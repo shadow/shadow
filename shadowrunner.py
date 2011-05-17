@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 import sys, os, argparse, subprocess
 from datetime import datetime
@@ -12,7 +12,7 @@ FILETRANSFER_PATH="src/plug-ins/filetransfer"
 PRELOAD_PATH="lib/libshadow-preload.so"
 
 # path to the shadow binary relative to the cmake dir
-SHADOW_PATH="bin/shadow"
+SHADOW_PATH="bin/shadow-bin"
 
 # path to other programs
 TIME_PATH="/usr/bin/time"
@@ -25,7 +25,7 @@ def main():
     parser_main.add_argument('-b', '--build-dir', action="store", dest="build_directory",
           help="generate build output into BUILD-DIR", default="./build")
     parser_main.add_argument('-i', '--install-dir', action="store", dest="install_directory",
-          help="directory where shadow will be installed if directed", default="~/.shadow/")
+          help="directory where shadow will be installed if directed", default="/usr/local")
     parser_main.add_argument('-q', '--quiet', action="store_true", dest="be_quiet",
           help="this script will not display its actions", default=False)
     
@@ -50,7 +50,15 @@ def main():
           help="generate documentation into BUILD-DIR/shadow/doc", default=False)
     parser_build.add_argument('-q', '--quiet', action="store_true", dest="no_stdout",
           help="redirect stdout to /dev/null", default=False)
+
+    # install subcommand
+    parser_install = subparsers_main.add_parser('install', help='install the shadow simulator as configured during build', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser_install.set_defaults(func=do_install, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     
+    # install options
+    parser_install.add_argument('-q', '--quiet', action="store_true", dest="no_stdout",
+          help="redirect stdout to /dev/null", default=False)
+
     # run subcommand
     parser_run = subparsers_main.add_parser('run', help='run the shadow simulator', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser_run.set_defaults(func=do_run, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -104,24 +112,31 @@ def do_build(args):
     outfile = get_outfile(args)
 
     # prepare filesystem
+    prepare(args)
+    
+    # configure
+    retcode = setup(args, outfile)
+
+    # if we have success, we can make
+    if(retcode == 0): retcode = build(args, outfile)
+
+    log_result(args, "building shadow and plug-ins", retcode)
+
+def prepare(args):
+    # remove and or make directories
     if(args.do_rebuild and os.path.exists(args.build_directory)):
         import shutil
         shutil.rmtree(args.build_directory)
-    
     if not os.path.exists(args.build_directory):
         os.makedirs(args.build_directory)
-# TODO add install option
-#    if not os.path.exists(args.install_directory):
-#        os.makedirs(args.install_directory)
-    
-    # now we are ready to build shadow
-    retcode = buildshadow(args, outfile)
-    log_result(args, "building shadow and plug-ins", retcode)
+    if not os.path.exists(args.install_directory):
+        os.makedirs(args.install_directory)
 
-def buildshadow(args, output):
+def setup(args, output):
     # start building up args string for cmake
     # we will run from build directory
     rundir = os.getcwd()
+
     cmake_args = []
     cmake_args.append("cmake")
     cmake_args.append(args.shadow_directory)
@@ -146,14 +161,45 @@ def buildshadow(args, output):
     
     # call cmake to configure the make process, wait for completion
     retcode = subprocess.call(cmake_args, stdout=output)
-    log_result(args, "shadow cmake", retcode)
+    log_result(args, "cmake", retcode)
+
+    # go back to where we came from
+    os.chdir(rundir)
+    return retcode
+
+def build(args, output):
+    # go to build dir and run make from makefile
+    rundir = os.getcwd()
+    os.chdir(args.build_directory)
     
-    # if we have success, we can make
-    if(retcode == 0):
-        log(args, "calling \'make\'")
-        # call make, wait for it to finish
-        retcode = subprocess.call(["make"], stdout=output)
-        log_result(args, "shadow make", retcode)
+    # call make, wait for it to finish
+    log(args, "calling \'make\'")
+    retcode = subprocess.call(["make"], stdout=output)
+    log_result(args, "make", retcode)
+    
+    # go back to where we came from
+    os.chdir(rundir)
+    return retcode
+
+def do_install(args):
+    set_absolute_paths(args)
+    outfile = get_outfile(args)
+
+    if not os.path.exists(args.build_directory): 
+        log_fail(args, "please build before installing! make install")
+        return
+
+    retcode = install(args, outfile)
+
+def install(args, output):
+    # go to build dir and install from makefile
+    rundir = os.getcwd()
+    os.chdir(args.build_directory)
+    
+    # call make, wait for it to finish
+    log(args, "calling \'make install\'")
+    retcode = subprocess.call(["make", "install"], stdout=output)
+    log_result(args, "make install", retcode)
     
     # go back to where we came from
     os.chdir(rundir)
@@ -161,9 +207,9 @@ def buildshadow(args, output):
 
 def do_run(args):
     set_absolute_paths(args)
-    runshadow(args)
+    run(args)
 
-def runshadow(args):
+def run(args):
     # start with the default preload
     preloads = args.build_directory + '/' + PRELOAD_PATH
     # add user-specified preloads
@@ -199,15 +245,15 @@ def runshadow(args):
     
     if(not args.do_dry_run):
         retcode = subprocess.call(run_args, stdout=get_outfile(args))
-        log_result(args, "shadow run", retcode)
+        log_result(args, "run", retcode)
     
     os.chdir(rundir)
  
 def do_autorun(args):
     set_absolute_paths(args)
-    autorunshadow(args)
+    autorun(args)
        
-def autorunshadow(args):
+def autorun(args):
     # default preloads depend what we are running
     preloads = args.build_directory + '/' + PRELOAD_PATH
     dsim_path = ""
@@ -236,7 +282,7 @@ def autorunshadow(args):
     log_list(args, "running shadow from\n\t" + args.shadow_directory + "\nusing args\n\t", run_args)
     
     retcode = subprocess.call(run_args, stdout=get_outfile(args))
-    log_result(args, "shadow autorun", retcode)
+    log_result(args, "autorun", retcode)
     
     os.chdir(rundir)
     

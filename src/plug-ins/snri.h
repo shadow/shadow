@@ -1,7 +1,4 @@
 /**
- * SNRI R2 - Standard Network Routing Interface Revision 2
- * Loadable module header
-/**
  * The Shadow Simulator
  *
  * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
@@ -32,6 +29,11 @@
 
 #include "log_codes.h"
 #include "snricall_codes.h"
+
+/**
+ * SNRI R2 - Standard Network Routing Interface Revision 2
+ * Loadable module header
+ */
 
 /* snricall function pointer */
 typedef int (*_snricall_fpref_t)(int, ...);

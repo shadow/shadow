@@ -12,3 +12,6 @@ target_link_libraries(shadow-plugin-pingpongtcp shadow-snri)
 
 add_dependencies(shadow-plugin-pingpongtcp shadow-snri)
 add_dependencies(shadow-plugin-pingpongudp shadow-snri)
+
+install(TARGETS shadow-plugin-pingpongtcp shadow-plugin-pingpongudp DESTINATION lib)
+install(FILES pingpong-tcp.dsim pingpong-udp.dsim DESTINATION share/shadow)

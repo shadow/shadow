@@ -50,9 +50,10 @@ set(vsystem_srcs
 )
 
 # dvn executable
-add_executable(shadow ${core_srcs} ${node_srcs} ${vevent_srcs} ${vsystem_srcs} ${vnetwork_srcs})
-add_dependencies(shadow shadow-intercept shadow-util shadow-dsim)
-target_link_libraries(shadow shadow-intercept shadow-util shadow-dsim ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES})
+add_executable(shadow-bin ${core_srcs} ${node_srcs} ${vevent_srcs} ${vsystem_srcs} ${vnetwork_srcs})
+add_dependencies(shadow-bin shadow-intercept shadow-util shadow-dsim)
+target_link_libraries(shadow-bin shadow-intercept shadow-util shadow-dsim ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES})
+install(TARGETS shadow-bin DESTINATION bin)
 
 add_executable(shadow-controller shd-controller-main.c)
 add_dependencies(shadow-controller shadow-util)

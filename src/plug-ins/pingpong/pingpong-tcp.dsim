@@ -1,6 +1,6 @@
 ?DSIM3
 on(time 0:01) {
-	pingpong_vm = load_plugin("build/lib/libshadow-plugin-pingpongtcp.so");
+	pingpong_vm = load_plugin("lib/libshadow-plugin-pingpongtcp.so");
 	
 	server_hostname = create_hostname("ponger.shd");
 	client_hostname = create_hostname("pinger.shd");

@@ -10,3 +10,6 @@ target_link_libraries(shadow-plugin-echoloopback shadow-snri)
 
 add_dependencies(shadow-plugin-echoserver shadow-snri)
 add_dependencies(shadow-plugin-echoclient shadow-snri)
+
+install(TARGETS shadow-plugin-echoserver shadow-plugin-echoclient shadow-plugin-echoloopback DESTINATION lib)
+install(FILES echo-ethernet.dsim echo-loopback.dsim DESTINATION share/shadow)

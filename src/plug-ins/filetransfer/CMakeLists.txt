@@ -25,3 +25,8 @@ target_link_libraries(shadow-filegetter rt)
 
 add_dependencies(shadow-plugin-fileserver shadow-snri shadow-util)
 add_dependencies(shadow-plugin-filegetter shadow-snri)
+
+install(TARGETS shadow-plugin-fileserver shadow-plugin-filegetter DESTINATION lib)
+install(TARGETS shadow-fileserver shadow-filegetter DESTINATION bin)
+install(DIRECTORY ./ DESTINATION include/shadow FILES_MATCHING PATTERN "*.h")
+install(FILES downloads.spec filetransfer.dsim DESTINATION share/shadow)

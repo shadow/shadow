@@ -1,7 +1,7 @@
 ?DSIM3
 on(time 0:01) {
-	echoserver_vm = load_plugin("build/lib/libshadow-plugin-echoserver.so");
-	echoclient_vm = load_plugin("build/lib/libshadow-plugin-echoclient.so");
+	echoserver_vm = load_plugin("lib/libshadow-plugin-echoserver.so");
+	echoclient_vm = load_plugin("lib/libshadow-plugin-echoclient.so");
 	
 	server_hostname = create_hostname("echoserver.shd");
 	client_hostname = create_hostname("echoclient.shd");

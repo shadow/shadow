@@ -1,7 +1,7 @@
 ?DSIM3
 on(time 0:01) {
-	fileserver_vm = load_plugin("build/lib/libshadow-plugin-fileserver.so");
-	filegetter_vm = load_plugin("build/lib/libshadow-plugin-filegetter.so");
+	fileserver_vm = load_plugin("lib/libshadow-plugin-fileserver.so");
+	filegetter_vm = load_plugin("lib/libshadow-plugin-filegetter.so");
 
 	fileserver_hostname = create_hostname("fileserver.shd");
 	filegetter_hostname = create_hostname("filegetter.shd");
@@ -20,7 +20,7 @@ on(time 0:02) {
 on(time 1:00) {
 # main file server, symmetric bandwidth
 	create_nodes(1, fileserver_vm, network, fileserver_hostname, fs_bandwidth_cdf, NULL, cpu_cdf,
-		"8080 src/plug-ins/filetransfer");
+		"8080 share/shadow/");
 }
 
 on(time 2:00) {
@@ -30,7 +30,7 @@ on(time 2:00) {
 
 # multi file client, no socks proxy and no service expiration
 	create_nodes(10, filegetter_vm, network, filegetter_hostname, fg_bandwidth_cdf, NULL, cpu_cdf,
-		"multi src/plug-ins/filetransfer/downloads.spec none 0 none -1");
+		"multi share/shadow/downloads.spec none 0 none -1");
 }
 
 on(time 300:00) {
