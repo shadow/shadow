@@ -1,0 +1,47 @@
+#!/bin/sh
+
+if [ $# -eq 0 ] ; then
+	echo "Usage: $0 <--debug|--release> [--rebuild]"
+	echo "  --debug/--release: Sets the build type."
+	echo "  --rebuild: If set, rebuild everything."
+	echo ""
+	echo "Note that all building is done out-of-source in the build/ subdirectory."
+	exit 1
+fi
+
+BT=Release
+REBUILD=0
+
+while [ $# -gt 0 ]; do
+case $1 in
+	"--debug") BT=Debug ;;
+	"--release") BT=Release ;;
+	"--rebuild") REBUILD=1 ; echo "(Rebuild enabled)" ;;
+	*) echo "Unknown option '$1'" ; exit 1 ;;
+esac
+shift 1
+done
+
+ARGS="-DCMAKE_BUILD_TYPE=$BT"
+
+if [ "`which cmake`" = "" ]; then
+	echo "CMake not found! Please install CMake 2.6+ and try again."
+	exit 1
+fi
+
+if [ "$REBUILD" = "1" ]; then
+if [ -d build ]; then
+	rm -rf build
+fi
+fi
+
+if [ ! -d build ]; then
+	mkdir build
+fi
+
+echo "Invoking: cmake $ARGS"
+
+cd build
+cmake .. $ARGS
+make
+

@@ -1,0 +1,100 @@
+Shadow (c) 2011 Rob Jansen jansen@cs.umn.edu
+
+I. Shadow dependencies
+======================
+The following are required to properly build and run Shadow:
+  - gcc
+  - cmake >= 2.6
+  - flex
+  - bison
+  
+The following are optional, but recommended, for building and running Shadow:
+  - python >= 2.7.1
+
+
+II. Building Shadow
+===================
+There are two ways to build shadow:
+  1. $ python shadowrunner.py build -rg
+  2. $ contrib/runbuild --rebuild --debug
+  
+The python script is the preferred method, and offers much greater flexibility
+over the build options and an extensive help menu:
+
+$ python shadowrunner.py build -h
+
+Both methods should be run from the Shadow base directory. All build output is 
+generated out-of-source, by default to the ./build directory (although this 
+location can be modified with the shadowrunner.py script). Both methods are
+wrappers to cmake and make for building Shadow. Using cmake and make directly
+is also possible, but strongly discouraged.
+
+III. Running Shadow
+===================
+There are multiple ways to run Shadow.
+
+A. Using shadowrunner.py
+------------------------
+The shadowrunner.py script is simply a wrapper around to assist in running the
+Shadow binary. The shadowrunner.py script has several built-in modules that can 
+be autorun. Use
+
+$ python shadowrunner.py autorun -h
+
+to get usage and help regarding running the built-in modules. Most of the options
+can be left as default, and you need only specify which built-in module example
+you want to run, e.g.
+
+$ python shadowrunner.py autorun --echo
+
+When developing custom modules, you may also run your module with shadowrunner.py
+by using the 'run' command. Again, use
+
+$ python shadowrunner.py run -h
+
+for usage and help. When running a custom module, a dsim file describing the
+experiment must be provided. Examples of dsim files can be found in mode 
+src/module/* directories. Also see doc/ for the dsim API.
+
+B. Running the shadow binary directly
+-------------------------------------
+You may also invoke the binary directly without the use of the
+python shadowruner.py script. Get usage information from Shadow with:
+
+$ path/to/shadow -h
+
+By default, Shadow project executable are placed in build/bin/ and libraries are
+placed in build/lib/. The shadow binary also requires a dsim file.
+
+IV. Scallion
+============
+Scallion is a special plugin for shadow that allows shadow to run the Tor
+(torproject.org) software. There are several modifications to Tor that must be
+made to allow this to happen. Those modifications are stored on a branch of a 
+clone of the Tor git master repository. This way, patches can be created for
+any version of Tor by merging new changes into the local scallion branch. Our
+current approach is to create patches from a diff of archived Tor releases and
+our scallion branch, so that others can simply download the correct release,
+apply our patch, and run scallion in shadow.
+
+Scallion also requires some other libs to be locally installed, like libevent
+and openssl. Of course, the shadowrunner.py script will handle all of the dirty 
+work for you. However, patches must be created and their paths are currently 
+hard-coded. To create a patch, first export the scallion branch from git with 
+something like:
+
+$ git archive --prefix=tor-0.2.2.15-alpha-scallion/ scallion | gzip > tor-0.2.2.15-alpha-scallion.tar.gz
+
+Then download the tor-0.2.2.15-alpha.tar.gz release from archive.torproject.org,
+extract both tar files, and create the patch:
+
+$ diff -Naur tor-0.2.2.15-alpha tor-0.2.2.15-alpha-scallion > tor-0.2.2.15-alpha.scallion.patch
+
+Place the patch in contrib/patches. Note - you may want to remove the 'doc' and
+and the 'WIN32Build' directories from the extracted trees in order to reduce the
+size of the created patch file. If needed, the shadowrunner.py script will 
+automatically download the correct version of Tor apply the patch:
+
+$ patch -Np1 --batch -i path/to/tor-0.2.2.15-alpha.scallion.patch
+
+TODO: enable multiple versions of tor/scallion to be built and run.

@@ -1,0 +1,6 @@
+#!/bin/bash
+
+PACKAGES="cmake gcc bison flex php5-cli zlib-bin zlib1g-dev subversion"
+sudo apt-get -y update
+sudo apt-get -y upgrade
+sudo apt-get -y install $PACKAGES

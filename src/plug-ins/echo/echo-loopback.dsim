@@ -1,0 +1,22 @@
+?DSIM3
+on(time 0:01) {
+	echoloopback_vm = load_plugin("build/lib/libshadow-plugin-echoloopback.so");
+	
+	hostname = create_hostname("echolo.shd");
+	
+	cpu_cdf = generate_cdf(100000000, 20000000, 20000000);
+	bandwidth_cdf = generate_cdf(10, 0, 0);
+	latency_cdf = generate_cdf(200, 40, 20);
+}
+
+on(time 0:02) {
+	network = create_network(latency_cdf, 0.60);
+}
+
+on(time 1:00) {
+	create_nodes(1, echoloopback_vm, network, hostname, bandwidth_cdf, bandwidth_cdf, cpu_cdf, "");
+}
+
+on(time 150:00) {
+	end();
+}

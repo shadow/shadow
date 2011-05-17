@@ -1,0 +1,27 @@
+set(util_srcs
+	btree.c
+	clo.c
+	hash.c
+	hashtable.c
+	heap.c
+	ipcsync.c
+	orderedlist.c
+	linkedbuffer.c
+	list.c
+	nbdf.c
+	pipecloud.c
+	rand.c
+	reference_counter.c
+	rwlock.c
+	rwlock_mgr.c
+	shd-cdf.c
+	shmcabinet.c
+	shmcabinet_mgr.c
+	socket.c
+	socketset.c
+	utility.c
+	vector.c
+)
+
+add_library(shadow-util STATIC ${util_srcs})
+target_link_libraries(shadow-util rt pthread)

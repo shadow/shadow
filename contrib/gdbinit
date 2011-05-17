@@ -1,0 +1,11 @@
+## if fork happens, the process gdb will follow
+set follow-fork-mode child
+#set follow-fork-mode parent
+
+## when a fork happens, should gdb detach the unfollowed process or pause it so you can switch between
+set detach-on-fork on
+#set detach-on-fork off
+
+## preloads and args loaded here (not needed if set in eclipse)
+#set environment LD_PRELOAD=/home/rob/projects/tiab/trunk/dvn/run/lib/libpreload.so
+#set args -d echo.dsim -c ../../defaultconfig.txt -p 1
