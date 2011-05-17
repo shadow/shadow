@@ -233,12 +233,12 @@ module_tp module_load(module_mgr_tp mgr, int id, char * module) {
 
 
 	if(!mod->handle ||
-			!(mod->mod_instantiate = 	dlsym(mod->handle, "_module_instantiate")) ||
-			!(mod->mod_destroy = 		dlsym(mod->handle, "_module_destroy")) ||
-			!(mod->mod_init = 			dlsym(mod->handle, "_module_init")) ||
-			!(mod->mod_uninit = 		dlsym(mod->handle, "_module_uninit")) ||
-			!(mod->mod_socket_readable = dlsym(mod->handle, "_module_socket_readable")) ||
-			!(mod->mod_socket_writable = dlsym(mod->handle, "_module_socket_writable")) ||
+			!(mod->mod_instantiate = 	dlsym(mod->handle, "_plugin_instantiate")) ||
+			!(mod->mod_destroy = 		dlsym(mod->handle, "_plugin_destroy")) ||
+			!(mod->mod_init = 			dlsym(mod->handle, "_plugin_init")) ||
+			!(mod->mod_uninit = 		dlsym(mod->handle, "_plugin_uninit")) ||
+			!(mod->mod_socket_readable = dlsym(mod->handle, "_plugin_socket_readable")) ||
+			!(mod->mod_socket_writable = dlsym(mod->handle, "_plugin_socket_writable")) ||
 			!(mod->mod_snricall_fpmem = dlsym(mod->handle, "_snricall_fpref"))) {
 
 		dlogf( LOG_ERR, "Module Subsystem: Unable to properly acquire all external function in module: %s \n", dlerror());

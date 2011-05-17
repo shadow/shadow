@@ -29,10 +29,10 @@
 #include <errno.h>
 
 /* This module implements the module_interface */
-#include "module_interface.h"
+#include "shd-plugin-interface.h"
 
 /* This module makes calls to the DVN core through the standard network routing interface */
-#include "snri.h"
+#include "shd-plugin.h"
 
 /* Handy functions and structs for simple transport */
 #include "pingpong_lib.h"
@@ -41,18 +41,18 @@
  * the name must not collide with other loaded modules globals. */
 simple_transport_t instance;
 
-void _module_init() {
-	snri_log(LOG_INFO, "_module_init\n");
+void _plugin_init() {
+	snri_log(LOG_INFO, "_plugin_init\n");
 	/* Register the globals here. Since we are storing them in a struct, we
 	 * only have to register one (the struct itself). */
 	snri_register_globals(1,  sizeof(instance), &instance);
 }
 
-void _module_uninit() {
-	snri_log(LOG_INFO, "_module_uninit\n");
+void _plugin_uninit() {
+	snri_log(LOG_INFO, "_plugin_uninit\n");
 }
 
-void _module_instantiate(int argc, char * argv[]) {
+void _plugin_instantiate(int argc, char * argv[]) {
 	char buffer[40];
 
 	/* get IP address through SNRI */
@@ -93,7 +93,7 @@ void _module_instantiate(int argc, char * argv[]) {
 	}
 }
 
-void _module_destroy() {
+void _plugin_destroy() {
 	/* free memory and cleanup */
 	if(instance.is_server) {
 		free(instance.sdata);
@@ -104,8 +104,8 @@ void _module_destroy() {
 			instance.num_msgs_sent, instance.num_msgs_received);
 }
 
-void _module_socket_readable(int socket){
-	snri_log(LOG_INFO, "_module_socket_readable for socket %i\n", socket);
+void _plugin_socket_readable(int socket){
+	snri_log(LOG_INFO, "_plugin_socket_readable for socket %i\n", socket);
 
 	struct sockaddr_in source;
 	source.sin_family = AF_INET;
@@ -125,8 +125,8 @@ void _module_socket_readable(int socket){
 	}
 }
 
-void _module_socket_writable(int socket){
-	snri_log(LOG_INFO, "_module_socket_writable for socket %i\n", socket);
+void _plugin_socket_writable(int socket){
+	snri_log(LOG_INFO, "_plugin_socket_writable for socket %i\n", socket);
 	if(!instance.is_server && !instance.did_init) {
 		/* client needs to start sending */
 		struct sockaddr_in source;

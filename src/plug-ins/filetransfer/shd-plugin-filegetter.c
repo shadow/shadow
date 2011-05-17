@@ -27,8 +27,8 @@
 #include <arpa/inet.h>
 
 /* This plugin implements the module_interface */
-#include "module_interface.h"
-#include "snri.h"
+#include "shd-plugin-interface.h"
+#include "shd-plugin.h"
 
 /* this plugin runs a filegetter service */
 #include "shd-service-filegetter.h"
@@ -37,14 +37,14 @@
 /* my global structure to hold all variable, node-specific application state. */
 service_filegetter_t sfg;
 
-void _module_init() {
+void _plugin_init() {
 	/* Register the globals here so shadow can track them per-node */
 	snri_register_globals(1, sizeof(service_filegetter_t), &sfg);
 }
 
-void _module_uninit() {}
+void _plugin_uninit() {}
 
-void _module_instantiate(int argc, char * argv[]) {
+void _plugin_instantiate(int argc, char * argv[]) {
 	const char* usage = "USAGE:\n\t\'single\' http_host http_port (socks_host|\'none\') socks_port num_downloads filepath\n\t--or--\n\t\'multi\' server_specification_filepath (socks_host|\'none\') socks_port (thinktimes_cdf_filepath|\'none\') (runtime_seconds|-1)\n";
 	int mode = 0;
 
@@ -101,14 +101,14 @@ void _module_instantiate(int argc, char * argv[]) {
 	service_filegetter_activate(&sfg, sockd);
 }
 
-void _module_destroy() {
+void _plugin_destroy() {
 	service_filegetter_stop(&sfg);
 }
 
-void _module_socket_readable(int sockd){
+void _plugin_socket_readable(int sockd){
 	service_filegetter_activate(&sfg, sockd);
 }
 
-void _module_socket_writable(int sockd){
+void _plugin_socket_writable(int sockd){
 	service_filegetter_activate(&sfg, sockd);
 }

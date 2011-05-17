@@ -20,8 +20,8 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SNRI_H_
-#define SNRI_H_
+#ifndef SHD_PLUGIN_H_
+#define SHD_PLUGIN_H_
 
 #include <stdarg.h>
 #include <sys/time.h>
@@ -168,4 +168,4 @@ int snri_set_loopexit_fn(snri_timer_callback_fp fn);
 #define SOCK_CLOEXEC 01000000
 #endif
 
-#endif /* SNRI_H_ */
+#endif /* SHD_PLUGIN_H_ */

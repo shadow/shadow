@@ -26,7 +26,7 @@
 
 #include "log_codes.h"
 #include "snricall_codes.h"
-#include "snri.h"
+#include "shd-plugin.h"
 
 int (*_snricall_fpref)(int, ...);
 

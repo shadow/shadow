@@ -28,7 +28,7 @@
 
 #include "shd-plugin-filegetter-util.h"
 #include "shd-service-filegetter.h"
-#include "snri.h"
+#include "shd-plugin.h"
 
 void plugin_filegetter_util_log_callback(enum service_filegetter_loglevel level, const char* message) {
 	if(level == SFG_CRITICAL) {
