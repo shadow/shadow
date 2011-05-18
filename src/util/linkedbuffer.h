@@ -27,8 +27,6 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#define MIN(a,b) ((a)<(b)?(a):(b))
-
 typedef struct bufferlink_t{
 	void* buf;
 	uint16_t capacity;

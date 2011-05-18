@@ -104,7 +104,7 @@ size_t linkedbuffer_read(linkedbuffer_tp lbuffer, void* dest, size_t numbytes){
 			}
 
 			/* how much we actually read */
-			size_t numread = MIN(bytes_left, tail_avail);
+			size_t numread = (bytes_left < tail_avail ? bytes_left : tail_avail);
 			memcpy(dest + dest_offset,
 					lbuffer->tail->buf + lbuffer->tail_r_offset,
 					numread);
@@ -154,7 +154,7 @@ size_t linkedbuffer_write(linkedbuffer_tp lbuffer, const void* src, size_t numby
 			}
 
 			/* how much we actually write */
-			size_t numwrite = MIN(bytes_left, head_space);
+			size_t numwrite = (bytes_left < head_space ? bytes_left : head_space);
 			memcpy(lbuffer->head->buf + lbuffer->head_w_offset,
 					src + src_offset, numwrite);
 

@@ -95,6 +95,7 @@ find_package(RT REQUIRED)
 find_package(DL REQUIRED)
 find_package(M REQUIRED)
 find_package(EVENT2 REQUIRED)
+find_package(GLIB REQUIRED)
 
 ## generate config header and make sure its on the include path
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config.h.in ${CMAKE_CURRENT_BINARY_DIR}/config.h)

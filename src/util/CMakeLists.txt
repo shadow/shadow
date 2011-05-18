@@ -24,6 +24,6 @@ set(util_srcs
 )
 
 add_library(shadow-util STATIC ${util_srcs})
-target_link_libraries(shadow-util rt pthread)
+target_link_libraries(shadow-util rt pthread glib-2.0)
 install(TARGETS shadow-util EXPORT shadow-externals DESTINATION lib)
 install(FILES global.h DESTINATION include/shadow)
