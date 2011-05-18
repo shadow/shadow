@@ -10,15 +10,14 @@
 ## Check for the header files
 
 find_path (EVENT2_INCLUDES event2/event.h
-  PATHS /usr/local/include /usr/include /sw/include
-#  PATH_SUFFIXES event2
+  PATHS /usr/local/include /usr/include ${CMAKE_EXTRA_INCLUDES}
   )
 
 ## -----------------------------------------------------------------------------
 ## Check for the library
 
 find_library (EVENT2_LIBRARIES event event-2.0
-  PATHS /usr/local/lib /usr/lib /lib /sw/lib
+  PATHS /usr/local/lib /usr/lib /lib ${CMAKE_EXTRA_LIBRARIES}
   )
 
 ## -----------------------------------------------------------------------------
