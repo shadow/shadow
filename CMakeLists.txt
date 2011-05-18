@@ -11,8 +11,8 @@ set(VERSION_BUILD 0)
 set(PACKAGE_STRING "Shadow ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_BUILD}")
 
 ## custom output paths
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+#set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+#set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 ## enable our custom modules
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
@@ -105,11 +105,6 @@ if(SHADOW_TEST STREQUAL ON)
     message(STATUS "SHADOW_TEST enabled")
     add_subdirectory(${SHADOW_TEST_DIR})
 endif(SHADOW_TEST STREQUAL ON)
-
-## install shadow script
-install(PROGRAMS ${CMAKE_CURRENT_SOURCE_DIR}/shadowrunner.py 
-    DESTINATION bin
-    PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ)
 
 ## install our 'exported' libs so they can be imported by others
 ## put the .cmake file for importing in shadow-specific directory

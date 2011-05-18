@@ -5,7 +5,7 @@ add_definitions(-fPIC)
 ## its a static lib because it needs to be linked to a module and plugged into dhadow
 add_library(shadow-plugin STATIC shd-plugin.c)
 install(TARGETS shadow-plugin EXPORT shadow-externals DESTINATION lib)
-install(FILES shd-plugin.h module_interface.h DESTINATION include/shadow)
+install(FILES shd-plugin.h shd-plugin-interface.h DESTINATION include/shadow)
 
 ## now recurse into plug-in dirs
 
