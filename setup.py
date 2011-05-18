@@ -1,10 +1,10 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2.7
 
 import sys, os, argparse, subprocess
 from datetime import datetime
 
 BUILD_PREFIX="build"
-INSTALL_PREFIX = os.getenv("HOME") + "/.local"
+INSTALL_PREFIX="/usr/local"
 
 def main():
     parser_main = argparse.ArgumentParser(description='Utility to help setup the shadow simulator', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -18,8 +18,12 @@ def main():
     parser_build = subparsers_main.add_parser('build', help='configure and build the shadow simulator', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser_build.set_defaults(func=build, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     
-    parser_build.add_argument('-i', '--install-prefix', action="store", dest="prefix",
-          help="path to root directory for shadow installation", default=INSTALL_PREFIX)
+    parser_build.add_argument('-p', '--prefix', action="store", dest="prefix",
+          help="path to root directory for shadow installation", metavar="PATH", default=INSTALL_PREFIX)
+    parser_build.add_argument('-i', '--include', action="append", dest="extra_includes", metavar="PATH",
+          help="include PATH when searching for headers. useful if dependencies are installed to non-standard locations.")
+    parser_build.add_argument('-l', '--library', action="append", dest="extra_libraries", metavar="PATH",
+          help="include PATH when searching for libraries. useful if dependencies are installed to non-standard locations.")
     parser_build.add_argument('-g', '--debug', action="store_true", dest="do_debug",
           help="turn on debugging for verbose program output", default=False)
     parser_build.add_argument('-t', '--test', action="store_true", dest="do_test",
@@ -64,6 +68,8 @@ def build(args):
     # build up args string for cmake
     cmake_cmd = "cmake " + rootdir + " -DCMAKE_BUILD_PREFIX=" + builddir + " -DCMAKE_INSTALL_PREFIX=" + installdir
 
+    if(args.extra_includes is not None): cmake_cmd += " -DCMAKE_EXTRA_INCLUDES=" + ';'.join(args.extra_includes)
+    if(args.extra_libraries is not None): cmake_cmd += + " -DCMAKE_EXTRA_LIBRARIES=" + ';'.join(args.extra_libraries)
     if(args.do_coverage): cmake_cmd += " -DSHADOW_COVERAGE=ON"
     if(args.do_doc): cmake_cmd += " -DSHADOW_DOC=ON"
     if(args.do_debug): cmake_cmd += " -DSHADOW_DEBUG=ON"

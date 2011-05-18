@@ -10,15 +10,14 @@
 ## Check for the header files
 
 find_path (RT_INCLUDES time.h
-  PATHS /usr/local/include /usr/include /sw/include
-#  PATH_SUFFIXES <optional path extension>
+  PATHS /usr/local/include /usr/include ${CMAKE_EXTRA_INCLUDES}
   )
 
 ## -----------------------------------------------------------------------------
 ## Check for the library
 
 find_library (RT_LIBRARIES rt
-  PATHS /usr/local/lib /usr/lib /lib /sw/lib
+  PATHS /usr/local/lib /usr/lib /lib ${CMAKE_EXTRA_LIBRARIES}
   )
 
 ## -----------------------------------------------------------------------------

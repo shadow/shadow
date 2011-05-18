@@ -14,9 +14,6 @@ set(PACKAGE_STRING "Shadow ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_BUILD}")
 #set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 #set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
-## enable our custom modules
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
-
 ## output locations
 set(SHADOW_SOURCE_DIR ${CMAKE_SOURCE_DIR}/src)
 set(SHADOW_TEST_DIR ${CMAKE_SOURCE_DIR}/test)
@@ -75,6 +72,15 @@ include(CheckLibraryExists)
 ## run system-wide tests
 include (TestBigEndian)
 TEST_BIG_ENDIAN(IS_BIG_ENDIAN)
+
+## enable our custom modules
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
+
+## user-defined includes
+foreach(include ${CMAKE_EXTRA_INCLUDES})
+    include_directories(${include})
+    set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${include}")
+endforeach(include)
 
 ## check for dependencies, using built-in cmake files to help us find the libs
 ## these are in /usr/share/cmake/Modules/Findxxx.cmake
