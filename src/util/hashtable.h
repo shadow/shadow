@@ -23,6 +23,7 @@
 #ifndef _hashtable_h
 #define _hashtable_h
 
+#include <glib-2.0/glib.h>
 #include "hash.h"
 #include "btree.h"
 
@@ -40,6 +41,8 @@ typedef struct hashtable_t {
 	float growth_factor;
 
 	hashtable_bucket_tp buckets;
+
+	GHashTable *ht;
 } hashtable_t, *hashtable_tp;
 
 typedef void (*hashtable_walk_callback_tp)(void *, int);

@@ -24,4 +24,4 @@ set(util_srcs
 )
 
 add_library(shadow-util STATIC ${util_srcs})
-target_link_libraries(shadow-util rt pthread)
+target_link_libraries(shadow-util rt pthread glib-2.0)
