@@ -1,7 +1,4 @@
 /**
- * SNRI R2 - Standard Network Routing Interface Revision 2
- * Loadable module header
-/**
  * The Shadow Simulator
  *
  * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
@@ -23,8 +20,8 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SNRI_H_
-#define SNRI_H_
+#ifndef SHD_PLUGIN_H_
+#define SHD_PLUGIN_H_
 
 #include <stdarg.h>
 #include <sys/time.h>
@@ -32,6 +29,11 @@
 
 #include "log_codes.h"
 #include "snricall_codes.h"
+
+/**
+ * SNRI R2 - Standard Network Routing Interface Revision 2
+ * Loadable module header
+ */
 
 /* snricall function pointer */
 typedef int (*_snricall_fpref_t)(int, ...);
@@ -166,4 +168,4 @@ int snri_set_loopexit_fn(snri_timer_callback_fp fn);
 #define SOCK_CLOEXEC 01000000
 #endif
 
-#endif /* SNRI_H_ */
+#endif /* SHD_PLUGIN_H_ */

@@ -30,7 +30,7 @@
 #include <unistd.h>
 
 #include "snricall_codes.h"
-#include "snri.h"
+#include "shd-plugin.h"
 #include "echo_lib.h"
 
 void echo_client_instantiate(echoclient_tp ec, int argc, char * argv[], in_addr_t bootstrap_address) {

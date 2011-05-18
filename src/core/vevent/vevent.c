@@ -444,11 +444,12 @@ static void vevent_execute(vevent_mgr_tp mgr, event_tp ev) {
 
 	/* execute the saved function */
 	debugf("++++ executing event... eventid %d, fd %d, type %s\n", ev->ev_timeout_pos.min_heap_idx, ev->ev_fd, vevent_get_event_type_string(mgr, ev->ev_events));
-	ev->ev_flags |= EVLIST_ACTIVE;
+//	ev->ev_flags |= EVLIST_ACTIVE;
 
 	(ev->ev_callback)(ev->ev_fd, ev->ev_res, ev->ev_arg);
 
-	ev->ev_flags &= ~EVLIST_ACTIVE;
+//	invalid if event was deleted during callback
+//	ev->ev_flags &= ~EVLIST_ACTIVE;
 	debugf("---- done executing event.\n");
 }
 

@@ -23,11 +23,11 @@
 #include <netinet/in.h>
 
 /* This module implements the module_interface */
-#include "module_interface.h"
+#include "shd-plugin-interface.h"
 
 /* This module makes calls to the shadow core through the standard network routing
  * interface. System socket calls should also be preloaded */
-#include "snri.h"
+#include "shd-plugin.h"
 
 /* echo server and client functionality */
 #include "echo_lib.h"
@@ -36,28 +36,28 @@
  * the name must not collide with other loaded modules globals. */
 echoclient_t echoclient_inst;
 
-void _module_init() {
+void _plugin_init() {
 	/* Register the globals here. Since we are storing them in a struct, we
 	 * only have to register one (the struct itself). */
 	snri_register_globals(1,  sizeof(echoclient_inst), &echoclient_inst);
 }
 
-void _module_uninit() {
+void _plugin_uninit() {
 }
 
-void _module_instantiate(int argc, char * argv[]) {
+void _plugin_instantiate(int argc, char * argv[]) {
 	in_addr_t echo_server_ip;
 	snri_resolve_name(argv[0], &echo_server_ip);
 	echo_client_instantiate(&echoclient_inst, argc, argv, echo_server_ip);
 }
 
-void _module_destroy() {
+void _plugin_destroy() {
 }
 
-void _module_socket_readable(int sockd){
+void _plugin_socket_readable(int sockd){
 	echo_client_socket_readable(&echoclient_inst, sockd);
 }
 
-void _module_socket_writable(int sockd){
+void _plugin_socket_writable(int sockd){
 	echo_client_socket_writable(&echoclient_inst, sockd);
 }

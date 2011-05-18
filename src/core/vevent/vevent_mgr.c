@@ -30,7 +30,7 @@
 
 #include "vevent_mgr.h"
 #include "vevent.h"
-#include "snri.h"
+#include "shd-plugin.h"
 #include "log.h"
 #include "list.h"
 #include "timer.h"

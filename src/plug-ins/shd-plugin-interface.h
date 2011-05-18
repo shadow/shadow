@@ -20,8 +20,8 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef MODULE_INTERFACE_H_
-#define MODULE_INTERFACE_H_
+#ifndef PLUGIN_INTERFACE_H_
+#define PLUGIN_INTERFACE_H_
 
 #include <netinet/in.h>
 
@@ -65,4 +65,4 @@ void _module_socket_readable(int socket);
  */
 void _module_socket_writable(int socket);
 
-#endif /* MODULE_INTERFACE_H_ */
+#endif /* PLUGIN_INTERFACE_H_ */

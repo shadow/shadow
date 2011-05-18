@@ -14,3 +14,6 @@ add_subdirectory(dsim)
 add_subdirectory(intercept)
 add_subdirectory(plug-ins)
 add_subdirectory(util)
+
+## install shadow script
+install(PROGRAMS ${SHADOW_SOURCE_DIR}/shadow DESTINATION bin)

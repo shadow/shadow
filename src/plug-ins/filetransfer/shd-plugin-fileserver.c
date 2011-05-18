@@ -26,11 +26,11 @@
 #include <arpa/inet.h>
 
 /* This module implements the module_interface */
-#include "module_interface.h"
+#include "shd-plugin-interface.h"
 
 /* This module makes calls to the DVN core through the standard network routing
  * interface. */
-#include "snri.h"
+#include "shd-plugin.h"
 
 /* this plugin implements a fileserver */
 #include "shd-filetransfer.h"
@@ -42,16 +42,16 @@ typedef struct plugin_fileserver_s {
 /* my global structure to hold all variable, node-specific application state. */
 plugin_fileserver_t pfs;
 
-void _module_init() {
+void _plugin_init() {
 	snri_log(LOG_DEBUG, "registering\n");
 
 	/* Register the globals here so DVN can track them per-node */
 	snri_register_globals(1, sizeof(plugin_fileserver_t), &pfs);
 }
 
-void _module_uninit() {}
+void _plugin_uninit() {}
 
-void _module_instantiate(int argc, char * argv[]) {
+void _plugin_instantiate(int argc, char * argv[]) {
 	snri_log(LOG_DEBUG, "parsing args\n");
 	if(argc != 2) {
 		snri_log(LOG_WARN, "wrong number of args. expected 2.\n");
@@ -73,7 +73,7 @@ void _module_instantiate(int argc, char * argv[]) {
 	}
 }
 
-void _module_destroy() {
+void _plugin_destroy() {
 	snri_log(LOG_MSG, "fileserver stats: %lu bytes in, %lu bytes out, %lu replies\n",
 			pfs.fs.bytes_received, pfs.fs.bytes_sent, pfs.fs.replies_sent);
 	snri_log(LOG_INFO, "shutting down fileserver\n");
@@ -86,10 +86,10 @@ static void plugin_fileserver_activate(int sockd) {
 			fileserver_codetoa(result), pfs.fs.bytes_received, pfs.fs.bytes_sent, pfs.fs.replies_sent);
 }
 
-void _module_socket_readable(int sockd){
+void _plugin_socket_readable(int sockd){
 	plugin_fileserver_activate(sockd);
 }
 
-void _module_socket_writable(int sockd){
+void _plugin_socket_writable(int sockd){
 	plugin_fileserver_activate(sockd);
 }
