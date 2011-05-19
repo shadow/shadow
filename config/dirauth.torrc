@@ -1,0 +1,27 @@
+## COMMON SETTINGS ##
+
+DirServer authority v3ident=BFDFB235720CCFE8B3120B5C26334CB573351B7E orport=9111 4uthority.scallion.shd:9112 01D0 0306 63B7 FC8D FC7C 520B 947F 7EAD E9C7 A429
+
+TestingTorNetwork 1
+
+ServerDNSDetectHijacking 0
+NumCPUs 0
+Log notice stdout
+SafeLogging 0
+ContactInfo jansen@cs.umn.edu
+
+## DIRECTORY AUTHORITIES ##
+
+# DataDirectory path/to/dir # this should be passed to module through DSIM file, since it needs to be unique for each relay
+V3AuthoritativeDirectory 1
+V2AuthoritativeDirectory 1
+AuthoritativeDirectory 1
+ORPort 9111
+DirPort 9112
+SocksPort 0
+
+CellStatistics 1
+DirReqStatistics 1
+EntryStatistics 1
+ExitPortStatistics 1
+ExtraInfoStatistics 1
