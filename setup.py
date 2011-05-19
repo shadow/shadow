@@ -123,6 +123,8 @@ def auto(args):
     args.do_doc = False
     args.do_debug = False
     args.do_test = False
+    args.extra_includes = None
+    args.extra_libraries = None
     if build(args) == 0: install(args)
 
 def log(args, msg):
