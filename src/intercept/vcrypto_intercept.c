@@ -42,6 +42,6 @@ void intercept_AES_decrypt(const unsigned char *in, unsigned char *out, const AE
 int intercept_EVP_Cipher(EVP_CIPHER_CTX *ctx, unsigned char *out, const unsigned char *in, unsigned int inl) {
 	/* Processing delays already include crypto and are added during reads/writes */
 	/* TODO: do we need to advance the key here? */
-	memcpy(out, in, inl);
+	memmove(out, in, (size_t)inl);
 	return 1;
 }

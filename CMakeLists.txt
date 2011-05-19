@@ -84,7 +84,7 @@ endforeach(include)
 
 foreach(library ${CMAKE_EXTRA_LIBRARIES})
     link_directories(${library})
-endforeach(include)
+endforeach(library)
 
 ## check for dependencies, using built-in cmake files to help us find the libs
 ## these are in /usr/share/cmake/Modules/Findxxx.cmake

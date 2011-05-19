@@ -745,6 +745,9 @@ void vci_schedule_retransmit(rc_vpacket_pod_tp rc_packet, in_addr_t caller_addr)
 				deliver_to = packet->header.source_addr;
 			}
 
+			/* event tracker will hold on to the packet */
+			rc_vpacket_pod_retain(rc_packet);
+
 			vci_event_tp vci_event = vci_create_event(vci_mgr, VCI_EC_ONRETRANSMIT, deliver_time,
 					deliver_to, retransmit_payload);
 			vci_schedule_event(vci_mgr->events, vci_event);
