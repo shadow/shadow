@@ -92,13 +92,13 @@ find_package(FLEX REQUIRED)
 find_package(BISON REQUIRED)
 find_package(Threads REQUIRED)
 find_package(ZLIB REQUIRED)
-find_package(OpenSSL REQUIRED) # result in ${OPENSSL_LIBRARIES} and ${OPENSSL_INCLUDE_DIR}
 
 ## other libs dont have a Findxxx.cmake, so we check on our own (./cmake)
 find_package(RT REQUIRED)
 find_package(DL REQUIRED)
 find_package(M REQUIRED)
 find_package(EVENT2 REQUIRED)
+find_package(OPENSSL REQUIRED)
 
 ## generate config header and make sure its on the include path
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config.h.in ${CMAKE_CURRENT_BINARY_DIR}/shd-config.h)
