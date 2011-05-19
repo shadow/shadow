@@ -67,9 +67,16 @@ def build(args):
 
     # build up args string for cmake
     cmake_cmd = "cmake " + rootdir + " -DCMAKE_BUILD_PREFIX=" + builddir + " -DCMAKE_INSTALL_PREFIX=" + installdir
+    
+    if args.extra_includes is None: args.extra_includes = []
+    if args.extra_libraries is None: args.extra_libraries = []
+    
+    # hack to make passing args to CMAKE work... doesnt seem to like the first arg
+    args.extra_includes.insert(0, "./")
+    args.extra_libraries.insert(0, "./")
 
-    if(args.extra_includes is not None): cmake_cmd += " -DCMAKE_EXTRA_INCLUDES=" + ';'.join(args.extra_includes)
-    if(args.extra_libraries is not None): cmake_cmd += + " -DCMAKE_EXTRA_LIBRARIES=" + ';'.join(args.extra_libraries)
+    cmake_cmd += " -DCMAKE_EXTRA_INCLUDES=" + ';'.join(args.extra_includes)
+    cmake_cmd += " -DCMAKE_EXTRA_LIBRARIES=" + ';'.join(args.extra_libraries)
     if(args.do_coverage): cmake_cmd += " -DSHADOW_COVERAGE=ON"
     if(args.do_doc): cmake_cmd += " -DSHADOW_DOC=ON"
     if(args.do_debug): cmake_cmd += " -DSHADOW_DEBUG=ON"

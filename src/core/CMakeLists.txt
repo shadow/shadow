@@ -62,3 +62,4 @@ add_executable(shadow-controller shd-controller-main.c)
 add_dependencies(shadow-controller shadow-util)
 target_link_libraries(shadow-controller shadow-util)
 
+install(FILES log_codes.h node/snricall_codes.h DESTINATION include/shadow)

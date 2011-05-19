@@ -82,6 +82,10 @@ foreach(include ${CMAKE_EXTRA_INCLUDES})
     set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${include}")
 endforeach(include)
 
+foreach(library ${CMAKE_EXTRA_LIBRARIES})
+    link_directories(${library})
+endforeach(include)
+
 ## check for dependencies, using built-in cmake files to help us find the libs
 ## these are in /usr/share/cmake/Modules/Findxxx.cmake
 find_package(FLEX REQUIRED)
@@ -97,8 +101,9 @@ find_package(M REQUIRED)
 find_package(EVENT2 REQUIRED)
 
 ## generate config header and make sure its on the include path
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config.h.in ${CMAKE_CURRENT_BINARY_DIR}/config.h)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config.h.in ${CMAKE_CURRENT_BINARY_DIR}/shd-config.h)
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/shd-config.h DESTINATION include/shadow)
 
 ## compile options
 add_definitions(-Wall --std=c99 -D__USE_BSD -D_SVID_SOURCE -D_XOPEN_SOURCE=600 -fPIC -g)
