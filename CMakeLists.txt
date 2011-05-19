@@ -66,17 +66,17 @@ endforeach(library)
 ## check for dependencies, using built-in cmake files to help us find the libs
 ## these are in /usr/share/cmake/Modules/Findxxx.cmake
 find_package(ZLIB REQUIRED)
-find_package(OpenSSL REQUIRED) # result in ${OPENSSL_LIBRARIES} and ${OPENSSL_INCLUDE_DIR}
 
 ## other libs dont have a Findxxx.cmake, so we check on our own (./cmake)
 find_package(RT REQUIRED)
 find_package(DL REQUIRED)
 find_package(M REQUIRED)
+find_package(OPENSSL REQUIRED)
 find_package(EVENT2 REQUIRED)
 find_package(TOR REQUIRED)
 find_package(SHADOW REQUIRED)
 
-include_directories(${RT_INCLUDES} ${DL_INCLUDES} ${M_INCLUDES} ${EVENT2_INCLUDES} ${OPENSSL_INCLUDE_DIR} ${TOR_INCLUDES} ${SHADOW_INCLUDES})
+include_directories(${RT_INCLUDES} ${DL_INCLUDES} ${M_INCLUDES} ${EVENT2_INCLUDES} ${OPENSSL_INCLUDES} ${TOR_INCLUDES} ${SHADOW_INCLUDES})
 
 ## compile options
 add_definitions(-Wall --std=c99 -fPIC -g -D_GNU_SOURCE)
