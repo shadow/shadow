@@ -28,6 +28,10 @@ def main():
           help="include PATH when searching for headers. useful if dependencies are installed to non-standard locations.")
     parser_build.add_argument('-l', '--library', action="append", dest="extra_libraries", metavar="PATH",
           help="include PATH when searching for libraries. useful if dependencies are installed to non-standard locations.")
+    parser_build.add_argument('--libevent-prefix', action="append", dest="prefix_libevent", metavar="PATH",
+          help="use non-standard PATH when linking Tor to libevent.", default=None)
+    parser_build.add_argument('--openssl-prefix', action="append", dest="prefix_openssl", metavar="PATH",
+          help="use non-standard PATH when linking Tor to openssl.", default=None)
     parser_build.add_argument('-g', '--debug', action="store_true", dest="do_debug",
           help="turn on debugging for verbose program output", default=False)
     
@@ -35,8 +39,14 @@ def main():
     parser_install = subparsers_main.add_parser('install', help='install scallion', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser_install.set_defaults(func=install, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     
-    parser_auto = subparsers_main.add_parser('auto', help='build to ./build, install to ./install. useful for quick local setup during development.', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser_auto = subparsers_main.add_parser('auto', help='build to ./build, install to local prefix. useful for quick local setup and during development.', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser_auto.set_defaults(func=auto, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    
+    default_prefix = os.path.abspath(os.getenv("HOME") + "/.local/")
+    parser_auto.add_argument('-p', '--prefix', action="store", dest="prefix",
+          help="install to PATH using libevent and openssl from PATH.", metavar="PATH", default=default_prefix)
+    parser_auto.add_argument('-g', '--debug', action="store_true", dest="do_debug",
+          help="turn on debugging for verbose program output", default=False)
     
     # get arguments, accessible with args.value
     args = parser_main.parse_args()
@@ -70,6 +80,7 @@ def build(args):
 
     if setup_dependencies(args) != 0: return
     if setup_tor(args) != 0: return
+    include_tor(args)
     
     os.chdir(builddir+"/scallion")
 
@@ -122,71 +133,74 @@ def install(args):
     log(args, "calling \'make install\'")
     retcode = subprocess.call(["make", "install"], stdout=outfile)
     log(args, "make install returned " + str(retcode))
-    if retcode == 0: log(args, "run \'shadow -d src/scallion.dsim -l build/scallion/src/libshadow-plugin-scallion-preload.so\'")
+    #if retcode == 0: log(args, "run \'shadow -d src/scallion.dsim -l build/scallion/src/libshadow-plugin-scallion-preload.so\'")
     
     # go back to where we came from
     os.chdir(rundir)
     return retcode
 
 def auto(args):
-    args.prefix = "./install"
-    args.do_debug = False
-    args.extra_includes = None
-    args.extra_libraries = None
+    args.prefix_libevent = args.prefix
+    args.prefix_openssl = args.prefix
+    args.extra_includes = [os.path.abspath(args.prefix + "/include")]
+    args.extra_libraries = [os.path.abspath(args.prefix + "/lib")]
     if build(args) == 0: install(args)
     
 def setup_tor(args):
     rundir = os.getcwd()
     outfile = get_outfile(args)
 
-    # if we already have a directory, dont rebuild
-    if(os.path.exists(args.tordir+"/src/or/tor")): 
-        include_tor(args)
-        return 0
-
-    cflags = "-fPIC"
-    if args.extra_includes is not None:
-        for i in args.extra_includes: cflags += " -I" + i.strip()
-    
-    ldflags = ""
-    if args.extra_libraries is not None:
-        for l in args.extra_libraries: ldflags += " -L" + l.strip()
-
-    patch = "patch -Np1 --batch -i " + args.patchfile
-    configure = "./configure --disable-static-vars --disable-transparent --disable-threads --disable-asciidoc CFLAGS=\"" + cflags + "\" LDFLAGS=\"" + ldflags + "\" LIBS=-lrt"
-    gen = "./autogen.sh"
     build = "make"
-    
-    rundir = os.getcwd()
-    os.chdir(args.tordir)
-    
-    log(args, patch)
-    retcode = subprocess.call(shlex.split(patch), stdout=outfile)
-    if(retcode == 0):
-        os.chmod("autogen.sh", stat.S_IREAD|stat.S_IEXEC);
-        log(args, gen)
-        retcode = subprocess.call(shlex.split(gen), stdout=outfile)
-    
-    if retcode != 0:
-        os.chdir(rundir)
-        shutil.rmtree(args.tordir)
-        return -1
-    
-    retcode = -1
-    if(os.path.exists(args.tordir)):
-        # configure
+    retcode = 0
+
+    # if we already built successfully, dont patch or re-configure
+    if os.path.exists(args.tordir):
         os.chdir(args.tordir)
-        log(args, configure)
-        if subprocess.call(shlex.split(configure), stdout=outfile) == 0:
+        if not os.path.exists(args.tordir+"/src/or/tor"):
+            
+            # patch then configure first
+            cflags = "-fPIC"
+            if args.extra_includes is not None:
+                for i in args.extra_includes: cflags += " -I" + i.strip()
+            
+            ldflags = ""
+            if args.extra_libraries is not None:
+                for l in args.extra_libraries: ldflags += " -L" + l.strip()
+        
+            patch = "patch -Np1 --batch -i " + args.patchfile
+            gen = "./autogen.sh"
+            configure = "./configure --disable-static-vars --disable-transparent --disable-threads --disable-asciidoc CFLAGS=\"" + cflags + "\" LDFLAGS=\"" + ldflags + "\" LIBS=-lrt"
+            if args.prefix_libevent is not None: configure += " --with-libevent-dir=" + os.path.abspath(args.prefix_libevent)
+            if args.prefix_openssl is not None: configure += " --with-openssl-dir=" + os.path.abspath(args.prefix_openssl)
+            
+            if retcode == 0:
+                #patch
+                log(args, patch)
+                retcode = subprocess.call(shlex.split(patch), stdout=outfile)
+                
+            if retcode == 0:
+                # generate configure
+                os.chmod("autogen.sh", stat.S_IREAD|stat.S_IEXEC);
+                log(args, gen)
+                retcode = subprocess.call(shlex.split(gen), stdout=outfile)
+            
+            if retcode == 0:
+                # configure
+                log(args, configure)
+                retcode = subprocess.call(shlex.split(configure), stdout=outfile)
+
+        # configure done now
+        if retcode == 0:
+            # build
             log(args, build)
             retcode = subprocess.call(shlex.split(build), stdout=outfile)
-
-    os.chdir(rundir)
-    if retcode != 0:
-        shutil.rmtree(args.tordir)
-        return -1
     
-    include_tor(args)        
+        os.chdir(rundir)
+        
+        # if we had a failure, start over with patching
+        if retcode != 0:
+            shutil.rmtree(args.tordir)
+            return -1
     
     return retcode
 
@@ -200,7 +214,7 @@ def include_tor(args):
 def setup_dependencies(args):
     outfile = get_outfile(args)
     
-    log(args, "downloading resources...")
+    log(args, "checking tor dependencies...")
     
     args.target_resources = os.path.abspath(os.path.basename(RESOURCES_URL))
     args.target_tor = os.path.abspath(os.path.basename(TOR_URL))
@@ -219,9 +233,11 @@ def setup_dependencies(args):
 #    else: return -1
 
     if not os.path.exists(args.target_tor):
+        log(args, "downloading " + TOR_URL)
         if download(TOR_URL, args.target_tor) != 0:
             log(args, "failed to download " + TOR_URL)
             return -1
+        
     if not os.path.exists(args.tordir):
         if tarfile.is_tarfile(args.target_tor):
             tar = tarfile.open(args.target_tor, "r:gz")
@@ -230,9 +246,11 @@ def setup_dependencies(args):
         else: return -1
 
     if not os.path.exists(args.target_tor_patch):
+        log(args, "downloading " + TOR_PATCH_URL)
         if download(TOR_PATCH_URL, args.target_tor_patch) != 0:
             log(args, "failed to download " + TOR_PATCH_URL)
             return -1
+        
     if not os.path.exists(args.patchfile):
         fin = gzip.open(args.target_tor_patch, 'r')
         fout = open(args.patchfile, 'w')
