@@ -49,6 +49,9 @@ def get_outfile(args):
     # check if we redirect to null
     if(args.be_quiet): return open("/dev/null", 'w')
     else: return None
+        
+def make_paths_absolute(list):
+    for i in xrange(len(list)): list[i] = os.path.abspath(list[i])
 
 def build(args):
     outfile = get_outfile(args)
@@ -74,6 +77,9 @@ def build(args):
     # hack to make passing args to CMAKE work... doesnt seem to like the first arg
     args.extra_includes.insert(0, "./")
     args.extra_libraries.insert(0, "./")
+    
+    make_paths_absolute(args.extra_includes)
+    make_paths_absolute(args.extra_libraries)
 
     cmake_cmd += " -DCMAKE_EXTRA_INCLUDES=" + ';'.join(args.extra_includes)
     cmake_cmd += " -DCMAKE_EXTRA_LIBRARIES=" + ';'.join(args.extra_libraries)
