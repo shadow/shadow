@@ -1,1 +1,49 @@
 TODO
+
+Dependencies:
+Cmake >= 2.6
+Flex
+Bison
+Python2.7
+
+=============================
+STANDARD INSTALL quickstart (replace "rob" with your username):
+=============================
+wget openssl
+./config -fPIC shared
+make
+make install
+
+wget libevent-2.0.11
+./configure CFLAGS="-fPIC"
+make
+make install
+
+wget shadow-1.0.0
+python setup.py build
+python setup.py install
+
+wget scallion-1.0.0
+python setup.py build
+python setup.py install
+
+=============================
+LOCAL INSTALL quickstart (replace "rob" with your username):
+=============================
+wget openssl
+./config --prefix=/home/rob/.local -fPIC shared
+make
+make install
+
+wget libevent-2.0.11
+./configure --prefix=/home/rob/.local CFLAGS="-fPIC -I/home/rob/.local" LDFLAGS="-L/home/rob/.local"
+make
+make install
+
+wget shadow-1.0.0
+python setup.py build --prefix /home/rob/.local --include /home/rob/.local/include --library /home/rob/.local/lib
+python setup.py install
+
+wget scallion-1.0.0
+python setup.py build --prefix /home/rob/.local --include /home/rob/.local/include --library /home/rob/.local/lib
+python setup.py install

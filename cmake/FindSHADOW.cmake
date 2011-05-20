@@ -11,6 +11,7 @@
 
 find_path (SHADOW_INCLUDES shd-plugin.h
   PATHS /usr/local/include /usr/include ${CMAKE_EXTRA_INCLUDES}
+  PATH_SUFFIXES shadow
   )
 
 ## -----------------------------------------------------------------------------

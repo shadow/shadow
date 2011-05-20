@@ -9,8 +9,9 @@
 ## -----------------------------------------------------------------------------
 ## Check for the header files, prirotize user inputs
 
-find_path (OPENSSL_INCLUDES openssl/ssl.h
+find_path (OPENSSL_INCLUDES ssl.h
   PATHS ${CMAKE_EXTRA_INCLUDES} NO_DEFAULT_PATH
+  PATH_SUFFIXES openssl
   )
 if(NOT OPENSSL_INCLUDES)
     find_path (OPENSSL_INCLUDES openssl/ssl.h
