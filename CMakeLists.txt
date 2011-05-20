@@ -120,3 +120,8 @@ endif(SHADOW_TEST STREQUAL ON)
 ## install our 'exported' libs so they can be imported by others
 ## put the .cmake file for importing in shadow-specific directory
 install(EXPORT shadow-externals DESTINATION share/shadow)
+
+## install resources useful for simulations
+install(DIRECTORY ${CMAKE_BUILD_PREFIX}/../shadow-resources/
+    DESTINATION share/shadow/resources
+    PATTERN "${CMAKE_BUILD_PREFIX}/../shadow-resources/*")

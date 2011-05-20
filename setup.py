@@ -1,10 +1,12 @@
 #!/usr/bin/env python2.7
 
-import sys, os, argparse, subprocess
+import sys, os, argparse, subprocess, shutil, urllib2, tarfile
 from datetime import datetime
 
 BUILD_PREFIX="build"
 INSTALL_PREFIX="/usr/local"
+
+RESOURCES_URL="http://shadow.cs.umn.edu/shadow-resources.tar.gz"
 
 def main():
     parser_main = argparse.ArgumentParser(description='Utility to help setup the shadow simulator', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -50,14 +52,6 @@ def main():
     args = parser_main.parse_args()
     # run chosen command
     args.func(args)
-    
-def get_outfile(args):
-    # check if we redirect to null
-    if(args.be_quiet): return open("/dev/null", 'w')
-    else: return None
-        
-def make_paths_absolute(list):
-    for i in xrange(len(list)): list[i] = os.path.abspath(list[i])
 
 def build(args):
     outfile = get_outfile(args)
@@ -65,17 +59,16 @@ def build(args):
     filepath=os.path.abspath(__file__)
     rootdir=filepath[:filepath.rfind("/")]
     builddir=os.path.abspath(BUILD_PREFIX)
+    shadowdir=os.path.abspath(BUILD_PREFIX + "/shadow")
     installdir=os.path.abspath(args.prefix)
     
     # clear cmake cache
-    if(os.path.exists(builddir)):
-        import shutil
-        shutil.rmtree(builddir)
-    if not os.path.exists(builddir): os.makedirs(builddir)
+    if(os.path.exists(shadowdir)): shutil.rmtree(shadowdir)
+    if not os.path.exists(shadowdir): os.makedirs(shadowdir)
     if not os.path.exists(installdir): os.makedirs(installdir)
 
     # build up args string for cmake
-    cmake_cmd = "cmake " + rootdir + " -DCMAKE_BUILD_PREFIX=" + builddir + " -DCMAKE_INSTALL_PREFIX=" + installdir
+    cmake_cmd = "cmake " + rootdir + " -DCMAKE_BUILD_PREFIX=" + shadowdir + " -DCMAKE_INSTALL_PREFIX=" + installdir
     
     if args.extra_includes is None: args.extra_includes = []
     if args.extra_libraries is None: args.extra_libraries = []
@@ -97,9 +90,11 @@ def build(args):
     # we will run from build directory
     rundir = os.getcwd()
     os.chdir(builddir)
+    get_resources(args)
+    os.chdir(shadowdir)
     
     # call cmake to configure the make process, wait for completion
-    log(args, "running \'" + cmake_cmd + "\' from " + builddir)
+    log(args, "running \'" + cmake_cmd + "\' from " + shadowdir)
     retcode = subprocess.call(cmake_cmd.strip().split(), stdout=outfile)
     log(args, "cmake returned " + str(retcode))
     
@@ -117,14 +112,14 @@ def build(args):
 def install(args):
     outfile = get_outfile(args)
     
-    builddir=os.path.abspath(BUILD_PREFIX)
-    if not os.path.exists(builddir): 
+    shadowdir=os.path.abspath(BUILD_PREFIX + "/shadow")
+    if not os.path.exists(shadowdir): 
         log(args, "ERROR: please build before installing!")
         return
 
     # go to build dir and install from makefile
     rundir = os.getcwd()
-    os.chdir(builddir)
+    os.chdir(shadowdir)
     
     # call make install, wait for it to finish
     log(args, "calling \'make install\'")
@@ -143,6 +138,40 @@ def auto(args):
     args.extra_includes = [os.path.abspath(args.prefix + "/include")]
     args.extra_libraries = [os.path.abspath(args.prefix + "/lib")]
     if build(args) == 0: install(args)
+
+def get_resources(args):
+    args.target_resources = os.path.abspath(os.path.basename(RESOURCES_URL))
+    # download and extract
+    if not os.path.exists(args.target_resources):
+        log(args, "downloading " + RESOURCES_URL)
+        if download(RESOURCES_URL, args.target_resources) != 0:
+            log(args, "failed to download " + RESOURCES_URL)
+            return -1
+        
+    resources_dir = args.target_resources[:args.target_resources.rindex(".tar.gz")]
+    if tarfile.is_tarfile(args.target_resources) and not os.path.exists(resources_dir):
+        tar = tarfile.open(args.target_resources, "r:gz")
+        tar.extractall()
+        tar.close()
+    else: return -1
+
+def get_outfile(args):
+    # check if we redirect to null
+    if(args.be_quiet): return open("/dev/null", 'w')
+    else: return None
+        
+def make_paths_absolute(list):
+    for i in xrange(len(list)): list[i] = os.path.abspath(list[i])
+    
+def download(url, target_path):
+    try:
+        u = urllib2.urlopen(url)
+        localfile = open(target_path, 'w')
+        localfile.write(u.read())
+        localfile.close()
+        return 0
+    except urllib2.URLError:
+        return -1
 
 def log(args, msg):
     if not args.be_quiet:
