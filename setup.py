@@ -8,7 +8,6 @@ INSTALL_PREFIX="/usr/local"
 
 TOR_URL="https://archive.torproject.org/tor-package-archive/tor-0.2.2.15-alpha.tar.gz"
 TOR_PATCH_URL="http://shadow.cs.umn.edu/tor-0.2.2.15-alpha.scallion.patch.gz"
-RESOURCES_URL="http://shadow.cs.umn.edu/shadow-resources.tar.gz"
 
 def main():
     parser_main = argparse.ArgumentParser(description='Utility to help setup the scallion plug-in for the shadow simulator', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -216,22 +215,11 @@ def setup_dependencies(args):
     
     log(args, "checking tor dependencies...")
     
-    args.target_resources = os.path.abspath(os.path.basename(RESOURCES_URL))
     args.target_tor = os.path.abspath(os.path.basename(TOR_URL))
     args.tordir = args.target_tor[:args.target_tor.rindex(".tar.gz")]
     args.target_tor_patch = os.path.abspath(os.path.basename(TOR_PATCH_URL))
     args.patchfile = args.target_tor_patch[:args.target_tor_patch.rindex('.')]
     
-    # download and extract
-#    if not os.path.exists(args.target_resources) and download(RESOURCES_URL, args.target_resources) != 0:
-#        log(args, "failed to download " + RESOURCES_URL)
-#        return -1
-#    if tarfile.is_tarfile(args.target_resources):
-#        tar = tarfile.open(args.target_resources, "r:gz")
-#        tar.extractall()
-#        tar.close()
-#    else: return -1
-
     if not os.path.exists(args.target_tor):
         log(args, "downloading " + TOR_URL)
         if download(TOR_URL, args.target_tor) != 0:
