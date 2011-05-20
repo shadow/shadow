@@ -111,8 +111,8 @@ static void scallion_start_socks_client(int timerid, void* arg) {
 	}
 }
 
-void _module_init() {
-	scallion_enter_context("_module_init");
+void _plugin_init() {
+	scallion_enter_context("_plugin_init");
 
 	/* clear global memory before registering */
 	memset(&_scallion_global_data, 0, sizeof(scallion_t));
@@ -123,13 +123,13 @@ void _module_init() {
 	scallion_register_globals(&_scallion_global_data, &scallion);
 	snri_log(LOG_MSG, "finished registration, scallion initialized!\n");
 
-	scallion_exit_context("_module_init");
+	scallion_exit_context("_plugin_init");
 }
 
-void _module_uninit() {}
+void _plugin_uninit() {}
 
-void _module_instantiate(int argc, char* argv[]) {
-	scallion_enter_context("_module_instantiate");
+void _plugin_instantiate(int argc, char* argv[]) {
+	scallion_enter_context("_plugin_instantiate");
 
 	const char* usage = "Scallion USAGE: (\"dirauth\"|\"relay\"|\"exitrelay\"|\"client\") torrc_path datadir_base_path geoip_path [client_args for shd-plugin-filegetter...]\n";
 
@@ -276,17 +276,17 @@ void _module_instantiate(int argc, char* argv[]) {
 		snri_timer_create(180000, &scallion_start_socks_client, launch);
 	}
 
-	scallion_exit_context("_module_instantiate");
+	scallion_exit_context("_plugin_instantiate");
 }
 
-void _module_destroy() {
-	scallion_enter_context("_module_destroy");
+void _plugin_destroy() {
+	scallion_enter_context("_plugin_destroy");
 	vtor_destroy();
-	scallion_exit_context("_module_destroy");
+	scallion_exit_context("_plugin_destroy");
 }
 
-void _module_socket_readable(int sockd){
-	scallion_enter_context("_module_socket_readable");
+void _plugin_socket_readable(int sockd){
+	scallion_enter_context("_plugin_socket_readable");
 
 	if(sockd == scallion->sfg.fg.sockd) {
 		service_filegetter_activate(&scallion->sfg, sockd);
@@ -294,10 +294,10 @@ void _module_socket_readable(int sockd){
 		vtor_socket_readable(&scallion->vtor, sockd);
 	}
 
-	scallion_exit_context("_module_socket_readable");
+	scallion_exit_context("_plugin_socket_readable");
 }
-void _module_socket_writable(int sockd){
-	scallion_enter_context("_module_socket_writable");
+void _plugin_socket_writable(int sockd){
+	scallion_enter_context("_plugin_socket_writable");
 
 	if(sockd == scallion->sfg.fg.sockd) {
 		service_filegetter_activate(&scallion->sfg, sockd);
@@ -305,5 +305,5 @@ void _module_socket_writable(int sockd){
 		vtor_socket_writable(&scallion->vtor, sockd);
 	}
 
-	scallion_exit_context("_module_socket_writable");
+	scallion_exit_context("_plugin_socket_writable");
 }

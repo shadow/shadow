@@ -20,9 +20,10 @@ set(FIND_SHADOW_PATHS "/usr/local/lib /usr/lib /lib ${CMAKE_EXTRA_LIBRARIES}")
 
 find_library (SHADOW_UTIL_LIBRARIES NAMES libshadow-util.a shadow-util PATHS ${FIND_SHADOW_PATHS})
 find_library (SHADOW_PLUGIN_LIBRARIES NAMES libshadow-plugin.a shadow-plugin PATHS ${FIND_SHADOW_PATHS})
+find_library (SHADOW_SERVICE_LIBRARIES shadow-plugin-service PATHS ${FIND_SHADOW_PATHS})
 
-mark_as_advanced(${SHADOW_UTIL_LIBRARIES} ${SHADOW_PLUGIN_LIBRARIES})
-set(SHADOW_LIBRARIES ${SHADOW_UTIL_LIBRARIES} ${SHADOW_PLUGIN_LIBRARIES})
+mark_as_advanced(${SHADOW_UTIL_LIBRARIES} ${SHADOW_PLUGIN_LIBRARIES} ${SHADOW_SERVICE_LIBRARIES})
+set(SHADOW_LIBRARIES ${SHADOW_UTIL_LIBRARIES} ${SHADOW_PLUGIN_LIBRARIES} ${SHADOW_SERVICE_LIBRARIES})
 
 ## -----------------------------------------------------------------------------
 ## Actions taken when all components have been found

@@ -27,9 +27,10 @@ find_library (TOR_TOR_LIBRARIES NAMES libtor.a tor PATHS ${FIND_TOR_PATHS})
 find_library (TOR_OR_LIBRARIES NAMES libor.a or PATHS ${FIND_TOR_PATHS})
 find_library (TOR_OR_CRYPTO_LIBRARIES NAMES libor-crypto.a or-crypto PATHS ${FIND_TOR_PATHS})
 find_library (TOR_OR_EVENT_LIBRARIES NAMES libor-event.a or-event PATHS ${FIND_TOR_PATHS})
+find_file (TOR_VAR_DEFINITIONS var_definitions.o PATHS ${FIND_TOR_PATHS})
 
-mark_as_advanced(${TOR_TOR_LIBRARIES} ${TOR_OR_LIBRARIES} ${TOR_OR_CRYPTO_LIBRARIES} ${TOR_OR_EVENT_LIBRARIES})
-set(TOR_LIBRARIES ${TOR_TOR_LIBRARIES} ${TOR_OR_LIBRARIES} ${TOR_OR_CRYPTO_LIBRARIES} ${TOR_OR_EVENT_LIBRARIES})
+mark_as_advanced(${TOR_TOR_LIBRARIES} ${TOR_OR_LIBRARIES} ${TOR_OR_CRYPTO_LIBRARIES} ${TOR_OR_EVENT_LIBRARIES} ${TOR_VAR_DEFINITIONS})
+set(TOR_LIBRARIES ${TOR_TOR_LIBRARIES} ${TOR_OR_LIBRARIES} ${TOR_OR_CRYPTO_LIBRARIES} ${TOR_OR_EVENT_LIBRARIES} ${TOR_VAR_DEFINITIONS})
 
 ## -----------------------------------------------------------------------------
 ## Actions taken when all components have been found
