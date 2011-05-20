@@ -37,9 +37,15 @@ def main():
     parser_install = subparsers_main.add_parser('install', help='install the shadow simulator', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser_install.set_defaults(func=install, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     
-    parser_auto = subparsers_main.add_parser('auto', help='build to ./build, install to ./install. useful for quick local setup during development.', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser_auto = subparsers_main.add_parser('auto', help='build to ./build, install to local prefix. useful for quick local setup and during development.', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser_auto.set_defaults(func=auto, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     
+    default_prefix = os.path.abspath(os.getenv("HOME") + "/.local/")
+    parser_auto.add_argument('-p', '--prefix', action="store", dest="prefix",
+          help="install to PATH using libs from PATH/lib and includes from PATH/include", metavar="PATH", default=default_prefix)
+    parser_auto.add_argument('-g', '--debug', action="store_true", dest="do_debug",
+          help="turn on debugging for verbose program output", default=False)
+        
     # get arguments, accessible with args.value
     args = parser_main.parse_args()
     # run chosen command
@@ -131,13 +137,11 @@ def install(args):
     return retcode
 
 def auto(args):
-    args.prefix = "./install"
     args.do_coverage = False
     args.do_doc = False
-    args.do_debug = False
     args.do_test = False
-    args.extra_includes = None
-    args.extra_libraries = None
+    args.extra_includes = [os.path.abspath(args.prefix + "/include")]
+    args.extra_libraries = [os.path.abspath(args.prefix + "/lib")]
     if build(args) == 0: install(args)
 
 def log(args, msg):
