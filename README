@@ -8,42 +8,42 @@ Python2.7
 
 =============================
 STANDARD INSTALL quickstart (replace "rob" with your username):
+ -install to /usr/local (requires root priveledges)
 =============================
-wget openssl
+wget http://www.openssl.org/source/openssl-1.0.0d.tar.gz
 ./config -fPIC shared
 make
-make install
+sudo make install
 
-wget libevent-2.0.11
+wget http://monkey.org/~provos/libevent-2.0.11-stable.tar.gz
 ./configure CFLAGS="-fPIC"
 make
-make install
+sudo make install
 
 wget shadow-1.0.0
 python setup.py build
-python setup.py install
+sudo python setup.py install
 
 wget scallion-1.0.0
 python setup.py build
-python setup.py install
+sudo python setup.py install
 
 =============================
 LOCAL INSTALL quickstart (replace "rob" with your username):
+ -install to ~/.local
 =============================
-wget openssl
+wget http://www.openssl.org/source/openssl-1.0.0d.tar.gz
 ./config --prefix=/home/rob/.local -fPIC shared
 make
 make install
 
-wget libevent-2.0.11
+wget http://monkey.org/~provos/libevent-2.0.11-stable.tar.gz
 ./configure --prefix=/home/rob/.local CFLAGS="-fPIC -I/home/rob/.local" LDFLAGS="-L/home/rob/.local"
 make
 make install
 
 wget shadow-1.0.0
-python setup.py build --prefix /home/rob/.local --include /home/rob/.local/include --library /home/rob/.local/lib
-python setup.py install
+python setup.py auto
 
 wget scallion-1.0.0
-python setup.py build --prefix /home/rob/.local --include /home/rob/.local/include --library /home/rob/.local/lib
-python setup.py install
+python setup.py auto
