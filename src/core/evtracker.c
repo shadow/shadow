@@ -223,6 +223,10 @@ void * evtracker_get_nextevent(evtracker_tp evt, ptime_t * time, char removal) {
 			} else
 				evt->evhash[hashe->time % evt->size] = rep2;
 
+			/* if we are deleting a cached element, clear the cache */
+			if(hashe == evt->last_hash_e) {
+				evt->last_hash_e = NULL;
+			}
 			/* hooray for ram */
 			free(hashe->data);
 			free(hashe);
