@@ -248,19 +248,27 @@ ssize_t vtcp_recv(vsocket_mgr_tp net, vsocket_tp tcpsock, void* dest_buf, size_t
 }
 
 enum vt_prc_result vtcp_process_item(vtransport_item_tp titem) {
-	vsocket_tp target = vtcp_get_target_socket(titem);
-	vpacket_tp packet = vpacket_mgr_lockcontrol(titem->rc_packet, LC_OP_READLOCK | LC_TARGET_PACKET);
-
 	enum vt_prc_result prc_result = VT_PRC_NONE;
 
-	/* we must have a socket and header info to proceed */
+	if(titem == NULL || titem->rc_packet == NULL) {
+		goto ret;
+	}
+
+	vsocket_tp target = vtcp_get_target_socket(titem);
+
+	/* we must have a socket */
 	if(target == NULL) {
 		dlogf(LOG_INFO, "vtcp_process_item: ignoring NULL target socket (child socket was destroyed?)\n");
 		goto ret;
 	} else if (target->ethernet_peer == NULL && target->loopback_peer == NULL) {
 		dlogf(LOG_WARN, "vtcp_process_item: cannot process unbound socket\n");
 		goto ret;
-	} else if (packet == NULL) {
+	}
+
+	vpacket_tp packet = vpacket_mgr_lockcontrol(titem->rc_packet, LC_OP_READLOCK | LC_TARGET_PACKET);
+
+	/* must have packet and header info to proceed */
+	if (packet == NULL) {
 		dlogf(LOG_WARN, "vtcp_process_item: cannot process without incoming control packet\n");
 		goto ret;
 	} else if (packet->header.protocol != SOCK_STREAM) {
@@ -271,6 +279,9 @@ enum vt_prc_result vtcp_process_item(vtransport_item_tp titem) {
 		goto ret;
 	}
 
+	rc_vpacket_pod_retain_stack(titem->rc_packet);
+	rc_set(titem->rc_packet);
+
 	vpacket_mgr_lockcontrol(titem->rc_packet, LC_OP_READUNLOCK | LC_TARGET_PACKET);
 
 	debugf("vtcp_process_item: socket %i got seq# %u from %s\n", target->sock_desc, packet->tcp_header.sequence_number, inet_ntoa_t(packet->header.source_addr));
@@ -278,7 +289,7 @@ enum vt_prc_result vtcp_process_item(vtransport_item_tp titem) {
 	prc_result |= vtcp_process_state(target, titem->rc_packet);
 
 	if(prc_result & VT_PRC_RESET) {
-		goto ret;
+		goto done;
 	}
 
 	prc_result |= vtcp_process_updates(target, titem->rc_packet);
@@ -295,6 +306,10 @@ enum vt_prc_result vtcp_process_item(vtransport_item_tp titem) {
 	if(prc_result & VT_PRC_DESTROY) {
 		vsocket_mgr_destroy_and_remove_socket(target->vt->vtcp->vsocket_mgr, target);
 	}
+
+done:
+	rc_vpacket_pod_release_stack(titem->rc_packet);
+	rc_unset(titem->rc_packet);
 
 ret:
 	return prc_result;
@@ -355,12 +370,10 @@ static void vtcp_reset(vtcp_tp vtcp, vsocket_tp sock, rc_vpacket_pod_tp rc_packe
 static enum vt_prc_result vtcp_process_state(vsocket_tp sock, rc_vpacket_pod_tp rc_packet) {
 	rc_vpacket_pod_retain_stack(rc_packet);
 	enum vt_prc_result prc_result = VT_PRC_NONE;
-	int do_unlock = 1;
 
 	vpacket_tp packet = vpacket_mgr_lockcontrol(rc_packet, LC_OP_READLOCK | LC_TARGET_PACKET);
 	if(packet == NULL) {
-		do_unlock = 0;
-		goto ret;
+		goto ret2;
 	}
 	vsocket_mgr_tp vs = sock->vt->vsocket_mgr;
 	vtcp_tp vtcp = sock->vt->vtcp;
@@ -502,9 +515,8 @@ static enum vt_prc_result vtcp_process_state(vsocket_tp sock, rc_vpacket_pod_tp 
 
 ret:
 	vpacket_mgr_lockcontrol(rc_packet, LC_OP_READUNLOCK | LC_TARGET_PACKET);
-	if(do_unlock) {
-		rc_vpacket_pod_release_stack(rc_packet);
-	}
+ret2:
+	rc_vpacket_pod_release_stack(rc_packet);
 	return prc_result;
 }
 

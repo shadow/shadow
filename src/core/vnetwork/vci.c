@@ -695,12 +695,9 @@ void vci_schedule_retransmit(rc_vpacket_pod_tp rc_packet, in_addr_t caller_addr)
 	rc_vpacket_pod_retain_stack(rc_packet);
 	vci_scheduling_info_tp si = NULL;
 
-	int do_unlock = 1;
-
 	vpacket_tp packet = vpacket_mgr_lockcontrol(rc_packet, LC_OP_READLOCK | LC_TARGET_PACKET);
 	if(packet == NULL) {
-		do_unlock = 0;
-		goto ret;
+		goto ret2;
 	}
 
 	vci_mgr_tp vci_mgr = NULL;
@@ -785,9 +782,8 @@ ret:
 	if(si != NULL) {
 		free(si);
 	}
-	if(do_unlock) {
-		vpacket_mgr_lockcontrol(rc_packet, LC_OP_READUNLOCK | LC_TARGET_PACKET);
-	}
+	vpacket_mgr_lockcontrol(rc_packet, LC_OP_READUNLOCK | LC_TARGET_PACKET);
+ret2:
 	rc_vpacket_pod_release_stack(rc_packet);
 }
 
