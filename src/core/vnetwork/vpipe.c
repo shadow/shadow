@@ -28,8 +28,8 @@
 
 #include "vsocket_mgr.h"
 #include "vpipe.h"
-#include "hashtable.h"
 #include "log.h"
+#include "hashtable.h"
 
 static enum vpipe_status vpipe_unid_destroy(vpipe_unid_tp unipipe) {
 	if(unipipe != NULL) {
@@ -236,7 +236,7 @@ static enum vpipe_status vpipe_bid_close(vpipe_bid_tp bipipe, vpipe_id fd) {
 	return VPIPE_FAILURE;
 }
 
-static void vpipe_destroy_cb(void* value, int key) {
+static void vpipe_destroy_cb(int key, void* value, void *data) {
 	/* the lower level close functions dont modify the hashtable, so we should
 	 * be safe using them. they should take care not to double-free. */
 	vpipe_bid_close(value, key);
@@ -244,15 +244,15 @@ static void vpipe_destroy_cb(void* value, int key) {
 
 vpipe_mgr_tp vpipe_mgr_create(in_addr_t addr) {
 	vpipe_mgr_tp mgr = malloc(sizeof(vpipe_mgr_t));
-	mgr->bipipes = hashtable_create(10, 0.90);
+	mgr->bipipes = g_hash_table_new(g_int_hash, g_int_equal);
 	mgr->addr = addr;
 	return mgr;
 }
 
 void vpipe_mgr_destroy(vpipe_mgr_tp mgr) {
 	if(mgr != NULL) {
-		hashtable_walk(mgr->bipipes, &vpipe_destroy_cb);
-		hashtable_destroy(mgr->bipipes);
+		g_hash_table_foreach(mgr->bipipes, (GHFunc)vpipe_destroy_cb, NULL);
+		g_hash_table_destroy(mgr->bipipes);
 		free(mgr);
 	}
 }
@@ -263,8 +263,10 @@ enum vpipe_status vpipe_create(vevent_mgr_tp vev_mgr, vpipe_mgr_tp mgr, vpipe_id
 
 		if(bipipe != NULL) {
 			/* TODO: check for collisions */
-			hashtable_set(mgr->bipipes, fda, bipipe);
-			hashtable_set(mgr->bipipes, fdb, bipipe);
+                        gint *key1 = int_key(fda);
+                        gint *key2 = int_key(fdb);
+			g_hash_table_insert(mgr->bipipes, key1, bipipe);
+			g_hash_table_insert(mgr->bipipes, key2, bipipe);
 			return VPIPE_SUCCESS;
 		}
 	}
@@ -273,7 +275,7 @@ enum vpipe_status vpipe_create(vevent_mgr_tp vev_mgr, vpipe_mgr_tp mgr, vpipe_id
 
 ssize_t vpipe_read(vpipe_mgr_tp mgr, vpipe_id fd, void* dst, size_t num_bytes) {
 	if(mgr != NULL) {
-		vpipe_bid_tp bipipe = hashtable_get(mgr->bipipes, fd);
+		vpipe_bid_tp bipipe = g_hash_table_lookup(mgr->bipipes, &fd);
 		return vpipe_bid_read(bipipe, fd, dst, num_bytes);
 	}
 	return VPIPE_IO_ERROR;
@@ -281,7 +283,7 @@ ssize_t vpipe_read(vpipe_mgr_tp mgr, vpipe_id fd, void* dst, size_t num_bytes) {
 
 ssize_t vpipe_write(vpipe_mgr_tp mgr, vpipe_id fd, const void* src, size_t num_bytes) {
 	if(mgr != NULL) {
-		vpipe_bid_tp bipipe = hashtable_get(mgr->bipipes, fd);
+		vpipe_bid_tp bipipe = g_hash_table_lookup(mgr->bipipes, &fd);
 		return vpipe_bid_write(bipipe, fd, src, num_bytes);
 	}
 	return VPIPE_IO_ERROR;
@@ -290,7 +292,8 @@ ssize_t vpipe_write(vpipe_mgr_tp mgr, vpipe_id fd, const void* src, size_t num_b
 enum vpipe_status vpipe_close(vpipe_mgr_tp mgr, vpipe_id fd) {
 	if(mgr != NULL) {
 		/* consider it closed if its not mapped */
-		vpipe_bid_tp vp = hashtable_remove(mgr->bipipes, fd);
+		vpipe_bid_tp vp = g_hash_table_lookup(mgr->bipipes, &fd);
+		g_hash_table_remove(mgr->bipipes, &fd);
 
 		return vpipe_bid_close(vp, fd);
 	}
@@ -299,7 +302,7 @@ enum vpipe_status vpipe_close(vpipe_mgr_tp mgr, vpipe_id fd) {
 
 enum vpipe_status vpipe_stat(vpipe_mgr_tp mgr, vpipe_id fd) {
 	if(mgr != NULL) {
-		vpipe_bid_tp vp = hashtable_get(mgr->bipipes, fd);
+		vpipe_bid_tp vp = g_hash_table_lookup(mgr->bipipes, &fd);
 		if(vp != NULL) {
 			/* since the pipe exists, we know this fd hasn't closed yet. so it
 			 * can still read. but we need to check that the other end didn't
@@ -332,7 +335,7 @@ enum vpipe_status vpipe_stat(vpipe_mgr_tp mgr, vpipe_id fd) {
 
 vepoll_tp vpipe_get_poll(vpipe_mgr_tp mgr, vpipe_id fd) {
 	if(mgr != NULL) {
-		vpipe_bid_tp vp = hashtable_get(mgr->bipipes, fd);
+		vpipe_bid_tp vp = g_hash_table_lookup(mgr->bipipes, &fd);
 		if(vp != NULL) {
 			if(fd == vp->fda) {
 				return vp->vepolla;

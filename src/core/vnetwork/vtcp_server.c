@@ -32,12 +32,12 @@
 #include "vpeer.h"
 #include "vtransport.h"
 #include "vtcp.h"
-#include "hashtable.h"
 #include "list.h"
 #include "log.h"
 #include "sysconfig.h"
+#include "hashtable.h"
 
-static void vtcp_server_add_child_helper(hashtable_tp ht, vtcp_server_child_tp schild);
+static void vtcp_server_add_child_helper(GHashTable *ht, vtcp_server_child_tp schild);
 
 vtcp_server_tp vtcp_server_create(vsocket_mgr_tp vsocket_mgr, vsocket_tp sock, int backlog) {
 	vtcp_server_tp server = malloc(sizeof(vtcp_server_t));
@@ -53,15 +53,15 @@ vtcp_server_tp vtcp_server_create(vsocket_mgr_tp vsocket_mgr, vsocket_tp sock, i
 	server->vsocket_mgr = vsocket_mgr;
 	server->sock = sock;
 
-	server->incomplete_children = hashtable_create(sysconfig_get_int("vtcpserver_incomplete_hashsize"), sysconfig_get_float("vtcpserver_incomplete_hashgrowth"));
-	server->pending_children = hashtable_create(sysconfig_get_int("vtcpserver_pending_hashsize"), sysconfig_get_float("vtcpserver_pending_hashgrowth"));
+	server->incomplete_children = g_hash_table_new(g_int_hash, g_int_equal);
+	server->pending_children = g_hash_table_new(g_int_hash, g_int_equal);
 	server->pending_queue = list_create();
-	server->accepted_children = hashtable_create(sysconfig_get_int("vtcpserver_accepted_hashsize"), sysconfig_get_float("vtcpserver_accepted_hashgrowth"));
+	server->accepted_children = g_hash_table_new(g_int_hash, g_int_equal);
 
 	return server;
 }
 
-void vtcp_server_destroy_cb(void* value, int key) {
+void vtcp_server_destroy_cb(int key, void* value, void *param) {
 	vtcp_server_destroy((vtcp_server_tp) value);
 }
 
@@ -69,13 +69,13 @@ void vtcp_server_destroy(vtcp_server_tp server) {
 	if(server != NULL){
 //		server->backlog = 0;
 
-		hashtable_walk_param(server->incomplete_children, &vsocket_mgr_destroy_and_remove_socket_cb, server->vsocket_mgr);
-		hashtable_walk_param(server->pending_children, &vsocket_mgr_destroy_and_remove_socket_cb, server->vsocket_mgr);
-		hashtable_walk_param(server->accepted_children, &vsocket_mgr_destroy_and_remove_socket_cb, server->vsocket_mgr);
+		g_hash_table_foreach(server->incomplete_children, (GHFunc)vsocket_mgr_destroy_and_remove_socket_cb, server->vsocket_mgr);
+		g_hash_table_foreach(server->pending_children, (GHFunc)vsocket_mgr_destroy_and_remove_socket_cb, server->vsocket_mgr);
+		g_hash_table_foreach(server->accepted_children, (GHFunc)vsocket_mgr_destroy_and_remove_socket_cb, server->vsocket_mgr);
 
-		hashtable_destroy(server->incomplete_children);
-		hashtable_destroy(server->pending_children);
-		hashtable_destroy(server->accepted_children);
+		g_hash_table_destroy(server->incomplete_children);
+		g_hash_table_destroy(server->pending_children);
+		g_hash_table_destroy(server->accepted_children);
 
 		/* vsockets stored in pending queue were just deleted from hashtable */
 		list_destroy(server->pending_queue);
@@ -85,14 +85,13 @@ void vtcp_server_destroy(vtcp_server_tp server) {
 }
 
 uint8_t vtcp_server_is_empty(vtcp_server_tp server) {
-	if(server != NULL &&
-			server->accepted_children->population +
-			server->incomplete_children->population +
-			server->pending_children->population > 0) {
+	if(server != NULL && 
+           (g_hash_table_size(server->accepted_children) > 0 ||
+            g_hash_table_size(server->incomplete_children) > 0 ||
+            g_hash_table_size(server->incomplete_children) > 0)) {
 		return 0;
-	} else {
-		return 1;
 	}
+        return 1;
 }
 
 vtcp_server_child_tp vtcp_server_create_child(vtcp_server_tp server, in_addr_t remote_addr, in_port_t remote_port) {
@@ -139,9 +138,9 @@ void vtcp_server_destroy_child(vtcp_server_tp server, vtcp_server_child_tp schil
 					schild->sock->sock_desc, schild->sock->sock_desc_parent);
 
 		/* remove all possible links to child */
-		hashtable_remove(server->incomplete_children, schild->key);
-		hashtable_remove(server->pending_children, schild->key);
-		hashtable_remove(server->accepted_children, schild->key);
+		g_hash_table_remove(server->incomplete_children, &schild->key);
+		g_hash_table_remove(server->pending_children, &schild->key);
+		g_hash_table_remove(server->accepted_children, &schild->key);
 
 		/* TODO do something smarter instead of re-creating the
 		 * pending queue... like a list iterator */
@@ -165,15 +164,16 @@ void vtcp_server_destroy_child(vtcp_server_tp server, vtcp_server_child_tp schil
 vtcp_server_child_tp vtcp_server_get_child(vtcp_server_tp server, in_addr_t remote_addr, in_port_t remote_port) {
 	if(server != NULL) {
 		unsigned int hashkey = vsocket_hash(remote_addr, remote_port);
+                gint *key = int_key(hashkey);
 
 		vtcp_server_child_tp target = NULL;
 
 		/* look through existing connections */
-		target = hashtable_get(server->accepted_children, hashkey);
+		target = g_hash_table_lookup(server->accepted_children, key);
 		if(target == NULL){
-			target = hashtable_get(server->incomplete_children, hashkey);
+			target = g_hash_table_lookup(server->incomplete_children, key);
 			if(target == NULL){
-				target = hashtable_get(server->pending_children, hashkey);
+				target = g_hash_table_lookup(server->pending_children, key);
 			}
 		}
 
@@ -191,7 +191,7 @@ void vtcp_server_add_child_incomplete(vtcp_server_tp server, vtcp_server_child_t
 
 void vtcp_server_remove_child_incomplete(vtcp_server_tp server, vtcp_server_child_tp schild) {
 	if(server != NULL && schild != NULL) {
-		hashtable_remove(server->incomplete_children, schild->key);
+		g_hash_table_remove(server->incomplete_children, &schild->key);
 	}
 }
 
@@ -211,7 +211,7 @@ vtcp_server_child_tp vtcp_server_remove_child_pending(vtcp_server_tp server) {
 	if(server != NULL && server->pending_queue != NULL) {
 		vtcp_server_child_tp pending = list_pop_front(server->pending_queue);
 		if(pending != NULL) {
-			hashtable_remove(server->pending_children, pending->key);
+			g_hash_table_remove(server->pending_children, &pending->key);
 		}
 		return pending;
 	} else {
@@ -227,20 +227,21 @@ void vtcp_server_add_child_accepted(vtcp_server_tp server, vtcp_server_child_tp 
 
 void vtcp_server_remove_child_accepted(vtcp_server_tp server, vtcp_server_child_tp schild) {
 	if(server != NULL && schild != NULL) {
-		hashtable_remove(server->accepted_children, schild->key);
+		g_hash_table_remove(server->accepted_children, &schild->key);
 	}
 }
 
-static void vtcp_server_add_child_helper(hashtable_tp ht, vtcp_server_child_tp schild) {
+static void vtcp_server_add_child_helper(GHashTable *ht, vtcp_server_child_tp schild) {
 	if(schild != NULL) {
 		/* check for collision in its new table */
-		vsocket_tp collision = hashtable_get(ht, schild->key);
+		vsocket_tp collision = g_hash_table_lookup(ht, &schild->key);
 		if(collision != NULL){
 			dlogf(LOG_ERR, "vtcp_server_add_child_helper: hash collision!\n");
 			return;
 		}
 
-		hashtable_set(ht, schild->key, schild);
+                gint *key = int_key(schild->key);
+		g_hash_table_insert(ht, key, schild);
 	}
 }
 

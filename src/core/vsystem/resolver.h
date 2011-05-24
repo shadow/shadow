@@ -25,6 +25,7 @@
 
 #include <stdint.h>
 #include <netinet/in.h>
+#include <glib-2.0/glib.h>
 
 #include "hashtable.h"
 
@@ -40,14 +41,14 @@ typedef struct resolver_entry_s {
 
 typedef struct resolver_s {
 	uint32_t unique_id_counter;
-	hashtable_tp name_entry;
-	hashtable_tp addr_entry;
+	GHashTable *name_entry;
+	GHashTable *addr_entry;
 	int pid;
 } resolver_t, *resolver_tp;
 
 resolver_tp resolver_create(int process_id);
 void resolver_destroy(resolver_tp resolver);
-void resolver_destroy_cb(void* value, int key);
+void resolver_destroy_cb(int key, void* value, void *param); 
 
 void resolver_add(resolver_tp r, char* name, in_addr_t addr, uint8_t prepend_unique_id, uint32_t KBps_down, uint32_t KBps_up);
 void resolver_remove_byname(resolver_tp r, char* name);

@@ -25,10 +25,10 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <glib-2.0/glib.h>
 
 #include "vepoll.h"
 #include "linkedbuffer.h"
-#include "hashtable.h"
 
 typedef uint16_t vpipe_id;
 #define VPIPE_IO_ERROR -1
@@ -62,7 +62,7 @@ typedef struct vpipe_bid_s {
 } vpipe_bid_t, *vpipe_bid_tp;
 
 typedef struct vpipe_mgr_s {
-	hashtable_tp bipipes;
+	GHashTable *bipipes;
 	in_addr_t addr;
 } vpipe_mgr_t, *vpipe_mgr_tp;
 

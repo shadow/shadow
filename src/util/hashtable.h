@@ -65,5 +65,6 @@ void * hashtable_get(hashtable_tp ht, unsigned int key) ;
 
 void * hashtable_remove(hashtable_tp ht, unsigned int key);
 
+gint *int_key(int key);
 
 #endif

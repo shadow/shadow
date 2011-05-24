@@ -55,9 +55,9 @@
 #endif
 
 void vsocket_mgr_destroy_and_remove_socket(vsocket_mgr_tp net, vsocket_tp sock);
-void vsocket_mgr_destroy_and_remove_socket_cb(void* value, int key, void* param);
+void vsocket_mgr_destroy_and_remove_socket_cb(int key, void* value, void* param);
 void vsocket_mgr_destroy_socket(vsocket_tp sock);
-void vsocket_mgr_destroy_socket_cb(void* value, int key);
+void vsocket_mgr_destroy_socket_cb(int key, void* value, void *param);
 uint64_t vsocket_get_retransmit_key(rc_vpacket_pod_tp rc_packet);
 unsigned int vsocket_hash(in_addr_t addr, in_port_t port);
 void vsocket_transition(vsocket_tp sock, enum vsocket_state newstate);

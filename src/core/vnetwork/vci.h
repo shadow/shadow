@@ -31,10 +31,10 @@
 #include <sys/time.h>
 #include <time.h>
 #include <netinet/in.h>
+#include <glib-2.0/glib.h>
 
 #include "vpacket_mgr.h"
 #include "vpacket.h"
-#include "hashtable.h"
 #include "btree.h"
 #include "evtracker.h"
 #include "nbdf.h"
@@ -156,11 +156,11 @@ typedef struct vci_mgr_t {
 	unsigned int worker_id;
 
 	/** all nodes this block manages */
-	hashtable_tp mailboxes;
+	GHashTable *mailboxes;
 
 	/** all virtual networks available */
-	hashtable_tp networks_by_id;
-	hashtable_tp networks_by_address;
+	GHashTable *networks_by_id;
+	GHashTable *networks_by_address;
 
 	vsocket_mgr_tp current_vsocket_mgr;
 } vci_mgr_t, *vci_mgr_tp;

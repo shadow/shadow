@@ -98,6 +98,7 @@ static enum filegetter_code filegetter_connect(filegetter_tp fg, in_addr_t addr,
 	int sockd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
 
 	if (sockd < 0) {
+                perror("socket");
 		return FG_ERR_SOCKET;
 	}
 
@@ -111,6 +112,7 @@ static enum filegetter_code filegetter_connect(filegetter_tp fg, in_addr_t addr,
 
 	/* nonblocking sockets means inprogress is ok */
 	if(result < 0 && errno != EINPROGRESS) {
+                perror("connect");
 		return FG_ERR_SOCKET;
 	}
 

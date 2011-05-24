@@ -29,13 +29,14 @@
 #include "resolver.h"
 #include "hash.h"
 #include "sysconfig.h"
+#include "hashtable.h"
 
 resolver_tp resolver_create(int process_id) {
 	resolver_tp r = malloc(sizeof(resolver_t));
 
 	r->unique_id_counter = 0;
-	r->addr_entry = hashtable_create(sysconfig_get_int("resolver_hashsize"), sysconfig_get_float("resolver_hashgrowth"));
-	r->name_entry = hashtable_create(sysconfig_get_int("resolver_hashsize"), sysconfig_get_float("resolver_hashgrowth"));
+	r->addr_entry = g_hash_table_new(g_int_hash, g_int_equal);
+	r->name_entry = g_hash_table_new(g_int_hash, g_int_equal);
 	r->pid = process_id;
 
 	return r;
@@ -43,16 +44,16 @@ resolver_tp resolver_create(int process_id) {
 
 void resolver_destroy(resolver_tp r) {
 	if(r != NULL) {
-		hashtable_walk(r->addr_entry, resolver_destroy_cb);
-		hashtable_destroy(r->addr_entry);
+		g_hash_table_foreach(r->addr_entry, (GHFunc)resolver_destroy_cb, NULL);
+		g_hash_table_destroy(r->addr_entry);
 		r->addr_entry = NULL;
-		hashtable_destroy(r->name_entry);
+		g_hash_table_destroy(r->name_entry);
 		r->name_entry = NULL;
 		free(r);
 	}
 }
 
-void resolver_destroy_cb(void* value, int key) {
+void resolver_destroy_cb(int key, void* value, void *param) {
 	if(value != NULL) {
 		free(value);
 	}
@@ -83,18 +84,19 @@ void resolver_add(resolver_tp r, char* name, in_addr_t addr, uint8_t prepend_uni
 	rentry->KBps_down = KBps_down;
 	rentry->KBps_up = KBps_up;
 
-	hashtable_set(r->addr_entry, (unsigned int) rentry->addr, rentry);
+	g_hash_table_insert(r->addr_entry, int_key(rentry->addr), rentry);
 	int key = adler32_hash(rentry->hostname);
-	hashtable_set(r->name_entry, key, rentry);
+	g_hash_table_insert(r->name_entry, int_key(key), rentry);
 }
 
 void resolver_remove_byname(resolver_tp r, char* name) {
 	if(r != NULL) {
 		int key = adler32_hash(name);
-		resolver_entry_tp rentry = hashtable_remove(r->name_entry, key);
+		resolver_entry_tp rentry = g_hash_table_lookup(r->name_entry, &key);
+		g_hash_table_remove(r->name_entry, &key);
 
 		if(rentry != NULL) {
-			hashtable_remove(r->addr_entry, rentry->addr);
+			g_hash_table_remove(r->addr_entry, &rentry->addr);
 			free(rentry);
 		}
 	}
@@ -102,11 +104,12 @@ void resolver_remove_byname(resolver_tp r, char* name) {
 
 void resolver_remove_byaddr(resolver_tp r, in_addr_t addr) {
 	if(r != NULL) {
-		resolver_entry_tp rentry = hashtable_remove(r->addr_entry, addr);
+		resolver_entry_tp rentry = g_hash_table_lookup(r->addr_entry, &addr);
+		g_hash_table_remove(r->addr_entry, &addr);
 
 		if(rentry != NULL) {
 			int key = adler32_hash(rentry->hostname);
-			hashtable_remove(r->name_entry, key);
+			g_hash_table_remove(r->name_entry, &key);
 			free(rentry);
 		}
 	}
@@ -115,7 +118,7 @@ void resolver_remove_byaddr(resolver_tp r, in_addr_t addr) {
 in_addr_t* resolver_resolve_byname(resolver_tp r, char* name) {
 	if(r != NULL) {
 		int key = adler32_hash(name);
-		resolver_entry_tp rentry = hashtable_get(r->name_entry, key);
+		resolver_entry_tp rentry = g_hash_table_lookup(r->name_entry, &key);
 
 		if(rentry != NULL) {
 			return &(rentry->addr);
@@ -126,7 +129,7 @@ in_addr_t* resolver_resolve_byname(resolver_tp r, char* name) {
 
 char* resolver_resolve_byaddr(resolver_tp r, in_addr_t addr) {
 	if(r != NULL) {
-		resolver_entry_tp rentry = hashtable_get(r->addr_entry, addr);
+		resolver_entry_tp rentry = g_hash_table_lookup(r->addr_entry, &addr);
 
 		if(rentry != NULL) {
 			return rentry->hostname;
@@ -137,7 +140,7 @@ char* resolver_resolve_byaddr(resolver_tp r, in_addr_t addr) {
 
 uint32_t resolver_get_minbw(resolver_tp r, in_addr_t addr) {
 	if(r != NULL) {
-		resolver_entry_tp rentry = hashtable_get(r->addr_entry, addr);
+		resolver_entry_tp rentry = g_hash_table_lookup(r->addr_entry, &addr);
 
 		if(rentry != NULL) {
 			return rentry->KBps_down < rentry->KBps_up ? rentry->KBps_down : rentry->KBps_up;
@@ -148,7 +151,7 @@ uint32_t resolver_get_minbw(resolver_tp r, in_addr_t addr) {
 
 uint32_t resolver_get_upbw(resolver_tp r, in_addr_t addr) {
 	if(r != NULL) {
-		resolver_entry_tp rentry = hashtable_get(r->addr_entry, addr);
+		resolver_entry_tp rentry = g_hash_table_lookup(r->addr_entry, &addr);
 
 		if(rentry != NULL) {
 			return rentry->KBps_up;
@@ -159,7 +162,7 @@ uint32_t resolver_get_upbw(resolver_tp r, in_addr_t addr) {
 
 uint32_t resolver_get_downbw(resolver_tp r, in_addr_t addr) {
 	if(r != NULL) {
-		resolver_entry_tp rentry = hashtable_get(r->addr_entry, addr);
+		resolver_entry_tp rentry = g_hash_table_lookup(r->addr_entry, &addr);
 
 		if(rentry != NULL) {
 			return rentry->KBps_down;

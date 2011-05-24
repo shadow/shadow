@@ -37,6 +37,7 @@
 #include "vepoll.h"
 #include "vevent_mgr.h"
 #include "vcpu.h"
+#include "hashtable.h"
 
 static vsocket_tp vsocket_mgr_find_socket_helper(vinterface_tp vi, uint8_t protocol,
 		in_addr_t remote_addr, in_port_t remote_port, in_port_t local_port);
@@ -50,8 +51,8 @@ vsocket_mgr_tp vsocket_mgr_create(context_provider_tp p, in_addr_t addr, uint32_
 
 	net->next_sock_desc = VNETWORK_MIN_SD;
 	net->next_rnd_port = VSOCKET_MIN_RND_PORT;
-	net->vsockets = hashtable_create(sysconfig_get_int("vsockets_hashsize"), sysconfig_get_float("vsockets_hashgrowth"));
-	net->destroyed_descs = hashtable_create(sysconfig_get_int("vsocket_destroyed_descriptors_hashsize"), sysconfig_get_float("vsocket_destroyed_descriptors_hashgrowth"));
+	net->vsockets = g_hash_table_new(g_int_hash, g_int_equal);
+	net->destroyed_descs = g_hash_table_new(g_int_hash, g_int_equal);
 
 	net->ethernet = vsocket_mgr_create_interface(net, net->addr);
 	net->loopback = vsocket_mgr_create_interface(net,htonl(INADDR_LOOPBACK));
@@ -74,24 +75,24 @@ void vsocket_mgr_destroy(vsocket_mgr_tp net) {
 		 */
 
 		/* must destroy tcpserver (and its vsockets) first to avoid double free */
-//		hashtable_walk(net->ethernet->tcp_servers, &vtcp_server_destroy_cb);
-		hashtable_destroy(net->ethernet->tcp_servers);
+  		g_hash_table_foreach(net->ethernet->tcp_servers, (GHFunc)vtcp_server_destroy_cb, NULL);
+		g_hash_table_destroy(net->ethernet->tcp_servers);
 
-//		hashtable_walk(net->loopback->tcp_servers, &vtcp_server_destroy_cb);
-		hashtable_destroy(net->loopback->tcp_servers);
+  		g_hash_table_foreach(net->loopback->tcp_servers, (GHFunc)vtcp_server_destroy_cb, NULL);
+		g_hash_table_destroy(net->loopback->tcp_servers);
 
 		/* destroys remaining vsockets */
-		hashtable_walk(net->vsockets, &vsocket_mgr_destroy_socket_cb);
-		hashtable_destroy(net->vsockets);
+		//g_hash_table_foreach(net->vsockets, (GHFunc)vsocket_mgr_destroy_socket_cb, NULL);
+		g_hash_table_destroy(net->vsockets);
 
 		/* since all vsockets were destroyed, we can simply remove references here */
-		hashtable_destroy(net->ethernet->tcp_vsockets);
-		hashtable_destroy(net->ethernet->udp_vsockets);
-		hashtable_destroy(net->loopback->tcp_vsockets);
-		hashtable_destroy(net->loopback->udp_vsockets);
+		g_hash_table_destroy(net->ethernet->tcp_vsockets);
+		g_hash_table_destroy(net->ethernet->udp_vsockets);
+		g_hash_table_destroy(net->loopback->tcp_vsockets);
+		g_hash_table_destroy(net->loopback->udp_vsockets);
 
 		/* do not walk since no values were created and stored here */
-		hashtable_destroy(net->destroyed_descs);
+		g_hash_table_destroy(net->destroyed_descs);
 
 		vpipe_mgr_destroy(net->vpipe_mgr);
 		vtransport_mgr_destroy(net->vt_mgr);
@@ -112,9 +113,9 @@ void vsocket_mgr_destroy(vsocket_mgr_tp net) {
 vinterface_tp vsocket_mgr_create_interface(vsocket_mgr_tp net, in_addr_t addr) {
 	if(net != NULL) {
 		vinterface_tp vi = malloc(sizeof(vinterface_t));
-		vi->tcp_vsockets = hashtable_create(sysconfig_get_int("vsocket_tcp_hashsize"), sysconfig_get_float("vsocket_tcp_hashgrowth"));
-		vi->udp_vsockets = hashtable_create(sysconfig_get_int("vsocket_udp_hashsize"), sysconfig_get_float("vsocket_udp_hashgrowth"));
-		vi->tcp_servers = hashtable_create(sysconfig_get_int("vsocket_tcpserver_hashsize"), sysconfig_get_float("vsocket_tcpserver_hashgrowth"));
+		vi->tcp_vsockets = g_hash_table_new(g_int_hash, g_int_equal);
+		vi->udp_vsockets = g_hash_table_new(g_int_hash, g_int_equal);
+		vi->tcp_servers = g_hash_table_new(g_int_hash, g_int_equal);
 		vi->ip_address = addr;
 		return vi;
 	}
@@ -151,7 +152,6 @@ vsocket_tp vsocket_mgr_create_socket(vsocket_mgr_tp net, uint8_t type) {
 
 void vsocket_mgr_destroy_socket(vsocket_tp sock) {
 	if(sock != NULL) {
-
 		vpeer_destroy(sock->ethernet_peer);
 		vpeer_destroy(sock->loopback_peer);
 		vtransport_destroy(sock->vt);
@@ -166,12 +166,15 @@ void vsocket_mgr_destroy_socket(vsocket_tp sock) {
 }
 
 void vsocket_mgr_add_server(vsocket_mgr_tp net, vtcp_server_tp server) {
+        gint *key;
 	if(net != NULL && server != NULL) {
 		if(server->sock->ethernet_peer != NULL) {
-			hashtable_set(net->ethernet->tcp_servers, server->sock->ethernet_peer->port, server);
+                        key = int_key(server->sock->ethernet_peer->port);
+			g_hash_table_insert(net->ethernet->tcp_servers, key, server);
 		}
 		if(server->sock->loopback_peer != NULL) {
-			hashtable_set(net->loopback->tcp_servers, server->sock->loopback_peer->port, server);
+                        key = int_key(server->sock->loopback_peer->port);
+			g_hash_table_insert(net->loopback->tcp_servers, key, server);
 		}
 	}
 }
@@ -179,9 +182,9 @@ void vsocket_mgr_add_server(vsocket_mgr_tp net, vtcp_server_tp server) {
 vtcp_server_tp vsocket_mgr_get_server(vsocket_mgr_tp net, vsocket_tp sock) {
 	if(net != NULL && sock != NULL) {
 		if(sock->ethernet_peer != NULL) {
-			return hashtable_get(net->ethernet->tcp_servers, sock->ethernet_peer->port);
+			return g_hash_table_lookup(net->ethernet->tcp_servers, int_key(sock->ethernet_peer->port));
 		} else if(sock->loopback_peer != NULL) {
-			return hashtable_get(net->loopback->tcp_servers, sock->loopback_peer->port);
+			return g_hash_table_lookup(net->loopback->tcp_servers, int_key(sock->loopback_peer->port));
 		}
 	}
 	return NULL;
@@ -190,34 +193,36 @@ vtcp_server_tp vsocket_mgr_get_server(vsocket_mgr_tp net, vsocket_tp sock) {
 void vsocket_mgr_remove_server(vsocket_mgr_tp net, vtcp_server_tp server) {
 	if(net != NULL && server != NULL) {
 		if(server->sock->ethernet_peer != NULL) {
-			hashtable_remove(net->ethernet->tcp_servers, server->sock->ethernet_peer->port);
+			g_hash_table_remove(net->ethernet->tcp_servers, &server->sock->ethernet_peer->port);
 		}
 		if(server->sock->loopback_peer != NULL) {
-			hashtable_remove(net->loopback->tcp_servers, server->sock->loopback_peer->port);
+			g_hash_table_remove(net->loopback->tcp_servers, &server->sock->loopback_peer->port);
 		}
 	}
 }
 
 void vsocket_mgr_add_socket(vsocket_mgr_tp net, vsocket_tp sock) {
 	if(net != NULL && sock != NULL) {
-		hashtable_set(net->vsockets, sock->sock_desc, sock);
+                gint *key = int_key(sock->sock_desc);
+		g_hash_table_insert(net->vsockets, key, sock);
 	}
 }
 
 vsocket_tp vsocket_mgr_get_socket(vsocket_mgr_tp net, uint16_t sockd) {
+        vsocket_tp ret = NULL;
 	if(net != NULL) {
-		return hashtable_get(net->vsockets, sockd);
+		ret = g_hash_table_lookup(net->vsockets, int_key(sockd));
 	}
-	return NULL;
+	return ret;
 }
 
 void vsocket_mgr_remove_socket(vsocket_mgr_tp net, vsocket_tp sock) {
 	if(net != NULL && sock != NULL) {
-		hashtable_remove(net->vsockets, sock->sock_desc);
+		g_hash_table_remove(net->vsockets, &sock->sock_desc);
 	}
 }
 
-void vsocket_mgr_destroy_socket_cb(void* value, int key) {
+void vsocket_mgr_destroy_socket_cb(int key, void* value, void *param) {
 	vsocket_mgr_destroy_socket((vsocket_tp) value);
 }
 
@@ -226,30 +231,31 @@ void vsocket_mgr_destroy_and_remove_socket(vsocket_mgr_tp net, vsocket_tp sock) 
 		return;
 	}
 
-	if(hashtable_remove(net->vsockets, sock->sock_desc) == NULL) {
+	if(g_hash_table_lookup(net->vsockets, int_key(sock->sock_desc)) == NULL) {
 		return;
 	}
+        g_hash_table_remove(net->vsockets, &sock->sock_desc);
 
 	if(sock->type == SOCK_STREAM) {
 		if(sock->ethernet_peer != NULL && net->ethernet != NULL) {
-			hashtable_remove(net->ethernet->tcp_vsockets, sock->ethernet_peer->port);
+			g_hash_table_remove(net->ethernet->tcp_vsockets, &sock->ethernet_peer->port);
 		}
 		if(sock->loopback_peer != NULL && net->loopback != NULL) {
-			hashtable_remove(net->loopback->tcp_vsockets, sock->loopback_peer->port);
+			g_hash_table_remove(net->loopback->tcp_vsockets, &sock->loopback_peer->port);
 		}
 
 		/* child of a server */
 		if(sock->sock_desc_parent != 0) {
-			vsocket_tp parent = hashtable_get(net->vsockets, sock->sock_desc_parent);
+			vsocket_tp parent = g_hash_table_lookup(net->vsockets, int_key(sock->sock_desc_parent));
 
 			if(parent != NULL) {
 				/* get the server running on the parent */
 				vtcp_server_tp parent_server = NULL;
 
 				if(parent->ethernet_peer != NULL && net->ethernet != NULL) {
-					parent_server = hashtable_get(net->ethernet->tcp_servers, parent->ethernet_peer->port);
+					parent_server = g_hash_table_lookup(net->ethernet->tcp_servers, int_key(parent->ethernet_peer->port));
 				} else if(parent->loopback_peer != NULL && net->loopback != NULL) {
-					parent_server = hashtable_get(net->loopback->tcp_servers, parent->loopback_peer->port);
+					parent_server = g_hash_table_lookup(net->loopback->tcp_servers, int_key(parent->loopback_peer->port));
 				}
 
 				if(parent_server != NULL) {
@@ -269,10 +275,12 @@ void vsocket_mgr_destroy_and_remove_socket(vsocket_mgr_tp net, vsocket_tp sock) 
 		vtcp_server_tp server1 = NULL;
 		vtcp_server_tp server2 = NULL;
 		if(sock->ethernet_peer != NULL && net->ethernet != NULL) {
-			server1 = hashtable_remove(net->ethernet->tcp_servers, sock->ethernet_peer->port);
+			server1 = g_hash_table_lookup(net->ethernet->tcp_servers, int_key(sock->ethernet_peer->port));
+			g_hash_table_remove(net->ethernet->tcp_servers, &sock->ethernet_peer->port);
 		}
 		if(sock->loopback_peer != NULL && net->loopback != NULL) {
-			server2 = hashtable_remove(net->loopback->tcp_servers, sock->loopback_peer->port);
+			server2 = g_hash_table_lookup(net->loopback->tcp_servers, int_key(sock->loopback_peer->port));
+			g_hash_table_remove(net->loopback->tcp_servers, &sock->loopback_peer->port);
 		}
 
 		/* make sure to only destroy once */
@@ -283,10 +291,10 @@ void vsocket_mgr_destroy_and_remove_socket(vsocket_mgr_tp net, vsocket_tp sock) 
 		}
 	} else {
 		if(sock->ethernet_peer != NULL && net->ethernet != NULL) {
-			hashtable_remove(net->ethernet->udp_vsockets, sock->ethernet_peer->port);
+			g_hash_table_remove(net->ethernet->udp_vsockets, &sock->ethernet_peer->port);
 		}
 		if(sock->loopback_peer != NULL && net->loopback != NULL) {
-			hashtable_remove(net->loopback->udp_vsockets, sock->loopback_peer->port);
+			g_hash_table_remove(net->loopback->udp_vsockets, &sock->loopback_peer->port);
 		}
 	}
 
@@ -296,12 +304,13 @@ void vsocket_mgr_destroy_and_remove_socket(vsocket_mgr_tp net, vsocket_tp sock) 
 		/* use net as dummy value.
 		 * TODO: hashtable should really implement a contains() function instead.
 		 */
-		hashtable_set(net->destroyed_descs, sock->sock_desc, net);
+                gint *key = int_key(sock->sock_desc);
+		g_hash_table_insert(net->destroyed_descs, key, net);
 	}
 	vsocket_mgr_destroy_socket(sock);
 }
 
-void vsocket_mgr_destroy_and_remove_socket_cb(void* value, int key, void* param) {
+void vsocket_mgr_destroy_and_remove_socket_cb(int key, void* value, void* param) {
 	vsocket_mgr_destroy_and_remove_socket((vsocket_mgr_tp) param, (vsocket_tp) value);
 }
 
@@ -338,19 +347,20 @@ static vsocket_tp vsocket_mgr_find_socket_helper(vinterface_tp vi, uint8_t proto
 	if(vi != NULL){
 		/* get the descriptor for the destination of the packet */
 		vsocket_tp target = NULL;
+                gint *key = int_key(local_port);
 		if(protocol == SOCK_STREAM) {
 			/* check if target is actually a server, or a multiplexed socket */
-			vtcp_server_tp server = hashtable_get(vi->tcp_servers, local_port);
+			vtcp_server_tp server = g_hash_table_lookup(vi->tcp_servers, key);
 			vtcp_server_child_tp schild = vtcp_server_get_child(server, remote_addr, remote_port);
 
 			if(schild == NULL) {
 				/* target must be the server itself */
-				target = hashtable_get(vi->tcp_vsockets, local_port);
+				target = g_hash_table_lookup(vi->tcp_vsockets, key);
 			} else {
 				target = schild->sock;
 			}
 		} else {
-			target = hashtable_get(vi->udp_vsockets, local_port);
+			target = g_hash_table_lookup(vi->udp_vsockets, key);
 		}
 
 		return target;
@@ -372,7 +382,7 @@ vsocket_tp vsocket_mgr_find_socket(vsocket_mgr_tp net, uint8_t protocol,
 
 uint8_t vsocket_mgr_isbound_loopback(vsocket_mgr_tp net, in_port_t port) {
 	if(net != NULL && net->loopback != NULL &&
-			hashtable_get(net->loopback->tcp_vsockets, port) != NULL) {
+			g_hash_table_lookup(net->loopback->tcp_vsockets, int_key(port)) != NULL) {
 		return 1;
 	}
 	return 0;
@@ -380,7 +390,7 @@ uint8_t vsocket_mgr_isbound_loopback(vsocket_mgr_tp net, in_port_t port) {
 
 uint8_t vsocket_mgr_isbound_ethernet(vsocket_mgr_tp net, in_port_t port) {
 	if(net != NULL && net->ethernet != NULL &&
-			hashtable_get(net->ethernet->tcp_vsockets, port) != NULL) {
+			g_hash_table_lookup(net->ethernet->tcp_vsockets, int_key(port)) != NULL) {
 		return 1;
 	}
 	return 0;
@@ -389,10 +399,11 @@ uint8_t vsocket_mgr_isbound_ethernet(vsocket_mgr_tp net, in_port_t port) {
 void vsocket_mgr_bind_ethernet(vsocket_mgr_tp net, vsocket_tp sock, in_port_t bind_port) {
 	if(net != NULL && sock != NULL && net->ethernet != NULL) {
 		sock->ethernet_peer = vpeer_create(net->ethernet->ip_address, bind_port);
+                gint *key = int_key(bind_port);
 		if(sock->type == SOCK_STREAM) {
-			hashtable_set(net->ethernet->tcp_vsockets, bind_port, sock);
+			g_hash_table_insert(net->ethernet->tcp_vsockets, key, sock);
 		} else {
-			hashtable_set(net->ethernet->udp_vsockets, bind_port, sock);
+			g_hash_table_insert(net->ethernet->udp_vsockets, key, sock);
 		}
 	}
 }
@@ -400,10 +411,11 @@ void vsocket_mgr_bind_ethernet(vsocket_mgr_tp net, vsocket_tp sock, in_port_t bi
 void vsocket_mgr_bind_loopback(vsocket_mgr_tp net, vsocket_tp sock, in_port_t bind_port) {
 	if(net != NULL && sock != NULL && net->ethernet != NULL) {
 		sock->loopback_peer = vpeer_create(net->loopback->ip_address, bind_port);
+                gint *key = int_key(bind_port);
 		if(sock->type == SOCK_STREAM) {
-			hashtable_set(net->loopback->tcp_vsockets, bind_port, sock);
+			g_hash_table_insert(net->loopback->tcp_vsockets, key, sock);
 		} else {
-			hashtable_set(net->loopback->udp_vsockets, bind_port, sock);
+			g_hash_table_insert(net->loopback->udp_vsockets, key, sock);
 		}
 	}
 }
@@ -469,8 +481,8 @@ void vsocket_mgr_print_stat(vsocket_mgr_tp net, uint16_t sockd) {
 			vtcp_server_tp server = vsocket_mgr_get_server(net, sock);
 			if(server != NULL) {
 				debugf("sockd %u running a server with %u accepted, %u pending, %u incomplete\n", sockd,
-					server->accepted_children->population, server->pending_queue->num_elems,
-					server->incomplete_children->population);
+					g_hash_table_size(server->accepted_children), server->pending_queue->num_elems,
+					g_hash_table_size(server->incomplete_children));
 
 				if(server->pending_queue->num_elems > 0 && !(sock->vep->available & VEPOLL_READ)) {
 					dlogf(LOG_ERR, "sockd %u should be marked available!!!\n", sockd);

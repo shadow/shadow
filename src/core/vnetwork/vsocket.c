@@ -27,6 +27,7 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <errno.h>
+#include <glib-2.0/glib.h>
 
 #include "vsocket_mgr.h"
 #include "vsocket_mgr_server.h"
@@ -1037,7 +1038,7 @@ int vsocket_close(vsocket_mgr_tp net, int fd) {
 	}
 
 	if(sock == NULL && net->destroyed_descs != NULL &&
-			hashtable_remove(net->destroyed_descs, fd) != NULL) {
+			g_hash_table_remove(net->destroyed_descs, int_key(fd)) != FALSE) {
 		/* socket was previously deleted, considered a successful close */
 		return VSOCKET_SUCCESS;
 	}

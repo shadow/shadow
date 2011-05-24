@@ -29,7 +29,6 @@
 #include "vtransport_processing.h"
 #include "vtransport_mgr.h"
 #include "vsocket.h"
-#include "hashtable.h"
 #include "log.h"
 #include "vci.h"
 #include "sysconfig.h"

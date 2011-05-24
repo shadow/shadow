@@ -109,7 +109,7 @@ static void vevent_destroy_vevent(vevent_tp vev) {
 	}
 }
 
-static void vevent_destroy_vevent_cb(void* value, int key) {
+static void vevent_destroy_vevent_cb(int key, void* value, void *param) {
 	vevent_destroy_vevent((vevent_tp)value);
 }
 
@@ -149,14 +149,14 @@ void vevent_destroy_base(event_base_tp eb) {
 			vevent_base_tp veb = eb->evbase;
 
 			if(veb->sockets_by_sd != NULL) {
-				hashtable_walk(veb->sockets_by_sd, &vevent_destroy_socket_cb);
-				hashtable_destroy(veb->sockets_by_sd);
+				g_hash_table_foreach(veb->sockets_by_sd, (GHFunc)vevent_destroy_socket_cb, NULL);
+				g_hash_table_destroy(veb->sockets_by_sd);
 				veb->sockets_by_sd = NULL;
 			}
 
 			if(veb->vevents_by_id != NULL) {
-				hashtable_walk(veb->vevents_by_id, &vevent_destroy_vevent_cb);
-				hashtable_destroy(veb->vevents_by_id);
+				g_hash_table_foreach(veb->vevents_by_id, (GHFunc)vevent_destroy_vevent_cb, NULL);
+				g_hash_table_destroy(veb->vevents_by_id);
 				veb->vevents_by_id = NULL;
 			}
 
@@ -264,18 +264,18 @@ static int vevent_register(vevent_mgr_tp mgr, event_tp ev, const struct timeval 
 		vevent_base_tp veb = ev->ev_base->evbase;
 
 		/* check for the socket */
-		vevent_socket_tp vsd = hashtable_get(veb->sockets_by_sd, ev->ev_fd);
+		vevent_socket_tp vsd = g_hash_table_lookup(veb->sockets_by_sd, &ev->ev_fd);
 		if(vsd == NULL) {
 			vsd = vevent_socket_create(ev->ev_fd);
-			hashtable_set(veb->sockets_by_sd, ev->ev_fd, vsd);
+			g_hash_table_insert(veb->sockets_by_sd, int_key(ev->ev_fd), vsd);
 			debugf("vevent_register: start monitoring socket %d\n", ev->ev_fd);
 		}
 
 		/* register as event */
-		vevent_tp vev = hashtable_get(veb->vevents_by_id, ev->ev_timeout_pos.min_heap_idx);
+		vevent_tp vev = g_hash_table_lookup(veb->vevents_by_id, &ev->ev_timeout_pos.min_heap_idx);
 		if(vev == NULL) {
 			vev = vevent_create(ev, vsd);
-			hashtable_set(veb->vevents_by_id, vev->id, vev);
+			g_hash_table_insert(veb->vevents_by_id, int_key(vev->id), vev);
 			vev->event->ev_flags |= EVLIST_INSERTED;
 			debugf("vevent_register: inserted vevent id %d, fd %d, type %s\n", vev->id, vev->vsd->sd, vevent_get_event_type_string(mgr, vev->event->ev_events));
 		}
@@ -313,7 +313,8 @@ static int vevent_unregister(vevent_mgr_tp mgr, event_tp ev) {
 		vevent_base_tp veb = ev->ev_base->evbase;
 
 		/* unregister vevent */
-		vevent_tp vev = hashtable_remove(veb->vevents_by_id, ev->ev_timeout_pos.min_heap_idx);
+		vevent_tp vev = g_hash_table_lookup(veb->vevents_by_id, &ev->ev_timeout_pos.min_heap_idx);
+		g_hash_table_remove(veb->vevents_by_id, &ev->ev_timeout_pos.min_heap_idx);
 		if(vev != NULL) {
 			/* make sure timers get canceled */
 			vev->event->ev_flags &= ~EVLIST_INSERTED;
@@ -322,7 +323,7 @@ static int vevent_unregister(vevent_mgr_tp mgr, event_tp ev) {
 		}
 
 		/* unregister from socket */
-		vevent_socket_tp vsd = hashtable_get(veb->sockets_by_sd, ev->ev_fd);
+		vevent_socket_tp vsd = g_hash_table_lookup(veb->sockets_by_sd, &ev->ev_fd);
 		if(vsd != NULL) {
 			void* result = list_remove(vsd->vevents, vev, &vevent_isequal_cb);
 			if(result != NULL) {
@@ -331,7 +332,7 @@ static int vevent_unregister(vevent_mgr_tp mgr, event_tp ev) {
 			}
 
 			if(list_get_size(vsd->vevents) <= 0) {
-				hashtable_remove(veb->sockets_by_sd, vsd->sd);
+				g_hash_table_remove(veb->sockets_by_sd, &vsd->sd);
 				vevent_destroy_socket(vsd);
 				debugf("vevent_unregister: stop monitoring socket %d\n", ev->ev_fd);
 			}
@@ -351,7 +352,7 @@ static int vevent_unregister(vevent_mgr_tp mgr, event_tp ev) {
 static void vevent_execute_callbacks(vevent_mgr_tp mgr, event_base_tp eb, int sockd, short event_type) {
 	if(eb != NULL && eb->evbase != NULL) {
 		vevent_base_tp veb = eb->evbase;
-		vevent_socket_tp vsd = hashtable_get(veb->sockets_by_sd, sockd);
+		vevent_socket_tp vsd = g_hash_table_lookup(veb->sockets_by_sd, &sockd);
 
 		if(vsd != NULL) {
 			debugf("getting callbacks for type %s on fd %i\n", vevent_get_event_type_string(mgr, event_type), sockd);
@@ -461,8 +462,8 @@ event_base_tp vevent_event_base_new(vevent_mgr_tp mgr) {
 		/* create new vevent base, store pointer to it in event_base */
 		vevent_base_tp veb = calloc(1, sizeof(vevent_base_t));
 		veb->nextid = 0;
-		veb->vevents_by_id = hashtable_create(10, 0.90);
-		veb->sockets_by_sd = hashtable_create(10, 0.90);
+		veb->vevents_by_id = g_hash_table_new(g_int_hash, g_int_equal);
+		veb->sockets_by_sd = g_hash_table_new(g_int_hash, g_int_equal);
 
 		event_base_tp eb = calloc(1, sizeof(event_base_t));
 		eb->evbase = veb;
@@ -610,7 +611,7 @@ void vevent_event_active(vevent_mgr_tp mgr, event_tp ev, int flags_for_cb, short
 int vevent_event_pending(vevent_mgr_tp mgr, const event_tp ev, short types, struct timeval * tv) {
 	if(ev != NULL && ev->ev_base != NULL && ev->ev_base->evbase != NULL) {
 		vevent_base_tp veb = ev->ev_base->evbase;
-		vevent_tp vev = hashtable_get(veb->vevents_by_id, ev->ev_timeout_pos.min_heap_idx);
+		vevent_tp vev = g_hash_table_lookup(veb->vevents_by_id, &ev->ev_timeout_pos.min_heap_idx);
 
 		if(vev != NULL) {
 			/* event has been added, check type */

@@ -22,7 +22,6 @@
 
 #include <string.h>
 #include <stdlib.h>
-#include <glib-2.0/glib.h>
 
 #include "global.h"
 #include "hashtable.h"
@@ -33,12 +32,6 @@ struct hashtable_cb_data {
     hashtable_walk_param_callback_tp cb_param;
     void *param;
 };
-
-gint *int_key(int key) {
-    gint *ret = g_malloc(sizeof(gint));
-    *ret = key;
-    return ret;
-}
 
 hashtable_tp hashtable_create(unsigned int buckets, float growth_factor) {
 	hashtable_tp ht = malloc(sizeof(*ht));

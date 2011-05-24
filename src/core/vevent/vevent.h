@@ -25,6 +25,7 @@
 
 #include <sys/time.h>
 #include <netinet/in.h>
+#include <glib-2.0/glib.h>
 
 #include <event2/event_struct.h>
 #include <event2/event.h>
@@ -68,8 +69,8 @@ typedef struct vevent_s {
 /* holds all registered vevents and sockets */
 typedef struct vevent_base_s {
 	int nextid;
-	hashtable_tp vevents_by_id;
-	hashtable_tp sockets_by_sd;
+	GHashTable *vevents_by_id;
+	GHashTable *sockets_by_sd;
 } vevent_base_t, *vevent_base_tp;
 
 typedef struct vevent_timer_s {

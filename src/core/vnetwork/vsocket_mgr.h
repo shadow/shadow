@@ -25,6 +25,7 @@
 
 #include <stdint.h>
 #include <netinet/in.h>
+#include <glib-2.0/glib.h>
 
 #include "global.h"
 #include "context.h"
@@ -47,11 +48,11 @@ enum vsocket_state {
 typedef struct vinterface_s {
 	in_addr_t ip_address;
 	/* hashtable<udp port, vsocket> */
-	hashtable_tp udp_vsockets;
+	GHashTable *udp_vsockets;
 	/* hashtable<tcp port, vsocket> */
-	hashtable_tp tcp_vsockets;
+	GHashTable *tcp_vsockets;
 	/* hashtable<tcp port, tcpserver> */
-	hashtable_tp tcp_servers;
+	GHashTable *tcp_servers;
 } vinterface_t, *vinterface_tp;
 
 typedef struct vsocket_t {
@@ -84,12 +85,12 @@ typedef struct vsocket_mgr_s {
 	uint16_t next_sock_desc;
 	uint16_t next_rnd_port;
 	/* hashtable<socket descriptor, vsocket> */
-	hashtable_tp vsockets;
+	GHashTable *vsockets;
 	vinterface_tp loopback;
 	vinterface_tp ethernet;
 	/* sockets that were previously deleted but not yet closed by app
 	 * TODO: this should probably be a BST or something */
-	hashtable_tp destroyed_descs;
+	GHashTable *destroyed_descs;
 	struct vtransport_mgr_s* vt_mgr;
 	vpipe_mgr_tp vpipe_mgr;
 	vpacket_mgr_tp vp_mgr;
@@ -110,9 +111,9 @@ void vsocket_mgr_unmap_socket_tcp(vsocket_mgr_tp net, vsocket_tp sock);
 void vsocket_mgr_map_socket_udp(vsocket_mgr_tp net, vsocket_tp sock);
 vsocket_tp vsocket_mgr_get_socket_udp(vsocket_mgr_tp net, uint16_t port);
 void vsocket_mgr_unmap_socket_udp(vsocket_mgr_tp net, vsocket_tp sock);
-void vsocket_mgr_destroy_socket_cb(void* value, int key);
+void vsocket_mgr_destroy_socket_cb(int keu, void* value, void *param);
 void vsocket_mgr_destroy_and_remove_socket(vsocket_mgr_tp net, vsocket_tp sock);
-void vsocket_mgr_destroy_and_remove_socket_cb(void* value, int key, void* param);
+void vsocket_mgr_destroy_and_remove_socket_cb(int key, void* value, void* param);
 void vsocket_mgr_try_destroy_socket(vsocket_mgr_tp net, vsocket_tp sock);
 vsocket_tp vsocket_mgr_get_socket_receiver(vsocket_mgr_tp net, rc_vpacket_pod_tp rc_packet);
 vsocket_tp vsocket_mgr_find_socket(vsocket_mgr_tp net, uint8_t protocol,

@@ -22,6 +22,7 @@
 
 #include <stdlib.h>
 #include <assert.h>
+#include <glib-2.0/glib.h>
 
 #include <event2/event_struct.h>
 #include <event2/event.h>
@@ -132,7 +133,7 @@ void vevent_mgr_destroy(vevent_mgr_tp mgr) {
 //	}
 //}
 
-static void vevent_mgr_print_all_cb(void* val, int key, void* param) {
+static void vevent_mgr_print_all_cb(int key, void* val, void* param) {
 	vevent_socket_tp vsd = val;
 	vevent_mgr_tp mgr = param;
 	if(vsd != NULL && mgr != NULL) {
@@ -160,8 +161,8 @@ void vevent_mgr_print_stat(vevent_mgr_tp mgr, uint16_t sockd) {
 
 			if(eb != NULL && eb->evbase != NULL) {
 				vevent_base_tp veb = eb->evbase;
-				vevent_socket_tp vsd = hashtable_get(veb->sockets_by_sd, (unsigned int)sockd);
-				vevent_mgr_print_all_cb(vsd, sockd, mgr);
+				vevent_socket_tp vsd = g_hash_table_lookup(veb->sockets_by_sd, &sockd);
+				vevent_mgr_print_all_cb(sockd, vsd, mgr);
 			}
 		}
 		debugf("======Done printing======\n");
@@ -181,7 +182,7 @@ void vevent_mgr_print_all(vevent_mgr_tp mgr) {
 			if(eb != NULL && eb->evbase != NULL) {
 				vevent_base_tp veb = eb->evbase;
 				debugf("======Printing all waiting registered events======\n");
-				hashtable_walk_param(veb->sockets_by_sd, &vevent_mgr_print_all_cb, mgr);
+				g_hash_table_foreach(veb->sockets_by_sd, (GHFunc)vevent_mgr_print_all_cb, mgr);
 				debugf("======Done printing======\n");
 			}
 		}
