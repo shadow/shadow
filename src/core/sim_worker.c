@@ -54,8 +54,8 @@ sim_worker_tp sim_worker_create (pipecloud_tp pipecloud, int slave_id, int proce
 	rv->stalled_simops = list_create();
 	rv->mod_mgr = module_mgr_create();
 
-	rv->hostname_tracking = hashtable_create(sysconfig_get_int("sim_nodetrack_hashsize"),sysconfig_get_float("sim_nodetrack_hashgrowth"));
-	rv->loaded_cdfs = hashtable_create(sysconfig_get_int("sim_nodetrack_hashsize"),sysconfig_get_float("sim_nodetrack_hashgrowth"));
+	rv->hostname_tracking = g_hash_table_new(g_int_hash, g_int_equal);
+	rv->loaded_cdfs = g_hash_table_new(g_int_hash, g_int_equal);
 
 	rv->timer_mgr = dtimer_create_manager(rv->events);
 	rv->ascheme = vci_create_addressing_scheme(num_slaves, max_wrkrs_per_slave);
@@ -436,7 +436,7 @@ ret:
 	return returnval;
 }
 
-static void sim_worker_destroy_cdftracker_cb(void* value, int key) {
+static void sim_worker_destroy_cdftracker_cb(int key, void* value, void *param) {
 	cdf_destroy((cdf_tp)value);
 }
 
@@ -458,12 +458,12 @@ void sim_worker_destroy(sim_worker_tp sim) {
 	sim->network_topology = NULL;
 
 	/* todo cleanup - use different func */
-	hashtable_walk(sim->hostname_tracking, &sim_worker_destroy_nodetracker_cb);
-	hashtable_destroy(sim->hostname_tracking);
+	g_hash_table_foreach(sim->hostname_tracking, (GHFunc)sim_worker_destroy_nodetracker_cb, NULL);
+	g_hash_table_destroy(sim->hostname_tracking);
 	sim->hostname_tracking = NULL;
 
-	hashtable_walk(sim->loaded_cdfs, &sim_worker_destroy_cdftracker_cb);
-	hashtable_destroy(sim->loaded_cdfs);
+	g_hash_table_foreach(sim->loaded_cdfs, (GHFunc)sim_worker_destroy_cdftracker_cb, NULL);
+	g_hash_table_destroy(sim->loaded_cdfs);
 	sim->loaded_cdfs = NULL;
 
 	while(list_get_size(sim->stalled_simops) > 0) {
@@ -491,7 +491,7 @@ sim_worker_nodetracker_tp sim_worker_create_nodetracker(in_addr_t addr, int trac
 	return nt;
 }
 
-void sim_worker_destroy_nodetracker_cb(void* value, int key) {
+void sim_worker_destroy_nodetracker_cb(int key, void* value, void *param) {
 	sim_worker_destroy_nodetracker((sim_worker_nodetracker_tp) value);
 }
 
@@ -522,7 +522,7 @@ static int sim_worker_opexec_load_cdf(sim_worker_tp wo, simop_tp sop) {
 
 	cdf_tp cdf = cdf_create(op->filepath);
 	if(cdf != NULL) {
-		hashtable_set(wo->loaded_cdfs, op->id, cdf);
+		g_hash_table_insert(wo->loaded_cdfs, int_key(op->id), cdf);
 	}
 
 	return 1;
@@ -533,7 +533,7 @@ static int sim_worker_opexec_generate_cdf(sim_worker_tp wo, simop_tp sop) {
 
 	cdf_tp cdf = cdf_generate(op->base_delay, op->base_width, op->tail_width);
 	if(cdf != NULL) {
-		hashtable_set(wo->loaded_cdfs, op->id, cdf);
+		g_hash_table_insert(wo->loaded_cdfs, int_key(op->id), cdf);
 	}
 
 	return 1;
@@ -543,7 +543,7 @@ static int sim_worker_opexec_create_network(sim_worker_tp wo, simop_tp sop) {
 	simop_create_network_tp op = sop->operation;
 
 	/* build up our knowledge of the network */
-	cdf_tp cdf = hashtable_get(wo->loaded_cdfs, op->cdf_id_intra_latency);
+	cdf_tp cdf = g_hash_table_lookup(wo->loaded_cdfs, &op->cdf_id_intra_latency);
 	simnet_graph_add_vertex(wo->network_topology, op->id, cdf, op->reliability);
 
 	/* vci needs ids to look up graph properties */
@@ -556,8 +556,8 @@ static int sim_worker_opexec_connect_network(sim_worker_tp wo, simop_tp sop) {
 	simop_connect_networks_tp op = sop->operation;
 
 	/* build up our knowledge of the network */
-	cdf_tp cdf_latency_1to2 = hashtable_get(wo->loaded_cdfs, op->cdf_id_latency_1to2);
-	cdf_tp cdf_latency_2to1 = hashtable_get(wo->loaded_cdfs, op->cdf_id_latency_2to1);
+	cdf_tp cdf_latency_1to2 = g_hash_table_lookup(wo->loaded_cdfs, &op->cdf_id_latency_1to2);
+	cdf_tp cdf_latency_2to1 = g_hash_table_lookup(wo->loaded_cdfs, &op->cdf_id_latency_2to1);
 
 	simnet_graph_add_edge(wo->network_topology, op->network1_id, cdf_latency_1to2, op->reliability_1to2,
 			op->network2_id, cdf_latency_2to1, op->reliability_2to1);
@@ -571,7 +571,7 @@ static int sim_worker_opexec_create_hostname(sim_worker_tp wo, simop_tp sop) {
 	char* base_hostname = malloc(sizeof(op->base_hostname));
 	strncpy(base_hostname, op->base_hostname, sizeof(op->base_hostname));
 
-	hashtable_set(wo->hostname_tracking, op->id, base_hostname);
+	g_hash_table_insert(wo->hostname_tracking, int_key(op->id), base_hostname);
 	return 1;
 }
 
@@ -605,17 +605,17 @@ static int sim_worker_opexec_create_nodes(sim_worker_tp wo, simop_tp sop) {
 	/* if we only have 1 id, we have symmetric bandwidth, otherwise asym as specified by cdfs */
 	if(op->cdf_id_bandwidth_up == 0 || op->cdf_id_bandwidth_down == 0) {
 		unsigned int sym_id = op->cdf_id_bandwidth_up != 0 ? op->cdf_id_bandwidth_up : op->cdf_id_bandwidth_down;
-		cdf_tp sym = hashtable_get(wo->loaded_cdfs, sym_id);
+		cdf_tp sym = g_hash_table_lookup(wo->loaded_cdfs, &sym_id);
 		KBps_up = KBps_down = (uint32_t)cdf_random_value(sym);
 	} else {
-		cdf_tp up = hashtable_get(wo->loaded_cdfs, op->cdf_id_bandwidth_up);
-		cdf_tp down = hashtable_get(wo->loaded_cdfs, op->cdf_id_bandwidth_down);
+		cdf_tp up = g_hash_table_lookup(wo->loaded_cdfs, &op->cdf_id_bandwidth_up);
+		cdf_tp down = g_hash_table_lookup(wo->loaded_cdfs, &op->cdf_id_bandwidth_down);
 		KBps_up = (uint32_t)cdf_random_value(up);
 		KBps_down = (uint32_t)cdf_random_value(down);
 	}
 
 	/* create unique hostname. master tells us what id we should prepend to ensure uniqueness */
-	char* basename = hashtable_get(wo->hostname_tracking, op->hostname_id);
+	char* basename = g_hash_table_lookup(wo->hostname_tracking, &op->hostname_id);
 	if(basename == NULL) {
 		dlogf(LOG_ERR, "SWorker: Failure to create hostname. cant instantiate node!\n");
 		return 1;
@@ -632,7 +632,7 @@ static int sim_worker_opexec_create_nodes(sim_worker_tp wo, simop_tp sop) {
 	resolver_add(wo->resolver, hostname, addr, 0, KBps_down, KBps_up);
 
 
-	cdf_tp cpu_speed_cdf = hashtable_get(wo->loaded_cdfs, op->cdf_id_cpu_speed);
+	cdf_tp cpu_speed_cdf = g_hash_table_lookup(wo->loaded_cdfs, &op->cdf_id_cpu_speed);
 	uint64_t cpu_speed_Bps = (uint64_t)cdf_random_value(cpu_speed_cdf);
 
 	/* create vnetwork management */

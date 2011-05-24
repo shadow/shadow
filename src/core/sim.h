@@ -24,6 +24,7 @@
 #define _sim_h
 
 #include <netinet/in.h>
+#include <glib-2.0/glib.h>
 
 #include "global.h"
 #include "dsim_utils.h"
@@ -66,8 +67,8 @@ typedef struct sim_worker_t {
 	vci_mgr_tp vci_mgr;
 	module_mgr_tp mod_mgr;
 
-	hashtable_tp hostname_tracking;
-	hashtable_tp loaded_cdfs;
+	GHashTable *hostname_tracking;
+	GHashTable *loaded_cdfs;
 
 	events_tp events;
 	list_tp stalled_simops;
@@ -130,10 +131,10 @@ typedef struct sim_master_t {
 	simnet_graph_tp network_topology;
 
 	/* these are basically used to ensure unique ids */
-	hashtable_tp module_tracking; /**< Tracking HT for sim_modtracker_t objects */
-	hashtable_tp network_tracking; /**< Tracking HT for sim_nettracker_t objects */
-	hashtable_tp cdf_tracking;
-	hashtable_tp base_hostname_tracking;
+	GHashTable *module_tracking; /**< Tracking HT for sim_modtracker_t objects */
+	GHashTable *network_tracking; /**< Tracking HT for sim_nettracker_t objects */
+	GHashTable *cdf_tracking;
+	GHashTable *base_hostname_tracking;
 
 	struct timespec simulation_start; /**< Real time start of simulation (for timing) */
 
@@ -166,7 +167,7 @@ void sim_worker_abortsim(sim_worker_tp wo, char * error) ;
 void sim_worker_destroy_node(sim_worker_tp wo, context_provider_tp cp);
 void sim_worker_destroy(sim_worker_tp sim);
 sim_worker_nodetracker_tp sim_worker_create_nodetracker(in_addr_t addr, int track_id, char valid);
-void sim_worker_destroy_nodetracker_cb(void* value, int key);
+void sim_worker_destroy_nodetracker_cb(int key, void* value, void *param);
 void sim_worker_destroy_nodetracker(sim_worker_nodetracker_tp nt);
 
 
@@ -193,7 +194,7 @@ void sim_worker_destroy_nodetracker(sim_worker_nodetracker_tp nt);
 //
 //	module_mgr_tp mod_mgr;
 //
-//	hashtable_tp node_tracking;
+//	GHashTable *node_tracking;
 //
 //	char state;
 //

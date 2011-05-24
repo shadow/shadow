@@ -25,6 +25,7 @@
 
 #include <netinet/in.h>
 #include <stdarg.h>
+#include <glib-2.0/glib.h>
 
 #include "snricall.h"
 #include "hashtable.h"
@@ -63,7 +64,7 @@ typedef struct module_t {
 } module_t, *module_tp;
 
 typedef struct module_mgr_t {
-	hashtable_tp modules;
+	GHashTable *modules;
 } * module_mgr_tp;
 
 typedef struct module_instance_t {

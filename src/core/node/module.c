@@ -32,7 +32,7 @@
 
 module_mgr_tp module_mgr_create (void) {
 	module_mgr_tp mgr = malloc(sizeof(*mgr));
-	mgr->modules = hashtable_create(10, 0.75f);
+	mgr->modules = g_hash_table_new(g_int_hash, g_int_equal);
 	return mgr;
 }
 
@@ -47,8 +47,8 @@ static void module_free_cb(void * vmod, int id) {
 
 void module_mgr_destroy (module_mgr_tp mgr) {
 	if(mgr->modules){
-		hashtable_walk(mgr->modules, &module_free_cb);
-		hashtable_destroy(mgr->modules);
+		g_hash_table_foreach(mgr->modules, (GHFunc)module_free_cb, NULL);
+		g_hash_table_destroy(mgr->modules);
 	}
 	free(mgr);
 	return;
@@ -123,7 +123,7 @@ void module_call_socket_writable(module_instance_tp modinst, int sockd) {
 }
 
 module_tp module_get_module(module_mgr_tp mgr, int module_id) {
-	return hashtable_get(mgr->modules, module_id);
+	return g_hash_table_lookup(mgr->modules, &module_id);
 }
 
 int module_register_globals( module_tp modinst, va_list va_args ) {
@@ -254,7 +254,7 @@ module_tp module_load(module_mgr_tp mgr, int id, char * module) {
 	*mod->mod_snricall_fpmem = &snricall;
 
 	/* track it */
-	hashtable_set(mgr->modules, mod->id, mod);
+	g_hash_table_insert(mgr->modules, int_key(mod->id), mod);
 
 	return mod;
 }

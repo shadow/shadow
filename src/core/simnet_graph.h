@@ -23,6 +23,7 @@
 #ifndef SIMNET_GRAPH_H_
 #define SIMNET_GRAPH_H_
 
+#include <glib-2.0/glib.h>
 #include "list.h"
 #include "hashtable.h"
 #include "shd-cdf.h"
@@ -31,7 +32,7 @@ typedef struct simnet_vertex_s {
 	unsigned int id;
 
 	/* connections to other nodes */
-	hashtable_tp edges;
+	GHashTable *edges;
 
 	/* intranet properties */
 	cdf_tp intranet_latency;
@@ -56,7 +57,7 @@ typedef struct simnet_graph_s {
 	/* holds all networks, of type sim_net_vertex_tp */
 	list_tp vertices;
 	list_tp edges;
-	hashtable_tp vertices_map;
+	GHashTable *vertices_map;
 
 	/* the min/max latency between networks - used for runahead */
 	unsigned int runahead_min;

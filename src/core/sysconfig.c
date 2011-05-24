@@ -137,7 +137,7 @@ sysconfig_t sysconfig;
 
 void sysconfig_init(void)  {
 	int i = 0;
-	sysconfig.data = hashtable_create(32, 0.9f);
+	sysconfig.data = g_hash_table_new(g_int_hash, g_int_equal);
 
 	/* load up all the defaults */
 	while (sysconfig_defaults[i].name[0]) {
@@ -159,7 +159,8 @@ void sysconfig_init(void)  {
 }
 
 int sysconfig_get_int(char * param) {
-	sysconfig_val_tp v = hashtable_get(sysconfig.data, adler32_hash(param));
+        int key = adler32_hash(param);
+	sysconfig_val_tp v = g_hash_table_lookup(sysconfig.data, &key);
 	int rv = 0;
 
 	if(!v)
@@ -177,7 +178,8 @@ int sysconfig_get_int(char * param) {
 	return rv;
 }
 float sysconfig_get_float(char * param) {
-	sysconfig_val_tp v = hashtable_get(sysconfig.data, adler32_hash(param));
+        int key = adler32_hash(param);
+	sysconfig_val_tp v = g_hash_table_lookup(sysconfig.data, &key);
 	float rv = 0.0f;
 
 	if(!v)
@@ -196,7 +198,8 @@ float sysconfig_get_float(char * param) {
 }
 char * sysconfig_get_string(char * param) {
 	static char temp[64];
-	sysconfig_val_tp v = hashtable_get(sysconfig.data, adler32_hash(param));
+        int key = adler32_hash(param);
+	sysconfig_val_tp v = g_hash_table_lookup(sysconfig.data, &key);
 	char * rv = "";
 
 	if(!v)
@@ -221,12 +224,12 @@ char * sysconfig_get_string(char * param) {
 
 void sysconfig_set_int(char * param, int v) {
 	int key = adler32_hash(param);
-	sysconfig_val_tp val = hashtable_get(sysconfig.data, key);
+	sysconfig_val_tp val = g_hash_table_lookup(sysconfig.data, &key);
 
 	if(!val) {
 		val = malloc(sizeof(*val));
 		strncpy(val->name, param, sizeof(val->name)); val->name[sizeof(val->name)-1] = 0;
-		hashtable_set(sysconfig.data, key, val);
+		g_hash_table_insert(sysconfig.data, int_key(key), val);
 	}
 
 	val->type = SYSCONFIG_INT;
@@ -235,12 +238,12 @@ void sysconfig_set_int(char * param, int v) {
 
 void sysconfig_set_string(char * param, char * v) {
 	int key = adler32_hash(param);
-	sysconfig_val_tp val = hashtable_get(sysconfig.data, key);
+	sysconfig_val_tp val = g_hash_table_lookup(sysconfig.data, &key);
 
 	if(!val) {
 		val = malloc(sizeof(*val));
 		strncpy(val->name, param, sizeof(val->name)); val->name[sizeof(val->name)-1] = 0;
-		hashtable_set(sysconfig.data, key, val);
+		g_hash_table_insert(sysconfig.data, int_key(key), val);
 	}
 
 	strncpy(val->v.string_val, v, sizeof(val->v.string_val));
@@ -250,12 +253,12 @@ void sysconfig_set_string(char * param, char * v) {
 
 void sysconfig_set_float(char * param, float v) {
 	int key = adler32_hash(param);
-	sysconfig_val_tp val = hashtable_get(sysconfig.data, key);
+	sysconfig_val_tp val = g_hash_table_lookup(sysconfig.data, &key);
 
 	if(!val) {
 		val = malloc(sizeof(*val));
 		strncpy(val->name, param, sizeof(val->name)); val->name[sizeof(val->name)-1] = 0;
-		hashtable_set(sysconfig.data, key, val);
+		g_hash_table_insert(sysconfig.data, int_key(key), val);
 	}
 
 	val->v.float_val = v;
@@ -337,7 +340,7 @@ void sysconfig_import_config(char * in_config_data) {
 	return;
 }
 
-void sysconfig_export_walk(void * d, int key) {
+void sysconfig_export_walk(int key, void * d, void *param) {
 	static char temp_buffer[512];
 
 	sysconfig_val_tp val = d;
@@ -362,15 +365,15 @@ void sysconfig_export_walk(void * d, int key) {
 char * sysconfig_export_config(void) {
 	sysconfig.exported_config_size = 0;
 	sysconfig.exported_config[0] = 0;
-	hashtable_walk(sysconfig.data, &sysconfig_export_walk);
+	g_hash_table_foreach(sysconfig.data, (GHFunc)sysconfig_export_walk, NULL);
 	return sysconfig.exported_config;
 }
 
-void sysconfig_destroy_cb(void* value, int key) {
+void sysconfig_destroy_cb(int key, void* value, void *param) {
 	free(value);
 }
 
 void sysconfig_cleanup(void) {
-	hashtable_walk(sysconfig.data, &sysconfig_destroy_cb);
-	hashtable_destroy(sysconfig.data);
+	g_hash_table_foreach(sysconfig.data, (GHFunc)sysconfig_destroy_cb, NULL);
+	g_hash_table_destroy(sysconfig.data);
 }

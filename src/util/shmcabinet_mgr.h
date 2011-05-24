@@ -25,6 +25,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <glib-2.0/glib.h>
 
 #include "shmcabinet.h"
 #include "rwlock_mgr.h"
@@ -53,8 +54,8 @@ typedef struct shmcabinet_mgr_s {
 	uint32_t min_payloads_threshold;
 	size_t payload_size;
 	list_tp shm_owned_available;
-	hashtable_tp shm_owned;
-	hashtable_tp shm_unowned;
+	GHashTable *shm_owned;
+	GHashTable *shm_unowned;
 } shmcabinet_mgr_t, *shmcabinet_mgr_tp;
 
 /* creates a new smc_mgr that can store payloads of payload_size in shared memory.

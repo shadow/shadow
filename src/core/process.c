@@ -39,6 +39,7 @@
 #include "netconst.h"
 #include "routing.h"
 #include "log.h"
+#include "hashtable.h"
 
 dvninstance_tp dvn_global_instance = NULL;
 dvn_global_worker_data_t dvn_global_worker_data = {0, NULL, 0, 0};
@@ -208,7 +209,7 @@ void dvn_slave_deposit (dvninstance_tp dvn, nbdf_tp net_frame) {
 					socketset_watch(dvn->socketset, new_socket);
 
 					vector_push(dvn->slave->slave_connections, new_slave_connection);
-					hashtable_set(dvn->slave->slave_connection_lookup, slave_id, new_slave_connection);
+					g_hash_table_insert(dvn->slave->slave_connection_lookup, int_key(slave_id), new_slave_connection);
 					dvn->num_active_slaves++;
 
 					debugf( "Slave:     Engaged. Now %d active slaves.\n", dvn->num_active_slaves);
@@ -253,10 +254,11 @@ int dvn_slave_socketprocess(dvninstance_tp dvn, dvninstance_slave_connection_tp 
 				/* set our own ID */
 				dvn->my_instid = assigned_id;
 
-				if(hashtable_get(dvn->slave->slave_connection_lookup, 0) == NULL) {
+                                int key = 0;
+				if(g_hash_table_lookup(dvn->slave->slave_connection_lookup, &key) == NULL) {
 					/* mark this link as ID 0 (master) */
 					slave_connection->id = 0;
-					hashtable_set(dvn->slave->slave_connection_lookup, 0, slave_connection);
+					g_hash_table_insert(dvn->slave->slave_connection_lookup, int_key(key), slave_connection);
 					dvn->num_active_slaves++;
 
 					debugf( "Slave: BOOTSTRAPED to ID %i (master connection established)\n",assigned_id);
@@ -267,10 +269,10 @@ int dvn_slave_socketprocess(dvninstance_tp dvn, dvninstance_slave_connection_tp 
 
 				nbdf_read(frame, "i", &id);
 
-				if(hashtable_get(dvn->slave->slave_connection_lookup, id)) {
+				if(g_hash_table_lookup(dvn->slave->slave_connection_lookup, &id)) {
 					debugf("Slave: Got a identification for worker %i\n",id);
 					slave_connection->id = id;
-					hashtable_set(dvn->slave->slave_connection_lookup, id, slave_connection);
+					g_hash_table_insert(dvn->slave->slave_connection_lookup, int_key(id), slave_connection);
 				}
 			}
 		} else {
@@ -360,7 +362,7 @@ void dvn_slave_heartbeat (dvninstance_tp dvn) {
 			/* DESTROY */
 			if(cur_slave) {
 				if(cur_slave->id != -1)
-					hashtable_remove(dvn->slave->slave_connection_lookup, cur_slave->id);
+					g_hash_table_remove(dvn->slave->slave_connection_lookup, &cur_slave->id);
 
 				if(cur_slave->sock)
 					socket_destroy(cur_slave->sock);
@@ -424,7 +426,7 @@ void dvn_slave_heartbeat (dvninstance_tp dvn) {
 
 				else {
 					dvninstance_slave_connection_tp remote_slave_connection =
-						hashtable_get(dvn->slave->slave_connection_lookup, dest_major);
+						g_hash_table_lookup(dvn->slave->slave_connection_lookup, &dest_major);
 
 					if(remote_slave_connection && remote_slave_connection->sock)
 						nbdf_send(frame, remote_slave_connection->sock);
@@ -437,8 +439,9 @@ void dvn_slave_heartbeat (dvninstance_tp dvn) {
 					dvn_slave_deposit(dvn, frame);
 
 				else {
+                                        int key = 0;
 					dvninstance_slave_connection_tp remote_slave_connection =
-						hashtable_get(dvn->slave->slave_connection_lookup, 0);
+						g_hash_table_lookup(dvn->slave->slave_connection_lookup, &key);
 
 					if(remote_slave_connection && remote_slave_connection->sock)
 						nbdf_send(frame, remote_slave_connection->sock);
@@ -537,7 +540,7 @@ dvninstance_slave_tp dvn_create_slave (int daemon, unsigned int num_processes, u
 	pipecloud_config_localized(slave->pipecloud, 0);
 
 	/* create data structures for tracking remote connections */
-	slave->slave_connection_lookup = hashtable_create(256, .9f);
+	slave->slave_connection_lookup = g_hash_table_new(g_int_hash, g_int_equal);
 	slave->slave_connections = vector_create();
 
 	/* if in daemon mode, create network slave socket */
@@ -604,7 +607,7 @@ void dvn_destroy_slave (dvninstance_slave_tp slave) {
 	}
 
 	if(slave->slave_connection_lookup)
-		hashtable_destroy(slave->slave_connection_lookup);
+		g_hash_table_destroy(slave->slave_connection_lookup);
 
 	free(slave);
 }

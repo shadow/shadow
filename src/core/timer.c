@@ -35,12 +35,12 @@ dtimer_mgr_tp dtimer_create_manager(events_tp events){
 	dtimer_mgr_tp rval = malloc(sizeof(*rval));
 	rval->c_tmr_cnt = 0;
 	rval->events = events;
-	rval->timersets = hashtable_create(sysconfig_get_int("dtimer_tset_hashsize"), sysconfig_get_float("dtimer_tset_hashgrowth"));
+	rval->timersets = g_hash_table_new(g_int_hash, g_int_equal);
 	return rval;
 }
 
-static void dtimer_free_timerset_cb(void * d, int k) {
-	dtimer_timerset_tp ts = d;
+static void dtimer_free_timerset_cb(int key, void * value, void *param) {
+	dtimer_timerset_tp ts = value;
 
 	if(!ts)
 		return;
@@ -54,8 +54,8 @@ void dtimer_destroy_manager(dtimer_mgr_tp mgr) {
 	if(mgr == NULL)
 		return;
 
-	hashtable_walk(mgr->timersets, &dtimer_free_timerset_cb);
-	hashtable_destroy(mgr->timersets);
+	g_hash_table_foreach(mgr->timersets, (GHFunc)dtimer_free_timerset_cb, NULL);
+	g_hash_table_destroy(mgr->timersets);
 
 	free(mgr);
 
@@ -72,14 +72,14 @@ int dtimer_create_timer( dtimer_mgr_tp mgr, ptime_t cur_time, context_provider_t
 
 	event_time += msdelay;
 
-	ts = hashtable_get(mgr->timersets, cp->vsocket_mgr->addr);
+	ts = g_hash_table_lookup(mgr->timersets, &cp->vsocket_mgr->addr);
 	if(!ts) {
 		ts = malloc(sizeof(*ts));
 		if(!ts)
 			printfault(EXIT_NOMEM, "Out of memory: dtimer_create_event");
 		ts->timers = btree_create(1);
 		ts->cur_tid = 1;
-		hashtable_set(mgr->timersets, cp->vsocket_mgr->addr, ts);
+		g_hash_table_insert(mgr->timersets, int_key(cp->vsocket_mgr->addr), ts);
 	}
 
 	timer_item = malloc(sizeof(*timer_item));
@@ -102,11 +102,11 @@ void dtimer_destroy_timers(dtimer_mgr_tp mgr, context_provider_tp cp) {
 	dtimer_timerset_tp ts;
 	dtimer_item_tp timer_item;
 
-	ts = hashtable_get(mgr->timersets, cp->vsocket_mgr->addr);
+	ts = g_hash_table_lookup(mgr->timersets, &cp->vsocket_mgr->addr);
 	if(!ts)
 		return;
 
-	hashtable_remove(mgr->timersets, cp->vsocket_mgr->addr);
+	g_hash_table_remove(mgr->timersets, &cp->vsocket_mgr->addr);
 
 	for(int i=0; i<btree_get_size(ts->timers); i++) {
 		timer_item = btree_get_index(ts->timers, i, NULL);
@@ -122,7 +122,7 @@ void dtimer_destroy_timer(dtimer_mgr_tp mgr, context_provider_tp cp, int timer_i
 	dtimer_timerset_tp ts;
 	dtimer_item_tp timer_item;
 
-	ts = hashtable_get(mgr->timersets, cp->vsocket_mgr->addr);
+	ts = g_hash_table_lookup(mgr->timersets, &cp->vsocket_mgr->addr);
 	if(!ts)
 		return;
 

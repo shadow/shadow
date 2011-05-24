@@ -169,8 +169,9 @@ void dvn_packet_route(unsigned char dest_type, unsigned char dest_layer, int des
 					dvn_slave_deposit(dvn_global_instance, net_nb);
 
 				else {
+                                        int key = 0;
 					dvninstance_slave_connection_tp remote_slave_connection =
-						hashtable_get(dvn_global_instance->slave->slave_connection_lookup, 0);
+						g_hash_table_lookup(dvn_global_instance->slave->slave_connection_lookup, &key);
 
 					if(remote_slave_connection && remote_slave_connection->sock)
 						nbdf_send(net_nb, remote_slave_connection->sock);
@@ -184,7 +185,7 @@ void dvn_packet_route(unsigned char dest_type, unsigned char dest_layer, int des
 
 				else {
 					dvninstance_slave_connection_tp remote_slave_connection =
-						hashtable_get(dvn_global_instance->slave->slave_connection_lookup, dest_major);
+						g_hash_table_lookup(dvn_global_instance->slave->slave_connection_lookup, &dest_major);
 
 					if(remote_slave_connection && remote_slave_connection->sock)
 						nbdf_send(net_nb, remote_slave_connection->sock);

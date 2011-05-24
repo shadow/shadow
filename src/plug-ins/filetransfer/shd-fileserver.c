@@ -92,7 +92,7 @@ enum fileserver_code fileserver_start(fileserver_tp fs, in_addr_t listen_addr, i
 	fs->listen_port = listen_port;
 	fs->listen_sockd = sockd;
 	strncpy(fs->docroot, docroot, FT_STR_SIZE);
-	fs->connections = hashtable_create(10, 0.9);
+	fs->connections = g_hash_table_new(g_int_hash, g_int_equal);
 	fs->bytes_sent = 0;
 	fs->bytes_received = 0;
 	fs->replies_sent = 0;
@@ -100,7 +100,7 @@ enum fileserver_code fileserver_start(fileserver_tp fs, in_addr_t listen_addr, i
 	return FS_SUCCESS;
 }
 
-static void fileserver_shutdown_cb(void* value, int key) {
+static void fileserver_shutdown_cb(int key, void* value, void *data) {
 	/* cant call fileserve_connection_close since we are walking the ht */
 	fileserver_connection_tp c = value;
 
@@ -119,8 +119,8 @@ enum fileserver_code fileserver_shutdown(fileserver_tp fs) {
 		return FS_ERR_INVALID;
 	}
 
-	hashtable_walk(fs->connections, &fileserver_shutdown_cb);
-	hashtable_destroy(fs->connections);
+	g_hash_table_foreach(fs->connections, (GHFunc)fileserver_shutdown_cb, NULL);
+	g_hash_table_destroy(fs->connections);
 
 	if(close(fs->listen_sockd) < 0) {
 		return FS_ERR_CLOSE;
@@ -149,7 +149,7 @@ enum fileserver_code fileserver_accept_one(fileserver_tp fs, int* sockd_out) {
 	fileserver_connection_tp c = malloc(sizeof(fileserver_connection_t));
 	c->sockd = sockd;
 	c->state = FS_IDLE;
-	hashtable_set(fs->connections, sockd, c);
+	g_hash_table_insert(fs->connections, int_key(sockd), c);
 
 	if(sockd_out != NULL) {
 		*sockd_out = sockd;
@@ -159,7 +159,7 @@ enum fileserver_code fileserver_accept_one(fileserver_tp fs, int* sockd_out) {
 }
 
 static void fileserve_connection_close(fileserver_tp fs, fileserver_connection_tp c) {
-	hashtable_remove(fs->connections, c->sockd);
+	g_hash_table_remove(fs->connections, &c->sockd);
 	if(c->reply.f != NULL) {
 		fclose(c->reply.f);
 	}
@@ -183,7 +183,7 @@ enum fileserver_code fileserver_activate(fileserver_tp fs, int sockd) {
 	}
 
 	/* otherwise check for a connection */
-	fileserver_connection_tp c = hashtable_get(fs->connections, sockd);
+	fileserver_connection_tp c = g_hash_table_lookup(fs->connections, &sockd);
 	if(c == NULL) {
 		return FS_ERR_BADSD;
 	}

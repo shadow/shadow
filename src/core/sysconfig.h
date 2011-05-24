@@ -23,6 +23,7 @@
 #ifndef _sysconfig_h
 #define _sysconfig_h
 
+#include <glib-2.0/glib.h>
 #include "hashtable.h"
 
 #define SYSCONFIG_INT 1
@@ -45,7 +46,7 @@ typedef struct sysconfig_val_t {
 } sysconfig_val_t, * sysconfig_val_tp;
 
 typedef struct sysconfig_t {
-	hashtable_tp data;
+	GHashTable *data;
 	unsigned int exported_config_size;
 	char exported_config[65536]; /* hope that's big enough! */
 } sysconfig_t, * sysconfig_tp;
@@ -53,7 +54,7 @@ typedef struct sysconfig_t {
 extern sysconfig_t sysconfig;
 
 void sysconfig_init(void) ;
-void sysconfig_destroy_cb(void* value, int key);
+void sysconfig_destroy_cb(int key, void* value, void *data);
 
 int sysconfig_get_int(char * param);
 float sysconfig_get_float(char * param);

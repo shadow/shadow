@@ -26,6 +26,7 @@
 #include <sys/time.h>
 #include <time.h>
 #include <stdlib.h>
+#include <glib-2.0/glib.h>
 
 #include "events.h"
 #include "context.h"
@@ -45,7 +46,7 @@ typedef struct dtimer_mgr_t {
 	unsigned long c_tmr_cnt;
 
 	/** timer sets addressed by IP */
-	hashtable_tp timersets;
+	GHashTable *timersets;
 
 	/** events tracker */
 	events_tp events;

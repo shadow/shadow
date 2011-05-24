@@ -32,7 +32,7 @@ simnet_graph_tp simnet_graph_create() {
 
 	g->edges = list_create();
 	g->vertices = list_create();
-	g->vertices_map = hashtable_create(sysconfig_get_int("simnet_graph_hashsize"), sysconfig_get_float("simnet_graph_hashgrowth"));
+	g->vertices_map = g_hash_table_new(g_int_hash, g_int_equal);
 
 	g->runahead_min = 0;
 	g->runahead_max = 0;
@@ -69,7 +69,7 @@ static double simnet_graph_bound_reliability(double reliability) {
 void simnet_graph_add_vertex(simnet_graph_tp g, unsigned int network_id, cdf_tp latency_cdf, double reliablity) {
 	reliablity = simnet_graph_bound_reliability(reliablity);
 	if(g != NULL) {
-		simnet_vertex_tp v = hashtable_get(g->vertices_map, network_id);
+		simnet_vertex_tp v = g_hash_table_lookup(g->vertices_map, &network_id);
 		if(v == NULL) {
 			v = malloc(sizeof(simnet_vertex_t));
 
@@ -77,10 +77,10 @@ void simnet_graph_add_vertex(simnet_graph_tp g, unsigned int network_id, cdf_tp 
 			v->intranet_latency = latency_cdf;
 			v->reliablity = reliablity;
 
-			v->edges = hashtable_create(sysconfig_get_int("simnet_graph_hashsize"), sysconfig_get_float("simnet_graph_hashgrowth"));
+			v->edges = g_hash_table_new(g_int_hash, g_int_equal);
 
 			list_push_back(g->vertices, v);
-			hashtable_set(g->vertices_map, network_id, v);
+			g_hash_table_insert(g->vertices_map, int_key(network_id), v);
 
 			simnet_graph_track_minmax(g, latency_cdf);
 
@@ -96,8 +96,8 @@ void simnet_graph_add_edge(simnet_graph_tp g, unsigned int id1, cdf_tp latency_c
 	reliablity_2to1 = simnet_graph_bound_reliability(reliablity_2to1);
 
 	if(g != NULL) {
-		simnet_vertex_tp v1 = hashtable_get(g->vertices_map, id1);
-		simnet_vertex_tp v2 = hashtable_get(g->vertices_map, id2);
+		simnet_vertex_tp v1 = g_hash_table_lookup(g->vertices_map, &id1);
+		simnet_vertex_tp v2 = g_hash_table_lookup(g->vertices_map, &id2);
 
 		if(v1 != NULL && v2 != NULL) {
 			simnet_edge_tp e = malloc(sizeof(simnet_edge_t));
@@ -110,8 +110,8 @@ void simnet_graph_add_edge(simnet_graph_tp g, unsigned int id1, cdf_tp latency_c
 			e->reliablity_2to1 = reliablity_2to1;
 
 			list_push_back(g->edges, e);
-			hashtable_set(v1->edges, id2, e);
-			hashtable_set(v2->edges, id1, e);
+			g_hash_table_insert(v1->edges, int_key(id2), e);
+			g_hash_table_insert(v2->edges, int_key(id1), e);
 
 			simnet_graph_track_minmax(g, latency_cdf_1to2);
 			simnet_graph_track_minmax(g, latency_cdf_2to1);
@@ -139,14 +139,14 @@ void simnet_graph_destroy(simnet_graph_tp g) {
 			list_iter_tp vert_iter = list_iterator_create(g->vertices);
 			while(list_iterator_hasnext(vert_iter)) {
 				simnet_vertex_tp v = list_iterator_getnext(vert_iter);
-				hashtable_destroy(v->edges);
+				g_hash_table_destroy(v->edges);
 				free(v);
 			}
 			list_iterator_destroy(vert_iter);
 			list_destroy(g->vertices);
 		}
 
-		hashtable_destroy(g->vertices_map);
+		g_hash_table_destroy(g->vertices_map);
 
 		free(g);
 	}
@@ -157,14 +157,14 @@ double simnet_graph_end2end_latency(simnet_graph_tp g, unsigned int src_network_
 
 	if(g != NULL) {
 		/* find latency for a node in src_network to a node in dst_network */
-		simnet_vertex_tp vertex = hashtable_get(g->vertices_map, src_network_id);
+		simnet_vertex_tp vertex = g_hash_table_lookup(g->vertices_map, &src_network_id);
 		if(vertex != NULL) {
 			if(src_network_id == dst_network_id) {
 				/* intranet */
 				milliseconds_latency = cdf_random_value(vertex->intranet_latency);
 			} else {
 				/* internet */
-				simnet_edge_tp edge = hashtable_get(vertex->edges, dst_network_id);
+				simnet_edge_tp edge = g_hash_table_lookup(vertex->edges, &dst_network_id);
 				if(edge != NULL) {
 					if(vertex->id == edge->vertex1->id) {
 						milliseconds_latency = cdf_random_value(edge->internet_latency_1to2);
@@ -186,14 +186,14 @@ double simnet_graph_end2end_reliablity(simnet_graph_tp g, unsigned int src_netwo
 
 	if(g != NULL) {
 		/* find latency for a node in src_network to a node in dst_network */
-		simnet_vertex_tp vertex = hashtable_get(g->vertices_map, src_network_id);
+		simnet_vertex_tp vertex = g_hash_table_lookup(g->vertices_map, &src_network_id);
 		if(vertex != NULL) {
 			if(src_network_id == dst_network_id) {
 				/* intranet */
 				reliability = vertex->reliablity;
 			} else {
 				/* internet */
-				simnet_edge_tp edge = hashtable_get(vertex->edges, dst_network_id);
+				simnet_edge_tp edge = g_hash_table_lookup(vertex->edges, &dst_network_id);
 				if(edge != NULL) {
 					if(vertex->id == edge->vertex1->id) {
 						reliability = edge->reliablity_1to2;

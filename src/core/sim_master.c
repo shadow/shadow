@@ -52,10 +52,10 @@ sim_master_tp sim_master_create (char * dsim, unsigned int num_slaves) {
 		return NULL;
 	}
 
-	smaster->module_tracking = 	hashtable_create(sysconfig_get_int("sim_modtrack_hashsize"), sysconfig_get_float("sim_modtrack_hashgrowth"));
-	smaster->cdf_tracking = hashtable_create(sysconfig_get_int("sim_modtrack_hashsize"), sysconfig_get_float("sim_modtrack_hashgrowth"));
-	smaster->network_tracking = hashtable_create(sysconfig_get_int("sim_nettrack_hashsize"), sysconfig_get_float("sim_nettrack_hashgrowth"));
-	smaster->base_hostname_tracking = hashtable_create(sysconfig_get_int("sim_nettrack_hashsize"), sysconfig_get_float("sim_nettrack_hashgrowth"));
+	smaster->module_tracking = g_hash_table_new(g_int_hash, g_int_equal);
+	smaster->cdf_tracking = g_hash_table_new(g_int_hash, g_int_equal);
+	smaster->network_tracking = g_hash_table_new(g_int_hash, g_int_equal);
+	smaster->base_hostname_tracking = g_hash_table_new(g_int_hash, g_int_equal);
 
 	clock_gettime(CLOCK_MONOTONIC, &smaster->simulation_start);
 
@@ -94,7 +94,7 @@ sim_master_tp sim_master_create (char * dsim, unsigned int num_slaves) {
 	return smaster;
 }
 
-static void sim_master_destroy_cdftracker_cb(void* value, int key) {
+static void sim_master_destroy_cdftracker_cb(int key, void* value, void *param) {
 	sim_master_tracker_tp cdf_tracker = value;
 	if(cdf_tracker != NULL) {
 		cdf_destroy((cdf_tp)cdf_tracker->value);
@@ -114,17 +114,17 @@ void sim_master_destroy(sim_master_tp sim) {
 
 	simnet_graph_destroy(sim->network_topology);
 
-	hashtable_walk(sim->network_tracking, (hashtable_walk_callback_tp)&sim_free_tracker);
-	hashtable_destroy(sim->network_tracking);
+	g_hash_table_foreach(sim->network_tracking, (GHFunc)sim_free_tracker, NULL);
+	g_hash_table_destroy(sim->network_tracking);
 
-	hashtable_walk(sim->module_tracking, (hashtable_walk_callback_tp)&sim_free_tracker);
-	hashtable_destroy(sim->module_tracking);
+	g_hash_table_foreach(sim->module_tracking, (GHFunc)sim_free_tracker, NULL);
+	g_hash_table_destroy(sim->module_tracking);
 
-	hashtable_walk(sim->cdf_tracking, &sim_master_destroy_cdftracker_cb);
-	hashtable_destroy(sim->cdf_tracking);
+	g_hash_table_foreach(sim->cdf_tracking, (GHFunc)sim_master_destroy_cdftracker_cb, NULL);
+	g_hash_table_destroy(sim->cdf_tracking);
 
-	hashtable_walk(sim->base_hostname_tracking, (hashtable_walk_callback_tp)&sim_free_tracker);
-	hashtable_destroy(sim->base_hostname_tracking);
+	g_hash_table_foreach(sim->base_hostname_tracking, (GHFunc)sim_free_tracker, NULL);
+	g_hash_table_destroy(sim->base_hostname_tracking);
 
 	free(sim);
 
@@ -146,14 +146,14 @@ int sim_master_isdone(sim_master_tp smaster) {
 	return smaster->num_slaves == smaster->num_slaves_complete ? 1 : 0;
 }
 
-static unsigned int sim_master_dsimop_helper(operation_tp dsimop, hashtable_tp tracker_ht, enum dsim_vartype vartype) {
+static unsigned int sim_master_dsimop_helper(operation_tp dsimop, GHashTable *tracker_ht, enum dsim_vartype vartype) {
 	sim_master_tracker_tp tracker;
 	nbdf_tp nb_op;
 
 	if(dsimop->retval) {
 		/* need a unique id for tracking, but 0 is reserved */
 		unsigned int tracking_id = 0;
-		while(tracking_id == 0 || hashtable_get(tracker_ht, tracking_id) != NULL) {
+		while(tracking_id == 0 || g_hash_table_lookup(tracker_ht, &tracking_id) != NULL) {
 			tracking_id = dvn_rand_fast(RAND_MAX);
 		}
 
@@ -164,7 +164,7 @@ static unsigned int sim_master_dsimop_helper(operation_tp dsimop, hashtable_tp t
 		tracker->id = tracking_id;
 		tracker->counter = 0;
 		tracker->value = NULL;
-		hashtable_set(tracker_ht, tracker->id, tracker);
+		g_hash_table_insert(tracker_ht, int_key(tracker->id), tracker);
 
 		/* save it to the variable so DSIM has access to it */
 		dsimop->retval->data = tracker;
@@ -195,7 +195,7 @@ static void sim_master_dsimop_load_cdf(sim_master_tp master, operation_tp dsimop
 	unsigned int id = sim_master_dsimop_helper(dsimop, master->cdf_tracking, dsim_vartracker_type_cdftrack);
 
 	/* master has to keep track of all cdfs used for latency in order to compute runahead */
-	sim_master_tracker_tp cdf_tracker = hashtable_get(master->cdf_tracking, id);
+	sim_master_tracker_tp cdf_tracker = g_hash_table_lookup(master->cdf_tracking, &id);
 	if(cdf_tracker != NULL) {
 		cdf_tp cdf = cdf_create(filepath);
 		if(cdf != NULL) {
@@ -214,7 +214,7 @@ static void sim_master_dsimop_generate_cdf(sim_master_tp master, operation_tp ds
 	unsigned int id = sim_master_dsimop_helper(dsimop, master->cdf_tracking, dsim_vartracker_type_cdftrack);
 
 	/* master has to keep track of all cdfs used for latency in order to compute runahead */
-	sim_master_tracker_tp cdf_tracker = hashtable_get(master->cdf_tracking, id);
+	sim_master_tracker_tp cdf_tracker = g_hash_table_lookup(master->cdf_tracking, &id);
 	if(cdf_tracker != NULL) {
 		cdf_tp cdf = cdf_generate(cdf_base_center, cdf_base_width, cdf_tail_width);
 		if(cdf != NULL) {
@@ -235,7 +235,7 @@ static void sim_master_dsimop_create_network(sim_master_tp master, operation_tp 
 		double reliability = dsimop->arguments[1].v.double_val;
 
 		/* get the cdf used for latency */
-		sim_master_tracker_tp cdf_tracker = hashtable_get(master->cdf_tracking, cdf_id);
+		sim_master_tracker_tp cdf_tracker = g_hash_table_lookup(master->cdf_tracking, &cdf_id);
 		if(cdf_tracker != NULL && cdf_tracker->value != NULL) {
 			/* add it to our topology */
 			cdf_tp cdf = cdf_tracker->value;
@@ -280,8 +280,8 @@ static void sim_master_dsimop_connect_networks(sim_master_tp master, operation_t
 		nbdf_free(nb_op);
 
 		/* get the cdfs used for latency */
-		sim_master_tracker_tp cdf_tracker_1to2 = hashtable_get(master->cdf_tracking, cdf_id_latency_net1_to_net2);
-		sim_master_tracker_tp cdf_tracker_2to1 = hashtable_get(master->cdf_tracking, cdf_id_latency_net2_to_net1);
+		sim_master_tracker_tp cdf_tracker_1to2 = g_hash_table_lookup(master->cdf_tracking, &cdf_id_latency_net1_to_net2);
+		sim_master_tracker_tp cdf_tracker_2to1 = g_hash_table_lookup(master->cdf_tracking, &cdf_id_latency_net2_to_net1);
 		if(cdf_tracker_1to2 != NULL && cdf_tracker_1to2->value != NULL
 				&& cdf_tracker_2to1 != NULL && cdf_tracker_2to1->value != NULL) {
 			/* add it to our topology */

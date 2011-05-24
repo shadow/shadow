@@ -23,6 +23,8 @@
 #ifndef _process_h
 #define _process_h
 
+#include <glib-2.0/glib.h>
+
 #include "socket.h"
 #include "socketset.h"
 #include "sim.h"
@@ -68,7 +70,7 @@ typedef struct dvninstance_slave_t {
 	pipecloud_tp pipecloud;
 
 	/** by-ID mapping of sockets to for remote slaves - daemon master/slave mode only */
-	hashtable_tp slave_connection_lookup;
+	GHashTable *slave_connection_lookup;
 	vector_tp slave_connections;
 
 	unsigned int num_processes;

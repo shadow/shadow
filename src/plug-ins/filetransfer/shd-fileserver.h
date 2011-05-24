@@ -26,6 +26,7 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <netinet/in.h>
+#include <glib-2.0/glib.h>
 
 #include "shd-filetransfer-defs.h"
 #include "hashtable.h"
@@ -78,7 +79,7 @@ typedef struct fileserver_s {
 	int listen_sockd;
 	char docroot[FT_STR_SIZE];
 	/* client connections keyed by sockd */
-	hashtable_tp connections;
+	GHashTable *connections;
 	/* global stats for this server */
 	size_t bytes_received;
 	size_t bytes_sent;

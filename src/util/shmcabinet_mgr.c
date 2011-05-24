@@ -59,10 +59,10 @@ static void shmcabinet_mgr_lazy_create(shmcabinet_mgr_tp smc_mgr) {
 	if(smc_mgr != NULL) {
 		unsigned int num_cabinets = smc_mgr->min_payloads_threshold / smc_mgr->payloads_per_cabinet;
 		if(smc_mgr->shm_owned == NULL) {
-			smc_mgr->shm_owned = hashtable_create(num_cabinets*2, 0.90);
+			smc_mgr->shm_owned = g_hash_table_new(g_int_hash, g_int_equal);
 		}
 		if(smc_mgr->shm_unowned == NULL) {
-			smc_mgr->shm_unowned = hashtable_create(num_cabinets, 0.90);
+			smc_mgr->shm_unowned = g_hash_table_new(g_int_hash, g_int_equal);
 		}
 		if(smc_mgr->shm_owned_available == NULL) {
 			smc_mgr->shm_owned_available = list_create();
@@ -74,14 +74,14 @@ void shmcabinet_mgr_destroy(shmcabinet_mgr_tp smc_mgr) {
 	if(smc_mgr != NULL) {
 		/* detach from our referenced shm cabinets */
 		if(smc_mgr->shm_owned != NULL) {
-			hashtable_walk(smc_mgr->shm_owned, &shmcabinet_mgr_shm_destroy_cb);
-			hashtable_destroy(smc_mgr->shm_owned);
+			g_hash_table_foreach(smc_mgr->shm_owned, (GHFunc)shmcabinet_mgr_shm_destroy_cb, NULL);
+			g_hash_table_destroy(smc_mgr->shm_owned);
 		}
 
 		/* detach from other shm cabinets we mapped to our address space */
 		if(smc_mgr->shm_unowned != NULL) {
-			hashtable_walk(smc_mgr->shm_unowned, &shmcabinet_mgr_shm_destroy_cb);
-			hashtable_destroy(smc_mgr->shm_unowned);
+			g_hash_table_foreach(smc_mgr->shm_unowned, (GHFunc)shmcabinet_mgr_shm_destroy_cb, NULL);
+			g_hash_table_destroy(smc_mgr->shm_unowned);
 		}
 
 		/* already destroyed the shm, so just destroy the list */
@@ -152,7 +152,7 @@ shm_item_tp shmcabinet_mgr_alloc(shmcabinet_mgr_tp smc_mgr) {
 
 				/* keep track of the new shm */
 				list_push_back(smc_mgr->shm_owned_available, shm);
-				hashtable_set(smc_mgr->shm_owned, shm->info.cabinet_id, shm);
+				g_hash_table_insert(smc_mgr->shm_owned, int_key(shm->info.cabinet_id), shm);
 			} else {
 				dlogf(LOG_ERR, "shmcabinet_mgr_alloc: problem creating new shared memory cabinet\n");
 				return NULL;
@@ -196,7 +196,7 @@ shm_item_tp shmcabinet_mgr_open(shmcabinet_mgr_tp smc_mgr, shmcabinet_info_tp sh
 		unsigned int key = twouint_hash(shm_info->process_id, shm_info->cabinet_id);
 
 		/* check if we are already connected to this shm */
-		shm_tp shm = hashtable_get(smc_mgr->shm_unowned, key);
+		shm_tp shm = g_hash_table_lookup(smc_mgr->shm_unowned, &key);
 
 		if(shm == NULL) {
 			/* we need to map the given cabinet */
@@ -210,7 +210,7 @@ shm_item_tp shmcabinet_mgr_open(shmcabinet_mgr_tp smc_mgr, shmcabinet_info_tp sh
 				shm->owned = 0;
 
 				/* keep track of the mapped shm */
-				hashtable_set(smc_mgr->shm_unowned, key, shm);
+				g_hash_table_insert(smc_mgr->shm_unowned, int_key(key), shm);
 			} else {
 				dlogf(LOG_ERR, "shmcabinet_mgr_open: problem mapping shared memory cabinet\n");
 				return NULL;
@@ -266,7 +266,7 @@ void shmcabinet_mgr_free(shmcabinet_mgr_tp smc_mgr, shm_item_tp item) {
 				if(avail_payloads - smc_mgr->payloads_per_cabinet >= smc_mgr->min_payloads_threshold) {
 					if(shmcabinet_unmap(shm->cabinet) == SHMCABINET_SUCCESS) {
 						list_remove(smc_mgr->shm_owned_available, shm, NULL);
-						hashtable_remove(smc_mgr->shm_owned, shm->info.cabinet_id);
+						g_hash_table_remove(smc_mgr->shm_owned, &shm->info.cabinet_id);
 						free(shm);
 					} else {
 						dlogf(LOG_ERR, "shmcabinet_mgr_free: problem unmapping owned cabinet\n");
@@ -278,7 +278,7 @@ void shmcabinet_mgr_free(shmcabinet_mgr_tp smc_mgr, shm_item_tp item) {
 			if(shm->references == 0) {
 				unsigned int key = twouint_hash(shm->info.process_id, shm->info.cabinet_id);
 				if(shmcabinet_unmap(shm->cabinet) == SHMCABINET_SUCCESS) {
-					hashtable_remove(smc_mgr->shm_unowned, key);
+					g_hash_table_remove(smc_mgr->shm_unowned, &key);
 					free(shm);
 				} else {
 					dlogf(LOG_ERR, "shmcabinet_mgr_free: problem unmapping unowned cabinet\n");
