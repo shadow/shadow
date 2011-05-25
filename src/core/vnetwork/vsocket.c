@@ -46,6 +46,7 @@
 #include "sim.h"
 #include "vepoll.h"
 #include "vpipe.h"
+#include "hash.h"
 
 static int vsocket_bind_implicit(vsocket_mgr_tp net, int fd, in_addr_t addr);
 

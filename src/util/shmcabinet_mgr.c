@@ -30,6 +30,7 @@
 #include "hash.h"
 #include "list.h"
 #include "log.h"
+#include "utility.h"
 
 static void shmcabinet_mgr_lazy_create(shmcabinet_mgr_tp smc_mgr);
 static void shmcabinet_mgr_shm_item_destroy(shm_item_tp shm_item);

@@ -26,6 +26,7 @@
 #include "sysconfig.h"
 #include "log.h"
 #include "shd-cdf.h"
+#include "utility.h"
 
 simnet_graph_tp simnet_graph_create() {
 	simnet_graph_tp g = malloc(sizeof(simnet_graph_t));

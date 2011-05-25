@@ -25,6 +25,8 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include "sysconfig.h"
+#include "utility.h"
+#include "hash.h"
 
 sysconfig_val_t sysconfig_defaults[] = {
 		{"sim_nodetrack_hashsize", SYSCONFIG_INT, {.int_val=128}},
