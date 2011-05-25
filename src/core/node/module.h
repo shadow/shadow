@@ -28,7 +28,6 @@
 #include <glib-2.0/glib.h>
 
 #include "snricall.h"
-#include "hashtable.h"
 
 typedef void (*module_modfunc_init_fp)();
 typedef void (*module_modfunc_uninit_fp)();

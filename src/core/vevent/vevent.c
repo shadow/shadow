@@ -41,7 +41,6 @@
 #include "vsocket.h"
 #include "log.h"
 #include "list.h"
-#include "hashtable.h"
 
 /* FIXME TODO:
  * -make vevent_mgr accesses local to vevent_mgr.c

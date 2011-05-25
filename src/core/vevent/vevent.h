@@ -35,7 +35,6 @@
 #include <event2/dns_struct.h>
 
 #include "vevent_mgr.h"
-#include "hashtable.h"
 #include "list.h"
 #include "context.h"
 

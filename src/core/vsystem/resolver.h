@@ -27,7 +27,6 @@
 #include <netinet/in.h>
 #include <glib-2.0/glib.h>
 
-#include "hashtable.h"
 
 /* should cover all digits in UINT32_MAX */
 #define RESOLVER_ID_MAXLENSTR 12

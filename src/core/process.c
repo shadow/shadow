@@ -39,7 +39,6 @@
 #include "netconst.h"
 #include "routing.h"
 #include "log.h"
-#include "hashtable.h"
 
 dvninstance_tp dvn_global_instance = NULL;
 dvn_global_worker_data_t dvn_global_worker_data = {0, NULL, 0, 0};

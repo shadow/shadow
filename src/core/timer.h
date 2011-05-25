@@ -32,7 +32,6 @@
 #include "context.h"
 
 #include "btree.h"
-#include "hashtable.h"
 
 #define TIMER_INVALID -1
 

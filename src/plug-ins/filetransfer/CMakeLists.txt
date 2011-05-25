@@ -2,7 +2,6 @@ add_definitions(-D_GNU_SOURCE)
 
 # fileserver plug-in
 add_library(shadow-plugin-fileserver MODULE shd-plugin-fileserver.c shd-fileserver.c 
-    ${SHADOW_SOURCE_DIR}/util/hashtable.c 
     ${SHADOW_SOURCE_DIR}/util/hash.c 
     ${SHADOW_SOURCE_DIR}/util/btree.c)
 target_link_libraries(shadow-plugin-fileserver shadow-plugin)

@@ -32,7 +32,6 @@
 #include "module.h"
 #include "timer.h"
 #include "vci.h"
-#include "hashtable.h"
 #include "simnet_graph.h"
 #include "resolver.h"
 

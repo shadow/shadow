@@ -30,7 +30,6 @@
 #include "shmcabinet.h"
 #include "rwlock_mgr.h"
 #include "list.h"
-#include "hashtable.h"
 
 typedef struct shm_s {
 	shmcabinet_tp cabinet;

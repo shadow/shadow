@@ -28,7 +28,6 @@
 #include "shmcabinet.h"
 #include "rwlock_mgr.h"
 #include "hash.h"
-#include "hashtable.h"
 #include "list.h"
 #include "log.h"
 

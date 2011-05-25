@@ -25,7 +25,6 @@
 
 #include <glib-2.0/glib.h>
 #include "list.h"
-#include "hashtable.h"
 #include "shd-cdf.h"
 
 typedef struct simnet_vertex_s {

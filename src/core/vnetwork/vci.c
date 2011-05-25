@@ -43,7 +43,6 @@
 #include "sim.h"
 #include "simnet_graph.h"
 #include "vepoll.h"
-#include "hashtable.h"
 
 static void vci_free_network(int netid, void * vnet, void *data);
 static void vci_free_mailbox(int laddr, void * vmbox, void *data);

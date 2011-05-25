@@ -24,7 +24,6 @@
 #define _sysconfig_h
 
 #include <glib-2.0/glib.h>
-#include "hashtable.h"
 
 #define SYSCONFIG_INT 1
 #define SYSCONFIG_STRING  2

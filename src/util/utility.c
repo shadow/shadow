@@ -69,3 +69,10 @@ void printfault(int error, char *fmt, ...) {
 	va_end(arg);
 	exit(error);
 }
+
+gint *int_key(int key) {
+    gint *ret = g_malloc(sizeof(gint));
+    *ret = key;
+    return ret;
+}
+

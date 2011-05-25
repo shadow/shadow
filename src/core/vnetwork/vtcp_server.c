@@ -35,7 +35,6 @@
 #include "list.h"
 #include "log.h"
 #include "sysconfig.h"
-#include "hashtable.h"
 
 static void vtcp_server_add_child_helper(GHashTable *ht, vtcp_server_child_tp schild);
 

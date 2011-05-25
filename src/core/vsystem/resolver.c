@@ -29,7 +29,6 @@
 #include "resolver.h"
 #include "hash.h"
 #include "sysconfig.h"
-#include "hashtable.h"
 
 resolver_tp resolver_create(int process_id) {
 	resolver_tp r = malloc(sizeof(resolver_t));

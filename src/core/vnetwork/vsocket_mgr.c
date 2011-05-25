@@ -37,7 +37,6 @@
 #include "vepoll.h"
 #include "vevent_mgr.h"
 #include "vcpu.h"
-#include "hashtable.h"
 
 static vsocket_tp vsocket_mgr_find_socket_helper(vinterface_tp vi, uint8_t protocol,
 		in_addr_t remote_addr, in_port_t remote_port, in_port_t local_port);

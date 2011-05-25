@@ -29,7 +29,6 @@
 #include "vsocket_mgr.h"
 #include "vpipe.h"
 #include "log.h"
-#include "hashtable.h"
 
 static enum vpipe_status vpipe_unid_destroy(vpipe_unid_tp unipipe) {
 	if(unipipe != NULL) {

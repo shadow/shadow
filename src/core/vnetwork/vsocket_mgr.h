@@ -32,7 +32,6 @@
 #include "vpacket_mgr.h"
 #include "vpacket.h"
 #include "vpeer.h"
-#include "hashtable.h"
 #include "vpipe.h"
 #include "linkedbuffer.h"
 #include "vevent_mgr.h"

@@ -29,7 +29,6 @@
 #include <glib-2.0/glib.h>
 
 #include "shd-filetransfer-defs.h"
-#include "hashtable.h"
 
 /*
  * A minimal http server.

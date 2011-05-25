@@ -23,8 +23,12 @@
 #ifndef _utility_h
 #define _utility_h
 
+#include <glib-2.0/glib.h>
+
 char * file_get_contents(const char * filename);
 
 void printfault(int error, char *fmt, ...);
+
+gint *int_key(int key);
 
 #endif /*UTILITY_H_*/

@@ -2,7 +2,6 @@ set(util_srcs
 	btree.c
 	clo.c
 	hash.c
-	hashtable.c
 	heap.c
 	ipcsync.c
 	orderedlist.c
