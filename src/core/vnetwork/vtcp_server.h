@@ -28,7 +28,6 @@
 
 #include "vsocket_mgr.h"
 #include "vsocket.h"
-#include "list.h"
 
 typedef struct vtcp_server_child_s {
 	/* TODO should we store the sock_descrs instead of pointers to sockets?
@@ -50,7 +49,7 @@ typedef struct vtcp_server_s {
 	 * keyed by hash(remoteaddr, remoteport) */
 	GHashTable *pending_children;
 	/* pending vtcp_server_child_tp are also stored in a queue so we accept them in order. */
-	list_tp pending_queue;
+	GQueue *pending_queue;
 	/* vtcp_server_child_tp of established connections that have been accepted
 	 * keyed by hash(remoteaddr, remoteport) */
 	GHashTable *accepted_children;

@@ -32,7 +32,6 @@
 #include "vpeer.h"
 #include "vtransport.h"
 #include "vtcp.h"
-#include "list.h"
 #include "log.h"
 #include "sysconfig.h"
 
@@ -54,7 +53,7 @@ vtcp_server_tp vtcp_server_create(vsocket_mgr_tp vsocket_mgr, vsocket_tp sock, i
 
 	server->incomplete_children = g_hash_table_new(g_int_hash, g_int_equal);
 	server->pending_children = g_hash_table_new(g_int_hash, g_int_equal);
-	server->pending_queue = list_create();
+	server->pending_queue = g_queue_new();
 	server->accepted_children = g_hash_table_new(g_int_hash, g_int_equal);
 
 	return server;
@@ -77,7 +76,7 @@ void vtcp_server_destroy(vtcp_server_tp server) {
 		g_hash_table_destroy(server->accepted_children);
 
 		/* vsockets stored in pending queue were just deleted from hashtable */
-		list_destroy(server->pending_queue);
+		g_queue_free(server->pending_queue);
 
 		free(server);
 	}
@@ -143,15 +142,15 @@ void vtcp_server_destroy_child(vtcp_server_tp server, vtcp_server_child_tp schil
 
 		/* TODO do something smarter instead of re-creating the
 		 * pending queue... like a list iterator */
-		if(list_get_size(server->pending_queue) > 0) {
-			list_tp new_pending = list_create();
-			while(list_get_size(server->pending_queue) > 0) {
-				vsocket_tp next = list_pop_front(server->pending_queue);
+		if(g_queue_get_length(server->pending_queue) > 0) {
+			GQueue *new_pending = g_queue_new();
+			while(g_queue_get_length(server->pending_queue) > 0) {
+				vsocket_tp next = g_queue_pop_head(server->pending_queue);
 				if(next->sock_desc != schild->sock->sock_desc) {
-					list_push_back(new_pending, next);
+					g_queue_push_tail(new_pending, next);
 				}
 			}
-			list_destroy(server->pending_queue);
+			g_queue_free(server->pending_queue);
 			server->pending_queue = new_pending;
 		}
 
@@ -197,9 +196,9 @@ void vtcp_server_remove_child_incomplete(vtcp_server_tp server, vtcp_server_chil
 uint8_t vtcp_server_add_child_pending(vtcp_server_tp server, vtcp_server_child_tp schild) {
 	if(server != NULL) {
 //		Disabled backlog for now
-//		if(list_get_size(server->pending_queue) < server->backlog) {
+//		if(g_queue_get_length(server->pending_queue) < server->backlog) {
 			vtcp_server_add_child_helper(server->pending_children, schild);
-			list_push_back(server->pending_queue, schild);
+			g_queue_push_tail(server->pending_queue, schild);
 			return 1;
 //		}
 	}
@@ -208,7 +207,7 @@ uint8_t vtcp_server_add_child_pending(vtcp_server_tp server, vtcp_server_child_t
 
 vtcp_server_child_tp vtcp_server_remove_child_pending(vtcp_server_tp server) {
 	if(server != NULL && server->pending_queue != NULL) {
-		vtcp_server_child_tp pending = list_pop_front(server->pending_queue);
+		vtcp_server_child_tp pending = g_queue_pop_head(server->pending_queue);
 		if(pending != NULL) {
 			g_hash_table_remove(server->pending_children, &pending->key);
 		}

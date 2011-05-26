@@ -32,7 +32,6 @@
 #include "vpeer.h"
 #include "vpacket_mgr.h"
 #include "vpacket.h"
-#include "list.h"
 
 /* starting point for 'random' ports we select [2^16 / 2] */
 #define VSOCKET_MIN_RND_PORT 30000

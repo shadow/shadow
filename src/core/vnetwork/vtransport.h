@@ -48,7 +48,6 @@ vtransport_tp vtransport_create(vsocket_mgr_tp vsocket_mgr, vsocket_tp sock);
 vtransport_item_tp vtransport_create_item(uint16_t sockd, rc_vpacket_pod_tp rc_packet);
 void vtransport_destroy(vtransport_tp vt);
 void vtransport_destroy_item(vtransport_item_tp titem);
-void vsocket_execute_receive(vtransport_tp vt, list_tp rc_packets);
 uint8_t vtransport_is_empty(vtransport_tp vt);
 void vtransport_notify_readable_cb(void* value, int key);
 void vtransport_notify_writable_cb(void* value, int key);
@@ -56,7 +55,7 @@ void vtransport_onclose(vsocket_mgr_tp net, in_addr_t src_addr, in_port_t src_po
 		in_addr_t dst_addr, in_port_t dst_port, uint64_t rcv_end);
 void vtransport_onretransmit(vsocket_mgr_tp net, in_addr_t dst_addr, in_port_t dst_port,
 		in_port_t src_port, uint32_t retransmit_key);
-void vtransport_process_incoming_items(vsocket_mgr_tp net, list_tp titems);
+void vtransport_process_incoming_items(vsocket_mgr_tp net, GQueue *titems);
 uint8_t vtransport_transmit(vtransport_tp vt, uint32_t* bytes_transmitted, uint16_t* packets_remaining);
 
 #endif /* VTRANSPORT_H_ */

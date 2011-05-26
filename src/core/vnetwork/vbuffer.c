@@ -27,7 +27,6 @@
 #include "reference_counter.h"
 #include "vbuffer.h"
 #include "vci.h"
-#include "list.h"
 #include "log.h"
 #include "vepoll.h"
 
@@ -75,7 +74,7 @@ static vbuffer_rbuf_tp vbuffer_create_receive_buffer(uint64_t max_size, uint8_t 
 	rbuf->current_size = 0;
 	rbuf->num_packets = 0;
 
-	rbuf->vread = list_create();
+	rbuf->vread = g_queue_new();
 	rbuf->data_offset = 0;
 
 	if(tcp_mode) {
@@ -99,11 +98,11 @@ static void vbuffer_destroy_receive_buffer(vbuffer_rbuf_tp rbuf) {
 		}
 
 		if(rbuf->vread != NULL) {
-			while(list_get_size(rbuf->vread) > 0) {
-				rc_vpacket_pod_tp rc_packet = list_pop_back(rbuf->vread);
+			while(g_queue_get_length(rbuf->vread) > 0) {
+				rc_vpacket_pod_tp rc_packet = g_queue_pop_tail(rbuf->vread);
 				rc_vpacket_pod_release(rc_packet);
 			}
-			list_destroy(rbuf->vread);
+			g_queue_free(rbuf->vread);
 			rbuf->vread = NULL;
 		}
 
@@ -125,7 +124,7 @@ static vbuffer_sbuf_tp vbuffer_create_send_buffer(uint64_t max_size, uint8_t tcp
 
 	if(tcp_mode) {
 		sbuf->tcp_retransmit = orderedlist_create();
-		sbuf->tcp_control = list_create();
+		sbuf->tcp_control = g_queue_new();
 	} else {
 		sbuf->tcp_retransmit = NULL;
 		sbuf->tcp_control = NULL;
@@ -155,11 +154,11 @@ static void vbuffer_destroy_send_buffer(vbuffer_sbuf_tp sbuf) {
 		}
 
 		if(sbuf->tcp_control != NULL) {
-			while(list_get_size(sbuf->tcp_control) > 0) {
-				rc_vpacket_pod_tp rc_packet = list_pop_front(sbuf->tcp_control);
+			while(g_queue_get_length(sbuf->tcp_control) > 0) {
+				rc_vpacket_pod_tp rc_packet = g_queue_pop_head(sbuf->tcp_control);
 				rc_vpacket_pod_release(rc_packet);
 			}
-			list_destroy(sbuf->tcp_control);
+			g_queue_free(sbuf->tcp_control);
 			sbuf->tcp_control = NULL;
 		}
 
@@ -191,7 +190,7 @@ static uint8_t vbuffer_add_receive_helper(vbuffer_tp vb, rc_vpacket_pod_tp rc_pa
 						break;
 
 					case VB_RECEIVE_VREAD:
-						list_push_back(vb->rbuf->vread, rc_packet);
+						g_queue_push_tail(vb->rbuf->vread, rc_packet);
 						break;
 
 					default:
@@ -256,7 +255,7 @@ static uint8_t vbuffer_add_send_helper(vbuffer_tp vb, rc_vpacket_pod_tp rc_packe
 						break;
 
 					case VB_SEND_CONTROL:
-						list_push_back(vb->sbuf->tcp_control, rc_packet);
+						g_queue_push_tail(vb->sbuf->tcp_control, rc_packet);
 						break;
 
 					default:
@@ -325,7 +324,7 @@ static rc_vpacket_pod_tp vbuffer_remove_receive_helper(vbuffer_tp vb, enum vbuff
 					break;
 
 				case VB_RECEIVE_VREAD:
-					rc_packet = list_get_front(vb->rbuf->vread);
+					rc_packet = g_queue_peek_head(vb->rbuf->vread);
 					*read_offset = &vb->rbuf->data_offset;
 					break;
 
@@ -351,7 +350,7 @@ static rc_vpacket_pod_tp vbuffer_remove_receive_helper(vbuffer_tp vb, enum vbuff
 					break;
 
 				case VB_RECEIVE_VREAD:
-					rc_packet = list_pop_front(vb->rbuf->vread);
+					rc_packet = g_queue_pop_head(vb->rbuf->vread);
 					vb->rbuf->data_offset = 0;
 					break;
 
@@ -446,7 +445,7 @@ static rc_vpacket_pod_tp vbuffer_remove_send_helper(vbuffer_tp vb, enum vbuffer_
 					}
 
 				case VB_SEND_CONTROL:
-					rc_packet = list_pop_front(vb->sbuf->tcp_control);
+					rc_packet = g_queue_pop_head(vb->sbuf->tcp_control);
 					break;
 
 				default:
@@ -533,7 +532,7 @@ size_t vbuffer_receive_space_available(vbuffer_tp vb) {
 
 uint8_t vbuffer_is_readable(vbuffer_tp vb) {
 	if(vb != NULL && vb->rbuf != NULL && vb->rbuf->vread != NULL) {
-		return list_get_size(vb->rbuf->vread) > 0;
+		return g_queue_get_length(vb->rbuf->vread) > 0;
 	}
 	return 0;
 }
@@ -595,7 +594,7 @@ int vbuffer_get_send_length(vbuffer_tp vb) {
 
 uint8_t vbuffer_is_empty_send_control(vbuffer_tp vb) {
 	if(vb->sbuf->tcp_control != NULL) {
-		return list_get_size(vb->sbuf->tcp_control) == 0;
+		return g_queue_get_length(vb->sbuf->tcp_control) == 0;
 	}
 	return 0;
 }

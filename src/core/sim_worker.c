@@ -37,7 +37,6 @@
 #include "context.h"
 #include "vsocket_mgr.h"
 #include "resolver.h"
-#include "list.h"
 #include "shd-cdf.h"
 
 /* TODO so many NULL checks are missing all over this code */
@@ -51,7 +50,7 @@ sim_worker_tp sim_worker_create (pipecloud_tp pipecloud, int slave_id, int proce
 
 	rv->pipecloud = pipecloud;
 	rv->events = events_create();
-	rv->stalled_simops = list_create();
+	rv->stalled_simops = g_queue_new();
 	rv->mod_mgr = module_mgr_create();
 
 	rv->hostname_tracking = g_hash_table_new(g_int_hash, g_int_equal);
@@ -187,7 +186,7 @@ ptime_t sim_worker_calcwindow(sim_worker_tp worker) {
 	ptime_t max_window = PTIME_INVALID;
 	ptime_t min_current = PTIME_MAX;
 
-	if(list_get_size(worker->stalled_simops) > 0) {
+	if(g_queue_get_length(worker->stalled_simops) > 0) {
 		debugf("Stalled for simop wait!\n");
 		return PTIME_INVALID;
 	}
@@ -292,7 +291,7 @@ static ptime_t sim_worker_advance_remote_workers(sim_worker_tp worker) {
 }
 
 static void sim_worker_sync_time(sim_worker_tp worker) {
-	if(list_get_size(worker->stalled_simops) > 0) {
+	if(g_queue_get_length(worker->stalled_simops) > 0) {
 		dlogf(LOG_WARN, "sim_worker_sync_time: stalled simops!!\n");
 		return;
 	}
@@ -355,12 +354,12 @@ int sim_worker_heartbeat(sim_worker_tp worker, size_t* num_event_worker_executed
 	}
 
 	/* first, attempt to process any stalled simop events. */
-	while((simop_event = list_pop_front(worker->stalled_simops)) != NULL) {
+	while((simop_event = g_queue_pop_head(worker->stalled_simops)) != NULL) {
 		/* set the current time for SNRI callbacks */
 		worker->current_time = simop_event->target_time;
 
 		if(!sim_worker_opexec(worker, simop_event)) {
-			list_push_front(worker->stalled_simops, simop_event);
+			g_queue_push_head(worker->stalled_simops, simop_event);
 			break;
 		}
 	}
@@ -398,7 +397,7 @@ int sim_worker_heartbeat(sim_worker_tp worker, size_t* num_event_worker_executed
 
 			case EVENTS_TYPE_SIMOP: {
 				if(!sim_worker_opexec(worker, event)) {
-					list_push_back(worker->stalled_simops, event);
+					g_queue_push_tail(worker->stalled_simops, event);
 					continue;
 				}
 				break;
@@ -466,10 +465,10 @@ void sim_worker_destroy(sim_worker_tp sim) {
 	g_hash_table_destroy(sim->loaded_cdfs);
 	sim->loaded_cdfs = NULL;
 
-	while(list_get_size(sim->stalled_simops) > 0) {
-		simop_destroy(list_pop_front(sim->stalled_simops));
+	while(g_queue_get_length(sim->stalled_simops) > 0) {
+		simop_destroy(g_queue_pop_head(sim->stalled_simops));
 	}
-	list_destroy(sim->stalled_simops);
+	g_queue_free(sim->stalled_simops);
 	sim->stalled_simops = NULL;
 
 	free(sim->worker_states);
@@ -657,21 +656,21 @@ static int sim_worker_opexec_create_nodes(sim_worker_tp wo, simop_tp sop) {
 	nbdf_free(vci_net_track);
 
 	/* parse the cl_args into separate strings */
-	list_tp args = list_create();
+	GQueue *args = g_queue_new();
 	char* result = strtok(op->cl_args, " ");
 	while(result != NULL) {
-		list_push_back(args, result);
+		g_queue_push_tail(args, result);
 		result = strtok(NULL, " ");
 	}
 
 	/* setup for instantiation */
-	int argc = list_get_size(args);
+	int argc = g_queue_get_length(args);
 	char* argv[argc];
 	int argi = 0;
 	for(argi = 0; argi < argc; argi++) {
-		argv[argi] = list_pop_front(args);
+		argv[argi] = g_queue_pop_head(args);
 	}
-	list_destroy(args);
+	g_queue_free(args);
 
 	dlogf(LOG_MSG, "SWorker: Instantiating node, ip %s, hostname %s, upstream %u KBps, downstream %u KBps\n", inet_ntoa_t(addr), hostname, KBps_up, KBps_down);
 

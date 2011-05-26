@@ -971,7 +971,7 @@ int vsocket_accept(vsocket_mgr_tp net, int fd, struct sockaddr_in* saddr, sockle
 	vepoll_mark_available(pending_sock->vep, VEPOLL_WRITE);
 
 	/* update server status */
-	if(list_get_size(server->pending_queue) > 0) {
+	if(g_queue_get_length(server->pending_queue) > 0) {
 		vepoll_mark_available(sock->vep, VEPOLL_READ);
 	} else {
 		vepoll_mark_unavailable(sock->vep, VEPOLL_READ);

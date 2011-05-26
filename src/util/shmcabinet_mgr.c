@@ -28,7 +28,6 @@
 #include "shmcabinet.h"
 #include "rwlock_mgr.h"
 #include "hash.h"
-#include "list.h"
 #include "log.h"
 #include "utility.h"
 
@@ -57,7 +56,6 @@ shmcabinet_mgr_tp shmcabinet_mgr_create(size_t payload_size, uint32_t payloads_p
 
 static void shmcabinet_mgr_lazy_create(shmcabinet_mgr_tp smc_mgr) {
 	if(smc_mgr != NULL) {
-		unsigned int num_cabinets = smc_mgr->min_payloads_threshold / smc_mgr->payloads_per_cabinet;
 		if(smc_mgr->shm_owned == NULL) {
 			smc_mgr->shm_owned = g_hash_table_new(g_int_hash, g_int_equal);
 		}
@@ -65,7 +63,7 @@ static void shmcabinet_mgr_lazy_create(shmcabinet_mgr_tp smc_mgr) {
 			smc_mgr->shm_unowned = g_hash_table_new(g_int_hash, g_int_equal);
 		}
 		if(smc_mgr->shm_owned_available == NULL) {
-			smc_mgr->shm_owned_available = list_create();
+			smc_mgr->shm_owned_available = g_queue_new();
 		}
 	}
 }
@@ -86,7 +84,7 @@ void shmcabinet_mgr_destroy(shmcabinet_mgr_tp smc_mgr) {
 
 		/* already destroyed the shm, so just destroy the list */
 		if(smc_mgr->shm_owned_available != NULL) {
-			list_destroy(smc_mgr->shm_owned_available);
+			g_queue_free(smc_mgr->shm_owned_available);
 		}
 
 		free(smc_mgr);
@@ -128,12 +126,12 @@ shm_item_tp shmcabinet_mgr_alloc(shmcabinet_mgr_tp smc_mgr) {
 
 		/* get available shm */
 		shm_tp shm = NULL;
-		if(smc_mgr->shm_owned_available != NULL && list_get_size(smc_mgr->shm_owned_available) > 0) {
-			shm = list_get_front(smc_mgr->shm_owned_available);
+		if(smc_mgr->shm_owned_available != NULL && g_queue_get_length(smc_mgr->shm_owned_available) > 0) {
+			shm = g_queue_peek_head(smc_mgr->shm_owned_available);
 
 			if(shm != NULL && shm->cabinet != NULL && shmcabinet_slots_available(shm->cabinet) == 0) {
 				dlogf(LOG_WARN, "shmcabinet_mgr_alloc: shm cabinet is full, I will try to correct\n");
-				list_pop_front(smc_mgr->shm_owned_available);
+				g_queue_pop_head(smc_mgr->shm_owned_available);
 				shm = NULL;
 			}
 		}
@@ -151,7 +149,7 @@ shm_item_tp shmcabinet_mgr_alloc(shmcabinet_mgr_tp smc_mgr) {
 				shm->owned = 1;
 
 				/* keep track of the new shm */
-				list_push_back(smc_mgr->shm_owned_available, shm);
+				g_queue_push_tail(smc_mgr->shm_owned_available, shm);
 				g_hash_table_insert(smc_mgr->shm_owned, int_key(shm->info.cabinet_id), shm);
 			} else {
 				dlogf(LOG_ERR, "shmcabinet_mgr_alloc: problem creating new shared memory cabinet\n");
@@ -171,7 +169,7 @@ shm_item_tp shmcabinet_mgr_alloc(shmcabinet_mgr_tp smc_mgr) {
 
 		/* after allocation, check space and update available list */
 		if(shmcabinet_slots_available(shm->cabinet) == 0) {
-			list_remove(smc_mgr->shm_owned_available, shm, NULL);
+			g_queue_remove(smc_mgr->shm_owned_available, shm);
 		}
 
 		/* we're all set to return the item */
@@ -257,7 +255,7 @@ void shmcabinet_mgr_free(shmcabinet_mgr_tp smc_mgr, shm_item_tp item) {
 		if(shm->owned) {
 			/* if closing that payload made the cabinet unfull, update avail list */
 			if(shmcabinet_slots_available(shm->cabinet) == 1) {
-				list_push_back(smc_mgr->shm_owned_available, shm);
+				g_queue_push_tail(smc_mgr->shm_owned_available, shm);
 			}
 
 			if(shm->references == 0) {
@@ -265,7 +263,7 @@ void shmcabinet_mgr_free(shmcabinet_mgr_tp smc_mgr, shm_item_tp item) {
 				uint32_t avail_payloads = shmcabinet_mgr_allocatable_slots(smc_mgr);
 				if(avail_payloads - smc_mgr->payloads_per_cabinet >= smc_mgr->min_payloads_threshold) {
 					if(shmcabinet_unmap(shm->cabinet) == SHMCABINET_SUCCESS) {
-						list_remove(smc_mgr->shm_owned_available, shm, NULL);
+						g_queue_remove(smc_mgr->shm_owned_available, shm);
 						g_hash_table_remove(smc_mgr->shm_owned, &shm->info.cabinet_id);
 						free(shm);
 					} else {
@@ -295,14 +293,14 @@ static uint32_t shmcabinet_mgr_allocatable_slots(shmcabinet_mgr_tp smc_mgr) {
 		/* iterate the avail list and count the free slots in each cabinet */
 		uint32_t allocatable = 0;
 
-		list_iter_tp iter = list_iterator_create(smc_mgr->shm_owned_available);
-		while(iter != NULL && list_iterator_hasnext(iter)) {
-			shm_tp shm = list_iterator_getnext(iter);
+		GList* iter = g_queue_peek_head_link(smc_mgr->shm_owned_available);
+		while(iter != NULL) {
+			shm_tp shm = iter->data;
 			if(shm != NULL) {
 				allocatable += shmcabinet_slots_available(shm->cabinet);
 			}
+                        iter = iter->next;
 		}
-		list_iterator_destroy(iter);
 
 		return allocatable;
 	}

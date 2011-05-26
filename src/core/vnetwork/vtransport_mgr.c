@@ -50,7 +50,7 @@ vtransport_mgr_tp vtransport_mgr_create(vsocket_mgr_tp vsocket_mgr, uint32_t KBp
 	vt_mgr->nanos_per_byte_down = 1000000000.0 / Bps_down;
 	vt_mgr->nanos_per_byte_up = 1000000000.0 / Bps_up;
 
-	vt_mgr->ready_to_send = list_create();
+	vt_mgr->ready_to_send = g_queue_new();
 	vt_mgr->ok_to_fire_send = 1;
 
 	/* TODO: make this config option?
@@ -71,13 +71,13 @@ void vtransport_mgr_destroy(vtransport_mgr_tp vt_mgr) {
 		vtransport_mgr_destroy_buffer(vt_mgr->inq);
 
 		/* we are not responsible for the transports, so just delete list */
-		while(list_get_size(vt_mgr->ready_to_send) > 0) {
-			void* malloced_sockd = list_pop_back(vt_mgr->ready_to_send);
+		while(g_queue_get_length(vt_mgr->ready_to_send) > 0) {
+			void* malloced_sockd = g_queue_pop_tail(vt_mgr->ready_to_send);
 			if(malloced_sockd != NULL) {
 				free(malloced_sockd);
 			}
 		}
-		list_destroy(vt_mgr->ready_to_send);
+		g_queue_free(vt_mgr->ready_to_send);
 		vt_mgr->ready_to_send = NULL;
 
 		vt_mgr->ok_to_fire_send = 0;
@@ -92,7 +92,7 @@ void vtransport_mgr_destroy(vtransport_mgr_tp vt_mgr) {
 
 static vtransport_mgr_inq_tp vtransport_mgr_create_buffer(uint64_t max_size) {
 	vtransport_mgr_inq_tp buffer = malloc(sizeof(vtransport_mgr_inq_t));
-	buffer->buffer = list_create();
+	buffer->buffer = g_queue_new();
 	buffer->max_size = max_size;
 	buffer->current_size = 0;
 	return buffer;
@@ -103,13 +103,13 @@ static void vtransport_mgr_destroy_buffer(vtransport_mgr_inq_tp buffer) {
 		return;
 	}
 
-	while(list_get_size(buffer->buffer) > 0) {
-		vtransport_item_tp titem = list_pop_back(buffer->buffer);
+	while(g_queue_get_length(buffer->buffer) > 0) {
+		vtransport_item_tp titem = g_queue_pop_tail(buffer->buffer);
 		if(titem != NULL) {
 			rc_vpacket_pod_release(titem->rc_packet);
 		}
 	}
-	list_destroy(buffer->buffer);
+	g_queue_free(buffer->buffer);
 	buffer->buffer = NULL;
 
 	buffer->max_size = 0;
@@ -141,7 +141,7 @@ void vtransport_mgr_ready_receive(vtransport_mgr_tp vt_mgr, vsocket_tp sock, rc_
 			/* accept the packet in our incoming queue */
 			vtransport_item_tp titem = vtransport_create_item(sock->sock_desc, rc_packet);
 
-			list_push_back(vt_mgr->inq->buffer, titem);
+			g_queue_push_tail(vt_mgr->inq->buffer, titem);
 
 			vpacket_mgr_lockcontrol(rc_packet, LC_OP_READLOCK | LC_TARGET_PACKET);
 			vt_mgr->inq->current_size += packet->data_size;
@@ -174,7 +174,7 @@ void vtransport_mgr_download_next(vtransport_mgr_tp vt_mgr) {
 	/* a receive event was triggered, accept incoming packets and process.
 	 * we might have already processed all packets and got no new ones while
 	 * the receive event was sitting in the scheduler. */
-	if(list_get_size(vt_mgr->inq->buffer) < 1) {
+	if(g_queue_get_length(vt_mgr->inq->buffer) < 1) {
 		/* we've reached the end of our chain-receive. no more packets for now.
 		 * any new arrivals can now immediately fire a recv event */
 		vt_mgr->ok_to_fire_recv = 1;
@@ -204,10 +204,10 @@ void vtransport_mgr_download_next(vtransport_mgr_tp vt_mgr) {
 	}
 
 	/* we will batch recvs */
-	list_tp titems_to_process = list_create();
+	GQueue *titems_to_process = g_queue_new();
 	while (vt_mgr->nanos_consumed_recv < VTRANSPORT_MGR_BATCH_TIME &&
-			list_get_size(vt_mgr->inq->buffer) > 0) {
-		vtransport_item_tp titem = list_pop_front(vt_mgr->inq->buffer);
+			g_queue_get_length(vt_mgr->inq->buffer) > 0) {
+		vtransport_item_tp titem = g_queue_pop_head(vt_mgr->inq->buffer);
 		if(titem == NULL) {
 			dlogf(LOG_CRIT, "vtransport_mgr_download_next: incoming titem is NULL\n");
 			vtransport_destroy_item(titem);
@@ -228,7 +228,7 @@ void vtransport_mgr_download_next(vtransport_mgr_tp vt_mgr) {
 		vpacket_mgr_lockcontrol(titem->rc_packet, LC_OP_READUNLOCK | LC_TARGET_PACKET);
 
 		/* add to the list of items that will be processed this round */
-		list_push_back(titems_to_process, titem);
+		g_queue_push_tail(titems_to_process, titem);
 
 		/* update consumed bandwidth */
 		uint32_t effective_size = vpacket_get_size(titem->rc_packet);
@@ -239,11 +239,11 @@ void vtransport_mgr_download_next(vtransport_mgr_tp vt_mgr) {
 	vtransport_process_incoming_items(vt_mgr->vsocket_mgr, titems_to_process);
 
 	/* list of items better be empty */
-	if(list_get_size(titems_to_process) > 0) {
+	if(g_queue_get_length(titems_to_process) > 0) {
 		dlogf(LOG_CRIT, "vtransport_mgr_download_next: not all packets processed by vsocket\n");
 	}
 
-	list_destroy(titems_to_process);
+	g_queue_free(titems_to_process);
 
 	/* now we have a cpu delay counter and a receive delay counter.
 	 * we are constrained by the slower (larger) of these. */
@@ -275,17 +275,17 @@ void vtransport_mgr_ready_send(vtransport_mgr_tp vt_mgr, vsocket_tp sock) {
 	/* dont add the socket if its already in the list!
 	 * TODO list should implement a contains() method instead */
 	uint8_t do_add = 1;
-	if(list_get_size(vt_mgr->ready_to_send) > 0) {
-		list_tp new_ready_to_send = list_create();
+	if(g_queue_get_length(vt_mgr->ready_to_send) > 0) {
+		GQueue *new_ready_to_send = g_queue_new();
 
-		while(list_get_size(vt_mgr->ready_to_send) > 0) {
-			uint32_t* sockdp = list_pop_front(vt_mgr->ready_to_send);
+		while(g_queue_get_length(vt_mgr->ready_to_send) > 0) {
+			uint32_t* sockdp = g_queue_pop_head(vt_mgr->ready_to_send);
 			if(*sockdp == sock->sock_desc){
 				do_add = 0;
 			}
-			list_push_back(new_ready_to_send, sockdp);
+			g_queue_push_tail(new_ready_to_send, sockdp);
 		}
-		list_destroy(vt_mgr->ready_to_send);
+		g_queue_free(vt_mgr->ready_to_send);
 
 		vt_mgr->ready_to_send = new_ready_to_send;
 	}
@@ -293,7 +293,7 @@ void vtransport_mgr_ready_send(vtransport_mgr_tp vt_mgr, vsocket_tp sock) {
 	if(do_add) {
 		uint32_t* sockdp = malloc(sizeof(uint32_t));
 		*sockdp = sock->sock_desc;
-		list_push_back(vt_mgr->ready_to_send, sockdp);
+		g_queue_push_tail(vt_mgr->ready_to_send, sockdp);
 	}
 
 	/* trigger a send event if this is the first ready buffer */
@@ -307,7 +307,7 @@ void vtransport_mgr_upload_next(vtransport_mgr_tp vt_mgr) {
 	 * from the front of send list.
 	 * there might not be any ready buffers if no data was written while
 	 * the send event was sitting in the scheduler. */
-	if(list_get_size(vt_mgr->ready_to_send) < 1) {
+	if(g_queue_get_length(vt_mgr->ready_to_send) < 1) {
 		/* we've reached the end of our chain-send. no more packets for now.
 		 * any new arrivals can now immediately fire a send event */
 		vt_mgr->ok_to_fire_send = 1;
@@ -339,9 +339,9 @@ void vtransport_mgr_upload_next(vtransport_mgr_tp vt_mgr) {
 	/* we will batch sends */
 	uint16_t num_transmitted = 0;
 	while (vt_mgr->nanos_consumed_sent < VTRANSPORT_MGR_BATCH_TIME &&
-			list_get_size(vt_mgr->ready_to_send) > 0) {
+			g_queue_get_length(vt_mgr->ready_to_send) > 0) {
 		/* we do round robin on all ready sockets */
-		uint32_t* sockdp = list_pop_front(vt_mgr->ready_to_send);
+		uint32_t* sockdp = g_queue_pop_head(vt_mgr->ready_to_send);
 		vsocket_tp sock = vsocket_mgr_get_socket(vt_mgr->vsocket_mgr, *sockdp);
 		if(sock == NULL || sock->vt == NULL) {
 			debugf("vtransport_mgr_upload_next: send buffer NULL during round robin, maybe socket %i closed\n", *sockdp);
@@ -360,7 +360,7 @@ void vtransport_mgr_upload_next(vtransport_mgr_tp vt_mgr) {
 
 		/* if send_buffer has more, return it to round robin queue */
 		if(was_transmitted && packets_remaining > 0) {
-			list_push_back(vt_mgr->ready_to_send, sockdp);
+			g_queue_push_tail(vt_mgr->ready_to_send, sockdp);
 		} else {
 			free(sockdp);
 		}

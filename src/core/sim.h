@@ -70,7 +70,7 @@ typedef struct sim_worker_t {
 	GHashTable *loaded_cdfs;
 
 	events_tp events;
-	list_tp stalled_simops;
+	GQueue *stalled_simops;
 	vci_addressing_scheme_tp ascheme;
 
 	/* internal hostname to address resolver */

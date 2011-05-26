@@ -24,7 +24,6 @@
 #define SIMNET_GRAPH_H_
 
 #include <glib-2.0/glib.h>
-#include "list.h"
 #include "shd-cdf.h"
 
 typedef struct simnet_vertex_s {
@@ -54,8 +53,8 @@ typedef struct simnet_graph_s {
 	int is_dirty;
 
 	/* holds all networks, of type sim_net_vertex_tp */
-	list_tp vertices;
-	list_tp edges;
+	GQueue *vertices;
+	GQueue *edges;
 	GHashTable *vertices_map;
 
 	/* the min/max latency between networks - used for runahead */

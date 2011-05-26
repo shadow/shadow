@@ -35,8 +35,6 @@
 #include "shd-filetransfer.h"
 #include "netinet/tcp.h"
 
-#include "list.h"
-
 #define __USE_POSIX199309 1
 //#define _FSDEBUG 1
 
@@ -95,7 +93,7 @@ int main(int argc, char *argv[])
 #endif
 
 
-	list_tp children = list_create();
+	GQueue *children = g_queue_new();
 
 	/* main loop */
 	while(1) {
@@ -109,14 +107,15 @@ int main(int argc, char *argv[])
 		int max_sockd = fs.listen_sockd;
 
 		/* watch all children for reads and writes */
-		list_iter_tp chit = list_iterator_create(children);
-		while(list_iterator_hasnext(chit)) {
-			int sd = (int)((long)list_iterator_getnext(chit));
+		GList *child = g_queue_peek_head_link(children);
+		while(child != NULL) {
+			int sd = (int)child->data;
 			if(sd > max_sockd){
 				max_sockd = sd;
 			}
 			FD_SET(sd, &readset);
 			FD_SET(sd, &writeset);
+                        child = child->next;
 		}
 
 		int err = select(max_sockd+1, &readset, &writeset, NULL, NULL);
@@ -130,22 +129,22 @@ int main(int argc, char *argv[])
 
 			if(result == FS_SUCCESS) {
 				/* keep a list so we can iterate children */
-				list_push_back(children, (void*) ((long)next_sockd));
+				g_queue_push_tail(children, (void*) ((long)next_sockd));
 			}
 		}
 
 		/* keep a list so we can remove closed sockets without affecting our iterator */
-		list_tp remove = list_create();
+		GQueue *remove = g_queue_new();
 
-		list_iter_tp iter = list_iterator_create(children);
-		while(list_iterator_hasnext(iter)) {
-			int sd = (int)((long)list_iterator_getnext(iter));
+		child = g_queue_peek_head_link(children);
+		while(child != NULL) {
+			int sd = (int)child->data;
 
 			if(FD_ISSET(sd, &readset) || FD_ISSET(sd, &writeset)) {
 				enum fileserver_code result = fileserver_activate(&fs, sd);
 
 				if(result != FS_ERR_WOULDBLOCK && result != FS_SUCCESS) {
-					list_push_back(remove, (void*) ((long)sd));
+					g_queue_push_tail(remove, (void*) ((long)sd));
 				}
 #ifdef _FSDEBUG
 				/* report some TCP kernel info */
@@ -155,16 +154,16 @@ int main(int argc, char *argv[])
 				LOGD("fileserver activation result: %s (%zu bytes in, %zu bytes out, %zu replies)\n",
 						fileserver_codetoa(result), fs.bytes_received, fs.bytes_sent, fs.replies_sent);
 			}
+                        child = child->next;
 		}
-		list_iterator_destroy(iter);
 
-		while(list_get_size(remove) > 0) {
-			list_remove(children, list_pop_front(remove), NULL);
+		while(g_queue_get_length(remove) > 0) {
+			g_queue_remove(children, g_queue_pop_head(remove));
 		}
-		list_destroy(remove);
+		g_queue_free(remove);
 	}
 
-	list_destroy(children);
+	g_queue_free(children);
 
 	/* all done */
 	LOGD("fileserver stats: %zu bytes in, %zu bytes out, %zu replies\n",

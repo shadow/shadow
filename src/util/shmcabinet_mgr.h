@@ -29,7 +29,6 @@
 
 #include "shmcabinet.h"
 #include "rwlock_mgr.h"
-#include "list.h"
 
 typedef struct shm_s {
 	shmcabinet_tp cabinet;
@@ -52,7 +51,7 @@ typedef struct shmcabinet_mgr_s {
 	uint32_t payloads_per_cabinet;
 	uint32_t min_payloads_threshold;
 	size_t payload_size;
-	list_tp shm_owned_available;
+	GQueue *shm_owned_available;
 	GHashTable *shm_owned;
 	GHashTable *shm_unowned;
 } shmcabinet_mgr_t, *shmcabinet_mgr_tp;

@@ -33,7 +33,6 @@
 #include "vevent.h"
 #include "shd-plugin.h"
 #include "log.h"
-#include "list.h"
 #include "timer.h"
 #include "sim.h"
 #include "context.h"
@@ -50,7 +49,7 @@ int vevent_mgr_timer_create(vevent_mgr_tp mgr, int milli_delay, vevent_mgr_timer
 static void vevent_mgr_init(context_provider_tp p, vevent_mgr_tp mgr) {
 	/* every node needs to init its data */
 	if(mgr != NULL) {
-		mgr->event_bases = list_create();
+		mgr->event_bases = g_queue_new();
 		mgr->loopexit_fp = NULL;
 		mgr->provider = p;
 	}
@@ -59,12 +58,12 @@ static void vevent_mgr_init(context_provider_tp p, vevent_mgr_tp mgr) {
 static void vevent_mgr_uninit(vevent_mgr_tp mgr) {
 	if(mgr != NULL) {
 		/* delete all event bases */
-		while(list_get_size(mgr->event_bases) > 0) {
-			event_base_tp eb = list_pop_front(mgr->event_bases);
+		while(g_queue_get_length(mgr->event_bases) > 0) {
+			event_base_tp eb = g_queue_pop_head(mgr->event_bases);
 			vevent_destroy_base(eb);
 		}
 
-		list_destroy(mgr->event_bases);
+		g_queue_free(mgr->event_bases);
 	}
 }
 
@@ -137,47 +136,46 @@ static void vevent_mgr_print_all_cb(int key, void* val, void* param) {
 	vevent_socket_tp vsd = val;
 	vevent_mgr_tp mgr = param;
 	if(vsd != NULL && mgr != NULL) {
-		list_iter_tp liter = list_iterator_create(vsd->vevents);
+		GList* event = g_queue_peek_head_link(vsd->vevents);
 
-		while(list_iterator_hasnext(liter)) {
-			vevent_tp vev = list_iterator_getnext(liter);
+		while(event != NULL) {
+			vevent_tp vev = event->data;
 			if(vev != NULL && vev->event != NULL) {
 				debugf("socket %i waiting for events %s\n", key, vevent_get_event_type_string(mgr, vev->event->ev_events));
 			}
+                        event = event->next;
 		}
-
-		list_iterator_destroy(liter);
 	}
 }
 
 void vevent_mgr_print_stat(vevent_mgr_tp mgr, uint16_t sockd) {
 	if(mgr != NULL) {
 		/* go through every base we know about */
-		list_iter_tp bases = list_iterator_create(mgr->event_bases);
+		GList *bases = g_queue_peek_head_link(mgr->event_bases);
 
 		debugf("======Printing all waiting registered events for socket %u======\n", sockd);
-		while(list_iterator_hasnext(bases)) {
-			event_base_tp eb = list_iterator_getnext(bases);
+		while(bases != NULL) {
+			event_base_tp eb = bases->data;
 
 			if(eb != NULL && eb->evbase != NULL) {
 				vevent_base_tp veb = eb->evbase;
 				vevent_socket_tp vsd = g_hash_table_lookup(veb->sockets_by_sd, &sockd);
 				vevent_mgr_print_all_cb(sockd, vsd, mgr);
 			}
+
+                        bases = bases->next;
 		}
 		debugf("======Done printing======\n");
-
-		list_iterator_destroy(bases);
 	}
 }
 
 void vevent_mgr_print_all(vevent_mgr_tp mgr) {
 	if(mgr != NULL) {
 		/* go through every base we know about */
-		list_iter_tp bases = list_iterator_create(mgr->event_bases);
+		GList *bases = g_queue_peek_head_link(mgr->event_bases);
 
-		while(list_iterator_hasnext(bases)) {
-			event_base_tp eb = list_iterator_getnext(bases);
+		while(bases != NULL) {
+			event_base_tp eb = bases->data;
 
 			if(eb != NULL && eb->evbase != NULL) {
 				vevent_base_tp veb = eb->evbase;
@@ -185,9 +183,9 @@ void vevent_mgr_print_all(vevent_mgr_tp mgr) {
 				g_hash_table_foreach(veb->sockets_by_sd, (GHFunc)vevent_mgr_print_all_cb, mgr);
 				debugf("======Done printing======\n");
 			}
-		}
 
-		list_iterator_destroy(bases);
+                        bases = bases->next;
+		}
 	}
 }
 

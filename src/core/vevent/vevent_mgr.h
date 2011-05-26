@@ -23,7 +23,8 @@
 #ifndef VEVENT_MGR_H_
 #define VEVENT_MGR_H_
 
-#include "list.h"
+#include <glib-2.0/glib.h>
+
 #include "context.h"
 
 typedef void (*vevent_mgr_timer_callback_fp)(int timer_id, void* arg);
@@ -31,7 +32,7 @@ typedef void (*vevent_mgr_timer_callback_fp)(int timer_id, void* arg);
 /* holds all event bases that the user creates (each holds pointer to a vevent base) */
 typedef struct vevent_mgr_s {
 	/* holds event_base_tp */
-	list_tp event_bases;
+	GQueue *event_bases;
 	vevent_mgr_timer_callback_fp loopexit_fp;
 	char typebuf[80];
 	context_provider_tp provider;

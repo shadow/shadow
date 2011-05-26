@@ -6,7 +6,6 @@ set(util_srcs
 	ipcsync.c
 	orderedlist.c
 	linkedbuffer.c
-	list.c
 	nbdf.c
 	pipecloud.c
 	rand.c

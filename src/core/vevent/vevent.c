@@ -40,7 +40,6 @@
 #include "vepoll.h"
 #include "vsocket.h"
 #include "log.h"
-#include "list.h"
 
 /* FIXME TODO:
  * -make vevent_mgr accesses local to vevent_mgr.c
@@ -90,7 +89,7 @@ char* vevent_get_event_type_string(vevent_mgr_tp mgr, short event_type) {
 static void vevent_destroy_socket(vevent_socket_tp vsd) {
 	if(vsd != NULL) {
 		if(vsd->vevents != NULL) {
-			list_destroy(vsd->vevents);
+			g_queue_free(vsd->vevents);
 			vsd->vevents = NULL;
 		}
 		free(vsd);
@@ -168,7 +167,7 @@ void vevent_destroy_base(event_base_tp eb) {
 
 static vevent_socket_tp vevent_socket_create(int sd) {
 	vevent_socket_tp vsd = malloc(sizeof(vevent_socket_t));
-	vsd->vevents = list_create();
+	vsd->vevents = g_queue_new();
 	vsd->sd = sd;
 	return vsd;
 }
@@ -223,10 +222,14 @@ static void vevent_timer_cb(int timerid, void* value) {
 static int vevent_isequal_cb(void* ev1, void* ev2) {
 	if(ev1 != NULL && ev2 != NULL) {
 		if((((vevent_tp)ev1)->id) == (((vevent_tp)ev2)->id)) {
-			return 1;
-		}
+			return 0;
+		} else if((((vevent_tp)ev1)->id) < (((vevent_tp)ev2)->id)) {
+                        return -1;
+		} else if((((vevent_tp)ev1)->id) == (((vevent_tp)ev2)->id)) {
+                        return 1;
+                }
 	}
-	return 0;
+	return 1;
 }
 
 static int vevent_set_timer(vevent_mgr_tp mgr, vevent_tp vev, const struct timeval *tv) {
@@ -280,8 +283,8 @@ static int vevent_register(vevent_mgr_tp mgr, event_tp ev, const struct timeval 
 		}
 
 		/* register with socket */
-		if(list_search(vsd->vevents, vev, &vevent_isequal_cb) == NULL) {
-			list_push_back(vsd->vevents, vev);
+		if(g_queue_find_custom(vsd->vevents, vev, (GCompareFunc)vevent_isequal_cb) == NULL) {
+			g_queue_push_tail(vsd->vevents, vev);
 			vevent_vepoll_action(vsd->sd, 1, ev->ev_events);
 			debugf("vevent_register: registered vevent id %i with socket %i\n", vev->id, vev->vsd->sd);
 		}
@@ -324,13 +327,14 @@ static int vevent_unregister(vevent_mgr_tp mgr, event_tp ev) {
 		/* unregister from socket */
 		vevent_socket_tp vsd = g_hash_table_lookup(veb->sockets_by_sd, &ev->ev_fd);
 		if(vsd != NULL) {
-			void* result = list_remove(vsd->vevents, vev, &vevent_isequal_cb);
+			GList* result = g_queue_find_custom(vsd->vevents, vev, (GCompareFunc)vevent_isequal_cb);
 			if(result != NULL) {
+                                g_queue_delete_link(vsd->vevents, result);
 				vevent_vepoll_action(vsd->sd, 0, ev->ev_events);
 				debugf("vevent_unregister: unregistered vevent id %i from socket %i\n", vev->id, vev->vsd->sd);
 			}
 
-			if(list_get_size(vsd->vevents) <= 0) {
+			if(g_queue_get_length(vsd->vevents) <= 0) {
 				g_hash_table_remove(veb->sockets_by_sd, &vsd->sd);
 				vevent_destroy_socket(vsd);
 				debugf("vevent_unregister: stop monitoring socket %d\n", ev->ev_fd);
@@ -357,21 +361,20 @@ static void vevent_execute_callbacks(vevent_mgr_tp mgr, event_base_tp eb, int so
 			debugf("getting callbacks for type %s on fd %i\n", vevent_get_event_type_string(mgr, event_type), sockd);
 
 			/* keep track of the events we need to execute */
-			list_tp to_execute = list_create();
-			list_iter_tp liter = list_iterator_create(vsd->vevents);
+			GQueue *to_execute = g_queue_new();
+			GList *event = g_queue_peek_head_link(vsd->vevents);
 
-			while(list_iterator_hasnext(liter)) {
-				vevent_tp vev = list_iterator_getnext(liter);
+			while(event != NULL) {
+				vevent_tp vev = event->data;
 				if(vev != NULL && vev->event != NULL) {
 					/* execute if event is the correct type  */
 					if(vev->event->ev_events & event_type){
 						vev->event->ev_res = event_type;
-						list_push_back(to_execute, vev);
+						g_queue_push_tail(to_execute, vev);
 					}
 				}
+                                event = event->next;
 			}
-
-			list_iterator_destroy(liter);
 
 			/* now execute events.
 			 *
@@ -382,7 +385,7 @@ static void vevent_execute_callbacks(vevent_mgr_tp mgr, event_base_tp eb, int so
 			 * dependence on the event before executing the callback.
 			 * We currently take the second approach by creating this separate list.
 			 */
-			debugf("executing %i events for fd %i\n", list_get_size(to_execute), sockd);
+			debugf("executing %i events for fd %i\n", g_queue_get_length(to_execute), sockd);
 
 			/* need to be in node context */
 
@@ -397,16 +400,16 @@ static void vevent_execute_callbacks(vevent_mgr_tp mgr, event_base_tp eb, int so
 				return;
 			else {
 				/* this is the part that needs to be wrapped in node context */
-				while(list_get_size(to_execute) > 0) {
+				while(g_queue_get_length(to_execute) > 0) {
 					/* execute event */
-					vevent_tp vev = list_pop_front(to_execute);
+					vevent_tp vev = g_queue_pop_head(to_execute);
 					vevent_execute(mgr, vev->event);
 				}
 			}
 			/* swap back to dvn holding */
 			context_save();
 
-			list_destroy(to_execute);
+			g_queue_free(to_execute);
 		}
 	}
 }
@@ -414,15 +417,14 @@ static void vevent_execute_callbacks(vevent_mgr_tp mgr, event_base_tp eb, int so
 void vevent_notify(vevent_mgr_tp mgr, int sockd, short event_type) {
 	/* an event has occurred on sockd */
 	if(mgr != NULL && mgr->event_bases != NULL) {
-		list_iter_tp liter = list_iterator_create(mgr->event_bases);
+		GList *bases = g_queue_peek_head_link(mgr->event_bases);
 
 		/* activate all callbacks for this sockd */
-		while(list_iterator_hasnext(liter)) {
-			event_base_tp eb = list_iterator_getnext(liter);
+		while(bases != NULL) {
+			event_base_tp eb = bases->data;
 			vevent_execute_callbacks(mgr, eb, sockd, event_type);
+                        bases = bases->next;
 		}
-
-		list_iterator_destroy(liter);
 	}
 }
 
@@ -467,7 +469,7 @@ event_base_tp vevent_event_base_new(vevent_mgr_tp mgr) {
 		event_base_tp eb = calloc(1, sizeof(event_base_t));
 		eb->evbase = veb;
 
-		list_push_back(mgr->event_bases, eb);
+		g_queue_push_tail(mgr->event_bases, eb);
 		return eb;
 	} else {
 		return NULL;
@@ -476,8 +478,9 @@ event_base_tp vevent_event_base_new(vevent_mgr_tp mgr) {
 
 void vevent_event_base_free(vevent_mgr_tp mgr, event_base_tp eb) {
 	if(mgr != NULL && mgr->event_bases != NULL) {
-		event_base_tp removed = list_remove(mgr->event_bases, eb, NULL);
-		vevent_destroy_base(removed);
+		GList *removed = g_queue_find(mgr->event_bases, eb);
+		vevent_destroy_base(removed->data);
+                g_queue_delete_link(mgr->event_bases, removed);
 	}
 }
 

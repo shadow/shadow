@@ -115,11 +115,11 @@ void vtransport_destroy_item(vtransport_item_tp titem) {
 	}
 }
 
-void vtransport_process_incoming_items(vsocket_mgr_tp net, list_tp titems) {
+void vtransport_process_incoming_items(vsocket_mgr_tp net, GQueue *titems) {
 	if(titems != NULL) {
 		/* we need to process the entire list of packets, storing them as needed. */
-		while(list_get_size(titems) > 0) {
-			vtransport_item_tp titem = list_pop_front(titems);
+		while(g_queue_get_length(titems) > 0) {
+			vtransport_item_tp titem = g_queue_pop_head(titems);
 
 			if(titem != NULL){
 				titem->sock = vsocket_mgr_get_socket(net, titem->sockd);

@@ -28,7 +28,6 @@
 
 #include "vpacket_mgr.h"
 #include "vpacket.h"
-#include "list.h"
 #include "orderedlist.h"
 #include "vepoll.h"
 
@@ -36,7 +35,7 @@ typedef struct vbuffer_sbuf_s {
 	/* rc_packets to send, keyed by position in sliding window (flow/congestion control) */
 	orderedlist_tp vwrite;
 	/* packets that can be sent immediately, have no data */
-	list_tp tcp_control;
+	GQueue *tcp_control;
 	/* rc_packets sent but not acked */
 	orderedlist_tp tcp_retransmit;
 	uint64_t max_size;
@@ -46,7 +45,7 @@ typedef struct vbuffer_sbuf_s {
 
 typedef struct vbuffer_rbuf_s {
 	/* rc_packets with user data */
-	list_tp vread;
+	GQueue *vread;
 	/* rc_packets waiting for a gap to be filled for in-order processing */
 	orderedlist_tp tcp_unprocessed;
 	/* users read offset into the packet at the front of the data list */

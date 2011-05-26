@@ -28,7 +28,6 @@
 #include "vsocket_mgr.h"
 #include "vpacket_mgr.h"
 #include "vpacket.h"
-#include "list.h"
 
 /* we will batch packet transfers until we consume this many nanoseconds of bandwidth */
 #define VTRANSPORT_NS_PER_MS 1000000
@@ -38,7 +37,7 @@
 
 typedef struct vtransport_mgr_inq_s {
 	/* rc_packets coming into this node from the wire */
-	list_tp buffer;
+	GQueue *buffer;
 	/* burst rate of incoming packets */
 	uint64_t max_size;
 	uint64_t current_size;
@@ -53,7 +52,7 @@ typedef struct vtransport_mgr_s {
 	uint32_t KBps_down;
 	uint32_t KBps_up;
 	/* list<vsocket_tp>, list of sockets that have packets waiting to be sent */
-	list_tp ready_to_send;
+	GQueue *ready_to_send;
 	/* set if an incoming packet can trigger a send event */
 	uint8_t ok_to_fire_send;
 	/* list<rc_packet>, essentially the NIC queue - packets waiting to be received */

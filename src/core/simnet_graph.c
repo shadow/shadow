@@ -31,8 +31,8 @@
 simnet_graph_tp simnet_graph_create() {
 	simnet_graph_tp g = malloc(sizeof(simnet_graph_t));
 
-	g->edges = list_create();
-	g->vertices = list_create();
+	g->edges = g_queue_new();
+	g->vertices = g_queue_new();
 	g->vertices_map = g_hash_table_new(g_int_hash, g_int_equal);
 
 	g->runahead_min = 0;
@@ -80,7 +80,7 @@ void simnet_graph_add_vertex(simnet_graph_tp g, unsigned int network_id, cdf_tp 
 
 			v->edges = g_hash_table_new(g_int_hash, g_int_equal);
 
-			list_push_back(g->vertices, v);
+			g_queue_push_tail(g->vertices, v);
 			g_hash_table_insert(g->vertices_map, int_key(network_id), v);
 
 			simnet_graph_track_minmax(g, latency_cdf);
@@ -110,7 +110,7 @@ void simnet_graph_add_edge(simnet_graph_tp g, unsigned int id1, cdf_tp latency_c
 			e->internet_latency_2to1 = latency_cdf_2to1;
 			e->reliablity_2to1 = reliablity_2to1;
 
-			list_push_back(g->edges, e);
+			g_queue_push_tail(g->edges, e);
 			g_hash_table_insert(v1->edges, int_key(id2), e);
 			g_hash_table_insert(v2->edges, int_key(id1), e);
 
@@ -127,24 +127,24 @@ void simnet_graph_add_edge(simnet_graph_tp g, unsigned int id1, cdf_tp latency_c
 void simnet_graph_destroy(simnet_graph_tp g) {
 	if(g != NULL) {
 		if(g->edges != NULL) {
-			list_iter_tp edge_iter = list_iterator_create(g->edges);
-			while(list_iterator_hasnext(edge_iter)) {
-				simnet_edge_tp e = list_iterator_getnext(edge_iter);
+			GList* edge = g_queue_peek_head_link(g->edges);
+			while(edge != NULL) {
+				simnet_edge_tp e = edge->data;
 				free(e);
+                                edge = edge->next;
 			}
-			list_iterator_destroy(edge_iter);
-			list_destroy(g->edges);
+			g_queue_free(g->edges);
 		}
 
 		if(g->vertices != NULL) {
-			list_iter_tp vert_iter = list_iterator_create(g->vertices);
-			while(list_iterator_hasnext(vert_iter)) {
-				simnet_vertex_tp v = list_iterator_getnext(vert_iter);
+			GList* vert = g_queue_peek_head_link(g->vertices);
+			while(vert != NULL) {
+				simnet_vertex_tp v = vert->data;
 				g_hash_table_destroy(v->edges);
 				free(v);
+                                vert = vert->next;
 			}
-			list_iterator_destroy(vert_iter);
-			list_destroy(g->vertices);
+			g_queue_free(g->vertices);
 		}
 
 		g_hash_table_destroy(g->vertices_map);

@@ -35,7 +35,6 @@
 #include <event2/dns_struct.h>
 
 #include "vevent_mgr.h"
-#include "list.h"
 #include "context.h"
 
 /* make libevent types slightly prettier */
@@ -53,7 +52,7 @@ typedef struct evdns_server_port evdns_server_port_t, *evdns_server_port_tp;
 /* represents a descriptor we are monitoring */
 typedef struct vevent_socket_s {
 	int sd;
-	list_tp vevents;
+	GQueue *vevents;
 } vevent_socket_t, *vevent_socket_tp;
 
 /* wrapper around an event */

@@ -69,7 +69,7 @@ pipecloud_tp pipecloud_create(unsigned int attendees, size_t size, unsigned int 
 	}
 
 	pc->localized.id = 0;
-	pc->localized.in = list_create();
+	pc->localized.in = g_queue_new();
 	pc->localized.waiting_in = 0;
 
 	return pc;
@@ -79,7 +79,7 @@ void pipecloud_destroy(pipecloud_tp pipecloud) {
 	pipecloud_buffer_tp buf;
 
 	/* clear out waiting incoming data */
-	while((buf = list_pop_front(pipecloud->localized.in)) != NULL)
+	while((buf = g_queue_pop_head(pipecloud->localized.in)) != NULL)
 		free(buf);
 
 	/* process 0 should destroy semaphores and the shm segment */
@@ -102,7 +102,7 @@ void pipecloud_destroy(pipecloud_tp pipecloud) {
 //	shmdt(pipecloud->shm);
 
 	//if(pipecloud->localized.in)
-	list_destroy(pipecloud->localized.in);
+	g_queue_free(pipecloud->localized.in);
 	free(pipecloud->mqs);
 	free(pipecloud);
 	return ;
@@ -132,7 +132,7 @@ void pipecloud_select(pipecloud_tp pipecloud, int block) {
 
 			memcpy(buf->data, msgbuffer, rv);
 
-			list_push_back(pipecloud->localized.in, buf);
+			g_queue_push_tail(pipecloud->localized.in, buf);
 			pipecloud->localized.waiting_in += rv;
 		}
 	}
@@ -194,7 +194,7 @@ void pipecloud_localize_reads(pipecloud_tp pipecloud) {
 
 			memcpy(buf->data, msgbuffer, rv);
 
-			list_push_back(pipecloud->localized.in, buf);
+			g_queue_push_tail(pipecloud->localized.in, buf);
 			pipecloud->localized.waiting_in += rv;
 		}
 	} while(rv >= 0);
@@ -212,7 +212,7 @@ int pipecloud_read(pipecloud_tp pipecloud, char * out_buffer, size_t size) {
 		return 0;
 
 	while(size) {
-		buf = list_get_front(pipecloud->localized.in);
+		buf = g_queue_peek_head(pipecloud->localized.in);
 
 		if(buf != NULL) {
 			/* how much to copy...*/
@@ -227,7 +227,7 @@ int pipecloud_read(pipecloud_tp pipecloud, char * out_buffer, size_t size) {
 
 			/* if this buffer has no more data, destroy it */
 			if(buf->offset==buf->len) {
-				list_pop_front(pipecloud->localized.in);
+				g_queue_pop_head(pipecloud->localized.in);
 				free(buf);
 			}
 		} else {

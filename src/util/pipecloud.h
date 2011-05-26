@@ -26,7 +26,7 @@
 #include <sys/sem.h>
 #include <sys/ipc.h>
 #include <mqueue.h>
-#include "list.h"
+#include <glib-2.0/glib.h>
 #include "ipcsync.h"
 
 #define PIPECLOUD_CHUNK_DATA_SIZE 1024
@@ -61,7 +61,7 @@ typedef struct pipecloud_t {
 		int id;
 
 		/* waiting input queue of pipecloud_buffer_t objects */
-		list_tp in;
+		GQueue *in;
 
 		/* total quantity of waiting in data */
 		size_t waiting_in;

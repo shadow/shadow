@@ -28,7 +28,6 @@
 
 #include "shmcabinet_mgr.h"
 #include "rwlock_mgr.h"
-#include "list.h"
 
 #ifdef DEBUG
 #define vpacket_log_debug(packet) vpacket_log(packet)

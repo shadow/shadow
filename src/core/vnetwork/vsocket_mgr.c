@@ -480,10 +480,10 @@ void vsocket_mgr_print_stat(vsocket_mgr_tp net, uint16_t sockd) {
 			vtcp_server_tp server = vsocket_mgr_get_server(net, sock);
 			if(server != NULL) {
 				debugf("sockd %u running a server with %u accepted, %u pending, %u incomplete\n", sockd,
-					g_hash_table_size(server->accepted_children), server->pending_queue->num_elems,
+					g_hash_table_size(server->accepted_children), g_queue_get_length(server->pending_queue), 
 					g_hash_table_size(server->incomplete_children));
 
-				if(server->pending_queue->num_elems > 0 && !(sock->vep->available & VEPOLL_READ)) {
+				if(g_queue_get_length(server->pending_queue) > 0 && !(sock->vep->available & VEPOLL_READ)) {
 					dlogf(LOG_ERR, "sockd %u should be marked available!!!\n", sockd);
 				}
 			}
