@@ -30,7 +30,7 @@ rc_object_tp rc_create(void* data, rc_object_destructor_fp destructor) {
 	rc_object->data = data;
 	rc_object->destructor = destructor;
 	rc_object->reference_count = 1;
-	rc_object->isSet = 1;
+	rc_object->isSet = 0;
 	return rc_object;
 }
 
