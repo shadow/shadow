@@ -7,18 +7,28 @@
 #  EVENT2_LIBRARIES  = Link these to use EVENT2
 
 ## -----------------------------------------------------------------------------
-## Check for the header files
+## Check for the header files, prirotize user inputs
 
 find_path (EVENT2_INCLUDES event2/event.h
-  PATHS /usr/local/include /usr/include ${CMAKE_EXTRA_INCLUDES}
+  PATHS ${CMAKE_EXTRA_INCLUDES} NO_DEFAULT_PATH
   )
+if(NOT EVENT2_INCLUDES)
+    find_path (EVENT2_INCLUDES event2/event.h
+      PATHS /usr/local/include /usr/include ${CMAKE_EXTRA_INCLUDES}
+      )
+endif(NOT EVENT2_INCLUDES)
 
 ## -----------------------------------------------------------------------------
-## Check for the library
+## Check for the library, prirotize user inputs
 
-find_library (EVENT2_LIBRARIES event event-2.0
-  PATHS /usr/local/lib /usr/lib /lib ${CMAKE_EXTRA_LIBRARIES}
+find_library (EVENT2_LIBRARIES event-2.0 event
+  PATHS ${CMAKE_EXTRA_LIBRARIES} NO_DEFAULT_PATH
   )
+if(NOT EVENT2_LIBRARIES)
+    find_library (EVENT2_LIBRARIES event-2.0 event
+      PATHS /usr/local/lib /usr/lib /lib ${CMAKE_EXTRA_LIBRARIES}
+      )
+endif(NOT EVENT2_LIBRARIES)
 
 ## -----------------------------------------------------------------------------
 ## Actions taken when all components have been found

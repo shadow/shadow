@@ -82,13 +82,16 @@ foreach(include ${CMAKE_EXTRA_INCLUDES})
     set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${include}")
 endforeach(include)
 
+foreach(library ${CMAKE_EXTRA_LIBRARIES})
+    link_directories(${library})
+endforeach(library)
+
 ## check for dependencies, using built-in cmake files to help us find the libs
 ## these are in /usr/share/cmake/Modules/Findxxx.cmake
 find_package(FLEX REQUIRED)
 find_package(BISON REQUIRED)
 find_package(Threads REQUIRED)
 find_package(ZLIB REQUIRED)
-find_package(OpenSSL REQUIRED) # result in ${OPENSSL_LIBRARIES} and ${OPENSSL_INCLUDE_DIR}
 
 ## other libs dont have a Findxxx.cmake, so we check on our own (./cmake)
 find_package(RT REQUIRED)
@@ -96,10 +99,12 @@ find_package(DL REQUIRED)
 find_package(M REQUIRED)
 find_package(EVENT2 REQUIRED)
 find_package(GLIB REQUIRED)
+find_package(OPENSSL REQUIRED)
 
 ## generate config header and make sure its on the include path
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config.h.in ${CMAKE_CURRENT_BINARY_DIR}/config.h)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config.h.in ${CMAKE_CURRENT_BINARY_DIR}/shd-config.h)
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/shd-config.h DESTINATION include/shadow)
 
 ## compile options
 add_definitions(-Wall --std=c99 -D__USE_BSD -D_SVID_SOURCE -D_XOPEN_SOURCE=600 -fPIC -g)
@@ -116,3 +121,8 @@ endif(SHADOW_TEST STREQUAL ON)
 ## install our 'exported' libs so they can be imported by others
 ## put the .cmake file for importing in shadow-specific directory
 install(EXPORT shadow-externals DESTINATION share/shadow)
+
+## install resources useful for simulations
+install(DIRECTORY ${CMAKE_BUILD_PREFIX}/../shadow-resources/
+    DESTINATION share/shadow/resources
+    PATTERN "${CMAKE_BUILD_PREFIX}/../shadow-resources/*")

@@ -28,7 +28,7 @@
 #include "utility.h"
 
 /* from autotools */
-#include "config.h"
+#include "shd-config.h"
 
 
 #ifndef NULL

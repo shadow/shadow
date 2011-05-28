@@ -214,7 +214,7 @@ module_tp module_load(module_mgr_tp mgr, int id, char * module) {
 	h = dlopen(module, RTLD_LAZY | RTLD_GLOBAL);
 
 	if(!h) {
-		debugf( "Module Subsystem: Unable to load the module: %s\n",  dlerror());
+		dlogf(LOG_ERR, "Plug-in Subsystem: Unable to load the plug-in: %s\n",  dlerror());
 		return NULL;
 	}
 
@@ -241,7 +241,7 @@ module_tp module_load(module_mgr_tp mgr, int id, char * module) {
 			!(mod->mod_socket_writable = dlsym(mod->handle, "_plugin_socket_writable")) ||
 			!(mod->mod_snricall_fpmem = dlsym(mod->handle, "_snricall_fpref"))) {
 
-		dlogf( LOG_ERR, "Module Subsystem: Unable to properly acquire all external function in module: %s \n", dlerror());
+		dlogf(LOG_ERR, "Plug-in Subsystem: Unable to properly acquire all external function in plug-in: %s \n", dlerror());
 
 		if(mod->handle)
 			dlclose(mod->handle);
