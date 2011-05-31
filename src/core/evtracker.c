@@ -24,7 +24,6 @@
 
 #include "global.h"
 #include "evtracker.h"
-#include "hash.h"
 
 evtracker_tp evtracker_create (size_t buf_size, unsigned int granularity) {
 	evtracker_tp evt = malloc(sizeof(*evt));

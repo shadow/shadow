@@ -1,7 +1,6 @@
 set(util_srcs
 	btree.c
 	clo.c
-	hash.c
 	heap.c
 	ipcsync.c
 	orderedlist.c
@@ -25,4 +24,4 @@ add_library(shadow-util STATIC ${util_srcs})
 target_link_libraries(shadow-util rt pthread glib-2.0)
 install(TARGETS shadow-util EXPORT shadow-externals DESTINATION lib)
 install(FILES global.h DESTINATION include/shadow)
-install(FILES hashtable.h btree.h orderedlist.h hash.h shd-cdf.h utility.h DESTINATION include/shadow)
+install(FILES btree.h orderedlist.h shd-cdf.h utility.h DESTINATION include/shadow)

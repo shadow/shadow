@@ -27,7 +27,6 @@
 #include "shmcabinet_mgr.h"
 #include "shmcabinet.h"
 #include "rwlock_mgr.h"
-#include "hash.h"
 #include "log.h"
 #include "utility.h"
 
@@ -191,7 +190,9 @@ shm_item_tp shmcabinet_mgr_open(shmcabinet_mgr_tp smc_mgr, shmcabinet_info_tp sh
 		/* we are using shm, make sure our data structs exist */
 		shmcabinet_mgr_lazy_create(smc_mgr);
 
-		unsigned int key = twouint_hash(shm_info->process_id, shm_info->cabinet_id);
+                char buf[24];
+                sprintf(buf,"%d%d\n", shm_info->process_id,  shm_info->cabinet_id);
+		unsigned int key = g_str_hash(buf);
 
 		/* check if we are already connected to this shm */
 		shm_tp shm = g_hash_table_lookup(smc_mgr->shm_unowned, &key);
@@ -274,7 +275,9 @@ void shmcabinet_mgr_free(shmcabinet_mgr_tp smc_mgr, shm_item_tp item) {
 		} else {
 			/* if no references remain, unmap immediately */
 			if(shm->references == 0) {
-				unsigned int key = twouint_hash(shm->info.process_id, shm->info.cabinet_id);
+                                char buf[24];
+                                sprintf(buf,"%d%d\n", shm->info.process_id,  shm->info.cabinet_id);
+                                unsigned int key = g_str_hash(buf);
 				if(shmcabinet_unmap(shm->cabinet) == SHMCABINET_SUCCESS) {
 					g_hash_table_remove(smc_mgr->shm_unowned, &key);
 					free(shm);

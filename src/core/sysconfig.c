@@ -26,7 +26,6 @@
 #include <stdlib.h>
 #include "sysconfig.h"
 #include "utility.h"
-#include "hash.h"
 
 sysconfig_val_t sysconfig_defaults[] = {
 		{"sim_nodetrack_hashsize", SYSCONFIG_INT, {.int_val=128}},
@@ -160,7 +159,7 @@ void sysconfig_init(void)  {
 }
 
 int sysconfig_get_int(char * param) {
-        int key = adler32_hash(param);
+        int key = g_str_hash(param);
 	sysconfig_val_tp v = g_hash_table_lookup(sysconfig.data, &key);
 	int rv = 0;
 
@@ -179,7 +178,7 @@ int sysconfig_get_int(char * param) {
 	return rv;
 }
 float sysconfig_get_float(char * param) {
-        int key = adler32_hash(param);
+        int key = g_str_hash(param);
 	sysconfig_val_tp v = g_hash_table_lookup(sysconfig.data, &key);
 	float rv = 0.0f;
 
@@ -199,7 +198,7 @@ float sysconfig_get_float(char * param) {
 }
 char * sysconfig_get_string(char * param) {
 	static char temp[64];
-        int key = adler32_hash(param);
+        int key = g_str_hash(param);
 	sysconfig_val_tp v = g_hash_table_lookup(sysconfig.data, &key);
 	char * rv = "";
 
@@ -224,7 +223,7 @@ char * sysconfig_get_string(char * param) {
 }
 
 void sysconfig_set_int(char * param, int v) {
-	int key = adler32_hash(param);
+	int key = g_str_hash(param);
 	sysconfig_val_tp val = g_hash_table_lookup(sysconfig.data, &key);
 
 	if(!val) {
@@ -238,7 +237,7 @@ void sysconfig_set_int(char * param, int v) {
 }
 
 void sysconfig_set_string(char * param, char * v) {
-	int key = adler32_hash(param);
+	int key = g_str_hash(param);
 	sysconfig_val_tp val = g_hash_table_lookup(sysconfig.data, &key);
 
 	if(!val) {
@@ -253,7 +252,7 @@ void sysconfig_set_string(char * param, char * v) {
 }
 
 void sysconfig_set_float(char * param, float v) {
-	int key = adler32_hash(param);
+	int key = g_str_hash(param);
 	sysconfig_val_tp val = g_hash_table_lookup(sysconfig.data, &key);
 
 	if(!val) {

@@ -76,3 +76,10 @@ gint *int_key(int key) {
     return ret;
 }
 
+gint gint_compare_func(gpointer a, gpointer b) {
+    gint x = GPOINTER_TO_INT(a);
+    gint y = GPOINTER_TO_INT(b);
+    if(x < y) return -1;
+    if(x > y) return 1;
+    return 0;
+}

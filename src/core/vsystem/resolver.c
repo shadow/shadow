@@ -27,7 +27,6 @@
 #include <netinet/in.h>
 
 #include "resolver.h"
-#include "hash.h"
 #include "sysconfig.h"
 #include "utility.h"
 
@@ -85,13 +84,13 @@ void resolver_add(resolver_tp r, char* name, in_addr_t addr, uint8_t prepend_uni
 	rentry->KBps_up = KBps_up;
 
 	g_hash_table_insert(r->addr_entry, int_key(rentry->addr), rentry);
-	int key = adler32_hash(rentry->hostname);
+	int key = g_str_hash(rentry->hostname);
 	g_hash_table_insert(r->name_entry, int_key(key), rentry);
 }
 
 void resolver_remove_byname(resolver_tp r, char* name) {
 	if(r != NULL) {
-		int key = adler32_hash(name);
+		int key = g_str_hash(name);
 		resolver_entry_tp rentry = g_hash_table_lookup(r->name_entry, &key);
 		g_hash_table_remove(r->name_entry, &key);
 
@@ -108,7 +107,7 @@ void resolver_remove_byaddr(resolver_tp r, in_addr_t addr) {
 		g_hash_table_remove(r->addr_entry, &addr);
 
 		if(rentry != NULL) {
-			int key = adler32_hash(rentry->hostname);
+			int key = g_str_hash(rentry->hostname);
 			g_hash_table_remove(r->name_entry, &key);
 			free(rentry);
 		}
@@ -117,7 +116,7 @@ void resolver_remove_byaddr(resolver_tp r, in_addr_t addr) {
 
 in_addr_t* resolver_resolve_byname(resolver_tp r, char* name) {
 	if(r != NULL) {
-		int key = adler32_hash(name);
+		int key = g_str_hash(name);
 		resolver_entry_tp rentry = g_hash_table_lookup(r->name_entry, &key);
 
 		if(rentry != NULL) {

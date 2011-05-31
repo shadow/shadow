@@ -46,7 +46,6 @@
 #include "sim.h"
 #include "vepoll.h"
 #include "vpipe.h"
-#include "hash.h"
 
 static int vsocket_bind_implicit(vsocket_mgr_tp net, int fd, in_addr_t addr);
 
@@ -64,12 +63,12 @@ unsigned int vsocket_hash(in_addr_t addr, in_port_t port) {
 	size_t portsize = sizeof(in_port_t);
 	size_t addrsize = sizeof(in_addr_t);
 
-	void* buffer = calloc(1, addrsize + portsize);
+	void* buffer = calloc(1, addrsize + portsize + 1);
+        memset(buffer, 0, addrsize + portsize + 1);
 
 	memcpy(buffer, (void*)&addr, addrsize);
 	memcpy(buffer+addrsize, (void*)&port, portsize);
-
-	unsigned int hash_value = adler32_hash2(buffer, addrsize + portsize);
+	unsigned int hash_value = g_str_hash(buffer);
 	free(buffer);
 	return hash_value;
 }

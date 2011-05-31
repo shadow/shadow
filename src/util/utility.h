@@ -31,4 +31,6 @@ void printfault(int error, char *fmt, ...);
 
 gint *int_key(int key);
 
+gint gint_compare_func(gpointer a, gpointer b);
+
 #endif /*UTILITY_H_*/
