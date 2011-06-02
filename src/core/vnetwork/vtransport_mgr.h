@@ -28,6 +28,8 @@
 #include "vsocket_mgr.h"
 #include "vpacket_mgr.h"
 #include "vpacket.h"
+#include "vci.h"
+#include "vci_event.h"
 
 /* we will batch packet transfers until we consume this many nanoseconds of bandwidth */
 #define VTRANSPORT_NS_PER_MS 1000000
@@ -68,9 +70,9 @@ typedef struct vtransport_mgr_s {
 vtransport_mgr_tp vtransport_mgr_create(vsocket_mgr_tp vsocket_mgr, uint32_t KBps_down, uint32_t KBps_up);
 void vtransport_mgr_destroy(vtransport_mgr_tp vt_mgr);
 void vtransport_mgr_download_next(vtransport_mgr_tp vt_mgr);
-void vtransport_mgr_ondownloaded(vtransport_mgr_tp vt_mgr);
-void vtransport_mgr_onpacket(vtransport_mgr_tp vt_mgr, rc_vpacket_pod_tp rc_packet);
-void vtransport_mgr_onuploaded(vtransport_mgr_tp vt_mgr);
+void vtransport_mgr_ondownloaded(vci_event_tp vci_event, vsocket_mgr_tp vs_mgr);
+void vtransport_mgr_onpacket(vci_event_tp event, vsocket_mgr_tp vs_mgr);
+void vtransport_mgr_onuploaded(vci_event_tp vci_event, vsocket_mgr_tp vs_mgr);
 void vtransport_mgr_ready_receive(vtransport_mgr_tp vt_mgr, vsocket_tp sock, rc_vpacket_pod_tp rc_packet);
 void vtransport_mgr_ready_send(vtransport_mgr_tp vt_mgr, vsocket_tp sock);
 void vtransport_mgr_upload_next(vtransport_mgr_tp vt_mgr);

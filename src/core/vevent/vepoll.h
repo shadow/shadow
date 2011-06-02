@@ -28,6 +28,7 @@
 
 #include "vevent_mgr.h"
 #include "context.h"
+#include "vci_event.h"
 
 /* vepoll monitors the state of io events on a socket, and manages scheduling
  * events for notifying the modules that the socket is readable/writable. we
@@ -96,6 +97,6 @@ void vepoll_vevent_delete(vepoll_tp vep, enum vepoll_type type);
 /* scheduler popped our event, so we should notify module of socket is ready */
 void vepoll_execute_notification(context_provider_tp provider, vepoll_tp vep);
 /* called every polling interval to check status and activate as needed */
-void vepoll_onpoll(vepoll_tp vep);
+void vepoll_onpoll(vci_event_tp vci_event, void *vs_mgr);
 
 #endif /* VEPOLL_H_ */

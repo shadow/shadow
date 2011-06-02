@@ -31,6 +31,7 @@
 #include "vsocket.h"
 #include "log.h"
 #include "vci.h"
+#include "vci_event.h"
 #include "sysconfig.h"
 #include "sim.h"
 #include "vepoll.h"
@@ -161,41 +162,45 @@ void vtransport_process_incoming_items(vsocket_mgr_tp net, GQueue *titems) {
 	}
 }
 
-void vtransport_onretransmit(vsocket_mgr_tp net, in_addr_t dst_addr, in_port_t dst_port,
-		in_port_t src_port, uint32_t retransmit_key) {
+//void vtransport_onretransmit(vsocket_mgr_tp net, in_addr_t dst_addr, in_port_t dst_port,
+//		in_port_t src_port, uint32_t retransmit_key) {
+void vtransport_onretransmit(vci_event_tp vci_event, vsocket_mgr_tp vs_mgr) {
 	debugf("vtransport_onretransmit: event fired\n");
 
-	if(net == NULL) {
+        vci_onretransmit_tp payload = vci_event->payload;
+
+	if(vs_mgr == NULL) {
 		return;
 	}
 
-	debugf("vtransport_onretransmit: %s:%u requesting retransmission of %u from %s:%u\n",
-			inet_ntoa_t(dst_addr), ntohs(dst_port), retransmit_key, net->addr_string, ntohs(src_port));
+	debugf("vtransport_onpayload->retransmit: %s:%u requesting payload->retransmission of %u from %s:%u\n",
+			inet_ntoa_t(payload->dst_addr), ntohs(payload->dst_port), payload->retransmit_key, vs_mgr->addr_string, ntohs(payload->src_port));
 
-	vsocket_tp sock = vsocket_mgr_find_socket(net, SOCK_STREAM, dst_addr, dst_port, src_port);
+	vsocket_tp sock = vsocket_mgr_find_socket(vs_mgr, SOCK_STREAM, payload->dst_addr, payload->dst_port, payload->src_port);
 	if(sock == NULL || sock->vt == NULL) {
 		return;
 	}
 
 	if(sock->vt->vtcp != NULL && sock->vt->vtcp->remote_peer == NULL) {
-		dlogf(LOG_INFO, "vtransport_onretransmit: %s:%u has no connected child socket. was it closed?\n",
-				inet_ntoa_t(net->addr), ntohs(src_port));
+		dlogf(LOG_INFO, "vtransport_onpayload->retransmit: %s:%u has no connected child socket. was it closed?\n",
+				inet_ntoa_t(vs_mgr->addr), ntohs(payload->src_port));
 		return;
 	}
 
-	vtcp_retransmit(sock->vt->vtcp, retransmit_key);
+	vtcp_retransmit(sock->vt->vtcp, payload->retransmit_key);
 }
 
-void vtransport_onclose(vsocket_mgr_tp net, in_addr_t src_addr, in_port_t src_port,
-		in_addr_t dst_addr, in_port_t dst_port, uint64_t rcv_end) {
+void vtransport_onclose(vci_event_tp vci_event, vsocket_mgr_tp vs_mgr) {
 	debugf("vsocket_mgr_onclose: event fired\n");
+        
+        vci_onclose_tp payload = vci_event->payload;
 
-	vsocket_tp sock = vsocket_mgr_find_socket(net, SOCK_STREAM, src_addr, src_port, dst_port);
+	vsocket_tp sock = vsocket_mgr_find_socket(vs_mgr, SOCK_STREAM, payload->src_addr, payload->src_port, payload->dst_port);
 	if(sock != NULL && sock->vt != NULL && sock->vt->vtcp != NULL) {
 		if(sock->curr_state == VTCP_CLOSING) {
 			/* we initiated a close, other end got all data and scheduled this event */
 			vsocket_transition(sock, VTCP_CLOSED);
-			vsocket_mgr_destroy_and_remove_socket(net, sock);
+			vsocket_mgr_destroy_and_remove_socket(vs_mgr, sock);
 		} else if(sock->curr_state == VTCP_LISTEN) {
 			/* some other end is closing, we are listening so we do not care.
 			 * probably this means that the child that this was actually meant for
@@ -205,7 +210,7 @@ void vtransport_onclose(vsocket_mgr_tp net, in_addr_t src_addr, in_port_t src_po
 		} else {
 			/* other end is initiating a close */
 			vsocket_transition(sock, VTCP_CLOSE_WAIT);
-			sock->vt->vtcp->rcv_end = rcv_end;
+			sock->vt->vtcp->rcv_end = payload->rcv_end;
 
 			/* we should close after client reads all remaining data */
 			sock->do_delete = 1;
@@ -214,11 +219,11 @@ void vtransport_onclose(vsocket_mgr_tp net, in_addr_t src_addr, in_port_t src_po
 			vbuffer_clear_send(sock->vt->vb);
 			vbuffer_clear_tcp_retransmit(sock->vt->vb, 0, 0);
 
-			/* and we are done, but have to wait to get everything from network
+			/* and we are done, but have to wait to get everything from vs_mgrwork
 			 * and then for client to read EOF */
-			if(rcv_end <= sock->vt->vtcp->rcv_nxt) {
+			if(payload->rcv_end <= sock->vt->vtcp->rcv_nxt) {
 				/* we already got everything they will send, tell them they should close */
-				vci_schedule_close(net->addr, dst_addr, dst_port, src_addr, src_port, 0);
+				vci_schedule_close(vs_mgr->addr, vci_event->node_addr, payload->dst_port, payload->src_addr, payload->src_port, 0);
 
 				/* tell vepoll that we are ready to read EOF */
 				vepoll_mark_available(sock->vep, VEPOLL_READ);

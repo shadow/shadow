@@ -92,7 +92,7 @@ void events_destroy (events_tp events) {
 			break;
 
 		case EVENTS_TYPE_VCI:
-			vci_destroy_event(event);
+			vci_destroy_event(NULL, event);
 			break;
 
 		case EVENTS_TYPE_SIMOP:

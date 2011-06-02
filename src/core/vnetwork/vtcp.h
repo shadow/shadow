@@ -33,6 +33,7 @@
 #include "vpeer.h"
 #include "vbuffer.h"
 #include "orderedlist.h"
+#include "vci_event.h"
 
 /* -maximum size data we can send network:
  *	-tcp truncates and only sends 65536
@@ -90,7 +91,7 @@ void vtcp_destroy(vtcp_tp vtcp);
 void vtcp_disconnect(vtcp_tp vtcp);
 uint32_t vtcp_generate_iss();
 vsocket_tp vtcp_get_target_socket(vtransport_item_tp titem);
-void vtcp_ondack(vsocket_mgr_tp net, uint16_t sockd);
+void vtcp_ondack(vci_event_tp vci_event, vsocket_mgr_tp vs_mgr);
 enum vt_prc_result vtcp_process_item(vtransport_item_tp titem);
 ssize_t vtcp_recv(vsocket_mgr_tp net, vsocket_tp tcpsock, void* dest_buf, size_t n);
 void vtcp_retransmit(vtcp_tp vtcp, uint32_t retransmit_key);

@@ -26,6 +26,7 @@
 
 #include "global.h"
 #include "vci.h"
+#include "vci_event.h"
 #include "vsocket_mgr.h"
 #include "vtransport_mgr.h"
 #include "vtransport.h"
@@ -44,19 +45,23 @@
 #include "simnet_graph.h"
 #include "vepoll.h"
 
+
+typedef void (*vci_exec_func)(vci_event_tp vci_event, vsocket_mgr_tp vs_mgr);
+typedef void (*vci_deposit_func)(events_tp events, vci_event_tp vci_event);
+typedef void (*vci_destroy_func)(void *payload);
+
 static void vci_free_network(int netid, void * vnet, void *data);
 static void vci_free_mailbox(int laddr, void * vmbox, void *data);
 
 static vci_scheduling_info_tp vci_get_scheduling_info(in_addr_t src_addr, in_addr_t dst_addr);
 static enum vci_location vci_get_relative_location(in_addr_t relative_to);
-static vci_mailbox_tp vci_get_mailbox(vci_mgr_tp vci_mgr, in_addr_t ip);
 
 static vsocket_mgr_tp vci_enter_vnetwork_context(vci_mgr_tp vci_mgr, in_addr_t addr);
 static void vci_exit_vnetwork_context(vci_mgr_tp vci_mgr);
 static vci_event_tp vci_create_event(vci_mgr_tp vci_mgr, enum vci_event_code code, ptime_t deliver_time,
-		in_addr_t node_addr, void* payload);
+		in_addr_t node_addr, void* payload, int free_payload, void *exec_cb, void *destroy_cb, void *deposit_cb);
 static void vci_schedule_event(events_tp events, vci_event_tp vci_event);
-static void vci_schedule_transferred(in_addr_t addr, uint32_t msdelay, enum vci_event_code code);
+static void vci_schedule_transferred(in_addr_t addr, uint32_t msdelay, enum vci_event_code code, void *transfer_cb);
 
 static nbdf_tp vci_construct_pipecloud_packet_frame(ptime_t time, vpacket_tp packet);
 
@@ -192,7 +197,7 @@ static void vci_free_mailbox(int laddr, void * vmbox, void *data) {
 	return;
 }
 
-static vci_mailbox_tp vci_get_mailbox(vci_mgr_tp vci_mgr, in_addr_t ip) {
+vci_mailbox_tp vci_get_mailbox(vci_mgr_tp vci_mgr, in_addr_t ip) {
 	if(vci_mgr != NULL) {
                 int node = vci_ascheme_get_node(vci_mgr->ascheme, ip);
 		return g_hash_table_lookup(vci_mgr->mailboxes, int_key(node));
@@ -438,9 +443,10 @@ void vci_schedule_notify(in_addr_t addr, uint16_t sockd) {
 
 	vci_onnotify_tp notify_payload = malloc(sizeof(vci_onnotify_t));
 	notify_payload->sockd = sockd;
+        notify_payload->vci_mgr = worker->vci_mgr;
 
 	vci_event_tp vci_event = vci_create_event(worker->vci_mgr, VCI_EC_ONNOTIFY, worker->current_time + 1,
-			addr, notify_payload);
+			addr, notify_payload, 1, &vsocket_mgr_onnotify, NULL, &vci_destroy_event);
 	vci_schedule_event(worker->vci_mgr->events, vci_event);
 }
 
@@ -452,11 +458,8 @@ void vci_schedule_poll(in_addr_t addr, vepoll_tp vep, uint32_t ms_delay) {
 
 	/* this is always a local delivery, with a callback to the caller */
 
-	vci_onpoll_tp poll_payload = malloc(sizeof(vci_onpoll_t));
-	poll_payload->vep = vep;
-
 	vci_event_tp vci_event = vci_create_event(worker->vci_mgr, VCI_EC_ONPOLL, worker->current_time + ms_delay,
-			addr, poll_payload);
+			addr, vep, 0, &vepoll_onpoll, NULL, NULL);
 	vci_schedule_event(worker->vci_mgr->events, vci_event);
 }
 
@@ -468,15 +471,12 @@ void vci_schedule_dack(in_addr_t addr, uint16_t sockd, uint32_t ms_delay) {
 
 	/* this is always a local delivery, with a callback to the caller */
 
-	vci_ondack_tp dack_payload = malloc(sizeof(vci_ondack_t));
-	dack_payload->sockd = sockd;
-
 	vci_event_tp vci_event = vci_create_event(worker->vci_mgr, VCI_EC_ONDACK, worker->current_time + ms_delay,
-			addr, dack_payload);
+			addr, &sockd, 0, &vtcp_ondack, NULL, &vci_destroy_event);
 	vci_schedule_event(worker->vci_mgr->events, vci_event);
 }
 
-static void vci_schedule_transferred(in_addr_t addr, uint32_t msdelay, enum vci_event_code code) {
+static void vci_schedule_transferred(in_addr_t addr, uint32_t msdelay, enum vci_event_code code, void *transfer_cb) {
 	sim_worker_tp worker = global_sim_context.sim_worker;
 	if(worker == NULL || worker->vci_mgr == NULL) {
 		return;
@@ -485,30 +485,28 @@ static void vci_schedule_transferred(in_addr_t addr, uint32_t msdelay, enum vci_
 	/* this is always a local delivery, with a callback to the caller */
 
 	vci_event_tp vci_event = vci_create_event(worker->vci_mgr, code, worker->current_time + msdelay,
-			addr, NULL);
+			addr, NULL, 0, transfer_cb, NULL, &vci_destroy_event);
 	vci_schedule_event(worker->vci_mgr->events, vci_event);
 }
 
 void vci_schedule_uploaded(in_addr_t addr, uint32_t msdelay) {
-	vci_schedule_transferred(addr, msdelay, VCI_EC_ONUPLOADED);
+	vci_schedule_transferred(addr, msdelay, VCI_EC_ONUPLOADED, &vtransport_mgr_onuploaded);
 }
 
 void vci_schedule_downloaded(in_addr_t addr, uint32_t msdelay) {
-	vci_schedule_transferred(addr, msdelay, VCI_EC_ONDOWNLOADED);
+	vci_schedule_transferred(addr, msdelay, VCI_EC_ONDOWNLOADED, &vtransport_mgr_ondownloaded);
 }
 
 void vci_schedule_packet_loopback(rc_vpacket_pod_tp rc_packet, in_addr_t addr) {
 	rc_vpacket_pod_retain_stack(rc_packet);
 
-	vci_onpacket_tp packet_payload = malloc(sizeof(vci_onpacket_t));
-	packet_payload->rc_pod = rc_packet;
 	rc_vpacket_pod_retain(rc_packet);
 
 	if(global_sim_context.sim_worker != NULL && global_sim_context.sim_worker->vci_mgr != NULL) {
 		ptime_t deliver_time = global_sim_context.sim_worker->current_time + 1;
 
 		vci_event_tp vci_event = vci_create_event(global_sim_context.sim_worker->vci_mgr, VCI_EC_ONPACKET, deliver_time,
-				addr, packet_payload);
+				addr, rc_packet, 0, &vtransport_mgr_onpacket, &rc_vpacket_pod_release, &vci_schedule_event);
 		vci_schedule_event(global_sim_context.sim_worker->vci_mgr->events, vci_event);
 	}
 
@@ -560,12 +558,10 @@ void vci_schedule_packet(rc_vpacket_pod_tp rc_packet) {
 
 		/* delivery locally to another node on the same worker. */
 		case LOC_SAME_SLAVE_SAME_WORKER: {
-			vci_onpacket_tp packet_payload = malloc(sizeof(vci_onpacket_t));
-			packet_payload->rc_pod = rc_packet;
 			rc_vpacket_pod_retain(rc_packet);
 
 			vci_event_tp vci_event = vci_create_event(si->vci_mgr, VCI_EC_ONPACKET, deliver_time,
-					packet->header.destination_addr, packet_payload);
+					packet->header.destination_addr, rc_packet, 0, &vtransport_mgr_onpacket, &rc_vpacket_pod_release, &vci_schedule_event);
 			vci_schedule_event(si->vci_mgr->events, vci_event);
 			break;
 		}
@@ -752,7 +748,7 @@ void vci_schedule_retransmit(rc_vpacket_pod_tp rc_packet, in_addr_t caller_addr)
 			rc_vpacket_pod_retain(rc_packet);
 
 			vci_event_tp vci_event = vci_create_event(vci_mgr, VCI_EC_ONRETRANSMIT, deliver_time,
-					deliver_to, retransmit_payload);
+					deliver_to, retransmit_payload, 1, &vtransport_onretransmit, NULL, &vci_schedule_event);
 			vci_schedule_event(vci_mgr->events, vci_event);
 			break;
 		}
@@ -841,7 +837,7 @@ void vci_schedule_close(in_addr_t caller_addr, in_addr_t src_addr, in_port_t src
 				deliver_to = dst_addr;
 			}
 
-			vci_event_tp vci_event = vci_create_event(vci_mgr, VCI_EC_ONCLOSE, deliver_time, deliver_to, close_payload);
+			vci_event_tp vci_event = vci_create_event(vci_mgr, VCI_EC_ONCLOSE, deliver_time, deliver_to, close_payload, 1, &vtransport_onclose, NULL, &vci_schedule_event);
 			vci_schedule_event(vci_mgr->events, vci_event);
 			break;
 		}
@@ -872,12 +868,18 @@ void vci_schedule_close(in_addr_t caller_addr, in_addr_t src_addr, in_port_t src
 }
 
 static vci_event_tp vci_create_event(vci_mgr_tp vci_mgr, enum vci_event_code code, ptime_t deliver_time,
-		in_addr_t node_addr, void* payload) {
+		in_addr_t node_addr, void* payload, int free_payload, void *exec_cb, void *destroy_cb, void *deposit_cb) {
 	vci_event_tp vci_event = malloc(sizeof(vci_event_t));
 	vci_event->code = code;
 	vci_event->deliver_time = deliver_time;
 	vci_event->node_addr = node_addr;
 	vci_event->payload = payload;
+        vci_event->free_payload = free_payload;
+
+        vci_event->vtable = malloc(sizeof(vci_event_vtable_t));
+        vci_event->vtable->exec_cb = exec_cb;
+        vci_event->vtable->destroy_cb = destroy_cb;
+        vci_event->vtable->deposit_cb = deposit_cb;
 
 	vsocket_mgr_tp vs = vci_mgr->current_vsocket_mgr;
 	if(vs == NULL) {
@@ -888,40 +890,19 @@ static vci_event_tp vci_create_event(vci_mgr_tp vci_mgr, enum vci_event_code cod
 	return vci_event;
 }
 
-void vci_destroy_event(vci_event_tp vci_event) {
+void vci_destroy_event(events_tp events, vci_event_tp vci_event) {
 	if(vci_event == NULL) {
 		return;
 	}
 
-	switch (vci_event->code) {
+        vci_destroy_func destroy_cb = vci_event->vtable->destroy_cb;
+        if(destroy_cb != NULL) {
+            destroy_cb(vci_event->payload);
+        }
 
-		/* special payloads containing pointers */
-		case VCI_EC_ONPACKET: {
-			vci_onpacket_tp packet_payload = vci_event->payload;
-			if(packet_payload != NULL) {
-				rc_vpacket_pod_release(packet_payload->rc_pod);
-			}
-			free(packet_payload);
-			break;
-		}
-
-		/* simple payloads with no pointers */
-		case VCI_EC_ONNOTIFY:
-		case VCI_EC_ONPOLL:
-		case VCI_EC_ONDACK:
-		case VCI_EC_ONRETRANSMIT:
-		case VCI_EC_ONCLOSE:
-		default: {
-			free(vci_event->payload);
-			break;
-		}
-
-		/* no payload */
-		case VCI_EC_ONDOWNLOADED:
-		case VCI_EC_ONUPLOADED: {
-			break;
-		}
-	}
+        if(vci_event->free_payload) {
+            free(vci_event->payload);
+        }
 
 	free(vci_event);
 }
@@ -998,81 +979,15 @@ void vci_exec_event (vci_mgr_tp vci_mgr, vci_event_tp vci_event) {
 	}
 
 	vci_mailbox_tp mbox = vci_get_mailbox(vci_mgr, vci_event->node_addr);
-	if(mbox == NULL || mbox->context_provider == NULL ||
-			vs_mgr == NULL) {
+	if(mbox == NULL || mbox->context_provider == NULL || vs_mgr == NULL) {
 		goto ret;
 	}
 
-	switch (vci_event->code) {
-
-		case VCI_EC_ONPACKET: {
-			vci_onpacket_tp packet_payload = vci_event->payload;
-			if(packet_payload != NULL) {
-				vpacket_log_debug(packet_payload->rc_pod);
-				vtransport_mgr_onpacket(vs_mgr->vt_mgr, packet_payload->rc_pod);
-			}
-			break;
-		}
-
-		case VCI_EC_ONNOTIFY: {
-			vci_onnotify_tp notify_payload = vci_event->payload;
-			if(notify_payload != NULL) {
-				vsocket_mgr_onnotify(vs_mgr, mbox->context_provider, notify_payload->sockd);
-			}
-			break;
-		}
-
-		case VCI_EC_ONPOLL: {
-			vci_onpoll_tp poll_payload = vci_event->payload;
-			if(poll_payload != NULL) {
-				vepoll_onpoll(poll_payload->vep);
-			}
-			break;
-		}
-
-		case VCI_EC_ONDACK: {
-			vci_ondack_tp dack_payload = vci_event->payload;
-			if(dack_payload != NULL) {
-				vtcp_ondack(vs_mgr, dack_payload->sockd);
-			}
-			break;
-		}
-
-		case VCI_EC_ONDOWNLOADED: {
-			/* no payload */
-			vtransport_mgr_ondownloaded(vs_mgr->vt_mgr);
-			break;
-		}
-
-		case VCI_EC_ONUPLOADED: {
-			/* no payload */
-			vtransport_mgr_onuploaded(vs_mgr->vt_mgr);
-			break;
-		}
-
-		case VCI_EC_ONRETRANSMIT: {
-			vci_onretransmit_tp retransmit_payload = vci_event->payload;
-			vtransport_onretransmit(vs_mgr,
-					retransmit_payload->dst_addr, retransmit_payload->dst_port,
-					retransmit_payload->src_port, retransmit_payload->retransmit_key);
-			break;
-		}
-
-		case VCI_EC_ONCLOSE: {
-			vci_onclose_tp close_payload = vci_event->payload;
-			vtransport_onclose(vs_mgr,
-					close_payload->src_addr, close_payload->src_port,
-					vci_event->node_addr, close_payload->dst_port, close_payload->rcv_end);
-			break;
-		}
-
-		default: {
-			break;
-		}
-	}
+        vci_exec_func exec_cb = vci_event->vtable->exec_cb;
+        exec_cb(vci_event, vs_mgr);
 
 ret:
-	vci_destroy_event(vci_event);
+	vci_destroy_event(NULL, vci_event);
 exit:
 	vci_exit_vnetwork_context(vci_mgr);
 }
@@ -1089,29 +1004,12 @@ void vci_deposit(vci_mgr_tp vci_mgr, nbdf_tp frame, int frametype) {
 	unsigned int target_worker_id = vci_ascheme_get_worker(vci_mgr->ascheme, vci_event->node_addr);
 
 	if(target_slave_id != vci_mgr->slave_id || target_worker_id != vci_mgr->worker_id) {
-		vci_destroy_event(vci_event);
+		vci_destroy_event(NULL, vci_event);
 		return;
 	}
 
-	/* schedule the event */
-	switch (vci_event->code) {
-		case VCI_EC_ONPACKET:
-		case VCI_EC_ONRETRANSMIT:
-		case VCI_EC_ONCLOSE: {
-			vci_schedule_event(vci_mgr->events, vci_event);
-			break;
-		}
-
-		case VCI_EC_ONNOTIFY:
-		case VCI_EC_ONDOWNLOADED:
-		case VCI_EC_ONUPLOADED:
-		case VCI_EC_ONDACK:
-		default: {
-			dlogf(LOG_ERR, "vci_deposit: received network frame containing an event that should be scheduled locally\n");
-			vci_destroy_event(vci_event);
-			break;
-		}
-	}
+        vci_deposit_func deposit_cb = vci_event->vtable->deposit_cb;
+        deposit_cb(vci_mgr->events, vci_event); 
 }
 
 static vci_event_tp vci_decode(vci_mgr_tp vci_mgr, nbdf_tp frame, int frametype) {
@@ -1136,7 +1034,6 @@ static vci_event_tp vci_decode(vci_mgr_tp vci_mgr, nbdf_tp frame, int frametype)
 		case SIM_FRAME_VCI_PACKET_PAYLOAD: {
 			ptime_t time = 0;
 			in_addr_t addr = 0;
-			vci_onpacket_tp payload = NULL;
 
 			/* reconstruct entire packet from pipecloud frame */
 			rc_vpacket_pod_tp rc_pod = vpacket_mgr_empty_packet_create();
@@ -1196,10 +1093,7 @@ static vci_event_tp vci_decode(vci_mgr_tp vci_mgr, nbdf_tp frame, int frametype)
 
 			vpacket_mgr_setup_locks(rc_pod->pod);
 
-			payload = malloc(sizeof(vci_onpacket_t));
-			payload->rc_pod = rc_pod;
-
-			vci_event = vci_create_event(vci_mgr, VCI_EC_ONPACKET, time, addr, payload);
+			vci_event = vci_create_event(vci_mgr, VCI_EC_ONPACKET, time, addr, rc_pod, 0, &vtransport_mgr_onpacket, &rc_vpacket_pod_release, &vci_schedule_event);
 
 			vci_exit_vnetwork_context(vci_mgr);
 			break;
@@ -1218,8 +1112,7 @@ static vci_event_tp vci_decode(vci_mgr_tp vci_mgr, nbdf_tp frame, int frametype)
 			 * we have to initialize to zero in case our read doesnt fill the size_t. */
 			shminfo_packet.cabinet_size = 0;
 
-			vci_onpacket_tp payload = malloc(sizeof(vci_onpacket_t));
-
+                        rc_vpacket_pod_tp rc_pod = NULL;
 			if(frametype == SIM_FRAME_VCI_PACKET_PAYLOAD_SHMCABINET) {
 				/* we also need shm for payload */
 				shmcabinet_info_t shminfo_payload;
@@ -1234,11 +1127,10 @@ static vci_event_tp vci_decode(vci_mgr_tp vci_mgr, nbdf_tp frame, int frametype)
 
 				vsocket_mgr_tp vs_mgr = vci_enter_vnetwork_context(vci_mgr, addr);
 				if(vs_mgr == NULL) {
-					free(payload);
 					break;
 				}
 
-				payload->rc_pod = vpacket_mgr_attach_shared_packet(vs_mgr->vp_mgr,
+				rc_pod = vpacket_mgr_attach_shared_packet(vs_mgr->vp_mgr,
 						&shminfo_packet, slot_id_packet, &shminfo_payload, slot_id_payload);
 
 			} else { /* SIM_FRAME_VCI_PACKET_NOPAYLOAD_SHMCABINET */
@@ -1249,15 +1141,14 @@ static vci_event_tp vci_decode(vci_mgr_tp vci_mgr, nbdf_tp frame, int frametype)
 
 				vsocket_mgr_tp vs_mgr = vci_enter_vnetwork_context(vci_mgr, addr);
 				if(vs_mgr == NULL) {
-					free(payload);
 					break;
 				}
 
-				payload->rc_pod = vpacket_mgr_attach_shared_packet(vs_mgr->vp_mgr,
+				rc_pod = vpacket_mgr_attach_shared_packet(vs_mgr->vp_mgr,
 						&shminfo_packet, slot_id_packet, NULL, 0);
 			}
 
-			vci_event = vci_create_event(vci_mgr, VCI_EC_ONPACKET, time, addr, payload);
+			vci_event = vci_create_event(vci_mgr, VCI_EC_ONPACKET, time, addr, rc_pod, 0, &vtransport_mgr_onpacket, &rc_vpacket_pod_release, &vci_schedule_event);
 
 			vci_exit_vnetwork_context(vci_mgr);
 			break;
@@ -1272,7 +1163,7 @@ static vci_event_tp vci_decode(vci_mgr_tp vci_mgr, nbdf_tp frame, int frametype)
 					&payload->src_port, &payload->dst_addr, &payload->dst_port,
 					&payload->retransmit_key);
 
-			vci_event = vci_create_event(vci_mgr, VCI_EC_ONRETRANSMIT, time, addr, payload);
+			vci_event = vci_create_event(vci_mgr, VCI_EC_ONRETRANSMIT, time, addr, payload, 1, &vtransport_onretransmit, NULL, &vci_schedule_event);
 			break;
 		}
 
@@ -1285,7 +1176,7 @@ static vci_event_tp vci_decode(vci_mgr_tp vci_mgr, nbdf_tp frame, int frametype)
 					&payload->dst_port, &payload->src_addr, &payload->src_port,
 					&payload->rcv_end);
 
-			vci_event = vci_create_event(vci_mgr, VCI_EC_ONCLOSE, time, addr, payload);
+			vci_event = vci_create_event(vci_mgr, VCI_EC_ONCLOSE, time, addr, payload, 1, &vtransport_onclose, NULL, &vci_schedule_event);
 			break;
 		}
 

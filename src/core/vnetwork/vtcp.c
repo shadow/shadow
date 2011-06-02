@@ -1021,19 +1021,22 @@ uint32_t vtcp_generate_iss() {
 	return VTRANSPORT_TCP_ISS;
 }
 
-void vtcp_ondack(vsocket_mgr_tp net, uint16_t sockd) {
+void vtcp_ondack(vci_event_tp vci_event, vsocket_mgr_tp vs_mgr) {
 	debugf("vtcp_ondack: event fired\n");
+        if(vci_event->payload != NULL) {
+            uint16_t sockd = *(uint16_t *)(vci_event->payload);
 
-	/* a delayed ack timer expired, send ack if needed */
-	vsocket_tp sock = vsocket_mgr_get_socket(net, sockd);
-	if(sock != NULL && sock->vt != NULL && sock->vt->vtcp != NULL) {
-		vtcp_tp vtcp = sock->vt->vtcp;
-		if(vtcp->snd_dack & dack_requested) {
-			vtcp_send_control_packet(vtcp, ACK);
-		}
-		/* unset the scheduled bit */
-		vtcp->snd_dack = vtcp->snd_dack & ~dack_scheduled;
-	}
+            /* a delayed ack timer expired, send ack if needed */
+            vsocket_tp sock = vsocket_mgr_get_socket(vs_mgr, sockd);
+            if(sock != NULL && sock->vt != NULL && sock->vt->vtcp != NULL) {
+                vtcp_tp vtcp = sock->vt->vtcp;
+                if(vtcp->snd_dack & dack_requested) {
+                    vtcp_send_control_packet(vtcp, ACK);
+                }
+                /* unset the scheduled bit */
+                vtcp->snd_dack = vtcp->snd_dack & ~dack_scheduled;
+            }
+        }
 }
 
 rc_vpacket_pod_tp vtcp_create_packet(vtcp_tp vtcp, enum vpacket_tcp_flags flags, uint16_t data_size, const void* data) {

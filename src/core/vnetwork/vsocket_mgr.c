@@ -32,6 +32,7 @@
 #include "vtransport.h"
 #include "vtcp_server.h"
 #include "vci.h"
+#include "vci_event.h"
 #include "sysconfig.h"
 #include "vpipe.h"
 #include "vepoll.h"
@@ -419,19 +420,23 @@ void vsocket_mgr_bind_loopback(vsocket_mgr_tp net, vsocket_tp sock, in_port_t bi
 	}
 }
 
-void vsocket_mgr_onnotify(vsocket_mgr_tp net, context_provider_tp provider, uint16_t sockd) {
-	if(net != NULL) {
+void vsocket_mgr_onnotify(vci_event_tp vci_event, vsocket_mgr_tp vs_mgr) {
+        vci_onnotify_tp payload = vci_event->payload;
+	vci_mailbox_tp mbox = vci_get_mailbox(payload->vci_mgr, vci_event->node_addr);
+        context_provider_tp provider = mbox->context_provider;
+
+	if(vs_mgr != NULL && payload != NULL) {
 		/* check for a pipe */
-		vepoll_tp pipe_poll = vpipe_get_poll(net->vpipe_mgr, sockd);
+		vepoll_tp pipe_poll = vpipe_get_poll(vs_mgr->vpipe_mgr, payload->sockd);
 		if(pipe_poll != NULL) {
 			vepoll_execute_notification(provider, pipe_poll);
 		} else {
 			/* o/w a socket */
-			vsocket_tp sock = vsocket_mgr_get_socket(net, sockd);
+			vsocket_tp sock = vsocket_mgr_get_socket(vs_mgr, payload->sockd);
 			if(sock != NULL && sock->vep != NULL) {
 				vepoll_execute_notification(provider, sock->vep);
 			} else {
-				dlogf(LOG_INFO, "vepoll_on_notify: socket %u no longer exists, skipping notification.\n", sockd);
+				dlogf(LOG_INFO, "vepoll_on_notify: socket %u no longer exists, skipping notification.\n", payload->sockd);
 			}
 		}
 	}

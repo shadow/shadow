@@ -32,6 +32,7 @@
 #include "vudp.h"
 #include "vpacket_mgr.h"
 #include "vpacket.h"
+#include "vci_event.h"
 
 /* maximum size of an IP packet without fragmenting over Ethernetv2 */
 #define VTRANSPORT_MTU 1500
@@ -51,10 +52,8 @@ void vtransport_destroy_item(vtransport_item_tp titem);
 uint8_t vtransport_is_empty(vtransport_tp vt);
 void vtransport_notify_readable_cb(void* value, int key);
 void vtransport_notify_writable_cb(void* value, int key);
-void vtransport_onclose(vsocket_mgr_tp net, in_addr_t src_addr, in_port_t src_port,
-		in_addr_t dst_addr, in_port_t dst_port, uint64_t rcv_end);
-void vtransport_onretransmit(vsocket_mgr_tp net, in_addr_t dst_addr, in_port_t dst_port,
-		in_port_t src_port, uint32_t retransmit_key);
+void vtransport_onclose(vci_event_tp vci_event, vsocket_mgr_tp vs_mgr);
+void vtransport_onretransmit(vci_event_tp vci_event, vsocket_mgr_tp vs_mgr);
 void vtransport_process_incoming_items(vsocket_mgr_tp net, GQueue *titems);
 uint8_t vtransport_transmit(vtransport_tp vt, uint32_t* bytes_transmitted, uint16_t* packets_remaining);
 

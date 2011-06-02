@@ -392,30 +392,36 @@ void vtransport_mgr_upload_next(vtransport_mgr_tp vt_mgr) {
 	}
 }
 
-void vtransport_mgr_onpacket(vtransport_mgr_tp vt_mgr, rc_vpacket_pod_tp rc_packet) {
-	rc_vpacket_pod_retain_stack(rc_packet);
+void vtransport_mgr_onpacket(vci_event_tp vci_event, vsocket_mgr_tp vs_mgr) {
+        rc_vpacket_pod_tp rc_packet = vci_event->payload;
+        if(rc_packet != NULL) {
+            vpacket_log_debug(rc_packet);
 
-	/* called by vci when there is an incoming packet. */
-	debugf("vtransport_mgr_onpacket: event fired\n");
+            rc_vpacket_pod_retain_stack(rc_packet);
 
-	if(vt_mgr != NULL) {
-		vsocket_tp sock = vsocket_mgr_get_socket_receiver(vt_mgr->vsocket_mgr, rc_packet);
-		if(sock != NULL) {
-			vtransport_mgr_ready_receive(vt_mgr, sock, rc_packet);
-		} else {
-			debugf("socket no longer exists, dropping packet\n");
-		}
-	}
+            /* called by vci when there is an incoming packet. */
+            debugf("vtransport_mgr_onpacket: event fired\n");
 
-	rc_vpacket_pod_release_stack(rc_packet);
+            if(vs_mgr->vt_mgr != NULL) {
+                vsocket_tp sock = vsocket_mgr_get_socket_receiver(vs_mgr->vt_mgr->vsocket_mgr, rc_packet);
+                if(sock != NULL) {
+                    vtransport_mgr_ready_receive(vs_mgr->vt_mgr, sock, rc_packet);
+                } else {
+                    debugf("socket no longer exists, dropping packet\n");
+                }
+            }
+
+            debugf("vtransport_mgr_onpacket: releasing stack\n");
+            rc_vpacket_pod_release_stack(rc_packet);
+        }
 }
 
-void vtransport_mgr_onuploaded(vtransport_mgr_tp vt_mgr) {
+void vtransport_mgr_onuploaded(vci_event_tp vci_event, vsocket_mgr_tp vs_mgr) {
 	debugf("vtransport_mgr_onuploaded: event fired\n");
-	vtransport_mgr_upload_next(vt_mgr);
+	vtransport_mgr_upload_next(vs_mgr->vt_mgr);
 }
 
-void vtransport_mgr_ondownloaded(vtransport_mgr_tp vt_mgr) {
+void vtransport_mgr_ondownloaded(vci_event_tp vci_event, vsocket_mgr_tp vs_mgr) {
 	debugf("vtransport_mgr_ondownloaded: event fired\n");
-	vtransport_mgr_download_next(vt_mgr);
+	vtransport_mgr_download_next(vs_mgr->vt_mgr);
 }

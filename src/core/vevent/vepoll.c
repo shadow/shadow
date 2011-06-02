@@ -223,7 +223,8 @@ void vepoll_execute_notification(context_provider_tp provider, vepoll_tp vep) {
 }
 
 /* make sure sockets don't get stuck */
-void vepoll_onpoll(vepoll_tp vep) {
+void vepoll_onpoll(vci_event_tp vci_event, void *vs_mgr) {
+        vepoll_tp vep = vci_event->payload;
 	if(vep != NULL) {
 		/* poll no longer scheduled */
 		vep->flags &= ~VEPOLL_POLL_SCHEDULED;

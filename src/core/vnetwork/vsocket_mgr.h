@@ -37,6 +37,7 @@
 #include "vevent_mgr.h"
 #include "vepoll.h"
 #include "vcpu.h"
+#include "vci_event.h"
 
 #define VPIPE_ALIGN_TAG 0x3F
 
@@ -124,7 +125,7 @@ uint8_t vsocket_mgr_isbound_ethernet(vsocket_mgr_tp net, in_port_t port);
 void vsocket_mgr_bind_ethernet(vsocket_mgr_tp net, vsocket_tp sock, in_port_t bind_port);
 void vsocket_mgr_bind_loopback(vsocket_mgr_tp net, vsocket_tp sock, in_port_t bind_port);
 
-void vsocket_mgr_onnotify(vsocket_mgr_tp net, context_provider_tp provider, uint16_t sockd);
+void vsocket_mgr_onnotify(vci_event_tp vci_event, vsocket_mgr_tp vs_mgr);
 
 void vsocket_mgr_print_stat(vsocket_mgr_tp net, uint16_t sockd);
 
