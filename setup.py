@@ -8,6 +8,7 @@ INSTALL_PREFIX="/usr/local"
 
 TOR_URL="https://archive.torproject.org/tor-package-archive/tor-0.2.2.15-alpha.tar.gz"
 TOR_PATCH_URL="http://shadow.cs.umn.edu/tor-0.2.2.15-alpha.scallion.patch.gz"
+MAXMIND_URL="http://geolite.maxmind.com/download/geoip/database/GeoLiteCity.dat.gz"
 
 def main():
     parser_main = argparse.ArgumentParser(description='Utility to help setup the scallion plug-in for the shadow simulator', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -80,6 +81,8 @@ def build(args):
     if setup_dependencies(args) != 0: return
     if setup_tor(args) != 0: return
     include_tor(args)
+    if get_maxmind(args) != 0: return
+    if gen_www_files(args) != 0: return
     
     os.chdir(builddir+"/scallion")
 
@@ -238,7 +241,8 @@ def setup_dependencies(args):
         if download(TOR_PATCH_URL, args.target_tor_patch) != 0:
             log(args, "failed to download " + TOR_PATCH_URL)
             return -1
-        
+    
+    # gunzip tor patch
     if not os.path.exists(args.patchfile):
         fin = gzip.open(args.target_tor_patch, 'r')
         fout = open(args.patchfile, 'w')
@@ -248,6 +252,39 @@ def setup_dependencies(args):
     
     return 0
 
+def get_maxmind(args):
+    args.target_maxmind = os.path.abspath(os.path.basename(MAXMIND_URL))
+    args.maxminddb = args.target_maxmind[:args.target_maxmind.rindex('.')]
+    
+    if not os.path.exists(args.target_maxmind):
+        log(args, "downloading " + MAXMIND_URL)
+        if download(MAXMIND_URL, args.target_maxmind) != 0:
+            log(args, "failed to download " + MAXMIND_URL)
+            return -1
+    
+    # gunzip maxmind db
+    if not os.path.exists(args.maxminddb):
+        fin = gzip.open(args.target_maxmind, 'r')
+        fout = open(args.maxminddb, 'w')
+        fout.writelines(fin)
+        fout.close()
+        fin.close()
+        
+    return 0
+
+def gen_www_files(args):
+    dd(args, "50KiB.urnd", 50)
+    dd(args, "320KiB.urnd", 320)
+    dd(args, "1MiB.urnd", 1024)
+    dd(args, "5MiB.urnd", 5120)
+    return 0
+    
+def dd(args, filename, kb):
+    if not os.path.exists(filename):
+        ddcmd = "/bin/dd if=/dev/urandom of=" + filename + " bs=1024 count=" + str(kb)
+        log(args, "calling " + ddcmd)
+        subprocess.call(ddcmd.split())
+        
 def download(url, target_path):
     try:
         u = urllib2.urlopen(url)

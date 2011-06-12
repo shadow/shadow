@@ -5,10 +5,11 @@ Cmake >= 2.6
 Flex
 Bison
 Python2.7
+pygeoip >= 0.1.6
 
 =============================
-STANDARD INSTALL quickstart (replace "rob" with your username):
- -install to /usr/local (requires root priveledges)
+STANDARD INSTALL quickstart (requires root priveledges):
+ -install to /usr/local
 =============================
 wget http://www.openssl.org/source/openssl-1.0.0d.tar.gz
 ./config -fPIC shared

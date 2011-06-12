@@ -6,15 +6,25 @@ TestingTorNetwork 1
 
 ServerDNSDetectHijacking 0
 NumCPUs 0
+#Log notice file client.notice.log
 Log notice stdout
 SafeLogging 0
+#GeoIPFile geoip
 ContactInfo jansen@cs.umn.edu
+
+# make sure we are not throttled
+MaxOnionsPending 1000000
 
 ## CLIENTS ##
 
-# DataDirectory path/to/dir # this should be passed to module through DSIM file, since it needs to be unique for each relay
+#DataDirectory clientdata
 ORPort 0
 DirPort 0
 ClientOnly 1
 SocksPort 9000
 SocksListenAddress 127.0.0.1
+
+CircuitPriorityHalflife 0
+#PerConnBWRate 5 KB
+#PerConnBWBurst 2 MB
+

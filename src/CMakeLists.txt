@@ -11,4 +11,6 @@ add_library(shadow-plugin-scallion-preload SHARED vtor_preload.c)
 target_link_libraries(shadow-plugin-scallion-preload ${DL_LIBRARIES})
 
 install(TARGETS shadow-plugin-scallion shadow-plugin-scallion-preload DESTINATION lib)
-install(FILES scallion.dsim DESTINATION share/shadow)
+
+## install scallion script
+install(PROGRAMS scallion DESTINATION bin)

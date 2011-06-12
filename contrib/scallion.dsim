@@ -31,34 +31,34 @@ on(time 1:00) {
 
 # Tor directory authority		
 	create_nodes(1, scallion_vm, network, authority_hostname, bandwidth_cdf, NULL, cpu_cdf,
-		"dirauth 1024 share/shadow/config/dirauth.torrc /tmp/scallion-data share/shadow/resources/geoip");
+		"dirauth 1024 share/shadow/scallion/dirauth.torrc /tmp/scallion-data share/shadow/scallion/geoip");
 }
 
 # launch tor relays
 on(time 60:00) {
 # Tor exit relays
 	create_nodes(1, scallion_vm, network, exit_hostname, bandwidth_cdf, NULL, cpu_cdf,
-		"exitrelay 1024 share/shadow/config/relay.torrc /tmp/scallion-data share/shadow/resources/geoip");
+		"exitrelay 1024 share/shadow/scallion/relay.torrc /tmp/scallion-data share/shadow/scallion/geoip");
 
 # Tor relays	
 	create_nodes(1, scallion_vm, network, relay_hostname, bandwidth_cdf, NULL, cpu_cdf,
-		"relay 1024 share/shadow/config/relay.torrc /tmp/scallion-data share/shadow/resources/geoip");
+		"relay 1024 share/shadow/scallion/relay.torrc /tmp/scallion-data share/shadow/scallion/geoip");
 		
 	create_nodes(1, scallion_vm, network, relay_hostname, bandwidth_cdf, NULL, cpu_cdf,
-		"relay 1024 share/shadow/config/relay.torrc /tmp/scallion-data share/shadow/resources/geoip");
+		"relay 1024 share/shadow/scallion/relay.torrc /tmp/scallion-data share/shadow/scallion/geoip");
 }
 
 # finally, the onion proxies, and start downloading
 on(time 1200:00) {
 # Tor web client
 #	create_nodes(1, scallion_vm, network, proxy_hostname, bandwidth_cdf, bandwidth_cdf, cpu_cdf,
-#		"client 1024 share/shadow/config/client.torrc /tmp/scallion-data share/shadow/resources/geoip multi share/shadow/config/web.spec localhost 9000 none -1");
+#		"client 1024 share/shadow/scallion/client.torrc /tmp/scallion-data share/shadow/scallion/geoip multi share/shadow/scallion/web.spec localhost 9000 none -1");
 
 # Tor bulk client
 	create_nodes(1, scallion_vm, network, proxy_hostname, bandwidth_cdf, bandwidth_cdf, cpu_cdf,
-		"client 1024 share/shadow/config/client.torrc /tmp/scallion-data share/shadow/resources/geoip multi share/shadow/config/bulk.spec localhost 9000 none -1");
+		"client 1024 share/shadow/scallion/client.torrc /tmp/scallion-data share/shadow/resources/geoip multi share/shadow/scallion/bulk.spec localhost 9000 none -1");
 #	create_nodes(1, scallion_vm, network, proxy_hostname, bandwidth_cdf, bandwidth_cdf, cpu_cdf,
-#		"client 1024 share/shadow/config/client.torrc /tmp/scallion-data share/shadow/resources/geoip single fileserver.shd 8080 localhost 9000 1 /5mb.urnd");
+#		"client 1024 share/shadow/scallion/client.torrc /tmp/scallion-data share/shadow/scallion/geoip single fileserver.shd 8080 localhost 9000 1 /5MiB.urnd");
 
 }
 
