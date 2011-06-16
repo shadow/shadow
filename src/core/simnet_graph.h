@@ -27,6 +27,8 @@
 #include "hashtable.h"
 #include "shd-cdf.h"
 
+#define RUNAHEAD_FLOOR_MS 10
+
 typedef struct simnet_vertex_s {
 	unsigned int id;
 

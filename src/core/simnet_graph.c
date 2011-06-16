@@ -53,6 +53,9 @@ static void simnet_graph_track_minmax(simnet_graph_tp g, cdf_tp cdf) {
 		if(g->runahead_max == 0 || max > g->runahead_max) {
 			g->runahead_max = max;
 		}
+		if(g->runahead_min < RUNAHEAD_FLOOR_MS) {
+			g->runahead_min = RUNAHEAD_FLOOR_MS;
+		}
 	}
 }
 
