@@ -33,8 +33,6 @@
 #include <event2/dns_compat.h>
 #include <event2/dns_struct.h>
 
-#include "event-internal.h"
-
 #include "vevent.h"
 #include "vevent_mgr.h"
 #include "vepoll.h"
@@ -143,11 +141,10 @@ static void vevent_vepoll_action(uint16_t sockd, uint8_t add, short ev_type) {
 	}
 }
 
-void vevent_destroy_base(event_base_tp eb) {
+void vevent_destroy_base(vevent_mgr_tp mgr, event_base_tp eb) {
 	if(eb != NULL) {
-		if(eb->evbase != NULL) {
-			vevent_base_tp veb = eb->evbase;
-
+		vevent_base_tp veb = vevent_mgr_convert_base(mgr, eb);
+		if(veb != NULL) {
 			if(veb->sockets_by_sd != NULL) {
 				hashtable_walk(veb->sockets_by_sd, &vevent_destroy_socket_cb);
 				hashtable_destroy(veb->sockets_by_sd);
@@ -260,153 +257,159 @@ static int vevent_set_timer(vevent_mgr_tp mgr, vevent_tp vev, const struct timev
 
 static int vevent_register(vevent_mgr_tp mgr, event_tp ev, const struct timeval * timeout) {
 	/* check if the event already is added */
-	if(ev != NULL && ev->ev_base != NULL && ev->ev_base->evbase != NULL) {
-		vevent_base_tp veb = ev->ev_base->evbase;
+	if(ev != NULL && ev->ev_base != NULL) {
 
-		/* check for the socket */
-		vevent_socket_tp vsd = hashtable_get(veb->sockets_by_sd, ev->ev_fd);
-		if(vsd == NULL) {
-			vsd = vevent_socket_create(ev->ev_fd);
-			hashtable_set(veb->sockets_by_sd, ev->ev_fd, vsd);
-			debugf("vevent_register: start monitoring socket %d\n", ev->ev_fd);
-		}
-
-		/* register as event */
-		vevent_tp vev = hashtable_get(veb->vevents_by_id, ev->ev_timeout_pos.min_heap_idx);
-		if(vev == NULL) {
-			vev = vevent_create(ev, vsd);
-			hashtable_set(veb->vevents_by_id, vev->id, vev);
-			vev->event->ev_flags |= EVLIST_INSERTED;
-			debugf("vevent_register: inserted vevent id %d, fd %d, type %s\n", vev->id, vev->vsd->sd, vevent_get_event_type_string(mgr, vev->event->ev_events));
-		}
-
-		/* register with socket */
-		if(list_search(vsd->vevents, vev, &vevent_isequal_cb) == NULL) {
-			list_push_back(vsd->vevents, vev);
-			vevent_vepoll_action(vsd->sd, 1, ev->ev_events);
-			debugf("vevent_register: registered vevent id %i with socket %i\n", vev->id, vev->vsd->sd);
-		}
-
-		/* update the timeout */
-		if(timeout != NULL) {
-			vev->event->ev_timeout = *timeout;
-			if(vev->event->ev_timeout.tv_sec > 0 || vev->event->ev_timeout.tv_usec > 0) {
-				vevent_set_timer(mgr, vev, timeout);
+		vevent_base_tp veb = vevent_mgr_convert_base(mgr, ev->ev_base);
+		if(veb != NULL) {
+			/* check for the socket */
+			vevent_socket_tp vsd = hashtable_get(veb->sockets_by_sd, ev->ev_fd);
+			if(vsd == NULL) {
+				vsd = vevent_socket_create(ev->ev_fd);
+				hashtable_set(veb->sockets_by_sd, ev->ev_fd, vsd);
+				debugf("vevent_register: start monitoring socket %d\n", ev->ev_fd);
 			}
-		} else {
-			/* wait forever, if this is a EV_TIMEOUT event, this means
-			 * the event will be considered canceled and never fire. */
-			vev->timerid = -1;
-			vev->event->ev_timeout.tv_sec = 0;
-			vev->event->ev_timeout.tv_usec = 0;
-		}
 
-		/* success */
-		return 0;
+			/* register as event */
+			vevent_tp vev = hashtable_get(veb->vevents_by_id, ev->ev_timeout_pos.min_heap_idx);
+			if(vev == NULL) {
+				vev = vevent_create(ev, vsd);
+				hashtable_set(veb->vevents_by_id, vev->id, vev);
+				vev->event->ev_flags |= EVLIST_INSERTED;
+				debugf("vevent_register: inserted vevent id %d, fd %d, type %s\n", vev->id, vev->vsd->sd, vevent_get_event_type_string(mgr, vev->event->ev_events));
+			}
+
+			/* register with socket */
+			if(list_search(vsd->vevents, vev, &vevent_isequal_cb) == NULL) {
+				list_push_back(vsd->vevents, vev);
+				vevent_vepoll_action(vsd->sd, 1, ev->ev_events);
+				debugf("vevent_register: registered vevent id %i with socket %i\n", vev->id, vev->vsd->sd);
+			}
+
+			/* update the timeout */
+			if(timeout != NULL) {
+				vev->event->ev_timeout = *timeout;
+				if(vev->event->ev_timeout.tv_sec > 0 || vev->event->ev_timeout.tv_usec > 0) {
+					vevent_set_timer(mgr, vev, timeout);
+				}
+			} else {
+				/* wait forever, if this is a EV_TIMEOUT event, this means
+				 * the event will be considered canceled and never fire. */
+				vev->timerid = -1;
+				vev->event->ev_timeout.tv_sec = 0;
+				vev->event->ev_timeout.tv_usec = 0;
+			}
+
+			/* success */
+			return 0;
+		}
 	}
 
 	return -1;
 }
 
 static int vevent_unregister(vevent_mgr_tp mgr, event_tp ev) {
-	if(ev != NULL && ev->ev_base != NULL && ev->ev_base->evbase != NULL) {
-		vevent_base_tp veb = ev->ev_base->evbase;
+	if(ev != NULL && ev->ev_base != NULL) {
+		vevent_base_tp veb = vevent_mgr_convert_base(mgr, ev->ev_base);
+		if(veb != NULL) {
 
-		/* unregister vevent */
-		vevent_tp vev = hashtable_remove(veb->vevents_by_id, ev->ev_timeout_pos.min_heap_idx);
-		if(vev != NULL) {
-			/* make sure timers get canceled */
-			vev->event->ev_flags &= ~EVLIST_INSERTED;
-			vev->event = NULL;
-			debugf("vevent_unregister: removed vevent id %d, fd %d, type %s\n", ev->ev_timeout_pos.min_heap_idx, ev->ev_fd, vevent_get_event_type_string(mgr, ev->ev_events));
-		}
-
-		/* unregister from socket */
-		vevent_socket_tp vsd = hashtable_get(veb->sockets_by_sd, ev->ev_fd);
-		if(vsd != NULL) {
-			void* result = list_remove(vsd->vevents, vev, &vevent_isequal_cb);
-			if(result != NULL) {
-				vevent_vepoll_action(vsd->sd, 0, ev->ev_events);
-				debugf("vevent_unregister: unregistered vevent id %i from socket %i\n", vev->id, vev->vsd->sd);
+			/* unregister vevent */
+			vevent_tp vev = hashtable_remove(veb->vevents_by_id, ev->ev_timeout_pos.min_heap_idx);
+			if(vev != NULL) {
+				/* make sure timers get canceled */
+				vev->event->ev_flags &= ~EVLIST_INSERTED;
+				vev->event = NULL;
+				debugf("vevent_unregister: removed vevent id %d, fd %d, type %s\n", ev->ev_timeout_pos.min_heap_idx, ev->ev_fd, vevent_get_event_type_string(mgr, ev->ev_events));
 			}
 
-			if(list_get_size(vsd->vevents) <= 0) {
-				hashtable_remove(veb->sockets_by_sd, vsd->sd);
-				vevent_destroy_socket(vsd);
-				debugf("vevent_unregister: stop monitoring socket %d\n", ev->ev_fd);
+			/* unregister from socket */
+			vevent_socket_tp vsd = hashtable_get(veb->sockets_by_sd, ev->ev_fd);
+			if(vsd != NULL) {
+				void* result = list_remove(vsd->vevents, vev, &vevent_isequal_cb);
+				if(result != NULL) {
+					vevent_vepoll_action(vsd->sd, 0, ev->ev_events);
+					debugf("vevent_unregister: unregistered vevent id %i from socket %i\n", vev->id, vev->vsd->sd);
+				}
+
+				if(list_get_size(vsd->vevents) <= 0) {
+					hashtable_remove(veb->sockets_by_sd, vsd->sd);
+					vevent_destroy_socket(vsd);
+					debugf("vevent_unregister: stop monitoring socket %d\n", ev->ev_fd);
+				}
 			}
-		}
 
-		if(vev != NULL && vev->ntimers <= 0) {
-			vevent_destroy_vevent(vev);
-		}
+			if(vev != NULL && vev->ntimers <= 0) {
+				vevent_destroy_vevent(vev);
+			}
 
-		/* success, even if the event didnt actually exist */
-		return 0;
+			/* success, even if the event didnt actually exist */
+			return 0;
+		}
 	}
 
 	return -1;
 }
 
 static void vevent_execute_callbacks(vevent_mgr_tp mgr, event_base_tp eb, int sockd, short event_type) {
-	if(eb != NULL && eb->evbase != NULL) {
-		vevent_base_tp veb = eb->evbase;
-		vevent_socket_tp vsd = hashtable_get(veb->sockets_by_sd, sockd);
+	if(eb != NULL) {
+		vevent_base_tp veb = vevent_mgr_convert_base(mgr, eb);
+		if(veb != NULL) {
+			vevent_socket_tp vsd = hashtable_get(veb->sockets_by_sd, sockd);
 
-		if(vsd != NULL) {
-			debugf("getting callbacks for type %s on fd %i\n", vevent_get_event_type_string(mgr, event_type), sockd);
+			if(vsd != NULL) {
+				debugf("getting callbacks for type %s on fd %i\n", vevent_get_event_type_string(mgr, event_type), sockd);
 
-			/* keep track of the events we need to execute */
-			list_tp to_execute = list_create();
-			list_iter_tp liter = list_iterator_create(vsd->vevents);
+				/* keep track of the events we need to execute */
+				list_tp to_execute = list_create();
+				list_iter_tp liter = list_iterator_create(vsd->vevents);
 
-			while(list_iterator_hasnext(liter)) {
-				vevent_tp vev = list_iterator_getnext(liter);
-				if(vev != NULL && vev->event != NULL) {
-					/* execute if event is the correct type  */
-					if(vev->event->ev_events & event_type){
-						vev->event->ev_res = event_type;
-						list_push_back(to_execute, vev);
+				while(list_iterator_hasnext(liter)) {
+					vevent_tp vev = list_iterator_getnext(liter);
+					if(vev != NULL && vev->event != NULL) {
+						/* execute if event is the correct type  */
+						if(vev->event->ev_events & event_type){
+							vev->event->ev_res = event_type;
+							list_push_back(to_execute, vev);
+						}
 					}
 				}
-			}
 
-			list_iterator_destroy(liter);
+				list_iterator_destroy(liter);
 
-			/* now execute events.
-			 *
-			 * Careful!, as the execution of the event could invoke a call to try
-			 * and delete the event that is currently being executed, and could
-			 * free the memory storing the event. So we need
-			 * to either disallow deletion of in-progress events, or remove
-			 * dependence on the event before executing the callback.
-			 * We currently take the second approach by creating this separate list.
-			 */
-			debugf("executing %i events for fd %i\n", list_get_size(to_execute), sockd);
+				/* now execute events.
+				 *
+				 * Careful!, as the execution of the event could invoke a call to try
+				 * and delete the event that is currently being executed, and could
+				 * free the memory storing the event. So we need
+				 * to either disallow deletion of in-progress events, or remove
+				 * dependence on the event before executing the callback.
+				 * We currently take the second approach by creating this separate list.
+				 */
+				debugf("executing %i events for fd %i\n", list_get_size(to_execute), sockd);
 
-			/* need to be in node context */
+				/* need to be in node context */
 
-			/* XXX FIXME this should not happen here but in context.c!
-			 * need to swap to node context */
-			context_provider_tp provider = mgr->provider;
+				/* XXX FIXME this should not happen here but in context.c!
+				 * need to swap to node context */
+				context_provider_tp provider = mgr->provider;
 
-			/* swap out env for this provider */
-			context_load(provider);
-			global_sim_context.exit_usable = 1;
-			if(setjmp(global_sim_context.exit_env) == 1)  /* module has been destroyed if we get here. (sim_context.current_context will be NULL) */
-				return;
-			else {
-				/* this is the part that needs to be wrapped in node context */
-				while(list_get_size(to_execute) > 0) {
-					/* execute event */
-					vevent_tp vev = list_pop_front(to_execute);
-					vevent_execute(mgr, vev->event);
+				/* swap out env for this provider */
+				context_load(provider);
+				global_sim_context.exit_usable = 1;
+				if(setjmp(global_sim_context.exit_env) == 1)  /* module has been destroyed if we get here. (sim_context.current_context will be NULL) */
+					return;
+				else {
+					/* this is the part that needs to be wrapped in node context */
+					while(list_get_size(to_execute) > 0) {
+						/* execute event */
+						vevent_tp vev = list_pop_front(to_execute);
+						vevent_execute(mgr, vev->event);
+					}
 				}
-			}
-			/* swap back to dvn holding */
-			context_save();
+				/* swap back to dvn holding */
+				context_save();
 
-			list_destroy(to_execute);
+				list_destroy(to_execute);
+			}
 		}
 	}
 }
@@ -464,10 +467,10 @@ event_base_tp vevent_event_base_new(vevent_mgr_tp mgr) {
 		veb->vevents_by_id = hashtable_create(10, 0.90);
 		veb->sockets_by_sd = hashtable_create(10, 0.90);
 
-		event_base_tp eb = calloc(1, sizeof(event_base_t));
-		eb->evbase = veb;
-
+		event_base_tp eb = calloc(1, sizeof(void*));
 		list_push_back(mgr->event_bases, eb);
+
+		vevent_mgr_track_base(mgr, eb, veb);
 		return eb;
 	} else {
 		return NULL;
@@ -477,7 +480,8 @@ event_base_tp vevent_event_base_new(vevent_mgr_tp mgr) {
 void vevent_event_base_free(vevent_mgr_tp mgr, event_base_tp eb) {
 	if(mgr != NULL && mgr->event_bases != NULL) {
 		event_base_tp removed = list_remove(mgr->event_bases, eb, NULL);
-		vevent_destroy_base(removed);
+		vevent_destroy_base(mgr, removed);
+		vevent_mgr_untrack_base(mgr, eb);
 	}
 }
 
@@ -533,24 +537,25 @@ int vevent_event_assign(vevent_mgr_tp mgr, event_tp ev, event_base_tp eb, evutil
 
 	/* must have a valid event type */
 	if((types & (EV_READ|EV_WRITE|EV_SIGNAL|EV_TIMEOUT))) {
-		if(ev != NULL && eb != NULL && eb->evbase != NULL) {
-			vevent_base_tp veb = eb->evbase;
+		if(ev != NULL && eb != NULL) {
+			vevent_base_tp veb = vevent_mgr_convert_base(mgr, eb);
+			if(veb != NULL) {
+				ev->ev_base = eb;
+				ev->ev_fd = fd;
+				ev->ev_callback = cb;
+				ev->ev_arg = arg;
+				ev->ev_events = types;
+				ev->ev_flags = 0;
+				ev->ev_res = 0;
 
-			ev->ev_base = eb;
-			ev->ev_fd = fd;
-			ev->ev_callback = cb;
-			ev->ev_arg = arg;
-			ev->ev_events = types;
-			ev->ev_flags = 0;
-			ev->ev_res = 0;
+				/* use the priority field to hold the id */
+				ev->ev_timeout_pos.min_heap_idx = veb->nextid++;
 
-			/* use the priority field to hold the id */
-			ev->ev_timeout_pos.min_heap_idx = veb->nextid++;
+				debugf("vevent_event_assign: assigned id %i to event with sd %i and type %s\n", ev->ev_timeout_pos.min_heap_idx, ev->ev_fd, vevent_get_event_type_string(mgr, ev->ev_events));
 
-			debugf("vevent_event_assign: assigned id %i to event with sd %i and type %s\n", ev->ev_timeout_pos.min_heap_idx, ev->ev_fd, vevent_get_event_type_string(mgr, ev->ev_events));
-
-			/* success! */
-			return 0;
+				/* success! */
+				return 0;
+			}
 		}
 	}
 
@@ -608,28 +613,30 @@ void vevent_event_active(vevent_mgr_tp mgr, event_tp ev, int flags_for_cb, short
 }
 
 int vevent_event_pending(vevent_mgr_tp mgr, const event_tp ev, short types, struct timeval * tv) {
-	if(ev != NULL && ev->ev_base != NULL && ev->ev_base->evbase != NULL) {
-		vevent_base_tp veb = ev->ev_base->evbase;
-		vevent_tp vev = hashtable_get(veb->vevents_by_id, ev->ev_timeout_pos.min_heap_idx);
+	if(ev != NULL) {
+		vevent_base_tp veb = vevent_mgr_convert_base(mgr, ev->ev_base);
+		if(veb != NULL) {
+			vevent_tp vev = hashtable_get(veb->vevents_by_id, ev->ev_timeout_pos.min_heap_idx);
 
-		if(vev != NULL) {
-			/* event has been added, check type */
-			int flags = 0;
+			if(vev != NULL) {
+				/* event has been added, check type */
+				int flags = 0;
 
-			if (ev->ev_flags & EVLIST_INSERTED)
-				flags |= (ev->ev_events & (EV_TIMEOUT|EV_READ|EV_WRITE|EV_SIGNAL));
-			if (ev->ev_flags & EVLIST_ACTIVE)
-				flags |= ev->ev_res;
-			if (ev->ev_flags & EVLIST_TIMEOUT)
-				flags |= EV_TIMEOUT;
+				if (ev->ev_flags & EVLIST_INSERTED)
+					flags |= (ev->ev_events & (EV_TIMEOUT|EV_READ|EV_WRITE|EV_SIGNAL));
+				if (ev->ev_flags & EVLIST_ACTIVE)
+					flags |= ev->ev_res;
+				if (ev->ev_flags & EVLIST_TIMEOUT)
+					flags |= EV_TIMEOUT;
 
-			types &= (EV_TIMEOUT|EV_READ|EV_WRITE|EV_SIGNAL);
+				types &= (EV_TIMEOUT|EV_READ|EV_WRITE|EV_SIGNAL);
 
-			if(tv != NULL) {
-				/* TODO populate with expire time */
+				if(tv != NULL) {
+					/* TODO populate with expire time */
+				}
+
+				return (flags & types) == 0 ? 0 : 1;
 			}
-
-			return (flags & types) == 0 ? 0 : 1;
 		}
 	}
 

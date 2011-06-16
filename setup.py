@@ -103,7 +103,8 @@ def build(args):
         log(args, "calling \'make\'")
         retcode = subprocess.call(["make"], stdout=outfile)
         log(args, "make returned " + str(retcode))
-        log(args, "now run \'python setup.py install\'")
+        if retcode == 0: log(args, "now run \'python setup.py install\'")
+        else: log(args, "E! Non-zero return code.")
 
     # go back to where we came from
     os.chdir(rundir)

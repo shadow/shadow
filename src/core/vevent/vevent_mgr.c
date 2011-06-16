@@ -26,7 +26,6 @@
 #include <event2/event_struct.h>
 #include <event2/event.h>
 #include <event2/util.h>
-#include <event-internal.h>
 
 #include "vevent_mgr.h"
 #include "vevent.h"
@@ -36,6 +35,7 @@
 #include "timer.h"
 #include "sim.h"
 #include "context.h"
+#include "hash.h"
 
 int vevent_mgr_timer_create(vevent_mgr_tp mgr, int milli_delay, vevent_mgr_timer_callback_fp callback_function, void * cb_arg) {
 	assert(global_sim_context.sim_worker);
@@ -50,6 +50,7 @@ static void vevent_mgr_init(context_provider_tp p, vevent_mgr_tp mgr) {
 	/* every node needs to init its data */
 	if(mgr != NULL) {
 		mgr->event_bases = list_create();
+		mgr->base_conversion = hashtable_create(10, .9);
 		mgr->loopexit_fp = NULL;
 		mgr->provider = p;
 	}
@@ -60,10 +61,11 @@ static void vevent_mgr_uninit(vevent_mgr_tp mgr) {
 		/* delete all event bases */
 		while(list_get_size(mgr->event_bases) > 0) {
 			event_base_tp eb = list_pop_front(mgr->event_bases);
-			vevent_destroy_base(eb);
+			vevent_destroy_base(mgr, eb);
 		}
 
 		list_destroy(mgr->event_bases);
+		hashtable_destroy(mgr->base_conversion);
 	}
 }
 
@@ -158,8 +160,8 @@ void vevent_mgr_print_stat(vevent_mgr_tp mgr, uint16_t sockd) {
 		while(list_iterator_hasnext(bases)) {
 			event_base_tp eb = list_iterator_getnext(bases);
 
-			if(eb != NULL && eb->evbase != NULL) {
-				vevent_base_tp veb = eb->evbase;
+			vevent_base_tp veb = vevent_mgr_convert_base(mgr, eb);
+			if(veb != NULL) {
 				vevent_socket_tp vsd = hashtable_get(veb->sockets_by_sd, (unsigned int)sockd);
 				vevent_mgr_print_all_cb(vsd, sockd, mgr);
 			}
@@ -178,8 +180,8 @@ void vevent_mgr_print_all(vevent_mgr_tp mgr) {
 		while(list_iterator_hasnext(bases)) {
 			event_base_tp eb = list_iterator_getnext(bases);
 
-			if(eb != NULL && eb->evbase != NULL) {
-				vevent_base_tp veb = eb->evbase;
+			vevent_base_tp veb = vevent_mgr_convert_base(mgr, eb);
+			if(veb != NULL) {
 				debugf("======Printing all waiting registered events======\n");
 				hashtable_walk_param(veb->sockets_by_sd, &vevent_mgr_print_all_cb, mgr);
 				debugf("======Done printing======\n");
@@ -203,4 +205,31 @@ void vevent_mgr_notify_can_write(vevent_mgr_tp mgr, int sockfd) {
 void vevent_mgr_notify_signal_received(vevent_mgr_tp mgr, int signal) {
 	debugf("vevent_mgr_notify_signal_received: received signal %d.\n", signal);
 	vevent_notify(mgr, signal, EV_SIGNAL);
+}
+
+void vevent_mgr_track_base(vevent_mgr_tp mgr, event_base_tp eb, vevent_base_tp veb) {
+	if(eb != NULL) {
+		/* TODO can we avoid the hash? */
+		unsigned int key = adler32_hash((char*)eb);
+		hashtable_set(mgr->base_conversion, key, veb);
+	}
+}
+
+void vevent_mgr_untrack_base(vevent_mgr_tp mgr, event_base_tp eb) {
+	if(eb != NULL) {
+		/* TODO can we avoid the hash? */
+		unsigned int key = adler32_hash((char*)eb);
+		hashtable_remove(mgr->base_conversion, key);
+	}
+}
+
+vevent_base_tp vevent_mgr_convert_base(vevent_mgr_tp mgr, event_base_tp eb) {
+	if(eb != NULL) {
+		/* TODO can we avoid the hash? */
+		unsigned int key = adler32_hash((char*)eb);
+		vevent_base_tp vbase = hashtable_get(mgr->base_conversion, key);
+		return vbase;
+	} else {
+		return NULL;
+	}
 }
