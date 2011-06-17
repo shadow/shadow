@@ -2,7 +2,6 @@
  * The Shadow Simulator
  *
  * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
- * Copyright (c) 2006-2009 Tyson Malchow <tyson.malchow@gmail.com>
  *
  * This file is part of Shadow.
  *
