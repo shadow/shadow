@@ -627,6 +627,7 @@ def run(args):
     if dstat_p is not None: dstat_p.kill()
 
     log(str(end) + " shadow returned " + str(retcode) + " in " + str(end-start) + " seconds")
+    return 0
 
 def auto(args):
     args.prefix = os.path.abspath(os.getenv("HOME") + "/.local/")
@@ -671,7 +672,7 @@ def dd(filename, kb):
 def log(msg):
     color_start_code = "\033[94m" # red: \033[91m"
     color_end_code = "\033[0m"
-    prefix = "[" + str(datetime.now()) + "] setup: "
+    prefix = "[" + str(datetime.now()) + "] scallion: "
     print >> sys.stderr, color_start_code + prefix + msg + color_end_code
 
 if __name__ == '__main__':
