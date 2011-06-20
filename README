@@ -14,18 +14,21 @@ The following are optional, but recommended, for building and running Shadow:
 
 II. Building Shadow
 ===================
-There are two ways to build shadow:
-  1. $ python shadowrunner.py build -rg
-  2. $ contrib/runbuild --rebuild --debug
-  
-The python script is the preferred method, and offers much greater flexibility
-over the build options and an extensive help menu:
+The setup.py script has an extensive help menu ($ python setup.py --help)
 
-$ python shadowrunner.py build -h
+By default, the following will build and install to /usr/local (and so requires root)
+$ python setup.py build
+$ python setup.py install
 
-Both methods should be run from the Shadow base directory. All build output is 
-generated out-of-source, by default to the ./build directory (although this 
-location can be modified with the shadowrunner.py script). Both methods are
+-or-
+
+The following will build and install to ~/.local (no root required)
+$ python setup.py auto
+
+If using the second option, make sure ~/.local/bin is in your PATH.
+
+All build output is generated out-of-source, by default to the ./build directory (although this 
+location can be modified with the setup.py script). Both methods are
 wrappers to cmake and make for building Shadow. Using cmake and make directly
 is also possible, but strongly discouraged.
 
@@ -33,24 +36,23 @@ III. Running Shadow
 ===================
 There are multiple ways to run Shadow.
 
-A. Using shadowrunner.py
+A. Using installed shadow script
 ------------------------
-The shadowrunner.py script is simply a wrapper around to assist in running the
-Shadow binary. The shadowrunner.py script has several built-in modules that can 
-be autorun. Use
+Installing shadow installs a script called "shadow", a wrapper to assist in running the
+Shadow binary. The shadow script has several built-in plug-ins that can run automatically:
 
-$ python shadowrunner.py autorun -h
+$ shadow autorun --help
 
-to get usage and help regarding running the built-in modules. Most of the options
-can be left as default, and you need only specify which built-in module example
+to get usage and help regarding running the built-in plug-ins. Most of the options
+can be left as default, and you need only specify which plug-in example
 you want to run, e.g.
 
-$ python shadowrunner.py autorun --echo
+$ shadow autorun --echo-eth
 
-When developing custom modules, you may also run your module with shadowrunner.py
+When developing custom plug-ins, you may also run your plug-in with the shadow script
 by using the 'run' command. Again, use
 
-$ python shadowrunner.py run -h
+$ shadow run --help
 
 for usage and help. When running a custom module, a dsim file describing the
 experiment must be provided. Examples of dsim files can be found in mode 
@@ -59,42 +61,9 @@ src/module/* directories. Also see doc/ for the dsim API.
 B. Running the shadow binary directly
 -------------------------------------
 You may also invoke the binary directly without the use of the
-python shadowruner.py script. Get usage information from Shadow with:
+python script. Get usage information from Shadow with:
 
-$ path/to/shadow -h
+$ shadow-bin --help
 
-By default, Shadow project executable are placed in build/bin/ and libraries are
-placed in build/lib/. The shadow binary also requires a dsim file.
-
-IV. Scallion
-============
-Scallion is a special plugin for shadow that allows shadow to run the Tor
-(torproject.org) software. There are several modifications to Tor that must be
-made to allow this to happen. Those modifications are stored on a branch of a 
-clone of the Tor git master repository. This way, patches can be created for
-any version of Tor by merging new changes into the local scallion branch. Our
-current approach is to create patches from a diff of archived Tor releases and
-our scallion branch, so that others can simply download the correct release,
-apply our patch, and run scallion in shadow.
-
-Scallion also requires some other libs to be locally installed, like libevent
-and openssl. Of course, the shadowrunner.py script will handle all of the dirty 
-work for you. However, patches must be created and their paths are currently 
-hard-coded. To create a patch, first export the scallion branch from git with 
-something like:
-
-$ git archive --prefix=tor-0.2.2.15-alpha-scallion/ scallion | gzip > tor-0.2.2.15-alpha-scallion.tar.gz
-
-Then download the tor-0.2.2.15-alpha.tar.gz release from archive.torproject.org,
-extract both tar files, and create the patch:
-
-$ diff -Naur tor-0.2.2.15-alpha tor-0.2.2.15-alpha-scallion > tor-0.2.2.15-alpha.scallion.patch
-
-Place the patch in contrib/patches. Note - you may want to remove the 'doc' and
-and the 'WIN32Build' directories from the extracted trees in order to reduce the
-size of the created patch file. If needed, the shadowrunner.py script will 
-automatically download the correct version of Tor apply the patch:
-
-$ patch -Np1 --batch -i path/to/tor-0.2.2.15-alpha.scallion.patch
-
-TODO: enable multiple versions of tor/scallion to be built and run.
+The shadow binary also requires a dsim file. If possible, it is strongly recommended to
+use the python script.

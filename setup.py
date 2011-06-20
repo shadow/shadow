@@ -27,7 +27,7 @@ from datetime import datetime
 BUILD_PREFIX="build"
 INSTALL_PREFIX="/usr/local"
 
-RESOURCES_URL="http://shadow.cs.umn.edu/shadow-resources.tar.gz"
+RESOURCES_URL="http://shadow.cs.umn.edu/downloads/shadow-resources.tar.gz"
 
 def main():
     parser_main = argparse.ArgumentParser(description='Utility to help setup the shadow simulator', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
