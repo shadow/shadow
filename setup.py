@@ -28,7 +28,7 @@ BUILD_PREFIX="build"
 INSTALL_PREFIX="/usr/local"
 
 TOR_URL="https://archive.torproject.org/tor-package-archive/tor-0.2.2.15-alpha.tar.gz"
-TOR_PATCH_URL="http://shadow.cs.umn.edu/tor-0.2.2.15-alpha.scallion.patch.gz"
+TOR_PATCH_URL="http://shadow.cs.umn.edu/downloads/tor-0.2.2.15-alpha.scallion.patch.gz"
 MAXMIND_URL="http://geolite.maxmind.com/download/geoip/database/GeoLiteCity.dat.gz"
 
 def main():

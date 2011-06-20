@@ -204,7 +204,7 @@ on(time 0:02){\n\
 \tmidbw_cdf = generate_cdf(10240, 0, 0);\n\
 \tslowupbw_cdf = generate_cdf(1024, 0, 0);\n\
 \tslowdownbw_cdf = generate_cdf(3584, 0, 0);\n\
-\tnormbw_cdf = load_cdf(\"" + args.cdfs + "/synthetic_bandwidth_KiBps.cdf\");\n\
+\tnormbw_cdf = load_cdf(\"" + args.cdfs + "/umn/synthetic_bandwidth_KiBps.cdf\");\n\
 \n\
 \tfs_hostname = create_hostname(\"fileserver.shd\");\n\
 \tauthority_hostname = create_hostname(\"4uthority.scallion.shd\");\n\
@@ -214,13 +214,13 @@ on(time 0:02){\n\
 \n\
 \tlatency_cdf = generate_cdf(100, 0, 0);\n\
 \n\
-\tcpu_cdf = load_cdf(\"" + args.cdfs + "/synthetic_cpu_speed_arcachon_Bps.cdf\");")
+\tcpu_cdf = load_cdf(\"" + args.cdfs + "/umn/synthetic_cpu_speed_arcachon_Bps.cdf\");")
 
         self.out("}\n\non(time 0:03){")
         # get all latency cdfs
         for region1 in self.cp.sg.shadowregions:
             for region2 in self.cp.sg.shadowregions:
-                self.out("\t" + region1.name + "_to_" + region2.name + "_latency_cdf = load_cdf(\"" + args.cdfs + "/plab_latency/" + region1.name + "_to_" + region2.name + ".cdf\");")
+                self.out("\t" + region1.name + "_to_" + region2.name + "_latency_cdf = load_cdf(\"" + args.cdfs + "/umn/plab_latency/" + region1.name + "_to_" + region2.name + ".cdf\");")
         
         self.out("}\n\non(time 0:04){")
 
@@ -331,7 +331,7 @@ on(time 0:02){\n\
         each_bulk = int(args.nbulk / 30)
         remain_bulk = int(args.nbulk % 30)
 
-        WEB=" multi " + args.run + "/web.spec localhost 9000 " + args.cdfs + "/think_times_ms.cdf -1"
+        WEB=" multi " + args.run + "/web.spec localhost 9000 " + args.cdfs + "/unc/think_times_ms.cdf -1"
         BULK=" multi " + args.run + "/bulk.spec localhost 9000 none -1"
 
         for i in xrange(1200, 1500, 10):
