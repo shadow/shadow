@@ -48,3 +48,9 @@ python setup.py auto
 
 wget scallion-1.0.0
 python setup.py auto
+
+
+==================
+Developer's Notes:
+==================
+If you want to be able to run scallion through valgrind, you should configure openssl with the additional option: "-DPURIFY". This fixes openssl so it doesn't break valgrind.
