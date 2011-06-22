@@ -2,7 +2,7 @@
 ## (c)2009 DVN Tyson Malchow tyson.malchow@gmail.com
 
 project(shadow C)
-cmake_minimum_required(VERSION 2.6 FATAL_ERROR)
+cmake_minimum_required(VERSION 2.8 FATAL_ERROR)
 
 ## set paths and build parameters
 set(VERSION_MAJOR 1)
@@ -125,3 +125,6 @@ install(EXPORT shadow-externals DESTINATION share/shadow)
 install(DIRECTORY ${CMAKE_BUILD_PREFIX}/../shadow-resources/
     DESTINATION share/shadow/resources
     PATTERN "${CMAKE_BUILD_PREFIX}/../shadow-resources/*")
+
+## do CPack stuff
+add_subdirectory(${CMAKE_SOURCE_DIR}/cpack/)
