@@ -70,7 +70,7 @@ void rc_release(rc_object_tp rc_object) {
 			memset(rc_object, 0, sizeof(rc_object_t));
 
 			/* make sure future uses of this object will explode */
-			rc_object->reference_count = -666;
+			rc_object->reference_count = -66;
 			free(rc_object);
 		}
 	}
