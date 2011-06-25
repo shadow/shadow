@@ -279,7 +279,6 @@ enum vt_prc_result vtcp_process_item(vtransport_item_tp titem) {
 	}
 
 	rc_vpacket_pod_retain_stack(titem->rc_packet);
-	rc_set(titem->rc_packet);
 
 	vpacket_mgr_lockcontrol(titem->rc_packet, LC_OP_READUNLOCK | LC_TARGET_PACKET);
 
@@ -308,7 +307,6 @@ enum vt_prc_result vtcp_process_item(vtransport_item_tp titem) {
 
 done:
 	rc_vpacket_pod_release_stack(titem->rc_packet);
-	rc_unset(titem->rc_packet);
 
 ret:
 	return prc_result;

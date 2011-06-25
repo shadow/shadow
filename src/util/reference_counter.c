@@ -23,20 +23,30 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "global.h"
 #include "reference_counter.h"
+
+static void rc_assert_bounds(int count) {
+	/* if the count is out of bounds, its definitely an error. complain and die. */
+	if(count < 0 || count > 100) {
+		printfault(EXIT_UNKNOWN, "FATAL: rc_assert_bounds: reference count out of bounds\n");
+	}
+}
 
 rc_object_tp rc_create(void* data, rc_object_destructor_fp destructor) {
 	rc_object_tp rc_object = malloc(sizeof(rc_object_t));
 	rc_object->data = data;
 	rc_object->destructor = destructor;
 	rc_object->reference_count = 1;
-	rc_object->isSet = 0;
 	return rc_object;
 }
 
 void* rc_get(rc_object_tp rc_object) {
-	if(rc_object != NULL && rc_object->reference_count > 0) {
-		return rc_object->data;
+	if(rc_object != NULL) {
+		rc_assert_bounds(rc_object->reference_count);
+		if(rc_object->reference_count > 0) {
+			return rc_object->data;
+		}
 	}
 	return NULL;
 }
@@ -44,31 +54,24 @@ void* rc_get(rc_object_tp rc_object) {
 void rc_retain(rc_object_tp rc_object) {
 	if(rc_object != NULL) {
 		rc_object->reference_count++;
+		rc_assert_bounds(rc_object->reference_count);
 	}
 }
 
 void rc_release(rc_object_tp rc_object) {
-	if(rc_object != NULL && --rc_object->reference_count == 0) {
-		int breakpoint = 0;
-		if(rc_object->isSet) {
-			breakpoint++;
-		}
-		if(rc_object->destructor != NULL) {
-			(*rc_object->destructor)(rc_object->data);
-		}
-		memset(rc_object, 0, sizeof(rc_object_t));
-		free(rc_object);
-	}
-}
+	if(rc_object != NULL){
+		(rc_object->reference_count)--;
+		rc_assert_bounds(rc_object->reference_count);
 
-void rc_set(rc_object_tp rc_object) {
-	if(rc_object != NULL) {
-		rc_object->isSet = 1;
-	}
-}
+		if(rc_object->reference_count == 0) {
+			if(rc_object->destructor != NULL) {
+				(*rc_object->destructor)(rc_object->data);
+			}
+			memset(rc_object, 0, sizeof(rc_object_t));
 
-void rc_unset(rc_object_tp rc_object) {
-	if(rc_object != NULL) {
-		rc_object->isSet = 0;
+			/* make sure future uses of this object will explode */
+			rc_object->reference_count = -666;
+			free(rc_object);
+		}
 	}
 }
