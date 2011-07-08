@@ -7,9 +7,11 @@ The following are required to properly build and run Shadow:
   - cmake >= 2.6
   - flex
   - bison
+  - openssl
+  - libevent >= 2.0.10
   
-The following are optional, but recommended, for building and running Shadow:
-  - python >= 2.7.1
+The following are optional, but HIGHLY recommended, for building and running Shadow:
+  - python = 2.7.1
 
 
 II. Building Shadow
