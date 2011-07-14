@@ -295,11 +295,13 @@ enum vt_prc_result vtcp_process_item(vtransport_item_tp titem) {
 		prc_result |= vtcp_process_data(target, titem->rc_packet);
 	}
 
-	debugf("vtcp_process_item: socket %i cngthresh=%u, cngwnd=%u, snduna=%u, sndnxt=%u, sndwnd=%u, rcvnxt=%u, rcvwnd=%u\n",
-			target->sock_desc,
-			target->vt->vtcp->cng_threshold, target->vt->vtcp->cng_wnd,
-			target->vt->vtcp->snd_una, target->vt->vtcp->snd_nxt, target->vt->vtcp->snd_wnd,
-			target->vt->vtcp->rcv_nxt, target->vt->vtcp->rcv_wnd);
+	if(target != NULL && target->vt != NULL && target->vt->vtcp != NULL) {
+		debugf("vtcp_process_item: socket %i cngthresh=%u, cngwnd=%u, snduna=%u, sndnxt=%u, sndwnd=%u, rcvnxt=%u, rcvwnd=%u\n",
+				target->sock_desc,
+				target->vt->vtcp->cng_threshold, target->vt->vtcp->cng_wnd,
+				target->vt->vtcp->snd_una, target->vt->vtcp->snd_nxt, target->vt->vtcp->snd_wnd,
+				target->vt->vtcp->rcv_nxt, target->vt->vtcp->rcv_wnd);
+	}
 
 	if(prc_result & VT_PRC_DESTROY) {
 		vsocket_mgr_destroy_and_remove_socket(target->vt->vtcp->vsocket_mgr, target);
