@@ -1,58 +1,55 @@
-TODO
+Scallion plug-in for Shadow (c) 2011 Rob Jansen jansen@cs.umn.edu
 
-Dependencies:
-Cmake >= 2.6
-Flex
-Bison
-Python2.7
-pygeoip >= 0.1.6
+======================
+0. Quickstart (Install to ~/.local)
+======================
+(replace "rob" with your username)
 
-=============================
-STANDARD INSTALL quickstart (requires root priveledges):
- -install to /usr/local
-=============================
-wget http://www.openssl.org/source/openssl-1.0.0d.tar.gz
-./config -fPIC shared
-make
-sudo make install
+Download and install shadow and its dependencies following the Quickstart in the shadow README.
 
-wget http://monkey.org/~provos/libevent-2.0.11-stable.tar.gz
-./configure CFLAGS="-fPIC"
-make
-sudo make install
+X, Y, and Z are version numbers:
+$ wget http://shadow.cs.umn.edu/downloads/shadow-scallion-vX.Y.Z.tar.gz
+$ tar xvzf shadow-scallion-vX.Y.Z.tar.gz
+$ cd shadow-scallion-vX.Y.Z
+$ python setup.py auto
 
-wget shadow-1.0.0
-python setup.py build
-sudo python setup.py install
+======================
+I. Scallion dependencies
+======================
+The following are required to properly build and run Scallion:
+  - Shadow, and its dependencies
 
-wget scallion-1.0.0
-python setup.py build
-sudo python setup.py install
+======================
+II. Building Scallion
+======================
+The setup.py script has an extensive help menu ($ python setup.py --help)
 
-=============================
-LOCAL INSTALL quickstart (replace "rob" with your username):
- -install to ~/.local
-=============================
-wget http://www.openssl.org/source/openssl-1.0.0d.tar.gz
-./config --prefix=/home/rob/.local -fPIC shared
-make
-make install
+The following will build and install to ~/.local (no root required)
+Please make sure ~/.local/bin is in your PATH.
+$ python setup.py auto
 
-wget http://monkey.org/~provos/libevent-2.0.11-stable.tar.gz
-./configure --prefix=/home/rob/.local CFLAGS="-fPIC -I/home/rob/.local" LDFLAGS="-L/home/rob/.local"
-make
-make install
+-or-
 
-wget shadow-1.0.0
-python setup.py auto
+By default, the following will build and install to /usr/local (and so requires root)
+$ python setup.py build
+$ python setup.py install
 
-wget scallion-1.0.0
-python setup.py auto
+All build output is generated out-of-source, by default to the ./build directory (although this 
+location can be modified with the setup.py script). Both methods are
+wrappers to cmake and make for building Shadow. Using cmake and make directly
+is also possible, but strongly discouraged.
 
+======================
+III. Running Scallion
+======================
+Installing scallion installs a script called "scallion", a wrapper to assist in 
+generating Tor topolgies and running experiments. To get started:
 
-==================
-Developer's Notes:
-==================
+$ scallion --help
+
+======================
+IV. Developer's Notes:
+======================
 If you want to be able to run scallion through valgrind, you should configure openssl 
 with the additional option: "-DPURIFY". This fixes openssl so it doesn't break valgrind.
 
@@ -85,5 +82,3 @@ size of the created patch file. If needed, the shadowrunner.py script will
 automatically download the correct version of Tor apply the patch:
 
 $ patch -Np1 --batch -i path/to/tor-0.2.2.15-alpha.scallion.patch
-
-TODO: enable multiple versions of tor/scallion to be built and run.
