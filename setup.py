@@ -27,7 +27,9 @@ from datetime import datetime
 BUILD_PREFIX="build"
 INSTALL_PREFIX="/usr/local"
 
-TOR_URL="https://archive.torproject.org/tor-package-archive/tor-0.2.2.15-alpha.tar.gz"
+TOR_VERSION="0.2.2.15"
+
+TOR_URL="https://archive.torproject.org/tor-package-archive/tor-" + TOR_VERSION + "-alpha.tar.gz"
 TOR_PATCH_URL="http://shadow.cs.umn.edu/downloads/tor-0.2.2.15-alpha.scallion.patch.gz"
 MAXMIND_URL="http://geolite.maxmind.com/download/geoip/database/GeoLiteCity.dat.gz"
 
@@ -176,13 +178,15 @@ def setup_tor(args):
     build = "make"
     retcode = 0
 
+    convert = "echo DO NOTHING"
+
     # if we already built successfully, dont patch or re-configure
     if os.path.exists(args.tordir):
         os.chdir(args.tordir)
         if not os.path.exists(args.tordir+"/src/or/tor"):
             
             # patch then configure first
-            cflags = "-fPIC"
+            cflags = "-fPIC -fno-inline"
             if args.extra_includes is not None:
                 for i in args.extra_includes: cflags += " -I" + i.strip()
             
@@ -190,9 +194,13 @@ def setup_tor(args):
             if args.extra_libraries is not None:
                 for l in args.extra_libraries: ldflags += " -L" + l.strip()
         
-            patch = "patch -Np1 --batch -i " + args.patchfile
+            #patch = "patch -Np1 --batch -i " + args.patchfile
+            patch = "echo PATCHING TURNED OFF"
             gen = "./autogen.sh"
+            #gen = "aclocal && autoheader && autoconf && automake --add-missing --copy"
+            convert = "./static_symbol_converter.py"
             configure = "./configure --disable-static-vars --disable-transparent --disable-threads --disable-asciidoc CFLAGS=\"" + cflags + "\" LDFLAGS=\"" + ldflags + "\" LIBS=-lrt"
+            #configure = "./configure --disable-transparent --disable-threads --disable-asciidoc CFLAGS=\"" + cflags + "\" LDFLAGS=\"" + ldflags + "\" LIBS=-lrt"
             if args.prefix_libevent is not None: configure += " --with-libevent-dir=" + os.path.abspath(args.prefix_libevent)
             if args.prefix_openssl is not None: configure += " --with-openssl-dir=" + os.path.abspath(args.prefix_openssl)
             
@@ -203,9 +211,13 @@ def setup_tor(args):
                 
             if retcode == 0:
                 # generate configure
-                os.chmod("autogen.sh", stat.S_IREAD|stat.S_IEXEC);
                 log(args, gen)
-                retcode = subprocess.call(shlex.split(gen), stdout=outfile)
+                #os.chmod("autogen.sh", stat.S_IREAD|stat.S_IEXEC);
+                #retcode = subprocess.call(shlex.split(gen), stdout=outfile)
+                retcode = retcode or subprocess.call(shlex.split("aclocal"), stdout=outfile)
+                retcode = retcode or subprocess.call(shlex.split("autoheader"), stdout=outfile)
+                retcode = retcode or subprocess.call(shlex.split("autoconf"), stdout=outfile)
+                retcode = retcode or subprocess.call(shlex.split("automake --add-missing --copy"), stdout=outfile)
             
             if retcode == 0:
                 # configure
@@ -218,11 +230,25 @@ def setup_tor(args):
             log(args, build)
             retcode = subprocess.call(shlex.split(build), stdout=outfile)
     
+        os.chdir(rundir + "/../")
+
+        if retcode == 0:
+            log(args, convert)
+            retcode = subprocess.call(shlex.split(convert), stdout=outfile)
+
+
+        os.chdir(args.tordir)
+
+        if retcode == 0:
+            # build
+            log(args, build)
+            retcode = subprocess.call(shlex.split(build), stdout=outfile)
+
         os.chdir(rundir)
         
         # if we had a failure, start over with patching
         if retcode != 0:
-            shutil.rmtree(args.tordir)
+            #shutil.rmtree(args.tordir)
             return -1
     
     return retcode

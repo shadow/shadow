@@ -200,8 +200,19 @@ static int vtor_do_main_loop(void)
 
   /* Set up our buckets */
   connection_bucket_init();
-  stats_prev_global_read_bucket = global_read_bucket;
-  stats_prev_global_write_bucket = global_write_bucket;
+  int *to, *from;
+
+  to = (int *)&stats_prev_global_read_bucket;
+  from = (int *)&global_read_bucket;
+  *to = *from;
+
+  to = (int *)&stats_prev_global_write_bucket;
+  from = (int *)&global_write_bucket;
+  *to = *from;
+  //stats_prev_global_read_bucket = global_read_bucket;
+  //stats_prev_global_write_bucket = global_write_bucket;
+  //memcpy(stats_prev_global_read_bucket, global_read_bucket, sizeof(stats_prev_global_read_bucket));
+  //memcpy(stats_prev_global_write_bucket, global_write_bucket, sizeof(stats_prev_global_write_bucket));
 
   /* initialize the bootstrap status events to know we're starting up */
   control_event_bootstrap(BOOTSTRAP_STATUS_STARTING, 0);
@@ -232,17 +243,18 @@ static int vtor_do_main_loop(void)
     cpu_init();
   }
 
+  periodic_timer_t **timer = (periodic_timer_t **)&second_timer;
   /* set up once-a-second callback. */
-  if (! second_timer) {
+  if (*timer == NULL) {
     struct timeval one_second;
     one_second.tv_sec = 1;
     one_second.tv_usec = 0;
 
-    second_timer = periodic_timer_new(tor_libevent_get_base(),
+    *timer = periodic_timer_new(tor_libevent_get_base(),
                                       &one_second,
                                       second_elapsed_callback,
                                       NULL);
-    tor_assert(second_timer);
+    tor_assert(*timer);
   }
 
 //  for (;;) {
@@ -305,21 +317,23 @@ void vtor_socket_writable(vtor_tp vtor, int sockd) {
 void vtor_loopexit_cb(int unused1, void* unused2) {
 	update_approx_time(time(NULL));
 
+    smartlist_t** list = (smartlist_t **)&active_linked_connection_lst;
     /* All active linked conns should get their read events activated. */
-    SMARTLIST_FOREACH(active_linked_connection_lst, connection_t *, conn,
+    SMARTLIST_FOREACH(*list, connection_t *, conn,
     		event_active(conn->read_event, EV_READ, 1));
 
-    called_loop_once = smartlist_len(active_linked_connection_lst) ? 1 : 0;
+    int *called = (int *)&called_loop_once;
+    *called = smartlist_len(*list) ? 1 : 0;
 
     /* check for remaining active connections */
-    if(called_loop_once) {
+    if(*called) {
     	/* call back so we can check the linked conns again */
     	snri_timer_create(10, &vtor_loopexit_cb, NULL);
     }
 }
 
 extern void socket_accounting_lock();
-extern int n_sockets_open;
+//extern int n_sockets_open;
 extern void socket_accounting_unlock();
 
 int intercept_tor_open_socket(int domain, int type, int protocol)
@@ -327,7 +341,8 @@ int intercept_tor_open_socket(int domain, int type, int protocol)
   int s = socket(domain, type | SOCK_NONBLOCK, protocol);
   if (s >= 0) {
     socket_accounting_lock();
-    ++n_sockets_open;
+    int *open = (int *)&n_sockets_open;
+    *open = *open + 1;
 //    mark_socket_open(s);
     socket_accounting_unlock();
   }
