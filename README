@@ -95,3 +95,44 @@ $ shadow-bin --help
 
 The shadow binary also requires a dsim file. If possible, it is strongly recommended to
 use the python script.
+
+======================
+IV. Developer's Notes:
+======================
+
+A. Debugging
+------------
+To add extra debugging information and messages, add the -g flag when building
+shadow. See the help menu with $ python setup.py --help.
+
+If you want to be able to run shadow through valgrind, you should configure 
+openssl with the additional option: "-DPURIFY". This fixes openssl so it 
+doesn't break valgrind, but will likely only cause problems if the application
+you are running in shadow actually uses OpenSSL.
+
+B. System Limits
+----------------
+There are some default system limits you'll want to be aware of. One is a limit
+on the number of message queues and total bytes in them. Shadow will use a
+message queue for each process, meaning it will use X=2 message queues by default,
+and more if you try to run with multiple workers (not currently recommended). 
+
+See: 
+$ man mq_overview
+$ ulimit -q
+$ cat /proc/sys/fs/mqueue/queues_max
+
+There is also a limit on the number of open files. If each node in your shadow
+application opens many descriptors, you'll likely want to increase the limit so
+you application doesn't start getting errors when calling open().
+
+See:
+$ ulimit -n
+$ cat /proc/sys/fs/file-nr
+
+Limits can be raised by modifying /etc/security/limits.conf and rebooting.
+For example:
+* soft msgqueue 8192000
+* soft msgqueue 8192000
+* soft nofile 10000
+* hard nofile 10000
