@@ -50,10 +50,11 @@ $ scallion --help
 ======================
 IV. Developer's Notes:
 ======================
-If you want to be able to run scallion through valgrind, you should configure openssl 
-with the additional option: "-DPURIFY". This fixes openssl so it doesn't break valgrind.
+!!!IMPORTANT!!!
+These are old notes. We no longer require patches as everything is
+handled by our python installer scripts. Notes are left here for historical
+reasons.
 
-Scallion
 Scallion is a special plugin for shadow that allows shadow to run the Tor
 (torproject.org) software. There are several modifications to Tor that must be
 made to allow this to happen. Those modifications are stored on a branch of a 
@@ -78,7 +79,7 @@ $ diff -Naur tor-0.2.2.15-alpha tor-0.2.2.15-alpha-scallion > tor-0.2.2.15-alpha
 
 Place the patch in contrib/patches. Note - you may want to remove the 'doc' and
 and the 'WIN32Build' directories from the extracted trees in order to reduce the
-size of the created patch file. If needed, the shadowrunner.py script will 
+size of the created patch file. If needed, the setup.py script will 
 automatically download the correct version of Tor apply the patch:
 
 $ patch -Np1 --batch -i path/to/tor-0.2.2.15-alpha.scallion.patch
