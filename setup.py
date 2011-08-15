@@ -27,10 +27,9 @@ from datetime import datetime
 BUILD_PREFIX="build"
 INSTALL_PREFIX="/usr/local"
 
-TOR_VERSION="0.2.2.15"
+DEFAULT_TOR_VERSION="0.2.2.15-alpha"
 
-TOR_URL="https://archive.torproject.org/tor-package-archive/tor-" + TOR_VERSION + "-alpha.tar.gz"
-TOR_PATCH_URL="http://shadow.cs.umn.edu/downloads/tor-0.2.2.15-alpha.scallion.patch.gz"
+TOR_URL="https://archive.torproject.org/tor-package-archive/tor-" + DEFAULT_TOR_VERSION + ".tar.gz"
 MAXMIND_URL="http://geolite.maxmind.com/download/geoip/database/GeoLiteCity.dat.gz"
 
 def main():
@@ -70,6 +69,8 @@ def main():
           help="install to PATH using libevent and openssl from PATH.", metavar="PATH", default=default_prefix)
     parser_auto.add_argument('-g', '--debug', action="store_true", dest="do_debug",
           help="turn on debugging for verbose program output", default=False)
+    parser_auto.add_argument('-v', '--version', action="store", dest="tor_version",
+          help="specifiy what version of Tor to build with", default=DEFAULT_TOR_VERSION)
     
     # get arguments, accessible with args.value
     args = parser_main.parse_args()
@@ -150,6 +151,13 @@ def install(args):
         log(args, "ERROR: please build before installing!")
         return
 
+    # patching CMakeFile.txt to look into correct tor directory
+    cmake_file = open("CMakeLists.txt.new","w")
+    patch_cmd = "sed 's/build\/tor-.*\/src/build\/tor-" + args.tor_version + "\/src/g' CMakeLists.txt"
+    retcode = subprocess.call(shlex.split(patch_cmd), stdout=cmake_file)
+    shutil.move(cmake_file.name, "CMakesList.txt")
+    cmake_file.close()
+
     # go to build dir and install from makefile
     rundir = os.getcwd()
     os.chdir(builddir+"/scallion")
@@ -169,22 +177,24 @@ def auto(args):
     args.prefix_openssl = args.prefix
     args.extra_includes = [os.path.abspath(args.prefix + "/include")]
     args.extra_libraries = [os.path.abspath(args.prefix + "/lib")]
+    args.tor_url = TOR_URL.replace(DEFAULT_TOR_VERSION, args.tor_version)
     if build(args) == 0: install(args)
     
 def setup_tor(args):
     rundir = os.getcwd()
     outfile = get_outfile(args)
 
-    build = "make"
+    build = "make clean && make"
     retcode = 0
 
-    convert = "echo DO NOTHING"
+    # Copy patch and static symbol converter scripts to the build directory
+    shutil.copy("../contrib/static_symbol_converter.py", args.tordir)
+    shutil.copy("../contrib/patch.sh", args.tordir)
 
     # if we already built successfully, dont patch or re-configure
     if os.path.exists(args.tordir):
         os.chdir(args.tordir)
         if not os.path.exists(args.tordir+"/src/or/tor"):
-            
             # patch then configure first
             cflags = "-fPIC -fno-inline"
             if args.extra_includes is not None:
@@ -194,13 +204,10 @@ def setup_tor(args):
             if args.extra_libraries is not None:
                 for l in args.extra_libraries: ldflags += " -L" + l.strip()
         
-            #patch = "patch -Np1 --batch -i " + args.patchfile
-            patch = "echo PATCHING TURNED OFF"
-            gen = "./autogen.sh"
-            #gen = "aclocal && autoheader && autoconf && automake --add-missing --copy"
-            convert = "./static_symbol_converter.py"
-            configure = "./configure --disable-static-vars --disable-transparent --disable-threads --disable-asciidoc CFLAGS=\"" + cflags + "\" LDFLAGS=\"" + ldflags + "\" LIBS=-lrt"
-            #configure = "./configure --disable-transparent --disable-threads --disable-asciidoc CFLAGS=\"" + cflags + "\" LDFLAGS=\"" + ldflags + "\" LIBS=-lrt"
+            patch = "./patch.sh"
+            gen = "aclocal && autoheader && autoconf && automake --add-missing --copy"
+            configure = "./configure --disable-transparent --disable-threads --disable-asciidoc CFLAGS=\"" + cflags + "\" LDFLAGS=\"" + ldflags + "\" LIBS=-lrt"
+
             if args.prefix_libevent is not None: configure += " --with-libevent-dir=" + os.path.abspath(args.prefix_libevent)
             if args.prefix_openssl is not None: configure += " --with-openssl-dir=" + os.path.abspath(args.prefix_openssl)
             
@@ -208,16 +215,12 @@ def setup_tor(args):
                 #patch
                 log(args, patch)
                 retcode = subprocess.call(shlex.split(patch), stdout=outfile)
-                
+
             if retcode == 0:
                 # generate configure
                 log(args, gen)
-                #os.chmod("autogen.sh", stat.S_IREAD|stat.S_IEXEC);
-                #retcode = subprocess.call(shlex.split(gen), stdout=outfile)
-                retcode = retcode or subprocess.call(shlex.split("aclocal"), stdout=outfile)
-                retcode = retcode or subprocess.call(shlex.split("autoheader"), stdout=outfile)
-                retcode = retcode or subprocess.call(shlex.split("autoconf"), stdout=outfile)
-                retcode = retcode or subprocess.call(shlex.split("automake --add-missing --copy"), stdout=outfile)
+                for cmd in gen.split('&&'):
+                    retcode = retcode | subprocess.call(shlex.split(cmd.strip()), stdout=outfile)
             
             if retcode == 0:
                 # configure
@@ -228,21 +231,17 @@ def setup_tor(args):
         if retcode == 0:
             # build
             log(args, build)
-            retcode = subprocess.call(shlex.split(build), stdout=outfile)
+            for cmd in build.split('&&'):
+                retcode = retcode | subprocess.call(shlex.split(cmd.strip()), stdout=outfile)
     
-        os.chdir(rundir + "/../")
-
+        convert = "./static_symbol_converter.py " + args.tor_version
         if retcode == 0:
             log(args, convert)
             retcode = subprocess.call(shlex.split(convert), stdout=outfile)
 
-
-        os.chdir(args.tordir)
-
         if retcode == 0:
             # build
-            log(args, build)
-            retcode = subprocess.call(shlex.split(build), stdout=outfile)
+            retcode = subprocess.call(shlex.split("make"), stdout=outfile)
 
         os.chdir(rundir)
         
@@ -265,17 +264,15 @@ def setup_dependencies(args):
     
     log(args, "checking tor dependencies...")
     
-    args.target_tor = os.path.abspath(os.path.basename(TOR_URL))
+    args.target_tor = os.path.abspath(os.path.basename(args.tor_url))
     args.tordir = args.target_tor[:args.target_tor.rindex(".tar.gz")]
-    args.target_tor_patch = os.path.abspath(os.path.basename(TOR_PATCH_URL))
-    args.patchfile = args.target_tor_patch[:args.target_tor_patch.rindex('.')]
-    
+
     if not os.path.exists(args.target_tor):
-        log(args, "downloading " + TOR_URL)
-        if download(TOR_URL, args.target_tor) != 0:
-            log(args, "failed to download " + TOR_URL)
+        log(args, "downloading " + args.tor_url)
+        if download(args.tor_url, args.target_tor) != 0:
+            log(args, "failed to download " + args.tor_url)
             return -1
-        
+    
     if not os.path.exists(args.tordir):
         if tarfile.is_tarfile(args.target_tor):
             tar = tarfile.open(args.target_tor, "r:gz")
@@ -283,20 +280,6 @@ def setup_dependencies(args):
             tar.close()
         else: return -1
 
-    if not os.path.exists(args.target_tor_patch):
-        log(args, "downloading " + TOR_PATCH_URL)
-        if download(TOR_PATCH_URL, args.target_tor_patch) != 0:
-            log(args, "failed to download " + TOR_PATCH_URL)
-            return -1
-    
-    # gunzip tor patch
-    if not os.path.exists(args.patchfile):
-        fin = gzip.open(args.target_tor_patch, 'r')
-        fout = open(args.patchfile, 'w')
-        fout.writelines(fin)
-        fout.close()
-        fin.close()
-    
     return 0
 
 def get_maxmind(args):
