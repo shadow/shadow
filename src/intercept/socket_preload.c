@@ -35,6 +35,7 @@
  * functions to be the same for all nodes.
  */
 typedef int (*accept_fp)(int, struct sockaddr*, socklen_t*);
+typedef int (*accept4_fp)(int, struct sockaddr*, socklen_t*, int);
 typedef int (*bind_fp)(int, const struct sockaddr*, socklen_t);
 typedef int (*close_fp)(int);
 typedef int (*connect_fp)(int, const struct sockaddr*, socklen_t);
@@ -57,6 +58,7 @@ typedef size_t (*write_fp)(int, const void*, int);
 
 /* save pointers to dvn libsocket functions */
 static accept_fp _vsocket_accept = NULL;
+static accept4_fp _vsocket_accept4 = NULL;
 static bind_fp _vsocket_bind = NULL;
 static close_fp _vsocket_close = NULL;
 static connect_fp _vsocket_connect = NULL;
@@ -79,6 +81,7 @@ static write_fp _vsocket_write = NULL;
 
 /* save pointers to needed system functions */
 static accept_fp _accept = NULL;
+static accept4_fp _accept4 = NULL;
 static bind_fp _bind = NULL;
 static close_fp _close = NULL;
 static connect_fp _connect = NULL;
@@ -324,6 +327,20 @@ int accept(int fd, __SOCKADDR_ARG  addr,socklen_t *__restrict addr_len)  {
 	if(fd < VNETWORK_MIN_SD){
 		fp_ptr = &_accept;
 		f_name = "accept";
+	}
+
+	PRELOAD_LOOKUP(fp_ptr, f_name, -1);
+	return (*fp_ptr)(fd, addr, addr_len);
+}
+
+int accept4(int fd, __SOCKADDR_ARG  addr,socklen_t *__restrict addr_len, int flags)  {
+	accept_fp* fp_ptr = &_vsocket_accept;
+	char* f_name = SOCKET_LIB_PREFIX "accept4";
+
+	/* should we be forwarding to the system call? */
+	if(fd < VNETWORK_MIN_SD){
+		fp_ptr = &_accept4;
+		f_name = "accept4";
 	}
 
 	PRELOAD_LOOKUP(fp_ptr, f_name, -1);

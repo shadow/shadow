@@ -68,6 +68,7 @@ char* vevent_get_event_type_string(vevent_mgr_tp mgr, short event_type);
 
 /* event2/event.h */
 event_base_tp vevent_event_base_new(vevent_mgr_tp mgr);
+event_base_tp vevent_event_base_new_with_config(vevent_mgr_tp mgr, const struct event_config *cfg);
 void vevent_event_base_free(vevent_mgr_tp mgr, event_base_tp eb);
 const char *vevent_event_base_get_method(vevent_mgr_tp mgr, const event_base_tp);
 void vevent_event_set_log_callback(vevent_mgr_tp mgr, event_log_cb cb);

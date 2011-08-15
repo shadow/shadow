@@ -40,6 +40,7 @@
  * functions to be the same for all nodes.
  */
 typedef struct event_base *(*event_base_new_fp)(void);
+typedef struct event_base *(*event_base_new_with_config_fp)(const struct event_config *);
 typedef void (*event_base_free_fp)(struct event_base *);
 typedef const char *(*event_base_get_method_fp)(const struct event_base *);
 typedef void (*event_set_log_callback_fp)(event_log_cb cb);
@@ -85,6 +86,7 @@ typedef int (*evdns_resolv_conf_parse_fp)(int flags, const char *const filename)
 
 /* save static pointers so we dont have to search on every call */
 static event_base_new_fp _event_base_new = NULL;
+static event_base_new_with_config_fp _event_base_new_with_config = NULL;
 static event_base_free_fp _event_base_free = NULL;
 static event_base_get_method_fp _event_base_get_method = NULL;
 static event_set_log_callback_fp _event_set_log_callback = NULL;
@@ -132,6 +134,13 @@ struct event_base *event_base_new(void) {
 	char* f_name = EVENT_LIB_PREFIX "event_base_new";
 	PRELOAD_LOOKUP(fp_ptr, f_name, NULL);
 	return (*fp_ptr)();
+}
+
+struct event_base *event_base_new_with_config(const struct event_config *cfg) {
+	event_base_new_with_config_fp* fp_ptr = &_event_base_new_with_config;
+	char* f_name = EVENT_LIB_PREFIX "event_base_new_with_config";
+	PRELOAD_LOOKUP(fp_ptr, f_name, NULL);
+	return (*fp_ptr)(cfg);
 }
 
 void event_base_free(struct event_base * eb) {
