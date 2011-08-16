@@ -3,8 +3,8 @@
 import os,sys,re,subprocess,shlex
 
 def main():
-    scallion_registration = open('src/scallion_registration.c', 'w')
-    tor_externs = open('src/tor_externs.h', 'w')
+    scallion_registration = open('../../src/scallion_registration.c', 'w')
+    tor_externs = open('../../src/tor_externs.h', 'w')
 
     create_scallion_registration(scallion_registration)
     tor_externs.write('#include "tor_includes.h"\n\n')
