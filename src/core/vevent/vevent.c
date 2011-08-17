@@ -476,6 +476,10 @@ event_base_tp vevent_event_base_new(vevent_mgr_tp mgr) {
 	}
 }
 
+event_base_tp vevent_event_base_new_with_config(vevent_mgr_tp mgr, const struct event_config *cfg) {
+        event_base_tp base = vevent_event_base_new(mgr);
+}
+
 void vevent_event_base_free(vevent_mgr_tp mgr, event_base_tp eb) {
 	if(mgr != NULL && mgr->event_bases != NULL) {
 		event_base_tp removed = list_remove(mgr->event_bases, eb, NULL);

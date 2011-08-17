@@ -49,6 +49,10 @@ struct event_base *intercept_event_base_new(void) {
 	return vevent_event_base_new(get_vevent_mgr());
 }
 
+struct event_base *intercept_event_base_new_with_config(const struct event_config *cfg) {
+        return vevent_event_base_new_with_config(get_vevent_mgr(), cfg);
+}
+
 void intercept_event_base_free(struct event_base * eb) {
 	vevent_event_base_free(get_vevent_mgr(), eb);
 }

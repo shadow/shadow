@@ -219,7 +219,7 @@ int vsocket_socket(vsocket_mgr_tp net, int domain, int type, int protocol) {
 	if(blocking) {
 		/* TODO do we require NONBLOCK be set immediately for us to support the socket?
 		 * pretty sure Tor uses come ctrl functions at times*/
-		dlogf(LOG_WARN, "vsocket_socket: trying to create blocking socket, we only support non-blocking (bitwise OR 'SOCK_NONBLOCK' with type)\n", type);
+		dlogf(LOG_WARN, "vsocket_socket: trying to create blocking socket, we only support non-blocking (bitwise OR 'SOCK_NONBLOCK' with type) [%i]\n", type);
 		errno = EPROTONOSUPPORT;
 		goto err;
 	}
@@ -265,7 +265,7 @@ int vsocket_socketpair(vsocket_mgr_tp net, int domain, int type, int protocol, i
 	if(blocking) {
 		/* TODO do we require NONBLOCK be set immediately for us to support the socket?
 		 * pretty sure Tor uses come ctrl functions at times*/
-		dlogf(LOG_WARN, "vsocket_socket: trying to create blocking socket, we only support non-blocking (bitwise OR 'SOCK_NONBLOCK' with type)\n", type);
+		dlogf(LOG_WARN, "vsocket_socket: trying to create blocking socket, we only support non-blocking (bitwise OR 'SOCK_NONBLOCK' with type) {%i}\n", type);
 		errno = EPROTONOSUPPORT;
 		return VSOCKET_ERROR;
 	}
