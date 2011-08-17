@@ -27,6 +27,10 @@ on(time 2:00) {
 # limited file clients n times
 	create_nodes(1, filegetter_vm, network, filegetter_hostname, fg_bandwidth_cdf, NULL, cpu_cdf,
 		"single fileserver.shd 8080 none 0 3 /filetransfer.dsim");
+		
+# download 2 (or 3) files, pause for 60 seconds, and repeat
+    create_nodes(1, filegetter_vm, network, filegetter_hostname, fg_bandwidth_cdf, NULL, cpu_cdf,
+        "double fileserver.shd 8080 none 0 /filetransfer.dsim /filetransfer.dsim none 60");
 
 # multi file client, no socks proxy and no service expiration
 	create_nodes(10, filegetter_vm, network, filegetter_hostname, fg_bandwidth_cdf, NULL, cpu_cdf,
