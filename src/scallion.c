@@ -94,7 +94,7 @@ static void scallion_start_socks_client(int timerid, void* arg) {
 	if(launch != NULL) {
 		int sockd = 0;
 
-		if(launch->is_single) {
+		if(launch->is_single == 1) {
 			service_filegetter_single_args_tp args = launch->service_filegetter_args;
 
 			service_filegetter_start_single(&scallion->sfg, args, &sockd);
@@ -105,6 +105,20 @@ static void scallion_start_socks_client(int timerid, void* arg) {
 			free(args->socks_proxy.port);
 			free(args->num_downloads);
 			free(args->filepath);
+			free(args);
+		} else if(launch->is_single == 2) {
+			service_filegetter_double_args_tp args = launch->service_filegetter_args;
+
+			service_filegetter_start_double(&scallion->sfg, args, &sockd);
+
+			free(args->http_server.host);
+			free(args->http_server.port);
+			free(args->socks_proxy.host);
+			free(args->socks_proxy.port);
+			free(args->filepath1);
+			free(args->filepath2);
+			free(args->filepath3);
+			free(args->pausetime_seconds);
 			free(args);
 		} else {
 			service_filegetter_multi_args_tp args = launch->service_filegetter_args;
@@ -282,6 +296,49 @@ void _plugin_instantiate(int argc, char* argv[]) {
 			args->hostbyname_cb = &plugin_filegetter_util_hostbyname_callback;
 
 			launch->is_single = 1;
+			launch->service_filegetter_args = args;
+		} else if(strncmp(argv[5], "double", 6) == 0 && argc == 14) {
+			service_filegetter_double_args_tp args = malloc(sizeof(service_filegetter_double_args_t));
+
+			size_t s;
+
+			s = strnlen(argv[6], 128)+1;
+			args->http_server.host = malloc(s);
+			snprintf(args->http_server.host, s, argv[6]);
+
+			s = strnlen(argv[7], 128)+1;
+			args->http_server.port = malloc(s);
+			snprintf(args->http_server.port, s, argv[7]);
+
+			s = strnlen(argv[8], 128)+1;
+			args->socks_proxy.host = malloc(s);
+			snprintf(args->socks_proxy.host, s, argv[8]);
+
+			s = strnlen(argv[9], 128)+1;
+			args->socks_proxy.port = malloc(s);
+			snprintf(args->socks_proxy.port, s, argv[9]);
+
+			s = strnlen(argv[10], 128)+1;
+			args->filepath1 = malloc(s);
+			snprintf(args->filepath1, s, argv[10]);
+
+			s = strnlen(argv[11], 128)+1;
+			args->filepath2 = malloc(s);
+			snprintf(args->filepath2, s, argv[11]);
+
+			s = strnlen(argv[12], 128)+1;
+			args->filepath3 = malloc(s);
+			snprintf(args->filepath3, s, argv[12]);
+
+			s = strnlen(argv[13], 128)+1;
+			args->pausetime_seconds = malloc(s);
+			snprintf(args->pausetime_seconds, s, argv[13]);
+
+			args->log_cb = &plugin_filegetter_util_log_callback;
+			args->hostbyname_cb = &plugin_filegetter_util_hostbyname_callback;
+			args->sleep_cb = &plugin_filegetter_util_sleep_callback;
+
+			launch->is_single = 2;
 			launch->service_filegetter_args = args;
 		} else {
 			snri_log(LOG_CRIT, usage);
