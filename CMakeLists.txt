@@ -73,6 +73,7 @@ find_package(DL REQUIRED)
 find_package(M REQUIRED)
 find_package(OPENSSL REQUIRED)
 find_package(EVENT2 REQUIRED)
+find_package(GLIB REQUIRED)
 find_package(TOR REQUIRED)
 find_package(SHADOW REQUIRED)
 
@@ -87,5 +88,5 @@ add_definitions(-Wall --std=c99 -fPIC -g -D_GNU_SOURCE)
 ## build source
 add_subdirectory(src)
 
-install(FILES build/tor-0.2.3.2-alpha/src/config/geoip build/50KiB.urnd build/320KiB.urnd build/1MiB.urnd build/5MiB.urnd build/GeoLiteCity.dat DESTINATION share/shadow/scallion)
+install(FILES build/tor-0.2.2.15-alpha/src/config/geoip build/50KiB.urnd build/320KiB.urnd build/1MiB.urnd build/5MiB.urnd build/GeoLiteCity.dat DESTINATION share/shadow/scallion)
 install(DIRECTORY config/ DESTINATION share/shadow/scallion PATTERN "config/*")
