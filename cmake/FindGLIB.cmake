@@ -24,7 +24,7 @@ find_library (GLIB_LIBRARIES glib-2.0
 ## -----------------------------------------------------------------------------
 ## Actions taken when all components have been found
 
-include_directories(/usr/include/glib-2.0 /usr/lib/glib-2.0/include /usr/lib64/glib-2.0/include/)
+include_directories(/usr/include/glib-2.0 /usr/lib/glib-2.0/include /usr/lib64/glib-2.0/include/ /usr/lib/x86_64-linux-gnu/glib-2.0/include/)
 
 if (GLIB_INCLUDES AND GLIB_LIBRARIES)
   set (HAVE_GLIB TRUE)
