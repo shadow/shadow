@@ -177,7 +177,7 @@ void vevent_mgr_print_all(vevent_mgr_tp mgr) {
 			event_base_tp eb = bases->data;
 			vevent_base_tp veb = vevent_mgr_convert_base(mgr, eb);
 
-			if(veb != NULLL) {
+			if(veb != NULL) {
 				debugf("======Printing all waiting registered events======\n");
 				g_hash_table_foreach(veb->sockets_by_sd, (GHFunc)vevent_mgr_print_all_cb, mgr);
 				debugf("======Done printing======\n");
@@ -206,7 +206,7 @@ void vevent_mgr_notify_signal_received(vevent_mgr_tp mgr, int signal) {
 void vevent_mgr_track_base(vevent_mgr_tp mgr, event_base_tp eb, vevent_base_tp veb) {
 	if(eb != NULL) {
 		/* TODO can we avoid the hash? */
-		unsigned int key = adler32_hash((char*)eb);
+		unsigned int key = g_direct_hash(eb);
 		g_hash_table_insert(mgr->base_conversion, int_key(key), veb);
 	}
 }
@@ -214,7 +214,7 @@ void vevent_mgr_track_base(vevent_mgr_tp mgr, event_base_tp eb, vevent_base_tp v
 void vevent_mgr_untrack_base(vevent_mgr_tp mgr, event_base_tp eb) {
 	if(eb != NULL) {
 		/* TODO can we avoid the hash? */
-		unsigned int key = adler32_hash((char*)eb);
+		unsigned int key = g_direct_hash(eb);
 		g_hash_table_remove(mgr->base_conversion, &key);
 	}
 }
@@ -222,7 +222,7 @@ void vevent_mgr_untrack_base(vevent_mgr_tp mgr, event_base_tp eb) {
 vevent_base_tp vevent_mgr_convert_base(vevent_mgr_tp mgr, event_base_tp eb) {
 	if(eb != NULL) {
 		/* TODO can we avoid the hash? */
-		unsigned int key = adler32_hash((char*)eb);
+		unsigned int key = g_direct_hash(eb);
 		vevent_base_tp vbase = g_hash_table_lookup(mgr->base_conversion, &key);
 		return vbase;
 	} else {

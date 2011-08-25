@@ -486,7 +486,7 @@ event_base_tp vevent_event_base_new_with_config(vevent_mgr_tp mgr, const struct 
 void vevent_event_base_free(vevent_mgr_tp mgr, event_base_tp eb) {
 	if(mgr != NULL && mgr->event_bases != NULL) {
 		GList *removed = g_queue_find(mgr->event_bases, eb);
-		vevent_destroy_base(removed->data);
+		vevent_destroy_base(mgr, removed->data);
         g_queue_delete_link(mgr->event_bases, removed);
         vevent_mgr_untrack_base(mgr, eb);
 	}
