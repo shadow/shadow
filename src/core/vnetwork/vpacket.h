@@ -2,7 +2,6 @@
  * The Shadow Simulator
  *
  * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
- * Copyright (c) 2006-2009 Tyson Malchow <tyson.malchow@gmail.com>
  *
  * This file is part of Shadow.
  *
@@ -112,7 +111,7 @@ typedef struct vpacket_pod_s {
 typedef void (*rc_vpacket_pod_destructor_fp)(vpacket_pod_tp vpacket_pod);
 typedef struct rc_vpacket_pod_s {
 	vpacket_pod_tp pod;
-	uint8_t reference_count;
+	int8_t reference_count;
 	rc_vpacket_pod_destructor_fp destructor;
 } rc_vpacket_pod_t, *rc_vpacket_pod_tp;
 

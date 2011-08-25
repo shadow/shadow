@@ -46,6 +46,7 @@ int intercept_setsockopt(int fd, int level, int optname, const void* optval,
 		socklen_t optlen);
 int intercept_listen(int fd, int backlog);
 int intercept_accept(int fd, struct sockaddr* addr, socklen_t* addr_len);
+int intercept_accept4(int fd, struct sockaddr* addr, socklen_t* addr_len, int flags);
 int intercept_shutdown(int fd, int how);
 
 ssize_t intercept_read(int fd, void* buf, int numbytes);

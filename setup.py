@@ -1,12 +1,33 @@
 #!/usr/bin/env python2.7
 
+##
+# The Shadow Simulator
+#
+# Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
+#
+# This file is part of Shadow.
+#
+# Shadow is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# Shadow is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
+#
+
 import sys, os, argparse, subprocess, shutil, urllib2, tarfile
 from datetime import datetime
 
 BUILD_PREFIX="build"
 INSTALL_PREFIX="/usr/local"
 
-RESOURCES_URL="http://shadow.cs.umn.edu/shadow-resources.tar.gz"
+RESOURCES_URL="http://shadow.cs.umn.edu/downloads/shadow-resources.tar.gz"
 
 def main():
     parser_main = argparse.ArgumentParser(description='Utility to help setup the shadow simulator', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -103,7 +124,8 @@ def build(args):
         log(args, "calling \'make\'")
         retcode = subprocess.call(["make"], stdout=outfile)
         log(args, "make returned " + str(retcode))
-        log(args, "now run \'python setup.py install\'")
+        if retcode == 0: log(args, "now run \'python setup.py install\'")
+        else: log(args, "E! Non-zero return code.")
 
     # go back to where we came from
     os.chdir(rundir)

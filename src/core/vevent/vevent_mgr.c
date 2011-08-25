@@ -2,7 +2,6 @@
  * The Shadow Simulator
  *
  * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
- * Copyright (c) 2006-2009 Tyson Malchow <tyson.malchow@gmail.com>
  *
  * This file is part of Shadow.
  *
@@ -27,7 +26,6 @@
 #include <event2/event_struct.h>
 #include <event2/event.h>
 #include <event2/util.h>
-#include <event-internal.h>
 
 #include "vevent_mgr.h"
 #include "vevent.h"
@@ -60,10 +58,11 @@ static void vevent_mgr_uninit(vevent_mgr_tp mgr) {
 		/* delete all event bases */
 		while(g_queue_get_length(mgr->event_bases) > 0) {
 			event_base_tp eb = g_queue_pop_head(mgr->event_bases);
-			vevent_destroy_base(eb);
+			vevent_destroy_base(mgr, eb);
 		}
 
 		g_queue_free(mgr->event_bases);
+		g_hash_table_destroy(mgr->base_conversion);
 	}
 }
 
@@ -143,7 +142,7 @@ static void vevent_mgr_print_all_cb(int key, void* val, void* param) {
 			if(vev != NULL && vev->event != NULL) {
 				debugf("socket %i waiting for events %s\n", key, vevent_get_event_type_string(mgr, vev->event->ev_events));
 			}
-                        event = event->next;
+            event = event->next;
 		}
 	}
 }
@@ -156,14 +155,14 @@ void vevent_mgr_print_stat(vevent_mgr_tp mgr, uint16_t sockd) {
 		debugf("======Printing all waiting registered events for socket %u======\n", sockd);
 		while(bases != NULL) {
 			event_base_tp eb = bases->data;
-
-			if(eb != NULL && eb->evbase != NULL) {
-				vevent_base_tp veb = eb->evbase;
+			vevent_base_tp veb = vevent_mgr_convert_base(mgr, eb);
+			
+			if(veb != NULL) {
 				vevent_socket_tp vsd = g_hash_table_lookup(veb->sockets_by_sd, &sockd);
 				vevent_mgr_print_all_cb(sockd, vsd, mgr);
 			}
 
-                        bases = bases->next;
+            bases = bases->next;
 		}
 		debugf("======Done printing======\n");
 	}
@@ -176,15 +175,15 @@ void vevent_mgr_print_all(vevent_mgr_tp mgr) {
 
 		while(bases != NULL) {
 			event_base_tp eb = bases->data;
+			vevent_base_tp veb = vevent_mgr_convert_base(mgr, eb);
 
-			if(eb != NULL && eb->evbase != NULL) {
-				vevent_base_tp veb = eb->evbase;
+			if(veb != NULLL) {
 				debugf("======Printing all waiting registered events======\n");
 				g_hash_table_foreach(veb->sockets_by_sd, (GHFunc)vevent_mgr_print_all_cb, mgr);
 				debugf("======Done printing======\n");
 			}
 
-                        bases = bases->next;
+            bases = bases->next;
 		}
 	}
 }
@@ -202,4 +201,31 @@ void vevent_mgr_notify_can_write(vevent_mgr_tp mgr, int sockfd) {
 void vevent_mgr_notify_signal_received(vevent_mgr_tp mgr, int signal) {
 	debugf("vevent_mgr_notify_signal_received: received signal %d.\n", signal);
 	vevent_notify(mgr, signal, EV_SIGNAL);
+}
+
+void vevent_mgr_track_base(vevent_mgr_tp mgr, event_base_tp eb, vevent_base_tp veb) {
+	if(eb != NULL) {
+		/* TODO can we avoid the hash? */
+		unsigned int key = adler32_hash((char*)eb);
+		g_hash_table_insert(mgr->base_conversion, int_key(key), veb);
+	}
+}
+
+void vevent_mgr_untrack_base(vevent_mgr_tp mgr, event_base_tp eb) {
+	if(eb != NULL) {
+		/* TODO can we avoid the hash? */
+		unsigned int key = adler32_hash((char*)eb);
+		g_hash_table_remove(mgr->base_conversion, &key);
+	}
+}
+
+vevent_base_tp vevent_mgr_convert_base(vevent_mgr_tp mgr, event_base_tp eb) {
+	if(eb != NULL) {
+		/* TODO can we avoid the hash? */
+		unsigned int key = adler32_hash((char*)eb);
+		vevent_base_tp vbase = g_hash_table_lookup(mgr->base_conversion, &key);
+		return vbase;
+	} else {
+		return NULL;
+	}
 }

@@ -101,6 +101,10 @@ int intercept_accept(int fd, struct sockaddr* addr, socklen_t* addr_len) {
 	return vsocket_accept(vsocket_intercept_get_net(), fd, (struct sockaddr_in *) addr, addr_len);
 }
 
+int intercept_accept4(int fd, struct sockaddr* addr, socklen_t* addr_len, int flags) {
+        // Call the standard accpet() function which will just ignore the flags option
+	return vsocket_accept(vsocket_intercept_get_net(), fd, (struct sockaddr_in *) addr, addr_len);
+}
 int intercept_shutdown(int fd, int how) {
 	return vsocket_shutdown(vsocket_intercept_get_net(), fd, how);
 }

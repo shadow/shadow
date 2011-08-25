@@ -160,6 +160,8 @@ void echo_server_instantiate(echoserver_tp es, int argc, char * argv[], in_addr_
 		perror("echo_server_instantiate: error in listen");
 	}
 
+	memset(es, 0, sizeof(echoserver_t));
+
 	/* store the socket as our listening socket */
 	es->listen_sd = socketd;
 }
@@ -181,22 +183,28 @@ void echo_server_socket_readable(echoserver_tp es, int sockd) {
 		}
 	}
 
-	const int read_size = UINT16_MAX;
-	void* buffer = calloc(1, read_size);
-
 	/* read all data available */
+	int read_size = BUFFERSIZE - es->read_offset;
 	ssize_t bread;
-	ssize_t bwrote;
-	while((bread = read(sockd, buffer, read_size)) > 0) {
+	while(read_size > 0 &&
+			(bread = read(sockd, es->echo_buffer + es->read_offset, read_size)) > 0) {
 		snri_log(LOG_INFO, "server socket %i read %i bytes\n", sockd, (int)bread);
-		/* echo it back to the client on the same sd */
-		bwrote = write(sockd, buffer, bread);
+		es->read_offset += bread;
+		read_size -= bread;
+	}
+
+	/* echo it back to the client on the same sd,
+	 * also taking care of data that is still hanging around from previous reads. */
+	int write_size = es->read_offset - es->write_offset;
+	ssize_t bwrote;
+	while(write_size > 0 &&
+			(bwrote = write(sockd, es->echo_buffer + es->write_offset, write_size)) > 0) {
 		snri_log(LOG_INFO, "server socket %i wrote %i bytes\n", sockd, (int)bwrote);
+		es->write_offset += bwrote;
+		write_size -= bwrote;
 	}
 
 	/* cant close sockd to client if we havent received everything yet.
-	 * keep it simple and just keep the socket open.
+	 * keep it simple and just keep the socket open for now.
 	 */
-
-	free(buffer);
 }

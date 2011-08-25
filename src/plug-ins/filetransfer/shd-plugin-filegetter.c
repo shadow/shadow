@@ -45,7 +45,7 @@ void _plugin_init() {
 void _plugin_uninit() {}
 
 void _plugin_instantiate(int argc, char * argv[]) {
-	const char* usage = "USAGE:\n\t\'single\' http_host http_port (socks_host|\'none\') socks_port num_downloads filepath\n\t--or--\n\t\'multi\' server_specification_filepath (socks_host|\'none\') socks_port (thinktimes_cdf_filepath|\'none\') (runtime_seconds|-1)\n";
+	const char* usage = "USAGE:\n\t\'single\' http_host http_port (socks_host|\'none\') socks_port num_downloads filepath\n\t--or--\n\t\'double\' http_host http_port (socks_host|\'none\') socks_port filepath1 filepath2 (filepath3|\'none\') pausetime_seconds\n\t--or--\n\t\'multi\' server_specification_filepath (socks_host|\'none\') socks_port (thinktimes_cdf_filepath|\'none\') (runtime_seconds|-1)\n";
 	int mode = 0;
 
 	if(argc < 1) {
@@ -53,10 +53,12 @@ void _plugin_instantiate(int argc, char * argv[]) {
 		return;
 	}
 
-	if(strncmp(argv[0], "multi", 5) == 0) {
+	if(strncmp(argv[0], "single", 6) == 0) {
 		mode = 1;
-	} else if(strncmp(argv[0], "single", 6) == 0) {
+	} else if(strncmp(argv[0], "double", 6) == 0) {
 		mode = 2;
+	} else if(strncmp(argv[0], "multi", 5) == 0) {
+		mode = 3;
 	} else {
 		snri_log(LOG_WARN, usage);
 		return;
@@ -65,6 +67,37 @@ void _plugin_instantiate(int argc, char * argv[]) {
 	int sockd = 0;
 
 	if(mode == 1) {
+		service_filegetter_single_args_t args;
+
+		args.http_server.host = argv[1];
+		args.http_server.port = argv[2];
+		args.socks_proxy.host = argv[3];
+		args.socks_proxy.port = argv[4];
+		args.num_downloads = argv[5];
+		args.filepath = argv[6];
+
+		args.log_cb = &plugin_filegetter_util_log_callback;
+		args.hostbyname_cb = &plugin_filegetter_util_hostbyname_callback;
+
+		service_filegetter_start_single(&sfg, &args, &sockd);
+	} else if(mode == 2){
+		service_filegetter_double_args_t args;
+
+		args.http_server.host = argv[1];
+		args.http_server.port = argv[2];
+		args.socks_proxy.host = argv[3];
+		args.socks_proxy.port = argv[4];
+		args.filepath1 = argv[5];
+		args.filepath2 = argv[6];
+		args.filepath3 = argv[7];
+		args.pausetime_seconds = argv[8];
+
+		args.log_cb = &plugin_filegetter_util_log_callback;
+		args.hostbyname_cb = &plugin_filegetter_util_hostbyname_callback;
+		args.sleep_cb = &plugin_filegetter_util_sleep_callback;
+
+		service_filegetter_start_double(&sfg, &args, &sockd);
+	} else {
 		service_filegetter_multi_args_t args;
 
 		args.server_specification_filepath = argv[1];
@@ -82,20 +115,6 @@ void _plugin_instantiate(int argc, char * argv[]) {
 		args.sleep_cb = &plugin_filegetter_util_sleep_callback;
 
 		service_filegetter_start_multi(&sfg, &args, &sockd);
-	} else {
-		service_filegetter_single_args_t args;
-
-		args.http_server.host = argv[1];
-		args.http_server.port = argv[2];
-		args.socks_proxy.host = argv[3];
-		args.socks_proxy.port = argv[4];
-		args.num_downloads = argv[5];
-		args.filepath = argv[6];
-
-		args.log_cb = &plugin_filegetter_util_log_callback;
-		args.hostbyname_cb = &plugin_filegetter_util_hostbyname_callback;
-
-		service_filegetter_start_single(&sfg, &args, &sockd);
 	}
 
 	service_filegetter_activate(&sfg, sockd);

@@ -36,6 +36,7 @@
 
 /* event2/event.h */
 struct event_base *intercept_event_base_new(void);
+struct event_base *intercept_event_base_new_with_config(const struct event_config *cfg);
 void intercept_event_base_free(struct event_base *);
 const char *intercept_event_base_get_method(const struct event_base *);
 void intercept_event_set_log_callback(event_log_cb cb);

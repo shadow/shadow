@@ -2,7 +2,6 @@
  * The Shadow Simulator
  *
  * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
- * Copyright (c) 2006-2009 Tyson Malchow <tyson.malchow@gmail.com>
  *
  * This file is part of Shadow.
  *
@@ -37,15 +36,6 @@
 #include "vevent_mgr.h"
 #include "context.h"
 
-/* make libevent types slightly prettier */
-typedef struct event event_t, *event_tp;
-typedef struct event_base event_base_t, *event_base_tp;
-
-typedef struct evdns_base evdns_base_t, *evdns_base_tp;
-typedef struct evdns_request evdns_request_t, *evdns_request_tp;
-typedef struct evdns_server_request evdns_server_request_t, *evdns_server_request_tp;
-typedef struct evdns_server_port evdns_server_port_t, *evdns_server_port_tp;
-
 /* vevent types and functions */
 #define VEVENT_METHOD "shadow-vevent";
 
@@ -64,26 +54,20 @@ typedef struct vevent_s {
 	int ntimers;
 } vevent_t, *vevent_tp;
 
-/* holds all registered vevents and sockets */
-typedef struct vevent_base_s {
-	int nextid;
-	GHashTable *vevents_by_id;
-	GHashTable *sockets_by_sd;
-} vevent_base_t, *vevent_base_tp;
-
 typedef struct vevent_timer_s {
 	vevent_mgr_tp mgr;
 	vevent_tp vev;
 } vevent_timer_t, *vevent_timer_tp;
 
 void vevent_notify(vevent_mgr_tp mgr, int sockd, short event_type);
-void vevent_destroy_base(event_base_tp eb);
+void vevent_destroy_base(vevent_mgr_tp mgr, event_base_tp eb);
 char* vevent_get_event_type_string(vevent_mgr_tp mgr, short event_type);
 
 /* libevent intercepted functions */
 
 /* event2/event.h */
 event_base_tp vevent_event_base_new(vevent_mgr_tp mgr);
+event_base_tp vevent_event_base_new_with_config(vevent_mgr_tp mgr, const struct event_config *cfg);
 void vevent_event_base_free(vevent_mgr_tp mgr, event_base_tp eb);
 const char *vevent_event_base_get_method(vevent_mgr_tp mgr, const event_base_tp);
 void vevent_event_set_log_callback(vevent_mgr_tp mgr, event_log_cb cb);

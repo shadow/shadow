@@ -1,5 +1,31 @@
 Shadow (c) 2011 Rob Jansen jansen@cs.umn.edu
 
+======================
+0. Quickstart (Install to ~/.local)
+======================
+(replace "rob" with your username)
+
+$ wget http://www.openssl.org/source/openssl-1.0.0d.tar.gz
+$ tar xvzf openssl-1.0.0d.tar.gz
+$ cd openssl-1.0.0d
+$ ./config --prefix=/home/rob/.local -fPIC shared
+$ make
+$ make install
+
+$ wget http://monkey.org/~provos/libevent-2.0.11-stable.tar.gz
+$ tar xvzf libevent-2.0.11-stable.tar.gz
+$ cd libevent-2.0.11-stable
+$ ./configure --prefix=/home/rob/.local CFLAGS="-fPIC -I/home/rob/.local" LDFLAGS="-L/home/rob/.local"
+$ make
+$ make install
+
+X, Y, and Z are version numbers:
+$ wget http://shadow.cs.umn.edu/downloads/shadow-vX.Y.Z.tar.gz
+$ tar xvzf shadow-vX.Y.Z.tar.gz
+$ cd shadow-vX.Y.Z
+$ python setup.py auto
+
+======================
 I. Shadow dependencies
 ======================
 The following are required to properly build and run Shadow:
@@ -7,94 +33,108 @@ The following are required to properly build and run Shadow:
   - cmake >= 2.6
   - flex
   - bison
+  - openssl (installed manually)
+  - libevent >= 2.0.10 (installed manually)
   
-The following are optional, but recommended, for building and running Shadow:
-  - python >= 2.7.1
+The following are optional, but HIGHLY recommended, for building and running Shadow:
+  - python = 2.7.1
 
-
+======================
 II. Building Shadow
-===================
-There are two ways to build shadow:
-  1. $ python shadowrunner.py build -rg
-  2. $ contrib/runbuild --rebuild --debug
-  
-The python script is the preferred method, and offers much greater flexibility
-over the build options and an extensive help menu:
+======================
+The setup.py script has an extensive help menu ($ python setup.py --help)
 
-$ python shadowrunner.py build -h
+The following will build and install to ~/.local (no root required)
+Please make sure ~/.local/bin is in your PATH.
+$ python setup.py auto
 
-Both methods should be run from the Shadow base directory. All build output is 
-generated out-of-source, by default to the ./build directory (although this 
-location can be modified with the shadowrunner.py script). Both methods are
+-or-
+
+By default, the following will build and install to /usr/local (and so requires root)
+$ python setup.py build
+$ python setup.py install
+
+All build output is generated out-of-source, by default to the ./build directory (although this 
+location can be modified with the setup.py script). Both methods are
 wrappers to cmake and make for building Shadow. Using cmake and make directly
 is also possible, but strongly discouraged.
 
+======================
 III. Running Shadow
-===================
+======================
 There are multiple ways to run Shadow.
 
-A. Using shadowrunner.py
-------------------------
-The shadowrunner.py script is simply a wrapper around to assist in running the
-Shadow binary. The shadowrunner.py script has several built-in modules that can 
-be autorun. Use
+A. Using installed shadow script
+--------------------------------
+Installing shadow installs a script called "shadow", a wrapper to assist in running the
+Shadow binary. The shadow script has several built-in plug-ins that can run automatically:
 
-$ python shadowrunner.py autorun -h
+$ shadow autorun --help
 
-to get usage and help regarding running the built-in modules. Most of the options
-can be left as default, and you need only specify which built-in module example
+to get usage and help regarding running the built-in plug-ins. Most of the options
+can be left as default, and you need only specify which plug-in example
 you want to run, e.g.
 
-$ python shadowrunner.py autorun --echo
+$ shadow autorun --echo-eth
 
-When developing custom modules, you may also run your module with shadowrunner.py
+When developing custom plug-ins, you may also run your plug-in with the shadow script
 by using the 'run' command. Again, use
 
-$ python shadowrunner.py run -h
+$ shadow run --help
 
 for usage and help. When running a custom module, a dsim file describing the
 experiment must be provided. Examples of dsim files can be found in mode 
-src/module/* directories. Also see doc/ for the dsim API.
+src/plug-ins/* directories. Also see doc/ for the dsim API.
 
 B. Running the shadow binary directly
 -------------------------------------
 You may also invoke the binary directly without the use of the
-python shadowruner.py script. Get usage information from Shadow with:
+python script. Get usage information from Shadow with:
 
-$ path/to/shadow -h
+$ shadow-bin --help
 
-By default, Shadow project executable are placed in build/bin/ and libraries are
-placed in build/lib/. The shadow binary also requires a dsim file.
+The shadow binary also requires a dsim file. If possible, it is strongly recommended to
+use the python script.
 
-IV. Scallion
-============
-Scallion is a special plugin for shadow that allows shadow to run the Tor
-(torproject.org) software. There are several modifications to Tor that must be
-made to allow this to happen. Those modifications are stored on a branch of a 
-clone of the Tor git master repository. This way, patches can be created for
-any version of Tor by merging new changes into the local scallion branch. Our
-current approach is to create patches from a diff of archived Tor releases and
-our scallion branch, so that others can simply download the correct release,
-apply our patch, and run scallion in shadow.
+======================
+IV. Developer's Notes:
+======================
 
-Scallion also requires some other libs to be locally installed, like libevent
-and openssl. Of course, the shadowrunner.py script will handle all of the dirty 
-work for you. However, patches must be created and their paths are currently 
-hard-coded. To create a patch, first export the scallion branch from git with 
-something like:
+A. Debugging
+------------
+To add extra debugging information and messages, add the -g flag when building
+shadow. See the help menu with $ python setup.py --help.
 
-$ git archive --prefix=tor-0.2.2.15-alpha-scallion/ scallion | gzip > tor-0.2.2.15-alpha-scallion.tar.gz
+If you want to be able to run shadow through valgrind, you should configure 
+openssl with the additional option: "-DPURIFY". This fixes openssl so it 
+doesn't break valgrind, but will likely only cause problems if the application
+you are running in shadow actually uses OpenSSL.
 
-Then download the tor-0.2.2.15-alpha.tar.gz release from archive.torproject.org,
-extract both tar files, and create the patch:
+B. System Limits
+----------------
+There are some default system limits you'll want to be aware of. One is a limit
+on the number of message queues and total bytes in them. Shadow will use a
+message queue for each process, meaning it will use X=2 message queues by default,
+and more if you try to run with multiple workers (not currently recommended).
+Each queue takes about 81920 bytes, which means you will only be able to run 4
+experiments simultaneously with the default limits.
 
-$ diff -Naur tor-0.2.2.15-alpha tor-0.2.2.15-alpha-scallion > tor-0.2.2.15-alpha.scallion.patch
+See: 
+$ man mq_overview
+$ ulimit -q
+$ cat /proc/sys/fs/mqueue/*
 
-Place the patch in contrib/patches. Note - you may want to remove the 'doc' and
-and the 'WIN32Build' directories from the extracted trees in order to reduce the
-size of the created patch file. If needed, the shadowrunner.py script will 
-automatically download the correct version of Tor apply the patch:
+There is also a limit on the number of open files. If each node in your shadow
+application opens many descriptors, you'll likely want to increase the limit so
+you application doesn't start getting errors when calling open().
 
-$ patch -Np1 --batch -i path/to/tor-0.2.2.15-alpha.scallion.patch
+See:
+$ ulimit -n
+$ cat /proc/sys/fs/file-*
 
-TODO: enable multiple versions of tor/scallion to be built and run.
+Limits can be raised by modifying /etc/security/limits.conf and rebooting.
+For example:
+* soft msgqueue 8192000
+* soft msgqueue 8192000
+* soft nofile 10000
+* hard nofile 10000

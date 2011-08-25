@@ -2,7 +2,6 @@
  * The Shadow Simulator
  *
  * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
- * Copyright (c) 2006-2009 Tyson Malchow <tyson.malchow@gmail.com>
  *
  * This file is part of Shadow.
  *
@@ -158,7 +157,7 @@ static void vpacket_tcp_flags_to_string(void* buffer, size_t size, enum vpacket_
 }
 
 rc_vpacket_pod_tp rc_vpacket_pod_create(vpacket_pod_tp vp_pod, rc_vpacket_pod_destructor_fp destructor) {
-	return (rc_vpacket_pod_tp) rc_create((rc_object_tp) vp_pod, (rc_object_destructor_fp) destructor);
+	return (rc_vpacket_pod_tp) rc_create(vp_pod, (rc_object_destructor_fp) destructor);
 }
 
 void rc_vpacket_pod_retain(rc_vpacket_pod_tp rc_vpacket_pod) {

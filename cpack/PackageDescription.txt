@@ -1,0 +1,1 @@
+The Shadow Simulator is a discrete event simulator capable of intercepting real system network calls from application and routing them through a simulated network. This is useful for simulating applications with many nodes on a single machine.

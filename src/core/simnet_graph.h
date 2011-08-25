@@ -26,6 +26,8 @@
 #include <glib-2.0/glib.h>
 #include "shd-cdf.h"
 
+#define RUNAHEAD_FLOOR_MS 10
+
 typedef struct simnet_vertex_s {
 	unsigned int id;
 

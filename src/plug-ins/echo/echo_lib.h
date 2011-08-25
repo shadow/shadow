@@ -41,6 +41,9 @@ typedef struct echoclient_s {
 
 typedef struct echoserver_s {
 	int listen_sd;
+	char echo_buffer[BUFFERSIZE];
+	int read_offset;
+	int write_offset;
 } echoserver_t, *echoserver_tp;
 
 typedef struct echoloopback_s {

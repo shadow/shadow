@@ -56,9 +56,17 @@ pipecloud_tp pipecloud_create(unsigned int attendees, size_t size, unsigned int 
 	pc->max_msg_size = 8192;
 	pc->num_pipes = attendees;
 
+	/* TODO - calling getpid here means that if children do not inherit the
+	 * pipecloud, they will be unable to connect to the parent's message queues.
+	 * ideally, we should pass in a pid to pipecloud_create, and use that instead.
+	 *
+	 * For now, children inherit the pipecloud so its not an issue.
+	 */
+	long int mypid = (long)getpid();
+
 	/* Create the MQs */
 	for(int i=0; i < attendees; i++) {
-		snprintf(mqname, sizeof(mqname), "/dvn%d", i);
+		snprintf(mqname, sizeof(mqname), "/shadow-pid%ld-mq%d", mypid, i);
 		pc->mqs[i] = mq_open(mqname, O_RDWR | O_CREAT, 0777, &attrs);
 
 		if(pc->mqs[i] == -1){
@@ -66,6 +74,16 @@ pipecloud_tp pipecloud_create(unsigned int attendees, size_t size, unsigned int 
 			printfault(EXIT_UNKNOWN, "pipecloud_create: Unable to open IPC message queues");
 		}
 //		mq_setattr(pc->mqs[i], &attrs, NULL);
+
+		/* the following only works because the mesasge queues are inherited.
+		 * unlinking deletes the name-to-queue mapping, so no one else will be
+		 * able to connect. the queue will actually be deleted when all the
+		 * descriptors are closed.
+		 */
+		if(mq_unlink(mqname) < 0) {
+			perror("mq_unlink");
+			printfault(EXIT_UNKNOWN, "pipecloud_create: Error unlinking successfully created message queue");
+		}
 	}
 
 	pc->localized.id = 0;
@@ -81,6 +99,10 @@ void pipecloud_destroy(pipecloud_tp pipecloud) {
 	/* clear out waiting incoming data */
 	while((buf = g_queue_pop_head(pipecloud->localized.in)) != NULL)
 		free(buf);
+
+	for(int i=0; i < pipecloud->num_pipes; i++) {
+		mq_close(pipecloud->mqs[i]);
+	}
 
 	/* process 0 should destroy semaphores and the shm segment */
 //	if(pipecloud->localized.id == 0) {

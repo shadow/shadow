@@ -41,9 +41,8 @@ typedef void (*rc_object_destructor_fp)(void* object);
 
 typedef struct rc_object_s {
 	void* data;
-	uint8_t reference_count;
+	int8_t reference_count;
 	rc_object_destructor_fp destructor;
-	int isSet;
 }rc_object_t, *rc_object_tp;
 
 rc_object_tp rc_create(void* data, rc_object_destructor_fp destructor);

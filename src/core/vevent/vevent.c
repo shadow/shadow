@@ -2,7 +2,6 @@
  * The Shadow Simulator
  *
  * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
- * Copyright (c) 2006-2009 Tyson Malchow <tyson.malchow@gmail.com>
  *
  * This file is part of Shadow.
  *
@@ -32,8 +31,6 @@
 #include <event2/dns.h>
 #include <event2/dns_compat.h>
 #include <event2/dns_struct.h>
-
-#include "event-internal.h"
 
 #include "vevent.h"
 #include "vevent_mgr.h"
@@ -141,11 +138,10 @@ static void vevent_vepoll_action(uint16_t sockd, uint8_t add, short ev_type) {
 	}
 }
 
-void vevent_destroy_base(event_base_tp eb) {
+void vevent_destroy_base(vevent_mgr_tp mgr, event_base_tp eb) {
 	if(eb != NULL) {
-		if(eb->evbase != NULL) {
-			vevent_base_tp veb = eb->evbase;
-
+		vevent_base_tp veb = vevent_mgr_convert_base(mgr, eb);
+		if(veb != NULL) {
 			if(veb->sockets_by_sd != NULL) {
 				g_hash_table_foreach(veb->sockets_by_sd, (GHFunc)vevent_destroy_socket_cb, NULL);
 				g_hash_table_destroy(veb->sockets_by_sd);
@@ -262,9 +258,10 @@ static int vevent_set_timer(vevent_mgr_tp mgr, vevent_tp vev, const struct timev
 
 static int vevent_register(vevent_mgr_tp mgr, event_tp ev, const struct timeval * timeout) {
 	/* check if the event already is added */
-	if(ev != NULL && ev->ev_base != NULL && ev->ev_base->evbase != NULL) {
-		vevent_base_tp veb = ev->ev_base->evbase;
+	if(ev != NULL && ev->ev_base != NULL) {
 
+		vevent_base_tp veb = vevent_mgr_convert_base(mgr, ev->ev_base);
+		if(veb != NULL) {
 		/* check for the socket */
 		vevent_socket_tp vsd = g_hash_table_lookup(veb->sockets_by_sd, &ev->ev_fd);
 		if(vsd == NULL) {
@@ -305,14 +302,16 @@ static int vevent_register(vevent_mgr_tp mgr, event_tp ev, const struct timeval 
 
 		/* success */
 		return 0;
+		}
 	}
 
 	return -1;
 }
 
 static int vevent_unregister(vevent_mgr_tp mgr, event_tp ev) {
-	if(ev != NULL && ev->ev_base != NULL && ev->ev_base->evbase != NULL) {
-		vevent_base_tp veb = ev->ev_base->evbase;
+	if(ev != NULL && ev->ev_base != NULL) {
+		vevent_base_tp veb = vevent_mgr_convert_base(mgr, ev->ev_base);
+		if(veb != NULL) {
 
 		/* unregister vevent */
 		vevent_tp vev = g_hash_table_lookup(veb->vevents_by_id, &ev->ev_timeout_pos.min_heap_idx);
@@ -329,7 +328,7 @@ static int vevent_unregister(vevent_mgr_tp mgr, event_tp ev) {
 		if(vsd != NULL) {
 			GList* result = g_queue_find_custom(vsd->vevents, vev, (GCompareFunc)vevent_isequal_cb);
 			if(result != NULL) {
-                                g_queue_delete_link(vsd->vevents, result);
+                g_queue_delete_link(vsd->vevents, result);
 				vevent_vepoll_action(vsd->sd, 0, ev->ev_events);
 				debugf("vevent_unregister: unregistered vevent id %i from socket %i\n", vev->id, vev->vsd->sd);
 			}
@@ -347,14 +346,16 @@ static int vevent_unregister(vevent_mgr_tp mgr, event_tp ev) {
 
 		/* success, even if the event didnt actually exist */
 		return 0;
+		}
 	}
 
 	return -1;
 }
 
 static void vevent_execute_callbacks(vevent_mgr_tp mgr, event_base_tp eb, int sockd, short event_type) {
-	if(eb != NULL && eb->evbase != NULL) {
-		vevent_base_tp veb = eb->evbase;
+	if(eb != NULL) {
+		vevent_base_tp veb = vevent_mgr_convert_base(mgr, eb);
+		if(veb != NULL) {
 		vevent_socket_tp vsd = g_hash_table_lookup(veb->sockets_by_sd, &sockd);
 
 		if(vsd != NULL) {
@@ -373,7 +374,7 @@ static void vevent_execute_callbacks(vevent_mgr_tp mgr, event_base_tp eb, int so
 						g_queue_push_tail(to_execute, vev);
 					}
 				}
-                                event = event->next;
+                event = event->next;
 			}
 
 			/* now execute events.
@@ -410,6 +411,7 @@ static void vevent_execute_callbacks(vevent_mgr_tp mgr, event_base_tp eb, int so
 			context_save();
 
 			g_queue_free(to_execute);
+			}
 		}
 	}
 }
@@ -423,7 +425,7 @@ void vevent_notify(vevent_mgr_tp mgr, int sockd, short event_type) {
 		while(bases != NULL) {
 			event_base_tp eb = bases->data;
 			vevent_execute_callbacks(mgr, eb, sockd, event_type);
-                        bases = bases->next;
+            bases = bases->next;
 		}
 	}
 }
@@ -466,21 +468,27 @@ event_base_tp vevent_event_base_new(vevent_mgr_tp mgr) {
 		veb->vevents_by_id = g_hash_table_new(g_int_hash, g_int_equal);
 		veb->sockets_by_sd = g_hash_table_new(g_int_hash, g_int_equal);
 
-		event_base_tp eb = calloc(1, sizeof(event_base_t));
-		eb->evbase = veb;
-
+		event_base_tp eb = calloc(1, sizeof(void*));
 		g_queue_push_tail(mgr->event_bases, eb);
+		
+		vevent_mgr_track_base(mgr, eb, veb);
 		return eb;
 	} else {
 		return NULL;
 	}
 }
 
+event_base_tp vevent_event_base_new_with_config(vevent_mgr_tp mgr, const struct event_config *cfg) {
+	/** FIXME is this ever called??? */
+    return vevent_event_base_new(mgr);
+}
+
 void vevent_event_base_free(vevent_mgr_tp mgr, event_base_tp eb) {
 	if(mgr != NULL && mgr->event_bases != NULL) {
 		GList *removed = g_queue_find(mgr->event_bases, eb);
 		vevent_destroy_base(removed->data);
-                g_queue_delete_link(mgr->event_bases, removed);
+        g_queue_delete_link(mgr->event_bases, removed);
+        vevent_mgr_untrack_base(mgr, eb);
 	}
 }
 
@@ -536,8 +544,9 @@ int vevent_event_assign(vevent_mgr_tp mgr, event_tp ev, event_base_tp eb, evutil
 
 	/* must have a valid event type */
 	if((types & (EV_READ|EV_WRITE|EV_SIGNAL|EV_TIMEOUT))) {
-		if(ev != NULL && eb != NULL && eb->evbase != NULL) {
-			vevent_base_tp veb = eb->evbase;
+		if(ev != NULL && eb != NULL) {
+			vevent_base_tp veb = vevent_mgr_convert_base(mgr, eb);
+			if(veb != NULL) {
 
 			ev->ev_base = eb;
 			ev->ev_fd = fd;
@@ -554,6 +563,7 @@ int vevent_event_assign(vevent_mgr_tp mgr, event_tp ev, event_base_tp eb, evutil
 
 			/* success! */
 			return 0;
+			}
 		}
 	}
 
@@ -611,8 +621,9 @@ void vevent_event_active(vevent_mgr_tp mgr, event_tp ev, int flags_for_cb, short
 }
 
 int vevent_event_pending(vevent_mgr_tp mgr, const event_tp ev, short types, struct timeval * tv) {
-	if(ev != NULL && ev->ev_base != NULL && ev->ev_base->evbase != NULL) {
-		vevent_base_tp veb = ev->ev_base->evbase;
+	if(ev != NULL) {
+		vevent_base_tp veb = vevent_mgr_convert_base(mgr, ev->ev_base);
+		if(veb != NULL) {
 		vevent_tp vev = g_hash_table_lookup(veb->vevents_by_id, &ev->ev_timeout_pos.min_heap_idx);
 
 		if(vev != NULL) {
@@ -633,6 +644,7 @@ int vevent_event_pending(vevent_mgr_tp mgr, const event_tp ev, short types, stru
 			}
 
 			return (flags & types) == 0 ? 0 : 1;
+		}
 		}
 	}
 
