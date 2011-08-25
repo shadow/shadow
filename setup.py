@@ -155,7 +155,7 @@ def install(args):
     cmake_file = open("CMakeLists.txt.new","w")
     patch_cmd = "sed 's/build\/tor-.*\/src/build\/tor-" + args.tor_version + "\/src/g' CMakeLists.txt"
     retcode = subprocess.call(shlex.split(patch_cmd), stdout=cmake_file)
-    shutil.move(cmake_file.name, "CMakesList.txt")
+    shutil.move(cmake_file.name, "CMakeLists.txt")
     cmake_file.close()
 
     # go to build dir and install from makefile
