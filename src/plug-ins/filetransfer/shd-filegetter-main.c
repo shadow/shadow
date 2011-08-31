@@ -20,6 +20,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -40,25 +41,25 @@
 #define __USE_POSIX199309 1
 //#define _TCP_REPORTING_ENABLED 1
 
-#define FLOG(file, fmt, ...) fprintf(file, "<%u><%u> " fmt, (unsigned int) time(NULL), (unsigned int) (time(NULL)-EXP_START), ## __VA_ARGS__)
+#define FLOG(file, fmt, ...) fprintf(file, "<%u><%u> " fmt, (guint) time(NULL), (guint) (time(NULL)-EXP_START), ## __VA_ARGS__)
 #define LOGE(fmt, ...) FLOG(stderr, fmt, ## __VA_ARGS__)
 #define LOGD(fmt, ...) FLOG(stdout, fmt, ## __VA_ARGS__)
 
-unsigned int EXP_START = 0;
+guint EXP_START = 0;
 
 #ifdef _TCP_REPORTING_ENABLED
-void report(int sockd, struct timeval *ti_start, struct timeval *ti_now, struct tcp_info *ti, socklen_t *ti_len)
+void report(gint sockd, struct timeval *ti_start, struct timeval *ti_now, struct tcp_info *ti, socklen_t *ti_len)
 {
 	/* Convert "struct timeval" to fractional seconds. */
     gettimeofday(ti_now, NULL);
-    double t = (ti_now->tv_sec - ti_start->tv_sec) + (ti_now->tv_usec - ti_start->tv_usec) / 1e6;
+    gdouble t = (ti_now->tv_sec - ti_start->tv_sec) + (ti_now->tv_usec - ti_start->tv_usec) / 1e6;
     /* get and report socket vals */
     getsockopt(sockd, SOL_TCP, TCP_INFO, ti, ti_len);
     LOGD("%.6f sockd=%i last_sent=%u last_recv=%u snd_cwnd=%u snd_thrs=%u snd_wndscale=%u, rcv_thrs=%u rtt=%u rtt_var=%u unacked=%u sacked=%u lost=%u retran=%u fackets=%u\n", t, sockd, ti->tcpi_last_data_sent, ti->tcpi_last_data_recv, ti->tcpi_snd_cwnd, ti->tcpi_snd_ssthresh, ti->tcpi_snd_wscale, ti->tcpi_rcv_ssthresh, ti->tcpi_rtt, ti->tcpi_rttvar, ti->tcpi_unacked, ti->tcpi_sacked, ti->tcpi_lost, ti->tcpi_retrans, ti->tcpi_fackets);
 }
 #endif
 
-static void filegetter_main_log_callback(enum service_filegetter_loglevel level, const char* message) {
+static void filegetter_main_log_callback(enum service_filegetter_loglevel level, const gchar* message) {
 	if(level == SFG_CRITICAL) {
 		LOGE("%s\n", message);
 	} else if(level == SFG_WARNING || level == SFG_CRITICAL || level == SFG_NOTICE) {
@@ -67,7 +68,7 @@ static void filegetter_main_log_callback(enum service_filegetter_loglevel level,
 	}
 }
 
-int main(int argc, char *argv[])
+gint main(gint argc, gchar *argv[])
 {
 	EXP_START = time(NULL);
 
@@ -78,16 +79,16 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
-	char* http_address = argv[1];
-	char* http_port = argv[2];
-	char* socks_address = argv[3];
-	char* socks_port = argv[4];
-	char* num_downloads = argv[5];
-	char* filepath = argv[6];
-	char* waittime_cdf_path = argv[7];
-	char* max_runtime_seconds = argv[8];
+	gchar* http_address = argv[1];
+	gchar* http_port = argv[2];
+	gchar* socks_address = argv[3];
+	gchar* socks_port = argv[4];
+	gchar* num_downloads = argv[5];
+	gchar* filepath = argv[6];
+	gchar* waittime_cdf_path = argv[7];
+	gchar* max_runtime_seconds = argv[8];
 
-	int downloads_remaining = atoi(num_downloads);
+	gint downloads_remaining = atoi(num_downloads);
 	time_t endtime = EXP_START + atoi(max_runtime_seconds);
 
 	/* cdf for wait times. */
@@ -95,7 +96,7 @@ int main(int argc, char *argv[])
 	if(strncmp(waittime_cdf_path, "none", 4) != 0) {
 		wait_cdf = cdf_create(waittime_cdf_path);
 		/* cdf uses rand, make sure we seed it */
-		srand((unsigned int)(time(NULL)%UINT32_MAX));
+		srand((guint)(time(NULL)%UINT32_MAX));
 	}
 
 	/* we will do one download at a time, with pauses */
@@ -114,7 +115,7 @@ int main(int argc, char *argv[])
 	while(downloads_remaining > 0 && time(NULL) < endtime) {
 start_loop:;
 
-		int sockd = 0;
+		gint sockd = 0;
 		enum filegetter_code result;
 
 		result = service_filegetter_start_single(&sfg, &args, &sockd);
@@ -144,7 +145,7 @@ start_loop:;
 
 		result = FG_ERR_INVALID;
 		while(result != FG_SUCCESS) {
-			int sel_result = select(sockd+1, &read_sockets, &write_sockets, NULL, NULL);
+			gint sel_result = select(sockd+1, &read_sockets, &write_sockets, NULL, NULL);
 			if(sel_result < 0) {
 				perror("select()");
 				goto start_loop;
@@ -175,8 +176,8 @@ start_loop:;
 
 		if(wait_cdf != NULL && downloads_remaining > 0) {
 			/* wait before downloading next, draw from cdf */
-			double milliseconds = cdf_random_value(wait_cdf);
-			unsigned int seconds = (unsigned int)(milliseconds / 1000);
+			gdouble milliseconds = cdf_random_value(wait_cdf);
+			guint seconds = (guint)(milliseconds / 1000);
 
 			/* if we would end after waking up, just quit now */
 			if(time(NULL) + seconds > endtime) {

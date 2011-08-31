@@ -19,6 +19,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <socket.h>
@@ -36,13 +37,13 @@
 
 static void vtcp_server_add_child_helper(GHashTable *ht, vtcp_server_child_tp schild);
 
-vtcp_server_tp vtcp_server_create(vsocket_mgr_tp vsocket_mgr, vsocket_tp sock, int backlog) {
+vtcp_server_tp vtcp_server_create(vsocket_mgr_tp vsocket_mgr, vsocket_tp sock, gint backlog) {
 	vtcp_server_tp server = malloc(sizeof(vtcp_server_t));
 
 	/* silently truncate backlog at our max level of SOMAXCONN */
 //	turn this off for now - we are unable to start many nodes at once otherwise
 //	if(backlog > 0 && backlog < SOMAXCONN){
-//		server->backlog = (uint8_t) backlog;
+//		server->backlog = (guint8) backlog;
 //	} else {
 //		server->backlog = SOMAXCONN;
 //	}
@@ -58,7 +59,7 @@ vtcp_server_tp vtcp_server_create(vsocket_mgr_tp vsocket_mgr, vsocket_tp sock, i
 	return server;
 }
 
-void vtcp_server_destroy_cb(int key, void* value, void *param) {
+void vtcp_server_destroy_cb(gint key, gpointer value, gpointer param) {
 	vtcp_server_destroy((vtcp_server_tp) value);
 }
 
@@ -81,7 +82,7 @@ void vtcp_server_destroy(vtcp_server_tp server) {
 	}
 }
 
-uint8_t vtcp_server_is_empty(vtcp_server_tp server) {
+guint8 vtcp_server_is_empty(vtcp_server_tp server) {
 	if(server != NULL && 
            (g_hash_table_size(server->accepted_children) > 0 ||
             g_hash_table_size(server->incomplete_children) > 0 ||
@@ -111,7 +112,7 @@ vtcp_server_child_tp vtcp_server_create_child(vtcp_server_tp server, in_addr_t r
 	newaddr.sin_port = htons(server->vsocket_mgr->next_rnd_port++);
 	newaddr.sin_family = PF_UNIX;
 
-	int result = vsocket_bind(server->vsocket_mgr, schild->sock->sock_desc, &newaddr, sizeof(newaddr));
+	gint result = vsocket_bind(server->vsocket_mgr, schild->sock->sock_desc, &newaddr, sizeof(newaddr));
 
 	/* if there was an error in bind, cleanup mapping added in socket() */
 	if(result == VSOCKET_ERROR){
@@ -160,8 +161,8 @@ void vtcp_server_destroy_child(vtcp_server_tp server, vtcp_server_child_tp schil
 
 vtcp_server_child_tp vtcp_server_get_child(vtcp_server_tp server, in_addr_t remote_addr, in_port_t remote_port) {
 	if(server != NULL) {
-		unsigned int hashkey = vsocket_hash(remote_addr, remote_port);
-                gint *key = int_key(hashkey);
+		guint hashkey = vsocket_hash(remote_addr, remote_port);
+                gint *key = gint_key(hashkey);
 
 		vtcp_server_child_tp target = NULL;
 
@@ -192,7 +193,7 @@ void vtcp_server_remove_child_incomplete(vtcp_server_tp server, vtcp_server_chil
 	}
 }
 
-uint8_t vtcp_server_add_child_pending(vtcp_server_tp server, vtcp_server_child_tp schild) {
+guint8 vtcp_server_add_child_pending(vtcp_server_tp server, vtcp_server_child_tp schild) {
 	if(server != NULL) {
 //		Disabled backlog for now
 //		if(g_queue_get_length(server->pending_queue) < server->backlog) {
@@ -237,7 +238,7 @@ static void vtcp_server_add_child_helper(GHashTable *ht, vtcp_server_child_tp sc
 			return;
 		}
 
-                gint *key = int_key(schild->key);
+                gint *key = gint_key(schild->key);
 		g_hash_table_insert(ht, key, schild);
 	}
 }

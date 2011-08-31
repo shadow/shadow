@@ -20,6 +20,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <netinet/in.h>
 
 /* This module implements the module_interface */
@@ -45,7 +46,7 @@ void _plugin_init() {
 void _plugin_uninit() {
 }
 
-void _plugin_instantiate(int argc, char * argv[]) {
+void _plugin_instantiate(gint argc, gchar * argv[]) {
 	in_addr_t ip;
 	if(snri_getip(&ip) == SNRICALL_ERROR) {
 		snri_log(LOG_WARN, "Error getting ip address in echo server\n");
@@ -57,10 +58,10 @@ void _plugin_instantiate(int argc, char * argv[]) {
 void _plugin_destroy() {
 }
 
-void _plugin_socket_readable(int sockd){
+void _plugin_socket_readable(gint sockd){
 	echo_server_socket_readable(&echoserver_inst, sockd);
 }
 
-void _plugin_socket_writable(int sockd){
+void _plugin_socket_writable(gint sockd){
 	echo_server_socket_readable(&echoserver_inst, sockd);
 }

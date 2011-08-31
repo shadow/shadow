@@ -34,6 +34,7 @@
  *  "HTTP/1.1 200 OK\r\nContent-Length: 17\r\n\r\nSome data payload"
  */
 
+#include <glib.h>
 #include "shd-filetransfer-defs.h"
 #include "shd-fileserver.h"
 #include "shd-filegetter.h"

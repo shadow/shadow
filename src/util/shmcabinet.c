@@ -20,6 +20,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -36,13 +37,13 @@
 #include "rwlock_mgr.h"
 
 /* process-global cabinet id counter */
-static uint32_t next_cabinet_id = 0;
+static guint32 next_cabinet_id = 0;
 
-static shmcabinet_tp shmcabinet_map_helper(uint32_t process_id, uint32_t cabinet_id,
-		size_t cabinet_size, int flags);
-static uint32_t shmcabinet_lockop(shmcabinet_tp cabinet, void* payload, enum shmcabinet_lockop op);
+static shmcabinet_tp shmcabinet_map_helper(guint32 process_id, guint32 cabinet_id,
+		size_t cabinet_size, gint flags);
+static guint32 shmcabinet_lockop(shmcabinet_tp cabinet, gpointer payload, enum shmcabinet_lockop op);
 
-shmcabinet_tp shmcabinet_create(uint32_t num_slots, size_t slot_payload_size,
+shmcabinet_tp shmcabinet_create(guint32 num_slots, size_t slot_payload_size,
 		enum rwlock_mgr_type cabinet_lock_type, enum rwlock_mgr_type slot_lock_type) {
 	if(num_slots > SHMCABINET_MAX_SLOTS) {
 		/* they asked for too many slots */
@@ -64,10 +65,10 @@ shmcabinet_tp shmcabinet_create(uint32_t num_slots, size_t slot_payload_size,
 		}
 		size_t cabinet_total_size = cabinet_header_size + cabinet_lock_size + (num_slots * slot_total_size);
 
-		uint32_t process_id = getpid();
+		guint32 process_id = getpid();
 
 		/* TODO: need lock if using multiple threads */
-		uint32_t cabinet_id = next_cabinet_id++;
+		guint32 cabinet_id = next_cabinet_id++;
 
 		shmcabinet_tp cabinet = shmcabinet_map_helper(process_id, cabinet_id,
 				cabinet_total_size, O_RDWR | O_CREAT | O_TRUNC);
@@ -95,7 +96,7 @@ shmcabinet_tp shmcabinet_create(uint32_t num_slots, size_t slot_payload_size,
 
 			/* each slot also has a lock */
 			shmcabinet_slot_tp slot = shmcabinet_ID_TO_SLOT(cabinet, 0);
-			for(int i = 0; i < num_slots; i++) {
+			for(gint i = 0; i < num_slots; i++) {
 				/* unlocked, process-shared lock for the slot */
 				if(rwlock_mgr_init(shmcabinet_SLOT_TO_LOCK(slot), slot_lock_type, 1) != RWLOCK_MGR_SUCCESS) {
 					goto err;
@@ -125,7 +126,7 @@ err:
 	return NULL;
 }
 
-shmcabinet_tp shmcabinet_map(uint32_t process_id, uint32_t cabinet_id, size_t cabinet_size) {
+shmcabinet_tp shmcabinet_map(guint32 process_id, guint32 cabinet_id, size_t cabinet_size) {
 	shmcabinet_tp cabinet = shmcabinet_map_helper(process_id, cabinet_id, cabinet_size, O_RDWR | O_EXCL);
 
 	if(cabinet != NULL && cabinet->valid == SHMCABINET_VALID) {
@@ -151,13 +152,13 @@ err:
 	return NULL;
 }
 
-static shmcabinet_tp shmcabinet_map_helper(uint32_t process_id, uint32_t cabinet_id,
-		size_t cabinet_size, int flags) {
+static shmcabinet_tp shmcabinet_map_helper(guint32 process_id, guint32 cabinet_id,
+		size_t cabinet_size, gint flags) {
 	/* convert ids to the correct shmem name */
 	shmcabinet_NAME(namebuf, process_id, cabinet_id);
 
 	/* get the shared memory fd from /dev/shm */
-	int shmem_fd = shm_open(namebuf, flags, 0600);
+	gint shmem_fd = shm_open(namebuf, flags, 0600);
 	if(shmem_fd == -1) {
 		perror("shmcabinet_map_helper");
 		return NULL;
@@ -176,7 +177,7 @@ static shmcabinet_tp shmcabinet_map_helper(uint32_t process_id, uint32_t cabinet
 	/* map it to our address space */
 	shmcabinet_tp cabinet = (shmcabinet_tp) mmap(NULL, cabinet_size,
 			PROT_READ | PROT_WRITE, MAP_SHARED, shmem_fd, 0);
-	if(cabinet == (void*) -1) {
+	if(cabinet == (gpointer ) -1) {
 		perror("shmcabinet_map_helper");
 		shm_unlink(namebuf);
 		close(shmem_fd);
@@ -194,7 +195,7 @@ static shmcabinet_tp shmcabinet_map_helper(uint32_t process_id, uint32_t cabinet
 	return cabinet;
 }
 
-uint32_t shmcabinet_unmap(shmcabinet_tp cabinet) {
+guint32 shmcabinet_unmap(shmcabinet_tp cabinet) {
 	if(cabinet != NULL && cabinet->valid == SHMCABINET_VALID) {
 		if(rwlock_mgr_writelock(shmcabinet_CABINET_TO_LOCK(cabinet)) != RWLOCK_MGR_SUCCESS) {
 			goto err;
@@ -214,7 +215,7 @@ uint32_t shmcabinet_unmap(shmcabinet_tp cabinet) {
 			shmcabinet_slot_tp slot = shmcabinet_ID_TO_SLOT(cabinet, 0);
 
 			/* destroy all the slots */
-			for(int i = 0; i < cabinet->num_slots; i++) {
+			for(gint i = 0; i < cabinet->num_slots; i++) {
 				if(slot != NULL && slot->valid == SHMCABINET_VALID) {
 					slot->valid = SHMCABINET_INVALID;
 					slot->next_slot_offset = SHMCABINET_INVALID;
@@ -254,7 +255,7 @@ err:
 	return SHMCABINET_ERROR;
 }
 
-void* shmcabinet_allocate(shmcabinet_tp cabinet) {
+gpointer shmcabinet_allocate(shmcabinet_tp cabinet) {
 	if(cabinet != NULL && cabinet->valid == SHMCABINET_VALID) {
 		if(rwlock_mgr_writelock(shmcabinet_CABINET_TO_LOCK(cabinet)) != RWLOCK_MGR_SUCCESS) {
 			goto err;
@@ -302,7 +303,7 @@ err:
 	return NULL;
 }
 
-void* shmcabinet_open(shmcabinet_tp cabinet, uint32_t slot_id) {
+gpointer shmcabinet_open(shmcabinet_tp cabinet, guint32 slot_id) {
 	if(cabinet != NULL && cabinet->valid == SHMCABINET_VALID && slot_id < cabinet->num_slots) {
 		/* find the slot from the slot id */
 		shmcabinet_slot_tp slot = shmcabinet_ID_TO_SLOT(cabinet, slot_id);
@@ -333,7 +334,7 @@ err:
 	return NULL;
 }
 
-uint32_t shmcabinet_close(shmcabinet_tp cabinet, void* payload) {
+guint32 shmcabinet_close(shmcabinet_tp cabinet, gpointer payload) {
 	if(cabinet != NULL && cabinet->valid == SHMCABINET_VALID) {
 		/* get the slot */
 		shmcabinet_slot_tp slot = shmcabinet_PAYLOAD_TO_SLOT(cabinet, payload);
@@ -392,7 +393,7 @@ err:
 	return SHMCABINET_ERROR;
 }
 
-static uint32_t shmcabinet_lockop(shmcabinet_tp cabinet, void* payload, enum shmcabinet_lockop op) {
+static guint32 shmcabinet_lockop(shmcabinet_tp cabinet, gpointer payload, enum shmcabinet_lockop op) {
 	if(cabinet != NULL && cabinet->valid == SHMCABINET_VALID && payload != NULL) {
 		/* get the slot */
 		shmcabinet_slot_tp slot = shmcabinet_PAYLOAD_TO_SLOT(cabinet, payload);
@@ -412,7 +413,7 @@ static uint32_t shmcabinet_lockop(shmcabinet_tp cabinet, void* payload, enum shm
 						}
 					}
 
-					uint8_t is_allocated = slot->next_slot_offset == SHMCABINET_INVALID;
+					guint8 is_allocated = slot->next_slot_offset == SHMCABINET_INVALID;
 					if(!is_allocated) {
 						/* it was not allocated, cancel the op */
 						if(op == SHMCABINET_READLOCK) {
@@ -458,23 +459,23 @@ err:
 	return SHMCABINET_ERROR;
 }
 
-uint32_t shmcabinet_readlock(shmcabinet_tp cabinet, void* payload) {
+guint32 shmcabinet_readlock(shmcabinet_tp cabinet, gpointer payload) {
 	return shmcabinet_lockop(cabinet, payload, SHMCABINET_READLOCK);
 }
 
-uint32_t shmcabinet_writelock(shmcabinet_tp cabinet, void* payload) {
+guint32 shmcabinet_writelock(shmcabinet_tp cabinet, gpointer payload) {
 	return shmcabinet_lockop(cabinet, payload, SHMCABINET_WRITELOCK);
 }
 
-uint32_t shmcabinet_readunlock(shmcabinet_tp cabinet, void* payload) {
+guint32 shmcabinet_readunlock(shmcabinet_tp cabinet, gpointer payload) {
 	return shmcabinet_lockop(cabinet, payload, SHMCABINET_READUNLOCK);
 }
 
-uint32_t shmcabinet_writeunlock(shmcabinet_tp cabinet, void* payload) {
+guint32 shmcabinet_writeunlock(shmcabinet_tp cabinet, gpointer payload) {
 	return shmcabinet_lockop(cabinet, payload, SHMCABINET_WRITEUNLOCK);
 }
 
-uint32_t shmcabinet_get_info(shmcabinet_tp cabinet, shmcabinet_info_tp info) {
+guint32 shmcabinet_get_info(shmcabinet_tp cabinet, shmcabinet_info_tp info) {
 	if(cabinet != NULL && info != NULL) {
 		info->cabinet_id = cabinet->id;
 		info->cabinet_size = cabinet->size;
@@ -484,14 +485,14 @@ uint32_t shmcabinet_get_info(shmcabinet_tp cabinet, shmcabinet_info_tp info) {
 	return SHMCABINET_ERROR;
 }
 
-uint32_t shmcabinet_get_id(shmcabinet_tp cabinet, void* payload) {
+guint32 shmcabinet_get_id(shmcabinet_tp cabinet, gpointer payload) {
 	if(cabinet != NULL && cabinet->valid == SHMCABINET_VALID && payload != NULL) {
 		shmcabinet_slot_tp slot = shmcabinet_PAYLOAD_TO_SLOT(cabinet, payload);
 
 		/* only return id if the slot is allocated */
 		if(slot != NULL && slot->valid == SHMCABINET_VALID) {
 			if(rwlock_mgr_readlock(shmcabinet_SLOT_TO_LOCK(slot)) == RWLOCK_MGR_SUCCESS) {
-				uint8_t bool = slot->next_slot_offset == SHMCABINET_INVALID;
+				guint8 bool = slot->next_slot_offset == SHMCABINET_INVALID;
 				if(rwlock_mgr_readunlock(shmcabinet_SLOT_TO_LOCK(slot)) == RWLOCK_MGR_SUCCESS) {
 					if(bool) {
 						return slot->id;
@@ -503,10 +504,10 @@ uint32_t shmcabinet_get_id(shmcabinet_tp cabinet, void* payload) {
 	return SHMCABINET_ERROR;
 }
 
-uint32_t shmcabinet_slots_available(shmcabinet_tp cabinet) {
+guint32 shmcabinet_slots_available(shmcabinet_tp cabinet) {
 	if(cabinet != NULL && cabinet->valid == SHMCABINET_VALID) {
 		if(rwlock_mgr_readlock(shmcabinet_CABINET_TO_LOCK(cabinet)) == RWLOCK_MGR_SUCCESS) {
-			uint32_t num = cabinet->num_slots - cabinet->num_slots_allocated;
+			guint32 num = cabinet->num_slots - cabinet->num_slots_allocated;
 			if(rwlock_mgr_readunlock(shmcabinet_CABINET_TO_LOCK(cabinet)) == RWLOCK_MGR_SUCCESS) {
 				return num;
 			}
@@ -515,10 +516,10 @@ uint32_t shmcabinet_slots_available(shmcabinet_tp cabinet) {
 	return 0;
 }
 
-uint8_t shmcabinet_is_empty(shmcabinet_tp cabinet) {
+guint8 shmcabinet_is_empty(shmcabinet_tp cabinet) {
 	if(cabinet != NULL && cabinet->valid == SHMCABINET_VALID) {
 		if(rwlock_mgr_readlock(shmcabinet_CABINET_TO_LOCK(cabinet)) == RWLOCK_MGR_SUCCESS) {
-			uint8_t bool = cabinet->num_slots_allocated == 0;
+			guint8 bool = cabinet->num_slots_allocated == 0;
 			if(rwlock_mgr_readunlock(shmcabinet_CABINET_TO_LOCK(cabinet)) == RWLOCK_MGR_SUCCESS) {
 				return bool;
 			}

@@ -24,17 +24,17 @@
 #define _clo_h
 
 struct CLO_entry {
-	int id;
-	char option;
-	char fulloption[20];
-	char transitive;
-	char desc[200];
+	gint id;
+	gchar option;
+	gchar fulloption[20];
+	gchar transitive;
+	gchar desc[200];
 };
 
 #define CLO_OKAY 1
 #define CLO_BAD 0
 #define CLO_USAGE 2
 
-int parse_clo(int argc, char * argv[], struct CLO_entry cloentries[], int (*clo_handler)(char*,int,void*), void *v);
+gint parse_clo(gint argc, gchar * argv[], struct CLO_entry cloentries[], gint (*clo_handler)(gchar*,gint,gpointer ), gpointer v);
 
 #endif

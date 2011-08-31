@@ -23,6 +23,7 @@
 #ifndef _process_h
 #define _process_h
 
+#include <glib.h>
 #include <glib-2.0/glib.h>
 
 #include "socket.h"
@@ -33,15 +34,15 @@
 #include "vector.h"
 
 typedef struct {
-	int in_worker;
+	gint in_worker;
 	pipecloud_tp pipecloud;
-	unsigned int process_id;
-	unsigned int total_workers;
+	guint process_id;
+	guint total_workers;
 } dvn_global_worker_data_t ;
 
 typedef struct dvninstance_master_t {
 	/** nonzero if we are to run in daemon mode */
-	int is_daemon_mode;
+	gint is_daemon_mode;
 
 	/** simulation master logic */
 	sim_master_tp sim_master;
@@ -56,7 +57,7 @@ typedef struct dvninstance_master_t {
 
 typedef struct dvninstance_slave_connection_t {
 	socket_tp sock;
-	int id;
+	gint id;
 } dvninstance_slave_connection_t, * dvninstance_slave_connection_tp ;
 
 typedef struct dvninstance_slave_t {
@@ -73,8 +74,8 @@ typedef struct dvninstance_slave_t {
 	GHashTable *slave_connection_lookup;
 	vector_tp slave_connections;
 
-	unsigned int num_processes;
-	int * worker_process_ids;
+	guint num_processes;
+	gint * worker_process_ids;
 
 } dvninstance_slave_t, * dvninstance_slave_tp;
 
@@ -89,13 +90,13 @@ typedef struct dvninstance_t {
 	socketset_tp socketset;
 
 	/** DVN instance ID for this instance - typically, one ID per machine */
-	int my_instid;
+	gint my_instid;
 
 	/** number of connected slaves */
-	unsigned int num_active_slaves;
+	guint num_active_slaves;
 
 	/** becomes nonzero if DVN should end */
-	int ending;
+	gint ending;
 } dvninstance_t, * dvninstance_tp;
 
 struct DVN_CONFIG {
@@ -103,51 +104,51 @@ struct DVN_CONFIG {
 	enum { dvn_mode_normal, dvn_mode_master, dvn_mode_slave } dvn_mode;
 
 	/** port to listen on for incoming controller connections (master mode) */
-	unsigned int controller_listen_port;
+	guint controller_listen_port;
 
 	/** port to listen on for incoming slave connections */
-	unsigned int slave_listen_port;
+	guint slave_listen_port;
 
 	/** total worker processes to spawn - at least one */
-	unsigned int num_processes;
+	guint num_processes;
 
 	/** nonzero to dump version and quit */
-	char version;
+	gchar version;
 
 	/** nonzero if we should go detach to background (daemon) */
-	char background;
+	gchar background;
 
 	/** DSIM file path to load for 'normal_mode' operation */
-	char dsim_file[200];
+	gchar dsim_file[200];
 
 	/** config file path to load */
-	char config_file[200];
+	gchar config_file[200];
 
 	/** nonzero if we should dump our config file and quit */
-	int config_dump;
+	gint config_dump;
 
 	/** for 'normal_mode', array of log destination configuration strings (per-channel) */
-	char log_destinations[10][256];
+	gchar log_destinations[10][256];
 };
 
-int dvn_controller_process (dvninstance_tp dvn, socket_tp sock);
+gint dvn_controller_process (dvninstance_tp dvn, socket_tp sock);
 
-int dvn_worker_main (unsigned int process_id, unsigned int total_workers, pipecloud_tp pipecloud);
+gint dvn_worker_main (guint process_id, guint total_workers, pipecloud_tp pipecloud);
 void dvn_master_heartbeat (dvninstance_tp dvn);
 void dvn_slave_deposit (dvninstance_tp dvn, nbdf_tp net_frame);
-int dvn_slave_socketprocess(dvninstance_tp dvn, dvninstance_slave_connection_tp slave_connection);
+gint dvn_slave_socketprocess(dvninstance_tp dvn, dvninstance_slave_connection_tp slave_connection);
 void dvn_slave_heartbeat (dvninstance_tp dvn);
-dvninstance_master_tp dvn_create_master (int is_daemon, unsigned int controller_port, socketset_tp socketset);
+dvninstance_master_tp dvn_create_master (gint is_daemon, guint controller_port, socketset_tp socketset);
 void dvn_destroy_master (dvninstance_master_tp master);
-dvninstance_slave_tp dvn_create_slave (int daemon, unsigned int num_processes, unsigned int slave_listen_port, socketset_tp socketset);
+dvninstance_slave_tp dvn_create_slave (gint daemon, guint num_processes, guint slave_listen_port, socketset_tp socketset);
 void dvn_destroy_slave (dvninstance_slave_tp slave);
 dvninstance_tp dvn_create_instance (struct DVN_CONFIG * config);
 void dvn_destroy_instance (dvninstance_tp dvn);
 
-int dvn_main (struct DVN_CONFIG * config);
+gint dvn_main (struct DVN_CONFIG * config);
 
-//void dvn_packet_write(socket_tp socket, unsigned char dest_type, unsigned char dest_layer, int dest_major, int frametype, nbdf_tp frame);
-///void dvn_packet_route(unsigned char dest_type, unsigned char dest_layer, int dest_major, int frametype, nbdf_tp frame);
+//void dvn_packet_write(socket_tp socket, guchar dest_type, guchar dest_layer, gint dest_major, gint frametype, nbdf_tp frame);
+///void dvn_packet_route(guchar dest_type, guchar dest_layer, gint dest_major, gint frametype, nbdf_tp frame);
 
 #endif
 

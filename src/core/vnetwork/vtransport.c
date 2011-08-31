@@ -19,6 +19,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -41,22 +42,22 @@ vtransport_tp vtransport_create(vsocket_mgr_tp vsocket_mgr, vsocket_tp sock) {
 	vt->vsocket_mgr = vsocket_mgr;
 	vt->sock = sock;
 
-	uint64_t wmem = sysconfig_get_int("vnetwork_send_buffer_size");
-	uint64_t rmem = sysconfig_get_int("vnetwork_recv_buffer_size");
+	guint64 wmem = sysconfig_get_gint("vnetwork_send_buffer_size");
+	guint64 rmem = sysconfig_get_gint("vnetwork_recv_buffer_size");
 
 	/* this is now done in vtcp_autotune */
 #if 0
-	int force = sysconfig_get_int("vnetwork_send_buffer_size_force");
+	gint force = sysconfig_get_gint("vnetwork_send_buffer_size_force");
 	if(force == 0) {
 		/* our receive buffer needs to be large enough to allow the sender to send
 		 * a full delay*bandwidth worth of bytes to keep the pipe full. */
-		uint64_t max_latency_milliseconds = global_sim_context.sim_worker->max_latency;
-		uint64_t worst_case_rtt_milliseconds = max_latency_milliseconds * 2;
-		double delay_seconds = ((double)worst_case_rtt_milliseconds) / 1000.0;
+		guint64 max_latency_milliseconds = global_sim_context.sim_worker->max_latency;
+		guint64 worst_case_rtt_milliseconds = max_latency_milliseconds * 2;
+		gdouble delay_seconds = ((gdouble)worst_case_rtt_milliseconds) / 1000.0;
 
 		/* we need bandwidth in bytes per second */
-		uint64_t bandwidth_bytes_per_second_up = vsocket_mgr->vt_mgr->KBps_up * 1024;
-		uint64_t delay_bandwidth_product = delay_seconds * bandwidth_bytes_per_second_up;
+		guint64 bandwidth_bytes_per_second_up = vsocket_mgr->vt_mgr->KBps_up * 1024;
+		guint64 delay_bandwidth_product = delay_seconds * bandwidth_bytes_per_second_up;
 
 		/* only adjust it if we need more space */
 		if(rmem < delay_bandwidth_product) {
@@ -94,7 +95,7 @@ void vtransport_destroy(vtransport_tp vt) {
 	}
 }
 
-vtransport_item_tp vtransport_create_item(uint16_t sockd, rc_vpacket_pod_tp rc_packet) {
+vtransport_item_tp vtransport_create_item(guint16 sockd, rc_vpacket_pod_tp rc_packet) {
 	rc_vpacket_pod_retain_stack(rc_packet);
 
 	vtransport_item_tp titem = malloc(sizeof(vtransport_item_t));
@@ -162,7 +163,7 @@ void vtransport_process_incoming_items(vsocket_mgr_tp net, GQueue *titems) {
 }
 
 //void vtransport_onretransmit(vsocket_mgr_tp net, in_addr_t dst_addr, in_port_t dst_port,
-//		in_port_t src_port, uint32_t retransmit_key) {
+//		in_port_t src_port, guint32 retransmit_key) {
 void vtransport_onretransmit(vci_event_tp vci_event, vsocket_mgr_tp vs_mgr) {
 	debugf("vtransport_onretransmit: event fired\n");
 
@@ -231,14 +232,14 @@ void vtransport_onclose(vci_event_tp vci_event, vsocket_mgr_tp vs_mgr) {
 	}
 }
 
-uint8_t vtransport_is_empty(vtransport_tp vt) {
+guint8 vtransport_is_empty(vtransport_tp vt) {
 	return vbuffer_is_empty(vt->vb);
 }
 
-uint8_t vtransport_transmit(vtransport_tp vt, uint32_t* bytes_transmitted, uint16_t* packets_remaining) {
+guint8 vtransport_transmit(vtransport_tp vt, guint32* bytes_transmitted, guint16* packets_remaining) {
 	rc_vpacket_pod_tp rc_packet = NULL;
-	uint32_t bytes_consumed = 0;
-	uint8_t was_transmitted = 0;
+	guint32 bytes_consumed = 0;
+	guint8 was_transmitted = 0;
 
 	/* get packet, how is protocol specific */
 	rc_packet = vt->sock->type == SOCK_STREAM ?

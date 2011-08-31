@@ -20,10 +20,11 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <stdlib.h>
 #include "heap.h"
 
-heap_tp heap_create (int (*compare)(void *a, void *b), unsigned int default_size) {
+heap_tp heap_create (gint (*compare)(gpointer a, gpointer b), guint default_size) {
 	heap_tp rval;
 
 	if(default_size == 0)
@@ -34,7 +35,7 @@ heap_tp heap_create (int (*compare)(void *a, void *b), unsigned int default_size
 		return NULL;
 
 	rval->default_size = default_size;
-	rval->heap = malloc(sizeof(void*) * default_size);
+	rval->heap = malloc(sizeof(gpointer ) * default_size);
 	rval->heapsize = default_size;
 	rval->ptr = 0;
 	rval->compare = compare;
@@ -43,7 +44,7 @@ heap_tp heap_create (int (*compare)(void *a, void *b), unsigned int default_size
 }
 
 void heap_destroy(heap_tp heap) {
-	unsigned int i;
+	guint i;
 
 	if(heap) {
 		if(heap->heap) {
@@ -62,11 +63,11 @@ void heap_destroy(heap_tp heap) {
 /**
  * deletes the item at index i from the heap
  */
-void * heap_remove(heap_tp heap, unsigned int i) {
-	unsigned int childa, childb;
-	void * rv = NULL;
-	unsigned int j;
-	void * tmp;
+gpointer heap_remove(heap_tp heap, guint i) {
+	guint childa, childb;
+	gpointer rv = NULL;
+	guint j;
+	gpointer tmp;
 
 	if(heap->ptr == 0);
 	else if(heap->ptr == 1 || i == (heap->ptr - 1)) {
@@ -110,7 +111,7 @@ void * heap_remove(heap_tp heap, unsigned int i) {
 	/* shrink the heapsize if possible */
 	if(heap->ptr < (heap->heapsize/2) && (heap->heapsize/2) >= heap->default_size) {
 		heap->heapsize = heap->heapsize >> 1;
-		heap->heap = realloc((void*)heap->heap, heap->heapsize * sizeof(void*));
+		heap->heap = realloc((gpointer )heap->heap, heap->heapsize * sizeof(gpointer ));
 	}
 
 	return rv;
@@ -119,14 +120,14 @@ void * heap_remove(heap_tp heap, unsigned int i) {
 /**
  * return the number of elements currently in the heap
  */
-unsigned int heap_getsize(heap_tp heap) {
+guint heap_getsize(heap_tp heap) {
 	return heap->ptr;
 }
 
 /**
  * returns the item in the heap at index i
  */
-void * heap_get(heap_tp heap, unsigned int i) {
+gpointer heap_get(heap_tp heap, guint i) {
 	if(i < heap->ptr)
 		return heap->heap[i];
 	else
@@ -134,17 +135,17 @@ void * heap_get(heap_tp heap, unsigned int i) {
 }
 
 /**
- * inserts an item o into the heap
+ * inserts an item o ginto the heap
  */
-int heap_insert(heap_tp heap, void * o) {
-	unsigned int i, parent;
-	void * tmp;
+gint heap_insert(heap_tp heap, gpointer o) {
+	guint i, parent;
+	gpointer tmp;
 	if(!o)
 		return 0;
 
 	if(heap->ptr == heap->heapsize) {
 		heap->heapsize *= 2;
-		heap->heap = realloc(heap->heap, heap->heapsize * sizeof(void*));
+		heap->heap = realloc(heap->heap, heap->heapsize * sizeof(gpointer ));
 	}
 
 	i = heap->ptr;

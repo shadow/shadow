@@ -22,6 +22,7 @@
 #ifndef VSOCKET_MGR_H_
 #define VSOCKET_MGR_H_
 
+#include <glib.h>
 #include <stdint.h>
 #include <netinet/in.h>
 #include <glib-2.0/glib.h>
@@ -56,9 +57,9 @@ typedef struct vinterface_s {
 
 typedef struct vsocket_t {
 	/* type of this socket, either SOCK_DGRAM, or SOCK_STREAM */
-	uint8_t type;
+	guint8 type;
 	/* the socket descriptor, unique for each socket */
-	uint16_t sock_desc;
+	guint16 sock_desc;
 	/* the local name of the socket, (address and port) */
 	vpeer_tp ethernet_peer;
 	/* the loopback interface, non-null if bound to loopback */
@@ -66,23 +67,23 @@ typedef struct vsocket_t {
 	/* socket transport layer */
 	struct vtransport_s* vt;
 	/* if set, the socket will be deleted when its buffers become empty */
-	uint8_t do_delete;
+	guint8 do_delete;
 	/* multiplexed sockets are child sockets of a server */
-	uint16_t sock_desc_parent;
+	guint16 sock_desc_parent;
 	/* socket states */
 	enum vsocket_state prev_state;
 	enum vsocket_state curr_state;
 	/* keeps track of the state of the socket */
 	vepoll_tp vep;
 	/* either the child socket is accepted, or the parent socket is listening */
-	uint8_t is_active;
+	guint8 is_active;
 }vsocket_t, *vsocket_tp;
 
 typedef struct vsocket_mgr_s {
 	in_addr_t addr;
-	char addr_string[INET_ADDRSTRLEN];
-	uint16_t next_sock_desc;
-	uint16_t next_rnd_port;
+	gchar addr_string[INET_ADDRSTRLEN];
+	guint16 next_sock_desc;
+	guint16 next_rnd_port;
 	/* hashtable<socket descriptor, vsocket> */
 	GHashTable *vsockets;
 	vinterface_tp loopback;
@@ -97,35 +98,35 @@ typedef struct vsocket_mgr_s {
 	vcpu_tp vcpu;
 }vsocket_mgr_t, *vsocket_mgr_tp;
 
-vsocket_mgr_tp vsocket_mgr_create(context_provider_tp p, in_addr_t addr, uint32_t KBps_down, uint32_t KBps_up, uint64_t cpu_speed_Bps);
+vsocket_mgr_tp vsocket_mgr_create(context_provider_tp p, in_addr_t addr, guint32 KBps_down, guint32 KBps_up, guint64 cpu_speed_Bps);
 void vsocket_mgr_destroy(vsocket_mgr_tp net);
-vsocket_tp vsocket_mgr_create_socket(vsocket_mgr_tp net, uint8_t type);
+vsocket_tp vsocket_mgr_create_socket(vsocket_mgr_tp net, guint8 type);
 void vsocket_mgr_destroy_socket(vsocket_tp sock);
 void vsocket_mgr_add_socket(vsocket_mgr_tp net, vsocket_tp sock);
-vsocket_tp vsocket_mgr_get_socket(vsocket_mgr_tp net, uint16_t sockd);
+vsocket_tp vsocket_mgr_get_socket(vsocket_mgr_tp net, guint16 sockd);
 void vsocket_mgr_remove_socket(vsocket_mgr_tp net, vsocket_tp sock);
 void vsocket_mgr_map_socket_tcp(vsocket_mgr_tp net, vsocket_tp sock);
-vsocket_tp vsocket_mgr_get_socket_tcp(vsocket_mgr_tp net, uint16_t port);
+vsocket_tp vsocket_mgr_get_socket_tcp(vsocket_mgr_tp net, guint16 port);
 void vsocket_mgr_unmap_socket_tcp(vsocket_mgr_tp net, vsocket_tp sock);
 void vsocket_mgr_map_socket_udp(vsocket_mgr_tp net, vsocket_tp sock);
-vsocket_tp vsocket_mgr_get_socket_udp(vsocket_mgr_tp net, uint16_t port);
+vsocket_tp vsocket_mgr_get_socket_udp(vsocket_mgr_tp net, guint16 port);
 void vsocket_mgr_unmap_socket_udp(vsocket_mgr_tp net, vsocket_tp sock);
-void vsocket_mgr_destroy_socket_cb(int keu, void* value, void *param);
+void vsocket_mgr_destroy_socket_cb(gint keu, gpointer value, gpointer param);
 void vsocket_mgr_destroy_and_remove_socket(vsocket_mgr_tp net, vsocket_tp sock);
-void vsocket_mgr_destroy_and_remove_socket_cb(int key, void* value, void* param);
+void vsocket_mgr_destroy_and_remove_socket_cb(gint key, gpointer value, gpointer param);
 void vsocket_mgr_try_destroy_socket(vsocket_mgr_tp net, vsocket_tp sock);
 vsocket_tp vsocket_mgr_get_socket_receiver(vsocket_mgr_tp net, rc_vpacket_pod_tp rc_packet);
-vsocket_tp vsocket_mgr_find_socket(vsocket_mgr_tp net, uint8_t protocol,
+vsocket_tp vsocket_mgr_find_socket(vsocket_mgr_tp net, guint8 protocol,
 		in_addr_t remote_addr, in_port_t remote_port, in_port_t local_port);
 
 vinterface_tp vsocket_mgr_create_interface(vsocket_mgr_tp net, in_addr_t addr);
-uint8_t vsocket_mgr_isbound_loopback(vsocket_mgr_tp net, in_port_t port);
-uint8_t vsocket_mgr_isbound_ethernet(vsocket_mgr_tp net, in_port_t port);
+guint8 vsocket_mgr_isbound_loopback(vsocket_mgr_tp net, in_port_t port);
+guint8 vsocket_mgr_isbound_ethernet(vsocket_mgr_tp net, in_port_t port);
 void vsocket_mgr_bind_ethernet(vsocket_mgr_tp net, vsocket_tp sock, in_port_t bind_port);
 void vsocket_mgr_bind_loopback(vsocket_mgr_tp net, vsocket_tp sock, in_port_t bind_port);
 
 void vsocket_mgr_onnotify(vci_event_tp vci_event, vsocket_mgr_tp vs_mgr);
 
-void vsocket_mgr_print_stat(vsocket_mgr_tp net, uint16_t sockd);
+void vsocket_mgr_prgint_stat(vsocket_mgr_tp net, guint16 sockd);
 
 #endif /* VSOCKET_MGR_H_ */

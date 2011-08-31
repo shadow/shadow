@@ -22,6 +22,7 @@
 #ifndef VPIPE_H_
 #define VPIPE_H_
 
+#include <glib.h>
 #include <stdint.h>
 #include <stddef.h>
 #include <glib-2.0/glib.h>
@@ -29,7 +30,7 @@
 #include "vepoll.h"
 #include "linkedbuffer.h"
 
-typedef uint16_t vpipe_id;
+typedef guint16 vpipe_id;
 #define VPIPE_IO_ERROR -1
 
 enum vpipe_status {
@@ -52,10 +53,10 @@ typedef struct vpipe_unid_s {
 } vpipe_unid_t, *vpipe_unid_tp;
 
 typedef struct vpipe_bid_s {
-	uint16_t fda;
+	guint16 fda;
 	vpipe_unid_tp pipea;
 	vepoll_tp vepolla;
-	uint16_t fdb;
+	guint16 fdb;
 	vpipe_unid_tp pipeb;
 	vepoll_tp vepollb;
 } vpipe_bid_t, *vpipe_bid_tp;
@@ -69,8 +70,8 @@ vpipe_mgr_tp vpipe_mgr_create(in_addr_t addr);
 void vpipe_mgr_destroy(vpipe_mgr_tp mgr);
 
 enum vpipe_status vpipe_create(vevent_mgr_tp vev_mgr, vpipe_mgr_tp mgr, vpipe_id fda, vpipe_id fdb);
-ssize_t vpipe_read(vpipe_mgr_tp mgr, vpipe_id fd, void* dst, size_t num_bytes);
-ssize_t vpipe_write(vpipe_mgr_tp mgr, vpipe_id fd, const void* src, size_t num_bytes);
+ssize_t vpipe_read(vpipe_mgr_tp mgr, vpipe_id fd, gpointer dst, size_t num_bytes);
+ssize_t vpipe_write(vpipe_mgr_tp mgr, vpipe_id fd, const gpointer src, size_t num_bytes);
 enum vpipe_status vpipe_close(vpipe_mgr_tp mgr, vpipe_id fd);
 enum vpipe_status vpipe_stat(vpipe_mgr_tp mgr, vpipe_id fd);
 vepoll_tp vpipe_get_poll(vpipe_mgr_tp mgr, vpipe_id fd);

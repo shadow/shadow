@@ -22,6 +22,7 @@
 #ifndef VTRANSPORT_MGR_H_
 #define VTRANSPORT_MGR_H_
 
+#include <glib.h>
 #include <stdint.h>
 
 #include "vsocket_mgr.h"
@@ -37,36 +38,36 @@
 #define CPU_LOAD_MULTIPLIER 0
 
 typedef struct vtransport_mgr_inq_s {
-	/* rc_packets coming into this node from the wire */
+	/* rc_packets coming ginto this node from the wire */
 	GQueue *buffer;
 	/* burst rate of incoming packets */
-	uint64_t max_size;
-	uint64_t current_size;
+	guint64 max_size;
+	guint64 current_size;
 }vtransport_mgr_inq_t, *vtransport_mgr_inq_tp;
 
 typedef struct vtransport_mgr_s {
 	vsocket_mgr_tp vsocket_mgr;
 	/* nanos to receive a single byte */
-	double nanos_per_byte_down;
+	gdouble nanos_per_byte_down;
 	/* nanos to send a single byte */
-	double nanos_per_byte_up;
-	uint32_t KBps_down;
-	uint32_t KBps_up;
+	gdouble nanos_per_byte_up;
+	guint32 KBps_down;
+	guint32 KBps_up;
 	/* list<vsocket_tp>, list of sockets that have packets waiting to be sent */
 	GQueue *ready_to_send;
 	/* set if an incoming packet can trigger a send event */
-	uint8_t ok_to_fire_send;
+	guint8 ok_to_fire_send;
 	/* list<rc_packet>, essentially the NIC queue - packets waiting to be received */
 	vtransport_mgr_inq_tp inq;
 	/* set if an incoming packet can trigger a recv event */
-	uint8_t ok_to_fire_recv;
+	guint8 ok_to_fire_recv;
 	ptime_t last_time_sent;
 	ptime_t last_time_recv;
-	uint64_t nanos_consumed_sent;
-	uint64_t nanos_consumed_recv;
+	guint64 nanos_consumed_sent;
+	guint64 nanos_consumed_recv;
 } vtransport_mgr_t, *vtransport_mgr_tp;
 
-vtransport_mgr_tp vtransport_mgr_create(vsocket_mgr_tp vsocket_mgr, uint32_t KBps_down, uint32_t KBps_up);
+vtransport_mgr_tp vtransport_mgr_create(vsocket_mgr_tp vsocket_mgr, guint32 KBps_down, guint32 KBps_up);
 void vtransport_mgr_destroy(vtransport_mgr_tp vt_mgr);
 void vtransport_mgr_download_next(vtransport_mgr_tp vt_mgr);
 void vtransport_mgr_ondownloaded(vci_event_tp vci_event, vsocket_mgr_tp vs_mgr);

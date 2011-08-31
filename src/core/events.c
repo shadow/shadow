@@ -20,6 +20,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <stdlib.h>
 
 #include "global.h"
@@ -36,12 +37,12 @@ events_tp events_create (void) {
 	if(!events)
 		printfault(EXIT_NOMEM, "events_create: Out of memory");
 
-	events->evtracker = evtracker_create(sysconfig_get_int("event_tracker_size"), sysconfig_get_int("event_tracker_granularity"));
+	events->evtracker = evtracker_create(sysconfig_get_gint("event_tracker_size"), sysconfig_get_gint("event_tracker_granularity"));
 
 	return events;
 }
 
-void events_schedule (events_tp events, ptime_t at, void * data, int type) {
+void events_schedule (events_tp events, ptime_t at, gpointer data, gint type) {
 	events_eholder_tp eh = malloc(sizeof(*eh));
 
 	if(!eh)
@@ -59,9 +60,9 @@ ptime_t events_get_next_time (events_tp events) {
 	return evtracker_earliest_event(events->evtracker, NULL);
 }
 
-void * events_dequeue  (events_tp events, ptime_t * at, int * type) {
+gpointer events_dequeue  (events_tp events, ptime_t * at, gint * type) {
 	events_eholder_tp eh;
-	void * rv;
+	gpointer rv;
 
 	eh = evtracker_get_nextevent(events->evtracker, at, 1);
 	if(!eh)
@@ -80,8 +81,8 @@ void events_destroy (events_tp events) {
 		return;
 	}
 
-	void* event;
-	int event_type = 0;
+	gpointer event;
+	gint event_type = 0;
 
 	/* empty the event queue, destroying each */
 	while((event = events_dequeue(events, NULL, &event_type)) != NULL) {

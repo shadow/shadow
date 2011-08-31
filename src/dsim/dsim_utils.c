@@ -20,6 +20,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <string.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -36,13 +37,13 @@ dsim_tp global_current_dsim;
 
 /* for yacc stuff */
 extern FILE * yyin;
-extern char * _dsim_curbuf_input;
-extern int dsim_is_error;
+extern gchar * _dsim_curbuf_input;
+extern gint dsim_is_error;
 
 /* define possible functions and their argument formats */
 struct {
-	char operation_text[20];
-	char operation_argfmt[20];
+	gchar operation_text[20];
+	gchar operation_argfmt[20];
 	enum operation_type type;
 } dsim_operation_list[] = {
 		/* plugin_path */
@@ -75,7 +76,7 @@ dsim_vartracker_tp dsim_vartracker_create(void) {
 
 void dsim_vartracker_destroy(dsim_vartracker_tp vt) {
 	dsim_vartracker_var_tp var;
-	int v;
+	gint v;
 	if(vt) {
 		while((var = btree_get_head(vt->btree, &v)) != NULL) {
 			if(var->data && var->freeable)
@@ -92,9 +93,9 @@ void dsim_vartracker_destroy(dsim_vartracker_tp vt) {
 	return;
 }
 
-int dsim_vartracker_nameencode(char * name) {
+gint dsim_vartracker_nameencode(gchar * name) {
 	/* adler32 */
-	unsigned int a=1,b=1,slen=strlen(name),i;
+	guint a=1,b=1,slen=strlen(name),i;
 
 	for(i=0;i<slen;i++) {
 		a += name[i];
@@ -106,8 +107,8 @@ int dsim_vartracker_nameencode(char * name) {
 	return (a % 65521) + (b % 65521)*65536;
 }
 
-dsim_vartracker_var_tp dsim_vartracker_findvar(dsim_vartracker_tp vt, char * name) {
-	int namekey = dsim_vartracker_nameencode(name);
+dsim_vartracker_var_tp dsim_vartracker_findvar(dsim_vartracker_tp vt, gchar * name) {
+	gint namekey = dsim_vartracker_nameencode(name);
 	dsim_vartracker_var_tp var = btree_get(vt->btree, namekey);
 
 	if(var)
@@ -116,9 +117,9 @@ dsim_vartracker_var_tp dsim_vartracker_findvar(dsim_vartracker_tp vt, char * nam
 		return dsim_vartracker_createvar(vt, name, NULL);
 }
 
-dsim_vartracker_var_tp dsim_vartracker_createvar(dsim_vartracker_tp vt, char * name, void * value) {
+dsim_vartracker_var_tp dsim_vartracker_createvar(dsim_vartracker_tp vt, gchar * name, gpointer value) {
 	dsim_vartracker_var_tp var = malloc(sizeof(*var));
-	int namekey = dsim_vartracker_nameencode(name);
+	gint namekey = dsim_vartracker_nameencode(name);
 
 	if(!var)
 		printfault(EXIT_NOMEM, "Out of memory: dsim_vartracker_create");
@@ -133,7 +134,7 @@ dsim_vartracker_var_tp dsim_vartracker_createvar(dsim_vartracker_tp vt, char * n
 	return var;
 }
 
-dsim_tp dsim_create (char * dsim_file) {
+dsim_tp dsim_create (gchar * dsim_file) {
 	dsim_tp dsim = malloc(sizeof(*dsim));
 
 	if(!dsim)
@@ -189,9 +190,9 @@ void dsim_destroy_delement_arglist(delement_tp arg) {
 	return;
 }
 
-int dsim_construct_arglist(char * fmt, operation_arg_tp out_args, delement_tp in_args) {
+gint dsim_construct_arglist(gchar * fmt, operation_arg_tp out_args, delement_tp in_args) {
 	delement_tp ca = in_args;
-	int i;
+	gint i;
 
 	for(i=0; i<strlen(fmt); i++){
 		if(!ca || !ca->data)
@@ -208,7 +209,7 @@ int dsim_construct_arglist(char * fmt, operation_arg_tp out_args, delement_tp in
 
 			case 'n':
 				if(ca->DTYPE == DT_NUMBER) {
-					out_args[i].v.double_val  = *((double*)ca->data);
+					out_args[i].v.gdouble_val  = *((gdouble*)ca->data);
 					out_args[i].DTYPE = DT_NUMBER;
 				} else
 					i = -1;
@@ -249,9 +250,9 @@ int dsim_construct_arglist(char * fmt, operation_arg_tp out_args, delement_tp in
 	return 1;
 }
 
-operation_tp dsim_create_operation(char * fname,delement_tp args,dsim_vartracker_var_tp retval){
+operation_tp dsim_create_operation(gchar * fname,delement_tp args,dsim_vartracker_var_tp retval){
 	operation_tp op = NULL;
-	int i;
+	gint i;
 
 	if(!fname)
 		return NULL;
@@ -283,18 +284,18 @@ operation_tp dsim_create_operation(char * fname,delement_tp args,dsim_vartracker
 }
 
 void dsim_destroy_operation(operation_tp op) {
-	for(int i=0; i<op->num_arguments; i++) {
+	for(gint i=0; i<op->num_arguments; i++) {
 		if(op->arguments[i].DTYPE == DT_STRING)
 			free(op->arguments[i].v.string_val);
 	}
 	free(op);
 }
 
-int dsim_finalize_operations(dsim_tp dsim, delement_tp de_ops, ptime_t tv){
+gint dsim_finalize_operations(dsim_tp dsim, delement_tp de_ops, ptime_t tv){
 	delement_tp cur_de = de_ops;
 	delement_tp tmp;
 	operation_tp cur_op;
-	int rv = 1;
+	gint rv = 1;
 
 	while(cur_de) {
 		if(cur_de->DTYPE == DT_OP) {
@@ -324,7 +325,7 @@ ptime_t dsim_get_nexttime(dsim_tp dsim) {
 	else return PTIME_INVALID;
 }
 
-operation_tp dsim_get_nextevent(dsim_tp dsim, ptime_t * time, char removal) {
+operation_tp dsim_get_nextevent(dsim_tp dsim, ptime_t * time, gchar removal) {
 	return evtracker_get_nextevent(dsim->oplist, time, removal );
 }
 

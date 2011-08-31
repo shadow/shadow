@@ -20,15 +20,16 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <string.h>
 #include <stdio.h>
 
 #include "global.h"
 #include "clo.h"
 
-int parse_clo(int argc, char * argv[], struct CLO_entry cloentries[], int (*clo_handler)(char*,int,void*), void *v) {
-	int i,j,k;
-	char so[3] = "--";
+gint parse_clo(gint argc, gchar * argv[], struct CLO_entry cloentries[], gint (*clo_handler)(gchar*,gint,gpointer ), gpointer v) {
+	gint i,j,k;
+	gchar so[3] = "--";
 	j = argc-1;
 	for(j=1; j<argc; j++) {
 		for(i=0; cloentries[i].id; i++){

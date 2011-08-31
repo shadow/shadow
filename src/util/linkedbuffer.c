@@ -34,6 +34,7 @@
  *      Author: jansen
  */
 
+#include <glib.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -46,7 +47,7 @@ static void linkedbuffer_create_new_head(linkedbuffer_tp lbuffer);
 static void linkedbuffer_destroy_old_tail(linkedbuffer_tp lbuffer);
 static size_t linkedbuffer_get_available_bytes_tail(linkedbuffer_tp lbuffer);
 
-static bufferlink_tp bufferlink_create(uint16_t capacity);
+static bufferlink_tp bufferlink_create(guint16 capacity);
 static void bufferlink_destroy(bufferlink_tp link);
 
 linkedbuffer_tp linkedbuffer_create(size_t link_capacity){
@@ -77,15 +78,15 @@ void linkedbuffer_destroy(linkedbuffer_tp lbuffer){
 		}
 		free(lbuffer);
 	} else {
-		/* TODO log null pointer exception */
+		/* TODO log null poginter exception */
 	}
 
 	return;
 }
 
-size_t linkedbuffer_read(linkedbuffer_tp lbuffer, void* dest, size_t numbytes){
+size_t linkedbuffer_read(linkedbuffer_tp lbuffer, gpointer dest, size_t numbytes){
 	size_t bytes_left = numbytes;
-	uint32_t dest_offset = 0;
+	guint32 dest_offset = 0;
 
 	/* destroys old buffer tails proactively as opposed to lazily */
 
@@ -125,15 +126,15 @@ size_t linkedbuffer_read(linkedbuffer_tp lbuffer, void* dest, size_t numbytes){
 		}
 
 	} else {
-		/* TODO log null pointer exception */
+		/* TODO log null poginter exception */
 	}
 
 	return numbytes - bytes_left;
 }
 
-size_t linkedbuffer_write(linkedbuffer_tp lbuffer, const void* src, size_t numbytes){
+size_t linkedbuffer_write(linkedbuffer_tp lbuffer, const gpointer src, size_t numbytes){
 	size_t bytes_left = numbytes;
-	uint32_t src_offset = 0;
+	guint32 src_offset = 0;
 
 	/* creates new buffer heads lazily as opposed to proactively */
 
@@ -168,7 +169,7 @@ size_t linkedbuffer_write(linkedbuffer_tp lbuffer, const void* src, size_t numby
 		}
 
 	} else {
-		/* TODO log null pointer exception */
+		/* TODO log null poginter exception */
 	}
 
 	return numbytes - bytes_left;
@@ -212,7 +213,7 @@ static size_t linkedbuffer_get_available_bytes_tail(linkedbuffer_tp lbuffer) {
 	return bytes_available;
 }
 
-static bufferlink_tp bufferlink_create(uint16_t capacity){
+static bufferlink_tp bufferlink_create(guint16 capacity){
 	bufferlink_tp link = malloc(sizeof(bufferlink_t));
 	if(link == NULL){
 		printf("Out of memory: bufferlink_create\n");
@@ -240,7 +241,7 @@ static void bufferlink_destroy(bufferlink_tp link){
 		link->next = NULL;
 		free(link);
 	} else {
-		/* TODO log null pointer exception */
+		/* TODO log null poginter exception */
 	}
 
 	return;

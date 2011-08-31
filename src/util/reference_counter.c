@@ -20,20 +20,21 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "global.h"
 #include "reference_counter.h"
 
-static void rc_assert_bounds(int count) {
+static void rc_assert_bounds(gint count) {
 	/* if the count is out of bounds, its definitely an error. complain and die. */
 	if(count < 0 || count > 100) {
 		printfault(EXIT_UNKNOWN, "FATAL: rc_assert_bounds: reference count out of bounds\n");
 	}
 }
 
-rc_object_tp rc_create(void* data, rc_object_destructor_fp destructor) {
+rc_object_tp rc_create(gpointer data, rc_object_destructor_fp destructor) {
 	rc_object_tp rc_object = malloc(sizeof(rc_object_t));
 	rc_object->data = data;
 	rc_object->destructor = destructor;
@@ -41,7 +42,7 @@ rc_object_tp rc_create(void* data, rc_object_destructor_fp destructor) {
 	return rc_object;
 }
 
-void* rc_get(rc_object_tp rc_object) {
+gpointer rc_get(rc_object_tp rc_object) {
 	if(rc_object != NULL) {
 		rc_assert_bounds(rc_object->reference_count);
 		if(rc_object->reference_count > 0) {

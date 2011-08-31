@@ -20,6 +20,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -28,18 +29,18 @@
 #define ORDEREDLIST_DEBUG 0
 
 #if ORDEREDLIST_DEBUG
-/* prints an ascii representation of the list */
-static void orderedlist_print(orderedlist_tp list);
+/* prgints an ascii representation of the list */
+static void orderedlist_prgint(orderedlist_tp list);
 #endif
 /* searches the list for the given key.
  * returns NULL if not found and the last element with the given key otherwise.
  */
-static orderedlist_element_tp orderedlist_search(orderedlist_tp list, uint64_t key);
+static orderedlist_element_tp orderedlist_search(orderedlist_tp list, guint64 key);
 /* searches for the position where key fits in the list.
  * returns NULL if the key belongs at the front of the list and the last element
  * that is <= the given key otherwise.
  */
-static orderedlist_element_tp orderedlist_find_position(orderedlist_tp list, uint64_t key);
+static orderedlist_element_tp orderedlist_find_position(orderedlist_tp list, guint64 key);
 
 orderedlist_tp orderedlist_create() {
 	orderedlist_tp list = malloc(sizeof(orderedlist_t));
@@ -56,7 +57,7 @@ orderedlist_tp orderedlist_create() {
 	return list;
 }
 
-void orderedlist_destroy(orderedlist_tp list, uint8_t do_free_values) {
+void orderedlist_destroy(orderedlist_tp list, guint8 do_free_values) {
 	/* this will leak memory if the caller does not free the values stored in the
 	 * list. we cannot free values since we do not know the type.
 	 */
@@ -66,7 +67,7 @@ void orderedlist_destroy(orderedlist_tp list, uint8_t do_free_values) {
 
 	if(do_free_values) {
 		while (list->first != NULL) {
-			void* value = orderedlist_remove_first(list);
+			gpointer value = orderedlist_remove_first(list);
 			if(value != NULL){
 				free(value);
 			}
@@ -80,7 +81,7 @@ void orderedlist_destroy(orderedlist_tp list, uint8_t do_free_values) {
 	free(list);
 }
 
-void orderedlist_add(orderedlist_tp list, uint64_t key, void* value) {
+void orderedlist_add(orderedlist_tp list, guint64 key, gpointer value) {
 	if(list == NULL || key == UINT32_MAX) {
 		return;
 	}
@@ -128,7 +129,7 @@ void orderedlist_add(orderedlist_tp list, uint64_t key, void* value) {
 	list->length++;
 }
 
-void* orderedlist_remove(orderedlist_tp list, uint64_t key) {
+gpointer orderedlist_remove(orderedlist_tp list, guint64 key) {
 	if(list == NULL) {
 		return NULL;
 	}
@@ -153,14 +154,14 @@ void* orderedlist_remove(orderedlist_tp list, uint64_t key) {
 	/* target is in middle somewhere */
 	target->prev->next = target->next;
 	target->next->prev = target->prev;
-	void* value = target->value;
+	gpointer value = target->value;
 	free(target);
 	list->length--;
 
 	return value;
 }
 
-void* orderedlist_remove_first(orderedlist_tp list) {
+gpointer orderedlist_remove_first(orderedlist_tp list) {
 	if(list == NULL || list->first == NULL){
 		return NULL;
 	}
@@ -176,14 +177,14 @@ void* orderedlist_remove_first(orderedlist_tp list) {
 	}
 
 	/* save value for return */
-	void* value = remove->value;
+	gpointer value = remove->value;
 	free(remove);
 	list->length--;
 
 	return value;
 }
 
-void* orderedlist_remove_last(orderedlist_tp list) {
+gpointer orderedlist_remove_last(orderedlist_tp list) {
 	if(list == NULL || list->last == NULL){
 		return NULL;
 	}
@@ -199,42 +200,42 @@ void* orderedlist_remove_last(orderedlist_tp list) {
 	}
 
 	/* save value for return */
-	void* value = remove->value;
+	gpointer value = remove->value;
 	free(remove);
 	list->length--;
 
 	return value;
 }
 
-void* orderedlist_peek_first_value(orderedlist_tp list) {
+gpointer orderedlist_peek_first_value(orderedlist_tp list) {
 	if(list == NULL || list->first == NULL){
 		return NULL;
 	}
 	return list->first->value;
 }
 
-uint64_t orderedlist_peek_first_key(orderedlist_tp list) {
+guint64 orderedlist_peek_first_key(orderedlist_tp list) {
 	if(list == NULL || list->first == NULL){
 		return UINT64_MAX;
 	}
 	return list->first->key;
 }
 
-void* orderedlist_peek_last_value(orderedlist_tp list) {
+gpointer orderedlist_peek_last_value(orderedlist_tp list) {
 	if(list == NULL || list->last == NULL){
 		return NULL;
 	}
 	return list->last->value;
 }
 
-uint64_t orderedlist_peek_last_key(orderedlist_tp list) {
+guint64 orderedlist_peek_last_key(orderedlist_tp list) {
 	if(list == NULL || list->last == NULL){
 		return UINT64_MAX;
 	}
 	return list->last->key;
 }
 
-void* orderedlist_ceiling_value(orderedlist_tp list, uint64_t key) {
+gpointer orderedlist_ceiling_value(orderedlist_tp list, guint64 key) {
 	if(list == NULL) {
 		return NULL;
 	}
@@ -255,12 +256,12 @@ void* orderedlist_ceiling_value(orderedlist_tp list, uint64_t key) {
 	return NULL;
 }
 
-uint64_t orderedlist_compact(orderedlist_tp list){
+guint64 orderedlist_compact(orderedlist_tp list){
 	if(list == NULL || list->first == NULL) {
 		return 0;
 	}
 
-	uint32_t count = 0;
+	guint32 count = 0;
 	orderedlist_element_tp element = list->first;
 	while(element != NULL) {
 		element->key = count++;
@@ -271,7 +272,7 @@ uint64_t orderedlist_compact(orderedlist_tp list){
 	return count;
 }
 
-uint32_t orderedlist_length(orderedlist_tp list){
+guint32 orderedlist_length(orderedlist_tp list){
 	if(list == NULL) {
 		return 0;
 	} else {
@@ -279,7 +280,7 @@ uint32_t orderedlist_length(orderedlist_tp list){
 	}
 }
 
-static orderedlist_element_tp orderedlist_search(orderedlist_tp list, uint64_t key) {
+static orderedlist_element_tp orderedlist_search(orderedlist_tp list, guint64 key) {
 	orderedlist_element_tp target = list->last;
 	while (target != NULL) {
 		if(key == target->key) {
@@ -290,7 +291,7 @@ static orderedlist_element_tp orderedlist_search(orderedlist_tp list, uint64_t k
 	return target;
 }
 
-static orderedlist_element_tp orderedlist_find_position(orderedlist_tp list, uint64_t key){
+static orderedlist_element_tp orderedlist_find_position(orderedlist_tp list, guint64 key){
 	/* we search from back of list, since increasing sequence numbers will
 	 * get added to the back. this means adding to the list can be constant.
 	 */
@@ -305,7 +306,7 @@ static orderedlist_element_tp orderedlist_find_position(orderedlist_tp list, uin
 }
 
 #if ORDEREDLIST_DEBUG
-static void orderedlist_print(orderedlist_tp list){
+static void orderedlist_prgint(orderedlist_tp list){
 	printf("##########\n");
 	if(list == NULL){
 		printf("List:NULL\n");

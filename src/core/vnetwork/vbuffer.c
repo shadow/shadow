@@ -19,6 +19,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -38,16 +39,16 @@ enum vbuffer_action {
 	VB_ADD, VB_REMOVE, VB_GET
 };
 
-static vbuffer_rbuf_tp vbuffer_create_receive_buffer(uint64_t max_size, uint8_t tcp_mode);
-static vbuffer_sbuf_tp vbuffer_create_send_buffer(uint64_t max_size, uint8_t tcp_mode);
+static vbuffer_rbuf_tp vbuffer_create_receive_buffer(guint64 max_size, guint8 tcp_mode);
+static vbuffer_sbuf_tp vbuffer_create_send_buffer(guint64 max_size, guint8 tcp_mode);
 static void vbuffer_destroy_receive_buffer(vbuffer_rbuf_tp rbuf);
 static void vbuffer_destroy_send_buffer(vbuffer_sbuf_tp sbuf);
-static uint8_t vbuffer_add_receive_helper(vbuffer_tp vb, rc_vpacket_pod_tp rc_packet, enum vbuffer_type vbt);
-static uint8_t vbuffer_add_send_helper(vbuffer_tp vb, rc_vpacket_pod_tp rc_packet, enum vbuffer_type vbt, uint32_t key);
-static rc_vpacket_pod_tp vbuffer_remove_receive_helper(vbuffer_tp vb, enum vbuffer_type vbt, enum vbuffer_action vba, uint16_t** read_offset, uint32_t next_sequence);
-static rc_vpacket_pod_tp vbuffer_remove_send_helper(vbuffer_tp vb, enum vbuffer_type vbt, enum vbuffer_action vba, uint32_t key);
+static guint8 vbuffer_add_receive_helper(vbuffer_tp vb, rc_vpacket_pod_tp rc_packet, enum vbuffer_type vbt);
+static guint8 vbuffer_add_send_helper(vbuffer_tp vb, rc_vpacket_pod_tp rc_packet, enum vbuffer_type vbt, guint32 key);
+static rc_vpacket_pod_tp vbuffer_remove_receive_helper(vbuffer_tp vb, enum vbuffer_type vbt, enum vbuffer_action vba, guint16** read_offset, guint32 next_sequence);
+static rc_vpacket_pod_tp vbuffer_remove_send_helper(vbuffer_tp vb, enum vbuffer_type vbt, enum vbuffer_action vba, guint32 key);
 
-vbuffer_tp vbuffer_create(uint8_t type, uint64_t max_recv_space, uint64_t max_send_space, vepoll_tp vep) {
+vbuffer_tp vbuffer_create(guint8 type, guint64 max_recv_space, guint64 max_send_space, vepoll_tp vep) {
 	vbuffer_tp vb = malloc(sizeof(vbuffer_t));
 
 	vb->rbuf = vbuffer_create_receive_buffer(max_recv_space, type == SOCK_STREAM);
@@ -67,7 +68,7 @@ void vbuffer_destroy(vbuffer_tp vb) {
 	free(vb);
 }
 
-static vbuffer_rbuf_tp vbuffer_create_receive_buffer(uint64_t max_size, uint8_t tcp_mode) {
+static vbuffer_rbuf_tp vbuffer_create_receive_buffer(guint64 max_size, guint8 tcp_mode) {
 	vbuffer_rbuf_tp rbuf = malloc(sizeof(vbuffer_rbuf_t));
 	rbuf->max_size = max_size;
 	rbuf->current_size = 0;
@@ -113,7 +114,7 @@ static void vbuffer_destroy_receive_buffer(vbuffer_rbuf_tp rbuf) {
 	}
 }
 
-static vbuffer_sbuf_tp vbuffer_create_send_buffer(uint64_t max_size, uint8_t tcp_mode) {
+static vbuffer_sbuf_tp vbuffer_create_send_buffer(guint64 max_size, guint8 tcp_mode) {
 	vbuffer_sbuf_tp sbuf = malloc(sizeof(vbuffer_sbuf_t));
 	sbuf->max_size = max_size;
 	sbuf->current_size = 0;
@@ -169,9 +170,9 @@ static void vbuffer_destroy_send_buffer(vbuffer_sbuf_tp sbuf) {
 }
 
 /* returns 1 if the packet was buffered, 0 otherwise */
-static uint8_t vbuffer_add_receive_helper(vbuffer_tp vb, rc_vpacket_pod_tp rc_packet, enum vbuffer_type vbt) {
+static guint8 vbuffer_add_receive_helper(vbuffer_tp vb, rc_vpacket_pod_tp rc_packet, enum vbuffer_type vbt) {
 	rc_vpacket_pod_retain_stack(rc_packet);
-	uint8_t result = 0;
+	guint8 result = 0;
 
 	if(vb != NULL && vb->rbuf != NULL) {
 		vpacket_tp packet = vpacket_mgr_lockcontrol(rc_packet, LC_OP_READLOCK | LC_TARGET_PACKET);
@@ -181,7 +182,7 @@ static uint8_t vbuffer_add_receive_helper(vbuffer_tp vb, rc_vpacket_pod_tp rc_pa
 				switch (vbt) {
 					case VB_RECEIVE_UNPROCESSED:;
 						/* UDP uses 0 as key because we do not care about order. */
-						uint64_t listkey = 0;
+						guint64 listkey = 0;
 						if(packet->header.protocol == SOCK_STREAM) {
 							listkey = packet->tcp_header.sequence_number;
 						}
@@ -226,18 +227,18 @@ ret:
 	return result;
 }
 
-uint8_t vbuffer_add_receive(vbuffer_tp vb, rc_vpacket_pod_tp rc_packet) {
+guint8 vbuffer_add_receive(vbuffer_tp vb, rc_vpacket_pod_tp rc_packet) {
 	return vbuffer_add_receive_helper(vb, rc_packet, VB_RECEIVE_UNPROCESSED);
 }
 
-uint8_t vbuffer_add_read(vbuffer_tp vb, rc_vpacket_pod_tp rc_packet){
+guint8 vbuffer_add_read(vbuffer_tp vb, rc_vpacket_pod_tp rc_packet){
 	return vbuffer_add_receive_helper(vb, rc_packet, VB_RECEIVE_VREAD);
 }
 
 /* returns 1 if the packet was buffered, 0 otherwise */
-static uint8_t vbuffer_add_send_helper(vbuffer_tp vb, rc_vpacket_pod_tp rc_packet, enum vbuffer_type vbt, uint32_t key) {
+static guint8 vbuffer_add_send_helper(vbuffer_tp vb, rc_vpacket_pod_tp rc_packet, enum vbuffer_type vbt, guint32 key) {
 	rc_vpacket_pod_retain_stack(rc_packet);
-	uint8_t result = 0;
+	guint8 result = 0;
 
 	if(vb != NULL && vb->sbuf != NULL && rc_packet != NULL) {
 		vpacket_tp packet = vpacket_mgr_lockcontrol(rc_packet, LC_OP_READLOCK | LC_TARGET_PACKET);
@@ -290,19 +291,19 @@ ret:
 	return result;
 }
 
-uint8_t vbuffer_add_send(vbuffer_tp vb, rc_vpacket_pod_tp rc_packet, uint32_t transmit_key) {
+guint8 vbuffer_add_send(vbuffer_tp vb, rc_vpacket_pod_tp rc_packet, guint32 transmit_key) {
 	return vbuffer_add_send_helper(vb, rc_packet, VB_SEND_VWRITE, transmit_key);
 }
 
-uint8_t vbuffer_add_retransmit(vbuffer_tp vb, rc_vpacket_pod_tp rc_packet, uint32_t retransmit_key) {
+guint8 vbuffer_add_retransmit(vbuffer_tp vb, rc_vpacket_pod_tp rc_packet, guint32 retransmit_key) {
 	return vbuffer_add_send_helper(vb, rc_packet, VB_SEND_RETRANSMIT, retransmit_key);
 }
 
-uint8_t vbuffer_add_control(vbuffer_tp vb, rc_vpacket_pod_tp rc_packet) {
+guint8 vbuffer_add_control(vbuffer_tp vb, rc_vpacket_pod_tp rc_packet) {
 	return vbuffer_add_send_helper(vb, rc_packet, VB_SEND_CONTROL, 0);
 }
 
-static rc_vpacket_pod_tp vbuffer_remove_receive_helper(vbuffer_tp vb, enum vbuffer_type vbt, enum vbuffer_action vba, uint16_t** read_offset, uint32_t next_sequence) {
+static rc_vpacket_pod_tp vbuffer_remove_receive_helper(vbuffer_tp vb, enum vbuffer_type vbt, enum vbuffer_action vba, guint16** read_offset, guint32 next_sequence) {
 	rc_vpacket_pod_tp rc_packet = NULL;
 
 	if(vb != NULL && vb->rbuf != NULL) {
@@ -332,7 +333,7 @@ static rc_vpacket_pod_tp vbuffer_remove_receive_helper(vbuffer_tp vb, enum vbuff
 					goto ret;
 			}
 
-			/* packet pointer is copied */
+			/* packet poginter is copied */
 			rc_vpacket_pod_retain(rc_packet);
 		} else if(vba == VB_REMOVE) {
 			switch (vbt) {
@@ -358,7 +359,7 @@ static rc_vpacket_pod_tp vbuffer_remove_receive_helper(vbuffer_tp vb, enum vbuff
 					goto ret;
 			}
 
-			/* if packet pointer was removed, it will be returned */
+			/* if packet poginter was removed, it will be returned */
 
 			vpacket_tp packet = vpacket_mgr_lockcontrol(rc_packet, LC_OP_READLOCK | LC_TARGET_PACKET);
 			if(packet != NULL) {
@@ -383,7 +384,7 @@ ret:
 	return rc_packet;
 }
 
-rc_vpacket_pod_tp vbuffer_get_read(vbuffer_tp vb, uint16_t** read_offset) {
+rc_vpacket_pod_tp vbuffer_get_read(vbuffer_tp vb, guint16** read_offset) {
 	return vbuffer_remove_receive_helper(vb, VB_RECEIVE_VREAD, VB_GET, read_offset, 0);
 }
 
@@ -391,15 +392,15 @@ rc_vpacket_pod_tp vbuffer_remove_read(vbuffer_tp vb) {
 	return vbuffer_remove_receive_helper(vb, VB_RECEIVE_VREAD, VB_REMOVE, NULL, 0);
 }
 
-rc_vpacket_pod_tp vbuffer_get_tcp_unprocessed(vbuffer_tp vb, uint32_t next_sequence) {
+rc_vpacket_pod_tp vbuffer_get_tcp_unprocessed(vbuffer_tp vb, guint32 next_sequence) {
 	return vbuffer_remove_receive_helper(vb, VB_RECEIVE_UNPROCESSED, VB_GET, NULL, next_sequence);
 }
 
-rc_vpacket_pod_tp vbuffer_remove_tcp_unprocessed(vbuffer_tp vb, uint32_t next_sequence) {
+rc_vpacket_pod_tp vbuffer_remove_tcp_unprocessed(vbuffer_tp vb, guint32 next_sequence) {
 	return vbuffer_remove_receive_helper(vb, VB_RECEIVE_UNPROCESSED, VB_REMOVE, NULL, next_sequence);
 }
 
-static rc_vpacket_pod_tp vbuffer_remove_send_helper(vbuffer_tp vb, enum vbuffer_type vbt, enum vbuffer_action vba, uint32_t key) {
+static rc_vpacket_pod_tp vbuffer_remove_send_helper(vbuffer_tp vb, enum vbuffer_type vbt, enum vbuffer_action vba, guint32 key) {
 	rc_vpacket_pod_tp rc_packet = NULL;
 
 	if(vb != NULL && vb->sbuf != NULL) {
@@ -427,7 +428,7 @@ static rc_vpacket_pod_tp vbuffer_remove_send_helper(vbuffer_tp vb, enum vbuffer_
 					goto ret;
 			}
 
-			/* packet pointer is copied */
+			/* packet poginter is copied */
 			rc_vpacket_pod_retain(rc_packet);
 		} else if(vba == VB_REMOVE) {
 			switch (vbt) {
@@ -452,7 +453,7 @@ static rc_vpacket_pod_tp vbuffer_remove_send_helper(vbuffer_tp vb, enum vbuffer_
 					goto ret;
 			}
 
-			/* if packet pointer was removed, it will be returned */
+			/* if packet poginter was removed, it will be returned */
 
 			vpacket_tp packet = vpacket_mgr_lockcontrol(rc_packet, LC_OP_READLOCK | LC_TARGET_PACKET);
 			if(packet != NULL) {
@@ -481,11 +482,11 @@ rc_vpacket_pod_tp vbuffer_get_send(vbuffer_tp vb) {
 	return vbuffer_remove_send_helper(vb, VB_SEND_VWRITE, VB_GET, 0);
 }
 
-rc_vpacket_pod_tp vbuffer_remove_send(vbuffer_tp vb, uint32_t transmit_key) {
+rc_vpacket_pod_tp vbuffer_remove_send(vbuffer_tp vb, guint32 transmit_key) {
 	return vbuffer_remove_send_helper(vb, VB_SEND_VWRITE, VB_REMOVE, transmit_key);
 }
 
-rc_vpacket_pod_tp vbuffer_remove_tcp_retransmit(vbuffer_tp vb, uint32_t retransmit_key) {
+rc_vpacket_pod_tp vbuffer_remove_tcp_retransmit(vbuffer_tp vb, guint32 retransmit_key) {
 	return vbuffer_remove_send_helper(vb, VB_SEND_RETRANSMIT, VB_REMOVE, retransmit_key);
 }
 
@@ -493,7 +494,7 @@ rc_vpacket_pod_tp vbuffer_remove_tcp_control(vbuffer_tp vb) {
 	return vbuffer_remove_send_helper(vb, VB_SEND_CONTROL, VB_REMOVE, 0);
 }
 
-uint8_t vbuffer_is_empty(vbuffer_tp vb) {
+guint8 vbuffer_is_empty(vbuffer_tp vb) {
 	if(vb != NULL) {
 		/* we return true only if none of the buffers have data or packets
 		 * to handle. since packets without user data don't take up any "space"
@@ -529,21 +530,21 @@ size_t vbuffer_receive_space_available(vbuffer_tp vb) {
 	return 0;
 }
 
-uint8_t vbuffer_is_readable(vbuffer_tp vb) {
+guint8 vbuffer_is_readable(vbuffer_tp vb) {
 	if(vb != NULL && vb->rbuf != NULL && vb->rbuf->vread != NULL) {
 		return g_queue_get_length(vb->rbuf->vread) > 0;
 	}
 	return 0;
 }
 
-uint8_t vbuffer_is_writable(vbuffer_tp vb) {
+guint8 vbuffer_is_writable(vbuffer_tp vb) {
 	if(vb != NULL && vb->sbuf != NULL && vb->sbuf->vwrite != NULL) {
 		return vbuffer_send_space_available(vb) > 0;
 	}
 	return 0;
 }
 
-void vbuffer_set_size(vbuffer_tp vb, uint64_t rbuf_max, uint64_t sbuf_max) {
+void vbuffer_set_size(vbuffer_tp vb, guint64 rbuf_max, guint64 sbuf_max) {
 	if (vb != NULL) {
 		/* todo do we need minimums */
 		if(vb->sbuf != NULL) {
@@ -564,7 +565,7 @@ void vbuffer_clear_send(vbuffer_tp vb) {
 	}
 }
 
-void vbuffer_clear_tcp_retransmit(vbuffer_tp vb, uint8_t only_clear_acked, uint32_t acknum) {
+void vbuffer_clear_tcp_retransmit(vbuffer_tp vb, guint8 only_clear_acked, guint32 acknum) {
 	if(!only_clear_acked) {
 		acknum = UINT32_MAX;
 	}
@@ -583,7 +584,7 @@ void vbuffer_clear_tcp_retransmit(vbuffer_tp vb, uint8_t only_clear_acked, uint3
 	}
 }
 
-int vbuffer_get_send_length(vbuffer_tp vb) {
+gint vbuffer_get_send_length(vbuffer_tp vb) {
 	if(vb != NULL && vb->sbuf != NULL) {
 		return orderedlist_length(vb->sbuf->vwrite);
 	} else {
@@ -591,7 +592,7 @@ int vbuffer_get_send_length(vbuffer_tp vb) {
 	}
 }
 
-uint8_t vbuffer_is_empty_send_control(vbuffer_tp vb) {
+guint8 vbuffer_is_empty_send_control(vbuffer_tp vb) {
 	if(vb->sbuf->tcp_control != NULL) {
 		return g_queue_get_length(vb->sbuf->tcp_control) == 0;
 	}

@@ -23,6 +23,7 @@
 #ifndef _sim_h
 #define _sim_h
 
+#include <glib.h>
 #include <netinet/in.h>
 #include <glib-2.0/glib.h>
 
@@ -53,14 +54,14 @@ typedef struct sim_worker_remotestate_t {
 	 * o/w current is the next event. (i.e. our current notion of the "current" safe time)
 	 */
 	ptime_t current;
-	unsigned char valid;
+	guchar valid;
 } sim_worker_remotestate_t, * sim_worker_remotestate_tp;
 
 typedef struct sim_worker_t {
 	enum { sim_worker_mode_idle, sim_worker_mode_spool, sim_worker_mode_simulating, sim_worker_mode_error, sim_worker_mode_complete } mode;
 
 	/** this worker's process id. should never be 0, since that's the main process. */
-	unsigned int process_id;
+	guint process_id;
 
 	dtimer_mgr_tp timer_mgr;
 	vci_mgr_tp vci_mgr;
@@ -73,7 +74,7 @@ typedef struct sim_worker_t {
 	GQueue *stalled_simops;
 	vci_addressing_scheme_tp ascheme;
 
-	/* internal hostname to address resolver */
+	/* ginternal hostname to address resolver */
 	resolver_tp resolver;
 
 	simnet_graph_tp network_topology;
@@ -92,31 +93,31 @@ typedef struct sim_worker_t {
 	sim_worker_remotestate_tp my_state;
 
 	/** total number of workers on this machine */
-	unsigned int num_workers;
+	guint num_workers;
 
 	pipecloud_tp pipecloud;
-	int destroying;
+	gint destroying;
 } sim_worker_t, * sim_worker_tp;
 
 
 typedef struct sim_slave_t {
-	unsigned int my_id;
-	unsigned int num_workers;
-	unsigned int num_workers_complete;
-	unsigned int worker_turn;
+	guint my_id;
+	guint num_workers;
+	guint num_workers_complete;
+	guint worker_turn;
 } sim_slave_t, * sim_slave_tp;
 
 
 typedef struct sim_worker_nodetracker_t {
-	char valid;
+	gchar valid;
 	in_addr_t addr;
-	int track_id;
+	gint track_id;
 } sim_worker_nodetracker_t, * sim_worker_nodetracker_tp;
 
 typedef struct sim_master_tracker_t {
-	unsigned int id;
-	unsigned int counter;
-	void* value;
+	guint id;
+	guint counter;
+	gpointer value;
 } sim_master_tracker_t, *sim_master_tracker_tp;
 
 /* the simulation master; one exists per simulation */
@@ -137,36 +138,36 @@ typedef struct sim_master_t {
 
 	struct timespec simulation_start; /**< Real time start of simulation (for timing) */
 
-	int end_time_found;
+	gint end_time_found;
 } sim_master_t, * sim_master_tp;
 
 
-sim_master_tp sim_master_create (char * dsim, unsigned int num_slaves);
+sim_master_tp sim_master_create (gchar * dsim, guint num_slaves);
 void sim_master_destroy(sim_master_tp sim);
-void sim_master_deposit(sim_master_tp sslave, int frametype, nbdf_tp nb);
+void sim_master_deposit(sim_master_tp sslave, gint frametype, nbdf_tp nb);
 
 void sim_master_opexec(sim_master_tp ma, operation_tp op) ;
-int sim_master_isdone(sim_master_tp);
+gint sim_master_isdone(sim_master_tp);
 
-void sim_slave_deposit(sim_slave_tp sslave, int frametype, nbdf_tp frame);
-sim_slave_tp sim_slave_create (unsigned int my_id, unsigned int num_workers);
+void sim_slave_deposit(sim_slave_tp sslave, gint frametype, nbdf_tp frame);
+sim_slave_tp sim_slave_create (guint my_id, guint num_workers);
 void sim_slave_destroy(sim_slave_tp sslave);
 
 
 sim_worker_tp sim_worker_create (pipecloud_tp pipecloud,
-		int slave_id, int process_id, unsigned int num_slaves, unsigned int num_workers, unsigned int max_wrkrs_per_slave);
-void sim_worker_deposit(sim_worker_tp worker, int frametype, nbdf_tp frame);
+		gint slave_id, gint process_id, guint num_slaves, guint num_workers, guint max_wrkrs_per_slave);
+void sim_worker_deposit(sim_worker_tp worker, gint frametype, nbdf_tp frame);
 
 //void sim_worker_timecalc(sim_worker_tp worker);
-//int sim_worker_setstate(sim_worker_tp worker, ptime_t last_event_time, ptime_t next_event_time);
+//gint sim_worker_setstate(sim_worker_tp worker, ptime_t last_event_time, ptime_t next_event_time);
 
-int sim_worker_heartbeat(sim_worker_tp worker, size_t* num_event_worker_executed);
-int sim_worker_opexec(sim_worker_tp wo, simop_tp sop) ;
-void sim_worker_abortsim(sim_worker_tp wo, char * error) ;
+gint sim_worker_heartbeat(sim_worker_tp worker, size_t* num_event_worker_executed);
+gint sim_worker_opexec(sim_worker_tp wo, simop_tp sop) ;
+void sim_worker_abortsim(sim_worker_tp wo, gchar * error) ;
 void sim_worker_destroy_node(sim_worker_tp wo, context_provider_tp cp);
 void sim_worker_destroy(sim_worker_tp sim);
-sim_worker_nodetracker_tp sim_worker_create_nodetracker(in_addr_t addr, int track_id, char valid);
-void sim_worker_destroy_nodetracker_cb(int key, void* value, void *param);
+sim_worker_nodetracker_tp sim_worker_create_nodetracker(in_addr_t addr, gint track_id, gchar valid);
+void sim_worker_destroy_nodetracker_cb(gint key, gpointer value, gpointer param);
 void sim_worker_destroy_nodetracker(sim_worker_nodetracker_tp nt);
 
 
@@ -195,9 +196,9 @@ void sim_worker_destroy_nodetracker(sim_worker_nodetracker_tp nt);
 //
 //	GHashTable *node_tracking;
 //
-//	char state;
+//	gchar state;
 //
-//	int my_id;
+//	gint my_id;
 //
 //	/** the current simulation time */
 //	ptime_t curtime;
@@ -224,7 +225,7 @@ void sim_worker_destroy_nodetracker(sim_worker_nodetracker_tp nt);
 //	/** thread shiz */
 //	pthread_t * threads;
 //	size_t num_threads;
-//	int thread_end;
+//	gint thread_end;
 //
 //	pthread_cond_t thread_active_cond;
 //	pthread_mutex_t thread_active_mutex;
@@ -237,22 +238,22 @@ void sim_worker_destroy_nodetracker(sim_worker_nodetracker_tp nt);
 //} sim_worker_t, * sim_worker_tp;
 //
 //typedef struct nodeholder_t {
-//	void *handle;
+//	gpointer handle;
 //	in_addr_t addr;
 //} nodeholder_t, *nodeholder_tp;
 //
 //
 //typedef struct sim_nettracker_t {
-//	int id;
+//	gint id;
 //} sim_nettracker_t, *sim_nettracker_tp;
 //
 //typedef struct sim_modtracker_t {
-//	int id;
+//	gint id;
 //} sim_modtracker_t, *sim_modtracker_tp;
 //
 //typedef struct sim_nodetracker_t {
-//	char valid;
-//	unsigned int track_id;
+//	gchar valid;
+//	guint track_id;
 //	in_addr_t addr;
 //
 //	simop_tp ip_simop;
@@ -284,13 +285,13 @@ void sim_worker_destroy_nodetracker(sim_worker_nodetracker_tp nt);
   * Creates a sim_master_tp
   * @return The newly created master object
   */
-//sim_master_tp sim_master_create (char * dsim, size_t num_workers);
+//sim_master_tp sim_master_create (gchar * dsim, size_t num_workers);
 //
 ///* sends the given frame to the master */
-//void sim_master_deposit (sim_master_tp ma, int source_worker_id, nbdf_tp nb);
+//void sim_master_deposit (sim_master_tp ma, gint source_worker_id, nbdf_tp nb);
 //
 ///* tells the master to process some quanta of work */
-//int sim_master_process (sim_master_tp ma);
+//gint sim_master_process (sim_master_tp ma);
 //
 //void sim_master_opexec(sim_master_tp ma, operation_tp op);
 //void sim_master_opexec_load_module(sim_master_tp ma, operation_tp op);
@@ -301,7 +302,7 @@ void sim_worker_destroy_nodetracker(sim_worker_nodetracker_tp nt);
 //void sim_master_opexec_create_nodes(sim_master_tp ma, operation_tp op);
 //
 ///* returns nonzero if the master is completed working */
-//int sim_master_isdone (sim_master_tp ma);
+//gint sim_master_isdone (sim_master_tp ma);
 //
 ///* destroy the master */
 //void sim_master_destroy(sim_master_tp sim);
@@ -309,13 +310,13 @@ void sim_worker_destroy_nodetracker(sim_worker_nodetracker_tp nt);
 //
 //
 ///* create a worker */
-//sim_worker_tp sim_worker_create (int my_id, size_t num_workers);
+//sim_worker_tp sim_worker_create (gint my_id, size_t num_workers);
 //
 ///* sends the given frame to a worker */
-//void sim_worker_deposit (sim_worker_tp wo, int source_worker_id, nbdf_tp);
+//void sim_worker_deposit (sim_worker_tp wo, gint source_worker_id, nbdf_tp);
 //
 ///* tells a worker to process some quanta of work */
-//int sim_worker_process (sim_worker_tp wo);
+//gint sim_worker_process (sim_worker_tp wo);
 //
 //void sim_worker_opexec_cnodes(sim_worker_tp wo, simop_tp sop);
 //void sim_worker_opexec_end(sim_worker_tp wo, simop_tp sop);
@@ -325,19 +326,19 @@ void sim_worker_destroy_nodetracker(sim_worker_nodetracker_tp nt);
 //
 ///* destroy the worker */
 //void sim_worker_destroy(sim_worker_tp sim);
-//void sim_worker_abortsim(sim_worker_tp wo, char * error);
+//void sim_worker_abortsim(sim_worker_tp wo, gchar * error);
 //
-//void sim_tell_worker(int worker, int command, nbdf_tp nb);
-//void sim_tell_master(int command, nbdf_tp nb);
-//void sim_master_wbroadcast(sim_master_tp ma, int command, nbdf_tp nb);
-//void sim_worker_wbroadcast(sim_worker_tp wo, int command, nbdf_tp nb);
+//void sim_tell_worker(gint worker, gint command, nbdf_tp nb);
+//void sim_tell_master(gint command, nbdf_tp nb);
+//void sim_master_wbroadcast(sim_master_tp ma, gint command, nbdf_tp nb);
+//void sim_worker_wbroadcast(sim_worker_tp wo, gint command, nbdf_tp nb);
 //
 //
-//void sim_hashwalk_nodetracker(void * d, int id) ;
+//void sim_hashwalk_nodetracker(gpointer d, gint id) ;
 //
-//void sim_hashwalk_nettracker(void * d, int id);
+//void sim_hashwalk_nettracker(gpointer d, gint id);
 //
-//void sim_hashwalk_modtracker(void * d, int id) ;
+//void sim_hashwalk_modtracker(gpointer d, gint id) ;
 
 
 #endif

@@ -20,12 +20,13 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <stdlib.h>
 
 #include "global.h"
 #include "evtracker.h"
 
-evtracker_tp evtracker_create (size_t buf_size, unsigned int granularity) {
+evtracker_tp evtracker_create (size_t buf_size, guint granularity) {
 	evtracker_tp evt = malloc(sizeof(*evt));
 	if(!evt)
 		printfault(EXIT_NOMEM, "evtracker_create: Out of memory.");
@@ -47,7 +48,7 @@ evtracker_tp evtracker_create (size_t buf_size, unsigned int granularity) {
 	return evt;
 }
 
-int evtracker_heap_e_compare(void * a, void * b) {
+gint evtracker_heap_e_compare(gpointer a, gpointer b) {
 	struct EVTRACKER_HEAP_E * a_e = (struct EVTRACKER_HEAP_E *)a;
 	struct EVTRACKER_HEAP_E * b_e = (struct EVTRACKER_HEAP_E *)b;
 	return (a_e->time == b_e->time ? 0 : (a_e->time > b_e->time ? -1 : 1));
@@ -70,11 +71,11 @@ void evtracker_destroy(evtracker_tp evt) {
 	return;
 }
 
-struct EVTRACKER_HASH_E * evtracker_find_hash_e(evtracker_tp evt, ptime_t time, char create_okay) {
+struct EVTRACKER_HASH_E * evtracker_find_hash_e(evtracker_tp evt, ptime_t time, gchar create_okay) {
 	struct EVTRACKER_HASH_E * hashe = NULL;
 	struct EVTRACKER_HASH_E ** tmp = NULL;
 	struct EVTRACKER_HASH_E * p = NULL;
-	int hash_idx = time % evt->size;
+	gint hash_idx = time % evt->size;
 
 	if(evt->last_hash_e != NULL && evt->last_accessed_time == time)
 		hashe = evt->last_hash_e;
@@ -128,9 +129,9 @@ struct EVTRACKER_HASH_E * evtracker_find_hash_e(evtracker_tp evt, ptime_t time, 
 	return hashe;
 }
 
-void evtracker_insert_event(evtracker_tp evt, ptime_t time, void * data) {
+void evtracker_insert_event(evtracker_tp evt, ptime_t time, gpointer data) {
 	struct EVTRACKER_HASH_E * hashe;
-	unsigned int sliced;
+	guint sliced;
 
 	/* modify the time for the given granularity */
 	if(time != PTIME_INVALID) {
@@ -164,12 +165,12 @@ void evtracker_insert_event(evtracker_tp evt, ptime_t time, void * data) {
 	return;
 }
 
-unsigned int evtracker_get_numevents(evtracker_tp evt) {
+guint evtracker_get_numevents(evtracker_tp evt) {
 	return evt->num_events;
 }
 
-void * evtracker_get_nextevent(evtracker_tp evt, ptime_t * time, char removal) {
-	void * rv = NULL;
+gpointer evtracker_get_nextevent(evtracker_tp evt, ptime_t * time, gchar removal) {
+	gpointer rv = NULL;
 	struct EVTRACKER_HEAP_E * heape = heap_get(evt->evheap,0);
 
 	if(heape != NULL && heape->hash_e->data_read_ptr < heape->hash_e->data_write_ptr) {

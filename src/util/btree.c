@@ -20,11 +20,12 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <stdlib.h>
 #include "global.h"
 #include "btree.h"
 
-btree_tp btree_create( unsigned int initial_size) {
+btree_tp btree_create( guint initial_size) {
 	btree_tp bt;
 
 	bt = malloc(sizeof(*bt));
@@ -47,8 +48,8 @@ btree_tp btree_create( unsigned int initial_size) {
 	return bt;
 }
 
-void * btree_get_head(btree_tp bt, int * v) {
-	void * rv = NULL;
+gpointer btree_get_head(btree_tp bt, gint * v) {
+	gpointer rv = NULL;
 	if(bt && bt->num_elems > 0) {
 		rv = bt->elements[0].d;
 		if(v)
@@ -67,8 +68,8 @@ void btree_destroy(btree_tp bt) {
 	}
 }
 
-void * btree_get(btree_tp bt, int v) {
-	int cur=bt->head_node;
+gpointer btree_get(btree_tp bt, gint v) {
+	gint cur=bt->head_node;
 
 	if(!bt || bt->num_elems == 0)
 		return NULL;
@@ -85,11 +86,11 @@ void * btree_get(btree_tp bt, int v) {
 	return NULL;
 }
 
-void * btree_remove(btree_tp bt, int v) {
-	int cur=bt->head_node, *next=NULL;
-	void * rv;
-	int replacement = -1;
-	int new_allocated;
+gpointer btree_remove(btree_tp bt, gint v) {
+	gint cur=bt->head_node, *next=NULL;
+	gpointer rv;
+	gint replacement = -1;
+	gint new_allocated;
 
 	if(!bt || bt->num_elems == 0)
 		return NULL;
@@ -155,7 +156,7 @@ void * btree_remove(btree_tp bt, int v) {
 			/* now memory adjustments */
 			bt->num_elems--;
 			if(cur < bt->num_elems) {
-				int swapfrom = bt->num_elems;
+				gint swapfrom = bt->num_elems;
 
 				/* overwrite cur with the last element */
 				bt->elements[cur].v = bt->elements[swapfrom].v;
@@ -164,7 +165,7 @@ void * btree_remove(btree_tp bt, int v) {
 				bt->elements[cur].d = bt->elements[swapfrom].d;
 				bt->elements[cur].parent = bt->elements[swapfrom].parent;
 
-				/* change the parent to point to new child */
+				/* change the parent to pogint to new child */
 				if(bt->elements[cur].parent != -1) {
 					if(bt->elements[bt->elements[cur].parent].left == swapfrom)
 						bt->elements[bt->elements[cur].parent].left = cur;
@@ -173,7 +174,7 @@ void * btree_remove(btree_tp bt, int v) {
 				} else
 					bt->head_node = cur;
 
-				/* change children of old element to point to new element */
+				/* change children of old element to pogint to new element */
 				if(bt->elements[cur].left != -1)
 					bt->elements[bt->elements[cur].left].parent = cur;
 				if(bt->elements[cur].right != -1)
@@ -204,18 +205,18 @@ void * btree_remove(btree_tp bt, int v) {
 }
 
 void btree_walk(btree_tp bt, btree_walk_callback_tp cb) {
-	int i;
+	gint i;
 	for(i=0; i<bt->num_elems; i++)
 		(*cb)(bt->elements[i].d, bt->elements[i].v);
 }
 
-void btree_walk_param(btree_tp bt, btree_walk_param_callback_tp cb, void* param) {
-	int i;
+void btree_walk_param(btree_tp bt, btree_walk_param_callback_tp cb, gpointer param) {
+	gint i;
 	for(i=0; i<bt->num_elems; i++)
 		(*cb)(bt->elements[i].d, bt->elements[i].v, param);
 }
 
-void * btree_get_index(btree_tp bt, unsigned int i, int * v) {
+gpointer btree_get_index(btree_tp bt, guint i, gint * v) {
 	if(i>=bt->num_elems)
 		return NULL;
 	else {
@@ -225,8 +226,8 @@ void * btree_get_index(btree_tp bt, unsigned int i, int * v) {
 	}
 }
 
-void btree_insert(btree_tp bt, int v, void *d) {
-	int cur=bt->head_node, *next, parent=-1;
+void btree_insert(btree_tp bt, gint v, gpointer d) {
+	gint cur=bt->head_node, *next, parent=-1;
 
 	if(d == NULL)
 		btree_remove(bt, v);

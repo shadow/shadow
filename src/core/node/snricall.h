@@ -23,14 +23,15 @@
 #ifndef _snricall_h
 #define _snricall_h
 
+#include <glib.h>
 #include <stdarg.h>
 
 /**
  * Performs a DVN "system" call. Refer to parameters listed in dvncall_codes.h
  * Returns nonzero on success
  */
-int snricall(int call_code, ...);
+gint snricall(gint call_code, ...);
 
-typedef int (*snricall_fp)(int, ...);
+typedef gint (*snricall_fp)(gint, ...);
 
 #endif

@@ -22,6 +22,7 @@
 #ifndef VEPOLL_H_
 #define VEPOLL_H_
 
+#include <glib.h>
 #include <stdint.h>
 #include <netinet/in.h>
 
@@ -57,22 +58,22 @@ enum vepoll_flags {
 
 typedef struct vepoll_s {
 	in_addr_t addr;
-	uint16_t sockd;
+	guint16 sockd;
 	/* OR'ed with types that are allowed (i.e. readable/writable) */
 	enum vepoll_type available;
 	/* OR'ed with types that vevent is waiting for (i.e. readable/writable) */
 	enum vepoll_type polling;
-	uint16_t num_read;
-	uint16_t num_write;
+	guint16 num_read;
+	guint16 num_write;
 	/* my current state */
 	enum vepoll_state state;
-	/* OR'ed with various flags we are interested in */
+	/* OR'ed with various flags we are ginterested in */
 	enum vepoll_flags flags;
 	vevent_mgr_tp vev_mgr;
-	uint8_t do_read_first;
+	guint8 do_read_first;
 } vepoll_t, *vepoll_tp;
 
-vepoll_tp vepoll_create(vevent_mgr_tp vev_mgr, in_addr_t addr, uint16_t sockd);
+vepoll_tp vepoll_create(vevent_mgr_tp vev_mgr, in_addr_t addr, guint16 sockd);
 void vepoll_destroy(vepoll_tp vep);
 
 /* the socket is active and can be notified when available */
@@ -86,7 +87,7 @@ void vepoll_mark_available(vepoll_tp vep, enum vepoll_type type);
  * returns 0 on success, -1 on error */
 void vepoll_mark_unavailable(vepoll_tp vep, enum vepoll_type type);
 /* returns 1 if the socket is available for type, 0 othewise */
-uint8_t vepoll_query_available(vepoll_tp vep, enum vepoll_type type);
+guint8 vepoll_query_available(vepoll_tp vep, enum vepoll_type type);
 
 /* vevent wants to be notified when status changes for this sock/pipe */
 void vepoll_vevent_add(vepoll_tp vep, enum vepoll_type type);
@@ -95,7 +96,7 @@ void vepoll_vevent_delete(vepoll_tp vep, enum vepoll_type type);
 
 /* scheduler popped our event, so we should notify module of socket is ready */
 void vepoll_execute_notification(context_provider_tp provider, vepoll_tp vep);
-/* called every polling interval to check status and activate as needed */
-void vepoll_onpoll(vci_event_tp vci_event, void *vs_mgr);
+/* called every polling ginterval to check status and activate as needed */
+void vepoll_onpoll(vci_event_tp vci_event, gpointer vs_mgr);
 
 #endif /* VEPOLL_H_ */

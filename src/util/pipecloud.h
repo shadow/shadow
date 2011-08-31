@@ -23,6 +23,7 @@
 #ifndef _pipecloud_h
 #define _pipecloud_h
 
+#include <glib.h>
 #include <sys/sem.h>
 #include <sys/ipc.h>
 #include <mqueue.h>
@@ -44,12 +45,12 @@
 typedef struct pipecloud_buffer_t {
 	size_t len;
 	size_t offset;
-	char data[];
+	gchar data[];
 } pipecloud_buffer_t, * pipecloud_buffer_tp;
 
 typedef struct pipecloud_t {
-	/* total number of mailbox endpoints */
-	unsigned int num_pipes;
+	/* total number of mailbox endpogints */
+	guint num_pipes;
 
 	mqd_t * mqs;
 
@@ -58,7 +59,7 @@ typedef struct pipecloud_t {
 	/* used for "localized" (e.g. this-process-owned) data */
 	struct {
 		/* what process are we? */
-		int id;
+		gint id;
 
 		/* waiting input queue of pipecloud_buffer_t objects */
 		GQueue *in;
@@ -68,19 +69,19 @@ typedef struct pipecloud_t {
 	} localized;
 } pipecloud_t, * pipecloud_tp;
 
-pipecloud_tp pipecloud_create(unsigned int attendees, size_t size, unsigned int num_wakeup_channels);
+pipecloud_tp pipecloud_create(guint attendees, size_t size, guint num_wakeup_channels);
 
 void pipecloud_destroy(pipecloud_tp);
-void pipecloud_config_localized(pipecloud_tp pipecloud, unsigned int id);
-int pipecloud_get_wakeup_fd(pipecloud_tp pc);
+void pipecloud_config_localized(pipecloud_tp pipecloud, guint id);
+gint pipecloud_get_wakeup_fd(pipecloud_tp pc);
 
-void pipecloud_select(pipecloud_tp pipecloud, int block);
+void pipecloud_select(pipecloud_tp pipecloud, gint block);
 
-size_t pipecloud_write(pipecloud_tp pipecloud, unsigned int dest, char * data, size_t data_size);
-size_t pipecloud_write_core(pipecloud_tp pipecloud, unsigned int dest, char * data, size_t data_size);
+size_t pipecloud_write(pipecloud_tp pipecloud, guint dest, gchar * data, size_t data_size);
+size_t pipecloud_write_core(pipecloud_tp pipecloud, guint dest, gchar * data, size_t data_size);
 
-int pipecloud_read(pipecloud_tp pipecloud, char * buffer, size_t size);
-int pipecloud_peek(pipecloud_tp pipecloud, char * buffer, size_t size);
+gint pipecloud_read(pipecloud_tp pipecloud, gchar * buffer, size_t size);
+gint pipecloud_peek(pipecloud_tp pipecloud, gchar * buffer, size_t size);
 
 void pipecloud_localize_reads(pipecloud_tp pipecloud);
 

@@ -28,24 +28,25 @@
 #ifndef SHD_CDF_H_
 #define SHD_CDF_H_
 
+#include <glib.h>
 #include <stdint.h>
 #include <stddef.h>
 
 #include "orderedlist.h"
 
-#define DOUBLE_2_UINT64(x) ((uint64_t)((x)*10000000000))
-#define UINT64_2_DOUBLE(x) ((double)((x)/10000000000))
+#define DOUBLE_2_UINT64(x) ((guint64)((x)*10000000000))
+#define UINT64_2_DOUBLE(x) ((gdouble)((x)/10000000000))
 
 typedef struct cdf_s {
 	orderedlist_tp ol;
 } cdf_t, *cdf_tp;
 
-cdf_tp cdf_create(const char* filename);
-cdf_tp cdf_generate(unsigned int base_center, unsigned int base_width, unsigned int tail_width);
+cdf_tp cdf_create(const gchar* filename);
+cdf_tp cdf_generate(guint base_center, guint base_width, guint tail_width);
 void cdf_destroy(cdf_tp cdf);
 
-double cdf_min_value(cdf_tp cdf);
-double cdf_max_value(cdf_tp cdf);
-double cdf_random_value(cdf_tp cdf);
+gdouble cdf_min_value(cdf_tp cdf);
+gdouble cdf_max_value(cdf_tp cdf);
+gdouble cdf_random_value(cdf_tp cdf);
 
 #endif /* SHD_CDF_H_ */

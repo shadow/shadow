@@ -20,6 +20,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/select.h>
@@ -43,9 +44,9 @@
 dvninstance_tp dvn_global_instance = NULL;
 dvn_global_worker_data_t dvn_global_worker_data = {0, NULL, 0, 0};
 
-int dvn_worker_main (unsigned int process_id, unsigned int total_workers, pipecloud_tp pipecloud) {
+gint dvn_worker_main (guint process_id, guint total_workers, pipecloud_tp pipecloud) {
 	nbdf_tp pipe_frame;
-	int run = 1;
+	gint run = 1;
 	sim_worker_tp worker = NULL;
 	size_t num_event_worker_executed = 0;
 	
@@ -77,8 +78,8 @@ int dvn_worker_main (unsigned int process_id, unsigned int total_workers, pipecl
 
 		// process all frames from pipecloud
 		while((pipe_frame = nbdf_import_frame_pipecloud(pipecloud)) != NULL) {
-			unsigned char dest_type, dest_layer;
-			unsigned int dest_major, frametype;
+			guchar dest_type, dest_layer;
+			guint dest_major, frametype;
 			nbdf_tp frame;
 
 			nbdf_read(pipe_frame, "cciin", &dest_type, &dest_layer, &dest_major, &frametype, &frame);
@@ -86,7 +87,7 @@ int dvn_worker_main (unsigned int process_id, unsigned int total_workers, pipecl
 			if(dest_layer & DVNPACKET_LAYER_PRC) {
 				switch(frametype) {
 					case DVN_FRAME_STARTSIM: {
-						int num_slaves, max_wrkrs, slave_id;
+						gint num_slaves, max_wrkrs, slave_id;
 						nbdf_read(frame, "iii", &slave_id, &num_slaves, &max_wrkrs);
 
 						worker = sim_worker_create(pipecloud, slave_id, process_id, num_slaves, total_workers, max_wrkrs);
@@ -153,7 +154,7 @@ void dvn_master_heartbeat (dvninstance_tp dvn) {
 	}
 
 	/* check if there's waiting data on any controller socket */
-	for(unsigned int i = 0; i < vector_size(dvn->master->controller_sockets); i++ ) {
+	for(guint i = 0; i < vector_size(dvn->master->controller_sockets); i++ ) {
 		socket_tp cur_socket = vector_get(dvn->master->controller_sockets, i);
 
 		if( 	!socket_isvalid(cur_socket) ||
@@ -168,8 +169,8 @@ void dvn_master_heartbeat (dvninstance_tp dvn) {
 }
 
 void dvn_slave_deposit (dvninstance_tp dvn, nbdf_tp net_frame) {
-	unsigned char dest_type, dest_layer;
-	int dest_major, frametype;
+	guchar dest_type, dest_layer;
+	gint dest_major, frametype;
 	nbdf_tp frame;
 
 	nbdf_read(net_frame, "cciin", &dest_type, &dest_layer, &dest_major, &frametype, &frame);
@@ -184,8 +185,8 @@ void dvn_slave_deposit (dvninstance_tp dvn, nbdf_tp net_frame) {
 	} else {
 		switch(frametype) {
 			case DVN_FRAME_ENGAGEIP: {
-				int port, slave_id;
-				char * host;
+				gint port, slave_id;
+				gchar * host;
 				socket_tp new_socket = socket_create(SOCKET_OPTION_TCP|SOCKET_OPTION_NONBLOCK);
 
 				nbdf_read(frame, "iSi", &slave_id, &host, &port);
@@ -208,7 +209,7 @@ void dvn_slave_deposit (dvninstance_tp dvn, nbdf_tp net_frame) {
 					socketset_watch(dvn->socketset, new_socket);
 
 					vector_push(dvn->slave->slave_connections, new_slave_connection);
-					g_hash_table_insert(dvn->slave->slave_connection_lookup, int_key(slave_id), new_slave_connection);
+					g_hash_table_insert(dvn->slave->slave_connection_lookup, gint_key(slave_id), new_slave_connection);
 					dvn->num_active_slaves++;
 
 					debugf( "Slave:     Engaged. Now %d active slaves.\n", dvn->num_active_slaves);
@@ -231,12 +232,12 @@ void dvn_slave_deposit (dvninstance_tp dvn, nbdf_tp net_frame) {
 /**
  * processes incoming data from remote slaves
  */
-int dvn_slave_socketprocess(dvninstance_tp dvn, dvninstance_slave_connection_tp slave_connection) {
-	int rv = 1;
+gint dvn_slave_socketprocess(dvninstance_tp dvn, dvninstance_slave_connection_tp slave_connection) {
+	gint rv = 1;
 
 	while(rv == 1) {
-		unsigned char dest_type, dest_layer;
-		unsigned int dest_major, frametype;
+		guchar dest_type, dest_layer;
+		guint dest_major, frametype;
 		nbdf_tp frame = NULL, net_frame = NULL;
 
 		if(!nbdf_frame_avail(slave_connection->sock))
@@ -247,31 +248,31 @@ int dvn_slave_socketprocess(dvninstance_tp dvn, dvninstance_slave_connection_tp 
 
 		if(slave_connection->id == -1) {
 			if( frametype == DVN_FRAME_BOOTSTRAP ) {
-				int assigned_id;
+				gint assigned_id;
 				nbdf_read(frame, "i", &assigned_id);
 
 				/* set our own ID */
 				dvn->my_instid = assigned_id;
 
-                                int key = 0;
+                                gint key = 0;
 				if(g_hash_table_lookup(dvn->slave->slave_connection_lookup, &key) == NULL) {
 					/* mark this link as ID 0 (master) */
 					slave_connection->id = 0;
-					g_hash_table_insert(dvn->slave->slave_connection_lookup, int_key(key), slave_connection);
+					g_hash_table_insert(dvn->slave->slave_connection_lookup, gint_key(key), slave_connection);
 					dvn->num_active_slaves++;
 
 					debugf( "Slave: BOOTSTRAPED to ID %i (master connection established)\n",assigned_id);
 				}
 
 			} else if(frametype == DVN_FRAME_IDENTIFY) {
-				int id;
+				gint id;
 
 				nbdf_read(frame, "i", &id);
 
 				if(g_hash_table_lookup(dvn->slave->slave_connection_lookup, &id)) {
 					debugf("Slave: Got a identification for worker %i\n",id);
 					slave_connection->id = id;
-					g_hash_table_insert(dvn->slave->slave_connection_lookup, int_key(id), slave_connection);
+					g_hash_table_insert(dvn->slave->slave_connection_lookup, gint_key(id), slave_connection);
 				}
 			}
 		} else {
@@ -296,7 +297,7 @@ int dvn_slave_socketprocess(dvninstance_tp dvn, dvninstance_slave_connection_tp 
 //
 //			} else if( command == NETSIM_CMD_START) {
 //				/* starting a new simulation... all other workers should be connected right now. */
-//				int i;
+//				gint i;
 //
 //				debugf("Got NETSIM_CMD_START (numactive: %d)\n", inst->workers_numactive);
 //
@@ -350,7 +351,7 @@ void dvn_slave_heartbeat (dvninstance_tp dvn) {
 	}
 
 	/* check if there's waiting data on any slave socket */
-	for(unsigned int i = 0; i < vector_size(dvn->slave->slave_connections); i++ ) {
+	for(guint i = 0; i < vector_size(dvn->slave->slave_connections); i++ ) {
 		dvninstance_slave_connection_tp cur_slave = vector_get(dvn->slave->slave_connections, i);
 
 		if( 	!cur_slave || !socket_isvalid(cur_slave->sock) ||
@@ -376,8 +377,8 @@ void dvn_slave_heartbeat (dvninstance_tp dvn) {
 	 * are not the [only] final destination */
 	pipecloud_select(dvn->slave->pipecloud, PIPECLOUD_MODE_POLL);
 	while((frame = nbdf_import_frame_pipecloud(dvn->slave->pipecloud)) != NULL) {
-		unsigned char dest_type, dest_layer;
-		int dest_major, frametype;
+		guchar dest_type, dest_layer;
+		gint dest_major, frametype;
 
 		nbdf_read(frame, "ccii", &dest_type, &dest_layer, &dest_major, &frametype); // should be "cciin" but we don't need to look at the payload (faster)
 
@@ -388,7 +389,7 @@ void dvn_slave_heartbeat (dvninstance_tp dvn) {
 
 			case DVNPACKET_GLOBAL_BCAST: {
 				/* send out remote slaves */
-				for(int i=0; i<vector_size(dvn->slave->slave_connections); i++) {
+				for(gint i=0; i<vector_size(dvn->slave->slave_connections); i++) {
 					dvninstance_slave_connection_tp remote_slave_connection =
 							vector_get(dvn->slave->slave_connections, i);
 
@@ -399,14 +400,14 @@ void dvn_slave_heartbeat (dvninstance_tp dvn) {
 					nbdf_send(frame, remote_slave_connection->sock);
 				}
 
-				/* our slave is also an endpoint. */
+				/* our slave is also an endpogint. */
 				dvn_slave_deposit(dvn, frame);
 
 				break;
 			}
 
 			case DVNPACKET_LOCAL_SLAVE:
-			case DVNPACKET_LOCAL_BCAST: { /* it was a LOCAL broadcast, which means our local slave was an endpoint */
+			case DVNPACKET_LOCAL_BCAST: { /* it was a LOCAL broadcast, which means our local slave was an endpogint */
 				dvn_slave_deposit(dvn, frame);
 				break;
 			}
@@ -438,7 +439,7 @@ void dvn_slave_heartbeat (dvninstance_tp dvn) {
 					dvn_slave_deposit(dvn, frame);
 
 				else {
-                                        int key = 0;
+                                        gint key = 0;
 					dvninstance_slave_connection_tp remote_slave_connection =
 						g_hash_table_lookup(dvn->slave->slave_connection_lookup, &key);
 
@@ -458,7 +459,7 @@ void dvn_slave_heartbeat (dvninstance_tp dvn) {
 }
 
 
-dvninstance_master_tp dvn_create_master (int is_daemon, unsigned int controller_port, socketset_tp socketset) {
+dvninstance_master_tp dvn_create_master (gint is_daemon, guint controller_port, socketset_tp socketset) {
 	dvninstance_master_tp master = malloc(sizeof(*master));
 
 	master->controller_sock = NULL;
@@ -470,7 +471,7 @@ dvninstance_master_tp dvn_create_master (int is_daemon, unsigned int controller_
 		/* open the controller socket */
 		master->controller_sock = socket_create(SOCKET_OPTION_NONBLOCK | SOCKET_OPTION_TCP);
 		if(!socket_listen(master->controller_sock, controller_port, 3)) {
-			int e = errno;
+			gint e = errno;
 			dlogf(LOG_ERR, "dvn_create_master: Unable to open controller listen socket on %i. Aborting.\n%s\n", controller_port, strerror(e));
 			socket_destroy(master->controller_sock);
 			free(master);
@@ -503,7 +504,7 @@ void dvn_destroy_master (dvninstance_master_tp master) {
 	free(master);
 }
 
-dvninstance_slave_tp dvn_create_slave (int daemon, unsigned int num_processes, unsigned int slave_listen_port, socketset_tp socketset) {
+dvninstance_slave_tp dvn_create_slave (gint daemon, guint num_processes, guint slave_listen_port, socketset_tp socketset) {
 	dvninstance_slave_tp slave = malloc(sizeof(*slave));
 
 	slave->slave_connection_lookup = NULL;
@@ -513,14 +514,14 @@ dvninstance_slave_tp dvn_create_slave (int daemon, unsigned int num_processes, u
 	slave->sim_slave = NULL;
 
 	/* create/attach the pipecloud */
-	slave->pipecloud = pipecloud_create(num_processes + 1, (num_processes + 1) * sysconfig_get_int("pipecloud_pp_size"), 1);
+	slave->pipecloud = pipecloud_create(num_processes + 1, (num_processes + 1) * sysconfig_get_gint("pipecloud_pp_size"), 1);
 
 	/* for saving PIDs */
-	slave->worker_process_ids = malloc(sizeof(int) * num_processes);
+	slave->worker_process_ids = malloc(sizeof(gint) * num_processes);
 
 	/* first, we're going to fork off all the worker processes */
-	for(unsigned int i = 0; i < num_processes; i++) {
-		int fork_result = fork();
+	for(guint i = 0; i < num_processes; i++) {
+		gint fork_result = fork();
 
 		if(fork_result < 0)
 			printfault(EXIT_UNKNOWN, "fork failed");
@@ -547,7 +548,7 @@ dvninstance_slave_tp dvn_create_slave (int daemon, unsigned int num_processes, u
 		slave->slave_sock = socket_create (SOCKET_OPTION_NONBLOCK | SOCKET_OPTION_TCP);
 
 		if(!socket_isvalid(slave->slave_sock) || !socket_listen(slave->slave_sock, slave_listen_port, 3)) {
-			int e = errno;
+			gint e = errno;
 			dlogf(LOG_ERR,"dvn_create_slave: Unable to open slave listen socket on port %i. Aborting.\n%s\n", slave_listen_port,strerror(e));
 			free(slave);
 			return NULL;
@@ -579,8 +580,8 @@ void dvn_destroy_slave (dvninstance_slave_tp slave) {
 	nbdf_free(die_frame);
 
 	/* wait for them to die */
-	for(unsigned int i=0; i < slave->num_processes; i++) {
-		int status;
+	for(guint i=0; i < slave->num_processes; i++) {
+		gint status;
 		waitpid(slave->worker_process_ids[i], &status, WUNTRACED);
 	}
 
@@ -594,7 +595,7 @@ void dvn_destroy_slave (dvninstance_slave_tp slave) {
 		socket_destroy(slave->slave_sock);
 
 	if(slave->slave_connections) {
-		for(unsigned int i = 0; i < vector_size(slave->slave_connections); i++) {
+		for(guint i = 0; i < vector_size(slave->slave_connections); i++) {
 			dvninstance_slave_connection_tp cur_slave = vector_get(slave->slave_connections, i);
 			if(cur_slave) {
 				if(cur_slave->sock)
@@ -651,14 +652,14 @@ void dvn_destroy_instance (dvninstance_tp dvn) {
 	free(dvn);
 }
 
-int dvn_main (struct DVN_CONFIG * config) {
+gint dvn_main (struct DVN_CONFIG * config) {
 	dvninstance_tp dvn;
 
 	if(!config)
 		return 1;
 
 	/* open logs */
-	for(int i=0; i<(sizeof(config->log_destinations)/sizeof(config->log_destinations[0])); i++) {
+	for(gint i=0; i<(sizeof(config->log_destinations)/sizeof(config->log_destinations[0])); i++) {
 		if(config->log_destinations[i][0] != '\0')
 			dlog_set_channel(i, config->log_destinations[i], 0);
 	}
@@ -668,13 +669,13 @@ int dvn_main (struct DVN_CONFIG * config) {
 
 	/* if we're in normal mode, we need to load up the DSIM file and start processing ASAP */
 	if(config->dvn_mode == dvn_mode_normal) {
-		char * dsim = file_get_contents(config->dsim_file);
+		gchar * dsim = file_get_contents(config->dsim_file);
 		if(!dsim) {
 
 		} else {
 			/* issue a command to workers so they each create a sim_worker - they need this to accept
 			 * OPs from the sim_master */
-			nbdf_tp pf_start_nb = nbdf_construct("iii", 0, 1, sysconfig_get_int("max_workers_per_slave"));
+			nbdf_tp pf_start_nb = nbdf_construct("iii", 0, 1, sysconfig_get_gint("max_workers_per_slave"));
 			dvn_packet_route(DVNPACKET_WORKER_BCAST, DVNPACKET_LAYER_PRC, 0, DVN_FRAME_STARTSIM, pf_start_nb);
 			nbdf_free(pf_start_nb);
 

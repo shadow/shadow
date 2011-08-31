@@ -20,6 +20,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -32,18 +33,18 @@
 #include "nbdf.h"
 
 struct DVN_CLIENT_CONFIG {
-	char type[200];
-	char adr[200];
-	char dsim_path[200];
-	int port;
+	gchar type[200];
+	gchar adr[200];
+	gchar dsim_path[200];
+	gint port;
 
-	char worker_host[200];
-	int worker_port;
+	gchar worker_host[200];
+	gint worker_port;
 
-	int adrsplit;
-	int n_threads;
+	gint adrsplit;
+	gint n_threads;
 
-	unsigned int verbose : 1;
+	guint verbose : 1;
 };
 
 #define CLOPTION_PORT			1
@@ -56,7 +57,7 @@ struct DVN_CLIENT_CONFIG {
 #define CLOPTION_CPORT			8
 #define CLOPTION_CHOST			9
 
-int clo_handle(char *v, int o, struct DVN_CLIENT_CONFIG* dconfig) {
+gint clo_handle(gchar *v, gint o, struct DVN_CLIENT_CONFIG* dconfig) {
 	switch(o) {
 		case CLOPTION_NTHREADS:
 			dconfig->n_threads = atoi(v);
@@ -107,11 +108,11 @@ struct CLO_entry cloentries[] = {
 #define CLTYPE_DSIM 1
 #define CLTYPE_UNKNONWN 2
 
-int main(int argc, char * argv[]) {
-	char issuance[200];
-	char * data = NULL;
+gint main(gint argc, gchar * argv[]) {
+	gchar issuance[200];
+	gchar * data = NULL;
 	socket_tp sock;
-	int command;
+	gint command;
 	struct DVN_CLIENT_CONFIG dconfig;
 	nbdf_tp ctl_nb, action_nb = NULL;
 
@@ -123,7 +124,7 @@ int main(int argc, char * argv[]) {
 	strcpy(dconfig.type, "dsim");
 	issuance[0] = 0;
 
-	parse_clo(argc, argv,cloentries,(int (*)(char*,int,void*))clo_handle,(void*)&dconfig);
+	parse_clo(argc, argv,cloentries,(gint (*)(gchar*,gint,gpointer ))clo_handle,(gpointer )&dconfig);
 
 	if(strlen(dconfig.adr) == 0) {
 		printf("Please enter a remote address to connect to.\n");
@@ -132,7 +133,7 @@ int main(int argc, char * argv[]) {
 
 	if(!strcmp(dconfig.type,"dsim")) {
 		FILE * dsf;
-		unsigned int dsim_len ;
+		guint dsim_len ;
 
 		if(strlen(dconfig.dsim_path) == 0) {
 			printf("Please give a DSIM file to send to the DVN server.\n");

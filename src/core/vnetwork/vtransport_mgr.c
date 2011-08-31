@@ -19,6 +19,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <stdlib.h>
 #include <stdint.h>
 
@@ -32,11 +33,11 @@
 #include "vci.h"
 #include "sim.h"
 
-static vtransport_mgr_inq_tp vtransport_mgr_create_buffer(uint64_t max_size);
+static vtransport_mgr_inq_tp vtransport_mgr_create_buffer(guint64 max_size);
 static void vtransport_mgr_destroy_buffer(vtransport_mgr_inq_tp buffer);
-static uint8_t vtransport_mgr_is_acceptable_in(vtransport_mgr_tp vt_mgr, uint16_t data_size);
+static guint8 vtransport_mgr_is_acceptable_in(vtransport_mgr_tp vt_mgr, guint16 data_size);
 
-vtransport_mgr_tp vtransport_mgr_create(vsocket_mgr_tp vsocket_mgr, uint32_t KBps_down, uint32_t KBps_up){
+vtransport_mgr_tp vtransport_mgr_create(vsocket_mgr_tp vsocket_mgr, guint32 KBps_down, guint32 KBps_up){
 	vtransport_mgr_tp vt_mgr = malloc(sizeof(vtransport_mgr_t));
 
 	vt_mgr->vsocket_mgr = vsocket_mgr;
@@ -44,8 +45,8 @@ vtransport_mgr_tp vtransport_mgr_create(vsocket_mgr_tp vsocket_mgr, uint32_t KBp
 	vt_mgr->KBps_down = KBps_down;
 	vt_mgr->KBps_up = KBps_up;
 
-	uint64_t Bps_down = KBps_down * 1024;
-	uint64_t Bps_up = KBps_up * 1024;
+	guint64 Bps_down = KBps_down * 1024;
+	guint64 Bps_up = KBps_up * 1024;
 	vt_mgr->nanos_per_byte_down = 1000000000.0 / Bps_down;
 	vt_mgr->nanos_per_byte_up = 1000000000.0 / Bps_up;
 
@@ -71,7 +72,7 @@ void vtransport_mgr_destroy(vtransport_mgr_tp vt_mgr) {
 
 		/* we are not responsible for the transports, so just delete list */
 		while(g_queue_get_length(vt_mgr->ready_to_send) > 0) {
-			void* malloced_sockd = g_queue_pop_tail(vt_mgr->ready_to_send);
+			gpointer malloced_sockd = g_queue_pop_tail(vt_mgr->ready_to_send);
 			if(malloced_sockd != NULL) {
 				free(malloced_sockd);
 			}
@@ -89,7 +90,7 @@ void vtransport_mgr_destroy(vtransport_mgr_tp vt_mgr) {
 	}
 }
 
-static vtransport_mgr_inq_tp vtransport_mgr_create_buffer(uint64_t max_size) {
+static vtransport_mgr_inq_tp vtransport_mgr_create_buffer(guint64 max_size) {
 	vtransport_mgr_inq_tp buffer = malloc(sizeof(vtransport_mgr_inq_t));
 	buffer->buffer = g_queue_new();
 	buffer->max_size = max_size;
@@ -116,7 +117,7 @@ static void vtransport_mgr_destroy_buffer(vtransport_mgr_inq_tp buffer) {
 	free(buffer);
 }
 
-static uint8_t vtransport_mgr_is_acceptable_in(vtransport_mgr_tp vt_mgr, uint16_t data_size) {
+static guint8 vtransport_mgr_is_acceptable_in(vtransport_mgr_tp vt_mgr, guint16 data_size) {
 	if(vt_mgr != NULL && vt_mgr->inq != NULL) {
 		if(data_size <= (vt_mgr->inq->max_size - vt_mgr->inq->current_size)) {
 			return 1;
@@ -190,7 +191,7 @@ void vtransport_mgr_download_next(vtransport_mgr_tp vt_mgr) {
 //	vtransport_mgr_adjust_cpu_load_counter(vt_mgr);
 
 	/* adjust ns bandwidth counter */
-	uint64_t ns_since_last = VTRANSPORT_NS_PER_MS * (global_sim_context.sim_worker->current_time - vt_mgr->last_time_recv);
+	guint64 ns_since_last = VTRANSPORT_NS_PER_MS * (global_sim_context.sim_worker->current_time - vt_mgr->last_time_recv);
 	if(ns_since_last > 0) {
 		if(vt_mgr->nanos_consumed_recv > ns_since_last) {
 			/* we partially absorbed the delay */
@@ -230,7 +231,7 @@ void vtransport_mgr_download_next(vtransport_mgr_tp vt_mgr) {
 		g_queue_push_tail(titems_to_process, titem);
 
 		/* update consumed bandwidth */
-		uint32_t effective_size = vpacket_get_size(titem->rc_packet);
+		guint32 effective_size = vpacket_get_size(titem->rc_packet);
 		vt_mgr->nanos_consumed_recv += effective_size * vt_mgr->nanos_per_byte_down;
 	}
 
@@ -246,10 +247,10 @@ void vtransport_mgr_download_next(vtransport_mgr_tp vt_mgr) {
 
 	/* now we have a cpu delay counter and a receive delay counter.
 	 * we are constrained by the slower (larger) of these. */
-//	uint64_t actual_delay = vt_mgr->nanos_consumed_recv > vt_mgr->nanos_cpu_delay ?
+//	guint64 actual_delay = vt_mgr->nanos_consumed_recv > vt_mgr->nanos_cpu_delay ?
 //			vt_mgr->nanos_consumed_recv : vt_mgr->nanos_cpu_delay;
 
-	uint64_t actual_delay = vt_mgr->nanos_consumed_recv;
+	guint64 actual_delay = vt_mgr->nanos_consumed_recv;
 
 #if 0
 	if(vt_mgr->nanos_consumed_recv > vt_mgr->nanos_accumulated_delay) {
@@ -262,7 +263,7 @@ void vtransport_mgr_download_next(vtransport_mgr_tp vt_mgr) {
 	/* if it doesnt take a millisecond, we cant schedule an event */
 	if(actual_delay >= VTRANSPORT_NS_PER_MS) {
 		/* callback after delays */
-		uint32_t msdelay = actual_delay / VTRANSPORT_NS_PER_MS;
+		guint32 msdelay = actual_delay / VTRANSPORT_NS_PER_MS;
 		vci_schedule_downloaded(vt_mgr->vsocket_mgr->addr, msdelay);
 	} else {
 		/* not enough delays for a full MS */
@@ -273,12 +274,12 @@ void vtransport_mgr_download_next(vtransport_mgr_tp vt_mgr) {
 void vtransport_mgr_ready_send(vtransport_mgr_tp vt_mgr, vsocket_tp sock) {
 	/* dont add the socket if its already in the list!
 	 * TODO list should implement a contains() method instead */
-	uint8_t do_add = 1;
+	guint8 do_add = 1;
 	if(g_queue_get_length(vt_mgr->ready_to_send) > 0) {
 		GQueue *new_ready_to_send = g_queue_new();
 
 		while(g_queue_get_length(vt_mgr->ready_to_send) > 0) {
-			uint32_t* sockdp = g_queue_pop_head(vt_mgr->ready_to_send);
+			guint32* sockdp = g_queue_pop_head(vt_mgr->ready_to_send);
 			if(*sockdp == sock->sock_desc){
 				do_add = 0;
 			}
@@ -290,7 +291,7 @@ void vtransport_mgr_ready_send(vtransport_mgr_tp vt_mgr, vsocket_tp sock) {
 	}
 
 	if(do_add) {
-		uint32_t* sockdp = malloc(sizeof(uint32_t));
+		guint32* sockdp = malloc(sizeof(guint32));
 		*sockdp = sock->sock_desc;
 		g_queue_push_tail(vt_mgr->ready_to_send, sockdp);
 	}
@@ -323,7 +324,7 @@ void vtransport_mgr_upload_next(vtransport_mgr_tp vt_mgr) {
 //	vtransport_mgr_adjust_cpu_load_counter(vt_mgr);
 
 	/* adjust ns bandwidth counter */
-	uint64_t ns_since_last = VTRANSPORT_NS_PER_MS * (global_sim_context.sim_worker->current_time - vt_mgr->last_time_sent);
+	guint64 ns_since_last = VTRANSPORT_NS_PER_MS * (global_sim_context.sim_worker->current_time - vt_mgr->last_time_sent);
 	if(ns_since_last > 0) {
 		if(vt_mgr->nanos_consumed_sent > ns_since_last) {
 			/* we partially absorbed the delay */
@@ -336,20 +337,20 @@ void vtransport_mgr_upload_next(vtransport_mgr_tp vt_mgr) {
 	}
 
 	/* we will batch sends */
-	uint16_t num_transmitted = 0;
+	guint16 num_transmitted = 0;
 	while (vt_mgr->nanos_consumed_sent < VTRANSPORT_MGR_BATCH_TIME &&
 			g_queue_get_length(vt_mgr->ready_to_send) > 0) {
 		/* we do round robin on all ready sockets */
-		uint32_t* sockdp = g_queue_pop_head(vt_mgr->ready_to_send);
+		guint32* sockdp = g_queue_pop_head(vt_mgr->ready_to_send);
 		vsocket_tp sock = vsocket_mgr_get_socket(vt_mgr->vsocket_mgr, *sockdp);
 		if(sock == NULL || sock->vt == NULL) {
 			debugf("vtransport_mgr_upload_next: send buffer NULL during round robin, maybe socket %i closed\n", *sockdp);
 			continue;
 		}
 
-		uint32_t bytes_transmitted = 0;
-		uint16_t packets_remaining = 0;
-		uint8_t was_transmitted = vtransport_transmit(sock->vt, &bytes_transmitted, &packets_remaining);
+		guint32 bytes_transmitted = 0;
+		guint16 packets_remaining = 0;
+		guint8 was_transmitted = vtransport_transmit(sock->vt, &bytes_transmitted, &packets_remaining);
 
 		if(was_transmitted) {
 			/* update bandwidth consumed */
@@ -367,10 +368,10 @@ void vtransport_mgr_upload_next(vtransport_mgr_tp vt_mgr) {
 
 	/* now we have a cpu delay counter and a receive delay counter.
 	 * we are constrained by the slower (larger) of these. */
-//	uint64_t actual_delay = vt_mgr->nanos_consumed_sent > vt_mgr->nanos_cpu_delay ?
+//	guint64 actual_delay = vt_mgr->nanos_consumed_sent > vt_mgr->nanos_cpu_delay ?
 //			vt_mgr->nanos_consumed_sent : vt_mgr->nanos_cpu_delay;
 
-	uint64_t actual_delay = vt_mgr->nanos_consumed_sent;
+	guint64 actual_delay = vt_mgr->nanos_consumed_sent;
 
 #if 0
 	if(vt_mgr->nanos_consumed_sent > vt_mgr->nanos_accumulated_delay) {
@@ -383,7 +384,7 @@ void vtransport_mgr_upload_next(vtransport_mgr_tp vt_mgr) {
 	/* if it doesnt take a millisecond, we cant schedule an event */
 	if(num_transmitted > 0 && actual_delay >= VTRANSPORT_NS_PER_MS) {
 		/* callback after absorbing delays */
-		uint32_t msdelay = actual_delay / VTRANSPORT_NS_PER_MS;
+		guint32 msdelay = actual_delay / VTRANSPORT_NS_PER_MS;
 		vci_schedule_uploaded(vt_mgr->vsocket_mgr->addr, msdelay);
 	} else {
 		/* we didnt send enough for a full MS */

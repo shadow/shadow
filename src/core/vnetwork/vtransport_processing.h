@@ -22,6 +22,7 @@
 #ifndef VTRANSPORT_PROCESSING_H_
 #define VTRANSPORT_PROCESSING_H_
 
+#include <glib.h>
 #include "vsocket_mgr.h"
 #include "vpacket_mgr.h"
 #include "vpacket.h"
@@ -32,7 +33,7 @@ enum vt_prc_result {
 
 typedef struct vtransport_item_s {
 	rc_vpacket_pod_tp rc_packet;
-	uint16_t sockd;
+	guint16 sockd;
 	vsocket_tp sock;
 }vtransport_item_t, *vtransport_item_tp;
 

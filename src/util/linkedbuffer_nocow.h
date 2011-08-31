@@ -24,13 +24,14 @@
 #ifndef linkedbuffer_nocow_NOCOW_H_
 #define linkedbuffer_nocow_NOCOW_H_
 
+#include <glib.h>
 #include <stdint.h>
 #include <stddef.h>
 
 #define MIN(a,b) ((a)<(b)?(a):(b))
 
 typedef struct bufferlink_nocow_t{
-	void* buf;
+	gpointer buf;
 	size_t capacity;
 	struct bufferlink_nocow_t* next;
 }bufferlink_nocow_t, *bufferlink_nocow_tp;
@@ -48,10 +49,10 @@ linkedbuffer_nocow_tp linkedbuffer_nocow_create();
 /* destroy the given linked buffer, freeing all memory stored by links */
 void linkedbuffer_nocow_destroy(linkedbuffer_nocow_tp lbuffer);
 /* copies numbytes bytes of data from the queue to the dest buffer */
-size_t linkedbuffer_nocow_read(linkedbuffer_nocow_tp lbuffer, void* dest, size_t numbytes);
+size_t linkedbuffer_nocow_read(linkedbuffer_nocow_tp lbuffer, gpointer dest, size_t numbytes);
 /* takes ownership of src buffer, effectively adding its data to the queue.
- * the caller should set its pointers to src buffer to NULL after this call.
+ * the caller should set its poginters to src buffer to NULL after this call.
  */
-size_t linkedbuffer_nocow_write(linkedbuffer_nocow_tp lbuffer, void* src, size_t numbytes);
+size_t linkedbuffer_nocow_write(linkedbuffer_nocow_tp lbuffer, gpointer src, size_t numbytes);
 
 #endif /* linkedbuffer_nocow_NOCOW_H_ */

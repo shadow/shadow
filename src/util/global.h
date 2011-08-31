@@ -23,6 +23,7 @@
 #ifndef _global_h
 #define _global_h
 
+#include <glib.h>
 #include <stdarg.h>
 #include <stdint.h>
 #include "utility.h"
@@ -71,8 +72,8 @@ typedef unsigned long long ptime_t;
  * file descriptor counter doesnt collide with our sockets. So this should be
  * set over the ulimit -n value.
  *
- * FIXME we should implement socket descriptors greater than uint16 so we can use
- * all 31 bits of the int!
+ * FIXME we should implement socket descriptors greater than ugint16 so we can use
+ * all 31 bits of the gint!
  */
 #define VNETWORK_MIN_SD 30000
 

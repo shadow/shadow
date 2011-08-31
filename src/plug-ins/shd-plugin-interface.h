@@ -23,6 +23,7 @@
 #ifndef PLUGIN_INTERFACE_H_
 #define PLUGIN_INTERFACE_H_
 
+#include <glib.h>
 #include <netinet/in.h>
 
 /**
@@ -46,7 +47,7 @@ void _module_uninit(void);
  * Called to instantiate each new module instance (i.e. node).
  * argc and argv are as passed in DSIM.
  */
-void _module_instantiate(int argc, char * argv[]);
+void _module_instantiate(gint argc, gchar * argv[]);
 
 /**
  * Called immediately before a module instance (i.e. node) is destroyed
@@ -57,12 +58,12 @@ void _module_destroy(void);
  * Called when a module instance can read data from its network through the
  * given socket.
  */
-void _module_socket_readable(int socket);
+void _module_socket_readable(gint socket);
 
 /**
  * Called when a module instance can write data to its network through the
  * given socket.
  */
-void _module_socket_writable(int socket);
+void _module_socket_writable(gint socket);
 
 #endif /* PLUGIN_INTERFACE_H_ */

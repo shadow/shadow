@@ -20,6 +20,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <stdlib.h>
 #include <sys/time.h>
 #include <time.h>
@@ -39,7 +40,7 @@ dtimer_mgr_tp dtimer_create_manager(events_tp events){
 	return rval;
 }
 
-static void dtimer_free_timerset_cb(int key, void * value, void *param) {
+static void dtimer_free_timerset_cb(gint key, gpointer value, gpointer param) {
 	dtimer_timerset_tp ts = value;
 
 	if(!ts)
@@ -62,7 +63,7 @@ void dtimer_destroy_manager(dtimer_mgr_tp mgr) {
 	return;
 }
 
-int dtimer_create_timer( dtimer_mgr_tp mgr, ptime_t cur_time, context_provider_tp cp, int msdelay, dtimer_ontimer_cb_fp callback, void * callback_arg ) {
+gint dtimer_create_timer( dtimer_mgr_tp mgr, ptime_t cur_time, context_provider_tp cp, gint msdelay, dtimer_ontimer_cb_fp callback, gpointer callback_arg ) {
 	ptime_t event_time = cur_time;
 	dtimer_item_tp timer_item;
 	dtimer_timerset_tp ts;
@@ -79,7 +80,7 @@ int dtimer_create_timer( dtimer_mgr_tp mgr, ptime_t cur_time, context_provider_t
 			printfault(EXIT_NOMEM, "Out of memory: dtimer_create_event");
 		ts->timers = btree_create(1);
 		ts->cur_tid = 1;
-		g_hash_table_insert(mgr->timersets, int_key(cp->vsocket_mgr->addr), ts);
+		g_hash_table_insert(mgr->timersets, gint_key(cp->vsocket_mgr->addr), ts);
 	}
 
 	timer_item = malloc(sizeof(*timer_item));
@@ -108,7 +109,7 @@ void dtimer_destroy_timers(dtimer_mgr_tp mgr, context_provider_tp cp) {
 
 	g_hash_table_remove(mgr->timersets, &cp->vsocket_mgr->addr);
 
-	for(int i=0; i<btree_get_size(ts->timers); i++) {
+	for(gint i=0; i<btree_get_size(ts->timers); i++) {
 		timer_item = btree_get_index(ts->timers, i, NULL);
 		timer_item->valid = 0;
 	}
@@ -118,7 +119,7 @@ void dtimer_destroy_timers(dtimer_mgr_tp mgr, context_provider_tp cp) {
 	return;
 }
 
-void dtimer_destroy_timer(dtimer_mgr_tp mgr, context_provider_tp cp, int timer_id) {
+void dtimer_destroy_timer(dtimer_mgr_tp mgr, context_provider_tp cp, gint timer_id) {
 	dtimer_timerset_tp ts;
 	dtimer_item_tp timer_item;
 

@@ -29,7 +29,7 @@
  * A data buffer (queue) that is composed of several links. The buffer can be read
  * and written and guarantees it will not allow reading more than was written.
  * Its basically a linked queue that is written (and grows) at the front and
- * read (and shrinks) from the back. Data is 'written' by passing in pointers
+ * read (and shrinks) from the back. Data is 'written' by passing in poginters
  * to buffers, which the lnkedbuffer will take ownership of without copying.
  * As data is read, data is copied to callers buffer while automatically freeing
  * old buffers passed in on previous calls of write.
@@ -38,6 +38,7 @@
  *      Author: jansen
  */
 
+#include <glib.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -46,10 +47,10 @@
 #include "utility.h"
 
 /* forward declarations */
-static void linkedbuffer_nocow_create_new_head(linkedbuffer_nocow_tp lbuffer, void* src, size_t numbytes);
+static void linkedbuffer_nocow_create_new_head(linkedbuffer_nocow_tp lbuffer, gpointer src, size_t numbytes);
 static void linkedbuffer_nocow_destroy_old_tail(linkedbuffer_nocow_tp lbuffer);
 
-static bufferlink_nocow_tp bufferlink_nocow_create(void* src, size_t numbytes);
+static bufferlink_nocow_tp bufferlink_nocow_create(gpointer src, size_t numbytes);
 static void bufferlink_nocow_destroy(bufferlink_nocow_tp link);
 
 linkedbuffer_nocow_tp linkedbuffer_nocow_create(){
@@ -77,7 +78,7 @@ void linkedbuffer_nocow_destroy(linkedbuffer_nocow_tp lbuffer){
 			link = next;
 		}
 	} else {
-		/* TODO log null pointer exception */
+		/* TODO log null poginter exception */
 	}
 
 	free(lbuffer);
@@ -86,9 +87,9 @@ void linkedbuffer_nocow_destroy(linkedbuffer_nocow_tp lbuffer){
 	return;
 }
 
-size_t linkedbuffer_nocow_read(linkedbuffer_nocow_tp lbuffer, void* dest, size_t numbytes){
+size_t linkedbuffer_nocow_read(linkedbuffer_nocow_tp lbuffer, gpointer dest, size_t numbytes){
 	size_t bytes_left = numbytes;
-	uint32_t dest_offset = 0;
+	guint32 dest_offset = 0;
 
 	/* destroys old buffer tails proactively as opposed to lazily */
 
@@ -119,20 +120,20 @@ size_t linkedbuffer_nocow_read(linkedbuffer_nocow_tp lbuffer, void* dest, size_t
 		}
 
 	} else {
-		/* TODO log null pointer exception */
+		/* TODO log null poginter exception */
 	}
 
 	return numbytes - bytes_left;
 }
 
-size_t linkedbuffer_nocow_write(linkedbuffer_nocow_tp lbuffer, void* src, size_t numbytes){
+size_t linkedbuffer_nocow_write(linkedbuffer_nocow_tp lbuffer, gpointer src, size_t numbytes){
 	/* add src buffer as the new head */
 	linkedbuffer_nocow_create_new_head(lbuffer, src, numbytes);
 	lbuffer->length += numbytes;
 	return numbytes;
 }
 
-static void linkedbuffer_nocow_create_new_head(linkedbuffer_nocow_tp lbuffer, void* src, size_t numbytes) {
+static void linkedbuffer_nocow_create_new_head(linkedbuffer_nocow_tp lbuffer, gpointer src, size_t numbytes) {
 	bufferlink_nocow_tp newhead = bufferlink_nocow_create(src, numbytes);
 	if(lbuffer->head == NULL) {
 		lbuffer->head = lbuffer->tail = newhead;
@@ -158,7 +159,7 @@ static void linkedbuffer_nocow_destroy_old_tail(linkedbuffer_nocow_tp lbuffer) {
 	}
 }
 
-static bufferlink_nocow_tp bufferlink_nocow_create(void* src, size_t numbytes){
+static bufferlink_nocow_tp bufferlink_nocow_create(gpointer src, size_t numbytes){
 	bufferlink_nocow_tp link = malloc(sizeof(bufferlink_nocow_t));
 	if(link == NULL){
 		printf("Out of memory: bufferlink_nocow_create\n");
@@ -180,7 +181,7 @@ static void bufferlink_nocow_destroy(bufferlink_nocow_tp link){
 		link->capacity = 0;
 		link->next = NULL;
 	} else {
-		/* TODO log null pointer exception */
+		/* TODO log null poginter exception */
 	}
 
 	free(link);

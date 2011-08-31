@@ -19,6 +19,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <strings.h>
@@ -29,15 +30,15 @@
 #include "log.h"
 #include "sysconfig.h"
 
-extern uint8_t vci_can_share_memory(in_addr_t);
+extern guint8 vci_can_share_memory(in_addr_t);
 
-static enum rwlock_mgr_type vpacket_mgr_get_rwlock_type(char* lock_type_config);
+static enum rwlock_mgr_type vpacket_mgr_get_rwlock_type(gchar* lock_type_config);
 
 vpacket_mgr_tp vpacket_mgr_create() {
 	vpacket_mgr_tp vp_mgr = malloc(sizeof(vpacket_mgr_t));
 
-	vp_mgr->use_shmcabinet = sysconfig_get_int("vnetwork_use_shmcabinet");
-	vp_mgr->lock_regular_packets = sysconfig_get_int("vpacketmgr_lock_regular_mem_packets");
+	vp_mgr->use_shmcabinet = sysconfig_get_gint("vnetwork_use_shmcabinet");
+	vp_mgr->lock_regular_packets = sysconfig_get_gint("vpacketmgr_lock_regular_mem_packets");
 	vp_mgr->smc_mgr_packets = NULL;
 	vp_mgr->smc_mgr_payloads = NULL;
 
@@ -47,13 +48,13 @@ vpacket_mgr_tp vpacket_mgr_create() {
 		enum rwlock_mgr_type payload_cabinet_lock = vpacket_mgr_get_rwlock_type(sysconfig_get_string("vpacketmgr_payloads_cabinet_lock_type"));
 		enum rwlock_mgr_type payload_slot_lock = vpacket_mgr_get_rwlock_type(sysconfig_get_string("vpacketmgr_payloads_slot_lock_type"));
 
-		uint32_t num = (uint32_t) sysconfig_get_int("vpacketmgr_packets_per_shmcabinet");
-		uint32_t threshold = (uint32_t) sysconfig_get_int("vpacketmgr_packets_threshold_shmcabinet");
+		guint32 num = (guint32) sysconfig_get_gint("vpacketmgr_packets_per_shmcabinet");
+		guint32 threshold = (guint32) sysconfig_get_gint("vpacketmgr_packets_threshold_shmcabinet");
 
 		vp_mgr->smc_mgr_packets = shmcabinet_mgr_create(sizeof(vpacket_t), num, threshold, packet_cabinet_lock, packet_slot_lock);
 
-		num = (uint32_t) sysconfig_get_int("vpacketmgr_payloads_per_shmcabinet");
-		threshold = (uint32_t) sysconfig_get_int("vpacketmgr_payloads_threshold_shmcabinet");
+		num = (guint32) sysconfig_get_gint("vpacketmgr_payloads_per_shmcabinet");
+		threshold = (guint32) sysconfig_get_gint("vpacketmgr_payloads_threshold_shmcabinet");
 
 		vp_mgr->smc_mgr_payloads = shmcabinet_mgr_create(VPACKET_MSS, num, threshold, payload_cabinet_lock, payload_slot_lock);
 	}
@@ -61,7 +62,7 @@ vpacket_mgr_tp vpacket_mgr_create() {
 	return vp_mgr;
 }
 
-static enum rwlock_mgr_type vpacket_mgr_get_rwlock_type(char* lock_type_config) {
+static enum rwlock_mgr_type vpacket_mgr_get_rwlock_type(gchar* lock_type_config) {
 	if(strcasecmp(lock_type_config, SYSCONFIG_LOCK_STR_PTHREAD) == 0) {
 		return RWLOCK_MGR_TYPE_PTHREAD;
 	} else if(strcasecmp(lock_type_config, SYSCONFIG_LOCK_STR_SEMAPHORE) == 0) {
@@ -79,10 +80,10 @@ void vpacket_mgr_destroy(vpacket_mgr_tp vp_mgr) {
 	}
 }
 
-rc_vpacket_pod_tp vpacket_mgr_packet_create(vpacket_mgr_tp vp_mgr, uint8_t protocol,
+rc_vpacket_pod_tp vpacket_mgr_packet_create(vpacket_mgr_tp vp_mgr, guint8 protocol,
 		in_addr_t src_addr, in_port_t src_port, in_addr_t dst_addr, in_port_t dst_port,
-		enum vpacket_tcp_flags flags, uint32_t seq_number, uint32_t ack_number, uint32_t advertised_window,
-		uint16_t data_size, const void* data) {
+		enum vpacket_tcp_flags flags, guint32 seq_number, guint32 ack_number, guint32 advertised_window,
+		guint16 data_size, const gpointer data) {
 	/* get vpod memory */
 	vpacket_pod_tp vp_pod = malloc(sizeof(vpacket_pod_t));
 	vp_pod->vp_mgr = vp_mgr;
@@ -107,7 +108,7 @@ rc_vpacket_pod_tp vpacket_mgr_packet_create(vpacket_mgr_tp vp_mgr, uint8_t proto
 			return NULL;
 		}
 
-		/* setup packet pointer so shared memory is transparent */
+		/* setup packet poginter so shared memory is transparent */
 		vp_pod->vpacket = (vpacket_tp) vp_pod->shmitem_packet->payload;
 
 		if(data_size > 0) {
@@ -122,7 +123,7 @@ rc_vpacket_pod_tp vpacket_mgr_packet_create(vpacket_mgr_tp vp_mgr, uint8_t proto
 				return NULL;
 			}
 
-			/* setup packet payload pointer so shared memory is transparent */
+			/* setup packet payload poginter so shared memory is transparent */
 			vp_pod->vpacket->payload = vp_pod->shmitem_payload->payload;
 		} else {
 			vp_pod->shmitem_payload = NULL;
@@ -189,8 +190,8 @@ void vpacket_mgr_setup_locks(vpacket_pod_tp vp_pod) {
 }
 
 rc_vpacket_pod_tp vpacket_mgr_attach_shared_packet(vpacket_mgr_tp vp_mgr,
-		shmcabinet_info_tp shminfo_packet, uint32_t slot_id_packet,
-		shmcabinet_info_tp shminfo_payload, uint32_t slot_id_payload) {
+		shmcabinet_info_tp shminfo_packet, guint32 slot_id_packet,
+		shmcabinet_info_tp shminfo_payload, guint32 slot_id_payload) {
 	if(vp_mgr == NULL) {
 		return NULL;
 	}
@@ -212,7 +213,7 @@ rc_vpacket_pod_tp vpacket_mgr_attach_shared_packet(vpacket_mgr_tp vp_mgr,
 		return NULL;
 	}
 
-	/* setup packet pointer so shared memory is transparent */
+	/* setup packet poginter so shared memory is transparent */
 	vp_pod->vpacket = (vpacket_tp) vp_pod->shmitem_packet->payload;
 
 	/* shm for the payload, if there is a payload */
@@ -226,7 +227,7 @@ rc_vpacket_pod_tp vpacket_mgr_attach_shared_packet(vpacket_mgr_tp vp_mgr,
 			free(vp_pod);
 		}
 
-		/* setup packet payload pointer so shared memory is transparent */
+		/* setup packet payload poginter so shared memory is transparent */
 		vp_pod->vpacket->payload = vp_pod->shmitem_payload->payload;
 	} else {
 		vp_pod->shmitem_payload = NULL;

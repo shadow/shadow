@@ -20,6 +20,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <sys/time.h>
 #include <stdlib.h>
 #include "simop.h"
@@ -45,7 +46,7 @@ void simop_list_add( simop_list_tp list, simop_tp op, ptime_t time) {
 	evtracker_insert_event(list, time, op);
 }
 
-int simop_list_size( simop_list_tp list ) {
+gint simop_list_size( simop_list_tp list ) {
 	return evtracker_get_numevents(list);
 }
 
@@ -64,7 +65,7 @@ void simop_destroy(simop_tp simop) {
 	}
 }
 
-nbdf_tp simop_nbdf_encode(operation_tp dsimop, unsigned int tracking_id) {
+nbdf_tp simop_nbdf_encode(operation_tp dsimop, guint tracking_id) {
 	nbdf_tp nb = NULL;
 	nbdf_tp nb_outer = NULL;
 
@@ -74,7 +75,7 @@ nbdf_tp simop_nbdf_encode(operation_tp dsimop, unsigned int tracking_id) {
 	switch(dsimop->type){
 		case OP_LOAD_PLUGIN:
 		case OP_LOAD_CDF: {
-			char* filepath = dsimop->arguments[0].v.string_val;
+			gchar* filepath = dsimop->arguments[0].v.string_val;
 
 			nb = nbdf_construct("is",
 					tracking_id,
@@ -83,9 +84,9 @@ nbdf_tp simop_nbdf_encode(operation_tp dsimop, unsigned int tracking_id) {
 			break;
 		}
 		case OP_GENERATE_CDF: {
-			unsigned int cdf_base_center = (unsigned int)(dsimop->arguments[0].v.double_val);
-			unsigned int cdf_base_width = (unsigned int)(dsimop->arguments[1].v.double_val);
-			unsigned int cdf_tail_width = (unsigned int)(dsimop->arguments[2].v.double_val);
+			guint cdf_base_center = (guint)(dsimop->arguments[0].v.gdouble_val);
+			guint cdf_base_width = (guint)(dsimop->arguments[1].v.gdouble_val);
+			guint cdf_tail_width = (guint)(dsimop->arguments[2].v.gdouble_val);
 
 			nb = nbdf_construct("iiii",
 					tracking_id,
@@ -96,8 +97,8 @@ nbdf_tp simop_nbdf_encode(operation_tp dsimop, unsigned int tracking_id) {
 			break;
 		}
 		case OP_CREATE_NETWORK: {
-			unsigned int cdf_id = ((sim_master_tracker_tp)dsimop->arguments[0].v.var_val->data)->id;
-			double reliability = dsimop->arguments[1].v.double_val;
+			guint cdf_id = ((sim_master_tracker_tp)dsimop->arguments[0].v.var_val->data)->id;
+			gdouble reliability = dsimop->arguments[1].v.gdouble_val;
 
 			nb = nbdf_construct("iid",
 					tracking_id,
@@ -107,12 +108,12 @@ nbdf_tp simop_nbdf_encode(operation_tp dsimop, unsigned int tracking_id) {
 			break;
 		}
 		case OP_CONNECT_NETWORKS: {
-			unsigned int net1_id = ((sim_master_tracker_tp)dsimop->arguments[0].v.var_val->data)->id;
-			unsigned int cdf_id_latency_net1_to_net2 = ((sim_master_tracker_tp)dsimop->arguments[1].v.var_val->data)->id;
-			double reliability_net1_to_net2 = dsimop->arguments[2].v.double_val;
-			unsigned int net2_id = ((sim_master_tracker_tp)dsimop->arguments[3].v.var_val->data)->id;
-			unsigned int cdf_id_latency_net2_to_net1 = ((sim_master_tracker_tp)dsimop->arguments[4].v.var_val->data)->id;
-			double reliability_net2_to_net1 = dsimop->arguments[5].v.double_val;
+			guint net1_id = ((sim_master_tracker_tp)dsimop->arguments[0].v.var_val->data)->id;
+			guint cdf_id_latency_net1_to_net2 = ((sim_master_tracker_tp)dsimop->arguments[1].v.var_val->data)->id;
+			gdouble reliability_net1_to_net2 = dsimop->arguments[2].v.gdouble_val;
+			guint net2_id = ((sim_master_tracker_tp)dsimop->arguments[3].v.var_val->data)->id;
+			guint cdf_id_latency_net2_to_net1 = ((sim_master_tracker_tp)dsimop->arguments[4].v.var_val->data)->id;
+			gdouble reliability_net2_to_net1 = dsimop->arguments[5].v.gdouble_val;
 
 			nb = nbdf_construct("iidiid",
 					net1_id,
@@ -125,7 +126,7 @@ nbdf_tp simop_nbdf_encode(operation_tp dsimop, unsigned int tracking_id) {
 			break;
 		}
 		case OP_CREATE_HOSTNAME: {
-			char* base_hostname = dsimop->arguments[0].v.string_val;
+			gchar* base_hostname = dsimop->arguments[0].v.string_val;
 
 			nb = nbdf_construct("is",
 					tracking_id,
@@ -134,23 +135,23 @@ nbdf_tp simop_nbdf_encode(operation_tp dsimop, unsigned int tracking_id) {
 			break;
 		}
 		case OP_CREATE_NODES: {
-			unsigned int plugin_id = ((sim_master_tracker_tp)dsimop->arguments[1].v.var_val->data)->id;
-			unsigned int network_id = ((sim_master_tracker_tp)dsimop->arguments[2].v.var_val->data)->id;
-			unsigned int base_hostname_id = ((sim_master_tracker_tp)dsimop->arguments[3].v.var_val->data)->id;
+			guint plugin_id = ((sim_master_tracker_tp)dsimop->arguments[1].v.var_val->data)->id;
+			guint network_id = ((sim_master_tracker_tp)dsimop->arguments[2].v.var_val->data)->id;
+			guint base_hostname_id = ((sim_master_tracker_tp)dsimop->arguments[3].v.var_val->data)->id;
 
-			unsigned int cdf_id_bandwidth_up = 0;
+			guint cdf_id_bandwidth_up = 0;
 			if(dsimop->arguments[4].v.var_val->data_type == dsim_vartracker_type_cdftrack) {
 				cdf_id_bandwidth_up = ((sim_master_tracker_tp)dsimop->arguments[4].v.var_val->data)->id;
 			}
 
-			unsigned int cdf_id_bandwidth_down = 0;
+			guint cdf_id_bandwidth_down = 0;
 			if(dsimop->arguments[5].v.var_val->data_type == dsim_vartracker_type_cdftrack) {
 				cdf_id_bandwidth_down = ((sim_master_tracker_tp)dsimop->arguments[5].v.var_val->data)->id;
 			}
 
-			unsigned int cdf_id_cpu_speed = ((sim_master_tracker_tp)dsimop->arguments[6].v.var_val->data)->id;
+			guint cdf_id_cpu_speed = ((sim_master_tracker_tp)dsimop->arguments[6].v.var_val->data)->id;
 
-			char* plugin_args = dsimop->arguments[7].v.string_val;
+			gchar* plugin_args = dsimop->arguments[7].v.string_val;
 
 			nb = nbdf_construct("iiiiiiis",
 					plugin_id,
@@ -231,7 +232,7 @@ simop_tp simop_nbdf_decode(nbdf_tp nb) {
 
 			nbdf_read(inner, "iid",
 					&op->id,
-					&op->cdf_id_intra_latency,
+					&op->cdf_id_gintra_latency,
 					&op->reliability);
 
 			simop->operation = op;

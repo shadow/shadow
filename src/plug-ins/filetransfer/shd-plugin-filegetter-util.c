@@ -20,6 +20,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <time.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -30,7 +31,7 @@
 #include "shd-service-filegetter.h"
 #include "shd-plugin.h"
 
-void plugin_filegetter_util_log_callback(enum service_filegetter_loglevel level, const char* message) {
+void plugin_filegetter_util_log_callback(enum service_filegetter_loglevel level, const gchar* message) {
 	if(level == SFG_CRITICAL) {
 		snri_log(LOG_CRIT, "%s\n", message);
 	} else if(level == SFG_WARNING) {
@@ -46,7 +47,7 @@ void plugin_filegetter_util_log_callback(enum service_filegetter_loglevel level,
 	}
 }
 
-in_addr_t plugin_filegetter_util_hostbyname_callback(const char* hostname) {
+in_addr_t plugin_filegetter_util_hostbyname_callback(const gchar* hostname) {
 	in_addr_t addr = 0;
 
 	/* get the address in network order */
@@ -55,7 +56,7 @@ in_addr_t plugin_filegetter_util_hostbyname_callback(const char* hostname) {
 	} else if(strncmp(hostname, "localhost", 9) == 0) {
 		addr = htonl(INADDR_LOOPBACK);
 	} else {
-		if(snri_resolve_name((char*)hostname, &addr) != SNRICALL_SUCCESS) {
+		if(snri_resolve_name((gchar*)hostname, &addr) != SNRICALL_SUCCESS) {
 			snri_log(LOG_WARN, "%s does not resolve to a usable address\n", hostname);
 			addr = htonl(INADDR_NONE);
 		}
@@ -64,11 +65,11 @@ in_addr_t plugin_filegetter_util_hostbyname_callback(const char* hostname) {
 	return addr;
 }
 
-void plugin_filegetter_util_wakeup_callback(int timerid, void* arg) {
+void plugin_filegetter_util_wakeup_callback(gint timerid, gpointer arg) {
 	service_filegetter_activate((service_filegetter_tp) arg, 0);
 }
 
-void plugin_filegetter_util_sleep_callback(void* sfg, unsigned int seconds) {
+void plugin_filegetter_util_sleep_callback(gpointer sfg, guint seconds) {
 	if(snri_timer_create(seconds * 1000, &plugin_filegetter_util_wakeup_callback, sfg) == SNRICALL_ERROR) {
 		snri_log(LOG_WARN, "unable to create sleep timer for %u seconds\n", seconds);
 	}

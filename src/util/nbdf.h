@@ -23,24 +23,25 @@
 #ifndef _nbdf_h
 #define _nbdf_h
 
+#include <glib.h>
 #include "pipecloud.h"
 #include "socket.h"
 
 #define NBDF_DEFAULT_AVAILABLE 64
 
 typedef struct nbdf_t {
-	char * data;
-	unsigned int avail;
-	unsigned int consumed;
+	gchar * data;
+	guint avail;
+	guint consumed;
 } nbdf_t, *nbdf_tp;
 
-nbdf_tp nbdf_construct(char * format, ...);
+nbdf_tp nbdf_construct(gchar * format, ...);
 nbdf_tp nbdf_import_frame(socket_tp s);
 nbdf_tp nbdf_import_frame_pipecloud(pipecloud_tp);
-int nbdf_frame_avail(socket_tp s);
+gint nbdf_frame_avail(socket_tp s);
 void nbdf_send(nbdf_tp nb, socket_tp s);
-void nbdf_send_pipecloud(nbdf_tp nb, int destination_mbox, pipecloud_tp pc);
-void nbdf_read(nbdf_tp nb, char * format, ...);
+void nbdf_send_pipecloud(nbdf_tp nb, gint destination_mbox, pipecloud_tp pc);
+void nbdf_read(nbdf_tp nb, gchar * format, ...);
 void nbdf_free(nbdf_tp nbdf);
 nbdf_tp nbdf_dup(nbdf_tp nb);
 

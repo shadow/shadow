@@ -20,12 +20,13 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include "global.h"
 #include "sim.h"
 #include "routing.h"
 #include "netconst.h"
 
-sim_slave_tp sim_slave_create (unsigned int my_id, unsigned int num_workers) {
+sim_slave_tp sim_slave_create (guint my_id, guint num_workers) {
 	sim_slave_tp slave;
 
 	slave=malloc(sizeof(*slave));
@@ -46,7 +47,7 @@ void sim_slave_destroy(sim_slave_tp sslave) {
 	return;
 }
 
-void sim_slave_deposit(sim_slave_tp sslave, int frametype, nbdf_tp frame) {
+void sim_slave_deposit(sim_slave_tp sslave, gint frametype, nbdf_tp frame) {
 
 	switch(frametype) {
 		case SIM_FRAME_OP: {

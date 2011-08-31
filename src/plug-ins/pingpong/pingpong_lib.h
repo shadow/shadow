@@ -23,12 +23,13 @@
 #ifndef SIMPLE_TRANSPORT_LIB_H_
 #define SIMPLE_TRANSPORT_LIB_H_
 
+#include <glib.h>
 #include <netinet/in.h>
 #include <stdio.h>
 
 /* Structure for server-specific data. */
 typedef struct server_t {
-	int listening_socketd;
+	gint listening_socketd;
 } server_t, *server_tp;
 
 /* Structure for client-specific data. */
@@ -39,11 +40,11 @@ typedef struct client_t {
 /* The main structure that will hold all of my module-specific variables. */
 typedef struct {
 	in_addr_t ip;
-	char ipstring[40];
-	int is_server;
-	int did_init;
-	int num_msgs_sent;
-	int num_msgs_received;
+	gchar ipstring[40];
+	gint is_server;
+	gint did_init;
+	gint num_msgs_sent;
+	gint num_msgs_received;
 	server_tp sdata;
 	client_tp cdata;
 } simple_transport_t, *simple_transport_tp;
@@ -63,52 +64,57 @@ typedef struct {
 
 #define SERVER_LISTEN_PORT 60000
 #define MAX_CONNECTIONS 100
-#define TRUE 1
-#define FALSE 0
+#ifndef	FALSE
+#define	FALSE	(0)
+#endif
+
+#ifndef	TRUE
+#define	TRUE	(!FALSE)
+#endif
 #define ERROR -1
 
 /* Convenience (?) function that calls inet_ntop() with AF_INET. */
-const char * ip_to_string(in_addr_t ip, char *buffer, size_t buflen);
+const gchar * ip_to_string(in_addr_t ip, gchar *buffer, size_t buflen);
 
 /*
  * Open a DGRAM socket in nonblocking mode, bind to SERVER_LISTEN_PORT.
  * returns the socket descriptor, or ERROR if error
  */
-int udpserver_start(simple_transport_tp instance);
+gint udpserver_start(simple_transport_tp instance);
 /*
  * Open a DGRAM socket in nonblocking mode.
  * returns the socket descriptor, or ERROR if error
  */
-int udpclient_start(simple_transport_tp instance);
+gint udpclient_start(simple_transport_tp instance);
 
 /*
  * Open a STREAM socket in nonblocking mode, bind to SERVER_LISTEN_PORT and listen
  * as a server socket. Accept a connection, if there is one.
  * returns the listening socket descriptor, or ERROR if error
  */
-int tcpserver_start(simple_transport_tp instance);
+gint tcpserver_start(simple_transport_tp instance);
 /*
  * Attempts to accept a connection from a client, returning the socket
  * descriptor of the new connection or ERROR if error.
  */
-int tcpserver_accept(simple_transport_tp instance);
+gint tcpserver_accept(simple_transport_tp instance);
 /*
  * Create a STREAM socket in nonblocking mode and connect to the given address
  * and port.
  * returns the descriptor to the connected socket, or ERROR if error
  */
-int tcpclient_start(simple_transport_tp instance, in_addr_t server_address, int server_port);
+gint tcpclient_start(simple_transport_tp instance, in_addr_t server_address, gint server_port);
 
 /*
  * Send a message to the given destination.
  * returns the number of bytes sent, or ERROR if error
  */
-int transport_send_message(simple_transport_tp instance, int socketd, struct sockaddr_in* destination);
+gint transport_send_message(simple_transport_tp instance, gint socketd, struct sockaddr_in* destination);
 /*
  * Receive a message on the given socket descriptor, and fill in the address
  * information for the source of the message.
  * returns the number of bytes received, or ERROR if error
  */
-int transport_receive_message(simple_transport_tp instance, int socketd, struct sockaddr* source);
+gint transport_receive_message(simple_transport_tp instance, gint socketd, struct sockaddr* source);
 
 #endif /* SIMPLE_TRANSPORT_LIB_H_ */

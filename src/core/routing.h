@@ -23,10 +23,11 @@
 #ifndef _routing_h
 #define _routing_h
 
+#include <glib.h>
 #include "nbdf.h"
 #include "socket.h"
 
-void dvn_packet_write(socket_tp socket, unsigned char dest_type, unsigned char dest_layer, int dest_major, int frametype, nbdf_tp frame);
-void dvn_packet_route(unsigned char dest_type, unsigned char dest_layer, int dest_major, int frametype, nbdf_tp frame);
+void dvn_packet_write(socket_tp socket, guchar dest_type, guchar dest_layer, gint dest_major, gint frametype, nbdf_tp frame);
+void dvn_packet_route(guchar dest_type, guchar dest_layer, gint dest_major, gint frametype, nbdf_tp frame);
 
 #endif

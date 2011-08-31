@@ -20,6 +20,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -72,7 +73,7 @@
 #define DOPTION_LOG2			102
 #define DOPTION_LOG3			103
 
-int clo_handle(char *v, int o, void * arg) {
+gint clo_handle(gchar *v, gint o, gpointer arg) {
 	struct DVN_CONFIG* dconfig = (struct DVN_CONFIG*)arg;
 
 	switch(o) {
@@ -142,7 +143,7 @@ int clo_handle(char *v, int o, void * arg) {
 		case DOPTION_LOG1:
 		case DOPTION_LOG2:
 		case DOPTION_LOG3: {
-			int logchannel = o-DOPTION_LOG0;
+			gint logchannel = o-DOPTION_LOG0;
 			strncpy(dconfig->log_destinations[logchannel], v, sizeof(dconfig->log_destinations[0]));
 			dconfig->log_destinations[logchannel][sizeof(dconfig->log_destinations[0])-1] = 0;
 			break;
@@ -181,7 +182,7 @@ struct CLO_entry cloentries[] = {
 	 };
 
 /* entry for dvn */
-int main (int argc, char * argv[]) {
+gint main (gint argc, gchar * argv[]) {
 	struct DVN_CONFIG config;
 
 	/* setup system defaults */
@@ -238,7 +239,7 @@ int main (int argc, char * argv[]) {
 		printf("%s\n", sysconfig_export_config());
 		exit(0);
 	} else if(config.config_file[0]) {
-		char * configuration = file_get_contents(config.config_file);
+		gchar * configuration = file_get_contents(config.config_file);
 		if(!configuration)
 			printfault(EXIT_FAILURE, "Unable to open configuration file '%s'\n", config.config_file);
 		sysconfig_import_config(configuration);
@@ -253,7 +254,7 @@ int main (int argc, char * argv[]) {
 	debugf("Core: DVN Starting\n");
 
 	/*if(config.background) {
-		debugf("Core: Detaching into daemon\n");
+		debugf("Core: Detaching ginto daemon\n");
 
 	to daemonize, i need to ....
 	 * fork()

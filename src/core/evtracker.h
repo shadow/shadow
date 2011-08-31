@@ -23,6 +23,7 @@
 #ifndef _evtracker_h
 #define _evtracker_h
 
+#include <glib.h>
 #include "global.h"
 #include "heap.h"
 #include "log.h"
@@ -34,25 +35,25 @@ struct EVTRACKER_HASH_E {
 	struct EVTRACKER_HASH_E * p;
 	struct EVTRACKER_HASH_E * l;
 	struct EVTRACKER_HASH_E * r;
-	void ** data;
-	unsigned int data_size;
-	unsigned int data_write_ptr;
-	unsigned int data_read_ptr;
+	gpointer * data;
+	guint data_size;
+	guint data_write_ptr;
+	guint data_read_ptr;
 	ptime_t time;
 };
 
 struct EVTRACKER_HEAP_E {
 	ptime_t time;
 	struct EVTRACKER_HASH_E * hash_e;
-	unsigned int hash_offset;
+	guint hash_offset;
 };
 
 typedef struct EVTRACKER {
 	struct EVTRACKER_HASH_E ** evhash;
 	heap_tp evheap;
-	unsigned int size;
-	unsigned int granularity;
-	unsigned int num_events;
+	guint size;
+	guint granularity;
+	guint num_events;
 
 	ptime_t last_accessed_time;
 	struct EVTRACKER_HASH_E * last_hash_e;
@@ -65,25 +66,25 @@ typedef struct EVTRACKER {
  * @param time Output - will contain the time this event expires (if provided, is optional)
  * @param removal If set nonzero, will remove the event from the evtracker
  */
-void * evtracker_get_nextevent(evtracker_tp evt, ptime_t * time, char removal);
+gpointer evtracker_get_nextevent(evtracker_tp evt, ptime_t * time, gchar removal);
 
 /**
  * Returns the total number of events held within the Evt
  */
-unsigned int evtracker_get_numevents(evtracker_tp evt);
+guint evtracker_get_numevents(evtracker_tp evt);
 
 /**
  * Returns nonzero if the next soonest time is the ptime_t parameter given.
  * @param time The time to check against the evtracker
  */
-int evtracker_isnext(evtracker_tp evt, ptime_t time);
+gint evtracker_isnext(evtracker_tp evt, ptime_t time);
 
 /**
- * Inserts an event into the evtracker.
+ * Inserts an event ginto the evtracker.
  * @param time Time event occurs
  * @param data Data associated with event
  */
-void evtracker_insert_event(evtracker_tp evt, ptime_t time, void * data);
+void evtracker_insert_event(evtracker_tp evt, ptime_t time, gpointer data);
 
 /**
  * Destroys the given evtracker
@@ -96,13 +97,13 @@ void evtracker_destroy(evtracker_tp);
  * @param buf_size The size of memory to allocate for the quick-insertion hashtable.
  * @param granularity All events inserted will be accessible only within windows of granularity of the specified size
  */
-evtracker_tp evtracker_create(size_t buf_size, unsigned int granularity);
+evtracker_tp evtracker_create(size_t buf_size, guint granularity);
 
-struct EVTRACKER_HASH_E * evtracker_find_hash_e(evtracker_tp evt, ptime_t time, char create_okay);
-int evtracker_heap_e_compare(void * a, void * b);
+struct EVTRACKER_HASH_E * evtracker_find_hash_e(evtracker_tp evt, ptime_t time, gchar create_okay);
+gint evtracker_heap_e_compare(gpointer a, gpointer b);
 
 /**
- * @param maximum If a pointer is passed, this function will never return
+ * @param maximum If a poginter is passed, this function will never return
  *                a value greater than this.
  */
 ptime_t evtracker_earliest_event(evtracker_tp evt, ptime_t * maximum);

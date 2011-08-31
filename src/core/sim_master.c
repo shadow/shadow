@@ -20,6 +20,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <string.h>
 
 #include "global.h"
@@ -31,7 +32,7 @@
 #include "rand.h"
 #include "simnet_graph.h"
 
-sim_master_tp sim_master_create (char * dsim, unsigned int num_slaves) {
+sim_master_tp sim_master_create (gchar * dsim, guint num_slaves) {
 	sim_master_tp smaster;
 	nbdf_tp start_nb;
 	operation_tp op = NULL;
@@ -94,7 +95,7 @@ sim_master_tp sim_master_create (char * dsim, unsigned int num_slaves) {
 	return smaster;
 }
 
-static void sim_master_destroy_cdftracker_cb(int key, void* value, void *param) {
+static void sim_master_destroy_cdftracker_cb(gint key, gpointer value, gpointer param) {
 	sim_master_tracker_tp cdf_tracker = value;
 	if(cdf_tracker != NULL) {
 		cdf_destroy((cdf_tp)cdf_tracker->value);
@@ -102,7 +103,7 @@ static void sim_master_destroy_cdftracker_cb(int key, void* value, void *param) 
 	}
 }
 
-void sim_free_tracker(sim_master_tracker_tp t, int id) {
+void sim_free_tracker(sim_master_tracker_tp t, gint id) {
 	if(t)
 		free(t);
 }
@@ -132,7 +133,7 @@ void sim_master_destroy(sim_master_tp sim) {
 }
 
 
-void sim_master_deposit(sim_master_tp smaster, int frametype, nbdf_tp nb) {
+void sim_master_deposit(sim_master_tp smaster, gint frametype, nbdf_tp nb) {
 
 	switch(frametype) {
 		case SIM_FRAME_DONE_SLAVE:{
@@ -142,17 +143,17 @@ void sim_master_deposit(sim_master_tp smaster, int frametype, nbdf_tp nb) {
 	}
 }
 
-int sim_master_isdone(sim_master_tp smaster) {
+gint sim_master_isdone(sim_master_tp smaster) {
 	return smaster->num_slaves == smaster->num_slaves_complete ? 1 : 0;
 }
 
-static unsigned int sim_master_dsimop_helper(operation_tp dsimop, GHashTable *tracker_ht, enum dsim_vartype vartype) {
+static guint sim_master_dsimop_helper(operation_tp dsimop, GHashTable *tracker_ht, enum dsim_vartype vartype) {
 	sim_master_tracker_tp tracker;
 	nbdf_tp nb_op;
 
 	if(dsimop->retval) {
 		/* need a unique id for tracking, but 0 is reserved */
-		unsigned int tracking_id = 0;
+		guint tracking_id = 0;
 		while(tracking_id == 0 || g_hash_table_lookup(tracker_ht, &tracking_id) != NULL) {
 			tracking_id = dvn_rand_fast(RAND_MAX);
 		}
@@ -164,7 +165,7 @@ static unsigned int sim_master_dsimop_helper(operation_tp dsimop, GHashTable *tr
 		tracker->id = tracking_id;
 		tracker->counter = 0;
 		tracker->value = NULL;
-		g_hash_table_insert(tracker_ht, int_key(tracker->id), tracker);
+		g_hash_table_insert(tracker_ht, gint_key(tracker->id), tracker);
 
 		/* save it to the variable so DSIM has access to it */
 		dsimop->retval->data = tracker;
@@ -189,10 +190,10 @@ static void sim_master_dsimop_load_plugin(sim_master_tp master, operation_tp dsi
 }
 
 static void sim_master_dsimop_load_cdf(sim_master_tp master, operation_tp dsimop) {
-	char* filepath = dsimop->arguments[0].v.string_val;
+	gchar* filepath = dsimop->arguments[0].v.string_val;
 	debugf("SMaster: Parsing DSIM Operation: load_cdf(): '%s'\n", filepath);
 
-	unsigned int id = sim_master_dsimop_helper(dsimop, master->cdf_tracking, dsim_vartracker_type_cdftrack);
+	guint id = sim_master_dsimop_helper(dsimop, master->cdf_tracking, dsim_vartracker_type_cdftrack);
 
 	/* master has to keep track of all cdfs used for latency in order to compute runahead */
 	sim_master_tracker_tp cdf_tracker = g_hash_table_lookup(master->cdf_tracking, &id);
@@ -207,11 +208,11 @@ static void sim_master_dsimop_load_cdf(sim_master_tp master, operation_tp dsimop
 static void sim_master_dsimop_generate_cdf(sim_master_tp master, operation_tp dsimop) {
 	debugf("SMaster: Parsing DSIM Operation: generate_cdf()\n");
 
-	unsigned int cdf_base_center = (unsigned int)(dsimop->arguments[0].v.double_val);
-	unsigned int cdf_base_width = (unsigned int)(dsimop->arguments[1].v.double_val);
-	unsigned int cdf_tail_width = (unsigned int)(dsimop->arguments[2].v.double_val);
+	guint cdf_base_center = (guint)(dsimop->arguments[0].v.gdouble_val);
+	guint cdf_base_width = (guint)(dsimop->arguments[1].v.gdouble_val);
+	guint cdf_tail_width = (guint)(dsimop->arguments[2].v.gdouble_val);
 
-	unsigned int id = sim_master_dsimop_helper(dsimop, master->cdf_tracking, dsim_vartracker_type_cdftrack);
+	guint id = sim_master_dsimop_helper(dsimop, master->cdf_tracking, dsim_vartracker_type_cdftrack);
 
 	/* master has to keep track of all cdfs used for latency in order to compute runahead */
 	sim_master_tracker_tp cdf_tracker = g_hash_table_lookup(master->cdf_tracking, &id);
@@ -230,9 +231,9 @@ static void sim_master_dsimop_create_network(sim_master_tp master, operation_tp 
 	if(dsimop->arguments[0].v.var_val &&
 			dsimop->arguments[0].v.var_val->data_type == dsim_vartracker_type_cdftrack &&
 			dsimop->arguments[0].v.var_val->data) {
-		unsigned int netid = sim_master_dsimop_helper(dsimop, master->network_tracking, dsim_vartracker_type_nettrack);
-		unsigned int cdf_id = ((sim_master_tracker_tp)dsimop->arguments[0].v.var_val->data)->id;
-		double reliability = dsimop->arguments[1].v.double_val;
+		guint netid = sim_master_dsimop_helper(dsimop, master->network_tracking, dsim_vartracker_type_nettrack);
+		guint cdf_id = ((sim_master_tracker_tp)dsimop->arguments[0].v.var_val->data)->id;
+		gdouble reliability = dsimop->arguments[1].v.gdouble_val;
 
 		/* get the cdf used for latency */
 		sim_master_tracker_tp cdf_tracker = g_hash_table_lookup(master->cdf_tracking, &cdf_id);
@@ -263,12 +264,12 @@ static void sim_master_dsimop_connect_networks(sim_master_tp master, operation_t
 			dsimop->arguments[4].v.var_val->data_type == dsim_vartracker_type_cdftrack &&
 			dsimop->arguments[4].v.var_val->data) {
 
-		unsigned int net1_id = ((sim_master_tracker_tp)dsimop->arguments[0].v.var_val->data)->id;
-		unsigned int cdf_id_latency_net1_to_net2 = ((sim_master_tracker_tp)dsimop->arguments[1].v.var_val->data)->id;
-		double reliability_net1_to_net2 = dsimop->arguments[2].v.double_val;
-		unsigned int net2_id = ((sim_master_tracker_tp)dsimop->arguments[3].v.var_val->data)->id;
-		unsigned int cdf_id_latency_net2_to_net1 = ((sim_master_tracker_tp)dsimop->arguments[4].v.var_val->data)->id;
-		double reliability_net2_to_net1 = dsimop->arguments[5].v.double_val;
+		guint net1_id = ((sim_master_tracker_tp)dsimop->arguments[0].v.var_val->data)->id;
+		guint cdf_id_latency_net1_to_net2 = ((sim_master_tracker_tp)dsimop->arguments[1].v.var_val->data)->id;
+		gdouble reliability_net1_to_net2 = dsimop->arguments[2].v.gdouble_val;
+		guint net2_id = ((sim_master_tracker_tp)dsimop->arguments[3].v.var_val->data)->id;
+		guint cdf_id_latency_net2_to_net1 = ((sim_master_tracker_tp)dsimop->arguments[4].v.var_val->data)->id;
+		gdouble reliability_net2_to_net1 = dsimop->arguments[5].v.gdouble_val;
 
 
 		/* encode the simop to NBDF */
@@ -317,7 +318,7 @@ static void sim_master_dsimop_create_nodes(sim_master_tp master, operation_tp ds
 			dsimop->arguments[6].v.var_val->data) {
 
 		/* must have one cdf, but the other one can be anything if not a cdf, it will be ignored */
-		int n_cdfs = 0;
+		gint n_cdfs = 0;
 		if(dsimop->arguments[4].v.var_val &&
 			dsimop->arguments[4].v.var_val->data_type == dsim_vartracker_type_cdftrack &&
 			dsimop->arguments[4].v.var_val->data) {
@@ -334,12 +335,12 @@ static void sim_master_dsimop_create_nodes(sim_master_tp master, operation_tp ds
 			return;
 		}
 
-		unsigned int quantity = ((unsigned int)(dsimop->arguments[0].v.double_val));
+		guint quantity = ((guint)(dsimop->arguments[0].v.gdouble_val));
 		sim_master_tracker_tp hostname_tracker = dsimop->arguments[3].v.var_val->data;
 
 		/* multi node creation. split the job up. */
-		for(int i = 0; i < quantity; i++) {
-			unsigned int slave_id = i % master->num_slaves;
+		for(gint i = 0; i < quantity; i++) {
+			guint slave_id = i % master->num_slaves;
 			nb_op = simop_nbdf_encode(dsimop, hostname_tracker->counter++);
 			dvn_packet_route(DVNPACKET_SLAVE, DVNPACKET_LAYER_SIM, slave_id, SIM_FRAME_OP, nb_op);
 			nbdf_free(nb_op);

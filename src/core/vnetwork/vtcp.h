@@ -22,6 +22,7 @@
 #ifndef VTCP_H_
 #define VTCP_H_
 
+#include <glib.h>
 #include <stdint.h>
 #include <stddef.h>
 #include <netinet/in.h>
@@ -53,50 +54,50 @@ typedef struct vtcp_s {
 	vbuffer_tp vb;
 	vpeer_tp remote_peer;
 	/* set if the connection was destroyed because it was reset */
-	uint8_t connection_was_reset;
+	guint8 connection_was_reset;
 	/* acks are delayed to get a chance to piggyback on data */
 	enum vtcp_delayed_ack snd_dack;
 	/* used to make sure we get all data when other end closes */
-	uint32_t rcv_end;
+	guint32 rcv_end;
 	/* the last byte that was sent by the app, possibly not yet sent to the network */
-	uint32_t snd_end;
+	guint32 snd_end;
 	/* send unacknowledged */
-	uint32_t snd_una;
+	guint32 snd_una;
 	/* send next */
-	uint32_t snd_nxt;
+	guint32 snd_nxt;
 	/* send window */
-	uint32_t snd_wnd;
+	guint32 snd_wnd;
 	/* send sequence number used for last window update */
-	uint32_t snd_wl1;
+	guint32 snd_wl1;
 	/* send ack number used from last window update */
-	uint32_t snd_wl2;
+	guint32 snd_wl2;
 	/* receive next */
-	uint32_t rcv_nxt;
+	guint32 rcv_nxt;
 	/* receive window */
-	uint32_t rcv_wnd;
+	guint32 rcv_wnd;
 	/* initial receive sequence number */
-	uint32_t rcv_irs;
+	guint32 rcv_irs;
 	/* congestion control, used for AIMD and slow start */
-	uint8_t is_slow_start;
-	uint32_t cng_wnd;
-	uint32_t cng_threshold;
-	uint32_t last_adv_wnd;
+	guint8 is_slow_start;
+	guint32 cng_wnd;
+	guint32 cng_threshold;
+	guint32 last_adv_wnd;
 }vtcp_t, *vtcp_tp;
 
 void vtcp_connect(vtcp_tp vtcp, in_addr_t remote_addr, in_port_t remote_port);
 vtcp_tp vtcp_create(vsocket_mgr_tp vsocket_mgr, vsocket_tp sock, vbuffer_tp vb);
-rc_vpacket_pod_tp vtcp_create_packet(vtcp_tp vtcp, enum vpacket_tcp_flags flags, uint16_t data_size, const void* data);
+rc_vpacket_pod_tp vtcp_create_packet(vtcp_tp vtcp, enum vpacket_tcp_flags flags, guint16 data_size, const gpointer data);
 void vtcp_destroy(vtcp_tp vtcp);
 void vtcp_disconnect(vtcp_tp vtcp);
-uint32_t vtcp_generate_iss();
+guint32 vtcp_generate_iss();
 vsocket_tp vtcp_get_target_socket(vtransport_item_tp titem);
 void vtcp_ondack(vci_event_tp vci_event, vsocket_mgr_tp vs_mgr);
 enum vt_prc_result vtcp_process_item(vtransport_item_tp titem);
-ssize_t vtcp_recv(vsocket_mgr_tp net, vsocket_tp tcpsock, void* dest_buf, size_t n);
-void vtcp_retransmit(vtcp_tp vtcp, uint32_t retransmit_key);
-ssize_t vtcp_send(vsocket_mgr_tp net, vsocket_tp tcpsock, const void* src_buf, size_t n);
+ssize_t vtcp_recv(vsocket_mgr_tp net, vsocket_tp tcpsock, gpointer dest_buf, size_t n);
+void vtcp_retransmit(vtcp_tp vtcp, guint32 retransmit_key);
+ssize_t vtcp_send(vsocket_mgr_tp net, vsocket_tp tcpsock, const gpointer src_buf, size_t n);
 void vtcp_send_control_packet(vtcp_tp vtcp, enum vpacket_tcp_flags flags);
-uint8_t vtcp_send_packet(vtcp_tp vtcp, rc_vpacket_pod_tp rc_packet);
+guint8 vtcp_send_packet(vtcp_tp vtcp, rc_vpacket_pod_tp rc_packet);
 rc_vpacket_pod_tp vtcp_wire_packet(vtcp_tp vtcp);
 
 #endif /* VTCP_H_ */

@@ -20,6 +20,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <netinet/in.h>
 
 #include "global.h"
@@ -70,7 +71,7 @@ void context_execute_init(module_tp module) {
 	global_sim_context.static_context = NULL;
 }
 
-void context_execute_instantiate(context_provider_tp provider, int argc, char* argv[]) {
+void context_execute_instantiate(context_provider_tp provider, gint argc, gchar* argv[]) {
 	if(!provider)
 		return;
 
@@ -103,7 +104,7 @@ void context_execute_destroy(context_provider_tp provider) {
 	return;
 }
 
-void context_execute_socket(context_provider_tp provider, uint16_t sockd, uint8_t can_read, uint8_t can_write, uint8_t do_read_first) {
+void context_execute_socket(context_provider_tp provider, guint16 sockd, guint8 can_read, guint8 can_write, guint8 do_read_first) {
 	if(!provider){
 		return;
 	}
@@ -128,17 +129,17 @@ void context_execute_socket(context_provider_tp provider, uint16_t sockd, uint8_
 		/* TODO refactor this! */
 		if(do_read_first) {
 			if(can_read) {
-				module_call_socket_readable(provider->modinst, (int)sockd);
+				module_call_socket_readable(provider->modinst, (gint)sockd);
 			}
 			if(can_write) {
-				module_call_socket_writable(provider->modinst, (int)sockd);
+				module_call_socket_writable(provider->modinst, (gint)sockd);
 			}
 		} else {
 			if(can_write) {
-				module_call_socket_writable(provider->modinst, (int)sockd);
+				module_call_socket_writable(provider->modinst, (gint)sockd);
 			}
 			if(can_read) {
-				module_call_socket_readable(provider->modinst, (int)sockd);
+				module_call_socket_readable(provider->modinst, (gint)sockd);
 			}
 		}
 	}
@@ -150,7 +151,7 @@ void context_execute_socket(context_provider_tp provider, uint16_t sockd, uint8_
 //		}
 }
 
-void context_execute_dtimer_cb(context_provider_tp provider, dtimer_ontimer_cb_fp cb, int timer_id, void * cb_arg) {
+void context_execute_dtimer_cb(context_provider_tp provider, dtimer_ontimer_cb_fp cb, gint timer_id, gpointer cb_arg) {
 	if(!provider)
 		return;
 

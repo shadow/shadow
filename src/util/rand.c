@@ -20,21 +20,22 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <stdlib.h>
 #include "rand.h"
 
-double dvn_rand_unit() {
-	return (double)rand() / (double)RAND_MAX;
+gdouble dvn_rand_unit() {
+	return (gdouble)rand() / (gdouble)RAND_MAX;
 }
 
-unsigned int dvn_rand_fast(unsigned int max) {
+guint dvn_rand_fast(guint max) {
 	return rand() % max; /* note: i'm WELL AWARE this isn't an even distribution. */
 }
 
-unsigned int dvn_rand(unsigned int max) {
+guint dvn_rand(guint max) {
 	return dvn_rand_unit() * max;
 }
 
-void dvn_rand_seed(unsigned int seed) {
+void dvn_rand_seed(guint seed) {
 	srand(seed);
 }

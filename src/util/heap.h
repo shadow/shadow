@@ -35,17 +35,17 @@
 
 
 typedef struct HEAP {
-	void ** heap;
-	unsigned int ptr;
-	unsigned int heapsize;
-	unsigned int default_size;
-	int (*compare)(void *a, void *b);
+	gpointer * heap;
+	guint ptr;
+	guint heapsize;
+	guint default_size;
+	gint (*compare)(gpointer a, gpointer b);
 } * heap_tp;
 
 /**
  * creates a heap!
  */
-heap_tp heap_create (int (*compare)(void *a, void *b), unsigned int default_size);
+heap_tp heap_create (gint (*compare)(gpointer a, gpointer b), guint default_size);
 
 /**
  * destroys the heap
@@ -56,21 +56,21 @@ void heap_destroy(heap_tp);
 /**
  * deletes the item at index i from the heap
  */
-void * heap_remove(heap_tp heap, unsigned int i);
+gpointer heap_remove(heap_tp heap, guint i);
 /**
  * return the number of elements currently in the heap
  */
-unsigned int heap_getsize(heap_tp heap);
+guint heap_getsize(heap_tp heap);
 
 /**
  * returns the item in the heap at index i
  */
-void * heap_get(heap_tp heap, unsigned int i);
+gpointer heap_get(heap_tp heap, guint i);
 
 /**
- * inserts an item o into the heap
+ * inserts an item o ginto the heap
  */
-int heap_insert(heap_tp heap, void * o);
+gint heap_insert(heap_tp heap, gpointer o);
 
 #endif
 

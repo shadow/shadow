@@ -20,6 +20,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -38,10 +39,10 @@
 #include "global.h"
 #include "pipecloud.h"
 
-pipecloud_tp pipecloud_create(unsigned int attendees, size_t size, unsigned int num_wakeup_channels) {
+pipecloud_tp pipecloud_create(guint attendees, size_t size, guint num_wakeup_channels) {
 	pipecloud_tp pc;
 	struct mq_attr attrs;
-	char mqname[1024];
+	gchar mqname[1024];
 
 	pc = malloc(sizeof(*pc));
 
@@ -62,10 +63,10 @@ pipecloud_tp pipecloud_create(unsigned int attendees, size_t size, unsigned int 
 	 *
 	 * For now, children inherit the pipecloud so its not an issue.
 	 */
-	long int mypid = (long)getpid();
+	glong mypid = (glong)getpid();
 
 	/* Create the MQs */
-	for(int i=0; i < attendees; i++) {
+	for(gint i=0; i < attendees; i++) {
 		snprintf(mqname, sizeof(mqname), "/shadow-pid%ld-mq%d", mypid, i);
 		pc->mqs[i] = mq_open(mqname, O_RDWR | O_CREAT, 0777, &attrs);
 
@@ -100,7 +101,7 @@ void pipecloud_destroy(pipecloud_tp pipecloud) {
 	while((buf = g_queue_pop_head(pipecloud->localized.in)) != NULL)
 		free(buf);
 
-	for(int i=0; i < pipecloud->num_pipes; i++) {
+	for(gint i=0; i < pipecloud->num_pipes; i++) {
 		mq_close(pipecloud->mqs[i]);
 	}
 
@@ -130,15 +131,15 @@ void pipecloud_destroy(pipecloud_tp pipecloud) {
 	return ;
 }
 
-int pipecloud_get_wakeup_fd(pipecloud_tp pc) {
+gint pipecloud_get_wakeup_fd(pipecloud_tp pc) {
 	if(pc->localized.id < 0)
 		return -1;
 	return pc->mqs[pc->localized.id];//pc->mboxes[pc->localized.id].wakeup_channel[0];
 }
 
-void pipecloud_select(pipecloud_tp pipecloud, int block) {
-	char* msgbuffer = calloc(1, pipecloud->max_msg_size);
-	int rv;
+void pipecloud_select(pipecloud_tp pipecloud, gint block) {
+	gchar* msgbuffer = calloc(1, pipecloud->max_msg_size);
+	gint rv;
 
 	while(pipecloud->localized.waiting_in == 0 && block) {
 		rv = mq_receive(pipecloud->mqs[pipecloud->localized.id], msgbuffer, pipecloud->max_msg_size, NULL);
@@ -166,14 +167,14 @@ void pipecloud_select(pipecloud_tp pipecloud, int block) {
 	return;
 }
 
-void pipecloud_config_localized(pipecloud_tp pipecloud, unsigned int id) {
+void pipecloud_config_localized(pipecloud_tp pipecloud, guint id) {
 	pipecloud->localized.id = id;
 }
 
 
-size_t pipecloud_write(pipecloud_tp pipecloud, unsigned int dest, char * data, size_t data_size) {
+size_t pipecloud_write(pipecloud_tp pipecloud, guint dest, gchar * data, size_t data_size) {
 	struct timespec ts;
-	int rv;
+	gint rv;
 
 	assert(dest < pipecloud->num_pipes);
 
@@ -195,8 +196,8 @@ size_t pipecloud_write(pipecloud_tp pipecloud, unsigned int dest, char * data, s
 
 void pipecloud_localize_reads(pipecloud_tp pipecloud) {
 	struct timespec ts;
-	char* msgbuffer = calloc(1, pipecloud->max_msg_size);
-	int rv;
+	gchar* msgbuffer = calloc(1, pipecloud->max_msg_size);
+	gint rv;
 
 	ts.tv_sec = PIPECLOUD_TIMEOUT_SEC;
 	ts.tv_nsec = PIPECLOUD_TIMEOUT_NSEC;
@@ -226,7 +227,7 @@ void pipecloud_localize_reads(pipecloud_tp pipecloud) {
 	return;
 }
 
-int pipecloud_read(pipecloud_tp pipecloud, char * out_buffer, size_t size) {
+gint pipecloud_read(pipecloud_tp pipecloud, gchar * out_buffer, size_t size) {
 	size_t amt = 0, offset = 0, buf_avail = 0, rv = size;
 	pipecloud_buffer_tp buf = NULL;
 

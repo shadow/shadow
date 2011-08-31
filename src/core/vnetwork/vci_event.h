@@ -23,6 +23,7 @@
 #ifndef _vci_event_h
 #define _vci_event_h
 
+#include <glib.h>
 #include "global.h"
 
 #ifndef VEPOLL_H_
@@ -41,9 +42,9 @@ enum vci_event_code {
 };
 
 typedef struct vci_event_vtable_s {
-        void *exec_cb;
-        void *destroy_cb;
-        void *deposit_cb;
+        gpointer exec_cb;
+        gpointer destroy_cb;
+        gpointer deposit_cb;
 } vci_event_vtable_t, *vci_event_vtable_tp;
 
 typedef struct vci_event_s {
@@ -51,9 +52,9 @@ typedef struct vci_event_s {
 	ptime_t deliver_time;
 	in_addr_t node_addr;
 	in_addr_t owner_addr;
-	uint64_t cpu_delay_position;
-	void *payload;
-        int free_payload;
+	guint64 cpu_delay_position;
+	gpointer payload;
+        gint free_payload;
         vci_event_vtable_tp vtable;
 } vci_event_t, *vci_event_tp;
 

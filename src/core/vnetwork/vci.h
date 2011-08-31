@@ -28,6 +28,7 @@
 */
 
 
+#include <glib.h>
 #include <sys/time.h>
 #include <time.h>
 #include <netinet/in.h>
@@ -46,8 +47,8 @@
 
 #define VCI_MAX_DATAGRAM_SIZE 8192 /**< maximum size of a VCI UDP simulated datagram - messages larger than this are dropped */
 
-#define VCI_RLBLTY_100 1000000000 /**< 100% reliability - using fixed point math */
-#define VCI_RLBLTY_FAC 10000000   /**< scaling factor used for the fixed point math */
+#define VCI_RLBLTY_100 1000000000 /**< 100% reliability - using fixed pogint math */
+#define VCI_RLBLTY_FAC 10000000   /**< scaling factor used for the fixed pogint math */
 
 /**
  * defines how tight we want the distribution around the average value:
@@ -63,19 +64,19 @@ enum vci_location {
 };
 
 typedef struct vci_addressing_scheme_t {
-	unsigned int slave_mask;
+	guint slave_mask;
 
-	unsigned int worker_shiftcount;
-	uint32_t worker_mask;
+	guint worker_shiftcount;
+	guint32 worker_mask;
 
-	uint32_t node_shiftcount;
-	unsigned int node_randmax;
+	guint32 node_shiftcount;
+	guint node_randmax;
 } vci_addressing_scheme_t, *vci_addressing_scheme_tp;
 
 /**
  * a VCI manager
  *
- * this it holds some quantity of vci-addressable endpoints, along with the mechanisms for ordered
+ * this it holds some quantity of vci-addressable endpogints, along with the mechanisms for ordered
  * delivery
  */
 typedef struct vci_mgr_t {
@@ -83,8 +84,8 @@ typedef struct vci_mgr_t {
 
 	vci_addressing_scheme_tp ascheme;
 
-	unsigned int slave_id;
-	unsigned int worker_id;
+	guint slave_id;
+	guint worker_id;
 
 	/** all nodes this block manages */
 	GHashTable *mailboxes;
@@ -103,11 +104,11 @@ typedef struct vci_onretransmit_s {
 	in_port_t src_port;
 	in_addr_t dst_addr;
 	in_port_t dst_port;
-	uint32_t retransmit_key;
+	guint32 retransmit_key;
 } vci_onretransmit_t, *vci_onretransmit_tp;
 
 typedef struct vci_onnotify_s {
-	uint16_t sockd;
+	guint16 sockd;
         vci_mgr_tp vci_mgr;
 } vci_onnotify_t, *vci_onnotify_tp;
 
@@ -115,13 +116,13 @@ typedef struct vci_onclose_s {
 	in_addr_t src_addr;
 	in_port_t src_port;
 	in_port_t dst_port;
-	uint32_t rcv_end;
+	guint32 rcv_end;
 } vci_onclose_t, *vci_onclose_tp;
 
 /* a single subnet of a larger network */
 typedef struct vci_network_t {
 	/* network id */
-	unsigned int netid;
+	guint netid;
 } vci_network_t, *vci_network_tp;
 
 typedef struct vci_mailbox_t {
@@ -136,41 +137,41 @@ typedef struct vci_scheduling_info_s {
 	vci_network_tp dst_net;
 } vci_scheduling_info_t, *vci_scheduling_info_tp;
 
-vci_mgr_tp vci_mgr_create (events_tp events, unsigned int slave_id, unsigned int worker_id, vci_addressing_scheme_tp scheme);
+vci_mgr_tp vci_mgr_create (events_tp events, guint slave_id, guint worker_id, vci_addressing_scheme_tp scheme);
 void vci_mgr_destroy(vci_mgr_tp mgr);
-in_addr_t vci_create_ip(vci_mgr_tp mgr, int net_id, context_provider_tp cp);
+in_addr_t vci_create_ip(vci_mgr_tp mgr, gint net_id, context_provider_tp cp);
 void vci_free_ip(vci_mgr_tp mgr, in_addr_t addr);
-vci_addressing_scheme_tp vci_create_addressing_scheme (int num_slaves, int max_wrkr_per_slave);
+vci_addressing_scheme_tp vci_create_addressing_scheme (gint num_slaves, gint max_wrkr_per_slave);
 void vci_destroy_addressing_scheme (vci_addressing_scheme_tp scheme);
 
-in_addr_t vci_ascheme_build_addr(vci_addressing_scheme_tp scheme, unsigned int slave_id, unsigned int worker_id, unsigned int node_id);
-uint8_t vci_can_share_memory(in_addr_t node);
-uint8_t vci_get_latency(in_addr_t src_addr, in_addr_t dst_addr,
-		uint32_t* src_to_dst_lat, uint32_t* dst_to_src_lat);
+in_addr_t vci_ascheme_build_addr(vci_addressing_scheme_tp scheme, guint slave_id, guint worker_id, guint node_id);
+guint8 vci_can_share_memory(in_addr_t node);
+guint8 vci_get_latency(in_addr_t src_addr, in_addr_t dst_addr,
+		guint32* src_to_dst_lat, guint32* dst_to_src_lat);
 vci_mailbox_tp vci_get_mailbox(vci_mgr_tp vci_mgr, in_addr_t ip);
 
-unsigned int vci_ascheme_rand_node (vci_addressing_scheme_tp scheme);
-unsigned int vci_ascheme_get_worker (vci_addressing_scheme_tp scheme, in_addr_t ip);
-unsigned int vci_ascheme_get_slave (vci_addressing_scheme_tp scheme, in_addr_t ip);
-unsigned int vci_ascheme_get_node (vci_addressing_scheme_tp scheme, in_addr_t ip);
+guint vci_ascheme_rand_node (vci_addressing_scheme_tp scheme);
+guint vci_ascheme_get_worker (vci_addressing_scheme_tp scheme, in_addr_t ip);
+guint vci_ascheme_get_slave (vci_addressing_scheme_tp scheme, in_addr_t ip);
+guint vci_ascheme_get_node (vci_addressing_scheme_tp scheme, in_addr_t ip);
 
 void vci_schedule_packet(rc_vpacket_pod_tp rc_packet);
 void vci_schedule_packet_loopback(rc_vpacket_pod_tp rc_packet, in_addr_t addr);
 void vci_schedule_retransmit(rc_vpacket_pod_tp rc_packet, in_addr_t caller_addr);
-void vci_schedule_notify(in_addr_t addr, uint16_t sockd);
-void vci_schedule_uploaded(in_addr_t addr, uint32_t nanos_consumed);
-void vci_schedule_downloaded(in_addr_t addr, uint32_t nanos_consumed);
+void vci_schedule_notify(in_addr_t addr, guint16 sockd);
+void vci_schedule_uploaded(in_addr_t addr, guint32 nanos_consumed);
+void vci_schedule_downloaded(in_addr_t addr, guint32 nanos_consumed);
 void vci_schedule_close(in_addr_t caller_addr, in_addr_t src_addr, in_port_t src_port,
-		in_addr_t dst_addr, in_port_t dst_port, uint32_t rcv_end);
-void vci_schedule_dack(in_addr_t addr, uint16_t sockd, uint32_t ms_delay);
-void vci_schedule_poll(in_addr_t addr, vepoll_tp vep, uint32_t ms_delay);
+		in_addr_t dst_addr, in_port_t dst_port, guint32 rcv_end);
+void vci_schedule_dack(in_addr_t addr, guint16 sockd, guint32 ms_delay);
+void vci_schedule_poll(in_addr_t addr, vepoll_tp vep, guint32 ms_delay);
 
 void vci_exec_event (vci_mgr_tp mgr, vci_event_tp vci_event);
 void vci_destroy_event(events_tp events, vci_event_tp vci_event);
-void vci_deposit(vci_mgr_tp vci_mgr, nbdf_tp frame, int frametype);
+void vci_deposit(vci_mgr_tp vci_mgr, nbdf_tp frame, gint frametype);
 
-vci_network_tp vci_network_create(vci_mgr_tp mgr, unsigned int id);
-void vci_track_network(vci_mgr_tp mgr, unsigned int network_id, in_addr_t addr);
+vci_network_tp vci_network_create(vci_mgr_tp mgr, guint id);
+void vci_track_network(vci_mgr_tp mgr, guint network_id, in_addr_t addr);
 
 #ifndef INADDR_LOOPBACK
 #define INADDR_LOOPBACK 0x0100007f

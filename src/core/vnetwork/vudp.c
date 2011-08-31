@@ -19,6 +19,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <stdlib.h>
 #include <stddef.h>
 #include <netinet/in.h>
@@ -62,8 +63,8 @@ void vudp_destroy(vudp_tp vudp){
  * bound to a local port, no matter if that happened explicitly or implicitly.
  */
 ssize_t vudp_send(vsocket_mgr_tp net, vsocket_tp udpsock,
-		const void* src_buf, size_t n, in_addr_t addr, in_port_t port){
-	uint16_t packet_max_data_size = VSOCKET_MAX_DGRAM_SIZE;
+		const gpointer src_buf, size_t n, in_addr_t addr, in_port_t port){
+	guint16 packet_max_data_size = VSOCKET_MAX_DGRAM_SIZE;
 	size_t bytes_sent = 0;
 	size_t copy_size = 0;
 	size_t remaining = n;
@@ -74,7 +75,7 @@ ssize_t vudp_send(vsocket_mgr_tp net, vsocket_tp udpsock,
 		return VSOCKET_ERROR;
 	}
 
-	/* break data into segments, and send each in a packet */
+	/* break data ginto segments, and send each in a packet */
 	while (remaining > 0) {
 		copy_size = packet_max_data_size;
 		/* does the remaining bytes fit in a packet */
@@ -101,12 +102,12 @@ ssize_t vudp_send(vsocket_mgr_tp net, vsocket_tp udpsock,
 			return VSOCKET_ERROR;
 		}
 		rc_vpacket_pod_tp rc_packet = vpacket_mgr_create_udp(net->vp_mgr, src_addr, src_port, addr, port,
-				(uint16_t) copy_size, src_buf + bytes_sent);
+				(guint16) copy_size, src_buf + bytes_sent);
 
 		/* attempt to store the packet */
-		uint8_t success = vudp_send_packet(udpsock->vt->vudp, rc_packet);
+		guint8 success = vudp_send_packet(udpsock->vt->vudp, rc_packet);
 
-		/* release our stack copy of the pointer */
+		/* release our stack copy of the poginter */
 		rc_vpacket_pod_release(rc_packet);
 
 		if(!success) {
@@ -123,8 +124,8 @@ ssize_t vudp_send(vsocket_mgr_tp net, vsocket_tp udpsock,
 	return (ssize_t) bytes_sent;
 }
 
-uint8_t vudp_send_packet(vudp_tp vudp, rc_vpacket_pod_tp rc_packet) {
-	uint8_t success = vbuffer_add_send(vudp->vb, rc_packet, 0);
+guint8 vudp_send_packet(vudp_tp vudp, rc_vpacket_pod_tp rc_packet) {
+	guint8 success = vbuffer_add_send(vudp->vb, rc_packet, 0);
 	if(success && vbuffer_get_send_length(vudp->vb) == 1) {
 		/* we just became ready to send */
 		vtransport_mgr_ready_send(vudp->vsocket_mgr->vt_mgr, vudp->sock);
@@ -132,7 +133,7 @@ uint8_t vudp_send_packet(vudp_tp vudp, rc_vpacket_pod_tp rc_packet) {
 	return success;
 }
 
-ssize_t vudp_recv(vsocket_mgr_tp net, vsocket_tp udpsock, void* dest_buf, size_t n, in_addr_t* addr, in_port_t* port){
+ssize_t vudp_recv(vsocket_mgr_tp net, vsocket_tp udpsock, gpointer dest_buf, size_t n, in_addr_t* addr, in_port_t* port){
 	/* get the next packet for this socket */
 	rc_vpacket_pod_tp rc_packet = vbuffer_remove_read(udpsock->vt->vb);
 	vpacket_tp packet = vpacket_mgr_lockcontrol(rc_packet, LC_OP_READLOCK | LC_TARGET_PACKET | LC_TARGET_PAYLOAD);
@@ -166,7 +167,7 @@ ssize_t vudp_recv(vsocket_mgr_tp net, vsocket_tp udpsock, void* dest_buf, size_t
 
 enum vt_prc_result vudp_process_item(vtransport_item_tp titem) {
 	/* udp data, packet just gets stored for user */
-	uint8_t success = vbuffer_add_read(titem->sock->vt->vb, titem->rc_packet);
+	guint8 success = vbuffer_add_read(titem->sock->vt->vb, titem->rc_packet);
 	if(success) {
 		return VT_PRC_READABLE;
 	} else {

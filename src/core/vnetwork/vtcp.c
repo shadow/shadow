@@ -19,6 +19,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <stdlib.h>
 #include <stddef.h>
 #include <string.h>
@@ -51,15 +52,15 @@ static enum vt_prc_result vtcp_process_updates(vsocket_tp sock, rc_vpacket_pod_t
 static enum vt_prc_result vtcp_process_data(vsocket_tp sock, rc_vpacket_pod_tp rc_packet);
 static enum vt_prc_result vtcp_process_data_helper(vsocket_tp sock, rc_vpacket_pod_tp rc_packet);
 static void vtcp_trysend_dack(vtcp_tp vtcp);
-static uint8_t vtcp_update_perceived_congestion(vtcp_tp vtcp, uint32_t bytes, uint8_t timeout);
-static uint8_t vtcp_update_send_window(vtcp_tp vtcp);
-static uint8_t vtcp_update_unacknowledged(vtcp_tp vtcp, uint64_t acknum);
+static guint8 vtcp_update_perceived_congestion(vtcp_tp vtcp, guint32 bytes, guint8 timeout);
+static guint8 vtcp_update_send_window(vtcp_tp vtcp);
+static guint8 vtcp_update_unacknowledged(vtcp_tp vtcp, guint64 acknum);
 
 vtcp_tp vtcp_create(vsocket_mgr_tp vsocket_mgr, vsocket_tp sock, vbuffer_tp vb){
 	vtcp_tp vtcp = malloc(sizeof(vtcp_t));
 
 	/* TODO make config option */
-	uint32_t initial_window = 10;
+	guint32 initial_window = 10;
 
 	vtcp->sock = sock;
 	vtcp->remote_peer = NULL;
@@ -73,7 +74,7 @@ vtcp_tp vtcp_create(vsocket_mgr_tp vsocket_mgr, vsocket_tp sock, vbuffer_tp vb){
 	vtcp->is_slow_start = 1;
 	vtcp->last_adv_wnd = initial_window;
 
-	uint32_t iss = vtcp_generate_iss();
+	guint32 iss = vtcp_generate_iss();
 	vtcp->rcv_end = 0;
 	vtcp->snd_end = iss;
 	vtcp->snd_dack = 0;
@@ -111,10 +112,10 @@ void vtcp_disconnect(vtcp_tp vtcp) {
 	vtcp->remote_peer = NULL;
 }
 
-ssize_t vtcp_send(vsocket_mgr_tp net, vsocket_tp tcpsock, const void* src_buf, size_t n) {
-	uint16_t packet_size = VTRANSPORT_MTU;
-	uint16_t packet_header_size = VPACKET_IP_HEADER_SIZE + VPACKET_TCP_HEADER_SIZE;
-	uint16_t packet_data_size = packet_size - packet_header_size;
+ssize_t vtcp_send(vsocket_mgr_tp net, vsocket_tp tcpsock, const gpointer src_buf, size_t n) {
+	guint16 packet_size = VTRANSPORT_MTU;
+	guint16 packet_header_size = VPACKET_IP_HEADER_SIZE + VPACKET_TCP_HEADER_SIZE;
+	guint16 packet_data_size = packet_size - packet_header_size;
 
 	/* we accept at most VTRANSPORT_TCP_MAX_STREAM_SIZE from user */
 	size_t data_bytes = n < VTRANSPORT_TCP_MAX_STREAM_SIZE ? n : VTRANSPORT_TCP_MAX_STREAM_SIZE;
@@ -125,7 +126,7 @@ ssize_t vtcp_send(vsocket_mgr_tp net, vsocket_tp tcpsock, const void* src_buf, s
 	size_t sendable_data_bytes = vbuffer_send_space_available(tcpsock->vt->vb);
 	size_t remaining = sendable_data_bytes < data_bytes ? sendable_data_bytes : data_bytes;
 
-	/* break data into segments, and send each in a packet */
+	/* break data ginto segments, and send each in a packet */
 	while (remaining > 0) {
 		/* does the remaining data bytes fit in a packet */
 		if(remaining < packet_data_size) {
@@ -137,12 +138,12 @@ ssize_t vtcp_send(vsocket_mgr_tp net, vsocket_tp tcpsock, const void* src_buf, s
 
 		/* create the actual packet */
 		rc_vpacket_pod_tp rc_packet = vtcp_create_packet(tcpsock->vt->vtcp, ACK,
-				(uint16_t) copy_size, src_buf + bytes_sent);
+				(guint16) copy_size, src_buf + bytes_sent);
 
 		/* attempt to store the packet in transport */
-		uint8_t success = vtcp_send_packet(tcpsock->vt->vtcp, rc_packet);
+		guint8 success = vtcp_send_packet(tcpsock->vt->vtcp, rc_packet);
 
-		/* release our stack copy of the pointer */
+		/* release our stack copy of the poginter */
 		rc_vpacket_pod_release(rc_packet);
 
 		if(!success) {
@@ -159,8 +160,8 @@ ssize_t vtcp_send(vsocket_mgr_tp net, vsocket_tp tcpsock, const void* src_buf, s
 	return (ssize_t) bytes_sent;
 }
 
-uint8_t vtcp_send_packet(vtcp_tp vtcp, rc_vpacket_pod_tp rc_packet) {
-	uint8_t success = 0;
+guint8 vtcp_send_packet(vtcp_tp vtcp, rc_vpacket_pod_tp rc_packet) {
+	guint8 success = 0;
 	if(rc_packet != NULL) {
 		rc_vpacket_pod_retain_stack(rc_packet);
 		vpacket_tp packet = vpacket_mgr_lockcontrol(rc_packet, LC_OP_READLOCK | LC_TARGET_PACKET);
@@ -169,7 +170,7 @@ uint8_t vtcp_send_packet(vtcp_tp vtcp, rc_vpacket_pod_tp rc_packet) {
 			/* add the packet to the send buffer, then have vtransport_mgr check
 			 * if we can send another one based on our send window, etc */
 			if(packet->data_size > 0) {
-				uint64_t key = packet->tcp_header.sequence_number;
+				guint64 key = packet->tcp_header.sequence_number;
 				vpacket_mgr_lockcontrol(rc_packet, LC_OP_READUNLOCK | LC_TARGET_PACKET);
 				success = vbuffer_add_send(vtcp->vb, rc_packet, key);
 			} else {
@@ -187,12 +188,12 @@ uint8_t vtcp_send_packet(vtcp_tp vtcp, rc_vpacket_pod_tp rc_packet) {
 	return success;
 }
 
-ssize_t vtcp_recv(vsocket_mgr_tp net, vsocket_tp tcpsock, void* dest_buf, size_t n) {
+ssize_t vtcp_recv(vsocket_mgr_tp net, vsocket_tp tcpsock, gpointer dest_buf, size_t n) {
 	ssize_t remaining = n;
 	size_t bytes_read = 0;
 	size_t copy_size = 0;
-	void* copy_start = NULL;
-	uint16_t* read_offset = NULL;
+	gpointer copy_start = NULL;
+	guint16* read_offset = NULL;
 
 	while(remaining > 0) {
 		/* get the next packet for this socket */
@@ -213,7 +214,7 @@ ssize_t vtcp_recv(vsocket_mgr_tp net, vsocket_tp tcpsock, void* dest_buf, size_t
 		}
 
 		/* we may have already read part of this packet */
-		uint8_t partial = remaining < packet->data_size - *read_offset ? 1 : 0;
+		guint8 partial = remaining < packet->data_size - *read_offset ? 1 : 0;
 
 		/* compute where and how much to copy */
 		copy_start = packet->payload + *read_offset;
@@ -403,7 +404,7 @@ static enum vt_prc_result vtcp_process_state(vsocket_tp sock, rc_vpacket_pod_tp 
 				vtcp_send_control_packet(vtcp, SYN | ACK | CON);
 				vsocket_transition(sock, VTCP_SYN_RCVD);
 
-				/* avoid double increment in postprocess */
+				/* avoid gdouble increment in postprocess */
 				vtcp->rcv_nxt--;
 			} else {
 				/* only SYNs are valid */
@@ -443,7 +444,7 @@ static enum vt_prc_result vtcp_process_state(vsocket_tp sock, rc_vpacket_pod_tp 
 					vtcp_send_control_packet(vtcp, SYN | ACK | CON);
 				}
 
-				/* avoid double increment in postprocess */
+				/* avoid gdouble increment in postprocess */
 				vtcp->rcv_nxt--;
 			}
 			break;
@@ -466,7 +467,7 @@ static enum vt_prc_result vtcp_process_state(vsocket_tp sock, rc_vpacket_pod_tp 
 			}
 
 			if (flags & SYN) {
-				/* we should not be receiving SYNs at this point */
+				/* we should not be receiving SYNs at this pogint */
 				vtcp_send_control_packet(vtcp, RST);
 				vtcp_reset(vtcp, sock, rc_packet);
 				prc_result |= VT_PRC_DROPPED;
@@ -485,7 +486,7 @@ static enum vt_prc_result vtcp_process_state(vsocket_tp sock, rc_vpacket_pod_tp 
 					vtcp_server_child_tp schild = vtcp_server_get_child(server, hdr->source_addr, hdr->source_port);
 					if(schild != NULL) {
 						vtcp_server_remove_child_incomplete(server, schild);
-						uint8_t success = vtcp_server_add_child_pending(server, schild);
+						guint8 success = vtcp_server_add_child_pending(server, schild);
 
 						if(success) {
 							/* server should accept connection */
@@ -532,7 +533,7 @@ static enum vt_prc_result vtcp_process_updates(vsocket_tp sock, rc_vpacket_pod_t
 		/* congestion and flow control */
 		if(tcphdr->acknowledgement > vtcp->snd_una && tcphdr->acknowledgement <= vtcp->snd_nxt) {
 			/* keep track of how many packets just got acked */
-			int64_t packets_acked = tcphdr->acknowledgement - vtcp->snd_una;
+			gint64 packets_acked = tcphdr->acknowledgement - vtcp->snd_una;
 
 			/* advance snd_una */
 			if(vtcp_update_unacknowledged(vtcp, tcphdr->acknowledgement)) {
@@ -579,7 +580,7 @@ static enum vt_prc_result vtcp_process_data(vsocket_tp sock, rc_vpacket_pod_tp r
 	vpacket_tp packet = vpacket_mgr_lockcontrol(rc_packet, LC_OP_READLOCK | LC_TARGET_PACKET);
 
 	if(packet != NULL) {
-		uint32_t seqnum = packet->tcp_header.sequence_number;
+		guint32 seqnum = packet->tcp_header.sequence_number;
 		vpacket_mgr_lockcontrol(rc_packet, LC_OP_READUNLOCK | LC_TARGET_PACKET);
 
 		vtcp_tp vtcp = sock->vt->vtcp;
@@ -616,7 +617,7 @@ static enum vt_prc_result vtcp_process_data_helper(vsocket_tp sock, rc_vpacket_p
 	vpacket_tp packet = vpacket_mgr_lockcontrol(rc_packet, LC_OP_READLOCK | LC_TARGET_PACKET);
 	if(packet != NULL) {
 		vtcp_tp vtcp = sock->vt->vtcp;
-		uint16_t datasize = packet->data_size;
+		guint16 datasize = packet->data_size;
 
 		vpacket_mgr_lockcontrol(rc_packet, LC_OP_READUNLOCK | LC_TARGET_PACKET);
 
@@ -660,7 +661,7 @@ ret:
 	return prc_result;
 }
 
-static uint8_t vtcp_update_perceived_congestion(vtcp_tp vtcp, uint32_t packets_acked, uint8_t timeout) {
+static guint8 vtcp_update_perceived_congestion(vtcp_tp vtcp, guint32 packets_acked, guint8 timeout) {
 	if(vtcp != NULL) {
 		if(timeout) {
 			/* this is basically a negative ack.
@@ -747,7 +748,7 @@ vsocket_tp vtcp_get_target_socket(vtransport_item_tp titem) {
 			vpacket_tp packet = vpacket_mgr_lockcontrol(titem->rc_packet, LC_OP_READLOCK | LC_TARGET_PACKET);
 
 			if(packet != NULL) {
-				uint8_t do_multiplex = 0;
+				guint8 do_multiplex = 0;
 				if(packet->header.destination_addr == htonl(INADDR_LOOPBACK)) {
 					if(titem->sock->loopback_peer != NULL) {
 						if(titem->sock->loopback_peer->port == packet->header.destination_port &&
@@ -793,7 +794,7 @@ void vtcp_send_control_packet(vtcp_tp vtcp, enum vpacket_tcp_flags flags) {
 	rc_vpacket_pod_release(rc_control_packet);
 }
 
-static uint8_t vtcp_update_unacknowledged(vtcp_tp vtcp, uint64_t acknum) {
+static guint8 vtcp_update_unacknowledged(vtcp_tp vtcp, guint64 acknum) {
 	/* we only update to largest ack */
 	if(acknum > vtcp->snd_una) {
 		vtcp->snd_una = acknum;
@@ -804,8 +805,8 @@ static uint8_t vtcp_update_unacknowledged(vtcp_tp vtcp, uint64_t acknum) {
 	return 0;
 }
 
-static uint8_t vtcp_update_send_window(vtcp_tp vtcp) {
-	uint32_t old_window = vtcp->snd_wnd;
+static guint8 vtcp_update_send_window(vtcp_tp vtcp) {
+	guint32 old_window = vtcp->snd_wnd;
 
 	/* send window is minimum of congestion window and advertised/old send window */
 	vtcp->snd_wnd = vtcp->last_adv_wnd < vtcp->cng_wnd ? vtcp->last_adv_wnd : vtcp->cng_wnd;
@@ -825,7 +826,7 @@ static uint8_t vtcp_update_send_window(vtcp_tp vtcp) {
 
 static void vtcp_autotune(vtcp_tp vtcp) {
 	if(vtcp != NULL) {
-		int force = sysconfig_get_int("vnetwork_send_buffer_size_force");
+		gint force = sysconfig_get_gint("vnetwork_send_buffer_size_force");
 		if(force == 0) {
 			if(vtcp->remote_peer->addr == htonl(INADDR_LOOPBACK)) {
 				/* 16 MiB as max */
@@ -836,39 +837,39 @@ static void vtcp_autotune(vtcp_tp vtcp) {
 
 			/* our buffers need to be large enough to send and receive
 			 * a full delay*bandwidth worth of bytes to keep the pipe full. */
-			uint32_t send_latency, receive_latency;
+			guint32 send_latency, receive_latency;
 
 			/* get latency in milliseconds */
-			uint8_t success = vci_get_latency(vtcp->vsocket_mgr->addr, vtcp->remote_peer->addr, &send_latency, &receive_latency);
+			guint8 success = vci_get_latency(vtcp->vsocket_mgr->addr, vtcp->remote_peer->addr, &send_latency, &receive_latency);
 			if(!success) {
 				dlogf(LOG_WARN, "vtcp_autotune: cant get latency for autotuning. defaulting to worst case latency.\n");
 				send_latency = global_sim_context.sim_worker->max_latency;
 				receive_latency = global_sim_context.sim_worker->max_latency;
 			}
 
-			uint32_t rtt_milliseconds = send_latency + receive_latency;
+			guint32 rtt_milliseconds = send_latency + receive_latency;
 
 			/* i got delay, now i need values for my send and receive buffer
 			 * sizes based on bandwidth in both directions.
 			 * do my send size first. */
-			uint32_t my_send_bw = vtcp->vsocket_mgr->vt_mgr->KBps_up;
-			uint32_t their_receive_bw = resolver_get_downbw(global_sim_context.sim_worker->resolver, vtcp->remote_peer->addr);
-			uint32_t my_send_Bpms = (uint32_t) (my_send_bw * 1.024f);
-			uint32_t their_receive_Bpms = (uint32_t) (their_receive_bw * 1.024f);
+			guint32 my_send_bw = vtcp->vsocket_mgr->vt_mgr->KBps_up;
+			guint32 their_receive_bw = resolver_get_downbw(global_sim_context.sim_worker->resolver, vtcp->remote_peer->addr);
+			guint32 my_send_Bpms = (guint32) (my_send_bw * 1.024f);
+			guint32 their_receive_Bpms = (guint32) (their_receive_bw * 1.024f);
 
-			uint32_t send_bottleneck_bw = my_send_Bpms < their_receive_Bpms ? my_send_Bpms : their_receive_Bpms;
+			guint32 send_bottleneck_bw = my_send_Bpms < their_receive_Bpms ? my_send_Bpms : their_receive_Bpms;
 
 			/* the delay bandwidth product is how many bytes I can send at once to keep the pipe full.
 			 * mult. by 1.2 to account for network overhead. */
-			uint64_t sendbuf_size = (uint64_t) (rtt_milliseconds * send_bottleneck_bw * 1.25f);
+			guint64 sendbuf_size = (guint64) (rtt_milliseconds * send_bottleneck_bw * 1.25f);
 
 			/* now the same thing for my receive buf */
-			uint32_t my_receive_bw = vtcp->vsocket_mgr->vt_mgr->KBps_down;
-			uint32_t their_send_bw = resolver_get_upbw(global_sim_context.sim_worker->resolver, vtcp->remote_peer->addr);
-			uint32_t my_receive_Bpms = (uint32_t) (my_receive_bw * 1.024f);
-			uint32_t their_send_Bpms = (uint32_t) (their_send_bw * 1.024f);
+			guint32 my_receive_bw = vtcp->vsocket_mgr->vt_mgr->KBps_down;
+			guint32 their_send_bw = resolver_get_upbw(global_sim_context.sim_worker->resolver, vtcp->remote_peer->addr);
+			guint32 my_receive_Bpms = (guint32) (my_receive_bw * 1.024f);
+			guint32 their_send_Bpms = (guint32) (their_send_bw * 1.024f);
 
-			uint32_t receive_bottleneck_bw;
+			guint32 receive_bottleneck_bw;
 			if(their_send_Bpms > my_receive_Bpms) {
 				receive_bottleneck_bw = their_send_Bpms;
 			} else {
@@ -876,11 +877,11 @@ static void vtcp_autotune(vtcp_tp vtcp) {
 			}
 
 			if(their_send_Bpms - my_receive_Bpms > -4096 || their_send_Bpms - my_receive_Bpms < 4096) {
-				receive_bottleneck_bw = (uint32_t) (receive_bottleneck_bw * 1.2f);
+				receive_bottleneck_bw = (guint32) (receive_bottleneck_bw * 1.2f);
 			}
 
 			/* the delay bandwidth product is how many bytes I can receive at once to keep the pipe full */
-			uint64_t receivebuf_size = (uint64_t) (rtt_milliseconds * receive_bottleneck_bw * 1.25);
+			guint64 receivebuf_size = (guint64) (rtt_milliseconds * receive_bottleneck_bw * 1.25);
 
 			vbuffer_set_size(vtcp->vb, receivebuf_size, sendbuf_size);
 			debugf("vtcp_autotune: set network buffer sizes: send %lu receive %lu\n", sendbuf_size, receivebuf_size);
@@ -890,7 +891,7 @@ static void vtcp_autotune(vtcp_tp vtcp) {
 
 static void vtcp_trysend_dack(vtcp_tp vtcp) {
 	/* fixme add this to config */
-	if(sysconfig_get_int("usedack") == 1) {
+	if(sysconfig_get_gint("usedack") == 1) {
 		/* in practice, there is an ack delay timer of 40ms. the empty ack isn't
 		 * sent until the timer expires if app data does not comes in. this
 		 * prevents sending an ack when you could have piggybacked it soon after.
@@ -917,7 +918,7 @@ static void vtcp_update_receive_window(vtcp_tp vtcp) {
 		size_t space = vbuffer_receive_space_available(vtcp->vb);
 		size_t num_packets = space / VSOCKET_TCP_MSS;
 		if(num_packets < UINT32_MAX) {
-			vtcp->rcv_wnd = (uint32_t)num_packets;
+			vtcp->rcv_wnd = (guint32)num_packets;
 		} else {
 			vtcp->rcv_wnd = UINT32_MAX;
 		}
@@ -940,7 +941,7 @@ rc_vpacket_pod_tp vtcp_wire_packet(vtcp_tp vtcp) {
 			/* always send control packets first, to propogate our latest ACK */
 			rc_packet = vbuffer_remove_tcp_control(vtcp->vb);
 		} else {
-			uint64_t key = vtcp->snd_una + vtcp->snd_wnd;
+			guint64 key = vtcp->snd_una + vtcp->snd_wnd;
 			rc_packet = vbuffer_remove_send(vtcp->vb, key);
 		}
 		if(rc_packet != NULL){
@@ -961,7 +962,7 @@ rc_vpacket_pod_tp vtcp_wire_packet(vtcp_tp vtcp) {
 
 				/* save packet in retransmit queue until its received
 				 * key will be seq# + data_size so we can check against acknum when removing */
-				uint64_t retransmit_key = packet->tcp_header.sequence_number;
+				guint64 retransmit_key = packet->tcp_header.sequence_number;
 				vpacket_mgr_lockcontrol(rc_packet, LC_OP_WRITEUNLOCK | LC_TARGET_PACKET);
 				if(!vbuffer_add_retransmit(vtcp->vb, rc_packet, retransmit_key)) {
 					dlogf(LOG_CRIT, "vtcp_wire_packet: packet will not be reliable\n");
@@ -982,10 +983,10 @@ rc_vpacket_pod_tp vtcp_wire_packet(vtcp_tp vtcp) {
 	return rc_packet;
 }
 
-void vtcp_retransmit(vtcp_tp vtcp, uint32_t retransmit_key) {
+void vtcp_retransmit(vtcp_tp vtcp, guint32 retransmit_key) {
 	/* update send window if needed */
-	uint8_t window_opened = vtcp_update_perceived_congestion(vtcp, 0, 1);
-	uint8_t is_retransmitted = 0;
+	guint8 window_opened = vtcp_update_perceived_congestion(vtcp, 0, 1);
+	guint8 is_retransmitted = 0;
 
 	rc_vpacket_pod_tp rc_packet = vbuffer_remove_tcp_retransmit(vtcp->vb, retransmit_key);
 	if(rc_packet != NULL) {
@@ -1002,7 +1003,7 @@ void vtcp_retransmit(vtcp_tp vtcp, uint32_t retransmit_key) {
 		/* this might happen if an old packet was already removed from the retransmit
 		 * buffer because we received a newer ack that cleared it.
 		 */
-		uint16_t sockd = 0;
+		guint16 sockd = 0;
 		if(vtcp->sock != NULL) {
 			sockd = vtcp->sock->sock_desc;
 		}
@@ -1015,7 +1016,7 @@ void vtcp_retransmit(vtcp_tp vtcp, uint32_t retransmit_key) {
 	}
 }
 
-uint32_t vtcp_generate_iss() {
+guint32 vtcp_generate_iss() {
 	/* TODO do we need a ISS generator? (rfc793 pg26) */
 	return VTRANSPORT_TCP_ISS;
 }
@@ -1023,7 +1024,7 @@ uint32_t vtcp_generate_iss() {
 void vtcp_ondack(vci_event_tp vci_event, vsocket_mgr_tp vs_mgr) {
 	debugf("vtcp_ondack: event fired\n");
         if(vci_event->payload != NULL) {
-            uint16_t sockd = *(uint16_t *)(vci_event->payload);
+            guint16 sockd = *(guint16 *)(vci_event->payload);
 
             /* a delayed ack timer expired, send ack if needed */
             vsocket_tp sock = vsocket_mgr_get_socket(vs_mgr, sockd);
@@ -1038,7 +1039,7 @@ void vtcp_ondack(vci_event_tp vci_event, vsocket_mgr_tp vs_mgr) {
         }
 }
 
-rc_vpacket_pod_tp vtcp_create_packet(vtcp_tp vtcp, enum vpacket_tcp_flags flags, uint16_t data_size, const void* data) {
+rc_vpacket_pod_tp vtcp_create_packet(vtcp_tp vtcp, enum vpacket_tcp_flags flags, guint16 data_size, const gpointer data) {
 	if(vtcp != NULL && vtcp->sock != NULL && vtcp->remote_peer != NULL) {
 		in_addr_t dst_addr = vtcp->remote_peer->addr;
 		in_port_t dst_port = vtcp->remote_peer->port;

@@ -22,6 +22,7 @@
 #ifndef VEVENT_MGR_H_
 #define VEVENT_MGR_H_
 
+#include <glib.h>
 #include <glib-2.0/glib.h>
 
 #include <event2/event_struct.h>
@@ -42,22 +43,22 @@ typedef struct evdns_request evdns_request_t, *evdns_request_tp;
 typedef struct evdns_server_request evdns_server_request_t, *evdns_server_request_tp;
 typedef struct evdns_server_port evdns_server_port_t, *evdns_server_port_tp;
 
-typedef void (*vevent_mgr_timer_callback_fp)(int timer_id, void* arg);
+typedef void (*vevent_mgr_timer_callback_fp)(gint timer_id, gpointer arg);
 
 /* holds all registered vevents and sockets */
 typedef struct vevent_base_s {
-	int nextid;
+	gint nextid;
 	GHashTable *vevents_by_id;
 	GHashTable *sockets_by_sd;
 } vevent_base_t, *vevent_base_tp;
 
-/* holds all event bases that the user creates (each holds pointer to a vevent base) */
+/* holds all event bases that the user creates (each holds poginter to a vevent base) */
 typedef struct vevent_mgr_s {
 	/* holds event_base_tp */
 	GQueue *event_bases;
 	GHashTable * base_conversion;
 	vevent_mgr_timer_callback_fp loopexit_fp;
-	char typebuf[80];
+	gchar typebuf[80];
 	context_provider_tp provider;
 } vevent_mgr_t, *vevent_mgr_tp;
 
@@ -71,16 +72,16 @@ void vevent_mgr_track_base(vevent_mgr_tp mgr, event_base_tp eb, vevent_base_tp v
 void vevent_mgr_untrack_base(vevent_mgr_tp mgr, event_base_tp eb);
 vevent_base_tp vevent_mgr_convert_base(vevent_mgr_tp mgr, event_base_tp eb);
 
-int vevent_mgr_timer_create(vevent_mgr_tp mgr, int milli_delay, vevent_mgr_timer_callback_fp callback_function, void * cb_arg);
+gint vevent_mgr_timer_create(vevent_mgr_tp mgr, gint milli_delay, vevent_mgr_timer_callback_fp callback_function, gpointer cb_arg);
 void vevent_mgr_set_loopexit_fn(vevent_mgr_tp mgr, vevent_mgr_timer_callback_fp fn);
 
 //void vevent_mgr_wakeup_all(vevent_mgr_tp mgr);
-void vevent_mgr_notify_can_read(vevent_mgr_tp mgr, int sockfd);
-void vevent_mgr_notify_can_write(vevent_mgr_tp mgr, int sockfd);
-void vevent_mgr_notify_signal_received(vevent_mgr_tp mgr, int signal);
+void vevent_mgr_notify_can_read(vevent_mgr_tp mgr, gint sockfd);
+void vevent_mgr_notify_can_write(vevent_mgr_tp mgr, gint sockfd);
+void vevent_mgr_notify_signal_received(vevent_mgr_tp mgr, gint signal);
 
 /* mostly for debugging purposes */
-void vevent_mgr_print_stat(vevent_mgr_tp mgr, uint16_t sockd);
-void vevent_mgr_print_all(vevent_mgr_tp mgr);
+void vevent_mgr_prgint_stat(vevent_mgr_tp mgr, guint16 sockd);
+void vevent_mgr_prgint_all(vevent_mgr_tp mgr);
 
 #endif /* VEVENT_MGR_H_ */

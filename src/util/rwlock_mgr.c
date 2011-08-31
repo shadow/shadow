@@ -20,6 +20,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <semaphore.h>
@@ -28,7 +29,7 @@
 #include "rwlock_mgr.h"
 #include "rwlock.h"
 
-rwlock_mgr_tp rwlock_mgr_create(enum rwlock_mgr_type type, uint8_t is_process_shared) {
+rwlock_mgr_tp rwlock_mgr_create(enum rwlock_mgr_type type, guint8 is_process_shared) {
 	ssize_t lmgr_size = rwlock_mgr_sizeof(type);
 	if(lmgr_size < 0) {
 		return NULL;
@@ -46,7 +47,7 @@ rwlock_mgr_tp rwlock_mgr_create(enum rwlock_mgr_type type, uint8_t is_process_sh
 
 enum rwlock_mgr_status rwlock_mgr_destroy(rwlock_mgr_tp lmgr) {
 	if(lmgr != NULL) {
-		int retval = rwlock_mgr_uninit(lmgr);
+		gint retval = rwlock_mgr_uninit(lmgr);
 		free(lmgr);
 		return retval;;
 	} else {
@@ -54,7 +55,7 @@ enum rwlock_mgr_status rwlock_mgr_destroy(rwlock_mgr_tp lmgr) {
 	}
 }
 
-enum rwlock_mgr_status rwlock_mgr_init(rwlock_mgr_tp lmgr, enum rwlock_mgr_type type, uint8_t is_process_shared) {
+enum rwlock_mgr_status rwlock_mgr_init(rwlock_mgr_tp lmgr, enum rwlock_mgr_type type, guint8 is_process_shared) {
 	if(lmgr != NULL) {
 
 		switch (type) {
@@ -260,7 +261,7 @@ enum rwlock_mgr_status rwlock_mgr_lockcontrol(rwlock_mgr_tp lmgr, enum rwlock_mg
 					case RWLOCK_MGR_COMMAND_READUNLOCK:
 					case RWLOCK_MGR_COMMAND_WRITEUNLOCK: {
 						/* dont increment sem if its not locked */
-						int lockval = 0;
+						gint lockval = 0;
 						if(sem_getvalue((sem_t*)(lmgr->lock), &lockval) != 0) {
 							goto err;
 						}

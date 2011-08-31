@@ -23,6 +23,7 @@
 #ifndef VSYSTEM_INTERCEPT_H_
 #define VSYSTEM_INTERCEPT_H_
 
+#include <glib.h>
 #include <time.h>
 #include <stddef.h>
 #include <sys/types.h>
@@ -30,10 +31,10 @@
 #include <netdb.h>
 
 time_t intercept_time(time_t* t);
-int intercept_clock_gettime(clockid_t clk_id, struct timespec *tp);
-int intercept_gethostname(char *name, size_t len);
-int intercept_getaddrinfo(char *node, const char *service,
-		const struct addrinfo *hints, struct addrinfo **res);
+gint intercept_clock_gettime(clockid_t clk_id, struct timespec *tp);
+gint intercept_gethostname(gchar *name, size_t len);
+gint intercept_getaddrinfo(gchar *node, const gchar *service,
+		const struct addrinfo *hgints, struct addrinfo **res);
 void intercept_freeaddrinfo(struct addrinfo *res);
 
 #endif /* VSYSTEM_INTERCEPT_H_ */

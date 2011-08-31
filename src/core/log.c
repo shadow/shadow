@@ -23,6 +23,7 @@
 /* for asprintf */
 #define _GNU_SOURCE
 
+#include <glib.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -42,14 +43,14 @@
 
 static struct {
 	enum shadow_log_code max_level;
-	char prefix[100];
+	gchar prefix[100];
 
-	int use_dvn_routing ;
+	gint use_dvn_routing ;
 
 	logger_t channels[LOG_NUM_CHANNELS];
 } _log_system ;
 
-static enum shadow_log_code dlog_loglvl_to_int(char* loglevel) {
+static enum shadow_log_code dlog_loglvl_to_gint(gchar* loglevel) {
 	if(strcasecmp(loglevel, "error") == 0) {
 		return LOG_ERR;
 	} else if(strcasecmp(loglevel, "critical") == 0) {
@@ -67,8 +68,8 @@ static enum shadow_log_code dlog_loglvl_to_int(char* loglevel) {
 	}
 }
 
-void dlog_init(char* loglevel) {
-	_log_system.max_level = dlog_loglvl_to_int(loglevel);
+void dlog_init(gchar* loglevel) {
+	_log_system.max_level = dlog_loglvl_to_gint(loglevel);
 	_log_system.use_dvn_routing = 0;
 
 	strcpy(_log_system.prefix, "");
@@ -80,11 +81,11 @@ void dlog_init(char* loglevel) {
 }
 
 void dlog_cleanup(void) {
-	for (int i=0; i<LOG_NUM_CHANNELS; i++)
+	for (gint i=0; i<LOG_NUM_CHANNELS; i++)
 		dlog_close_channel(i);
 }
 
-void dlog_set_dvn_routing(int enabled) {
+void dlog_set_dvn_routing(gint enabled) {
 	if(enabled) {
 		/* close all open channels */
 		dlog_cleanup();
@@ -95,7 +96,7 @@ void dlog_set_dvn_routing(int enabled) {
 		_log_system.use_dvn_routing = 0;
 }
 
-void dlog_close_channel(int channel) {
+void dlog_close_channel(gint channel) {
 	logger_tp curl;
 	if(channel < 0 || channel >= LOG_NUM_CHANNELS)
 		return;
@@ -117,8 +118,8 @@ void dlog_close_channel(int channel) {
 	return;
 }
 
-void dlog_set_channel(int channel, char * destination, int process_identifier) {
-	char buffer[256];
+void dlog_set_channel(gint channel, gchar * destination, gint process_identifier) {
+	gchar buffer[256];
 	logger_tp curl;
 
 	if(channel < 0 || channel >= LOG_NUM_CHANNELS)
@@ -138,7 +139,7 @@ void dlog_set_channel(int channel, char * destination, int process_identifier) {
 
 	} else if(strstr(destination, "file:") == destination) {
 		FILE * file;
-		char * destfile;
+		gchar * destfile;
 		size_t destfile_size;
 
 		destfile = destination + 5;
@@ -165,8 +166,8 @@ void dlog_set_channel(int channel, char * destination, int process_identifier) {
 
 	} else if(strstr(destination, "socket:") == destination) {
 		socket_tp newsocket;
-		char * host, * portstr;
-		int port;
+		gchar * host, * portstr;
+		gint port;
 
 		host = destination + 7;
 		portstr = strchr(host, ':');
@@ -198,7 +199,7 @@ void dlog_set_channel(int channel, char * destination, int process_identifier) {
 }
 
 void dlog_update_status(void) {
-	for (int i=0; i<LOG_NUM_CHANNELS; i++) {
+	for (gint i=0; i<LOG_NUM_CHANNELS; i++) {
 		if(_log_system.channels[i].type == LOGGER_TYPE_SOCKET && !socket_isvalid(_log_system.channels[i].detail.tcpsocket.sock)) {
 			//dvn_drop_socket(_log_system.channels[i].detail.tcpsocket.sock);
 			socket_destroy(_log_system.channels[i].detail.tcpsocket.sock);
@@ -209,9 +210,9 @@ void dlog_update_status(void) {
 }
 
 
-void dlog_deposit(int frametype, nbdf_tp frame) {
-	unsigned int channel, data_length;
-	char * data;
+void dlog_deposit(gint frametype, nbdf_tp frame) {
+	guint channel, data_length;
+	gchar * data;
 
 	if(frametype != DVN_FRAME_LOG)
 		return;
@@ -226,7 +227,7 @@ void dlog_deposit(int frametype, nbdf_tp frame) {
 	return;
 }
 
-void dlog_channel_write(int channel, char * data, unsigned int length) {
+void dlog_channel_write(gint channel, gchar * data, guint length) {
 	logger_tp curl;
 
 	if(channel < 0 || channel >= LOG_NUM_CHANNELS || !data)
@@ -247,7 +248,7 @@ void dlog_channel_write(int channel, char * data, unsigned int length) {
 			break;
 
 		case LOGGER_TYPE_STDOUT: {
-			char temp[length+1];
+			gchar temp[length+1];
 			memcpy(temp, data, length);
 			temp[length] = 0;
 			printf("%s", temp);
@@ -269,13 +270,13 @@ void dlog_channel_write(int channel, char * data, unsigned int length) {
 	return;
 }
 
-void dlog_setprefix(char * pre) {
+void dlog_setprefix(gchar * pre) {
 	strcpy(_log_system.prefix, pre);
 }
 
-void dlogf_bin(char * d, int length) {
+void dlogf_bin(gchar * d, gint length) {
 #ifdef DEBUG
-	unsigned int i ;
+	guint i ;
 	for(i=0; i<length; i++) {
 		if(i%10 == 0)
 			printf("\n");
@@ -285,19 +286,19 @@ void dlogf_bin(char * d, int length) {
 #endif
 }
 
-void dlogf(enum shadow_log_code level, char *fmt, ...) {
+void dlogf(enum shadow_log_code level, gchar *fmt, ...) {
 	va_list vargs;
 	va_start(vargs, fmt);
 	dlogf_main(level, CONTEXT_SHADOW, fmt, vargs);
 	va_end(vargs);
 }
 
-void dlogf_main(enum shadow_log_code level, enum shadow_log_context context, char *fmt, va_list vargs) {
-	static char buffer1[2048], buffer2[2048];
-	char * lvltxt;
-	unsigned int len;
+void dlogf_main(enum shadow_log_code level, enum shadow_log_context context, gchar *fmt, va_list vargs) {
+	static gchar buffer1[2048], buffer2[2048];
+	gchar * lvltxt;
+	guint len;
 	va_list vargs_copy;
-	char* status_prefix;
+	gchar* status_prefix;
 
 	if( level > _log_system.max_level )
 		return;
@@ -345,7 +346,7 @@ void dlogf_main(enum shadow_log_code level, enum shadow_log_context context, cha
 			break;
 	}
 
-	int free_stat = 1;
+	gint free_stat = 1;
 	if(status_prefix == NULL) {
 		status_prefix = "shadow";
 		free_stat = 0;
@@ -357,8 +358,8 @@ void dlogf_main(enum shadow_log_code level, enum shadow_log_context context, cha
 
 	if(len >= sizeof(buffer1)) {
 		/* message was truncated */
-		char* truncmsg = "[truncated...]\n";
-		char* writeposition = buffer1 + sizeof(buffer1) - strlen(truncmsg) - 1;
+		gchar* truncmsg = "[truncated...]\n";
+		gchar* writeposition = buffer1 + sizeof(buffer1) - strlen(truncmsg) - 1;
 		snprintf(writeposition, strlen(truncmsg) + 1, "%s", truncmsg);
 	} else {
 		/* include the null byte when writing to channel */
@@ -372,15 +373,15 @@ void dlogf_main(enum shadow_log_code level, enum shadow_log_context context, cha
 	}
 }
 
-char* dlog_get_status_prefix(char* caller_str) {
+gchar* dlog_get_status_prefix(gchar* caller_str) {
 	ptime_t simtime = 0;
-	unsigned int sid = 0, wid = 0;
-	char* status_str;
-	int len;
+	guint sid = 0, wid = 0;
+	gchar* status_str;
+	gint len;
 
-	char* name = "";
+	gchar* name = "";
 	in_addr_t addr = 0;
-	char addr_string[INET_ADDRSTRLEN+1];
+	gchar addr_string[INET_ADDRSTRLEN+1];
 	memset(addr_string, 0, sizeof(addr_string));
 
 	/* we prefer an address from vci, and go to the current context as backup */
@@ -405,7 +406,7 @@ char* dlog_get_status_prefix(char* caller_str) {
 	inet_ntop(AF_INET, &addr, addr_string, INET_ADDRSTRLEN);
 
 	len = asprintf(&status_str, "|t=%lu.%.3d|s=%u|w=%u|%s|%s|%s| ",
-			(unsigned long)simtime/1000, (int)simtime%1000, sid, wid, caller_str, addr_string, name);
+			(unsigned long)simtime/1000, (gint)simtime%1000, sid, wid, caller_str, addr_string, name);
 	if(len < 0) {
 		return NULL;
 	} else {

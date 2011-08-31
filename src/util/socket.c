@@ -20,6 +20,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <string.h>
@@ -37,17 +38,17 @@
 #include "global.h"
 #include "socket.h"
 
-static int socket_signal_status = 0;
-static int socket_is_async = 0;
+static gint socket_signal_status = 0;
+static gint socket_is_async = 0;
 
 #if defined (HAVE_SIGNAL_H) && defined (USE_SIGNALS)
 #include <signal.h>
 #endif
 
-static int socket_configure(int fd, int socket_options) {
-	int flags;
-	int pgrp = getpid();
-	int use_async =  socket_is_async && (socket_options & SOCKET_OPTION_NONBLOCK);
+static gint socket_configure(gint fd, gint socket_options) {
+	gint flags;
+	gint pgrp = getpid();
+	gint use_async =  socket_is_async && (socket_options & SOCKET_OPTION_NONBLOCK);
 
 	flags = (socket_options & SOCKET_OPTION_NONBLOCK ? O_NONBLOCK : 0);
 
@@ -73,7 +74,7 @@ static int socket_configure(int fd, int socket_options) {
 	}
 //#elif defined (FIOSETOWN)
 #else
-	if(use_async && ioctl(fd, FIOSETOWN, (char*)&pgrp) < 0) {
+	if(use_async && ioctl(fd, FIOSETOWN, (gchar*)&pgrp) < 0) {
 		perror("ioctl(FIOSETOWN)");
 		close(fd);
 		return 0;
@@ -97,7 +98,7 @@ static int socket_configure(int fd, int socket_options) {
 //#ifdef DEBUG
 
 /** @returns true if the given socket is valid and connected */
-int socket_isvalid(socket_tp s) { return s!=NULL && s->sock != -1; }
+gint socket_isvalid(socket_tp s) { return s!=NULL && s->sock != -1; }
 
 /** @returns true if the given socket has waiting outgoing data */
 size_t socket_data_outgoing(socket_tp s) { return s->total_outgoing_size; }
@@ -106,21 +107,21 @@ size_t socket_data_outgoing(socket_tp s) { return s->total_outgoing_size; }
 size_t socket_data_incoming(socket_tp s) { return s->total_incoming_size; } 
 
 /* returns the actual FD associated with this socket */
-int socket_getfd(socket_tp s) { return s->sock; }
+gint socket_getfd(socket_tp s) { return s->sock; }
 
-char * socket_gethost(socket_tp s) { return inet_ntoa(s->remoteaddr.sin_addr); }
+gchar * socket_gethost(socket_tp s) { return inet_ntoa(s->remoteaddr.sin_addr); }
 
 short socket_getport(socket_tp s) { return ntohs(s->remoteaddr.sin_port); }
 
-int socket_islisten(socket_tp s) { return s->state & SOCKET_STATE_LISTEN; }
+gint socket_islisten(socket_tp s) { return s->state & SOCKET_STATE_LISTEN; }
 
-/* sets the internal blocksize of this socket. defaults to 16k */
+/* sets the ginternal blocksize of this socket. defaults to 16k */
 void socket_set_blocksize(socket_tp s,size_t bsize) { s->block_size = bsize; }
 
 //#endif
 
 
-static void socket_init_struct(socket_tp s,int fd, int state, int socket_options) {
+static void socket_init_struct(socket_tp s,gint fd, gint state, gint socket_options) {
 	s->sock = fd;
 	s->options = socket_options;
 	s->total_incoming_size = s->total_outgoing_size = 0;
@@ -133,7 +134,7 @@ static void socket_init_struct(socket_tp s,int fd, int state, int socket_options
 	memset(&s->remoteaddr, 0, sizeof(s->remoteaddr));
 }
 
-socket_tp socket_create_from(int fd, int socket_options) {
+socket_tp socket_create_from(gint fd, gint socket_options) {
 	socket_tp s;
 
 	if(socket_options & SOCKET_OPTION_TCP) {
@@ -148,8 +149,8 @@ socket_tp socket_create_from(int fd, int socket_options) {
 	return s;
 }
 
-socket_tp socket_create (int socket_options) {
-	int fd;
+socket_tp socket_create (gint socket_options) {
+	gint fd;
 	socket_tp s;
 
 	if(socket_options & SOCKET_OPTION_TCP) {
@@ -213,13 +214,13 @@ void socket_disable_async(void) {
 #endif
 }
 
-void socket_sigio_handler(int a) {
+void socket_sigio_handler(gint a) {
 	socket_disable_async();
 	socket_is_async = 1;
 	socket_signal_status++;
 }
 
-int socket_needs_servicing(void) {
+gint socket_needs_servicing(void) {
 	return socket_signal_status;
 }
 
@@ -228,7 +229,7 @@ void socket_reset_servicing_status(void) {
 	socket_enable_async();
 }
 
-socket_tp socket_create_child ( socket_tp mommy, int socket_options ) {
+socket_tp socket_create_child ( socket_tp mommy, gint socket_options ) {
 	socket_tp child;
 	socklen_t addrlen = sizeof(struct sockaddr_in);
 	struct sockaddr_in address;
@@ -236,7 +237,7 @@ socket_tp socket_create_child ( socket_tp mommy, int socket_options ) {
 	if(mommy->state != SOCKET_STATE_LISTEN)
 		return NULL;
 
-	int fd = accept(mommy->sock, (struct sockaddr*)&address, &addrlen);
+	gint fd = accept(mommy->sock, (struct sockaddr*)&address, &addrlen);
 
 	if(fd < 0)
 		return NULL;
@@ -253,14 +254,14 @@ socket_tp socket_create_child ( socket_tp mommy, int socket_options ) {
 }
 
 
-int socket_listen (socket_tp s, int port, int waiting_size) {
+gint socket_listen (socket_tp s, gint port, gint waiting_size) {
 	struct sockaddr_in ctl_address;
-	int o_true = 1;
+	gint o_true = 1;
 
 	if(s->state != SOCKET_STATE_IDLE || !(s->options & SOCKET_OPTION_TCP))
 		return 0;
 
-	if(setsockopt(s->sock, SOL_SOCKET, SO_REUSEADDR,(char *)&o_true, sizeof(o_true)) < 0)
+	if(setsockopt(s->sock, SOL_SOCKET, SO_REUSEADDR,(gchar *)&o_true, sizeof(o_true)) < 0)
 		return 0;
 
 	ctl_address.sin_family = AF_INET;
@@ -280,11 +281,11 @@ int socket_listen (socket_tp s, int port, int waiting_size) {
 	return 1;
 }
 
-int socket_connect (socket_tp s, char * dest_addr, int port) {
+gint socket_connect (socket_tp s, gchar * dest_addr, gint port) {
 	struct hostent * he = gethostbyname(dest_addr);
-	int rv = 1;
-	int flags = 0;
-	int sas = socket_is_async;
+	gint rv = 1;
+	gint flags = 0;
+	gint sas = socket_is_async;
 
 	if(!he || !he->h_addr)
 		return 0;
@@ -328,11 +329,11 @@ void socket_set_nonblock(socket_tp s) {
 	s->options |= SOCKET_OPTION_NONBLOCK;
 }
 
-int socket_issue_read (socket_tp s) {
+gint socket_issue_read (socket_tp s) {
 	struct SOCKET_BUFFERLINK * sbl;
-	int to_read;
-	char keep_reading = 1;
-	int vread;
+	gint to_read;
+	gchar keep_reading = 1;
+	gint vread;
 
 	if(s->state != SOCKET_STATE_CONNECTED)
 		return 0;
@@ -390,8 +391,8 @@ int socket_issue_read (socket_tp s) {
 	return 1;
 }
 
-int socket_issue_write (socket_tp s) {
-	int write_qty, written ;
+gint socket_issue_write (socket_tp s) {
+	gint write_qty, written ;
 	struct SOCKET_BUFFERLINK * sbl;
 
 	if(s->state != SOCKET_STATE_CONNECTED)
@@ -432,10 +433,10 @@ int socket_issue_write (socket_tp s) {
 	return 1;
 }
 
-int socket_write_to (socket_tp s, char * dest_addr, int dest_port, char * buffer, unsigned int size) {
+gint socket_write_to (socket_tp s, gchar * dest_addr, gint dest_port, gchar * buffer, guint size) {
 	struct sockaddr_in remoteaddr;
 	struct hostent * he = gethostbyname(dest_addr);
-	int written = -1;
+	gint written = -1;
 
 	if(s->state != SOCKET_STATE_IDLE || !(s->options & SOCKET_OPTION_UDP) || !buffer || !size)
 		return 0;
@@ -476,10 +477,10 @@ int socket_write_to (socket_tp s, char * dest_addr, int dest_port, char * buffer
 	return 1;
 }
 
-int socket_write (socket_tp s, char * buffer, unsigned int size) {
-	int written =0;
-	int left_to_copy;
-	unsigned int avail_space;
+gint socket_write (socket_tp s, gchar * buffer, guint size) {
+	gint written =0;
+	gint left_to_copy;
+	guint avail_space;
 	struct SOCKET_BUFFERLINK * sbl = s->outgoing_buffer_end;
 
 	if(s->state != SOCKET_STATE_CONNECTED)
@@ -542,9 +543,9 @@ int socket_write (socket_tp s, char * buffer, unsigned int size) {
 	return 1;
 }
 
-int socket_read (socket_tp s, char * buffer, unsigned int size) {
+gint socket_read (socket_tp s, gchar * buffer, guint size) {
 	struct SOCKET_BUFFERLINK * sbl = s->incoming_buffer;
-	int pull_amt;
+	gint pull_amt;
 
 	if(size == 0)
 		return 1;
@@ -580,9 +581,9 @@ int socket_read (socket_tp s, char * buffer, unsigned int size) {
 	return 1;
 }
 
-static int socket_peek_tcp(socket_tp s, char * buffer, unsigned int size){
+static gint socket_peek_tcp(socket_tp s, gchar * buffer, guint size){
 	struct SOCKET_BUFFERLINK * sbl = s->incoming_buffer;
-	int pull_amt;
+	gint pull_amt;
 
 	if(s->total_incoming_size < size)
 		return 0;
@@ -608,11 +609,11 @@ static int socket_peek_tcp(socket_tp s, char * buffer, unsigned int size){
 	return size;
 }
 
-static int socket_peek_udp(socket_tp s, char * buffer, unsigned int size) {
+static gint socket_peek_udp(socket_tp s, gchar * buffer, guint size) {
 	return 0;
 }
 
-int socket_peek (socket_tp s, char * buffer, unsigned int size) {
+gint socket_peek (socket_tp s, gchar * buffer, guint size) {
 	if(size == 0)
 		return 1;
 
@@ -651,7 +652,7 @@ void socket_destroy (socket_tp s) {
 		}
 
 		if(s->incoming_buffer_d) {
-			for(int i=0; i<s->incoming_buffer_d_size; i++) {
+			for(gint i=0; i<s->incoming_buffer_d_size; i++) {
 				if(s->incoming_buffer_d[i].data)
 					free(s->incoming_buffer_d[i].data);
 			}
@@ -660,7 +661,7 @@ void socket_destroy (socket_tp s) {
 		}
 
 		if(s->outgoing_buffer_d) {
-			for(int i=0; i<s->outgoing_buffer_d_size; i++) {
+			for(gint i=0; i<s->outgoing_buffer_d_size; i++) {
 				if(s->outgoing_buffer_d[i].data)
 					free(s->outgoing_buffer_d[i].data);
 			}

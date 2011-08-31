@@ -23,6 +23,7 @@
 #ifndef _sysconfig_h
 #define _sysconfig_h
 
+#include <glib.h>
 #include <glib-2.0/glib.h>
 
 #define SYSCONFIG_INT 1
@@ -35,36 +36,36 @@
 #define SYSCONFIG_LOGLEVEL_STRING "message"
 
 typedef struct sysconfig_val_t {
-	char name[128];
-	int type;
+	gchar name[128];
+	gint type;
 	union {
-		char string_val[128];
+		gchar string_val[128];
 		float float_val;
-		int int_val;
+		gint gint_val;
 	} v;
 } sysconfig_val_t, * sysconfig_val_tp;
 
 typedef struct sysconfig_t {
 	GHashTable *data;
-	unsigned int exported_config_size;
-	char exported_config[65536]; /* hope that's big enough! */
+	guint exported_config_size;
+	gchar exported_config[65536]; /* hope that's big enough! */
 } sysconfig_t, * sysconfig_tp;
 
 extern sysconfig_t sysconfig;
 
 void sysconfig_init(void) ;
-void sysconfig_destroy_cb(int key, void* value, void *data);
+void sysconfig_destroy_cb(gint key, gpointer value, gpointer data);
 
-int sysconfig_get_int(char * param);
-float sysconfig_get_float(char * param);
-char * sysconfig_get_string(char * param);
+gint sysconfig_get_gint(gchar * param);
+float sysconfig_get_float(gchar * param);
+gchar * sysconfig_get_string(gchar * param);
 
-void sysconfig_set_int(char * param, int v);
-void sysconfig_set_string(char * param, char * v);
-void sysconfig_set_float(char * param, float v);
+void sysconfig_set_gint(gchar * param, gint v);
+void sysconfig_set_string(gchar * param, gchar * v);
+void sysconfig_set_float(gchar * param, float v);
 
-void sysconfig_import_config(char * config_data);
-char * sysconfig_export_config(void);
+void sysconfig_import_config(gchar * config_data);
+gchar * sysconfig_export_config(void);
 
 void sysconfig_cleanup(void) ;
 

@@ -20,6 +20,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <time.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -51,7 +52,7 @@ void _plugin_init() {
 
 void _plugin_uninit() {}
 
-void _plugin_instantiate(int argc, char * argv[]) {
+void _plugin_instantiate(gint argc, gchar * argv[]) {
 	snri_log(LOG_DEBUG, "parsing args\n");
 	if(argc != 2) {
 		snri_log(LOG_WARN, "wrong number of args. expected 2.\n");
@@ -61,7 +62,7 @@ void _plugin_instantiate(int argc, char * argv[]) {
 
 	in_addr_t listen_addr = INADDR_ANY;
 	in_port_t listen_port = (in_port_t) atoi(argv[0]);
-	char* docroot = argv[1];
+	gchar* docroot = argv[1];
 
 	snri_log(LOG_DEBUG, "starting fileserver on port %u\n", listen_port);
 	enum fileserver_code res = fileserver_start(&pfs.fs, htonl(listen_addr), htons(listen_port), docroot, 100);
@@ -80,16 +81,16 @@ void _plugin_destroy() {
 	fileserver_shutdown(&pfs.fs);
 }
 
-static void plugin_fileserver_activate(int sockd) {
+static void plugin_fileserver_activate(gint sockd) {
 	enum fileserver_code result = fileserver_activate(&pfs.fs, sockd);
 	snri_log(LOG_INFO, "fileserver activation result: %s (%lu bytes in, %lu bytes out, %lu replies)\n",
 			fileserver_codetoa(result), pfs.fs.bytes_received, pfs.fs.bytes_sent, pfs.fs.replies_sent);
 }
 
-void _plugin_socket_readable(int sockd){
+void _plugin_socket_readable(gint sockd){
 	plugin_fileserver_activate(sockd);
 }
 
-void _plugin_socket_writable(int sockd){
+void _plugin_socket_writable(gint sockd){
 	plugin_fileserver_activate(sockd);
 }

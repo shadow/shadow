@@ -20,6 +20,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <netinet/in.h>
 
 /* This module implements the module_interface */
@@ -45,7 +46,7 @@ void _plugin_init() {
 void _plugin_uninit() {
 }
 
-void _plugin_instantiate(int argc, char * argv[]) {
+void _plugin_instantiate(gint argc, gchar * argv[]) {
 	echo_server_instantiate(&echoloopback_inst.server, argc, argv, htonl(INADDR_LOOPBACK));
 	echo_client_instantiate(&echoloopback_inst.client, argc, argv, htonl(INADDR_LOOPBACK));
 }
@@ -53,7 +54,7 @@ void _plugin_instantiate(int argc, char * argv[]) {
 void _plugin_destroy() {
 }
 
-void _plugin_socket_readable(int sockd){
+void _plugin_socket_readable(gint sockd){
 	if(sockd == echoloopback_inst.client.sd) {
 		echo_client_socket_readable(&echoloopback_inst.client, sockd);
 	} else {
@@ -62,7 +63,7 @@ void _plugin_socket_readable(int sockd){
 	}
 }
 
-void _plugin_socket_writable(int sockd){
+void _plugin_socket_writable(gint sockd){
 	/* server does nothing on writable notification */
 	if(sockd == echoloopback_inst.client.sd) {
 		echo_client_socket_writable(&echoloopback_inst.client, sockd);

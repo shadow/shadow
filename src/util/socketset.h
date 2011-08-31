@@ -23,6 +23,7 @@
 #ifndef _socketset_h
 #define _socketset_h
 
+#include <glib.h>
 #include <sys/select.h>
 #include <sys/time.h>
 #include <sys/types.h>
@@ -35,8 +36,8 @@ typedef struct socketset_t {
 	vector_tp sockets;
 	vector_tp fds;
 
-	unsigned int num_entries;
-	unsigned int allocated;
+	guint num_entries;
+	guint allocated;
 
 	fd_set master_read_fds;
 	//fd_set master_write_fds;
@@ -44,7 +45,7 @@ typedef struct socketset_t {
 	fd_set readfds;
 	fd_set writefds;
 
-	int maxfd;
+	gint maxfd;
 } socketset_t, * socketset_tp;
 
 #define socketset_is_readset(ss, socket) (FD_ISSET(socket_getfd(socket), &ss->readfds))
@@ -62,15 +63,15 @@ void socketset_destroy(socketset_tp socketset) ;
 void socketset_watch (socketset_tp ss, socket_tp sock);
 void socketset_drop (socketset_tp ss, socket_tp sock);
 
-void socketset_watch_readfd (socketset_tp ss, int fd);
-void socketset_drop_readfd (socketset_tp ss, int fd);
+void socketset_watch_readfd (socketset_tp ss, gint fd);
+void socketset_drop_readfd (socketset_tp ss, gint fd);
 
 /**
  * higher-level equivalent of select(). ensures all sockets that have waiting userspace data to
  * be written are checked for writability (and flushes their data when possible). if
- * sockets have readable data waiting, issues read commands to pull their data into userspace
+ * sockets have readable data waiting, issues read commands to pull their data ginto userspace
  * from the kernel.
  */
-int socketset_update(socketset_tp ss, struct timeval * timeout,int writes_only);
+gint socketset_update(socketset_tp ss, struct timeval * timeout,gint writes_only);
 
 #endif

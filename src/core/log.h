@@ -23,6 +23,7 @@
 #ifndef _log_h
 #define _log_h
 
+#include <glib.h>
 #include <stdio.h>
 
 #include "log_codes.h"
@@ -30,10 +31,10 @@
 #include "nbdf.h"
 #include "pipecloud.h"
 
-void dlogf(enum shadow_log_code level, char *fmt, ...);
-void dlogf_main(enum shadow_log_code level, enum shadow_log_context context, char *fmt, va_list vargs);
-void dlogf_bin(char * d, int length);
-char* dlog_get_status_prefix(char* caller_str);
+void dlogf(enum shadow_log_code level, gchar *fmt, ...);
+void dlogf_main(enum shadow_log_code level, enum shadow_log_context context, gchar *fmt, va_list vargs);
+void dlogf_bin(gchar * d, gint length);
+gchar* dlog_get_status_prefix(gchar* caller_str);
 
 #ifdef DEBUG
 #define debugf(fmt, ...) dlogf(LOG_DEBUG, fmt, ## __VA_ARGS__)
@@ -43,16 +44,16 @@ char* dlog_get_status_prefix(char* caller_str);
 
 #define inet_ntoa_t(ip) inet_ntoa((struct in_addr){ip})
 
-void dlog_init(char* loglevel);
+void dlog_init(gchar* loglevel);
 void dlog_cleanup(void);
-void dlog_setprefix(char *);
-void dlog_deposit(int frametype, nbdf_tp frame);
-void dlog_close_channel(int channel);
-void dlog_set_channel(int channel, char * destination, int process_identifier) ;
+void dlog_setprefix(gchar *);
+void dlog_deposit(gint frametype, nbdf_tp frame);
+void dlog_close_channel(gint channel);
+void dlog_set_channel(gint channel, gchar * destination, gint process_identifier) ;
 void dlog_update_status(void);
-void dlog_channel_write(int channel, char * data, unsigned int length);
+void dlog_channel_write(gint channel, gchar * data, guint length);
 void dlog_set_pipecloud(pipecloud_tp pipecloud);
-void dlog_set_dvn_routing(int enabled);
+void dlog_set_dvn_routing(gint enabled);
 
 #define LOGGER_TYPE_NULL 0
 #define LOGGER_TYPE_FILE 1
@@ -63,27 +64,27 @@ void dlog_set_dvn_routing(int enabled);
 #define LOG_NUM_CHANNELS 10
 
 typedef struct logger_t {
-	int type;
-	int level;
+	gint type;
+	gint level;
 
 	union {
 		struct {
 			FILE * file;
-			char path[256];
+			gchar path[256];
 		} file ;
 
 		struct {
-			char host[128];
-			int port;
+			gchar host[128];
+			gint port;
 
-			char dbname[128];
-			char username[128];
-			char password[128];
+			gchar dbname[128];
+			gchar username[128];
+			gchar password[128];
 		} mysql ;
 
 		struct {
-			char host[128];
-			int port;
+			gchar host[128];
+			gint port;
 			socket_tp sock;
 		} tcpsocket;
 	} detail;

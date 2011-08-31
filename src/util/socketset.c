@@ -20,6 +20,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <stdlib.h>
 #include <sys/select.h>
 #include <sys/time.h>
@@ -58,7 +59,7 @@ void socketset_destroy(socketset_tp socketset) {
 	}
 }
 
-void socketset_watch_readfd (socketset_tp ss, int fd) {
+void socketset_watch_readfd (socketset_tp ss, gint fd) {
 	if(fd < 0)
 		return;
 
@@ -68,7 +69,7 @@ void socketset_watch_readfd (socketset_tp ss, int fd) {
 		ss->maxfd = fd;
 }
 
-void socketset_drop_readfd (socketset_tp ss, int fd) {
+void socketset_drop_readfd (socketset_tp ss, gint fd) {
 	FD_CLR(fd, &ss->master_read_fds);
 }
 
@@ -89,7 +90,7 @@ void socketset_drop (socketset_tp ss, socket_tp sock)  {
 	if(!sock)
 		return;
 
-	for(int i=0; i < vector_size(ss->sockets); i++) {
+	for(gint i=0; i < vector_size(ss->sockets); i++) {
 		if( vector_get(ss->sockets, i) == sock) {
 			vector_remove(ss->sockets, i);
 			return;
@@ -101,9 +102,9 @@ void socketset_drop (socketset_tp ss, socket_tp sock)  {
 	return;
 }
 
-int socketset_update(socketset_tp ss, struct timeval * timeout, int writes_only) {
-	char destroy;
-	int work_left = 0;
+gint socketset_update(socketset_tp ss, struct timeval * timeout, gint writes_only) {
+	gchar destroy;
+	gint work_left = 0;
 
 	FD_ZERO(&ss->readfds); FD_ZERO(&ss->writefds);
 
@@ -111,7 +112,7 @@ int socketset_update(socketset_tp ss, struct timeval * timeout, int writes_only)
 		ss->readfds = ss->master_read_fds;
 
 	/* build our write descriptor sets */
-	for(int i=0; i<vector_size(ss->sockets); i++) {
+	for(gint i=0; i<vector_size(ss->sockets); i++) {
 		socket_tp sock = vector_get(ss->sockets, i);
 
 		if( !socket_isvalid(sock) )
@@ -129,7 +130,7 @@ int socketset_update(socketset_tp ss, struct timeval * timeout, int writes_only)
 
 	select(ss->maxfd+1,&ss->readfds,&ss->writefds,NULL,timeout);
 
-	for(int i=0; i<vector_size(ss->sockets); i++) {
+	for(gint i=0; i<vector_size(ss->sockets); i++) {
 		socket_tp sock = vector_get(ss->sockets, i);
 		destroy = 0;
 

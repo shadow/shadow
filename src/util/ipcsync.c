@@ -20,6 +20,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <stdlib.h>
 #include <sys/types.h>
 #include <sys/ipc.h>
@@ -28,7 +29,7 @@
 #include "global.h"
 #include "ipcsync.h"
 
-ipcsync_tp ipcsync_create(int num_mutex, int num_cond) {
+ipcsync_tp ipcsync_create(gint num_mutex, gint num_cond) {
 	ipcsync_tp is;
 	union ipcsync_semun semopts;
 
@@ -44,7 +45,7 @@ ipcsync_tp ipcsync_create(int num_mutex, int num_cond) {
 	is->semid = semget(IPC_PRIVATE, is->cnt, 0666);
 
 	/* init all sems - first num_mutex are mutex, rest are cond */
-	for(int i = 0; i < is->cnt; i++) {
+	for(gint i = 0; i < is->cnt; i++) {
 		if(i < num_mutex) {
 			semopts.val = 1;
 			semctl( is->semid, i, SETVAL, semopts );
@@ -63,7 +64,7 @@ void ipcsync_destroy(ipcsync_tp is) {
 	free(is);
 }
 
-void ipcsync_mutex_lock(ipcsync_tp is, int mutex_num) {
+void ipcsync_mutex_lock(ipcsync_tp is, gint mutex_num) {
 	struct sembuf op;
 
 	assert(mutex_num < is->cnt_mutex);
@@ -74,7 +75,7 @@ void ipcsync_mutex_lock(ipcsync_tp is, int mutex_num) {
 	while(semop(is->semid, &op, 1) == -1);
 }
 
-int ipcsync_mutex_trylock(ipcsync_tp is, int mutex_num) {
+gint ipcsync_mutex_trylock(ipcsync_tp is, gint mutex_num) {
 	struct sembuf op;
 
 	assert(mutex_num < is->cnt_mutex);
@@ -90,7 +91,7 @@ int ipcsync_mutex_trylock(ipcsync_tp is, int mutex_num) {
 }
 
 
-void ipcsync_mutex_unlock(ipcsync_tp is, int mutex_num) {
+void ipcsync_mutex_unlock(ipcsync_tp is, gint mutex_num) {
 	struct sembuf op;
 
 	assert(mutex_num < is->cnt_mutex);
@@ -101,7 +102,7 @@ void ipcsync_mutex_unlock(ipcsync_tp is, int mutex_num) {
 	while(semop(is->semid, &op, 1) == -1);
 }
 
-void ipcsync_cond_wait(ipcsync_tp is, int mutex_num, int cond_num) {
+void ipcsync_cond_wait(ipcsync_tp is, gint mutex_num, gint cond_num) {
 	struct sembuf semops[3];
 
 	/* indicate waiting process */
@@ -137,9 +138,9 @@ void ipcsync_cond_wait(ipcsync_tp is, int mutex_num, int cond_num) {
 
 }
 
-void ipcsync_cond_signal(ipcsync_tp is, int cond_num) {
+void ipcsync_cond_signal(ipcsync_tp is, gint cond_num) {
 	struct sembuf op;
-	int waiting_procs;
+	gint waiting_procs;
 
 	/* get the count */
 	waiting_procs = semctl(is->semid, is->cnt_mutex + (cond_num*2) + 1, GETVAL);
@@ -154,9 +155,9 @@ void ipcsync_cond_signal(ipcsync_tp is, int cond_num) {
 	while(semop(is->semid, &op, 1) == -1);
 }
 
-void ipcsync_cond_bcast(ipcsync_tp is, int cond_num) {
+void ipcsync_cond_bcast(ipcsync_tp is, gint cond_num) {
 	struct sembuf op;
-	int waiting_procs;
+	gint waiting_procs;
 
 	/* get the count */
 	waiting_procs = semctl(is->semid, is->cnt_mutex + (cond_num*2) + 1, GETVAL);

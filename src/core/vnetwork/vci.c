@@ -20,6 +20,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
@@ -48,10 +49,10 @@
 
 typedef void (*vci_exec_func)(vci_event_tp vci_event, vsocket_mgr_tp vs_mgr);
 typedef void (*vci_deposit_func)(events_tp events, vci_event_tp vci_event);
-typedef void (*vci_destroy_func)(void *payload);
+typedef void (*vci_destroy_func)(gpointer payload);
 
-static void vci_free_network(int netid, void * vnet, void *data);
-static void vci_free_mailbox(int laddr, void * vmbox, void *data);
+static void vci_free_network(gint netid, gpointer vnet, gpointer data);
+static void vci_free_mailbox(gint laddr, gpointer vmbox, gpointer data);
 
 static vci_scheduling_info_tp vci_get_scheduling_info(in_addr_t src_addr, in_addr_t dst_addr);
 static enum vci_location vci_get_relative_location(in_addr_t relative_to);
@@ -59,29 +60,29 @@ static enum vci_location vci_get_relative_location(in_addr_t relative_to);
 static vsocket_mgr_tp vci_enter_vnetwork_context(vci_mgr_tp vci_mgr, in_addr_t addr);
 static void vci_exit_vnetwork_context(vci_mgr_tp vci_mgr);
 static vci_event_tp vci_create_event(vci_mgr_tp vci_mgr, enum vci_event_code code, ptime_t deliver_time,
-		in_addr_t node_addr, void* payload, int free_payload, void *exec_cb, void *destroy_cb, void *deposit_cb);
+		in_addr_t node_addr, gpointer payload, gint free_payload, gpointer exec_cb, gpointer destroy_cb, gpointer deposit_cb);
 static void vci_schedule_event(events_tp events, vci_event_tp vci_event);
-static void vci_schedule_transferred(in_addr_t addr, uint32_t msdelay, enum vci_event_code code, void *transfer_cb);
+static void vci_schedule_transferred(in_addr_t addr, guint32 msdelay, enum vci_event_code code, gpointer transfer_cb);
 
 static nbdf_tp vci_construct_pipecloud_packet_frame(ptime_t time, vpacket_tp packet);
 
-static vci_event_tp vci_decode(vci_mgr_tp vci_mgr, nbdf_tp frame, int frametype);
+static vci_event_tp vci_decode(vci_mgr_tp vci_mgr, nbdf_tp frame, gint frametype);
 
 
-vci_addressing_scheme_tp vci_create_addressing_scheme (int num_slaves, int max_wrkr_per_slave) {
+vci_addressing_scheme_tp vci_create_addressing_scheme (gint num_slaves, gint max_wrkr_per_slave) {
 	vci_addressing_scheme_tp scheme;
-	unsigned int slave_bit_count;
-	unsigned int worker_bit_count;
+	guint slave_bit_count;
+	guint worker_bit_count;
 
 	scheme = malloc(sizeof(*scheme));
 	if(!scheme)
 		printfault(EXIT_NOMEM, "vci_create_addressing_scheme: Out of memory");
 
 	slave_bit_count = ceil(log(num_slaves) / log(2));
-	scheme->slave_mask = (uint32_t) pow(2, slave_bit_count) - 1;
+	scheme->slave_mask = (guint32) pow(2, slave_bit_count) - 1;
 
 	worker_bit_count = ceil(log(max_wrkr_per_slave) / log(2));
-	scheme->worker_mask = (uint32_t) pow(2, worker_bit_count) - 1;
+	scheme->worker_mask = (guint32) pow(2, worker_bit_count) - 1;
 	scheme->worker_mask <<= slave_bit_count;
 	scheme->worker_shiftcount = slave_bit_count;
 
@@ -95,21 +96,21 @@ void vci_destroy_addressing_scheme (vci_addressing_scheme_tp scheme) {
 	free(scheme);
 }
 
-unsigned int vci_ascheme_get_worker (vci_addressing_scheme_tp scheme, in_addr_t ip) {
+guint vci_ascheme_get_worker (vci_addressing_scheme_tp scheme, in_addr_t ip) {
 	return ((ip & scheme->worker_mask) >> scheme->worker_shiftcount);
 }
 
-unsigned int vci_ascheme_get_slave (vci_addressing_scheme_tp scheme, in_addr_t ip) {
+guint vci_ascheme_get_slave (vci_addressing_scheme_tp scheme, in_addr_t ip) {
 	return (ip & scheme->slave_mask);
 }
 
-unsigned int vci_ascheme_get_node (vci_addressing_scheme_tp scheme, in_addr_t ip) {
+guint vci_ascheme_get_node (vci_addressing_scheme_tp scheme, in_addr_t ip) {
 	return (ip >> scheme->node_shiftcount);
 }
 
-unsigned int vci_ascheme_rand_node (vci_addressing_scheme_tp scheme) {
-	unsigned int node;
-	unsigned char high_order;
+guint vci_ascheme_rand_node (vci_addressing_scheme_tp scheme) {
+	guint node;
+	guchar high_order;
 
 	do {
 		node = dvn_rand_fast(scheme->node_randmax);
@@ -119,24 +120,24 @@ unsigned int vci_ascheme_rand_node (vci_addressing_scheme_tp scheme) {
 	return node;
 }
 
-in_addr_t vci_ascheme_build_addr(vci_addressing_scheme_tp scheme, unsigned int slave_id, unsigned int worker_id, unsigned int node_id) {
+in_addr_t vci_ascheme_build_addr(vci_addressing_scheme_tp scheme, guint slave_id, guint worker_id, guint node_id) {
 	return slave_id + (worker_id << scheme->worker_shiftcount) + (node_id << scheme->node_shiftcount);
 	//return node_id + (worker_id << scheme->worker_shiftcount) + (slave_id  << scheme->slave_shiftcount);
 }
 
 /* create a new node inside net_id network */
-in_addr_t vci_create_ip(vci_mgr_tp mgr, int net_id, context_provider_tp cp) {
-	uint32_t laddr;
+in_addr_t vci_create_ip(vci_mgr_tp mgr, gint net_id, context_provider_tp cp) {
+	guint32 laddr;
 	in_addr_t addr;
 	vci_mailbox_tp mbox;
 
-	vci_network_tp net = g_hash_table_lookup(mgr->networks_by_id, int_key(net_id));
+	vci_network_tp net = g_hash_table_lookup(mgr->networks_by_id, gint_key(net_id));
 	if(!net)
 		return INADDR_NONE;
 
 	do {
 		laddr = vci_ascheme_rand_node(mgr->ascheme);
-	} while(g_hash_table_lookup(mgr->mailboxes, int_key(laddr)));
+	} while(g_hash_table_lookup(mgr->mailboxes, gint_key(laddr)));
 
 	addr = vci_ascheme_build_addr(mgr->ascheme, mgr->slave_id, mgr->worker_id, laddr);
 
@@ -148,8 +149,8 @@ in_addr_t vci_create_ip(vci_mgr_tp mgr, int net_id, context_provider_tp cp) {
 	mbox->network = net;
 
 	/* track it with a hashtable */
-        gint *key_laddr = int_key(laddr);
-        gint *key_addr = int_key(addr);
+        gint *key_laddr = gint_key(laddr);
+        gint *key_addr = gint_key(addr);
 	g_hash_table_insert(mgr->mailboxes, key_laddr, mbox);
 	g_hash_table_insert(mgr->networks_by_address, key_addr, net);
 
@@ -157,15 +158,15 @@ in_addr_t vci_create_ip(vci_mgr_tp mgr, int net_id, context_provider_tp cp) {
 }
 
 void vci_free_ip(vci_mgr_tp mgr, in_addr_t addr) {
-	unsigned int laddr = vci_ascheme_get_node(mgr->ascheme, addr);
-	vci_mailbox_tp mbox = g_hash_table_lookup(mgr->mailboxes, int_key(laddr));
+	guint laddr = vci_ascheme_get_node(mgr->ascheme, addr);
+	vci_mailbox_tp mbox = g_hash_table_lookup(mgr->mailboxes, gint_key(laddr));
 	g_hash_table_remove(mgr->mailboxes, &laddr);
 	if(mbox)
 		vci_free_mailbox(laddr, mbox, NULL);
 	return;
 }
 
-static void vci_free_modules(int ladder, void* vmbox, void *data) {
+static void vci_free_modules(gint ladder, gpointer vmbox, gpointer data) {
 	vci_mailbox_tp mbox = vmbox;
 
 	if(mbox) {
@@ -177,7 +178,7 @@ static void vci_free_modules(int ladder, void* vmbox, void *data) {
 	}
 }
 
-static void vci_free_mailbox(int laddr, void * vmbox, void *data) {
+static void vci_free_mailbox(gint laddr, gpointer vmbox, gpointer data) {
 	vci_mailbox_tp mbox = vmbox;
 
 	if(mbox) {
@@ -199,13 +200,13 @@ static void vci_free_mailbox(int laddr, void * vmbox, void *data) {
 
 vci_mailbox_tp vci_get_mailbox(vci_mgr_tp vci_mgr, in_addr_t ip) {
 	if(vci_mgr != NULL) {
-                int node = vci_ascheme_get_node(vci_mgr->ascheme, ip);
-		return g_hash_table_lookup(vci_mgr->mailboxes, int_key(node));
+                gint node = vci_ascheme_get_node(vci_mgr->ascheme, ip);
+		return g_hash_table_lookup(vci_mgr->mailboxes, gint_key(node));
 	}
 	return NULL;
 }
 
-vci_mgr_tp vci_mgr_create (events_tp events, unsigned int slave_id, unsigned int worker_id, vci_addressing_scheme_tp scheme) {
+vci_mgr_tp vci_mgr_create (events_tp events, guint slave_id, guint worker_id, vci_addressing_scheme_tp scheme) {
 	vci_mgr_tp rv = malloc(sizeof(*rv));
 
 	rv->ascheme = scheme;
@@ -241,20 +242,20 @@ void vci_mgr_destroy(vci_mgr_tp mgr) {
 	return;
 }
 
-vci_network_tp vci_network_create(vci_mgr_tp mgr, unsigned int id) {
+vci_network_tp vci_network_create(vci_mgr_tp mgr, guint id) {
 	vci_network_tp net = malloc(sizeof(vci_network_t));
 	if(!net)
 		printfault(EXIT_NOMEM, "vci_network_create: Out of memory");
 
 	net->netid = id;
 
-        gint *key = int_key(id);
+        gint *key = gint_key(id);
 	g_hash_table_insert(mgr->networks_by_id, key, net);
 
 	return net;
 }
 
-static void vci_free_network(int netid, void * vnet, void *data) {
+static void vci_free_network(gint netid, gpointer vnet, gpointer data) {
 	vci_network_tp net = vnet;
 
 	if(net) {
@@ -264,9 +265,9 @@ static void vci_free_network(int netid, void * vnet, void *data) {
 	return;
 }
 
-void vci_track_network(vci_mgr_tp mgr, unsigned int network_id, in_addr_t addr) {
+void vci_track_network(vci_mgr_tp mgr, guint network_id, in_addr_t addr) {
 	/* we are being told that the remote node addr belongs to network_id */
-	vci_network_tp net = g_hash_table_lookup(mgr->networks_by_address, int_key(addr));
+	vci_network_tp net = g_hash_table_lookup(mgr->networks_by_address, gint_key(addr));
 
 	if(net != NULL) {
 		dlogf(LOG_WARN, "vci_track_network: overwriting remote network mapping for %s\n", inet_ntoa_t(addr));
@@ -274,7 +275,7 @@ void vci_track_network(vci_mgr_tp mgr, unsigned int network_id, in_addr_t addr) 
 		net = vci_network_create(mgr, network_id);
 	}
         
-        gint *key = int_key(addr);
+        gint *key = gint_key(addr);
 	g_hash_table_insert(mgr->networks_by_address, key, net);
 }
 
@@ -282,9 +283,9 @@ void vci_track_network(vci_mgr_tp mgr, unsigned int network_id, in_addr_t addr) 
  * Provides the underlying model for the network layer
  *
  * Based on the delay measurements in turbo-King
- * http://inl.info.ucl.ac.be/blogs/08-04-23-turbo-king-framework-large-scale-internet-delay-measurements
+ * http://inl.info.ucl.ac.be/blogs/08-04-23-turbo-king-framework-large-scale-ginternet-delay-measurements
  * Paper:  http://irl.cs.tamu.edu/people/derek/papers/infocom2008.pdf
- * Note that we are looking mostly at link delay since we are modeling an inter AS delay
+ * Note that we are looking mostly at link delay since we are modeling an ginter AS delay
  *
  * We expect a CDF as follows:
 
@@ -309,11 +310,11 @@ void vci_track_network(vci_mgr_tp mgr, unsigned int network_id, in_addr_t addr) 
  */
 
 // TODO check if we should do this in cdf_generate
-//static unsigned int vci_model_delay(vci_netmodel_tp netmodel) {
+//static guint vci_model_delay(vci_netmodel_tp netmodel) {
 //	if(netmodel != NULL) {
 //		float flBase = 1.0f;
 //		float flRandWidth = 0.0f;
-//		int i = 0;
+//		gint i = 0;
 //
 //		for(i=0;i<=VCI_NETMODEL_TIGHTNESS_FACTOR ;i++)
 //		{
@@ -326,7 +327,7 @@ void vci_track_network(vci_mgr_tp mgr, unsigned int network_id, in_addr_t addr) 
 //		else
 //			flRandWidth = flBase * netmodel->tail_width;// Models the long tail
 //
-//		return (unsigned int) netmodel->base_delay + (unsigned int)flRandWidth;
+//		return (guint) netmodel->base_delay + (guint)flRandWidth;
 //	} else {
 //		return 0;
 //	}
@@ -356,8 +357,8 @@ static enum vci_location vci_get_relative_location(in_addr_t relative_to) {
 		return LOC_ERROR;
 	}
 
-	unsigned int target_slave_id = vci_ascheme_get_slave(vci_mgr->ascheme, relative_to);
-	unsigned int target_worker_id = vci_ascheme_get_worker(vci_mgr->ascheme, relative_to);
+	guint target_slave_id = vci_ascheme_get_slave(vci_mgr->ascheme, relative_to);
+	guint target_worker_id = vci_ascheme_get_worker(vci_mgr->ascheme, relative_to);
 
 	if(target_slave_id == vci_mgr->slave_id && target_worker_id == vci_mgr->worker_id) {
 		/* case 1 */
@@ -374,16 +375,16 @@ static enum vci_location vci_get_relative_location(in_addr_t relative_to) {
 	}
 }
 
-uint8_t vci_get_latency(in_addr_t src_addr, in_addr_t dst_addr,
-		uint32_t* src_to_dst_lat, uint32_t* dst_to_src_lat) {
-	int retval = 0;
+guint8 vci_get_latency(in_addr_t src_addr, in_addr_t dst_addr,
+		guint32* src_to_dst_lat, guint32* dst_to_src_lat) {
+	gint retval = 0;
 	vci_scheduling_info_tp si = vci_get_scheduling_info(src_addr, dst_addr);
 	if(si != NULL) {
 		if(src_to_dst_lat != NULL) {
-			*src_to_dst_lat = (uint32_t) simnet_graph_end2end_latency(si->worker->network_topology, si->src_net->netid, si->dst_net->netid);
+			*src_to_dst_lat = (guint32) simnet_graph_end2end_latency(si->worker->network_topology, si->src_net->netid, si->dst_net->netid);
 		}
 		if(dst_to_src_lat != NULL) {
-			*dst_to_src_lat = (uint32_t) simnet_graph_end2end_latency(si->worker->network_topology, si->dst_net->netid, si->src_net->netid);
+			*dst_to_src_lat = (guint32) simnet_graph_end2end_latency(si->worker->network_topology, si->dst_net->netid, si->src_net->netid);
 		}
 		retval = 1;
 	}
@@ -407,13 +408,13 @@ static vci_scheduling_info_tp vci_get_scheduling_info(in_addr_t src_addr, in_add
 		return NULL;
 	}
 
-	vci_network_tp src_net = g_hash_table_lookup(vci_mgr->networks_by_address, int_key(src_addr));
+	vci_network_tp src_net = g_hash_table_lookup(vci_mgr->networks_by_address, gint_key(src_addr));
 	if(src_net == NULL) {
 		dlogf(LOG_ERR, "vci_get_scheduling_info: error obtaining src network for %s\n", inet_ntoa_t(src_addr));
 		return NULL;
 	}
 
-	vci_network_tp dst_net = g_hash_table_lookup(vci_mgr->networks_by_address, int_key(dst_addr));
+	vci_network_tp dst_net = g_hash_table_lookup(vci_mgr->networks_by_address, gint_key(dst_addr));
 	if(dst_net == NULL) {
 		dlogf(LOG_ERR, "vci_get_scheduling_info: error obtaining dst network for %s\n", inet_ntoa_t(dst_addr));
 		return NULL;
@@ -428,12 +429,12 @@ static vci_scheduling_info_tp vci_get_scheduling_info(in_addr_t src_addr, in_add
 	return sched;
 }
 
-uint8_t vci_can_share_memory(in_addr_t node) {
+guint8 vci_can_share_memory(in_addr_t node) {
 	/* true if the caller can share memory with node */
 	return vci_get_relative_location(node) == LOC_SAME_SLAVE_DIFFERENT_WORKER;
 }
 
-void vci_schedule_notify(in_addr_t addr, uint16_t sockd) {
+void vci_schedule_notify(in_addr_t addr, guint16 sockd) {
 	sim_worker_tp worker = global_sim_context.sim_worker;
 	if(worker == NULL || worker->vci_mgr == NULL) {
 		return;
@@ -450,7 +451,7 @@ void vci_schedule_notify(in_addr_t addr, uint16_t sockd) {
 	vci_schedule_event(worker->vci_mgr->events, vci_event);
 }
 
-void vci_schedule_poll(in_addr_t addr, vepoll_tp vep, uint32_t ms_delay) {
+void vci_schedule_poll(in_addr_t addr, vepoll_tp vep, guint32 ms_delay) {
 	sim_worker_tp worker = global_sim_context.sim_worker;
 	if(worker == NULL || worker->vci_mgr == NULL) {
 		return;
@@ -463,7 +464,7 @@ void vci_schedule_poll(in_addr_t addr, vepoll_tp vep, uint32_t ms_delay) {
 	vci_schedule_event(worker->vci_mgr->events, vci_event);
 }
 
-void vci_schedule_dack(in_addr_t addr, uint16_t sockd, uint32_t ms_delay) {
+void vci_schedule_dack(in_addr_t addr, guint16 sockd, guint32 ms_delay) {
 	sim_worker_tp worker = global_sim_context.sim_worker;
 	if(worker == NULL || worker->vci_mgr == NULL) {
 		return;
@@ -476,7 +477,7 @@ void vci_schedule_dack(in_addr_t addr, uint16_t sockd, uint32_t ms_delay) {
 	vci_schedule_event(worker->vci_mgr->events, vci_event);
 }
 
-static void vci_schedule_transferred(in_addr_t addr, uint32_t msdelay, enum vci_event_code code, void *transfer_cb) {
+static void vci_schedule_transferred(in_addr_t addr, guint32 msdelay, enum vci_event_code code, gpointer transfer_cb) {
 	sim_worker_tp worker = global_sim_context.sim_worker;
 	if(worker == NULL || worker->vci_mgr == NULL) {
 		return;
@@ -489,11 +490,11 @@ static void vci_schedule_transferred(in_addr_t addr, uint32_t msdelay, enum vci_
 	vci_schedule_event(worker->vci_mgr->events, vci_event);
 }
 
-void vci_schedule_uploaded(in_addr_t addr, uint32_t msdelay) {
+void vci_schedule_uploaded(in_addr_t addr, guint32 msdelay) {
 	vci_schedule_transferred(addr, msdelay, VCI_EC_ONUPLOADED, &vtransport_mgr_onuploaded);
 }
 
-void vci_schedule_downloaded(in_addr_t addr, uint32_t msdelay) {
+void vci_schedule_downloaded(in_addr_t addr, guint32 msdelay) {
 	vci_schedule_transferred(addr, msdelay, VCI_EC_ONDOWNLOADED, &vtransport_mgr_ondownloaded);
 }
 
@@ -516,7 +517,7 @@ void vci_schedule_packet_loopback(rc_vpacket_pod_tp rc_packet, in_addr_t addr) {
 void vci_schedule_packet(rc_vpacket_pod_tp rc_packet) {
 	rc_vpacket_pod_retain_stack(rc_packet);
 	vci_scheduling_info_tp si = NULL;
-	int do_unlock = 1;
+	gint do_unlock = 1;
 
 	vpacket_tp packet = vpacket_mgr_lockcontrol(rc_packet, LC_OP_READLOCK | LC_TARGET_PACKET);
 	if(packet == NULL) {
@@ -546,7 +547,7 @@ void vci_schedule_packet(rc_vpacket_pod_tp rc_packet) {
 	}
 
 	/* packet will make it through, find latency */
-	unsigned int latency = (unsigned int) simnet_graph_end2end_latency(si->worker->network_topology, si->src_net->netid, si->dst_net->netid);
+	guint latency = (guint) simnet_graph_end2end_latency(si->worker->network_topology, si->src_net->netid, si->dst_net->netid);
 	ptime_t deliver_time = si->worker->current_time + latency;
 
 	packet = vpacket_mgr_lockcontrol(rc_packet, LC_OP_READLOCK | LC_TARGET_PACKET | LC_TARGET_PAYLOAD);
@@ -568,11 +569,11 @@ void vci_schedule_packet(rc_vpacket_pod_tp rc_packet) {
 
 		/* delivery locally to another node on a different worker. */
 		case LOC_SAME_SLAVE_DIFFERENT_WORKER: {
-			int frametype = 0;
+			gint frametype = 0;
 			nbdf_tp frame = NULL;
 
 			/* either the packet exists in a shmcabinet, or we send it through a pipecloud */
-			if(sysconfig_get_int("vnetwork_use_shmcabinet")) {
+			if(sysconfig_get_gint("vnetwork_use_shmcabinet")) {
 
 				/* make sure we can get our shm information */
 				if(rc_packet->pod == NULL || rc_packet->pod->shmitem_packet == NULL ||
@@ -625,7 +626,7 @@ void vci_schedule_packet(rc_vpacket_pod_tp rc_packet) {
 				frame = vci_construct_pipecloud_packet_frame(deliver_time, packet);
 			}
 
-			unsigned int target_worker_id = vci_ascheme_get_worker(si->vci_mgr->ascheme, packet->header.destination_addr);
+			guint target_worker_id = vci_ascheme_get_worker(si->vci_mgr->ascheme, packet->header.destination_addr);
 			dvn_packet_route(DVNPACKET_WORKER, DVNPACKET_LAYER_SIM, target_worker_id, frametype, frame);
 
 			nbdf_free(frame);
@@ -634,7 +635,7 @@ void vci_schedule_packet(rc_vpacket_pod_tp rc_packet) {
 
 		/* delivery remotely to another node on a different worker. */
 		case LOC_DIFFERENT_SLAVE_DIFFERENT_WORKER: {
-			int frametype = 0;
+			gint frametype = 0;
 
 			if(packet->data_size > 0) {
 				frametype = SIM_FRAME_VCI_PACKET_PAYLOAD;
@@ -645,7 +646,7 @@ void vci_schedule_packet(rc_vpacket_pod_tp rc_packet) {
 			/* send all packet contents across the real network */
 			nbdf_tp frame = vci_construct_pipecloud_packet_frame(deliver_time, packet);
 
-			unsigned int target_worker_id = vci_ascheme_get_worker(si->vci_mgr->ascheme, packet->header.destination_addr);
+			guint target_worker_id = vci_ascheme_get_worker(si->vci_mgr->ascheme, packet->header.destination_addr);
 			dvn_packet_route(DVNPACKET_SLAVE, DVNPACKET_LAYER_SIM, target_worker_id, frametype, frame);
 
 			nbdf_free(frame);
@@ -677,7 +678,7 @@ static nbdf_tp vci_construct_pipecloud_packet_frame(ptime_t time, vpacket_tp pac
 					packet->header.destination_addr, packet->header.destination_port,
 					packet->tcp_header.sequence_number, packet->tcp_header.acknowledgement,
 					packet->tcp_header.advertised_window, packet->tcp_header.flags,
-					(unsigned int)packet->data_size, packet->payload);
+					(guint)packet->data_size, packet->payload);
 		} else {
 			frame = nbdf_construct("tcapapiiic",
 					time, packet->header.protocol,
@@ -717,7 +718,7 @@ void vci_schedule_retransmit(rc_vpacket_pod_tp rc_packet, in_addr_t caller_addr)
 		/* source should retransmit.
 		 * retransmit timers depend on RTT, use latency as approximation since in most
 		 * cases the dest will be dropping a packet and one latency has already been incurred. */
-		unsigned int latency = (unsigned int) simnet_graph_end2end_latency(si->worker->network_topology, si->src_net->netid, si->dst_net->netid);
+		guint latency = (guint) simnet_graph_end2end_latency(si->worker->network_topology, si->src_net->netid, si->dst_net->netid);
 		deliver_time = si->worker->current_time + latency;
 
 		vci_mgr = si->vci_mgr;
@@ -757,8 +758,8 @@ void vci_schedule_retransmit(rc_vpacket_pod_tp rc_packet, in_addr_t caller_addr)
 
 		case LOC_SAME_SLAVE_DIFFERENT_WORKER:
 		case LOC_DIFFERENT_SLAVE_DIFFERENT_WORKER: {
-			int frametype = SIM_FRAME_VCI_RETRANSMIT;
-			unsigned char route_type = loc == LOC_SAME_SLAVE_DIFFERENT_WORKER ?
+			gint frametype = SIM_FRAME_VCI_RETRANSMIT;
+			guchar route_type = loc == LOC_SAME_SLAVE_DIFFERENT_WORKER ?
 					DVNPACKET_WORKER : DVNPACKET_SLAVE;
 
 			nbdf_tp frame = nbdf_construct("tapapi",
@@ -769,7 +770,7 @@ void vci_schedule_retransmit(rc_vpacket_pod_tp rc_packet, in_addr_t caller_addr)
 					packet->header.destination_port,
 					packet->tcp_header.sequence_number);
 
-			unsigned int target_worker_id = vci_ascheme_get_worker(si->vci_mgr->ascheme, packet->header.source_addr);
+			guint target_worker_id = vci_ascheme_get_worker(si->vci_mgr->ascheme, packet->header.source_addr);
 			dvn_packet_route(route_type, DVNPACKET_LAYER_SIM, target_worker_id, frametype, frame);
 
 			nbdf_free(frame);
@@ -792,7 +793,7 @@ ret2:
 }
 
 void vci_schedule_close(in_addr_t caller_addr, in_addr_t src_addr, in_port_t src_port,
-		in_addr_t dst_addr, in_port_t dst_port, uint32_t rcv_end) {
+		in_addr_t dst_addr, in_port_t dst_port, guint32 rcv_end) {
 	if(global_sim_context.sim_worker != NULL &&
 			global_sim_context.sim_worker->destroying) {
 		/* then we dont care */
@@ -813,7 +814,7 @@ void vci_schedule_close(in_addr_t caller_addr, in_addr_t src_addr, in_port_t src
 		if(si == NULL) {
 			return;
 		}
-		unsigned int latency = (unsigned int) simnet_graph_end2end_latency(si->worker->network_topology, si->src_net->netid, si->dst_net->netid);
+		guint latency = (guint) simnet_graph_end2end_latency(si->worker->network_topology, si->src_net->netid, si->dst_net->netid);
 		deliver_time = si->worker->current_time + latency;
 		vci_mgr = si->vci_mgr;
 	}
@@ -846,14 +847,14 @@ void vci_schedule_close(in_addr_t caller_addr, in_addr_t src_addr, in_port_t src
 
 		case LOC_SAME_SLAVE_DIFFERENT_WORKER:
 		case LOC_DIFFERENT_SLAVE_DIFFERENT_WORKER: {
-			int frametype = SIM_FRAME_VCI_CLOSE;
-			unsigned char route_type = loc == LOC_SAME_SLAVE_DIFFERENT_WORKER ?
+			gint frametype = SIM_FRAME_VCI_CLOSE;
+			guchar route_type = loc == LOC_SAME_SLAVE_DIFFERENT_WORKER ?
 					DVNPACKET_WORKER : DVNPACKET_SLAVE;
 
 			nbdf_tp frame = nbdf_construct("tapapi", deliver_time,
 					dst_addr, dst_port, src_addr, src_port, rcv_end);
 
-			unsigned int target_worker_id = vci_ascheme_get_worker(si->vci_mgr->ascheme, dst_addr);
+			guint target_worker_id = vci_ascheme_get_worker(si->vci_mgr->ascheme, dst_addr);
 			dvn_packet_route(route_type, DVNPACKET_LAYER_SIM, target_worker_id, frametype, frame);
 
 			nbdf_free(frame);
@@ -870,7 +871,7 @@ void vci_schedule_close(in_addr_t caller_addr, in_addr_t src_addr, in_port_t src
 }
 
 static vci_event_tp vci_create_event(vci_mgr_tp vci_mgr, enum vci_event_code code, ptime_t deliver_time,
-		in_addr_t node_addr, void* payload, int free_payload, void *exec_cb, void *destroy_cb, void *deposit_cb) {
+		in_addr_t node_addr, gpointer payload, gint free_payload, gpointer exec_cb, gpointer destroy_cb, gpointer deposit_cb) {
 	vci_event_tp vci_event = malloc(sizeof(vci_event_t));
 	vci_event->code = code;
 	vci_event->deliver_time = deliver_time;
@@ -922,7 +923,7 @@ static vsocket_mgr_tp vci_enter_vnetwork_context(vci_mgr_tp vci_mgr, in_addr_t a
 
 	if(mbox == NULL || mbox->context_provider == NULL ||
 			mbox->context_provider->vsocket_mgr == NULL) {
-		dlogf(LOG_ERR, "vci_enter_vnetwork_context: NULL pointer when entering vnetwork context for %s\n", inet_ntoa_t(addr));
+		dlogf(LOG_ERR, "vci_enter_vnetwork_context: NULL poginter when entering vnetwork context for %s\n", inet_ntoa_t(addr));
 		return NULL;
 	}
 
@@ -958,7 +959,7 @@ void vci_exec_event (vci_mgr_tp vci_mgr, vci_event_tp vci_event) {
 		/* check if we are allowed to execute or have to wait for cpu delays */
 		if(vcpu_is_blocking(vs_mgr->vcpu)) {
 			/* this event is delayed due to cpu, so reschedule it */
-			uint64_t current_delay = vcpu_get_delay(vs_mgr->vcpu);
+			guint64 current_delay = vcpu_get_delay(vs_mgr->vcpu);
 
 			if(vci_event->cpu_delay_position > current_delay) {
 				/* impossible for our cpu to lose delay */
@@ -966,11 +967,11 @@ void vci_exec_event (vci_mgr_tp vci_mgr, vci_event_tp vci_event) {
 				goto ret;
 			}
 
-			uint64_t nanos_offset = current_delay - vci_event->cpu_delay_position;
-			uint64_t millis_offset = (uint64_t)(nanos_offset / ((uint64_t)1000000));
+			guint64 nanos_offset = current_delay - vci_event->cpu_delay_position;
+			guint64 millis_offset = (guint64)(nanos_offset / ((guint64)1000000));
 
 			if(millis_offset > 0) {
-				vci_event->cpu_delay_position += ((uint64_t)(millis_offset * 1000000));
+				vci_event->cpu_delay_position += ((guint64)(millis_offset * 1000000));
 				vci_event->deliver_time += millis_offset;
 				vci_schedule_event(vci_mgr->events, vci_event);
 				debugf("vci_exec_event: event blocked on CPU, rescheduled for %lu ms from now\n", millis_offset);
@@ -994,7 +995,7 @@ exit:
 	vci_exit_vnetwork_context(vci_mgr);
 }
 
-void vci_deposit(vci_mgr_tp vci_mgr, nbdf_tp frame, int frametype) {
+void vci_deposit(vci_mgr_tp vci_mgr, nbdf_tp frame, gint frametype) {
 	/* we have an incoming frame that contains an event from another worker */
 	vci_event_tp vci_event = vci_decode(vci_mgr, frame, frametype);
 	if(vci_event == NULL) {
@@ -1002,8 +1003,8 @@ void vci_deposit(vci_mgr_tp vci_mgr, nbdf_tp frame, int frametype) {
 	}
 
 	/* make sure this event is actually meant for us */
-	unsigned int target_slave_id = vci_ascheme_get_slave(vci_mgr->ascheme, vci_event->node_addr);
-	unsigned int target_worker_id = vci_ascheme_get_worker(vci_mgr->ascheme, vci_event->node_addr);
+	guint target_slave_id = vci_ascheme_get_slave(vci_mgr->ascheme, vci_event->node_addr);
+	guint target_worker_id = vci_ascheme_get_worker(vci_mgr->ascheme, vci_event->node_addr);
 
 	if(target_slave_id != vci_mgr->slave_id || target_worker_id != vci_mgr->worker_id) {
 		vci_destroy_event(NULL, vci_event);
@@ -1014,7 +1015,7 @@ void vci_deposit(vci_mgr_tp vci_mgr, nbdf_tp frame, int frametype) {
         deposit_cb(vci_mgr->events, vci_event); 
 }
 
-static vci_event_tp vci_decode(vci_mgr_tp vci_mgr, nbdf_tp frame, int frametype) {
+static vci_event_tp vci_decode(vci_mgr_tp vci_mgr, nbdf_tp frame, gint frametype) {
 	vci_event_tp vci_event = NULL;
 
 	/* if we are getting a frame, it must have come from another process.
@@ -1049,8 +1050,8 @@ static vci_event_tp vci_decode(vci_mgr_tp vci_mgr, nbdf_tp frame, int frametype)
 
 			if(frametype == SIM_FRAME_VCI_PACKET_PAYLOAD) {
 				/* our packet has a payload */
-				unsigned int data_size = 0;
-				char flags;
+				guint data_size = 0;
+				gchar flags;
 
 				nbdf_read(frame, "tcapapiiicB",
 						&time, &(packet->header.protocol),
@@ -1063,11 +1064,11 @@ static vci_event_tp vci_decode(vci_mgr_tp vci_mgr, nbdf_tp frame, int frametype)
 				/* nbdf_read would not properly fill the bits of these vars, make sure
 				 * they are casted correctly */
 				packet->tcp_header.flags = (enum vpacket_tcp_flags) flags;
-				packet->data_size = (uint16_t) data_size;
+				packet->data_size = (guint16) data_size;
 				addr = packet->header.destination_addr;
 			} else { /* SIM_FRAME_VCI_PACKET_NOPAYLOAD */
 				/* no payload */
-				char flags;
+				gchar flags;
 
 				nbdf_read(frame, "tcapapiiic",
 						&time, &(packet->header.protocol),
@@ -1108,9 +1109,9 @@ static vci_event_tp vci_decode(vci_mgr_tp vci_mgr, nbdf_tp frame, int frametype)
 
 			/* get the shm info from the frame */
 			shmcabinet_info_t shminfo_packet;
-			uint32_t slot_id_packet;
+			guint32 slot_id_packet;
 
-			/* TODO nbdf doesnt directly support size_t, so we use uint32 for size_t here.
+			/* TODO nbdf doesnt directly support size_t, so we use ugint32 for size_t here.
 			 * we have to initialize to zero in case our read doesnt fill the size_t. */
 			shminfo_packet.cabinet_size = 0;
 
@@ -1118,7 +1119,7 @@ static vci_event_tp vci_decode(vci_mgr_tp vci_mgr, nbdf_tp frame, int frametype)
 			if(frametype == SIM_FRAME_VCI_PACKET_PAYLOAD_SHMCABINET) {
 				/* we also need shm for payload */
 				shmcabinet_info_t shminfo_payload;
-				uint32_t slot_id_payload;
+				guint32 slot_id_payload;
 				shminfo_payload.cabinet_size = 0;
 
 				nbdf_read(frame, "taiiiiiiii", &time, &addr,
@@ -1193,11 +1194,11 @@ static vci_event_tp vci_decode(vci_mgr_tp vci_mgr, nbdf_tp frame, int frametype)
 
 #if 0
 /* used for testing encoding and decoding packets */
-static void quickprint(vpacket_tp vpacket) {
+static void quickprgint(vpacket_tp vpacket) {
 	if(vpacket != NULL) {
-		char srcip[INET_ADDRSTRLEN];
+		gchar srcip[INET_ADDRSTRLEN];
 		inet_ntop(AF_INET, &vpacket->header.source_addr, srcip, sizeof(srcip));
-		char dstip[INET_ADDRSTRLEN];
+		gchar dstip[INET_ADDRSTRLEN];
 		inet_ntop(AF_INET, &vpacket->header.destination_addr, dstip, sizeof(dstip));
 
 		if(vpacket->header.protocol == SOCK_STREAM) {
@@ -1238,7 +1239,7 @@ static void quicktest() {
 
 	vci_decode_pipecloud_packet_frame(frame, &t, &a, &pin);
 
-	quickprint(&p);
-	quickprint(&pin);
+	quickprgint(&p);
+	quickprgint(&pin);
 }
 #endif

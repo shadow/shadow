@@ -20,6 +20,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <time.h>
 #include <stddef.h>
 #include <sys/socket.h>
@@ -31,17 +32,17 @@ time_t intercept_time(time_t* t) {
 	return vsystem_time(t);
 }
 
-int intercept_clock_gettime(clockid_t clk_id, struct timespec *tp) {
+gint intercept_clock_gettime(clockid_t clk_id, struct timespec *tp) {
 	return vsystem_clock_gettime(clk_id, tp);
 }
 
-int intercept_gethostname(char *name, size_t len) {
+gint intercept_gethostname(gchar *name, size_t len) {
 	return vsystem_gethostname(name, len);
 }
 
-int intercept_getaddrinfo(char *node, const char *service,
-		const struct addrinfo *hints, struct addrinfo **res) {
-	return vsystem_getaddrinfo(node, service, hints, res);
+gint intercept_getaddrinfo(gchar *node, const gchar *service,
+		const struct addrinfo *hgints, struct addrinfo **res) {
+	return vsystem_getaddrinfo(node, service, hgints, res);
 }
 
 void intercept_freeaddrinfo(struct addrinfo *res) {

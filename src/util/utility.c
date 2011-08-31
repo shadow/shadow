@@ -20,15 +20,16 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 #include "global.h"
 #include "utility.h"
 
-char * file_get_contents(const char * filename) {
-	char * contents;
-	unsigned int length;
+gchar * file_get_contents(const gchar * filename) {
+	gchar * contents;
+	guint length;
 	FILE * file;
 
 	if(!filename)
@@ -60,7 +61,7 @@ char * file_get_contents(const char * filename) {
  * and exits with the given exit code.
  *
  */
-void printfault(int error, char *fmt, ...) {
+void printfault(gint error, gchar *fmt, ...) {
 	va_list arg;
 	va_start(arg, fmt);
 
@@ -70,7 +71,7 @@ void printfault(int error, char *fmt, ...) {
 	exit(error);
 }
 
-gint *int_key(int key) {
+gint *gint_key(gint key) {
     gint *ret = g_malloc(sizeof(gint));
     *ret = key;
     return ret;

@@ -24,41 +24,42 @@
 #define _ipcsync_h
 
 typedef struct ipcsync_t {
-	int semid;
+	gint semid;
 
-	unsigned int cnt;
-	unsigned int cnt_mutex;
-	unsigned int cnt_cond;
+	guint cnt;
+	guint cnt_mutex;
+	guint cnt_cond;
 } ipcsync_t, * ipcsync_tp;
 
 union ipcsync_semun {
-	int              val;    /* Value for SETVAL */
+	gint              val;    /* Value for SETVAL */
 	struct semid_ds *buf;    /* Buffer for IPC_STAT, IPC_SET */
 	unsigned short  *array;  /* Array for GETALL, SETALL */
 	struct seminfo  *__buf;  /* Buffer for IPC_INFO (Linux-specific) */
 };
 
+#include <glib.h>
 #include "ipcsync.h"
 
 /**
  *
  */
-ipcsync_tp ipcsync_create(int num_mutex, int num_cond);
+ipcsync_tp ipcsync_create(gint num_mutex, gint num_cond);
 
 void ipcsync_destroy(ipcsync_tp is) ;
 
-void ipcsync_mutex_lock(ipcsync_tp is, int mutex_num);
-int ipcsync_mutex_trylock(ipcsync_tp is, int mutex_num);
-void ipcsync_mutex_unlock(ipcsync_tp is, int mutex_num);
+void ipcsync_mutex_lock(ipcsync_tp is, gint mutex_num);
+gint ipcsync_mutex_trylock(ipcsync_tp is, gint mutex_num);
+void ipcsync_mutex_unlock(ipcsync_tp is, gint mutex_num);
 
 /**
  * mutex variable must be locked prior to calling
  */
-void ipcsync_cond_wait(ipcsync_tp is, int mutex_num, int cond_num);
+void ipcsync_cond_wait(ipcsync_tp is, gint mutex_num, gint cond_num);
 
 /** expcets to be called in a critical section, so a mutex should be locked */
-void ipcsync_cond_signal(ipcsync_tp is, int cond_num);
-void ipcsync_cond_bcast(ipcsync_tp is, int cond_num);
+void ipcsync_cond_signal(ipcsync_tp is, gint cond_num);
+void ipcsync_cond_bcast(ipcsync_tp is, gint cond_num);
 
 
 #endif

@@ -20,6 +20,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <openssl/aes.h>
 #include <openssl/evp.h>
 #include <string.h>
@@ -27,19 +28,19 @@
 #include "vcrypto_intercept.h"
 #include "vsystem.h"
 
-void intercept_AES_encrypt(const unsigned char *in, unsigned char *out, const AES_KEY *key) {
+void intercept_AES_encrypt(const guchar *in, guchar *out, const AES_KEY *key) {
 	/* Processing delays already include crypto and are added during reads/writes */
 	/* TODO: do we need to advance the key here? */
 	return;
 }
 
-void intercept_AES_decrypt(const unsigned char *in, unsigned char *out, const AES_KEY *key) {
+void intercept_AES_decrypt(const guchar *in, guchar *out, const AES_KEY *key) {
 	/* Processing delays already include crypto and are added during reads/writes */
 	/* TODO: do we need to advance the key here? */
 	return;
 }
 
-int intercept_EVP_Cipher(EVP_CIPHER_CTX *ctx, unsigned char *out, const unsigned char *in, unsigned int inl) {
+gint intercept_EVP_Cipher(EVP_CIPHER_CTX *ctx, guchar *out, const guchar *in, guint inl) {
 	/* Processing delays already include crypto and are added during reads/writes */
 	/* TODO: do we need to advance the key here? */
 	memmove(out, in, (size_t)inl);

@@ -23,13 +23,14 @@
 #ifndef SHD_PLUGIN_FILEGETTER_UTIL_H_
 #define SHD_PLUGIN_FILEGETTER_UTIL_H_
 
+#include <glib.h>
 #include <netinet/in.h>
 
 #include "shd-service-filegetter.h"
 
-void plugin_filegetter_util_log_callback(enum service_filegetter_loglevel level, const char* message);
-in_addr_t plugin_filegetter_util_hostbyname_callback(const char* hostname);
-void plugin_filegetter_util_wakeup_callback(int timerid, void* arg);
-void plugin_filegetter_util_sleep_callback(void* sfg, unsigned int seconds);
+void plugin_filegetter_util_log_callback(enum service_filegetter_loglevel level, const gchar* message);
+in_addr_t plugin_filegetter_util_hostbyname_callback(const gchar* hostname);
+void plugin_filegetter_util_wakeup_callback(gint timerid, gpointer arg);
+void plugin_filegetter_util_sleep_callback(gpointer sfg, guint seconds);
 
 #endif /* SHD_PLUGIN_FILEGETTER_UTIL_H_ */

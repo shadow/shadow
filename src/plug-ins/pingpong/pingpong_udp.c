@@ -20,6 +20,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -53,8 +54,8 @@ void _plugin_uninit() {
 	snri_log(LOG_INFO, "_plugin_uninit\n");
 }
 
-void _plugin_instantiate(int argc, char * argv[]) {
-	char buffer[40];
+void _plugin_instantiate(gint argc, gchar * argv[]) {
+	gchar buffer[40];
 
 	/* get IP address through SNRI */
 	if(snri_getip(&instance.ip) == SNRICALL_ERROR) {
@@ -85,7 +86,7 @@ void _plugin_instantiate(int argc, char * argv[]) {
 		in_addr_t server_ip;
 		snri_resolve_name(argv[0], &server_ip);
 
-		int socketd = udpclient_start(&instance);
+		gint socketd = udpclient_start(&instance);
 
 		if(socketd == ERROR){
 			snri_log(LOG_ERR, "Error starting client at %s\n", instance.ipstring);
@@ -114,7 +115,7 @@ void _plugin_destroy() {
 			instance.num_msgs_sent, instance.num_msgs_received);
 }
 
-void _plugin_socket_readable(int socket){
+void _plugin_socket_readable(gint socket){
 	snri_log(LOG_INFO, "_plugin_socket_readable for socket %i\n", socket);
 
 	struct sockaddr_in source;
@@ -126,6 +127,6 @@ void _plugin_socket_readable(int socket){
 	}
 }
 
-void _plugin_socket_writable(int socket){
+void _plugin_socket_writable(gint socket){
 	snri_log(LOG_INFO, "_plugin_socket_writable for socket %i\n", socket);
 }

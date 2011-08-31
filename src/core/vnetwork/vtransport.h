@@ -22,6 +22,7 @@
 #ifndef VTRANSPORT_H_
 #define VTRANSPORT_H_
 
+#include <glib.h>
 #include <stdint.h>
 #include <stddef.h>
 
@@ -45,15 +46,15 @@ typedef struct vtransport_s {
 }vtransport_t, *vtransport_tp;
 
 vtransport_tp vtransport_create(vsocket_mgr_tp vsocket_mgr, vsocket_tp sock);
-vtransport_item_tp vtransport_create_item(uint16_t sockd, rc_vpacket_pod_tp rc_packet);
+vtransport_item_tp vtransport_create_item(guint16 sockd, rc_vpacket_pod_tp rc_packet);
 void vtransport_destroy(vtransport_tp vt);
 void vtransport_destroy_item(vtransport_item_tp titem);
-uint8_t vtransport_is_empty(vtransport_tp vt);
-void vtransport_notify_readable_cb(void* value, int key);
-void vtransport_notify_writable_cb(void* value, int key);
+guint8 vtransport_is_empty(vtransport_tp vt);
+void vtransport_notify_readable_cb(gpointer value, gint key);
+void vtransport_notify_writable_cb(gpointer value, gint key);
 void vtransport_onclose(vci_event_tp vci_event, vsocket_mgr_tp vs_mgr);
 void vtransport_onretransmit(vci_event_tp vci_event, vsocket_mgr_tp vs_mgr);
 void vtransport_process_incoming_items(vsocket_mgr_tp net, GQueue *titems);
-uint8_t vtransport_transmit(vtransport_tp vt, uint32_t* bytes_transmitted, uint16_t* packets_remaining);
+guint8 vtransport_transmit(vtransport_tp vt, guint32* bytes_transmitted, guint16* packets_remaining);
 
 #endif /* VTRANSPORT_H_ */

@@ -23,6 +23,7 @@
 #ifndef _events_h
 #define _events_h
 
+#include <glib.h>
 #include "evtracker.h"
 
 #define EVENTS_TYPE_VCI 1
@@ -37,14 +38,14 @@ typedef struct events_t {
 } events_t, * events_tp;
 
 typedef struct events_eholder_t {
-	void * d;
-	int type;
+	gpointer d;
+	gint type;
 } events_eholder_t, * events_eholder_tp;
 
 events_tp events_create (void);
-void events_schedule (events_tp events, ptime_t at, void * data, int type);
+void events_schedule (events_tp events, ptime_t at, gpointer data, gint type);
 ptime_t events_get_next_time (events_tp events);
-void * events_dequeue  (events_tp events, ptime_t * at, int * type);
+gpointer events_dequeue  (events_tp events, ptime_t * at, gint * type);
 void events_destroy (events_tp events);
 
 

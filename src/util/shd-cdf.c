@@ -20,13 +20,14 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 
 #include "shd-cdf.h"
 
-static orderedlist_tp cdf_parse(const char* filename) {
+static orderedlist_tp cdf_parse(const gchar* filename) {
 	if(filename == NULL) {
 		return NULL;
 	}
@@ -39,17 +40,17 @@ static orderedlist_tp cdf_parse(const char* filename) {
 
 	orderedlist_tp ol = orderedlist_create();
 
-	int result = 0;
-	double key = 0;
+	gint result = 0;
+	gdouble key = 0;
 	while(!feof(f) && !ferror(f)) {
-		double* value = calloc(1, sizeof(double));
+		gdouble* value = calloc(1, sizeof(gdouble));
 		result = fscanf(f, "%lf %lf\n", value, &key);
 		if(result != 2) {
 			orderedlist_destroy(ol, 1);
 			ol = NULL;
 			free(value);
 		} else {
-			uint64_t list_key = DOUBLE_2_UINT64(key);
+			guint64 list_key = DOUBLE_2_UINT64(key);
 			orderedlist_add(ol, list_key, value);
 		}
 	}
@@ -59,7 +60,7 @@ static orderedlist_tp cdf_parse(const char* filename) {
 	return ol;
 }
 
-cdf_tp cdf_create(const char* filename) {
+cdf_tp cdf_create(const gchar* filename) {
 	orderedlist_tp ol = cdf_parse(filename);
 	if(ol != NULL) {
 		cdf_tp cdf = malloc(sizeof(cdf_t));
@@ -70,15 +71,15 @@ cdf_tp cdf_create(const char* filename) {
 	}
 }
 
-cdf_tp cdf_generate(unsigned int base_center, unsigned int base_width, unsigned int tail_width) {
+cdf_tp cdf_generate(guint base_center, guint base_width, guint tail_width) {
 	cdf_tp cdf = malloc(sizeof(cdf_t));
 	cdf->ol = orderedlist_create();
 
 	/* TODO fix this - use model from vci?? */
-	double* value1 = calloc(1, sizeof(double));
-	double* value2 = calloc(1, sizeof(double));
-	double* value3 = calloc(1, sizeof(double));
-	double* value4 = calloc(1, sizeof(double));
+	gdouble* value1 = calloc(1, sizeof(gdouble));
+	gdouble* value2 = calloc(1, sizeof(gdouble));
+	gdouble* value3 = calloc(1, sizeof(gdouble));
+	gdouble* value4 = calloc(1, sizeof(gdouble));
 
 	*value1 = base_center - base_width;
 	*value2 = base_center;
@@ -100,34 +101,34 @@ void cdf_destroy(cdf_tp cdf) {
 	}
 }
 
-double cdf_min_value(cdf_tp cdf) {
+gdouble cdf_min_value(cdf_tp cdf) {
 	if(cdf != NULL) {
-		double* value = orderedlist_peek_first_value(cdf->ol);
+		gdouble* value = orderedlist_peek_first_value(cdf->ol);
 		if(value != NULL) {
-			double d = *value;
+			gdouble d = *value;
 			return d;
 		}
 	}
 	return 0;
 }
 
-double cdf_max_value(cdf_tp cdf) {
+gdouble cdf_max_value(cdf_tp cdf) {
 	if(cdf != NULL) {
-		double* value = orderedlist_peek_last_value(cdf->ol);
+		gdouble* value = orderedlist_peek_last_value(cdf->ol);
 		if(value != NULL) {
-			double d = *value;
+			gdouble d = *value;
 			return d;
 		}
 	}
 	return 0;
 }
 
-double cdf_random_value(cdf_tp cdf) {
+gdouble cdf_random_value(cdf_tp cdf) {
 	if(cdf != NULL) {
-		uint64_t list_key = DOUBLE_2_UINT64((double)rand() / (double)RAND_MAX);
-		double* value = orderedlist_ceiling_value(cdf->ol, list_key);
+		guint64 list_key = DOUBLE_2_UINT64((gdouble)rand() / (gdouble)RAND_MAX);
+		gdouble* value = orderedlist_ceiling_value(cdf->ol, list_key);
 		if(value != NULL) {
-			double ceiling = *value;
+			gdouble ceiling = *value;
 			return ceiling;
 		}
 	}

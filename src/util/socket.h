@@ -23,6 +23,7 @@
 #ifndef _socket_h
 #define _socket_h
 
+#include <glib.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -52,25 +53,25 @@
 
 struct SOCKET_PACKETSAVE {
 	struct sockaddr_in remoteaddr;
-	unsigned int size;
-	char * data;
+	guint size;
+	gchar * data;
 };
 
 struct SOCKET_BUFFERLINK {
-	unsigned int offset;
-	unsigned int sock_offset;
+	guint offset;
+	guint sock_offset;
 	struct SOCKET_BUFFERLINK * next;
 
-	char buffer[SOCKET_DEFAULT_BLOCKSIZE];
+	gchar buffer[SOCKET_DEFAULT_BLOCKSIZE];
 };
 
 typedef struct socket_t {
-	int sock;
+	gint sock;
 	struct sockaddr_in remoteaddr;
-	unsigned int block_size;
+	guint block_size;
 
-	unsigned int total_incoming_size;
-	unsigned int total_outgoing_size;
+	guint total_incoming_size;
+	guint total_outgoing_size;
 
 	/* tcp buffers */
 	struct SOCKET_BUFFERLINK * incoming_buffer, * incoming_buffer_end;
@@ -78,11 +79,11 @@ typedef struct socket_t {
 
 	/* datagram buffers (unused at the moment) */
 	struct SOCKET_PACKETSAVE * incoming_buffer_d, * outgoing_buffer_d;
-	unsigned int incoming_buffer_d_allocated, incoming_buffer_d_size;
-	unsigned int outgoing_buffer_d_allocated, outgoing_buffer_d_size;
+	guint incoming_buffer_d_allocated, incoming_buffer_d_size;
+	guint outgoing_buffer_d_allocated, outgoing_buffer_d_size;
 
-	int options;
-	int state;
+	gint options;
+	gint state;
 } socket_t, * socket_tp;
 
 
@@ -100,7 +101,7 @@ typedef struct socket_t {
 #else*/
 
 /** @returns true if the given socket is valid and connected */
-int socket_isvalid(socket_tp s);
+gint socket_isvalid(socket_tp s);
 
 /** @returns true if the given socket has waiting outgoing data */
 size_t socket_data_outgoing(socket_tp s) ;
@@ -109,34 +110,34 @@ size_t socket_data_outgoing(socket_tp s) ;
 size_t socket_data_incoming(socket_tp s) ;
 
 /* returns the actual FD associated with this socket */
-int socket_getfd(socket_tp s) ;
+gint socket_getfd(socket_tp s) ;
 
-char * socket_gethost(socket_tp s) ;
+gchar * socket_gethost(socket_tp s) ;
 
 short socket_getport(socket_tp s) ;
 
-int socket_islisten(socket_tp s);
+gint socket_islisten(socket_tp s);
 
-/* sets the internal blocksize of this socket. defaults to 16k */
+/* sets the ginternal blocksize of this socket. defaults to 16k */
 void socket_set_blocksize(socket_tp s,size_t bsize);
 
 ///#endif
 
 
 /* returns nonzero when a socket needs servicing! */
-int socket_needs_servicing(void);
+gint socket_needs_servicing(void);
 void socket_enable_async(void);
 void socket_ignore_sigpipe(void);
-void socket_sigio_handler(int);
-int socket_needs_servicing(void);
+void socket_sigio_handler(gint);
+gint socket_needs_servicing(void);
 void socket_reset_servicing_status(void);
 
 /* Creates a socket with the given options. */
-socket_tp socket_create (int socket_options) ;
-socket_tp socket_create_from(int fd, int socket_options);
+socket_tp socket_create (gint socket_options) ;
+socket_tp socket_create_from(gint fd, gint socket_options);
 
 /* Creates a socket by accepting a waiting incoming connection from <mommy> with the given options */
-socket_tp socket_create_child ( socket_tp mommy, int socket_options );
+socket_tp socket_create_child ( socket_tp mommy, gint socket_options );
 
 /* Closes a socket */
 void socket_close (socket_tp s);
@@ -145,31 +146,31 @@ void socket_close (socket_tp s);
 void socket_destroy (socket_tp s);
 
 /* Make this socket start listening on the given port */
-int socket_listen (socket_tp s, int port, int waiting_size);
+gint socket_listen (socket_tp s, gint port, gint waiting_size);
 
 /* Connect to a remote host */
-int socket_connect (socket_tp s, char * dest_addr, int port);
+gint socket_connect (socket_tp s, gchar * dest_addr, gint port);
 
 /* Issue a read event to the socket. This will cause it to collect and buffer all waiting data from the kernel */
-int socket_issue_read (socket_tp s);
+gint socket_issue_read (socket_tp s);
 
 /* Issue a write event to the socket. This should happen when the socket has indicated it has waiting data, and
  * there has been an event that indicates the socket is now ready to write to. */
-int socket_issue_write (socket_tp s);
+gint socket_issue_write (socket_tp s);
 
-/* Reads <size> bytes into <buffer> from <s>. If <size> bytes are not available, the function will fail and return zero.
+/* Reads <size> bytes ginto <buffer> from <s>. If <size> bytes are not available, the function will fail and return zero.
  * Otherwise, it will return 1 on success. Bytes are removed from socket buffer. */
-int socket_read (socket_tp s, char * buffer, unsigned int size);
+gint socket_read (socket_tp s, gchar * buffer, guint size);
 
-/* Reads <size> bytes into <buffer> from <s>. If <size> bytes are not available, the function will fail and return zero.
+/* Reads <size> bytes ginto <buffer> from <s>. If <size> bytes are not available, the function will fail and return zero.
  * Otherwise, it will return 1 on success. Bytes are *not* removed from socket buffer. */
-int socket_peek (socket_tp s, char * buffer, unsigned int size);
+gint socket_peek (socket_tp s, gchar * buffer, guint size);
 
 /* Writes the given bytes to the socket. */
-int socket_write (socket_tp s, char * buffer, unsigned int size);
+gint socket_write (socket_tp s, gchar * buffer, guint size);
 
 /* unimplemented */
-int socket_write_to (socket_tp s, char * dest_addr, int dest_port, char * buffer, unsigned int size);
+gint socket_write_to (socket_tp s, gchar * dest_addr, gint dest_port, gchar * buffer, guint size);
 
 /* Sets this socket as nonblocking (obviously!) */
 void socket_set_nonblock(socket_tp s);

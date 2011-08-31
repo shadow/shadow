@@ -19,6 +19,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <netinet/in.h>
@@ -35,7 +36,7 @@
 #include "vtcp_server.h"
 #include "vsocket.h"
 
-vepoll_tp vepoll_create(vevent_mgr_tp vev_mgr, in_addr_t addr, uint16_t sockd) {
+vepoll_tp vepoll_create(vevent_mgr_tp vev_mgr, in_addr_t addr, guint16 sockd) {
 	vepoll_tp vep = calloc(1, sizeof(vepoll_t));
 	vep->addr = addr;
 	vep->sockd = sockd;
@@ -96,7 +97,7 @@ void vepoll_mark_unavailable(vepoll_tp vep, enum vepoll_type type) {
 	}
 }
 
-uint8_t vepoll_query_available(vepoll_tp vep, enum vepoll_type type) {
+guint8 vepoll_query_available(vepoll_tp vep, enum vepoll_type type) {
 	type &= (VEPOLL_READ|VEPOLL_WRITE);
 
 	if(vep != NULL && type) {
@@ -157,7 +158,7 @@ void vepoll_execute_notification(context_provider_tp provider, vepoll_tp vep) {
 		debugf("vepoll_execute_notification: activation for socket %u, can_write=%i, can_read=%i\n",
 				vep->sockd, (vep->available & VEPOLL_WRITE) > 0, (vep->available & VEPOLL_READ) > 0);
 #ifdef DEBUG
-		vevent_mgr_print_stat(vep->vev_mgr, vep->sockd);
+		vevent_mgr_prgint_stat(vep->vev_mgr, vep->sockd);
 #endif
 
 		/* the event is no longer scheduled */
@@ -173,7 +174,7 @@ void vepoll_execute_notification(context_provider_tp provider, vepoll_tp vep) {
 		if(vep->state != VEPOLL_INACTIVE) {
 			vep->flags |= VEPOLL_EXECUTING;
 
-			uint8_t turn = vep->do_read_first;
+			guint8 turn = vep->do_read_first;
 
 			/* tell the socket about it if available, only switching context once */
 			if((vep->available & VEPOLL_READ) && (vep->available & VEPOLL_WRITE)) {
@@ -222,7 +223,7 @@ void vepoll_execute_notification(context_provider_tp provider, vepoll_tp vep) {
 }
 
 /* make sure sockets don't get stuck */
-void vepoll_onpoll(vci_event_tp vci_event, void *vs_mgr) {
+void vepoll_onpoll(vci_event_tp vci_event, gpointer vs_mgr) {
         vepoll_tp vep = vci_event->payload;
 	if(vep != NULL) {
 		/* poll no longer scheduled */
@@ -236,8 +237,8 @@ void vepoll_onpoll(vci_event_tp vci_event, void *vs_mgr) {
 		/* TODO move this out of vepoll and to a higher level */
 #ifdef DEBUG
 		vsocket_mgr_tp vsock_mgr = global_sim_context.sim_worker->vci_mgr->current_vsocket_mgr;
-		vsocket_mgr_print_stat(vsock_mgr, vep->sockd);
-		vevent_mgr_print_stat(vep->vev_mgr, vep->sockd);
+		vsocket_mgr_prgint_stat(vsock_mgr, vep->sockd);
+		vevent_mgr_prgint_stat(vep->vev_mgr, vep->sockd);
 #endif
 
 		vepoll_activate(vep);

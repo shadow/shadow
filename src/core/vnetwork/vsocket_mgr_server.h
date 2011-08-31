@@ -22,6 +22,7 @@
 #ifndef VSOCKET_MGR_SERVER_H_
 #define VSOCKET_MGR_SERVER_H_
 
+#include <glib.h>
 #include "vsocket_mgr.h"
 #include "vtcp_server.h"
 

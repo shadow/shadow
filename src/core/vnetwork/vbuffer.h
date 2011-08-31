@@ -22,6 +22,7 @@
 #ifndef VBUFFER_H_
 #define VBUFFER_H_
 
+#include <glib.h>
 #include <stdint.h>
 #include <stddef.h>
 
@@ -37,9 +38,9 @@ typedef struct vbuffer_sbuf_s {
 	GQueue *tcp_control;
 	/* rc_packets sent but not acked */
 	orderedlist_tp tcp_retransmit;
-	uint64_t max_size;
-	uint64_t current_size;
-	uint16_t num_packets;
+	guint64 max_size;
+	guint64 current_size;
+	guint16 num_packets;
 } vbuffer_sbuf_t, *vbuffer_sbuf_tp;
 
 typedef struct vbuffer_rbuf_s {
@@ -47,11 +48,11 @@ typedef struct vbuffer_rbuf_s {
 	GQueue *vread;
 	/* rc_packets waiting for a gap to be filled for in-order processing */
 	orderedlist_tp tcp_unprocessed;
-	/* users read offset into the packet at the front of the data list */
-	uint16_t data_offset;
-	uint64_t max_size;
-	uint64_t current_size;
-	uint16_t num_packets;
+	/* users read offset ginto the packet at the front of the data list */
+	guint16 data_offset;
+	guint64 max_size;
+	guint64 current_size;
+	guint16 num_packets;
 } vbuffer_rbuf_t, *vbuffer_rbuf_tp;
 
 typedef struct vbuffer_s {
@@ -60,33 +61,33 @@ typedef struct vbuffer_s {
 	vbuffer_sbuf_tp sbuf;
 } vbuffer_t, *vbuffer_tp;
 
-int vbuffer_get_send_length(vbuffer_tp vb);
-void vbuffer_set_size(vbuffer_tp vb, uint64_t rbuf_max, uint64_t sbuf_max);
+gint vbuffer_get_send_length(vbuffer_tp vb);
+void vbuffer_set_size(vbuffer_tp vb, guint64 rbuf_max, guint64 sbuf_max);
 size_t vbuffer_receive_space_available(vbuffer_tp vb);
 size_t vbuffer_send_space_available(vbuffer_tp vb);
-void vbuffer_clear_tcp_retransmit(vbuffer_tp vb, uint8_t only_clear_acked, uint32_t acknum);
+void vbuffer_clear_tcp_retransmit(vbuffer_tp vb, guint8 only_clear_acked, guint32 acknum);
 void vbuffer_clear_send(vbuffer_tp vb);
-vbuffer_tp vbuffer_create(uint8_t type, uint64_t max_recv_space, uint64_t max_send_space, vepoll_tp vep);
+vbuffer_tp vbuffer_create(guint8 type, guint64 max_recv_space, guint64 max_send_space, vepoll_tp vep);
 void vbuffer_destroy(vbuffer_tp vb);
-rc_vpacket_pod_tp vbuffer_get_read(vbuffer_tp vb, uint16_t** read_offset);
-uint8_t vbuffer_is_empty(vbuffer_tp vb);
-uint8_t vbuffer_is_empty_send_control(vbuffer_tp vb);
-uint8_t vbuffer_is_readable(vbuffer_tp vb);
-uint8_t vbuffer_is_writable(vbuffer_tp vb);
+rc_vpacket_pod_tp vbuffer_get_read(vbuffer_tp vb, guint16** read_offset);
+guint8 vbuffer_is_empty(vbuffer_tp vb);
+guint8 vbuffer_is_empty_send_control(vbuffer_tp vb);
+guint8 vbuffer_is_readable(vbuffer_tp vb);
+guint8 vbuffer_is_writable(vbuffer_tp vb);
 
-uint8_t vbuffer_add_receive(vbuffer_tp vb, rc_vpacket_pod_tp rc_packet);
-uint8_t vbuffer_add_read(vbuffer_tp vb, rc_vpacket_pod_tp rc_packet);
-uint8_t vbuffer_add_send(vbuffer_tp vb, rc_vpacket_pod_tp rc_packet, uint32_t transmit_key);
-uint8_t vbuffer_add_retransmit(vbuffer_tp vb, rc_vpacket_pod_tp rc_packet, uint32_t retransmit_key);
-uint8_t vbuffer_add_control(vbuffer_tp vb, rc_vpacket_pod_tp rc_packet);
+guint8 vbuffer_add_receive(vbuffer_tp vb, rc_vpacket_pod_tp rc_packet);
+guint8 vbuffer_add_read(vbuffer_tp vb, rc_vpacket_pod_tp rc_packet);
+guint8 vbuffer_add_send(vbuffer_tp vb, rc_vpacket_pod_tp rc_packet, guint32 transmit_key);
+guint8 vbuffer_add_retransmit(vbuffer_tp vb, rc_vpacket_pod_tp rc_packet, guint32 retransmit_key);
+guint8 vbuffer_add_control(vbuffer_tp vb, rc_vpacket_pod_tp rc_packet);
 
-rc_vpacket_pod_tp vbuffer_get_read(vbuffer_tp vb, uint16_t** read_offset);
+rc_vpacket_pod_tp vbuffer_get_read(vbuffer_tp vb, guint16** read_offset);
 rc_vpacket_pod_tp vbuffer_remove_read(vbuffer_tp vb);
-rc_vpacket_pod_tp vbuffer_get_tcp_unprocessed(vbuffer_tp vb, uint32_t next_sequence);
-rc_vpacket_pod_tp vbuffer_remove_tcp_unprocessed(vbuffer_tp vb, uint32_t next_sequence);
+rc_vpacket_pod_tp vbuffer_get_tcp_unprocessed(vbuffer_tp vb, guint32 next_sequence);
+rc_vpacket_pod_tp vbuffer_remove_tcp_unprocessed(vbuffer_tp vb, guint32 next_sequence);
 rc_vpacket_pod_tp vbuffer_get_send(vbuffer_tp vb);
-rc_vpacket_pod_tp vbuffer_remove_send(vbuffer_tp vb, uint32_t transmit_key);
-rc_vpacket_pod_tp vbuffer_remove_tcp_retransmit(vbuffer_tp vb, uint32_t retransmit_key);
+rc_vpacket_pod_tp vbuffer_remove_send(vbuffer_tp vb, guint32 transmit_key);
+rc_vpacket_pod_tp vbuffer_remove_tcp_retransmit(vbuffer_tp vb, guint32 retransmit_key);
 rc_vpacket_pod_tp vbuffer_remove_tcp_control(vbuffer_tp vb);
 
 #endif /* VBUFFER_H_ */

@@ -23,6 +23,7 @@
 #ifndef ECHO_LIB_H_
 #define ECHO_LIB_H_
 
+#include <glib.h>
 #include <netinet/in.h>
 
 #define ERROR -1
@@ -30,20 +31,20 @@
 #define ECHO_SERVER_PORT 60000
 
 typedef struct echoclient_s {
-	int sd;
-	char send_buffer[BUFFERSIZE];
-	char recv_buffer[BUFFERSIZE];
-	int recv_offset;
-	int sent_msg;
-	int amount_sent;
-	int is_done;
+	gint sd;
+	gchar send_buffer[BUFFERSIZE];
+	gchar recv_buffer[BUFFERSIZE];
+	gint recv_offset;
+	gint sent_msg;
+	gint amount_sent;
+	gint is_done;
 } echoclient_t, *echoclient_tp;
 
 typedef struct echoserver_s {
-	int listen_sd;
-	char echo_buffer[BUFFERSIZE];
-	int read_offset;
-	int write_offset;
+	gint listen_sd;
+	gchar echo_buffer[BUFFERSIZE];
+	gint read_offset;
+	gint write_offset;
 } echoserver_t, *echoserver_tp;
 
 typedef struct echoloopback_s {
@@ -51,11 +52,11 @@ typedef struct echoloopback_s {
 	echoclient_t client;
 } echoloopback_t, *echoloopback_tp;
 
-void echo_client_instantiate(echoclient_tp ec, int argc, char * argv[], in_addr_t bootstrap_address);
-void echo_client_socket_readable(echoclient_tp ec, int sockd);
-void echo_client_socket_writable(echoclient_tp ec, int sockd);
+void echo_client_instantiate(echoclient_tp ec, gint argc, gchar * argv[], in_addr_t bootstrap_address);
+void echo_client_socket_readable(echoclient_tp ec, gint sockd);
+void echo_client_socket_writable(echoclient_tp ec, gint sockd);
 
-void echo_server_instantiate(echoserver_tp es, int argc, char * argv[], in_addr_t bootstrap_address);
-void echo_server_socket_readable(echoserver_tp es, int sockd);
+void echo_server_instantiate(echoserver_tp es, gint argc, gchar * argv[], in_addr_t bootstrap_address);
+void echo_server_socket_readable(echoserver_tp es, gint sockd);
 
 #endif /* ECHO_LIB_H_ */

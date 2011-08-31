@@ -20,6 +20,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <time.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -44,9 +45,9 @@ void _plugin_init() {
 
 void _plugin_uninit() {}
 
-void _plugin_instantiate(int argc, char * argv[]) {
-	const char* usage = "USAGE:\n\t\'single\' http_host http_port (socks_host|\'none\') socks_port num_downloads filepath\n\t--or--\n\t\'double\' http_host http_port (socks_host|\'none\') socks_port filepath1 filepath2 (filepath3|\'none\') pausetime_seconds\n\t--or--\n\t\'multi\' server_specification_filepath (socks_host|\'none\') socks_port (thinktimes_cdf_filepath|\'none\') (runtime_seconds|-1)\n";
-	int mode = 0;
+void _plugin_instantiate(gint argc, gchar * argv[]) {
+	const gchar* usage = "USAGE:\n\t\'single\' http_host http_port (socks_host|\'none\') socks_port num_downloads filepath\n\t--or--\n\t\'gdouble\' http_host http_port (socks_host|\'none\') socks_port filepath1 filepath2 (filepath3|\'none\') pausetime_seconds\n\t--or--\n\t\'multi\' server_specification_filepath (socks_host|\'none\') socks_port (thinktimes_cdf_filepath|\'none\') (runtime_seconds|-1)\n";
+	gint mode = 0;
 
 	if(argc < 1) {
 		snri_log(LOG_WARN, usage);
@@ -55,7 +56,7 @@ void _plugin_instantiate(int argc, char * argv[]) {
 
 	if(strncmp(argv[0], "single", 6) == 0) {
 		mode = 1;
-	} else if(strncmp(argv[0], "double", 6) == 0) {
+	} else if(strncmp(argv[0], "gdouble", 6) == 0) {
 		mode = 2;
 	} else if(strncmp(argv[0], "multi", 5) == 0) {
 		mode = 3;
@@ -64,7 +65,7 @@ void _plugin_instantiate(int argc, char * argv[]) {
 		return;
 	}
 
-	int sockd = 0;
+	gint sockd = 0;
 
 	if(mode == 1) {
 		service_filegetter_single_args_t args;
@@ -124,10 +125,10 @@ void _plugin_destroy() {
 	service_filegetter_stop(&sfg);
 }
 
-void _plugin_socket_readable(int sockd){
+void _plugin_socket_readable(gint sockd){
 	service_filegetter_activate(&sfg, sockd);
 }
 
-void _plugin_socket_writable(int sockd){
+void _plugin_socket_writable(gint sockd){
 	service_filegetter_activate(&sfg, sockd);
 }

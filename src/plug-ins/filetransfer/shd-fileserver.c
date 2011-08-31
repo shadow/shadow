@@ -20,6 +20,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -37,13 +38,13 @@
 /* TODO better checking of syscall results like strncpy */
 
 /* these MUST be synced with fileserver_codes */
-static const char* fileserver_code_strings[] = {
+static const gchar* fileserver_code_strings[] = {
 	"FS_SUCCESS", "FS_CLOSED", "FS_ERR_INVALID", "FS_ERR_FATAL", "FS_ERR_BADSD", "FS_ERR_WOULDBLOCK", "FS_ERR_BUFSPACE",
 	"FS_ERR_SOCKET", "FS_ERR_BIND", "FS_ERR_LISTEN", "FS_ERR_ACCEPT", "FS_ERR_RECV", "FS_ERR_SEND", "FS_ERR_CLOSE"
 };
 
-const char* fileserver_codetoa(enum fileserver_code fsc) {
-	int index = (int) fsc;
+const gchar* fileserver_codetoa(enum fileserver_code fsc) {
+	gint index = (gint) fsc;
 	if(index >= 0 && index < sizeof(fileserver_code_strings)) {
 		return fileserver_code_strings[index];
 	} else {
@@ -52,7 +53,7 @@ const char* fileserver_codetoa(enum fileserver_code fsc) {
 }
 
 enum fileserver_code fileserver_start(fileserver_tp fs, in_addr_t listen_addr, in_port_t listen_port,
-		char* docroot, int max_connections) {
+		gchar* docroot, gint max_connections) {
 	/* check user inputs */
 	if(fs == NULL || strnlen(docroot, FT_STR_SIZE) == FT_STR_SIZE) {
 		return FS_ERR_INVALID;
@@ -61,7 +62,7 @@ enum fileserver_code fileserver_start(fileserver_tp fs, in_addr_t listen_addr, i
 	/* TODO check for network order */
 
 	/* create the socket and get a socket descriptor */
-	int sockd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
+	gint sockd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
 	if (sockd < 0) {
 		return FS_ERR_SOCKET;
 	}
@@ -76,7 +77,7 @@ enum fileserver_code fileserver_start(fileserver_tp fs, in_addr_t listen_addr, i
 	listener.sin_port = listen_port;
 
 	/* bind the socket to the server port */
-	int result = bind(sockd, (struct sockaddr *) &listener, sizeof(listener));
+	gint result = bind(sockd, (struct sockaddr *) &listener, sizeof(listener));
 	if (result < 0) {
 		return FS_ERR_BIND;
 	}
@@ -100,7 +101,7 @@ enum fileserver_code fileserver_start(fileserver_tp fs, in_addr_t listen_addr, i
 	return FS_SUCCESS;
 }
 
-static void fileserver_shutdown_cb(int key, void* value, void *data) {
+static void fileserver_shutdown_cb(gint key, gpointer value, gpointer data) {
 	/* cant call fileserve_connection_close since we are walking the ht */
 	fileserver_connection_tp c = value;
 
@@ -129,14 +130,14 @@ enum fileserver_code fileserver_shutdown(fileserver_tp fs) {
 	}
 }
 
-enum fileserver_code fileserver_accept_one(fileserver_tp fs, int* sockd_out) {
+enum fileserver_code fileserver_accept_one(fileserver_tp fs, gint* sockd_out) {
 	/* check user inputs */
 	if(fs == NULL) {
 		return FS_ERR_INVALID;
 	}
 
 	/* try to accept a connection */
-	int sockd = accept(fs->listen_sockd, NULL, NULL);
+	gint sockd = accept(fs->listen_sockd, NULL, NULL);
 	if(sockd < 0) {
 		if(errno == EWOULDBLOCK) {
 			return FS_ERR_WOULDBLOCK;
@@ -149,7 +150,7 @@ enum fileserver_code fileserver_accept_one(fileserver_tp fs, int* sockd_out) {
 	fileserver_connection_tp c = malloc(sizeof(fileserver_connection_t));
 	c->sockd = sockd;
 	c->state = FS_IDLE;
-	g_hash_table_insert(fs->connections, int_key(sockd), c);
+	g_hash_table_insert(fs->connections, gint_key(sockd), c);
 
 	if(sockd_out != NULL) {
 		*sockd_out = sockd;
@@ -167,7 +168,7 @@ static void fileserve_connection_close(fileserver_tp fs, fileserver_connection_t
 	free(c);
 }
 
-enum fileserver_code fileserver_activate(fileserver_tp fs, int sockd) {
+enum fileserver_code fileserver_activate(fileserver_tp fs, gint sockd) {
 	/* check user inputs */
 	if(fs == NULL || sockd < 0) {
 		return FS_ERR_INVALID;
@@ -206,7 +207,7 @@ start:
 		}
 
 		case FS_REQUEST: {
-			int space = sizeof(c->request.buf) - c->request.buf_write_offset - 1;
+			gint space = sizeof(c->request.buf) - c->request.buf_write_offset - 1;
 			if(space <= 0) {
 				/* the request wont fit in our buffer, just give up */
 				fileserve_connection_close(fs, c);
@@ -234,14 +235,14 @@ start:
 			c->request.buf[c->request.buf_write_offset] = '\0';
 
 			/* check if the request is all here */
-			char* found = strcasestr(c->request.buf, FT_2CRLF);
+			gchar* found = strcasestr(c->request.buf, FT_2CRLF);
 
 			if(!found) {
 				/* need to read more */
 				c->state = FS_REQUEST;
 			} else {
 				/* extract the file path, check http version */
-				char* relpath = strcasestr(c->request.buf, "GET ");
+				gchar* relpath = strcasestr(c->request.buf, "GET ");
 				if(relpath == NULL) {
 					/* malformed */
 					c->state = FS_REPLY_404_START;
@@ -250,7 +251,7 @@ start:
 
 				relpath += 4;
 
-				char* relpath_end = strcasestr(relpath, " ");
+				gchar* relpath_end = strcasestr(relpath, " ");
 				if(relpath_end == NULL) {
 					/* malformed */
 					c->state = FS_REPLY_404_START;
@@ -301,7 +302,7 @@ start:
 
 			/* stitch together the filepath */
 			size_t len = docroot_len + filepath_len;
-			char abspath[len + 1];
+			gchar abspath[len + 1];
 			strncpy(abspath, fs->docroot, docroot_len);
 			strncpy(abspath + docroot_len, c->request.filepath, filepath_len);
 			abspath[len] = '\0';
@@ -320,12 +321,12 @@ start:
 			rewind(c->reply.f);
 
 			/* write header to reply buffer */
-			int bytes = snprintf(c->reply.buf, sizeof(c->reply.buf), FT_HTTP_200_FMT, c->reply.f_length);
+			gint bytes = snprintf(c->reply.buf, sizeof(c->reply.buf), FT_HTTP_200_FMT, c->reply.f_length);
 
 			if(bytes < 0) {
 				/* some kind of output error */
 				fileserve_connection_close(fs, c);
-				fprintf(stderr, "fileserver fatal error: internal io error\n");
+				fprintf(stderr, "fileserver fatal error: ginternal io error\n");
 				return FS_ERR_FATAL;
 			} else if(bytes >= sizeof(c->reply.buf)) {
 				/* truncated, our buffer is way too small, just give up */
@@ -341,11 +342,11 @@ start:
 
 		case FS_REPLY_FILE_CONTINUE: {
 			/* do we have space to read more */
-			int done_reading = c->reply.f_read_offset == c->reply.f_length;
+			gint done_reading = c->reply.f_read_offset == c->reply.f_length;
 			ssize_t space = sizeof(c->reply.buf) - c->reply.buf_write_offset;
 
 			if(space > 0 && !done_reading) {
-				void* start = c->reply.buf + c->reply.buf_write_offset;
+				gpointer start = c->reply.buf + c->reply.buf_write_offset;
 				size_t bytes = fread(start, 1, space, c->reply.f);
 
 				c->reply.buf_write_offset += bytes;
@@ -369,7 +370,7 @@ start:
 		}
 
 		case FS_REPLY_SEND: {
-			void* sendpos = c->reply.buf + c->reply.buf_read_offset;
+			gpointer sendpos = c->reply.buf + c->reply.buf_read_offset;
 			size_t sendlen = c->reply.buf_write_offset - c->reply.buf_read_offset;
 
 			ssize_t bytes = send(c->sockd, sendpos, sendlen, 0);

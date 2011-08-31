@@ -20,6 +20,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include "global.h"
 #include "process.h"
 #include "routing.h"
@@ -30,16 +31,16 @@
 extern dvn_global_worker_data_t dvn_global_worker_data;
 extern dvninstance_tp dvn_global_instance;
 
-void dvn_packet_write(socket_tp socket, unsigned char dest_type, unsigned char dest_layer, int dest_major, int frametype, nbdf_tp frame) {
+void dvn_packet_write(socket_tp socket, guchar dest_type, guchar dest_layer, gint dest_major, gint frametype, nbdf_tp frame) {
 	nbdf_tp net_nb = nbdf_construct("cciin", dest_type, dest_layer, dest_major,  frametype, frame);
 	nbdf_send(net_nb, socket);
 	nbdf_free(net_nb);
 }
 
-void dvn_packet_route(unsigned char dest_type, unsigned char dest_layer, int dest_major, int frametype, nbdf_tp frame) {
+void dvn_packet_route(guchar dest_type, guchar dest_layer, gint dest_major, gint frametype, nbdf_tp frame) {
 	/* if we are a worker and already reported complete, do not send out
 	 * anything because there might not be anyone waiting to receive (avoids deadlocks)
-	 * this cuts off logging at the end of the sim, but at this point master does
+	 * this cuts off logging at the end of the sim, but at this pogint master does
 	 * not handle logging anymore anyway */
 	if(dvn_global_worker_data.in_worker && global_sim_context.sim_worker &&
 			global_sim_context.sim_worker->mode == sim_worker_mode_complete) {
@@ -53,10 +54,10 @@ void dvn_packet_route(unsigned char dest_type, unsigned char dest_layer, int des
 			case DVNPACKET_WORKER_BCAST:{
 				if(dest_layer & DVNPACKET_LAYER_OPT_DLOCAL) {
 					/* would this ever happen? hopefully not. */
-					for(int i=1; i <= dvn_global_worker_data.total_workers; i++)
+					for(gint i=1; i <= dvn_global_worker_data.total_workers; i++)
 						nbdf_send_pipecloud(net_nb, i, dvn_global_worker_data.pipecloud);
 				} else {
-					for(int i=1; i <= dvn_global_worker_data.total_workers; i++) {
+					for(gint i=1; i <= dvn_global_worker_data.total_workers; i++) {
 						if(i == dvn_global_worker_data.process_id)
 							continue;
 						nbdf_send_pipecloud(net_nb, i, dvn_global_worker_data.pipecloud);
@@ -69,10 +70,10 @@ void dvn_packet_route(unsigned char dest_type, unsigned char dest_layer, int des
 			case DVNPACKET_LOCAL_BCAST: {
 				if(dest_layer & DVNPACKET_LAYER_OPT_DLOCAL) {
 					/* would this ever happen? hopefully not. */
-					for(int i=0; i <= dvn_global_worker_data.total_workers; i++)
+					for(gint i=0; i <= dvn_global_worker_data.total_workers; i++)
 						nbdf_send_pipecloud(net_nb, i, dvn_global_worker_data.pipecloud);
 				} else {
-					for(int i=0; i <= dvn_global_worker_data.total_workers; i++) {
+					for(gint i=0; i <= dvn_global_worker_data.total_workers; i++) {
 						if(i == dvn_global_worker_data.process_id)
 							continue;
 						nbdf_send_pipecloud(net_nb, i, dvn_global_worker_data.pipecloud);
@@ -98,14 +99,14 @@ void dvn_packet_route(unsigned char dest_type, unsigned char dest_layer, int des
 	} else { /* non-worker context */
 		switch(dest_type) {
 			case DVNPACKET_WORKER_BCAST:{
-				for(int i=1; i <= dvn_global_instance->slave->num_processes; i++)
+				for(gint i=1; i <= dvn_global_instance->slave->num_processes; i++)
 					nbdf_send_pipecloud(net_nb, i, dvn_global_instance->slave->pipecloud);
 				break;
 			}
 
 //			case DVNPACKET_SLAVE_BCAST: {
 //				/* to remote slaves... */
-//				for(int i=0; i<vector_size(dvn_global_instance->slave->slave_connections); i++) {
+//				for(gint i=0; i<vector_size(dvn_global_instance->slave->slave_connections); i++) {
 //					dvninstance_slave_connection_tp remote_slave_connection =
 //							vector_get(dvn_global_instance->slave->slave_connections, i);
 //
@@ -125,11 +126,11 @@ void dvn_packet_route(unsigned char dest_type, unsigned char dest_layer, int des
 
 			case DVNPACKET_GLOBAL_BCAST: {
 				/* broadcast to workers.... */
-				for(int i=1; i <= dvn_global_instance->slave->num_processes; i++)
+				for(gint i=1; i <= dvn_global_instance->slave->num_processes; i++)
 					nbdf_send_pipecloud(net_nb, i, dvn_global_instance->slave->pipecloud);
 
 				/* then again to remote slaves */
-				for(int i=0; i<vector_size(dvn_global_instance->slave->slave_connections); i++) {
+				for(gint i=0; i<vector_size(dvn_global_instance->slave->slave_connections); i++) {
 					dvninstance_slave_connection_tp remote_slave_connection =
 							vector_get(dvn_global_instance->slave->slave_connections, i);
 
@@ -154,7 +155,7 @@ void dvn_packet_route(unsigned char dest_type, unsigned char dest_layer, int des
 
 			case DVNPACKET_LOCAL_BCAST: {
 				/* broadcast to workers.... */
-				for(int i=1; i <= dvn_global_instance->slave->num_processes; i++)
+				for(gint i=1; i <= dvn_global_instance->slave->num_processes; i++)
 					nbdf_send_pipecloud(net_nb, i, dvn_global_instance->slave->pipecloud);
 
 				/* local slave */
@@ -169,7 +170,7 @@ void dvn_packet_route(unsigned char dest_type, unsigned char dest_layer, int des
 					dvn_slave_deposit(dvn_global_instance, net_nb);
 
 				else {
-                                        int key = 0;
+                                        gint key = 0;
 					dvninstance_slave_connection_tp remote_slave_connection =
 						g_hash_table_lookup(dvn_global_instance->slave->slave_connection_lookup, &key);
 

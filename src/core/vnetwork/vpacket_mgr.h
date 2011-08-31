@@ -22,17 +22,18 @@
 #ifndef VPACKET_MGR_H_
 #define VPACKET_MGR_H_
 
+#include <glib.h>
 #include "vpacket.h"
 #include "shmcabinet_mgr.h"
 
 typedef struct vpacket_mgr_s {
 	/* shared mem packet locking is handled by shmem manager */
-	int use_shmcabinet;
+	gint use_shmcabinet;
 	shmcabinet_mgr_tp smc_mgr_packets;
 	shmcabinet_mgr_tp smc_mgr_payloads;
 
 	/* if set normal packets should be locked */
-	int lock_regular_packets;
+	gint lock_regular_packets;
 }vpacket_mgr_t, *vpacket_mgr_tp;
 
 /* convenience macros for packet types */
@@ -47,15 +48,15 @@ typedef struct vpacket_mgr_s {
 vpacket_mgr_tp vpacket_mgr_create();
 void vpacket_mgr_destroy(vpacket_mgr_tp vp_mgr);
 
-rc_vpacket_pod_tp vpacket_mgr_packet_create(vpacket_mgr_tp vp_mgr, uint8_t protocol,
+rc_vpacket_pod_tp vpacket_mgr_packet_create(vpacket_mgr_tp vp_mgr, guint8 protocol,
 		in_addr_t src_addr, in_port_t src_port, in_addr_t dst_addr, in_port_t dst_port,
-		enum vpacket_tcp_flags flags, uint32_t seq_number, uint32_t ack_number, uint32_t advertised_window,
-		uint16_t data_size, const void* data);
+		enum vpacket_tcp_flags flags, guint32 seq_number, guint32 ack_number, guint32 advertised_window,
+		guint16 data_size, const gpointer data);
 rc_vpacket_pod_tp vpacket_mgr_empty_packet_create();
 void vpacket_mgr_setup_locks(vpacket_pod_tp vp_pod);
 rc_vpacket_pod_tp vpacket_mgr_attach_shared_packet(vpacket_mgr_tp vp_mgr,
-		shmcabinet_info_tp shminfo_packet, uint32_t slot_id_packet,
-		shmcabinet_info_tp shminfo_payload, uint32_t slot_id_payload);
+		shmcabinet_info_tp shminfo_packet, guint32 slot_id_packet,
+		shmcabinet_info_tp shminfo_payload, guint32 slot_id_payload);
 vpacket_tp vpacket_mgr_lockcontrol(rc_vpacket_pod_tp rc_vp_pod, enum vpacket_lockcontrol command);
 void vpacket_mgr_vpacket_pod_destructor_cb(vpacket_pod_tp vp_pod);
 

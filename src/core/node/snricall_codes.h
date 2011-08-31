@@ -27,24 +27,24 @@
 #define SNRICALL_SUCCESS 0
 
 /**
- * int*		    - output/number of IPs assigned
+ * gint*		    - output/number of IPs assigned
  * in_addr_t**- output/array of assigned IPs
  */
 #define SNRICALL_GETIP 1
 
 /**
  * logs a string
- * int			- log level
- * unsigned int - length of data
- * char *		- data to log
+ * gint			- log level
+ * guint - length of data
+ * gchar *		- data to log
  */
 #define SNRICALL_LOG 2
 
 /**
  * logs a binary message
- * int			- log level
- * unsigned int - length of data
- * char *		- data to log
+ * gint			- log level
+ * guint - length of data
+ * gchar *		- data to log
  */
 #define SNRICALL_LOG_BINARY 3
 
@@ -56,16 +56,16 @@
 
 /**
  * creates a timer
- * unsigned int	- number of milliseconds from now the timer should expire
- * void (*t)(int timerid) - timer callback - function called when timer expires
+ * guint	- number of milliseconds from now the timer should expire
+ * void (*t)(gint timerid) - timer callback - function called when timer expires
  *
- * int* 		- output/timer identifier
+ * gint* 		- output/timer identifier
  */
 #define SNRICALL_CREATE_TIMER 5
 
 /**
  * destroys a timer
- * int			- timer id to destroy
+ * gint			- timer id to destroy
  */
 #define SNRICALL_DESTROY_TIMER 6
 
@@ -78,33 +78,33 @@
 #define SNRICALL_REGISTER_GLOBALS 8
 
 /**
- * char*  		- hostname to resolve to an addr
- * in_addr_t* 	- pointer to space for the returned addr
+ * gchar*  		- hostname to resolve to an addr
+ * in_addr_t* 	- poginter to space for the returned addr
  */
 #define SNRICALL_RESOLVE_NAME 9
 
 /**
  * in_addr_t	- the addr to resolve to a name
- * char* 		- pointer to a buffer to hold the resolved name
- * int			- the length of the buffer
+ * gchar* 		- poginter to a buffer to hold the resolved name
+ * gint			- the length of the buffer
  */
 #define SNRICALL_RESOLVE_ADDR 10
 
 /**
  * in_addr_t	- the addr to find the minimum of up/down bw
- * uint*		- will hold the result
+ * ugint*		- will hold the result
  */
 #define SNRICALL_RESOLVE_BW 11
 
 /**
- * int			-the socket descriptor
- * int*			-pointer to an int to hold the result, 1 or 0 (true/false)
+ * gint			-the socket descriptor
+ * gint*			-poginter to an gint to hold the result, 1 or 0 (true/false)
  */
 #define SNRICALL_SOCKET_IS_READABLE 12
 
 /**
- * int			-the socket descriptor
- * int*			-pointer to an int to hold the result, 1 or 0 (true/false)
+ * gint			-the socket descriptor
+ * gint*			-poginter to an gint to hold the result, 1 or 0 (true/false)
  */
 #define SNRICALL_SOCKET_IS_WRITABLE 13
 

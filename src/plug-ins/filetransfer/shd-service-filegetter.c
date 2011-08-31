@@ -20,6 +20,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -35,7 +36,7 @@
 #include "shd-cdf.h"
 #include "orderedlist.h"
 
-static void service_filegetter_log(service_filegetter_tp sfg, enum service_filegetter_loglevel level, const char* format, ...) {
+static void service_filegetter_log(service_filegetter_tp sfg, enum service_filegetter_loglevel level, const gchar* format, ...) {
 	/* if they gave NULL as a callback, dont log */
 	if(sfg != NULL && sfg->log_cb != NULL) {
 		va_list vargs, vargs_copy;
@@ -52,13 +53,13 @@ static void service_filegetter_log(service_filegetter_tp sfg, enum service_fileg
 	}
 }
 
-static void service_filegetter_report(service_filegetter_tp sfg, enum service_filegetter_loglevel level, char* preamble, filegetter_filestats_tp stats, int current_download, int total_downloads) {
+static void service_filegetter_report(service_filegetter_tp sfg, enum service_filegetter_loglevel level, gchar* preamble, filegetter_filestats_tp stats, gint current_download, gint total_downloads) {
 	if(preamble != NULL && stats != NULL) {
 		service_filegetter_log(sfg, level, "%s got first bytes in %lu.%.3d seconds and %zu of %zu bytes in %lu.%.3d seconds (download %i of %i)",
 				preamble,
-				stats->first_byte_time.tv_sec, (int)(stats->first_byte_time.tv_nsec / 1000000),
+				stats->first_byte_time.tv_sec, (gint)(stats->first_byte_time.tv_nsec / 1000000),
 				stats->bytes_downloaded, stats->bytes_expected,
-				stats->download_time.tv_sec, (int) (stats->download_time.tv_nsec / 1000000),
+				stats->download_time.tv_sec, (gint) (stats->download_time.tv_nsec / 1000000),
 				current_download, total_downloads);
 	}
 }
@@ -67,7 +68,7 @@ static in_addr_t service_filegetter_getaddr(service_filegetter_tp sfg, service_f
 		service_filegetter_hostbyname_cb hostname_cb) {
 	/* check if we have an address as a string */
 	struct in_addr in;
-	int is_ip_address = inet_aton(server->host, &in);
+	gint is_ip_address = inet_aton(server->host, &in);
 
 	if(is_ip_address) {
 		return in.s_addr;
@@ -84,7 +85,7 @@ static in_addr_t service_filegetter_getaddr(service_filegetter_tp sfg, service_f
 
 static service_filegetter_download_tp service_filegetter_get_download_from_args(
 		service_filegetter_tp sfg, service_filegetter_server_args_tp http_server,
-		service_filegetter_server_args_tp socks_proxy, char* filepath,
+		service_filegetter_server_args_tp socks_proxy, gchar* filepath,
 		service_filegetter_hostbyname_cb hostbyname_cb) {
 
 	/* absolute file path to get from server */
@@ -132,7 +133,7 @@ static enum filegetter_code service_filegetter_download_next(service_filegetter_
 
 		case SFG_MULTI: {
 			/* get a new random download */
-			uint64_t position = (uint64_t) (rand() % orderedlist_length(sfg->downloads));
+			guint64 position = (guint64) (rand() % orderedlist_length(sfg->downloads));
 
 			sfg->current_download = orderedlist_ceiling_value(sfg->downloads, position);
 
@@ -161,7 +162,7 @@ static enum filegetter_code service_filegetter_download_next(service_filegetter_
 	}
 }
 
-static enum filegetter_code service_filegetter_launch(service_filegetter_tp sfg, int* sockd_out) {
+static enum filegetter_code service_filegetter_launch(service_filegetter_tp sfg, gint* sockd_out) {
 	/* inputs should be ok, start up the client */
 	enum filegetter_code result = filegetter_start(&sfg->fg);
 	service_filegetter_log(sfg, SFG_DEBUG, "filegetter startup code: %s", filegetter_codetoa(result));
@@ -177,7 +178,7 @@ static enum filegetter_code service_filegetter_launch(service_filegetter_tp sfg,
 }
 
 enum filegetter_code service_filegetter_start_single(service_filegetter_tp sfg,
-		service_filegetter_single_args_tp args, int* sockd_out) {
+		service_filegetter_single_args_tp args, gint* sockd_out) {
 	assert(sfg);
 	assert(args);
 
@@ -205,7 +206,7 @@ enum filegetter_code service_filegetter_start_single(service_filegetter_tp sfg,
 }
 
 enum filegetter_code service_filegetter_start_double(service_filegetter_tp sfg,
-		service_filegetter_double_args_tp args, int* sockd_out) {
+		service_filegetter_double_args_tp args, gint* sockd_out) {
 	assert(sfg);
 	assert(args);
 
@@ -272,7 +273,7 @@ static orderedlist_tp service_filegetter_import_download_specs(service_filegette
 	}
 
 	orderedlist_tp ol = orderedlist_create();
-	char linebuffer[512];
+	gchar linebuffer[512];
 
 	while(fgets(linebuffer, sizeof(linebuffer), specs) != NULL) {
 		/* strip off the newline */
@@ -282,9 +283,9 @@ static orderedlist_tp service_filegetter_import_download_specs(service_filegette
 
 		orderedlist_tp tokens = orderedlist_create();
 
-		char* result = strtok(linebuffer, ":");
-		for(int i = 0; result != NULL; i++) {
-			orderedlist_add(tokens, (uint64_t)i, result);
+		gchar* result = strtok(linebuffer, ":");
+		for(gint i = 0; result != NULL; i++) {
+			orderedlist_add(tokens, (guint64)i, result);
 			result = strtok(NULL, ":");
 		}
 
@@ -298,7 +299,7 @@ static orderedlist_tp service_filegetter_import_download_specs(service_filegette
 		service_filegetter_server_args_t http;
 		http.host = orderedlist_remove_first(tokens);
 		http.port = orderedlist_remove_first(tokens);
-		char* filepath = orderedlist_remove_first(tokens);
+		gchar* filepath = orderedlist_remove_first(tokens);
 
 		service_filegetter_download_tp dl = service_filegetter_get_download_from_args(sfg, &http, &args->socks_proxy, filepath, args->hostbyname_cb);
 		orderedlist_destroy(tokens, 0);
@@ -321,7 +322,7 @@ static orderedlist_tp service_filegetter_import_download_specs(service_filegette
 }
 
 enum filegetter_code service_filegetter_start_multi(service_filegetter_tp sfg,
-		service_filegetter_multi_args_tp args, int* sockd_out) {
+		service_filegetter_multi_args_tp args, gint* sockd_out) {
 	assert(sfg);
 	assert(args);
 
@@ -357,7 +358,7 @@ enum filegetter_code service_filegetter_start_multi(service_filegetter_tp sfg,
 		return FG_ERR_INVALID;
 	}
 
-	int runtime_seconds = atoi(args->runtime_seconds);
+	gint runtime_seconds = atoi(args->runtime_seconds);
 	if(runtime_seconds > 0) {
 		clock_gettime(CLOCK_REALTIME, &sfg->expire);
 		sfg->expire.tv_sec += runtime_seconds;
@@ -379,7 +380,7 @@ static enum filegetter_code service_filegetter_expire(service_filegetter_tp sfg)
 	return FG_OK_200;
 }
 
-enum filegetter_code service_filegetter_activate(service_filegetter_tp sfg, int sockd) {
+enum filegetter_code service_filegetter_activate(service_filegetter_tp sfg, gint sockd) {
 	assert(sfg);
 
 start_over:
@@ -415,7 +416,7 @@ reactivate:;
 
 	if(result == FG_ERR_FATAL) {
 		/* it had to shut down, lets try again */
-		service_filegetter_log(sfg, SFG_NOTICE, "filegetter shutdown due to internal error... restarting");
+		service_filegetter_log(sfg, SFG_NOTICE, "filegetter shutdown due to ginternal error... restarting");
 		filegetter_shutdown(&sfg->fg);
 		filegetter_start(&sfg->fg);
 		service_filegetter_download_next(sfg);
@@ -442,7 +443,7 @@ reactivate:;
 		} else {
 			if(sfg->type == SFG_MULTI && sfg->think_times != NULL) {
 				/* get think time and set wakeup timer */
-				unsigned int sleeptime = (unsigned int) (cdf_random_value(sfg->think_times) / 1000);
+				guint sleeptime = (guint) (cdf_random_value(sfg->think_times) / 1000);
 
 				clock_gettime(CLOCK_REALTIME, &sfg->wakeup);
 				sfg->wakeup.tv_sec += sleeptime;
@@ -456,13 +457,13 @@ reactivate:;
 				(*sfg->sleep_cb)(sfg, sleeptime);
 				goto start_over;
 			} else if(sfg->type == SFG_DOUBLE) {
-				int time_to_pause = 0;
+				gint time_to_pause = 0;
 
 				if(sfg->current_download == sfg->download1) {
-					service_filegetter_log(sfg, SFG_NOTICE, "[fg-double] download1 %lu.%.3d seconds\n", stats.download_time.tv_sec, (int) (stats.download_time.tv_nsec / 1000000));
+					service_filegetter_log(sfg, SFG_NOTICE, "[fg-gdouble] download1 %lu.%.3d seconds\n", stats.download_time.tv_sec, (gint) (stats.download_time.tv_nsec / 1000000));
 					sfg->current_download = sfg->download2;
 				} else if(sfg->current_download == sfg->download2) {
-					service_filegetter_log(sfg, SFG_NOTICE, "[fg-double] download2 %lu.%.3d seconds\n", stats.download_time.tv_sec, (int) (stats.download_time.tv_nsec / 1000000));
+					service_filegetter_log(sfg, SFG_NOTICE, "[fg-gdouble] download2 %lu.%.3d seconds\n", stats.download_time.tv_sec, (gint) (stats.download_time.tv_nsec / 1000000));
 					if(sfg->download3 == NULL) {
 						time_to_pause = 1;
 						sfg->current_download = sfg->download1;
@@ -470,7 +471,7 @@ reactivate:;
 						sfg->current_download = sfg->download3;
 					}
 				} else if(sfg->current_download == sfg->download3) {
-					service_filegetter_log(sfg, SFG_NOTICE, "[fg-double] download3 %lu.%.3d seconds\n", stats.download_time.tv_sec, (int) (stats.download_time.tv_nsec / 1000000));
+					service_filegetter_log(sfg, SFG_NOTICE, "[fg-gdouble] download3 %lu.%.3d seconds\n", stats.download_time.tv_sec, (gint) (stats.download_time.tv_nsec / 1000000));
 					time_to_pause = 1;
 					sfg->current_download = sfg->download1;
 				} else {

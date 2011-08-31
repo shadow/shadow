@@ -19,6 +19,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <stdlib.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -54,7 +55,7 @@ static vpipe_unid_tp vpipe_unid_create(vevent_mgr_tp vev_mgr, vpipe_id read_fd, 
 	}
 }
 
-static size_t vpipe_unid_read(vpipe_unid_tp unipipe, vpipe_id fd, void* dst, size_t num_bytes) {
+static size_t vpipe_unid_read(vpipe_unid_tp unipipe, vpipe_id fd, gpointer dst, size_t num_bytes) {
 	if(unipipe != NULL) {
 		if(fd == unipipe->read_fd && !(unipipe->flags & VPIPE_READER_CLOSED)) {
 			return linkedbuffer_read(unipipe->buffer, dst, num_bytes);
@@ -65,7 +66,7 @@ static size_t vpipe_unid_read(vpipe_unid_tp unipipe, vpipe_id fd, void* dst, siz
 	return VPIPE_IO_ERROR;
 }
 
-static size_t vpipe_unid_write(vpipe_unid_tp unipipe, vpipe_id fd, const void* src, size_t num_bytes) {
+static size_t vpipe_unid_write(vpipe_unid_tp unipipe, vpipe_id fd, const gpointer src, size_t num_bytes) {
 	if(unipipe != NULL) {
 		if(fd == unipipe->write_fd && !(unipipe->flags & VPIPE_WRITER_CLOSED)) {
 			return linkedbuffer_write(unipipe->buffer, src, num_bytes);
@@ -136,7 +137,7 @@ static vpipe_bid_tp vpipe_bid_create(vevent_mgr_tp vev_mgr, vpipe_id fda, vpipe_
 	}
 }
 
-static ssize_t vpipe_bid_read(vpipe_bid_tp bipipe, vpipe_id fd, void* dst, size_t num_bytes) {
+static ssize_t vpipe_bid_read(vpipe_bid_tp bipipe, vpipe_id fd, gpointer dst, size_t num_bytes) {
 	if(bipipe != NULL) {
 		if(fd == bipipe->fda) {
 			/* fda tries to read from pipea */
@@ -171,7 +172,7 @@ static ssize_t vpipe_bid_read(vpipe_bid_tp bipipe, vpipe_id fd, void* dst, size_
 	return VPIPE_IO_ERROR;
 }
 
-static ssize_t vpipe_bid_write(vpipe_bid_tp bipipe, vpipe_id fd, const void* src, size_t num_bytes) {
+static ssize_t vpipe_bid_write(vpipe_bid_tp bipipe, vpipe_id fd, const gpointer src, size_t num_bytes) {
 	if(bipipe != NULL) {
 		if(fd == bipipe->fda) {
 			/* fda tries to write to pipeb
@@ -234,9 +235,9 @@ static enum vpipe_status vpipe_bid_close(vpipe_bid_tp bipipe, vpipe_id fd) {
 	return VPIPE_FAILURE;
 }
 
-static void vpipe_destroy_cb(int key, void* value, void *data) {
+static void vpipe_destroy_cb(gint key, gpointer value, gpointer data) {
 	/* the lower level close functions dont modify the hashtable, so we should
-	 * be safe using them. they should take care not to double-free. */
+	 * be safe using them. they should take care not to gdouble-free. */
 	vpipe_bid_close(value, key);
 }
 
@@ -261,8 +262,8 @@ enum vpipe_status vpipe_create(vevent_mgr_tp vev_mgr, vpipe_mgr_tp mgr, vpipe_id
 
 		if(bipipe != NULL) {
 			/* TODO: check for collisions */
-                        gint *key1 = int_key(fda);
-                        gint *key2 = int_key(fdb);
+                        gint *key1 = gint_key(fda);
+                        gint *key2 = gint_key(fdb);
 			g_hash_table_insert(mgr->bipipes, key1, bipipe);
 			g_hash_table_insert(mgr->bipipes, key2, bipipe);
 			return VPIPE_SUCCESS;
@@ -271,7 +272,7 @@ enum vpipe_status vpipe_create(vevent_mgr_tp vev_mgr, vpipe_mgr_tp mgr, vpipe_id
 	return VPIPE_FAILURE;
 }
 
-ssize_t vpipe_read(vpipe_mgr_tp mgr, vpipe_id fd, void* dst, size_t num_bytes) {
+ssize_t vpipe_read(vpipe_mgr_tp mgr, vpipe_id fd, gpointer dst, size_t num_bytes) {
 	if(mgr != NULL) {
 		vpipe_bid_tp bipipe = g_hash_table_lookup(mgr->bipipes, &fd);
 		return vpipe_bid_read(bipipe, fd, dst, num_bytes);
@@ -279,7 +280,7 @@ ssize_t vpipe_read(vpipe_mgr_tp mgr, vpipe_id fd, void* dst, size_t num_bytes) {
 	return VPIPE_IO_ERROR;
 }
 
-ssize_t vpipe_write(vpipe_mgr_tp mgr, vpipe_id fd, const void* src, size_t num_bytes) {
+ssize_t vpipe_write(vpipe_mgr_tp mgr, vpipe_id fd, const gpointer src, size_t num_bytes) {
 	if(mgr != NULL) {
 		vpipe_bid_tp bipipe = g_hash_table_lookup(mgr->bipipes, &fd);
 		return vpipe_bid_write(bipipe, fd, src, num_bytes);
@@ -304,7 +305,7 @@ enum vpipe_status vpipe_stat(vpipe_mgr_tp mgr, vpipe_id fd) {
 		if(vp != NULL) {
 			/* since the pipe exists, we know this fd hasn't closed yet. so it
 			 * can still read. but we need to check that the other end didn't
-			 * close, closing our write end and forcing us into readonly mode.
+			 * close, closing our write end and forcing us ginto readonly mode.
 			 */
 			vpipe_unid_tp writerpipe = NULL;
 

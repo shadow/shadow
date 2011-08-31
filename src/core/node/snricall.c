@@ -20,6 +20,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <setjmp.h>
 #include <string.h>
 
@@ -36,9 +37,9 @@
 #include "sysconfig.h"
 #include "vevent_mgr.h"
 
-static int snricall_getip(va_list va) {
+static gint snricall_getip(va_list va) {
 	va_list vac;
-	int rv;
+	gint rv;
 	in_addr_t * ip_addr;
 
 	va_copy(vac, va);
@@ -56,25 +57,25 @@ static int snricall_getip(va_list va) {
 
 /**
  * creates a timer
- * unsigned int	- number of milliseconds from now the timer should expire
- * void (*t)(int timerid) - timer callback - function called when timer expires
- * void *		- timer callback argument
+ * guint	- number of milliseconds from now the timer should expire
+ * void (*t)(gint timerid) - timer callback - function called when timer expires
+ * gpointer 		- timer callback argument
  *
- * int* 		- output/timer identifier
+ * gint* 		- output/timer identifier
  */
-static int snricall_create_timer(va_list va) {
-	int rv;
-	int *timer_id_p, timer_id;
-	unsigned int delay;
-	void * cb_arg;
+static gint snricall_create_timer(va_list va) {
+	gint rv;
+	gint *timer_id_p, timer_id;
+	guint delay;
+	gpointer cb_arg;
 	dtimer_ontimer_cb_fp cb;
 
 	va_list vac;
 	va_copy(vac, va);
-	delay = va_arg(vac, unsigned int);
+	delay = va_arg(vac, guint);
 	cb = va_arg(vac,dtimer_ontimer_cb_fp);
-	cb_arg = va_arg(vac,void*);
-	timer_id_p = va_arg(vac, int*);
+	cb_arg = va_arg(vac,gpointer );
+	timer_id_p = va_arg(vac, gint*);
 	va_end(vac);
 
 	timer_id = dtimer_create_timer(global_sim_context.sim_worker->timer_mgr, global_sim_context.sim_worker->current_time, global_sim_context.current_context, delay, cb, cb_arg);
@@ -88,12 +89,12 @@ static int snricall_create_timer(va_list va) {
 	return rv;
 }
 
-static int snricall_destroy_timer(va_list va) {
-	int timer_id;
+static gint snricall_destroy_timer(va_list va) {
+	gint timer_id;
 
 	va_list vac;
 	va_copy(vac, va);
-	timer_id = va_arg(vac, int);
+	timer_id = va_arg(vac, gint);
 	va_end(vac);
 
 	dtimer_destroy_timer(global_sim_context.sim_worker->timer_mgr, global_sim_context.current_context, timer_id);
@@ -101,7 +102,7 @@ static int snricall_destroy_timer(va_list va) {
 	return SNRICALL_SUCCESS;
 }
 
-static int snricall_exit(va_list va) {
+static gint snricall_exit(va_list va) {
 	if(global_sim_context.exit_usable) {
 		sim_worker_destroy_node(global_sim_context.sim_worker, global_sim_context.current_context);
 		global_sim_context.current_context = NULL;
@@ -112,8 +113,8 @@ static int snricall_exit(va_list va) {
 	return SNRICALL_SUCCESS;
 }
 
-static int snricall_gettime(va_list va) {
-	int rv;
+static gint snricall_gettime(va_list va) {
+	gint rv;
 	struct timeval * tv;
 	va_list vac;
 
@@ -125,7 +126,7 @@ static int snricall_gettime(va_list va) {
 		tv->tv_sec = global_sim_context.sim_worker->current_time / 1000;
 		tv->tv_usec = (global_sim_context.sim_worker->current_time % 1000) * 1000;
 
-		if(sysconfig_get_int("use_wallclock_startup_time_offset")) {
+		if(sysconfig_get_gint("use_wallclock_startup_time_offset")) {
 			tv->tv_sec += global_sim_context.sim_worker->wall_time_at_startup.tv_sec;
 			ptime_t usec = tv->tv_usec + (global_sim_context.sim_worker->wall_time_at_startup.tv_nsec / 1000);
 
@@ -141,41 +142,41 @@ static int snricall_gettime(va_list va) {
 	return rv;
 }
 
-static int snricall_log(va_list va) {
-	int log_level;
+static gint snricall_log(va_list va) {
+	gint log_level;
 	va_list vac;
-	char* format;
+	gchar* format;
 
 	va_copy(vac, va);
-	log_level = va_arg(vac, int);
-	format = va_arg(vac, char *);
+	log_level = va_arg(vac, gint);
+	format = va_arg(vac, gchar *);
 	dlogf_main(log_level, CONTEXT_MODULE, format, vac);
 	va_end(vac);
 
 	return SNRICALL_SUCCESS;
 }
 
-static int snricall_log_binary(va_list va) {
-	int log_level;
-	char * data;
-	unsigned int data_length;
+static gint snricall_log_binary(va_list va) {
+	gint log_level;
+	gchar * data;
+	guint data_length;
 	va_list vac;
-	char* status_prefix;
+	gchar* status_prefix;
 
 	va_copy(vac, va);
-	log_level = va_arg(vac, int);
-	data = va_arg(vac, char *);
-	data_length = va_arg(vac, unsigned int);
+	log_level = va_arg(vac, gint);
+	data = va_arg(vac, gchar *);
+	data_length = va_arg(vac, guint);
 	va_end(vac);
 
 	status_prefix = dlog_get_status_prefix("module");
-	int free_stat = 1;
+	gint free_stat = 1;
 	if(status_prefix == NULL) {
 		status_prefix = "module";
 		free_stat = 0;
 	}
-	int status_len = strlen(status_prefix);
-	char logdata[data_length + status_len];
+	gint status_len = strlen(status_prefix);
+	gchar logdata[data_length + status_len];
 	memcpy(logdata, status_prefix, status_len);
 	memcpy(logdata + status_len, data, data_length);
 
@@ -191,9 +192,9 @@ static int snricall_log_binary(va_list va) {
 	return SNRICALL_SUCCESS;
 }
 
-static int snricall_register_globals(va_list va) {
+static gint snricall_register_globals(va_list va) {
 	va_list vac;
-	int rv;
+	gint rv;
 
 	va_copy(vac, va);
 	if(global_sim_context.static_context) {
@@ -207,15 +208,15 @@ static int snricall_register_globals(va_list va) {
 	return rv;
 }
 
-static int snricall_resolve_name(va_list va) {
+static gint snricall_resolve_name(va_list va) {
 	/* see snricall_codes.h for explanation of expected params */
-	int rv;
-	char* name;
+	gint rv;
+	gchar* name;
 	in_addr_t* addr_out;
 	va_list vac;
 
 	va_copy(vac, va);
-	name = va_arg(vac, char*);
+	name = va_arg(vac, gchar*);
 	addr_out = va_arg(vac, in_addr_t*);
 	va_end(vac);
 
@@ -231,22 +232,22 @@ static int snricall_resolve_name(va_list va) {
 	return rv;
 }
 
-static int snricall_resolve_addr(va_list va) {
+static gint snricall_resolve_addr(va_list va) {
 	/* see snricall_codes.h for explanation of expected params */
-	int rv;
+	gint rv;
 	in_addr_t addr;
-	char* name_out;
-	int name_out_len;
+	gchar* name_out;
+	gint name_out_len;
 	va_list vac;
 
 	va_copy(vac, va);
 	addr = va_arg(vac, in_addr_t);
-	name_out = va_arg(vac, char*);
-	name_out_len = va_arg(vac, int);
+	name_out = va_arg(vac, gchar*);
+	name_out_len = va_arg(vac, gint);
 	va_end(vac);
 
 	/* do lookup */
-	char* name = resolver_resolve_byaddr(global_sim_context.sim_worker->resolver, addr);
+	gchar* name = resolver_resolve_byaddr(global_sim_context.sim_worker->resolver, addr);
 	if(name != NULL && name_out_len > strlen(name)) {
 		strncpy(name_out, name, name_out_len);
 		rv = SNRICALL_SUCCESS;
@@ -257,15 +258,15 @@ static int snricall_resolve_addr(va_list va) {
 	return rv;
 }
 
-static int snricall_resolve_minbw(va_list va) {
+static gint snricall_resolve_minbw(va_list va) {
 	/* see snricall_codes.h for explanation of expected params */
 	in_addr_t addr;
-	unsigned int* bw_KBps_out;
+	guint* bw_KBps_out;
 	va_list vac;
 
 	va_copy(vac, va);
 	addr = va_arg(vac, in_addr_t);
-	bw_KBps_out = va_arg(vac, unsigned int*);
+	bw_KBps_out = va_arg(vac, guint*);
 	va_end(vac);
 
 	/* do lookup */
@@ -274,16 +275,16 @@ static int snricall_resolve_minbw(va_list va) {
 	return SNRICALL_SUCCESS;
 }
 
-static int snricall_socket_is_readable(va_list va) {
+static gint snricall_socket_is_readable(va_list va) {
 	/* see snricall_codes.h for explanation of expected params */
-	int rv;
-	int sockd;
-	int* bool_out;
+	gint rv;
+	gint sockd;
+	gint* bool_out;
 	va_list vac;
 
 	va_copy(vac, va);
-	sockd = va_arg(vac, int);
-	bool_out = va_arg(vac, int*);
+	sockd = va_arg(vac, gint);
+	bool_out = va_arg(vac, gint*);
 	va_end(vac);
 
 	vsocket_tp sock = vsocket_mgr_get_socket(global_sim_context.current_context->vsocket_mgr, sockd);
@@ -297,16 +298,16 @@ static int snricall_socket_is_readable(va_list va) {
 	return rv;
 }
 
-static int snricall_socket_is_writable(va_list va) {
+static gint snricall_socket_is_writable(va_list va) {
 	/* see snricall_codes.h for explanation of expected params */
-	int rv;
-	int sockd;
-	int* bool_out;
+	gint rv;
+	gint sockd;
+	gint* bool_out;
 	va_list vac;
 
 	va_copy(vac, va);
-	sockd = va_arg(vac, int);
-	bool_out = va_arg(vac, int*);
+	sockd = va_arg(vac, gint);
+	bool_out = va_arg(vac, gint*);
 	va_end(vac);
 
 	vsocket_tp sock = vsocket_mgr_get_socket(global_sim_context.current_context->vsocket_mgr, sockd);
@@ -320,14 +321,14 @@ static int snricall_socket_is_writable(va_list va) {
 	return rv;
 }
 
-static int snricall_set_loopexit_fn(va_list va) {
+static gint snricall_set_loopexit_fn(va_list va) {
 	/* see snricall_codes.h for explanation of expected params */
-	int rv;
+	gint rv;
 	vevent_mgr_timer_callback_fp fn;
 	va_list vac;
 
 	va_copy(vac, va);
-	fn = (vevent_mgr_timer_callback_fp) va_arg(vac, void*);
+	fn = (vevent_mgr_timer_callback_fp) va_arg(vac, gpointer );
 	va_end(vac);
 
 	vsocket_mgr_tp mgr = global_sim_context.current_context->vsocket_mgr;
@@ -341,9 +342,9 @@ static int snricall_set_loopexit_fn(va_list va) {
 	return rv;
 }
 
-int snricall(int call_code, ...) {
+gint snricall(gint call_code, ...) {
 	va_list va;
-	int rv = 0;
+	gint rv = 0;
 
 	va_start(va, call_code);
 	switch(call_code) {

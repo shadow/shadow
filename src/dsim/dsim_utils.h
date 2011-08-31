@@ -23,6 +23,7 @@
 #ifndef _dsim_utils_h
 #define _dsim_utils_h
 
+#include <glib.h>
 #include <sys/time.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -35,7 +36,7 @@
 /**
  * Returns the type of a named variable.
  */
-unsigned char dsim_get_vartype(char *name);
+guchar dsim_get_vartype(gchar *name);
 
 #define DT_NONE			0
 
@@ -59,9 +60,9 @@ enum dsim_vartype {
 
 
 typedef struct dsim_vartracker_var_t {
-	char varname[DSIM_VARTRACKER_MAXVARLEN];
-	char freeable;
-	void * data;
+	gchar varname[DSIM_VARTRACKER_MAXVARLEN];
+	gchar freeable;
+	gpointer data;
 	enum dsim_vartype data_type;
 }dsim_vartracker_var_t,*dsim_vartracker_var_tp;
 
@@ -75,26 +76,26 @@ typedef struct dsim_t {
 } dsim_t, *dsim_tp;
 
 typedef struct delement_t {
-	void * data;
-	unsigned char DTYPE;
+	gpointer data;
+	guchar DTYPE;
 
 	struct delement_t* next;
 } delement_t, *delement_tp;
 
 typedef struct operation_arg_t {
 	union {
-		double double_val;
-		char * string_val;
+		gdouble gdouble_val;
+		gchar * string_val;
 		dsim_vartracker_var_tp var_val;
-		void * voidptr_val;
+		gpointer voidptr_val;
 	} v;
-	unsigned char DTYPE;
+	guchar DTYPE;
 }operation_arg_t, *operation_arg_tp;
 
 typedef struct operation_t {
 	enum operation_type type;
 	dsim_vartracker_var_tp retval;
-	int num_arguments;
+	gint num_arguments;
 	ptime_t target_time;
 	operation_arg_t arguments[];
 } operation_t, *operation_tp;
@@ -105,7 +106,7 @@ extern dsim_tp global_current_dsim;
  * Creates a dsim_t object based on the given DSIM file. Returns NULL
  * on errors
  */
-dsim_tp dsim_create (char * dsim_file);
+dsim_tp dsim_create (gchar * dsim_file);
 
 /**
  * Returns the next time an operation occurs on the given dsim object.
@@ -115,24 +116,24 @@ ptime_t dsim_get_nexttime(dsim_tp dsim);
 /**
  * Returns the next soonest operation from the DSIM
  */
-operation_tp dsim_get_nextevent(dsim_tp dsim, ptime_t * time, char removal);
+operation_tp dsim_get_nextevent(dsim_tp dsim, ptime_t * time, gchar removal);
 
 /**
- * For Yacc parsing.. converts the delement_tp linked list into the internal format used by the
+ * For Yacc parsing.. converts the delement_tp linked list ginto the ginternal format used by the
  * dsim_t object.
  */
-int dsim_finalize_operations(dsim_tp dsim, delement_tp de_ops, ptime_t tv);
+gint dsim_finalize_operations(dsim_tp dsim, delement_tp de_ops, ptime_t tv);
 
 /**
  * Creates an operation for the given call name and linked list of arguments
  */
-operation_tp dsim_create_operation(char * fname,delement_tp args,dsim_vartracker_var_tp retval);
+operation_tp dsim_create_operation(gchar * fname,delement_tp args,dsim_vartracker_var_tp retval);
 void dsim_destroy_operation(operation_tp op);
 /**
- * Constructs an argument list into the output argument out_args based on the
+ * Constructs an argument list ginto the output argument out_args based on the
  * linked list in_args
  */
-int dsim_construct_arglist(char * fmt, operation_arg_tp out_args, delement_tp in_args);
+gint dsim_construct_arglist(gchar * fmt, operation_arg_tp out_args, delement_tp in_args);
 
 /**
  * Destroys an argument list in the linkedlist form
@@ -147,17 +148,17 @@ void dsim_destroy(dsim_tp dsim);
 /**
  * Creates a variable in the vartracker
  */
-dsim_vartracker_var_tp dsim_vartracker_createvar(dsim_vartracker_tp vt, char * name, void * value);
+dsim_vartracker_var_tp dsim_vartracker_createvar(dsim_vartracker_tp vt, gchar * name, gpointer value);
 
 /**
  * Searches for a variable in the vartracker
  */
-dsim_vartracker_var_tp dsim_vartracker_findvar(dsim_vartracker_tp vt, char * name) ;
+dsim_vartracker_var_tp dsim_vartracker_findvar(dsim_vartracker_tp vt, gchar * name) ;
 
 /**
  * Encodes a variable name for hashing
  */
-int dsim_vartracker_nameencode(char * name);
+gint dsim_vartracker_nameencode(gchar * name);
 
 /**
  * Destroys a vartracker
@@ -170,8 +171,8 @@ void dsim_vartracker_destroy(dsim_vartracker_tp vt) ;
 dsim_vartracker_tp dsim_vartracker_create(void);
 
 
-extern int yyparse(void);
-extern int yyerror(char* msg,...);
-extern int yylex(void);
+extern gint yyparse(void);
+extern gint yyerror(gchar* msg,...);
+extern gint yylex(void);
 
 #endif

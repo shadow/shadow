@@ -20,15 +20,16 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include "netconst.h"
 #include "sysconfig.h"
 #include "process.h"
 
 /* Processes the communications between this DVN and some controller connection */
-int dvn_controller_process_msg (dvninstance_tp dvn, int command, nbdf_tp nb) {
+gint dvn_controller_process_msg (dvninstance_tp dvn, gint command, nbdf_tp nb) {
 	switch(command) {
 //		case NETCTL_CMD_START: {
-//			char * dsim;
+//			gchar * dsim;
 //
 //			dlogf(LOG_INFO, "Master: Controller socket issued simulation start command. Loading DSIM and starting simulation.\n");
 //
@@ -64,7 +65,7 @@ int dvn_controller_process_msg (dvninstance_tp dvn, int command, nbdf_tp nb) {
 //			break;
 //		}
 //		case NETCTL_CMD_CONNECT:{
-//			char * host; int port;
+//			gchar * host; gint port;
 //			socket_tp new_socket;
 //
 //			nbdf_read(nb, "Si",&host,&port);
@@ -76,7 +77,7 @@ int dvn_controller_process_msg (dvninstance_tp dvn, int command, nbdf_tp nb) {
 //				dlogf(LOG_ERR, "Master: Unable to connect to controller-requested host '%s' on port %i.\n", host, port);
 //			} else {
 //				nbdf_tp nb_boot, nb_eip;
-//				int new_worker_id = inst->workers_numactive++;
+//				gint new_worker_id = inst->workers_numactive++;
 //
 //				dlogf(LOG_INFO, "Master: Connected to controller-requested host '%s' on port %i. Socket %i\n", host, port, socket_getfd(new_socket));
 //
@@ -115,7 +116,7 @@ int dvn_controller_process_msg (dvninstance_tp dvn, int command, nbdf_tp nb) {
 		case DVN_CFRAME_CONNECT:
 			break;
 		case DVN_CFRAME_CONFIG: {
-			char * config;
+			gchar * config;
 
 			nbdf_read(nb, "S",&config);
 			if(!config)
@@ -130,7 +131,7 @@ int dvn_controller_process_msg (dvninstance_tp dvn, int command, nbdf_tp nb) {
 		}
 
 		case DVN_CFRAME_GETCONFIG: {
-			/*char * config = sysconfig_export_config();
+			/*gchar * config = sysconfig_export_config();
 			nbdf_tp nb = nbdf_
 
 			free(config);*/
@@ -151,11 +152,11 @@ int dvn_controller_process_msg (dvninstance_tp dvn, int command, nbdf_tp nb) {
 }
 
 /* Process communications between this DVN and a controller */
-int dvn_controller_process (dvninstance_tp dvn, socket_tp sock) {
-	int rv = 1;
+gint dvn_controller_process (dvninstance_tp dvn, socket_tp sock) {
+	gint rv = 1;
 	do {
 		nbdf_tp nb = NULL, frame_nb = NULL;
-		int prefix, command;
+		gint prefix, command;
 
 		if(nbdf_frame_avail(sock)) {
 			nb = nbdf_import_frame(sock);

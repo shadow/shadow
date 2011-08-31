@@ -20,6 +20,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <stdint.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -33,9 +34,9 @@
 static void shmcabinet_mgr_lazy_create(shmcabinet_mgr_tp smc_mgr);
 static void shmcabinet_mgr_shm_item_destroy(shm_item_tp shm_item);
 static void shmcabinet_mgr_shm_destroy(shm_tp shm);
-static uint32_t shmcabinet_mgr_allocatable_slots(shmcabinet_mgr_tp smc_mgr);
+static guint32 shmcabinet_mgr_allocatable_slots(shmcabinet_mgr_tp smc_mgr);
 
-shmcabinet_mgr_tp shmcabinet_mgr_create(size_t payload_size, uint32_t payloads_per_cabinet, uint32_t unmap_threshold,
+shmcabinet_mgr_tp shmcabinet_mgr_create(size_t payload_size, guint32 payloads_per_cabinet, guint32 unmap_threshold,
 		enum rwlock_mgr_type cabinet_lock_type, enum rwlock_mgr_type slot_lock_type) {
 	shmcabinet_mgr_tp smc_mgr = malloc(sizeof(shmcabinet_mgr_t));
 
@@ -90,7 +91,7 @@ void shmcabinet_mgr_destroy(shmcabinet_mgr_tp smc_mgr) {
 	}
 }
 
-void shmcabinet_mgr_shm_item_destroy_cb(void* value, int key) {
+void shmcabinet_mgr_shm_item_destroy_cb(gpointer value, gint key) {
 	shmcabinet_mgr_shm_item_destroy((shm_item_tp) value);
 }
 
@@ -104,7 +105,7 @@ static void shmcabinet_mgr_shm_item_destroy(shm_item_tp shm_item) {
 	}
 }
 
-void shmcabinet_mgr_shm_destroy_cb(void* value, int key) {
+void shmcabinet_mgr_shm_destroy_cb(gpointer value, gint key) {
 	shmcabinet_mgr_shm_destroy((shm_tp) value);
 }
 
@@ -149,7 +150,7 @@ shm_item_tp shmcabinet_mgr_alloc(shmcabinet_mgr_tp smc_mgr) {
 
 				/* keep track of the new shm */
 				g_queue_push_tail(smc_mgr->shm_owned_available, shm);
-				g_hash_table_insert(smc_mgr->shm_owned, int_key(shm->info.cabinet_id), shm);
+				g_hash_table_insert(smc_mgr->shm_owned, gint_key(shm->info.cabinet_id), shm);
 			} else {
 				dlogf(LOG_ERR, "shmcabinet_mgr_alloc: problem creating new shared memory cabinet\n");
 				return NULL;
@@ -160,7 +161,7 @@ shm_item_tp shmcabinet_mgr_alloc(shmcabinet_mgr_tp smc_mgr) {
 		}
 
 		/* make sure we can get a payload spot */
-		void* payload = shmcabinet_allocate(shm->cabinet);
+		gpointer payload = shmcabinet_allocate(shm->cabinet);
 		if(payload == NULL) {
 			dlogf(LOG_ERR, "shmcabinet_mgr_alloc: problem allocating payload in cabinet\n");
 			return NULL;
@@ -185,14 +186,14 @@ shm_item_tp shmcabinet_mgr_alloc(shmcabinet_mgr_tp smc_mgr) {
 	return NULL;
 }
 
-shm_item_tp shmcabinet_mgr_open(shmcabinet_mgr_tp smc_mgr, shmcabinet_info_tp shm_info, uint32_t slot_id) {
+shm_item_tp shmcabinet_mgr_open(shmcabinet_mgr_tp smc_mgr, shmcabinet_info_tp shm_info, guint32 slot_id) {
 	if(smc_mgr != NULL) {
 		/* we are using shm, make sure our data structs exist */
 		shmcabinet_mgr_lazy_create(smc_mgr);
 
-                char buf[24];
+                gchar buf[24];
                 sprintf(buf,"%d%d\n", shm_info->process_id,  shm_info->cabinet_id);
-		unsigned int key = g_str_hash(buf);
+		guint key = g_str_hash(buf);
 
 		/* check if we are already connected to this shm */
 		shm_tp shm = g_hash_table_lookup(smc_mgr->shm_unowned, &key);
@@ -209,7 +210,7 @@ shm_item_tp shmcabinet_mgr_open(shmcabinet_mgr_tp smc_mgr, shmcabinet_info_tp sh
 				shm->owned = 0;
 
 				/* keep track of the mapped shm */
-				g_hash_table_insert(smc_mgr->shm_unowned, int_key(key), shm);
+				g_hash_table_insert(smc_mgr->shm_unowned, gint_key(key), shm);
 			} else {
 				dlogf(LOG_ERR, "shmcabinet_mgr_open: problem mapping shared memory cabinet\n");
 				return NULL;
@@ -220,7 +221,7 @@ shm_item_tp shmcabinet_mgr_open(shmcabinet_mgr_tp smc_mgr, shmcabinet_info_tp sh
 		}
 
 		/* make sure we can open the payload spot */
-		void* payload = shmcabinet_open(shm->cabinet, slot_id);
+		gpointer payload = shmcabinet_open(shm->cabinet, slot_id);
 		if(payload == NULL) {
 			dlogf(LOG_ERR, "shmcabinet_mgr_open: problem allocating payload in cabinet\n");
 			return NULL;
@@ -261,7 +262,7 @@ void shmcabinet_mgr_free(shmcabinet_mgr_tp smc_mgr, shm_item_tp item) {
 
 			if(shm->references == 0) {
 				/* unmap the cabinet if we stay above the threshold */
-				uint32_t avail_payloads = shmcabinet_mgr_allocatable_slots(smc_mgr);
+				guint32 avail_payloads = shmcabinet_mgr_allocatable_slots(smc_mgr);
 				if(avail_payloads - smc_mgr->payloads_per_cabinet >= smc_mgr->min_payloads_threshold) {
 					if(shmcabinet_unmap(shm->cabinet) == SHMCABINET_SUCCESS) {
 						g_queue_remove(smc_mgr->shm_owned_available, shm);
@@ -275,9 +276,9 @@ void shmcabinet_mgr_free(shmcabinet_mgr_tp smc_mgr, shm_item_tp item) {
 		} else {
 			/* if no references remain, unmap immediately */
 			if(shm->references == 0) {
-                                char buf[24];
+                                gchar buf[24];
                                 sprintf(buf,"%d%d\n", shm->info.process_id,  shm->info.cabinet_id);
-                                unsigned int key = g_str_hash(buf);
+                                guint key = g_str_hash(buf);
 				if(shmcabinet_unmap(shm->cabinet) == SHMCABINET_SUCCESS) {
 					g_hash_table_remove(smc_mgr->shm_unowned, &key);
 					free(shm);
@@ -291,10 +292,10 @@ void shmcabinet_mgr_free(shmcabinet_mgr_tp smc_mgr, shm_item_tp item) {
 	}
 }
 
-static uint32_t shmcabinet_mgr_allocatable_slots(shmcabinet_mgr_tp smc_mgr) {
+static guint32 shmcabinet_mgr_allocatable_slots(shmcabinet_mgr_tp smc_mgr) {
 	if(smc_mgr != NULL) {
 		/* iterate the avail list and count the free slots in each cabinet */
-		uint32_t allocatable = 0;
+		guint32 allocatable = 0;
 
 		GList* iter = g_queue_peek_head_link(smc_mgr->shm_owned_available);
 		while(iter != NULL) {
@@ -310,7 +311,7 @@ static uint32_t shmcabinet_mgr_allocatable_slots(shmcabinet_mgr_tp smc_mgr) {
 	return 0;
 }
 
-uint8_t shmcabinet_mgr_readlock(shm_item_tp item) {
+guint8 shmcabinet_mgr_readlock(shm_item_tp item) {
 	if(item != NULL && item->shm != NULL) {
 		/* avoid deadlocks: no read-locks allowed if we already hold a write-lock */
 		if(item->num_writelocks < 1) {
@@ -325,7 +326,7 @@ uint8_t shmcabinet_mgr_readlock(shm_item_tp item) {
 	return 0;
 }
 
-uint8_t shmcabinet_mgr_readunlock(shm_item_tp item) {
+guint8 shmcabinet_mgr_readunlock(shm_item_tp item) {
 	if(item != NULL && item->shm != NULL) {
 		/* dont unlock if we dont have a lock */
 		if(item->num_readlocks > 0) {
@@ -340,7 +341,7 @@ uint8_t shmcabinet_mgr_readunlock(shm_item_tp item) {
 	return 0;
 }
 
-uint8_t shmcabinet_mgr_writelock(shm_item_tp item) {
+guint8 shmcabinet_mgr_writelock(shm_item_tp item) {
 	if(item != NULL && item->shm != NULL) {
 		/* avoid deadlocks: no write-locks allowed if we already hold a read-lock */
 		if(item->num_readlocks < 1) {
@@ -355,7 +356,7 @@ uint8_t shmcabinet_mgr_writelock(shm_item_tp item) {
 	return 0;
 }
 
-uint8_t shmcabinet_mgr_writeunlock(shm_item_tp item) {
+guint8 shmcabinet_mgr_writeunlock(shm_item_tp item) {
 	if(item != NULL && item->shm != NULL) {
 		/* dont unlock if we dont have a lock */
 		if(item->num_writelocks > 0) {

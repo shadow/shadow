@@ -19,6 +19,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <stdlib.h>
 #include <assert.h>
 #include <glib-2.0/glib.h>
@@ -35,15 +36,15 @@
 #include "sim.h"
 #include "context.h"
 
-int vevent_mgr_timer_create(vevent_mgr_tp mgr, int milli_delay, vevent_mgr_timer_callback_fp callback_function, void * cb_arg) {
+gint vevent_mgr_timer_create(vevent_mgr_tp mgr, gint milli_delay, vevent_mgr_timer_callback_fp callback_function, gpointer cb_arg) {
 	assert(global_sim_context.sim_worker);
 	return dtimer_create_timer(global_sim_context.sim_worker->timer_mgr,
 			global_sim_context.sim_worker->current_time,
 			mgr->provider, milli_delay, callback_function, cb_arg);
 }
 
-/* internal storage must be allocated by caller. the caller should
- * register the struct that this pointer points to with shadow. */
+/* ginternal storage must be allocated by caller. the caller should
+ * register the struct that this poginter pogints to with shadow. */
 static void vevent_mgr_init(context_provider_tp p, vevent_mgr_tp mgr) {
 	/* every node needs to init its data */
 	if(mgr != NULL) {
@@ -85,14 +86,14 @@ void vevent_mgr_destroy(vevent_mgr_tp mgr) {
 	}
 }
 
-//static void vevent_mgr_add_wakeup_cb(void* val, int key, void* param) {
+//static void vevent_mgr_add_wakeup_cb(gpointer val, gint key, gpointer param) {
 //	vevent_socket_tp vsd = val;
 //	list_tp wake = param;
 //	if(vsd != NULL && wake != NULL) {
-//		/* XXX storing ints in pointers is fragile */
+//		/* XXX storing gints in poginters is fragile */
 //		long l = (long) vsd->sd;
-//		/* our pointer will be at least 32 bits, so can hold the int sd */
-//		void* p = (void*) l;
+//		/* our poginter will be at least 32 bits, so can hold the gint sd */
+//		gpointer p = (gpointer ) l;
 //		list_push_back(wake, p);
 //	}
 //}
@@ -117,7 +118,7 @@ void vevent_mgr_destroy(vevent_mgr_tp mgr) {
 //
 //				while(list_iterator_hasnext(li)) {
 //					long l = (long)list_iterator_getnext(li);
-//					int sd = (int) l;
+//					gint sd = (gint) l;
 //					vevent_mgr_notify_can_read(mgr, sd);
 //					vevent_mgr_notify_can_write(mgr, sd);
 //				}
@@ -131,7 +132,7 @@ void vevent_mgr_destroy(vevent_mgr_tp mgr) {
 //	}
 //}
 
-static void vevent_mgr_print_all_cb(int key, void* val, void* param) {
+static void vevent_mgr_prgint_all_cb(gint key, gpointer val, gpointer param) {
 	vevent_socket_tp vsd = val;
 	vevent_mgr_tp mgr = param;
 	if(vsd != NULL && mgr != NULL) {
@@ -147,28 +148,28 @@ static void vevent_mgr_print_all_cb(int key, void* val, void* param) {
 	}
 }
 
-void vevent_mgr_print_stat(vevent_mgr_tp mgr, uint16_t sockd) {
+void vevent_mgr_prgint_stat(vevent_mgr_tp mgr, guint16 sockd) {
 	if(mgr != NULL) {
 		/* go through every base we know about */
 		GList *bases = g_queue_peek_head_link(mgr->event_bases);
 
-		debugf("======Printing all waiting registered events for socket %u======\n", sockd);
+		debugf("======Prginting all waiting registered events for socket %u======\n", sockd);
 		while(bases != NULL) {
 			event_base_tp eb = bases->data;
 			vevent_base_tp veb = vevent_mgr_convert_base(mgr, eb);
 			
 			if(veb != NULL) {
 				vevent_socket_tp vsd = g_hash_table_lookup(veb->sockets_by_sd, &sockd);
-				vevent_mgr_print_all_cb(sockd, vsd, mgr);
+				vevent_mgr_prgint_all_cb(sockd, vsd, mgr);
 			}
 
             bases = bases->next;
 		}
-		debugf("======Done printing======\n");
+		debugf("======Done prginting======\n");
 	}
 }
 
-void vevent_mgr_print_all(vevent_mgr_tp mgr) {
+void vevent_mgr_prgint_all(vevent_mgr_tp mgr) {
 	if(mgr != NULL) {
 		/* go through every base we know about */
 		GList *bases = g_queue_peek_head_link(mgr->event_bases);
@@ -178,9 +179,9 @@ void vevent_mgr_print_all(vevent_mgr_tp mgr) {
 			vevent_base_tp veb = vevent_mgr_convert_base(mgr, eb);
 
 			if(veb != NULL) {
-				debugf("======Printing all waiting registered events======\n");
-				g_hash_table_foreach(veb->sockets_by_sd, (GHFunc)vevent_mgr_print_all_cb, mgr);
-				debugf("======Done printing======\n");
+				debugf("======Prginting all waiting registered events======\n");
+				g_hash_table_foreach(veb->sockets_by_sd, (GHFunc)vevent_mgr_prgint_all_cb, mgr);
+				debugf("======Done prginting======\n");
 			}
 
             bases = bases->next;
@@ -188,17 +189,17 @@ void vevent_mgr_print_all(vevent_mgr_tp mgr) {
 	}
 }
 
-void vevent_mgr_notify_can_read(vevent_mgr_tp mgr, int sockfd) {
+void vevent_mgr_notify_can_read(vevent_mgr_tp mgr, gint sockfd) {
 	debugf("vevent_mgr_notify_can_read: ready to read from fd %d\n", sockfd);
 	vevent_notify(mgr, sockfd, EV_READ);
 }
 
-void vevent_mgr_notify_can_write(vevent_mgr_tp mgr, int sockfd) {
+void vevent_mgr_notify_can_write(vevent_mgr_tp mgr, gint sockfd) {
 	debugf("vevent_mgr_notify_can_write: ready to write to fd %d\n", sockfd);
 	vevent_notify(mgr, sockfd, EV_WRITE);
 }
 
-void vevent_mgr_notify_signal_received(vevent_mgr_tp mgr, int signal) {
+void vevent_mgr_notify_signal_received(vevent_mgr_tp mgr, gint signal) {
 	debugf("vevent_mgr_notify_signal_received: received signal %d.\n", signal);
 	vevent_notify(mgr, signal, EV_SIGNAL);
 }
@@ -206,15 +207,15 @@ void vevent_mgr_notify_signal_received(vevent_mgr_tp mgr, int signal) {
 void vevent_mgr_track_base(vevent_mgr_tp mgr, event_base_tp eb, vevent_base_tp veb) {
 	if(eb != NULL) {
 		/* TODO can we avoid the hash? */
-		unsigned int key = g_direct_hash(eb);
-		g_hash_table_insert(mgr->base_conversion, int_key(key), veb);
+		guint key = g_direct_hash(eb);
+		g_hash_table_insert(mgr->base_conversion, gint_key(key), veb);
 	}
 }
 
 void vevent_mgr_untrack_base(vevent_mgr_tp mgr, event_base_tp eb) {
 	if(eb != NULL) {
 		/* TODO can we avoid the hash? */
-		unsigned int key = g_direct_hash(eb);
+		guint key = g_direct_hash(eb);
 		g_hash_table_remove(mgr->base_conversion, &key);
 	}
 }
@@ -222,7 +223,7 @@ void vevent_mgr_untrack_base(vevent_mgr_tp mgr, event_base_tp eb) {
 vevent_base_tp vevent_mgr_convert_base(vevent_mgr_tp mgr, event_base_tp eb) {
 	if(eb != NULL) {
 		/* TODO can we avoid the hash? */
-		unsigned int key = g_direct_hash(eb);
+		guint key = g_direct_hash(eb);
 		vevent_base_tp vbase = g_hash_table_lookup(mgr->base_conversion, &key);
 		return vbase;
 	} else {

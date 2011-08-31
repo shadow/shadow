@@ -20,6 +20,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -28,49 +29,49 @@
 #include "snricall_codes.h"
 #include "shd-plugin.h"
 
-int (*_snricall_fpref)(int, ...);
+gint (*_snricall_fpref)(gint, ...);
 
-int snri_gettime(struct timeval *t) {
+gint snri_gettime(struct timeval *t) {
 	return _snricall(SNRICALL_GETTIME, t);
 }
 
-int snri_timer_create(int milli_delay, snri_timer_callback_fp callback_function, void * cb_arg) {
-	int timer_id;
+gint snri_timer_create(gint milli_delay, snri_timer_callback_fp callback_function, gpointer cb_arg) {
+	gint timer_id;
 	if(_snricall(SNRICALL_CREATE_TIMER, milli_delay, callback_function, cb_arg, &timer_id) == SNRICALL_SUCCESS)
 		return timer_id;
 	else
 		return SNRICALL_ERROR;
 }
 
-int snri_timer_destroy(int timer_id) {
+gint snri_timer_destroy(gint timer_id) {
 	return _snricall(SNRICALL_DESTROY_TIMER, timer_id);
 }
 
-int snri_exit() {
+gint snri_exit() {
 	return _snricall(SNRICALL_EXIT);
 }
 
-int snri_log_binary(int level, char * data, int data_size) {
+gint snri_log_binary(gint level, gchar * data, gint data_size) {
 	return _snricall(SNRICALL_LOG_BINARY, level, data, data_size);
 }
 
-int snri_resolve_name(char* name, in_addr_t* addr_out) {
+gint snri_resolve_name(gchar* name, in_addr_t* addr_out) {
 	return _snricall(SNRICALL_RESOLVE_NAME, name, addr_out);
 }
 
-int snri_resolve_addr(in_addr_t addr, char* name_out, int name_out_len) {
+gint snri_resolve_addr(in_addr_t addr, gchar* name_out, gint name_out_len) {
 	return _snricall(SNRICALL_RESOLVE_ADDR, addr, name_out, name_out_len);
 }
 
-int snri_resolve_minbw(in_addr_t addr, unsigned int* bw_KBps_out) {
+gint snri_resolve_minbw(in_addr_t addr, guint* bw_KBps_out) {
 	return _snricall(SNRICALL_RESOLVE_BW, addr, bw_KBps_out);
 }
 
-int snri_getip(in_addr_t* addr_out) {
+gint snri_getip(in_addr_t* addr_out) {
 	return _snricall(SNRICALL_GETIP, addr_out);
 }
 
-int snri_gethostname(char* name_out, int name_out_len) {
+gint snri_gethostname(gchar* name_out, gint name_out_len) {
 	in_addr_t ip;
 	if(snri_getip(&ip) == SNRICALL_ERROR) {
 		return SNRICALL_ERROR;
@@ -79,8 +80,8 @@ int snri_gethostname(char* name_out, int name_out_len) {
 	}
 }
 
-int snri_socket_is_readable(int sockd) {
-	int bool = 0;
+gint snri_socket_is_readable(gint sockd) {
+	gint bool = 0;
 	if(_snricall(SNRICALL_SOCKET_IS_READABLE, sockd, &bool) == SNRICALL_ERROR) {
 		return SNRICALL_ERROR;
 	} else {
@@ -88,8 +89,8 @@ int snri_socket_is_readable(int sockd) {
 	}
 }
 
-int snri_socket_is_writable(int sockd) {
-	int bool = 0;
+gint snri_socket_is_writable(gint sockd) {
+	gint bool = 0;
 	if(_snricall(SNRICALL_SOCKET_IS_WRITABLE, sockd, &bool) == SNRICALL_ERROR) {
 		return SNRICALL_ERROR;
 	} else {
@@ -97,6 +98,6 @@ int snri_socket_is_writable(int sockd) {
 	}
 }
 
-int snri_set_loopexit_fn(snri_timer_callback_fp fn) {
+gint snri_set_loopexit_fn(snri_timer_callback_fp fn) {
 	return _snricall(SNRICALL_SET_LOOPEXIT_FN, fn);
 }

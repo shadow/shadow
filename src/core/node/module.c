@@ -20,6 +20,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <dlfcn.h>
 #include <string.h>
 #include <stdlib.h>
@@ -36,7 +37,7 @@ module_mgr_tp module_mgr_create (void) {
 	return mgr;
 }
 
-static void module_free_cb(void * vmod, int id) {
+static void module_free_cb(gpointer vmod, gint id) {
 	module_tp mod = vmod;
 
 	if(mod)
@@ -87,7 +88,7 @@ void module_destroy_instance(module_instance_tp modinst) {
 }
 
 void module_load_globals(module_instance_tp modinst) {
-	int i, didx=0;
+	gint i, didx=0;
 	module_tp module = modinst->module;
 
 	/* load globals */
@@ -100,7 +101,7 @@ void module_load_globals(module_instance_tp modinst) {
 }
 
 void module_save_globals(module_instance_tp modinst) {
-	int i, didx=0;
+	gint i, didx=0;
 	module_tp module = modinst->module;
 
 	/*save globals */
@@ -110,28 +111,28 @@ void module_save_globals(module_instance_tp modinst) {
 	}
 }
 
-void module_call_instantiate(module_instance_tp modinst, int argc, char* argv[]) {
+void module_call_instantiate(module_instance_tp modinst, gint argc, gchar* argv[]) {
 	(*modinst->module->mod_instantiate)(argc, argv);
 }
 
-void module_call_socket_readable(module_instance_tp modinst, int sockd) {
+void module_call_socket_readable(module_instance_tp modinst, gint sockd) {
 	(*modinst->module->mod_socket_readable)(sockd);
 }
 
-void module_call_socket_writable(module_instance_tp modinst, int sockd) {
+void module_call_socket_writable(module_instance_tp modinst, gint sockd) {
 	(*modinst->module->mod_socket_writable)(sockd);
 }
 
-module_tp module_get_module(module_mgr_tp mgr, int module_id) {
+module_tp module_get_module(module_mgr_tp mgr, gint module_id) {
 	return g_hash_table_lookup(mgr->modules, &module_id);
 }
 
-int module_register_globals( module_tp modinst, va_list va_args ) {
+gint module_register_globals( module_tp modinst, va_list va_args ) {
 	va_list va;
-	unsigned int i, didx=0, total_size=0, num_globals;
+	guint i, didx=0, total_size=0, num_globals;
 
 	va_copy(va, va_args);
-	num_globals = va_arg(va, unsigned int);
+	num_globals = va_arg(va, guint);
 	if(num_globals == 0) {
 		va_end(va);
 		return 0;
@@ -149,8 +150,8 @@ int module_register_globals( module_tp modinst, va_list va_args ) {
 
 	/* create the global var index */
 	for(i=0; i < num_globals; i++) {
-		unsigned int argsize = va_arg(va, unsigned int);
-		void * ref = va_arg(va, void*);
+		guint argsize = va_arg(va, guint);
+		gpointer ref = va_arg(va, gpointer );
 
 		modinst->globals.g_refs[i] = ref;
 		modinst->globals.g_sizes[i] = argsize;
@@ -184,7 +185,7 @@ void module_call_uninit(module_tp modinst) {
 }
 
 void module_destroy(module_tp modinst) {
-	int didx = 0, i;
+	gint didx = 0, i;
 
 	if(!modinst)
 		return;
@@ -207,9 +208,9 @@ void module_destroy(module_tp modinst) {
 	free(modinst);
 }
 
-module_tp module_load(module_mgr_tp mgr, int id, char * module) {
+module_tp module_load(module_mgr_tp mgr, gint id, gchar * module) {
 	module_tp mod = NULL;
-	void * h;
+	gpointer h;
 
 	h = dlopen(module, RTLD_LAZY | RTLD_GLOBAL);
 
@@ -254,7 +255,7 @@ module_tp module_load(module_mgr_tp mgr, int id, char * module) {
 	*mod->mod_snricall_fpmem = &snricall;
 
 	/* track it */
-	g_hash_table_insert(mgr->modules, int_key(mod->id), mod);
+	g_hash_table_insert(mgr->modules, gint_key(mod->id), mod);
 
 	return mod;
 }

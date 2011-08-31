@@ -23,6 +23,7 @@
 #ifndef _modloader_h
 #define _modloader_h
 
+#include <glib.h>
 #include <netinet/in.h>
 #include <stdarg.h>
 #include <glib-2.0/glib.h>
@@ -31,22 +32,22 @@
 
 typedef void (*module_modfunc_init_fp)();
 typedef void (*module_modfunc_uninit_fp)();
-typedef void (*module_modfunc_instantiate_fp)(int, char *[]);
+typedef void (*module_modfunc_instantiate_fp)(gint, gchar *[]);
 typedef void (*module_modfunc_destroy_fp)();
-typedef void (*module_modfunc_socket_readable_fp)(int);
-typedef void (*module_modfunc_socket_writable_fp)(int);
+typedef void (*module_modfunc_socket_readable_fp)(gint);
+typedef void (*module_modfunc_socket_writable_fp)(gint);
 
 typedef struct module_globals_t {
-	void ** g_refs;
-	unsigned int * g_sizes;
-	unsigned char * defaults;
-	unsigned int total_size;
-	unsigned int num_globals;
+	gpointer * g_refs;
+	guint * g_sizes;
+	guchar * defaults;
+	guint total_size;
+	guint num_globals;
 } module_globals_t, *module_globals_tp;
 
 typedef struct module_t {
-	int id;
-	void * handle;
+	gint id;
+	gpointer handle;
 
 	module_globals_t globals;
 
@@ -67,7 +68,7 @@ typedef struct module_mgr_t {
 } * module_mgr_tp;
 
 typedef struct module_instance_t {
-	char * globals;
+	gchar * globals;
 	module_tp module;
 } module_instance_t, *module_instance_tp;
 
@@ -75,22 +76,22 @@ typedef struct module_instance_t {
 /* Creates a module manager with the given callbacks */
 module_mgr_tp module_mgr_create (void);
 
-void module_call_instantiate(module_instance_tp modinst, int argc, char* argv[]);
+void module_call_instantiate(module_instance_tp modinst, gint argc, gchar* argv[]);
 void module_call_init(module_tp modinst);
 void module_call_uninit(module_tp modinst);
 void module_call_destroy(module_instance_tp modinst);
-void module_call_socket_readable(module_instance_tp modinst, int sockd);
-void module_call_socket_writable(module_instance_tp modinst, int sockd);
+void module_call_socket_readable(module_instance_tp modinst, gint sockd);
+void module_call_socket_writable(module_instance_tp modinst, gint sockd);
 
 /* registers a set of globals for usage in a particular DVN module. saves
  * the defaults */
-int module_register_globals( module_tp mod, va_list va_args );
+gint module_register_globals( module_tp mod, va_list va_args );
 
 /* Destroys a module manager */
 void module_mgr_destroy (module_mgr_tp);
 
 /* Loads a module to the given manager */
-module_tp module_load(module_mgr_tp mgr, int id, char * module);
+module_tp module_load(module_mgr_tp mgr, gint id, gchar * module);
 
 void module_destroy(module_tp mod);
 
@@ -102,7 +103,7 @@ void module_load_globals(module_instance_tp modinst);
 
 void module_save_globals(module_instance_tp modinst);
 
-module_tp module_get_module(module_mgr_tp mgr, int module_id);
+module_tp module_get_module(module_mgr_tp mgr, gint module_id);
 
 
 #endif

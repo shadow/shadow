@@ -23,9 +23,9 @@
 #ifndef _rand_h
 #define _rand_h
 
-double dvn_rand_unit();
-unsigned int dvn_rand_fast(unsigned int max);
-unsigned int dvn_rand(unsigned int max);
-void dvn_rand_seed(unsigned int seed);
+gdouble dvn_rand_unit();
+guint dvn_rand_fast(guint max);
+guint dvn_rand(guint max);
+void dvn_rand_seed(guint seed);
 
 #endif

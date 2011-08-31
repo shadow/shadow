@@ -20,6 +20,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <pthread.h>
 #include <errno.h>
 
@@ -27,9 +28,9 @@
 
 /* TODO refactor */
 
-int rwlock_init(rwlock_tp lock, int is_process_shared) {
+gint rwlock_init(rwlock_tp lock, gint is_process_shared) {
 	if(lock != NULL) {
-		int result = 0;
+		gint result = 0;
 		pthread_mutexattr_t mattr;
 		pthread_condattr_t cattr;
 		pthread_mutexattr_t* mattribute = NULL;
@@ -98,9 +99,9 @@ int rwlock_init(rwlock_tp lock, int is_process_shared) {
 	}
 }
 
-int rwlock_destroy(rwlock_tp lock) {
+gint rwlock_destroy(rwlock_tp lock) {
 	if(lock != NULL && lock->valid == RWLOCK_READY) {
-		int result1 = 0, result2 = 0, result3 = 0;
+		gint result1 = 0, result2 = 0, result3 = 0;
 
 		result1 = pthread_mutex_lock(&lock->mutex);
 		if(result1 != 0) {
@@ -138,15 +139,15 @@ int rwlock_destroy(rwlock_tp lock) {
 	}
 }
 
-static void rwlock_read_cleanup(void* parameter) {
+static void rwlock_read_cleanup(gpointer parameter) {
 	rwlock_tp lock = (rwlock_tp) parameter;
 	(lock->readers_waiting)--;
 	pthread_mutex_unlock(&lock->mutex);
 }
 
-int rwlock_readlock(rwlock_tp lock) {
+gint rwlock_readlock(rwlock_tp lock) {
 	if(lock != NULL && lock->valid == RWLOCK_READY) {
-		int result1 = 0, result2 = 0;
+		gint result1 = 0, result2 = 0;
 
 		result1 = pthread_mutex_lock(&lock->mutex);
 		if(result1 != 0) {
@@ -157,7 +158,7 @@ int rwlock_readlock(rwlock_tp lock) {
 		/* we have the mutex, if theres a writer, we have to block */
 		if(lock->writers_active > 0) {
 			(lock->readers_waiting)++;
-			pthread_cleanup_push(&rwlock_read_cleanup, (void*) lock);
+			pthread_cleanup_push(&rwlock_read_cleanup, (gpointer ) lock);
 
 			/* keep waiting until writers are done */
 			while(lock->writers_active > 0) {
@@ -193,9 +194,9 @@ int rwlock_readlock(rwlock_tp lock) {
 	}
 }
 
-int rwlock_readunlock(rwlock_tp lock) {
+gint rwlock_readunlock(rwlock_tp lock) {
 	if(lock != NULL && lock->valid == RWLOCK_READY) {
-		int result1 = 0, result2 = 0;
+		gint result1 = 0, result2 = 0;
 
 		result1 = pthread_mutex_lock(&lock->mutex);
 		if(result1 != 0) {
@@ -228,15 +229,15 @@ int rwlock_readunlock(rwlock_tp lock) {
 	}
 }
 
-static void rwlock_write_cleanup(void* parameter) {
+static void rwlock_write_cleanup(gpointer parameter) {
 	rwlock_tp lock = (rwlock_tp) parameter;
 	(lock->writers_waiting)--;
 	pthread_mutex_unlock(&lock->mutex);
 }
 
-int rwlock_writelock(rwlock_tp lock) {
+gint rwlock_writelock(rwlock_tp lock) {
 	if(lock != NULL && lock->valid == RWLOCK_READY) {
-		int result1 = 0, result2 = 0;
+		gint result1 = 0, result2 = 0;
 
 		result1 = pthread_mutex_lock(&lock->mutex);
 		if(result1 != 0) {
@@ -246,7 +247,7 @@ int rwlock_writelock(rwlock_tp lock) {
 
 		if(lock->writers_active > 0 || lock->readers_active > 0) {
 			(lock->writers_waiting)++;
-			pthread_cleanup_push(&rwlock_write_cleanup, (void*) lock);
+			pthread_cleanup_push(&rwlock_write_cleanup, (gpointer ) lock);
 
 			while(lock->writers_active > 0 || lock->readers_active > 0) {
 				result2 = pthread_cond_wait(&lock->write_condition, &lock->mutex);
@@ -280,9 +281,9 @@ int rwlock_writelock(rwlock_tp lock) {
 	}
 }
 
-int rwlock_writeunlock(rwlock_tp lock) {
+gint rwlock_writeunlock(rwlock_tp lock) {
 	if(lock != NULL && lock->valid == RWLOCK_READY) {
-		int result1 = 0, result2 = 0;
+		gint result1 = 0, result2 = 0;
 
 		result1 = pthread_mutex_lock(&lock->mutex);
 		if(result1 != 0) {

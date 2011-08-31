@@ -23,6 +23,7 @@
 #ifndef SHD_FILESERVER_H_
 #define SHD_FILESERVER_H_
 
+#include <glib.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <netinet/in.h>
@@ -49,21 +50,21 @@ typedef struct fileserver_reply_s {
 	FILE* f;
 	size_t f_length;
 	size_t f_read_offset;
-	char buf[FT_BUF_SIZE];
+	gchar buf[FT_BUF_SIZE];
 	size_t buf_read_offset;
 	size_t buf_write_offset;
 } fileserver_reply_t, *fileserver_reply_tp;
 
 typedef struct fileserver_request_s {
-	char filepath[FT_STR_SIZE];
-	char buf[FT_STR_SIZE];
+	gchar filepath[FT_STR_SIZE];
+	gchar buf[FT_STR_SIZE];
 	size_t buf_read_offset;
 	size_t buf_write_offset;
 } fileserver_request_t, *fileserver_request_tp;
 
 typedef struct fileserver_connection_s {
 	/* this connections socket */
-	int sockd;
+	gint sockd;
 	/* the current request we are handling */
 	fileserver_request_t request;
 	/* the current reply we are sending */
@@ -75,8 +76,8 @@ typedef struct fileserver_connection_s {
 typedef struct fileserver_s {
 	in_addr_t listen_addr;
 	in_port_t listen_port;
-	int listen_sockd;
-	char docroot[FT_STR_SIZE];
+	gint listen_sockd;
+	gchar docroot[FT_STR_SIZE];
 	/* client connections keyed by sockd */
 	GHashTable *connections;
 	/* global stats for this server */
@@ -91,11 +92,11 @@ typedef struct fileserver_s {
  * most FS_STRBUFFER_SIZE including the null byte.
  */
 enum fileserver_code fileserver_start(fileserver_tp fs, in_addr_t listen_addr, in_port_t listen_port,
-		char* docroot, int max_connections);
+		gchar* docroot, gint max_connections);
 
 /* trys to accept a single connection from the listening socket.
  * if sockd_out is not NULL and the accept succeeds, the sockd will be copied there. */
-enum fileserver_code fileserver_accept_one(fileserver_tp fs, int* sockd_out);
+enum fileserver_code fileserver_accept_one(fileserver_tp fs, gint* sockd_out);
 
 /* if given the fileserver's listening sockd, will try to accept as many
  * connections as it can, and returns the result of the first attempt that does
@@ -104,12 +105,12 @@ enum fileserver_code fileserver_accept_one(fileserver_tp fs, int* sockd_out);
  * otherwise, handles the connection associated with sockd, if any, by replying
  * with the requested content or 404 errors.
  */
-enum fileserver_code fileserver_activate(fileserver_tp fs, int sockd);
+enum fileserver_code fileserver_activate(fileserver_tp fs, gint sockd);
 
 /* close all connections and shutdown the fileserver */
 enum fileserver_code fileserver_shutdown(fileserver_tp fs);
 
 /* helpful function for getting a code as ascii. returns NULL on an invalid code. */
-const char* fileserver_codetoa(enum fileserver_code fsc);
+const gchar* fileserver_codetoa(enum fileserver_code fsc);
 
 #endif /* SHD_FILESERVER_H_ */

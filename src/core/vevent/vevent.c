@@ -19,6 +19,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <stdlib.h>
@@ -40,18 +41,18 @@
 
 /* FIXME TODO:
  * -make vevent_mgr accesses local to vevent_mgr.c
- * -refactor to better utilize shadow integration
+ * -refactor to better utilize shadow gintegration
  * -refactor should allow user to remove libevent dependency while still having vevent function for shadow */
 
 static void vevent_execute(vevent_mgr_tp mgr, event_tp ev);
-static int vevent_set_timer(vevent_mgr_tp mgr, vevent_tp vev, const struct timeval *tv);
+static gint vevent_set_timer(vevent_mgr_tp mgr, vevent_tp vev, const struct timeval *tv);
 
 
 /* start helper functions */
 
-char* vevent_get_event_type_string(vevent_mgr_tp mgr, short event_type) {
+gchar* vevent_get_event_type_string(vevent_mgr_tp mgr, short event_type) {
 	if(mgr != NULL && mgr->typebuf != NULL) {
-		void* buffer = mgr->typebuf;
+		gpointer buffer = mgr->typebuf;
 		size_t size = sizeof(mgr->typebuf);
 		size_t written = 0;
 
@@ -93,7 +94,7 @@ static void vevent_destroy_socket(vevent_socket_tp vsd) {
 	}
 }
 
-static void vevent_destroy_socket_cb(void* value, int key) {
+static void vevent_destroy_socket_cb(gpointer value, gint key) {
 	vevent_destroy_socket((vevent_socket_tp)value);
 }
 
@@ -104,11 +105,11 @@ static void vevent_destroy_vevent(vevent_tp vev) {
 	}
 }
 
-static void vevent_destroy_vevent_cb(int key, void* value, void *param) {
+static void vevent_destroy_vevent_cb(gint key, gpointer value, gpointer param) {
 	vevent_destroy_vevent((vevent_tp)value);
 }
 
-static void vevent_vepoll_action(uint16_t sockd, uint8_t add, short ev_type) {
+static void vevent_vepoll_action(guint16 sockd, guint8 add, short ev_type) {
 	/* make sure we tell vepoll our preference for event notifications when the socket/pipe is ready */
 	vsocket_mgr_tp vsock_mgr = global_sim_context.current_context->vsocket_mgr;
 	if(vsock_mgr != NULL) {
@@ -161,7 +162,7 @@ void vevent_destroy_base(vevent_mgr_tp mgr, event_base_tp eb) {
 	}
 }
 
-static vevent_socket_tp vevent_socket_create(int sd) {
+static vevent_socket_tp vevent_socket_create(gint sd) {
 	vevent_socket_tp vsd = malloc(sizeof(vevent_socket_t));
 	vsd->vevents = g_queue_new();
 	vsd->sd = sd;
@@ -181,7 +182,7 @@ static vevent_tp vevent_create(event_tp ev, vevent_socket_tp vsd) {
 	return NULL;
 }
 
-static void vevent_timer_cb(int timerid, void* value) {
+static void vevent_timer_cb(gint timerid, gpointer value) {
 	vevent_timer_tp vt = value;
 
 	if(vt != NULL && vt->vev != NULL && vt->mgr != NULL) {
@@ -215,7 +216,7 @@ static void vevent_timer_cb(int timerid, void* value) {
 	}
 }
 
-static int vevent_isequal_cb(void* ev1, void* ev2) {
+static gint vevent_isequal_cb(gpointer ev1, gpointer ev2) {
 	if(ev1 != NULL && ev2 != NULL) {
 		if((((vevent_tp)ev1)->id) == (((vevent_tp)ev2)->id)) {
 			return 0;
@@ -228,17 +229,17 @@ static int vevent_isequal_cb(void* ev1, void* ev2) {
 	return 1;
 }
 
-static int vevent_set_timer(vevent_mgr_tp mgr, vevent_tp vev, const struct timeval *tv) {
+static gint vevent_set_timer(vevent_mgr_tp mgr, vevent_tp vev, const struct timeval *tv) {
 	if(tv != NULL && mgr != NULL) {
 		/* evtimer called with a time - lets do a call-through to shadow timer */
-		int delay_millis = (tv->tv_sec * 1000) + (tv->tv_usec / 1000);
+		gint delay_millis = (tv->tv_sec * 1000) + (tv->tv_usec / 1000);
 
 		/* timer create result will be the timerid or an error */
 		vevent_timer_tp vt = malloc(sizeof(vevent_timer_t));
 		vt->mgr = mgr;
 		vt->vev = vev;
 
-		int timer_result = vevent_mgr_timer_create(mgr, delay_millis, &vevent_timer_cb, vt);
+		gint timer_result = vevent_mgr_timer_create(mgr, delay_millis, &vevent_timer_cb, vt);
 
 		if(timer_result != -1){
 			/* success */
@@ -256,7 +257,7 @@ static int vevent_set_timer(vevent_mgr_tp mgr, vevent_tp vev, const struct timev
 	return -1;
 }
 
-static int vevent_register(vevent_mgr_tp mgr, event_tp ev, const struct timeval * timeout) {
+static gint vevent_register(vevent_mgr_tp mgr, event_tp ev, const struct timeval * timeout) {
 	/* check if the event already is added */
 	if(ev != NULL && ev->ev_base != NULL) {
 
@@ -266,7 +267,7 @@ static int vevent_register(vevent_mgr_tp mgr, event_tp ev, const struct timeval 
 		vevent_socket_tp vsd = g_hash_table_lookup(veb->sockets_by_sd, &ev->ev_fd);
 		if(vsd == NULL) {
 			vsd = vevent_socket_create(ev->ev_fd);
-			g_hash_table_insert(veb->sockets_by_sd, int_key(ev->ev_fd), vsd);
+			g_hash_table_insert(veb->sockets_by_sd, gint_key(ev->ev_fd), vsd);
 			debugf("vevent_register: start monitoring socket %d\n", ev->ev_fd);
 		}
 
@@ -274,7 +275,7 @@ static int vevent_register(vevent_mgr_tp mgr, event_tp ev, const struct timeval 
 		vevent_tp vev = g_hash_table_lookup(veb->vevents_by_id, &ev->ev_timeout_pos.min_heap_idx);
 		if(vev == NULL) {
 			vev = vevent_create(ev, vsd);
-			g_hash_table_insert(veb->vevents_by_id, int_key(vev->id), vev);
+			g_hash_table_insert(veb->vevents_by_id, gint_key(vev->id), vev);
 			vev->event->ev_flags |= EVLIST_INSERTED;
 			debugf("vevent_register: inserted vevent id %d, fd %d, type %s\n", vev->id, vev->vsd->sd, vevent_get_event_type_string(mgr, vev->event->ev_events));
 		}
@@ -308,7 +309,7 @@ static int vevent_register(vevent_mgr_tp mgr, event_tp ev, const struct timeval 
 	return -1;
 }
 
-static int vevent_unregister(vevent_mgr_tp mgr, event_tp ev) {
+static gint vevent_unregister(vevent_mgr_tp mgr, event_tp ev) {
 	if(ev != NULL && ev->ev_base != NULL) {
 		vevent_base_tp veb = vevent_mgr_convert_base(mgr, ev->ev_base);
 		if(veb != NULL) {
@@ -352,7 +353,7 @@ static int vevent_unregister(vevent_mgr_tp mgr, event_tp ev) {
 	return -1;
 }
 
-static void vevent_execute_callbacks(vevent_mgr_tp mgr, event_base_tp eb, int sockd, short event_type) {
+static void vevent_execute_callbacks(vevent_mgr_tp mgr, event_base_tp eb, gint sockd, short event_type) {
 	if(eb != NULL) {
 		vevent_base_tp veb = vevent_mgr_convert_base(mgr, eb);
 		if(veb != NULL) {
@@ -416,7 +417,7 @@ static void vevent_execute_callbacks(vevent_mgr_tp mgr, event_base_tp eb, int so
 	}
 }
 
-void vevent_notify(vevent_mgr_tp mgr, int sockd, short event_type) {
+void vevent_notify(vevent_mgr_tp mgr, gint sockd, short event_type) {
 	/* an event has occurred on sockd */
 	if(mgr != NULL && mgr->event_bases != NULL) {
 		GList *bases = g_queue_peek_head_link(mgr->event_bases);
@@ -462,13 +463,13 @@ static void vevent_execute(vevent_mgr_tp mgr, event_tp ev) {
 /* event2/event.h */
 event_base_tp vevent_event_base_new(vevent_mgr_tp mgr) {
 	if(mgr != NULL && mgr->event_bases != NULL) {
-		/* create new vevent base, store pointer to it in event_base */
+		/* create new vevent base, store poginter to it in event_base */
 		vevent_base_tp veb = calloc(1, sizeof(vevent_base_t));
 		veb->nextid = 0;
 		veb->vevents_by_id = g_hash_table_new(g_int_hash, g_int_equal);
 		veb->sockets_by_sd = g_hash_table_new(g_int_hash, g_int_equal);
 
-		event_base_tp eb = calloc(1, sizeof(void*));
+		event_base_tp eb = calloc(1, sizeof(gpointer ));
 		g_queue_push_tail(mgr->event_bases, eb);
 		
 		vevent_mgr_track_base(mgr, eb, veb);
@@ -492,7 +493,7 @@ void vevent_event_base_free(vevent_mgr_tp mgr, event_base_tp eb) {
 	}
 }
 
-const char *vevent_event_base_get_method(vevent_mgr_tp mgr, const event_base_tp eb) {
+const gchar *vevent_event_base_get_method(vevent_mgr_tp mgr, const event_base_tp eb) {
 	return VEVENT_METHOD;
 }
 
@@ -501,12 +502,12 @@ void vevent_event_set_log_callback(vevent_mgr_tp mgr, event_log_cb cb) {
 	return;
 }
 
-int vevent_event_base_loop(vevent_mgr_tp mgr, event_base_tp eb, int flags) {
+gint vevent_event_base_loop(vevent_mgr_tp mgr, event_base_tp eb, gint flags) {
 	dlogf(LOG_MSG, "vevent_event_base_loop called but will have no effect\n");
 	return 0;
 }
 
-void vevent_call_loopexit_fn(int tid, void* arg) {
+void vevent_call_loopexit_fn(gint tid, gpointer arg) {
 	vevent_mgr_tp mgr = arg;
 	if(mgr == NULL) {
 		return;
@@ -516,9 +517,9 @@ void vevent_call_loopexit_fn(int tid, void* arg) {
 	(mgr->loopexit_fp)(0, NULL);
 }
 
-int vevent_event_base_loopexit(vevent_mgr_tp mgr, event_base_tp eb, const struct timeval * tv) {
+gint vevent_event_base_loopexit(vevent_mgr_tp mgr, event_base_tp eb, const struct timeval * tv) {
 	/* compute delay */
-	int delay_millis = 1;
+	gint delay_millis = 1;
 	if(tv != NULL) {
 		delay_millis = (tv->tv_sec * 1000) + (tv->tv_usec / 1000);
 		if(delay_millis <= 0) {
@@ -537,7 +538,7 @@ int vevent_event_base_loopexit(vevent_mgr_tp mgr, event_base_tp eb, const struct
 	return 0;
 }
 
-int vevent_event_assign(vevent_mgr_tp mgr, event_tp ev, event_base_tp eb, evutil_socket_t fd, short types, event_callback_fn cb, void * arg) {
+gint vevent_event_assign(vevent_mgr_tp mgr, event_tp ev, event_base_tp eb, evutil_socket_t fd, short types, event_callback_fn cb, gpointer arg) {
 	if(fd == -1) {
 		types |= EV_TIMEOUT;
 	}
@@ -571,10 +572,10 @@ int vevent_event_assign(vevent_mgr_tp mgr, event_tp ev, event_base_tp eb, evutil
 	return -1;
 }
 
-event_tp vevent_event_new(vevent_mgr_tp mgr, event_base_tp eb, evutil_socket_t fd, short types, event_callback_fn cb, void * arg) {
+event_tp vevent_event_new(vevent_mgr_tp mgr, event_base_tp eb, evutil_socket_t fd, short types, event_callback_fn cb, gpointer arg) {
 	event_tp ev = calloc(1, sizeof(event_t));
 
-	int result = vevent_event_assign(mgr, ev, eb, fd, types, cb, arg);
+	gint result = vevent_event_assign(mgr, ev, eb, fd, types, cb, arg);
 
 	if(result == 0) {
 		return ev;
@@ -591,7 +592,7 @@ void vevent_event_free(vevent_mgr_tp mgr, event_tp ev) {
 	}
 }
 
-int vevent_event_add(vevent_mgr_tp mgr, event_tp ev, const struct timeval * timeout) {
+gint vevent_event_add(vevent_mgr_tp mgr, event_tp ev, const struct timeval * timeout) {
 	if(ev != NULL) {
 		/* ignore signal-only events */
 		if(ev->ev_events == EV_SIGNAL) {
@@ -605,14 +606,14 @@ int vevent_event_add(vevent_mgr_tp mgr, event_tp ev, const struct timeval * time
 	return -1;
 }
 
-int vevent_event_del(vevent_mgr_tp mgr, event_tp ev) {
+gint vevent_event_del(vevent_mgr_tp mgr, event_tp ev) {
 	return vevent_unregister(mgr, ev);
 }
 
-void vevent_event_active(vevent_mgr_tp mgr, event_tp ev, int flags_for_cb, short ncalls) {
+void vevent_event_active(vevent_mgr_tp mgr, event_tp ev, gint flags_for_cb, short ncalls) {
 	if(ev != NULL) {
 		ev->ev_res = flags_for_cb;
-		for(int i = 0; i < ncalls; i++) {
+		for(gint i = 0; i < ncalls; i++) {
 			vevent_execute(mgr, ev);
 		}
 	} else {
@@ -620,7 +621,7 @@ void vevent_event_active(vevent_mgr_tp mgr, event_tp ev, int flags_for_cb, short
 	}
 }
 
-int vevent_event_pending(vevent_mgr_tp mgr, const event_tp ev, short types, struct timeval * tv) {
+gint vevent_event_pending(vevent_mgr_tp mgr, const event_tp ev, short types, struct timeval * tv) {
 	if(ev != NULL) {
 		vevent_base_tp veb = vevent_mgr_convert_base(mgr, ev->ev_base);
 		if(veb != NULL) {
@@ -628,7 +629,7 @@ int vevent_event_pending(vevent_mgr_tp mgr, const event_tp ev, short types, stru
 
 		if(vev != NULL) {
 			/* event has been added, check type */
-			int flags = 0;
+			gint flags = 0;
 
 			if (ev->ev_flags & EVLIST_INSERTED)
 				flags |= (ev->ev_events & (EV_TIMEOUT|EV_READ|EV_WRITE|EV_SIGNAL));
@@ -654,52 +655,52 @@ int vevent_event_pending(vevent_mgr_tp mgr, const event_tp ev, short types, stru
 
 
 /* event2/dns.h */
-struct evdns_base * vevent_evdns_base_new(struct event_base * event_base, int initialize_nameservers) {
+struct evdns_base * vevent_evdns_base_new(struct event_base * event_base, gint initialize_nameservers) {
 	dlogf(LOG_WARN, "vevent_evdns_base_new: function intercepted and ignored...\n");
 	return NULL;
 }
 
-const char *vevent_evdns_err_to_string(int err) {
+const gchar *vevent_evdns_err_to_string(gint err) {
 	dlogf(LOG_WARN, "vevent_evdns_err_to_string: function intercepted and ignored...\n");
 	return NULL;
 }
 
-int vevent_evdns_base_count_nameservers(struct evdns_base * base) {
+gint vevent_evdns_base_count_nameservers(struct evdns_base * base) {
 	dlogf(LOG_WARN, "vevent_evdns_base_count_nameservers: function intercepted and ignored...\n");
 	return -1;
 }
 
-int vevent_evdns_base_clear_nameservers_and_suspend(struct evdns_base * base) {
+gint vevent_evdns_base_clear_nameservers_and_suspend(struct evdns_base * base) {
 	dlogf(LOG_WARN, "vevent_evdns_base_clear_nameservers_and_suspend: function intercepted and ignored...\n");
 	return -1;
 }
 
-int vevent_evdns_base_resume(struct evdns_base * base) {
+gint vevent_evdns_base_resume(struct evdns_base * base) {
 	dlogf(LOG_WARN, "vevent_evdns_base_resume: function intercepted and ignored...\n");
 	return -1;
 }
 
-struct evdns_request * vevent_evdns_base_resolve_ipv4(struct evdns_base * base, const char *name, int flags, evdns_callback_type callback, void *ptr) {
+struct evdns_request * vevent_evdns_base_resolve_ipv4(struct evdns_base * base, const gchar *name, gint flags, evdns_callback_type callback, gpointer ptr) {
 	dlogf(LOG_WARN, "vevent_evdns_base_resolve_ipv4: function intercepted and ignored...\n");
 	return NULL;
 }
 
-struct evdns_request * vevent_evdns_base_resolve_reverse(struct evdns_base * base, const struct in_addr *in, int flags, evdns_callback_type callback, void *ptr) {
+struct evdns_request * vevent_evdns_base_resolve_reverse(struct evdns_base * base, const struct in_addr *in, gint flags, evdns_callback_type callback, gpointer ptr) {
 	dlogf(LOG_WARN, "vevent_evdns_base_resolve_reverse: function intercepted and ignored...\n");
 	return NULL;
 }
 
-struct evdns_request * vevent_evdns_base_resolve_reverse_ipv6(struct evdns_base * base, const struct in6_addr *in, int flags, evdns_callback_type callback, void *ptr) {
+struct evdns_request * vevent_evdns_base_resolve_reverse_ipv6(struct evdns_base * base, const struct in6_addr *in, gint flags, evdns_callback_type callback, gpointer ptr) {
 	dlogf(LOG_WARN, "vevent_evdns_base_resolve_reverse_ipv6: function intercepted and ignored...\n");
 	return NULL;
 }
 
-int vevent_evdns_base_set_option(struct evdns_base * base, const char *option, const char *val) {
+gint vevent_evdns_base_set_option(struct evdns_base * base, const gchar *option, const gchar *val) {
 	dlogf(LOG_WARN, "vevent_evdns_base_set_option: function intercepted and ignored...\n");
 	return -1;
 }
 
-int vevent_evdns_base_resolv_conf_parse(struct evdns_base * base, int flags, const char *const filename) {
+gint vevent_evdns_base_resolv_conf_parse(struct evdns_base * base, gint flags, const gchar *const filename) {
 	dlogf(LOG_WARN, "vevent_evdns_base_resolv_conf_parse: function intercepted and ignored...\n");
 	return -1;
 }
@@ -712,11 +713,11 @@ void vevent_evdns_set_log_fn(evdns_debug_log_fn_type fn) {
 	dlogf(LOG_WARN, "vevent_evdns_set_log_fn: function intercepted and ignored...\n");
 }
 
-void vevent_evdns_set_random_bytes_fn(void (*fn)(char *, size_t)) {
+void vevent_evdns_set_random_bytes_fn(void (*fn)(gchar *, size_t)) {
 	dlogf(LOG_WARN, "vevent_evdns_set_random_bytes_fn: function intercepted and ignored...\n");
 }
 
-struct evdns_server_port * vevent_evdns_add_server_port_with_base(struct event_base * base, evutil_socket_t socket, int flags, evdns_request_callback_fn_type callback, void *user_data) {
+struct evdns_server_port * vevent_evdns_add_server_port_with_base(struct event_base * base, evutil_socket_t socket, gint flags, evdns_request_callback_fn_type callback, gpointer user_data) {
 	dlogf(LOG_WARN, "vevent_evdns_add_server_port_with_base: function intercepted and ignored...\n");
 	return NULL;
 }
@@ -725,48 +726,48 @@ void vevent_evdns_close_server_port(struct evdns_server_port * port) {
 	dlogf(LOG_WARN, "vevent_evdns_close_server_port: function intercepted and ignored...\n");
 }
 
-int vevent_evdns_server_request_add_reply(struct evdns_server_request * req, int section, const char *name, int type, int dns_class, int ttl, int datalen, int is_name, const char *data) {
+gint vevent_evdns_server_request_add_reply(struct evdns_server_request * req, gint section, const gchar *name, gint type, gint dns_class, gint ttl, gint datalen, gint is_name, const gchar *data) {
 	dlogf(LOG_WARN, "vevent_evdns_server_request_add_reply: function intercepted and ignored...\n");
 	return -1;
 }
 
-int vevent_evdns_server_request_add_a_reply(struct evdns_server_request * req, const char *name, int n, const void *addrs, int ttl) {
+gint vevent_evdns_server_request_add_a_reply(struct evdns_server_request * req, const gchar *name, gint n, const gpointer addrs, gint ttl) {
 	dlogf(LOG_WARN, "vevent_evdns_server_request_add_a_reply: function intercepted and ignored...\n");
 	return -1;
 }
 
-int vevent_evdns_server_request_add_ptr_reply(struct evdns_server_request * req, struct in_addr *in, const char *inaddr_name, const char *hostname, int ttl) {
+gint vevent_evdns_server_request_add_ptr_reply(struct evdns_server_request * req, struct in_addr *in, const gchar *inaddr_name, const gchar *hostname, gint ttl) {
 	dlogf(LOG_WARN, "vevent_evdns_server_request_add_ptr_reply: function intercepted and ignored...\n");
 	return -1;
 }
 
-int vevent_evdns_server_request_respond(struct evdns_server_request * req, int err) {
+gint vevent_evdns_server_request_respond(struct evdns_server_request * req, gint err) {
 	dlogf(LOG_WARN, "vevent_evdns_server_request_respond: function intercepted and ignored...\n");
 	return -1;
 }
 
-int vevent_evdns_server_request_get_requesting_addr(struct evdns_server_request * _req, struct sockaddr *sa, int addr_len) {
+gint vevent_evdns_server_request_get_requesting_addr(struct evdns_server_request * _req, struct sockaddr *sa, gint addr_len) {
 	dlogf(LOG_WARN, "vevent_evdns_server_request_get_requesting_addr: function intercepted and ignored...\n");
 	return -1;
 }
 
 
 /* event2/dns_compat.h */
-void vevent_evdns_shutdown(int fail_requests) {
+void vevent_evdns_shutdown(gint fail_requests) {
 	dlogf(LOG_WARN, "vevent_evdns_shutdown: function intercepted and ignored...\n");
 }
 
-int vevent_evdns_nameserver_ip_add(const char *ip_as_string) {
+gint vevent_evdns_nameserver_ip_add(const gchar *ip_as_string) {
 	dlogf(LOG_WARN, "vevent_evdns_nameserver_ip_add: function intercepted and ignored...\n");
 	return -1;
 }
 
-int vevent_evdns_set_option(const char *option, const char *val, int flags) {
+gint vevent_evdns_set_option(const gchar *option, const gchar *val, gint flags) {
 	dlogf(LOG_WARN, "vevent_evdns_set_option: function intercepted and ignored...\n");
 	return -1;
 }
 
-int vevent_evdns_resolv_conf_parse(int flags, const char *const filename) {
+gint vevent_evdns_resolv_conf_parse(gint flags, const gchar *const filename) {
 	dlogf(LOG_WARN, "vevent_evdns_resolv_conf_parse: function intercepted and ignored...\n");
 	return -1;
 }

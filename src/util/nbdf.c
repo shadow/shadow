@@ -20,6 +20,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <stdlib.h>
 #include <ctype.h>
 #include <string.h>
@@ -36,13 +37,13 @@
 						}while(0)
 
 
-nbdf_tp nbdf_construct(char * format, ...) {
+nbdf_tp nbdf_construct(gchar * format, ...) {
 	va_list ap;
-	char * str;
-	char buf[32];
+	gchar * str;
+	gchar buf[32];
 	nbdf_tp nb, nb_in;
 	ptime_t pt;
-	unsigned int i,j, msize=0, bin_len=0;
+	guint i,j, msize=0, bin_len=0;
 	nbdf_tp *nb_arr;
 
 	nb = malloc(sizeof(*nb));
@@ -54,49 +55,49 @@ nbdf_tp nbdf_construct(char * format, ...) {
 	va_start(ap, format);
 	for(i=0; format[i]; i++) {
 		switch(format[i]) {
-			case 'i': /* 4 byte int */
+			case 'i': /* 4 byte gint */
 				NBDF_CHECK_BUFFER(4);
-				*((uint32_t*)(&nb->data[nb->consumed])) = htonl(va_arg(ap, int));
+				*((guint32*)(&nb->data[nb->consumed])) = htonl(va_arg(ap, gint));
 				nb->consumed += 4;
 				break;
 
-			case 'j': /* 2 byte int */
+			case 'j': /* 2 byte gint */
 				NBDF_CHECK_BUFFER(2);
-				*((uint16_t*)(&nb->data[nb->consumed])) = htons((uint16_t)va_arg(ap, int));
+				*((guint16*)(&nb->data[nb->consumed])) = htons((guint16)va_arg(ap, gint));
 				nb->consumed += 2;
 				break;
 
-			case 'c': /* 1 byte char */
+			case 'c': /* 1 byte gchar */
 				NBDF_CHECK_BUFFER(1);
-				nb->data[nb->consumed++] = (char)va_arg(ap, int);
+				nb->data[nb->consumed++] = (gchar)va_arg(ap, gint);
 				break;
 
 			case 'b': /* binary chunk */
-				bin_len = va_arg(ap, unsigned int);
-				str = va_arg(ap, char*);
+				bin_len = va_arg(ap, guint);
+				str = va_arg(ap, gchar*);
 
 				if(str && bin_len) {
 					NBDF_CHECK_BUFFER(4 + bin_len);
-					*((uint32_t*)(&nb->data[nb->consumed])) = htonl(bin_len);
+					*((guint32*)(&nb->data[nb->consumed])) = htonl(bin_len);
 					nb->consumed += 4;
 
 					memcpy(&nb->data[nb->consumed], str, bin_len);
 					nb->consumed += bin_len;
 				} else {
 					NBDF_CHECK_BUFFER(4);
-					*((uint32_t*)(&nb->data[nb->consumed])) = 0;
+					*((guint32*)(&nb->data[nb->consumed])) = 0;
 					nb->consumed+=4;
 				}
 				break;
 
 			case 's': /* string */
-				str = va_arg(ap, char*);
+				str = va_arg(ap, gchar*);
 
 				if(str) {
 					bin_len = strlen(str);
 					NBDF_CHECK_BUFFER(4 + bin_len);
 
-					*((uint32_t*)(&nb->data[nb->consumed])) = htonl(bin_len);
+					*((guint32*)(&nb->data[nb->consumed])) = htonl(bin_len);
 					nb->consumed += 4;
 
 					if(bin_len > 0) {
@@ -105,7 +106,7 @@ nbdf_tp nbdf_construct(char * format, ...) {
 					}
 				} else {
 					NBDF_CHECK_BUFFER(4);
-					*((uint32_t*)(&nb->data[nb->consumed])) = 0;
+					*((guint32*)(&nb->data[nb->consumed])) = 0;
 					nb->consumed+=4;
 				}
 
@@ -113,22 +114,22 @@ nbdf_tp nbdf_construct(char * format, ...) {
 
 			case 'a': /* in_addr_t */
 				NBDF_CHECK_BUFFER(4);
-				*((uint32_t*)(&nb->data[nb->consumed])) = htonl(va_arg(ap, in_addr_t));
+				*((guint32*)(&nb->data[nb->consumed])) = htonl(va_arg(ap, in_addr_t));
 				nb->consumed += 4;
 				break;
 
 			case 'p': /* in_port_t */
 				NBDF_CHECK_BUFFER(2);
-				*((uint16_t*)(&nb->data[nb->consumed])) = htons((in_port_t)va_arg(ap, int));
+				*((guint16*)(&nb->data[nb->consumed])) = htons((in_port_t)va_arg(ap, gint));
 				nb->consumed += 2;
 				break;
 
-			case 'd': /* double - transmit as a ascii-string. slow, but effective. */
-				snprintf(buf, sizeof(buf), "%f", va_arg(ap, double)); buf[sizeof(buf)-1] = 0;
+			case 'd': /* gdouble - transmit as a ascii-string. slow, but effective. */
+				snprintf(buf, sizeof(buf), "%f", va_arg(ap, gdouble)); buf[sizeof(buf)-1] = 0;
 				bin_len = strlen(buf);
 
 				NBDF_CHECK_BUFFER(4 + bin_len);
-				*((uint32_t*)(&nb->data[nb->consumed])) = htonl(bin_len);
+				*((guint32*)(&nb->data[nb->consumed])) = htonl(bin_len);
 				nb->consumed += 4;
 
 				memcpy(&nb->data[nb->consumed], buf, bin_len);
@@ -143,17 +144,17 @@ nbdf_tp nbdf_construct(char * format, ...) {
 					nb->consumed += nb_in->consumed;
 				} else {
 					NBDF_CHECK_BUFFER(4);
-					*((uint32_t*)(&nb->data[nb->consumed])) = 0;
+					*((guint32*)(&nb->data[nb->consumed])) = 0;
 					nb->consumed+=4;
 				}
 				break;
 
 			case 'm':
-				msize = va_arg(ap, unsigned int);
+				msize = va_arg(ap, guint);
 				nb_arr = va_arg(ap, nbdf_tp*);
 
 				NBDF_CHECK_BUFFER(4);
-				*((uint32_t*)(&nb->data[nb->consumed])) = htonl(msize);
+				*((guint32*)(&nb->data[nb->consumed])) = htonl(msize);
 				nb->consumed+=4;
 				for(j=0; j<msize; j++) {
 					if(nb_arr[j]) {
@@ -162,7 +163,7 @@ nbdf_tp nbdf_construct(char * format, ...) {
 						nb->consumed += nb_arr[j]->consumed;
 					} else {
 						NBDF_CHECK_BUFFER(4);
-						*((uint32_t*)(&nb->data[nb->consumed])) = 0;
+						*((guint32*)(&nb->data[nb->consumed])) = 0;
 						nb->consumed+=4;
 					}
 				}
@@ -200,7 +201,7 @@ nbdf_tp nbdf_construct(char * format, ...) {
 	}
 	va_end(ap);
 
-	*((uint32_t*)(nb->data)) = htonl(nb->consumed-4);
+	*((guint32*)(nb->data)) = htonl(nb->consumed-4);
 
 	return nb;
 }
@@ -218,10 +219,10 @@ nbdf_tp nbdf_dup(nbdf_tp nb) {
 }
 
 nbdf_tp nbdf_import_frame_pipecloud(pipecloud_tp pipecloud) {
-	uint32_t framesize, h_framesize;
+	guint32 framesize, h_framesize;
 	nbdf_tp nb;
 
-	if(pipecloud_read(pipecloud, (char*)&framesize, 4) == 0)
+	if(pipecloud_read(pipecloud, (gchar*)&framesize, 4) == 0)
 		return NULL;
 
 	h_framesize = ntohl(framesize);
@@ -241,10 +242,10 @@ nbdf_tp nbdf_import_frame_pipecloud(pipecloud_tp pipecloud) {
 }
 
 nbdf_tp nbdf_import_frame(socket_tp s) {
-	uint32_t framesize;
+	guint32 framesize;
 	nbdf_tp nb;
 
-	if(!socket_peek(s, (char*)&framesize, 4))
+	if(!socket_peek(s, (gchar*)&framesize, 4))
 		return NULL;
 	framesize = ntohl(framesize);
 
@@ -253,7 +254,7 @@ nbdf_tp nbdf_import_frame(socket_tp s) {
 
 	if(framesize == 0) {
 		/* throw away the size... */
-		socket_read(s, (char*)&framesize,4);
+		socket_read(s, (gchar*)&framesize,4);
 
 		return NULL;
 	}
@@ -272,10 +273,10 @@ nbdf_tp nbdf_import_frame(socket_tp s) {
 	return nb;
 }
 
-int nbdf_frame_avail(socket_tp s) {
-	uint32_t framesize;
+gint nbdf_frame_avail(socket_tp s) {
+	guint32 framesize;
 
-	if(!socket_peek(s, (char*)&framesize, 4))
+	if(!socket_peek(s, (gchar*)&framesize, 4))
 		return 0;
 
 	framesize = ntohl(framesize);
@@ -286,7 +287,7 @@ int nbdf_frame_avail(socket_tp s) {
 	return 1;
 }
 
-void nbdf_send_pipecloud(nbdf_tp nb, int destination_mbox, pipecloud_tp pc) {
+void nbdf_send_pipecloud(nbdf_tp nb, gint destination_mbox, pipecloud_tp pc) {
 	if(nb && nb->data && nb->consumed) {
 		pipecloud_write(pc, destination_mbox, nb->data, nb->consumed);
 	} else {
@@ -305,26 +306,26 @@ void nbdf_send(nbdf_tp nb, socket_tp s) {
 
 /**
  * if using code 'b' (for a binary chunk without malloc), you MUST pass in two
- * arguments: an unsigned int and a char * to a buffer for the data. the unsigned
- * int should contain the size of the buffer you are passing in to avoid overflowing
+ * arguments: an guint and a gchar * to a buffer for the data. the unsigned
+ * gint should contain the size of the buffer you are passing in to avoid overflowing
  * your buffer. this means if you give a buffer too small, you might lose data
  * from the frame.
  */
-void nbdf_read(nbdf_tp nb, char * format, ...) {
+void nbdf_read(nbdf_tp nb, gchar * format, ...) {
 	va_list ap;
-	unsigned int i,j, cpos=4, dsize, msize;
-	uint32_t framesize;
-	unsigned int * iptr;
+	guint i,j, cpos=4, dsize, msize;
+	guint32 framesize;
+	guint * iptr;
 	unsigned short * siptr;
-	char * cptr;
-	char ** dptr;
+	gchar * cptr;
+	gchar ** dptr;
 	nbdf_tp ** nbdptr;
 	nbdf_tp * nbptr;
-	char buf[32];
+	gchar buf[32];
 	ptime_t * ptptr;
 	in_addr_t * inaptr;
 	in_port_t * inpptr;
-	double * dubptr;
+	gdouble * dubptr;
 
 	/* TODO: fix this so smaller user-provided buffers will not mis-align
 	 * all future reads */
@@ -335,35 +336,35 @@ void nbdf_read(nbdf_tp nb, char * format, ...) {
 	va_start(ap, format);
 	for(i=0; format[i]; i++) {
 		switch(format[i]) {
-			case 'i': /* 4 byte int */
-				iptr = va_arg(ap, unsigned int*);
-				*iptr = ntohl(*((uint32_t*)&nb->data[cpos]));
+			case 'i': /* 4 byte gint */
+				iptr = va_arg(ap, guint*);
+				*iptr = ntohl(*((guint32*)&nb->data[cpos]));
 				cpos+=4;
 				break;
 
-			case 'j': /* 2 byte int */
+			case 'j': /* 2 byte gint */
 				siptr = va_arg(ap, unsigned short*);
-				*siptr = ntohs(*((uint16_t*)&nb->data[cpos]));
+				*siptr = ntohs(*((guint16*)&nb->data[cpos]));
 				cpos+=2;
 				break;
 
-			case 'c': /* 1 byte char */
-				cptr = va_arg(ap, char*);
+			case 'c': /* 1 byte gchar */
+				cptr = va_arg(ap, gchar*);
 				*cptr = nb->data[cpos++];
 				break;
 
 			case 'M':
-				iptr = va_arg(ap, unsigned int *);
+				iptr = va_arg(ap, guint *);
 				nbdptr = va_arg(ap, nbdf_tp **);
 
-				msize = *iptr = ntohl(*((uint32_t*)&nb->data[cpos]));
+				msize = *iptr = ntohl(*((guint32*)&nb->data[cpos]));
 				cpos+=4;
 
 				if(msize) {
 					nbptr = *nbdptr = malloc(sizeof(*nbptr) * msize);
 
 					for(j=0; j<msize;j++) {
-						framesize = ntohl(*((uint32_t*)&nb->data[cpos]));
+						framesize = ntohl(*((guint32*)&nb->data[cpos]));
 
 						if(framesize == 0) {
 							nbptr[j] = NULL;
@@ -383,17 +384,17 @@ void nbdf_read(nbdf_tp nb, char * format, ...) {
 				break;
 
 			case 'm':
-				iptr = va_arg(ap, unsigned int *);
+				iptr = va_arg(ap, guint *);
 				nbptr = va_arg(ap, nbdf_tp *);
 
-				dsize = ntohl(*((uint32_t*)&nb->data[cpos]));
+				dsize = ntohl(*((guint32*)&nb->data[cpos]));
 				cpos+=4;
 
 				/* use the smaller of the two..*/
 				msize = *iptr = (*iptr > dsize ? dsize : *iptr);
 
 				for(j=0; j<msize;j++) {
-					framesize = ntohl(*((uint32_t*)&nb->data[cpos]));
+					framesize = ntohl(*((guint32*)&nb->data[cpos]));
 
 					if(framesize == 0) {
 						nbptr[j] = NULL;
@@ -410,10 +411,10 @@ void nbdf_read(nbdf_tp nb, char * format, ...) {
 				break;
 
 			case 'B': /* binary chunk with mallocation */
-				iptr = va_arg(ap, unsigned int *);
-				dptr = va_arg(ap,char**);
+				iptr = va_arg(ap, guint *);
+				dptr = va_arg(ap,gchar**);
 
-				dsize = *iptr = ntohl(*((uint32_t*)&nb->data[cpos]));
+				dsize = *iptr = ntohl(*((guint32*)&nb->data[cpos]));
 				cpos+=4;
 
 				if(dsize) {
@@ -427,10 +428,10 @@ void nbdf_read(nbdf_tp nb, char * format, ...) {
 				break;
 
 			case 'b': /* binary chunk */
-				iptr = va_arg(ap, unsigned int *);
-				cptr = va_arg(ap,char*);
+				iptr = va_arg(ap, guint *);
+				cptr = va_arg(ap,gchar*);
 
-				dsize = ntohl(*((uint32_t*)&nb->data[cpos]));
+				dsize = ntohl(*((guint32*)&nb->data[cpos]));
 				cpos+=4;
 
 				/* use the smaller of the two..*/
@@ -443,9 +444,9 @@ void nbdf_read(nbdf_tp nb, char * format, ...) {
 				break;
 
 			case 'S': /* string  with mallocation*/
-				dptr = va_arg(ap,char**);
+				dptr = va_arg(ap,gchar**);
 
-				dsize = ntohl(*((uint32_t*)&nb->data[cpos]));
+				dsize = ntohl(*((guint32*)&nb->data[cpos]));
 				cpos+=4;
 
 				cptr = *dptr = malloc(dsize + 1);
@@ -457,10 +458,10 @@ void nbdf_read(nbdf_tp nb, char * format, ...) {
 				break;
 
 			case 's': /* string */
-				msize = va_arg(ap, unsigned int);
-				cptr = va_arg(ap,char*);
+				msize = va_arg(ap, guint);
+				cptr = va_arg(ap,gchar*);
 
-				dsize = ntohl(*((uint32_t*)&nb->data[cpos]));
+				dsize = ntohl(*((guint32*)&nb->data[cpos]));
 				cpos+=4;
 
 				dsize = msize > (dsize+1) ? (dsize+1) : msize ;
@@ -472,10 +473,10 @@ void nbdf_read(nbdf_tp nb, char * format, ...) {
 				cpos += dsize-1;
 				break;
 
-			case 'd': /* double */
-				dubptr = va_arg(ap,double*);
+			case 'd': /* gdouble */
+				dubptr = va_arg(ap,gdouble*);
 
-				dsize = ntohl(*((uint32_t*)&nb->data[cpos]));
+				dsize = ntohl(*((guint32*)&nb->data[cpos]));
 				cpos+=4;
 
 				dsize = sizeof(buf) > (dsize+1) ? (dsize+1) : sizeof(buf) ;
@@ -490,19 +491,19 @@ void nbdf_read(nbdf_tp nb, char * format, ...) {
 			case 'a': /* in_addr_t */
 				inaptr = va_arg(ap,in_addr_t*);
 
-				*inaptr = ntohl(*((uint32_t*)&nb->data[cpos]));
+				*inaptr = ntohl(*((guint32*)&nb->data[cpos]));
 				cpos+=4;
 				break;
 
 			case 'p': /* in_port_t */
 				inpptr = va_arg(ap, in_port_t*);
-				*inpptr = ntohs(*((uint16_t*)&nb->data[cpos]));
+				*inpptr = ntohs(*((guint16*)&nb->data[cpos]));
 				cpos+=2;
 				break;
 
 			case 'n': /* precoded nbdf */
 				nbptr = va_arg(ap, nbdf_tp*);
-				framesize = ntohl(*((uint32_t*)&nb->data[cpos]));
+				framesize = ntohl(*((guint32*)&nb->data[cpos]));
 
 				if(framesize == 0) {
 					*nbptr = NULL;

@@ -20,6 +20,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -33,7 +34,7 @@
 #include "shd-plugin.h"
 #include "echo_lib.h"
 
-void echo_client_instantiate(echoclient_tp ec, int argc, char * argv[], in_addr_t bootstrap_address) {
+void echo_client_instantiate(echoclient_tp ec, gint argc, gchar * argv[], in_addr_t bootstrap_address) {
 	if(ec == NULL) {
 		snri_log(LOG_WARN, "echo_client_instantiate called with NULL client\n");
 		return;
@@ -44,7 +45,7 @@ void echo_client_instantiate(echoclient_tp ec, int argc, char * argv[], in_addr_
 	/* clear echoclient_inst vars */
 	memset(ec, 0, sizeof(echoclient_t));
 
-	int sockd = 0;
+	gint sockd = 0;
 	struct sockaddr_in server;
 
 	/* setup the socket address info, client has outgoing connection to server */
@@ -69,7 +70,7 @@ void echo_client_instantiate(echoclient_tp ec, int argc, char * argv[], in_addr_
 	ec->sd = sockd;
 }
 
-void echo_client_socket_readable(echoclient_tp ec, int sockd) {
+void echo_client_socket_readable(echoclient_tp ec, gint sockd) {
 	if(ec == NULL) {
 		snri_log(LOG_WARN, "echo_client_socket_readable called with NULL client\n");
 		return;
@@ -99,15 +100,15 @@ void echo_client_socket_readable(echoclient_tp ec, int sockd) {
 	}
 }
 
-/* fills buffer with size random characters */
-static void fill_char_buffer(char* buffer, int size) {
-	for(int i = 0; i < size; i++) {
-		int n = rand() % 26;
+/* fills buffer with size random gcharacters */
+static void fill_gchar_buffer(gchar* buffer, gint size) {
+	for(gint i = 0; i < size; i++) {
+		gint n = rand() % 26;
 		buffer[i] = 'a' + n;
 	}
 }
 
-void echo_client_socket_writable(echoclient_tp ec, int sockd) {
+void echo_client_socket_writable(echoclient_tp ec, gint sockd) {
 	if(ec == NULL) {
 		snri_log(LOG_WARN, "echo_client_socket_writable called with NULL client\n");
 		return;
@@ -116,7 +117,7 @@ void echo_client_socket_writable(echoclient_tp ec, int sockd) {
 	snri_log(LOG_INFO, "echo_client_socket_writable for socket %i\n", sockd);
 
 	if(!ec->sent_msg) {
-		fill_char_buffer(ec->send_buffer, sizeof(ec->send_buffer)-1);
+		fill_gchar_buffer(ec->send_buffer, sizeof(ec->send_buffer)-1);
 		ssize_t b = write(sockd, ec->send_buffer, sizeof(ec->send_buffer));
 		ec->sent_msg = 1;
 		ec->amount_sent = b;
@@ -124,7 +125,7 @@ void echo_client_socket_writable(echoclient_tp ec, int sockd) {
 	}
 }
 
-void echo_server_instantiate(echoserver_tp es, int argc, char * argv[], in_addr_t bind_address) {
+void echo_server_instantiate(echoserver_tp es, gint argc, gchar * argv[], in_addr_t bind_address) {
 	if(es == NULL) {
 		snri_log(LOG_WARN, "echo_server_instantiate called with NULL server\n");
 		return;
@@ -134,7 +135,7 @@ void echo_server_instantiate(echoserver_tp es, int argc, char * argv[], in_addr_
 	es->listen_sd = 0;
 
 	/* start up the echo server */
-	int socketd;
+	gint socketd;
 	struct sockaddr_in server;
 
 	/* create the socket and get a socket descriptor */
@@ -166,7 +167,7 @@ void echo_server_instantiate(echoserver_tp es, int argc, char * argv[], in_addr_
 	es->listen_sd = socketd;
 }
 
-void echo_server_socket_readable(echoserver_tp es, int sockd) {
+void echo_server_socket_readable(echoserver_tp es, gint sockd) {
 	if(es == NULL) {
 		snri_log(LOG_WARN, "echo_server_socket_readable called with NULL server\n");
 		return;
@@ -184,22 +185,22 @@ void echo_server_socket_readable(echoserver_tp es, int sockd) {
 	}
 
 	/* read all data available */
-	int read_size = BUFFERSIZE - es->read_offset;
+	gint read_size = BUFFERSIZE - es->read_offset;
 	ssize_t bread;
 	while(read_size > 0 &&
 			(bread = read(sockd, es->echo_buffer + es->read_offset, read_size)) > 0) {
-		snri_log(LOG_INFO, "server socket %i read %i bytes\n", sockd, (int)bread);
+		snri_log(LOG_INFO, "server socket %i read %i bytes\n", sockd, (gint)bread);
 		es->read_offset += bread;
 		read_size -= bread;
 	}
 
 	/* echo it back to the client on the same sd,
 	 * also taking care of data that is still hanging around from previous reads. */
-	int write_size = es->read_offset - es->write_offset;
+	gint write_size = es->read_offset - es->write_offset;
 	ssize_t bwrote;
 	while(write_size > 0 &&
 			(bwrote = write(sockd, es->echo_buffer + es->write_offset, write_size)) > 0) {
-		snri_log(LOG_INFO, "server socket %i wrote %i bytes\n", sockd, (int)bwrote);
+		snri_log(LOG_INFO, "server socket %i wrote %i bytes\n", sockd, (gint)bwrote);
 		es->write_offset += bwrote;
 		write_size -= bwrote;
 	}

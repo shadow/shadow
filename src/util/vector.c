@@ -20,6 +20,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <stdlib.h>
 #include "global.h"
 #include "vector.h"
@@ -40,14 +41,14 @@ size_t vector_size (vector_tp v) {
 	return v->num_elems;
 }
 
-void * vector_get (vector_tp v, unsigned int i) {
+gpointer vector_get (vector_tp v, guint i) {
 	if(i >= v->num_elems)
 		return NULL;
 	return v->elems[i];
 }
 
-void * vector_remove (vector_tp v, unsigned int i) {
-	void * rv;
+gpointer vector_remove (vector_tp v, guint i) {
+	gpointer rv;
 
 	if(i >= v->num_elems)
 		return NULL;
@@ -67,7 +68,7 @@ void * vector_remove (vector_tp v, unsigned int i) {
 	return rv;
 }
 
-void vector_push (vector_tp v, void * o) {
+void vector_push (vector_tp v, gpointer o) {
 	if(v->num_elems == v->num_allocated) {
 		if(v->num_allocated == 0) {
 			v->num_allocated = VECTOR_MIN_SIZE;
@@ -85,7 +86,7 @@ void vector_push (vector_tp v, void * o) {
 	return;
 }
 
-void * vector_pop (vector_tp v) {
+gpointer vector_pop (vector_tp v) {
 	return vector_remove(v, v->num_elems - 1);
 }
 

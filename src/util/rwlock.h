@@ -23,6 +23,7 @@
 #ifndef RWLOCK_H_
 #define RWLOCK_H_
 
+#include <glib.h>
 #include <stdint.h>
 #include <pthread.h>
 
@@ -30,22 +31,22 @@ typedef struct rwlock_s {
 	pthread_mutex_t mutex;
 	pthread_cond_t read_condition;
 	pthread_cond_t write_condition;
-	uint32_t valid;
-	uint32_t readers_active;
-	uint32_t readers_waiting;
-	uint32_t writers_active;
-	uint32_t writers_waiting;
+	guint32 valid;
+	guint32 readers_active;
+	guint32 readers_waiting;
+	guint32 writers_active;
+	guint32 writers_waiting;
 } rwlock_t, *rwlock_tp;
 
 #define RWLOCK_READY 0xBACADAEA
 #define RWLOCK_SUCCESS 0
 #define RWLOCK_ERROR -1
 
-int rwlock_init(rwlock_tp lock, int is_process_shared);
-int rwlock_destroy(rwlock_tp lock);
-int rwlock_readlock(rwlock_tp lock);
-int rwlock_readunlock(rwlock_tp lock);
-int rwlock_writelock(rwlock_tp lock);
-int rwlock_writeunlock(rwlock_tp lock);
+gint rwlock_init(rwlock_tp lock, gint is_process_shared);
+gint rwlock_destroy(rwlock_tp lock);
+gint rwlock_readlock(rwlock_tp lock);
+gint rwlock_readunlock(rwlock_tp lock);
+gint rwlock_writelock(rwlock_tp lock);
+gint rwlock_writeunlock(rwlock_tp lock);
 
 #endif /* RWLOCK_H_ */

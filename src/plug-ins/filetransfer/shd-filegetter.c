@@ -20,6 +20,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -36,7 +37,7 @@
 #include "shd-filetransfer.h"
 
 /* these MUST be synced with filegetter_codes */
-static const char* filegetter_code_strings[] = {
+static const gchar* filegetter_code_strings[] = {
 	"FG_SUCCESS", "FG_ERR_INVALID", "FG_ERR_FATAL",
 	"FG_ERR_NOTSTARTED", "FG_ERR_NEEDFSPEC",
 	"FG_ERR_SOCKET", "FG_ERR_SOCKSINIT", "FG_ERR_SOCKSCONN", "FG_ERR_HTTPCONN", "FG_ERR_FOPEN", "FG_ERR_CLOSE",
@@ -46,7 +47,7 @@ static const char* filegetter_code_strings[] = {
 
 #define FG_ASSERTBUF(fg, retcode) \
 	if(bytes < 0) { \
-		return filegetter_die(fg, "filegetter fatal error: internal io error\n"); \
+		return filegetter_die(fg, "filegetter fatal error: ginternal io error\n"); \
 	} else if(bytes >= sizeof(fg->buf)) { \
 		/* truncated, our buffer is way too small, just give up */ \
 		return filegetter_die(fg, "filegetter fatal error: error writing request\n"); \
@@ -78,14 +79,14 @@ static const char* filegetter_code_strings[] = {
 	assert(fg->buf_write_offset >= 0 && fg->buf_write_offset < sizeof(fg->buf)); \
 	assert(fg->buf_write_offset >= fg->buf_read_offset)
 
-static enum filegetter_code filegetter_die(filegetter_tp fg, char* msg) {
+static enum filegetter_code filegetter_die(filegetter_tp fg, gchar* msg) {
 	filegetter_shutdown(fg);
 	fprintf(stderr, msg);
 	return FG_ERR_FATAL;
 }
 
-const char* filegetter_codetoa(enum filegetter_code fgc) {
-	int index = (int) fgc;
+const gchar* filegetter_codetoa(enum filegetter_code fgc) {
+	gint index = (gint) fgc;
 	if(index >= 0 && index < sizeof(filegetter_code_strings)) {
 		return filegetter_code_strings[index];
 	} else {
@@ -95,7 +96,7 @@ const char* filegetter_codetoa(enum filegetter_code fgc) {
 
 static enum filegetter_code filegetter_connect(filegetter_tp fg, in_addr_t addr, in_port_t port) {
     /* create the socket and get a socket descriptor */
-	int sockd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
+	gint sockd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
 
 	if (sockd < 0) {
                 perror("socket");
@@ -108,7 +109,7 @@ static enum filegetter_code filegetter_connect(filegetter_tp fg, in_addr_t addr,
     server.sin_addr.s_addr = addr;
     server.sin_port = port;
 
-	int result = connect(sockd,(struct sockaddr *) &server, sizeof(server));
+	gint result = connect(sockd,(struct sockaddr *) &server, sizeof(server));
 
 	/* nonblocking sockets means inprogress is ok */
 	if(result < 0 && errno != EINPROGRESS) {
@@ -122,8 +123,8 @@ static enum filegetter_code filegetter_connect(filegetter_tp fg, in_addr_t addr,
 }
 
 static enum filegetter_code filegetter_disconnect(filegetter_tp fg) {
-	int fclose_err = 0;
-	int close_err = 0;
+	gint fclose_err = 0;
+	gint close_err = 0;
 
 	/* close destination file */
 	if(fg->f != NULL) {
@@ -327,7 +328,7 @@ start:
 			/* check that we actually have FT_SOCKS_REQ_HEAD_LEN+6 space */
 			assert(sizeof(fg->buf) - fg->buf_write_offset >= FT_SOCKS_REQ_HEAD_LEN + 6);
 
-			/* write connection request, including intended destination */
+			/* write connection request, including gintended destination */
 			memcpy(fg->buf + fg->buf_write_offset, FT_SOCKS_REQ_HEAD, FT_SOCKS_REQ_HEAD_LEN);
 			fg->buf_write_offset += FT_SOCKS_REQ_HEAD_LEN;
 			memcpy(fg->buf + fg->buf_write_offset, &(fg->sspec.http_addr), 4);
@@ -398,7 +399,7 @@ start:
 			/* write the request to our buffer */
 			ssize_t space = sizeof(fg->buf) - fg->buf_write_offset;
 			assert(space > 0);
-			int bytes = snprintf(fg->buf + fg->buf_write_offset, (size_t) space, FT_HTTP_GET_FMT, fg->fspec.remote_path, inet_ntoa((struct in_addr){ntohl(fg->sspec.http_addr)}));
+			gint bytes = snprintf(fg->buf + fg->buf_write_offset, (size_t) space, FT_HTTP_GET_FMT, fg->fspec.remote_path, inet_ntoa((struct in_addr){ntohl(fg->sspec.http_addr)}));
 
 			FG_ASSERTBUF(fg, bytes);
 
@@ -421,7 +422,7 @@ start:
 			fg->buf[fg->buf_write_offset] = '\0';
 
 			/* check for status code */
-			char* err404 = strcasestr(fg->buf + fg->buf_read_offset, FT_HTTP_404);
+			gchar* err404 = strcasestr(fg->buf + fg->buf_read_offset, FT_HTTP_404);
 			if(err404) {
 				/* well, that sucks but no file for us */
 				fg->buf_read_offset += FT_HTTP_404_LEN;
@@ -434,8 +435,8 @@ start:
 			}
 
 			/* check if we have the entire reply header */
-			char* ok200 = strcasestr(fg->buf + fg->buf_read_offset, FT_HTTP_200);
-			char* content = strcasestr(fg->buf + fg->buf_read_offset, FT_2CRLF);
+			gchar* ok200 = strcasestr(fg->buf + fg->buf_read_offset, FT_HTTP_200);
+			gchar* content = strcasestr(fg->buf + fg->buf_read_offset, FT_2CRLF);
 
 			if(!ok200 || !content) {
 				/* need more, come back here after */
@@ -444,10 +445,10 @@ start:
 				goto start;
 			}
 
-			char* payload = content + FT_2CRLF_LEN;
+			gchar* payload = content + FT_2CRLF_LEN;
 
 			/* so now we have the entire header, extract the content length */
-			char* cl = strcasestr(fg->buf + fg->buf_read_offset, FT_CONTENT);
+			gchar* cl = strcasestr(fg->buf + fg->buf_read_offset, FT_CONTENT);
 
 			if(!cl) {
 				/* malformed reply! */
@@ -470,7 +471,7 @@ start:
 		case FG_SEND: {
 			assert(fg->buf_write_offset >= fg->buf_read_offset);
 
-			void* sendpos = fg->buf + fg->buf_read_offset;
+			gpointer sendpos = fg->buf + fg->buf_read_offset;
 			size_t sendlen = fg->buf_write_offset - fg->buf_read_offset;
 
 			ssize_t bytes = send(fg->sockd, sendpos, sendlen, 0);
@@ -496,7 +497,7 @@ start:
 			size_t space = sizeof(fg->buf) - fg->buf_write_offset;
 
 			/* we will recv from socket and write to buf */
-			void* recvpos = fg->buf + fg->buf_write_offset;
+			gpointer recvpos = fg->buf + fg->buf_write_offset;
 			ssize_t bytes = recv(fg->sockd, recvpos, space, 0);
 
 			FG_ASSERTIO(fg, bytes, errno == EWOULDBLOCK, FG_ERR_RECV);

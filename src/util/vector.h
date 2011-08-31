@@ -26,7 +26,7 @@
 typedef struct vector_t {
 	size_t num_elems;
 	size_t num_allocated;
-	void ** elems;
+	gpointer * elems;
 } vector_t, * vector_tp;
 
 #define VECTOR_MIN_SIZE 8
@@ -34,11 +34,11 @@ typedef struct vector_t {
 vector_tp vector_create (void);
 
 size_t vector_size (vector_tp v);
-void * vector_get (vector_tp v, unsigned int i);
-void * vector_remove (vector_tp v, unsigned int i);
+gpointer vector_get (vector_tp v, guint i);
+gpointer vector_remove (vector_tp v, guint i);
 
-void vector_push (vector_tp v, void * o);
-void * vector_pop (vector_tp v);
+void vector_push (vector_tp v, gpointer o);
+gpointer vector_pop (vector_tp v);
 
 void vector_destroy (vector_tp v);
 

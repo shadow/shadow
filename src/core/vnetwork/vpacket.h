@@ -22,6 +22,7 @@
 #ifndef VPACKET_H_
 #define VPACKET_H_
 
+#include <glib.h>
 #include <netinet/in.h>
 #include <stdint.h>
 
@@ -64,9 +65,9 @@ enum vpacket_tcp_flags {
 
 typedef struct vpacket_tcp_header_s {
 	/* contains tcp specifics, like seq #s, etc */
-	uint32_t sequence_number;
-	uint32_t acknowledgement;
-	uint32_t advertised_window;
+	guint32 sequence_number;
+	guint32 acknowledgement;
+	guint32 advertised_window;
 	enum vpacket_tcp_flags flags;
 } vpacket_tcp_header_t, *vpacket_tcp_header_tp;
 
@@ -78,7 +79,7 @@ typedef struct vpacket_header_s {
 	in_addr_t destination_addr;
 	in_port_t destination_port;
 	/* SOCK_DGRAM or SOCK_STREAM */
-	uint8_t protocol;
+	guint8 protocol;
 } vpacket_header_t, *vpacket_header_tp;
 
 typedef struct vpacket_s {
@@ -87,8 +88,8 @@ typedef struct vpacket_s {
 	/* additional header for SOCK_STREAM packets */
 	vpacket_tcp_header_t tcp_header;
 	/* application data */
-	uint16_t data_size;
-	void* payload;
+	guint16 data_size;
+	gpointer payload;
 } vpacket_t, *vpacket_tp;
 
 typedef struct vpacket_pod_s {
@@ -111,7 +112,7 @@ typedef struct vpacket_pod_s {
 typedef void (*rc_vpacket_pod_destructor_fp)(vpacket_pod_tp vpacket_pod);
 typedef struct rc_vpacket_pod_s {
 	vpacket_pod_tp pod;
-	int8_t reference_count;
+	gint8 reference_count;
 	rc_vpacket_pod_destructor_fp destructor;
 } rc_vpacket_pod_t, *rc_vpacket_pod_tp;
 
@@ -122,11 +123,11 @@ void rc_vpacket_pod_release(rc_vpacket_pod_tp rc_vpacket_pod);
 #define rc_vpacket_pod_retain_stack(rc_vpacket_pod) rc_vpacket_pod_retain(rc_vpacket_pod)
 #define rc_vpacket_pod_release_stack(rc_vpacket_pod) rc_vpacket_pod_release(rc_vpacket_pod)
 
-vpacket_tp vpacket_set(vpacket_tp vpacket, uint8_t protocol, in_addr_t src_addr, in_port_t src_port,
+vpacket_tp vpacket_set(vpacket_tp vpacket, guint8 protocol, in_addr_t src_addr, in_port_t src_port,
 		in_addr_t dst_addr, in_port_t dst_port, enum vpacket_tcp_flags flags,
-		uint32_t seq_number, uint32_t ack_number, uint32_t advertised_window,
-		uint16_t data_size, const void* data);
-uint32_t vpacket_get_size(rc_vpacket_pod_tp rc_packet);
+		guint32 seq_number, guint32 ack_number, guint32 advertised_window,
+		guint16 data_size, const gpointer data);
+guint32 vpacket_get_size(rc_vpacket_pod_tp rc_packet);
 void vpacket_log(rc_vpacket_pod_tp vpacket_pod);
 
 #endif /* VPACKET_H_ */

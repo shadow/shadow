@@ -20,6 +20,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/time.h>
@@ -41,9 +42,9 @@
 
 /* TODO so many NULL checks are missing all over this code */
 
-typedef int (*gettimeofday_fp)(struct timeval*, __timezone_ptr_t*);
+typedef gint (*gettimeofday_fp)(struct timeval*, __timezone_ptr_t*);
 
-sim_worker_tp sim_worker_create (pipecloud_tp pipecloud, int slave_id, int process_id, unsigned int num_slaves, unsigned int num_workers, unsigned int max_wrkrs_per_slave) {
+sim_worker_tp sim_worker_create (pipecloud_tp pipecloud, gint slave_id, gint process_id, guint num_slaves, guint num_workers, guint max_wrkrs_per_slave) {
 	sim_worker_tp rv;
 
 	rv=malloc(sizeof(*rv));
@@ -74,7 +75,7 @@ sim_worker_tp sim_worker_create (pipecloud_tp pipecloud, int slave_id, int proce
 	/* startup timestamp */
 	clock_gettime(CLOCK_MONOTONIC, &rv->wall_time_at_startup);
 
-	for(int i=0; i <= num_workers; i++) {
+	for(gint i=0; i <= num_workers; i++) {
 		rv->worker_states[i].window = PTIME_INVALID;
 		rv->worker_states[i].last_event = PTIME_INVALID;
 		rv->worker_states[i].next_event = PTIME_INVALID;
@@ -96,7 +97,7 @@ static void sim_worker_schedule_ticktock(sim_worker_tp worker) {
 	events_schedule(worker->events, worker->current_time + TICKTOCK_INTERVAL, tt, EVENTS_TYPE_TICKTOCK);
 }
 
-static void sim_worker_handle_ticktock(sim_worker_tp worker, void* event) {
+static void sim_worker_handle_ticktock(sim_worker_tp worker, gpointer event) {
 	ticktock_event_tp tt = event;
 
 	/* CLOCK_REALTIME is intercepted... */
@@ -115,7 +116,7 @@ static void sim_worker_handle_ticktock(sim_worker_tp worker, void* event) {
 	free(tt);
 }
 
-void sim_worker_deposit(sim_worker_tp worker, int frametype, nbdf_tp frame) {
+void sim_worker_deposit(sim_worker_tp worker, gint frametype, nbdf_tp frame) {
 	switch(frametype) {
 		case SIM_FRAME_START: {
 			nbdf_read(frame, "ii", &worker->max_latency, &worker->min_latency);
@@ -132,11 +133,11 @@ void sim_worker_deposit(sim_worker_tp worker, int frametype, nbdf_tp frame) {
 		}
 
 		case SIM_FRAME_TRACK: {
-			unsigned int network_id;
+			guint network_id;
 			in_addr_t addr;
-			char* hostname;
-			uint32_t KBps_down;
-			uint32_t KBps_up;
+			gchar* hostname;
+			guint32 KBps_down;
+			guint32 KBps_up;
 
 			nbdf_read(frame, "iaSii", &network_id, &addr, &hostname, &KBps_down, &KBps_up);
 
@@ -144,7 +145,7 @@ void sim_worker_deposit(sim_worker_tp worker, int frametype, nbdf_tp frame) {
 			vci_track_network(worker->vci_mgr, network_id, addr);
 
 			debugf("SWorker (%d): Creating ip:hostname mapping %s:%s\n", worker->process_id, inet_ntoa_t(addr), hostname);
-			/* at this point the unique id will have already been prepended if needed */
+			/* at this pogint the unique id will have already been prepended if needed */
 			resolver_add(worker->resolver, hostname, addr, 0, KBps_down, KBps_up);
 
 			break;
@@ -161,7 +162,7 @@ void sim_worker_deposit(sim_worker_tp worker, int frametype, nbdf_tp frame) {
 		}
 
 		case SIM_FRAME_STATE: {
-			unsigned int source_worker_id;
+			guint source_worker_id;
 			ptime_t last, current, next, window;
 
 			nbdf_read(frame, "itttt", &source_worker_id, &last, &current, &next, &window);
@@ -196,7 +197,7 @@ ptime_t sim_worker_calcwindow(sim_worker_tp worker) {
 		return PTIME_MAX;
 	}
 
-	for(int i=0; i <= worker->num_workers; i++) {
+	for(gint i=0; i <= worker->num_workers; i++) {
 		/* dont count master or my own events */
 		if(i == 0 || i == worker->process_id) {
 			continue;
@@ -270,7 +271,7 @@ static ptime_t sim_worker_advance_remote_workers(sim_worker_tp worker) {
 
 	/* returns true if the time that my next event will affect others can push ahead their
 	 * window */
-	for(int i=0; i <= worker->num_workers; i++) {
+	for(gint i=0; i <= worker->num_workers; i++) {
 		/* dont count master or my own events */
 		if(i == 0 || i == worker->process_id) {
 			continue;
@@ -335,15 +336,15 @@ static void sim_worker_sync_time(sim_worker_tp worker) {
 	}
 }
 
-int sim_worker_heartbeat(sim_worker_tp worker, size_t* num_event_worker_executed) {
+gint sim_worker_heartbeat(sim_worker_tp worker, size_t* num_event_worker_executed) {
 	ptime_t event_at;
-	int event_type;
-	void * event;
+	gint event_type;
+	gpointer event;
 	simop_tp simop_event;
 	size_t num_executed = 0;
 
 	/* -1 for error, 0 for blocked, 1 for success. */
-	int returnval = 0;
+	gint returnval = 0;
 
 	debugf("SWorker (%d): Heartbeat\n", worker->process_id);
 
@@ -373,7 +374,7 @@ int sim_worker_heartbeat(sim_worker_tp worker, size_t* num_event_worker_executed
 		if(!event)
 			break;
 
-		/* double check no backwards time */
+		/* gdouble check no backwards time */
 		if(event_at < worker->current_time) {
 			dlogf(LOG_ERR, "sim_worker_heartbeat: attempting to execute past event type %i scheduled for %llu. killing myself!\n", event_type, event_at);
 			returnval = -1;
@@ -435,7 +436,7 @@ ret:
 	return returnval;
 }
 
-static void sim_worker_destroy_cdftracker_cb(int key, void* value, void *param) {
+static void sim_worker_destroy_cdftracker_cb(gint key, gpointer value, gpointer param) {
 	cdf_destroy((cdf_tp)value);
 }
 
@@ -478,7 +479,7 @@ void sim_worker_destroy(sim_worker_tp sim) {
 	context_set_worker(NULL);
 }
 
-sim_worker_nodetracker_tp sim_worker_create_nodetracker(in_addr_t addr, int track_id, char valid) {
+sim_worker_nodetracker_tp sim_worker_create_nodetracker(in_addr_t addr, gint track_id, gchar valid) {
 	sim_worker_nodetracker_tp nt = malloc(sizeof(sim_worker_nodetracker_t));
 	if(!nt)
 		printfault(EXIT_NOMEM, "sim_worker_create_nodetracker: Out of memory");
@@ -490,7 +491,7 @@ sim_worker_nodetracker_tp sim_worker_create_nodetracker(in_addr_t addr, int trac
 	return nt;
 }
 
-void sim_worker_destroy_nodetracker_cb(int key, void* value, void *param) {
+void sim_worker_destroy_nodetracker_cb(gint key, gpointer value, gpointer param) {
 	sim_worker_destroy_nodetracker((sim_worker_nodetracker_tp) value);
 }
 
@@ -498,7 +499,7 @@ void sim_worker_destroy_nodetracker(sim_worker_nodetracker_tp nt) {
 	free(nt);
 }
 
-static int sim_worker_opexec_load_plugin(sim_worker_tp wo, simop_tp sop) {
+static gint sim_worker_opexec_load_plugin(sim_worker_tp wo, simop_tp sop) {
 	simop_load_plugin_tp op = sop->operation;
 	debugf("SWorker (%d): Loading Module: %s\n", wo->process_id, op->filepath);
 
@@ -507,7 +508,7 @@ static int sim_worker_opexec_load_plugin(sim_worker_tp wo, simop_tp sop) {
 	if(mod != NULL) {
 		context_execute_init(mod);
 	} else {
-		char buffer[200];
+		gchar buffer[200];
 
 		snprintf(buffer,200,"Unable to load and validate '%s'", op->filepath);
 		sim_worker_abortsim(wo, buffer);
@@ -516,33 +517,33 @@ static int sim_worker_opexec_load_plugin(sim_worker_tp wo, simop_tp sop) {
 	return 1;
 }
 
-static int sim_worker_opexec_load_cdf(sim_worker_tp wo, simop_tp sop) {
+static gint sim_worker_opexec_load_cdf(sim_worker_tp wo, simop_tp sop) {
 	simop_load_cdf_tp op = sop->operation;
 
 	cdf_tp cdf = cdf_create(op->filepath);
 	if(cdf != NULL) {
-		g_hash_table_insert(wo->loaded_cdfs, int_key(op->id), cdf);
+		g_hash_table_insert(wo->loaded_cdfs, gint_key(op->id), cdf);
 	}
 
 	return 1;
 }
 
-static int sim_worker_opexec_generate_cdf(sim_worker_tp wo, simop_tp sop) {
+static gint sim_worker_opexec_generate_cdf(sim_worker_tp wo, simop_tp sop) {
 	simop_generate_cdf_tp op = sop->operation;
 
 	cdf_tp cdf = cdf_generate(op->base_delay, op->base_width, op->tail_width);
 	if(cdf != NULL) {
-		g_hash_table_insert(wo->loaded_cdfs, int_key(op->id), cdf);
+		g_hash_table_insert(wo->loaded_cdfs, gint_key(op->id), cdf);
 	}
 
 	return 1;
 }
 
-static int sim_worker_opexec_create_network(sim_worker_tp wo, simop_tp sop) {
+static gint sim_worker_opexec_create_network(sim_worker_tp wo, simop_tp sop) {
 	simop_create_network_tp op = sop->operation;
 
 	/* build up our knowledge of the network */
-	cdf_tp cdf = g_hash_table_lookup(wo->loaded_cdfs, &op->cdf_id_intra_latency);
+	cdf_tp cdf = g_hash_table_lookup(wo->loaded_cdfs, &op->cdf_id_gintra_latency);
 	simnet_graph_add_vertex(wo->network_topology, op->id, cdf, op->reliability);
 
 	/* vci needs ids to look up graph properties */
@@ -551,7 +552,7 @@ static int sim_worker_opexec_create_network(sim_worker_tp wo, simop_tp sop) {
 	return 1;
 }
 
-static int sim_worker_opexec_connect_network(sim_worker_tp wo, simop_tp sop) {
+static gint sim_worker_opexec_connect_network(sim_worker_tp wo, simop_tp sop) {
 	simop_connect_networks_tp op = sop->operation;
 
 	/* build up our knowledge of the network */
@@ -564,17 +565,17 @@ static int sim_worker_opexec_connect_network(sim_worker_tp wo, simop_tp sop) {
 	return 1;
 }
 
-static int sim_worker_opexec_create_hostname(sim_worker_tp wo, simop_tp sop) {
+static gint sim_worker_opexec_create_hostname(sim_worker_tp wo, simop_tp sop) {
 	simop_create_hostname_tp op = sop->operation;
 
-	char* base_hostname = malloc(sizeof(op->base_hostname));
+	gchar* base_hostname = malloc(sizeof(op->base_hostname));
 	strncpy(base_hostname, op->base_hostname, sizeof(op->base_hostname));
 
-	g_hash_table_insert(wo->hostname_tracking, int_key(op->id), base_hostname);
+	g_hash_table_insert(wo->hostname_tracking, gint_key(op->id), base_hostname);
 	return 1;
 }
 
-static int sim_worker_opexec_create_nodes(sim_worker_tp wo, simop_tp sop) {
+static gint sim_worker_opexec_create_nodes(sim_worker_tp wo, simop_tp sop) {
 	simop_create_nodes_tp op = sop->operation;
 	module_tp  module = module_get_module(wo->mod_mgr, op->plugin_id);
 
@@ -598,29 +599,29 @@ static int sim_worker_opexec_create_nodes(sim_worker_tp wo, simop_tp sop) {
 	}
 
 	/* get bandwidth */
-	uint32_t KBps_up = 0;
-	uint32_t KBps_down = 0;
+	guint32 KBps_up = 0;
+	guint32 KBps_down = 0;
 
 	/* if we only have 1 id, we have symmetric bandwidth, otherwise asym as specified by cdfs */
 	if(op->cdf_id_bandwidth_up == 0 || op->cdf_id_bandwidth_down == 0) {
-		unsigned int sym_id = op->cdf_id_bandwidth_up != 0 ? op->cdf_id_bandwidth_up : op->cdf_id_bandwidth_down;
+		guint sym_id = op->cdf_id_bandwidth_up != 0 ? op->cdf_id_bandwidth_up : op->cdf_id_bandwidth_down;
 		cdf_tp sym = g_hash_table_lookup(wo->loaded_cdfs, &sym_id);
-		KBps_up = KBps_down = (uint32_t)cdf_random_value(sym);
+		KBps_up = KBps_down = (guint32)cdf_random_value(sym);
 	} else {
 		cdf_tp up = g_hash_table_lookup(wo->loaded_cdfs, &op->cdf_id_bandwidth_up);
 		cdf_tp down = g_hash_table_lookup(wo->loaded_cdfs, &op->cdf_id_bandwidth_down);
-		KBps_up = (uint32_t)cdf_random_value(up);
-		KBps_down = (uint32_t)cdf_random_value(down);
+		KBps_up = (guint32)cdf_random_value(up);
+		KBps_down = (guint32)cdf_random_value(down);
 	}
 
 	/* create unique hostname. master tells us what id we should prepend to ensure uniqueness */
-	char* basename = g_hash_table_lookup(wo->hostname_tracking, &op->hostname_id);
+	gchar* basename = g_hash_table_lookup(wo->hostname_tracking, &op->hostname_id);
 	if(basename == NULL) {
 		dlogf(LOG_ERR, "SWorker: Failure to create hostname. cant instantiate node!\n");
 		return 1;
 	}
 
-	char hostname[SIMOP_STRING_LEN];
+	gchar hostname[SIMOP_STRING_LEN];
 	if(op->hostname_unique_counter == 0) {
 		snprintf(hostname, SIMOP_STRING_LEN, "%s", basename);
 	} else {
@@ -632,7 +633,7 @@ static int sim_worker_opexec_create_nodes(sim_worker_tp wo, simop_tp sop) {
 
 
 	cdf_tp cpu_speed_cdf = g_hash_table_lookup(wo->loaded_cdfs, &op->cdf_id_cpu_speed);
-	uint64_t cpu_speed_Bps = (uint64_t)cdf_random_value(cpu_speed_cdf);
+	guint64 cpu_speed_Bps = (guint64)cdf_random_value(cpu_speed_cdf);
 
 	/* create vnetwork management */
 	context_provider->vsocket_mgr = vsocket_mgr_create(context_provider, addr, KBps_down, KBps_up, cpu_speed_Bps);
@@ -655,18 +656,18 @@ static int sim_worker_opexec_create_nodes(sim_worker_tp wo, simop_tp sop) {
 	dvn_packet_route(DVNPACKET_GLOBAL_BCAST, DVNPACKET_LAYER_SIM, 0, SIM_FRAME_TRACK, vci_net_track);
 	nbdf_free(vci_net_track);
 
-	/* parse the cl_args into separate strings */
+	/* parse the cl_args ginto separate strings */
 	GQueue *args = g_queue_new();
-	char* result = strtok(op->cl_args, " ");
+	gchar* result = strtok(op->cl_args, " ");
 	while(result != NULL) {
 		g_queue_push_tail(args, result);
 		result = strtok(NULL, " ");
 	}
 
 	/* setup for instantiation */
-	int argc = g_queue_get_length(args);
-	char* argv[argc];
-	int argi = 0;
+	gint argc = g_queue_get_length(args);
+	gchar* argv[argc];
+	gint argi = 0;
 	for(argi = 0; argi < argc; argi++) {
 		argv[argi] = g_queue_pop_head(args);
 	}
@@ -680,7 +681,7 @@ static int sim_worker_opexec_create_nodes(sim_worker_tp wo, simop_tp sop) {
 	return 1;
 }
 
-static int sim_worker_opexec_end(sim_worker_tp wo, simop_tp sop) {
+static gint sim_worker_opexec_end(sim_worker_tp wo, simop_tp sop) {
 	nbdf_tp complete_frame;
 
 	complete_frame = nbdf_construct("i", wo->process_id);
@@ -694,7 +695,7 @@ static int sim_worker_opexec_end(sim_worker_tp wo, simop_tp sop) {
 }
 
 
-void sim_worker_abortsim(sim_worker_tp wo, char * error) {
+void sim_worker_abortsim(sim_worker_tp wo, gchar * error) {
 	nbdf_tp error_frame;
 
 	error_frame = nbdf_construct("s", error);
@@ -708,7 +709,7 @@ void sim_worker_abortsim(sim_worker_tp wo, char * error) {
 }
 
 void sim_worker_destroy_node(sim_worker_tp wo, context_provider_tp cp) {
-	/* free his dtimer endpoint */
+	/* free his dtimer endpogint */
 	dtimer_destroy_timers(global_sim_context.sim_worker->timer_mgr, cp);
 
 	resolver_remove_byaddr(wo->resolver, cp->vsocket_mgr->addr);
@@ -724,8 +725,8 @@ void sim_worker_destroy_node(sim_worker_tp wo, context_provider_tp cp) {
 	free(cp);
 }
 
-int sim_worker_opexec(sim_worker_tp wo, simop_tp op) {
-	int rv = 1;
+gint sim_worker_opexec(sim_worker_tp wo, simop_tp op) {
+	gint rv = 1;
 	switch(op->type){
 		case OP_LOAD_PLUGIN: {
 			rv = sim_worker_opexec_load_plugin(wo, op);

@@ -22,6 +22,7 @@
 #ifndef RESOLVER_H_
 #define RESOLVER_H_
 
+#include <glib.h>
 #include <stdint.h>
 #include <netinet/in.h>
 #include <glib-2.0/glib.h>
@@ -31,31 +32,31 @@
 #define RESOLVER_ID_MAXLENSTR 12
 
 typedef struct resolver_entry_s {
-	uint32_t KBps_down;
-	uint32_t KBps_up;
+	guint32 KBps_down;
+	guint32 KBps_up;
 	in_addr_t addr;
-	char hostname[];
+	gchar hostname[];
 } resolver_entry_t, *resolver_entry_tp;
 
 typedef struct resolver_s {
-	uint32_t unique_id_counter;
+	guint32 unique_id_counter;
 	GHashTable *name_entry;
 	GHashTable *addr_entry;
-	int pid;
+	gint pid;
 } resolver_t, *resolver_tp;
 
-resolver_tp resolver_create(int process_id);
+resolver_tp resolver_create(gint process_id);
 void resolver_destroy(resolver_tp resolver);
-void resolver_destroy_cb(int key, void* value, void *param); 
+void resolver_destroy_cb(gint key, gpointer value, gpointer param); 
 
-void resolver_add(resolver_tp r, char* name, in_addr_t addr, uint8_t prepend_unique_id, uint32_t KBps_down, uint32_t KBps_up);
-void resolver_remove_byname(resolver_tp r, char* name);
+void resolver_add(resolver_tp r, gchar* name, in_addr_t addr, guint8 prepend_unique_id, guint32 KBps_down, guint32 KBps_up);
+void resolver_remove_byname(resolver_tp r, gchar* name);
 void resolver_remove_byaddr(resolver_tp r, in_addr_t addr);
-in_addr_t* resolver_resolve_byname(resolver_tp r, char* name);
-char* resolver_resolve_byaddr(resolver_tp r, in_addr_t addr);
+in_addr_t* resolver_resolve_byname(resolver_tp r, gchar* name);
+gchar* resolver_resolve_byaddr(resolver_tp r, in_addr_t addr);
 
-uint32_t resolver_get_minbw(resolver_tp r, in_addr_t addr);
-uint32_t resolver_get_upbw(resolver_tp r, in_addr_t addr);
-uint32_t resolver_get_downbw(resolver_tp r, in_addr_t addr);
+guint32 resolver_get_minbw(resolver_tp r, in_addr_t addr);
+guint32 resolver_get_upbw(resolver_tp r, in_addr_t addr);
+guint32 resolver_get_downbw(resolver_tp r, in_addr_t addr);
 
 #endif /* RESOLVER_H_ */

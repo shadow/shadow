@@ -23,11 +23,12 @@
 #ifndef VCRYPTO_INTERCEPT_H_
 #define VCRYPTO_INTERCEPT_H_
 
+#include <glib.h>
 #include <openssl/aes.h>
 #include <openssl/evp.h>
 
-void intercept_AES_encrypt(const unsigned char *in, unsigned char *out, const AES_KEY *key);
-void intercept_AES_decrypt(const unsigned char *in, unsigned char *out, const AES_KEY *key);
-int intercept_EVP_Cipher(EVP_CIPHER_CTX *ctx, unsigned char *out, const unsigned char *in, unsigned int inl);
+void intercept_AES_encrypt(const guchar *in, guchar *out, const AES_KEY *key);
+void intercept_AES_decrypt(const guchar *in, guchar *out, const AES_KEY *key);
+gint intercept_EVP_Cipher(EVP_CIPHER_CTX *ctx, guchar *out, const guchar *in, guint inl);
 
 #endif /* VCRYPTO_INTERCEPT_H_ */

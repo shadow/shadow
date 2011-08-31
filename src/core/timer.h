@@ -23,6 +23,7 @@
 #ifndef _timer_h
 #define _timer_h
 
+#include <glib.h>
 #include <sys/time.h>
 #include <time.h>
 #include <stdlib.h>
@@ -37,7 +38,7 @@
 
 typedef struct dtimer_timerset_t {
 	btree_tp timers;
-	unsigned int cur_tid;
+	guint cur_tid;
 } dtimer_timerset_t, * dtimer_timerset_tp;
 
 /** a full timer manager system */
@@ -54,20 +55,20 @@ typedef struct dtimer_mgr_t {
 
 /* a timer element  */
 typedef struct dtimer_item_t {
-	int timer_ref;
+	gint timer_ref;
 	ptime_t expire;
-	void * callback_arg;
+	gpointer callback_arg;
 	context_provider_tp context_provider;
 	dtimer_ontimer_cb_fp callback;
-	char valid;
+	gchar valid;
 } dtimer_item_t, *dtimer_item_tp;
 
 
 dtimer_mgr_tp dtimer_create_manager(events_tp events);
 void dtimer_destroy_manager(dtimer_mgr_tp mgr);
-int dtimer_create_timer( dtimer_mgr_tp mgr, ptime_t cur_time, context_provider_tp cp, int msdelay, dtimer_ontimer_cb_fp callback, void * callback_arg);
+gint dtimer_create_timer( dtimer_mgr_tp mgr, ptime_t cur_time, context_provider_tp cp, gint msdelay, dtimer_ontimer_cb_fp callback, gpointer callback_arg);
 void dtimer_destroy_timers(dtimer_mgr_tp mgr, context_provider_tp cp);
-void dtimer_destroy_timer(dtimer_mgr_tp mgr, context_provider_tp cp, int timer_id);
+void dtimer_destroy_timer(dtimer_mgr_tp mgr, context_provider_tp cp, gint timer_id);
 void dtimer_exec_event(dtimer_mgr_tp mgr, dtimer_item_tp event);
 void dtimer_destroy_event(dtimer_item_tp event);
 

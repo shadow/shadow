@@ -23,6 +23,7 @@
 #ifndef SHD_SERVICE_FILEGETTER_H_
 #define SHD_SERVICE_FILEGETTER_H_
 
+#include <glib.h>
 #include <stddef.h>
 #include <time.h>
 
@@ -42,13 +43,13 @@ enum service_filegetter_type {
 	SFG_SINGLE, SFG_DOUBLE, SFG_MULTI
 };
 
-typedef void (*service_filegetter_log_cb)(enum service_filegetter_loglevel level, const char* message);
-typedef void (*service_filegetter_sleep_cb)(void* sfg, unsigned int seconds);
-typedef in_addr_t (*service_filegetter_hostbyname_cb)(const char* hostname);
+typedef void (*service_filegetter_log_cb)(enum service_filegetter_loglevel level, const gchar* message);
+typedef void (*service_filegetter_sleep_cb)(gpointer sfg, guint seconds);
+typedef in_addr_t (*service_filegetter_hostbyname_cb)(const gchar* hostname);
 
 typedef struct service_filegetter_server_args_s {
-	char* host;
-	char* port;
+	gchar* host;
+	gchar* port;
 } service_filegetter_server_args_t, *service_filegetter_server_args_tp;
 
 typedef struct service_filegetter_single_args_s {
@@ -56,8 +57,8 @@ typedef struct service_filegetter_single_args_s {
 	service_filegetter_server_args_t socks_proxy;
 	service_filegetter_log_cb log_cb;
 	service_filegetter_hostbyname_cb hostbyname_cb;
-	char* num_downloads;
-	char* filepath;
+	gchar* num_downloads;
+	gchar* filepath;
 } service_filegetter_single_args_t, *service_filegetter_single_args_tp;
 
 typedef struct service_filegetter_double_args_s {
@@ -66,16 +67,16 @@ typedef struct service_filegetter_double_args_s {
 	service_filegetter_log_cb log_cb;
 	service_filegetter_hostbyname_cb hostbyname_cb;
 	service_filegetter_sleep_cb sleep_cb;
-	char* pausetime_seconds;
-	char* filepath1;
-	char* filepath2;
-	char* filepath3;
+	gchar* pausetime_seconds;
+	gchar* filepath1;
+	gchar* filepath2;
+	gchar* filepath3;
 } service_filegetter_double_args_t, *service_filegetter_double_args_tp;
 
 typedef struct service_filegetter_multi_args_s {
-	char* server_specification_filepath;
-	char* thinktimes_cdf_filepath;
-	char* runtime_seconds;
+	gchar* server_specification_filepath;
+	gchar* thinktimes_cdf_filepath;
+	gchar* runtime_seconds;
 	service_filegetter_server_args_t socks_proxy;
 	service_filegetter_hostbyname_cb hostbyname_cb;
 	service_filegetter_sleep_cb sleep_cb;
@@ -100,18 +101,18 @@ typedef struct service_filegetter_s {
 	service_filegetter_sleep_cb sleep_cb;
 	service_filegetter_log_cb log_cb;
 	cdf_tp think_times;
-	int pausetime_seconds;
+	gint pausetime_seconds;
 	struct timespec wakeup;
 	struct timespec expire;
-	char log_buffer[1024];
-	int downloads_requested;
-	int downloads_completed;
+	gchar log_buffer[1024];
+	gint downloads_requested;
+	gint downloads_completed;
 } service_filegetter_t, *service_filegetter_tp;
 
-enum filegetter_code service_filegetter_start_single(service_filegetter_tp sfg, service_filegetter_single_args_tp args, int* sockd_out);
-enum filegetter_code service_filegetter_start_double(service_filegetter_tp sfg, service_filegetter_double_args_tp args, int* sockd_out);
-enum filegetter_code service_filegetter_start_multi(service_filegetter_tp sfg, service_filegetter_multi_args_tp args, int* sockd_out);
-enum filegetter_code service_filegetter_activate(service_filegetter_tp sfg, int sockd);
+enum filegetter_code service_filegetter_start_single(service_filegetter_tp sfg, service_filegetter_single_args_tp args, gint* sockd_out);
+enum filegetter_code service_filegetter_start_double(service_filegetter_tp sfg, service_filegetter_double_args_tp args, gint* sockd_out);
+enum filegetter_code service_filegetter_start_multi(service_filegetter_tp sfg, service_filegetter_multi_args_tp args, gint* sockd_out);
+enum filegetter_code service_filegetter_activate(service_filegetter_tp sfg, gint sockd);
 enum filegetter_code service_filegetter_stop(service_filegetter_tp sfg);
 
 #endif /* SHD_SERVICE_FILEGETTER_H_ */

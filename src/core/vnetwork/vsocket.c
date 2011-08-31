@@ -19,6 +19,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <stdint.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -46,7 +47,7 @@
 #include "vepoll.h"
 #include "vpipe.h"
 
-static int vsocket_bind_implicit(vsocket_mgr_tp net, int fd, in_addr_t addr);
+static gint vsocket_bind_implicit(vsocket_mgr_tp net, gint fd, in_addr_t addr);
 
 void vsocket_try_destroy_server(vsocket_mgr_tp net, vsocket_tp server_sock) {
 	if(server_sock->type == SOCK_STREAM &&
@@ -58,16 +59,16 @@ void vsocket_try_destroy_server(vsocket_mgr_tp net, vsocket_tp server_sock) {
 	}
 }
 
-unsigned int vsocket_hash(in_addr_t addr, in_port_t port) {
+guint vsocket_hash(in_addr_t addr, in_port_t port) {
 	size_t portsize = sizeof(in_port_t);
 	size_t addrsize = sizeof(in_addr_t);
 
-	void* buffer = calloc(1, addrsize + portsize + 1);
+	gpointer buffer = calloc(1, addrsize + portsize + 1);
         memset(buffer, 0, addrsize + portsize + 1);
 
-	memcpy(buffer, (void*)&addr, addrsize);
-	memcpy(buffer+addrsize, (void*)&port, portsize);
-	unsigned int hash_value = g_str_hash(buffer);
+	memcpy(buffer, (gpointer )&addr, addrsize);
+	memcpy(buffer+addrsize, (gpointer )&port, portsize);
+	guint hash_value = g_str_hash(buffer);
 	free(buffer);
 	return hash_value;
 }
@@ -89,7 +90,7 @@ static vsocket_tp vsocket_get_socket_sender(vsocket_mgr_tp net, rc_vpacket_pod_t
 	return sock;
 }
 
-void vsocket_notify(vsocket_mgr_tp net, vsocket_tp sock, uint8_t can_read, uint8_t can_write) {
+void vsocket_notify(vsocket_mgr_tp net, vsocket_tp sock, guint8 can_read, guint8 can_write) {
 	if(net == NULL || sock == NULL){
 		return;
 	}
@@ -137,19 +138,46 @@ void vsocket_transition(vsocket_tp sock, enum vsocket_state newstate) {
 		sock->prev_state = sock->curr_state;
 		sock->curr_state = newstate;
 
-		char* s;
 		switch (newstate) {
 			case VUDP:
 				vepoll_mark_active(sock->vep);
 				vepoll_mark_available(sock->vep, VEPOLL_WRITE);
-				s = "UDP";
 				break;
 			case VTCP_CLOSED:
 				vepoll_mark_inactive(sock->vep);
-				s = "CLOSED";
 				break;
 			case VTCP_LISTEN:
 				vepoll_mark_active(sock->vep);
+				break;
+			case VTCP_SYN_SENT:
+				break;
+			case VTCP_SYN_RCVD:
+				break;
+			case VTCP_ESTABLISHED:
+				vepoll_mark_active(sock->vep);
+				vepoll_mark_available(sock->vep, VEPOLL_WRITE);
+				break;
+			case VTCP_CLOSING:
+				vepoll_mark_inactive(sock->vep);
+				break;
+			case VTCP_CLOSE_WAIT:
+				/* user needs to read a 0 so it knows we closed */
+				vepoll_mark_available(sock->vep, VEPOLL_READ);
+				break;
+			default:
+				break;
+		}
+
+#ifdef DEBUG
+		gchar* s;
+		switch (newstate) {
+			case VUDP:
+				s = "UDP";
+				break;
+			case VTCP_CLOSED:
+				s = "CLOSED";
+				break;
+			case VTCP_LISTEN:
 				s = "LISTEN";
 				break;
 			case VTCP_SYN_SENT:
@@ -159,17 +187,12 @@ void vsocket_transition(vsocket_tp sock, enum vsocket_state newstate) {
 				s = "SYN_RCVD";
 				break;
 			case VTCP_ESTABLISHED:
-				vepoll_mark_active(sock->vep);
-				vepoll_mark_available(sock->vep, VEPOLL_WRITE);
 				s = "ESTABLISHED";
 				break;
 			case VTCP_CLOSING:
-				vepoll_mark_inactive(sock->vep);
 				s = "CLOSING";
 				break;
 			case VTCP_CLOSE_WAIT:
-				/* user needs to read a 0 so it knows we closed */
-				vepoll_mark_available(sock->vep, VEPOLL_READ);
 				s = "CLOSE_WAIT";
 				break;
 			default:
@@ -177,10 +200,11 @@ void vsocket_transition(vsocket_tp sock, enum vsocket_state newstate) {
 				break;
 		}
 		debugf("vsocket_transition: socket %u moved to state %s (parent is %u)\n", sock->sock_desc, s, sock->sock_desc_parent);
+#endif
 	}
 }
 
-static int vsocket_bind_implicit(vsocket_mgr_tp net, int fd, in_addr_t addr) {
+static gint vsocket_bind_implicit(vsocket_mgr_tp net, gint fd, in_addr_t addr) {
 	struct sockaddr_in bind_addr;
 	memset(&bind_addr, 0, sizeof(bind_addr));
 	bind_addr.sin_addr.s_addr = addr;
@@ -189,7 +213,7 @@ static int vsocket_bind_implicit(vsocket_mgr_tp net, int fd, in_addr_t addr) {
 	return vsocket_bind(net, fd, &bind_addr, sizeof(bind_addr));
 }
 
-int vsocket_socket(vsocket_mgr_tp net, int domain, int type, int protocol) {
+gint vsocket_socket(vsocket_mgr_tp net, gint domain, gint type, gint protocol) {
 	/* vsocket only supports PF_INET */
 	if (domain != PF_INET) {
 		dlogf(LOG_WARN, "vsocket_socket: trying to create socket with domain \"%i\", we only support PF_INET\n", domain);
@@ -198,7 +222,7 @@ int vsocket_socket(vsocket_mgr_tp net, int domain, int type, int protocol) {
 	}
 
 	/* vsocket only supports non-blocking sockets */
-	uint8_t blocking = 1;
+	guint8 blocking = 1;
 
 	/* clear non-blocking flags if set to get true type */
 	if(type & SOCK_NONBLOCK) {
@@ -236,7 +260,7 @@ err:
 	return VSOCKET_ERROR;
 }
 
-int vsocket_socketpair(vsocket_mgr_tp net, int domain, int type, int protocol, int sv[2]) {
+gint vsocket_socketpair(vsocket_mgr_tp net, gint domain, gint type, gint protocol, gint sv[2]) {
 	/* TODO: this is currently implemented just so it works in scallion!! */
 
 	/* create a pair of connected sockets, i.e. a pipe */
@@ -246,7 +270,7 @@ int vsocket_socketpair(vsocket_mgr_tp net, int domain, int type, int protocol, i
 	}
 
 	/* vsocket only supports non-blocking sockets */
-	uint8_t blocking = 1;
+	guint8 blocking = 1;
 
 	/* clear non-blocking flags if set to get true type */
 	if(type & SOCK_NONBLOCK) {
@@ -286,7 +310,7 @@ int vsocket_socketpair(vsocket_mgr_tp net, int domain, int type, int protocol, i
 	}
 }
 
-int vsocket_bind(vsocket_mgr_tp net, int fd, struct sockaddr_in* saddr, socklen_t saddr_len) {
+gint vsocket_bind(vsocket_mgr_tp net, gint fd, struct sockaddr_in* saddr, socklen_t saddr_len) {
 	/* check for NULL addr */
 	if(saddr == NULL || saddr_len < sizeof(struct sockaddr_in)) {
 		errno = EFAULT;
@@ -319,8 +343,8 @@ int vsocket_bind(vsocket_mgr_tp net, int fd, struct sockaddr_in* saddr, socklen_
 		bind_port = htons(net->next_rnd_port++);
 	}
 
-	int bound_lb = vsocket_mgr_isbound_loopback(net, bind_port);
-	int bound_eth = vsocket_mgr_isbound_ethernet(net, bind_port);
+	gint bound_lb = vsocket_mgr_isbound_loopback(net, bind_port);
+	gint bound_eth = vsocket_mgr_isbound_ethernet(net, bind_port);
 
 	/* TODO refactor this to separate method.
 	 * make sure an existing socket is not already using the port and interface
@@ -364,7 +388,7 @@ int vsocket_bind(vsocket_mgr_tp net, int fd, struct sockaddr_in* saddr, socklen_
 	return VSOCKET_SUCCESS;
 }
 
-int vsocket_getsockname(vsocket_mgr_tp net, int fd, struct sockaddr_in* saddr, socklen_t* saddr_len) {
+gint vsocket_getsockname(vsocket_mgr_tp net, gint fd, struct sockaddr_in* saddr, socklen_t* saddr_len) {
 	/* check if this is a socket */
 	if(fd < VNETWORK_MIN_SD){
 		errno = ENOTSOCK;
@@ -409,7 +433,7 @@ int vsocket_getsockname(vsocket_mgr_tp net, int fd, struct sockaddr_in* saddr, s
 	return VSOCKET_SUCCESS;
 }
 
-int vsocket_connect(vsocket_mgr_tp net, int fd, struct sockaddr_in* saddr, socklen_t saddr_len) {
+gint vsocket_connect(vsocket_mgr_tp net, gint fd, struct sockaddr_in* saddr, socklen_t saddr_len) {
 	/* check if this is a socket */
 	if(fd < VNETWORK_MIN_SD){
 		errno = ENOTSOCK;
@@ -479,7 +503,7 @@ int vsocket_connect(vsocket_mgr_tp net, int fd, struct sockaddr_in* saddr, sockl
 
 		/* send 1st part of 3-way handshake, closed->syn_sent */
 		rc_vpacket_pod_tp rc_packet = vtcp_create_packet(sock->vt->vtcp, SYN | CON, 0, NULL);
-		uint8_t success = vtcp_send_packet(sock->vt->vtcp, rc_packet);
+		guint8 success = vtcp_send_packet(sock->vt->vtcp, rc_packet);
 
 		rc_vpacket_pod_release(rc_packet);
 
@@ -538,7 +562,7 @@ int vsocket_connect(vsocket_mgr_tp net, int fd, struct sockaddr_in* saddr, sockl
 	return VSOCKET_ERROR;
 }
 
-int vsocket_getpeername(vsocket_mgr_tp net, int fd, struct sockaddr_in* saddr, socklen_t* saddr_len) {
+gint vsocket_getpeername(vsocket_mgr_tp net, gint fd, struct sockaddr_in* saddr, socklen_t* saddr_len) {
 	/* check if this is a socket */
 	if(fd < VNETWORK_MIN_SD){
 		errno = ENOTSOCK;
@@ -577,15 +601,15 @@ int vsocket_getpeername(vsocket_mgr_tp net, int fd, struct sockaddr_in* saddr, s
 	return VSOCKET_SUCCESS;
 }
 
-ssize_t vsocket_send(vsocket_mgr_tp net, int fd, const void* buf, size_t n, int flags) {
+ssize_t vsocket_send(vsocket_mgr_tp net, gint fd, const gpointer buf, size_t n, gint flags) {
 	return vsocket_sendto(net, fd, buf, n, flags, NULL, 0);
 }
 
-ssize_t vsocket_recv(vsocket_mgr_tp net, int fd, void* buf, size_t n, int flags) {
+ssize_t vsocket_recv(vsocket_mgr_tp net, gint fd, gpointer buf, size_t n, gint flags) {
 	return vsocket_recvfrom(net, fd, buf, n, flags, NULL, 0);
 }
 
-ssize_t vsocket_sendto(vsocket_mgr_tp net, int fd, const void* buf, size_t n, int flags,
+ssize_t vsocket_sendto(vsocket_mgr_tp net, gint fd, const gpointer buf, size_t n, gint flags,
 		struct sockaddr_in* saddr, socklen_t saddr_len) {
 	/* block sending if we have yet to absorb cpu delays */
 	if(vcpu_is_blocking(net->vcpu)) {
@@ -635,7 +659,7 @@ ssize_t vsocket_sendto(vsocket_mgr_tp net, int fd, const void* buf, size_t n, in
 		}
 
 		if(sock->vt == NULL || sock->vt->vtcp == NULL) {
-			/* internal error */
+			/* ginternal error */
 			dlogf(LOG_ERR, "vsocket_sendto: NULL transport objects");
 			errno = EINVAL;
 			return VSOCKET_ERROR;
@@ -713,12 +737,12 @@ ssize_t vsocket_sendto(vsocket_mgr_tp net, int fd, const void* buf, size_t n, in
 
 		/* user is reading some bytes. lets assume some cpu processing delay
 		 * here since they will need to copy these and process them. */
-		vcpu_add_load_write(net->vcpu, (uint32_t)result);
+		vcpu_add_load_write(net->vcpu, (guint32)result);
 	}
 	return result;
 }
 
-ssize_t vsocket_recvfrom(vsocket_mgr_tp net, int fd, void* buf, size_t n, int flags,
+ssize_t vsocket_recvfrom(vsocket_mgr_tp net, gint fd, gpointer buf, size_t n, gint flags,
 		struct sockaddr_in* saddr, socklen_t* saddr_len) {
 	/* block receiving if we have yet to absorb cpu delays */
 	if(vcpu_is_blocking(net->vcpu)) {
@@ -812,34 +836,34 @@ ssize_t vsocket_recvfrom(vsocket_mgr_tp net, int fd, void* buf, size_t n, int fl
 	if(result > 0) {
 		/* user is reading some bytes. lets assume some cpu processing delay
 		 * here since they will need to copy these and process them. */
-		vcpu_add_load_read(net->vcpu, (uint32_t)result);
+		vcpu_add_load_read(net->vcpu, (guint32)result);
 	}
 
 	return result;
 }
 
-ssize_t vsocket_sendmsg(vsocket_mgr_tp net, int fd, const struct msghdr* message, int flags) {
+ssize_t vsocket_sendmsg(vsocket_mgr_tp net, gint fd, const struct msghdr* message, gint flags) {
 	/* TODO implement */
 	dlogf(LOG_WARN, "vsocket_sendmsg: sendmsg not implemented\n");
 	errno = ENOSYS;
 	return (ssize_t) VSOCKET_ERROR;
 }
 
-ssize_t vsocket_recvmsg(vsocket_mgr_tp net, int fd, struct msghdr* message, int flags) {
+ssize_t vsocket_recvmsg(vsocket_mgr_tp net, gint fd, struct msghdr* message, gint flags) {
 	/* TODO implement */
 	dlogf(LOG_WARN, "vsocket_recvmsg: recvmsg not implemented\n");
 	errno = ENOSYS;
 	return (ssize_t) VSOCKET_ERROR;
 }
 
-int vsocket_getsockopt(vsocket_mgr_tp net, int fd, int level, int optname, void* optval,
+gint vsocket_getsockopt(vsocket_mgr_tp net, gint fd, gint level, gint optname, gpointer optval,
 		socklen_t* optlen) {
 	/* TODO implement required options/levels */
 	if(level == SOL_SOCKET || level == SOL_IP) {
 		switch (optname) {
 			case SO_ERROR:
-				*((int*)optval) = 0;
-				*optlen = sizeof(int);
+				*((gint*)optval) = 0;
+				*optlen = sizeof(gint);
 				break;
 
 			default:
@@ -856,7 +880,7 @@ int vsocket_getsockopt(vsocket_mgr_tp net, int fd, int level, int optname, void*
 	}
 }
 
-int vsocket_setsockopt(vsocket_mgr_tp net, int fd, int level, int optname, const void* optval,
+gint vsocket_setsockopt(vsocket_mgr_tp net, gint fd, gint level, gint optname, const gpointer optval,
 		socklen_t optlen) {
 	/* TODO implement */
 	dlogf(LOG_WARN, "vsocket_setsockopt: setsockopt not implemented\n");
@@ -864,7 +888,7 @@ int vsocket_setsockopt(vsocket_mgr_tp net, int fd, int level, int optname, const
 	return VSOCKET_ERROR;
 }
 
-int vsocket_listen(vsocket_mgr_tp net, int fd, int backlog) {
+gint vsocket_listen(vsocket_mgr_tp net, gint fd, gint backlog) {
 	/* check if this is a socket */
 	if(fd < VNETWORK_MIN_SD){
 		errno = ENOTSOCK;
@@ -903,7 +927,7 @@ int vsocket_listen(vsocket_mgr_tp net, int fd, int backlog) {
 	return VSOCKET_SUCCESS;
 }
 
-int vsocket_accept(vsocket_mgr_tp net, int fd, struct sockaddr_in* saddr, socklen_t* saddr_len) {
+gint vsocket_accept(vsocket_mgr_tp net, gint fd, struct sockaddr_in* saddr, socklen_t* saddr_len) {
 	/* check if this is a socket */
 	if(fd < VNETWORK_MIN_SD){
 		errno = ENOTSOCK;
@@ -985,22 +1009,22 @@ int vsocket_accept(vsocket_mgr_tp net, int fd, struct sockaddr_in* saddr, sockle
 	return pending_sock->sock_desc;
 }
 
-int vsocket_shutdown(vsocket_mgr_tp net, int fd, int how) {
+gint vsocket_shutdown(vsocket_mgr_tp net, gint fd, gint how) {
 	/* TODO implement */
 	dlogf(LOG_WARN, "vsocket_shutdown: shutdown not implemented\n");
 	errno = ENOSYS;
 	return VSOCKET_ERROR;
 }
 
-ssize_t vsocket_read(vsocket_mgr_tp net, int fd, void* buf, size_t n) {
+ssize_t vsocket_read(vsocket_mgr_tp net, gint fd, gpointer buf, size_t n) {
 	return vsocket_recvfrom(net, fd, buf, n, 0, NULL, 0);
 }
 
-ssize_t vsocket_write(vsocket_mgr_tp net, int fd, const void* buf, size_t n) {
+ssize_t vsocket_write(vsocket_mgr_tp net, gint fd, const gpointer buf, size_t n) {
 	return vsocket_sendto(net, fd, buf, n, 0, NULL, 0);
 }
 
-int vsocket_close(vsocket_mgr_tp net, int fd) {
+gint vsocket_close(vsocket_mgr_tp net, gint fd) {
 	/* check if this is a socket */
 	if(net == NULL || fd < VNETWORK_MIN_SD){
 		errno = ENOTSOCK;
@@ -1037,7 +1061,7 @@ int vsocket_close(vsocket_mgr_tp net, int fd) {
 	}
 
 	if(sock == NULL && net->destroyed_descs != NULL &&
-			g_hash_table_remove(net->destroyed_descs, int_key(fd)) != FALSE) {
+			g_hash_table_remove(net->destroyed_descs, gint_key(fd)) != FALSE) {
 		/* socket was previously deleted, considered a successful close */
 		return VSOCKET_SUCCESS;
 	}

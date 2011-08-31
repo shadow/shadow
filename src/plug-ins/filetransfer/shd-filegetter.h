@@ -23,6 +23,7 @@
 #ifndef SHD_FILEGETTER_H_
 #define SHD_FILEGETTER_H_
 
+#include <glib.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <netinet/in.h>
@@ -56,9 +57,9 @@ typedef struct filegetter_filestats_s {
 } filegetter_filestats_t, *filegetter_filestats_tp;
 
 typedef struct filegetter_filespec_s {
-	char remote_path[FT_STR_SIZE];
-	char local_path[FT_STR_SIZE];
-	uint8_t do_save;
+	gchar remote_path[FT_STR_SIZE];
+	gchar local_path[FT_STR_SIZE];
+	guint8 do_save;
 } filegetter_filespec_t, *filegetter_filespec_tp;
 
 typedef struct filegetter_serverspec_s {
@@ -73,9 +74,9 @@ typedef struct filegetter_s {
 	filegetter_filespec_t fspec;
 	filegetter_filestats_t curstats;
 	filegetter_filestats_t allstats;
-	int sockd;
+	gint sockd;
 	FILE* f;
-	char buf[FT_BUF_SIZE];
+	gchar buf[FT_BUF_SIZE];
 	size_t buf_write_offset;
 	size_t buf_read_offset;
 	struct timespec download_start;
@@ -98,6 +99,6 @@ enum filegetter_code filegetter_stat_download(filegetter_tp fg, filegetter_files
 
 enum filegetter_code filegetter_stat_aggregate(filegetter_tp fg, filegetter_filestats_tp stats_out);
 
-const char* filegetter_codetoa(enum filegetter_code fgc);
+const gchar* filegetter_codetoa(enum filegetter_code fgc);
 
 #endif /* SHD_FILEGETTER_H_ */

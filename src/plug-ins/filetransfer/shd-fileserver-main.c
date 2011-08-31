@@ -20,6 +20,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -42,18 +43,18 @@
 #define LOGD(fmt, ...) fprintf(stdout, fmt, ## __VA_ARGS__)
 
 #ifdef _FSDEBUG
-void report(int sockd, struct timeval *ti_start, struct timeval *ti_now, struct tcp_info *ti, socklen_t *ti_len)
+void report(gint sockd, struct timeval *ti_start, struct timeval *ti_now, struct tcp_info *ti, socklen_t *ti_len)
 {
 	/* Convert "struct timeval" to fractional seconds. */
     gettimeofday(ti_now, NULL);
-    double t = (ti_now->tv_sec - ti_start->tv_sec) + (ti_now->tv_usec - ti_start->tv_usec) / 1e6;
+    gdouble t = (ti_now->tv_sec - ti_start->tv_sec) + (ti_now->tv_usec - ti_start->tv_usec) / 1e6;
     /* get and report socket vals */
     getsockopt(sockd, SOL_TCP, TCP_INFO, ti, ti_len);
     LOGD("%.6f sockd=%i last_sent=%u last_recv=%u snd_cwnd=%u snd_thrs=%u snd_wndscale=%u, rcv_thrs=%u rtt=%u rtt_var=%u unacked=%u sacked=%u lost=%u retran=%u fackets=%u\n", t, sockd, ti->tcpi_last_data_sent, ti->tcpi_last_data_recv, ti->tcpi_snd_cwnd, ti->tcpi_snd_ssthresh, ti->tcpi_snd_wscale, ti->tcpi_rcv_ssthresh, ti->tcpi_rtt, ti->tcpi_rttvar, ti->tcpi_unacked, ti->tcpi_sacked, ti->tcpi_lost, ti->tcpi_retrans, ti->tcpi_fackets);
 }
 #endif
 
-int main(int argc, char *argv[])
+gint main(gint argc, gchar *argv[])
 {
 	LOGD("parsing args\n");
 	if(argc != 3) {
@@ -64,7 +65,7 @@ int main(int argc, char *argv[])
 
 	in_addr_t listen_addr = INADDR_ANY;
 	in_port_t listen_port = (in_port_t) atoi(argv[1]);
-	char* docroot = argv[2];
+	gchar* docroot = argv[2];
 
 	fileserver_t fs;
 	memset(&fs, 0, sizeof(fileserver_t));
@@ -104,12 +105,12 @@ int main(int argc, char *argv[])
 
 		/* watch the server for reads */
 		FD_SET(fs.listen_sockd, &readset);
-		int max_sockd = fs.listen_sockd;
+		gint max_sockd = fs.listen_sockd;
 
 		/* watch all children for reads and writes */
 		GList *child = g_queue_peek_head_link(children);
 		while(child != NULL) {
-			int sd = (int)child->data;
+			gint sd = GPOINTER_TO_INT(child->data);
 			if(sd > max_sockd){
 				max_sockd = sd;
 			}
@@ -118,18 +119,18 @@ int main(int argc, char *argv[])
                         child = child->next;
 		}
 
-		int err = select(max_sockd+1, &readset, &writeset, NULL, NULL);
+		gint err = select(max_sockd+1, &readset, &writeset, NULL, NULL);
 		if(err < 0) {
 			perror("select()");
 		}
 
 		if(FD_ISSET(fs.listen_sockd, &readset)) {
-			int next_sockd = 0;
+			gint next_sockd = 0;
 			enum fileserver_code result = fileserver_accept_one(&fs, &next_sockd);
 
 			if(result == FS_SUCCESS) {
 				/* keep a list so we can iterate children */
-				g_queue_push_tail(children, (void*) ((long)next_sockd));
+				g_queue_push_tail(children, (gpointer ) ((long)next_sockd));
 			}
 		}
 
@@ -138,13 +139,13 @@ int main(int argc, char *argv[])
 
 		child = g_queue_peek_head_link(children);
 		while(child != NULL) {
-			int sd = (int)child->data;
+			gint sd = GPOINTER_TO_INT(child->data);
 
 			if(FD_ISSET(sd, &readset) || FD_ISSET(sd, &writeset)) {
 				enum fileserver_code result = fileserver_activate(&fs, sd);
 
 				if(result != FS_ERR_WOULDBLOCK && result != FS_SUCCESS) {
-					g_queue_push_tail(remove, (void*) ((long)sd));
+					g_queue_push_tail(remove, (gpointer ) ((long)sd));
 				}
 #ifdef _FSDEBUG
 				/* report some TCP kernel info */

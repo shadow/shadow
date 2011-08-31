@@ -20,6 +20,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <stdlib.h>
 
 #include "simnet_graph.h"
@@ -45,8 +46,8 @@ simnet_graph_tp simnet_graph_create() {
 
 static void simnet_graph_track_minmax(simnet_graph_tp g, cdf_tp cdf) {
 	if(g != NULL && cdf != NULL) {
-		unsigned int min = (unsigned int) cdf_min_value(cdf);
-		unsigned int max = (unsigned int) cdf_max_value(cdf);
+		guint min = (guint) cdf_min_value(cdf);
+		guint max = (guint) cdf_max_value(cdf);
 
 		if(g->runahead_min == 0 || min < g->runahead_min) {
 			g->runahead_min = min;
@@ -60,7 +61,7 @@ static void simnet_graph_track_minmax(simnet_graph_tp g, cdf_tp cdf) {
 	}
 }
 
-static double simnet_graph_bound_reliability(double reliability) {
+static gdouble simnet_graph_bound_reliability(gdouble reliability) {
 	if(reliability < 0.0) {
 		reliability = 0.0;
 	}
@@ -70,7 +71,7 @@ static double simnet_graph_bound_reliability(double reliability) {
 	return reliability;
 }
 
-void simnet_graph_add_vertex(simnet_graph_tp g, unsigned int network_id, cdf_tp latency_cdf, double reliablity) {
+void simnet_graph_add_vertex(simnet_graph_tp g, guint network_id, cdf_tp latency_cdf, gdouble reliablity) {
 	reliablity = simnet_graph_bound_reliability(reliablity);
 	if(g != NULL) {
 		simnet_vertex_tp v = g_hash_table_lookup(g->vertices_map, &network_id);
@@ -78,13 +79,13 @@ void simnet_graph_add_vertex(simnet_graph_tp g, unsigned int network_id, cdf_tp 
 			v = malloc(sizeof(simnet_vertex_t));
 
 			v->id = network_id;
-			v->intranet_latency = latency_cdf;
+			v->gintranet_latency = latency_cdf;
 			v->reliablity = reliablity;
 
 			v->edges = g_hash_table_new(g_int_hash, g_int_equal);
 
 			g_queue_push_tail(g->vertices, v);
-			g_hash_table_insert(g->vertices_map, int_key(network_id), v);
+			g_hash_table_insert(g->vertices_map, gint_key(network_id), v);
 
 			simnet_graph_track_minmax(g, latency_cdf);
 
@@ -95,7 +96,7 @@ void simnet_graph_add_vertex(simnet_graph_tp g, unsigned int network_id, cdf_tp 
 	}
 }
 
-void simnet_graph_add_edge(simnet_graph_tp g, unsigned int id1, cdf_tp latency_cdf_1to2, double reliablity_1to2, unsigned int id2, cdf_tp latency_cdf_2to1, double reliablity_2to1) {
+void simnet_graph_add_edge(simnet_graph_tp g, guint id1, cdf_tp latency_cdf_1to2, gdouble reliablity_1to2, guint id2, cdf_tp latency_cdf_2to1, gdouble reliablity_2to1) {
 	reliablity_1to2 = simnet_graph_bound_reliability(reliablity_1to2);
 	reliablity_2to1 = simnet_graph_bound_reliability(reliablity_2to1);
 
@@ -107,22 +108,22 @@ void simnet_graph_add_edge(simnet_graph_tp g, unsigned int id1, cdf_tp latency_c
 			simnet_edge_tp e = malloc(sizeof(simnet_edge_t));
 
 			e->vertex1 = v1;
-			e->internet_latency_1to2 = latency_cdf_1to2;
+			e->ginternet_latency_1to2 = latency_cdf_1to2;
 			e->reliablity_1to2 = reliablity_1to2;
 			e->vertex2 = v2;
-			e->internet_latency_2to1 = latency_cdf_2to1;
+			e->ginternet_latency_2to1 = latency_cdf_2to1;
 			e->reliablity_2to1 = reliablity_2to1;
 
 			g_queue_push_tail(g->edges, e);
-			g_hash_table_insert(v1->edges, int_key(id2), e);
-			g_hash_table_insert(v2->edges, int_key(id1), e);
+			g_hash_table_insert(v1->edges, gint_key(id2), e);
+			g_hash_table_insert(v2->edges, gint_key(id1), e);
 
 			simnet_graph_track_minmax(g, latency_cdf_1to2);
 			simnet_graph_track_minmax(g, latency_cdf_2to1);
 
 			g->is_dirty = 1;
 		} else {
-			dlogf(LOG_WARN, "simnet_graph_add_edge: edge endpoint(s) %u and/or $u missing\n", id1, id2);
+			dlogf(LOG_WARN, "simnet_graph_add_edge: edge endpogint(s) %u and/or $u missing\n", id1, id2);
 		}
 	}
 }
@@ -156,24 +157,24 @@ void simnet_graph_destroy(simnet_graph_tp g) {
 	}
 }
 
-double simnet_graph_end2end_latency(simnet_graph_tp g, unsigned int src_network_id, unsigned int dst_network_id) {
-	double milliseconds_latency = -1;
+gdouble simnet_graph_end2end_latency(simnet_graph_tp g, guint src_network_id, guint dst_network_id) {
+	gdouble milliseconds_latency = -1;
 
 	if(g != NULL) {
 		/* find latency for a node in src_network to a node in dst_network */
 		simnet_vertex_tp vertex = g_hash_table_lookup(g->vertices_map, &src_network_id);
 		if(vertex != NULL) {
 			if(src_network_id == dst_network_id) {
-				/* intranet */
-				milliseconds_latency = cdf_random_value(vertex->intranet_latency);
+				/* gintranet */
+				milliseconds_latency = cdf_random_value(vertex->gintranet_latency);
 			} else {
-				/* internet */
+				/* ginternet */
 				simnet_edge_tp edge = g_hash_table_lookup(vertex->edges, &dst_network_id);
 				if(edge != NULL) {
 					if(vertex->id == edge->vertex1->id) {
-						milliseconds_latency = cdf_random_value(edge->internet_latency_1to2);
+						milliseconds_latency = cdf_random_value(edge->ginternet_latency_1to2);
 					} else if(vertex->id == edge->vertex2->id) {
-						milliseconds_latency = cdf_random_value(edge->internet_latency_2to1);
+						milliseconds_latency = cdf_random_value(edge->ginternet_latency_2to1);
 					} else {
 						dlogf(LOG_WARN, "simnet_graph_end2end_latency: no connection between networks %u and $u\n", src_network_id, dst_network_id);
 					}
@@ -185,18 +186,18 @@ double simnet_graph_end2end_latency(simnet_graph_tp g, unsigned int src_network_
 	return milliseconds_latency;
 }
 
-double simnet_graph_end2end_reliablity(simnet_graph_tp g, unsigned int src_network_id, unsigned int dst_network_id) {
-	double reliability = -1;
+gdouble simnet_graph_end2end_reliablity(simnet_graph_tp g, guint src_network_id, guint dst_network_id) {
+	gdouble reliability = -1;
 
 	if(g != NULL) {
 		/* find latency for a node in src_network to a node in dst_network */
 		simnet_vertex_tp vertex = g_hash_table_lookup(g->vertices_map, &src_network_id);
 		if(vertex != NULL) {
 			if(src_network_id == dst_network_id) {
-				/* intranet */
+				/* gintranet */
 				reliability = vertex->reliablity;
 			} else {
-				/* internet */
+				/* ginternet */
 				simnet_edge_tp edge = g_hash_table_lookup(vertex->edges, &dst_network_id);
 				if(edge != NULL) {
 					if(vertex->id == edge->vertex1->id) {

@@ -20,6 +20,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -30,12 +31,12 @@
 
 #include "pingpong_lib.h"
 
-const char * ip_to_string(in_addr_t ip, char *buffer, size_t buflen) {
+const gchar * ip_to_string(in_addr_t ip, gchar *buffer, size_t buflen) {
 	return inet_ntop(AF_INET, &ip, buffer, buflen);
 }
 
-int udpserver_start(simple_transport_tp instance){
-	int socketd;
+gint udpserver_start(simple_transport_tp instance){
+	gint socketd;
 	struct sockaddr_in server;
 
 	/* create the socket and get a socket descriptor */
@@ -61,8 +62,8 @@ int udpserver_start(simple_transport_tp instance){
 	return socketd;
 }
 
-int udpclient_start(simple_transport_tp instance){
-	int socketd;
+gint udpclient_start(simple_transport_tp instance){
+	gint socketd;
 
 	/* create the socket and get a socket descriptor */
 	if ((socketd = socket(AF_INET, SOCK_DGRAM | SOCK_NONBLOCK, 0)) == ERROR) {
@@ -73,8 +74,8 @@ int udpclient_start(simple_transport_tp instance){
 	return socketd;
 }
 
-int tcpserver_start(simple_transport_tp instance){
-	int socketd;
+gint tcpserver_start(simple_transport_tp instance){
+	gint socketd;
 	struct sockaddr_in server;
 
 	/* create the socket and get a socket descriptor */
@@ -114,20 +115,20 @@ int tcpserver_start(simple_transport_tp instance){
 	return socketd;
 }
 
-int tcpserver_accept(simple_transport_tp instance){
+gint tcpserver_accept(simple_transport_tp instance){
 	/* need to accept a connection on server listening socket */
 	struct sockaddr_in client;
-	int client_len = sizeof(client);
+	gint client_len = sizeof(client);
 
-	int socketd_to_client = accept(instance->sdata->listening_socketd, (struct sockaddr *) &client, (socklen_t *) &client_len);
+	gint socketd_to_client = accept(instance->sdata->listening_socketd, (struct sockaddr *) &client, (socklen_t *) &client_len);
 	if(socketd_to_client == ERROR) {
 		perror("Error in tcpserver_accept: accept");
 	}
 	return socketd_to_client;
 }
 
-int tcpclient_start(simple_transport_tp instance, in_addr_t server_address, int server_port){
-	int socketd;
+gint tcpclient_start(simple_transport_tp instance, in_addr_t server_address, gint server_port){
+	gint socketd;
 	struct sockaddr_in server;
 
 	/* setup the socket address info, client has outgoing connection to server */
@@ -154,9 +155,9 @@ int tcpclient_start(simple_transport_tp instance, in_addr_t server_address, int 
 	return socketd;
 }
 
-int transport_send_message(simple_transport_tp instance, int socketd, struct sockaddr_in* destination) {
-	char* message;
-	int result = 0;
+gint transport_send_message(simple_transport_tp instance, gint socketd, struct sockaddr_in* destination) {
+	gchar* message;
+	gint result = 0;
 
 	if (instance->is_server) {
 		message = "Server PONG!";
@@ -169,7 +170,7 @@ int transport_send_message(simple_transport_tp instance, int socketd, struct soc
 	if (result == ERROR) {
 		perror("Error in transport_send_message: sendto");
 	} else {
-		char buffer[40];
+		gchar buffer[40];
 		LOG("Sent '%s' to %s:%i.\n", message, ip_to_string(destination->sin_addr.s_addr, buffer, sizeof(buffer)), destination->sin_port);
 		instance->num_msgs_sent++;
 	}
@@ -177,12 +178,12 @@ int transport_send_message(simple_transport_tp instance, int socketd, struct soc
 	return result;
 }
 
-int transport_receive_message(simple_transport_tp instance, int socketd, struct sockaddr* source) {
-	int result = 0;
+gint transport_receive_message(simple_transport_tp instance, gint socketd, struct sockaddr* source) {
+	gint result = 0;
 
 	/* receive if there is data available */
-	void* data = calloc(1, 256);
-	char buffer[40];
+	gpointer data = calloc(1, 256);
+	gchar buffer[40];
 
 	socklen_t source_len = sizeof(*source);
 	result = recvfrom(socketd, data, 255, 0, source, &source_len);
@@ -196,7 +197,7 @@ int transport_receive_message(simple_transport_tp instance, int socketd, struct 
 		}
 	} else {
 		struct sockaddr_in* sa = (struct sockaddr_in*) source;
-		LOG("Received '%s' from %s:%i.\n", (char*)data, ip_to_string(sa->sin_addr.s_addr, buffer, sizeof(buffer)), sa->sin_port);
+		LOG("Received '%s' from %s:%i.\n", (gchar*)data, ip_to_string(sa->sin_addr.s_addr, buffer, sizeof(buffer)), sa->sin_port);
 		instance->num_msgs_received++;
 	}
 

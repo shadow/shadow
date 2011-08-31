@@ -24,28 +24,29 @@
 #ifndef LINKEDBUFFER_H_
 #define LINKEDBUFFER_H_
 
+#include <glib.h>
 #include <stdint.h>
 #include <stddef.h>
 
 typedef struct bufferlink_t{
-	void* buf;
-	uint16_t capacity;
+	gpointer buf;
+	guint16 capacity;
 	struct bufferlink_t* next;
 }bufferlink_t, *bufferlink_tp;
 
 typedef struct linkedbuffer{
 	bufferlink_tp tail;
-	uint16_t tail_r_offset;
+	guint16 tail_r_offset;
 	bufferlink_tp head;
-	uint16_t head_w_offset;
-	uint16_t num_links;
+	guint16 head_w_offset;
+	guint16 num_links;
 	size_t length;
 	size_t link_capacity;
 }linkedbuffer_t, *linkedbuffer_tp;
 
 linkedbuffer_tp linkedbuffer_create(size_t link_capacity);
 void linkedbuffer_destroy(linkedbuffer_tp lbuffer);
-size_t linkedbuffer_read(linkedbuffer_tp lbuffer, void* dest, size_t numbytes);
-size_t linkedbuffer_write(linkedbuffer_tp lbuffer, const void* src, size_t numbytes);
+size_t linkedbuffer_read(linkedbuffer_tp lbuffer, gpointer dest, size_t numbytes);
+size_t linkedbuffer_write(linkedbuffer_tp lbuffer, const gpointer src, size_t numbytes);
 
 #endif /* LINKEDBUFFER_H_ */

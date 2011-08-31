@@ -23,6 +23,7 @@
 #ifndef SHMCABINET_INTERNAL_H_
 #define SHMCABINET_INTERNAL_H_
 
+#include <glib.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -54,7 +55,7 @@
 #define SHMCABINET_NAME_FORMAT "/shmcabinet-shm-%u-%u"
 
 /* maximum size of a shmem name:
- * 20 for chars, pad, and null, 20 for the maximum chars required for 2 uint32s */
+ * 20 for gchars, pad, and null, 20 for the maximum gchars required for 2 ugint32s */
 #define SHMCABINET_NAME_MAX_SIZE 40
 
 /* a slot is valid if the its valid tag matches this */
@@ -72,16 +73,16 @@ enum shmcabinet_lockop {
  * will be held immediately following this structure in the shared memory space. */
 typedef struct shmcabinet_slot_s {
 	/* unique slot id inside a given cabinet */
-	uint32_t id;
+	guint32 id;
 	/* number of open references to this slot (reference count) */
-	uint32_t num_opened;
-	/* offset to the next unallocated slot from the cabinet pointer */
+	guint32 num_opened;
+	/* offset to the next unallocated slot from the cabinet poginter */
 	size_t next_slot_offset;
 	/* a lock is stored in the first bytes of data. its size is stored here.
 	 * lock protects num_opened and next_slot_offset only */
 	/* if the slot is valid, this will be set to SHMCABINET_VALID */
-	uint32_t valid;
-	char data[];
+	guint32 valid;
+	gchar data[];
 } shmcabinet_slot_t, *shmcabinet_slot_tp;
 
 /* cabinet structure and associated control information.
@@ -89,63 +90,63 @@ typedef struct shmcabinet_slot_s {
  * structure in shared memory. */
 typedef struct shmcabinet_s {
 	/* unique process id, combined with cabinet id to create unique shmem mappings */
-	uint32_t pid;
+	guint32 pid;
 	/* unique cabinet id for this process */
-	uint32_t id;
+	guint32 id;
 	/* total size of the cabinet computed during construction */
 	size_t size;
 	/* number of open references to this cabinet (reference count) */
-	uint32_t num_opened;
+	guint32 num_opened;
 	/* size of each slot, including header and payload */
 	size_t slot_size;
 	/* number of slots this cabinet holds, specified in the constructor */
-	uint32_t num_slots;
+	guint32 num_slots;
 	/* number of allocated slots in this cabinet (reference count) */
-	uint32_t num_slots_allocated;
-	/* offset to the first unallocated slot from the cabinet pointer */
+	guint32 num_slots_allocated;
+	/* offset to the first unallocated slot from the cabinet poginter */
 	size_t head_slot_offset;
 	/* a lock is stored in the first bytes of data. its size is stored here.
 	 * lock protects num_opened, num_slots_allocated, and head_slot_offset only */
 	size_t cabinet_lock_size;
 	size_t slot_lock_size;
 	/* if the cabinet is valid, this will be set to SHMCABINET_VALID */
-	uint32_t valid;
-	char data[];
+	guint32 valid;
+	gchar data[];
 } shmcabinet_s;
 
 /* creates a buffer with the given variable name that contains
  * the name of the shared memory file mapped in /dev/shm/ */
 #define shmcabinet_NAME(bufname, process_id, cabinet_id) \
-	char bufname[SHMCABINET_NAME_MAX_SIZE]; \
+	gchar bufname[SHMCABINET_NAME_MAX_SIZE]; \
 	snprintf(bufname, SHMCABINET_NAME_MAX_SIZE, SHMCABINET_NAME_FORMAT, process_id, cabinet_id)
 
-/* returns a pointer to the mapped address of the head slot */
+/* returns a poginter to the mapped address of the head slot */
 #define shmcabinet_HEAD(cabinet) \
-	((shmcabinet_slot_tp)(((char*)cabinet) + (cabinet->head_slot_offset)))
+	((shmcabinet_slot_tp)(((gchar*)cabinet) + (cabinet->head_slot_offset)))
 
-/** returns the offset from the cabinet pointer to the slot given by slot_id */
+/** returns the offset from the cabinet poginter to the slot given by slot_id */
 #define shmcabinet_ID_TO_OFFSET(cabinet, slot_id) \
 	((size_t)(sizeof(shmcabinet_t) + cabinet->cabinet_lock_size + ((slot_id) * (cabinet->slot_size))))
 
-/* returns a pointer to the mapped address of the slot given by slot_id */
+/* returns a poginter to the mapped address of the slot given by slot_id */
 #define shmcabinet_ID_TO_SLOT(cabinet, slot_id) \
-	((shmcabinet_slot_tp)(((char*)cabinet) + shmcabinet_ID_TO_OFFSET(cabinet, slot_id)))
+	((shmcabinet_slot_tp)(((gchar*)cabinet) + shmcabinet_ID_TO_OFFSET(cabinet, slot_id)))
 
-/* returns the offset from the cabinet pointer to the given slot payload */
+/* returns the offset from the cabinet poginter to the given slot payload */
 #define shmcabinet_PAYLOAD_TO_OFFSET(cabinet, payload) \
-	((size_t)(((char*) payload) - ((char*) cabinet)))
+	((size_t)(((gchar*) payload) - ((gchar*) cabinet)))
 
-/* returns a pointer to the mapped address of the slot of the given payload */
+/* returns a poginter to the mapped address of the slot of the given payload */
 #define shmcabinet_PAYLOAD_TO_SLOT(cabinet, payload) \
-	((shmcabinet_slot_tp)(((char*) payload) - cabinet->slot_lock_size - sizeof(shmcabinet_slot_t)))
+	((shmcabinet_slot_tp)(((gchar*) payload) - cabinet->slot_lock_size - sizeof(shmcabinet_slot_t)))
 
 #define shmcabinet_SLOT_TO_LOCK(slot) \
-	((rwlock_mgr_tp) (((char*) slot) + sizeof(shmcabinet_slot_t)))
+	((rwlock_mgr_tp) (((gchar*) slot) + sizeof(shmcabinet_slot_t)))
 
 #define shmcabinet_SLOT_TO_PAYLOAD(cabinet, slot) \
-	((void*) (((char*) slot) + sizeof(shmcabinet_slot_t) + cabinet->slot_lock_size))
+	((gpointer ) (((gchar*) slot) + sizeof(shmcabinet_slot_t) + cabinet->slot_lock_size))
 
 #define shmcabinet_CABINET_TO_LOCK(cabinet) \
-	((rwlock_mgr_tp) (((char*) cabinet) + sizeof(shmcabinet_t)))
+	((rwlock_mgr_tp) (((gchar*) cabinet) + sizeof(shmcabinet_t)))
 
 #endif /* SHMCABINET_INTERNAL_H_ */

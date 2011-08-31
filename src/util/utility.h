@@ -23,13 +23,14 @@
 #ifndef _utility_h
 #define _utility_h
 
+#include <glib.h>
 #include <glib-2.0/glib.h>
 
-char * file_get_contents(const char * filename);
+gchar * file_get_contents(const gchar * filename);
 
-void printfault(int error, char *fmt, ...);
+void printfault(gint error, gchar *fmt, ...);
 
-gint *int_key(int key);
+gint *gint_key(gint key);
 
 gint gint_compare_func(gpointer a, gpointer b);
 

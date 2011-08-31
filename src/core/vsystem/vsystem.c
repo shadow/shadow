@@ -19,6 +19,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <time.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -45,7 +46,7 @@ time_t vsystem_time(time_t* t) {
 	return secs;
 }
 
-int vsystem_clock_gettime(clockid_t clk_id, struct timespec *tp) {
+gint vsystem_clock_gettime(clockid_t clk_id, struct timespec *tp) {
 	if(clk_id != CLOCK_REALTIME) {
 		errno = EINVAL;
 		return -1;
@@ -62,14 +63,14 @@ int vsystem_clock_gettime(clockid_t clk_id, struct timespec *tp) {
 	return 0;
 }
 
-int vsystem_gethostname(char *name, size_t len) {
+gint vsystem_gethostname(gchar *name, size_t len) {
 	if(name != NULL && global_sim_context.current_context != NULL &&
 			global_sim_context.current_context->vsocket_mgr != NULL &&
 			global_sim_context.sim_worker != NULL) {
 
 		/* resolve my address to a hsotname */
 		in_addr_t addr = global_sim_context.current_context->vsocket_mgr->addr;
-		char* sysname = resolver_resolve_byaddr(global_sim_context.sim_worker->resolver, addr);
+		gchar* sysname = resolver_resolve_byaddr(global_sim_context.sim_worker->resolver, addr);
 
 		if(sysname != NULL) {
 			if(strncpy(name, sysname, len) != NULL) {
@@ -81,8 +82,8 @@ int vsystem_gethostname(char *name, size_t len) {
 	return -1;
 }
 
-int vsystem_getaddrinfo(char *node, const char *service,
-		const struct addrinfo *hints, struct addrinfo **res) {
+gint vsystem_getaddrinfo(gchar *node, const gchar *service,
+		const struct addrinfo *hgints, struct addrinfo **res) {
 	if(node != NULL && global_sim_context.sim_worker != NULL) {
 		resolver_tp r = global_sim_context.sim_worker->resolver;
 
@@ -94,11 +95,11 @@ int vsystem_getaddrinfo(char *node, const char *service,
 			struct in_addr inaddr;
 			/* convert and try again */
 
-			int result = inet_pton(AF_INET, node, &inaddr);
+			gint result = inet_pton(AF_INET, node, &inaddr);
 
 			if(result == 1) {
 				/* successful conversion, do lookup */
-				char* hostname = resolver_resolve_byaddr(r, inaddr.s_addr);
+				gchar* hostname = resolver_resolve_byaddr(r, inaddr.s_addr);
 
 				if(hostname != NULL) {
 					/* got it, so the converted addr is valid */
@@ -119,7 +120,7 @@ int vsystem_getaddrinfo(char *node, const char *service,
 		/* should have address now */
 		struct sockaddr_in* sa = malloc(sizeof(struct sockaddr_in));
 		/* application will expect it in network order */
-		// sa->sin_addr.s_addr = (in_addr_t) htonl((uint32_t)(*addr));
+		// sa->sin_addr.s_addr = (in_addr_t) htonl((guint32)(*addr));
 		sa->sin_addr.s_addr = *addr;
 
 		struct addrinfo* ai_out = malloc(sizeof(struct addrinfo));
@@ -145,7 +146,7 @@ void vsystem_freeaddrinfo(struct addrinfo *res) {
 	return;
 }
 
-void vsystem_add_cpu_load(double number_of_encryptions) {
+void vsystem_add_cpu_load(gdouble number_of_encryptions) {
 	vsocket_mgr_tp mgr = (vsocket_mgr_tp) global_sim_context.current_context->vsocket_mgr;
 	if(mgr == NULL) {
 		return;

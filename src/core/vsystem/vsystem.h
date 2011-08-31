@@ -22,17 +22,18 @@
 #ifndef VSYSTEM_H_
 #define VSYSTEM_H_
 
+#include <glib.h>
 #include <time.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
 
 time_t vsystem_time(time_t* t);
-int vsystem_clock_gettime(clockid_t clk_id, struct timespec *tp);
-int vsystem_gethostname(char *name, size_t len);
-int vsystem_getaddrinfo(char *node, const char *service,
-		const struct addrinfo *hints, struct addrinfo **res);
+gint vsystem_clock_gettime(clockid_t clk_id, struct timespec *tp);
+gint vsystem_gethostname(gchar *name, size_t len);
+gint vsystem_getaddrinfo(gchar *node, const gchar *service,
+		const struct addrinfo *hgints, struct addrinfo **res);
 void vsystem_freeaddrinfo(struct addrinfo *res);
-void vsystem_add_cpu_load(double number_of_encryptions);
+void vsystem_add_cpu_load(gdouble number_of_encryptions);
 
 #endif /* VSYSTEM_H_ */

@@ -19,6 +19,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -29,7 +30,7 @@
 #include "sysconfig.h"
 #include "utility.h"
 
-resolver_tp resolver_create(int process_id) {
+resolver_tp resolver_create(gint process_id) {
 	resolver_tp r = malloc(sizeof(resolver_t));
 
 	r->unique_id_counter = 0;
@@ -51,14 +52,14 @@ void resolver_destroy(resolver_tp r) {
 	}
 }
 
-void resolver_destroy_cb(int key, void* value, void *param) {
+void resolver_destroy_cb(gint key, gpointer value, gpointer param) {
 	if(value != NULL) {
 		free(value);
 	}
 }
 
 /* name MUST be null-terminated */
-void resolver_add(resolver_tp r, char* name, in_addr_t addr, uint8_t prepend_unique_id, uint32_t KBps_down, uint32_t KBps_up) {
+void resolver_add(resolver_tp r, gchar* name, in_addr_t addr, guint8 prepend_unique_id, guint32 KBps_down, guint32 KBps_up) {
 	resolver_entry_tp rentry;
 	size_t hostname_len;
 
@@ -82,14 +83,14 @@ void resolver_add(resolver_tp r, char* name, in_addr_t addr, uint8_t prepend_uni
 	rentry->KBps_down = KBps_down;
 	rentry->KBps_up = KBps_up;
 
-	g_hash_table_insert(r->addr_entry, int_key(rentry->addr), rentry);
-	int key = g_str_hash(rentry->hostname);
-	g_hash_table_insert(r->name_entry, int_key(key), rentry);
+	g_hash_table_insert(r->addr_entry, gint_key(rentry->addr), rentry);
+	gint key = g_str_hash(rentry->hostname);
+	g_hash_table_insert(r->name_entry, gint_key(key), rentry);
 }
 
-void resolver_remove_byname(resolver_tp r, char* name) {
+void resolver_remove_byname(resolver_tp r, gchar* name) {
 	if(r != NULL) {
-		int key = g_str_hash(name);
+		gint key = g_str_hash(name);
 		resolver_entry_tp rentry = g_hash_table_lookup(r->name_entry, &key);
 		g_hash_table_remove(r->name_entry, &key);
 
@@ -106,16 +107,16 @@ void resolver_remove_byaddr(resolver_tp r, in_addr_t addr) {
 		g_hash_table_remove(r->addr_entry, &addr);
 
 		if(rentry != NULL) {
-			int key = g_str_hash(rentry->hostname);
+			gint key = g_str_hash(rentry->hostname);
 			g_hash_table_remove(r->name_entry, &key);
 			free(rentry);
 		}
 	}
 }
 
-in_addr_t* resolver_resolve_byname(resolver_tp r, char* name) {
+in_addr_t* resolver_resolve_byname(resolver_tp r, gchar* name) {
 	if(r != NULL) {
-		int key = g_str_hash(name);
+		gint key = g_str_hash(name);
 		resolver_entry_tp rentry = g_hash_table_lookup(r->name_entry, &key);
 
 		if(rentry != NULL) {
@@ -125,7 +126,7 @@ in_addr_t* resolver_resolve_byname(resolver_tp r, char* name) {
 	return NULL;
 }
 
-char* resolver_resolve_byaddr(resolver_tp r, in_addr_t addr) {
+gchar* resolver_resolve_byaddr(resolver_tp r, in_addr_t addr) {
 	if(r != NULL) {
 		resolver_entry_tp rentry = g_hash_table_lookup(r->addr_entry, &addr);
 
@@ -136,7 +137,7 @@ char* resolver_resolve_byaddr(resolver_tp r, in_addr_t addr) {
 	return NULL;
 }
 
-uint32_t resolver_get_minbw(resolver_tp r, in_addr_t addr) {
+guint32 resolver_get_minbw(resolver_tp r, in_addr_t addr) {
 	if(r != NULL) {
 		resolver_entry_tp rentry = g_hash_table_lookup(r->addr_entry, &addr);
 
@@ -147,7 +148,7 @@ uint32_t resolver_get_minbw(resolver_tp r, in_addr_t addr) {
 	return 0;
 }
 
-uint32_t resolver_get_upbw(resolver_tp r, in_addr_t addr) {
+guint32 resolver_get_upbw(resolver_tp r, in_addr_t addr) {
 	if(r != NULL) {
 		resolver_entry_tp rentry = g_hash_table_lookup(r->addr_entry, &addr);
 
@@ -158,7 +159,7 @@ uint32_t resolver_get_upbw(resolver_tp r, in_addr_t addr) {
 	return 0;
 }
 
-uint32_t resolver_get_downbw(resolver_tp r, in_addr_t addr) {
+guint32 resolver_get_downbw(resolver_tp r, in_addr_t addr) {
 	if(r != NULL) {
 		resolver_entry_tp rentry = g_hash_table_lookup(r->addr_entry, &addr);
 

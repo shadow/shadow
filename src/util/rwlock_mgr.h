@@ -23,6 +23,7 @@
 #ifndef RWLOCK_MGR_H_
 #define RWLOCK_MGR_H_
 
+#include <glib.h>
 #include <stdint.h>
 
 enum rwlock_mgr_status {
@@ -41,12 +42,12 @@ enum rwlock_mgr_command {
 
 typedef struct rwlock_mgr_s {
 	enum rwlock_mgr_type type;
-	char lock[];
+	gchar lock[];
 } rwlock_mgr_t, *rwlock_mgr_tp;
 
-rwlock_mgr_tp rwlock_mgr_create(enum rwlock_mgr_type type, uint8_t is_process_shared);
+rwlock_mgr_tp rwlock_mgr_create(enum rwlock_mgr_type type, guint8 is_process_shared);
 enum rwlock_mgr_status rwlock_mgr_destroy(rwlock_mgr_tp lmgr);
-enum rwlock_mgr_status rwlock_mgr_init(rwlock_mgr_tp lmgr, enum rwlock_mgr_type type, uint8_t is_process_shared);
+enum rwlock_mgr_status rwlock_mgr_init(rwlock_mgr_tp lmgr, enum rwlock_mgr_type type, guint8 is_process_shared);
 enum rwlock_mgr_status rwlock_mgr_uninit(rwlock_mgr_tp lmgr);
 ssize_t rwlock_mgr_sizeof(enum rwlock_mgr_type type);
 enum rwlock_mgr_status rwlock_mgr_lockcontrol(rwlock_mgr_tp lmgr, enum rwlock_mgr_command command);
