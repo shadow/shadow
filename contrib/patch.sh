@@ -1,5 +1,8 @@
 #!/bin/sh 
 
+echo Patching configure
+sed -i 's/-O2/-O0/g' configure
+
 echo Patching common/log.c
 sed '/static void/ {N;/\nlogv/ {s/static void\nlogv/void logv/}}' src/common/log.c > src/common/log.c.patch
 mv src/common/log.c.patch src/common/log.c

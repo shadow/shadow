@@ -234,7 +234,9 @@ def setup_tor(args):
             for cmd in build.split('&&'):
                 retcode = retcode | subprocess.call(shlex.split(cmd.strip()), stdout=outfile)
     
-        convert = "./static_symbol_converter.py " + args.tor_version
+        os.chdir(args.tordir)
+
+        convert = "python static_symbol_converter.py " + args.tor_version
         if retcode == 0:
             log(args, convert)
             retcode = subprocess.call(shlex.split(convert), stdout=outfile)
