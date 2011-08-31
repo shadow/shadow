@@ -48,6 +48,7 @@ gint vevent_mgr_timer_create(vevent_mgr_tp mgr, gint milli_delay, vevent_mgr_tim
 static void vevent_mgr_init(context_provider_tp p, vevent_mgr_tp mgr) {
 	/* every node needs to init its data */
 	if(mgr != NULL) {
+                mgr->base_conversion = g_hash_table_new(g_int_hash, g_int_equal);
 		mgr->event_bases = g_queue_new();
 		mgr->loopexit_fp = NULL;
 		mgr->provider = p;
