@@ -2,9 +2,7 @@
 
 rm -rf ./build
 rm -rf ./install
-mkdir -p build/shadow
-mkdir -p install/include
-mkdir -p install/lib
+mkdir -p build/shadow install
 
 currentDirectory=`pwd`
 build=$currentDirectory/build
