@@ -212,15 +212,16 @@ def setup_tor(args):
             if args.prefix_openssl is not None: configure += " --with-openssl-dir=" + os.path.abspath(args.prefix_openssl)
             
             if retcode == 0:
-                #patch
-                log(args, patch)
-                retcode = subprocess.call(shlex.split(patch), stdout=outfile)
-
-            if retcode == 0:
                 # generate configure
                 log(args, gen)
                 for cmd in gen.split('&&'):
                     retcode = retcode | subprocess.call(shlex.split(cmd.strip()), stdout=outfile)
+            
+            # need to patch AFTER generating configure to avoid overwriting the patched configure
+            if retcode == 0:
+                #patch
+                log(args, patch)
+                retcode = subprocess.call(shlex.split(patch), stdout=outfile)
             
             if retcode == 0:
                 # configure
