@@ -38,6 +38,7 @@ do
     sed -i 's/prgintf/printf/g' $f
     sed -i 's/ginterface/interface/g' $f
     sed -i 's/_gdouble/_double/g' $f
+    sed -i 's/prgint/print/g' $f
 
 # add glib include to all files
     sed -i '0,/\#include/s/\#include/\#include <glib.h>\n\#include/' $f

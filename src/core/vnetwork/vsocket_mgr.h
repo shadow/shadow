@@ -127,6 +127,6 @@ void vsocket_mgr_bind_loopback(vsocket_mgr_tp net, vsocket_tp sock, in_port_t bi
 
 void vsocket_mgr_onnotify(vci_event_tp vci_event, vsocket_mgr_tp vs_mgr);
 
-void vsocket_mgr_prgint_stat(vsocket_mgr_tp net, guint16 sockd);
+void vsocket_mgr_print_stat(vsocket_mgr_tp net, guint16 sockd);
 
 #endif /* VSOCKET_MGR_H_ */

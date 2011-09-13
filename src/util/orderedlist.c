@@ -29,8 +29,8 @@
 #define ORDEREDLIST_DEBUG 0
 
 #if ORDEREDLIST_DEBUG
-/* prgints an ascii representation of the list */
-static void orderedlist_prgint(orderedlist_tp list);
+/* prints an ascii representation of the list */
+static void orderedlist_print(orderedlist_tp list);
 #endif
 /* searches the list for the given key.
  * returns NULL if not found and the last element with the given key otherwise.
@@ -306,7 +306,7 @@ static orderedlist_element_tp orderedlist_find_position(orderedlist_tp list, gui
 }
 
 #if ORDEREDLIST_DEBUG
-static void orderedlist_prgint(orderedlist_tp list){
+static void orderedlist_print(orderedlist_tp list){
 	printf("##########\n");
 	if(list == NULL){
 		printf("List:NULL\n");

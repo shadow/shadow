@@ -1194,7 +1194,7 @@ static vci_event_tp vci_decode(vci_mgr_tp vci_mgr, nbdf_tp frame, gint frametype
 
 #if 0
 /* used for testing encoding and decoding packets */
-static void quickprgint(vpacket_tp vpacket) {
+static void quickprint(vpacket_tp vpacket) {
 	if(vpacket != NULL) {
 		gchar srcip[INET_ADDRSTRLEN];
 		inet_ntop(AF_INET, &vpacket->header.source_addr, srcip, sizeof(srcip));
@@ -1239,7 +1239,7 @@ static void quicktest() {
 
 	vci_decode_pipecloud_packet_frame(frame, &t, &a, &pin);
 
-	quickprgint(&p);
-	quickprgint(&pin);
+	quickprint(&p);
+	quickprint(&pin);
 }
 #endif

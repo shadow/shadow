@@ -81,7 +81,7 @@ void vevent_mgr_notify_can_write(vevent_mgr_tp mgr, gint sockfd);
 void vevent_mgr_notify_signal_received(vevent_mgr_tp mgr, gint signal);
 
 /* mostly for debugging purposes */
-void vevent_mgr_prgint_stat(vevent_mgr_tp mgr, guint16 sockd);
-void vevent_mgr_prgint_all(vevent_mgr_tp mgr);
+void vevent_mgr_print_stat(vevent_mgr_tp mgr, guint16 sockd);
+void vevent_mgr_print_all(vevent_mgr_tp mgr);
 
 #endif /* VEVENT_MGR_H_ */

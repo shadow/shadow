@@ -133,7 +133,7 @@ void vevent_mgr_destroy(vevent_mgr_tp mgr) {
 //	}
 //}
 
-static void vevent_mgr_prgint_all_cb(gint key, gpointer val, gpointer param) {
+static void vevent_mgr_print_all_cb(gint key, gpointer val, gpointer param) {
 	vevent_socket_tp vsd = val;
 	vevent_mgr_tp mgr = param;
 	if(vsd != NULL && mgr != NULL) {
@@ -149,7 +149,7 @@ static void vevent_mgr_prgint_all_cb(gint key, gpointer val, gpointer param) {
 	}
 }
 
-void vevent_mgr_prgint_stat(vevent_mgr_tp mgr, guint16 sockd) {
+void vevent_mgr_print_stat(vevent_mgr_tp mgr, guint16 sockd) {
 	if(mgr != NULL) {
 		/* go through every base we know about */
 		GList *bases = g_queue_peek_head_link(mgr->event_bases);
@@ -161,16 +161,16 @@ void vevent_mgr_prgint_stat(vevent_mgr_tp mgr, guint16 sockd) {
 			
 			if(veb != NULL) {
 				vevent_socket_tp vsd = g_hash_table_lookup(veb->sockets_by_sd, &sockd);
-				vevent_mgr_prgint_all_cb(sockd, vsd, mgr);
+				vevent_mgr_print_all_cb(sockd, vsd, mgr);
 			}
 
             bases = bases->next;
 		}
-		debugf("======Done prginting======\n");
+		debugf("======Done printing======\n");
 	}
 }
 
-void vevent_mgr_prgint_all(vevent_mgr_tp mgr) {
+void vevent_mgr_print_all(vevent_mgr_tp mgr) {
 	if(mgr != NULL) {
 		/* go through every base we know about */
 		GList *bases = g_queue_peek_head_link(mgr->event_bases);
@@ -181,8 +181,8 @@ void vevent_mgr_prgint_all(vevent_mgr_tp mgr) {
 
 			if(veb != NULL) {
 				debugf("======Prginting all waiting registered events======\n");
-				g_hash_table_foreach(veb->sockets_by_sd, (GHFunc)vevent_mgr_prgint_all_cb, mgr);
-				debugf("======Done prginting======\n");
+				g_hash_table_foreach(veb->sockets_by_sd, (GHFunc)vevent_mgr_print_all_cb, mgr);
+				debugf("======Done printing======\n");
 			}
 
             bases = bases->next;

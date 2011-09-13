@@ -442,9 +442,9 @@ void vsocket_mgr_onnotify(vci_event_tp vci_event, vsocket_mgr_tp vs_mgr) {
 	}
 }
 
-void vsocket_mgr_prgint_stat(vsocket_mgr_tp net, guint16 sockd) {
+void vsocket_mgr_print_stat(vsocket_mgr_tp net, guint16 sockd) {
 	if(net != NULL) {
-		debugf("######vsocket_mgr_prgint_stat: looking for stats for socket %u######\n", sockd);
+		debugf("######vsocket_mgr_print_stat: looking for stats for socket %u######\n", sockd);
 		vsocket_tp sock = vsocket_mgr_get_socket(net, sockd);
 		if(sock != NULL) {
 			if(sock->loopback_peer != NULL) {
@@ -519,6 +519,6 @@ void vsocket_mgr_prgint_stat(vsocket_mgr_tp net, guint16 sockd) {
 			}
 		}
 
-		debugf("######vsocket_mgr_prgint_stat: stat done for socket %u######\n", sockd);
+		debugf("######vsocket_mgr_print_stat: stat done for socket %u######\n", sockd);
 	}
 }

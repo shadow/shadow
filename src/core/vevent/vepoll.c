@@ -158,7 +158,7 @@ void vepoll_execute_notification(context_provider_tp provider, vepoll_tp vep) {
 		debugf("vepoll_execute_notification: activation for socket %u, can_write=%i, can_read=%i\n",
 				vep->sockd, (vep->available & VEPOLL_WRITE) > 0, (vep->available & VEPOLL_READ) > 0);
 #ifdef DEBUG
-		vevent_mgr_prgint_stat(vep->vev_mgr, vep->sockd);
+		vevent_mgr_print_stat(vep->vev_mgr, vep->sockd);
 #endif
 
 		/* the event is no longer scheduled */
@@ -237,8 +237,8 @@ void vepoll_onpoll(vci_event_tp vci_event, gpointer vs_mgr) {
 		/* TODO move this out of vepoll and to a higher level */
 #ifdef DEBUG
 		vsocket_mgr_tp vsock_mgr = global_sim_context.sim_worker->vci_mgr->current_vsocket_mgr;
-		vsocket_mgr_prgint_stat(vsock_mgr, vep->sockd);
-		vevent_mgr_prgint_stat(vep->vev_mgr, vep->sockd);
+		vsocket_mgr_print_stat(vsock_mgr, vep->sockd);
+		vevent_mgr_print_stat(vep->vev_mgr, vep->sockd);
 #endif
 
 		vepoll_activate(vep);

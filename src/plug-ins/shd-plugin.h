@@ -76,7 +76,7 @@ gint snri_timer_destroy(gint timer_id);
 gint snri_exit(void);
 
 /**
- * Logs some message at the given log_level. Will only be prginted if logged
+ * Logs some message at the given log_level. Will only be printed if logged
  * at a lower level than the configured system log level.
  *
  * this function takes the args:
