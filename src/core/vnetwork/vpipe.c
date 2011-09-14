@@ -235,22 +235,27 @@ static enum vpipe_status vpipe_bid_close(vpipe_bid_tp bipipe, vpipe_id fd) {
 	return VPIPE_FAILURE;
 }
 
-static void vpipe_destroy_cb(gint key, gpointer value, gpointer data) {
+static void vpipe_destroy_cb(gpointer key, gpointer value, gpointer data) {
 	/* the lower level close functions dont modify the hashtable, so we should
-	 * be safe using them. they should take care not to gdouble-free. */
-	vpipe_bid_close(value, key);
+	 * be safe using them. they should take care not to double-free. */
+	vpipe_bid_close(value, *((vpipe_id*)key));
 }
 
 vpipe_mgr_tp vpipe_mgr_create(in_addr_t addr) {
 	vpipe_mgr_tp mgr = malloc(sizeof(vpipe_mgr_t));
-	mgr->bipipes = g_hash_table_new(g_int_hash, g_int_equal);
+	/* we will free the values, but the keys will be freed with g_free */
+	mgr->bipipes = g_hash_table_new_full(g_int_hash, g_int_equal, g_free, NULL);
 	mgr->addr = addr;
 	return mgr;
 }
 
 void vpipe_mgr_destroy(vpipe_mgr_tp mgr) {
 	if(mgr != NULL) {
-		g_hash_table_foreach(mgr->bipipes, (GHFunc)vpipe_destroy_cb, NULL);
+		/* destroy the values */
+		g_hash_table_foreach(mgr->bipipes, vpipe_destroy_cb, NULL);
+		/* destroy the keys (since we passed g_free as the key destroy function) */
+		g_hash_table_remove_all(mgr->bipipes);
+		/* destroy the table */
 		g_hash_table_destroy(mgr->bipipes);
 		free(mgr);
 	}
@@ -262,8 +267,8 @@ enum vpipe_status vpipe_create(vevent_mgr_tp vev_mgr, vpipe_mgr_tp mgr, vpipe_id
 
 		if(bipipe != NULL) {
 			/* TODO: check for collisions */
-                        gint *key1 = gint_key(fda);
-                        gint *key2 = gint_key(fdb);
+			gint *key1 = gint_key(fda);
+			gint *key2 = gint_key(fdb);
 			g_hash_table_insert(mgr->bipipes, key1, bipipe);
 			g_hash_table_insert(mgr->bipipes, key2, bipipe);
 			return VPIPE_SUCCESS;

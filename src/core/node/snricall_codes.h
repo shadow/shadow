@@ -79,13 +79,13 @@
 
 /**
  * gchar*  		- hostname to resolve to an addr
- * in_addr_t* 	- poginter to space for the returned addr
+ * in_addr_t* 	- pointer to space for the returned addr
  */
 #define SNRICALL_RESOLVE_NAME 9
 
 /**
  * in_addr_t	- the addr to resolve to a name
- * gchar* 		- poginter to a buffer to hold the resolved name
+ * gchar* 		- pointer to a buffer to hold the resolved name
  * gint			- the length of the buffer
  */
 #define SNRICALL_RESOLVE_ADDR 10
@@ -98,13 +98,13 @@
 
 /**
  * gint			-the socket descriptor
- * gint*			-poginter to an gint to hold the result, 1 or 0 (true/false)
+ * gint*			-pointer to an gint to hold the result, 1 or 0 (true/false)
  */
 #define SNRICALL_SOCKET_IS_READABLE 12
 
 /**
  * gint			-the socket descriptor
- * gint*			-poginter to an gint to hold the result, 1 or 0 (true/false)
+ * gint*			-pointer to an gint to hold the result, 1 or 0 (true/false)
  */
 #define SNRICALL_SOCKET_IS_WRITABLE 13
 

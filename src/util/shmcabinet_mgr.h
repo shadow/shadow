@@ -76,7 +76,7 @@ void shmcabinet_mgr_destroy(shmcabinet_mgr_tp smc_mgr);
 /* allocates a new payload slot in shared memory and populates shared memory
  * connection information in a shm_item. the item is unlocked when returned.
  * shm_items must be freed with a call to shmcabinet_mgr_free.
- * returns NULL if there was an error, otherwise a poginter to a new shm_mem_item
+ * returns NULL if there was an error, otherwise a pointer to a new shm_mem_item
  * containing the newly allocated cabinet slot information.
  */
 shm_item_tp shmcabinet_mgr_alloc(shmcabinet_mgr_tp smc_mgr);
@@ -84,7 +84,7 @@ shm_item_tp shmcabinet_mgr_alloc(shmcabinet_mgr_tp smc_mgr);
 /* opens an exisiting payload slot in shared memory and populates shared memory
  * connection information in a shm_item. the item is unlocked when returned.
  * shm_items must be freed with a call to shmcabinet_mgr_free.
- * returns NULL if there was an error, otherwise a poginter to a new shm_mem_item
+ * returns NULL if there was an error, otherwise a pointer to a new shm_mem_item
  * containing the existing cabinet slot information.
  */
 shm_item_tp shmcabinet_mgr_open(shmcabinet_mgr_tp smc_mgr, shmcabinet_info_tp shm_info, guint32 slot_id);

@@ -49,7 +49,7 @@ typedef struct pipecloud_buffer_t {
 } pipecloud_buffer_t, * pipecloud_buffer_tp;
 
 typedef struct pipecloud_t {
-	/* total number of mailbox endpogints */
+	/* total number of mailbox endpoints */
 	guint num_pipes;
 
 	mqd_t * mqs;

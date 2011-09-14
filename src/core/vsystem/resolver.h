@@ -47,7 +47,6 @@ typedef struct resolver_s {
 
 resolver_tp resolver_create(gint process_id);
 void resolver_destroy(resolver_tp resolver);
-void resolver_destroy_cb(gint key, gpointer value, gpointer param); 
 
 void resolver_add(resolver_tp r, gchar* name, in_addr_t addr, guint8 prepend_unique_id, guint32 KBps_down, guint32 KBps_up);
 void resolver_remove_byname(resolver_tp r, gchar* name);

@@ -54,8 +54,8 @@ sim_worker_tp sim_worker_create (pipecloud_tp pipecloud, gint slave_id, gint pro
 	rv->stalled_simops = g_queue_new();
 	rv->mod_mgr = module_mgr_create();
 
-	rv->hostname_tracking = g_hash_table_new(g_int_hash, g_int_equal);
-	rv->loaded_cdfs = g_hash_table_new(g_int_hash, g_int_equal);
+	rv->hostname_tracking = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, g_free);
+	rv->loaded_cdfs = g_hash_table_new_full(g_int_hash, g_int_equal, g_free, NULL);
 
 	rv->timer_mgr = dtimer_create_manager(rv->events);
 	rv->ascheme = vci_create_addressing_scheme(num_slaves, max_wrkrs_per_slave);
@@ -145,7 +145,7 @@ void sim_worker_deposit(sim_worker_tp worker, gint frametype, nbdf_tp frame) {
 			vci_track_network(worker->vci_mgr, network_id, addr);
 
 			debugf("SWorker (%d): Creating ip:hostname mapping %s:%s\n", worker->process_id, inet_ntoa_t(addr), hostname);
-			/* at this pogint the unique id will have already been prepended if needed */
+			/* at this point the unique id will have already been prepended if needed */
 			resolver_add(worker->resolver, hostname, addr, 0, KBps_down, KBps_up);
 
 			break;
@@ -436,7 +436,7 @@ ret:
 	return returnval;
 }
 
-static void sim_worker_destroy_cdftracker_cb(gint key, gpointer value, gpointer param) {
+static void sim_worker_destroy_cdftracker_cb(gpointer key, gpointer value, gpointer param) {
 	cdf_destroy((cdf_tp)value);
 }
 
@@ -458,11 +458,12 @@ void sim_worker_destroy(sim_worker_tp sim) {
 	sim->network_topology = NULL;
 
 	/* todo cleanup - use different func */
-	g_hash_table_foreach(sim->hostname_tracking, (GHFunc)sim_worker_destroy_nodetracker_cb, NULL);
+	g_hash_table_remove_all(sim->hostname_tracking);
 	g_hash_table_destroy(sim->hostname_tracking);
 	sim->hostname_tracking = NULL;
 
-	g_hash_table_foreach(sim->loaded_cdfs, (GHFunc)sim_worker_destroy_cdftracker_cb, NULL);
+	g_hash_table_foreach(sim->loaded_cdfs, sim_worker_destroy_cdftracker_cb, NULL);
+	g_hash_table_destroy(sim->loaded_cdfs);
 	g_hash_table_destroy(sim->loaded_cdfs);
 	sim->loaded_cdfs = NULL;
 
@@ -709,7 +710,7 @@ void sim_worker_abortsim(sim_worker_tp wo, gchar * error) {
 }
 
 void sim_worker_destroy_node(sim_worker_tp wo, context_provider_tp cp) {
-	/* free his dtimer endpogint */
+	/* free his dtimer endpoint */
 	dtimer_destroy_timers(global_sim_context.sim_worker->timer_mgr, cp);
 
 	resolver_remove_byaddr(wo->resolver, cp->vsocket_mgr->addr);

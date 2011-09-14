@@ -76,7 +76,7 @@ typedef struct shmcabinet_s shmcabinet_t, *shmcabinet_tp;
  * that can each hold payloads of slot_payload_size bytes in size. num_slots must
  * not exceed SHMCABINET_MAX_SLOTS. caller must specify a valid lock_type for
  * the cabinet and the slot locks.
- * returns a poginter to the mapped cabinet, or NULL if num_slots exceeds
+ * returns a pointer to the mapped cabinet, or NULL if num_slots exceeds
  * SHMCABINET_MAX_SLOTS or there was an error. */
 shmcabinet_tp shmcabinet_create(guint32 num_slots, size_t slot_payload_size,
 		enum rwlock_mgr_type cabinet_lock_type, enum rwlock_mgr_type slot_lock_type);
@@ -91,37 +91,37 @@ guint32 shmcabinet_unmap(shmcabinet_tp cabinet);
 
 /* allocates and opens an available slot from the given cabinet.
  * returns NULL if there was an error or there are no slots available for
- * allocation. otherwise a poginter to the uncleared slot payload is returned. */
+ * allocation. otherwise a pointer to the uncleared slot payload is returned. */
 gpointer shmcabinet_allocate(shmcabinet_tp cabinet);
 
 /* opens the slot given by slot_id in the cabinet. this slot must be closed
  * with a call to shmcabinet_close before its resources can be released.
- * returns NULL if there was problems opening the slot, otherwise a poginter
+ * returns NULL if there was problems opening the slot, otherwise a pointer
  * to the mapped address of the slot's payload is returned. */
 gpointer shmcabinet_open(shmcabinet_tp cabinet, guint32 slot_id);
 
-/* closes the reference to the slot holding the payload given by the poginter
+/* closes the reference to the slot holding the payload given by the pointer
  * payload. the slot is deallocated if no further references to it remain.
  * returns SHMCABINET_ERROR on error, or SHMCABINET_SUCCESS on success. */
 guint32 shmcabinet_close(shmcabinet_tp cabinet, gpointer payload);
 
-/* locks the slot that holds the payload given by the poginter payload. reads are
+/* locks the slot that holds the payload given by the pointer payload. reads are
  * allowed, but no other writes to the slot are allowed until the slot is unlocked
  * with shmcabinet_unlock.
  * returns SHMCABINET_ERROR on error, or SHMCABINET_SUCCESS on success. */
 guint32 shmcabinet_readlock(shmcabinet_tp cabinet, gpointer payload);
 
-/* unlocks the slot that holds the payload given by the poginter payload.
+/* unlocks the slot that holds the payload given by the pointer payload.
  * if the slot is not read-locked, this call has no effect. */
 guint32 shmcabinet_readunlock(shmcabinet_tp cabinet, gpointer payload);
 
-/* locks the slot that holds the payload given by the poginter payload. no other
+/* locks the slot that holds the payload given by the pointer payload. no other
  * reads or writes to the slot are allowed until the slot is unlocked
  * with shmcabinet_unlock.
  * returns SHMCABINET_ERROR on error, or SHMCABINET_SUCCESS on success. */
 guint32 shmcabinet_writelock(shmcabinet_tp cabinet, gpointer payload);
 
-/* unlocks the slot that holds the payload given by the poginter payload.
+/* unlocks the slot that holds the payload given by the pointer payload.
  * if the slot is not write-locked, this call has no effect. */
 guint32 shmcabinet_writeunlock(shmcabinet_tp cabinet, gpointer payload);
 

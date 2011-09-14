@@ -463,7 +463,7 @@ static void vevent_execute(vevent_mgr_tp mgr, event_tp ev) {
 /* event2/event.h */
 event_base_tp vevent_event_base_new(vevent_mgr_tp mgr) {
 	if(mgr != NULL && mgr->event_bases != NULL) {
-		/* create new vevent base, store poginter to it in event_base */
+		/* create new vevent base, store pointer to it in event_base */
 		vevent_base_tp veb = calloc(1, sizeof(vevent_base_t));
 		veb->nextid = 0;
 		veb->vevents_by_id = g_hash_table_new(g_int_hash, g_int_equal);

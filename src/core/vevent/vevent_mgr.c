@@ -43,12 +43,13 @@ gint vevent_mgr_timer_create(vevent_mgr_tp mgr, gint milli_delay, vevent_mgr_tim
 			mgr->provider, milli_delay, callback_function, cb_arg);
 }
 
-/* ginternal storage must be allocated by caller. the caller should
- * register the struct that this poginter pogints to with shadow. */
+/* internal storage must be allocated by caller. the caller should
+ * register the struct that this pointer points to with shadow. */
 static void vevent_mgr_init(context_provider_tp p, vevent_mgr_tp mgr) {
 	/* every node needs to init its data */
 	if(mgr != NULL) {
-                mgr->base_conversion = g_hash_table_new(g_int_hash, g_int_equal);
+		/* hash table using pointers as keys, so we directly hash and compare pointers */
+        mgr->base_conversion = g_hash_table_new(g_direct_hash, g_direct_equal);
 		mgr->event_bases = g_queue_new();
 		mgr->loopexit_fp = NULL;
 		mgr->provider = p;
@@ -91,9 +92,9 @@ void vevent_mgr_destroy(vevent_mgr_tp mgr) {
 //	vevent_socket_tp vsd = val;
 //	list_tp wake = param;
 //	if(vsd != NULL && wake != NULL) {
-//		/* XXX storing gints in poginters is fragile */
+//		/* XXX storing gints in pointers is fragile */
 //		long l = (long) vsd->sd;
-//		/* our poginter will be at least 32 bits, so can hold the gint sd */
+//		/* our pointer will be at least 32 bits, so can hold the gint sd */
 //		gpointer p = (gpointer ) l;
 //		list_push_back(wake, p);
 //	}
@@ -133,9 +134,9 @@ void vevent_mgr_destroy(vevent_mgr_tp mgr) {
 //	}
 //}
 
-static void vevent_mgr_print_all_cb(gint key, gpointer val, gpointer param) {
-	vevent_socket_tp vsd = val;
-	vevent_mgr_tp mgr = param;
+static void vevent_mgr_print_all_cb(gpointer key, gpointer value, gpointer user_data) {
+	vevent_socket_tp vsd = value;
+	vevent_mgr_tp mgr = user_data;
 	if(vsd != NULL && mgr != NULL) {
 		GList* event = g_queue_peek_head_link(vsd->vevents);
 
@@ -161,7 +162,7 @@ void vevent_mgr_print_stat(vevent_mgr_tp mgr, guint16 sockd) {
 			
 			if(veb != NULL) {
 				vevent_socket_tp vsd = g_hash_table_lookup(veb->sockets_by_sd, &sockd);
-				vevent_mgr_print_all_cb(sockd, vsd, mgr);
+				vevent_mgr_print_all_cb(&sockd, vsd, mgr);
 			}
 
             bases = bases->next;
@@ -181,7 +182,7 @@ void vevent_mgr_print_all(vevent_mgr_tp mgr) {
 
 			if(veb != NULL) {
 				debugf("======Prginting all waiting registered events======\n");
-				g_hash_table_foreach(veb->sockets_by_sd, (GHFunc)vevent_mgr_print_all_cb, mgr);
+				g_hash_table_foreach(veb->sockets_by_sd, vevent_mgr_print_all_cb, mgr);
 				debugf("======Done printing======\n");
 			}
 
@@ -206,26 +207,20 @@ void vevent_mgr_notify_signal_received(vevent_mgr_tp mgr, gint signal) {
 }
 
 void vevent_mgr_track_base(vevent_mgr_tp mgr, event_base_tp eb, vevent_base_tp veb) {
-	if(eb != NULL) {
-		/* TODO can we avoid the hash? */
-		guint key = g_direct_hash(eb);
-		g_hash_table_insert(mgr->base_conversion, gint_key(key), veb);
+	if(mgr != NULL && eb != NULL) {
+		g_hash_table_insert(mgr->base_conversion, eb, veb);
 	}
 }
 
 void vevent_mgr_untrack_base(vevent_mgr_tp mgr, event_base_tp eb) {
-	if(eb != NULL) {
-		/* TODO can we avoid the hash? */
-		guint key = g_direct_hash(eb);
-		g_hash_table_remove(mgr->base_conversion, &key);
+	if(mgr != NULL && eb != NULL) {
+		g_hash_table_remove(mgr->base_conversion, eb);
 	}
 }
 
 vevent_base_tp vevent_mgr_convert_base(vevent_mgr_tp mgr, event_base_tp eb) {
-	if(eb != NULL) {
-		/* TODO can we avoid the hash? */
-		guint key = g_direct_hash(eb);
-		vevent_base_tp vbase = g_hash_table_lookup(mgr->base_conversion, &key);
+	if(mgr != NULL && eb != NULL) {
+		vevent_base_tp vbase = g_hash_table_lookup(mgr->base_conversion, eb);
 		return vbase;
 	} else {
 		return NULL;

@@ -138,7 +138,7 @@ sysconfig_t sysconfig;
 
 void sysconfig_init(void)  {
 	gint i = 0;
-	sysconfig.data = g_hash_table_new(g_int_hash, g_int_equal);
+	sysconfig.data = g_hash_table_new_full(g_int_hash, g_int_equal, g_free, g_free);
 
 	/* load up all the defaults */
 	while (sysconfig_defaults[i].name[0]) {
@@ -160,7 +160,7 @@ void sysconfig_init(void)  {
 }
 
 gint sysconfig_get_gint(gchar * param) {
-        gint key = g_str_hash(param);
+    guint key = g_str_hash(param);
 	sysconfig_val_tp v = g_hash_table_lookup(sysconfig.data, &key);
 	gint rv = 0;
 
@@ -179,7 +179,7 @@ gint sysconfig_get_gint(gchar * param) {
 	return rv;
 }
 float sysconfig_get_float(gchar * param) {
-        gint key = g_str_hash(param);
+    guint key = g_str_hash(param);
 	sysconfig_val_tp v = g_hash_table_lookup(sysconfig.data, &key);
 	float rv = 0.0f;
 
@@ -199,7 +199,7 @@ float sysconfig_get_float(gchar * param) {
 }
 gchar * sysconfig_get_string(gchar * param) {
 	static gchar temp[64];
-        gint key = g_str_hash(param);
+    guint key = g_str_hash(param);
 	sysconfig_val_tp v = g_hash_table_lookup(sysconfig.data, &key);
 	gchar * rv = "";
 
@@ -224,7 +224,7 @@ gchar * sysconfig_get_string(gchar * param) {
 }
 
 void sysconfig_set_gint(gchar * param, gint v) {
-	gint key = g_str_hash(param);
+	guint key = g_str_hash(param);
 	sysconfig_val_tp val = g_hash_table_lookup(sysconfig.data, &key);
 
 	if(!val) {
@@ -238,7 +238,7 @@ void sysconfig_set_gint(gchar * param, gint v) {
 }
 
 void sysconfig_set_string(gchar * param, gchar * v) {
-	gint key = g_str_hash(param);
+	guint key = g_str_hash(param);
 	sysconfig_val_tp val = g_hash_table_lookup(sysconfig.data, &key);
 
 	if(!val) {
@@ -253,7 +253,7 @@ void sysconfig_set_string(gchar * param, gchar * v) {
 }
 
 void sysconfig_set_float(gchar * param, float v) {
-	gint key = g_str_hash(param);
+	guint key = g_str_hash(param);
 	sysconfig_val_tp val = g_hash_table_lookup(sysconfig.data, &key);
 
 	if(!val) {
@@ -341,7 +341,7 @@ void sysconfig_import_config(gchar * in_config_data) {
 	return;
 }
 
-void sysconfig_export_walk(gint key, gpointer d, gpointer param) {
+void sysconfig_export_walk(gpointer key, gpointer d, gpointer param) {
 	static gchar temp_buffer[512];
 
 	sysconfig_val_tp val = d;
@@ -366,7 +366,7 @@ void sysconfig_export_walk(gint key, gpointer d, gpointer param) {
 gchar * sysconfig_export_config(void) {
 	sysconfig.exported_config_size = 0;
 	sysconfig.exported_config[0] = 0;
-	g_hash_table_foreach(sysconfig.data, (GHFunc)sysconfig_export_walk, NULL);
+	g_hash_table_foreach(sysconfig.data, sysconfig_export_walk, NULL);
 	return sysconfig.exported_config;
 }
 
@@ -375,6 +375,6 @@ void sysconfig_destroy_cb(gint key, gpointer value, gpointer param) {
 }
 
 void sysconfig_cleanup(void) {
-	g_hash_table_foreach(sysconfig.data, (GHFunc)sysconfig_destroy_cb, NULL);
+	g_hash_table_remove_all(sysconfig.data);
 	g_hash_table_destroy(sysconfig.data);
 }

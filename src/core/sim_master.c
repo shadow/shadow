@@ -53,10 +53,10 @@ sim_master_tp sim_master_create (gchar * dsim, guint num_slaves) {
 		return NULL;
 	}
 
-	smaster->module_tracking = g_hash_table_new(g_int_hash, g_int_equal);
+	smaster->module_tracking = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, g_free);
 	smaster->cdf_tracking = g_hash_table_new(g_int_hash, g_int_equal);
-	smaster->network_tracking = g_hash_table_new(g_int_hash, g_int_equal);
-	smaster->base_hostname_tracking = g_hash_table_new(g_int_hash, g_int_equal);
+	smaster->network_tracking = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, g_free);
+	smaster->base_hostname_tracking = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, g_free);
 
 	clock_gettime(CLOCK_MONOTONIC, &smaster->simulation_start);
 
@@ -95,7 +95,7 @@ sim_master_tp sim_master_create (gchar * dsim, guint num_slaves) {
 	return smaster;
 }
 
-static void sim_master_destroy_cdftracker_cb(gint key, gpointer value, gpointer param) {
+static void sim_master_destroy_cdftracker_cb(gpointer key, gpointer value, gpointer param) {
 	sim_master_tracker_tp cdf_tracker = value;
 	if(cdf_tracker != NULL) {
 		cdf_destroy((cdf_tp)cdf_tracker->value);
@@ -103,28 +103,22 @@ static void sim_master_destroy_cdftracker_cb(gint key, gpointer value, gpointer 
 	}
 }
 
-void sim_free_tracker(sim_master_tracker_tp t, gint id) {
-	if(t)
-		free(t);
-}
-
-
 void sim_master_destroy(sim_master_tp sim) {
 	if(sim->dsim)
 		dsim_destroy(sim->dsim);
 
 	simnet_graph_destroy(sim->network_topology);
 
-	g_hash_table_foreach(sim->network_tracking, (GHFunc)sim_free_tracker, NULL);
+	g_hash_table_remove_all(sim->network_tracking);
 	g_hash_table_destroy(sim->network_tracking);
 
-	g_hash_table_foreach(sim->module_tracking, (GHFunc)sim_free_tracker, NULL);
+	g_hash_table_remove_all(sim->module_tracking);
 	g_hash_table_destroy(sim->module_tracking);
 
-	g_hash_table_foreach(sim->cdf_tracking, (GHFunc)sim_master_destroy_cdftracker_cb, NULL);
+	g_hash_table_foreach(sim->cdf_tracking, sim_master_destroy_cdftracker_cb, NULL);
 	g_hash_table_destroy(sim->cdf_tracking);
 
-	g_hash_table_foreach(sim->base_hostname_tracking, (GHFunc)sim_free_tracker, NULL);
+	g_hash_table_remove_all(sim->base_hostname_tracking);
 	g_hash_table_destroy(sim->base_hostname_tracking);
 
 	free(sim);
@@ -165,7 +159,7 @@ static guint sim_master_dsimop_helper(operation_tp dsimop, GHashTable *tracker_h
 		tracker->id = tracking_id;
 		tracker->counter = 0;
 		tracker->value = NULL;
-		g_hash_table_insert(tracker_ht, gint_key(tracker->id), tracker);
+		g_hash_table_insert(tracker_ht, &(tracker->id), tracker);
 
 		/* save it to the variable so DSIM has access to it */
 		dsimop->retval->data = tracker;

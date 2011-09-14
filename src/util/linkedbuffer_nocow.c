@@ -29,7 +29,7 @@
  * A data buffer (queue) that is composed of several links. The buffer can be read
  * and written and guarantees it will not allow reading more than was written.
  * Its basically a linked queue that is written (and grows) at the front and
- * read (and shrinks) from the back. Data is 'written' by passing in poginters
+ * read (and shrinks) from the back. Data is 'written' by passing in pointers
  * to buffers, which the lnkedbuffer will take ownership of without copying.
  * As data is read, data is copied to callers buffer while automatically freeing
  * old buffers passed in on previous calls of write.
@@ -78,7 +78,7 @@ void linkedbuffer_nocow_destroy(linkedbuffer_nocow_tp lbuffer){
 			link = next;
 		}
 	} else {
-		/* TODO log null poginter exception */
+		/* TODO log null pointer exception */
 	}
 
 	free(lbuffer);
@@ -120,7 +120,7 @@ size_t linkedbuffer_nocow_read(linkedbuffer_nocow_tp lbuffer, gpointer dest, siz
 		}
 
 	} else {
-		/* TODO log null poginter exception */
+		/* TODO log null pointer exception */
 	}
 
 	return numbytes - bytes_left;
@@ -181,7 +181,7 @@ static void bufferlink_nocow_destroy(bufferlink_nocow_tp link){
 		link->capacity = 0;
 		link->next = NULL;
 	} else {
-		/* TODO log null poginter exception */
+		/* TODO log null pointer exception */
 	}
 
 	free(link);

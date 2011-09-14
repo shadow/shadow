@@ -51,7 +51,7 @@ void linkedbuffer_nocow_destroy(linkedbuffer_nocow_tp lbuffer);
 /* copies numbytes bytes of data from the queue to the dest buffer */
 size_t linkedbuffer_nocow_read(linkedbuffer_nocow_tp lbuffer, gpointer dest, size_t numbytes);
 /* takes ownership of src buffer, effectively adding its data to the queue.
- * the caller should set its poginters to src buffer to NULL after this call.
+ * the caller should set its pointers to src buffer to NULL after this call.
  */
 size_t linkedbuffer_nocow_write(linkedbuffer_nocow_tp lbuffer, gpointer src, size_t numbytes);
 

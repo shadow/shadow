@@ -34,8 +34,10 @@ resolver_tp resolver_create(gint process_id) {
 	resolver_tp r = malloc(sizeof(resolver_t));
 
 	r->unique_id_counter = 0;
-	r->addr_entry = g_hash_table_new(g_int_hash, g_int_equal);
-	r->name_entry = g_hash_table_new(g_int_hash, g_int_equal);
+	/* the key is stored in the value and freed when the value is */
+	r->addr_entry = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, g_free);
+	/* the key is malloced, but the value is freed as part of addr_entry */
+	r->name_entry = g_hash_table_new_full(g_int_hash, g_int_equal, g_free, NULL);
 	r->pid = process_id;
 
 	return r;
@@ -43,18 +45,15 @@ resolver_tp resolver_create(gint process_id) {
 
 void resolver_destroy(resolver_tp r) {
 	if(r != NULL) {
-		g_hash_table_foreach(r->addr_entry, (GHFunc)resolver_destroy_cb, NULL);
+		/* destroy all entries (values) */
+		g_hash_table_remove_all(r->addr_entry);
 		g_hash_table_destroy(r->addr_entry);
 		r->addr_entry = NULL;
+		/* destroy all keys, but the values were destroyed above */
+		g_hash_table_remove_all(r->name_entry);
 		g_hash_table_destroy(r->name_entry);
 		r->name_entry = NULL;
 		free(r);
-	}
-}
-
-void resolver_destroy_cb(gint key, gpointer value, gpointer param) {
-	if(value != NULL) {
-		free(value);
 	}
 }
 

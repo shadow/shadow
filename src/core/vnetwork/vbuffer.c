@@ -333,7 +333,7 @@ static rc_vpacket_pod_tp vbuffer_remove_receive_helper(vbuffer_tp vb, enum vbuff
 					goto ret;
 			}
 
-			/* packet poginter is copied */
+			/* packet pointer is copied */
 			rc_vpacket_pod_retain(rc_packet);
 		} else if(vba == VB_REMOVE) {
 			switch (vbt) {
@@ -359,7 +359,7 @@ static rc_vpacket_pod_tp vbuffer_remove_receive_helper(vbuffer_tp vb, enum vbuff
 					goto ret;
 			}
 
-			/* if packet poginter was removed, it will be returned */
+			/* if packet pointer was removed, it will be returned */
 
 			vpacket_tp packet = vpacket_mgr_lockcontrol(rc_packet, LC_OP_READLOCK | LC_TARGET_PACKET);
 			if(packet != NULL) {
@@ -428,7 +428,7 @@ static rc_vpacket_pod_tp vbuffer_remove_send_helper(vbuffer_tp vb, enum vbuffer_
 					goto ret;
 			}
 
-			/* packet poginter is copied */
+			/* packet pointer is copied */
 			rc_vpacket_pod_retain(rc_packet);
 		} else if(vba == VB_REMOVE) {
 			switch (vbt) {
@@ -453,7 +453,7 @@ static rc_vpacket_pod_tp vbuffer_remove_send_helper(vbuffer_tp vb, enum vbuffer_
 					goto ret;
 			}
 
-			/* if packet poginter was removed, it will be returned */
+			/* if packet pointer was removed, it will be returned */
 
 			vpacket_tp packet = vpacket_mgr_lockcontrol(rc_packet, LC_OP_READLOCK | LC_TARGET_PACKET);
 			if(packet != NULL) {

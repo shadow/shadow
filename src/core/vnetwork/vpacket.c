@@ -41,7 +41,7 @@ static void vpacket_tcp_flags_to_string(gpointer buffer, size_t size, enum vpack
 * copies the data ginto the receiver application's buffer, unless distributed
 * mode requires sending the data to another machine.
 *
-* vpacket must be NON-NULL, and it should pogint to an allocated packet whose contents
+* vpacket must be NON-NULL, and it should point to an allocated packet whose contents
 * will be set using the parameters of this method.
 */
 vpacket_tp vpacket_set(vpacket_tp vpacket, guint8 protocol, in_addr_t src_addr, in_port_t src_port,
@@ -50,7 +50,7 @@ vpacket_tp vpacket_set(vpacket_tp vpacket, guint8 protocol, in_addr_t src_addr, 
 		guint16 data_size, const gpointer data) {
 	/* check for allocation */
 	if(vpacket == NULL){
-		dlogf(LOG_ERR, "vpacket_set: please provide NON-NULL poginter to a vpacket\n");
+		dlogf(LOG_ERR, "vpacket_set: please provide NON-NULL pointer to a vpacket\n");
 		return NULL;
 	}
 

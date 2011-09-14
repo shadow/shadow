@@ -78,7 +78,7 @@ void linkedbuffer_destroy(linkedbuffer_tp lbuffer){
 		}
 		free(lbuffer);
 	} else {
-		/* TODO log null poginter exception */
+		/* TODO log null pointer exception */
 	}
 
 	return;
@@ -126,7 +126,7 @@ size_t linkedbuffer_read(linkedbuffer_tp lbuffer, gpointer dest, size_t numbytes
 		}
 
 	} else {
-		/* TODO log null poginter exception */
+		/* TODO log null pointer exception */
 	}
 
 	return numbytes - bytes_left;
@@ -169,7 +169,7 @@ size_t linkedbuffer_write(linkedbuffer_tp lbuffer, const gpointer src, size_t nu
 		}
 
 	} else {
-		/* TODO log null poginter exception */
+		/* TODO log null pointer exception */
 	}
 
 	return numbytes - bytes_left;
@@ -241,7 +241,7 @@ static void bufferlink_destroy(bufferlink_tp link){
 		link->next = NULL;
 		free(link);
 	} else {
-		/* TODO log null poginter exception */
+		/* TODO log null pointer exception */
 	}
 
 	return;

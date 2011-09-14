@@ -209,7 +209,7 @@ void dvn_slave_deposit (dvninstance_tp dvn, nbdf_tp net_frame) {
 					socketset_watch(dvn->socketset, new_socket);
 
 					vector_push(dvn->slave->slave_connections, new_slave_connection);
-					g_hash_table_insert(dvn->slave->slave_connection_lookup, gint_key(slave_id), new_slave_connection);
+					g_hash_table_insert(dvn->slave->slave_connection_lookup, &(new_slave_connection->id), new_slave_connection);
 					dvn->num_active_slaves++;
 
 					debugf( "Slave:     Engaged. Now %d active slaves.\n", dvn->num_active_slaves);
@@ -254,11 +254,11 @@ gint dvn_slave_socketprocess(dvninstance_tp dvn, dvninstance_slave_connection_tp
 				/* set our own ID */
 				dvn->my_instid = assigned_id;
 
-                                gint key = 0;
+                gint key = 0;
 				if(g_hash_table_lookup(dvn->slave->slave_connection_lookup, &key) == NULL) {
 					/* mark this link as ID 0 (master) */
 					slave_connection->id = 0;
-					g_hash_table_insert(dvn->slave->slave_connection_lookup, gint_key(key), slave_connection);
+					g_hash_table_insert(dvn->slave->slave_connection_lookup, &(slave_connection->id), slave_connection);
 					dvn->num_active_slaves++;
 
 					debugf( "Slave: BOOTSTRAPED to ID %i (master connection established)\n",assigned_id);
@@ -272,7 +272,7 @@ gint dvn_slave_socketprocess(dvninstance_tp dvn, dvninstance_slave_connection_tp
 				if(g_hash_table_lookup(dvn->slave->slave_connection_lookup, &id)) {
 					debugf("Slave: Got a identification for worker %i\n",id);
 					slave_connection->id = id;
-					g_hash_table_insert(dvn->slave->slave_connection_lookup, gint_key(id), slave_connection);
+					g_hash_table_insert(dvn->slave->slave_connection_lookup, &(slave_connection->id), slave_connection);
 				}
 			}
 		} else {
@@ -362,7 +362,7 @@ void dvn_slave_heartbeat (dvninstance_tp dvn) {
 			/* DESTROY */
 			if(cur_slave) {
 				if(cur_slave->id != -1)
-					g_hash_table_remove(dvn->slave->slave_connection_lookup, &cur_slave->id);
+					g_hash_table_remove(dvn->slave->slave_connection_lookup, &(cur_slave->id));
 
 				if(cur_slave->sock)
 					socket_destroy(cur_slave->sock);
@@ -400,14 +400,14 @@ void dvn_slave_heartbeat (dvninstance_tp dvn) {
 					nbdf_send(frame, remote_slave_connection->sock);
 				}
 
-				/* our slave is also an endpogint. */
+				/* our slave is also an endpoint. */
 				dvn_slave_deposit(dvn, frame);
 
 				break;
 			}
 
 			case DVNPACKET_LOCAL_SLAVE:
-			case DVNPACKET_LOCAL_BCAST: { /* it was a LOCAL broadcast, which means our local slave was an endpogint */
+			case DVNPACKET_LOCAL_BCAST: { /* it was a LOCAL broadcast, which means our local slave was an endpoint */
 				dvn_slave_deposit(dvn, frame);
 				break;
 			}
@@ -439,7 +439,7 @@ void dvn_slave_heartbeat (dvninstance_tp dvn) {
 					dvn_slave_deposit(dvn, frame);
 
 				else {
-                                        gint key = 0;
+                    gint key = 0;
 					dvninstance_slave_connection_tp remote_slave_connection =
 						g_hash_table_lookup(dvn->slave->slave_connection_lookup, &key);
 

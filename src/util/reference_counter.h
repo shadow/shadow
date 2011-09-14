@@ -29,10 +29,10 @@
 /*
  * Implements a generic reference counter for objects that destroys the object
  * when it has no more references. In general, rc_retain should be called any
- * time a poginter to the rc_object is stored, and rc_release should be called
- * when a poginter is deleted. This includes stack poginters, so functions that
- * take in a rc_object poginter should immediately call rc_retain, and
- * should call rc_release right before returning (unless a poginter to the
+ * time a pointer to the rc_object is stored, and rc_release should be called
+ * when a pointer is deleted. This includes stack pointers, so functions that
+ * take in a rc_object pointer should immediately call rc_retain, and
+ * should call rc_release right before returning (unless a pointer to the
  * rc_object itself is returned, in which case rc_release is not called upon
  * exiting a function, and the caller of said function is responsible to handle
  * proper releases).

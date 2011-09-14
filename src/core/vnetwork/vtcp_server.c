@@ -59,7 +59,7 @@ vtcp_server_tp vtcp_server_create(vsocket_mgr_tp vsocket_mgr, vsocket_tp sock, g
 	return server;
 }
 
-void vtcp_server_destroy_cb(gint key, gpointer value, gpointer param) {
+void vtcp_server_destroy_cb(gpointer key, gpointer value, gpointer param) {
 	vtcp_server_destroy((vtcp_server_tp) value);
 }
 
@@ -67,9 +67,9 @@ void vtcp_server_destroy(vtcp_server_tp server) {
 	if(server != NULL){
 //		server->backlog = 0;
 
-		g_hash_table_foreach(server->incomplete_children, (GHFunc)vsocket_mgr_destroy_and_remove_socket_cb, server->vsocket_mgr);
-		g_hash_table_foreach(server->pending_children, (GHFunc)vsocket_mgr_destroy_and_remove_socket_cb, server->vsocket_mgr);
-		g_hash_table_foreach(server->accepted_children, (GHFunc)vsocket_mgr_destroy_and_remove_socket_cb, server->vsocket_mgr);
+		g_hash_table_foreach(server->incomplete_children, vsocket_mgr_destroy_and_remove_socket_cb, server->vsocket_mgr);
+		g_hash_table_foreach(server->pending_children, vsocket_mgr_destroy_and_remove_socket_cb, server->vsocket_mgr);
+		g_hash_table_foreach(server->accepted_children, vsocket_mgr_destroy_and_remove_socket_cb, server->vsocket_mgr);
 
 		g_hash_table_destroy(server->incomplete_children);
 		g_hash_table_destroy(server->pending_children);
@@ -136,9 +136,9 @@ void vtcp_server_destroy_child(vtcp_server_tp server, vtcp_server_child_tp schil
 					schild->sock->sock_desc, schild->sock->sock_desc_parent);
 
 		/* remove all possible links to child */
-		g_hash_table_remove(server->incomplete_children, &schild->key);
-		g_hash_table_remove(server->pending_children, &schild->key);
-		g_hash_table_remove(server->accepted_children, &schild->key);
+		g_hash_table_remove(server->incomplete_children, &(schild->key));
+		g_hash_table_remove(server->pending_children, &(schild->key));
+		g_hash_table_remove(server->accepted_children, &(schild->key));
 
 		/* TODO do something smarter instead of re-creating the
 		 * pending queue... like a list iterator */
@@ -162,7 +162,7 @@ void vtcp_server_destroy_child(vtcp_server_tp server, vtcp_server_child_tp schil
 vtcp_server_child_tp vtcp_server_get_child(vtcp_server_tp server, in_addr_t remote_addr, in_port_t remote_port) {
 	if(server != NULL) {
 		guint hashkey = vsocket_hash(remote_addr, remote_port);
-                gint *key = gint_key(hashkey);
+        gconstpointer key = &(hashkey);
 
 		vtcp_server_child_tp target = NULL;
 
@@ -189,7 +189,7 @@ void vtcp_server_add_child_incomplete(vtcp_server_tp server, vtcp_server_child_t
 
 void vtcp_server_remove_child_incomplete(vtcp_server_tp server, vtcp_server_child_tp schild) {
 	if(server != NULL && schild != NULL) {
-		g_hash_table_remove(server->incomplete_children, &schild->key);
+		g_hash_table_remove(server->incomplete_children, &(schild->key));
 	}
 }
 
@@ -209,7 +209,7 @@ vtcp_server_child_tp vtcp_server_remove_child_pending(vtcp_server_tp server) {
 	if(server != NULL && server->pending_queue != NULL) {
 		vtcp_server_child_tp pending = g_queue_pop_head(server->pending_queue);
 		if(pending != NULL) {
-			g_hash_table_remove(server->pending_children, &pending->key);
+			g_hash_table_remove(server->pending_children, &(pending->key));
 		}
 		return pending;
 	} else {
@@ -225,20 +225,20 @@ void vtcp_server_add_child_accepted(vtcp_server_tp server, vtcp_server_child_tp 
 
 void vtcp_server_remove_child_accepted(vtcp_server_tp server, vtcp_server_child_tp schild) {
 	if(server != NULL && schild != NULL) {
-		g_hash_table_remove(server->accepted_children, &schild->key);
+		g_hash_table_remove(server->accepted_children, &(schild->key));
 	}
 }
 
 static void vtcp_server_add_child_helper(GHashTable *ht, vtcp_server_child_tp schild) {
 	if(schild != NULL) {
 		/* check for collision in its new table */
-		vsocket_tp collision = g_hash_table_lookup(ht, &schild->key);
+		vsocket_tp collision = g_hash_table_lookup(ht, &(schild->key));
 		if(collision != NULL){
 			dlogf(LOG_ERR, "vtcp_server_add_child_helper: hash collision!\n");
 			return;
 		}
 
-                gint *key = gint_key(schild->key);
+        gpointer key = &(schild->key);
 		g_hash_table_insert(ht, key, schild);
 	}
 }

@@ -74,11 +74,11 @@ void vsocket_mgr_destroy(vsocket_mgr_tp net) {
 		 * because they both destroy the same socket.
 		 */
 
-		/* must destroy tcpserver (and its vsockets) first to avoid gdouble free */
-  		g_hash_table_foreach(net->ethernet->tcp_servers, (GHFunc)vtcp_server_destroy_cb, NULL);
+		/* must destroy tcpserver (and its vsockets) first to avoid double free */
+  		g_hash_table_foreach(net->ethernet->tcp_servers, vtcp_server_destroy_cb, NULL);
 		g_hash_table_destroy(net->ethernet->tcp_servers);
 
-  		g_hash_table_foreach(net->loopback->tcp_servers, (GHFunc)vtcp_server_destroy_cb, NULL);
+  		g_hash_table_foreach(net->loopback->tcp_servers, vtcp_server_destroy_cb, NULL);
 		g_hash_table_destroy(net->loopback->tcp_servers);
 
 		/* destroys remaining vsockets */
@@ -166,15 +166,12 @@ void vsocket_mgr_destroy_socket(vsocket_tp sock) {
 }
 
 void vsocket_mgr_add_server(vsocket_mgr_tp net, vtcp_server_tp server) {
-        gint *key;
 	if(net != NULL && server != NULL) {
 		if(server->sock->ethernet_peer != NULL) {
-                        key = gint_key(server->sock->ethernet_peer->port);
-			g_hash_table_insert(net->ethernet->tcp_servers, key, server);
+			g_hash_table_insert(net->ethernet->tcp_servers, &(server->sock->ethernet_peer->port), server);
 		}
 		if(server->sock->loopback_peer != NULL) {
-                        key = gint_key(server->sock->loopback_peer->port);
-			g_hash_table_insert(net->loopback->tcp_servers, key, server);
+			g_hash_table_insert(net->loopback->tcp_servers, &(server->sock->loopback_peer->port), server);
 		}
 	}
 }
@@ -182,9 +179,9 @@ void vsocket_mgr_add_server(vsocket_mgr_tp net, vtcp_server_tp server) {
 vtcp_server_tp vsocket_mgr_get_server(vsocket_mgr_tp net, vsocket_tp sock) {
 	if(net != NULL && sock != NULL) {
 		if(sock->ethernet_peer != NULL) {
-			return g_hash_table_lookup(net->ethernet->tcp_servers, gint_key(sock->ethernet_peer->port));
+			return g_hash_table_lookup(net->ethernet->tcp_servers, &(sock->ethernet_peer->port));
 		} else if(sock->loopback_peer != NULL) {
-			return g_hash_table_lookup(net->loopback->tcp_servers, gint_key(sock->loopback_peer->port));
+			return g_hash_table_lookup(net->loopback->tcp_servers, &(sock->loopback_peer->port));
 		}
 	}
 	return NULL;
@@ -193,36 +190,35 @@ vtcp_server_tp vsocket_mgr_get_server(vsocket_mgr_tp net, vsocket_tp sock) {
 void vsocket_mgr_remove_server(vsocket_mgr_tp net, vtcp_server_tp server) {
 	if(net != NULL && server != NULL) {
 		if(server->sock->ethernet_peer != NULL) {
-			g_hash_table_remove(net->ethernet->tcp_servers, &server->sock->ethernet_peer->port);
+			g_hash_table_remove(net->ethernet->tcp_servers, &(server->sock->ethernet_peer->port));
 		}
 		if(server->sock->loopback_peer != NULL) {
-			g_hash_table_remove(net->loopback->tcp_servers, &server->sock->loopback_peer->port);
+			g_hash_table_remove(net->loopback->tcp_servers, &(server->sock->loopback_peer->port));
 		}
 	}
 }
 
 void vsocket_mgr_add_socket(vsocket_mgr_tp net, vsocket_tp sock) {
 	if(net != NULL && sock != NULL) {
-                gint *key = gint_key(sock->sock_desc);
-		g_hash_table_insert(net->vsockets, key, sock);
+		g_hash_table_insert(net->vsockets, &(sock->sock_desc), sock);
 	}
 }
 
 vsocket_tp vsocket_mgr_get_socket(vsocket_mgr_tp net, guint16 sockd) {
         vsocket_tp ret = NULL;
 	if(net != NULL) {
-		ret = g_hash_table_lookup(net->vsockets, gint_key(sockd));
+		ret = g_hash_table_lookup(net->vsockets, &(sockd));
 	}
 	return ret;
 }
 
 void vsocket_mgr_remove_socket(vsocket_mgr_tp net, vsocket_tp sock) {
 	if(net != NULL && sock != NULL) {
-		g_hash_table_remove(net->vsockets, &sock->sock_desc);
+		g_hash_table_remove(net->vsockets, &(sock->sock_desc));
 	}
 }
 
-void vsocket_mgr_destroy_socket_cb(gint key, gpointer value, gpointer param) {
+void vsocket_mgr_destroy_socket_cb(gpointer key, gpointer value, gpointer param) {
 	vsocket_mgr_destroy_socket((vsocket_tp) value);
 }
 
@@ -231,31 +227,31 @@ void vsocket_mgr_destroy_and_remove_socket(vsocket_mgr_tp net, vsocket_tp sock) 
 		return;
 	}
 
-	if(g_hash_table_lookup(net->vsockets, gint_key(sock->sock_desc)) == NULL) {
+	if(g_hash_table_lookup(net->vsockets, &(sock->sock_desc)) == NULL) {
 		return;
 	}
         g_hash_table_remove(net->vsockets, &sock->sock_desc);
 
 	if(sock->type == SOCK_STREAM) {
 		if(sock->ethernet_peer != NULL && net->ethernet != NULL) {
-			g_hash_table_remove(net->ethernet->tcp_vsockets, &sock->ethernet_peer->port);
+			g_hash_table_remove(net->ethernet->tcp_vsockets, &(sock->ethernet_peer->port));
 		}
 		if(sock->loopback_peer != NULL && net->loopback != NULL) {
-			g_hash_table_remove(net->loopback->tcp_vsockets, &sock->loopback_peer->port);
+			g_hash_table_remove(net->loopback->tcp_vsockets, &(sock->loopback_peer->port));
 		}
 
 		/* child of a server */
 		if(sock->sock_desc_parent != 0) {
-			vsocket_tp parent = g_hash_table_lookup(net->vsockets, gint_key(sock->sock_desc_parent));
+			vsocket_tp parent = g_hash_table_lookup(net->vsockets, &(sock->sock_desc_parent));
 
 			if(parent != NULL) {
 				/* get the server running on the parent */
 				vtcp_server_tp parent_server = NULL;
 
 				if(parent->ethernet_peer != NULL && net->ethernet != NULL) {
-					parent_server = g_hash_table_lookup(net->ethernet->tcp_servers, gint_key(parent->ethernet_peer->port));
+					parent_server = g_hash_table_lookup(net->ethernet->tcp_servers, &(parent->ethernet_peer->port));
 				} else if(parent->loopback_peer != NULL && net->loopback != NULL) {
-					parent_server = g_hash_table_lookup(net->loopback->tcp_servers, gint_key(parent->loopback_peer->port));
+					parent_server = g_hash_table_lookup(net->loopback->tcp_servers, &(parent->loopback_peer->port));
 				}
 
 				if(parent_server != NULL) {
@@ -271,15 +267,15 @@ void vsocket_mgr_destroy_and_remove_socket(vsocket_mgr_tp net, vsocket_tp sock) 
 			}
 		}
 
-		/* a server itself, these two will pogint to the same server */
+		/* a server itself, these two will point to the same server */
 		vtcp_server_tp server1 = NULL;
 		vtcp_server_tp server2 = NULL;
 		if(sock->ethernet_peer != NULL && net->ethernet != NULL) {
-			server1 = g_hash_table_lookup(net->ethernet->tcp_servers, gint_key(sock->ethernet_peer->port));
+			server1 = g_hash_table_lookup(net->ethernet->tcp_servers, &(sock->ethernet_peer->port));
 			g_hash_table_remove(net->ethernet->tcp_servers, &sock->ethernet_peer->port);
 		}
 		if(sock->loopback_peer != NULL && net->loopback != NULL) {
-			server2 = g_hash_table_lookup(net->loopback->tcp_servers, gint_key(sock->loopback_peer->port));
+			server2 = g_hash_table_lookup(net->loopback->tcp_servers, &(sock->loopback_peer->port));
 			g_hash_table_remove(net->loopback->tcp_servers, &sock->loopback_peer->port);
 		}
 
@@ -291,10 +287,10 @@ void vsocket_mgr_destroy_and_remove_socket(vsocket_mgr_tp net, vsocket_tp sock) 
 		}
 	} else {
 		if(sock->ethernet_peer != NULL && net->ethernet != NULL) {
-			g_hash_table_remove(net->ethernet->udp_vsockets, &sock->ethernet_peer->port);
+			g_hash_table_remove(net->ethernet->udp_vsockets, &(sock->ethernet_peer->port));
 		}
 		if(sock->loopback_peer != NULL && net->loopback != NULL) {
-			g_hash_table_remove(net->loopback->udp_vsockets, &sock->loopback_peer->port);
+			g_hash_table_remove(net->loopback->udp_vsockets, &(sock->loopback_peer->port));
 		}
 	}
 
@@ -304,13 +300,13 @@ void vsocket_mgr_destroy_and_remove_socket(vsocket_mgr_tp net, vsocket_tp sock) 
 		/* use net as dummy value.
 		 * TODO: hashtable should really implement a contains() function instead.
 		 */
-                gint *key = gint_key(sock->sock_desc);
+		gint *key = gint_key(sock->sock_desc);
 		g_hash_table_insert(net->destroyed_descs, key, net);
 	}
 	vsocket_mgr_destroy_socket(sock);
 }
 
-void vsocket_mgr_destroy_and_remove_socket_cb(gint key, gpointer value, gpointer param) {
+void vsocket_mgr_destroy_and_remove_socket_cb(gpointer key, gpointer value, gpointer param) {
 	vsocket_mgr_destroy_and_remove_socket((vsocket_mgr_tp) param, (vsocket_tp) value);
 }
 
@@ -347,7 +343,7 @@ static vsocket_tp vsocket_mgr_find_socket_helper(vinterface_tp vi, guint8 protoc
 	if(vi != NULL){
 		/* get the descriptor for the destination of the packet */
 		vsocket_tp target = NULL;
-                gint *key = gint_key(local_port);
+        gconstpointer key = &(local_port);
 		if(protocol == SOCK_STREAM) {
 			/* check if target is actually a server, or a multiplexed socket */
 			vtcp_server_tp server = g_hash_table_lookup(vi->tcp_servers, key);
@@ -382,7 +378,7 @@ vsocket_tp vsocket_mgr_find_socket(vsocket_mgr_tp net, guint8 protocol,
 
 guint8 vsocket_mgr_isbound_loopback(vsocket_mgr_tp net, in_port_t port) {
 	if(net != NULL && net->loopback != NULL &&
-			g_hash_table_lookup(net->loopback->tcp_vsockets, gint_key(port)) != NULL) {
+			g_hash_table_lookup(net->loopback->tcp_vsockets, &(port)) != NULL) {
 		return 1;
 	}
 	return 0;
@@ -390,7 +386,7 @@ guint8 vsocket_mgr_isbound_loopback(vsocket_mgr_tp net, in_port_t port) {
 
 guint8 vsocket_mgr_isbound_ethernet(vsocket_mgr_tp net, in_port_t port) {
 	if(net != NULL && net->ethernet != NULL &&
-			g_hash_table_lookup(net->ethernet->tcp_vsockets, gint_key(port)) != NULL) {
+			g_hash_table_lookup(net->ethernet->tcp_vsockets, &(port)) != NULL) {
 		return 1;
 	}
 	return 0;
@@ -399,7 +395,7 @@ guint8 vsocket_mgr_isbound_ethernet(vsocket_mgr_tp net, in_port_t port) {
 void vsocket_mgr_bind_ethernet(vsocket_mgr_tp net, vsocket_tp sock, in_port_t bind_port) {
 	if(net != NULL && sock != NULL && net->ethernet != NULL) {
 		sock->ethernet_peer = vpeer_create(net->ethernet->ip_address, bind_port);
-                gint *key = gint_key(bind_port);
+		gpointer key = &(bind_port);
 		if(sock->type == SOCK_STREAM) {
 			g_hash_table_insert(net->ethernet->tcp_vsockets, key, sock);
 		} else {
@@ -411,7 +407,7 @@ void vsocket_mgr_bind_ethernet(vsocket_mgr_tp net, vsocket_tp sock, in_port_t bi
 void vsocket_mgr_bind_loopback(vsocket_mgr_tp net, vsocket_tp sock, in_port_t bind_port) {
 	if(net != NULL && sock != NULL && net->ethernet != NULL) {
 		sock->loopback_peer = vpeer_create(net->loopback->ip_address, bind_port);
-                gint *key = gint_key(bind_port);
+		gpointer key = &(bind_port);
 		if(sock->type == SOCK_STREAM) {
 			g_hash_table_insert(net->loopback->tcp_vsockets, key, sock);
 		} else {

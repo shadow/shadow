@@ -40,7 +40,7 @@ void dvn_packet_write(socket_tp socket, guchar dest_type, guchar dest_layer, gin
 void dvn_packet_route(guchar dest_type, guchar dest_layer, gint dest_major, gint frametype, nbdf_tp frame) {
 	/* if we are a worker and already reported complete, do not send out
 	 * anything because there might not be anyone waiting to receive (avoids deadlocks)
-	 * this cuts off logging at the end of the sim, but at this pogint master does
+	 * this cuts off logging at the end of the sim, but at this point master does
 	 * not handle logging anymore anyway */
 	if(dvn_global_worker_data.in_worker && global_sim_context.sim_worker &&
 			global_sim_context.sim_worker->mode == sim_worker_mode_complete) {
@@ -170,7 +170,7 @@ void dvn_packet_route(guchar dest_type, guchar dest_layer, gint dest_major, gint
 					dvn_slave_deposit(dvn_global_instance, net_nb);
 
 				else {
-                                        gint key = 0;
+                    gint key = 0;
 					dvninstance_slave_connection_tp remote_slave_connection =
 						g_hash_table_lookup(dvn_global_instance->slave->slave_connection_lookup, &key);
 

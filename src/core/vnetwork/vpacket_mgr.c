@@ -108,7 +108,7 @@ rc_vpacket_pod_tp vpacket_mgr_packet_create(vpacket_mgr_tp vp_mgr, guint8 protoc
 			return NULL;
 		}
 
-		/* setup packet poginter so shared memory is transparent */
+		/* setup packet pointer so shared memory is transparent */
 		vp_pod->vpacket = (vpacket_tp) vp_pod->shmitem_packet->payload;
 
 		if(data_size > 0) {
@@ -123,7 +123,7 @@ rc_vpacket_pod_tp vpacket_mgr_packet_create(vpacket_mgr_tp vp_mgr, guint8 protoc
 				return NULL;
 			}
 
-			/* setup packet payload poginter so shared memory is transparent */
+			/* setup packet payload pointer so shared memory is transparent */
 			vp_pod->vpacket->payload = vp_pod->shmitem_payload->payload;
 		} else {
 			vp_pod->shmitem_payload = NULL;
@@ -213,7 +213,7 @@ rc_vpacket_pod_tp vpacket_mgr_attach_shared_packet(vpacket_mgr_tp vp_mgr,
 		return NULL;
 	}
 
-	/* setup packet poginter so shared memory is transparent */
+	/* setup packet pointer so shared memory is transparent */
 	vp_pod->vpacket = (vpacket_tp) vp_pod->shmitem_packet->payload;
 
 	/* shm for the payload, if there is a payload */
@@ -227,7 +227,7 @@ rc_vpacket_pod_tp vpacket_mgr_attach_shared_packet(vpacket_mgr_tp vp_mgr,
 			free(vp_pod);
 		}
 
-		/* setup packet payload poginter so shared memory is transparent */
+		/* setup packet payload pointer so shared memory is transparent */
 		vp_pod->vpacket->payload = vp_pod->shmitem_payload->payload;
 	} else {
 		vp_pod->shmitem_payload = NULL;

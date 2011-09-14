@@ -103,7 +103,7 @@ struct EVTRACKER_HASH_E * evtracker_find_hash_e(evtracker_tp evt, ptime_t time, 
 gint evtracker_heap_e_compare(gpointer a, gpointer b);
 
 /**
- * @param maximum If a poginter is passed, this function will never return
+ * @param maximum If a pointer is passed, this function will never return
  *                a value greater than this.
  */
 ptime_t evtracker_earliest_event(evtracker_tp evt, ptime_t * maximum);

@@ -36,11 +36,11 @@ dtimer_mgr_tp dtimer_create_manager(events_tp events){
 	dtimer_mgr_tp rval = malloc(sizeof(*rval));
 	rval->c_tmr_cnt = 0;
 	rval->events = events;
-	rval->timersets = g_hash_table_new(g_int_hash, g_int_equal);
+	rval->timersets = g_hash_table_new_full(g_int_hash, g_int_equal, g_free, NULL);
 	return rval;
 }
 
-static void dtimer_free_timerset_cb(gint key, gpointer value, gpointer param) {
+static void dtimer_free_timerset_cb(gpointer key, gpointer value, gpointer param) {
 	dtimer_timerset_tp ts = value;
 
 	if(!ts)
@@ -55,7 +55,8 @@ void dtimer_destroy_manager(dtimer_mgr_tp mgr) {
 	if(mgr == NULL)
 		return;
 
-	g_hash_table_foreach(mgr->timersets, (GHFunc)dtimer_free_timerset_cb, NULL);
+	g_hash_table_foreach(mgr->timersets, dtimer_free_timerset_cb, NULL);
+	g_hash_table_remove_all(mgr->timersets);
 	g_hash_table_destroy(mgr->timersets);
 
 	free(mgr);

@@ -85,7 +85,7 @@ void simnet_graph_add_vertex(simnet_graph_tp g, guint network_id, cdf_tp latency
 			v->edges = g_hash_table_new(g_int_hash, g_int_equal);
 
 			g_queue_push_tail(g->vertices, v);
-			g_hash_table_insert(g->vertices_map, gint_key(network_id), v);
+			g_hash_table_insert(g->vertices_map, &(v->id), v);
 
 			simnet_graph_track_minmax(g, latency_cdf);
 
@@ -115,15 +115,15 @@ void simnet_graph_add_edge(simnet_graph_tp g, guint id1, cdf_tp latency_cdf_1to2
 			e->reliablity_2to1 = reliablity_2to1;
 
 			g_queue_push_tail(g->edges, e);
-			g_hash_table_insert(v1->edges, gint_key(id2), e);
-			g_hash_table_insert(v2->edges, gint_key(id1), e);
+			g_hash_table_insert(v1->edges, &(e->vertex2->id), e);
+			g_hash_table_insert(v2->edges, &(e->vertex1->id), e);
 
 			simnet_graph_track_minmax(g, latency_cdf_1to2);
 			simnet_graph_track_minmax(g, latency_cdf_2to1);
 
 			g->is_dirty = 1;
 		} else {
-			dlogf(LOG_WARN, "simnet_graph_add_edge: edge endpogint(s) %u and/or $u missing\n", id1, id2);
+			dlogf(LOG_WARN, "simnet_graph_add_edge: edge endpoint(s) %u and/or $u missing\n", id1, id2);
 		}
 	}
 }

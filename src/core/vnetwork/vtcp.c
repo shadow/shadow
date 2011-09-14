@@ -143,7 +143,7 @@ ssize_t vtcp_send(vsocket_mgr_tp net, vsocket_tp tcpsock, const gpointer src_buf
 		/* attempt to store the packet in transport */
 		guint8 success = vtcp_send_packet(tcpsock->vt->vtcp, rc_packet);
 
-		/* release our stack copy of the poginter */
+		/* release our stack copy of the pointer */
 		rc_vpacket_pod_release(rc_packet);
 
 		if(!success) {
@@ -467,7 +467,7 @@ static enum vt_prc_result vtcp_process_state(vsocket_tp sock, rc_vpacket_pod_tp 
 			}
 
 			if (flags & SYN) {
-				/* we should not be receiving SYNs at this pogint */
+				/* we should not be receiving SYNs at this point */
 				vtcp_send_control_packet(vtcp, RST);
 				vtcp_reset(vtcp, sock, rc_packet);
 				prc_result |= VT_PRC_DROPPED;

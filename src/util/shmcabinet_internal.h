@@ -76,7 +76,7 @@ typedef struct shmcabinet_slot_s {
 	guint32 id;
 	/* number of open references to this slot (reference count) */
 	guint32 num_opened;
-	/* offset to the next unallocated slot from the cabinet poginter */
+	/* offset to the next unallocated slot from the cabinet pointer */
 	size_t next_slot_offset;
 	/* a lock is stored in the first bytes of data. its size is stored here.
 	 * lock protects num_opened and next_slot_offset only */
@@ -103,7 +103,7 @@ typedef struct shmcabinet_s {
 	guint32 num_slots;
 	/* number of allocated slots in this cabinet (reference count) */
 	guint32 num_slots_allocated;
-	/* offset to the first unallocated slot from the cabinet poginter */
+	/* offset to the first unallocated slot from the cabinet pointer */
 	size_t head_slot_offset;
 	/* a lock is stored in the first bytes of data. its size is stored here.
 	 * lock protects num_opened, num_slots_allocated, and head_slot_offset only */
@@ -120,23 +120,23 @@ typedef struct shmcabinet_s {
 	gchar bufname[SHMCABINET_NAME_MAX_SIZE]; \
 	snprintf(bufname, SHMCABINET_NAME_MAX_SIZE, SHMCABINET_NAME_FORMAT, process_id, cabinet_id)
 
-/* returns a poginter to the mapped address of the head slot */
+/* returns a pointer to the mapped address of the head slot */
 #define shmcabinet_HEAD(cabinet) \
 	((shmcabinet_slot_tp)(((gchar*)cabinet) + (cabinet->head_slot_offset)))
 
-/** returns the offset from the cabinet poginter to the slot given by slot_id */
+/** returns the offset from the cabinet pointer to the slot given by slot_id */
 #define shmcabinet_ID_TO_OFFSET(cabinet, slot_id) \
 	((size_t)(sizeof(shmcabinet_t) + cabinet->cabinet_lock_size + ((slot_id) * (cabinet->slot_size))))
 
-/* returns a poginter to the mapped address of the slot given by slot_id */
+/* returns a pointer to the mapped address of the slot given by slot_id */
 #define shmcabinet_ID_TO_SLOT(cabinet, slot_id) \
 	((shmcabinet_slot_tp)(((gchar*)cabinet) + shmcabinet_ID_TO_OFFSET(cabinet, slot_id)))
 
-/* returns the offset from the cabinet poginter to the given slot payload */
+/* returns the offset from the cabinet pointer to the given slot payload */
 #define shmcabinet_PAYLOAD_TO_OFFSET(cabinet, payload) \
 	((size_t)(((gchar*) payload) - ((gchar*) cabinet)))
 
-/* returns a poginter to the mapped address of the slot of the given payload */
+/* returns a pointer to the mapped address of the slot of the given payload */
 #define shmcabinet_PAYLOAD_TO_SLOT(cabinet, payload) \
 	((shmcabinet_slot_tp)(((gchar*) payload) - cabinet->slot_lock_size - sizeof(shmcabinet_slot_t)))
 

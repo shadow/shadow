@@ -1061,7 +1061,7 @@ gint vsocket_close(vsocket_mgr_tp net, gint fd) {
 	}
 
 	if(sock == NULL && net->destroyed_descs != NULL &&
-			g_hash_table_remove(net->destroyed_descs, gint_key(fd)) != FALSE) {
+		g_hash_table_remove(net->destroyed_descs, &(fd)) != FALSE) {
 		/* socket was previously deleted, considered a successful close */
 		return VSOCKET_SUCCESS;
 	}

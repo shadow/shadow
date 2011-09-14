@@ -51,8 +51,8 @@ typedef void (*vci_exec_func)(vci_event_tp vci_event, vsocket_mgr_tp vs_mgr);
 typedef void (*vci_deposit_func)(events_tp events, vci_event_tp vci_event);
 typedef void (*vci_destroy_func)(gpointer payload);
 
-static void vci_free_network(gint netid, gpointer vnet, gpointer data);
-static void vci_free_mailbox(gint laddr, gpointer vmbox, gpointer data);
+static void vci_free_network(gpointer key, gpointer value, gpointer user_data);
+static void vci_free_mailbox(gpointer laddr, gpointer vmbox, gpointer data);
 
 static vci_scheduling_info_tp vci_get_scheduling_info(in_addr_t src_addr, in_addr_t dst_addr);
 static enum vci_location vci_get_relative_location(in_addr_t relative_to);
@@ -131,13 +131,13 @@ in_addr_t vci_create_ip(vci_mgr_tp mgr, gint net_id, context_provider_tp cp) {
 	in_addr_t addr;
 	vci_mailbox_tp mbox;
 
-	vci_network_tp net = g_hash_table_lookup(mgr->networks_by_id, gint_key(net_id));
+	vci_network_tp net = g_hash_table_lookup(mgr->networks_by_id, &net_id);
 	if(!net)
 		return INADDR_NONE;
 
 	do {
 		laddr = vci_ascheme_rand_node(mgr->ascheme);
-	} while(g_hash_table_lookup(mgr->mailboxes, gint_key(laddr)));
+	} while(g_hash_table_lookup(mgr->mailboxes, &laddr));
 
 	addr = vci_ascheme_build_addr(mgr->ascheme, mgr->slave_id, mgr->worker_id, laddr);
 
@@ -149,8 +149,8 @@ in_addr_t vci_create_ip(vci_mgr_tp mgr, gint net_id, context_provider_tp cp) {
 	mbox->network = net;
 
 	/* track it with a hashtable */
-        gint *key_laddr = gint_key(laddr);
-        gint *key_addr = gint_key(addr);
+	gint *key_laddr = gint_key(laddr);
+	gint *key_addr = gint_key(addr);
 	g_hash_table_insert(mgr->mailboxes, key_laddr, mbox);
 	g_hash_table_insert(mgr->networks_by_address, key_addr, net);
 
@@ -159,14 +159,14 @@ in_addr_t vci_create_ip(vci_mgr_tp mgr, gint net_id, context_provider_tp cp) {
 
 void vci_free_ip(vci_mgr_tp mgr, in_addr_t addr) {
 	guint laddr = vci_ascheme_get_node(mgr->ascheme, addr);
-	vci_mailbox_tp mbox = g_hash_table_lookup(mgr->mailboxes, gint_key(laddr));
+	vci_mailbox_tp mbox = g_hash_table_lookup(mgr->mailboxes, &laddr);
 	g_hash_table_remove(mgr->mailboxes, &laddr);
 	if(mbox)
-		vci_free_mailbox(laddr, mbox, NULL);
+		vci_free_mailbox(&laddr, mbox, NULL);
 	return;
 }
 
-static void vci_free_modules(gint ladder, gpointer vmbox, gpointer data) {
+static void vci_free_modules(gpointer ladder, gpointer vmbox, gpointer data) {
 	vci_mailbox_tp mbox = vmbox;
 
 	if(mbox) {
@@ -178,7 +178,7 @@ static void vci_free_modules(gint ladder, gpointer vmbox, gpointer data) {
 	}
 }
 
-static void vci_free_mailbox(gint laddr, gpointer vmbox, gpointer data) {
+static void vci_free_mailbox(gpointer laddr, gpointer vmbox, gpointer data) {
 	vci_mailbox_tp mbox = vmbox;
 
 	if(mbox) {
@@ -200,8 +200,8 @@ static void vci_free_mailbox(gint laddr, gpointer vmbox, gpointer data) {
 
 vci_mailbox_tp vci_get_mailbox(vci_mgr_tp vci_mgr, in_addr_t ip) {
 	if(vci_mgr != NULL) {
-                gint node = vci_ascheme_get_node(vci_mgr->ascheme, ip);
-		return g_hash_table_lookup(vci_mgr->mailboxes, gint_key(node));
+        gint node = vci_ascheme_get_node(vci_mgr->ascheme, ip);
+		return g_hash_table_lookup(vci_mgr->mailboxes, &node);
 	}
 	return NULL;
 }
@@ -212,9 +212,9 @@ vci_mgr_tp vci_mgr_create (events_tp events, guint slave_id, guint worker_id, vc
 	rv->ascheme = scheme;
 	rv->events = events;
 
-	rv->mailboxes = g_hash_table_new(g_int_hash, g_int_equal);
+	rv->mailboxes = g_hash_table_new_full(g_int_hash, g_int_equal, g_free, NULL);
+	rv->networks_by_address = g_hash_table_new_full(g_int_hash, g_int_equal, g_free, NULL);
 	rv->networks_by_id = g_hash_table_new(g_int_hash, g_int_equal);
-	rv->networks_by_address = g_hash_table_new(g_int_hash, g_int_equal);
 
 	rv->slave_id = slave_id;
 	rv->worker_id = worker_id;
@@ -226,15 +226,18 @@ vci_mgr_tp vci_mgr_create (events_tp events, guint slave_id, guint worker_id, vc
 
 void vci_mgr_destroy(vci_mgr_tp mgr) {
 	/* network cleanup */
-	g_hash_table_foreach(mgr->networks_by_id, (GHFunc)vci_free_network, NULL);
+	g_hash_table_foreach(mgr->networks_by_id, vci_free_network, NULL);
 	g_hash_table_destroy(mgr->networks_by_id);
+	/* need to free the keys */
+	g_hash_table_remove_all(mgr->networks_by_address);
 	g_hash_table_destroy(mgr->networks_by_address);
 
 	/* first destroy all modules */
-	g_hash_table_foreach(mgr->mailboxes, (GHFunc)vci_free_modules, NULL);
+	g_hash_table_foreach(mgr->mailboxes, vci_free_modules, NULL);
 
 	/* then the actual mailbox cleanup */
-	g_hash_table_foreach(mgr->mailboxes, (GHFunc)vci_free_mailbox, NULL);
+	g_hash_table_foreach(mgr->mailboxes, vci_free_mailbox, NULL);
+	g_hash_table_remove_all(mgr->mailboxes);
 	g_hash_table_destroy(mgr->mailboxes);
 
 	free(mgr);
@@ -249,16 +252,16 @@ vci_network_tp vci_network_create(vci_mgr_tp mgr, guint id) {
 
 	net->netid = id;
 
-        gint *key = gint_key(id);
-	g_hash_table_insert(mgr->networks_by_id, key, net);
+	g_hash_table_insert(mgr->networks_by_id, &(net->netid), net);
 
 	return net;
 }
 
-static void vci_free_network(gint netid, gpointer vnet, gpointer data) {
-	vci_network_tp net = vnet;
+static void vci_free_network(gpointer key, gpointer value, gpointer user_data) {
+	vci_network_tp net = value;
 
 	if(net) {
+		/* this also frees the key */
 		free(net);
 	}
 
@@ -267,7 +270,7 @@ static void vci_free_network(gint netid, gpointer vnet, gpointer data) {
 
 void vci_track_network(vci_mgr_tp mgr, guint network_id, in_addr_t addr) {
 	/* we are being told that the remote node addr belongs to network_id */
-	vci_network_tp net = g_hash_table_lookup(mgr->networks_by_address, gint_key(addr));
+	vci_network_tp net = g_hash_table_lookup(mgr->networks_by_address, &addr);
 
 	if(net != NULL) {
 		dlogf(LOG_WARN, "vci_track_network: overwriting remote network mapping for %s\n", inet_ntoa_t(addr));
@@ -275,7 +278,7 @@ void vci_track_network(vci_mgr_tp mgr, guint network_id, in_addr_t addr) {
 		net = vci_network_create(mgr, network_id);
 	}
         
-        gint *key = gint_key(addr);
+    gint *key = gint_key(addr);
 	g_hash_table_insert(mgr->networks_by_address, key, net);
 }
 
@@ -408,13 +411,13 @@ static vci_scheduling_info_tp vci_get_scheduling_info(in_addr_t src_addr, in_add
 		return NULL;
 	}
 
-	vci_network_tp src_net = g_hash_table_lookup(vci_mgr->networks_by_address, gint_key(src_addr));
+	vci_network_tp src_net = g_hash_table_lookup(vci_mgr->networks_by_address, &src_addr);
 	if(src_net == NULL) {
 		dlogf(LOG_ERR, "vci_get_scheduling_info: error obtaining src network for %s\n", inet_ntoa_t(src_addr));
 		return NULL;
 	}
 
-	vci_network_tp dst_net = g_hash_table_lookup(vci_mgr->networks_by_address, gint_key(dst_addr));
+	vci_network_tp dst_net = g_hash_table_lookup(vci_mgr->networks_by_address, &dst_addr);
 	if(dst_net == NULL) {
 		dlogf(LOG_ERR, "vci_get_scheduling_info: error obtaining dst network for %s\n", inet_ntoa_t(dst_addr));
 		return NULL;
@@ -923,7 +926,7 @@ static vsocket_mgr_tp vci_enter_vnetwork_context(vci_mgr_tp vci_mgr, in_addr_t a
 
 	if(mbox == NULL || mbox->context_provider == NULL ||
 			mbox->context_provider->vsocket_mgr == NULL) {
-		dlogf(LOG_ERR, "vci_enter_vnetwork_context: NULL poginter when entering vnetwork context for %s\n", inet_ntoa_t(addr));
+		dlogf(LOG_ERR, "vci_enter_vnetwork_context: NULL pointer when entering vnetwork context for %s\n", inet_ntoa_t(addr));
 		return NULL;
 	}
 

@@ -36,12 +36,12 @@
  * Loadable module header
  */
 
-/* snricall function poginter */
+/* snricall function pointer */
 typedef gint (*_snricall_fpref_t)(gint, ...);
 extern _snricall_fpref_t _snricall_fpref;
 #define _snricall (*_snricall_fpref)
 
-/* This is the function poginter that will need to be passed for timer callback. When your
+/* This is the function pointer that will need to be passed for timer callback. When your
  * timer expires, SNRI will call the function you pass with this signature.
  */
 typedef void (*snri_timer_callback_fp)(
@@ -99,8 +99,8 @@ gint snri_resolve_name(gchar* name, in_addr_t* addr_out);
 
 /**
  * resolves address to a name and stores the result in name_out. name_out should
- * pogint to a buffer of length name_out_len to avoid overflows. if the buffer name_out
- * pogints to is smaller than the actual hostname, this will return an error.
+ * point to a buffer of length name_out_len to avoid overflows. if the buffer name_out
+ * points to is smaller than the actual hostname, this will return an error.
  */
 gint snri_resolve_addr(in_addr_t addr, gchar* name_out, gint name_out_len);
 
@@ -119,7 +119,7 @@ gint snri_resolve_minbw(in_addr_t addr, guint* bw_KBps_out);
 gint snri_getip(in_addr_t* addr_out);
 
 /**
- * returns the hostname of the caller. if the buffer name_out pogints to is
+ * returns the hostname of the caller. if the buffer name_out points to is
  * smaller than the actual hostname, this will return an error.
  */
 gint snri_gethostname(gchar* name_out, gint name_out_len);
@@ -147,7 +147,7 @@ gint snri_set_loopexit_fn(snri_timer_callback_fp fn);
  *
  * @param num_globals Number of globals to register
  * The rest of the params should follow this form:
- * 		global variable poginter
+ * 		global variable pointer
  * 		size of data
  *
  * For instance, you may have the following globals:

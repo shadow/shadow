@@ -111,9 +111,9 @@ void vsocket_mgr_unmap_socket_tcp(vsocket_mgr_tp net, vsocket_tp sock);
 void vsocket_mgr_map_socket_udp(vsocket_mgr_tp net, vsocket_tp sock);
 vsocket_tp vsocket_mgr_get_socket_udp(vsocket_mgr_tp net, guint16 port);
 void vsocket_mgr_unmap_socket_udp(vsocket_mgr_tp net, vsocket_tp sock);
-void vsocket_mgr_destroy_socket_cb(gint keu, gpointer value, gpointer param);
+void vsocket_mgr_destroy_socket_cb(gpointer keu, gpointer value, gpointer param);
 void vsocket_mgr_destroy_and_remove_socket(vsocket_mgr_tp net, vsocket_tp sock);
-void vsocket_mgr_destroy_and_remove_socket_cb(gint key, gpointer value, gpointer param);
+void vsocket_mgr_destroy_and_remove_socket_cb(gpointer key, gpointer value, gpointer param);
 void vsocket_mgr_try_destroy_socket(vsocket_mgr_tp net, vsocket_tp sock);
 vsocket_tp vsocket_mgr_get_socket_receiver(vsocket_mgr_tp net, rc_vpacket_pod_tp rc_packet);
 vsocket_tp vsocket_mgr_find_socket(vsocket_mgr_tp net, guint8 protocol,

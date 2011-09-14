@@ -47,8 +47,8 @@
 
 #define VCI_MAX_DATAGRAM_SIZE 8192 /**< maximum size of a VCI UDP simulated datagram - messages larger than this are dropped */
 
-#define VCI_RLBLTY_100 1000000000 /**< 100% reliability - using fixed pogint math */
-#define VCI_RLBLTY_FAC 10000000   /**< scaling factor used for the fixed pogint math */
+#define VCI_RLBLTY_100 1000000000 /**< 100% reliability - using fixed point math */
+#define VCI_RLBLTY_FAC 10000000   /**< scaling factor used for the fixed point math */
 
 /**
  * defines how tight we want the distribution around the average value:
@@ -76,7 +76,7 @@ typedef struct vci_addressing_scheme_t {
 /**
  * a VCI manager
  *
- * this it holds some quantity of vci-addressable endpogints, along with the mechanisms for ordered
+ * this it holds some quantity of vci-addressable endpoints, along with the mechanisms for ordered
  * delivery
  */
 typedef struct vci_mgr_t {

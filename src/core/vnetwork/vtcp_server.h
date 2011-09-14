@@ -30,8 +30,8 @@
 #include "vsocket.h"
 
 typedef struct vtcp_server_child_s {
-	/* TODO should we store the sock_descrs instead of poginters to sockets?
-	 * then we would do a lookup on the fly from vsocket_mgr, preventing a dangling poginter when the socket is deleted. */
+	/* TODO should we store the sock_descrs instead of pointers to sockets?
+	 * then we would do a lookup on the fly from vsocket_mgr, preventing a dangling pointer when the socket is deleted. */
 	vsocket_tp sock;
 	guint key;
 } vtcp_server_child_t, *vtcp_server_child_tp;
@@ -61,7 +61,7 @@ guint8 vtcp_server_add_child_pending(vtcp_server_tp server, vtcp_server_child_tp
 vtcp_server_tp vtcp_server_create(vsocket_mgr_tp vsocket_mgr, vsocket_tp sock, gint backlog);
 vtcp_server_child_tp vtcp_server_create_child(vtcp_server_tp server, in_addr_t remote_addr, in_port_t remote_port);
 void vtcp_server_destroy(vtcp_server_tp server);
-void vtcp_server_destroy_cb(gint key, gpointer value, gpointer param);
+void vtcp_server_destroy_cb(gpointer key, gpointer value, gpointer param);
 void vtcp_server_destroy_child(vtcp_server_tp server, vtcp_server_child_tp schild);
 vtcp_server_child_tp vtcp_server_get_child(vtcp_server_tp server, in_addr_t remote_addr, in_port_t remote_port);
 guint8 vtcp_server_is_empty(vtcp_server_tp server);

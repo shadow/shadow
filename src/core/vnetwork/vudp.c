@@ -107,7 +107,7 @@ ssize_t vudp_send(vsocket_mgr_tp net, vsocket_tp udpsock,
 		/* attempt to store the packet */
 		guint8 success = vudp_send_packet(udpsock->vt->vudp, rc_packet);
 
-		/* release our stack copy of the poginter */
+		/* release our stack copy of the pointer */
 		rc_vpacket_pod_release(rc_packet);
 
 		if(!success) {

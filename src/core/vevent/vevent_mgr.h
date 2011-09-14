@@ -52,7 +52,7 @@ typedef struct vevent_base_s {
 	GHashTable *sockets_by_sd;
 } vevent_base_t, *vevent_base_tp;
 
-/* holds all event bases that the user creates (each holds poginter to a vevent base) */
+/* holds all event bases that the user creates (each holds pointer to a vevent base) */
 typedef struct vevent_mgr_s {
 	/* holds event_base_tp */
 	GQueue *event_bases;

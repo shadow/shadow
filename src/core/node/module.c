@@ -37,8 +37,8 @@ module_mgr_tp module_mgr_create (void) {
 	return mgr;
 }
 
-static void module_free_cb(gpointer vmod, gint id) {
-	module_tp mod = vmod;
+static void module_free_cb(gpointer key, gpointer value, gpointer user_data) {
+	module_tp mod = value;
 
 	if(mod)
 		module_destroy(mod);
@@ -48,7 +48,7 @@ static void module_free_cb(gpointer vmod, gint id) {
 
 void module_mgr_destroy (module_mgr_tp mgr) {
 	if(mgr->modules){
-		g_hash_table_foreach(mgr->modules, (GHFunc)module_free_cb, NULL);
+		g_hash_table_foreach(mgr->modules, module_free_cb, NULL);
 		g_hash_table_destroy(mgr->modules);
 	}
 	free(mgr);
@@ -255,7 +255,7 @@ module_tp module_load(module_mgr_tp mgr, gint id, gchar * module) {
 	*mod->mod_snricall_fpmem = &snricall;
 
 	/* track it */
-	g_hash_table_insert(mgr->modules, gint_key(mod->id), mod);
+	g_hash_table_insert(mgr->modules, &(mod->id), mod);
 
 	return mod;
 }

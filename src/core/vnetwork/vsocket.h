@@ -33,7 +33,7 @@
 #include "vpacket_mgr.h"
 #include "vpacket.h"
 
-/* starting pogint for 'random' ports we select [2^16 / 2] */
+/* starting point for 'random' ports we select [2^16 / 2] */
 #define VSOCKET_MIN_RND_PORT 30000
 /* max size of incomplete, un-established connection queue, taken from /proc/sys/net/ipv4/tcp_max_syn_backlog */
 #define VSOCKET_MAX_SYN_BACKLOG 1024
@@ -53,9 +53,9 @@
 #endif
 
 void vsocket_mgr_destroy_and_remove_socket(vsocket_mgr_tp net, vsocket_tp sock);
-void vsocket_mgr_destroy_and_remove_socket_cb(gint key, gpointer value, gpointer param);
+void vsocket_mgr_destroy_and_remove_socket_cb(gpointer key, gpointer value, gpointer param);
 void vsocket_mgr_destroy_socket(vsocket_tp sock);
-void vsocket_mgr_destroy_socket_cb(gint key, gpointer value, gpointer param);
+void vsocket_mgr_destroy_socket_cb(gpointer key, gpointer value, gpointer param);
 guint64 vsocket_get_retransmit_key(rc_vpacket_pod_tp rc_packet);
 guint vsocket_hash(in_addr_t addr, in_port_t port);
 void vsocket_transition(vsocket_tp sock, enum vsocket_state newstate);

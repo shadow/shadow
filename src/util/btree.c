@@ -165,7 +165,7 @@ gpointer btree_remove(btree_tp bt, gint v) {
 				bt->elements[cur].d = bt->elements[swapfrom].d;
 				bt->elements[cur].parent = bt->elements[swapfrom].parent;
 
-				/* change the parent to pogint to new child */
+				/* change the parent to point to new child */
 				if(bt->elements[cur].parent != -1) {
 					if(bt->elements[bt->elements[cur].parent].left == swapfrom)
 						bt->elements[bt->elements[cur].parent].left = cur;
@@ -174,7 +174,7 @@ gpointer btree_remove(btree_tp bt, gint v) {
 				} else
 					bt->head_node = cur;
 
-				/* change children of old element to pogint to new element */
+				/* change children of old element to point to new element */
 				if(bt->elements[cur].left != -1)
 					bt->elements[bt->elements[cur].left].parent = cur;
 				if(bt->elements[cur].right != -1)

@@ -101,7 +101,7 @@ enum fileserver_code fileserver_start(fileserver_tp fs, in_addr_t listen_addr, i
 	return FS_SUCCESS;
 }
 
-static void fileserver_shutdown_cb(gint key, gpointer value, gpointer data) {
+static void fileserver_shutdown_cb(gpointer key, gpointer value, gpointer data) {
 	/* cant call fileserve_connection_close since we are walking the ht */
 	fileserver_connection_tp c = value;
 
@@ -120,7 +120,7 @@ enum fileserver_code fileserver_shutdown(fileserver_tp fs) {
 		return FS_ERR_INVALID;
 	}
 
-	g_hash_table_foreach(fs->connections, (GHFunc)fileserver_shutdown_cb, NULL);
+	g_hash_table_foreach(fs->connections, fileserver_shutdown_cb, NULL);
 	g_hash_table_destroy(fs->connections);
 
 	if(close(fs->listen_sockd) < 0) {
@@ -150,7 +150,7 @@ enum fileserver_code fileserver_accept_one(fileserver_tp fs, gint* sockd_out) {
 	fileserver_connection_tp c = malloc(sizeof(fileserver_connection_t));
 	c->sockd = sockd;
 	c->state = FS_IDLE;
-	g_hash_table_insert(fs->connections, gint_key(sockd), c);
+	g_hash_table_insert(fs->connections, &(c->sockd), c);
 
 	if(sockd_out != NULL) {
 		*sockd_out = sockd;
@@ -160,7 +160,7 @@ enum fileserver_code fileserver_accept_one(fileserver_tp fs, gint* sockd_out) {
 }
 
 static void fileserve_connection_close(fileserver_tp fs, fileserver_connection_tp c) {
-	g_hash_table_remove(fs->connections, &c->sockd);
+	g_hash_table_remove(fs->connections, &(c->sockd));
 	if(c->reply.f != NULL) {
 		fclose(c->reply.f);
 	}
