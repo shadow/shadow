@@ -463,7 +463,7 @@ void sim_worker_destroy(sim_worker_tp sim) {
 	sim->hostname_tracking = NULL;
 
 	g_hash_table_foreach(sim->loaded_cdfs, sim_worker_destroy_cdftracker_cb, NULL);
-	g_hash_table_destroy(sim->loaded_cdfs);
+	g_hash_table_remove_all(sim->loaded_cdfs);
 	g_hash_table_destroy(sim->loaded_cdfs);
 	sim->loaded_cdfs = NULL;
 

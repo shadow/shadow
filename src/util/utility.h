@@ -34,4 +34,7 @@ gint *gint_key(gint key);
 
 gint gint_compare_func(gpointer a, gpointer b);
 
+gboolean g_int16_equal(gconstpointer v1, gconstpointer v2);
+guint g_int16_hash(gconstpointer v1);
+
 #endif /*UTILITY_H_*/

@@ -72,7 +72,7 @@ void printfault(gint error, gchar *fmt, ...) {
 }
 
 gint *gint_key(gint key) {
-    gint *ret = g_malloc(sizeof(gint));
+    gint *ret = g_malloc0(sizeof(gint));
     *ret = key;
     return ret;
 }
@@ -83,4 +83,19 @@ gint gint_compare_func(gpointer a, gpointer b) {
     if(x < y) return -1;
     if(x > y) return 1;
     return 0;
+}
+
+gboolean g_int16_equal(gconstpointer v1, gconstpointer v2) {
+	/* make sure upper bits are zero */
+	gint k1, k2 = 0;
+	k1 = *((gint16*)v1);
+	k2 = *((gint16*)v2);
+	return g_int_equal(&k1, &k2);
+}
+
+guint g_int16_hash(gconstpointer v1) {
+	/* make sure upper bits are zero */
+	gint k = 0;
+	k = *((gint16*)v1);
+	return g_int_hash(&k);
 }

@@ -51,7 +51,7 @@ vsocket_mgr_tp vsocket_mgr_create(context_provider_tp p, in_addr_t addr, guint32
 
 	net->next_sock_desc = VNETWORK_MIN_SD;
 	net->next_rnd_port = VSOCKET_MIN_RND_PORT;
-	net->vsockets = g_hash_table_new(g_int_hash, g_int_equal);
+	net->vsockets = g_hash_table_new(g_int16_hash, g_int16_equal);
 	net->destroyed_descs = g_hash_table_new(g_int_hash, g_int_equal);
 
 	net->ethernet = vsocket_mgr_create_interface(net, net->addr);
@@ -113,9 +113,9 @@ void vsocket_mgr_destroy(vsocket_mgr_tp net) {
 vinterface_tp vsocket_mgr_create_interface(vsocket_mgr_tp net, in_addr_t addr) {
 	if(net != NULL) {
 		vinterface_tp vi = malloc(sizeof(vinterface_t));
-		vi->tcp_vsockets = g_hash_table_new(g_int_hash, g_int_equal);
-		vi->udp_vsockets = g_hash_table_new(g_int_hash, g_int_equal);
-		vi->tcp_servers = g_hash_table_new(g_int_hash, g_int_equal);
+		vi->tcp_vsockets = g_hash_table_new(g_int16_hash, g_int16_equal);
+		vi->udp_vsockets = g_hash_table_new(g_int16_hash, g_int16_equal);
+		vi->tcp_servers = g_hash_table_new(g_int16_hash, g_int16_equal);
 		vi->ip_address = addr;
 		return vi;
 	}
