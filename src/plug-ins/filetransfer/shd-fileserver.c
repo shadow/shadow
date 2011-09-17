@@ -52,6 +52,20 @@ const gchar* fileserver_codetoa(enum fileserver_code fsc) {
 	}
 }
 
+
+static void fileserver_connection_destroy_cb(gpointer data) {
+	/* cant call fileserve_connection_close since we are walking the ht */
+	fileserver_connection_tp c = data;
+
+	if(c != NULL) {
+		if(c->reply.f != NULL) {
+			fclose(c->reply.f);
+		}
+		close(c->sockd);
+		free(c);
+	}
+}
+
 enum fileserver_code fileserver_start(fileserver_tp fs, in_addr_t listen_addr, in_port_t listen_port,
 		gchar* docroot, gint max_connections) {
 	/* check user inputs */
@@ -93,25 +107,12 @@ enum fileserver_code fileserver_start(fileserver_tp fs, in_addr_t listen_addr, i
 	fs->listen_port = listen_port;
 	fs->listen_sockd = sockd;
 	strncpy(fs->docroot, docroot, FT_STR_SIZE);
-	fs->connections = g_hash_table_new(g_int_hash, g_int_equal);
+	fs->connections = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, fileserver_connection_destroy_cb);
 	fs->bytes_sent = 0;
 	fs->bytes_received = 0;
 	fs->replies_sent = 0;
 
 	return FS_SUCCESS;
-}
-
-static void fileserver_shutdown_cb(gpointer key, gpointer value, gpointer data) {
-	/* cant call fileserve_connection_close since we are walking the ht */
-	fileserver_connection_tp c = value;
-
-	if(c != NULL) {
-		if(c->reply.f != NULL) {
-			fclose(c->reply.f);
-		}
-		close(c->sockd);
-		free(c);
-	}
 }
 
 enum fileserver_code fileserver_shutdown(fileserver_tp fs) {
@@ -120,7 +121,7 @@ enum fileserver_code fileserver_shutdown(fileserver_tp fs) {
 		return FS_ERR_INVALID;
 	}
 
-	g_hash_table_foreach(fs->connections, fileserver_shutdown_cb, NULL);
+	/* destroy the hashtable. this calls the connection destroy function for each. */
 	g_hash_table_destroy(fs->connections);
 
 	if(close(fs->listen_sockd) < 0) {
@@ -150,7 +151,11 @@ enum fileserver_code fileserver_accept_one(fileserver_tp fs, gint* sockd_out) {
 	fileserver_connection_tp c = malloc(sizeof(fileserver_connection_t));
 	c->sockd = sockd;
 	c->state = FS_IDLE;
-	g_hash_table_insert(fs->connections, &(c->sockd), c);
+
+	/* in case we have a registered stale connection at this sockd, destroy it
+	 * and replace with the new connection.
+	 */
+	g_hash_table_replace(fs->connections, &(c->sockd), c);
 
 	if(sockd_out != NULL) {
 		*sockd_out = sockd;
@@ -161,11 +166,6 @@ enum fileserver_code fileserver_accept_one(fileserver_tp fs, gint* sockd_out) {
 
 static void fileserve_connection_close(fileserver_tp fs, fileserver_connection_tp c) {
 	g_hash_table_remove(fs->connections, &(c->sockd));
-	if(c->reply.f != NULL) {
-		fclose(c->reply.f);
-	}
-	close(c->sockd);
-	free(c);
 }
 
 enum fileserver_code fileserver_activate(fileserver_tp fs, gint sockd) {

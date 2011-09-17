@@ -143,7 +143,7 @@ static void vevent_mgr_print_all_cb(gpointer key, gpointer value, gpointer user_
 		while(event != NULL) {
 			vevent_tp vev = event->data;
 			if(vev != NULL && vev->event != NULL) {
-				debugf("socket %i waiting for events %s\n", key, vevent_get_event_type_string(mgr, vev->event->ev_events));
+				debugf("socket %i waiting for events %s\n", *((gint*)key), vevent_get_event_type_string(mgr, vev->event->ev_events));
 			}
             event = event->next;
 		}
@@ -155,7 +155,7 @@ void vevent_mgr_print_stat(vevent_mgr_tp mgr, guint16 sockd) {
 		/* go through every base we know about */
 		GList *bases = g_queue_peek_head_link(mgr->event_bases);
 
-		debugf("======Prginting all waiting registered events for socket %u======\n", sockd);
+		debugf("======Printing all waiting registered events for socket %u======\n", sockd);
 		while(bases != NULL) {
 			event_base_tp eb = bases->data;
 			vevent_base_tp veb = vevent_mgr_convert_base(mgr, eb);
@@ -181,7 +181,7 @@ void vevent_mgr_print_all(vevent_mgr_tp mgr) {
 			vevent_base_tp veb = vevent_mgr_convert_base(mgr, eb);
 
 			if(veb != NULL) {
-				debugf("======Prginting all waiting registered events======\n");
+				debugf("======Printing all waiting registered events======\n");
 				g_hash_table_foreach(veb->sockets_by_sd, vevent_mgr_print_all_cb, mgr);
 				debugf("======Done printing======\n");
 			}
