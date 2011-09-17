@@ -85,10 +85,14 @@ void vsocket_mgr_destroy(vsocket_mgr_tp net) {
 		//g_hash_table_foreach(net->vsockets, (GHFunc)vsocket_mgr_destroy_socket_cb, NULL);
 		g_hash_table_destroy(net->vsockets);
 
-		/* since all vsockets were destroyed, we can simply remove references here */
+		/* all vsockets were destroyed, but make sure to free keys */
+		g_hash_table_remove_all(net->ethernet->tcp_vsockets);
 		g_hash_table_destroy(net->ethernet->tcp_vsockets);
+		g_hash_table_remove_all(net->ethernet->udp_vsockets);
 		g_hash_table_destroy(net->ethernet->udp_vsockets);
+		g_hash_table_remove_all(net->loopback->tcp_vsockets);
 		g_hash_table_destroy(net->loopback->tcp_vsockets);
+		g_hash_table_remove_all(net->loopback->udp_vsockets);
 		g_hash_table_destroy(net->loopback->udp_vsockets);
 
 		/* do not walk since no values were created and stored here */
@@ -113,8 +117,8 @@ void vsocket_mgr_destroy(vsocket_mgr_tp net) {
 vinterface_tp vsocket_mgr_create_interface(vsocket_mgr_tp net, in_addr_t addr) {
 	if(net != NULL) {
 		vinterface_tp vi = malloc(sizeof(vinterface_t));
-		vi->tcp_vsockets = g_hash_table_new(g_int16_hash, g_int16_equal);
-		vi->udp_vsockets = g_hash_table_new(g_int16_hash, g_int16_equal);
+		vi->tcp_vsockets = g_hash_table_new_full(g_int16_hash, g_int16_equal, g_free, NULL);
+		vi->udp_vsockets = g_hash_table_new_full(g_int16_hash, g_int16_equal, g_free, NULL);
 		vi->tcp_servers = g_hash_table_new(g_int16_hash, g_int16_equal);
 		vi->ip_address = addr;
 		return vi;
@@ -395,7 +399,7 @@ guint8 vsocket_mgr_isbound_ethernet(vsocket_mgr_tp net, in_port_t port) {
 void vsocket_mgr_bind_ethernet(vsocket_mgr_tp net, vsocket_tp sock, in_port_t bind_port) {
 	if(net != NULL && sock != NULL && net->ethernet != NULL) {
 		sock->ethernet_peer = vpeer_create(net->ethernet->ip_address, bind_port);
-		gpointer key = &(bind_port);
+		gpointer key = gint_key(bind_port);
 		if(sock->type == SOCK_STREAM) {
 			g_hash_table_insert(net->ethernet->tcp_vsockets, key, sock);
 		} else {
@@ -407,7 +411,7 @@ void vsocket_mgr_bind_ethernet(vsocket_mgr_tp net, vsocket_tp sock, in_port_t bi
 void vsocket_mgr_bind_loopback(vsocket_mgr_tp net, vsocket_tp sock, in_port_t bind_port) {
 	if(net != NULL && sock != NULL && net->ethernet != NULL) {
 		sock->loopback_peer = vpeer_create(net->loopback->ip_address, bind_port);
-		gpointer key = &(bind_port);
+		gpointer key = gint_key(bind_port);
 		if(sock->type == SOCK_STREAM) {
 			g_hash_table_insert(net->loopback->tcp_vsockets, key, sock);
 		} else {

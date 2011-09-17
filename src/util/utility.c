@@ -87,15 +87,15 @@ gint gint_compare_func(gpointer a, gpointer b) {
 
 gboolean g_int16_equal(gconstpointer v1, gconstpointer v2) {
 	/* make sure upper bits are zero */
-	gint k1, k2 = 0;
-	k1 = *((gint16*)v1);
-	k2 = *((gint16*)v2);
+	gint k1 = 0, k2 = 0;
+	k1 = (gint) *((gint16*)v1);
+	k2 = (gint) *((gint16*)v2);
 	return g_int_equal(&k1, &k2);
 }
 
 guint g_int16_hash(gconstpointer v1) {
 	/* make sure upper bits are zero */
 	gint k = 0;
-	k = *((gint16*)v1);
+	k = (gint) *((gint16*)v1);
 	return g_int_hash(&k);
 }
