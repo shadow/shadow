@@ -35,7 +35,7 @@ typedef struct resolver_entry_s {
 	guint32 KBps_down;
 	guint32 KBps_up;
 	in_addr_t addr;
-	gchar hostname[];
+	GString* hostname;
 } resolver_entry_t, *resolver_entry_tp;
 
 typedef struct resolver_s {

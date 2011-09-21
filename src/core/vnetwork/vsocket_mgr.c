@@ -68,10 +68,16 @@ vsocket_mgr_tp vsocket_mgr_create(context_provider_tp p, in_addr_t addr, guint32
 
 void vsocket_mgr_destroy(vsocket_mgr_tp net) {
 	if(net != NULL){
-		/* TODO dsetruction of interfaces should be refactored */
-
-		/* FIXME this leaks memory - we cant walk both the eth and loop tcp_servers
+		/* TODO
+		 * dsetruction of interfaces should be refactored
+		 *
+		 * FIXME
+		 * this leaks memory - we cant walk both the eth and loop tcp_servers
 		 * because they both destroy the same socket.
+		 *
+		 * XXX
+		 * would be smarter to register a destroy function using g_hash_table_new_full
+		 * so that when g_hash_table_destroy is called below, things are automatic
 		 */
 
 		/* must destroy tcpserver (and its vsockets) first to avoid double free */

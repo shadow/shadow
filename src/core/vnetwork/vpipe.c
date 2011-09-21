@@ -244,7 +244,7 @@ static void vpipe_destroy_cb(gpointer key, gpointer value, gpointer data) {
 vpipe_mgr_tp vpipe_mgr_create(in_addr_t addr) {
 	vpipe_mgr_tp mgr = malloc(sizeof(vpipe_mgr_t));
 	/* we will free the values, but the keys will be freed with g_free */
-	mgr->bipipes = g_hash_table_new_full(g_int_hash, g_int_equal, g_free, NULL);
+	mgr->bipipes = g_hash_table_new_full(g_int16_hash, g_int16_equal, g_free, NULL);
 	mgr->addr = addr;
 	return mgr;
 }
@@ -310,7 +310,7 @@ enum vpipe_status vpipe_stat(vpipe_mgr_tp mgr, vpipe_id fd) {
 		if(vp != NULL) {
 			/* since the pipe exists, we know this fd hasn't closed yet. so it
 			 * can still read. but we need to check that the other end didn't
-			 * close, closing our write end and forcing us ginto readonly mode.
+			 * close, closing our write end and forcing us into readonly mode.
 			 */
 			vpipe_unid_tp writerpipe = NULL;
 
