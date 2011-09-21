@@ -6,7 +6,7 @@ cmake_minimum_required(VERSION 2.8 FATAL_ERROR)
 
 ## set paths and build parameters
 set(VERSION_MAJOR 1)
-set(VERSION_MINOR 0)
+set(VERSION_MINOR 1)
 set(VERSION_BUILD 0)
 set(PACKAGE_STRING "Shadow ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_BUILD}")
 
