@@ -25,7 +25,7 @@ import sys, os, argparse, subprocess, shlex, shutil, urllib2, tarfile, gzip, sta
 from datetime import datetime
 
 BUILD_PREFIX="build"
-INSTALL_PREFIX="/usr/local"
+INSTALL_PREFIX=os.path.expanduser("~/.local")
 
 DEFAULT_TOR_VERSION="0.2.2.15-alpha"
 
@@ -56,24 +56,31 @@ def main():
           help="use non-standard PATH when linking Tor to openssl.", default=None)
     parser_build.add_argument('-g', '--debug', action="store_true", dest="do_debug",
           help="turn on debugging for verbose program output", default=False)
+    parser_build.add_argument('-v', '--version', action="store", dest="tor_version",
+          help="specifiy what version of Tor to build", default=DEFAULT_TOR_VERSION)
     
     # install subcommand
     parser_install = subparsers_main.add_parser('install', help='install scallion', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser_install.set_defaults(func=install, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     
+    parser_install.add_argument('-v', '--version', action="store", dest="tor_version",
+          help="specifiy the version of Tor to install", default=DEFAULT_TOR_VERSION)
+    
     parser_auto = subparsers_main.add_parser('auto', help='build to ./build, install to local prefix. useful for quick local setup and during development.', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser_auto.set_defaults(func=auto, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     
-    default_prefix = os.path.abspath(os.getenv("HOME") + "/.local/")
     parser_auto.add_argument('-p', '--prefix', action="store", dest="prefix",
-          help="install to PATH using libevent and openssl from PATH.", metavar="PATH", default=default_prefix)
+          help="install to PATH using libevent and openssl from PATH.", metavar="PATH", default=INSTALL_PREFIX)
     parser_auto.add_argument('-g', '--debug', action="store_true", dest="do_debug",
           help="turn on debugging for verbose program output", default=False)
     parser_auto.add_argument('-v', '--version', action="store", dest="tor_version",
-          help="specifiy what version of Tor to build with", default=DEFAULT_TOR_VERSION)
+          help="specifiy what version of Tor to build and install", default=DEFAULT_TOR_VERSION)
     
     # get arguments, accessible with args.value
     args = parser_main.parse_args()
+    
+    args.tor_url = TOR_URL.replace(DEFAULT_TOR_VERSION, args.tor_version)
+    
     # run chosen command
     args.func(args)
     
@@ -177,7 +184,6 @@ def auto(args):
     args.prefix_openssl = args.prefix
     args.extra_includes = [os.path.abspath(args.prefix + "/include")]
     args.extra_libraries = [os.path.abspath(args.prefix + "/lib")]
-    args.tor_url = TOR_URL.replace(DEFAULT_TOR_VERSION, args.tor_version)
     if build(args) == 0: install(args)
     
 def setup_tor(args):
