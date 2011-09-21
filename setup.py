@@ -25,7 +25,7 @@ import sys, os, argparse, subprocess, shutil, urllib2, tarfile
 from datetime import datetime
 
 BUILD_PREFIX="build"
-INSTALL_PREFIX="/usr/local"
+INSTALL_PREFIX=os.path.expanduser("~/.local")
 
 RESOURCES_URL="http://shadow.cs.umn.edu/downloads/shadow-resources.tar.gz"
 
@@ -63,9 +63,8 @@ def main():
     parser_auto = subparsers_main.add_parser('auto', help='build to ./build, install to local prefix. useful for quick local setup and during development.', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser_auto.set_defaults(func=auto, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     
-    default_prefix = os.path.abspath(os.getenv("HOME") + "/.local/")
     parser_auto.add_argument('-p', '--prefix', action="store", dest="prefix",
-          help="install to PATH using libs from PATH/lib and includes from PATH/include", metavar="PATH", default=default_prefix)
+          help="install to PATH using libs from PATH/lib and includes from PATH/include", metavar="PATH", default=INSTALL_PREFIX)
     parser_auto.add_argument('-g', '--debug', action="store_true", dest="do_debug",
           help="turn on debugging for verbose program output", default=False)
         
