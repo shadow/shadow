@@ -50,9 +50,9 @@ def main():
           help="include PATH when searching for headers. useful if dependencies are installed to non-standard locations.")
     parser_build.add_argument('-l', '--library', action="append", dest="extra_libraries", metavar="PATH",
           help="include PATH when searching for libraries. useful if dependencies are installed to non-standard locations.")
-    parser_build.add_argument('--libevent-prefix', action="append", dest="prefix_libevent", metavar="PATH",
+    parser_build.add_argument('--libevent-prefix', action="store", dest="prefix_libevent", metavar="PATH",
           help="use non-standard PATH when linking Tor to libevent.", default=None)
-    parser_build.add_argument('--openssl-prefix', action="append", dest="prefix_openssl", metavar="PATH",
+    parser_build.add_argument('--openssl-prefix', action="store", dest="prefix_openssl", metavar="PATH",
           help="use non-standard PATH when linking Tor to openssl.", default=None)
     parser_build.add_argument('-g', '--debug', action="store_true", dest="do_debug",
           help="turn on debugging for verbose program output", default=False)
