@@ -19,11 +19,20 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <glib.h>
+#include "shadow.h"
 
-typedef struct _Node Node;
+Node* node_new() {
+	Node* node = g_new(Node, 1);
 
-struct _Node {
-	guint id;
+	node->event_mailbox = g_async_queue_new_full(event_free);
+	node->event_priority_queue = g_queue_new();
 
-};
+	return node;
+}
+
+void node_free(Node* node) {
+	g_assert(node);
+	g_async_queue_unref(node->event_mailbox);
+	g_queue_free(node->event_priority_queue);
+	g_free(node);
+}

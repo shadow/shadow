@@ -17,3 +17,21 @@ add_subdirectory(util)
 
 ## install shadow script
 install(PROGRAMS ${SHADOW_SOURCE_DIR}/shadow DESTINATION bin)
+
+set(shadow2_srcs
+    engine/shd-engine.c
+    engine/shd-configuration.c
+    engine/shd-logging.c
+    engine/shd-main.c
+    engine/shd-worker.c
+    events/shd-event.c
+    events/shd-spinevent.c
+    events/shd-stopevent.c
+    node/shd-node.c
+    main.c
+)
+
+include_directories(${SHADOW_SOURCE_DIR}/)
+add_executable(shadow2 ${shadow2_srcs})
+target_link_libraries(shadow2 ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES} ${GLIB_LIBRARIES})
+install(TARGETS shadow2 DESTINATION bin)

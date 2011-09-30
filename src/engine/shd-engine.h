@@ -31,6 +31,7 @@ struct _Engine {
 
 	GPrivate* worker_key;
 	gint worker_id_counter;
+	gint node_id_counter;
 
 	SimulationTime clock;
 	GAsyncQueue* event_mailbox;

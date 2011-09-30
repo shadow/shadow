@@ -36,6 +36,8 @@
 #include "engine/shd-logging.h"
 #include "engine/shd-worker.h"
 
+#include "node/shd-node.h"
+
 extern Engine* shadow_engine;
 
 #endif /* SHADOW_H_ */

@@ -22,6 +22,26 @@
 #ifndef SHD_NODE_H_
 #define SHD_NODE_H_
 
+typedef struct _Node Node;
 
+struct _Node {
+	/* asynchronous event priority queue. other nodes may push to this queue. */
+	GAsyncQueue* event_mailbox;
+
+	/* general node lock. nothing that belongs to the node should be touched
+	 * unless holding this lock.
+	 */
+	GMutex* node_lock;
+
+	/* a simple priority queue holding events currently being executed.
+	 * these are place in a separate queue before handing the node off to a
+	 * worker and should not be modified by other nodes. */
+	GQueue* event_priority_queue;
+
+	gint node_id;
+};
+
+Node* node_new();
+void node_free(Node* node);
 
 #endif /* SHD_NODE_H_ */
