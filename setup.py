@@ -44,9 +44,11 @@ def main():
     parser_build.add_argument('-p', '--prefix', action="store", dest="prefix",
           help="path to root directory for shadow installation", metavar="PATH", default=INSTALL_PREFIX)
     parser_build.add_argument('-i', '--include', action="append", dest="extra_includes", metavar="PATH",
-          help="include PATH when searching for headers. useful if dependencies are installed to non-standard locations.")
+          help="include PATH when searching for headers. useful if dependencies are installed to non-standard locations.",
+          default=[INSTALL_PREFIX+ "/include"])
     parser_build.add_argument('-l', '--library', action="append", dest="extra_libraries", metavar="PATH",
-          help="include PATH when searching for libraries. useful if dependencies are installed to non-standard locations.")
+          help="include PATH when searching for libraries. useful if dependencies are installed to non-standard locations.",
+          default=[INSTALL_PREFIX+ "/lib"])
     parser_build.add_argument('-g', '--debug', action="store_true", dest="do_debug",
           help="turn on debugging for verbose program output", default=False)
     parser_build.add_argument('-t', '--test', action="store_true", dest="do_test",
