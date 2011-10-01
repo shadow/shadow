@@ -537,11 +537,11 @@ http://geolite.maxmind.com/download/geoip/database/asnum/GeoIPASNum.dat.gz
 class ShadowGeo():
     US_WEST = ["WA", "ID", "MT", "WY", "OR", "NV", "CA", "UT", "CO", "NM", "AZ", "HI"]
     US_CENTRAL = ["ND", "MN", "WI", "SD", "IA", "IL", "NE", "KS", "MO", "OK", "AR", "LA", "TX", "MI", "IN", "OH", "KY", "TN", "MS", "US"]
-    US_EAST = ["AL", "GA", "FL", "SC", "NC", "VA", "WV", "PA", "NY", "VT", "NH", "ME", "MA", "RI", "CT", "NJ", "DE", "MD", "DC"]
+    US_EAST = ["AL", "GA", "FL", "SC", "NC", "VA", "WV", "PA", "NY", "VT", "NH", "ME", "MA", "RI", "CT", "NJ", "DE", "MD", "DC", "VI"]
     NORTH = ["CA", "AK"]
-    SOUTH = ["BR", "VE", "AR", "UY", "AQ", "BB", "RE", "CI", "CL", "EG", "ZA", "CR"]
+    SOUTH = ["BR", "VE", "AR", "UY", "AQ", "BB", "RE", "CI", "CL", "EG", "ZA", "CR", "PY", "NI", "AN"]
     EU_WEST = ["BE", "FR", "DE", "HU", "FI", "NL", "PT", "NO", "AT", "RO", "PL", "CH", "GR", "IT", "CZ", "IE", "ES", "SE", "GB", "LU", "EE", "HR", "DK", "BG", "BA", "JE", "BY", "LV", "LT", "SK", "UA", "SI", "EU"]
-    EU_EAST = ["JO", "RU", "TR", "PK", "IL", "GE", "SA"]
+    EU_EAST = ["JO", "RU", "TR", "PK", "IL", "GE", "SA", "SY", "IR", "CY", "AE", "KW"]
     ASIA = ["JP", "HK", "TW", "CN", "KR", "SG", "VN", "TH", "MY"]
     AUSTRALIA = ["NZ", "AU", "MX"]
 
@@ -598,8 +598,9 @@ class ShadowGeo():
         ipnum = self.ip2long(address)
         rec = self.geoip._get_record(ipnum)
         country_code, region = "", ""
-        if 'country_code' in rec: country_code = rec['country_code'] 
-        if 'region_name' in rec: region = rec['region_name']
+        if rec is not None:
+            if 'country_code' in rec: country_code = rec['country_code'] 
+            if 'region_name' in rec: region = rec['region_name']
         return {'country_code' : country_code, 'region_name' : region }
 
     def ip2long(self, ip):
