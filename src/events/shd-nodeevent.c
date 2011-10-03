@@ -34,7 +34,7 @@ void nodeevent_init(NodeEvent* event, NodeEventVTable* vtable, Node* node) {
 	event_init(&(event->super), &nodeevent_vtable);
 
 	MAGIC_INIT(event);
-	MAGIC_INIT(event->vtable);
+	MAGIC_INIT(vtable);
 
 	event->vtable = vtable;
 	event->node = node;

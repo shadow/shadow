@@ -118,11 +118,17 @@ static gint engine_main_multi(Engine* engine) {
 gint engine_run(Engine* engine) {
 	MAGIC_ASSERT(engine);
 
+	/* make sure our bootstrap events are set properly */
+	Worker* worker = worker_get();
+	worker->clock_now = 0;
+	worker->cached_engine = engine;
+
 	/* parse user simulation script, create jobs */
 	debug("parsing simulation script");
 
 //	TODO create events correctly (NodeEvent vs Event)
-//	worker_schedule_event(spinevent_new(1), SIMTIME_ONE_SECOND);
+	SpinEvent* se = spin_event_new(1);
+	worker_schedule_event((Event*)se, SIMTIME_ONE_SECOND);
 //	worker_schedule_event(stopevent_new(), SIMTIME_ONE_MINUTE);
 
 	if(engine->config->num_threads > 1) {

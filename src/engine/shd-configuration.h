@@ -36,11 +36,19 @@ typedef guint64 SimulationTime;
 
 /* memory magic for assertions that memory has not been freed */
 /* TODO add ifdef here so this stuff only happens in DEBUG mode */
+#if 1
 #define MAGIC_VALUE 0xAABBCCDD
 #define MAGIC_DECLARE guint magic
 #define MAGIC_INIT(object) object->magic = MAGIC_VALUE
 #define MAGIC_ASSERT(object) g_assert(object && (object->magic == MAGIC_VALUE))
 #define MAGIC_CLEAR(object) object->magic = 0
+#else
+#define MAGIC_VALUE
+#define MAGIC_DECLARE
+#define MAGIC_INIT(object)
+#define MAGIC_ASSERT(object)
+#define MAGIC_CLEAR(object)
+#endif
 
 typedef struct _Configuration Configuration;
 
