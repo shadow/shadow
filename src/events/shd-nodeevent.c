@@ -21,27 +21,41 @@
 
 #include "shadow.h"
 
-EventVTable stopevent_vtable = {
-	(EventExecuteFunc)stopevent_execute,
-	(EventFreeFunc)stopevent_free,
+EventVTable nodeevent_vtable = {
+	(EventExecuteFunc)nodeevent_execute,
+	(EventFreeFunc)nodeevent_free,
 	MAGIC_VALUE
 };
 
-StopEvent* stopevent_new() {
-	StopEvent* event = g_new(StopEvent, 1);
+void nodeevent_init(NodeEvent* event, NodeEventVTable* vtable, Node* node) {
+	g_assert(event && vtable);
+	MAGIC_ASSERT(node);
+
+	event_init(&(event->super), &nodeevent_vtable);
+
 	MAGIC_INIT(event);
+	MAGIC_INIT(event->vtable);
 
-	event_init(&(event->super), &stopevent_vtable);
-	return event;
+	event->vtable = vtable;
+	event->node = node;
 }
 
-void stopevent_free(StopEvent* event) {
+void nodeevent_execute(NodeEvent* event) {
 	MAGIC_ASSERT(event);
+	MAGIC_ASSERT(event->vtable);
+	MAGIC_ASSERT(event->node);
+
+	event->vtable->execute(event, event->node);
+}
+
+void nodeevent_free(gpointer data) {
+	NodeEvent* event = data;
+	MAGIC_ASSERT(event);
+	MAGIC_ASSERT(event->vtable);
+	MAGIC_ASSERT(event->node);
+
 	MAGIC_CLEAR(event);
-	g_free(event);
-}
+	MAGIC_CLEAR(event->vtable);
 
-void stopevent_execute(StopEvent* event) {
-	MAGIC_ASSERT(event);
-	g_atomic_int_inc(&(shadow_engine->killed));
+	event->vtable->free(event, event->node);
 }

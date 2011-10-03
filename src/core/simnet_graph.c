@@ -183,6 +183,9 @@ gdouble simnet_graph_end2end_latency(simnet_graph_tp g, guint src_network_id, gu
 		}
 	}
 
+	if(milliseconds_latency < g->runahead_min)
+		milliseconds_latency = (gdouble) g->runahead_min;
+
 	return milliseconds_latency;
 }
 
