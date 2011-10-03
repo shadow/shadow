@@ -21,70 +21,135 @@
 
 #include "shadow.h"
 
-static Worker* worker_new() {
+static Worker* worker_new(Engine* engine) {
 	Worker* worker = g_new(Worker, 1);
+	MAGIC_INIT(worker);
 
-	worker->thread_id = g_atomic_int_exchange_and_add(&(shadow_engine->worker_id_counter), 1);
-	worker->clock_current_event = 0;
-	worker->clock_last_event = 0;
-
-	worker->event_mailbox = g_async_queue_ref(shadow_engine->event_mailbox);
+	worker->thread_id = g_atomic_int_exchange_and_add(&(engine->worker_id_counter), 1);
+	worker->clock_now = SIMTIME_INVALID;
+	worker->clock_last = SIMTIME_INVALID;
+	worker->clock_barrier = SIMTIME_INVALID;
 
 	return worker;
 }
 
 void worker_free(gpointer data) {
 	Worker* worker = data;
-	g_assert(worker);
-
-	g_async_queue_unref(worker->event_mailbox);
-	worker->event_mailbox = NULL;
+	MAGIC_ASSERT(worker);
+	MAGIC_CLEAR(worker);
 	g_free(worker);
 }
 
 Worker* worker_get() {
+	/* reference the global shadow engine */
+	Engine* engine = shadow_engine;
+	MAGIC_ASSERT(engine);
+
 	/* get current thread's private worker object */
-	Worker* worker = g_private_get(shadow_engine->worker_key);
+	Worker* worker = g_private_get(engine->worker_key);
 
 	/* todo: should we use g_once here instead? */
 	if(!worker) {
-		worker = worker_new();
-		g_private_set(shadow_engine->worker_key, worker);
+		worker = worker_new(engine);
+		g_private_set(engine->worker_key, worker);
 	}
 
+	MAGIC_ASSERT(worker);
 	return worker;
 }
 
 void worker_execute_event(gpointer data, gpointer user_data) {
 	/* cast our data */
-	Event* event = data;
-	g_assert(event);
+	Engine* engine = user_data;
+	MAGIC_ASSERT(engine);
+	Node* node = data;
+	MAGIC_ASSERT(node);
 
 	/* get current thread's private worker object */
 	Worker* worker = worker_get();
 
-	/* update time */
-	worker->clock_current_event = event->time;
+	/* update cache, reset clocks */
+	worker->cached_engine = engine;
+	worker->cached_node = node;
+	worker->clock_last = SIMTIME_INVALID;
+	worker->clock_now = SIMTIME_INVALID;
+	worker->clock_barrier = engine->execute_window_end;
 
-	/* make sure we don't jump backward in time */
-	g_assert(worker->clock_current_event >= worker->clock_last_event);
+	/* lock the node */
+	node_lock(worker->cached_node);
 
-	/* do the job */
-	event_execute(event);
+	worker->cached_event = node_task_pop(worker->cached_node);
 
-	/* keep track of last executed event time */
-	worker->clock_last_event = event->time;
-	worker->clock_current_event = SIMTIME_INVALID;
+	/* process all events in the nodes local queue */
+	while(!engine->killed && worker->cached_event)
+	{
+		MAGIC_ASSERT(worker->cached_event);
 
-	event_free(event);
+		/* make sure we don't jump backward in time */
+		worker->clock_now = worker->cached_event->time;
+		if(worker->clock_last != SIMTIME_INVALID) {
+			g_assert(worker->clock_now >= worker->clock_last);
+		}
+
+		/* do the local task */
+		event_execute(worker->cached_event);
+
+		/* update times */
+		worker->clock_last = worker->clock_now;
+		worker->clock_now = SIMTIME_INVALID;
+
+		/* finished event can now be destroyed */
+		event_free(worker->cached_event);
+
+		/* get the next event, or NULL will tell us to break */
+		worker->cached_event = node_task_pop(worker->cached_node);
+	}
+
+	/* unlock, clear cache */
+	node_unlock(worker->cached_node);
+	worker->cached_engine = NULL;
+	worker->cached_node = NULL;
+	worker->cached_event = NULL;
+
+	/* worker thread now returns to the pool */
 }
 
-void worker_schedule_event(Event* event, SimulationTime nano_delay) {
-	g_assert(event);
+void worker_schedule_event(Event* event, gint receiver_node_id, SimulationTime nano_delay) {
+	MAGIC_ASSERT(event);
 
+	/* get our thread-private worker */
 	Worker* worker = worker_get();
-	event->time = worker->clock_current_event + nano_delay;
 
-	/* pass the engine an event and let it manage the schedules */
-	g_async_queue_push(worker->event_mailbox, event);
+	/* when the event will execute */
+	event->time = worker->clock_now + nano_delay;
+
+	/* parties involved */
+	Node* sender = worker->cached_node;
+	Node* receiver = engine_lookup_node(worker->cached_engine, receiver_node_id);
+
+	/* single threaded mode is simpler than multi threaded */
+	if(worker->cached_engine->config->num_threads > 1) {
+		/* multi threaded, figure out where to push event */
+		if(node_equal(receiver, sender) &&
+				(event->time < worker->clock_barrier))
+		{
+			/* this is for our current node, push to its local queue. its ok if
+			 * the event time inside of the min delay since its a local event */
+			node_task_push(receiver, event);
+		} else {
+			/* this is for another node. send it as mail. make sure delay
+			 * follows the configured minimum delay.
+			 */
+			SimulationTime min_time = worker->clock_now + worker->cached_engine->min_time_jump;
+			if(event->time < min_time) {
+				warning("Inter-node event time %lu changed to %lu due to minimum delay %lu",
+						event->time, min_time, worker->cached_engine->min_time_jump);
+				event->time = min_time;
+			}
+			node_mail_push(receiver, event);
+		}
+	} else {
+		/* single threaded, push to master queue */
+		engine_push_event(worker->cached_engine, event);
+	}
 }

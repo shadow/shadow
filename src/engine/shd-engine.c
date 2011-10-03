@@ -22,9 +22,10 @@
 #include "shadow.h"
 
 Engine* engine_new(Configuration* config) {
-	g_assert(config);
+	MAGIC_ASSERT(config);
 
 	Engine* engine = g_new(Engine, 1);
+	MAGIC_INIT(engine);
 
 	/* initialize the singleton-per-thread worker class */
 	engine->worker_key = g_private_new(worker_free);
@@ -42,82 +43,98 @@ Engine* engine_new(Configuration* config) {
 			error("thread pool failed: %s\n", error->message);
 			g_error_free(error);
 		}
-
-		/* make sure the thread pool events are sorted by priority */
-		g_thread_pool_set_sort_function(engine->worker_pool, event_compare, NULL);
-
-		engine->event_priority_queue = NULL;
 	} else {
 		/* one thread, use simple queue, no thread pool needed */
 		engine->worker_pool = NULL;
-		engine->event_priority_queue = g_queue_new();
 	}
 
-	engine->event_mailbox = g_async_queue_new_full(event_free);
+	engine->master_event_queue = g_queue_new();
+
 	engine->killed = 0;
 
 	return engine;
 }
 
 void engine_free(Engine* engine) {
+	MAGIC_ASSERT(engine);
+
 	/* only free thread pool if we actually needed one */
 	if(engine->worker_pool) {
 		g_thread_pool_free(engine->worker_pool, FALSE, TRUE);
 	}
 
-	if(engine->event_priority_queue) {
-		g_queue_free(engine->event_priority_queue);
+	if(engine->master_event_queue) {
+		g_queue_free(engine->master_event_queue);
 	}
 
-	g_async_queue_unref(engine->event_mailbox);
-
+	MAGIC_CLEAR(engine);
 	g_free(engine);
 }
 
-static gint engine_manage(Engine* engine) {
+static gint engine_main_single(Engine* engine) {
+	MAGIC_ASSERT(engine);
+
+	Worker* worker = worker_get();
+	worker->clock_now = SIMTIME_INVALID;
+	worker->clock_last = 0;
+	worker->cached_engine = engine;
+
+	/* process all events in the priority queue */
+	while(!engine->killed && g_queue_get_length(engine->master_event_queue) > 0)
+	{
+		/* get next event */
+		worker->cached_event = g_queue_pop_head(engine->master_event_queue);
+		MAGIC_ASSERT(worker->cached_event);
+
+		/* ensure priority */
+		worker->clock_now = worker->cached_event->time;
+		g_assert(worker->clock_now >= worker->clock_last);
+
+		event_execute(worker->cached_event);
+		event_free(worker->cached_event);
+		worker->cached_event = NULL;
+
+		worker->clock_last = worker->clock_now;
+		worker->clock_now = SIMTIME_INVALID;
+	}
+
+	return 0;
+}
+
+
+static gint engine_main_multi(Engine* engine) {
+	MAGIC_ASSERT(engine);
 	/* manage events coming from the event mailbox to the thread pool */
 
 	return 0;
 }
 
-static gint engine_work(Engine* engine) {
-	g_assert(engine && engine->event_mailbox && engine->event_priority_queue);
-
-	GAsyncQueue* mb = engine->event_mailbox;
-	GQueue* pq = engine->event_priority_queue;
-
-	/* process until there are no more events in the mailbox and no events
-	 * waiting to be executed in the priority queue */
-	while(!engine->killed &&
-			(g_async_queue_length(mb) > 0 || g_queue_get_length(pq) > 0))
-	{
-		/* get all events from the mailbox and prioritize them */
-		while(g_async_queue_length(mb) > 0) {
-			g_queue_insert_sorted(pq, g_async_queue_pop(mb), event_compare, NULL);
-		}
-
-		/* execute the next event, then loop back around to ensure priority */
-		Event* event = g_queue_pop_head(pq);
-		worker_execute_event(event, engine);
-	}
-
-	return 0;
-}
-
 gint engine_run(Engine* engine) {
-	g_assert(engine);
+	MAGIC_ASSERT(engine);
 
 	/* parse user simulation script, create jobs */
 	debug("parsing simulation script");
 
-	worker_schedule_event(spinevent_new(1), SIMTIME_ONE_SECOND);
-	worker_schedule_event(stopevent_new(), SIMTIME_ONE_MINUTE);
+//	TODO create events correctly (NodeEvent vs Event)
+//	worker_schedule_event(spinevent_new(1), SIMTIME_ONE_SECOND);
+//	worker_schedule_event(stopevent_new(), SIMTIME_ONE_MINUTE);
 
 	if(engine->config->num_threads > 1) {
 		/* multi threaded, manage the other workers */
-		return engine_manage(engine);
+		return engine_main_multi(engine);
 	} else {
 		/* single threaded, we are the only worker */
-		return engine_work(engine);
+		return engine_main_single(engine);
 	}
+}
+
+void engine_push_event(Engine* engine, Event* event) {
+	MAGIC_ASSERT(engine);
+	MAGIC_ASSERT(event);
+	g_queue_insert_sorted(engine->master_event_queue, event, event_compare, NULL);
+}
+
+Node* engine_lookup_node(Engine* engine, gint node_id) {
+//	hash_table_lookup();
+	return NULL;
 }

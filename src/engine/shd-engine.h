@@ -27,25 +27,46 @@
 typedef struct _Engine Engine;
 
 struct _Engine {
+	/* general configuration options for the simulation */
 	Configuration* config;
 
-	GPrivate* worker_key;
-	gint worker_id_counter;
-	gint node_id_counter;
-
+	/* global simulation time, rough approximate if multi-threaded */
 	SimulationTime clock;
-	GAsyncQueue* event_mailbox;
+	/* minimum allowed time jump when sending events between nodes */
+	SimulationTime min_time_jump;
+	/* start of current window of execution */
+	SimulationTime execute_window_start;
+	/* end of current window of execution (start + min_time_jump) */
+	SimulationTime execute_window_end;
 
-	/* if single threaded, use a simple priority queue */
-	GQueue* event_priority_queue;
-	/* if multi-threaded, we use a worker pool as the priority queue */
+	/* if single threaded, use this global event priority queue. if multi-
+	 * threaded, use this for non-node events */
+	GQueue* master_event_queue;
+
+	/* if multi-threaded, we use a worker pool */
 	GThreadPool* worker_pool;
 
+	/* holds a thread-private key that each thread references to get a private
+	 * instance of a worker object
+	 */
+	GPrivate* worker_key;
+
+	/* id counter for worker objects */
+	gint worker_id_counter;
+	/* id counter for node objects */
+	gint node_id_counter;
+
+//	GAsyncQueue* node_priority_queue;
+
 	gint killed;
+
+	MAGIC_DECLARE;
 };
 
 Engine* engine_new(Configuration* config);
 void engine_free(Engine* engine);
 gint engine_run(Engine* engine);
+void engine_push_event(Engine* engine, Event* event);
+Node* engine_lookup_node(Engine* engine, gint node_id);
 
 #endif /* SHD_ENGINE_H_ */

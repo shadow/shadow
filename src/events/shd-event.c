@@ -22,14 +22,17 @@
 #include "shadow.h"
 
 void event_init(Event* event, EventVTable* vtable) {
-	g_assert(event && vtable);
+	g_assert(event && event->vtable);
+	MAGIC_INIT(event);
+	MAGIC_INIT(event->vtable);
 
 	event->vtable = vtable;
 	event->time = 0;
 }
 
 void event_execute(Event* event) {
-	g_assert(event && event->vtable);
+	MAGIC_ASSERT(event);
+	MAGIC_ASSERT(event->vtable);
 
 	event->vtable->execute(event);
 }
@@ -37,13 +40,18 @@ void event_execute(Event* event) {
 gint event_compare(gconstpointer a, gconstpointer b, gpointer user_data) {
 	const Event* ea = a;
 	const Event* eb = b;
-	g_assert(ea && eb);
+	MAGIC_ASSERT(ea);
+	MAGIC_ASSERT(eb);
 	return ea->time > eb->time ? +1 : ea->time == eb->time ? 0 : -1;
 }
 
 void event_free(gpointer data) {
 	Event* event = data;
-	g_assert(event && event->vtable);
+	MAGIC_ASSERT(event);
+	MAGIC_ASSERT(event->vtable);
+
+	MAGIC_CLEAR(event);
+	MAGIC_CLEAR(event->vtable);
 
 	event->vtable->free(event);
 }

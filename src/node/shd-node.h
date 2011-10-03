@@ -34,14 +34,27 @@ struct _Node {
 	GMutex* node_lock;
 
 	/* a simple priority queue holding events currently being executed.
-	 * these are place in a separate queue before handing the node off to a
+	 * events are place in this queue before handing the node off to a
 	 * worker and should not be modified by other nodes. */
 	GQueue* event_priority_queue;
 
 	gint node_id;
+
+	MAGIC_DECLARE;
 };
 
 Node* node_new();
 void node_free(Node* node);
+
+void node_lock(Node* node);
+void node_unlock(Node* node);
+
+void node_mail_push(Node* node, Event* event);
+Event* node_mail_pop(Node* node);
+void node_task_push(Node* node, Event* event);
+Event* node_task_pop(Node* node);
+
+gint node_compare(gconstpointer a, gconstpointer b, gpointer user_data);
+gboolean node_equal(Node* a, Node* b);
 
 #endif /* SHD_NODE_H_ */

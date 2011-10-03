@@ -23,21 +23,25 @@
 
 EventVTable stopevent_vtable = {
 	(EventExecuteFunc)stopevent_execute,
-	(EventFreeFunc)stopevent_free
+	(EventFreeFunc)stopevent_free,
+	MAGIC_VALUE
 };
 
 StopEvent* stopevent_new() {
 	StopEvent* event = g_new(StopEvent, 1);
+	MAGIC_INIT(event);
+
 	event_init(&(event->super), &stopevent_vtable);
 	return event;
 }
 
 void stopevent_free(StopEvent* event) {
-	g_assert(event);
+	MAGIC_ASSERT(event);
+	MAGIC_CLEAR(event);
 	g_free(event);
 }
 
 void stopevent_execute(StopEvent* event) {
-	g_assert(event);
+	MAGIC_ASSERT(event);
 	g_atomic_int_inc(&(shadow_engine->killed));
 }

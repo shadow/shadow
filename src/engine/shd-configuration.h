@@ -34,11 +34,21 @@ typedef guint64 SimulationTime;
 #define SIMTIME_ONE_MINUTE G_GUINT64_CONSTANT(60000000000)
 #define SIMTIME_ONE_HOUR G_GUINT64_CONSTANT(3600000000000)
 
+/* memory magic for assertions that memory has not been freed */
+/* TODO add ifdef here so this stuff only happens in DEBUG mode */
+#define MAGIC_VALUE 0xAABBCCDD
+#define MAGIC_DECLARE guint magic
+#define MAGIC_INIT(object) object->magic = MAGIC_VALUE
+#define MAGIC_ASSERT(object) g_assert(object && (object->magic == MAGIC_VALUE))
+#define MAGIC_CLEAR(object) object->magic = 0
+
 typedef struct _Configuration Configuration;
 
 struct _Configuration {
 	GOptionContext *context;
 	gint num_threads;
+
+	MAGIC_DECLARE;
 };
 
 Configuration* configuration_new(gint argc, gchar* argv[]);

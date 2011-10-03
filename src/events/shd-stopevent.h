@@ -28,6 +28,8 @@ typedef struct _StopEvent StopEvent;
 
 struct _StopEvent {
 	Event super;
+
+	MAGIC_DECLARE;
 };
 
 StopEvent* stopevent_new();

@@ -29,6 +29,8 @@ typedef struct _SpinEvent SpinEvent;
 struct _SpinEvent {
 	Event super;
 	guint spin_seconds;
+
+	MAGIC_DECLARE;
 };
 
 SpinEvent* spinevent_new(guint seconds);

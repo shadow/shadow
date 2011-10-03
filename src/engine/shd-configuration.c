@@ -24,6 +24,7 @@
 Configuration* configuration_new(gint argc, gchar* argv[]) {
 	/* get memory */
 	Configuration* c = g_new(Configuration, 1);
+	MAGIC_INIT(c);
 
 	/* set defaults */
 	c->context = g_option_context_new(NULL);
@@ -35,7 +36,7 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	/* set options to change defaults */
 	GOptionEntry entries[] =
 	{
-//	  { "threads", 't', 1, G_OPTION_ARG_INT, &(c->num_threads), "Use N worker threads", "N" },
+	  { "threads", 't', 1, G_OPTION_ARG_INT, &(c->num_threads), "Use N worker threads", "N" },
 	  { NULL }
 	};
 
@@ -58,9 +59,10 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 }
 
 void configuration_free(Configuration* config) {
-	g_assert(config);
+	MAGIC_ASSERT(config);
 
 	g_option_context_free(config->context);
 
+	MAGIC_CLEAR(config);
 	g_free(config);
 }

@@ -23,6 +23,7 @@
 
 Node* node_new() {
 	Node* node = g_new(Node, 1);
+	MAGIC_INIT(node);
 
 	node->event_mailbox = g_async_queue_new_full(event_free);
 	node->event_priority_queue = g_queue_new();
@@ -31,8 +32,55 @@ Node* node_new() {
 }
 
 void node_free(Node* node) {
-	g_assert(node);
+	MAGIC_ASSERT(node);
+
 	g_async_queue_unref(node->event_mailbox);
 	g_queue_free(node->event_priority_queue);
+
+	MAGIC_CLEAR(node);
 	g_free(node);
+}
+
+void node_lock(Node* node) {
+	MAGIC_ASSERT(node);
+}
+
+void node_unlock(Node* node) {
+	MAGIC_ASSERT(node);
+}
+
+void node_mail_push(Node* node, Event* event) {
+	MAGIC_ASSERT(node);
+	MAGIC_ASSERT(event);
+
+	g_async_queue_push_sorted(node->event_mailbox, event, event_compare, NULL);
+}
+
+Event* node_mail_pop(Node* node) {
+	MAGIC_ASSERT(node);
+	return g_async_queue_pop(node->event_mailbox);
+}
+
+void node_task_push(Node* node, Event* event) {
+	MAGIC_ASSERT(node);
+	MAGIC_ASSERT(event);
+
+	g_queue_insert_sorted(node->event_priority_queue, event, event_compare, NULL);
+}
+
+Event* node_task_pop(Node* node) {
+	MAGIC_ASSERT(node);
+	return g_queue_pop_head(node->event_priority_queue);
+}
+
+gint node_compare(gconstpointer a, gconstpointer b, gpointer user_data) {
+	const Node* na = a;
+	const Node* nb = b;
+	MAGIC_ASSERT(na);
+	MAGIC_ASSERT(nb);
+	return na->node_id > nb->node_id ? +1 : na->node_id == nb->node_id ? 0 : -1;
+}
+
+gboolean node_equal(Node* a, Node* b) {
+	return node_compare(a, b, NULL) == 0;
 }

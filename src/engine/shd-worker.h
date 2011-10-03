@@ -29,10 +29,16 @@ typedef struct _Worker Worker;
 
 struct _Worker {
 	gint thread_id;
-	Event* current_event;
-	SimulationTime clock_current_event;
-	SimulationTime clock_last_event;
-	GAsyncQueue* event_mailbox;
+
+	SimulationTime clock_now;
+	SimulationTime clock_last;
+	SimulationTime clock_barrier;
+
+	Engine* cached_engine;
+	Node* cached_node;
+	Event* cached_event;
+
+	MAGIC_DECLARE;
 };
 
 /* returns the worker associated with the current thread */
@@ -47,6 +53,6 @@ void worker_free(gpointer data);
  */
 void worker_execute_event(gpointer data, gpointer user_data);
 
-void worker_schedule_event(Event* event, SimulationTime nano_delay);
+void worker_schedule_event(Event* event, gint receiver_node_id, SimulationTime nano_delay);
 
 #endif /* SHD_WORKER_H_ */

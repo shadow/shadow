@@ -38,6 +38,8 @@ typedef void (*EventFreeFunc)(Event* event);
 struct _EventVTable {
 	EventExecuteFunc execute;
 	EventFreeFunc free;
+
+	MAGIC_DECLARE;
 };
 
 /*
@@ -47,6 +49,8 @@ struct _EventVTable {
 struct _Event {
 	EventVTable* vtable;
 	SimulationTime time;
+
+	MAGIC_DECLARE;
 };
 
 void event_init(Event* event, EventVTable* vtable);

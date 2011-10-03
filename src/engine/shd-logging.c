@@ -89,11 +89,11 @@ void logging_log(const gchar *log_domain, GLogLevelFlags log_level, const gchar 
 	Worker* w = worker_get();
 
 	GString* simtime = g_string_new(NULL);
-	if(w->clock_current_event == SIMTIME_INVALID) {
+	if(w->clock_now == SIMTIME_INVALID) {
 		g_string_printf(simtime, "n/a");
 	} else {
 		SimulationTime hours, minutes, seconds, remainder;
-		remainder = w->clock_current_event;
+		remainder = w->clock_now;
 
 		hours = remainder / SIMTIME_ONE_HOUR;
 		remainder %= SIMTIME_ONE_HOUR;

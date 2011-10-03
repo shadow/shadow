@@ -24,25 +24,28 @@
 
 EventVTable spinevent_vtable = {
 	(EventExecuteFunc)spinevent_execute,
-	(EventFreeFunc)spinevent_free
+	(EventFreeFunc)spinevent_free,
+	MAGIC_VALUE
 };
 
 SpinEvent* spinevent_new(guint seconds) {
 	SpinEvent* event = g_new(SpinEvent, 1);
-	event_init(&(event->super), &spinevent_vtable);
+	MAGIC_INIT(event);
 
+	event_init(&(event->super), &spinevent_vtable);
 	event->spin_seconds = seconds;
 
 	return event;
 }
 
 void spinevent_free(SpinEvent* event) {
-	g_assert(event);
+	MAGIC_ASSERT(event);
+	MAGIC_CLEAR(event);
 	g_free(event);
 }
 
 void spinevent_execute(SpinEvent* event) {
-	g_assert(event);
+	MAGIC_ASSERT(event);
 
 	debug("executing spin event for %u seconds", event->spin_seconds);
 
@@ -51,5 +54,6 @@ void spinevent_execute(SpinEvent* event) {
 		continue;
 	}
 
-	worker_schedule_event((Event*)spinevent_new(event->spin_seconds), event->spin_seconds * SIMTIME_ONE_SECOND);
+//	TODO create events correctly (NodeEvent vs Event)
+//	worker_schedule_event((Event*)spinevent_new(event->spin_seconds), event->spin_seconds * SIMTIME_ONE_SECOND);
 }
