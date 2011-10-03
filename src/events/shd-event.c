@@ -51,7 +51,5 @@ void event_free(gpointer data) {
 	MAGIC_ASSERT(event->vtable);
 
 	MAGIC_CLEAR(event);
-	MAGIC_CLEAR(event->vtable);
-
 	event->vtable->free(event);
 }

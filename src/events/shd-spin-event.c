@@ -54,6 +54,7 @@ void spin_event_execute(SpinEvent* event) {
 		continue;
 	}
 
-//	TODO create events correctly (NodeEvent vs Event)
-//	worker_schedule_event((Event*)spinevent_new(event->spin_seconds), event->spin_seconds * SIMTIME_ONE_SECOND);
+	SpinEvent* se = spin_event_new(event->spin_seconds);
+	SimulationTime t = event->spin_seconds * SIMTIME_ONE_SECOND;
+	worker_schedule_event((Event*)se, t);
 }
