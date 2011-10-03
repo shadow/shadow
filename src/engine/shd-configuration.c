@@ -32,7 +32,7 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	g_option_context_set_description(c->context, "Shadow description");
 
 	c->num_threads = 1;
-	c->min_time_jump =
+	c->min_time_jump = 10;
 
 	/* set options to change defaults */
 	const GOptionEntry entries[] =
