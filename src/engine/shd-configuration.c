@@ -32,17 +32,19 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	g_option_context_set_description(c->context, "Shadow description");
 
 	c->num_threads = 1;
+	c->min_time_jump =
 
 	/* set options to change defaults */
-	GOptionEntry entries[] =
+	const GOptionEntry entries[] =
 	{
-	  { "threads", 't', 1, G_OPTION_ARG_INT, &(c->num_threads), "Use N worker threads", "N" },
-	  { NULL }
+	  { "threads", 't', 0, G_OPTION_ARG_INT, &(c->num_threads), "Use N worker threads", "N" },
+	  { "jump-min", 'j', 0, G_OPTION_ARG_INT, &(c->min_time_jump), "Minimum allowed time jump when sending events between nodes, in milliseconds", "N" },
+	  { NULL },
 	};
 
-	/* parse args */
 	g_option_context_add_main_entries(c->context, entries, NULL);
 
+	/* parse args */
 	GError *error = NULL;
 	if (!g_option_context_parse(c->context, &argc, &argv, &error)) {
 		g_print("**%s**\n", error->message);

@@ -35,7 +35,6 @@ gint shadow_main(gint argc, gchar* argv[]) {
 
 	/* allocate application structures */
 	shadow_engine = engine_new(config);
-	Worker* main_worker = worker_get();
 
 	g_log_set_default_handler(logging_handle_log, shadow_engine);
 	debug("log system initialized");
@@ -45,13 +44,11 @@ gint shadow_main(gint argc, gchar* argv[]) {
 	gint retval = engine_run(shadow_engine);
 	debug("engine finished, waiting for workers...");
 
-	/* cleanup */
+	/* cleanup. workers are auto-deleted when threads end. */
 	engine_free(shadow_engine);
 	configuration_free(config);
 
-	/* last log message before worker is destroyed */
-	debug("exiting cleanly");
-	worker_free(main_worker);
-
+	/* engine gone, must use glib logging */
+	g_debug("exiting cleanly, returning value %i", retval);
 	return retval;
 }

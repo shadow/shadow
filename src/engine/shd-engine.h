@@ -24,6 +24,12 @@
 
 #include <glib.h>
 
+typedef enum _EngineStorage EngineStorage;
+
+enum _EngineStorage {
+	NODES, NETWORKS, CDFS,
+};
+
 typedef struct _Engine Engine;
 
 struct _Engine {
@@ -38,6 +44,7 @@ struct _Engine {
 	SimulationTime execute_window_start;
 	/* end of current window of execution (start + min_time_jump) */
 	SimulationTime execute_window_end;
+	SimulationTime end_time;
 
 	/* if single threaded, use this global event priority queue. if multi-
 	 * threaded, use this for non-node events */
@@ -56,6 +63,11 @@ struct _Engine {
 	/* id counter for node objects */
 	gint node_id_counter;
 
+	/*
+	 * Keep track of all sorts of global info: simulation nodes, networks, etc.
+	 * all indexed by ID.
+	 */
+	Registry* registry;
 //	GAsyncQueue* node_priority_queue;
 
 	gint killed;
@@ -67,6 +79,6 @@ Engine* engine_new(Configuration* config);
 void engine_free(Engine* engine);
 gint engine_run(Engine* engine);
 void engine_push_event(Engine* engine, Event* event);
-Node* engine_lookup_node(Engine* engine, gint node_id);
+gpointer engine_lookup(Engine* engine, EngineStorage type, gint id);
 
 #endif /* SHD_ENGINE_H_ */

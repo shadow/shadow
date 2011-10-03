@@ -49,8 +49,12 @@ Engine* engine_new(Configuration* config) {
 	}
 
 	engine->master_event_queue = g_queue_new();
+	engine->registry = registry_new();
 
+	engine->end_time = SIMTIME_ONE_HOUR;
 	engine->killed = 0;
+
+	engine->min_time_jump = engine->config->min_time_jump * SIMTIME_ONE_MILLISECOND;
 
 	return engine;
 }
@@ -66,6 +70,8 @@ void engine_free(Engine* engine) {
 	if(engine->master_event_queue) {
 		g_queue_free(engine->master_event_queue);
 	}
+
+	registry_free(engine->registry);
 
 	MAGIC_CLEAR(engine);
 	g_free(engine);
@@ -134,7 +140,13 @@ void engine_push_event(Engine* engine, Event* event) {
 	g_queue_insert_sorted(engine->master_event_queue, event, event_compare, NULL);
 }
 
-Node* engine_lookup_node(Engine* engine, gint node_id) {
-//	hash_table_lookup();
-	return NULL;
+gpointer engine_lookup(Engine* engine, EngineStorage type, gint id) {
+	MAGIC_ASSERT(engine);
+
+	/*
+	 * Return the item corresponding to type and id in a thread-safe way.
+	 * I believe for now no protections are necessary since our registry
+	 * is read-only.
+	 */
+	return registry_get(engine->registry, type, &id);
 }

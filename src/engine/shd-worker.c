@@ -114,24 +114,42 @@ void worker_execute_event(gpointer data, gpointer user_data) {
 	/* worker thread now returns to the pool */
 }
 
-void worker_schedule_event(Event* event, gint receiver_node_id, SimulationTime nano_delay) {
+void worker_schedule_event(Event* event, SimulationTime nano_delay) {
 	MAGIC_ASSERT(event);
 
 	/* get our thread-private worker */
 	Worker* worker = worker_get();
 
-	/* when the event will execute */
+	/* when the event will execute. this will be approximate if multi-threaded,
+	 * since the master's time jumps between scheduling 'intervals'.
+	 * i.e. some threads may execute events slightly after this one before
+	 * this one actually gets executed by the engine. */
 	event->time = worker->clock_now + nano_delay;
+
+	/* always push to master queue since there is no node associated */
+	engine_push_event(worker->cached_engine, event);
+}
+
+void worker_schedule_nodeevent(NodeEvent* event, SimulationTime nano_delay, gint receiver_node_id) {
+	MAGIC_ASSERT(event);
+	Event* super = &(event->super);
+	MAGIC_ASSERT(super);
+
+	/* get our thread-private worker */
+	Worker* worker = worker_get();
+
+	/* when the event will execute */
+	event->super.time = worker->clock_now + nano_delay;
 
 	/* parties involved */
 	Node* sender = worker->cached_node;
-	Node* receiver = engine_lookup_node(worker->cached_engine, receiver_node_id);
+	Node* receiver = engine_lookup(worker->cached_engine, NODES, receiver_node_id);
 
 	/* single threaded mode is simpler than multi threaded */
 	if(worker->cached_engine->config->num_threads > 1) {
 		/* multi threaded, figure out where to push event */
 		if(node_equal(receiver, sender) &&
-				(event->time < worker->clock_barrier))
+				(event->super.time < worker->clock_barrier))
 		{
 			/* this is for our current node, push to its local queue. its ok if
 			 * the event time inside of the min delay since its a local event */
@@ -141,15 +159,15 @@ void worker_schedule_event(Event* event, gint receiver_node_id, SimulationTime n
 			 * follows the configured minimum delay.
 			 */
 			SimulationTime min_time = worker->clock_now + worker->cached_engine->min_time_jump;
-			if(event->time < min_time) {
+			if(event->super.time < min_time) {
 				warning("Inter-node event time %lu changed to %lu due to minimum delay %lu",
-						event->time, min_time, worker->cached_engine->min_time_jump);
-				event->time = min_time;
+						event->super.time, min_time, worker->cached_engine->min_time_jump);
+				event->super.time = min_time;
 			}
 			node_mail_push(receiver, event);
 		}
 	} else {
 		/* single threaded, push to master queue */
-		engine_push_event(worker->cached_engine, event);
+		engine_push_event(worker->cached_engine, (Event*)event);
 	}
 }

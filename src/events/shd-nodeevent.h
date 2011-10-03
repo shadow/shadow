@@ -27,6 +27,9 @@
 typedef struct _NodeEvent NodeEvent;
 typedef struct _NodeEventVTable NodeEventVTable;
 
+/* FIXME: forward declaration to avoid circular dependencies... */
+typedef struct _Node Node;
+
 /* required functions */
 typedef void (*NodeEventExecuteFunc)(NodeEvent* event, Node* node);
 typedef void (*NodeEventFreeFunc)(NodeEvent* event, Node* node);

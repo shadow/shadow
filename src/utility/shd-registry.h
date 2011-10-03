@@ -19,22 +19,24 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SHD_SPIN_EVENT_H_
-#define SHD_SPIN_EVENT_H_
+#ifndef SHD_REGISTRY_H_
+#define SHD_REGISTRY_H_
 
 #include "shadow.h"
 
-typedef struct _SpinEvent SpinEvent;
+typedef struct _Registry Registry;
 
-struct _SpinEvent {
-	Event super;
-	guint spin_seconds;
+struct _Registry {
+	GHashTable* storage;
 
 	MAGIC_DECLARE;
 };
 
-SpinEvent* spin_event_new(guint seconds);
-void spin_event_free(SpinEvent* event);
-void spin_event_execute(SpinEvent* event);
+Registry* registry_new();
+void registry_free(Registry* registry);
 
-#endif /* SHD_SPIN_EVENT_H_ */
+void registry_register(Registry* registry, gint index, GDestroyNotify value_destory_func);
+void registry_put(Registry* registry, gint index, gint* key, gpointer value);
+gpointer registry_get(Registry* registry, gint index, gint* key);
+
+#endif /* SHD_REGISTRY_H_ */

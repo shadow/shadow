@@ -22,7 +22,7 @@
 #include "shadow.h"
 
 void event_init(Event* event, EventVTable* vtable) {
-	g_assert(event && event->vtable);
+	g_assert(event && vtable);
 	MAGIC_INIT(event);
 	MAGIC_INIT(event->vtable);
 

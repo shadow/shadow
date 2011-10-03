@@ -22,29 +22,29 @@
 #include <glib.h>
 #include "shadow.h"
 
-EventVTable spinevent_vtable = {
-	(EventExecuteFunc)spinevent_execute,
-	(EventFreeFunc)spinevent_free,
+EventVTable spin_event_vtable = {
+	(EventExecuteFunc)spin_event_execute,
+	(EventFreeFunc)spin_event_free,
 	MAGIC_VALUE
 };
 
-SpinEvent* spinevent_new(guint seconds) {
+SpinEvent* spin_event_new(guint seconds) {
 	SpinEvent* event = g_new(SpinEvent, 1);
 	MAGIC_INIT(event);
 
-	event_init(&(event->super), &spinevent_vtable);
+	event_init(&(event->super), &spin_event_vtable);
 	event->spin_seconds = seconds;
 
 	return event;
 }
 
-void spinevent_free(SpinEvent* event) {
+void spin_event_free(SpinEvent* event) {
 	MAGIC_ASSERT(event);
 	MAGIC_CLEAR(event);
 	g_free(event);
 }
 
-void spinevent_execute(SpinEvent* event) {
+void spin_event_execute(SpinEvent* event) {
 	MAGIC_ASSERT(event);
 
 	debug("executing spin event for %u seconds", event->spin_seconds);

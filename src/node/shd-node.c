@@ -49,7 +49,7 @@ void node_unlock(Node* node) {
 	MAGIC_ASSERT(node);
 }
 
-void node_mail_push(Node* node, Event* event) {
+void node_mail_push(Node* node, NodeEvent* event) {
 	MAGIC_ASSERT(node);
 	MAGIC_ASSERT(event);
 
@@ -61,7 +61,7 @@ Event* node_mail_pop(Node* node) {
 	return g_async_queue_pop(node->event_mailbox);
 }
 
-void node_task_push(Node* node, Event* event) {
+void node_task_push(Node* node, NodeEvent* event) {
 	MAGIC_ASSERT(node);
 	MAGIC_ASSERT(event);
 

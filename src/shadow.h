@@ -28,16 +28,17 @@
 #include "engine/shd-main.h"
 #include "engine/shd-configuration.h"
 
+#include "utility/shd-registry.h"
+
 #include "events/shd-event.h"
-#include "events/shd-spinevent.h"
-#include "events/shd-stopevent.h"
+#include "events/shd-nodeevent.h"
+#include "events/shd-spin-event.h"
 
 #include "node/shd-node.h"
 
 #include "engine/shd-logging.h"
 #include "engine/shd-engine.h"
 #include "engine/shd-worker.h"
-
 
 extern Engine* shadow_engine;
 

@@ -22,6 +22,8 @@
 #ifndef SHD_NODE_H_
 #define SHD_NODE_H_
 
+#include "shadow.h"
+
 typedef struct _Node Node;
 
 struct _Node {
@@ -49,9 +51,9 @@ void node_free(Node* node);
 void node_lock(Node* node);
 void node_unlock(Node* node);
 
-void node_mail_push(Node* node, Event* event);
+void node_mail_push(Node* node, NodeEvent* event);
 Event* node_mail_pop(Node* node);
-void node_task_push(Node* node, Event* event);
+void node_task_push(Node* node, NodeEvent* event);
 Event* node_task_pop(Node* node);
 
 gint node_compare(gconstpointer a, gconstpointer b, gpointer user_data);

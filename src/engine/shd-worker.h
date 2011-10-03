@@ -53,6 +53,7 @@ void worker_free(gpointer data);
  */
 void worker_execute_event(gpointer data, gpointer user_data);
 
-void worker_schedule_event(Event* event, gint receiver_node_id, SimulationTime nano_delay);
+void worker_schedule_event(Event* event, SimulationTime nano_delay);
+void worker_schedule_nodeevent(NodeEvent* event, SimulationTime nano_delay, gint receiver_node_id);
 
 #endif /* SHD_WORKER_H_ */
