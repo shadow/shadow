@@ -27,6 +27,7 @@ set(shadow2_srcs
     events/shd-event.c
     events/shd-nodeevent.c
     events/shd-spin-event.c
+    events/shd-killengine-event.c
     node/shd-node.c
     utility/shd-registry.c
     main.c

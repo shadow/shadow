@@ -126,10 +126,9 @@ gint engine_run(Engine* engine) {
 	/* parse user simulation script, create jobs */
 	debug("parsing simulation script");
 
-//	TODO create events correctly (NodeEvent vs Event)
 	SpinEvent* se = spin_event_new(1);
 	worker_schedule_event((Event*)se, SIMTIME_ONE_SECOND);
-//	worker_schedule_event(stopevent_new(), SIMTIME_ONE_MINUTE);
+	worker_schedule_event((Event*)killengine_event_new(), SIMTIME_ONE_HOUR);
 
 	if(engine->config->num_threads > 1) {
 		/* multi threaded, manage the other workers */

@@ -19,28 +19,19 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SHADOW_H_
-#define SHADOW_H_
+#ifndef SHD_KILLENGINE_EVENT_H_
+#define SHD_KILLENGINE_EVENT_H_
 
-#include <glib.h>
-#include <gmodule.h>
+typedef struct _KillEngineEvent KillEngineEvent;
 
-#include "engine/shd-main.h"
-#include "engine/shd-configuration.h"
+struct _KillEngineEvent {
+	Event super;
 
-#include "utility/shd-registry.h"
+	MAGIC_DECLARE;
+};
 
-#include "events/shd-event.h"
-#include "events/shd-nodeevent.h"
-#include "events/shd-spin-event.h"
-#include "events/shd-killengine-event.h"
+KillEngineEvent* killengine_event_new();
+void killengine_event_free(KillEngineEvent* event);
+void killengine_event_execute(KillEngineEvent* event);
 
-#include "node/shd-node.h"
-
-#include "engine/shd-logging.h"
-#include "engine/shd-engine.h"
-#include "engine/shd-worker.h"
-
-extern Engine* shadow_engine;
-
-#endif /* SHADOW_H_ */
+#endif /* SHD_KILLENGINE_EVENT_H_ */
