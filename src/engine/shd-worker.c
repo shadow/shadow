@@ -78,7 +78,7 @@ void worker_execute_event(gpointer data, gpointer user_data) {
 	/* lock the node */
 	node_lock(worker->cached_node);
 
-	worker->cached_event = node_task_pop(worker->cached_node);
+	worker->cached_event = (Event*) node_task_pop(worker->cached_node);
 
 	/* process all events in the nodes local queue */
 	while(!engine->killed && worker->cached_event)
@@ -102,7 +102,7 @@ void worker_execute_event(gpointer data, gpointer user_data) {
 		event_free(worker->cached_event);
 
 		/* get the next event, or NULL will tell us to break */
-		worker->cached_event = node_task_pop(worker->cached_node);
+		worker->cached_event = (Event*) node_task_pop(worker->cached_node);
 	}
 
 	/* unlock, clear cache */

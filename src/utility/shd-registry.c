@@ -92,3 +92,9 @@ gpointer registry_get(Registry* registry, gint index, gint* key) {
 	GHashTable* entry = registry_get_entry(registry, index);
 	return g_hash_table_lookup(entry, (gconstpointer)key);
 }
+
+GList* registry_get_all(Registry* registry, gint index) {
+	MAGIC_ASSERT(registry);
+	GHashTable* entry = registry_get_entry(registry, index);
+	return g_hash_table_get_values(entry);
+}

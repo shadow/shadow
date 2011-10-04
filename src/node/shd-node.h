@@ -52,9 +52,9 @@ void node_lock(Node* node);
 void node_unlock(Node* node);
 
 void node_mail_push(Node* node, NodeEvent* event);
-Event* node_mail_pop(Node* node);
+NodeEvent* node_mail_pop(Node* node);
 void node_task_push(Node* node, NodeEvent* event);
-Event* node_task_pop(Node* node);
+NodeEvent* node_task_pop(Node* node);
 
 gint node_compare(gconstpointer a, gconstpointer b, gpointer user_data);
 gboolean node_equal(Node* a, Node* b);

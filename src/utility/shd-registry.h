@@ -38,5 +38,6 @@ void registry_free(Registry* registry);
 void registry_register(Registry* registry, gint index, GDestroyNotify value_destory_func);
 void registry_put(Registry* registry, gint index, gint* key, gpointer value);
 gpointer registry_get(Registry* registry, gint index, gint* key);
+GList* registry_get_all(Registry* registry, gint index);
 
 #endif /* SHD_REGISTRY_H_ */

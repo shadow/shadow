@@ -56,7 +56,7 @@ void node_mail_push(Node* node, NodeEvent* event) {
 	g_async_queue_push_sorted(node->event_mailbox, event, event_compare, NULL);
 }
 
-Event* node_mail_pop(Node* node) {
+NodeEvent* node_mail_pop(Node* node) {
 	MAGIC_ASSERT(node);
 	return g_async_queue_pop(node->event_mailbox);
 }
@@ -68,7 +68,7 @@ void node_task_push(Node* node, NodeEvent* event) {
 	g_queue_insert_sorted(node->event_priority_queue, event, event_compare, NULL);
 }
 
-Event* node_task_pop(Node* node) {
+NodeEvent* node_task_pop(Node* node) {
 	MAGIC_ASSERT(node);
 	return g_queue_pop_head(node->event_priority_queue);
 }

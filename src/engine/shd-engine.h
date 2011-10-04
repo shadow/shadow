@@ -44,7 +44,6 @@ struct _Engine {
 	SimulationTime execute_window_start;
 	/* end of current window of execution (start + min_time_jump) */
 	SimulationTime execute_window_end;
-	SimulationTime end_time;
 
 	/* if single threaded, use this global event priority queue. if multi-
 	 * threaded, use this for non-node events */
@@ -60,6 +59,7 @@ struct _Engine {
 
 	/* id counter for worker objects */
 	gint worker_id_counter;
+
 	/* id counter for node objects */
 	gint node_id_counter;
 
@@ -68,7 +68,6 @@ struct _Engine {
 	 * all indexed by ID.
 	 */
 	Registry* registry;
-//	GAsyncQueue* node_priority_queue;
 
 	gint killed;
 
