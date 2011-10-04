@@ -19,8 +19,8 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SHD_KILLENGINE_EVENT_H_
-#define SHD_KILLENGINE_EVENT_H_
+#ifndef SHD_KILLENGINE_H_
+#define SHD_KILLENGINE_H_
 
 typedef struct _KillEngineEvent KillEngineEvent;
 
@@ -30,8 +30,8 @@ struct _KillEngineEvent {
 	MAGIC_DECLARE;
 };
 
-KillEngineEvent* killengine_event_new();
-void killengine_event_free(KillEngineEvent* event);
-void killengine_event_execute(KillEngineEvent* event);
+KillEngineEvent* killengine_new();
+void killengine_free(KillEngineEvent* event);
+void killengine_execute(KillEngineEvent* event);
 
-#endif /* SHD_KILLENGINE_EVENT_H_ */
+#endif /* SHD_KILLENGINE_H_ */

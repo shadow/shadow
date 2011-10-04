@@ -21,7 +21,7 @@
 
 #include "shadow.h"
 
-static Worker* worker_new(Engine* engine) {
+static Worker* _worker_new(Engine* engine) {
 	Worker* worker = g_new(Worker, 1);
 	MAGIC_INIT(worker);
 
@@ -40,7 +40,7 @@ void worker_free(gpointer data) {
 	g_free(worker);
 }
 
-Worker* worker_get() {
+Worker* worker_getPrivate() {
 	/* reference the global shadow engine */
 	Engine* engine = shadow_engine;
 	MAGIC_ASSERT(engine);
@@ -50,7 +50,7 @@ Worker* worker_get() {
 
 	/* todo: should we use g_once here instead? */
 	if(!worker) {
-		worker = worker_new(engine);
+		worker = _worker_new(engine);
 		g_private_set(engine->workerKey, worker);
 	}
 
@@ -58,14 +58,14 @@ Worker* worker_get() {
 	return worker;
 }
 
-void worker_execute_event(gpointer data, gpointer user_data) {
+void worker_executeEvent(gpointer data, gpointer user_data) {
 	/* cast our data */
 	Engine* engine = user_data;
 	Node* node = data;
 	MAGIC_ASSERT(node);
 
 	/* get current thread's private worker object */
-	Worker* worker = worker_get();
+	Worker* worker = worker_getPrivate();
 
 	/* update cache, reset clocks */
 	worker->cached_engine = engine;
@@ -77,7 +77,7 @@ void worker_execute_event(gpointer data, gpointer user_data) {
 	/* lock the node */
 	node_lock(worker->cached_node);
 
-	worker->cached_event = (Event*) node_task_pop(worker->cached_node);
+	worker->cached_event = (Event*) node_popTask(worker->cached_node);
 
 	/* process all events in the nodes local queue */
 	while(!engine_isKilled(engine) && worker->cached_event)
@@ -101,7 +101,7 @@ void worker_execute_event(gpointer data, gpointer user_data) {
 		event_free(worker->cached_event);
 
 		/* get the next event, or NULL will tell us to break */
-		worker->cached_event = (Event*) node_task_pop(worker->cached_node);
+		worker->cached_event = (Event*) node_popTask(worker->cached_node);
 	}
 
 	/* unlock, clear cache */
@@ -115,11 +115,11 @@ void worker_execute_event(gpointer data, gpointer user_data) {
 	/* worker thread now returns to the pool */
 }
 
-void worker_schedule_event(Event* event, SimulationTime nano_delay) {
+void worker_scheduleEvent(Event* event, SimulationTime nano_delay) {
 	MAGIC_ASSERT(event);
 
 	/* get our thread-private worker */
-	Worker* worker = worker_get();
+	Worker* worker = worker_getPrivate();
 
 	/* when the event will execute. this will be approximate if multi-threaded,
 	 * since the master's time jumps between scheduling 'intervals'.
@@ -131,14 +131,14 @@ void worker_schedule_event(Event* event, SimulationTime nano_delay) {
 	engine_pushEvent(worker->cached_engine, event);
 }
 
-void worker_schedule_nodeevent(NodeEvent* event, SimulationTime nano_delay, gint receiver_node_id) {
+void worker_scheduleNodeEvent(NodeEvent* event, SimulationTime nano_delay, gint receiver_node_id) {
 	/* TODO create accessors, or better yet refactor the work to event class */
 	MAGIC_ASSERT(event);
 	Event* super = &(event->super);
 	MAGIC_ASSERT(super);
 
 	/* get our thread-private worker */
-	Worker* worker = worker_get();
+	Worker* worker = worker_getPrivate();
 	Engine* engine = worker->cached_engine;
 
 	/* when the event will execute */
@@ -156,7 +156,7 @@ void worker_schedule_nodeevent(NodeEvent* event, SimulationTime nano_delay, gint
 		{
 			/* this is for our current node, push to its local queue. its ok if
 			 * the event time inside of the min delay since its a local event */
-			node_task_push(receiver, event);
+			node_pushTask(receiver, event);
 		} else {
 			/* this is for another node. send it as mail. make sure delay
 			 * follows the configured minimum delay.
@@ -172,7 +172,7 @@ void worker_schedule_nodeevent(NodeEvent* event, SimulationTime nano_delay, gint
 			}
 
 			/* send event to node's mailbox */
-			node_mail_push(receiver, event);
+			node_pushMail(receiver, event);
 		}
 	} else {
 		/* single threaded, push to master queue */

@@ -31,7 +31,7 @@
 #define info(...) 		logging_log(G_LOG_DOMAIN, G_LOG_LEVEL_INFO, __VA_ARGS__)
 #define debug(...) 		logging_log(G_LOG_DOMAIN, G_LOG_LEVEL_DEBUG, __VA_ARGS__)
 
-void logging_handle_log(const gchar *log_domain, GLogLevelFlags log_level, const gchar *message, gpointer user_data);
+void logging_handleLog(const gchar *log_domain, GLogLevelFlags log_level, const gchar *message, gpointer user_data);
 void logging_log(const gchar *log_domain, GLogLevelFlags log_level, const gchar *format, ...);
 
 #endif /* SHD_LOGGING_H_ */

@@ -36,7 +36,7 @@ Engine* engine_new(Configuration* config) {
 		/* we need some workers, create a thread pool */
 		gint nWorkers = config->num_threads - 1;
 		GError *error = NULL;
-		engine->workerPool = g_thread_pool_new(worker_execute_event, engine, nWorkers, TRUE, &error);
+		engine->workerPool = g_thread_pool_new(worker_executeEvent, engine, nWorkers, TRUE, &error);
 		if (!engine->workerPool) {
 			error("thread pool failed: %s\n", error->message);
 			g_error_free(error);
@@ -83,10 +83,10 @@ void engine_free(Engine* engine) {
 	g_free(engine);
 }
 
-static gint engine_processEvents(Engine* engine) {
+static gint _engine_processEvents(Engine* engine) {
 	MAGIC_ASSERT(engine);
 
-	Worker* worker = worker_get();
+	Worker* worker = worker_getPrivate();
 	worker->clock_now = SIMTIME_INVALID;
 	worker->clock_last = 0;
 	worker->cached_engine = engine;
@@ -124,25 +124,25 @@ static gint engine_processEvents(Engine* engine) {
 	return 0;
 }
 
-static void engine_manageExecutableMail(gpointer data, gpointer user_data) {
+static void _engine_manageExecutableMail(gpointer data, gpointer user_data) {
 	Node* node = data;
 	Engine* engine = user_data;
 	MAGIC_ASSERT(node);
 	MAGIC_ASSERT(engine);
 
 	/* pop mail from mailbox, check that its in window, push as a task */
-	NodeEvent* event = node_mail_pop(node);
+	NodeEvent* event = node_popMail(node);
 	while(event && (event->super.time < engine->executeWindowEnd)) {
 		g_assert(event->super.time >= engine->executeWindowStart);
-		node_task_push(node, event);
-		event = node_mail_pop(node);
+		node_pushTask(node, event);
+		event = node_popMail(node);
 	}
 
 	/* if the last event we popped was beyond the allowed execution window,
 	 * push it back into mailbox so it gets executed during the next iteration
 	 */
 	if(event && (event->super.time >= engine->executeWindowEnd)) {
-		node_mail_push(node, event);
+		node_pushMail(node, event);
 	}
 
 	if(node_getNumTasks(node) > 0) {
@@ -159,7 +159,7 @@ static void engine_manageExecutableMail(gpointer data, gpointer user_data) {
 	}
 }
 
-static gint engine_distributeEvents(Engine* engine) {
+static gint _engine_distributeEvents(Engine* engine) {
 	MAGIC_ASSERT(engine);
 
 	/* process all events in the priority queue */
@@ -175,10 +175,10 @@ static gint engine_distributeEvents(Engine* engine) {
 		 * nodes that have executable events are placed in the thread pool and
 		 * processed by a worker thread.
 		 */
-		GList* node_list = registry_get_all(engine->registry, NODES);
+		GList* node_list = registry_getAll(engine->registry, NODES);
 
 		/* after calling this, multiple threads are running */
-		g_list_foreach(node_list, engine_manageExecutableMail, engine);
+		g_list_foreach(node_list, _engine_manageExecutableMail, engine);
 		g_list_free(node_list);
 
 		/* wait for all workers to process their events. the last worker must
@@ -195,7 +195,7 @@ static gint engine_distributeEvents(Engine* engine) {
 		 * TODO: parallelize this if it becomes a problem. for now I'm assume
 		 * that we wont have enough non-node events to matter.
 		 */
-		engine_processEvents(engine);
+		_engine_processEvents(engine);
 
 		/*
 		 * finally, update the allowed event execution window.
@@ -211,27 +211,27 @@ gint engine_run(Engine* engine) {
 	MAGIC_ASSERT(engine);
 
 	/* make sure our bootstrap events are set properly */
-	Worker* worker = worker_get();
+	Worker* worker = worker_getPrivate();
 	worker->clock_now = 0;
 	worker->cached_engine = engine;
 
 	/* parse user simulation script, create jobs */
 	debug("parsing simulation script");
 
-	SpinEvent* se = spin_event_new(1);
-	worker_schedule_event((Event*)se, SIMTIME_ONE_SECOND);
-	worker_schedule_event((Event*)killengine_event_new(), SIMTIME_ONE_HOUR);
+	SpinEvent* se = spin_new(1);
+	worker_scheduleEvent((Event*)se, SIMTIME_ONE_SECOND);
+	worker_scheduleEvent((Event*)killengine_new(), SIMTIME_ONE_HOUR);
 
 	if(engine->config->num_threads > 1) {
 		/* multi threaded, manage the other workers */
 		engine->executeWindowStart = 0;
 		engine->executeWindowEnd = engine->minTimeJump;
-		return engine_distributeEvents(engine);
+		return _engine_distributeEvents(engine);
 	} else {
 		/* single threaded, we are the only worker */
 		engine->executeWindowStart = 0;
 		engine->executeWindowEnd = G_MAXUINT64;
-		return engine_processEvents(engine);
+		return _engine_processEvents(engine);
 	}
 }
 

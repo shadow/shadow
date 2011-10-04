@@ -32,8 +32,8 @@
 
 #include "events/shd-event.h"
 #include "events/shd-nodeevent.h"
-#include "events/shd-spin-event.h"
-#include "events/shd-killengine-event.h"
+#include "events/shd-spin.h"
+#include "events/shd-killengine.h"
 
 #include "node/shd-node.h"
 

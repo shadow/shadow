@@ -21,7 +21,7 @@
 
 #include "shadow.h"
 
-static gchar* _logging_get_log_level_string(GLogLevelFlags log_level) {
+static gchar* _logging_getLogLevelString(GLogLevelFlags log_level) {
 	gchar* levels;
 	switch (log_level) {
 		case G_LOG_LEVEL_ERROR: {
@@ -61,12 +61,12 @@ static gchar* _logging_get_log_level_string(GLogLevelFlags log_level) {
 	return levels;
 }
 
-static const gchar* _logging_get_log_domain_string(const gchar *log_domain) {
+static const gchar* _logging_getLogDomainString(const gchar *log_domain) {
 	const gchar* domains = log_domain != NULL ? log_domain : "shadow";
 	return domains;
 }
 
-void logging_handle_log(const gchar *log_domain, GLogLevelFlags log_level, const gchar *message, gpointer user_data) {
+void logging_handleLog(const gchar *log_domain, GLogLevelFlags log_level, const gchar *message, gpointer user_data) {
 	/* callback from GLib, no access to workers */
 	GDateTime* dt_now = g_date_time_new_now_local();
 
@@ -86,7 +86,7 @@ void logging_log(const gchar *log_domain, GLogLevelFlags log_level, const gchar 
 	va_start(vargs, format);
 
 	/* this is called by worker threads, so we have access to worker */
-	Worker* w = worker_get();
+	Worker* w = worker_getPrivate();
 
 	GString* simtime = g_string_new(NULL);
 	if(w->clock_now == SIMTIME_INVALID) {
@@ -111,8 +111,8 @@ void logging_log(const gchar *log_domain, GLogLevelFlags log_level, const gchar 
 	g_string_printf(string_buffer, "%s [t%i] [%s-%s] %s",
 			clock_string,
 			w->thread_id,
-			_logging_get_log_domain_string(log_domain),
-			_logging_get_log_level_string(log_level),
+			_logging_getLogDomainString(log_domain),
+			_logging_getLogLevelString(log_level),
 			format
 			);
 

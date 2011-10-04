@@ -42,7 +42,7 @@ struct _Worker {
 };
 
 /* returns the worker associated with the current thread */
-Worker* worker_get();
+Worker* worker_getPrivate();
 void worker_free(gpointer data);
 
 /**
@@ -51,9 +51,9 @@ void worker_free(gpointer data);
  *
  * Used as the callback for the main thread pool.
  */
-void worker_execute_event(gpointer data, gpointer user_data);
+void worker_executeEvent(gpointer data, gpointer user_data);
 
-void worker_schedule_event(Event* event, SimulationTime nano_delay);
-void worker_schedule_nodeevent(NodeEvent* event, SimulationTime nano_delay, gint receiver_node_id);
+void worker_scheduleEvent(Event* event, SimulationTime nano_delay);
+void worker_scheduleNodeEvent(NodeEvent* event, SimulationTime nano_delay, gint receiver_node_id);
 
 #endif /* SHD_WORKER_H_ */

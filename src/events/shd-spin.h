@@ -19,8 +19,8 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SHD_SPIN_EVENT_H_
-#define SHD_SPIN_EVENT_H_
+#ifndef SHD_SPIN_H_
+#define SHD_SPIN_H_
 
 #include "shadow.h"
 
@@ -33,8 +33,8 @@ struct _SpinEvent {
 	MAGIC_DECLARE;
 };
 
-SpinEvent* spin_event_new(guint seconds);
-void spin_event_free(SpinEvent* event);
-void spin_event_execute(SpinEvent* event);
+SpinEvent* spin_new(guint seconds);
+void spin_free(SpinEvent* event);
+void spin_execute(SpinEvent* event);
 
-#endif /* SHD_SPIN_EVENT_H_ */
+#endif /* SHD_SPIN_H_ */

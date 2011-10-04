@@ -36,7 +36,7 @@ gint shadow_main(gint argc, gchar* argv[]) {
 	/* allocate application structures */
 	shadow_engine = engine_new(config);
 
-	g_log_set_default_handler(logging_handle_log, shadow_engine);
+	g_log_set_default_handler(logging_handleLog, shadow_engine);
 	debug("log system initialized");
 
 	/* run the engine. when this returns, the simulation is done */
