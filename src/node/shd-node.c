@@ -31,7 +31,8 @@ Node* node_new() {
 	return node;
 }
 
-void node_free(Node* node) {
+void node_free(gpointer data) {
+	Node* node = data;
 	MAGIC_ASSERT(node);
 
 	g_async_queue_unref(node->event_mailbox);
@@ -58,7 +59,7 @@ void node_mail_push(Node* node, NodeEvent* event) {
 
 NodeEvent* node_mail_pop(Node* node) {
 	MAGIC_ASSERT(node);
-	return g_async_queue_pop(node->event_mailbox);
+	return g_async_queue_try_pop(node->event_mailbox);
 }
 
 void node_task_push(Node* node, NodeEvent* event) {
@@ -71,6 +72,11 @@ void node_task_push(Node* node, NodeEvent* event) {
 NodeEvent* node_task_pop(Node* node) {
 	MAGIC_ASSERT(node);
 	return g_queue_pop_head(node->event_priority_queue);
+}
+
+guint node_getNumTasks(Node* node) {
+	MAGIC_ASSERT(node);
+	return g_queue_get_length(node->event_priority_queue);
 }
 
 gint node_compare(gconstpointer a, gconstpointer b, gpointer user_data) {

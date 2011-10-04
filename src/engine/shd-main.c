@@ -49,6 +49,6 @@ gint shadow_main(gint argc, gchar* argv[]) {
 	configuration_free(config);
 
 	/* engine gone, must use glib logging */
-	g_debug("exiting cleanly, returning value %i", retval);
+	g_debug("n/a [t0] [shadow-debug] exiting cleanly, returning value %i", retval);
 	return retval;
 }

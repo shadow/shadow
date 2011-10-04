@@ -39,29 +39,11 @@ struct _Engine {
 	/* global simulation time, rough approximate if multi-threaded */
 	SimulationTime clock;
 	/* minimum allowed time jump when sending events between nodes */
-	SimulationTime min_time_jump;
+	SimulationTime minTimeJump;
 	/* start of current window of execution */
-	SimulationTime execute_window_start;
+	SimulationTime executeWindowStart;
 	/* end of current window of execution (start + min_time_jump) */
-	SimulationTime execute_window_end;
-
-	/* if single threaded, use this global event priority queue. if multi-
-	 * threaded, use this for non-node events */
-	GQueue* master_event_queue;
-
-	/* if multi-threaded, we use a worker pool */
-	GThreadPool* worker_pool;
-
-	/* holds a thread-private key that each thread references to get a private
-	 * instance of a worker object
-	 */
-	GPrivate* worker_key;
-
-	/* id counter for worker objects */
-	gint worker_id_counter;
-
-	/* id counter for node objects */
-	gint node_id_counter;
+	SimulationTime executeWindowEnd;
 
 	/*
 	 * Keep track of all sorts of global info: simulation nodes, networks, etc.
@@ -69,15 +51,62 @@ struct _Engine {
 	 */
 	Registry* registry;
 
-	gint killed;
+	/* if single threaded, use this global event priority queue. if multi-
+	 * threaded, use this for non-node events */
+	GAsyncQueue* masterEventQueue;
 
+	/* if multi-threaded, we use a worker pool */
+	GThreadPool* workerPool;
+
+	/* holds a thread-private key that each thread references to get a private
+	 * instance of a worker object
+	 */
+	GPrivate* workerKey;
+
+	/*
+	 * condition that signals when all node's events have been processed in a
+	 * given execution interval.
+	 */
+	GCond* workersIdle;
+
+	/*
+	 * before signaling the engine that the workers are idle, it must be idle
+	 * to accept the signal.
+	 */
+	GMutex* engineIdle;
+
+	/*
+	 * these values are modified during simulation and must be protected so
+	 * they are thread safe
+	 */
+	struct {
+		/* id counter for worker objects */
+		volatile gint workerIDCounter;
+
+		/* id counter for node objects */
+		volatile gint nodeIDCounter;
+
+		/* the simulation should attempt to end immediately if this is > 0 */
+		volatile gint isKilled;
+
+		/* number of nodes left to process in current interval */
+		volatile gint nNodesToProcess;
+	} protect;
 	MAGIC_DECLARE;
 };
 
 Engine* engine_new(Configuration* config);
 void engine_free(Engine* engine);
 gint engine_run(Engine* engine);
-void engine_push_event(Engine* engine, Event* event);
+void engine_pushEvent(Engine* engine, Event* event);
 gpointer engine_lookup(Engine* engine, EngineStorage type, gint id);
+
+gint engine_generateWorkerID(Engine* engine);
+gint engine_generateNodeID(Engine* engine);
+gint engine_getNumThreads(Engine* engine);
+SimulationTime engine_getMinTimeJump(Engine* engine);
+SimulationTime engine_getExecutionBarrier(Engine* engine);
+gboolean engine_isKilled(Engine* engine);
+void engine_notifyNodeProcessed(Engine* engine);
 
 #endif /* SHD_ENGINE_H_ */

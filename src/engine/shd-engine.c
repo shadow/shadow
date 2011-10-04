@@ -27,33 +27,37 @@ Engine* engine_new(Configuration* config) {
 	Engine* engine = g_new(Engine, 1);
 	MAGIC_INIT(engine);
 
-	/* initialize the singleton-per-thread worker class */
-	engine->worker_key = g_private_new(worker_free);
-	engine->worker_id_counter = 0;
-
 	engine->config = config;
-	engine->clock = 0;
 
-	if(engine->config->num_threads > 1) {
+	/* initialize the singleton-per-thread worker class */
+	engine->workerKey = g_private_new(worker_free);
+
+	if(config->num_threads > 1) {
 		/* we need some workers, create a thread pool */
-		gint num_workers = engine->config->num_threads - 1;
+		gint nWorkers = config->num_threads - 1;
 		GError *error = NULL;
-		engine->worker_pool = g_thread_pool_new(worker_execute_event, engine, num_workers, TRUE, &error);
-		if (!engine->worker_pool) {
+		engine->workerPool = g_thread_pool_new(worker_execute_event, engine, nWorkers, TRUE, &error);
+		if (!engine->workerPool) {
 			error("thread pool failed: %s\n", error->message);
 			g_error_free(error);
 		}
 	} else {
 		/* one thread, use simple queue, no thread pool needed */
-		engine->worker_pool = NULL;
+		engine->workerPool = NULL;
 	}
 
-	engine->master_event_queue = g_queue_new();
+	/* holds all events if single-threaded, and non-node events otherwise. */
+	engine->masterEventQueue = g_async_queue_new_full(event_free);
+	engine->workersIdle = g_cond_new();
+	engine->engineIdle = g_mutex_new();
+
 	engine->registry = registry_new();
+	registry_register(engine->registry, NODES, node_free);
 
-	engine->killed = 0;
+	engine->protect.isKilled = 0;
+	engine->protect.nNodesToProcess = 0;
 
-	engine->min_time_jump = engine->config->min_time_jump * SIMTIME_ONE_MILLISECOND;
+	engine->minTimeJump = config->min_time_jump * SIMTIME_ONE_MILLISECOND;
 
 	return engine;
 }
@@ -62,13 +66,16 @@ void engine_free(Engine* engine) {
 	MAGIC_ASSERT(engine);
 
 	/* only free thread pool if we actually needed one */
-	if(engine->worker_pool) {
-		g_thread_pool_free(engine->worker_pool, FALSE, TRUE);
+	if(engine->workerPool) {
+		g_thread_pool_free(engine->workerPool, FALSE, TRUE);
 	}
 
-	if(engine->master_event_queue) {
-		g_queue_free(engine->master_event_queue);
+	if(engine->masterEventQueue) {
+		g_async_queue_unref(engine->masterEventQueue);
 	}
+
+	g_cond_free(engine->workersIdle);
+	g_mutex_free(engine->engineIdle);
 
 	registry_free(engine->registry);
 
@@ -76,7 +83,7 @@ void engine_free(Engine* engine) {
 	g_free(engine);
 }
 
-static gint engine_main_single(Engine* engine) {
+static gint engine_processEvents(Engine* engine) {
 	MAGIC_ASSERT(engine);
 
 	Worker* worker = worker_get();
@@ -84,14 +91,14 @@ static gint engine_main_single(Engine* engine) {
 	worker->clock_last = 0;
 	worker->cached_engine = engine;
 
-	Event* next_event = g_queue_peek_head(engine->master_event_queue);
+	Event* next_event = g_async_queue_try_pop(engine->masterEventQueue);
 
 	/* process all events in the priority queue */
-	while(!engine->killed &&
-			next_event && next_event->time < engine->execute_window_end)
+	while(!engine->protect.isKilled && next_event &&
+			next_event->time < engine->executeWindowEnd)
 	{
 		/* get next event */
-		worker->cached_event = g_queue_pop_head(engine->master_event_queue);
+		worker->cached_event = next_event;
 		MAGIC_ASSERT(worker->cached_event);
 
 		/* ensure priority */
@@ -106,13 +113,18 @@ static gint engine_main_single(Engine* engine) {
 		worker->clock_last = worker->clock_now;
 		worker->clock_now = SIMTIME_INVALID;
 
-		next_event = g_queue_peek_head(engine->master_event_queue);
+		next_event = g_async_queue_try_pop(engine->masterEventQueue);
+	}
+
+	/* push the next event in case we didnt execute it */
+	if(next_event) {
+		engine_pushEvent(engine, next_event);
 	}
 
 	return 0;
 }
 
-static void engine_pull_executable_mail(gpointer data, gpointer user_data) {
+static void engine_manageExecutableMail(gpointer data, gpointer user_data) {
 	Node* node = data;
 	Engine* engine = user_data;
 	MAGIC_ASSERT(node);
@@ -120,8 +132,8 @@ static void engine_pull_executable_mail(gpointer data, gpointer user_data) {
 
 	/* pop mail from mailbox, check that its in window, push as a task */
 	NodeEvent* event = node_mail_pop(node);
-	while(event && (event->super.time < engine->execute_window_end)) {
-		g_assert(event->super.time >= engine->execute_window_start);
+	while(event && (event->super.time < engine->executeWindowEnd)) {
+		g_assert(event->super.time >= engine->executeWindowStart);
 		node_task_push(node, event);
 		event = node_mail_pop(node);
 	}
@@ -129,32 +141,34 @@ static void engine_pull_executable_mail(gpointer data, gpointer user_data) {
 	/* if the last event we popped was beyond the allowed execution window,
 	 * push it back into mailbox so it gets executed during the next iteration
 	 */
-	if(event && (event->super.time >= engine->execute_window_end)) {
+	if(event && (event->super.time >= engine->executeWindowEnd)) {
 		node_mail_push(node, event);
 	}
 
-	/* now let the worker handle all the node's events */
-	GError* pool_error;
-	g_thread_pool_push(engine->worker_pool, node, &pool_error);
-	if (pool_error) {
-		error("thread pool push failed: %s\n", pool_error->message);
-		g_error_free(pool_error);
-	}
+	if(node_getNumTasks(node) > 0) {
+		/* now let the worker handle all the node's events */
+		GError* pool_error;
+		g_thread_pool_push(engine->workerPool, node, &pool_error);
+		if (pool_error) {
+			error("thread pool push failed: %s\n", pool_error->message);
+			g_error_free(pool_error);
+		}
 
-	//TODO increment an atomic int counter
+		/* we just added another node that must be processed */
+		g_atomic_int_inc(&(engine->protect.nNodesToProcess));
+	}
 }
 
-static gint engine_main_multi(Engine* engine) {
+static gint engine_distributeEvents(Engine* engine) {
 	MAGIC_ASSERT(engine);
 
-	Worker* worker = worker_get();
-	worker->clock_now = SIMTIME_INVALID;
-	worker->clock_last = 0;
-	worker->cached_engine = engine;
-
 	/* process all events in the priority queue */
-	while(!engine->killed)
+	while(!g_atomic_int_get(&(engine->protect.isKilled)))
 	{
+		/* set to one, so after adding nodes we can decrement and check
+		 * if all nodes are done by checking for 0 */
+		g_atomic_int_set(&(engine->protect.nNodesToProcess), 1);
+
 		/*
 		 * check all nodes, moving events that are within the execute window
 		 * from their mailbox into their priority queue for execution. all
@@ -162,21 +176,32 @@ static gint engine_main_multi(Engine* engine) {
 		 * processed by a worker thread.
 		 */
 		GList* node_list = registry_get_all(engine->registry, NODES);
+
 		/* after calling this, multiple threads are running */
-		g_list_foreach(node_list, engine_pull_executable_mail, engine);
+		g_list_foreach(node_list, engine_manageExecutableMail, engine);
+		g_list_free(node_list);
 
-		// TODO decrement an atomic int counter here since we are done
-		// adding nodes to the pool. then workers will have to check for -1 after
-		// decrementing it, and signal a condition variable to wake me up
+		/* wait for all workers to process their events. the last worker must
+		 * wait until we are actually listening for the signal before he
+		 * sends us the signal to prevent deadlock. */
+		if(!g_atomic_int_dec_and_test(&(engine->protect.nNodesToProcess))) {
+			while(g_atomic_int_get(&(engine->protect.nNodesToProcess)))
+				g_cond_wait(engine->workersIdle, NULL);
+		}
 
-		/* wait for all workers to process their events */
-		// TODO wait on condition variable
+		/* other threads are sleeping */
 
 		/* execute any non-node events
-		 * TODO: parallelize this if it becomes a problem. for now I assume
+		 * TODO: parallelize this if it becomes a problem. for now I'm assume
 		 * that we wont have enough non-node events to matter.
 		 */
-		engine_main_single(engine);
+		engine_processEvents(engine);
+
+		/*
+		 * finally, update the allowed event execution window.
+		 */
+		engine->executeWindowStart = engine->executeWindowEnd;
+		engine->executeWindowEnd += engine->minTimeJump;
 	}
 
 	return 0;
@@ -199,21 +224,21 @@ gint engine_run(Engine* engine) {
 
 	if(engine->config->num_threads > 1) {
 		/* multi threaded, manage the other workers */
-		engine->execute_window_start = 0;
-		engine->execute_window_end = engine->min_time_jump;
-		return engine_main_multi(engine);
+		engine->executeWindowStart = 0;
+		engine->executeWindowEnd = engine->minTimeJump;
+		return engine_distributeEvents(engine);
 	} else {
 		/* single threaded, we are the only worker */
-		engine->execute_window_start = 0;
-		engine->execute_window_end = G_MAXUINT64;
-		return engine_main_single(engine);
+		engine->executeWindowStart = 0;
+		engine->executeWindowEnd = G_MAXUINT64;
+		return engine_processEvents(engine);
 	}
 }
 
-void engine_push_event(Engine* engine, Event* event) {
+void engine_pushEvent(Engine* engine, Event* event) {
 	MAGIC_ASSERT(engine);
 	MAGIC_ASSERT(event);
-	g_queue_insert_sorted(engine->master_event_queue, event, event_compare, NULL);
+	g_async_queue_push_sorted(engine->masterEventQueue, event, event_compare, NULL);
 }
 
 gpointer engine_lookup(Engine* engine, EngineStorage type, gint id) {
@@ -225,4 +250,49 @@ gpointer engine_lookup(Engine* engine, EngineStorage type, gint id) {
 	 * is read-only.
 	 */
 	return registry_get(engine->registry, type, &id);
+}
+
+gint engine_generateWorkerID(Engine* engine) {
+	MAGIC_ASSERT(engine);
+	return g_atomic_int_exchange_and_add(&(engine->protect.workerIDCounter), 1);
+}
+
+gint engine_generateNodeID(Engine* engine) {
+	MAGIC_ASSERT(engine);
+	return g_atomic_int_exchange_and_add(&(engine->protect.nodeIDCounter), 1);
+}
+
+gint engine_getNumThreads(Engine* engine) {
+	MAGIC_ASSERT(engine);
+	return engine->config->num_threads;
+}
+
+SimulationTime engine_getMinTimeJump(Engine* engine) {
+	MAGIC_ASSERT(engine);
+	return engine->minTimeJump;
+}
+
+SimulationTime engine_getExecutionBarrier(Engine* engine) {
+	MAGIC_ASSERT(engine);
+	return engine->executeWindowEnd;
+}
+
+gboolean engine_isKilled(Engine* engine) {
+	MAGIC_ASSERT(engine);
+	return g_atomic_int_get(&(engine->protect.isKilled)) > 0;
+}
+
+void engine_notifyNodeProcessed(Engine* engine) {
+	MAGIC_ASSERT(engine);
+
+	/*
+	 * if all the nodes have been processed and the engine is done adding nodes,
+	 * nNodesToProcess could be 0. if it is, get the engine lock to ensure it
+	 * is listening for the signal, then signal the condition.
+	 */
+	if(g_atomic_int_dec_and_test(&(engine->protect.nNodesToProcess))) {
+		g_mutex_lock(engine->engineIdle);
+		g_cond_signal(engine->workersIdle);
+		g_mutex_unlock(engine->engineIdle);
+	}
 }

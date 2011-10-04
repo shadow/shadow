@@ -25,7 +25,7 @@ static Worker* worker_new(Engine* engine) {
 	Worker* worker = g_new(Worker, 1);
 	MAGIC_INIT(worker);
 
-	worker->thread_id = g_atomic_int_exchange_and_add(&(engine->worker_id_counter), 1);
+	worker->thread_id = engine_generateWorkerID(engine);
 	worker->clock_now = SIMTIME_INVALID;
 	worker->clock_last = SIMTIME_INVALID;
 	worker->clock_barrier = SIMTIME_INVALID;
@@ -46,12 +46,12 @@ Worker* worker_get() {
 	MAGIC_ASSERT(engine);
 
 	/* get current thread's private worker object */
-	Worker* worker = g_private_get(engine->worker_key);
+	Worker* worker = g_private_get(engine->workerKey);
 
 	/* todo: should we use g_once here instead? */
 	if(!worker) {
 		worker = worker_new(engine);
-		g_private_set(engine->worker_key, worker);
+		g_private_set(engine->workerKey, worker);
 	}
 
 	MAGIC_ASSERT(worker);
@@ -61,7 +61,6 @@ Worker* worker_get() {
 void worker_execute_event(gpointer data, gpointer user_data) {
 	/* cast our data */
 	Engine* engine = user_data;
-	MAGIC_ASSERT(engine);
 	Node* node = data;
 	MAGIC_ASSERT(node);
 
@@ -73,7 +72,7 @@ void worker_execute_event(gpointer data, gpointer user_data) {
 	worker->cached_node = node;
 	worker->clock_last = SIMTIME_INVALID;
 	worker->clock_now = SIMTIME_INVALID;
-	worker->clock_barrier = engine->execute_window_end;
+	worker->clock_barrier = engine_getExecutionBarrier(engine);
 
 	/* lock the node */
 	node_lock(worker->cached_node);
@@ -81,7 +80,7 @@ void worker_execute_event(gpointer data, gpointer user_data) {
 	worker->cached_event = (Event*) node_task_pop(worker->cached_node);
 
 	/* process all events in the nodes local queue */
-	while(!engine->killed && worker->cached_event)
+	while(!engine_isKilled(engine) && worker->cached_event)
 	{
 		MAGIC_ASSERT(worker->cached_event);
 
@@ -107,9 +106,11 @@ void worker_execute_event(gpointer data, gpointer user_data) {
 
 	/* unlock, clear cache */
 	node_unlock(worker->cached_node);
-	worker->cached_engine = NULL;
 	worker->cached_node = NULL;
 	worker->cached_event = NULL;
+	worker->cached_engine = NULL;
+
+	engine_notifyNodeProcessed(engine);
 
 	/* worker thread now returns to the pool */
 }
@@ -127,26 +128,28 @@ void worker_schedule_event(Event* event, SimulationTime nano_delay) {
 	event->time = worker->clock_now + nano_delay;
 
 	/* always push to master queue since there is no node associated */
-	engine_push_event(worker->cached_engine, event);
+	engine_pushEvent(worker->cached_engine, event);
 }
 
 void worker_schedule_nodeevent(NodeEvent* event, SimulationTime nano_delay, gint receiver_node_id) {
+	/* TODO create accessors, or better yet refactor the work to event class */
 	MAGIC_ASSERT(event);
 	Event* super = &(event->super);
 	MAGIC_ASSERT(super);
 
 	/* get our thread-private worker */
 	Worker* worker = worker_get();
+	Engine* engine = worker->cached_engine;
 
 	/* when the event will execute */
 	event->super.time = worker->clock_now + nano_delay;
 
 	/* parties involved */
 	Node* sender = worker->cached_node;
-	Node* receiver = engine_lookup(worker->cached_engine, NODES, receiver_node_id);
+	Node* receiver = engine_lookup(engine, NODES, receiver_node_id);
 
 	/* single threaded mode is simpler than multi threaded */
-	if(worker->cached_engine->config->num_threads > 1) {
+	if(engine_getNumThreads(engine) > 1) {
 		/* multi threaded, figure out where to push event */
 		if(node_equal(receiver, sender) &&
 				(event->super.time < worker->clock_barrier))
@@ -158,16 +161,21 @@ void worker_schedule_nodeevent(NodeEvent* event, SimulationTime nano_delay, gint
 			/* this is for another node. send it as mail. make sure delay
 			 * follows the configured minimum delay.
 			 */
-			SimulationTime min_time = worker->clock_now + worker->cached_engine->min_time_jump;
+			SimulationTime jump = engine_getMinTimeJump(engine);
+			SimulationTime min_time = worker->clock_now + jump;
+
+			/* warn and adjust time if needed */
 			if(event->super.time < min_time) {
 				warning("Inter-node event time %lu changed to %lu due to minimum delay %lu",
-						event->super.time, min_time, worker->cached_engine->min_time_jump);
+						event->super.time, min_time, jump);
 				event->super.time = min_time;
 			}
+
+			/* send event to node's mailbox */
 			node_mail_push(receiver, event);
 		}
 	} else {
 		/* single threaded, push to master queue */
-		engine_push_event(worker->cached_engine, (Event*)event);
+		engine_pushEvent(engine, (Event*)event);
 	}
 }

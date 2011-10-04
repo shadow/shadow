@@ -42,5 +42,5 @@ void killengine_event_free(KillEngineEvent* event) {
 
 void killengine_event_execute(KillEngineEvent* event) {
 	MAGIC_ASSERT(event);
-	g_atomic_int_inc(&(shadow_engine->killed));
+	g_atomic_int_inc(&(shadow_engine->protect.isKilled));
 }
