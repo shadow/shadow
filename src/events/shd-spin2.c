@@ -19,39 +19,46 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 #include "shadow.h"
 
-EventVTable nodeevent_vtable = {
-	(EventExecuteFunc)nodeevent_execute,
-	(EventFreeFunc)nodeevent_free,
+NodeEventVTable spin2_vtable = {
+	(NodeEventExecuteFunc)spin2_execute,
+	(NodeEventFreeFunc)spin2_free,
 	MAGIC_VALUE
 };
 
-void nodeevent_init(NodeEvent* event, NodeEventVTable* vtable) {
-	g_assert(event && vtable);
-
-	event_init(&(event->super), &nodeevent_vtable);
-
+Spin2Event* spin2_new(guint seconds) {
+	Spin2Event* event = g_new(Spin2Event, 1);
 	MAGIC_INIT(event);
-	MAGIC_INIT(vtable);
 
-	event->vtable = vtable;
+	nodeevent_init(&(event->super), &spin2_vtable);
+	event->spin_seconds = seconds;
+
+	return event;
 }
 
-void nodeevent_execute(NodeEvent* event) {
+void spin2_free(Spin2Event* event) {
 	MAGIC_ASSERT(event);
-	MAGIC_ASSERT(event->vtable);
-	MAGIC_ASSERT(event->node);
-
-	event->vtable->execute(event, event->node);
-}
-
-void nodeevent_free(gpointer data) {
-	NodeEvent* event = data;
-	MAGIC_ASSERT(event);
-	MAGIC_ASSERT(event->vtable);
-	MAGIC_ASSERT(event->node);
-
 	MAGIC_CLEAR(event);
-	event->vtable->free(event);
+	g_free(event);
+}
+
+void spin2_execute(Spin2Event* event, Node* node) {
+	MAGIC_ASSERT(event);
+	MAGIC_ASSERT(node);
+
+	debug("executing spin event for %u seconds", event->spin_seconds);
+
+	guint64 i = 1000000 * event->spin_seconds;
+	while(i--) {
+		continue;
+	}
+
+	Spin2Event* se = spin2_new(event->spin_seconds);
+	SimulationTime t = 1;
+	worker_scheduleNodeEvent((NodeEvent*)se, t, node->node_id);
+
+	// FIXME: the following breaks
+//	worker_scheduleNodeEvent((NodeEvent*)se, t, ((node->node_id++) % 100));
 }

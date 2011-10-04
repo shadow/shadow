@@ -21,12 +21,15 @@
 
 #include "shadow.h"
 
-Node* node_new() {
+Node* node_new(gint id) {
 	Node* node = g_new(Node, 1);
 	MAGIC_INIT(node);
 
+	node->node_id = id;
 	node->event_mailbox = g_async_queue_new_full(event_free);
 	node->event_priority_queue = g_queue_new();
+
+	node->node_lock = g_mutex_new();
 
 	return node;
 }
@@ -38,16 +41,20 @@ void node_free(gpointer data) {
 	g_async_queue_unref(node->event_mailbox);
 	g_queue_free(node->event_priority_queue);
 
+	g_mutex_free(node->node_lock);
+
 	MAGIC_CLEAR(node);
 	g_free(node);
 }
 
 void node_lock(Node* node) {
 	MAGIC_ASSERT(node);
+	g_mutex_lock(node->node_lock);
 }
 
 void node_unlock(Node* node) {
 	MAGIC_ASSERT(node);
+	g_mutex_unlock(node->node_lock);
 }
 
 void node_pushMail(Node* node, NodeEvent* event) {
@@ -88,5 +95,11 @@ gint node_compare(gconstpointer a, gconstpointer b, gpointer user_data) {
 }
 
 gboolean node_equal(Node* a, Node* b) {
-	return node_compare(a, b, NULL) == 0;
+	if(a == NULL && b == NULL) {
+		return TRUE;
+	} else if(a == NULL || b == NULL) {
+		return FALSE;
+	} else {
+		return node_compare(a, b, NULL) == 0;
+	}
 }

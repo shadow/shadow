@@ -49,7 +49,7 @@ void spin_execute(SpinEvent* event) {
 
 	debug("executing spin event for %u seconds", event->spin_seconds);
 
-	guint64 i = 1000000 * event->spin_seconds;
+	guint64 i = 100000000 * event->spin_seconds;
 	while(i--) {
 		continue;
 	}

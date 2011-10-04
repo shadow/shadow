@@ -40,7 +40,8 @@ gint shadow_main(gint argc, gchar* argv[]) {
 	debug("log system initialized");
 
 	/* run the engine. when this returns, the simulation is done */
-	debug("starting %i-threaded engine", shadow_engine->config->num_threads);
+	gint n = shadow_engine->config->nWorkerThreads;
+	debug("starting %i-threaded engine (main + %i workers)", (n + 1), n);
 	gint retval = engine_run(shadow_engine);
 	debug("engine finished, waiting for workers...");
 

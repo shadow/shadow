@@ -80,7 +80,7 @@ void registry_put(Registry* registry, gint index, gint* key, gpointer value) {
 	GHashTable* entry = _registry_getEntry(registry, index);
 
 	/* make sure an object doesnt exist at this key */
-	g_assert(!g_hash_table_lookup_extended(registry->storage, (gconstpointer)key, NULL, NULL));
+	g_assert(!g_hash_table_lookup_extended(entry, (gconstpointer)key, NULL, NULL));
 
 	g_hash_table_insert(entry, (gpointer)key, value);
 }

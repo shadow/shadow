@@ -55,8 +55,8 @@ typedef struct _Configuration Configuration;
 struct _Configuration {
 	GOptionContext *context;
 
-	gint num_threads;
-	gint min_time_jump;
+	gint nWorkerThreads;
+	gint minTimeJump;
 
 	MAGIC_DECLARE;
 };

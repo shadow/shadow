@@ -32,7 +32,7 @@ typedef struct _Node Node;
 
 /* required functions */
 typedef void (*NodeEventExecuteFunc)(NodeEvent* event, Node* node);
-typedef void (*NodeEventFreeFunc)(NodeEvent* event, Node* node);
+typedef void (*NodeEventFreeFunc)(NodeEvent* event);
 
 /*
  * Virtual function table for base event, storing pointers to required
@@ -57,7 +57,7 @@ struct _NodeEvent {
 	MAGIC_DECLARE;
 };
 
-void nodeevent_init(NodeEvent* event, NodeEventVTable* vtable, Node* node);
+void nodeevent_init(NodeEvent* event, NodeEventVTable* vtable);
 void nodeevent_execute(NodeEvent* event);
 void nodeevent_free(gpointer data);
 

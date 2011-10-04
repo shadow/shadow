@@ -33,6 +33,7 @@
 #include "events/shd-event.h"
 #include "events/shd-nodeevent.h"
 #include "events/shd-spin.h"
+#include "events/shd-spin2.h"
 #include "events/shd-killengine.h"
 
 #include "node/shd-node.h"

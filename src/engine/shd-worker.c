@@ -21,11 +21,11 @@
 
 #include "shadow.h"
 
-static Worker* _worker_new(Engine* engine) {
+static Worker* _worker_new(gint id) {
 	Worker* worker = g_new(Worker, 1);
 	MAGIC_INIT(worker);
 
-	worker->thread_id = engine_generateWorkerID(engine);
+	worker->thread_id = id;
 	worker->clock_now = SIMTIME_INVALID;
 	worker->clock_last = SIMTIME_INVALID;
 	worker->clock_barrier = SIMTIME_INVALID;
@@ -50,7 +50,7 @@ Worker* worker_getPrivate() {
 
 	/* todo: should we use g_once here instead? */
 	if(!worker) {
-		worker = _worker_new(engine);
+		worker = _worker_new(engine_generateWorkerID(engine));
 		g_private_set(engine->workerKey, worker);
 	}
 
@@ -144,9 +144,11 @@ void worker_scheduleNodeEvent(NodeEvent* event, SimulationTime nano_delay, gint 
 	/* when the event will execute */
 	event->super.time = worker->clock_now + nano_delay;
 
-	/* parties involved */
+	/* parties involved. sender may be NULL, receiver may not! */
 	Node* sender = worker->cached_node;
 	Node* receiver = engine_lookup(engine, NODES, receiver_node_id);
+	g_assert(receiver);
+	event->node = receiver;
 
 	/* single threaded mode is simpler than multi threaded */
 	if(engine_getNumThreads(engine) > 1) {

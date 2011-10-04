@@ -32,11 +32,11 @@ Engine* engine_new(Configuration* config) {
 	/* initialize the singleton-per-thread worker class */
 	engine->workerKey = g_private_new(worker_free);
 
-	if(config->num_threads > 1) {
+	if(config->nWorkerThreads > 0) {
 		/* we need some workers, create a thread pool */
-		gint nWorkers = config->num_threads - 1;
 		GError *error = NULL;
-		engine->workerPool = g_thread_pool_new(worker_executeEvent, engine, nWorkers, TRUE, &error);
+		engine->workerPool = g_thread_pool_new(worker_executeEvent, engine,
+				config->nWorkerThreads, TRUE, &error);
 		if (!engine->workerPool) {
 			error("thread pool failed: %s\n", error->message);
 			g_error_free(error);
@@ -54,10 +54,7 @@ Engine* engine_new(Configuration* config) {
 	engine->registry = registry_new();
 	registry_register(engine->registry, NODES, node_free);
 
-	engine->protect.isKilled = 0;
-	engine->protect.nNodesToProcess = 0;
-
-	engine->minTimeJump = config->min_time_jump * SIMTIME_ONE_MILLISECOND;
+	engine->minTimeJump = config->minTimeJump * SIMTIME_ONE_MILLISECOND;
 
 	return engine;
 }
@@ -147,12 +144,7 @@ static void _engine_manageExecutableMail(gpointer data, gpointer user_data) {
 
 	if(node_getNumTasks(node) > 0) {
 		/* now let the worker handle all the node's events */
-		GError* pool_error;
-		g_thread_pool_push(engine->workerPool, node, &pool_error);
-		if (pool_error) {
-			error("thread pool push failed: %s\n", pool_error->message);
-			g_error_free(pool_error);
-		}
+		g_thread_pool_push(engine->workerPool, node, NULL);
 
 		/* we just added another node that must be processed */
 		g_atomic_int_inc(&(engine->protect.nNodesToProcess));
@@ -186,7 +178,7 @@ static gint _engine_distributeEvents(Engine* engine) {
 		 * sends us the signal to prevent deadlock. */
 		if(!g_atomic_int_dec_and_test(&(engine->protect.nNodesToProcess))) {
 			while(g_atomic_int_get(&(engine->protect.nNodesToProcess)))
-				g_cond_wait(engine->workersIdle, NULL);
+				g_cond_wait(engine->workersIdle, engine->engineIdle);
 		}
 
 		/* other threads are sleeping */
@@ -199,12 +191,24 @@ static gint _engine_distributeEvents(Engine* engine) {
 
 		/*
 		 * finally, update the allowed event execution window.
+		 * TODO: should be able to jump to next event time of any node
+		 * in case its far in the future
 		 */
 		engine->executeWindowStart = engine->executeWindowEnd;
 		engine->executeWindowEnd += engine->minTimeJump;
 	}
 
 	return 0;
+}
+
+// XXX: take this out when we actually parse DSIM and get real nodes, etc
+static void _addNodeEvents(gpointer data, gpointer user_data) {
+	Node* node = data;
+	MAGIC_ASSERT(node);
+
+	Spin2Event* se = spin2_new(1);
+	SimulationTime t = se->spin_seconds * SIMTIME_ONE_SECOND;
+	worker_scheduleNodeEvent((NodeEvent*)se, t, node->node_id);
 }
 
 gint engine_run(Engine* engine) {
@@ -218,11 +222,23 @@ gint engine_run(Engine* engine) {
 	/* parse user simulation script, create jobs */
 	debug("parsing simulation script");
 
+	// *******************************
+	// XXX: take this out when we actually parse DSIM and get real nodes, etc
+	// loop through all nodes and add some events for each.
+	gint i = 0;
+	for(i=0; i < 1000; i++) {
+		Node* n = node_new(engine_generateNodeID(engine));
+		registry_put(engine->registry, NODES, &(n->node_id), n);
+	}
+	GList* node_list = registry_getAll(engine->registry, NODES);
+	g_list_foreach(node_list, _addNodeEvents, engine);
+	g_list_free(node_list);
 	SpinEvent* se = spin_new(1);
 	worker_scheduleEvent((Event*)se, SIMTIME_ONE_SECOND);
 	worker_scheduleEvent((Event*)killengine_new(), SIMTIME_ONE_HOUR);
+	// *******************************
 
-	if(engine->config->num_threads > 1) {
+	if(engine->config->nWorkerThreads > 0) {
 		/* multi threaded, manage the other workers */
 		engine->executeWindowStart = 0;
 		engine->executeWindowEnd = engine->minTimeJump;
@@ -264,7 +280,7 @@ gint engine_generateNodeID(Engine* engine) {
 
 gint engine_getNumThreads(Engine* engine) {
 	MAGIC_ASSERT(engine);
-	return engine->config->num_threads;
+	return engine->config->nWorkerThreads;
 }
 
 SimulationTime engine_getMinTimeJump(Engine* engine) {

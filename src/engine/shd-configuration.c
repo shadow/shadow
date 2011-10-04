@@ -31,14 +31,14 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	g_option_context_set_summary(c->context, "Shadow - run real applications over simulated networks");
 	g_option_context_set_description(c->context, "Shadow description");
 
-	c->num_threads = 1;
-	c->min_time_jump = 10;
+	c->nWorkerThreads = 0;
+	c->minTimeJump = 10;
 
 	/* set options to change defaults */
 	const GOptionEntry entries[] =
 	{
-	  { "threads", 't', 0, G_OPTION_ARG_INT, &(c->num_threads), "Use N worker threads", "N" },
-	  { "jump-min", 'j', 0, G_OPTION_ARG_INT, &(c->min_time_jump), "Minimum allowed time jump when sending events between nodes, in milliseconds", "N" },
+	  { "threads", 't', 0, G_OPTION_ARG_INT, &(c->nWorkerThreads), "Use N worker threads", "N" },
+	  { "jump-min", 'j', 0, G_OPTION_ARG_INT, &(c->minTimeJump), "Minimum allowed time jump when sending events between nodes, in milliseconds", "N" },
 	  { NULL },
 	};
 
@@ -53,8 +53,8 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 		return NULL;
 	}
 
-	if(c->num_threads < 1) {
-		c->num_threads = 1;
+	if(c->nWorkerThreads < 0) {
+		c->nWorkerThreads = 0;
 	}
 
 	return c;

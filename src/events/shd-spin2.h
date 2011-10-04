@@ -19,39 +19,22 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#ifndef SHD_SPIN2_H_
+#define SHD_SPIN2_H_
+
 #include "shadow.h"
 
-EventVTable nodeevent_vtable = {
-	(EventExecuteFunc)nodeevent_execute,
-	(EventFreeFunc)nodeevent_free,
-	MAGIC_VALUE
+typedef struct _Spin2Event Spin2Event;
+
+struct _Spin2Event {
+	NodeEvent super;
+	guint spin_seconds;
+
+	MAGIC_DECLARE;
 };
 
-void nodeevent_init(NodeEvent* event, NodeEventVTable* vtable) {
-	g_assert(event && vtable);
+Spin2Event* spin2_new(guint seconds);
+void spin2_free(Spin2Event* event);
+void spin2_execute(Spin2Event* event, Node* node);
 
-	event_init(&(event->super), &nodeevent_vtable);
-
-	MAGIC_INIT(event);
-	MAGIC_INIT(vtable);
-
-	event->vtable = vtable;
-}
-
-void nodeevent_execute(NodeEvent* event) {
-	MAGIC_ASSERT(event);
-	MAGIC_ASSERT(event->vtable);
-	MAGIC_ASSERT(event->node);
-
-	event->vtable->execute(event, event->node);
-}
-
-void nodeevent_free(gpointer data) {
-	NodeEvent* event = data;
-	MAGIC_ASSERT(event);
-	MAGIC_ASSERT(event->vtable);
-	MAGIC_ASSERT(event->node);
-
-	MAGIC_CLEAR(event);
-	event->vtable->free(event);
-}
+#endif /* SHD_SPIN2_H_ */
