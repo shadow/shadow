@@ -31,6 +31,10 @@ gint shadow_main(gint argc, gchar* argv[]) {
 	if(!config) {
 		/* incorrect options given */
 		return -1;
+	} else if(config->printSoftwareVersion) {
+		g_print("Shadow v%s - (c) 2010-2011 Rob G. Jansen\nReleased under the GNU GPL, v3\n", SHADOW_VERSION);
+		configuration_free(config);
+		return 0;
 	}
 
 	/* allocate application structures */

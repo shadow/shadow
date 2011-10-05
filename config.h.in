@@ -9,5 +9,5 @@
 # endif
 #endif
 
-#cmakedefine PACKAGE_STRING "${PACKAGE_STRING}"
+#define SHADOW_VERSION "${Shadow_VERSION_MAJOR}.${Shadow_VERSION_MINOR}.${Shadow_VERSION_BUILD}"
 

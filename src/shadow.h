@@ -25,6 +25,8 @@
 #include <glib.h>
 #include <gmodule.h>
 
+#include "shd-config.h"
+
 #include "engine/shd-main.h"
 #include "engine/shd-configuration.h"
 

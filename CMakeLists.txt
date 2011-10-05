@@ -1,14 +1,13 @@
 ## (c)2010-2011 Shadow, Rob Jansen jansen@cs.umn.edu
 ## (c)2009 DVN Tyson Malchow tyson.malchow@gmail.com
 
-project(shadow C)
+project(Shadow C)
 cmake_minimum_required(VERSION 2.8 FATAL_ERROR)
 
 ## set paths and build parameters
-set(VERSION_MAJOR 1)
-set(VERSION_MINOR 1)
-set(VERSION_BUILD 0)
-set(PACKAGE_STRING "Shadow ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_BUILD}")
+set(Shadow_VERSION_MAJOR 1)
+set(Shadow_VERSION_MINOR 1)
+set(Shadow_VERSION_BUILD 0)
 
 ## custom output paths
 #set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)

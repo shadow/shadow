@@ -33,12 +33,14 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 
 	c->nWorkerThreads = 0;
 	c->minTimeJump = 10;
+	c->printSoftwareVersion = 0;
 
 	/* set options to change defaults */
 	const GOptionEntry entries[] =
 	{
 	  { "threads", 't', 0, G_OPTION_ARG_INT, &(c->nWorkerThreads), "Use N worker threads", "N" },
 	  { "jump-min", 'j', 0, G_OPTION_ARG_INT, &(c->minTimeJump), "Minimum allowed time jump when sending events between nodes, in milliseconds", "N" },
+	  { "version", 'v', 0, G_OPTION_ARG_NONE, &(c->printSoftwareVersion), "Print software version and exit", NULL },
 	  { NULL },
 	};
 

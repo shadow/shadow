@@ -57,6 +57,7 @@ struct _Configuration {
 
 	gint nWorkerThreads;
 	gint minTimeJump;
+	gboolean printSoftwareVersion;
 
 	MAGIC_DECLARE;
 };
