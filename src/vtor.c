@@ -68,6 +68,9 @@ static int vtor_do_main_loop(void);
 extern struct event_base * tor_libevent_get_base(void);
 extern void tor_cleanup(void);
 extern void second_elapsed_callback(periodic_timer_t *timer, void *arg);
+#ifdef USE_REFILL_CALLBACK
+extern void refill_callback(periodic_timer_t *timer, void *arg);
+#endif
 extern int identity_key_is_set(void);
 extern int init_keys(void);
 extern void init_cell_pool(void);
@@ -244,6 +247,23 @@ static int vtor_do_main_loop(void)
                                       NULL);
     tor_assert(second_timer);
   }
+
+
+#ifdef USE_REFILL_CALLBACK
+  if (!refill_timer) {
+      struct timeval refill_interval;
+      int msecs = get_options()->TokenBucketRefillInterval;
+
+      refill_interval.tv_sec =  msecs/1000;
+      refill_interval.tv_usec = (msecs%1000)*1000;
+
+      refill_timer = periodic_timer_new(tor_libevent_get_base(),
+              &refill_interval,
+              refill_callback,
+              NULL);
+      tor_assert(refill_timer);
+  }
+#endif
 
 //  for (;;) {
 //    if (nt_service_is_stopping())

@@ -25,6 +25,7 @@ def main():
             'tor_libevent_get_base',
             'tor_cleanup',
             'second_elapsed_callback',
+            'refill_callback',
             'identity_key_is_set',
             'client_identity_key_is_set',
             'init_keys',
@@ -52,6 +53,7 @@ def main():
             'global_read_bucket' : 'int',
             'global_write_bucket' : 'int',
             'second_timer' : 'periodic_timer_t *',
+            'refill_timer' : 'periodic_timer_t *',
             'active_linked_connection_lst' : 'smartlist_t *',
             'called_loop_once' : 'int',
             'n_sockets_open' : 'int'}
@@ -147,6 +149,9 @@ def main():
     # Remove the temporary files used to rename and global symbols
     os.remove(sym_rename_file.name)
     os.remove(sym_globalize_file.name)
+
+    if 'refill_timer' in vars_global:
+        tor_externs.write('#define USE_REFILL_CALLBACK\n\n')
 
     scallion_registration.write('\tsnri_register_globals({0},\n'.format(len(vars_global.keys()) + 2))
     scallion_registration.write('\t\tsizeof(scallion_t), scallion_global_data,\n')
