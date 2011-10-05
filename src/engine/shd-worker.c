@@ -148,6 +148,8 @@ void worker_scheduleNodeEvent(NodeEvent* event, SimulationTime nano_delay, gint 
 	Node* sender = worker->cached_node;
 	Node* receiver = engine_lookup(engine, NODES, receiver_node_id);
 	g_assert(receiver);
+
+	/* the NodeEvent needs a pointer to the correct node */
 	event->node = receiver;
 
 	/* single threaded mode is simpler than multi threaded */

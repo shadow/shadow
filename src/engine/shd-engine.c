@@ -196,6 +196,8 @@ static gint _engine_distributeEvents(Engine* engine) {
 		 */
 		engine->executeWindowStart = engine->executeWindowEnd;
 		engine->executeWindowEnd += engine->minTimeJump;
+		debug("updated execution window [%lu--%lu]",
+				engine->executeWindowStart, engine->executeWindowEnd);
 	}
 
 	return 0;

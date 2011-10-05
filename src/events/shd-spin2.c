@@ -58,7 +58,6 @@ void spin2_execute(Spin2Event* event, Node* node) {
 	Spin2Event* se = spin2_new(event->spin_seconds);
 	SimulationTime t = 1;
 	worker_scheduleNodeEvent((NodeEvent*)se, t, node->node_id);
-
-	// FIXME: the following breaks
-//	worker_scheduleNodeEvent((NodeEvent*)se, t, ((node->node_id++) % 100));
+	Spin2Event* se2 = spin2_new(event->spin_seconds);
+	worker_scheduleNodeEvent((NodeEvent*)se2, t, 0);
 }
