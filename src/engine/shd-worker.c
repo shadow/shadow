@@ -151,7 +151,7 @@ void worker_scheduleNodeEvent(NodeEvent* event, SimulationTime nano_delay, gint 
 	event->node = receiver;
 
 	/* single threaded mode is simpler than multi threaded */
-	if(engine_getNumThreads(engine) > 1) {
+	if(engine_getNumThreads(engine) > 0) {
 		/* multi threaded, figure out where to push event */
 		if(node_equal(receiver, sender) &&
 				(event->super.time < worker->clock_barrier))
