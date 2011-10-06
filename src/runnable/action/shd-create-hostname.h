@@ -19,31 +19,20 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SHADOW_H_
-#define SHADOW_H_
+#ifndef SHD_CREATE_HOSTNAME_H_
+#define SHD_CREATE_HOSTNAME_H_
 
-#include <glib.h>
-#include <gmodule.h>
+#include "shadow.h"
 
-#include "shd-config.h"
+typedef struct _CreateHostnameAction CreateHostnameAction;
 
-#include "engine/shd-main.h"
-#include "engine/shd-configuration.h"
+struct _CreateHostnameAction {
+	Action super;
+	MAGIC_DECLARE;
+};
 
-#include "utility/shd-registry.h"
+CreateHostnameAction* createhostname_new(guint seconds);
+void createhostname_run(CreateHostnameAction* action);
+void createhostname_free(CreateHostnameAction* action);
 
-#include "runnable/shd-runnable.h"
-#include "runnable/event/shd-event.h"
-#include "runnable/event/shd-spine.h"
-#include "runnable/action/shd-action.h"
-#include "runnable/action/shd-spina.h"
-
-#include "node/shd-node.h"
-
-#include "engine/shd-logging.h"
-#include "engine/shd-engine.h"
-#include "engine/shd-worker.h"
-
-extern Engine* shadow_engine;
-
-#endif /* SHADOW_H_ */
+#endif /* SHD_CREATE_HOSTNAME_H_ */

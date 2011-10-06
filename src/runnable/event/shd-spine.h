@@ -19,28 +19,22 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#ifndef SHD_SPINE_H_
+#define SHD_SPINE_H_
+
 #include "shadow.h"
 
-EventVTable killengine_vtable = {
-	(EventExecuteFunc) killengine_execute,
-	(EventFreeFunc) killengine_free,
-	MAGIC_VALUE
+typedef struct _SpinEvent SpinEvent;
+
+struct _SpinEvent {
+	Event super;
+	guint spin_seconds;
+
+	MAGIC_DECLARE;
 };
 
-KillEngineEvent* killengine_new() {
-	KillEngineEvent* event = g_new(KillEngineEvent, 1);
-	MAGIC_INIT(event);
-	event_init(&(event->super), &killengine_vtable);
-	return event;
-}
+SpinEvent* spine_new(guint seconds);
+void spine_run(SpinEvent* event, Node* node);
+void spine_free(SpinEvent* event);
 
-void killengine_free(KillEngineEvent* event) {
-	MAGIC_ASSERT(event);
-	MAGIC_CLEAR(event);
-	g_free(event);
-}
-
-void killengine_execute(KillEngineEvent* event) {
-	MAGIC_ASSERT(event);
-	g_atomic_int_inc(&(shadow_engine->protect.isKilled));
-}
+#endif /* SHD_SPINE_H_ */

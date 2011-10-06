@@ -19,31 +19,29 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SHADOW_H_
-#define SHADOW_H_
+#include "shadow.h"
 
-#include <glib.h>
-#include <gmodule.h>
+RunnableVTable createnetwork_vtable = {
+	(RunnableRunFunc) createnetwork_run,
+	(RunnableFreeFunc) createnetwork_free,
+	MAGIC_VALUE
+};
 
-#include "shd-config.h"
+CreateNetworkAction* createnetwork_new(guint seconds) {
+	CreateNetworkAction* action = g_new(CreateNetworkAction, 1);
+	MAGIC_INIT(action);
 
-#include "engine/shd-main.h"
-#include "engine/shd-configuration.h"
+	action_init(&(action->super), &createnetwork_vtable);
 
-#include "utility/shd-registry.h"
+	return action;
+}
 
-#include "runnable/shd-runnable.h"
-#include "runnable/event/shd-event.h"
-#include "runnable/event/shd-spine.h"
-#include "runnable/action/shd-action.h"
-#include "runnable/action/shd-spina.h"
+void createnetwork_run(CreateNetworkAction* action) {
+	MAGIC_ASSERT(action);
+}
 
-#include "node/shd-node.h"
-
-#include "engine/shd-logging.h"
-#include "engine/shd-engine.h"
-#include "engine/shd-worker.h"
-
-extern Engine* shadow_engine;
-
-#endif /* SHADOW_H_ */
+void createnetwork_free(CreateNetworkAction* action) {
+	MAGIC_ASSERT(action);
+	MAGIC_CLEAR(action);
+	g_free(action);
+}

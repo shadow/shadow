@@ -19,31 +19,20 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SHADOW_H_
-#define SHADOW_H_
+#ifndef SHD_LOAD_PLUGIN_H_
+#define SHD_LOAD_PLUGIN_H_
 
-#include <glib.h>
-#include <gmodule.h>
+#include "shadow.h"
 
-#include "shd-config.h"
+typedef struct _LoadPluginAction LoadPluginAction;
 
-#include "engine/shd-main.h"
-#include "engine/shd-configuration.h"
+struct _LoadPluginAction {
+	Action super;
+	MAGIC_DECLARE;
+};
 
-#include "utility/shd-registry.h"
+LoadPluginAction* loadplugin_new(guint seconds);
+void loadplugin_run(LoadPluginAction* action);
+void loadplugin_free(LoadPluginAction* action);
 
-#include "runnable/shd-runnable.h"
-#include "runnable/event/shd-event.h"
-#include "runnable/event/shd-spine.h"
-#include "runnable/action/shd-action.h"
-#include "runnable/action/shd-spina.h"
-
-#include "node/shd-node.h"
-
-#include "engine/shd-logging.h"
-#include "engine/shd-engine.h"
-#include "engine/shd-worker.h"
-
-extern Engine* shadow_engine;
-
-#endif /* SHADOW_H_ */
+#endif /* SHD_LOAD_PLUGIN_H_ */

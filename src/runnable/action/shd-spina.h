@@ -19,31 +19,22 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SHADOW_H_
-#define SHADOW_H_
+#ifndef SHD_SPINA_H_
+#define SHD_SPINA_H_
 
-#include <glib.h>
-#include <gmodule.h>
+#include "shadow.h"
 
-#include "shd-config.h"
+typedef struct _SpinAction SpinAction;
 
-#include "engine/shd-main.h"
-#include "engine/shd-configuration.h"
+struct _SpinAction {
+	Action super;
+	guint spin_seconds;
 
-#include "utility/shd-registry.h"
+	MAGIC_DECLARE;
+};
 
-#include "runnable/shd-runnable.h"
-#include "runnable/event/shd-event.h"
-#include "runnable/event/shd-spine.h"
-#include "runnable/action/shd-action.h"
-#include "runnable/action/shd-spina.h"
+SpinAction* spina_new(guint seconds);
+void spina_free(SpinAction* event);
+void spina_run(SpinAction* event);
 
-#include "node/shd-node.h"
-
-#include "engine/shd-logging.h"
-#include "engine/shd-engine.h"
-#include "engine/shd-worker.h"
-
-extern Engine* shadow_engine;
-
-#endif /* SHADOW_H_ */
+#endif /* SHD_SPINA_H_ */

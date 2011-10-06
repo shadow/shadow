@@ -19,43 +19,50 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SHD_EVENT_H_
-#define SHD_EVENT_H_
+#ifndef SHD_RUNNABLE_H_
+#define SHD_RUNNABLE_H_
 
-#include <glib.h>
+#include "shadow.h"
 
-typedef struct _Event Event;
-typedef struct _EventVTable EventVTable;
+typedef struct _Runnable Runnable;
+typedef struct _RunnableVTable RunnableVTable;
 
-/* required functions */
-typedef void (*EventExecuteFunc)(Event* event);
-typedef void (*EventFreeFunc)(Event* event);
+/* required interface functions. _new() should be implemented in subclass. */
+typedef void (*RunnableRunFunc)(Runnable* r);
+typedef void (*RunnableFreeFunc)(Runnable* r);
 
-/*
- * Virtual function table for base event, storing pointers to required
+/**
+ * Virtual function table for base runnable, storing pointers to required
  * callable functions.
  */
-struct _EventVTable {
-	EventExecuteFunc execute;
-	EventFreeFunc free;
-
+struct _RunnableVTable {
+	RunnableRunFunc run;
+	RunnableFreeFunc free;
 	MAGIC_DECLARE;
 };
 
-/*
+/**
  * A base event and its members. Subclasses extend Event by keeping this as
  * the first element in the substructure, and adding custom members below it.
  */
-struct _Event {
-	EventVTable* vtable;
-	SimulationTime time;
-
+struct _Runnable {
+	RunnableVTable* vtable;
 	MAGIC_DECLARE;
 };
 
-void event_init(Event* event, EventVTable* vtable);
-void event_execute(Event* event);
-gint event_compare(gconstpointer eventa, gconstpointer eventb, gpointer user_data);
-void event_free(gpointer data);
+/**
+ *
+ */
+void runnable_init(Runnable* r, RunnableVTable* vtable);
 
-#endif /* SHD_EVENT_H_ */
+/**
+ *
+ */
+void runnable_run(gpointer data);
+
+/**
+ *
+ */
+void runnable_free(gpointer data);
+
+#endif /* SHD_RUNNABLE_H_ */

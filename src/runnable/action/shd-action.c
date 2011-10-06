@@ -21,35 +21,9 @@
 
 #include "shadow.h"
 
-void event_init(Event* event, EventVTable* vtable) {
-	g_assert(event && vtable);
-	MAGIC_INIT(event);
+void action_init(Action* a, RunnableVTable* vtable) {
+	g_assert(a && vtable);
+	MAGIC_INIT(a);
 	MAGIC_INIT(vtable);
-
-	event->vtable = vtable;
-	event->time = 0;
-}
-
-void event_execute(Event* event) {
-	MAGIC_ASSERT(event);
-	MAGIC_ASSERT(event->vtable);
-
-	event->vtable->execute(event);
-}
-
-gint event_compare(gconstpointer a, gconstpointer b, gpointer user_data) {
-	const Event* ea = a;
-	const Event* eb = b;
-	MAGIC_ASSERT(ea);
-	MAGIC_ASSERT(eb);
-	return ea->time > eb->time ? +1 : ea->time == eb->time ? 0 : -1;
-}
-
-void event_free(gpointer data) {
-	Event* event = data;
-	MAGIC_ASSERT(event);
-	MAGIC_ASSERT(event->vtable);
-
-	MAGIC_CLEAR(event);
-	event->vtable->free(event);
+	runnable_init(&(a->super), vtable);
 }

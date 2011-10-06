@@ -19,19 +19,20 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SHD_KILLENGINE_H_
-#define SHD_KILLENGINE_H_
+#ifndef SHD_LOAD_CDF_H_
+#define SHD_LOAD_CDF_H_
 
-typedef struct _KillEngineEvent KillEngineEvent;
+#include "shadow.h"
 
-struct _KillEngineEvent {
-	Event super;
+typedef struct _LoadCDFAction LoadCDFAction;
 
+struct _LoadCDFAction {
+	Action super;
 	MAGIC_DECLARE;
 };
 
-KillEngineEvent* killengine_new();
-void killengine_free(KillEngineEvent* event);
-void killengine_execute(KillEngineEvent* event);
+LoadCDFAction* loadcdf_new(guint seconds);
+void loadcdf_run(LoadCDFAction* action);
+void loadcdf_free(LoadCDFAction* action);
 
-#endif /* SHD_KILLENGINE_H_ */
+#endif /* SHD_LOAD_CDF_H_ */

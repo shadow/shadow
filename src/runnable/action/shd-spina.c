@@ -19,22 +19,41 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SHD_SPIN_H_
-#define SHD_SPIN_H_
-
 #include "shadow.h"
 
-typedef struct _SpinEvent SpinEvent;
-
-struct _SpinEvent {
-	Event super;
-	guint spin_seconds;
-
-	MAGIC_DECLARE;
+RunnableVTable spina_vtable = {
+	(RunnableRunFunc) spina_run,
+	(RunnableFreeFunc) spina_free,
+	MAGIC_VALUE
 };
 
-SpinEvent* spin_new(guint seconds);
-void spin_free(SpinEvent* event);
-void spin_execute(SpinEvent* event);
+SpinAction* spina_new(guint seconds) {
+	SpinAction* action = g_new(SpinAction, 1);
+	MAGIC_INIT(action);
 
-#endif /* SHD_SPIN_H_ */
+	action_init(&(action->super), &spina_vtable);
+	action->spin_seconds = seconds;
+
+	return action;
+}
+
+void spina_free(SpinAction* action) {
+	MAGIC_ASSERT(action);
+	MAGIC_CLEAR(action);
+	g_free(action);
+}
+
+void spina_run(SpinAction* action) {
+	MAGIC_ASSERT(action);
+
+	debug("running spin action for %u seconds", action->spin_seconds);
+
+	guint64 i = 100000000 * action->spin_seconds;
+	while(i--) {
+		continue;
+	}
+
+//	SpinAction* sa = spina_new(action->spin_seconds);
+//	SimulationTime t = action->spin_seconds * SIMTIME_ONE_SECOND;
+//	worker_scheduleEvent((Event*)sa, t);
+}

@@ -57,26 +57,26 @@ void node_unlock(Node* node) {
 	g_mutex_unlock(node->node_lock);
 }
 
-void node_pushMail(Node* node, NodeEvent* event) {
+void node_pushMail(Node* node, Event* event) {
 	MAGIC_ASSERT(node);
 	MAGIC_ASSERT(event);
 
 	g_async_queue_push_sorted(node->event_mailbox, event, event_compare, NULL);
 }
 
-NodeEvent* node_popMail(Node* node) {
+Event* node_popMail(Node* node) {
 	MAGIC_ASSERT(node);
 	return g_async_queue_try_pop(node->event_mailbox);
 }
 
-void node_pushTask(Node* node, NodeEvent* event) {
+void node_pushTask(Node* node, Event* event) {
 	MAGIC_ASSERT(node);
 	MAGIC_ASSERT(event);
 
 	g_queue_insert_sorted(node->event_priority_queue, event, event_compare, NULL);
 }
 
-NodeEvent* node_popTask(Node* node) {
+Event* node_popTask(Node* node) {
 	MAGIC_ASSERT(node);
 	return g_queue_pop_head(node->event_priority_queue);
 }

@@ -109,7 +109,7 @@ static gint _engine_processEvents(Engine* engine) {
 		engine->clock = worker->clock_now;
 		g_assert(worker->clock_now >= worker->clock_last);
 
-		event_execute(worker->cached_event);
+		event_run(worker->cached_event);
 		event_free(worker->cached_event);
 		worker->cached_event = NULL;
 
@@ -134,9 +134,9 @@ static void _engine_manageExecutableMail(gpointer data, gpointer user_data) {
 	MAGIC_ASSERT(engine);
 
 	/* pop mail from mailbox, check that its in window, push as a task */
-	NodeEvent* event = node_popMail(node);
-	while(event && (event->super.time < engine->executeWindowEnd)) {
-		g_assert(event->super.time >= engine->executeWindowStart);
+	Event* event = node_popMail(node);
+	while(event && (event->time < engine->executeWindowEnd)) {
+		g_assert(event->time >= engine->executeWindowStart);
 		node_pushTask(node, event);
 		event = node_popMail(node);
 	}
@@ -144,7 +144,7 @@ static void _engine_manageExecutableMail(gpointer data, gpointer user_data) {
 	/* if the last event we popped was beyond the allowed execution window,
 	 * push it back into mailbox so it gets executed during the next iteration
 	 */
-	if(event && (event->super.time >= engine->executeWindowEnd)) {
+	if(event && (event->time >= engine->executeWindowEnd)) {
 		node_pushMail(node, event);
 	}
 
@@ -192,6 +192,7 @@ static gint _engine_distributeEvents(Engine* engine) {
 		/* execute any non-node events
 		 * TODO: parallelize this if it becomes a problem. for now I'm assume
 		 * that we wont have enough non-node events to matter.
+		 * FIXME: this doesnt make sense with actions / events
 		 */
 		_engine_processEvents(engine);
 
@@ -214,71 +215,347 @@ static void _addNodeEvents(gpointer data, gpointer user_data) {
 	Node* node = data;
 	MAGIC_ASSERT(node);
 
-	Spin2Event* se = spin2_new(1);
+	SpinEvent* se = spine_new(1);
 	SimulationTime t = se->spin_seconds * SIMTIME_ONE_SECOND;
-	worker_scheduleNodeEvent((NodeEvent*)se, t, node->node_id);
+	worker_scheduleEvent((Event*)se, t, node->node_id);
 }
 
 static gboolean engine_parse_dsim(Engine* engine) {
-	gchar* dsim_filename = engine->config->dsim_filename->str;
-	gchar* dsim_file = file_get_contents(dsim_filename);
-	if(dsim_file == NULL){
-		warning("cant find dsim file at %s", dsim_filename);
-		return FALSE;
-	}
-
-	dsim_tp dsim_parsed = dsim_create(dsim_file);
-
-	operation_tp op;
-	while((op=dsim_get_nextevent(dsim_parsed, NULL, 1)))
-	{
-		switch(op->type){
-			case OP_LOAD_PLUGIN: {
-//				sim_master_dsimop_load_plugin(ma, op);
-				debug("OP_LOAD_PLUGIN");
-				break;
-			}
-			case OP_LOAD_CDF: {
-//				sim_master_dsimop_load_cdf(ma, op);
-				debug("OP_LOAD_CDF");
-				break;
-			}
-			case OP_GENERATE_CDF: {
-//				sim_master_dsimop_generate_cdf(ma, op);
-				debug("OP_GENERATE_CDF");
-				break;
-			}
-			case OP_CREATE_NETWORK: {
-//				sim_master_dsimop_create_network(ma, op);
-				debug("OP_CREATE_NETWORK");
-				break;
-			}
-			case OP_CONNECT_NETWORKS: {
-//				sim_master_dsimop_connect_networks(ma, op);
-				debug("OP_CONNECT_NETWORKS");
-				break;
-			}
-			case OP_CREATE_HOSTNAME: {
-//				sim_master_dsimop_create_hostname(ma, op);
-				debug("OP_CREATE_HOSTNAME");
-				break;
-			}
-			case OP_CREATE_NODES: {
-//				sim_master_dsimop_create_nodes(ma, op);
-				debug("OP_CREATE_NODES");
-				break;
-			}
-			case OP_END: {
-//				sim_master_dsimop_end(ma, op);
-				debug("OP_END");
-				break;
-			}
-			default: {
-				error("Unknown dsim operation!?");
-				break;
-			}
-		}
-	}
+//	gchar* dsim_filename = engine->config->dsim_filename->str;
+//	gchar* dsim_file = file_get_contents(dsim_filename);
+//	if(dsim_file == NULL){
+//		warning("cant find dsim file at %s", dsim_filename);
+//		return FALSE;
+//	}
+//
+//	dsim_tp dsim_parsed = dsim_create(dsim_file);
+//
+//	operation_tp op;
+//	while((op=dsim_get_nextevent(dsim_parsed, NULL, 1)))
+//	{
+//		switch(op->type){
+//			case OP_LOAD_PLUGIN: {
+//				debug("OP_LOAD_PLUGIN");
+//
+//				gchar* plugin_filepath = op->arguments[0].v.string_val;
+//
+//				/* normally this would happen at the event exe time */
+//
+//				module_tp mod = module_load(wo->mod_mgr, op->id, op->filepath);
+//
+//				if(mod != NULL) {
+//					context_execute_init(mod);
+//				} else {
+//					gchar buffer[200];
+//
+//					snprintf(buffer,200,"Unable to load and validate '%s'", op->filepath);
+//					sim_worker_abortsim(wo, buffer);
+//				}
+//
+//				break;
+//			}
+//			case OP_LOAD_CDF: {
+//				debug("OP_LOAD_CDF");
+//				gchar* cdf_filepath = op->arguments[0].v.string_val;
+//
+//				cdf_tp cdf = cdf_create(cdf_filepath);
+//
+//				/* normally this would happen at the event exe time */
+//
+//				cdf_tp cdf = cdf_create(op->filepath);
+//				if(cdf != NULL) {
+//					g_hash_table_insert(wo->loaded_cdfs, gint_key(op->id), cdf);
+//				}
+//				break;
+//			}
+//			case OP_GENERATE_CDF: {
+//				debug("OP_GENERATE_CDF");
+//
+//				guint cdf_base_center = (guint)(op->arguments[0].v.gdouble_val);
+//				guint cdf_base_width = (guint)(op->arguments[1].v.gdouble_val);
+//				guint cdf_tail_width = (guint)(op->arguments[2].v.gdouble_val);
+//
+//				cdf_tp cdf = cdf_generate(cdf_base_center, cdf_base_width, cdf_tail_width);
+//
+//				/* normally this would happen at the event exe time */
+//				cdf_tp cdf = cdf_generate(op->base_delay, op->base_width, op->tail_width);
+//				if(cdf != NULL) {
+//					g_hash_table_insert(wo->loaded_cdfs, gint_key(op->id), cdf);
+//				}
+//				break;
+//			}
+//			case OP_CREATE_NETWORK: {
+//				debug("OP_CREATE_NETWORK");
+//
+//				/* make sure we have the dsim variable data */
+//				if(dsimop->arguments[0].v.var_val &&
+//						dsimop->arguments[0].v.var_val->data_type == dsim_vartracker_type_cdftrack &&
+//						dsimop->arguments[0].v.var_val->data) {
+//					guint netid = sim_master_dsimop_helper(dsimop, master->network_tracking, dsim_vartracker_type_nettrack);
+//					guint cdf_id = ((sim_master_tracker_tp)dsimop->arguments[0].v.var_val->data)->id;
+//					gdouble reliability = dsimop->arguments[1].v.gdouble_val;
+//
+//					/* get the cdf used for latency */
+//					sim_master_tracker_tp cdf_tracker = g_hash_table_lookup(master->cdf_tracking, &cdf_id);
+//					if(cdf_tracker != NULL && cdf_tracker->value != NULL) {
+//						/* add it to our topology */
+//						cdf_tp cdf = cdf_tracker->value;
+//						simnet_graph_add_vertex(master->network_topology, netid, cdf, reliability);
+//					}
+//				}
+//
+//				/* normally this would happen at the event exe time */
+//
+//				/* build up our knowledge of the network */
+//				cdf_tp cdf = g_hash_table_lookup(wo->loaded_cdfs, &op->cdf_id_gintra_latency);
+//				simnet_graph_add_vertex(wo->network_topology, op->id, cdf, op->reliability);
+//
+//				/* vci needs ids to look up graph properties */
+//				vci_network_create(wo->vci_mgr, op->id);
+//
+//				break;
+//			}
+//			case OP_CONNECT_NETWORKS: {
+//				debug("OP_CONNECT_NETWORKS");
+//
+//				/* make sure we have the dsim variable data */
+//				if(dsimop->arguments[0].v.var_val &&
+//						dsimop->arguments[0].v.var_val->data_type == dsim_vartracker_type_nettrack &&
+//						dsimop->arguments[0].v.var_val->data &&
+//						dsimop->arguments[1].v.var_val &&
+//						dsimop->arguments[1].v.var_val->data_type == dsim_vartracker_type_cdftrack &&
+//						dsimop->arguments[1].v.var_val->data &&
+//						dsimop->arguments[3].v.var_val &&
+//						dsimop->arguments[3].v.var_val->data_type == dsim_vartracker_type_nettrack &&
+//						dsimop->arguments[3].v.var_val->data &&
+//						dsimop->arguments[4].v.var_val &&
+//						dsimop->arguments[4].v.var_val->data_type == dsim_vartracker_type_cdftrack &&
+//						dsimop->arguments[4].v.var_val->data) {
+//
+//					guint net1_id = ((sim_master_tracker_tp)dsimop->arguments[0].v.var_val->data)->id;
+//					guint cdf_id_latency_net1_to_net2 = ((sim_master_tracker_tp)dsimop->arguments[1].v.var_val->data)->id;
+//					gdouble reliability_net1_to_net2 = dsimop->arguments[2].v.gdouble_val;
+//					guint net2_id = ((sim_master_tracker_tp)dsimop->arguments[3].v.var_val->data)->id;
+//					guint cdf_id_latency_net2_to_net1 = ((sim_master_tracker_tp)dsimop->arguments[4].v.var_val->data)->id;
+//					gdouble reliability_net2_to_net1 = dsimop->arguments[5].v.gdouble_val;
+//
+//
+//					/* encode the simop to NBDF */
+//					nb_op = simop_nbdf_encode(dsimop, 0);
+//
+//					/* notify all the workers about the new connection */
+//					dvn_packet_route(DVNPACKET_GLOBAL_BCAST, DVNPACKET_LAYER_SIM, 0, SIM_FRAME_OP, nb_op);
+//
+//					nbdf_free(nb_op);
+//
+//					/* get the cdfs used for latency */
+//					sim_master_tracker_tp cdf_tracker_1to2 = g_hash_table_lookup(master->cdf_tracking, &cdf_id_latency_net1_to_net2);
+//					sim_master_tracker_tp cdf_tracker_2to1 = g_hash_table_lookup(master->cdf_tracking, &cdf_id_latency_net2_to_net1);
+//					if(cdf_tracker_1to2 != NULL && cdf_tracker_1to2->value != NULL
+//							&& cdf_tracker_2to1 != NULL && cdf_tracker_2to1->value != NULL) {
+//						/* add it to our topology */
+//						cdf_tp cdf_1to2 = cdf_tracker_1to2->value;
+//						cdf_tp cdf_2to1 = cdf_tracker_2to1->value;
+//						simnet_graph_add_edge(master->network_topology, net1_id, cdf_1to2, reliability_net1_to_net2, net2_id, cdf_2to1, reliability_net2_to_net1);
+//					}
+//				}
+//
+//				/* normally this would happen at the event exe time */
+//
+//				/* build up our knowledge of the network */
+//				cdf_tp cdf_latency_1to2 = g_hash_table_lookup(wo->loaded_cdfs, &op->cdf_id_latency_1to2);
+//				cdf_tp cdf_latency_2to1 = g_hash_table_lookup(wo->loaded_cdfs, &op->cdf_id_latency_2to1);
+//
+//				simnet_graph_add_edge(wo->network_topology, op->network1_id, cdf_latency_1to2, op->reliability_1to2,
+//						op->network2_id, cdf_latency_2to1, op->reliability_2to1);
+//
+//				break;
+//			}
+//			case OP_CREATE_HOSTNAME: {
+//				debug("OP_CREATE_HOSTNAME");
+//
+//				gchar* base_hostname = op->arguments[0].v.string_val;
+//
+//				/* normally this would happen at the event exe time */
+//
+//				gchar* base_hostname = malloc(sizeof(op->base_hostname));
+//				strncpy(base_hostname, op->base_hostname, sizeof(op->base_hostname));
+//
+//				g_hash_table_insert(wo->hostname_tracking, gint_key(op->id), base_hostname);
+//
+//				break;
+//			}
+//			case OP_CREATE_NODES: {
+//				debug("OP_CREATE_NODES");
+//
+//				/* make sure we have the dsim variable data */
+//				if(dsimop->arguments[1].v.var_val &&
+//						dsimop->arguments[1].v.var_val->data_type == dsim_vartracker_type_modtrack &&
+//						dsimop->arguments[1].v.var_val->data &&
+//						dsimop->arguments[2].v.var_val &&
+//						dsimop->arguments[2].v.var_val->data_type == dsim_vartracker_type_nettrack &&
+//						dsimop->arguments[2].v.var_val->data &&
+//						dsimop->arguments[3].v.var_val &&
+//						dsimop->arguments[3].v.var_val->data_type == dsim_vartracker_type_basehostnametrack &&
+//						dsimop->arguments[3].v.var_val->data &&
+//						dsimop->arguments[6].v.var_val &&
+//						dsimop->arguments[6].v.var_val->data_type == dsim_vartracker_type_cdftrack &&
+//						dsimop->arguments[6].v.var_val->data) {
+//
+//					/* must have one cdf, but the other one can be anything if not a cdf, it will be ignored */
+//					gint n_cdfs = 0;
+//					if(dsimop->arguments[4].v.var_val &&
+//						dsimop->arguments[4].v.var_val->data_type == dsim_vartracker_type_cdftrack &&
+//						dsimop->arguments[4].v.var_val->data) {
+//						n_cdfs++;
+//					}
+//					if(dsimop->arguments[5].v.var_val &&
+//						dsimop->arguments[5].v.var_val->data_type == dsim_vartracker_type_cdftrack &&
+//						dsimop->arguments[5].v.var_val->data) {
+//						n_cdfs++;
+//					}
+//
+//					if(n_cdfs < 1) {
+//						dlogf(LOG_ERR, "SMaster: Invalid DSIM file submitted. Please use at least one bandwidth cdf for node creation.\n");
+//						return;
+//					}
+//
+//					guint quantity = ((guint)(dsimop->arguments[0].v.gdouble_val));
+//					sim_master_tracker_tp hostname_tracker = dsimop->arguments[3].v.var_val->data;
+//
+//					/* multi node creation. split the job up. */
+//					for(gint i = 0; i < quantity; i++) {
+//						guint slave_id = i % master->num_slaves;
+//						nb_op = simop_nbdf_encode(dsimop, hostname_tracker->counter++);
+//						dvn_packet_route(DVNPACKET_SLAVE, DVNPACKET_LAYER_SIM, slave_id, SIM_FRAME_OP, nb_op);
+//						nbdf_free(nb_op);
+//					}
+//				}
+//
+//				/* normally this would happen at the event exe time */
+//
+//				module_tp  module = module_get_module(wo->mod_mgr, op->plugin_id);
+//
+//				if(!module)
+//					return 1;
+//
+//				debugf("SWorker (%d): Spawning node @%llu.\n", wo->process_id, sop->target_time);
+//
+//				/* every node contains its own context */
+//				context_provider_tp context_provider = malloc(sizeof(context_provider_t));
+//
+//				if(!context_provider)
+//					printfault(EXIT_NOMEM, "sim_worker_opexec_cnodes: Out of memory");
+//
+//				/* assign an IP and start tracking */
+//				in_addr_t addr = vci_create_ip(wo->vci_mgr, op->network_id, context_provider);
+//
+//				if(addr == INADDR_NONE) {
+//					dlogf(LOG_ERR, "SWorker: Failure to create ip. cant instantiate node!\n");
+//					return 1;
+//				}
+//
+//				/* get bandwidth */
+//				guint32 KBps_up = 0;
+//				guint32 KBps_down = 0;
+//
+//				/* if we only have 1 id, we have symmetric bandwidth, otherwise asym as specified by cdfs */
+//				if(op->cdf_id_bandwidth_up == 0 || op->cdf_id_bandwidth_down == 0) {
+//					guint sym_id = op->cdf_id_bandwidth_up != 0 ? op->cdf_id_bandwidth_up : op->cdf_id_bandwidth_down;
+//					cdf_tp sym = g_hash_table_lookup(wo->loaded_cdfs, &sym_id);
+//					KBps_up = KBps_down = (guint32)cdf_random_value(sym);
+//				} else {
+//					cdf_tp up = g_hash_table_lookup(wo->loaded_cdfs, &op->cdf_id_bandwidth_up);
+//					cdf_tp down = g_hash_table_lookup(wo->loaded_cdfs, &op->cdf_id_bandwidth_down);
+//					KBps_up = (guint32)cdf_random_value(up);
+//					KBps_down = (guint32)cdf_random_value(down);
+//				}
+//
+//				/* create unique hostname. master tells us what id we should prepend to ensure uniqueness */
+//				gchar* basename = g_hash_table_lookup(wo->hostname_tracking, &op->hostname_id);
+//				if(basename == NULL) {
+//					dlogf(LOG_ERR, "SWorker: Failure to create hostname. cant instantiate node!\n");
+//					return 1;
+//				}
+//
+//				gchar hostname[SIMOP_STRING_LEN];
+//				if(op->hostname_unique_counter == 0) {
+//					snprintf(hostname, SIMOP_STRING_LEN, "%s", basename);
+//				} else {
+//					snprintf(hostname, SIMOP_STRING_LEN, "%u.%s", op->hostname_unique_counter, basename);
+//				}
+//
+//				/* add this nodes hostname, etc,  to resolver map */
+//				resolver_add(wo->resolver, hostname, addr, 0, KBps_down, KBps_up);
+//
+//
+//				cdf_tp cpu_speed_cdf = g_hash_table_lookup(wo->loaded_cdfs, &op->cdf_id_cpu_speed);
+//				guint64 cpu_speed_Bps = (guint64)cdf_random_value(cpu_speed_cdf);
+//
+//				/* create vnetwork management */
+//				context_provider->vsocket_mgr = vsocket_mgr_create(context_provider, addr, KBps_down, KBps_up, cpu_speed_Bps);
+//
+//				/* allocate module memory */
+//				context_provider->modinst = module_create_instance(module, addr);
+//
+//				/* setup node logging channel */
+//				context_provider->log_channel = 0;
+//				context_provider->log_level = 1;
+//
+//				/* FIXME the following mappings never get removed, but probably should when
+//				 * sim_worker_destroy_node is called.
+//				 * this means removing from resolver and sending out to all other workers
+//				 * so they can too. */
+//
+//				/* other workers track the node's network membership and name-addr map */
+//				nbdf_tp vci_net_track = nbdf_construct("iasii", op->network_id, addr, hostname,
+//						KBps_down, KBps_up);
+//				dvn_packet_route(DVNPACKET_GLOBAL_BCAST, DVNPACKET_LAYER_SIM, 0, SIM_FRAME_TRACK, vci_net_track);
+//				nbdf_free(vci_net_track);
+//
+//				/* parse the cl_args ginto separate strings */
+//				GQueue *args = g_queue_new();
+//				gchar* result = strtok(op->cl_args, " ");
+//				while(result != NULL) {
+//					g_queue_push_tail(args, result);
+//					result = strtok(NULL, " ");
+//				}
+//
+//				/* setup for instantiation */
+//				gint argc = g_queue_get_length(args);
+//				gchar* argv[argc];
+//				gint argi = 0;
+//				for(argi = 0; argi < argc; argi++) {
+//					argv[argi] = g_queue_pop_head(args);
+//				}
+//				g_queue_free(args);
+//
+//				dlogf(LOG_MSG, "SWorker: Instantiating node, ip %s, hostname %s, upstream %u KBps, downstream %u KBps\n", inet_ntoa_t(addr), hostname, KBps_up, KBps_down);
+//
+//				/* call module instantiation */
+//				context_execute_instantiate(context_provider, argc, argv);
+//
+//				break;
+//			}
+//			case OP_END: {
+//				debug("OP_END");
+//
+//				SimulationTime end_time = (SimulationTime) op->target_time;
+//
+//				/* normally this would happen at the event exe time */
+//
+////				wo->mode = sim_worker_mode_complete;
+//				// actually should set kill time
+//				g_atomic_int_inc(&(shadow_engine->protect.isKilled));
+//
+//				break;
+//			}
+//			default: {
+//				error("Unknown dsim operation!?");
+//				break;
+//			}
+//		}
+//	}
 
 	return FALSE;
 }
@@ -293,9 +570,9 @@ gint engine_run(Engine* engine) {
 
 	/* parse user simulation script, create jobs */
 	debug("parsing simulation script");
-	if(engine_parse_dsim(engine) == FALSE) {
-		return -1;
-	}
+//	if(engine_parse_dsim(engine) == FALSE) {
+//		return -1;
+//	}
 
 	// *******************************
 	// XXX: take this out when we actually parse DSIM and get real nodes, etc
@@ -308,9 +585,6 @@ gint engine_run(Engine* engine) {
 	GList* node_list = registry_getAll(engine->registry, NODES);
 	g_list_foreach(node_list, _addNodeEvents, engine);
 	g_list_free(node_list);
-	SpinEvent* se = spin_new(1);
-	worker_scheduleEvent((Event*)se, SIMTIME_ONE_SECOND);
-	worker_scheduleEvent((Event*)killengine_new(), SIMTIME_ONE_HOUR);
 	// *******************************
 
 	if(engine->config->nWorkerThreads > 0) {

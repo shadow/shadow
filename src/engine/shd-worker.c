@@ -91,7 +91,7 @@ void worker_executeEvent(gpointer data, gpointer user_data) {
 		}
 
 		/* do the local task */
-		event_execute(worker->cached_event);
+		event_run(worker->cached_event);
 
 		/* update times */
 		worker->clock_last = worker->clock_now;
@@ -115,34 +115,36 @@ void worker_executeEvent(gpointer data, gpointer user_data) {
 	/* worker thread now returns to the pool */
 }
 
-void worker_scheduleEvent(Event* event, SimulationTime nano_delay) {
-	MAGIC_ASSERT(event);
-
-	/* get our thread-private worker */
-	Worker* worker = worker_getPrivate();
-
-	/* when the event will execute. this will be approximate if multi-threaded,
-	 * since the master's time jumps between scheduling 'intervals'.
-	 * i.e. some threads may execute events slightly after this one before
-	 * this one actually gets executed by the engine. */
-	event->time = worker->clock_now + nano_delay;
-
-	/* always push to master queue since there is no node associated */
-	engine_pushEvent(worker->cached_engine, event);
+void worker_scheduleAction(Action* action, SimulationTime nano_delay) {
+	/* its not clear to me that we should schedule "actions": scheduled actions
+	 * are basically events
+	 */
+//	MAGIC_ASSERT(action);
+//
+//	/* get our thread-private worker */
+//	Worker* worker = worker_getPrivate();
+//
+//	/* when the event will execute. this will be approximate if multi-threaded,
+//	 * since the master's time jumps between scheduling 'intervals'.
+//	 * i.e. some threads may execute events slightly after this one before
+//	 * this one actually gets executed by the engine. */
+//	action->time = worker->clock_now + nano_delay;
+//
+//	/* always push to master queue since there is no node associated */
+//	engine_pushEvent(worker->cached_engine, action);
 }
 
-void worker_scheduleNodeEvent(NodeEvent* event, SimulationTime nano_delay, gint receiver_node_id) {
+void worker_scheduleEvent(Event* event, SimulationTime nano_delay, gint receiver_node_id) {
 	/* TODO create accessors, or better yet refactor the work to event class */
 	MAGIC_ASSERT(event);
-	Event* super = &(event->super);
-	MAGIC_ASSERT(super);
+	MAGIC_ASSERT((&(event->super)));
 
 	/* get our thread-private worker */
 	Worker* worker = worker_getPrivate();
 	Engine* engine = worker->cached_engine;
 
 	/* when the event will execute */
-	event->super.time = worker->clock_now + nano_delay;
+	event->time = worker->clock_now + nano_delay;
 
 	/* parties involved. sender may be NULL, receiver may not! */
 	Node* sender = worker->cached_node;
@@ -156,7 +158,7 @@ void worker_scheduleNodeEvent(NodeEvent* event, SimulationTime nano_delay, gint 
 	if(engine_getNumThreads(engine) > 0) {
 		/* multi threaded, figure out where to push event */
 		if(node_equal(receiver, sender) &&
-				(event->super.time < worker->clock_barrier))
+				(event->time < worker->clock_barrier))
 		{
 			/* this is for our current node, push to its local queue. its ok if
 			 * the event time inside of the min delay since its a local event */
@@ -169,10 +171,10 @@ void worker_scheduleNodeEvent(NodeEvent* event, SimulationTime nano_delay, gint 
 			SimulationTime min_time = worker->clock_now + jump;
 
 			/* warn and adjust time if needed */
-			if(event->super.time < min_time) {
+			if(event->time < min_time) {
 				warning("Inter-node event time %lu changed to %lu due to minimum delay %lu",
-						event->super.time, min_time, jump);
-				event->super.time = min_time;
+						event->time, min_time, jump);
+				event->time = min_time;
 			}
 
 			/* send event to node's mailbox */

@@ -19,45 +19,48 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <glib.h>
 #include "shadow.h"
 
-NodeEventVTable spin2_vtable = {
-	(NodeEventExecuteFunc)spin2_execute,
-	(NodeEventFreeFunc)spin2_free,
+RunnableVTable event_vtable = {
+	(RunnableRunFunc) event_run,
+	(RunnableFreeFunc) event_free,
 	MAGIC_VALUE
 };
 
-Spin2Event* spin2_new(guint seconds) {
-	Spin2Event* event = g_new(Spin2Event, 1);
+void event_init(Event* event, EventVTable* vtable) {
+	g_assert(event && vtable);
+
+	runnable_init(&(event->super), &event_vtable);
+
 	MAGIC_INIT(event);
+	MAGIC_INIT(vtable);
 
-	nodeevent_init(&(event->super), &spin2_vtable);
-	event->spin_seconds = seconds;
-
-	return event;
+	event->vtable = vtable;
 }
 
-void spin2_free(Spin2Event* event) {
+void event_run(gpointer data) {
+	Event* event = data;
 	MAGIC_ASSERT(event);
+	MAGIC_ASSERT(event->vtable);
+	MAGIC_ASSERT(event->node);
+
+	event->vtable->run(event, event->node);
+}
+
+gint event_compare(gconstpointer a, gconstpointer b, gpointer user_data) {
+	const Event* ea = a;
+	const Event* eb = b;
+	MAGIC_ASSERT(ea);
+	MAGIC_ASSERT(eb);
+	return ea->time > eb->time ? +1 : ea->time == eb->time ? 0 : -1;
+}
+
+void event_free(gpointer data) {
+	Event* event = data;
+	MAGIC_ASSERT(event);
+	MAGIC_ASSERT(event->vtable);
+	MAGIC_ASSERT(event->node);
+
 	MAGIC_CLEAR(event);
-	g_free(event);
-}
-
-void spin2_execute(Spin2Event* event, Node* node) {
-	MAGIC_ASSERT(event);
-	MAGIC_ASSERT(node);
-
-	debug("executing spin event for %u seconds", event->spin_seconds);
-
-	guint64 i = 1000000 * event->spin_seconds;
-	while(i--) {
-		continue;
-	}
-
-	Spin2Event* se = spin2_new(event->spin_seconds);
-	SimulationTime t = 1;
-	worker_scheduleNodeEvent((NodeEvent*)se, t, node->node_id);
-	Spin2Event* se2 = spin2_new(event->spin_seconds);
-	worker_scheduleNodeEvent((NodeEvent*)se2, t, 0);
+	event->vtable->free(event);
 }

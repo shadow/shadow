@@ -19,29 +19,28 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SHD_NODEEVENT_H_
-#define SHD_NODEEVENT_H_
+#ifndef SHD_EVENT_H_
+#define SHD_EVENT_H_
 
 #include "shadow.h"
 
-typedef struct _NodeEvent NodeEvent;
-typedef struct _NodeEventVTable NodeEventVTable;
+typedef struct _Event Event;
+typedef struct _EventVTable EventVTable;
 
 /* FIXME: forward declaration to avoid circular dependencies... */
 typedef struct _Node Node;
 
 /* required functions */
-typedef void (*NodeEventExecuteFunc)(NodeEvent* event, Node* node);
-typedef void (*NodeEventFreeFunc)(NodeEvent* event);
+typedef void (*EventRunFunc)(Event* event, Node* node);
+typedef void (*EventFreeFunc)(Event* event);
 
 /*
  * Virtual function table for base event, storing pointers to required
  * callable functions.
  */
-struct _NodeEventVTable {
-	NodeEventExecuteFunc execute;
-	NodeEventFreeFunc free;
-
+struct _EventVTable {
+	EventRunFunc run;
+	EventFreeFunc free;
 	MAGIC_DECLARE;
 };
 
@@ -49,16 +48,17 @@ struct _NodeEventVTable {
  * A basic event connected to a specific node. This extends event, and is meant
  * to be extended by most other events.
  */
-struct _NodeEvent {
-	Event super;
-	NodeEventVTable* vtable;
+struct _Event {
+	Runnable super;
+	EventVTable* vtable;
+	SimulationTime time;
 	Node* node;
-
 	MAGIC_DECLARE;
 };
 
-void nodeevent_init(NodeEvent* event, NodeEventVTable* vtable);
-void nodeevent_execute(NodeEvent* event);
-void nodeevent_free(gpointer data);
+void event_init(Event* event, EventVTable* vtable);
+void event_run(gpointer data);
+gint event_compare(gconstpointer eventa, gconstpointer eventb, gpointer user_data);
+void event_free(gpointer data);
 
-#endif /* SHD_NODEEVENT_H_ */
+#endif /* SHD_EVENT_H_ */

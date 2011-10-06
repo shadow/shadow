@@ -19,31 +19,29 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SHADOW_H_
-#define SHADOW_H_
+#include "shadow.h"
 
-#include <glib.h>
-#include <gmodule.h>
+RunnableVTable loadcdf_vtable = {
+	(RunnableRunFunc) loadcdf_run,
+	(RunnableFreeFunc) loadcdf_free,
+	MAGIC_VALUE
+};
 
-#include "shd-config.h"
+LoadCDFAction* loadcdf_new(guint seconds) {
+	LoadCDFAction* action = g_new(LoadCDFAction, 1);
+	MAGIC_INIT(action);
 
-#include "engine/shd-main.h"
-#include "engine/shd-configuration.h"
+	action_init(&(action->super), &loadcdf_vtable);
 
-#include "utility/shd-registry.h"
+	return action;
+}
 
-#include "runnable/shd-runnable.h"
-#include "runnable/event/shd-event.h"
-#include "runnable/event/shd-spine.h"
-#include "runnable/action/shd-action.h"
-#include "runnable/action/shd-spina.h"
+void loadcdf_run(LoadCDFAction* action) {
+	MAGIC_ASSERT(action);
+}
 
-#include "node/shd-node.h"
-
-#include "engine/shd-logging.h"
-#include "engine/shd-engine.h"
-#include "engine/shd-worker.h"
-
-extern Engine* shadow_engine;
-
-#endif /* SHADOW_H_ */
+void loadcdf_free(LoadCDFAction* action) {
+	MAGIC_ASSERT(action);
+	MAGIC_CLEAR(action);
+	g_free(action);
+}

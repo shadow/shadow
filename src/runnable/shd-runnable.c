@@ -19,42 +19,26 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <glib.h>
 #include "shadow.h"
 
-EventVTable spin_vtable = {
-	(EventExecuteFunc)spin_execute,
-	(EventFreeFunc)spin_free,
-	MAGIC_VALUE
-};
-
-SpinEvent* spin_new(guint seconds) {
-	SpinEvent* event = g_new(SpinEvent, 1);
-	MAGIC_INIT(event);
-
-	event_init(&(event->super), &spin_vtable);
-	event->spin_seconds = seconds;
-
-	return event;
+void runnable_init(Runnable* r, RunnableVTable* vtable) {
+	g_assert(r && vtable);
+	MAGIC_INIT(r);
+	MAGIC_INIT(vtable);
+	r->vtable = vtable;
 }
 
-void spin_free(SpinEvent* event) {
-	MAGIC_ASSERT(event);
-	MAGIC_CLEAR(event);
-	g_free(event);
+void runnable_run(gpointer data) {
+	Runnable* r = data;
+	MAGIC_ASSERT(r);
+	MAGIC_ASSERT(r->vtable);
+	r->vtable->run(r);
 }
 
-void spin_execute(SpinEvent* event) {
-	MAGIC_ASSERT(event);
-
-	debug("executing spin event for %u seconds", event->spin_seconds);
-
-	guint64 i = 100000000 * event->spin_seconds;
-	while(i--) {
-		continue;
-	}
-
-	SpinEvent* se = spin_new(event->spin_seconds);
-	SimulationTime t = event->spin_seconds * SIMTIME_ONE_SECOND;
-	worker_scheduleEvent((Event*)se, t);
+void runnable_free(gpointer data) {
+	Runnable* r = data;
+	MAGIC_ASSERT(r);
+	MAGIC_ASSERT(r->vtable);
+	MAGIC_CLEAR(r);
+	r->vtable->free(r);
 }

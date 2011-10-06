@@ -21,37 +21,27 @@
 
 #include "shadow.h"
 
-EventVTable nodeevent_vtable = {
-	(EventExecuteFunc)nodeevent_execute,
-	(EventFreeFunc)nodeevent_free,
+RunnableVTable generatecdf_vtable = {
+	(RunnableRunFunc) generatecdf_run,
+	(RunnableFreeFunc) generatecdf_free,
 	MAGIC_VALUE
 };
 
-void nodeevent_init(NodeEvent* event, NodeEventVTable* vtable) {
-	g_assert(event && vtable);
+GenerateCDFAction* generatecdf_new(guint seconds) {
+	GenerateCDFAction* action = g_new(GenerateCDFAction, 1);
+	MAGIC_INIT(action);
 
-	event_init(&(event->super), &nodeevent_vtable);
+	action_init(&(action->super), &generatecdf_vtable);
 
-	MAGIC_INIT(event);
-	MAGIC_INIT(vtable);
-
-	event->vtable = vtable;
+	return action;
 }
 
-void nodeevent_execute(NodeEvent* event) {
-	MAGIC_ASSERT(event);
-	MAGIC_ASSERT(event->vtable);
-	MAGIC_ASSERT(event->node);
-
-	event->vtable->execute(event, event->node);
+void generatecdf_run(GenerateCDFAction* action) {
+	MAGIC_ASSERT(action);
 }
 
-void nodeevent_free(gpointer data) {
-	NodeEvent* event = data;
-	MAGIC_ASSERT(event);
-	MAGIC_ASSERT(event->vtable);
-	MAGIC_ASSERT(event->node);
-
-	MAGIC_CLEAR(event);
-	event->vtable->free(event);
+void generatecdf_free(GenerateCDFAction* action) {
+	MAGIC_ASSERT(action);
+	MAGIC_CLEAR(action);
+	g_free(action);
 }

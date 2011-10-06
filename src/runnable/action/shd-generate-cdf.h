@@ -19,22 +19,20 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SHD_SPIN2_H_
-#define SHD_SPIN2_H_
+#ifndef SHD_GENERATE_CDF_H_
+#define SHD_GENERATE_CDF_H_
 
 #include "shadow.h"
 
-typedef struct _Spin2Event Spin2Event;
+typedef struct _GenerateCDFAction GenerateCDFAction;
 
-struct _Spin2Event {
-	NodeEvent super;
-	guint spin_seconds;
-
+struct _GenerateCDFAction {
+	Action super;
 	MAGIC_DECLARE;
 };
 
-Spin2Event* spin2_new(guint seconds);
-void spin2_free(Spin2Event* event);
-void spin2_execute(Spin2Event* event, Node* node);
+GenerateCDFAction* generatecdf_new(guint seconds);
+void generatecdf_run(GenerateCDFAction* action);
+void generatecdf_free(GenerateCDFAction* action);
 
-#endif /* SHD_SPIN2_H_ */
+#endif /* SHD_GENERATE_CDF_H_ */

@@ -19,31 +19,29 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SHADOW_H_
-#define SHADOW_H_
+#include "shadow.h"
 
-#include <glib.h>
-#include <gmodule.h>
+RunnableVTable loadplugin_vtable = {
+	(RunnableRunFunc) loadplugin_run,
+	(RunnableFreeFunc) loadplugin_free,
+	MAGIC_VALUE
+};
 
-#include "shd-config.h"
+LoadPluginAction* loadplugin_new(guint seconds) {
+	LoadPluginAction* action = g_new(LoadPluginAction, 1);
+	MAGIC_INIT(action);
 
-#include "engine/shd-main.h"
-#include "engine/shd-configuration.h"
+	action_init(&(action->super), &loadplugin_vtable);
 
-#include "utility/shd-registry.h"
+	return action;
+}
 
-#include "runnable/shd-runnable.h"
-#include "runnable/event/shd-event.h"
-#include "runnable/event/shd-spine.h"
-#include "runnable/action/shd-action.h"
-#include "runnable/action/shd-spina.h"
+void loadplugin_run(LoadPluginAction* action) {
+	MAGIC_ASSERT(action);
+}
 
-#include "node/shd-node.h"
-
-#include "engine/shd-logging.h"
-#include "engine/shd-engine.h"
-#include "engine/shd-worker.h"
-
-extern Engine* shadow_engine;
-
-#endif /* SHADOW_H_ */
+void loadplugin_free(LoadPluginAction* action) {
+	MAGIC_ASSERT(action);
+	MAGIC_CLEAR(action);
+	g_free(action);
+}

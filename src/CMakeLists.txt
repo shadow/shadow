@@ -25,11 +25,11 @@ set(shadow2_srcs
     engine/shd-engine.c
     engine/shd-worker.c
     
-    events/shd-event.c
-    events/shd-nodeevent.c
-    events/shd-spin.c
-    events/shd-spin2.c
-    events/shd-killengine.c
+    runnable/shd-runnable.c
+    runnable/event/shd-event.c
+    runnable/event/shd-spine.c
+    runnable/action/shd-action.c
+    runnable/action/shd-spina.c
     
     node/shd-node.c
     
