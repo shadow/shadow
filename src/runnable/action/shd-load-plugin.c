@@ -27,17 +27,33 @@ RunnableVTable loadplugin_vtable = {
 	MAGIC_VALUE
 };
 
-LoadPluginAction* loadplugin_new(guint seconds) {
+LoadPluginAction* loadplugin_new(gint id, Registry* registry, GString* filename) {
+	g_assert(registry && filename);
 	LoadPluginAction* action = g_new(LoadPluginAction, 1);
 	MAGIC_INIT(action);
 
 	action_init(&(action->super), &loadplugin_vtable);
+
+	action->id = id;
+	action->registry = registry;
+	action->filename = filename;
 
 	return action;
 }
 
 void loadplugin_run(LoadPluginAction* action) {
 	MAGIC_ASSERT(action);
+
+//	module_tp mod = module_load(wo->mod_mgr, op->id, op->filepath);
+//
+//	if(mod != NULL) {
+//		context_execute_init(mod);
+//	} else {
+//		gchar buffer[200];
+//
+//		snprintf(buffer,200,"Unable to load and validate '%s'", op->filepath);
+//		sim_worker_abortsim(wo, buffer);
+//	}
 }
 
 void loadplugin_free(LoadPluginAction* action) {

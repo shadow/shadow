@@ -37,6 +37,14 @@
 #include "runnable/event/shd-spine.h"
 #include "runnable/action/shd-action.h"
 #include "runnable/action/shd-spina.h"
+#include "runnable/action/shd-spina.h"
+#include "runnable/action/shd-connect-network.h"
+#include "runnable/action/shd-create-hostname.h"
+#include "runnable/action/shd-create-network.h"
+#include "runnable/action/shd-create-node.h"
+#include "runnable/action/shd-generate-cdf.h"
+#include "runnable/action/shd-load-cdf.h"
+#include "runnable/action/shd-load-plugin.h"
 
 #include "node/shd-node.h"
 

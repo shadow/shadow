@@ -80,7 +80,7 @@ void worker_executeEvent(gpointer data, gpointer user_data) {
 	worker->cached_event = (Event*) node_popTask(worker->cached_node);
 
 	/* process all events in the nodes local queue */
-	while(!engine_isKilled(engine) && worker->cached_event)
+	while(worker->cached_event)
 	{
 		MAGIC_ASSERT(worker->cached_event);
 

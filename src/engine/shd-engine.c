@@ -97,8 +97,8 @@ static gint _engine_processEvents(Engine* engine) {
 	Event* next_event = g_async_queue_try_pop(engine->masterEventQueue);
 
 	/* process all events in the priority queue */
-	while(!engine->protect.isKilled && next_event &&
-			next_event->time < engine->executeWindowEnd)
+	while(next_event && (next_event->time < engine->executeWindowEnd) &&
+			(next_event->time < engine->endTime))
 	{
 		/* get next event */
 		worker->cached_event = next_event;
@@ -135,7 +135,8 @@ static void _engine_manageExecutableMail(gpointer data, gpointer user_data) {
 
 	/* pop mail from mailbox, check that its in window, push as a task */
 	Event* event = node_popMail(node);
-	while(event && (event->time < engine->executeWindowEnd)) {
+	while(event && (event->time < engine->executeWindowEnd)
+			&& (event->time < engine->endTime)) {
 		g_assert(event->time >= engine->executeWindowStart);
 		node_pushTask(node, event);
 		event = node_popMail(node);
@@ -161,7 +162,7 @@ static gint _engine_distributeEvents(Engine* engine) {
 	MAGIC_ASSERT(engine);
 
 	/* process all events in the priority queue */
-	while(!g_atomic_int_get(&(engine->protect.isKilled)))
+	while(engine->executeWindowStart < engine->endTime)
 	{
 		/* set to one, so after adding nodes we can decrement and check
 		 * if all nodes are done by checking for 0 */
@@ -237,35 +238,19 @@ static gboolean engine_parse_dsim(Engine* engine) {
 //			case OP_LOAD_PLUGIN: {
 //				debug("OP_LOAD_PLUGIN");
 //
-//				gchar* plugin_filepath = op->arguments[0].v.string_val;
-//
-//				/* normally this would happen at the event exe time */
-//
-//				module_tp mod = module_load(wo->mod_mgr, op->id, op->filepath);
-//
-//				if(mod != NULL) {
-//					context_execute_init(mod);
-//				} else {
-//					gchar buffer[200];
-//
-//					snprintf(buffer,200,"Unable to load and validate '%s'", op->filepath);
-//					sim_worker_abortsim(wo, buffer);
-//				}
+//				GString* plugin_filepath = g_string_new(op->arguments[0].v.string_val);
+//				gint id = engine_generateModuleID(engine);
+//				LoadPluginAction* a = loadplugin_new(id, engine->registry, plugin_filepath);
 //
 //				break;
 //			}
 //			case OP_LOAD_CDF: {
 //				debug("OP_LOAD_CDF");
-//				gchar* cdf_filepath = op->arguments[0].v.string_val;
 //
-//				cdf_tp cdf = cdf_create(cdf_filepath);
+//				GString* cdf_filepath = g_string_new(op->arguments[0].v.string_val);
+//				gint id = engine_generateCDFID(engine);
+//				LoadCDFAction* a = loadcdf_new(id, engine->registry, cdf_filepath);
 //
-//				/* normally this would happen at the event exe time */
-//
-//				cdf_tp cdf = cdf_create(op->filepath);
-//				if(cdf != NULL) {
-//					g_hash_table_insert(wo->loaded_cdfs, gint_key(op->id), cdf);
-//				}
 //				break;
 //			}
 //			case OP_GENERATE_CDF: {
@@ -627,6 +612,21 @@ gint engine_generateNodeID(Engine* engine) {
 	return g_atomic_int_exchange_and_add(&(engine->protect.nodeIDCounter), 1);
 }
 
+gint engine_generateNetworkID(Engine* engine) {
+	MAGIC_ASSERT(engine);
+	return g_atomic_int_exchange_and_add(&(engine->protect.networkIDCounter), 1);
+}
+
+gint engine_generateCDFID(Engine* engine) {
+	MAGIC_ASSERT(engine);
+	return g_atomic_int_exchange_and_add(&(engine->protect.cdfIDCounter), 1);
+}
+
+gint engine_generateModuleID(Engine* engine) {
+	MAGIC_ASSERT(engine);
+	return g_atomic_int_exchange_and_add(&(engine->protect.moduleIDCounter), 1);
+}
+
 gint engine_getNumThreads(Engine* engine) {
 	MAGIC_ASSERT(engine);
 	return engine->config->nWorkerThreads;
@@ -640,11 +640,6 @@ SimulationTime engine_getMinTimeJump(Engine* engine) {
 SimulationTime engine_getExecutionBarrier(Engine* engine) {
 	MAGIC_ASSERT(engine);
 	return engine->executeWindowEnd;
-}
-
-gboolean engine_isKilled(Engine* engine) {
-	MAGIC_ASSERT(engine);
-	return g_atomic_int_get(&(engine->protect.isKilled)) > 0;
 }
 
 void engine_notifyNodeProcessed(Engine* engine) {

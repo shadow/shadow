@@ -28,10 +28,13 @@ typedef struct _LoadPluginAction LoadPluginAction;
 
 struct _LoadPluginAction {
 	Action super;
+	gint id;
+	Registry* registry;
+	GString* filename;
 	MAGIC_DECLARE;
 };
 
-LoadPluginAction* loadplugin_new(guint seconds);
+LoadPluginAction* loadplugin_new(gint id, Registry* registry, GString* filename);
 void loadplugin_run(LoadPluginAction* action);
 void loadplugin_free(LoadPluginAction* action);
 

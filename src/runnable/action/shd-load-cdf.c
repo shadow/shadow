@@ -27,17 +27,26 @@ RunnableVTable loadcdf_vtable = {
 	MAGIC_VALUE
 };
 
-LoadCDFAction* loadcdf_new(guint seconds) {
+LoadCDFAction* loadcdf_new(gint id, Registry* registry, GString* filename) {
 	LoadCDFAction* action = g_new(LoadCDFAction, 1);
 	MAGIC_INIT(action);
 
 	action_init(&(action->super), &loadcdf_vtable);
+
+	action->id = id;
+	action->registry = registry;
+	action->filename = filename;
 
 	return action;
 }
 
 void loadcdf_run(LoadCDFAction* action) {
 	MAGIC_ASSERT(action);
+
+//	cdf_tp cdf = cdf_create(op->filepath);
+//	if(cdf != NULL) {
+//		g_hash_table_insert(wo->loaded_cdfs, gint_key(op->id), cdf);
+//	}
 }
 
 void loadcdf_free(LoadCDFAction* action) {

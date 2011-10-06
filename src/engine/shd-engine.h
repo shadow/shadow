@@ -27,7 +27,7 @@
 typedef enum _EngineStorage EngineStorage;
 
 enum _EngineStorage {
-	NODES, NETWORKS, CDFS,
+	NODES, NETWORKS, CDFS, HOSTNAMES, MODULES,
 };
 
 typedef struct _Engine Engine;
@@ -44,6 +44,8 @@ struct _Engine {
 	SimulationTime executeWindowStart;
 	/* end of current window of execution (start + min_time_jump) */
 	SimulationTime executeWindowEnd;
+	/* the simulator should attempt to end immediately after this time */
+	SimulationTime endTime;
 
 	/*
 	 * Keep track of all sorts of global info: simulation nodes, networks, etc.
@@ -80,17 +82,15 @@ struct _Engine {
 	 * they are thread safe
 	 */
 	struct {
-		/* id counter for worker objects */
-		volatile gint workerIDCounter;
-
-		/* id counter for node objects */
-		volatile gint nodeIDCounter;
-
-		/* the simulation should attempt to end immediately if this is > 0 */
-		volatile gint isKilled;
-
 		/* number of nodes left to process in current interval */
 		volatile gint nNodesToProcess;
+
+		/* id generation counters */
+		volatile gint workerIDCounter;
+		volatile gint nodeIDCounter;
+		volatile gint networkIDCounter;
+		volatile gint cdfIDCounter;
+		volatile gint moduleIDCounter;
 	} protect;
 	MAGIC_DECLARE;
 };
@@ -106,7 +106,6 @@ gint engine_generateNodeID(Engine* engine);
 gint engine_getNumThreads(Engine* engine);
 SimulationTime engine_getMinTimeJump(Engine* engine);
 SimulationTime engine_getExecutionBarrier(Engine* engine);
-gboolean engine_isKilled(Engine* engine);
 void engine_notifyNodeProcessed(Engine* engine);
 
 #endif /* SHD_ENGINE_H_ */

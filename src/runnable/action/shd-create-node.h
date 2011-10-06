@@ -19,29 +19,20 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#ifndef SHD_CREATE_NODE_H_
+#define SHD_CREATE_NODE_H_
+
 #include "shadow.h"
 
-RunnableVTable createnodes_vtable = {
-	(RunnableRunFunc) createnodes_run,
-	(RunnableFreeFunc) createnodes_free,
-	MAGIC_VALUE
+typedef struct _CreateNodeAction CreateNodeAction;
+
+struct _CreateNodeAction {
+	Action super;
+	MAGIC_DECLARE;
 };
 
-CreateNodesAction* createnodes_new(guint seconds) {
-	CreateNodesAction* action = g_new(CreateNodesAction, 1);
-	MAGIC_INIT(action);
+CreateNodeAction* createnode_new(guint seconds);
+void createnode_run(CreateNodeAction* action);
+void createnode_free(CreateNodeAction* action);
 
-	action_init(&(action->super), &createnodes_vtable);
-
-	return action;
-}
-
-void createnodes_run(CreateNodesAction* action) {
-	MAGIC_ASSERT(action);
-}
-
-void createnodes_free(CreateNodesAction* action) {
-	MAGIC_ASSERT(action);
-	MAGIC_CLEAR(action);
-	g_free(action);
-}
+#endif /* SHD_CREATE_NODE_H_ */

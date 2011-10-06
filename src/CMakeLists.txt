@@ -30,6 +30,13 @@ set(shadow2_srcs
     runnable/event/shd-spine.c
     runnable/action/shd-action.c
     runnable/action/shd-spina.c
+    runnable/action/shd-connect-network.c
+    runnable/action/shd-create-hostname.c
+    runnable/action/shd-create-network.c
+    runnable/action/shd-create-node.c
+    runnable/action/shd-generate-cdf.c
+    runnable/action/shd-load-cdf.c
+    runnable/action/shd-load-plugin.c
     
     node/shd-node.c
     
