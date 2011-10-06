@@ -205,7 +205,7 @@ gint main (gint argc, gchar * argv[]) {
 		exit(1);
 
 	if(config.version) {
-		printf(PACKAGE_STRING " (c) 2006-2009 Tyson Malchow\n");
+		printf("Shadow (c) 2010-2011 Rob Jansen\n");
 		exit(0);
 	}
 
