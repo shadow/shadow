@@ -59,6 +59,8 @@ struct _Configuration {
 	gint minTimeJump;
 	gboolean printSoftwareVersion;
 
+	GString* dsim_filename;
+
 	MAGIC_DECLARE;
 };
 

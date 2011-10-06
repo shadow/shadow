@@ -220,9 +220,10 @@ static void _addNodeEvents(gpointer data, gpointer user_data) {
 }
 
 static gboolean engine_parse_dsim(Engine* engine) {
-	gchar* dsim_file = file_get_contents("/tmp/dsim.dsim");
+	gchar* dsim_filename = engine->config->dsim_filename->str;
+	gchar* dsim_file = file_get_contents(dsim_filename);
 	if(dsim_file == NULL){
-		warning("cant find dsim file at /tmp/dsim.dsim");
+		warning("cant find dsim file at %s", dsim_filename);
 		return FALSE;
 	}
 

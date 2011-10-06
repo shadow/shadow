@@ -26,11 +26,14 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	Configuration* c = g_new(Configuration, 1);
 	MAGIC_INIT(c);
 
-	/* set defaults */
-	c->context = g_option_context_new(NULL);
+	const gchar* required_parameters = "topology_file";
+	gint num_required = 1;
+
+	c->context = g_option_context_new(required_parameters);
 	g_option_context_set_summary(c->context, "Shadow - run real applications over simulated networks");
 	g_option_context_set_description(c->context, "Shadow description");
 
+	/* set defaults */
 	c->nWorkerThreads = 0;
 	c->minTimeJump = 10;
 	c->printSoftwareVersion = 0;
@@ -49,11 +52,21 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	/* parse args */
 	GError *error = NULL;
 	if (!g_option_context_parse(c->context, &argc, &argv, &error)) {
-		g_print("**%s**\n", error->message);
+		g_print("** %s **\n", error->message);
 		g_print(g_option_context_get_help(c->context, TRUE, NULL));
 		configuration_free(c);
 		return NULL;
 	}
+
+	/* make sure we have the required arguments. program name is first arg. */
+	if(argc < num_required + 1) {
+		g_print("** Please provide the required parameters **\n");
+		g_print(g_option_context_get_help(c->context, TRUE, NULL));
+		configuration_free(c);
+		return NULL;
+	}
+
+	c->dsim_filename = g_string_new(argv[1]);
 
 	if(c->nWorkerThreads < 0) {
 		c->nWorkerThreads = 0;
