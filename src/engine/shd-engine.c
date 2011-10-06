@@ -21,6 +21,12 @@
 
 #include "shadow.h"
 
+#include "util/heap.h"
+#include "util/btree.h"
+#include "util/global.h"
+#include "core/evtracker.h"
+#include "dsim/dsim_utils.h"
+
 Engine* engine_new(Configuration* config) {
 	MAGIC_ASSERT(config);
 
@@ -213,6 +219,69 @@ static void _addNodeEvents(gpointer data, gpointer user_data) {
 	worker_scheduleNodeEvent((NodeEvent*)se, t, node->node_id);
 }
 
+static gboolean engine_parse_dsim(Engine* engine) {
+	gchar* dsim_file = file_get_contents("/tmp/dsim.dsim");
+	if(dsim_file == NULL){
+		warning("cant find dsim file at /tmp/dsim.dsim");
+		return FALSE;
+	}
+
+	dsim_tp dsim_parsed = dsim_create(dsim_file);
+
+	operation_tp op;
+	while((op=dsim_get_nextevent(dsim_parsed, NULL, 1)))
+	{
+		switch(op->type){
+			case OP_LOAD_PLUGIN: {
+//				sim_master_dsimop_load_plugin(ma, op);
+				debug("OP_LOAD_PLUGIN");
+				break;
+			}
+			case OP_LOAD_CDF: {
+//				sim_master_dsimop_load_cdf(ma, op);
+				debug("OP_LOAD_CDF");
+				break;
+			}
+			case OP_GENERATE_CDF: {
+//				sim_master_dsimop_generate_cdf(ma, op);
+				debug("OP_GENERATE_CDF");
+				break;
+			}
+			case OP_CREATE_NETWORK: {
+//				sim_master_dsimop_create_network(ma, op);
+				debug("OP_CREATE_NETWORK");
+				break;
+			}
+			case OP_CONNECT_NETWORKS: {
+//				sim_master_dsimop_connect_networks(ma, op);
+				debug("OP_CONNECT_NETWORKS");
+				break;
+			}
+			case OP_CREATE_HOSTNAME: {
+//				sim_master_dsimop_create_hostname(ma, op);
+				debug("OP_CREATE_HOSTNAME");
+				break;
+			}
+			case OP_CREATE_NODES: {
+//				sim_master_dsimop_create_nodes(ma, op);
+				debug("OP_CREATE_NODES");
+				break;
+			}
+			case OP_END: {
+//				sim_master_dsimop_end(ma, op);
+				debug("OP_END");
+				break;
+			}
+			default: {
+				error("Unknown dsim operation!?");
+				break;
+			}
+		}
+	}
+
+	return FALSE;
+}
+
 gint engine_run(Engine* engine) {
 	MAGIC_ASSERT(engine);
 
@@ -223,6 +292,9 @@ gint engine_run(Engine* engine) {
 
 	/* parse user simulation script, create jobs */
 	debug("parsing simulation script");
+	if(engine_parse_dsim(engine) == FALSE) {
+		return -1;
+	}
 
 	// *******************************
 	// XXX: take this out when we actually parse DSIM and get real nodes, etc

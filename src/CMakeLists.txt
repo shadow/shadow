@@ -24,17 +24,26 @@ set(shadow2_srcs
     engine/shd-main.c
     engine/shd-engine.c
     engine/shd-worker.c
+    
     events/shd-event.c
     events/shd-nodeevent.c
     events/shd-spin.c
     events/shd-spin2.c
     events/shd-killengine.c
+    
     node/shd-node.c
+    
     utility/shd-registry.c
+    
+    util/utility.c
+    util/btree.c
+    util/heap.c
+    core/evtracker.c
+    
     main.c
 )
 
 include_directories(${SHADOW_SOURCE_DIR}/)
 add_executable(shadow2 ${shadow2_srcs})
-target_link_libraries(shadow2 ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES} ${GLIB_LIBRARIES})
+target_link_libraries(shadow2 shadow-dsim ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES} ${GLIB_LIBRARIES})
 install(TARGETS shadow2 DESTINATION bin)
