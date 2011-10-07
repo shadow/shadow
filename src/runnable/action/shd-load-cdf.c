@@ -28,7 +28,7 @@ RunnableVTable loadcdf_vtable = {
 };
 
 LoadCDFAction* loadcdf_new(gint id, Registry* registry, GString* filename) {
-	LoadCDFAction* action = g_new(LoadCDFAction, 1);
+	LoadCDFAction* action = g_new0(LoadCDFAction, 1);
 	MAGIC_INIT(action);
 
 	action_init(&(action->super), &loadcdf_vtable);

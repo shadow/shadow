@@ -28,7 +28,7 @@ RunnableVTable createnetwork_vtable = {
 };
 
 CreateNetworkAction* createnetwork_new(guint seconds) {
-	CreateNetworkAction* action = g_new(CreateNetworkAction, 1);
+	CreateNetworkAction* action = g_new0(CreateNetworkAction, 1);
 	MAGIC_INIT(action);
 
 	action_init(&(action->super), &createnetwork_vtable);

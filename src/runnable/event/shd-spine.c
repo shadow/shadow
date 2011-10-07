@@ -29,7 +29,7 @@ EventVTable spine_vtable = {
 };
 
 SpinEvent* spine_new(guint seconds) {
-	SpinEvent* event = g_new(SpinEvent, 1);
+	SpinEvent* event = g_new0(SpinEvent, 1);
 	MAGIC_INIT(event);
 
 	event_init(&(event->super), &spine_vtable);

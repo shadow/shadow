@@ -22,7 +22,7 @@
 #include "shadow.h"
 
 static Worker* _worker_new(gint id) {
-	Worker* worker = g_new(Worker, 1);
+	Worker* worker = g_new0(Worker, 1);
 	MAGIC_INIT(worker);
 
 	worker->thread_id = id;

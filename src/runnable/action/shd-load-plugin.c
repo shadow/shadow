@@ -29,7 +29,7 @@ RunnableVTable loadplugin_vtable = {
 
 LoadPluginAction* loadplugin_new(gint id, Registry* registry, GString* filename) {
 	g_assert(registry && filename);
-	LoadPluginAction* action = g_new(LoadPluginAction, 1);
+	LoadPluginAction* action = g_new0(LoadPluginAction, 1);
 	MAGIC_INIT(action);
 
 	action_init(&(action->super), &loadplugin_vtable);

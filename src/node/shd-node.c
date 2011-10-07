@@ -22,7 +22,7 @@
 #include "shadow.h"
 
 Node* node_new(gint id) {
-	Node* node = g_new(Node, 1);
+	Node* node = g_new0(Node, 1);
 	MAGIC_INIT(node);
 
 	node->node_id = id;

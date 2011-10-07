@@ -62,30 +62,48 @@ typedef enum {
 typedef struct _Parser Parser;
 
 struct _Parser {
-	GMarkupParser hostParser;
-	GMarkupParseContext* hostContext;
-	GSList* hostActions;
+	GMarkupParser parser;
+	GMarkupParseContext* context;
+	GSList* actions;
+	MAGIC_DECLARE;
+};
 
-	GMarkupParser topologyParser;
-	GMarkupParseContext* topologyContext;
-	GSList* topologyActions;
+typedef struct _ParserValues ParserValues;
+
+struct _ParserValues {
+	GString* name;
+	GString* path;
+	guint64 center;
+	guint64 width;
+	guint64 tail;
+	GString* plugin;
+	GString* arguments;
+	GString* application;
+	guint64 bandwidthup;
+	guint64 bandwidthdown;
+	GString* cpu;
+	guint64 quantity;
+	GString* network;
+	GString* networka;
+	GString* networkb;
+	GString* latency;
+	GString* latencyab;
+	GString* latencyba;
+	gdouble reliability;
+	gdouble reliabilityab;
+	gdouble reliabilityba;
 	MAGIC_DECLARE;
 };
 
 Parser* parser_new();
-
-/**
- * Parse the given filename and return a list of Actions that will produce the
- * specified topology (networks and links) when executed.
- */
-GSList* parser_parseTopology(Parser* parser, GString* filename);
-
-/**
- * Parse the given filename and return a list of Actions that will produce the
- * specified hosts (nodes and applications) when executed.
- */
-GSList* parser_parseHosts(Parser* parser, GString* filename);
-
 void parser_free(Parser* parser);
+
+/**
+ * Parse the given filename and return a list of Actions that will produce the
+ * specified topology (networks and links) and hosts (nodes and applications)
+ * when executed.
+ */
+GSList* parser_parse(Parser* parser, GString* filename);
+
 
 #endif /* SHD_PARSER_H_ */

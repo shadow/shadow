@@ -30,7 +30,7 @@
 Engine* engine_new(Configuration* config) {
 	MAGIC_ASSERT(config);
 
-	Engine* engine = g_new(Engine, 1);
+	Engine* engine = g_new0(Engine, 1);
 	MAGIC_INIT(engine);
 
 	engine->config = config;
@@ -557,8 +557,8 @@ gint engine_run(Engine* engine) {
 	debug("parsing simulation script");
 
 	Parser* p = parser_new();
-	GString* s = g_string_new("/tmp/example.topology.xml");
-	parser_parseTopology(p, s);
+	GString* s = g_string_new("/tmp/example.hosts.xml");
+	parser_parse(p, s);
 	g_string_free(s, TRUE);
 	return -1;
 

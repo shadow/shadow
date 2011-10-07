@@ -22,7 +22,7 @@
 #include "shadow.h"
 
 Registry* registry_new() {
-	Registry* registry = g_new(Registry, 1);
+	Registry* registry = g_new0(Registry, 1);
 	MAGIC_INIT(registry);
 
 	registry->storage = g_hash_table_new_full(g_int_hash, g_int_equal, g_free, NULL);
@@ -61,7 +61,7 @@ void registry_register(Registry* registry, gint index, GDestroyNotify value_dest
 	 */
 	GHashTable* entry = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, value_destory_func);
 
-	gint* storage_index = g_new(gint, 1);
+	gint* storage_index = g_new0(gint, 1);
 	*storage_index = index;
 
 	g_hash_table_insert(registry->storage, storage_index, entry);

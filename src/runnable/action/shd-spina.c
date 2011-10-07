@@ -28,7 +28,7 @@ RunnableVTable spina_vtable = {
 };
 
 SpinAction* spina_new(guint seconds) {
-	SpinAction* action = g_new(SpinAction, 1);
+	SpinAction* action = g_new0(SpinAction, 1);
 	MAGIC_INIT(action);
 
 	action_init(&(action->super), &spina_vtable);

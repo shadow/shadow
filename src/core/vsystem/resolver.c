@@ -39,7 +39,7 @@ void resolver_entry_destroy(gpointer data) {
 }
 
 resolver_tp resolver_create(gint process_id) {
-	resolver_tp r = g_new(resolver_t, 1);
+	resolver_tp r = g_new0(resolver_t, 1);
 
 	r->unique_id_counter = 0;
 	/* the key is stored in the value and freed when the value is */
@@ -73,7 +73,7 @@ void resolver_add(resolver_tp r, gchar* name, in_addr_t addr, guint8 prepend_uni
 		prepend_unique_id = 1;
 	}
 
-	resolver_entry_tp rentry = g_new(resolver_entry_t, 1);
+	resolver_entry_tp rentry = g_new0(resolver_entry_t, 1);
 	rentry->hostname = g_string_new(NULL);
 
 	if(prepend_unique_id) {

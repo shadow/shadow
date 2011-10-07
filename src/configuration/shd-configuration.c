@@ -23,7 +23,7 @@
 
 Configuration* configuration_new(gint argc, gchar* argv[]) {
 	/* get memory */
-	Configuration* c = g_new(Configuration, 1);
+	Configuration* c = g_new0(Configuration, 1);
 	MAGIC_INIT(c);
 
 	const gchar* required_parameters = "topology_file";

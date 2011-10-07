@@ -28,7 +28,7 @@ RunnableVTable connectnetwork_vtable = {
 };
 
 ConnectNetworkAction* connectnetwork_new(guint seconds) {
-	ConnectNetworkAction* action = g_new(ConnectNetworkAction, 1);
+	ConnectNetworkAction* action = g_new0(ConnectNetworkAction, 1);
 	MAGIC_INIT(action);
 
 	action_init(&(action->super), &connectnetwork_vtable);

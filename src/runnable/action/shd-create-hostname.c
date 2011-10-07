@@ -28,7 +28,7 @@ RunnableVTable createhostname_vtable = {
 };
 
 CreateHostnameAction* createhostname_new(guint seconds) {
-	CreateHostnameAction* action = g_new(CreateHostnameAction, 1);
+	CreateHostnameAction* action = g_new0(CreateHostnameAction, 1);
 	MAGIC_INIT(action);
 
 	action_init(&(action->super), &createhostname_vtable);

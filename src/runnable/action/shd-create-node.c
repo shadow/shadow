@@ -28,7 +28,7 @@ RunnableVTable createnode_vtable = {
 };
 
 CreateNodeAction* createnode_new(guint seconds) {
-	CreateNodeAction* action = g_new(CreateNodeAction, 1);
+	CreateNodeAction* action = g_new0(CreateNodeAction, 1);
 	MAGIC_INIT(action);
 
 	action_init(&(action->super), &createnode_vtable);

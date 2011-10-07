@@ -28,7 +28,7 @@ RunnableVTable generatecdf_vtable = {
 };
 
 GenerateCDFAction* generatecdf_new(guint seconds) {
-	GenerateCDFAction* action = g_new(GenerateCDFAction, 1);
+	GenerateCDFAction* action = g_new0(GenerateCDFAction, 1);
 	MAGIC_INIT(action);
 
 	action_init(&(action->super), &generatecdf_vtable);
