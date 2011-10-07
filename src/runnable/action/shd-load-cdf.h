@@ -28,13 +28,12 @@ typedef struct _LoadCDFAction LoadCDFAction;
 
 struct _LoadCDFAction {
 	Action super;
-	gint id;
-	Registry* registry;
-	GString* filename;
+	GString* name;
+	GString* path;
 	MAGIC_DECLARE;
 };
 
-LoadCDFAction* loadcdf_new(gint id, Registry* registry, GString* filename);
+LoadCDFAction* loadcdf_new(GString* name, GString* path);
 void loadcdf_run(LoadCDFAction* action);
 void loadcdf_free(LoadCDFAction* action);
 

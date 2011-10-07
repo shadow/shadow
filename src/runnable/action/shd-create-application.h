@@ -19,20 +19,25 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SHD_CREATE_HOSTNAME_H_
-#define SHD_CREATE_HOSTNAME_H_
+#ifndef SHD_CREATE_APPLICATION_H_
+#define SHD_CREATE_APPLICATION_H_
 
 #include "shadow.h"
 
-typedef struct _CreateHostnameAction CreateHostnameAction;
+typedef struct _CreateApplicationAction CreateApplicationAction;
 
-struct _CreateHostnameAction {
+struct _CreateApplicationAction {
 	Action super;
+	GString* name;
+	GString* pluginName;
+	GString* arguments;
+	SimulationTime launchtime;
 	MAGIC_DECLARE;
 };
 
-CreateHostnameAction* createhostname_new(guint seconds);
-void createhostname_run(CreateHostnameAction* action);
-void createhostname_free(CreateHostnameAction* action);
+CreateApplicationAction* createapplication_new(GString* name,
+		GString* pluginName, GString* arguments, guint64 launchtime);
+void createapplication_run(CreateApplicationAction* action);
+void createapplication_free(CreateApplicationAction* action);
 
-#endif /* SHD_CREATE_HOSTNAME_H_ */
+#endif /* SHD_CREATE_APPLICATION_H_ */

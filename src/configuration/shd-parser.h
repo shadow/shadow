@@ -32,6 +32,7 @@ typedef enum {
 	ELEMENT_NODE,
 	ELEMENT_NETWORK,
 	ELEMENT_LINK,
+	ELEMENT_KILL,
 } ParserElements;
 
 /* NOTE - they MUST be synced with ParserAttributeStrings in shd-parser.c */
@@ -44,6 +45,7 @@ typedef enum {
 	ATTRIBUTE_PLUGIN,
 	ATTRIBUTE_ARGUMENTS,
 	ATTRIBUTE_APPLICATION,
+	ATTRIBUTE_TIME,
 	ATTRIBUTE_BANDWIDTHUP,
 	ATTRIBUTE_BANDWIDTHDOWN,
 	ATTRIBUTE_CPU,
@@ -64,33 +66,56 @@ typedef struct _Parser Parser;
 struct _Parser {
 	GMarkupParser parser;
 	GMarkupParseContext* context;
-	GSList* actions;
+	GQueue* actions;
+	gboolean hasValidationError;
 	MAGIC_DECLARE;
 };
 
 typedef struct _ParserValues ParserValues;
 
 struct _ParserValues {
+	/* represents a unique ID */
 	GString* name;
+	/* path to a file */
 	GString* path;
+	/* center of base of CDF - meaning dependent on what the CDF represents */
 	guint64 center;
+	/* width of base of CDF - meaning dependent on what the CDF represents */
 	guint64 width;
+	/* width of tail of CDF - meaning dependent on what the CDF represents */
 	guint64 tail;
+	/* holds the unique ID name of a plugin */
 	GString* plugin;
+	/* string of arguments that will be passed to the application */
 	GString* arguments;
+	/* holds the unique ID name of an application */
 	GString* application;
-	guint64 bandwidthup;
-	guint64 bandwidthdown;
+	/* time in seconds */
+	guint64 time;
+	/* holds the unique ID name of a CDF for bandwidth (KiB/s) */
+	GString* bandwidthup;
+	/* holds the unique ID name of a CDF for bandwidth (KiB/s) */
+	GString* bandwidthdown;
+	/* holds the unique ID name of a CDF for CPU delay */
 	GString* cpu;
 	guint64 quantity;
+	/* holds the unique ID name of a network */
 	GString* network;
+	/* holds the unique ID name of a network */
 	GString* networka;
+	/* holds the unique ID name of a network */
 	GString* networkb;
+	/* holds the unique ID name of a CDF for latency (milliseconds) */
 	GString* latency;
+	/* holds the unique ID name of a CDF for latency (milliseconds) */
 	GString* latencyab;
+	/* holds the unique ID name of a CDF for latency (milliseconds) */
 	GString* latencyba;
+	/* fraction between 0 and 1 - liklihood that a packet gets dropped */
 	gdouble reliability;
+	/* fraction between 0 and 1 - liklihood that a packet gets dropped */
 	gdouble reliabilityab;
+	/* fraction between 0 and 1 - liklihood that a packet gets dropped */
 	gdouble reliabilityba;
 	MAGIC_DECLARE;
 };
@@ -99,11 +124,10 @@ Parser* parser_new();
 void parser_free(Parser* parser);
 
 /**
- * Parse the given filename and return a list of Actions that will produce the
+ * Parse the given filename and return a Queue of Actions that will produce the
  * specified topology (networks and links) and hosts (nodes and applications)
- * when executed.
+ * when executed. The caller owns the returned Queue and must properly free it.
  */
-GSList* parser_parse(Parser* parser, GString* filename);
-
+gboolean parser_parse(Parser* parser, GString* filename, GQueue* actions);
 
 #endif /* SHD_PARSER_H_ */

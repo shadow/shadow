@@ -19,22 +19,21 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SHD_LOAD_PLUGIN_H_
-#define SHD_LOAD_PLUGIN_H_
+#ifndef SHD_KILL_ENGINE_H_
+#define SHD_KILL_ENGINE_H_
 
 #include "shadow.h"
 
-typedef struct _LoadPluginAction LoadPluginAction;
+typedef struct _KillEngineAction KillEngineAction;
 
-struct _LoadPluginAction {
+struct _KillEngineAction {
 	Action super;
-	GString* name;
-	GString* path;
+	SimulationTime time;
 	MAGIC_DECLARE;
 };
 
-LoadPluginAction* loadplugin_new(GString* name, GString* path);
-void loadplugin_run(LoadPluginAction* action);
-void loadplugin_free(LoadPluginAction* action);
+KillEngineAction* killengine_new(guint64 time);
+void killengine_run(KillEngineAction* action);
+void killengine_free(KillEngineAction* action);
 
-#endif /* SHD_LOAD_PLUGIN_H_ */
+#endif /* SHD_KILL_ENGINE_H_ */

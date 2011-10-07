@@ -59,7 +59,7 @@ struct _Configuration {
 	gint minTimeJump;
 	gboolean printSoftwareVersion;
 
-	GString* dsim_filename;
+	GQueue* inputXMLFilenames;
 
 	MAGIC_DECLARE;
 };

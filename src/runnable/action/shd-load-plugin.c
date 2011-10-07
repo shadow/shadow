@@ -27,16 +27,15 @@ RunnableVTable loadplugin_vtable = {
 	MAGIC_VALUE
 };
 
-LoadPluginAction* loadplugin_new(gint id, Registry* registry, GString* filename) {
-	g_assert(registry && filename);
+LoadPluginAction* loadplugin_new(GString* name, GString* path) {
+	g_assert(name && path);
 	LoadPluginAction* action = g_new0(LoadPluginAction, 1);
 	MAGIC_INIT(action);
 
 	action_init(&(action->super), &loadplugin_vtable);
 
-	action->id = id;
-	action->registry = registry;
-	action->filename = filename;
+	action->name = g_string_new(name->str);
+	action->path = g_string_new(path->str);
 
 	return action;
 }
@@ -58,6 +57,10 @@ void loadplugin_run(LoadPluginAction* action) {
 
 void loadplugin_free(LoadPluginAction* action) {
 	MAGIC_ASSERT(action);
+
+	g_string_free(action->name, TRUE);
+	g_string_free(action->path, TRUE);
+
 	MAGIC_CLEAR(action);
 	g_free(action);
 }

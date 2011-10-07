@@ -19,22 +19,32 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SHD_LOAD_PLUGIN_H_
-#define SHD_LOAD_PLUGIN_H_
-
 #include "shadow.h"
 
-typedef struct _LoadPluginAction LoadPluginAction;
-
-struct _LoadPluginAction {
-	Action super;
-	GString* name;
-	GString* path;
-	MAGIC_DECLARE;
+RunnableVTable killengine_vtable = {
+	(RunnableRunFunc) killengine_run,
+	(RunnableFreeFunc) killengine_free,
+	MAGIC_VALUE
 };
 
-LoadPluginAction* loadplugin_new(GString* name, GString* path);
-void loadplugin_run(LoadPluginAction* action);
-void loadplugin_free(LoadPluginAction* action);
+KillEngineAction* killengine_new(guint64 time) {
+	KillEngineAction* action = g_new0(KillEngineAction, 1);
+	MAGIC_INIT(action);
 
-#endif /* SHD_LOAD_PLUGIN_H_ */
+	action_init(&(action->super), &killengine_vtable);
+	action->time = (SimulationTime)time;
+
+	return action;
+}
+
+void killengine_run(KillEngineAction* action) {
+	MAGIC_ASSERT(action);
+	Worker* worker = worker_getPrivate();
+	worker->cached_engine->endTime = action->time;
+}
+
+void killengine_free(KillEngineAction* action) {
+	MAGIC_ASSERT(action);
+	MAGIC_CLEAR(action);
+	g_free(action);
+}

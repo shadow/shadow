@@ -26,8 +26,8 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	Configuration* c = g_new0(Configuration, 1);
 	MAGIC_INIT(c);
 
-	const gchar* required_parameters = "topology_file";
-	gint num_required = 1;
+	const gchar* required_parameters = "xml-simulation-specification-filepath1 ...";
+	gint nRequiredXMLFiles = 1;
 
 	c->context = g_option_context_new(required_parameters);
 	g_option_context_set_summary(c->context, "Shadow - run real applications over simulated networks");
@@ -59,14 +59,18 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	}
 
 	/* make sure we have the required arguments. program name is first arg. */
-	if(argc < num_required + 1) {
+	if(argc < nRequiredXMLFiles + 1) {
 		g_print("** Please provide the required parameters **\n");
 		g_print(g_option_context_get_help(c->context, TRUE, NULL));
 		configuration_free(c);
 		return NULL;
 	}
 
-	c->dsim_filename = g_string_new(argv[1]);
+	c->inputXMLFilenames = g_queue_new();
+	for(gint i = 1; i < argc; i++) {
+		GString* filename = g_string_new(argv[i]);
+		g_queue_push_tail(c->inputXMLFilenames, filename);
+	}
 
 	if(c->nWorkerThreads < 0) {
 		c->nWorkerThreads = 0;
@@ -79,6 +83,7 @@ void configuration_free(Configuration* config) {
 	MAGIC_ASSERT(config);
 
 	g_option_context_free(config->context);
+	g_queue_free(config->inputXMLFilenames);
 
 	MAGIC_CLEAR(config);
 	g_free(config);

@@ -28,10 +28,19 @@ typedef struct _ConnectNetworkAction ConnectNetworkAction;
 
 struct _ConnectNetworkAction {
 	Action super;
+	GString* networkaName;
+	GString* networkbName;
+	GString* latencyabCDFName;
+	gdouble reliabilityab;
+	GString* latencybaCDFName;
+	gdouble reliabilityba;
 	MAGIC_DECLARE;
 };
 
-ConnectNetworkAction* connectnetwork_new(guint seconds);
+ConnectNetworkAction* connectnetwork_new(GString* networkaName,
+		GString* networkbName, GString* latencyabCDFName,
+		gdouble reliabilityab, GString* latencybaCDFName,
+		gdouble reliabilityba);
 void connectnetwork_run(ConnectNetworkAction* action);
 void connectnetwork_free(ConnectNetworkAction* action);
 

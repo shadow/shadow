@@ -21,27 +21,40 @@
 
 #include "shadow.h"
 
-RunnableVTable createhostname_vtable = {
-	(RunnableRunFunc) createhostname_run,
-	(RunnableFreeFunc) createhostname_free,
+RunnableVTable createapplication_vtable = {
+	(RunnableRunFunc) createapplication_run,
+	(RunnableFreeFunc) createapplication_free,
 	MAGIC_VALUE
 };
 
-CreateHostnameAction* createhostname_new(guint seconds) {
-	CreateHostnameAction* action = g_new0(CreateHostnameAction, 1);
+CreateApplicationAction* createapplication_new(GString* name,
+		GString* pluginName, GString* arguments, guint64 launchtime)
+{
+	g_assert(name && pluginName && arguments);
+	CreateApplicationAction* action = g_new0(CreateApplicationAction, 1);
 	MAGIC_INIT(action);
 
-	action_init(&(action->super), &createhostname_vtable);
+	action_init(&(action->super), &createapplication_vtable);
+
+	action->name = g_string_new(name->str);
+	action->pluginName = g_string_new(pluginName->str);
+	action->arguments = g_string_new(arguments->str);
+	action->launchtime = (SimulationTime)launchtime;
 
 	return action;
 }
 
-void createhostname_run(CreateHostnameAction* action) {
+void createapplication_run(CreateApplicationAction* action) {
 	MAGIC_ASSERT(action);
 }
 
-void createhostname_free(CreateHostnameAction* action) {
+void createapplication_free(CreateApplicationAction* action) {
 	MAGIC_ASSERT(action);
+
+	g_string_free(action->name, TRUE);
+	g_string_free(action->pluginName, TRUE);
+	g_string_free(action->arguments, TRUE);
+
 	MAGIC_CLEAR(action);
 	g_free(action);
 }

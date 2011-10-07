@@ -32,26 +32,22 @@ set(shadow2_srcs
     runnable/action/shd-action.c
     runnable/action/shd-spina.c
     runnable/action/shd-connect-network.c
-    runnable/action/shd-create-hostname.c
+    runnable/action/shd-create-application.c
     runnable/action/shd-create-network.c
     runnable/action/shd-create-node.c
     runnable/action/shd-generate-cdf.c
     runnable/action/shd-load-cdf.c
     runnable/action/shd-load-plugin.c
-    
+    runnable/action/shd-kill-engine.c
+        
     node/shd-node.c
     
     utility/shd-registry.c
-    
-    util/utility.c
-    util/btree.c
-    util/heap.c
-    core/evtracker.c
     
     main.c
 )
 
 include_directories(${SHADOW_SOURCE_DIR}/)
 add_executable(shadow2 ${shadow2_srcs})
-target_link_libraries(shadow2 shadow-dsim ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES} ${GLIB_LIBRARIES})
+target_link_libraries(shadow2 ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES} ${GLIB_LIBRARIES})
 install(TARGETS shadow2 DESTINATION bin)

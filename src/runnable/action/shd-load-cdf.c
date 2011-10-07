@@ -27,15 +27,15 @@ RunnableVTable loadcdf_vtable = {
 	MAGIC_VALUE
 };
 
-LoadCDFAction* loadcdf_new(gint id, Registry* registry, GString* filename) {
+LoadCDFAction* loadcdf_new(GString* name, GString* path) {
+	g_assert(name && path);
 	LoadCDFAction* action = g_new0(LoadCDFAction, 1);
 	MAGIC_INIT(action);
 
 	action_init(&(action->super), &loadcdf_vtable);
 
-	action->id = id;
-	action->registry = registry;
-	action->filename = filename;
+	action->name = g_string_new(name->str);
+	action->path = g_string_new(path->str);
 
 	return action;
 }
@@ -51,6 +51,10 @@ void loadcdf_run(LoadCDFAction* action) {
 
 void loadcdf_free(LoadCDFAction* action) {
 	MAGIC_ASSERT(action);
+
+	g_string_free(action->name, TRUE);
+	g_string_free(action->path, TRUE);
+
 	MAGIC_CLEAR(action);
 	g_free(action);
 }

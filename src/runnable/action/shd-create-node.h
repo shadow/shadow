@@ -19,20 +19,30 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SHD_CREATE_NODE_H_
-#define SHD_CREATE_NODE_H_
+#ifndef SHD_CREATE_NODES_H_
+#define SHD_CREATE_NODES_H_
 
 #include "shadow.h"
 
-typedef struct _CreateNodeAction CreateNodeAction;
+typedef struct _CreateNodesAction CreateNodesAction;
 
-struct _CreateNodeAction {
+struct _CreateNodesAction {
 	Action super;
+	guint64 quantity;
+	GString* name;
+	GString* applicationName;
+	GString* cpudelayCDFName;
+	GString* networkName;
+	GString* bandwidthup;
+	GString* bandwidthdown;
 	MAGIC_DECLARE;
 };
 
-CreateNodeAction* createnode_new(guint seconds);
-void createnode_run(CreateNodeAction* action);
-void createnode_free(CreateNodeAction* action);
+CreateNodesAction* createnodes_new(guint64 quantity, GString* name,
+		GString* applicationName, GString* cpudelayCDFName,
+		GString* networkName, GString* bandwidthupCDFName,
+		GString* bandwidthdownCDFName);
+void createnodes_run(CreateNodesAction* action);
+void createnodes_free(CreateNodesAction* action);
 
-#endif /* SHD_CREATE_NODE_H_ */
+#endif /* SHD_CREATE_NODES_H_ */

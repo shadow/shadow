@@ -28,10 +28,14 @@ typedef struct _CreateNetworkAction CreateNetworkAction;
 
 struct _CreateNetworkAction {
 	Action super;
+	GString* name;
+	GString* latencyCDFName;
+	gdouble reliability;
 	MAGIC_DECLARE;
 };
 
-CreateNetworkAction* createnetwork_new(guint seconds);
+CreateNetworkAction* createnetwork_new(GString* name, GString* latencyCDFName,
+		gdouble reliability);
 void createnetwork_run(CreateNetworkAction* action);
 void createnetwork_free(CreateNetworkAction* action);
 

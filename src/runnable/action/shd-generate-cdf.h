@@ -28,10 +28,15 @@ typedef struct _GenerateCDFAction GenerateCDFAction;
 
 struct _GenerateCDFAction {
 	Action super;
+	GString* name;
+	guint64 center;
+	guint64 width;
+	guint64 tail;
 	MAGIC_DECLARE;
 };
 
-GenerateCDFAction* generatecdf_new(guint seconds);
+GenerateCDFAction* generatecdf_new(GString* name, guint64 center, guint64 width,
+		guint64 tail);
 void generatecdf_run(GenerateCDFAction* action);
 void generatecdf_free(GenerateCDFAction* action);
 
