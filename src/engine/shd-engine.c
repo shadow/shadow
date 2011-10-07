@@ -555,6 +555,13 @@ gint engine_run(Engine* engine) {
 
 	/* parse user simulation script, create jobs */
 	debug("parsing simulation script");
+
+	Parser* p = parser_new();
+	GString* s = g_string_new("/tmp/example.topology.xml");
+	parser_parseTopology(p, s);
+	g_string_free(s, TRUE);
+	return -1;
+
 //	if(engine_parse_dsim(engine) == FALSE) {
 //		return -1;
 //	}

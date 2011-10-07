@@ -28,7 +28,8 @@
 #include "shd-config.h"
 
 #include "engine/shd-main.h"
-#include "engine/shd-configuration.h"
+#include "configuration/shd-configuration.h"
+#include "configuration/shd-parser.h"
 
 #include "utility/shd-registry.h"
 

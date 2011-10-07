@@ -19,7 +19,8 @@ add_subdirectory(util)
 install(PROGRAMS ${SHADOW_SOURCE_DIR}/shadow DESTINATION bin)
 
 set(shadow2_srcs
-    engine/shd-configuration.c
+    configuration/shd-configuration.c
+    configuration/shd-parser.c
     engine/shd-logging.c
     engine/shd-main.c
     engine/shd-engine.c
