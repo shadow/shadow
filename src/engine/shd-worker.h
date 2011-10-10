@@ -22,7 +22,6 @@
 #ifndef SHD_WORKER_H_
 #define SHD_WORKER_H_
 
-#include <glib.h>
 #include "shadow.h"
 
 typedef struct _Worker Worker;
@@ -35,8 +34,11 @@ struct _Worker {
 	SimulationTime clock_barrier;
 
 	Engine* cached_engine;
+	Plugin* cached_plugin;
 	Node* cached_node;
 	Event* cached_event;
+
+	GHashTable* plugins;
 
 	MAGIC_DECLARE;
 };

@@ -77,6 +77,11 @@ struct _Engine {
 	 */
 	GMutex* engineIdle;
 
+	/* track global network members and topology */
+	resolver_tp resolver;
+	topology_tp topology;
+	GHashTable* pluginNameToPath;
+
 	/*
 	 * these values are modified during simulation and must be protected so
 	 * they are thread safe

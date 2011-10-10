@@ -21,12 +21,6 @@
 
 #include "shadow.h"
 
-#include "util/heap.h"
-#include "util/btree.h"
-#include "util/global.h"
-#include "core/evtracker.h"
-#include "dsim/dsim_utils.h"
-
 Engine* engine_new(Configuration* config) {
 	MAGIC_ASSERT(config);
 
@@ -62,6 +56,10 @@ Engine* engine_new(Configuration* config) {
 
 	engine->minTimeJump = config->minTimeJump * SIMTIME_ONE_MILLISECOND;
 
+	engine->resolver = resolver_create();
+	engine->topology = topology_create();
+	engine->pluginNameToPath = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
+
 	return engine;
 }
 
@@ -81,6 +79,10 @@ void engine_free(Engine* engine) {
 	g_mutex_free(engine->engineIdle);
 
 	registry_free(engine->registry);
+
+	topology_destroy(engine->topology);
+	resolver_destroy(engine->resolver);
+	g_hash_table_destroy(engine->pluginNameToPath);
 
 	MAGIC_CLEAR(engine);
 	g_free(engine);
@@ -304,7 +306,8 @@ gint engine_generateModuleID(Engine* engine) {
 
 gint engine_getNumThreads(Engine* engine) {
 	MAGIC_ASSERT(engine);
-	return engine->config->nWorkerThreads;
+	/* number of workers plus 1 for main thread */
+	return engine->config->nWorkerThreads + 1;
 }
 
 SimulationTime engine_getMinTimeJump(Engine* engine) {

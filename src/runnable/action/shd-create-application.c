@@ -46,6 +46,9 @@ CreateApplicationAction* createapplication_new(GString* name,
 
 void createapplication_run(CreateApplicationAction* action) {
 	MAGIC_ASSERT(action);
+
+	Worker* worker = worker_getPrivate();
+
 }
 
 void createapplication_free(CreateApplicationAction* action) {

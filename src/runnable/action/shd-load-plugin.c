@@ -43,23 +43,24 @@ LoadPluginAction* loadplugin_new(GString* name, GString* path) {
 void loadplugin_run(LoadPluginAction* action) {
 	MAGIC_ASSERT(action);
 
-//	module_tp mod = module_load(wo->mod_mgr, op->id, op->filepath);
-//
-//	if(mod != NULL) {
-//		context_execute_init(mod);
-//	} else {
-//		gchar buffer[200];
-//
-//		snprintf(buffer,200,"Unable to load and validate '%s'", op->filepath);
-//		sim_worker_abortsim(wo, buffer);
-//	}
+	/* we need a copy of the library for every thread because each of
+	 * them needs a separate instance of all the plug-in state so it doesn't
+	 * overlap. We'll do this lazily while booting up applications, since that
+	 * event will be run by a worker. For now, we just track the original
+	 * filename of the plug-in library, so the worker can copy it later.
+	 */
+	Worker* worker = worker_getPrivate();
+
+	/* the hash table now owns the actual strings (but not the GStrings) */
+	/* FIXME: check for collisions */
+	g_hash_table_replace(worker->cached_engine->pluginNameToPath, action->name->str, action->path->str);
 }
 
 void loadplugin_free(LoadPluginAction* action) {
 	MAGIC_ASSERT(action);
 
-	g_string_free(action->name, TRUE);
-	g_string_free(action->path, TRUE);
+	g_string_free(action->name, FALSE);
+	g_string_free(action->path, FALSE);
 
 	MAGIC_CLEAR(action);
 	g_free(action);

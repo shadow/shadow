@@ -1,0 +1,65 @@
+/**
+ * The Shadow Simulator
+ *
+ * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
+ *
+ * This file is part of Shadow.
+ *
+ * Shadow is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Shadow is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+#ifndef SHADOWLIB_H_
+#define SHADOWLIB_H_
+
+#include <netinet/in.h>
+
+/* function signatures for what each plugin must implement */
+typedef void (*PluginNewInstanceFunc)(gint, gchar *[]);
+typedef void (*PluginFreeInstanceFunc)();
+typedef void (*PluginSocketReadableFunc)(gint);
+typedef void (*PluginSocketWritableFunc)(gint);
+
+typedef struct _PluginVTable PluginVTable;
+
+struct _PluginVTable {
+	PluginNewInstanceFunc new;
+	PluginFreeInstanceFunc free;
+	PluginSocketReadableFunc readable;
+	PluginSocketWritableFunc writable;
+};
+
+/* function signatures for available shadow functions */
+typedef gboolean (*ShadowlibRegisterFunc)(PluginVTable* callbackFunctions, guint nVariables, ...);
+typedef void (*ShadowlibLogFunc)(gchar* format, ...);
+typedef in_addr_t (*ShadowlibResolveHostnameFunc)(gchar* name);
+typedef gboolean (*ShadowlibResolveIPAddressFunc)(in_addr_t addr, gchar* name_out, gint name_out_len);
+typedef in_addr_t (*ShadowlibGetIPAddressFunc)();
+typedef gboolean (*ShadowlibGetHostnameFunc)(gchar* name_out, gint name_out_len);
+
+typedef struct _ShadowlibVTable ShadowlibVTable;
+
+struct _ShadowlibVTable {
+	ShadowlibRegisterFunc registration;
+	ShadowlibLogFunc log;
+	ShadowlibResolveHostnameFunc resolveHostname;
+	ShadowlibResolveIPAddressFunc resolveIP;
+	ShadowlibGetHostnameFunc getHostname;
+	ShadowlibGetIPAddressFunc getIP;
+};
+
+/* Plug-ins must implement this function to communicate with Shadow.
+ * the function name symbol must be "__shadow_plugin_init__" */
+typedef void (*ShadowPluginInitializeFunc)(ShadowlibVTable* shadowlibFunctions);
+
+#endif /* SHADOWLIB_H_ */

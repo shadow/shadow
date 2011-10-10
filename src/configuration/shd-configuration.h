@@ -50,6 +50,9 @@ typedef guint64 SimulationTime;
 #define MAGIC_CLEAR(object)
 #endif
 
+/* plug-ins must implement this method to hook into shadow */
+#define PLUGININITSYMBOL "__shadow_plugin_init__"
+
 typedef struct _Configuration Configuration;
 
 struct _Configuration {

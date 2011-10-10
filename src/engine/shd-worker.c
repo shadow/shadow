@@ -30,12 +30,19 @@ static Worker* _worker_new(gint id) {
 	worker->clock_last = SIMTIME_INVALID;
 	worker->clock_barrier = SIMTIME_INVALID;
 
+	/* each worker needs a private copy of each plug-in library */
+	worker->plugins = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, plugin_free);
+
 	return worker;
 }
 
 void worker_free(gpointer data) {
 	Worker* worker = data;
 	MAGIC_ASSERT(worker);
+
+	/* calls the destroy functions we specified in g_hash_table_new_full */
+	g_hash_table_destroy(worker->plugins);
+
 	MAGIC_CLEAR(worker);
 	g_free(worker);
 }
@@ -155,7 +162,7 @@ void worker_scheduleEvent(Event* event, SimulationTime nano_delay, gint receiver
 	event->node = receiver;
 
 	/* single threaded mode is simpler than multi threaded */
-	if(engine_getNumThreads(engine) > 0) {
+	if(engine_getNumThreads(engine) > 1) {
 		/* multi threaded, figure out where to push event */
 		if(node_equal(receiver, sender) &&
 				(event->time < worker->clock_barrier))

@@ -20,14 +20,10 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SIMNET_GRAPH_H_
-#define SIMNET_GRAPH_H_
+#ifndef SHD_TOPOLOGY_H_
+#define SHD_TOPOLOGY_H_
 
-#include <glib.h>
-#include <glib-2.0/glib.h>
-#include "shd-cdf.h"
-
-#define RUNAHEAD_FLOOR_MS 10
+#include "shadow.h"
 
 typedef struct simnet_vertex_s {
 	guint id;
@@ -36,7 +32,7 @@ typedef struct simnet_vertex_s {
 	GHashTable *edges;
 
 	/* gintranet properties */
-	cdf_tp gintranet_latency;
+	CumulativeDistribution* intranet_latency;
 	gdouble reliablity;
 } simnet_vertex_t, *simnet_vertex_tp;
 
@@ -46,13 +42,13 @@ typedef struct simnet_edge_s {
 	simnet_vertex_tp vertex2;
 
 	/* ginternet properties between the vertex1 and vertex2 */
-	cdf_tp ginternet_latency_1to2;
+	CumulativeDistribution* internet_latency_1to2;
 	gdouble reliablity_1to2;
-	cdf_tp ginternet_latency_2to1;
+	CumulativeDistribution* internet_latency_2to1;
 	gdouble reliablity_2to1;
 } simnet_edge_t, *simnet_edge_tp;
 
-typedef struct simnet_graph_s {
+typedef struct topology_s {
 	gint is_dirty;
 
 	/* holds all networks, of type sim_net_vertex_tp */
@@ -63,13 +59,13 @@ typedef struct simnet_graph_s {
 	/* the min/max latency between networks - used for runahead */
 	guint runahead_min;
 	guint runahead_max;
-} simnet_graph_t, *simnet_graph_tp;
+} topology_t, *topology_tp;
 
-simnet_graph_tp simnet_graph_create();
-void simnet_graph_destroy(simnet_graph_tp g);
-void simnet_graph_add_vertex(simnet_graph_tp g, guint network_id, cdf_tp latency_cdf, gdouble reliablity);
-void simnet_graph_add_edge(simnet_graph_tp g, guint id1, cdf_tp latency_cdf_1to2, gdouble reliablity_1to2, guint id2, cdf_tp latency_cdf_2to1, gdouble reliablity_2to1);
-gdouble simnet_graph_end2end_latency(simnet_graph_tp g, guint src_network_id, guint dst_network_id);
-gdouble simnet_graph_end2end_reliablity(simnet_graph_tp g, guint src_network_id, guint dst_network_id);
+topology_tp topology_create();
+void topology_destroy(topology_tp g);
+void topology_add_vertex(topology_tp g, guint network_id, CumulativeDistribution* latency_cdf, gdouble reliablity);
+void topology_add_edge(topology_tp g, guint id1, CumulativeDistribution* latency_cdf_1to2, gdouble reliablity_1to2, guint id2, CumulativeDistribution* latency_cdf_2to1, gdouble reliablity_2to1);
+gdouble topology_end2end_latency(topology_tp g, guint src_network_id, guint dst_network_id);
+gdouble topology_end2end_reliablity(topology_tp g, guint src_network_id, guint dst_network_id);
 
-#endif /* SIMNET_GRAPH_H_ */
+#endif /* SHD_TOPOLOGY_H_ */

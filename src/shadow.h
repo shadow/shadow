@@ -43,8 +43,18 @@
 
 /* utilities with limited dependencies */
 #include "utility/shd-registry.h"
+#include "utility/shd-cdf.h"
+#include "utility/shd-data-entry.h"
+#include "utility/shd-resolver.h"
+#include "utility/shd-topology.h"
+
+#include "plugin/libraries/shadowlib.h"
+#include "plugin/shd-shadowlib.h"
+#include "plugin/shd-plugin-state.h"
+#include "plugin/shd-plugin.h"
 
 #include "runnable/event/shd-spine.h"
+#include "runnable/event/shd-start-application.h"
 #include "runnable/action/shd-spina.h"
 #include "runnable/action/shd-connect-network.h"
 #include "runnable/action/shd-create-application.h"

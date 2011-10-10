@@ -28,25 +28,28 @@
 #ifndef SHD_CDF_H_
 #define SHD_CDF_H_
 
-#include <glib.h>
-#include <stdint.h>
-#include <stddef.h>
+#include "shadow.h"
 
-#include "orderedlist.h"
+typedef struct _CumulativeDistributionEntry CumulativeDistributionEntry;
+struct _CumulativeDistributionEntry {
+	gdouble fraction;
+	gdouble value;
+	MAGIC_DECLARE;
+};
 
-#define DOUBLE_2_UINT64(x) ((guint64)((x)*10000000000))
-#define UINT64_2_DOUBLE(x) ((gdouble)((x)/10000000000))
+typedef struct _CumulativeDistribution CumulativeDistribution;
+struct _CumulativeDistribution {
+	GList* entries;
+	MAGIC_DECLARE;
+};
 
-typedef struct cdf_s {
-	orderedlist_tp ol;
-} cdf_t, *cdf_tp;
 
-cdf_tp cdf_create(const gchar* filename);
-cdf_tp cdf_generate(guint base_center, guint base_width, guint tail_width);
-void cdf_destroy(cdf_tp cdf);
+CumulativeDistribution* cdf_create(const gchar* filename);
+CumulativeDistribution* cdf_generate(guint base_center, guint base_width, guint tail_width);
+void cdf_destroy(CumulativeDistribution* cdf);
 
-gdouble cdf_min_value(cdf_tp cdf);
-gdouble cdf_max_value(cdf_tp cdf);
-gdouble cdf_random_value(cdf_tp cdf);
+gdouble cdf_getMinimumValue(CumulativeDistribution* cdf);
+gdouble cdf_getMaximumValue(CumulativeDistribution* cdf);
+gdouble cdf_getRandomValue(CumulativeDistribution* cdf);
 
 #endif /* SHD_CDF_H_ */

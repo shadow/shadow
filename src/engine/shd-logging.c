@@ -81,10 +81,7 @@ void logging_handleLog(const gchar *log_domain, GLogLevelFlags log_level, const 
 	g_date_time_unref(dt_now);
 }
 
-void logging_log(const gchar *log_domain, GLogLevelFlags log_level, const gchar *format, ...) {
-	va_list vargs;
-	va_start(vargs, format);
-
+void logging_logv(const gchar *log_domain, GLogLevelFlags log_level, const gchar *format, va_list vargs) {
 	/* this is called by worker threads, so we have access to worker */
 	Worker* w = worker_getPrivate();
 
@@ -120,6 +117,13 @@ void logging_log(const gchar *log_domain, GLogLevelFlags log_level, const gchar 
 	g_logv(log_domain, log_level, new_format, vargs);
 	g_free(new_format);
 	g_free(clock_string);
+}
+
+void logging_log(const gchar *log_domain, GLogLevelFlags log_level, const gchar *format, ...) {
+	va_list vargs;
+	va_start(vargs, format);
+
+	logging_logv(log_domain, log_level, format, vargs);
 
 	va_end(vargs);
 }

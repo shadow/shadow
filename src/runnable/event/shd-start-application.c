@@ -21,41 +21,30 @@
 
 #include "shadow.h"
 
-EventVTable spine_vtable = {
-	(EventRunFunc) spine_run,
-	(EventFreeFunc) spine_free,
+EventVTable startapplication_vtable = {
+	(EventRunFunc) startapplication_run,
+	(EventFreeFunc) startapplication_free,
 	MAGIC_VALUE
 };
 
-SpinEvent* spine_new(guint seconds) {
-	SpinEvent* event = g_new0(SpinEvent, 1);
+StartApplicationEvent* startapplication_new(Node* node, SimulationTime time) {
+	StartApplicationEvent* event = g_new0(StartApplicationEvent, 1);
 	MAGIC_INIT(event);
 
-	event_init(&(event->super), &spine_vtable);
-	event->spin_seconds = seconds;
+	event_init(&(event->super), &startapplication_vtable);
+	event->super.node = node;
+	event->super.time = time;
 
 	return event;
 }
 
-void spine_run(SpinEvent* event, Node* node) {
+void startapplication_run(StartApplicationEvent* event, Node* node) {
 	MAGIC_ASSERT(event);
 	MAGIC_ASSERT(node);
 
-	debug("executing spin event for %u seconds", event->spin_seconds);
-
-	guint64 i = 1000000 * event->spin_seconds;
-	while(i--) {
-		continue;
-	}
-
-	SpinEvent* se = spine_new(event->spin_seconds);
-	SimulationTime t = 1;
-	worker_scheduleEvent((Event*)se, t, node->node_id);
-	SpinEvent* se2 = spine_new(event->spin_seconds);
-	worker_scheduleEvent((Event*)se2, t, 0);
 }
 
-void spine_free(SpinEvent* event) {
+void startapplication_free(StartApplicationEvent* event) {
 	MAGIC_ASSERT(event);
 	MAGIC_CLEAR(event);
 	g_free(event);

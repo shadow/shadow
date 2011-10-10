@@ -1,4 +1,4 @@
-<plugin name="fileserver" path="/tmp/file.so" />
+<plugin name="fileserver" path="/home/rob/shadow/build/shadow/src/plugin/libraries/echo/libshadow-plugin-echo.so" />
 
 <cdf name="cpudelay" center="100000000" width="20000000" tail="20000000" />
 <cdf name="upstream" center="1024" width="0" tail="0" />
@@ -13,3 +13,5 @@
 <node name="5.fileserver.shd" application="server" network="useast" bandwidthup="upstream" bandwidthdown="downstream" cpu="cpudelay" />
 
 <node name="fileserver.shd" quantity="5" application="server" network="useast" bandwidthup="upstream" bandwidthdown="downstream" cpu="cpudelay" />
+
+<kill time="600" />

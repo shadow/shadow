@@ -87,8 +87,8 @@ endforeach(library)
 
 ## check for dependencies, using built-in cmake files to help us find the libs
 ## these are in /usr/share/cmake/Modules/Findxxx.cmake
-find_package(FLEX REQUIRED)
-find_package(BISON REQUIRED)
+#find_package(FLEX REQUIRED)
+#find_package(BISON REQUIRED)
 find_package(Threads REQUIRED)
 find_package(ZLIB REQUIRED)
 
@@ -119,7 +119,7 @@ endif(SHADOW_TEST STREQUAL ON)
 
 ## install our 'exported' libs so they can be imported by others
 ## put the .cmake file for importing in shadow-specific directory
-install(EXPORT shadow-externals DESTINATION share/shadow)
+#install(EXPORT shadow-externals DESTINATION share/shadow)
 
 ## install resources useful for simulations
 install(DIRECTORY ${CMAKE_BUILD_PREFIX}/../shadow-resources/

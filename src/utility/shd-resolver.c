@@ -19,16 +19,10 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <glib.h>
-#include <stdint.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include <netinet/in.h>
+#include "shadow.h"
 
-#include "resolver.h"
-#include "sysconfig.h"
-#include "utility.h"
+#include <netinet/in.h>
+#include <string.h>
 
 void resolver_entry_destroy(gpointer data) {
 	g_assert(data);
@@ -38,7 +32,7 @@ void resolver_entry_destroy(gpointer data) {
 	g_free(rentry);
 }
 
-resolver_tp resolver_create(gint process_id) {
+resolver_tp resolver_create() {
 	resolver_tp r = g_new0(resolver_t, 1);
 
 	r->unique_id_counter = 0;
@@ -46,7 +40,6 @@ resolver_tp resolver_create(gint process_id) {
 	r->addr_entry = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, resolver_entry_destroy);
 	/* the key is stored in the value, but the value is freed as part of addr_entry */
 	r->name_entry = g_hash_table_new_full(g_str_hash, g_str_equal, NULL, NULL);
-	r->pid = process_id;
 
 	return r;
 }
@@ -60,7 +53,7 @@ void resolver_destroy(resolver_tp r) {
 	/* frees values (and  keys implicitly since all keys are stored in the values) */
 	g_hash_table_destroy(r->addr_entry);
 	r->addr_entry = NULL;
-	free(r);
+	g_free(r);
 }
 
 /* name MUST be null-terminated */
@@ -77,7 +70,7 @@ void resolver_add(resolver_tp r, gchar* name, in_addr_t addr, guint8 prepend_uni
 	rentry->hostname = g_string_new(NULL);
 
 	if(prepend_unique_id) {
-		g_string_printf(rentry->hostname, "%u.%s.%i", r->unique_id_counter++, name, r->pid);
+		g_string_printf(rentry->hostname, "%u.%s", r->unique_id_counter++, name);
 	} else {
 		g_string_printf(rentry->hostname, "%s", name);
 	}
@@ -100,7 +93,7 @@ static void resolver_remove_entry(resolver_tp r, resolver_entry_tp rentry) {
 	 */
 	g_hash_table_remove(r->name_entry, rentry->hostname->str);
 	g_hash_table_remove(r->addr_entry, &(rentry->addr));
-	free(rentry);
+	g_free(rentry);
 }
 
 void resolver_remove_byname(resolver_tp r, gchar* name) {

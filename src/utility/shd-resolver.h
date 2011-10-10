@@ -19,8 +19,8 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef RESOLVER_H_
-#define RESOLVER_H_
+#ifndef SHD_RESOLVER_H_
+#define SHD_RESOLVER_H_
 
 #include <glib.h>
 #include <stdint.h>
@@ -42,10 +42,9 @@ typedef struct resolver_s {
 	guint32 unique_id_counter;
 	GHashTable *name_entry;
 	GHashTable *addr_entry;
-	gint pid;
 } resolver_t, *resolver_tp;
 
-resolver_tp resolver_create(gint process_id);
+resolver_tp resolver_create();
 void resolver_destroy(resolver_tp resolver);
 
 void resolver_add(resolver_tp r, gchar* name, in_addr_t addr, guint8 prepend_unique_id, guint32 KBps_down, guint32 KBps_up);
@@ -58,4 +57,4 @@ guint32 resolver_get_minbw(resolver_tp r, in_addr_t addr);
 guint32 resolver_get_upbw(resolver_tp r, in_addr_t addr);
 guint32 resolver_get_downbw(resolver_tp r, in_addr_t addr);
 
-#endif /* RESOLVER_H_ */
+#endif /* SHD_RESOLVER_H_ */

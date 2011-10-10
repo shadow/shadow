@@ -2,7 +2,6 @@
  * The Shadow Simulator
  *
  * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
- * Copyright (c) 2006-2009 Tyson Malchow <tyson.malchow@gmail.com>
  *
  * This file is part of Shadow.
  *
@@ -20,17 +19,28 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef ECHO_LIB_H_
-#define ECHO_LIB_H_
+#ifndef SHD_ECHO_H_
+#define SHD_ECHO_H_
 
 #include <glib.h>
+#include <shadowlib.h>
+
+#include <sys/socket.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h>
+#include <errno.h>
+#include <unistd.h>
 
 #define ERROR -1
 #define BUFFERSIZE 20000
 #define ECHO_SERVER_PORT 60000
 
-typedef struct echoclient_s {
+typedef struct _EchoClient EchoClient;
+struct _EchoClient {
 	gint sd;
 	gchar send_buffer[BUFFERSIZE];
 	gchar recv_buffer[BUFFERSIZE];
@@ -38,25 +48,35 @@ typedef struct echoclient_s {
 	gint sent_msg;
 	gint amount_sent;
 	gint is_done;
-} echoclient_t, *echoclient_tp;
+};
 
-typedef struct echoserver_s {
+typedef struct _EchoServer EchoServer;
+struct _EchoServer {
 	gint listen_sd;
 	gchar echo_buffer[BUFFERSIZE];
 	gint read_offset;
 	gint write_offset;
-} echoserver_t, *echoserver_tp;
+};
 
-typedef struct echoloopback_s {
-	echoserver_t server;
-	echoclient_t client;
+typedef struct _Echo Echo;
+struct _Echo {
+	EchoServer* server;
+	EchoClient* client;
+	ShadowlibVTable* shadowlibFuncs;
 } echoloopback_t, *echoloopback_tp;
 
-void echo_client_instantiate(echoclient_tp ec, gint argc, gchar * argv[], in_addr_t bootstrap_address);
-void echo_client_socket_readable(echoclient_tp ec, gint sockd);
-void echo_client_socket_writable(echoclient_tp ec, gint sockd);
+void echo_new(int argc, char* argv[]);
+void echo_free();
+void echo_readable(int socketDesriptor);
+void echo_writable(int socketDesriptor);
 
-void echo_server_instantiate(echoserver_tp es, gint argc, gchar * argv[], in_addr_t bootstrap_address);
-void echo_server_socket_readable(echoserver_tp es, gint sockd);
+EchoClient* echoclient_new(in_addr_t serverIPAddress);
+void echoclient_free(EchoClient* ec);
+void echoclient_socketReadable(EchoClient* ec, gint sockd, ShadowlibLogFunc log);
+void echoclient_socketWritable(EchoClient* ec, gint sockd, ShadowlibLogFunc log);
 
-#endif /* ECHO_LIB_H_ */
+EchoServer* echoserver_new(in_addr_t bindIPAddress);
+void echoserver_free(EchoServer* es);
+void echoserver_socketReadable(EchoServer* es, gint sockd, ShadowlibLogFunc log);
+
+#endif /* SHD_ECHO_H_ */
