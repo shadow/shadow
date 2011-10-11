@@ -69,16 +69,16 @@ static const gchar* _logging_getLogDomainString(const gchar *log_domain) {
 void logging_handleLog(const gchar *log_domain, GLogLevelFlags log_level, const gchar *message, gpointer user_data) {
 	/* callback from GLib, no access to workers */
 	GDateTime* dt_now = g_date_time_new_now_local();
+	gchar* dt_format = g_date_time_format(dt_now, "%F %H:%M:%S:%N");
 
-	g_print("%s %s\n",
-			g_date_time_format(dt_now, "%F %H:%M:%S:%N"),
-			message);
+	g_print("%s %s\n", dt_format, message);
 
 	if(log_level & G_LOG_LEVEL_ERROR) {
 		g_print("\t**aborting**\n");
 	}
 
 	g_date_time_unref(dt_now);
+	g_free(dt_format);
 }
 
 void logging_logv(const gchar *log_domain, GLogLevelFlags log_level, const gchar *format, va_list vargs) {
