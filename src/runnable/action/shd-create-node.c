@@ -108,7 +108,11 @@ void createnodes_run(CreateNodesAction* action) {
 		g_string_free(hostname, TRUE);
 
 		StartApplicationEvent* event = startapplication_new();
+
+		/* make sure our bootstrap events are set properly */
+		worker->clock_now = 0;
 		worker_scheduleEvent((Event*)event, application->startTime, node->id);
+		worker->clock_now = 0;
 	}
 }
 

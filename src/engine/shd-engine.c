@@ -218,9 +218,8 @@ static gint _engine_distributeEvents(Engine* engine) {
 gint engine_run(Engine* engine) {
 	MAGIC_ASSERT(engine);
 
-	/* make sure our bootstrap events are set properly */
+	/* setup our engine so its globally available */
 	Worker* worker = worker_getPrivate();
-	worker->clock_now = 0;
 	worker->cached_engine = engine;
 
 	/* parse user simulation script, create jobs */
