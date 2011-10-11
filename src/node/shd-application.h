@@ -35,7 +35,7 @@ struct _Application {
 	MAGIC_DECLARE;
 };
 
-Application* application_new(GQuark id, GString* arguments, GString* pluginPath, SimulationTime startTime);
+Application* application_new(GQuark id, gchar* arguments, gchar* pluginPath, SimulationTime startTime);
 void application_free(gpointer data);
 
 #endif /* SHD_APPLICATION_H_ */

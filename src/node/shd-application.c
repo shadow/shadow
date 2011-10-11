@@ -21,13 +21,13 @@
 
 #include "shadow.h"
 
-Application* application_new(GQuark id, GString* arguments, GString* pluginPath, SimulationTime startTime) {
+Application* application_new(GQuark id, gchar* arguments, gchar* pluginPath, SimulationTime startTime) {
 	Application* application = g_new0(Application, 1);
 	MAGIC_INIT(application);
 
 	application->id = id;
-	application->arguments = g_string_new(arguments->str);
-	application->pluginPath = g_string_new(pluginPath->str);
+	application->arguments = g_string_new(arguments);
+	application->pluginPath = g_string_new(pluginPath);
 	application->startTime = startTime;
 
 	return application;

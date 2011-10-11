@@ -86,6 +86,8 @@ void createnodes_run(CreateNodesAction* action) {
 			KBps_down = (guint32) cdf_getRandomValue(bwDownCDF);
 		}
 
+		guint64 cpu_speed_Bps = (guint64) cdf_getRandomValue(cpuCDF);
+
 		/* address */
 		in_addr_t ipAddress = (in_addr_t) action->id;
 
@@ -96,13 +98,12 @@ void createnodes_run(CreateNodesAction* action) {
 			g_snprintf(prefix, 20, "%u.", ++hostnameCounter);
 			hostname = g_string_prepend(hostname, (const char*) prefix);
 		}
+		GQuark id = g_quark_from_string((const gchar*) hostname->str);
 
 		/* add this nodes hostname, etc,  to resolver map */
+		Node* node = node_new(id, network, application, ipAddress, hostname, KBps_down, KBps_up, cpu_speed_Bps);
+		registry_put(worker->cached_engine->registry, NODES, &(node->id), node);
 		resolver_add(worker->cached_engine->resolver, hostname->str, ipAddress, 0, KBps_down, KBps_up);
-
-		guint64 cpu_speed_Bps = (guint64) cdf_getRandomValue(cpuCDF);
-
-		Node* node = node_new(action->id, network, application, ipAddress, hostname, KBps_down, KBps_up, cpu_speed_Bps);
 
 		g_string_free(hostname, TRUE);
 

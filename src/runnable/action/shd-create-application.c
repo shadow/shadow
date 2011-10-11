@@ -48,9 +48,9 @@ void createapplication_run(CreateApplicationAction* action) {
 	MAGIC_ASSERT(action);
 
 	Worker* worker = worker_getPrivate();
-	GString* pluginPath = registry_get(worker->cached_engine->registry, PLUGINPATHS, &(action->pluginID));
+	gchar* pluginPath = registry_get(worker->cached_engine->registry, PLUGINPATHS, &(action->pluginID));
 
-	Application* application = application_new(action->id, action->arguments, pluginPath, action->launchtime);
+	Application* application = application_new(action->id, action->arguments->str, pluginPath, action->launchtime);
 	registry_put(worker->cached_engine->registry, APPLICATIONS, &(application->id), application);
 }
 
