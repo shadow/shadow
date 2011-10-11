@@ -21,19 +21,19 @@
 
 #include "shadow.h"
 
+#include <string.h>
+
 EventVTable startapplication_vtable = {
 	(EventRunFunc) startapplication_run,
 	(EventFreeFunc) startapplication_free,
 	MAGIC_VALUE
 };
 
-StartApplicationEvent* startapplication_new(Node* node, SimulationTime time) {
+StartApplicationEvent* startapplication_new() {
 	StartApplicationEvent* event = g_new0(StartApplicationEvent, 1);
 	MAGIC_INIT(event);
 
 	event_init(&(event->super), &startapplication_vtable);
-	event->super.node = node;
-	event->super.time = time;
 
 	return event;
 }
@@ -42,6 +42,29 @@ void startapplication_run(StartApplicationEvent* event, Node* node) {
 	MAGIC_ASSERT(event);
 	MAGIC_ASSERT(node);
 
+	/* parse the cl_args ginto separate strings */
+	GQueue *args = g_queue_new();
+	gchar* result = strtok(node->application->arguments->str, " ");
+	while(result != NULL) {
+		g_queue_push_tail(args, result);
+		result = strtok(NULL, " ");
+	}
+
+	/* setup for instantiation */
+	gint argc = g_queue_get_length(args);
+	gchar* argv[argc];
+	gint argi = 0;
+	for(argi = 0; argi < argc; argi++) {
+		argv[argi] = g_queue_pop_head(args);
+	}
+	g_queue_free(args);
+
+	// TODO implement
+
+//	info("Instantiating node, ip %s, hostname %s, upstream %u KBps, downstream %u KBps\n", inet_ntoa_t(addr), hostname, KBps_up, KBps_down);
+
+	/* call module instantiation */
+//	context_execute_instantiate(context_provider, argc, argv);
 }
 
 void startapplication_free(StartApplicationEvent* event) {

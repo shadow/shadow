@@ -141,7 +141,7 @@ void worker_scheduleAction(Action* action, SimulationTime nano_delay) {
 //	engine_pushEvent(worker->cached_engine, action);
 }
 
-void worker_scheduleEvent(Event* event, SimulationTime nano_delay, gint receiver_node_id) {
+void worker_scheduleEvent(Event* event, SimulationTime nano_delay, GQuark receiver_node_id) {
 	/* TODO create accessors, or better yet refactor the work to event class */
 	MAGIC_ASSERT(event);
 	MAGIC_ASSERT((&(event->super)));

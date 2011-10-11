@@ -34,7 +34,7 @@ LoadCDFAction* loadcdf_new(GString* name, GString* path) {
 
 	action_init(&(action->super), &loadcdf_vtable);
 
-	action->name = g_string_new(name->str);
+	action->id = g_quark_from_string((const gchar*)name->str);
 	action->path = g_string_new(path->str);
 
 	return action;
@@ -43,16 +43,18 @@ LoadCDFAction* loadcdf_new(GString* name, GString* path) {
 void loadcdf_run(LoadCDFAction* action) {
 	MAGIC_ASSERT(action);
 
-//	cdf_tp cdf = cdf_create(op->filepath);
-//	if(cdf != NULL) {
-//		g_hash_table_insert(wo->loaded_cdfs, gint_key(op->id), cdf);
-//	}
+	CumulativeDistribution* cdf = cdf_new(action->id, action->path->str);
+	if(cdf) {
+		Worker* worker = worker_getPrivate();
+		registry_put(worker->cached_engine->registry, CDFS, &(cdf->id), cdf);
+	} else {
+		critical("loading cdf '%s' from '%s' failed", g_quark_to_string(action->id), action->path->str);
+	}
 }
 
 void loadcdf_free(LoadCDFAction* action) {
 	MAGIC_ASSERT(action);
 
-	g_string_free(action->name, TRUE);
 	g_string_free(action->path, TRUE);
 
 	MAGIC_CLEAR(action);

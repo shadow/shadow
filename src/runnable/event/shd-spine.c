@@ -50,7 +50,7 @@ void spine_run(SpinEvent* event, Node* node) {
 
 	SpinEvent* se = spine_new(event->spin_seconds);
 	SimulationTime t = 1;
-	worker_scheduleEvent((Event*)se, t, node->node_id);
+	worker_scheduleEvent((Event*)se, t, node->id);
 	SpinEvent* se2 = spine_new(event->spin_seconds);
 	worker_scheduleEvent((Event*)se2, t, 0);
 }

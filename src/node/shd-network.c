@@ -19,25 +19,21 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SHD_CREATE_APPLICATION_H_
-#define SHD_CREATE_APPLICATION_H_
-
 #include "shadow.h"
 
-typedef struct _CreateApplicationAction CreateApplicationAction;
+Network* network_new(GQuark id) {
+	Network* network = g_new0(Network, 1);
+	MAGIC_INIT(network);
 
-struct _CreateApplicationAction {
-	Action super;
-	GQuark id;
-	GQuark pluginID;
-	GString* arguments;
-	SimulationTime launchtime;
-	MAGIC_DECLARE;
-};
+	network->id = id;
 
-CreateApplicationAction* createapplication_new(GString* name,
-		GString* pluginName, GString* arguments, guint64 launchtime);
-void createapplication_run(CreateApplicationAction* action);
-void createapplication_free(CreateApplicationAction* action);
+	return network;
+}
 
-#endif /* SHD_CREATE_APPLICATION_H_ */
+void network_free(gpointer data) {
+	Network* network = data;
+	MAGIC_ASSERT(network);
+
+	MAGIC_CLEAR(network);
+	g_free(network);
+}

@@ -56,6 +56,6 @@ void worker_free(gpointer data);
 void worker_executeEvent(gpointer data, gpointer user_data);
 
 void worker_scheduleAction(Action* action, SimulationTime nano_delay);
-void worker_scheduleEvent(Event* event, SimulationTime nano_delay, gint receiver_node_id);
+void worker_scheduleEvent(Event* event, SimulationTime nano_delay, GQuark receiver_node_id);
 
 #endif /* SHD_WORKER_H_ */

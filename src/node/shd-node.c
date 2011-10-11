@@ -21,15 +21,22 @@
 
 #include "shadow.h"
 
-Node* node_new(gint id) {
+Node* node_new(GQuark id, Network* network, Application* application, in_addr_t ipAddress, GString* hostname, guint32 KBps_down, guint32 KBps_up, guint64 cpu_speed_Bps) {
 	Node* node = g_new0(Node, 1);
 	MAGIC_INIT(node);
 
-	node->node_id = id;
+	node->id = id;
 	node->event_mailbox = g_async_queue_new_full(event_free);
 	node->event_priority_queue = g_queue_new();
 
 	node->node_lock = g_mutex_new();
+
+	/* application state is created lazily as an event */
+	node->application = application;
+	node->network = network;
+
+//  FIXME create this!
+//	node->vsocket_mgr = vsocket_mgr_create(context_provider, ipAddress, KBps_down, KBps_up, cpu_speed_Bps);
 
 	return node;
 }
@@ -91,7 +98,7 @@ gint node_compare(gconstpointer a, gconstpointer b, gpointer user_data) {
 	const Node* nb = b;
 	MAGIC_ASSERT(na);
 	MAGIC_ASSERT(nb);
-	return na->node_id > nb->node_id ? +1 : na->node_id == nb->node_id ? 0 : -1;
+	return na->id > nb->id ? +1 : na->id == nb->id ? 0 : -1;
 }
 
 gboolean node_equal(Node* a, Node* b) {

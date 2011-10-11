@@ -52,13 +52,16 @@ Engine* engine_new(Configuration* config) {
 	engine->engineIdle = g_mutex_new();
 
 	engine->registry = registry_new();
-	registry_register(engine->registry, NODES, node_free);
+	registry_register(engine->registry, NODES, NULL, node_free);
+	registry_register(engine->registry, NETWORKS, NULL, network_free);
+	registry_register(engine->registry, APPLICATIONS, NULL, application_free);
+	registry_register(engine->registry, CDFS, NULL, cdf_free);
+	registry_register(engine->registry, PLUGINPATHS, g_free, g_free);
 
 	engine->minTimeJump = config->minTimeJump * SIMTIME_ONE_MILLISECOND;
 
 	engine->resolver = resolver_create();
 	engine->topology = topology_create();
-	engine->pluginNameToPath = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
 
 	return engine;
 }
@@ -82,7 +85,6 @@ void engine_free(Engine* engine) {
 
 	topology_destroy(engine->topology);
 	resolver_destroy(engine->resolver);
-	g_hash_table_destroy(engine->pluginNameToPath);
 
 	MAGIC_CLEAR(engine);
 	g_free(engine);
@@ -239,7 +241,10 @@ gint engine_run(Engine* engine) {
 	} else {
 		/*
 		 * loop through actions that were created from parsing. this will create
-		 * all the nodes, networks, applications, load the plugins, etc
+		 * all the nodes, networks, applications, etc., and add an application
+		 * start event for each node tp bootstrap the simulation. Note that the
+		 * plug-in libraries themselves are not loaded until a worker needs it,
+		 * since each worker will need its own private version.
 		 */
 		while(g_queue_get_length(actions) > 0) {
 			Action* a = g_queue_pop_head(actions);
@@ -268,7 +273,7 @@ void engine_pushEvent(Engine* engine, Event* event) {
 	g_async_queue_push_sorted(engine->masterEventQueue, event, event_compare, NULL);
 }
 
-gpointer engine_lookup(Engine* engine, EngineStorage type, gint id) {
+gpointer engine_lookup(Engine* engine, EngineStorage type, GQuark id) {
 	MAGIC_ASSERT(engine);
 
 	/*
@@ -284,24 +289,9 @@ gint engine_generateWorkerID(Engine* engine) {
 	return g_atomic_int_exchange_and_add(&(engine->protect.workerIDCounter), 1);
 }
 
-gint engine_generateNodeID(Engine* engine) {
+gint engine_generateObjectID(Engine* engine) {
 	MAGIC_ASSERT(engine);
-	return g_atomic_int_exchange_and_add(&(engine->protect.nodeIDCounter), 1);
-}
-
-gint engine_generateNetworkID(Engine* engine) {
-	MAGIC_ASSERT(engine);
-	return g_atomic_int_exchange_and_add(&(engine->protect.networkIDCounter), 1);
-}
-
-gint engine_generateCDFID(Engine* engine) {
-	MAGIC_ASSERT(engine);
-	return g_atomic_int_exchange_and_add(&(engine->protect.cdfIDCounter), 1);
-}
-
-gint engine_generateModuleID(Engine* engine) {
-	MAGIC_ASSERT(engine);
-	return g_atomic_int_exchange_and_add(&(engine->protect.moduleIDCounter), 1);
+	return g_atomic_int_exchange_and_add(&(engine->protect.objectIDCounter), 1);
 }
 
 gint engine_getNumThreads(Engine* engine) {

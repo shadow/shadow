@@ -22,6 +22,20 @@
 #ifndef SHD_APPLICATION_H_
 #define SHD_APPLICATION_H_
 
+#include "shadow.h"
 
+typedef struct _Application Application;
+
+struct _Application {
+	GQuark id;
+	GString* arguments;
+	GString* pluginPath;
+	SimulationTime startTime;
+
+	MAGIC_DECLARE;
+};
+
+Application* application_new(GQuark id, GString* arguments, GString* pluginPath, SimulationTime startTime);
+void application_free(gpointer data);
 
 #endif /* SHD_APPLICATION_H_ */

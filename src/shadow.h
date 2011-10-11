@@ -65,6 +65,8 @@
 #include "runnable/action/shd-load-plugin.h"
 #include "runnable/action/shd-kill-engine.h"
 
+#include "node/shd-network.h"
+#include "node/shd-application.h"
 #include "node/shd-node.h"
 
 #include "engine/shd-logging.h"

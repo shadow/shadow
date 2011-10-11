@@ -52,8 +52,9 @@ static void topology_track_minmax(topology_tp g, CumulativeDistribution* cdf) {
 
 		/* TODO should not be reliant on worker, instead pass in minimum when creating the topology */
 		Worker* worker = worker_getPrivate();
-		if(g->runahead_min < worker->cached_engine->config->minTimeJump) {
-			g->runahead_min = worker->cached_engine->config->minTimeJump;
+		SimulationTime t = engine_getMinTimeJump(worker->cached_engine);
+		if(g->runahead_min < t) {
+			g->runahead_min = (guint)t;
 		}
 	}
 }
@@ -68,7 +69,7 @@ static gdouble topology_bound_reliability(gdouble reliability) {
 	return reliability;
 }
 
-void topology_add_vertex(topology_tp g, guint network_id, CumulativeDistribution* latency_cdf, gdouble reliablity) {
+void topology_add_vertex(topology_tp g, GQuark network_id, CumulativeDistribution* latency_cdf, gdouble reliablity) {
 	reliablity = topology_bound_reliability(reliablity);
 	if(g != NULL) {
 		simnet_vertex_tp v = g_hash_table_lookup(g->vertices_map, &network_id);
@@ -93,7 +94,7 @@ void topology_add_vertex(topology_tp g, guint network_id, CumulativeDistribution
 	}
 }
 
-void topology_add_edge(topology_tp g, guint id1, CumulativeDistribution* latency_cdf_1to2, gdouble reliablity_1to2, guint id2, CumulativeDistribution* latency_cdf_2to1, gdouble reliablity_2to1) {
+void topology_add_edge(topology_tp g, GQuark id1, CumulativeDistribution* latency_cdf_1to2, gdouble reliablity_1to2, GQuark id2, CumulativeDistribution* latency_cdf_2to1, gdouble reliablity_2to1) {
 	reliablity_1to2 = topology_bound_reliability(reliablity_1to2);
 	reliablity_2to1 = topology_bound_reliability(reliablity_2to1);
 
@@ -154,7 +155,7 @@ void topology_destroy(topology_tp g) {
 	}
 }
 
-gdouble topology_end2end_latency(topology_tp g, guint src_network_id, guint dst_network_id) {
+gdouble topology_end2end_latency(topology_tp g, GQuark src_network_id, GQuark dst_network_id) {
 	gdouble milliseconds_latency = -1;
 
 	if(g != NULL) {
@@ -186,7 +187,7 @@ gdouble topology_end2end_latency(topology_tp g, guint src_network_id, guint dst_
 	return milliseconds_latency;
 }
 
-gdouble topology_end2end_reliablity(topology_tp g, guint src_network_id, guint dst_network_id) {
+gdouble topology_end2end_reliablity(topology_tp g, GQuark src_network_id, GQuark dst_network_id) {
 	gdouble reliability = -1;
 
 	if(g != NULL) {

@@ -36,7 +36,7 @@ GenerateCDFAction* generatecdf_new(GString* name, guint64 center, guint64 width,
 
 	action_init(&(action->super), &generatecdf_vtable);
 
-	action->name = g_string_new(name->str);
+	action->id = g_quark_from_string((const gchar*)name->str);
 	action->center = center;
 	action->width = width;
 	action->tail = tail;
@@ -47,17 +47,17 @@ GenerateCDFAction* generatecdf_new(GString* name, guint64 center, guint64 width,
 void generatecdf_run(GenerateCDFAction* action) {
 	MAGIC_ASSERT(action);
 
-//				/* normally this would happen at the event exe time */
-//				cdf_tp cdf = cdf_generate(op->base_delay, op->base_width, op->tail_width);
-//				if(cdf != NULL) {
-//					g_hash_table_insert(wo->loaded_cdfs, gint_key(op->id), cdf);
-//				}
+	CumulativeDistribution* cdf = cdf_generate(action->id, action->center, action->width, action->tail);
+	if(cdf) {
+		Worker* worker = worker_getPrivate();
+		registry_put(worker->cached_engine->registry, CDFS, &(cdf->id), cdf);
+	} else {
+		critical("generating cdf '%s' failed", g_quark_to_string(action->id));
+	}
 }
 
 void generatecdf_free(GenerateCDFAction* action) {
 	MAGIC_ASSERT(action);
-
-	g_string_free(action->name, TRUE);
 
 	MAGIC_CLEAR(action);
 	g_free(action);

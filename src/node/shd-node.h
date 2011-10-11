@@ -24,6 +24,8 @@
 
 #include "shadow.h"
 
+#include <netinet/in.h>
+
 typedef struct _Node Node;
 
 struct _Node {
@@ -40,12 +42,15 @@ struct _Node {
 	 * worker and should not be modified by other nodes. */
 	GQueue* event_priority_queue;
 
-	gint node_id;
+	GQuark id;
+	Network* network;
+	Application* application;
+	PluginState* state;
 
 	MAGIC_DECLARE;
 };
 
-Node* node_new();
+Node* node_new(GQuark id, Network* network, Application* application, in_addr_t ipAddress, GString* hostname, guint32 KBps_down, guint32 KBps_up, guint64 cpu_speed_Bps);
 void node_free(gpointer data);
 
 void node_lock(Node* node);

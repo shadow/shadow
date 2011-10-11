@@ -36,7 +36,7 @@ CreateNetworkAction* createnetwork_new(GString* name, GString* latencyCDFName,
 
 	action_init(&(action->super), &createnetwork_vtable);
 
-	action->name = g_string_new(name->str);
+	action->id = g_quark_from_string((const gchar*)name->str);
 	action->latencyCDFName = g_string_new(latencyCDFName->str);
 	action->reliability = reliability;
 
@@ -46,37 +46,23 @@ CreateNetworkAction* createnetwork_new(GString* name, GString* latencyCDFName,
 void createnetwork_run(CreateNetworkAction* action) {
 	MAGIC_ASSERT(action);
 
-//				/* make sure we have the dsim variable data */
-//				if(dsimop->arguments[0].v.var_val &&
-//						dsimop->arguments[0].v.var_val->data_type == dsim_vartracker_type_cdftrack &&
-//						dsimop->arguments[0].v.var_val->data) {
-//					guint netid = sim_master_dsimop_helper(dsimop, master->network_tracking, dsim_vartracker_type_nettrack);
-//					guint cdf_id = ((sim_master_tracker_tp)dsimop->arguments[0].v.var_val->data)->id;
-//					gdouble reliability = dsimop->arguments[1].v.gdouble_val;
-//
-//					/* get the cdf used for latency */
-//					sim_master_tracker_tp cdf_tracker = g_hash_table_lookup(master->cdf_tracking, &cdf_id);
-//					if(cdf_tracker != NULL && cdf_tracker->value != NULL) {
-//						/* add it to our topology */
-//						cdf_tp cdf = cdf_tracker->value;
-//						simnet_graph_add_vertex(master->network_topology, netid, cdf, reliability);
-//					}
-//				}
-//
-//				/* normally this would happen at the event exe time */
-//
-//				/* build up our knowledge of the network */
-//				cdf_tp cdf = g_hash_table_lookup(wo->loaded_cdfs, &op->cdf_id_gintra_latency);
-//				simnet_graph_add_vertex(wo->network_topology, op->id, cdf, op->reliability);
-//
-//				/* vci needs ids to look up graph properties */
-//				vci_network_create(wo->vci_mgr, op->id);
+	Worker* worker = worker_getPrivate();
+
+	GQuark cdfID = g_quark_from_string((const gchar*)action->latencyCDFName->str);
+	CumulativeDistribution* cdf = registry_get(worker->cached_engine->registry, CDFS, &cdfID);
+	if(cdf) {
+		topology_add_vertex(worker->cached_engine->topology, action->id, cdf, action->reliability);
+	} else {
+		critical("failed to add vertex to topology");
+	}
+
+	Network* network = network_new(action->id);
+	registry_put(worker->cached_engine->registry, NETWORKS, &(network->id), network);
 }
 
 void createnetwork_free(CreateNetworkAction* action) {
 	MAGIC_ASSERT(action);
 
-	g_string_free(action->name, TRUE);
 	g_string_free(action->latencyCDFName, TRUE);
 
 	MAGIC_CLEAR(action);

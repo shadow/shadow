@@ -28,7 +28,7 @@ typedef struct _GenerateCDFAction GenerateCDFAction;
 
 struct _GenerateCDFAction {
 	Action super;
-	GString* name;
+	GQuark id;
 	guint64 center;
 	guint64 width;
 	guint64 tail;

@@ -75,7 +75,7 @@ gboolean shadowlib_resolveIPAddress(in_addr_t addr, gchar* name_out, gint name_o
 
 in_addr_t shadowlib_getIPAddress() {
 	Worker* worker = worker_getPrivate();
-	return worker->cached_node->node_id;
+	return worker->cached_node->id;
 }
 
 gboolean shadowlib_getHostname(gchar* name_out, gint name_out_len) {

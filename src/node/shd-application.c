@@ -18,3 +18,28 @@
  * You should have received a copy of the GNU General Public License
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
+
+#include "shadow.h"
+
+Application* application_new(GQuark id, GString* arguments, GString* pluginPath, SimulationTime startTime) {
+	Application* application = g_new0(Application, 1);
+	MAGIC_INIT(application);
+
+	application->id = id;
+	application->arguments = g_string_new(arguments->str);
+	application->pluginPath = g_string_new(pluginPath->str);
+	application->startTime = startTime;
+
+	return application;
+}
+
+void application_free(gpointer data) {
+	Application* application = data;
+	MAGIC_ASSERT(application);
+
+	g_string_free(application->arguments, TRUE);
+	g_string_free(application->pluginPath, TRUE);
+
+	MAGIC_CLEAR(application);
+	g_free(application);
+}

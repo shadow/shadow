@@ -29,12 +29,12 @@ typedef struct _CreateNodesAction CreateNodesAction;
 struct _CreateNodesAction {
 	Action super;
 	guint64 quantity;
-	GString* name;
-	GString* applicationName;
-	GString* cpudelayCDFName;
-	GString* networkName;
-	GString* bandwidthup;
-	GString* bandwidthdown;
+	GQuark id;
+	GQuark applicationID;
+	GQuark cpudelayCDFID;
+	GQuark networkID;
+	GQuark bandwidthupID;
+	GQuark bandwidthdownID;
 	MAGIC_DECLARE;
 };
 

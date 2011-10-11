@@ -36,10 +36,10 @@ CreateApplicationAction* createapplication_new(GString* name,
 
 	action_init(&(action->super), &createapplication_vtable);
 
-	action->name = g_string_new(name->str);
-	action->pluginName = g_string_new(pluginName->str);
+	action->id = g_quark_from_string((const gchar*) name->str);
+	action->pluginID = g_quark_from_string((const gchar*) pluginName->str);
 	action->arguments = g_string_new(arguments->str);
-	action->launchtime = (SimulationTime)launchtime;
+	action->launchtime = (SimulationTime) (launchtime * SIMTIME_ONE_SECOND);
 
 	return action;
 }
@@ -48,14 +48,15 @@ void createapplication_run(CreateApplicationAction* action) {
 	MAGIC_ASSERT(action);
 
 	Worker* worker = worker_getPrivate();
+	GString* pluginPath = registry_get(worker->cached_engine->registry, PLUGINPATHS, &(action->pluginID));
 
+	Application* application = application_new(action->id, action->arguments, pluginPath, action->launchtime);
+	registry_put(worker->cached_engine->registry, APPLICATIONS, &(application->id), application);
 }
 
 void createapplication_free(CreateApplicationAction* action) {
 	MAGIC_ASSERT(action);
 
-	g_string_free(action->name, TRUE);
-	g_string_free(action->pluginName, TRUE);
 	g_string_free(action->arguments, TRUE);
 
 	MAGIC_CLEAR(action);

@@ -39,14 +39,15 @@ struct _CumulativeDistributionEntry {
 
 typedef struct _CumulativeDistribution CumulativeDistribution;
 struct _CumulativeDistribution {
+	GQuark id;
 	GList* entries;
 	MAGIC_DECLARE;
 };
 
 
-CumulativeDistribution* cdf_create(const gchar* filename);
-CumulativeDistribution* cdf_generate(guint base_center, guint base_width, guint tail_width);
-void cdf_destroy(CumulativeDistribution* cdf);
+CumulativeDistribution* cdf_new(GQuark id, const gchar* filename);
+CumulativeDistribution* cdf_generate(GQuark id, guint base_center, guint base_width, guint tail_width);
+void cdf_free(gpointer data);
 
 gdouble cdf_getMinimumValue(CumulativeDistribution* cdf);
 gdouble cdf_getMaximumValue(CumulativeDistribution* cdf);

@@ -35,9 +35,10 @@ struct _Registry {
 Registry* registry_new();
 void registry_free(Registry* registry);
 
-void registry_register(Registry* registry, gint index, GDestroyNotify value_destory_func);
-void registry_put(Registry* registry, gint index, gint* key, gpointer value);
-gpointer registry_get(Registry* registry, gint index, gint* key);
+void registry_register(Registry* registry, gint index,
+		GDestroyNotify keyDestroyFunc, GDestroyNotify valueDestroyFunc);
+void registry_put(Registry* registry, gint index, GQuark* key, gpointer value);
+gpointer registry_get(Registry* registry, gint index, GQuark* key);
 GList* registry_getAll(Registry* registry, gint index);
 
 #endif /* SHD_REGISTRY_H_ */

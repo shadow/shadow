@@ -34,7 +34,7 @@ LoadPluginAction* loadplugin_new(GString* name, GString* path) {
 
 	action_init(&(action->super), &loadplugin_vtable);
 
-	action->name = g_string_new(name->str);
+	action->id = g_quark_from_string((const gchar*) name->str);
 	action->path = g_string_new(path->str);
 
 	return action;
@@ -51,15 +51,15 @@ void loadplugin_run(LoadPluginAction* action) {
 	 */
 	Worker* worker = worker_getPrivate();
 
-	/* the hash table now owns the actual strings (but not the GStrings) */
-	/* FIXME: check for collisions */
-	g_hash_table_replace(worker->cached_engine->pluginNameToPath, action->name->str, action->path->str);
+	/* the hash table now owns the actual string (but not the GString) */
+	GQuark* id = g_new0(GQuark, 1);
+	*id = action->id;
+	registry_put(worker->cached_engine->registry, PLUGINPATHS, id, action->path->str);
 }
 
 void loadplugin_free(LoadPluginAction* action) {
 	MAGIC_ASSERT(action);
 
-	g_string_free(action->name, FALSE);
 	g_string_free(action->path, FALSE);
 
 	MAGIC_CLEAR(action);

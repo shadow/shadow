@@ -28,11 +28,11 @@ typedef struct _ConnectNetworkAction ConnectNetworkAction;
 
 struct _ConnectNetworkAction {
 	Action super;
-	GString* networkaName;
-	GString* networkbName;
-	GString* latencyabCDFName;
+	GQuark networkaID;
+	GQuark networkbID;
+	GQuark latencyabCDFID;
 	gdouble reliabilityab;
-	GString* latencybaCDFName;
+	GQuark latencybaCDFID;
 	gdouble reliabilityba;
 	MAGIC_DECLARE;
 };

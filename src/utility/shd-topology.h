@@ -26,7 +26,7 @@
 #include "shadow.h"
 
 typedef struct simnet_vertex_s {
-	guint id;
+	GQuark id;
 
 	/* connections to other nodes */
 	GHashTable *edges;
@@ -63,9 +63,9 @@ typedef struct topology_s {
 
 topology_tp topology_create();
 void topology_destroy(topology_tp g);
-void topology_add_vertex(topology_tp g, guint network_id, CumulativeDistribution* latency_cdf, gdouble reliablity);
-void topology_add_edge(topology_tp g, guint id1, CumulativeDistribution* latency_cdf_1to2, gdouble reliablity_1to2, guint id2, CumulativeDistribution* latency_cdf_2to1, gdouble reliablity_2to1);
-gdouble topology_end2end_latency(topology_tp g, guint src_network_id, guint dst_network_id);
-gdouble topology_end2end_reliablity(topology_tp g, guint src_network_id, guint dst_network_id);
+void topology_add_vertex(topology_tp g, GQuark network_id, CumulativeDistribution* latency_cdf, gdouble reliablity);
+void topology_add_edge(topology_tp g, GQuark id1, CumulativeDistribution* latency_cdf_1to2, gdouble reliablity_1to2, GQuark id2, CumulativeDistribution* latency_cdf_2to1, gdouble reliablity_2to1);
+gdouble topology_end2end_latency(topology_tp g, GQuark src_network_id, GQuark dst_network_id);
+gdouble topology_end2end_reliablity(topology_tp g, GQuark src_network_id, GQuark dst_network_id);
 
 #endif /* SHD_TOPOLOGY_H_ */

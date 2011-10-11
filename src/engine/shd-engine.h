@@ -27,7 +27,7 @@
 typedef enum _EngineStorage EngineStorage;
 
 enum _EngineStorage {
-	NODES, NETWORKS, CDFS, HOSTNAMES, MODULES,
+	NODES, NETWORKS, APPLICATIONS, CDFS, PLUGINPATHS
 };
 
 typedef struct _Engine Engine;
@@ -80,7 +80,6 @@ struct _Engine {
 	/* track global network members and topology */
 	resolver_tp resolver;
 	topology_tp topology;
-	GHashTable* pluginNameToPath;
 
 	/*
 	 * these values are modified during simulation and must be protected so
@@ -92,10 +91,7 @@ struct _Engine {
 
 		/* id generation counters */
 		volatile gint workerIDCounter;
-		volatile gint nodeIDCounter;
-		volatile gint networkIDCounter;
-		volatile gint cdfIDCounter;
-		volatile gint moduleIDCounter;
+		volatile gint objectIDCounter;
 	} protect;
 	MAGIC_DECLARE;
 };
@@ -104,7 +100,7 @@ Engine* engine_new(Configuration* config);
 void engine_free(Engine* engine);
 gint engine_run(Engine* engine);
 void engine_pushEvent(Engine* engine, Event* event);
-gpointer engine_lookup(Engine* engine, EngineStorage type, gint id);
+gpointer engine_lookup(Engine* engine, EngineStorage type, GQuark id);
 
 gint engine_generateWorkerID(Engine* engine);
 gint engine_generateNodeID(Engine* engine);

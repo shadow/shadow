@@ -77,22 +77,24 @@ static GList* cdf_parse(const gchar* filename) {
 	return entries;
 }
 
-CumulativeDistribution* cdf_create(const gchar* filename) {
+CumulativeDistribution* cdf_new(GQuark id, const gchar* filename) {
 	GList* ol = cdf_parse(filename);
 	if(ol != NULL) {
 		CumulativeDistribution* cdf = g_new0(CumulativeDistribution, 1);
 		MAGIC_INIT(cdf);
 		cdf->entries = ol;
+		cdf->id = id;
 		return cdf;
 	} else {
 		return NULL;
 	}
 }
 
-CumulativeDistribution* cdf_generate(guint base_center, guint base_width, guint tail_width) {
+CumulativeDistribution* cdf_generate(GQuark id, guint base_center, guint base_width, guint tail_width) {
 	CumulativeDistribution* cdf = g_new0(CumulativeDistribution, 1);
 	MAGIC_INIT(cdf);
 	cdf->entries = NULL;
+	cdf->id = id;
 
 	/* TODO fix this - use model from vci?? */
 	CumulativeDistributionEntry* entry1 = cdfentry_create();
@@ -117,7 +119,8 @@ CumulativeDistribution* cdf_generate(guint base_center, guint base_width, guint 
 	return cdf;
 }
 
-void cdf_destroy(CumulativeDistribution* cdf) {
+void cdf_free(gpointer data) {
+	CumulativeDistribution* cdf = data;
 	MAGIC_ASSERT(cdf);
 	g_list_free_full(cdf->entries, cdfentry_free);
 	MAGIC_CLEAR(cdf);

@@ -28,7 +28,7 @@ typedef struct _LoadCDFAction LoadCDFAction;
 
 struct _LoadCDFAction {
 	Action super;
-	GString* name;
+	GQuark id;
 	GString* path;
 	MAGIC_DECLARE;
 };

@@ -52,15 +52,17 @@ void registry_free(Registry* registry) {
 	g_free(registry);
 }
 
-void registry_register(Registry* registry, gint index, GDestroyNotify value_destory_func) {
+void registry_register(Registry* registry, gint index,
+		GDestroyNotify keyDestroyFunc, GDestroyNotify valueDestroyFunc) {
 	MAGIC_ASSERT(registry);
 
 	/*
 	 * create a new entry, i.e. track a new set of objects. we manage keys for
 	 * the outer registry, but caller manages keys for this entry
 	 */
-	GHashTable* entry = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, value_destory_func);
+	GHashTable* entry = g_hash_table_new_full(g_int_hash, g_int_equal, keyDestroyFunc, valueDestroyFunc);
 
+	/* these will be freed when the storage table is destroyed */
 	gint* storage_index = g_new0(gint, 1);
 	*storage_index = index;
 
@@ -73,10 +75,10 @@ static GHashTable* _registry_getEntry(Registry* registry, gint index) {
 	return entry;
 }
 
-void registry_put(Registry* registry, gint index, gint* key, gpointer value) {
+void registry_put(Registry* registry, gint index, GQuark* key, gpointer value) {
 	MAGIC_ASSERT(registry);
 
-	/* simple lookup from the hashtable stored at index */
+	/* simple insert into the hashtable stored at index */
 	GHashTable* entry = _registry_getEntry(registry, index);
 
 	/* make sure an object doesnt exist at this key */
@@ -85,10 +87,10 @@ void registry_put(Registry* registry, gint index, gint* key, gpointer value) {
 	g_hash_table_insert(entry, (gpointer)key, value);
 }
 
-gpointer registry_get(Registry* registry, gint index, gint* key) {
+gpointer registry_get(Registry* registry, gint index, GQuark* key) {
 	MAGIC_ASSERT(registry);
 
-	/* simple insert into the hashtable stored at index */
+	/* simple lookup from the hashtable stored at index */
 	GHashTable* entry = _registry_getEntry(registry, index);
 	return g_hash_table_lookup(entry, (gconstpointer)key);
 }

@@ -26,21 +26,18 @@
 
 /**
  * Start an application for a given Node. This event is basically a bootstrap
- * event for each node and is therefore unique in that it requires a reference
- * to the node and the execution time. (Generally the node reference and time
- * are set automatically.)
+ * event for each node.
  */
 
 typedef struct _StartApplicationEvent StartApplicationEvent;
 
 struct _StartApplicationEvent {
 	Event super;
-	guint spin_seconds;
 
 	MAGIC_DECLARE;
 };
 
-StartApplicationEvent* startapplication_new(Node* node, SimulationTime time);
+StartApplicationEvent* startapplication_new();
 void startapplication_run(StartApplicationEvent* event, Node* node);
 void startapplication_free(StartApplicationEvent* event);
 
