@@ -31,7 +31,7 @@ static Worker* _worker_new(gint id) {
 	worker->clock_barrier = SIMTIME_INVALID;
 
 	/* each worker needs a private copy of each plug-in library */
-	worker->plugins = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, plugin_free);
+	worker->plugins = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, plugin_free);
 
 	return worker;
 }
@@ -63,6 +63,26 @@ Worker* worker_getPrivate() {
 
 	MAGIC_ASSERT(worker);
 	return worker;
+}
+
+Plugin* worker_getPlugin(GQuark* softwareID, GString* pluginPath) {
+	g_assert(pluginPath);
+
+	/* worker has a private plug-in for each software ID */
+	Worker* worker = worker_getPrivate();
+	Plugin* plugin = g_hash_table_lookup(worker->plugins, softwareID);
+	if(!plugin) {
+		/* plug-in has yet to be loaded by this worker. do that now with a
+		 * unique temporary filename so we dont affect other workers.
+		 * XXX FIXME must do this for multithreads
+		 * g_file_open_tmp
+		 */
+
+		plugin = plugin_new(pluginPath);
+		g_hash_table_replace(worker->plugins, softwareID, plugin);
+	}
+
+	return plugin;
 }
 
 void worker_executeEvent(gpointer data, gpointer user_data) {

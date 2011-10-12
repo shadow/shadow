@@ -21,8 +21,6 @@
 
 #include "shadow.h"
 
-#include <string.h>
-
 EventVTable startapplication_vtable = {
 	(EventRunFunc) startapplication_run,
 	(EventFreeFunc) startapplication_free,
@@ -42,30 +40,7 @@ void startapplication_run(StartApplicationEvent* event, Node* node) {
 	MAGIC_ASSERT(event);
 	MAGIC_ASSERT(node);
 
-	/* parse the cl_args ginto separate strings */
-	GQueue *arguments = g_queue_new();
-	gchar* argString = node_getApplicationArguments(node);
-	gchar* result = strtok(argString, " ");
-	while(result != NULL) {
-		g_queue_push_tail(arguments, result);
-		result = strtok(NULL, " ");
-	}
-
-	/* setup for instantiation */
-	gint argc = g_queue_get_length(arguments);
-	gchar* argv[argc];
-	gint argi = 0;
-	for(argi = 0; argi < argc; argi++) {
-		argv[argi] = g_queue_pop_head(arguments);
-	}
-	g_queue_free(arguments);
-
-	// TODO implement
-
-//	info("Instantiating node, ip %s, hostname %s, upstream %u KBps, downstream %u KBps\n", inet_ntoa_t(addr), hostname, KBps_up, KBps_down);
-
-	/* call module instantiation */
-//	context_execute_instantiate(context_provider, argc, argv);
+	node_startApplication(node);
 }
 
 void startapplication_free(StartApplicationEvent* event) {

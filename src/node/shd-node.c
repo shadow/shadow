@@ -32,9 +32,12 @@ Node* node_new(GQuark id, Network* network, Software* software, GString* hostnam
 
 	node->node_lock = g_mutex_new();
 
-//	node->application = application_new();
+	node->application = application_new(software);
 //  FIXME create this!
 //	node->vsocket_mgr = vsocket_mgr_create(context_provider, ipAddress, KBps_down, KBps_up, cpu_speed_Bps);
+
+	info("Created Node '%s', ip %s, %u bwUpKiBps, %u bwDownKiBps, %lu cpuBps\n",
+			g_quark_to_string(node->id), NTOA(node->id), 0, 0, 0);
 
 	return node;
 }
@@ -91,9 +94,9 @@ guint node_getNumTasks(Node* node) {
 	return g_queue_get_length(node->event_priority_queue);
 }
 
-gchar* node_getApplicationArguments(Node* node) {
+void node_startApplication(Node* node) {
 	MAGIC_ASSERT(node);
-	return node->application->software->arguments->str;
+	application_boot(node->application);
 }
 
 gint node_compare(gconstpointer a, gconstpointer b, gpointer user_data) {

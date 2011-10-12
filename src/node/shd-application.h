@@ -32,7 +32,12 @@ struct _Application {
 	MAGIC_DECLARE;
 };
 
-Application* application_new();
+Application* application_new(Software* software);
 void application_free(Application* application);
+
+void application_boot(Application* application);
+void application_kill(Application* application);
+void application_readable(Application* application, gint socketDescriptor);
+void application_writable(Application* application, gint socketDescriptor);
 
 #endif /* SHD_APPLICATION_H_ */

@@ -57,7 +57,7 @@ void node_free(gpointer data);
 void node_lock(Node* node);
 void node_unlock(Node* node);
 
-gchar* node_getApplicationArguments(Node* node);
+void node_startApplication(Node* node);
 
 void node_pushMail(Node* node, Event* event);
 Event* node_popMail(Node* node);

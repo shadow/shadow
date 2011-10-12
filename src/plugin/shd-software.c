@@ -21,6 +21,8 @@
 
 #include "shadow.h"
 
+#include <string.h>
+
 Software* software_new(GQuark id, gchar* arguments, gchar* pluginPath, SimulationTime startTime) {
 	Software* software = g_new0(Software, 1);
 	MAGIC_INIT(software);
@@ -42,4 +44,36 @@ void software_free(gpointer data) {
 
 	MAGIC_CLEAR(software);
 	g_free(software);
+}
+
+gint software_getArguments(Software* software, gchar** argvOut[]) {
+	MAGIC_ASSERT(software);
+
+	gchar* argumentString = g_strdup(software->arguments->str);
+	GQueue *arguments = g_queue_new();
+
+	/* parse the full argument string into separate strings */
+	gchar* token = strtok(argumentString, " ");
+	while(token != NULL) {
+		gchar* argument = g_strdup((const gchar*) token);
+		g_queue_push_tail(arguments, argument);
+		token = strtok(NULL, " ");
+	}
+
+	/* setup for creating new plug-in, i.e. format into argc and argv */
+	gint argc = g_queue_get_length(arguments);
+	/* a pointer to an array that holds pointers */
+	gchar** argv = g_new0(gchar*, argc);
+
+	for(gint i = 0; i < argc; i++) {
+		argv[i] = g_queue_pop_head(arguments);
+	}
+
+	/* cleanup */
+	g_free(argumentString);
+	g_queue_free(arguments);
+
+	/* transfer to the caller - they must free argv and each element of it */
+	*argvOut = argv;
+	return argc;
 }

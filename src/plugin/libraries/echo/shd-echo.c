@@ -53,7 +53,7 @@ void __shadow_plugin_init__(ShadowlibVTable* shadowlibFuncs) {
 	 * tell shadow which of our functions it can use to notify our plugin,
 	 * and allow it to track our state for each instance of this plugin
 	 */
-	gboolean success = shadowlibFuncs->registration(&echoLibraryFuncs, 1, &echo_globalState);
+	gboolean success = shadowlibFuncs->registration(&echoLibraryFuncs, 1, sizeof(Echo));
 	if(!success) {
 		shadowlibFuncs->log("Echo error registering state");
 	}

@@ -47,6 +47,8 @@ struct _Worker {
 Worker* worker_getPrivate();
 void worker_free(gpointer data);
 
+Plugin* worker_getPlugin(GQuark* softwareID, GString* pluginPath);
+
 /**
  * Execute the given event. Return TRUE if the event was executed successfully,
  * or FALSE if there was an error during execution.

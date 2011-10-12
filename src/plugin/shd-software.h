@@ -37,5 +37,6 @@ struct _Software {
 
 Software* software_new(GQuark id, gchar* arguments, gchar* pluginPath, SimulationTime startTime);
 void software_free(gpointer data);
+gint software_getArguments(Software* software, gchar** argvOut[]);
 
 #endif /* SHD_SOFTWARE_H_ */
