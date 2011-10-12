@@ -36,11 +36,8 @@ gboolean shadowlib_register(PluginVTable* callbackFunctions, guint nVariables, .
 	va_list variableArguments;
 	va_start(variableArguments, nVariables);
 
-	/* these are the physical memory addresses and sizes for each variable */
-	PluginState* residentState = pluginstate_new(callbackFunctions, nVariables, variableArguments);
-
 	Worker* worker = worker_getPrivate();
-	plugin_registerResidentState(worker->cached_plugin, residentState);
+	plugin_registerResidentState(worker->cached_plugin, callbackFunctions, nVariables, variableArguments);
 
 	va_end(variableArguments);
 

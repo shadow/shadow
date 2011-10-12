@@ -31,16 +31,15 @@ struct _Plugin {
 	GModule* handle;
 	ShadowPluginInitializeFunc init;
 	PluginState* residentState;
-	gboolean isRegisterred;
 	PluginState* defaultState;
+	gboolean isRegisterred;
+	gboolean isExecuting;
 	MAGIC_DECLARE;
 };
 
 Plugin* plugin_new(GString* filename);
 void plugin_free(gpointer data);
 
-void plugin_registerResidentState(Plugin* plugin, PluginState* state);
-void plugin_loadState(Plugin* plugin, PluginState* state);
-void plugin_saveState(Plugin* plugin, PluginState* state);
+void plugin_registerResidentState(Plugin* plugin, PluginVTable* callbackFunctions, guint nVariables, va_list variableArguments);
 
 #endif /* SHD_PLUGIN_H_ */

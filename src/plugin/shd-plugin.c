@@ -42,9 +42,15 @@ Plugin* plugin_new(GString* filename) {
 				PLUGININITSYMBOL, filename->str);
 	}
 
-	/* notify the plugin of our callable functions by calling the init func */
-	// TODO need to go into plugin context mode
+	/* notify the plugin of our callable functions by calling the init function,
+	 * this is a special version of executing because we still dont know about
+	 * the plug-in libraries state. */
+	Worker* worker = worker_getPrivate();
+	plugin->isExecuting = TRUE;
+	worker->cached_plugin = plugin;
 	plugin->init(&shadowlibVTable);
+	plugin->isExecuting = FALSE;
+	worker->cached_plugin = NULL;
 
 	return plugin;
 }
@@ -65,32 +71,70 @@ void plugin_free(gpointer data) {
 	g_free(plugin);
 }
 
-void plugin_registerResidentState(Plugin* plugin, PluginState* state) {
+void plugin_registerResidentState(Plugin* plugin, PluginVTable* callbackFunctions, guint nVariables, va_list variableArguments) {
 	MAGIC_ASSERT(plugin);
 	if(plugin->isRegisterred) {
 		warning("ignoring duplicate state registration");
 		return;
 	}
 
+	/* these are the physical memory addresses and sizes for each variable */
+	plugin->residentState = pluginstate_new(callbackFunctions, nVariables, variableArguments);
 
+	/* also store a copy of the defaults as they exist now */
+	plugin->defaultState = pluginstate_copyNew(plugin->residentState);
+
+	/* dont change our resident state or defaults */
 	plugin->isRegisterred = TRUE;
 }
 
-void plugin_loadState(Plugin* plugin, PluginState* state) {
+static void _plugin_startExecuting(Plugin* plugin, PluginState* state) {
 	MAGIC_ASSERT(plugin);
+	g_assert(!plugin->isExecuting);
 
-}
-
-void plugin_saveState(Plugin* plugin, PluginState* state) {
-	MAGIC_ASSERT(plugin);
-
-}
-
-void plugin_execute(Plugin* plugin) {
 	Worker* worker = worker_getPrivate();
+
+	/* context switch from shadow to plug-in library */
+	pluginstate_copy(state, plugin->residentState);
+	plugin->isExecuting = TRUE;
 	worker->cached_plugin = plugin;
+}
 
-	// TODO call whatever function
+static void _plugin_stopExecuting(Plugin* plugin, PluginState* state) {
+	MAGIC_ASSERT(plugin);
 
+	Worker* worker = worker_getPrivate();
+
+	/* context switch back to shadow from plug-in library */
+	pluginstate_copy(plugin->residentState, state);
+	plugin->isExecuting = FALSE;
 	worker->cached_plugin = NULL;
+}
+
+void plugin_executeNew(Plugin* plugin, PluginState* state, gint argcParam, gchar* argvParam[]) {
+	MAGIC_ASSERT(plugin);
+	_plugin_startExecuting(plugin, state);
+	plugin->residentState->functions->new(argcParam, argvParam);
+	_plugin_stopExecuting(plugin, state);
+}
+
+void plugin_executeFree(Plugin* plugin, PluginState* state) {
+	MAGIC_ASSERT(plugin);
+	_plugin_startExecuting(plugin, state);
+	plugin->residentState->functions->free();
+	_plugin_stopExecuting(plugin, state);
+}
+
+void plugin_executeReadable(Plugin* plugin, PluginState* state, gint socketParam) {
+	MAGIC_ASSERT(plugin);
+	_plugin_startExecuting(plugin, state);
+	plugin->residentState->functions->readable(socketParam);
+	_plugin_stopExecuting(plugin, state);
+}
+
+void plugin_executeWritable(Plugin* plugin, PluginState* state, gint socketParam) {
+	MAGIC_ASSERT(plugin);
+	_plugin_startExecuting(plugin, state);
+	plugin->residentState->functions->writable(socketParam);
+	_plugin_stopExecuting(plugin, state);
 }
