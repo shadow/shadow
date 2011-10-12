@@ -218,11 +218,12 @@ static gint _engine_distributeEvents(Engine* engine) {
 gint engine_run(Engine* engine) {
 	MAGIC_ASSERT(engine);
 
-	/* setup our engine so its globally available */
+	/* our first call to create the worker for the main thread */
 	Worker* worker = worker_getPrivate();
+	/* make the engine available */
 	worker->cached_engine = engine;
 
-	/* parse user simulation script, create jobs */
+	/* parse user simulation scripts, create jobs */
 	GQueue* actions = g_queue_new();
 	gboolean success = TRUE;
 
@@ -241,7 +242,7 @@ gint engine_run(Engine* engine) {
 		/*
 		 * loop through actions that were created from parsing. this will create
 		 * all the nodes, networks, applications, etc., and add an application
-		 * start event for each node tp bootstrap the simulation. Note that the
+		 * start event for each node to bootstrap the simulation. Note that the
 		 * plug-in libraries themselves are not loaded until a worker needs it,
 		 * since each worker will need its own private version.
 		 */

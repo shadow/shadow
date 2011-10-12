@@ -58,8 +58,9 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 		return NULL;
 	}
 
-	/* make sure we have the required arguments. program name is first arg. */
-	if(argc < nRequiredXMLFiles + 1) {
+	/* make sure we have the required arguments. program name is first arg.
+	 * printing the software version requires no other args. */
+	if(!(c->printSoftwareVersion) && (argc < nRequiredXMLFiles + 1)) {
 		g_print("** Please provide the required parameters **\n");
 		g_print(g_option_context_get_help(c->context, TRUE, NULL));
 		configuration_free(c);
@@ -83,7 +84,9 @@ void configuration_free(Configuration* config) {
 	MAGIC_ASSERT(config);
 
 	g_option_context_free(config->context);
-	g_queue_free(config->inputXMLFilenames);
+	if(config->inputXMLFilenames) {
+		g_queue_free(config->inputXMLFilenames);
+	}
 
 	MAGIC_CLEAR(config);
 	g_free(config);
