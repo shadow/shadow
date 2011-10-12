@@ -218,42 +218,7 @@ static gint _engine_distributeEvents(Engine* engine) {
 gint engine_run(Engine* engine) {
 	MAGIC_ASSERT(engine);
 
-	/* our first call to create the worker for the main thread */
-	Worker* worker = worker_getPrivate();
-	/* make the engine available */
-	worker->cached_engine = engine;
-
-	/* parse user simulation scripts, create jobs */
-	GQueue* actions = g_queue_new();
-	gboolean success = TRUE;
-
-	Parser* xmlParser = parser_new();
-	while(success && g_queue_get_length(engine->config->inputXMLFilenames) > 0) {
-		GString* filename = g_queue_pop_head(engine->config->inputXMLFilenames);
-		success = parser_parse(xmlParser, filename, actions);
-	}
-	parser_free(xmlParser);
-
-	/* if there was an error parsing, bounce out */
-	if(!success) {
-		g_queue_free(actions);
-		return -1;
-	} else {
-		/*
-		 * loop through actions that were created from parsing. this will create
-		 * all the nodes, networks, applications, etc., and add an application
-		 * start event for each node to bootstrap the simulation. Note that the
-		 * plug-in libraries themselves are not loaded until a worker needs it,
-		 * since each worker will need its own private version.
-		 */
-		while(g_queue_get_length(actions) > 0) {
-			Action* a = g_queue_pop_head(actions);
-			runnable_run(a);
-		}
-		g_queue_free(actions);
-	}
-
-	/* now we are ready to simulate - loop through events */
+	/* simulation mode depends on configured number of workers */
 	if(engine->config->nWorkerThreads > 0) {
 		/* multi threaded, manage the other workers */
 		engine->executeWindowStart = 0;

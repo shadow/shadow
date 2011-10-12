@@ -37,23 +37,59 @@ gint shadow_main(gint argc, gchar* argv[]) {
 		return 0;
 	}
 
-	/* allocate application structures */
+	/* allocate our driving application structure */
 	shadow_engine = engine_new(config);
+	/* our first call to create the worker for the main thread */
+	Worker* worker = worker_getPrivate();
+	/* make the engine available */
+	worker->cached_engine = shadow_engine;
 
+	/* hook in our logging system */
 	g_log_set_default_handler(logging_handleLog, shadow_engine);
 	debug("log system initialized");
 
-	/* run the engine. when this returns, the simulation is done */
-	gint n = shadow_engine->config->nWorkerThreads;
+	/* store parsed actions from each user-configured simulation script  */
+	GQueue* actions = g_queue_new();
+	Parser* xmlParser = parser_new();
+	gboolean success = TRUE;
+	while(success && g_queue_get_length(config->inputXMLFilenames) > 0) {
+		GString* filename = g_queue_pop_head(config->inputXMLFilenames);
+		success = parser_parse(xmlParser, filename, actions);
+	}
+	parser_free(xmlParser);
+
+	/* if there was an error parsing, bounce out */
+	if(!success) {
+		g_queue_free(actions);
+		return -1;
+	}
+
+	/*
+	 * loop through actions that were created from parsing. this will create
+	 * all the nodes, networks, applications, etc., and add an application
+	 * start event for each node to bootstrap the simulation. Note that the
+	 * plug-in libraries themselves are not loaded until a worker needs it,
+	 * since each worker will need its own private version.
+	 */
+	while(g_queue_get_length(actions) > 0) {
+		Action* a = g_queue_pop_head(actions);
+		runnable_run(a);
+	}
+	g_queue_free(actions);
+
+	/* run the engine to drive the simulation. when this returns, we are done */
+	gint n = config->nWorkerThreads;
 	debug("starting %i-threaded engine (main + %i workers)", (n + 1), n);
+
 	gint retval = engine_run(shadow_engine);
+
 	debug("engine finished, waiting for workers...");
 
-	/* cleanup. workers are auto-deleted when threads end. */
+	/* cleanup. join thread pool. workers are auto-deleted when threads end. */
 	engine_free(shadow_engine);
 	configuration_free(config);
 
-	/* engine gone, must use glib logging */
+	/* engine gone, so we must use glib logging for our last message */
 	g_debug("n/a [t0] [shadow-debug] exiting cleanly, returning value %i", retval);
 	return retval;
 }
