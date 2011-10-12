@@ -4,14 +4,14 @@
 <cdf name="upstream" center="1024" width="0" tail="0" />
 <cdf name="downstream" center="1024" width="0" tail="0" />
 
-<application name="server" plugin="fileserver" time="60" arguments="8080 share/shadow/" />
+<software name="server" plugin="fileserver" time="60" arguments="8080 share/shadow/" />
 
-<node name="1.fileserver.shd" application="server" network="useast" bandwidthup="upstream" bandwidthdown="downstream" cpu="cpudelay" />
-<node name="2.fileserver.shd" application="server" network="useast" bandwidthup="upstream" bandwidthdown="downstream" cpu="cpudelay" />
-<node name="3.fileserver.shd" application="server" network="useast" bandwidthup="upstream" bandwidthdown="downstream" cpu="cpudelay" />
-<node name="4.fileserver.shd" application="server" network="useast" bandwidthup="upstream" bandwidthdown="downstream" cpu="cpudelay" />
-<node name="5.fileserver.shd" application="server" network="useast" bandwidthup="upstream" bandwidthdown="downstream" cpu="cpudelay" />
+<node name="1.fileserver.shd" software="server" network="useast" bandwidthup="upstream" bandwidthdown="downstream" cpu="cpudelay" />
+<node name="2.fileserver.shd" software="server" network="useast" bandwidthup="upstream" bandwidthdown="downstream" cpu="cpudelay" />
+<node name="3.fileserver.shd" software="server" network="useast" bandwidthup="upstream" bandwidthdown="downstream" cpu="cpudelay" />
+<node name="4.fileserver.shd" software="server" network="useast" bandwidthup="upstream" bandwidthdown="downstream" cpu="cpudelay" />
+<node name="5.fileserver.shd" software="server" network="useast" bandwidthup="upstream" bandwidthdown="downstream" cpu="cpudelay" />
 
-<node name="fileserver.shd" quantity="5" application="server" network="useast" bandwidthup="upstream" bandwidthdown="downstream" cpu="cpudelay" />
+<node name="fileserver.shd" quantity="5" software="server" network="useast" bandwidthup="upstream" bandwidthdown="downstream" cpu="cpudelay" />
 
 <kill time="600" />

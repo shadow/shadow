@@ -32,8 +32,11 @@ struct _Node {
 	/* asynchronous event priority queue. other nodes may push to this queue. */
 	GAsyncQueue* event_mailbox;
 
+	/* the network this node belongs to */
+	Network* network;
+
 	/* general node lock. nothing that belongs to the node should be touched
-	 * unless holding this lock.
+	 * unless holding this lock. everything following this falls under the lock.
 	 */
 	GMutex* node_lock;
 
@@ -43,18 +46,18 @@ struct _Node {
 	GQueue* event_priority_queue;
 
 	GQuark id;
-	Network* network;
 	Application* application;
-	PluginState* state;
 
 	MAGIC_DECLARE;
 };
 
-Node* node_new(GQuark id, Network* network, Application* application, in_addr_t ipAddress, GString* hostname, guint32 KBps_down, guint32 KBps_up, guint64 cpu_speed_Bps);
+Node* node_new(GQuark id, Network* network, Software* software, GString* hostname, guint32 bwDownKiBps, guint32 bwUpKiBps, guint64 cpuBps);
 void node_free(gpointer data);
 
 void node_lock(Node* node);
 void node_unlock(Node* node);
+
+gchar* node_getApplicationArguments(Node* node);
 
 void node_pushMail(Node* node, Event* event);
 Event* node_popMail(Node* node);

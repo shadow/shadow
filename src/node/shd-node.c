@@ -21,20 +21,18 @@
 
 #include "shadow.h"
 
-Node* node_new(GQuark id, Network* network, Application* application, in_addr_t ipAddress, GString* hostname, guint32 KBps_down, guint32 KBps_up, guint64 cpu_speed_Bps) {
+Node* node_new(GQuark id, Network* network, Software* software, GString* hostname, guint32 bwDownKiBps, guint32 bwUpKiBps, guint64 cpuBps) {
 	Node* node = g_new0(Node, 1);
 	MAGIC_INIT(node);
 
 	node->id = id;
 	node->event_mailbox = g_async_queue_new_full(event_free);
 	node->event_priority_queue = g_queue_new();
+	node->network = network;
 
 	node->node_lock = g_mutex_new();
 
-	/* application state is created lazily as an event */
-	node->application = application;
-	node->network = network;
-
+//	node->application = application_new();
 //  FIXME create this!
 //	node->vsocket_mgr = vsocket_mgr_create(context_provider, ipAddress, KBps_down, KBps_up, cpu_speed_Bps);
 
@@ -91,6 +89,11 @@ Event* node_popTask(Node* node) {
 guint node_getNumTasks(Node* node) {
 	MAGIC_ASSERT(node);
 	return g_queue_get_length(node->event_priority_queue);
+}
+
+gchar* node_getApplicationArguments(Node* node) {
+	MAGIC_ASSERT(node);
+	return node->application->software->arguments->str;
 }
 
 gint node_compare(gconstpointer a, gconstpointer b, gpointer user_data) {

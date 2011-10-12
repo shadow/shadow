@@ -53,11 +53,12 @@ void createnodes_run(CreateNodesAction* action) {
 
 	Worker* worker = worker_getPrivate();
 
-	CumulativeDistribution* bwUpCDF = registry_get(worker->cached_engine->registry, CDFS, &(action->bandwidthupID));
-	CumulativeDistribution* bwDownCDF = registry_get(worker->cached_engine->registry, CDFS, &(action->bandwidthdownID));
-	CumulativeDistribution* cpuCDF = registry_get(worker->cached_engine->registry, CDFS, &(action->cpudelayCDFID));
-	Network* network = registry_get(worker->cached_engine->registry, NETWORKS, &(action->networkID));
-	Application* application = registry_get(worker->cached_engine->registry, APPLICATIONS, &(action->applicationID));
+	CumulativeDistribution* bwUpCDF = engine_get(worker->cached_engine, CDFS, action->bandwidthupID);
+	CumulativeDistribution* bwDownCDF = engine_get(worker->cached_engine, CDFS, action->bandwidthdownID);
+	CumulativeDistribution* cpuCDF = engine_get(worker->cached_engine, CDFS, action->cpudelayCDFID);
+	Software* software = engine_get(worker->cached_engine, SOFTWARE, action->applicationID);
+
+	Network* network = internetwork_getNetwork(worker->cached_engine->internet, action->networkID);
 
 	/* must have one cdf, but the other one can be anything if not a cdf, it will be ignored */
 	if(!bwUpCDF && !bwDownCDF) {
@@ -65,8 +66,9 @@ void createnodes_run(CreateNodesAction* action) {
 		return;
 	}
 
-	if(!cpuCDF || !network || !application) {
-		critical("Node can not be created with NULL components. Check XML file for errors.");
+	if(!cpuCDF || !network || !software) {
+		critical("Can not create %lu Node(s) '%s' with NULL components. Check XML file for errors.",
+				action->quantity, g_quark_to_string(action->id));
 		return;
 	}
 
@@ -74,22 +76,19 @@ void createnodes_run(CreateNodesAction* action) {
 
 	for(gint i = 0; i < action->quantity; i++) {
 		/* get bandwidth */
-		guint32 KBps_up = 0;
-		guint32 KBps_down = 0;
+		guint32 bwUpKiBps = 0;
+		guint32 bwDownKiBps = 0;
 
 		/* if we only have 1 id, we have symmetric bandwidth, otherwise asym as specified by cdfs */
 		if(!bwUpCDF || !bwDownCDF) {
 			CumulativeDistribution* symCDF = bwUpCDF != NULL ? bwUpCDF : bwDownCDF;
-			KBps_up = KBps_down = (guint32) cdf_getRandomValue(symCDF);
+			bwUpKiBps = bwDownKiBps = (guint32) cdf_getRandomValue(symCDF);
 		} else {
-			KBps_up = (guint32) cdf_getRandomValue(bwUpCDF);
-			KBps_down = (guint32) cdf_getRandomValue(bwDownCDF);
+			bwUpKiBps = (guint32) cdf_getRandomValue(bwUpCDF);
+			bwDownKiBps = (guint32) cdf_getRandomValue(bwDownCDF);
 		}
 
-		guint64 cpu_speed_Bps = (guint64) cdf_getRandomValue(cpuCDF);
-
-		/* address */
-		in_addr_t ipAddress = (in_addr_t) action->id;
+		guint64 cpuBps = (guint64) cdf_getRandomValue(cpuCDF);
 
 		/* hostname */
 		GString* hostname = g_string_new(g_quark_to_string(action->id));
@@ -100,10 +99,8 @@ void createnodes_run(CreateNodesAction* action) {
 		}
 		GQuark id = g_quark_from_string((const gchar*) hostname->str);
 
-		/* add this nodes hostname, etc,  to resolver map */
-		Node* node = node_new(id, network, application, ipAddress, hostname, KBps_down, KBps_up, cpu_speed_Bps);
-		registry_put(worker->cached_engine->registry, NODES, &(node->id), node);
-		resolver_add(worker->cached_engine->resolver, hostname->str, ipAddress, 0, KBps_down, KBps_up);
+		/* the node is part of the internet */
+		internetwork_createNode(worker->cached_engine->internet, id, network, software, hostname, bwDownKiBps, bwUpKiBps, cpuBps);
 
 		g_string_free(hostname, TRUE);
 
@@ -111,7 +108,7 @@ void createnodes_run(CreateNodesAction* action) {
 
 		/* make sure our bootstrap events are set properly */
 		worker->clock_now = 0;
-		worker_scheduleEvent((Event*)event, application->startTime, node->id);
+		worker_scheduleEvent((Event*)event, software->startTime, id);
 		worker->clock_now = 0;
 	}
 }

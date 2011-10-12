@@ -6,12 +6,12 @@
 
 <network name="echonetwork" latency="echolatency" reliability="1.0" />
 
-<application name="echoserver" plugin="echoplugin" time="10" arguments="server" />
-<application name="echoclient" plugin="echoplugin" time="20" arguments="client server.echo.shd" />
-<application name="echoloopback" plugin="echoplugin" time="20" arguments="loopback" />
+<software name="echoserver" plugin="echoplugin" time="10" arguments="server" />
+<software name="echoclient" plugin="echoplugin" time="20" arguments="client server.echo.shd" />
+<software name="echoloopback" plugin="echoplugin" time="20" arguments="loopback" />
 
-<node name="server.echo.shd" application="echoserver" network="echonetwork" bandwidthup="echobandwidth" bandwidthdown="echobandwidth" cpu="echocpu" />
-<node name="client.echo.shd" application="echoclient" network="echonetwork" bandwidthup="echobandwidth" bandwidthdown="echobandwidth" cpu="echocpu" />
-<node name="loopback.echo.shd" application="echoloopback" network="echonetwork" bandwidthup="echobandwidth" bandwidthdown="echobandwidth" cpu="echocpu" />
+<node name="server.echo.shd" software="echoserver" network="echonetwork" bandwidthup="echobandwidth" bandwidthdown="echobandwidth" cpu="echocpu" />
+<node name="client.echo.shd" software="echoclient" network="echonetwork" bandwidthup="echobandwidth" bandwidthdown="echobandwidth" cpu="echocpu" />
+<node name="loopback.echo.shd" software="echoloopback" network="echonetwork" bandwidthup="echobandwidth" bandwidthdown="echobandwidth" cpu="echocpu" />
 
 <kill time="180" />

@@ -37,7 +37,7 @@ CreateNetworkAction* createnetwork_new(GString* name, GString* latencyCDFName,
 	action_init(&(action->super), &createnetwork_vtable);
 
 	action->id = g_quark_from_string((const gchar*)name->str);
-	action->latencyCDFName = g_string_new(latencyCDFName->str);
+	action->latencyID = g_quark_from_string(latencyCDFName->str);
 	action->reliability = reliability;
 
 	return action;
@@ -48,22 +48,17 @@ void createnetwork_run(CreateNetworkAction* action) {
 
 	Worker* worker = worker_getPrivate();
 
-	GQuark cdfID = g_quark_from_string((const gchar*)action->latencyCDFName->str);
-	CumulativeDistribution* cdf = registry_get(worker->cached_engine->registry, CDFS, &cdfID);
-	if(cdf) {
-		topology_add_vertex(worker->cached_engine->topology, action->id, cdf, action->reliability);
-	} else {
-		critical("failed to add vertex to topology");
+	CumulativeDistribution* cdf = engine_get(worker->cached_engine, CDFS, action->latencyID);
+	if(!cdf) {
+		critical("failed to create network '%s'", g_quark_to_string(action->latencyID));
+		return;
 	}
 
-	Network* network = network_new(action->id);
-	registry_put(worker->cached_engine->registry, NETWORKS, &(network->id), network);
+	internetwork_createNetwork(worker->cached_engine->internet, action->id, cdf);
 }
 
 void createnetwork_free(CreateNetworkAction* action) {
 	MAGIC_ASSERT(action);
-
-	g_string_free(action->latencyCDFName, TRUE);
 
 	MAGIC_CLEAR(action);
 	g_free(action);

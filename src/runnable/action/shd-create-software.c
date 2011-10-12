@@ -21,20 +21,20 @@
 
 #include "shadow.h"
 
-RunnableVTable createapplication_vtable = {
-	(RunnableRunFunc) createapplication_run,
-	(RunnableFreeFunc) createapplication_free,
+RunnableVTable createsoftware_vtable = {
+	(RunnableRunFunc) createsoftware_run,
+	(RunnableFreeFunc) createsoftware_free,
 	MAGIC_VALUE
 };
 
-CreateApplicationAction* createapplication_new(GString* name,
+CreateSoftwareAction* createsoftware_new(GString* name,
 		GString* pluginName, GString* arguments, guint64 launchtime)
 {
 	g_assert(name && pluginName && arguments);
-	CreateApplicationAction* action = g_new0(CreateApplicationAction, 1);
+	CreateSoftwareAction* action = g_new0(CreateSoftwareAction, 1);
 	MAGIC_INIT(action);
 
-	action_init(&(action->super), &createapplication_vtable);
+	action_init(&(action->super), &createsoftware_vtable);
 
 	action->id = g_quark_from_string((const gchar*) name->str);
 	action->pluginID = g_quark_from_string((const gchar*) pluginName->str);
@@ -44,17 +44,17 @@ CreateApplicationAction* createapplication_new(GString* name,
 	return action;
 }
 
-void createapplication_run(CreateApplicationAction* action) {
+void createsoftware_run(CreateSoftwareAction* action) {
 	MAGIC_ASSERT(action);
 
 	Worker* worker = worker_getPrivate();
-	gchar* pluginPath = registry_get(worker->cached_engine->registry, PLUGINPATHS, &(action->pluginID));
+	gchar* pluginPath = engine_get(worker->cached_engine, PLUGINPATHS, action->pluginID);
 
-	Application* application = application_new(action->id, action->arguments->str, pluginPath, action->launchtime);
-	registry_put(worker->cached_engine->registry, APPLICATIONS, &(application->id), application);
+	Software* software = software_new(action->id, action->arguments->str, pluginPath, action->launchtime);
+	engine_put(worker->cached_engine, SOFTWARE, &(software->id), software);
 }
 
-void createapplication_free(CreateApplicationAction* action) {
+void createsoftware_free(CreateSoftwareAction* action) {
 	MAGIC_ASSERT(action);
 
 	g_string_free(action->arguments, TRUE);

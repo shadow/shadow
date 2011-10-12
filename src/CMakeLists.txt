@@ -16,8 +16,13 @@ set(shadow_srcs
     engine/shd-engine.c
     engine/shd-worker.c
     
+    topology/shd-network.c
+    topology/shd-link.c
+    topology/shd-internetwork.c
+    
     plugin/shd-plugin.c
     plugin/shd-plugin-state.c
+    plugin/shd-software.c
     plugin/shd-shadowlib.c
     
     runnable/shd-runnable.c
@@ -27,7 +32,7 @@ set(shadow_srcs
     runnable/action/shd-action.c
     runnable/action/shd-spina.c
     runnable/action/shd-connect-network.c
-    runnable/action/shd-create-application.c
+    runnable/action/shd-create-software.c
     runnable/action/shd-create-network.c
     runnable/action/shd-create-node.c
     runnable/action/shd-generate-cdf.c
@@ -37,13 +42,10 @@ set(shadow_srcs
         
     node/shd-node.c
     node/shd-application.c
-    node/shd-network.c
         
     utility/shd-cdf.c
     utility/shd-data-entry.c
     utility/shd-registry.c
-    utility/shd-resolver.c
-    utility/shd-topology.c
     
     main.c
 )

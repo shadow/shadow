@@ -19,21 +19,23 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#ifndef SHD_SOFTWARE_H_
+#define SHD_SOFTWARE_H_
+
 #include "shadow.h"
 
-Network* network_new(GQuark id) {
-	Network* network = g_new0(Network, 1);
-	MAGIC_INIT(network);
+typedef struct _Software Software;
 
-	network->id = id;
+struct _Software {
+	GQuark id;
+	GString* arguments;
+	GString* pluginPath;
+	SimulationTime startTime;
 
-	return network;
-}
+	MAGIC_DECLARE;
+};
 
-void network_free(gpointer data) {
-	Network* network = data;
-	MAGIC_ASSERT(network);
+Software* software_new(GQuark id, gchar* arguments, gchar* pluginPath, SimulationTime startTime);
+void software_free(gpointer data);
 
-	MAGIC_CLEAR(network);
-	g_free(network);
-}
+#endif /* SHD_SOFTWARE_H_ */

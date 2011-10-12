@@ -23,13 +23,13 @@
 
 /* these MUST be synced with ParserElements in shd-parser.h */
 static const gchar* ParserElementStrings[] = {
-	"plugin", "cdf", "application", "node", "network", "link", "kill",
+	"plugin", "cdf", "software", "node", "network", "link", "kill",
 };
 
 /* these MUST be synced with ParserAttributes in shd-parser.h */
 static const gchar* ParserAttributeStrings[] = {
 	"name", "path", "center", "width", "tail", "plugin", "arguments",
-	"application", "time", "bandwidthup", "bandwidthdown", "cpu", "quantity",
+	"software", "time", "bandwidthup", "bandwidthdown", "cpu", "quantity",
 	"network", "networka", "networkb",
 	"latency", "latencyab", "latencyba",
 	"reliability", "reliabilityab", "reliabilityba",
@@ -49,8 +49,8 @@ static ParserValues* _parser_getValues(const gchar *element_name,
 		debug("found attribute '%s=%s'", *name_cursor, *value_cursor);
 
 		/* contains the actual logic for parsing attributes of topology files. */
-		if (g_ascii_strcasecmp(*name_cursor, ParserAttributeStrings[ATTRIBUTE_APPLICATION]) == 0) {
-			values->application = g_string_new(*value_cursor);
+		if (g_ascii_strcasecmp(*name_cursor, ParserAttributeStrings[ATTRIBUTE_SOFTWARE]) == 0) {
+			values->software = g_string_new(*value_cursor);
 		} else if (g_ascii_strcasecmp(*name_cursor, ParserAttributeStrings[ATTRIBUTE_ARGUMENTS]) == 0) {
 			values->arguments = g_string_new(*value_cursor);
 		} else if(g_ascii_strcasecmp(*name_cursor, ParserAttributeStrings[ATTRIBUTE_BANDWIDTHDOWN]) == 0) {
@@ -107,8 +107,8 @@ static ParserValues* _parser_getValues(const gchar *element_name,
 static void _parser_freeValues(ParserValues* values) {
 	MAGIC_ASSERT(values);
 
-	if(values->application)
-		g_string_free(values->application, TRUE);
+	if(values->software)
+		g_string_free(values->software, TRUE);
 	if(values->arguments)
 		g_string_free(values->arguments, TRUE);
 	if(values->bandwidthdown)
@@ -215,7 +215,7 @@ static gboolean _parser_validateApplication(Parser* parser, ParserValues* values
 
 	if(!values->name || !values->plugin || !values->time || !values->arguments) {
 		critical("element '%s' requires attributes '%s' '%s' '%s' '%s'",
-				ParserElementStrings[ELEMENT_APPLICATION],
+				ParserElementStrings[ELEMENT_SOFTWARE],
 				ParserAttributeStrings[ATTRIBUTE_NAME],
 				ParserAttributeStrings[ATTRIBUTE_PLUGIN],
 				ParserAttributeStrings[ATTRIBUTE_TIME],
@@ -230,13 +230,13 @@ static gboolean _parser_validateNode(Parser* parser, ParserValues* values) {
 	MAGIC_ASSERT(parser);
 	MAGIC_ASSERT(values);
 
-	if(!values->name || !values->application || !values->network ||
+	if(!values->name || !values->software || !values->network ||
 			!values->bandwidthup || !values->bandwidthdown || !values->cpu)
 	{
 		critical("element '%s' requires attributes '%s' '%s' '%s' '%s' '%s' '%s'",
 				ParserElementStrings[ELEMENT_NODE],
 				ParserAttributeStrings[ATTRIBUTE_NAME],
-				ParserAttributeStrings[ATTRIBUTE_APPLICATION],
+				ParserAttributeStrings[ATTRIBUTE_SOFTWARE],
 				ParserAttributeStrings[ATTRIBUTE_NETWORK],
 				ParserAttributeStrings[ATTRIBUTE_BANDWIDTHUP],
 				ParserAttributeStrings[ATTRIBUTE_BANDWIDTHDOWN],
@@ -322,9 +322,9 @@ static void _parser_handleElement(GMarkupParseContext *context,
 			a = (Action*) loadplugin_new(values->name, values->path);
 			a->priority = 0;
 		}
-	} else if(g_ascii_strcasecmp(element_name, ParserElementStrings[ELEMENT_APPLICATION]) == 0) {
+	} else if(g_ascii_strcasecmp(element_name, ParserElementStrings[ELEMENT_SOFTWARE]) == 0) {
 		if(_parser_validateApplication(parser, values)) {
-			a = (Action*) createapplication_new(values->name, values->plugin,
+			a = (Action*) createsoftware_new(values->name, values->plugin,
 					values->arguments, values->time);
 			a->priority = 4;
 		}
@@ -335,7 +335,7 @@ static void _parser_handleElement(GMarkupParseContext *context,
 			}
 
 			a = (Action*) createnodes_new(values->quantity, values->name,
-					values->application, values->cpu, values->network,
+					values->software, values->cpu, values->network,
 					values->bandwidthup, values->bandwidthdown);
 			a->priority = 5;
 		}

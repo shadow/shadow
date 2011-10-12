@@ -52,16 +52,13 @@ Engine* engine_new(Configuration* config) {
 	engine->engineIdle = g_mutex_new();
 
 	engine->registry = registry_new();
-	registry_register(engine->registry, NODES, NULL, node_free);
-	registry_register(engine->registry, NETWORKS, NULL, network_free);
-	registry_register(engine->registry, APPLICATIONS, NULL, application_free);
+	registry_register(engine->registry, SOFTWARE, NULL, software_free);
 	registry_register(engine->registry, CDFS, NULL, cdf_free);
 	registry_register(engine->registry, PLUGINPATHS, g_free, g_free);
 
 	engine->minTimeJump = config->minTimeJump * SIMTIME_ONE_MILLISECOND;
 
-	engine->resolver = resolver_create();
-	engine->topology = topology_create();
+	engine->internet = internetwork_new();
 
 	return engine;
 }
@@ -83,8 +80,7 @@ void engine_free(Engine* engine) {
 
 	registry_free(engine->registry);
 
-	topology_destroy(engine->topology);
-	resolver_destroy(engine->resolver);
+	internetwork_free(engine->internet);
 
 	MAGIC_CLEAR(engine);
 	g_free(engine);
@@ -178,7 +174,7 @@ static gint _engine_distributeEvents(Engine* engine) {
 		 * nodes that have executable events are placed in the thread pool and
 		 * processed by a worker thread.
 		 */
-		GList* node_list = registry_getAll(engine->registry, NODES);
+		GList* node_list = internetwork_getAllNodes(engine->internet);
 
 		/* after calling this, multiple threads are running */
 		g_list_foreach(node_list, _engine_manageExecutableMail, engine);
@@ -238,7 +234,18 @@ void engine_pushEvent(Engine* engine, Event* event) {
 	g_async_queue_push_sorted(engine->masterEventQueue, event, event_compare, NULL);
 }
 
-gpointer engine_lookup(Engine* engine, EngineStorage type, GQuark id) {
+void engine_put(Engine* engine, EngineStorage type, GQuark* id, gpointer item) {
+	MAGIC_ASSERT(engine);
+
+	/*
+	 * put the item corresponding to type and id in a thread-safe way.
+	 * I believe for now no protections are necessary since our registry
+	 * is filled before simulation and is read only.
+	 */
+	registry_put(engine->registry, type, id, item);
+}
+
+gpointer engine_get(Engine* engine, EngineStorage type, GQuark id) {
 	MAGIC_ASSERT(engine);
 
 	/*

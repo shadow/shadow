@@ -27,15 +27,12 @@
 typedef struct _Application Application;
 
 struct _Application {
-	GQuark id;
-	GString* arguments;
-	GString* pluginPath;
-	SimulationTime startTime;
-
+	Software* software;
+	PluginState* state;
 	MAGIC_DECLARE;
 };
 
-Application* application_new(GQuark id, gchar* arguments, gchar* pluginPath, SimulationTime startTime);
-void application_free(gpointer data);
+Application* application_new();
+void application_free(Application* application);
 
 #endif /* SHD_APPLICATION_H_ */

@@ -29,7 +29,7 @@ typedef struct _CreateNetworkAction CreateNetworkAction;
 struct _CreateNetworkAction {
 	Action super;
 	GQuark id;
-	GString* latencyCDFName;
+	GQuark latencyID;
 	gdouble reliability;
 	MAGIC_DECLARE;
 };

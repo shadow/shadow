@@ -28,7 +28,7 @@
 typedef enum {
 	ELEMENT_PLUGIN,
 	ELEMENT_CDF,
-	ELEMENT_APPLICATION,
+	ELEMENT_SOFTWARE,
 	ELEMENT_NODE,
 	ELEMENT_NETWORK,
 	ELEMENT_LINK,
@@ -44,7 +44,7 @@ typedef enum {
 	ATTRIBUTE_TAIL,
 	ATTRIBUTE_PLUGIN,
 	ATTRIBUTE_ARGUMENTS,
-	ATTRIBUTE_APPLICATION,
+	ATTRIBUTE_SOFTWARE,
 	ATTRIBUTE_TIME,
 	ATTRIBUTE_BANDWIDTHUP,
 	ATTRIBUTE_BANDWIDTHDOWN,
@@ -86,10 +86,10 @@ struct _ParserValues {
 	guint64 tail;
 	/* holds the unique ID name of a plugin */
 	GString* plugin;
-	/* string of arguments that will be passed to the application */
+	/* string of arguments that will be passed to the software */
 	GString* arguments;
-	/* holds the unique ID name of an application */
-	GString* application;
+	/* holds the unique ID name of software */
+	GString* software;
 	/* time in seconds */
 	guint64 time;
 	/* holds the unique ID name of a CDF for bandwidth (KiB/s) */
@@ -125,7 +125,7 @@ void parser_free(Parser* parser);
 
 /**
  * Parse the given filename and return a Queue of Actions that will produce the
- * specified topology (networks and links) and hosts (nodes and applications)
+ * specified topology (networks and links) and hosts (nodes and software)
  * when executed. The caller owns the returned Queue and must properly free it.
  */
 gboolean parser_parse(Parser* parser, GString* filename, GQueue* actions);

@@ -54,7 +54,7 @@ void loadplugin_run(LoadPluginAction* action) {
 	/* the hash table now owns the GString */
 	GQuark* id = g_new0(GQuark, 1);
 	*id = action->id;
-	registry_put(worker->cached_engine->registry, PLUGINPATHS, id, action->path->str);
+	engine_put(worker->cached_engine, PLUGINPATHS, id, action->path->str);
 }
 
 void loadplugin_free(LoadPluginAction* action) {

@@ -19,20 +19,25 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#ifndef SHD_CREATE_SOFTWARE_H_
+#define SHD_CREATE_SOFTWARE_H_
+
 #include "shadow.h"
 
-Application* application_new() {
-	Application* application = g_new0(Application, 1);
-	MAGIC_INIT(application);
+typedef struct _CreateSoftwareAction CreateSoftwareAction;
 
+struct _CreateSoftwareAction {
+	Action super;
+	GQuark id;
+	GQuark pluginID;
+	GString* arguments;
+	SimulationTime launchtime;
+	MAGIC_DECLARE;
+};
 
-	return application;
-}
+CreateSoftwareAction* createsoftware_new(GString* name,
+		GString* pluginName, GString* arguments, guint64 launchtime);
+void createsoftware_run(CreateSoftwareAction* action);
+void createsoftware_free(CreateSoftwareAction* action);
 
-void application_free(Application* application) {
-	MAGIC_ASSERT(application);
-
-
-	MAGIC_CLEAR(application);
-	g_free(application);
-}
+#endif /* SHD_CREATE_SOFTWARE_H_ */

@@ -43,21 +43,22 @@ void startapplication_run(StartApplicationEvent* event, Node* node) {
 	MAGIC_ASSERT(node);
 
 	/* parse the cl_args ginto separate strings */
-	GQueue *args = g_queue_new();
-	gchar* result = strtok(node->application->arguments->str, " ");
+	GQueue *arguments = g_queue_new();
+	gchar* argString = node_getApplicationArguments(node);
+	gchar* result = strtok(argString, " ");
 	while(result != NULL) {
-		g_queue_push_tail(args, result);
+		g_queue_push_tail(arguments, result);
 		result = strtok(NULL, " ");
 	}
 
 	/* setup for instantiation */
-	gint argc = g_queue_get_length(args);
+	gint argc = g_queue_get_length(arguments);
 	gchar* argv[argc];
 	gint argi = 0;
 	for(argi = 0; argi < argc; argi++) {
-		argv[argi] = g_queue_pop_head(args);
+		argv[argi] = g_queue_pop_head(arguments);
 	}
-	g_queue_free(args);
+	g_queue_free(arguments);
 
 	// TODO implement
 

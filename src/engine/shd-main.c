@@ -81,12 +81,15 @@ gint shadow_main(gint argc, gchar* argv[]) {
 	gint n = config->nWorkerThreads;
 	debug("starting %i-threaded engine (main + %i workers)", (n + 1), n);
 
+	/* dont modify internet during simulation, since its not locked for threads */
+	shadow_engine->internet->isReadOnly = 1;
 	gint retval = engine_run(shadow_engine);
 
 	debug("engine finished, waiting for workers...");
 
 	/* cleanup. join thread pool. workers are auto-deleted when threads end. */
 	engine_free(shadow_engine);
+
 	configuration_free(config);
 
 	/* engine gone, so we must use glib logging for our last message */

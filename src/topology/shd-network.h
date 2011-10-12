@@ -24,15 +24,28 @@
 
 #include "shadow.h"
 
+/* FIXME: forward declaration to avoid circular dependencies... */
+typedef struct _Link Link;
+
 typedef struct _Network Network;
 
 struct _Network {
 	GQuark id;
-
+	CumulativeDistribution* intranetLatency;
+	/* links to other networks this network can access */
+	GList* outgoingLinks;
+	/* links from other networks that can access this network */
+	GList* incomingLinks;
+	/* map to outgoing links by network id */
+	GHashTable* outgoingLinkMap;
 	MAGIC_DECLARE;
 };
 
-Network* network_new(GQuark id);
+Network* network_new(GQuark id, CumulativeDistribution* intranetLatency);
 void network_free(gpointer data);
+void network_addOutgoingLink(Network* network, Link* outgoingLink);
+void network_addIncomingLink(Network* network, Link* incomingLink);
+gint network_compare(gconstpointer a, gconstpointer b, gpointer user_data);
+gboolean network_equal(Network* a, Network* b);
 
 #endif /* SHD_NETWORK_H_ */

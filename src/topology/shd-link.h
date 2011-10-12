@@ -19,20 +19,29 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#ifndef SHD_LINK_H_
+#define SHD_LINK_H_
+
 #include "shadow.h"
 
-Application* application_new() {
-	Application* application = g_new0(Application, 1);
-	MAGIC_INIT(application);
+/* a directed link between two networks */
 
+typedef struct _Link Link;
 
-	return application;
-}
+struct _Link {
+	Network* sourceNetwork;
+	Network* destinationNetwork;
+	CumulativeDistribution* latency;
+	gdouble reliability;
+	MAGIC_DECLARE;
+};
 
-void application_free(Application* application) {
-	MAGIC_ASSERT(application);
+Link* link_new(Network* sourceNetwork, Network* destinationNetwork,
+		CumulativeDistribution* latency, gdouble reliability);
+Network* link_getSourceNetwork(Link* link);
+Network* link_getDestinationNetwork(Link* link);
+gdouble link_getLatency(Link* link);
+gdouble link_getReliability(Link* link);
+void link_free(gpointer data);
 
-
-	MAGIC_CLEAR(application);
-	g_free(application);
-}
+#endif /* SHD_LINK_H_ */

@@ -50,14 +50,15 @@ void connectnetwork_run(ConnectNetworkAction* action) {
 
 	Worker* worker = worker_getPrivate();
 
-	CumulativeDistribution* cdfA2B = registry_get(worker->cached_engine->registry, CDFS, &(action->latencyabCDFID));
-	CumulativeDistribution* cdfB2A = registry_get(worker->cached_engine->registry, CDFS, &(action->latencybaCDFID));
+	CumulativeDistribution* cdfA2B = engine_get(worker->cached_engine, CDFS, action->latencyabCDFID);
+	CumulativeDistribution* cdfB2A = engine_get(worker->cached_engine, CDFS, action->latencybaCDFID);
 
-	if(cdfA2B && cdfB2A) {
-		topology_add_edge(worker->cached_engine->topology, action->networkaID, cdfA2B, action->reliabilityab, action->networkbID, cdfB2A, action->reliabilityba);
-	} else {
-		critical("failed to add edge to topology");
+	if(!cdfA2B || !cdfB2A) {
+		critical("failed to connect networks '%s' and '%s'", g_quark_to_string(action->networkaID), g_quark_to_string(action->networkbID));
+		return;
 	}
+
+	internetwork_connectNetworks(worker->cached_engine->internet, action->networkaID, action->networkbID, cdfA2B, cdfB2A, action->reliabilityab, action->reliabilityba);
 }
 
 void connectnetwork_free(ConnectNetworkAction* action) {

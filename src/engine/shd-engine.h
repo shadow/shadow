@@ -27,7 +27,7 @@
 typedef enum _EngineStorage EngineStorage;
 
 enum _EngineStorage {
-	NODES, NETWORKS, APPLICATIONS, CDFS, PLUGINPATHS
+	SOFTWARE, CDFS, PLUGINPATHS
 };
 
 typedef struct _Engine Engine;
@@ -47,9 +47,11 @@ struct _Engine {
 	/* the simulator should attempt to end immediately after this time */
 	SimulationTime endTime;
 
+	/* track nodes, networks, links, and topology */
+	Internetwork* internet;
+
 	/*
-	 * Keep track of all sorts of global info: simulation nodes, networks, etc.
-	 * all indexed by ID.
+	 * track global objects: software, cdfs, plugins
 	 */
 	Registry* registry;
 
@@ -77,10 +79,6 @@ struct _Engine {
 	 */
 	GMutex* engineIdle;
 
-	/* track global network members and topology */
-	resolver_tp resolver;
-	topology_tp topology;
-
 	/*
 	 * these values are modified during simulation and must be protected so
 	 * they are thread safe
@@ -100,7 +98,9 @@ Engine* engine_new(Configuration* config);
 void engine_free(Engine* engine);
 gint engine_run(Engine* engine);
 void engine_pushEvent(Engine* engine, Event* event);
-gpointer engine_lookup(Engine* engine, EngineStorage type, GQuark id);
+
+void engine_put(Engine* engine, EngineStorage type, GQuark* id, gpointer item);
+gpointer engine_get(Engine* engine, EngineStorage type, GQuark id);
 
 gint engine_generateWorkerID(Engine* engine);
 gint engine_generateNodeID(Engine* engine);
