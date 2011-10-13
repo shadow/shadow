@@ -31,28 +31,23 @@
 #include "vevent_mgr.h"
 #include "vevent.h"
 #include "shd-plugin.h"
-#include "log.h"
-#include "timer.h"
-#include "sim.h"
-#include "context.h"
 
-gint vevent_mgr_timer_create(vevent_mgr_tp mgr, gint milli_delay, vevent_mgr_timer_callback_fp callback_function, gpointer cb_arg) {
-	assert(global_sim_context.sim_worker);
-	return dtimer_create_timer(global_sim_context.sim_worker->timer_mgr,
-			global_sim_context.sim_worker->current_time,
-			mgr->provider, milli_delay, callback_function, cb_arg);
+void vevent_mgr_timer_create(vevent_mgr_tp mgr, gint milli_delay, CallbackFunc callback_function, gpointer cb_arg) {
+	CallbackEvent* cb = callback_new(callback_function, cb_arg);
+	Worker* worker = worker_getPrivate();
+	worker_scheduleEvent(cb, SIMTIME_ONE_MILLISECOND * milli_delay, worker->cached_node->id);
 }
 
 /* internal storage must be allocated by caller. the caller should
  * register the struct that this pointer points to with shadow. */
-static void vevent_mgr_init(context_provider_tp p, vevent_mgr_tp mgr) {
+static void vevent_mgr_init(vevent_mgr_tp mgr) {
 	/* every node needs to init its data */
 	if(mgr != NULL) {
 		/* hash table using pointers as keys, so we directly hash and compare pointers */
         mgr->base_conversion = g_hash_table_new(g_direct_hash, g_direct_equal);
 		mgr->event_bases = g_queue_new();
 		mgr->loopexit_fp = NULL;
-		mgr->provider = p;
+		mgr->id_counter = 0;
 	}
 }
 
@@ -75,9 +70,9 @@ void vevent_mgr_set_loopexit_fn(vevent_mgr_tp mgr, vevent_mgr_timer_callback_fp 
 	}
 }
 
-vevent_mgr_tp vevent_mgr_create(context_provider_tp p) {
+vevent_mgr_tp vevent_mgr_create() {
 	vevent_mgr_tp mgr = calloc(1, sizeof(vevent_mgr_t));
-	vevent_mgr_init(p, mgr);
+	vevent_mgr_init(mgr);
 	return mgr;
 }
 

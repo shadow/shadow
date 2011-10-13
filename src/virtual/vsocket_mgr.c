@@ -40,7 +40,7 @@
 static vsocket_tp vsocket_mgr_find_socket_helper(vinterface_tp vi, guint8 protocol,
 		in_addr_t remote_addr, in_port_t remote_port, in_port_t local_port);
 
-vsocket_mgr_tp vsocket_mgr_create(context_provider_tp p, in_addr_t addr, guint32 KBps_down, guint32 KBps_up,
+vsocket_mgr_tp vsocket_mgr_create(in_addr_t addr, guint32 KBps_down, guint32 KBps_up,
 		guint64 cpu_speed_Bps) {
 	vsocket_mgr_tp net = malloc(sizeof(vsocket_mgr_t));
 
@@ -58,7 +58,7 @@ vsocket_mgr_tp vsocket_mgr_create(context_provider_tp p, in_addr_t addr, guint32
 	net->vt_mgr = vtransport_mgr_create(net, KBps_down, KBps_up);
 	net->vp_mgr = vpacket_mgr_create();
 	net->vpipe_mgr = vpipe_mgr_create(net->addr);
-	net->vev_mgr = vevent_mgr_create(p);
+	net->vev_mgr = vevent_mgr_create();
 	net->vcpu = vcpu_create(cpu_speed_Bps);
 
 	return net;

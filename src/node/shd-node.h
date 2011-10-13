@@ -47,6 +47,7 @@ struct _Node {
 
 	GQuark id;
 	Application* application;
+//	vsocket_mgr_tp vsocket_mgr;
 
 	MAGIC_DECLARE;
 };

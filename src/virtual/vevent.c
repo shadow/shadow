@@ -37,7 +37,6 @@
 #include "vevent_mgr.h"
 #include "vepoll.h"
 #include "vsocket.h"
-#include "log.h"
 
 /* FIXME TODO:
  * -make vevent_mgr accesses local to vevent_mgr.c
@@ -111,13 +110,14 @@ static void vevent_destroy_vevent_cb(gint key, gpointer value, gpointer param) {
 
 static void vevent_vepoll_action(guint16 sockd, guint8 add, short ev_type) {
 	/* make sure we tell vepoll our preference for event notifications when the socket/pipe is ready */
-	vsocket_mgr_tp vsock_mgr = global_sim_context.current_context->vsocket_mgr;
+	Worker* worker = worker_getPrivate();
+	vsocket_mgr_tp vsock_mgr = worker->cached_node->vsocket_mgr;
 	if(vsock_mgr != NULL) {
 		vepoll_tp poll = NULL;
 
 		poll = vpipe_get_poll(vsock_mgr->vpipe_mgr, sockd);
 		if(poll == NULL) {
-			vsocket_tp sock = vsocket_mgr_get_socket(global_sim_context.current_context->vsocket_mgr, sockd);
+			vsocket_tp sock = vsocket_mgr_get_socket(vsock_mgr, sockd);
 			if(sock != NULL) {
 				poll = sock->vep;
 			}
@@ -239,17 +239,12 @@ static gint vevent_set_timer(vevent_mgr_tp mgr, vevent_tp vev, const struct time
 		vt->mgr = mgr;
 		vt->vev = vev;
 
-		gint timer_result = vevent_mgr_timer_create(mgr, delay_millis, &vevent_timer_cb, vt);
+		vevent_mgr_timer_create(mgr, delay_millis, &vevent_timer_cb, vt);
 
-		if(timer_result != -1){
-			/* success */
-			vev->timerid = timer_result;
-			vev->ntimers++;
-			vev->event->ev_flags |= EVLIST_TIMEOUT;
-			return 0;
-		} else {
-			critical("vevent_set_timer: error adding timer. eventid %d, fd %d, type %s\n", vev->id, vev->event->ev_fd, vevent_get_event_type_string(mgr, vev->event->ev_events));
-		}
+		vev->timerid = ++(mgr->id_counter);
+		vev->ntimers++;
+		vev->event->ev_flags |= EVLIST_TIMEOUT;
+		return 0;
 	} else {
 		critical("vevent_set_timer: timer created without specifying delay. timer event not added. event id %d, fd %d, type %s\n", vev->id, vev->event->ev_fd, vevent_get_event_type_string(mgr, vev->event->ev_events));
 	}
@@ -507,7 +502,7 @@ gint vevent_event_base_loop(vevent_mgr_tp mgr, event_base_tp eb, gint flags) {
 	return 0;
 }
 
-void vevent_call_loopexit_fn(gint tid, gpointer arg) {
+void vevent_call_loopexit_fn(gpointer arg) {
 	vevent_mgr_tp mgr = arg;
 	if(mgr == NULL) {
 		return;

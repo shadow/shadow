@@ -34,10 +34,10 @@ Node* node_new(GQuark id, Network* network, Software* software, GString* hostnam
 
 	node->application = application_new(software);
 //  FIXME create this!
-//	node->vsocket_mgr = vsocket_mgr_create(context_provider, ipAddress, KBps_down, KBps_up, cpu_speed_Bps);
+//	node->vsocket_mgr = vsocket_mgr_create((in_addr_t) id, bwDownKiBps, bwUpKiBps, cpuBps);
 
 	info("Created Node '%s', ip %s, %u bwUpKiBps, %u bwDownKiBps, %lu cpuBps\n",
-			g_quark_to_string(node->id), NTOA(node->id), 0, 0, 0);
+			g_quark_to_string(node->id), NTOA(node->id), bwUpKiBps, bwDownKiBps, cpuBps);
 
 	return node;
 }

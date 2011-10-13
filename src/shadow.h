@@ -62,6 +62,7 @@
 
 #include "runnable/event/shd-spine.h"
 #include "runnable/event/shd-start-application.h"
+#include "runnable/event/shd-callback.h"
 #include "runnable/action/shd-spina.h"
 #include "runnable/action/shd-connect-network.h"
 #include "runnable/action/shd-create-software.h"

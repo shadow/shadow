@@ -98,7 +98,7 @@ typedef struct vsocket_mgr_s {
 	vcpu_tp vcpu;
 }vsocket_mgr_t, *vsocket_mgr_tp;
 
-vsocket_mgr_tp vsocket_mgr_create(context_provider_tp p, in_addr_t addr, guint32 KBps_down, guint32 KBps_up, guint64 cpu_speed_Bps);
+vsocket_mgr_tp vsocket_mgr_create(in_addr_t addr, guint32 KBps_down, guint32 KBps_up, guint64 cpu_speed_Bps);
 void vsocket_mgr_destroy(vsocket_mgr_tp net);
 vsocket_tp vsocket_mgr_create_socket(vsocket_mgr_tp net, guint8 type);
 void vsocket_mgr_destroy_socket(vsocket_tp sock);

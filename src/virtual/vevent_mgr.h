@@ -32,8 +32,6 @@
 #include <event2/dns_compat.h>
 #include <event2/dns_struct.h>
 
-#include "context.h"
-
 /* make libevent types slightly prettier */
 typedef struct event event_t, *event_tp;
 typedef struct event_base event_base_t, *event_base_tp;
@@ -43,7 +41,7 @@ typedef struct evdns_request evdns_request_t, *evdns_request_tp;
 typedef struct evdns_server_request evdns_server_request_t, *evdns_server_request_tp;
 typedef struct evdns_server_port evdns_server_port_t, *evdns_server_port_tp;
 
-typedef void (*vevent_mgr_timer_callback_fp)(gint timer_id, gpointer arg);
+typedef void (*vevent_mgr_timer_callback_fp)(gpointer arg);
 
 /* holds all registered vevents and sockets */
 typedef struct vevent_base_s {
@@ -59,20 +57,20 @@ typedef struct vevent_mgr_s {
 	GHashTable * base_conversion;
 	vevent_mgr_timer_callback_fp loopexit_fp;
 	gchar typebuf[80];
-	context_provider_tp provider;
+	gint id_counter;
 } vevent_mgr_t, *vevent_mgr_tp;
 
 /* public vevent api */
 //void vevent_mgr_init(vevent_mgr_tp mgr);
 //void vevent_mgr_uninit(vevent_mgr_tp mgr);
-vevent_mgr_tp vevent_mgr_create(context_provider_tp p);
+vevent_mgr_tp vevent_mgr_create();
 void vevent_mgr_destroy(vevent_mgr_tp mgr);
 
 void vevent_mgr_track_base(vevent_mgr_tp mgr, event_base_tp eb, vevent_base_tp veb);
 void vevent_mgr_untrack_base(vevent_mgr_tp mgr, event_base_tp eb);
 vevent_base_tp vevent_mgr_convert_base(vevent_mgr_tp mgr, event_base_tp eb);
 
-gint vevent_mgr_timer_create(vevent_mgr_tp mgr, gint milli_delay, vevent_mgr_timer_callback_fp callback_function, gpointer cb_arg);
+void vevent_mgr_timer_create(vevent_mgr_tp mgr, gint milli_delay, CallbackFunc callback_function, gpointer cb_arg);
 void vevent_mgr_set_loopexit_fn(vevent_mgr_tp mgr, vevent_mgr_timer_callback_fp fn);
 
 //void vevent_mgr_wakeup_all(vevent_mgr_tp mgr);
