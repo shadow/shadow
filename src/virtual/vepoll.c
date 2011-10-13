@@ -24,13 +24,12 @@
 #include <stdint.h>
 #include <netinet/in.h>
 
+#include "shadow.h"
+
 #include "vepoll.h"
 #include "vsocket_mgr.h"
 #include "vevent_mgr.h"
 #include "vci.h"
-#include "log.h"
-#include "timer.h"
-#include "sim.h"
 
 #include "vsocket_mgr_server.h"
 #include "vtcp_server.h"
@@ -153,7 +152,7 @@ void vepoll_vevent_delete(vepoll_tp vep, enum vepoll_type type) {
 	}
 }
 
-void vepoll_execute_notification(context_provider_tp provider, vepoll_tp vep) {
+void vepoll_execute_notification(vepoll_tp vep) {
 	if(vep != NULL) {
 		debug("vepoll_execute_notification: activation for socket %u, can_write=%i, can_read=%i\n",
 				vep->sockd, (vep->available & VEPOLL_WRITE) > 0, (vep->available & VEPOLL_READ) > 0);
@@ -176,16 +175,24 @@ void vepoll_execute_notification(context_provider_tp provider, vepoll_tp vep) {
 
 			guint8 turn = vep->do_read_first;
 
+			Worker* worker = worker_getPrivate();
+			Application* a = worker->cached_node->application;
+			Plugin* plugin = worker_getPlugin(a->software->id, a->software->pluginPath);
+
 			/* tell the socket about it if available, only switching context once */
 			if((vep->available & VEPOLL_READ) && (vep->available & VEPOLL_WRITE)) {
-				context_execute_socket(provider, vep->sockd, 1, 1, turn);
+				if(vep->do_read_first) {
+					plugin_executeReadableWritable(plugin, a->state, vep->sockd);
+				} else {
+					plugin_executeWritableReadable(plugin, a->state, vep->sockd);
+				}
 
 				/* next time its the other types turn to go first */
 				vep->do_read_first = vep->do_read_first == 1 ? 0 : 1;
 			} else if(vep->available & VEPOLL_READ) {
-				context_execute_socket(provider, vep->sockd, 1, 0, turn);
+				plugin_executeReadable(plugin, a->state, vep->sockd);
 			} else if(vep->available & VEPOLL_WRITE) {
-				context_execute_socket(provider, vep->sockd, 0, 1, turn);
+				plugin_executeWritable(plugin, a->state, vep->sockd);
 			}
 
 			/* tell vevent to execute its callbacks for this socket */

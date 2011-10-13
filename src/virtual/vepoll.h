@@ -27,7 +27,6 @@
 #include <netinet/in.h>
 
 #include "vevent_mgr.h"
-#include "context.h"
 #include "vci_event.h"
 
 /* vepoll monitors the state of io events on a socket, and manages scheduling
@@ -95,7 +94,7 @@ void vepoll_vevent_add(vepoll_tp vep, enum vepoll_type type);
 void vepoll_vevent_delete(vepoll_tp vep, enum vepoll_type type);
 
 /* scheduler popped our event, so we should notify module of socket is ready */
-void vepoll_execute_notification(context_provider_tp provider, vepoll_tp vep);
+void vepoll_execute_notification(vepoll_tp vep);
 /* called every polling ginterval to check status and activate as needed */
 void vepoll_onpoll(vci_event_tp vci_event, gpointer vs_mgr);
 

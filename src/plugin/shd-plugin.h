@@ -45,5 +45,7 @@ void plugin_executeNew(Plugin* plugin, PluginState* state, gint argcParam, gchar
 void plugin_executeFree(Plugin* plugin, PluginState* state);
 void plugin_executeReadable(Plugin* plugin, PluginState* state, gint socketParam);
 void plugin_executeWritable(Plugin* plugin, PluginState* state, gint socketParam);
+void plugin_executeWritableReadable(Plugin* plugin, PluginState* state, gint socketParam);
+void plugin_executeReadableWritable(Plugin* plugin, PluginState* state, gint socketParam);
 
 #endif /* SHD_PLUGIN_H_ */

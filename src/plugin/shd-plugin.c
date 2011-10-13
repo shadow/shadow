@@ -138,3 +138,19 @@ void plugin_executeWritable(Plugin* plugin, PluginState* state, gint socketParam
 	plugin->residentState->functions->writable(socketParam);
 	_plugin_stopExecuting(plugin, state);
 }
+
+void plugin_executeWritableReadable(Plugin* plugin, PluginState* state, gint socketParam) {
+	MAGIC_ASSERT(plugin);
+	_plugin_startExecuting(plugin, state);
+	plugin->residentState->functions->writable(socketParam);
+	plugin->residentState->functions->readable(socketParam);
+	_plugin_stopExecuting(plugin, state);
+}
+
+void plugin_executeReadableWritable(Plugin* plugin, PluginState* state, gint socketParam) {
+	MAGIC_ASSERT(plugin);
+	_plugin_startExecuting(plugin, state);
+	plugin->residentState->functions->readable(socketParam);
+	plugin->residentState->functions->writable(socketParam);
+	_plugin_stopExecuting(plugin, state);
+}
