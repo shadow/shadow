@@ -28,9 +28,18 @@ set(shadow_srcs
     runnable/shd-runnable.c
     runnable/event/shd-event.c
     runnable/event/shd-start-application.c
+    runnable/event/shd-callback.c
+    runnable/event/shd-packet-arrived.c
+    runnable/event/shd-packet-received.c
+    runnable/event/shd-packet-sent.c
+    runnable/event/shd-socket-activated.c
+    runnable/event/shd-socket-poll-timer-expired.c
+    runnable/event/shd-tcp-close-timer-expired.c
+    runnable/event/shd-tcp-dack-timer-expired.c
+    runnable/event/shd-tcp-retransmit-timer-expired.c
     runnable/event/shd-spine.c
-    runnable/action/shd-action.c
     runnable/action/shd-spina.c
+    runnable/action/shd-action.c
     runnable/action/shd-connect-network.c
     runnable/action/shd-create-software.c
     runnable/action/shd-create-network.c

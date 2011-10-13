@@ -68,6 +68,7 @@ static void vepoll_activate(vepoll_tp vep) {
 		/* check if we need to schedule a notification */
 		if((vep->flags & VEPOLL_NOTIFY_SCHEDULED) == 0) {
 			vep->flags |= VEPOLL_NOTIFY_SCHEDULED;
+			// XXX NEED_NEW_EVENT
 			vci_schedule_notify(vep->addr, vep->sockd);
 		}
 	}
