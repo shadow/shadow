@@ -823,8 +823,7 @@ static guint8 vtcp_update_send_window(vtcp_tp vtcp) {
 
 static void vtcp_autotune(vtcp_tp vtcp) {
 	if(vtcp != NULL) {
-		gint force = sysconfig_get_gint("vnetwork_send_buffer_size_force");
-		if(force == 0) {
+		if(!CONFIG_SEND_BUFFER_SIZE_FORCE) {
 			if(vtcp->remote_peer->addr == htonl(INADDR_LOOPBACK)) {
 				/* 16 MiB as max */
 				vbuffer_set_size(vtcp->vb, 16777216, 16777216);
@@ -889,7 +888,7 @@ static void vtcp_autotune(vtcp_tp vtcp) {
 
 static void vtcp_trysend_dack(vtcp_tp vtcp) {
 	/* fixme add this to config */
-	if(sysconfig_get_gint("usedack") == 1) {
+	if(CONFIG_DO_DELAYED_ACKS) {
 		/* in practice, there is an ack delay timer of 40ms. the empty ack isn't
 		 * sent until the timer expires if app data does not comes in. this
 		 * prevents sending an ack when you could have piggybacked it soon after.

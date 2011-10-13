@@ -39,13 +39,12 @@ vtransport_tp vtransport_create(vsocket_mgr_tp vsocket_mgr, vsocket_tp sock) {
 	vt->vsocket_mgr = vsocket_mgr;
 	vt->sock = sock;
 
-	guint64 wmem = sysconfig_get_gint("vnetwork_send_buffer_size");
-	guint64 rmem = sysconfig_get_gint("vnetwork_recv_buffer_size");
+	guint64 wmem = CONFIG_SEND_BUFFER_SIZE;
+	guint64 rmem = CONFIG_RECV_BUFFER_SIZE;
 
 	/* this is now done in vtcp_autotune */
 #if 0
-	gint force = sysconfig_get_gint("vnetwork_send_buffer_size_force");
-	if(force == 0) {
+	if(!CONFIG_SEND_BUFFER_SIZE_FORCE) {
 		/* our receive buffer needs to be large enough to allow the sender to send
 		 * a full delay*bandwidth worth of bytes to keep the pipe full. */
 		guint64 max_latency_milliseconds = global_sim_context.sim_worker->max_latency;

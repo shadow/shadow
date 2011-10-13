@@ -25,7 +25,6 @@
 #include <openssl/aes.h>
 #include <openssl/ssl.h>
 #include "preload.h"
-//#include "sysconfig.h"
 
 #define CRYPTO_LIB_PREFIX "intercept_"
 

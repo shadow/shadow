@@ -86,6 +86,11 @@ typedef guint64 SimulationTime;
 
 #define NTOA(ip) inet_ntoa((struct in_addr){ip})
 
+#define CONFIG_SEND_BUFFER_SIZE_FORCE 0
+#define CONFIG_SEND_BUFFER_SIZE 131072
+#define CONFIG_RECV_BUFFER_SIZE 174760
+#define CONFIG_DO_DELAYED_ACKS 0
+
 typedef struct _Configuration Configuration;
 
 struct _Configuration {
