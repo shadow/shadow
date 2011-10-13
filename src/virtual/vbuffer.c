@@ -194,7 +194,7 @@ static guint8 vbuffer_add_receive_helper(vbuffer_tp vb, rc_vpacket_pod_tp rc_pac
 						break;
 
 					default:
-						dlogf(LOG_CRIT, "vbuffer_add_receive_helper: must specify buffer\n");
+						critical("vbuffer_add_receive_helper: must specify buffer\n");
 						vpacket_mgr_lockcontrol(rc_packet, LC_OP_READUNLOCK | LC_TARGET_PACKET);
 						goto ret;
 				}
@@ -208,7 +208,7 @@ static guint8 vbuffer_add_receive_helper(vbuffer_tp vb, rc_vpacket_pod_tp rc_pac
 				/* success, packet was buffered */
 				result = 1;
 			} else {
-				debugf("vbuffer_add_receive_helper: no space to store\n");
+				debug("vbuffer_add_receive_helper: no space to store\n");
 			}
 			vpacket_mgr_lockcontrol(rc_packet, LC_OP_READUNLOCK | LC_TARGET_PACKET);
 		}
@@ -259,7 +259,7 @@ static guint8 vbuffer_add_send_helper(vbuffer_tp vb, rc_vpacket_pod_tp rc_packet
 						break;
 
 					default:
-						dlogf(LOG_CRIT, "vbuffer_add_send_helper: must specify buffer\n");
+						critical("vbuffer_add_send_helper: must specify buffer\n");
 						vpacket_mgr_lockcontrol(rc_packet, LC_OP_READUNLOCK | LC_TARGET_PACKET);
 						goto ret;
 				}
@@ -272,7 +272,7 @@ static guint8 vbuffer_add_send_helper(vbuffer_tp vb, rc_vpacket_pod_tp rc_packet
 				/* success, packet was buffered */
 				result = 1;
 			} else {
-				debugf("vbuffer_add_send_helper: no space to store\n");
+				debug("vbuffer_add_send_helper: no space to store\n");
 			}
 			vpacket_mgr_lockcontrol(rc_packet, LC_OP_READUNLOCK | LC_TARGET_PACKET);
 		}
@@ -329,7 +329,7 @@ static rc_vpacket_pod_tp vbuffer_remove_receive_helper(vbuffer_tp vb, enum vbuff
 					break;
 
 				default:
-					dlogf(LOG_CRIT, "vbuffer_remove_receive_helper: must specify buffer\n");
+					critical("vbuffer_remove_receive_helper: must specify buffer\n");
 					goto ret;
 			}
 
@@ -355,7 +355,7 @@ static rc_vpacket_pod_tp vbuffer_remove_receive_helper(vbuffer_tp vb, enum vbuff
 					break;
 
 				default:
-					dlogf(LOG_CRIT, "vbuffer_remove_receive_helper: must specify buffer\n");
+					critical("vbuffer_remove_receive_helper: must specify buffer\n");
 					goto ret;
 			}
 
@@ -408,7 +408,7 @@ static rc_vpacket_pod_tp vbuffer_remove_send_helper(vbuffer_tp vb, enum vbuffer_
 		if(vba == VB_GET) {
 			switch (vbt) {
 				case VB_SEND_RETRANSMIT:
-					debugf("vbuffer_remove_send_helper: get retransmit unsupported\n");
+					debug("vbuffer_remove_send_helper: get retransmit unsupported\n");
 					goto ret;
 
 				case VB_SEND_VWRITE:
@@ -420,11 +420,11 @@ static rc_vpacket_pod_tp vbuffer_remove_send_helper(vbuffer_tp vb, enum vbuffer_
 					}
 
 				case VB_SEND_CONTROL:
-					debugf("vbuffer_remove_send_helper: get retransmit unsupported\n");
+					debug("vbuffer_remove_send_helper: get retransmit unsupported\n");
 					goto ret;
 
 				default:
-					dlogf(LOG_CRIT, "vbuffer_remove_send_helper: must specify buffer\n");
+					critical("vbuffer_remove_send_helper: must specify buffer\n");
 					goto ret;
 			}
 
@@ -449,7 +449,7 @@ static rc_vpacket_pod_tp vbuffer_remove_send_helper(vbuffer_tp vb, enum vbuffer_
 					break;
 
 				default:
-					dlogf(LOG_CRIT, "vbuffer_remove_send_helper: must specify buffer\n");
+					critical("vbuffer_remove_send_helper: must specify buffer\n");
 					goto ret;
 			}
 
@@ -461,7 +461,7 @@ static rc_vpacket_pod_tp vbuffer_remove_send_helper(vbuffer_tp vb, enum vbuffer_
 				vb->sbuf->num_packets--;
 				vpacket_mgr_lockcontrol(rc_packet, LC_OP_READUNLOCK | LC_TARGET_PACKET);
 			} else {
-				dlogf(LOG_WARN, "vbuffer_remove_send_helper: packet is NULL, key was %u\n", key);
+				warning("vbuffer_remove_send_helper: packet is NULL, key was %u\n", key);
 			}
 		}
 	}

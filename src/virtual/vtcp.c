@@ -147,7 +147,7 @@ ssize_t vtcp_send(vsocket_mgr_tp net, vsocket_tp tcpsock, const gpointer src_buf
 		rc_vpacket_pod_release(rc_packet);
 
 		if(!success) {
-			dlogf(LOG_WARN, "vtcp_send: unable to send packet\n");
+			warning("vtcp_send: unable to send packet\n");
 			return bytes_sent;
 		}
 
@@ -155,7 +155,7 @@ ssize_t vtcp_send(vsocket_mgr_tp net, vsocket_tp tcpsock, const gpointer src_buf
 		remaining -= copy_size;
 	}
 
-	debugf("vtcp_send: sent %i bytes to transport\n", bytes_sent);
+	debug("vtcp_send: sent %i bytes to transport\n", bytes_sent);
 
 	return (ssize_t) bytes_sent;
 }
@@ -179,7 +179,7 @@ guint8 vtcp_send_packet(vtcp_tp vtcp, rc_vpacket_pod_tp rc_packet) {
 			}
 			vtransport_mgr_ready_send(vtcp->vsocket_mgr->vt_mgr, vtcp->sock);
 		} else {
-			dlogf(LOG_CRIT, "vtcp_send_packet: trying to send NULL packet\n");
+			critical("vtcp_send_packet: trying to send NULL packet\n");
 			rc_vpacket_pod_release(rc_packet);
 		}
 
@@ -258,10 +258,10 @@ enum vt_prc_result vtcp_process_item(vtransport_item_tp titem) {
 
 	/* we must have a socket */
 	if(target == NULL) {
-		dlogf(LOG_INFO, "vtcp_process_item: ignoring NULL target socket (child socket was destroyed?)\n");
+		info("vtcp_process_item: ignoring NULL target socket (child socket was destroyed?)\n");
 		goto ret;
 	} else if (target->ethernet_peer == NULL && target->loopback_peer == NULL) {
-		dlogf(LOG_WARN, "vtcp_process_item: cannot process unbound socket\n");
+		warning("vtcp_process_item: cannot process unbound socket\n");
 		goto ret;
 	}
 
@@ -269,13 +269,13 @@ enum vt_prc_result vtcp_process_item(vtransport_item_tp titem) {
 
 	/* must have packet and header info to proceed */
 	if (packet == NULL) {
-		dlogf(LOG_WARN, "vtcp_process_item: cannot process without incoming control packet\n");
+		warning("vtcp_process_item: cannot process without incoming control packet\n");
 		goto ret;
 	} else if (packet->header.protocol != SOCK_STREAM) {
-		dlogf(LOG_WARN, "vtcp_process_item: cannot process without incoming control header\n");
+		warning("vtcp_process_item: cannot process without incoming control header\n");
 		goto ret;
 	} else if(target->vt == NULL || target->vt->vtcp == NULL) {
-		dlogf(LOG_WARN, "vtcp_process_item: cannot process without connection\n");
+		warning("vtcp_process_item: cannot process without connection\n");
 		goto ret;
 	}
 
@@ -283,7 +283,7 @@ enum vt_prc_result vtcp_process_item(vtransport_item_tp titem) {
 
 	vpacket_mgr_lockcontrol(titem->rc_packet, LC_OP_READUNLOCK | LC_TARGET_PACKET);
 
-	debugf("vtcp_process_item: socket %i got seq# %u from %s\n", target->sock_desc, packet->tcp_header.sequence_number, inet_ntoa_t(packet->header.source_addr));
+	debug("vtcp_process_item: socket %i got seq# %u from %s\n", target->sock_desc, packet->tcp_header.sequence_number, inet_ntoa_t(packet->header.source_addr));
 
 	prc_result |= vtcp_process_state(target, titem->rc_packet);
 
@@ -297,7 +297,7 @@ enum vt_prc_result vtcp_process_item(vtransport_item_tp titem) {
 	}
 
 	if(target != NULL && target->vt != NULL && target->vt->vtcp != NULL) {
-		debugf("vtcp_process_item: socket %i cngthresh=%u, cngwnd=%u, snduna=%u, sndnxt=%u, sndwnd=%u, rcvnxt=%u, rcvwnd=%u\n",
+		debug("vtcp_process_item: socket %i cngthresh=%u, cngwnd=%u, snduna=%u, sndnxt=%u, sndwnd=%u, rcvnxt=%u, rcvwnd=%u\n",
 				target->sock_desc,
 				target->vt->vtcp->cng_threshold, target->vt->vtcp->cng_wnd,
 				target->vt->vtcp->snd_una, target->vt->vtcp->snd_nxt, target->vt->vtcp->snd_wnd,
@@ -493,23 +493,23 @@ static enum vt_prc_result vtcp_process_state(vsocket_tp sock, rc_vpacket_pod_tp 
 							prc_result |= VT_PRC_PARENT_READABLE;
 						} else {
 							/* no space to hold pending connection */
-							dlogf(LOG_WARN, "vtcp_preprocess: server has too many connections, dropping new connection request!\n");
+							warning("vtcp_preprocess: server has too many connections, dropping new connection request!\n");
 							vtcp_send_control_packet(vtcp, RST);
 							vtcp_reset(vtcp, sock, rc_packet);
 							prc_result |= VT_PRC_DROPPED;
 							break;
 						}
 					} else {
-						dlogf(LOG_CRIT, "vtcp_preprocess: unable to process newly established multiplexed connection\n");
+						critical("vtcp_preprocess: unable to process newly established multiplexed connection\n");
 					}
 				} else {
-					dlogf(LOG_CRIT, "vtcp_preprocess: no parent for multiplexed connection\n");
+					critical("vtcp_preprocess: no parent for multiplexed connection\n");
 				}
 			}
 			break;
 
 		default:
-			debugf("vtcp_preprocess: dropping packet received while in state %i\n", sock->curr_state);
+			debug("vtcp_preprocess: dropping packet received while in state %i\n", sock->curr_state);
 			break;
 	}
 
@@ -637,7 +637,7 @@ static enum vt_prc_result vtcp_process_data_helper(vsocket_tp sock, rc_vpacket_p
 
 		/* if we got here, we have space to store packet */
 		vtcp->rcv_nxt++;
-		debugf("vtcp_process_data_helper: socket %i advance seq# %u from %s\n", sock->sock_desc, packet->tcp_header.sequence_number, inet_ntoa_t(packet->header.source_addr));
+		debug("vtcp_process_data_helper: socket %i advance seq# %u from %s\n", sock->sock_desc, packet->tcp_header.sequence_number, inet_ntoa_t(packet->header.source_addr));
 
 		packet = vpacket_mgr_lockcontrol(rc_packet, LC_OP_READLOCK | LC_TARGET_PACKET);
 
@@ -778,7 +778,7 @@ vsocket_tp vtcp_get_target_socket(vtransport_item_tp titem) {
 	}
 
 	if(target == NULL) {
-		debugf("vtcp_get_target_socket: unable to locate target socket, maybe socket closed\n");
+		debug("vtcp_get_target_socket: unable to locate target socket, maybe socket closed\n");
 	}
 	return target;
 }
@@ -788,7 +788,7 @@ void vtcp_send_control_packet(vtcp_tp vtcp, enum vpacket_tcp_flags flags) {
 
 	if(!vtcp_send_packet(vtcp, rc_control_packet)) {
 		/* this should never happen since control packets take no buffer space */
-		dlogf(LOG_CRIT, "vtcp_send_control_packet: cannot send control packet\n");
+		critical("vtcp_send_control_packet: cannot send control packet\n");
 	}
 
 	rc_vpacket_pod_release(rc_control_packet);
@@ -831,7 +831,7 @@ static void vtcp_autotune(vtcp_tp vtcp) {
 			if(vtcp->remote_peer->addr == htonl(INADDR_LOOPBACK)) {
 				/* 16 MiB as max */
 				vbuffer_set_size(vtcp->vb, 16777216, 16777216);
-				debugf("vtcp_autotune: set loopback buffer sizes to 16777216\n");
+				debug("vtcp_autotune: set loopback buffer sizes to 16777216\n");
 				return;
 			}
 
@@ -842,7 +842,7 @@ static void vtcp_autotune(vtcp_tp vtcp) {
 			/* get latency in milliseconds */
 			guint8 success = vci_get_latency(vtcp->vsocket_mgr->addr, vtcp->remote_peer->addr, &send_latency, &receive_latency);
 			if(!success) {
-				dlogf(LOG_WARN, "vtcp_autotune: cant get latency for autotuning. defaulting to worst case latency.\n");
+				warning("vtcp_autotune: cant get latency for autotuning. defaulting to worst case latency.\n");
 				send_latency = global_sim_context.sim_worker->max_latency;
 				receive_latency = global_sim_context.sim_worker->max_latency;
 			}
@@ -884,7 +884,7 @@ static void vtcp_autotune(vtcp_tp vtcp) {
 			guint64 receivebuf_size = (guint64) (rtt_milliseconds * receive_bottleneck_bw * 1.25);
 
 			vbuffer_set_size(vtcp->vb, receivebuf_size, sendbuf_size);
-			debugf("vtcp_autotune: set network buffer sizes: send %lu receive %lu\n", sendbuf_size, receivebuf_size);
+			debug("vtcp_autotune: set network buffer sizes: send %lu receive %lu\n", sendbuf_size, receivebuf_size);
 		}
 	}
 }
@@ -965,16 +965,16 @@ rc_vpacket_pod_tp vtcp_wire_packet(vtcp_tp vtcp) {
 				guint64 retransmit_key = packet->tcp_header.sequence_number;
 				vpacket_mgr_lockcontrol(rc_packet, LC_OP_WRITEUNLOCK | LC_TARGET_PACKET);
 				if(!vbuffer_add_retransmit(vtcp->vb, rc_packet, retransmit_key)) {
-					dlogf(LOG_CRIT, "vtcp_wire_packet: packet will not be reliable\n");
+					critical("vtcp_wire_packet: packet will not be reliable\n");
 				}
 			}
 		}
 #ifdef DEBUG
 		else {
 			if(vbuffer_get_send_length(vtcp->vb) > 0) {
-				debugf("vtcp_wire_packet: throttled socket %i, send window extends to %u\n", vtcp->sock->sock_desc, vtcp->snd_una + vtcp->snd_wnd);
+				debug("vtcp_wire_packet: throttled socket %i, send window extends to %u\n", vtcp->sock->sock_desc, vtcp->snd_una + vtcp->snd_wnd);
 			}else {
-				debugf("vtcp_wire_packet: no packet to send for socket %i\n", vtcp->sock->sock_desc);
+				debug("vtcp_wire_packet: no packet to send for socket %i\n", vtcp->sock->sock_desc);
 			}
 		}
 #endif
@@ -994,9 +994,9 @@ void vtcp_retransmit(vtcp_tp vtcp, guint32 retransmit_key) {
 
 
 		if(is_retransmitted) {
-			debugf("vtcp_retransmit: enqueued seq# %u for retransmission!\n", retransmit_key);
+			debug("vtcp_retransmit: enqueued seq# %u for retransmission!\n", retransmit_key);
 		} else {
-			dlogf(LOG_CRIT, "vtcp_retransmit: cant retransmit valid seq# %u!\n", retransmit_key);
+			critical("vtcp_retransmit: cant retransmit valid seq# %u!\n", retransmit_key);
 		}
 		rc_vpacket_pod_release(rc_packet);
 	} else {
@@ -1007,7 +1007,7 @@ void vtcp_retransmit(vtcp_tp vtcp, guint32 retransmit_key) {
 		if(vtcp->sock != NULL) {
 			sockd = vtcp->sock->sock_desc;
 		}
-		dlogf(LOG_WARN, "vtcp_retransmit: socket %i cant retransmit seq# %u. it may have been sent, cleared from a newer ack, or the socket closed.\n", sockd, retransmit_key);
+		warning("vtcp_retransmit: socket %i cant retransmit seq# %u. it may have been sent, cleared from a newer ack, or the socket closed.\n", sockd, retransmit_key);
 	}
 
 	/* try to send, packet might be within send window even if buffer has more than 1 item */
@@ -1022,7 +1022,7 @@ guint32 vtcp_generate_iss() {
 }
 
 void vtcp_ondack(vci_event_tp vci_event, vsocket_mgr_tp vs_mgr) {
-	debugf("vtcp_ondack: event fired\n");
+	debug("vtcp_ondack: event fired\n");
         if(vci_event->payload != NULL) {
             guint16 sockd = *(guint16 *)(vci_event->payload);
 
@@ -1051,7 +1051,7 @@ rc_vpacket_pod_tp vtcp_create_packet(vtcp_tp vtcp, enum vpacket_tcp_flags flags,
 				src_addr = vtcp->sock->loopback_peer->addr;
 				src_port = vtcp->sock->loopback_peer->port;
 			} else {
-				dlogf(LOG_ERR, "vtcp_create_packet: trying to send to loopback but have no local loopback peer\n");
+				error("vtcp_create_packet: trying to send to loopback but have no local loopback peer\n");
 				return NULL;
 			}
 		} else {
@@ -1059,7 +1059,7 @@ rc_vpacket_pod_tp vtcp_create_packet(vtcp_tp vtcp, enum vpacket_tcp_flags flags,
 				src_addr = vtcp->sock->ethernet_peer->addr;
 				src_port = vtcp->sock->ethernet_peer->port;
 			} else {
-				dlogf(LOG_ERR, "vtcp_create_packet: trying to send to ethernet but have no local ethernet peer\n");
+				error("vtcp_create_packet: trying to send to ethernet but have no local ethernet peer\n");
 				return NULL;
 			}
 		}
@@ -1075,7 +1075,7 @@ rc_vpacket_pod_tp vtcp_create_packet(vtcp_tp vtcp, enum vpacket_tcp_flags flags,
 						src_addr = parent->loopback_peer->addr;
 						src_port = parent->loopback_peer->port;
 					} else {
-						dlogf(LOG_ERR, "vtcp_create_packet: trying to send to loopback but have no local loopback parent\n");
+						error("vtcp_create_packet: trying to send to loopback but have no local loopback parent\n");
 						return NULL;
 					}
 				} else {
@@ -1083,7 +1083,7 @@ rc_vpacket_pod_tp vtcp_create_packet(vtcp_tp vtcp, enum vpacket_tcp_flags flags,
 						src_addr = parent->ethernet_peer->addr;
 						src_port = parent->ethernet_peer->port;
 					} else {
-						dlogf(LOG_ERR, "vtcp_create_packet: trying to send to ethernet but have no local ethernet parent\n");
+						error("vtcp_create_packet: trying to send to ethernet but have no local ethernet parent\n");
 						return NULL;
 					}
 				}
@@ -1100,7 +1100,7 @@ rc_vpacket_pod_tp vtcp_create_packet(vtcp_tp vtcp, enum vpacket_tcp_flags flags,
 
 		return created_rc_packet;
 	} else {
-		dlogf(LOG_ERR, "vtcp_create_packet: can not send response packet from unconnected socket\n");
+		error("vtcp_create_packet: can not send response packet from unconnected socket\n");
 		return NULL;
 	}
 }

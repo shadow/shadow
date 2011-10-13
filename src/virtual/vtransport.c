@@ -151,10 +151,10 @@ void vtransport_process_incoming_items(vsocket_mgr_tp net, GQueue *titems) {
 						}
 					}
 				} else {
-					dlogf(LOG_INFO, "vtransport_process_incoming_items: ignoring packet for non-existent socket (was it deleted?)\n");
+					info("vtransport_process_incoming_items: ignoring packet for non-existent socket (was it deleted?)\n");
 				}
 			} else {
-				dlogf(LOG_WARN, "vtransport_process_incoming_items: transport item is NULL, can not process\n");
+				warning("vtransport_process_incoming_items: transport item is NULL, can not process\n");
 			}
 
 			vtransport_destroy_item(titem);
@@ -165,7 +165,7 @@ void vtransport_process_incoming_items(vsocket_mgr_tp net, GQueue *titems) {
 //void vtransport_onretransmit(vsocket_mgr_tp net, in_addr_t dst_addr, in_port_t dst_port,
 //		in_port_t src_port, guint32 retransmit_key) {
 void vtransport_onretransmit(vci_event_tp vci_event, vsocket_mgr_tp vs_mgr) {
-	debugf("vtransport_onretransmit: event fired\n");
+	debug("vtransport_onretransmit: event fired\n");
 
         vci_onretransmit_tp payload = vci_event->payload;
 
@@ -173,7 +173,7 @@ void vtransport_onretransmit(vci_event_tp vci_event, vsocket_mgr_tp vs_mgr) {
 		return;
 	}
 
-	debugf("vtransport_onpayload->retransmit: %s:%u requesting payload->retransmission of %u from %s:%u\n",
+	debug("vtransport_onpayload->retransmit: %s:%u requesting payload->retransmission of %u from %s:%u\n",
 			inet_ntoa_t(payload->dst_addr), ntohs(payload->dst_port), payload->retransmit_key, vs_mgr->addr_string, ntohs(payload->src_port));
 
 	vsocket_tp sock = vsocket_mgr_find_socket(vs_mgr, SOCK_STREAM, payload->dst_addr, payload->dst_port, payload->src_port);
@@ -182,7 +182,7 @@ void vtransport_onretransmit(vci_event_tp vci_event, vsocket_mgr_tp vs_mgr) {
 	}
 
 	if(sock->vt->vtcp != NULL && sock->vt->vtcp->remote_peer == NULL) {
-		dlogf(LOG_INFO, "vtransport_onpayload->retransmit: %s:%u has no connected child socket. was it closed?\n",
+		info("vtransport_onpayload->retransmit: %s:%u has no connected child socket. was it closed?\n",
 				inet_ntoa_t(vs_mgr->addr), ntohs(payload->src_port));
 		return;
 	}
@@ -191,7 +191,7 @@ void vtransport_onretransmit(vci_event_tp vci_event, vsocket_mgr_tp vs_mgr) {
 }
 
 void vtransport_onclose(vci_event_tp vci_event, vsocket_mgr_tp vs_mgr) {
-	debugf("vsocket_mgr_onclose: event fired\n");
+	debug("vsocket_mgr_onclose: event fired\n");
         
         vci_onclose_tp payload = vci_event->payload;
 
@@ -248,7 +248,7 @@ guint8 vtransport_transmit(vtransport_tp vt, guint32* bytes_transmitted, guint16
 
 	/* send the packet */
 	if(rc_packet != NULL) {
-		debugf("vtransport_transmit: sending packet for socket %i\n", vt->sock->sock_desc);
+		debug("vtransport_transmit: sending packet for socket %i\n", vt->sock->sock_desc);
 		vpacket_log_debug(rc_packet);
 
 		/* FIXME each interface should be separated and have its own bandwidth

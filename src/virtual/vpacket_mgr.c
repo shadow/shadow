@@ -103,7 +103,7 @@ rc_vpacket_pod_tp vpacket_mgr_packet_create(vpacket_mgr_tp vp_mgr, guint8 protoc
 
 		/* check for error */
 		if(vp_pod->shmitem_packet == NULL) {
-			dlogf(LOG_ERR, "vpacket_mgr_packet_create: can't create packet, no shared memory\n");
+			error("vpacket_mgr_packet_create: can't create packet, no shared memory\n");
 			free(vp_pod);
 			return NULL;
 		}
@@ -117,7 +117,7 @@ rc_vpacket_pod_tp vpacket_mgr_packet_create(vpacket_mgr_tp vp_mgr, guint8 protoc
 
 			/* check for error */
 			if(vp_pod->shmitem_payload == NULL) {
-				dlogf(LOG_ERR, "vpacket_mgr_packet_create: can't create packet payload, no shared memory\n");
+				error("vpacket_mgr_packet_create: can't create packet payload, no shared memory\n");
 				shmcabinet_mgr_free(vp_mgr->smc_mgr_packets, vp_pod->shmitem_packet);
 				free(vp_pod);
 				return NULL;
@@ -208,7 +208,7 @@ rc_vpacket_pod_tp vpacket_mgr_attach_shared_packet(vpacket_mgr_tp vp_mgr,
 
 	/* check error */
 	if(vp_pod->shmitem_packet == NULL) {
-		dlogf(LOG_ERR, "vpacket_mgr_get_shared_packet: can't create packet, problem connecting to shared memory\n");
+		error("vpacket_mgr_get_shared_packet: can't create packet, problem connecting to shared memory\n");
 		free(vp_pod);
 		return NULL;
 	}
@@ -222,7 +222,7 @@ rc_vpacket_pod_tp vpacket_mgr_attach_shared_packet(vpacket_mgr_tp vp_mgr,
 
 		/* check error */
 		if(vp_pod->shmitem_payload == NULL) {
-			dlogf(LOG_ERR, "vpacket_mgr_get_shared_packet: can't create packet payload, problem connecting to shared memory\n");
+			error("vpacket_mgr_get_shared_packet: can't create packet payload, problem connecting to shared memory\n");
 			shmcabinet_mgr_free(vp_mgr->smc_mgr_payloads, vp_pod->shmitem_payload);
 			free(vp_pod);
 		}
@@ -262,7 +262,7 @@ void vpacket_mgr_vpacket_pod_destructor_cb(vpacket_pod_tp vp_pod) {
 
 		free(vp_pod);
 	} else {
-		dlogf(LOG_WARN, "vpacket_pod_rc_destructor_cb: unable to destroy NULL pod\n");
+		warning("vpacket_pod_rc_destructor_cb: unable to destroy NULL pod\n");
 	}
 }
 
@@ -287,16 +287,16 @@ vpacket_tp vpacket_mgr_lockcontrol(rc_vpacket_pod_tp rc_vp_pod, enum vpacket_loc
 									return vp_pod->vpacket;
 								} else {
 									shmcabinet_mgr_readunlock(vp_pod->shmitem_payload);
-									dlogf(LOG_WARN, "vpacket_mgr_lockcontrol: shm packet (with payload) error LC_OP_READLOCK LC_TARGET_PACKET LC_TARGET_PAYLOAD\n");
+									warning("vpacket_mgr_lockcontrol: shm packet (with payload) error LC_OP_READLOCK LC_TARGET_PACKET LC_TARGET_PAYLOAD\n");
 								}
 							} else {
-								dlogf(LOG_WARN, "vpacket_mgr_lockcontrol: shm payload error LC_OP_READLOCK LC_TARGET_PACKET LC_TARGET_PAYLOAD\n");
+								warning("vpacket_mgr_lockcontrol: shm payload error LC_OP_READLOCK LC_TARGET_PACKET LC_TARGET_PAYLOAD\n");
 							}
 						} else if(vp_pod->shmitem_packet != NULL) {
 							if(shmcabinet_mgr_readlock(vp_pod->shmitem_packet)) {
 								return vp_pod->vpacket;
 							} else {
-								dlogf(LOG_WARN, "vpacket_mgr_lockcontrol: shm packet (no payload) error LC_OP_READLOCK LC_TARGET_PACKET LC_TARGET_PAYLOAD\n");
+								warning("vpacket_mgr_lockcontrol: shm packet (no payload) error LC_OP_READLOCK LC_TARGET_PACKET LC_TARGET_PAYLOAD\n");
 							}
 						}
 					} else if(target & LC_TARGET_PACKET) {
@@ -304,7 +304,7 @@ vpacket_tp vpacket_mgr_lockcontrol(rc_vpacket_pod_tp rc_vp_pod, enum vpacket_loc
 							if(shmcabinet_mgr_readlock(vp_pod->shmitem_packet)){
 								return vp_pod->vpacket;
 							} else {
-								dlogf(LOG_WARN, "vpacket_mgr_lockcontrol: shm packet error LC_OP_READLOCK LC_TARGET_PACKET\n");
+								warning("vpacket_mgr_lockcontrol: shm packet error LC_OP_READLOCK LC_TARGET_PACKET\n");
 							}
 						}
 					} else if(target & LC_TARGET_PAYLOAD) {
@@ -312,7 +312,7 @@ vpacket_tp vpacket_mgr_lockcontrol(rc_vpacket_pod_tp rc_vp_pod, enum vpacket_loc
 							if(shmcabinet_mgr_readlock(vp_pod->shmitem_payload)){
 								return vp_pod->vpacket;
 							} else {
-								dlogf(LOG_WARN, "vpacket_mgr_lockcontrol: shm payload error LC_OP_READLOCK LC_TARGET_PAYLOAD\n");
+								warning("vpacket_mgr_lockcontrol: shm payload error LC_OP_READLOCK LC_TARGET_PAYLOAD\n");
 							}
 						}
 					}
@@ -341,16 +341,16 @@ vpacket_tp vpacket_mgr_lockcontrol(rc_vpacket_pod_tp rc_vp_pod, enum vpacket_loc
 									return vp_pod->vpacket;
 								} else {
 									shmcabinet_mgr_writeunlock(vp_pod->shmitem_payload);
-									dlogf(LOG_WARN, "vpacket_mgr_lockcontrol: shm packet (with payload) error LC_OP_WRITELOCK LC_TARGET_PACKET LC_TARGET_PAYLOAD\n");
+									warning("vpacket_mgr_lockcontrol: shm packet (with payload) error LC_OP_WRITELOCK LC_TARGET_PACKET LC_TARGET_PAYLOAD\n");
 								}
 							} else {
-								dlogf(LOG_WARN, "vpacket_mgr_lockcontrol: shm payload error LC_OP_WRITELOCK LC_TARGET_PACKET LC_TARGET_PAYLOAD\n");
+								warning("vpacket_mgr_lockcontrol: shm payload error LC_OP_WRITELOCK LC_TARGET_PACKET LC_TARGET_PAYLOAD\n");
 							}
 						} else if (vp_pod->shmitem_packet != NULL) {
 							if(shmcabinet_mgr_writelock(vp_pod->shmitem_packet)) {
 								return vp_pod->vpacket;
 							} else {
-								dlogf(LOG_WARN, "vpacket_mgr_lockcontrol: shm packet (no payload) error LC_OP_WRITELOCK LC_TARGET_PACKET LC_TARGET_PAYLOAD\n");
+								warning("vpacket_mgr_lockcontrol: shm packet (no payload) error LC_OP_WRITELOCK LC_TARGET_PACKET LC_TARGET_PAYLOAD\n");
 							}
 						}
 					} else if(target & LC_TARGET_PACKET) {
@@ -358,7 +358,7 @@ vpacket_tp vpacket_mgr_lockcontrol(rc_vpacket_pod_tp rc_vp_pod, enum vpacket_loc
 							if(shmcabinet_mgr_writelock(vp_pod->shmitem_packet)){
 								return vp_pod->vpacket;
 							} else {
-								dlogf(LOG_WARN, "vpacket_mgr_lockcontrol: shm packet error LC_OP_WRITELOCK LC_TARGET_PACKET\n");
+								warning("vpacket_mgr_lockcontrol: shm packet error LC_OP_WRITELOCK LC_TARGET_PACKET\n");
 							}
 						}
 					} else if(target & LC_TARGET_PAYLOAD) {
@@ -366,7 +366,7 @@ vpacket_tp vpacket_mgr_lockcontrol(rc_vpacket_pod_tp rc_vp_pod, enum vpacket_loc
 							if(shmcabinet_mgr_writelock(vp_pod->shmitem_payload)){
 								return vp_pod->vpacket;
 							} else {
-								dlogf(LOG_WARN, "vpacket_mgr_lockcontrol: shm payload error LC_OP_WRITELOCK LC_TARGET_PAYLOAD\n");
+								warning("vpacket_mgr_lockcontrol: shm payload error LC_OP_WRITELOCK LC_TARGET_PAYLOAD\n");
 							}
 						}
 					}
@@ -386,7 +386,7 @@ vpacket_tp vpacket_mgr_lockcontrol(rc_vpacket_pod_tp rc_vp_pod, enum vpacket_loc
 				}
 
 				default: {
-					dlogf(LOG_WARN, "vpacket_mgr_lockcontrol: undefined command\n");
+					warning("vpacket_mgr_lockcontrol: undefined command\n");
 				}
 			}
 		} else if(vp_mgr != NULL && vp_mgr->lock_regular_packets && vp_pod->vpacket != NULL){ /* non-shared mem packets */
@@ -401,30 +401,30 @@ vpacket_tp vpacket_mgr_lockcontrol(rc_vpacket_pod_tp rc_vp_pod, enum vpacket_loc
 									return vp_pod->vpacket;
 								} else {
 									rwlock_mgr_readunlock(vp_pod->payload_lock);
-									dlogf(LOG_WARN, "vpacket_mgr_lockcontrol: packet (with payload) error LC_OP_READLOCK LC_TARGET_PACKET LC_TARGET_PAYLOAD\n");
+									warning("vpacket_mgr_lockcontrol: packet (with payload) error LC_OP_READLOCK LC_TARGET_PACKET LC_TARGET_PAYLOAD\n");
 								}
 							} else {
-								dlogf(LOG_WARN, "vpacket_mgr_lockcontrol: payload error LC_OP_READLOCK LC_TARGET_PACKET LC_TARGET_PAYLOAD\n");
+								warning("vpacket_mgr_lockcontrol: payload error LC_OP_READLOCK LC_TARGET_PACKET LC_TARGET_PAYLOAD\n");
 							}
 						} else {
 							if(rwlock_mgr_readlock(vp_pod->packet_lock) == RWLOCK_MGR_SUCCESS) {
 								return vp_pod->vpacket;
 							} else {
-								dlogf(LOG_WARN, "vpacket_mgr_lockcontrol: packet (no payload) error LC_OP_READLOCK LC_TARGET_PACKET LC_TARGET_PAYLOAD\n");
+								warning("vpacket_mgr_lockcontrol: packet (no payload) error LC_OP_READLOCK LC_TARGET_PACKET LC_TARGET_PAYLOAD\n");
 							}
 						}
 					} else if(target & LC_TARGET_PACKET) {
 						if(rwlock_mgr_readlock(vp_pod->packet_lock) == RWLOCK_MGR_SUCCESS){
 							return vp_pod->vpacket;
 						} else {
-							dlogf(LOG_WARN, "vpacket_mgr_lockcontrol: packet error LC_OP_READLOCK LC_TARGET_PACKET\n");
+							warning("vpacket_mgr_lockcontrol: packet error LC_OP_READLOCK LC_TARGET_PACKET\n");
 						}
 					} else if(target & LC_TARGET_PAYLOAD) {
 						if(vp_pod->vpacket->payload != NULL) {
 							if(rwlock_mgr_readlock(vp_pod->payload_lock) == RWLOCK_MGR_SUCCESS){
 								return vp_pod->vpacket;
 							} else {
-								dlogf(LOG_WARN, "vpacket_mgr_lockcontrol: payload error LC_OP_READLOCK LC_TARGET_PAYLOAD\n");
+								warning("vpacket_mgr_lockcontrol: payload error LC_OP_READLOCK LC_TARGET_PAYLOAD\n");
 							}
 						}
 					}
@@ -452,30 +452,30 @@ vpacket_tp vpacket_mgr_lockcontrol(rc_vpacket_pod_tp rc_vp_pod, enum vpacket_loc
 									return vp_pod->vpacket;
 								} else {
 									rwlock_mgr_writeunlock(vp_pod->payload_lock);
-									dlogf(LOG_WARN, "vpacket_mgr_lockcontrol: packet (with payload) error LC_OP_WRITELOCK LC_TARGET_PACKET LC_TARGET_PAYLOAD\n");
+									warning("vpacket_mgr_lockcontrol: packet (with payload) error LC_OP_WRITELOCK LC_TARGET_PACKET LC_TARGET_PAYLOAD\n");
 								}
 							} else {
-								dlogf(LOG_WARN, "vpacket_mgr_lockcontrol: payload error LC_OP_WRITELOCK LC_TARGET_PACKET LC_TARGET_PAYLOAD\n");
+								warning("vpacket_mgr_lockcontrol: payload error LC_OP_WRITELOCK LC_TARGET_PACKET LC_TARGET_PAYLOAD\n");
 							}
 						} else {
 							if(rwlock_mgr_writelock(vp_pod->packet_lock) == RWLOCK_MGR_SUCCESS) {
 								return vp_pod->vpacket;
 							} else {
-								dlogf(LOG_WARN, "vpacket_mgr_lockcontrol: packet (no payload) error LC_OP_WRITELOCK LC_TARGET_PACKET LC_TARGET_PAYLOAD\n");
+								warning("vpacket_mgr_lockcontrol: packet (no payload) error LC_OP_WRITELOCK LC_TARGET_PACKET LC_TARGET_PAYLOAD\n");
 							}
 						}
 					} else if(target & LC_TARGET_PACKET) {
 						if(rwlock_mgr_writelock(vp_pod->packet_lock) == RWLOCK_MGR_SUCCESS){
 							return vp_pod->vpacket;
 						} else {
-							dlogf(LOG_WARN, "vpacket_mgr_lockcontrol: packet error LC_OP_WRITELOCK LC_TARGET_PACKET\n");
+							warning("vpacket_mgr_lockcontrol: packet error LC_OP_WRITELOCK LC_TARGET_PACKET\n");
 						}
 					} else if(target & LC_TARGET_PAYLOAD) {
 						if(vp_pod->vpacket->payload != NULL) {
 							if(rwlock_mgr_writelock(vp_pod->payload_lock) == RWLOCK_MGR_SUCCESS){
 								return vp_pod->vpacket;
 							} else {
-								dlogf(LOG_WARN, "vpacket_mgr_lockcontrol: payload error LC_OP_WRITELOCK LC_TARGET_PAYLOAD\n");
+								warning("vpacket_mgr_lockcontrol: payload error LC_OP_WRITELOCK LC_TARGET_PAYLOAD\n");
 							}
 						}
 					}
@@ -495,7 +495,7 @@ vpacket_tp vpacket_mgr_lockcontrol(rc_vpacket_pod_tp rc_vp_pod, enum vpacket_loc
 				}
 
 				default: {
-					dlogf(LOG_WARN, "vpacket_mgr_lockcontrol: undefined command\n");
+					warning("vpacket_mgr_lockcontrol: undefined command\n");
 				}
 			}
 		} else {

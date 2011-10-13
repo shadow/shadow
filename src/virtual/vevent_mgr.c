@@ -143,7 +143,7 @@ static void vevent_mgr_print_all_cb(gpointer key, gpointer value, gpointer user_
 		while(event != NULL) {
 			vevent_tp vev = event->data;
 			if(vev != NULL && vev->event != NULL) {
-				debugf("socket %i waiting for events %s\n", *((gint*)key), vevent_get_event_type_string(mgr, vev->event->ev_events));
+				debug("socket %i waiting for events %s\n", *((gint*)key), vevent_get_event_type_string(mgr, vev->event->ev_events));
 			}
             event = event->next;
 		}
@@ -155,7 +155,7 @@ void vevent_mgr_print_stat(vevent_mgr_tp mgr, guint16 sockd) {
 		/* go through every base we know about */
 		GList *bases = g_queue_peek_head_link(mgr->event_bases);
 
-		debugf("======Printing all waiting registered events for socket %u======\n", sockd);
+		debug("======Printing all waiting registered events for socket %u======\n", sockd);
 		while(bases != NULL) {
 			event_base_tp eb = bases->data;
 			vevent_base_tp veb = vevent_mgr_convert_base(mgr, eb);
@@ -167,7 +167,7 @@ void vevent_mgr_print_stat(vevent_mgr_tp mgr, guint16 sockd) {
 
             bases = bases->next;
 		}
-		debugf("======Done printing======\n");
+		debug("======Done printing======\n");
 	}
 }
 
@@ -181,9 +181,9 @@ void vevent_mgr_print_all(vevent_mgr_tp mgr) {
 			vevent_base_tp veb = vevent_mgr_convert_base(mgr, eb);
 
 			if(veb != NULL) {
-				debugf("======Printing all waiting registered events======\n");
+				debug("======Printing all waiting registered events======\n");
 				g_hash_table_foreach(veb->sockets_by_sd, vevent_mgr_print_all_cb, mgr);
-				debugf("======Done printing======\n");
+				debug("======Done printing======\n");
 			}
 
             bases = bases->next;
@@ -192,17 +192,17 @@ void vevent_mgr_print_all(vevent_mgr_tp mgr) {
 }
 
 void vevent_mgr_notify_can_read(vevent_mgr_tp mgr, gint sockfd) {
-	debugf("vevent_mgr_notify_can_read: ready to read from fd %d\n", sockfd);
+	debug("vevent_mgr_notify_can_read: ready to read from fd %d\n", sockfd);
 	vevent_notify(mgr, sockfd, EV_READ);
 }
 
 void vevent_mgr_notify_can_write(vevent_mgr_tp mgr, gint sockfd) {
-	debugf("vevent_mgr_notify_can_write: ready to write to fd %d\n", sockfd);
+	debug("vevent_mgr_notify_can_write: ready to write to fd %d\n", sockfd);
 	vevent_notify(mgr, sockfd, EV_WRITE);
 }
 
 void vevent_mgr_notify_signal_received(vevent_mgr_tp mgr, gint signal) {
-	debugf("vevent_mgr_notify_signal_received: received signal %d.\n", signal);
+	debug("vevent_mgr_notify_signal_received: received signal %d.\n", signal);
 	vevent_notify(mgr, signal, EV_SIGNAL);
 }
 

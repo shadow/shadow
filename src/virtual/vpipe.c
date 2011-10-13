@@ -60,7 +60,7 @@ static size_t vpipe_unid_read(vpipe_unid_tp unipipe, vpipe_id fd, gpointer dst, 
 		if(fd == unipipe->read_fd && !(unipipe->flags & VPIPE_READER_CLOSED)) {
 			return linkedbuffer_read(unipipe->buffer, dst, num_bytes);
 		} else {
-			dlogf(LOG_ERR, "vpipe_unid_read: fd %u not allowed to read\n", fd);
+			error("vpipe_unid_read: fd %u not allowed to read\n", fd);
 		}
 	}
 	return VPIPE_IO_ERROR;
@@ -71,7 +71,7 @@ static size_t vpipe_unid_write(vpipe_unid_tp unipipe, vpipe_id fd, const gpointe
 		if(fd == unipipe->write_fd && !(unipipe->flags & VPIPE_WRITER_CLOSED)) {
 			return linkedbuffer_write(unipipe->buffer, src, num_bytes);
 		} else {
-			dlogf(LOG_ERR, "vpipe_unid_write: fd %u not allowed to write\n", fd);
+			error("vpipe_unid_write: fd %u not allowed to write\n", fd);
 		}
 	}
 	return VPIPE_IO_ERROR;
@@ -91,7 +91,7 @@ static enum vpipe_status vpipe_unid_close(vpipe_unid_tp unipipe, vpipe_id fd) {
 			}
 			return VPIPE_CLOSED;
 		} else {
-			dlogf(LOG_ERR, "vpipe_unid_close: invalid pipe fd %u\n", fd);
+			error("vpipe_unid_close: invalid pipe fd %u\n", fd);
 		}
 	}
 	return VPIPE_FAILURE;
@@ -166,7 +166,7 @@ static ssize_t vpipe_bid_read(vpipe_bid_tp bipipe, vpipe_id fd, gpointer dst, si
 				return s;
 			}
 		} else {
-			dlogf(LOG_ERR, "vpipe_bid_read: fd %u not allowed to read\n", fd);
+			error("vpipe_bid_read: fd %u not allowed to read\n", fd);
 		}
 	}
 	return VPIPE_IO_ERROR;
@@ -203,7 +203,7 @@ static ssize_t vpipe_bid_write(vpipe_bid_tp bipipe, vpipe_id fd, const gpointer 
 				return s;
 			}
 		} else {
-			dlogf(LOG_ERR, "vpipe_bid_write: fd %u not allowed to write\n", fd);
+			error("vpipe_bid_write: fd %u not allowed to write\n", fd);
 		}
 	}
 	return VPIPE_IO_ERROR;
@@ -319,7 +319,7 @@ enum vpipe_status vpipe_stat(vpipe_mgr_tp mgr, vpipe_id fd) {
 			} else if(vp->pipeb != NULL && fd == vp->pipeb->write_fd) {
 				writerpipe = vp->pipeb;
 			} else {
-				dlogf(LOG_ERR, "vpipe_stat: fd %u not a writer for either end of pipe!?\n", fd);
+				error("vpipe_stat: fd %u not a writer for either end of pipe!?\n", fd);
 				return VPIPE_FAILURE;
 			}
 

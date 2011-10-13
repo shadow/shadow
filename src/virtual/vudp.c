@@ -98,7 +98,7 @@ ssize_t vudp_send(vsocket_mgr_tp net, vsocket_tp udpsock,
 			}
 		}
 		if(src_addr == 0) {
-			dlogf(LOG_ERR, "vudp_send: no src information for udp datagram\n");
+			error("vudp_send: no src information for udp datagram\n");
 			return VSOCKET_ERROR;
 		}
 		rc_vpacket_pod_tp rc_packet = vpacket_mgr_create_udp(net->vp_mgr, src_addr, src_port, addr, port,
@@ -111,7 +111,7 @@ ssize_t vudp_send(vsocket_mgr_tp net, vsocket_tp udpsock,
 		rc_vpacket_pod_release(rc_packet);
 
 		if(!success) {
-			dlogf(LOG_WARN, "vudp_send: unable to send packet\n");
+			warning("vudp_send: unable to send packet\n");
 			return bytes_sent;
 		}
 
@@ -119,7 +119,7 @@ ssize_t vudp_send(vsocket_mgr_tp net, vsocket_tp udpsock,
 		remaining = n - bytes_sent;
 	}
 
-	debugf("vudp_send: sent %i bytes to transport\n", bytes_sent);
+	debug("vudp_send: sent %i bytes to transport\n", bytes_sent);
 
 	return (ssize_t) bytes_sent;
 }

@@ -116,7 +116,7 @@ vtcp_server_child_tp vtcp_server_create_child(vtcp_server_tp server, in_addr_t r
 
 	/* if there was an error in bind, cleanup mapping added in socket() */
 	if(result == VSOCKET_ERROR){
-		dlogf(LOG_WARN, "vsocket_execute_receive: unable to create new connection as requested\n");
+		warning("vsocket_execute_receive: unable to create new connection as requested\n");
 		vsocket_mgr_destroy_and_remove_socket(server->vsocket_mgr, schild->sock);
 		return NULL;
 	}
@@ -124,7 +124,7 @@ vtcp_server_child_tp vtcp_server_create_child(vtcp_server_tp server, in_addr_t r
 	/* attach it to connection, dont call connect as that will start new handshake */
 	schild->sock->sock_desc_parent = server->sock->sock_desc;
 
-	debugf("vtcp_server_create_child: creating multiplexed socket sd %u for server sd %u\n",
+	debug("vtcp_server_create_child: creating multiplexed socket sd %u for server sd %u\n",
 			schild->sock->sock_desc, schild->sock->sock_desc_parent);
 
 	return schild;
@@ -132,7 +132,7 @@ vtcp_server_child_tp vtcp_server_create_child(vtcp_server_tp server, in_addr_t r
 
 void vtcp_server_destroy_child(vtcp_server_tp server, vtcp_server_child_tp schild) {
 	if(server != NULL && schild != NULL && schild->sock != NULL){
-		debugf("vtcp_server_destroy_child: destroying multiplexed socket sd %u for server sd %u\n",
+		debug("vtcp_server_destroy_child: destroying multiplexed socket sd %u for server sd %u\n",
 					schild->sock->sock_desc, schild->sock->sock_desc_parent);
 
 		/* remove all possible links to child */
@@ -234,7 +234,7 @@ static void vtcp_server_add_child_helper(GHashTable *ht, vtcp_server_child_tp sc
 		/* check for collision in its new table */
 		vsocket_tp collision = g_hash_table_lookup(ht, &(schild->key));
 		if(collision != NULL){
-			dlogf(LOG_ERR, "vtcp_server_add_child_helper: hash collision!\n");
+			error("vtcp_server_add_child_helper: hash collision!\n");
 			return;
 		}
 

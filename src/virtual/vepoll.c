@@ -82,7 +82,7 @@ void vepoll_mark_available(vepoll_tp vep, enum vepoll_type type) {
 		vep->available |= type;
 		vepoll_activate(vep);
 	} else {
-		dlogf(LOG_WARN, "vepoll_mark_available: vepoll was NULL when trying to mark type %u\n", type);
+		warning("vepoll_mark_available: vepoll was NULL when trying to mark type %u\n", type);
 	}
 }
 
@@ -93,7 +93,7 @@ void vepoll_mark_unavailable(vepoll_tp vep, enum vepoll_type type) {
 		/* turn it off */
 		vep->available &= ~type;
 	} else {
-		dlogf(LOG_WARN, "vepoll_mark_unavailable: vepoll was NULL when trying to unmark type %u\n", type);
+		warning("vepoll_mark_unavailable: vepoll was NULL when trying to unmark type %u\n", type);
 	}
 }
 
@@ -155,7 +155,7 @@ void vepoll_vevent_delete(vepoll_tp vep, enum vepoll_type type) {
 
 void vepoll_execute_notification(context_provider_tp provider, vepoll_tp vep) {
 	if(vep != NULL) {
-		debugf("vepoll_execute_notification: activation for socket %u, can_write=%i, can_read=%i\n",
+		debug("vepoll_execute_notification: activation for socket %u, can_write=%i, can_read=%i\n",
 				vep->sockd, (vep->available & VEPOLL_WRITE) > 0, (vep->available & VEPOLL_READ) > 0);
 #ifdef DEBUG
 		vevent_mgr_print_stat(vep->vev_mgr, vep->sockd);
@@ -217,7 +217,7 @@ void vepoll_execute_notification(context_provider_tp provider, vepoll_tp vep) {
 				return;
 			}
 		} else {
-			debugf("vepoll_execute_notification: canceling notification for inactive socket sd %u\n", vep->sockd);
+			debug("vepoll_execute_notification: canceling notification for inactive socket sd %u\n", vep->sockd);
 		}
 	}
 }

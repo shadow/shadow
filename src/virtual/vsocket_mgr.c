@@ -23,9 +23,8 @@
 #include <string.h>
 #include <arpa/inet.h>
 #include <stdlib.h>
-#include <stddef.h>
 
-#include "log.h"
+#include "shadow.h"
 #include "vsocket_mgr.h"
 #include "vsocket.h"
 #include "vtransport_mgr.h"
@@ -33,7 +32,6 @@
 #include "vtcp_server.h"
 #include "vci.h"
 #include "vci_event.h"
-#include "sysconfig.h"
 #include "vpipe.h"
 #include "vepoll.h"
 #include "vevent_mgr.h"
@@ -155,7 +153,7 @@ vsocket_tp vsocket_mgr_create_socket(vsocket_mgr_tp net, guint8 type) {
 		sock->curr_state = VUDP;
 		vsocket_transition(sock, VUDP);
 	}
-	debugf("vsocket_mgr_create_socket: created socket %u\n", sock->sock_desc);
+	debug("vsocket_mgr_create_socket: created socket %u\n", sock->sock_desc);
 
 	return sock;
 }
@@ -168,7 +166,7 @@ void vsocket_mgr_destroy_socket(vsocket_tp sock) {
 
 		vepoll_destroy(sock->vep);
 
-		debugf("vsocket_mgr_destroy_socket: destroyed socket %u\n", sock->sock_desc);
+		debug("vsocket_mgr_destroy_socket: destroyed socket %u\n", sock->sock_desc);
 
 		memset(sock, 0, sizeof(vsocket_t));
 		free(sock);
@@ -442,7 +440,7 @@ void vsocket_mgr_onnotify(vci_event_tp vci_event, vsocket_mgr_tp vs_mgr) {
 			if(sock != NULL && sock->vep != NULL) {
 				vepoll_execute_notification(provider, sock->vep);
 			} else {
-				dlogf(LOG_INFO, "vepoll_on_notify: socket %u no longer exists, skipping notification.\n", payload->sockd);
+				info("vepoll_on_notify: socket %u no longer exists, skipping notification.\n", payload->sockd);
 			}
 		}
 	}
@@ -450,81 +448,81 @@ void vsocket_mgr_onnotify(vci_event_tp vci_event, vsocket_mgr_tp vs_mgr) {
 
 void vsocket_mgr_print_stat(vsocket_mgr_tp net, guint16 sockd) {
 	if(net != NULL) {
-		debugf("######vsocket_mgr_print_stat: looking for stats for socket %u######\n", sockd);
+		debug("######vsocket_mgr_print_stat: looking for stats for socket %u######\n", sockd);
 		vsocket_tp sock = vsocket_mgr_get_socket(net, sockd);
 		if(sock != NULL) {
 			if(sock->loopback_peer != NULL) {
-				debugf("sockd %u running on %s:%u\n", sockd,
+				debug("sockd %u running on %s:%u\n", sockd,
 					inet_ntoa_t(sock->loopback_peer->addr), ntohs(sock->loopback_peer->port));
 			}
 
 			if(sock->ethernet_peer != NULL) {
-				debugf("sockd %u running on %s:%u\n", sockd,
+				debug("sockd %u running on %s:%u\n", sockd,
 					inet_ntoa_t(sock->ethernet_peer->addr), ntohs(sock->ethernet_peer->port));
 			}
 
 			if(sock->sock_desc_parent > 0) {
-				debugf("sockd %u has parent sockd %u\n", sockd, sock->sock_desc_parent);
+				debug("sockd %u has parent sockd %u\n", sockd, sock->sock_desc_parent);
 				vsocket_tp parent = vsocket_mgr_get_socket(net, sock->sock_desc_parent);
 
 				if(parent != NULL) {
 					if(parent->loopback_peer != NULL) {
-						debugf("parent sockd %u running on %s:%u\n", parent->sock_desc,
+						debug("parent sockd %u running on %s:%u\n", parent->sock_desc,
 							inet_ntoa_t(parent->loopback_peer->addr), ntohs(parent->loopback_peer->port));
 					}
 
 					if(parent->ethernet_peer != NULL) {
-						debugf("parent sockd %u running on %s:%u\n", parent->sock_desc,
+						debug("parent sockd %u running on %s:%u\n", parent->sock_desc,
 							inet_ntoa_t(parent->ethernet_peer->addr), ntohs(parent->ethernet_peer->port));
 					}
 
 				} else {
-					debugf("parent sockd NOT FOUND!\n");
+					debug("parent sockd NOT FOUND!\n");
 				}
 			}
 
 			if(sock->vt != NULL && sock->vt->vtcp != NULL && sock->vt->vtcp->remote_peer != NULL) {
-				debugf("sockd %u connected to %s:%u\n", sockd,
+				debug("sockd %u connected to %s:%u\n", sockd,
 					inet_ntoa_t(sock->vt->vtcp->remote_peer->addr), ntohs(sock->vt->vtcp->remote_peer->port));
 			}
 
 			vtcp_server_tp server = vsocket_mgr_get_server(net, sock);
 			if(server != NULL) {
-				debugf("sockd %u running a server with %u accepted, %u pending, %u incomplete\n", sockd,
+				debug("sockd %u running a server with %u accepted, %u pending, %u incomplete\n", sockd,
 					g_hash_table_size(server->accepted_children), g_queue_get_length(server->pending_queue), 
 					g_hash_table_size(server->incomplete_children));
 
 				if(g_queue_get_length(server->pending_queue) > 0 && !(sock->vep->available & VEPOLL_READ)) {
-					dlogf(LOG_ERR, "sockd %u should be marked available!!!\n", sockd);
+					error("sockd %u should be marked available!!!\n", sockd);
 				}
 			}
 
 			if(vepoll_query_available(sock->vep, VEPOLL_READ)) {
-				debugf("sockd %u ready to read\n", sockd);
+				debug("sockd %u ready to read\n", sockd);
 				if(sock->vep->state == VEPOLL_ACTIVE) {
 					if(sock->vep->flags & VEPOLL_NOTIFY_SCHEDULED) {
-						debugf("sockd %u readable, active and notify is scheduled\n", sockd);
+						debug("sockd %u readable, active and notify is scheduled\n", sockd);
 					} else {
-						dlogf(LOG_WARN, "sockd %u read available and active but not scheduled!!!!!\n", sockd);
+						warning("sockd %u read available and active but not scheduled!!!!!\n", sockd);
 					}
 				} else {
-					debugf("sockd %u inactive\n", sockd);
+					debug("sockd %u inactive\n", sockd);
 				}
 			}
 			if(vepoll_query_available(sock->vep, VEPOLL_WRITE)) {
-				debugf("sockd %u ready to write\n", sockd);
+				debug("sockd %u ready to write\n", sockd);
 				if(sock->vep->state == VEPOLL_ACTIVE) {
 					if(sock->vep->flags & VEPOLL_NOTIFY_SCHEDULED) {
-						debugf("sockd %u writable, active and notify is scheduled\n", sockd);
+						debug("sockd %u writable, active and notify is scheduled\n", sockd);
 					} else {
-						dlogf(LOG_WARN, "sockd %u write available and active but not scheduled!!!!!\n", sockd);
+						warning("sockd %u write available and active but not scheduled!!!!!\n", sockd);
 					}
 				} else {
-					debugf("sockd %u inactive\n", sockd);
+					debug("sockd %u inactive\n", sockd);
 				}
 			}
 		}
 
-		debugf("######vsocket_mgr_print_stat: stat done for socket %u######\n", sockd);
+		debug("######vsocket_mgr_print_stat: stat done for socket %u######\n", sockd);
 	}
 }

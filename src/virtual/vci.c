@@ -273,7 +273,7 @@ void vci_track_network(vci_mgr_tp mgr, guint network_id, in_addr_t addr) {
 	vci_network_tp net = g_hash_table_lookup(mgr->networks_by_address, &addr);
 
 	if(net != NULL) {
-		dlogf(LOG_WARN, "vci_track_network: overwriting remote network mapping for %s\n", inet_ntoa_t(addr));
+		warning("vci_track_network: overwriting remote network mapping for %s\n", inet_ntoa_t(addr));
 	} else {
 		net = vci_network_create(mgr, network_id);
 	}
@@ -401,25 +401,25 @@ guint8 vci_get_latency(in_addr_t src_addr, in_addr_t dst_addr,
 static vci_scheduling_info_tp vci_get_scheduling_info(in_addr_t src_addr, in_addr_t dst_addr) {
 	sim_worker_tp worker = global_sim_context.sim_worker;
 	if(worker == NULL) {
-		dlogf(LOG_ERR, "vci_get_scheduling_info: error obtaining worker\n");
+		error("vci_get_scheduling_info: error obtaining worker\n");
 		return NULL;
 	}
 
 	vci_mgr_tp vci_mgr = worker->vci_mgr;
 	if(vci_mgr == NULL) {
-		dlogf(LOG_ERR, "vci_get_scheduling_info: error obtaining vci_mgr\n");
+		error("vci_get_scheduling_info: error obtaining vci_mgr\n");
 		return NULL;
 	}
 
 	vci_network_tp src_net = g_hash_table_lookup(vci_mgr->networks_by_address, &src_addr);
 	if(src_net == NULL) {
-		dlogf(LOG_ERR, "vci_get_scheduling_info: error obtaining src network for %s\n", inet_ntoa_t(src_addr));
+		error("vci_get_scheduling_info: error obtaining src network for %s\n", inet_ntoa_t(src_addr));
 		return NULL;
 	}
 
 	vci_network_tp dst_net = g_hash_table_lookup(vci_mgr->networks_by_address, &dst_addr);
 	if(dst_net == NULL) {
-		dlogf(LOG_ERR, "vci_get_scheduling_info: error obtaining dst network for %s\n", inet_ntoa_t(dst_addr));
+		error("vci_get_scheduling_info: error obtaining dst network for %s\n", inet_ntoa_t(dst_addr));
 		return NULL;
 	}
 
@@ -524,13 +524,13 @@ void vci_schedule_packet(rc_vpacket_pod_tp rc_packet) {
 
 	vpacket_tp packet = vpacket_mgr_lockcontrol(rc_packet, LC_OP_READLOCK | LC_TARGET_PACKET);
 	if(packet == NULL) {
-		dlogf(LOG_ERR, "vci_schedule_packet: packet is NULL!\n");
+		error("vci_schedule_packet: packet is NULL!\n");
 		do_unlock = 0;
 		goto ret;
 	}
 	si = vci_get_scheduling_info(packet->header.source_addr, packet->header.destination_addr);
 	if(si == NULL) {
-		dlogf(LOG_ERR, "vci_schedule_packet: scheduling information NULL!\n");
+		error("vci_schedule_packet: scheduling information NULL!\n");
 		goto ret;
 	}
 
@@ -581,7 +581,7 @@ void vci_schedule_packet(rc_vpacket_pod_tp rc_packet) {
 				/* make sure we can get our shm information */
 				if(rc_packet->pod == NULL || rc_packet->pod->shmitem_packet == NULL ||
 						rc_packet->pod->shmitem_packet->shm == NULL) {
-					dlogf(LOG_ERR, "vci_schedule_packet: error scheduling packet, problem getting packet shm id information\n");
+					error("vci_schedule_packet: error scheduling packet, problem getting packet shm id information\n");
 					goto ret;
 				}
 
@@ -595,7 +595,7 @@ void vci_schedule_packet(rc_vpacket_pod_tp rc_packet) {
 					/* make sure we can get our shm information */
 					if(rc_packet->pod->shmitem_payload == NULL ||
 							rc_packet->pod->shmitem_payload->shm == NULL) {
-						dlogf(LOG_ERR, "vci_schedule_packet: error scheduling packet, problem getting payload shm id information\n");
+						error("vci_schedule_packet: error scheduling packet, problem getting payload shm id information\n");
 						goto ret;
 					}
 
@@ -657,7 +657,7 @@ void vci_schedule_packet(rc_vpacket_pod_tp rc_packet) {
 		}
 
 		default: {
-			dlogf(LOG_ERR, "vci_schedule_packet: error determining node location\n");
+			error("vci_schedule_packet: error determining node location\n");
 			break;
 		}
 	}
@@ -781,7 +781,7 @@ void vci_schedule_retransmit(rc_vpacket_pod_tp rc_packet, in_addr_t caller_addr)
 		}
 
 		default: {
-			dlogf(LOG_ERR, "vci_schedule_retransmit: error determining node location\n");
+			error("vci_schedule_retransmit: error determining node location\n");
 			break;
 		}
 	}
@@ -865,7 +865,7 @@ void vci_schedule_close(in_addr_t caller_addr, in_addr_t src_addr, in_port_t src
 		}
 
 		default: {
-			dlogf(LOG_ERR, "vci_schedule_close: error determining node location\n");
+			error("vci_schedule_close: error determining node location\n");
 			break;
 		}
 	}
@@ -916,7 +916,7 @@ void vci_destroy_event(events_tp events, vci_event_tp vci_event) {
 static void vci_schedule_event(events_tp events, vci_event_tp vci_event) {
 	if(vci_event->node_addr == htonl(INADDR_LOOPBACK) ||
 			vci_event->node_addr == htonl(INADDR_NONE)) {
-		dlogf(LOG_WARN, "vci_schedule_event: scheduling event with address %s\n", inet_ntoa_t(vci_event->node_addr));
+		warning("vci_schedule_event: scheduling event with address %s\n", inet_ntoa_t(vci_event->node_addr));
 	}
 	events_schedule(events, vci_event->deliver_time, vci_event, EVENTS_TYPE_VCI);
 }
@@ -926,7 +926,7 @@ static vsocket_mgr_tp vci_enter_vnetwork_context(vci_mgr_tp vci_mgr, in_addr_t a
 
 	if(mbox == NULL || mbox->context_provider == NULL ||
 			mbox->context_provider->vsocket_mgr == NULL) {
-		dlogf(LOG_ERR, "vci_enter_vnetwork_context: NULL pointer when entering vnetwork context for %s\n", inet_ntoa_t(addr));
+		error("vci_enter_vnetwork_context: NULL pointer when entering vnetwork context for %s\n", inet_ntoa_t(addr));
 		return NULL;
 	}
 
@@ -966,7 +966,7 @@ void vci_exec_event (vci_mgr_tp vci_mgr, vci_event_tp vci_event) {
 
 			if(vci_event->cpu_delay_position > current_delay) {
 				/* impossible for our cpu to lose delay */
-				dlogf(LOG_ERR, "vci_exec_event: delay on event (%lu) is greater than our CPU delay (%lu). Killing it. Things probably wont work right.\n", vci_event->cpu_delay_position, current_delay);
+				error("vci_exec_event: delay on event (%lu) is greater than our CPU delay (%lu). Killing it. Things probably wont work right.\n", vci_event->cpu_delay_position, current_delay);
 				goto ret;
 			}
 
@@ -977,7 +977,7 @@ void vci_exec_event (vci_mgr_tp vci_mgr, vci_event_tp vci_event) {
 				vci_event->cpu_delay_position += ((guint64)(millis_offset * 1000000));
 				vci_event->deliver_time += millis_offset;
 				vci_schedule_event(vci_mgr->events, vci_event);
-				debugf("vci_exec_event: event blocked on CPU, rescheduled for %lu ms from now\n", millis_offset);
+				debug("vci_exec_event: event blocked on CPU, rescheduled for %lu ms from now\n", millis_offset);
 				goto exit;
 			}
 
@@ -1187,7 +1187,7 @@ static vci_event_tp vci_decode(vci_mgr_tp vci_mgr, nbdf_tp frame, gint frametype
 		}
 
 		default: {
-			dlogf(LOG_WARN, "vci_decode: unrecognized frame type %i\n", frametype);
+			warning("vci_decode: unrecognized frame type %i\n", frametype);
 			break;
 		}
 	}
@@ -1206,7 +1206,7 @@ static void quickprint(vpacket_tp vpacket) {
 
 		if(vpacket->header.protocol == SOCK_STREAM) {
 
-			debugf("vpacket_log: TCP from %s:%u to %s:%u %u seq#:%u ack#:%u win#:%u bytes:%u\n",
+			debug("vpacket_log: TCP from %s:%u to %s:%u %u seq#:%u ack#:%u win#:%u bytes:%u\n",
 					srcip,
 					vpacket->header.source_port,
 					dstip,

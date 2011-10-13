@@ -55,7 +55,7 @@ static void vcpu_add_load(vcpu_tp vcpu, gdouble load) {
 	if(vcpu != NULL) {
 		guint64 ns_to_add = (guint64) ceil(load);
 		vcpu->nanos_accumulated_delay += ns_to_add;
-		debugf("vcpu_add_load: added %lu nanos of CPU load. new load is %lu\n", ns_to_add, vcpu->nanos_accumulated_delay);
+		debug("vcpu_add_load: added %lu nanos of CPU load. new load is %lu\n", ns_to_add, vcpu->nanos_accumulated_delay);
 	}
 }
 
