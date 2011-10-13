@@ -33,6 +33,7 @@
 #include <event2/dns_compat.h>
 #include <event2/dns_struct.h>
 
+#include "shadow.h"
 #include "vevent.h"
 #include "vevent_mgr.h"
 #include "vepoll.h"
@@ -182,8 +183,8 @@ static vevent_tp vevent_create(event_tp ev, vevent_socket_tp vsd) {
 	return NULL;
 }
 
-static void vevent_timer_cb(gint timerid, gpointer value) {
-	vevent_timer_tp vt = value;
+static void vevent_executeTimerCallback(gpointer data, gpointer argument) {
+	vevent_timer_tp vt = data;
 
 	if(vt != NULL && vt->vev != NULL && vt->mgr != NULL) {
 		vevent_tp vev = vt->vev;
@@ -193,7 +194,7 @@ static void vevent_timer_cb(gint timerid, gpointer value) {
 			ev->ev_flags &= ~EVLIST_TIMEOUT;
 
 			/* execute if this timer is still valid */
-			if(vev->timerid == timerid) {
+			if(vev->timerid != -1) {
 				vevent_execute(vt->mgr, ev);
 			}
 		}
@@ -214,6 +215,14 @@ static void vevent_timer_cb(gint timerid, gpointer value) {
 	if(vt != NULL) {
 		free(vt);
 	}
+}
+
+static void vevent_timerTimerCallback(gpointer data, gpointer argument) {
+	/* need to be in node context */
+	Worker* worker = worker_getPrivate();
+	Application* a = worker->cached_node->application;
+	Plugin* plugin = worker_getPlugin(a->software->id, a->software->pluginPath);
+	plugin_executeGeneric(plugin, a->state, vevent_executeTimerCallback, data, argument);
 }
 
 static gint vevent_isequal_cb(gpointer ev1, gpointer ev2) {
@@ -239,7 +248,7 @@ static gint vevent_set_timer(vevent_mgr_tp mgr, vevent_tp vev, const struct time
 		vt->mgr = mgr;
 		vt->vev = vev;
 
-		vevent_mgr_timer_create(mgr, delay_millis, &vevent_timer_cb, vt);
+		vevent_mgr_timer_create(mgr, delay_millis, &vevent_timerTimerCallback, vt);
 
 		vev->timerid = ++(mgr->id_counter);
 		vev->ntimers++;
@@ -348,65 +357,61 @@ static gint vevent_unregister(vevent_mgr_tp mgr, event_tp ev) {
 	return -1;
 }
 
+static void vevent_executeAllCallback(gpointer data, gpointer argument) {
+	vevent_mgr_tp mgr = data;
+	GQueue* q = argument;
+
+	/* this is the part that needs to be wrapped in node context */
+	while(g_queue_get_length(q) > 0) {
+		/* execute event */
+		vevent_tp vev = g_queue_pop_head(q);
+		vevent_execute(mgr, vev->event);
+	}
+}
+
 static void vevent_execute_callbacks(vevent_mgr_tp mgr, event_base_tp eb, gint sockd, short event_type) {
 	if(eb != NULL) {
 		vevent_base_tp veb = vevent_mgr_convert_base(mgr, eb);
 		if(veb != NULL) {
-		vevent_socket_tp vsd = g_hash_table_lookup(veb->sockets_by_sd, &sockd);
+			vevent_socket_tp vsd = g_hash_table_lookup(veb->sockets_by_sd, &sockd);
 
-		if(vsd != NULL) {
-			debug("getting callbacks for type %s on fd %i\n", vevent_get_event_type_string(mgr, event_type), sockd);
+			if(vsd != NULL) {
+				debug("getting callbacks for type %s on fd %i\n", vevent_get_event_type_string(mgr, event_type), sockd);
 
-			/* keep track of the events we need to execute */
-			GQueue *to_execute = g_queue_new();
-			GList *event = g_queue_peek_head_link(vsd->vevents);
+				/* keep track of the events we need to execute */
+				GQueue *to_execute = g_queue_new();
+				GList *event = g_queue_peek_head_link(vsd->vevents);
 
-			while(event != NULL) {
-				vevent_tp vev = event->data;
-				if(vev != NULL && vev->event != NULL) {
-					/* execute if event is the correct type  */
-					if(vev->event->ev_events & event_type){
-						vev->event->ev_res = event_type;
-						g_queue_push_tail(to_execute, vev);
+				while(event != NULL) {
+					vevent_tp vev = event->data;
+					if(vev != NULL && vev->event != NULL) {
+						/* execute if event is the correct type  */
+						if(vev->event->ev_events & event_type){
+							vev->event->ev_res = event_type;
+							g_queue_push_tail(to_execute, vev);
+						}
 					}
+					event = event->next;
 				}
-                event = event->next;
-			}
 
-			/* now execute events.
-			 *
-			 * Careful!, as the execution of the event could invoke a call to try
-			 * and delete the event that is currently being executed, and could
-			 * free the memory storing the event. So we need
-			 * to either disallow deletion of in-progress events, or remove
-			 * dependence on the event before executing the callback.
-			 * We currently take the second approach by creating this separate list.
-			 */
-			debug("executing %i events for fd %i\n", g_queue_get_length(to_execute), sockd);
+				/* now execute events.
+				 *
+				 * Careful!, as the execution of the event could invoke a call to try
+				 * and delete the event that is currently being executed, and could
+				 * free the memory storing the event. So we need
+				 * to either disallow deletion of in-progress events, or remove
+				 * dependence on the event before executing the callback.
+				 * We currently take the second approach by creating this separate list.
+				 */
+				debug("executing %i events for fd %i\n", g_queue_get_length(to_execute), sockd);
 
-			/* need to be in node context */
+				/* need to be in node context */
+				Worker* worker = worker_getPrivate();
+				Application* a = worker->cached_node->application;
+				Plugin* plugin = worker_getPlugin(a->software->id, a->software->pluginPath);
+				plugin_executeGeneric(plugin, a->state, vevent_executeAllCallback, mgr, to_execute);
 
-			/* XXX FIXME this should not happen here but in context.c!
-			 * need to swap to node context */
-			context_provider_tp provider = mgr->provider;
-
-			/* swap out env for this provider */
-			context_load(provider);
-			global_sim_context.exit_usable = 1;
-			if(setjmp(global_sim_context.exit_env) == 1)  /* module has been destroyed if we get here. (sim_context.current_context will be NULL) */
-				return;
-			else {
-				/* this is the part that needs to be wrapped in node context */
-				while(g_queue_get_length(to_execute) > 0) {
-					/* execute event */
-					vevent_tp vev = g_queue_pop_head(to_execute);
-					vevent_execute(mgr, vev->event);
-				}
-			}
-			/* swap back to dvn holding */
-			context_save();
-
-			g_queue_free(to_execute);
+				g_queue_free(to_execute);
 			}
 		}
 	}
@@ -475,7 +480,7 @@ event_base_tp vevent_event_base_new(vevent_mgr_tp mgr) {
 }
 
 event_base_tp vevent_event_base_new_with_config(vevent_mgr_tp mgr, const struct event_config *cfg) {
-	/** FIXME is this ever called??? */
+	/* just ignore the config */
     return vevent_event_base_new(mgr);
 }
 
@@ -502,14 +507,22 @@ gint vevent_event_base_loop(vevent_mgr_tp mgr, event_base_tp eb, gint flags) {
 	return 0;
 }
 
-void vevent_call_loopexit_fn(gpointer arg) {
-	vevent_mgr_tp mgr = arg;
+/* this function should only be called while plugin->isExecuting */
+static void vevent_executeLoopexitCallback(gpointer data, gpointer argument) {
+	vevent_mgr_tp mgr = data;
 	if(mgr == NULL) {
 		return;
 	}
 
 	/* we are already in node context, so no need to swap */
 	(mgr->loopexit_fp)(0, NULL);
+}
+
+static void vevent_looexitTimerCallback(gpointer data, gpointer argument) {
+	Worker* worker = worker_getPrivate();
+	Application* a = worker->cached_node->application;
+	Plugin* plugin = worker_getPlugin(a->software->id, a->software->pluginPath);
+	plugin_executeGeneric(plugin, a->state, vevent_executeLoopexitCallback, data, argument);
 }
 
 gint vevent_event_base_loopexit(vevent_mgr_tp mgr, event_base_tp eb, const struct timeval * tv) {
@@ -524,7 +537,7 @@ gint vevent_event_base_loopexit(vevent_mgr_tp mgr, event_base_tp eb, const struc
 
 	/* setup callback by creating a timer */
 	if(mgr != NULL && mgr->loopexit_fp != NULL) {
-		vevent_mgr_timer_create(mgr, delay_millis, &vevent_call_loopexit_fn, mgr);
+		vevent_mgr_timer_create(mgr, delay_millis, &vevent_looexitTimerCallback, mgr);
 
 		info("vevent_event_base_loopexit: registered loopexit callback\n");
 	} else {
@@ -609,6 +622,7 @@ void vevent_event_active(vevent_mgr_tp mgr, event_tp ev, gint flags_for_cb, shor
 	if(ev != NULL) {
 		ev->ev_res = flags_for_cb;
 		for(gint i = 0; i < ncalls; i++) {
+			/* XXX: fragile - we are in plugin context but this could easily break */
 			vevent_execute(mgr, ev);
 		}
 	} else {

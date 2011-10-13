@@ -94,7 +94,12 @@ static void _plugin_startExecuting(Plugin* plugin, PluginState* state) {
 
 	Worker* worker = worker_getPrivate();
 
-	/* context switch from shadow to plug-in library */
+	/* context switch from shadow to plug-in library
+	 *
+	 * TODO: we can be smarter here - save a pointer to the last plugin that
+	 * was loaded... if the physical memory locations still has our state,
+	 * there is no need to copy it in again. similarly for stopExecuting()
+	 */
 	pluginstate_copy(state, plugin->residentState);
 	plugin->isExecuting = TRUE;
 	worker->cached_plugin = plugin;
@@ -152,5 +157,12 @@ void plugin_executeReadableWritable(Plugin* plugin, PluginState* state, gint soc
 	_plugin_startExecuting(plugin, state);
 	plugin->residentState->functions->readable(socketParam);
 	plugin->residentState->functions->writable(socketParam);
+	_plugin_stopExecuting(plugin, state);
+}
+
+void plugin_executeGeneric(Plugin* plugin, PluginState* state, CallbackFunc callback, gpointer data, gpointer callbackArgument) {
+	MAGIC_ASSERT(plugin);
+	_plugin_startExecuting(plugin, state);
+	callback(data, callbackArgument);
 	_plugin_stopExecuting(plugin, state);
 }

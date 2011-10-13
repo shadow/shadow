@@ -24,19 +24,20 @@
 
 #include "shadow.h"
 
-typedef void (*CallbackFunc)(gpointer callbackArgument);
+typedef void (*CallbackFunc)(gpointer data, gpointer callbackArgument);
 
 typedef struct _CallbackEvent CallbackEvent;
 
 struct _CallbackEvent {
 	Event super;
 	CallbackFunc callback;
+	gpointer data;
 	gpointer callbackArgument;
 
 	MAGIC_DECLARE;
 };
 
-CallbackEvent* callback_new(CallbackFunc callback, gpointer callbackArgument);
+CallbackEvent* callback_new(CallbackFunc callback, gpointer data, gpointer callbackArgument);
 void callback_run(CallbackEvent* event, Node* node);
 void callback_free(CallbackEvent* event);
 

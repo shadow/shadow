@@ -27,11 +27,18 @@ EventVTable callback_vtable = {
 	MAGIC_VALUE
 };
 
-CallbackEvent* callback_new() {
+CallbackEvent* callback_new(CallbackFunc callback, gpointer data, gpointer callbackArgument) {
+	/* better have a non-null callback if we are going to execute it */
+	g_assert(callback);
+
 	CallbackEvent* event = g_new0(CallbackEvent, 1);
 	MAGIC_INIT(event);
 
 	event_init(&(event->super), &callback_vtable);
+
+	event->callback = callback;
+	event->data = data;
+	event->callbackArgument = callbackArgument;
 
 	return event;
 }
@@ -40,7 +47,7 @@ void callback_run(CallbackEvent* event, Node* node) {
 	MAGIC_ASSERT(event);
 	MAGIC_ASSERT(node);
 
-	event->callback(event->callbackArgument);
+	event->callback(event->data, event->callbackArgument);
 }
 
 void callback_free(CallbackEvent* event) {

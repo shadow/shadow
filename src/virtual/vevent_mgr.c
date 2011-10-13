@@ -33,7 +33,7 @@
 #include "shd-plugin.h"
 
 void vevent_mgr_timer_create(vevent_mgr_tp mgr, gint milli_delay, CallbackFunc callback_function, gpointer cb_arg) {
-	CallbackEvent* cb = callback_new(callback_function, cb_arg);
+	CallbackEvent* cb = callback_new(callback_function, cb_arg, NULL);
 	Worker* worker = worker_getPrivate();
 	worker_scheduleEvent(cb, SIMTIME_ONE_MILLISECOND * milli_delay, worker->cached_node->id);
 }

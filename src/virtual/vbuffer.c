@@ -27,7 +27,6 @@
 #include "reference_counter.h"
 #include "vbuffer.h"
 #include "vci.h"
-#include "log.h"
 #include "vepoll.h"
 
 enum vbuffer_type {

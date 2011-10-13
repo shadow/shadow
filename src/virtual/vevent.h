@@ -35,7 +35,6 @@
 #include <event2/dns_struct.h>
 
 #include "vevent_mgr.h"
-#include "context.h"
 
 /* vevent types and functions */
 #define VEVENT_METHOD "shadow-vevent";

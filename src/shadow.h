@@ -50,16 +50,6 @@
 #include "utility/shd-cdf.h"
 #include "utility/shd-data-entry.h"
 
-#include "plugin/libraries/shadowlib.h"
-#include "plugin/shd-shadowlib.h"
-#include "plugin/shd-plugin-state.h"
-#include "plugin/shd-plugin.h"
-#include "plugin/shd-software.h"
-
-#include "topology/shd-network.h"
-#include "topology/shd-link.h"
-#include "topology/shd-internetwork.h"
-
 #include "runnable/event/shd-spine.h"
 #include "runnable/event/shd-start-application.h"
 #include "runnable/event/shd-callback.h"
@@ -72,6 +62,17 @@
 #include "runnable/action/shd-load-cdf.h"
 #include "runnable/action/shd-load-plugin.h"
 #include "runnable/action/shd-kill-engine.h"
+
+#include "plugin/libraries/shadowlib.h"
+#include "plugin/shd-shadowlib.h"
+#include "plugin/shd-plugin-state.h"
+#include "plugin/shd-plugin.h"
+#include "plugin/shd-software.h"
+
+#include "topology/shd-network.h"
+#include "topology/shd-link.h"
+#include "topology/shd-internetwork.h"
+
 
 #include "node/shd-application.h"
 #include "node/shd-node.h"

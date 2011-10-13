@@ -43,9 +43,12 @@ void plugin_free(gpointer data);
 void plugin_registerResidentState(Plugin* plugin, PluginVTable* callbackFunctions, guint nVariables, va_list variableArguments);
 void plugin_executeNew(Plugin* plugin, PluginState* state, gint argcParam, gchar* argvParam[]);
 void plugin_executeFree(Plugin* plugin, PluginState* state);
+
 void plugin_executeReadable(Plugin* plugin, PluginState* state, gint socketParam);
 void plugin_executeWritable(Plugin* plugin, PluginState* state, gint socketParam);
 void plugin_executeWritableReadable(Plugin* plugin, PluginState* state, gint socketParam);
 void plugin_executeReadableWritable(Plugin* plugin, PluginState* state, gint socketParam);
+
+void plugin_executeGeneric(Plugin* plugin, PluginState* state, CallbackFunc callback, gpointer data, gpointer callbackArgument);
 
 #endif /* SHD_PLUGIN_H_ */

@@ -25,7 +25,6 @@
 #include <glib.h>
 #include <stddef.h>
 #include <stdint.h>
-#include "global.h"
 
 /* this is multiplied by the actual number of bytes processed to artificially increase processing penalty.
  * set to 0 to disable CPU load delays. */
