@@ -41,12 +41,26 @@ void internetwork_free(Internetwork* internet) {
 	g_free(internet);
 }
 
+static void _internetwork_trackLatency(Internetwork* internet, CumulativeDistribution* latency) {
+	MAGIC_ASSERT(internet);
+	gdouble maxLocal = cdf_getMaximumValue(latency);
+	if(maxLocal > internet->maximumGlobalLatency) {
+		internet->maximumGlobalLatency = maxLocal;
+	}
+	gdouble minLocal = cdf_getMinimumValue(latency);
+	if(minLocal < internet->minimumGlobalLatency) {
+		internet->minimumGlobalLatency = minLocal;
+	}
+}
+
 void internetwork_createNetwork(Internetwork* internet, GQuark networkID, CumulativeDistribution* intranetLatency) {
 	MAGIC_ASSERT(internet);
 	g_assert(!internet->isReadOnly);
 
 	Network* network = network_new(networkID, intranetLatency);
 	g_hash_table_replace(internet->networks, &(network->id), network);
+
+	_internetwork_trackLatency(internet, intranetLatency);
 }
 
 void internetwork_connectNetworks(Internetwork* internet, GQuark networkAID, GQuark networkBID,
@@ -70,6 +84,10 @@ void internetwork_connectNetworks(Internetwork* internet, GQuark networkAID, GQu
 
 	network_addIncomingLink(networkA, linkB2A);
 	network_addIncomingLink(networkB, linkA2B);
+
+	/* track latency */
+	_internetwork_trackLatency(internet, latencyA2B);
+	_internetwork_trackLatency(internet, latencyB2A);
 }
 
 Network* internetwork_getNetwork(Internetwork* internet, GQuark networkID) {
@@ -97,10 +115,34 @@ GList* internetwork_getAllNodes(Internetwork* internet) {
 	return g_hash_table_get_values(internet->nodes);
 }
 
-GQuark internet_resolveName(Internetwork* internet, gchar* name) {
+GQuark internetwork_resolveName(Internetwork* internet, gchar* name) {
+	MAGIC_ASSERT(internet);
 	return g_quark_try_string((const gchar*) name);
 }
 
-const gchar* internet_resolveID(Internetwork* internet, GQuark id) {
+const gchar* internetwork_resolveID(Internetwork* internet, GQuark id) {
+	MAGIC_ASSERT(internet);
 	return g_quark_to_string(id);
+}
+
+gdouble internetwork_getMaximumLatency(Internetwork* internet) {
+	MAGIC_ASSERT(internet);
+	return internet->maximumGlobalLatency;
+}
+
+gdouble internetwork_getMinimumLatency(Internetwork* internet) {
+	MAGIC_ASSERT(internet);
+	return internet->minimumGlobalLatency;
+}
+
+guint32 internetwork_getNodeBandwidthUp(Internetwork* internet, GQuark nodeID) {
+	MAGIC_ASSERT(internet);
+	Node* node = internetwork_getNode(internet, nodeID);
+	return node_getBandwidthUp(node);
+}
+
+guint32 internetwork_getNodeBandwidthDown(Internetwork* internet, GQuark nodeID) {
+	MAGIC_ASSERT(internet);
+	Node* node = internetwork_getNode(internet, nodeID);
+	return node_getBandwidthDown(node);
 }

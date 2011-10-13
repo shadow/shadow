@@ -29,11 +29,8 @@
 #include "vtransport_processing.h"
 #include "vtransport_mgr.h"
 #include "vsocket.h"
-#include "log.h"
 #include "vci.h"
 #include "vci_event.h"
-#include "sysconfig.h"
-#include "sim.h"
 #include "vepoll.h"
 
 vtransport_tp vtransport_create(vsocket_mgr_tp vsocket_mgr, vsocket_tp sock) {

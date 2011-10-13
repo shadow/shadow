@@ -27,8 +27,6 @@
 #include <netinet/in.h>
 #include <glib-2.0/glib.h>
 
-#include "global.h"
-#include "context.h"
 #include "vpacket_mgr.h"
 #include "vpacket.h"
 #include "vpeer.h"

@@ -32,6 +32,9 @@ struct _Internetwork {
 	GHashTable* nodes;
 	GHashTable* networks;
 
+	gdouble maximumGlobalLatency;
+	gdouble minimumGlobalLatency;
+
 	MAGIC_DECLARE;
 };
 
@@ -50,7 +53,12 @@ void internetwork_createNode(Internetwork* internet, GQuark nodeID,
 Node* internetwork_getNode(Internetwork* internet, GQuark nodeID);
 GList* internetwork_getAllNodes(Internetwork* internet);
 
-GQuark internet_resolveName(Internetwork* internet, gchar* name);
-const gchar* internet_resolveID(Internetwork* internet, GQuark id);
+GQuark internetwork_resolveName(Internetwork* internet, gchar* name);
+const gchar* internetwork_resolveID(Internetwork* internet, GQuark id);
+
+gdouble internetwork_getMaximumLatency(Internetwork* internet);
+gdouble internetwork_getMinimumLatency(Internetwork* internet);
+guint32 internetwork_getNodeBandwidthUp(Internetwork* internet, GQuark nodeID);
+guint32 internetwork_getNodeBandwidthDown(Internetwork* internet, GQuark nodeID);
 
 #endif /* SHD_INTERNETWORK_H_ */

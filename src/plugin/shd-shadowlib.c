@@ -55,12 +55,12 @@ void shadowlib_log(gchar* format, ...) {
 
 in_addr_t shadowlib_resolveHostname(gchar* name) {
 	Worker* worker = worker_getPrivate();
-	return (in_addr_t) internet_resolveName(worker->cached_engine->internet, name);
+	return (in_addr_t) internetwork_resolveName(worker->cached_engine->internet, name);
 }
 
 gboolean shadowlib_resolveIPAddress(in_addr_t addr, gchar* name_out, gint name_out_len) {
 	Worker* worker = worker_getPrivate();
-	const gchar* name = internet_resolveID(worker->cached_engine->internet, (GQuark)addr);
+	const gchar* name = internetwork_resolveID(worker->cached_engine->internet, (GQuark)addr);
 	if(name != NULL && name_out_len > strlen(name)) {
 		strncpy(name_out, name, name_out_len);
 		return TRUE;

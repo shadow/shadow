@@ -23,7 +23,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 
-#include "log.h"
+#include "shadow.h"
 #include "vtransport_mgr.h"
 #include "vtransport.h"
 #include "vtransport_processing.h"
@@ -31,7 +31,6 @@
 #include "vpacket_mgr.h"
 #include "vpacket.h"
 #include "vci.h"
-#include "sim.h"
 
 static vtransport_mgr_inq_tp vtransport_mgr_create_buffer(guint64 max_size);
 static void vtransport_mgr_destroy_buffer(vtransport_mgr_inq_tp buffer);
@@ -191,7 +190,8 @@ void vtransport_mgr_download_next(vtransport_mgr_tp vt_mgr) {
 //	vtransport_mgr_adjust_cpu_load_counter(vt_mgr);
 
 	/* adjust ns bandwidth counter */
-	guint64 ns_since_last = VTRANSPORT_NS_PER_MS * (global_sim_context.sim_worker->current_time - vt_mgr->last_time_recv);
+	SimulationTime now = worker_getPrivate()->clock_now;
+	guint64 ns_since_last = now - vt_mgr->last_time_recv;
 	if(ns_since_last > 0) {
 		if(vt_mgr->nanos_consumed_recv > ns_since_last) {
 			/* we partially absorbed the delay */
@@ -200,7 +200,7 @@ void vtransport_mgr_download_next(vtransport_mgr_tp vt_mgr) {
 			/* enough time has passed that we absorbed the entire delay */
 			vt_mgr->nanos_consumed_recv = 0;
 		}
-		vt_mgr->last_time_recv = global_sim_context.sim_worker->current_time;
+		vt_mgr->last_time_recv = now;
 	}
 
 	/* we will batch recvs */
@@ -324,7 +324,8 @@ void vtransport_mgr_upload_next(vtransport_mgr_tp vt_mgr) {
 //	vtransport_mgr_adjust_cpu_load_counter(vt_mgr);
 
 	/* adjust ns bandwidth counter */
-	guint64 ns_since_last = VTRANSPORT_NS_PER_MS * (global_sim_context.sim_worker->current_time - vt_mgr->last_time_sent);
+	SimulationTime now = worker_getPrivate()->clock_now;
+	guint64 ns_since_last = now - vt_mgr->last_time_sent;
 	if(ns_since_last > 0) {
 		if(vt_mgr->nanos_consumed_sent > ns_since_last) {
 			/* we partially absorbed the delay */
@@ -333,7 +334,7 @@ void vtransport_mgr_upload_next(vtransport_mgr_tp vt_mgr) {
 			/* enough time has passed that we absorbed the entire delay */
 			vt_mgr->nanos_consumed_sent = 0;
 		}
-		vt_mgr->last_time_sent = global_sim_context.sim_worker->current_time;
+		vt_mgr->last_time_sent = now;
 	}
 
 	/* we will batch sends */

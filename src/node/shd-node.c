@@ -116,3 +116,13 @@ gboolean node_equal(Node* a, Node* b) {
 		return node_compare(a, b, NULL) == 0;
 	}
 }
+
+guint32 node_getBandwidthUp(Node* node) {
+	MAGIC_ASSERT(node);
+	return 0;//node->vsocket_mgr->vt_mgr->KBps_up;
+}
+
+guint32 node_getBandwidthDown(Node* node) {
+	MAGIC_ASSERT(node);
+	return 0;//node->vsocket_mgr->vt_mgr->KBps_down;
+}

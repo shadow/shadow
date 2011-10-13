@@ -69,4 +69,7 @@ guint node_getNumTasks(Node* node);
 gint node_compare(gconstpointer a, gconstpointer b, gpointer user_data);
 gboolean node_equal(Node* a, Node* b);
 
+guint32 node_getBandwidthUp(Node* node);
+guint32 node_getBandwidthDown(Node* node);
+
 #endif /* SHD_NODE_H_ */

@@ -29,12 +29,10 @@
 #include <errno.h>
 #include <glib-2.0/glib.h>
 
+#include "shadow.h"
 #include "vsocket_mgr.h"
 #include "vsocket_mgr_server.h"
 #include "vsocket.h"
-#include "log.h"
-#include "context.h"
-#include "global.h"
 #include "vbuffer.h"
 #include "vtransport.h"
 #include "vtcp.h"
@@ -43,7 +41,6 @@
 #include "vpacket_mgr.h"
 #include "vpacket.h"
 #include "vci.h"
-#include "sim.h"
 #include "vepoll.h"
 #include "vpipe.h"
 

@@ -26,6 +26,7 @@
 #include <netinet/in.h>
 #include <errno.h>
 
+#include "shadow.h"
 #include "vtcp.h"
 #include "vtransport.h"
 #include "vtransport_processing.h"
@@ -38,10 +39,6 @@
 #include "vpacket.h"
 #include "orderedlist.h"
 #include "vci.h"
-#include "log.h"
-#include "sysconfig.h"
-#include "resolver.h"
-#include "sim.h"
 
 static void vtcp_autotune(vtcp_tp vtcp);
 static void vtcp_update_receive_window(vtcp_tp vtcp);
@@ -838,13 +835,14 @@ static void vtcp_autotune(vtcp_tp vtcp) {
 			/* our buffers need to be large enough to send and receive
 			 * a full delay*bandwidth worth of bytes to keep the pipe full. */
 			guint32 send_latency, receive_latency;
+			Internetwork* internet = worker_getPrivate()->cached_engine->internet;
 
 			/* get latency in milliseconds */
 			guint8 success = vci_get_latency(vtcp->vsocket_mgr->addr, vtcp->remote_peer->addr, &send_latency, &receive_latency);
 			if(!success) {
 				warning("vtcp_autotune: cant get latency for autotuning. defaulting to worst case latency.\n");
-				send_latency = global_sim_context.sim_worker->max_latency;
-				receive_latency = global_sim_context.sim_worker->max_latency;
+				gdouble maxLatency = internetwork_getMaximumLatency(internet);
+				send_latency = receive_latency = (guint32) maxLatency;
 			}
 
 			guint32 rtt_milliseconds = send_latency + receive_latency;
@@ -853,7 +851,7 @@ static void vtcp_autotune(vtcp_tp vtcp) {
 			 * sizes based on bandwidth in both directions.
 			 * do my send size first. */
 			guint32 my_send_bw = vtcp->vsocket_mgr->vt_mgr->KBps_up;
-			guint32 their_receive_bw = resolver_get_downbw(global_sim_context.sim_worker->resolver, vtcp->remote_peer->addr);
+			guint32 their_receive_bw = internetwork_getNodeBandwidthDown(internet, (GQuark) vtcp->remote_peer->addr);
 			guint32 my_send_Bpms = (guint32) (my_send_bw * 1.024f);
 			guint32 their_receive_Bpms = (guint32) (their_receive_bw * 1.024f);
 
@@ -865,7 +863,7 @@ static void vtcp_autotune(vtcp_tp vtcp) {
 
 			/* now the same thing for my receive buf */
 			guint32 my_receive_bw = vtcp->vsocket_mgr->vt_mgr->KBps_down;
-			guint32 their_send_bw = resolver_get_upbw(global_sim_context.sim_worker->resolver, vtcp->remote_peer->addr);
+			guint32 their_send_bw = internetwork_getNodeBandwidthUp(internet, (GQuark) vtcp->remote_peer->addr);
 			guint32 my_receive_Bpms = (guint32) (my_receive_bw * 1.024f);
 			guint32 their_send_Bpms = (guint32) (their_send_bw * 1.024f);
 

@@ -25,6 +25,7 @@
 #include <glib.h>
 #include <stdint.h>
 
+#include "shadow.h"
 #include "vsocket_mgr.h"
 #include "vpacket_mgr.h"
 #include "vpacket.h"
@@ -61,10 +62,10 @@ typedef struct vtransport_mgr_s {
 	vtransport_mgr_inq_tp inq;
 	/* set if an incoming packet can trigger a recv event */
 	guint8 ok_to_fire_recv;
-	ptime_t last_time_sent;
-	ptime_t last_time_recv;
-	guint64 nanos_consumed_sent;
-	guint64 nanos_consumed_recv;
+	SimulationTime last_time_sent;
+	SimulationTime last_time_recv;
+	SimulationTime nanos_consumed_sent;
+	SimulationTime nanos_consumed_recv;
 } vtransport_mgr_t, *vtransport_mgr_tp;
 
 vtransport_mgr_tp vtransport_mgr_create(vsocket_mgr_tp vsocket_mgr, guint32 KBps_down, guint32 KBps_up);

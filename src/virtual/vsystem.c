@@ -27,17 +27,15 @@
 #include <string.h>
 #include <errno.h>
 
+#include "shadow.h"
 #include "vsocket_mgr.h"
 #include "vtransport_mgr.h"
 #include "vsystem.h"
-#include "context.h"
-#include "sim.h"
-#include "resolver.h"
 #include "vcpu.h"
 
 time_t vsystem_time(time_t* t) {
-	/* get time from dvn */
-	time_t secs = (time_t) global_sim_context.sim_worker->current_time / 1000;
+	/* get time from shadow */
+	time_t secs = (time_t) (worker_getPrivate()->clock_now / SIMTIME_ONE_SECOND);
 
 	if(t != NULL){
 		*t = secs;
@@ -57,20 +55,20 @@ gint vsystem_clock_gettime(clockid_t clk_id, struct timespec *tp) {
 		return -1;
 	}
 
-	tp->tv_sec = global_sim_context.sim_worker->current_time / 1000;
-	tp->tv_nsec = (global_sim_context.sim_worker->current_time % 1000) * 1000000;
+	SimulationTime now = worker_getPrivate()->clock_now;
+	tp->tv_sec = now / SIMTIME_ONE_SECOND;
+	tp->tv_nsec = now % SIMTIME_ONE_SECOND;
 
 	return 0;
 }
 
 gint vsystem_gethostname(gchar *name, size_t len) {
-	if(name != NULL && global_sim_context.current_context != NULL &&
-			global_sim_context.current_context->vsocket_mgr != NULL &&
-			global_sim_context.sim_worker != NULL) {
+	Worker* worker = worker_getPrivate();
+	Node* node = worker->cached_node;
+	if(name != NULL && node != NULL) {
 
 		/* resolve my address to a hsotname */
-		in_addr_t addr = global_sim_context.current_context->vsocket_mgr->addr;
-		gchar* sysname = resolver_resolve_byaddr(global_sim_context.sim_worker->resolver, addr);
+		const gchar* sysname = internetwork_resolveID(worker->cached_engine->internet, node->id);
 
 		if(sysname != NULL) {
 			if(strncpy(name, sysname, len) != NULL) {
@@ -82,30 +80,31 @@ gint vsystem_gethostname(gchar *name, size_t len) {
 	return -1;
 }
 
-gint vsystem_getaddrinfo(gchar *node, const gchar *service,
+gint vsystem_getaddrinfo(gchar *name, const gchar *service,
 		const struct addrinfo *hgints, struct addrinfo **res) {
-	if(node != NULL && global_sim_context.sim_worker != NULL) {
-		resolver_tp r = global_sim_context.sim_worker->resolver;
+	Worker* worker = worker_getPrivate();
+	Node* node = worker->cached_node;
+	if(name != NULL && node != NULL) {
 
 		/* node may be a number-and-dots address, or a hostname. lets hope for hostname
 		 * and try that first, o/w convert to the in_addr_t and do a second lookup. */
-		in_addr_t* addr = resolver_resolve_byname(r, node);
+		in_addr_t address = (in_addr_t) internetwork_resolveName(worker->cached_engine->internet, name);
 
-		if(addr == NULL) {
+		if(address == 0) {
+			/* name was not in hostname format. convert to IP format and try again */
 			struct in_addr inaddr;
-			/* convert and try again */
-
-			gint result = inet_pton(AF_INET, node, &inaddr);
+			gint result = inet_pton(AF_INET, name, &inaddr);
 
 			if(result == 1) {
-				/* successful conversion, do lookup */
-				gchar* hostname = resolver_resolve_byaddr(r, inaddr.s_addr);
+				/* successful conversion to IP format, now find the real hostname */
+				GQuark convertedIP = (GQuark) inaddr.s_addr;
+				gchar* hostname = internetwork_resolveID(worker->cached_engine->internet, convertedIP);
 
 				if(hostname != NULL) {
-					/* got it, so the converted addr is valid */
-					addr = resolver_resolve_byname(r, hostname);
+					/* got it, so convertedIP is a valid IP */
+					address = (in_addr_t) convertedIP;
 				} else {
-					/* node not mapped by resolver... */
+					/* name not mapped by resolver... */
 					return EAI_FAIL;
 				}
 			} else if(result == 0) {
@@ -121,7 +120,7 @@ gint vsystem_getaddrinfo(gchar *node, const gchar *service,
 		struct sockaddr_in* sa = malloc(sizeof(struct sockaddr_in));
 		/* application will expect it in network order */
 		// sa->sin_addr.s_addr = (in_addr_t) htonl((guint32)(*addr));
-		sa->sin_addr.s_addr = *addr;
+		sa->sin_addr.s_addr = address;
 
 		struct addrinfo* ai_out = malloc(sizeof(struct addrinfo));
 		ai_out->ai_addr = (struct sockaddr*) sa;
@@ -147,7 +146,7 @@ void vsystem_freeaddrinfo(struct addrinfo *res) {
 }
 
 void vsystem_add_cpu_load(gdouble number_of_encryptions) {
-	vsocket_mgr_tp mgr = (vsocket_mgr_tp) global_sim_context.current_context->vsocket_mgr;
+	vsocket_mgr_tp mgr = (vsocket_mgr_tp) worker_getPrivate()->cached_node->vsocket_mgr;
 	if(mgr == NULL) {
 		return;
 	}

@@ -27,8 +27,6 @@
 #include "vpacket_mgr.h"
 #include "vpacket.h"
 #include "shmcabinet_mgr.h"
-#include "log.h"
-#include "sysconfig.h"
 
 extern guint8 vci_can_share_memory(in_addr_t);
 
