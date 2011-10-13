@@ -43,9 +43,14 @@ struct _Network {
 
 Network* network_new(GQuark id, CumulativeDistribution* intranetLatency);
 void network_free(gpointer data);
-void network_addOutgoingLink(Network* network, Link* outgoingLink);
-void network_addIncomingLink(Network* network, Link* incomingLink);
+
 gint network_compare(gconstpointer a, gconstpointer b, gpointer user_data);
 gboolean network_equal(Network* a, Network* b);
+
+void network_addOutgoingLink(Network* network, Link* outgoingLink);
+void network_addIncomingLink(Network* network, Link* incomingLink);
+
+gdouble network_getLinkLatency(Network* sourceNetwork, Network* destinationNetwork, gdouble percentile);
+gdouble network_sampleLinkLatency(Network* sourceNetwork, Network* destinationNetwork);
 
 #endif /* SHD_NETWORK_H_ */

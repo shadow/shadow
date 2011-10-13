@@ -49,6 +49,7 @@ CumulativeDistribution* cdf_new(GQuark id, const gchar* filename);
 CumulativeDistribution* cdf_generate(GQuark id, guint base_center, guint base_width, guint tail_width);
 void cdf_free(gpointer data);
 
+gdouble cdf_getValue(CumulativeDistribution* cdf, gdouble percentile);
 gdouble cdf_getMinimumValue(CumulativeDistribution* cdf);
 gdouble cdf_getMaximumValue(CumulativeDistribution* cdf);
 gdouble cdf_getRandomValue(CumulativeDistribution* cdf);

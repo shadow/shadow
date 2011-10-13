@@ -78,6 +78,7 @@ static GList* cdf_parse(const gchar* filename) {
 }
 
 CumulativeDistribution* cdf_new(GQuark id, const gchar* filename) {
+	/* TODO We should use a binary tree for more efficient lookups */
 	GList* ol = cdf_parse(filename);
 	if(ol != NULL) {
 		CumulativeDistribution* cdf = g_new0(CumulativeDistribution, 1);
@@ -89,6 +90,60 @@ CumulativeDistribution* cdf_new(GQuark id, const gchar* filename) {
 		return NULL;
 	}
 }
+
+/**
+ * Provides the underlying model for the network layer
+ *
+ * Based on the delay measurements in turbo-King
+ * http://inl.info.ucl.ac.be/blogs/08-04-23-turbo-king-framework-large-scale-ginternet-delay-measurements
+ * Paper:  http://irl.cs.tamu.edu/people/derek/papers/infocom2008.pdf
+ * Note that we are looking mostly at link delay since we are modeling an inter AS delay
+ *
+ * We expect a CDF as follows:
+
+   1|                         +++++++++++++++
+    |                     +++
+    |                  ++
+    |                 +
+    |                +
+    |                +
+    |                +
+    |                +
+    |                +
+    |                +
+    |               +
+    |               +
+    |              +
+   0+++++++++++++++-----------------------------
+    0                |
+                Base Delay
+                 |<----->|<----------|
+                  Width      Tail
+ */
+
+// TODO check if we should do this in cdf_generate
+//static guint vci_model_delay(vci_netmodel_tp netmodel) {
+//	if(netmodel != NULL) {
+//		float flBase = 1.0f;
+//		float flRandWidth = 0.0f;
+//		gint i = 0;
+//
+//		for(i=0;i<=VCI_NETMODEL_TIGHTNESS_FACTOR ;i++)
+//		{
+//			// Cummulatively computes random delay values
+//			flBase = flBase * (1.0f - (dvn_rand_fast(RAND_MAX) / ((float)RAND_MAX/2)));
+//		}
+//
+//		if(flBase < 0)
+//			flRandWidth = flBase * netmodel->width;// Scales it to the desired width
+//		else
+//			flRandWidth = flBase * netmodel->tail_width;// Models the long tail
+//
+//		return (guint) netmodel->base_delay + (guint)flRandWidth;
+//	} else {
+//		return 0;
+//	}
+//}
 
 CumulativeDistribution* cdf_generate(GQuark id, guint base_center, guint base_width, guint tail_width) {
 	CumulativeDistribution* cdf = g_new0(CumulativeDistribution, 1);
@@ -127,25 +182,22 @@ void cdf_free(gpointer data) {
 	g_free(cdf);
 }
 
-gdouble cdf_getMinimumValue(CumulativeDistribution* cdf) {
+gdouble cdf_getValue(CumulativeDistribution* cdf, gdouble percentile) {
 	MAGIC_ASSERT(cdf);
+	g_assert(percentile >= 0.0 && percentile <= 1.0);
 
-	GList* firstItem = g_list_first(cdf->entries);
-	if(firstItem) {
-		CumulativeDistributionEntry* entry = firstItem->data;
-		MAGIC_ASSERT(entry);
-		return entry->value;
+	GList* item;
+	if(percentile == 1.0) {
+		item = g_list_last(cdf->entries);
+	} else if(percentile == 0.0) {
+		item = g_list_first(cdf->entries);
+	} else {
+		guint position = (guint) (percentile * (g_list_length(cdf->entries)));
+		item = g_list_nth(cdf->entries, position);
 	}
 
-	return (gdouble) 0;
-}
-
-gdouble cdf_getMaximumValue(CumulativeDistribution* cdf) {
-	MAGIC_ASSERT(cdf);
-
-	GList* lastItem = g_list_last(cdf->entries);
-	if(lastItem) {
-		CumulativeDistributionEntry* entry = lastItem->data;
+	if(item) {
+		CumulativeDistributionEntry* entry = item->data;
 		MAGIC_ASSERT(entry);
 		return entry->value;
 	}
@@ -156,7 +208,7 @@ gdouble cdf_getMaximumValue(CumulativeDistribution* cdf) {
 gdouble cdf_getRandomValue(CumulativeDistribution* cdf) {
 	MAGIC_ASSERT(cdf);
 
-	/* FIXME make this random!!! */
+	/* FIXME XXX make this random!!! */
 	guint randomPosition = 0;
 
 	GList* randomItem = g_list_nth(cdf->entries, randomPosition);

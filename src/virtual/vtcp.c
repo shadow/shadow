@@ -832,15 +832,22 @@ static void vtcp_autotune(vtcp_tp vtcp) {
 			}
 
 			/* our buffers need to be large enough to send and receive
-			 * a full delay*bandwidth worth of bytes to keep the pipe full. */
-			guint32 send_latency, receive_latency;
+			 * a full delay*bandwidth worth of bytes to keep the pipe full.
+			 * but not too large that we'll just buffer everything. autotuning
+			 * is meant to tune it to an optimal rate. estimate that by taking
+			 * the 80th percentile.
+			 */
 			Internetwork* internet = worker_getPrivate()->cached_engine->internet;
+			GQuark sourceID = (GQuark) vtcp->vsocket_mgr->addr;
+			GQuark destinationID = (GQuark) vtcp->remote_peer->addr;
 
 			/* get latency in milliseconds */
-			guint8 success = vci_get_latency(vtcp->vsocket_mgr->addr, vtcp->remote_peer->addr, &send_latency, &receive_latency);
-			if(!success) {
+			guint32 send_latency = (guint32) internetwork_getLatency(internet, sourceID, destinationID, 0.8);
+			guint32 receive_latency = (guint32) internetwork_getLatency(internet, destinationID, sourceID, 0.8);
+
+			if(send_latency < 0 || receive_latency < 0) {
 				warning("vtcp_autotune: cant get latency for autotuning. defaulting to worst case latency.\n");
-				gdouble maxLatency = internetwork_getMaximumLatency(internet);
+				gdouble maxLatency = internetwork_getMaximumGlobalLatency(internet);
 				send_latency = receive_latency = (guint32) maxLatency;
 			}
 

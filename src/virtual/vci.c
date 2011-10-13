@@ -25,7 +25,6 @@
 #include <string.h>
 #include <math.h>
 
-#include "global.h"
 #include "vci.h"
 #include "vci_event.h"
 #include "vsocket_mgr.h"
@@ -35,15 +34,8 @@
 #include "vpacket_mgr.h"
 #include "vpacket.h"
 #include "shmcabinet.h"
-#include "sysconfig.h"
-#include "log.h"
 #include "rand.h"
-#include "context.h"
-#include "module.h"
-#include "routing.h"
 #include "netconst.h"
-#include "sim.h"
-#include "simnet_graph.h"
 #include "vepoll.h"
 
 
@@ -282,59 +274,6 @@ void vci_track_network(vci_mgr_tp mgr, guint network_id, in_addr_t addr) {
 	g_hash_table_insert(mgr->networks_by_address, key, net);
 }
 
-/**
- * Provides the underlying model for the network layer
- *
- * Based on the delay measurements in turbo-King
- * http://inl.info.ucl.ac.be/blogs/08-04-23-turbo-king-framework-large-scale-ginternet-delay-measurements
- * Paper:  http://irl.cs.tamu.edu/people/derek/papers/infocom2008.pdf
- * Note that we are looking mostly at link delay since we are modeling an ginter AS delay
- *
- * We expect a CDF as follows:
-
-   1|                         +++++++++++++++
-    |                     +++
-    |                  ++
-    |                 +
-    |                +
-    |                +
-    |                +
-    |                +
-    |                +
-    |                +
-    |               +
-    |               +
-    |              +
-   0+++++++++++++++-----------------------------
-    0                |
-                Base Delay
-                 |<----->|<----------|
-                  Width      Tail
- */
-
-// TODO check if we should do this in cdf_generate
-//static guint vci_model_delay(vci_netmodel_tp netmodel) {
-//	if(netmodel != NULL) {
-//		float flBase = 1.0f;
-//		float flRandWidth = 0.0f;
-//		gint i = 0;
-//
-//		for(i=0;i<=VCI_NETMODEL_TIGHTNESS_FACTOR ;i++)
-//		{
-//			// Cummulatively computes random delay values
-//			flBase = flBase * (1.0f - (dvn_rand_fast(RAND_MAX) / ((float)RAND_MAX/2)));
-//		}
-//
-//		if(flBase < 0)
-//			flRandWidth = flBase * netmodel->width;// Scales it to the desired width
-//		else
-//			flRandWidth = flBase * netmodel->tail_width;// Models the long tail
-//
-//		return (guint) netmodel->base_delay + (guint)flRandWidth;
-//	} else {
-//		return 0;
-//	}
-//}
 
 static enum vci_location vci_get_relative_location(in_addr_t relative_to) {
 	/* there are 3 cases - the caller and the given address are on:

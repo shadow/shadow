@@ -55,6 +55,24 @@ void network_free(gpointer data) {
 	g_free(network);
 }
 
+gint network_compare(gconstpointer a, gconstpointer b, gpointer user_data) {
+	const Network* na = a;
+	const Network* nb = b;
+	MAGIC_ASSERT(na);
+	MAGIC_ASSERT(nb);
+	return na->id > nb->id ? +1 : na->id == nb->id ? 0 : -1;
+}
+
+gboolean network_equal(Network* a, Network* b) {
+	if(a == NULL && b == NULL) {
+		return TRUE;
+	} else if(a == NULL || b == NULL) {
+		return FALSE;
+	} else {
+		return network_compare(a, b, NULL) == 0;
+	}
+}
+
 void network_addOutgoingLink(Network* network, Link* outgoingLink) {
 	MAGIC_ASSERT(network);
 
@@ -77,20 +95,22 @@ void network_addIncomingLink(Network* network, Link* incomingLink) {
 	network->incomingLinks = g_list_prepend(network->incomingLinks, incomingLink);
 }
 
-gint network_compare(gconstpointer a, gconstpointer b, gpointer user_data) {
-	const Network* na = a;
-	const Network* nb = b;
-	MAGIC_ASSERT(na);
-	MAGIC_ASSERT(nb);
-	return na->id > nb->id ? +1 : na->id == nb->id ? 0 : -1;
+gdouble network_getLinkLatency(Network* sourceNetwork, Network* destinationNetwork, gdouble percentile) {
+	MAGIC_ASSERT(sourceNetwork);
+	MAGIC_ASSERT(destinationNetwork);
+	Link* link = g_hash_table_lookup(sourceNetwork->outgoingLinkMap, &(destinationNetwork->id));
+	if(link) {
+		return cdf_getValue(link->latency, percentile);
+	}
+	return G_MINDOUBLE;
 }
 
-gboolean network_equal(Network* a, Network* b) {
-	if(a == NULL && b == NULL) {
-		return TRUE;
-	} else if(a == NULL || b == NULL) {
-		return FALSE;
-	} else {
-		return network_compare(a, b, NULL) == 0;
+gdouble network_sampleLinkLatency(Network* sourceNetwork, Network* destinationNetwork) {
+	MAGIC_ASSERT(sourceNetwork);
+	MAGIC_ASSERT(destinationNetwork);
+	Link* link = g_hash_table_lookup(sourceNetwork->outgoingLinkMap, &(destinationNetwork->id));
+	if(link) {
+		return cdf_getRandomValue(link->latency);
 	}
+	return G_MINDOUBLE;
 }

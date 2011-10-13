@@ -43,11 +43,11 @@ void internetwork_free(Internetwork* internet) {
 
 static void _internetwork_trackLatency(Internetwork* internet, CumulativeDistribution* latency) {
 	MAGIC_ASSERT(internet);
-	gdouble maxLocal = cdf_getMaximumValue(latency);
+	gdouble maxLocal = cdf_getValue(latency, 1.0);
 	if(maxLocal > internet->maximumGlobalLatency) {
 		internet->maximumGlobalLatency = maxLocal;
 	}
-	gdouble minLocal = cdf_getMinimumValue(latency);
+	gdouble minLocal = cdf_getValue(latency, 0.0);
 	if(minLocal < internet->minimumGlobalLatency) {
 		internet->minimumGlobalLatency = minLocal;
 	}
@@ -125,12 +125,12 @@ const gchar* internetwork_resolveID(Internetwork* internet, GQuark id) {
 	return g_quark_to_string(id);
 }
 
-gdouble internetwork_getMaximumLatency(Internetwork* internet) {
+gdouble internetwork_getMaximumGlobalLatency(Internetwork* internet) {
 	MAGIC_ASSERT(internet);
 	return internet->maximumGlobalLatency;
 }
 
-gdouble internetwork_getMinimumLatency(Internetwork* internet) {
+gdouble internetwork_getMinimumGlobalLatency(Internetwork* internet) {
 	MAGIC_ASSERT(internet);
 	return internet->minimumGlobalLatency;
 }
@@ -145,4 +145,22 @@ guint32 internetwork_getNodeBandwidthDown(Internetwork* internet, GQuark nodeID)
 	MAGIC_ASSERT(internet);
 	Node* node = internetwork_getNode(internet, nodeID);
 	return node_getBandwidthDown(node);
+}
+
+gdouble internetwork_getLatency(Internetwork* internet, GQuark sourceNodeID, GQuark destinationNodeID, gdouble percentile) {
+	MAGIC_ASSERT(internet);
+	Node* sourceNode = internetwork_getNode(internet, sourceNodeID);
+	MAGIC_ASSERT(sourceNode);
+	Node* destinationNode = internetwork_getNode(internet, destinationNodeID);
+	MAGIC_ASSERT(destinationNode);
+	return network_getLinkLatency(sourceNode->network, destinationNode->network, percentile);
+}
+
+gdouble internetwork_sampleLatency(Internetwork* internet, GQuark sourceNodeID, GQuark destinationNodeID) {
+	MAGIC_ASSERT(internet);
+	Node* sourceNode = internetwork_getNode(internet, sourceNodeID);
+	MAGIC_ASSERT(sourceNode);
+	Node* destinationNode = internetwork_getNode(internet, destinationNodeID);
+	MAGIC_ASSERT(destinationNode);
+	return network_sampleLinkLatency(sourceNode->network, destinationNode->network);
 }
