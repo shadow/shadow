@@ -6,6 +6,8 @@ include_directories(${SHADOW_SOURCE_DIR}/)
 
 ## build the built-in plug-in libraries
 add_subdirectory(plugin/libraries)
+## build the required libraries for intercepting system and library calls
+add_subdirectory(intercept)
 
 ## sources for our main shadow program
 set(shadow_srcs

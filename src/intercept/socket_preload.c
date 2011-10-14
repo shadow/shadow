@@ -23,9 +23,7 @@
 #include <dlfcn.h>
 #include <sys/socket.h>
 
-#include "preload.h"
-#include "vsocket_intercept.h"
-#include "global.h"
+#include "shadow.h"
 
 #define SOCKET_LIB_PREFIX "intercept_"
 

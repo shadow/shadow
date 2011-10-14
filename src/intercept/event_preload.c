@@ -28,9 +28,7 @@
 #include <event2/dns_compat.h>
 #include <event2/dns_struct.h>
 
-#include "preload.h"
-#include "vevent.h"
-//#include "vevent_intercept.h"
+#include "shadow.h"
 
 #define EVENT_LIB_PREFIX "intercept_"
 

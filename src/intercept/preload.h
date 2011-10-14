@@ -24,21 +24,11 @@
 #define PRELOAD_H_
 
 #include <stdio.h>
-#include "log_codes.h"
+#include "shadow.h"
 
 /* handles for dlsym */
 #define RTLD_NEXT ((void *) -1l)
 #define RTLD_DEFAULT ((void *) 0)
-
-extern void dlogf(enum shadow_log_code level, char *fmt, ...);
-
-#ifdef DEBUG
-#define PRELOADLOGD(fmt, ...) dlogf(LOG_DEBUG, fmt, ## __VA_ARGS__)
-#else
-#define PRELOADLOGD(fmt, ...)
-#endif
-
-#define PRELOADLOG(level, fmt, ...) dlogf(level, fmt, ## __VA_ARGS__)
 
 /* convenience macro for doing the dlsym lookups
  * return x if function can't be found */
@@ -63,11 +53,11 @@ extern void dlogf(enum shadow_log_code level, char *fmt, ...);
 		/* check for error, dlerror returns null or a char* error msg */ \
 		dlmsg = dlerror(); \
 		if (!*my_function || dlmsg != NULL) { \
-			PRELOADLOG(LOG_CRIT, "PRELOAD_LOOKUP: failed to chain-load function \"%s\": dlerror = \"%s\", fp = \"%p\"\n", my_search, dlmsg, *my_function); \
+			critical("PRELOAD_LOOKUP: failed to chain-load function \"%s\": dlerror = \"%s\", fp = \"%p\"\n", my_search, dlmsg, *my_function); \
 			return ret; \
 		} \
 	} \
-	PRELOADLOGD("PRELOAD_LOOKUP: calling \"%s\"\n", my_search); \
+	debug("PRELOAD_LOOKUP: calling \"%s\"\n", my_search); \
 }
 
 #endif /* PRELOAD_H_ */

@@ -23,15 +23,13 @@
 #include <glib.h>
 #include <sys/socket.h>
 
-#include "vsocket_intercept.h"
-#include "vsocket.h"
-#include "context.h"
+#include "shadow.h"
 
 /* we are intercepting calls from the module, which means we can
  * access the current context for provider information.
  */
 static vsocket_mgr_tp vsocket_intercept_get_net(){
-	return (vsocket_mgr_tp) global_sim_context.current_context->vsocket_mgr;
+	return (vsocket_mgr_tp) worker_getPrivate()->cached_node->vsocket_mgr;
 }
 
 gint intercept_socket(gint domain, gint type, gint protocol) {

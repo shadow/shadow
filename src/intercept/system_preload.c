@@ -24,9 +24,7 @@
 #include <time.h>
 #include <stddef.h>
 
-#include "preload.h"
-#include "vsystem_intercept.h"
-#include "global.h"
+#include "shadow.h"
 
 #define SYSTEM_LIB_PREFIX "intercept_"
 

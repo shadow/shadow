@@ -25,8 +25,7 @@
 #include <openssl/evp.h>
 #include <string.h>
 
-#include "vcrypto_intercept.h"
-#include "vsystem.h"
+#include "shadow.h"
 
 void intercept_AES_encrypt(const guchar *in, guchar *out, const AES_KEY *key) {
 	/* Processing delays already include crypto and are added during reads/writes */

@@ -36,13 +36,10 @@
 #include <event2/dns_compat.h>
 #include <event2/dns_struct.h>
 
-#include "vevent_intercept.h"
-#include "vevent.h"
-#include "context.h"
-#include "vsocket_mgr.h"
+#include "shadow.h"
 
 static vevent_mgr_tp get_vevent_mgr(){
-	return (vevent_mgr_tp) global_sim_context.current_context->vsocket_mgr->vev_mgr;
+	return (vevent_mgr_tp) worker_getPrivate()->cached_node->vsocket_mgr->vev_mgr;
 }
 
 /* event2/event.h */

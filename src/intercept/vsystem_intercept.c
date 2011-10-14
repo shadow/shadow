@@ -25,8 +25,7 @@
 #include <stddef.h>
 #include <sys/socket.h>
 
-#include "vsystem_intercept.h"
-#include "vsystem.h"
+#include "shadow.h"
 
 time_t intercept_time(time_t* t) {
 	return vsystem_time(t);

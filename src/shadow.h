@@ -152,6 +152,12 @@ typedef struct evdns_server_port evdns_server_port_t, *evdns_server_port_tp;
 #include "virtual/vtransport.h"
 #include "virtual/vudp.h"
 
+#include "intercept/preload.h"
+#include "intercept/vcrypto_intercept.h"
+#include "intercept/vevent_intercept.h"
+#include "intercept/vsocket_intercept.h"
+#include "intercept/vsystem_intercept.h"
+
 extern Engine* shadow_engine;
 
 #endif /* SHADOW_H_ */
