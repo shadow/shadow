@@ -30,7 +30,7 @@
 
 /* Here we setup and save function pointers to the function symbols we will be
  * searching for in the library that we are preempting. We do not need to
- * register these variables in DVN since we expect the locations of the
+ * register these variables in Shadow since we expect the locations of the
  * functions to be the same for all nodes.
  */
 typedef time_t (*time_fp)(time_t*);
@@ -39,63 +39,59 @@ typedef int (*gethostname_fp)(char*, size_t);
 typedef int (*getaddrinfo_fp)(const char*, const char*, const struct addrinfo*, struct addrinfo**);
 typedef int (*freeaddrinfo_fp)(struct addrinfo*);
 
-/* save pointers to dvn vsystem functions */
+/* save pointers to shadow vsystem functions */
 static time_fp _vsystem_time = NULL;
 static clock_gettime_fp _vsystem_clock_gettime = NULL;
 static gethostname_fp _vsystem_gethostname = NULL;
 static getaddrinfo_fp _vsystem_getaddrinfo = NULL;
 static freeaddrinfo_fp _vsystem_freeaddrinfo = NULL;
 
+/* real system functions */
+static time_fp _time = NULL;
 static clock_gettime_fp _clock_gettime = NULL;
+static gethostname_fp _gethostname = NULL;
+static getaddrinfo_fp _getaddrinfo = NULL;
+static freeaddrinfo_fp _freeaddrinfo = NULL;
 
 time_t time(time_t *t)  {
-	/* this call is never forwarded to time() */
-	time_fp* fp_ptr = &_vsystem_time;
-	char* f_name = SYSTEM_LIB_PREFIX "time";
-
-	PRELOAD_LOOKUP(fp_ptr, f_name, -1);
-	return (*fp_ptr)(t);
+	time_fp func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "time", _time, SYSTEM_LIB_PREFIX, _vsystem_time, 1);
+	PRELOAD_LOOKUP(func, funcName, -1);
+	return func(t);
 }
 
 int clock_gettime(clockid_t clk_id, struct timespec *tp) {
-	clock_gettime_fp* fp_ptr = &_vsystem_clock_gettime;
-	char* f_name = SYSTEM_LIB_PREFIX "clock_gettime";
-
-	if(clk_id != CLOCK_REALTIME) {
-		fp_ptr = &_clock_gettime;
-		f_name = "clock_gettime";
-	}
-
-	PRELOAD_LOOKUP(fp_ptr, f_name, -1);
-	return (*fp_ptr)(clk_id, tp);
+	clock_gettime_fp func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "clock_gettime", _clock_gettime, SYSTEM_LIB_PREFIX, _vsystem_clock_gettime, 1);
+	PRELOAD_LOOKUP(func, funcName, -1);
+	return func(clk_id, tp);
 }
 
 int gethostname(char* name, size_t len) {
-	/* this call is never forwarded to gethostname() */
-	gethostname_fp* fp_ptr = &_vsystem_gethostname;
-	char* f_name = SYSTEM_LIB_PREFIX "gethostname";
-
-	PRELOAD_LOOKUP(fp_ptr, f_name, -1);
-	return (*fp_ptr)(name, len);
+	gethostname_fp func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "gethostname", _gethostname, SYSTEM_LIB_PREFIX, _vsystem_gethostname, 1);
+	PRELOAD_LOOKUP(func, funcName, -1);
+	return func(name, len);
 }
 
 int getaddrinfo(const char *node, const char *service,
                        const struct addrinfo *hints,
                        struct addrinfo **res) {
-	/* this call is never forwarded to getaddrinfo() */
-	getaddrinfo_fp* fp_ptr = &_vsystem_getaddrinfo;
-	char* f_name = SYSTEM_LIB_PREFIX "getaddrinfo";
-
-	PRELOAD_LOOKUP(fp_ptr, f_name, -1);
-	return (*fp_ptr)(node, service, hints, res);
+	getaddrinfo_fp func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "getaddrinfo", _getaddrinfo, SYSTEM_LIB_PREFIX, _vsystem_getaddrinfo, 1);
+	PRELOAD_LOOKUP(func, funcName, -1);
+	return func(node, service, hints, res);
 }
 
 void freeaddrinfo(struct addrinfo *res) {
-	/* this call is never forwarded to freeaddrinfo() */
-	freeaddrinfo_fp* fp_ptr = &_vsystem_freeaddrinfo;
-	char* f_name = SYSTEM_LIB_PREFIX "freeaddrinfo";
-
+	freeaddrinfo_fp func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "freeaddrinfo", _freeaddrinfo, SYSTEM_LIB_PREFIX, _vsystem_freeaddrinfo, 1);
 	/* third arg is nothing since we return void */
-	PRELOAD_LOOKUP(fp_ptr, f_name, );
-	(*fp_ptr)(res);
+	PRELOAD_LOOKUP(func, funcName,);
+	func(res);
 }

@@ -384,7 +384,7 @@ gboolean parser_parse(Parser* parser, GString* filename, GQueue* actions) {
 
 	/* check for success */
 	if (!success) {
-		error("parser_parse: g_file_get_contents: %s\n", error->message);
+		error("g_file_get_contents: %s\n", error->message);
 		g_error_free(error);
 		return FALSE;
 	}

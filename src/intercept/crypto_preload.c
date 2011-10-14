@@ -36,16 +36,19 @@ typedef int (*EVP_Cipher_fp)(EVP_CIPHER_CTX *ctx, unsigned char *out, const unsi
 static AES_encrypt_fp _intercept_AES_encrypt = NULL;
 static AES_decrypt_fp _intercept_AES_decrypt = NULL;
 static EVP_Cipher_fp _intercept_EVP_Cipher = NULL;
-///* pointer to openssl's version */
-//static AES_encrypt_fp _AES_encrypt = NULL;
+
+/* pointer to openssl's version */
+static AES_encrypt_fp _AES_encrypt = NULL;
+static AES_decrypt_fp _AES_decrypt = NULL;
+static EVP_Cipher_fp _EVP_Cipher = NULL;
 
 /* avoid multiple hash table lookups */
 //static int _did_check_config = 0;
 //static int _do_intercept = 0;
 
 void AES_encrypt(const unsigned char *in, unsigned char *out, const AES_KEY *key) {
-	AES_encrypt_fp* fp_ptr;
-	char* f_name;
+	AES_encrypt_fp func;
+	char* funcName;
 
 //	/* check config option to see if we should intercept the call */
 //	if(_did_check_config == 0) {
@@ -63,29 +66,26 @@ void AES_encrypt(const unsigned char *in, unsigned char *out, const AES_KEY *key
 //		f_name = "AES_encrypt";
 //	}
 
-	fp_ptr = &_intercept_AES_encrypt;
-	f_name = CRYPTO_LIB_PREFIX "AES_encrypt";
-
+	PRELOAD_DECIDE(func, funcName, "AES_encrypt", _AES_encrypt, CRYPTO_LIB_PREFIX, _intercept_AES_encrypt, 1);
 	/* this is a void func, so no return val in the third param */
-	PRELOAD_LOOKUP(fp_ptr, f_name,);
-	(*fp_ptr)(in, out, key);
+	PRELOAD_LOOKUP(func, funcName,);
+	func(in, out, key);
 }
 
 void AES_decrypt(const unsigned char *in, unsigned char *out, const AES_KEY *key) {
-	AES_decrypt_fp* fp_ptr = &_intercept_AES_decrypt;
-	char* f_name = CRYPTO_LIB_PREFIX "AES_decrypt";
-
+	AES_decrypt_fp func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "AES_decrypt", _AES_decrypt, CRYPTO_LIB_PREFIX, _intercept_AES_decrypt, 1);
 	/* this is a void func, so no return val in the third param */
-	PRELOAD_LOOKUP(fp_ptr, f_name,);
-	(*fp_ptr)(in, out, key);
+	PRELOAD_LOOKUP(func, funcName,);
+	func(in, out, key);
 }
 
 int EVP_Cipher(EVP_CIPHER_CTX *ctx, unsigned char *out, const unsigned char *in, unsigned int inl)
 {
-	EVP_Cipher_fp* fp_ptr = &_intercept_EVP_Cipher;
-	char* f_name = CRYPTO_LIB_PREFIX "EVP_Cipher";
-
-	/* this is a void func, so no return val in the third param */
-	PRELOAD_LOOKUP(fp_ptr, f_name, -1);
-	return (*fp_ptr)(ctx, out, in, inl);
+	EVP_Cipher_fp func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "EVP_Cipher", _EVP_Cipher, CRYPTO_LIB_PREFIX, _intercept_EVP_Cipher, 1);
+	PRELOAD_LOOKUP(func, funcName, -1);
+	return func(ctx, out, in, inl);
 }

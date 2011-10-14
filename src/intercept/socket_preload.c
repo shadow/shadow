@@ -29,7 +29,7 @@
 
 /* Here we setup and save function pointers to the function symbols we will be
  * searching for in the library that we are preempting. We do not need to
- * register these variables in DVN since we expect the locations of the
+ * register these variables in Shadow since we expect the locations of the
  * functions to be the same for all nodes.
  */
 typedef int (*accept_fp)(int, struct sockaddr*, socklen_t*);
@@ -54,7 +54,7 @@ typedef int (*socket_fp)(int, int, int);
 typedef int (*socketpair_fp)(int, int, int, int[]);
 typedef size_t (*write_fp)(int, const void*, int);
 
-/* save pointers to dvn libsocket functions */
+/* save pointers to shadow libsocket functions */
 static accept_fp _vsocket_accept = NULL;
 static accept4_fp _vsocket_accept4 = NULL;
 static bind_fp _vsocket_bind = NULL;
@@ -101,302 +101,172 @@ static socketpair_fp _socketpair = NULL;
 static write_fp _write = NULL;
 
 int socket(int domain, int type, int protocol) {
-	socket_fp* fp_ptr = &_vsocket_socket;
-	char* f_name = SOCKET_LIB_PREFIX "socket";
-
-	if(type & DVN_CORE_SOCKET){
-		/* clear dvn DVN_CORE_SOCKET bit */
-		type = type & ~DVN_CORE_SOCKET;
-		/* call made from DVN core, forward to sys socket */
-		fp_ptr = &_socket;
-		f_name = "socket";
-	}
-
-	PRELOAD_LOOKUP(fp_ptr, f_name, -1);
-	return (*fp_ptr)(domain, type, protocol);
+	socket_fp func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "socket", _socket, SOCKET_LIB_PREFIX, _vsocket_socket, 1);
+	PRELOAD_LOOKUP(func, funcName, -1);
+	return func(domain, type, protocol);
 }
 
 int socketpair(int domain, int type, int protocol, int fds[2]) {
-	socketpair_fp* fp_ptr = &_vsocket_socketpair;
-	char* f_name = SOCKET_LIB_PREFIX "socketpair";
-
-	if(type & DVN_CORE_SOCKET){
-		/* clear dvn DVN_CORE_SOCKET bit */
-		type = type & ~DVN_CORE_SOCKET;
-		/* call made from DVN core, forward to sys socket */
-		fp_ptr = &_socketpair;
-		f_name = "socketpair";
-	}
-
-	PRELOAD_LOOKUP(fp_ptr, f_name, -1);
-	return (*fp_ptr)(domain, type, protocol, fds);
+	socketpair_fp func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "socketpair", _socketpair, SOCKET_LIB_PREFIX, _vsocket_socketpair, 1);
+	PRELOAD_LOOKUP(func, funcName, -1);
+	return func(domain, type, protocol, fds);
 }
 
 int bind(int fd, __CONST_SOCKADDR_ARG addr, socklen_t len)  {
-	bind_fp* fp_ptr = &_vsocket_bind;
-	char* f_name = SOCKET_LIB_PREFIX "bind";
-
-	/* should we be forwarding to the system call? */
-	if(fd < VNETWORK_MIN_SD){
-		fp_ptr = &_bind;
-		f_name = "bind";
-	}
-
-	PRELOAD_LOOKUP(fp_ptr, f_name, -1);
-	return (*fp_ptr)(fd, addr, len);
+	bind_fp func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "bind", _bind, SOCKET_LIB_PREFIX, _vsocket_bind, fd >= VNETWORK_MIN_SD);
+	PRELOAD_LOOKUP(func, funcName, -1);
+	return func(fd, addr, len);
 }
 
 int getsockname(int fd, __SOCKADDR_ARG addr,socklen_t *__restrict len)  {
-	getsockname_fp* fp_ptr = &_vsocket_getsockname;
-	char* f_name = SOCKET_LIB_PREFIX "getsockname";
-
-	/* should we be forwarding to the system call? */
-	if(fd < VNETWORK_MIN_SD){
-		fp_ptr = &_getsockname;
-		f_name = "getsockname";
-	}
-
-	PRELOAD_LOOKUP(fp_ptr, f_name, -1);
-	return (*fp_ptr)(fd, addr, len);
+	getsockname_fp func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "getsockname", _getsockname, SOCKET_LIB_PREFIX, _vsocket_getsockname, fd >= VNETWORK_MIN_SD);
+	PRELOAD_LOOKUP(func, funcName, -1);
+	return func(fd, addr, len);
 }
 
 int connect(int fd, __CONST_SOCKADDR_ARG addr,socklen_t len)  {
-	connect_fp* fp_ptr = &_vsocket_connect;
-	char* f_name = SOCKET_LIB_PREFIX "connect";
-
-	/* should we be forwarding to the system call? */
-	if(fd < VNETWORK_MIN_SD){
-		fp_ptr = &_connect;
-		f_name = "connect";
-	}
-
-	PRELOAD_LOOKUP(fp_ptr, f_name, -1);
-	return (*fp_ptr)(fd, addr, len);
+	connect_fp func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "connect", _connect, SOCKET_LIB_PREFIX, _vsocket_connect, fd >= VNETWORK_MIN_SD);
+	PRELOAD_LOOKUP(func, funcName, -1);
+	return func(fd, addr, len);
 }
 
 int getpeername(int fd, __SOCKADDR_ARG addr,socklen_t *__restrict len)  {
-	getpeername_fp* fp_ptr = &_vsocket_getpeername;
-	char* f_name = SOCKET_LIB_PREFIX "getpeername";
-
-	/* should we be forwarding to the system call? */
-	if(fd < VNETWORK_MIN_SD){
-		fp_ptr = &_getpeername;
-		f_name = "getpeername";
-	}
-
-	PRELOAD_LOOKUP(fp_ptr, f_name, -1);
-	return (*fp_ptr)(fd, addr, len);
+	getpeername_fp func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "getpeername", _getpeername, SOCKET_LIB_PREFIX, _vsocket_getpeername, fd >= VNETWORK_MIN_SD);
+	PRELOAD_LOOKUP(func, funcName, -1);
+	return func(fd, addr, len);
 }
 
 ssize_t send(int fd, __const void *buf, size_t n, int flags) {
-	send_fp* fp_ptr = &_vsocket_send;
-	char* f_name = SOCKET_LIB_PREFIX "send";
-
-	/* should we be forwarding to the system call? */
-	if(fd < VNETWORK_MIN_SD){
-		fp_ptr = &_send;
-		f_name = "send";
-	}
-
-	PRELOAD_LOOKUP(fp_ptr, f_name, -1);
-	return (*fp_ptr)(fd, buf, n, flags);
+	send_fp func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "send", _send, SOCKET_LIB_PREFIX, _vsocket_send, fd >= VNETWORK_MIN_SD);
+	PRELOAD_LOOKUP(func, funcName, -1);
+	return func(fd, buf, n, flags);
 }
 
 ssize_t recv(int fd, void *buf, size_t n, int flags) {
-	recv_fp* fp_ptr = &_vsocket_recv;
-	char* f_name = SOCKET_LIB_PREFIX "recv";
-
-	/* should we be forwarding to the system call? */
-	if(fd < VNETWORK_MIN_SD){
-		fp_ptr = &_recv;
-		f_name = "recv";
-	}
-
-	PRELOAD_LOOKUP(fp_ptr, f_name, -1);
-	return (*fp_ptr)(fd, buf, n, flags);
+	recv_fp func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "recv", _recv, SOCKET_LIB_PREFIX, _vsocket_recv, fd >= VNETWORK_MIN_SD);
+	PRELOAD_LOOKUP(func, funcName, -1);
+	return func(fd, buf, n, flags);
 }
 
 ssize_t sendto(int fd, const void *buf, size_t n, int flags,
 		__CONST_SOCKADDR_ARG  addr,socklen_t addr_len)  {
-	sendto_fp* fp_ptr = &_vsocket_sendto;
-	char* f_name = SOCKET_LIB_PREFIX "sendto";
-
-	/* should we be forwarding to the system call? */
-	if(fd < VNETWORK_MIN_SD){
-		fp_ptr = &_sendto;
-		f_name = "sendto";
-	}
-
-	PRELOAD_LOOKUP(fp_ptr, f_name, -1);
-	return (*fp_ptr)(fd, buf, n, flags, addr, addr_len);
+	sendto_fp func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "sendto", _sendto, SOCKET_LIB_PREFIX, _vsocket_sendto, fd >= VNETWORK_MIN_SD);
+	PRELOAD_LOOKUP(func, funcName, -1);
+	return func(fd, buf, n, flags, addr, addr_len);
 }
 
 ssize_t recvfrom(int fd, void *buf, size_t n, int flags, __SOCKADDR_ARG  addr,socklen_t *restrict addr_len)  {
-	recvfrom_fp* fp_ptr = &_vsocket_recvfrom;
-	char* f_name = SOCKET_LIB_PREFIX "recvfrom";
-
-	/* should we be forwarding to the system call? */
-	if(fd < VNETWORK_MIN_SD){
-		fp_ptr = &_recvfrom;
-		f_name = "recvfrom";
-	}
-
-	PRELOAD_LOOKUP(fp_ptr, f_name, -1);
-	return (*fp_ptr)(fd, buf, n, flags, addr, addr_len);
+	recvfrom_fp func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "recvfrom", _recvfrom, SOCKET_LIB_PREFIX, _vsocket_recvfrom, fd >= VNETWORK_MIN_SD);
+	PRELOAD_LOOKUP(func, funcName, -1);
+	return func(fd, buf, n, flags, addr, addr_len);
 }
 
 ssize_t sendmsg(int fd, __const struct msghdr *message, int flags) {
-	sendmsg_fp* fp_ptr = &_vsocket_sendmsg;
-	char* f_name = SOCKET_LIB_PREFIX "sendmsg";
-
-	/* should we be forwarding to the system call? */
-	if(fd < VNETWORK_MIN_SD){
-		fp_ptr = &_sendmsg;
-		f_name = "sendmsg";
-	}
-
-	PRELOAD_LOOKUP(fp_ptr, f_name, -1);
-	return (*fp_ptr)(fd, message, flags);
+	sendmsg_fp func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "sendmsg", _sendmsg, SOCKET_LIB_PREFIX, _vsocket_sendmsg, fd >= VNETWORK_MIN_SD);
+	PRELOAD_LOOKUP(func, funcName, -1);
+	return func(fd, message, flags);
 }
 
 ssize_t recvmsg(int fd, struct msghdr *message, int flags) {
-	recvmsg_fp* fp_ptr = &_vsocket_recvmsg;
-	char* f_name = SOCKET_LIB_PREFIX "recvmsg";
-
-	/* should we be forwarding to the system call? */
-	if(fd < VNETWORK_MIN_SD){
-		fp_ptr = &_recvmsg;
-		f_name = "recvmsg";
-	}
-
-	PRELOAD_LOOKUP(fp_ptr, f_name, -1);
-	return (*fp_ptr)(fd, message, flags);
+	recvmsg_fp func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "recvmsg", _recvmsg, SOCKET_LIB_PREFIX, _vsocket_recvmsg, fd >= VNETWORK_MIN_SD);
+	PRELOAD_LOOKUP(func, funcName, -1);
+	return func(fd, message, flags);
 }
 
 int getsockopt(int fd, int level, int optname, void *__restrict optval,
 		socklen_t *__restrict optlen) {
-	getsockopt_fp* fp_ptr = &_vsocket_getsockopt;
-	char* f_name = SOCKET_LIB_PREFIX "getsockopt";
-
-	/* should we be forwarding to the system call? */
-	if(fd < VNETWORK_MIN_SD){
-		fp_ptr = &_getsockopt;
-		f_name = "getsockopt";
-	}
-
-	PRELOAD_LOOKUP(fp_ptr, f_name, -1);
-	return (*fp_ptr)(fd, level, optname, optval, optlen);
+	getsockopt_fp func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "getsockopt", _getsockopt, SOCKET_LIB_PREFIX, _vsocket_getsockopt, fd >= VNETWORK_MIN_SD);
+	PRELOAD_LOOKUP(func, funcName, -1);
+	return func(fd, level, optname, optval, optlen);
 }
 
 int setsockopt(int fd, int level, int optname, __const void *optval,
 		socklen_t optlen) {
-	setsockopt_fp* fp_ptr = &_vsocket_setsockopt;
-	char* f_name = SOCKET_LIB_PREFIX "setsockopt";
-
-	/* should we be forwarding to the system call? */
-	if(fd < VNETWORK_MIN_SD){
-		fp_ptr = &_setsockopt;
-		f_name = "setsockopt";
-	}
-
-	PRELOAD_LOOKUP(fp_ptr, f_name, -1);
-	return (*fp_ptr)(fd, level, optname, optval, optlen);
+	setsockopt_fp func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "setsockopt", _setsockopt, SOCKET_LIB_PREFIX, _vsocket_setsockopt, fd >= VNETWORK_MIN_SD);
+	PRELOAD_LOOKUP(func, funcName, -1);
+	return func(fd, level, optname, optval, optlen);
 }
 
 int listen(int fd, int n) {
-	listen_fp* fp_ptr = &_vsocket_listen;
-	char* f_name = SOCKET_LIB_PREFIX "listen";
-
-	/* should we be forwarding to the system call? */
-	if(fd < VNETWORK_MIN_SD){
-		fp_ptr = &_listen;
-		f_name = "listen";
-	}
-
-	PRELOAD_LOOKUP(fp_ptr, f_name, -1);
-	return (*fp_ptr)(fd, n);
+	listen_fp func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "listen", _listen, SOCKET_LIB_PREFIX, _vsocket_listen, fd >= VNETWORK_MIN_SD);
+	PRELOAD_LOOKUP(func, funcName, -1);
+	return func(fd, n);
 }
 
 int accept(int fd, __SOCKADDR_ARG  addr,socklen_t *__restrict addr_len)  {
-	accept_fp* fp_ptr = &_vsocket_accept;
-	char* f_name = SOCKET_LIB_PREFIX "accept";
-
-	/* should we be forwarding to the system call? */
-	if(fd < VNETWORK_MIN_SD){
-		fp_ptr = &_accept;
-		f_name = "accept";
-	}
-
-	PRELOAD_LOOKUP(fp_ptr, f_name, -1);
-	return (*fp_ptr)(fd, addr, addr_len);
+	accept_fp func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "accept", _accept, SOCKET_LIB_PREFIX, _vsocket_accept, fd >= VNETWORK_MIN_SD);
+	PRELOAD_LOOKUP(func, funcName, -1);
+	return func(fd, addr, addr_len);
 }
 
 int accept4(int fd, __SOCKADDR_ARG  addr,socklen_t *__restrict addr_len, int flags)  {
-	accept4_fp* fp_ptr = &_vsocket_accept4;
-	char* f_name = SOCKET_LIB_PREFIX "accept4";
-
-	/* should we be forwarding to the system call? */
-	if(fd < VNETWORK_MIN_SD){
-		fp_ptr = &_accept4;
-		f_name = "accept4";
-	}
-
-	PRELOAD_LOOKUP(fp_ptr, f_name, -1);
-	return (*fp_ptr)(fd, addr, addr_len, flags);
+	accept4_fp func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "accept4", _accept4, SOCKET_LIB_PREFIX, _vsocket_accept4, fd >= VNETWORK_MIN_SD);
+	PRELOAD_LOOKUP(func, funcName, -1);
+	return func(fd, addr, addr_len, flags);
 }
 
 int shutdown(int fd, int how) {
-	shutdown_fp* fp_ptr = &_vsocket_shutdown;
-	char* f_name = SOCKET_LIB_PREFIX "shutdown";
-
-	/* should we be forwarding to the system call? */
-	if(fd < VNETWORK_MIN_SD){
-		fp_ptr = &_shutdown;
-		f_name = "shutdown";
-	}
-
-	PRELOAD_LOOKUP(fp_ptr, f_name, -1);
-	return (*fp_ptr)(fd, how);
+	shutdown_fp func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "shutdown", _shutdown, SOCKET_LIB_PREFIX, _vsocket_shutdown, fd >= VNETWORK_MIN_SD);
+	PRELOAD_LOOKUP(func, funcName, -1);
+	return func(fd, how);
 }
 
 ssize_t read(int fd, void *buff, int numbytes) {
-	read_fp* fp_ptr = &_vsocket_read;
-	char* f_name = SOCKET_LIB_PREFIX "read";
-
-	/* should we be forwarding to the system call? */
-	if(fd < VNETWORK_MIN_SD){
-		fp_ptr = &_read;
-		f_name = "read";
-	}
-
-	PRELOAD_LOOKUP(fp_ptr, f_name, -1);
-	return (*fp_ptr)(fd, buff, numbytes);
+	read_fp func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "read", _read, SOCKET_LIB_PREFIX, _vsocket_read, fd >= VNETWORK_MIN_SD);
+	PRELOAD_LOOKUP(func, funcName, -1);
+	return func(fd, buff, numbytes);
 }
 
 ssize_t write(int fd, const void *buff, int n) {
-	write_fp* fp_ptr = &_vsocket_write;
-	char* f_name = SOCKET_LIB_PREFIX "write";
-
-	/* should we be forwarding to the system call? */
-	if(fd < VNETWORK_MIN_SD){
-		fp_ptr = &_write;
-		f_name = "write";
-	}
-
-	PRELOAD_LOOKUP(fp_ptr, f_name, -1);
-	return (*fp_ptr)(fd, buff, n);
+	write_fp func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "write", _write, SOCKET_LIB_PREFIX, _vsocket_write, fd >= VNETWORK_MIN_SD);
+	PRELOAD_LOOKUP(func, funcName, -1);
+	return func(fd, buff, n);
 }
 
 int close(int fd) {
-	close_fp* fp_ptr = &_vsocket_close;
-	char* f_name = SOCKET_LIB_PREFIX "close";
-
-	/* should we be forwarding to the system call? */
-	if(fd < VNETWORK_MIN_SD){
-		fp_ptr = &_close;
-		f_name = "close";
-	}
-
-	PRELOAD_LOOKUP(fp_ptr, f_name, -1);
-	return (*fp_ptr)(fd);
+	close_fp func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "close", _close, SOCKET_LIB_PREFIX, _vsocket_close, fd >= VNETWORK_MIN_SD);
+	PRELOAD_LOOKUP(func, funcName, -1);
+	return func(fd);
 }

@@ -33,12 +33,31 @@ struct _Plugin {
 	PluginState* residentState;
 	PluginState* defaultState;
 	gboolean isRegisterred;
+	/*
+	 * TRUE from when we've called into plug-in code until the call completes.
+	 * Note that the plug-in may get back into shadow code during execution, by
+	 * calling one of the shadowlin functions or calling a function that we
+	 * intercept. isShadowContext distinguishes this.
+	 */
 	gboolean isExecuting;
+	/*
+	 * Distinguishes which context we are in. Whenever the flow of execution
+	 * passes into the plug-in, this is FALSE, and whenever it comes back to
+	 * shadow, this is TRUE. This is used to determine if we should actually
+	 * be intercepting functions or not, since we dont want to intercept them
+	 * if they provide shadow with needed functionality.
+	 *
+	 * We must be careful to set this correctly at every boundry (shadowlib,
+	 * interceptions, etc)
+	 */
+	gboolean isShadowContext;
 	MAGIC_DECLARE;
 };
 
 Plugin* plugin_new(GString* filename);
 void plugin_free(gpointer data);
+
+void plugin_setShadowContext(Plugin* plugin, gboolean isShadowContext);
 
 void plugin_registerResidentState(Plugin* plugin, PluginVTable* callbackFunctions, guint nVariables, va_list variableArguments);
 void plugin_executeNew(Plugin* plugin, PluginState* state, gint argcParam, gchar* argvParam[]);

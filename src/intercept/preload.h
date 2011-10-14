@@ -31,11 +31,12 @@
 #define RTLD_DEFAULT ((void *) 0)
 
 /* convenience macro for doing the dlsym lookups
- * return x if function can't be found */
+ * return "ret" if function can't be found. if used in a void function, use a comma
+ * but omit the last param, like "PRELOAD_LOOKUP(a, b,)" */
 #define PRELOAD_LOOKUP(my_function, my_search, ret) \
 { \
 	/* only search if function pointer is null */ \
-	if(*my_function == NULL){ \
+	if(my_function == NULL){ \
 		/* if we dont have logging, then we are not running shadow yet, gtfo */ \
 		/* clear old error vals */ \
 		dlerror(); \
@@ -49,15 +50,34 @@
 		/* we have log function, clear old error vals */ \
 		dlerror(); \
 		/* search for function symbol */ \
-		*my_function = dlsym(RTLD_NEXT, my_search); \
+		my_function = dlsym(RTLD_NEXT, my_search); \
 		/* check for error, dlerror returns null or a char* error msg */ \
 		dlmsg = dlerror(); \
-		if (!*my_function || dlmsg != NULL) { \
-			critical("PRELOAD_LOOKUP: failed to chain-load function \"%s\": dlerror = \"%s\", fp = \"%p\"\n", my_search, dlmsg, *my_function); \
+		if (!my_function || dlmsg != NULL) { \
+			critical("PRELOAD_LOOKUP: failed to chain-load function \"%s\": dlerror = \"%s\", fp = \"%p\"\n", my_search, dlmsg, my_function); \
 			return ret; \
 		} \
 	} \
 	debug("PRELOAD_LOOKUP: calling \"%s\"\n", my_search); \
+}
+
+/* convenience macro for deciding if we should intercept the function or
+ * not, depending on if the call came from shadow or the plug-in.
+ * if the plugin exists, we came from the plugin, and the extra condition holds,
+ * we attempt to redirect the call to shadow.
+ * pass in "1" for extraCondition if you ALWAYS redirect when coming from a
+ * plug-in (i.e. you have no special condition). */
+#define PRELOAD_DECIDE(funcOut, nameOut, sysName, sysPointer, shadowPrefix, shadowPointer, extraCondition) \
+{ \
+	/* should we be forwarding to the system call? */ \
+	Worker* w = worker_getPrivate(); \
+	if(w->cached_plugin && !w->cached_plugin->isShadowContext && extraCondition) { \
+		funcOut = shadowPointer; \
+		nameOut = shadowPrefix sysName; \
+	} else { \
+		funcOut = sysPointer; \
+		nameOut = sysName; \
+	} \
 }
 
 #endif /* PRELOAD_H_ */

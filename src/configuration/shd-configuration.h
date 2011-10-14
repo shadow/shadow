@@ -50,22 +50,6 @@ typedef guint64 SimulationTime;
 #define MAGIC_CLEAR(object)
 #endif
 
-/* We intercept all socket calls made in DVN so we can call our virtual socket
- * functions instead of the system socket functions. However, there are cases
- * where DVN-core actually wants to create a real system socket - for
- * communicating with other DVN slaves if running a distributed simulation.
- * We use the following constant to inform the preload library that the call
- * was made from DVN and should be forwarded to the regular system socket call.
-
- * If DVN wants a real socket, do this:
- * fd = socket(AF_INET, SOCK_STREAM | DVN_CORE_SOCKET, 0);
- *
- * CAUTION: we are using a _currently_ unused bit from bits/socket.h types to
- * differentiate between DVN socket calls and module socket calls. If the socket
- * library starts using this bit, we need to change our constant.
- */
-#define DVN_CORE_SOCKET 0x20
-
 /* We intercept read, write, and close calls since they may be done on our
  * virtual sockets. However, applications may also want to read/write/close a
  * regular file. We differentiate these by handing out high descriptors for

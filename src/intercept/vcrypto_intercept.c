@@ -28,20 +28,20 @@
 #include "shadow.h"
 
 void intercept_AES_encrypt(const guchar *in, guchar *out, const AES_KEY *key) {
-	/* Processing delays already include crypto and are added during reads/writes */
-	/* TODO: do we need to advance the key here? */
+	/* Processing delays already include crypto and are added during reads/writes.
+	 * Note: if we ever intercept this, we should use INTERCEPT_CONTEXT_SWITCH */
 	return;
 }
 
 void intercept_AES_decrypt(const guchar *in, guchar *out, const AES_KEY *key) {
-	/* Processing delays already include crypto and are added during reads/writes */
-	/* TODO: do we need to advance the key here? */
+	/* Processing delays already include crypto and are added during reads/writes.
+	 * Note: if we ever intercept this, we should use INTERCEPT_CONTEXT_SWITCH */
 	return;
 }
 
 gint intercept_EVP_Cipher(EVP_CIPHER_CTX *ctx, guchar *out, const guchar *in, guint inl) {
-	/* Processing delays already include crypto and are added during reads/writes */
-	/* TODO: do we need to advance the key here? */
+	/* Processing delays already include crypto and are added during reads/writes.
+	 * Note: if we ever intercept this, we should use INTERCEPT_CONTEXT_SWITCH */
 	memmove(out, in, (size_t)inl);
 	return 1;
 }

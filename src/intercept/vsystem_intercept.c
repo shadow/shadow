@@ -28,22 +28,32 @@
 #include "shadow.h"
 
 time_t intercept_time(time_t* t) {
-	return vsystem_time(t);
+	INTERCEPT_CONTEXT_SWITCH(,
+			time_t r = vsystem_time(t),
+			return r);
 }
 
 gint intercept_clock_gettime(clockid_t clk_id, struct timespec *tp) {
-	return vsystem_clock_gettime(clk_id, tp);
+	INTERCEPT_CONTEXT_SWITCH(,
+			gint r = vsystem_clock_gettime(clk_id, tp),
+			return r);
 }
 
 gint intercept_gethostname(gchar *name, size_t len) {
-	return vsystem_gethostname(name, len);
+	INTERCEPT_CONTEXT_SWITCH(,
+			gint r = vsystem_gethostname(name, len),
+			return r);
 }
 
 gint intercept_getaddrinfo(gchar *node, const gchar *service,
 		const struct addrinfo *hgints, struct addrinfo **res) {
-	return vsystem_getaddrinfo(node, service, hgints, res);
+	INTERCEPT_CONTEXT_SWITCH(,
+			gint r = vsystem_getaddrinfo(node, service, hgints, res),
+			return r);
 }
 
 void intercept_freeaddrinfo(struct addrinfo *res) {
 	vsystem_freeaddrinfo(res);
+	INTERCEPT_CONTEXT_SWITCH(,
+			vsystem_freeaddrinfo(res),);
 }

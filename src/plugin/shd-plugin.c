@@ -48,7 +48,9 @@ Plugin* plugin_new(GString* filename) {
 	Worker* worker = worker_getPrivate();
 	plugin->isExecuting = TRUE;
 	worker->cached_plugin = plugin;
+	plugin_setShadowContext(plugin, FALSE);
 	plugin->init(&shadowlibVTable);
+	plugin_setShadowContext(plugin, TRUE);
 	plugin->isExecuting = FALSE;
 	worker->cached_plugin = NULL;
 
@@ -69,6 +71,11 @@ void plugin_free(gpointer data) {
 
 	MAGIC_CLEAR(plugin);
 	g_free(plugin);
+}
+
+void plugin_setShadowContext(Plugin* plugin, gboolean isShadowContext) {
+	MAGIC_ASSERT(plugin);
+	plugin->isShadowContext = isShadowContext;
 }
 
 void plugin_registerResidentState(Plugin* plugin, PluginVTable* callbackFunctions, guint nVariables, va_list variableArguments) {
@@ -103,6 +110,7 @@ static void _plugin_startExecuting(Plugin* plugin, PluginState* state) {
 	pluginstate_copy(state, plugin->residentState);
 	plugin->isExecuting = TRUE;
 	worker->cached_plugin = plugin;
+	plugin_setShadowContext(plugin, FALSE);
 }
 
 static void _plugin_stopExecuting(Plugin* plugin, PluginState* state) {
@@ -114,6 +122,7 @@ static void _plugin_stopExecuting(Plugin* plugin, PluginState* state) {
 	pluginstate_copy(plugin->residentState, state);
 	plugin->isExecuting = FALSE;
 	worker->cached_plugin = NULL;
+	plugin_setShadowContext(plugin, TRUE);
 }
 
 void plugin_executeNew(Plugin* plugin, PluginState* state, gint argcParam, gchar* argvParam[]) {
