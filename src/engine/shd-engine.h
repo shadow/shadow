@@ -96,6 +96,9 @@ struct _Engine {
 
 Engine* engine_new(Configuration* config);
 void engine_free(Engine* engine);
+void engine_setupWorkerThreads(Engine* engine, gint nWorkerThreads);
+void engine_teardownWorkerThreads(Engine* engine);
+
 gint engine_run(Engine* engine);
 void engine_pushEvent(Engine* engine, Event* event);
 

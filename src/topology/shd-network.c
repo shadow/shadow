@@ -21,12 +21,11 @@
 
 #include "shadow.h"
 
-Network* network_new(GQuark id, CumulativeDistribution* intranetLatency) {
+Network* network_new(GQuark id) {
 	Network* network = g_new0(Network, 1);
 	MAGIC_INIT(network);
 
 	network->id = id;
-	network->intranetLatency = intranetLatency;
 
 	/* lists are created by setting to NULL */
 	network->incomingLinks = NULL;

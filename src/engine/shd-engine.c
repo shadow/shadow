@@ -66,24 +66,42 @@ Engine* engine_new(Configuration* config) {
 void engine_free(Engine* engine) {
 	MAGIC_ASSERT(engine);
 
-	/* only free thread pool if we actually needed one */
-	if(engine->workerPool) {
-		g_thread_pool_free(engine->workerPool, FALSE, TRUE);
-	}
-
 	if(engine->masterEventQueue) {
 		g_async_queue_unref(engine->masterEventQueue);
 	}
 
+	/* its ok if this was already called, its NULL-safe */
+	engine_teardownWorkerThreads(engine);
+
+	registry_free(engine->registry);
+	internetwork_free(engine->internet);
 	g_cond_free(engine->workersIdle);
 	g_mutex_free(engine->engineIdle);
 
-	registry_free(engine->registry);
-
-	internetwork_free(engine->internet);
+	info("clean engine shutdown");
 
 	MAGIC_CLEAR(engine);
 	g_free(engine);
+}
+
+
+void engine_setupWorkerThreads(Engine* engine, gint nWorkerThreads) {
+	MAGIC_ASSERT(engine);
+	/* we need some workers, create a thread pool */
+	GError *error = NULL;
+	engine->workerPool = g_thread_pool_new(worker_executeEvent, engine,
+			nWorkerThreads, TRUE, &error);
+	if (!engine->workerPool) {
+		error("thread pool failed: %s\n", error->message);
+		g_error_free(error);
+	}
+}
+
+void engine_teardownWorkerThreads(Engine* engine) {
+	MAGIC_ASSERT(engine);
+	if(engine->workerPool) {
+		g_thread_pool_free(engine->workerPool, FALSE, TRUE);
+	}
 }
 
 static gint _engine_processEvents(Engine* engine) {

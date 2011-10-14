@@ -31,7 +31,6 @@ typedef struct _Network Network;
 
 struct _Network {
 	GQuark id;
-	CumulativeDistribution* intranetLatency;
 	/* links to other networks this network can access */
 	GList* outgoingLinks;
 	/* links from other networks that can access this network */
@@ -41,7 +40,7 @@ struct _Network {
 	MAGIC_DECLARE;
 };
 
-Network* network_new(GQuark id, CumulativeDistribution* intranetLatency);
+Network* network_new(GQuark id);
 void network_free(gpointer data);
 
 gint network_compare(gconstpointer a, gconstpointer b, gpointer user_data);

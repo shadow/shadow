@@ -53,12 +53,15 @@ static void _internetwork_trackLatency(Internetwork* internet, CumulativeDistrib
 	}
 }
 
-void internetwork_createNetwork(Internetwork* internet, GQuark networkID, CumulativeDistribution* intranetLatency) {
+void internetwork_createNetwork(Internetwork* internet, GQuark networkID, CumulativeDistribution* intranetLatency, gdouble intranetReliability) {
 	MAGIC_ASSERT(internet);
 	g_assert(!internet->isReadOnly);
 
-	Network* network = network_new(networkID, intranetLatency);
+	Network* network = network_new(networkID);
 	g_hash_table_replace(internet->networks, &(network->id), network);
+
+	Link* selfLink = link_new(network, network, intranetLatency, intranetReliability);
+	network_addOutgoingLink(network, selfLink);
 
 	_internetwork_trackLatency(internet, intranetLatency);
 }

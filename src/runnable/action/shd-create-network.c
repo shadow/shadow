@@ -54,7 +54,7 @@ void createnetwork_run(CreateNetworkAction* action) {
 		return;
 	}
 
-	internetwork_createNetwork(worker->cached_engine->internet, action->id, cdf);
+	internetwork_createNetwork(worker->cached_engine->internet, action->id, cdf, action->reliability);
 }
 
 void createnetwork_free(CreateNetworkAction* action) {

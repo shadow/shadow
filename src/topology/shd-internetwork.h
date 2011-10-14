@@ -41,7 +41,7 @@ struct _Internetwork {
 Internetwork* internetwork_new();
 void internetwork_free(Internetwork* internet);
 
-void internetwork_createNetwork(Internetwork* internet, GQuark networkID, CumulativeDistribution* intranetLatency);
+void internetwork_createNetwork(Internetwork* internet, GQuark networkID, CumulativeDistribution* intranetLatency, gdouble intranetReliability);
 void internetwork_connectNetworks(Internetwork* internet, GQuark networkAID, GQuark networkBID,
 		CumulativeDistribution* latencyA2B, CumulativeDistribution* latencyB2A,
 		gdouble reliabilityA2B, gdouble reliabilityB2A);
