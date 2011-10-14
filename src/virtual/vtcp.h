@@ -27,20 +27,14 @@
 #include <stddef.h>
 #include <netinet/in.h>
 
-#include "vsocket_mgr.h"
-#include "vsocket.h"
-#include "vtransport_processing.h"
-#include "vpeer.h"
-#include "vbuffer.h"
-#include "orderedlist.h"
-#include "vci_event.h"
+#include "shadow.h"
 
 /* -maximum size data we can send network:
  *	-tcp truncates and only sends 65536
  */
 #define VTRANSPORT_TCP_MAX_STREAM_SIZE 65535
 /* the delayed ack timer in milliseconds */
-#define VTRANSPORT_TCP_DACK_TIMER 10
+#define VTRANSPORT_TCP_DACK_TIMER 10*SIMTIME_ONE_MILLISECOND
 /* initial sequence number */
 #define VTRANSPORT_TCP_ISS 0
 
@@ -48,7 +42,7 @@ enum vtcp_delayed_ack {
 	dack_scheduled = 1, dack_requested = 2
 };
 
-typedef struct vtcp_s {
+struct vtcp_s {
 	vsocket_mgr_tp vsocket_mgr;
 	vsocket_tp sock;
 	vbuffer_tp vb;
@@ -82,7 +76,7 @@ typedef struct vtcp_s {
 	guint32 cng_wnd;
 	guint32 cng_threshold;
 	guint32 last_adv_wnd;
-}vtcp_t, *vtcp_tp;
+};
 
 void vtcp_connect(vtcp_tp vtcp, in_addr_t remote_addr, in_port_t remote_port);
 vtcp_tp vtcp_create(vsocket_mgr_tp vsocket_mgr, vsocket_tp sock, vbuffer_tp vb);
@@ -91,7 +85,7 @@ void vtcp_destroy(vtcp_tp vtcp);
 void vtcp_disconnect(vtcp_tp vtcp);
 guint32 vtcp_generate_iss();
 vsocket_tp vtcp_get_target_socket(vtransport_item_tp titem);
-void vtcp_ondack(vci_event_tp vci_event, vsocket_mgr_tp vs_mgr);
+void vtcp_checkdack(vtcp_tp vtcp);
 enum vt_prc_result vtcp_process_item(vtransport_item_tp titem);
 ssize_t vtcp_recv(vsocket_mgr_tp net, vsocket_tp tcpsock, gpointer dest_buf, size_t n);
 void vtcp_retransmit(vtcp_tp vtcp, guint32 retransmit_key);

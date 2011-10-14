@@ -28,11 +28,18 @@ typedef struct _TCPRetransmitTimerExpiredEvent TCPRetransmitTimerExpiredEvent;
 
 struct _TCPRetransmitTimerExpiredEvent {
 	Event super;
-
+	GQuark callerID;
+	GQuark sourceID;
+	in_port_t sourcePort;
+	GQuark destinationID;
+	in_port_t destinationPort;
+	guint32 retransmitKey;
 	MAGIC_DECLARE;
 };
 
-TCPRetransmitTimerExpiredEvent* tcpretransmittimerexpired_new();
+TCPRetransmitTimerExpiredEvent* tcpretransmittimerexpired_new(GQuark callerID,
+		GQuark sourceID, in_port_t sourcePort, GQuark destinationID,
+		in_port_t destinationPort, guint32 retransmitKey);
 void tcpretransmittimerexpired_run(TCPRetransmitTimerExpiredEvent* event, Node* node);
 void tcpretransmittimerexpired_free(TCPRetransmitTimerExpiredEvent* event);
 

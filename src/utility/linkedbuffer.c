@@ -40,7 +40,6 @@
 #include <stdio.h>
 
 #include "linkedbuffer.h"
-#include "utility.h"
 
 /* forward declarations */
 static void linkedbuffer_create_new_head(linkedbuffer_tp lbuffer);

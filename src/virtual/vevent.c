@@ -34,10 +34,6 @@
 #include <event2/dns_struct.h>
 
 #include "shadow.h"
-#include "vevent.h"
-#include "vevent_mgr.h"
-#include "vepoll.h"
-#include "vsocket.h"
 
 /* FIXME TODO:
  * -make vevent_mgr accesses local to vevent_mgr.c
@@ -221,7 +217,7 @@ static void vevent_timerTimerCallback(gpointer data, gpointer argument) {
 	/* need to be in node context */
 	Worker* worker = worker_getPrivate();
 	Application* a = worker->cached_node->application;
-	Plugin* plugin = worker_getPlugin(a->software->id, a->software->pluginPath);
+	Plugin* plugin = worker_getPlugin(&(a->software->id), a->software->pluginPath);
 	plugin_executeGeneric(plugin, a->state, vevent_executeTimerCallback, data, argument);
 }
 
@@ -408,7 +404,7 @@ static void vevent_execute_callbacks(vevent_mgr_tp mgr, event_base_tp eb, gint s
 				/* need to be in node context */
 				Worker* worker = worker_getPrivate();
 				Application* a = worker->cached_node->application;
-				Plugin* plugin = worker_getPlugin(a->software->id, a->software->pluginPath);
+				Plugin* plugin = worker_getPlugin(&(a->software->id), a->software->pluginPath);
 				plugin_executeGeneric(plugin, a->state, vevent_executeAllCallback, mgr, to_execute);
 
 				g_queue_free(to_execute);
@@ -493,7 +489,7 @@ void vevent_event_base_free(vevent_mgr_tp mgr, event_base_tp eb) {
 	}
 }
 
-const gchar *vevent_event_base_get_method(vevent_mgr_tp mgr, const event_base_tp eb) {
+const gchar* vevent_event_base_get_method(vevent_mgr_tp mgr, const event_base_tp eb) {
 	return VEVENT_METHOD;
 }
 
@@ -515,13 +511,13 @@ static void vevent_executeLoopexitCallback(gpointer data, gpointer argument) {
 	}
 
 	/* we are already in node context, so no need to swap */
-	(mgr->loopexit_fp)(0, NULL);
+	(mgr->loopexit_fp)(NULL);
 }
 
 static void vevent_looexitTimerCallback(gpointer data, gpointer argument) {
 	Worker* worker = worker_getPrivate();
 	Application* a = worker->cached_node->application;
-	Plugin* plugin = worker_getPlugin(a->software->id, a->software->pluginPath);
+	Plugin* plugin = worker_getPlugin(&(a->software->id), a->software->pluginPath);
 	plugin_executeGeneric(plugin, a->state, vevent_executeLoopexitCallback, data, argument);
 }
 

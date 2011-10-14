@@ -29,9 +29,7 @@
 #include <arpa/inet.h>
 #include <errno.h>
 
-#include "vpacket.h"
-#include "reference_counter.h"
-#include "log.h"
+#include "shadow.h"
 
 extern vpacket_tp vpacket_mgr_lockcontrol(rc_vpacket_pod_tp rc_vp_pod, enum vpacket_lockcontrol command);
 static void vpacket_tcp_flags_to_string(gpointer buffer, size_t size, enum vpacket_tcp_flags flags);

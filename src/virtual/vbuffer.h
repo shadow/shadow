@@ -26,12 +26,9 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#include "vpacket_mgr.h"
-#include "vpacket.h"
-#include "orderedlist.h"
-#include "vepoll.h"
+#include "shadow.h"
 
-typedef struct vbuffer_sbuf_s {
+struct vbuffer_sbuf_s {
 	/* rc_packets to send, keyed by position in sliding window (flow/congestion control) */
 	orderedlist_tp vwrite;
 	/* packets that can be sent immediately, have no data */
@@ -41,9 +38,9 @@ typedef struct vbuffer_sbuf_s {
 	guint64 max_size;
 	guint64 current_size;
 	guint16 num_packets;
-} vbuffer_sbuf_t, *vbuffer_sbuf_tp;
+};
 
-typedef struct vbuffer_rbuf_s {
+struct vbuffer_rbuf_s {
 	/* rc_packets with user data */
 	GQueue *vread;
 	/* rc_packets waiting for a gap to be filled for in-order processing */
@@ -53,13 +50,13 @@ typedef struct vbuffer_rbuf_s {
 	guint64 max_size;
 	guint64 current_size;
 	guint16 num_packets;
-} vbuffer_rbuf_t, *vbuffer_rbuf_tp;
+};
 
-typedef struct vbuffer_s {
+struct vbuffer_s {
 	vepoll_tp vep;
 	vbuffer_rbuf_tp rbuf;
 	vbuffer_sbuf_tp sbuf;
-} vbuffer_t, *vbuffer_tp;
+};
 
 gint vbuffer_get_send_length(vbuffer_tp vb);
 void vbuffer_set_size(vbuffer_tp vb, guint64 rbuf_max, guint64 sbuf_max);

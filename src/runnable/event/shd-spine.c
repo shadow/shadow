@@ -31,7 +31,7 @@ SpinEvent* spine_new(guint seconds) {
 	SpinEvent* event = g_new0(SpinEvent, 1);
 	MAGIC_INIT(event);
 
-	event_init(&(event->super), &spine_vtable);
+	shadowevent_init(&(event->super), &spine_vtable);
 	event->spin_seconds = seconds;
 
 	return event;

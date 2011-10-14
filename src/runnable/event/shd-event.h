@@ -53,12 +53,15 @@ struct _Event {
 	EventVTable* vtable;
 	SimulationTime time;
 	Node* node;
+
+	SimulationTime cpuDelayPosition;
+	GQuark ownerID;
 	MAGIC_DECLARE;
 };
 
-void event_init(Event* event, EventVTable* vtable);
-void event_run(gpointer data);
-gint event_compare(gconstpointer eventa, gconstpointer eventb, gpointer user_data);
-void event_free(gpointer data);
+void shadowevent_init(Event* event, EventVTable* vtable);
+gboolean shadowevent_run(gpointer data);
+gint shadowevent_compare(gconstpointer eventa, gconstpointer eventb, gpointer user_data);
+void shadowevent_free(gpointer data);
 
 #endif /* SHD_EVENT_H_ */

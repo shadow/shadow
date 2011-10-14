@@ -24,14 +24,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 
-#include "vsocket_mgr.h"
-#include "vtransport.h"
-#include "vtransport_processing.h"
-#include "vtransport_mgr.h"
-#include "vsocket.h"
-#include "vci.h"
-#include "vci_event.h"
-#include "vepoll.h"
+#include "shadow.h"
 
 vtransport_tp vtransport_create(vsocket_mgr_tp vsocket_mgr, vsocket_tp sock) {
 	vtransport_tp vt = malloc(sizeof(vtransport_t));
@@ -158,76 +151,6 @@ void vtransport_process_incoming_items(vsocket_mgr_tp net, GQueue *titems) {
 	}
 }
 
-//void vtransport_onretransmit(vsocket_mgr_tp net, in_addr_t dst_addr, in_port_t dst_port,
-//		in_port_t src_port, guint32 retransmit_key) {
-void vtransport_onretransmit(vci_event_tp vci_event, vsocket_mgr_tp vs_mgr) {
-	debug("vtransport_onretransmit: event fired\n");
-
-        vci_onretransmit_tp payload = vci_event->payload;
-
-	if(vs_mgr == NULL) {
-		return;
-	}
-
-	debug("vtransport_onpayload->retransmit: %s:%u requesting payload->retransmission of %u from %s:%u\n",
-			inet_ntoa_t(payload->dst_addr), ntohs(payload->dst_port), payload->retransmit_key, vs_mgr->addr_string, ntohs(payload->src_port));
-
-	vsocket_tp sock = vsocket_mgr_find_socket(vs_mgr, SOCK_STREAM, payload->dst_addr, payload->dst_port, payload->src_port);
-	if(sock == NULL || sock->vt == NULL) {
-		return;
-	}
-
-	if(sock->vt->vtcp != NULL && sock->vt->vtcp->remote_peer == NULL) {
-		info("vtransport_onpayload->retransmit: %s:%u has no connected child socket. was it closed?\n",
-				inet_ntoa_t(vs_mgr->addr), ntohs(payload->src_port));
-		return;
-	}
-
-	vtcp_retransmit(sock->vt->vtcp, payload->retransmit_key);
-}
-
-void vtransport_onclose(vci_event_tp vci_event, vsocket_mgr_tp vs_mgr) {
-	debug("vsocket_mgr_onclose: event fired\n");
-        
-        vci_onclose_tp payload = vci_event->payload;
-
-	vsocket_tp sock = vsocket_mgr_find_socket(vs_mgr, SOCK_STREAM, payload->src_addr, payload->src_port, payload->dst_port);
-	if(sock != NULL && sock->vt != NULL && sock->vt->vtcp != NULL) {
-		if(sock->curr_state == VTCP_CLOSING) {
-			/* we initiated a close, other end got all data and scheduled this event */
-			vsocket_transition(sock, VTCP_CLOSED);
-			vsocket_mgr_destroy_and_remove_socket(vs_mgr, sock);
-		} else if(sock->curr_state == VTCP_LISTEN) {
-			/* some other end is closing, we are listening so we do not care.
-			 * probably this means that the child that this was actually meant for
-			 * was already deleted, so vsocket_mgr_find_socket returned the
-			 * parent listener instead. just ignore. */
-			return;
-		} else {
-			/* other end is initiating a close */
-			vsocket_transition(sock, VTCP_CLOSE_WAIT);
-			sock->vt->vtcp->rcv_end = payload->rcv_end;
-
-			/* we should close after client reads all remaining data */
-			sock->do_delete = 1;
-
-			/* other end will not accept any more data */
-			vbuffer_clear_send(sock->vt->vb);
-			vbuffer_clear_tcp_retransmit(sock->vt->vb, 0, 0);
-
-			/* and we are done, but have to wait to get everything from vs_mgrwork
-			 * and then for client to read EOF */
-			if(payload->rcv_end <= sock->vt->vtcp->rcv_nxt) {
-				/* we already got everything they will send, tell them they should close */
-				vci_schedule_close(vs_mgr->addr, vci_event->node_addr, payload->dst_port, payload->src_addr, payload->src_port, 0);
-
-				/* tell vepoll that we are ready to read EOF */
-				vepoll_mark_available(sock->vep, VEPOLL_READ);
-			}
-		}
-	}
-}
-
 guint8 vtransport_is_empty(vtransport_tp vt) {
 	return vbuffer_is_empty(vt->vb);
 }
@@ -253,9 +176,10 @@ guint8 vtransport_transmit(vtransport_tp vt, guint32* bytes_transmitted, guint16
 		 */
 		if(rc_packet->pod != NULL && rc_packet->pod->vpacket != NULL &&
 				rc_packet->pod->vpacket->header.destination_addr == htonl(INADDR_LOOPBACK)) {
-			vci_schedule_packet_loopback(rc_packet, vt->vsocket_mgr->addr);
+			PacketArrivedEvent* event = packetarrived_new(rc_packet);
+			worker_scheduleEvent((Event*)event, 1, vt->vsocket_mgr->addr);
 		} else {
-			vci_schedule_packet(rc_packet);
+			network_schedulePacket(rc_packet);
 			bytes_consumed = vpacket_get_size(rc_packet);
 		}
 

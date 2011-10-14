@@ -31,8 +31,7 @@ PacketSentEvent* packetsent_new() {
 	PacketSentEvent* event = g_new0(PacketSentEvent, 1);
 	MAGIC_INIT(event);
 
-	event_init(&(event->super), &packetsent_vtable);
-
+	shadowevent_init(&(event->super), &packetsent_vtable);
 
 	return event;
 }
@@ -41,6 +40,7 @@ void packetsent_run(PacketSentEvent* event, Node* node) {
 	MAGIC_ASSERT(event);
 	MAGIC_ASSERT(node);
 
+	vtransport_mgr_upload_next(node->vsocket_mgr->vt_mgr);
 }
 
 void packetsent_free(PacketSentEvent* event) {

@@ -24,13 +24,12 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "global.h"
-#include "reference_counter.h"
+#include "shadow.h"
 
 static void rc_assert_bounds(gint count) {
 	/* if the count is out of bounds, its definitely an error. complain and die. */
 	if(count < 0 || count > 100) {
-		printfault(EXIT_UNKNOWN, "FATAL: rc_assert_bounds: reference count out of bounds\n");
+		error("%s: reference count out of bounds\n", __FUNCTION__);
 	}
 }
 

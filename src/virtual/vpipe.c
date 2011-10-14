@@ -26,8 +26,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 
-#include "vsocket_mgr.h"
-#include "vpipe.h"
+#include "shadow.h"
 
 static enum vpipe_status vpipe_unid_destroy(vpipe_unid_tp unipipe) {
 	if(unipipe != NULL) {

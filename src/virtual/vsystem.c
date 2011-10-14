@@ -28,10 +28,6 @@
 #include <errno.h>
 
 #include "shadow.h"
-#include "vsocket_mgr.h"
-#include "vtransport_mgr.h"
-#include "vsystem.h"
-#include "vcpu.h"
 
 time_t vsystem_time(time_t* t) {
 	/* get time from shadow */
@@ -98,7 +94,7 @@ gint vsystem_getaddrinfo(gchar *name, const gchar *service,
 			if(result == 1) {
 				/* successful conversion to IP format, now find the real hostname */
 				GQuark convertedIP = (GQuark) inaddr.s_addr;
-				gchar* hostname = internetwork_resolveID(worker->cached_engine->internet, convertedIP);
+				const gchar* hostname = internetwork_resolveID(worker->cached_engine->internet, convertedIP);
 
 				if(hostname != NULL) {
 					/* got it, so convertedIP is a valid IP */
@@ -117,12 +113,12 @@ gint vsystem_getaddrinfo(gchar *name, const gchar *service,
 		}
 
 		/* should have address now */
-		struct sockaddr_in* sa = malloc(sizeof(struct sockaddr_in));
+		struct sockaddr_in* sa = g_malloc(sizeof(struct sockaddr_in));
 		/* application will expect it in network order */
 		// sa->sin_addr.s_addr = (in_addr_t) htonl((guint32)(*addr));
 		sa->sin_addr.s_addr = address;
 
-		struct addrinfo* ai_out = malloc(sizeof(struct addrinfo));
+		struct addrinfo* ai_out = g_malloc(sizeof(struct addrinfo));
 		ai_out->ai_addr = (struct sockaddr*) sa;
 		ai_out->ai_addrlen = sizeof(in_addr_t);
 		ai_out->ai_canonname = NULL;
@@ -140,8 +136,8 @@ gint vsystem_getaddrinfo(gchar *name, const gchar *service,
 }
 
 void vsystem_freeaddrinfo(struct addrinfo *res) {
-	free(res->ai_addr);
-	free(res);
+	g_free(res->ai_addr);
+	g_free(res);
 	return;
 }
 

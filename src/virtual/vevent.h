@@ -34,30 +34,30 @@
 #include <event2/dns_compat.h>
 #include <event2/dns_struct.h>
 
-#include "vevent_mgr.h"
+#include "shadow.h"
 
 /* vevent types and functions */
 #define VEVENT_METHOD "shadow-vevent";
 
 /* represents a descriptor we are monitoring */
-typedef struct vevent_socket_s {
+struct vevent_socket_s {
 	gint sd;
 	GQueue *vevents;
-} vevent_socket_t, *vevent_socket_tp;
+};
 
 /* wrapper around an event */
-typedef struct vevent_s {
+struct vevent_s {
 	gint id;
 	event_tp event;
 	vevent_socket_tp vsd;
 	gint timerid;
 	gint ntimers;
-} vevent_t, *vevent_tp;
+};
 
-typedef struct vevent_timer_s {
+struct vevent_timer_s {
 	vevent_mgr_tp mgr;
 	vevent_tp vev;
-} vevent_timer_t, *vevent_timer_tp;
+};
 
 void vevent_notify(vevent_mgr_tp mgr, gint sockd, short event_type);
 void vevent_destroy_base(vevent_mgr_tp mgr, event_base_tp eb);
@@ -69,7 +69,7 @@ gchar* vevent_get_event_type_string(vevent_mgr_tp mgr, short event_type);
 event_base_tp vevent_event_base_new(vevent_mgr_tp mgr);
 event_base_tp vevent_event_base_new_with_config(vevent_mgr_tp mgr, const struct event_config *cfg);
 void vevent_event_base_free(vevent_mgr_tp mgr, event_base_tp eb);
-const gchar *vevent_event_base_get_method(vevent_mgr_tp mgr, const event_base_tp);
+const gchar* vevent_event_base_get_method(vevent_mgr_tp mgr, const event_base_tp);
 void vevent_event_set_log_callback(vevent_mgr_tp mgr, event_log_cb cb);
 gint vevent_event_base_loop(vevent_mgr_tp mgr, event_base_tp, gint);
 gint vevent_event_base_loopexit(vevent_mgr_tp mgr, event_base_tp, const struct timeval *);

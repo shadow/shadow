@@ -32,33 +32,24 @@
 #include <event2/dns_compat.h>
 #include <event2/dns_struct.h>
 
-/* make libevent types slightly prettier */
-typedef struct event event_t, *event_tp;
-typedef struct event_base event_base_t, *event_base_tp;
-
-typedef struct evdns_base evdns_base_t, *evdns_base_tp;
-typedef struct evdns_request evdns_request_t, *evdns_request_tp;
-typedef struct evdns_server_request evdns_server_request_t, *evdns_server_request_tp;
-typedef struct evdns_server_port evdns_server_port_t, *evdns_server_port_tp;
-
 typedef void (*vevent_mgr_timer_callback_fp)(gpointer arg);
 
 /* holds all registered vevents and sockets */
-typedef struct vevent_base_s {
+struct vevent_base_s {
 	gint nextid;
 	GHashTable *vevents_by_id;
 	GHashTable *sockets_by_sd;
-} vevent_base_t, *vevent_base_tp;
+};
 
 /* holds all event bases that the user creates (each holds pointer to a vevent base) */
-typedef struct vevent_mgr_s {
+struct vevent_mgr_s {
 	/* holds event_base_tp */
 	GQueue *event_bases;
 	GHashTable * base_conversion;
 	vevent_mgr_timer_callback_fp loopexit_fp;
 	gchar typebuf[80];
 	gint id_counter;
-} vevent_mgr_t, *vevent_mgr_tp;
+};
 
 /* public vevent api */
 //void vevent_mgr_init(vevent_mgr_tp mgr);

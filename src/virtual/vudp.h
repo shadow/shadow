@@ -26,22 +26,19 @@
 #include <netinet/in.h>
 #include <stddef.h>
 
-#include "vsocket_mgr.h"
-#include "vsocket.h"
-#include "vtransport_processing.h"
-#include "vbuffer.h"
+#include "shadow.h"
 
 /* -maximum size data we can send network:
  *	-udp data we can send is 65507, otherwise EMSGSIZE is returned
  */
 #define VSOCKET_MAX_DGRAM_SIZE 65507
 
-typedef struct vudp_s {
+struct vudp_s {
 	vsocket_mgr_tp vsocket_mgr;
 	vsocket_tp sock;
 	vbuffer_tp vb;
 	vpeer_tp default_remote_peer;
-}vudp_t, *vudp_tp;
+};
 
 vudp_tp vudp_create(vsocket_mgr_tp vsocket_mgr, vsocket_tp sock, vbuffer_tp vb);
 void vudp_destroy(vudp_tp vudp);

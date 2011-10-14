@@ -22,16 +22,10 @@
 #include <glib.h>
 #include <stdlib.h>
 #include <stdint.h>
-#include <socket.h>
 #include <netinet/in.h>
 #include <string.h>
 
-#include "vtcp_server.h"
-#include "vsocket_mgr.h"
-#include "vsocket_mgr_server.h"
-#include "vpeer.h"
-#include "vtransport.h"
-#include "vtcp.h"
+#include "shadow.h"
 
 static void vtcp_server_add_child_helper(GHashTable *ht, vtcp_server_child_tp schild);
 

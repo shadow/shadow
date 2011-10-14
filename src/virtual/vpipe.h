@@ -27,8 +27,7 @@
 #include <stddef.h>
 #include <glib-2.0/glib.h>
 
-#include "vepoll.h"
-#include "linkedbuffer.h"
+#include "shadow.h"
 
 typedef guint16 vpipe_id;
 #define VPIPE_IO_ERROR -1
@@ -43,28 +42,28 @@ enum vpipe_flags {
 	VPIPE_READER_CLOSED=1, VPIPE_WRITER_CLOSED=2
 };
 
-typedef struct vpipe_unid_s {
+struct vpipe_unid_s {
 	vpipe_id read_fd;
 	vpipe_id write_fd;
 	vepoll_tp read_poll;
 	vepoll_tp write_poll;
 	linkedbuffer_tp buffer;
 	enum vpipe_flags flags;
-} vpipe_unid_t, *vpipe_unid_tp;
+};
 
-typedef struct vpipe_bid_s {
+struct vpipe_bid_s {
 	guint16 fda;
 	vpipe_unid_tp pipea;
 	vepoll_tp vepolla;
 	guint16 fdb;
 	vpipe_unid_tp pipeb;
 	vepoll_tp vepollb;
-} vpipe_bid_t, *vpipe_bid_tp;
+};
 
-typedef struct vpipe_mgr_s {
+struct vpipe_mgr_s {
 	GHashTable *bipipes;
 	in_addr_t addr;
-} vpipe_mgr_t, *vpipe_mgr_tp;
+};
 
 vpipe_mgr_tp vpipe_mgr_create(in_addr_t addr);
 void vpipe_mgr_destroy(vpipe_mgr_tp mgr);

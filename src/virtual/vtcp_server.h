@@ -26,17 +26,16 @@
 #include <stdint.h>
 #include <glib-2.0/glib.h>
 
-#include "vsocket_mgr.h"
-#include "vsocket.h"
+#include "shadow.h"
 
-typedef struct vtcp_server_child_s {
+struct vtcp_server_child_s {
 	/* TODO should we store the sock_descrs instead of pointers to sockets?
 	 * then we would do a lookup on the fly from vsocket_mgr, preventing a dangling pointer when the socket is deleted. */
 	vsocket_tp sock;
 	guint key;
-} vtcp_server_child_t, *vtcp_server_child_tp;
+};
 
-typedef struct vtcp_server_s {
+struct vtcp_server_s {
 	vsocket_mgr_tp vsocket_mgr;
 	vsocket_tp sock;
 	/* vtcp_server_child_tp of requested connections that are not yet established, max size of this
@@ -53,7 +52,7 @@ typedef struct vtcp_server_s {
 	/* vtcp_server_child_tp of established connections that have been accepted
 	 * keyed by hash(remoteaddr, remoteport) */
 	GHashTable *accepted_children;
-}vtcp_server_t, *vtcp_server_tp;
+};
 
 void vtcp_server_add_child_accepted(vtcp_server_tp server, vtcp_server_child_tp schild);
 void vtcp_server_add_child_incomplete(vtcp_server_tp server, vtcp_server_child_tp schild);

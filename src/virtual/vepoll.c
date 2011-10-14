@@ -26,15 +26,6 @@
 
 #include "shadow.h"
 
-#include "vepoll.h"
-#include "vsocket_mgr.h"
-#include "vevent_mgr.h"
-#include "vci.h"
-
-#include "vsocket_mgr_server.h"
-#include "vtcp_server.h"
-#include "vsocket.h"
-
 vepoll_tp vepoll_create(vevent_mgr_tp vev_mgr, in_addr_t addr, guint16 sockd) {
 	vepoll_tp vep = calloc(1, sizeof(vepoll_t));
 	vep->addr = addr;
@@ -47,7 +38,7 @@ vepoll_tp vepoll_create(vevent_mgr_tp vev_mgr, in_addr_t addr, guint16 sockd) {
 
 	/* startup our polling timer. this *shouldnt* be needed if we correctly watch our buffers... */
 //	vep->flags |= VEPOLL_POLL_SCHEDULED;
-//	vci_schedule_poll(addr, vep, VEPOLL_POLL_DELAY);
+//	worker_scheduleEvent(socketpolltimerexpired_new(vep), VEPOLL_POLL_DELAY, (GQuark) vep->addr);
 
 	return vep;
 }
@@ -68,8 +59,7 @@ static void vepoll_activate(vepoll_tp vep) {
 		/* check if we need to schedule a notification */
 		if((vep->flags & VEPOLL_NOTIFY_SCHEDULED) == 0) {
 			vep->flags |= VEPOLL_NOTIFY_SCHEDULED;
-			// XXX NEED_NEW_EVENT
-			vci_schedule_notify(vep->addr, vep->sockd);
+			worker_scheduleEvent((Event*)socketactivated_new(vep->sockd), 1, (GQuark) vep->addr);
 		}
 	}
 }
@@ -178,7 +168,7 @@ void vepoll_execute_notification(vepoll_tp vep) {
 
 			Worker* worker = worker_getPrivate();
 			Application* a = worker->cached_node->application;
-			Plugin* plugin = worker_getPlugin(a->software->id, a->software->pluginPath);
+			Plugin* plugin = worker_getPlugin(&(a->software->id), a->software->pluginPath);
 
 			/* tell the socket about it if available, only switching context once */
 			if((vep->available & VEPOLL_READ) && (vep->available & VEPOLL_WRITE)) {
@@ -231,27 +221,28 @@ void vepoll_execute_notification(vepoll_tp vep) {
 }
 
 /* make sure sockets don't get stuck */
-void vepoll_onpoll(vci_event_tp vci_event, gpointer vs_mgr) {
-        vepoll_tp vep = vci_event->payload;
-	if(vep != NULL) {
-		/* poll no longer scheduled */
-		vep->flags &= ~VEPOLL_POLL_SCHEDULED;
+void vepoll_poll(vepoll_tp vep, vsocket_mgr_tp vs_mgr) {
+	if(!vep) {
+		return;
+	}
+    g_assert(vs_mgr);
 
-		if(vep->flags & VEPOLL_CANCEL_AND_DESTROY) {
-			vepoll_destroy(vep);
-			return;
-		}
+	/* poll no longer scheduled */
+	vep->flags &= ~VEPOLL_POLL_SCHEDULED;
 
-		/* TODO move this out of vepoll and to a higher level */
+	if(vep->flags & VEPOLL_CANCEL_AND_DESTROY) {
+		vepoll_destroy(vep);
+		return;
+	}
+
+	/* TODO move this out of vepoll and to a higher level */
 #ifdef DEBUG
-		vsocket_mgr_tp vsock_mgr = global_sim_context.sim_worker->vci_mgr->current_vsocket_mgr;
-		vsocket_mgr_print_stat(vsock_mgr, vep->sockd);
-		vevent_mgr_print_stat(vep->vev_mgr, vep->sockd);
+	vsocket_mgr_print_stat(vsock_mgr, vep->sockd);
+	vevent_mgr_print_stat(vep->vev_mgr, vep->sockd);
 #endif
 
-		vepoll_activate(vep);
+	vepoll_activate(vep);
 
-		vep->flags |= VEPOLL_POLL_SCHEDULED;
-		vci_schedule_poll(vep->addr, vep, VEPOLL_POLL_DELAY);
-	}
+	vep->flags |= VEPOLL_POLL_SCHEDULED;
+	worker_scheduleEvent((Event*)socketpolltimerexpired_new(vep), VEPOLL_POLL_DELAY, (GQuark) vep->addr);
 }

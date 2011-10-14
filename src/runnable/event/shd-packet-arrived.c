@@ -27,12 +27,13 @@ EventVTable packetarrived_vtable = {
 	MAGIC_VALUE
 };
 
-PacketArrivedEvent* packetarrived_new() {
+PacketArrivedEvent* packetarrived_new(rc_vpacket_pod_tp rc_packet) {
 	PacketArrivedEvent* event = g_new0(PacketArrivedEvent, 1);
 	MAGIC_INIT(event);
 
-	event_init(&(event->super), &packetarrived_vtable);
-
+	shadowevent_init(&(event->super), &packetarrived_vtable);
+	event->rc_packet = rc_packet;
+	rc_vpacket_pod_retain(rc_packet);
 
 	return event;
 }
@@ -41,10 +42,32 @@ void packetarrived_run(PacketArrivedEvent* event, Node* node) {
 	MAGIC_ASSERT(event);
 	MAGIC_ASSERT(node);
 
+    rc_vpacket_pod_tp rc_packet = event->rc_packet;
+    if(rc_packet != NULL) {
+        vpacket_log_debug(rc_packet);
+
+        rc_vpacket_pod_retain_stack(rc_packet);
+
+        /* called when there is an incoming packet. */
+        debug("vtransport_mgr_onpacket: event fired\n");
+
+        if(node->vsocket_mgr->vt_mgr != NULL) {
+            vsocket_tp sock = vsocket_mgr_get_socket_receiver(node->vsocket_mgr, rc_packet);
+            if(sock != NULL) {
+                vtransport_mgr_ready_receive(node->vsocket_mgr->vt_mgr, sock, rc_packet);
+            } else {
+                debug("socket no longer exists, dropping packet\n");
+            }
+        }
+
+        debug("vtransport_mgr_onpacket: releasing stack\n");
+        rc_vpacket_pod_release_stack(rc_packet);
+    }
 }
 
 void packetarrived_free(PacketArrivedEvent* event) {
 	MAGIC_ASSERT(event);
+	rc_vpacket_pod_release(event->rc_packet);
 	MAGIC_CLEAR(event);
 	g_free(event);
 }

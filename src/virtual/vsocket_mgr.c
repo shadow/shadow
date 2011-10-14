@@ -25,17 +25,6 @@
 #include <stdlib.h>
 
 #include "shadow.h"
-#include "vsocket_mgr.h"
-#include "vsocket.h"
-#include "vtransport_mgr.h"
-#include "vtransport.h"
-#include "vtcp_server.h"
-#include "vci.h"
-#include "vci_event.h"
-#include "vpipe.h"
-#include "vepoll.h"
-#include "vevent_mgr.h"
-#include "vcpu.h"
 
 static vsocket_tp vsocket_mgr_find_socket_helper(vinterface_tp vi, guint8 protocol,
 		in_addr_t remote_addr, in_port_t remote_port, in_port_t local_port);
@@ -423,26 +412,6 @@ void vsocket_mgr_bind_loopback(vsocket_mgr_tp net, vsocket_tp sock, in_port_t bi
 		}
 	}
 }
-
-void vsocket_mgr_onnotify(vci_event_tp vci_event, vsocket_mgr_tp vs_mgr) {
-        vci_onnotify_tp payload = vci_event->payload;
-	if(vs_mgr != NULL && payload != NULL) {
-		/* check for a pipe */
-		vepoll_tp pipe_poll = vpipe_get_poll(vs_mgr->vpipe_mgr, payload->sockd);
-		if(pipe_poll != NULL) {
-			vepoll_execute_notification(pipe_poll);
-		} else {
-			/* o/w a socket */
-			vsocket_tp sock = vsocket_mgr_get_socket(vs_mgr, payload->sockd);
-			if(sock != NULL && sock->vep != NULL) {
-				vepoll_execute_notification(sock->vep);
-			} else {
-				info("vepoll_on_notify: socket %u no longer exists, skipping notification.\n", payload->sockd);
-			}
-		}
-	}
-}
-
 void vsocket_mgr_print_stat(vsocket_mgr_tp net, guint16 sockd) {
 	if(net != NULL) {
 		debug("######vsocket_mgr_print_stat: looking for stats for socket %u######\n", sockd);
@@ -450,12 +419,12 @@ void vsocket_mgr_print_stat(vsocket_mgr_tp net, guint16 sockd) {
 		if(sock != NULL) {
 			if(sock->loopback_peer != NULL) {
 				debug("sockd %u running on %s:%u\n", sockd,
-					inet_ntoa_t(sock->loopback_peer->addr), ntohs(sock->loopback_peer->port));
+					NTOA(sock->loopback_peer->addr), ntohs(sock->loopback_peer->port));
 			}
 
 			if(sock->ethernet_peer != NULL) {
 				debug("sockd %u running on %s:%u\n", sockd,
-					inet_ntoa_t(sock->ethernet_peer->addr), ntohs(sock->ethernet_peer->port));
+						NTOA(sock->ethernet_peer->addr), ntohs(sock->ethernet_peer->port));
 			}
 
 			if(sock->sock_desc_parent > 0) {
@@ -465,12 +434,12 @@ void vsocket_mgr_print_stat(vsocket_mgr_tp net, guint16 sockd) {
 				if(parent != NULL) {
 					if(parent->loopback_peer != NULL) {
 						debug("parent sockd %u running on %s:%u\n", parent->sock_desc,
-							inet_ntoa_t(parent->loopback_peer->addr), ntohs(parent->loopback_peer->port));
+								NTOA(parent->loopback_peer->addr), ntohs(parent->loopback_peer->port));
 					}
 
 					if(parent->ethernet_peer != NULL) {
 						debug("parent sockd %u running on %s:%u\n", parent->sock_desc,
-							inet_ntoa_t(parent->ethernet_peer->addr), ntohs(parent->ethernet_peer->port));
+								NTOA(parent->ethernet_peer->addr), ntohs(parent->ethernet_peer->port));
 					}
 
 				} else {
@@ -480,7 +449,7 @@ void vsocket_mgr_print_stat(vsocket_mgr_tp net, guint16 sockd) {
 
 			if(sock->vt != NULL && sock->vt->vtcp != NULL && sock->vt->vtcp->remote_peer != NULL) {
 				debug("sockd %u connected to %s:%u\n", sockd,
-					inet_ntoa_t(sock->vt->vtcp->remote_peer->addr), ntohs(sock->vt->vtcp->remote_peer->port));
+						NTOA(sock->vt->vtcp->remote_peer->addr), ntohs(sock->vt->vtcp->remote_peer->port));
 			}
 
 			vtcp_server_tp server = vsocket_mgr_get_server(net, sock);

@@ -25,8 +25,7 @@
 #include <stdlib.h>
 #include <math.h>
 
-#include "vcpu.h"
-#include "vtransport_mgr.h"
+#include "shadow.h"
 
 vcpu_tp vcpu_create(guint64 cpu_speed_Bps) {
 	vcpu_tp vcpu = malloc(sizeof(vcpu_t));

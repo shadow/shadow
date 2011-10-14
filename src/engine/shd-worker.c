@@ -118,14 +118,16 @@ void worker_executeEvent(gpointer data, gpointer user_data) {
 		}
 
 		/* do the local task */
-		event_run(worker->cached_event);
+		gboolean complete = shadowevent_run(worker->cached_event);
 
 		/* update times */
 		worker->clock_last = worker->clock_now;
 		worker->clock_now = SIMTIME_INVALID;
 
 		/* finished event can now be destroyed */
-		event_free(worker->cached_event);
+		if(complete) {
+			shadowevent_free(worker->cached_event);
+		}
 
 		/* get the next event, or NULL will tell us to break */
 		worker->cached_event = (Event*) node_popTask(worker->cached_node);
@@ -180,6 +182,7 @@ void worker_scheduleEvent(Event* event, SimulationTime nano_delay, GQuark receiv
 
 	/* the NodeEvent needs a pointer to the correct node */
 	event->node = receiver;
+	event->ownerID = sender->id;
 
 	/* single threaded mode is simpler than multi threaded */
 	if(engine_getNumThreads(engine) > 1) {

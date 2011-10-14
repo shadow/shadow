@@ -39,13 +39,13 @@
 #define VCPU_READ_FRACTION 0.75
 #define VCPU_WRITE_FRACTION 1 - VCPU_READ_FRACTION
 
-typedef struct vcpu_s {
+struct vcpu_s {
 	guint64 cpu_speed_Bps;
 	gdouble nanos_per_cpu_aes_byte;
 	gdouble nanos_per_cpu_proc_byte;
 	guint64 nanos_accumulated_delay;
 	guint64 nanos_currently_absorbed;
-} vcpu_t, *vcpu_tp;
+};
 
 vcpu_tp vcpu_create(guint64 cpu_speed_Bps);
 void vcpu_destroy(vcpu_tp vcpu);

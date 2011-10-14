@@ -30,19 +30,6 @@
 #include <glib-2.0/glib.h>
 
 #include "shadow.h"
-#include "vsocket_mgr.h"
-#include "vsocket_mgr_server.h"
-#include "vsocket.h"
-#include "vbuffer.h"
-#include "vtransport.h"
-#include "vtcp.h"
-#include "vudp.h"
-#include "vtcp_server.h"
-#include "vpacket_mgr.h"
-#include "vpacket.h"
-#include "vci.h"
-#include "vepoll.h"
-#include "vpipe.h"
 
 static gint vsocket_bind_implicit(vsocket_mgr_tp net, gint fd, in_addr_t addr);
 
@@ -1085,13 +1072,13 @@ gint vsocket_close(vsocket_mgr_tp net, gint fd) {
 			/* we need to schedule a closing event for other end.
 			 * they should close after receiving everything we already sent */
 			if(sock->ethernet_peer != NULL) {
-				vci_schedule_close(net->addr, sock->ethernet_peer->addr, sock->ethernet_peer->port,
-						sock->vt->vtcp->remote_peer->addr, sock->vt->vtcp->remote_peer->port,
+				network_scheduleClose((GQuark)net->addr, (GQuark)sock->ethernet_peer->addr, sock->ethernet_peer->port,
+						(GQuark)sock->vt->vtcp->remote_peer->addr, sock->vt->vtcp->remote_peer->port,
 						sock->vt->vtcp->snd_end);
 			}
 			if(sock->loopback_peer != NULL) {
-				vci_schedule_close(net->addr, sock->loopback_peer->addr, sock->loopback_peer->port,
-						sock->vt->vtcp->remote_peer->addr, sock->vt->vtcp->remote_peer->port,
+				network_scheduleClose((GQuark)net->addr, (GQuark)sock->loopback_peer->addr, sock->loopback_peer->port,
+						(GQuark)sock->vt->vtcp->remote_peer->addr, sock->vt->vtcp->remote_peer->port,
 						sock->vt->vtcp->snd_end);
 			}
 		}

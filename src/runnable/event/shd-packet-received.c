@@ -31,8 +31,7 @@ PacketReceivedEvent* packetreceived_new() {
 	PacketReceivedEvent* event = g_new0(PacketReceivedEvent, 1);
 	MAGIC_INIT(event);
 
-	event_init(&(event->super), &packetreceived_vtable);
-
+	shadowevent_init(&(event->super), &packetreceived_vtable);
 
 	return event;
 }
@@ -41,6 +40,7 @@ void packetreceived_run(PacketReceivedEvent* event, Node* node) {
 	MAGIC_ASSERT(event);
 	MAGIC_ASSERT(node);
 
+	vtransport_mgr_download_next(node->vsocket_mgr->vt_mgr);
 }
 
 void packetreceived_free(PacketReceivedEvent* event) {

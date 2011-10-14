@@ -28,11 +28,18 @@ typedef struct _TCPCloseTimerExpiredEvent TCPCloseTimerExpiredEvent;
 
 struct _TCPCloseTimerExpiredEvent {
 	Event super;
-
+	GQuark callerID;
+	GQuark sourceID;
+	in_port_t sourcePort;
+	GQuark destinationID;
+	in_port_t destinationPort;
+	guint32 receiveEnd;
 	MAGIC_DECLARE;
 };
 
-TCPCloseTimerExpiredEvent* tcpclosetimerexpired_new();
+TCPCloseTimerExpiredEvent* tcpclosetimerexpired_new(GQuark callerID,
+		GQuark sourceID, in_port_t sourcePort, GQuark destinationID,
+		in_port_t destinationPort, guint32 receiveEnd);
 void tcpclosetimerexpired_run(TCPCloseTimerExpiredEvent* event, Node* node);
 void tcpclosetimerexpired_free(TCPCloseTimerExpiredEvent* event);
 

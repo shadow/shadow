@@ -27,15 +27,7 @@
 #include <netinet/in.h>
 #include <glib-2.0/glib.h>
 
-#include "vpacket_mgr.h"
-#include "vpacket.h"
-#include "vpeer.h"
-#include "vpipe.h"
-#include "linkedbuffer.h"
-#include "vevent_mgr.h"
-#include "vepoll.h"
-#include "vcpu.h"
-#include "vci_event.h"
+#include "shadow.h"
 
 #define VPIPE_ALIGN_TAG 0x3F
 
@@ -43,7 +35,7 @@ enum vsocket_state {
 	VUDP, VTCP_CLOSED, VTCP_LISTEN, VTCP_SYN_SENT, VTCP_SYN_RCVD, VTCP_ESTABLISHED, VTCP_CLOSING, VTCP_CLOSE_WAIT
 };
 
-typedef struct vinterface_s {
+struct vinterface_s {
 	in_addr_t ip_address;
 	/* hashtable<udp port, vsocket> */
 	GHashTable *udp_vsockets;
@@ -51,9 +43,9 @@ typedef struct vinterface_s {
 	GHashTable *tcp_vsockets;
 	/* hashtable<tcp port, tcpserver> */
 	GHashTable *tcp_servers;
-} vinterface_t, *vinterface_tp;
+};
 
-typedef struct vsocket_t {
+struct vsocket_t {
 	/* type of this socket, either SOCK_DGRAM, or SOCK_STREAM */
 	guint8 type;
 	/* the socket descriptor, unique for each socket */
@@ -75,9 +67,9 @@ typedef struct vsocket_t {
 	vepoll_tp vep;
 	/* either the child socket is accepted, or the parent socket is listening */
 	guint8 is_active;
-}vsocket_t, *vsocket_tp;
+};
 
-typedef struct vsocket_mgr_s {
+struct vsocket_mgr_s {
 	in_addr_t addr;
 	gchar addr_string[INET_ADDRSTRLEN];
 	guint16 next_sock_desc;
@@ -94,7 +86,7 @@ typedef struct vsocket_mgr_s {
 	vpacket_mgr_tp vp_mgr;
 	vevent_mgr_tp vev_mgr;
 	vcpu_tp vcpu;
-}vsocket_mgr_t, *vsocket_mgr_tp;
+};
 
 vsocket_mgr_tp vsocket_mgr_create(in_addr_t addr, guint32 KBps_down, guint32 KBps_up, guint64 cpu_speed_Bps);
 void vsocket_mgr_destroy(vsocket_mgr_tp net);
@@ -122,8 +114,6 @@ guint8 vsocket_mgr_isbound_loopback(vsocket_mgr_tp net, in_port_t port);
 guint8 vsocket_mgr_isbound_ethernet(vsocket_mgr_tp net, in_port_t port);
 void vsocket_mgr_bind_ethernet(vsocket_mgr_tp net, vsocket_tp sock, in_port_t bind_port);
 void vsocket_mgr_bind_loopback(vsocket_mgr_tp net, vsocket_tp sock, in_port_t bind_port);
-
-void vsocket_mgr_onnotify(vci_event_tp vci_event, vsocket_mgr_tp vs_mgr);
 
 void vsocket_mgr_print_stat(vsocket_mgr_tp net, guint16 sockd);
 

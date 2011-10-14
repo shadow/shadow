@@ -47,7 +47,7 @@ Engine* engine_new(Configuration* config) {
 	}
 
 	/* holds all events if single-threaded, and non-node events otherwise. */
-	engine->masterEventQueue = g_async_queue_new_full(event_free);
+	engine->masterEventQueue = g_async_queue_new_full(shadowevent_free);
 	engine->workersIdle = g_cond_new();
 	engine->engineIdle = g_mutex_new();
 
@@ -109,8 +109,10 @@ static gint _engine_processEvents(Engine* engine) {
 		engine->clock = worker->clock_now;
 		g_assert(worker->clock_now >= worker->clock_last);
 
-		event_run(worker->cached_event);
-		event_free(worker->cached_event);
+		gboolean complete = shadowevent_run(worker->cached_event);
+		if(complete) {
+			shadowevent_free(worker->cached_event);
+		}
 		worker->cached_event = NULL;
 
 		worker->clock_last = worker->clock_now;
@@ -231,7 +233,7 @@ gint engine_run(Engine* engine) {
 void engine_pushEvent(Engine* engine, Event* event) {
 	MAGIC_ASSERT(engine);
 	MAGIC_ASSERT(event);
-	g_async_queue_push_sorted(engine->masterEventQueue, event, event_compare, NULL);
+	g_async_queue_push_sorted(engine->masterEventQueue, event, shadowevent_compare, NULL);
 }
 
 void engine_put(Engine* engine, EngineStorage type, GQuark* id, gpointer item) {

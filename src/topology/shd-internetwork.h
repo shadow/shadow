@@ -58,6 +58,7 @@ const gchar* internetwork_resolveID(Internetwork* internet, GQuark id);
 
 guint32 internetwork_getNodeBandwidthUp(Internetwork* internet, GQuark nodeID);
 guint32 internetwork_getNodeBandwidthDown(Internetwork* internet, GQuark nodeID);
+gdouble internetwork_getReliability(Internetwork* internet, GQuark sourceNodeID, GQuark destinationNodeID);
 gdouble internetwork_getLatency(Internetwork* internet, GQuark sourceNodeID, GQuark destinationNodeID, gdouble percentile);
 gdouble internetwork_sampleLatency(Internetwork* internet, GQuark sourceNodeID, GQuark destinationNodeID);
 gdouble internetwork_getMinimumGlobalLatency(Internetwork* internet);

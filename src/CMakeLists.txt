@@ -56,6 +56,28 @@ set(shadow_srcs
     utility/shd-data-entry.c
     utility/shd-registry.c
     
+    utility/linkedbuffer.c
+    utility/orderedlist.c
+    utility/reference_counter.c
+    utility/rand.c
+    virtual/vbuffer.c
+    virtual/vcpu.c
+    virtual/vepoll.c
+    virtual/vevent_mgr.c
+    virtual/vevent.c
+    virtual/vpacket_mgr.c
+    virtual/vpacket.c
+    virtual/vpeer.c
+    virtual/vpipe.c
+    virtual/vsocket_mgr.c
+    virtual/vsocket.c
+    virtual/vsystem.c
+    virtual/vtcp_server.c
+    virtual/vtcp.c
+    virtual/vtransport_mgr.c
+    virtual/vtransport.c
+    virtual/vudp.c
+    
     main.c
 )
 

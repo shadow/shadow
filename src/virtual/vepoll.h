@@ -26,8 +26,7 @@
 #include <stdint.h>
 #include <netinet/in.h>
 
-#include "vevent_mgr.h"
-#include "vci_event.h"
+#include "shadow.h"
 
 /* vepoll monitors the state of io events on a socket, and manages scheduling
  * events for notifying the modules that the socket is readable/writable. we
@@ -36,7 +35,7 @@
  * of how many outstanding events we created.
  */
 
-#define VEPOLL_POLL_DELAY 1000
+#define VEPOLL_POLL_DELAY SIMTIME_ONE_SECOND
 
 enum vepoll_type {
 	VEPOLL_READ=1, /* the socket can be read, i.e. there is data waiting for user */
@@ -55,7 +54,7 @@ enum vepoll_flags {
 	VEPOLL_EXECUTING=8,
 };
 
-typedef struct vepoll_s {
+struct vepoll_s {
 	in_addr_t addr;
 	guint16 sockd;
 	/* OR'ed with types that are allowed (i.e. readable/writable) */
@@ -70,7 +69,7 @@ typedef struct vepoll_s {
 	enum vepoll_flags flags;
 	vevent_mgr_tp vev_mgr;
 	guint8 do_read_first;
-} vepoll_t, *vepoll_tp;
+};
 
 vepoll_tp vepoll_create(vevent_mgr_tp vev_mgr, in_addr_t addr, guint16 sockd);
 void vepoll_destroy(vepoll_tp vep);
@@ -95,7 +94,7 @@ void vepoll_vevent_delete(vepoll_tp vep, enum vepoll_type type);
 
 /* scheduler popped our event, so we should notify module of socket is ready */
 void vepoll_execute_notification(vepoll_tp vep);
-/* called every polling ginterval to check status and activate as needed */
-void vepoll_onpoll(vci_event_tp vci_event, gpointer vs_mgr);
+/* called every polling interval to check status and activate as needed */
+void vepoll_poll(vepoll_tp vep, vsocket_mgr_tp vs_mgr);
 
 #endif /* VEPOLL_H_ */

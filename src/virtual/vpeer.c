@@ -24,7 +24,7 @@
 #include <stdlib.h>
 #include <stddef.h>
 
-#include "vpeer.h"
+#include "shadow.h"
 
 vpeer_tp vpeer_create(in_addr_t addr, in_port_t port){
 	vpeer_tp peer = malloc(sizeof(vpeer_t));

@@ -26,17 +26,7 @@
 #include <string.h>
 #include <errno.h>
 
-#include "vudp.h"
-#include "vtransport.h"
-#include "vtransport_mgr.h"
-#include "vtransport_processing.h"
-#include "vsocket_mgr.h"
-#include "vbuffer.h"
-#include "vsocket.h"
-#include "vpacket_mgr.h"
-#include "vpacket.h"
-#include "vci.h"
-#include "vepoll.h"
+#include "shadow.h"
 
 vudp_tp vudp_create(vsocket_mgr_tp vsocket_mgr, vsocket_tp sock, vbuffer_tp vb){
 	vudp_tp vudp = malloc(sizeof(vudp_t));

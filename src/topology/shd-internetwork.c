@@ -147,6 +147,15 @@ guint32 internetwork_getNodeBandwidthDown(Internetwork* internet, GQuark nodeID)
 	return node_getBandwidthDown(node);
 }
 
+gdouble internetwork_getReliability(Internetwork* internet, GQuark sourceNodeID, GQuark destinationNodeID) {
+	MAGIC_ASSERT(internet);
+	Node* sourceNode = internetwork_getNode(internet, sourceNodeID);
+	MAGIC_ASSERT(sourceNode);
+	Node* destinationNode = internetwork_getNode(internet, destinationNodeID);
+	MAGIC_ASSERT(destinationNode);
+	return network_getLinkReliability(sourceNode->network, destinationNode->network);
+}
+
 gdouble internetwork_getLatency(Internetwork* internet, GQuark sourceNodeID, GQuark destinationNodeID, gdouble percentile) {
 	MAGIC_ASSERT(internet);
 	Node* sourceNode = internetwork_getNode(internet, sourceNodeID);

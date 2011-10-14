@@ -23,18 +23,17 @@
 #define VTRANSPORT_PROCESSING_H_
 
 #include <glib.h>
-#include "vsocket_mgr.h"
-#include "vpacket_mgr.h"
-#include "vpacket.h"
+
+#include "shadow.h"
 
 enum vt_prc_result {
 	VT_PRC_NONE=0, VT_PRC_DROPPED=1, VT_PRC_READABLE=2, VT_PRC_WRITABLE=4, VT_PRC_PARENT_READABLE=8, VT_PRC_SENDABLE=16, VT_PRC_DESTROY=32, VT_PRC_RESET=64
 };
 
-typedef struct vtransport_item_s {
+struct vtransport_item_s {
 	rc_vpacket_pod_tp rc_packet;
 	guint16 sockd;
 	vsocket_tp sock;
-}vtransport_item_t, *vtransport_item_tp;
+};
 
 #endif /* VTRANSPORT_PROCESSING_H_ */

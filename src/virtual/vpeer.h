@@ -22,10 +22,10 @@
 #ifndef VPEER_H_
 #define VPEER_H_
 
-typedef struct vpeer_s {
+struct vpeer_s {
 	in_addr_t addr;
 	in_port_t port;
-}vpeer_t, *vpeer_tp;
+};
 
 vpeer_tp vpeer_create(in_addr_t addr, in_port_t port);
 void vpeer_destroy(vpeer_tp peer);

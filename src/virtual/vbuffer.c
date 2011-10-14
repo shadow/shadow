@@ -24,10 +24,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 
-#include "reference_counter.h"
-#include "vbuffer.h"
-#include "vci.h"
-#include "vepoll.h"
+#include "shadow.h"
 
 enum vbuffer_type {
 	VB_SEND_RETRANSMIT, VB_SEND_VWRITE, VB_SEND_CONTROL,

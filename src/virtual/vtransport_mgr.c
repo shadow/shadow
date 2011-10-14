@@ -24,13 +24,6 @@
 #include <stdint.h>
 
 #include "shadow.h"
-#include "vtransport_mgr.h"
-#include "vtransport.h"
-#include "vtransport_processing.h"
-#include "vbuffer.h"
-#include "vpacket_mgr.h"
-#include "vpacket.h"
-#include "vci.h"
 
 static vtransport_mgr_inq_tp vtransport_mgr_create_buffer(guint64 max_size);
 static void vtransport_mgr_destroy_buffer(vtransport_mgr_inq_tp buffer);
@@ -154,7 +147,7 @@ void vtransport_mgr_ready_receive(vtransport_mgr_tp vt_mgr, vsocket_tp sock, rc_
 			vpacket_mgr_lockcontrol(rc_packet, LC_OP_READUNLOCK | LC_TARGET_PACKET);
 			debug("vtransport_mgr_ready_receive: no space to receive packet, dropping\n");
 			if(sock->type == SOCK_STREAM) {
-				vci_schedule_retransmit(rc_packet, vt_mgr->vsocket_mgr->addr);
+				network_scheduleRetransmit(rc_packet, (GQuark)vt_mgr->vsocket_mgr->addr);
 			}
 		}
 	} else {
@@ -250,7 +243,7 @@ void vtransport_mgr_download_next(vtransport_mgr_tp vt_mgr) {
 //	guint64 actual_delay = vt_mgr->nanos_consumed_recv > vt_mgr->nanos_cpu_delay ?
 //			vt_mgr->nanos_consumed_recv : vt_mgr->nanos_cpu_delay;
 
-	guint64 actual_delay = vt_mgr->nanos_consumed_recv;
+	SimulationTime actual_delay = vt_mgr->nanos_consumed_recv;
 
 #if 0
 	if(vt_mgr->nanos_consumed_recv > vt_mgr->nanos_accumulated_delay) {
@@ -260,11 +253,9 @@ void vtransport_mgr_download_next(vtransport_mgr_tp vt_mgr) {
 	}
 #endif
 
-	/* if it doesnt take a millisecond, we cant schedule an event */
 	if(actual_delay >= VTRANSPORT_NS_PER_MS) {
 		/* callback after delays */
-		guint32 msdelay = actual_delay / VTRANSPORT_NS_PER_MS;
-		vci_schedule_downloaded(vt_mgr->vsocket_mgr->addr, msdelay);
+		worker_scheduleEvent((Event*)packetreceived_new(), actual_delay, (GQuark) vt_mgr->vsocket_mgr->addr);
 	} else {
 		/* not enough delays for a full MS */
 		vt_mgr->ok_to_fire_recv = 1;
@@ -372,7 +363,7 @@ void vtransport_mgr_upload_next(vtransport_mgr_tp vt_mgr) {
 //	guint64 actual_delay = vt_mgr->nanos_consumed_sent > vt_mgr->nanos_cpu_delay ?
 //			vt_mgr->nanos_consumed_sent : vt_mgr->nanos_cpu_delay;
 
-	guint64 actual_delay = vt_mgr->nanos_consumed_sent;
+	SimulationTime actual_delay = vt_mgr->nanos_consumed_sent;
 
 #if 0
 	if(vt_mgr->nanos_consumed_sent > vt_mgr->nanos_accumulated_delay) {
@@ -382,47 +373,11 @@ void vtransport_mgr_upload_next(vtransport_mgr_tp vt_mgr) {
 	}
 #endif
 
-	/* if it doesnt take a millisecond, we cant schedule an event */
-	if(num_transmitted > 0 && actual_delay >= VTRANSPORT_NS_PER_MS) {
+	if(num_transmitted > 0) {
 		/* callback after absorbing delays */
-		guint32 msdelay = actual_delay / VTRANSPORT_NS_PER_MS;
-		vci_schedule_uploaded(vt_mgr->vsocket_mgr->addr, msdelay);
+		worker_scheduleEvent((Event*)packetsent_new(), actual_delay, (GQuark) vt_mgr->vsocket_mgr->addr);
 	} else {
 		/* we didnt send enough for a full MS */
 		vt_mgr->ok_to_fire_send = 1;
 	}
-}
-
-void vtransport_mgr_onpacket(vci_event_tp vci_event, vsocket_mgr_tp vs_mgr) {
-        rc_vpacket_pod_tp rc_packet = vci_event->payload;
-        if(rc_packet != NULL) {
-            vpacket_log_debug(rc_packet);
-
-            rc_vpacket_pod_retain_stack(rc_packet);
-
-            /* called by vci when there is an incoming packet. */
-            debug("vtransport_mgr_onpacket: event fired\n");
-
-            if(vs_mgr->vt_mgr != NULL) {
-                vsocket_tp sock = vsocket_mgr_get_socket_receiver(vs_mgr->vt_mgr->vsocket_mgr, rc_packet);
-                if(sock != NULL) {
-                    vtransport_mgr_ready_receive(vs_mgr->vt_mgr, sock, rc_packet);
-                } else {
-                    debug("socket no longer exists, dropping packet\n");
-                }
-            }
-
-            debug("vtransport_mgr_onpacket: releasing stack\n");
-            rc_vpacket_pod_release_stack(rc_packet);
-        }
-}
-
-void vtransport_mgr_onuploaded(vci_event_tp vci_event, vsocket_mgr_tp vs_mgr) {
-	debug("vtransport_mgr_onuploaded: event fired\n");
-	vtransport_mgr_upload_next(vs_mgr->vt_mgr);
-}
-
-void vtransport_mgr_ondownloaded(vci_event_tp vci_event, vsocket_mgr_tp vs_mgr) {
-	debug("vtransport_mgr_ondownloaded: event fired\n");
-	vtransport_mgr_download_next(vs_mgr->vt_mgr);
 }

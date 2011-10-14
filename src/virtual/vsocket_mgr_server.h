@@ -23,8 +23,7 @@
 #define VSOCKET_MGR_SERVER_H_
 
 #include <glib.h>
-#include "vsocket_mgr.h"
-#include "vtcp_server.h"
+#include "shadow.h"
 
 void vsocket_mgr_add_server(vsocket_mgr_tp net, vtcp_server_tp server);
 vtcp_server_tp vsocket_mgr_get_server(vsocket_mgr_tp net, vsocket_tp sock);

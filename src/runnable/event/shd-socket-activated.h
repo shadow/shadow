@@ -28,11 +28,11 @@ typedef struct _SocketActivatedEvent SocketActivatedEvent;
 
 struct _SocketActivatedEvent {
 	Event super;
-
+	guint16 socketDescriptor;
 	MAGIC_DECLARE;
 };
 
-SocketActivatedEvent* socketactivated_new();
+SocketActivatedEvent* socketactivated_new(guint16 socketDescriptor);
 void socketactivated_run(SocketActivatedEvent* event, Node* node);
 void socketactivated_free(SocketActivatedEvent* event);
 

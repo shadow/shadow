@@ -26,11 +26,6 @@
 #include <stdint.h>
 
 #include "shadow.h"
-#include "vsocket_mgr.h"
-#include "vpacket_mgr.h"
-#include "vpacket.h"
-#include "vci.h"
-#include "vci_event.h"
 
 /* we will batch packet transfers until we consume this many nanoseconds of bandwidth */
 #define VTRANSPORT_NS_PER_MS 1000000
@@ -38,15 +33,15 @@
 
 #define CPU_LOAD_MULTIPLIER 0
 
-typedef struct vtransport_mgr_inq_s {
+struct vtransport_mgr_inq_s {
 	/* rc_packets coming ginto this node from the wire */
 	GQueue *buffer;
 	/* burst rate of incoming packets */
 	guint64 max_size;
 	guint64 current_size;
-}vtransport_mgr_inq_t, *vtransport_mgr_inq_tp;
+};
 
-typedef struct vtransport_mgr_s {
+struct vtransport_mgr_s {
 	vsocket_mgr_tp vsocket_mgr;
 	/* nanos to receive a single byte */
 	gdouble nanos_per_byte_down;
@@ -66,14 +61,11 @@ typedef struct vtransport_mgr_s {
 	SimulationTime last_time_recv;
 	SimulationTime nanos_consumed_sent;
 	SimulationTime nanos_consumed_recv;
-} vtransport_mgr_t, *vtransport_mgr_tp;
+};
 
 vtransport_mgr_tp vtransport_mgr_create(vsocket_mgr_tp vsocket_mgr, guint32 KBps_down, guint32 KBps_up);
 void vtransport_mgr_destroy(vtransport_mgr_tp vt_mgr);
 void vtransport_mgr_download_next(vtransport_mgr_tp vt_mgr);
-void vtransport_mgr_ondownloaded(vci_event_tp vci_event, vsocket_mgr_tp vs_mgr);
-void vtransport_mgr_onpacket(vci_event_tp event, vsocket_mgr_tp vs_mgr);
-void vtransport_mgr_onuploaded(vci_event_tp vci_event, vsocket_mgr_tp vs_mgr);
 void vtransport_mgr_ready_receive(vtransport_mgr_tp vt_mgr, vsocket_tp sock, rc_vpacket_pod_tp rc_packet);
 void vtransport_mgr_ready_send(vtransport_mgr_tp vt_mgr, vsocket_tp sock);
 void vtransport_mgr_upload_next(vtransport_mgr_tp vt_mgr);

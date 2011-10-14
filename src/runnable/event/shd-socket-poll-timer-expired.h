@@ -28,11 +28,11 @@ typedef struct _SocketPollTimerExpiredEvent SocketPollTimerExpiredEvent;
 
 struct _SocketPollTimerExpiredEvent {
 	Event super;
-
+	vepoll_tp vep;
 	MAGIC_DECLARE;
 };
 
-SocketPollTimerExpiredEvent* socketpolltimerexpired_new();
+SocketPollTimerExpiredEvent* socketpolltimerexpired_new(vepoll_tp vep);
 void socketpolltimerexpired_run(SocketPollTimerExpiredEvent* event, Node* node);
 void socketpolltimerexpired_free(SocketPollTimerExpiredEvent* event);
 

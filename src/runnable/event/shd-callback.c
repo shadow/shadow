@@ -34,7 +34,7 @@ CallbackEvent* callback_new(CallbackFunc callback, gpointer data, gpointer callb
 	CallbackEvent* event = g_new0(CallbackEvent, 1);
 	MAGIC_INIT(event);
 
-	event_init(&(event->super), &callback_vtable);
+	shadowevent_init(&(event->super), &callback_vtable);
 
 	event->callback = callback;
 	event->data = data;

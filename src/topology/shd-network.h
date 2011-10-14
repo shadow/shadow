@@ -50,7 +50,14 @@ gboolean network_equal(Network* a, Network* b);
 void network_addOutgoingLink(Network* network, Link* outgoingLink);
 void network_addIncomingLink(Network* network, Link* incomingLink);
 
+gdouble network_getLinkReliability(Network* sourceNetwork, Network* destinationNetwork);
 gdouble network_getLinkLatency(Network* sourceNetwork, Network* destinationNetwork, gdouble percentile);
 gdouble network_sampleLinkLatency(Network* sourceNetwork, Network* destinationNetwork);
+
+// TODO these are out of place...
+void network_scheduleClose(GQuark callerID, GQuark sourceID, in_port_t sourcePort,
+		GQuark destinationID, in_port_t destinationPort, guint32 receiveEnd);
+void network_scheduleRetransmit(rc_vpacket_pod_tp rc_packet, GQuark callerID);
+void network_schedulePacket(rc_vpacket_pod_tp rc_packet);
 
 #endif /* SHD_NETWORK_H_ */

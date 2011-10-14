@@ -27,18 +27,6 @@
 #include <errno.h>
 
 #include "shadow.h"
-#include "vtcp.h"
-#include "vtransport.h"
-#include "vtransport_processing.h"
-#include "vtransport_mgr.h"
-#include "vtcp_server.h"
-#include "vsocket_mgr_server.h"
-#include "vbuffer.h"
-#include "vpeer.h"
-#include "vpacket_mgr.h"
-#include "vpacket.h"
-#include "orderedlist.h"
-#include "vci.h"
 
 static void vtcp_autotune(vtcp_tp vtcp);
 static void vtcp_update_receive_window(vtcp_tp vtcp);
@@ -280,7 +268,7 @@ enum vt_prc_result vtcp_process_item(vtransport_item_tp titem) {
 
 	vpacket_mgr_lockcontrol(titem->rc_packet, LC_OP_READUNLOCK | LC_TARGET_PACKET);
 
-	debug("vtcp_process_item: socket %i got seq# %u from %s\n", target->sock_desc, packet->tcp_header.sequence_number, inet_ntoa_t(packet->header.source_addr));
+	debug("vtcp_process_item: socket %i got seq# %u from %s\n", target->sock_desc, packet->tcp_header.sequence_number, NTOA(packet->header.source_addr));
 
 	prc_result |= vtcp_process_state(target, titem->rc_packet);
 
@@ -457,7 +445,7 @@ static enum vt_prc_result vtcp_process_state(vsocket_tp sock, rc_vpacket_pod_tp 
 				/* not in acceptable range now, source should retransmit later.
 				 * we only care about future packets or packets with data */
 				if(packet->data_size > 0 || tcphdr->sequence_number > vtcp->rcv_nxt) {
-					vci_schedule_retransmit(rc_packet, vs->addr);
+					network_scheduleRetransmit(rc_packet, (GQuark)vs->addr);
 				}
 				prc_result |= VT_PRC_DROPPED;
 				break;
@@ -596,7 +584,7 @@ static enum vt_prc_result vtcp_process_data(vsocket_tp sock, rc_vpacket_pod_tp r
 			/* buffer and process out of order data later */
 			if(!vbuffer_add_receive(vtcp->vb, rc_packet)) {
 				/* no buffer space, sender should retransmit */
-				vci_schedule_retransmit(rc_packet, vtcp->vsocket_mgr->addr);
+				network_scheduleRetransmit(rc_packet, (GQuark) vtcp->vsocket_mgr->addr);
 				prc_result |= VT_PRC_DROPPED;
 			}
 		}
@@ -623,7 +611,7 @@ static enum vt_prc_result vtcp_process_data_helper(vsocket_tp sock, rc_vpacket_p
 			if(sock->curr_state == VTCP_ESTABLISHED || sock->curr_state == VTCP_CLOSE_WAIT) {
 				if(!vbuffer_add_read(sock->vt->vb, rc_packet)) {
 					/* no buffer space, sender should retransmit */
-					vci_schedule_retransmit(rc_packet, sock->vt->vsocket_mgr->addr);
+					network_scheduleRetransmit(rc_packet, (GQuark) sock->vt->vsocket_mgr->addr);
 					prc_result |= VT_PRC_DROPPED;
 					/* avoid updating rcv_nxt, we are not actually accepting packet */
 					goto ret;
@@ -634,7 +622,7 @@ static enum vt_prc_result vtcp_process_data_helper(vsocket_tp sock, rc_vpacket_p
 
 		/* if we got here, we have space to store packet */
 		vtcp->rcv_nxt++;
-		debug("vtcp_process_data_helper: socket %i advance seq# %u from %s\n", sock->sock_desc, packet->tcp_header.sequence_number, inet_ntoa_t(packet->header.source_addr));
+		debug("vtcp_process_data_helper: socket %i advance seq# %u from %s\n", sock->sock_desc, packet->tcp_header.sequence_number, NTOA(packet->header.source_addr));
 
 		packet = vpacket_mgr_lockcontrol(rc_packet, LC_OP_READLOCK | LC_TARGET_PACKET);
 
@@ -644,8 +632,8 @@ static enum vt_prc_result vtcp_process_data_helper(vsocket_tp sock, rc_vpacket_p
 		if(sock->curr_state == VTCP_CLOSE_WAIT &&
 				vtcp->rcv_end != 0 && vtcp->rcv_nxt >= vtcp->rcv_end) {
 			/* other end will close, send event and not ack */
-			vci_schedule_close(sock->vt->vsocket_mgr->addr, packet->header.destination_addr, packet->header.destination_port,
-					packet->header.source_addr, packet->header.source_port, 0);
+			network_scheduleClose((GQuark)sock->vt->vsocket_mgr->addr, (GQuark)packet->header.destination_addr, packet->header.destination_port,
+					(GQuark)packet->header.source_addr, packet->header.source_port, 0);
 		} else if((packet->tcp_header.flags & ACK) && packet->data_size > 0) {
 			vtcp_trysend_dack(vtcp);
 		}
@@ -907,7 +895,7 @@ static void vtcp_trysend_dack(vtcp_tp vtcp) {
 			vtcp->snd_dack = vtcp->snd_dack | dack_requested;
 			/* if a dack is not currently scheduled, schedule one and set the bit */
 			if(!(vtcp->snd_dack & dack_scheduled)) {
-				vci_schedule_dack(vtcp->vsocket_mgr->addr, vtcp->sock->sock_desc, VTRANSPORT_TCP_DACK_TIMER);
+				worker_scheduleEvent((Event*)tcpdacktimerexpired_new(vtcp->sock->sock_desc), VTRANSPORT_TCP_DACK_TIMER, (GQuark) vtcp->vsocket_mgr->addr);
 				vtcp->snd_dack = vtcp->snd_dack | dack_scheduled;
 			}
 		}
@@ -1025,22 +1013,12 @@ guint32 vtcp_generate_iss() {
 	return VTRANSPORT_TCP_ISS;
 }
 
-void vtcp_ondack(vci_event_tp vci_event, vsocket_mgr_tp vs_mgr) {
-	debug("vtcp_ondack: event fired\n");
-        if(vci_event->payload != NULL) {
-            guint16 sockd = *(guint16 *)(vci_event->payload);
-
-            /* a delayed ack timer expired, send ack if needed */
-            vsocket_tp sock = vsocket_mgr_get_socket(vs_mgr, sockd);
-            if(sock != NULL && sock->vt != NULL && sock->vt->vtcp != NULL) {
-                vtcp_tp vtcp = sock->vt->vtcp;
-                if(vtcp->snd_dack & dack_requested) {
-                    vtcp_send_control_packet(vtcp, ACK);
-                }
-                /* unset the scheduled bit */
-                vtcp->snd_dack = vtcp->snd_dack & ~dack_scheduled;
-            }
-        }
+void vtcp_checkdack(vtcp_tp vtcp) {
+	if(vtcp->snd_dack & dack_requested) {
+		vtcp_send_control_packet(vtcp, ACK);
+	}
+	/* unset the scheduled bit */
+	vtcp->snd_dack = vtcp->snd_dack & ~dack_scheduled;
 }
 
 rc_vpacket_pod_tp vtcp_create_packet(vtcp_tp vtcp, enum vpacket_tcp_flags flags, guint16 data_size, const gpointer data) {

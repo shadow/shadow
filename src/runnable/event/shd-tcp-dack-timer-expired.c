@@ -27,12 +27,12 @@ EventVTable tcpdacktimerexpired_vtable = {
 	MAGIC_VALUE
 };
 
-TCPDAckTimerExpiredEvent* tcpdacktimerexpired_new() {
+TCPDAckTimerExpiredEvent* tcpdacktimerexpired_new(guint16 socketDescriptor) {
 	TCPDAckTimerExpiredEvent* event = g_new0(TCPDAckTimerExpiredEvent, 1);
 	MAGIC_INIT(event);
 
-	event_init(&(event->super), &tcpdacktimerexpired_vtable);
-
+	shadowevent_init(&(event->super), &tcpdacktimerexpired_vtable);
+	event->socketDescriptor = socketDescriptor;
 
 	return event;
 }
@@ -40,6 +40,12 @@ TCPDAckTimerExpiredEvent* tcpdacktimerexpired_new() {
 void tcpdacktimerexpired_run(TCPDAckTimerExpiredEvent* event, Node* node) {
 	MAGIC_ASSERT(event);
 	MAGIC_ASSERT(node);
+
+	/* a delayed ack timer expired, send ack if needed */
+	vsocket_tp sock = vsocket_mgr_get_socket(node->vsocket_mgr, event->socketDescriptor);
+	if(sock != NULL && sock->vt != NULL) {
+		vtcp_checkdack(sock->vt->vtcp);
+	}
 
 }
 

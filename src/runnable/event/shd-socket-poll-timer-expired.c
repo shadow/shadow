@@ -27,12 +27,12 @@ EventVTable socketpolltimerexpired_vtable = {
 	MAGIC_VALUE
 };
 
-SocketPollTimerExpiredEvent* socketpolltimerexpired_new() {
+SocketPollTimerExpiredEvent* socketpolltimerexpired_new(vepoll_tp vep) {
 	SocketPollTimerExpiredEvent* event = g_new0(SocketPollTimerExpiredEvent, 1);
 	MAGIC_INIT(event);
 
-	event_init(&(event->super), &socketpolltimerexpired_vtable);
-
+	shadowevent_init(&(event->super), &socketpolltimerexpired_vtable);
+	event->vep = vep;
 
 	return event;
 }
@@ -41,6 +41,7 @@ void socketpolltimerexpired_run(SocketPollTimerExpiredEvent* event, Node* node) 
 	MAGIC_ASSERT(event);
 	MAGIC_ASSERT(node);
 
+	vepoll_poll(event->vep, node->vsocket_mgr);
 }
 
 void socketpolltimerexpired_free(SocketPollTimerExpiredEvent* event) {

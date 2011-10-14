@@ -27,12 +27,19 @@ EventVTable tcpretransmittimerexpired_vtable = {
 	MAGIC_VALUE
 };
 
-TCPRetransmitTimerExpiredEvent* tcpretransmittimerexpired_new() {
+TCPRetransmitTimerExpiredEvent* tcpretransmittimerexpired_new(GQuark callerID,
+		GQuark sourceID, in_port_t sourcePort, GQuark destinationID,
+		in_port_t destinationPort, guint32 retransmitKey) {
 	TCPRetransmitTimerExpiredEvent* event = g_new0(TCPRetransmitTimerExpiredEvent, 1);
 	MAGIC_INIT(event);
 
-	event_init(&(event->super), &tcpretransmittimerexpired_vtable);
-
+	shadowevent_init(&(event->super), &tcpretransmittimerexpired_vtable);
+	event->callerID = callerID;
+	event->sourceID = sourceID;
+	event->sourcePort = sourcePort;
+	event->destinationID = destinationID;
+	event->destinationPort = destinationPort;
+	event->retransmitKey = retransmitKey;
 
 	return event;
 }
@@ -41,6 +48,31 @@ void tcpretransmittimerexpired_run(TCPRetransmitTimerExpiredEvent* event, Node* 
 	MAGIC_ASSERT(event);
 	MAGIC_ASSERT(node);
 
+	debug("vtransport_onretransmit: event fired\n");
+
+	vsocket_mgr_tp vs_mgr = node->vsocket_mgr;
+	if(vs_mgr == NULL) {
+		return;
+	}
+
+	debug("vtransport_onpayload->retransmit: %s:%u requesting payload->retransmission of %u from %s:%u\n",
+			NTOA(event->destinationID), ntohs(event->destinationPort),
+			event->retransmitKey, vs_mgr->addr_string, ntohs(event->sourcePort));
+
+	vsocket_tp sock = vsocket_mgr_find_socket(vs_mgr, SOCK_STREAM,
+			(in_addr_t)event->destinationID, event->destinationPort, event->sourcePort);
+
+	if(sock == NULL || sock->vt == NULL) {
+		return;
+	}
+
+	if(sock->vt->vtcp != NULL && sock->vt->vtcp->remote_peer == NULL) {
+		info("vtransport_onpayload->retransmit: %s:%u has no connected child socket. was it closed?\n",
+				NTOA(vs_mgr->addr), ntohs(event->sourcePort));
+		return;
+	}
+
+	vtcp_retransmit(sock->vt->vtcp, event->retransmitKey);
 }
 
 void tcpretransmittimerexpired_free(TCPRetransmitTimerExpiredEvent* event) {

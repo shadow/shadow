@@ -28,11 +28,11 @@ typedef struct _TCPDAckTimerExpiredEvent TCPDAckTimerExpiredEvent;
 
 struct _TCPDAckTimerExpiredEvent {
 	Event super;
-
+	guint16 socketDescriptor;
 	MAGIC_DECLARE;
 };
 
-TCPDAckTimerExpiredEvent* tcpdacktimerexpired_new();
+TCPDAckTimerExpiredEvent* tcpdacktimerexpired_new(guint16 socketDescriptor);
 void tcpdacktimerexpired_run(TCPDAckTimerExpiredEvent* event, Node* node);
 void tcpdacktimerexpired_free(TCPDAckTimerExpiredEvent* event);
 

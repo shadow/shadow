@@ -26,9 +26,6 @@
 #include <netinet/in.h>
 #include <stdint.h>
 
-#include "shmcabinet_mgr.h"
-#include "rwlock_mgr.h"
-
 #ifdef DEBUG
 #define vpacket_log_debug(packet) vpacket_log(packet)
 #else
@@ -63,15 +60,15 @@ enum vpacket_tcp_flags {
 	FIN = 1, SYN = 2, RST = 4, ACK = 8, CON = 16
 };
 
-typedef struct vpacket_tcp_header_s {
+struct vpacket_tcp_header_s {
 	/* contains tcp specifics, like seq #s, etc */
 	guint32 sequence_number;
 	guint32 acknowledgement;
 	guint32 advertised_window;
 	enum vpacket_tcp_flags flags;
-} vpacket_tcp_header_t, *vpacket_tcp_header_tp;
+};
 
-typedef struct vpacket_header_s {
+struct vpacket_header_s {
 	/* source information */
 	in_addr_t source_addr;
 	in_port_t source_port;
@@ -80,9 +77,9 @@ typedef struct vpacket_header_s {
 	in_port_t destination_port;
 	/* SOCK_DGRAM or SOCK_STREAM */
 	guint8 protocol;
-} vpacket_header_t, *vpacket_header_tp;
+};
 
-typedef struct vpacket_s {
+struct vpacket_s {
 	/* all packets have a header */
 	vpacket_header_t header;
 	/* additional header for SOCK_STREAM packets */
@@ -90,31 +87,22 @@ typedef struct vpacket_s {
 	/* application data */
 	guint16 data_size;
 	gpointer payload;
-} vpacket_t, *vpacket_tp;
+};
 
-typedef struct vpacket_pod_s {
+struct vpacket_pod_s {
 	enum vpacket_pod_flags pod_flags;
 	struct vpacket_mgr_s* vp_mgr;
 	vpacket_tp vpacket;
-
-	/* shm items only used if using shared mem */
-	shm_item_tp shmitem_packet;
-	shm_item_tp shmitem_payload;
-
-	/* these locks are only used if we are locking reg packets */
-	/* TODO wrap these in items so we can avoid deadlocks similar to
-	 * the shmcabinet_mgr read and write functions. */
-	rwlock_mgr_tp packet_lock;
-	rwlock_mgr_tp payload_lock;
-} vpacket_pod_t, *vpacket_pod_tp;
+	GMutex* lock;
+};
 
 /* packet pods are wrapped by a reference counter */
 typedef void (*rc_vpacket_pod_destructor_fp)(vpacket_pod_tp vpacket_pod);
-typedef struct rc_vpacket_pod_s {
+struct rc_vpacket_pod_s {
 	vpacket_pod_tp pod;
 	gint8 reference_count;
 	rc_vpacket_pod_destructor_fp destructor;
-} rc_vpacket_pod_t, *rc_vpacket_pod_tp;
+};
 
 rc_vpacket_pod_tp rc_vpacket_pod_create(vpacket_pod_tp vp_pod, rc_vpacket_pod_destructor_fp destructor);
 vpacket_pod_tp rc_vpacket_pod_get(rc_vpacket_pod_tp rc_vpacket_pod);

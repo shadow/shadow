@@ -26,15 +26,16 @@ Node* node_new(GQuark id, Network* network, Software* software, GString* hostnam
 	MAGIC_INIT(node);
 
 	node->id = id;
-	node->event_mailbox = g_async_queue_new_full(event_free);
+	node->event_mailbox = g_async_queue_new_full(shadowevent_free);
 	node->event_priority_queue = g_queue_new();
 	node->network = network;
 
 	node->node_lock = g_mutex_new();
 
 	node->application = application_new(software);
-//  FIXME create this!
-//	node->vsocket_mgr = vsocket_mgr_create((in_addr_t) id, bwDownKiBps, bwUpKiBps, cpuBps);
+
+	// TODO refactor all the socket/event code
+	node->vsocket_mgr = vsocket_mgr_create((in_addr_t) id, bwDownKiBps, bwUpKiBps, cpuBps);
 
 	info("Created Node '%s', ip %s, %u bwUpKiBps, %u bwDownKiBps, %lu cpuBps\n",
 			g_quark_to_string(node->id), NTOA(node->id), bwUpKiBps, bwDownKiBps, cpuBps);
@@ -69,7 +70,7 @@ void node_pushMail(Node* node, Event* event) {
 	MAGIC_ASSERT(node);
 	MAGIC_ASSERT(event);
 
-	g_async_queue_push_sorted(node->event_mailbox, event, event_compare, NULL);
+	g_async_queue_push_sorted(node->event_mailbox, event, shadowevent_compare, NULL);
 }
 
 Event* node_popMail(Node* node) {
@@ -81,7 +82,7 @@ void node_pushTask(Node* node, Event* event) {
 	MAGIC_ASSERT(node);
 	MAGIC_ASSERT(event);
 
-	g_queue_insert_sorted(node->event_priority_queue, event, event_compare, NULL);
+	g_queue_insert_sorted(node->event_priority_queue, event, shadowevent_compare, NULL);
 }
 
 Event* node_popTask(Node* node) {
