@@ -384,7 +384,7 @@ gboolean parser_parse(Parser* parser, GString* filename, GQueue* actions) {
 
 	/* check for success */
 	if (!success) {
-		error("g_file_get_contents: %s\n", error->message);
+		error("g_file_get_contents: %s", error->message);
 		g_error_free(error);
 		return FALSE;
 	}
@@ -410,13 +410,13 @@ gboolean parser_parse(Parser* parser, GString* filename, GQueue* actions) {
 
 		/* check parse error */
 		if (!success) {
-			error("parser_parse: g_markup_parse_context_parse: %s\n", error->message);
+			error("g_markup_parse_context_parse: %s", error->message);
 			g_error_free(error);
 		}
 
 		/* also check for validation */
 		if(parser->hasValidationError) {
-			critical("parser_parse: XML validation error");
+			critical("XML validation error");
 		}
 
 		return FALSE;

@@ -460,10 +460,10 @@ reactivate:;
 				gint time_to_pause = 0;
 
 				if(sfg->current_download == sfg->download1) {
-					service_filegetter_log(sfg, SFG_NOTICE, "[fg-gdouble] download1 %lu.%.3d seconds\n", stats.download_time.tv_sec, (gint) (stats.download_time.tv_nsec / 1000000));
+					service_filegetter_log(sfg, SFG_NOTICE, "[fg-gdouble] download1 %lu.%.3d seconds", stats.download_time.tv_sec, (gint) (stats.download_time.tv_nsec / 1000000));
 					sfg->current_download = sfg->download2;
 				} else if(sfg->current_download == sfg->download2) {
-					service_filegetter_log(sfg, SFG_NOTICE, "[fg-gdouble] download2 %lu.%.3d seconds\n", stats.download_time.tv_sec, (gint) (stats.download_time.tv_nsec / 1000000));
+					service_filegetter_log(sfg, SFG_NOTICE, "[fg-gdouble] download2 %lu.%.3d seconds", stats.download_time.tv_sec, (gint) (stats.download_time.tv_nsec / 1000000));
 					if(sfg->download3 == NULL) {
 						time_to_pause = 1;
 						sfg->current_download = sfg->download1;
@@ -471,7 +471,7 @@ reactivate:;
 						sfg->current_download = sfg->download3;
 					}
 				} else if(sfg->current_download == sfg->download3) {
-					service_filegetter_log(sfg, SFG_NOTICE, "[fg-gdouble] download3 %lu.%.3d seconds\n", stats.download_time.tv_sec, (gint) (stats.download_time.tv_nsec / 1000000));
+					service_filegetter_log(sfg, SFG_NOTICE, "[fg-gdouble] download3 %lu.%.3d seconds", stats.download_time.tv_sec, (gint) (stats.download_time.tv_nsec / 1000000));
 					time_to_pause = 1;
 					sfg->current_download = sfg->download1;
 				} else {
@@ -484,7 +484,7 @@ reactivate:;
 					clock_gettime(CLOCK_REALTIME, &sfg->wakeup);
 					sfg->wakeup.tv_sec += sfg->pausetime_seconds;
 					(*sfg->sleep_cb)(sfg, sfg->pausetime_seconds);
-					service_filegetter_log(sfg, SFG_NOTICE, "[fg-pause] pausing for %i seconds\n", sfg->pausetime_seconds);
+					service_filegetter_log(sfg, SFG_NOTICE, "[fg-pause] pausing for %i seconds", sfg->pausetime_seconds);
 				} else {
 					/* reset download file */
 					service_filegetter_download_next(sfg);

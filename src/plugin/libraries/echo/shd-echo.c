@@ -60,7 +60,7 @@ void __shadow_plugin_init__(ShadowlibVTable* shadowlibFuncs) {
 }
 
 void echo_new(int argc, char* argv[]) {
-	echo_globalState.shadowlibFuncs->log("echo_new called\n");
+	echo_globalState.shadowlibFuncs->log("echo_new called");
 
 	echo_globalState.client = NULL;
 	echo_globalState.server = NULL;
@@ -94,7 +94,7 @@ void echo_new(int argc, char* argv[]) {
 }
 
 void echo_free() {
-	echo_globalState.shadowlibFuncs->log("echo_free called\n");
+	echo_globalState.shadowlibFuncs->log("echo_free called");
 
 	if(echo_globalState.client) {
 		echoclient_free(echo_globalState.client);
@@ -106,7 +106,7 @@ void echo_free() {
 }
 
 void echo_readable(int socketDesriptor) {
-	echo_globalState.shadowlibFuncs->log("echo_readable called\n");
+	echo_globalState.shadowlibFuncs->log("echo_readable called");
 
 	if (echo_globalState.client
 			&& (socketDesriptor == echo_globalState.client->sd)) {
@@ -119,7 +119,7 @@ void echo_readable(int socketDesriptor) {
 }
 
 void echo_writable(int socketDesriptor) {
-	echo_globalState.shadowlibFuncs->log("echo_writable called\n");
+	echo_globalState.shadowlibFuncs->log("echo_writable called");
 
 	if (echo_globalState.client
 			&& (socketDesriptor == echo_globalState.client->sd)) {

@@ -140,10 +140,10 @@ void vtransport_process_incoming_items(vsocket_mgr_tp net, GQueue *titems) {
 						}
 					}
 				} else {
-					info("vtransport_process_incoming_items: ignoring packet for non-existent socket (was it deleted?)\n");
+					info("ignoring packet for non-existent socket (was it deleted?)");
 				}
 			} else {
-				warning("vtransport_process_incoming_items: transport item is NULL, can not process\n");
+				warning("transport item is NULL, can not process");
 			}
 
 			vtransport_destroy_item(titem);
@@ -167,7 +167,7 @@ guint8 vtransport_transmit(vtransport_tp vt, guint32* bytes_transmitted, guint16
 
 	/* send the packet */
 	if(rc_packet != NULL) {
-		debug("vtransport_transmit: sending packet for socket %i\n", vt->sock->sock_desc);
+		debug("sending packet for socket %i", vt->sock->sock_desc);
 		vpacket_log_debug(rc_packet);
 
 		/* FIXME each interface should be separated and have its own bandwidth

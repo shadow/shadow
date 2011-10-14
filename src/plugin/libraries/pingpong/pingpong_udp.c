@@ -44,14 +44,14 @@
 simple_transport_t instance;
 
 void _plugin_init() {
-	snri_log(LOG_INFO, "_plugin_init\n");
+	snri_log(LOG_INFO, "_plugin_init");
 	/* Register the globals here. Since we are storing them in a struct, we
 	 * only have to register one (the struct itself). */
 	snri_register_globals(1,  sizeof(instance), &instance);
 }
 
 void _plugin_uninit() {
-	snri_log(LOG_INFO, "_plugin_uninit\n");
+	snri_log(LOG_INFO, "_plugin_uninit");
 }
 
 void _plugin_instantiate(gint argc, gchar * argv[]) {
@@ -59,7 +59,7 @@ void _plugin_instantiate(gint argc, gchar * argv[]) {
 
 	/* get IP address through SNRI */
 	if(snri_getip(&instance.ip) == SNRICALL_ERROR) {
-		snri_log(LOG_ERR, "Error getting IP address!\n");
+		snri_log(LOG_ERR, "Error getting IP address!");
 		return;
 	}
 	/* also save IP as string */
@@ -72,11 +72,11 @@ void _plugin_instantiate(gint argc, gchar * argv[]) {
 		instance.sdata = calloc(1, sizeof(server_t));
 
 		if(udpserver_start(&instance) == ERROR){
-			snri_log(LOG_ERR, "Error starting server at %s\n", instance.ipstring);
+			snri_log(LOG_ERR, "Error starting server at %s", instance.ipstring);
 			/* cannot continue without a server */
 			exit(ERROR);
 		} else {
-			snri_log(LOG_MSG, "Started server at %s\n", instance.ipstring);
+			snri_log(LOG_MSG, "Started server at %s", instance.ipstring);
 		}
 	} else {
 		/* setup and start a client */
@@ -89,9 +89,9 @@ void _plugin_instantiate(gint argc, gchar * argv[]) {
 		gint socketd = udpclient_start(&instance);
 
 		if(socketd == ERROR){
-			snri_log(LOG_ERR, "Error starting client at %s\n", instance.ipstring);
+			snri_log(LOG_ERR, "Error starting client at %s", instance.ipstring);
 		} else {
-			snri_log(LOG_MSG, "Started client at %s, bootstrapping from server %s\n", instance.ipstring,
+			snri_log(LOG_MSG, "Started client at %s, bootstrapping from server %s", instance.ipstring,
 					ip_to_string(server_ip,buffer,sizeof(buffer)));
 
 			/* start sending data since we do not have to wait for connection */
@@ -111,12 +111,12 @@ void _plugin_destroy() {
 	} else {
 		free(instance.cdata);
 	}
-	snri_log(LOG_INFO, "Module destroyed after sending %i messages and receiving %i messages.\n",
+	snri_log(LOG_INFO, "Module destroyed after sending %i messages and receiving %i messages.",
 			instance.num_msgs_sent, instance.num_msgs_received);
 }
 
 void _plugin_socket_readable(gint socket){
-	snri_log(LOG_INFO, "_plugin_socket_readable for socket %i\n", socket);
+	snri_log(LOG_INFO, "_plugin_socket_readable for socket %i", socket);
 
 	struct sockaddr_in source;
 	source.sin_family = AF_INET;
@@ -128,5 +128,5 @@ void _plugin_socket_readable(gint socket){
 }
 
 void _plugin_socket_writable(gint socket){
-	snri_log(LOG_INFO, "_plugin_socket_writable for socket %i\n", socket);
+	snri_log(LOG_INFO, "_plugin_socket_writable for socket %i", socket);
 }

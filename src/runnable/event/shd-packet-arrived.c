@@ -49,18 +49,18 @@ void packetarrived_run(PacketArrivedEvent* event, Node* node) {
         rc_vpacket_pod_retain_stack(rc_packet);
 
         /* called when there is an incoming packet. */
-        debug("vtransport_mgr_onpacket: event fired\n");
+        debug("event fired");
 
         if(node->vsocket_mgr->vt_mgr != NULL) {
             vsocket_tp sock = vsocket_mgr_get_socket_receiver(node->vsocket_mgr, rc_packet);
             if(sock != NULL) {
                 vtransport_mgr_ready_receive(node->vsocket_mgr->vt_mgr, sock, rc_packet);
             } else {
-                debug("socket no longer exists, dropping packet\n");
+                debug("socket no longer exists, dropping packet");
             }
         }
 
-        debug("vtransport_mgr_onpacket: releasing stack\n");
+        debug("releasing stack");
         rc_vpacket_pod_release_stack(rc_packet);
     }
 }

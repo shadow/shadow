@@ -29,7 +29,7 @@
 static void rc_assert_bounds(gint count) {
 	/* if the count is out of bounds, its definitely an error. complain and die. */
 	if(count < 0 || count > 100) {
-		error("%s: reference count out of bounds\n", __FUNCTION__);
+		error("reference count out of bounds");
 	}
 }
 

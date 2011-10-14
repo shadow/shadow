@@ -38,7 +38,7 @@ Engine* engine_new(Configuration* config) {
 		engine->workerPool = g_thread_pool_new(worker_executeEvent, engine,
 				config->nWorkerThreads, TRUE, &error);
 		if (!engine->workerPool) {
-			error("thread pool failed: %s\n", error->message);
+			error("thread pool failed: %s", error->message);
 			g_error_free(error);
 		}
 	} else {
@@ -92,7 +92,7 @@ void engine_setupWorkerThreads(Engine* engine, gint nWorkerThreads) {
 	engine->workerPool = g_thread_pool_new(worker_executeEvent, engine,
 			nWorkerThreads, TRUE, &error);
 	if (!engine->workerPool) {
-		error("thread pool failed: %s\n", error->message);
+		error("thread pool failed: %s", error->message);
 		g_error_free(error);
 	}
 }

@@ -145,13 +145,13 @@ void vtransport_mgr_ready_receive(vtransport_mgr_tp vt_mgr, vsocket_tp sock, rc_
 			}
 		} else {
 			vpacket_mgr_lockcontrol(rc_packet, LC_OP_READUNLOCK | LC_TARGET_PACKET);
-			debug("vtransport_mgr_ready_receive: no space to receive packet, dropping\n");
+			debug("no space to receive packet, dropping");
 			if(sock->type == SOCK_STREAM) {
 				network_scheduleRetransmit(rc_packet, (GQuark)vt_mgr->vsocket_mgr->addr);
 			}
 		}
 	} else {
-		error("vtransport_mgr_ready_receive: incoming packet is NULL!\n");
+		error("incoming packet is NULL!");
 	}
 
 ret:
@@ -177,7 +177,7 @@ void vtransport_mgr_download_next(vtransport_mgr_tp vt_mgr) {
 		vt_mgr->ok_to_fire_recv = 0;
 	}
 
-	debug("vtransport_mgr_download_next: looking for transport items to receive\n");
+	debug("looking for transport items to receive");
 
 	/* adjust ns cpu counter */
 //	vtransport_mgr_adjust_cpu_load_counter(vt_mgr);
@@ -202,7 +202,7 @@ void vtransport_mgr_download_next(vtransport_mgr_tp vt_mgr) {
 			g_queue_get_length(vt_mgr->inq->buffer) > 0) {
 		vtransport_item_tp titem = g_queue_pop_head(vt_mgr->inq->buffer);
 		if(titem == NULL) {
-			critical("vtransport_mgr_download_next: incoming titem is NULL\n");
+			critical("incoming titem is NULL");
 			vtransport_destroy_item(titem);
 			continue;
 		}
@@ -210,7 +210,7 @@ void vtransport_mgr_download_next(vtransport_mgr_tp vt_mgr) {
 		vpacket_tp packet = vpacket_mgr_lockcontrol(titem->rc_packet, LC_OP_READLOCK | LC_TARGET_PACKET);
 
 		if(packet == NULL) {
-			critical("vtransport_mgr_download_next: incoming packet is NULL\n");
+			critical("incoming packet is NULL");
 			vtransport_destroy_item(titem);
 			continue;
 		}
@@ -233,7 +233,7 @@ void vtransport_mgr_download_next(vtransport_mgr_tp vt_mgr) {
 
 	/* list of items better be empty */
 	if(g_queue_get_length(titems_to_process) > 0) {
-		critical("vtransport_mgr_download_next: not all packets processed by vsocket\n");
+		critical("not all packets processed by vsocket");
 	}
 
 	g_queue_free(titems_to_process);
@@ -247,9 +247,9 @@ void vtransport_mgr_download_next(vtransport_mgr_tp vt_mgr) {
 
 #if 0
 	if(vt_mgr->nanos_consumed_recv > vt_mgr->nanos_accumulated_delay) {
-		debug("vtransport_mgr_download_next: constrained by network speed (net delay = %lu, cpu delay = %lu)\n", vt_mgr->nanos_consumed_recv, vt_mgr->nanos_accumulated_delay);
+		debug("constrained by network speed (net delay = %lu, cpu delay = %lu)", vt_mgr->nanos_consumed_recv, vt_mgr->nanos_accumulated_delay);
 	} else if(vt_mgr->nanos_accumulated_delay > 0) {
-		debug("vtransport_mgr_download_next: constrained by CPU speed (net delay = %lu, cpu delay = %lu)\n", vt_mgr->nanos_consumed_recv, vt_mgr->nanos_accumulated_delay);
+		debug("constrained by CPU speed (net delay = %lu, cpu delay = %lu)", vt_mgr->nanos_consumed_recv, vt_mgr->nanos_accumulated_delay);
 	}
 #endif
 
@@ -309,7 +309,7 @@ void vtransport_mgr_upload_next(vtransport_mgr_tp vt_mgr) {
 		vt_mgr->ok_to_fire_send = 0;
 	}
 
-	debug("vtransport_mgr_upload_next: looking for packets to send\n");
+	debug("looking for packets to send");
 
 	/* adjust ns cpu counter */
 //	vtransport_mgr_adjust_cpu_load_counter(vt_mgr);
@@ -336,7 +336,7 @@ void vtransport_mgr_upload_next(vtransport_mgr_tp vt_mgr) {
 		guint32* sockdp = g_queue_pop_head(vt_mgr->ready_to_send);
 		vsocket_tp sock = vsocket_mgr_get_socket(vt_mgr->vsocket_mgr, *sockdp);
 		if(sock == NULL || sock->vt == NULL) {
-			debug("vtransport_mgr_upload_next: send buffer NULL during round robin, maybe socket %i closed\n", *sockdp);
+			debug("send buffer NULL during round robin, maybe socket %i closed", *sockdp);
 			continue;
 		}
 
@@ -367,9 +367,9 @@ void vtransport_mgr_upload_next(vtransport_mgr_tp vt_mgr) {
 
 #if 0
 	if(vt_mgr->nanos_consumed_sent > vt_mgr->nanos_accumulated_delay) {
-		debug("vtransport_mgr_upload_next: constrained by network speed (net delay = %lu, cpu delay = %lu)\n", vt_mgr->nanos_consumed_sent, vt_mgr->nanos_accumulated_delay);
+		debug("constrained by network speed (net delay = %lu, cpu delay = %lu)", vt_mgr->nanos_consumed_sent, vt_mgr->nanos_accumulated_delay);
 	} else if(vt_mgr->nanos_accumulated_delay > 0) {
-		debug("vtransport_mgr_upload_next: constrained by CPU speed (net delay = %lu, cpu delay = %lu)\n", vt_mgr->nanos_consumed_sent, vt_mgr->nanos_accumulated_delay);
+		debug("constrained by CPU speed (net delay = %lu, cpu delay = %lu)", vt_mgr->nanos_consumed_sent, vt_mgr->nanos_accumulated_delay);
 	}
 #endif
 

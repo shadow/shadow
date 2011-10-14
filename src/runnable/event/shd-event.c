@@ -61,7 +61,7 @@ static gboolean _event_reschedule(Event* event) {
 
 	if(event->cpuDelayPosition > current_delay) {
 		/* impossible for our cpu to lose delay */
-		error("vci_exec_event: delay on event (%lu) is greater than our CPU delay (%lu). Killing it. Things probably wont work right.\n", event->cpuDelayPosition, current_delay);
+		error("delay on event (%lu) is greater than our CPU delay (%lu). Killing it. Things probably wont work right.", event->cpuDelayPosition, current_delay);
 		/* free the event */
 		return TRUE;
 	}
@@ -72,7 +72,7 @@ static gboolean _event_reschedule(Event* event) {
 	event->cpuDelayPosition += nanos_offset;
 	worker_scheduleEvent(event, nanos_offset, event->node->id);
 
-	debug("vci_exec_event: event blocked on CPU, rescheduled for %lu nanoseconds from now\n", nanos_offset);
+	debug("event blocked on CPU, rescheduled for %lu nanoseconds from now", nanos_offset);
 
 	/* dont free the event */
 	return FALSE;

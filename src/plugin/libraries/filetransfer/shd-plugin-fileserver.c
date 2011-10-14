@@ -44,7 +44,7 @@ typedef struct plugin_fileserver_s {
 plugin_fileserver_t pfs;
 
 void _plugin_init() {
-	snri_log(LOG_DEBUG, "registering\n");
+	snri_log(LOG_DEBUG, "registering");
 
 	/* Register the globals here so DVN can track them per-node */
 	snri_register_globals(1, sizeof(plugin_fileserver_t), &pfs);
@@ -53,10 +53,10 @@ void _plugin_init() {
 void _plugin_uninit() {}
 
 void _plugin_instantiate(gint argc, gchar * argv[]) {
-	snri_log(LOG_DEBUG, "parsing args\n");
+	snri_log(LOG_DEBUG, "parsing args");
 	if(argc != 2) {
-		snri_log(LOG_WARN, "wrong number of args. expected 2.\n");
-		snri_log(LOG_MSG, "USAGE: listen_port path/to/docroot\n");
+		snri_log(LOG_WARN, "wrong number of args. expected 2.");
+		snri_log(LOG_MSG, "USAGE: listen_port path/to/docroot");
 		return;
 	}
 
@@ -64,26 +64,26 @@ void _plugin_instantiate(gint argc, gchar * argv[]) {
 	in_port_t listen_port = (in_port_t) atoi(argv[0]);
 	gchar* docroot = argv[1];
 
-	snri_log(LOG_DEBUG, "starting fileserver on port %u\n", listen_port);
+	snri_log(LOG_DEBUG, "starting fileserver on port %u", listen_port);
 	enum fileserver_code res = fileserver_start(&pfs.fs, htonl(listen_addr), htons(listen_port), docroot, 100);
 
 	if(res == FS_SUCCESS) {
-		snri_log(LOG_MSG, "fileserver running on at %s:%u\n", inet_ntoa((struct in_addr){listen_addr}),listen_port);
+		snri_log(LOG_MSG, "fileserver running on at %s:%u", inet_ntoa((struct in_addr){listen_addr}),listen_port);
 	} else {
-		snri_log(LOG_CRIT, "fileserver error, not started!\n");
+		snri_log(LOG_CRIT, "fileserver error, not started!");
 	}
 }
 
 void _plugin_destroy() {
-	snri_log(LOG_MSG, "fileserver stats: %lu bytes in, %lu bytes out, %lu replies\n",
+	snri_log(LOG_MSG, "fileserver stats: %lu bytes in, %lu bytes out, %lu replies",
 			pfs.fs.bytes_received, pfs.fs.bytes_sent, pfs.fs.replies_sent);
-	snri_log(LOG_INFO, "shutting down fileserver\n");
+	snri_log(LOG_INFO, "shutting down fileserver");
 	fileserver_shutdown(&pfs.fs);
 }
 
 static void plugin_fileserver_activate(gint sockd) {
 	enum fileserver_code result = fileserver_activate(&pfs.fs, sockd);
-	snri_log(LOG_INFO, "fileserver activation result: %s (%lu bytes in, %lu bytes out, %lu replies)\n",
+	snri_log(LOG_INFO, "fileserver activation result: %s (%lu bytes in, %lu bytes out, %lu replies)",
 			fileserver_codetoa(result), pfs.fs.bytes_received, pfs.fs.bytes_sent, pfs.fs.replies_sent);
 }
 

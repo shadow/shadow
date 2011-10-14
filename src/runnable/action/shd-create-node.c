@@ -62,7 +62,7 @@ void createnodes_run(CreateNodesAction* action) {
 
 	/* must have one cdf, but the other one can be anything if not a cdf, it will be ignored */
 	if(!bwUpCDF && !bwDownCDF) {
-		critical("Invalid XML file submitted. Please use at least one bandwidth cdf for node creation.\n");
+		critical("Invalid XML file submitted. Please use at least one bandwidth cdf for node creation.");
 		return;
 	}
 

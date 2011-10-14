@@ -50,11 +50,7 @@ static bufferlink_tp bufferlink_create(guint16 capacity);
 static void bufferlink_destroy(bufferlink_tp link);
 
 linkedbuffer_tp linkedbuffer_create(size_t link_capacity){
-	linkedbuffer_tp lbuffer = malloc(sizeof(linkedbuffer_t));
-	if(lbuffer == NULL){
-		printf("Out of memory: linkedbuffer_create\n");
-		exit(1);
-	}
+	linkedbuffer_tp lbuffer = g_malloc(sizeof(linkedbuffer_t));
 
 	lbuffer->head = NULL;
 	lbuffer->head_w_offset = 0;
@@ -213,17 +209,9 @@ static size_t linkedbuffer_get_available_bytes_tail(linkedbuffer_tp lbuffer) {
 }
 
 static bufferlink_tp bufferlink_create(guint16 capacity){
-	bufferlink_tp link = malloc(sizeof(bufferlink_t));
-	if(link == NULL){
-		printf("Out of memory: bufferlink_create\n");
-		exit(1);
-	}
+	bufferlink_tp link = g_malloc(sizeof(bufferlink_t));
 
-	link->buf = malloc(capacity);
-	if(link->buf == NULL){
-		printf("Out of memory: bufferlink_create : buf\n");
-		exit(1);
-	}
+	link->buf = g_malloc(capacity);
 
 	link->capacity = capacity;
 	link->next = NULL;

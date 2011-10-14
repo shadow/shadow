@@ -48,14 +48,14 @@ void tcpretransmittimerexpired_run(TCPRetransmitTimerExpiredEvent* event, Node* 
 	MAGIC_ASSERT(event);
 	MAGIC_ASSERT(node);
 
-	debug("vtransport_onretransmit: event fired\n");
+	debug("event fired\n");
 
 	vsocket_mgr_tp vs_mgr = node->vsocket_mgr;
 	if(vs_mgr == NULL) {
 		return;
 	}
 
-	debug("vtransport_onpayload->retransmit: %s:%u requesting payload->retransmission of %u from %s:%u\n",
+	debug("%s:%u requesting retransmission of %u from %s:%u",
 			NTOA(event->destinationID), ntohs(event->destinationPort),
 			event->retransmitKey, vs_mgr->addr_string, ntohs(event->sourcePort));
 
@@ -67,7 +67,7 @@ void tcpretransmittimerexpired_run(TCPRetransmitTimerExpiredEvent* event, Node* 
 	}
 
 	if(sock->vt->vtcp != NULL && sock->vt->vtcp->remote_peer == NULL) {
-		info("vtransport_onpayload->retransmit: %s:%u has no connected child socket. was it closed?\n",
+		info("%s:%u has no connected child socket. was it closed?",
 				NTOA(vs_mgr->addr), ntohs(event->sourcePort));
 		return;
 	}

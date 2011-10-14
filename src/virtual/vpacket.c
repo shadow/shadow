@@ -48,7 +48,7 @@ vpacket_tp vpacket_set(vpacket_tp vpacket, guint8 protocol, in_addr_t src_addr, 
 		guint16 data_size, const gpointer data) {
 	/* check for allocation */
 	if(vpacket == NULL){
-		error("vpacket_set: please provide NON-NULL pointer to a vpacket\n");
+		error("please provide NON-NULL pointer to a vpacket");
 		return NULL;
 	}
 
@@ -110,7 +110,7 @@ void vpacket_log(rc_vpacket_pod_tp vpacket_pod) {
 			gchar flagstring[24];
 			vpacket_tcp_flags_to_string(flagstring, sizeof(flagstring), vpacket->tcp_header.flags);
 
-			debug("vpacket_log: TCP from %s:%u to %s:%u %s seq#:%u ack#:%u win#:%u bytes:%u\n",
+			debug("TCP from %s:%u to %s:%u %s seq#:%u ack#:%u win#:%u bytes:%u",
 					srcip,
 					ntohs(vpacket->header.source_port),
 					dstip,
@@ -121,7 +121,7 @@ void vpacket_log(rc_vpacket_pod_tp vpacket_pod) {
 					vpacket->tcp_header.advertised_window,
 					vpacket->data_size);
 		} else {
-			debug("vpacket_log: UDP from %s:%u to %s:%u bytes:%u\n",
+			debug("UDP from %s:%u to %s:%u bytes:%u",
 					srcip,
 					ntohs(vpacket->header.source_port),
 					dstip,

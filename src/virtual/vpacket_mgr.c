@@ -86,7 +86,7 @@ void vpacket_mgr_vpacket_pod_destructor_cb(vpacket_pod_tp vp_pod) {
 
 		free(vp_pod);
 	} else {
-		warning("vpacket_pod_rc_destructor_cb: unable to destroy NULL pod\n");
+		warning("unable to destroy NULL pod");
 	}
 }
 
@@ -111,7 +111,7 @@ vpacket_tp vpacket_mgr_lockcontrol(rc_vpacket_pod_tp rc_vp_pod, enum vpacket_loc
 					break;
 				}
 				default: {
-					warning("vpacket_mgr_lockcontrol: undefined command\n");
+					warning("undefined command");
 					break;
 				}
 			}

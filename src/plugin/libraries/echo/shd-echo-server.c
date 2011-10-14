@@ -28,7 +28,7 @@ EchoServer* echoserver_new(in_addr_t bindIPAddress) {
 
 	/* create the socket and get a socket descriptor */
 	if ((socketd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0)) == ERROR) {
-		perror("echoserver_new: error creating socket");
+		perror("error creating socket");
 	}
 
 	/* setup the socket address info, server will listen for incoming
@@ -41,12 +41,12 @@ EchoServer* echoserver_new(in_addr_t bindIPAddress) {
 
 	/* bind the socket to the server port */
 	if (bind(socketd, (struct sockaddr *) &server, sizeof(server)) == ERROR) {
-		perror("echoserver_new: error in bind");
+		perror("error in bind");
 	}
 
 	/* set as server socket */
 	if (listen(socketd, 100) == ERROR) {
-		perror("echoserver_new: error in listen");
+		perror("error in listen");
 	}
 
 	/* store the socket as our listening socket */
@@ -62,18 +62,18 @@ void echoserver_free(EchoServer* es) {
 
 void echoserver_socketReadable(EchoServer* es, gint sockd, ShadowlibLogFunc log) {
 	if(es == NULL) {
-		log("echoserver_socketReadable called with NULL server\n");
+		log("NULL server");
 		return;
 	}
 
-	log("echoserver_socketReadable for socket %i\n", sockd);
+	log("socket %i", sockd);
 
 	if(sockd == es->listen_sd) {
 		/* need to accept a connection on server listening socket,
 		 * dont care about address of connector.
 		 * this gives us a new socket thats connected to the client */
 		if((sockd = accept(es->listen_sd, NULL, NULL)) == ERROR) {
-			perror("echoserver_socketReadable: error accepting socket");
+			perror("error accepting socket");
 		}
 	}
 
@@ -82,7 +82,7 @@ void echoserver_socketReadable(EchoServer* es, gint sockd, ShadowlibLogFunc log)
 	ssize_t bread;
 	while(read_size > 0 &&
 			(bread = read(sockd, es->echo_buffer + es->read_offset, read_size)) > 0) {
-		log("server socket %i read %i bytes\n", sockd, (gint)bread);
+		log("server socket %i read %i bytes", sockd, (gint)bread);
 		es->read_offset += bread;
 		read_size -= bread;
 	}
@@ -93,7 +93,7 @@ void echoserver_socketReadable(EchoServer* es, gint sockd, ShadowlibLogFunc log)
 	ssize_t bwrote;
 	while(write_size > 0 &&
 			(bwrote = write(sockd, es->echo_buffer + es->write_offset, write_size)) > 0) {
-		log("server socket %i wrote %i bytes\n", sockd, (gint)bwrote);
+		log("server socket %i wrote %i bytes", sockd, (gint)bwrote);
 		es->write_offset += bwrote;
 		write_size -= bwrote;
 	}

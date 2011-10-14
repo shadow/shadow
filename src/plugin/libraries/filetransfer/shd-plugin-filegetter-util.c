@@ -33,15 +33,15 @@
 
 void plugin_filegetter_util_log_callback(enum service_filegetter_loglevel level, const gchar* message) {
 	if(level == SFG_CRITICAL) {
-		snri_log(LOG_CRIT, "%s\n", message);
+		snri_log(LOG_CRIT, "%s", message);
 	} else if(level == SFG_WARNING) {
-		snri_log(LOG_WARN, "%s\n", message);
+		snri_log(LOG_WARN, "%s", message);
 	} else if(level == SFG_NOTICE) {
-		snri_log(LOG_MSG, "%s\n", message);
+		snri_log(LOG_MSG, "%s", message);
 	} else if(level == SFG_INFO) {
-		snri_log(LOG_INFO, "%s\n", message);
+		snri_log(LOG_INFO, "%s", message);
 	} else if(level == SFG_DEBUG) {
-		snri_logdebug("%s\n", message);
+		snri_logdebug("%s", message);
 	} else {
 		/* we dont care */
 	}
@@ -57,7 +57,7 @@ in_addr_t plugin_filegetter_util_hostbyname_callback(const gchar* hostname) {
 		addr = htonl(INADDR_LOOPBACK);
 	} else {
 		if(snri_resolve_name((gchar*)hostname, &addr) != SNRICALL_SUCCESS) {
-			snri_log(LOG_WARN, "%s does not resolve to a usable address\n", hostname);
+			snri_log(LOG_WARN, "%s does not resolve to a usable address", hostname);
 			addr = htonl(INADDR_NONE);
 		}
 	}
@@ -71,6 +71,6 @@ void plugin_filegetter_util_wakeup_callback(gint timerid, gpointer arg) {
 
 void plugin_filegetter_util_sleep_callback(gpointer sfg, guint seconds) {
 	if(snri_timer_create(seconds * 1000, &plugin_filegetter_util_wakeup_callback, sfg) == SNRICALL_ERROR) {
-		snri_log(LOG_WARN, "unable to create sleep timer for %u seconds\n", seconds);
+		snri_log(LOG_WARN, "unable to create sleep timer for %u seconds", seconds);
 	}
 }

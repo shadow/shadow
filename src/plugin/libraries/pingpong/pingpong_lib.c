@@ -171,7 +171,7 @@ gint transport_send_message(simple_transport_tp instance, gint socketd, struct s
 		perror("Error in transport_send_message: sendto");
 	} else {
 		gchar buffer[40];
-		LOG("Sent '%s' to %s:%i.\n", message, ip_to_string(destination->sin_addr.s_addr, buffer, sizeof(buffer)), destination->sin_port);
+		LOG("Sent '%s' to %s:%i.", message, ip_to_string(destination->sin_addr.s_addr, buffer, sizeof(buffer)), destination->sin_port);
 		instance->num_msgs_sent++;
 	}
 
@@ -190,14 +190,14 @@ gint transport_receive_message(simple_transport_tp instance, gint socketd, struc
 	if(result == ERROR){
 		/* EAGAIN or EWOULDBLOCK are valid for non-blocking sockets */
 		if(errno == EAGAIN || errno == EWOULDBLOCK) {
-			LOG("No data to receive, will try again on next receive call\n");
+			LOG("No data to receive, will try again on next receive call");
 			result = 0;
 		} else {
 			perror("Error in transport_receive_message: recvfrom");
 		}
 	} else {
 		struct sockaddr_in* sa = (struct sockaddr_in*) source;
-		LOG("Received '%s' from %s:%i.\n", (gchar*)data, ip_to_string(sa->sin_addr.s_addr, buffer, sizeof(buffer)), sa->sin_port);
+		LOG("Received '%s' from %s:%i.", (gchar*)data, ip_to_string(sa->sin_addr.s_addr, buffer, sizeof(buffer)), sa->sin_port);
 		instance->num_msgs_received++;
 	}
 

@@ -43,12 +43,7 @@ static orderedlist_element_tp orderedlist_search(orderedlist_tp list, guint64 ke
 static orderedlist_element_tp orderedlist_find_position(orderedlist_tp list, guint64 key);
 
 orderedlist_tp orderedlist_create() {
-	orderedlist_tp list = malloc(sizeof(orderedlist_t));
-
-	if(list == NULL){
-		printf("Out of memory: orderedlist_create\n");
-		exit(-1);
-	}
+	orderedlist_tp list = g_malloc(sizeof(orderedlist_t));
 
 	list->first = NULL;
 	list->last = NULL;
@@ -87,11 +82,7 @@ void orderedlist_add(orderedlist_tp list, guint64 key, gpointer value) {
 	}
 
 	/* create new element */
-	orderedlist_element_tp new = malloc(sizeof(orderedlist_element_t));
-	if(new == NULL){
-		printf("Out of memory: orderedlist_add\n");
-		exit(-1);
-	}
+	orderedlist_element_tp new = g_malloc(sizeof(orderedlist_element_t));
 	new->key = key;
 	new->value = value;
 

@@ -101,8 +101,8 @@ gdouble network_getLinkReliability(Network* sourceNetwork, Network* destinationN
 	if(link) {
 		return link->reliability;
 	} else {
-		critical("%s: unable to find link between networks '%s' and '%s'. Check XML file for errors.",
-				__FUNCTION__, g_quark_to_string(sourceNetwork->id), g_quark_to_string(destinationNetwork->id));
+		critical("unable to find link between networks '%s' and '%s'. Check XML file for errors.",
+				g_quark_to_string(sourceNetwork->id), g_quark_to_string(destinationNetwork->id));
 		return G_MINDOUBLE;
 	}
 }
@@ -114,8 +114,8 @@ gdouble network_getLinkLatency(Network* sourceNetwork, Network* destinationNetwo
 	if(link) {
 		return cdf_getValue(link->latency, percentile);
 	} else {
-		critical("%s: unable to find link between networks '%s' and '%s'. Check XML file for errors.",
-				__FUNCTION__, g_quark_to_string(sourceNetwork->id), g_quark_to_string(destinationNetwork->id));
+		critical("unable to find link between networks '%s' and '%s'. Check XML file for errors.",
+				g_quark_to_string(sourceNetwork->id), g_quark_to_string(destinationNetwork->id));
 		return G_MINDOUBLE;
 	}
 }
@@ -211,7 +211,7 @@ void network_schedulePacket(rc_vpacket_pod_tp rc_packet) {
 
 	vpacket_tp packet = vpacket_mgr_lockcontrol(rc_packet, LC_OP_READLOCK | LC_TARGET_PACKET);
 	if(packet == NULL) {
-		error("vci_schedule_packet: packet is NULL!\n");
+		error("packet is NULL!");
 		do_unlock = 0;
 		goto ret;
 	}

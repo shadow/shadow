@@ -82,24 +82,24 @@ void vsocket_notify(vsocket_mgr_tp net, vsocket_tp sock, guint8 can_read, guint8
 	/* check several cases for not marking the socket available */
 	if(sock->curr_state == VTCP_CLOSED || sock->curr_state == VTCP_CLOSING) {
 		/* cant read or write if connection is closed or close was called by client */
-		debug("vsocket_notify: not creating notification event, connection CLOSED or CLOSING\n");
+		debug("not creating notification event, connection CLOSED or CLOSING");
 		return;
 	}
 	if(can_write && sock->curr_state == VTCP_CLOSE_WAIT) {
 		/* cant write to a connection closed by the other end */
-		debug("vsocket_notify: not creating write notification event, connection CLOSE_WAIT\n");
+		debug("not creating write notification event, connection CLOSE_WAIT");
 		return;
 	}
 	if(can_write && sock->curr_state != VTCP_ESTABLISHED) {
 		/* dont tell the user it can write because a control packet was sent
 		 * and caused the buffer to become empty
 		 */
-		debug("vsocket_notify: not creating write notification event, connection not ESTABLISHED\n");
+		debug("not creating write notification event, connection not ESTABLISHED");
 		return;
 	}
 	if(!sock->is_active) {
 		/* dont mark unaccepted connections as available */
-		debug("vsocket_notify: not creating notification event, socket not active\n");
+		debug("not creating notification event, socket not active");
 		return;
 	}
 
@@ -112,7 +112,7 @@ void vsocket_notify(vsocket_mgr_tp net, vsocket_tp sock, guint8 can_read, guint8
 	}
 
 	if(vepoll_mark_available(sock->vep, activation_type) == 0) {
-		debug("vsocket_notify: event created, socket %i type=%u\n", sock->sock_desc, activation_type);
+		debug("event created, socket %i type=%u", sock->sock_desc, activation_type);
 	}
 }
 #endif
@@ -183,7 +183,7 @@ void vsocket_transition(vsocket_tp sock, enum vsocket_state newstate) {
 				s = "ERROR!";
 				break;
 		}
-		debug("vsocket_transition: socket %u moved to state %s (parent is %u)\n", sock->sock_desc, s, sock->sock_desc_parent);
+		debug("socket %u moved to state %s (parent is %u)", sock->sock_desc, s, sock->sock_desc_parent);
 #endif
 	}
 }
@@ -200,7 +200,7 @@ static gint vsocket_bind_implicit(vsocket_mgr_tp net, gint fd, in_addr_t addr) {
 gint vsocket_socket(vsocket_mgr_tp net, gint domain, gint type, gint protocol) {
 	/* vsocket only supports PF_INET */
 	if (domain != PF_INET) {
-		warning("vsocket_socket: trying to create socket with domain \"%i\", we only support PF_INET\n", domain);
+		warning("trying to create socket with domain \"%i\", we only support PF_INET", domain);
 		errno = EAFNOSUPPORT;
 		goto err;
 	}
@@ -220,7 +220,7 @@ gint vsocket_socket(vsocket_mgr_tp net, gint domain, gint type, gint protocol) {
 
 	/* check for our supported types */
 	if (type != SOCK_STREAM && type != SOCK_DGRAM) {
-		warning("vsocket_socket: trying to create socket with type \"%i\", we only support SOCK_STREAM and SOCK_DGRAM\n", type);
+		warning("trying to create socket with type \"%i\", we only support SOCK_STREAM and SOCK_DGRAM", type);
 		errno = EPROTONOSUPPORT;
 		goto err;
 	}
@@ -228,7 +228,7 @@ gint vsocket_socket(vsocket_mgr_tp net, gint domain, gint type, gint protocol) {
 	if(blocking) {
 		/* TODO do we require NONBLOCK be set immediately for us to support the socket?
 		 * pretty sure Tor uses come ctrl functions at times*/
-		warning("vsocket_socket: trying to create blocking socket, we only support non-blocking (bitwise OR 'SOCK_NONBLOCK' with type) [%i]\n", type);
+		warning("trying to create blocking socket, we only support non-blocking (bitwise OR 'SOCK_NONBLOCK' with type) [%i]", type);
 		errno = EPROTONOSUPPORT;
 		goto err;
 	}
@@ -240,7 +240,7 @@ gint vsocket_socket(vsocket_mgr_tp net, gint domain, gint type, gint protocol) {
 	return sock->sock_desc;
 
 err:
-	critical("vsocket_socket: error creating socket, returning an invalid socket descriptor\n");
+	critical("error creating socket, returning an invalid socket descriptor");
 	return VSOCKET_ERROR;
 }
 
@@ -274,7 +274,7 @@ gint vsocket_socketpair(vsocket_mgr_tp net, gint domain, gint type, gint protoco
 	if(blocking) {
 		/* TODO do we require NONBLOCK be set immediately for us to support the socket?
 		 * pretty sure Tor uses come ctrl functions at times*/
-		warning("vsocket_socket: trying to create blocking socket, we only support non-blocking (bitwise OR 'SOCK_NONBLOCK' with type) {%i}\n", type);
+		warning("trying to create blocking socket, we only support non-blocking (bitwise OR 'SOCK_NONBLOCK' with type) {%i}", type);
 		errno = EPROTONOSUPPORT;
 		return VSOCKET_ERROR;
 	}
@@ -284,12 +284,12 @@ gint vsocket_socketpair(vsocket_mgr_tp net, gint domain, gint type, gint protoco
 	vpipe_id fdb = net->next_sock_desc++;
 
 	if(vpipe_create(net->vev_mgr, net->vpipe_mgr, fda, fdb) == VPIPE_SUCCESS) {
-		debug("vsocket_socketpair: created socketpair (%u, %u)\n", fda, fdb);
+		debug("created socketpair (%u, %u)", fda, fdb);
 		sv[0] = fda;
 		sv[1] = fdb;
 		return VSOCKET_SUCCESS;
 	} else {
-		debug("vsocket_socketpair: vpipe error, socketpair not created\n");
+		debug("vpipe error, socketpair not created");
 		return VSOCKET_ERROR;
 	}
 }
@@ -493,7 +493,7 @@ gint vsocket_connect(vsocket_mgr_tp net, gint fd, struct sockaddr_in* saddr, soc
 
 		if(!success) {
 			/* this should never happen, control packets consume no buffer space */
-			error("vsocket_connect: error sending SYN step 1\n");
+			error("error sending SYN step 1");
 			vtcp_disconnect(sock->vt->vtcp);
 			errno = EAGAIN;
 			return VSOCKET_ERROR;
@@ -597,7 +597,7 @@ ssize_t vsocket_sendto(vsocket_mgr_tp net, gint fd, const gpointer buf, size_t n
 		struct sockaddr_in* saddr, socklen_t saddr_len) {
 	/* block sending if we have yet to absorb cpu delays */
 	if(vcpu_is_blocking(net->vcpu)) {
-		debug("vsocket_sendto: blocked on CPU when trying to send %lu bytes from socket %i\n", n, fd);
+		debug("blocked on CPU when trying to send %lu bytes from socket %i", n, fd);
 		errno = EAGAIN;
 		return VSOCKET_ERROR;
 	}
@@ -644,7 +644,7 @@ ssize_t vsocket_sendto(vsocket_mgr_tp net, gint fd, const gpointer buf, size_t n
 
 		if(sock->vt == NULL || sock->vt->vtcp == NULL) {
 			/* ginternal error */
-			error("vsocket_sendto: NULL transport objects");
+			error("NULL transport objects");
 			errno = EINVAL;
 			return VSOCKET_ERROR;
 		}
@@ -717,7 +717,7 @@ ssize_t vsocket_sendto(vsocket_mgr_tp net, gint fd, const gpointer buf, size_t n
 		result = VSOCKET_ERROR;
 		errno = EAGAIN;
 	} else {
-		debug("user sent %zd bytes\n", result);
+		debug("user sent %zd bytes", result);
 
 		/* user is reading some bytes. lets assume some cpu processing delay
 		 * here since they will need to copy these and process them. */
@@ -730,7 +730,7 @@ ssize_t vsocket_recvfrom(vsocket_mgr_tp net, gint fd, gpointer buf, size_t n, gi
 		struct sockaddr_in* saddr, socklen_t* saddr_len) {
 	/* block receiving if we have yet to absorb cpu delays */
 	if(vcpu_is_blocking(net->vcpu)) {
-		debug("vsocket_recvfrom: blocked on CPU when trying to receive from socket %i\n", fd);
+		debug("blocked on CPU when trying to receive from socket %i", fd);
 		errno = EAGAIN;
 		return VSOCKET_ERROR;
 	}
@@ -810,7 +810,7 @@ ssize_t vsocket_recvfrom(vsocket_mgr_tp net, gint fd, gpointer buf, size_t n, gi
 			errno = EAGAIN;
 		}
 	} else {
-		debug("user received %zd bytes\n", result);
+		debug("user received %zd bytes", result);
 		if(sock->curr_state == VTCP_CLOSE_WAIT) {
 			/* make sure user keeps reading till EOF */
 			vepoll_mark_available(sock->vep, VEPOLL_READ);
@@ -828,14 +828,14 @@ ssize_t vsocket_recvfrom(vsocket_mgr_tp net, gint fd, gpointer buf, size_t n, gi
 
 ssize_t vsocket_sendmsg(vsocket_mgr_tp net, gint fd, const struct msghdr* message, gint flags) {
 	/* TODO implement */
-	warning("vsocket_sendmsg: sendmsg not implemented\n");
+	warning("sendmsg not implemented");
 	errno = ENOSYS;
 	return (ssize_t) VSOCKET_ERROR;
 }
 
 ssize_t vsocket_recvmsg(vsocket_mgr_tp net, gint fd, struct msghdr* message, gint flags) {
 	/* TODO implement */
-	warning("vsocket_recvmsg: recvmsg not implemented\n");
+	warning("recvmsg not implemented");
 	errno = ENOSYS;
 	return (ssize_t) VSOCKET_ERROR;
 }
@@ -851,14 +851,14 @@ gint vsocket_getsockopt(vsocket_mgr_tp net, gint fd, gint level, gint optname, g
 				break;
 
 			default:
-				warning("vsocket_getsockopt: option not implemented\n");
+				warning("option not implemented");
 				errno = ENOSYS;
 				return VSOCKET_ERROR;
 		}
 
 		return VSOCKET_SUCCESS;
 	} else {
-		warning("vsocket_getsockopt: level not implemented\n");
+		warning("level not implemented");
 		errno = ENOSYS;
 		return VSOCKET_ERROR;
 	}
@@ -867,7 +867,7 @@ gint vsocket_getsockopt(vsocket_mgr_tp net, gint fd, gint level, gint optname, g
 gint vsocket_setsockopt(vsocket_mgr_tp net, gint fd, gint level, gint optname, const gpointer optval,
 		socklen_t optlen) {
 	/* TODO implement */
-	warning("vsocket_setsockopt: setsockopt not implemented\n");
+	warning("setsockopt not implemented");
 	errno = ENOSYS;
 	return VSOCKET_ERROR;
 }
@@ -965,7 +965,7 @@ gint vsocket_accept(vsocket_mgr_tp net, gint fd, struct sockaddr_in* saddr, sock
 	}
 
 	if(pending_sock->vt->vtcp->remote_peer == NULL) {
-		error("vsocket_accept: no remote peer on pending connection\n");
+		error("no remote peer on pending connection");
 		errno = VSOCKET_ERROR;
 		return VSOCKET_ERROR;
 	}
@@ -995,7 +995,7 @@ gint vsocket_accept(vsocket_mgr_tp net, gint fd, struct sockaddr_in* saddr, sock
 
 gint vsocket_shutdown(vsocket_mgr_tp net, gint fd, gint how) {
 	/* TODO implement */
-	warning("vsocket_shutdown: shutdown not implemented\n");
+	warning("shutdown not implemented");
 	errno = ENOSYS;
 	return VSOCKET_ERROR;
 }
