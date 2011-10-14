@@ -37,7 +37,7 @@ Node* node_new(GQuark id, Network* network, Software* software, GString* hostnam
 	// TODO refactor all the socket/event code
 	node->vsocket_mgr = vsocket_mgr_create((in_addr_t) id, bwDownKiBps, bwUpKiBps, cpuBps);
 
-	info("Created Node '%s', ip %s, %u bwUpKiBps, %u bwDownKiBps, %lu cpuBps\n",
+	info("Created Node '%s', ip %s, %u bwUpKiBps, %u bwDownKiBps, %lu cpuBps",
 			g_quark_to_string(node->id), NTOA(node->id), bwUpKiBps, bwDownKiBps, cpuBps);
 
 	return node;

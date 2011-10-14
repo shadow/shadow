@@ -103,18 +103,20 @@ static gint _engine_processEvents(Engine* engine) {
 		/* get next event */
 		worker->cached_event = next_event;
 		MAGIC_ASSERT(worker->cached_event);
+		worker->cached_node = next_event->node;
 
 		/* ensure priority */
 		worker->clock_now = worker->cached_event->time;
 		engine->clock = worker->clock_now;
 		g_assert(worker->clock_now >= worker->clock_last);
 
+
 		gboolean complete = shadowevent_run(worker->cached_event);
 		if(complete) {
 			shadowevent_free(worker->cached_event);
 		}
 		worker->cached_event = NULL;
-
+		worker->cached_node = NULL;
 		worker->clock_last = worker->clock_now;
 		worker->clock_now = SIMTIME_INVALID;
 

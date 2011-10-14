@@ -45,8 +45,7 @@ void dataentry_copy(DataEntry* sourceEntry, DataEntry* destinationEntry) {
 	g_assert(destinationEntry->size == sourceEntry->size);
 	g_assert(destinationEntry->reference && sourceEntry->reference);
 
-	destinationEntry->size = sourceEntry->size;
-	memmove(destinationEntry->reference, sourceEntry->reference, sourceEntry->size);
+	memmove(destinationEntry->reference, sourceEntry->reference, destinationEntry->size);
 }
 
 void dataentry_free(gpointer data) {

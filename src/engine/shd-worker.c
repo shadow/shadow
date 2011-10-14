@@ -182,7 +182,11 @@ void worker_scheduleEvent(Event* event, SimulationTime nano_delay, GQuark receiv
 
 	/* the NodeEvent needs a pointer to the correct node */
 	event->node = receiver;
-	event->ownerID = sender->id;
+
+	/* sender can be NULL while bootstrapping */
+	if(sender) {
+		event->ownerID = sender->id;
+	}
 
 	/* single threaded mode is simpler than multi threaded */
 	if(engine_getNumThreads(engine) > 1) {

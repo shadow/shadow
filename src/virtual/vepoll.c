@@ -237,7 +237,7 @@ void vepoll_poll(vepoll_tp vep, vsocket_mgr_tp vs_mgr) {
 
 	/* TODO move this out of vepoll and to a higher level */
 #ifdef DEBUG
-	vsocket_mgr_print_stat(vsock_mgr, vep->sockd);
+	vsocket_mgr_print_stat(vs_mgr, vep->sockd);
 	vevent_mgr_print_stat(vep->vev_mgr, vep->sockd);
 #endif
 

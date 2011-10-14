@@ -27,12 +27,12 @@ RunnableVTable killengine_vtable = {
 	MAGIC_VALUE
 };
 
-KillEngineAction* killengine_new(guint64 time) {
+KillEngineAction* killengine_new(guint64 endTimeInSeconds) {
 	KillEngineAction* action = g_new0(KillEngineAction, 1);
 	MAGIC_INIT(action);
 
 	action_init(&(action->super), &killengine_vtable);
-	action->time = (SimulationTime)time;
+	action->endTime = (SimulationTime)(SIMTIME_ONE_SECOND * endTimeInSeconds);
 
 	return action;
 }
@@ -40,7 +40,7 @@ KillEngineAction* killengine_new(guint64 time) {
 void killengine_run(KillEngineAction* action) {
 	MAGIC_ASSERT(action);
 	Worker* worker = worker_getPrivate();
-	worker->cached_engine->endTime = action->time;
+	worker->cached_engine->endTime = action->endTime;
 }
 
 void killengine_free(KillEngineAction* action) {

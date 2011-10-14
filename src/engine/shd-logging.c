@@ -81,7 +81,7 @@ void logging_handleLog(const gchar *log_domain, GLogLevelFlags log_level, const 
 	g_free(dt_format);
 }
 
-void logging_logv(const gchar *log_domain, GLogLevelFlags log_level, const gchar *format, va_list vargs) {
+void logging_logv(const gchar *log_domain, GLogLevelFlags log_level, const gchar* functionName, const gchar *format, va_list vargs) {
 	/* this is called by worker threads, so we have access to worker */
 	Worker* w = worker_getPrivate();
 
@@ -104,12 +104,15 @@ void logging_logv(const gchar *log_domain, GLogLevelFlags log_level, const gchar
 
 	gchar* clock_string = g_string_free(simtime, FALSE);
 
+	const gchar* functionString = functionName ? functionName : "n/a";
+
 	GString* string_buffer = g_string_new(NULL);
-	g_string_printf(string_buffer, "%s [t%i] [%s-%s] %s",
+	g_string_printf(string_buffer, "%s [t%i] [%s-%s] [%s] %s",
 			clock_string,
 			w->thread_id,
 			_logging_getLogDomainString(log_domain),
 			_logging_getLogLevelString(log_level),
+			functionString,
 			format
 			);
 
@@ -119,11 +122,11 @@ void logging_logv(const gchar *log_domain, GLogLevelFlags log_level, const gchar
 	g_free(clock_string);
 }
 
-void logging_log(const gchar *log_domain, GLogLevelFlags log_level, const gchar *format, ...) {
+void logging_log(const gchar *log_domain, GLogLevelFlags log_level, const gchar* functionName, const gchar *format, ...) {
 	va_list vargs;
 	va_start(vargs, format);
 
-	logging_logv(log_domain, log_level, format, vargs);
+	logging_logv(log_domain, log_level, functionName, format, vargs);
 
 	va_end(vargs);
 }

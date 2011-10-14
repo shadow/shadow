@@ -48,7 +48,10 @@ void shadowlib_log(gchar* format, ...) {
 	va_list variableArguments;
 	va_start(variableArguments, format);
 
-	logging_logv(G_LOG_DOMAIN, G_LOG_LEVEL_MESSAGE, format, variableArguments);
+	/* the NULL is the function name. we dont get that from the plug-in, and
+	 * it might not even make sense anyway.
+	 */
+	logging_logv(G_LOG_DOMAIN, G_LOG_LEVEL_MESSAGE, NULL, format, variableArguments);
 
 	va_end(variableArguments);
 }

@@ -44,8 +44,6 @@ PluginVTable echoLibraryFuncs = {
 Echo echo_globalState;
 
 void __shadow_plugin_init__(ShadowlibVTable* shadowlibFuncs) {
-	printf("initializing with shadowlib\n");
-
 	/* save the shadow functions we will use */
 	echo_globalState.shadowlibFuncs = shadowlibFuncs;
 
@@ -53,16 +51,19 @@ void __shadow_plugin_init__(ShadowlibVTable* shadowlibFuncs) {
 	 * tell shadow which of our functions it can use to notify our plugin,
 	 * and allow it to track our state for each instance of this plugin
 	 */
-	gboolean success = shadowlibFuncs->registration(&echoLibraryFuncs, 1, sizeof(Echo));
-	if(!success) {
-		shadowlibFuncs->log("Echo error registering state");
+	gboolean success = shadowlibFuncs->registration(&echoLibraryFuncs, 1, sizeof(Echo), &echo_globalState);
+	if(success) {
+		shadowlibFuncs->log("successfully registered echo plug-in state");
+	} else {
+		shadowlibFuncs->log("error registering echo plug-in state");
 	}
 }
 
 void echo_new(int argc, char* argv[]) {
 	echo_globalState.shadowlibFuncs->log("echo_new called\n");
 
-	memset(&echo_globalState, 0, sizeof(Echo));
+	echo_globalState.client = NULL;
+	echo_globalState.server = NULL;
 
 	char* USAGE = "Echo usage: 'client serverHostname', 'server', or 'loopback'";
 	if(argc < 1) {
