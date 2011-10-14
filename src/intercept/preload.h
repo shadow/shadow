@@ -30,35 +30,47 @@
 #define RTLD_NEXT ((void *) -1l)
 #define RTLD_DEFAULT ((void *) 0)
 
+/**
+ * Its not ok to call shadow function from the preload lib. it is not linked
+ * to shadow, so it has to search for the symbols. further, it can only call
+ * functions in the intercept lib, because the search only works if the symbol
+ * exists in other shared libraries.
+ */
+
+Worker* preload_worker_getPrivate();
+
+// logging causes too much recursion, because something in the log function gets intercepted
+//extern void logging_log(const gchar *log_domain, GLogLevelFlags log_level, const gchar* functionName, const gchar *format, ...);
+
 /* convenience macro for doing the dlsym lookups
  * return "ret" if function can't be found. if used in a void function, use a comma
  * but omit the last param, like "PRELOAD_LOOKUP(a, b,)" */
 #define PRELOAD_LOOKUP(my_function, my_search, ret) \
 { \
 	/* only search if function pointer is null */ \
-	if(my_function == NULL){ \
+	if(*my_function == NULL){ \
 		/* if we dont have logging, then we are not running shadow yet, gtfo */ \
 		/* clear old error vals */ \
 		dlerror(); \
 		/* search for a function symbol that tells us shadow is loaded */ \
-		void* log_fp = dlsym(RTLD_NEXT, "intercept_time"); \
+		void* functionInShadowInterceptLib = dlsym(RTLD_NEXT, "intercept_time"); \
 		/* check for error, dlerror returns null or a char* error msg */ \
 		char* dlmsg = dlerror(); \
-		if(!log_fp || dlmsg != NULL) { \
+		if(!functionInShadowInterceptLib || dlmsg != NULL) { \
 			return ret; \
 		} \
-		/* we have log function, clear old error vals */ \
+		/* we have a shadow function, clear old error vals */ \
 		dlerror(); \
 		/* search for function symbol */ \
-		my_function = dlsym(RTLD_NEXT, my_search); \
+		*my_function = dlsym(RTLD_NEXT, my_search); \
 		/* check for error, dlerror returns null or a char* error msg */ \
 		dlmsg = dlerror(); \
-		if (!my_function || dlmsg != NULL) { \
-			critical("PRELOAD_LOOKUP: failed to chain-load function \"%s\": dlerror = \"%s\", fp = \"%p\"\n", my_search, dlmsg, my_function); \
+		if (!*my_function || dlmsg != NULL) { \
+			/*critical("PRELOAD_LOOKUP: failed to chain-load function \"%s\": dlerror = \"%s\", fp = \"%p\"\n", my_search, dlmsg, *my_function);*/ \
 			return ret; \
 		} \
 	} \
-	debug("PRELOAD_LOOKUP: calling \"%s\"\n", my_search); \
+	/* debug("PRELOAD_LOOKUP: calling \"%s\"\n", my_search); */ \
 }
 
 /* convenience macro for deciding if we should intercept the function or
@@ -70,12 +82,12 @@
 #define PRELOAD_DECIDE(funcOut, nameOut, sysName, sysPointer, shadowPrefix, shadowPointer, extraCondition) \
 { \
 	/* should we be forwarding to the system call? */ \
-	Worker* w = worker_getPrivate(); \
-	if(w->cached_plugin && !w->cached_plugin->isShadowContext && extraCondition) { \
-		funcOut = shadowPointer; \
+	Worker* w = preload_worker_getPrivate(); \
+	if(w && w->cached_plugin && !w->cached_plugin->isShadowContext && extraCondition) { \
+		funcOut = &shadowPointer; \
 		nameOut = shadowPrefix sysName; \
 	} else { \
-		funcOut = sysPointer; \
+		funcOut = &sysPointer; \
 		nameOut = sysName; \
 	} \
 }

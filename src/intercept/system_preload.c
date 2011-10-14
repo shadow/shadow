@@ -54,44 +54,44 @@ static getaddrinfo_fp _getaddrinfo = NULL;
 static freeaddrinfo_fp _freeaddrinfo = NULL;
 
 time_t time(time_t *t)  {
-	time_fp func;
+	time_fp* func;
 	char* funcName;
 	PRELOAD_DECIDE(func, funcName, "time", _time, SYSTEM_LIB_PREFIX, _vsystem_time, 1);
 	PRELOAD_LOOKUP(func, funcName, -1);
-	return func(t);
+	return (*func)(t);
 }
 
 int clock_gettime(clockid_t clk_id, struct timespec *tp) {
-	clock_gettime_fp func;
+	clock_gettime_fp* func;
 	char* funcName;
 	PRELOAD_DECIDE(func, funcName, "clock_gettime", _clock_gettime, SYSTEM_LIB_PREFIX, _vsystem_clock_gettime, 1);
 	PRELOAD_LOOKUP(func, funcName, -1);
-	return func(clk_id, tp);
+	return (*func)(clk_id, tp);
 }
 
 int gethostname(char* name, size_t len) {
-	gethostname_fp func;
+	gethostname_fp* func;
 	char* funcName;
 	PRELOAD_DECIDE(func, funcName, "gethostname", _gethostname, SYSTEM_LIB_PREFIX, _vsystem_gethostname, 1);
 	PRELOAD_LOOKUP(func, funcName, -1);
-	return func(name, len);
+	return (*func)(name, len);
 }
 
 int getaddrinfo(const char *node, const char *service,
                        const struct addrinfo *hints,
                        struct addrinfo **res) {
-	getaddrinfo_fp func;
+	getaddrinfo_fp* func;
 	char* funcName;
 	PRELOAD_DECIDE(func, funcName, "getaddrinfo", _getaddrinfo, SYSTEM_LIB_PREFIX, _vsystem_getaddrinfo, 1);
 	PRELOAD_LOOKUP(func, funcName, -1);
-	return func(node, service, hints, res);
+	return (*func)(node, service, hints, res);
 }
 
 void freeaddrinfo(struct addrinfo *res) {
-	freeaddrinfo_fp func;
+	freeaddrinfo_fp* func;
 	char* funcName;
 	PRELOAD_DECIDE(func, funcName, "freeaddrinfo", _freeaddrinfo, SYSTEM_LIB_PREFIX, _vsystem_freeaddrinfo, 1);
 	/* third arg is nothing since we return void */
 	PRELOAD_LOOKUP(func, funcName,);
-	func(res);
+	(*func)(res);
 }

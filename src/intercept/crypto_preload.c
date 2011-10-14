@@ -2,7 +2,6 @@
  * The Shadow Simulator
  *
  * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
- * Copyright (c) 2006-2009 Tyson Malchow <tyson.malchow@gmail.com>
  *
  * This file is part of Shadow.
  *
@@ -47,7 +46,7 @@ static EVP_Cipher_fp _EVP_Cipher = NULL;
 //static int _do_intercept = 0;
 
 void AES_encrypt(const unsigned char *in, unsigned char *out, const AES_KEY *key) {
-	AES_encrypt_fp func;
+	AES_encrypt_fp* func;
 	char* funcName;
 
 //	/* check config option to see if we should intercept the call */
@@ -69,23 +68,23 @@ void AES_encrypt(const unsigned char *in, unsigned char *out, const AES_KEY *key
 	PRELOAD_DECIDE(func, funcName, "AES_encrypt", _AES_encrypt, CRYPTO_LIB_PREFIX, _intercept_AES_encrypt, 1);
 	/* this is a void func, so no return val in the third param */
 	PRELOAD_LOOKUP(func, funcName,);
-	func(in, out, key);
+	(*func)(in, out, key);
 }
 
 void AES_decrypt(const unsigned char *in, unsigned char *out, const AES_KEY *key) {
-	AES_decrypt_fp func;
+	AES_decrypt_fp* func;
 	char* funcName;
 	PRELOAD_DECIDE(func, funcName, "AES_decrypt", _AES_decrypt, CRYPTO_LIB_PREFIX, _intercept_AES_decrypt, 1);
 	/* this is a void func, so no return val in the third param */
 	PRELOAD_LOOKUP(func, funcName,);
-	func(in, out, key);
+	(*func)(in, out, key);
 }
 
 int EVP_Cipher(EVP_CIPHER_CTX *ctx, unsigned char *out, const unsigned char *in, unsigned int inl)
 {
-	EVP_Cipher_fp func;
+	EVP_Cipher_fp* func;
 	char* funcName;
 	PRELOAD_DECIDE(func, funcName, "EVP_Cipher", _EVP_Cipher, CRYPTO_LIB_PREFIX, _intercept_EVP_Cipher, 1);
 	PRELOAD_LOOKUP(func, funcName, -1);
-	return func(ctx, out, in, inl);
+	return (*func)(ctx, out, in, inl);
 }

@@ -110,7 +110,6 @@ static gint _engine_processEvents(Engine* engine) {
 		engine->clock = worker->clock_now;
 		g_assert(worker->clock_now >= worker->clock_last);
 
-
 		gboolean complete = shadowevent_run(worker->cached_event);
 		if(complete) {
 			shadowevent_free(worker->cached_event);

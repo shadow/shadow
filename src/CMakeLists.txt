@@ -85,5 +85,6 @@ set(shadow_srcs
 
 ## specify the executable, link, and install location under prefix
 add_executable(shadow ${shadow_srcs})
-target_link_libraries(shadow ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES} ${GLIB_LIBRARIES})
+add_dependencies(shadow shadow-intercept shadow-preload)
+target_link_libraries(shadow shadow-intercept ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES} ${GLIB_LIBRARIES})
 install(TARGETS shadow DESTINATION bin)

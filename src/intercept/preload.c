@@ -19,23 +19,15 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef INTERCEPT_H_
-#define INTERCEPT_H_
-
+#include <dlfcn.h>
 #include "shadow.h"
+#include <stdio.h>
 
-/**
- * Its ok to call shadow function from the intercept lib - its linked to shadow
- */
+typedef Worker* (*WorkerGetPrivateFunc)();
+static WorkerGetPrivateFunc _worker_getPrivate = NULL;
 
-Worker* intercept_worker_getPrivate();
-
-#define INTERCEPT_CONTEXT_SWITCH(prepare, call, ret) \
-Worker* w = worker_getPrivate(); \
-prepare; \
-plugin_setShadowContext(w->cached_plugin, TRUE); \
-call; \
-plugin_setShadowContext(w->cached_plugin, FALSE); \
-ret;
-
-#endif /* INTERCEPT_H_ */
+Worker* preload_worker_getPrivate() {
+	WorkerGetPrivateFunc* func = &_worker_getPrivate;
+	PRELOAD_LOOKUP(func, "intercept_worker_getPrivate", NULL);
+	return (*func)();
+}
