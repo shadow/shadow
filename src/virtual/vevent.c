@@ -499,7 +499,7 @@ void vevent_event_set_log_callback(vevent_mgr_tp mgr, event_log_cb cb) {
 }
 
 gint vevent_event_base_loop(vevent_mgr_tp mgr, event_base_tp eb, gint flags) {
-	info("vevent_event_base_loop called but will have no effect");
+	info("skipping base loop");
 	return 0;
 }
 

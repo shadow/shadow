@@ -21,14 +21,14 @@
 
 #include "shd-echo.h"
 
-EchoServer* echoserver_new(in_addr_t bindIPAddress) {
+EchoServer* echoserver_new(in_addr_t bindIPAddress, ShadowlibLogFunc log) {
 	/* start up the echo server */
 	gint socketd;
 	struct sockaddr_in server;
 
 	/* create the socket and get a socket descriptor */
 	if ((socketd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0)) == ERROR) {
-		perror("error creating socket");
+		log(G_LOG_LEVEL_WARNING, __FUNCTION__, "error creating socket");
 	}
 
 	/* setup the socket address info, server will listen for incoming
@@ -41,12 +41,12 @@ EchoServer* echoserver_new(in_addr_t bindIPAddress) {
 
 	/* bind the socket to the server port */
 	if (bind(socketd, (struct sockaddr *) &server, sizeof(server)) == ERROR) {
-		perror("error in bind");
+		log(G_LOG_LEVEL_WARNING, __FUNCTION__, "error in bind");
 	}
 
 	/* set as server socket */
 	if (listen(socketd, 100) == ERROR) {
-		perror("error in listen");
+		log(G_LOG_LEVEL_WARNING, __FUNCTION__, "error in listen");
 	}
 
 	/* store the socket as our listening socket */
@@ -62,18 +62,18 @@ void echoserver_free(EchoServer* es) {
 
 void echoserver_socketReadable(EchoServer* es, gint sockd, ShadowlibLogFunc log) {
 	if(es == NULL) {
-		log(G_LOG_LEVEL_INFO, __FUNCTION__, "NULL server");
+		log(G_LOG_LEVEL_WARNING, __FUNCTION__, "NULL server");
 		return;
 	}
 
-	log(G_LOG_LEVEL_INFO, __FUNCTION__, "socket %i", sockd);
+	log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "trying to read socket %i", sockd);
 
 	if(sockd == es->listen_sd) {
 		/* need to accept a connection on server listening socket,
 		 * dont care about address of connector.
 		 * this gives us a new socket thats connected to the client */
 		if((sockd = accept(es->listen_sd, NULL, NULL)) == ERROR) {
-			perror("error accepting socket");
+			log(G_LOG_LEVEL_WARNING, __FUNCTION__, "error accepting socket");
 		}
 	}
 

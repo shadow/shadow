@@ -54,7 +54,7 @@ void socketactivated_run(SocketActivatedEvent* event, Node* node) {
 		if(sock != NULL && sock->vep != NULL) {
 			vepoll_execute_notification(sock->vep);
 		} else {
-			info("socket %u no longer exists, skipping notification.", event->socketDescriptor);
+			warning("socket %u no longer exists, skipping notification.", event->socketDescriptor);
 		}
 	}
 }

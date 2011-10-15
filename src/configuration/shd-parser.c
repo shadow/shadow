@@ -399,7 +399,7 @@ gboolean parser_parse(Parser* parser, GString* filename, GQueue* actions) {
 
 	g_free(content);
 
-	info("finished parsing XML file '%s'", filename->str);
+	message("finished parsing XML file '%s'", filename->str);
 
 	/* check for success in parsing and validating the XML */
 	if(success && !parser->hasValidationError) {

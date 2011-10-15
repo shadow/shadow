@@ -53,14 +53,14 @@ void __shadow_plugin_init__(ShadowlibFunctionTable* shadowlibFuncs) {
 	 */
 	gboolean success = shadowlibFuncs->registration(&echo_pluginFunctions, 1, sizeof(Echo), &echo_globalState);
 	if(success) {
-		shadowlibFuncs->log(G_LOG_LEVEL_INFO, __FUNCTION__, "successfully registered echo plug-in state");
+		shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "successfully registered echo plug-in state");
 	} else {
 		shadowlibFuncs->log(G_LOG_LEVEL_INFO, __FUNCTION__, "error registering echo plug-in state");
 	}
 }
 
 void echo_new(int argc, char* argv[]) {
-	echo_globalState.shadowlibFuncs->log(G_LOG_LEVEL_INFO, __FUNCTION__, "echo_new called");
+	echo_globalState.shadowlibFuncs->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "echo_new called");
 
 	echo_globalState.client = NULL;
 	echo_globalState.server = NULL;
@@ -81,20 +81,20 @@ void echo_new(int argc, char* argv[]) {
 		/* start up a client, connecting to the server specified in args */
 		char* serverHostname = argv[1];
 		in_addr_t serverIP = echo_globalState.shadowlibFuncs->resolveHostname(serverHostname);
-		echo_globalState.client = echoclient_new(serverIP);
+		echo_globalState.client = echoclient_new(serverIP, echo_globalState.shadowlibFuncs->log);
 	} else if(strcasecmp(mode, "server") == 0) {
 		in_addr_t serverIP = echo_globalState.shadowlibFuncs->getIP();
-		echo_globalState.server = echoserver_new(serverIP);
+		echo_globalState.server = echoserver_new(serverIP, echo_globalState.shadowlibFuncs->log);
 	} else if(strcasecmp(mode, "loopback") == 0) {
-		echo_globalState.server = echoserver_new(htonl(INADDR_LOOPBACK));
-		echo_globalState.client = echoclient_new(htonl(INADDR_LOOPBACK));
+		echo_globalState.server = echoserver_new(htonl(INADDR_LOOPBACK), echo_globalState.shadowlibFuncs->log);
+		echo_globalState.client = echoclient_new(htonl(INADDR_LOOPBACK), echo_globalState.shadowlibFuncs->log);
 	} else {
 		echo_globalState.shadowlibFuncs->log(G_LOG_LEVEL_INFO, __FUNCTION__, USAGE);
 	}
 }
 
 void echo_free() {
-	echo_globalState.shadowlibFuncs->log(G_LOG_LEVEL_INFO, __FUNCTION__, "echo_free called");
+	echo_globalState.shadowlibFuncs->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "echo_free called");
 
 	if(echo_globalState.client) {
 		echoclient_free(echo_globalState.client);
@@ -106,7 +106,7 @@ void echo_free() {
 }
 
 void echo_readable(int socketDesriptor) {
-	echo_globalState.shadowlibFuncs->log(G_LOG_LEVEL_INFO, __FUNCTION__, "echo_readable called");
+	echo_globalState.shadowlibFuncs->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "echo_readable called");
 
 	if (echo_globalState.client
 			&& (socketDesriptor == echo_globalState.client->sd)) {
@@ -119,7 +119,7 @@ void echo_readable(int socketDesriptor) {
 }
 
 void echo_writable(int socketDesriptor) {
-	echo_globalState.shadowlibFuncs->log(G_LOG_LEVEL_INFO, __FUNCTION__, "echo_writable called");
+	echo_globalState.shadowlibFuncs->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "echo_writable called");
 
 	if (echo_globalState.client
 			&& (socketDesriptor == echo_globalState.client->sd)) {

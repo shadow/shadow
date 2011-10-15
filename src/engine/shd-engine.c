@@ -78,7 +78,7 @@ void engine_free(Engine* engine) {
 	g_cond_free(engine->workersIdle);
 	g_mutex_free(engine->engineIdle);
 
-	info("clean engine shutdown");
+	message("clean engine shutdown");
 
 	MAGIC_CLEAR(engine);
 	g_free(engine);

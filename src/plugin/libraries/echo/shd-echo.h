@@ -70,12 +70,12 @@ void echo_free();
 void echo_readable(int socketDesriptor);
 void echo_writable(int socketDesriptor);
 
-EchoClient* echoclient_new(in_addr_t serverIPAddress);
+EchoClient* echoclient_new(in_addr_t serverIPAddress, ShadowlibLogFunc log);
 void echoclient_free(EchoClient* ec);
 void echoclient_socketReadable(EchoClient* ec, gint sockd, ShadowlibLogFunc log);
 void echoclient_socketWritable(EchoClient* ec, gint sockd, ShadowlibLogFunc log);
 
-EchoServer* echoserver_new(in_addr_t bindIPAddress);
+EchoServer* echoserver_new(in_addr_t bindIPAddress, ShadowlibLogFunc log);
 void echoserver_free(EchoServer* es);
 void echoserver_socketReadable(EchoServer* es, gint sockd, ShadowlibLogFunc log);
 
