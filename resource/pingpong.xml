@@ -1,0 +1,15 @@
+<plugin name="pingpongplugin" path="/home/rob/shadow/build/shadow/src/plugin/libraries/pingpong/libshadow-plugin-pingpong.so" />
+
+<cdf name="pingpongcpu" center="100000000" width="20000000" tail="20000000" />
+<cdf name="pingpongbandwidth" center="512" width="300" tail="100" />
+<cdf name="pingponglatency" center="200" width="40" tail="20" />
+
+<network name="pingpongnetwork" latency="pingponglatency" reliability="1.0" />
+
+<software name="tcpserver" plugin="pingpongplugin" time="10" arguments="server tcp" />
+<software name="tcpclient" plugin="pingpongplugin" time="20" arguments="client tcp server" />
+
+<node name="server" software="tcpserver" network="pingpongnetwork" bandwidthup="pingpongbandwidth" bandwidthdown="pingpongbandwidth" cpu="pingpongcpu" />
+<node name="client" software="tcpclient" network="pingpongnetwork" bandwidthup="pingpongbandwidth" bandwidthdown="pingpongbandwidth" cpu="pingpongcpu" />
+
+<kill time="30" />

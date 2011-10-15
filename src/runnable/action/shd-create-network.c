@@ -50,7 +50,8 @@ void createnetwork_run(CreateNetworkAction* action) {
 
 	CumulativeDistribution* cdf = engine_get(worker->cached_engine, CDFS, action->latencyID);
 	if(!cdf) {
-		critical("failed to create network '%s'", g_quark_to_string(action->latencyID));
+		critical("failed to create latency '%s' for network '%s'",
+				g_quark_to_string(action->latencyID), g_quark_to_string(action->id));
 		return;
 	}
 

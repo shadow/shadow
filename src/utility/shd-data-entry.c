@@ -52,8 +52,6 @@ void dataentry_free(gpointer data) {
 	DataEntry* entry = (DataEntry*) data;
 	MAGIC_ASSERT(entry);
 
-	g_free(entry->reference);
-
 	MAGIC_CLEAR(entry);
 	g_free(entry);
 }

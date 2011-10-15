@@ -73,8 +73,8 @@ void engine_free(Engine* engine) {
 	/* its ok if this was already called, its NULL-safe */
 	engine_teardownWorkerThreads(engine);
 
-	registry_free(engine->registry);
 	internetwork_free(engine->internet);
+	registry_free(engine->registry);
 	g_cond_free(engine->workersIdle);
 	g_mutex_free(engine->engineIdle);
 

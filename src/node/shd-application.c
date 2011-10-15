@@ -38,6 +38,13 @@ Application* application_new(Software* software) {
 void application_free(Application* application) {
 	MAGIC_ASSERT(application);
 
+	/* need to get thread-private plugin from current worker */
+	Plugin* plugin = worker_getPlugin(application->software);
+
+	/* tell the plug-in to free its data */
+	plugin_executeFree(plugin, application->state);
+
+	/* free our copy of plug-in resources */
 	pluginstate_free(application->state);
 
 	MAGIC_CLEAR(application);
@@ -79,12 +86,4 @@ void application_writable(Application* application, gint socketDescriptor) {
 	/* need to get thread-private plugin from current worker */
 	Plugin* plugin = worker_getPlugin(application->software);
 	plugin_executeWritable(plugin, application->state, socketDescriptor);
-}
-
-void application_kill(Application* application) {
-	MAGIC_ASSERT(application);
-
-	/* need to get thread-private plugin from current worker */
-	Plugin* plugin = worker_getPlugin(application->software);
-	plugin_executeFree(plugin, application->state);
 }

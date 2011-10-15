@@ -89,7 +89,7 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 		c->nWorkerThreads = 0;
 	}
 	if(c->logLevelInput == NULL) {
-		c->logLevelInput = g_strdup("info");
+		c->logLevelInput = g_strdup("message");
 	}
 
 	return c;
@@ -128,6 +128,6 @@ GLogLevelFlags configuration_getLogLevel(Configuration* config) {
 	} else if (g_ascii_strcasecmp(l, "debug") == 0) {
 		return G_LOG_LEVEL_DEBUG;
 	} else {
-		return G_LOG_LEVEL_INFO;
+		return G_LOG_LEVEL_MESSAGE;
 	}
 }

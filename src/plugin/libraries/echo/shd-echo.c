@@ -68,24 +68,26 @@ void echo_new(int argc, char* argv[]) {
 	char* USAGE = "Echo usage: 'client serverHostname', 'server', or 'loopback'";
 	if(argc < 1) {
 		echo_globalState.shadowlibFuncs->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, USAGE);
+		return;
 	}
 
 	/* parse command line args */
 	char* mode = argv[0];
 
-	if(strcasecmp(mode, "client") == 0) {
+	if(g_strcasecmp(mode, "client") == 0) {
 		if(argc < 2) {
 			echo_globalState.shadowlibFuncs->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, USAGE);
+			return;
 		}
 
 		/* start up a client, connecting to the server specified in args */
 		char* serverHostname = argv[1];
 		in_addr_t serverIP = echo_globalState.shadowlibFuncs->resolveHostname(serverHostname);
 		echo_globalState.client = echoclient_new(serverIP, echo_globalState.shadowlibFuncs->log);
-	} else if(strcasecmp(mode, "server") == 0) {
+	} else if(g_strcasecmp(mode, "server") == 0) {
 		in_addr_t serverIP = echo_globalState.shadowlibFuncs->getIP();
 		echo_globalState.server = echoserver_new(serverIP, echo_globalState.shadowlibFuncs->log);
-	} else if(strcasecmp(mode, "loopback") == 0) {
+	} else if(g_strcasecmp(mode, "loopback") == 0) {
 		echo_globalState.server = echoserver_new(htonl(INADDR_LOOPBACK), echo_globalState.shadowlibFuncs->log);
 		echo_globalState.client = echoclient_new(htonl(INADDR_LOOPBACK), echo_globalState.shadowlibFuncs->log);
 	} else {

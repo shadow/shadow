@@ -4,3 +4,4 @@ install(FILES shadowlib.h DESTINATION include/shadow)
 
 ## build each plug-in
 add_subdirectory(echo)
+add_subdirectory(pingpong)

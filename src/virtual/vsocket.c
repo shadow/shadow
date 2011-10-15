@@ -784,6 +784,11 @@ ssize_t vsocket_recvfrom(vsocket_mgr_tp net, gint fd, gpointer buf, size_t n, gi
 			return VSOCKET_ERROR;
 		}
 
+		if(saddr) {
+			saddr->sin_addr.s_addr = sock->vt->vtcp->remote_peer->addr;
+			saddr->sin_port = sock->vt->vtcp->remote_peer->port;
+		}
+
 		result = vtcp_recv(net, sock, buf, n);
 	} else {
 		in_addr_t* addr = NULL;

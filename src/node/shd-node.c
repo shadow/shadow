@@ -50,6 +50,7 @@ void node_free(gpointer data) {
 	MAGIC_ASSERT(node);
 
 	address_free(node->address);
+	application_free(node->application);
 	g_async_queue_unref(node->event_mailbox);
 	g_queue_free(node->event_priority_queue);
 
