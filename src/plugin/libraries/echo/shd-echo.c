@@ -53,21 +53,21 @@ void __shadow_plugin_init__(ShadowlibFunctionTable* shadowlibFuncs) {
 	 */
 	gboolean success = shadowlibFuncs->registration(&echo_pluginFunctions, 1, sizeof(Echo), &echo_globalState);
 	if(success) {
-		shadowlibFuncs->log("successfully registered echo plug-in state");
+		shadowlibFuncs->log(G_LOG_LEVEL_INFO, __FUNCTION__, "successfully registered echo plug-in state");
 	} else {
-		shadowlibFuncs->log("error registering echo plug-in state");
+		shadowlibFuncs->log(G_LOG_LEVEL_INFO, __FUNCTION__, "error registering echo plug-in state");
 	}
 }
 
 void echo_new(int argc, char* argv[]) {
-	echo_globalState.shadowlibFuncs->log("echo_new called");
+	echo_globalState.shadowlibFuncs->log(G_LOG_LEVEL_INFO, __FUNCTION__, "echo_new called");
 
 	echo_globalState.client = NULL;
 	echo_globalState.server = NULL;
 
 	char* USAGE = "Echo usage: 'client serverHostname', 'server', or 'loopback'";
 	if(argc < 1) {
-		echo_globalState.shadowlibFuncs->log(USAGE);
+		echo_globalState.shadowlibFuncs->log(G_LOG_LEVEL_INFO, __FUNCTION__, USAGE);
 	}
 
 	/* parse command line args */
@@ -75,7 +75,7 @@ void echo_new(int argc, char* argv[]) {
 
 	if(strcasecmp(mode, "client") == 0) {
 		if(argc < 2) {
-			echo_globalState.shadowlibFuncs->log(USAGE);
+			echo_globalState.shadowlibFuncs->log(G_LOG_LEVEL_INFO, __FUNCTION__, USAGE);
 		}
 
 		/* start up a client, connecting to the server specified in args */
@@ -89,12 +89,12 @@ void echo_new(int argc, char* argv[]) {
 		echo_globalState.server = echoserver_new(htonl(INADDR_LOOPBACK));
 		echo_globalState.client = echoclient_new(htonl(INADDR_LOOPBACK));
 	} else {
-		echo_globalState.shadowlibFuncs->log(USAGE);
+		echo_globalState.shadowlibFuncs->log(G_LOG_LEVEL_INFO, __FUNCTION__, USAGE);
 	}
 }
 
 void echo_free() {
-	echo_globalState.shadowlibFuncs->log("echo_free called");
+	echo_globalState.shadowlibFuncs->log(G_LOG_LEVEL_INFO, __FUNCTION__, "echo_free called");
 
 	if(echo_globalState.client) {
 		echoclient_free(echo_globalState.client);
@@ -106,7 +106,7 @@ void echo_free() {
 }
 
 void echo_readable(int socketDesriptor) {
-	echo_globalState.shadowlibFuncs->log("echo_readable called");
+	echo_globalState.shadowlibFuncs->log(G_LOG_LEVEL_INFO, __FUNCTION__, "echo_readable called");
 
 	if (echo_globalState.client
 			&& (socketDesriptor == echo_globalState.client->sd)) {
@@ -119,7 +119,7 @@ void echo_readable(int socketDesriptor) {
 }
 
 void echo_writable(int socketDesriptor) {
-	echo_globalState.shadowlibFuncs->log("echo_writable called");
+	echo_globalState.shadowlibFuncs->log(G_LOG_LEVEL_INFO, __FUNCTION__, "echo_writable called");
 
 	if (echo_globalState.client
 			&& (socketDesriptor == echo_globalState.client->sd)) {

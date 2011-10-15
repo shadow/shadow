@@ -29,13 +29,14 @@ typedef struct _Software Software;
 struct _Software {
 	GQuark id;
 	GString* arguments;
+	GQuark pluginID;
 	GString* pluginPath;
 	SimulationTime startTime;
 
 	MAGIC_DECLARE;
 };
 
-Software* software_new(GQuark id, gchar* arguments, gchar* pluginPath, SimulationTime startTime);
+Software* software_new(GQuark id, gchar* arguments, GQuark pluginID, gchar* pluginPath, SimulationTime startTime);
 void software_free(gpointer data);
 gint software_getArguments(Software* software, gchar** argvOut[]);
 

@@ -21,10 +21,12 @@
 
 #include "shadow.h"
 
-Plugin* plugin_new(GString* filename) {
+Plugin* plugin_new(GQuark id, GString* filename) {
 	g_assert(filename);
 	Plugin* plugin = g_new0(Plugin, 1);
 	MAGIC_INIT(plugin);
+
+	plugin->id = id;
 
 	/* get the plugin handle */
 	plugin->handle = g_module_open(filename->str, G_MODULE_BIND_LAZY | G_MODULE_BIND_LOCAL);

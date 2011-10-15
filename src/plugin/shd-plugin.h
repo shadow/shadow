@@ -27,6 +27,7 @@
 typedef struct _Plugin Plugin;
 
 struct _Plugin {
+	GQuark id;
 	GString* path;
 	GModule* handle;
 	ShadowPluginInitializeFunc init;
@@ -54,7 +55,7 @@ struct _Plugin {
 	MAGIC_DECLARE;
 };
 
-Plugin* plugin_new(GString* filename);
+Plugin* plugin_new(GQuark id, GString* filename);
 void plugin_free(gpointer data);
 
 void plugin_setShadowContext(Plugin* plugin, gboolean isShadowContext);

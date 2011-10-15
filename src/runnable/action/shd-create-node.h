@@ -30,7 +30,7 @@ struct _CreateNodesAction {
 	Action super;
 	guint64 quantity;
 	GQuark id;
-	GQuark applicationID;
+	GQuark softwareID;
 	GQuark cpudelayCDFID;
 	GQuark networkID;
 	GQuark bandwidthupID;

@@ -168,7 +168,7 @@ void vepoll_execute_notification(vepoll_tp vep) {
 
 			Worker* worker = worker_getPrivate();
 			Application* a = worker->cached_node->application;
-			Plugin* plugin = worker_getPlugin(&(a->software->id), a->software->pluginPath);
+			Plugin* plugin = worker_getPlugin(a->software);
 
 			/* tell the socket about it if available, only switching context once */
 			if((vep->available & VEPOLL_READ) && (vep->available & VEPOLL_WRITE)) {

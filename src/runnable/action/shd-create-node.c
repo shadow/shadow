@@ -42,7 +42,7 @@ CreateNodesAction* createnodes_new(guint64 quantity, GString* name,
 
 	action->quantity = quantity;
 	action->id = g_quark_from_string((const gchar*) name->str);
-	action->applicationID = g_quark_from_string((const gchar*) applicationName->str);
+	action->softwareID = g_quark_from_string((const gchar*) applicationName->str);
 	action->cpudelayCDFID = g_quark_from_string((const gchar*) cpudelayCDFName->str);
 	action->networkID = g_quark_from_string((const gchar*) networkName->str);
 	action->bandwidthupID = g_quark_from_string((const gchar*) bandwidthupCDFName->str);
@@ -59,7 +59,7 @@ void createnodes_run(CreateNodesAction* action) {
 	CumulativeDistribution* bwUpCDF = engine_get(worker->cached_engine, CDFS, action->bandwidthupID);
 	CumulativeDistribution* bwDownCDF = engine_get(worker->cached_engine, CDFS, action->bandwidthdownID);
 	CumulativeDistribution* cpuCDF = engine_get(worker->cached_engine, CDFS, action->cpudelayCDFID);
-	Software* software = engine_get(worker->cached_engine, SOFTWARE, action->applicationID);
+	Software* software = engine_get(worker->cached_engine, SOFTWARE, action->softwareID);
 
 	Network* network = internetwork_getNetwork(worker->cached_engine->internet, action->networkID);
 

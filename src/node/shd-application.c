@@ -27,7 +27,7 @@ Application* application_new(Software* software) {
 	g_assert(software);
 
 	/* need to get thread-private plugin from current worker */
-	Plugin* plugin = worker_getPlugin(&(software->id), software->pluginPath);
+	Plugin* plugin = worker_getPlugin(software);
 
 	application->software = software;
 	application->state = pluginstate_copyNew(plugin->defaultState);
@@ -55,7 +55,7 @@ void application_boot(Application* application) {
 	gint n = argc;
 
 	/* need to get thread-private plugin from current worker */
-	Plugin* plugin = worker_getPlugin(&(application->software->id), application->software->pluginPath);
+	Plugin* plugin = worker_getPlugin(application->software);
 	plugin_executeNew(plugin, application->state, argc, argv);
 
 	/* free the arguments */
@@ -69,7 +69,7 @@ void application_readable(Application* application, gint socketDescriptor) {
 	MAGIC_ASSERT(application);
 
 	/* need to get thread-private plugin from current worker */
-	Plugin* plugin = worker_getPlugin(&(application->software->id), application->software->pluginPath);
+	Plugin* plugin = worker_getPlugin(application->software);
 	plugin_executeReadable(plugin, application->state, socketDescriptor);
 }
 
@@ -77,7 +77,7 @@ void application_writable(Application* application, gint socketDescriptor) {
 	MAGIC_ASSERT(application);
 
 	/* need to get thread-private plugin from current worker */
-	Plugin* plugin = worker_getPlugin(&(application->software->id), application->software->pluginPath);
+	Plugin* plugin = worker_getPlugin(application->software);
 	plugin_executeWritable(plugin, application->state, socketDescriptor);
 }
 
@@ -85,6 +85,6 @@ void application_kill(Application* application) {
 	MAGIC_ASSERT(application);
 
 	/* need to get thread-private plugin from current worker */
-	Plugin* plugin = worker_getPlugin(&(application->software->id), application->software->pluginPath);
+	Plugin* plugin = worker_getPlugin(application->software);
 	plugin_executeFree(plugin, application->state);
 }

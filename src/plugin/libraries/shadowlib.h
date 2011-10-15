@@ -41,7 +41,7 @@ struct _PluginFunctionTable {
 
 /* function signatures for available shadow functions */
 typedef gboolean (*ShadowlibRegisterFunc)(PluginFunctionTable* callbackFunctions, guint nVariables, ...);
-typedef void (*ShadowlibLogFunc)(gchar* format, ...);
+typedef void (*ShadowlibLogFunc)(GLogLevelFlags level, const gchar* functionName, gchar* format, ...);
 typedef in_addr_t (*ShadowlibResolveHostnameFunc)(gchar* name);
 typedef gboolean (*ShadowlibResolveIPAddressFunc)(in_addr_t addr, gchar* name_out, gint name_out_len);
 typedef in_addr_t (*ShadowlibGetIPAddressFunc)();

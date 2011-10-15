@@ -30,56 +30,82 @@
  */
 
 gboolean shadowlib_register(PluginFunctionTable* callbackFunctions, guint nVariables, ...) {
+	Worker* worker = worker_getPrivate();
+	plugin_setShadowContext(worker->cached_plugin, TRUE);
+
 	debug("shadowlib_register called");
 
 	/* collect the variable length argument list*/
 	va_list variableArguments;
 	va_start(variableArguments, nVariables);
 
-	Worker* worker = worker_getPrivate();
 	plugin_registerResidentState(worker->cached_plugin, callbackFunctions, nVariables, variableArguments);
 
 	va_end(variableArguments);
 
+	plugin_setShadowContext(worker->cached_plugin, FALSE);
 	return TRUE;
 }
 
-void shadowlib_log(gchar* format, ...) {
+void shadowlib_log(GLogLevelFlags level, const gchar* functionName, gchar* format, ...) {
+	Worker* worker = worker_getPrivate();
+	plugin_setShadowContext(worker->cached_plugin, TRUE);
+
 	va_list variableArguments;
 	va_start(variableArguments, format);
 
-	/* the NULL is the function name. we dont get that from the plug-in, and
-	 * it might not even make sense anyway.
-	 */
-	logging_logv(G_LOG_DOMAIN, G_LOG_LEVEL_MESSAGE, NULL, format, variableArguments);
+	const gchar* domain = g_quark_to_string(worker->cached_plugin->id);
+	logging_logv(domain, level, functionName, format, variableArguments);
 
 	va_end(variableArguments);
+
+	plugin_setShadowContext(worker->cached_plugin, FALSE);
 }
 
 in_addr_t shadowlib_resolveHostname(gchar* name) {
 	Worker* worker = worker_getPrivate();
-	return (in_addr_t) internetwork_resolveName(worker->cached_engine->internet, name);
+	plugin_setShadowContext(worker->cached_plugin, TRUE);
+
+	in_addr_t ip = (in_addr_t) internetwork_resolveName(worker->cached_engine->internet, name);
+
+	plugin_setShadowContext(worker->cached_plugin, FALSE);
+	return ip;
 }
 
 gboolean shadowlib_resolveIPAddress(in_addr_t addr, gchar* name_out, gint name_out_len) {
 	Worker* worker = worker_getPrivate();
+	plugin_setShadowContext(worker->cached_plugin, TRUE);
+
 	const gchar* name = internetwork_resolveID(worker->cached_engine->internet, (GQuark)addr);
+	gboolean isSuccess = FALSE;
 	if(name != NULL && name_out_len > strlen(name)) {
 		strncpy(name_out, name, name_out_len);
-		return TRUE;
-	} else {
-		return FALSE;
+		isSuccess = TRUE;
 	}
+
+	plugin_setShadowContext(worker->cached_plugin, FALSE);
+	return isSuccess;
 }
 
 in_addr_t shadowlib_getIPAddress() {
 	Worker* worker = worker_getPrivate();
-	return (in_addr_t) worker->cached_node->id;
+	plugin_setShadowContext(worker->cached_plugin, TRUE);
+
+	in_addr_t ip = (in_addr_t) worker->cached_node->id;
+
+	plugin_setShadowContext(worker->cached_plugin, FALSE);
+	return ip;
 }
 
 gboolean shadowlib_getHostname(gchar* name_out, gint name_out_len) {
-	in_addr_t ip = shadowlib_getIPAddress();
-	return shadowlib_resolveIPAddress(ip, name_out, name_out_len);
+	Worker* worker = worker_getPrivate();
+	plugin_setShadowContext(worker->cached_plugin, TRUE);
+
+	in_addr_t ip = (in_addr_t) worker->cached_node->id;
+	gboolean hostname = shadowlib_resolveIPAddress(ip, name_out, name_out_len);
+
+	plugin_setShadowContext(worker->cached_plugin, FALSE);
+	return hostname;
 }
 
 /* we send this FunctionTable to each plug-in so it has pointers to our functions.

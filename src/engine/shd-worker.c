@@ -65,12 +65,13 @@ Worker* worker_getPrivate() {
 	return worker;
 }
 
-Plugin* worker_getPlugin(GQuark* softwareID, GString* pluginPath) {
-	g_assert(pluginPath);
+Plugin* worker_getPlugin(Software* software) {
+	MAGIC_ASSERT(software);
+	g_assert(software->pluginPath);
 
-	/* worker has a private plug-in for each software ID */
+	/* worker has a private plug-in for each plugin ID */
 	Worker* worker = worker_getPrivate();
-	Plugin* plugin = g_hash_table_lookup(worker->plugins, softwareID);
+	Plugin* plugin = g_hash_table_lookup(worker->plugins, &(software->pluginID));
 	if(!plugin) {
 		/* plug-in has yet to be loaded by this worker. do that now with a
 		 * unique temporary filename so we dont affect other workers.
@@ -78,8 +79,8 @@ Plugin* worker_getPlugin(GQuark* softwareID, GString* pluginPath) {
 		 * g_file_open_tmp
 		 */
 
-		plugin = plugin_new(pluginPath);
-		g_hash_table_replace(worker->plugins, softwareID, plugin);
+		plugin = plugin_new(software->pluginID, software->pluginPath);
+		g_hash_table_replace(worker->plugins, &(plugin->id), plugin);
 	}
 
 	return plugin;

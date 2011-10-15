@@ -23,12 +23,13 @@
 
 #include <string.h>
 
-Software* software_new(GQuark id, gchar* arguments, gchar* pluginPath, SimulationTime startTime) {
+Software* software_new(GQuark id, gchar* arguments, GQuark pluginID, gchar* pluginPath, SimulationTime startTime) {
 	Software* software = g_new0(Software, 1);
 	MAGIC_INIT(software);
 
 	software->id = id;
 	software->arguments = g_string_new(arguments);
+	software->pluginID = pluginID;
 	software->pluginPath = g_string_new(pluginPath);
 	software->startTime = startTime;
 

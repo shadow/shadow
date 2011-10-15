@@ -217,7 +217,7 @@ static void vevent_timerTimerCallback(gpointer data, gpointer argument) {
 	/* need to be in node context */
 	Worker* worker = worker_getPrivate();
 	Application* a = worker->cached_node->application;
-	Plugin* plugin = worker_getPlugin(&(a->software->id), a->software->pluginPath);
+	Plugin* plugin = worker_getPlugin(a->software);
 	plugin_executeGeneric(plugin, a->state, vevent_executeTimerCallback, data, argument);
 }
 
@@ -404,7 +404,7 @@ static void vevent_execute_callbacks(vevent_mgr_tp mgr, event_base_tp eb, gint s
 				/* need to be in node context */
 				Worker* worker = worker_getPrivate();
 				Application* a = worker->cached_node->application;
-				Plugin* plugin = worker_getPlugin(&(a->software->id), a->software->pluginPath);
+				Plugin* plugin = worker_getPlugin(a->software);
 				plugin_executeGeneric(plugin, a->state, vevent_executeAllCallback, mgr, to_execute);
 
 				g_queue_free(to_execute);
@@ -517,7 +517,7 @@ static void vevent_executeLoopexitCallback(gpointer data, gpointer argument) {
 static void vevent_looexitTimerCallback(gpointer data, gpointer argument) {
 	Worker* worker = worker_getPrivate();
 	Application* a = worker->cached_node->application;
-	Plugin* plugin = worker_getPlugin(&(a->software->id), a->software->pluginPath);
+	Plugin* plugin = worker_getPlugin(a->software);
 	plugin_executeGeneric(plugin, a->state, vevent_executeLoopexitCallback, data, argument);
 }
 

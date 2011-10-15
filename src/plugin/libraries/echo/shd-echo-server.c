@@ -62,11 +62,11 @@ void echoserver_free(EchoServer* es) {
 
 void echoserver_socketReadable(EchoServer* es, gint sockd, ShadowlibLogFunc log) {
 	if(es == NULL) {
-		log("NULL server");
+		log(G_LOG_LEVEL_INFO, __FUNCTION__, "NULL server");
 		return;
 	}
 
-	log("socket %i", sockd);
+	log(G_LOG_LEVEL_INFO, __FUNCTION__, "socket %i", sockd);
 
 	if(sockd == es->listen_sd) {
 		/* need to accept a connection on server listening socket,
@@ -82,7 +82,7 @@ void echoserver_socketReadable(EchoServer* es, gint sockd, ShadowlibLogFunc log)
 	ssize_t bread;
 	while(read_size > 0 &&
 			(bread = read(sockd, es->echo_buffer + es->read_offset, read_size)) > 0) {
-		log("server socket %i read %i bytes", sockd, (gint)bread);
+		log(G_LOG_LEVEL_INFO, __FUNCTION__, "server socket %i read %i bytes", sockd, (gint)bread);
 		es->read_offset += bread;
 		read_size -= bread;
 	}
@@ -93,7 +93,7 @@ void echoserver_socketReadable(EchoServer* es, gint sockd, ShadowlibLogFunc log)
 	ssize_t bwrote;
 	while(write_size > 0 &&
 			(bwrote = write(sockd, es->echo_buffer + es->write_offset, write_size)) > 0) {
-		log("server socket %i wrote %i bytes", sockd, (gint)bwrote);
+		log(G_LOG_LEVEL_INFO, __FUNCTION__, "server socket %i wrote %i bytes", sockd, (gint)bwrote);
 		es->write_offset += bwrote;
 		write_size -= bwrote;
 	}

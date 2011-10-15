@@ -56,30 +56,30 @@ void echoclient_free(EchoClient* ec) {
 
 void echoclient_socketReadable(EchoClient* ec, gint sockd, ShadowlibLogFunc log) {
 	if(ec == NULL) {
-		log("NULL client");
+		log(G_LOG_LEVEL_INFO, __FUNCTION__, "NULL client");
 		return;
 	}
 
-	log("socket %i", sockd);
+	log(G_LOG_LEVEL_INFO, __FUNCTION__, "socket %i", sockd);
 
 	if(!ec->is_done) {
 		ssize_t b = 0;
 		while(ec->amount_sent-ec->recv_offset > 0 &&
 				(b = read(sockd, ec->recv_buffer+ec->recv_offset, ec->amount_sent-ec->recv_offset)) > 0) {
-			log("client socket %i read %i bytes: '%s'", sockd, b, ec->recv_buffer+ec->recv_offset);
+			log(G_LOG_LEVEL_INFO, __FUNCTION__, "client socket %i read %i bytes: '%s'", sockd, b, ec->recv_buffer+ec->recv_offset);
 			ec->recv_offset += b;
 		}
 
 		if(ec->recv_offset >= ec->amount_sent) {
 			ec->is_done = 1;
 			if(memcmp(ec->send_buffer, ec->recv_buffer, ec->amount_sent)) {
-				log("inconsistent echo received!");
+				log(G_LOG_LEVEL_INFO, __FUNCTION__, "inconsistent echo received!");
 			} else {
-				log("consistent echo received!");
+				log(G_LOG_LEVEL_INFO, __FUNCTION__, "consistent echo received!");
 			}
 			close(sockd);
 		} else {
-			log("echo progress: %i of %i bytes", ec->recv_offset, ec->amount_sent);
+			log(G_LOG_LEVEL_INFO, __FUNCTION__, "echo progress: %i of %i bytes", ec->recv_offset, ec->amount_sent);
 		}
 	}
 }
@@ -94,17 +94,17 @@ static void echoclient_fillCharBuffer(gchar* buffer, gint size) {
 
 void echoclient_socketWritable(EchoClient* ec, gint sockd, ShadowlibLogFunc log) {
 	if(ec == NULL) {
-		log("NULL client");
+		log(G_LOG_LEVEL_INFO, __FUNCTION__, "NULL client");
 		return;
 	}
 
-	log("socket %i", sockd);
+	log(G_LOG_LEVEL_INFO, __FUNCTION__, "socket %i", sockd);
 
 	if(!ec->sent_msg) {
 		echoclient_fillCharBuffer(ec->send_buffer, sizeof(ec->send_buffer)-1);
 		ssize_t b = write(sockd, ec->send_buffer, sizeof(ec->send_buffer));
 		ec->sent_msg = 1;
 		ec->amount_sent = b;
-		log("client socket %i wrote %i bytes: '%s'", sockd, b, ec->send_buffer);
+		log(G_LOG_LEVEL_INFO, __FUNCTION__, "client socket %i wrote %i bytes: '%s'", sockd, b, ec->send_buffer);
 	}
 }

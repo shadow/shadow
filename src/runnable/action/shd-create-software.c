@@ -50,7 +50,7 @@ void createsoftware_run(CreateSoftwareAction* action) {
 	Worker* worker = worker_getPrivate();
 	gchar* pluginPath = engine_get(worker->cached_engine, PLUGINPATHS, action->pluginID);
 
-	Software* software = software_new(action->id, action->arguments->str, pluginPath, action->launchtime);
+	Software* software = software_new(action->id, action->arguments->str, action->pluginID, pluginPath, action->launchtime);
 	engine_put(worker->cached_engine, SOFTWARE, &(software->id), software);
 }
 
