@@ -35,19 +35,31 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 
 	/* set defaults */
 	c->nWorkerThreads = 0;
-	c->minTimeJump = 10;
+	c->minRunAhead = 10;
 	c->printSoftwareVersion = 0;
 
-	/* set options to change defaults */
-	const GOptionEntry entries[] =
-	{
+	/* set options to change defaults for the main group */
+	c->mainOptionGroup = g_option_group_new("main", "Application Options", "Various application related options", NULL, NULL);
+	const GOptionEntry mainEntries[] = {
 	  { "threads", 't', 0, G_OPTION_ARG_INT, &(c->nWorkerThreads), "Use N worker threads", "N" },
-	  { "jump-min", 'j', 0, G_OPTION_ARG_INT, &(c->minTimeJump), "Minimum allowed time jump when sending events between nodes, in milliseconds", "N" },
+	  { "log-level", 'l', 0, G_OPTION_ARG_STRING, &(c->logLevelInput), "Log LEVEL above which to filter messages (error > critical > warning > message > info > debug)", "LEVEL" },
 	  { "version", 'v', 0, G_OPTION_ARG_NONE, &(c->printSoftwareVersion), "Print software version and exit", NULL },
 	  { NULL },
 	};
 
-	g_option_context_add_main_entries(c->context, entries, NULL);
+	g_option_group_add_entries(c->mainOptionGroup, mainEntries);
+	g_option_context_set_main_group(c->context, c->mainOptionGroup);
+
+	/* now fill in options for other groups */
+	c->networkOptionGroup = g_option_group_new("network", "Network Options", "Various network related options", NULL, NULL);
+	const GOptionEntry networkEntries[] =
+	{
+	  { "runahead", 'r', 0, G_OPTION_ARG_INT, &(c->minRunAhead), "Minimum allowed TIME workers may run ahead when sending events between nodes, in milliseconds", "TIME" },
+	  { NULL },
+	};
+
+	g_option_group_add_entries(c->networkOptionGroup, networkEntries);
+	g_option_context_add_group(c->context, c->networkOptionGroup);
 
 	/* parse args */
 	GError *error = NULL;
@@ -76,6 +88,9 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	if(c->nWorkerThreads < 0) {
 		c->nWorkerThreads = 0;
 	}
+	if(c->logLevelInput == NULL) {
+		c->logLevelInput = g_strdup("info");
+	}
 
 	return c;
 }
@@ -83,11 +98,36 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 void configuration_free(Configuration* config) {
 	MAGIC_ASSERT(config);
 
-	g_option_context_free(config->context);
 	if(config->inputXMLFilenames) {
 		g_queue_free(config->inputXMLFilenames);
 	}
+	g_free(config->logLevelInput);
+
+	/* groups are freed with the context */
+	g_option_context_free(config->context);
 
 	MAGIC_CLEAR(config);
 	g_free(config);
+}
+
+GLogLevelFlags configuration_getLogLevel(Configuration* config) {
+	MAGIC_ASSERT(config);
+
+	const gchar* l = (const gchar*) config->logLevelInput;
+
+	if (g_ascii_strcasecmp(l, "error") == 0) {
+		return G_LOG_LEVEL_ERROR;
+	} else if (g_ascii_strcasecmp(l, "critical") == 0) {
+		return G_LOG_LEVEL_CRITICAL;
+	} else if (g_ascii_strcasecmp(l, "warning") == 0) {
+		return G_LOG_LEVEL_WARNING;
+	} else if (g_ascii_strcasecmp(l, "message") == 0) {
+		return G_LOG_LEVEL_MESSAGE;
+	} else if (g_ascii_strcasecmp(l, "info") == 0) {
+		return G_LOG_LEVEL_INFO;
+	} else if (g_ascii_strcasecmp(l, "debug") == 0) {
+		return G_LOG_LEVEL_DEBUG;
+	} else {
+		return G_LOG_LEVEL_INFO;
+	}
 }

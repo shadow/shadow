@@ -67,6 +67,11 @@ static const gchar* _logging_getLogDomainString(const gchar *log_domain) {
 }
 
 void logging_handleLog(const gchar *log_domain, GLogLevelFlags log_level, const gchar *message, gpointer user_data) {
+	GLogLevelFlags* configuredLogLevel = user_data;
+	if(log_level > *configuredLogLevel) {
+		return;
+	}
+
 	/* callback from GLib, no access to workers */
 	GDateTime* dt_now = g_date_time_new_now_local();
 	gchar* dt_format = g_date_time_format(dt_now, "%F %H:%M:%S:%N");

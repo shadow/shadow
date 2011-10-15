@@ -80,9 +80,13 @@ typedef struct _Configuration Configuration;
 struct _Configuration {
 	GOptionContext *context;
 
+	GOptionGroup* mainOptionGroup;
+	gchar* logLevelInput;
 	gint nWorkerThreads;
-	gint minTimeJump;
 	gboolean printSoftwareVersion;
+
+	GOptionGroup* networkOptionGroup;
+	gint minRunAhead;
 
 	GQueue* inputXMLFilenames;
 
@@ -91,5 +95,7 @@ struct _Configuration {
 
 Configuration* configuration_new(gint argc, gchar* argv[]);
 void configuration_free(Configuration* config);
+
+GLogLevelFlags configuration_getLogLevel(Configuration* config);
 
 #endif /* SHD_CONFIGURATION_H_ */

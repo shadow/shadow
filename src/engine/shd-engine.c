@@ -56,7 +56,7 @@ Engine* engine_new(Configuration* config) {
 	registry_register(engine->registry, CDFS, NULL, cdf_free);
 	registry_register(engine->registry, PLUGINPATHS, g_free, g_free);
 
-	engine->minTimeJump = config->minTimeJump * SIMTIME_ONE_MILLISECOND;
+	engine->minTimeJump = config->minRunAhead * SIMTIME_ONE_MILLISECOND;
 
 	engine->internet = internetwork_new();
 

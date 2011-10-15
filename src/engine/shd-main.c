@@ -44,8 +44,10 @@ gint shadow_main(gint argc, gchar* argv[]) {
 	/* make the engine available */
 	worker->cached_engine = shadow_engine;
 
-	/* hook in our logging system */
-	g_log_set_default_handler(logging_handleLog, shadow_engine);
+	/* hook in our logging system. stack variable used to avoid errors
+	 * during cleanup below. */
+	GLogLevelFlags configuredLogLevel = configuration_getLogLevel(config);
+	g_log_set_default_handler(logging_handleLog, &(configuredLogLevel));
 	debug("log system initialized");
 
 	/* store parsed actions from each user-configured simulation script  */
