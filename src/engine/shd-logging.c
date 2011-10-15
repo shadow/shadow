@@ -90,10 +90,9 @@ void logging_logv(const gchar *log_domain, GLogLevelFlags log_level, const gchar
 	/* this is called by worker threads, so we have access to worker */
 	Worker* w = worker_getPrivate();
 
-	GString* simtime = g_string_new(NULL);
-	if(w->clock_now == SIMTIME_INVALID) {
-		g_string_printf(simtime, "n/a");
-	} else {
+	/* format the simulation time if we are running an event */
+	GString* simtime = NULL;
+	if(w->clock_now != SIMTIME_INVALID) {
 		SimulationTime hours, minutes, seconds, remainder;
 		remainder = w->clock_now;
 
@@ -104,27 +103,39 @@ void logging_logv(const gchar *log_domain, GLogLevelFlags log_level, const gchar
 		seconds = remainder / SIMTIME_ONE_SECOND;
 		remainder %= SIMTIME_ONE_SECOND;
 
+		simtime = g_string_new(NULL);
 		g_string_printf(simtime, "%lu:%lu:%lu:%lu", hours, minutes, seconds, remainder);
 	}
 
-	gchar* clock_string = g_string_free(simtime, FALSE);
+	/* the time - we'll need to free clockString later */
+	gchar* clockString = !simtime ? g_strdup("n/a") : g_string_free(simtime, FALSE);
 
-	const gchar* functionString = functionName ? functionName : "n/a";
+	/* node identifier, if we are running a node
+	 * dont free this since we dont own the ip address string */
+	const gchar* nodeString = !w->cached_node ? "n/a" :
+			address_toHostName(w->cached_node->address);
 
-	GString* string_buffer = g_string_new(NULL);
-	g_string_printf(string_buffer, "%s [t%i] [%s-%s] [%s] %s",
-			clock_string,
+	/* the function name - no need to free this */
+	const gchar* functionString = !functionName ? "n/a" : functionName;
+
+	GString* newLogFormatBuffer = g_string_new(NULL);
+	g_string_printf(newLogFormatBuffer, "%s [t%i] [%s] [%s-%s] [%s] %s",
+			clockString,
 			w->thread_id,
+			nodeString,
 			_logging_getLogDomainString(log_domain),
 			_logging_getLogLevelString(log_level),
 			functionString,
 			format
 			);
 
-	gchar* new_format = g_string_free(string_buffer, FALSE);
-	g_logv(log_domain, log_level, new_format, vargs);
-	g_free(new_format);
-	g_free(clock_string);
+	/* get the new format out of our string buffer and log it */
+	gchar* newLogFormat = g_string_free(newLogFormatBuffer, FALSE);
+	g_logv(log_domain, log_level, newLogFormat, vargs);
+
+	/* cleanup */
+	g_free(newLogFormat);
+	g_free(clockString);
 }
 
 void logging_log(const gchar *log_domain, GLogLevelFlags log_level, const gchar* functionName, const gchar *format, ...) {

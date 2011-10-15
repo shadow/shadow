@@ -104,6 +104,7 @@ Network* internetwork_getNetwork(Internetwork* internet, GQuark networkID) {
 
 guint32 _internetwork_generateIP(Internetwork* internet) {
 	MAGIC_ASSERT(internet);
+	internet->ipCounter++;
 	while(internet->ipCounter == htonl(INADDR_NONE) ||
 			internet->ipCounter == htonl(INADDR_NONE) ||
 			internet->ipCounter == htonl(INADDR_NONE) ||
@@ -111,7 +112,7 @@ guint32 _internetwork_generateIP(Internetwork* internet) {
 	{
 		internet->ipCounter++;
 	}
-	return internet->ipCounter++;
+	return internet->ipCounter;
 }
 
 void internetwork_createNode(Internetwork* internet, GQuark nodeID,

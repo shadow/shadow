@@ -112,7 +112,7 @@ void createnodes_run(CreateNodesAction* action) {
 		/* make sure our bootstrap events are set properly */
 		worker->clock_now = 0;
 		worker_scheduleEvent((Event*)event, software->startTime, id);
-		worker->clock_now = 0;
+		worker->clock_now = SIMTIME_INVALID;
 	}
 }
 

@@ -26,7 +26,7 @@ Node* node_new(GQuark id, Network* network, Software* software, guint32 ip, GStr
 	MAGIC_INIT(node);
 
 	node->id = id;
-	node->address = address_new(ip, (const gchar*) hostname->str);
+	node->address = address_new(id, (const gchar*) hostname->str);
 	node->event_mailbox = g_async_queue_new_full(shadowevent_free);
 	node->event_priority_queue = g_queue_new();
 	node->network = network;
@@ -123,10 +123,10 @@ gboolean node_isEqual(Node* a, Node* b) {
 
 guint32 node_getBandwidthUp(Node* node) {
 	MAGIC_ASSERT(node);
-	return 0;//node->vsocket_mgr->vt_mgr->KBps_up;
+	return node->vsocket_mgr->vt_mgr->KBps_up;
 }
 
 guint32 node_getBandwidthDown(Node* node) {
 	MAGIC_ASSERT(node);
-	return 0;//node->vsocket_mgr->vt_mgr->KBps_down;
+	return node->vsocket_mgr->vt_mgr->KBps_down;
 }
