@@ -119,12 +119,12 @@ void logging_logv(const gchar *log_domain, GLogLevelFlags log_level, const gchar
 	const gchar* functionString = !functionName ? "n/a" : functionName;
 
 	GString* newLogFormatBuffer = g_string_new(NULL);
-	g_string_printf(newLogFormatBuffer, "%s [t%i] [%s] [%s-%s] [%s] %s",
-			clockString,
+	g_string_printf(newLogFormatBuffer, "[thread-%i] %s [%s-%s] [%s] [%s] %s",
 			w->thread_id,
-			nodeString,
+			clockString,
 			_logging_getLogDomainString(log_domain),
 			_logging_getLogLevelString(log_level),
+			nodeString,
 			functionString,
 			format
 			);
