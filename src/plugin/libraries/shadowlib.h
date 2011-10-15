@@ -30,9 +30,9 @@ typedef void (*PluginFreeInstanceFunc)();
 typedef void (*PluginSocketReadableFunc)(gint);
 typedef void (*PluginSocketWritableFunc)(gint);
 
-typedef struct _PluginVTable PluginVTable;
+typedef struct _PluginFunctionTable PluginFunctionTable;
 
-struct _PluginVTable {
+struct _PluginFunctionTable {
 	PluginNewInstanceFunc new;
 	PluginFreeInstanceFunc free;
 	PluginSocketReadableFunc readable;
@@ -40,16 +40,16 @@ struct _PluginVTable {
 };
 
 /* function signatures for available shadow functions */
-typedef gboolean (*ShadowlibRegisterFunc)(PluginVTable* callbackFunctions, guint nVariables, ...);
+typedef gboolean (*ShadowlibRegisterFunc)(PluginFunctionTable* callbackFunctions, guint nVariables, ...);
 typedef void (*ShadowlibLogFunc)(gchar* format, ...);
 typedef in_addr_t (*ShadowlibResolveHostnameFunc)(gchar* name);
 typedef gboolean (*ShadowlibResolveIPAddressFunc)(in_addr_t addr, gchar* name_out, gint name_out_len);
 typedef in_addr_t (*ShadowlibGetIPAddressFunc)();
 typedef gboolean (*ShadowlibGetHostnameFunc)(gchar* name_out, gint name_out_len);
 
-typedef struct _ShadowlibVTable ShadowlibVTable;
+typedef struct _ShadowlibFunctionTable ShadowlibFunctionTable;
 
-struct _ShadowlibVTable {
+struct _ShadowlibFunctionTable {
 	ShadowlibRegisterFunc registration;
 	ShadowlibLogFunc log;
 	ShadowlibResolveHostnameFunc resolveHostname;
@@ -60,6 +60,6 @@ struct _ShadowlibVTable {
 
 /* Plug-ins must implement this function to communicate with Shadow.
  * the function name symbol must be "__shadow_plugin_init__" */
-typedef void (*ShadowPluginInitializeFunc)(ShadowlibVTable* shadowlibFunctions);
+typedef void (*ShadowPluginInitializeFunc)(ShadowlibFunctionTable* shadowlibFunctions);
 
 #endif /* SHADOWLIB_H_ */

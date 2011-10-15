@@ -21,7 +21,7 @@
 
 #include "shadow.h"
 
-RunnableVTable createnetwork_vtable = {
+RunnableFunctionTable createnetwork_functions = {
 	(RunnableRunFunc) createnetwork_run,
 	(RunnableFreeFunc) createnetwork_free,
 	MAGIC_VALUE
@@ -34,7 +34,7 @@ CreateNetworkAction* createnetwork_new(GString* name, GString* latencyCDFName,
 	CreateNetworkAction* action = g_new0(CreateNetworkAction, 1);
 	MAGIC_INIT(action);
 
-	action_init(&(action->super), &createnetwork_vtable);
+	action_init(&(action->super), &createnetwork_functions);
 
 	action->id = g_quark_from_string((const gchar*)name->str);
 	action->latencyID = g_quark_from_string(latencyCDFName->str);

@@ -21,7 +21,7 @@
 
 #include "shadow.h"
 
-EventVTable packetreceived_vtable = {
+EventFunctionTable packetreceived_functions = {
 	(EventRunFunc) packetreceived_run,
 	(EventFreeFunc) packetreceived_free,
 	MAGIC_VALUE
@@ -31,7 +31,7 @@ PacketReceivedEvent* packetreceived_new() {
 	PacketReceivedEvent* event = g_new0(PacketReceivedEvent, 1);
 	MAGIC_INIT(event);
 
-	shadowevent_init(&(event->super), &packetreceived_vtable);
+	shadowevent_init(&(event->super), &packetreceived_functions);
 
 	return event;
 }

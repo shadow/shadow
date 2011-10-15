@@ -21,8 +21,11 @@
 
 #include "shadow.h"
 
-RunnableVTable connectnetwork_vtable = { (RunnableRunFunc) connectnetwork_run,
-		(RunnableFreeFunc) connectnetwork_free, MAGIC_VALUE };
+RunnableFunctionTable connectnetwork_functions = {
+		(RunnableRunFunc) connectnetwork_run,
+		(RunnableFreeFunc) connectnetwork_free,
+		MAGIC_VALUE
+};
 
 ConnectNetworkAction* connectnetwork_new(GString* networkaName,
 		GString* networkbName, GString* latencyabCDFName,
@@ -33,7 +36,7 @@ ConnectNetworkAction* connectnetwork_new(GString* networkaName,
 	ConnectNetworkAction* action = g_new0(ConnectNetworkAction, 1);
 	MAGIC_INIT(action);
 
-	action_init(&(action->super), &connectnetwork_vtable);
+	action_init(&(action->super), &connectnetwork_functions);
 
 	action->networkaID = g_quark_from_string((const gchar*) networkaName->str);
 	action->networkbID = g_quark_from_string((const gchar*) networkbName->str);

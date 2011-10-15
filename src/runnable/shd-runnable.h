@@ -25,7 +25,7 @@
 #include "shadow.h"
 
 typedef struct _Runnable Runnable;
-typedef struct _RunnableVTable RunnableVTable;
+typedef struct _RunnableFunctionTable RunnableFunctionTable;
 
 /* required interface functions. _new() should be implemented in subclass. */
 typedef void (*RunnableRunFunc)(Runnable* r);
@@ -35,7 +35,7 @@ typedef void (*RunnableFreeFunc)(Runnable* r);
  * Virtual function table for base runnable, storing pointers to required
  * callable functions.
  */
-struct _RunnableVTable {
+struct _RunnableFunctionTable {
 	RunnableRunFunc run;
 	RunnableFreeFunc free;
 	MAGIC_DECLARE;
@@ -46,14 +46,14 @@ struct _RunnableVTable {
  * the first element in the substructure, and adding custom members below it.
  */
 struct _Runnable {
-	RunnableVTable* vtable;
+	RunnableFunctionTable* vtable;
 	MAGIC_DECLARE;
 };
 
 /**
  *
  */
-void runnable_init(Runnable* r, RunnableVTable* vtable);
+void runnable_init(Runnable* r, RunnableFunctionTable* vtable);
 
 /**
  *

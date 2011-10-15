@@ -29,7 +29,7 @@
  * a common interface and re-directs to the appropriate shadow function.
  */
 
-gboolean shadowlib_register(PluginVTable* callbackFunctions, guint nVariables, ...) {
+gboolean shadowlib_register(PluginFunctionTable* callbackFunctions, guint nVariables, ...) {
 	debug("shadowlib_register called");
 
 	/* collect the variable length argument list*/
@@ -82,9 +82,9 @@ gboolean shadowlib_getHostname(gchar* name_out, gint name_out_len) {
 	return shadowlib_resolveIPAddress(ip, name_out, name_out_len);
 }
 
-/* we send this VTable to each plug-in so it has pointers to our functions.
+/* we send this FunctionTable to each plug-in so it has pointers to our functions.
  * we use this to export shadow functionality to plug-ins. */
-ShadowlibVTable shadowlibVTable = {
+ShadowlibFunctionTable shadowlibFunctionTable = {
 	&shadowlib_register,
 	&shadowlib_log,
 	&shadowlib_resolveHostname,

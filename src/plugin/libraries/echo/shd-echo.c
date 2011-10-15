@@ -35,7 +35,7 @@
  *
  */
 
-PluginVTable echoLibraryFuncs = {
+PluginFunctionTable echo_pluginFunctions = {
 	&echo_new, &echo_free, &echo_readable, &echo_writable,
 };
 
@@ -43,7 +43,7 @@ PluginVTable echoLibraryFuncs = {
  * the name must not collide with other loaded modules globals. */
 Echo echo_globalState;
 
-void __shadow_plugin_init__(ShadowlibVTable* shadowlibFuncs) {
+void __shadow_plugin_init__(ShadowlibFunctionTable* shadowlibFuncs) {
 	/* save the shadow functions we will use */
 	echo_globalState.shadowlibFuncs = shadowlibFuncs;
 
@@ -51,7 +51,7 @@ void __shadow_plugin_init__(ShadowlibVTable* shadowlibFuncs) {
 	 * tell shadow which of our functions it can use to notify our plugin,
 	 * and allow it to track our state for each instance of this plugin
 	 */
-	gboolean success = shadowlibFuncs->registration(&echoLibraryFuncs, 1, sizeof(Echo), &echo_globalState);
+	gboolean success = shadowlibFuncs->registration(&echo_pluginFunctions, 1, sizeof(Echo), &echo_globalState);
 	if(success) {
 		shadowlibFuncs->log("successfully registered echo plug-in state");
 	} else {

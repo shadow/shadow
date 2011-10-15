@@ -21,7 +21,7 @@
 
 #include "shadow.h"
 
-EventVTable callback_vtable = {
+EventFunctionTable callback_functions = {
 	(EventRunFunc) callback_run,
 	(EventFreeFunc) callback_free,
 	MAGIC_VALUE
@@ -34,7 +34,7 @@ CallbackEvent* callback_new(CallbackFunc callback, gpointer data, gpointer callb
 	CallbackEvent* event = g_new0(CallbackEvent, 1);
 	MAGIC_INIT(event);
 
-	shadowevent_init(&(event->super), &callback_vtable);
+	shadowevent_init(&(event->super), &callback_functions);
 
 	event->callback = callback;
 	event->data = data;

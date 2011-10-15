@@ -23,8 +23,11 @@
 
 #include <netinet/in.h>
 
-RunnableVTable createnodes_vtable = { (RunnableRunFunc) createnodes_run,
-		(RunnableFreeFunc) createnodes_free, MAGIC_VALUE };
+RunnableFunctionTable createnodes_functions = {
+		(RunnableRunFunc) createnodes_run,
+		(RunnableFreeFunc) createnodes_free,
+		MAGIC_VALUE
+};
 
 CreateNodesAction* createnodes_new(guint64 quantity, GString* name,
 		GString* applicationName, GString* cpudelayCDFName,
@@ -35,7 +38,7 @@ CreateNodesAction* createnodes_new(guint64 quantity, GString* name,
 	CreateNodesAction* action = g_new0(CreateNodesAction, 1);
 	MAGIC_INIT(action);
 
-	action_init(&(action->super), &createnodes_vtable);
+	action_init(&(action->super), &createnodes_functions);
 
 	action->quantity = quantity;
 	action->id = g_quark_from_string((const gchar*) name->str);

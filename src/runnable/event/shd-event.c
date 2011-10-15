@@ -21,16 +21,16 @@
 
 #include "shadow.h"
 
-RunnableVTable event_vtable = {
+RunnableFunctionTable event_functions = {
 	(RunnableRunFunc) shadowevent_run,
 	(RunnableFreeFunc) shadowevent_free,
 	MAGIC_VALUE
 };
 
-void shadowevent_init(Event* event, EventVTable* vtable) {
+void shadowevent_init(Event* event, EventFunctionTable* vtable) {
 	g_assert(event && vtable);
 
-	runnable_init(&(event->super), &event_vtable);
+	runnable_init(&(event->super), &event_functions);
 
 	MAGIC_INIT(event);
 	MAGIC_INIT(vtable);

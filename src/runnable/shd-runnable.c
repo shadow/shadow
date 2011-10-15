@@ -21,7 +21,7 @@
 
 #include "shadow.h"
 
-void runnable_init(Runnable* r, RunnableVTable* vtable) {
+void runnable_init(Runnable* r, RunnableFunctionTable* vtable) {
 	g_assert(r && vtable);
 	MAGIC_INIT(r);
 	MAGIC_INIT(vtable);

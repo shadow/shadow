@@ -21,4 +21,4 @@
 
 #include "shadow.h"
 
-extern ShadowlibVTable shadowlibVTable;
+extern ShadowlibFunctionTable shadowlibFunctionTable;

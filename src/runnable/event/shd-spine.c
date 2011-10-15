@@ -21,7 +21,7 @@
 
 #include "shadow.h"
 
-EventVTable spine_vtable = {
+EventFunctionTable spine_functions = {
 	(EventRunFunc) spine_run,
 	(EventFreeFunc) spine_free,
 	MAGIC_VALUE
@@ -31,7 +31,7 @@ SpinEvent* spine_new(guint seconds) {
 	SpinEvent* event = g_new0(SpinEvent, 1);
 	MAGIC_INIT(event);
 
-	shadowevent_init(&(event->super), &spine_vtable);
+	shadowevent_init(&(event->super), &spine_functions);
 	event->spin_seconds = seconds;
 
 	return event;

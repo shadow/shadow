@@ -21,7 +21,7 @@
 
 #include "shadow.h"
 
-RunnableVTable spina_vtable = {
+RunnableFunctionTable spina_functions = {
 	(RunnableRunFunc) spina_run,
 	(RunnableFreeFunc) spina_free,
 	MAGIC_VALUE
@@ -31,7 +31,7 @@ SpinAction* spina_new(guint seconds) {
 	SpinAction* action = g_new0(SpinAction, 1);
 	MAGIC_INIT(action);
 
-	action_init(&(action->super), &spina_vtable);
+	action_init(&(action->super), &spina_functions);
 	action->spin_seconds = seconds;
 
 	return action;

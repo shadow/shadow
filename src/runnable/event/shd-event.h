@@ -25,7 +25,7 @@
 #include "shadow.h"
 
 typedef struct _Event Event;
-typedef struct _EventVTable EventVTable;
+typedef struct _EventFunctionTable EventFunctionTable;
 
 /* FIXME: forward declaration to avoid circular dependencies... */
 typedef struct _Node Node;
@@ -38,7 +38,7 @@ typedef void (*EventFreeFunc)(Event* event);
  * Virtual function table for base event, storing pointers to required
  * callable functions.
  */
-struct _EventVTable {
+struct _EventFunctionTable {
 	EventRunFunc run;
 	EventFreeFunc free;
 	MAGIC_DECLARE;
@@ -50,7 +50,7 @@ struct _EventVTable {
  */
 struct _Event {
 	Runnable super;
-	EventVTable* vtable;
+	EventFunctionTable* vtable;
 	SimulationTime time;
 	Node* node;
 
@@ -59,7 +59,7 @@ struct _Event {
 	MAGIC_DECLARE;
 };
 
-void shadowevent_init(Event* event, EventVTable* vtable);
+void shadowevent_init(Event* event, EventFunctionTable* vtable);
 gboolean shadowevent_run(gpointer data);
 gint shadowevent_compare(gconstpointer eventa, gconstpointer eventb, gpointer user_data);
 void shadowevent_free(gpointer data);

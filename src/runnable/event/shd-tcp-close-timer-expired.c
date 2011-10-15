@@ -21,7 +21,7 @@
 
 #include "shadow.h"
 
-EventVTable tcpclosetimerexpired_vtable = {
+EventFunctionTable tcpclosetimerexpired_functions = {
 	(EventRunFunc) tcpclosetimerexpired_run,
 	(EventFreeFunc) tcpclosetimerexpired_free,
 	MAGIC_VALUE
@@ -33,7 +33,7 @@ TCPCloseTimerExpiredEvent* tcpclosetimerexpired_new(GQuark callerID,
 	TCPCloseTimerExpiredEvent* event = g_new0(TCPCloseTimerExpiredEvent, 1);
 	MAGIC_INIT(event);
 
-	shadowevent_init(&(event->super), &tcpclosetimerexpired_vtable);
+	shadowevent_init(&(event->super), &tcpclosetimerexpired_functions);
 	event->callerID = callerID;
 	event->sourceID = sourceID;
 	event->sourcePort = sourcePort;

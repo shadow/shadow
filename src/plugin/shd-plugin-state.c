@@ -21,13 +21,13 @@
 
 #include "shadow.h"
 
-PluginState* pluginstate_new(PluginVTable* callbackFunctions, guint nVariables, va_list vargs) {
+PluginState* pluginstate_new(PluginFunctionTable* callbackFunctions, guint nVariables, va_list vargs) {
 	g_assert(callbackFunctions);
 	PluginState* state = g_new0(PluginState, 1);
 	MAGIC_INIT(state);
 
 	/* store the pointers to the callbacks the plugin wants us to call */
-	state->functions = g_new0(PluginVTable, 1);
+	state->functions = g_new0(PluginFunctionTable, 1);
 	*(state->functions) = *callbackFunctions;
 
 	/* initialize the empty singly-linked list of variables */
@@ -63,7 +63,7 @@ PluginState* pluginstate_copyNew(PluginState* state) {
 	PluginState* copyState = g_new0(PluginState, 1);
 	MAGIC_INIT(copyState);
 
-	copyState->functions = g_new0(PluginVTable, 1);
+	copyState->functions = g_new0(PluginFunctionTable, 1);
 	*(copyState->functions) = *(state->functions);
 
 	copyState->dataEntries = NULL;

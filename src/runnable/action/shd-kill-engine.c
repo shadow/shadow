@@ -21,7 +21,7 @@
 
 #include "shadow.h"
 
-RunnableVTable killengine_vtable = {
+RunnableFunctionTable killengine_functions = {
 	(RunnableRunFunc) killengine_run,
 	(RunnableFreeFunc) killengine_free,
 	MAGIC_VALUE
@@ -31,7 +31,7 @@ KillEngineAction* killengine_new(guint64 endTimeInSeconds) {
 	KillEngineAction* action = g_new0(KillEngineAction, 1);
 	MAGIC_INIT(action);
 
-	action_init(&(action->super), &killengine_vtable);
+	action_init(&(action->super), &killengine_functions);
 	action->endTime = (SimulationTime)(SIMTIME_ONE_SECOND * endTimeInSeconds);
 
 	return action;

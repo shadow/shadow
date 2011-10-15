@@ -27,14 +27,14 @@
 typedef struct _PluginState PluginState;
 
 struct _PluginState {
-	PluginVTable* functions;
+	PluginFunctionTable* functions;
 	GSList* dataEntries;
 	gsize nEntries;
 	gsize totalEntrySize;
 	MAGIC_DECLARE;
 };
 
-PluginState* pluginstate_new(PluginVTable* callbackFunctions, guint nVariables, va_list vargs);
+PluginState* pluginstate_new(PluginFunctionTable* callbackFunctions, guint nVariables, va_list vargs);
 PluginState* pluginstate_copyNew(PluginState* state);
 void pluginstate_copy(PluginState* sourceState, PluginState* destinationState);
 void pluginstate_free(PluginState* state);

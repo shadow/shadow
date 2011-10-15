@@ -21,7 +21,7 @@
 
 #include "shadow.h"
 
-RunnableVTable loadplugin_vtable = {
+RunnableFunctionTable loadplugin_functions = {
 	(RunnableRunFunc) loadplugin_run,
 	(RunnableFreeFunc) loadplugin_free,
 	MAGIC_VALUE
@@ -32,7 +32,7 @@ LoadPluginAction* loadplugin_new(GString* name, GString* path) {
 	LoadPluginAction* action = g_new0(LoadPluginAction, 1);
 	MAGIC_INIT(action);
 
-	action_init(&(action->super), &loadplugin_vtable);
+	action_init(&(action->super), &loadplugin_functions);
 
 	action->id = g_quark_from_string((const gchar*) name->str);
 	action->path = g_string_new(path->str);

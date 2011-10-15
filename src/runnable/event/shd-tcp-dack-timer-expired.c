@@ -21,7 +21,7 @@
 
 #include "shadow.h"
 
-EventVTable tcpdacktimerexpired_vtable = {
+EventFunctionTable tcpdacktimerexpired_functions = {
 	(EventRunFunc) tcpdacktimerexpired_run,
 	(EventFreeFunc) tcpdacktimerexpired_free,
 	MAGIC_VALUE
@@ -31,7 +31,7 @@ TCPDAckTimerExpiredEvent* tcpdacktimerexpired_new(guint16 socketDescriptor) {
 	TCPDAckTimerExpiredEvent* event = g_new0(TCPDAckTimerExpiredEvent, 1);
 	MAGIC_INIT(event);
 
-	shadowevent_init(&(event->super), &tcpdacktimerexpired_vtable);
+	shadowevent_init(&(event->super), &tcpdacktimerexpired_functions);
 	event->socketDescriptor = socketDescriptor;
 
 	return event;

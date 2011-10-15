@@ -62,7 +62,7 @@ typedef struct _Echo Echo;
 struct _Echo {
 	EchoServer* server;
 	EchoClient* client;
-	ShadowlibVTable* shadowlibFuncs;
+	ShadowlibFunctionTable* shadowlibFuncs;
 } echoloopback_t, *echoloopback_tp;
 
 void echo_new(int argc, char* argv[]);

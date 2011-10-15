@@ -21,7 +21,7 @@
 
 #include "shadow.h"
 
-RunnableVTable createsoftware_vtable = {
+RunnableFunctionTable createsoftware_functions = {
 	(RunnableRunFunc) createsoftware_run,
 	(RunnableFreeFunc) createsoftware_free,
 	MAGIC_VALUE
@@ -34,7 +34,7 @@ CreateSoftwareAction* createsoftware_new(GString* name,
 	CreateSoftwareAction* action = g_new0(CreateSoftwareAction, 1);
 	MAGIC_INIT(action);
 
-	action_init(&(action->super), &createsoftware_vtable);
+	action_init(&(action->super), &createsoftware_functions);
 
 	action->id = g_quark_from_string((const gchar*) name->str);
 	action->pluginID = g_quark_from_string((const gchar*) pluginName->str);

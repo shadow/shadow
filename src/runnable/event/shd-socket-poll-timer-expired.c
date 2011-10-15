@@ -21,7 +21,7 @@
 
 #include "shadow.h"
 
-EventVTable socketpolltimerexpired_vtable = {
+EventFunctionTable socketpolltimerexpired_functions = {
 	(EventRunFunc) socketpolltimerexpired_run,
 	(EventFreeFunc) socketpolltimerexpired_free,
 	MAGIC_VALUE
@@ -31,7 +31,7 @@ SocketPollTimerExpiredEvent* socketpolltimerexpired_new(vepoll_tp vep) {
 	SocketPollTimerExpiredEvent* event = g_new0(SocketPollTimerExpiredEvent, 1);
 	MAGIC_INIT(event);
 
-	shadowevent_init(&(event->super), &socketpolltimerexpired_vtable);
+	shadowevent_init(&(event->super), &socketpolltimerexpired_functions);
 	event->vep = vep;
 
 	return event;

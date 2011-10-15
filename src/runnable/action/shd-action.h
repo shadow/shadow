@@ -32,7 +32,7 @@ struct _Action {
 	MAGIC_DECLARE;
 };
 
-void action_init(Action* a, RunnableVTable* vtable);
+void action_init(Action* a, RunnableFunctionTable* vtable);
 gint action_compare(gconstpointer a, gconstpointer b, gpointer user_data);
 
 #endif /* SHD_ACTION_H_ */

@@ -21,7 +21,7 @@
 
 #include "shadow.h"
 
-EventVTable tcpretransmittimerexpired_vtable = {
+EventFunctionTable tcpretransmittimerexpired_functions = {
 	(EventRunFunc) tcpretransmittimerexpired_run,
 	(EventFreeFunc) tcpretransmittimerexpired_free,
 	MAGIC_VALUE
@@ -33,7 +33,7 @@ TCPRetransmitTimerExpiredEvent* tcpretransmittimerexpired_new(GQuark callerID,
 	TCPRetransmitTimerExpiredEvent* event = g_new0(TCPRetransmitTimerExpiredEvent, 1);
 	MAGIC_INIT(event);
 
-	shadowevent_init(&(event->super), &tcpretransmittimerexpired_vtable);
+	shadowevent_init(&(event->super), &tcpretransmittimerexpired_functions);
 	event->callerID = callerID;
 	event->sourceID = sourceID;
 	event->sourcePort = sourcePort;

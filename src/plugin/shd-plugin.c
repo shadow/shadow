@@ -49,7 +49,7 @@ Plugin* plugin_new(GString* filename) {
 	plugin->isExecuting = TRUE;
 	worker->cached_plugin = plugin;
 	plugin_setShadowContext(plugin, FALSE);
-	plugin->init(&shadowlibVTable);
+	plugin->init(&shadowlibFunctionTable);
 	plugin_setShadowContext(plugin, TRUE);
 	plugin->isExecuting = FALSE;
 	worker->cached_plugin = NULL;
@@ -78,7 +78,7 @@ void plugin_setShadowContext(Plugin* plugin, gboolean isShadowContext) {
 	plugin->isShadowContext = isShadowContext;
 }
 
-void plugin_registerResidentState(Plugin* plugin, PluginVTable* callbackFunctions, guint nVariables, va_list variableArguments) {
+void plugin_registerResidentState(Plugin* plugin, PluginFunctionTable* callbackFunctions, guint nVariables, va_list variableArguments) {
 	MAGIC_ASSERT(plugin);
 	if(plugin->isRegisterred) {
 		warning("ignoring duplicate state registration");

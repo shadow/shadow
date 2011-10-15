@@ -21,7 +21,7 @@
 
 #include "shadow.h"
 
-EventVTable socketactivated_vtable = {
+EventFunctionTable socketactivated_functions = {
 	(EventRunFunc) socketactivated_run,
 	(EventFreeFunc) socketactivated_free,
 	MAGIC_VALUE
@@ -31,7 +31,7 @@ SocketActivatedEvent* socketactivated_new(guint16 socketDescriptor) {
 	SocketActivatedEvent* event = g_new0(SocketActivatedEvent, 1);
 	MAGIC_INIT(event);
 
-	shadowevent_init(&(event->super), &socketactivated_vtable);
+	shadowevent_init(&(event->super), &socketactivated_functions);
 	event->socketDescriptor = socketDescriptor;
 
 	return event;

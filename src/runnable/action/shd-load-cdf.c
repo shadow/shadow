@@ -21,7 +21,7 @@
 
 #include "shadow.h"
 
-RunnableVTable loadcdf_vtable = {
+RunnableFunctionTable loadcdf_functions = {
 	(RunnableRunFunc) loadcdf_run,
 	(RunnableFreeFunc) loadcdf_free,
 	MAGIC_VALUE
@@ -32,7 +32,7 @@ LoadCDFAction* loadcdf_new(GString* name, GString* path) {
 	LoadCDFAction* action = g_new0(LoadCDFAction, 1);
 	MAGIC_INIT(action);
 
-	action_init(&(action->super), &loadcdf_vtable);
+	action_init(&(action->super), &loadcdf_functions);
 
 	action->id = g_quark_from_string((const gchar*)name->str);
 	action->path = g_string_new(path->str);

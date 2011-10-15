@@ -21,7 +21,7 @@
 
 #include "shadow.h"
 
-EventVTable startapplication_vtable = {
+EventFunctionTable startapplication_functions = {
 	(EventRunFunc) startapplication_run,
 	(EventFreeFunc) startapplication_free,
 	MAGIC_VALUE
@@ -31,7 +31,7 @@ StartApplicationEvent* startapplication_new() {
 	StartApplicationEvent* event = g_new0(StartApplicationEvent, 1);
 	MAGIC_INIT(event);
 
-	shadowevent_init(&(event->super), &startapplication_vtable);
+	shadowevent_init(&(event->super), &startapplication_functions);
 
 	return event;
 }
