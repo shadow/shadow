@@ -191,7 +191,7 @@ void worker_scheduleEvent(Event* event, SimulationTime nano_delay, GQuark receiv
 	/* single threaded mode is simpler than multi threaded */
 	if(engine_getNumThreads(engine) > 1) {
 		/* multi threaded, figure out where to push event */
-		if(node_equal(receiver, sender) &&
+		if(node_isEqual(receiver, sender) &&
 				(event->time < worker->clock_barrier))
 		{
 			/* this is for our current node, push to its local queue. its ok if

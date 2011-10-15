@@ -21,11 +21,12 @@
 
 #include "shadow.h"
 
-Node* node_new(GQuark id, Network* network, Software* software, GString* hostname, guint32 bwDownKiBps, guint32 bwUpKiBps, guint64 cpuBps) {
+Node* node_new(GQuark id, Network* network, Software* software, guint32 ip, GString* hostname, guint32 bwDownKiBps, guint32 bwUpKiBps, guint64 cpuBps) {
 	Node* node = g_new0(Node, 1);
 	MAGIC_INIT(node);
 
 	node->id = id;
+	node->address = address_new(ip, (const gchar*) hostname->str);
 	node->event_mailbox = g_async_queue_new_full(shadowevent_free);
 	node->event_priority_queue = g_queue_new();
 	node->network = network;
@@ -38,7 +39,8 @@ Node* node_new(GQuark id, Network* network, Software* software, GString* hostnam
 	node->vsocket_mgr = vsocket_mgr_create((in_addr_t) id, bwDownKiBps, bwUpKiBps, cpuBps);
 
 	info("Created Node '%s', ip %s, %u bwUpKiBps, %u bwDownKiBps, %lu cpuBps",
-			g_quark_to_string(node->id), NTOA(node->id), bwUpKiBps, bwDownKiBps, cpuBps);
+			g_quark_to_string(node->id), address_toHostIPString(node->address),
+			bwUpKiBps, bwDownKiBps, cpuBps);
 
 	return node;
 }
@@ -47,6 +49,7 @@ void node_free(gpointer data) {
 	Node* node = data;
 	MAGIC_ASSERT(node);
 
+	address_free(node->address);
 	g_async_queue_unref(node->event_mailbox);
 	g_queue_free(node->event_priority_queue);
 
@@ -108,7 +111,7 @@ gint node_compare(gconstpointer a, gconstpointer b, gpointer user_data) {
 	return na->id > nb->id ? +1 : na->id == nb->id ? 0 : -1;
 }
 
-gboolean node_equal(Node* a, Node* b) {
+gboolean node_isEqual(Node* a, Node* b) {
 	if(a == NULL && b == NULL) {
 		return TRUE;
 	} else if(a == NULL || b == NULL) {

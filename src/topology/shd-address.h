@@ -19,30 +19,34 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SHD_LINK_H_
-#define SHD_LINK_H_
+#ifndef SHD_ADDRESS_H_
+#define SHD_ADDRESS_H_
 
 #include "shadow.h"
 
-/* a directed link between two networks */
+/*
+ * host order INADDR_LOOPBACK: 2130706433, INADDR_ANY: 0, INADDR_NONE: 4294967295, INADDR_BROADCAST: 4294967295
+ * network order INADDR_LOOPBACK: 16777343, INADDR_ANY: 0, INADDR_NONE: 4294967295, INADDR_BROADCAST: 4294967295
+ */
 
-typedef struct _Link Link;
+typedef struct _Address Address;
 
-struct _Link {
-	Network* sourceNetwork;
-	Network* destinationNetwork;
-	CumulativeDistribution* latency;
-	gdouble reliability;
+struct _Address {
+	/* IP must be first so we can cast an Address to an in_addr_t */
+	guint32 ip;
+	gchar* ipString;
+	gchar* name;
 	MAGIC_DECLARE;
 };
 
-Link* link_new(Network* sourceNetwork, Network* destinationNetwork,
-		CumulativeDistribution* latency, gdouble reliability);
-void link_free(gpointer data);
+Address* address_new(guint32 ip, const gchar* name);
+void address_free(gpointer data);
 
-Network* link_getSourceNetwork(Link* link);
-Network* link_getDestinationNetwork(Link* link);
-gdouble link_getLatency(Link* link);
-gdouble link_getReliability(Link* link);
+gboolean address_isEqual(Address* a, Address* b);
+guint32 address_toHostIP(Address* address);
+gchar* address_toHostIPString(Address* address);
+guint32 address_toNetworkIP(Address* address);
+gchar* address_toHostName(Address* address);
 
-#endif /* SHD_LINK_H_ */
+
+#endif /* SHD_ADDRESS_H_ */

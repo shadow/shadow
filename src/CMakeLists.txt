@@ -18,6 +18,7 @@ set(shadow_srcs
     engine/shd-engine.c
     engine/shd-worker.c
     
+    topology/shd-address.c
     topology/shd-network.c
     topology/shd-link.c
     topology/shd-internetwork.c

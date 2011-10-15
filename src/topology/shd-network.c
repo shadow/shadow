@@ -62,7 +62,7 @@ gint network_compare(gconstpointer a, gconstpointer b, gpointer user_data) {
 	return na->id > nb->id ? +1 : na->id == nb->id ? 0 : -1;
 }
 
-gboolean network_equal(Network* a, Network* b) {
+gboolean network_isEqual(Network* a, Network* b) {
 	if(a == NULL && b == NULL) {
 		return TRUE;
 	} else if(a == NULL || b == NULL) {

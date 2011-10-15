@@ -46,13 +46,14 @@ struct _Node {
 	GQueue* event_priority_queue;
 
 	GQuark id;
+	Address* address;
 	Application* application;
 	vsocket_mgr_tp vsocket_mgr;
 
 	MAGIC_DECLARE;
 };
 
-Node* node_new(GQuark id, Network* network, Software* software, GString* hostname, guint32 bwDownKiBps, guint32 bwUpKiBps, guint64 cpuBps);
+Node* node_new(GQuark id, Network* network,Software* software, guint32 ip, GString* hostname, guint32 bwDownKiBps, guint32 bwUpKiBps, guint64 cpuBps);
 void node_free(gpointer data);
 
 void node_lock(Node* node);
@@ -67,7 +68,7 @@ Event* node_popTask(Node* node);
 guint node_getNumTasks(Node* node);
 
 gint node_compare(gconstpointer a, gconstpointer b, gpointer user_data);
-gboolean node_equal(Node* a, Node* b);
+gboolean node_isEqual(Node* a, Node* b);
 
 guint32 node_getBandwidthUp(Node* node);
 guint32 node_getBandwidthDown(Node* node);

@@ -44,7 +44,7 @@ Network* network_new(GQuark id);
 void network_free(gpointer data);
 
 gint network_compare(gconstpointer a, gconstpointer b, gpointer user_data);
-gboolean network_equal(Network* a, Network* b);
+gboolean network_isEqual(Network* a, Network* b);
 
 void network_addOutgoingLink(Network* network, Link* outgoingLink);
 void network_addIncomingLink(Network* network, Link* incomingLink);

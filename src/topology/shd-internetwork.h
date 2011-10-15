@@ -31,9 +31,13 @@ struct _Internetwork {
 
 	GHashTable* nodes;
 	GHashTable* networks;
+	GHashTable* nameByIp;
+	GHashTable* ipByName;
 
 	gdouble maximumGlobalLatency;
 	gdouble minimumGlobalLatency;
+
+	guint32 ipCounter;
 
 	MAGIC_DECLARE;
 };
@@ -54,6 +58,7 @@ Node* internetwork_getNode(Internetwork* internet, GQuark nodeID);
 GList* internetwork_getAllNodes(Internetwork* internet);
 
 GQuark internetwork_resolveName(Internetwork* internet, gchar* name);
+const gchar* internetwork_resolveIP(Internetwork* internet, guint32 ip);
 const gchar* internetwork_resolveID(Internetwork* internet, GQuark id);
 
 guint32 internetwork_getNodeBandwidthUp(Internetwork* internet, GQuark nodeID);

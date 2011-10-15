@@ -34,6 +34,15 @@ Link* link_new(Network* sourceNetwork, Network* destinationNetwork,
 	return link;
 }
 
+
+void link_free(gpointer data) {
+	Link* link = data;
+	MAGIC_ASSERT(link);
+
+	MAGIC_CLEAR(link);
+	g_free(link);
+}
+
 Network* link_getSourceNetwork(Link* link) {
 	MAGIC_ASSERT(link);
 	return link->sourceNetwork;
@@ -52,12 +61,4 @@ gdouble link_getLatency(Link* link) {
 gdouble link_getReliability(Link* link) {
 	MAGIC_ASSERT(link);
 	return link->reliability;
-}
-
-void link_free(gpointer data) {
-	Link* link = data;
-	MAGIC_ASSERT(link);
-
-	MAGIC_CLEAR(link);
-	g_free(link);
 }

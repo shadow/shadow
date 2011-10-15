@@ -27,6 +27,8 @@ Internetwork* internetwork_new() {
 
 	internet->nodes = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, node_free);
 	internet->networks = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, network_free);
+	internet->ipByName = g_hash_table_new_full(g_str_hash, g_str_equal, NULL, g_free);
+	internet->nameByIp = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, g_free);
 
 	return internet;
 }
@@ -36,6 +38,8 @@ void internetwork_free(Internetwork* internet) {
 
 	g_hash_table_destroy(internet->nodes);
 	g_hash_table_destroy(internet->networks);
+	g_hash_table_destroy(internet->ipByName);
+	g_hash_table_destroy(internet->nameByIp);
 
 	MAGIC_CLEAR(internet);
 	g_free(internet);
@@ -98,14 +102,33 @@ Network* internetwork_getNetwork(Internetwork* internet, GQuark networkID) {
 	return (Network*) g_hash_table_lookup(internet->networks, &networkID);
 }
 
+guint32 _internetwork_generateIP(Internetwork* internet) {
+	MAGIC_ASSERT(internet);
+	while(internet->ipCounter == htonl(INADDR_NONE) ||
+			internet->ipCounter == htonl(INADDR_NONE) ||
+			internet->ipCounter == htonl(INADDR_NONE) ||
+			internet->ipCounter == htonl(INADDR_NONE))
+	{
+		internet->ipCounter++;
+	}
+	return internet->ipCounter++;
+}
+
 void internetwork_createNode(Internetwork* internet, GQuark nodeID,
 		Network* network, Software* software, GString* hostname,
 		guint32 bwDownKiBps, guint32 bwUpKiBps, guint64 cpuBps) {
 	MAGIC_ASSERT(internet);
 	g_assert(!internet->isReadOnly);
 
-	Node* node = node_new(nodeID, network, software, hostname, bwDownKiBps, bwUpKiBps, cpuBps);
+	guint32 ip = _internetwork_generateIP(internet);
+	Node* node = node_new(nodeID, network, software, ip, hostname, bwDownKiBps, bwUpKiBps, cpuBps);
 	g_hash_table_replace(internet->nodes, &(node->id), node);
+
+	gchar* mapName = g_strdup((const gchar*) hostname->str);
+	guint32* mapIP = g_new0(guint32, 1);
+	*mapIP = ip;
+	g_hash_table_replace(internet->ipByName, mapName, mapIP);
+	g_hash_table_replace(internet->nameByIp, mapIP, mapName);
 }
 
 Node* internetwork_getNode(Internetwork* internet, GQuark nodeID) {
@@ -118,9 +141,20 @@ GList* internetwork_getAllNodes(Internetwork* internet) {
 	return g_hash_table_get_values(internet->nodes);
 }
 
-GQuark internetwork_resolveName(Internetwork* internet, gchar* name) {
+guint32 internetwork_resolveName(Internetwork* internet, gchar* name) {
 	MAGIC_ASSERT(internet);
 	return g_quark_try_string((const gchar*) name);
+//	guint32* ip = g_hash_table_lookup(internet->ipByName, name);
+//	if(ip) {
+//		return *ip;
+//	} else {
+//		return (guint32)INADDR_NONE;
+//	}
+}
+
+const gchar* internetwork_resolveIP(Internetwork* internet, guint32 ip) {
+	MAGIC_ASSERT(internet);
+	return g_hash_table_lookup(internet->nameByIp, &ip);
 }
 
 const gchar* internetwork_resolveID(Internetwork* internet, GQuark id) {

@@ -109,6 +109,7 @@ typedef struct vbuffer_s vbuffer_t, *vbuffer_tp;
 #include "plugin/shd-plugin.h"
 #include "plugin/shd-software.h"
 
+#include "topology/shd-address.h"
 #include "topology/shd-network.h"
 #include "topology/shd-link.h"
 #include "topology/shd-internetwork.h"
