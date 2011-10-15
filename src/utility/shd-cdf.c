@@ -207,16 +207,6 @@ gdouble cdf_getValue(CumulativeDistribution* cdf, gdouble percentile) {
 
 gdouble cdf_getRandomValue(CumulativeDistribution* cdf) {
 	MAGIC_ASSERT(cdf);
-
-	/* FIXME XXX make this random!!! */
-	guint randomPosition = 0;
-
-	GList* randomItem = g_list_nth(cdf->entries, randomPosition);
-	if(randomItem) {
-		CumulativeDistributionEntry* entry = randomItem->data;
-		MAGIC_ASSERT(entry);
-		return entry->value;
-	}
-
-	return (gdouble) 0;
+	gdouble percentile = dvn_rand_unit();
+	return cdf_getValue(cdf, percentile);
 }
