@@ -28,7 +28,8 @@
 #ifndef SHD_CDF_H_
 #define SHD_CDF_H_
 
-#include "shadow.h"
+/* dont include shadow.h here - we use this in plugins and exes */
+#include <glib.h>
 
 typedef struct _CumulativeDistributionEntry CumulativeDistributionEntry;
 struct _CumulativeDistributionEntry {

@@ -33,7 +33,6 @@
 #include <string.h>
 
 #include "shd-filetransfer.h"
-#include "utility.h"
 
 /* TODO better checking of syscall results like strncpy */
 

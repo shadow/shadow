@@ -32,9 +32,6 @@
 
 /* this service implements a filegetter and may be used inside or outside of shadow */
 #include "shd-service-filegetter.h"
-#include "shd-filetransfer.h"
-#include "shd-cdf.h"
-#include "orderedlist.h"
 
 static void service_filegetter_log(service_filegetter_tp sfg, enum service_filegetter_loglevel level, const gchar* format, ...) {
 	/* if they gave NULL as a callback, dont log */
@@ -133,9 +130,9 @@ static enum filegetter_code service_filegetter_download_next(service_filegetter_
 
 		case SFG_MULTI: {
 			/* get a new random download */
-			guint64 position = (guint64) (rand() % orderedlist_length(sfg->downloads));
+			const gint position = (gint) (rand() % g_tree_nnodes(sfg->downloads));
 
-			sfg->current_download = orderedlist_ceiling_value(sfg->downloads, position);
+			sfg->current_download = g_tree_lookup(sfg->downloads, &position);
 
 			if(sfg->current_download == NULL) {
 				return FG_ERR_INVALID;
@@ -255,6 +252,11 @@ enum filegetter_code service_filegetter_start_double(service_filegetter_tp sfg,
 	return service_filegetter_launch(sfg, sockd_out);
 }
 
+static gint _treeIntCompare(gconstpointer a, gconstpointer b, gpointer user_data) {
+	g_assert(a && b);
+	return *a > *b ? +1 : *a == *b ? 0 : -1;
+}
+
 static orderedlist_tp service_filegetter_import_download_specs(service_filegetter_tp sfg, service_filegetter_multi_args_tp args) {
 	/* reads file with lines of the form:
 	 * fileserver.shd:8080:/5mb.urnd
@@ -272,8 +274,9 @@ static orderedlist_tp service_filegetter_import_download_specs(service_filegette
 		return NULL;
 	}
 
-	orderedlist_tp ol = orderedlist_create();
 	gchar linebuffer[512];
+	GTree* dlTree = g_tree_new_full(_treeIntCompare, NULL, g_free, g_free);
+	gint counter = 0;
 
 	while(fgets(linebuffer, sizeof(linebuffer), specs) != NULL) {
 		/* strip off the newline */
@@ -281,44 +284,37 @@ static orderedlist_tp service_filegetter_import_download_specs(service_filegette
 			linebuffer[strlen(linebuffer) - 1] = '\0';
 		}
 
-		orderedlist_tp tokens = orderedlist_create();
-
-		gchar* result = strtok(linebuffer, ":");
-		for(gint i = 0; result != NULL; i++) {
-			orderedlist_add(tokens, (guint64)i, result);
-			result = strtok(NULL, ":");
-		}
-
-		if(orderedlist_length(tokens) != 3) {
+		gchar* tokens[] = g_strsplit((const gchar*) linebuffer, ':', 3);
+		if(g_strrstr(tokens[2], ":") != NULL) {
 			service_filegetter_log(sfg, SFG_CRITICAL, "format of download specification file incorrect. expected something like \"fileserver.shd:8080:/5mb.urnd\" on each line");
-			orderedlist_destroy(tokens, 0);
-			orderedlist_destroy(ol, 1);
+			g_strfreev(tokens);
+			g_tree_destroy(dlTree);
 			return NULL;
 		}
 
 		service_filegetter_server_args_t http;
-		http.host = orderedlist_remove_first(tokens);
-		http.port = orderedlist_remove_first(tokens);
-		gchar* filepath = orderedlist_remove_first(tokens);
+		http.host = tokens[0];
+		http.port = tokens[1];
+		gchar* filepath = tokens[2];
 
 		service_filegetter_download_tp dl = service_filegetter_get_download_from_args(sfg, &http, &args->socks_proxy, filepath, args->hostbyname_cb);
-		orderedlist_destroy(tokens, 0);
+
+		g_strfreev(tokens);
 
 		if(dl == NULL) {
 			service_filegetter_log(sfg, SFG_CRITICAL, "error parsing download specification file");
-			orderedlist_destroy(ol, 1);
+			g_tree_destroy(dlTree);
 			return NULL;
-		} else {
-			orderedlist_add(ol, 0, dl);
 		}
+
+		gint* key = g_new(gint, 1);
+		*key = counter++;
+		g_tree_insert(dlTree, key, dl);
 	}
 
 	fclose(specs);
 
-	/* reorder the keys so they represent indices */
-	orderedlist_compact(ol);
-
-	return ol;
+	return dlTree;
 }
 
 enum filegetter_code service_filegetter_start_multi(service_filegetter_tp sfg,
@@ -344,7 +340,7 @@ enum filegetter_code service_filegetter_start_multi(service_filegetter_tp sfg,
 	}
 
 	if(args->thinktimes_cdf_filepath != NULL) {
-		sfg->think_times = cdf_create(args->thinktimes_cdf_filepath);
+		sfg->think_times = cdf_new(0, args->thinktimes_cdf_filepath);
 		if(sfg->think_times == NULL) {
 			service_filegetter_log(sfg, SFG_CRITICAL, "problem importing thinktime cdf.");
 			return FG_ERR_INVALID;
@@ -354,7 +350,7 @@ enum filegetter_code service_filegetter_start_multi(service_filegetter_tp sfg,
 	sfg->downloads = service_filegetter_import_download_specs(sfg, args);
 	if(sfg->downloads == NULL) {
 		service_filegetter_log(sfg, SFG_CRITICAL, "problem parsing server download specification file. is the format correct?");
-		cdf_destroy(sfg->think_times);
+		cdf_free(sfg->think_times);
 		return FG_ERR_INVALID;
 	}
 
@@ -443,7 +439,7 @@ reactivate:;
 		} else {
 			if(sfg->type == SFG_MULTI && sfg->think_times != NULL) {
 				/* get think time and set wakeup timer */
-				guint sleeptime = (guint) (cdf_random_value(sfg->think_times) / 1000);
+				guint sleeptime = (guint) (cdf_getRandomValue(sfg->think_times) / 1000);
 
 				clock_gettime(CLOCK_REALTIME, &sfg->wakeup);
 				sfg->wakeup.tv_sec += sleeptime;
@@ -509,12 +505,12 @@ enum filegetter_code service_filegetter_stop(service_filegetter_tp sfg) {
 	enum filegetter_code result = FG_SUCCESS;
 
 	if(sfg->think_times != NULL) {
-		cdf_destroy(sfg->think_times);
+		cdf_free(sfg->think_times);
 		sfg->think_times = NULL;
 	}
 
 	if(sfg->downloads != NULL) {
-		orderedlist_destroy(sfg->downloads, 1);
+		g_tree_destroy(sfg->downloads);
 		sfg->downloads = NULL;
 	}
 

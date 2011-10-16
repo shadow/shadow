@@ -35,9 +35,22 @@
  */
 
 #include <glib.h>
+
 #include "shd-filetransfer-defs.h"
 #include "shd-fileserver.h"
 #include "shd-filegetter.h"
 #include "shd-service-filegetter.h"
+
+typedef struct _FileTransfer FileTransfer;
+struct _FileTransfer {
+	ShadowlibFunctionTable* shadowlib;
+	service_filegetter_tp client;
+	fileserver_tp server;
+};
+
+FileTransfer** filetransfer_init(FileTransfer* existingFT);
+void filetransfer_new(int argc, char* argv[]);
+void filetransfer_free();
+void filetransfer_activate(gint socketDesriptor);
 
 #endif /* SHD_FILETRANSFER_H_ */

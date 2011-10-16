@@ -39,6 +39,11 @@ struct _PluginFunctionTable {
 	PluginSocketWritableFunc writable;
 };
 
+/*
+ * signature for plug-in callback functions
+ */
+typedef void (*ShadowPluginCallbackFunc)(gpointer data);
+
 /* function signatures for available shadow functions */
 typedef gboolean (*ShadowlibRegisterFunc)(PluginFunctionTable* callbackFunctions, guint nVariables, ...);
 typedef void (*ShadowlibLogFunc)(GLogLevelFlags level, const gchar* functionName, gchar* format, ...);
@@ -46,6 +51,7 @@ typedef in_addr_t (*ShadowlibResolveHostnameFunc)(gchar* name);
 typedef gboolean (*ShadowlibResolveIPAddressFunc)(in_addr_t addr, gchar* name_out, gint name_out_len);
 typedef in_addr_t (*ShadowlibGetIPAddressFunc)();
 typedef gboolean (*ShadowlibGetHostnameFunc)(gchar* name_out, gint name_out_len);
+typedef void (*ShadowlibCreateCallbackFunc)(ShadowPluginCallbackFunc callback, gpointer data, guint millisecondsDelay);
 
 typedef struct _ShadowlibFunctionTable ShadowlibFunctionTable;
 
@@ -56,6 +62,7 @@ struct _ShadowlibFunctionTable {
 	ShadowlibResolveIPAddressFunc resolveIP;
 	ShadowlibGetHostnameFunc getHostname;
 	ShadowlibGetIPAddressFunc getIP;
+	ShadowlibCreateCallbackFunc createCallback;
 };
 
 /* Plug-ins must implement this function to communicate with Shadow.

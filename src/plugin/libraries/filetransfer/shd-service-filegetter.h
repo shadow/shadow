@@ -29,7 +29,6 @@
 
 #include "shd-filetransfer.h"
 #include "shd-cdf.h"
-#include "orderedlist.h"
 
 enum service_filegetter_loglevel {
 	SFG_CRITICAL, SFG_WARNING, SFG_NOTICE, SFG_INFO, SFG_DEBUG
@@ -92,7 +91,7 @@ typedef struct service_filegetter_s {
 	enum service_filegetter_state state;
 	enum service_filegetter_type type;
 	filegetter_t fg;
-	orderedlist_tp downloads;
+	GTree* downloads;
 	service_filegetter_download_tp current_download;
 	service_filegetter_download_tp download1;
 	service_filegetter_download_tp download2;
@@ -100,7 +99,7 @@ typedef struct service_filegetter_s {
 	service_filegetter_hostbyname_cb hostbyname_cb;
 	service_filegetter_sleep_cb sleep_cb;
 	service_filegetter_log_cb log_cb;
-	cdf_tp think_times;
+	CumulativeDistribution* think_times;
 	gint pausetime_seconds;
 	struct timespec wakeup;
 	struct timespec expire;

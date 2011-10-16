@@ -34,8 +34,8 @@
 #include <time.h>
 #include <string.h>
 
-#include "shd-filetransfer.h"
 #include "shd-cdf.h"
+#include "shd-filetransfer.h"
 #include "netinet/tcp.h"
 
 #define __USE_POSIX199309 1
@@ -92,9 +92,9 @@ gint main(gint argc, gchar *argv[])
 	time_t endtime = EXP_START + atoi(max_runtime_seconds);
 
 	/* cdf for wait times. */
-	cdf_tp wait_cdf = NULL;
+	CumulativeDistribution* wait_cdf = NULL;
 	if(strncmp(waittime_cdf_path, "none", 4) != 0) {
-		wait_cdf = cdf_create(waittime_cdf_path);
+		wait_cdf = cdf_new(0, waittime_cdf_path);
 		/* cdf uses rand, make sure we seed it */
 		srand((guint)(time(NULL)%UINT32_MAX));
 	}
@@ -176,7 +176,7 @@ start_loop:;
 
 		if(wait_cdf != NULL && downloads_remaining > 0) {
 			/* wait before downloading next, draw from cdf */
-			gdouble milliseconds = cdf_random_value(wait_cdf);
+			gdouble milliseconds = cdf_getRandomValue(wait_cdf);
 			guint seconds = (guint)(milliseconds / 1000);
 
 			/* if we would end after waking up, just quit now */

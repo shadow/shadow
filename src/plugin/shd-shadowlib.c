@@ -108,6 +108,32 @@ gboolean shadowlib_getHostname(gchar* name_out, gint name_out_len) {
 	return hostname;
 }
 
+void _shadowlib_executeCallbackInPluginContext(gpointer data, gpointer argument) {
+	ShadowPluginCallbackFunc callback = argument;
+	callback(data);
+}
+
+void _shadowlib_timerExpired(gpointer data, gpointer argument) {
+	Worker* worker = worker_getPrivate();
+	Application* a = worker->cached_node->application;
+	Plugin* plugin = worker_getPlugin(a->software);
+	plugin_executeGeneric(plugin, a->state, _shadowlib_executeCallbackInPluginContext, data, argument);
+}
+
+void shadowlib_createCallback(ShadowPluginCallbackFunc callback, gpointer data, guint millisecondsDelay) {
+	Worker* worker = worker_getPrivate();
+	plugin_setShadowContext(worker->cached_plugin, TRUE);
+
+	/* the plugin wants a callback. since we need it to happen in the plug-in
+	 * context, we create a callback to our own function, then execute theirs
+	 */
+	CallbackEvent* event = callback_new(_shadowlib_timerExpired, data, callback);
+	SimulationTime nanos = SIMTIME_ONE_MILLISECOND * millisecondsDelay;
+	worker_scheduleEvent((Event*)event, nanos, worker->cached_node->id);
+
+	plugin_setShadowContext(worker->cached_plugin, FALSE);
+}
+
 /* we send this FunctionTable to each plug-in so it has pointers to our functions.
  * we use this to export shadow functionality to plug-ins. */
 ShadowlibFunctionTable shadowlibFunctionTable = {
@@ -117,4 +143,5 @@ ShadowlibFunctionTable shadowlibFunctionTable = {
 	&shadowlib_resolveIPAddress,
 	&shadowlib_getHostname,
 	&shadowlib_getIPAddress,
+	&shadowlib_createCallback,
 };
