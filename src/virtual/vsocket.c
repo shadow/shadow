@@ -595,14 +595,6 @@ ssize_t vsocket_recv(vsocket_mgr_tp net, gint fd, gpointer buf, size_t n, gint f
 
 ssize_t vsocket_sendto(vsocket_mgr_tp net, gint fd, const gpointer buf, size_t n, gint flags,
 		struct sockaddr_in* saddr, socklen_t saddr_len) {
-	/* block sending if we have yet to absorb cpu delays */
-	if(vcpu_is_blocking(net->vcpu)) {
-		debug("blocked on CPU when trying to send %lu bytes from socket %i", n, fd);
-		errno = EAGAIN;
-		return VSOCKET_ERROR;
-	}
-
-
 	/* TODO flags are ignored */
 	/* check if this is a socket */
 	if(fd < VNETWORK_MIN_SD){
@@ -610,7 +602,7 @@ ssize_t vsocket_sendto(vsocket_mgr_tp net, gint fd, const gpointer buf, size_t n
 		return VSOCKET_ERROR;
 	}
 
-	/* if this is a pipe, redirect */
+	/* if this is a pipe, redirect. pipes are not bound by CPU */
 	enum vpipe_status stat = vpipe_stat(net->vpipe_mgr, fd);
 	if(stat == VPIPE_OPEN) {
 		ssize_t pwritten = vpipe_write(net->vpipe_mgr, fd, buf, n);
@@ -629,6 +621,19 @@ ssize_t vsocket_sendto(vsocket_mgr_tp net, gint fd, const gpointer buf, size_t n
 	vsocket_tp sock = vsocket_mgr_get_socket(net, fd);
 	if(sock == NULL) {
 		errno = EBADF;
+		return VSOCKET_ERROR;
+	}
+
+	/* block sending if we have yet to absorb cpu delays */
+	if(vcpu_is_blocking(net->vcpu)) {
+		debug("blocked on CPU when trying to send %lu bytes from socket %i", n, fd);
+
+		/* immediately schedule an event to tell the socket it can write. it will
+		 * pop out when the CPU delay is absorbed. otherwise we could miss writes.
+		 */
+		vepoll_mark_available(sock->vep, VEPOLL_WRITE);
+
+		errno = EAGAIN;
 		return VSOCKET_ERROR;
 	}
 
@@ -728,13 +733,6 @@ ssize_t vsocket_sendto(vsocket_mgr_tp net, gint fd, const gpointer buf, size_t n
 
 ssize_t vsocket_recvfrom(vsocket_mgr_tp net, gint fd, gpointer buf, size_t n, gint flags,
 		struct sockaddr_in* saddr, socklen_t* saddr_len) {
-	/* block receiving if we have yet to absorb cpu delays */
-	if(vcpu_is_blocking(net->vcpu)) {
-		debug("blocked on CPU when trying to receive from socket %i", fd);
-		errno = EAGAIN;
-		return VSOCKET_ERROR;
-	}
-
 	/* TODO flags are ignored */
 	/* check if this is a socket */
 	if(fd < VNETWORK_MIN_SD){
@@ -742,7 +740,7 @@ ssize_t vsocket_recvfrom(vsocket_mgr_tp net, gint fd, gpointer buf, size_t n, gi
 		return VSOCKET_ERROR;
 	}
 
-	/* if this is a pipe, redirect */
+	/* if this is a pipe, redirect. pipes are not bound by CPU */
 	enum vpipe_status stat = vpipe_stat(net->vpipe_mgr, fd);
 	if(stat == VPIPE_OPEN || stat == VPIPE_READONLY) {
 		ssize_t pread = vpipe_read(net->vpipe_mgr, fd, buf, n);
@@ -757,6 +755,17 @@ ssize_t vsocket_recvfrom(vsocket_mgr_tp net, gint fd, gpointer buf, size_t n, gi
 	vsocket_tp sock = vsocket_mgr_get_socket(net, fd);
 	if(sock == NULL) {
 		errno = EBADF;
+		return VSOCKET_ERROR;
+	}
+
+	/* block receiving if we have yet to absorb cpu delays */
+	if(vcpu_is_blocking(net->vcpu)) {
+		debug("blocked on CPU when trying to receive from socket %i", fd);
+
+		/* tell vepoll we need to read when we can, i.e. when CPU lets us */
+		vepoll_mark_available(sock->vep, VEPOLL_READ);
+
+		errno = EAGAIN;
 		return VSOCKET_ERROR;
 	}
 
