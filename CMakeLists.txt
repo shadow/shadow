@@ -87,8 +87,6 @@ endforeach(library)
 
 ## check for dependencies, using built-in cmake files to help us find the libs
 ## these are in /usr/share/cmake/Modules/Findxxx.cmake
-#find_package(FLEX REQUIRED)
-#find_package(BISON REQUIRED)
 find_package(Threads REQUIRED)
 find_package(ZLIB REQUIRED)
 
