@@ -24,110 +24,51 @@
 
 #include "shadow.h"
 
-/* NOTE - they MUST be synced with ParserElementStrings in shd-parser.c */
-typedef enum {
-	ELEMENT_PLUGIN,
-	ELEMENT_CDF,
-	ELEMENT_SOFTWARE,
-	ELEMENT_NODE,
-	ELEMENT_NETWORK,
-	ELEMENT_LINK,
-	ELEMENT_KILL,
-} ParserElements;
+/**
+ * @addtogroup Parser
+ * @{
+ * Use this module to parse XML input files.
+ */
 
-/* NOTE - they MUST be synced with ParserAttributeStrings in shd-parser.c */
-typedef enum {
-	ATTRIBUTE_NAME,
-	ATTRIBUTE_PATH,
-	ATTRIBUTE_CENTER,
-	ATTRIBUTE_WIDTH,
-	ATTRIBUTE_TAIL,
-	ATTRIBUTE_PLUGIN,
-	ATTRIBUTE_ARGUMENTS,
-	ATTRIBUTE_SOFTWARE,
-	ATTRIBUTE_TIME,
-	ATTRIBUTE_BANDWIDTHUP,
-	ATTRIBUTE_BANDWIDTHDOWN,
-	ATTRIBUTE_CPU,
-	ATTRIBUTE_QUANTITY,
-	ATTRIBUTE_NETWORK,
-	ATTRIBUTE_NETWORKA,
-	ATTRIBUTE_NETWORKB,
-	ATTRIBUTE_LATENCY,
-	ATTRIBUTE_LATENCYAB,
-	ATTRIBUTE_LATENCYBA,
-	ATTRIBUTE_RELIABILITY,
-	ATTRIBUTE_RELIABILITYAB,
-	ATTRIBUTE_RELIABILITYBA,
-} ParserAttributes;
-
+/**
+ * An opaque object used to store state while parsing an XML file for
+ * Shadow simulation input. The member of this struct are private and should not
+ * be accessed directly.
+ */
 typedef struct _Parser Parser;
 
-struct _Parser {
-	GMarkupParser parser;
-	GMarkupParseContext* context;
-	GQueue* actions;
-	gboolean hasValidationError;
-	MAGIC_DECLARE;
-};
-
-typedef struct _ParserValues ParserValues;
-
-struct _ParserValues {
-	/* represents a unique ID */
-	GString* name;
-	/* path to a file */
-	GString* path;
-	/* center of base of CDF - meaning dependent on what the CDF represents */
-	guint64 center;
-	/* width of base of CDF - meaning dependent on what the CDF represents */
-	guint64 width;
-	/* width of tail of CDF - meaning dependent on what the CDF represents */
-	guint64 tail;
-	/* holds the unique ID name of a plugin */
-	GString* plugin;
-	/* string of arguments that will be passed to the software */
-	GString* arguments;
-	/* holds the unique ID name of software */
-	GString* software;
-	/* time in seconds */
-	guint64 time;
-	/* holds the unique ID name of a CDF for bandwidth (KiB/s) */
-	GString* bandwidthup;
-	/* holds the unique ID name of a CDF for bandwidth (KiB/s) */
-	GString* bandwidthdown;
-	/* holds the unique ID name of a CDF for CPU delay */
-	GString* cpu;
-	guint64 quantity;
-	/* holds the unique ID name of a network */
-	GString* network;
-	/* holds the unique ID name of a network */
-	GString* networka;
-	/* holds the unique ID name of a network */
-	GString* networkb;
-	/* holds the unique ID name of a CDF for latency (milliseconds) */
-	GString* latency;
-	/* holds the unique ID name of a CDF for latency (milliseconds) */
-	GString* latencyab;
-	/* holds the unique ID name of a CDF for latency (milliseconds) */
-	GString* latencyba;
-	/* fraction between 0 and 1 - liklihood that a packet gets dropped */
-	gdouble reliability;
-	/* fraction between 0 and 1 - liklihood that a packet gets dropped */
-	gdouble reliabilityab;
-	/* fraction between 0 and 1 - liklihood that a packet gets dropped */
-	gdouble reliabilityba;
-	MAGIC_DECLARE;
-};
-
+/**
+ * Create a new parser. The parser is capable of parsing Shadow XML simulation
+ * files.
+ *
+ * @returns a pointer to a newly allocated #Parser. The pointer should be freed
+ * with parser_free().
+ */
 Parser* parser_new();
+
+/**
+ * Frees a previously allocated parser.
+ *
+ * @param parser a pointer to a #Parser allocated with parser_new().
+ */
 void parser_free(Parser* parser);
 
 /**
- * Parse the given filename and return a Queue of Actions that will produce the
- * specified topology (networks and links) and hosts (nodes and software)
- * when executed. The caller owns the returned Queue and must properly free it.
+ * Parse the given filename and add #Action objects to the given actions queue.
+ * Execution of the actions will produce the topology specified in the XML
+ * sfile (networks and links) and hosts (nodes and software)
+ * when executed. The caller owns the #GQueue before and after calling this
+ * function.
+ *
+ * @param parser a pointer to a #Parser allocated with parser_new().
+ * @param filename a #GString holding the path to an XML file formated for
+ * Shadow input.
+ * @param actions a pointer to an existing #GQueue.
+ *
+ * @returns TRUE if filename was successfully parsed, FALSE otherwise.
  */
 gboolean parser_parse(Parser* parser, GString* filename, GQueue* actions);
+
+/** @} */
 
 #endif /* SHD_PARSER_H_ */

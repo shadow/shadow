@@ -91,7 +91,7 @@ find_package(Threads REQUIRED)
 find_package(ZLIB REQUIRED)
 
 ## other libs dont have a Findxxx.cmake, so we check on our own (./cmake)
-#find_package(RT REQUIRED)
+find_package(RT REQUIRED)
 find_package(DL REQUIRED)
 find_package(M REQUIRED)
 find_package(EVENT2 REQUIRED)

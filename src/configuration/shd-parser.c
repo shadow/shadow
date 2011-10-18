@@ -21,18 +21,112 @@
 
 #include "shadow.h"
 
-/* these MUST be synced with ParserElements in shd-parser.h */
+/* NOTE - these MUST be synced with ParserElements */
 static const gchar* ParserElementStrings[] = {
 	"plugin", "cdf", "software", "node", "network", "link", "kill",
 };
 
-/* these MUST be synced with ParserAttributes in shd-parser.h */
+/* NOTE - they MUST be synced with ParserElementStrings */
+typedef enum {
+	ELEMENT_PLUGIN,
+	ELEMENT_CDF,
+	ELEMENT_SOFTWARE,
+	ELEMENT_NODE,
+	ELEMENT_NETWORK,
+	ELEMENT_LINK,
+	ELEMENT_KILL,
+} ParserElements;
+
+/* NOTE - these MUST be synced with ParserAttributes in */
 static const gchar* ParserAttributeStrings[] = {
 	"name", "path", "center", "width", "tail", "plugin", "arguments",
 	"software", "time", "bandwidthup", "bandwidthdown", "cpu", "quantity",
 	"network", "networka", "networkb",
 	"latency", "latencyab", "latencyba",
 	"reliability", "reliabilityab", "reliabilityba",
+};
+
+/* NOTE - they MUST be synced with ParserAttributeStrings */
+typedef enum {
+	ATTRIBUTE_NAME,
+	ATTRIBUTE_PATH,
+	ATTRIBUTE_CENTER,
+	ATTRIBUTE_WIDTH,
+	ATTRIBUTE_TAIL,
+	ATTRIBUTE_PLUGIN,
+	ATTRIBUTE_ARGUMENTS,
+	ATTRIBUTE_SOFTWARE,
+	ATTRIBUTE_TIME,
+	ATTRIBUTE_BANDWIDTHUP,
+	ATTRIBUTE_BANDWIDTHDOWN,
+	ATTRIBUTE_CPU,
+	ATTRIBUTE_QUANTITY,
+	ATTRIBUTE_NETWORK,
+	ATTRIBUTE_NETWORKA,
+	ATTRIBUTE_NETWORKB,
+	ATTRIBUTE_LATENCY,
+	ATTRIBUTE_LATENCYAB,
+	ATTRIBUTE_LATENCYBA,
+	ATTRIBUTE_RELIABILITY,
+	ATTRIBUTE_RELIABILITYAB,
+	ATTRIBUTE_RELIABILITYBA,
+} ParserAttributes;
+
+struct _Parser {
+	GMarkupParser parser;
+	GMarkupParseContext* context;
+	GQueue* actions;
+	gboolean hasValidationError;
+	MAGIC_DECLARE;
+};
+
+typedef struct _ParserValues ParserValues;
+
+struct _ParserValues {
+	/* represents a unique ID */
+	GString* name;
+	/* path to a file */
+	GString* path;
+	/* center of base of CDF - meaning dependent on what the CDF represents */
+	guint64 center;
+	/* width of base of CDF - meaning dependent on what the CDF represents */
+	guint64 width;
+	/* width of tail of CDF - meaning dependent on what the CDF represents */
+	guint64 tail;
+	/* holds the unique ID name of a plugin */
+	GString* plugin;
+	/* string of arguments that will be passed to the software */
+	GString* arguments;
+	/* holds the unique ID name of software */
+	GString* software;
+	/* time in seconds */
+	guint64 time;
+	/* holds the unique ID name of a CDF for bandwidth (KiB/s) */
+	GString* bandwidthup;
+	/* holds the unique ID name of a CDF for bandwidth (KiB/s) */
+	GString* bandwidthdown;
+	/* holds the unique ID name of a CDF for CPU delay */
+	GString* cpu;
+	guint64 quantity;
+	/* holds the unique ID name of a network */
+	GString* network;
+	/* holds the unique ID name of a network */
+	GString* networka;
+	/* holds the unique ID name of a network */
+	GString* networkb;
+	/* holds the unique ID name of a CDF for latency (milliseconds) */
+	GString* latency;
+	/* holds the unique ID name of a CDF for latency (milliseconds) */
+	GString* latencyab;
+	/* holds the unique ID name of a CDF for latency (milliseconds) */
+	GString* latencyba;
+	/* fraction between 0 and 1 - liklihood that a packet gets dropped */
+	gdouble reliability;
+	/* fraction between 0 and 1 - liklihood that a packet gets dropped */
+	gdouble reliabilityab;
+	/* fraction between 0 and 1 - liklihood that a packet gets dropped */
+	gdouble reliabilityba;
+	MAGIC_DECLARE;
 };
 
 static ParserValues* _parser_getValues(const gchar *element_name,
@@ -405,10 +499,7 @@ gboolean parser_parse(Parser* parser, GString* filename, GQueue* actions) {
 	if(success && !parser->hasValidationError) {
 		return TRUE;
 	} else {
-		/* some kind of error ocurred */
-		g_queue_free(actions);
-
-		/* check parse error */
+		/* some kind of error occurred, check the parser */
 		if (!success) {
 			error("g_markup_parse_context_parse: %s", error->message);
 			g_error_free(error);
