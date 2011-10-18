@@ -1,4 +1,4 @@
-/**
+/*
  * The Shadow Simulator
  *
  * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
@@ -30,6 +30,23 @@
 #include <arpa/inet.h>
 
 #include "shd-config.h"
+
+/**
+ * @mainpage Shadow Documentation
+ *
+ * @section dep Dependencies
+ *
+ * We depend on GLib 2.0
+ *
+ * @section install Installation
+ *
+ * Once satisfying the dependencies, Shadow can be installed as follows.
+ *
+ * @section notes Notes
+ *
+ * Be aware of system limits that could affect your application.
+ * @include extra.txt
+ */
 
 /*
  * order of includes is very important to prevent circular dependencies.

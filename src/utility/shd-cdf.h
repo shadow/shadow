@@ -1,4 +1,4 @@
-/**
+/*
  * The Shadow Simulator
  *
  * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
@@ -37,6 +37,9 @@ struct _CumulativeDistributionEntry {
 	MAGIC_DECLARE;
 };
 
+/**
+ * An opaque structure representing a Cumulative Distribution.
+ */
 typedef struct _CumulativeDistribution CumulativeDistribution;
 struct _CumulativeDistribution {
 	GQuark id;
@@ -44,10 +47,26 @@ struct _CumulativeDistribution {
 	MAGIC_DECLARE;
 };
 
-
+/**
+ * Create a new CumulativeDistribution with data from the given filename. The
+ * file is parsed for lines of the form "value fraction". Each such entry will
+ * be sorted internally.
+ *
+ * @param id
+ * @param filename
+ */
 CumulativeDistribution* cdf_new(GQuark id, const gchar* filename);
+
+/**
+ *
+ */
 CumulativeDistribution* cdf_generate(GQuark id, guint base_center, guint base_width, guint tail_width);
+
+/**
+ *
+ */
 void cdf_free(gpointer data);
+
 
 gdouble cdf_getValue(CumulativeDistribution* cdf, gdouble percentile);
 gdouble cdf_getMinimumValue(CumulativeDistribution* cdf);

@@ -1,4 +1,4 @@
-/**
+/*
  * The Shadow Simulator
  *
  * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
@@ -19,9 +19,9 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "shadow.h"
-
 #include <stdio.h>
+
+#include "shadow.h"
 
 static CumulativeDistributionEntry* cdfentry_create() {
 	CumulativeDistributionEntry* entry = g_new0(CumulativeDistributionEntry, 1);

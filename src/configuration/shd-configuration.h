@@ -1,4 +1,4 @@
-/**
+/*
  * The Shadow Simulator
  *
  * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
