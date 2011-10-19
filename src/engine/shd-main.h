@@ -26,7 +26,12 @@
 
 /**
  * Main entry point for the simulator. Initializes logging, configuration,
- * allocates initial memory structures, launches thread pool.
+ * allocates initial memory structures, launches thread pool, runs simulation.
+ *
+ * @param argc argument count
+ * @param argv argument vector
+ *
+ * @returns an integer return code
  */
 gint shadow_main(gint argc, gchar* argv[]);
 
