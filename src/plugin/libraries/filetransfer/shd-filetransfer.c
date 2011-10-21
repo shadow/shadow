@@ -19,6 +19,9 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <arpa/inet.h>
+#include <stdlib.h>
+
 #include "shd-filetransfer.h"
 
 /* my global structure to hold all variable, node-specific application state */
@@ -52,9 +55,9 @@ static in_addr_t _filetransfer_HostnameCallback(const gchar* hostname) {
 	in_addr_t addr = 0;
 
 	/* get the address in network order */
-	if(strncmp(hostname, "none", 4) == 0) {
+	if(g_strncasecmp(hostname, "none", 4) == 0) {
 		addr = htonl(INADDR_NONE);
-	} else if(strncmp(hostname, "localhost", 9) == 0) {
+	} else if(g_strncasecmp(hostname, "localhost", 9) == 0) {
 		addr = htonl(INADDR_LOOPBACK);
 	} else {
 		addr = ft->shadowlib->resolveHostname((gchar*) hostname);
@@ -185,7 +188,7 @@ void filetransfer_new(int argc, char* argv[]) {
 
 	return;
 printUsage:
-	ft->shadowlib->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, USAGE);
+	ft->shadowlib->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, (gchar*)USAGE);
 	return;
 }
 

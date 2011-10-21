@@ -55,4 +55,11 @@
 #define FT_HTTP_GET_FMT "GET %s HTTP/1.1\r\nHost: %s\r\n\r\n"
 #define FT_HTTP_200_FMT "HTTP/1.1 200 OK\r\nContent-Length: %zu\r\n\r\n"
 
+/* make files that use CDF happy */
+#define MAGIC_VALUE
+#define MAGIC_DECLARE
+#define MAGIC_INIT(object)
+#define MAGIC_ASSERT(object)
+#define MAGIC_CLEAR(object)
+
 #endif /* SHD_FILETRANSFER_DEFS_H_ */

@@ -26,8 +26,10 @@
 #include <stddef.h>
 #include <time.h>
 
-#include "shd-filetransfer.h"
+#include "shd-filetransfer-defs.h"
+#include "shd-filegetter.h"
 #include "shd-cdf.h"
+#include "rand.h"
 
 enum service_filegetter_loglevel {
 	SFG_CRITICAL, SFG_WARNING, SFG_NOTICE, SFG_INFO, SFG_DEBUG

@@ -252,11 +252,13 @@ enum filegetter_code service_filegetter_start_double(service_filegetter_tp sfg,
 }
 
 static gint _treeIntCompare(gconstpointer a, gconstpointer b, gpointer user_data) {
-	g_assert(a && b);
-	return *a > *b ? +1 : *a == *b ? 0 : -1;
+	const gint* ai = a;
+	const gint* bi = b;
+	g_assert(ai && bi);
+	return *ai > *bi ? +1 : *ai == *bi ? 0 : -1;
 }
 
-static orderedlist_tp service_filegetter_import_download_specs(service_filegetter_tp sfg, service_filegetter_multi_args_tp args) {
+static GTree* service_filegetter_import_download_specs(service_filegetter_tp sfg, service_filegetter_multi_args_tp args) {
 	/* reads file with lines of the form:
 	 * fileserver.shd:8080:/5mb.urnd
 	 */
@@ -283,7 +285,7 @@ static orderedlist_tp service_filegetter_import_download_specs(service_filegette
 			linebuffer[strlen(linebuffer) - 1] = '\0';
 		}
 
-		gchar* tokens[] = g_strsplit((const gchar*) linebuffer, ':', 3);
+		gchar** tokens = g_strsplit((const gchar*) linebuffer, (const gchar*)":", 3);
 		if(g_strrstr(tokens[2], ":") != NULL) {
 			service_filegetter_log(sfg, SFG_CRITICAL, "format of download specification file incorrect. expected something like \"fileserver.shd:8080:/5mb.urnd\" on each line");
 			g_strfreev(tokens);

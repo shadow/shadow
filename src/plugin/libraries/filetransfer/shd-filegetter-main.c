@@ -33,8 +33,9 @@
 #include <time.h>
 #include <string.h>
 
-#include "shd-cdf.h"
 #include "shd-filetransfer.h"
+#include "shd-cdf.h"
+#include "rand.h"
 #include "netinet/tcp.h"
 
 #define __USE_POSIX199309 1

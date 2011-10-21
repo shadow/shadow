@@ -19,7 +19,22 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <string.h>
+
 #include "shd-filetransfer.h"
+
+/* create a new node using this plug-in */
+static void filetransferplugin_new(int argc, char* argv[]) {
+	filetransfer_new(argc, argv);
+}
+
+static void filetransferplugin_free() {
+	filetransfer_free();
+}
+
+static void filetransferplugin_activate(gint socketDesriptor) {
+	filetransfer_activate(socketDesriptor);
+}
 
 PluginFunctionTable filetransfer_pluginFunctions = {
 	&filetransferplugin_new, &filetransferplugin_free,
@@ -32,10 +47,10 @@ FileTransfer filetransferplugin_globalData;
 /* shadow calls this function for a one-time initialization */
 void __shadow_plugin_init__(ShadowlibFunctionTable* shadowlibFuncs) {
 	/* clear our memory before initializing */
-	memset(&ft, 0, sizeof(FileTransfer));
+	memset(&filetransferplugin_globalData, 0, sizeof(FileTransfer));
 
 	/* save the shadow functions we will use */
-	ft.shadowlib = shadowlibFuncs;
+	filetransferplugin_globalData.shadowlib = shadowlibFuncs;
 
 	/* give the filetransfer code a pointer to this global struct, and
 	 * register the global pointer it uses. this basically gives them access
@@ -55,18 +70,4 @@ void __shadow_plugin_init__(ShadowlibFunctionTable* shadowlibFuncs) {
 	} else {
 		shadowlibFuncs->log(G_LOG_LEVEL_INFO, __FUNCTION__, "error registering filetransfer plug-in state");
 	}
-}
-
-
-/* create a new node using this plug-in */
-void filetransferplugin_new(int argc, char* argv[]) {
-	filetransfer_new(argc, argv);
-}
-
-void filetransferplugin_free() {
-	filetransfer_free();
-}
-
-void filetransferplugin_activate(gint socketDesriptor) {
-	filetransfer_activate(socketDesriptor);
 }
