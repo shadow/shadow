@@ -104,6 +104,8 @@ gint shadow_main(gint argc, gchar* argv[]) {
 		engine_teardownWorkerThreads(shadow_engine);
 	}
 
+	shadow_engine->killed = TRUE;
+
 	/* cleanup */
 	configuration_free(config);
 	engine_free(shadow_engine);

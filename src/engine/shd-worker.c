@@ -189,6 +189,15 @@ void worker_scheduleEvent(Event* event, SimulationTime nano_delay, GQuark receiv
 		event->ownerID = sender->id;
 	}
 
+	/* if we are not going to execute any more events, free it and return */
+	if(engine_isKilled(engine)) {
+		shadowevent_free(event);
+		return;
+	}
+
+	/* we are not killed, we better have set the time correctly */
+	g_assert(worker->clock_now != SIMTIME_INVALID);
+
 	/* single threaded mode is simpler than multi threaded */
 	if(engine_getNumThreads(engine) > 1) {
 		/* multi threaded, figure out where to push event */

@@ -317,3 +317,8 @@ void engine_notifyNodeProcessed(Engine* engine) {
 		g_mutex_unlock(engine->engineIdle);
 	}
 }
+
+gboolean engine_isKilled(Engine* engine) {
+	MAGIC_ASSERT(engine);
+	return engine->killed;
+}

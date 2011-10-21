@@ -60,6 +60,7 @@ void node_lock(Node* node);
 void node_unlock(Node* node);
 
 void node_startApplication(Node* node);
+void node_stopApplication(gpointer key, gpointer value, gpointer user_data);
 
 void node_pushMail(Node* node, Event* event);
 Event* node_popMail(Node* node);

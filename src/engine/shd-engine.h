@@ -80,6 +80,11 @@ struct _Engine {
 	GMutex* engineIdle;
 
 	/*
+	 * TRUE if the engine is not longer running events and is in cleanup mode
+	 */
+	gboolean killed;
+
+	/*
 	 * these values are modified during simulation and must be protected so
 	 * they are thread safe
 	 */
@@ -111,5 +116,6 @@ gint engine_getNumThreads(Engine* engine);
 SimulationTime engine_getMinTimeJump(Engine* engine);
 SimulationTime engine_getExecutionBarrier(Engine* engine);
 void engine_notifyNodeProcessed(Engine* engine);
+gboolean engine_isKilled(Engine* engine);
 
 #endif /* SHD_ENGINE_H_ */

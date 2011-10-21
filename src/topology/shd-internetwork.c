@@ -36,6 +36,13 @@ Internetwork* internetwork_new() {
 void internetwork_free(Internetwork* internet) {
 	MAGIC_ASSERT(internet);
 
+	/* free all applications before freeing any of the nodes since freeing
+	 * applications may cause close() to get called on sockets which needs
+	 * other node information.
+	 */
+	g_hash_table_foreach(internet->nodes, node_stopApplication, NULL);
+
+	/* now cleanup the rest */
 	g_hash_table_destroy(internet->nodes);
 	g_hash_table_destroy(internet->networks);
 	g_hash_table_destroy(internet->ipByName);

@@ -49,8 +49,12 @@ void node_free(gpointer data) {
 	Node* node = data;
 	MAGIC_ASSERT(node);
 
+	/* this was hopefully freed in node_stopApplication */
+	if(node->application) {
+		node_stopApplication(NULL, node, NULL);
+	}
+
 	address_free(node->address);
-	application_free(node->application);
 	g_async_queue_unref(node->event_mailbox);
 	g_queue_free(node->event_priority_queue);
 
@@ -102,6 +106,19 @@ guint node_getNumTasks(Node* node) {
 void node_startApplication(Node* node) {
 	MAGIC_ASSERT(node);
 	application_boot(node->application);
+}
+
+void node_stopApplication(gpointer key, gpointer value, gpointer user_data) {
+	Node* node = value;
+	MAGIC_ASSERT(node);
+
+	Worker* worker = worker_getPrivate();
+	worker->cached_node = node;
+
+	application_free(node->application);
+	node->application = NULL;
+
+	worker->cached_node = NULL;
 }
 
 gint node_compare(gconstpointer a, gconstpointer b, gpointer user_data) {
