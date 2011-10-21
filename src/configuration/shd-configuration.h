@@ -134,13 +134,6 @@ typedef guint64 SimulationTime;
 #define VNETWORK_MIN_SD 30000
 
 /**
- * plug-ins must implement a function with this name to hook into Shadow. We
- * call this function during plugin initialization. A symbol with this name
- * must exist or the dlsym lookup will fail.
- */
-#define PLUGININITSYMBOL "__shadow_plugin_init__"
-
-/**
  * A shortcut for turning an IP address in network format to a string in
  * dot-and-number format. The returned string is returned in a statically
  * allocated buffer and so is not thread-safe.

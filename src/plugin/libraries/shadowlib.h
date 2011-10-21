@@ -24,18 +24,81 @@
 
 #include <netinet/in.h>
 
-/* function signatures for what each plugin must implement */
-typedef void (*PluginNewInstanceFunc)(gint, gchar *[]);
+/**
+ * plug-ins must implement a function with this name to hook into Shadow. We
+ * call this function during plugin initialization. A symbol with this name
+ * must exist or the dlsym lookup will fail.
+ */
+#define PLUGININITSYMBOL "__shadow_plugin_init__"
+
+/**
+ * Signature of a function that Shadow calls when creating a new node instance
+ * with the plug-in. The parameters are meant to mirror those passed to the
+ * main() function of a standard C program.
+ *
+ * @param argc the number of arguments passed in the argument vector
+ * @param argv a vector of arguments for node creation, as parsed from the XML
+ * simulation input file
+ *
+ * @see #PluginFunctionTable
+ */
+typedef void (*PluginNewInstanceFunc)(gint argc, gchar* argv[]);
+
+/**
+ * Signature of a function that Shadow calls when a plug-in should free the
+ * state associated with a node instance.
+ *
+ * @see #PluginFunctionTable
+ */
 typedef void (*PluginFreeInstanceFunc)();
-typedef void (*PluginSocketReadableFunc)(gint);
-typedef void (*PluginSocketWritableFunc)(gint);
+
+/**
+ * Signature of a function that Shadow calls when a socket may be read without
+ * blocking.
+ * @param socketDescriptor the descriptor for the readable socket
+ *
+ * @see #PluginFunctionTable
+ */
+typedef void (*PluginSocketReadableFunc)(gint socketDescriptor);
+
+/**
+ * Signature of a function that Shadow calls when a socket may be written
+ * without blocking.
+ *
+ * @param socketDescriptor the descriptor for the writable socket
+ *
+ * @see #PluginFunctionTable
+ */
+typedef void (*PluginSocketWritableFunc)(gint socketDescriptor);
 
 typedef struct _PluginFunctionTable PluginFunctionTable;
 
+/**
+ * A collection of functions implemented by a plug-in. The functions
+ * essentially define the plug-in interface that Shadow uses to communicate
+ * with the plug-in, allowing Shadow to perform callbacks into user-specified
+ * functions when creating and freeing nodes, and when a socket may be read or
+ * written without blocking.
+ */
 struct _PluginFunctionTable {
+	/**
+	 * Pointer to a function to call when creating a new node instance.
+	 */
 	PluginNewInstanceFunc new;
+
+	/**
+	 * Pointer to a function to call when freeing a node instance.
+	 */
 	PluginFreeInstanceFunc free;
+
+	/**
+	 * Pointer to a function to call when a socket is readable.
+	 */
 	PluginSocketReadableFunc readable;
+
+	/**
+	 * Pointer to a function to call when a socket is writable.
+	 */
 	PluginSocketWritableFunc writable;
 };
 
@@ -55,6 +118,11 @@ typedef void (*ShadowlibCreateCallbackFunc)(ShadowPluginCallbackFunc callback, g
 
 typedef struct _ShadowlibFunctionTable ShadowlibFunctionTable;
 
+/**
+ * A collection of functions exported to a plug-in. Each pointer in this table
+ * may be dereferenced to call a function in Shadow. Plug-ins may use these
+ * functions to hook into Shadow's logging and event systems.
+ */
 struct _ShadowlibFunctionTable {
 	ShadowlibRegisterFunc registration;
 	ShadowlibLogFunc log;
@@ -66,7 +134,7 @@ struct _ShadowlibFunctionTable {
 };
 
 /* Plug-ins must implement this function to communicate with Shadow.
- * the function name symbol must be "__shadow_plugin_init__" */
+ * the function name symbol must be PLUGININITSYMBOL */
 typedef void (*ShadowPluginInitializeFunc)(ShadowlibFunctionTable* shadowlibFunctions);
 
 #endif /* SHADOWLIB_H_ */
