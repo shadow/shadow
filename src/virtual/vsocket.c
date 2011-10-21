@@ -44,16 +44,10 @@ void vsocket_try_destroy_server(vsocket_mgr_tp net, vsocket_tp server_sock) {
 }
 
 guint vsocket_hash(in_addr_t addr, in_port_t port) {
-	size_t portsize = sizeof(in_port_t);
-	size_t addrsize = sizeof(in_addr_t);
-
-	gpointer buffer = calloc(1, addrsize + portsize + 1);
-        memset(buffer, 0, addrsize + portsize + 1);
-
-	memcpy(buffer, (gpointer )&addr, addrsize);
-	memcpy(buffer+addrsize, (gpointer )&port, portsize);
-	guint hash_value = g_str_hash(buffer);
-	free(buffer);
+	GString* buffer = g_string_new(NULL);
+	g_string_printf(buffer, "%u:%u", addr, port);
+	guint hash_value = g_str_hash(buffer->str);
+	g_string_free(buffer, TRUE);
 	return hash_value;
 }
 

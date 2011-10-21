@@ -9,8 +9,9 @@
 
 <software name="fileserver" plugin="filetransfer" time="10" arguments="server 8080 /home/rob/.local/share/shadow/" />
 <software name="fileclient" plugin="filetransfer" time="20" arguments="client single server.filetransfer 8080 none 0 10 /scallion/320KiB.urnd" />
+<software name="fileclient2" plugin="filetransfer" time="20" arguments="client multi /home/rob/shadow/resource/filetransfer.downloads none 0 none -1" />
 
 <node name="server.filetransfer" software="fileserver" network="filenetwork" bandwidthup="serverbandwidth" bandwidthdown="serverbandwidth" cpu="filecpu" />
-<node name="client.filetransfer" software="fileclient" network="filenetwork" bandwidthup="clientbandwidth" bandwidthdown="clientbandwidth" cpu="filecpu" />
+<node name="client.filetransfer" software="fileclient2" network="filenetwork" bandwidthup="clientbandwidth" bandwidthdown="clientbandwidth" cpu="filecpu" />
 
 <kill time="600" />

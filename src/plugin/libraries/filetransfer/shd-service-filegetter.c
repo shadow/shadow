@@ -231,7 +231,7 @@ enum filegetter_code service_filegetter_start_double(service_filegetter_tp sfg,
 		return FG_ERR_INVALID;
 	}
 
-	if(strncmp(args->filepath3, "none", 4) == 0) {
+	if(g_strncasecmp(args->filepath3, "none", 4) == 0) {
 		sfg->download3 = NULL;
 	} else {
 		sfg->download3 = service_filegetter_get_download_from_args(sfg, &args->http_server, &args->socks_proxy, args->filepath3, args->hostbyname_cb);
@@ -515,7 +515,7 @@ enum filegetter_code service_filegetter_stop(service_filegetter_tp sfg) {
 		sfg->downloads = NULL;
 	}
 
-	if(sfg->state != SFG_DONE && sfg->downloads_completed != sfg->downloads_requested) {
+	if(sfg->state != SFG_DONE) {
 		result = filegetter_shutdown(&sfg->fg);
 		sfg->current_download = NULL;
 		sfg->state = SFG_DONE;

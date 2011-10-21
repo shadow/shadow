@@ -274,10 +274,14 @@ enum vt_prc_result vtcp_process_item(vtransport_item_tp titem) {
 
 	if(prc_result & VT_PRC_RESET) {
 		goto done;
+	} else if(prc_result & VT_PRC_RESET) {
+		debug("socket %i dropped seq# %u", target->sock_desc, packet->tcp_header.sequence_number);
 	}
 
 	prc_result |= vtcp_process_updates(target, titem->rc_packet);
-	if(!(prc_result & VT_PRC_DROPPED)) {
+	if(prc_result & VT_PRC_DROPPED) {
+		debug("socket %i dropped seq# %u", target->sock_desc, packet->tcp_header.sequence_number);
+	} else {
 		prc_result |= vtcp_process_data(target, titem->rc_packet);
 	}
 
