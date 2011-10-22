@@ -619,7 +619,7 @@ ssize_t vsocket_sendto(vsocket_mgr_tp net, gint fd, const gpointer buf, size_t n
 	}
 
 	/* block sending if we have yet to absorb cpu delays */
-	if(vcpu_is_blocking(net->vcpu)) {
+	if(vcpu_isBlocked(net->vcpu)) {
 		debug("blocked on CPU when trying to send %lu bytes from socket %i", n, fd);
 
 		/* immediately schedule an event to tell the socket it can write. it will
@@ -753,7 +753,7 @@ ssize_t vsocket_recvfrom(vsocket_mgr_tp net, gint fd, gpointer buf, size_t n, gi
 	}
 
 	/* block receiving if we have yet to absorb cpu delays */
-	if(vcpu_is_blocking(net->vcpu)) {
+	if(vcpu_isBlocked(net->vcpu)) {
 		debug("blocked on CPU when trying to receive from socket %i", fd);
 
 		/* tell vepoll we need to read when we can, i.e. when CPU lets us */

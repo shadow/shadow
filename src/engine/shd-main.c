@@ -19,6 +19,10 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#if 0 /* these are only avail in glib >= 2.30, needed for signals */
+#include <glib-unix.h>
+#endif
+
 #include "shadow.h"
 
 Engine* shadow_engine;
@@ -56,6 +60,13 @@ gint shadow_main(gint argc, gchar* argv[]) {
 	GLogLevelFlags configuredLogLevel = configuration_getLogLevel(config);
 	g_log_set_default_handler(logging_handleLog, &(configuredLogLevel));
 	debug("log system initialized");
+
+#if 0 /* these are only avail in glib >= 2.30 */
+	/* setup signal handlers for gracefully handling shutdowns */
+	g_unix_signal_add(SIGTERM, engine_handleInterruptSignal, shadow_engine);
+	g_unix_signal_add(SIGHUP, engine_handleInterruptSignal, shadow_engine);
+	g_unix_signal_add(SIGINT, engine_handleInterruptSignal, shadow_engine);
+#endif
 
 	/* store parsed actions from each user-configured simulation script  */
 	GQueue* actions = g_queue_new();

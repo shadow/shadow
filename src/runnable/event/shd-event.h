@@ -54,7 +54,6 @@ struct _Event {
 	SimulationTime time;
 	Node* node;
 
-	SimulationTime cpuDelayPosition;
 	GQuark ownerID;
 	MAGIC_DECLARE;
 };

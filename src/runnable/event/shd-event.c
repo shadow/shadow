@@ -38,58 +38,21 @@ void shadowevent_init(Event* event, EventFunctionTable* vtable) {
 	event->vtable = vtable;
 }
 
-static void _event_updateDelay(Event* event) {
-	vsocket_mgr_tp vs_mgr = event->node->vsocket_mgr;
-	g_assert(vs_mgr);
-
-	if(event->ownerID != event->node->id) {
-		/* i didnt create the event. the delay attached is someone elses.
-		 * this is the first i've seen of this event. take ownership and
-		 * update the cpu delay to mine. */
-		event->ownerID = event->node->id;
-		event->cpuDelayPosition = vcpu_get_delay(vs_mgr->vcpu);
-	}
-
-	/* set our current position so any calls to read/write knows how
-	 * much delay we've already absorbed.
-	 */
-	vcpu_set_absorbed(vs_mgr->vcpu, event->cpuDelayPosition);
-}
-
-static gboolean _event_reschedule(Event* event) {
-	guint64 current_delay = vcpu_get_delay(event->node->vsocket_mgr->vcpu);
-
-	if(event->cpuDelayPosition > current_delay) {
-		/* impossible for our cpu to lose delay */
-		error("delay on event (%lu) is greater than our CPU delay (%lu). Killing it. Things probably wont work right.", event->cpuDelayPosition, current_delay);
-		/* free the event */
-		return TRUE;
-	}
-
-	guint64 nanos_offset = current_delay - event->cpuDelayPosition;
-	g_assert(nanos_offset > 0);
-
-	event->cpuDelayPosition += nanos_offset;
-	worker_scheduleEvent(event, nanos_offset, event->node->id);
-
-	debug("event blocked on CPU, rescheduled for %lu nanoseconds from now", nanos_offset);
-
-	/* dont free the event */
-	return FALSE;
-}
-
 gboolean shadowevent_run(gpointer data) {
 	Event* event = data;
 	MAGIC_ASSERT(event);
 	MAGIC_ASSERT(event->vtable);
 	MAGIC_ASSERT(event->node);
 
-	_event_updateDelay(event);
+	SimulationTime cpuDelay = vcpu_adjustDelay(event->node->vsocket_mgr->vcpu, event->time);
 
 	/* check if we are allowed to execute or have to wait for cpu delays */
-	if(vcpu_is_blocking(event->node->vsocket_mgr->vcpu)) {
+	if(cpuDelay > 0) {
+		debug("event blocked on CPU, rescheduled for %lu nanoseconds from now", cpuDelay);
 		/* this event is delayed due to cpu, so reschedule it */
-		return _event_reschedule(event);
+		worker_scheduleEvent(event, cpuDelay, event->node->id);
+		/* dont free it, it needs to run again */
+		return FALSE;
 	} else {
 		/* ok to execute the event */
 		event->vtable->run(event, event->node);

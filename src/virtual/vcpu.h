@@ -43,8 +43,8 @@ struct vcpu_s {
 	guint64 cpu_speed_Bps;
 	gdouble nanos_per_cpu_aes_byte;
 	gdouble nanos_per_cpu_proc_byte;
-	guint64 nanos_accumulated_delay;
-	guint64 nanos_currently_absorbed;
+	SimulationTime now;
+	SimulationTime timeCPUAvailable;
 };
 
 vcpu_tp vcpu_create(guint64 cpu_speed_Bps);
@@ -53,11 +53,8 @@ void vcpu_destroy(vcpu_tp vcpu);
 void vcpu_add_load_aes(vcpu_tp vcpu, guint32 bytes);
 void vcpu_add_load_read(vcpu_tp vcpu, guint32 bytes);
 void vcpu_add_load_write(vcpu_tp vcpu, guint32 bytes);
-guint8 vcpu_is_blocking(vcpu_tp vcpu);
+gboolean vcpu_isBlocked(vcpu_tp vcpu);
 
-/* set the delay already absorbed by the current event */
-void vcpu_set_absorbed(vcpu_tp vcpu, guint64 absorbed);
-/* get the total accumulated delay from the cpu */
-guint64 vcpu_get_delay(vcpu_tp vcpu);
+SimulationTime vcpu_adjustDelay(vcpu_tp vcpu, SimulationTime now);
 
 #endif /* VCPU_H_ */

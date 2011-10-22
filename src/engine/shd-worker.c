@@ -182,11 +182,6 @@ void worker_scheduleEvent(Event* event, SimulationTime nano_delay, GQuark receiv
 	/* the NodeEvent needs a pointer to the correct node */
 	event->node = receiver;
 
-	/* sender can be NULL while bootstrapping */
-	if(sender) {
-		event->ownerID = sender->id;
-	}
-
 	/* if we are not going to execute any more events, free it and return */
 	if(engine_isKilled(engine)) {
 		shadowevent_free(event);

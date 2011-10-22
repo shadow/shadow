@@ -33,8 +33,7 @@ vcpu_tp vcpu_create(guint64 cpu_speed_Bps) {
 	vcpu->cpu_speed_Bps = cpu_speed_Bps;
 	vcpu->nanos_per_cpu_aes_byte = 1000000000.0 / cpu_speed_Bps;
 	vcpu->nanos_per_cpu_proc_byte = vcpu->nanos_per_cpu_aes_byte * VCPU_AES_TO_TOR_RATIO;
-	vcpu->nanos_accumulated_delay = 0;
-	vcpu->nanos_currently_absorbed = 0;
+	vcpu->timeCPUAvailable = vcpu->now = 0;
 
 	return vcpu;
 }
@@ -46,12 +45,12 @@ void vcpu_destroy(vcpu_tp vcpu) {
 }
 
 static void vcpu_add_load(vcpu_tp vcpu, gdouble load) {
-	/* convert bytes ginto nanoseconds to give our node a notion of cpu delay.
+	/* convert bytes into nanoseconds to give our node a notion of cpu delay.
 	 * to incorporate general runtime, we multiply by VCPU_LOAD_MULTIPLIER here. */
 	if(vcpu != NULL) {
 		guint64 ns_to_add = (guint64) ceil(load);
-		vcpu->nanos_accumulated_delay += ns_to_add;
-		debug("added %lu nanos of CPU load. new load is %lu", ns_to_add, vcpu->nanos_accumulated_delay);
+		vcpu->timeCPUAvailable += ns_to_add;
+		debug("added %lu nanos of CPU load. CPU is ready at %lu", ns_to_add, vcpu->timeCPUAvailable);
 	}
 }
 
@@ -79,28 +78,23 @@ void vcpu_add_load_write(vcpu_tp vcpu, guint32 bytes) {
 	}
 }
 
-guint8 vcpu_is_blocking(vcpu_tp vcpu) {
-	if(vcpu != NULL) {
-		/* we have delay if we've crossed the threshold */
-		guint64 unabsorbed_delay = vcpu->nanos_accumulated_delay - vcpu->nanos_currently_absorbed;
-		if(unabsorbed_delay > VCPU_DELAY_THRESHOLD_NS) {
-			return 1;
-		} else {
-			return 0;
-		}
+SimulationTime _vcpu_getDelay(vcpu_tp vcpu) {
+	/* we only have delay if we've crossed the threshold */
+	SimulationTime builtUpDelay = vcpu->timeCPUAvailable - vcpu->now;
+	if(builtUpDelay > VCPU_DELAY_THRESHOLD_NS) {
+		return builtUpDelay;
 	}
 	return 0;
 }
 
-void vcpu_set_absorbed(vcpu_tp vcpu, guint64 absorbed) {
-	if(vcpu != NULL) {
-		vcpu->nanos_currently_absorbed = absorbed;
-	}
+gboolean vcpu_isBlocked(vcpu_tp vcpu) {
+	g_assert(vcpu);
+	return _vcpu_getDelay(vcpu) > 0;
 }
 
-guint64 vcpu_get_delay(vcpu_tp vcpu) {
-	if(vcpu != NULL) {
-		return vcpu->nanos_accumulated_delay;
-	}
-	return 0;
+SimulationTime vcpu_adjustDelay(vcpu_tp vcpu, SimulationTime now) {
+	g_assert(vcpu);
+	vcpu->now = now;
+	vcpu->timeCPUAvailable = (SimulationTime) fmax(vcpu->timeCPUAvailable, now);
+	return _vcpu_getDelay(vcpu);
 }

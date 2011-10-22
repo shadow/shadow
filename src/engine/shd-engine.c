@@ -311,3 +311,16 @@ gboolean engine_isKilled(Engine* engine) {
 	MAGIC_ASSERT(engine);
 	return engine->killed;
 }
+
+gboolean engine_handleInterruptSignal(gpointer user_data) {
+	Engine* engine = user_data;
+	MAGIC_ASSERT(engine);
+
+	/* handle (SIGHUP, SIGTERM, SIGINT), shutdown cleanly */
+	g_mutex_lock(engine->engineIdle);
+	engine->endTime = 0;
+	g_mutex_unlock(engine->engineIdle);
+
+	/* dont remove the source */
+	return FALSE;
+}
