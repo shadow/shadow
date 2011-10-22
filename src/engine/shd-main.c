@@ -47,9 +47,9 @@ gint shadow_main(gint argc, gchar* argv[]) {
 	/* allocate our driving application structure */
 	shadow_engine = engine_new(config);
 	/* our first call to create the worker for the main thread */
-	Worker* worker = worker_getPrivate();
+	Worker* mainThreadWorker = worker_getPrivate();
 	/* make the engine available */
-	worker->cached_engine = shadow_engine;
+	mainThreadWorker->cached_engine = shadow_engine;
 
 	/* hook in our logging system. stack variable used to avoid errors
 	 * during cleanup below. */
@@ -97,7 +97,6 @@ gint shadow_main(gint argc, gchar* argv[]) {
 	shadow_engine->internet->isReadOnly = 1;
 	gint retval = engine_run(shadow_engine);
 
-
 	/* join thread pool. workers are auto-deleted when threads end. */
 	debug("engine finished, waiting for workers...");
 	if(n > 0) {
@@ -109,6 +108,7 @@ gint shadow_main(gint argc, gchar* argv[]) {
 	/* cleanup */
 	configuration_free(config);
 	engine_free(shadow_engine);
+	worker_free(mainThreadWorker);
 
 	return retval;
 }

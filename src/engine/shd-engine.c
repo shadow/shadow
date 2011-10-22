@@ -32,20 +32,6 @@ Engine* engine_new(Configuration* config) {
 	/* initialize the singleton-per-thread worker class */
 	engine->workerKey = g_private_new(worker_free);
 
-	if(config->nWorkerThreads > 0) {
-		/* we need some workers, create a thread pool */
-		GError *error = NULL;
-		engine->workerPool = g_thread_pool_new(worker_executeEvent, engine,
-				config->nWorkerThreads, TRUE, &error);
-		if (!engine->workerPool) {
-			error("thread pool failed: %s", error->message);
-			g_error_free(error);
-		}
-	} else {
-		/* one thread, use simple queue, no thread pool needed */
-		engine->workerPool = NULL;
-	}
-
 	/* holds all events if single-threaded, and non-node events otherwise. */
 	engine->masterEventQueue = g_async_queue_new_full(shadowevent_free);
 	engine->workersIdle = g_cond_new();
@@ -66,12 +52,12 @@ Engine* engine_new(Configuration* config) {
 void engine_free(Engine* engine) {
 	MAGIC_ASSERT(engine);
 
+	/* its ok if this was already called, its NULL-safe */
+	engine_teardownWorkerThreads(engine);
+
 	if(engine->masterEventQueue) {
 		g_async_queue_unref(engine->masterEventQueue);
 	}
-
-	/* its ok if this was already called, its NULL-safe */
-	engine_teardownWorkerThreads(engine);
 
 	internetwork_free(engine->internet);
 	registry_free(engine->registry);
@@ -87,13 +73,15 @@ void engine_free(Engine* engine) {
 
 void engine_setupWorkerThreads(Engine* engine, gint nWorkerThreads) {
 	MAGIC_ASSERT(engine);
-	/* we need some workers, create a thread pool */
-	GError *error = NULL;
-	engine->workerPool = g_thread_pool_new(worker_executeEvent, engine,
-			nWorkerThreads, TRUE, &error);
-	if (!engine->workerPool) {
-		error("thread pool failed: %s", error->message);
-		g_error_free(error);
+	if(nWorkerThreads > 0) {
+		/* we need some workers, create a thread pool */
+		GError *error = NULL;
+		engine->workerPool = g_thread_pool_new(worker_executeEvent, engine,
+				nWorkerThreads, TRUE, &error);
+		if (!engine->workerPool) {
+			error("thread pool failed: %s", error->message);
+			g_error_free(error);
+		}
 	}
 }
 
@@ -101,6 +89,7 @@ void engine_teardownWorkerThreads(Engine* engine) {
 	MAGIC_ASSERT(engine);
 	if(engine->workerPool) {
 		g_thread_pool_free(engine->workerPool, FALSE, TRUE);
+		engine->workerPool = NULL;
 	}
 }
 
@@ -225,8 +214,8 @@ static gint _engine_distributeEvents(Engine* engine) {
 		 */
 		engine->executeWindowStart = engine->executeWindowEnd;
 		engine->executeWindowEnd += engine->minTimeJump;
-		debug("updated execution window [%lu--%lu]",
-				engine->executeWindowStart, engine->executeWindowEnd);
+//		debug("updated execution window [%lu--%lu]",
+//				engine->executeWindowStart, engine->executeWindowEnd);
 	}
 
 	return 0;

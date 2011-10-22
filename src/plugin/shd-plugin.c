@@ -19,6 +19,9 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <unistd.h>
+#include <glib/gstdio.h>
+
 #include "shadow.h"
 
 Plugin* plugin_new(GQuark id, GString* filename) {
@@ -28,10 +31,53 @@ Plugin* plugin_new(GQuark id, GString* filename) {
 
 	plugin->id = id;
 
-	/* get the plugin handle */
-	plugin->handle = g_module_open(filename->str, G_MODULE_BIND_LAZY | G_MODULE_BIND_LOCAL);
+	/* do not open the path directly, but rather copy to tmp directory first
+	 * to avoid multiple threads using the same memory space.
+	 */
+
+	/* get the basename of the real plug-in and create a temp file template */
+	gchar* basename = g_path_get_basename(filename->str);
+	GString* templateBuffer = g_string_new(basename);
+	templateBuffer = g_string_prepend(templateBuffer, "XXXXXX-");
+	g_free(basename);
+	gchar* template = g_string_free(templateBuffer, FALSE);
+
+	/* try to open the temp file, saving the new temp path and checking for errors */
+	gchar* temporaryFilename;
+	GError* error = NULL;
+	gint openedFile = g_file_open_tmp((const gchar*) template, &temporaryFilename, &error);
+	if(openedFile < 0) {
+		error("unable to open temporary file for plug-in '%s': %s", filename->str, error->message);
+	}
+
+	/* if we got here, the temp filename should exist, so lets save it's path */
+	plugin->path = g_string_new(temporaryFilename);
+	g_free(temporaryFilename);
+
+	/* now we need to copy the actual contents to our new file */
+	gchar* contents = NULL;
+	gsize length = 0;
+	error = NULL;
+	if(!g_file_get_contents(filename->str, &contents, &length, &error)) {
+		error("unable to read '%s' for copying: %s",
+				filename->str, error->message);
+		return NULL;
+	}
+	error = NULL;
+	if(!g_file_set_contents(plugin->path->str, contents, (gssize)length, &error)) {
+		error("unable to write private copy of '%s' to '%s': %s",
+				filename->str, plugin->path->str, error->message);
+		return NULL;
+	}
+
+	/* ok, our private copy was created, cleanup */
+	g_free(contents);
+	close(openedFile);
+
+	/* now get the plugin handle from our private copy of the library */
+	plugin->handle = g_module_open(plugin->path->str, G_MODULE_BIND_LAZY | G_MODULE_BIND_LOCAL);
 	if(!plugin->handle) {
-		error("unable to load plug-in '%s'", filename->str);
+		error("unable to load private plug-in '%s'", plugin->path->str);
 	}
 
 	/* make sure it has the required init function */
@@ -67,9 +113,12 @@ void plugin_free(gpointer data) {
 		gboolean success = g_module_close(plugin->handle);
 		/* TODO: what to do if failure? */
 		if(!success) {
-			warning("failed closing plugin '%s'", plugin->path);
+			warning("failed closing plugin '%s'", plugin->path->str);
 		}
 	}
+
+	g_unlink(plugin->path->str);
+	g_string_free(plugin->path, TRUE);
 
 	MAGIC_CLEAR(plugin);
 	g_free(plugin);

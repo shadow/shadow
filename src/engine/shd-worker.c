@@ -73,12 +73,10 @@ Plugin* worker_getPlugin(Software* software) {
 	Worker* worker = worker_getPrivate();
 	Plugin* plugin = g_hash_table_lookup(worker->plugins, &(software->pluginID));
 	if(!plugin) {
-		/* plug-in has yet to be loaded by this worker. do that now with a
-		 * unique temporary filename so we dont affect other workers.
-		 * XXX FIXME must do this for multithreads
-		 * g_file_open_tmp
+		/* plug-in has yet to be loaded by this worker. do that now. this call
+		 * will copy the plug-in library to the temporary directory, and open
+		 * that so each thread can execute in its own memory space.
 		 */
-
 		plugin = plugin_new(software->pluginID, software->pluginPath);
 		g_hash_table_replace(worker->plugins, &(plugin->id), plugin);
 	}
@@ -87,7 +85,7 @@ Plugin* worker_getPlugin(Software* software) {
 }
 
 void worker_executeEvent(gpointer data, gpointer user_data) {
-	/* cast our data */
+	/* worker comes from pool to execute event - cast our data */
 	Engine* engine = user_data;
 	Node* node = data;
 	MAGIC_ASSERT(node);
@@ -216,7 +214,7 @@ void worker_scheduleEvent(Event* event, SimulationTime nano_delay, GQuark receiv
 
 			/* warn and adjust time if needed */
 			if(event->time < min_time) {
-				warning("Inter-node event time %lu changed to %lu due to minimum delay %lu",
+				debug("Inter-node event time %lu changed to %lu due to minimum delay %lu",
 						event->time, min_time, jump);
 				event->time = min_time;
 			}
