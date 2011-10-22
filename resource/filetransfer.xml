@@ -12,6 +12,6 @@
 <software name="fileclient2" plugin="filetransfer" time="20" arguments="client multi /home/rob/shadow/resource/filetransfer.downloads none 0 none -1" />
 
 <node name="server.filetransfer" software="fileserver" network="filenetwork" bandwidthup="serverbandwidth" bandwidthdown="serverbandwidth" cpu="filecpu" />
-<node name="client.filetransfer" software="fileclient2" network="filenetwork" bandwidthup="clientbandwidth" bandwidthdown="clientbandwidth" cpu="filecpu" />
+<node name="client.filetransfer" quantity="100" software="fileclient2" network="filenetwork" bandwidthup="clientbandwidth" bandwidthdown="clientbandwidth" cpu="filecpu" />
 
 <kill time="600" />

@@ -24,19 +24,15 @@
 
 #include "shadow.h"
 
+/**
+ * An opaque structure representing the state for each node of a plug-in.
+ */
 typedef struct _PluginState PluginState;
-
-struct _PluginState {
-	PluginFunctionTable* functions;
-	GSList* dataEntries;
-	gsize nEntries;
-	gsize totalEntrySize;
-	MAGIC_DECLARE;
-};
 
 PluginState* pluginstate_new(PluginFunctionTable* callbackFunctions, guint nVariables, va_list vargs);
 PluginState* pluginstate_copyNew(PluginState* state);
 void pluginstate_copy(PluginState* sourceState, PluginState* destinationState);
 void pluginstate_free(PluginState* state);
+PluginFunctionTable* pluginstate_getPluginFunctions(PluginState* state);
 
 #endif /* SHD_PLUGIN_STATE_H_ */

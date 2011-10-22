@@ -97,7 +97,6 @@ typedef struct vbuffer_s vbuffer_t, *vbuffer_tp;
 /* utilities with limited dependencies */
 #include "utility/shd-registry.h"
 #include "utility/shd-cdf.h"
-#include "utility/shd-data-entry.h"
 
 #include "runnable/event/shd-callback.h"
 #include "runnable/event/shd-packet-arrived.h"

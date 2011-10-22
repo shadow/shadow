@@ -56,7 +56,6 @@ set(shadow_srcs
     node/shd-application.c
         
     utility/shd-cdf.c
-    utility/shd-data-entry.c
     utility/shd-registry.c
     
     utility/linkedbuffer.c

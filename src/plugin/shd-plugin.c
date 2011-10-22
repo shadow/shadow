@@ -24,6 +24,56 @@
 
 #include "shadow.h"
 
+GString* _plugin_getTemporaryFilePath(gchar* originalPath) {
+	/* get the basename of the real plug-in and create a temp file template */
+	gchar* basename = g_path_get_basename(originalPath);
+	GString* templateBuffer = g_string_new(basename);
+	g_free(basename);
+
+	templateBuffer = g_string_prepend(templateBuffer, "XXXXXX-");
+	gchar* template = g_string_free(templateBuffer, FALSE);
+
+	/* try to open the templated file, checking for errors */
+	gchar* temporaryFilename = NULL;
+	GError* error = NULL;
+	gint openedFile = g_file_open_tmp((const gchar*) template, &temporaryFilename, &error);
+	if(openedFile < 0) {
+		error("unable to open temporary file for plug-in '%s': %s", originalPath, error->message);
+	}
+
+	/* now we ceanup and return the new filename */
+	close(openedFile);
+	g_free(template);
+
+	GString* templatePath = g_string_new(temporaryFilename);
+	g_free(temporaryFilename);
+	return templatePath;
+}
+
+gboolean _plugin_copyFile(gchar* fromPath, gchar* toPath) {
+	gchar* contents = NULL;
+	gsize length = 0;
+	GError* error = NULL;
+
+	/* get the original file */
+	if(!g_file_get_contents(fromPath, &contents, &length, &error)) {
+		error("unable to read '%s' for copying: %s", fromPath, error->message);
+		return FALSE;
+	}
+	error = NULL;
+
+	/* copy to the new file */
+	if(!g_file_set_contents(toPath, contents, (gssize)length, &error)) {
+		error("unable to write private copy of '%s' to '%s': %s",
+				fromPath, toPath, error->message);
+		return FALSE;
+	}
+
+	/* ok, our private copy was created, cleanup */
+	g_free(contents);
+	return TRUE;
+}
+
 Plugin* plugin_new(GQuark id, GString* filename) {
 	g_assert(filename);
 	Plugin* plugin = g_new0(Plugin, 1);
@@ -34,49 +84,20 @@ Plugin* plugin_new(GQuark id, GString* filename) {
 	/* do not open the path directly, but rather copy to tmp directory first
 	 * to avoid multiple threads using the same memory space.
 	 */
-
-	/* get the basename of the real plug-in and create a temp file template */
-	gchar* basename = g_path_get_basename(filename->str);
-	GString* templateBuffer = g_string_new(basename);
-	templateBuffer = g_string_prepend(templateBuffer, "XXXXXX-");
-	g_free(basename);
-	gchar* template = g_string_free(templateBuffer, FALSE);
-
-	/* try to open the temp file, saving the new temp path and checking for errors */
-	gchar* temporaryFilename;
-	GError* error = NULL;
-	gint openedFile = g_file_open_tmp((const gchar*) template, &temporaryFilename, &error);
-	if(openedFile < 0) {
-		error("unable to open temporary file for plug-in '%s': %s", filename->str, error->message);
-	}
-
-	/* if we got here, the temp filename should exist, so lets save it's path */
-	plugin->path = g_string_new(temporaryFilename);
-	g_free(temporaryFilename);
+	plugin->path = _plugin_getTemporaryFilePath(filename->str);
 
 	/* now we need to copy the actual contents to our new file */
-	gchar* contents = NULL;
-	gsize length = 0;
-	error = NULL;
-	if(!g_file_get_contents(filename->str, &contents, &length, &error)) {
-		error("unable to read '%s' for copying: %s",
-				filename->str, error->message);
+	if(!_plugin_copyFile(filename->str, plugin->path->str)) {
+		g_string_free(plugin->path, TRUE);
+		g_free(plugin);
 		return NULL;
 	}
-	error = NULL;
-	if(!g_file_set_contents(plugin->path->str, contents, (gssize)length, &error)) {
-		error("unable to write private copy of '%s' to '%s': %s",
-				filename->str, plugin->path->str, error->message);
-		return NULL;
-	}
-
-	/* ok, our private copy was created, cleanup */
-	g_free(contents);
-	close(openedFile);
 
 	/* now get the plugin handle from our private copy of the library */
 	plugin->handle = g_module_open(plugin->path->str, G_MODULE_BIND_LAZY | G_MODULE_BIND_LOCAL);
-	if(!plugin->handle) {
+	if(plugin->handle) {
+		message("successfully loaded private plug-in '%s'", plugin->path->str);
+	} else {
 		error("unable to load private plug-in '%s'", plugin->path->str);
 	}
 
@@ -179,44 +200,44 @@ static void _plugin_stopExecuting(Plugin* plugin, PluginState* state) {
 void plugin_executeNew(Plugin* plugin, PluginState* state, gint argcParam, gchar* argvParam[]) {
 	MAGIC_ASSERT(plugin);
 	_plugin_startExecuting(plugin, state);
-	plugin->residentState->functions->new(argcParam, argvParam);
+	pluginstate_getPluginFunctions(plugin->residentState)->new(argcParam, argvParam);
 	_plugin_stopExecuting(plugin, state);
 }
 
 void plugin_executeFree(Plugin* plugin, PluginState* state) {
 	MAGIC_ASSERT(plugin);
 	_plugin_startExecuting(plugin, state);
-	plugin->residentState->functions->free();
+	pluginstate_getPluginFunctions(plugin->residentState)->free();
 	_plugin_stopExecuting(plugin, state);
 }
 
 void plugin_executeReadable(Plugin* plugin, PluginState* state, gint socketParam) {
 	MAGIC_ASSERT(plugin);
 	_plugin_startExecuting(plugin, state);
-	plugin->residentState->functions->readable(socketParam);
+	pluginstate_getPluginFunctions(plugin->residentState)->readable(socketParam);
 	_plugin_stopExecuting(plugin, state);
 }
 
 void plugin_executeWritable(Plugin* plugin, PluginState* state, gint socketParam) {
 	MAGIC_ASSERT(plugin);
 	_plugin_startExecuting(plugin, state);
-	plugin->residentState->functions->writable(socketParam);
+	pluginstate_getPluginFunctions(plugin->residentState)->writable(socketParam);
 	_plugin_stopExecuting(plugin, state);
 }
 
 void plugin_executeWritableReadable(Plugin* plugin, PluginState* state, gint socketParam) {
 	MAGIC_ASSERT(plugin);
 	_plugin_startExecuting(plugin, state);
-	plugin->residentState->functions->writable(socketParam);
-	plugin->residentState->functions->readable(socketParam);
+	pluginstate_getPluginFunctions(plugin->residentState)->writable(socketParam);
+	pluginstate_getPluginFunctions(plugin->residentState)->readable(socketParam);
 	_plugin_stopExecuting(plugin, state);
 }
 
 void plugin_executeReadableWritable(Plugin* plugin, PluginState* state, gint socketParam) {
 	MAGIC_ASSERT(plugin);
 	_plugin_startExecuting(plugin, state);
-	plugin->residentState->functions->readable(socketParam);
-	plugin->residentState->functions->writable(socketParam);
+	pluginstate_getPluginFunctions(plugin->residentState)->readable(socketParam);
+	pluginstate_getPluginFunctions(plugin->residentState)->writable(socketParam);
 	_plugin_stopExecuting(plugin, state);
 }
 

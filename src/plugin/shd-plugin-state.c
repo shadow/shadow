@@ -20,6 +20,58 @@
  */
 
 #include "shadow.h"
+#include <string.h>
+
+/* Holds pointers to data for each variable registered by a plug-in */
+struct _PluginState {
+	PluginFunctionTable* functions;
+	GSList* dataEntries;
+	gsize nEntries;
+	gsize totalEntrySize;
+	MAGIC_DECLARE;
+};
+
+/* internal structure to manage state entries */
+typedef struct _PluginStateEntry PluginStateEntry;
+struct _PluginStateEntry {
+	gpointer reference;
+	gsize size;
+	MAGIC_DECLARE;
+};
+
+static PluginStateEntry* _pluginstateentry_new(gpointer reference, gsize size) {
+	PluginStateEntry* entry = g_new0(PluginStateEntry, 1);
+	MAGIC_INIT(entry);
+
+	entry->reference = reference;
+	entry->size = size;
+
+	return entry;
+}
+
+static PluginStateEntry* _pluginstateentry_copyNew(PluginStateEntry* entry) {
+	MAGIC_ASSERT(entry);
+	gpointer copy = g_slice_copy(entry->size, entry->reference);
+	return _pluginstateentry_new(copy, entry->size);
+}
+
+static void _pluginstateentry_copy(PluginStateEntry* sourceEntry, PluginStateEntry* destinationEntry) {
+	MAGIC_ASSERT(sourceEntry);
+	MAGIC_ASSERT(destinationEntry);
+
+	g_assert(destinationEntry->size == sourceEntry->size);
+	g_assert(destinationEntry->reference && sourceEntry->reference);
+
+	memmove(destinationEntry->reference, sourceEntry->reference, destinationEntry->size);
+}
+
+static void _pluginstateentry_free(gpointer data) {
+	PluginStateEntry* entry = (PluginStateEntry*) data;
+	MAGIC_ASSERT(entry);
+
+	MAGIC_CLEAR(entry);
+	g_free(entry);
+}
 
 PluginState* pluginstate_new(PluginFunctionTable* callbackFunctions, guint nVariables, va_list vargs) {
 	g_assert(callbackFunctions);
@@ -44,7 +96,7 @@ PluginState* pluginstate_new(PluginFunctionTable* callbackFunctions, guint nVari
 		gsize size = va_arg(variables, gsize);
 		gpointer reference = va_arg(variables, gpointer);
 
-		DataEntry* entry = dataentry_new(reference, size);
+		PluginStateEntry* entry = _pluginstateentry_new(reference, size);
 		state->dataEntries = g_slist_prepend(state->dataEntries, entry);
 		(state->nEntries)++;
 		state->totalEntrySize += size;
@@ -74,8 +126,8 @@ PluginState* pluginstate_copyNew(PluginState* state) {
 	 */
 	GSList* next = state->dataEntries;
 	while(next) {
-		DataEntry* entry = next->data;
-		DataEntry* copyEntry = dataentry_copyNew(entry);
+		PluginStateEntry* entry = next->data;
+		PluginStateEntry* copyEntry = _pluginstateentry_copyNew(entry);
 
 		copyState->dataEntries = g_slist_prepend(copyState->dataEntries, copyEntry);
 		(copyState->nEntries)++;
@@ -106,7 +158,7 @@ void pluginstate_copy(PluginState* sourceState, PluginState* destinationState) {
 	GSList* nextSource = sourceState->dataEntries;
 	GSList* nextDestination = destinationState->dataEntries;
 	while(nextSource && nextDestination) {
-		dataentry_copy(nextSource->data, nextDestination->data);
+		_pluginstateentry_copy(nextSource->data, nextDestination->data);
 
 		nextSource = g_slist_next(nextSource);
 		nextDestination = g_slist_next(nextDestination);
@@ -117,8 +169,13 @@ void pluginstate_free(PluginState* state) {
 	MAGIC_ASSERT(state);
 
 	g_free(state->functions);
-	g_slist_free_full(state->dataEntries, dataentry_free);
+	g_slist_free_full(state->dataEntries, _pluginstateentry_free);
 
 	MAGIC_CLEAR(state);
 	g_free(state);
+}
+
+PluginFunctionTable* pluginstate_getPluginFunctions(PluginState* state) {
+	MAGIC_ASSERT(state);
+	return state->functions;
 }
