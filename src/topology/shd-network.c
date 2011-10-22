@@ -116,7 +116,7 @@ gdouble network_getLinkLatency(Network* sourceNetwork, Network* destinationNetwo
 	} else {
 		critical("unable to find link between networks '%s' and '%s'. Check XML file for errors.",
 				g_quark_to_string(sourceNetwork->id), g_quark_to_string(destinationNetwork->id));
-		return G_MINDOUBLE;
+		return G_MAXDOUBLE;
 	}
 }
 
@@ -126,8 +126,11 @@ gdouble network_sampleLinkLatency(Network* sourceNetwork, Network* destinationNe
 	Link* link = g_hash_table_lookup(sourceNetwork->outgoingLinkMap, &(destinationNetwork->id));
 	if(link) {
 		return cdf_getRandomValue(link->latency);
+	} else {
+		critical("unable to find link between networks '%s' and '%s'. Check XML file for errors.",
+				g_quark_to_string(sourceNetwork->id), g_quark_to_string(destinationNetwork->id));
+		return G_MAXDOUBLE;
 	}
-	return G_MINDOUBLE;
 }
 
 void network_scheduleClose(GQuark callerID, GQuark sourceID, in_port_t sourcePort,
@@ -238,9 +241,10 @@ void network_schedulePacket(rc_vpacket_pod_tp rc_packet) {
 
 	/* packet will make it through, find latency */
 	gdouble latency = internetwork_sampleLatency(internet, sourceID, destinationID);
+	SimulationTime delay = (SimulationTime) (latency * SIMTIME_ONE_MILLISECOND);
 
 	PacketArrivedEvent* event = packetarrived_new(rc_packet);
-	worker_scheduleEvent((Event*)event, latency, (GQuark) packet->header.destination_addr);
+	worker_scheduleEvent((Event*)event, delay, (GQuark) packet->header.destination_addr);
 
 ret:
 	if(do_unlock) {
