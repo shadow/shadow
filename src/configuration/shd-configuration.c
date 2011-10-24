@@ -26,7 +26,7 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	Configuration* c = g_new0(Configuration, 1);
 	MAGIC_INIT(c);
 
-	const gchar* required_parameters = "xml-simulation-specification-filepath1 ...";
+	const gchar* required_parameters = "input.xml ...";
 	gint nRequiredXMLFiles = 1;
 
 	c->context = g_option_context_new(required_parameters);
@@ -50,7 +50,7 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	g_option_group_add_entries(c->mainOptionGroup, mainEntries);
 	g_option_context_set_main_group(c->context, c->mainOptionGroup);
 
-	/* now fill in options for other groups */
+	/* now fill in the network option group */
 	c->networkOptionGroup = g_option_group_new("network", "Network Options", "Various network related options", NULL, NULL);
 	const GOptionEntry networkEntries[] =
 	{
@@ -60,6 +60,19 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 
 	g_option_group_add_entries(c->networkOptionGroup, networkEntries);
 	g_option_context_add_group(c->context, c->networkOptionGroup);
+
+	/* now fill in the default plug-in examples option group */
+	c->pluginsOptionGroup = g_option_group_new("plug-ins", "Plug-in Examples", "Run example simulations with built-in plug-ins", NULL, NULL);
+	const GOptionEntry pluginEntries[] =
+	{
+	  { "ping", 0, 0, G_OPTION_ARG_NONE, &(c->runPingExample), "Run basic ping-pong simulation", NULL },
+	  { "echo", 0, 0, G_OPTION_ARG_NONE, &(c->runEchoExample), "Run basic echo simulation", NULL },
+	  { "file", 0, 0, G_OPTION_ARG_NONE, &(c->runFileExample), "Run basic HTTP file transfer simulation", NULL },
+	  { NULL },
+	};
+
+	g_option_group_add_entries(c->pluginsOptionGroup, pluginEntries);
+	g_option_context_add_group(c->context, c->pluginsOptionGroup);
 
 	/* parse args */
 	GError *error = NULL;
@@ -71,18 +84,15 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	}
 
 	/* make sure we have the required arguments. program name is first arg.
-	 * printing the software version requires no other args. */
-	if(!(c->printSoftwareVersion) && (argc < nRequiredXMLFiles + 1)) {
+	 * printing the software version requires no other args. running a
+	 * plug-in example also requires no other args. */
+	if(!(c->printSoftwareVersion) && !(c->runPingExample) &&
+			!(c->runEchoExample) && !(c->runFileExample) &&
+			(argc < nRequiredXMLFiles + 1)) {
 		g_printerr("** Please provide the required parameters **\n");
 		g_printerr(g_option_context_get_help(c->context, TRUE, NULL));
 		configuration_free(c);
 		return NULL;
-	}
-
-	c->inputXMLFilenames = g_queue_new();
-	for(gint i = 1; i < argc; i++) {
-		GString* filename = g_string_new(argv[i]);
-		g_queue_push_tail(c->inputXMLFilenames, filename);
 	}
 
 	if(c->nWorkerThreads < 0) {
@@ -90,6 +100,12 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	}
 	if(c->logLevelInput == NULL) {
 		c->logLevelInput = g_strdup("message");
+	}
+
+	c->inputXMLFilenames = g_queue_new();
+	for(gint i = 1; i < argc; i++) {
+		GString* filename = g_string_new(argv[i]);
+		g_queue_push_tail(c->inputXMLFilenames, filename);
 	}
 
 	return c;

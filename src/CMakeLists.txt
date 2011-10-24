@@ -1,16 +1,15 @@
-## install shadow script
-#install(PROGRAMS ${SHADOW_SOURCE_DIR}/shadow DESTINATION bin)
-
 ## make sure shadow.h is in the include path
 include_directories(${SHADOW_SOURCE_DIR}/)
 
-## build the built-in plug-in libraries
-add_subdirectory(plugin/libraries)
 ## build the required libraries for intercepting system and library calls
 add_subdirectory(intercept)
 
+## build the built-in plug-in libraries
+add_subdirectory(plugin/libraries)
+
 ## sources for our main shadow program
 set(shadow_srcs
+    configuration/shd-examples.c
     configuration/shd-configuration.c
     configuration/shd-parser.c
     engine/shd-logging.c
@@ -83,8 +82,14 @@ set(shadow_srcs
     main.c
 )
 
-## specify the executable, link, and install location under prefix
-add_executable(shadow ${shadow_srcs})
-add_dependencies(shadow shadow-intercept shadow-preload)
-target_link_libraries(shadow shadow-intercept ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES} ${GLIB_LIBRARIES})
-install(TARGETS shadow DESTINATION bin)
+## specify the main shadow executable, build, link, and install
+add_executable(shadow-bin ${shadow_srcs})
+add_dependencies(shadow-bin shadow-intercept shadow-preload)
+target_link_libraries(shadow-bin shadow-intercept ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES} ${GLIB_LIBRARIES})
+install(TARGETS shadow-bin DESTINATION bin)
+
+## shadow needs to find libshadow-intercept after install
+set_target_properties(shadow-bin PROPERTIES INSTALL_RPATH ${CMAKE_INSTALL_PREFIX}/lib INSTALL_RPATH_USE_LINK_PATH TRUE)
+
+## install the helper script that sets LD_PRELOAD before launching shadow-bin
+install(PROGRAMS ${SHADOW_SOURCE_DIR}/shadow DESTINATION bin)

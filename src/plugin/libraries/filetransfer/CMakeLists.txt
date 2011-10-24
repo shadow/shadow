@@ -27,7 +27,6 @@ add_executable(shadow-filegetter shd-filegetter-main.c shd-service-filegetter.c 
 target_link_libraries(shadow-filegetter ${RT_LIBRARIES} ${GLIB_LIBRARIES})
 
 install(TARGETS shadow-service-filetransfer EXPORT shadow-externals DESTINATION lib)
-install(TARGETS shadow-plugin-filetransfer DESTINATION lib)
+install(TARGETS shadow-plugin-filetransfer DESTINATION ${SHADOW_PLUGIN_DIR})
 install(TARGETS shadow-fileserver shadow-filegetter DESTINATION bin)
 install(DIRECTORY ./ DESTINATION include/shadow FILES_MATCHING PATTERN "*.h")
-install(FILES downloads.spec DESTINATION share/shadow)

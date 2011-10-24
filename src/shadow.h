@@ -88,6 +88,7 @@ typedef struct vbuffer_rbuf_s vbuffer_rbuf_t, *vbuffer_rbuf_tp;
 typedef struct vbuffer_s vbuffer_t, *vbuffer_tp;
 
 /* configuration, base runnables, and input parsing */
+#include "configuration/shd-examples.h"
 #include "configuration/shd-configuration.h"
 #include "runnable/shd-runnable.h"
 #include "runnable/event/shd-event.h"

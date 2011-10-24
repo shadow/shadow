@@ -465,35 +465,14 @@ Parser* parser_new() {
 	return parser;
 }
 
-gboolean parser_parse(Parser* parser, GString* filename, GQueue* actions) {
-	MAGIC_ASSERT(parser);
-	g_assert(filename && actions);
+gboolean parser_parseContents(Parser* parser, gchar* contents, gsize length, GQueue* actions) {
 
-	gchar* content;
-	gsize length;
-	GError *error = NULL;
-
-	/* get the xml file */
-	gboolean success = g_file_get_contents(filename->str, &content, &length, &error);
-
-	/* check for success */
-	if (!success) {
-		error("g_file_get_contents: %s", error->message);
-		g_error_free(error);
-		return FALSE;
-	}
-
-	debug("attempting to parse XML file '%s'", filename->str);
-
-	/* parse the file, collecting actions. we store a pointer
+	/* parse the contents, collecting actions. we store a pointer
 	 * to it in parser so we have access while parsing elements. */
 	parser->actions = actions;
-	success = g_markup_parse_context_parse(parser->context, content, length, &error);
+	GError *error = NULL;
+	gboolean success = g_markup_parse_context_parse(parser->context, contents, (gssize) length, &error);
 	parser->actions = NULL;
-
-	g_free(content);
-
-	message("finished parsing XML file '%s'", filename->str);
 
 	/* check for success in parsing and validating the XML */
 	if(success && !parser->hasValidationError) {
@@ -512,6 +491,34 @@ gboolean parser_parse(Parser* parser, GString* filename, GQueue* actions) {
 
 		return FALSE;
 	}
+}
+
+gboolean parser_parseFile(Parser* parser, GString* filename, GQueue* actions) {
+	MAGIC_ASSERT(parser);
+	g_assert(filename && actions);
+
+	gchar* content;
+	gsize length;
+	GError *error = NULL;
+
+	/* get the xml file */
+	gboolean success = g_file_get_contents(filename->str, &content, &length, &error);
+
+	/* check for success */
+	if (!success) {
+		error("g_file_get_contents: %s", error->message);
+		g_error_free(error);
+		return FALSE;
+	}
+
+	/* do the actual parsing */
+	debug("attempting to parse XML file '%s'", filename->str);
+	gboolean result = parser_parseContents(parser, content, length, actions);
+	message("finished parsing XML file '%s'", filename->str);
+
+	g_free(content);
+
+	return result;
 }
 
 void parser_free(Parser* parser) {

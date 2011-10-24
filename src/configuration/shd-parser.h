@@ -41,7 +41,7 @@ typedef struct _Parser Parser;
  * Create a new parser. The parser is capable of parsing Shadow XML simulation
  * files.
  *
- * @returns a pointer to a newly allocated #Parser. The pointer should be freed
+ * @return a pointer to a newly allocated #Parser. The pointer should be freed
  * with parser_free().
  */
 Parser* parser_new();
@@ -49,25 +49,37 @@ Parser* parser_new();
 /**
  * Frees a previously allocated parser.
  *
- * @param parser a pointer to a #Parser allocated with parser_new().
+ * @param parser a pointer to a #Parser allocated with parser_new()
  */
 void parser_free(Parser* parser);
 
 /**
- * Parse the given filename and add #Action objects to the given actions queue.
+ * Convenience function that reads the contents from a file and parses it
+ * by calling parser_parseContents().
+ *
+ * @param parser a pointer to a #Parser allocated with parser_new()
+ * @param filename a #GString holding the path to an XML file formated for
+ * Shadow input.
+ * @param actions a pointer to an existing #GQueue
+ *
+ * @return TRUE if filename was successfully parsed and validated, FALSE otherwise
+ */
+gboolean parser_parseFile(Parser* parser, GString* filename, GQueue* actions);
+
+/**
+ * Parse the given contents and add #Action objects to the given actions queue.
  * Execution of the actions will produce the topology specified in the XML
- * sfile (networks and links) and hosts (nodes and software)
+ * contents (networks and links) and hosts (nodes and software)
  * when executed. The caller owns the #GQueue before and after calling this
  * function.
  *
- * @param parser a pointer to a #Parser allocated with parser_new().
- * @param filename a #GString holding the path to an XML file formated for
- * Shadow input.
- * @param actions a pointer to an existing #GQueue.
- *
- * @returns TRUE if filename was successfully parsed, FALSE otherwise.
+ * @param parser a pointer to a #Parser allocated with parser_new()
+ * @param contents the XML contents to parse
+ * @param length the length of the XML contents string
+ * @param actions a pointer to an existing #GQueue
+ * @return TRUE if contents were successfully parsed and validated, FALSE otherwise
  */
-gboolean parser_parse(Parser* parser, GString* filename, GQueue* actions);
+gboolean parser_parseContents(Parser* parser, gchar* contents, gsize length, GQueue* actions);
 
 /** @} */
 

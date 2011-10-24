@@ -54,6 +54,18 @@ void loadplugin_run(LoadPluginAction* action) {
 	/* the hash table now owns the GString */
 	GQuark* id = g_new0(GQuark, 1);
 	*id = action->id;
+
+	/* make sure the path is absolute */
+	if(!g_path_is_absolute(action->path->str)) {
+		/* ok, we look in ~/.shadow/plugins */
+		gchar* plugin = g_string_free(action->path, FALSE);
+		const gchar* home = g_get_home_dir();
+		gchar* path = g_build_path("/", home, ".shadow", "plugins", plugin, NULL);
+		action->path = g_string_new(path);
+		g_free(plugin);
+		g_free(path);
+	}
+
 	engine_put(worker->cached_engine, PLUGINPATHS, id, action->path->str);
 }
 

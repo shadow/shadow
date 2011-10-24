@@ -28,13 +28,6 @@
 Engine* shadow_engine;
 
 gint shadow_main(gint argc, gchar* argv[]) {
-	/* we better have preloaded libshadow_preload.so */
-	const gchar* ldPreloadValue = g_getenv("LD_PRELOAD");
-	if(!ldPreloadValue || !g_strstr_len(ldPreloadValue, -1, "libshadow-preload.so")) {
-		g_printerr("** Environment Check Failed: LD_PRELOAD does not contain libshadow-preload.so\n");
-		return -1;
-	}
-
 	g_thread_init(NULL);
 
 	/* setup configuration - this fails and aborts if invalid */
@@ -46,6 +39,13 @@ gint shadow_main(gint argc, gchar* argv[]) {
 		g_printerr("Shadow v%s - (c) 2010-2011 Rob G. Jansen\nReleased under the GNU GPL, v3\n", SHADOW_VERSION);
 		configuration_free(config);
 		return 0;
+	}
+
+	/* we better have preloaded libshadow_preload.so */
+	const gchar* ldPreloadValue = g_getenv("LD_PRELOAD");
+	if(!ldPreloadValue || !g_strstr_len(ldPreloadValue, -1, "libshadow-preload.so")) {
+		g_printerr("** Environment Check Failed: LD_PRELOAD does not contain libshadow-preload.so\n");
+		return -1;
 	}
 
 	/* allocate our driving application structure */
@@ -71,11 +71,29 @@ gint shadow_main(gint argc, gchar* argv[]) {
 	/* store parsed actions from each user-configured simulation script  */
 	GQueue* actions = g_queue_new();
 	Parser* xmlParser = parser_new();
+
+	/* parse built-in examples, or input files */
 	gboolean success = TRUE;
-	while(success && g_queue_get_length(config->inputXMLFilenames) > 0) {
-		GString* filename = g_queue_pop_head(config->inputXMLFilenames);
-		success = parser_parse(xmlParser, filename, actions);
+	if(config->runPingExample) {
+		GString* ping = example_getPingExampleContents();
+		success = parser_parseContents(xmlParser, ping->str, ping->len, actions);
+		g_string_free(ping, TRUE);
+	} else if(config->runEchoExample) {
+		GString* echo = example_getEchoExampleContents();
+		success = parser_parseContents(xmlParser, echo->str, echo->len, actions);
+		g_string_free(echo, TRUE);
+	} else if(config->runFileExample) {
+		GString* file = example_getFileExampleContents();
+		success = parser_parseContents(xmlParser, file->str, file->len, actions);
+		g_string_free(file, TRUE);
+	} else {
+		/* parse all given input XML files */
+		while(success && g_queue_get_length(config->inputXMLFilenames) > 0) {
+			GString* filename = g_queue_pop_head(config->inputXMLFilenames);
+			success = parser_parseFile(xmlParser, filename, actions);
+		}
 	}
+
 	parser_free(xmlParser);
 
 	/* if there was an error parsing, bounce out */

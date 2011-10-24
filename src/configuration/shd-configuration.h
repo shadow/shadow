@@ -185,6 +185,11 @@ struct _Configuration {
 	GOptionGroup* networkOptionGroup;
 	gint minRunAhead;
 
+	GOptionGroup* pluginsOptionGroup;
+	gboolean runPingExample;
+	gboolean runEchoExample;
+	gboolean runFileExample;
+
 	GQueue* inputXMLFilenames;
 
 	MAGIC_DECLARE;
