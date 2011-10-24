@@ -134,6 +134,28 @@ void shadowlib_createCallback(ShadowPluginCallbackFunc callback, gpointer data, 
 	plugin_setShadowContext(worker->cached_plugin, FALSE);
 }
 
+void shadowlib_setLoopExit(ShadowPluginCallbackFunc callback) {
+	Worker* worker = worker_getPrivate();
+	plugin_setShadowContext(worker->cached_plugin, TRUE);
+
+	vevent_mgr_set_loopexit_fn(worker->cached_node->vsocket_mgr->vev_mgr,
+			(vevent_mgr_timer_callback_fp)callback);
+
+	plugin_setShadowContext(worker->cached_plugin, FALSE);
+}
+
+guint32 shadowlib_getBandwidthFloor(in_addr_t ip) {
+	Worker* worker = worker_getPrivate();
+	plugin_setShadowContext(worker->cached_plugin, TRUE);
+
+	Node* n = internetwork_getNode(worker->cached_engine->internet, (GQuark)ip);
+	guint32 down = n->vsocket_mgr->vt_mgr->KBps_down;
+	guint32 up = n->vsocket_mgr->vt_mgr->KBps_up;
+
+	plugin_setShadowContext(worker->cached_plugin, FALSE);
+	return down < up ? down : up;
+}
+
 /* we send this FunctionTable to each plug-in so it has pointers to our functions.
  * we use this to export shadow functionality to plug-ins. */
 ShadowlibFunctionTable shadowlibFunctionTable = {
@@ -144,4 +166,6 @@ ShadowlibFunctionTable shadowlibFunctionTable = {
 	&shadowlib_getHostname,
 	&shadowlib_getIPAddress,
 	&shadowlib_createCallback,
+	&shadowlib_setLoopExit,
+	&shadowlib_getBandwidthFloor,
 };

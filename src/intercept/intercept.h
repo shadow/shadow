@@ -28,7 +28,7 @@
  * Its ok to call shadow function from the intercept lib - its linked to shadow
  */
 
-Worker* intercept_worker_getPrivate();
+int intercept_worker_isInShadowContext();
 
 #define INTERCEPT_CONTEXT_SWITCH(prepare, call, ret) \
 Worker* w = worker_getPrivate(); \

@@ -21,6 +21,6 @@
 
 #include "shadow.h"
 
-Worker* intercept_worker_getPrivate() {
-	return worker_getPrivate();
+int intercept_worker_isInShadowContext() {
+	return worker_isInShadowContext();
 }

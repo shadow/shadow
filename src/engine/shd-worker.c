@@ -222,3 +222,11 @@ void worker_scheduleEvent(Event* event, SimulationTime nano_delay, GQuark receiv
 		engine_pushEvent(engine, (Event*)event);
 	}
 }
+
+gboolean worker_isInShadowContext() {
+	Worker* worker = worker_getPrivate();
+	if(worker->cached_plugin) {
+		return worker->cached_plugin->isShadowContext;
+	}
+	return FALSE;
+}

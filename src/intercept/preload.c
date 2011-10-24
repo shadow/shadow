@@ -20,14 +20,14 @@
  */
 
 #include <dlfcn.h>
-#include "shadow.h"
 #include <stdio.h>
+#include "preload.h"
 
-typedef Worker* (*WorkerGetPrivateFunc)();
-static WorkerGetPrivateFunc _worker_getPrivate = NULL;
+typedef int (*WorkerIsInShadowContextFunc)();
+static WorkerIsInShadowContextFunc _worker_isInShadowContext = NULL;
 
-Worker* preload_worker_getPrivate() {
-	WorkerGetPrivateFunc* func = &_worker_getPrivate;
-	PRELOAD_LOOKUP(func, "intercept_worker_getPrivate", NULL);
+int preload_worker_isInShadowContext() {
+	WorkerIsInShadowContextFunc* func = &_worker_isInShadowContext;
+	PRELOAD_LOOKUP(func, "intercept_worker_isInShadowContext", 0);
 	return (*func)();
 }

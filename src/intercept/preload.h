@@ -36,7 +36,7 @@
  * exists in other shared libraries.
  */
 
-Worker* preload_worker_getPrivate();
+int preload_worker_isInShadowContext();
 
 // logging causes too much recursion, because something in the log function gets intercepted
 //extern void logging_log(const gchar *log_domain, GLogLevelFlags log_level, const gchar* functionName, const gchar *format, ...);
@@ -81,8 +81,7 @@ Worker* preload_worker_getPrivate();
 #define PRELOAD_DECIDE(funcOut, nameOut, sysName, sysPointer, shadowPrefix, shadowPointer, extraCondition) \
 { \
 	/* should we be forwarding to the system call? */ \
-	Worker* w = preload_worker_getPrivate(); \
-	if(w && w->cached_plugin && !w->cached_plugin->isShadowContext && extraCondition) { \
+	if(!preload_worker_isInShadowContext() && extraCondition) { \
 		funcOut = &shadowPointer; \
 		nameOut = shadowPrefix sysName; \
 	} else { \

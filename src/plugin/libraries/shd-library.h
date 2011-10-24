@@ -22,6 +22,7 @@
 #ifndef SHD_LIBRARY_H_
 #define SHD_LIBRARY_H_
 
+#include <glib.h>
 #include <netinet/in.h>
 
 /**
@@ -115,6 +116,8 @@ typedef gboolean (*ShadowlibResolveIPAddressFunc)(in_addr_t addr, gchar* name_ou
 typedef in_addr_t (*ShadowlibGetIPAddressFunc)();
 typedef gboolean (*ShadowlibGetHostnameFunc)(gchar* name_out, gint name_out_len);
 typedef void (*ShadowlibCreateCallbackFunc)(ShadowPluginCallbackFunc callback, gpointer data, guint millisecondsDelay);
+typedef void (*ShadowlibSetLoopExitFunc)(ShadowPluginCallbackFunc callback);
+typedef guint32 (*ShadowlibGetBandwidthFloorFunc)(in_addr_t ip);
 
 typedef struct _ShadowlibFunctionTable ShadowlibFunctionTable;
 extern ShadowlibFunctionTable shadowlibFunctionTable;
@@ -132,6 +135,8 @@ struct _ShadowlibFunctionTable {
 	ShadowlibGetHostnameFunc getHostname;
 	ShadowlibGetIPAddressFunc getIP;
 	ShadowlibCreateCallbackFunc createCallback;
+	ShadowlibSetLoopExitFunc setLoopExit;
+	ShadowlibGetBandwidthFloorFunc getBandwidthFloor;
 };
 
 /* Plug-ins must implement this function to communicate with Shadow.
