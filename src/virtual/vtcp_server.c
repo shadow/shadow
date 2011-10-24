@@ -145,7 +145,8 @@ void vtcp_server_destroy_child(vtcp_server_tp server, vtcp_server_child_tp schil
 			g_queue_free(server->pending_queue);
 			server->pending_queue = new_pending;
 		}
-
+	}
+	if(schild) {
 		memset(schild, 0, sizeof(vtcp_server_child_t));
 		free(schild);
 	}

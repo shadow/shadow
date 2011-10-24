@@ -54,6 +54,8 @@ void node_free(gpointer data) {
 		node_stopApplication(NULL, node, NULL);
 	}
 
+	vsocket_mgr_destroy(node->vsocket_mgr);
+
 	address_free(node->address);
 	g_async_queue_unref(node->event_mailbox);
 	g_queue_free(node->event_priority_queue);

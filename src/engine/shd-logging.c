@@ -78,12 +78,12 @@ void logging_handleLog(const gchar *log_domain, GLogLevelFlags log_level, const 
 
 	g_print("%s %s\n", dt_format, message);
 
+	g_date_time_unref(dt_now);
+	g_free(dt_format);
+
 	if(log_level & G_LOG_LEVEL_ERROR) {
 		g_print("\t**aborting**\n");
 	}
-
-	g_date_time_unref(dt_now);
-	g_free(dt_format);
 }
 
 void logging_logv(const gchar *log_domain, GLogLevelFlags log_level, const gchar* functionName, const gchar *format, va_list vargs) {
@@ -103,8 +103,8 @@ void logging_logv(const gchar *log_domain, GLogLevelFlags log_level, const gchar
 		seconds = remainder / SIMTIME_ONE_SECOND;
 		remainder %= SIMTIME_ONE_SECOND;
 
-		simtime = g_string_new(NULL);
-		g_string_printf(simtime, "%lu:%lu:%lu:%lu", hours, minutes, seconds, remainder);
+		simtime = g_string_new("");
+		g_string_append_printf(simtime, "%lu:%lu:%lu:%lu", hours, minutes, seconds, remainder);
 	}
 
 	/* the time - we'll need to free clockString later */

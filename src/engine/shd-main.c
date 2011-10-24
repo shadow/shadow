@@ -112,6 +112,7 @@ gint shadow_main(gint argc, gchar* argv[]) {
 	while(g_queue_get_length(actions) > 0) {
 		Action* a = g_queue_pop_head(actions);
 		runnable_run(a);
+		runnable_free(a);
 	}
 	g_queue_free(actions);
 

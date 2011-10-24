@@ -88,6 +88,9 @@ void vsocket_mgr_destroy(vsocket_mgr_tp net) {
 		g_hash_table_remove_all(net->loopback->udp_vsockets);
 		g_hash_table_destroy(net->loopback->udp_vsockets);
 
+		g_free(net->ethernet);
+		g_free(net->loopback);
+
 		/* do not walk since no values were created and stored here */
 		g_hash_table_destroy(net->destroyed_descs);
 
