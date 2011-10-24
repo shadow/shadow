@@ -25,7 +25,7 @@ set(shadow_srcs
     plugin/shd-plugin.c
     plugin/shd-plugin-state.c
     plugin/shd-software.c
-    plugin/shd-shadowlib.c
+    plugin/libraries/shd-library.c
     
     runnable/shd-runnable.c
     runnable/event/shd-event.c

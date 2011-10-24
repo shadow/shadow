@@ -23,7 +23,7 @@
 #define SHD_PINGPONG_H_
 
 #include <glib.h>
-#include <shadowlib.h>
+#include <shd-library.h>
 
 #include <sys/socket.h>
 #include <netinet/in.h>

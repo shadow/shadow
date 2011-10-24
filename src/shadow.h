@@ -120,8 +120,7 @@ typedef struct vbuffer_s vbuffer_t, *vbuffer_tp;
 #include "runnable/action/shd-load-plugin.h"
 #include "runnable/action/shd-spina.h"
 
-#include "plugin/libraries/shadowlib.h"
-#include "plugin/shd-shadowlib.h"
+#include "plugin/libraries/shd-library.h"
 #include "plugin/shd-plugin-state.h"
 #include "plugin/shd-plugin.h"
 #include "plugin/shd-software.h"

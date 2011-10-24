@@ -34,7 +34,7 @@
  */
 
 #include <glib.h>
-#include <shadowlib.h>
+#include <shd-library.h>
 
 #include "shd-filetransfer-defs.h"
 #include "shd-fileserver.h"

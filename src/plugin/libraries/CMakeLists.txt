@@ -1,6 +1,6 @@
-## the plug-ins need to include shadowlib.h
+## the plug-ins need to include shd-library.h
 include_directories(${SHADOW_SOURCE_DIR}/plugin/libraries)
-install(FILES shadowlib.h DESTINATION include/shadow)
+install(FILES shd-library.h DESTINATION include/shadow)
 
 ## build each plug-in
 add_subdirectory(echo)

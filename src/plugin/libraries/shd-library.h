@@ -1,4 +1,4 @@
-/*
+/**
  * The Shadow Simulator
  *
  * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
@@ -19,8 +19,8 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SHADOWLIB_H_
-#define SHADOWLIB_H_
+#ifndef SHD_LIBRARY_H_
+#define SHD_LIBRARY_H_
 
 #include <netinet/in.h>
 
@@ -117,6 +117,7 @@ typedef gboolean (*ShadowlibGetHostnameFunc)(gchar* name_out, gint name_out_len)
 typedef void (*ShadowlibCreateCallbackFunc)(ShadowPluginCallbackFunc callback, gpointer data, guint millisecondsDelay);
 
 typedef struct _ShadowlibFunctionTable ShadowlibFunctionTable;
+extern ShadowlibFunctionTable shadowlibFunctionTable;
 
 /**
  * A collection of functions exported to a plug-in. Each pointer in this table
@@ -137,4 +138,4 @@ struct _ShadowlibFunctionTable {
  * the function name symbol must be PLUGININITSYMBOL */
 typedef void (*ShadowPluginInitializeFunc)(ShadowlibFunctionTable* shadowlibFunctions);
 
-#endif /* SHADOWLIB_H_ */
+#endif /* SHD_LIBRARY_H_ */
