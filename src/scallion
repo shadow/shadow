@@ -26,6 +26,7 @@ from datetime import datetime
 from time import sleep
 
 INSTALL_PREFIX=os.path.abspath(os.path.expanduser("~/.local/"))
+PRELOAD_PATH=os.path.abspath(os.path.dirname(__file__) + "/../lib/libshadow-preload-scallion.so")
 
 DEFAULT_NRELAYS = 10
 DEFAULT_EXITFRAC = 0.4

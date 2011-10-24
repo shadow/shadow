@@ -23,23 +23,18 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <netinet/in.h>
-
-#include <shd-plugin.h>
+#include <glib.h>
 
 #include "tor_includes.h"
 #include "tor_externs.h"
 
 #include "vtorflow.h"
-#include "scallion.h"
+#include "scallion-plugin.h"
 
 /* run every 5 mins */
-#define VTORFLOW_SCHED_PERIOD 300000
+#define VTORFLOW_SCHED_PERIOD 60000
 
 extern routerlist_t *router_get_routerlist(void);
-
-static void vtorflow_init_v3bw_cb(int timerid, void* arg) {
-	vtorflow_init_v3bw(arg);
-}
 
 /* replacement for torflow in Tor. for now just grab the bandwidth we configured
  * in the DSIM and use that as the measured bandwidth value. since our configured
@@ -61,11 +56,12 @@ static void vtorflow_init_v3bw_cb(int timerid, void* arg) {
  * where 0123456789 is the time, 0123456789ABCDEF0123456789ABCDEF01234567 is
  * the relay's fingerprint, and 12345 is the measured bandwidth in ?.
  */
-void vtorflow_init_v3bw(const char* v3bw_name) {
+void vtorflow_init_v3bw(void* data) {
+	vtor_tp vtor = data;
 	/* open the bw file, clearing it if it exists */
-	FILE *v3bw = fopen(v3bw_name, "w");
+	FILE *v3bw = fopen(vtor->v3bw_name, "w");
 	if(v3bw == NULL) {
-		snri_log(LOG_WARN, "vtorflow_init_v3bw: v3bandwidth file not updated: can not open file '%s'\n", v3bw_name);
+//		snri_log(LOG_WARN, "vtorflow_init_v3bw: v3bandwidth file not updated: can not open file '%s'\n", v3bw_name);
 		return;
 	}
 
@@ -75,7 +71,7 @@ void vtorflow_init_v3bw(const char* v3bw_name) {
 	/* print time part on first line */
 	if(fprintf(v3bw, "%lu\n", maxtime) < 0) {
 		/* uhhhh... */
-		snri_log(LOG_WARN, "vtorflow_init_v3bw: v3bandwidth file not updated: can write time '%u' to file '%s'\n", maxtime, v3bw_name);
+//		snri_log(LOG_WARN, "vtorflow_init_v3bw: v3bandwidth file not updated: can write time '%u' to file '%s'\n", maxtime, v3bw_name);
 		return;
 	}
 
@@ -94,12 +90,11 @@ void vtorflow_init_v3bw(const char* v3bw_name) {
 		in_addr_t netaddr = htonl(rinfo->addr);
 
 		/* ask shadow for this node's configured bandwidth */
-		uint32_t bw;
-		snri_resolve_minbw(netaddr, &bw);
+		uint32_t bw = vtor->shadowlibFuncs->getBandwidthFloor(netaddr);
 
 		if(fprintf(v3bw, "node_id=$%s bw=%u\n", node_id, bw) < 0) {
 			/* uhhhh... */
-			snri_log(LOG_WARN, "vtorflow_init_v3bw: v3bandwidth file not updated: can write line 'node_id=$%s bw=%u\n' to file '%s'\n", node_id, bw, v3bw_name);
+//			snri_log(LOG_WARN, "vtorflow_init_v3bw: v3bandwidth file not updated: can write line 'node_id=$%s bw=%u\n' to file '%s'\n", node_id, bw, v3bw_name);
 			return;
 		}
 	}
@@ -107,5 +102,5 @@ void vtorflow_init_v3bw(const char* v3bw_name) {
 	fclose(v3bw);
 
 	/* reschedule */
-	snri_timer_create(VTORFLOW_SCHED_PERIOD, vtorflow_init_v3bw_cb, (void*)v3bw_name);
+	vtor->shadowlibFuncs->createCallback(&vtorflow_init_v3bw, vtor, VTORFLOW_SCHED_PERIOD);
 }

@@ -22,6 +22,8 @@
 #ifndef VTORFLOW_H_
 #define VTORFLOW_H_
 
-void vtorflow_init_v3bw(const char* v3bw_name);
+#include "vtor.h"
+
+void vtorflow_init_v3bw(void* data);
 
 #endif /* VTORFLOW_H_ */

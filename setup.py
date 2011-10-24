@@ -24,10 +24,10 @@
 import sys, os, argparse, subprocess, shlex, shutil, urllib2, tarfile, gzip, stat
 from datetime import datetime
 
-BUILD_PREFIX="build"
-INSTALL_PREFIX=os.path.expanduser("~/.local")
+BUILD_PREFIX="./build"
+INSTALL_PREFIX=os.path.expanduser("~/.shadow")
 
-DEFAULT_TOR_VERSION="0.2.2.15-alpha"
+DEFAULT_TOR_VERSION="0.2.3.5-alpha"
 
 TOR_URL="https://archive.torproject.org/tor-package-archive/tor-" + DEFAULT_TOR_VERSION + ".tar.gz"
 MAXMIND_URL="http://geolite.maxmind.com/download/geoip/database/GeoLiteCity.dat.gz"
@@ -47,24 +47,26 @@ def main():
     parser_build.add_argument('-p', '--prefix', action="store", dest="prefix",
           help="path to root directory for scallion installation", metavar="PATH", default=INSTALL_PREFIX)
     parser_build.add_argument('-i', '--include', action="append", dest="extra_includes", metavar="PATH",
-          help="include PATH when searching for headers. useful if dependencies are installed to non-standard locations.")
+          help="include PATH when searching for headers. useful if dependencies are installed to non-standard locations.",
+          default=[INSTALL_PREFIX+ "/include"])
     parser_build.add_argument('-l', '--library', action="append", dest="extra_libraries", metavar="PATH",
-          help="include PATH when searching for libraries. useful if dependencies are installed to non-standard locations.")
+          help="include PATH when searching for libraries. useful if dependencies are installed to non-standard locations.",
+          default=[INSTALL_PREFIX+ "/lib"])
     parser_build.add_argument('--libevent-prefix', action="store", dest="prefix_libevent", metavar="PATH",
-          help="use non-standard PATH when linking Tor to libevent.", default=None)
+          help="use non-standard PATH when linking Tor to libevent.", default=INSTALL_PREFIX)
     parser_build.add_argument('--openssl-prefix', action="store", dest="prefix_openssl", metavar="PATH",
-          help="use non-standard PATH when linking Tor to openssl.", default=None)
+          help="use non-standard PATH when linking Tor to openssl.", default=INSTALL_PREFIX)
     parser_build.add_argument('-g', '--debug', action="store_true", dest="do_debug",
           help="turn on debugging for verbose program output", default=False)
     parser_build.add_argument('-v', '--version', action="store", dest="tor_version",
-          help="specifiy what version of Tor to build", default=DEFAULT_TOR_VERSION)
+          help="specify what version of Tor to build", default=DEFAULT_TOR_VERSION)
     
     # install subcommand
     parser_install = subparsers_main.add_parser('install', help='install scallion', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser_install.set_defaults(func=install, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     
     parser_install.add_argument('-v', '--version', action="store", dest="tor_version",
-          help="specifiy the version of Tor to install", default=DEFAULT_TOR_VERSION)
+          help="specify the version of Tor to install", default=DEFAULT_TOR_VERSION)
     
     parser_auto = subparsers_main.add_parser('auto', help='build to ./build, install to local prefix. useful for quick local setup and during development.', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser_auto.set_defaults(func=auto, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -74,7 +76,7 @@ def main():
     parser_auto.add_argument('-g', '--debug', action="store_true", dest="do_debug",
           help="turn on debugging for verbose program output", default=False)
     parser_auto.add_argument('-v', '--version', action="store", dest="tor_version",
-          help="specifiy what version of Tor to build and install", default=DEFAULT_TOR_VERSION)
+          help="specify what version of Tor to build and install", default=DEFAULT_TOR_VERSION)
     
     # get arguments, accessible with args.value
     args = parser_main.parse_args()

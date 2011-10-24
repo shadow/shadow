@@ -43,9 +43,6 @@ typedef __fsid_t fsid_t;
 
 #include <errno.h>
 
-#include "vtor.h"
-#include <shd-plugin.h>
-
 #undef NDEBUG
 
 #include "orconfig.h"

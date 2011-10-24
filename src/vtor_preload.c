@@ -25,7 +25,6 @@
 #include <stdint.h>
 
 #include <preload.h>
-#include <global.h>
 
 #include "vtor.h"
 //#include "tor_includes.h"

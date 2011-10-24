@@ -27,6 +27,8 @@
 #include <stdint.h>
 #include <sys/time.h>
 #include <netinet/in.h>
+#include <shd-library.h>
+#include <glib.h>
 
 enum vtor_nodetype {
 	VTOR_DIRAUTH, VTOR_RELAY, VTOR_EXITRELAY, VTOR_CLIENT
@@ -36,6 +38,7 @@ typedef struct vtor_s {
 	char v3bw_name[255];
 	enum vtor_nodetype type;
 	unsigned int bandwidth;
+	ShadowlibFunctionTable* shadowlibFuncs;
 } vtor_t, *vtor_tp;
 
 void vtor_instantiate(vtor_tp vtor, char* hostname, enum vtor_nodetype type,
@@ -43,7 +46,7 @@ void vtor_instantiate(vtor_tp vtor, char* hostname, enum vtor_nodetype type,
 void vtor_destroy();
 void vtor_socket_readable(vtor_tp vtor, int sockd);
 void vtor_socket_writable(vtor_tp vtor, int sockd);
-void vtor_loopexit_cb(int unused1, void* unused2);
+void vtor_loopexit_cb(void* unused2);
 
 int intercept_tor_open_socket(int domain, int type, int protocol);
 void intercept_tor_gettimeofday(struct timeval *);

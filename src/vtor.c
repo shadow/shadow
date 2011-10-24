@@ -30,8 +30,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-#include <shd-plugin.h>
-#include "scallion.h"
+#include "scallion-plugin.h"
 #include "vtor.h"
 #include "vtorflow.h"
 
@@ -40,6 +39,8 @@
 
 #include "tor_includes.h"
 #include "tor_externs.h"
+
+extern Scallion scallion;
 
 /** The tag specifies which circuit this onionskin was from. */
 #define TAG_LEN 10
@@ -68,9 +69,6 @@ static int vtor_do_main_loop(void);
 extern struct event_base * tor_libevent_get_base(void);
 extern void tor_cleanup(void);
 extern void second_elapsed_callback(periodic_timer_t *timer, void *arg);
-#ifdef USE_REFILL_CALLBACK
-extern void refill_callback(periodic_timer_t *timer, void *arg);
-#endif
 extern int identity_key_is_set(void);
 extern int init_keys(void);
 extern void init_cell_pool(void);
@@ -128,8 +126,7 @@ void vtor_instantiate(vtor_tp vtor, char* hostname, enum vtor_nodetype type,
 		/* additional args */
 		if(vtor->type == VTOR_DIRAUTH) {
 			if(snprintf(vtor->v3bw_name, 255, "%s/dirauth.v3bw", datadir_path) >= 255) {
-				/* truncated is an error here */
-				snri_log(LOG_WARN, "vtor_instantiate: v3bw name too long! failing.\n");
+				/* todo truncated is an error here */
 				return;
 			}
 			config[19] = "--V3BandwidthsFile";
@@ -139,22 +136,17 @@ void vtor_instantiate(vtor_tp vtor, char* hostname, enum vtor_nodetype type,
 			config[20] = "reject *:*";
 		}
 
-		snri_log(LOG_MSG, "vtor_instantiate: booting the Tor node\n");
-
 		vtor_run(num_args, config);
 
 		if(vtor->type == VTOR_DIRAUTH) {
 			/* run torflow now, it will schedule itself as needed */
-			vtorflow_init_v3bw(vtor->v3bw_name);
+			vtorflow_init_v3bw(vtor);
 		}
-
-		snri_log(LOG_MSG, "vtor_instantiate: Tor node is running!\n");
 	}
 }
 
 void vtor_destroy() {
 	tor_cleanup();
-	snri_log(LOG_MSG, "vtor_destroy: Tor node destroyed\n");
 }
 
 static int vtor_run(int argc, char *argv[])
@@ -248,23 +240,6 @@ static int vtor_do_main_loop(void)
     tor_assert(second_timer);
   }
 
-
-#ifdef USE_REFILL_CALLBACK
-  if (!refill_timer) {
-      struct timeval refill_interval;
-      int msecs = get_options()->TokenBucketRefillInterval;
-
-      refill_interval.tv_sec =  msecs/1000;
-      refill_interval.tv_usec = (msecs%1000)*1000;
-
-      refill_timer = periodic_timer_new(tor_libevent_get_base(),
-              &refill_interval,
-              refill_callback,
-              NULL);
-      tor_assert(refill_timer);
-  }
-#endif
-
 //  for (;;) {
 //    if (nt_service_is_stopping())
 //      return 0;
@@ -322,7 +297,7 @@ void vtor_socket_writable(vtor_tp vtor, int sockd) {
 }
 
 /* tor sometimes call event_base_loopexit so it can activate "linked" socks conns */
-void vtor_loopexit_cb(int unused1, void* unused2) {
+void vtor_loopexit_cb(void* unused) {
 	update_approx_time(time(NULL));
 
     /* All active linked conns should get their read events activated. */
@@ -334,7 +309,7 @@ void vtor_loopexit_cb(int unused1, void* unused2) {
     /* check for remaining active connections */
     if(called_loop_once) {
     	/* call back so we can check the linked conns again */
-    	snri_timer_create(10, &vtor_loopexit_cb, NULL);
+    	scallion.shadowlibFuncs->createCallback(vtor_loopexit_cb, NULL, 10);
     }
 }
 
@@ -355,9 +330,10 @@ int intercept_tor_open_socket(int domain, int type, int protocol)
 }
 
 void intercept_tor_gettimeofday(struct timeval *timeval) {
-	if(timeval != NULL) {
-		snri_gettime(timeval);
-	}
+	struct timespec tp;
+	clock_gettime(CLOCK_REALTIME, &tp);
+	timeval->tv_sec = tp.tv_sec;
+	timeval->tv_usec = tp.tv_nsec/1000;
 }
 
 #include "torlog.h"
@@ -372,29 +348,37 @@ void intercept_logv(int severity, uint32_t domain, const char *funcname,
 	/* Call assert, not tor_assert, since tor_assert calls log on failure. */
 	assert(format);
 
+	GLogLevelFlags level;
+
 	switch (severity) {
 		case LOG_DEBUG:
 			sev_str = "tor-debug";
+			level = G_LOG_LEVEL_DEBUG;
 		break;
 
 		case LOG_INFO:
 			sev_str = "tor-info";
+			level = G_LOG_LEVEL_INFO;
 		break;
 
 		case LOG_NOTICE:
 			sev_str = "tor-notice";
+			level = G_LOG_LEVEL_MESSAGE;
 		break;
 
 		case LOG_WARN:
 			sev_str = "tor-warn";
+			level = G_LOG_LEVEL_WARNING;
 		break;
 
 		case LOG_ERR:
 			sev_str = "tor-err";
+			level = G_LOG_LEVEL_ERROR;
 		break;
 
 		default:
 			sev_str = "tor-UNKNOWN";
+			level = G_LOG_LEVEL_DEBUG;
 		break;
 	}
 
@@ -425,7 +409,8 @@ void intercept_logv(int severity, uint32_t domain, const char *funcname,
 	current_position++;
 	buf[current_position+1] = '\0';
 	current_position++;
-	snri_log_binary(0, buf, current_position-1);
+	#undef log
+	scallion.shadowlibFuncs->log(level, __FUNCTION__, buf);
 }
 
 int intercept_spawn_func(void (*func)(void *), void *data)
@@ -564,8 +549,8 @@ int intercept_rep_hist_bandwidth_assess() {
 
 	/* need to convert to bytes. tor will divide the value we return by 1000 and put it in the descriptor. */
 	int bw = INT_MAX;
-	if((scallion->vtor.bandwidth * 1000) < bw) {
-		bw = (scallion->vtor.bandwidth * 1000);
+	if((scallion.vtor.bandwidth * 1000) < bw) {
+		bw = (scallion.vtor.bandwidth * 1000);
 	}
 	return bw;
 }
