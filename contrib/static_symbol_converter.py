@@ -149,10 +149,10 @@ def main():
     os.remove(sym_globalize_file.name)
 
     scallion_registration.write('\tscallionData->shadowlibFuncs->registration(scallionFuncs, {0},\n'.format(len(vars_global.keys()) + 1))
-    scallion_registration.write('\t\t(gsize) sizeof(Scallion), scallionData')
+    scallion_registration.write('\t\t(gsize) sizeof(Scallion), (gpointer) scallionData')
     
     for var in vars_global:
-        scallion_registration.write(',\n\t\t(gsize) 0x{0}, &{1}'.format(vars_global[var], var))
+        scallion_registration.write(',\n\t\t(gsize) 0x{0}, (gpointer) &{1}'.format(vars_global[var], var))
         if var not in vars_to_skip: 
             if var in var_types.keys():
                 tor_externs.write('extern {1} {0};\n'.format(var, var_types[var]))
