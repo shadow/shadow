@@ -4,7 +4,7 @@ add_library(shadow-plugin-scallion MODULE scallion-plugin.c scallion_registratio
 ## link with the required dependencies
 #-lz -lm -levent -lssl -lcrypto -ldl
 target_link_libraries(shadow-plugin-scallion ${SHADOW_LIBRARIES} ${TOR_LIBRARIES} 
-    z ${M_LIBRARIES} ${EVENT2_LIBRARIES} ${OPENSSL_LIBRARIES} ${RT_LIBRARIES} ${DL_LIBRARIES})
+    z ${M_LIBRARIES} ${RT_LIBRARIES} ${DL_LIBRARIES})
 
 ## preload library for intercepting functions
 add_library(shadow-preload-scallion SHARED vtor_preload.c)

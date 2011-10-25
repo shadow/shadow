@@ -146,7 +146,7 @@ static void scallion_start_socks_client(void* arg) {
 void scallion_new(int argc, char* argv[]) {
 	scallion.shadowlibFuncs->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "scallion_new called");
 
-	gchar* usage = "Scallion USAGE: (\"dirauth\"|\"relay\"|\"exitrelay\"|\"client\") torrc_path datadir_base_path geoip_path [client_args for shd-plugin-filegetter...]\n";
+	gchar* usage = "Scallion USAGE: (\"dirauth\"|\"relay\"|\"exitrelay\"|\"client\") bandwidth torrc_path datadir_base_path geoip_path [client_args for shd-plugin-filegetter...]\n";
 
 	const int argcc = argc;
 	if(argcc < 1) {

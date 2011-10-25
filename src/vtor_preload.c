@@ -84,7 +84,7 @@ int spawn_func(void (*func)(void *), void *data) {
 	spawn_func_fp* fp_ptr = &_spawn_func_fp;
 	char* f_name = TOR_LIB_PREFIX "spawn_func";
 
-	PRELOAD_LOOKUP(fp_ptr, f_name,-1);
+	PRELOAD_LOOKUP(fp_ptr, f_name, -1);
 	return (*fp_ptr)(func, data);
 }
 
