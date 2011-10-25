@@ -166,7 +166,7 @@ def generate(args):
     os.makedirs(args.clientdata)
     
     shutil.copytree(args.keys, args.output+"/keys")
-    shutil.copytree(args.keys, args.authoritydata + "/4uthority.scallion.shd/keys")
+    shutil.copytree(args.keys, args.authoritydata + "/4uthority.tor/keys")
     
     shutil.copy(args.exitrc, args.output)
     args.exitrc = args.output + "/" + os.path.basename(args.exitrc)
@@ -213,7 +213,7 @@ on(time 0:02){\n\
 \tnormbw_cdf = load_cdf(\"" + args.cdfs + "/umn/synthetic_bandwidth_KiBps.cdf\");\n\
 \n\
 \tfs_hostname = create_hostname(\"fileserver.shd\");\n\
-\tauthority_hostname = create_hostname(\"4uthority.scallion.shd\");\n\
+\tauthority_hostname = create_hostname(\"4uthority.tor\");\n\
 \trelay_hostname = create_hostname(\"relay.shd\");\n\
 \texit_hostname = create_hostname(\"exit.shd\");\n\
 \tproxy_hostname = create_hostname(\"proxy.shd\");\n\
@@ -688,7 +688,7 @@ def clean(args):
     os.makedirs(args.output+"/data/relaydata")
     os.makedirs(args.output+"/data/clientdata")
     
-    shutil.copytree(args.output+"/keys", args.output+"/data/authoritydata/4uthority.scallion.shd/keys")
+    shutil.copytree(args.output+"/keys", args.output+"/data/authoritydata/4uthority.tor/keys")
     return 0
 
 def dd(filename, kb):

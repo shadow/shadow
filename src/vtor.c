@@ -405,9 +405,7 @@ void intercept_logv(int severity, uint32_t domain, const char *funcname,
 		current_position += res;
 	}
 
-	buf[current_position] = '\n';
-	current_position++;
-	buf[current_position+1] = '\0';
+	buf[current_position] = '\0';
 	current_position++;
 	#undef log
 	scallion.shadowlibFuncs->log(level, __FUNCTION__, buf);

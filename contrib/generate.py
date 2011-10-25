@@ -147,7 +147,7 @@ on(time 0:02){\n\
 \tnormbw_cdf = load_cdf(\"" + args.cdfs + "normal_bandwidth.cdf\");\n\
 \n\
 \tfs_hostname = create_hostname(\"fileserver.shd\");\n\
-\tauthority_hostname = create_hostname(\"4uthority.scallion.shd\");\n\
+\tauthority_hostname = create_hostname(\"4uthority.tor\");\n\
 \trelay_hostname = create_hostname(\"relay.shd\");\n\
 \texit_hostname = create_hostname(\"exit.shd\");\n\
 \tproxy_hostname = create_hostname(\"proxy.shd\");\n\

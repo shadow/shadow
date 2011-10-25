@@ -55,7 +55,7 @@ def run(outdir, dsimpath, logfilepath):
     os.makedirs(exitdir)
     os.makedirs(relaydir)
     os.makedirs(clientdir)
-    shutil.copytree("config/authoritydata", authdir + "/4uthority.scallion.shd")
+    shutil.copytree("config/authoritydata", authdir + "/4uthority.tor")
 
     # start monitoring
     dstat_cmd = "dstat -cmstTy --fs --output data/dstat.log"
