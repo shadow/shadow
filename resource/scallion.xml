@@ -17,4 +17,12 @@
 <software name="authority" plugin="scallion" time="1" arguments="dirauth 102400 /home/rob/test/vanilla/authority.torrc /home/rob/test/vanilla/data/authoritydata /home/rob/.shadow/share/shadow/scallion/geoip" />
 <node name="4uthority.tor" software="authority" network="network" bandwidthup="tier1" bandwidthdown="tier1" cpu="cpu" />
 
-<kill time="180" />
+<software name="exit" plugin="scallion" time="10" arguments="exitrelay 300 /home/rob/test/vanilla/exit.torrc /home/rob/test/vanilla/data/exitdata /home/rob/.shadow/share/shadow/scallion/geoip" />
+<node name="exit1.tor" software="exit" network="network" bandwidthup="tier3" bandwidthdown="tier3" cpu="cpu" />
+<node name="exit2.tor" software="exit" network="network" bandwidthup="tier3" bandwidthdown="tier3" cpu="cpu" />
+<node name="exit3.tor" software="exit" network="network" bandwidthup="tier3" bandwidthdown="tier3" cpu="cpu" />
+
+<software name="client" plugin="scallion" time="900" arguments="client 1024 /home/rob/test/vanilla/client.torrc /home/rob/test/vanilla/data/clientdata /home/rob/.shadow/share/shadow/scallion/geoip client single server.file 8080 localhost 9000 1 /home/rob/.shadow/share/shadow/scallion/5MiB.urnd" />
+<node name="client1.tor" software="client" network="network" bandwidthup="tier3" bandwidthdown="tier3" cpu="cpu" />
+
+<kill time="4500" />
