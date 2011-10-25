@@ -80,6 +80,7 @@ gint vsystem_getaddrinfo(gchar *name, const gchar *service,
 		const struct addrinfo *hgints, struct addrinfo **res) {
 	Worker* worker = worker_getPrivate();
 	Node* node = worker->cached_node;
+	*res = NULL;
 	if(name != NULL && node != NULL) {
 
 		/* node may be a number-and-dots address, or a hostname. lets hope for hostname
@@ -136,10 +137,9 @@ gint vsystem_getaddrinfo(gchar *name, const gchar *service,
 }
 
 void vsystem_freeaddrinfo(struct addrinfo *res) {
-	if(res->ai_addr != NULL) {
+	if(res && res->ai_addr != NULL) {
 		g_free(res->ai_addr);
-	}
-	if(res != NULL) {
+		res->ai_addr = NULL;
 		g_free(res);
 	}
 	return;

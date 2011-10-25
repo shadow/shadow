@@ -85,10 +85,10 @@ set(shadow_srcs
 ## specify the main shadow executable, build, link, and install
 add_executable(shadow-bin ${shadow_srcs})
 add_dependencies(shadow-bin shadow-intercept shadow-preload)
-target_link_libraries(shadow-bin shadow-intercept ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES} ${GLIB_LIBRARIES})
+target_link_libraries(shadow-bin shadow-intercept ${M_LIBRARIES} ${EVENT2_LIBRARIES} ${OPENSSL_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES} ${GLIB_LIBRARIES})
 install(TARGETS shadow-bin DESTINATION bin)
 
-## shadow needs to find libshadow-intercept after install
+## shadow needs to find libshadow-intercept and custom libs after install
 set_target_properties(shadow-bin PROPERTIES INSTALL_RPATH ${CMAKE_INSTALL_PREFIX}/lib INSTALL_RPATH_USE_LINK_PATH TRUE)
 
 ## install the helper script that sets LD_PRELOAD before launching shadow-bin

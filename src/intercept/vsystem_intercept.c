@@ -52,7 +52,6 @@ gint intercept_getaddrinfo(gchar *node, const gchar *service,
 }
 
 void intercept_freeaddrinfo(struct addrinfo *res) {
-	vsystem_freeaddrinfo(res);
 	INTERCEPT_CONTEXT_SWITCH(,
 			vsystem_freeaddrinfo(res),);
 }
