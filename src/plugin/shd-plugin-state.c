@@ -62,7 +62,7 @@ static void _pluginstateentry_copy(PluginStateEntry* sourceEntry, PluginStateEnt
 	g_assert(destinationEntry->size == sourceEntry->size);
 	g_assert(destinationEntry->reference && sourceEntry->reference);
 
-	memmove(destinationEntry->reference, sourceEntry->reference, destinationEntry->size);
+	g_memmove(destinationEntry->reference, sourceEntry->reference, destinationEntry->size);
 }
 
 static void _pluginstateentry_free(gpointer data) {
