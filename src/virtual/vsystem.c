@@ -136,8 +136,12 @@ gint vsystem_getaddrinfo(gchar *name, const gchar *service,
 }
 
 void vsystem_freeaddrinfo(struct addrinfo *res) {
-	g_free(res->ai_addr);
-	g_free(res);
+	if(res->ai_addr != NULL) {
+		g_free(res->ai_addr);
+	}
+	if(res != NULL) {
+		g_free(res);
+	}
 	return;
 }
 

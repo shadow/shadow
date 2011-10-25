@@ -33,9 +33,9 @@ int intercept_worker_isInShadowContext();
 #define INTERCEPT_CONTEXT_SWITCH(prepare, call, ret) \
 Worker* w = worker_getPrivate(); \
 prepare; \
-plugin_setShadowContext(w->cached_plugin, TRUE); \
+if(w->cached_plugin) plugin_setShadowContext(w->cached_plugin, TRUE); \
 call; \
-plugin_setShadowContext(w->cached_plugin, FALSE); \
+if(w->cached_plugin) plugin_setShadowContext(w->cached_plugin, FALSE); \
 ret;
 
 #endif /* INTERCEPT_H_ */

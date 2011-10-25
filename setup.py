@@ -53,9 +53,6 @@ def main():
     parser_install = subparsers_main.add_parser('install', help='install Shadow', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser_install.set_defaults(func=install, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     
-    parser_auto = subparsers_main.add_parser('auto', help='build Shadow to \''+BUILD_PREFIX+'\', install to \''+INSTALL_PREFIX+'\'.', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser_auto.set_defaults(func=auto, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-        
     # get arguments, accessible with args.value
     args = parser_main.parse_args()
     # run chosen command
@@ -136,14 +133,6 @@ def install(args):
     # go back to where we came from
     os.chdir(calledDirectory)
     return retcode
-
-def auto(args):
-    args.do_debug = False
-    args.do_test = False
-    args.prefix = INSTALL_PREFIX
-    args.extra_includes = [os.path.abspath(args.prefix + "/include")]
-    args.extra_libraries = [os.path.abspath(args.prefix + "/lib")]
-    if build(args) == 0: install(args)
 
 def make_paths_absolute(list):
     for i in xrange(len(list)): list[i] = os.path.abspath(list[i])
