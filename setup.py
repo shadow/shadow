@@ -27,31 +27,46 @@ BUILD_PREFIX="./build"
 INSTALL_PREFIX=os.path.expanduser("~/.shadow")
 
 def main():
-    parser_main = argparse.ArgumentParser(description='Utility to help setup the shadow simulator', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser_main = argparse.ArgumentParser(
+        description='Utility to help setup the Shadow simulator', 
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     
     # setup our commands
-    subparsers_main = parser_main.add_subparsers(help='run a subcommand (for help use <subcommand> --help)')
+    subparsers_main = parser_main.add_subparsers(
+        help='run a subcommand (for help use <subcommand> --help)')
     
-    # configure subcommand
-    parser_build = subparsers_main.add_parser('build', help='configure and build the shadow simulator', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser_build.set_defaults(func=build, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    # configure build subcommand
+    parser_build = subparsers_main.add_parser('build',
+        help='configure and build Shadow', 
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser_build.set_defaults(func=build, 
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     
+    # add building options
     parser_build.add_argument('-p', '--prefix', action="store", dest="prefix",
-          help="configure PATH as Shadow root installation directory", metavar="PATH", default=INSTALL_PREFIX)
-    parser_build.add_argument('-i', '--include', action="append", dest="extra_includes", metavar="PATH",
-          help="append PATH to the list of paths searched for headers. useful if dependencies are installed to non-standard locations.",
-          default=[INSTALL_PREFIX+ "/include"])
-    parser_build.add_argument('-l', '--library', action="append", dest="extra_libraries", metavar="PATH",
-          help="append PATH to the list of paths searched for libraries. useful if dependencies are installed to non-standard locations.",
-          default=[INSTALL_PREFIX+ "/lib"])
-    parser_build.add_argument('-g', '--debug', action="store_true", dest="do_debug",
-          help="define DEBUG during build, useful if you want extra memory checks when running Shadow", default=False)
-    parser_build.add_argument('-t', '--test', action="store_true", dest="do_test",
-          help="build tests", default=False)
+        help="configure PATH as Shadow root installation directory", 
+        default=INSTALL_PREFIX, metavar="PATH")
     
-    # install subcommand
-    parser_install = subparsers_main.add_parser('install', help='install Shadow', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser_install.set_defaults(func=install, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser_build.add_argument('-i', '--include', action="append", dest="extra_includes",
+        help="append PATH to the list of paths searched for headers. useful if dependencies are installed to non-standard locations.",
+        default=[INSTALL_PREFIX+ "/include"], metavar="PATH")
+    
+    parser_build.add_argument('-l', '--library', action="append", dest="extra_libraries",
+        help="append PATH to the list of paths searched for libraries. useful if dependencies are installed to non-standard locations.",
+        default=[INSTALL_PREFIX+ "/lib"], metavar="PATH")
+    
+    parser_build.add_argument('-g', '--debug', action="store_true", dest="do_debug",
+        help="build in extra memory checks and debugging symbols when running Shadow",
+        default=False)
+    
+    parser_build.add_argument('-t', '--test', action="store_true", dest="do_test",
+        help="build tests", default=False)
+    
+    # configure install subcommand
+    parser_install = subparsers_main.add_parser('install', help='install Shadow', 
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser_install.set_defaults(func=install, 
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     
     # get arguments, accessible with args.value
     args = parser_main.parse_args()
