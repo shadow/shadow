@@ -93,8 +93,16 @@ Plugin* plugin_new(GQuark id, GString* filename) {
 		return NULL;
 	}
 
-	/* now get the plugin handle from our private copy of the library */
-	plugin->handle = g_module_open(plugin->path->str, G_MODULE_BIND_LAZY | G_MODULE_BIND_LOCAL);
+	/*
+	 * now get the plugin handle from our private copy of the library.
+	 *
+	 * @warning only global dlopens are searchable with dlsym
+	 * we cant use G_MODULE_BIND_LOCAL if we want to be able to lookup
+	 * functions using dlsym in the plugin itself. if G_MODULE_BIND_LOCAL
+	 * functionality is desired, then we must require plugins to separate their
+	 * intercepted functions to a SHARED library, and link the plugin to that.
+	 */
+	plugin->handle = g_module_open(plugin->path->str, G_MODULE_BIND_LAZY);
 	if(plugin->handle) {
 		message("successfully loaded private plug-in '%s'", plugin->path->str);
 	} else {

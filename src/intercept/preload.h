@@ -22,8 +22,9 @@
 #ifndef PRELOAD_H_
 #define PRELOAD_H_
 
+#include <glib.h>
+#include <dlfcn.h>
 #include <stdio.h>
-#include "shadow.h"
 
 /* handles for dlsym */
 #define RTLD_NEXT ((void *) -1l)
@@ -56,6 +57,7 @@ int preload_worker_isInShadowContext();
 		/* check for error, dlerror returns null or a char* error msg */ \
 		char* dlmsg = dlerror(); \
 		if(!functionInShadowInterceptLib || dlmsg != NULL) { \
+			/* g_error("PRELOAD_LOOKUP: Shadow is not loaded: no function \"%s\": dlerror = \"%s\", fp = \"%p\"\n", my_search, dlmsg, *my_function); */ \
 			return ret; \
 		} \
 		/* we have a shadow function, clear old error vals */ \
@@ -65,7 +67,7 @@ int preload_worker_isInShadowContext();
 		/* check for error, dlerror returns null or a char* error msg */ \
 		dlmsg = dlerror(); \
 		if (!*my_function || dlmsg != NULL) { \
-			/*critical("PRELOAD_LOOKUP: failed to chain-load function \"%s\": dlerror = \"%s\", fp = \"%p\"\n", my_search, dlmsg, *my_function);*/ \
+			/* g_error("PRELOAD_LOOKUP: failed to chain-load function \"%s\": dlerror = \"%s\", fp = \"%p\"\n", my_search, dlmsg, *my_function); */ \
 			return ret; \
 		} \
 	} \
