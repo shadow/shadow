@@ -1,0 +1,20 @@
+<plugin name="scallion" path="libshadow-plugin-scallion.so" />
+<plugin name="filetransfer" path="libshadow-plugin-filetransfer.so" />
+
+<cdf name="cpu" center="100000000" width="20000000" tail="20000000" />
+
+<cdf name="tier1" center="102400" width="0" tail="0" />
+<cdf name="tier2" center="10240" width="0" tail="0" />
+<cdf name="tier3" center="1024" width="0" tail="0" />
+<cdf name="tier4" center="102" width="0" tail="0" />
+
+<cdf name="latency" center="80" width="40" tail="20" />
+<network name="network" latency="latency" reliability="1.0" />
+
+<software name="fileserver" plugin="scallion" time="1" arguments="8080 /home/rob/.shadow/share/shadow/scallion" />
+<node name="server.file" software="fileserver" network="network" bandwidthup="tier1" bandwidthdown="tier1" cpu="cpu" />
+
+<software name="authority" plugin="scallion" time="1" arguments="dirauth 102400 /home/rob/test/vanilla/authority.torrc /home/rob/test/vanilla/data/authoritydata /home/rob/.shadow/share/shadow/scallion/geoip" />
+<node name="authority.tor" software="authority" network="network" bandwidthup="tier1" bandwidthdown="tier1" cpu="cpu" />
+
+<kill time="180" />

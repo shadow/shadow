@@ -89,4 +89,4 @@ add_definitions(-Wall --std=c99 -fPIC -g -D_GNU_SOURCE)
 add_subdirectory(src)
 
 install(FILES build/tor-0.2.3.5-alpha/src/config/geoip build/50KiB.urnd build/320KiB.urnd build/1MiB.urnd build/5MiB.urnd build/GeoLiteCity.dat DESTINATION share/shadow/scallion)
-install(DIRECTORY config/ DESTINATION share/shadow/scallion PATTERN "config/*")
+install(DIRECTORY resource/ DESTINATION share/shadow/scallion PATTERN "config/*")
