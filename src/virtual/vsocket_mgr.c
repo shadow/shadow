@@ -71,7 +71,8 @@ void vsocket_mgr_destroy(vsocket_mgr_tp net) {
   		g_hash_table_foreach(net->ethernet->tcp_servers, vtcp_server_destroy_cb, NULL);
 		g_hash_table_destroy(net->ethernet->tcp_servers);
 
-  		g_hash_table_foreach(net->loopback->tcp_servers, vtcp_server_destroy_cb, NULL);
+		/* destroyes the same scokets as above... */
+//  		g_hash_table_foreach(net->loopback->tcp_servers, vtcp_server_destroy_cb, NULL);
 		g_hash_table_destroy(net->loopback->tcp_servers);
 
 		/* destroys remaining vsockets */
