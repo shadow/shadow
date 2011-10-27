@@ -9,15 +9,35 @@
 ## -----------------------------------------------------------------------------
 ## Check for the header files
 
-find_path (GLIB_INCLUDES glib.h
-  PATHS /usr/local/include /usr/include /sw/include /usr/include/glib-2.0
-  #PATH_SUFFIXES <optional path extension>
+find_path (GLIB_CORE_INCLUDES glib.h
+  PATHS ${CMAKE_EXTRA_INCLUDES} NO_DEFAULT_PATH
   )
+if(NOT GLIB_CORE_INCLUDES)
+    find_path (GLIB_CORE_INCLUDES glib.h
+      PATHS /usr/local/include /usr/include /include /sw/include /usr/include/glib-2.0 /usr/lib/glib-2.0/include /usr/lib64/glib-2.0/include/ /usr/lib/x86_64-linux-gnu/glib-2.0/include/ ${CMAKE_EXTRA_INCLUDES}
+      )
+endif(NOT GLIB_CORE_INCLUDES)
+
+find_path (GLIB_CONFIG_INCLUDES glibconfig.h
+  PATHS ${CMAKE_EXTRA_INCLUDES} NO_DEFAULT_PATH
+  )
+if(NOT GLIB_CONFIG_INCLUDES)
+    find_path (GLIB_CONFIG_INCLUDES glibconfig.h
+      PATHS /usr/local/include /usr/include /include /sw/include /usr/lib/glib-2.0/include/ /usr/include/glib-2.0 /usr/lib/glib-2.0/include /usr/lib64/glib-2.0/include/ /usr/lib/x86_64-linux-gnu/glib-2.0/include/ ${CMAKE_EXTRA_INCLUDES}
+      )
+endif(NOT GLIB_CONFIG_INCLUDES)
+
+## we need both include directories
+if(GLIB_CORE_INCLUDES)
+    if(GLIB_CONFIG_INCLUDES)
+        SET(GLIB_INCLUDES ${GLIB_CORE_INCLUDES} ${GLIB_CONFIG_INCLUDES})
+    endif(GLIB_CONFIG_INCLUDES)
+endif(GLIB_CORE_INCLUDES)
 
 ## -----------------------------------------------------------------------------
 ## Check for the library
 
-find_library (GLIB_LIBRARIES NAMES glib-2.0
+find_library (GLIB_CORE_LIBRARIES NAMES glib-2.0
   PATHS ${CMAKE_EXTRA_LIBRARIES} NO_DEFAULT_PATH
   )
 if(NOT GLIB_CORE_LIBRARIES)
@@ -49,8 +69,6 @@ SET(GLIB_LIBRARIES ${GLIB_CORE_LIBRARIES} ${GLIB_GTHREAD_LIBRARIES} ${GLIB_GMODU
 
 ## -----------------------------------------------------------------------------
 ## Actions taken when all components have been found
-
-include_directories(/usr/include/glib-2.0 /usr/lib/glib-2.0/include /usr/lib64/glib-2.0/include/ /usr/lib/x86_64-linux-gnu/glib-2.0/include/)
 
 if (GLIB_INCLUDES AND GLIB_CORE_LIBRARIES AND GLIB_GTHREAD_LIBRARIES AND GLIB_GMODULE_LIBRARIES)
   set (HAVE_GLIB TRUE)

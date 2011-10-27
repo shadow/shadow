@@ -1,5 +1,5 @@
 ## make sure shadow.h is in the include path
-include_directories(${SHADOW_SOURCE_DIR}/)
+include_directories(${SHADOW_SOURCE_DIR}/ ${GLIB_INCLUDES})
 
 ## build the required libraries for intercepting system and library calls
 add_subdirectory(intercept)
