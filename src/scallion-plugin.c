@@ -210,30 +210,38 @@ void scallion_new(int argc, char* argv[]) {
 		/* get filegetter client args */
 		scallion_launch_client_tp launch = malloc(sizeof(scallion_launch_client_t));
 
-		if(strncmp(argv[5], "multi", 5) == 0 && argc == 11) {
+		gchar* filetransferMode = argv[5];
+		if(strncmp(filetransferMode, "client", 6) != 0) {
+			scallion.shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, usage);
+			return;
+		}
+
+		gchar* fileClientMode = argv[6];
+
+		if(strncmp(fileClientMode, "multi", 5) == 0 && argc == 12) {
 			service_filegetter_multi_args_tp args = malloc(sizeof(service_filegetter_multi_args_t));
 
 			size_t s;
 
-			s = strnlen(argv[6], 128)+1;
-			args->server_specification_filepath = malloc(s);
-			snprintf(args->server_specification_filepath, s, argv[6]);
-
 			s = strnlen(argv[7], 128)+1;
-			args->socks_proxy.host = malloc(s);
-			snprintf(args->socks_proxy.host, s, argv[7]);
+			args->server_specification_filepath = malloc(s);
+			snprintf(args->server_specification_filepath, s, argv[7]);
 
 			s = strnlen(argv[8], 128)+1;
-			args->socks_proxy.port = malloc(s);
-			snprintf(args->socks_proxy.port, s, argv[8]);
+			args->socks_proxy.host = malloc(s);
+			snprintf(args->socks_proxy.host, s, argv[8]);
 
 			s = strnlen(argv[9], 128)+1;
-			args->thinktimes_cdf_filepath = malloc(s);
-			snprintf(args->thinktimes_cdf_filepath, s, argv[9]);
+			args->socks_proxy.port = malloc(s);
+			snprintf(args->socks_proxy.port, s, argv[9]);
 
 			s = strnlen(argv[10], 128)+1;
+			args->thinktimes_cdf_filepath = malloc(s);
+			snprintf(args->thinktimes_cdf_filepath, s, argv[10]);
+
+			s = strnlen(argv[11], 128)+1;
 			args->runtime_seconds = malloc(s);
-			snprintf(args->runtime_seconds, s, argv[10]);
+			snprintf(args->runtime_seconds, s, argv[11]);
 
 			if(strncmp(args->thinktimes_cdf_filepath, "none", 4) == 0) {
 				free(args->thinktimes_cdf_filepath);
@@ -246,76 +254,76 @@ void scallion_new(int argc, char* argv[]) {
 
 			launch->is_single = 0;
 			launch->service_filegetter_args = args;
-		} else if(strncmp(argv[5], "single", 6) == 0 && argc == 12) {
+		} else if(strncmp(fileClientMode, "single", 6) == 0 && argc == 13) {
 			service_filegetter_single_args_tp args = malloc(sizeof(service_filegetter_single_args_t));
 
 			size_t s;
 
-			s = strnlen(argv[6], 128)+1;
-			args->http_server.host = malloc(s);
-			snprintf(args->http_server.host, s, argv[6]);
-
 			s = strnlen(argv[7], 128)+1;
-			args->http_server.port = malloc(s);
-			snprintf(args->http_server.port, s, argv[7]);
+			args->http_server.host = malloc(s);
+			snprintf(args->http_server.host, s, argv[7]);
 
 			s = strnlen(argv[8], 128)+1;
-			args->socks_proxy.host = malloc(s);
-			snprintf(args->socks_proxy.host, s, argv[8]);
+			args->http_server.port = malloc(s);
+			snprintf(args->http_server.port, s, argv[8]);
 
 			s = strnlen(argv[9], 128)+1;
-			args->socks_proxy.port = malloc(s);
-			snprintf(args->socks_proxy.port, s, argv[9]);
+			args->socks_proxy.host = malloc(s);
+			snprintf(args->socks_proxy.host, s, argv[9]);
 
 			s = strnlen(argv[10], 128)+1;
-			args->num_downloads = malloc(s);
-			snprintf(args->num_downloads, s, argv[10]);
+			args->socks_proxy.port = malloc(s);
+			snprintf(args->socks_proxy.port, s, argv[10]);
 
 			s = strnlen(argv[11], 128)+1;
+			args->num_downloads = malloc(s);
+			snprintf(args->num_downloads, s, argv[11]);
+
+			s = strnlen(argv[12], 128)+1;
 			args->filepath = malloc(s);
-			snprintf(args->filepath, s, argv[11]);
+			snprintf(args->filepath, s, argv[12]);
 
 			args->log_cb = &_scallion_logCallback;
 			args->hostbyname_cb = &_scallion_HostnameCallback;
 
 			launch->is_single = 1;
 			launch->service_filegetter_args = args;
-		} else if(strncmp(argv[5], "double", 6) == 0 && argc == 14) {
+		} else if(strncmp(fileClientMode, "double", 6) == 0 && argc == 15) {
 			service_filegetter_double_args_tp args = malloc(sizeof(service_filegetter_double_args_t));
 
 			size_t s;
 
-			s = strnlen(argv[6], 128)+1;
-			args->http_server.host = malloc(s);
-			snprintf(args->http_server.host, s, argv[6]);
-
 			s = strnlen(argv[7], 128)+1;
-			args->http_server.port = malloc(s);
-			snprintf(args->http_server.port, s, argv[7]);
+			args->http_server.host = malloc(s);
+			snprintf(args->http_server.host, s, argv[7]);
 
 			s = strnlen(argv[8], 128)+1;
-			args->socks_proxy.host = malloc(s);
-			snprintf(args->socks_proxy.host, s, argv[8]);
+			args->http_server.port = malloc(s);
+			snprintf(args->http_server.port, s, argv[8]);
 
 			s = strnlen(argv[9], 128)+1;
-			args->socks_proxy.port = malloc(s);
-			snprintf(args->socks_proxy.port, s, argv[9]);
+			args->socks_proxy.host = malloc(s);
+			snprintf(args->socks_proxy.host, s, argv[9]);
 
 			s = strnlen(argv[10], 128)+1;
-			args->filepath1 = malloc(s);
-			snprintf(args->filepath1, s, argv[10]);
+			args->socks_proxy.port = malloc(s);
+			snprintf(args->socks_proxy.port, s, argv[10]);
 
 			s = strnlen(argv[11], 128)+1;
-			args->filepath2 = malloc(s);
-			snprintf(args->filepath2, s, argv[11]);
+			args->filepath1 = malloc(s);
+			snprintf(args->filepath1, s, argv[11]);
 
 			s = strnlen(argv[12], 128)+1;
-			args->filepath3 = malloc(s);
-			snprintf(args->filepath3, s, argv[12]);
+			args->filepath2 = malloc(s);
+			snprintf(args->filepath2, s, argv[12]);
 
 			s = strnlen(argv[13], 128)+1;
+			args->filepath3 = malloc(s);
+			snprintf(args->filepath3, s, argv[13]);
+
+			s = strnlen(argv[14], 128)+1;
 			args->pausetime_seconds = malloc(s);
-			snprintf(args->pausetime_seconds, s, argv[13]);
+			snprintf(args->pausetime_seconds, s, argv[14]);
 
 			args->log_cb = &_scallion_logCallback;
 			args->hostbyname_cb = &_scallion_HostnameCallback;
