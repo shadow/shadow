@@ -179,7 +179,11 @@ static vevent_tp vevent_create(event_tp ev, vevent_socket_tp vsd) {
 	return NULL;
 }
 
-static void vevent_executeTimerCallback(gpointer data, gpointer argument) {
+/*
+ * @warning this should only be executed in plugin context, e.g. by passing
+ * it as the callback function to plugin_executeGeneric()
+ */
+static void _vevent_executeTimerCallback(gpointer data, gpointer argument) {
 	vevent_timer_tp vt = data;
 
 	if(vt != NULL && vt->vev != NULL && vt->mgr != NULL) {
@@ -218,7 +222,7 @@ static void vevent_timerTimerCallback(gpointer data, gpointer argument) {
 	Worker* worker = worker_getPrivate();
 	Application* a = worker->cached_node->application;
 	Plugin* plugin = worker_getPlugin(a->software);
-	plugin_executeGeneric(plugin, a->state, vevent_executeTimerCallback, data, argument);
+	plugin_executeGeneric(plugin, a->state, _vevent_executeTimerCallback, data, argument);
 }
 
 static gint vevent_isequal_cb(gpointer ev1, gpointer ev2) {
@@ -353,7 +357,11 @@ static gint vevent_unregister(vevent_mgr_tp mgr, event_tp ev) {
 	return -1;
 }
 
-static void vevent_executeAllCallback(gpointer data, gpointer argument) {
+/*
+ * @warning this should only be executed in plugin context, e.g. by passing
+ * it as the callback function to plugin_executeGeneric()
+ */
+static void _vevent_executeAllInPluginContextCallback(gpointer data, gpointer argument) {
 	vevent_mgr_tp mgr = data;
 	GQueue* q = argument;
 
@@ -405,7 +413,7 @@ static void vevent_execute_callbacks(vevent_mgr_tp mgr, event_base_tp eb, gint s
 				Worker* worker = worker_getPrivate();
 				Application* a = worker->cached_node->application;
 				Plugin* plugin = worker_getPlugin(a->software);
-				plugin_executeGeneric(plugin, a->state, vevent_executeAllCallback, mgr, to_execute);
+				plugin_executeGeneric(plugin, a->state, _vevent_executeAllInPluginContextCallback, mgr, to_execute);
 
 				g_queue_free(to_execute);
 			}
@@ -503,8 +511,11 @@ gint vevent_event_base_loop(vevent_mgr_tp mgr, event_base_tp eb, gint flags) {
 	return 0;
 }
 
-/* this function should only be called while plugin->isExecuting */
-static void vevent_executeLoopexitCallback(gpointer data, gpointer argument) {
+/*
+ * @warning this should only be executed in plugin context, e.g. by passing
+ * it as the callback function to plugin_executeGeneric()
+ */
+static void _vevent_executeLoopexitInPluginContextCallback(gpointer data, gpointer argument) {
 	vevent_mgr_tp mgr = data;
 	if(mgr == NULL) {
 		return;
@@ -518,7 +529,7 @@ static void vevent_looexitTimerCallback(gpointer data, gpointer argument) {
 	Worker* worker = worker_getPrivate();
 	Application* a = worker->cached_node->application;
 	Plugin* plugin = worker_getPlugin(a->software);
-	plugin_executeGeneric(plugin, a->state, vevent_executeLoopexitCallback, data, argument);
+	plugin_executeGeneric(plugin, a->state, _vevent_executeLoopexitInPluginContextCallback, data, argument);
 }
 
 gint vevent_event_base_loopexit(vevent_mgr_tp mgr, event_base_tp eb, const struct timeval * tv) {
@@ -615,14 +626,23 @@ gint vevent_event_del(vevent_mgr_tp mgr, event_tp ev) {
 }
 
 void vevent_event_active(vevent_mgr_tp mgr, event_tp ev, gint flags_for_cb, short ncalls) {
-	if(ev != NULL) {
-		ev->ev_res = flags_for_cb;
-		for(gint i = 0; i < ncalls; i++) {
-			/* XXX: fragile - we are in plugin context but this could easily break */
-			vevent_execute(mgr, ev);
-		}
-	} else {
-		warning("failed because event is NULL");
+	g_assert(mgr && ev);
+
+	Worker* worker = worker_getPrivate();
+	Application* a = worker->cached_node->application;
+	Plugin* plugin = worker_getPlugin(a->software);
+
+	ev->ev_res = flags_for_cb;
+	for(gint i = 0; i < ncalls; i++) {
+		/* XXX: fragile - we are in plugin context but this could easily break!
+		 * this is a hack to set context correctly. we *should* be creating a
+		 * timer and executing in context with plugin_executeGeneric(). we cant
+		 * use plugin_executeGeneric() now because the plugin is already
+		 * executing, i.e., its state is loaded etc. and that call would mess
+		 * things up. */
+		plugin_setShadowContext(plugin, FALSE);
+		vevent_execute(mgr, ev);
+		plugin_setShadowContext(plugin, TRUE);
 	}
 }
 

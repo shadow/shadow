@@ -875,7 +875,7 @@ gint vsocket_getsockopt(vsocket_mgr_tp net, gint fd, gint level, gint optname, g
 gint vsocket_setsockopt(vsocket_mgr_tp net, gint fd, gint level, gint optname, const gpointer optval,
 		socklen_t optlen) {
 	/* TODO implement */
-	warning("setsockopt not implemented");
+	debug("setsockopt not implemented. this is probably OK unless Tor starts using socket opts in ways that we dont handle.");
 	errno = ENOSYS;
 	return VSOCKET_ERROR;
 }

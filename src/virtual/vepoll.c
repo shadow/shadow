@@ -54,12 +54,13 @@ void vepoll_destroy(vepoll_tp vep) {
 	}
 }
 
-static void vepoll_activate(vepoll_tp vep) {
+static void vepoll_activate(vepoll_tp vep, gboolean immediate) {
 	if(vep != NULL) {
 		/* check if we need to schedule a notification */
 		if((vep->flags & VEPOLL_NOTIFY_SCHEDULED) == 0) {
 			vep->flags |= VEPOLL_NOTIFY_SCHEDULED;
-			worker_scheduleEvent((Event*)socketactivated_new(vep->sockd), 1, (GQuark) vep->addr);
+			SimulationTime delay = immediate ? 1 : SIMTIME_ONE_SECOND;
+			worker_scheduleEvent((Event*)socketactivated_new(vep->sockd), delay, (GQuark) vep->addr);
 		}
 	}
 }
@@ -70,7 +71,7 @@ void vepoll_mark_available(vepoll_tp vep, enum vepoll_type type) {
 	if(vep != NULL) {
 		/* turn it on and schedule as needed */
 		vep->available |= type;
-		vepoll_activate(vep);
+		vepoll_activate(vep, TRUE);
 	} else {
 		warning("vepoll was NULL when trying to mark type %u", type);
 	}
@@ -101,7 +102,7 @@ guint8 vepoll_query_available(vepoll_tp vep, enum vepoll_type type) {
 void vepoll_mark_active(vepoll_tp vep) {
 	if(vep != NULL) {
 		vep->state = VEPOLL_ACTIVE;
-		vepoll_activate(vep);
+		vepoll_activate(vep, TRUE);
 	}
 }
 
@@ -124,7 +125,7 @@ void vepoll_vevent_add(vepoll_tp vep, enum vepoll_type type) {
 			vep->num_write++;
 		}
 
-		vepoll_activate(vep);
+		vepoll_activate(vep, TRUE);
 	}
 }
 
@@ -206,7 +207,7 @@ void vepoll_execute_notification(vepoll_tp vep) {
 			/* if vevent is still waiting for more, reactivate it */
 			if(((vep->num_read > 0) && (vep->available & VEPOLL_READ)) ||
 				((vep->num_write > 0) && (vep->available & VEPOLL_WRITE))) {
-				vepoll_activate(vep);
+				vepoll_activate(vep, FALSE);
 			}
 
 			vep->flags &= ~VEPOLL_EXECUTING;
@@ -241,7 +242,7 @@ void vepoll_poll(vepoll_tp vep, vsocket_mgr_tp vs_mgr) {
 	vevent_mgr_print_stat(vep->vev_mgr, vep->sockd);
 #endif
 
-	vepoll_activate(vep);
+	vepoll_activate(vep, TRUE);
 
 	vep->flags |= VEPOLL_POLL_SCHEDULED;
 	worker_scheduleEvent((Event*)socketpolltimerexpired_new(vep), VEPOLL_POLL_DELAY, (GQuark) vep->addr);
