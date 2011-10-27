@@ -18,21 +18,15 @@
 <node name="4uthority.tor" software="authority" network="network" bandwidthup="tier1" bandwidthdown="tier1" cpu="cpu" />
 
 <software name="exit" plugin="scallion" time="300" arguments="exitrelay 300 /home/rob/test/vanilla/exit.torrc /home/rob/test/vanilla/data/exitdata /home/rob/.shadow/share/shadow/scallion/geoip" />
-<node name="exit1.tor" software="exit" network="network" bandwidthup="tier3" bandwidthdown="tier3" cpu="cpu" />
-<node name="exit2.tor" software="exit" network="network" bandwidthup="tier3" bandwidthdown="tier3" cpu="cpu" />
-<node name="exit3.tor" software="exit" network="network" bandwidthup="tier3" bandwidthdown="tier3" cpu="cpu" />
+<node name="exit.tor" quantity="3" software="exit" network="network" bandwidthup="tier3" bandwidthdown="tier3" cpu="cpu" />
 
 <software name="relay" plugin="scallion" time="600" arguments="relay 300 /home/rob/test/vanilla/relay.torrc /home/rob/test/vanilla/data/relaydata /home/rob/.shadow/share/shadow/scallion/geoip" />
-<node name="relay1.tor" software="relay" network="network" bandwidthup="tier3" bandwidthdown="tier3" cpu="cpu" />
-<node name="relay2.tor" software="relay" network="network" bandwidthup="tier3" bandwidthdown="tier3" cpu="cpu" />
-<node name="relay3.tor" software="relay" network="network" bandwidthup="tier3" bandwidthdown="tier3" cpu="cpu" />
+<node name="relay.tor" quantity="3" software="relay" network="network" bandwidthup="tier3" bandwidthdown="tier3" cpu="cpu" />
 
-<software name="exitb" plugin="scallion" time="600" arguments="exitrelay 300 /home/rob/test/vanilla/exit.torrc /home/rob/test/vanilla/data/exitdata /home/rob/.shadow/share/shadow/scallion/geoip" />
-<node name="exit4.tor" software="exitb" network="network" bandwidthup="tier3" bandwidthdown="tier3" cpu="cpu" />
-<node name="exit5.tor" software="exitb" network="network" bandwidthup="tier3" bandwidthdown="tier3" cpu="cpu" />
-<node name="exit6.tor" software="exitb" network="network" bandwidthup="tier3" bandwidthdown="tier3" cpu="cpu" />
+<software name="exitb" plugin="scallion" time="900" arguments="exitrelay 300 /home/rob/test/vanilla/exit.torrc /home/rob/test/vanilla/data/exitdata /home/rob/.shadow/share/shadow/scallion/geoip" />
+<node name="exitb.tor" quantity="3" software="exitb" network="network" bandwidthup="tier3" bandwidthdown="tier3" cpu="cpu" />
 
-<software name="client" plugin="scallion" time="900" arguments="client 1024 /home/rob/test/vanilla/client.torrc /home/rob/test/vanilla/data/clientdata /home/rob/.shadow/share/shadow/scallion/geoip client single server.file 8080 localhost 9000 1 /home/rob/.shadow/share/shadow/scallion/5MiB.urnd" />
-<node name="client1.tor" software="client" network="network" bandwidthup="tier3" bandwidthdown="tier3" cpu="cpu" />
+<software name="client" plugin="scallion" time="1800" arguments="client 1024 /home/rob/test/vanilla/client.torrc /home/rob/test/vanilla/data/clientdata /home/rob/.shadow/share/shadow/scallion/geoip client single server.file 8080 localhost 9000 1 /5MiB.urnd" />
+<node name="client.tor" quantity="1" software="client" network="network" bandwidthup="tier3" bandwidthdown="tier3" cpu="cpu" />
 
-<kill time="4500" />
+<kill time="5400" />

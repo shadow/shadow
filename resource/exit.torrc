@@ -3,6 +3,7 @@
 DirServer authority v3ident=919CAD4BB055CE7EC5169F19BCA731F3D60EFB19 orport=9111 4uthority.tor:9112 9441 269F 5989 487F 07AE 8240 6334 5A0A 6BCA B279
 
 TestingTorNetwork 1
+AllowInvalidNodes "entry,middle,exit,introduction,rendezvous"
 
 ServerDNSDetectHijacking 0
 NumCPUs 0
