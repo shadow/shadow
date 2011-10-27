@@ -85,7 +85,7 @@ void vtor_instantiate(vtor_tp vtor, char* hostname, enum vtor_nodetype type,
 		vtor->bandwidth = atoi(bandwidth);
 
 		/* we use 14 args to tor by 'default' */
-		int num_args = 19;
+		int num_args = 21;
 		if(vtor->type == VTOR_DIRAUTH || vtor->type == VTOR_RELAY) {
 			num_args += 2;
 		}
@@ -123,17 +123,30 @@ void vtor_instantiate(vtor_tp vtor, char* hostname, enum vtor_nodetype type,
 		config[17] = "--RelayBandwidthBurst";
 		config[18] = bwconf;
 
+		gchar* nickname = g_strdup(hostname);
+		while(1) {
+			gchar* dot = g_strstr_len((const gchar*)nickname, -1, ".");
+			if(dot != NULL) {
+				*dot = 'x';
+			} else {
+				break;
+			}
+		}
+
+		config[19] = "--Nickname";
+		config[20] = nickname;
+
 		/* additional args */
 		if(vtor->type == VTOR_DIRAUTH) {
 			if(snprintf(vtor->v3bw_name, 255, "%s/dirauth.v3bw", datadir_path) >= 255) {
 				/* todo truncated is an error here */
 				return;
 			}
-			config[19] = "--V3BandwidthsFile";
-			config[20] = vtor->v3bw_name;
+			config[21] = "--V3BandwidthsFile";
+			config[22] = vtor->v3bw_name;
 		} else if(vtor->type == VTOR_RELAY) {
-			config[19] = "--ExitPolicy";
-			config[20] = "reject *:*";
+			config[21] = "--ExitPolicy";
+			config[22] = "reject *:*";
 		}
 
 		vtor_run(num_args, config);
@@ -142,6 +155,8 @@ void vtor_instantiate(vtor_tp vtor, char* hostname, enum vtor_nodetype type,
 			/* run torflow now, it will schedule itself as needed */
 			vtorflow_init_v3bw(vtor);
 		}
+
+		g_free(nickname);
 	}
 }
 
