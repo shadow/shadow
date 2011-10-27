@@ -10,20 +10,21 @@
 ## Check for the header files
 
 find_path (GLIB_CORE_INCLUDES glib.h
-  PATHS ${CMAKE_EXTRA_INCLUDES} NO_DEFAULT_PATH
+  PATHS ${CMAKE_EXTRA_INCLUDES} PATH_SUFFIXES glib-2.0/ glib-2.0/include NO_DEFAULT_PATH
   )
 if(NOT GLIB_CORE_INCLUDES)
     find_path (GLIB_CORE_INCLUDES glib.h
-      PATHS /usr/local/include /usr/include /include /sw/include /usr/include/glib-2.0 /usr/lib/glib-2.0/include /usr/lib64/glib-2.0/include/ /usr/lib/x86_64-linux-gnu/glib-2.0/include/ ${CMAKE_EXTRA_INCLUDES}
+      PATHS /usr/local/include /usr/include /include /sw/include /usr/lib /usr/lib64 /usr/lib/x86_64-linux-gnu/ ${CMAKE_EXTRA_INCLUDES} PATH_SUFFIXES glib-2.0/ glib-2.0/include
       )
 endif(NOT GLIB_CORE_INCLUDES)
 
+## glibconfig is actually under the lib/ directory, so also use LIB directories
 find_path (GLIB_CONFIG_INCLUDES glibconfig.h
-  PATHS ${CMAKE_EXTRA_INCLUDES} NO_DEFAULT_PATH
+  PATHS ${CMAKE_EXTRA_INCLUDES} ${CMAKE_EXTRA_LIBRARIES} PATH_SUFFIXES glib-2.0/ glib-2.0/include NO_DEFAULT_PATH
   )
 if(NOT GLIB_CONFIG_INCLUDES)
     find_path (GLIB_CONFIG_INCLUDES glibconfig.h
-      PATHS /usr/local/include /usr/include /include /sw/include /usr/lib/glib-2.0/include/ /usr/include/glib-2.0 /usr/lib/glib-2.0/include /usr/lib64/glib-2.0/include/ /usr/lib/x86_64-linux-gnu/glib-2.0/include/ ${CMAKE_EXTRA_INCLUDES}
+      PATHS /usr/local/include /usr/include /include /sw/include /usr/lib /usr/lib64 /usr/lib/x86_64-linux-gnu/ ${CMAKE_EXTRA_INCLUDES} ${CMAKE_EXTRA_LIBRARIES} PATH_SUFFIXES glib-2.0 glib-2.0/include
       )
 endif(NOT GLIB_CONFIG_INCLUDES)
 
@@ -38,29 +39,29 @@ endif(GLIB_CORE_INCLUDES)
 ## Check for the library
 
 find_library (GLIB_CORE_LIBRARIES NAMES glib-2.0
-  PATHS ${CMAKE_EXTRA_LIBRARIES} NO_DEFAULT_PATH
+  PATHS ${CMAKE_EXTRA_LIBRARIES} PATH_SUFFIXES glib-2.0/ NO_DEFAULT_PATH
   )
 if(NOT GLIB_CORE_LIBRARIES)
     find_library (GLIB_CORE_LIBRARIES NAMES glib-2.0
-      PATHS /usr/local/lib /usr/lib /lib /sw/lib ${CMAKE_EXTRA_LIBRARIES}
+      PATHS /usr/local/lib /usr/lib /lib /sw/lib ${CMAKE_EXTRA_LIBRARIES} PATH_SUFFIXES glib-2.0/
       )
 endif(NOT GLIB_CORE_LIBRARIES)
 
 find_library (GLIB_GTHREAD_LIBRARIES NAMES gthread-2.0
-  PATHS ${CMAKE_EXTRA_LIBRARIES} NO_DEFAULT_PATH
+  PATHS ${CMAKE_EXTRA_LIBRARIES} PATH_SUFFIXES glib-2.0/ NO_DEFAULT_PATH
   )
 if(NOT GLIB_GTHREAD_LIBRARIES)
     find_library (GLIB_GTHREAD_LIBRARIES NAMES gthread-2.0
-      PATHS /usr/local/lib /usr/lib /lib /sw/lib ${CMAKE_EXTRA_LIBRARIES}
+      PATHS /usr/local/lib /usr/lib /lib /sw/lib ${CMAKE_EXTRA_LIBRARIES} PATH_SUFFIXES glib-2.0/
       )
 endif(NOT GLIB_GTHREAD_LIBRARIES)
 
 find_library (GLIB_GMODULE_LIBRARIES NAMES gmodule-2.0
-  PATHS ${CMAKE_EXTRA_LIBRARIES} NO_DEFAULT_PATH
+  PATHS ${CMAKE_EXTRA_LIBRARIES} PATH_SUFFIXES glib-2.0/ NO_DEFAULT_PATH
   )
 if(NOT GLIB_GMODULE_LIBRARIES)
     find_library (GLIB_GMODULE_LIBRARIES NAMES gmodule-2.0
-      PATHS /usr/local/lib /usr/lib /lib /sw/lib ${CMAKE_EXTRA_LIBRARIES}
+      PATHS /usr/local/lib /usr/lib /lib /sw/lib ${CMAKE_EXTRA_LIBRARIES} PATH_SUFFIXES glib-2.0/
       )
 endif(NOT GLIB_GMODULE_LIBRARIES)
 

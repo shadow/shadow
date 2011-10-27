@@ -15,12 +15,14 @@ set(Shadow_VERSION_BUILD 0)
 ## output locations
 set(SHADOW_SOURCE_DIR ${CMAKE_SOURCE_DIR}/src)
 set(SHADOW_TEST_DIR ${CMAKE_SOURCE_DIR}/test)
-set(SHADOW_PLUGIN_DIR $ENV{HOME}/.shadow/plugins)
 
-# check for unix environment
+## check for unix environment (CMAKE_SYSTEM_NAME == "Linux")
 if(NOT UNIX)
 	message(FATAL_ERROR "Shadow requires a UNIX-like environment.")
 endif()
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    message(FATAL_ERROR "Shadow requires a Linux environment.")
+endif(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
 
 ## disallow in-source build
 string(COMPARE EQUAL "${CMAKE_SOURCE_DIR}" "${CMAKE_BUILD_PREFIX}" buildInSource)
@@ -45,7 +47,7 @@ MESSAGE(STATUS)
 if(SHADOW_DEBUG STREQUAL ON)
     message(STATUS "CMAKE_BUILD_TYPE Debug enabled.")
     set(CMAKE_BUILD_TYPE Debug)
-    add_definitions(-DDEBUG)
+    add_definitions(-DDEBUG ${CMAKE_C_FLAGS_DEBUG})
 else(SHADOW_DEBUG STREQUAL ON)
     message(STATUS "CMAKE_BUILD_TYPE Release enabled.")
     set(CMAKE_BUILD_TYPE Release)
@@ -74,18 +76,21 @@ foreach(library ${CMAKE_EXTRA_LIBRARIES})
     link_directories(${library})
 endforeach(library)
 
-## check for dependencies, using built-in cmake files to help us find the libs
-## these are in /usr/share/cmake/Modules/Findxxx.cmake
-find_package(Threads REQUIRED)
-find_package(ZLIB REQUIRED)
-
-## other libs dont have a Findxxx.cmake, so we check on our own (./cmake)
+## check for dependencies with our own Find scripts in "./cmake"
+## these don't have built-in cmake files in /usr/share/cmake/Modules/Findxxx.cmake
 find_package(RT REQUIRED)
 find_package(DL REQUIRED)
 find_package(M REQUIRED)
 find_package(EVENT2 REQUIRED)
 find_package(GLIB REQUIRED)
 find_package(OPENSSL REQUIRED)
+
+include_directories(${RT_INCLUDES})
+include_directories(${DL_INCLUDES})
+include_directories(${M_INCLUDES})
+include_directories(${EVENT2_INCLUDES})
+include_directories(${GLIB_INCLUDES})
+include_directories(${OPENSSL_INCLUDES})
 
 ## generate config header and make sure its on the include path
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config.h.in ${CMAKE_CURRENT_BINARY_DIR}/shd-config.h)

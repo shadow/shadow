@@ -327,7 +327,7 @@ start:
 			/* check that we actually have FT_SOCKS_REQ_HEAD_LEN+6 space */
 			assert(sizeof(fg->buf) - fg->buf_write_offset >= FT_SOCKS_REQ_HEAD_LEN + 6);
 
-			/* write connection request, including gintended destination */
+			/* write connection request, including intended destination */
 			memcpy(fg->buf + fg->buf_write_offset, FT_SOCKS_REQ_HEAD, FT_SOCKS_REQ_HEAD_LEN);
 			fg->buf_write_offset += FT_SOCKS_REQ_HEAD_LEN;
 			memcpy(fg->buf + fg->buf_write_offset, &(fg->sspec.http_addr), 4);
