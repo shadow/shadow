@@ -51,8 +51,11 @@ set(shadow_srcs
     runnable/action/shd-load-plugin.c
     runnable/action/shd-kill-engine.c
         
-    node/shd-node.c
+    node/shd-descriptor.c
+    node/shd-epoll.c
+    node/shd-system.c
     node/shd-application.c
+    node/shd-node.c
         
     utility/shd-cdf.c
     utility/shd-registry.c

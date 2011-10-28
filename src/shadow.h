@@ -28,6 +28,8 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <sys/epoll.h>
+#include <errno.h>
 
 #include "shd-config.h"
 
@@ -131,6 +133,9 @@ typedef struct vbuffer_s vbuffer_t, *vbuffer_tp;
 #include "topology/shd-internetwork.h"
 
 #include "node/shd-application.h"
+#include "node/shd-descriptor.h"
+#include "node/shd-epoll.h"
+#include "node/shd-system.h"
 #include "node/shd-node.h"
 
 #include "engine/shd-logging.h"

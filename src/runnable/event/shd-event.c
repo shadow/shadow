@@ -66,6 +66,9 @@ gint shadowevent_compare(gconstpointer a, gconstpointer b, gpointer user_data) {
 	const Event* eb = b;
 	MAGIC_ASSERT(ea);
 	MAGIC_ASSERT(eb);
+	/*
+	 * @todo should events already scheduled get priority over new events?
+	 */
 	return ea->time > eb->time ? +1 : ea->time == eb->time ? 0 : -1;
 }
 

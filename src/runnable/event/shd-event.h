@@ -45,7 +45,7 @@ struct _EventFunctionTable {
 };
 
 /*
- * A basic event connected to a specific node. This extends event, and is meant
+ * A basic event connected to a specific node. This is meant
  * to be extended by most other events.
  */
 struct _Event {

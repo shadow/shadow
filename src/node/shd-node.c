@@ -35,6 +35,9 @@ Node* node_new(GQuark id, Network* network, Software* software, guint32 ip, GStr
 
 	node->application = application_new(software);
 
+	node->descriptors = g_tree_new_full(descriptor_compare, NULL, NULL, descriptor_free);
+	node->descriptorHandleCounter = VNETWORK_MIN_SD;
+
 	// TODO refactor all the socket/event code
 	node->vsocket_mgr = vsocket_mgr_create((in_addr_t) id, bwDownKiBps, bwUpKiBps, cpuBps);
 
@@ -149,4 +152,64 @@ guint32 node_getBandwidthUp(Node* node) {
 guint32 node_getBandwidthDown(Node* node) {
 	MAGIC_ASSERT(node);
 	return node->vsocket_mgr->vt_mgr->KBps_down;
+}
+
+static gint _node_monitorDescriptor(Node* node, Descriptor* descriptor) {
+	MAGIC_ASSERT(node);
+
+	gint* handle = descriptor_getHandleReference(descriptor);
+	/* @todo add check if something exists at this key */
+	g_tree_replace(node->descriptors, handle, descriptor);
+
+	return *handle;
+}
+
+gint node_epollNew(Node* node) {
+	MAGIC_ASSERT(node);
+
+	/* get a unique descriptor that can be "closed" later */
+	EpollDescriptor* epoll = epoll_new((node->descriptorHandleCounter)++);
+	return _node_monitorDescriptor(node, (Descriptor*) epoll);;
+}
+
+gint node_epollControl(Node* node, gint epollDescriptor, gint operation,
+		gint fileDescriptor, struct epoll_event* event) {
+	MAGIC_ASSERT(node);
+	g_assert(node->descriptors);
+
+	/* EBADF  epfd or fd is not a valid file descriptor. */
+	Descriptor* descriptor = g_tree_lookup(node->descriptors, &epollDescriptor);
+	if(descriptor == NULL ||
+			g_tree_lookup(node->descriptors, &fileDescriptor) == NULL) {
+		return EBADF;
+	}
+
+	/* EINVAL epfd is not an epoll file descriptor */
+	if(descriptor_getType(descriptor) != DT_EPOLL) {
+		return EINVAL;
+	}
+
+	EpollDescriptor* epoll = (EpollDescriptor*) descriptor;
+	return epoll_control(epoll, operation, fileDescriptor, event);
+
+}
+
+gint node_epollGetEvents(Node* node, gint epollDescriptor,
+		struct epoll_event* eventArray, gint eventArrayLength, gint* nEvents) {
+	MAGIC_ASSERT(node);
+	g_assert(node->descriptors);
+
+	/* EBADF  epfd is not a valid file descriptor. */
+	Descriptor* descriptor = g_tree_lookup(node->descriptors, &epollDescriptor);
+	if(descriptor == NULL) {
+		return EBADF;
+	}
+
+	/* EINVAL epfd is not an epoll file descriptor */
+	if(descriptor_getType(descriptor) != DT_EPOLL) {
+		return EINVAL;
+	}
+
+	EpollDescriptor* epoll = (EpollDescriptor*) descriptor;
+	return epoll_getEvents(epoll, eventArray, eventArrayLength, nEvents);
 }
