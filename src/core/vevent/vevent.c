@@ -477,7 +477,7 @@ event_base_tp vevent_event_base_new(vevent_mgr_tp mgr) {
 }
 
 event_base_tp vevent_event_base_new_with_config(vevent_mgr_tp mgr, const struct event_config *cfg) {
-        event_base_tp base = vevent_event_base_new(mgr);
+	return vevent_event_base_new(mgr);
 }
 
 void vevent_event_base_free(vevent_mgr_tp mgr, event_base_tp eb) {

@@ -136,19 +136,46 @@ void vsocket_transition(vsocket_tp sock, enum vsocket_state newstate) {
 		sock->prev_state = sock->curr_state;
 		sock->curr_state = newstate;
 
-		char* s;
 		switch (newstate) {
 			case VUDP:
 				vepoll_mark_active(sock->vep);
 				vepoll_mark_available(sock->vep, VEPOLL_WRITE);
-				s = "UDP";
 				break;
 			case VTCP_CLOSED:
 				vepoll_mark_inactive(sock->vep);
-				s = "CLOSED";
 				break;
 			case VTCP_LISTEN:
 				vepoll_mark_active(sock->vep);
+				break;
+			case VTCP_SYN_SENT:
+				break;
+			case VTCP_SYN_RCVD:
+				break;
+			case VTCP_ESTABLISHED:
+				vepoll_mark_active(sock->vep);
+				vepoll_mark_available(sock->vep, VEPOLL_WRITE);
+				break;
+			case VTCP_CLOSING:
+				vepoll_mark_inactive(sock->vep);
+				break;
+			case VTCP_CLOSE_WAIT:
+				/* user needs to read a 0 so it knows we closed */
+				vepoll_mark_available(sock->vep, VEPOLL_READ);
+				break;
+			default:
+				break;
+		}
+
+#ifdef DEBUG
+		char* s;
+		switch (newstate) {
+			case VUDP:
+				s = "UDP";
+				break;
+			case VTCP_CLOSED:
+				s = "CLOSED";
+				break;
+			case VTCP_LISTEN:
 				s = "LISTEN";
 				break;
 			case VTCP_SYN_SENT:
@@ -158,17 +185,12 @@ void vsocket_transition(vsocket_tp sock, enum vsocket_state newstate) {
 				s = "SYN_RCVD";
 				break;
 			case VTCP_ESTABLISHED:
-				vepoll_mark_active(sock->vep);
-				vepoll_mark_available(sock->vep, VEPOLL_WRITE);
 				s = "ESTABLISHED";
 				break;
 			case VTCP_CLOSING:
-				vepoll_mark_inactive(sock->vep);
 				s = "CLOSING";
 				break;
 			case VTCP_CLOSE_WAIT:
-				/* user needs to read a 0 so it knows we closed */
-				vepoll_mark_available(sock->vep, VEPOLL_READ);
 				s = "CLOSE_WAIT";
 				break;
 			default:
@@ -176,6 +198,7 @@ void vsocket_transition(vsocket_tp sock, enum vsocket_state newstate) {
 				break;
 		}
 		debugf("vsocket_transition: socket %u moved to state %s (parent is %u)\n", sock->sock_desc, s, sock->sock_desc_parent);
+#endif
 	}
 }
 

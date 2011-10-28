@@ -334,7 +334,7 @@ int accept(int fd, __SOCKADDR_ARG  addr,socklen_t *__restrict addr_len)  {
 }
 
 int accept4(int fd, __SOCKADDR_ARG  addr,socklen_t *__restrict addr_len, int flags)  {
-	accept_fp* fp_ptr = &_vsocket_accept;
+	accept4_fp* fp_ptr = &_vsocket_accept4;
 	char* f_name = SOCKET_LIB_PREFIX "accept4";
 
 	/* should we be forwarding to the system call? */
@@ -344,7 +344,7 @@ int accept4(int fd, __SOCKADDR_ARG  addr,socklen_t *__restrict addr_len, int fla
 	}
 
 	PRELOAD_LOOKUP(fp_ptr, f_name, -1);
-	return (*fp_ptr)(fd, addr, addr_len);
+	return (*fp_ptr)(fd, addr, addr_len, flags);
 }
 
 int shutdown(int fd, int how) {
