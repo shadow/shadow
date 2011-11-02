@@ -136,26 +136,53 @@ int pipecloud_get_wakeup_fd(pipecloud_tp pc) {
 	return pc->mqs[pc->localized.id];//pc->mboxes[pc->localized.id].wakeup_channel[0];
 }
 
+static void pipecloud_add_local_buffer(pipecloud_tp pipecloud, const char* message, size_t bytes) {
+	pipecloud_buffer_tp buf = calloc(1, sizeof(*buf) + bytes);
+
+	if(buf == NULL)
+		printfault(EXIT_NOMEM, "pipecloud_localize_reads: Out of memory");
+
+	buf->len = bytes;
+	buf->offset = 0;
+
+	memcpy(buf->data, message, bytes);
+
+	list_push_back(pipecloud->localized.in, buf);
+	pipecloud->localized.waiting_in += bytes;
+}
+
+/* should be a non-blocking attempt to read */
+static void pipecloud_localize_reads(pipecloud_tp pipecloud) {
+	struct timespec ts;
+	char* msgbuffer = calloc(1, pipecloud->max_msg_size);
+	ssize_t rv = 0;
+
+	ts.tv_sec = 0;
+	ts.tv_nsec = 0;
+
+	do {
+		rv = mq_timedreceive(pipecloud->mqs[pipecloud->localized.id],
+				msgbuffer, pipecloud->max_msg_size, NULL, &ts);
+
+		if(rv > 0) {
+			pipecloud_add_local_buffer(pipecloud, msgbuffer, (size_t)rv);
+		}
+	} while(rv > 0);
+
+	free(msgbuffer);
+
+	return;
+}
+
 void pipecloud_select(pipecloud_tp pipecloud, int block) {
 	char* msgbuffer = calloc(1, pipecloud->max_msg_size);
-	int rv;
+	ssize_t rv = 0;
 
 	while(pipecloud->localized.waiting_in == 0 && block) {
 		rv = mq_receive(pipecloud->mqs[pipecloud->localized.id], msgbuffer, pipecloud->max_msg_size, NULL);
 
 		if(rv > 0) {
-			pipecloud_buffer_tp buf = calloc(1, sizeof(*buf) + rv);
-
-			if(buf == NULL)
-				printfault(EXIT_NOMEM, "pipecloud_localize_reads: Out of memory");
-
-			buf->len = rv;
-			buf->offset = 0;
-
-			memcpy(buf->data, msgbuffer, rv);
-
-			list_push_back(pipecloud->localized.in, buf);
-			pipecloud->localized.waiting_in += rv;
+			pipecloud_add_local_buffer(pipecloud, msgbuffer, (size_t)rv);
 		}
 	}
 
@@ -193,47 +220,14 @@ size_t pipecloud_write(pipecloud_tp pipecloud, unsigned int dest, char * data, s
 	return data_size;
 }
 
-void pipecloud_localize_reads(pipecloud_tp pipecloud) {
-	struct timespec ts;
-	char* msgbuffer = calloc(1, pipecloud->max_msg_size);
-	int rv;
-
-	ts.tv_sec = PIPECLOUD_TIMEOUT_SEC;
-	ts.tv_nsec = PIPECLOUD_TIMEOUT_NSEC;
-
-	do {
-		rv = mq_timedreceive(pipecloud->mqs[pipecloud->localized.id],
-				msgbuffer, pipecloud->max_msg_size, NULL, &ts);
-
-		if(rv > 0) {
-			pipecloud_buffer_tp buf = calloc(1, sizeof(*buf) + rv);
-
-			if(buf == NULL)
-				printfault(EXIT_NOMEM, "pipecloud_localize_reads: Out of memory");
-
-			buf->len = rv;
-			buf->offset = 0;
-
-			memcpy(buf->data, msgbuffer, rv);
-
-			list_push_back(pipecloud->localized.in, buf);
-			pipecloud->localized.waiting_in += rv;
-		}
-	} while(rv >= 0);
-
-	free(msgbuffer);
-
-	return;
-}
-
 int pipecloud_read(pipecloud_tp pipecloud, char * out_buffer, size_t size) {
-	size_t amt = 0, offset = 0, buf_avail = 0, rv = size;
+	size_t amt = 0, offset = 0, buf_avail = 0, rv = 0;
 	pipecloud_buffer_tp buf = NULL;
 
 	if(size == 0 || !out_buffer || size > pipecloud->localized.waiting_in)
 		return 0;
 
-	while(size) {
+	while(size > 0) {
 		buf = list_get_front(pipecloud->localized.in);
 
 		if(buf != NULL) {
@@ -243,22 +237,20 @@ int pipecloud_read(pipecloud_tp pipecloud, char * out_buffer, size_t size) {
 
 			/* copy data */
 			memcpy(out_buffer + offset, buf->data + buf->offset, amt);
+			assert((size - amt) >= 0);
 			size -= amt;
 			buf->offset += amt;
 			offset += amt;
+			rv += amt;
+			pipecloud->localized.waiting_in -= amt;
 
 			/* if this buffer has no more data, destroy it */
 			if(buf->offset==buf->len) {
 				list_pop_front(pipecloud->localized.in);
 				free(buf);
 			}
-		} else {
-			rv = 0;
-			break;
 		}
 	}
-
-	pipecloud->localized.waiting_in -= rv;
 
 	return rv;
 }

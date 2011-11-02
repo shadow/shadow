@@ -82,7 +82,5 @@ size_t pipecloud_write_core(pipecloud_tp pipecloud, unsigned int dest, char * da
 int pipecloud_read(pipecloud_tp pipecloud, char * buffer, size_t size);
 int pipecloud_peek(pipecloud_tp pipecloud, char * buffer, size_t size);
 
-void pipecloud_localize_reads(pipecloud_tp pipecloud);
-
 #endif
 

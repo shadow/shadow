@@ -881,7 +881,7 @@ int vsocket_getsockopt(vsocket_mgr_tp net, int fd, int level, int optname, void*
 int vsocket_setsockopt(vsocket_mgr_tp net, int fd, int level, int optname, const void* optval,
 		socklen_t optlen) {
 	/* TODO implement */
-	dlogf(LOG_WARN, "vsocket_setsockopt: setsockopt not implemented\n");
+	debugf("vsocket_setsockopt: setsockopt not implemented\n");
 	errno = ENOSYS;
 	return VSOCKET_ERROR;
 }
