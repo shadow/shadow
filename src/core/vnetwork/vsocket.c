@@ -206,7 +206,7 @@ static int vsocket_bind_implicit(vsocket_mgr_tp net, int fd, in_addr_t addr) {
 	struct sockaddr_in bind_addr;
 	memset(&bind_addr, 0, sizeof(bind_addr));
 	bind_addr.sin_addr.s_addr = addr;
-	bind_addr.sin_port = htons(net->next_rnd_port++);
+	bind_addr.sin_port = htons(vsocket_mgr_get_random_port(net));
 	bind_addr.sin_family = PF_INET;
 	return vsocket_bind(net, fd, &bind_addr, sizeof(bind_addr));
 }
@@ -294,8 +294,8 @@ int vsocket_socketpair(vsocket_mgr_tp net, int domain, int type, int protocol, i
 	}
 
 	/* create the bi-directional pipe */
-	vpipe_id fda = net->next_sock_desc++;
-	vpipe_id fdb = net->next_sock_desc++;
+	vpipe_id fda = vsocket_mgr_get_random_descriptor(net);
+	vpipe_id fdb = vsocket_mgr_get_random_descriptor(net);
 
 	if(vpipe_create(net->vev_mgr, net->vpipe_mgr, fda, fdb) == VPIPE_SUCCESS) {
 		debugf("vsocket_socketpair: created socketpair (%u, %u)\n", fda, fdb);
@@ -338,7 +338,7 @@ int vsocket_bind(vsocket_mgr_tp net, int fd, struct sockaddr_in* saddr, socklen_
 	}
 
 	if(bind_port == 0) {
-		bind_port = htons(net->next_rnd_port++);
+		bind_port = htons(vsocket_mgr_get_random_port(net));
 	}
 
 	int bound_lb = vsocket_mgr_isbound_loopback(net, bind_port);
@@ -972,7 +972,7 @@ int vsocket_accept(vsocket_mgr_tp net, int fd, struct sockaddr_in* saddr, sockle
 	if(pending_sock->vt->vtcp == NULL || pending_sock->curr_state != VTCP_ESTABLISHED){
 		/* close stale socket whose connection was reset before accepted */
 		if(pending_sock->vt->vtcp != NULL && pending_sock->vt->vtcp->connection_was_reset) {
-			vsocket_close(net, pending_sock->sock_desc);
+			vsocket_close(net, (int)pending_sock->sock_desc);
 		}
 		errno = ECONNABORTED;
 		return VSOCKET_ERROR;
@@ -1004,7 +1004,7 @@ int vsocket_accept(vsocket_mgr_tp net, int fd, struct sockaddr_in* saddr, sockle
 		*saddr_len = sizeof(*saddr);
 	}
 
-	return pending_sock->sock_desc;
+	return (int) pending_sock->sock_desc;
 }
 
 int vsocket_shutdown(vsocket_mgr_tp net, int fd, int how) {

@@ -23,6 +23,7 @@
 #include <arpa/inet.h>
 #include <stdlib.h>
 #include <stddef.h>
+#include <assert.h>
 
 #include "log.h"
 #include "vsocket_mgr.h"
@@ -108,6 +109,25 @@ void vsocket_mgr_destroy(vsocket_mgr_tp net) {
 	}
 }
 
+in_port_t vsocket_mgr_get_random_port(vsocket_mgr_tp net) {
+	assert(net);
+	in_port_t p = net->next_rnd_port++;
+	assert(p >= VSOCKET_MIN_RND_PORT);
+	return p;
+}
+
+uint16_t vsocket_mgr_get_random_descriptor(vsocket_mgr_tp net) {
+	assert(net);
+	/*
+	 * if this looped over because of long simulations, scream!
+	 * @todo why are we using uint16 for this? we have more room with int.
+	 * @todo implement some kind of descriptor tracking to reuse old ones.
+	 */
+	uint16_t d = net->next_sock_desc++;
+	assert(d >= VNETWORK_MIN_SD);
+	return d;
+}
+
 vinterface_tp vsocket_mgr_create_interface(vsocket_mgr_tp net, in_addr_t addr) {
 	if(net != NULL) {
 		vinterface_tp vi = malloc(sizeof(vinterface_t));
@@ -125,7 +145,7 @@ vsocket_tp vsocket_mgr_create_socket(vsocket_mgr_tp net, uint8_t type) {
 
 	sock->type = type;
 
-	sock->sock_desc = net->next_sock_desc++;
+	sock->sock_desc = vsocket_mgr_get_random_descriptor(net);
 	sock->sock_desc_parent = 0;
 	sock->ethernet_peer = NULL;
 	sock->loopback_peer = NULL;
@@ -199,7 +219,7 @@ void vsocket_mgr_remove_server(vsocket_mgr_tp net, vtcp_server_tp server) {
 
 void vsocket_mgr_add_socket(vsocket_mgr_tp net, vsocket_tp sock) {
 	if(net != NULL && sock != NULL) {
-		hashtable_set(net->vsockets, sock->sock_desc, sock);
+		hashtable_set(net->vsockets, (unsigned int)sock->sock_desc, sock);
 	}
 }
 

@@ -35,7 +35,7 @@
 #include "list.h"
 
 /* starting point for 'random' ports we select [2^16 / 2] */
-#define VSOCKET_MIN_RND_PORT 30000
+#define VSOCKET_MIN_RND_PORT 20000
 /* max size of incomplete, un-established connection queue, taken from /proc/sys/net/ipv4/tcp_max_syn_backlog */
 #define VSOCKET_MAX_SYN_BACKLOG 1024
 /* Initial send sequence number */

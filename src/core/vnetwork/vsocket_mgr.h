@@ -98,6 +98,10 @@ typedef struct vsocket_mgr_s {
 
 vsocket_mgr_tp vsocket_mgr_create(context_provider_tp p, in_addr_t addr, uint32_t KBps_down, uint32_t KBps_up, uint64_t cpu_speed_Bps);
 void vsocket_mgr_destroy(vsocket_mgr_tp net);
+
+uint16_t vsocket_mgr_get_random_descriptor(vsocket_mgr_tp net);
+in_port_t vsocket_mgr_get_random_port(vsocket_mgr_tp net);
+
 vsocket_tp vsocket_mgr_create_socket(vsocket_mgr_tp net, uint8_t type);
 void vsocket_mgr_destroy_socket(vsocket_tp sock);
 void vsocket_mgr_add_socket(vsocket_mgr_tp net, vsocket_tp sock);

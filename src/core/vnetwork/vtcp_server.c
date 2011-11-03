@@ -111,7 +111,7 @@ vtcp_server_child_tp vtcp_server_create_child(vtcp_server_tp server, in_addr_t r
 	} else {
 		newaddr.sin_addr.s_addr = server->vsocket_mgr->addr;
 	}
-	newaddr.sin_port = htons(server->vsocket_mgr->next_rnd_port++);
+	newaddr.sin_port = htons(vsocket_mgr_get_random_port(server->vsocket_mgr));
 	newaddr.sin_family = PF_UNIX;
 
 	int result = vsocket_bind(server->vsocket_mgr, schild->sock->sock_desc, &newaddr, sizeof(newaddr));

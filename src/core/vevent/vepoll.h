@@ -56,7 +56,7 @@ enum vepoll_flags {
 
 typedef struct vepoll_s {
 	in_addr_t addr;
-	uint16_t sockd;
+	int sockd;
 	/* OR'ed with types that are allowed (i.e. readable/writable) */
 	enum vepoll_type available;
 	/* OR'ed with types that vevent is waiting for (i.e. readable/writable) */
