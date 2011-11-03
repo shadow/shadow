@@ -48,11 +48,13 @@ pipecloud_tp pipecloud_create(unsigned int attendees, size_t size, unsigned int 
 	if(!pc)
 		printfault(EXIT_NOMEM, "pipecloud_create: Out of memory");
 
-	pc->mqs = malloc(sizeof(*pc->mqs) * attendees);
+	pc->pipeqs = malloc(sizeof(pipecloud_queue_t) * attendees);
 
 	attrs.mq_flags = 0;
 	attrs.mq_maxmsg = 10;
 	attrs.mq_msgsize = 8192;
+
+	/* fixme error here if the OS cuts this size to something lower */
 	pc->max_msg_size = 8192;
 	pc->num_pipes = attendees;
 
@@ -66,14 +68,21 @@ pipecloud_tp pipecloud_create(unsigned int attendees, size_t size, unsigned int 
 
 	/* Create the MQs */
 	for(int i=0; i < attendees; i++) {
-		snprintf(mqname, sizeof(mqname), "/shadow-pid%ld-mq%d", mypid, i);
-		pc->mqs[i] = mq_open(mqname, O_RDWR | O_CREAT, 0777, &attrs);
+		pipecloud_queue_tp myq = &pc->pipeqs[i];
 
-		if(pc->mqs[i] == -1){
+		snprintf(mqname, sizeof(mqname), "/shadow-pid%ld-mq%d", mypid, i);
+		size_t name_len = strlen(mqname);
+		myq->name = calloc(1, name_len);
+		memmove(myq->name, mqname, name_len);
+
+		myq->descriptor = mq_open(myq->name, O_RDWR | O_CREAT, 0777, &attrs);
+
+		if(myq->descriptor == -1){
 			perror("mq_open");
 			printfault(EXIT_UNKNOWN, "pipecloud_create: Unable to open IPC message queues");
 		}
-//		mq_setattr(pc->mqs[i], &attrs, NULL);
+
+		mq_setattr(myq->descriptor, &attrs, NULL);
 
 		/* the following only works because the mesasge queues are inherited.
 		 * unlinking deletes the name-to-queue mapping, so no one else will be
@@ -101,7 +110,16 @@ void pipecloud_destroy(pipecloud_tp pipecloud) {
 		free(buf);
 
 	for(int i=0; i < pipecloud->num_pipes; i++) {
-		mq_close(pipecloud->mqs[i]);
+		pipecloud_queue_tp myq = &pipecloud->pipeqs[i];
+
+//		if(pipecloud->localized.id == 0) {
+//			if(mq_unlink(myq->name) < 0) {
+//				perror("mq_unlink");
+//				printfault(EXIT_UNKNOWN, "pipecloud_create: Error unlinking successfully created message queue");
+//			}
+//		}
+
+		mq_close(myq->descriptor);
 	}
 
 	/* process 0 should destroy semaphores and the shm segment */
@@ -125,7 +143,7 @@ void pipecloud_destroy(pipecloud_tp pipecloud) {
 
 	//if(pipecloud->localized.in)
 	list_destroy(pipecloud->localized.in);
-	free(pipecloud->mqs);
+	free(pipecloud->pipeqs);
 	free(pipecloud);
 	return ;
 }
@@ -133,7 +151,8 @@ void pipecloud_destroy(pipecloud_tp pipecloud) {
 int pipecloud_get_wakeup_fd(pipecloud_tp pc) {
 	if(pc->localized.id < 0)
 		return -1;
-	return pc->mqs[pc->localized.id];//pc->mboxes[pc->localized.id].wakeup_channel[0];
+	pipecloud_queue_tp myq = &pc->pipeqs[pc->localized.id];
+	return myq->descriptor;//pc->mboxes[pc->localized.id].wakeup_channel[0];
 }
 
 static void pipecloud_add_local_buffer(pipecloud_tp pipecloud, const char* message, size_t bytes) {
@@ -154,32 +173,50 @@ static void pipecloud_add_local_buffer(pipecloud_tp pipecloud, const char* messa
 /* should be a non-blocking attempt to read */
 static void pipecloud_localize_reads(pipecloud_tp pipecloud) {
 	struct timespec ts;
-	char* msgbuffer = calloc(1, pipecloud->max_msg_size);
 	ssize_t rv = 0;
 
 	ts.tv_sec = 0;
 	ts.tv_nsec = 0;
 
-	do {
-		rv = mq_timedreceive(pipecloud->mqs[pipecloud->localized.id],
-				msgbuffer, pipecloud->max_msg_size, NULL, &ts);
+	pipecloud_queue_tp myq = &pipecloud->pipeqs[pipecloud->localized.id];
 
-		if(rv > 0) {
-			pipecloud_add_local_buffer(pipecloud, msgbuffer, (size_t)rv);
-		}
-	} while(rv > 0);
+	struct mq_attr attrs;
+	if(mq_getattr(myq->descriptor, &attrs) != 0) {
+		perror("mq_getattr");
+	}
 
-	free(msgbuffer);
+	/* if there are waiting messages, we better be able to read one.*/
+	if(attrs.mq_curmsgs > 0) {
+		char* msgbuffer = calloc(1, pipecloud->max_msg_size);
+		size_t total_bytes = 0;
+
+		do {
+			rv = mq_timedreceive(myq->descriptor, msgbuffer, pipecloud->max_msg_size, NULL, &ts);
+
+			if(rv > 0) {
+				size_t bytes = (size_t)rv;
+				total_bytes += bytes;
+				pipecloud_add_local_buffer(pipecloud, msgbuffer, bytes);
+			}
+
+			/* if we're here we should have had at least one message */
+			assert(total_bytes > 0);
+		} while(rv > 0);
+
+		free(msgbuffer);
+	}
 
 	return;
 }
 
 void pipecloud_select(pipecloud_tp pipecloud, int block) {
 	char* msgbuffer = calloc(1, pipecloud->max_msg_size);
-	ssize_t rv = 0;
+	ssize_t rv;
+
+	pipecloud_queue_tp myq = &pipecloud->pipeqs[pipecloud->localized.id];
 
 	while(pipecloud->localized.waiting_in == 0 && block) {
-		rv = mq_receive(pipecloud->mqs[pipecloud->localized.id], msgbuffer, pipecloud->max_msg_size, NULL);
+		rv = mq_receive(myq->descriptor, msgbuffer, pipecloud->max_msg_size, NULL);
 
 		if(rv > 0) {
 			pipecloud_add_local_buffer(pipecloud, msgbuffer, (size_t)rv);
@@ -204,17 +241,32 @@ size_t pipecloud_write(pipecloud_tp pipecloud, unsigned int dest, char * data, s
 
 	assert(dest < pipecloud->num_pipes);
 
+	pipecloud_queue_tp destq = &pipecloud->pipeqs[dest];
+
 	ts.tv_sec = PIPECLOUD_TIMEOUT_SEC;
 	ts.tv_nsec = PIPECLOUD_TIMEOUT_NSEC;
 
-	rv = mq_timedsend(pipecloud->mqs[dest], data, data_size, 0, &ts);
+	rv = mq_timedsend(destq->descriptor, data, data_size, 0, &ts);
 
 	while(rv != 0) {
 		/* first, try to pull in any waiting writes that we might have to avoid deadlocks */
 		pipecloud_localize_reads(pipecloud);
 
 		/* then, try to send again. */
-		rv = mq_timedsend(pipecloud->mqs[dest], data, data_size, 0, &ts);
+		rv = mq_timedsend(destq->descriptor, data, data_size, 0, &ts);
+
+		/* if it failed, there better not be space there! */
+		if(rv < 0) {
+			struct mq_attr attrs;
+			if(mq_getattr(destq->descriptor, &attrs) != 0) {
+				perror("mq_getattr");
+			}
+			if(attrs.mq_maxmsg > attrs.mq_curmsgs) {
+				/* explode. something happened to our descriptor. did our
+				 * virtual descriptors loop around? */
+				printfault(EXIT_UNKNOWN, "pipecloud_write: fatal descriptor error - timeout occurred even though there is space in the message queue!");
+			}
+		}
 	}
 
 	return data_size;
@@ -227,7 +279,7 @@ int pipecloud_read(pipecloud_tp pipecloud, char * out_buffer, size_t size) {
 	if(size == 0 || !out_buffer || size > pipecloud->localized.waiting_in)
 		return 0;
 
-	while(size > 0) {
+	while(size) {
 		buf = list_get_front(pipecloud->localized.in);
 
 		if(buf != NULL) {
@@ -237,7 +289,6 @@ int pipecloud_read(pipecloud_tp pipecloud, char * out_buffer, size_t size) {
 
 			/* copy data */
 			memcpy(out_buffer + offset, buf->data + buf->offset, amt);
-			assert((size - amt) >= 0);
 			size -= amt;
 			buf->offset += amt;
 			offset += amt;

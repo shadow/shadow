@@ -47,11 +47,16 @@ typedef struct pipecloud_buffer_t {
 	char data[];
 } pipecloud_buffer_t, * pipecloud_buffer_tp;
 
+typedef struct pipecloud_queue_t {
+	mqd_t descriptor;
+	char* name;
+} pipecloud_queue_t, *pipecloud_queue_tp;
+
 typedef struct pipecloud_t {
 	/* total number of mailbox endpoints */
 	unsigned int num_pipes;
 
-	mqd_t * mqs;
+	pipecloud_queue_t* pipeqs;
 
 	size_t max_msg_size;
 
