@@ -80,7 +80,7 @@ void vevent_mgr_notify_can_write(vevent_mgr_tp mgr, int sockfd);
 void vevent_mgr_notify_signal_received(vevent_mgr_tp mgr, int signal);
 
 /* mostly for debugging purposes */
-void vevent_mgr_print_stat(vevent_mgr_tp mgr, uint16_t sockd);
+void vevent_mgr_print_stat(vevent_mgr_tp mgr, int sockd);
 void vevent_mgr_print_all(vevent_mgr_tp mgr);
 
 #endif /* VEVENT_MGR_H_ */

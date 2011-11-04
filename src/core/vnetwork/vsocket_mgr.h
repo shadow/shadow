@@ -57,7 +57,7 @@ typedef struct vsocket_t {
 	/* type of this socket, either SOCK_DGRAM, or SOCK_STREAM */
 	uint8_t type;
 	/* the socket descriptor, unique for each socket */
-	uint16_t sock_desc;
+	int sock_desc;
 	/* the local name of the socket, (address and port) */
 	vpeer_tp ethernet_peer;
 	/* the loopback interface, non-null if bound to loopback */
@@ -67,7 +67,7 @@ typedef struct vsocket_t {
 	/* if set, the socket will be deleted when its buffers become empty */
 	uint8_t do_delete;
 	/* multiplexed sockets are child sockets of a server */
-	uint16_t sock_desc_parent;
+	int sock_desc_parent;
 	/* socket states */
 	enum vsocket_state prev_state;
 	enum vsocket_state curr_state;
@@ -80,7 +80,7 @@ typedef struct vsocket_t {
 typedef struct vsocket_mgr_s {
 	in_addr_t addr;
 	char addr_string[INET_ADDRSTRLEN];
-	uint16_t next_sock_desc;
+	int next_sock_desc;
 	uint16_t next_rnd_port;
 	/* hashtable<socket descriptor, vsocket> */
 	hashtable_tp vsockets;
@@ -99,13 +99,13 @@ typedef struct vsocket_mgr_s {
 vsocket_mgr_tp vsocket_mgr_create(context_provider_tp p, in_addr_t addr, uint32_t KBps_down, uint32_t KBps_up, uint64_t cpu_speed_Bps);
 void vsocket_mgr_destroy(vsocket_mgr_tp net);
 
-uint16_t vsocket_mgr_get_random_descriptor(vsocket_mgr_tp net);
+int vsocket_mgr_get_random_descriptor(vsocket_mgr_tp net);
 in_port_t vsocket_mgr_get_random_port(vsocket_mgr_tp net);
 
 vsocket_tp vsocket_mgr_create_socket(vsocket_mgr_tp net, uint8_t type);
 void vsocket_mgr_destroy_socket(vsocket_tp sock);
 void vsocket_mgr_add_socket(vsocket_mgr_tp net, vsocket_tp sock);
-vsocket_tp vsocket_mgr_get_socket(vsocket_mgr_tp net, uint16_t sockd);
+vsocket_tp vsocket_mgr_get_socket(vsocket_mgr_tp net, int sockd);
 void vsocket_mgr_remove_socket(vsocket_mgr_tp net, vsocket_tp sock);
 void vsocket_mgr_map_socket_tcp(vsocket_mgr_tp net, vsocket_tp sock);
 vsocket_tp vsocket_mgr_get_socket_tcp(vsocket_mgr_tp net, uint16_t port);
@@ -127,8 +127,8 @@ uint8_t vsocket_mgr_isbound_ethernet(vsocket_mgr_tp net, in_port_t port);
 void vsocket_mgr_bind_ethernet(vsocket_mgr_tp net, vsocket_tp sock, in_port_t bind_port);
 void vsocket_mgr_bind_loopback(vsocket_mgr_tp net, vsocket_tp sock, in_port_t bind_port);
 
-void vsocket_mgr_onnotify(vsocket_mgr_tp net, context_provider_tp provider, uint16_t sockd);
+void vsocket_mgr_onnotify(vsocket_mgr_tp net, context_provider_tp provider, int sockd);
 
-void vsocket_mgr_print_stat(vsocket_mgr_tp net, uint16_t sockd);
+void vsocket_mgr_print_stat(vsocket_mgr_tp net, int sockd);
 
 #endif /* VSOCKET_MGR_H_ */

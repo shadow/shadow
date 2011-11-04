@@ -116,14 +116,13 @@ in_port_t vsocket_mgr_get_random_port(vsocket_mgr_tp net) {
 	return p;
 }
 
-uint16_t vsocket_mgr_get_random_descriptor(vsocket_mgr_tp net) {
+int vsocket_mgr_get_random_descriptor(vsocket_mgr_tp net) {
 	assert(net);
 	/*
 	 * if this looped over because of long simulations, scream!
-	 * @todo why are we using uint16 for this? we have more room with int.
 	 * @todo implement some kind of descriptor tracking to reuse old ones.
 	 */
-	uint16_t d = net->next_sock_desc++;
+	int d = net->next_sock_desc++;
 	assert(d >= VNETWORK_MIN_SD);
 	return d;
 }
@@ -223,16 +222,16 @@ void vsocket_mgr_add_socket(vsocket_mgr_tp net, vsocket_tp sock) {
 	}
 }
 
-vsocket_tp vsocket_mgr_get_socket(vsocket_mgr_tp net, uint16_t sockd) {
+vsocket_tp vsocket_mgr_get_socket(vsocket_mgr_tp net, int sockd) {
 	if(net != NULL) {
-		return hashtable_get(net->vsockets, sockd);
+		return hashtable_get(net->vsockets, (unsigned int)sockd);
 	}
 	return NULL;
 }
 
 void vsocket_mgr_remove_socket(vsocket_mgr_tp net, vsocket_tp sock) {
 	if(net != NULL && sock != NULL) {
-		hashtable_remove(net->vsockets, sock->sock_desc);
+		hashtable_remove(net->vsockets, (unsigned int)sock->sock_desc);
 	}
 }
 
@@ -245,30 +244,30 @@ void vsocket_mgr_destroy_and_remove_socket(vsocket_mgr_tp net, vsocket_tp sock) 
 		return;
 	}
 
-	if(hashtable_remove(net->vsockets, sock->sock_desc) == NULL) {
+	if(hashtable_remove(net->vsockets, (unsigned int)sock->sock_desc) == NULL) {
 		return;
 	}
 
 	if(sock->type == SOCK_STREAM) {
 		if(sock->ethernet_peer != NULL && net->ethernet != NULL) {
-			hashtable_remove(net->ethernet->tcp_vsockets, sock->ethernet_peer->port);
+			hashtable_remove(net->ethernet->tcp_vsockets, (unsigned int)sock->ethernet_peer->port);
 		}
 		if(sock->loopback_peer != NULL && net->loopback != NULL) {
-			hashtable_remove(net->loopback->tcp_vsockets, sock->loopback_peer->port);
+			hashtable_remove(net->loopback->tcp_vsockets, (unsigned int)sock->loopback_peer->port);
 		}
 
 		/* child of a server */
 		if(sock->sock_desc_parent != 0) {
-			vsocket_tp parent = hashtable_get(net->vsockets, sock->sock_desc_parent);
+			vsocket_tp parent = hashtable_get(net->vsockets, (unsigned int)sock->sock_desc_parent);
 
 			if(parent != NULL) {
 				/* get the server running on the parent */
 				vtcp_server_tp parent_server = NULL;
 
 				if(parent->ethernet_peer != NULL && net->ethernet != NULL) {
-					parent_server = hashtable_get(net->ethernet->tcp_servers, parent->ethernet_peer->port);
+					parent_server = hashtable_get(net->ethernet->tcp_servers, (unsigned int)parent->ethernet_peer->port);
 				} else if(parent->loopback_peer != NULL && net->loopback != NULL) {
-					parent_server = hashtable_get(net->loopback->tcp_servers, parent->loopback_peer->port);
+					parent_server = hashtable_get(net->loopback->tcp_servers,(unsigned int) parent->loopback_peer->port);
 				}
 
 				if(parent_server != NULL) {
@@ -288,10 +287,10 @@ void vsocket_mgr_destroy_and_remove_socket(vsocket_mgr_tp net, vsocket_tp sock) 
 		vtcp_server_tp server1 = NULL;
 		vtcp_server_tp server2 = NULL;
 		if(sock->ethernet_peer != NULL && net->ethernet != NULL) {
-			server1 = hashtable_remove(net->ethernet->tcp_servers, sock->ethernet_peer->port);
+			server1 = hashtable_remove(net->ethernet->tcp_servers, (unsigned int)sock->ethernet_peer->port);
 		}
 		if(sock->loopback_peer != NULL && net->loopback != NULL) {
-			server2 = hashtable_remove(net->loopback->tcp_servers, sock->loopback_peer->port);
+			server2 = hashtable_remove(net->loopback->tcp_servers, (unsigned int)sock->loopback_peer->port);
 		}
 
 		/* make sure to only destroy once */
@@ -302,10 +301,10 @@ void vsocket_mgr_destroy_and_remove_socket(vsocket_mgr_tp net, vsocket_tp sock) 
 		}
 	} else {
 		if(sock->ethernet_peer != NULL && net->ethernet != NULL) {
-			hashtable_remove(net->ethernet->udp_vsockets, sock->ethernet_peer->port);
+			hashtable_remove(net->ethernet->udp_vsockets, (unsigned int)sock->ethernet_peer->port);
 		}
 		if(sock->loopback_peer != NULL && net->loopback != NULL) {
-			hashtable_remove(net->loopback->udp_vsockets, sock->loopback_peer->port);
+			hashtable_remove(net->loopback->udp_vsockets, (unsigned int)sock->loopback_peer->port);
 		}
 	}
 
@@ -315,7 +314,7 @@ void vsocket_mgr_destroy_and_remove_socket(vsocket_mgr_tp net, vsocket_tp sock) 
 		/* use net as dummy value.
 		 * TODO: hashtable should really implement a contains() function instead.
 		 */
-		hashtable_set(net->destroyed_descs, sock->sock_desc, net);
+		hashtable_set(net->destroyed_descs, (unsigned int)sock->sock_desc, net);
 	}
 	vsocket_mgr_destroy_socket(sock);
 }
@@ -364,12 +363,12 @@ static vsocket_tp vsocket_mgr_find_socket_helper(vinterface_tp vi, uint8_t proto
 
 			if(schild == NULL) {
 				/* target must be the server itself */
-				target = hashtable_get(vi->tcp_vsockets, local_port);
+				target = hashtable_get(vi->tcp_vsockets, (unsigned int)local_port);
 			} else {
 				target = schild->sock;
 			}
 		} else {
-			target = hashtable_get(vi->udp_vsockets, local_port);
+			target = hashtable_get(vi->udp_vsockets, (unsigned int)local_port);
 		}
 
 		return target;
@@ -427,7 +426,7 @@ void vsocket_mgr_bind_loopback(vsocket_mgr_tp net, vsocket_tp sock, in_port_t bi
 	}
 }
 
-void vsocket_mgr_onnotify(vsocket_mgr_tp net, context_provider_tp provider, uint16_t sockd) {
+void vsocket_mgr_onnotify(vsocket_mgr_tp net, context_provider_tp provider, int sockd) {
 	if(net != NULL) {
 		/* check for a pipe */
 		vepoll_tp pipe_poll = vpipe_get_poll(net->vpipe_mgr, sockd);
@@ -445,33 +444,33 @@ void vsocket_mgr_onnotify(vsocket_mgr_tp net, context_provider_tp provider, uint
 	}
 }
 
-void vsocket_mgr_print_stat(vsocket_mgr_tp net, uint16_t sockd) {
+void vsocket_mgr_print_stat(vsocket_mgr_tp net, int sockd) {
 	if(net != NULL) {
 		debugf("######vsocket_mgr_print_stat: looking for stats for socket %u######\n", sockd);
 		vsocket_tp sock = vsocket_mgr_get_socket(net, sockd);
 		if(sock != NULL) {
 			if(sock->loopback_peer != NULL) {
-				debugf("sockd %u running on %s:%u\n", sockd,
+				debugf("sockd %i running on %s:%u\n", sockd,
 					inet_ntoa_t(sock->loopback_peer->addr), ntohs(sock->loopback_peer->port));
 			}
 
 			if(sock->ethernet_peer != NULL) {
-				debugf("sockd %u running on %s:%u\n", sockd,
+				debugf("sockd %i running on %s:%u\n", sockd,
 					inet_ntoa_t(sock->ethernet_peer->addr), ntohs(sock->ethernet_peer->port));
 			}
 
 			if(sock->sock_desc_parent > 0) {
-				debugf("sockd %u has parent sockd %u\n", sockd, sock->sock_desc_parent);
+				debugf("sockd %ii has parent sockd %i\n", sockd, sock->sock_desc_parent);
 				vsocket_tp parent = vsocket_mgr_get_socket(net, sock->sock_desc_parent);
 
 				if(parent != NULL) {
 					if(parent->loopback_peer != NULL) {
-						debugf("parent sockd %u running on %s:%u\n", parent->sock_desc,
+						debugf("parent sockd %i running on %s:%u\n", parent->sock_desc,
 							inet_ntoa_t(parent->loopback_peer->addr), ntohs(parent->loopback_peer->port));
 					}
 
 					if(parent->ethernet_peer != NULL) {
-						debugf("parent sockd %u running on %s:%u\n", parent->sock_desc,
+						debugf("parent sockd %i running on %s:%u\n", parent->sock_desc,
 							inet_ntoa_t(parent->ethernet_peer->addr), ntohs(parent->ethernet_peer->port));
 					}
 
@@ -481,13 +480,13 @@ void vsocket_mgr_print_stat(vsocket_mgr_tp net, uint16_t sockd) {
 			}
 
 			if(sock->vt != NULL && sock->vt->vtcp != NULL && sock->vt->vtcp->remote_peer != NULL) {
-				debugf("sockd %u connected to %s:%u\n", sockd,
+				debugf("sockd %i connected to %s:%u\n", sockd,
 					inet_ntoa_t(sock->vt->vtcp->remote_peer->addr), ntohs(sock->vt->vtcp->remote_peer->port));
 			}
 
 			vtcp_server_tp server = vsocket_mgr_get_server(net, sock);
 			if(server != NULL) {
-				debugf("sockd %u running a server with %u accepted, %u pending, %u incomplete\n", sockd,
+				debugf("sockd %i running a server with %u accepted, %u pending, %u incomplete\n", sockd,
 					server->accepted_children->population, server->pending_queue->num_elems,
 					server->incomplete_children->population);
 
@@ -497,31 +496,31 @@ void vsocket_mgr_print_stat(vsocket_mgr_tp net, uint16_t sockd) {
 			}
 
 			if(vepoll_query_available(sock->vep, VEPOLL_READ)) {
-				debugf("sockd %u ready to read\n", sockd);
+				debugf("sockd %i ready to read\n", sockd);
 				if(sock->vep->state == VEPOLL_ACTIVE) {
 					if(sock->vep->flags & VEPOLL_NOTIFY_SCHEDULED) {
-						debugf("sockd %u readable, active and notify is scheduled\n", sockd);
+						debugf("sockd %i readable, active and notify is scheduled\n", sockd);
 					} else {
-						dlogf(LOG_WARN, "sockd %u read available and active but not scheduled!!!!!\n", sockd);
+						dlogf(LOG_WARN, "sockd %i read available and active but not scheduled!!!!!\n", sockd);
 					}
 				} else {
-					debugf("sockd %u inactive\n", sockd);
+					debugf("sockd %i inactive\n", sockd);
 				}
 			}
 			if(vepoll_query_available(sock->vep, VEPOLL_WRITE)) {
-				debugf("sockd %u ready to write\n", sockd);
+				debugf("sockd %i ready to write\n", sockd);
 				if(sock->vep->state == VEPOLL_ACTIVE) {
 					if(sock->vep->flags & VEPOLL_NOTIFY_SCHEDULED) {
-						debugf("sockd %u writable, active and notify is scheduled\n", sockd);
+						debugf("sockd %i writable, active and notify is scheduled\n", sockd);
 					} else {
-						dlogf(LOG_WARN, "sockd %u write available and active but not scheduled!!!!!\n", sockd);
+						dlogf(LOG_WARN, "sockd %i write available and active but not scheduled!!!!!\n", sockd);
 					}
 				} else {
-					debugf("sockd %u inactive\n", sockd);
+					debugf("sockd %i inactive\n", sockd);
 				}
 			}
 		}
 
-		debugf("######vsocket_mgr_print_stat: stat done for socket %u######\n", sockd);
+		debugf("######vsocket_mgr_print_stat: stat done for socket %i######\n", sockd);
 	}
 }

@@ -94,7 +94,7 @@ void vtransport_destroy(vtransport_tp vt) {
 	}
 }
 
-vtransport_item_tp vtransport_create_item(uint16_t sockd, rc_vpacket_pod_tp rc_packet) {
+vtransport_item_tp vtransport_create_item(int sockd, rc_vpacket_pod_tp rc_packet) {
 	rc_vpacket_pod_retain_stack(rc_packet);
 
 	vtransport_item_tp titem = malloc(sizeof(vtransport_item_t));

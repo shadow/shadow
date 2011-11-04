@@ -71,10 +71,8 @@ typedef unsigned long long ptime_t;
  * file descriptor counter doesnt collide with our sockets. So this should be
  * set over the ulimit -n value.
  *
- * FIXME we should implement socket descriptors greater than uint16 so we can use
- * all 31 bits of the int!
  */
-#define VNETWORK_MIN_SD 20000
+#define VNETWORK_MIN_SD 1000000
 
 /* todo probably doesnt belong here*/
 enum operation_type {

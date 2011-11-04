@@ -71,7 +71,7 @@ typedef struct vepoll_s {
 	uint8_t do_read_first;
 } vepoll_t, *vepoll_tp;
 
-vepoll_tp vepoll_create(vevent_mgr_tp vev_mgr, in_addr_t addr, uint16_t sockd);
+vepoll_tp vepoll_create(vevent_mgr_tp vev_mgr, in_addr_t addr, int sockd);
 void vepoll_destroy(vepoll_tp vep);
 
 /* the socket is active and can be notified when available */

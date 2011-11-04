@@ -1002,7 +1002,7 @@ void vtcp_retransmit(vtcp_tp vtcp, uint32_t retransmit_key) {
 		/* this might happen if an old packet was already removed from the retransmit
 		 * buffer because we received a newer ack that cleared it.
 		 */
-		uint16_t sockd = 0;
+		int sockd = 0;
 		if(vtcp->sock != NULL) {
 			sockd = vtcp->sock->sock_desc;
 		}
@@ -1020,7 +1020,7 @@ uint32_t vtcp_generate_iss() {
 	return VTRANSPORT_TCP_ISS;
 }
 
-void vtcp_ondack(vsocket_mgr_tp net, uint16_t sockd) {
+void vtcp_ondack(vsocket_mgr_tp net, int sockd) {
 	debugf("vtcp_ondack: event fired\n");
 
 	/* a delayed ack timer expired, send ack if needed */

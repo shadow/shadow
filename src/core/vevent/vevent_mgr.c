@@ -150,7 +150,7 @@ static void vevent_mgr_print_all_cb(void* val, int key, void* param) {
 	}
 }
 
-void vevent_mgr_print_stat(vevent_mgr_tp mgr, uint16_t sockd) {
+void vevent_mgr_print_stat(vevent_mgr_tp mgr, int sockd) {
 	if(mgr != NULL) {
 		/* go through every base we know about */
 		list_iter_tp bases = list_iterator_create(mgr->event_bases);

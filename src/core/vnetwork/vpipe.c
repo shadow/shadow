@@ -262,8 +262,8 @@ enum vpipe_status vpipe_create(vevent_mgr_tp vev_mgr, vpipe_mgr_tp mgr, vpipe_id
 
 		if(bipipe != NULL) {
 			/* TODO: check for collisions */
-			hashtable_set(mgr->bipipes, fda, bipipe);
-			hashtable_set(mgr->bipipes, fdb, bipipe);
+			hashtable_set(mgr->bipipes, (unsigned int)fda, bipipe);
+			hashtable_set(mgr->bipipes, (unsigned int)fdb, bipipe);
 			return VPIPE_SUCCESS;
 		}
 	}
@@ -272,7 +272,7 @@ enum vpipe_status vpipe_create(vevent_mgr_tp vev_mgr, vpipe_mgr_tp mgr, vpipe_id
 
 ssize_t vpipe_read(vpipe_mgr_tp mgr, vpipe_id fd, void* dst, size_t num_bytes) {
 	if(mgr != NULL) {
-		vpipe_bid_tp bipipe = hashtable_get(mgr->bipipes, fd);
+		vpipe_bid_tp bipipe = hashtable_get(mgr->bipipes, (unsigned int)fd);
 		return vpipe_bid_read(bipipe, fd, dst, num_bytes);
 	}
 	return VPIPE_IO_ERROR;
@@ -280,7 +280,7 @@ ssize_t vpipe_read(vpipe_mgr_tp mgr, vpipe_id fd, void* dst, size_t num_bytes) {
 
 ssize_t vpipe_write(vpipe_mgr_tp mgr, vpipe_id fd, const void* src, size_t num_bytes) {
 	if(mgr != NULL) {
-		vpipe_bid_tp bipipe = hashtable_get(mgr->bipipes, fd);
+		vpipe_bid_tp bipipe = hashtable_get(mgr->bipipes, (unsigned int)fd);
 		return vpipe_bid_write(bipipe, fd, src, num_bytes);
 	}
 	return VPIPE_IO_ERROR;
@@ -289,7 +289,7 @@ ssize_t vpipe_write(vpipe_mgr_tp mgr, vpipe_id fd, const void* src, size_t num_b
 enum vpipe_status vpipe_close(vpipe_mgr_tp mgr, vpipe_id fd) {
 	if(mgr != NULL) {
 		/* consider it closed if its not mapped */
-		vpipe_bid_tp vp = hashtable_remove(mgr->bipipes, fd);
+		vpipe_bid_tp vp = hashtable_remove(mgr->bipipes, (unsigned int)fd);
 
 		return vpipe_bid_close(vp, fd);
 	}
@@ -298,7 +298,7 @@ enum vpipe_status vpipe_close(vpipe_mgr_tp mgr, vpipe_id fd) {
 
 enum vpipe_status vpipe_stat(vpipe_mgr_tp mgr, vpipe_id fd) {
 	if(mgr != NULL) {
-		vpipe_bid_tp vp = hashtable_get(mgr->bipipes, fd);
+		vpipe_bid_tp vp = hashtable_get(mgr->bipipes, (unsigned int)fd);
 		if(vp != NULL) {
 			/* since the pipe exists, we know this fd hasn't closed yet. so it
 			 * can still read. but we need to check that the other end didn't
@@ -331,7 +331,7 @@ enum vpipe_status vpipe_stat(vpipe_mgr_tp mgr, vpipe_id fd) {
 
 vepoll_tp vpipe_get_poll(vpipe_mgr_tp mgr, vpipe_id fd) {
 	if(mgr != NULL) {
-		vpipe_bid_tp vp = hashtable_get(mgr->bipipes, fd);
+		vpipe_bid_tp vp = hashtable_get(mgr->bipipes, (unsigned int)fd);
 		if(vp != NULL) {
 			if(fd == vp->fda) {
 				return vp->vepolla;

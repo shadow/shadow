@@ -32,7 +32,7 @@ enum vt_prc_result {
 
 typedef struct vtransport_item_s {
 	rc_vpacket_pod_tp rc_packet;
-	uint16_t sockd;
+	int sockd;
 	vsocket_tp sock;
 }vtransport_item_t, *vtransport_item_tp;
 

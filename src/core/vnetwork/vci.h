@@ -93,7 +93,7 @@ typedef struct vci_onretransmit_s {
 } vci_onretransmit_t, *vci_onretransmit_tp;
 
 typedef struct vci_onnotify_s {
-	uint16_t sockd;
+	int sockd;
 } vci_onnotify_t, *vci_onnotify_tp;
 
 typedef struct vci_onpoll_s {
@@ -101,7 +101,7 @@ typedef struct vci_onpoll_s {
 } vci_onpoll_t, *vci_onpoll_tp;
 
 typedef struct vci_ondack_s {
-	uint16_t sockd;
+	int sockd;
 } vci_ondack_t, *vci_ondack_tp;
 
 typedef struct vci_onclose_s {
@@ -192,12 +192,12 @@ unsigned int vci_ascheme_get_node (vci_addressing_scheme_tp scheme, in_addr_t ip
 void vci_schedule_packet(rc_vpacket_pod_tp rc_packet);
 void vci_schedule_packet_loopback(rc_vpacket_pod_tp rc_packet, in_addr_t addr);
 void vci_schedule_retransmit(rc_vpacket_pod_tp rc_packet, in_addr_t caller_addr);
-void vci_schedule_notify(in_addr_t addr, uint16_t sockd);
+void vci_schedule_notify(in_addr_t addr, int sockd);
 void vci_schedule_uploaded(in_addr_t addr, uint32_t nanos_consumed);
 void vci_schedule_downloaded(in_addr_t addr, uint32_t nanos_consumed);
 void vci_schedule_close(in_addr_t caller_addr, in_addr_t src_addr, in_port_t src_port,
 		in_addr_t dst_addr, in_port_t dst_port, uint32_t rcv_end);
-void vci_schedule_dack(in_addr_t addr, uint16_t sockd, uint32_t ms_delay);
+void vci_schedule_dack(in_addr_t addr, int sockd, uint32_t ms_delay);
 void vci_schedule_poll(in_addr_t addr, vepoll_tp vep, uint32_t ms_delay);
 
 void vci_exec_event (vci_mgr_tp mgr, vci_event_tp vci_event);

@@ -422,7 +422,7 @@ uint8_t vci_can_share_memory(in_addr_t node) {
 	return vci_get_relative_location(node) == LOC_SAME_SLAVE_DIFFERENT_WORKER;
 }
 
-void vci_schedule_notify(in_addr_t addr, uint16_t sockd) {
+void vci_schedule_notify(in_addr_t addr, int sockd) {
 	sim_worker_tp worker = global_sim_context.sim_worker;
 	if(worker == NULL || worker->vci_mgr == NULL) {
 		return;
@@ -454,7 +454,7 @@ void vci_schedule_poll(in_addr_t addr, vepoll_tp vep, uint32_t ms_delay) {
 	vci_schedule_event(worker->vci_mgr->events, vci_event);
 }
 
-void vci_schedule_dack(in_addr_t addr, uint16_t sockd, uint32_t ms_delay) {
+void vci_schedule_dack(in_addr_t addr, int sockd, uint32_t ms_delay) {
 	sim_worker_tp worker = global_sim_context.sim_worker;
 	if(worker == NULL || worker->vci_mgr == NULL) {
 		return;

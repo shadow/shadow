@@ -89,7 +89,7 @@ void vtcp_destroy(vtcp_tp vtcp);
 void vtcp_disconnect(vtcp_tp vtcp);
 uint32_t vtcp_generate_iss();
 vsocket_tp vtcp_get_target_socket(vtransport_item_tp titem);
-void vtcp_ondack(vsocket_mgr_tp net, uint16_t sockd);
+void vtcp_ondack(vsocket_mgr_tp net, int sockd);
 enum vt_prc_result vtcp_process_item(vtransport_item_tp titem);
 ssize_t vtcp_recv(vsocket_mgr_tp net, vsocket_tp tcpsock, void* dest_buf, size_t n);
 void vtcp_retransmit(vtcp_tp vtcp, uint32_t retransmit_key);

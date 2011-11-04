@@ -29,7 +29,7 @@
 #include "linkedbuffer.h"
 #include "hashtable.h"
 
-typedef uint16_t vpipe_id;
+typedef int vpipe_id;
 #define VPIPE_IO_ERROR -1
 
 enum vpipe_status {
@@ -52,10 +52,10 @@ typedef struct vpipe_unid_s {
 } vpipe_unid_t, *vpipe_unid_tp;
 
 typedef struct vpipe_bid_s {
-	uint16_t fda;
+	int fda;
 	vpipe_unid_tp pipea;
 	vepoll_tp vepolla;
-	uint16_t fdb;
+	int fdb;
 	vpipe_unid_tp pipeb;
 	vepoll_tp vepollb;
 } vpipe_bid_t, *vpipe_bid_tp;

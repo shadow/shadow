@@ -74,7 +74,7 @@ void context_execute_init(struct module_t *module);
 void context_execute_instantiate(context_provider_tp provider, int argc, char* argv[]);
 void context_execute_destroy(context_provider_tp provider);
 void context_execute_dtimer_cb(context_provider_tp provider, dtimer_ontimer_cb_fp cb, int timer_id, void * cb_arg);
-void context_execute_socket(context_provider_tp provider, uint16_t sockd, uint8_t can_read, uint8_t can_write, uint8_t do_read_first);
+void context_execute_socket(context_provider_tp provider, int sockd, uint8_t can_read, uint8_t can_write, uint8_t do_read_first);
 
 
 /* XXX FIXME these should not be visible!!! */

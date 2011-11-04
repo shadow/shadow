@@ -44,7 +44,7 @@ typedef struct vtransport_s {
 }vtransport_t, *vtransport_tp;
 
 vtransport_tp vtransport_create(vsocket_mgr_tp vsocket_mgr, vsocket_tp sock);
-vtransport_item_tp vtransport_create_item(uint16_t sockd, rc_vpacket_pod_tp rc_packet);
+vtransport_item_tp vtransport_create_item(int sockd, rc_vpacket_pod_tp rc_packet);
 void vtransport_destroy(vtransport_tp vt);
 void vtransport_destroy_item(vtransport_item_tp titem);
 void vsocket_execute_receive(vtransport_tp vt, list_tp rc_packets);

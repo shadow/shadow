@@ -103,7 +103,7 @@ void context_execute_destroy(context_provider_tp provider) {
 	return;
 }
 
-void context_execute_socket(context_provider_tp provider, uint16_t sockd, uint8_t can_read, uint8_t can_write, uint8_t do_read_first) {
+void context_execute_socket(context_provider_tp provider, int sockd, uint8_t can_read, uint8_t can_write, uint8_t do_read_first) {
 	if(!provider){
 		return;
 	}

@@ -110,7 +110,7 @@ static void vevent_destroy_vevent_cb(void* value, int key) {
 	vevent_destroy_vevent((vevent_tp)value);
 }
 
-static void vevent_vepoll_action(uint16_t sockd, uint8_t add, short ev_type) {
+static void vevent_vepoll_action(int sockd, uint8_t add, short ev_type) {
 	/* make sure we tell vepoll our preference for event notifications when the socket/pipe is ready */
 	vsocket_mgr_tp vsock_mgr = global_sim_context.current_context->vsocket_mgr;
 	if(vsock_mgr != NULL) {

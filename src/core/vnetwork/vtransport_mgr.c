@@ -278,7 +278,7 @@ void vtransport_mgr_ready_send(vtransport_mgr_tp vt_mgr, vsocket_tp sock) {
 		list_tp new_ready_to_send = list_create();
 
 		while(list_get_size(vt_mgr->ready_to_send) > 0) {
-			uint32_t* sockdp = list_pop_front(vt_mgr->ready_to_send);
+			int* sockdp = list_pop_front(vt_mgr->ready_to_send);
 			if(*sockdp == sock->sock_desc){
 				do_add = 0;
 			}
@@ -290,7 +290,7 @@ void vtransport_mgr_ready_send(vtransport_mgr_tp vt_mgr, vsocket_tp sock) {
 	}
 
 	if(do_add) {
-		uint32_t* sockdp = malloc(sizeof(uint32_t));
+		int* sockdp = malloc(sizeof(int));
 		*sockdp = sock->sock_desc;
 		list_push_back(vt_mgr->ready_to_send, sockdp);
 	}
@@ -340,7 +340,7 @@ void vtransport_mgr_upload_next(vtransport_mgr_tp vt_mgr) {
 	while (vt_mgr->nanos_consumed_sent < VTRANSPORT_MGR_BATCH_TIME &&
 			list_get_size(vt_mgr->ready_to_send) > 0) {
 		/* we do round robin on all ready sockets */
-		uint32_t* sockdp = list_pop_front(vt_mgr->ready_to_send);
+		int* sockdp = list_pop_front(vt_mgr->ready_to_send);
 		vsocket_tp sock = vsocket_mgr_get_socket(vt_mgr->vsocket_mgr, *sockdp);
 		if(sock == NULL || sock->vt == NULL) {
 			debugf("vtransport_mgr_upload_next: send buffer NULL during round robin, maybe socket %i closed\n", *sockdp);

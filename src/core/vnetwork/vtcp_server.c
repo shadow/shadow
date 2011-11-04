@@ -126,7 +126,7 @@ vtcp_server_child_tp vtcp_server_create_child(vtcp_server_tp server, in_addr_t r
 	/* attach it to connection, dont call connect as that will start new handshake */
 	schild->sock->sock_desc_parent = server->sock->sock_desc;
 
-	debugf("vtcp_server_create_child: creating multiplexed socket sd %u for server sd %u\n",
+	debugf("vtcp_server_create_child: creating multiplexed socket sd %i for server sd %i\n",
 			schild->sock->sock_desc, schild->sock->sock_desc_parent);
 
 	return schild;
@@ -134,7 +134,7 @@ vtcp_server_child_tp vtcp_server_create_child(vtcp_server_tp server, in_addr_t r
 
 void vtcp_server_destroy_child(vtcp_server_tp server, vtcp_server_child_tp schild) {
 	if(server != NULL && schild != NULL && schild->sock != NULL){
-		debugf("vtcp_server_destroy_child: destroying multiplexed socket sd %u for server sd %u\n",
+		debugf("vtcp_server_destroy_child: destroying multiplexed socket sd %i for server sd %i\n",
 					schild->sock->sock_desc, schild->sock->sock_desc_parent);
 
 		/* remove all possible links to child */

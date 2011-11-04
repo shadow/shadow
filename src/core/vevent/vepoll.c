@@ -35,7 +35,7 @@
 #include "vtcp_server.h"
 #include "vsocket.h"
 
-vepoll_tp vepoll_create(vevent_mgr_tp vev_mgr, in_addr_t addr, uint16_t sockd) {
+vepoll_tp vepoll_create(vevent_mgr_tp vev_mgr, in_addr_t addr, int sockd) {
 	vepoll_tp vep = calloc(1, sizeof(vepoll_t));
 	vep->addr = addr;
 	vep->sockd = sockd;
