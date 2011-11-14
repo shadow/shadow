@@ -1,8 +1,7 @@
-/**
+/*
  * The Shadow Simulator
  *
  * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
- * Copyright (c) 2006-2009 Tyson Malchow <tyson.malchow@gmail.com>
  *
  * This file is part of Shadow.
  *
@@ -25,24 +24,23 @@
 #include <openssl/evp.h>
 #include <string.h>
 
-#include "vcrypto_intercept.h"
-#include "vsystem.h"
+#include "shadow.h"
 
 void intercept_AES_encrypt(const guchar *in, guchar *out, const AES_KEY *key) {
-	/* Processing delays already include crypto and are added during reads/writes */
-	/* TODO: do we need to advance the key here? */
+	/* Processing delays already include crypto and are added during reads/writes.
+	 * Note: if we ever intercept this, we should use INTERCEPT_CONTEXT_SWITCH */
 	return;
 }
 
 void intercept_AES_decrypt(const guchar *in, guchar *out, const AES_KEY *key) {
-	/* Processing delays already include crypto and are added during reads/writes */
-	/* TODO: do we need to advance the key here? */
+	/* Processing delays already include crypto and are added during reads/writes.
+	 * Note: if we ever intercept this, we should use INTERCEPT_CONTEXT_SWITCH */
 	return;
 }
 
 gint intercept_EVP_Cipher(EVP_CIPHER_CTX *ctx, guchar *out, const guchar *in, guint inl) {
-	/* Processing delays already include crypto and are added during reads/writes */
-	/* TODO: do we need to advance the key here? */
+	/* Processing delays already include crypto and are added during reads/writes.
+	 * Note: if we ever intercept this, we should use INTERCEPT_CONTEXT_SWITCH */
 	memmove(out, in, (size_t)inl);
 	return 1;
 }
