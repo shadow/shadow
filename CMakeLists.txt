@@ -4,8 +4,8 @@ project(Shadow C)
 cmake_minimum_required(VERSION 2.8 FATAL_ERROR)
 
 ## set paths and build parameters
-set(Shadow_VERSION_MAJOR 2)
-set(Shadow_VERSION_MINOR 0)
+set(Shadow_VERSION_MAJOR 1)
+set(Shadow_VERSION_MINOR 2)
 set(Shadow_VERSION_BUILD 0)
 
 ## custom output paths
