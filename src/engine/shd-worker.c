@@ -228,5 +228,6 @@ gboolean worker_isInShadowContext() {
 	if(worker->cached_plugin) {
 		return worker->cached_plugin->isShadowContext;
 	}
-	return FALSE;
+	/* if there is no cached plugin, we are definitely in Shadow context */
+	return TRUE;
 }
