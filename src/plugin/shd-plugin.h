@@ -63,6 +63,7 @@ void plugin_setShadowContext(Plugin* plugin, gboolean isShadowContext);
 void plugin_registerResidentState(Plugin* plugin, PluginFunctionTable* callbackFunctions, guint nVariables, va_list variableArguments);
 void plugin_executeNew(Plugin* plugin, PluginState* state, gint argcParam, gchar* argvParam[]);
 void plugin_executeFree(Plugin* plugin, PluginState* state);
+void plugin_executeNotify(Plugin* plugin, PluginState* state);
 
 void plugin_executeReadable(Plugin* plugin, PluginState* state, gint socketParam);
 void plugin_executeWritable(Plugin* plugin, PluginState* state, gint socketParam);

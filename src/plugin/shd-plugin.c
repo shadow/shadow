@@ -219,34 +219,27 @@ void plugin_executeFree(Plugin* plugin, PluginState* state) {
 	_plugin_stopExecuting(plugin, state);
 }
 
-void plugin_executeReadable(Plugin* plugin, PluginState* state, gint socketParam) {
+void plugin_executeNotify(Plugin* plugin, PluginState* state) {
 	MAGIC_ASSERT(plugin);
 	_plugin_startExecuting(plugin, state);
-	pluginstate_getPluginFunctions(plugin->residentState)->readable(socketParam);
+	pluginstate_getPluginFunctions(plugin->residentState)->notify();
 	_plugin_stopExecuting(plugin, state);
+}
+
+void plugin_executeReadable(Plugin* plugin, PluginState* state, gint socketParam) {
+	plugin_executeNotify(plugin, state);
 }
 
 void plugin_executeWritable(Plugin* plugin, PluginState* state, gint socketParam) {
-	MAGIC_ASSERT(plugin);
-	_plugin_startExecuting(plugin, state);
-	pluginstate_getPluginFunctions(plugin->residentState)->writable(socketParam);
-	_plugin_stopExecuting(plugin, state);
+	plugin_executeNotify(plugin, state);
 }
 
 void plugin_executeWritableReadable(Plugin* plugin, PluginState* state, gint socketParam) {
-	MAGIC_ASSERT(plugin);
-	_plugin_startExecuting(plugin, state);
-	pluginstate_getPluginFunctions(plugin->residentState)->writable(socketParam);
-	pluginstate_getPluginFunctions(plugin->residentState)->readable(socketParam);
-	_plugin_stopExecuting(plugin, state);
+	plugin_executeNotify(plugin, state);
 }
 
 void plugin_executeReadableWritable(Plugin* plugin, PluginState* state, gint socketParam) {
-	MAGIC_ASSERT(plugin);
-	_plugin_startExecuting(plugin, state);
-	pluginstate_getPluginFunctions(plugin->residentState)->readable(socketParam);
-	pluginstate_getPluginFunctions(plugin->residentState)->writable(socketParam);
-	_plugin_stopExecuting(plugin, state);
+	plugin_executeNotify(plugin, state);
 }
 
 void plugin_executeGeneric(Plugin* plugin, PluginState* state, CallbackFunc callback, gpointer data, gpointer callbackArgument) {

@@ -29,7 +29,7 @@ typedef struct _EpollDescriptor EpollDescriptor;
 /* free this with descriptor_free() */
 EpollDescriptor* epoll_new(gint handle);
 
-gint epoll_control(EpollDescriptor* epoll, gint operation, gint fileDescriptor,
+gint epoll_control(EpollDescriptor* epoll, gint operation, Descriptor* descriptor,
 		struct epoll_event* event);
 gint epoll_getEvents(EpollDescriptor* epoll, struct epoll_event* eventArray,
 		gint eventArrayLength, gint* nEvents);

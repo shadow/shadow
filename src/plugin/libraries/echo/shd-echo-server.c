@@ -23,11 +23,11 @@
 
 EchoServer* echoserver_new(in_addr_t bindIPAddress, ShadowlibLogFunc log) {
 	/* start up the echo server */
-	gint socketd;
+	gint sockd;
 	struct sockaddr_in server;
 
 	/* create the socket and get a socket descriptor */
-	if ((socketd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0)) == ERROR) {
+	if ((sockd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0)) == ERROR) {
 		log(G_LOG_LEVEL_WARNING, __FUNCTION__, "error creating socket");
 	}
 
@@ -40,62 +40,138 @@ EchoServer* echoserver_new(in_addr_t bindIPAddress, ShadowlibLogFunc log) {
 	server.sin_port = htons(ECHO_SERVER_PORT);
 
 	/* bind the socket to the server port */
-	if (bind(socketd, (struct sockaddr *) &server, sizeof(server)) == ERROR) {
+	if (bind(sockd, (struct sockaddr *) &server, sizeof(server)) == ERROR) {
 		log(G_LOG_LEVEL_WARNING, __FUNCTION__, "error in bind");
 	}
 
 	/* set as server socket */
-	if (listen(socketd, 100) == ERROR) {
+	if (listen(sockd, 100) == ERROR) {
 		log(G_LOG_LEVEL_WARNING, __FUNCTION__, "error in listen");
+	}
+
+	gint epollFileDescriptor;
+	if((epollFileDescriptor = epoll_create(1)) == ERROR) {
+		log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_create");
+	} else {
+		struct epoll_event ev;
+		ev.events = EPOLLIN;
+		ev.data.fd = sockd;
+		if(epoll_ctl(epollFileDescriptor, EPOLL_CTL_ADD, sockd, &ev) == ERROR) {
+			log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_ctl");
+		}
 	}
 
 	/* store the socket as our listening socket */
 	EchoServer* es = g_new0(EchoServer, 1);
-	es->listen_sd = socketd;
+	es->listen_sd = sockd;
+	es->epollFileDescriptor = epollFileDescriptor;
 	return es;
 }
 
 void echoserver_free(EchoServer* es) {
 	g_assert(es);
+	epoll_ctl(es->epollFileDescriptor, EPOLL_CTL_DEL, es->listen_sd, NULL);
 	g_free(es);
 }
 
-void echoserver_socketReadable(EchoServer* es, gint sockd, ShadowlibLogFunc log) {
+static void echoserver_socketReadable(EchoServer* es, gint socketDescriptor, ShadowlibLogFunc log) {
+	log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "trying to read socket %i", socketDescriptor);
+
+	if(socketDescriptor == es->listen_sd) {
+		/* need to accept a connection on server listening socket,
+		 * dont care about address of connector.
+		 * this gives us a new socket thats connected to the client */
+		gint acceptedDescriptor = 0;
+		if((acceptedDescriptor = accept(es->listen_sd, NULL, NULL)) == ERROR) {
+			log(G_LOG_LEVEL_WARNING, __FUNCTION__, "error accepting socket");
+			return;
+		}
+		struct epoll_event ev;
+		ev.events = EPOLLIN;
+		ev.data.fd = acceptedDescriptor;
+		if(epoll_ctl(es->epollFileDescriptor, EPOLL_CTL_ADD, acceptedDescriptor, &ev) == ERROR) {
+			log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_ctl");
+		}
+	} else {
+		/* read all data available */
+		gint read_size = BUFFERSIZE - es->read_offset;
+		if(read_size > 0) {
+		    ssize_t bread = read(socketDescriptor, es->echo_buffer + es->read_offset, read_size);
+
+			/* if we read, start listening for when we can write */
+			if(bread == 0) {
+				close(socketDescriptor);
+			} else if(bread > 0) {
+				log(G_LOG_LEVEL_INFO, __FUNCTION__, "server socket %i read %i bytes", socketDescriptor, (gint)bread);
+				es->read_offset += bread;
+				read_size -= bread;
+
+				struct epoll_event ev;
+				ev.events = EPOLLIN|EPOLLOUT;
+				ev.data.fd = socketDescriptor;
+				if(epoll_ctl(es->epollFileDescriptor, EPOLL_CTL_MOD, socketDescriptor, &ev) == ERROR) {
+					log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_ctl");
+				}
+			}
+		}
+	}
+
+}
+
+static void echoserver_socketWritable(EchoServer* es, gint socketDescriptor, ShadowlibLogFunc log) {
+	log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "trying to read socket %i", socketDescriptor);
+
+	/* echo it back to the client on the same sd,
+	 * also taking care of data that is still hanging around from previous reads. */
+	gint write_size = es->read_offset - es->write_offset;
+	if(write_size > 0) {
+		ssize_t bwrote = write(socketDescriptor, es->echo_buffer + es->write_offset, write_size);
+		if(bwrote == 0) {
+			if(epoll_ctl(es->epollFileDescriptor, EPOLL_CTL_DEL, socketDescriptor, NULL) == ERROR) {
+				log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_ctl");
+			}
+		} else if(bwrote > 0) {
+			log(G_LOG_LEVEL_INFO, __FUNCTION__, "server socket %i wrote %i bytes", socketDescriptor, (gint)bwrote);
+			es->write_offset += bwrote;
+			write_size -= bwrote;
+		}
+	}
+
+	if(write_size == 0) {
+		/* stop trying to write */
+		struct epoll_event ev;
+		ev.events = EPOLLIN;
+		ev.data.fd = socketDescriptor;
+		if(epoll_ctl(es->epollFileDescriptor, EPOLL_CTL_MOD, socketDescriptor, &ev) == ERROR) {
+			log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_ctl");
+		}
+	}
+}
+
+void echoserver_ready(EchoServer* es, ShadowlibLogFunc log) {
 	if(es == NULL) {
 		log(G_LOG_LEVEL_WARNING, __FUNCTION__, "NULL server");
 		return;
 	}
 
-	log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "trying to read socket %i", sockd);
+	struct epoll_event events[MAX_EVENTS];
+	int nfds = epoll_wait(es->epollFileDescriptor, events, MAX_EVENTS, 0);
+	if(nfds == -1) {
+		log(G_LOG_LEVEL_WARNING, __FUNCTION__, "error in epoll_wait");
+	}
 
-	if(sockd == es->listen_sd) {
-		/* need to accept a connection on server listening socket,
-		 * dont care about address of connector.
-		 * this gives us a new socket thats connected to the client */
-		if((sockd = accept(es->listen_sd, NULL, NULL)) == ERROR) {
-			log(G_LOG_LEVEL_WARNING, __FUNCTION__, "error accepting socket");
+	for(int i = 0; i < nfds; i++) {
+		if(events[i].events & EPOLLIN) {
+			echoserver_socketReadable(es, events[i].data.fd, log);
+		}
+		if(events[i].events & EPOLLOUT) {
+			echoserver_socketWritable(es, events[i].data.fd, log);
 		}
 	}
 
-	/* read all data available */
-	gint read_size = BUFFERSIZE - es->read_offset;
-	ssize_t bread;
-	while(read_size > 0 &&
-			(bread = read(sockd, es->echo_buffer + es->read_offset, read_size)) > 0) {
-		log(G_LOG_LEVEL_INFO, __FUNCTION__, "server socket %i read %i bytes", sockd, (gint)bread);
-		es->read_offset += bread;
-		read_size -= bread;
-	}
-
-	/* echo it back to the client on the same sd,
-	 * also taking care of data that is still hanging around from previous reads. */
-	gint write_size = es->read_offset - es->write_offset;
-	ssize_t bwrote;
-	while(write_size > 0 &&
-			(bwrote = write(sockd, es->echo_buffer + es->write_offset, write_size)) > 0) {
-		log(G_LOG_LEVEL_INFO, __FUNCTION__, "server socket %i wrote %i bytes", sockd, (gint)bwrote);
-		es->write_offset += bwrote;
-		write_size -= bwrote;
+	if(es->read_offset == es->write_offset) {
+		es->read_offset = 0;
+		es->write_offset = 0;
 	}
 
 	/* cant close sockd to client if we havent received everything yet.

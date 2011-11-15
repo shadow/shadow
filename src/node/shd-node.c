@@ -169,7 +169,7 @@ gint node_epollNew(Node* node) {
 
 	/* get a unique descriptor that can be "closed" later */
 	EpollDescriptor* epoll = epoll_new((node->descriptorHandleCounter)++);
-	return _node_monitorDescriptor(node, (Descriptor*) epoll);;
+	return _node_monitorDescriptor(node, (Descriptor*) epoll);
 }
 
 gint node_epollControl(Node* node, gint epollDescriptor, gint operation,
@@ -177,10 +177,9 @@ gint node_epollControl(Node* node, gint epollDescriptor, gint operation,
 	MAGIC_ASSERT(node);
 	g_assert(node->descriptors);
 
-	/* EBADF  epfd or fd is not a valid file descriptor. */
+	/* EBADF  epfd is not a valid file descriptor. */
 	Descriptor* descriptor = g_tree_lookup(node->descriptors, &epollDescriptor);
-	if(descriptor == NULL ||
-			g_tree_lookup(node->descriptors, &fileDescriptor) == NULL) {
+	if(descriptor == NULL) {
 		return EBADF;
 	}
 
@@ -189,8 +188,16 @@ gint node_epollControl(Node* node, gint epollDescriptor, gint operation,
 		return EINVAL;
 	}
 
+	/* now we know its an epoll */
 	EpollDescriptor* epoll = (EpollDescriptor*) descriptor;
-	return epoll_control(epoll, operation, fileDescriptor, event);
+
+	/* EBADF  fd is not a valid file descriptor. */
+	descriptor = g_tree_lookup(node->descriptors, &fileDescriptor);
+	if(descriptor == NULL) {
+		return EBADF;
+	}
+
+	return epoll_control(epoll, operation, descriptor, event);
 
 }
 

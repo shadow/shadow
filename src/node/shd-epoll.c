@@ -25,14 +25,22 @@ struct _EpollDescriptor {
 	Descriptor super;
 
 	/* other members specific to epoll */
+	GTree* watchedDescriptors;
 
 	MAGIC_DECLARE;
+};
+
+typedef struct _EpollWatch EpollWatch;
+struct _EpollWatch {
+	Descriptor* descriptor;
 };
 
 /* should only be called from descriptor dereferencing the functionTable */
 static void epoll_free(gpointer data) {
 	EpollDescriptor* epoll = data;
 	MAGIC_ASSERT(epoll);
+
+	g_tree_unref(epoll->watchedDescriptors);
 
 	MAGIC_CLEAR(epoll);
 	g_free(epoll);
@@ -51,27 +59,54 @@ EpollDescriptor* epoll_new(gint handle) {
 	descriptor_init(&(epoll->super), DT_EPOLL, &epollFunctions, handle);
 
 	/* allocate backend needed for managing events for this descriptor */
+	epoll->watchedDescriptors = g_tree_new_full(descriptor_compare, NULL, NULL, NULL);
 
 	return epoll;
 }
 
-gint epoll_control(EpollDescriptor* epoll, gint operation, gint fileDescriptor,
+static gboolean epoll_isWatchingDescriptor(EpollDescriptor* epoll, Descriptor* descriptor) {
+	Descriptor* d = g_tree_lookup(epoll->watchedDescriptors,
+			descriptor_getHandleReference(descriptor));
+	return d == NULL ? FALSE : TRUE;
+}
+
+gint epoll_control(EpollDescriptor* epoll, gint operation, Descriptor* descriptor,
 		struct epoll_event* event) {
 	MAGIC_ASSERT(epoll);
 
 	switch (operation) {
 		case EPOLL_CTL_ADD: {
-			//	EEXIST op was EPOLL_CTL_ADD, and the supplied file descriptor fd is already registered with this epoll instance.
+			/* EEXIST op was EPOLL_CTL_ADD, and the supplied file descriptor
+			 * fd is already registered with this epoll instance. */
+			if(epoll_isWatchingDescriptor(epoll, descriptor)) {
+				return EEXIST;
+			}
+
+			g_tree_replace(epoll->watchedDescriptors, descriptor_getHandleReference(descriptor), descriptor);
+
 			break;
 		}
 
 		case EPOLL_CTL_MOD: {
-			//	ENOENT op was EPOLL_CTL_MOD or EPOLL_CTL_DEL, and fd is not registered with this epoll instance.
+			/* ENOENT op was EPOLL_CTL_MOD, and fd is not
+			 * registered with this epoll instance. */
+			if(!epoll_isWatchingDescriptor(epoll, descriptor)) {
+				return ENOENT;
+			}
+
+
 			break;
 		}
 
 		case EPOLL_CTL_DEL: {
-			//	ENOENT op was EPOLL_CTL_MOD or EPOLL_CTL_DEL, and fd is not registered with this epoll instance.
+			/* ENOENT op was EPOLL_CTL_DEL, and fd is not
+			 * registered with this epoll instance. */
+			if(!epoll_isWatchingDescriptor(epoll, descriptor)) {
+				return ENOENT;
+			}
+
+			g_tree_remove(epoll->watchedDescriptors, descriptor_getHandleReference(descriptor));
+
 			break;
 		}
 

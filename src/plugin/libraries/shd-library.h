@@ -46,31 +46,12 @@
 typedef void (*PluginNewInstanceFunc)(gint argc, gchar* argv[]);
 
 /**
- * Signature of a function that Shadow calls when a plug-in should free the
- * state associated with a node instance.
+ * Signature of a function that Shadow calls to notify of an event or to
+ * execute destruction.
  *
  * @see #PluginFunctionTable
  */
-typedef void (*PluginFreeInstanceFunc)();
-
-/**
- * Signature of a function that Shadow calls when a socket may be read without
- * blocking.
- * @param socketDescriptor the descriptor for the readable socket
- *
- * @see #PluginFunctionTable
- */
-typedef void (*PluginSocketReadableFunc)(gint socketDescriptor);
-
-/**
- * Signature of a function that Shadow calls when a socket may be written
- * without blocking.
- *
- * @param socketDescriptor the descriptor for the writable socket
- *
- * @see #PluginFunctionTable
- */
-typedef void (*PluginSocketWritableFunc)(gint socketDescriptor);
+typedef void (*PluginNotifyFunc)();
 
 typedef struct _PluginFunctionTable PluginFunctionTable;
 
@@ -90,17 +71,12 @@ struct _PluginFunctionTable {
 	/**
 	 * Pointer to a function to call when freeing a node instance.
 	 */
-	PluginFreeInstanceFunc free;
+	PluginNotifyFunc free;
 
 	/**
-	 * Pointer to a function to call when a socket is readable.
+	 * Pointer to a function to call when a descriptor is ready.
 	 */
-	PluginSocketReadableFunc readable;
-
-	/**
-	 * Pointer to a function to call when a socket is writable.
-	 */
-	PluginSocketWritableFunc writable;
+	PluginNotifyFunc notify;
 };
 
 /*

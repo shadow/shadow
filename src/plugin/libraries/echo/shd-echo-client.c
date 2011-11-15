@@ -45,21 +45,28 @@ EchoClient* echoclient_new(in_addr_t serverIPAddress, ShadowlibLogFunc log) {
 		log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in connect");
 	}
 
+	if((ec->epollFileDescriptor = epoll_create(1)) == ERROR) {
+		log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_create");
+	} else {
+		struct epoll_event ev;
+		ev.events = EPOLLIN|EPOLLOUT;
+		ev.data.fd = sockd;
+		if(epoll_ctl(ec->epollFileDescriptor, EPOLL_CTL_ADD, sockd, &ev) == ERROR) {
+			log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_ctl");
+		}
+	}
+
 	ec->sd = sockd;
 	return ec;
 }
 
 void echoclient_free(EchoClient* ec) {
 	g_assert(ec);
+	epoll_ctl(ec->epollFileDescriptor, EPOLL_CTL_DEL, ec->sd, NULL);
 	g_free(ec);
 }
 
-void echoclient_socketReadable(EchoClient* ec, gint sockd, ShadowlibLogFunc log) {
-	if(ec == NULL) {
-		log(G_LOG_LEVEL_WARNING, __FUNCTION__, "NULL client");
-		return;
-	}
-
+static void echoclient_socketReadable(EchoClient* ec, gint sockd, ShadowlibLogFunc log) {
 	log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "trying to read socket %i", sockd);
 
 	if(!ec->is_done) {
@@ -92,19 +99,46 @@ static void echoclient_fillCharBuffer(gchar* buffer, gint size) {
 	}
 }
 
-void echoclient_socketWritable(EchoClient* ec, gint sockd, ShadowlibLogFunc log) {
-	if(ec == NULL) {
-		log(G_LOG_LEVEL_WARNING, __FUNCTION__, "NULL client");
-		return;
-	}
-
+static void echoclient_socketWritable(EchoClient* ec, gint sockd, ShadowlibLogFunc log) {
 	log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "trying to write to socket %i", sockd);
 
 	if(!ec->sent_msg) {
 		echoclient_fillCharBuffer(ec->send_buffer, sizeof(ec->send_buffer)-1);
 		ssize_t b = write(sockd, ec->send_buffer, sizeof(ec->send_buffer));
 		ec->sent_msg = 1;
-		ec->amount_sent = b;
+		ec->amount_sent += b;
 		log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "client socket %i wrote %i bytes: '%s'", sockd, b, ec->send_buffer);
+
+		if(ec->amount_sent >= sizeof(ec->send_buffer)) {
+			/* we sent everything, so stop trying to write */
+			struct epoll_event ev;
+			ev.events = EPOLLIN;
+			ev.data.fd = sockd;
+			if(epoll_ctl(ec->epollFileDescriptor, EPOLL_CTL_MOD, sockd, &ev) == ERROR) {
+				log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_ctl");
+			}
+		}
+	}
+}
+
+void echoclient_ready(EchoClient* ec, ShadowlibLogFunc log) {
+	if(ec == NULL) {
+		log(G_LOG_LEVEL_WARNING, __FUNCTION__, "NULL client");
+		return;
+	}
+
+	struct epoll_event events[MAX_EVENTS];
+	int nfds = epoll_wait(ec->epollFileDescriptor, events, MAX_EVENTS, 0);
+	if(nfds == -1) {
+		log(G_LOG_LEVEL_WARNING, __FUNCTION__, "error in epoll_wait");
+	}
+
+	for(int i = 0; i < nfds; i++) {
+		if(events[i].events & EPOLLIN) {
+			echoclient_socketReadable(ec, events[i].data.fd, log);
+		}
+		if(events[i].events & EPOLLOUT) {
+			echoclient_socketWritable(ec, events[i].data.fd, log);
+		}
 	}
 }
