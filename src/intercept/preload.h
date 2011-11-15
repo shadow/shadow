@@ -26,6 +26,8 @@
 #include <dlfcn.h>
 #include <stdio.h>
 
+#define INTERCEPT_PREFIX "intercept_"
+
 /* handles for dlsym */
 #define RTLD_NEXT ((void *) -1l)
 #define RTLD_DEFAULT ((void *) 0)
