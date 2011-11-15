@@ -22,9 +22,10 @@
 #include <glib.h>
 #include <openssl/aes.h>
 #include <openssl/evp.h>
+#include <sys/socket.h>
+#include <sys/epoll.h>
 #include <time.h>
 #include <stddef.h>
-#include <sys/socket.h>
 #include <string.h>
 
 #include "shadow.h"
