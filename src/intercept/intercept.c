@@ -89,19 +89,19 @@ gint intercept_socketpair(gint domain, gint type, gint protocol, gint fds[2]) {
 }
 
 gint intercept_bind(gint fd, const struct sockaddr* addr, socklen_t len) {
-	return system_bind(fd, (struct sockaddr_in *) addr, len);
+	return system_bind(fd, addr, len);
 }
 
 gint intercept_getsockname(gint fd, struct sockaddr* addr, socklen_t* len) {
-	return system_getSockName(fd, (struct sockaddr_in *) addr, len);
+	return system_getSockName(fd, addr, len);
 }
 
 gint intercept_connect(gint fd, const struct sockaddr* addr, socklen_t len) {
-	return system_connect(fd, (struct sockaddr_in *) addr, len);
+	return system_connect(fd, addr, len);
 }
 
 gint intercept_getpeername(gint fd, struct sockaddr* addr, socklen_t* len) {
-	return system_getPeerName(fd, (struct sockaddr_in *) addr, len);
+	return system_getPeerName(fd, addr, len);
 }
 
 ssize_t intercept_send(gint fd, const gpointer buf, size_t n, gint flags) {
@@ -114,12 +114,12 @@ ssize_t intercept_recv(gint fd, gpointer buf, size_t n, gint flags) {
 
 ssize_t intercept_sendto(gint fd, const gpointer buf, size_t n, gint flags,
 		const struct sockaddr* addr, socklen_t addr_len) {
-	return system_sendTo(fd, buf, n, flags, (struct sockaddr_in *) addr, addr_len);
+	return system_sendTo(fd, buf, n, flags, addr, addr_len);
 }
 
 ssize_t intercept_recvfrom(gint fd, gpointer buf, size_t n, gint flags,
 		struct sockaddr* addr, socklen_t* addr_len) {
-	return system_recvFrom(fd, buf, n, flags, (struct sockaddr_in *) addr, addr_len);
+	return system_recvFrom(fd, buf, n, flags, addr, addr_len);
 }
 
 ssize_t intercept_sendmsg(gint fd, const struct msghdr* message, gint flags) {
@@ -145,11 +145,11 @@ gint intercept_listen(gint fd, gint backlog) {
 }
 
 gint intercept_accept(gint fd, struct sockaddr* addr, socklen_t* addr_len) {
-	return system_accept(fd, (struct sockaddr_in *) addr, addr_len);
+	return system_accept(fd, addr, addr_len);
 }
 
 gint intercept_accept4(gint fd, struct sockaddr* addr, socklen_t* addr_len, gint flags) {
-   return system_accept4(fd, (struct sockaddr_in *) addr, addr_len, flags);
+   return system_accept4(fd, addr, addr_len, flags);
 }
 gint intercept_shutdown(gint fd, gint how) {
 	return system_shutdown(fd, how);

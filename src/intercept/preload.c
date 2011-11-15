@@ -19,9 +19,15 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <dlfcn.h>
-#include <stdio.h>
+#include <glib.h>
+#include <openssl/aes.h>
+#include <openssl/evp.h>
+#include <sys/socket.h>
 #include <sys/epoll.h>
+#include <time.h>
+#include <stddef.h>
+#include <string.h>
+
 #include "preload.h"
 #include "shadow.h"
 
