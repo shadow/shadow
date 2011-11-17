@@ -34,6 +34,7 @@ gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor,
 gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray,
 		gint eventArrayLength, gint* nEvents);
 
-void epoll_notify(gpointer data, gpointer callbackArgument);
+void epoll_descriptorStatusChanged(gpointer data, gpointer callbackArgument);
+gboolean epoll_isReadyToNotify(Epoll* epoll);
 
 #endif /* SHD_EPOLL_H_ */

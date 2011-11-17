@@ -72,18 +72,10 @@ void application_boot(Application* application) {
 	g_free(argv);
 }
 
-void application_readable(Application* application, gint socketDescriptor) {
+void application_notify(Application* application) {
 	MAGIC_ASSERT(application);
 
 	/* need to get thread-private plugin from current worker */
 	Plugin* plugin = worker_getPlugin(application->software);
-	plugin_executeReadable(plugin, application->state, socketDescriptor);
-}
-
-void application_writable(Application* application, gint socketDescriptor) {
-	MAGIC_ASSERT(application);
-
-	/* need to get thread-private plugin from current worker */
-	Plugin* plugin = worker_getPlugin(application->software);
-	plugin_executeWritable(plugin, application->state, socketDescriptor);
+	plugin_executeNotify(plugin, application->state);
 }

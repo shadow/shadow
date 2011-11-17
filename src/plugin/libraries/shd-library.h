@@ -74,7 +74,7 @@ struct _PluginFunctionTable {
 	PluginNotifyFunc free;
 
 	/**
-	 * Pointer to a function to call when a descriptor is ready.
+	 * Pointer to a function to call when descriptors are ready.
 	 */
 	PluginNotifyFunc notify;
 };

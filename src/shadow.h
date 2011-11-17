@@ -93,6 +93,7 @@ typedef struct vbuffer_s vbuffer_t, *vbuffer_tp;
 #include "configuration/shd-examples.h"
 #include "configuration/shd-configuration.h"
 #include "runnable/shd-listener.h"
+#include "node/descriptor/shd-descriptor.h"
 #include "runnable/shd-runnable.h"
 #include "runnable/event/shd-event.h"
 #include "runnable/action/shd-action.h"
@@ -103,6 +104,7 @@ typedef struct vbuffer_s vbuffer_t, *vbuffer_tp;
 #include "utility/shd-cdf.h"
 
 #include "runnable/event/shd-callback.h"
+#include "runnable/event/shd-notify-plugin.h"
 #include "runnable/event/shd-packet-arrived.h"
 #include "runnable/event/shd-packet-received.h"
 #include "runnable/event/shd-packet-sent.h"
@@ -133,7 +135,6 @@ typedef struct vbuffer_s vbuffer_t, *vbuffer_tp;
 #include "topology/shd-link.h"
 #include "topology/shd-internetwork.h"
 
-#include "node/descriptor/shd-descriptor.h"
 #include "node/descriptor/shd-epoll.h"
 #include "node/descriptor/shd-transport.h"
 #include "node/descriptor/shd-pipe.h"

@@ -78,6 +78,8 @@ gboolean node_isEqual(Node* a, Node* b);
 guint32 node_getBandwidthUp(Node* node);
 guint32 node_getBandwidthDown(Node* node);
 
+Descriptor* node_lookupDescriptor(Node* node, gint descriptorHandle);
+
 gint node_epollNew(Node* node);
 gint node_epollControl(Node* node, gint epollDescriptor, gint operation,
 		gint fileDescriptor, struct epoll_event* event);

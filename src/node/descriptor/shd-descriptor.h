@@ -80,9 +80,11 @@ gint descriptor_compare(gconstpointer a, gconstpointer b, gpointer user_data);
 enum DescriptorType descriptor_getType(Descriptor* descriptor);
 gint* descriptor_getHandleReference(Descriptor* descriptor);
 
-void descriptor_setReady(Descriptor* descriptor, gboolean isReady, enum DescriptorStatus status);
-enum DescriptorStatus descriptor_getReady(Descriptor* descriptor);
-void descriptor_addStateChangeListener(Descriptor* descriptor, Listener* listener);
-void descriptor_removeStateChangeListener(Descriptor* descriptor, Listener* listener);
+void descriptor_adjustStatus(Descriptor* descriptor, gboolean doSetBits,
+		enum DescriptorStatus status);
+enum DescriptorStatus descriptor_getStatus(Descriptor* descriptor);
+
+void descriptor_addStatusChangeListener(Descriptor* descriptor, Listener* listener);
+void descriptor_removeStatusChangeListener(Descriptor* descriptor, Listener* listener);
 
 #endif /* SHD_DESCRIPTOR_H_ */

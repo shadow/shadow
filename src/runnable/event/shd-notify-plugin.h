@@ -1,4 +1,4 @@
-/*
+/**
  * The Shadow Simulator
  *
  * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
@@ -19,23 +19,21 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SHD_APPLICATION_H_
-#define SHD_APPLICATION_H_
+#ifndef SHD_NOTIFY_PLUGIN_H_
+#define SHD_NOTIFY_PLUGIN_H_
 
 #include "shadow.h"
 
-typedef struct _Application Application;
+typedef struct _NotifyPluginEvent NotifyPluginEvent;
 
-struct _Application {
-	Software* software;
-	PluginState* state;
+struct _NotifyPluginEvent {
+	Event super;
+	gint epollHandle;
 	MAGIC_DECLARE;
 };
 
-Application* application_new(Software* software);
-void application_free(Application* application);
+NotifyPluginEvent* notifyplugin_new(gint epollHandle);
+void notifyplugin_run(NotifyPluginEvent* event, Node* node);
+void notifyplugin_free(NotifyPluginEvent* event);
 
-void application_boot(Application* application);
-void application_notify(Application* application);
-
-#endif /* SHD_APPLICATION_H_ */
+#endif /* SHD_NOTIFY_PLUGIN_H_ */

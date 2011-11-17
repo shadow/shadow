@@ -164,6 +164,11 @@ static gint _node_monitorDescriptor(Node* node, Descriptor* descriptor) {
 	return *handle;
 }
 
+Descriptor* node_lookupDescriptor(Node* node, gint descriptorHandle) {
+	MAGIC_ASSERT(node);
+	return g_tree_lookup(node->descriptors, (gconstpointer) &descriptorHandle);
+}
+
 gint node_epollNew(Node* node) {
 	MAGIC_ASSERT(node);
 

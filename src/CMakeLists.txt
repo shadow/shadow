@@ -32,6 +32,7 @@ set(shadow_srcs
     runnable/event/shd-event.c
     runnable/event/shd-start-application.c
     runnable/event/shd-callback.c
+    runnable/event/shd-notify-plugin.c
     runnable/event/shd-packet-arrived.c
     runnable/event/shd-packet-received.c
     runnable/event/shd-packet-sent.c

@@ -21,31 +21,34 @@
 
 #include "shadow.h"
 
-enum EpollWatchFlags {
-	EWF_NONE = 0,
-	/* callback is currently scheduled to notify user */
-	EWF_NOTIFY_SCHEDULED = 1 << 0,
-	/* callback is currently scheduled to poll */
-	EWF_POLL_SCHEDULED = 1 << 1,
-	/* we should cancel the callback and self-destruct */
-	EWF_CANCEL_AND_DESTROY = 1 << 2,
-	/* currently executing a callback to the application */
-	EWF_EXECUTING = 1 << 3,
-};
-
 typedef struct _EpollWatch EpollWatch;
 struct _EpollWatch {
 	Descriptor* descriptor;
-	enum EpollWatchFlags flags;
 	Listener* listener;
 	struct epoll_event event;
 	MAGIC_DECLARE;
+};
+
+typedef struct _EpollGetEventContainer EpollGetEventContainer;
+struct _EpollGetEventContainer {
+	struct epoll_event* eventArray;
+	gint eventArrayLength;
+	gint nEvents;
+};
+
+enum EpollFlags {
+	EF_NONE = 0,
+	/* callback is currently scheduled to notify user */
+	EF_SCHEDULED = 1 << 0,
+	/* we should cancel the callback and self-destruct */
+	EF_CANCELED = 1 << 1,
 };
 
 struct _Epoll {
 	Descriptor super;
 
 	/* other members specific to epoll */
+	enum EpollFlags flags;
 	GTree* watchedDescriptors;
 
 	MAGIC_DECLARE;
@@ -58,9 +61,9 @@ static EpollWatch* epollwatch_new(Epoll* epoll, Descriptor* descriptor, struct e
 
 	descriptor_ref(descriptor);
 
+	watch->listener = listener_new(epoll_descriptorStatusChanged, epoll, descriptor);
+	descriptor_addStatusChangeListener(watch->descriptor, watch->listener);
 	watch->descriptor = descriptor;
-	watch->listener = listener_new(epoll_notify, epoll, descriptor);
-	watch->flags = EWF_NONE;
 	watch->event = *event;
 
 	return watch;
@@ -70,7 +73,7 @@ static void epollwatch_free(gpointer data) {
 	EpollWatch* watch = data;
 	MAGIC_ASSERT(watch);
 
-	descriptor_removeStateChangeListener(watch->descriptor, watch->listener);
+	descriptor_removeStatusChangeListener(watch->descriptor, watch->listener);
 	listener_free(watch->listener);
 	descriptor_unref(watch->descriptor);
 
@@ -172,13 +175,30 @@ gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor,
 static gboolean epoll_searchReadyEvents(gpointer key, gpointer value, gpointer data) {
 	EpollWatch* watch = value;
 	MAGIC_ASSERT(watch);
-	GSList* readyList = data;
+	EpollGetEventContainer* ready = data;
 
-	// TODO
-	// we return the event types that the user registered, or the event
-	// types that are actually available, only if the user registered them?
+	/* return the event types that are actually available if they are registered
+	 * without removing our knowledge of what was registered
+	 */
+	enum DescriptorStatus status = descriptor_getStatus(watch->descriptor);
+	gboolean isReadable = (status & DS_READABLE) ? TRUE : FALSE;
+	gboolean waitingReadable = (watch->event.events & EPOLLIN) ? TRUE : FALSE;
+	gboolean isWritable = (status & DS_WRITABLE) ? TRUE : FALSE;
+	gboolean waitingWritable = (watch->event.events & EPOLLOUT) ? TRUE : FALSE;
 
-	return FALSE;
+	if((isReadable && waitingReadable) || (isWritable && waitingWritable)) {
+		ready->eventArray[ready->nEvents] = watch->event;
+		ready->eventArray[ready->nEvents].events =
+				isReadable && isWritable ? EPOLLIN|EPOLLOUT : isReadable ? EPOLLIN : EPOLLOUT;
+		(ready->nEvents)++;
+	}
+
+	/* if we've filled everything, stop traversing the tree */
+	if(ready->nEvents >= ready->eventArrayLength) {
+		return TRUE;
+	} else {
+		return FALSE;
+	}
 }
 
 gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray,
@@ -188,36 +208,43 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray,
 
 	/* return the available events in the eventArray, making sure not to
 	 * overflow. the number of actual events is returned in nEvents. */
-	GSList* readyList = NULL;
-	g_tree_foreach(epoll->watchedDescriptors, epoll_searchReadyEvents, readyList);
+	EpollGetEventContainer ready;
+	ready.eventArray = eventArray;
+	ready.eventArrayLength = eventArrayLength;
+	ready.nEvents = 0;
 
-	gint i;
-	GSList* next = readyList;
-	for(i = 0; next && next->data && i < eventArrayLength; next = g_slist_next(next), i++) {
-		struct epoll_event* event = next->data;
-		g_assert(event);
+	/*
+	 * @todo: could be more efficient if we kept track of which descriptors
+	 * are ready at any given time, at the cost of code complexity (we'd have
+	 * to manage descriptors in multiples structs, update when deleted, etc)
+	 */
+	g_tree_foreach(epoll->watchedDescriptors, epoll_searchReadyEvents, &ready);
+	*nEvents = ready.nEvents;
 
-		// TODO: make sure we have the correct event types set.
-		// if we keep the user registered types, might need to change eventArray[nEvents].events
-		eventArray[i] = *event;
-	}
-
-	if(readyList) {
-		g_slist_free(readyList);
-	}
-	*nEvents = i;
-
-//	The memory area pointed to by events will contain the events
-//    that will be available for the caller.  Up to maxevents are returned by epoll_wait().
-
-//    The  data  of  each  returned  structure will contain the same data the user set with
-//    an epoll_ctl(2) (EPOLL_CTL_ADD,EPOLL_CTL_MOD) while the events member will contain the
-//    returned event bit field.
-
-	return -1;
+	return 0;
 }
 
-void epoll_notify(gpointer data, gpointer callbackArgument) {
+static gboolean epollwatch_needsNotify(EpollWatch* watch) {
+	MAGIC_ASSERT(watch);
+
+	/* check status */
+	enum DescriptorStatus status = descriptor_getStatus(watch->descriptor);
+
+	/* check if we care about the status */
+	gboolean isActive = (status & DS_ACTIVE) ? TRUE : FALSE;
+	gboolean isReadable = (status & DS_READABLE) ? TRUE : FALSE;
+	gboolean waitingReadable = (watch->event.events & EPOLLIN) ? TRUE : FALSE;
+	gboolean isWritable = (status & DS_WRITABLE) ? TRUE : FALSE;
+	gboolean waitingWritable = (watch->event.events & EPOLLOUT) ? TRUE : FALSE;
+
+	if(isActive && ((isReadable && waitingReadable) || (isWritable && waitingWritable))) {
+		return TRUE;
+	} else {
+		return FALSE;
+	}
+}
+
+void epoll_descriptorStatusChanged(gpointer data, gpointer callbackArgument) {
 	Epoll* epoll = data;
 	MAGIC_ASSERT(epoll);
 	Descriptor* descriptor = callbackArgument;
@@ -228,9 +255,30 @@ void epoll_notify(gpointer data, gpointer callbackArgument) {
 	/* if we are not watching, its an error because we shouldn't be listening */
 	g_assert(watch && (watch->descriptor == descriptor));
 
-	/* check what happened to it */
-	enum DescriptorStatus status = descriptor_getReady(watch->descriptor);
+	/* check if we need to schedule a notification */
+	gboolean needsNotify = epollwatch_needsNotify(watch);
+	gboolean isScheduled = (epoll->flags & EF_SCHEDULED) ? TRUE : FALSE;
+	if(needsNotify && !isScheduled) {
+		epoll->flags |= EF_SCHEDULED;
+		NotifyPluginEvent* event = notifyplugin_new(epoll->super.handle);
+		SimulationTime delay = 1;
+		worker_scheduleEvent((Event*)event, delay, worker_getPrivate()->cached_node->id);
+	} else if(!needsNotify && isScheduled) {
+		epoll->flags |= EF_CANCELED;
+	}
+}
 
-	/* depending on what happened and the watch state, notify application */
-	// TODO
+gboolean epoll_isReadyToNotify(Epoll* epoll) {
+	MAGIC_ASSERT(epoll);
+
+	/* event is being executed from the scheduler */
+	epoll->flags &= ~EF_SCHEDULED;
+
+	/* double check that we should actually notify the plugin */
+	if(epoll->flags & EF_CANCELED) {
+		epoll->flags &= ~EF_CANCELED;
+		return FALSE;
+	} else {
+		return TRUE;
+	}
 }
