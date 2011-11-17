@@ -25,7 +25,7 @@
 #include "shadow.h"
 
 enum DescriptorType {
-	DT_SOCKET, DT_EPOLL
+	DT_TRANSPORT, DT_SOCKET, DT_PIPE, DT_EPOLL
 };
 
 enum DescriptorFlags {
@@ -33,6 +33,17 @@ enum DescriptorFlags {
 	DF_A = 1 << 0,
 	DF_B = 1 << 1,
 	DF_C = 1 << 2,
+};
+
+enum DescriptorStatus {
+	DS_NONE = 0,
+	/* ok to notify user as far as we know, socket is ready.
+	 * o/w never notify user (b/c they e.g. closed the socket or did not accept yet) */
+	DS_ACTIVE = 1 << 0,
+	/* can be read, i.e. there is data waiting for user */
+	DS_READABLE = 1 << 1,
+	/* can be written, i.e. there is available buffer space */
+	DS_WRITABLE = 1 << 2,
 };
 
 typedef struct _Descriptor Descriptor;
@@ -54,15 +65,24 @@ struct _Descriptor {
 	DescriptorFunctionTable* funcTable;
 	gint handle;
 	enum DescriptorType type;
+	enum DescriptorStatus status;
+	GSList* readyListeners;
+	gint referenceCount;
 	MAGIC_DECLARE;
 };
 
 void descriptor_init(Descriptor* descriptor, enum DescriptorType type,
 		DescriptorFunctionTable* funcTable, gint handle);
-void descriptor_free(gpointer data);
+void descriptor_ref(gpointer data);
+void descriptor_unref(gpointer data);
 gint descriptor_compare(gconstpointer a, gconstpointer b, gpointer user_data);
 
 enum DescriptorType descriptor_getType(Descriptor* descriptor);
 gint* descriptor_getHandleReference(Descriptor* descriptor);
+
+void descriptor_setReady(Descriptor* descriptor, gboolean isReady, enum DescriptorStatus status);
+enum DescriptorStatus descriptor_getReady(Descriptor* descriptor);
+void descriptor_addStateChangeListener(Descriptor* descriptor, Listener* listener);
+void descriptor_removeStateChangeListener(Descriptor* descriptor, Listener* listener);
 
 #endif /* SHD_DESCRIPTOR_H_ */

@@ -35,7 +35,7 @@ Node* node_new(GQuark id, Network* network, Software* software, guint32 ip, GStr
 
 	node->application = application_new(software);
 
-	node->descriptors = g_tree_new_full(descriptor_compare, NULL, NULL, descriptor_free);
+	node->descriptors = g_tree_new_full(descriptor_compare, NULL, NULL, descriptor_unref);
 	node->descriptorHandleCounter = VNETWORK_MIN_SD;
 
 	// TODO refactor all the socket/event code
@@ -168,7 +168,7 @@ gint node_epollNew(Node* node) {
 	MAGIC_ASSERT(node);
 
 	/* get a unique descriptor that can be "closed" later */
-	EpollDescriptor* epoll = epoll_new((node->descriptorHandleCounter)++);
+	Epoll* epoll = epoll_new((node->descriptorHandleCounter)++);
 	return _node_monitorDescriptor(node, (Descriptor*) epoll);
 }
 
@@ -189,7 +189,7 @@ gint node_epollControl(Node* node, gint epollDescriptor, gint operation,
 	}
 
 	/* now we know its an epoll */
-	EpollDescriptor* epoll = (EpollDescriptor*) descriptor;
+	Epoll* epoll = (Epoll*) descriptor;
 
 	/* EBADF  fd is not a valid file descriptor. */
 	descriptor = g_tree_lookup(node->descriptors, &fileDescriptor);
@@ -217,6 +217,6 @@ gint node_epollGetEvents(Node* node, gint epollDescriptor,
 		return EINVAL;
 	}
 
-	EpollDescriptor* epoll = (EpollDescriptor*) descriptor;
+	Epoll* epoll = (Epoll*) descriptor;
 	return epoll_getEvents(epoll, eventArray, eventArrayLength, nEvents);
 }

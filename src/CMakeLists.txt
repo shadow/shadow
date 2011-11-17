@@ -28,6 +28,7 @@ set(shadow_srcs
     plugin/libraries/shd-library.c
     
     runnable/shd-runnable.c
+    runnable/shd-listener.c
     runnable/event/shd-event.c
     runnable/event/shd-start-application.c
     runnable/event/shd-callback.c
@@ -51,8 +52,11 @@ set(shadow_srcs
     runnable/action/shd-load-plugin.c
     runnable/action/shd-kill-engine.c
         
-    node/shd-descriptor.c
-    node/shd-epoll.c
+    node/descriptor/shd-descriptor.c
+    node/descriptor/shd-epoll.c
+    node/descriptor/shd-transport.c
+    node/descriptor/shd-pipe.c
+    node/descriptor/shd-socket.c
     node/shd-system.c
     node/shd-application.c
     node/shd-node.c

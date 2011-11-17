@@ -19,19 +19,9 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SHD_EPOLL_H_
-#define SHD_EPOLL_H_
+#ifndef SHD_SOCKET_H_
+#define SHD_SOCKET_H_
 
-#include "shadow.h"
 
-typedef struct _EpollDescriptor EpollDescriptor;
 
-/* free this with descriptor_free() */
-EpollDescriptor* epoll_new(gint handle);
-
-gint epoll_control(EpollDescriptor* epoll, gint operation, Descriptor* descriptor,
-		struct epoll_event* event);
-gint epoll_getEvents(EpollDescriptor* epoll, struct epoll_event* eventArray,
-		gint eventArrayLength, gint* nEvents);
-
-#endif /* SHD_EPOLL_H_ */
+#endif /* SHD_SOCKET_H_ */

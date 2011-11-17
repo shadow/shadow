@@ -1,4 +1,4 @@
-/*
+/**
  * The Shadow Simulator
  *
  * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
@@ -19,24 +19,21 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SHD_CALLBACK_H_
-#define SHD_CALLBACK_H_
+#ifndef SHD_EPOLL_H_
+#define SHD_EPOLL_H_
 
 #include "shadow.h"
 
-typedef struct _CallbackEvent CallbackEvent;
+typedef struct _Epoll Epoll;
 
-struct _CallbackEvent {
-	Event super;
-	CallbackFunc callback;
-	gpointer data;
-	gpointer callbackArgument;
+/* free this with descriptor_free() */
+Epoll* epoll_new(gint handle);
 
-	MAGIC_DECLARE;
-};
+gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor,
+		struct epoll_event* event);
+gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray,
+		gint eventArrayLength, gint* nEvents);
 
-CallbackEvent* callback_new(CallbackFunc callback, gpointer data, gpointer callbackArgument);
-void callback_run(CallbackEvent* event, Node* node);
-void callback_free(CallbackEvent* event);
+void epoll_notify(gpointer data, gpointer callbackArgument);
 
-#endif /* SHD_CALLBACK_H_ */
+#endif /* SHD_EPOLL_H_ */
