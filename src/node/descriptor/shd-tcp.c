@@ -19,31 +19,37 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SHD_TRANSPORT_H_
-#define SHD_TRANSPORT_H_
-
 #include "shadow.h"
 
-typedef struct _Transport Transport;
-typedef struct _TransportFunctionTable TransportFunctionTable;
-
-typedef void (*TransportSendFunc)(Transport* transport);
-typedef void (*TransportFreeFunc)(Transport* transport);
-
-struct _TransportFunctionTable {
-	TransportSendFunc send;
-	TransportFreeFunc free;
-	MAGIC_DECLARE;
-};
-
-struct _Transport {
-	Descriptor super;
-	TransportFunctionTable* vtable;
+struct _TCP {
+	Socket super;
 
 	MAGIC_DECLARE;
 };
 
-void transport_init(Transport* transport, TransportFunctionTable* vtable, enum DescriptorType type, gint handle);
-void transport_free(gpointer data);
+SocketFunctionTable tcp_functions = {
+	(SocketSendFunc) tcp_send,
+	(SocketFreeFunc) tcp_free,
+	MAGIC_VALUE
+};
 
-#endif /* SHD_TRANSPORT_H_ */
+TCP* tcp_new(gint handle) {
+	TCP* tcp = g_new0(TCP, 1);
+	MAGIC_INIT(tcp);
+
+	socket_init(&(tcp->super), &tcp_functions, DT_TCPSOCKET, handle);
+
+	return tcp;
+}
+
+void tcp_free(TCP* data) {
+	TCP* tcp = data;
+	MAGIC_ASSERT(tcp);
+
+	MAGIC_CLEAR(tcp);
+	g_free(tcp);
+}
+
+void tcp_send(gpointer data) {
+
+}

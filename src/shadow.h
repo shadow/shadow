@@ -139,6 +139,8 @@ typedef struct vbuffer_s vbuffer_t, *vbuffer_tp;
 #include "node/descriptor/shd-transport.h"
 #include "node/descriptor/shd-pipe.h"
 #include "node/descriptor/shd-socket.h"
+#include "node/descriptor/shd-tcp.h"
+#include "node/descriptor/shd-udp.h"
 #include "node/shd-application.h"
 #include "node/shd-system.h"
 #include "node/shd-node.h"

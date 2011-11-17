@@ -24,7 +24,7 @@
 void descriptor_init(Descriptor* descriptor, enum DescriptorType type,
 		DescriptorFunctionTable* funcTable, gint handle) {
 	g_assert(descriptor && funcTable);
-	g_assert(handle >= VNETWORK_MIN_SD);
+	g_assert(handle >= MIN_DESCRIPTOR);
 
 	MAGIC_INIT(descriptor);
 	MAGIC_INIT(funcTable);
@@ -32,6 +32,7 @@ void descriptor_init(Descriptor* descriptor, enum DescriptorType type,
 	descriptor->handle = handle;
 	descriptor->type = type;
 	descriptor->readyListeners = NULL;
+	descriptor->referenceCount = 1;
 }
 
 static void descriptor_free(Descriptor* descriptor) {

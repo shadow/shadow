@@ -19,31 +19,16 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SHD_TRANSPORT_H_
-#define SHD_TRANSPORT_H_
+#ifndef SHD_UDP_H_
+#define SHD_UDP_H_
 
 #include "shadow.h"
 
-typedef struct _Transport Transport;
-typedef struct _TransportFunctionTable TransportFunctionTable;
+typedef struct _UDP UDP;
 
-typedef void (*TransportSendFunc)(Transport* transport);
-typedef void (*TransportFreeFunc)(Transport* transport);
+UDP* udp_new(gint handle);
+void udp_free(UDP* data);
 
-struct _TransportFunctionTable {
-	TransportSendFunc send;
-	TransportFreeFunc free;
-	MAGIC_DECLARE;
-};
+void udp_send(gpointer data);
 
-struct _Transport {
-	Descriptor super;
-	TransportFunctionTable* vtable;
-
-	MAGIC_DECLARE;
-};
-
-void transport_init(Transport* transport, TransportFunctionTable* vtable, enum DescriptorType type, gint handle);
-void transport_free(gpointer data);
-
-#endif /* SHD_TRANSPORT_H_ */
+#endif /* SHD_UDP_H_ */

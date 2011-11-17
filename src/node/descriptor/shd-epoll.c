@@ -99,7 +99,7 @@ DescriptorFunctionTable epollFunctions = {
 };
 
 Epoll* epoll_new(gint handle) {
-	g_assert(handle >= VNETWORK_MIN_SD);
+	g_assert(handle >= MIN_DESCRIPTOR);
 	Epoll* epoll = g_new0(Epoll, 1);
 	MAGIC_INIT(epoll);
 

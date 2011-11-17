@@ -18,3 +18,30 @@
  * You should have received a copy of the GNU General Public License
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
+
+#include "shadow.h"
+
+DescriptorFunctionTable transport_functions = {
+	(DescriptorFreeFunc) transport_free,
+	MAGIC_VALUE
+};
+
+void transport_init(Transport* transport, TransportFunctionTable* vtable, enum DescriptorType type, gint handle) {
+	g_assert(transport && vtable);
+
+	descriptor_init(&(transport->super), type, &transport_functions, handle);
+
+	MAGIC_INIT(transport);
+	MAGIC_INIT(vtable);
+
+	transport->vtable = vtable;
+}
+
+void transport_free(gpointer data) {
+	Transport* transport = data;
+	MAGIC_ASSERT(transport);
+	MAGIC_ASSERT(transport->vtable);
+
+	MAGIC_CLEAR(transport);
+	transport->vtable->free(transport);
+}

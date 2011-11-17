@@ -119,19 +119,15 @@ typedef guint64 SimulationTime;
 
 /**
  * We intercept read, write, and close calls since they may be done on our
- * virtual sockets. However, applications may also want to read/write/close a
- * regular file. We differentiate these by handing out high descriptors for
- * our virtual sockets. Any descriptor below this cutoff can be considered a
- * real file.
+ * virtual descriptors. However, applications may also want to read/write/close
+ * a regular file. We differentiate these by handing out high descriptors.
+ * Any descriptor below this cutoff can be considered a real file.
  *
  * It is important to set this high enough so in large simulations the system
- * file descriptor counter doesnt collide with our sockets. So this should be
- * set over the ulimit -n value.
- *
- * @todo FIXME we should implement socket descriptors greater than ugint16 so we can use
- * all 31 bits of the gint!
+ * file descriptor counter doesn't collide with our sockets. So this should be
+ * set at least over the ulimit -n value.
  */
-#define VNETWORK_MIN_SD 30000
+#define MIN_DESCRIPTOR 30000
 
 /**
  * A shortcut for turning an IP address in network format to a string in

@@ -58,6 +58,8 @@ set(shadow_srcs
     node/descriptor/shd-transport.c
     node/descriptor/shd-pipe.c
     node/descriptor/shd-socket.c
+    node/descriptor/shd-tcp.c
+    node/descriptor/shd-udp.c
     node/shd-system.c
     node/shd-application.c
     node/shd-node.c

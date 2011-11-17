@@ -36,7 +36,7 @@ vsocket_mgr_tp vsocket_mgr_create(in_addr_t addr, guint32 KBps_down, guint32 KBp
 	net->addr = addr;
 	inet_ntop(AF_INET, &addr, net->addr_string, sizeof(net->addr_string));
 
-	net->next_sock_desc = VNETWORK_MIN_SD;
+	net->next_sock_desc = MIN_DESCRIPTOR;
 	net->next_rnd_port = VSOCKET_MIN_RND_PORT;
 	net->vsockets = g_hash_table_new(g_int16_hash, g_int16_equal);
 	net->destroyed_descs = g_hash_table_new(g_int_hash, g_int_equal);

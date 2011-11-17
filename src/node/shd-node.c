@@ -36,7 +36,7 @@ Node* node_new(GQuark id, Network* network, Software* software, guint32 ip, GStr
 	node->application = application_new(software);
 
 	node->descriptors = g_tree_new_full(descriptor_compare, NULL, NULL, descriptor_unref);
-	node->descriptorHandleCounter = VNETWORK_MIN_SD;
+	node->descriptorHandleCounter = MIN_DESCRIPTOR;
 
 	// TODO refactor all the socket/event code
 	node->vsocket_mgr = vsocket_mgr_create((in_addr_t) id, bwDownKiBps, bwUpKiBps, cpuBps);

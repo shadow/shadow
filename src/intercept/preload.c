@@ -140,7 +140,7 @@ static bind_fp _vsocket_bind = NULL;
 int bind(int fd, __CONST_SOCKADDR_ARG addr, socklen_t len)  {
 	bind_fp* func;
 	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "bind", _bind, INTERCEPT_PREFIX, _vsocket_bind, fd >= VNETWORK_MIN_SD);
+	PRELOAD_DECIDE(func, funcName, "bind", _bind, INTERCEPT_PREFIX, _vsocket_bind, fd >= MIN_DESCRIPTOR);
 	PRELOAD_LOOKUP(func, funcName, -1);
 	return (*func)(fd, addr, len);
 }
@@ -151,7 +151,7 @@ static getsockname_fp _vsocket_getsockname = NULL;
 int getsockname(int fd, __SOCKADDR_ARG addr,socklen_t *__restrict len)  {
 	getsockname_fp* func;
 	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "getsockname", _getsockname, INTERCEPT_PREFIX, _vsocket_getsockname, fd >= VNETWORK_MIN_SD);
+	PRELOAD_DECIDE(func, funcName, "getsockname", _getsockname, INTERCEPT_PREFIX, _vsocket_getsockname, fd >= MIN_DESCRIPTOR);
 	PRELOAD_LOOKUP(func, funcName, -1);
 	return (*func)(fd, addr, len);
 }
@@ -162,7 +162,7 @@ static connect_fp _vsocket_connect = NULL;
 int connect(int fd, __CONST_SOCKADDR_ARG addr,socklen_t len)  {
 	connect_fp* func;
 	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "connect", _connect, INTERCEPT_PREFIX, _vsocket_connect, fd >= VNETWORK_MIN_SD);
+	PRELOAD_DECIDE(func, funcName, "connect", _connect, INTERCEPT_PREFIX, _vsocket_connect, fd >= MIN_DESCRIPTOR);
 	PRELOAD_LOOKUP(func, funcName, -1);
 	return (*func)(fd, addr, len);
 }
@@ -173,7 +173,7 @@ static getpeername_fp _vsocket_getpeername = NULL;
 int getpeername(int fd, __SOCKADDR_ARG addr,socklen_t *__restrict len)  {
 	getpeername_fp* func;
 	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "getpeername", _getpeername, INTERCEPT_PREFIX, _vsocket_getpeername, fd >= VNETWORK_MIN_SD);
+	PRELOAD_DECIDE(func, funcName, "getpeername", _getpeername, INTERCEPT_PREFIX, _vsocket_getpeername, fd >= MIN_DESCRIPTOR);
 	PRELOAD_LOOKUP(func, funcName, -1);
 	return (*func)(fd, addr, len);
 }
@@ -184,7 +184,7 @@ static send_fp _vsocket_send = NULL;
 ssize_t send(int fd, __const void *buf, size_t n, int flags) {
 	send_fp* func;
 	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "send", _send, INTERCEPT_PREFIX, _vsocket_send, fd >= VNETWORK_MIN_SD);
+	PRELOAD_DECIDE(func, funcName, "send", _send, INTERCEPT_PREFIX, _vsocket_send, fd >= MIN_DESCRIPTOR);
 	PRELOAD_LOOKUP(func, funcName, -1);
 	return (*func)(fd, buf, n, flags);
 }
@@ -196,7 +196,7 @@ ssize_t sendto(int fd, const void *buf, size_t n, int flags,
 		__CONST_SOCKADDR_ARG  addr,socklen_t addr_len)  {
 	sendto_fp* func;
 	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "sendto", _sendto, INTERCEPT_PREFIX, _vsocket_sendto, fd >= VNETWORK_MIN_SD);
+	PRELOAD_DECIDE(func, funcName, "sendto", _sendto, INTERCEPT_PREFIX, _vsocket_sendto, fd >= MIN_DESCRIPTOR);
 	PRELOAD_LOOKUP(func, funcName, -1);
 	return (*func)(fd, buf, n, flags, addr, addr_len);
 }
@@ -207,7 +207,7 @@ static sendmsg_fp _vsocket_sendmsg = NULL;
 ssize_t sendmsg(int fd, __const struct msghdr *message, int flags) {
 	sendmsg_fp* func;
 	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "sendmsg", _sendmsg, INTERCEPT_PREFIX, _vsocket_sendmsg, fd >= VNETWORK_MIN_SD);
+	PRELOAD_DECIDE(func, funcName, "sendmsg", _sendmsg, INTERCEPT_PREFIX, _vsocket_sendmsg, fd >= MIN_DESCRIPTOR);
 	PRELOAD_LOOKUP(func, funcName, -1);
 	return (*func)(fd, message, flags);
 }
@@ -218,7 +218,7 @@ static recv_fp _vsocket_recv = NULL;
 ssize_t recv(int fd, void *buf, size_t n, int flags) {
 	recv_fp* func;
 	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "recv", _recv, INTERCEPT_PREFIX, _vsocket_recv, fd >= VNETWORK_MIN_SD);
+	PRELOAD_DECIDE(func, funcName, "recv", _recv, INTERCEPT_PREFIX, _vsocket_recv, fd >= MIN_DESCRIPTOR);
 	PRELOAD_LOOKUP(func, funcName, -1);
 	return (*func)(fd, buf, n, flags);
 }
@@ -229,7 +229,7 @@ static recvfrom_fp _vsocket_recvfrom = NULL;
 ssize_t recvfrom(int fd, void *buf, size_t n, int flags, __SOCKADDR_ARG  addr,socklen_t *restrict addr_len)  {
 	recvfrom_fp* func;
 	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "recvfrom", _recvfrom, INTERCEPT_PREFIX, _vsocket_recvfrom, fd >= VNETWORK_MIN_SD);
+	PRELOAD_DECIDE(func, funcName, "recvfrom", _recvfrom, INTERCEPT_PREFIX, _vsocket_recvfrom, fd >= MIN_DESCRIPTOR);
 	PRELOAD_LOOKUP(func, funcName, -1);
 	return (*func)(fd, buf, n, flags, addr, addr_len);
 }
@@ -240,7 +240,7 @@ static recvmsg_fp _vsocket_recvmsg = NULL;
 ssize_t recvmsg(int fd, struct msghdr *message, int flags) {
 	recvmsg_fp* func;
 	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "recvmsg", _recvmsg, INTERCEPT_PREFIX, _vsocket_recvmsg, fd >= VNETWORK_MIN_SD);
+	PRELOAD_DECIDE(func, funcName, "recvmsg", _recvmsg, INTERCEPT_PREFIX, _vsocket_recvmsg, fd >= MIN_DESCRIPTOR);
 	PRELOAD_LOOKUP(func, funcName, -1);
 	return (*func)(fd, message, flags);
 }
@@ -252,7 +252,7 @@ int getsockopt(int fd, int level, int optname, void *__restrict optval,
 		socklen_t *__restrict optlen) {
 	getsockopt_fp* func;
 	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "getsockopt", _getsockopt, INTERCEPT_PREFIX, _vsocket_getsockopt, fd >= VNETWORK_MIN_SD);
+	PRELOAD_DECIDE(func, funcName, "getsockopt", _getsockopt, INTERCEPT_PREFIX, _vsocket_getsockopt, fd >= MIN_DESCRIPTOR);
 	PRELOAD_LOOKUP(func, funcName, -1);
 	return (*func)(fd, level, optname, optval, optlen);
 }
@@ -264,7 +264,7 @@ int setsockopt(int fd, int level, int optname, __const void *optval,
 		socklen_t optlen) {
 	setsockopt_fp* func;
 	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "setsockopt", _setsockopt, INTERCEPT_PREFIX, _vsocket_setsockopt, fd >= VNETWORK_MIN_SD);
+	PRELOAD_DECIDE(func, funcName, "setsockopt", _setsockopt, INTERCEPT_PREFIX, _vsocket_setsockopt, fd >= MIN_DESCRIPTOR);
 	PRELOAD_LOOKUP(func, funcName, -1);
 	return (*func)(fd, level, optname, optval, optlen);
 }
@@ -275,7 +275,7 @@ static listen_fp _vsocket_listen = NULL;
 int listen(int fd, int n) {
 	listen_fp* func;
 	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "listen", _listen, INTERCEPT_PREFIX, _vsocket_listen, fd >= VNETWORK_MIN_SD);
+	PRELOAD_DECIDE(func, funcName, "listen", _listen, INTERCEPT_PREFIX, _vsocket_listen, fd >= MIN_DESCRIPTOR);
 	PRELOAD_LOOKUP(func, funcName, -1);
 	return (*func)(fd, n);
 }
@@ -286,7 +286,7 @@ static accept_fp _vsocket_accept = NULL;
 int accept(int fd, __SOCKADDR_ARG  addr,socklen_t *__restrict addr_len)  {
 	accept_fp* func;
 	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "accept", _accept, INTERCEPT_PREFIX, _vsocket_accept, fd >= VNETWORK_MIN_SD);
+	PRELOAD_DECIDE(func, funcName, "accept", _accept, INTERCEPT_PREFIX, _vsocket_accept, fd >= MIN_DESCRIPTOR);
 	PRELOAD_LOOKUP(func, funcName, -1);
 	return (*func)(fd, addr, addr_len);
 }
@@ -297,7 +297,7 @@ static accept4_fp _vsocket_accept4 = NULL;
 int accept4(int fd, __SOCKADDR_ARG  addr,socklen_t *__restrict addr_len, int flags)  {
 	accept4_fp* func;
 	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "accept4", _accept4, INTERCEPT_PREFIX, _vsocket_accept4, fd >= VNETWORK_MIN_SD);
+	PRELOAD_DECIDE(func, funcName, "accept4", _accept4, INTERCEPT_PREFIX, _vsocket_accept4, fd >= MIN_DESCRIPTOR);
 	PRELOAD_LOOKUP(func, funcName, -1);
 	return (*func)(fd, addr, addr_len, flags);
 }
@@ -308,7 +308,7 @@ static shutdown_fp _vsocket_shutdown = NULL;
 int shutdown(int fd, int how) {
 	shutdown_fp* func;
 	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "shutdown", _shutdown, INTERCEPT_PREFIX, _vsocket_shutdown, fd >= VNETWORK_MIN_SD);
+	PRELOAD_DECIDE(func, funcName, "shutdown", _shutdown, INTERCEPT_PREFIX, _vsocket_shutdown, fd >= MIN_DESCRIPTOR);
 	PRELOAD_LOOKUP(func, funcName, -1);
 	return (*func)(fd, how);
 }
@@ -319,7 +319,7 @@ static read_fp _vsocket_read = NULL;
 ssize_t read(int fd, void *buff, int numbytes) {
 	read_fp* func;
 	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "read", _read, INTERCEPT_PREFIX, _vsocket_read, fd >= VNETWORK_MIN_SD);
+	PRELOAD_DECIDE(func, funcName, "read", _read, INTERCEPT_PREFIX, _vsocket_read, fd >= MIN_DESCRIPTOR);
 	PRELOAD_LOOKUP(func, funcName, -1);
 	return (*func)(fd, buff, numbytes);
 }
@@ -330,7 +330,7 @@ static write_fp _vsocket_write = NULL;
 ssize_t write(int fd, const void *buff, int n) {
 	write_fp* func;
 	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "write", _write, INTERCEPT_PREFIX, _vsocket_write, fd >= VNETWORK_MIN_SD);
+	PRELOAD_DECIDE(func, funcName, "write", _write, INTERCEPT_PREFIX, _vsocket_write, fd >= MIN_DESCRIPTOR);
 	PRELOAD_LOOKUP(func, funcName, -1);
 	return (*func)(fd, buff, n);
 }
@@ -341,7 +341,7 @@ static close_fp _vsocket_close = NULL;
 int close(int fd) {
 	close_fp* func;
 	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "close", _close, INTERCEPT_PREFIX, _vsocket_close, fd >= VNETWORK_MIN_SD);
+	PRELOAD_DECIDE(func, funcName, "close", _close, INTERCEPT_PREFIX, _vsocket_close, fd >= MIN_DESCRIPTOR);
 	PRELOAD_LOOKUP(func, funcName, -1);
 	return (*func)(fd);
 }

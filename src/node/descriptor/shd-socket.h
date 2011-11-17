@@ -22,6 +22,28 @@
 #ifndef SHD_SOCKET_H_
 #define SHD_SOCKET_H_
 
+typedef struct _Socket Socket;
+typedef struct _SocketFunctionTable SocketFunctionTable;
 
+typedef void (*SocketSendFunc)(Socket* transport);
+typedef void (*SocketFreeFunc)(Socket* transport);
+
+struct _SocketFunctionTable {
+	SocketSendFunc send;
+	SocketFreeFunc free;
+	MAGIC_DECLARE;
+};
+
+struct _Socket {
+	Transport super;
+	SocketFunctionTable* vtable;
+
+	MAGIC_DECLARE;
+};
+
+void socket_init(Socket* socket, SocketFunctionTable* vtable, enum DescriptorType type, gint handle);
+void socket_free(gpointer data);
+
+void socket_send(gpointer data);
 
 #endif /* SHD_SOCKET_H_ */

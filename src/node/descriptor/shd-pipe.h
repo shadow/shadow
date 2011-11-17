@@ -22,6 +22,13 @@
 #ifndef SHD_PIPE_H_
 #define SHD_PIPE_H_
 
+#include "shadow.h"
 
+typedef struct _Pipe Pipe;
+
+Pipe* pipe_new(gint handle);
+void pipe_free(Pipe* data);
+
+void pipe_send(gpointer data);
 
 #endif /* SHD_PIPE_H_ */

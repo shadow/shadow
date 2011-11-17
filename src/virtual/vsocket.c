@@ -299,7 +299,7 @@ gint vsocket_bind(vsocket_mgr_tp net, gint fd, struct sockaddr_in* saddr, sockle
 	in_port_t bind_port = saddr->sin_port;
 
 	/* check if this is a socket */
-	if(fd < VNETWORK_MIN_SD){
+	if(fd < MIN_DESCRIPTOR){
 		errno = ENOTSOCK;
 		return VSOCKET_ERROR;
 	}
@@ -368,7 +368,7 @@ gint vsocket_bind(vsocket_mgr_tp net, gint fd, struct sockaddr_in* saddr, sockle
 
 gint vsocket_getsockname(vsocket_mgr_tp net, gint fd, struct sockaddr_in* saddr, socklen_t* saddr_len) {
 	/* check if this is a socket */
-	if(fd < VNETWORK_MIN_SD){
+	if(fd < MIN_DESCRIPTOR){
 		errno = ENOTSOCK;
 		return VSOCKET_ERROR;
 	}
@@ -413,7 +413,7 @@ gint vsocket_getsockname(vsocket_mgr_tp net, gint fd, struct sockaddr_in* saddr,
 
 gint vsocket_connect(vsocket_mgr_tp net, gint fd, struct sockaddr_in* saddr, socklen_t saddr_len) {
 	/* check if this is a socket */
-	if(fd < VNETWORK_MIN_SD){
+	if(fd < MIN_DESCRIPTOR){
 		errno = ENOTSOCK;
 		return VSOCKET_ERROR;
 	}
@@ -542,7 +542,7 @@ gint vsocket_connect(vsocket_mgr_tp net, gint fd, struct sockaddr_in* saddr, soc
 
 gint vsocket_getpeername(vsocket_mgr_tp net, gint fd, struct sockaddr_in* saddr, socklen_t* saddr_len) {
 	/* check if this is a socket */
-	if(fd < VNETWORK_MIN_SD){
+	if(fd < MIN_DESCRIPTOR){
 		errno = ENOTSOCK;
 		return VSOCKET_ERROR;
 	}
@@ -591,7 +591,7 @@ ssize_t vsocket_sendto(vsocket_mgr_tp net, gint fd, const gpointer buf, size_t n
 		struct sockaddr_in* saddr, socklen_t saddr_len) {
 	/* TODO flags are ignored */
 	/* check if this is a socket */
-	if(fd < VNETWORK_MIN_SD){
+	if(fd < MIN_DESCRIPTOR){
 		errno = ENOTSOCK;
 		return VSOCKET_ERROR;
 	}
@@ -729,7 +729,7 @@ ssize_t vsocket_recvfrom(vsocket_mgr_tp net, gint fd, gpointer buf, size_t n, gi
 		struct sockaddr_in* saddr, socklen_t* saddr_len) {
 	/* TODO flags are ignored */
 	/* check if this is a socket */
-	if(fd < VNETWORK_MIN_SD){
+	if(fd < MIN_DESCRIPTOR){
 		errno = ENOTSOCK;
 		return VSOCKET_ERROR;
 	}
@@ -882,7 +882,7 @@ gint vsocket_setsockopt(vsocket_mgr_tp net, gint fd, gint level, gint optname, c
 
 gint vsocket_listen(vsocket_mgr_tp net, gint fd, gint backlog) {
 	/* check if this is a socket */
-	if(fd < VNETWORK_MIN_SD){
+	if(fd < MIN_DESCRIPTOR){
 		errno = ENOTSOCK;
 		return VSOCKET_ERROR;
 	}
@@ -921,7 +921,7 @@ gint vsocket_listen(vsocket_mgr_tp net, gint fd, gint backlog) {
 
 gint vsocket_accept(vsocket_mgr_tp net, gint fd, struct sockaddr_in* saddr, socklen_t* saddr_len) {
 	/* check if this is a socket */
-	if(fd < VNETWORK_MIN_SD){
+	if(fd < MIN_DESCRIPTOR){
 		errno = ENOTSOCK;
 		return VSOCKET_ERROR;
 	}
@@ -1018,7 +1018,7 @@ ssize_t vsocket_write(vsocket_mgr_tp net, gint fd, const gpointer buf, size_t n)
 
 gint vsocket_close(vsocket_mgr_tp net, gint fd) {
 	/* check if this is a socket */
-	if(net == NULL || fd < VNETWORK_MIN_SD){
+	if(net == NULL || fd < MIN_DESCRIPTOR){
 		errno = ENOTSOCK;
 		return VSOCKET_ERROR;
 	}
