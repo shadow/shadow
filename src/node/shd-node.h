@@ -86,9 +86,10 @@ Descriptor* node_lookupDescriptor(Node* node, gint descriptorHandle);
 
 gint node_epollControl(Node* node, gint epollDescriptor, gint operation,
 		gint fileDescriptor, struct epoll_event* event);
-gint node_epollGetEvents(Node* node, gint handle,
-		struct epoll_event* eventArray, gint eventArrayLength, gint* nEvents);
+gint node_epollGetEvents(Node* node, gint handle, struct epoll_event* eventArray,
+		gint eventArrayLength, gint* nEvents);
 
 gint node_bindToInterface(Node* node, gint handle, in_addr_t bindAddress, in_port_t bindPort);
+gint node_connectToPeer(Node* node, gint handle, in_addr_t peerAddress, in_port_t peerPort, sa_family_t family);
 
 #endif /* SHD_NODE_H_ */

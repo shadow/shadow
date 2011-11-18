@@ -39,6 +39,7 @@ NetworkInterface* networkinterface_new(GQuark address, gchar* name,
 		guint32 bwDownKiBps, guint32 bwUpKiBps);
 void networkinterface_free(gpointer data);
 
+in_addr_t networkinterface_getIPAddress(NetworkInterface* interface);
 gboolean networkinterface_isAssociated(NetworkInterface* interface,
 		enum DescriptorType type, in_port_t port);
 void networkinterface_associate(NetworkInterface* interface, Socket* socket);

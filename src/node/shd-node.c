@@ -353,7 +353,7 @@ gint node_bindToInterface(Node* node, gint handle, in_addr_t bindAddress, in_por
 	enum DescriptorType type = descriptor_getType(descriptor);
 	if(type != DT_TCPSOCKET && type != DT_UDPSOCKET) {
 		warning("wrong type for descriptor handle '%i'", handle);
-		return EBADF;
+		return ENOTSOCK;
 	}
 
 	/* make sure we have an interface at that address */
@@ -387,8 +387,47 @@ gint node_bindToInterface(Node* node, gint handle, in_addr_t bindAddress, in_por
 	return 0;
 }
 
-void node_connectToPeer(Node* node) {
+gint node_connectToPeer(Node* node, gint handle, in_addr_t peerAddress,
+		in_port_t peerPort, sa_family_t family) {
 	MAGIC_ASSERT(node);
+
+	Descriptor* descriptor = node_lookupDescriptor(node, handle);
+	if(descriptor == NULL) {
+		warning("descriptor handle '%i' not found", handle);
+		return EBADF;
+	}
+
+	enum DescriptorType type = descriptor_getType(descriptor);
+	if(type != DT_TCPSOCKET && type != DT_UDPSOCKET) {
+		warning("wrong type for descriptor handle '%i'", handle);
+		return ENOTSOCK;
+	}
+
+	Socket* socket = (Socket*) descriptor;
+
+	if(!socket_isFamilySupported(socket, family)) {
+		return EAFNOSUPPORT;
+	}
+
+	gint error = socket_getConnectError(socket);
+	if(error) {
+		return error;
+	}
+
+	if(!socket_isBound(socket)) {
+		/* do an implicit bind to a random port.
+		 * use default interface unless the remote peer is on loopback */
+		in_addr_t loIP = htonl(INADDR_LOOPBACK);
+		in_addr_t defaultIP = networkinterface_getIPAddress(node->defaultInterface);
+
+		in_addr_t bindAddress = loIP == peerAddress ? loIP : defaultIP;
+		in_port_t bindPort = node_getRandomFreePort(node, bindAddress, type);
+
+		socket_bindToInterface(socket, bindAddress, bindPort);
+		node_associateInterface(node, bindAddress, socket);
+	}
+
+	return socket_connectToPeer(socket, peerAddress, peerPort, family);
 }
 
 void node_listenForPeer(Node* node) {

@@ -27,8 +27,5 @@
 typedef struct _TCP TCP;
 
 TCP* tcp_new(gint handle);
-void tcp_free(TCP* data);
-
-void tcp_send(gpointer data);
 
 #endif /* SHD_TCP_H_ */

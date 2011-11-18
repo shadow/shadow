@@ -30,6 +30,10 @@
 
 #include "shadow.h"
 
+enum SystemCallType {
+	SCT_BIND, SCT_CONNECT, SCT_GETSOCKNAME, SCT_GETPEERNAME,
+};
+
 static Node* _system_switchInShadowContext() {
 	Worker* worker = worker_getPrivate();
 	if(worker->cached_plugin) {
@@ -197,7 +201,7 @@ gint system_socket(gint domain, gint type, gint protocol) {
 		warning("unsupported socket type \"%i\", we only support SOCK_STREAM and SOCK_DGRAM", type);
 		errno = EPROTONOSUPPORT;
 		return -1;
-	} else if(domain != PF_INET) { /* implies AF_INET as well */
+	} else if(domain != AF_INET) {
 		warning("trying to create socket with domain \"%i\", we only support PF_INET", domain);
 		errno = EAFNOSUPPORT;
 		return -1;
@@ -219,7 +223,8 @@ gint system_socketPair(gint domain, gint type, gint protocol, gint fds[2]) {
 	return r;
 }
 
-gint system_bind(gint fd, const struct sockaddr* addr, socklen_t len) {
+static gint system_checkAndDirect(gint fd, const struct sockaddr* addr, socklen_t* len,
+		enum SystemCallType type) {
 	/* check if this is a virtual socket */
 	if(fd < MIN_DESCRIPTOR){
 		warning("intercepted a non-virtual descriptor");
@@ -228,18 +233,52 @@ gint system_bind(gint fd, const struct sockaddr* addr, socklen_t len) {
 	}
 
 	/* check for proper addr */
-	if(addr == NULL || len < sizeof(struct sockaddr_in)) {
+	if(addr == NULL) {
 		errno = EFAULT;
 		return -1;
 	}
 
-	struct sockaddr_in* saddr = (struct sockaddr_in*) addr;
-	in_addr_t bindAddress = saddr->sin_addr.s_addr;
-	in_port_t bindPort = saddr->sin_port;
+	if(len == NULL || *len < sizeof(struct sockaddr_in)) {
+		errno = EINVAL;
+		return -1;
+	}
 
-	/* pass on to node for further checks */
+	struct sockaddr_in* saddr = (struct sockaddr_in*) addr;
+	in_addr_t ip = saddr->sin_addr.s_addr;
+	in_port_t port = saddr->sin_port;
+	sa_family_t family = saddr->sin_family;
+
+	/* direct to node for further checks */
 	Node* node = _system_switchInShadowContext();
-	gint result = node_bindToInterface(node, fd, bindAddress, bindPort);
+
+	gint result = EINVAL;
+	switch(type) {
+		case SCT_BIND: {
+			result = node_bindToInterface(node, fd, ip, port);
+			break;
+		}
+
+		case SCT_CONNECT: {
+			result = node_connectToPeer(node, fd, ip, port, family);
+			break;
+		}
+
+		case SCT_GETPEERNAME: {
+//			result = vsocket_getpeername(node->vsocket_mgr, fd, (struct sockaddr_in *) addr, len);
+			break;
+		}
+
+		case SCT_GETSOCKNAME: {
+//			result = vsocket_getsockname(node->vsocket_mgr, fd, (struct sockaddr_in *) addr, len);
+			break;
+		}
+
+		default: {
+			error("unrecognized system call type");
+			break;
+		}
+	}
+
 	_system_switchOutShadowContext(node);
 
 	/* check if there was an error */
@@ -251,25 +290,50 @@ gint system_bind(gint fd, const struct sockaddr* addr, socklen_t len) {
 	return 0;
 }
 
-gint system_getSockName(gint fd, struct sockaddr* addr, socklen_t* len) {
+
+gint system_accept(gint fd, struct sockaddr* addr, socklen_t* len) {
+	/* check if this is a virtual socket */
+	if(fd < MIN_DESCRIPTOR){
+		warning("intercepted a non-virtual descriptor");
+		errno = ENOTSOCK;
+		return -1;
+	}
+
+	/* direct to node for further checks */
 	Node* node = _system_switchInShadowContext();
-	gint r = vsocket_getsockname(node->vsocket_mgr, fd, (struct sockaddr_in *) addr, len);
+
+	gint result = 0;//node_acceptNewPeer(node);
+
 	_system_switchOutShadowContext(node);
-	return r;
+
+	/* check if there was an error */
+	if(result != 0) {
+		errno = result;
+		return -1;
+	}
+
+	return 0;
+}
+
+gint system_accept4(gint fd, struct sockaddr* addr, socklen_t* len, gint flags) {
+	/* just ignore the flags and call accept */
+	return system_accept(fd, addr, len);
+}
+
+gint system_bind(gint fd, const struct sockaddr* addr, socklen_t len) {
+	return system_checkAndDirect(fd, addr, &len, SCT_BIND);
 }
 
 gint system_connect(gint fd, const struct sockaddr* addr, socklen_t len) {
-	Node* node = _system_switchInShadowContext();
-	gint r = vsocket_connect(node->vsocket_mgr, fd, (struct sockaddr_in *) addr, len);
-	_system_switchOutShadowContext(node);
-	return r;
+	return system_checkAndDirect(fd, addr, &len, SCT_CONNECT);
 }
 
 gint system_getPeerName(gint fd, struct sockaddr* addr, socklen_t* len) {
-	Node* node = _system_switchInShadowContext();
-	gint r = vsocket_getpeername(node->vsocket_mgr, fd, (struct sockaddr_in *) addr, len);
-	_system_switchOutShadowContext(node);
-	return r;
+	return system_checkAndDirect(fd, addr, len, SCT_GETPEERNAME);
+}
+
+gint system_getSockName(gint fd, struct sockaddr* addr, socklen_t* len) {
+	return system_checkAndDirect(fd, addr, len, SCT_GETSOCKNAME);
 }
 
 gssize system_send(gint fd, const gpointer buf, gsize n, gint flags) {
@@ -335,21 +399,6 @@ gint system_setSockOpt(gint fd, gint level, gint optname, const gpointer optval,
 gint system_listen(gint fd, gint backlog) {
 	Node* node = _system_switchInShadowContext();
 	gint r = vsocket_listen(node->vsocket_mgr, fd, backlog);
-	_system_switchOutShadowContext(node);
-	return r;
-}
-
-gint system_accept(gint fd, struct sockaddr* addr, socklen_t* addr_len) {
-	Node* node = _system_switchInShadowContext();
-	gint r = vsocket_accept(node->vsocket_mgr, fd, (struct sockaddr_in *) addr, addr_len);
-	_system_switchOutShadowContext(node);
-	return r;
-}
-
-gint system_accept4(gint fd, struct sockaddr* addr, socklen_t* addr_len, gint flags) {
-	Node* node = _system_switchInShadowContext();
-	// Call the standard accpet() function which will just ignore the flags option
-	gint r = vsocket_accept(node->vsocket_mgr, fd, (struct sockaddr_in *) addr, addr_len);
 	_system_switchOutShadowContext(node);
 	return r;
 }

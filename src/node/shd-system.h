@@ -42,10 +42,12 @@ gint system_epollPWait(gint epollDescriptor, struct epoll_event* events,
 
 gint system_socket(gint domain, gint type, gint protocol);
 gint system_socketPair(gint domain, gint type, gint protocol, gint fds[2]);
+gint system_accept(gint fd, struct sockaddr* addr, socklen_t* len);
+gint system_accept4(gint fd, struct sockaddr* addr, socklen_t* len, gint flags);
 gint system_bind(gint fd, const struct sockaddr* addr, socklen_t len);
-gint system_getSockName(gint fd, struct sockaddr* addr, socklen_t* len);
 gint system_connect(gint fd, const struct sockaddr* addr, socklen_t len);
 gint system_getPeerName(gint fd, struct sockaddr* addr, socklen_t* len);
+gint system_getSockName(gint fd, struct sockaddr* addr, socklen_t* len);
 gssize system_send(gint fd, const gpointer buf, gsize n, gint flags);
 gssize system_recv(gint fd, gpointer buf, gsize n, gint flags);
 gssize system_sendTo(gint fd, const gpointer buf, gsize n, gint flags,
@@ -59,8 +61,6 @@ gint system_getSockOpt(gint fd, gint level, gint optname, gpointer optval,
 gint system_setSockOpt(gint fd, gint level, gint optname, const gpointer optval,
 		socklen_t optlen);
 gint system_listen(gint fd, gint backlog);
-gint system_accept(gint fd, struct sockaddr* addr, socklen_t* addr_len);
-gint system_accept4(gint fd, struct sockaddr* addr, socklen_t* addr_len, gint flags);
 gint system_shutdown(gint fd, gint how);
 gssize system_read(gint fd, gpointer buf, gint numbytes);
 gssize system_write(gint fd, const gpointer buf, gint numbytes);

@@ -27,8 +27,5 @@
 typedef struct _UDP UDP;
 
 UDP* udp_new(gint handle);
-void udp_free(UDP* data);
-
-void udp_send(gpointer data);
 
 #endif /* SHD_UDP_H_ */

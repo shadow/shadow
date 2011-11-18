@@ -24,10 +24,55 @@
 struct _UDP {
 	Socket super;
 
+	in_addr_t defaultPeerIP;
+	in_port_t defaultPeerPort;
+
 	MAGIC_DECLARE;
 };
 
+gboolean udp_isFamilySupported(UDP* udp, sa_family_t family) {
+	MAGIC_ASSERT(udp);
+	return (family == AF_INET || family == AF_UNSPEC) ? TRUE : FALSE;
+}
+
+gint udp_getConnectError(UDP* udp) {
+	MAGIC_ASSERT(udp);
+	return 0;
+}
+
+gint udp_connectToPeer(UDP* udp, in_addr_t ip, in_port_t port, sa_family_t family) {
+	MAGIC_ASSERT(udp);
+
+	/* ip/port specifies the default destination for packets */
+	if(family == AF_UNSPEC) {
+		/* dissolve our existing defaults */
+		udp->defaultPeerIP = 0;
+		udp->defaultPeerPort = 0;
+	} else {
+		/* set new defaults */
+		udp->defaultPeerIP = ip;
+		udp->defaultPeerPort = port;
+	}
+
+	return 0;
+}
+
+void udp_send(UDP* udp) {
+
+}
+
+void udp_free(UDP* udp) {
+	MAGIC_ASSERT(udp);
+
+	MAGIC_CLEAR(udp);
+	g_free(udp);
+}
+
+/* we implement the socket interface, this describes our function suite */
 SocketFunctionTable udp_functions = {
+	(SocketIsFamilySupportedFunc) udp_isFamilySupported,
+	(SocketGetConnectErrorFunc) udp_getConnectError,
+	(SocketConnectToPeerFunc) udp_connectToPeer,
 	(SocketSendFunc) udp_send,
 	(SocketFreeFunc) udp_free,
 	MAGIC_VALUE
@@ -40,16 +85,4 @@ UDP* udp_new(gint handle) {
 	socket_init(&(udp->super), &udp_functions, DT_UDPSOCKET, handle);
 
 	return udp;
-}
-
-void udp_free(UDP* data) {
-	UDP* udp = data;
-	MAGIC_ASSERT(udp);
-
-	MAGIC_CLEAR(udp);
-	g_free(udp);
-}
-
-void udp_send(gpointer data) {
-
 }

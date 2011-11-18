@@ -90,3 +90,8 @@ void networkinterface_associate(NetworkInterface* interface, Socket* socket) {
 	g_hash_table_replace(protocolTable, &(socket->boundPort), socket);
 	descriptor_ref(socket);
 }
+
+in_addr_t networkinterface_getIPAddress(NetworkInterface* interface) {
+	MAGIC_ASSERT(interface);
+	return address_toNetworkIP(interface->address);
+}

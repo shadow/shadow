@@ -38,10 +38,6 @@ void socket_init(Socket* socket, SocketFunctionTable* vtable, enum DescriptorTyp
 	socket->vtable = vtable;
 }
 
-void socket_send(gpointer data) {
-
-}
-
 void socket_free(gpointer data) {
 	Socket* socket = data;
 	MAGIC_ASSERT(socket);
@@ -50,6 +46,32 @@ void socket_free(gpointer data) {
 	MAGIC_CLEAR(socket);
 	socket->vtable->free(socket);
 }
+
+/* interface functions, implemented by subtypes */
+
+gboolean socket_isFamilySupported(Socket* socket, sa_family_t family) {
+	MAGIC_ASSERT(socket);
+	MAGIC_ASSERT(socket->vtable);
+	return socket->vtable->isFamilySupported(socket, family);
+}
+
+gint socket_getConnectError(Socket* socket) {
+	MAGIC_ASSERT(socket);
+	MAGIC_ASSERT(socket->vtable);
+	return socket->vtable->getConnectError(socket);
+}
+
+gint socket_connectToPeer(Socket* socket, in_addr_t ip, in_port_t port, sa_family_t family) {
+	MAGIC_ASSERT(socket);
+	MAGIC_ASSERT(socket->vtable);
+	return socket->vtable->connectToPeer(socket, ip, port, family);
+}
+
+void socket_send(Socket* socket) {
+
+}
+
+/* functions implemented by socket */
 
 gboolean socket_isBound(Socket* socket) {
 	MAGIC_ASSERT(socket);
