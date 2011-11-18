@@ -46,13 +46,16 @@ struct _Node {
 	GQueue* event_priority_queue;
 
 	GQuark id;
-	Address* address;
+	GHashTable* interfaces;
+	NetworkInterface* defaultInterface;
+
 	Application* application;
 	vsocket_mgr_tp vsocket_mgr;
 
 	/* all file, socket, and epoll descriptors we know about and track */
-	GTree* descriptors;
+	GHashTable* descriptors;
 	gint descriptorHandleCounter;
+	in_port_t randomPortCounter;
 
 	MAGIC_DECLARE;
 };
@@ -78,12 +81,14 @@ gboolean node_isEqual(Node* a, Node* b);
 guint32 node_getBandwidthUp(Node* node);
 guint32 node_getBandwidthDown(Node* node);
 
+gint node_createDescriptor(Node* node, enum DescriptorType type);
 Descriptor* node_lookupDescriptor(Node* node, gint descriptorHandle);
 
-gint node_epollNew(Node* node);
 gint node_epollControl(Node* node, gint epollDescriptor, gint operation,
 		gint fileDescriptor, struct epoll_event* event);
-gint node_epollGetEvents(Node* node, gint epollDescriptor,
+gint node_epollGetEvents(Node* node, gint handle,
 		struct epoll_event* eventArray, gint eventArrayLength, gint* nEvents);
+
+gint node_bindToInterface(Node* node, gint handle, in_addr_t bindAddress, in_port_t bindPort);
 
 #endif /* SHD_NODE_H_ */

@@ -113,9 +113,9 @@ guint32 _internetwork_generateIP(Internetwork* internet) {
 	MAGIC_ASSERT(internet);
 	internet->ipCounter++;
 	while(internet->ipCounter == htonl(INADDR_NONE) ||
-			internet->ipCounter == htonl(INADDR_NONE) ||
-			internet->ipCounter == htonl(INADDR_NONE) ||
-			internet->ipCounter == htonl(INADDR_NONE))
+			internet->ipCounter == htonl(INADDR_ANY) ||
+			internet->ipCounter == htonl(INADDR_LOOPBACK) ||
+			internet->ipCounter == htonl(INADDR_BROADCAST))
 	{
 		internet->ipCounter++;
 	}

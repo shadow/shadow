@@ -19,38 +19,28 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SHD_TRANSPORT_H_
-#define SHD_TRANSPORT_H_
+#ifndef SHD_NETWORK_INTERFACE_H_
+#define SHD_NETWORK_INTERFACE_H_
 
 #include "shadow.h"
 
-typedef struct _Transport Transport;
-typedef struct _TransportFunctionTable TransportFunctionTable;
-
-typedef void (*TransportSendFunc)(Transport* transport);
-typedef void (*TransportFreeFunc)(Transport* transport);
-
-struct _TransportFunctionTable {
-	TransportSendFunc send;
-	TransportFreeFunc free;
+typedef struct _NetworkInterface NetworkInterface;
+struct _NetworkInterface {
+	Address* address;
+	guint32 bwDownKiBps;
+	guint32 bwUpKiBps;
+	/* port-to-descriptor bindings */
+	GHashTable* boundTCP;
+	GHashTable* boundUDP;
 	MAGIC_DECLARE;
 };
 
-enum TransportFlags {
-	TF_NONE = 0,
-	TF_CONNECTED = 1 << 0,
-};
+NetworkInterface* networkinterface_new(GQuark address, gchar* name,
+		guint32 bwDownKiBps, guint32 bwUpKiBps);
+void networkinterface_free(gpointer data);
 
-struct _Transport {
-	Descriptor super;
-	TransportFunctionTable* vtable;
+gboolean networkinterface_isAssociated(NetworkInterface* interface,
+		enum DescriptorType type, in_port_t port);
+void networkinterface_associate(NetworkInterface* interface, Socket* socket);
 
-	enum TransportFlags flags;
-
-	MAGIC_DECLARE;
-};
-
-void transport_init(Transport* transport, TransportFunctionTable* vtable, enum DescriptorType type, gint handle);
-void transport_free(gpointer data);
-
-#endif /* SHD_TRANSPORT_H_ */
+#endif /* SHD_NETWORK_INTERFACE_H_ */

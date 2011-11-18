@@ -26,23 +26,33 @@ Node* node_new(GQuark id, Network* network, Software* software, guint32 ip, GStr
 	MAGIC_INIT(node);
 
 	node->id = id;
-	node->address = address_new(id, (const gchar*) hostname->str);
+
+	/* communication with other nodes */
 	node->event_mailbox = g_async_queue_new_full(shadowevent_free);
 	node->event_priority_queue = g_queue_new();
 	node->network = network;
 
 	node->node_lock = g_mutex_new();
 
+	/* create virtual interfaces */
+	node->interfaces = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, networkinterface_free);
+	NetworkInterface* ethernet = networkinterface_new(id, hostname->str, bwDownKiBps, bwUpKiBps);
+	g_hash_table_replace(node->interfaces, &(ethernet->address->ip), ethernet);
+	NetworkInterface* loopback = networkinterface_new((GQuark)htonl(INADDR_LOOPBACK), "loopback", G_MAXUINT32, G_MAXUINT32);
+	g_hash_table_replace(node->interfaces, &(loopback->address->ip), loopback);
+	node->defaultInterface = ethernet;
+
 	node->application = application_new(software);
 
-	node->descriptors = g_tree_new_full(descriptor_compare, NULL, NULL, descriptor_unref);
+	node->descriptors = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, descriptor_unref);
 	node->descriptorHandleCounter = MIN_DESCRIPTOR;
+	node->randomPortCounter = MIN_RANDOM_PORT;
 
 	// TODO refactor all the socket/event code
 	node->vsocket_mgr = vsocket_mgr_create((in_addr_t) id, bwDownKiBps, bwUpKiBps, cpuBps);
 
 	info("Created Node '%s', ip %s, %u bwUpKiBps, %u bwDownKiBps, %lu cpuBps",
-			g_quark_to_string(node->id), address_toHostIPString(node->address),
+			g_quark_to_string(node->id), address_toHostIPString(node->defaultInterface->address),
 			bwUpKiBps, bwDownKiBps, cpuBps);
 
 	return node;
@@ -59,7 +69,8 @@ void node_free(gpointer data) {
 
 	vsocket_mgr_destroy(node->vsocket_mgr);
 
-	address_free(node->address);
+	g_hash_table_destroy(node->interfaces);
+
 	g_async_queue_unref(node->event_mailbox);
 	g_queue_free(node->event_priority_queue);
 
@@ -159,22 +170,45 @@ static gint _node_monitorDescriptor(Node* node, Descriptor* descriptor) {
 
 	gint* handle = descriptor_getHandleReference(descriptor);
 	/* @todo add check if something exists at this key */
-	g_tree_replace(node->descriptors, handle, descriptor);
+	g_hash_table_replace(node->descriptors, handle, descriptor);
 
 	return *handle;
 }
 
-Descriptor* node_lookupDescriptor(Node* node, gint descriptorHandle) {
-	MAGIC_ASSERT(node);
-	return g_tree_lookup(node->descriptors, (gconstpointer) &descriptorHandle);
-}
-
-gint node_epollNew(Node* node) {
+gint node_createDescriptor(Node* node, enum DescriptorType type) {
 	MAGIC_ASSERT(node);
 
 	/* get a unique descriptor that can be "closed" later */
-	Epoll* epoll = epoll_new((node->descriptorHandleCounter)++);
-	return _node_monitorDescriptor(node, (Descriptor*) epoll);
+	Descriptor* descriptor;
+
+	switch(type) {
+		case DT_EPOLL: {
+			descriptor = (Descriptor*) epoll_new((node->descriptorHandleCounter)++);
+			break;
+		}
+
+		case DT_TCPSOCKET: {
+			descriptor = (Descriptor*) tcp_new((node->descriptorHandleCounter)++);
+			break;
+		}
+
+		case DT_UDPSOCKET: {
+			descriptor = (Descriptor*) udp_new((node->descriptorHandleCounter)++);
+			break;
+		}
+
+		default: {
+			warning("unknown descriptor type: %i", (int)type);
+			return EINVAL;
+		}
+	}
+
+	return _node_monitorDescriptor(node, descriptor);
+}
+
+Descriptor* node_lookupDescriptor(Node* node, gint descriptorHandle) {
+	MAGIC_ASSERT(node);
+	return g_hash_table_lookup(node->descriptors, (gconstpointer) &descriptorHandle);
 }
 
 gint node_epollControl(Node* node, gint epollDescriptor, gint operation,
@@ -183,7 +217,7 @@ gint node_epollControl(Node* node, gint epollDescriptor, gint operation,
 	g_assert(node->descriptors);
 
 	/* EBADF  epfd is not a valid file descriptor. */
-	Descriptor* descriptor = g_tree_lookup(node->descriptors, &epollDescriptor);
+	Descriptor* descriptor = g_hash_table_lookup(node->descriptors, &epollDescriptor);
 	if(descriptor == NULL) {
 		return EBADF;
 	}
@@ -197,7 +231,7 @@ gint node_epollControl(Node* node, gint epollDescriptor, gint operation,
 	Epoll* epoll = (Epoll*) descriptor;
 
 	/* EBADF  fd is not a valid file descriptor. */
-	descriptor = g_tree_lookup(node->descriptors, &fileDescriptor);
+	descriptor = g_hash_table_lookup(node->descriptors, &fileDescriptor);
 	if(descriptor == NULL) {
 		return EBADF;
 	}
@@ -206,13 +240,13 @@ gint node_epollControl(Node* node, gint epollDescriptor, gint operation,
 
 }
 
-gint node_epollGetEvents(Node* node, gint epollDescriptor,
+gint node_epollGetEvents(Node* node, gint handle,
 		struct epoll_event* eventArray, gint eventArrayLength, gint* nEvents) {
 	MAGIC_ASSERT(node);
 	g_assert(node->descriptors);
 
 	/* EBADF  epfd is not a valid file descriptor. */
-	Descriptor* descriptor = g_tree_lookup(node->descriptors, &epollDescriptor);
+	Descriptor* descriptor = node_lookupDescriptor(node, handle);
 	if(descriptor == NULL) {
 		return EBADF;
 	}
@@ -224,4 +258,151 @@ gint node_epollGetEvents(Node* node, gint epollDescriptor,
 
 	Epoll* epoll = (Epoll*) descriptor;
 	return epoll_getEvents(epoll, eventArray, eventArrayLength, nEvents);
+}
+
+static gboolean node_doesInterfaceExist(Node* node, in_addr_t interfaceIP) {
+	MAGIC_ASSERT(node);
+
+	if(interfaceIP == htonl(INADDR_ANY) && node->defaultInterface) {
+		return TRUE;
+	}
+
+	NetworkInterface* interface = g_hash_table_lookup(node->interfaces, &interfaceIP);
+	if(interface) {
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
+static gboolean node_isInterfaceAvailable(Node* node, in_addr_t interfaceIP,
+		enum DescriptorType type, in_port_t port) {
+	MAGIC_ASSERT(node);
+
+	gboolean isAvailable = FALSE;
+
+	if(interfaceIP == htonl(INADDR_ANY)) {
+		/* need to check that all interfaces are free */
+		GHashTableIter iter;
+		gpointer key, value;
+		g_hash_table_iter_init(&iter, node->interfaces);
+
+		while(g_hash_table_iter_next(&iter, &key, &value)) {
+			NetworkInterface* interface = value;
+			isAvailable = networkinterface_isAssociated(interface, type, port);
+
+			/* as soon as one is taken, break out to return FALSE */
+			if(!isAvailable) {
+				break;
+			}
+		}
+	} else {
+		NetworkInterface* interface = g_hash_table_lookup(node->interfaces, &interfaceIP);
+		isAvailable = networkinterface_isAssociated(interface, type, port);
+	}
+
+	return isAvailable;
+}
+
+
+static in_port_t node_getRandomFreePort(Node* node, in_addr_t interfaceIP,
+		enum DescriptorType type) {
+	MAGIC_ASSERT(node);
+
+	in_port_t randomPort = 0;
+	gboolean available = FALSE;
+
+	while(!available) {
+		randomPort = (node->randomPortCounter)++;
+		g_assert(randomPort >= MIN_RANDOM_PORT);
+		available = node_isInterfaceAvailable(node, interfaceIP, type, randomPort);
+	}
+
+	return randomPort;
+}
+
+static void node_associateInterface(Node* node, in_addr_t interfaceIP, Socket* socket) {
+	MAGIC_ASSERT(node);
+
+	if(interfaceIP == htonl(INADDR_ANY)) {
+		/* need to associate all interfaces */
+		GHashTableIter iter;
+		gpointer key, value;
+		g_hash_table_iter_init(&iter, node->interfaces);
+
+		while(g_hash_table_iter_next(&iter, &key, &value)) {
+			NetworkInterface* interface = value;
+			MAGIC_ASSERT(interface);
+			networkinterface_associate(interface, socket);
+		}
+	} else {
+		NetworkInterface* interface = g_hash_table_lookup(node->interfaces, &interfaceIP);
+		networkinterface_associate(interface, socket);
+	}
+}
+
+gint node_bindToInterface(Node* node, gint handle, in_addr_t bindAddress, in_port_t bindPort) {
+	MAGIC_ASSERT(node);
+
+	Descriptor* descriptor = node_lookupDescriptor(node, handle);
+	if(descriptor == NULL) {
+		warning("descriptor handle '%i' not found", handle);
+		return EBADF;
+	}
+
+	enum DescriptorType type = descriptor_getType(descriptor);
+	if(type != DT_TCPSOCKET && type != DT_UDPSOCKET) {
+		warning("wrong type for descriptor handle '%i'", handle);
+		return EBADF;
+	}
+
+	/* make sure we have an interface at that address */
+	if(!node_doesInterfaceExist(node, bindAddress)) {
+		return EADDRNOTAVAIL;
+	}
+
+	Socket* socket = (Socket*) descriptor;
+
+	/* make sure socket is not bound */
+	if(socket_isBound(socket)) {
+		warning("socket already bound to requested address");
+		return EINVAL;
+	}
+
+	/* make sure we have a proper port */
+	if(bindPort == 0) {
+		/* we know it will be available */
+		bindPort = node_getRandomFreePort(node, bindAddress, type);
+	} else {
+		/* make sure their port is available at that address for this protocol. */
+		if(!node_isInterfaceAvailable(node, bindAddress, type, bindPort)) {
+			return EADDRINUSE;
+		}
+	}
+
+	/* bind socket and set association on the interface */
+	socket_bindToInterface(socket, bindAddress, bindPort);
+	node_associateInterface(node, bindAddress, socket);
+
+	return 0;
+}
+
+void node_connectToPeer(Node* node) {
+	MAGIC_ASSERT(node);
+}
+
+void node_listenForPeer(Node* node) {
+	MAGIC_ASSERT(node);
+}
+
+void node_acceptNewPeer(Node* node) {
+	MAGIC_ASSERT(node);
+}
+
+void node_sendToPeer(Node* node) {
+	MAGIC_ASSERT(node);
+}
+
+void node_receiveFromPeer(Node* node) {
+	MAGIC_ASSERT(node);
 }

@@ -130,6 +130,12 @@ typedef guint64 SimulationTime;
 #define MIN_DESCRIPTOR 30000
 
 /**
+ * The start of our random port range, used if application doesn't specify
+ * the port it wants to bind to, and for client connections.
+ */
+#define MIN_RANDOM_PORT 10000
+
+/**
  * A shortcut for turning an IP address in network format to a string in
  * dot-and-number format. The returned string is returned in a statically
  * allocated buffer and so is not thread-safe.

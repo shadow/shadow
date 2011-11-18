@@ -60,6 +60,7 @@ set(shadow_srcs
     node/descriptor/shd-socket.c
     node/descriptor/shd-tcp.c
     node/descriptor/shd-udp.c
+    node/shd-network-interface.c
     node/shd-system.c
     node/shd-application.c
     node/shd-node.c

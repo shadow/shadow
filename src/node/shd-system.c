@@ -59,7 +59,7 @@ gint system_epollCreate(gint size) {
 
 	/* switch into shadow and create the new descriptor */
 	Node* node = _system_switchInShadowContext();
-	gint handle = node_epollNew(node);
+	gint handle = node_createDescriptor(node, DT_EPOLL);
 	_system_switchOutShadowContext(node);
 
 	return handle;
@@ -174,10 +174,42 @@ gint system_epollPWait(gint epollDescriptor, struct epoll_event* events,
  */
 
 gint system_socket(gint domain, gint type, gint protocol) {
+	/* we only support non-blocking sockets, and require
+	 * SOCK_NONBLOCK to be set immediately */
+	gboolean isBlocking = TRUE;
+
+	/* clear non-blocking flags if set to get true type */
+	if(type & SOCK_NONBLOCK) {
+		type = type & ~SOCK_NONBLOCK;
+		isBlocking = FALSE;
+	}
+	if(type & SOCK_CLOEXEC) {
+		type = type & ~SOCK_CLOEXEC;
+		isBlocking = FALSE;
+	}
+
+	/* check inputs for what we support */
+	if(isBlocking) {
+		warning("we only support non-blocking sockets: please bitwise OR 'SOCK_NONBLOCK' with type flags");
+		errno = EPROTONOSUPPORT;
+		return -1;
+	} else if (type != SOCK_STREAM && type != SOCK_DGRAM) {
+		warning("unsupported socket type \"%i\", we only support SOCK_STREAM and SOCK_DGRAM", type);
+		errno = EPROTONOSUPPORT;
+		return -1;
+	} else if(domain != PF_INET) { /* implies AF_INET as well */
+		warning("trying to create socket with domain \"%i\", we only support PF_INET", domain);
+		errno = EAFNOSUPPORT;
+		return -1;
+	}
+
+	/* we are all set to create the socket */
+	enum DescriptorType dtype = type == SOCK_STREAM ? DT_TCPSOCKET : DT_UDPSOCKET;
+
 	Node* node = _system_switchInShadowContext();
-	gint r = vsocket_socket(node->vsocket_mgr, domain, type, protocol);
+	gint result = node_createDescriptor(node, dtype);
 	_system_switchOutShadowContext(node);
-	return r;
+	return result;
 }
 
 gint system_socketPair(gint domain, gint type, gint protocol, gint fds[2]) {
@@ -188,10 +220,35 @@ gint system_socketPair(gint domain, gint type, gint protocol, gint fds[2]) {
 }
 
 gint system_bind(gint fd, const struct sockaddr* addr, socklen_t len) {
+	/* check if this is a virtual socket */
+	if(fd < MIN_DESCRIPTOR){
+		warning("intercepted a non-virtual descriptor");
+		errno = ENOTSOCK;
+		return -1;
+	}
+
+	/* check for proper addr */
+	if(addr == NULL || len < sizeof(struct sockaddr_in)) {
+		errno = EFAULT;
+		return -1;
+	}
+
+	struct sockaddr_in* saddr = (struct sockaddr_in*) addr;
+	in_addr_t bindAddress = saddr->sin_addr.s_addr;
+	in_port_t bindPort = saddr->sin_port;
+
+	/* pass on to node for further checks */
 	Node* node = _system_switchInShadowContext();
-	gint r = vsocket_bind(node->vsocket_mgr, fd, (struct sockaddr_in *) addr, len);
+	gint result = node_bindToInterface(node, fd, bindAddress, bindPort);
 	_system_switchOutShadowContext(node);
-	return r;
+
+	/* check if there was an error */
+	if(result != 0) {
+		errno = result;
+		return -1;
+	}
+
+	return 0;
 }
 
 gint system_getSockName(gint fd, struct sockaddr* addr, socklen_t* len) {

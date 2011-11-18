@@ -50,3 +50,16 @@ void socket_free(gpointer data) {
 	MAGIC_CLEAR(socket);
 	socket->vtable->free(socket);
 }
+
+gboolean socket_isBound(Socket* socket) {
+	MAGIC_ASSERT(socket);
+	return (socket->flags & SF_BOUND) ? TRUE : FALSE;
+}
+
+void socket_bindToInterface(Socket* socket, in_addr_t interfaceIP, in_port_t port) {
+	MAGIC_ASSERT(socket);
+	g_assert(!(socket->flags & SF_BOUND));
+	socket->boundInterfaceIP = interfaceIP;
+	socket->boundPort = port;
+	socket->flags |= SF_BOUND;
+}

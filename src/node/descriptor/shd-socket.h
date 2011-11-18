@@ -34,10 +34,18 @@ struct _SocketFunctionTable {
 	MAGIC_DECLARE;
 };
 
+enum SocketFlags {
+	SF_NONE = 0,
+	SF_BOUND = 1 << 0,
+};
+
 struct _Socket {
 	Transport super;
 	SocketFunctionTable* vtable;
 
+	enum SocketFlags flags;
+	in_addr_t boundInterfaceIP;
+	in_port_t boundPort;
 	MAGIC_DECLARE;
 };
 
@@ -45,5 +53,8 @@ void socket_init(Socket* socket, SocketFunctionTable* vtable, enum DescriptorTyp
 void socket_free(gpointer data);
 
 void socket_send(gpointer data);
+
+gboolean socket_isBound(Socket* socket);
+void socket_bindToInterface(Socket* socket, in_addr_t interfaceIP, in_port_t port);
 
 #endif /* SHD_SOCKET_H_ */
