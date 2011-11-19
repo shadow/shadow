@@ -47,7 +47,7 @@ struct _Epoll {
 	MAGIC_DECLARE;
 };
 
-static EpollWatch* epollwatch_new(Epoll* epoll, Descriptor* descriptor, struct epoll_event* event) {
+static EpollWatch* _epollwatch_new(Epoll* epoll, Descriptor* descriptor, struct epoll_event* event) {
 	EpollWatch* watch = g_new0(EpollWatch, 1);
 	MAGIC_INIT(watch);
 	g_assert(event);
@@ -62,7 +62,7 @@ static EpollWatch* epollwatch_new(Epoll* epoll, Descriptor* descriptor, struct e
 	return watch;
 }
 
-static void epollwatch_free(gpointer data) {
+static void _epollwatch_free(gpointer data) {
 	EpollWatch* watch = data;
 	MAGIC_ASSERT(watch);
 
@@ -75,7 +75,7 @@ static void epollwatch_free(gpointer data) {
 }
 
 /* should only be called from descriptor dereferencing the functionTable */
-static void epoll_free(gpointer data) {
+static void _epoll_free(gpointer data) {
 	Epoll* epoll = data;
 	MAGIC_ASSERT(epoll);
 
@@ -87,7 +87,7 @@ static void epoll_free(gpointer data) {
 }
 
 DescriptorFunctionTable epollFunctions = {
-	(DescriptorFreeFunc) epoll_free,
+	(DescriptorFreeFunc) _epoll_free,
 	MAGIC_VALUE
 };
 
@@ -99,12 +99,12 @@ Epoll* epoll_new(gint handle) {
 	descriptor_init(&(epoll->super), DT_EPOLL, &epollFunctions, handle);
 
 	/* allocate backend needed for managing events for this descriptor */
-	epoll->watchedDescriptors = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, epollwatch_free);
+	epoll->watchedDescriptors = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, _epollwatch_free);
 
 	return epoll;
 }
 
-static gboolean epoll_isWatchingDescriptor(Epoll* epoll, Descriptor* descriptor) {
+static gboolean _epoll_isWatchingDescriptor(Epoll* epoll, Descriptor* descriptor) {
 
 	EpollWatch* watch = g_hash_table_lookup(epoll->watchedDescriptors,
 			descriptor_getHandleReference(descriptor));
@@ -119,11 +119,11 @@ gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor,
 		case EPOLL_CTL_ADD: {
 			/* EEXIST op was EPOLL_CTL_ADD, and the supplied file descriptor
 			 * fd is already registered with this epoll instance. */
-			if(epoll_isWatchingDescriptor(epoll, descriptor)) {
+			if(_epoll_isWatchingDescriptor(epoll, descriptor)) {
 				return EEXIST;
 			}
 
-			EpollWatch* watch = epollwatch_new(epoll, descriptor, event);
+			EpollWatch* watch = _epollwatch_new(epoll, descriptor, event);
 			g_hash_table_replace(epoll->watchedDescriptors, descriptor_getHandleReference(descriptor), watch);
 
 			break;
@@ -132,7 +132,7 @@ gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor,
 		case EPOLL_CTL_MOD: {
 			/* ENOENT op was EPOLL_CTL_MOD, and fd is not
 			 * registered with this epoll instance. */
-			if(!epoll_isWatchingDescriptor(epoll, descriptor)) {
+			if(!_epoll_isWatchingDescriptor(epoll, descriptor)) {
 				return ENOENT;
 			}
 
@@ -148,7 +148,7 @@ gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor,
 		case EPOLL_CTL_DEL: {
 			/* ENOENT op was EPOLL_CTL_DEL, and fd is not
 			 * registered with this epoll instance. */
-			if(!epoll_isWatchingDescriptor(epoll, descriptor)) {
+			if(!_epoll_isWatchingDescriptor(epoll, descriptor)) {
 				return ENOENT;
 			}
 
@@ -214,7 +214,7 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray,
 	return 0;
 }
 
-static gboolean epollwatch_needsNotify(EpollWatch* watch) {
+static gboolean _epollwatch_needsNotify(EpollWatch* watch) {
 	MAGIC_ASSERT(watch);
 
 	/* check status */
@@ -246,7 +246,7 @@ void epoll_descriptorStatusChanged(gpointer data, gpointer callbackArgument) {
 	g_assert(watch && (watch->descriptor == descriptor));
 
 	/* check if we need to schedule a notification */
-	gboolean needsNotify = epollwatch_needsNotify(watch);
+	gboolean needsNotify = _epollwatch_needsNotify(watch);
 	gboolean isScheduled = (epoll->flags & EF_SCHEDULED) ? TRUE : FALSE;
 	if(needsNotify && !isScheduled) {
 		epoll->flags |= EF_SCHEDULED;

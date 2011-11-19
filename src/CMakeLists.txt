@@ -83,7 +83,6 @@ set(shadow_srcs
     virtual/vpipe.c
     virtual/vsocket_mgr.c
     virtual/vsocket.c
-    virtual/vsystem.c
     virtual/vtcp_server.c
     virtual/vtcp.c
     virtual/vtransport_mgr.c

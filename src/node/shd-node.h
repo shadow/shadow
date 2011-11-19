@@ -82,7 +82,8 @@ guint32 node_getBandwidthUp(Node* node);
 guint32 node_getBandwidthDown(Node* node);
 
 gint node_createDescriptor(Node* node, enum DescriptorType type);
-Descriptor* node_lookupDescriptor(Node* node, gint descriptorHandle);
+Descriptor* node_lookupDescriptor(Node* node, gint handle);
+gint node_closeDescriptor(Node* node, gint handle);
 
 gint node_epollControl(Node* node, gint epollDescriptor, gint operation,
 		gint fileDescriptor, struct epoll_event* event);
@@ -91,5 +92,11 @@ gint node_epollGetEvents(Node* node, gint handle, struct epoll_event* eventArray
 
 gint node_bindToInterface(Node* node, gint handle, in_addr_t bindAddress, in_port_t bindPort);
 gint node_connectToPeer(Node* node, gint handle, in_addr_t peerAddress, in_port_t peerPort, sa_family_t family);
+gint node_listenForPeer(Node* node, gint handle, gint backlog);
+gint node_acceptNewPeer(Node* node, gint handle, in_addr_t* ip, in_port_t* port);
+gssize node_sendToPeer(Node* node, gint handle, gconstpointer buffer, gsize nBytes, in_addr_t ip, in_addr_t port);
+gssize node_receiveFromPeer(Node* node, gint handle, gpointer buffer, gsize nBytes, in_addr_t* ip, in_port_t* port);
+gint node_getPeerName(Node* node, gint handle, in_addr_t* ip, in_port_t* port);
+gint node_getSocketName(Node* node, gint handle, in_addr_t* ip, in_port_t* port);
 
 #endif /* SHD_NODE_H_ */

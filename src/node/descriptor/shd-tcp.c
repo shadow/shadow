@@ -96,7 +96,76 @@ gint tcp_connectToPeer(TCP* tcp, in_addr_t ip, in_port_t port, sa_family_t famil
 }
 
 void tcp_send(TCP* tcp) {
+	MAGIC_ASSERT(tcp);
+}
 
+void tcp_enterServerMode(TCP* tcp, gint backlog) {
+	MAGIC_ASSERT(tcp);
+
+	/* we are a server ready to listen, build our server state */
+	//TODO
+//	/* build the tcp server that will listen at our server port */
+//	vtcp_server_tp server = vtcp_server_create(net, sock, backlog);
+//	vsocket_mgr_add_server(net, server);
+//
+//	/* we are now listening for connections */
+//	vsocket_transition(sock, VTCP_LISTEN);
+}
+
+gint tcp_acceptServerPeer(TCP* tcp, in_addr_t* ip, in_port_t* port) {
+	MAGIC_ASSERT(tcp);
+
+//	/* make sure we are listening and bound to a addr and port */
+//	if(tcp->state != TCPS_LISTEN || !socket_isBound(&(tcp->super))) {
+//		return EINVAL;
+//	}
+//
+//	/* get our tcp server */
+//	vtcp_server_tp server = vsocket_mgr_get_server(net, sock);
+//	if(server == NULL){
+//		errno = EINVAL;
+//		return VSOCKET_ERROR;
+//	}
+//
+//	/* if there are no pending connection ready to accept, dont block waiting */
+//	vtcp_server_child_tp pending_child = vtcp_server_remove_child_pending(server);
+//	vsocket_tp pending_sock = pending_child == NULL ? NULL : pending_child->sock;
+//	if(pending_sock == NULL) {
+//		errno = EWOULDBLOCK;
+//		return VSOCKET_ERROR;
+//	}
+//
+//	/* we have a connection and socket ready, it will now be accepted
+//	 * make sure socket is still good */
+//	if(pending_sock->vt->vtcp == NULL || pending_sock->curr_state != VTCP_ESTABLISHED){
+//		/* close stale socket whose connection was reset before accepted */
+//		if(pending_sock->vt->vtcp != NULL && pending_sock->vt->vtcp->connection_was_reset) {
+//			vsocket_close(net, pending_sock->sock_desc);
+//		}
+//		errno = ECONNABORTED;
+//		return VSOCKET_ERROR;
+//	}
+//
+//	if(pending_sock->vt->vtcp->remote_peer == NULL) {
+//		error("no remote peer on pending connection");
+//		errno = VSOCKET_ERROR;
+//		return VSOCKET_ERROR;
+//	}
+//
+//	vtcp_server_add_child_accepted(server, pending_child);
+//
+//	/* update child status */
+//	vepoll_mark_active(pending_sock->vep);
+//	vepoll_mark_available(pending_sock->vep, VEPOLL_WRITE);
+//
+//	/* update server status */
+//	if(g_queue_get_length(server->pending_queue) > 0) {
+//		vepoll_mark_available(sock->vep, VEPOLL_READ);
+//	} else {
+//		vepoll_mark_unavailable(sock->vep, VEPOLL_READ);
+//	}
+
+	return 0;
 }
 
 void tcp_free(TCP* tcp) {
@@ -109,7 +178,6 @@ void tcp_free(TCP* tcp) {
 /* we implement the socket interface, this describes our function suite */
 SocketFunctionTable tcp_functions = {
 	(SocketIsFamilySupportedFunc) tcp_isFamilySupported,
-	(SocketGetConnectErrorFunc) tcp_getConnectError,
 	(SocketConnectToPeerFunc) tcp_connectToPeer,
 	(SocketSendFunc) tcp_send,
 	(SocketFreeFunc) tcp_free,

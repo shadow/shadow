@@ -223,12 +223,12 @@ gint system_socketPair(gint domain, gint type, gint protocol, gint fds[2]) {
 	return r;
 }
 
-static gint system_checkAndDirect(gint fd, const struct sockaddr* addr, socklen_t* len,
+static gint _system_addressHelper(gint fd, const struct sockaddr* addr, socklen_t* len,
 		enum SystemCallType type) {
 	/* check if this is a virtual socket */
 	if(fd < MIN_DESCRIPTOR){
 		warning("intercepted a non-virtual descriptor");
-		errno = ENOTSOCK;
+		errno = EBADF;
 		return -1;
 	}
 
@@ -263,13 +263,17 @@ static gint system_checkAndDirect(gint fd, const struct sockaddr* addr, socklen_
 			break;
 		}
 
-		case SCT_GETPEERNAME: {
-//			result = vsocket_getpeername(node->vsocket_mgr, fd, (struct sockaddr_in *) addr, len);
-			break;
-		}
-
+		case SCT_GETPEERNAME:
 		case SCT_GETSOCKNAME: {
-//			result = vsocket_getsockname(node->vsocket_mgr, fd, (struct sockaddr_in *) addr, len);
+			result = type == SCT_GETPEERNAME ?
+					node_getPeerName(node, fd, &(saddr->sin_addr.s_addr), &(saddr->sin_port)) :
+					node_getSocketName(node, fd, &(saddr->sin_addr.s_addr), &(saddr->sin_port));
+
+			if(result == 0) {
+				saddr->sin_family = AF_INET;
+				*len = sizeof(struct sockaddr_in);
+			}
+
 			break;
 		}
 
@@ -295,14 +299,17 @@ gint system_accept(gint fd, struct sockaddr* addr, socklen_t* len) {
 	/* check if this is a virtual socket */
 	if(fd < MIN_DESCRIPTOR){
 		warning("intercepted a non-virtual descriptor");
-		errno = ENOTSOCK;
+		errno = EBADF;
 		return -1;
 	}
+
+	in_addr_t ip = 0;
+	in_port_t port = 0;
 
 	/* direct to node for further checks */
 	Node* node = _system_switchInShadowContext();
 
-	gint result = 0;//node_acceptNewPeer(node);
+	gint result = node_acceptNewPeer(node, fd, &ip, &port);
 
 	_system_switchOutShadowContext(node);
 
@@ -310,6 +317,14 @@ gint system_accept(gint fd, struct sockaddr* addr, socklen_t* len) {
 	if(result != 0) {
 		errno = result;
 		return -1;
+	}
+
+	if(addr != NULL && len != NULL && *len >= sizeof(struct sockaddr_in)) {
+		struct sockaddr_in* ai = (struct sockaddr_in*) addr;
+		ai->sin_addr.s_addr = ip;
+		ai->sin_port = port;
+		ai->sin_family = AF_INET;
+		*len = sizeof(struct sockaddr_in);
 	}
 
 	return 0;
@@ -321,112 +336,181 @@ gint system_accept4(gint fd, struct sockaddr* addr, socklen_t* len, gint flags) 
 }
 
 gint system_bind(gint fd, const struct sockaddr* addr, socklen_t len) {
-	return system_checkAndDirect(fd, addr, &len, SCT_BIND);
+	return _system_addressHelper(fd, addr, &len, SCT_BIND);
 }
 
 gint system_connect(gint fd, const struct sockaddr* addr, socklen_t len) {
-	return system_checkAndDirect(fd, addr, &len, SCT_CONNECT);
+	return _system_addressHelper(fd, addr, &len, SCT_CONNECT);
 }
 
 gint system_getPeerName(gint fd, struct sockaddr* addr, socklen_t* len) {
-	return system_checkAndDirect(fd, addr, len, SCT_GETPEERNAME);
+	return _system_addressHelper(fd, addr, len, SCT_GETPEERNAME);
 }
 
 gint system_getSockName(gint fd, struct sockaddr* addr, socklen_t* len) {
-	return system_checkAndDirect(fd, addr, len, SCT_GETSOCKNAME);
-}
-
-gssize system_send(gint fd, const gpointer buf, gsize n, gint flags) {
-	Node* node = _system_switchInShadowContext();
-	gssize r = vsocket_send(node->vsocket_mgr, fd, buf, n, flags);
-	_system_switchOutShadowContext(node);
-	return r;
-}
-
-gssize system_recv(gint fd, gpointer buf, gsize n, gint flags) {
-	Node* node = _system_switchInShadowContext();
-	gssize r = vsocket_recv(node->vsocket_mgr, fd, buf, n, flags);
-	_system_switchOutShadowContext(node);
-	return r;
+	return _system_addressHelper(fd, addr, len, SCT_GETSOCKNAME);
 }
 
 gssize system_sendTo(gint fd, const gpointer buf, gsize n, gint flags,
-		const struct sockaddr* addr, socklen_t addr_len) {
+		const struct sockaddr* addr, socklen_t len) {
+	/* TODO flags are ignored */
+	/* check if this is a socket */
+	if(fd < MIN_DESCRIPTOR){
+		errno = EBADF;
+		return VSOCKET_ERROR;
+	}
+
+	in_addr_t ip = 0;
+	in_port_t port = 0;
+
+	/* check if they specified an address to send to */
+	if(addr != NULL && len >= sizeof(struct sockaddr_in)) {
+		struct sockaddr_in* si = (struct sockaddr_in*) addr;
+		ip = si->sin_addr.s_addr;
+		port = si->sin_port;
+	}
+
 	Node* node = _system_switchInShadowContext();
-	gssize r = vsocket_sendto(node->vsocket_mgr, fd, buf, n, flags, (struct sockaddr_in *) addr, addr_len);
+	gssize result = node_sendToPeer(node, fd, buf, n, ip, port);
 	_system_switchOutShadowContext(node);
-	return r;
+
+	if(result < 0) {
+		errno = result;
+		return -1;
+	}
+	return result;
 }
 
-gssize system_recvFrom(gint fd, gpointer buf, size_t n, gint flags,
-		struct sockaddr* addr, socklen_t* addr_len) {
-	Node* node = _system_switchInShadowContext();
-	gssize r = vsocket_recvfrom(node->vsocket_mgr, fd, buf, n, flags, (struct sockaddr_in *) addr, addr_len);
-	_system_switchOutShadowContext(node);
-	return r;
+gssize system_send(gint fd, const gpointer buf, gsize n, gint flags) {
+	return system_sendTo(fd, buf, n, flags, NULL, 0);
 }
 
 gssize system_sendMsg(gint fd, const struct msghdr* message, gint flags) {
+	/* TODO implement */
+	warning("sendmsg not implemented");
+	errno = ENOSYS;
+	return -1;
+}
+
+gssize system_write(gint fd, const gpointer buf, gint n) {
+	return system_sendTo(fd, buf, n, 0, NULL, 0);
+}
+
+gssize system_recvFrom(gint fd, gpointer buf, size_t n, gint flags,
+		struct sockaddr* addr, socklen_t* len) {
+	/* TODO flags are ignored */
+	/* check if this is a socket */
+	if(fd < MIN_DESCRIPTOR){
+		errno = EBADF;
+		return VSOCKET_ERROR;
+	}
+
+	in_addr_t ip = 0;
+	in_port_t port = 0;
+
 	Node* node = _system_switchInShadowContext();
-	gssize r = vsocket_sendmsg(node->vsocket_mgr, fd, message, flags);
+	gssize result = node_receiveFromPeer(node, fd, buf, n, &ip, &port);
 	_system_switchOutShadowContext(node);
-	return r;
+
+	if(result < 0) {
+		errno = result;
+		return -1;
+	}
+
+	/* check if they wanted to know where we got the data from */
+	if(addr != NULL && len != NULL && *len >= sizeof(struct sockaddr_in)) {
+		struct sockaddr_in* si = (struct sockaddr_in*) addr;
+		si->sin_addr.s_addr = ip;
+		si->sin_port = port;
+		si->sin_family = AF_INET;
+		*len = sizeof(struct sockaddr_in);
+	}
+
+	return result;
+}
+
+gssize system_recv(gint fd, gpointer buf, gsize n, gint flags) {
+	return system_recvFrom(fd, buf, n, flags, NULL, 0);
 }
 
 gssize system_recvMsg(gint fd, struct msghdr* message, gint flags) {
-	Node* node = _system_switchInShadowContext();
-	gssize r = vsocket_recvmsg(node->vsocket_mgr, fd, message, flags);
-	_system_switchOutShadowContext(node);
-	return r;
+	/* TODO implement */
+	warning("recvmsg not implemented");
+	errno = ENOSYS;
+	return -1;
+}
+
+gssize system_read(gint fd, gpointer buf, gint n) {
+	return system_recvFrom(fd, buf, n, 0, NULL, 0);
 }
 
 gint system_getSockOpt(gint fd, gint level, gint optname, gpointer optval,
 		socklen_t* optlen) {
-	Node* node = _system_switchInShadowContext();
-	gint r = vsocket_getsockopt(node->vsocket_mgr, fd, level, optname, optval, optlen);
-	_system_switchOutShadowContext(node);
-	return r;
+	/* @todo: implement socket options */
+	if(level == SOL_SOCKET || level == SOL_IP) {
+		switch (optname) {
+			case SO_ERROR:
+				*((gint*)optval) = 0;
+				*optlen = sizeof(gint);
+				break;
+
+			default:
+				warning("option not implemented");
+				errno = ENOSYS;
+				return -1;
+		}
+
+		return 0;
+	} else {
+		warning("socket option level not implemented");
+		errno = ENOSYS;
+		return -1;
+	}
 }
 
 gint system_setSockOpt(gint fd, gint level, gint optname, const gpointer optval,
 		socklen_t optlen) {
-	Node* node = _system_switchInShadowContext();
-	gint r = vsocket_setsockopt(node->vsocket_mgr, fd, level, optname, optval, optlen);
-	_system_switchOutShadowContext(node);
-	return r;
+	/* @todo: implement socket options */
+	debug("setsockopt not implemented. this is probably OK, depending on usage.");
+	errno = ENOSYS;
+	return -1;
 }
 
 gint system_listen(gint fd, gint backlog) {
+	/* check if this is a socket */
+	if(fd < MIN_DESCRIPTOR){
+		errno = EBADF;
+		return VSOCKET_ERROR;
+	}
+
 	Node* node = _system_switchInShadowContext();
-	gint r = vsocket_listen(node->vsocket_mgr, fd, backlog);
+	gint result = node_listenForPeer(node, fd, backlog);
 	_system_switchOutShadowContext(node);
-	return r;
+
+	/* check if there was an error */
+	if(result != 0) {
+		errno = result;
+		return -1;
+	}
+
+	return 0;
 }
 
 gint system_shutdown(gint fd, gint how) {
-	Node* node = _system_switchInShadowContext();
-	gint r = vsocket_shutdown(node->vsocket_mgr, fd, how);
-	_system_switchOutShadowContext(node);
-	return r;
-}
-
-gssize system_read(gint fd, gpointer buf, gint numbytes) {
-	Node* node = _system_switchInShadowContext();
-	gssize r = vsocket_read(node->vsocket_mgr, fd, buf, numbytes);
-	_system_switchOutShadowContext(node);
-	return r;
-}
-
-gssize system_write(gint fd, const gpointer buf, gint numbytes) {
-	Node* node = _system_switchInShadowContext();
-	gssize r = vsocket_write(node->vsocket_mgr, fd, buf, numbytes);
-	_system_switchOutShadowContext(node);
-	return r;
+	warning("shutdown not implemented");
+	errno = ENOSYS;
+	return -1;
 }
 
 gint system_close(gint fd) {
+	/* check if this is a socket */
+	if(fd < MIN_DESCRIPTOR){
+		errno = EBADF;
+		return -1;
+	}
+
 	Node* node = _system_switchInShadowContext();
-	gint r = vsocket_close(node->vsocket_mgr, fd);
+	gint r = node_closeDescriptor(node, fd);
 	_system_switchOutShadowContext(node);
 	return r;
 }
@@ -437,36 +521,133 @@ gint system_close(gint fd) {
  */
 
 time_t system_time(time_t* t) {
-	Node* node = _system_switchInShadowContext();
-	time_t r = vsystem_time(t);
-	_system_switchOutShadowContext(node);
-	return r;
+	time_t secs = (time_t) (worker_getPrivate()->clock_now / SIMTIME_ONE_SECOND);
+	if(t != NULL){
+		*t = secs;
+	}
+	return secs;
 }
 
 gint system_clockGetTime(clockid_t clk_id, struct timespec *tp) {
-	Node* node = _system_switchInShadowContext();
-	gint r = vsystem_clock_gettime(clk_id, tp);
-	_system_switchOutShadowContext(node);
-	return r;
+	if(clk_id != CLOCK_REALTIME) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	if(tp == NULL) {
+		errno = EFAULT;
+		return -1;
+	}
+
+	SimulationTime now = worker_getPrivate()->clock_now;
+	tp->tv_sec = now / SIMTIME_ONE_SECOND;
+	tp->tv_nsec = now % SIMTIME_ONE_SECOND;
+
+	return 0;
 }
 
 gint system_getHostName(gchar *name, size_t len) {
 	Node* node = _system_switchInShadowContext();
-	gint r = vsystem_gethostname(name, len);
+	Worker* worker = worker_getPrivate();
+	gint result = 0;
+
+	if(name != NULL && node != NULL) {
+
+		/* resolve my address to a hostname */
+		const gchar* sysname = internetwork_resolveID(worker->cached_engine->internet, node->id);
+
+		if(sysname != NULL) {
+			if(strncpy(name, sysname, len) != NULL) {
+				result = 0;
+				goto done;
+			}
+		}
+	}
+	errno = EFAULT;
+	result = -1;
+
+	done:
+
 	_system_switchOutShadowContext(node);
-	return r;
+	return result;
 }
 
-gint system_getAddrInfo(gchar *n, const gchar *service,
+gint system_getAddrInfo(gchar *name, const gchar *service,
 		const struct addrinfo *hgints, struct addrinfo **res) {
 	Node* node = _system_switchInShadowContext();
-	gint r = vsystem_getaddrinfo(n, service, hgints, res);
+
+	gint result = 0;
+
+	Worker* worker = worker_getPrivate();
+	*res = NULL;
+	if(name != NULL && node != NULL) {
+
+		/* node may be a number-and-dots address, or a hostname. lets hope for hostname
+		 * and try that first, o/w convert to the in_addr_t and do a second lookup. */
+		in_addr_t address = (in_addr_t) internetwork_resolveName(worker->cached_engine->internet, name);
+
+		if(address == 0) {
+			/* name was not in hostname format. convert to IP format and try again */
+			struct in_addr inaddr;
+			gint r = inet_pton(AF_INET, name, &inaddr);
+
+			if(r == 1) {
+				/* successful conversion to IP format, now find the real hostname */
+				GQuark convertedIP = (GQuark) inaddr.s_addr;
+				const gchar* hostname = internetwork_resolveID(worker->cached_engine->internet, convertedIP);
+
+				if(hostname != NULL) {
+					/* got it, so convertedIP is a valid IP */
+					address = (in_addr_t) convertedIP;
+				} else {
+					/* name not mapped by resolver... */
+					result = EAI_FAIL;
+					goto done;
+				}
+			} else if(r == 0) {
+				/* not in correct form... hmmm, too bad i guess */
+				result = EAI_NONAME;
+				goto done;
+			} else {
+				/* error occured */
+				result = EAI_SYSTEM;
+				goto done;
+			}
+		}
+
+		/* should have address now */
+		struct sockaddr_in* sa = g_malloc(sizeof(struct sockaddr_in));
+		/* application will expect it in network order */
+		// sa->sin_addr.s_addr = (in_addr_t) htonl((guint32)(*addr));
+		sa->sin_addr.s_addr = address;
+
+		struct addrinfo* ai_out = g_malloc(sizeof(struct addrinfo));
+		ai_out->ai_addr = (struct sockaddr*) sa;
+		ai_out->ai_addrlen = sizeof(in_addr_t);
+		ai_out->ai_canonname = NULL;
+		ai_out->ai_family = AF_INET;
+		ai_out->ai_flags = 0;
+		ai_out->ai_next = NULL;
+		ai_out->ai_protocol = 0;
+		ai_out->ai_socktype = SOCK_STREAM;
+
+		*res = ai_out;
+		result = 0;
+		goto done;
+	}
+
+	errno = EINVAL;
+	result = EAI_SYSTEM;
+
+	done:
 	_system_switchOutShadowContext(node);
-	return r;
+	return result;
 }
 
 void system_freeAddrInfo(struct addrinfo *res) {
-	Node* node = _system_switchInShadowContext();
-	vsystem_freeaddrinfo(res);
-	_system_switchOutShadowContext(node);
+	if(res && res->ai_addr != NULL) {
+		g_free(res->ai_addr);
+		res->ai_addr = NULL;
+		g_free(res);
+	}
 }

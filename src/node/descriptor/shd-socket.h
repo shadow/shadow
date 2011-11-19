@@ -26,14 +26,12 @@ typedef struct _Socket Socket;
 typedef struct _SocketFunctionTable SocketFunctionTable;
 
 typedef gboolean (*SocketIsFamilySupportedFunc)(Socket* socket, sa_family_t family);
-typedef gint (*SocketGetConnectErrorFunc)(Socket* socket);
 typedef gint (*SocketConnectToPeerFunc)(Socket* socket, in_addr_t ip, in_port_t port, sa_family_t family);
 typedef void (*SocketSendFunc)(Socket* socket);
 typedef void (*SocketFreeFunc)(Socket* socket);
 
 struct _SocketFunctionTable {
 	SocketIsFamilySupportedFunc isFamilySupported;
-	SocketGetConnectErrorFunc getConnectError;
 	SocketConnectToPeerFunc connectToPeer;
 	SocketSendFunc send;
 	SocketFreeFunc free;
@@ -52,6 +50,8 @@ struct _Socket {
 	enum SocketFlags flags;
 	in_addr_t boundInterfaceIP;
 	in_port_t boundPort;
+	in_addr_t peerIP;
+	in_addr_t peerPort;
 	MAGIC_DECLARE;
 };
 
@@ -62,9 +62,10 @@ void socket_send(Socket* data);
 
 gboolean socket_isBound(Socket* socket);
 void socket_bindToInterface(Socket* socket, in_addr_t interfaceIP, in_port_t port);
+gint socket_getPeerName(Socket* socket, in_addr_t* ip, in_port_t* port);
+gint socket_getSocketName(Socket* socket, in_addr_t* ip, in_port_t* port);
 
 gboolean socket_isFamilySupported(Socket* socket, sa_family_t family);
-gint socket_getConnectError(Socket* socket);
 gint socket_connectToPeer(Socket* socket, in_addr_t ip, in_port_t port, sa_family_t family);
 
 #endif /* SHD_SOCKET_H_ */

@@ -35,7 +35,7 @@ void descriptor_init(Descriptor* descriptor, enum DescriptorType type,
 	descriptor->referenceCount = 1;
 }
 
-static void descriptor_free(Descriptor* descriptor) {
+static void _descriptor_free(Descriptor* descriptor) {
 	MAGIC_ASSERT(descriptor);
 	MAGIC_ASSERT(descriptor->funcTable);
 
@@ -53,7 +53,7 @@ void descriptor_ref(gpointer data) {
 
 	(descriptor->referenceCount)++;
 	if(descriptor->referenceCount <= 0) {
-		descriptor_free(descriptor);
+		_descriptor_free(descriptor);
 	}
 }
 
@@ -63,7 +63,7 @@ void descriptor_unref(gpointer data) {
 
 	(descriptor->referenceCount)--;
 	if(descriptor->referenceCount <= 0) {
-		descriptor_free(descriptor);
+		_descriptor_free(descriptor);
 	}
 }
 
@@ -85,7 +85,7 @@ gint* descriptor_getHandleReference(Descriptor* descriptor) {
 	return &(descriptor->handle);
 }
 
-static void descriptor_notifyListener(gpointer data, gpointer user_data) {
+static void _descriptor_notifyListener(gpointer data, gpointer user_data) {
 	Listener* listener = data;
 	listener_notify(listener);
 }
@@ -131,7 +131,7 @@ void descriptor_adjustStatus(Descriptor* descriptor, gboolean doSetBits,
 	}
 
 	if(doNotify) {
-		g_slist_foreach(descriptor->readyListeners, descriptor_notifyListener, NULL);
+		g_slist_foreach(descriptor->readyListeners, _descriptor_notifyListener, NULL);
 	}
 }
 

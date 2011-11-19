@@ -206,9 +206,9 @@ gint node_createDescriptor(Node* node, enum DescriptorType type) {
 	return _node_monitorDescriptor(node, descriptor);
 }
 
-Descriptor* node_lookupDescriptor(Node* node, gint descriptorHandle) {
+Descriptor* node_lookupDescriptor(Node* node, gint handle) {
 	MAGIC_ASSERT(node);
-	return g_hash_table_lookup(node->descriptors, (gconstpointer) &descriptorHandle);
+	return g_hash_table_lookup(node->descriptors, (gconstpointer) &handle);
 }
 
 gint node_epollControl(Node* node, gint epollDescriptor, gint operation,
@@ -260,7 +260,7 @@ gint node_epollGetEvents(Node* node, gint handle,
 	return epoll_getEvents(epoll, eventArray, eventArrayLength, nEvents);
 }
 
-static gboolean node_doesInterfaceExist(Node* node, in_addr_t interfaceIP) {
+static gboolean _node_doesInterfaceExist(Node* node, in_addr_t interfaceIP) {
 	MAGIC_ASSERT(node);
 
 	if(interfaceIP == htonl(INADDR_ANY) && node->defaultInterface) {
@@ -275,7 +275,7 @@ static gboolean node_doesInterfaceExist(Node* node, in_addr_t interfaceIP) {
 	return FALSE;
 }
 
-static gboolean node_isInterfaceAvailable(Node* node, in_addr_t interfaceIP,
+static gboolean _node_isInterfaceAvailable(Node* node, in_addr_t interfaceIP,
 		enum DescriptorType type, in_port_t port) {
 	MAGIC_ASSERT(node);
 
@@ -305,7 +305,7 @@ static gboolean node_isInterfaceAvailable(Node* node, in_addr_t interfaceIP,
 }
 
 
-static in_port_t node_getRandomFreePort(Node* node, in_addr_t interfaceIP,
+static in_port_t _node_getRandomFreePort(Node* node, in_addr_t interfaceIP,
 		enum DescriptorType type) {
 	MAGIC_ASSERT(node);
 
@@ -315,13 +315,13 @@ static in_port_t node_getRandomFreePort(Node* node, in_addr_t interfaceIP,
 	while(!available) {
 		randomPort = (node->randomPortCounter)++;
 		g_assert(randomPort >= MIN_RANDOM_PORT);
-		available = node_isInterfaceAvailable(node, interfaceIP, type, randomPort);
+		available = _node_isInterfaceAvailable(node, interfaceIP, type, randomPort);
 	}
 
 	return randomPort;
 }
 
-static void node_associateInterface(Node* node, in_addr_t interfaceIP, Socket* socket) {
+static void _node_associateInterface(Node* node, in_addr_t interfaceIP, Socket* socket) {
 	MAGIC_ASSERT(node);
 
 	if(interfaceIP == htonl(INADDR_ANY)) {
@@ -357,7 +357,7 @@ gint node_bindToInterface(Node* node, gint handle, in_addr_t bindAddress, in_por
 	}
 
 	/* make sure we have an interface at that address */
-	if(!node_doesInterfaceExist(node, bindAddress)) {
+	if(!_node_doesInterfaceExist(node, bindAddress)) {
 		return EADDRNOTAVAIL;
 	}
 
@@ -372,17 +372,17 @@ gint node_bindToInterface(Node* node, gint handle, in_addr_t bindAddress, in_por
 	/* make sure we have a proper port */
 	if(bindPort == 0) {
 		/* we know it will be available */
-		bindPort = node_getRandomFreePort(node, bindAddress, type);
+		bindPort = _node_getRandomFreePort(node, bindAddress, type);
 	} else {
 		/* make sure their port is available at that address for this protocol. */
-		if(!node_isInterfaceAvailable(node, bindAddress, type, bindPort)) {
+		if(!_node_isInterfaceAvailable(node, bindAddress, type, bindPort)) {
 			return EADDRINUSE;
 		}
 	}
 
 	/* bind socket and set association on the interface */
 	socket_bindToInterface(socket, bindAddress, bindPort);
-	node_associateInterface(node, bindAddress, socket);
+	_node_associateInterface(node, bindAddress, socket);
 
 	return 0;
 }
@@ -409,9 +409,11 @@ gint node_connectToPeer(Node* node, gint handle, in_addr_t peerAddress,
 		return EAFNOSUPPORT;
 	}
 
-	gint error = socket_getConnectError(socket);
-	if(error) {
-		return error;
+	if(type == DT_TCPSOCKET) {
+		gint error = tcp_getConnectError((TCP*)socket);
+		if(error) {
+			return error;
+		}
 	}
 
 	if(!socket_isBound(socket)) {
@@ -421,27 +423,132 @@ gint node_connectToPeer(Node* node, gint handle, in_addr_t peerAddress,
 		in_addr_t defaultIP = networkinterface_getIPAddress(node->defaultInterface);
 
 		in_addr_t bindAddress = loIP == peerAddress ? loIP : defaultIP;
-		in_port_t bindPort = node_getRandomFreePort(node, bindAddress, type);
+		in_port_t bindPort = _node_getRandomFreePort(node, bindAddress, type);
 
 		socket_bindToInterface(socket, bindAddress, bindPort);
-		node_associateInterface(node, bindAddress, socket);
+		_node_associateInterface(node, bindAddress, socket);
 	}
 
 	return socket_connectToPeer(socket, peerAddress, peerPort, family);
 }
 
-void node_listenForPeer(Node* node) {
+gint node_listenForPeer(Node* node, gint handle, gint backlog) {
 	MAGIC_ASSERT(node);
+
+	Descriptor* descriptor = node_lookupDescriptor(node, handle);
+	if(descriptor == NULL) {
+		warning("descriptor handle '%i' not found", handle);
+		return EBADF;
+	}
+
+	enum DescriptorType type = descriptor_getType(descriptor);
+	if(type != DT_TCPSOCKET) {
+		warning("wrong type for descriptor handle '%i'", handle);
+		return EOPNOTSUPP;
+	}
+
+	Socket* socket = (Socket*) descriptor;
+
+	if(!socket_isBound(socket)) {
+		/* implicit bind */
+		in_addr_t bindAddress = htonl(INADDR_ANY);
+		in_port_t bindPort = _node_getRandomFreePort(node, bindAddress, type);
+
+		socket_bindToInterface(socket, bindAddress, bindPort);
+		_node_associateInterface(node, bindAddress, socket);
+	}
+
+	tcp_enterServerMode((TCP*)socket, backlog);
+	return 0;
 }
 
-void node_acceptNewPeer(Node* node) {
+gint node_acceptNewPeer(Node* node, gint handle, in_addr_t* ip, in_port_t* port) {
 	MAGIC_ASSERT(node);
+
+	Descriptor* descriptor = node_lookupDescriptor(node, handle);
+	if(descriptor == NULL) {
+		warning("descriptor handle '%i' not found", handle);
+		return EBADF;
+	}
+
+	enum DescriptorType type = descriptor_getType(descriptor);
+	if(type != DT_TCPSOCKET) {
+		return EOPNOTSUPP;
+	}
+
+	return tcp_acceptServerPeer((TCP*)descriptor, ip, port);
 }
 
-void node_sendToPeer(Node* node) {
+gint node_getPeerName(Node* node, gint handle, in_addr_t* ip, in_port_t* port) {
 	MAGIC_ASSERT(node);
+
+	Descriptor* descriptor = node_lookupDescriptor(node, handle);
+	if(descriptor == NULL) {
+		warning("descriptor handle '%i' not found", handle);
+		return EBADF;
+	}
+
+	enum DescriptorType type = descriptor_getType(descriptor);
+	if(type != DT_TCPSOCKET) {
+		return ENOTCONN;
+	}
+
+	return socket_getPeerName((Socket*)descriptor, ip, port);
 }
 
-void node_receiveFromPeer(Node* node) {
+gint node_getSocketName(Node* node, gint handle, in_addr_t* ip, in_port_t* port) {
 	MAGIC_ASSERT(node);
+
+	Descriptor* descriptor = node_lookupDescriptor(node, handle);
+	if(descriptor == NULL) {
+		warning("descriptor handle '%i' not found", handle);
+		return EBADF;
+	}
+
+	enum DescriptorType type = descriptor_getType(descriptor);
+	if(type != DT_TCPSOCKET && type != DT_UDPSOCKET) {
+		warning("wrong type for descriptor handle '%i'", handle);
+		return ENOTSOCK;
+	}
+
+	return socket_getSocketName((Socket*)descriptor, ip, port);
+}
+
+
+gssize node_sendToPeer(Node* node, gint handle, gconstpointer buffer, gsize nBytes,
+		in_addr_t ip, in_addr_t port) {
+	MAGIC_ASSERT(node);
+
+	Descriptor* descriptor = node_lookupDescriptor(node, handle);
+	if(descriptor == NULL) {
+		warning("descriptor handle '%i' not found", handle);
+		return EBADF;
+	}
+
+	return -1;
+}
+
+gssize node_receiveFromPeer(Node* node, gint handle, gpointer buffer, gsize nBytes,
+		in_addr_t* ip, in_port_t* port) {
+	MAGIC_ASSERT(node);
+
+	Descriptor* descriptor = node_lookupDescriptor(node, handle);
+	if(descriptor == NULL) {
+		warning("descriptor handle '%i' not found", handle);
+		return EBADF;
+	}
+
+	return -1;
+}
+
+gint node_closeDescriptor(Node* node, gint handle) {
+	MAGIC_ASSERT(node);
+
+	Descriptor* descriptor = node_lookupDescriptor(node, handle);
+	if(descriptor == NULL) {
+		warning("descriptor handle '%i' not found", handle);
+		return EBADF;
+	}
+
+	return -1;
 }

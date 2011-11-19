@@ -174,7 +174,6 @@ typedef struct evdns_server_port evdns_server_port_t, *evdns_server_port_tp;
 #include "virtual/vsocket_mgr_server.h"
 #include "virtual/vsocket_mgr.h"
 #include "virtual/vsocket.h"
-#include "virtual/vsystem.h"
 #include "virtual/vtcp_server.h"
 #include "virtual/vtcp.h"
 #include "virtual/vtransport_processing.h"

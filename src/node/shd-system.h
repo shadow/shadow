@@ -51,9 +51,9 @@ gint system_getSockName(gint fd, struct sockaddr* addr, socklen_t* len);
 gssize system_send(gint fd, const gpointer buf, gsize n, gint flags);
 gssize system_recv(gint fd, gpointer buf, gsize n, gint flags);
 gssize system_sendTo(gint fd, const gpointer buf, gsize n, gint flags,
-		const struct sockaddr* addr, socklen_t addr_len);
+		const struct sockaddr* addr, socklen_t len);
 gssize system_recvFrom(gint fd, gpointer buf, size_t n, gint flags,
-		struct sockaddr* addr, socklen_t* addr_len);
+		struct sockaddr* addr, socklen_t* len);
 gssize system_sendMsg(gint fd, const struct msghdr* message, gint flags);
 gssize system_recvMsg(gint fd, struct msghdr* message, gint flags);
 gint system_getSockOpt(gint fd, gint level, gint optname, gpointer optval,
@@ -62,14 +62,14 @@ gint system_setSockOpt(gint fd, gint level, gint optname, const gpointer optval,
 		socklen_t optlen);
 gint system_listen(gint fd, gint backlog);
 gint system_shutdown(gint fd, gint how);
-gssize system_read(gint fd, gpointer buf, gint numbytes);
-gssize system_write(gint fd, const gpointer buf, gint numbytes);
+gssize system_read(gint fd, gpointer buf, gint n);
+gssize system_write(gint fd, const gpointer buf, gint n);
 gint system_close(gint fd);
 
 time_t system_time(time_t* t);
 gint system_clockGetTime(clockid_t clk_id, struct timespec *tp);
 gint system_getHostName(gchar *name, size_t len);
-gint system_getAddrInfo(gchar *n, const gchar *service,
+gint system_getAddrInfo(gchar *name, const gchar *service,
 		const struct addrinfo *hgints, struct addrinfo **res);
 void system_freeAddrInfo(struct addrinfo *res);
 
