@@ -27,6 +27,18 @@ struct _Pipe {
 	MAGIC_DECLARE;
 };
 
+void pipe_send(gpointer data) {
+
+}
+
+void pipe_free(Pipe* data) {
+	Pipe* pipe = data;
+	MAGIC_ASSERT(pipe);
+
+	MAGIC_CLEAR(pipe);
+	g_free(pipe);
+}
+
 TransportFunctionTable pipe_functions = {
 	(TransportSendFunc) pipe_send,
 	(TransportFreeFunc) pipe_free,
@@ -42,14 +54,8 @@ Pipe* pipe_new(gint handle) {
 	return pipe;
 }
 
-void pipe_free(Pipe* data) {
-	Pipe* pipe = data;
+gint pipe_getHandles(Pipe* pipe, gint* handleX, gint* handleY) {
 	MAGIC_ASSERT(pipe);
 
-	MAGIC_CLEAR(pipe);
-	g_free(pipe);
-}
-
-void pipe_send(gpointer data) {
-
+	return -1;
 }

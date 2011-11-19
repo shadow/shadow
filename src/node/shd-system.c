@@ -217,10 +217,46 @@ gint system_socket(gint domain, gint type, gint protocol) {
 }
 
 gint system_socketPair(gint domain, gint type, gint protocol, gint fds[2]) {
+	/* create a pair of connected sockets, i.e. a bi-directional pipe */
+	if(domain != AF_UNIX) {
+		errno = EAFNOSUPPORT;
+		return -1;
+	}
+
+	/* only support non-blocking sockets */
+	gboolean isBlocking = TRUE;
+
+	/* clear non-blocking flags if set to get true type */
+	gint realType = type;
+	if(realType & SOCK_NONBLOCK) {
+		realType = realType & ~SOCK_NONBLOCK;
+		isBlocking = FALSE;
+	}
+	if(realType & SOCK_CLOEXEC) {
+		realType = realType & ~SOCK_CLOEXEC;
+		isBlocking = FALSE;
+	}
+
+	if(realType != SOCK_STREAM) {
+		errno = EPROTONOSUPPORT;
+		return -1;
+	}
+
+	if(isBlocking) {
+		warning("we only support non-blocking sockets: please bitwise OR 'SOCK_NONBLOCK' with type flags");
+		errno = EPROTONOSUPPORT;
+		return -1;
+	}
+
 	Node* node = _system_switchInShadowContext();
-	gint r = vsocket_socketpair(node->vsocket_mgr, domain, type, protocol, fds);
+
+	gint handle = node_createDescriptor(node, DT_PIPE);
+	Pipe* pipe = (Pipe*) node_lookupDescriptor(node, handle);
+	gint result = pipe_getHandles(pipe, &fds[0], &fds[1]);
+
 	_system_switchOutShadowContext(node);
-	return r;
+
+	return result;
 }
 
 static gint _system_addressHelper(gint fd, const struct sockaddr* addr, socklen_t* len,
@@ -357,7 +393,7 @@ gssize system_sendTo(gint fd, const gpointer buf, gsize n, gint flags,
 	/* check if this is a socket */
 	if(fd < MIN_DESCRIPTOR){
 		errno = EBADF;
-		return VSOCKET_ERROR;
+		return -1;
 	}
 
 	in_addr_t ip = 0;
@@ -402,7 +438,7 @@ gssize system_recvFrom(gint fd, gpointer buf, size_t n, gint flags,
 	/* check if this is a socket */
 	if(fd < MIN_DESCRIPTOR){
 		errno = EBADF;
-		return VSOCKET_ERROR;
+		return -1;
 	}
 
 	in_addr_t ip = 0;
@@ -480,7 +516,7 @@ gint system_listen(gint fd, gint backlog) {
 	/* check if this is a socket */
 	if(fd < MIN_DESCRIPTOR){
 		errno = EBADF;
-		return VSOCKET_ERROR;
+		return -1;
 	}
 
 	Node* node = _system_switchInShadowContext();

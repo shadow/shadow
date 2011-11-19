@@ -27,8 +27,7 @@
 typedef struct _Pipe Pipe;
 
 Pipe* pipe_new(gint handle);
-void pipe_free(Pipe* data);
 
-void pipe_send(gpointer data);
+gint pipe_getHandles(Pipe* pipe, gint* handleX, gint* handleY);
 
 #endif /* SHD_PIPE_H_ */
