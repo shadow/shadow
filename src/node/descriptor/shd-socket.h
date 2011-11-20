@@ -48,8 +48,6 @@ struct _Socket {
 	SocketFunctionTable* vtable;
 
 	enum SocketFlags flags;
-	in_addr_t boundInterfaceIP;
-	in_port_t boundPort;
 	in_addr_t peerIP;
 	in_addr_t peerPort;
 	MAGIC_DECLARE;
@@ -60,8 +58,6 @@ void socket_free(gpointer data);
 
 void socket_send(Socket* data);
 
-gboolean socket_isBound(Socket* socket);
-void socket_bindToInterface(Socket* socket, in_addr_t interfaceIP, in_port_t port);
 gint socket_getPeerName(Socket* socket, in_addr_t* ip, in_port_t* port);
 gint socket_getSocketName(Socket* socket, in_addr_t* ip, in_port_t* port);
 

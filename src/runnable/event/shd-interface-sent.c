@@ -21,29 +21,40 @@
 
 #include "shadow.h"
 
-EventFunctionTable packetsent_functions = {
-	(EventRunFunc) packetsent_run,
-	(EventFreeFunc) packetsent_free,
+struct _InterfaceSentEvent {
+	Event super;
+	NetworkInterface* interface;
+	MAGIC_DECLARE;
+};
+
+EventFunctionTable interfacesent_functions = {
+	(EventRunFunc) interfacesent_run,
+	(EventFreeFunc) interfacesent_free,
 	MAGIC_VALUE
 };
 
-PacketSentEvent* packetsent_new() {
-	PacketSentEvent* event = g_new0(PacketSentEvent, 1);
+InterfaceSentEvent* interfacesent_new(NetworkInterface* interface) {
+	InterfaceSentEvent* event = g_new0(InterfaceSentEvent, 1);
 	MAGIC_INIT(event);
 
-	shadowevent_init(&(event->super), &packetsent_functions);
+	shadowevent_init(&(event->super), &interfacesent_functions);
+
+	event->interface = interface;
 
 	return event;
 }
 
-void packetsent_run(PacketSentEvent* event, Node* node) {
+void interfacesent_run(InterfaceSentEvent* event, Node* node) {
 	MAGIC_ASSERT(event);
-	MAGIC_ASSERT(node);
 
-	vtransport_mgr_upload_next(node->vsocket_mgr->vt_mgr);
+	debug("event started");
+
+	networkinterface_sent(event->interface);
+
+	debug("event finished");
 }
 
-void packetsent_free(PacketSentEvent* event) {
+void interfacesent_free(InterfaceSentEvent* event) {
 	MAGIC_ASSERT(event);
 	MAGIC_CLEAR(event);
 	g_free(event);

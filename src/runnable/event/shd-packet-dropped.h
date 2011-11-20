@@ -1,4 +1,4 @@
-/*
+/**
  * The Shadow Simulator
  *
  * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
@@ -19,15 +19,15 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SHD_PACKET_ARRIVED_H_
-#define SHD_PACKET_ARRIVED_H_
+#ifndef SHD_PACKET_DROPPED_H_
+#define SHD_PACKET_DROPPED_H_
 
 #include "shadow.h"
 
-typedef struct _PacketArrivedEvent PacketArrivedEvent;
+typedef struct _PacketDroppedEvent PacketDroppedEvent;
 
-PacketArrivedEvent* packetarrived_new(Packet* packet);
-void packetarrived_run(PacketArrivedEvent* event, Node* node);
-void packetarrived_free(PacketArrivedEvent* event);
+PacketDroppedEvent* packetdropped_new(Packet* packet);
+void packetdropped_run(PacketDroppedEvent* event, Node* node);
+void packetdropped_free(PacketDroppedEvent* event);
 
-#endif /* SHD_PACKET_ARRIVED_H_ */
+#endif /* SHD_PACKET_DROPPED_H_ */

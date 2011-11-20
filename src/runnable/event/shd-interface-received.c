@@ -21,29 +21,40 @@
 
 #include "shadow.h"
 
-EventFunctionTable packetreceived_functions = {
-	(EventRunFunc) packetreceived_run,
-	(EventFreeFunc) packetreceived_free,
+struct _InterfaceReceivedEvent {
+	Event super;
+	NetworkInterface* interface;
+	MAGIC_DECLARE;
+};
+
+EventFunctionTable interfacereceived_functions = {
+	(EventRunFunc) interfacereceived_run,
+	(EventFreeFunc) interfacereceived_free,
 	MAGIC_VALUE
 };
 
-PacketReceivedEvent* packetreceived_new() {
-	PacketReceivedEvent* event = g_new0(PacketReceivedEvent, 1);
+InterfaceReceivedEvent* interfacereceived_new(NetworkInterface* interface) {
+	InterfaceReceivedEvent* event = g_new0(InterfaceReceivedEvent, 1);
 	MAGIC_INIT(event);
 
-	shadowevent_init(&(event->super), &packetreceived_functions);
+	shadowevent_init(&(event->super), &interfacereceived_functions);
+
+	event->interface = interface;
 
 	return event;
 }
 
-void packetreceived_run(PacketReceivedEvent* event, Node* node) {
+void interfacereceived_run(InterfaceReceivedEvent* event, Node* node) {
 	MAGIC_ASSERT(event);
-	MAGIC_ASSERT(node);
 
-	vtransport_mgr_download_next(node->vsocket_mgr->vt_mgr);
+	debug("event started");
+
+	networkinterface_received(event->interface);
+
+	debug("event finished");
 }
 
-void packetreceived_free(PacketReceivedEvent* event) {
+void interfacereceived_free(InterfaceReceivedEvent* event) {
 	MAGIC_ASSERT(event);
 	MAGIC_CLEAR(event);
 	g_free(event);

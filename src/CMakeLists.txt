@@ -32,15 +32,11 @@ set(shadow_srcs
     runnable/event/shd-event.c
     runnable/event/shd-start-application.c
     runnable/event/shd-callback.c
+    runnable/event/shd-interface-received.c
+    runnable/event/shd-interface-sent.c
     runnable/event/shd-notify-plugin.c
     runnable/event/shd-packet-arrived.c
-    runnable/event/shd-packet-received.c
-    runnable/event/shd-packet-sent.c
-    runnable/event/shd-socket-activated.c
-    runnable/event/shd-socket-poll-timer-expired.c
-    runnable/event/shd-tcp-close-timer-expired.c
-    runnable/event/shd-tcp-dack-timer-expired.c
-    runnable/event/shd-tcp-retransmit-timer-expired.c
+    runnable/event/shd-packet-dropped.c
     runnable/event/shd-spine.c
     runnable/action/shd-spina.c
     runnable/action/shd-action.c
@@ -60,6 +56,8 @@ set(shadow_srcs
     node/descriptor/shd-socket.c
     node/descriptor/shd-tcp.c
     node/descriptor/shd-udp.c
+    node/shd-packet.c
+    node/shd-cpu.c
     node/shd-network-interface.c
     node/shd-system.c
     node/shd-application.c
@@ -67,27 +65,7 @@ set(shadow_srcs
         
     utility/shd-cdf.c
     utility/shd-registry.c
-    
-    utility/linkedbuffer.c
-    utility/orderedlist.c
-    utility/reference_counter.c
     utility/rand.c
-    virtual/vbuffer.c
-    virtual/vcpu.c
-    virtual/vepoll.c
-    virtual/vevent_mgr.c
-    virtual/vevent.c
-    virtual/vpacket_mgr.c
-    virtual/vpacket.c
-    virtual/vpeer.c
-    virtual/vpipe.c
-    virtual/vsocket_mgr.c
-    virtual/vsocket.c
-    virtual/vtcp_server.c
-    virtual/vtcp.c
-    virtual/vtransport_mgr.c
-    virtual/vtransport.c
-    virtual/vudp.c
     
     main.c
 )

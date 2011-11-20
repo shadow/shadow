@@ -38,19 +38,30 @@ struct _TransportFunctionTable {
 
 enum TransportFlags {
 	TF_NONE = 0,
-	TF_CONNECTED = 1 << 0,
+	TF_BOUND = 1 << 0,
 };
 
 struct _Transport {
 	Descriptor super;
 	TransportFunctionTable* vtable;
 
+	enum ProtocolType protocol;
 	enum TransportFlags flags;
+	in_addr_t boundAddress;
+	in_port_t boundPort;
+	gint associationKey;
 
 	MAGIC_DECLARE;
 };
 
 void transport_init(Transport* transport, TransportFunctionTable* vtable, enum DescriptorType type, gint handle);
-void transport_free(gpointer data);
+void transport_free(Transport* transport);
+
+gboolean transport_isBound(Transport* transport);
+void transport_setBinding(Transport* transport, in_addr_t boundAddress, in_port_t port);
+gint transport_getAssociationKey(Transport* transport);
+
+gboolean transport_pushInPacket(Transport* transport, Packet* packet);
+Packet* transport_pullOutPacket(Transport* transport);
 
 #endif /* SHD_TRANSPORT_H_ */

@@ -168,6 +168,21 @@ typedef guint64 SimulationTime;
 #define CONFIG_RECV_BUFFER_SIZE 174760
 
 /**
+ * Default batching time when the network interface receives packets
+ */
+#define CONFIG_RECEIVE_BATCH_TIME SIMTIME_ONE_MICROSECOND
+
+/**
+ * Header size of a packet with UDP/IP encapsulation
+ */
+#define CONFIG_UDPIP_HEADER_SIZE 28
+
+/**
+ * Header size of a packet with TCP/IP encapsulation
+ */
+#define CONFIG_TCPIP_HEADER_SIZE 40
+
+/**
  * TRUE if we should do delayed acknowledgments, FALSE otherwise
  *
  * @todo change this to a command line option accessible via #Configuration

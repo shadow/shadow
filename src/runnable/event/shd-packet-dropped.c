@@ -1,4 +1,4 @@
-/*
+/**
  * The Shadow Simulator
  *
  * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
@@ -21,23 +21,23 @@
 
 #include "shadow.h"
 
-struct _PacketArrivedEvent {
+struct _PacketDroppedEvent {
 	Event super;
 	Packet* packet;
 	MAGIC_DECLARE;
 };
 
-EventFunctionTable packetarrived_functions = {
-	(EventRunFunc) packetarrived_run,
-	(EventFreeFunc) packetarrived_free,
+EventFunctionTable packetdropped_functions = {
+	(EventRunFunc) packetdropped_run,
+	(EventFreeFunc) packetdropped_free,
 	MAGIC_VALUE
 };
 
-PacketArrivedEvent* packetarrived_new(Packet* packet) {
-	PacketArrivedEvent* event = g_new0(PacketArrivedEvent, 1);
+PacketDroppedEvent* packetdropped_new(Packet* packet) {
+	PacketDroppedEvent* event = g_new0(PacketDroppedEvent, 1);
 	MAGIC_INIT(event);
 
-	shadowevent_init(&(event->super), &packetarrived_functions);
+	shadowevent_init(&(event->super), &packetdropped_functions);
 
 	packet_ref(packet);
 	event->packet = packet;
@@ -45,19 +45,20 @@ PacketArrivedEvent* packetarrived_new(Packet* packet) {
 	return event;
 }
 
-void packetarrived_run(PacketArrivedEvent* event, Node* node) {
+void packetdropped_run(PacketDroppedEvent* event, Node* node) {
 	MAGIC_ASSERT(event);
+	MAGIC_ASSERT(node);
 
 	debug("event started");
 
-	in_addr_t ip = packet_getDestinationIP(event->packet);
+	in_addr_t ip = packet_getSourceIP(event->packet);
 	NetworkInterface* interface = node_lookupInterface(node, ip);
-	networkinterface_packetArrived(interface, event->packet);
+	networkinterface_packetDropped(interface, event->packet);
 
 	debug("event finished");
 }
 
-void packetarrived_free(PacketArrivedEvent* event) {
+void packetdropped_free(PacketDroppedEvent* event) {
 	MAGIC_ASSERT(event);
 
 	packet_unref(event->packet);

@@ -35,13 +35,45 @@ void transport_init(Transport* transport, TransportFunctionTable* vtable, enum D
 	MAGIC_INIT(vtable);
 
 	transport->vtable = vtable;
+	transport->protocol = type == DT_TCPSOCKET ? PTCP : type == DT_UDPSOCKET ? PUDP : PLOCAL;
 }
 
-void transport_free(gpointer data) {
-	Transport* transport = data;
+void transport_free(Transport* transport) {
 	MAGIC_ASSERT(transport);
 	MAGIC_ASSERT(transport->vtable);
 
 	MAGIC_CLEAR(transport);
 	transport->vtable->free(transport);
+}
+
+gboolean transport_isBound(Transport* transport) {
+	MAGIC_ASSERT(transport);
+	return (transport->flags & TF_BOUND) ? TRUE : FALSE;
+}
+
+void transport_setBinding(Transport* transport, in_addr_t boundAddress, in_port_t port) {
+	MAGIC_ASSERT(transport);
+	g_assert(!transport_isBound(transport));
+	transport->boundAddress = boundAddress;
+	transport->boundPort = port;
+	transport->associationKey = PROTOCOL_DEMUX_KEY(transport->protocol, port);
+	transport->flags |= TF_BOUND;
+}
+
+gint transport_getAssociationKey(Transport* transport) {
+	MAGIC_ASSERT(transport);
+	g_assert(transport_isBound(transport));
+	return transport->associationKey;
+}
+
+gboolean transport_pushInPacket(Transport* transport, Packet* packet) {
+	MAGIC_ASSERT(transport);
+	// TODO
+	return FALSE;
+}
+
+Packet* transport_pullOutPacket(Transport* transport) {
+	MAGIC_ASSERT(transport);
+	// TODO
+	return NULL;
 }

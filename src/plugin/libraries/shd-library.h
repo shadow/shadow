@@ -92,7 +92,6 @@ typedef gboolean (*ShadowlibResolveIPAddressFunc)(in_addr_t addr, gchar* name_ou
 typedef in_addr_t (*ShadowlibGetIPAddressFunc)();
 typedef gboolean (*ShadowlibGetHostnameFunc)(gchar* name_out, gint name_out_len);
 typedef void (*ShadowlibCreateCallbackFunc)(ShadowPluginCallbackFunc callback, gpointer data, guint millisecondsDelay);
-typedef void (*ShadowlibSetLoopExitFunc)(ShadowPluginCallbackFunc callback);
 typedef guint32 (*ShadowlibGetBandwidthFloorFunc)(in_addr_t ip);
 
 typedef struct _ShadowlibFunctionTable ShadowlibFunctionTable;
@@ -111,7 +110,6 @@ struct _ShadowlibFunctionTable {
 	ShadowlibGetHostnameFunc getHostname;
 	ShadowlibGetIPAddressFunc getIP;
 	ShadowlibCreateCallbackFunc createCallback;
-	ShadowlibSetLoopExitFunc setLoopExit;
 	ShadowlibGetBandwidthFloorFunc getBandwidthFloor;
 };
 

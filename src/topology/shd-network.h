@@ -53,10 +53,11 @@ gdouble network_getLinkReliability(Network* sourceNetwork, Network* destinationN
 gdouble network_getLinkLatency(Network* sourceNetwork, Network* destinationNetwork, gdouble percentile);
 gdouble network_sampleLinkLatency(Network* sourceNetwork, Network* destinationNetwork);
 
+void network_schedulePacket(Network* sourceNetwork, Packet* packet);
+void network_scheduleRetransmit(Network* network, Packet* packet);
+
 // TODO these are out of place...
 void network_scheduleClose(GQuark callerID, GQuark sourceID, in_port_t sourcePort,
 		GQuark destinationID, in_port_t destinationPort, guint32 receiveEnd);
-void network_scheduleRetransmit(rc_vpacket_pod_tp rc_packet, GQuark callerID);
-void network_schedulePacket(rc_vpacket_pod_tp rc_packet);
 
 #endif /* SHD_NETWORK_H_ */

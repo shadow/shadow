@@ -19,21 +19,15 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SHD_PACKET_RECEIVED_H_
-#define SHD_PACKET_RECEIVED_H_
+#ifndef SHD_INTERFACE_RECEIVED_H_
+#define SHD_INTERFACE_RECEIVED_H_
 
 #include "shadow.h"
 
-typedef struct _PacketReceivedEvent PacketReceivedEvent;
+typedef struct _InterfaceReceivedEvent InterfaceReceivedEvent;
 
-struct _PacketReceivedEvent {
-	Event super;
+InterfaceReceivedEvent* interfacereceived_new(NetworkInterface* interface);
+void interfacereceived_run(InterfaceReceivedEvent* event, Node* node);
+void interfacereceived_free(InterfaceReceivedEvent* event);
 
-	MAGIC_DECLARE;
-};
-
-PacketReceivedEvent* packetreceived_new();
-void packetreceived_run(PacketReceivedEvent* event, Node* node);
-void packetreceived_free(PacketReceivedEvent* event);
-
-#endif /* SHD_PACKET_RECEIVED_H_ */
+#endif /* SHD_INTERFACE_RECEIVED_H_ */

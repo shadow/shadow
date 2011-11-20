@@ -44,7 +44,8 @@ gboolean shadowevent_run(gpointer data) {
 	MAGIC_ASSERT(event->vtable);
 	MAGIC_ASSERT(event->node);
 
-	SimulationTime cpuDelay = vcpu_adjustDelay(event->node->vsocket_mgr->vcpu, event->time);
+	CPU* cpu = node_getCPU(event->node);
+	SimulationTime cpuDelay = cpu_adjustDelay(cpu, event->time);
 
 	/* check if we are allowed to execute or have to wait for cpu delays */
 	if(cpuDelay > 0) {

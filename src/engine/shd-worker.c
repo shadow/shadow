@@ -176,7 +176,7 @@ void worker_scheduleEvent(Event* event, SimulationTime nano_delay, GQuark receiv
 
 	/* parties involved. sender may be NULL, receiver may not! */
 	Node* sender = worker->cached_node;
-	Node* receiver = internetwork_getNode(worker->cached_engine->internet, receiver_node_id);
+	Node* receiver = receiver_node_id == 0 ? sender : internetwork_getNode(worker->cached_engine->internet, receiver_node_id);
 	g_assert(receiver);
 
 	/* the NodeEvent needs a pointer to the correct node */

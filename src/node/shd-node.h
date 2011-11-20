@@ -38,7 +38,7 @@ struct _Node {
 	/* general node lock. nothing that belongs to the node should be touched
 	 * unless holding this lock. everything following this falls under the lock.
 	 */
-	GMutex* node_lock;
+	GMutex* lock;
 
 	/* a simple priority queue holding events currently being executed.
 	 * events are place in this queue before handing the node off to a
@@ -46,11 +46,12 @@ struct _Node {
 	GQueue* event_priority_queue;
 
 	GQuark id;
+	gchar* name;
 	GHashTable* interfaces;
 	NetworkInterface* defaultInterface;
+	CPU* cpu;
 
 	Application* application;
-	vsocket_mgr_tp vsocket_mgr;
 
 	/* all file, socket, and epoll descriptors we know about and track */
 	GHashTable* descriptors;
@@ -77,13 +78,12 @@ guint node_getNumTasks(Node* node);
 
 gint node_compare(gconstpointer a, gconstpointer b, gpointer user_data);
 gboolean node_isEqual(Node* a, Node* b);
-
-guint32 node_getBandwidthUp(Node* node);
-guint32 node_getBandwidthDown(Node* node);
+CPU* node_getCPU(Node* node);
 
 gint node_createDescriptor(Node* node, enum DescriptorType type);
-Descriptor* node_lookupDescriptor(Node* node, gint handle);
 gint node_closeDescriptor(Node* node, gint handle);
+Descriptor* node_lookupDescriptor(Node* node, gint handle);
+NetworkInterface* node_lookupInterface(Node* node, in_addr_t handle);
 
 gint node_epollControl(Node* node, gint epollDescriptor, gint operation,
 		gint fileDescriptor, struct epoll_event* event);

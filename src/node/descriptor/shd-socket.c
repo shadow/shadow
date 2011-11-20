@@ -67,19 +67,6 @@ void socket_send(Socket* socket) {
 
 /* functions implemented by socket */
 
-gboolean socket_isBound(Socket* socket) {
-	MAGIC_ASSERT(socket);
-	return (socket->flags & SF_BOUND) ? TRUE : FALSE;
-}
-
-void socket_bindToInterface(Socket* socket, in_addr_t interfaceIP, in_port_t port) {
-	MAGIC_ASSERT(socket);
-	g_assert(!(socket->flags & SF_BOUND));
-	socket->boundInterfaceIP = interfaceIP;
-	socket->boundPort = port;
-	socket->flags |= SF_BOUND;
-}
-
 gint socket_getPeerName(Socket* socket, in_addr_t* ip, in_port_t* port) {
 	MAGIC_ASSERT(socket);
 	g_assert(ip && port);
@@ -98,12 +85,12 @@ gint socket_getSocketName(Socket* socket, in_addr_t* ip, in_port_t* port) {
 	MAGIC_ASSERT(socket);
 	g_assert(ip && port);
 
-	if(socket->boundInterfaceIP == 0 || socket->boundPort == 0) {
+	if(socket->super.boundAddress == 0 || socket->super.boundPort == 0) {
 		return ENOTCONN;
 	}
 
-	*ip = socket->boundInterfaceIP;
-	*port = socket->boundPort;
+	*ip = socket->super.boundAddress;
+	*port = socket->super.boundPort;
 
 	return 0;
 }

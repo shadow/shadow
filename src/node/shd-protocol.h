@@ -1,4 +1,4 @@
-/*
+/**
  * The Shadow Simulator
  *
  * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
@@ -19,21 +19,30 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SHD_PACKET_SENT_H_
-#define SHD_PACKET_SENT_H_
+#ifndef SHD_PROTOCOL_H_
+#define SHD_PROTOCOL_H_
 
-#include "shadow.h"
-
-typedef struct _PacketSentEvent PacketSentEvent;
-
-struct _PacketSentEvent {
-	Event super;
-
-	MAGIC_DECLARE;
+enum ProtocolType {
+	PNONE, PLOCAL, PTCP, PUDP
 };
 
-PacketSentEvent* packetsent_new();
-void packetsent_run(PacketSentEvent* event, Node* node);
-void packetsent_free(PacketSentEvent* event);
+enum ProtocolLocalFlags {
+	PLOCAL_NONE = 0,
+};
 
-#endif /* SHD_PACKET_SENT_H_ */
+enum ProtocolUDPFlags {
+	PUDP_NONE = 0,
+};
+
+enum ProtocolTCPFlags {
+	PTCP_NONE = 0,
+	PTCP_FIN = 1 << 3,
+	PTCP_SYN = 1 << 4,
+	PTCP_RST = 1 << 5,
+	PTCP_ACK = 1 << 6,
+	PTCP_CON = 1 << 7,
+};
+
+#define PROTOCOL_DEMUX_KEY(protocolType, port) ((gint)((protocolType << 8) + port))
+
+#endif /* SHD_PROTOCOL_H_ */

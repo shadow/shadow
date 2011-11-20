@@ -19,15 +19,15 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SHD_PACKET_ARRIVED_H_
-#define SHD_PACKET_ARRIVED_H_
+#ifndef SHD_INTERFACE_SENT_H_
+#define SHD_INTERFACE_SENT_H_
 
 #include "shadow.h"
 
-typedef struct _PacketArrivedEvent PacketArrivedEvent;
+typedef struct _InterfaceSentEvent InterfaceSentEvent;
 
-PacketArrivedEvent* packetarrived_new(Packet* packet);
-void packetarrived_run(PacketArrivedEvent* event, Node* node);
-void packetarrived_free(PacketArrivedEvent* event);
+InterfaceSentEvent* interfacesent_new(NetworkInterface* interface);
+void interfacesent_run(InterfaceSentEvent* event, Node* node);
+void interfacesent_free(InterfaceSentEvent* event);
 
-#endif /* SHD_PACKET_ARRIVED_H_ */
+#endif /* SHD_INTERFACE_SENT_H_ */

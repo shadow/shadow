@@ -52,9 +52,6 @@ void descriptor_ref(gpointer data) {
 	MAGIC_ASSERT(descriptor);
 
 	(descriptor->referenceCount)++;
-	if(descriptor->referenceCount <= 0) {
-		_descriptor_free(descriptor);
-	}
 }
 
 void descriptor_unref(gpointer data) {
@@ -67,9 +64,7 @@ void descriptor_unref(gpointer data) {
 	}
 }
 
-gint descriptor_compare(gconstpointer a, gconstpointer b, gpointer user_data) {
-	const Descriptor* foo = a;
-	const Descriptor* bar = b;
+gint descriptor_compare(const Descriptor* foo, const Descriptor* bar, gpointer user_data) {
 	MAGIC_ASSERT(foo);
 	MAGIC_ASSERT(bar);
 	return foo->handle > bar->handle ? +1 : foo->handle == bar->handle ? 0 : -1;
