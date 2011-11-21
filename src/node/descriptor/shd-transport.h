@@ -27,12 +27,17 @@
 typedef struct _Transport Transport;
 typedef struct _TransportFunctionTable TransportFunctionTable;
 
-typedef void (*TransportSendFunc)(Transport* transport);
-typedef void (*TransportFreeFunc)(Transport* transport);
+typedef gssize (*TransportSendFunc)(Transport* transport, gconstpointer buffer, gsize nBytes, in_addr_t ip, in_port_t port);
+typedef gssize (*TransportReceiveFunc)(Transport* transport, gpointer buffer, gsize nBytes, in_addr_t* ip, in_port_t* port);
+typedef gboolean (*TransportPushFunc)(Transport* transport, Packet* packet);
+typedef Packet* (*TransportPullFunc)(Transport* transport);
 
 struct _TransportFunctionTable {
+	DescriptorFreeFunc free;
 	TransportSendFunc send;
-	TransportFreeFunc free;
+	TransportReceiveFunc receive;
+	TransportPushFunc push;
+	TransportPullFunc pull;
 	MAGIC_DECLARE;
 };
 
@@ -55,7 +60,6 @@ struct _Transport {
 };
 
 void transport_init(Transport* transport, TransportFunctionTable* vtable, enum DescriptorType type, gint handle);
-void transport_free(Transport* transport);
 
 gboolean transport_isBound(Transport* transport);
 void transport_setBinding(Transport* transport, in_addr_t boundAddress, in_port_t port);
@@ -63,5 +67,9 @@ gint transport_getAssociationKey(Transport* transport);
 
 gboolean transport_pushInPacket(Transport* transport, Packet* packet);
 Packet* transport_pullOutPacket(Transport* transport);
+gssize transport_sendUserData(Transport* transport, gconstpointer buffer, gsize nBytes,
+		in_addr_t ip, in_port_t port);
+gssize transport_receiveUserData(Transport* transport, gpointer buffer, gsize nBytes,
+		in_addr_t* ip, in_port_t* port);
 
 #endif /* SHD_TRANSPORT_H_ */

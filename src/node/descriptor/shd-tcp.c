@@ -168,6 +168,27 @@ gint tcp_acceptServerPeer(TCP* tcp, in_addr_t* ip, in_port_t* port) {
 	return 0;
 }
 
+gboolean tcp_pushInPacket(TCP* tcp, Packet* packet) {
+	MAGIC_ASSERT(tcp);
+	return FALSE;
+}
+
+Packet* tcp_pullOutPacket(TCP* tcp) {
+	MAGIC_ASSERT(tcp);
+	return NULL;
+}
+
+gssize tcp_sendUserData(TCP* tcp, gconstpointer buffer, gsize nBytes, in_addr_t ip, in_port_t port) {
+	MAGIC_ASSERT(tcp);
+
+	return -1;
+}
+
+gssize tcp_receiveUserData(TCP* tcp, gpointer buffer, gsize nBytes, in_addr_t* ip, in_port_t* port) {
+	MAGIC_ASSERT(tcp);
+	return -1;
+}
+
 void tcp_free(TCP* tcp) {
 	MAGIC_ASSERT(tcp);
 
@@ -177,10 +198,13 @@ void tcp_free(TCP* tcp) {
 
 /* we implement the socket interface, this describes our function suite */
 SocketFunctionTable tcp_functions = {
+	(DescriptorFreeFunc) tcp_free,
+	(TransportSendFunc) tcp_sendUserData,
+	(TransportReceiveFunc) tcp_receiveUserData,
+	(TransportPushFunc) tcp_pushInPacket,
+	(TransportPullFunc) tcp_pullOutPacket,
 	(SocketIsFamilySupportedFunc) tcp_isFamilySupported,
 	(SocketConnectToPeerFunc) tcp_connectToPeer,
-	(SocketSendFunc) tcp_send,
-	(SocketFreeFunc) tcp_free,
 	MAGIC_VALUE
 };
 

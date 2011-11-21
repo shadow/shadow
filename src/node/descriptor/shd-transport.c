@@ -21,6 +21,14 @@
 
 #include "shadow.h"
 
+void transport_free(Transport* transport) {
+	MAGIC_ASSERT(transport);
+	MAGIC_ASSERT(transport->vtable);
+
+	MAGIC_CLEAR(transport);
+	transport->vtable->free((Descriptor*)transport);
+}
+
 DescriptorFunctionTable transport_functions = {
 	(DescriptorFreeFunc) transport_free,
 	MAGIC_VALUE
@@ -36,14 +44,6 @@ void transport_init(Transport* transport, TransportFunctionTable* vtable, enum D
 
 	transport->vtable = vtable;
 	transport->protocol = type == DT_TCPSOCKET ? PTCP : type == DT_UDPSOCKET ? PUDP : PLOCAL;
-}
-
-void transport_free(Transport* transport) {
-	MAGIC_ASSERT(transport);
-	MAGIC_ASSERT(transport->vtable);
-
-	MAGIC_CLEAR(transport);
-	transport->vtable->free(transport);
 }
 
 gboolean transport_isBound(Transport* transport) {
@@ -68,12 +68,26 @@ gint transport_getAssociationKey(Transport* transport) {
 
 gboolean transport_pushInPacket(Transport* transport, Packet* packet) {
 	MAGIC_ASSERT(transport);
-	// TODO
-	return FALSE;
+	MAGIC_ASSERT(transport->vtable);
+	return transport->vtable->push(transport, packet);
 }
 
 Packet* transport_pullOutPacket(Transport* transport) {
 	MAGIC_ASSERT(transport);
-	// TODO
-	return NULL;
+	MAGIC_ASSERT(transport->vtable);
+	return transport->vtable->pull(transport);
+}
+
+gssize transport_sendUserData(Transport* transport, gconstpointer buffer, gsize nBytes,
+		in_addr_t ip, in_port_t port) {
+	MAGIC_ASSERT(transport);
+	MAGIC_ASSERT(transport->vtable);
+	return transport->vtable->send(transport, buffer, nBytes, ip, port);
+}
+
+gssize transport_receiveUserData(Transport* transport, gpointer buffer, gsize nBytes,
+		in_addr_t* ip, in_port_t* port) {
+	MAGIC_ASSERT(transport);
+	MAGIC_ASSERT(transport->vtable);
+	return transport->vtable->receive(transport, buffer, nBytes, ip, port);
 }

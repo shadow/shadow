@@ -183,6 +183,11 @@ typedef guint64 SimulationTime;
 #define CONFIG_TCPIP_HEADER_SIZE 40
 
 /**
+ * Maximum size of a datagram we are allowed to send out over the network
+ */
+#define CONFIG_DATAGRAM_MAX_SIZE 65507
+
+/**
  * TRUE if we should do delayed acknowledgments, FALSE otherwise
  *
  * @todo change this to a command line option accessible via #Configuration

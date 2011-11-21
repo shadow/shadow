@@ -27,14 +27,15 @@ typedef struct _SocketFunctionTable SocketFunctionTable;
 
 typedef gboolean (*SocketIsFamilySupportedFunc)(Socket* socket, sa_family_t family);
 typedef gint (*SocketConnectToPeerFunc)(Socket* socket, in_addr_t ip, in_port_t port, sa_family_t family);
-typedef void (*SocketSendFunc)(Socket* socket);
-typedef void (*SocketFreeFunc)(Socket* socket);
 
 struct _SocketFunctionTable {
+	DescriptorFreeFunc free;
+	TransportSendFunc send;
+	TransportReceiveFunc receive;
+	TransportPushFunc push;
+	TransportPullFunc pull;
 	SocketIsFamilySupportedFunc isFamilySupported;
 	SocketConnectToPeerFunc connectToPeer;
-	SocketSendFunc send;
-	SocketFreeFunc free;
 	MAGIC_DECLARE;
 };
 
@@ -54,9 +55,6 @@ struct _Socket {
 };
 
 void socket_init(Socket* socket, SocketFunctionTable* vtable, enum DescriptorType type, gint handle);
-void socket_free(gpointer data);
-
-void socket_send(Socket* data);
 
 gint socket_getPeerName(Socket* socket, in_addr_t* ip, in_port_t* port);
 gint socket_getSocketName(Socket* socket, in_addr_t* ip, in_port_t* port);

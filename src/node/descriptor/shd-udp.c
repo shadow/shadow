@@ -49,8 +49,36 @@ gint udp_connectToPeer(UDP* udp, in_addr_t ip, in_port_t port, sa_family_t famil
 	return 0;
 }
 
-void udp_send(UDP* udp) {
+gboolean udp_pushInPacket(UDP* udp, Packet* packet) {
+	MAGIC_ASSERT(udp);
+	return FALSE;
+}
 
+Packet* udp_pullOutPacket(UDP* udp) {
+	MAGIC_ASSERT(udp);
+	return NULL;
+}
+
+/*
+ * this function builds a UDP packet and sends to the virtual node given by the
+ * ip and port parameters. this function assumes that the socket is already
+ * bound to a local port, no matter if that happened explicitly or implicitly.
+ */
+gssize udp_sendUserData(UDP* udp, gconstpointer buffer, gsize nBytes, in_addr_t ip, in_port_t port) {
+	MAGIC_ASSERT(udp);
+
+//	gsize maxPacketLength = CONFIG_DATAGRAM_MAX_SIZE;
+//	gsize bytesSent = 0;
+//	gsize copySize = 0;
+//	gsize remaining = nBytes;
+
+	/* check if we have enough space */
+	return -1;
+}
+
+gssize udp_receiveUserData(UDP* udp, gpointer buffer, gsize nBytes, in_addr_t* ip, in_port_t* port) {
+	MAGIC_ASSERT(udp);
+	return -1;
 }
 
 void udp_free(UDP* udp) {
@@ -62,10 +90,13 @@ void udp_free(UDP* udp) {
 
 /* we implement the socket interface, this describes our function suite */
 SocketFunctionTable udp_functions = {
+	(DescriptorFreeFunc) udp_free,
+	(TransportSendFunc) udp_sendUserData,
+	(TransportReceiveFunc) udp_receiveUserData,
+	(TransportPushFunc) udp_pushInPacket,
+	(TransportPullFunc) udp_pullOutPacket,
 	(SocketIsFamilySupportedFunc) udp_isFamilySupported,
 	(SocketConnectToPeerFunc) udp_connectToPeer,
-	(SocketSendFunc) udp_send,
-	(SocketFreeFunc) udp_free,
 	MAGIC_VALUE
 };
 

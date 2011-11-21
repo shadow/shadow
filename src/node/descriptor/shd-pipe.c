@@ -27,12 +27,28 @@ struct _Pipe {
 	MAGIC_DECLARE;
 };
 
-void pipe_send(gpointer data) {
-
+gboolean pipe_pushInPacket(Pipe* pipe, Packet* packet) {
+	MAGIC_ASSERT(pipe);
+	return FALSE;
 }
 
-void pipe_free(Pipe* data) {
-	Pipe* pipe = data;
+Packet* pipe_pullOutPacket(Pipe* pipe) {
+	MAGIC_ASSERT(pipe);
+	return NULL;
+}
+
+gssize pipe_sendUserData(Pipe* pipe, gconstpointer buffer, gsize nBytes, in_addr_t ip, in_port_t port) {
+	MAGIC_ASSERT(pipe);
+
+	return -1;
+}
+
+gssize pipe_receiveUserData(Pipe* pipe, gpointer buffer, gsize nBytes, in_addr_t* ip, in_port_t* port) {
+	MAGIC_ASSERT(pipe);
+	return -1;
+}
+
+void pipe_free(Pipe* pipe) {
 	MAGIC_ASSERT(pipe);
 
 	MAGIC_CLEAR(pipe);
@@ -40,8 +56,11 @@ void pipe_free(Pipe* data) {
 }
 
 TransportFunctionTable pipe_functions = {
-	(TransportSendFunc) pipe_send,
-	(TransportFreeFunc) pipe_free,
+	(DescriptorFreeFunc) pipe_free,
+	(TransportSendFunc) pipe_sendUserData,
+	(TransportReceiveFunc) pipe_receiveUserData,
+	(TransportPushFunc) pipe_pushInPacket,
+	(TransportPullFunc) pipe_pullOutPacket,
 	MAGIC_VALUE
 };
 

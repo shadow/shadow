@@ -65,8 +65,8 @@ gint node_bindToInterface(Node* node, gint handle, in_addr_t bindAddress, in_por
 gint node_connectToPeer(Node* node, gint handle, in_addr_t peerAddress, in_port_t peerPort, sa_family_t family);
 gint node_listenForPeer(Node* node, gint handle, gint backlog);
 gint node_acceptNewPeer(Node* node, gint handle, in_addr_t* ip, in_port_t* port);
-gssize node_sendToPeer(Node* node, gint handle, gconstpointer buffer, gsize nBytes, in_addr_t ip, in_addr_t port);
-gssize node_receiveFromPeer(Node* node, gint handle, gpointer buffer, gsize nBytes, in_addr_t* ip, in_port_t* port);
+gint node_sendUserData(Node* node, gint handle, gconstpointer buffer, gsize nBytes, in_addr_t ip, in_addr_t port, gsize* bytesCopied);
+gint node_receiveUserData(Node* node, gint handle, gpointer buffer, gsize nBytes, in_addr_t* ip, in_port_t* port, gsize* bytesCopied);
 gint node_getPeerName(Node* node, gint handle, in_addr_t* ip, in_port_t* port);
 gint node_getSocketName(Node* node, gint handle, in_addr_t* ip, in_port_t* port);
 

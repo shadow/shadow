@@ -406,14 +406,15 @@ gssize system_sendTo(gint fd, const gpointer buf, gsize n, gint flags,
 	}
 
 	Node* node = _system_switchInShadowContext();
-	gssize result = node_sendToPeer(node, fd, buf, n, ip, port);
+	gsize bytes = 0;
+	gint result = node_sendUserData(node, fd, buf, n, ip, port, &bytes);
 	_system_switchOutShadowContext(node);
 
-	if(result < 0) {
+	if(result != 0) {
 		errno = result;
 		return -1;
 	}
-	return result;
+	return (gssize) bytes;
 }
 
 gssize system_send(gint fd, const gpointer buf, gsize n, gint flags) {
@@ -444,10 +445,11 @@ gssize system_recvFrom(gint fd, gpointer buf, size_t n, gint flags,
 	in_port_t port = 0;
 
 	Node* node = _system_switchInShadowContext();
-	gssize result = node_receiveFromPeer(node, fd, buf, n, &ip, &port);
+	gsize bytes = 0;
+	gint result = node_receiveUserData(node, fd, buf, n, &ip, &port, &bytes);
 	_system_switchOutShadowContext(node);
 
-	if(result < 0) {
+	if(result != 0) {
 		errno = result;
 		return -1;
 	}
@@ -461,7 +463,7 @@ gssize system_recvFrom(gint fd, gpointer buf, size_t n, gint flags,
 		*len = sizeof(struct sockaddr_in);
 	}
 
-	return result;
+	return (gssize) bytes;
 }
 
 gssize system_recv(gint fd, gpointer buf, gsize n, gint flags) {

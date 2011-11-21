@@ -21,9 +21,47 @@
 
 #include "shadow.h"
 
+gboolean socket_pushInPacket(Socket* socket, Packet* packet) {
+	MAGIC_ASSERT(socket);
+	MAGIC_ASSERT(socket->vtable);
+	return socket->vtable->push((Transport*)socket, packet);
+}
+
+Packet* socket_pullOutPacket(Socket* socket) {
+	MAGIC_ASSERT(socket);
+	MAGIC_ASSERT(socket->vtable);
+	return socket->vtable->pull((Transport*)socket);
+}
+
+gssize socket_sendUserData(Socket* socket, gconstpointer buffer, gsize nBytes,
+		in_addr_t ip, in_port_t port) {
+	MAGIC_ASSERT(socket);
+	MAGIC_ASSERT(socket->vtable);
+	return socket->vtable->send((Transport*)socket, buffer, nBytes, ip, port);
+}
+
+gssize socket_receiveUserData(Socket* socket, gpointer buffer, gsize nBytes,
+		in_addr_t* ip, in_port_t* port) {
+	MAGIC_ASSERT(socket);
+	MAGIC_ASSERT(socket->vtable);
+	return socket->vtable->receive((Transport*)socket, buffer, nBytes, ip, port);
+}
+
+void socket_free(gpointer data) {
+	Socket* socket = data;
+	MAGIC_ASSERT(socket);
+	MAGIC_ASSERT(socket->vtable);
+
+	MAGIC_CLEAR(socket);
+	socket->vtable->free((Descriptor*)socket);
+}
+
 TransportFunctionTable socket_functions = {
-	(TransportSendFunc) socket_send,
-	(TransportFreeFunc) socket_free,
+	(DescriptorFreeFunc) socket_free,
+	(TransportSendFunc) socket_sendUserData,
+	(TransportReceiveFunc) socket_receiveUserData,
+	(TransportPushFunc) socket_pushInPacket,
+	(TransportPullFunc) socket_pullOutPacket,
 	MAGIC_VALUE
 };
 
@@ -38,15 +76,6 @@ void socket_init(Socket* socket, SocketFunctionTable* vtable, enum DescriptorTyp
 	socket->vtable = vtable;
 }
 
-void socket_free(gpointer data) {
-	Socket* socket = data;
-	MAGIC_ASSERT(socket);
-	MAGIC_ASSERT(socket->vtable);
-
-	MAGIC_CLEAR(socket);
-	socket->vtable->free(socket);
-}
-
 /* interface functions, implemented by subtypes */
 
 gboolean socket_isFamilySupported(Socket* socket, sa_family_t family) {
@@ -59,10 +88,6 @@ gint socket_connectToPeer(Socket* socket, in_addr_t ip, in_port_t port, sa_famil
 	MAGIC_ASSERT(socket);
 	MAGIC_ASSERT(socket->vtable);
 	return socket->vtable->connectToPeer(socket, ip, port, family);
-}
-
-void socket_send(Socket* socket) {
-
 }
 
 /* functions implemented by socket */

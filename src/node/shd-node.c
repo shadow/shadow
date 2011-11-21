@@ -574,10 +574,10 @@ gint node_getSocketName(Node* node, gint handle, in_addr_t* ip, in_port_t* port)
 	return socket_getSocketName((Socket*)descriptor, ip, port);
 }
 
-
-gssize node_sendToPeer(Node* node, gint handle, gconstpointer buffer, gsize nBytes,
-		in_addr_t ip, in_addr_t port) {
+gint node_sendUserData(Node* node, gint handle, gconstpointer buffer, gsize nBytes,
+		in_addr_t ip, in_addr_t port, gsize* bytesCopied) {
 	MAGIC_ASSERT(node);
+	g_assert(bytesCopied);
 
 	Descriptor* descriptor = node_lookupDescriptor(node, handle);
 	if(descriptor == NULL) {
@@ -585,12 +585,43 @@ gssize node_sendToPeer(Node* node, gint handle, gconstpointer buffer, gsize nByt
 		return EBADF;
 	}
 
-	return -1;
+	enum DescriptorType type = descriptor_getType(descriptor);
+	if(type != DT_TCPSOCKET && type != DT_UDPSOCKET && type != DT_PIPE) {
+		return EBADF;
+	}
+
+	Transport* transport = (Transport*) descriptor;
+
+	/* we should block if our cpu has been too busy lately */
+	if(cpu_isBlocked(node->cpu)) {
+		debug("blocked on CPU when trying to send %lu bytes from socket %i", nBytes, handle);
+
+		/*
+		 * immediately schedule an event to tell the socket it can write. it will
+		 * pop out when the CPU delay is absorbed. otherwise we could miss writes.
+		 */
+		descriptor_adjustStatus(descriptor, TRUE, DS_WRITABLE);
+
+		return EAGAIN;
+	}
+
+	gssize n = transport_sendUserData(transport, buffer, nBytes, ip, port);
+	if(n > 0) {
+		/* user is writing some bytes. lets assume some cpu processing delay
+		 * here since they will need to copy these and process them. */
+		*bytesCopied = (gsize)n;
+		cpu_add_load_write(node->cpu, (guint32)n);
+	} else if(n < 0) {
+		return EWOULDBLOCK;
+	}
+
+	return 0;
 }
 
-gssize node_receiveFromPeer(Node* node, gint handle, gpointer buffer, gsize nBytes,
-		in_addr_t* ip, in_port_t* port) {
+gint node_receiveUserData(Node* node, gint handle, gpointer buffer, gsize nBytes,
+		in_addr_t* ip, in_port_t* port, gsize* bytesCopied) {
 	MAGIC_ASSERT(node);
+	g_assert(ip && port && bytesCopied);
 
 	Descriptor* descriptor = node_lookupDescriptor(node, handle);
 	if(descriptor == NULL) {
@@ -598,7 +629,37 @@ gssize node_receiveFromPeer(Node* node, gint handle, gpointer buffer, gsize nByt
 		return EBADF;
 	}
 
-	return -1;
+	enum DescriptorType type = descriptor_getType(descriptor);
+	if(type != DT_TCPSOCKET && type != DT_UDPSOCKET && type != DT_PIPE) {
+		return EBADF;
+	}
+
+	Transport* transport = (Transport*) descriptor;
+
+	/* we should block if our cpu has been too busy lately */
+	if(cpu_isBlocked(node->cpu)) {
+		debug("blocked on CPU when trying to send %lu bytes from socket %i", nBytes, handle);
+
+		/*
+		 * immediately schedule an event to tell the socket it can read. it will
+		 * pop out when the CPU delay is absorbed. otherwise we could miss reads.
+		 */
+		descriptor_adjustStatus(descriptor, TRUE, DS_READABLE);
+
+		return EAGAIN;
+	}
+
+	gssize n = transport_receiveUserData(transport, buffer, nBytes, ip, port);
+	if(n > 0) {
+		/* user is reading some bytes. lets assume some cpu processing delay
+		 * here since they will need to copy these and process them. */
+		*bytesCopied = (gsize)n;
+		cpu_add_load_read(node->cpu, (guint32)n);
+	} else if(n < 0) {
+		return EWOULDBLOCK;
+	}
+
+	return 0;
 }
 
 gint node_closeDescriptor(Node* node, gint handle) {
