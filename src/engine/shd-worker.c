@@ -88,7 +88,6 @@ void worker_executeEvent(gpointer data, gpointer user_data) {
 	/* worker comes from pool to execute event - cast our data */
 	Engine* engine = user_data;
 	Node* node = data;
-	MAGIC_ASSERT(node);
 
 	/* get current thread's private worker object */
 	Worker* worker = worker_getPrivate();

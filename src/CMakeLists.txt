@@ -37,8 +37,6 @@ set(shadow_srcs
     runnable/event/shd-notify-plugin.c
     runnable/event/shd-packet-arrived.c
     runnable/event/shd-packet-dropped.c
-    runnable/event/shd-spine.c
-    runnable/action/shd-spina.c
     runnable/action/shd-action.c
     runnable/action/shd-connect-network.c
     runnable/action/shd-create-software.c

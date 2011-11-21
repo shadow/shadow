@@ -252,7 +252,8 @@ void epoll_descriptorStatusChanged(gpointer data, gpointer callbackArgument) {
 		epoll->flags |= EF_SCHEDULED;
 		NotifyPluginEvent* event = notifyplugin_new(epoll->super.handle);
 		SimulationTime delay = 1;
-		worker_scheduleEvent((Event*)event, delay, worker_getPrivate()->cached_node->id);
+		/* notify ourselves */
+		worker_scheduleEvent((Event*)event, delay, 0);
 	} else if(!needsNotify && isScheduled) {
 		epoll->flags |= EF_CANCELED;
 	}

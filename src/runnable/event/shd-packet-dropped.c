@@ -47,7 +47,6 @@ PacketDroppedEvent* packetdropped_new(Packet* packet) {
 
 void packetdropped_run(PacketDroppedEvent* event, Node* node) {
 	MAGIC_ASSERT(event);
-	MAGIC_ASSERT(node);
 
 	debug("event started");
 

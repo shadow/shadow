@@ -140,7 +140,6 @@ static gint _engine_processEvents(Engine* engine) {
 static void _engine_manageExecutableMail(gpointer data, gpointer user_data) {
 	Node* node = data;
 	Engine* engine = user_data;
-	MAGIC_ASSERT(node);
 	MAGIC_ASSERT(engine);
 
 	/* pop mail from mailbox, check that its in window, push as a task */

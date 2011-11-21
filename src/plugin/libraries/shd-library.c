@@ -91,7 +91,7 @@ in_addr_t shadowlib_getIPAddress() {
 	Worker* worker = worker_getPrivate();
 	plugin_setShadowContext(worker->cached_plugin, TRUE);
 
-	in_addr_t ip = (in_addr_t) worker->cached_node->id;
+	in_addr_t ip = node_getDefaultIP(worker->cached_node);
 
 	plugin_setShadowContext(worker->cached_plugin, FALSE);
 	return ip;
@@ -101,7 +101,7 @@ gboolean shadowlib_getHostname(gchar* name_out, gint name_out_len) {
 	Worker* worker = worker_getPrivate();
 	plugin_setShadowContext(worker->cached_plugin, TRUE);
 
-	in_addr_t ip = (in_addr_t) worker->cached_node->id;
+	in_addr_t ip = node_getDefaultIP(worker->cached_node);
 	gboolean hostname = shadowlib_resolveIPAddress(ip, name_out, name_out_len);
 
 	plugin_setShadowContext(worker->cached_plugin, FALSE);
@@ -115,7 +115,7 @@ void _shadowlib_executeCallbackInPluginContext(gpointer data, gpointer argument)
 
 void _shadowlib_timerExpired(gpointer data, gpointer argument) {
 	Worker* worker = worker_getPrivate();
-	Application* a = worker->cached_node->application;
+	Application* a = node_getApplication(worker->cached_node);
 	Plugin* plugin = worker_getPlugin(a->software);
 	plugin_executeGeneric(plugin, a->state, _shadowlib_executeCallbackInPluginContext, data, argument);
 }
@@ -129,7 +129,9 @@ void shadowlib_createCallback(ShadowPluginCallbackFunc callback, gpointer data, 
 	 */
 	CallbackEvent* event = callback_new(_shadowlib_timerExpired, data, callback);
 	SimulationTime nanos = SIMTIME_ONE_MILLISECOND * millisecondsDelay;
-	worker_scheduleEvent((Event*)event, nanos, worker->cached_node->id);
+
+	/* callback to our own node */
+	worker_scheduleEvent((Event*)event, nanos, 0);
 
 	plugin_setShadowContext(worker->cached_plugin, FALSE);
 }

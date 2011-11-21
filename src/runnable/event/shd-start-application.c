@@ -38,7 +38,6 @@ StartApplicationEvent* startapplication_new() {
 
 void startapplication_run(StartApplicationEvent* event, Node* node) {
 	MAGIC_ASSERT(event);
-	MAGIC_ASSERT(node);
 
 	node_startApplication(node);
 }

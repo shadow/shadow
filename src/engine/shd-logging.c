@@ -112,7 +112,7 @@ void logging_logv(const gchar *log_domain, GLogLevelFlags log_level, const gchar
 
 	/* node identifier, if we are running a node
 	 * dont free this since we dont own the ip address string */
-	const gchar* nodeString = !w->cached_node ? "n/a" : w->cached_node->name;
+	const gchar* nodeString = !w->cached_node ? "n/a" : node_getName(w->cached_node);
 
 	/* the function name - no need to free this */
 	const gchar* functionString = !functionName ? "n/a" : functionName;

@@ -39,7 +39,6 @@ static Node* _system_switchInShadowContext() {
 	if(worker->cached_plugin) {
 		plugin_setShadowContext(worker->cached_plugin, TRUE);
 	}
-	MAGIC_ASSERT(worker->cached_node);
 	return worker->cached_node;
 }
 
@@ -584,13 +583,12 @@ gint system_clockGetTime(clockid_t clk_id, struct timespec *tp) {
 
 gint system_getHostName(gchar *name, size_t len) {
 	Node* node = _system_switchInShadowContext();
-	Worker* worker = worker_getPrivate();
 	gint result = 0;
 
 	if(name != NULL && node != NULL) {
 
 		/* resolve my address to a hostname */
-		const gchar* sysname = internetwork_resolveID(worker->cached_engine->internet, node->id);
+		const gchar* sysname = node_getName(node);
 
 		if(sysname != NULL) {
 			if(strncpy(name, sysname, len) != NULL) {

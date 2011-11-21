@@ -105,7 +105,7 @@
 //#include "runnable/event/shd-socket-activated.h"
 //#include "runnable/event/shd-socket-poll-timer-expired.h"
 #include "runnable/event/shd-start-application.h"
-#include "runnable/event/shd-spine.h"
+//#include "runnable/event/shd-spine.h"
 //#include "runnable/event/shd-tcp-close-timer-expired.h"
 //#include "runnable/event/shd-tcp-dack-timer-expired.h"
 //#include "runnable/event/shd-tcp-retransmit-timer-expired.h"
@@ -117,7 +117,7 @@
 #include "runnable/action/shd-kill-engine.h"
 #include "runnable/action/shd-load-cdf.h"
 #include "runnable/action/shd-load-plugin.h"
-#include "runnable/action/shd-spina.h"
+//#include "runnable/action/shd-spina.h"
 
 #include "engine/shd-logging.h"
 #include "engine/shd-engine.h"

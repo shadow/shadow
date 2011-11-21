@@ -39,12 +39,11 @@ NotifyPluginEvent* notifyplugin_new(gint epollHandle) {
 
 void notifyplugin_run(NotifyPluginEvent* event, Node* node) {
 	MAGIC_ASSERT(event);
-	MAGIC_ASSERT(node);
 
 	/* check in with epoll to make sure we should carry out the notification */
 	Descriptor* epoll = node_lookupDescriptor(node, event->epollHandle);
 	if(epoll_isReadyToNotify((Epoll*)epoll)) {
-		application_notify(node->application);
+		application_notify(node_getApplication(node));
 	}
 }
 

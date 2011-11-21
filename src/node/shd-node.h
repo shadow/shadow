@@ -28,39 +28,6 @@
 
 typedef struct _Node Node;
 
-struct _Node {
-	/* asynchronous event priority queue. other nodes may push to this queue. */
-	GAsyncQueue* event_mailbox;
-
-	/* the network this node belongs to */
-	Network* network;
-
-	/* general node lock. nothing that belongs to the node should be touched
-	 * unless holding this lock. everything following this falls under the lock.
-	 */
-	GMutex* lock;
-
-	/* a simple priority queue holding events currently being executed.
-	 * events are place in this queue before handing the node off to a
-	 * worker and should not be modified by other nodes. */
-	GQueue* event_priority_queue;
-
-	GQuark id;
-	gchar* name;
-	GHashTable* interfaces;
-	NetworkInterface* defaultInterface;
-	CPU* cpu;
-
-	Application* application;
-
-	/* all file, socket, and epoll descriptors we know about and track */
-	GHashTable* descriptors;
-	gint descriptorHandleCounter;
-	in_port_t randomPortCounter;
-
-	MAGIC_DECLARE;
-};
-
 Node* node_new(GQuark id, Network* network, Software* software, guint32 ip, GString* hostname, guint32 bwDownKiBps, guint32 bwUpKiBps, guint64 cpuBps);
 void node_free(gpointer data);
 
@@ -79,6 +46,10 @@ guint node_getNumTasks(Node* node);
 gint node_compare(gconstpointer a, gconstpointer b, gpointer user_data);
 gboolean node_isEqual(Node* a, Node* b);
 CPU* node_getCPU(Node* node);
+Network* node_getNetwork(Node* node);
+gchar* node_getName(Node* node);
+in_addr_t node_getDefaultIP(Node* node);
+Application* node_getApplication(Node* node);
 
 gint node_createDescriptor(Node* node, enum DescriptorType type);
 gint node_closeDescriptor(Node* node, gint handle);
