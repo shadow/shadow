@@ -21,16 +21,13 @@
 
 #include "shadow.h"
 
-gboolean socket_pushInPacket(Socket* socket, Packet* packet) {
+void socket_free(gpointer data) {
+	Socket* socket = data;
 	MAGIC_ASSERT(socket);
 	MAGIC_ASSERT(socket->vtable);
-	return socket->vtable->push((Transport*)socket, packet);
-}
 
-Packet* socket_pullOutPacket(Socket* socket) {
-	MAGIC_ASSERT(socket);
-	MAGIC_ASSERT(socket->vtable);
-	return socket->vtable->pull((Transport*)socket);
+	MAGIC_CLEAR(socket);
+	socket->vtable->free((Descriptor*)socket);
 }
 
 gssize socket_sendUserData(Socket* socket, gconstpointer buffer, gsize nBytes,
@@ -47,21 +44,17 @@ gssize socket_receiveUserData(Socket* socket, gpointer buffer, gsize nBytes,
 	return socket->vtable->receive((Transport*)socket, buffer, nBytes, ip, port);
 }
 
-void socket_free(gpointer data) {
-	Socket* socket = data;
+gboolean socket_processPacket(Socket* socket, Packet* packet) {
 	MAGIC_ASSERT(socket);
 	MAGIC_ASSERT(socket->vtable);
-
-	MAGIC_CLEAR(socket);
-	socket->vtable->free((Descriptor*)socket);
+	return socket->vtable->process((Transport*)socket, packet);
 }
 
 TransportFunctionTable socket_functions = {
 	(DescriptorFreeFunc) socket_free,
 	(TransportSendFunc) socket_sendUserData,
 	(TransportReceiveFunc) socket_receiveUserData,
-	(TransportPushFunc) socket_pushInPacket,
-	(TransportPullFunc) socket_pullOutPacket,
+	(TransportProcessFunc) socket_processPacket,
 	MAGIC_VALUE
 };
 

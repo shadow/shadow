@@ -49,14 +49,9 @@ gint udp_connectToPeer(UDP* udp, in_addr_t ip, in_port_t port, sa_family_t famil
 	return 0;
 }
 
-gboolean udp_pushInPacket(UDP* udp, Packet* packet) {
+gboolean udp_processPacket(UDP* udp, Packet* packet) {
 	MAGIC_ASSERT(udp);
 	return FALSE;
-}
-
-Packet* udp_pullOutPacket(UDP* udp) {
-	MAGIC_ASSERT(udp);
-	return NULL;
 }
 
 /*
@@ -93,8 +88,7 @@ SocketFunctionTable udp_functions = {
 	(DescriptorFreeFunc) udp_free,
 	(TransportSendFunc) udp_sendUserData,
 	(TransportReceiveFunc) udp_receiveUserData,
-	(TransportPushFunc) udp_pushInPacket,
-	(TransportPullFunc) udp_pullOutPacket,
+	(TransportProcessFunc) udp_processPacket,
 	(SocketIsFamilySupportedFunc) udp_isFamilySupported,
 	(SocketConnectToPeerFunc) udp_connectToPeer,
 	MAGIC_VALUE

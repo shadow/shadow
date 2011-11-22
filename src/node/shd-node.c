@@ -600,7 +600,7 @@ gint node_sendUserData(Node* node, gint handle, gconstpointer buffer, gsize nByt
 		 * immediately schedule an event to tell the socket it can write. it will
 		 * pop out when the CPU delay is absorbed. otherwise we could miss writes.
 		 */
-		descriptor_adjustStatus(descriptor, TRUE, DS_WRITABLE);
+		descriptor_adjustStatus(descriptor, DS_WRITABLE, TRUE);
 
 		return EAGAIN;
 	}
@@ -644,7 +644,7 @@ gint node_receiveUserData(Node* node, gint handle, gpointer buffer, gsize nBytes
 		 * immediately schedule an event to tell the socket it can read. it will
 		 * pop out when the CPU delay is absorbed. otherwise we could miss reads.
 		 */
-		descriptor_adjustStatus(descriptor, TRUE, DS_READABLE);
+		descriptor_adjustStatus(descriptor, DS_READABLE, TRUE);
 
 		return EAGAIN;
 	}

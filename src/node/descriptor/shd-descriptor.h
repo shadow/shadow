@@ -75,8 +75,7 @@ gint descriptor_compare(const Descriptor* foo, const Descriptor* bar, gpointer u
 enum DescriptorType descriptor_getType(Descriptor* descriptor);
 gint* descriptor_getHandleReference(Descriptor* descriptor);
 
-void descriptor_adjustStatus(Descriptor* descriptor, gboolean doSetBits,
-		enum DescriptorStatus status);
+void descriptor_adjustStatus(Descriptor* descriptor, enum DescriptorStatus status, gboolean doSetBits);
 enum DescriptorStatus descriptor_getStatus(Descriptor* descriptor);
 
 void descriptor_addStatusChangeListener(Descriptor* descriptor, Listener* listener);

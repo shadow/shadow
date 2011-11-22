@@ -29,15 +29,13 @@ typedef struct _TransportFunctionTable TransportFunctionTable;
 
 typedef gssize (*TransportSendFunc)(Transport* transport, gconstpointer buffer, gsize nBytes, in_addr_t ip, in_port_t port);
 typedef gssize (*TransportReceiveFunc)(Transport* transport, gpointer buffer, gsize nBytes, in_addr_t* ip, in_port_t* port);
-typedef gboolean (*TransportPushFunc)(Transport* transport, Packet* packet);
-typedef Packet* (*TransportPullFunc)(Transport* transport);
+typedef gboolean (*TransportProcessFunc)(Transport* transport, Packet* packet);
 
 struct _TransportFunctionTable {
 	DescriptorFreeFunc free;
 	TransportSendFunc send;
 	TransportReceiveFunc receive;
-	TransportPushFunc push;
-	TransportPullFunc pull;
+	TransportProcessFunc process;
 	MAGIC_DECLARE;
 };
 
@@ -56,6 +54,16 @@ struct _Transport {
 	in_port_t boundPort;
 	gint associationKey;
 
+	/* buffering packets readable by user */
+	GQueue* inputBuffer;
+	gsize inputBufferSize;
+	gsize inputBufferLength;
+
+	/* buffering packets ready to send */
+	GQueue* outputBuffer;
+	gsize outputBufferSize;
+	gsize outputBufferLength;
+
 	MAGIC_DECLARE;
 };
 
@@ -71,5 +79,10 @@ gssize transport_sendUserData(Transport* transport, gconstpointer buffer, gsize 
 		in_addr_t ip, in_port_t port);
 gssize transport_receiveUserData(Transport* transport, gpointer buffer, gsize nBytes,
 		in_addr_t* ip, in_port_t* port);
+
+gboolean transport_addToInputBuffer(Transport* transport, Packet* packet);
+Packet* transport_removeFromInputBuffer(Transport* transport);
+gboolean transport_addToOutputBuffer(Transport* transport, Packet* packet);
+Packet* transport_removeFromOutputBuffer(Transport* transport);
 
 #endif /* SHD_TRANSPORT_H_ */

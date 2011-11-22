@@ -44,6 +44,10 @@ void transport_init(Transport* transport, TransportFunctionTable* vtable, enum D
 
 	transport->vtable = vtable;
 	transport->protocol = type == DT_TCPSOCKET ? PTCP : type == DT_UDPSOCKET ? PUDP : PLOCAL;
+	transport->inputBuffer = g_queue_new();
+	transport->inputBufferSize = CONFIG_RECV_BUFFER_SIZE;
+	transport->outputBuffer = g_queue_new();
+	transport->outputBufferSize = CONFIG_SEND_BUFFER_SIZE;
 }
 
 gboolean transport_isBound(Transport* transport) {
@@ -69,13 +73,11 @@ gint transport_getAssociationKey(Transport* transport) {
 gboolean transport_pushInPacket(Transport* transport, Packet* packet) {
 	MAGIC_ASSERT(transport);
 	MAGIC_ASSERT(transport->vtable);
-	return transport->vtable->push(transport, packet);
+	return transport->vtable->process(transport, packet);
 }
 
 Packet* transport_pullOutPacket(Transport* transport) {
-	MAGIC_ASSERT(transport);
-	MAGIC_ASSERT(transport->vtable);
-	return transport->vtable->pull(transport);
+	return transport_removeFromOutputBuffer(transport);
 }
 
 gssize transport_sendUserData(Transport* transport, gconstpointer buffer, gsize nBytes,
@@ -90,4 +92,88 @@ gssize transport_receiveUserData(Transport* transport, gpointer buffer, gsize nB
 	MAGIC_ASSERT(transport);
 	MAGIC_ASSERT(transport->vtable);
 	return transport->vtable->receive(transport, buffer, nBytes, ip, port);
+}
+
+gboolean transport_addToInputBuffer(Transport* transport, Packet* packet) {
+	MAGIC_ASSERT(transport);
+
+	/* check if the packet fits */
+	guint length = packet_getPayloadLength(packet);
+	if((transport->inputBufferLength + length) > transport->inputBufferSize) {
+		return FALSE;
+	}
+
+	/* add to our queue */
+	g_queue_push_tail(transport->inputBuffer, packet);
+	transport->inputBufferLength += length;
+
+	/* we just added a packet, so we are readable */
+	if(transport->inputBufferLength > 0) {
+		descriptor_adjustStatus((Descriptor*)transport, DS_READABLE, TRUE);
+	}
+
+	return TRUE;
+}
+
+Packet* transport_removeFromInputBuffer(Transport* transport) {
+	MAGIC_ASSERT(transport);
+
+	/* see if we have any packets */
+	Packet* packet = g_queue_pop_head(transport->inputBuffer);
+	if(packet) {
+		/* just removed a packet */
+		guint length = packet_getPayloadLength(packet);
+		transport->inputBufferLength -= length;
+
+		/* we are not readable if we are now empty */
+		if(transport->inputBufferLength <= 0) {
+			descriptor_adjustStatus((Descriptor*)transport, DS_READABLE, FALSE);
+		}
+	}
+
+	return packet;
+}
+
+gboolean transport_addToOutputBuffer(Transport* transport, Packet* packet) {
+	MAGIC_ASSERT(transport);
+
+	/* check if the packet fits */
+	guint length = packet_getPayloadLength(packet);
+	if((transport->outputBufferLength + length) > transport->outputBufferSize) {
+		return FALSE;
+	}
+
+	/* add to our queue */
+	g_queue_push_tail(transport->outputBuffer, packet);
+	transport->outputBufferLength += length;
+
+	/* we just added a packet, we are no longer writable if full */
+	if((transport->outputBufferSize - transport->outputBufferLength) <= 0) {
+		descriptor_adjustStatus((Descriptor*)transport, DS_WRITABLE, FALSE);
+	}
+
+	/* tell the interface to include us when sending out to the network */
+	NetworkInterface* interface = node_lookupInterface(worker_getPrivate()->cached_node, transport->boundAddress);
+	networkinterface_wantsSend(interface, transport);
+
+	return TRUE;
+}
+
+Packet* transport_removeFromOutputBuffer(Transport* transport) {
+	MAGIC_ASSERT(transport);
+
+	/* see if we have any packets */
+	Packet* packet = g_queue_pop_head(transport->outputBuffer);
+	if(packet) {
+		/* just removed a packet */
+		guint length = packet_getPayloadLength(packet);
+		transport->outputBufferLength -= length;
+
+		/* we are writable if we now have space */
+		if((transport->outputBufferSize - transport->outputBufferLength) > 0) {
+			descriptor_adjustStatus((Descriptor*)transport, DS_WRITABLE, TRUE);
+		}
+	}
+
+	return packet;
 }

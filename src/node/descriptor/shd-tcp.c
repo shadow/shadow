@@ -95,10 +95,6 @@ gint tcp_connectToPeer(TCP* tcp, in_addr_t ip, in_port_t port, sa_family_t famil
 	return EINPROGRESS;
 }
 
-void tcp_send(TCP* tcp) {
-	MAGIC_ASSERT(tcp);
-}
-
 void tcp_enterServerMode(TCP* tcp, gint backlog) {
 	MAGIC_ASSERT(tcp);
 
@@ -168,14 +164,9 @@ gint tcp_acceptServerPeer(TCP* tcp, in_addr_t* ip, in_port_t* port) {
 	return 0;
 }
 
-gboolean tcp_pushInPacket(TCP* tcp, Packet* packet) {
+gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 	MAGIC_ASSERT(tcp);
 	return FALSE;
-}
-
-Packet* tcp_pullOutPacket(TCP* tcp) {
-	MAGIC_ASSERT(tcp);
-	return NULL;
 }
 
 gssize tcp_sendUserData(TCP* tcp, gconstpointer buffer, gsize nBytes, in_addr_t ip, in_port_t port) {
@@ -201,8 +192,7 @@ SocketFunctionTable tcp_functions = {
 	(DescriptorFreeFunc) tcp_free,
 	(TransportSendFunc) tcp_sendUserData,
 	(TransportReceiveFunc) tcp_receiveUserData,
-	(TransportPushFunc) tcp_pushInPacket,
-	(TransportPullFunc) tcp_pullOutPacket,
+	(TransportProcessFunc) tcp_processPacket,
 	(SocketIsFamilySupportedFunc) tcp_isFamilySupported,
 	(SocketConnectToPeerFunc) tcp_connectToPeer,
 	MAGIC_VALUE

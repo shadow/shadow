@@ -32,8 +32,7 @@ struct _SocketFunctionTable {
 	DescriptorFreeFunc free;
 	TransportSendFunc send;
 	TransportReceiveFunc receive;
-	TransportPushFunc push;
-	TransportPullFunc pull;
+	TransportProcessFunc process;
 	SocketIsFamilySupportedFunc isFamilySupported;
 	SocketConnectToPeerFunc connectToPeer;
 	MAGIC_DECLARE;
