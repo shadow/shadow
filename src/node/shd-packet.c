@@ -64,7 +64,7 @@ struct _Packet {
 	MAGIC_DECLARE;
 };
 
-Packet* packet_new(gconstpointer payload, guint payloadLength) {
+Packet* packet_new(gconstpointer payload, gsize payloadLength) {
 	Packet* packet = g_new0(Packet, 1);
 	MAGIC_INIT(packet);
 
@@ -259,6 +259,40 @@ in_addr_t packet_getSourceIP(Packet* packet) {
 
 	_packet_unlock(packet);
 	return ip;
+}
+
+in_port_t packet_getSourcePort(Packet* packet) {
+	_packet_lock(packet);
+
+	in_port_t port = 0;
+
+	switch (packet->protocol) {
+		case PLOCAL: {
+			PacketLocalHeader* header = packet->header;
+			port = header->port;
+			break;
+		}
+
+		case PUDP: {
+			PacketUDPHeader* header = packet->header;
+			port = header->sourcePort;
+			break;
+		}
+
+		case PTCP: {
+			PacketTCPHeader* header = packet->header;
+			port = header->sourcePort;
+			break;
+		}
+
+		default: {
+			error("unrecognized protocol");
+			break;
+		}
+	}
+
+	_packet_unlock(packet);
+	return port;
 }
 
 guint packet_copyPayload(Packet* packet, gpointer buffer, gsize bufferLength) {

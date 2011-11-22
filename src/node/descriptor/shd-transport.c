@@ -104,6 +104,7 @@ gboolean transport_addToInputBuffer(Transport* transport, Packet* packet) {
 	}
 
 	/* add to our queue */
+	packet_ref(packet);
 	g_queue_push_tail(transport->inputBuffer, packet);
 	transport->inputBufferLength += length;
 

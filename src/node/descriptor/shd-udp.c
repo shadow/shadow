@@ -51,7 +51,9 @@ gint udp_connectToPeer(UDP* udp, in_addr_t ip, in_port_t port, sa_family_t famil
 
 gboolean udp_processPacket(UDP* udp, Packet* packet) {
 	MAGIC_ASSERT(udp);
-	return FALSE;
+
+	/* UDP packet contains data for user and can be buffered immediately */
+	return transport_addToInputBuffer((Transport*)udp, packet);
 }
 
 /*
@@ -62,18 +64,75 @@ gboolean udp_processPacket(UDP* udp, Packet* packet) {
 gssize udp_sendUserData(UDP* udp, gconstpointer buffer, gsize nBytes, in_addr_t ip, in_port_t port) {
 	MAGIC_ASSERT(udp);
 
-//	gsize maxPacketLength = CONFIG_DATAGRAM_MAX_SIZE;
-//	gsize bytesSent = 0;
-//	gsize copySize = 0;
-//	gsize remaining = nBytes;
+	gsize space = udp->super.super.outputBufferSize - udp->super.super.outputBufferLength;
+	if(space < nBytes) {
+		/* not enough space to buffer the data */
+		return -1;
+	}
 
-	/* check if we have enough space */
-	return -1;
+	/* break data into segments and send each in a packet */
+	gsize maxPacketLength = CONFIG_DATAGRAM_MAX_SIZE;
+	gsize remaining = nBytes;
+	gsize offset = 0;
+
+	/* create as many packets as needed */
+	while(remaining > 0) {
+		gsize copyLength = MIN(maxPacketLength, remaining);
+
+		/* use default destination if none was specified */
+		in_addr_t destinationIP = (ip != 0) ? ip : udp->super.peerIP;
+		in_port_t destinationPort = (port != 0) ? port : udp->super.peerPort;
+
+		/* create the UDP packet */
+		Packet* packet = packet_new(buffer + offset, copyLength);
+		packet_setUDP(packet, PUDP_NONE, udp->super.super.boundAddress,
+				udp->super.super.boundPort, destinationIP, destinationPort);
+
+		/* buffer it in the transport layer, to be sent out when possible */
+		gboolean success = transport_addToOutputBuffer((Transport*) udp, packet);
+
+		/* counter maintenance */
+		if(success) {
+			remaining -= copyLength;
+			offset += copyLength;
+		} else {
+			warning("unable to send UDP packet");
+			break;
+		}
+	}
+
+	debug("buffered %lu outbound UDP bytes from user", offset);
+
+	return (gssize) offset;
 }
 
 gssize udp_receiveUserData(UDP* udp, gpointer buffer, gsize nBytes, in_addr_t* ip, in_port_t* port) {
 	MAGIC_ASSERT(udp);
-	return -1;
+
+	Packet* packet = transport_removeFromInputBuffer((Transport*)udp);
+	if(!packet) {
+		return -1;
+	}
+
+	/* copy lesser of requested and available amount to application buffer */
+	guint packetLength = packet_getPayloadLength(packet);
+	gsize copyLength = MIN(nBytes, packetLength);
+	guint bytesCopied = packet_copyPayload(packet, buffer, copyLength);
+
+	g_assert(bytesCopied == copyLength);
+
+	/* fill in address info */
+	if(ip) {
+		*ip = packet_getSourceIP(packet);
+	}
+	if(port) {
+		*port = packet_getSourcePort(packet);
+	}
+
+	/* destroy packet, throwing away any bytes not claimed by the app */
+	packet_unref(packet);
+
+	return (gssize)bytesCopied;
 }
 
 void udp_free(UDP* udp) {

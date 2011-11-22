@@ -26,7 +26,7 @@
 
 typedef struct _Packet Packet;
 
-Packet* packet_new(gconstpointer payload, guint payloadLength);
+Packet* packet_new(gconstpointer payload, gsize payloadLength);
 
 void packet_ref(Packet* packet);
 void packet_unref(Packet* packet);
@@ -45,6 +45,7 @@ guint packet_getPayloadLength(Packet* packet);
 guint packet_getHeaderSize(Packet* packet);
 in_addr_t packet_getDestinationIP(Packet* packet);
 in_addr_t packet_getSourceIP(Packet* packet);
+in_port_t packet_getSourcePort(Packet* packet);
 guint packet_copyPayload(Packet* packet, gpointer buffer, gsize bufferLength);
 gint packet_getAssociationKey(Packet* packet);
 
