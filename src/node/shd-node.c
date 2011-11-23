@@ -34,7 +34,7 @@ struct _Node {
 	GMutex* lock;
 
 	/* a simple priority queue holding events currently being executed.
-	 * events are place in this queue before handing the node off to a
+	 * events are placed in this queue before handing the node off to a
 	 * worker and should not be modified by other nodes. */
 	GQueue* event_priority_queue;
 
@@ -75,7 +75,7 @@ Node* node_new(GQuark id, Network* network, Software* software, guint32 ip, GStr
 	NetworkInterface* ethernet = networkinterface_new(network, id, hostname->str, bwDownKiBps, bwUpKiBps);
 	g_hash_table_replace(node->interfaces, GUINT_TO_POINTER((guint)id), ethernet);
 	NetworkInterface* loopback = networkinterface_new(NULL, (GQuark)htonl(INADDR_LOOPBACK), "loopback", G_MAXUINT32, G_MAXUINT32);
-	g_hash_table_replace(node->interfaces, GUINT_TO_POINTER((guint)id), loopback);
+	g_hash_table_replace(node->interfaces, GUINT_TO_POINTER((guint)htonl(INADDR_LOOPBACK)), loopback);
 	node->defaultInterface = ethernet;
 
 	/* virtual descriptor management */
@@ -231,7 +231,7 @@ static gint _node_monitorDescriptor(Node* node, Descriptor* descriptor) {
 
 	/* make sure there are no collisions before inserting */
 	gint* handle = descriptor_getHandleReference(descriptor);
-	g_assert(handle && node_lookupDescriptor(node, *handle));
+	g_assert(handle && !node_lookupDescriptor(node, *handle));
 	g_hash_table_replace(node->descriptors, handle, descriptor);
 
 	return *handle;
@@ -346,7 +346,7 @@ static gboolean _node_isInterfaceAvailable(Node* node, in_addr_t interfaceIP,
 
 		while(g_hash_table_iter_next(&iter, &key, &value)) {
 			NetworkInterface* interface = value;
-			isAvailable = networkinterface_isAssociated(interface, associationKey);
+			isAvailable = !networkinterface_isAssociated(interface, associationKey);
 
 			/* as soon as one is taken, break out to return FALSE */
 			if(!isAvailable) {
@@ -355,7 +355,7 @@ static gboolean _node_isInterfaceAvailable(Node* node, in_addr_t interfaceIP,
 		}
 	} else {
 		NetworkInterface* interface = node_lookupInterface(node, interfaceIP);
-		isAvailable = networkinterface_isAssociated(interface, associationKey);
+		isAvailable = !networkinterface_isAssociated(interface, associationKey);
 	}
 
 	return isAvailable;
@@ -603,6 +603,26 @@ gint node_sendUserData(Node* node, gint handle, gconstpointer buffer, gsize nByt
 		descriptor_adjustStatus(descriptor, DS_WRITABLE, TRUE);
 
 		return EAGAIN;
+	}
+
+	if(type == DT_UDPSOCKET) {
+		/* make sure that we have somewhere to send it */
+		if(ip == 0 || port == 0) {
+			Socket* socket = (Socket*)transport;
+			/* its ok as long as they setup a default destination with connect() */
+			if(socket->peerIP == 0 || socket->peerPort == 0) {
+				/* we have nowhere to send it */
+				return EDESTADDRREQ;
+			}
+		}
+
+		/* if this socket is not bound, do an implicit bind to a random port */
+		in_addr_t bindAddress = ip == htonl(INADDR_LOOPBACK) ? htonl(INADDR_LOOPBACK) :
+				networkinterface_getIPAddress(node->defaultInterface);
+		in_port_t bindPort = _node_getRandomFreePort(node, bindAddress, type);
+
+		/* bind port and set associations */
+		_node_associateInterface(node, transport, bindAddress, bindPort);
 	}
 
 	gssize n = transport_sendUserData(transport, buffer, nBytes, ip, port);

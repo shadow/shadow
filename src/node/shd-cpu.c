@@ -88,15 +88,17 @@ void cpu_add_load_write(CPU* cpu, guint32 bytes) {
 	cpu_add_load(cpu, load);
 }
 
-SimulationTime _cpu_getDelay(CPU* cpu) {
-	MAGIC_ASSERT(cpu);
-
-	/* we only have delay if we've crossed the threshold */
-	SimulationTime builtUpDelay = cpu->timeCPUAvailable - cpu->now;
-	if(builtUpDelay > VCPU_DELAY_THRESHOLD_NS) {
-		return builtUpDelay;
-	}
+static SimulationTime _cpu_getDelay(CPU* cpu) {
 	return 0;
+//	TODO fix CPU delay modelling
+//	MAGIC_ASSERT(cpu);
+//
+//	/* we only have delay if we've crossed the threshold */
+//	SimulationTime builtUpDelay = cpu->timeCPUAvailable - cpu->now;
+//	if(builtUpDelay > VCPU_DELAY_THRESHOLD_NS) {
+//		return builtUpDelay;
+//	}
+//	return 0;
 }
 
 gboolean cpu_isBlocked(CPU* cpu) {

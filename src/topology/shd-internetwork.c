@@ -27,6 +27,7 @@ Internetwork* internetwork_new() {
 
 	internet->nodes = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, node_free);
 	internet->networks = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, network_free);
+	internet->networksByIP = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, NULL);
 	internet->ipByName = g_hash_table_new_full(g_str_hash, g_str_equal, NULL, g_free);
 	internet->nameByIp = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, g_free);
 
@@ -45,6 +46,7 @@ void internetwork_free(Internetwork* internet) {
 	/* now cleanup the rest */
 	g_hash_table_destroy(internet->nodes);
 	g_hash_table_destroy(internet->networks);
+	g_hash_table_destroy(internet->networksByIP);
 	g_hash_table_destroy(internet->ipByName);
 	g_hash_table_destroy(internet->nameByIp);
 
@@ -109,7 +111,12 @@ Network* internetwork_getNetwork(Internetwork* internet, GQuark networkID) {
 	return (Network*) g_hash_table_lookup(internet->networks, &networkID);
 }
 
-guint32 _internetwork_generateIP(Internetwork* internet) {
+Network* internetwork_lookupNetwork(Internetwork* internet, in_addr_t ip) {
+	MAGIC_ASSERT(internet);
+	return (Network*) g_hash_table_lookup(internet->networksByIP, &ip);
+}
+
+static guint32 _internetwork_generateIP(Internetwork* internet) {
 	MAGIC_ASSERT(internet);
 	internet->ipCounter++;
 	while(internet->ipCounter == htonl(INADDR_NONE) ||
@@ -129,12 +136,15 @@ void internetwork_createNode(Internetwork* internet, GQuark nodeID,
 	g_assert(!internet->isReadOnly);
 
 	guint32 ip = _internetwork_generateIP(internet);
+	ip = (guint32) nodeID;
 	Node* node = node_new(nodeID, network, software, ip, hostname, bwDownKiBps, bwUpKiBps, cpuBps);
 	g_hash_table_replace(internet->nodes, GUINT_TO_POINTER((guint)nodeID), node);
+
 
 	gchar* mapName = g_strdup((const gchar*) hostname->str);
 	guint32* mapIP = g_new0(guint32, 1);
 	*mapIP = ip;
+	g_hash_table_replace(internet->networksByIP, mapIP, network);
 	g_hash_table_replace(internet->ipByName, mapName, mapIP);
 	g_hash_table_replace(internet->nameByIp, mapIP, mapName);
 }

@@ -57,7 +57,6 @@ gboolean transport_isBound(Transport* transport) {
 
 void transport_setBinding(Transport* transport, in_addr_t boundAddress, in_port_t port) {
 	MAGIC_ASSERT(transport);
-	g_assert(!transport_isBound(transport));
 	transport->boundAddress = boundAddress;
 	transport->boundPort = port;
 	transport->associationKey = PROTOCOL_DEMUX_KEY(transport->protocol, port);

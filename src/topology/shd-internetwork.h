@@ -31,6 +31,7 @@ struct _Internetwork {
 
 	GHashTable* nodes;
 	GHashTable* networks;
+	GHashTable* networksByIP;
 	GHashTable* nameByIp;
 	GHashTable* ipByName;
 
@@ -50,6 +51,7 @@ void internetwork_connectNetworks(Internetwork* internet, GQuark networkAID, GQu
 		CumulativeDistribution* latencyA2B, CumulativeDistribution* latencyB2A,
 		gdouble reliabilityA2B, gdouble reliabilityB2A);
 Network* internetwork_getNetwork(Internetwork* internet, GQuark networkID);
+Network* internetwork_lookupNetwork(Internetwork* internet, in_addr_t ip);
 
 void internetwork_createNode(Internetwork* internet, GQuark nodeID,
 		Network* network, Software* software, GString* hostname,

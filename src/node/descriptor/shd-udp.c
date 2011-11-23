@@ -159,5 +159,8 @@ UDP* udp_new(gint handle) {
 
 	socket_init(&(udp->super), &udp_functions, DT_UDPSOCKET, handle);
 
+	/* we are immediately active because UDP doesnt wait for accept or connect */
+	descriptor_adjustStatus((Descriptor*) udp, DS_ACTIVE, TRUE);
+
 	return udp;
 }

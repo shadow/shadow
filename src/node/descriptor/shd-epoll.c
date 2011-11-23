@@ -55,9 +55,10 @@ static EpollWatch* _epollwatch_new(Epoll* epoll, Descriptor* descriptor, struct 
 	descriptor_ref(descriptor);
 
 	watch->listener = listener_new(epoll_descriptorStatusChanged, epoll, descriptor);
-	descriptor_addStatusChangeListener(watch->descriptor, watch->listener);
 	watch->descriptor = descriptor;
 	watch->event = *event;
+
+	descriptor_addStatusChangeListener(watch->descriptor, watch->listener);
 
 	return watch;
 }
@@ -123,8 +124,12 @@ gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor,
 				return EEXIST;
 			}
 
+			/* start watching for status changes */
 			EpollWatch* watch = _epollwatch_new(epoll, descriptor, event);
 			g_hash_table_replace(epoll->watchedDescriptors, descriptor_getHandleReference(descriptor), watch);
+
+			/* make sure to initiate a callback if we are ready right now */
+			epoll_descriptorStatusChanged(epoll, descriptor);
 
 			break;
 		}

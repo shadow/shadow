@@ -172,10 +172,10 @@ void network_scheduleRetransmit(Network* network, Packet* packet) {
 	Worker* worker = worker_getPrivate();
 	Internetwork* internet = worker->cached_engine->internet;
 
-	GQuark sourceID = (GQuark) packet_getSourceIP(packet);
-	Network* sourceNetwork = internetwork_getNetwork(internet, sourceID);
-	GQuark destinationID = (GQuark) packet_getDestinationIP(packet);
-	Network* destinationNetwork = internetwork_getNetwork(internet, destinationID);
+	in_addr_t sourceIP = packet_getSourceIP(packet);
+	Network* sourceNetwork = internetwork_lookupNetwork(internet, sourceIP);
+	in_addr_t destinationIP = packet_getDestinationIP(packet);
+	Network* destinationNetwork = internetwork_lookupNetwork(internet, destinationIP);
 
 	gdouble latency = 0;
 	if(network_isEqual(network, sourceNetwork)) {
@@ -189,7 +189,7 @@ void network_scheduleRetransmit(Network* network, Packet* packet) {
 
 	SimulationTime delay = (SimulationTime) floor(latency * SIMTIME_ONE_MILLISECOND);
 	PacketDroppedEvent* event = packetdropped_new(packet);
-	worker_scheduleEvent((Event*)event, delay, sourceID);
+	worker_scheduleEvent((Event*)event, delay, (GQuark)sourceIP);
 }
 
 void network_schedulePacket(Network* sourceNetwork, Packet* packet) {
@@ -197,8 +197,8 @@ void network_schedulePacket(Network* sourceNetwork, Packet* packet) {
 
 	Worker* worker = worker_getPrivate();
 	Internetwork* internet = worker->cached_engine->internet;
-	GQuark destinationID = (GQuark) packet_getDestinationIP(packet);
-	Network* destinationNetwork = internetwork_getNetwork(internet, destinationID);
+	in_addr_t destinationIP = packet_getDestinationIP(packet);
+	Network* destinationNetwork = internetwork_lookupNetwork(internet, destinationIP);
 
 	/* first thing to check is if network reliability forces us to 'drop'
 	 * the packet. if so, get out of dodge doing as little as possible.
@@ -215,6 +215,6 @@ void network_schedulePacket(Network* sourceNetwork, Packet* packet) {
 		SimulationTime delay = (SimulationTime) floor(latency * SIMTIME_ONE_MILLISECOND);
 
 		PacketArrivedEvent* event = packetarrived_new(packet);
-		worker_scheduleEvent((Event*)event, delay, destinationID);
+		worker_scheduleEvent((Event*)event, delay, (GQuark)destinationIP);
 	}
 }

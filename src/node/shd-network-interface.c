@@ -44,7 +44,7 @@ struct _NetworkInterface {
 	/* NIC input queue */
 	GQueue* inBuffer;
 	gsize inBufferSize;
-	gsize inBufferLength;
+//	gsize inBufferLength;
 
 	/* Transports wanting to send data out */
 	GQueue* sendableTransports;
@@ -173,12 +173,13 @@ void networkinterface_packetArrived(NetworkInterface* interface, Packet* packet)
 	MAGIC_ASSERT(interface);
 
 	/* a packet arrived. lets try to receive or buffer it */
-	guint packetLength = packet_getPayloadLength(packet);
-	if(packetLength <= (interface->inBufferSize - interface->inBufferLength)) {
+	if(g_queue_get_length(interface->inBuffer) < 1) {
+//	guint packetLength = packet_getPayloadLength(packet);
+//	if(packetLength <= (interface->inBufferSize - interface->inBufferLength)) {
 		/* we have space to buffer it */
 		packet_ref(packet);
 		g_queue_push_tail(interface->inBuffer, packet);
-		interface->inBufferLength += packetLength;
+//		interface->inBufferLength += packetLength;
 
 		/* we need a trigger if we are not currently receiving */
 		if(!(interface->flags & NIF_RECEIVING)) {
@@ -222,7 +223,7 @@ void networkinterface_received(NetworkInterface* interface) {
 
 		/* free up buffer space */
 		guint length = packet_getPayloadLength(packet);
-		interface->inBufferLength -= length;
+//		interface->inBufferLength -= length;
 
 		/* batch the packet for processing this round, still reffed from before */
 		g_queue_push_tail(packetBatch, packet);
@@ -304,7 +305,7 @@ void networkinterface_sent(NetworkInterface* interface) {
 	if(absorbInterval > 0) {
 		/* decide how much delay we get to absorb based on the passed time */
 		gdouble newConsumed = interface->sendNanosecondsConsumed - absorbInterval;
-		interface->receiveNanosecondsConsumed = MAX(0, newConsumed);
+		interface->sendNanosecondsConsumed = MAX(0, newConsumed);
 	}
 
 	interface->lastTimeSent = now;
