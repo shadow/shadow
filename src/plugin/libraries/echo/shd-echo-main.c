@@ -40,23 +40,27 @@ gint main(gint argc, gchar *argv[]) {
 	echo.client = NULL;
 	echo.server = NULL;
 
-	char* USAGE = "Echo usage: 'client serverIP', 'server', or 'loopback'";
-	if(argc < 2) {
+	char* USAGE = "Echo usage: 'client tcp serverIP', 'client udp serverIP', 'server tcp', 'server udp', 'loopback tcp', or 'loopback udp'";
+	if(argc < 3) {
 		mylog(G_LOG_LEVEL_CRITICAL, __FUNCTION__, USAGE);
 		return -1;
 	}
 
 	/* parse command line args */
 	char* mode = argv[1];
+	char* protostr = argv[2];
+
+	enum EchoProtocol protocol = g_strcasecmp(protostr, "tcp") == 0 ? EchoTCP :
+			g_strcasecmp(protostr, "udp") == 0 ? EchoUDP : EchoPIPE;
 
 	if(g_strcasecmp(mode, "client") == 0) {
-		if(argc < 3) {
+		if(argc < 4) {
 			mylog(G_LOG_LEVEL_CRITICAL, __FUNCTION__, USAGE);
 			return -1;
 		}
 
 		/* start up a client, connecting to the server specified in args */
-		char* serverIPString = argv[2];
+		char* serverIPString = argv[3];
 		struct in_addr in;
 		gint is_ip_address = inet_aton(serverIPString, &in);
 		if(!is_ip_address) {
@@ -64,13 +68,13 @@ gint main(gint argc, gchar *argv[]) {
 			return -1;
 		}
 		in_addr_t serverIP = in.s_addr;
-		echo.client = echoclient_new(serverIP, mylog);
+		echo.client = echoclient_new(protocol, serverIP, mylog);
 	} else if(g_strcasecmp(mode, "server") == 0) {
 		in_addr_t serverIP = INADDR_ANY;
-		echo.server = echoserver_new(serverIP, mylog);
+		echo.server = echoserver_new(protocol, serverIP, mylog);
 	} else if(g_strcasecmp(mode, "loopback") == 0) {
-		echo.server = echoserver_new(htonl(INADDR_LOOPBACK), mylog);
-		echo.client = echoclient_new(htonl(INADDR_LOOPBACK), mylog);
+		echo.server = echoserver_new(protocol, htonl(INADDR_LOOPBACK), mylog);
+		echo.client = echoclient_new(protocol, htonl(INADDR_LOOPBACK), mylog);
 	} else {
 		mylog(G_LOG_LEVEL_CRITICAL, __FUNCTION__, USAGE);
 		return -1;
@@ -105,7 +109,7 @@ gint main(gint argc, gchar *argv[]) {
 	}
 
 	/* main loop - when the client/server epoll fds are ready, activate them */
-	for(;;) {
+	while(1) {
 		struct epoll_event events[10];
 		int nfds = epoll_wait(epolld, events, 10, -1);
 		if(nfds == -1) {

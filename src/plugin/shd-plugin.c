@@ -226,22 +226,6 @@ void plugin_executeNotify(Plugin* plugin, PluginState* state) {
 	_plugin_stopExecuting(plugin, state);
 }
 
-void plugin_executeReadable(Plugin* plugin, PluginState* state, gint socketParam) {
-	plugin_executeNotify(plugin, state);
-}
-
-void plugin_executeWritable(Plugin* plugin, PluginState* state, gint socketParam) {
-	plugin_executeNotify(plugin, state);
-}
-
-void plugin_executeWritableReadable(Plugin* plugin, PluginState* state, gint socketParam) {
-	plugin_executeNotify(plugin, state);
-}
-
-void plugin_executeReadableWritable(Plugin* plugin, PluginState* state, gint socketParam) {
-	plugin_executeNotify(plugin, state);
-}
-
 void plugin_executeGeneric(Plugin* plugin, PluginState* state, CallbackFunc callback, gpointer data, gpointer callbackArgument) {
 	MAGIC_ASSERT(plugin);
 	_plugin_startExecuting(plugin, state);

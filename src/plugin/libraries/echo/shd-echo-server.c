@@ -21,13 +21,16 @@
 
 #include "shd-echo.h"
 
-EchoServer* echoserver_new(in_addr_t bindIPAddress, ShadowlibLogFunc log) {
+EchoServer* echoserver_new(enum EchoProtocol protocol, in_addr_t bindIPAddress, ShadowlibLogFunc log) {
 	/* start up the echo server */
 	gint sockd;
 	struct sockaddr_in server;
 
+	gint flags = protocol == EchoTCP ? SOCK_STREAM : SOCK_DGRAM;
+	flags |= SOCK_NONBLOCK;
+
 	/* create the socket and get a socket descriptor */
-	if ((sockd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0)) == ERROR) {
+	if ((sockd = socket(AF_INET, flags, 0)) == ERROR) {
 		log(G_LOG_LEVEL_WARNING, __FUNCTION__, "error creating socket");
 	}
 
@@ -44,9 +47,11 @@ EchoServer* echoserver_new(in_addr_t bindIPAddress, ShadowlibLogFunc log) {
 		log(G_LOG_LEVEL_WARNING, __FUNCTION__, "error in bind");
 	}
 
-	/* set as server socket */
-	if (listen(sockd, 100) == ERROR) {
-		log(G_LOG_LEVEL_WARNING, __FUNCTION__, "error in listen");
+	if(protocol == EchoTCP) {
+		/* set as server socket */
+		if (listen(sockd, 100) == ERROR) {
+			log(G_LOG_LEVEL_WARNING, __FUNCTION__, "error in listen");
+		}
 	}
 
 	gint epollFileDescriptor;
@@ -63,6 +68,7 @@ EchoServer* echoserver_new(in_addr_t bindIPAddress, ShadowlibLogFunc log) {
 
 	/* store the socket as our listening socket */
 	EchoServer* es = g_new0(EchoServer, 1);
+	es->protocol = protocol;
 	es->listen_sd = sockd;
 	es->epollFileDescriptor = epollFileDescriptor;
 	return es;
@@ -77,7 +83,7 @@ void echoserver_free(EchoServer* es) {
 static void echoserver_socketReadable(EchoServer* es, gint socketDescriptor, ShadowlibLogFunc log) {
 	log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "trying to read socket %i", socketDescriptor);
 
-	if(socketDescriptor == es->listen_sd) {
+	if(socketDescriptor == es->listen_sd && es->protocol == EchoTCP) {
 		/* need to accept a connection on server listening socket,
 		 * dont care about address of connector.
 		 * this gives us a new socket thats connected to the client */
@@ -93,10 +99,12 @@ static void echoserver_socketReadable(EchoServer* es, gint socketDescriptor, Sha
 			log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_ctl");
 		}
 	} else {
+		socklen_t len = sizeof(es->address);
+
 		/* read all data available */
 		gint read_size = BUFFERSIZE - es->read_offset;
 		if(read_size > 0) {
-		    ssize_t bread = read(socketDescriptor, es->echo_buffer + es->read_offset, read_size);
+		    ssize_t bread = recvfrom(socketDescriptor, es->echo_buffer + es->read_offset, read_size, 0, (struct sockaddr*)&es->address, &len);
 
 			/* if we read, start listening for when we can write */
 			if(bread == 0) {
@@ -121,11 +129,13 @@ static void echoserver_socketReadable(EchoServer* es, gint socketDescriptor, Sha
 static void echoserver_socketWritable(EchoServer* es, gint socketDescriptor, ShadowlibLogFunc log) {
 	log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "trying to read socket %i", socketDescriptor);
 
+	socklen_t len = sizeof(es->address);
+
 	/* echo it back to the client on the same sd,
 	 * also taking care of data that is still hanging around from previous reads. */
 	gint write_size = es->read_offset - es->write_offset;
 	if(write_size > 0) {
-		ssize_t bwrote = write(socketDescriptor, es->echo_buffer + es->write_offset, write_size);
+		ssize_t bwrote = sendto(socketDescriptor, es->echo_buffer + es->write_offset, write_size, 0, (struct sockaddr*)&es->address, len);
 		if(bwrote == 0) {
 			if(epoll_ctl(es->epollFileDescriptor, EPOLL_CTL_DEL, socketDescriptor, NULL) == ERROR) {
 				log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_ctl");

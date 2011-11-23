@@ -73,23 +73,27 @@ void echo_new(int argc, char* argv[]) {
 
 	/* parse command line args */
 	char* mode = argv[0];
+	char* protostr = argv[1];
+
+	enum EchoProtocol protocol = g_strcasecmp(protostr, "tcp") == 0 ? EchoTCP :
+			g_strcasecmp(protostr, "udp") == 0 ? EchoUDP : EchoPIPE;
 
 	if(g_strcasecmp(mode, "client") == 0) {
-		if(argc < 2) {
+		if(argc < 3) {
 			echo_globalState.shadowlibFuncs->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, USAGE);
 			return;
 		}
 
 		/* start up a client, connecting to the server specified in args */
-		char* serverHostname = argv[1];
+		char* serverHostname = argv[2];
 		in_addr_t serverIP = echo_globalState.shadowlibFuncs->resolveHostname(serverHostname);
-		echo_globalState.client = echoclient_new(serverIP, echo_globalState.shadowlibFuncs->log);
+		echo_globalState.client = echoclient_new(protocol, serverIP, echo_globalState.shadowlibFuncs->log);
 	} else if(g_strcasecmp(mode, "server") == 0) {
 		in_addr_t serverIP = echo_globalState.shadowlibFuncs->getIP();
-		echo_globalState.server = echoserver_new(serverIP, echo_globalState.shadowlibFuncs->log);
+		echo_globalState.server = echoserver_new(protocol, serverIP, echo_globalState.shadowlibFuncs->log);
 	} else if(g_strcasecmp(mode, "loopback") == 0) {
-		echo_globalState.server = echoserver_new(htonl(INADDR_LOOPBACK), echo_globalState.shadowlibFuncs->log);
-		echo_globalState.client = echoclient_new(htonl(INADDR_LOOPBACK), echo_globalState.shadowlibFuncs->log);
+		echo_globalState.server = echoserver_new(protocol, htonl(INADDR_LOOPBACK), echo_globalState.shadowlibFuncs->log);
+		echo_globalState.client = echoclient_new(protocol, htonl(INADDR_LOOPBACK), echo_globalState.shadowlibFuncs->log);
 	} else {
 		echo_globalState.shadowlibFuncs->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, USAGE);
 	}

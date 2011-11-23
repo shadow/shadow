@@ -41,8 +41,14 @@
 #define ECHO_SERVER_PORT 60000
 #define MAX_EVENTS 10
 
+enum EchoProtocol {
+	EchoNONE, EchoTCP, EchoUDP, EchoPIPE,
+};
+
 typedef struct _EchoClient EchoClient;
 struct _EchoClient {
+	enum EchoProtocol protocol;
+	in_addr_t serverIPAddress;
 	gint epollFileDescriptor;
 	gint sd;
 	gchar send_buffer[BUFFERSIZE];
@@ -55,8 +61,10 @@ struct _EchoClient {
 
 typedef struct _EchoServer EchoServer;
 struct _EchoServer {
+	enum EchoProtocol protocol;
 	gint epollFileDescriptor;
 	gint listen_sd;
+	struct sockaddr_in address;
 	gchar echo_buffer[BUFFERSIZE];
 	gint read_offset;
 	gint write_offset;
@@ -73,11 +81,11 @@ void echo_new(int argc, char* argv[]);
 void echo_free();
 void echo_ready();
 
-EchoClient* echoclient_new(in_addr_t serverIPAddress, ShadowlibLogFunc log);
+EchoClient* echoclient_new(enum EchoProtocol protocol, in_addr_t serverIPAddress, ShadowlibLogFunc log);
 void echoclient_free(EchoClient* ec);
 void echoclient_ready(EchoClient* ec, ShadowlibLogFunc log);
 
-EchoServer* echoserver_new(in_addr_t bindIPAddress, ShadowlibLogFunc log);
+EchoServer* echoserver_new(enum EchoProtocol protocol, in_addr_t bindIPAddress, ShadowlibLogFunc log);
 void echoserver_free(EchoServer* es);
 void echoserver_ready(EchoServer* es, ShadowlibLogFunc log);
 
