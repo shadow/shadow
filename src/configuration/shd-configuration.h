@@ -145,11 +145,11 @@ typedef guint64 SimulationTime;
 #define NTOA(ip) inet_ntoa((struct in_addr){ip})
 
 /**
- * We always use TCP_autotuning unless this is set to TRUE
+ * We always use TCP_autotuning unless this is set to FALSE
  *
  * @todo change this to a command line option accessible via #Configuration
  */
-#define CONFIG_SEND_BUFFER_SIZE_FORCE FALSE
+#define CONFIG_TCPAUTOTUNE TRUE
 
 /**
  * Default size of the send buffer per socket if TCP-autotuning is not used.

@@ -190,6 +190,20 @@ gdouble internetwork_getMinimumGlobalLatency(Internetwork* internet) {
 	return internet->minimumGlobalLatency;
 }
 
+guint32 internetwork_getNodeBandwidthUp(Internetwork* internet, GQuark nodeID) {
+	MAGIC_ASSERT(internet);
+	Node* node = internetwork_getNode(internet, nodeID);
+	NetworkInterface* interface = node_lookupInterface(node, nodeID);
+	return networkinterface_getSpeedUpKiBps(interface);
+}
+
+guint32 internetwork_getNodeBandwidthDown(Internetwork* internet, GQuark nodeID) {
+	MAGIC_ASSERT(internet);
+	Node* node = internetwork_getNode(internet, nodeID);
+	NetworkInterface* interface = node_lookupInterface(node, nodeID);
+	return networkinterface_getSpeedDownKiBps(interface);
+}
+
 gdouble internetwork_getReliability(Internetwork* internet, GQuark sourceNodeID, GQuark destinationNodeID) {
 	MAGIC_ASSERT(internet);
 	Node* sourceNode = internetwork_getNode(internet, sourceNodeID);

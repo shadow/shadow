@@ -22,9 +22,10 @@
 #include "shadow.h"
 
 enum TCPState {
-	TCPS_NONE, TCPS_LISTEN,
+	TCPS_CLOSED, TCPS_LISTEN,
 	TCPS_SYNSENT, TCPS_SYNRECEIVED, TCPS_ESTABLISHED,
-	TCPS_CLOSING, TCPS_CLOSEWAIT, TCPS_CLOSED,
+	TCPS_FINWAIT1, TCPS_FINWAIT2, TCPS_CLOSING, TCPS_TIMEWAIT,
+	TCPS_CLOSEWAIT, TCPS_LASTACK,
 };
 
 enum TCPFlags {
@@ -106,8 +107,10 @@ struct _TCP {
 		guint32 last;
 	} congestion;
 
-	/* TCP throttles data packets if too many are in flight */
+	/* TCP throttles outgoing data packets if too many are in flight */
 	GQueue* throttledDataPackets;
+	/* TCP ensures that the user receives data in-order */
+	GQueue* unorderedDataPackets;
 
 	/* tracks a packet that has currently been only partially read, if any */
 	Packet* partialUserDataPacket;
@@ -136,6 +139,10 @@ static TCPChild* _tcpchild_new(TCP* tcp, TCP* parent, in_addr_t peerIP, in_port_
 	child->tcp = tcp;
 	descriptor_ref(parent);
 	child->parent = parent;
+
+	child->state = TCPCS_INCOMPLETE;
+	child->tcp->super.peerIP = peerIP;
+	child->tcp->super.peerPort = peerPort;
 
 	return child;
 }
@@ -173,6 +180,84 @@ static void _tcpserver_free(TCPServer* server) {
 	g_free(server);
 }
 
+static void _tcp_autotune(TCP* tcp) {
+	MAGIC_ASSERT(tcp);
+
+	if(!CONFIG_TCPAUTOTUNE) {
+		return;
+	}
+
+	if(tcp->super.super.boundAddress == htonl(INADDR_LOOPBACK)) {
+		/* 16 MiB as max */
+		g_assert(16777216 > tcp->super.super.inputBufferSize);
+		g_assert(16777216 > tcp->super.super.outputBufferSize);
+		tcp->super.super.inputBufferSize = 16777216;
+		tcp->super.super.outputBufferSize = 16777216;
+		debug("set loopback buffer sizes to 16777216");
+		return;
+	}
+
+	/* our buffers need to be large enough to send and receive
+	 * a full delay*bandwidth worth of bytes to keep the pipe full.
+	 * but not too large that we'll just buffer everything. autotuning
+	 * is meant to tune it to an optimal rate. estimate that by taking
+	 * the 80th percentile.
+	 */
+	Internetwork* internet = worker_getPrivate()->cached_engine->internet;
+	GQuark sourceID = (GQuark) tcp->super.super.boundAddress;
+	GQuark destinationID = (GQuark) tcp->super.peerIP;
+
+	/* get latency in milliseconds */
+	guint32 send_latency = (guint32) internetwork_getLatency(internet, sourceID, destinationID, 0.8);
+	guint32 receive_latency = (guint32) internetwork_getLatency(internet, destinationID, sourceID, 0.8);
+
+	if(send_latency < 0 || receive_latency < 0) {
+		warning("cant get latency for autotuning. defaulting to worst case latency.");
+		gdouble maxLatency = internetwork_getMaximumGlobalLatency(internet);
+		send_latency = receive_latency = (guint32) maxLatency;
+	}
+
+	guint32 rtt_milliseconds = send_latency + receive_latency;
+
+	/* i got delay, now i need values for my send and receive buffer
+	 * sizes based on bandwidth in both directions.
+	 * do my send size first. */
+	guint32 my_send_bw = internetwork_getNodeBandwidthDown(internet, sourceID);
+	guint32 their_receive_bw = internetwork_getNodeBandwidthDown(internet, destinationID);
+	guint32 my_send_Bpms = (guint32) (my_send_bw * 1.024f);
+	guint32 their_receive_Bpms = (guint32) (their_receive_bw * 1.024f);
+
+	guint32 send_bottleneck_bw = my_send_Bpms < their_receive_Bpms ? my_send_Bpms : their_receive_Bpms;
+
+	/* the delay bandwidth product is how many bytes I can send at once to keep the pipe full.
+	 * mult. by 1.2 to account for network overhead. */
+	guint64 sendbuf_size = (guint64) (rtt_milliseconds * send_bottleneck_bw * 1.25f);
+
+	/* now the same thing for my receive buf */
+	guint32 my_receive_bw = internetwork_getNodeBandwidthUp(internet, sourceID);
+	guint32 their_send_bw = internetwork_getNodeBandwidthUp(internet, destinationID);
+	guint32 my_receive_Bpms = (guint32) (my_receive_bw * 1.024f);
+	guint32 their_send_Bpms = (guint32) (their_send_bw * 1.024f);
+
+	guint32 receive_bottleneck_bw;
+	if(their_send_Bpms > my_receive_Bpms) {
+		receive_bottleneck_bw = their_send_Bpms;
+	} else {
+		receive_bottleneck_bw = my_receive_Bpms;
+	}
+
+	if(their_send_Bpms - my_receive_Bpms > -4096 || their_send_Bpms - my_receive_Bpms < 4096) {
+		receive_bottleneck_bw = (guint32) (receive_bottleneck_bw * 1.2f);
+	}
+
+	/* the delay bandwidth product is how many bytes I can receive at once to keep the pipe full */
+	guint64 receivebuf_size = (guint64) (rtt_milliseconds * receive_bottleneck_bw * 1.25);
+
+	tcp->super.super.inputBufferSize = MAX(receivebuf_size, tcp->super.super.inputBufferSize);
+	tcp->super.super.outputBufferSize = MAX(sendbuf_size, tcp->super.super.outputBufferSize);
+	debug("set network buffer sizes: send %lu receive %lu", sendbuf_size, receivebuf_size);
+}
+
 static void _tcp_setState(TCP* tcp, enum TCPState state) {
 	MAGIC_ASSERT(tcp);
 
@@ -193,6 +278,9 @@ static void _tcp_setState(TCP* tcp, enum TCPState state) {
 		}
 		case TCPS_ESTABLISHED: {
 			descriptor_adjustStatus((Descriptor*)tcp, DS_ACTIVE|DS_WRITABLE, TRUE);
+			if(tcp->state != tcp->stateLast) {
+				_tcp_autotune(tcp);
+			}
 			break;
 		}
 		case TCPS_CLOSING: {
@@ -209,7 +297,10 @@ static void _tcp_setState(TCP* tcp, enum TCPState state) {
 			descriptor_adjustStatus((Descriptor*)tcp, DS_STALE, TRUE);
 			break;
 		}
-		case TCPS_NONE:
+		case TCPS_TIMEWAIT: {
+			// TODO schedule timer
+			break;
+		}
 		default:
 			break;
 	}
@@ -299,7 +390,7 @@ static Packet* _tcp_createPacket(TCP* tcp, enum ProtocolTCPFlags flags, gconstpo
 	/* create the TCP packet */
 	Packet* packet = packet_new(payload, payloadLength);
 	packet_setTCP(packet, flags, sourceIP, sourcePort, tcp->super.peerIP,
-			tcp->super.peerPort, tcp->send.next, tcp->receive.next, tcp->receive.window);
+			tcp->super.peerPort, sequence, tcp->receive.next, tcp->receive.window);
 
 	/* update sequence numbers */
 	if(sequence > 0) {
@@ -310,7 +401,7 @@ static Packet* _tcp_createPacket(TCP* tcp, enum ProtocolTCPFlags flags, gconstpo
 	return packet;
 }
 
-static gboolean _tcp_handleOutputPacket(TCP* tcp, Packet* packet) {
+static gboolean _tcp_sendOrThrottlePacket(TCP* tcp, Packet* packet) {
 	MAGIC_ASSERT(tcp);
 
 	gsize space = tcp->super.super.outputBufferSize - tcp->super.super.outputBufferLength;
@@ -322,16 +413,63 @@ static gboolean _tcp_handleOutputPacket(TCP* tcp, Packet* packet) {
 
 	if(_tcp_willThrottlePacket(tcp, packet)) {
 		/* TCP wants us to wait for enough acks to send */
-		// FIXME adjust space of transport layer, even though we buffer it here
 		g_queue_insert_sorted(tcp->throttledDataPackets, packet, (GCompareDataFunc)packet_compareTCPSequence, NULL);
+		tcp->super.super.outputBufferLength += length;
 	} else {
-		/* sendable now, transport will queue it ASAP */
+		/* sendable now, update our tcp header */
+		_tcp_updateReceiveWindow(tcp);
+		packet_updateTCP(packet, tcp->receive.next, tcp->receive.window);
+
+		 /* transport will queue it ASAP */
 		gboolean success = transport_addToOutputBuffer((Transport*) tcp, packet);
 		/* we have space, so this should always succeed */
 		g_assert(success);
 	}
 
 	return TRUE;
+}
+
+static void _tcp_flush(TCP* tcp) {
+	MAGIC_ASSERT(tcp);
+
+	/* send unthrottled output packets */
+	gint n = (tcp->send.unacked + tcp->send.window) - tcp->send.next;
+	while(n > 0) {
+		/* get the next throttled packet, in sequence order */
+		Packet* packet = g_queue_pop_head(tcp->throttledDataPackets);
+		guint length = packet_getPayloadLength(packet);
+		tcp->super.super.outputBufferLength -= length;
+
+		/* make sure we have the packet and sent if ok */
+		if(!packet || !_tcp_sendOrThrottlePacket(tcp, packet)) {
+			/* we are out of throttled packets
+			 * we cant be out of space since we just removed that packet */
+			break;
+		}
+
+		/* sent one more */
+		n--;
+	}
+
+	/* buffer inorder input packets */
+	while(g_queue_get_length(tcp->unorderedDataPackets) > 0) {
+		Packet* packet = g_queue_pop_head(tcp->unorderedDataPackets);
+
+		PacketTCPHeader header;
+		packet_getTCPHeader(packet, &header);
+		if(header.sequence == tcp->receive.next) {
+			guint length = packet_getPayloadLength(packet);
+			tcp->super.super.outputBufferLength -= length;
+
+			gboolean success = transport_addToInputBuffer(&(tcp->super.super), packet);
+			g_assert(success);
+
+			(tcp->receive.next)++;
+		} else {
+			g_queue_push_head(tcp->unorderedDataPackets, packet);
+			break;
+		}
+	}
 }
 
 gboolean tcp_isFamilySupported(TCP* tcp, sa_family_t family) {
@@ -346,7 +484,7 @@ gint tcp_getConnectError(TCP* tcp) {
 		return ECONNREFUSED;
 	} else if(tcp->state == TCPS_SYNSENT || tcp->state == TCPS_SYNRECEIVED) {
 		return EALREADY;
-	} else if(tcp->state != TCPS_NONE) {
+	} else if(tcp->state != TCPS_CLOSED) {
 		/* @todo: this affects ability to connect. if a socket is closed, can
 		 * we start over and connect again? if so, this should change
 		 */
@@ -366,7 +504,7 @@ gint tcp_connectToPeer(TCP* tcp, in_addr_t ip, in_port_t port, sa_family_t famil
 	/* send 1st part of 3-way handshake, state->syn_sent */
 //	FIXME SYN|CON ?
 	Packet* packet = _tcp_createPacket(tcp, PTCP_SYN, NULL, 0);
-	gboolean success = transport_addToOutputBuffer((Transport*)tcp, packet);
+	gboolean success = _tcp_sendOrThrottlePacket(tcp, packet);
 
 	if(!success) {
 		/* this should never happen, control packets consume no buffer space */
@@ -439,9 +577,270 @@ gint tcp_acceptServerPeer(TCP* tcp, in_addr_t* ip, in_port_t* port) {
 	return 0;
 }
 
+/* return TRUE if we processed the packet, FALSE if it should be retransmitted */
 gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 	MAGIC_ASSERT(tcp);
-	return FALSE;
+
+	/* fetch the TCP info from the packet */
+	PacketTCPHeader header;
+	packet_getTCPHeader(packet, &header);
+	guint packetLength = packet_getPayloadLength(packet);
+
+	/* if we run a server, the packet could be for an existing child */
+	if(tcp->server) {
+		MAGIC_ASSERT(tcp->server);
+
+		/* children are multiplexed based on remote ip and port */
+		guint childKey = utility_ipPortHash(header.sourceIP, header.sourcePort);
+		TCPChild* child = g_hash_table_lookup(tcp->server->children, &childKey);
+
+		if(child) {
+			tcp = child->tcp;
+		}
+	}
+
+	/* now we have the true TCP for the packet */
+	MAGIC_ASSERT(tcp);
+	g_assert(tcp->state != TCPS_CLOSED);
+	debug("socket %i on port %u got seq# %u from %s", tcp->super.super.super.handle,
+			tcp->super.super.boundPort, header.sequence, NTOA(header.sourceIP));
+
+	/* if packet is reset, don't process */
+	if(header.flags & PTCP_RST) {
+		debug("received RESET packet");
+		tcp->error |= TCPE_CONNECTION_RESET;
+		// TODO clear out buffers
+
+//		if(tcp->state == TCPS_SYNRECEIVED && tcp->stateLast == TCPS_LISTEN) {
+//			/* initiated with passive open, connection refused, return to listen */
+//		} else if(tcp->state == TCPS_SYNRECEIVED && tcp->stateLast == TCPS_SYNSENT) {
+//			/* initiated with active open, connection refused */
+//		} else if() {
+//
+//		} else {
+//
+//		}
+	}
+
+	/* go through the state machine, tracking processing and response */
+	gboolean wasProcessed = FALSE;
+	enum ProtocolTCPFlags responseFlags = PTCP_NONE;
+
+	switch(tcp->state) {
+		case TCPS_LISTEN: {
+			/* receive SYN, send SYNACK, move to SYNRECEIVED */
+			if(header.flags & PTCP_SYN) {
+				wasProcessed = TRUE;
+
+				/* we need to multiplex a new child */
+				Node* node = worker_getPrivate()->cached_node;
+				gint childHandle = node_createDescriptor(node, DT_TCPSOCKET);
+				TCP* child = (TCP*) node_lookupDescriptor(node, childHandle);
+				child->child = _tcpchild_new(child, tcp, header.sourceIP, header.sourcePort);
+
+				child->receive.start = header.sequence;
+				child->receive.next = child->receive.start + 1;
+				_tcp_setState(child, TCPS_SYNRECEIVED);
+
+				/* parent will send response */
+				responseFlags = PTCP_SYN|PTCP_ACK;
+			}
+			break;
+		}
+
+		case TCPS_SYNSENT: {
+			/* receive SYNACK, send ACK, move to ESTABLISHED */
+			if((header.flags & PTCP_SYN) && (header.flags & PTCP_ACK)) {
+				wasProcessed = TRUE;
+				tcp->receive.start = header.sequence;
+				tcp->receive.next = tcp->receive.start + 1;
+
+				responseFlags |= PTCP_ACK;
+				_tcp_setState(tcp, TCPS_ESTABLISHED);
+			}
+			/* receive SYN, send ACK, move to SYNRECEIVED (simultaneous open) */
+			else if(header.flags & PTCP_SYN) {
+				wasProcessed = TRUE;
+				tcp->receive.start = header.sequence;
+				tcp->receive.next = tcp->receive.start + 1;
+
+				responseFlags |= PTCP_ACK;
+				_tcp_setState(tcp, TCPS_SYNRECEIVED);
+			}
+
+			break;
+		}
+
+		case TCPS_SYNRECEIVED: {
+			/* receive ACK, move to ESTABLISHED */
+			if(header.flags & PTCP_ACK) {
+				wasProcessed = TRUE;
+				_tcp_setState(tcp, TCPS_ESTABLISHED);
+
+				/* if this is a child, mark it accordingly */
+				if(tcp->child) {
+					tcp->child->state = TCPCS_PENDING;
+					g_queue_push_tail(tcp->child->parent->server->pending, tcp->child);
+					/* user should accept new child from parent */
+					descriptor_adjustStatus(&(tcp->child->parent->super.super.super), DS_READABLE, TRUE);
+				}
+			}
+			break;
+		}
+
+		case TCPS_ESTABLISHED: {
+			/* receive FIN, send FINACK, move to CLOSEWAIT */
+			if(header.flags & PTCP_FIN) {
+				wasProcessed = TRUE;
+				responseFlags |= PTCP_FIN|PTCP_ACK;
+				_tcp_setState(tcp, TCPS_CLOSEWAIT);
+			}
+			break;
+		}
+
+		case TCPS_FINWAIT1: {
+			/* receive FINACK, move to FINWAIT2 */
+			if((header.flags & PTCP_FIN) && (header.flags & PTCP_ACK)) {
+				wasProcessed = TRUE;
+				_tcp_setState(tcp, TCPS_FINWAIT2);
+			}
+			/* receive FIN, send FINACK, move to CLOSING (simultaneous close) */
+			else if(header.flags & PTCP_FIN) {
+				wasProcessed = TRUE;
+				responseFlags |= PTCP_FIN|PTCP_ACK;
+				_tcp_setState(tcp, TCPS_CLOSING);
+			}
+			break;
+		}
+
+		case TCPS_FINWAIT2: {
+			/* receive FIN, send FINACK, move to TIMEWAIT */
+			if(header.flags & PTCP_FIN) {
+				wasProcessed = TRUE;
+				responseFlags |= PTCP_FIN|PTCP_ACK;
+				_tcp_setState(tcp, TCPS_TIMEWAIT);
+			}
+			break;
+		}
+
+		case TCPS_CLOSING: {
+			/* receive FINACK, move to TIMEWAIT */
+			if((header.flags & PTCP_FIN) && (header.flags & PTCP_ACK)) {
+				wasProcessed = TRUE;
+				_tcp_setState(tcp, TCPS_TIMEWAIT);
+			}
+			break;
+		}
+
+		case TCPS_TIMEWAIT: {
+			break;
+		}
+
+		case TCPS_CLOSEWAIT: {
+			break;
+		}
+
+		case TCPS_LASTACK: {
+			/* receive FINACK, move to CLOSED */
+			if((header.flags & PTCP_FIN) && (header.flags & PTCP_ACK)) {
+				wasProcessed = TRUE;
+				_tcp_setState(tcp, TCPS_CLOSED);
+			}
+			break;
+		}
+
+		case TCPS_CLOSED: {
+			break;
+		}
+
+		default: {
+			break;
+		}
+
+	}
+
+	/* check if we can update some TCP control info */
+	if((header.acknowledgement > tcp->send.unacked) && (header.acknowledgement <= tcp->send.next)) {
+		/* prevent old segments from updating congestion window */
+		if((tcp->send.last1 < header.sequence) ||
+				((tcp->send.last1 == header.sequence) && (tcp->send.last2 <= header.acknowledgement)))
+		{
+			/* update congestion window and keep track of when it was updated */
+			tcp->congestion.last = header.window;
+			tcp->send.last1 = header.sequence;
+			tcp->send.last2 = header.acknowledgement;
+		}
+
+		/* have we received all user data they will send */
+//		TODO
+//		if(sock->curr_state == VTCP_CLOSING && vtcp->snd_una >= vtcp->snd_end) {
+//			/* everything i needed to send before closing was acknowledged */
+//			prc_result |= VT_PRC_DESTROY;
+//		}
+	}
+
+	gboolean doRetransmitData = FALSE;
+	gint nPacketsAcked = 0;
+
+	/* check if the packet carries user data for us */
+	if((header.flags == PTCP_ACK) && packetLength > 0) {
+		/* it has data, check if its in the correct range */
+		if(header.sequence >= (tcp->receive.next + tcp->receive.window)) {
+			/* its too far ahead to accept now, but they should re-send it */
+			wasProcessed = TRUE;
+			doRetransmitData = TRUE;
+
+		} else if(header.sequence >= tcp->receive.next) {
+			/* its in our window, so we can accept the data */
+			wasProcessed = TRUE;
+
+			/* make sure its in order */
+			if(header.sequence == tcp->receive.next) {
+				/* this is THE next packet, we MUST accept it to avoid
+				 * deadlocks unless we are blocked on user reading */
+				if(transport_addToInputBuffer(&(tcp->super.super), packet)) {
+					/* buffer had space, its now ready for user */
+					(tcp->receive.next)++;
+					nPacketsAcked++;
+				} else {
+					debug("no space for the next in-order packet");
+					doRetransmitData = TRUE;
+				}
+			} else {
+				gssize space = tcp->super.super.outputBufferSize - tcp->super.super.outputBufferLength - (CONFIG_MTU - CONFIG_TCPIP_HEADER_SIZE);
+				if(packetLength <= space) {
+					/* buffer has space, hold it until its in order */
+					g_queue_insert_sorted(tcp->unorderedDataPackets, packet, (GCompareDataFunc)packet_compareTCPSequence, NULL);
+					tcp->super.super.outputBufferLength += packetLength;
+					nPacketsAcked++;
+				} else {
+					doRetransmitData = TRUE;
+				}
+			}
+		}
+	}
+
+	/* if it is a spurious packet, send a reset */
+	if(!wasProcessed) {
+		g_assert(responseFlags == PTCP_NONE);
+		responseFlags = PTCP_RST;
+	}
+
+	/* try to update our windows based on potentially new info */
+	_tcp_updateReceiveWindow(tcp);
+	_tcp_updateSendWindow(tcp);
+	_tcp_updateCongestionWindow(tcp, nPacketsAcked);
+
+	/* send control packet if we have one */
+	if(responseFlags != PTCP_NONE) {
+		Packet* response = _tcp_createPacket(tcp, responseFlags, NULL, 0);
+		_tcp_sendOrThrottlePacket(tcp, response);
+	}
+
+	/* now flush as many packets as we can to transport */
+	_tcp_flush(tcp);
+
+	return !doRetransmitData;
 }
 
 void tcp_droppedPacket(TCP* tcp, Packet* packet) {
@@ -464,7 +863,7 @@ void tcp_droppedPacket(TCP* tcp, Packet* packet) {
 	}
 
 	/* buffer or send as appropriate */
-	_tcp_handleOutputPacket(tcp, packet);
+	_tcp_sendOrThrottlePacket(tcp, packet);
 }
 
 gssize tcp_sendUserData(TCP* tcp, gconstpointer buffer, gsize nBytes, in_addr_t ip, in_port_t port) {
@@ -487,7 +886,7 @@ gssize tcp_sendUserData(TCP* tcp, gconstpointer buffer, gsize nBytes, in_addr_t 
 		Packet* packet = _tcp_createPacket(tcp, PTCP_ACK, buffer + offset, copyLength);
 
 		/* lets send to transport, or queue it in TCP as appropriate */
-		if(_tcp_handleOutputPacket(tcp, packet)) {
+		if(_tcp_sendOrThrottlePacket(tcp, packet)) {
 			/* maintenance */
 			remaining -= copyLength;
 			offset += copyLength;
@@ -624,6 +1023,7 @@ TCP* tcp_new(gint handle) {
 	tcp->isSlowStart = TRUE;
 
 	tcp->throttledDataPackets = g_queue_new();
+	tcp->unorderedDataPackets = g_queue_new();
 
 	return tcp;
 }
