@@ -72,6 +72,7 @@
 #include "node/shd-cpu.h"
 
 /* utilities with limited dependencies */
+#include "utility/shd-utility.h"
 #include "utility/shd-registry.h"
 #include "utility/shd-cdf.h"
 

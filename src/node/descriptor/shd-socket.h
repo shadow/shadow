@@ -33,6 +33,7 @@ struct _SocketFunctionTable {
 	TransportSendFunc send;
 	TransportReceiveFunc receive;
 	TransportProcessFunc process;
+	TransportDroppedPacketFunc dropped;
 	SocketIsFamilySupportedFunc isFamilySupported;
 	SocketConnectToPeerFunc connectToPeer;
 	MAGIC_DECLARE;

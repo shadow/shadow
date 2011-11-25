@@ -269,8 +269,17 @@ void networkinterface_received(NetworkInterface* interface) {
 void networkinterface_packetDropped(NetworkInterface* interface, Packet* packet) {
 	MAGIC_ASSERT(interface);
 
-	/* someone dropped a packet belonging to our interface */
-	// TODO
+	/*
+	 * someone dropped a packet belonging to our interface
+	 * hand it off to the correct transport layer
+	 */
+	gint key = packet_getAssociationKey(packet);
+	Transport* transport = g_hash_table_lookup(interface->boundTransports, GINT_TO_POINTER(key));
+
+	/* just ignore if the transport closed in the meantime */
+	if(transport) {
+		transport_droppedPacket(transport, packet);
+	}
 }
 
 void networkinterface_wantsSend(NetworkInterface* interface, Transport* transport) {

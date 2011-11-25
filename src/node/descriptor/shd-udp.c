@@ -53,7 +53,15 @@ gboolean udp_processPacket(UDP* udp, Packet* packet) {
 	MAGIC_ASSERT(udp);
 
 	/* UDP packet contains data for user and can be buffered immediately */
-	return transport_addToInputBuffer((Transport*)udp, packet);
+	if(packet_getPayloadLength(packet) > 0) {
+		return transport_addToInputBuffer((Transport*)udp, packet);
+	}
+	return TRUE;
+}
+
+void udp_droppedPacket(UDP* udp, Packet* packet) {
+	MAGIC_ASSERT(udp);
+	/* udp doesnt care about reliability */
 }
 
 /*
@@ -117,7 +125,7 @@ gssize udp_receiveUserData(UDP* udp, gpointer buffer, gsize nBytes, in_addr_t* i
 	/* copy lesser of requested and available amount to application buffer */
 	guint packetLength = packet_getPayloadLength(packet);
 	gsize copyLength = MIN(nBytes, packetLength);
-	guint bytesCopied = packet_copyPayload(packet, buffer, copyLength);
+	guint bytesCopied = packet_copyPayload(packet, 0, buffer, copyLength);
 
 	g_assert(bytesCopied == copyLength);
 
@@ -131,6 +139,8 @@ gssize udp_receiveUserData(UDP* udp, gpointer buffer, gsize nBytes, in_addr_t* i
 
 	/* destroy packet, throwing away any bytes not claimed by the app */
 	packet_unref(packet);
+
+	debug("user read %lu inbound UDP bytes", bytesCopied);
 
 	return (gssize)bytesCopied;
 }
@@ -148,6 +158,7 @@ SocketFunctionTable udp_functions = {
 	(TransportSendFunc) udp_sendUserData,
 	(TransportReceiveFunc) udp_receiveUserData,
 	(TransportProcessFunc) udp_processPacket,
+	(TransportDroppedPacketFunc) udp_droppedPacket,
 	(SocketIsFamilySupportedFunc) udp_isFamilySupported,
 	(SocketConnectToPeerFunc) udp_connectToPeer,
 	MAGIC_VALUE

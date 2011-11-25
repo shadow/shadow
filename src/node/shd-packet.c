@@ -40,18 +40,6 @@ struct _PacketUDPHeader {
 	in_port_t destinationPort;
 };
 
-typedef struct _PacketTCPHeader PacketTCPHeader;
-struct _PacketTCPHeader {
-	enum ProtocolTCPFlags flags;
-	in_addr_t sourceIP;
-	in_port_t sourcePort;
-	in_addr_t destinationIP;
-	in_port_t destinationPort;
-	guint sequence;
-	guint acknowledgement;
-	guint window;
-};
-
 struct _Packet {
 	GMutex* lock;
 	guint referenceCount;
@@ -93,12 +81,12 @@ static void _packet_free(Packet* packet) {
 	g_free(packet);
 }
 
-static void _packet_lock(Packet* packet) {
+static void _packet_lock(const Packet* packet) {
 	MAGIC_ASSERT(packet);
 	g_mutex_lock(packet->lock);
 }
 
-static void _packet_unlock(Packet* packet) {
+static void _packet_unlock(const Packet* packet) {
 	MAGIC_ASSERT(packet);
 	g_mutex_unlock(packet->lock);
 }
@@ -119,6 +107,23 @@ void packet_unref(Packet* packet) {
 	} else {
 		_packet_unlock(packet);
 	}
+}
+
+gint packet_compareTCPSequence(const Packet* packet1, const Packet* packet2, gpointer user_data) {
+	if(packet1 == packet2){
+		MAGIC_ASSERT(packet1);
+		MAGIC_ASSERT(packet2);
+		return 0;
+	}
+	_packet_lock(packet1);
+	_packet_lock(packet2);
+
+	g_assert(packet1->protocol == PTCP && packet2->protocol == PTCP);
+	gint result = ((PacketTCPHeader*)(packet1->header))->sequence < ((PacketTCPHeader*)(packet2->header))->sequence ? -1 : 1;
+
+	_packet_unlock(packet2);
+	_packet_unlock(packet1);
+	return result;
 }
 
 void packet_setLocal(Packet* packet, enum ProtocolLocalFlags flags,
@@ -177,6 +182,18 @@ void packet_setTCP(Packet* packet, enum ProtocolTCPFlags flags,
 
 	packet->header = header;
 	packet->protocol = PTCP;
+	_packet_unlock(packet);
+}
+
+void packet_updateTCP(Packet* packet, guint acknowledgement, guint window) {
+	_packet_lock(packet);
+	g_assert(packet->header && (packet->protocol == PTCP));
+
+	PacketTCPHeader* header = (PacketTCPHeader*) packet->header;
+
+	header->acknowledgement = acknowledgement;
+	header->window = window;
+
 	_packet_unlock(packet);
 }
 
@@ -295,17 +312,20 @@ in_port_t packet_getSourcePort(Packet* packet) {
 	return port;
 }
 
-guint packet_copyPayload(Packet* packet, gpointer buffer, gsize bufferLength) {
+guint packet_copyPayload(Packet* packet, gsize payloadOffset, gpointer buffer, gsize bufferLength) {
 	_packet_lock(packet);
 
-	guint length = 0;
-	if(packet->payloadLength > 0 && packet->payloadLength <= bufferLength) {
-		length = packet->payloadLength;
-		g_memmove(buffer, packet->payload, length);
+	g_assert(payloadOffset <= packet->payloadLength);
+
+	guint targetLength = packet->payloadLength - ((guint)payloadOffset);
+	guint copyLength = MIN(targetLength, bufferLength);
+
+	if(copyLength > 0) {
+		g_memmove(buffer, packet->payload, copyLength);
 	}
 
 	_packet_unlock(packet);
-	return length;
+	return copyLength;
 }
 
 gint packet_getAssociationKey(Packet* packet) {
@@ -341,4 +361,13 @@ gint packet_getAssociationKey(Packet* packet) {
 
 	_packet_unlock(packet);
 	return key;
+}
+
+void packet_getTCPHeader(Packet* packet, PacketTCPHeader* header) {
+	_packet_lock(packet);
+
+	g_assert(packet->protocol == PTCP);
+	*header = *((PacketTCPHeader*)packet->header);
+
+	_packet_unlock(packet);
 }

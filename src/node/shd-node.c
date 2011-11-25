@@ -590,6 +590,8 @@ gint node_sendUserData(Node* node, gint handle, gconstpointer buffer, gsize nByt
 		return EBADF;
 	}
 
+	/* TODO stale (i.e. closed) descriptors return 0 */
+
 	Transport* transport = (Transport*) descriptor;
 
 	/* we should block if our cpu has been too busy lately */
@@ -625,6 +627,12 @@ gint node_sendUserData(Node* node, gint handle, gconstpointer buffer, gsize nByt
 		_node_associateInterface(node, transport, bindAddress, bindPort);
 	}
 
+	if(type == DT_TCPSOCKET) {
+		if(tcp_getConnectError((TCP*) transport) == ECONNREFUSED) {
+			return ECONNREFUSED;
+		}
+	}
+
 	gssize n = transport_sendUserData(transport, buffer, nBytes, ip, port);
 	if(n > 0) {
 		/* user is writing some bytes. lets assume some cpu processing delay
@@ -653,6 +661,8 @@ gint node_receiveUserData(Node* node, gint handle, gpointer buffer, gsize nBytes
 	if(type != DT_TCPSOCKET && type != DT_UDPSOCKET && type != DT_PIPE) {
 		return EBADF;
 	}
+
+	/* TODO stale (i.e. closed) descriptors return 0 */
 
 	Transport* transport = (Transport*) descriptor;
 

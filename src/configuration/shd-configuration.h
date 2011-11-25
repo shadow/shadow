@@ -183,6 +183,11 @@ typedef guint64 SimulationTime;
 #define CONFIG_TCPIP_HEADER_SIZE 40
 
 /**
+ * Maximum size of an IP packet without fragmenting over Ethernetv2
+ */
+#define CONFIG_MTU 1500
+
+/**
  * Maximum size of a datagram we are allowed to send out over the network
  */
 #define CONFIG_DATAGRAM_MAX_SIZE 65507

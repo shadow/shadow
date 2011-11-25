@@ -32,6 +32,10 @@ gboolean pipe_processPacket(Pipe* pipe, Packet* packet) {
 	return FALSE;
 }
 
+void pipe_droppedPacket(Pipe* pipe, Packet* packet) {
+	MAGIC_ASSERT(pipe);
+}
+
 gssize pipe_sendUserData(Pipe* pipe, gconstpointer buffer, gsize nBytes, in_addr_t ip, in_port_t port) {
 	MAGIC_ASSERT(pipe);
 
@@ -55,6 +59,7 @@ TransportFunctionTable pipe_functions = {
 	(TransportSendFunc) pipe_sendUserData,
 	(TransportReceiveFunc) pipe_receiveUserData,
 	(TransportProcessFunc) pipe_processPacket,
+	(TransportDroppedPacketFunc) pipe_droppedPacket,
 	MAGIC_VALUE
 };
 

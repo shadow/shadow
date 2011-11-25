@@ -1,8 +1,7 @@
-/*
+/**
  * The Shadow Simulator
  *
  * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
- * Copyright (c) 2006-2009 Tyson Malchow <tyson.malchow@gmail.com>
  *
  * This file is part of Shadow.
  *
@@ -20,22 +19,13 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <glib.h>
-#include <stdlib.h>
-#include "rand.h"
+#ifndef SHD_UTILITY_H_
+#define SHD_UTILITY_H_
 
-gdouble dvn_rand_unit() {
-	return (gdouble)rand() / (gdouble)RAND_MAX;
-}
+#include "shadow.h"
 
-guint dvn_rand_fast(guint max) {
-	return rand() % max; /* note: i'm WELL AWARE this isn't an even distribution. */
-}
+guint utility_ipPortHash(in_addr_t ip, in_port_t port);
+guint utility_int16Hash(gconstpointer value);
+gboolean utility_int16Equal(gconstpointer value1, gconstpointer value2);
 
-guint dvn_rand(guint max) {
-	return dvn_rand_unit() * max;
-}
-
-void dvn_rand_seed(guint seed) {
-	srand(seed);
-}
+#endif /* SHD_UTILITY_H_ */

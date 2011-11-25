@@ -93,6 +93,12 @@ gssize transport_receiveUserData(Transport* transport, gpointer buffer, gsize nB
 	return transport->vtable->receive(transport, buffer, nBytes, ip, port);
 }
 
+void transport_droppedPacket(Transport* transport, Packet* packet) {
+	MAGIC_ASSERT(transport);
+	MAGIC_ASSERT(transport->vtable);
+	transport->vtable->dropped(transport, packet);
+}
+
 gboolean transport_addToInputBuffer(Transport* transport, Packet* packet) {
 	MAGIC_ASSERT(transport);
 

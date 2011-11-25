@@ -1,8 +1,7 @@
-/*
+/**
  * The Shadow Simulator
  *
  * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
- * Copyright (c) 2006-2009 Tyson Malchow <tyson.malchow@gmail.com>
  *
  * This file is part of Shadow.
  *
@@ -20,22 +19,29 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <glib.h>
-#include <stdlib.h>
-#include "rand.h"
+#include "shadow.h"
 
-gdouble dvn_rand_unit() {
-	return (gdouble)rand() / (gdouble)RAND_MAX;
+guint utility_ipPortHash(in_addr_t ip, in_port_t port) {
+	GString* buffer = g_string_new(NULL);
+	g_string_printf(buffer, "%u:%u", ip, port);
+	guint hash_value = g_str_hash(buffer->str);
+	g_string_free(buffer, TRUE);
+	return hash_value;
 }
 
-guint dvn_rand_fast(guint max) {
-	return rand() % max; /* note: i'm WELL AWARE this isn't an even distribution. */
+guint utility_int16Hash(gconstpointer value) {
+	g_assert(value);
+	/* make sure upper bits are zero */
+	gint key = 0;
+	key = (gint) *((gint16*)value);
+	return g_int_hash(&key);
 }
 
-guint dvn_rand(guint max) {
-	return dvn_rand_unit() * max;
-}
-
-void dvn_rand_seed(guint seed) {
-	srand(seed);
+gboolean utility_int16Equal(gconstpointer value1, gconstpointer value2) {
+	g_assert(value1 && value2);
+	/* make sure upper bits are zero */
+	gint key1 = 0, key2 = 0;
+	key1 = (gint) *((gint16*)value1);
+	key2 = (gint) *((gint16*)value2);
+	return g_int_equal(&key1, &key2);
 }

@@ -61,6 +61,7 @@ set(shadow_srcs
     node/shd-application.c
     node/shd-node.c
         
+    utility/shd-utility.c
     utility/shd-cdf.c
     utility/shd-registry.c
     utility/rand.c

@@ -28,9 +28,4 @@ guint dvn_rand_fast(guint max);
 guint dvn_rand(guint max);
 void dvn_rand_seed(guint seed);
 
-gint *gint_key(gint key);
-gint gint_compare_func(gpointer a, gpointer b);
-gboolean g_int16_equal(gconstpointer v1, gconstpointer v2);
-guint g_int16_hash(gconstpointer v1);
-
 #endif

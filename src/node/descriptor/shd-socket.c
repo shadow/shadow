@@ -50,11 +50,18 @@ gboolean socket_processPacket(Socket* socket, Packet* packet) {
 	return socket->vtable->process((Transport*)socket, packet);
 }
 
+void socket_droppedPacket(Socket* socket, Packet* packet) {
+	MAGIC_ASSERT(socket);
+	MAGIC_ASSERT(socket->vtable);
+	socket->vtable->dropped((Transport*)socket, packet);
+}
+
 TransportFunctionTable socket_functions = {
 	(DescriptorFreeFunc) socket_free,
 	(TransportSendFunc) socket_sendUserData,
 	(TransportReceiveFunc) socket_receiveUserData,
 	(TransportProcessFunc) socket_processPacket,
+	(TransportDroppedPacketFunc) socket_droppedPacket,
 	MAGIC_VALUE
 };
 
