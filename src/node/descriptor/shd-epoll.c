@@ -58,7 +58,7 @@ static EpollWatch* _epollwatch_new(Epoll* epoll, Descriptor* descriptor, struct 
 	watch->descriptor = descriptor;
 	watch->event = *event;
 
-	descriptor_addStatusChangeListener(watch->descriptor, watch->listener);
+	descriptor_addStatusListener(watch->descriptor, watch->listener);
 
 	return watch;
 }
@@ -67,7 +67,7 @@ static void _epollwatch_free(gpointer data) {
 	EpollWatch* watch = data;
 	MAGIC_ASSERT(watch);
 
-	descriptor_removeStatusChangeListener(watch->descriptor, watch->listener);
+	descriptor_removeStatusListener(watch->descriptor, watch->listener);
 	listener_free(watch->listener);
 	descriptor_unref(watch->descriptor);
 

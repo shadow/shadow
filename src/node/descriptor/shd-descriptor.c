@@ -89,45 +89,37 @@ static void _descriptor_notifyListener(gpointer data, gpointer user_data) {
 void descriptor_adjustStatus(Descriptor* descriptor, enum DescriptorStatus status, gboolean doSetBits){
 	MAGIC_ASSERT(descriptor);
 
-	gboolean doNotify = TRUE;
-
+	/* adjust our status as requested */
 	if(doSetBits) {
 		if((status & DS_ACTIVE) && !(descriptor->status & DS_ACTIVE)) {
 			/* status changed - is now active */
 			descriptor->status |= DS_ACTIVE;
-			doNotify = TRUE;
 		}
 		if((status & DS_READABLE) && !(descriptor->status & DS_READABLE)) {
 			/* status changed - is now readable */
 			descriptor->status |= DS_READABLE;
-			doNotify = TRUE;
 		}
 		if((status & DS_WRITABLE) && !(descriptor->status & DS_WRITABLE)) {
 			/* status changed - is now writable */
 			descriptor->status |= DS_WRITABLE;
-			doNotify = TRUE;
 		}
 	} else {
 		if((status & DS_ACTIVE) && (descriptor->status & DS_ACTIVE)) {
 			/* status changed - no longer active */
 			descriptor->status &= ~DS_ACTIVE;
-			doNotify = TRUE;
 		}
 		if((status & DS_READABLE) && (descriptor->status & DS_READABLE)) {
 			/* status changed - no longer readable */
 			descriptor->status &= ~DS_READABLE;
-			doNotify = TRUE;
 		}
 		if((status & DS_WRITABLE) && (descriptor->status & DS_WRITABLE)) {
 			/* status changed - no longer writable */
 			descriptor->status &= ~DS_WRITABLE;
-			doNotify = TRUE;
 		}
 	}
 
-	if(doNotify) {
-		g_slist_foreach(descriptor->readyListeners, _descriptor_notifyListener, NULL);
-	}
+	/* tell our listeners their was some activity on this descriptor */
+	g_slist_foreach(descriptor->readyListeners, _descriptor_notifyListener, NULL);
 }
 
 enum DescriptorStatus descriptor_getStatus(Descriptor* descriptor) {
@@ -148,12 +140,12 @@ enum DescriptorStatus descriptor_getStatus(Descriptor* descriptor) {
 	return status;
 }
 
-void descriptor_addStatusChangeListener(Descriptor* descriptor, Listener* listener) {
+void descriptor_addStatusListener(Descriptor* descriptor, Listener* listener) {
 	MAGIC_ASSERT(descriptor);
 	descriptor->readyListeners = g_slist_prepend(descriptor->readyListeners, listener);
 }
 
-void descriptor_removeStatusChangeListener(Descriptor* descriptor, Listener* listener) {
+void descriptor_removeStatusListener(Descriptor* descriptor, Listener* listener) {
 	MAGIC_ASSERT(descriptor);
 	descriptor->readyListeners = g_slist_remove(descriptor->readyListeners, listener);
 }

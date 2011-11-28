@@ -78,7 +78,7 @@ gint* descriptor_getHandleReference(Descriptor* descriptor);
 void descriptor_adjustStatus(Descriptor* descriptor, enum DescriptorStatus status, gboolean doSetBits);
 enum DescriptorStatus descriptor_getStatus(Descriptor* descriptor);
 
-void descriptor_addStatusChangeListener(Descriptor* descriptor, Listener* listener);
-void descriptor_removeStatusChangeListener(Descriptor* descriptor, Listener* listener);
+void descriptor_addStatusListener(Descriptor* descriptor, Listener* listener);
+void descriptor_removeStatusListener(Descriptor* descriptor, Listener* listener);
 
 #endif /* SHD_DESCRIPTOR_H_ */
