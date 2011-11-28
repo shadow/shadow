@@ -35,15 +35,14 @@ gboolean udp_isFamilySupported(UDP* udp, sa_family_t family) {
 gint udp_connectToPeer(UDP* udp, in_addr_t ip, in_port_t port, sa_family_t family) {
 	MAGIC_ASSERT(udp);
 
+
 	/* ip/port specifies the default destination for packets */
 	if(family == AF_UNSPEC) {
 		/* dissolve our existing defaults */
-		udp->super.peerIP = 0;
-		udp->super.peerPort = 0;
+		socket_setPeerName(&(udp->super), 0, 0);
 	} else {
 		/* set new defaults */
-		udp->super.peerIP = ip;
-		udp->super.peerPort = port;
+		socket_setPeerName(&(udp->super), ip, port);
 	}
 
 	return 0;

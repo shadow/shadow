@@ -104,7 +104,7 @@ void logging_logv(const gchar *log_domain, GLogLevelFlags log_level, const gchar
 		remainder %= SIMTIME_ONE_SECOND;
 
 		simtime = g_string_new("");
-		g_string_append_printf(simtime, "%lu:%lu:%lu:%lu", hours, minutes, seconds, remainder);
+		g_string_append_printf(simtime, "%lu:%lu:%lu:%09lu", hours, minutes, seconds, remainder);
 	}
 
 	/* the time - we'll need to free clockString later */

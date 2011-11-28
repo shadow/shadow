@@ -130,8 +130,8 @@ typedef guint64 SimulationTime;
 #define MIN_DESCRIPTOR 30000
 
 /**
- * The start of our random port range, used if application doesn't specify
- * the port it wants to bind to, and for client connections.
+ * The start of our random port range in host order, used if application doesn't
+ * specify the port it wants to bind to, and for client connections.
  */
 #define MIN_RANDOM_PORT 10000
 

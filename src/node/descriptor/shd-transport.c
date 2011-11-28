@@ -25,6 +25,10 @@ void transport_free(Transport* transport) {
 	MAGIC_ASSERT(transport);
 	MAGIC_ASSERT(transport->vtable);
 
+	if(transport->boundString) {
+		g_free(transport->boundString);
+	}
+
 	MAGIC_CLEAR(transport);
 	transport->vtable->free((Descriptor*)transport);
 }
@@ -59,6 +63,15 @@ void transport_setBinding(Transport* transport, in_addr_t boundAddress, in_port_
 	MAGIC_ASSERT(transport);
 	transport->boundAddress = boundAddress;
 	transport->boundPort = port;
+
+	/* store the new ascii name of this transport endpoint */
+	if(transport->boundString) {
+		g_free(transport->boundString);
+	}
+	GString* stringBuffer = g_string_new(NTOA(boundAddress));
+	g_string_append_printf(stringBuffer, ":%u (descriptor %i)", ntohs(port), transport->super.handle);
+	transport->boundString = g_string_free(stringBuffer, FALSE);
+
 	transport->associationKey = PROTOCOL_DEMUX_KEY(transport->protocol, port);
 	transport->flags |= TF_BOUND;
 }

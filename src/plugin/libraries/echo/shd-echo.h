@@ -38,7 +38,7 @@
 
 #define ERROR -1
 #define BUFFERSIZE 20000
-#define ECHO_SERVER_PORT 60000
+#define ECHO_SERVER_PORT 9999
 #define MAX_EVENTS 10
 
 enum EchoProtocol {

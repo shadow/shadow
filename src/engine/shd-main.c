@@ -61,7 +61,7 @@ gint shadow_main(gint argc, gchar* argv[]) {
 	g_log_set_default_handler(logging_handleLog, &(configuredLogLevel));
 	debug("log system initialized");
 
-#if 0 /* these are only avail in glib >= 2.30 */
+#if 0 /* @todo: these are only avail in glib >= 2.30 */
 	/* setup signal handlers for gracefully handling shutdowns */
 	g_unix_signal_add(SIGTERM, engine_handleInterruptSignal, shadow_engine);
 	g_unix_signal_add(SIGHUP, engine_handleInterruptSignal, shadow_engine);

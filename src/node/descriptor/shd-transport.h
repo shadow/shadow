@@ -54,6 +54,7 @@ struct _Transport {
 	enum TransportFlags flags;
 	in_addr_t boundAddress;
 	in_port_t boundPort;
+	gchar* boundString;
 	gint associationKey;
 
 	/* buffering packets readable by user */

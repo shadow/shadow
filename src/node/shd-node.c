@@ -81,7 +81,7 @@ Node* node_new(GQuark id, Network* network, Software* software, guint32 ip, GStr
 	/* virtual descriptor management */
 	node->descriptors = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, descriptor_unref);
 	node->descriptorHandleCounter = MIN_DESCRIPTOR;
-	node->randomPortCounter = MIN_RANDOM_PORT;
+	node->randomPortCounter = htons(MIN_RANDOM_PORT);
 
 	/* applications this node will run */
 	node->application = application_new(software);
@@ -371,7 +371,7 @@ static in_port_t _node_getRandomFreePort(Node* node, in_addr_t interfaceIP,
 
 	while(!available) {
 		randomPort = (node->randomPortCounter)++;
-		g_assert(randomPort >= MIN_RANDOM_PORT);
+		g_assert(randomPort >= htons(MIN_RANDOM_PORT));
 		available = _node_isInterfaceAvailable(node, interfaceIP, type, randomPort);
 	}
 
@@ -522,7 +522,7 @@ gint node_listenForPeer(Node* node, gint handle, gint backlog) {
 	return 0;
 }
 
-gint node_acceptNewPeer(Node* node, gint handle, in_addr_t* ip, in_port_t* port) {
+gint node_acceptNewPeer(Node* node, gint handle, in_addr_t* ip, in_port_t* port, gint* acceptedHandle) {
 	MAGIC_ASSERT(node);
 
 	Descriptor* descriptor = node_lookupDescriptor(node, handle);
@@ -536,7 +536,7 @@ gint node_acceptNewPeer(Node* node, gint handle, in_addr_t* ip, in_port_t* port)
 		return EOPNOTSUPP;
 	}
 
-	return tcp_acceptServerPeer((TCP*)descriptor, ip, port);
+	return tcp_acceptServerPeer((TCP*)descriptor, ip, port, acceptedHandle);
 }
 
 gint node_getPeerName(Node* node, gint handle, in_addr_t* ip, in_port_t* port) {

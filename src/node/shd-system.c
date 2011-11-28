@@ -340,11 +340,12 @@ gint system_accept(gint fd, struct sockaddr* addr, socklen_t* len) {
 
 	in_addr_t ip = 0;
 	in_port_t port = 0;
+	gint handle = 0;
 
 	/* direct to node for further checks */
 	Node* node = _system_switchInShadowContext();
 
-	gint result = node_acceptNewPeer(node, fd, &ip, &port);
+	gint result = node_acceptNewPeer(node, fd, &ip, &port, &handle);
 
 	_system_switchOutShadowContext(node);
 
@@ -362,7 +363,7 @@ gint system_accept(gint fd, struct sockaddr* addr, socklen_t* len) {
 		*len = sizeof(struct sockaddr_in);
 	}
 
-	return 0;
+	return handle;
 }
 
 gint system_accept4(gint fd, struct sockaddr* addr, socklen_t* len, gint flags) {

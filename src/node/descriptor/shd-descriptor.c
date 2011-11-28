@@ -89,7 +89,7 @@ static void _descriptor_notifyListener(gpointer data, gpointer user_data) {
 void descriptor_adjustStatus(Descriptor* descriptor, enum DescriptorStatus status, gboolean doSetBits){
 	MAGIC_ASSERT(descriptor);
 
-	gboolean doNotify = FALSE;
+	gboolean doNotify = TRUE;
 
 	if(doSetBits) {
 		if((status & DS_ACTIVE) && !(descriptor->status & DS_ACTIVE)) {

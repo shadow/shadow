@@ -51,13 +51,17 @@ struct _Socket {
 	enum SocketFlags flags;
 	in_addr_t peerIP;
 	in_addr_t peerPort;
+	gchar* peerString;
+
 	MAGIC_DECLARE;
 };
 
 void socket_init(Socket* socket, SocketFunctionTable* vtable, enum DescriptorType type, gint handle);
 
 gint socket_getPeerName(Socket* socket, in_addr_t* ip, in_port_t* port);
+void socket_setPeerName(Socket* socket, in_addr_t ip, in_port_t port);
 gint socket_getSocketName(Socket* socket, in_addr_t* ip, in_port_t* port);
+void socket_setSocketName(Socket* socket, in_addr_t ip, in_port_t port);
 
 gboolean socket_isFamilySupported(Socket* socket, sa_family_t family);
 gint socket_connectToPeer(Socket* socket, in_addr_t ip, in_port_t port, sa_family_t family);

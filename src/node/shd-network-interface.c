@@ -173,7 +173,7 @@ void networkinterface_packetArrived(NetworkInterface* interface, Packet* packet)
 	MAGIC_ASSERT(interface);
 
 	/* a packet arrived. lets try to receive or buffer it */
-	if(g_queue_get_length(interface->inBuffer) < 1) {
+	if(g_queue_get_length(interface->inBuffer) < 100) {
 //	guint packetLength = packet_getPayloadLength(packet);
 //	if(packetLength <= (interface->inBufferSize - interface->inBufferLength)) {
 		/* we have space to buffer it */

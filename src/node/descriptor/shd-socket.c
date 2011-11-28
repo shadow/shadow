@@ -26,6 +26,10 @@ void socket_free(gpointer data) {
 	MAGIC_ASSERT(socket);
 	MAGIC_ASSERT(socket->vtable);
 
+	if(socket->peerString) {
+		g_free(socket->peerString);
+	}
+
 	MAGIC_CLEAR(socket);
 	socket->vtable->free((Descriptor*)socket);
 }
@@ -106,6 +110,21 @@ gint socket_getPeerName(Socket* socket, in_addr_t* ip, in_port_t* port) {
 	return 0;
 }
 
+void socket_setPeerName(Socket* socket, in_addr_t ip, in_port_t port) {
+	MAGIC_ASSERT(socket);
+
+	socket->peerIP = ip;
+	socket->peerPort = port;
+
+	/* store the new ascii name of this peer */
+	if(socket->peerString) {
+		g_free(socket->peerString);
+	}
+	GString* stringBuffer = g_string_new(NTOA(ip));
+	g_string_append_printf(stringBuffer, ":%u", ntohs(port));
+	socket->peerString = g_string_free(stringBuffer, FALSE);
+}
+
 gint socket_getSocketName(Socket* socket, in_addr_t* ip, in_port_t* port) {
 	MAGIC_ASSERT(socket);
 	g_assert(ip && port);
@@ -118,4 +137,9 @@ gint socket_getSocketName(Socket* socket, in_addr_t* ip, in_port_t* port) {
 	*port = socket->super.boundPort;
 
 	return 0;
+}
+
+void socket_setSocketName(Socket* socket, in_addr_t ip, in_port_t port) {
+	MAGIC_ASSERT(socket);
+	transport_setBinding(&(socket->super), ip, port);
 }

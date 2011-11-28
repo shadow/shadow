@@ -108,17 +108,17 @@ static void echoclient_fillCharBuffer(gchar* buffer, gint size) {
 }
 
 static void echoclient_socketWritable(EchoClient* ec, gint sockd, ShadowlibLogFunc log) {
-	log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "trying to write to socket %i", sockd);
-
-	struct sockaddr_in server;
-	memset(&server, 0, sizeof(server));
-	server.sin_family = AF_INET;
-	server.sin_addr.s_addr = ec->serverIPAddress;
-	server.sin_port = htons(ECHO_SERVER_PORT);
-
-	socklen_t len = sizeof(server);
-
 	if(!ec->sent_msg) {
+		log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "trying to write to socket %i", sockd);
+
+		struct sockaddr_in server;
+		memset(&server, 0, sizeof(server));
+		server.sin_family = AF_INET;
+		server.sin_addr.s_addr = ec->serverIPAddress;
+		server.sin_port = htons(ECHO_SERVER_PORT);
+
+		socklen_t len = sizeof(server);
+
 		echoclient_fillCharBuffer(ec->send_buffer, sizeof(ec->send_buffer)-1);
 		ssize_t b = sendto(sockd, ec->send_buffer, sizeof(ec->send_buffer), 0, (struct sockaddr*) (&server), len);
 		ec->sent_msg = 1;
