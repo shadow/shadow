@@ -1,5 +1,5 @@
 ## the plug-ins need to include shd-library.h
-include_directories(${SHADOW_SOURCE_DIR}/plugin/libraries)
+include_directories(${SHADOW_SOURCE_DIR}/library)
 install(FILES shd-library.h DESTINATION include/shadow)
 install(FILES ${SHADOW_SOURCE_DIR}/utility/shd-cdf.h DESTINATION include/shadow)
 
@@ -8,5 +8,4 @@ set(SHADOW_PLUGIN_DIR $ENV{HOME}/.shadow/plugins)
 
 ## build each plug-in
 add_subdirectory(echo)
-#add_subdirectory(pingpong)
 #add_subdirectory(filetransfer)

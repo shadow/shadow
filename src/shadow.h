@@ -76,7 +76,7 @@
 #include "utility/shd-registry.h"
 #include "utility/shd-cdf.h"
 
-#include "plugin/libraries/shd-library.h"
+#include "library/shd-library.h"
 #include "plugin/shd-plugin-state.h"
 #include "plugin/shd-plugin.h"
 #include "plugin/shd-software.h"

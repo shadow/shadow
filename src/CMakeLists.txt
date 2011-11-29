@@ -5,7 +5,7 @@ include_directories(${SHADOW_SOURCE_DIR}/ ${GLIB_INCLUDES})
 add_subdirectory(intercept)
 
 ## build the built-in plug-in libraries
-add_subdirectory(plugin/libraries)
+add_subdirectory(library)
 
 ## sources for our main shadow program
 set(shadow_srcs
@@ -25,7 +25,7 @@ set(shadow_srcs
     plugin/shd-plugin.c
     plugin/shd-plugin-state.c
     plugin/shd-software.c
-    plugin/libraries/shd-library.c
+    library/shd-library.c
     
     runnable/shd-runnable.c
     runnable/shd-listener.c
