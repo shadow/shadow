@@ -132,9 +132,20 @@ struct _TCP {
 	} congestion;
 
 	/* TCP throttles outgoing data packets if too many are in flight */
-	GQueue* throttledDataPackets;
+	GQueue* throttledOutput;
+	gsize throttledOutputLength;
+
 	/* TCP ensures that the user receives data in-order */
-	GQueue* unorderedDataPackets;
+	GQueue* unorderedInput;
+	gsize unorderedInputLength;
+
+	/* keep track of the sequence numbers and lengths of packets we may need to
+	 * retransmit in the future if they get dropped. this only holds information
+	 * about packets with data, i.e. with a positive length. this is done
+	 * so we can correctly track buffer length when data is acked.
+	 */
+	GHashTable* retransmission;
+	gsize retransmissionLength;
 
 	/* tracks a packet that has currently been only partially read, if any */
 	Packet* partialUserDataPacket;
@@ -347,7 +358,7 @@ static void _tcp_setState(TCP* tcp, enum TCPState state) {
 static void _tcp_updateReceiveWindow(TCP* tcp) {
 	MAGIC_ASSERT(tcp);
 
-	gsize space = tcp->super.super.outputBufferSize - tcp->super.super.outputBufferLength;
+	gsize space = transport_getOutputBufferSpace(&(tcp->super.super));
 	gsize nPackets = space / (CONFIG_MTU - CONFIG_TCPIP_HEADER_SIZE);
 
 	tcp->receive.window = nPackets;
@@ -424,34 +435,48 @@ static Packet* _tcp_createPacket(TCP* tcp, enum ProtocolTCPFlags flags, gconstpo
 
 static gsize _tcp_getBufferSpaceOut(TCP* tcp) {
 	MAGIC_ASSERT(tcp);
-	return (tcp->super.super.outputBufferSize - tcp->super.super.outputBufferLength);
+	/* account for throttled and retransmission buffer */
+	gssize space = (gssize)(transport_getOutputBufferSpace(&(tcp->super.super)) - tcp->throttledOutputLength - tcp->retransmissionLength);
+	return MAX(0, space);
 }
 
 static void _tcp_bufferPacketOut(TCP* tcp, Packet* packet) {
 	MAGIC_ASSERT(tcp);
 
-	guint length = packet_getPayloadLength(packet);
-	g_assert(length <= _tcp_getBufferSpaceOut(tcp));
-
 	/* TCP wants to avoid congestion */
-	g_queue_insert_sorted(tcp->throttledDataPackets, packet, (GCompareDataFunc)packet_compareTCPSequence, NULL);
-	tcp->super.super.outputBufferLength += length;
+	g_queue_insert_sorted(tcp->throttledOutput, packet, (GCompareDataFunc)packet_compareTCPSequence, NULL);
+	tcp->throttledOutputLength += packet_getPayloadLength(packet);
 }
 
 static gsize _tcp_getBufferSpaceIn(TCP* tcp) {
 	MAGIC_ASSERT(tcp);
-	return (tcp->super.super.inputBufferSize - tcp->super.super.inputBufferLength);
+	/* account for unordered input buffer */
+	gssize space = (gssize)(transport_getInputBufferSpace(&(tcp->super.super)) - tcp->unorderedInputLength);
+	return MAX(0, space);
 }
 
 static void _tcp_bufferPacketIn(TCP* tcp, Packet* packet) {
 	MAGIC_ASSERT(tcp);
 
-	guint length = packet_getPayloadLength(packet);
-	g_assert(length <= _tcp_getBufferSpaceIn(tcp));
-
 	/* TCP wants in-order data */
-	g_queue_insert_sorted(tcp->unorderedDataPackets, packet, (GCompareDataFunc)packet_compareTCPSequence, NULL);
-	tcp->super.super.inputBufferLength += length;
+	g_queue_insert_sorted(tcp->unorderedInput, packet, (GCompareDataFunc)packet_compareTCPSequence, NULL);
+	tcp->unorderedInputLength += packet_getPayloadLength(packet);
+}
+
+static void _tcp_addRetransmit(TCP* tcp, guint sequence, guint length) {
+	MAGIC_ASSERT(tcp);
+	g_hash_table_replace(tcp->retransmission, GINT_TO_POINTER(sequence), GINT_TO_POINTER(length));
+	tcp->retransmissionLength += length;
+}
+
+static void _tcp_removeRetransmit(TCP* tcp, guint sequence) {
+	MAGIC_ASSERT(tcp);
+	/* update buffer lengths */
+	guint length = ((guint)GPOINTER_TO_INT(g_hash_table_lookup(tcp->retransmission, GINT_TO_POINTER(sequence))));
+	if(length) {
+		tcp->retransmissionLength -= length;
+		g_hash_table_remove(tcp->retransmission, GINT_TO_POINTER(sequence));
+	}
 }
 
 static void _tcp_flush(TCP* tcp) {
@@ -462,9 +487,9 @@ static void _tcp_flush(TCP* tcp) {
 	_tcp_updateSendWindow(tcp);
 
 	/* flush packets that can now be sent to transport */
-	while(g_queue_get_length(tcp->throttledDataPackets) > 0) {
+	while(g_queue_get_length(tcp->throttledOutput) > 0) {
 		/* get the next throttled packet, in sequence order */
-		Packet* packet = g_queue_pop_head(tcp->throttledDataPackets);
+		Packet* packet = g_queue_pop_head(tcp->throttledOutput);
 
 		/* break out if we have no packets left */
 		if(!packet) {
@@ -473,22 +498,31 @@ static void _tcp_flush(TCP* tcp) {
 
 		guint length = packet_getPayloadLength(packet);
 
-		/* we cant send it if our window is too small
-		 * we already have space since we are already buffering it */
 		if(length > 0) {
 			PacketTCPHeader header;
 			packet_getTCPHeader(packet, &header);
-			if(header.sequence >= (tcp->send.unacked + tcp->send.window)) {
+
+			/* we cant send it if our window is too small */
+			gboolean fitsInWindow = (header.sequence < (tcp->send.unacked + tcp->send.window)) ? TRUE : FALSE;
+
+			/* we cant send it if we dont have enough space */
+			gboolean fitsInBuffer = (length <= transport_getOutputBufferSpace(&(tcp->super.super))) ? TRUE : FALSE;
+
+			if(!fitsInBuffer || !fitsInWindow) {
 				/* we cant send the packet yet */
-				g_queue_push_head(tcp->throttledDataPackets, packet);
+				g_queue_push_head(tcp->throttledOutput, packet);
 				break;
+			} else {
+				/* we will send: store length in virtual retransmission buffer
+				 * so we can reduce buffer space consumed when we receive the ack */
+				_tcp_addRetransmit(tcp, header.sequence, length);
 			}
 		}
 
-		/* packet is sendable, and we just removed it from our buffer */
-		tcp->super.super.outputBufferLength -= length;
+		/* packet is sendable, we removed it from out buffer */
+		tcp->throttledOutputLength -= length;
 
-		/* sendable now, update our tcp header */
+		/* update TCP header to our current advertised window and acknowledgement */
 		packet_updateTCP(packet, tcp->receive.next, tcp->receive.window);
 
 		/* keep track of the last things we sent them */
@@ -498,31 +532,31 @@ static void _tcp_flush(TCP* tcp) {
 		 /* transport will queue it ASAP */
 		gboolean success = transport_addToOutputBuffer(&(tcp->super.super), packet);
 
-		/* we have space, so this should always succeed */
+		/* we already checked for space, so this should always succeed */
 		g_assert(success);
 	}
 
 	/* any packets now in order can be pushed to our user input buffer */
-	while(g_queue_get_length(tcp->unorderedDataPackets) > 0) {
-		Packet* packet = g_queue_pop_head(tcp->unorderedDataPackets);
+	while(g_queue_get_length(tcp->unorderedInput) > 0) {
+		Packet* packet = g_queue_pop_head(tcp->unorderedInput);
 
 		PacketTCPHeader header;
 		packet_getTCPHeader(packet, &header);
 
 		if(header.sequence == tcp->receive.next) {
 			/* move from the unordered buffer to user input buffer */
-			guint length = packet_getPayloadLength(packet);
-			tcp->super.super.inputBufferLength -= length;
-			gboolean success = transport_addToInputBuffer(&(tcp->super.super), packet);
+			gboolean fitInBuffer = transport_addToInputBuffer(&(tcp->super.super), packet);
 
-			/* we have space, so this should always succeed */
-			g_assert(success);
-
-			(tcp->receive.next)++;
-		} else {
-			g_queue_push_head(tcp->unorderedDataPackets, packet);
-			break;
+			if(fitInBuffer) {
+				tcp->unorderedInputLength -= packet_getPayloadLength(packet);
+				(tcp->receive.next)++;
+				continue;
+			}
 		}
+
+		/* we could not buffer it because its out of order or we have no space */
+		g_queue_push_head(tcp->unorderedInput, packet);
+		break;
 	}
 }
 
@@ -629,6 +663,25 @@ gint tcp_acceptServerPeer(TCP* tcp, in_addr_t* ip, in_port_t* port, gint* accept
 	return 0;
 }
 
+static TCP* _tcp_getSourceTCP(TCP* tcp, in_addr_t ip, in_port_t port) {
+	MAGIC_ASSERT(tcp);
+
+	/* servers may have children keyed by ip:port */
+	if(tcp->server) {
+		MAGIC_ASSERT(tcp->server);
+
+		/* children are multiplexed based on remote ip and port */
+		guint childKey = utility_ipPortHash(ip, port);
+		TCPChild* child = g_hash_table_lookup(tcp->server->children, &childKey);
+
+		if(child) {
+			return child->tcp;
+		}
+	}
+
+	return tcp;
+}
+
 /* return TRUE if we processed the packet, FALSE if it should be retransmitted */
 gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 	MAGIC_ASSERT(tcp);
@@ -639,17 +692,7 @@ gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 	guint packetLength = packet_getPayloadLength(packet);
 
 	/* if we run a server, the packet could be for an existing child */
-	if(tcp->server) {
-		MAGIC_ASSERT(tcp->server);
-
-		/* children are multiplexed based on remote ip and port */
-		guint childKey = utility_ipPortHash(header.sourceIP, header.sourcePort);
-		TCPChild* child = g_hash_table_lookup(tcp->server->children, &childKey);
-
-		if(child) {
-			tcp = child->tcp;
-		}
-	}
+	tcp = _tcp_getSourceTCP(tcp, header.sourceIP, header.sourcePort);
 
 	/* now we have the true TCP for the packet */
 	MAGIC_ASSERT(tcp);
@@ -825,6 +868,12 @@ gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 		if((header.acknowledgement > tcp->send.unacked) && (header.acknowledgement <= tcp->send.next)) {
 			/* some data we sent got acknowledged */
 			nPacketsAcked = header.acknowledgement - tcp->send.unacked;
+
+			/* the packets just acked are 'released' from retransmit queue */
+			for(guint i = header.acknowledgement; i < tcp->send.unacked; i++) {
+				_tcp_removeRetransmit(tcp, i);
+			}
+
 			tcp->send.unacked = header.acknowledgement;
 
 			/* prevent old segments from updating congestion window */
@@ -908,6 +957,12 @@ gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 void tcp_droppedPacket(TCP* tcp, Packet* packet) {
 	MAGIC_ASSERT(tcp);
 
+	PacketTCPHeader header;
+	packet_getTCPHeader(packet, &header);
+
+	/* if we run a server, the packet could be for an existing child */
+	tcp = _tcp_getSourceTCP(tcp, header.destinationIP, header.destinationPort);
+
 	/* if we are trying to close, we don't care */
 	if(tcp->super.super.super.status == DS_STALE) {
 		return;
@@ -924,7 +979,11 @@ void tcp_droppedPacket(TCP* tcp, Packet* packet) {
 		tcp->congestion.threshold = (guint32) tcp->congestion.window;
 	}
 
+	debug("%s: retransmitting packet seq# %u to %s", tcp->super.super.boundString,
+			header.sequence, tcp->super.peerString);
+
 	/* buffer and send as appropriate */
+	_tcp_removeRetransmit(tcp, header.sequence);
 	_tcp_bufferPacketOut(tcp, packet);
 	_tcp_flush(tcp);
 }
@@ -935,10 +994,10 @@ gssize tcp_sendUserData(TCP* tcp, gconstpointer buffer, gsize nBytes, in_addr_t 
 	/* maximum data we can send network, o/w tcp truncates and only sends 65536*/
 	gsize acceptable = MIN(nBytes, 65535);
 	gsize space = _tcp_getBufferSpaceOut(tcp);
+	gsize remaining = MIN(acceptable, space);
 
 	/* break data into segments and send each in a packet */
 	gsize maxPacketLength = CONFIG_MTU - CONFIG_TCPIP_HEADER_SIZE;
-	gsize remaining = MIN(acceptable, space);
 	gsize offset = 0;
 
 	/* create as many packets as needed */
@@ -1032,10 +1091,17 @@ gssize tcp_receiveUserData(TCP* tcp, gpointer buffer, gsize nBytes, in_addr_t* i
 void tcp_free(TCP* tcp) {
 	MAGIC_ASSERT(tcp);
 
-	while(g_queue_get_length(tcp->throttledDataPackets) > 0) {
-		packet_unref(g_queue_pop_head(tcp->throttledDataPackets));
+	while(g_queue_get_length(tcp->throttledOutput) > 0) {
+		packet_unref(g_queue_pop_head(tcp->throttledOutput));
 	}
-	g_queue_free(tcp->throttledDataPackets);
+	g_queue_free(tcp->throttledOutput);
+
+	while(g_queue_get_length(tcp->unorderedInput) > 0) {
+		packet_unref(g_queue_pop_head(tcp->unorderedInput));
+	}
+	g_queue_free(tcp->unorderedInput);
+
+	g_hash_table_destroy(tcp->retransmission);
 
 	if(tcp->child) {
 		_tcpchild_free(tcp->child);
@@ -1091,8 +1157,9 @@ TCP* tcp_new(gint handle) {
 
 	tcp->isSlowStart = TRUE;
 
-	tcp->throttledDataPackets = g_queue_new();
-	tcp->unorderedDataPackets = g_queue_new();
+	tcp->throttledOutput = g_queue_new();
+	tcp->unorderedInput = g_queue_new();
+	tcp->retransmission = g_hash_table_new(g_direct_hash, g_direct_equal);
 
 	return tcp;
 }

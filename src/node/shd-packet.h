@@ -61,8 +61,10 @@ in_addr_t packet_getDestinationIP(Packet* packet);
 in_addr_t packet_getSourceIP(Packet* packet);
 in_port_t packet_getSourcePort(Packet* packet);
 guint packet_copyPayload(Packet* packet, gsize payloadOffset, gpointer buffer, gsize bufferLength);
-gint packet_getAssociationKey(Packet* packet);
 void packet_getTCPHeader(Packet* packet, PacketTCPHeader* header);
 gint packet_compareTCPSequence(const Packet* packet1, const Packet* packet2, gpointer user_data);
+
+gint packet_getDestinationAssociationKey(Packet* packet);
+gint packet_getSourceAssociationKey(Packet* packet);
 
 #endif /* SHD_PACKET_H_ */

@@ -84,8 +84,11 @@ gssize transport_receiveUserData(Transport* transport, gpointer buffer, gsize nB
 		in_addr_t* ip, in_port_t* port);
 void transport_droppedPacket(Transport* transport, Packet* packet);
 
+gsize transport_getInputBufferSpace(Transport* transport);
 gboolean transport_addToInputBuffer(Transport* transport, Packet* packet);
 Packet* transport_removeFromInputBuffer(Transport* transport);
+
+gsize transport_getOutputBufferSpace(Transport* transport);
 gboolean transport_addToOutputBuffer(Transport* transport, Packet* packet);
 Packet* transport_removeFromOutputBuffer(Transport* transport);
 

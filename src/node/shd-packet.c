@@ -328,7 +328,7 @@ guint packet_copyPayload(Packet* packet, gsize payloadOffset, gpointer buffer, g
 	return copyLength;
 }
 
-gint packet_getAssociationKey(Packet* packet) {
+gint packet_getDestinationAssociationKey(Packet* packet) {
 	_packet_lock(packet);
 
 	in_port_t port = 0;
@@ -348,6 +348,41 @@ gint packet_getAssociationKey(Packet* packet) {
 		case PTCP: {
 			PacketTCPHeader* header = packet->header;
 			port = header->destinationPort;
+			break;
+		}
+
+		default: {
+			error("unrecognized protocol");
+			break;
+		}
+	}
+
+	gint key = PROTOCOL_DEMUX_KEY(packet->protocol, port);
+
+	_packet_unlock(packet);
+	return key;
+}
+
+gint packet_getSourceAssociationKey(Packet* packet) {
+	_packet_lock(packet);
+
+	in_port_t port = 0;
+	switch (packet->protocol) {
+		case PLOCAL: {
+			PacketLocalHeader* header = packet->header;
+			port = header->port;
+			break;
+		}
+
+		case PUDP: {
+			PacketUDPHeader* header = packet->header;
+			port = header->sourcePort;
+			break;
+		}
+
+		case PTCP: {
+			PacketTCPHeader* header = packet->header;
+			port = header->sourcePort;
 			break;
 		}
 

@@ -112,12 +112,18 @@ void transport_droppedPacket(Transport* transport, Packet* packet) {
 	transport->vtable->dropped(transport, packet);
 }
 
+gsize transport_getInputBufferSpace(Transport* transport) {
+	MAGIC_ASSERT(transport);
+	g_assert(transport->inputBufferSize >= transport->inputBufferLength);
+	return (transport->inputBufferSize - transport->inputBufferLength);
+}
+
 gboolean transport_addToInputBuffer(Transport* transport, Packet* packet) {
 	MAGIC_ASSERT(transport);
 
 	/* check if the packet fits */
 	guint length = packet_getPayloadLength(packet);
-	if((transport->inputBufferLength + length) > transport->inputBufferSize) {
+	if(length > transport_getInputBufferSpace(transport)) {
 		return FALSE;
 	}
 
@@ -153,12 +159,18 @@ Packet* transport_removeFromInputBuffer(Transport* transport) {
 	return packet;
 }
 
+gsize transport_getOutputBufferSpace(Transport* transport) {
+	MAGIC_ASSERT(transport);
+	g_assert(transport->outputBufferSize >= transport->outputBufferLength);
+	return (transport->outputBufferSize - transport->outputBufferLength);
+}
+
 gboolean transport_addToOutputBuffer(Transport* transport, Packet* packet) {
 	MAGIC_ASSERT(transport);
 
 	/* check if the packet fits */
 	guint length = packet_getPayloadLength(packet);
-	if((transport->outputBufferLength + length) > transport->outputBufferSize) {
+	if(length > transport_getOutputBufferSpace(transport)) {
 		return FALSE;
 	}
 
@@ -167,7 +179,7 @@ gboolean transport_addToOutputBuffer(Transport* transport, Packet* packet) {
 	transport->outputBufferLength += length;
 
 	/* we just added a packet, we are no longer writable if full */
-	if((transport->outputBufferSize - transport->outputBufferLength) <= 0) {
+	if(transport_getOutputBufferSpace(transport) <= 0) {
 		descriptor_adjustStatus((Descriptor*)transport, DS_WRITABLE, FALSE);
 	}
 
@@ -189,7 +201,7 @@ Packet* transport_removeFromOutputBuffer(Transport* transport) {
 		transport->outputBufferLength -= length;
 
 		/* we are writable if we now have space */
-		if((transport->outputBufferSize - transport->outputBufferLength) > 0) {
+		if(transport_getOutputBufferSpace(transport) > 0) {
 			descriptor_adjustStatus((Descriptor*)transport, DS_WRITABLE, TRUE);
 		}
 	}

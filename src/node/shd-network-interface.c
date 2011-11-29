@@ -238,7 +238,7 @@ void networkinterface_received(NetworkInterface* interface) {
 		Packet* packet = g_queue_pop_head(packetBatch);
 
 		/* hand it off to the correct transport layer */
-		gint key = packet_getAssociationKey(packet);
+		gint key = packet_getDestinationAssociationKey(packet);
 		Transport* transport = g_hash_table_lookup(interface->boundTransports, GINT_TO_POINTER(key));
 		gboolean accepted = transport_pushInPacket(transport, packet);
 		if(!accepted) {
@@ -273,7 +273,7 @@ void networkinterface_packetDropped(NetworkInterface* interface, Packet* packet)
 	 * someone dropped a packet belonging to our interface
 	 * hand it off to the correct transport layer
 	 */
-	gint key = packet_getAssociationKey(packet);
+	gint key = packet_getSourceAssociationKey(packet);
 	Transport* transport = g_hash_table_lookup(interface->boundTransports, GINT_TO_POINTER(key));
 
 	/* just ignore if the transport closed in the meantime */
