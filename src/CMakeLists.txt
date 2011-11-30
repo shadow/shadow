@@ -37,6 +37,7 @@ set(shadow_srcs
     runnable/event/shd-notify-plugin.c
     runnable/event/shd-packet-arrived.c
     runnable/event/shd-packet-dropped.c
+    runnable/event/shd-tcp-close-timer-expired.c
     runnable/action/shd-action.c
     runnable/action/shd-connect-network.c
     runnable/action/shd-create-software.c

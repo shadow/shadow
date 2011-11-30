@@ -65,6 +65,16 @@ void descriptor_unref(gpointer data) {
 	}
 }
 
+void descriptor_close(Descriptor* descriptor) {
+	MAGIC_ASSERT(descriptor);
+	MAGIC_ASSERT(descriptor->funcTable);
+
+	/* user called close */
+	descriptor_adjustStatus(descriptor, DS_CLOSED, TRUE);
+
+	descriptor->funcTable->close(descriptor);
+}
+
 gint descriptor_compare(const Descriptor* foo, const Descriptor* bar, gpointer user_data) {
 	MAGIC_ASSERT(foo);
 	MAGIC_ASSERT(bar);
@@ -103,6 +113,10 @@ void descriptor_adjustStatus(Descriptor* descriptor, enum DescriptorStatus statu
 			/* status changed - is now writable */
 			descriptor->status |= DS_WRITABLE;
 		}
+		if((status & DS_CLOSED) && !(descriptor->status & DS_CLOSED)) {
+			/* status changed - is now writable */
+			descriptor->status |= DS_CLOSED;
+		}
 	} else {
 		if((status & DS_ACTIVE) && (descriptor->status & DS_ACTIVE)) {
 			/* status changed - no longer active */
@@ -115,6 +129,10 @@ void descriptor_adjustStatus(Descriptor* descriptor, enum DescriptorStatus statu
 		if((status & DS_WRITABLE) && (descriptor->status & DS_WRITABLE)) {
 			/* status changed - no longer writable */
 			descriptor->status &= ~DS_WRITABLE;
+		}
+		if((status & DS_CLOSED) && (descriptor->status & DS_CLOSED)) {
+			/* status changed - is now writable */
+			descriptor->status &= ~DS_CLOSED;
 		}
 	}
 

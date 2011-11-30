@@ -151,9 +151,15 @@ void udp_free(UDP* udp) {
 	g_free(udp);
 }
 
+void udp_close(UDP* udp) {
+	MAGIC_ASSERT(udp);
+	node_closeDescriptor(worker_getPrivate()->cached_node, udp->super.super.super.handle);
+}
+
 /* we implement the socket interface, this describes our function suite */
 SocketFunctionTable udp_functions = {
-	(DescriptorFreeFunc) udp_free,
+	(DescriptorFunc) udp_close,
+	(DescriptorFunc) udp_free,
 	(TransportSendFunc) udp_sendUserData,
 	(TransportReceiveFunc) udp_receiveUserData,
 	(TransportProcessFunc) udp_processPacket,

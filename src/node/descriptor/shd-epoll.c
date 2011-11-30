@@ -87,8 +87,14 @@ static void _epoll_free(gpointer data) {
 	g_free(epoll);
 }
 
+static void _epoll_close(Epoll* epoll) {
+	MAGIC_ASSERT(epoll);
+	node_closeDescriptor(worker_getPrivate()->cached_node, epoll->super.handle);
+}
+
 DescriptorFunctionTable epollFunctions = {
-	(DescriptorFreeFunc) _epoll_free,
+	(DescriptorFunc) _epoll_close,
+	(DescriptorFunc) _epoll_free,
 	MAGIC_VALUE
 };
 

@@ -52,7 +52,8 @@ in_addr_t node_getDefaultIP(Node* node);
 Application* node_getApplication(Node* node);
 
 gint node_createDescriptor(Node* node, enum DescriptorType type);
-gint node_closeDescriptor(Node* node, gint handle);
+void node_closeDescriptor(Node* node, gint handle);
+gint node_closeUser(Node* node, gint handle);
 Descriptor* node_lookupDescriptor(Node* node, gint handle);
 NetworkInterface* node_lookupInterface(Node* node, in_addr_t handle);
 

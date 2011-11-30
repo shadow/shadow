@@ -328,12 +328,12 @@ void networkinterface_sent(NetworkInterface* interface) {
 		Transport* transport = g_queue_pop_head(interface->sendableTransports);
 
 		/* check if it was closed in between sends */
-		if(descriptor_getStatus((Descriptor*) transport) & DS_STALE) {
-			gint* handleRef = descriptor_getHandleReference((Descriptor*) transport);
-			debug("dereferencing stale descriptor %i", *handleRef);
-			descriptor_unref(transport);
-			continue;
-		}
+//		if(descriptor_getStatus((Descriptor*) transport) & DS_STALE) {
+//			gint* handleRef = descriptor_getHandleReference((Descriptor*) transport);
+//			debug("dereferencing stale descriptor %i", *handleRef);
+//			descriptor_unref(transport);
+//			continue;
+//		}
 
 		Packet* packet = transport_pullOutPacket(transport);
 		if(packet) {

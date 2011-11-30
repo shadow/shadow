@@ -54,8 +54,14 @@ void pipe_free(Pipe* pipe) {
 	g_free(pipe);
 }
 
+void pipe_close(Pipe* pipe) {
+	MAGIC_ASSERT(pipe);
+	node_closeDescriptor(worker_getPrivate()->cached_node, pipe->super.super.handle);
+}
+
 TransportFunctionTable pipe_functions = {
-	(DescriptorFreeFunc) pipe_free,
+	(DescriptorFunc) pipe_close,
+	(DescriptorFunc) pipe_free,
 	(TransportSendFunc) pipe_sendUserData,
 	(TransportReceiveFunc) pipe_receiveUserData,
 	(TransportProcessFunc) pipe_processPacket,

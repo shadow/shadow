@@ -33,8 +33,15 @@ void transport_free(Transport* transport) {
 	transport->vtable->free((Descriptor*)transport);
 }
 
+void transport_close(Transport* transport) {
+	MAGIC_ASSERT(transport);
+	MAGIC_ASSERT(transport->vtable);
+	transport->vtable->close((Descriptor*)transport);
+}
+
 DescriptorFunctionTable transport_functions = {
-	(DescriptorFreeFunc) transport_free,
+	(DescriptorFunc) transport_close,
+	(DescriptorFunc) transport_free,
 	MAGIC_VALUE
 };
 

@@ -29,7 +29,8 @@ typedef gboolean (*SocketIsFamilySupportedFunc)(Socket* socket, sa_family_t fami
 typedef gint (*SocketConnectToPeerFunc)(Socket* socket, in_addr_t ip, in_port_t port, sa_family_t family);
 
 struct _SocketFunctionTable {
-	DescriptorFreeFunc free;
+	DescriptorFunc close;
+	DescriptorFunc free;
 	TransportSendFunc send;
 	TransportReceiveFunc receive;
 	TransportProcessFunc process;

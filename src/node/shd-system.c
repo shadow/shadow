@@ -548,7 +548,7 @@ gint system_close(gint fd) {
 	}
 
 	Node* node = _system_switchInShadowContext();
-	gint r = node_closeDescriptor(node, fd);
+	gint r = node_closeUser(node, fd);
 	_system_switchOutShadowContext(node);
 	return r;
 }

@@ -193,11 +193,9 @@ typedef guint64 SimulationTime;
 #define CONFIG_DATAGRAM_MAX_SIZE 65507
 
 /**
- * TRUE if we should do delayed acknowledgments, FALSE otherwise
- *
- * @todo change this to a command line option accessible via #Configuration
+ * Delay in nanoseconds for a TCP close timer.
  */
-#define CONFIG_DO_DELAYED_ACKS FALSE
+#define CONFIG_TCPCLOSETIMER_DELAY (60 * SIMTIME_ONE_SECOND)
 
 typedef struct _Configuration Configuration;
 

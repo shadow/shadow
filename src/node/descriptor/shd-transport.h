@@ -33,7 +33,8 @@ typedef gboolean (*TransportProcessFunc)(Transport* transport, Packet* packet);
 typedef void (*TransportDroppedPacketFunc)(Transport* transport, Packet* packet);
 
 struct _TransportFunctionTable {
-	DescriptorFreeFunc free;
+	DescriptorFunc close;
+	DescriptorFunc free;
 	TransportSendFunc send;
 	TransportReceiveFunc receive;
 	TransportProcessFunc process;

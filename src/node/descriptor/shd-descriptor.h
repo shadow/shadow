@@ -37,22 +37,23 @@ enum DescriptorStatus {
 	DS_READABLE = 1 << 1,
 	/* can be written, i.e. there is available buffer space */
 	DS_WRITABLE = 1 << 2,
-	/* is stale and should no longer be processed */
-	DS_STALE = 1 << 3,
+	/* user already called close */
+	DS_CLOSED = 1 << 3,
 };
 
 typedef struct _Descriptor Descriptor;
 typedef struct _DescriptorFunctionTable DescriptorFunctionTable;
 
 /* required functions */
-typedef void (*DescriptorFreeFunc)(Descriptor* descriptor);
+typedef void (*DescriptorFunc)(Descriptor* descriptor);
 
 /*
  * Virtual function table for base descriptor, storing pointers to required
  * callable functions.
  */
 struct _DescriptorFunctionTable {
-	DescriptorFreeFunc free;
+	DescriptorFunc close;
+	DescriptorFunc free;
 	MAGIC_DECLARE;
 };
 
@@ -70,6 +71,7 @@ void descriptor_init(Descriptor* descriptor, enum DescriptorType type,
 		DescriptorFunctionTable* funcTable, gint handle);
 void descriptor_ref(gpointer data);
 void descriptor_unref(gpointer data);
+void descriptor_close(Descriptor* descriptor);
 gint descriptor_compare(const Descriptor* foo, const Descriptor* bar, gpointer user_data);
 
 enum DescriptorType descriptor_getType(Descriptor* descriptor);

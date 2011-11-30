@@ -45,8 +45,8 @@ static const gchar* tcp_stateToAscii(enum TCPState state) {
 
 enum TCPFlags {
 	TCPF_NONE = 0,
-	TCPF_DELAYEDACK_SCHEDULED = 1 << 0,
-	TCPF_DELAYEDACK_REQUESTED = 1 << 1,
+	TCPF_LOCAL_CLOSED = 1 << 0,
+	TCPF_REMOTE_CLOSED = 1 << 1,
 };
 
 enum TCPError {
@@ -178,7 +178,8 @@ static TCPChild* _tcpchild_new(TCP* tcp, TCP* parent, in_addr_t peerIP, in_port_
 	child->state = TCPCS_INCOMPLETE;
 	socket_setPeerName(&(child->tcp->super), peerIP, peerPort);
 
-	/* @todo: is there any reason we need a new random port? */
+	/* the child is bound to the parent server's address, because all packets
+	 * coming from the child should appear to be coming from the server itself */
 	socket_setSocketName(&(child->tcp->super), parent->super.super.boundAddress, parent->super.super.boundPort);
 
 	return child;
@@ -333,21 +334,23 @@ static void _tcp_setState(TCP* tcp, enum TCPState state) {
 			break;
 		}
 		case TCPS_CLOSING: {
-			descriptor_adjustStatus((Descriptor*)tcp, DS_STALE, TRUE);
+//			descriptor_adjustStatus((Descriptor*)tcp, DS_STALE, TRUE);
 			break;
 		}
 		case TCPS_CLOSEWAIT: {
 			/* user needs to read a 0 so it knows we closed */
-			descriptor_adjustStatus((Descriptor*)tcp, DS_STALE, TRUE);
+//			descriptor_adjustStatus((Descriptor*)tcp, DS_STALE, TRUE);
 			break;
 		}
 		case TCPS_CLOSED: {
 			descriptor_adjustStatus((Descriptor*)tcp, DS_ACTIVE, FALSE);
-			descriptor_adjustStatus((Descriptor*)tcp, DS_STALE, TRUE);
+//			descriptor_adjustStatus((Descriptor*)tcp, DS_STALE, TRUE);
 			break;
 		}
 		case TCPS_TIMEWAIT: {
-			// TODO schedule timer
+			/* schedule a close timer self-event to finish out the closing process */
+			TCPCloseTimerExpiredEvent* event = tcpclosetimerexpired_new(tcp);
+			worker_scheduleEvent((Event*)event, CONFIG_TCPCLOSETIMER_DELAY, 0);
 			break;
 		}
 		default:
@@ -416,8 +419,9 @@ static Packet* _tcp_createPacket(TCP* tcp, enum ProtocolTCPFlags flags, gconstpo
 	/* make sure our receive window is up to date before putting it in the packet */
 	_tcp_updateReceiveWindow(tcp);
 
-	/* control packets have no sequence number */
-	guint sequence = payloadLength > 0 ? tcp->send.next : 0;
+	/* control packets have no sequence number
+	 * (except FIN, so we close after sending everything) */
+	guint sequence = ((payloadLength > 0) || (flags & PTCP_FIN)) ? tcp->send.next : 0;
 
 	/* create the TCP packet */
 	Packet* packet = packet_new(payload, payloadLength);
@@ -808,7 +812,7 @@ gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 			/* receive FIN, send FINACK, move to CLOSING (simultaneous close) */
 			else if(header.flags & PTCP_FIN) {
 				wasProcessed = TRUE;
-				responseFlags |= PTCP_FIN|PTCP_ACK;
+				responseFlags |= (PTCP_FIN|PTCP_ACK);
 				_tcp_setState(tcp, TCPS_CLOSING);
 			}
 			break;
@@ -818,7 +822,7 @@ gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 			/* receive FIN, send FINACK, move to TIMEWAIT */
 			if(header.flags & PTCP_FIN) {
 				wasProcessed = TRUE;
-				responseFlags |= PTCP_FIN|PTCP_ACK;
+				responseFlags |= (PTCP_FIN|PTCP_ACK);
 				_tcp_setState(tcp, TCPS_TIMEWAIT);
 			}
 			break;
@@ -937,7 +941,7 @@ gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 	/* now flush as many packets as we can to transport */
 	_tcp_flush(tcp);
 
-	/* send ack if they need updates but we didn't send any yet */
+	/* send ack if they need updates but we didn't send any yet (selective acks) */
 	if((tcp->receive.next > tcp->send.lastAcknowledgement) ||
 			(tcp->receive.window != tcp->send.lastWindow))
 	{
@@ -964,9 +968,9 @@ void tcp_droppedPacket(TCP* tcp, Packet* packet) {
 	tcp = _tcp_getSourceTCP(tcp, header.destinationIP, header.destinationPort);
 
 	/* if we are trying to close, we don't care */
-	if(tcp->super.super.super.status == DS_STALE) {
-		return;
-	}
+//	if(tcp->super.super.super.status == DS_STALE) {
+//		return;
+//	}
 
 	/* the packet was "dropped" - this is basically a negative ack.
 	 * handle congestion control.
@@ -1115,9 +1119,47 @@ void tcp_free(TCP* tcp) {
 	g_free(tcp);
 }
 
+void tcp_close(TCP* tcp) {
+	MAGIC_ASSERT(tcp);
+
+	// TODO do we have to check if the socket is connected first?
+	tcp->flags |= TCPF_LOCAL_CLOSED;
+
+	/* send a FIN */
+	Packet* packet = _tcp_createPacket(tcp, PTCP_FIN, NULL, 0);
+
+	/* dont have to worry about space since this has no payload */
+	_tcp_bufferPacketOut(tcp, packet);
+	_tcp_flush(tcp);
+
+	/* we are 1 of 3 main states, unless we have yet to establish */
+	switch (tcp->state) {
+		case TCPS_ESTABLISHED: {
+			_tcp_setState(tcp, TCPS_FINWAIT1);
+			break;
+		}
+
+		case TCPS_CLOSEWAIT: {
+			_tcp_setState(tcp, TCPS_LASTACK);
+			break;
+		}
+
+		default:
+			break;
+	}
+
+//	node_closeDescriptor(worker_getPrivate()->cached_node, tcp->super.super.super.handle);
+}
+
+void tcp_closeTimerExpired(TCP* tcp) {
+	MAGIC_ASSERT(tcp);
+	node_closeDescriptor(worker_getPrivate()->cached_node, tcp->super.super.super.handle);
+}
+
 /* we implement the socket interface, this describes our function suite */
 SocketFunctionTable tcp_functions = {
-	(DescriptorFreeFunc) tcp_free,
+	(DescriptorFunc) tcp_close,
+	(DescriptorFunc) tcp_free,
 	(TransportSendFunc) tcp_sendUserData,
 	(TransportReceiveFunc) tcp_receiveUserData,
 	(TransportProcessFunc) tcp_processPacket,
