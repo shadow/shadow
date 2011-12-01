@@ -47,11 +47,14 @@ enum TCPFlags {
 	TCPF_NONE = 0,
 	TCPF_LOCAL_CLOSED = 1 << 0,
 	TCPF_REMOTE_CLOSED = 1 << 1,
+	TCPF_WANTS_EOF = 1 << 2,
 };
 
 enum TCPError {
 	TCPE_NONE = 0,
 	TCPE_CONNECTION_RESET = 1 << 0,
+	TCPE_SEND_EOF = 1 << 1,
+	TCPE_RECEIVE_EOF = 1 << 2,
 };
 
 enum TCPChildState {
@@ -334,17 +337,13 @@ static void _tcp_setState(TCP* tcp, enum TCPState state) {
 			break;
 		}
 		case TCPS_CLOSING: {
-//			descriptor_adjustStatus((Descriptor*)tcp, DS_STALE, TRUE);
 			break;
 		}
 		case TCPS_CLOSEWAIT: {
-			/* user needs to read a 0 so it knows we closed */
-//			descriptor_adjustStatus((Descriptor*)tcp, DS_STALE, TRUE);
 			break;
 		}
 		case TCPS_CLOSED: {
 			descriptor_adjustStatus((Descriptor*)tcp, DS_ACTIVE, FALSE);
-//			descriptor_adjustStatus((Descriptor*)tcp, DS_STALE, TRUE);
 			break;
 		}
 		case TCPS_TIMEWAIT: {
@@ -404,7 +403,6 @@ static Packet* _tcp_createPacket(TCP* tcp, enum ProtocolTCPFlags flags, gconstpo
 
 	/*
 	 * packets from children of a server must appear to be coming from the server
-	 * @todo: does this handle loopback?
 	 */
 	in_addr_t sourceIP = (tcp->child) ? tcp->child->parent->super.super.boundAddress :
 			tcp->super.super.boundAddress;
@@ -428,10 +426,9 @@ static Packet* _tcp_createPacket(TCP* tcp, enum ProtocolTCPFlags flags, gconstpo
 	packet_setTCP(packet, flags, sourceIP, sourcePort, destinationIP, destinationPort,
 			sequence, tcp->receive.next, tcp->receive.window);
 
-	/* update sequence numbers */
+	/* update sequence number */
 	if(sequence > 0) {
 		tcp->send.next++;
-		tcp->send.end++;
 	}
 
 	return packet;
@@ -561,6 +558,19 @@ static void _tcp_flush(TCP* tcp) {
 		/* we could not buffer it because its out of order or we have no space */
 		g_queue_push_head(tcp->unorderedInput, packet);
 		break;
+	}
+
+	/* check if user needs an EOF signal */
+	gboolean wantsEOF = ((tcp->flags & TCPF_LOCAL_CLOSED) || (tcp->flags & TCPF_REMOTE_CLOSED)) ? TRUE : FALSE;
+	if(wantsEOF) {
+		/* if anyone closed, can't send anymore */
+		tcp->error |= TCPE_SEND_EOF;
+
+		if((tcp->receive.next >= tcp->receive.end) && !(tcp->error & TCPE_RECEIVE_EOF)) {
+			/* user needs to read a 0 so it knows we closed */
+			tcp->error |= TCPE_RECEIVE_EOF;
+			descriptor_adjustStatus((Descriptor*)tcp, DS_READABLE, TRUE);
+		}
 	}
 }
 
@@ -700,7 +710,6 @@ gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 
 	/* now we have the true TCP for the packet */
 	MAGIC_ASSERT(tcp);
-	g_assert(tcp->state != TCPS_CLOSED);
 	debug("%s: processing packet seq# %u from %s", tcp->super.super.boundString,
 			header.sequence, tcp->super.peerString);
 
@@ -797,8 +806,14 @@ gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 			/* receive FIN, send FINACK, move to CLOSEWAIT */
 			if(header.flags & PTCP_FIN) {
 				wasProcessed = TRUE;
-				responseFlags |= PTCP_FIN|PTCP_ACK;
+
+				/* other side of connections closed */
+				tcp->flags |= TCPF_REMOTE_CLOSED;
+				responseFlags |= (PTCP_FIN|PTCP_ACK);
 				_tcp_setState(tcp, TCPS_CLOSEWAIT);
+
+				/* it will send no more user data after this sequence */
+				tcp->receive.end = header.sequence;
 			}
 			break;
 		}
@@ -813,7 +828,11 @@ gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 			else if(header.flags & PTCP_FIN) {
 				wasProcessed = TRUE;
 				responseFlags |= (PTCP_FIN|PTCP_ACK);
+				tcp->flags |= TCPF_REMOTE_CLOSED;
 				_tcp_setState(tcp, TCPS_CLOSING);
+
+				/* it will send no more user data after this sequence */
+				tcp->receive.end = header.sequence;
 			}
 			break;
 		}
@@ -823,7 +842,11 @@ gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 			if(header.flags & PTCP_FIN) {
 				wasProcessed = TRUE;
 				responseFlags |= (PTCP_FIN|PTCP_ACK);
+				tcp->flags |= TCPF_REMOTE_CLOSED;
 				_tcp_setState(tcp, TCPS_TIMEWAIT);
+
+				/* it will send no more user data after this sequence */
+				tcp->receive.end = header.sequence;
 			}
 			break;
 		}
@@ -855,6 +878,8 @@ gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 		}
 
 		case TCPS_CLOSED: {
+			/* stray packet, drop without retransmit */
+			return TRUE;
 			break;
 		}
 
@@ -890,13 +915,6 @@ gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 				tcp->congestion.lastSequence = header.sequence;
 				tcp->congestion.lastAcknowledgement = header.acknowledgement;
 			}
-
-			/* have we received all user data they will send */
-	//		TODO
-	//		if(sock->curr_state == VTCP_CLOSING && vtcp->snd_una >= vtcp->snd_end) {
-	//			/* everything i needed to send before closing was acknowledged */
-	//			prc_result |= VT_PRC_DESTROY;
-	//		}
 		}
 	}
 
@@ -967,10 +985,10 @@ void tcp_droppedPacket(TCP* tcp, Packet* packet) {
 	/* if we run a server, the packet could be for an existing child */
 	tcp = _tcp_getSourceTCP(tcp, header.destinationIP, header.destinationPort);
 
-	/* if we are trying to close, we don't care */
-//	if(tcp->super.super.super.status == DS_STALE) {
-//		return;
-//	}
+	/* if we are closed, we don't care */
+	if(tcp->state == TCPS_CLOSED) {
+		return;
+	}
 
 	/* the packet was "dropped" - this is basically a negative ack.
 	 * handle congestion control.
@@ -992,8 +1010,23 @@ void tcp_droppedPacket(TCP* tcp, Packet* packet) {
 	_tcp_flush(tcp);
 }
 
+static void _tcp_endOfFileSignalled(TCP* tcp) {
+	MAGIC_ASSERT(tcp);
+
+	/* user can no longer access socket */
+	descriptor_adjustStatus(&(tcp->super.super.super), DS_CLOSED, TRUE);
+	descriptor_adjustStatus(&(tcp->super.super.super), DS_ACTIVE, FALSE);
+}
+
 gssize tcp_sendUserData(TCP* tcp, gconstpointer buffer, gsize nBytes, in_addr_t ip, in_port_t port) {
 	MAGIC_ASSERT(tcp);
+
+	/* return 0 to signal close, if necessary */
+	if(tcp->error & TCPE_SEND_EOF)
+	{
+		_tcp_endOfFileSignalled(tcp);
+		return 0;
+	}
 
 	/* maximum data we can send network, o/w tcp truncates and only sends 65536*/
 	gsize acceptable = MIN(nBytes, 65535);
@@ -1010,6 +1043,10 @@ gssize tcp_sendUserData(TCP* tcp, gconstpointer buffer, gsize nBytes, in_addr_t 
 
 		/* use helper to create the packet */
 		Packet* packet = _tcp_createPacket(tcp, PTCP_ACK, buffer + offset, copyLength);
+		if(copyLength > 0) {
+			/* we are sending more user data */
+			tcp->send.end++;
+		}
 
 		/* buffer the outgoing packet in TCP */
 		_tcp_bufferPacketOut(tcp, packet);
@@ -1030,13 +1067,20 @@ gssize tcp_sendUserData(TCP* tcp, gconstpointer buffer, gsize nBytes, in_addr_t 
 gssize tcp_receiveUserData(TCP* tcp, gpointer buffer, gsize nBytes, in_addr_t* ip, in_port_t* port) {
 	MAGIC_ASSERT(tcp);
 
+	/* make sure we pull in all readable user data */
+	_tcp_flush(tcp);
+
+	/* return 0 to signal close, if necessary */
+	if(tcp->error & TCPE_RECEIVE_EOF)
+	{
+		_tcp_endOfFileSignalled(tcp);
+		return 0;
+	}
+
 	gsize remaining = nBytes;
 	gsize bytesCopied = 0;
 	gsize offset = 0;
 	gsize copyLength = 0;
-
-	/* make sure we pull in all readable user data */
-	_tcp_flush(tcp);
 
 	while(remaining > 0) {
 		/* check if we have a partial packet waiting to get finished */
@@ -1108,7 +1152,11 @@ void tcp_free(TCP* tcp) {
 	g_hash_table_destroy(tcp->retransmission);
 
 	if(tcp->child) {
-		_tcpchild_free(tcp->child);
+		MAGIC_ASSERT(tcp->child);
+		MAGIC_ASSERT(tcp->child->parent);
+		MAGIC_ASSERT(tcp->child->parent->server);
+		/* remove parents reference to child, this frees the child */
+		g_hash_table_remove(tcp->child->parent->server->children, &(tcp->child->key));
 	}
 
 	if(tcp->server) {
@@ -1122,18 +1170,14 @@ void tcp_free(TCP* tcp) {
 void tcp_close(TCP* tcp) {
 	MAGIC_ASSERT(tcp);
 
-	// TODO do we have to check if the socket is connected first?
 	tcp->flags |= TCPF_LOCAL_CLOSED;
 
-	/* send a FIN */
-	Packet* packet = _tcp_createPacket(tcp, PTCP_FIN, NULL, 0);
-
-	/* dont have to worry about space since this has no payload */
-	_tcp_bufferPacketOut(tcp, packet);
-	_tcp_flush(tcp);
-
-	/* we are 1 of 3 main states, unless we have yet to establish */
 	switch (tcp->state) {
+		case TCPS_LISTEN: {
+			//TODO need to wait for children to close
+			break;
+		}
+
 		case TCPS_ESTABLISHED: {
 			_tcp_setState(tcp, TCPS_FINWAIT1);
 			break;
@@ -1144,15 +1188,33 @@ void tcp_close(TCP* tcp) {
 			break;
 		}
 
-		default:
-			break;
+		case TCPS_SYNRECEIVED:
+		case TCPS_SYNSENT: {
+			// TODO send RESET
+			return;
+		}
+
+		default: {
+			/* dont send a FIN */
+			return;
+		}
 	}
 
-//	node_closeDescriptor(worker_getPrivate()->cached_node, tcp->super.super.super.handle);
+	/* send a FIN */
+	Packet* packet = _tcp_createPacket(tcp, PTCP_FIN, NULL, 0);
+
+	/* dont have to worry about space since this has no payload */
+	_tcp_bufferPacketOut(tcp, packet);
+	_tcp_flush(tcp);
 }
 
 void tcp_closeTimerExpired(TCP* tcp) {
 	MAGIC_ASSERT(tcp);
+
+	/* children need to notify their parents when closing */
+	if(tcp->child) {
+
+	}
 	node_closeDescriptor(worker_getPrivate()->cached_node, tcp->super.super.super.handle);
 }
 

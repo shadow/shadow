@@ -89,6 +89,7 @@ static void _epoll_free(gpointer data) {
 
 static void _epoll_close(Epoll* epoll) {
 	MAGIC_ASSERT(epoll);
+	descriptor_adjustStatus(&(epoll->super), DS_CLOSED, TRUE);
 	node_closeDescriptor(worker_getPrivate()->cached_node, epoll->super.handle);
 }
 

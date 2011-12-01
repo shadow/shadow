@@ -68,10 +68,6 @@ void descriptor_unref(gpointer data) {
 void descriptor_close(Descriptor* descriptor) {
 	MAGIC_ASSERT(descriptor);
 	MAGIC_ASSERT(descriptor->funcTable);
-
-	/* user called close */
-	descriptor_adjustStatus(descriptor, DS_CLOSED, TRUE);
-
 	descriptor->funcTable->close(descriptor);
 }
 
@@ -114,7 +110,7 @@ void descriptor_adjustStatus(Descriptor* descriptor, enum DescriptorStatus statu
 			descriptor->status |= DS_WRITABLE;
 		}
 		if((status & DS_CLOSED) && !(descriptor->status & DS_CLOSED)) {
-			/* status changed - is now writable */
+			/* status changed - is now closed to user */
 			descriptor->status |= DS_CLOSED;
 		}
 	} else {
@@ -131,7 +127,7 @@ void descriptor_adjustStatus(Descriptor* descriptor, enum DescriptorStatus statu
 			descriptor->status &= ~DS_WRITABLE;
 		}
 		if((status & DS_CLOSED) && (descriptor->status & DS_CLOSED)) {
-			/* status changed - is now writable */
+			/* status changed - no longer closed to user */
 			descriptor->status &= ~DS_CLOSED;
 		}
 	}

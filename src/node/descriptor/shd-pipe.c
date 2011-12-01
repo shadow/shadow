@@ -56,6 +56,7 @@ void pipe_free(Pipe* pipe) {
 
 void pipe_close(Pipe* pipe) {
 	MAGIC_ASSERT(pipe);
+	descriptor_adjustStatus(&(pipe->super.super), DS_CLOSED, TRUE);
 	node_closeDescriptor(worker_getPrivate()->cached_node, pipe->super.super.handle);
 }
 

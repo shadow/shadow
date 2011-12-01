@@ -153,6 +153,7 @@ void udp_free(UDP* udp) {
 
 void udp_close(UDP* udp) {
 	MAGIC_ASSERT(udp);
+	descriptor_adjustStatus(&(udp->super.super.super), DS_CLOSED, TRUE);
 	node_closeDescriptor(worker_getPrivate()->cached_node, udp->super.super.super.handle);
 }
 
