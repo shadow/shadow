@@ -154,6 +154,15 @@ void networkinterface_associate(NetworkInterface* interface, Transport* transpor
 	descriptor_ref(transport);
 }
 
+void networkinterface_disassociate(NetworkInterface* interface, Transport* transport) {
+	MAGIC_ASSERT(interface);
+
+	gint key = transport_getAssociationKey(transport);
+
+	/* we will no longer receive packets for this port, this unrefs descriptor */
+	g_hash_table_remove(interface->boundTransports, GINT_TO_POINTER(key));
+}
+
 static void _networkinterface_dropInboundPacket(NetworkInterface* interface, Packet* packet) {
 	MAGIC_ASSERT(interface);
 
@@ -240,10 +249,14 @@ void networkinterface_received(NetworkInterface* interface) {
 		/* hand it off to the correct transport layer */
 		gint key = packet_getDestinationAssociationKey(packet);
 		Transport* transport = g_hash_table_lookup(interface->boundTransports, GINT_TO_POINTER(key));
-		gboolean accepted = transport_pushInPacket(transport, packet);
-		if(!accepted) {
-			/* transport can not handle it now, so drop it */
-			_networkinterface_dropInboundPacket(interface, packet);
+
+		/* if the transport closed, just drop the packet */
+		if(transport) {
+			gboolean accepted = transport_pushInPacket(transport, packet);
+			if(!accepted) {
+				/* transport can not handle it now, so drop it */
+				_networkinterface_dropInboundPacket(interface, packet);
+			}
 		}
 	}
 

@@ -73,7 +73,7 @@ struct _Transport {
 
 void transport_init(Transport* transport, TransportFunctionTable* vtable, enum DescriptorType type, gint handle);
 
-gboolean transport_isBound(Transport* transport);
+in_addr_t transport_getBinding(Transport* transport);
 void transport_setBinding(Transport* transport, in_addr_t boundAddress, in_port_t port);
 gint transport_getAssociationKey(Transport* transport);
 

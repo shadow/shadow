@@ -36,7 +36,7 @@ gint shadow_main(gint argc, gchar* argv[]) {
 		/* incorrect options given */
 		return -1;
 	} else if(config->printSoftwareVersion) {
-		g_printerr("Shadow v%s - (c) 2010-2011 Rob G. Jansen\nReleased under the GNU GPL, v3\n", SHADOW_VERSION);
+		g_printerr("Shadow v%s\n(c) 2010-2011 Rob G. Jansen\nReleased under the GNU GPL, v3\n", SHADOW_VERSION);
 		configuration_free(config);
 		return 0;
 	}
@@ -74,11 +74,7 @@ gint shadow_main(gint argc, gchar* argv[]) {
 
 	/* parse built-in examples, or input files */
 	gboolean success = TRUE;
-	if(config->runPingExample) {
-		GString* ping = example_getPingExampleContents();
-		success = parser_parseContents(xmlParser, ping->str, ping->len, actions);
-		g_string_free(ping, TRUE);
-	} else if(config->runEchoExample) {
+	if(config->runEchoExample) {
 		GString* echo = example_getEchoExampleContents();
 		success = parser_parseContents(xmlParser, echo->str, echo->len, actions);
 		g_string_free(echo, TRUE);

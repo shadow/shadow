@@ -47,7 +47,9 @@ enum TCPFlags {
 	TCPF_NONE = 0,
 	TCPF_LOCAL_CLOSED = 1 << 0,
 	TCPF_REMOTE_CLOSED = 1 << 1,
-	TCPF_WANTS_EOF = 1 << 2,
+	TCPF_EOF_SIGNALED = 1 << 2,
+	TCPF_RESET_SIGNALED = 1 << 3,
+	TCPF_WAS_ESTABLISHED = 1 << 4,
 };
 
 enum TCPError {
@@ -330,6 +332,7 @@ static void _tcp_setState(TCP* tcp, enum TCPState state) {
 			break;
 		}
 		case TCPS_ESTABLISHED: {
+			tcp->flags |= TCPF_WAS_ESTABLISHED;
 			if(tcp->state != tcp->stateLast) {
 				_tcp_autotune(tcp);
 			}
@@ -343,7 +346,28 @@ static void _tcp_setState(TCP* tcp, enum TCPState state) {
 			break;
 		}
 		case TCPS_CLOSED: {
+			/* user can no longer use socket */
 			descriptor_adjustStatus((Descriptor*)tcp, DS_ACTIVE, FALSE);
+
+			/*
+			 * servers have to wait for all children to close.
+			 * children need to notify their parents when closing.
+			 */
+			if(!tcp->server || g_hash_table_size(tcp->server->children) <= 0) {
+				if(tcp->child && tcp->child->parent) {
+					/* tell my server to stop accepting packets for me */
+					g_hash_table_remove(tcp->child->parent->server->children, (gconstpointer)&(tcp->child->key));
+
+					/* if i was the server's last child and its waiting to close, close it */
+					if((tcp->child->parent->state == TCPS_CLOSED) && (g_hash_table_size(tcp->child->parent->server->children) <= 0)) {
+						/* this will unbind from the network interface and free socket */
+						node_closeDescriptor(worker_getPrivate()->cached_node, tcp->child->parent->super.super.super.handle);
+					}
+				}
+
+				/* this will unbind from the network interface and free socket */
+				node_closeDescriptor(worker_getPrivate()->cached_node, tcp->super.super.super.handle);
+			}
 			break;
 		}
 		case TCPS_TIMEWAIT: {
@@ -566,7 +590,7 @@ static void _tcp_flush(TCP* tcp) {
 		/* if anyone closed, can't send anymore */
 		tcp->error |= TCPE_SEND_EOF;
 
-		if((tcp->receive.next >= tcp->receive.end) && !(tcp->error & TCPE_RECEIVE_EOF)) {
+		if((tcp->receive.next >= tcp->receive.end) && !(tcp->flags & TCPF_EOF_SIGNALED)) {
 			/* user needs to read a 0 so it knows we closed */
 			tcp->error |= TCPE_RECEIVE_EOF;
 			descriptor_adjustStatus((Descriptor*)tcp, DS_READABLE, TRUE);
@@ -583,12 +607,18 @@ gint tcp_getConnectError(TCP* tcp) {
 	MAGIC_ASSERT(tcp);
 
 	if(tcp->error & TCPE_CONNECTION_RESET) {
-		return ECONNREFUSED;
+		tcp->flags |= TCPF_RESET_SIGNALED;
+		if(tcp->flags & TCPF_WAS_ESTABLISHED) {
+			return ECONNRESET;
+		} else {
+			return ECONNREFUSED;
+		}
 	} else if(tcp->state == TCPS_SYNSENT || tcp->state == TCPS_SYNRECEIVED) {
 		return EALREADY;
 	} else if(tcp->state != TCPS_CLOSED) {
 		/* @todo: this affects ability to connect. if a socket is closed, can
-		 * we start over and connect again? if so, this should change
+		 * we start over and connect again? (reuseaddr socket opt)
+		 * if so, this should change
 		 */
 		return EISCONN;
 	}
@@ -630,7 +660,7 @@ gint tcp_acceptServerPeer(TCP* tcp, in_addr_t* ip, in_port_t* port, gint* accept
 	g_assert(acceptedHandle);
 
 	/* make sure we are listening and bound to an ip and port */
-	if(tcp->state != TCPS_LISTEN || !transport_isBound(&(tcp->super.super))) {
+	if(tcp->state != TCPS_LISTEN || !transport_getBinding(&(tcp->super.super))) {
 		return EINVAL;
 	}
 
@@ -646,16 +676,12 @@ gint tcp_acceptServerPeer(TCP* tcp, in_addr_t* ip, in_port_t* port, gint* accept
 
 	/* double check the pending child before its accepted */
 	TCPChild* child = g_queue_pop_head(tcp->server->pending);
-	MAGIC_ASSERT(child);
-	g_assert(child->tcp);
-
-	if(child->state != TCPCS_PENDING || child->tcp->state != TCPS_ESTABLISHED) {
-		if(child->tcp->error == TCPE_CONNECTION_RESET) {
-			/* close stale socket whose connection was reset before accepted */
-			// @FIXME CLOSE SOCKET
-		}
+	if(!child || (child->tcp && child->tcp->error == TCPE_CONNECTION_RESET)) {
 		return ECONNABORTED;
 	}
+
+	MAGIC_ASSERT(child);
+	g_assert(child->tcp);
 
 	/* better have a peer if we are established */
 	g_assert(child->tcp->super.peerIP && child->tcp->super.peerPort);
@@ -715,20 +741,16 @@ gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 
 	/* if packet is reset, don't process */
 	if(header.flags & PTCP_RST) {
+		/* @todo: not sure if this is handled correctly */
 		debug("received RESET packet");
 		tcp->error |= TCPE_CONNECTION_RESET;
-		return TRUE;
-		// TODO clear out buffers
 
-//		if(tcp->state == TCPS_SYNRECEIVED && tcp->stateLast == TCPS_LISTEN) {
-//			/* initiated with passive open, connection refused, return to listen */
-//		} else if(tcp->state == TCPS_SYNRECEIVED && tcp->stateLast == TCPS_SYNSENT) {
-//			/* initiated with active open, connection refused */
-//		} else if() {
-//
-//		} else {
-//
-//		}
+		tcp->flags |= TCPF_REMOTE_CLOSED;
+		_tcp_setState(tcp, TCPS_TIMEWAIT);
+
+		/* it will send no more user data after what we have now */
+		tcp->receive.end = tcp->receive.next;
+		return TRUE;
 	}
 
 	/* go through the state machine, tracking processing and response */
@@ -873,6 +895,8 @@ gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 			if((header.flags & PTCP_FIN) && (header.flags & PTCP_ACK)) {
 				wasProcessed = TRUE;
 				_tcp_setState(tcp, TCPS_CLOSED);
+				/* we closed, cant use tcp anymore, no retransmit */
+				return TRUE;
 			}
 			break;
 		}
@@ -906,9 +930,9 @@ gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 			tcp->send.unacked = header.acknowledgement;
 
 			/* prevent old segments from updating congestion window */
-			// @todo: control packets dont have sequence numbers, so math is off here
 			if((tcp->congestion.lastSequence < header.sequence) ||
-					((tcp->congestion.lastSequence == header.sequence) && (tcp->congestion.lastAcknowledgement <= header.acknowledgement)))
+					((tcp->congestion.lastSequence == header.sequence) &&
+					(tcp->congestion.lastAcknowledgement <= header.acknowledgement)))
 			{
 				/* update congestion window and keep track of when it was updated */
 				tcp->congestion.lastWindow = header.window;
@@ -932,12 +956,15 @@ gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 			/* its in our window, so we can accept the data */
 			wasProcessed = TRUE;
 
-//			if(header.sequence == tcp->receive.next) {
-//				/* this is THE next packet, we MUST accept it to avoid
-//				 * deadlocks unless we are blocked on user reading */
-//			}
+			/*
+			 * if this is THE next packet, we MUST accept it to avoid
+			 * deadlocks (unless we are blocked b/c user should read)
+			 */
+			gboolean isNextPacket = (header.sequence == tcp->receive.next) ? TRUE : FALSE;
+			gboolean waitingUserRead = (transport_getInputBufferSpace(&(tcp->super.super)) > 0) ? TRUE : FALSE;
+			gboolean packetFits = (packetLength <= _tcp_getBufferSpaceIn(tcp)) ? TRUE : FALSE;
 
-			if(packetLength <= _tcp_getBufferSpaceIn(tcp)) {
+			if((isNextPacket && !waitingUserRead) || (packetFits)) {
 				/* make sure its in order */
 				_tcp_bufferPacketIn(tcp, packet);
 			} else {
@@ -1012,6 +1039,8 @@ void tcp_droppedPacket(TCP* tcp, Packet* packet) {
 
 static void _tcp_endOfFileSignalled(TCP* tcp) {
 	MAGIC_ASSERT(tcp);
+
+	tcp->flags |= TCPF_EOF_SIGNALED;
 
 	/* user can no longer access socket */
 	descriptor_adjustStatus(&(tcp->super.super.super), DS_CLOSED, TRUE);
@@ -1174,8 +1203,8 @@ void tcp_close(TCP* tcp) {
 
 	switch (tcp->state) {
 		case TCPS_LISTEN: {
-			//TODO need to wait for children to close
-			break;
+			_tcp_setState(tcp, TCPS_CLOSED);
+			return;
 		}
 
 		case TCPS_ESTABLISHED: {
@@ -1190,7 +1219,9 @@ void tcp_close(TCP* tcp) {
 
 		case TCPS_SYNRECEIVED:
 		case TCPS_SYNSENT: {
-			// TODO send RESET
+			Packet* reset = _tcp_createPacket(tcp, PTCP_RST, NULL, 0);
+			_tcp_bufferPacketOut(tcp, reset);
+			_tcp_flush(tcp);
 			return;
 		}
 
@@ -1210,12 +1241,7 @@ void tcp_close(TCP* tcp) {
 
 void tcp_closeTimerExpired(TCP* tcp) {
 	MAGIC_ASSERT(tcp);
-
-	/* children need to notify their parents when closing */
-	if(tcp->child) {
-
-	}
-	node_closeDescriptor(worker_getPrivate()->cached_node, tcp->super.super.super.handle);
+	_tcp_setState(tcp, TCPS_CLOSED);
 }
 
 /* we implement the socket interface, this describes our function suite */
@@ -1237,8 +1263,7 @@ TCP* tcp_new(gint handle) {
 
 	socket_init(&(tcp->super), &tcp_functions, DT_TCPSOCKET, handle);
 
-	/* TODO make config option (cant be less than 1 !!) */
-	guint32 initial_window = 10;
+	guint32 initial_window = worker_getPrivate()->cached_engine->config->initialTCPWindow;
 
 	tcp->congestion.window = (gdouble)initial_window;
 	tcp->congestion.lastWindow = initial_window;

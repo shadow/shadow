@@ -37,6 +37,7 @@ guint32 networkinterface_getSpeedDownKiBps(NetworkInterface* interface);
 
 gboolean networkinterface_isAssociated(NetworkInterface* interface, gint key);
 void networkinterface_associate(NetworkInterface* interface, Transport* transport);
+void networkinterface_disassociate(NetworkInterface* interface, Transport* transport);
 
 void networkinterface_packetArrived(NetworkInterface* interface, Packet* packet);
 void networkinterface_received(NetworkInterface* interface);

@@ -61,9 +61,13 @@ void transport_init(Transport* transport, TransportFunctionTable* vtable, enum D
 	transport->outputBufferSize = CONFIG_SEND_BUFFER_SIZE;
 }
 
-gboolean transport_isBound(Transport* transport) {
+in_addr_t transport_getBinding(Transport* transport) {
 	MAGIC_ASSERT(transport);
-	return (transport->flags & TF_BOUND) ? TRUE : FALSE;
+	if(transport->flags & TF_BOUND) {
+		return transport->boundAddress;
+	} else {
+		return 0;
+	}
 }
 
 void transport_setBinding(Transport* transport, in_addr_t boundAddress, in_port_t port) {
@@ -85,7 +89,7 @@ void transport_setBinding(Transport* transport, in_addr_t boundAddress, in_port_
 
 gint transport_getAssociationKey(Transport* transport) {
 	MAGIC_ASSERT(transport);
-	g_assert(transport_isBound(transport));
+	g_assert(transport_getBinding(transport));
 	return transport->associationKey;
 }
 

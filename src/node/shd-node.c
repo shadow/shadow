@@ -239,7 +239,19 @@ static gint _node_monitorDescriptor(Node* node, Descriptor* descriptor) {
 
 static void _node_unmonitorDescriptor(Node* node, gint handle) {
 	MAGIC_ASSERT(node);
-	g_hash_table_remove(node->descriptors, (gconstpointer) &handle);
+
+	Descriptor* descriptor = node_lookupDescriptor(node, handle);
+	if(descriptor) {
+		if(descriptor->type == DT_TCPSOCKET || descriptor->type == DT_UDPSOCKET ||
+				descriptor->type == DT_PIPE)
+		{
+			Transport* transport = (Transport*) descriptor;
+			NetworkInterface* interface = node_lookupInterface(node, transport_getBinding(transport));
+			networkinterface_disassociate(interface, transport);
+		}
+
+		g_hash_table_remove(node->descriptors, (gconstpointer) &handle);
+	}
 }
 
 gint node_createDescriptor(Node* node, enum DescriptorType type) {
@@ -459,7 +471,7 @@ gint node_bindToInterface(Node* node, gint handle, in_addr_t bindAddress, in_por
 	Transport* transport = (Transport*) descriptor;
 
 	/* make sure socket is not bound */
-	if(transport_isBound(transport)) {
+	if(transport_getBinding(transport)) {
 		warning("socket already bound to requested address");
 		return EINVAL;
 	}
@@ -517,7 +529,7 @@ gint node_connectToPeer(Node* node, gint handle, in_addr_t peerAddress,
 		}
 	}
 
-	if(!transport_isBound(transport)) {
+	if(!transport_getBinding(transport)) {
 		/* do an implicit bind to a random port.
 		 * use default interface unless the remote peer is on loopback */
 		in_addr_t loIP = htonl(INADDR_LOOPBACK);
@@ -556,7 +568,7 @@ gint node_listenForPeer(Node* node, gint handle, gint backlog) {
 	Transport* transport = (Transport*) descriptor;
 	TCP* tcp = (TCP*) descriptor;
 
-	if(!transport_isBound(transport)) {
+	if(!transport_getBinding(transport)) {
 		/* implicit bind */
 		in_addr_t bindAddress = htonl(INADDR_ANY);
 		in_port_t bindPort = _node_getRandomFreePort(node, bindAddress, type);
@@ -696,7 +708,10 @@ gint node_sendUserData(Node* node, gint handle, gconstpointer buffer, gsize nByt
 	}
 
 	if(type == DT_TCPSOCKET) {
-		if(tcp_getConnectError((TCP*) transport) == ECONNREFUSED) {
+		gint error = tcp_getConnectError((TCP*) transport);
+		if(error == ECONNRESET) {
+			return ECONNRESET;
+		} else if(error == ECONNREFUSED) {
 			return ECONNREFUSED;
 		}
 	}

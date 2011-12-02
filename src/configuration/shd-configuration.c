@@ -37,12 +37,13 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	c->nWorkerThreads = 0;
 	c->minRunAhead = 10;
 	c->printSoftwareVersion = 0;
+	c->initialTCPWindow = 10;
 
 	/* set options to change defaults for the main group */
 	c->mainOptionGroup = g_option_group_new("main", "Application Options", "Various application related options", NULL, NULL);
 	const GOptionEntry mainEntries[] = {
-	  { "threads", 't', 0, G_OPTION_ARG_INT, &(c->nWorkerThreads), "Use N worker threads", "N" },
-	  { "log-level", 'l', 0, G_OPTION_ARG_STRING, &(c->logLevelInput), "Log LEVEL above which to filter messages (error < critical < warning < message < info < debug)", "LEVEL" },
+	  { "threads", 't', 0, G_OPTION_ARG_INT, &(c->nWorkerThreads), "Use N worker threads [0]", "N" },
+	  { "log-level", 'l', 0, G_OPTION_ARG_STRING, &(c->logLevelInput), "Log LEVEL above which to filter messages (error < critical < warning < message < info < debug) [message]", "LEVEL" },
 	  { "version", 'v', 0, G_OPTION_ARG_NONE, &(c->printSoftwareVersion), "Print software version and exit", NULL },
 	  { NULL },
 	};
@@ -54,7 +55,8 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	c->networkOptionGroup = g_option_group_new("network", "Network Options", "Various network related options", NULL, NULL);
 	const GOptionEntry networkEntries[] =
 	{
-	  { "runahead", 'r', 0, G_OPTION_ARG_INT, &(c->minRunAhead), "Minimum allowed TIME workers may run ahead when sending events between nodes, in milliseconds", "TIME" },
+	  { "runahead", 0, 0, G_OPTION_ARG_INT, &(c->minRunAhead), "Minimum allowed TIME workers may run ahead when sending events between nodes, in milliseconds [10]", "TIME" },
+	  { "tcp-windows", 0, 0, G_OPTION_ARG_INT, &(c->initialTCPWindow), "Initialize the TCP send, receive, and congestion windows to N packets [10]", "N" },
 	  { NULL },
 	};
 
@@ -65,7 +67,6 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	c->pluginsOptionGroup = g_option_group_new("plug-ins", "Plug-in Examples", "Run example simulations with built-in plug-ins", NULL, NULL);
 	const GOptionEntry pluginEntries[] =
 	{
-	  { "ping", 0, 0, G_OPTION_ARG_NONE, &(c->runPingExample), "Run basic ping-pong simulation", NULL },
 	  { "echo", 0, 0, G_OPTION_ARG_NONE, &(c->runEchoExample), "Run basic echo simulation", NULL },
 	  { "file", 0, 0, G_OPTION_ARG_NONE, &(c->runFileExample), "Run basic HTTP file transfer simulation", NULL },
 	  { NULL },
@@ -86,8 +87,7 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	/* make sure we have the required arguments. program name is first arg.
 	 * printing the software version requires no other args. running a
 	 * plug-in example also requires no other args. */
-	if(!(c->printSoftwareVersion) && !(c->runPingExample) &&
-			!(c->runEchoExample) && !(c->runFileExample) &&
+	if(!(c->printSoftwareVersion) && !(c->runEchoExample) && !(c->runFileExample) &&
 			(argc < nRequiredXMLFiles + 1)) {
 		g_printerr("** Please provide the required parameters **\n");
 		g_printerr(g_option_context_get_help(c->context, TRUE, NULL));
@@ -100,6 +100,9 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	}
 	if(c->logLevelInput == NULL) {
 		c->logLevelInput = g_strdup("message");
+	}
+	if(c->initialTCPWindow <= 0) {
+		c->initialTCPWindow = 1;
 	}
 
 	c->inputXMLFilenames = g_queue_new();

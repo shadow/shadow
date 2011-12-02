@@ -108,6 +108,7 @@ static void echoserver_socketReadable(EchoServer* es, gint socketDescriptor, Sha
 
 			/* if we read, start listening for when we can write */
 			if(bread == 0) {
+				close(es->listen_sd);
 				close(socketDescriptor);
 			} else if(bread > 0) {
 				log(G_LOG_LEVEL_INFO, __FUNCTION__, "server socket %i read %i bytes", socketDescriptor, (gint)bread);

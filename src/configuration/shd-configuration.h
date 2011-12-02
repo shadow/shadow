@@ -209,9 +209,9 @@ struct _Configuration {
 
 	GOptionGroup* networkOptionGroup;
 	gint minRunAhead;
+	gint initialTCPWindow;
 
 	GOptionGroup* pluginsOptionGroup;
-	gboolean runPingExample;
 	gboolean runEchoExample;
 	gboolean runFileExample;
 
