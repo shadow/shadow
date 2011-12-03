@@ -588,12 +588,15 @@ gint system_getHostName(gchar *name, size_t len) {
 	Node* node = _system_switchInShadowContext();
 	gint result = 0;
 
+//	in_addr_t ip = node_getDefaultIP(node);
+//	const gchar* hostname = internetwork_resolveID(worker_getPrivate()->cached_engine->internet, (GQuark)ip);
+
 	if(name != NULL && node != NULL) {
 
 		/* resolve my address to a hostname */
 		const gchar* sysname = node_getName(node);
 
-		if(sysname != NULL) {
+		if(sysname != NULL && len > strlen(sysname)) {
 			if(strncpy(name, sysname, len) != NULL) {
 				result = 0;
 				goto done;
@@ -687,4 +690,40 @@ void system_freeAddrInfo(struct addrinfo *res) {
 		res->ai_addr = NULL;
 		g_free(res);
 	}
+}
+
+struct hostent* system_getHostByName(const gchar* name) {
+	warning("gethostbyname not yet implemented");
+	return NULL;
+}
+
+int system_getHostByName_r(const gchar *name,
+               struct hostent *ret, gchar *buf, gsize buflen,
+               struct hostent **result, gint *h_errnop) {
+	warning("gethostbyname_r not yet implemented");
+	return -1;
+}
+
+struct hostent* system_getHostByName2(const gchar* name, gint af) {
+	warning("gethostbyname2 not yet implemented");
+	return NULL;
+}
+
+int system_getHostByName2_r(const gchar *name, gint af,
+               struct hostent *ret, gchar *buf, gsize buflen,
+               struct hostent **result, gint *h_errnop) {
+	warning("gethostbyname2_r not yet implemented");
+	return -1;
+}
+
+struct hostent* system_getHostByAddr(const void* addr, socklen_t len, gint type) {
+	warning("gethostbyaddr not yet implemented");
+	return NULL;
+}
+
+int system_getHostByAddr_r(const void *addr, socklen_t len, gint type,
+               struct hostent *ret, gchar *buf, gsize buflen,
+               struct hostent **result, gint *h_errnop) {
+	warning("gethostbyaddr_r not yet implemented");
+	return -1;
 }

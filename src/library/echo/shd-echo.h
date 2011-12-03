@@ -25,8 +25,10 @@
 #include <glib.h>
 #include <shd-library.h>
 
+#include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/epoll.h>
+#include <netdb.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <stdio.h>
@@ -36,57 +38,119 @@
 #include <errno.h>
 #include <unistd.h>
 
-#define ERROR -1
 #define BUFFERSIZE 20000
 #define ECHO_SERVER_PORT 9999
 #define MAX_EVENTS 10
 
+/**
+ * Note:
+ * If a module contains a function named g_module_check_init() it is called
+ * automatically when the module is loaded. It is passed the GModule structure
+ * and should return NULL on success or a string describing the initialization
+ * error. Similarly, if a module contains a function g_module_unload() it is
+ * called by GLib right before the module is unloaded.
+ *
+ * g_module_check_init(GModule* module)
+ * g_module_unload(GModule* module)
+ *
+ * @param module :
+ *	 the GModule corresponding to the module which has just been loaded.
+ * Returns :
+ *   NULL on success, or a string describing the initialization error.
+ */
+
+/**
+ * Protocol modes this echo module supports.
+ */
 enum EchoProtocol {
-	EchoNONE, EchoTCP, EchoUDP, EchoPIPE,
+	ECHOP_NONE, ECHOP_TCP, ECHOP_UDP, ECHOP_PIPE,
 };
 
+/**
+ *
+ */
 typedef struct _EchoClient EchoClient;
 struct _EchoClient {
-	enum EchoProtocol protocol;
-	in_addr_t serverIPAddress;
-	gint epollFileDescriptor;
-	gint sd;
-	gchar send_buffer[BUFFERSIZE];
-	gchar recv_buffer[BUFFERSIZE];
+	ShadowlibLogFunc log;
+	in_addr_t serverIP;
+	gint epolld;
+	gint socketd;
+	gchar sendBuffer[BUFFERSIZE];
+	gchar recvBuffer[BUFFERSIZE];
 	gint recv_offset;
 	gint sent_msg;
 	gint amount_sent;
 	gint is_done;
 };
 
+/**
+ *
+ */
 typedef struct _EchoServer EchoServer;
 struct _EchoServer {
-	enum EchoProtocol protocol;
-	gint epollFileDescriptor;
-	gint listen_sd;
+	ShadowlibLogFunc log;
+	gint epolld;
+	gint listend;
 	struct sockaddr_in address;
-	gchar echo_buffer[BUFFERSIZE];
+	gchar echoBuffer[BUFFERSIZE];
 	gint read_offset;
 	gint write_offset;
 };
 
+/**
+ *
+ */
+typedef struct _EchoTCP EchoTCP;
+struct _EchoTCP {
+	ShadowlibLogFunc log;
+	EchoClient* client;
+	EchoServer* server;
+};
+
+/**
+ *
+ */
+typedef struct _EchoUDP EchoUDP;
+struct _EchoUDP {
+	ShadowlibLogFunc log;
+	EchoClient* client;
+	EchoServer* server;
+};
+
+/**
+ *
+ */
+typedef struct _EchoPipe EchoPipe;
+struct _EchoPipe {
+	ShadowlibLogFunc log;
+};
+
+/**
+ *
+ */
 typedef struct _Echo Echo;
 struct _Echo {
-	EchoServer* server;
-	EchoClient* client;
-	ShadowlibFunctionTable* shadowlibFuncs;
-} echoloopback_t, *echoloopback_tp;
+	ShadowlibFunctionTable shadowlibFuncs;
+	enum EchoProtocol protocol;
+	EchoTCP* etcp;
+	EchoUDP* eudp;
+	EchoPipe* epipe;
+};
 
-void echo_new(int argc, char* argv[]);
-void echo_free();
-void echo_ready();
+void echoplugin_new(int argc, char* argv[]);
+void echoplugin_free();
+void echoplugin_ready();
 
-EchoClient* echoclient_new(enum EchoProtocol protocol, in_addr_t serverIPAddress, ShadowlibLogFunc log);
-void echoclient_free(EchoClient* ec);
-void echoclient_ready(EchoClient* ec, ShadowlibLogFunc log);
+EchoTCP* echotcp_new(ShadowlibLogFunc log, int argc, char* argv[]);
+void echotcp_free(EchoTCP* etcp);
+void echotcp_ready(EchoTCP* etcp);
 
-EchoServer* echoserver_new(enum EchoProtocol protocol, in_addr_t bindIPAddress, ShadowlibLogFunc log);
-void echoserver_free(EchoServer* es);
-void echoserver_ready(EchoServer* es, ShadowlibLogFunc log);
+EchoUDP* echoudp_new(ShadowlibLogFunc log, int argc, char* argv[]);
+void echoudp_free(EchoUDP* eudp);
+void echoudp_ready(EchoUDP* eudp);
+
+EchoPipe* echopipe_new(ShadowlibLogFunc log);
+void echopipe_free(EchoPipe* epipe);
+void echopipe_ready(EchoPipe* epipe);
 
 #endif /* SHD_ECHO_H_ */

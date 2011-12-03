@@ -148,7 +148,7 @@ gint main(gint argc, gchar *argv[])
 				}
 #ifdef _FSDEBUG
 				/* report some TCP kernel info */
-				report(sd, &ti_start, &ti_now, &ti, &ti_len);
+				report(socketd, &ti_start, &ti_now, &ti, &ti_len);
 #endif
 
 				LOGD("fileserver activation result: %s (%zu bytes in, %zu bytes out, %zu replies)\n",

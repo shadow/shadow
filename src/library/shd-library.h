@@ -87,12 +87,8 @@ typedef void (*ShadowPluginCallbackFunc)(gpointer data);
 /* function signatures for available shadow functions */
 typedef gboolean (*ShadowlibRegisterFunc)(PluginFunctionTable* callbackFunctions, guint nVariables, ...);
 typedef void (*ShadowlibLogFunc)(GLogLevelFlags level, const gchar* functionName, gchar* format, ...);
-typedef in_addr_t (*ShadowlibResolveHostnameFunc)(gchar* name);
-typedef gboolean (*ShadowlibResolveIPAddressFunc)(in_addr_t addr, gchar* name_out, gint name_out_len);
-typedef in_addr_t (*ShadowlibGetIPAddressFunc)();
-typedef gboolean (*ShadowlibGetHostnameFunc)(gchar* name_out, gint name_out_len);
 typedef void (*ShadowlibCreateCallbackFunc)(ShadowPluginCallbackFunc callback, gpointer data, guint millisecondsDelay);
-typedef guint32 (*ShadowlibGetBandwidthFloorFunc)(in_addr_t ip);
+typedef gboolean (*ShadowlibGetBandwidthFloorFunc)(in_addr_t ip, guint* bwdown, guint* bwup);
 
 typedef struct _ShadowlibFunctionTable ShadowlibFunctionTable;
 extern ShadowlibFunctionTable shadowlibFunctionTable;
@@ -103,14 +99,10 @@ extern ShadowlibFunctionTable shadowlibFunctionTable;
  * functions to hook into Shadow's logging and event systems.
  */
 struct _ShadowlibFunctionTable {
-	ShadowlibRegisterFunc registration;
+	ShadowlibRegisterFunc registerPlugin;
 	ShadowlibLogFunc log;
-	ShadowlibResolveHostnameFunc resolveHostname;
-	ShadowlibResolveIPAddressFunc resolveIP;
-	ShadowlibGetHostnameFunc getHostname;
-	ShadowlibGetIPAddressFunc getIP;
 	ShadowlibCreateCallbackFunc createCallback;
-	ShadowlibGetBandwidthFloorFunc getBandwidthFloor;
+	ShadowlibGetBandwidthFloorFunc getBandwidth;
 };
 
 /* Plug-ins must implement this function to communicate with Shadow.

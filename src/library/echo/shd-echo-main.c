@@ -33,52 +33,53 @@ void mylog(GLogLevelFlags level, const gchar* functionName, gchar* format, ...) 
 }
 
 gint main(gint argc, gchar *argv[]) {
-	Echo echo;
+	Echo echostate;
+	memset(&echostate, 0, sizeof(Echo));
 
 	mylog(G_LOG_LEVEL_DEBUG, __FUNCTION__, "Starting echo program");
 
-	echo.client = NULL;
-	echo.server = NULL;
+	const char* USAGE = "Echo USAGE: 'tcp client serverIP', 'tcp server', 'tcp loopback', 'tcp socketpair'"
+			"'udp client serverIP', 'udp server', 'udp loopback', 'pipe'\n"
+			"** clients and servers must be paired together, but loopback, socketpair,"
+			"and pipe modes stand on their own.";
 
-	char* USAGE = "Echo usage: 'client tcp serverIP', 'client udp serverIP', 'server tcp', 'server udp', 'loopback tcp', or 'loopback udp'";
-	if(argc < 3) {
-		mylog(G_LOG_LEVEL_CRITICAL, __FUNCTION__, USAGE);
+	/* 0 is the plugin name, 1 is the protocol */
+	if(argc < 2) {
+		echostate.shadowlibFuncs.log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "%s", USAGE);
 		return -1;
 	}
 
-	/* parse command line args */
-	char* mode = argv[1];
-	char* protostr = argv[2];
+	char* protocol = argv[1];
 
-	enum EchoProtocol protocol = g_strcasecmp(protostr, "tcp") == 0 ? EchoTCP :
-			g_strcasecmp(protostr, "udp") == 0 ? EchoUDP : EchoPIPE;
+	gboolean isError = TRUE;
 
-	if(g_strcasecmp(mode, "client") == 0) {
-		if(argc < 4) {
-			mylog(G_LOG_LEVEL_CRITICAL, __FUNCTION__, USAGE);
-			return -1;
-		}
-
-		/* start up a client, connecting to the server specified in args */
-		char* serverIPString = argv[3];
-		struct in_addr in;
-		gint is_ip_address = inet_aton(serverIPString, &in);
-		if(!is_ip_address) {
-			mylog(G_LOG_LEVEL_CRITICAL, __FUNCTION__, USAGE);
-			return -1;
-		}
-		in_addr_t serverIP = in.s_addr;
-		echo.client = echoclient_new(protocol, serverIP, mylog);
-	} else if(g_strcasecmp(mode, "server") == 0) {
-		in_addr_t serverIP = INADDR_ANY;
-		echo.server = echoserver_new(protocol, serverIP, mylog);
-	} else if(g_strcasecmp(mode, "loopback") == 0) {
-		echo.server = echoserver_new(protocol, htonl(INADDR_LOOPBACK), mylog);
-		echo.client = echoclient_new(protocol, htonl(INADDR_LOOPBACK), mylog);
-	} else {
-		mylog(G_LOG_LEVEL_CRITICAL, __FUNCTION__, USAGE);
-		return -1;
+	/* check for the protocol option and create the correct application state */
+	if(g_strncasecmp(protocol, "tcp", 3) == 0)
+	{
+		echostate.protocol = ECHOP_TCP;
+		echostate.etcp = echotcp_new(echostate.shadowlibFuncs.log, argc - 2, &argv[2]);
+		isError = (echostate.etcp == NULL) ? TRUE : FALSE;
 	}
+	else if(g_strncasecmp(protocol, "udp", 3) == 0)
+	{
+		echostate.protocol = ECHOP_UDP;
+		echostate.eudp = echoudp_new(echostate.shadowlibFuncs.log, argc - 2, &argv[2]);
+		isError = (echostate.eudp == NULL) ? TRUE : FALSE;
+	}
+	else if(g_strncasecmp(protocol, "pipe", 4) == 0)
+	{
+		echostate.protocol = ECHOP_PIPE;
+		echostate.epipe = NULL;//echopipe_new(echostate.shadowlibFuncs.log);
+		isError = (echostate.epipe == NULL) ? TRUE : FALSE;
+	}
+
+	if(isError) {
+		/* unknown argument for protocol, log usage information through Shadow */
+		mylog(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "%s", USAGE);
+	}
+
+	EchoServer* server = echostate.etcp ? echostate.etcp->server : echostate.eudp ? echostate.eudp->server : NULL;
+	EchoClient* client = echostate.etcp ? echostate.etcp->client : echostate.eudp ? echostate.eudp->client : NULL;
 
 	/* do an epoll on the client/server epoll descriptors, so we know when
 	 * we can wait on either of them without blocking.
@@ -88,20 +89,20 @@ gint main(gint argc, gchar *argv[]) {
 		mylog(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_create");
 		return -1;
 	} else {
-		if(echo.server) {
+		if(server) {
 			struct epoll_event ev;
 			ev.events = EPOLLIN;
-			ev.data.fd = echo.server->epollFileDescriptor;
-			if(epoll_ctl(epolld, EPOLL_CTL_ADD, echo.server->epollFileDescriptor, &ev) == -1) {
+			ev.data.fd = server->epolld;
+			if(epoll_ctl(epolld, EPOLL_CTL_ADD, server->epolld, &ev) == -1) {
 				mylog(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_ctl");
 				return -1;
 			}
 		}
-		if(echo.client) {
+		if(client) {
 			struct epoll_event ev;
 			ev.events = EPOLLIN;
-			ev.data.fd = echo.client->epollFileDescriptor;
-			if(epoll_ctl(epolld, EPOLL_CTL_ADD, echo.client->epollFileDescriptor, &ev) == -1) {
+			ev.data.fd = client->epolld;
+			if(epoll_ctl(epolld, EPOLL_CTL_ADD, client->epolld, &ev) == -1) {
 				mylog(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_ctl");
 				return -1;
 			}
@@ -118,18 +119,22 @@ gint main(gint argc, gchar *argv[]) {
 
 		for(int i = 0; i < nfds; i++) {
 			if(events[i].events & EPOLLIN) {
-				if(echo.server && events[i].data.fd == echo.server->epollFileDescriptor) {
-					echoserver_ready(echo.server, mylog);
-				}
-				if(echo.client && events[i].data.fd == echo.client->epollFileDescriptor) {
-					echoclient_ready(echo.client, mylog);
+				if(echostate.etcp) {
+					echotcp_ready(echostate.etcp);
+				}else if(echostate.eudp) {
+					echoudp_ready(echostate.eudp);
 				}
 			}
 		}
 
-		if(echo.client && echo.client->is_done) {
-			close(echo.client->sd);
-			echoclient_free(echo.client);
+		if(client && client->is_done) {
+			close(client->socketd);
+			if(echostate.etcp) {
+				echotcp_free(echostate.etcp);
+			}
+			if(echostate.eudp) {
+				echoudp_free(echostate.eudp);
+			}
 			break;
 		}
 	}

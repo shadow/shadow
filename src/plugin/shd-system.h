@@ -72,5 +72,17 @@ gint system_getHostName(gchar *name, size_t len);
 gint system_getAddrInfo(gchar *name, const gchar *service,
 		const struct addrinfo *hgints, struct addrinfo **res);
 void system_freeAddrInfo(struct addrinfo *res);
+struct hostent* system_getHostByName(const gchar* name);
+int system_getHostByName_r(const gchar *name,
+               struct hostent *ret, gchar *buf, gsize buflen,
+               struct hostent **result, gint *h_errnop);
+struct hostent* system_getHostByName2(const gchar* name, gint af);
+int system_getHostByName2_r(const gchar *name, gint af,
+               struct hostent *ret, gchar *buf, gsize buflen,
+               struct hostent **result, gint *h_errnop);
+struct hostent* system_getHostByAddr(const void* addr, socklen_t len, gint type);
+int system_getHostByAddr_r(const void *addr, socklen_t len, gint type,
+               struct hostent *ret, gchar *buf, gsize buflen,
+               struct hostent **result, gint *h_errnop);
 
 #endif /* SHD_SYSTEM_H_ */

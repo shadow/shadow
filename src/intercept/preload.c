@@ -24,6 +24,7 @@
 #include <openssl/evp.h>
 #include <sys/socket.h>
 #include <sys/epoll.h>
+#include <netdb.h>
 #include <time.h>
 #include <stddef.h>
 #include <string.h>
@@ -405,6 +406,78 @@ void freeaddrinfo(struct addrinfo *res) {
 	PRELOAD_DECIDE(func, funcName, "freeaddrinfo", _freeaddrinfo, INTERCEPT_PREFIX, _vsystem_freeaddrinfo, 1);
 	PRELOAD_LOOKUP(func, funcName,);
 	(*func)(res);
+}
+
+typedef struct hostent* (*gethostbyname_fp)(const gchar*);
+static gethostbyname_fp _gethostbyname = NULL;
+static gethostbyname_fp _vsystem_gethostbyname = NULL;
+struct hostent* gethostbyname(const gchar* name) {
+	gethostbyname_fp* func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "gethostbyname", _gethostbyname, INTERCEPT_PREFIX, _vsystem_gethostbyname, 1);
+	PRELOAD_LOOKUP(func, funcName, NULL);
+	return (*func)(name);
+}
+
+typedef int (*gethostbyname_r_fp)(const gchar *, struct hostent *, gchar *, gsize , struct hostent **, gint *);
+static gethostbyname_r_fp _gethostbyname_r = NULL;
+static gethostbyname_r_fp _vsystem_gethostbyname_r = NULL;
+int gethostbyname_r(const gchar *name,
+               struct hostent *ret, gchar *buf, gsize buflen,
+               struct hostent **result, gint *h_errnop) {
+	gethostbyname_r_fp* func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "gethostbyname_r", _gethostbyname_r, INTERCEPT_PREFIX, _vsystem_gethostbyname_r, 1);
+	PRELOAD_LOOKUP(func, funcName, -1);
+	return (*func)(name, ret, buf, buflen, result, h_errnop);
+}
+
+typedef struct hostent* (*gethostbyname2_fp)(const gchar*, gint);
+static gethostbyname2_fp _gethostbyname2 = NULL;
+static gethostbyname2_fp _vsystem_gethostbyname2 = NULL;
+struct hostent* gethostbyname2(const gchar* name, gint af) {
+	gethostbyname2_fp* func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "gethostbyname2", _gethostbyname2, INTERCEPT_PREFIX, _vsystem_gethostbyname2, 1);
+	PRELOAD_LOOKUP(func, funcName, NULL);
+	return (*func)(name, af);
+}
+
+typedef int (*gethostbyname2_r_fp)(const gchar *, gint, struct hostent *, gchar *, gsize , struct hostent **, gint *);
+static gethostbyname2_r_fp _gethostbyname2_r = NULL;
+static gethostbyname2_r_fp _vsystem_gethostbyname2_r = NULL;
+int gethostbyname2_r(const gchar *name, gint af,
+               struct hostent *ret, gchar *buf, gsize buflen,
+               struct hostent **result, gint *h_errnop) {
+	gethostbyname2_r_fp* func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "gethostbyname2_r", _gethostbyname2_r, INTERCEPT_PREFIX, _vsystem_gethostbyname2_r, 1);
+	PRELOAD_LOOKUP(func, funcName, -1);
+	return (*func)(name, af, ret, buf, buflen, result, h_errnop);
+}
+
+typedef struct hostent* (*gethostbyaddr_fp)(const void*, socklen_t, gint);
+static gethostbyaddr_fp _gethostbyaddr = NULL;
+static gethostbyaddr_fp _vsystem_gethostbyaddr = NULL;
+struct hostent* gethostbyaddr(const void* addr, socklen_t len, gint type) {
+	gethostbyaddr_fp* func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "gethostbyaddr", _gethostbyaddr, INTERCEPT_PREFIX, _vsystem_gethostbyaddr, 1);
+	PRELOAD_LOOKUP(func, funcName, NULL);
+	return (*func)(addr, len, type);
+}
+
+typedef int (*gethostbyaddr_r_fp)(const void *, socklen_t, gint, struct hostent *, gchar *, gsize , struct hostent **, gint *);
+static gethostbyaddr_r_fp _gethostbyaddr_r = NULL;
+static gethostbyaddr_r_fp _vsystem_gethostbyaddr_r = NULL;
+int gethostbyaddr_r(const void *addr, socklen_t len, gint type,
+               struct hostent *ret, gchar *buf, gsize buflen,
+               struct hostent **result, gint *h_errnop) {
+	gethostbyaddr_r_fp* func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "gethostbyaddr_r", _gethostbyaddr_r, INTERCEPT_PREFIX, _vsystem_gethostbyaddr_r, 1);
+	PRELOAD_LOOKUP(func, funcName, -1);
+	return (*func)(addr, len, type, ret, buf, buflen, result, h_errnop);
 }
 
 /**

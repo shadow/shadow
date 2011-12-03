@@ -25,6 +25,7 @@ set(shadow_srcs
     plugin/shd-plugin.c
     plugin/shd-plugin-state.c
     plugin/shd-software.c
+    plugin/shd-system.c
     library/shd-library.c
     
     runnable/shd-runnable.c
@@ -58,7 +59,6 @@ set(shadow_srcs
     node/shd-packet.c
     node/shd-cpu.c
     node/shd-network-interface.c
-    node/shd-system.c
     node/shd-application.c
     node/shd-node.c
         

@@ -62,58 +62,12 @@ void shadowlib_log(GLogLevelFlags level, const gchar* functionName, gchar* forma
 	plugin_setShadowContext(worker->cached_plugin, FALSE);
 }
 
-in_addr_t shadowlib_resolveHostname(gchar* name) {
-	Worker* worker = worker_getPrivate();
-	plugin_setShadowContext(worker->cached_plugin, TRUE);
-
-	in_addr_t ip = (in_addr_t) internetwork_resolveName(worker->cached_engine->internet, name);
-
-	plugin_setShadowContext(worker->cached_plugin, FALSE);
-	return ip;
-}
-
-gboolean shadowlib_resolveIPAddress(in_addr_t addr, gchar* name_out, gint name_out_len) {
-	Worker* worker = worker_getPrivate();
-	plugin_setShadowContext(worker->cached_plugin, TRUE);
-
-	const gchar* name = internetwork_resolveID(worker->cached_engine->internet, (GQuark)addr);
-	gboolean isSuccess = FALSE;
-	if(name != NULL && name_out_len > strlen(name)) {
-		strncpy(name_out, name, name_out_len);
-		isSuccess = TRUE;
-	}
-
-	plugin_setShadowContext(worker->cached_plugin, FALSE);
-	return isSuccess;
-}
-
-in_addr_t shadowlib_getIPAddress() {
-	Worker* worker = worker_getPrivate();
-	plugin_setShadowContext(worker->cached_plugin, TRUE);
-
-	in_addr_t ip = node_getDefaultIP(worker->cached_node);
-
-	plugin_setShadowContext(worker->cached_plugin, FALSE);
-	return ip;
-}
-
-gboolean shadowlib_getHostname(gchar* name_out, gint name_out_len) {
-	Worker* worker = worker_getPrivate();
-	plugin_setShadowContext(worker->cached_plugin, TRUE);
-
-	in_addr_t ip = node_getDefaultIP(worker->cached_node);
-	gboolean hostname = shadowlib_resolveIPAddress(ip, name_out, name_out_len);
-
-	plugin_setShadowContext(worker->cached_plugin, FALSE);
-	return hostname;
-}
-
-void _shadowlib_executeCallbackInPluginContext(gpointer data, gpointer argument) {
+static void _shadowlib_executeCallbackInPluginContext(gpointer data, gpointer argument) {
 	ShadowPluginCallbackFunc callback = argument;
 	callback(data);
 }
 
-void _shadowlib_timerExpired(gpointer data, gpointer argument) {
+static void _shadowlib_timerExpired(gpointer data, gpointer argument) {
 	Worker* worker = worker_getPrivate();
 	Application* a = node_getApplication(worker->cached_node);
 	Plugin* plugin = worker_getPlugin(a->software);
@@ -136,17 +90,29 @@ void shadowlib_createCallback(ShadowPluginCallbackFunc callback, gpointer data, 
 	plugin_setShadowContext(worker->cached_plugin, FALSE);
 }
 
-guint32 shadowlib_getBandwidthFloor(in_addr_t ip) {
+gboolean shadowlib_getBandwidth(in_addr_t ip, guint* bwdown, guint* bwup) {
+	if(!bwdown || !bwup) {
+		return FALSE;
+	}
+
+	gboolean success = FALSE;
+
 	Worker* worker = worker_getPrivate();
 	plugin_setShadowContext(worker->cached_plugin, TRUE);
 
 	Node* n = internetwork_getNode(worker->cached_engine->internet, (GQuark)ip);
-	NetworkInterface* interface = node_lookupInterface(n, ip);
-	guint32 down = networkinterface_getSpeedDownKiBps(interface);
-	guint32 up = networkinterface_getSpeedUpKiBps(interface);
+	if(n) {
+		NetworkInterface* interface = node_lookupInterface(n, ip);
+		if(interface) {
+			*bwdown = (guint)networkinterface_getSpeedDownKiBps(interface);
+			*bwup = (guint)networkinterface_getSpeedUpKiBps(interface);
+			success = TRUE;
+		}
+	}
 
 	plugin_setShadowContext(worker->cached_plugin, FALSE);
-	return down < up ? down : up;
+
+	return success;
 }
 
 /* we send this FunctionTable to each plug-in so it has pointers to our functions.
@@ -154,10 +120,6 @@ guint32 shadowlib_getBandwidthFloor(in_addr_t ip) {
 ShadowlibFunctionTable shadowlibFunctionTable = {
 	&shadowlib_register,
 	&shadowlib_log,
-	&shadowlib_resolveHostname,
-	&shadowlib_resolveIPAddress,
-	&shadowlib_getHostname,
-	&shadowlib_getIPAddress,
 	&shadowlib_createCallback,
-	&shadowlib_getBandwidthFloor,
+	&shadowlib_getBandwidth,
 };

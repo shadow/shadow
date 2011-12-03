@@ -127,7 +127,7 @@ typedef guint64 SimulationTime;
  * file descriptor counter doesn't collide with our sockets. So this should be
  * set at least over the ulimit -n value.
  */
-#define MIN_DESCRIPTOR 30000
+#define MIN_DESCRIPTOR 1000000
 
 /**
  * The start of our random port range in host order, used if application doesn't

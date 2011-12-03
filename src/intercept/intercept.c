@@ -76,6 +76,36 @@ void intercept_freeaddrinfo(struct addrinfo *res) {
 	system_freeAddrInfo(res);
 }
 
+struct hostent* intercept_gethostbyname(const gchar* name) {
+	return system_getHostByName(name);
+}
+
+int intercept_gethostbyname_r(const gchar *name,
+               struct hostent *ret, gchar *buf, gsize buflen,
+               struct hostent **result, gint *h_errnop) {
+	return system_getHostByName_r(name, ret, buf, buflen, result, h_errnop);
+}
+
+struct hostent* intercept_gethostbyname2(const gchar* name, gint af) {
+	return system_getHostByName2(name, af);
+}
+
+int intercept_gethostbyname2_r(const gchar *name, gint af,
+               struct hostent *ret, gchar *buf, gsize buflen,
+               struct hostent **result, gint *h_errnop) {
+	return system_getHostByName2_r(name, af, ret, buf, buflen, result, h_errnop);
+}
+
+struct hostent* intercept_gethostbyaddr(const void* addr, socklen_t len, gint type) {
+	return system_getHostByAddr(addr, len, type);
+}
+
+int intercept_gethostbyaddr_r(const void *addr, socklen_t len, gint type,
+               struct hostent *ret, gchar *buf, gsize buflen,
+               struct hostent **result, gint *h_errnop) {
+	return system_getHostByAddr_r(addr, len, type, ret, buf, buflen, result, h_errnop);
+}
+
 /**
  * System socket and IO
  */

@@ -94,7 +94,7 @@
 #include "node/descriptor/shd-udp.h"
 #include "node/shd-application.h"
 #include "node/shd-network-interface.h"
-#include "node/shd-system.h"
+#include "plugin/shd-system.h"
 #include "node/shd-node.h"
 
 #include "runnable/event/shd-callback.h"

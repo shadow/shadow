@@ -53,6 +53,10 @@ gint software_getArguments(Software* software, gchar** argvOut[]) {
 	gchar* argumentString = g_strdup(software->arguments->str);
 	GQueue *arguments = g_queue_new();
 
+	/* first argument is the name of the program */
+	const gchar* pluginName = g_quark_to_string(software->pluginID);
+	g_queue_push_tail(arguments, g_strdup(pluginName));
+
 	/* parse the full argument string into separate strings */
 	gchar* token = strtok(argumentString, " ");
 	while(token != NULL) {
