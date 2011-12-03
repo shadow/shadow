@@ -61,7 +61,7 @@ void echoplugin_new(int argc, char* argv[]) {
 	echostate.shadowlibFuncs.log(G_LOG_LEVEL_DEBUG, __FUNCTION__,
 			"echoplugin_new called");
 
-	const char* USAGE = "Echo USAGE: 'tcp client serverIP', 'tcp server', 'tcp loopback', 'tcp socketpair'"
+	const char* USAGE = "Echo USAGE: 'tcp client serverIP', 'tcp server', 'tcp loopback', 'tcp socketpair', "
 			"'udp client serverIP', 'udp server', 'udp loopback', 'pipe'\n"
 			"** clients and servers must be paired together, but loopback, socketpair,"
 			"and pipe modes stand on their own.";

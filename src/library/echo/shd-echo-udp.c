@@ -167,6 +167,7 @@ EchoUDP* echoudp_new(ShadowlibLogFunc log, int argc, char* argv[]) {
 				isError = TRUE;
 			} else {
 				in_addr_t myIP = ((struct sockaddr_in*)(myInfo->ai_addr))->sin_addr.s_addr;
+				log(G_LOG_LEVEL_INFO, __FUNCTION__, "binding to %s", inet_ntoa((struct in_addr){myIP}));
 				eudp->server = _echoudp_newServer(log, myIP);
 			}
 		} else {
@@ -347,7 +348,7 @@ void echoudp_ready(EchoUDP* eudp) {
 			if(events[i].events & EPOLLIN) {
 				_echoudp_clientReadable(eudp->client, events[i].data.fd);
 			}
-			if(events[i].events & EPOLLOUT) {
+			if(!eudp->client->is_done && (events[i].events & EPOLLOUT)) {
 				_echoudp_clientWritable(eudp->client, events[i].data.fd);
 			}
 		}

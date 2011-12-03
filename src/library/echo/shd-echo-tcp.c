@@ -180,6 +180,7 @@ EchoTCP* echotcp_new(ShadowlibLogFunc log, int argc, char* argv[]) {
 				isError = TRUE;
 			} else {
 				in_addr_t myIP = ((struct sockaddr_in*)(myInfo->ai_addr))->sin_addr.s_addr;
+				log(G_LOG_LEVEL_INFO, __FUNCTION__, "binding to %s", inet_ntoa((struct in_addr){myIP}));
 				etcp->server = _echotcp_newServer(log, myIP);
 			}
 		} else {
@@ -375,7 +376,7 @@ void echotcp_ready(EchoTCP* etcp) {
 			if(events[i].events & EPOLLIN) {
 				_echotcp_clientReadable(etcp->client, events[i].data.fd);
 			}
-			if(events[i].events & EPOLLOUT) {
+			if(!etcp->client->is_done && (events[i].events & EPOLLOUT)) {
 				_echotcp_clientWritable(etcp->client, events[i].data.fd);
 			}
 		}
