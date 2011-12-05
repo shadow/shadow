@@ -53,7 +53,7 @@ gboolean udp_processPacket(UDP* udp, Packet* packet) {
 
 	/* UDP packet contains data for user and can be buffered immediately */
 	if(packet_getPayloadLength(packet) > 0) {
-		return transport_addToInputBuffer((Transport*)udp, packet);
+		return socket_addToInputBuffer((Socket*)udp, packet);
 	}
 	return TRUE;
 }
@@ -71,7 +71,7 @@ void udp_droppedPacket(UDP* udp, Packet* packet) {
 gssize udp_sendUserData(UDP* udp, gconstpointer buffer, gsize nBytes, in_addr_t ip, in_port_t port) {
 	MAGIC_ASSERT(udp);
 
-	gsize space = udp->super.super.outputBufferSize - udp->super.super.outputBufferLength;
+	gsize space = udp->super.outputBufferSize - udp->super.outputBufferLength;
 	if(space < nBytes) {
 		/* not enough space to buffer the data */
 		return -1;
@@ -92,11 +92,11 @@ gssize udp_sendUserData(UDP* udp, gconstpointer buffer, gsize nBytes, in_addr_t 
 
 		/* create the UDP packet */
 		Packet* packet = packet_new(buffer + offset, copyLength);
-		packet_setUDP(packet, PUDP_NONE, udp->super.super.boundAddress,
-				udp->super.super.boundPort, destinationIP, destinationPort);
+		packet_setUDP(packet, PUDP_NONE, udp->super.boundAddress,
+				udp->super.boundPort, destinationIP, destinationPort);
 
 		/* buffer it in the transport layer, to be sent out when possible */
-		gboolean success = transport_addToOutputBuffer((Transport*) udp, packet);
+		gboolean success = socket_addToOutputBuffer((Socket*) udp, packet);
 
 		/* counter maintenance */
 		if(success) {
@@ -116,7 +116,7 @@ gssize udp_sendUserData(UDP* udp, gconstpointer buffer, gsize nBytes, in_addr_t 
 gssize udp_receiveUserData(UDP* udp, gpointer buffer, gsize nBytes, in_addr_t* ip, in_port_t* port) {
 	MAGIC_ASSERT(udp);
 
-	Packet* packet = transport_removeFromInputBuffer((Transport*)udp);
+	Packet* packet = socket_removeFromInputBuffer((Socket*)udp);
 	if(!packet) {
 		return -1;
 	}
@@ -163,8 +163,8 @@ SocketFunctionTable udp_functions = {
 	(DescriptorFunc) udp_free,
 	(TransportSendFunc) udp_sendUserData,
 	(TransportReceiveFunc) udp_receiveUserData,
-	(TransportProcessFunc) udp_processPacket,
-	(TransportDroppedPacketFunc) udp_droppedPacket,
+	(SocketProcessFunc) udp_processPacket,
+	(SocketDroppedPacketFunc) udp_droppedPacket,
 	(SocketIsFamilySupportedFunc) udp_isFamilySupported,
 	(SocketConnectToPeerFunc) udp_connectToPeer,
 	MAGIC_VALUE

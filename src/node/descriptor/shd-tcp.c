@@ -185,7 +185,7 @@ static TCPChild* _tcpchild_new(TCP* tcp, TCP* parent, in_addr_t peerIP, in_port_
 
 	/* the child is bound to the parent server's address, because all packets
 	 * coming from the child should appear to be coming from the server itself */
-	socket_setSocketName(&(child->tcp->super), parent->super.super.boundAddress, parent->super.super.boundPort);
+	socket_setSocketName(&(child->tcp->super), parent->super.boundAddress, parent->super.boundPort);
 
 	return child;
 }
@@ -237,16 +237,16 @@ static void _tcp_autotune(TCP* tcp) {
 	 * the 80th percentile.
 	 */
 	Internetwork* internet = worker_getPrivate()->cached_engine->internet;
-	GQuark sourceID = (GQuark) ((tcp->child) ? tcp->child->parent->super.super.boundAddress :
-				tcp->super.super.boundAddress);
+	GQuark sourceID = (GQuark) ((tcp->child) ? tcp->child->parent->super.boundAddress :
+				tcp->super.boundAddress);
 	GQuark destinationID = (GQuark) ((tcp->server) ? tcp->server->lastIP : tcp->super.peerIP);
 
 	if(sourceID == destinationID) {
 		/* 16 MiB as max */
-		g_assert(16777216 > tcp->super.super.inputBufferSize);
-		g_assert(16777216 > tcp->super.super.outputBufferSize);
-		tcp->super.super.inputBufferSize = 16777216;
-		tcp->super.super.outputBufferSize = 16777216;
+		g_assert(16777216 > tcp->super.inputBufferSize);
+		g_assert(16777216 > tcp->super.outputBufferSize);
+		tcp->super.inputBufferSize = 16777216;
+		tcp->super.outputBufferSize = 16777216;
 		debug("set loopback buffer sizes to 16777216");
 		return;
 	}
@@ -300,12 +300,12 @@ static void _tcp_autotune(TCP* tcp) {
 	/* make sure the user hasnt already written to the buffer, because if we
 	 * shrink it, our buffer math would overflow the size variable
 	 */
-	g_assert(tcp->super.super.inputBufferLength == 0);
-	g_assert(tcp->super.super.outputBufferLength == 0);
+	g_assert(tcp->super.inputBufferLength == 0);
+	g_assert(tcp->super.outputBufferLength == 0);
 
 	/* its ok to change buffer sizes since the user hasn't written anything yet */
-	tcp->super.super.inputBufferSize = receivebuf_size;
-	tcp->super.super.outputBufferSize = sendbuf_size;
+	tcp->super.inputBufferSize = receivebuf_size;
+	tcp->super.outputBufferSize = sendbuf_size;
 
 	debug("set network buffer sizes: send %lu receive %lu", sendbuf_size, receivebuf_size);
 }
@@ -384,7 +384,7 @@ static void _tcp_setState(TCP* tcp, enum TCPState state) {
 static void _tcp_updateReceiveWindow(TCP* tcp) {
 	MAGIC_ASSERT(tcp);
 
-	gsize space = transport_getOutputBufferSpace(&(tcp->super.super));
+	gsize space = socket_getOutputBufferSpace(&(tcp->super));
 	gsize nPackets = space / (CONFIG_MTU - CONFIG_TCPIP_HEADER_SIZE);
 
 	tcp->receive.window = nPackets;
@@ -428,10 +428,10 @@ static Packet* _tcp_createPacket(TCP* tcp, enum ProtocolTCPFlags flags, gconstpo
 	/*
 	 * packets from children of a server must appear to be coming from the server
 	 */
-	in_addr_t sourceIP = (tcp->child) ? tcp->child->parent->super.super.boundAddress :
-			tcp->super.super.boundAddress;
-	in_port_t sourcePort = (tcp->child) ? tcp->child->parent->super.super.boundPort :
-			tcp->super.super.boundPort;
+	in_addr_t sourceIP = (tcp->child) ? tcp->child->parent->super.boundAddress :
+			tcp->super.boundAddress;
+	in_port_t sourcePort = (tcp->child) ? tcp->child->parent->super.boundPort :
+			tcp->super.boundPort;
 
 	in_addr_t destinationIP = (tcp->server) ? tcp->server->lastIP : tcp->super.peerIP;
 	in_port_t destinationPort = (tcp->server) ? tcp->server->lastPort : tcp->super.peerPort;
@@ -461,7 +461,7 @@ static Packet* _tcp_createPacket(TCP* tcp, enum ProtocolTCPFlags flags, gconstpo
 static gsize _tcp_getBufferSpaceOut(TCP* tcp) {
 	MAGIC_ASSERT(tcp);
 	/* account for throttled and retransmission buffer */
-	gssize space = (gssize)(transport_getOutputBufferSpace(&(tcp->super.super)) - tcp->throttledOutputLength - tcp->retransmissionLength);
+	gssize space = (gssize)(socket_getOutputBufferSpace(&(tcp->super)) - tcp->throttledOutputLength - tcp->retransmissionLength);
 	return MAX(0, space);
 }
 
@@ -476,7 +476,7 @@ static void _tcp_bufferPacketOut(TCP* tcp, Packet* packet) {
 static gsize _tcp_getBufferSpaceIn(TCP* tcp) {
 	MAGIC_ASSERT(tcp);
 	/* account for unordered input buffer */
-	gssize space = (gssize)(transport_getInputBufferSpace(&(tcp->super.super)) - tcp->unorderedInputLength);
+	gssize space = (gssize)(socket_getInputBufferSpace(&(tcp->super)) - tcp->unorderedInputLength);
 	return MAX(0, space);
 }
 
@@ -511,7 +511,7 @@ static void _tcp_flush(TCP* tcp) {
 	_tcp_updateReceiveWindow(tcp);
 	_tcp_updateSendWindow(tcp);
 
-	/* flush packets that can now be sent to transport */
+	/* flush packets that can now be sent to socket */
 	while(g_queue_get_length(tcp->throttledOutput) > 0) {
 		/* get the next throttled packet, in sequence order */
 		Packet* packet = g_queue_pop_head(tcp->throttledOutput);
@@ -531,7 +531,7 @@ static void _tcp_flush(TCP* tcp) {
 			gboolean fitsInWindow = (header.sequence < (tcp->send.unacked + tcp->send.window)) ? TRUE : FALSE;
 
 			/* we cant send it if we dont have enough space */
-			gboolean fitsInBuffer = (length <= transport_getOutputBufferSpace(&(tcp->super.super))) ? TRUE : FALSE;
+			gboolean fitsInBuffer = (length <= socket_getOutputBufferSpace(&(tcp->super))) ? TRUE : FALSE;
 
 			if(!fitsInBuffer || !fitsInWindow) {
 				/* we cant send the packet yet */
@@ -554,8 +554,8 @@ static void _tcp_flush(TCP* tcp) {
 		tcp->send.lastAcknowledgement = tcp->receive.next;
 		tcp->send.lastWindow = tcp->receive.window;
 
-		 /* transport will queue it ASAP */
-		gboolean success = transport_addToOutputBuffer(&(tcp->super.super), packet);
+		 /* socket will queue it ASAP */
+		gboolean success = socket_addToOutputBuffer(&(tcp->super), packet);
 
 		/* we already checked for space, so this should always succeed */
 		g_assert(success);
@@ -570,7 +570,7 @@ static void _tcp_flush(TCP* tcp) {
 
 		if(header.sequence == tcp->receive.next) {
 			/* move from the unordered buffer to user input buffer */
-			gboolean fitInBuffer = transport_addToInputBuffer(&(tcp->super.super), packet);
+			gboolean fitInBuffer = socket_addToInputBuffer(&(tcp->super), packet);
 
 			if(fitInBuffer) {
 				tcp->unorderedInputLength -= packet_getPayloadLength(packet);
@@ -660,7 +660,7 @@ gint tcp_acceptServerPeer(TCP* tcp, in_addr_t* ip, in_port_t* port, gint* accept
 	g_assert(acceptedHandle);
 
 	/* make sure we are listening and bound to an ip and port */
-	if(tcp->state != TCPS_LISTEN || !transport_getBinding(&(tcp->super.super))) {
+	if(tcp->state != TCPS_LISTEN || !socket_getBinding(&(tcp->super))) {
 		return EINVAL;
 	}
 
@@ -736,7 +736,7 @@ gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 
 	/* now we have the true TCP for the packet */
 	MAGIC_ASSERT(tcp);
-	debug("%s: processing packet seq# %u from %s", tcp->super.super.boundString,
+	debug("%s: processing packet seq# %u from %s", tcp->super.boundString,
 			header.sequence, tcp->super.peerString);
 
 	/* if packet is reset, don't process */
@@ -961,7 +961,7 @@ gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 			 * deadlocks (unless we are blocked b/c user should read)
 			 */
 			gboolean isNextPacket = (header.sequence == tcp->receive.next) ? TRUE : FALSE;
-			gboolean waitingUserRead = (transport_getInputBufferSpace(&(tcp->super.super)) > 0) ? TRUE : FALSE;
+			gboolean waitingUserRead = (socket_getInputBufferSpace(&(tcp->super)) > 0) ? TRUE : FALSE;
 			gboolean packetFits = (packetLength <= _tcp_getBufferSpaceIn(tcp)) ? TRUE : FALSE;
 
 			if((isNextPacket && !waitingUserRead) || (packetFits)) {
@@ -983,7 +983,7 @@ gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 	/* try to update congestion window based on potentially new info */
 	_tcp_updateCongestionWindow(tcp, nPacketsAcked);
 
-	/* now flush as many packets as we can to transport */
+	/* now flush as many packets as we can to socket */
 	_tcp_flush(tcp);
 
 	/* send ack if they need updates but we didn't send any yet (selective acks) */
@@ -1028,7 +1028,7 @@ void tcp_droppedPacket(TCP* tcp, Packet* packet) {
 		tcp->congestion.threshold = (guint32) tcp->congestion.window;
 	}
 
-	debug("%s: retransmitting packet seq# %u to %s", tcp->super.super.boundString,
+	debug("%s: retransmitting packet seq# %u to %s", tcp->super.boundString,
 			header.sequence, tcp->super.peerString);
 
 	/* buffer and send as appropriate */
@@ -1084,10 +1084,10 @@ gssize tcp_sendUserData(TCP* tcp, gconstpointer buffer, gsize nBytes, in_addr_t 
 		offset += copyLength;
 	}
 
-	/* now flush as much as possible out to transport */
+	/* now flush as much as possible out to socket */
 	_tcp_flush(tcp);
 
-	debug("%s: sending %lu user bytes to %s", tcp->super.super.boundString,
+	debug("%s: sending %lu user bytes to %s", tcp->super.boundString,
 			offset, tcp->super.peerString);
 
 	return (gssize) offset;
@@ -1137,7 +1137,7 @@ gssize tcp_receiveUserData(TCP* tcp, gpointer buffer, gsize nBytes, in_addr_t* i
 		}
 
 		/* get the next buffered packet */
-		Packet* packet = transport_removeFromInputBuffer((Transport*)tcp);
+		Packet* packet = socket_removeFromInputBuffer((Socket*)tcp);
 		if(!packet) {
 			break;
 		}
@@ -1159,7 +1159,7 @@ gssize tcp_receiveUserData(TCP* tcp, gpointer buffer, gsize nBytes, in_addr_t* i
 		}
 	}
 
-	debug("%s: receiving %lu user bytes from %s", tcp->super.super.boundString,
+	debug("%s: receiving %lu user bytes from %s", tcp->super.boundString,
 			bytesCopied, tcp->super.peerString);
 
 	return (gssize) (bytesCopied == 0 ? -1 : bytesCopied);
@@ -1250,8 +1250,8 @@ SocketFunctionTable tcp_functions = {
 	(DescriptorFunc) tcp_free,
 	(TransportSendFunc) tcp_sendUserData,
 	(TransportReceiveFunc) tcp_receiveUserData,
-	(TransportProcessFunc) tcp_processPacket,
-	(TransportDroppedPacketFunc) tcp_droppedPacket,
+	(SocketProcessFunc) tcp_processPacket,
+	(SocketDroppedPacketFunc) tcp_droppedPacket,
 	(SocketIsFamilySupportedFunc) tcp_isFamilySupported,
 	(SocketConnectToPeerFunc) tcp_connectToPeer,
 	MAGIC_VALUE

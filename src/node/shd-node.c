@@ -242,12 +242,11 @@ static void _node_unmonitorDescriptor(Node* node, gint handle) {
 
 	Descriptor* descriptor = node_lookupDescriptor(node, handle);
 	if(descriptor) {
-		if(descriptor->type == DT_TCPSOCKET || descriptor->type == DT_UDPSOCKET ||
-				descriptor->type == DT_PIPE)
+		if(descriptor->type == DT_TCPSOCKET || descriptor->type == DT_UDPSOCKET)
 		{
-			Transport* transport = (Transport*) descriptor;
-			NetworkInterface* interface = node_lookupInterface(node, transport_getBinding(transport));
-			networkinterface_disassociate(interface, transport);
+			Socket* socket = (Socket*) descriptor;
+			NetworkInterface* interface = node_lookupInterface(node, socket_getBinding(socket));
+			networkinterface_disassociate(interface, socket);
 		}
 
 		g_hash_table_remove(node->descriptors, (gconstpointer) &handle);
@@ -273,6 +272,30 @@ gint node_createDescriptor(Node* node, enum DescriptorType type) {
 
 		case DT_UDPSOCKET: {
 			descriptor = (Descriptor*) udp_new((node->descriptorHandleCounter)++);
+			break;
+		}
+
+		case DT_SOCKETPAIR: {
+			gint handle = (node->descriptorHandleCounter)++;
+			gint linkedHandle = (node->descriptorHandleCounter)++;
+
+			/* each channel is readable and writable */
+			descriptor = (Descriptor*) channel_new(handle, linkedHandle, CT_NONE);
+			Descriptor* linked = (Descriptor*) channel_new(linkedHandle, handle, CT_NONE);
+			_node_monitorDescriptor(node, linked);
+
+			break;
+		}
+
+		case DT_PIPE: {
+			gint handle = (node->descriptorHandleCounter)++;
+			gint linkedHandle = (node->descriptorHandleCounter)++;
+
+			/* one side is readonly, the other is writeonly */
+			descriptor = (Descriptor*) channel_new(handle, linkedHandle, CT_READONLY);
+			Descriptor* linked = (Descriptor*) channel_new(linkedHandle, handle, CT_WRITEONLY);
+			_node_monitorDescriptor(node, linked);
+
 			break;
 		}
 
@@ -418,14 +441,14 @@ static in_port_t _node_getRandomFreePort(Node* node, in_addr_t interfaceIP,
 	return randomPort;
 }
 
-static void _node_associateInterface(Node* node, Transport* transport,
+static void _node_associateInterface(Node* node, Socket* socket,
 		in_addr_t bindAddress, in_port_t bindPort) {
 	MAGIC_ASSERT(node);
 
-	/* connect up transport layer */
-	transport_setBinding(transport, bindAddress, bindPort);
+	/* connect up socket layer */
+	socket_setBinding(socket, bindAddress, bindPort);
 
-	/* now associate the interfaces corresponding to bindAddress with transport */
+	/* now associate the interfaces corresponding to bindAddress with socket */
 	if(bindAddress == htonl(INADDR_ANY)) {
 		/* need to associate all interfaces */
 		GHashTableIter iter;
@@ -434,11 +457,11 @@ static void _node_associateInterface(Node* node, Transport* transport,
 
 		while(g_hash_table_iter_next(&iter, &key, &value)) {
 			NetworkInterface* interface = value;
-			networkinterface_associate(interface, transport);
+			networkinterface_associate(interface, socket);
 		}
 	} else {
 		NetworkInterface* interface = node_lookupInterface(node, bindAddress);
-		networkinterface_associate(interface, transport);
+		networkinterface_associate(interface, socket);
 	}
 }
 
@@ -468,10 +491,10 @@ gint node_bindToInterface(Node* node, gint handle, in_addr_t bindAddress, in_por
 		return EADDRNOTAVAIL;
 	}
 
-	Transport* transport = (Transport*) descriptor;
+	Socket* socket = (Socket*) descriptor;
 
 	/* make sure socket is not bound */
-	if(transport_getBinding(transport)) {
+	if(socket_getBinding(socket)) {
 		warning("socket already bound to requested address");
 		return EINVAL;
 	}
@@ -488,7 +511,7 @@ gint node_bindToInterface(Node* node, gint handle, in_addr_t bindAddress, in_por
 	}
 
 	/* bind port and set associations */
-	_node_associateInterface(node, transport, bindAddress, bindPort);
+	_node_associateInterface(node, socket, bindAddress, bindPort);
 
 	return 0;
 }
@@ -515,7 +538,6 @@ gint node_connectToPeer(Node* node, gint handle, in_addr_t peerAddress,
 		return ENOTSOCK;
 	}
 
-	Transport* transport = (Transport*) descriptor;
 	Socket* socket = (Socket*) descriptor;
 
 	if(!socket_isFamilySupported(socket, family)) {
@@ -529,7 +551,7 @@ gint node_connectToPeer(Node* node, gint handle, in_addr_t peerAddress,
 		}
 	}
 
-	if(!transport_getBinding(transport)) {
+	if(!socket_getBinding(socket)) {
 		/* do an implicit bind to a random port.
 		 * use default interface unless the remote peer is on loopback */
 		in_addr_t loIP = htonl(INADDR_LOOPBACK);
@@ -538,7 +560,7 @@ gint node_connectToPeer(Node* node, gint handle, in_addr_t peerAddress,
 		in_addr_t bindAddress = loIP == peerAddress ? loIP : defaultIP;
 		in_port_t bindPort = _node_getRandomFreePort(node, bindAddress, type);
 
-		_node_associateInterface(node, transport, bindAddress, bindPort);
+		_node_associateInterface(node, socket, bindAddress, bindPort);
 	}
 
 	return socket_connectToPeer(socket, peerAddress, peerPort, family);
@@ -565,15 +587,15 @@ gint node_listenForPeer(Node* node, gint handle, gint backlog) {
 		return EOPNOTSUPP;
 	}
 
-	Transport* transport = (Transport*) descriptor;
+	Socket* socket = (Socket*) descriptor;
 	TCP* tcp = (TCP*) descriptor;
 
-	if(!transport_getBinding(transport)) {
+	if(!socket_getBinding(socket)) {
 		/* implicit bind */
 		in_addr_t bindAddress = htonl(INADDR_ANY);
 		in_port_t bindPort = _node_getRandomFreePort(node, bindAddress, type);
 
-		_node_associateInterface(node, transport, bindAddress, bindPort);
+		_node_associateInterface(node, socket, bindAddress, bindPort);
 	}
 
 	tcp_enterServerMode(tcp, backlog);
@@ -689,8 +711,8 @@ gint node_sendUserData(Node* node, gint handle, gconstpointer buffer, gsize nByt
 
 	if(type == DT_UDPSOCKET) {
 		/* make sure that we have somewhere to send it */
+		Socket* socket = (Socket*)transport;
 		if(ip == 0 || port == 0) {
-			Socket* socket = (Socket*)transport;
 			/* its ok as long as they setup a default destination with connect() */
 			if(socket->peerIP == 0 || socket->peerPort == 0) {
 				/* we have nowhere to send it */
@@ -704,7 +726,7 @@ gint node_sendUserData(Node* node, gint handle, gconstpointer buffer, gsize nByt
 		in_port_t bindPort = _node_getRandomFreePort(node, bindAddress, type);
 
 		/* bind port and set associations */
-		_node_associateInterface(node, transport, bindAddress, bindPort);
+		_node_associateInterface(node, socket, bindAddress, bindPort);
 	}
 
 	if(type == DT_TCPSOCKET) {

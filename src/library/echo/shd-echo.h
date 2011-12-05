@@ -91,6 +91,7 @@ struct _EchoServer {
 	ShadowlibLogFunc log;
 	gint epolld;
 	gint listend;
+	gint socketd;
 	struct sockaddr_in address;
 	gchar echoBuffer[BUFFERSIZE];
 	gint read_offset;
@@ -123,6 +124,13 @@ struct _EchoUDP {
 typedef struct _EchoPipe EchoPipe;
 struct _EchoPipe {
 	ShadowlibLogFunc log;
+	gint writefd;
+	gchar inputBuffer[BUFFERSIZE];
+	gboolean didWrite;
+	gint readfd;
+	gchar outputBuffer[BUFFERSIZE];
+	gint didRead;
+	gint epolld;
 };
 
 /**

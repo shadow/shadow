@@ -19,15 +19,18 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SHD_PIPE_H_
-#define SHD_PIPE_H_
+#ifndef SHD_CHANNEL_H_
+#define SHD_CHANNEL_H_
 
 #include "shadow.h"
 
-typedef struct _Pipe Pipe;
+enum ChannelType {
+	CT_NONE, CT_READONLY, CT_WRITEONLY,
+};
 
-Pipe* pipe_new(gint handle);
+typedef struct _Channel Channel;
 
-gint pipe_getHandles(Pipe* pipe, gint* handleX, gint* handleY);
+Channel* channel_new(gint handle, gint linkedHandle, enum ChannelType type);
+gint channel_getLinkedHandle(Channel* channel);
 
-#endif /* SHD_PIPE_H_ */
+#endif /* SHD_CHANNEL_H_ */

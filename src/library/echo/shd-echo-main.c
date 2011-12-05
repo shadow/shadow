@@ -69,7 +69,7 @@ gint main(gint argc, gchar *argv[]) {
 	else if(g_strncasecmp(protocol, "pipe", 4) == 0)
 	{
 		echostate.protocol = ECHOP_PIPE;
-		echostate.epipe = NULL;//echopipe_new(mylog);
+		echostate.epipe = echopipe_new(mylog);
 		isError = (echostate.epipe == NULL) ? TRUE : FALSE;
 	}
 
@@ -80,6 +80,7 @@ gint main(gint argc, gchar *argv[]) {
 
 	EchoServer* server = echostate.etcp ? echostate.etcp->server : echostate.eudp ? echostate.eudp->server : NULL;
 	EchoClient* client = echostate.etcp ? echostate.etcp->client : echostate.eudp ? echostate.eudp->client : NULL;
+	EchoPipe* epipe = echostate.epipe;
 
 	/* do an epoll on the client/server epoll descriptors, so we know when
 	 * we can wait on either of them without blocking.
@@ -107,6 +108,15 @@ gint main(gint argc, gchar *argv[]) {
 				return -1;
 			}
 		}
+		if(epipe) {
+			struct epoll_event ev;
+			ev.events = EPOLLIN;
+			ev.data.fd = epipe->epolld;
+			if(epoll_ctl(epolld, EPOLL_CTL_ADD, epipe->epolld, &ev) == -1) {
+				mylog(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_ctl");
+				return -1;
+			}
+		}
 	}
 
 	/* main loop - when the client/server epoll fds are ready, activate them */
@@ -123,6 +133,8 @@ gint main(gint argc, gchar *argv[]) {
 					echotcp_ready(echostate.etcp);
 				}else if(echostate.eudp) {
 					echoudp_ready(echostate.eudp);
+				} else if(echostate.epipe) {
+					echopipe_ready(echostate.epipe);
 				}
 			}
 		}
@@ -135,6 +147,13 @@ gint main(gint argc, gchar *argv[]) {
 			if(echostate.eudp) {
 				echoudp_free(echostate.eudp);
 			}
+			break;
+		}
+
+		if(epipe && epipe->didRead) {
+			close(epipe->readfd);
+			close(epipe->writefd);
+			close(epipe->epolld);
 			break;
 		}
 	}

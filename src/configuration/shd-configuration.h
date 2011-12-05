@@ -168,6 +168,11 @@ typedef guint64 SimulationTime;
 #define CONFIG_RECV_BUFFER_SIZE 174760
 
 /**
+ * Default size for pipes. Value taken from "man 7 pipe".
+ */
+#define CONFIG_PIPE_BUFFER_SIZE 65536
+
+/**
  * Default batching time when the network interface receives packets
  */
 #define CONFIG_RECEIVE_BATCH_TIME SIMTIME_ONE_MICROSECOND

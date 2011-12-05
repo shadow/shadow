@@ -52,6 +52,8 @@ static EpollWatch* _epollwatch_new(Epoll* epoll, Descriptor* descriptor, struct 
 	MAGIC_INIT(watch);
 	g_assert(event);
 
+	/* ref it for the EpollWatch, which also covers the listener reference
+	 * (which is freed below in _epollwatch_free) */
 	descriptor_ref(descriptor);
 
 	watch->listener = listener_new(epoll_descriptorStatusChanged, epoll, descriptor);

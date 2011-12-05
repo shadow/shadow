@@ -137,6 +137,64 @@ static EchoServer* _echotcp_newServer(ShadowlibLogFunc log, in_addr_t bindIPAddr
 	return es;
 }
 
+static gboolean _echotcp_newPair(ShadowlibLogFunc log, EchoClient** client, EchoServer** server) {
+	g_assert(client && server);
+
+	gint sdarray[2];
+	gint result = socketpair(AF_UNIX, (SOCK_STREAM | SOCK_NONBLOCK), 0, sdarray);
+	if(result == -1) {
+		log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in socketpair");
+		return FALSE;
+	}
+
+	gint client_socketd = sdarray[0];
+	gint server_socketd = sdarray[1];
+
+	/* create an epoll so we can wait for IO events */
+	gint client_epolld = epoll_create(1);
+	gint server_epolld = epoll_create(1);
+	if(client_epolld == -1 || server_epolld == -1) {
+		log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_create");
+		close(client_epolld);
+		close(server_epolld);
+		return FALSE;
+	}
+
+	/* setup the events we will watch for */
+	struct epoll_event client_ev, server_ev;
+	client_ev.events = EPOLLIN|EPOLLOUT;
+	client_ev.data.fd = client_socketd;
+	server_ev.events = EPOLLIN;
+	server_ev.data.fd = server_socketd;
+
+	/* start watching out socket */
+	result = epoll_ctl(client_epolld, EPOLL_CTL_ADD, client_socketd, &client_ev);
+	gint result2 = epoll_ctl(server_epolld, EPOLL_CTL_ADD, server_socketd, &server_ev);
+	if(result == -1 || result2 == -1) {
+		log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_ctl");
+		close(client_epolld);
+		close(client_socketd);
+		close(server_epolld);
+		close(server_socketd);
+		return FALSE;
+	}
+
+	/* create our client and server and store our sockets */
+	EchoClient* ec = g_new0(EchoClient, 1);
+	ec->socketd = client_socketd;
+	ec->epolld = client_epolld;
+	ec->log = log;
+	*client = ec;
+
+	EchoServer* es = g_new0(EchoServer, 1);
+	es->epolld = server_epolld;
+	es->socketd = server_socketd;
+	es->log = log;
+	*server = es;
+
+	return TRUE;
+}
+
 EchoTCP* echotcp_new(ShadowlibLogFunc log, int argc, char* argv[]) {
 	g_assert(log);
 
@@ -196,7 +254,7 @@ EchoTCP* echotcp_new(ShadowlibLogFunc log, int argc, char* argv[]) {
 	}
 	else if (g_strncasecmp(mode, "socketpair", 10) == 0)
 	{
-		isError = TRUE; // TODO implement
+		_echotcp_newPair(log, &(etcp->client), &(etcp->server));
 	}
 	else {
 		isError = TRUE;
@@ -214,12 +272,12 @@ void echotcp_free(EchoTCP* etcp) {
 	g_assert(etcp);
 
 	if(etcp->client) {
-		epoll_ctl(etcp->client->epolld, EPOLL_CTL_DEL, etcp->client->socketd, NULL);
+		close(etcp->client->epolld);
 		g_free(etcp->client);
 	}
 
 	if(etcp->server) {
-		epoll_ctl(etcp->server->epolld, EPOLL_CTL_DEL, etcp->server->listend, NULL);
+		close(etcp->server->epolld);
 		g_free(etcp->server);
 	}
 
@@ -305,12 +363,6 @@ static void _echotcp_fillCharBuffer(gchar* buffer, gint size) {
 static void _echotcp_clientWritable(EchoClient* ec, gint socketd) {
 	if(!ec->sent_msg) {
 		ec->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "trying to write to socket %i", socketd);
-
-		struct sockaddr_in server;
-		memset(&server, 0, sizeof(server));
-		server.sin_family = AF_INET;
-		server.sin_addr.s_addr = ec->serverIP;
-		server.sin_port = htons(ECHO_SERVER_PORT);
 
 		_echotcp_fillCharBuffer(ec->sendBuffer, sizeof(ec->sendBuffer)-1);
 

@@ -20,32 +20,26 @@
  */
 
 
-#ifndef LINKEDBUFFER_H_
-#define LINKEDBUFFER_H_
+#ifndef SHD_BYTE_QUEUE_H_
+#define SHD_BYTE_QUEUE_H_
 
 #include <glib.h>
 #include <stdint.h>
 #include <stddef.h>
 
-typedef struct bufferlink_t{
-	gpointer buf;
-	guint16 capacity;
-	struct bufferlink_t* next;
-}bufferlink_t, *bufferlink_tp;
+/**
+ * A shared buffer that is composed of several chunks. The buffer can be read
+ * and written and guarantees it will not allow reading more than was written.
+ * Its basically a linked queue that is written (and grows) at the front and
+ * read (and shrinks) from the back. As data is written, new chunks are created
+ * automatically. As data is read, old chunks are freed automatically.
+ */
 
-typedef struct linkedbuffer{
-	bufferlink_tp tail;
-	guint16 tail_r_offset;
-	bufferlink_tp head;
-	guint16 head_w_offset;
-	guint16 num_links;
-	size_t length;
-	size_t link_capacity;
-}linkedbuffer_t, *linkedbuffer_tp;
+typedef struct _ByteQueue ByteQueue;
 
-linkedbuffer_tp linkedbuffer_create(size_t link_capacity);
-void linkedbuffer_destroy(linkedbuffer_tp lbuffer);
-size_t linkedbuffer_read(linkedbuffer_tp lbuffer, gpointer dest, size_t numbytes);
-size_t linkedbuffer_write(linkedbuffer_tp lbuffer, const gpointer src, size_t numbytes);
+ByteQueue* bytequeue_new(gsize chunkSize);
+void bytequeue_free(ByteQueue* bqueue);
+gsize bytequeue_pop(ByteQueue* bqueue, gpointer outBuffer, gsize nBytes);
+gsize bytequeue_push(ByteQueue* bqueue, gconstpointer inputBuffer, gsize nBytes);
 
-#endif /* LINKEDBUFFER_H_ */
+#endif /* SHD_BYTE_QUEUE_H_ */

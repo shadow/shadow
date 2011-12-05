@@ -36,13 +36,13 @@ guint32 networkinterface_getSpeedUpKiBps(NetworkInterface* interface);
 guint32 networkinterface_getSpeedDownKiBps(NetworkInterface* interface);
 
 gboolean networkinterface_isAssociated(NetworkInterface* interface, gint key);
-void networkinterface_associate(NetworkInterface* interface, Transport* transport);
-void networkinterface_disassociate(NetworkInterface* interface, Transport* transport);
+void networkinterface_associate(NetworkInterface* interface, Socket* transport);
+void networkinterface_disassociate(NetworkInterface* interface, Socket* transport);
 
 void networkinterface_packetArrived(NetworkInterface* interface, Packet* packet);
 void networkinterface_received(NetworkInterface* interface);
 void networkinterface_packetDropped(NetworkInterface* interface, Packet* packet);
-void networkinterface_wantsSend(NetworkInterface* interface, Transport* transport);
+void networkinterface_wantsSend(NetworkInterface* interface, Socket* transport);
 void networkinterface_sent(NetworkInterface* interface);
 
 

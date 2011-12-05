@@ -27,8 +27,22 @@
 #include <sys/socket.h>
 #include <netdb.h>
 #include <string.h>
+#include <fcntl.h>
 
 #include "shadow.h"
+
+#ifndef O_CLOEXEC
+#define O_CLOEXEC 02000000
+#endif
+#ifndef O_NONBLOCK
+#define O_NONBLOCK 04000
+#endif
+#ifndef SOCK_CLOEXEC
+#define SOCK_CLOEXEC 02000000
+#endif
+#ifndef SOCK_NONBLOCK
+#define SOCK_NONBLOCK 04000
+#endif
 
 enum SystemCallType {
 	SCT_BIND, SCT_CONNECT, SCT_GETSOCKNAME, SCT_GETPEERNAME,
@@ -249,13 +263,16 @@ gint system_socketPair(gint domain, gint type, gint protocol, gint fds[2]) {
 
 	Node* node = _system_switchInShadowContext();
 
-	gint handle = node_createDescriptor(node, DT_PIPE);
-	Pipe* pipe = (Pipe*) node_lookupDescriptor(node, handle);
-	gint result = pipe_getHandles(pipe, &fds[0], &fds[1]);
+	gint handle = node_createDescriptor(node, DT_SOCKETPAIR);
+
+	Channel* channel = (Channel*) node_lookupDescriptor(node, handle);
+	gint linkedHandle = channel_getLinkedHandle(channel);
 
 	_system_switchOutShadowContext(node);
 
-	return result;
+	fds[0] = handle;
+	fds[1] = linkedHandle;
+	return 0;
 }
 
 static gint _system_addressHelper(gint fd, const struct sockaddr* addr, socklen_t* len,
@@ -538,6 +555,46 @@ gint system_shutdown(gint fd, gint how) {
 	warning("shutdown not implemented");
 	errno = ENOSYS;
 	return -1;
+}
+
+gint system_pipe(gint pipefds[2]) {
+	return system_pipe2(pipefds, O_NONBLOCK);
+}
+
+gint system_pipe2(gint pipefds[2], gint flags) {
+	/* we only support non-blocking sockets, and require
+	 * SOCK_NONBLOCK to be set immediately */
+	gboolean isBlocking = TRUE;
+
+	/* clear non-blocking flags if set to get true type */
+	if(flags & O_NONBLOCK) {
+		flags = flags & ~O_NONBLOCK;
+		isBlocking = FALSE;
+	}
+	if(flags & O_CLOEXEC) {
+		flags = flags & ~O_CLOEXEC;
+		isBlocking = FALSE;
+	}
+
+	/* check inputs for what we support */
+	if(isBlocking) {
+		warning("we only support non-blocking pipes: please bitwise OR 'O_NONBLOCK' with flags");
+		errno = EINVAL;
+		return -1;
+	}
+
+	Node* node = _system_switchInShadowContext();
+
+	gint handle = node_createDescriptor(node, DT_PIPE);
+
+	Channel* channel = (Channel*) node_lookupDescriptor(node, handle);
+	gint linkedHandle = channel_getLinkedHandle(channel);
+
+	_system_switchOutShadowContext(node);
+
+	pipefds[0] = handle; /* reader */
+	pipefds[1] = linkedHandle; /* writer */
+	return 0;
 }
 
 gint system_close(gint fd) {

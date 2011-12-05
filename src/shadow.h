@@ -75,6 +75,7 @@
 #include "utility/shd-utility.h"
 #include "utility/shd-registry.h"
 #include "utility/shd-cdf.h"
+#include "utility/shd-byte-queue.h"
 
 #include "library/shd-library.h"
 #include "plugin/shd-plugin-state.h"
@@ -88,7 +89,7 @@
 
 #include "node/descriptor/shd-epoll.h"
 #include "node/descriptor/shd-transport.h"
-#include "node/descriptor/shd-pipe.h"
+#include "node/descriptor/shd-channel.h"
 #include "node/descriptor/shd-socket.h"
 #include "node/descriptor/shd-tcp.h"
 #include "node/descriptor/shd-udp.h"

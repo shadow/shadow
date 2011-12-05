@@ -314,6 +314,28 @@ int shutdown(int fd, int how) {
 	return (*func)(fd, how);
 }
 
+typedef int (*pipe_fp)(int [2]);
+static pipe_fp _pipe = NULL;
+static pipe_fp _vsystem_pipe = NULL;
+int pipe(int pipefd[2]) {
+	pipe_fp* func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "pipe", _pipe, INTERCEPT_PREFIX, _vsystem_pipe, 1);
+	PRELOAD_LOOKUP(func, funcName, -1);
+	return (*func)(pipefd);
+}
+
+typedef int (*pipe2_fp)(int [2], int);
+static pipe2_fp _pipe2 = NULL;
+static pipe2_fp _vsystem_pipe2 = NULL;
+int pipe2(int pipefd[2], int flags) {
+	pipe2_fp* func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "pipe2", _pipe2, INTERCEPT_PREFIX, _vsystem_pipe2, 1);
+	PRELOAD_LOOKUP(func, funcName, -1);
+	return (*func)(pipefd, flags);
+}
+
 typedef size_t (*read_fp)(int, void*, int);
 static read_fp _read = NULL;
 static read_fp _vsocket_read = NULL;

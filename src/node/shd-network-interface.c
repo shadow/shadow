@@ -38,8 +38,8 @@ struct _NetworkInterface {
 	guint32 bwUpKiBps;
 	gdouble timePerByteUp;
 
-	/* (protocol,port)-to-transport bindings */
-	GHashTable* boundTransports;
+	/* (protocol,port)-to-socket bindings */
+	GHashTable* boundSockets;
 
 	/* NIC input queue */
 	GQueue* inBuffer;
@@ -47,7 +47,7 @@ struct _NetworkInterface {
 //	gsize inBufferLength;
 
 	/* Transports wanting to send data out */
-	GQueue* sendableTransports;
+	GQueue* sendableSockets;
 
 	/* bandwidth accounting */
 	SimulationTime lastTimeReceived;
@@ -78,11 +78,11 @@ NetworkInterface* networkinterface_new(Network* network, GQuark address, gchar* 
 	/* @todo: set as configuration option, test effect of changing sizes */
 	interface->inBufferSize = bytesPerSecond;
 
-	/* incoming packets get passed along to transports */
-	interface->boundTransports = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, descriptor_unref);
+	/* incoming packets get passed along to sockets */
+	interface->boundSockets = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, descriptor_unref);
 
-	/* transports tell us when they want to start sending */
-	interface->sendableTransports = g_queue_new();
+	/* sockets tell us when they want to start sending */
+	interface->sendableSockets = g_queue_new();
 
 	/* log status */
 	char buffer[INET_ADDRSTRLEN];
@@ -104,7 +104,7 @@ void networkinterface_free(NetworkInterface* interface) {
 	}
 	g_queue_free(interface->inBuffer);
 
-	g_hash_table_destroy(interface->boundTransports);
+	g_hash_table_destroy(interface->boundSockets);
 	address_free(interface->address);
 
 	MAGIC_CLEAR(interface);
@@ -134,33 +134,33 @@ guint32 networkinterface_getSpeedDownKiBps(NetworkInterface* interface) {
 gboolean networkinterface_isAssociated(NetworkInterface* interface, gint key) {
 	MAGIC_ASSERT(interface);
 
-	if(g_hash_table_lookup(interface->boundTransports, GINT_TO_POINTER(key))) {
+	if(g_hash_table_lookup(interface->boundSockets, GINT_TO_POINTER(key))) {
 		return TRUE;
 	} else {
 		return FALSE;
 	}
 }
 
-void networkinterface_associate(NetworkInterface* interface, Transport* transport) {
+void networkinterface_associate(NetworkInterface* interface, Socket* socket) {
 	MAGIC_ASSERT(interface);
 
-	gint key = transport_getAssociationKey(transport);
+	gint key = socket_getAssociationKey(socket);
 
 	/* make sure there is no collision */
 	g_assert(!networkinterface_isAssociated(interface, key));
 
 	/* insert to our storage */
-	g_hash_table_replace(interface->boundTransports, GINT_TO_POINTER(key), transport);
-	descriptor_ref(transport);
+	g_hash_table_replace(interface->boundSockets, GINT_TO_POINTER(key), socket);
+	descriptor_ref(socket);
 }
 
-void networkinterface_disassociate(NetworkInterface* interface, Transport* transport) {
+void networkinterface_disassociate(NetworkInterface* interface, Socket* socket) {
 	MAGIC_ASSERT(interface);
 
-	gint key = transport_getAssociationKey(transport);
+	gint key = socket_getAssociationKey(socket);
 
 	/* we will no longer receive packets for this port, this unrefs descriptor */
-	g_hash_table_remove(interface->boundTransports, GINT_TO_POINTER(key));
+	g_hash_table_remove(interface->boundSockets, GINT_TO_POINTER(key));
 }
 
 static void _networkinterface_dropInboundPacket(NetworkInterface* interface, Packet* packet) {
@@ -246,15 +246,15 @@ void networkinterface_received(NetworkInterface* interface) {
 	while(g_queue_get_length(packetBatch) > 0) {
 		Packet* packet = g_queue_pop_head(packetBatch);
 
-		/* hand it off to the correct transport layer */
+		/* hand it off to the correct socket layer */
 		gint key = packet_getDestinationAssociationKey(packet);
-		Transport* transport = g_hash_table_lookup(interface->boundTransports, GINT_TO_POINTER(key));
+		Socket* socket = g_hash_table_lookup(interface->boundSockets, GINT_TO_POINTER(key));
 
-		/* if the transport closed, just drop the packet */
-		if(transport) {
-			gboolean accepted = transport_pushInPacket(transport, packet);
+		/* if the socket closed, just drop the packet */
+		if(socket) {
+			gboolean accepted = socket_pushInPacket(socket, packet);
 			if(!accepted) {
-				/* transport can not handle it now, so drop it */
+				/* socket can not handle it now, so drop it */
 				_networkinterface_dropInboundPacket(interface, packet);
 			}
 		}
@@ -284,24 +284,24 @@ void networkinterface_packetDropped(NetworkInterface* interface, Packet* packet)
 
 	/*
 	 * someone dropped a packet belonging to our interface
-	 * hand it off to the correct transport layer
+	 * hand it off to the correct socket layer
 	 */
 	gint key = packet_getSourceAssociationKey(packet);
-	Transport* transport = g_hash_table_lookup(interface->boundTransports, GINT_TO_POINTER(key));
+	Socket* socket = g_hash_table_lookup(interface->boundSockets, GINT_TO_POINTER(key));
 
-	/* just ignore if the transport closed in the meantime */
-	if(transport) {
-		transport_droppedPacket(transport, packet);
+	/* just ignore if the socket closed in the meantime */
+	if(socket) {
+		socket_droppedPacket(socket, packet);
 	}
 }
 
-void networkinterface_wantsSend(NetworkInterface* interface, Transport* transport) {
+void networkinterface_wantsSend(NetworkInterface* interface, Socket* socket) {
 	MAGIC_ASSERT(interface);
 
-	/* track the new transport for sending if not already tracking */
-	if(!g_queue_find(interface->sendableTransports, transport)) {
-		descriptor_ref(transport);
-		g_queue_push_tail(interface->sendableTransports, transport);
+	/* track the new socket for sending if not already tracking */
+	if(!g_queue_find(interface->sendableSockets, socket)) {
+		descriptor_ref(socket);
+		g_queue_push_tail(interface->sendableSockets, socket);
 	}
 
 	/* trigger a send if we are currently idle */
@@ -314,7 +314,7 @@ void networkinterface_sent(NetworkInterface* interface) {
 	MAGIC_ASSERT(interface);
 
 	/* we just finished sending a packet, now try to send the next one */
-	if(g_queue_get_length(interface->sendableTransports) < 1) {
+	if(g_queue_get_length(interface->sendableSockets) < 1) {
 		/* nothing to send right now.
 		 * any new arrivals can now immediately trigger a send event */
 		interface->flags &= ~NIF_SENDING;
@@ -335,10 +335,10 @@ void networkinterface_sent(NetworkInterface* interface) {
 
 	/* batch outgoing packet transmissions */
 	while(interface->sendNanosecondsConsumed < CONFIG_RECEIVE_BATCH_TIME &&
-			g_queue_get_length(interface->sendableTransports) > 0) {
-		/* do round robin on all ready transports.
+			g_queue_get_length(interface->sendableSockets) > 0) {
+		/* do round robin on all ready sockets.
 		 * dont unref until we know we wont be returning it to the queue. */
-		Transport* transport = g_queue_pop_head(interface->sendableTransports);
+		Socket* socket = g_queue_pop_head(interface->sendableSockets);
 
 		/* check if it was closed in between sends */
 //		if(descriptor_getStatus((Descriptor*) transport) & DS_STALE) {
@@ -348,7 +348,7 @@ void networkinterface_sent(NetworkInterface* interface) {
 //			continue;
 //		}
 
-		Packet* packet = transport_pullOutPacket(transport);
+		Packet* packet = socket_pullOutPacket(socket);
 		if(packet) {
 			/* will send to network, consumed more bandwidth */
 			guint length = packet_getPayloadLength(packet);
@@ -366,10 +366,10 @@ void networkinterface_sent(NetworkInterface* interface) {
 			}
 
 			/* might have more packets, and is still reffed from before */
-			g_queue_push_tail(interface->sendableTransports, transport);
+			g_queue_push_tail(interface->sendableSockets, socket);
 		} else {
-			/* transport has no more packets, unref it from round robin queue */
-			descriptor_unref((Descriptor*) transport);
+			/* socket has no more packets, unref it from round robin queue */
+			descriptor_unref((Descriptor*) socket);
 		}
 	}
 

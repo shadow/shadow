@@ -185,6 +185,14 @@ gint intercept_shutdown(gint fd, gint how) {
 	return system_shutdown(fd, how);
 }
 
+int intercept_pipe(int pipefd[2]) {
+	return system_pipe(pipefd);
+}
+
+int intercept_pipe2(int pipefd[2], int flags) {
+	return system_pipe2(pipefd, flags);
+}
+
 ssize_t intercept_read(gint fd, gpointer buf, gint n) {
 	return system_read(fd, buf, n);
 }

@@ -27,14 +27,16 @@ typedef struct _SocketFunctionTable SocketFunctionTable;
 
 typedef gboolean (*SocketIsFamilySupportedFunc)(Socket* socket, sa_family_t family);
 typedef gint (*SocketConnectToPeerFunc)(Socket* socket, in_addr_t ip, in_port_t port, sa_family_t family);
+typedef gboolean (*SocketProcessFunc)(Socket* socket, Packet* packet);
+typedef void (*SocketDroppedPacketFunc)(Socket* socket, Packet* packet);
 
 struct _SocketFunctionTable {
 	DescriptorFunc close;
 	DescriptorFunc free;
 	TransportSendFunc send;
 	TransportReceiveFunc receive;
-	TransportProcessFunc process;
-	TransportDroppedPacketFunc dropped;
+	SocketProcessFunc process;
+	SocketDroppedPacketFunc dropped;
 	SocketIsFamilySupportedFunc isFamilySupported;
 	SocketConnectToPeerFunc connectToPeer;
 	MAGIC_DECLARE;
@@ -50,14 +52,48 @@ struct _Socket {
 	SocketFunctionTable* vtable;
 
 	enum SocketFlags flags;
+	enum ProtocolType protocol;
+
 	in_addr_t peerIP;
 	in_addr_t peerPort;
 	gchar* peerString;
+
+	in_addr_t boundAddress;
+	in_port_t boundPort;
+	gchar* boundString;
+
+	gint associationKey;
+
+	/* buffering packets readable by user */
+	GQueue* inputBuffer;
+	gsize inputBufferSize;
+	gsize inputBufferLength;
+
+	/* buffering packets ready to send */
+	GQueue* outputBuffer;
+	gsize outputBufferSize;
+	gsize outputBufferLength;
 
 	MAGIC_DECLARE;
 };
 
 void socket_init(Socket* socket, SocketFunctionTable* vtable, enum DescriptorType type, gint handle);
+
+in_addr_t socket_getBinding(Socket* socket);
+void socket_setBinding(Socket* socket, in_addr_t boundAddress, in_port_t port);
+gint socket_getAssociationKey(Socket* socket);
+
+gboolean socket_pushInPacket(Socket* socket, Packet* packet);
+Packet* socket_pullOutPacket(Socket* socket);
+void socket_droppedPacket(Socket* socket, Packet* packet);
+
+gsize socket_getInputBufferSpace(Socket* socket);
+gboolean socket_addToInputBuffer(Socket* socket, Packet* packet);
+Packet* socket_removeFromInputBuffer(Socket* socket);
+
+gsize socket_getOutputBufferSpace(Socket* socket);
+gboolean socket_addToOutputBuffer(Socket* socket, Packet* packet);
+Packet* socket_removeFromOutputBuffer(Socket* socket);
 
 gint socket_getPeerName(Socket* socket, in_addr_t* ip, in_port_t* port);
 void socket_setPeerName(Socket* socket, in_addr_t ip, in_port_t port);

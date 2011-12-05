@@ -52,7 +52,7 @@ set(shadow_srcs
     node/descriptor/shd-descriptor.c
     node/descriptor/shd-epoll.c
     node/descriptor/shd-transport.c
-    node/descriptor/shd-pipe.c
+    node/descriptor/shd-channel.c
     node/descriptor/shd-socket.c
     node/descriptor/shd-tcp.c
     node/descriptor/shd-udp.c
@@ -65,6 +65,7 @@ set(shadow_srcs
     utility/shd-utility.c
     utility/shd-cdf.c
     utility/shd-registry.c
+    utility/shd-byte-queue.c
     utility/rand.c
     
     main.c

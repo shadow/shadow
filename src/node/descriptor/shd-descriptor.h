@@ -25,7 +25,7 @@
 #include "shadow.h"
 
 enum DescriptorType {
-	DT_TCPSOCKET, DT_UDPSOCKET, DT_PIPE, DT_EPOLL
+	DT_TCPSOCKET, DT_UDPSOCKET, DT_PIPE, DT_SOCKETPAIR, DT_EPOLL
 };
 
 enum DescriptorStatus {

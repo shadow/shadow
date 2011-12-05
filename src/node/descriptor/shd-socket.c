@@ -26,12 +26,16 @@ void socket_free(gpointer data) {
 	MAGIC_ASSERT(socket);
 	MAGIC_ASSERT(socket->vtable);
 
+	socket->vtable->free((Descriptor*)socket);
+
 	if(socket->peerString) {
 		g_free(socket->peerString);
 	}
+	if(socket->boundString) {
+		g_free(socket->boundString);
+	}
 
 	MAGIC_CLEAR(socket);
-	socket->vtable->free((Descriptor*)socket);
 }
 
 void socket_close(Socket* socket) {
@@ -54,25 +58,11 @@ gssize socket_receiveUserData(Socket* socket, gpointer buffer, gsize nBytes,
 	return socket->vtable->receive((Transport*)socket, buffer, nBytes, ip, port);
 }
 
-gboolean socket_processPacket(Socket* socket, Packet* packet) {
-	MAGIC_ASSERT(socket);
-	MAGIC_ASSERT(socket->vtable);
-	return socket->vtable->process((Transport*)socket, packet);
-}
-
-void socket_droppedPacket(Socket* socket, Packet* packet) {
-	MAGIC_ASSERT(socket);
-	MAGIC_ASSERT(socket->vtable);
-	socket->vtable->dropped((Transport*)socket, packet);
-}
-
 TransportFunctionTable socket_functions = {
 	(DescriptorFunc) socket_close,
 	(DescriptorFunc) socket_free,
 	(TransportSendFunc) socket_sendUserData,
 	(TransportReceiveFunc) socket_receiveUserData,
-	(TransportProcessFunc) socket_processPacket,
-	(TransportDroppedPacketFunc) socket_droppedPacket,
 	MAGIC_VALUE
 };
 
@@ -85,6 +75,12 @@ void socket_init(Socket* socket, SocketFunctionTable* vtable, enum DescriptorTyp
 	MAGIC_INIT(vtable);
 
 	socket->vtable = vtable;
+
+	socket->protocol = type == DT_TCPSOCKET ? PTCP : type == DT_UDPSOCKET ? PUDP : PLOCAL;
+	socket->inputBuffer = g_queue_new();
+	socket->inputBufferSize = CONFIG_RECV_BUFFER_SIZE;
+	socket->outputBuffer = g_queue_new();
+	socket->outputBufferSize = CONFIG_SEND_BUFFER_SIZE;
 }
 
 /* interface functions, implemented by subtypes */
@@ -101,7 +97,29 @@ gint socket_connectToPeer(Socket* socket, in_addr_t ip, in_port_t port, sa_famil
 	return socket->vtable->connectToPeer(socket, ip, port, family);
 }
 
+gboolean socket_processPacket(Socket* socket, Packet* packet) {
+	MAGIC_ASSERT(socket);
+	MAGIC_ASSERT(socket->vtable);
+	return socket->vtable->process(socket, packet);
+}
+
+void socket_droppedPacket(Socket* socket, Packet* packet) {
+	MAGIC_ASSERT(socket);
+	MAGIC_ASSERT(socket->vtable);
+	socket->vtable->dropped(socket, packet);
+}
+
+gboolean socket_pushInPacket(Socket* socket, Packet* packet) {
+	MAGIC_ASSERT(socket);
+	MAGIC_ASSERT(socket->vtable);
+	return socket->vtable->process(socket, packet);
+}
+
 /* functions implemented by socket */
+
+Packet* socket_pullOutPacket(Socket* socket) {
+	return socket_removeFromOutputBuffer(socket);
+}
 
 gint socket_getPeerName(Socket* socket, in_addr_t* ip, in_port_t* port) {
 	MAGIC_ASSERT(socket);
@@ -136,17 +154,146 @@ gint socket_getSocketName(Socket* socket, in_addr_t* ip, in_port_t* port) {
 	MAGIC_ASSERT(socket);
 	g_assert(ip && port);
 
-	if(socket->super.boundAddress == 0 || socket->super.boundPort == 0) {
+	if(socket->boundAddress == 0 || socket->boundPort == 0) {
 		return ENOTCONN;
 	}
 
-	*ip = socket->super.boundAddress;
-	*port = socket->super.boundPort;
+	*ip = socket->boundAddress;
+	*port = socket->boundPort;
 
 	return 0;
 }
 
 void socket_setSocketName(Socket* socket, in_addr_t ip, in_port_t port) {
 	MAGIC_ASSERT(socket);
-	transport_setBinding(&(socket->super), ip, port);
+	socket_setBinding(socket, ip, port);
+}
+
+in_addr_t socket_getBinding(Socket* socket) {
+	MAGIC_ASSERT(socket);
+	if(socket->flags & SF_BOUND) {
+		return socket->boundAddress;
+	} else {
+		return 0;
+	}
+}
+
+void socket_setBinding(Socket* socket, in_addr_t boundAddress, in_port_t port) {
+	MAGIC_ASSERT(socket);
+	socket->boundAddress = boundAddress;
+	socket->boundPort = port;
+
+	/* store the new ascii name of this socket endpoint */
+	if(socket->boundString) {
+		g_free(socket->boundString);
+	}
+	GString* stringBuffer = g_string_new(NTOA(boundAddress));
+	g_string_append_printf(stringBuffer, ":%u (descriptor %i)", ntohs(port), socket->super.super.handle);
+	socket->boundString = g_string_free(stringBuffer, FALSE);
+
+	socket->associationKey = PROTOCOL_DEMUX_KEY(socket->protocol, port);
+	socket->flags |= SF_BOUND;
+}
+
+gint socket_getAssociationKey(Socket* socket) {
+	MAGIC_ASSERT(socket);
+	g_assert(socket_getBinding(socket));
+	return socket->associationKey;
+}
+
+gsize socket_getInputBufferSpace(Socket* socket) {
+	MAGIC_ASSERT(socket);
+	g_assert(socket->inputBufferSize >= socket->inputBufferLength);
+	return (socket->inputBufferSize - socket->inputBufferLength);
+}
+
+gboolean socket_addToInputBuffer(Socket* socket, Packet* packet) {
+	MAGIC_ASSERT(socket);
+
+	/* check if the packet fits */
+	guint length = packet_getPayloadLength(packet);
+	if(length > socket_getInputBufferSpace(socket)) {
+		return FALSE;
+	}
+
+	/* add to our queue */
+	packet_ref(packet);
+	g_queue_push_tail(socket->inputBuffer, packet);
+	socket->inputBufferLength += length;
+
+	/* we just added a packet, so we are readable */
+	if(socket->inputBufferLength > 0) {
+		descriptor_adjustStatus((Descriptor*)socket, DS_READABLE, TRUE);
+	}
+
+	return TRUE;
+}
+
+Packet* socket_removeFromInputBuffer(Socket* socket) {
+	MAGIC_ASSERT(socket);
+
+	/* see if we have any packets */
+	Packet* packet = g_queue_pop_head(socket->inputBuffer);
+	if(packet) {
+		/* just removed a packet */
+		guint length = packet_getPayloadLength(packet);
+		socket->inputBufferLength -= length;
+
+		/* we are not readable if we are now empty */
+		if(socket->inputBufferLength <= 0) {
+			descriptor_adjustStatus((Descriptor*)socket, DS_READABLE, FALSE);
+		}
+	}
+
+	return packet;
+}
+
+gsize socket_getOutputBufferSpace(Socket* socket) {
+	MAGIC_ASSERT(socket);
+	g_assert(socket->outputBufferSize >= socket->outputBufferLength);
+	return (socket->outputBufferSize - socket->outputBufferLength);
+}
+
+gboolean socket_addToOutputBuffer(Socket* socket, Packet* packet) {
+	MAGIC_ASSERT(socket);
+
+	/* check if the packet fits */
+	guint length = packet_getPayloadLength(packet);
+	if(length > socket_getOutputBufferSpace(socket)) {
+		return FALSE;
+	}
+
+	/* add to our queue */
+	g_queue_push_tail(socket->outputBuffer, packet);
+	socket->outputBufferLength += length;
+
+	/* we just added a packet, we are no longer writable if full */
+	if(socket_getOutputBufferSpace(socket) <= 0) {
+		descriptor_adjustStatus((Descriptor*)socket, DS_WRITABLE, FALSE);
+	}
+
+	/* tell the interface to include us when sending out to the network */
+	NetworkInterface* interface = node_lookupInterface(worker_getPrivate()->cached_node, socket->boundAddress);
+	networkinterface_wantsSend(interface, socket);
+
+	return TRUE;
+}
+
+Packet* socket_removeFromOutputBuffer(Socket* socket) {
+	MAGIC_ASSERT(socket);
+
+	/* see if we have any packets */
+	Packet* packet = g_queue_pop_head(socket->outputBuffer);
+	if(packet) {
+		/* just removed a packet */
+		guint length = packet_getPayloadLength(packet);
+		socket->outputBufferLength -= length;
+
+		/* we are writable if we now have space */
+		if(socket_getOutputBufferSpace(socket) > 0) {
+			descriptor_adjustStatus((Descriptor*)socket, DS_WRITABLE, TRUE);
+		}
+	}
+
+	return packet;
 }

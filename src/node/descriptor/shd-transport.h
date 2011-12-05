@@ -29,68 +29,27 @@ typedef struct _TransportFunctionTable TransportFunctionTable;
 
 typedef gssize (*TransportSendFunc)(Transport* transport, gconstpointer buffer, gsize nBytes, in_addr_t ip, in_port_t port);
 typedef gssize (*TransportReceiveFunc)(Transport* transport, gpointer buffer, gsize nBytes, in_addr_t* ip, in_port_t* port);
-typedef gboolean (*TransportProcessFunc)(Transport* transport, Packet* packet);
-typedef void (*TransportDroppedPacketFunc)(Transport* transport, Packet* packet);
 
 struct _TransportFunctionTable {
 	DescriptorFunc close;
 	DescriptorFunc free;
 	TransportSendFunc send;
 	TransportReceiveFunc receive;
-	TransportProcessFunc process;
-	TransportDroppedPacketFunc dropped;
 	MAGIC_DECLARE;
-};
-
-enum TransportFlags {
-	TF_NONE = 0,
-	TF_BOUND = 1 << 0,
 };
 
 struct _Transport {
 	Descriptor super;
 	TransportFunctionTable* vtable;
 
-	enum ProtocolType protocol;
-	enum TransportFlags flags;
-	in_addr_t boundAddress;
-	in_port_t boundPort;
-	gchar* boundString;
-	gint associationKey;
-
-	/* buffering packets readable by user */
-	GQueue* inputBuffer;
-	gsize inputBufferSize;
-	gsize inputBufferLength;
-
-	/* buffering packets ready to send */
-	GQueue* outputBuffer;
-	gsize outputBufferSize;
-	gsize outputBufferLength;
-
 	MAGIC_DECLARE;
 };
 
 void transport_init(Transport* transport, TransportFunctionTable* vtable, enum DescriptorType type, gint handle);
 
-in_addr_t transport_getBinding(Transport* transport);
-void transport_setBinding(Transport* transport, in_addr_t boundAddress, in_port_t port);
-gint transport_getAssociationKey(Transport* transport);
-
-gboolean transport_pushInPacket(Transport* transport, Packet* packet);
-Packet* transport_pullOutPacket(Transport* transport);
 gssize transport_sendUserData(Transport* transport, gconstpointer buffer, gsize nBytes,
 		in_addr_t ip, in_port_t port);
 gssize transport_receiveUserData(Transport* transport, gpointer buffer, gsize nBytes,
 		in_addr_t* ip, in_port_t* port);
-void transport_droppedPacket(Transport* transport, Packet* packet);
-
-gsize transport_getInputBufferSpace(Transport* transport);
-gboolean transport_addToInputBuffer(Transport* transport, Packet* packet);
-Packet* transport_removeFromInputBuffer(Transport* transport);
-
-gsize transport_getOutputBufferSpace(Transport* transport);
-gboolean transport_addToOutputBuffer(Transport* transport, Packet* packet);
-Packet* transport_removeFromOutputBuffer(Transport* transport);
 
 #endif /* SHD_TRANSPORT_H_ */
