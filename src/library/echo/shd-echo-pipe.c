@@ -69,6 +69,7 @@ EchoPipe* echopipe_new(ShadowlibLogFunc log) {
 void echopipe_free(EchoPipe* epipe) {
 	g_assert(epipe);
 	close(epipe->epolld);
+	g_free(epipe);
 }
 
 /* fills buffer with size random characters */

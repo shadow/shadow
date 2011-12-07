@@ -48,6 +48,7 @@ gint udp_connectToPeer(UDP* udp, in_addr_t ip, in_port_t port, sa_family_t famil
 	return 0;
 }
 
+/* return TRUE if the packet should be retransmitted */
 gboolean udp_processPacket(UDP* udp, Packet* packet) {
 	MAGIC_ASSERT(udp);
 
@@ -55,7 +56,7 @@ gboolean udp_processPacket(UDP* udp, Packet* packet) {
 	if(packet_getPayloadLength(packet) > 0) {
 		return socket_addToInputBuffer((Socket*)udp, packet);
 	}
-	return TRUE;
+	return FALSE;
 }
 
 void udp_droppedPacket(UDP* udp, Packet* packet) {

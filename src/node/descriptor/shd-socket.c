@@ -26,7 +26,6 @@ void socket_free(gpointer data) {
 	MAGIC_ASSERT(socket);
 	MAGIC_ASSERT(socket->vtable);
 
-	socket->vtable->free((Descriptor*)socket);
 
 	if(socket->peerString) {
 		g_free(socket->peerString);
@@ -35,7 +34,18 @@ void socket_free(gpointer data) {
 		g_free(socket->boundString);
 	}
 
+	while(g_queue_get_length(socket->inputBuffer) > 0) {
+		packet_unref(g_queue_pop_head(socket->inputBuffer));
+	}
+	g_queue_free(socket->inputBuffer);
+
+	while(g_queue_get_length(socket->outputBuffer) > 0) {
+		packet_unref(g_queue_pop_head(socket->outputBuffer));
+	}
+	g_queue_free(socket->outputBuffer);
+
 	MAGIC_CLEAR(socket);
+	socket->vtable->free((Descriptor*)socket);
 }
 
 void socket_close(Socket* socket) {
@@ -95,12 +105,6 @@ gint socket_connectToPeer(Socket* socket, in_addr_t ip, in_port_t port, sa_famil
 	MAGIC_ASSERT(socket);
 	MAGIC_ASSERT(socket->vtable);
 	return socket->vtable->connectToPeer(socket, ip, port, family);
-}
-
-gboolean socket_processPacket(Socket* socket, Packet* packet) {
-	MAGIC_ASSERT(socket);
-	MAGIC_ASSERT(socket->vtable);
-	return socket->vtable->process(socket, packet);
 }
 
 void socket_droppedPacket(Socket* socket, Packet* packet) {
@@ -217,7 +221,6 @@ gboolean socket_addToInputBuffer(Socket* socket, Packet* packet) {
 	}
 
 	/* add to our queue */
-	packet_ref(packet);
 	g_queue_push_tail(socket->inputBuffer, packet);
 	socket->inputBufferLength += length;
 

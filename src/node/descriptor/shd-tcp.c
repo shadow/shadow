@@ -193,8 +193,8 @@ static TCPChild* _tcpchild_new(TCP* tcp, TCP* parent, in_addr_t peerIP, in_port_
 static void _tcpchild_free(TCPChild* child) {
 	MAGIC_ASSERT(child);
 
-	descriptor_unref(child->parent);
 	descriptor_unref(child->tcp);
+	descriptor_unref(child->parent);
 
 	MAGIC_CLEAR(child);
 	g_free(child);
@@ -204,7 +204,7 @@ static TCPServer* _tcpserver_new(gint backlog) {
 	TCPServer* server = g_new0(TCPServer, 1);
 	MAGIC_INIT(server);
 
-	server->children = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, (GDestroyNotify) _tcpchild_free);
+	server->children = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, NULL);
 	server->pending = g_queue_new();
 	server->pendingMaxLength = backlog;
 
@@ -722,7 +722,7 @@ static TCP* _tcp_getSourceTCP(TCP* tcp, in_addr_t ip, in_port_t port) {
 	return tcp;
 }
 
-/* return TRUE if we processed the packet, FALSE if it should be retransmitted */
+/* return TRUE if the packet should be retransmitted */
 gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 	MAGIC_ASSERT(tcp);
 
@@ -750,7 +750,8 @@ gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 
 		/* it will send no more user data after what we have now */
 		tcp->receive.end = tcp->receive.next;
-		return TRUE;
+		packet_unref(packet);
+		return FALSE;
 	}
 
 	/* go through the state machine, tracking processing and response */
@@ -896,14 +897,16 @@ gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 				wasProcessed = TRUE;
 				_tcp_setState(tcp, TCPS_CLOSED);
 				/* we closed, cant use tcp anymore, no retransmit */
-				return TRUE;
+				packet_unref(packet);
+				return FALSE;
 			}
 			break;
 		}
 
 		case TCPS_CLOSED: {
 			/* stray packet, drop without retransmit */
-			return TRUE;
+			packet_unref(packet);
+			return FALSE;
 			break;
 		}
 
@@ -1000,7 +1003,11 @@ gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 		_tcp_flush(tcp);
 	}
 
-	return !doRetransmitData;
+	/* we should free packets that are done but were not buffered */
+	if(!doRetransmitData && packetLength <= 0) {
+		packet_unref(packet);
+	}
+	return doRetransmitData;
 }
 
 void tcp_droppedPacket(TCP* tcp, Packet* packet) {
@@ -1184,8 +1191,11 @@ void tcp_free(TCP* tcp) {
 		MAGIC_ASSERT(tcp->child);
 		MAGIC_ASSERT(tcp->child->parent);
 		MAGIC_ASSERT(tcp->child->parent->server);
-		/* remove parents reference to child, this frees the child */
+
+		/* remove parents reference to child, if it exists */
 		g_hash_table_remove(tcp->child->parent->server->children, &(tcp->child->key));
+
+		_tcpchild_free(tcp->child);
 	}
 
 	if(tcp->server) {

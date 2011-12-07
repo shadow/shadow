@@ -101,7 +101,8 @@ void packet_unref(Packet* packet) {
 	_packet_lock(packet);
 
 	(packet->referenceCount)--;
-	if(packet->referenceCount <= 0) {
+	g_assert(packet->referenceCount >= 0);
+	if(packet->referenceCount == 0) {
 		_packet_unlock(packet);
 		_packet_free(packet);
 	} else {

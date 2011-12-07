@@ -104,11 +104,14 @@ void node_free(gpointer data) {
 	}
 
 	g_hash_table_destroy(node->interfaces);
+	g_hash_table_destroy(node->descriptors);
 
 	g_async_queue_unref(node->event_mailbox);
 	g_queue_free(node->event_priority_queue);
 
 	g_free(node->name);
+
+	cpu_free(node->cpu);
 
 	g_mutex_free(node->lock);
 

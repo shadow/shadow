@@ -149,6 +149,13 @@ void plugin_free(gpointer data) {
 	g_unlink(plugin->path->str);
 	g_string_free(plugin->path, TRUE);
 
+	if(plugin->residentState) {
+		pluginstate_free(plugin->residentState);
+	}
+	if(plugin->defaultState) {
+		pluginstate_free(plugin->defaultState);
+	}
+
 	MAGIC_CLEAR(plugin);
 	g_free(plugin);
 }

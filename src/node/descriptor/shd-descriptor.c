@@ -40,13 +40,13 @@ static void _descriptor_free(Descriptor* descriptor) {
 	MAGIC_ASSERT(descriptor);
 	MAGIC_ASSERT(descriptor->funcTable);
 
-	descriptor->funcTable->free(descriptor);
 
 	if(descriptor->readyListeners) {
 		g_slist_free(descriptor->readyListeners);
 	}
 
 	MAGIC_CLEAR(descriptor);
+	descriptor->funcTable->free(descriptor);
 }
 
 void descriptor_ref(gpointer data) {
@@ -61,7 +61,8 @@ void descriptor_unref(gpointer data) {
 	MAGIC_ASSERT(descriptor);
 
 	(descriptor->referenceCount)--;
-	if(descriptor->referenceCount <= 0) {
+	g_assert(descriptor->referenceCount >= 0);
+	if(descriptor->referenceCount == 0) {
 		_descriptor_free(descriptor);
 	}
 }

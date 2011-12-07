@@ -186,7 +186,6 @@ void networkinterface_packetArrived(NetworkInterface* interface, Packet* packet)
 //	guint packetLength = packet_getPayloadLength(packet);
 //	if(packetLength <= (interface->inBufferSize - interface->inBufferLength)) {
 		/* we have space to buffer it */
-		packet_ref(packet);
 		g_queue_push_tail(interface->inBuffer, packet);
 //		interface->inBufferLength += packetLength;
 
@@ -252,8 +251,8 @@ void networkinterface_received(NetworkInterface* interface) {
 
 		/* if the socket closed, just drop the packet */
 		if(socket) {
-			gboolean accepted = socket_pushInPacket(socket, packet);
-			if(!accepted) {
+			gboolean needsRetransmiit = socket_pushInPacket(socket, packet);
+			if(needsRetransmiit) {
 				/* socket can not handle it now, so drop it */
 				_networkinterface_dropInboundPacket(interface, packet);
 			}

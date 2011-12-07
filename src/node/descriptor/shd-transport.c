@@ -25,9 +25,8 @@ void transport_free(Transport* transport) {
 	MAGIC_ASSERT(transport);
 	MAGIC_ASSERT(transport->vtable);
 
-	transport->vtable->free((Descriptor*)transport);
-
 	MAGIC_CLEAR(transport);
+	transport->vtable->free((Descriptor*)transport);
 }
 
 void transport_close(Transport* transport) {

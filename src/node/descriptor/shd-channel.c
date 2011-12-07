@@ -66,7 +66,6 @@ static gssize channel_linkedWrite(Channel* channel, gconstpointer buffer, gsize 
 	bytequeue_push(channel->buffer, buffer, copyLength);
 	channel->bufferLength += copyLength;
 
-
 	/* we just got some data in our buffer */
 	descriptor_adjustStatus((Descriptor*)channel, DS_READABLE, TRUE);
 

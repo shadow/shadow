@@ -223,6 +223,7 @@ EchoTCP* echotcp_new(ShadowlibLogFunc log, int argc, char* argv[]) {
 				in_addr_t serverIP = ((struct sockaddr_in*)(serverInfo->ai_addr))->sin_addr.s_addr;
 				etcp->client = _echotcp_newClient(log, serverIP);
 			}
+			freeaddrinfo(serverInfo);
 		}
 	}
 	else if (g_strncasecmp(mode, "server", 6) == 0)
@@ -241,6 +242,7 @@ EchoTCP* echotcp_new(ShadowlibLogFunc log, int argc, char* argv[]) {
 				log(G_LOG_LEVEL_INFO, __FUNCTION__, "binding to %s", inet_ntoa((struct in_addr){myIP}));
 				etcp->server = _echotcp_newServer(log, myIP);
 			}
+			freeaddrinfo(myInfo);
 		} else {
 			log(G_LOG_LEVEL_WARNING, __FUNCTION__, "unable to create server: error in gethostname");
 			isError = TRUE;
@@ -281,6 +283,7 @@ void echotcp_free(EchoTCP* etcp) {
 		g_free(etcp->server);
 	}
 
+	g_free(etcp);
 }
 
 static void _echotcp_clientReadable(EchoClient* ec, gint socketd) {
