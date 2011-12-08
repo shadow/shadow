@@ -65,7 +65,7 @@ struct _Engine {
 	/* holds a thread-private key that each thread references to get a private
 	 * instance of a worker object
 	 */
-	GPrivate* workerKey;
+	GStaticPrivate workerKey;
 
 	/*
 	 * condition that signals when all node's events have been processed in a

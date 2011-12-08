@@ -53,12 +53,12 @@ Worker* worker_getPrivate() {
 	MAGIC_ASSERT(engine);
 
 	/* get current thread's private worker object */
-	Worker* worker = g_private_get(engine->workerKey);
+	Worker* worker = g_static_private_get(&(engine->workerKey));
 
 	/* todo: should we use g_once here instead? */
 	if(!worker) {
 		worker = _worker_new(engine_generateWorkerID(engine));
-		g_private_set(engine->workerKey, worker);
+		g_static_private_set(&(engine->workerKey), worker, worker_free);
 	}
 
 	MAGIC_ASSERT(worker);

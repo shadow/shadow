@@ -193,6 +193,8 @@ static TCPChild* _tcpchild_new(TCP* tcp, TCP* parent, in_addr_t peerIP, in_port_
 static void _tcpchild_free(TCPChild* child) {
 	MAGIC_ASSERT(child);
 
+	/* make sure our tcp doesnt try to free the child again */
+	child->tcp->child = NULL;
 	descriptor_unref(child->tcp);
 	descriptor_unref(child->parent);
 
@@ -204,7 +206,7 @@ static TCPServer* _tcpserver_new(gint backlog) {
 	TCPServer* server = g_new0(TCPServer, 1);
 	MAGIC_INIT(server);
 
-	server->children = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, NULL);
+	server->children = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, (GDestroyNotify) _tcpchild_free);
 	server->pending = g_queue_new();
 	server->pendingMaxLength = backlog;
 
@@ -355,13 +357,17 @@ static void _tcp_setState(TCP* tcp, enum TCPState state) {
 			 */
 			if(!tcp->server || g_hash_table_size(tcp->server->children) <= 0) {
 				if(tcp->child && tcp->child->parent) {
-					/* tell my server to stop accepting packets for me */
+					TCP* parent = tcp->child->parent;
+
+					/* tell my server to stop accepting packets for me
+					 * this will destroy the child and NULL out tcp->child */
 					g_hash_table_remove(tcp->child->parent->server->children, (gconstpointer)&(tcp->child->key));
 
 					/* if i was the server's last child and its waiting to close, close it */
-					if((tcp->child->parent->state == TCPS_CLOSED) && (g_hash_table_size(tcp->child->parent->server->children) <= 0)) {
+					g_assert(parent->server);
+					if((parent->state == TCPS_CLOSED) && (g_hash_table_size(parent->server->children) <= 0)) {
 						/* this will unbind from the network interface and free socket */
-						node_closeDescriptor(worker_getPrivate()->cached_node, tcp->child->parent->super.super.super.handle);
+						node_closeDescriptor(worker_getPrivate()->cached_node, parent->super.super.super.handle);
 					}
 				}
 
@@ -771,6 +777,7 @@ gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 				TCP* multiplexed = (TCP*) node_lookupDescriptor(node, multiplexedHandle);
 
 				multiplexed->child = _tcpchild_new(multiplexed, tcp, header.sourceIP, header.sourcePort);
+				g_assert(g_hash_table_lookup(tcp->server->children, &(multiplexed->child->key)) == NULL);
 				g_hash_table_replace(tcp->server->children, &(multiplexed->child->key), multiplexed->child);
 
 				multiplexed->receive.start = header.sequence;

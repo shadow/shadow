@@ -41,7 +41,7 @@ void application_free(Application* application) {
 	/* need to get thread-private plugin from current worker */
 	Plugin* plugin = worker_getPlugin(application->software);
 
-	/* tell the plug-in to free its data */
+	/* tell the plug-in module (user code) to free its data */
 	plugin_executeFree(plugin, application->state);
 
 	/* free our copy of plug-in resources */

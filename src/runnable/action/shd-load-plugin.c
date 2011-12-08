@@ -72,6 +72,10 @@ void loadplugin_run(LoadPluginAction* action) {
 void loadplugin_free(LoadPluginAction* action) {
 	MAGIC_ASSERT(action);
 
+	if(action->path) {
+		g_string_free(action->path, FALSE);
+	}
+
 	MAGIC_CLEAR(action);
 	g_free(action);
 }

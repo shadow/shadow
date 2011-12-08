@@ -30,7 +30,7 @@ Engine* engine_new(Configuration* config) {
 	engine->config = config;
 
 	/* initialize the singleton-per-thread worker class */
-	engine->workerKey = g_private_new(worker_free);
+	engine->workerKey.index = 0;
 
 	/* holds all events if single-threaded, and non-node events otherwise. */
 	engine->masterEventQueue = g_async_queue_new_full(shadowevent_free);

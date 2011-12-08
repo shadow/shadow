@@ -104,6 +104,13 @@ void networkinterface_free(NetworkInterface* interface) {
 	}
 	g_queue_free(interface->inBuffer);
 
+	/* unref all sockets wanting to send */
+	while(interface->sendableSockets && g_queue_get_length(interface->sendableSockets)) {
+		Socket* socket = g_queue_pop_head(interface->sendableSockets);
+		descriptor_unref(socket);
+	}
+	g_queue_free(interface->sendableSockets);
+
 	g_hash_table_destroy(interface->boundSockets);
 	address_free(interface->address);
 
