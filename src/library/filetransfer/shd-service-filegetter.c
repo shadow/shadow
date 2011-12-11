@@ -158,9 +158,9 @@ static enum filegetter_code service_filegetter_download_next(service_filegetter_
 	}
 }
 
-static enum filegetter_code service_filegetter_launch(service_filegetter_tp sfg, gint* sockd_out) {
+static enum filegetter_code service_filegetter_launch(service_filegetter_tp sfg, gint epolld, gint* sockd_out) {
 	/* inputs should be ok, start up the client */
-	enum filegetter_code result = filegetter_start(&sfg->fg);
+	enum filegetter_code result = filegetter_start(&sfg->fg, epolld);
 	service_filegetter_log(sfg, SFG_DEBUG, "filegetter startup code: %s", filegetter_codetoa(result));
 
 	/* set our download specifications */
@@ -174,7 +174,7 @@ static enum filegetter_code service_filegetter_launch(service_filegetter_tp sfg,
 }
 
 enum filegetter_code service_filegetter_start_single(service_filegetter_tp sfg,
-		service_filegetter_single_args_tp args, gint* sockd_out) {
+		service_filegetter_single_args_tp args, gint epolld, gint* sockd_out) {
 	assert(sfg);
 	assert(args);
 
@@ -198,11 +198,11 @@ enum filegetter_code service_filegetter_start_single(service_filegetter_tp sfg,
 		return FG_ERR_INVALID;
 	}
 
-	return service_filegetter_launch(sfg, sockd_out);
+	return service_filegetter_launch(sfg, epolld, sockd_out);
 }
 
 enum filegetter_code service_filegetter_start_double(service_filegetter_tp sfg,
-		service_filegetter_double_args_tp args, gint* sockd_out) {
+		service_filegetter_double_args_tp args, gint epolld, gint* sockd_out) {
 	assert(sfg);
 	assert(args);
 
@@ -248,7 +248,7 @@ enum filegetter_code service_filegetter_start_double(service_filegetter_tp sfg,
 		sfg->pausetime_seconds = 1;
 	}
 
-	return service_filegetter_launch(sfg, sockd_out);
+	return service_filegetter_launch(sfg, epolld, sockd_out);
 }
 
 static gint _treeIntCompare(gconstpointer a, gconstpointer b, gpointer user_data) {
@@ -319,7 +319,7 @@ static GTree* service_filegetter_import_download_specs(service_filegetter_tp sfg
 }
 
 enum filegetter_code service_filegetter_start_multi(service_filegetter_tp sfg,
-		service_filegetter_multi_args_tp args, gint* sockd_out) {
+		service_filegetter_multi_args_tp args, gint epolld, gint* sockd_out) {
 	assert(sfg);
 	assert(args);
 
@@ -361,7 +361,7 @@ enum filegetter_code service_filegetter_start_multi(service_filegetter_tp sfg,
 		sfg->expire.tv_sec += runtime_seconds;
 	}
 
-	return service_filegetter_launch(sfg, sockd_out);
+	return service_filegetter_launch(sfg, epolld, sockd_out);
 }
 
 static enum filegetter_code service_filegetter_expire(service_filegetter_tp sfg) {
@@ -415,7 +415,7 @@ reactivate:;
 		/* it had to shut down, lets try again */
 		service_filegetter_log(sfg, SFG_NOTICE, "filegetter shutdown due to ginternal error... restarting");
 		filegetter_shutdown(&sfg->fg);
-		filegetter_start(&sfg->fg);
+		filegetter_start(&sfg->fg, sfg->fg.epolld);
 		service_filegetter_download_next(sfg);
 		goto reactivate;
 	}

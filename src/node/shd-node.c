@@ -229,6 +229,51 @@ NetworkInterface* node_lookupInterface(Node* node, in_addr_t handle) {
 	return g_hash_table_lookup(node->interfaces, GUINT_TO_POINTER(handle));
 }
 
+static void _node_associateInterface(Node* node, Socket* socket,
+		in_addr_t bindAddress, in_port_t bindPort) {
+	MAGIC_ASSERT(node);
+
+	/* connect up socket layer */
+	socket_setBinding(socket, bindAddress, bindPort);
+
+	/* now associate the interfaces corresponding to bindAddress with socket */
+	if(bindAddress == htonl(INADDR_ANY)) {
+		/* need to associate all interfaces */
+		GHashTableIter iter;
+		gpointer key, value;
+		g_hash_table_iter_init(&iter, node->interfaces);
+
+		while(g_hash_table_iter_next(&iter, &key, &value)) {
+			NetworkInterface* interface = value;
+			networkinterface_associate(interface, socket);
+		}
+	} else {
+		NetworkInterface* interface = node_lookupInterface(node, bindAddress);
+		networkinterface_associate(interface, socket);
+	}
+}
+
+static void _node_disassociateInterface(Node* node, Socket* socket) {
+	in_addr_t bindAddress = socket_getBinding(socket);
+
+	if(bindAddress == htonl(INADDR_ANY)) {
+		/* need to dissociate all interfaces */
+		GHashTableIter iter;
+		gpointer key, value;
+		g_hash_table_iter_init(&iter, node->interfaces);
+
+		while(g_hash_table_iter_next(&iter, &key, &value)) {
+			NetworkInterface* interface = value;
+			networkinterface_disassociate(interface, socket);
+		}
+
+	} else {
+		NetworkInterface* interface = node_lookupInterface(node, bindAddress);
+		networkinterface_disassociate(interface, socket);
+	}
+
+}
+
 static gint _node_monitorDescriptor(Node* node, Descriptor* descriptor) {
 	MAGIC_ASSERT(node);
 
@@ -248,8 +293,7 @@ static void _node_unmonitorDescriptor(Node* node, gint handle) {
 		if(descriptor->type == DT_TCPSOCKET || descriptor->type == DT_UDPSOCKET)
 		{
 			Socket* socket = (Socket*) descriptor;
-			NetworkInterface* interface = node_lookupInterface(node, socket_getBinding(socket));
-			networkinterface_disassociate(interface, socket);
+			_node_disassociateInterface(node, socket);
 		}
 
 		g_hash_table_remove(node->descriptors, (gconstpointer) &handle);
@@ -442,30 +486,6 @@ static in_port_t _node_getRandomFreePort(Node* node, in_addr_t interfaceIP,
 	}
 
 	return randomPort;
-}
-
-static void _node_associateInterface(Node* node, Socket* socket,
-		in_addr_t bindAddress, in_port_t bindPort) {
-	MAGIC_ASSERT(node);
-
-	/* connect up socket layer */
-	socket_setBinding(socket, bindAddress, bindPort);
-
-	/* now associate the interfaces corresponding to bindAddress with socket */
-	if(bindAddress == htonl(INADDR_ANY)) {
-		/* need to associate all interfaces */
-		GHashTableIter iter;
-		gpointer key, value;
-		g_hash_table_iter_init(&iter, node->interfaces);
-
-		while(g_hash_table_iter_next(&iter, &key, &value)) {
-			NetworkInterface* interface = value;
-			networkinterface_associate(interface, socket);
-		}
-	} else {
-		NetworkInterface* interface = node_lookupInterface(node, bindAddress);
-		networkinterface_associate(interface, socket);
-	}
 }
 
 gint node_bindToInterface(Node* node, gint handle, in_addr_t bindAddress, in_port_t bindPort) {
@@ -734,10 +754,8 @@ gint node_sendUserData(Node* node, gint handle, gconstpointer buffer, gsize nByt
 
 	if(type == DT_TCPSOCKET) {
 		gint error = tcp_getConnectError((TCP*) transport);
-		if(error == ECONNRESET) {
-			return ECONNRESET;
-		} else if(error == ECONNREFUSED) {
-			return ECONNREFUSED;
+		if(error != EISCONN) {
+			return error;
 		}
 	}
 

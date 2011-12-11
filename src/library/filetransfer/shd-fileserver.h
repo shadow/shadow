@@ -38,7 +38,7 @@
  * Note - they MUST be synced with fileserver_code_strings */
 enum fileserver_code {
 	FS_SUCCESS, FS_CLOSED, FS_ERR_INVALID, FS_ERR_FATAL, FS_ERR_BADSD, FS_ERR_WOULDBLOCK, FS_ERR_BUFSPACE,
-	FS_ERR_SOCKET, FS_ERR_BIND, FS_ERR_LISTEN, FS_ERR_ACCEPT, FS_ERR_RECV, FS_ERR_SEND, FS_ERR_CLOSE
+	FS_ERR_SOCKET, FS_ERR_BIND, FS_ERR_LISTEN, FS_ERR_ACCEPT, FS_ERR_RECV, FS_ERR_SEND, FS_ERR_CLOSE, FS_ERR_EPOLL,
 };
 
 enum fileserver_state {
@@ -76,6 +76,7 @@ typedef struct fileserver_s {
 	in_addr_t listen_addr;
 	in_port_t listen_port;
 	gint listen_sockd;
+	gint epolld;
 	gchar docroot[FT_STR_SIZE];
 	/* client connections keyed by sockd */
 	GHashTable *connections;
@@ -90,7 +91,7 @@ typedef struct fileserver_s {
  * fs must not be null, addr and port are in network order, docroot must be at
  * most FS_STRBUFFER_SIZE including the null byte.
  */
-enum fileserver_code fileserver_start(fileserver_tp fs, in_addr_t listen_addr, in_port_t listen_port,
+enum fileserver_code fileserver_start(fileserver_tp fs, gint epolld, in_addr_t listen_addr, in_port_t listen_port,
 		gchar* docroot, gint max_connections);
 
 /* trys to accept a single connection from the listening socket.

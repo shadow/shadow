@@ -34,6 +34,12 @@
  */
 
 #include <glib.h>
+#include <sys/epoll.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netdb.h>
+#include <unistd.h>
+
 #include <shd-library.h>
 
 #include "shd-filetransfer-defs.h"
@@ -51,6 +57,6 @@ struct _FileTransfer {
 FileTransfer** filetransfer_init(FileTransfer* existingFT);
 void filetransfer_new(int argc, char* argv[]);
 void filetransfer_free();
-void filetransfer_activate(gint socketDesriptor);
+void filetransfer_activate();
 
 #endif /* SHD_FILETRANSFER_H_ */

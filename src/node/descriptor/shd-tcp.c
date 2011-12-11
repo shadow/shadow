@@ -81,8 +81,10 @@ struct _TCPServer {
 	/* maximum number of pending connections (capped at SOMAXCONN = 128) */
 	gint pendingMaxLength;
 	/* IP and port of the last peer trying to connect to us */
+	in_addr_t lastPeerIP;
+	in_port_t lastPeerPort;
+	/* last interface IP we received on */
 	in_addr_t lastIP;
-	in_port_t lastPort;
 	MAGIC_DECLARE;
 };
 
@@ -185,7 +187,8 @@ static TCPChild* _tcpchild_new(TCP* tcp, TCP* parent, in_addr_t peerIP, in_port_
 
 	/* the child is bound to the parent server's address, because all packets
 	 * coming from the child should appear to be coming from the server itself */
-	socket_setSocketName(&(child->tcp->super), parent->super.boundAddress, parent->super.boundPort);
+	socket_setSocketName(&(child->tcp->super), socket_getBinding(&(parent->super)),
+			parent->super.boundPort);
 
 	return child;
 }
@@ -225,6 +228,32 @@ static void _tcpserver_free(TCPServer* server) {
 	g_free(server);
 }
 
+static in_addr_t tcp_getIP(TCP* tcp) {
+	in_addr_t ip = 0;
+	if(tcp->server) {
+		ip = socket_getBinding(&(tcp->super));
+		if(ip == 0) {
+			ip = tcp->server->lastIP;
+		}
+	} else if(tcp->child) {
+		ip = socket_getBinding(&(tcp->child->parent->super));
+		if(ip == 0) {
+			ip = tcp->child->parent->server->lastIP;
+		}
+	} else {
+		ip = socket_getBinding(&(tcp->super));
+	}
+	return ip;
+}
+
+static in_addr_t tcp_getPeerIP(TCP* tcp) {
+	in_addr_t ip = tcp->super.peerIP;
+	if(tcp->server && ip == 0) {
+		ip = tcp->server->lastPeerIP;
+	}
+	return ip;
+}
+
 static void _tcp_autotune(TCP* tcp) {
 	MAGIC_ASSERT(tcp);
 
@@ -239,9 +268,9 @@ static void _tcp_autotune(TCP* tcp) {
 	 * the 80th percentile.
 	 */
 	Internetwork* internet = worker_getPrivate()->cached_engine->internet;
-	GQuark sourceID = (GQuark) ((tcp->child) ? tcp->child->parent->super.boundAddress :
-				tcp->super.boundAddress);
-	GQuark destinationID = (GQuark) ((tcp->server) ? tcp->server->lastIP : tcp->super.peerIP);
+
+	GQuark sourceID = (GQuark) tcp_getIP(tcp);
+	GQuark destinationID = (GQuark) tcp_getPeerIP(tcp);
 
 	if(sourceID == destinationID) {
 		/* 16 MiB as max */
@@ -434,13 +463,17 @@ static Packet* _tcp_createPacket(TCP* tcp, enum ProtocolTCPFlags flags, gconstpo
 	/*
 	 * packets from children of a server must appear to be coming from the server
 	 */
-	in_addr_t sourceIP = (tcp->child) ? tcp->child->parent->super.boundAddress :
-			tcp->super.boundAddress;
+	in_addr_t sourceIP = tcp_getIP(tcp);
 	in_port_t sourcePort = (tcp->child) ? tcp->child->parent->super.boundPort :
 			tcp->super.boundPort;
 
-	in_addr_t destinationIP = (tcp->server) ? tcp->server->lastIP : tcp->super.peerIP;
-	in_port_t destinationPort = (tcp->server) ? tcp->server->lastPort : tcp->super.peerPort;
+	in_addr_t destinationIP = tcp_getPeerIP(tcp);
+	in_port_t destinationPort = (tcp->server) ? tcp->server->lastPeerPort : tcp->super.peerPort;
+
+
+	if(sourceIP == htonl(INADDR_ANY)) {
+		sourceIP = node_getDefaultIP(worker_getPrivate()->cached_node);
+	}
 
 	g_assert(sourceIP && sourcePort && destinationIP && destinationPort);
 
@@ -666,7 +699,7 @@ gint tcp_acceptServerPeer(TCP* tcp, in_addr_t* ip, in_port_t* port, gint* accept
 	g_assert(acceptedHandle);
 
 	/* make sure we are listening and bound to an ip and port */
-	if(tcp->state != TCPS_LISTEN || !socket_getBinding(&(tcp->super))) {
+	if(tcp->state != TCPS_LISTEN || !(tcp->super.flags & SF_BOUND)) {
 		return EINVAL;
 	}
 
@@ -760,6 +793,16 @@ gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 		return FALSE;
 	}
 
+	/* if we are a server, we have to remember who we got this from so we can
+	 * respond back to them. this is because we could be bound to several
+	 * interfaces and otherwise cant decide which to send on.
+	 */
+	if(tcp->server) {
+		tcp->server->lastPeerIP = header.sourceIP;
+		tcp->server->lastPeerPort = header.sourcePort;
+		tcp->server->lastIP = header.destinationIP;
+	}
+
 	/* go through the state machine, tracking processing and response */
 	gboolean wasProcessed = FALSE;
 	enum ProtocolTCPFlags responseFlags = PTCP_NONE;
@@ -785,8 +828,6 @@ gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 				_tcp_setState(multiplexed, TCPS_SYNRECEIVED);
 
 				/* parent will send response */
-				tcp->server->lastIP = header.sourceIP;
-				tcp->server->lastPort = header.sourcePort;
 				responseFlags = PTCP_SYN|PTCP_ACK;
 			}
 			break;

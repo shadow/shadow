@@ -109,9 +109,9 @@ typedef struct service_filegetter_s {
 	gint downloads_completed;
 } service_filegetter_t, *service_filegetter_tp;
 
-enum filegetter_code service_filegetter_start_single(service_filegetter_tp sfg, service_filegetter_single_args_tp args, gint* sockd_out);
-enum filegetter_code service_filegetter_start_double(service_filegetter_tp sfg, service_filegetter_double_args_tp args, gint* sockd_out);
-enum filegetter_code service_filegetter_start_multi(service_filegetter_tp sfg, service_filegetter_multi_args_tp args, gint* sockd_out);
+enum filegetter_code service_filegetter_start_single(service_filegetter_tp sfg, service_filegetter_single_args_tp args, gint epolld, gint* sockd_out);
+enum filegetter_code service_filegetter_start_double(service_filegetter_tp sfg, service_filegetter_double_args_tp args, gint epolld, gint* sockd_out);
+enum filegetter_code service_filegetter_start_multi(service_filegetter_tp sfg, service_filegetter_multi_args_tp args, gint epolld, gint* sockd_out);
 enum filegetter_code service_filegetter_activate(service_filegetter_tp sfg, gint sockd);
 enum filegetter_code service_filegetter_stop(service_filegetter_tp sfg);
 

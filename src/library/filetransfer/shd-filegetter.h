@@ -74,6 +74,7 @@ typedef struct filegetter_s {
 	filegetter_filestats_t curstats;
 	filegetter_filestats_t allstats;
 	gint sockd;
+	gint epolld;
 	FILE* f;
 	gchar buf[FT_BUF_SIZE];
 	size_t buf_write_offset;
@@ -86,7 +87,7 @@ typedef struct filegetter_s {
 	enum filegetter_code errcode;
 } filegetter_t, *filegetter_tp;
 
-enum filegetter_code filegetter_start(filegetter_tp fg);
+enum filegetter_code filegetter_start(filegetter_tp fg, gint epolld);
 
 enum filegetter_code filegetter_download(filegetter_tp fg, filegetter_serverspec_tp sspec, filegetter_filespec_tp fspec);
 

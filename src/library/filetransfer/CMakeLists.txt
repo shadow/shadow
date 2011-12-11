@@ -15,18 +15,18 @@ set(filetransfer_sources
 add_library(shadow-service-filetransfer STATIC ${filetransfer_sources})
 add_dependencies(shadow-service-filetransfer shadow-util)
 target_link_libraries(shadow-service-filetransfer ${RT_LIBRARIES})
+install(TARGETS shadow-service-filetransfer EXPORT shadow-externals DESTINATION lib)
 
 ## a stand-alone shared library that can plug into shadow
 add_library(shadow-plugin-filetransfer MODULE shd-filetransfer-plugin.c)
 target_link_libraries(shadow-plugin-filetransfer shadow-service-filetransfer)
+install(TARGETS shadow-plugin-filetransfer DESTINATION ${SHADOW_PLUGIN_DIR})
 
 ## executables that can run outside of shadow
-add_executable(shadow-fileserver shd-fileserver-main.c shd-fileserver.c)
-target_link_libraries(shadow-fileserver ${GLIB_LIBRARIES})
-add_executable(shadow-filegetter shd-filegetter-main.c shd-service-filegetter.c shd-filegetter.c ${SHADOW_SOURCE_DIR}/utility/shd-cdf.c ${SHADOW_SOURCE_DIR}/utility/rand.c)
-target_link_libraries(shadow-filegetter ${RT_LIBRARIES} ${GLIB_LIBRARIES})
+#add_executable(shadow-fileserver shd-fileserver-main.c shd-fileserver.c)
+#target_link_libraries(shadow-fileserver ${GLIB_LIBRARIES})
+#add_executable(shadow-filegetter shd-filegetter-main.c shd-service-filegetter.c shd-filegetter.c ${SHADOW_SOURCE_DIR}/utility/shd-cdf.c ${SHADOW_SOURCE_DIR}/utility/rand.c)
+#target_link_libraries(shadow-filegetter ${RT_LIBRARIES} ${GLIB_LIBRARIES})
+#install(TARGETS shadow-fileserver shadow-filegetter DESTINATION bin)
 
-install(TARGETS shadow-service-filetransfer EXPORT shadow-externals DESTINATION lib)
-install(TARGETS shadow-plugin-filetransfer DESTINATION ${SHADOW_PLUGIN_DIR})
-install(TARGETS shadow-fileserver shadow-filegetter DESTINATION bin)
 install(DIRECTORY ./ DESTINATION include/shadow FILES_MATCHING PATTERN "*.h")

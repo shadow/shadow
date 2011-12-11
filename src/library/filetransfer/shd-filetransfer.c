@@ -60,7 +60,13 @@ static in_addr_t _filetransfer_HostnameCallback(const gchar* hostname) {
 	} else if(g_strncasecmp(hostname, "localhost", 9) == 0) {
 		addr = htonl(INADDR_LOOPBACK);
 	} else {
-		addr = ft->shadowlib->resolveHostname((gchar*) hostname);
+		struct addrinfo* info;
+		if(getaddrinfo((gchar*) hostname, NULL, NULL, &info) != -1) {
+			addr = ((struct sockaddr_in*)(info->ai_addr))->sin_addr.s_addr;
+		} else {
+			ft->shadowlib->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "unable to create client: error in getaddrinfo");
+		}
+		freeaddrinfo(info);
 	}
 
 	return addr;
@@ -88,60 +94,67 @@ void filetransfer_new(int argc, char* argv[]) {
 			"\t'client single fileServerHostname fileServerPort socksServerHostname(or 'none') socksServerPort nDownloads pathToFile'\n"
 			"\t'client double fileServerHostname fileServerPort socksServerHostname(or 'none') socksServerPort pathToFile1 pathToFile2 pathToFile3(or 'none') secondsPause'\n"
 			"\t'client multi pathToDownloadSpec socksServerHostname(or 'none') socksServerPort pathToThinktimeCDF(or 'none') secondsRunTime(or '-1')'\n";
-	if(argc < 1) goto printUsage;
+	if(argc < 2) goto printUsage;
 
-	/* parse command line args */
-	gchar* mode = argv[0];
+	/* parse command line args, first is program name */
+	gchar* mode = argv[1];
 
+	/* create an epoll so we can wait for IO events */
+	gint epolld = epoll_create(1);
+	if(epolld == -1) {
+		ft->shadowlib->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in server epoll_create");
+		close(epolld);
+		epolld = 0;
+	}
 
 	if(g_strcasecmp(mode, "client") == 0) {
 		/* check client args */
-		if(argc < 2) goto printUsage;
+		if(argc < 3) goto printUsage;
 
 		ft->client = g_new0(service_filegetter_t, 1);
-		gint sockd = -1;
 
-		gchar* clientMode = argv[1];
+		gchar* clientMode = argv[2];
+		gint sockd = -1;
 
 		if(g_strncasecmp(clientMode, "single", 6) == 0) {
 			service_filegetter_single_args_t args;
 
-			args.http_server.host = argv[2];
-			args.http_server.port = argv[3];
-			args.socks_proxy.host = argv[4];
-			args.socks_proxy.port = argv[5];
-			args.num_downloads = argv[6];
-			args.filepath = argv[7];
+			args.http_server.host = argv[3];
+			args.http_server.port = argv[4];
+			args.socks_proxy.host = argv[5];
+			args.socks_proxy.port = argv[6];
+			args.num_downloads = argv[7];
+			args.filepath = argv[8];
 
 			args.log_cb = &_filetransfer_logCallback;
 			args.hostbyname_cb = &_filetransfer_HostnameCallback;
 
-			service_filegetter_start_single(ft->client, &args, &sockd);
+			service_filegetter_start_single(ft->client, &args, epolld, &sockd);
 		} else if(g_strncasecmp(clientMode, "double", 6) == 0){
 			service_filegetter_double_args_t args;
 
-			args.http_server.host = argv[2];
-			args.http_server.port = argv[3];
-			args.socks_proxy.host = argv[4];
-			args.socks_proxy.port = argv[5];
-			args.filepath1 = argv[6];
-			args.filepath2 = argv[7];
-			args.filepath3 = argv[8];
-			args.pausetime_seconds = argv[9];
+			args.http_server.host = argv[3];
+			args.http_server.port = argv[4];
+			args.socks_proxy.host = argv[5];
+			args.socks_proxy.port = argv[6];
+			args.filepath1 = argv[7];
+			args.filepath2 = argv[8];
+			args.filepath3 = argv[9];
+			args.pausetime_seconds = argv[10];
 
 			args.log_cb = &_filetransfer_logCallback;
 			args.hostbyname_cb = &_filetransfer_HostnameCallback;
 			args.sleep_cb = &_filetransfer_sleepCallback;
 
-			service_filegetter_start_double(ft->client, &args, &sockd);
+			service_filegetter_start_double(ft->client, &args, epolld, &sockd);
 		} else if(g_strncasecmp(clientMode, "multi", 5) == 0) {
 			service_filegetter_multi_args_t args;
 
-			args.server_specification_filepath = argv[2];
-			args.socks_proxy.host = argv[3];
-			args.socks_proxy.port = argv[4];
-			args.thinktimes_cdf_filepath = argv[5];
-			args.runtime_seconds = argv[6];
+			args.server_specification_filepath = argv[3];
+			args.socks_proxy.host = argv[4];
+			args.socks_proxy.port = argv[5];
+			args.thinktimes_cdf_filepath = argv[6];
+			args.runtime_seconds = argv[7];
 
 			if(g_strncasecmp(args.thinktimes_cdf_filepath, "none", 4) == 0) {
 				args.thinktimes_cdf_filepath = NULL;
@@ -151,7 +164,7 @@ void filetransfer_new(int argc, char* argv[]) {
 			args.hostbyname_cb = &_filetransfer_HostnameCallback;
 			args.sleep_cb = &_filetransfer_sleepCallback;
 
-			service_filegetter_start_multi(ft->client, &args, &sockd);
+			service_filegetter_start_multi(ft->client, &args, epolld, &sockd);
 		} else {
 			/* unknown client mode */
 			g_free(ft->client);
@@ -165,16 +178,17 @@ void filetransfer_new(int argc, char* argv[]) {
 		}
 	} else if(g_strcasecmp(mode, "server") == 0) {
 		/* check server args */
-		if(argc < 3) goto printUsage;
+		if(argc < 4) goto printUsage;
 
 		/* we are running a server */
 		in_addr_t listenIP = INADDR_ANY;
-		in_port_t listenPort = (in_port_t) atoi(argv[1]);
-		gchar* docroot = argv[2];
+		in_port_t listenPort = (in_port_t) atoi(argv[2]);
+		gchar* docroot = argv[3];
 
 		ft->server = g_new0(fileserver_t, 1);
+
 		ft->shadowlib->log(G_LOG_LEVEL_INFO, __FUNCTION__, "serving '%s' on port %u", docroot, listenPort);
-		enum fileserver_code res = fileserver_start(ft->server, htonl(listenIP), htons(listenPort), docroot, 1000);
+		enum fileserver_code res = fileserver_start(ft->server, epolld, htonl(listenIP), htons(listenPort), docroot, 1000);
 
 		if(res == FS_SUCCESS) {
 			ft->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "fileserver running on at %s:%u", inet_ntoa((struct in_addr){listenIP}), listenPort);
@@ -221,18 +235,46 @@ void filetransfer_free() {
 	}
 }
 
-void filetransfer_activate(gint socketDesriptor) {
-	ft->shadowlib->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "activating socket %i", socketDesriptor);
+void filetransfer_activate() {
+	ft->shadowlib->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "checking epoll for ready sockets");
 
-	if (ft->client) {
-		/* activate client */
-		service_filegetter_activate(ft->client, socketDesriptor);
-	} else if (ft->server) {
-		/* activate server and print updated stats */
-		enum fileserver_code result = fileserver_activate(ft->server, socketDesriptor);
-		ft->shadowlib->log(G_LOG_LEVEL_DEBUG, __FUNCTION__,
-				"fileserver activation result: %s (%lu bytes in, %lu bytes out, %lu replies)",
-				fileserver_codetoa(result),  ft->server->bytes_received,
-				ft->server->bytes_sent, ft->server->replies_sent);
+	/* check clients epoll descriptor for events, and activate each ready socket */
+	if(ft->client) {
+		if(!ft->client->fg.epolld) {
+			ft->shadowlib->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "client cant wait on epoll without epoll descriptor");
+		} else {
+			struct epoll_event events[10];
+			int nfds = epoll_wait(ft->client->fg.epolld, events, 10, 0);
+			if(nfds == -1) {
+				ft->shadowlib->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "error in client epoll_wait");
+			} else {
+				/* finally, activate client for every socket thats ready */
+				for(int i = 0; i < nfds; i++) {
+					service_filegetter_activate(ft->client, events[i].data.fd);
+				}
+			}
+		}
+	}
+
+	/* check servers epoll descriptor for events, and activate each ready socket */
+	if(ft->server) {
+		if(!ft->server->epolld) {
+			ft->shadowlib->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "server cant wait on epoll without epoll descriptor");
+		} else {
+			struct epoll_event events[10];
+			int nfds = epoll_wait(ft->server->epolld, events, 10, 0);
+			if(nfds == -1) {
+				ft->shadowlib->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "error in server epoll_wait");
+			} else {
+				/* finally, activate server for every socket thats ready */
+				for(int i = 0; i < nfds; i++) {
+					enum fileserver_code result = fileserver_activate(ft->server, events[i].data.fd);
+					ft->shadowlib->log(G_LOG_LEVEL_DEBUG, __FUNCTION__,
+							"fileserver activation result: %s (%lu bytes in, %lu bytes out, %lu replies)",
+							fileserver_codetoa(result),  ft->server->bytes_received,
+							ft->server->bytes_sent, ft->server->replies_sent);
+				}
+			}
+		}
 	}
 }

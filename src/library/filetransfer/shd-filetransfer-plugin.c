@@ -32,13 +32,13 @@ static void filetransferplugin_free() {
 	filetransfer_free();
 }
 
-static void filetransferplugin_activate(gint socketDesriptor) {
-	filetransfer_activate(socketDesriptor);
+static void filetransferplugin_activate() {
+	filetransfer_activate();
 }
 
 PluginFunctionTable filetransfer_pluginFunctions = {
 	&filetransferplugin_new, &filetransferplugin_free,
-	&filetransferplugin_activate, &filetransferplugin_activate,
+	&filetransferplugin_activate,
 };
 
 /* my global structure to hold all variable, node-specific application state */
@@ -62,7 +62,7 @@ void __shadow_plugin_init__(ShadowlibFunctionTable* shadowlibFuncs) {
 	 * tell shadow which of our functions it can use to notify our plugin,
 	 * and allow it to track our state for each instance of this plugin
 	 */
-	gboolean success = shadowlibFuncs->registration(&filetransfer_pluginFunctions, 2,
+	gboolean success = shadowlibFuncs->registerPlugin(&filetransfer_pluginFunctions, 2,
 			sizeof(FileTransfer), &filetransferplugin_globalData,
 			sizeof(FileTransfer**), ftGlobalPointer);
 	if(success) {

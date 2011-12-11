@@ -93,7 +93,7 @@ gssize udp_sendUserData(UDP* udp, gconstpointer buffer, gsize nBytes, in_addr_t 
 
 		/* create the UDP packet */
 		Packet* packet = packet_new(buffer + offset, copyLength);
-		packet_setUDP(packet, PUDP_NONE, udp->super.boundAddress,
+		packet_setUDP(packet, PUDP_NONE, socket_getBinding(&(udp->super)),
 				udp->super.boundPort, destinationIP, destinationPort);
 
 		/* buffer it in the transport layer, to be sent out when possible */

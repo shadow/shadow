@@ -118,6 +118,14 @@ static enum filegetter_code filegetter_connect(filegetter_tp fg, in_addr_t addr,
 
 	fg->sockd = sockd;
 
+	/* start watching socket */
+	struct epoll_event ev;
+	ev.events = EPOLLOUT;
+	ev.data.fd = sockd;
+	if(epoll_ctl(fg->epolld, EPOLL_CTL_ADD, sockd, &ev) < 0) {
+		perror("epoll_ctl");
+	}
+
 	return FG_SUCCESS;
 }
 
@@ -133,6 +141,8 @@ static enum filegetter_code filegetter_disconnect(filegetter_tp fg) {
 
 	/* close source socket */
 	if(fg->sockd != 0) {
+		epoll_ctl(fg->epolld, EPOLL_CTL_DEL, fg->sockd, NULL);
+
 		close_err = close(fg->sockd);
 		fg->sockd = 0;
 	}
@@ -183,7 +193,7 @@ static void filegetter_metrics_complete(filegetter_tp fg) {
 	}
 }
 
-enum filegetter_code filegetter_start(filegetter_tp fg) {
+enum filegetter_code filegetter_start(filegetter_tp fg, gint epolld) {
 	if(fg == NULL) {
 		return FG_ERR_INVALID;
 	}
@@ -192,6 +202,7 @@ enum filegetter_code filegetter_start(filegetter_tp fg) {
 
 	/* we need server and file specs next */
 	fg->state = FG_SPEC;
+	fg->epolld = epolld;
 
 	return FG_SUCCESS;
 }
@@ -222,6 +233,15 @@ static enum filegetter_code filegetter_set_specs(filegetter_tp fg, filegetter_se
 	fg->curstats.first_byte_time.tv_nsec = 0;
 
 	return FG_SUCCESS;
+}
+
+static void filegetter_changeEpoll(filegetter_tp fg, gint eventType){
+	struct epoll_event ev;
+	ev.events = eventType;
+	ev.data.fd = fg->sockd;
+	if(epoll_ctl(fg->epolld, EPOLL_CTL_MOD, fg->sockd, &ev) < 0) {
+		perror("epoll_ctl");
+	}
 }
 
 enum filegetter_code filegetter_download(filegetter_tp fg, filegetter_serverspec_tp sspec, filegetter_filespec_tp fspec) {
@@ -257,6 +277,8 @@ enum filegetter_code filegetter_download(filegetter_tp fg, filegetter_serverspec
 		}
 	}
 
+	filegetter_changeEpoll(fg, EPOLLOUT);
+
 	return result;
 }
 
@@ -290,10 +312,13 @@ start:
 			fg->state = FG_SEND;
 			fg->nextstate = FG_TOREPLY_SOCKS_INIT;
 
+			filegetter_changeEpoll(fg, EPOLLOUT);
+
 			goto start;
 		}
 
 		case FG_TOREPLY_SOCKS_INIT: {
+			filegetter_changeEpoll(fg, EPOLLIN);
 			fg->state = FG_RECEIVE;
 			fg->nextstate = FG_REPLY_SOCKS_INIT;
 			goto start;
@@ -338,11 +363,13 @@ start:
 			/* we are ready to send, then transition to socks conn reply */
 			fg->state = FG_SEND;
 			fg->nextstate = FG_TOREPLY_SOCKS_CONN;
+			filegetter_changeEpoll(fg, EPOLLOUT);
 
 			goto start;
 		}
 
 		case FG_TOREPLY_SOCKS_CONN: {
+			filegetter_changeEpoll(fg, EPOLLIN);
 			fg->state = FG_RECEIVE;
 			fg->nextstate = FG_REPLY_SOCKS_CONN;
 			goto start;
@@ -405,6 +432,7 @@ start:
 			fg->buf_write_offset += bytes;
 
 			/* we are ready to send, then transition to http reply */
+	        filegetter_changeEpoll(fg, EPOLLOUT);
 			fg->state = FG_SEND;
 			fg->nextstate = FG_TOREPLY_HTTP;
 
@@ -412,6 +440,7 @@ start:
 		}
 
 		case FG_TOREPLY_HTTP: {
+	        filegetter_changeEpoll(fg, EPOLLIN);
 			fg->state = FG_RECEIVE;
 			fg->nextstate = FG_REPLY_HTTP;
 			goto start;
@@ -475,7 +504,7 @@ start:
 
 			ssize_t bytes = send(fg->sockd, sendpos, sendlen, 0);
 
-			FG_ASSERTIO(fg, bytes, errno == EWOULDBLOCK || errno == ENOTCONN, FG_ERR_SEND);
+			FG_ASSERTIO(fg, bytes, errno == EWOULDBLOCK || errno == ENOTCONN || errno == EALREADY, FG_ERR_SEND);
 
 			fg->buf_read_offset += bytes;
 

@@ -201,7 +201,7 @@ void socket_setBinding(Socket* socket, in_addr_t boundAddress, in_port_t port) {
 
 gint socket_getAssociationKey(Socket* socket) {
 	MAGIC_ASSERT(socket);
-	g_assert(socket_getBinding(socket));
+	g_assert((socket->flags & SF_BOUND) && socket->associationKey);
 	return socket->associationKey;
 }
 
@@ -276,7 +276,8 @@ gboolean socket_addToOutputBuffer(Socket* socket, Packet* packet) {
 	}
 
 	/* tell the interface to include us when sending out to the network */
-	NetworkInterface* interface = node_lookupInterface(worker_getPrivate()->cached_node, socket->boundAddress);
+	in_addr_t ip = packet_getSourceIP(packet);
+	NetworkInterface* interface = node_lookupInterface(worker_getPrivate()->cached_node, ip);
 	networkinterface_wantsSend(interface, socket);
 
 	return TRUE;

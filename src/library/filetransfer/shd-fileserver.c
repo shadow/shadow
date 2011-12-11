@@ -38,7 +38,7 @@
 /* these MUST be synced with fileserver_codes */
 static const gchar* fileserver_code_strings[] = {
 	"FS_SUCCESS", "FS_CLOSED", "FS_ERR_INVALID", "FS_ERR_FATAL", "FS_ERR_BADSD", "FS_ERR_WOULDBLOCK", "FS_ERR_BUFSPACE",
-	"FS_ERR_SOCKET", "FS_ERR_BIND", "FS_ERR_LISTEN", "FS_ERR_ACCEPT", "FS_ERR_RECV", "FS_ERR_SEND", "FS_ERR_CLOSE"
+	"FS_ERR_SOCKET", "FS_ERR_BIND", "FS_ERR_LISTEN", "FS_ERR_ACCEPT", "FS_ERR_RECV", "FS_ERR_SEND", "FS_ERR_CLOSE", "FS_ERR_EPOLL"
 };
 
 const gchar* fileserver_codetoa(enum fileserver_code fsc) {
@@ -64,7 +64,7 @@ static void fileserver_connection_destroy_cb(gpointer data) {
 	}
 }
 
-enum fileserver_code fileserver_start(fileserver_tp fs, in_addr_t listen_addr, in_port_t listen_port,
+enum fileserver_code fileserver_start(fileserver_tp fs, gint epolld, in_addr_t listen_addr, in_port_t listen_port,
 		gchar* docroot, gint max_connections) {
 	/* check user inputs */
 	if(fs == NULL || strnlen(docroot, FT_STR_SIZE) == FT_STR_SIZE) {
@@ -101,6 +101,8 @@ enum fileserver_code fileserver_start(fileserver_tp fs, in_addr_t listen_addr, i
 	}
 
 	/* we have success */
+	memset(fs, 0, sizeof(fileserver_t));
+	fs->epolld = epolld;
 	fs->listen_addr = listen_addr;
 	fs->listen_port = listen_port;
 	fs->listen_sockd = sockd;
@@ -109,6 +111,14 @@ enum fileserver_code fileserver_start(fileserver_tp fs, in_addr_t listen_addr, i
 	fs->bytes_sent = 0;
 	fs->bytes_received = 0;
 	fs->replies_sent = 0;
+
+	/* start watching socket */
+	struct epoll_event ev;
+	ev.events = EPOLLIN;
+	ev.data.fd = fs->listen_sockd;
+	if(epoll_ctl(fs->epolld, EPOLL_CTL_ADD, fs->listen_sockd, &ev) < 0) {
+		return FS_ERR_EPOLL;
+	}
 
 	return FS_SUCCESS;
 }
@@ -122,6 +132,7 @@ enum fileserver_code fileserver_shutdown(fileserver_tp fs) {
 	/* destroy the hashtable. this calls the connection destroy function for each. */
 	g_hash_table_destroy(fs->connections);
 
+	epoll_ctl(fs->epolld, EPOLL_CTL_DEL, fs->listen_sockd, NULL);
 	if(close(fs->listen_sockd) < 0) {
 		return FS_ERR_CLOSE;
 	} else {
@@ -146,9 +157,17 @@ enum fileserver_code fileserver_accept_one(fileserver_tp fs, gint* sockd_out) {
 	}
 
 	/* we just accepted a new connection */
-	fileserver_connection_tp c = malloc(sizeof(fileserver_connection_t));
+	fileserver_connection_tp c = g_new0(fileserver_connection_t, 1);
 	c->sockd = sockd;
 	c->state = FS_IDLE;
+
+	/* start watching socket */
+	struct epoll_event ev;
+	ev.events = EPOLLIN;
+	ev.data.fd = c->sockd;
+	if(epoll_ctl(fs->epolld, EPOLL_CTL_ADD, c->sockd, &ev) < 0) {
+		return FS_ERR_EPOLL;
+	}
 
 	/* in case we have a registered stale connection at this sockd, destroy it
 	 * and replace with the new connection.
@@ -163,6 +182,7 @@ enum fileserver_code fileserver_accept_one(fileserver_tp fs, gint* sockd_out) {
 }
 
 static void fileserve_connection_close(fileserver_tp fs, fileserver_connection_tp c) {
+	epoll_ctl(fs->epolld, EPOLL_CTL_DEL, c->sockd, NULL);
 	g_hash_table_remove(fs->connections, &(c->sockd));
 }
 
@@ -200,6 +220,12 @@ start:
 			c->reply.f_read_offset = 0;
 			c->reply.buf_read_offset = 0;
 			c->reply.buf_write_offset = 0;
+
+			/* wanting to read next request */
+			struct epoll_event ev;
+			ev.events = EPOLLIN;
+			ev.data.fd = c->sockd;
+			epoll_ctl(fs->epolld, EPOLL_CTL_MOD, c->sockd, &ev);
 
 			/* fall through to read */
 		}
@@ -295,6 +321,12 @@ start:
 		}
 
 		case FS_REPLY_FILE_START: {
+			/* we dont want to read any more, now we want to write the reply */
+			struct epoll_event ev;
+			ev.events = EPOLLOUT;
+			ev.data.fd = c->sockd;
+			epoll_ctl(fs->epolld, EPOLL_CTL_MOD, c->sockd, &ev);
+
 			size_t docroot_len = strnlen(fs->docroot, sizeof(fs->docroot));
 			size_t filepath_len = strnlen(c->request.filepath, sizeof(c->request.filepath));
 
