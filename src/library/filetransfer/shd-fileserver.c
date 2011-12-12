@@ -356,7 +356,7 @@ start:
 			if(bytes < 0) {
 				/* some kind of output error */
 				fileserve_connection_close(fs, c);
-				fprintf(stderr, "fileserver fatal error: ginternal io error\n");
+				fprintf(stderr, "fileserver fatal error: internal io error\n");
 				return FS_ERR_FATAL;
 			} else if(bytes >= sizeof(c->reply.buf)) {
 				/* truncated, our buffer is way too small, just give up */

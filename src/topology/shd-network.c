@@ -167,6 +167,7 @@ void network_scheduleRetransmit(Network* network, Packet* packet) {
 	MAGIC_ASSERT(network);
 
 	// FIXME make sure loopback packets dont get here!!
+	// FIXME network_isEqual is wrong!
 
 	/* source should retransmit. use latency to approximate RTT for 'retransmit timer' */
 	Worker* worker = worker_getPrivate();

@@ -413,7 +413,7 @@ reactivate:;
 
 	if(result == FG_ERR_FATAL) {
 		/* it had to shut down, lets try again */
-		service_filegetter_log(sfg, SFG_NOTICE, "filegetter shutdown due to ginternal error... restarting");
+		service_filegetter_log(sfg, SFG_NOTICE, "filegetter shutdown due to iinternal error... restarting");
 		filegetter_shutdown(&sfg->fg);
 		filegetter_start(&sfg->fg, sfg->fg.epolld);
 		service_filegetter_download_next(sfg);

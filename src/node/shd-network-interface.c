@@ -44,7 +44,7 @@ struct _NetworkInterface {
 	/* NIC input queue */
 	GQueue* inBuffer;
 	gsize inBufferSize;
-//	gsize inBufferLength;
+	gsize inBufferLength;
 
 	/* Transports wanting to send data out */
 	GQueue* sendableSockets;
@@ -185,20 +185,41 @@ static void _networkinterface_dropInboundPacket(NetworkInterface* interface, Pac
 	}
 }
 
+static void _networkinterface_scheduleNextReceive(NetworkInterface* interface) {
+	/* the next packet needs to be received according to bandwidth limitations.
+	 * we need to spend time receiving it before processing it. */
+	Packet* packet = g_queue_peek_head(interface->inBuffer);
+	if(!packet) {
+		return;
+	}
+
+	/* calculate how long it will take to 'receive' this packet */
+	guint length = packet_getPayloadLength(packet) + packet_getHeaderSize(packet);
+	SimulationTime delay = (SimulationTime) floor(length * interface->timePerByteDown);
+
+	/* call back when the packet is 'received' */
+	InterfaceReceivedEvent* event = interfacereceived_new(interface);
+
+	/* event destination is our node */
+	worker_scheduleEvent((Event*)event, delay, 0);
+
+	/* we are now in the process of receiving */
+	interface->flags |= NIF_RECEIVING;
+}
+
 void networkinterface_packetArrived(NetworkInterface* interface, Packet* packet) {
 	MAGIC_ASSERT(interface);
 
 	/* a packet arrived. lets try to receive or buffer it */
-	if(g_queue_get_length(interface->inBuffer) < 100) {
-//	guint packetLength = packet_getPayloadLength(packet);
-//	if(packetLength <= (interface->inBufferSize - interface->inBufferLength)) {
+//	if(interface->inBufferLength < CONFIG_INTERFACE_BUFFER_LENGTH) {
+	if(g_queue_get_length(interface->inBuffer) < 10) {
 		/* we have space to buffer it */
 		g_queue_push_tail(interface->inBuffer, packet);
-//		interface->inBufferLength += packetLength;
+		interface->inBufferLength += packet_getPayloadLength(packet) + packet_getHeaderSize(packet);
 
 		/* we need a trigger if we are not currently receiving */
 		if(!(interface->flags & NIF_RECEIVING)) {
-			networkinterface_received(interface);
+			_networkinterface_scheduleNextReceive(interface);
 		}
 	} else {
 		/* buffers are full, drop packet */
@@ -209,80 +230,29 @@ void networkinterface_packetArrived(NetworkInterface* interface, Packet* packet)
 void networkinterface_received(NetworkInterface* interface) {
 	MAGIC_ASSERT(interface);
 
-	/* try to receive the next packet if we have any */
-	if(g_queue_get_length(interface->inBuffer) < 1) {
-		/* nothing to receive right now.
-		 * any new arrivals can now immediately trigger a receive event */
-		interface->flags &= ~NIF_RECEIVING;
-		return;
-	}
+	/* we just finished receiving a packet and can now process it */
+	interface->flags &= ~NIF_RECEIVING;
 
-	SimulationTime now = worker_getPrivate()->clock_now;
-	SimulationTime absorbInterval = now - interface->lastTimeReceived;
+	/* get the next packet, dont unref because we'll be reffing it again */
+	Packet* packet = g_queue_pop_head(interface->inBuffer);
+	g_assert(packet);
+	interface->inBufferLength -= packet_getPayloadLength(packet) + packet_getHeaderSize(packet);
 
-	if(absorbInterval > 0) {
-		/* decide how much delay we get to absorb based on the passed time */
-		gdouble newConsumed = interface->receiveNanosecondsConsumed - absorbInterval;
-		interface->receiveNanosecondsConsumed = MAX(0, newConsumed);
-	}
+	/* hand it off to the correct socket layer */
+	gint key = packet_getDestinationAssociationKey(packet);
+	Socket* socket = g_hash_table_lookup(interface->boundSockets, GINT_TO_POINTER(key));
 
-	interface->lastTimeReceived = now;
-	interface->flags |= NIF_RECEIVING;
-
-	/* batch receive packets for processing */
-	GQueue* packetBatch = g_queue_new();
-	while(interface->receiveNanosecondsConsumed < CONFIG_RECEIVE_BATCH_TIME &&
-			g_queue_get_length(interface->inBuffer) > 0) {
-		/* get the next packet, dont unref because we'll be reffing it again */
-		Packet* packet = g_queue_pop_head(interface->inBuffer);
-
-		/* free up buffer space */
-		guint length = packet_getPayloadLength(packet);
-//		interface->inBufferLength -= length;
-
-		/* batch the packet for processing this round, still reffed from before */
-		g_queue_push_tail(packetBatch, packet);
-
-		/* consumed more bandwidth */
-		length += packet_getHeaderSize(packet);
-		interface->receiveNanosecondsConsumed += length * interface->timePerByteDown;
-	}
-
-	/* now process batch of packets */
-	while(g_queue_get_length(packetBatch) > 0) {
-		Packet* packet = g_queue_pop_head(packetBatch);
-
-		/* hand it off to the correct socket layer */
-		gint key = packet_getDestinationAssociationKey(packet);
-		Socket* socket = g_hash_table_lookup(interface->boundSockets, GINT_TO_POINTER(key));
-
-		/* if the socket closed, just drop the packet */
-		if(socket) {
-			gboolean needsRetransmiit = socket_pushInPacket(socket, packet);
-			if(needsRetransmiit) {
-				/* socket can not handle it now, so drop it */
-				_networkinterface_dropInboundPacket(interface, packet);
-			}
+	/* if the socket closed, just drop the packet */
+	if(socket) {
+		gboolean needsRetransmiit = socket_pushInPacket(socket, packet);
+		if(needsRetransmiit) {
+			/* socket can not handle it now, so drop it */
+			_networkinterface_dropInboundPacket(interface, packet);
 		}
 	}
 
-	/* batch queue better be empty now */
-	if(g_queue_get_length(packetBatch) > 0) {
-		critical("not all packets processed");
-	}
-	g_queue_free(packetBatch);
-
-	/* update state */
-	SimulationTime delay = (SimulationTime) floor(interface->receiveNanosecondsConsumed);
-	if(delay >= SIMTIME_ONE_NANOSECOND) {
-		/* call back when the packets are 'received' */
-		InterfaceReceivedEvent* event = interfacereceived_new(interface);
-		/* event destination is our node */
-		worker_scheduleEvent((Event*)event, delay, 0);
-	} else {
-		/* not enough delays for our time granularity */
-		interface->flags &= ~NIF_RECEIVING;
-	}
+	/* check if we have another to receive */
+	_networkinterface_scheduleNextReceive(interface);
 }
 
 void networkinterface_packetDropped(NetworkInterface* interface, Packet* packet) {
@@ -301,6 +271,51 @@ void networkinterface_packetDropped(NetworkInterface* interface, Packet* packet)
 	}
 }
 
+static void _networkinterface_scheduleNextSend(NetworkInterface* interface) {
+	/* the next packet needs to be sent according to bandwidth limitations.
+	 * we need to spend time sending it before sending the next it.
+	 * loop until we find a socket that has something to send */
+	while(g_queue_get_length(interface->sendableSockets) > 0) {
+		/* do round robin on all ready sockets */
+		Socket* socket = g_queue_pop_head(interface->sendableSockets);
+
+		Packet* packet = socket_pullOutPacket(socket);
+		if(!packet) {
+			/* socket has no more packets, unref it from round robin queue */
+			descriptor_unref((Descriptor*) socket);
+			continue;
+		}
+
+		/* calculate how long it will take to 'send' this packet */
+		guint length = packet_getPayloadLength(packet) + packet_getHeaderSize(packet);
+		SimulationTime delay = (SimulationTime) floor(length * interface->timePerByteUp);
+
+		/* call back when the packet is 'sent' */
+		InterfaceSentEvent* event = interfacesent_new(interface);
+		/* event destination is our node */
+		worker_scheduleEvent((Event*)event, delay, 0);
+
+		/* socket might have more packets, and is still reffed from before */
+		g_queue_push_tail(interface->sendableSockets, socket);
+
+		/* now actually send the packet somewhere */
+		interface->flags |= NIF_SENDING;
+
+		if(networkinterface_getIPAddress(interface) == packet_getDestinationIP(packet)) {
+			/* packet will arrive on our own interface */
+			PacketArrivedEvent* event = packetarrived_new(packet);
+			/* event destination is our node */
+			worker_scheduleEvent((Event*)event, 1, 0);
+		} else {
+			/* let the network schedule with appropriate delays */
+			network_schedulePacket(interface->network, packet);
+		}
+
+		/* successfully sent */
+		break;
+	}
+}
+
 void networkinterface_wantsSend(NetworkInterface* interface, Socket* socket) {
 	MAGIC_ASSERT(interface);
 
@@ -312,82 +327,16 @@ void networkinterface_wantsSend(NetworkInterface* interface, Socket* socket) {
 
 	/* trigger a send if we are currently idle */
 	if(!(interface->flags & NIF_SENDING)) {
-		networkinterface_sent(interface);
+		_networkinterface_scheduleNextSend(interface);
 	}
 }
 
 void networkinterface_sent(NetworkInterface* interface) {
 	MAGIC_ASSERT(interface);
 
-	/* we just finished sending a packet, now try to send the next one */
-	if(g_queue_get_length(interface->sendableSockets) < 1) {
-		/* nothing to send right now.
-		 * any new arrivals can now immediately trigger a send event */
-		interface->flags &= ~NIF_SENDING;
-		return;
-	}
+	/* we just finished sending a packet */
+	interface->flags &= ~NIF_SENDING;
 
-	SimulationTime now = worker_getPrivate()->clock_now;
-	SimulationTime absorbInterval = now - interface->lastTimeSent;
-
-	if(absorbInterval > 0) {
-		/* decide how much delay we get to absorb based on the passed time */
-		gdouble newConsumed = interface->sendNanosecondsConsumed - absorbInterval;
-		interface->sendNanosecondsConsumed = MAX(0, newConsumed);
-	}
-
-	interface->lastTimeSent = now;
-	interface->flags |= NIF_SENDING;
-
-	/* batch outgoing packet transmissions */
-	while(interface->sendNanosecondsConsumed < CONFIG_RECEIVE_BATCH_TIME &&
-			g_queue_get_length(interface->sendableSockets) > 0) {
-		/* do round robin on all ready sockets.
-		 * dont unref until we know we wont be returning it to the queue. */
-		Socket* socket = g_queue_pop_head(interface->sendableSockets);
-
-		/* check if it was closed in between sends */
-//		if(descriptor_getStatus((Descriptor*) transport) & DS_STALE) {
-//			gint* handleRef = descriptor_getHandleReference((Descriptor*) transport);
-//			debug("dereferencing stale descriptor %i", *handleRef);
-//			descriptor_unref(transport);
-//			continue;
-//		}
-
-		Packet* packet = socket_pullOutPacket(socket);
-		if(packet) {
-			/* will send to network, consumed more bandwidth */
-			guint length = packet_getPayloadLength(packet);
-			length += packet_getHeaderSize(packet);
-			interface->sendNanosecondsConsumed += length * interface->timePerByteUp;
-
-			if(networkinterface_getIPAddress(interface) == packet_getDestinationIP(packet)) {
-				/* packet will arrive on our own interface */
-				PacketArrivedEvent* event = packetarrived_new(packet);
-				/* event destination is our node */
-				worker_scheduleEvent((Event*)event, 1, 0);
-			} else {
-				/* let the network schedule with appropriate delays */
-				network_schedulePacket(interface->network, packet);
-			}
-
-			/* might have more packets, and is still reffed from before */
-			g_queue_push_tail(interface->sendableSockets, socket);
-		} else {
-			/* socket has no more packets, unref it from round robin queue */
-			descriptor_unref((Descriptor*) socket);
-		}
-	}
-
-	/* update state */
-	SimulationTime delay = (SimulationTime) floor(interface->sendNanosecondsConsumed);
-	if(delay >= SIMTIME_ONE_NANOSECOND) {
-		/* call back when the packets are 'sent' */
-		InterfaceSentEvent* event = interfacesent_new(interface);
-		/* event destination is our node */
-		worker_scheduleEvent((Event*)event, delay, 0);
-	} else {
-		/* not enough delays for our time granularity */
-		interface->flags &= ~NIF_SENDING;
-	}
+	/* now try to send the next one */
+	_networkinterface_scheduleNextSend(interface);
 }

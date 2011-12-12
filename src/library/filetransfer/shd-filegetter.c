@@ -46,7 +46,7 @@ static const gchar* filegetter_code_strings[] = {
 
 #define FG_ASSERTBUF(fg, retcode) \
 	if(bytes < 0) { \
-		return filegetter_die(fg, "filegetter fatal error: ginternal io error\n"); \
+		return filegetter_die(fg, "filegetter fatal error: internal io error\n"); \
 	} else if(bytes >= sizeof(fg->buf)) { \
 		/* truncated, our buffer is way too small, just give up */ \
 		return filegetter_die(fg, "filegetter fatal error: error writing request\n"); \
