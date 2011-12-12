@@ -974,7 +974,7 @@ gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 			nPacketsAcked = header.acknowledgement - tcp->send.unacked;
 
 			/* the packets just acked are 'released' from retransmit queue */
-			for(guint i = header.acknowledgement; i < tcp->send.unacked; i++) {
+			for(guint i = tcp->send.unacked; i < header.acknowledgement; i++) {
 				_tcp_removeRetransmit(tcp, i);
 			}
 
@@ -1119,14 +1119,14 @@ gssize tcp_sendUserData(TCP* tcp, gconstpointer buffer, gsize nBytes, in_addr_t 
 
 	/* break data into segments and send each in a packet */
 	gsize maxPacketLength = CONFIG_MTU - CONFIG_TCPIP_HEADER_SIZE;
-	gsize offset = 0;
+	gsize bytesCopied = 0;
 
 	/* create as many packets as needed */
 	while(remaining > 0) {
 		gsize copyLength = MIN(maxPacketLength, remaining);
 
 		/* use helper to create the packet */
-		Packet* packet = _tcp_createPacket(tcp, PTCP_ACK, buffer + offset, copyLength);
+		Packet* packet = _tcp_createPacket(tcp, PTCP_ACK, buffer + bytesCopied, copyLength);
 		if(copyLength > 0) {
 			/* we are sending more user data */
 			tcp->send.end++;
@@ -1136,16 +1136,16 @@ gssize tcp_sendUserData(TCP* tcp, gconstpointer buffer, gsize nBytes, in_addr_t 
 		_tcp_bufferPacketOut(tcp, packet);
 
 		remaining -= copyLength;
-		offset += copyLength;
+		bytesCopied += copyLength;
 	}
 
 	/* now flush as much as possible out to socket */
 	_tcp_flush(tcp);
 
 	debug("%s: sending %lu user bytes to %s", tcp->super.boundString,
-			offset, tcp->super.peerString);
+			bytesCopied, tcp->super.peerString);
 
-	return (gssize) offset;
+	return (gssize) (bytesCopied == 0 ? -1 : bytesCopied);
 }
 
 gssize tcp_receiveUserData(TCP* tcp, gpointer buffer, gsize nBytes, in_addr_t* ip, in_port_t* port) {
