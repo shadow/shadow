@@ -75,8 +75,7 @@ NetworkInterface* networkinterface_new(Network* network, GQuark address, gchar* 
 
 	/* incoming packet buffer */
 	interface->inBuffer = g_queue_new();
-	/* @todo: set as configuration option, test effect of changing sizes */
-	interface->inBufferSize = bytesPerSecond;
+	interface->inBufferSize = worker_getPrivate()->cached_engine->config->interfaceBufferSize;
 
 	/* incoming packets get passed along to sockets */
 	interface->boundSockets = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, descriptor_unref);
@@ -211,11 +210,11 @@ void networkinterface_packetArrived(NetworkInterface* interface, Packet* packet)
 	MAGIC_ASSERT(interface);
 
 	/* a packet arrived. lets try to receive or buffer it */
-//	if(interface->inBufferLength < CONFIG_INTERFACE_BUFFER_LENGTH) {
-	if(g_queue_get_length(interface->inBuffer) < 10) {
+	gint length = packet_getPayloadLength(packet);
+	if(length <= (interface->inBufferSize -interface->inBufferLength)) {
 		/* we have space to buffer it */
 		g_queue_push_tail(interface->inBuffer, packet);
-		interface->inBufferLength += packet_getPayloadLength(packet) + packet_getHeaderSize(packet);
+		interface->inBufferLength += length + packet_getHeaderSize(packet);
 
 		/* we need a trigger if we are not currently receiving */
 		if(!(interface->flags & NIF_RECEIVING)) {

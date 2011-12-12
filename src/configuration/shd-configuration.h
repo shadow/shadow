@@ -215,6 +215,7 @@ struct _Configuration {
 	GOptionGroup* networkOptionGroup;
 	gint minRunAhead;
 	gint initialTCPWindow;
+	gint interfaceBufferSize;
 
 	GOptionGroup* pluginsOptionGroup;
 	gboolean runEchoExample;

@@ -38,6 +38,7 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	c->minRunAhead = 10;
 	c->printSoftwareVersion = 0;
 	c->initialTCPWindow = 10;
+	c->interfaceBufferSize = 1024000;
 
 	/* set options to change defaults for the main group */
 	c->mainOptionGroup = g_option_group_new("main", "Application Options", "Various application related options", NULL, NULL);
@@ -57,6 +58,7 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	{
 	  { "runahead", 0, 0, G_OPTION_ARG_INT, &(c->minRunAhead), "Minimum allowed TIME workers may run ahead when sending events between nodes, in milliseconds [10]", "TIME" },
 	  { "tcp-windows", 0, 0, G_OPTION_ARG_INT, &(c->initialTCPWindow), "Initialize the TCP send, receive, and congestion windows to N packets [10]", "N" },
+	  { "interface-buffer", 0, 0, G_OPTION_ARG_INT, &(c->initialTCPWindow), "Size of the network interface receive buffer, in bytes [1024000]", "N" },
 	  { NULL },
 	};
 
@@ -103,6 +105,9 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	}
 	if(c->initialTCPWindow <= 0) {
 		c->initialTCPWindow = 1;
+	}
+	if(c->interfaceBufferSize <= CONFIG_MTU) {
+		c->interfaceBufferSize = CONFIG_MTU;
 	}
 
 	c->inputXMLFilenames = g_queue_new();
