@@ -58,7 +58,7 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	{
 	  { "runahead", 0, 0, G_OPTION_ARG_INT, &(c->minRunAhead), "Minimum allowed TIME workers may run ahead when sending events between nodes, in milliseconds [10]", "TIME" },
 	  { "tcp-windows", 0, 0, G_OPTION_ARG_INT, &(c->initialTCPWindow), "Initialize the TCP send, receive, and congestion windows to N packets [10]", "N" },
-	  { "interface-buffer", 0, 0, G_OPTION_ARG_INT, &(c->initialTCPWindow), "Size of the network interface receive buffer, in bytes [1024000]", "N" },
+	  { "interface-buffer", 0, 0, G_OPTION_ARG_INT, &(c->interfaceBufferSize), "Size of the network interface receive buffer, in bytes [1024000]", "N" },
 	  { NULL },
 	};
 
