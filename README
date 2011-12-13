@@ -2,7 +2,7 @@ Shadow (c) 2010-2011 Rob Jansen jansen@cs.umn.edu
 
 A. Dependencies
 ---------------
-Shadow requires CMake >= 2.6 and python 2.7
+Shadow requires GLib >= 2.28, CMake >= 2.6, and python 2.7
 
 B. Setup
 --------
