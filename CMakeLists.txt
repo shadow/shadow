@@ -81,16 +81,12 @@ endforeach(library)
 find_package(RT REQUIRED)
 find_package(DL REQUIRED)
 find_package(M REQUIRED)
-find_package(EVENT2 REQUIRED)
 find_package(GLIB REQUIRED)
-find_package(OPENSSL REQUIRED)
 
 include_directories(${RT_INCLUDES})
 include_directories(${DL_INCLUDES})
 include_directories(${M_INCLUDES})
-include_directories(${EVENT2_INCLUDES})
 include_directories(${GLIB_INCLUDES})
-include_directories(${OPENSSL_INCLUDES})
 
 ## generate config header and make sure its on the include path
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config.h.in ${CMAKE_CURRENT_BINARY_DIR}/shd-config.h)

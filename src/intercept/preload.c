@@ -20,8 +20,6 @@
  */
 
 #include <glib.h>
-#include <openssl/aes.h>
-#include <openssl/evp.h>
 #include <sys/socket.h>
 #include <sys/epoll.h>
 #include <netdb.h>
@@ -506,10 +504,14 @@ int gethostbyaddr_r(const void *addr, socklen_t len, gint type,
  * crypto interface
  */
 
-typedef void (*AES_encrypt_fp)(const unsigned char *, unsigned char *, const AES_KEY *);
+/*
+ * const AES_KEY *key
+ * The key parameter has been voided to avoid requiring Openssl headers
+ */
+typedef void (*AES_encrypt_fp)(const unsigned char *, unsigned char *, const void *);
 static AES_encrypt_fp _AES_encrypt = NULL;
 static AES_encrypt_fp _intercept_AES_encrypt = NULL;
-void AES_encrypt(const unsigned char *in, unsigned char *out, const AES_KEY *key) {
+void AES_encrypt(const unsigned char *in, unsigned char *out, const void *key) {
 	AES_encrypt_fp* func;
 	char* funcName;
 	PRELOAD_DECIDE(func, funcName, "AES_encrypt", _AES_encrypt, INTERCEPT_PREFIX, _intercept_AES_encrypt, 1);
@@ -517,10 +519,14 @@ void AES_encrypt(const unsigned char *in, unsigned char *out, const AES_KEY *key
 	(*func)(in, out, key);
 }
 
-typedef void (*AES_decrypt_fp)(const unsigned char *, unsigned char *, const AES_KEY *);
+/*
+ * const AES_KEY *key
+ * The key parameter has been voided to avoid requiring Openssl headers
+ */
+typedef void (*AES_decrypt_fp)(const unsigned char *, unsigned char *, const void *);
 static AES_decrypt_fp _AES_decrypt = NULL;
 static AES_decrypt_fp _intercept_AES_decrypt = NULL;
-void AES_decrypt(const unsigned char *in, unsigned char *out, const AES_KEY *key) {
+void AES_decrypt(const unsigned char *in, unsigned char *out, const void *key) {
 	AES_decrypt_fp* func;
 	char* funcName;
 	PRELOAD_DECIDE(func, funcName, "AES_decrypt", _AES_decrypt, INTERCEPT_PREFIX, _intercept_AES_decrypt, 1);
@@ -528,10 +534,14 @@ void AES_decrypt(const unsigned char *in, unsigned char *out, const AES_KEY *key
 	(*func)(in, out, key);
 }
 
-typedef int (*EVP_Cipher_fp)(EVP_CIPHER_CTX *ctx, unsigned char *out, const unsigned char *in, unsigned int inl);
+/*
+ * EVP_CIPHER_CTX *ctx
+ * The ctx parameter has been voided to avoid requiring Openssl headers
+ */
+typedef int (*EVP_Cipher_fp)(void *ctx, unsigned char *out, const unsigned char *in, unsigned int inl);
 static EVP_Cipher_fp _EVP_Cipher = NULL;
 static EVP_Cipher_fp _intercept_EVP_Cipher = NULL;
-int EVP_Cipher(EVP_CIPHER_CTX *ctx, unsigned char *out, const unsigned char *in, unsigned int inl){
+int EVP_Cipher(void *ctx, unsigned char *out, const unsigned char *in, unsigned int inl){
 	EVP_Cipher_fp* func;
 	char* funcName;
 	PRELOAD_DECIDE(func, funcName, "EVP_Cipher", _EVP_Cipher, INTERCEPT_PREFIX, _intercept_EVP_Cipher, 1);
