@@ -267,6 +267,9 @@ void networkinterface_packetDropped(NetworkInterface* interface, Packet* packet)
 	/* just ignore if the socket closed in the meantime */
 	if(socket) {
 		socket_droppedPacket(socket, packet);
+	} else {
+		debug("interface dropping packet from %s:%u, no socket registerred at %i",
+				NTOA(packet_getSourceIP(packet)), packet_getSourcePort(packet)), key;
 	}
 }
 

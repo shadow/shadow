@@ -171,6 +171,14 @@ gint socket_getSocketName(Socket* socket, in_addr_t* ip, in_port_t* port) {
 void socket_setSocketName(Socket* socket, in_addr_t ip, in_port_t port) {
 	MAGIC_ASSERT(socket);
 	socket_setBinding(socket, ip, port);
+
+	/* children of server sockets must not have the same key as the parent
+	 * otherwise when the child is closed, the parent's interface assoication
+	 * will be removed.
+	 *
+	 * @todo: this should be handled more elegantly.
+	 */
+	socket->associationKey = 0;
 }
 
 in_addr_t socket_getBinding(Socket* socket) {
@@ -201,7 +209,7 @@ void socket_setBinding(Socket* socket, in_addr_t boundAddress, in_port_t port) {
 
 gint socket_getAssociationKey(Socket* socket) {
 	MAGIC_ASSERT(socket);
-	g_assert((socket->flags & SF_BOUND) && socket->associationKey);
+	g_assert((socket->flags & SF_BOUND));
 	return socket->associationKey;
 }
 

@@ -295,35 +295,22 @@ static void _tcp_autotune(TCP* tcp) {
 	guint32 rtt_milliseconds = send_latency + receive_latency;
 
 	/* i got delay, now i need values for my send and receive buffer
-	 * sizes based on bandwidth in both directions.
-	 * do my send size first. */
-	guint32 my_send_bw = internetwork_getNodeBandwidthDown(internet, sourceID);
+	 * sizes based on bandwidth in both directions. do my send size first. */
+	guint32 my_send_bw = internetwork_getNodeBandwidthUp(internet, sourceID);
 	guint32 their_receive_bw = internetwork_getNodeBandwidthDown(internet, destinationID);
-	guint32 my_send_Bpms = (guint32) (my_send_bw * 1.024f);
-	guint32 their_receive_Bpms = (guint32) (their_receive_bw * 1.024f);
 
-	guint32 send_bottleneck_bw = my_send_Bpms < their_receive_Bpms ? my_send_Bpms : their_receive_Bpms;
+	/* KiBps is the same as Bpms, which works with our RTT calculation. */
+	guint32 send_bottleneck_bw = my_send_bw < their_receive_bw ? my_send_bw : their_receive_bw;
 
-	/* the delay bandwidth product is how many bytes I can send at once to keep the pipe full.
-	 * mult. by 1.2 to account for network overhead. */
+	/* the delay bandwidth product is how many bytes I can send at once to keep the pipe full */
 	guint64 sendbuf_size = (guint64) (rtt_milliseconds * send_bottleneck_bw * 1.25f);
 
 	/* now the same thing for my receive buf */
-	guint32 my_receive_bw = internetwork_getNodeBandwidthUp(internet, sourceID);
+	guint32 my_receive_bw = internetwork_getNodeBandwidthDown(internet, sourceID);
 	guint32 their_send_bw = internetwork_getNodeBandwidthUp(internet, destinationID);
-	guint32 my_receive_Bpms = (guint32) (my_receive_bw * 1.024f);
-	guint32 their_send_Bpms = (guint32) (their_send_bw * 1.024f);
 
-	guint32 receive_bottleneck_bw;
-	if(their_send_Bpms > my_receive_Bpms) {
-		receive_bottleneck_bw = their_send_Bpms;
-	} else {
-		receive_bottleneck_bw = my_receive_Bpms;
-	}
-
-	if(their_send_Bpms - my_receive_Bpms > -4096 || their_send_Bpms - my_receive_Bpms < 4096) {
-		receive_bottleneck_bw = (guint32) (receive_bottleneck_bw * 1.2f);
-	}
+	/* KiBps is the same as Bpms, which works with our RTT calculation. */
+	guint32 receive_bottleneck_bw = my_receive_bw < their_send_bw ? my_receive_bw : their_send_bw;
 
 	/* the delay bandwidth product is how many bytes I can receive at once to keep the pipe full */
 	guint64 receivebuf_size = (guint64) (rtt_milliseconds * receive_bottleneck_bw * 1.25);
@@ -980,16 +967,10 @@ gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 
 			tcp->send.unacked = header.acknowledgement;
 
-			/* prevent old segments from updating congestion window */
-			if((tcp->congestion.lastSequence < header.sequence) ||
-					((tcp->congestion.lastSequence == header.sequence) &&
-					(tcp->congestion.lastAcknowledgement <= header.acknowledgement)))
-			{
-				/* update congestion window and keep track of when it was updated */
-				tcp->congestion.lastWindow = header.window;
-				tcp->congestion.lastSequence = header.sequence;
-				tcp->congestion.lastAcknowledgement = header.acknowledgement;
-			}
+			/* update congestion window and keep track of when it was updated */
+			tcp->congestion.lastWindow = header.window;
+			tcp->congestion.lastSequence = header.sequence;
+			tcp->congestion.lastAcknowledgement = header.acknowledgement;
 		}
 	}
 
