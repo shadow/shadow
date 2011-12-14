@@ -23,8 +23,6 @@
 #define SHD_SYSTEM_H_
 
 #include <glib.h>
-#include <openssl/aes.h>
-#include <openssl/evp.h>
 #include <time.h>
 #include <stddef.h>
 #include <sys/socket.h>

@@ -1,117 +1,52 @@
-Shadow (c) 2011 Rob Jansen jansen@cs.umn.edu
+Shadow (c) 2010-2011 Rob Jansen jansen@cs.umn.edu
 
-======================
-0. Quickstart (Install to ~/.local)
-======================
-(replace "rob" with your username)
+A. Dependencies
+---------------
+Shadow requires GLib >= 2.28, CMake >= 2.6, and python 2.7
 
-$ wget http://www.openssl.org/source/openssl-1.0.0d.tar.gz
-$ tar xvzf openssl-1.0.0d.tar.gz
-$ cd openssl-1.0.0d
-$ ./config --prefix=/home/rob/.local -fPIC shared
-$ make
-$ make install
-
-$ wget http://monkey.org/~provos/libevent-2.0.11-stable.tar.gz
-$ tar xvzf libevent-2.0.11-stable.tar.gz
-$ cd libevent-2.0.11-stable
-$ ./configure --prefix=/home/rob/.local CFLAGS="-fPIC -I/home/rob/.local" LDFLAGS="-L/home/rob/.local"
-$ make
-$ make install
-
-X, Y, and Z are version numbers:
-$ wget http://shadow.cs.umn.edu/downloads/shadow-vX.Y.Z.tar.gz
-$ tar xvzf shadow-vX.Y.Z.tar.gz
-$ cd shadow-vX.Y.Z
-$ python setup.py auto
-
-======================
-I. Shadow dependencies
-======================
-The following are required to properly build and run Shadow:
-  - gcc
-  - cmake >= 2.6
-  - flex
-  - bison
-  - openssl (installed manually)
-  - libevent >= 2.0.10 (installed manually)
-  
-The following are optional, but HIGHLY recommended, for building and running Shadow:
-  - python = 2.7.1
-
-======================
-II. Building Shadow
-======================
-The setup.py script has an extensive help menu ($ python setup.py --help)
-
-The following will build and install to ~/.local (no root required)
-Please make sure ~/.local/bin is in your PATH.
-$ python setup.py auto
-
--or-
-
-By default, the following will build and install to /usr/local (and so requires root)
+B. Setup
+--------
+Shadow does not require root privileges, and the default and recommended setup
+is to install to ~/.shadow:
 $ python setup.py build
 $ python setup.py install
 
-All build output is generated out-of-source, by default to the ./build directory (although this 
-location can be modified with the setup.py script). Both methods are
-wrappers to cmake and make for building Shadow. Using cmake and make directly
-is also possible, but strongly discouraged.
+You may add ~/.shadow/bin to your PATH for convenience.
 
-======================
-III. Running Shadow
-======================
-There are multiple ways to run Shadow.
+The setup.py script will help you configure, build, and install Shadow. It has 
+an extensive help menu which can be accessed with:
+$ python setup.py --help
 
-A. Using installed shadow script
---------------------------------
-Installing shadow installs a script called "shadow", a wrapper to assist in running the
-Shadow binary. The shadow script has several built-in plug-ins that can run automatically:
+All build output is generated out-of-source, by default to the ./build directory.
+The setup.py script is a wrapper to cmake and make. Using cmake and make directly
+is also possible, but strongly discouraged. Installing shadow installs a script 
+called "shadow", a wrapper to assist in running the Shadow binary. 
 
-$ shadow autorun --help
+C. Running Shadow
+-----------------
+Shadow can run several built-in plug-ins automatically. Use the following to get 
+usage and help regarding the built-in plug-ins:
 
-to get usage and help regarding running the built-in plug-ins. Most of the options
-can be left as default, and you need only specify which plug-in example
-you want to run, e.g.
+$ shadow --help-plug-ins
 
-$ shadow autorun --echo-eth
+When developing and running a custom plug-in, a valid XML file describing the
+experiment must be provided. Examples of XML files can be found in the
+resource/ directory.
 
-When developing custom plug-ins, you may also run your plug-in with the shadow script
-by using the 'run' command. Again, use
+D. Developer's Notes
+--------------------
 
-$ shadow run --help
+Debugging
 
-for usage and help. When running a custom module, a dsim file describing the
-experiment must be provided. Examples of dsim files can be found in mode 
-src/plug-ins/* directories. Also see doc/ for the dsim API.
-
-B. Running the shadow binary directly
--------------------------------------
-You may also invoke the binary directly without the use of the
-python script. Get usage information from Shadow with:
-
-$ shadow-bin --help
-
-The shadow binary also requires a dsim file. If possible, it is strongly recommended to
-use the python script.
-
-======================
-IV. Developer's Notes:
-======================
-
-A. Debugging
-------------
 To add extra debugging information and messages, add the -g flag when building
 shadow. See the help menu with $ python setup.py --help.
 
-If you want to be able to run shadow through valgrind, you should configure 
-openssl with the additional option: "-DPURIFY". This fixes openssl so it 
-doesn't break valgrind, but will likely only cause problems if the application
-you are running in shadow actually uses OpenSSL.
+If you want to be able to run Shadow through valgrind and the application you 
+are running in Shadow uses OpenSSL, you should configure OpenSSL with the 
+additional option: "-DPURIFY". This fixes OpenSSL so it doesn't break valgrind.
 
-B. System Limits
-----------------
+System Limits
+
 There are some default system limits you'll want to be aware of. One is a limit
 on the number of message queues and total bytes in them. Shadow will use a
 message queue for each process, meaning it will use X=2 message queues by default,

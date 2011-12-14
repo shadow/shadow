@@ -20,8 +20,6 @@
  */
 
 #include <glib.h>
-#include <openssl/aes.h>
-#include <openssl/evp.h>
 #include <sys/socket.h>
 #include <sys/epoll.h>
 #include <time.h>
@@ -38,15 +36,27 @@ int intercept_worker_isInShadowContext() {
  * Crypto
  */
 
-void intercept_AES_encrypt(const guchar *in, guchar *out, const AES_KEY *key) {
+/*
+ * const AES_KEY *key
+ * The key parameter has been voided to avoid requiring Openssl headers
+ */
+void intercept_AES_encrypt(const guchar *in, guchar *out, const void *key) {
 	return;
 }
 
-void intercept_AES_decrypt(const guchar *in, guchar *out, const AES_KEY *key) {
+/*
+ * const AES_KEY *key
+ * The key parameter has been voided to avoid requiring Openssl headers
+ */
+void intercept_AES_decrypt(const guchar *in, guchar *out, const void *key) {
 	return;
 }
 
-gint intercept_EVP_Cipher(EVP_CIPHER_CTX *ctx, guchar *out, const guchar *in, guint inl) {
+/*
+ * EVP_CIPHER_CTX *ctx
+ * The ctx parameter has been voided to avoid requiring Openssl headers
+ */
+gint intercept_EVP_Cipher(void *ctx, guchar *out, const guchar *in, guint inl) {
 	memmove(out, in, (size_t)inl);
 	return 1;
 }
