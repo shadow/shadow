@@ -175,7 +175,7 @@ typedef guint64 SimulationTime;
 /**
  * Default batching time when the network interface receives packets
  */
-#define CONFIG_RECEIVE_BATCH_TIME SIMTIME_ONE_MICROSECOND
+#define CONFIG_RECEIVE_BATCH_TIME (10*SIMTIME_ONE_MILLISECOND)
 
 /**
  * Header size of a packet with UDP/IP encapsulation
@@ -216,6 +216,7 @@ struct _Configuration {
 	gint minRunAhead;
 	gint initialTCPWindow;
 	gint interfaceBufferSize;
+	SimulationTime interfaceBatchTime;
 
 	GOptionGroup* pluginsOptionGroup;
 	gboolean runEchoExample;

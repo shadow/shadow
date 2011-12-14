@@ -39,6 +39,7 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	c->printSoftwareVersion = 0;
 	c->initialTCPWindow = 10;
 	c->interfaceBufferSize = 1024000;
+	c->interfaceBatchTime = 10;
 
 	/* set options to change defaults for the main group */
 	c->mainOptionGroup = g_option_group_new("main", "Application Options", "Various application related options", NULL, NULL);
@@ -59,6 +60,7 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	  { "runahead", 0, 0, G_OPTION_ARG_INT, &(c->minRunAhead), "Minimum allowed TIME workers may run ahead when sending events between nodes, in milliseconds [10]", "TIME" },
 	  { "tcp-windows", 0, 0, G_OPTION_ARG_INT, &(c->initialTCPWindow), "Initialize the TCP send, receive, and congestion windows to N packets [10]", "N" },
 	  { "interface-buffer", 0, 0, G_OPTION_ARG_INT, &(c->interfaceBufferSize), "Size of the network interface receive buffer, in bytes [1024000]", "N" },
+	  { "interface-batch", 0, 0, G_OPTION_ARG_INT, &(c->interfaceBatchTime), "Batch time for network interface sends and receives, in milliseconds [10]", "N" },
 	  { NULL },
 	};
 
@@ -103,11 +105,19 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	if(c->logLevelInput == NULL) {
 		c->logLevelInput = g_strdup("message");
 	}
-	if(c->initialTCPWindow <= 0) {
+	if(c->initialTCPWindow < 1) {
 		c->initialTCPWindow = 1;
 	}
-	if(c->interfaceBufferSize <= CONFIG_MTU) {
+	if(c->interfaceBufferSize < CONFIG_MTU) {
 		c->interfaceBufferSize = CONFIG_MTU;
+	}
+	if(c->interfaceBatchTime < 0) {
+		c->interfaceBatchTime = 0;
+	}
+	c->interfaceBatchTime *= SIMTIME_ONE_MILLISECOND;
+	if(c->interfaceBatchTime == 0) {
+		/* we require at least 1 nanosecond b/c of time granularity */
+		c->interfaceBatchTime = 1;
 	}
 
 	c->inputXMLFilenames = g_queue_new();
