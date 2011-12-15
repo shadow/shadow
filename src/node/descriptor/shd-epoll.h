@@ -28,6 +28,7 @@ typedef struct _Epoll Epoll;
 
 /* free this with descriptor_free() */
 Epoll* epoll_new(gint handle);
+gint epoll_getOSEpollDescriptor(Epoll* epoll);
 
 gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor,
 		struct epoll_event* event);

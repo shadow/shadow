@@ -19,6 +19,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <unistd.h>
 #include "shadow.h"
 
 typedef struct _EpollWatch EpollWatch;
@@ -43,6 +44,9 @@ struct _Epoll {
 	/* other members specific to epoll */
 	enum EpollFlags flags;
 	GHashTable* watchedDescriptors;
+
+	gint osEpollDescriptor;
+	SimulationTime lastWaitTime;
 
 	MAGIC_DECLARE;
 };
@@ -85,6 +89,8 @@ static void _epoll_free(gpointer data) {
 	/* this will go through all epollwatch items and remove the listeners */
 	g_hash_table_destroy(epoll->watchedDescriptors);
 
+	close(epoll->osEpollDescriptor);
+
 	MAGIC_CLEAR(epoll);
 	g_free(epoll);
 }
@@ -110,6 +116,14 @@ Epoll* epoll_new(gint handle) {
 
 	/* allocate backend needed for managing events for this descriptor */
 	epoll->watchedDescriptors = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, _epollwatch_free);
+
+	/* the application may want us to watch some system files, so we need a
+	 * real OS epoll fd so we can offload that task.
+	 */
+	epoll->osEpollDescriptor = epoll_create(1000);
+	if(epoll->osEpollDescriptor == -1) {
+		warning("error in epoll_create for OS events, errno=%i", errno);
+	}
 
 	return epoll;
 }
@@ -185,6 +199,8 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray,
 	MAGIC_ASSERT(epoll);
 	g_assert(nEvents);
 
+	epoll->lastWaitTime = worker_getPrivate()->clock_now;
+
 	/* return the available events in the eventArray, making sure not to
 	 * overflow. the number of actual events is returned in nEvents.
 	 *
@@ -220,6 +236,25 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray,
 		/* if we've filled everything, stop iterating */
 		if(i >= eventArrayLength) {
 			break;
+		}
+	}
+
+	if(i < eventArrayLength) {
+		/* now we have to get events from the OS descriptors */
+		struct epoll_event osEvents[20];
+		gint nos = epoll_wait(epoll->osEpollDescriptor, osEvents, 20, 0);
+
+		if(nos == -1) {
+			warning("error in epoll_wait for OS events on epoll fd %i", epoll->osEpollDescriptor);
+		}
+
+		for(gint j = 0; j < nos; j++) {
+			eventArray[i] = osEvents[j];
+			i++;
+			/* if we've filled everything, stop iterating */
+			if(i >= eventArrayLength) {
+				break;
+			}
 		}
 	}
 
@@ -286,4 +321,9 @@ gboolean epoll_isReadyToNotify(Epoll* epoll) {
 	} else {
 		return TRUE;
 	}
+}
+
+gint epoll_getOSEpollDescriptor(Epoll* epoll) {
+	MAGIC_ASSERT(epoll);
+	return epoll->osEpollDescriptor;
 }

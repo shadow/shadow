@@ -23,6 +23,7 @@
 #include <time.h>
 #include <stddef.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <netdb.h>
 #include <string.h>
 #include <fcntl.h>
@@ -191,7 +192,7 @@ gint system_epollPWait(gint epollDescriptor, struct epoll_event* events,
 gint system_socket(gint domain, gint type, gint protocol) {
 	/* we only support non-blocking sockets, and require
 	 * SOCK_NONBLOCK to be set immediately */
-	gboolean isBlocking = TRUE;
+	gboolean isBlocking = FALSE;
 
 	/* clear non-blocking flags if set to get true type */
 	if(type & SOCK_NONBLOCK) {
@@ -235,7 +236,7 @@ gint system_socketPair(gint domain, gint type, gint protocol, gint fds[2]) {
 	}
 
 	/* only support non-blocking sockets */
-	gboolean isBlocking = TRUE;
+	gboolean isBlocking = FALSE;
 
 	/* clear non-blocking flags if set to get true type */
 	gint realType = type;
@@ -634,11 +635,6 @@ time_t system_time(time_t* t) {
 }
 
 gint system_clockGetTime(clockid_t clk_id, struct timespec *tp) {
-	if(clk_id != CLOCK_REALTIME) {
-		errno = EINVAL;
-		return -1;
-	}
-
 	if(tp == NULL) {
 		errno = EFAULT;
 		return -1;
@@ -648,6 +644,15 @@ gint system_clockGetTime(clockid_t clk_id, struct timespec *tp) {
 	tp->tv_sec = now / SIMTIME_ONE_SECOND;
 	tp->tv_nsec = now % SIMTIME_ONE_SECOND;
 
+	return 0;
+}
+
+gint system_getTimeOfDay(struct timeval *tv) {
+	SimulationTime now = worker_getPrivate()->clock_now;
+	if(tv) {
+		tv->tv_sec = now / SIMTIME_ONE_SECOND;
+		tv->tv_usec = (now % SIMTIME_ONE_SECOND) / SIMTIME_ONE_MICROSECOND;
+	}
 	return 0;
 }
 

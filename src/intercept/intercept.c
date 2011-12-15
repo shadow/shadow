@@ -103,6 +103,10 @@ gint intercept_clock_gettime(clockid_t clk_id, struct timespec *tp) {
 	return system_clockGetTime(clk_id, tp);
 }
 
+gint intercept_gettimeofday(struct timeval *tv, void *tz) {
+	return system_getTimeOfDay(tv);
+}
+
 gint intercept_gethostname(gchar *name, size_t len) {
 	return system_getHostName(name, len);
 }

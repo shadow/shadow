@@ -22,8 +22,9 @@
 #include <glib.h>
 #include <sys/socket.h>
 #include <sys/epoll.h>
-#include <netdb.h>
+#include <sys/time.h>
 #include <time.h>
+#include <netdb.h>
 #include <stddef.h>
 #include <stdarg.h>
 #include <string.h>
@@ -409,6 +410,17 @@ int clock_gettime(clockid_t clk_id, struct timespec *tp) {
 	PRELOAD_DECIDE(func, funcName, "clock_gettime", _clock_gettime, INTERCEPT_PREFIX, _vsystem_clock_gettime, 1);
 	PRELOAD_LOOKUP(func, funcName, -1);
 	return (*func)(clk_id, tp);
+}
+
+typedef int (*gettimeofday_fp)(struct timeval *, void *);
+static gettimeofday_fp _gettimeofday = NULL;
+static gettimeofday_fp _gettimeofday_redirect = NULL;
+int gettimeofday(struct timeval *tv, void *tz) {
+	gettimeofday_fp* func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "gettimeofday", _gettimeofday, INTERCEPT_PREFIX, _gettimeofday_redirect, 1);
+	PRELOAD_LOOKUP(func, funcName, -1);
+	return (*func)(tv, tz);
 }
 
 typedef int (*gethostname_fp)(char*, size_t);

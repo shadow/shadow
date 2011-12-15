@@ -726,6 +726,13 @@ gint tcp_acceptServerPeer(TCP* tcp, in_addr_t* ip, in_port_t* port, gint* accept
 	}
 
 	*acceptedHandle = child->tcp->super.super.super.handle;
+	if(ip) {
+		*ip = child->tcp->super.peerIP;
+	}
+	if(port) {
+		*port = child->tcp->super.peerPort;
+	}
+
 	return 0;
 }
 

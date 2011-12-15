@@ -26,6 +26,7 @@
 #include <time.h>
 #include <stddef.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <netdb.h>
 #include <string.h>
 
@@ -69,6 +70,7 @@ gint system_pipe(gint pipefds[2]);
 gint system_pipe2(gint pipefds[2], gint flags);
 time_t system_time(time_t* t);
 gint system_clockGetTime(clockid_t clk_id, struct timespec *tp);
+gint system_getTimeOfDay(struct timeval *tv);
 gint system_getHostName(gchar *name, size_t len);
 gint system_getAddrInfo(gchar *name, const gchar *service,
 		const struct addrinfo *hgints, struct addrinfo **res);

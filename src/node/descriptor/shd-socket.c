@@ -158,7 +158,8 @@ gint socket_getSocketName(Socket* socket, in_addr_t* ip, in_port_t* port) {
 	MAGIC_ASSERT(socket);
 	g_assert(ip && port);
 
-	if(socket->boundAddress == 0 || socket->boundPort == 0) {
+	/* boundAddress could be 0 (INADDR_NONE), so just check port */
+	if(socket->boundPort == 0) {
 		return ENOTCONN;
 	}
 

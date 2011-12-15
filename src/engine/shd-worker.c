@@ -225,10 +225,12 @@ void worker_scheduleEvent(Event* event, SimulationTime nano_delay, GQuark receiv
 }
 
 gboolean worker_isInShadowContext() {
-	Worker* worker = worker_getPrivate();
-	if(worker->cached_plugin) {
-		return worker->cached_plugin->isShadowContext;
+	if(shadow_engine) {
+		Worker* worker = worker_getPrivate();
+		if(worker->cached_plugin) {
+			return worker->cached_plugin->isShadowContext;
+		}
 	}
-	/* if there is no cached plugin, we are definitely in Shadow context */
+	/* if there is no engine or cached plugin, we are definitely in Shadow context */
 	return TRUE;
 }
