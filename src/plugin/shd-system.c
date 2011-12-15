@@ -608,6 +608,18 @@ gint system_close(gint fd) {
 	return r;
 }
 
+gint system_fcntl(int fd, int cmd, va_list farg) {
+	/* check if this is a socket */
+	if(fd < MIN_DESCRIPTOR){
+		errno = EBADF;
+		return -1;
+	}
+
+	/* normally, the type of farg depends on the cmd */
+
+	return 0;
+}
+
 /**
  * system util interface
  * @todo move input checking here

@@ -25,6 +25,7 @@
 #include <netdb.h>
 #include <time.h>
 #include <stddef.h>
+#include <stdarg.h>
 #include <string.h>
 
 #include "preload.h"
@@ -365,6 +366,23 @@ int close(int fd) {
 	PRELOAD_DECIDE(func, funcName, "close", _close, INTERCEPT_PREFIX, _vsocket_close, fd >= MIN_DESCRIPTOR);
 	PRELOAD_LOOKUP(func, funcName, -1);
 	return (*func)(fd);
+}
+
+typedef int (*fcntl_fp)(int, int, ...);
+static fcntl_fp _fcntl = NULL;
+static fcntl_fp _vsocket_fcntl = NULL;
+int fcntl(int fd, int cmd, ...) {
+	fcntl_fp* func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "fcntl", _fcntl, INTERCEPT_PREFIX, _vsocket_fcntl, fd >= MIN_DESCRIPTOR);
+	PRELOAD_LOOKUP(func, funcName, -1);
+
+	va_list farg;
+	va_start(farg, cmd);
+	int result = (*func)(fd, cmd, va_arg(farg, void*));
+	va_end(farg);
+
+	return result;
 }
 
 /**

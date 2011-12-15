@@ -245,6 +245,14 @@ gint intercept_close(gint fd) {
 	return system_close(fd);
 }
 
+gint intercept_fcntl(int fd, int cmd, ...) {
+	va_list farg;
+	va_start(farg, cmd);
+	gint result = system_fcntl(fd, cmd, farg);
+	va_end(farg);
+	return result;
+}
+
 /**
  * System epoll
  */

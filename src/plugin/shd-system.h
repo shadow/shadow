@@ -63,6 +63,7 @@ gint system_shutdown(gint fd, gint how);
 gssize system_read(gint fd, gpointer buf, gint n);
 gssize system_write(gint fd, const gpointer buf, gint n);
 gint system_close(gint fd);
+gint system_fcntl(int fd, int cmd, va_list farg);
 
 gint system_pipe(gint pipefds[2]);
 gint system_pipe2(gint pipefds[2], gint flags);
