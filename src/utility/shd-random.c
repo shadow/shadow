@@ -1,8 +1,7 @@
-/*
+/**
  * The Shadow Simulator
  *
  * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
- * Copyright (c) 2006-2009 Tyson Malchow <tyson.malchow@gmail.com>
  *
  * This file is part of Shadow.
  *
@@ -22,20 +21,31 @@
 
 #include <glib.h>
 #include <stdlib.h>
-#include "rand.h"
 
-gdouble dvn_rand_unit() {
-	return (gdouble)rand() / (gdouble)RAND_MAX;
+#include "shd-random.h"
+
+struct _Random {
+	guint seedState;
+	guint initialSeed;
+};
+
+Random* random_new(guint seed) {
+	Random* random = g_new0(Random, 1);
+	random->initialSeed = seed;
+	random->seedState = seed;
+	return random;
 }
 
-guint dvn_rand_fast(guint max) {
-	return rand() % max; /* note: i'm WELL AWARE this isn't an even distribution. */
+void random_free(Random* random) {
+	g_assert(random);
+	g_free(random);
 }
 
-guint dvn_rand(guint max) {
-	return dvn_rand_unit() * max;
+gint random_nextRandom(Random* random) {
+	return (gint) rand_r(&(random->seedState));
 }
 
-void dvn_rand_seed(guint seed) {
-	srand(seed);
+gdouble random_nextDouble(Random* random) {
+	g_assert(random);
+	return (gdouble)(((gdouble)rand_r(&(random->seedState))) / ((gdouble)RAND_MAX));
 }

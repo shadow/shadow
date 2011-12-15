@@ -548,3 +548,80 @@ int EVP_Cipher(void *ctx, unsigned char *out, const unsigned char *in, unsigned 
 	PRELOAD_LOOKUP(func, funcName, -1);
 	return (*func)(ctx, out, in, inl);
 }
+
+typedef void (*RAND_seed_fp)(const void *buf,int num);
+static RAND_seed_fp _RAND_seed = NULL;
+static RAND_seed_fp _intercept_RAND_seed = NULL;
+void RAND_seed(const void *buf,int num) {
+	RAND_seed_fp* func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "RAND_seed", _RAND_seed, INTERCEPT_PREFIX, _intercept_RAND_seed, 1);
+	PRELOAD_LOOKUP(func, funcName,);
+	(*func)(buf, num);
+}
+
+typedef void (*RAND_add_fp)(const void *buf,int num, double entropy);
+static RAND_add_fp _RAND_add = NULL;
+static RAND_add_fp _intercept_RAND_add = NULL;
+void RAND_add(const void *buf,int num,double entropy) {
+	RAND_add_fp* func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "RAND_add", _RAND_add, INTERCEPT_PREFIX, _intercept_RAND_add, 1);
+	PRELOAD_LOOKUP(func, funcName,);
+	(*func)(buf, num, entropy);
+}
+
+typedef int (*RAND_poll_fp)(void);
+static RAND_poll_fp _RAND_poll = NULL;
+static RAND_poll_fp _intercept_RAND_poll = NULL;
+int RAND_poll(void) {
+	RAND_poll_fp* func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "RAND_poll", _RAND_poll, INTERCEPT_PREFIX, _intercept_RAND_poll, 1);
+	PRELOAD_LOOKUP(func, funcName, 0);
+	return (*func)();
+}
+
+typedef int (*RAND_bytes_fp)(unsigned char *buf, int num);
+static RAND_bytes_fp _RAND_bytes = NULL;
+static RAND_bytes_fp _intercept_RAND_bytes = NULL;
+int RAND_bytes(unsigned char *buf, int num) {
+	RAND_bytes_fp* func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "RAND_bytes", _RAND_bytes, INTERCEPT_PREFIX, _intercept_RAND_bytes, 1);
+	PRELOAD_LOOKUP(func, funcName, 0);
+	return (*func)(buf, num);
+}
+
+typedef int (*RAND_pseudo_bytes_fp)(unsigned char *buf, int num);
+static RAND_pseudo_bytes_fp _RAND_pseudo_bytes = NULL;
+static RAND_pseudo_bytes_fp _intercept_RAND_pseudo_bytes = NULL;
+int RAND_pseudo_bytes(unsigned char *buf, int num) {
+	RAND_pseudo_bytes_fp* func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "RAND_pseudo_bytes", _RAND_pseudo_bytes, INTERCEPT_PREFIX, _intercept_RAND_pseudo_bytes, 1);
+	PRELOAD_LOOKUP(func, funcName, 0);
+	return (*func)(buf, num);
+}
+
+typedef int (*rand_fp)(void);
+static rand_fp _rand = NULL;
+static rand_fp _intercept_rand = NULL;
+int rand(void) {
+	rand_fp* func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "rand", _rand, INTERCEPT_PREFIX, _intercept_rand, 1);
+	PRELOAD_LOOKUP(func, funcName, 0);
+	return (*func)();
+}
+
+typedef void (*srand_fp)(unsigned int seed);
+static srand_fp _srand = NULL;
+static srand_fp _intercept_srand = NULL;
+void srand(unsigned int seed) {
+	srand_fp* func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "srand", _srand, INTERCEPT_PREFIX, _intercept_srand, 1);
+	PRELOAD_LOOKUP(func, funcName,);
+	return (*func)(seed);
+}

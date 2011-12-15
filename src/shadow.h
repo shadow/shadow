@@ -76,6 +76,7 @@
 #include "utility/shd-registry.h"
 #include "utility/shd-cdf.h"
 #include "utility/shd-byte-queue.h"
+#include "utility/shd-random.h"
 
 #include "library/shd-library.h"
 #include "plugin/shd-plugin-state.h"
@@ -118,8 +119,6 @@
 #include "engine/shd-logging.h"
 #include "engine/shd-engine.h"
 #include "engine/shd-worker.h"
-
-#include "utility/rand.h"
 
 #include "intercept/preload.h"
 

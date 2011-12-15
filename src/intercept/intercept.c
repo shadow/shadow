@@ -61,6 +61,36 @@ gint intercept_EVP_Cipher(void *ctx, guchar *out, const guchar *in, guint inl) {
 	return 1;
 }
 
+void intercept_RAND_seed(const void *buf, int num) {
+	system_addEntropy(buf, num);
+}
+
+void intercept_RAND_add(const void *buf, int num, double entropy) {
+	system_addEntropy(buf, num);
+}
+
+int intercept_RAND_poll() {
+	guint32 buf = 1;
+	system_addEntropy((gpointer)&buf, 4);
+	return 1;
+}
+
+int intercept_RAND_bytes(unsigned char *buf, int num) {
+	return system_randomBytes(buf, num);
+}
+
+int intercept_RAND_pseudo_bytes(unsigned char *buf, int num) {
+	return system_randomBytes(buf, num);
+}
+
+int intercept_rand() {
+	return system_getRandom();
+}
+
+void intercept_srand(unsigned int seed) {
+	return;
+}
+
 /**
  * System utils
  */

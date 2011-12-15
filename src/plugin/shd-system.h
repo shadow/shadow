@@ -85,4 +85,8 @@ int system_getHostByAddr_r(const void *addr, socklen_t len, gint type,
                struct hostent *ret, gchar *buf, gsize buflen,
                struct hostent **result, gint *h_errnop);
 
+void system_addEntropy(gconstpointer buffer, gint numBytes);
+gint system_randomBytes(guchar* buf, gint numBytes);
+gint system_getRandom();
+
 #endif /* SHD_SYSTEM_H_ */

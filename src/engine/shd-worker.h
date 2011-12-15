@@ -33,6 +33,8 @@ struct _Worker {
 	SimulationTime clock_last;
 	SimulationTime clock_barrier;
 
+	Random* random;
+
 	Engine* cached_engine;
 	Plugin* cached_plugin;
 	Node* cached_node;

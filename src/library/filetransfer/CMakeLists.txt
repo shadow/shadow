@@ -8,7 +8,6 @@ set(filetransfer_sources
     shd-service-filegetter.c 
     shd-filegetter.c
     ${SHADOW_SOURCE_DIR}/utility/shd-cdf.c
-    ${SHADOW_SOURCE_DIR}/utility/rand.c
 )
 
 ## service library to allow filetransfer to be used by any plugin

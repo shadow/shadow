@@ -210,6 +210,7 @@ struct _Configuration {
 	GOptionGroup* mainOptionGroup;
 	gchar* logLevelInput;
 	gint nWorkerThreads;
+	guint randomSeed;
 	gboolean printSoftwareVersion;
 
 	GOptionGroup* networkOptionGroup;

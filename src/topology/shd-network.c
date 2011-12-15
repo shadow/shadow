@@ -205,7 +205,8 @@ void network_schedulePacket(Network* sourceNetwork, Packet* packet) {
 	 * the packet. if so, get out of dodge doing as little as possible.
 	 */
 	gdouble reliability = network_getLinkReliability(sourceNetwork, destinationNetwork);
-	if(dvn_rand_unit() > reliability){
+	gdouble chance = random_nextDouble(worker_getPrivate()->random);
+	if(chance > reliability){
 		/* sender side is scheduling packets, but we are simulating
 		 * the packet being dropped between sender and receiver, so
 		 * it will need to be retransmitted */
