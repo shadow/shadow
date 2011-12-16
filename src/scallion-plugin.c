@@ -19,13 +19,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <string.h>
-#include <arpa/inet.h>
-#include "scallion-plugin.h"
-
-PluginFunctionTable scallion_pluginFunctions = {
-	&scallion_new, &scallion_free, &scallion_readable, &scallion_writable,
-};
+#include "scallion.h"
 
 typedef struct scallion_launch_client_s {
 	uint8_t is_single;
@@ -35,19 +29,6 @@ typedef struct scallion_launch_client_s {
 /* my global structure to hold all variable, node-specific application state.
  * the name must not collide with other loaded modules globals. */
 Scallion scallion;
-
-void __shadow_plugin_init__(ShadowlibFunctionTable* shadowlibFuncs) {
-	/* clear our memory before initializing */
-	memset(&scallion, 0, sizeof(Scallion));
-
-	/* save the shadow functions we will use */
-	scallion.shadowlibFuncs = shadowlibFuncs;
-
-	/* register all of our state with shadow */
-	scallion_register_globals(&scallion_pluginFunctions, &scallion);
-
-	shadowlibFuncs->log(G_LOG_LEVEL_INFO, __FUNCTION__, "finished registering scallion plug-in state");
-}
 
 static void _scallion_logCallback(enum service_filegetter_loglevel level, const gchar* message) {
 	if(level == SFG_CRITICAL) {
@@ -74,7 +55,13 @@ static in_addr_t _scallion_HostnameCallback(const gchar* hostname) {
 	} else if(g_strncasecmp(hostname, "localhost", 9) == 0) {
 		addr = htonl(INADDR_LOOPBACK);
 	} else {
-		addr = scallion.shadowlibFuncs->resolveHostname((gchar*) hostname);
+		struct addrinfo* info;
+		if(getaddrinfo((gchar*) hostname, NULL, NULL, &info) != -1) {
+			addr = ((struct sockaddr_in*)(info->ai_addr))->sin_addr.s_addr;
+		} else {
+			scallion.shadowlibFuncs->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "unable to create client: error in getaddrinfo");
+		}
+		freeaddrinfo(info);
 	}
 
 	return addr;
@@ -95,12 +82,13 @@ static void scallion_start_socks_client(void* arg) {
 
 	/* launch our filegetter */
 	if(launch != NULL) {
+		scallion.sfgEpoll = epoll_create(1);
 		int sockd = 0;
 
 		if(launch->is_single == 1) {
 			service_filegetter_single_args_tp args = launch->service_filegetter_args;
 
-			service_filegetter_start_single(&scallion.sfg, args, &sockd);
+			service_filegetter_start_single(&scallion.sfg, args, scallion.sfgEpoll, &sockd);
 
 			free(args->http_server.host);
 			free(args->http_server.port);
@@ -112,7 +100,7 @@ static void scallion_start_socks_client(void* arg) {
 		} else if(launch->is_single == 2) {
 			service_filegetter_double_args_tp args = launch->service_filegetter_args;
 
-			service_filegetter_start_double(&scallion.sfg, args, &sockd);
+			service_filegetter_start_double(&scallion.sfg, args, scallion.sfgEpoll, &sockd);
 
 			free(args->http_server.host);
 			free(args->http_server.port);
@@ -126,7 +114,7 @@ static void scallion_start_socks_client(void* arg) {
 		} else {
 			service_filegetter_multi_args_tp args = launch->service_filegetter_args;
 
-			service_filegetter_start_multi(&scallion.sfg, args, &sockd);
+			service_filegetter_start_multi(&scallion.sfg, args, scallion.sfgEpoll, &sockd);
 
 			free(args->server_specification_filepath);
 			free(args->socks_proxy.host);
@@ -143,16 +131,19 @@ static void scallion_start_socks_client(void* arg) {
 	}
 }
 
-void scallion_new(int argc, char* argv[]) {
+static void _scallion_new(gint argc, gchar* argv[]) {
 	scallion.shadowlibFuncs->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "scallion_new called");
 
 	gchar* usage = "Scallion USAGE: (\"dirauth\"|\"relay\"|\"exitrelay\"|\"client\") bandwidth torrc_path datadir_base_path geoip_path [client_args for shd-plugin-filegetter...]\n";
 
-	const int argcc = argc;
-	if(argcc < 1) {
+	if(argc < 2) {
 		scallion.shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, usage);
 		return;
 	}
+
+	/* take out program name arg */
+	argc--;
+	argv = &argv[1];
 
 	/* parse our arguments */
 	gchar* tortype = argv[0];
@@ -181,28 +172,24 @@ void scallion_new(int argc, char* argv[]) {
 		return;
 	}
 
-	/* get IP address through SNRI */
-	scallion.ip = scallion.shadowlibFuncs->getIP();
-
-	/* also save IP as string */
-	inet_ntop(AF_INET, &scallion.ip, scallion.ipstring, sizeof(scallion.ipstring));
-
 	/* get the hostname */
-	if(!scallion.shadowlibFuncs->getHostname(scallion.hostname, 128)) {
+	if(gethostname(scallion.hostname, 128) < 0) {
 		scallion.shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "error getting hostname");
 		return;
 	}
+
+	/* get IP address through SNRI */
+	scallion.ip = _scallion_HostnameCallback(scallion.hostname);
+
+	/* also save IP as string */
+	inet_ntop(AF_INET, &scallion.ip, scallion.ipstring, sizeof(scallion.ipstring));
 
 	/* setup actual data directory for this node */
 	int size = snprintf(NULL, 0, "%s/%s", datadir_base_path, scallion.hostname) + 1;
 	char datadir_path[size];
 	sprintf(datadir_path, "%s/%s", datadir_base_path, scallion.hostname);
 
-	/* init deps as needed */
-	scallion.shadowlibFuncs->setLoopExit(&vtor_loopexit_cb);
-
-	scallion.vtor.shadowlibFuncs = scallion.shadowlibFuncs;
-	vtor_instantiate(&scallion.vtor, scallion.hostname, ntype, bandwidth, torrc_path, datadir_path, geoip_path);
+	scallion.stor = scalliontor_new(scallion.shadowlibFuncs, scallion.hostname, ntype, bandwidth, torrc_path, datadir_path, geoip_path);
 
 	scallion.sfg.fg.sockd = 0;
 
@@ -341,28 +328,44 @@ void scallion_new(int argc, char* argv[]) {
 
 }
 
-void scallion_free() {
+static void _scallion_free() {
 	scallion.shadowlibFuncs->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "scallion_free called");
-
-	vtor_destroy();
+	scalliontor_free(scallion.stor);
 }
 
-void scallion_readable(int socketDesriptor) {
-	scallion.shadowlibFuncs->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "scallion_readable called");
+static void _scallion_notify() {
+	scallion.shadowlibFuncs->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "_scallion_notify called");
 
-	if(socketDesriptor == scallion.sfg.fg.sockd) {
-		service_filegetter_activate(&scallion.sfg, socketDesriptor);
-	} else {
-		vtor_socket_readable(&scallion.vtor, socketDesriptor);
+	/* check clients epoll descriptor for events, and activate each ready socket */
+	if(scallion.sfgEpoll) {
+		struct epoll_event events[10];
+		int nfds = epoll_wait(scallion.sfgEpoll, events, 10, 0);
+		if(nfds == -1) {
+			scallion.shadowlibFuncs->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "error in client epoll_wait");
+		} else {
+			/* finally, activate client for every socket thats ready */
+			for(int i = 0; i < nfds; i++) {
+				service_filegetter_activate(&scallion.sfg, events[i].data.fd);
+			}
+		}
 	}
+
+	scalliontor_notify(scallion.stor);
 }
 
-void scallion_writable(int socketDesriptor) {
-	scallion.shadowlibFuncs->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "scallion_writable called");
+PluginFunctionTable scallion_pluginFunctions = {
+	&_scallion_new, &_scallion_free, &_scallion_notify,
+};
 
-	if(socketDesriptor == scallion.sfg.fg.sockd) {
-		service_filegetter_activate(&scallion.sfg, socketDesriptor);
-	} else {
-		vtor_socket_writable(&scallion.vtor, socketDesriptor);
-	}
+void __shadow_plugin_init__(ShadowlibFunctionTable* shadowlibFuncs) {
+	/* clear our memory before initializing */
+	memset(&scallion, 0, sizeof(Scallion));
+
+	/* save the shadow functions we will use */
+	scallion.shadowlibFuncs = shadowlibFuncs;
+
+	/* register all of our state with shadow */
+	scallion_register_globals(&scallion_pluginFunctions, &scallion);
+
+	shadowlibFuncs->log(G_LOG_LEVEL_INFO, __FUNCTION__, "finished registering scallion plug-in state");
 }

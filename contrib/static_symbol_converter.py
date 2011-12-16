@@ -3,7 +3,7 @@
 import os,sys,re,subprocess,shlex
 
 def main():
-    scallion_registration = open('../../src/scallion_registration.c', 'w')
+    scallion_registration = open('../../src/scallion-registration.c', 'w')
     tor_externs = open('../../src/tor_externs.h', 'w')
 
     create_scallion_registration(scallion_registration)
@@ -148,7 +148,7 @@ def main():
     os.remove(sym_rename_file.name)
     os.remove(sym_globalize_file.name)
 
-    scallion_registration.write('\tscallionData->shadowlibFuncs->registration(scallionFuncs, {0},\n'.format(len(vars_global.keys()) + 1))
+    scallion_registration.write('\tscallionData->shadowlibFuncs->registerPlugin(scallionFuncs, {0},\n'.format(len(vars_global.keys()) + 1))
     scallion_registration.write('\t\t(gsize) sizeof(Scallion), (gpointer) scallionData')
     
     for var in vars_global:
@@ -193,7 +193,7 @@ def create_scallion_registration(scallion_registration):
     scallion_registration.write('\n')
     scallion_registration.write('const char tor_git_revision[] = "";\n')
     scallion_registration.write('\n')
-    scallion_registration.write('#include "scallion-plugin.h"\n')
+    scallion_registration.write('#include "scallion.h"\n')
     scallion_registration.write('\n')
     scallion_registration.write('#include "tor_includes.h"\n')
     scallion_registration.write('#include "tor_externs.h"\n')

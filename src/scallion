@@ -25,7 +25,8 @@ import os, sys, subprocess, shutil, gzip, argparse, pygeoip, random, socket
 from datetime import datetime
 from time import sleep
 
-INSTALL_PREFIX=os.path.abspath(os.path.expanduser("~/.local/"))
+INSTALL_USER="~/.shadow/"
+INSTALL_PREFIX=os.path.abspath(os.path.expanduser(INSTALL_USER))
 PRELOAD_PATH=os.path.abspath(os.path.dirname(__file__) + "/../lib/libshadow-preload-scallion.so")
 
 DEFAULT_NRELAYS = 10
@@ -133,7 +134,7 @@ def generate(args):
     args.output = os.path.abspath(args.output)
     args.run = args.output
     args.data = os.path.abspath(args.output + "/data/")
-    args.dsimout = os.path.abspath(args.output + "/scallion.dsim")
+    args.dsimout = os.path.abspath(args.output + "/scallion.xml")
     args.www = args.prefix2
     
     args.exitrc = os.path.abspath(args.exitrc)
@@ -193,73 +194,78 @@ class ScallionExperiment():
         self.outfile = open(args.dsimout, 'w')
         self.relay_choices = []
         self.choicefile = open(args.run + "/relay-choices.csv", 'w')
-
+        self.scounter = 0
+        self.ncounter = 0
+        
+    def nodeout(self, name, plugin, network, bwup, bwdown, cpu, args, time, quantity=1):
+        sname = name+"-software"+str(self.scounter)
+        self.scounter += 1
+        self.out("<software name=\"{0}\" plugin=\"{1}\" time=\"{2}\" arguments=\"{3}\" />".format(sname, plugin, time, args))
+        self.out("<node name=\"{0}\" software=\"{1}\" network=\"{2}\" bandwidthup=\"{3}\" bandwidthdown=\"{4}\" cpu=\"{5}\" quantity=\"{6}\" />\n".format(name+str(self.ncounter), sname, network, bwup, bwdown, cpu, quantity))
+        self.ncounter += 1
+        
     def out(self, string):
         print >> self.outfile, string
 
     def generate(self, args):
         self.out(
-"?DSIM3\n\
-on(time 0:01){\n\
-\tfs_plugin = load_plugin(\""+args.prefix+"/lib/libshadow-plugin-fileserver.so\");\n\
-\tscallion_plugin = load_plugin(\""+args.prefix+"/lib/libshadow-plugin-scallion.so\");\n\
-}\n\
+"<plugin name=\"filetransfer\" path=\"libshadow-plugin-filetransfer.so\" />\n\
+<plugin name=\"scallion\" path=\"libshadow-plugin-scallion.so\" />\n\
 \n\
-on(time 0:02){\n\
-\tfastbw_cdf = generate_cdf(102400, 0, 0);\n\
-\tmidbw_cdf = generate_cdf(10240, 0, 0);\n\
-\tslowupbw_cdf = generate_cdf(1024, 0, 0);\n\
-\tslowdownbw_cdf = generate_cdf(3584, 0, 0);\n\
-\tnormbw_cdf = load_cdf(\"" + args.cdfs + "/umn/synthetic_bandwidth_KiBps.cdf\");\n\
+<cdf name=\"fastbw_cdf\" center=\"102400\" width=\"0\" tail=\"0\" />\n\
+<cdf name=\"midbw_cdf\" center=\"10240\" width=\"0\" tail=\"0\" />\n\
+<cdf name=\"slowupbw_cdf\" center=\"1024\" width=\"0\" tail=\"0\" />\n\
+<cdf name=\"slowdownbw_cdf\" center=\"3584\" width=\"0\" tail=\"0\" />\n\
+<cdf name=\"normbw_cdf\" path=\"" + args.cdfs + "/umn/synthetic_bandwidth_KiBps.cdf\" />\n\
 \n\
-\tfs_hostname = create_hostname(\"fileserver.shd\");\n\
-\tauthority_hostname = create_hostname(\"4uthority.tor\");\n\
-\trelay_hostname = create_hostname(\"relay.shd\");\n\
-\texit_hostname = create_hostname(\"exit.shd\");\n\
-\tproxy_hostname = create_hostname(\"proxy.shd\");\n\
-\n\
-\tlatency_cdf = generate_cdf(100, 0, 0);\n\
-\n\
-\tcpu_cdf = load_cdf(\"" + args.cdfs + "/umn/synthetic_cpu_speed_arcachon_Bps.cdf\");")
+<cdf name=\"cpu_cdf\" path=\"" + args.cdfs + "/umn/synthetic_cpu_speed_arcachon_Bps.cdf\" />\n\
+<cdf name=\"latency_cdf\" center=\"100\" width=\"0\" tail=\"0\" />\n")
 
-        self.out("}\n\non(time 0:03){")
         # get all latency cdfs
         for region1 in self.cp.sg.shadowregions:
             for region2 in self.cp.sg.shadowregions:
-                self.out("\t" + region1.name + "_to_" + region2.name + "_latency_cdf = load_cdf(\"" + args.cdfs + "/umn/plab_latency/" + region1.name + "_to_" + region2.name + ".cdf\");")
+                name = region1.name + "_to_" + region2.name + "_latency_cdf"
+                path = args.cdfs + "/umn/plab_latency/" + region1.name + "_to_" + region2.name + ".cdf"
+                self.out("<cdf name=\"{0}\" path=\"{1}\" />".format(name, path))
+                
+        self.out("")
         
-        self.out("}\n\non(time 0:04){")
-
         # get all networks
         for region in self.cp.sg.shadowregions:
-            self.out("\t" + region.name + "_network = create_network(" + region.name + "_to_" + region.name + "_latency_cdf, 1.0);")
-#            self.out("\t" + region.name + "_network = create_network(latency_cdf, 1.0);")
-
-        self.out("}\n\non(time 0:05){")
+            name = region.name + "_network"
+            cdfname = region.name + "_to_" + region.name + "_latency_cdf"
+            self.out("<network name=\"{0}\" latency=\"{1}\" reliability=\"1.0\" />".format(name, cdfname))
+            
+        self.out("")
 
         # connect all networks
         for region1 in self.cp.sg.shadowregions:
             for region2 in self.cp.sg.shadowregions:
                 if region1 != region2:
-                    self.out("\tconnect_networks(" + region1.name + "_network, " + region1.name + "_to_" + region2.name + "_latency_cdf, 1.0, " + region2.name + "_network, " + region2.name + "_to_" + region1.name + "_latency_cdf, 1.0);")
-#                    self.out("\tconnect_networks(" + region1.name + "_network, latency_cdf, 1.0, " + region2.name + "_network, latency_cdf, 1.0);")
+                    name1 = region1.name + "_network"
+                    name2 = region2.name + "_network"
+                    cdfname1 = region1.name + "_to_" + region2.name + "_latency_cdf"
+                    cdfname2 = region2.name + "_to_" + region1.name + "_latency_cdf"
+                    self.out("<link networka=\"{0}\" networkb=\"{1}\" latencyab=\"{2}\" reliabilityab=\"1.0\" latencyba=\"{3}\" reliabilityba=\"1.0\" />".format(name1, name2, cdfname1, cdfname2))
 
+        self.out("")
+        
         # start up the authority and file servers
-        self.out("}\n\non(time 1:00){\n\
-\tcreate_nodes(1, scallion_plugin, US_CENTRAL_network, authority_hostname, fastbw_cdf, NULL, cpu_cdf, \n\
-\t\t\"dirauth 102400 " + args.authrc + " " + args.authoritydata + " " + args.geoip + "\");\n")
+        swargs = "dirauth 102400 " + args.authrc + " " + args.authoritydata + " " + args.geoip
+        self.out("<software name=\"4uthority.tor-software\" plugin=\"scallion\" time=\"1\" arguments=\"{0}\" />".format(swargs))
+        self.out("<node name=\"4uthority.tor\" software=\"4uthority.tor-software\" network=\"US_CENTRAL_network\" bandwidthup=\"fastbw_cdf\" bandwidthdown=\"fastbw_cdf\" cpu=\"cpu_cdf\" quantity=\"1\" />\n")
 
         # spread out the servers geographically
         networks = ["US_WEST_network", "US_CENTRAL_network", "US_EAST_network", "EU_WEST_network"]
+        n=args.nservers/len(networks)
+        r = args.nservers%len(networks)
         for network in networks:
-            self.out("\tcreate_nodes(" + str(args.nservers/len(networks)) + ", fs_plugin, " + network + ", fs_hostname, fastbw_cdf, NULL, cpu_cdf, \"8080 " + args.www + "\");")
-
-        remain = args.nservers%len(networks)
-        if remain > 0:
-            self.out("\tcreate_nodes(" + str(remain) + ", fs_plugin, US_CENTRAL_network, fs_hostname, fastbw_cdf, NULL, cpu_cdf, \"8080 " + args.www + "\");\n")
-
-        self.out("}\n")
-
+            q = n
+            if r > 0: 
+                q += r
+                r = 0
+            self.nodeout("fileserver.shd", "filetransfer", network, "fastbw_cdf", "fastbw_cdf", "cpu_cdf", "server 8080 " + args.www, 1, quantity=str(q))
+            
         # the clients will need to know which servers to connect to
         f = open(args.run + "/bulk.spec", 'w')
         for i in range(args.nservers):
@@ -276,100 +282,75 @@ on(time 0:02){\n\
         # start the exits first
         exits = self.select.exits(int(args.nrelays * args.exitfrac))
         for e in exits: self.relay_choices.append(e)
-        each = len(exits)/5
-        remain = len(exits)%5
+        total = len(exits)
+        each = total/5
+        remain = total%5
 
-        if each != 0:
-            for i in xrange(60, 210, 30):
-                self.out("on(time " + str(i) + ":00){")
-                for j in xrange(each):
-                    exit = exits.pop()
-                    total_bw += exit.torbw
-                    self.out(
-#"\trelay_" + exit.ip + "_bw_cdf = generate_cdf(" + str(exit.bw) + ", 0, 0);\n\
-"\tcreate_nodes(1, scallion_plugin, " + exit.georegion + "_network, exit_hostname, " + self.getbwstr(exit.torbw) + ", " + self.getbwdownstr(exit.torbw) + ", cpu_cdf,\n\
-\t\t\"exitrelay " + str(exit.torbw) + " " + args.exitrc + " " + args.exitdata + " " + args.geoip + "\");")
-                self.out("}\n")
-
-        if len(exits) > 0:
-            self.out("on(time 210:00){")
-            while len(exits) > 0:
+        for i in xrange(60, 210, 30):
+            time = str(i)
+            q = each
+            if remain > 0:
+                q += remain
+                remain = 0
+            if q <= 0: break
+            for j in xrange(q):
                 exit = exits.pop()
                 total_bw += exit.torbw
-                self.out(
-#"\trelay_" + exit.ip + "_bw_cdf = generate_cdf(" + str(exit.bw) + ", 0, 0);\n\
-"\tcreate_nodes(1, scallion_plugin, " + exit.georegion + "_network, exit_hostname, " + self.getbwstr(exit.torbw) + ", " + self.getbwdownstr(exit.torbw) + ", cpu_cdf,\n\
-\t\t\"exitrelay " + str(exit.torbw) + " " + args.exitrc + " " + args.exitdata + " " + args.geoip + "\");")
-            self.out("}\n")
-
+                swargs = "exitrelay " + str(exit.torbw) + " " + args.exitrc + " " + args.exitdata + " " + args.geoip
+                self.nodeout("exit.shd", "scallion", exit.georegion + "_network", self.getbwstr(exit.torbw), self.getbwdownstr(exit.torbw), "cpu_cdf", swargs, time)
+            total -= q
+            if total <= 0: break
+            
         # now start the other relays
         relays = self.select.relays(int(args.nrelays - (args.nrelays * args.exitfrac)))
         for r in relays: self.relay_choices.append(r)
-        each = len(relays)/5
-        remain = len(relays)%5
+        total = len(relays)
+        each = total/5
+        remain = total%5
 
-        if each != 0:
-            for i in xrange(240, 390, 30):
-                self.out("on(time " + str(i) + ":00){")
-                for j in xrange(each):
-                    relay = relays.pop()
-                    total_bw += relay.torbw
-                    self.out(
-#"\trelay_" + relay.ip + "_bw_cdf = generate_cdf(" + str(relay.bw) + ", 0, 0);\n\
-"\tcreate_nodes(1, scallion_plugin, " + relay.georegion + "_network, relay_hostname, " + self.getbwstr(relay.torbw) + ", " + self.getbwdownstr(relay.torbw) + ", cpu_cdf,\n\
-\t\t\"relay " + str(relay.torbw) + " " + args.relayrc + " " + args.relaydata + " " + args.geoip + "\");")
-                self.out("}\n")
-
-        if len(relays) > 0:
-            self.out("on(time 390:00){")
-            while len(relays) > 0:
+        for i in xrange(240, 390, 30):
+            time = str(i)
+            q = each
+            if remain > 0:
+                q += remain
+                remain = 0
+            if q <= 0: break
+            for j in xrange(q):
                 relay = relays.pop()
                 total_bw += relay.torbw
-                self.out(
-#"\trelay_" + relay.ip + "_bw_cdf = generate_cdf(" + str(relay.bw) + ", 0, 0);\n\
-"\tcreate_nodes(1, scallion_plugin, " + relay.georegion + "_network, relay_hostname, " + self.getbwstr(relay.torbw) + ", " + self.getbwdownstr(relay.torbw) + ", cpu_cdf,\n\
-\t\t\"relay " + str(relay.torbw) + " " + args.relayrc + " " + args.relaydata + " " + args.geoip + "\");")
-            self.out("}\n")
-
+                swargs = "relay " + str(relay.torbw) + " " + args.relayrc + " " + args.relaydata + " " + args.geoip
+                self.nodeout("relay.shd", "scallion", relay.georegion + "_network", self.getbwstr(relay.torbw), self.getbwdownstr(relay.torbw), "cpu_cdf", swargs, time)
+            total -= q
+            if total <= 0: break
+                
         # give time for bootstrapping before the clients
         each_web = int(args.nweb / 30)
         remain_web = int(args.nweb % 30)
         each_bulk = int(args.nbulk / 30)
         remain_bulk = int(args.nbulk % 30)
 
+        swargs = "client 102400 " + args.clientrc + " " + args.clientdata + " " + args.geoip
         WEB=" multi " + args.run + "/web.spec localhost 9000 " + args.cdfs + "/unc/think_times_ms.cdf -1"
         BULK=" multi " + args.run + "/bulk.spec localhost 9000 none -1"
 
         for i in xrange(1200, 1500, 10):
-            self.out("on(time " + str(i) + ":00){")
-            self.out(
-"\tcreate_nodes(" + str(each_web) + ", scallion_plugin, " + self.cp.sg.random_region() + "_network, proxy_hostname, slowupbw_cdf, slowdownbw_cdf, cpu_cdf,\n\
-\t\t\"client 102400 " + args.clientrc + " " + args.clientdata + " " + args.geoip + WEB + "\");\n");
+            time = str(i)
+            self.nodeout("client.shd", "scallion", self.cp.sg.random_region() + "_network", "slowupbw_cdf", "slowdownbw_cdf", "cpu_cdf", swargs+WEB, time, quantity=str(each_web))
 
             ncreate = each_bulk;
             if ncreate == 0 and remain_bulk > 0:
                 ncreate = 1
                 remain_bulk -= 1
             if ncreate > 0:
-                self.out("\tcreate_nodes(" + str(ncreate) + ", scallion_plugin, " + self.cp.sg.random_region() + "_network, proxy_hostname, slowupbw_cdf, slowdownbw_cdf, cpu_cdf,\n\
-\t\t\"client 102400 " + args.clientrc + " " + args.clientdata + " " + args.geoip + BULK + "\");")
-
-            self.out("}\n")
+                self.nodeout("client.shd", "scallion", self.cp.sg.random_region() + "_network", "slowupbw_cdf", "slowdownbw_cdf", "cpu_cdf", swargs+BULK, time, quantity=str(ncreate))
 
         if remain_web > 0 or remain_bulk > 0:
-            self.out("on(time 1500:00){")
             if remain_web > 0:
-                self.out(
-"\tcreate_nodes(" + str(remain_web) + ", scallion_plugin, " + self.cp.sg.random_region() + "_network, proxy_hostname, slowupbw_cdf, slowdownbw_cdf, cpu_cdf,\n\
-\t\t\"client 102400 " + args.clientrc + " " + args.clientdata + " " + args.geoip + WEB + "\");")
+                self.nodeout("client.shd", "scallion", self.cp.sg.random_region() + "_network", "slowupbw_cdf", "slowdownbw_cdf", "cpu_cdf", swargs+WEB, time, quantity=str(remain_web))
             if remain_bulk > 0:
-                self.out(
-"\tcreate_nodes(" + str(remain_bulk) + ", scallion_plugin, " + self.cp.sg.random_region() + "_network, proxy_hostname, slowupbw_cdf, slowdownbw_cdf, cpu_cdf,\n\
-\t\t\"client 102400 " + args.clientrc + " " + args.clientdata + " " + args.geoip + BULK + "\");")
-            self.out("}\n")
+                self.nodeout("client.shd", "scallion", self.cp.sg.random_region() + "_network", "slowupbw_cdf", "slowdownbw_cdf", "cpu_cdf", swargs+BULK, time, quantity=str(remain_bulk))
 
-        self.out("on(time 4980:00) {end();}")
-
+        self.out("<kill time=\"4980\" >")
 
         # check out what we generated
         nlive_relays = float(len(self.select.liverelays) + len(self.select.liveexits))
@@ -640,11 +621,25 @@ def run(args):
     dstat_p = None
     try: dstat_p = subprocess.Popen(dstat_cmd.split(), stdout=open("/dev/null", 'w'))
     except: dstat_p = None
+
+    # libevent must use epoll backend, disable the others
+    os.putenv("EVENT_NOSELECT", "1")
+    log("set environmental variable: EVENT_NOSELECT")
+    os.putenv("EVENT_NOPOLL", "1")
+    log("set environmental variable: EVENT_NOPOLL")
+    os.putenv("EVENT_NOKQUEUE", "1")
+    log("set environmental variable: EVENT_NOKQUEUE")
+    os.putenv("EVENT_NODEVPOLL", "1")
+    log("set environmental variable: EVENT_NODEVPOLL")
+    os.putenv("EVENT_NOEVPORT", "1")
+    log("set environmental variable: EVENT_NOEVPORT")
+    os.putenv("EVENT_NOWIN32", "1")
+    log("set environmental variable: EVENT_NOWIN32")
         
     # run
-    cmd = os.path.abspath(args.prefix+"/bin/shadow")+" run -p 1 -d scallion.dsim -l " + os.path.abspath(args.prefix+"/lib/libshadow-plugin-scallion-preload.so")
+    cmd = os.path.abspath(args.prefix+"/bin/shadow")+" --preload=" + os.path.abspath(args.prefix+"/lib/libshadow-plugin-scallion-preload.so") + " scallion.xml"
 
-    log("calling " + cmd + " with logfile " + logfilepath)
+    log("calling '" + cmd + "' with logfile '" + logfilepath+"'")
 
     f = open(logfilepath, 'w')
     start = datetime.now()
@@ -658,7 +653,7 @@ def run(args):
     return 0
 
 def auto(args):
-    args.prefix = os.path.abspath(os.path.expanduser("~/.local/"))
+    args.prefix = os.path.abspath(os.path.expanduser(INSTALL_USER))
     args.nrelays = DEFAULT_NRELAYS
     args.exitfrac = DEFAULT_EXITFRAC
     args.nclients = DEFAULT_NCLIENTS

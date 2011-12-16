@@ -27,7 +27,7 @@ from datetime import datetime
 BUILD_PREFIX="./build"
 INSTALL_PREFIX=os.path.expanduser("~/.shadow")
 
-DEFAULT_TOR_VERSION="0.2.3.5-alpha"
+DEFAULT_TOR_VERSION="0.2.3.7-alpha"
 
 TOR_URL="https://archive.torproject.org/tor-package-archive/tor-" + DEFAULT_TOR_VERSION + ".tar.gz"
 MAXMIND_URL="http://geolite.maxmind.com/download/geoip/database/GeoLiteCity.dat.gz"
@@ -215,7 +215,7 @@ def setup_tor(args):
         
             patch = "./patch.sh"
             gen = "aclocal && autoheader && autoconf && automake --add-missing --copy"
-            configure = "./configure --disable-transparent --disable-threads --disable-asciidoc CFLAGS=\"" + cflags + "\" LDFLAGS=\"" + ldflags + "\" LIBS=-lrt"
+            configure = "./configure --disable-transparent --disable-asciidoc CFLAGS=\"" + cflags + "\" LDFLAGS=\"" + ldflags + "\" LIBS=-lrt"
 
             if args.prefix_libevent is not None: configure += " --with-libevent-dir=" + os.path.abspath(args.prefix_libevent)
             if args.prefix_openssl is not None: configure += " --with-openssl-dir=" + os.path.abspath(args.prefix_openssl)
