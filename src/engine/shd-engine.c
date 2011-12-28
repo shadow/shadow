@@ -28,6 +28,7 @@ Engine* engine_new(Configuration* config) {
 	MAGIC_INIT(engine);
 
 	engine->config = config;
+	engine->runTimer = g_timer_new();
 
 	/* initialize the singleton-per-thread worker class */
 	engine->workerKey.index = 0;
@@ -64,7 +65,11 @@ void engine_free(Engine* engine) {
 	g_cond_free(engine->workersIdle);
 	g_mutex_free(engine->engineIdle);
 
-	message("clean engine shutdown");
+	GDateTime* dt_now = g_date_time_new_now_local();
+	gchar* dt_format = g_date_time_format(dt_now, "%F %H:%M:%S:%N");
+	message("clean engine shutdown at %s", dt_format);
+	g_date_time_unref(dt_now);
+	g_free(dt_format);
 
 	MAGIC_CLEAR(engine);
 	g_free(engine);

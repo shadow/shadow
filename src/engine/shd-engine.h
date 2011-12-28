@@ -36,6 +36,9 @@ struct _Engine {
 	/* general configuration options for the simulation */
 	Configuration* config;
 
+	/* tracks overall wall-clock runtime */
+	GTimer* runTimer;
+
 	/* global simulation time, rough approximate if multi-threaded */
 	SimulationTime clock;
 	/* minimum allowed time jump when sending events between nodes */

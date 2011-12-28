@@ -59,7 +59,12 @@ gint shadow_main(gint argc, gchar* argv[]) {
 	 * during cleanup below. */
 	GLogLevelFlags configuredLogLevel = configuration_getLogLevel(config);
 	g_log_set_default_handler(logging_handleLog, &(configuredLogLevel));
-	debug("log system initialized");
+
+	GDateTime* dt_now = g_date_time_new_now_local();
+	gchar* dt_format = g_date_time_format(dt_now, "%F %H:%M:%S:%N");
+	message("engine started, log system initialized at %s", dt_format);
+	g_date_time_unref(dt_now);
+	g_free(dt_format);
 
 #if 0 /* @todo: these are only avail in glib >= 2.30 */
 	/* setup signal handlers for gracefully handling shutdowns */

@@ -72,14 +72,14 @@ void logging_handleLog(const gchar *log_domain, GLogLevelFlags log_level, const 
 		return;
 	}
 
-	/* callback from GLib, no access to workers */
-	GDateTime* dt_now = g_date_time_new_now_local();
-	gchar* dt_format = g_date_time_format(dt_now, "%F %H:%M:%S:%N");
+	gulong hours, minutes, seconds, microseconds;
+	gulong elapsed = (gulong) g_timer_elapsed(shadow_engine->runTimer, &microseconds);
+	hours = elapsed / 3600;
+	elapsed %= 3600;
+	minutes = elapsed / 60;
+	seconds = elapsed % 60;
 
-	g_print("%s %s\n", dt_format, message);
-
-	g_date_time_unref(dt_now);
-	g_free(dt_format);
+	g_print("%lu:%lu:%lu:%06lu %s\n", hours, minutes, seconds, microseconds, message);
 
 	if(log_level & G_LOG_LEVEL_ERROR) {
 		g_print("\t**aborting**\n");
