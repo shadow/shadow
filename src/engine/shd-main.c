@@ -62,7 +62,7 @@ gint shadow_main(gint argc, gchar* argv[]) {
 
 	GDateTime* dt_now = g_date_time_new_now_local();
 	gchar* dt_format = g_date_time_format(dt_now, "%F %H:%M:%S:%N");
-	message("engine started, log system initialized at %s", dt_format);
+	message("Shadow v%s engine initialized at %s", SHADOW_VERSION, dt_format);
 	g_date_time_unref(dt_now);
 	g_free(dt_format);
 
@@ -139,6 +139,7 @@ gint shadow_main(gint argc, gchar* argv[]) {
 	/* cleanup */
 	configuration_free(config);
 	engine_free(shadow_engine);
+	shadow_engine = NULL;
 	worker_free(mainThreadWorker);
 
 	return retval;
