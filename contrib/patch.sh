@@ -26,3 +26,21 @@ mv src/or/cpuworker.c.patch src/or/cpuworker.c
 
 sed 's/set_socket_nonblocking(fd);//' src/or/cpuworker.c > src/or/cpuworker.c.patch
 mv src/or/cpuworker.c.patch src/or/cpuworker.c
+
+echo Patching or/main.c
+# multi-line static function definition
+sed ':a;N;$!ba;s/static void\nsecond_elapsed_callback/void\nsecond_elapsed_callback/' src/or/main.c > src/or/main.c.patch
+mv src/or/main.c.patch src/or/main.c
+
+# single line static function declaration
+sed 's/static void second_elapsed_callback/void second_elapsed_callback/' src/or/main.c > src/or/main.c.patch
+mv src/or/main.c.patch src/or/main.c
+
+# multi-line static function definition
+sed ':a;N;$!ba;s/static void\nrefill_callback/void\nrefill_callback/g' src/or/main.c > src/or/main.c.patch
+mv src/or/main.c.patch src/or/main.c
+
+# single line static function declaration
+sed 's/static void refill_callback/void refill_callback/g' src/or/main.c > src/or/main.c.patch
+mv src/or/main.c.patch src/or/main.c
+

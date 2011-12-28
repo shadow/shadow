@@ -52,6 +52,8 @@ def main():
             'global_read_bucket' : 'int',
             'global_write_bucket' : 'int',
             'second_timer' : 'periodic_timer_t *',
+            'refill_timer' : 'periodic_timer_t *',
+            'client_identitykey' : 'crypto_pk_env_t *',
             'active_linked_connection_lst' : 'smartlist_t *',
             'called_loop_once' : 'int',
             'n_sockets_open' : 'int'}

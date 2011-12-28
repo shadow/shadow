@@ -53,6 +53,7 @@ extern routerlist_t *router_get_routerlist(void);
 extern struct event_base * tor_libevent_get_base(void);
 extern void tor_cleanup(void);
 extern void second_elapsed_callback(periodic_timer_t *timer, void *arg);
+extern void refill_callback(periodic_timer_t *timer, void *arg);
 extern int identity_key_is_set(void);
 extern int init_keys(void);
 extern void init_cell_pool(void);

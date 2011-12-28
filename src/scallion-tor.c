@@ -110,14 +110,14 @@ gint scalliontor_start(ScallionTor* stor, gint argc, gchar *argv[]) {
 		return -1;
 	}
 
-	/* load the private keys, if we're supposed to have them, and set up the
-	* TLS context. */
-	if (! identity_key_is_set()) {
-		if (init_keys() < 0) {
-		  log_err(LD_BUG,"Error initializing keys; exiting");
-		  return -1;
-		}
-	}
+	  /* load the private keys, if we're supposed to have them, and set up the
+	   * TLS context. */
+	  if (client_identitykey == NULL) {
+	    if (init_keys() < 0) {
+	      log_err(LD_BUG,"Error initializing keys; exiting");
+	      return -1;
+	    }
+	  }
 
 	/* Set up the packed_cell_t memory pool. */
 	init_cell_pool();
@@ -170,7 +170,25 @@ gint scalliontor_start(ScallionTor* stor, gint argc, gchar *argv[]) {
 		tor_assert(second_timer);
 	}
 
-    event_base_loop(tor_libevent_get_base(), EVLOOP_NONBLOCK);
+	// FIXME this block should only appear if Tor > 0.2.3.5-alpha
+#ifndef USE_BUFFEREVENTS
+  if (!refill_timer) {
+    struct timeval refill_interval;
+    int msecs = get_options()->TokenBucketRefillInterval;
+
+    refill_interval.tv_sec =  msecs/1000;
+    refill_interval.tv_usec = (msecs%1000)*1000;
+
+    refill_timer = periodic_timer_new(tor_libevent_get_base(),
+                                      &refill_interval,
+                                      refill_callback,
+                                      NULL);
+    tor_assert(refill_timer);
+  }
+#endif
+    // end FIXME
+
+    event_base_loop(tor_libevent_get_base(), EVLOOP_ONCE|EVLOOP_NONBLOCK);
 
 	return 0;
 }
