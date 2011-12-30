@@ -85,13 +85,13 @@ void createnodes_run(CreateNodesAction* action) {
 		/* if we only have 1 id, we have symmetric bandwidth, otherwise asym as specified by cdfs */
 		if(!bwUpCDF || !bwDownCDF) {
 			CumulativeDistribution* symCDF = bwUpCDF != NULL ? bwUpCDF : bwDownCDF;
-			bwUpKiBps = bwDownKiBps = (guint32) cdf_getRandomValue(symCDF);
+			bwUpKiBps = bwDownKiBps = (guint32) worker_getRandomCDFValue(symCDF);
 		} else {
-			bwUpKiBps = (guint32) cdf_getRandomValue(bwUpCDF);
-			bwDownKiBps = (guint32) cdf_getRandomValue(bwDownCDF);
+			bwUpKiBps = (guint32) worker_getRandomCDFValue(bwUpCDF);
+			bwDownKiBps = (guint32) worker_getRandomCDFValue(bwDownCDF);
 		}
 
-		guint64 cpuBps = (guint64) cdf_getRandomValue(cpuCDF);
+		guint64 cpuBps = (guint64) worker_getRandomCDFValue(cpuCDF);
 
 		/* hostname */
 		GString* hostname = g_string_new(g_quark_to_string(action->id));

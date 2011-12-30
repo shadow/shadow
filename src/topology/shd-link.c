@@ -55,7 +55,7 @@ Network* link_getDestinationNetwork(Link* link) {
 
 gdouble link_getLatency(Link* link) {
 	MAGIC_ASSERT(link);
-	return cdf_getRandomValue(link->latency);
+	return worker_getRandomCDFValue(link->latency);
 }
 
 gdouble link_getReliability(Link* link) {

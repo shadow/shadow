@@ -21,11 +21,9 @@ add_library(shadow-plugin-filetransfer MODULE shd-filetransfer-plugin.c)
 target_link_libraries(shadow-plugin-filetransfer shadow-service-filetransfer)
 install(TARGETS shadow-plugin-filetransfer DESTINATION ${SHADOW_PLUGIN_DIR})
 
-## executables that can run outside of shadow
-#add_executable(shadow-fileserver shd-fileserver-main.c shd-fileserver.c)
-#target_link_libraries(shadow-fileserver ${GLIB_LIBRARIES})
-#add_executable(shadow-filegetter shd-filegetter-main.c shd-service-filegetter.c shd-filegetter.c ${SHADOW_SOURCE_DIR}/utility/shd-cdf.c ${SHADOW_SOURCE_DIR}/utility/rand.c)
-#target_link_libraries(shadow-filegetter ${RT_LIBRARIES} ${GLIB_LIBRARIES})
-#install(TARGETS shadow-fileserver shadow-filegetter DESTINATION bin)
+## executable that can run outside of shadow
+add_executable(shadow-filetransfer shd-filetransfer-main.c)
+target_link_libraries(shadow-filetransfer shadow-service-filetransfer ${RT_LIBRARIES} ${GLIB_LIBRARIES})
+install(TARGETS shadow-filetransfer DESTINATION bin)
 
 install(DIRECTORY ./ DESTINATION include/shadow FILES_MATCHING PATTERN "*.h")

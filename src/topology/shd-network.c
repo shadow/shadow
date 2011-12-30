@@ -125,7 +125,7 @@ gdouble network_sampleLinkLatency(Network* sourceNetwork, Network* destinationNe
 	MAGIC_ASSERT(destinationNetwork);
 	Link* link = g_hash_table_lookup(sourceNetwork->outgoingLinkMap, &(destinationNetwork->id));
 	if(link) {
-		return cdf_getRandomValue(link->latency);
+		return worker_getRandomCDFValue(link->latency);
 	} else {
 		critical("unable to find link between networks '%s' and '%s'. Check XML file for errors.",
 				g_quark_to_string(sourceNetwork->id), g_quark_to_string(destinationNetwork->id));

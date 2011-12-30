@@ -203,9 +203,3 @@ gdouble cdf_getValue(CumulativeDistribution* cdf, gdouble percentile) {
 
 	return (gdouble) 0;
 }
-
-gdouble cdf_getRandomValue(CumulativeDistribution* cdf) {
-	MAGIC_ASSERT(cdf);
-	gdouble percentile = random_nextDouble(worker_getPrivate()->random);
-	return cdf_getValue(cdf, percentile);
-}

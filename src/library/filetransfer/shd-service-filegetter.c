@@ -440,7 +440,8 @@ reactivate:;
 		} else {
 			if(sfg->type == SFG_MULTI && sfg->think_times != NULL) {
 				/* get think time and set wakeup timer */
-				guint sleeptime = (guint) (cdf_getRandomValue(sfg->think_times) / 1000);
+				gdouble percentile = (gdouble)(((gdouble)rand()) / ((gdouble)RAND_MAX));
+				guint sleeptime = (guint) (cdf_getValue(sfg->think_times, percentile) / 1000);
 
 				clock_gettime(CLOCK_REALTIME, &sfg->wakeup);
 				sfg->wakeup.tv_sec += sleeptime;

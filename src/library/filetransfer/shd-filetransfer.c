@@ -129,7 +129,13 @@ void filetransfer_new(int argc, char* argv[]) {
 			args.log_cb = &_filetransfer_logCallback;
 			args.hostbyname_cb = &_filetransfer_HostnameCallback;
 
-			service_filegetter_start_single(ft->client, &args, epolld, &sockd);
+			enum filegetter_code result = service_filegetter_start_single(ft->client, &args, epolld, &sockd);
+
+			if(result != FG_SUCCESS) {
+				ft->shadowlib->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "fileclient error, not started!");
+				g_free(ft->client);
+				ft->client = NULL;
+			}
 		} else if(g_strncasecmp(clientMode, "double", 6) == 0){
 			service_filegetter_double_args_t args;
 
@@ -146,7 +152,13 @@ void filetransfer_new(int argc, char* argv[]) {
 			args.hostbyname_cb = &_filetransfer_HostnameCallback;
 			args.sleep_cb = &_filetransfer_sleepCallback;
 
-			service_filegetter_start_double(ft->client, &args, epolld, &sockd);
+			enum filegetter_code result = service_filegetter_start_double(ft->client, &args, epolld, &sockd);
+
+			if(result != FG_SUCCESS) {
+				ft->shadowlib->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "fileclient error, not started!");
+				g_free(ft->client);
+				ft->client = NULL;
+			}
 		} else if(g_strncasecmp(clientMode, "multi", 5) == 0) {
 			service_filegetter_multi_args_t args;
 
@@ -164,7 +176,13 @@ void filetransfer_new(int argc, char* argv[]) {
 			args.hostbyname_cb = &_filetransfer_HostnameCallback;
 			args.sleep_cb = &_filetransfer_sleepCallback;
 
-			service_filegetter_start_multi(ft->client, &args, epolld, &sockd);
+			enum filegetter_code result = service_filegetter_start_multi(ft->client, &args, epolld, &sockd);
+
+			if(result != FG_SUCCESS) {
+				ft->shadowlib->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "fileclient error, not started!");
+				g_free(ft->client);
+				ft->client = NULL;
+			}
 		} else {
 			/* unknown client mode */
 			g_free(ft->client);
@@ -194,6 +212,8 @@ void filetransfer_new(int argc, char* argv[]) {
 			ft->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "fileserver running on at %s:%u", inet_ntoa((struct in_addr){listenIP}), listenPort);
 		} else {
 			ft->shadowlib->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "fileserver error, not started!");
+			g_free(ft->server);
+			ft->server = NULL;
 		}
 	} else {
 		/* not client or server... */
