@@ -322,7 +322,7 @@ guint packet_copyPayload(Packet* packet, gsize payloadOffset, gpointer buffer, g
 	guint copyLength = MIN(targetLength, bufferLength);
 
 	if(copyLength > 0) {
-		g_memmove(buffer, packet->payload, copyLength);
+		g_memmove(buffer, packet->payload + payloadOffset, copyLength);
 	}
 
 	_packet_unlock(packet);
