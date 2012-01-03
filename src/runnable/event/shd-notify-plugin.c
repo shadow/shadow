@@ -41,9 +41,13 @@ void notifyplugin_run(NotifyPluginEvent* event, Node* node) {
 	MAGIC_ASSERT(event);
 
 	/* check in with epoll to make sure we should carry out the notification */
-	Descriptor* epoll = node_lookupDescriptor(node, event->epollHandle);
-	if(epoll_isReadyToNotify((Epoll*)epoll)) {
+	Epoll* epoll = (Epoll*) node_lookupDescriptor(node, event->epollHandle);
+
+	if(epoll_isReadyToNotify(epoll)) {
 		application_notify(node_getApplication(node));
+
+		/* check if we need to be notified again */
+		epoll_ensureTriggers(epoll);
 	}
 }
 

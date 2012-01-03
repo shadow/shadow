@@ -95,20 +95,34 @@ void echopipe_ready(EchoPipe* epipe) {
 	}
 
 	for(int i = 0; i < nfds; i++) {
+		gint socketd = events[i].data.fd;
+
 		if(!(epipe->didRead) && (events[i].events & EPOLLIN)) {
-			read(events[i].data.fd, epipe->outputBuffer, BUFFERSIZE);
-			close(events[i].data.fd);
+			read(socketd, epipe->outputBuffer, BUFFERSIZE);
+
 			if(memcmp(epipe->inputBuffer, epipe->outputBuffer, BUFFERSIZE)) {
 				epipe->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "inconsistent echo received!");
 			} else {
 				epipe->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "consistent echo received!");
 			}
+
+			if(epoll_ctl(epipe->epolld, EPOLL_CTL_DEL, socketd, NULL) == -1) {
+				epipe->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_ctl");
+			}
+
+			close(socketd);
 			epipe->didRead = TRUE;
 		}
+
 		if(!(epipe->didWrite) && (events[i].events & EPOLLOUT)) {
 			_echopipe_fillCharBuffer(epipe->inputBuffer, BUFFERSIZE);
-			write(events[i].data.fd, (gconstpointer) epipe->inputBuffer, BUFFERSIZE);
-			close(events[i].data.fd);
+			write(socketd, (gconstpointer) epipe->inputBuffer, BUFFERSIZE);
+
+			if(epoll_ctl(epipe->epolld, EPOLL_CTL_DEL, socketd, NULL) == -1) {
+				epipe->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_ctl");
+			}
+
+			close(socketd);
 			epipe->didWrite = TRUE;
 		}
 	}

@@ -49,6 +49,7 @@ CPU* node_getCPU(Node* node);
 Network* node_getNetwork(Node* node);
 gchar* node_getName(Node* node);
 in_addr_t node_getDefaultIP(Node* node);
+gchar* node_getDefaultIPName(Node* node);
 Application* node_getApplication(Node* node);
 
 gint node_createDescriptor(Node* node, enum DescriptorType type);

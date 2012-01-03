@@ -49,6 +49,8 @@ struct _Node {
 	/* all file, socket, and epoll descriptors we know about and track */
 	GHashTable* descriptors;
 	gint descriptorHandleCounter;
+
+	/* random port counter, in host order */
 	in_port_t randomPortCounter;
 
 	MAGIC_DECLARE;
@@ -81,7 +83,9 @@ Node* node_new(GQuark id, Network* network, Software* software, guint32 ip, GStr
 	/* virtual descriptor management */
 	node->descriptors = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, descriptor_unref);
 	node->descriptorHandleCounter = MIN_DESCRIPTOR;
-	node->randomPortCounter = htons(MIN_RANDOM_PORT);
+
+	/* host order so increments make sense */
+	node->randomPortCounter = MIN_RANDOM_PORT;
 
 	/* applications this node will run */
 	node->application = application_new(software);
@@ -212,6 +216,11 @@ gchar* node_getName(Node* node) {
 in_addr_t node_getDefaultIP(Node* node) {
 	MAGIC_ASSERT(node);
 	return networkinterface_getIPAddress(node->defaultInterface);
+}
+
+gchar* node_getDefaultIPName(Node* node) {
+	MAGIC_ASSERT(node);
+	return networkinterface_getIPName(node->defaultInterface);
 }
 
 Application* node_getApplication(Node* node) {
@@ -486,8 +495,8 @@ static in_port_t _node_getRandomFreePort(Node* node, in_addr_t interfaceIP,
 	gboolean available = FALSE;
 
 	while(!available) {
-		randomPort = (node->randomPortCounter)++;
-		g_assert(randomPort >= htons(MIN_RANDOM_PORT));
+		randomPort = htons((node->randomPortCounter)++);
+		g_assert(node->randomPortCounter >= MIN_RANDOM_PORT);
 		available = _node_isInterfaceAvailable(node, interfaceIP, type, randomPort);
 	}
 
@@ -761,7 +770,11 @@ gint node_sendUserData(Node* node, gint handle, gconstpointer buffer, gsize nByt
 	if(type == DT_TCPSOCKET) {
 		gint error = tcp_getConnectError((TCP*) transport);
 		if(error != EISCONN) {
-			return error;
+			if(error == EALREADY) {
+				return EWOULDBLOCK;
+			} else {
+				return error;
+			}
 		}
 	}
 

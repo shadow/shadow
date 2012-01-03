@@ -487,8 +487,12 @@ static Packet* _tcp_createPacket(TCP* tcp, enum ProtocolTCPFlags flags, gconstpo
 static gsize _tcp_getBufferSpaceOut(TCP* tcp) {
 	MAGIC_ASSERT(tcp);
 	/* account for throttled and retransmission buffer */
-	gssize space = (gssize)(socket_getOutputBufferSpace(&(tcp->super)) - tcp->throttledOutputLength - tcp->retransmissionLength);
-	return MAX(0, space);
+	gssize s = (gssize)(socket_getOutputBufferSpace(&(tcp->super)) - tcp->throttledOutputLength - tcp->retransmissionLength);
+	gsize space = MAX(0, s);
+	if(space == 0) {
+		descriptor_adjustStatus((Descriptor*)tcp, DS_WRITABLE, FALSE);
+	}
+	return space;
 }
 
 static void _tcp_bufferPacketOut(TCP* tcp, Packet* packet) {
@@ -769,20 +773,24 @@ gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 
 	/* now we have the true TCP for the packet */
 	MAGIC_ASSERT(tcp);
-	debug("%s: processing packet seq# %u from %s", tcp->super.boundString,
+	debug("%s: processing packet# %u from %s", tcp->super.boundString,
 			header.sequence, tcp->super.peerString);
 
 	/* if packet is reset, don't process */
 	if(header.flags & PTCP_RST) {
 		/* @todo: not sure if this is handled correctly */
 		debug("received RESET packet");
-		tcp->error |= TCPE_CONNECTION_RESET;
 
-		tcp->flags |= TCPF_REMOTE_CLOSED;
-		_tcp_setState(tcp, TCPS_TIMEWAIT);
+		if(!(tcp->error & TCPE_CONNECTION_RESET)) {
+			tcp->error |= TCPE_CONNECTION_RESET;
+			tcp->flags |= TCPF_REMOTE_CLOSED;
 
-		/* it will send no more user data after what we have now */
-		tcp->receive.end = tcp->receive.next;
+			_tcp_setState(tcp, TCPS_TIMEWAIT);
+
+			/* it will send no more user data after what we have now */
+			tcp->receive.end = tcp->receive.next;
+		}
+
 		packet_unref(packet);
 		return FALSE;
 	}
@@ -877,7 +885,7 @@ gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 				responseFlags |= (PTCP_FIN|PTCP_ACK);
 				_tcp_setState(tcp, TCPS_CLOSEWAIT);
 
-				/* it will send no more user data after this sequence */
+				/* remote will send us no more user data after this sequence */
 				tcp->receive.end = header.sequence;
 			}
 			break;
@@ -1083,6 +1091,7 @@ void tcp_droppedPacket(TCP* tcp, Packet* packet) {
 static void _tcp_endOfFileSignalled(TCP* tcp) {
 	MAGIC_ASSERT(tcp);
 
+	debug("%s: signaling close to user, socket no longer usable", tcp->super.boundString);
 	tcp->flags |= TCPF_EOF_SIGNALED;
 
 	/* user can no longer access socket */
@@ -1142,13 +1151,6 @@ gssize tcp_receiveUserData(TCP* tcp, gpointer buffer, gsize nBytes, in_addr_t* i
 	/* make sure we pull in all readable user data */
 	_tcp_flush(tcp);
 
-	/* return 0 to signal close, if necessary */
-	if(tcp->error & TCPE_RECEIVE_EOF)
-	{
-		_tcp_endOfFileSignalled(tcp);
-		return 0;
-	}
-
 	gsize remaining = nBytes;
 	gsize bytesCopied = 0;
 	gsize offset = 0;
@@ -1202,6 +1204,14 @@ gssize tcp_receiveUserData(TCP* tcp, gpointer buffer, gsize nBytes, in_addr_t* i
 		}
 	}
 
+	/* return 0 to signal close if we have EOF and no more data */
+	if((tcp->unorderedInputLength == 0) && (tcp->super.inputBufferLength == 0) &&
+			(tcp->error & TCPE_RECEIVE_EOF) && (bytesCopied == 0))
+	{
+		_tcp_endOfFileSignalled(tcp);
+		return 0;
+	}
+
 	debug("%s: receiving %lu user bytes from %s", tcp->super.boundString,
 			bytesCopied, tcp->super.peerString);
 
@@ -1245,6 +1255,7 @@ void tcp_free(TCP* tcp) {
 void tcp_close(TCP* tcp) {
 	MAGIC_ASSERT(tcp);
 
+	debug("%s: user called close", tcp->super.boundString);
 	tcp->flags |= TCPF_LOCAL_CLOSED;
 
 	switch (tcp->state) {

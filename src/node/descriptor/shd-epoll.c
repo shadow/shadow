@@ -34,8 +34,6 @@ enum EpollFlags {
 	EF_NONE = 0,
 	/* callback is currently scheduled to notify user */
 	EF_SCHEDULED = 1 << 0,
-	/* we should cancel the callback and self-destruct */
-	EF_CANCELED = 1 << 1,
 };
 
 struct _Epoll {
@@ -43,7 +41,11 @@ struct _Epoll {
 
 	/* other members specific to epoll */
 	enum EpollFlags flags;
-	GHashTable* watchedDescriptors;
+
+	/* wrappers for descriptors we are watching for events */
+	GHashTable* watches;
+	/* wrappers for descriptors with events that should be reported to user */
+	GHashTable* reports;
 
 	gint osEpollDescriptor;
 	SimulationTime lastWaitTime;
@@ -60,7 +62,7 @@ static EpollWatch* _epollwatch_new(Epoll* epoll, Descriptor* descriptor, struct 
 	 * (which is freed below in _epollwatch_free) */
 	descriptor_ref(descriptor);
 
-	watch->listener = listener_new(epoll_descriptorStatusChanged, epoll, descriptor);
+	watch->listener = listener_new((CallbackFunc)epoll_descriptorStatusChanged, epoll, descriptor);
 	watch->descriptor = descriptor;
 	watch->event = *event;
 
@@ -87,7 +89,8 @@ static void _epoll_free(gpointer data) {
 	MAGIC_ASSERT(epoll);
 
 	/* this will go through all epollwatch items and remove the listeners */
-	g_hash_table_destroy(epoll->watchedDescriptors);
+	g_hash_table_destroy(epoll->watches);
+	g_hash_table_destroy(epoll->reports);
 
 	close(epoll->osEpollDescriptor);
 
@@ -115,7 +118,8 @@ Epoll* epoll_new(gint handle) {
 	descriptor_init(&(epoll->super), DT_EPOLL, &epollFunctions, handle);
 
 	/* allocate backend needed for managing events for this descriptor */
-	epoll->watchedDescriptors = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, _epollwatch_free);
+	epoll->watches = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, _epollwatch_free);
+	epoll->reports = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, NULL);
 
 	/* the application may want us to watch some system files, so we need a
 	 * real OS epoll fd so we can offload that task.
@@ -130,14 +134,65 @@ Epoll* epoll_new(gint handle) {
 
 static gboolean _epoll_isWatchingDescriptor(Epoll* epoll, Descriptor* descriptor) {
 
-	EpollWatch* watch = g_hash_table_lookup(epoll->watchedDescriptors,
+	EpollWatch* watch = g_hash_table_lookup(epoll->watches,
 			descriptor_getHandleReference(descriptor));
 	return watch == NULL ? FALSE : TRUE;
+}
+
+static gboolean _epollwatch_needsNotify(EpollWatch* watch) {
+	MAGIC_ASSERT(watch);
+
+	/* check status */
+	enum DescriptorStatus status = descriptor_getStatus(watch->descriptor);
+
+	/* check if we care about the status */
+	gboolean isActive = (status & DS_ACTIVE) ? TRUE : FALSE;
+	gboolean isReadable = (status & DS_READABLE) ? TRUE : FALSE;
+	gboolean waitingReadable = (watch->event.events & EPOLLIN) ? TRUE : FALSE;
+	gboolean isWritable = (status & DS_WRITABLE) ? TRUE : FALSE;
+	gboolean waitingWritable = (watch->event.events & EPOLLOUT) ? TRUE : FALSE;
+
+	if(isActive && ((isReadable && waitingReadable) || (isWritable && waitingWritable))) {
+		return TRUE;
+	} else {
+		return FALSE;
+	}
+}
+
+static void _epoll_check(Epoll* epoll, EpollWatch* watch) {
+	MAGIC_ASSERT(epoll);
+	MAGIC_ASSERT(watch);
+
+	/* check if we need to schedule a notification */
+	gboolean needsNotify = _epollwatch_needsNotify(watch);
+	gboolean isScheduled = (epoll->flags & EF_SCHEDULED) ? TRUE : FALSE;
+
+	gpointer watchKey = descriptor_getHandleReference(watch->descriptor);
+
+	if(needsNotify) {
+		/* we need to report an event to user */
+		g_hash_table_replace(epoll->reports, watchKey, watch);
+
+		if(!isScheduled) {
+			/* schedule a notification event for our node */
+			NotifyPluginEvent* event = notifyplugin_new(epoll->super.handle);
+			SimulationTime delay = 1;
+			worker_scheduleEvent((Event*)event, delay, 0);
+
+			epoll->flags |= EF_SCHEDULED;
+		}
+	} else {
+		/* no longer needs reporting */
+		g_hash_table_remove(epoll->reports, watchKey);
+	}
 }
 
 gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor,
 		struct epoll_event* event) {
 	MAGIC_ASSERT(epoll);
+
+	debug("epoll descriptor %i, operation %i, descriptor %i",
+			epoll->super.handle, operation, descriptor->handle);
 
 	switch (operation) {
 		case EPOLL_CTL_ADD: {
@@ -149,10 +204,10 @@ gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor,
 
 			/* start watching for status changes */
 			EpollWatch* watch = _epollwatch_new(epoll, descriptor, event);
-			g_hash_table_replace(epoll->watchedDescriptors, descriptor_getHandleReference(descriptor), watch);
+			g_hash_table_replace(epoll->watches, descriptor_getHandleReference(descriptor), watch);
 
-			/* make sure to initiate a callback if we are ready right now */
-			epoll_descriptorStatusChanged(epoll, descriptor);
+			/* initiate a callback if the new watched descriptor is ready */
+			_epoll_check(epoll, watch);
 
 			break;
 		}
@@ -164,11 +219,14 @@ gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor,
 				return ENOENT;
 			}
 
-			EpollWatch* watch = g_hash_table_lookup(epoll->watchedDescriptors,
+			EpollWatch* watch = g_hash_table_lookup(epoll->watches,
 						descriptor_getHandleReference(descriptor));
 
 			g_assert(watch && event);
 			watch->event = *event;
+
+			/* initiate a callback if the new event type on the watched descriptor is ready */
+			_epoll_check(epoll, watch);
 
 			break;
 		}
@@ -180,7 +238,7 @@ gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor,
 				return ENOENT;
 			}
 
-			g_hash_table_remove(epoll->watchedDescriptors, descriptor_getHandleReference(descriptor));
+			g_hash_table_remove(epoll->watches, descriptor_getHandleReference(descriptor));
 
 			break;
 		}
@@ -211,7 +269,7 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray,
 	GHashTableIter iter;
 	gpointer key, value;
 	gint i = 0;
-	g_hash_table_iter_init(&iter, epoll->watchedDescriptors);
+	g_hash_table_iter_init(&iter, epoll->watches);
 
 	while(g_hash_table_iter_next(&iter, &key, &value)) {
 		EpollWatch* watch = value;
@@ -227,9 +285,15 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray,
 		gboolean waitingWritable = (watch->event.events & EPOLLOUT) ? TRUE : FALSE;
 
 		if((isReadable && waitingReadable) || (isWritable && waitingWritable)) {
+			/* report the event */
 			eventArray[i] = watch->event;
 			eventArray[i].events =
 					isReadable && isWritable ? EPOLLIN|EPOLLOUT : isReadable ? EPOLLIN : EPOLLOUT;
+
+			/* no longer needs to be reported. if the user does not take action,
+			 * we'll mark it as needs reporting again in ensureNotifyTriggers */
+			g_hash_table_remove(epoll->reports, descriptor_getHandleReference(watch->descriptor));
+
 			i++;
 		}
 
@@ -242,6 +306,7 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray,
 	if(i < eventArrayLength) {
 		/* now we have to get events from the OS descriptors */
 		struct epoll_event osEvents[20];
+		/* since we are in shadow context, this will be forwarded to the OS epoll */
 		gint nos = epoll_wait(epoll->osEpollDescriptor, osEvents, 20, 0);
 
 		if(nos == -1) {
@@ -263,48 +328,32 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray,
 	return 0;
 }
 
-static gboolean _epollwatch_needsNotify(EpollWatch* watch) {
-	MAGIC_ASSERT(watch);
-
-	/* check status */
-	enum DescriptorStatus status = descriptor_getStatus(watch->descriptor);
-
-	/* check if we care about the status */
-	gboolean isActive = (status & DS_ACTIVE) ? TRUE : FALSE;
-	gboolean isReadable = (status & DS_READABLE) ? TRUE : FALSE;
-	gboolean waitingReadable = (watch->event.events & EPOLLIN) ? TRUE : FALSE;
-	gboolean isWritable = (status & DS_WRITABLE) ? TRUE : FALSE;
-	gboolean waitingWritable = (watch->event.events & EPOLLOUT) ? TRUE : FALSE;
-
-	if(isActive && ((isReadable && waitingReadable) || (isWritable && waitingWritable))) {
-		return TRUE;
-	} else {
-		return FALSE;
-	}
-}
-
-void epoll_descriptorStatusChanged(gpointer data, gpointer callbackArgument) {
-	Epoll* epoll = data;
+void epoll_descriptorStatusChanged(Epoll* epoll, Descriptor* descriptor) {
 	MAGIC_ASSERT(epoll);
-	Descriptor* descriptor = callbackArgument;
 
 	/* make sure we are actually watching the descriptor */
-	EpollWatch* watch = g_hash_table_lookup(epoll->watchedDescriptors,
+	EpollWatch* watch = g_hash_table_lookup(epoll->watches,
 			descriptor_getHandleReference(descriptor));
+
 	/* if we are not watching, its an error because we shouldn't be listening */
 	g_assert(watch && (watch->descriptor == descriptor));
 
-	/* check if we need to schedule a notification */
-	gboolean needsNotify = _epollwatch_needsNotify(watch);
-	gboolean isScheduled = (epoll->flags & EF_SCHEDULED) ? TRUE : FALSE;
-	if(needsNotify && !isScheduled) {
-		epoll->flags |= EF_SCHEDULED;
-		NotifyPluginEvent* event = notifyplugin_new(epoll->super.handle);
-		SimulationTime delay = 1;
-		/* notify ourselves */
-		worker_scheduleEvent((Event*)event, delay, 0);
-	} else if(!needsNotify && isScheduled) {
-		epoll->flags |= EF_CANCELED;
+	/* trigger notify if needed */
+	_epoll_check(epoll, watch);
+}
+
+void epoll_ensureTriggers(Epoll* epoll) {
+	MAGIC_ASSERT(epoll);
+
+	/* check all of our watched descriptors and schedule a notification if there
+	 * are any with events that need to be reported */
+	GHashTableIter iter;
+	gpointer key, value;
+	g_hash_table_iter_init(&iter, epoll->watches);
+
+	while(g_hash_table_iter_next(&iter, &key, &value)) {
+		EpollWatch* watch = value;
+		_epoll_check(epoll, watch);
 	}
 }
 
@@ -314,12 +363,11 @@ gboolean epoll_isReadyToNotify(Epoll* epoll) {
 	/* event is being executed from the scheduler */
 	epoll->flags &= ~EF_SCHEDULED;
 
-	/* double check that we should actually notify the plugin */
-	if(epoll->flags & EF_CANCELED) {
-		epoll->flags &= ~EF_CANCELED;
-		return FALSE;
-	} else {
+	/* we should notify the plugin only if we still have some events to report */
+	if(g_hash_table_size(epoll->reports) > 0) {
 		return TRUE;
+	} else {
+		return FALSE;
 	}
 }
 

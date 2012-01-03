@@ -304,6 +304,11 @@ static void _echotcp_clientReadable(EchoClient* ec, gint socketd) {
 			} else {
 				ec->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "consistent echo received!");
 			}
+
+			if(epoll_ctl(ec->epolld, EPOLL_CTL_DEL, socketd, NULL) == -1) {
+				ec->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_ctl");
+			}
+
 			close(socketd);
 		} else {
 			ec->log(G_LOG_LEVEL_INFO, __FUNCTION__, "echo progress: %i of %i bytes", ec->recv_offset, ec->amount_sent);
@@ -387,7 +392,7 @@ static void _echotcp_clientWritable(EchoClient* ec, gint socketd) {
 }
 
 static void _echotcp_serverWritable(EchoServer* es, gint socketd) {
-	es->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "trying to read socket %i", socketd);
+	es->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "trying to write socket %i", socketd);
 
 	/* echo it back to the client on the same sd,
 	 * also taking care of data that is still hanging around from previous reads. */

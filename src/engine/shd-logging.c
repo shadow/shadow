@@ -91,7 +91,7 @@ void logging_logv(const gchar *log_domain, GLogLevelFlags log_level, const gchar
 	Worker* w = worker_getPrivate();
 
 	/* format the simulation time if we are running an event */
-	GString* simtime = NULL;
+	GString* clockStringBuffer = g_string_new("");
 	if(w->clock_now != SIMTIME_INVALID) {
 		SimulationTime hours, minutes, seconds, remainder;
 		remainder = w->clock_now;
@@ -103,16 +103,23 @@ void logging_logv(const gchar *log_domain, GLogLevelFlags log_level, const gchar
 		seconds = remainder / SIMTIME_ONE_SECOND;
 		remainder %= SIMTIME_ONE_SECOND;
 
-		simtime = g_string_new("");
-		g_string_append_printf(simtime, "%lu:%lu:%lu:%09lu", hours, minutes, seconds, remainder);
+		g_string_printf(clockStringBuffer, "%lu:%lu:%lu:%09lu", hours, minutes, seconds, remainder);
+	} else {
+		g_string_printf(clockStringBuffer, "n/a");
 	}
 
-	/* the time - we'll need to free clockString later */
-	gchar* clockString = !simtime ? g_strdup("n/a") : g_string_free(simtime, FALSE);
+	/* we'll need to free clockString later */
+	gchar* clockString = g_string_free(clockStringBuffer, FALSE);
 
 	/* node identifier, if we are running a node
 	 * dont free this since we dont own the ip address string */
-	const gchar* nodeString = !w->cached_node ? "n/a" : node_getName(w->cached_node);
+	GString* nodeStringBuffer = g_string_new("");
+	if(w->cached_node) {
+		g_string_printf(nodeStringBuffer, "%s-%s", node_getName(w->cached_node), node_getDefaultIPName(w->cached_node));
+	} else {
+		g_string_printf(nodeStringBuffer, "n/a");
+	}
+	gchar* nodeString = g_string_free(nodeStringBuffer, FALSE);
 
 	/* the function name - no need to free this */
 	const gchar* functionString = !functionName ? "n/a" : functionName;
@@ -135,6 +142,7 @@ void logging_logv(const gchar *log_domain, GLogLevelFlags log_level, const gchar
 	/* cleanup */
 	g_free(newLogFormat);
 	g_free(clockString);
+	g_free(nodeString);
 }
 
 void logging_log(const gchar *log_domain, GLogLevelFlags log_level, const gchar* functionName, const gchar *format, ...) {

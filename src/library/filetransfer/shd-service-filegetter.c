@@ -413,11 +413,15 @@ reactivate:;
 
 	if(result == FG_ERR_FATAL) {
 		/* it had to shut down, lets try again */
-		service_filegetter_log(sfg, SFG_NOTICE, "filegetter shutdown due to iinternal error... restarting");
+		service_filegetter_log(sfg, SFG_NOTICE, "filegetter shutdown due to internal fatal error... restarting");
 		filegetter_shutdown(&sfg->fg);
 		filegetter_start(&sfg->fg, sfg->fg.epolld);
 		service_filegetter_download_next(sfg);
 		goto reactivate;
+	} else if(result != FG_OK_200 && result != FG_ERR_WOULDBLOCK) {
+		service_filegetter_log(sfg, SFG_CRITICAL, "filegetter shutdown due to protocol error...");
+		filegetter_shutdown(&sfg->fg);
+		return result;
 	}
 
 	/* report progress */

@@ -229,6 +229,11 @@ static void _echoudp_clientReadable(EchoClient* ec, gint socketd) {
 			} else {
 				ec->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "consistent echo received!");
 			}
+
+			if(epoll_ctl(ec->epolld, EPOLL_CTL_DEL, socketd, NULL) == -1) {
+				ec->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_ctl");
+			}
+
 			close(socketd);
 		} else {
 			ec->log(G_LOG_LEVEL_INFO, __FUNCTION__, "echo progress: %i of %i bytes", ec->recv_offset, ec->amount_sent);
