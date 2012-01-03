@@ -99,6 +99,22 @@ void scalliontor_free(ScallionTor* stor) {
 	g_free(stor);
 }
 
+static void _scalliontor_secondCallback(ScallionTor* stor) {
+	second_elapsed_callback(NULL, NULL);
+	if(stor) {
+		stor->shadowlibFuncs->createCallback((ShadowPluginCallbackFunc)_scalliontor_secondCallback,
+				stor, 1000);
+	}
+}
+
+static void _scalliontor_refillCallback(ScallionTor* stor) {
+	refill_callback(NULL, NULL);
+	if(stor) {
+		stor->shadowlibFuncs->createCallback((ShadowPluginCallbackFunc)_scalliontor_refillCallback,
+				stor, stor->refillmsecs);
+	}
+}
+
 gint scalliontor_start(ScallionTor* stor, gint argc, gchar *argv[]) {
 	time_t now = time(NULL);
 
@@ -159,31 +175,35 @@ gint scalliontor_start(ScallionTor* stor, gint argc, gchar *argv[]) {
 
 	/* set up once-a-second callback. */
 	if (! second_timer) {
-		struct timeval one_second;
-		one_second.tv_sec = 1;
-		one_second.tv_usec = 0;
+//		struct timeval one_second;
+//		one_second.tv_sec = 1;
+//		one_second.tv_usec = 0;
+//
+//		second_timer = periodic_timer_new(tor_libevent_get_base(),
+//										  &one_second,
+//										  second_elapsed_callback,
+//										  NULL);
+//		tor_assert(second_timer);
 
-		second_timer = periodic_timer_new(tor_libevent_get_base(),
-										  &one_second,
-										  second_elapsed_callback,
-										  NULL);
-		tor_assert(second_timer);
+		_scalliontor_secondCallback(stor);
 	}
 
 	// FIXME this block should only appear if Tor > 0.2.3.5-alpha
 #ifndef USE_BUFFEREVENTS
   if (!refill_timer) {
-    struct timeval refill_interval;
     int msecs = get_options()->TokenBucketRefillInterval;
-
-    refill_interval.tv_sec =  msecs/1000;
-    refill_interval.tv_usec = (msecs%1000)*1000;
-
-    refill_timer = periodic_timer_new(tor_libevent_get_base(),
-                                      &refill_interval,
-                                      refill_callback,
-                                      NULL);
-    tor_assert(refill_timer);
+//    struct timeval refill_interval;
+//
+//    refill_interval.tv_sec =  msecs/1000;
+//    refill_interval.tv_usec = (msecs%1000)*1000;
+//
+//    refill_timer = periodic_timer_new(tor_libevent_get_base(),
+//                                      &refill_interval,
+//                                      refill_callback,
+//                                      NULL);
+//    tor_assert(refill_timer);
+    stor->refillmsecs = msecs;
+	_scalliontor_refillCallback(stor);
   }
 #endif
     // end FIXME

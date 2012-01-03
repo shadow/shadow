@@ -25,6 +25,7 @@ def main():
             'tor_libevent_get_base',
             'tor_cleanup',
             'second_elapsed_callback',
+            'refill_callback',
             'identity_key_is_set',
             'client_identity_key_is_set',
             'init_keys',

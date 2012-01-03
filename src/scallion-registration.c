@@ -29,7 +29,7 @@ const char tor_git_revision[] = "";
 #include "tor_externs.h"
 
 void scallion_register_globals(PluginFunctionTable* scallionFuncs, Scallion* scallionData) {
-	scallionData->shadowlibFuncs->registerPlugin(scallionFuncs, 416,
+	scallionData->shadowlibFuncs->registerPlugin(scallionFuncs, 417,
 		(gsize) sizeof(Scallion), (gpointer) scallionData,
 		(gsize) 0x4, (gpointer) &gzip_is_supported,
 		(gsize) 0x68, (gpointer) &orconn_circid_map_PRIMES,
@@ -62,6 +62,7 @@ void scallion_register_globals(PluginFunctionTable* scallionFuncs, Scallion* sca
 		(gsize) 0x4, (gpointer) &mostly_read,
 		(gsize) 0x8, (gpointer) &networkstatus_v2_list,
 		(gsize) 0x8, (gpointer) &last_rotated_x509_certificate,
+		(gsize) 0x8, (gpointer) &stats_n_certs_cells_processed,
 		(gsize) 0x8, (gpointer) &owning_controller_process_spec,
 		(gsize) 0x4, (gpointer) &guard_bandwidth_excluding_exits,
 		(gsize) 0x8, (gpointer) &cached_consensuses,
@@ -102,6 +103,7 @@ void scallion_register_globals(PluginFunctionTable* scallionFuncs, Scallion* sca
 		(gsize) 0x8, (gpointer) &second_timer,
 		(gsize) 0x4, (gpointer) &_log_global_min_severity,
 		(gsize) 0x18, (gpointer) &bidi_map,
+		(gsize) 0x8, (gpointer) &last_culled_cpuworkers,
 		(gsize) 0x4, (gpointer) &arrays_initialized,
 		(gsize) 0x20, (gpointer) &pending_consensuses,
 		(gsize) 0x18, (gpointer) &delay_limit,
@@ -328,7 +330,6 @@ void scallion_register_globals(PluginFunctionTable* scallionFuncs, Scallion* sca
 		(gsize) 0x4, (gpointer) &num_cpus,
 		(gsize) 0x70, (gpointer) &cached_runningrouters,
 		(gsize) 0x18, (gpointer) &dirreq_map,
-		(gsize) 0x8, (gpointer) &stats_n_cert_cells_processed,
 		(gsize) 0x8, (gpointer) &time_to_check_port_forwarding,
 		(gsize) 0xff8, (gpointer) &circ_times,
 		(gsize) 0x4, (gpointer) &use_unsafe_renegotiation_flag,

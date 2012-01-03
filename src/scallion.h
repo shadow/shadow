@@ -93,6 +93,7 @@ struct _ScallionTor {
 	char v3bw_name[255];
 	enum vtor_nodetype type;
 	unsigned int bandwidth;
+	int refillmsecs;
 	vtor_cpuworker_tp cpuw;
 	ShadowlibFunctionTable* shadowlibFuncs;
 };
