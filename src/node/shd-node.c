@@ -771,6 +771,8 @@ gint node_sendUserData(Node* node, gint handle, gconstpointer buffer, gsize nByt
 		gint error = tcp_getConnectError((TCP*) transport);
 		if(error != EISCONN) {
 			if(error == EALREADY) {
+				/* we should not be writing if the connection is not ready */
+				descriptor_adjustStatus(descriptor, DS_WRITABLE, FALSE);
 				return EWOULDBLOCK;
 			} else {
 				return error;

@@ -33,7 +33,6 @@ void descriptor_init(Descriptor* descriptor, enum DescriptorType type,
 	descriptor->type = type;
 	descriptor->readyListeners = NULL;
 	descriptor->referenceCount = 1;
-	descriptor->status = DS_WRITABLE;
 }
 
 static void _descriptor_free(Descriptor* descriptor) {
