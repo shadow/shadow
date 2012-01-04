@@ -7,8 +7,8 @@ TestingTorNetwork 1
 AllowInvalidNodes "entry,middle,exit,introduction,rendezvous"
 
 ServerDNSDetectHijacking 0
-NumCPUs 0
-Log notice stdout
+NumCPUs 1
+Log debug stdout
 #Log notice file auth.notice.log
 SafeLogging 0
 #GeoIPFile geoip

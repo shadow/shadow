@@ -208,7 +208,8 @@ gint scalliontor_start(ScallionTor* stor, gint argc, gchar *argv[]) {
 #endif
     // end FIXME
 
-    event_base_loop(tor_libevent_get_base(), EVLOOP_ONCE|EVLOOP_NONBLOCK);
+    /* run the startup events */
+    scalliontor_notify(stor);
 
 	return 0;
 }
@@ -303,7 +304,7 @@ void scalliontor_notify(ScallionTor* stor) {
 	update_approx_time(time(NULL));
 
 	/* tell libevent to check epoll and activate the ready sockets without blocking */
-	event_base_loop(tor_libevent_get_base(), EVLOOP_ONCE|EVLOOP_NONBLOCK);
+	event_base_loop(tor_libevent_get_base(), EVLOOP_NONBLOCK);
 }
 
 /*

@@ -6,9 +6,9 @@ TestingTorNetwork 1
 AllowInvalidNodes "entry,middle,exit,introduction,rendezvous"
 
 ServerDNSDetectHijacking 0
-NumCPUs 0
+NumCPUs 1
 #Log notice file client.notice.log
-Log notice stdout
+Log debug stdout
 SafeLogging 0
 #GeoIPFile geoip
 ContactInfo jansen@cs.umn.edu

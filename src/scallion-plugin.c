@@ -323,7 +323,7 @@ static void _scallion_new(gint argc, gchar* argv[]) {
 			return;
 		}
 
-		scallion.shadowlibFuncs->createCallback(&scallion_start_socks_client, launch, 180000);
+		scallion.shadowlibFuncs->createCallback(&scallion_start_socks_client, launch, 600000);
 	}
 
 }

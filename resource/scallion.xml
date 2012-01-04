@@ -26,7 +26,7 @@
 <software name="exitb" plugin="scallion" time="900" arguments="exitrelay 300 /home/rob/test/vanilla/exit.torrc /home/rob/test/vanilla/data/exitdata /home/rob/.shadow/share/shadow/scallion/geoip" />
 <node name="exitb.tor" quantity="3" software="exitb" network="network" bandwidthup="tier3" bandwidthdown="tier3" cpu="cpu" />
 
-<software name="client" plugin="scallion" time="1800" arguments="client 1024 /home/rob/test/vanilla/client.torrc /home/rob/test/vanilla/data/clientdata /home/rob/.shadow/share/shadow/scallion/geoip client single server.file 8080 localhost 9000 1 /5MiB.urnd" />
+<software name="client" plugin="scallion" time="1200" arguments="client 1024 /home/rob/test/vanilla/client.torrc /home/rob/test/vanilla/data/clientdata /home/rob/.shadow/share/shadow/scallion/geoip client single server.file 8080 localhost 9000 1 /5MiB.urnd" />
 <node name="client.tor" quantity="1" software="client" network="network" bandwidthup="tier3" bandwidthdown="tier3" cpu="cpu" />
 
 <kill time="5400" />
