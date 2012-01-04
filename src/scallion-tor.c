@@ -314,21 +314,29 @@ void scalliontor_notify(ScallionTor* stor) {
  *
  * we hijack and use the libevent loop in nonblock mode, so when tor calls
  * the loopexit, we basically just need to do the linked connection activation.
- * that is extracted to this method. */
-void scalliontor_loopexit(ScallionTor* stor) {
+ * that is extracted to scalliontor_loopexitCallback, which we need to execute
+ * as a callback so we don't invoke event_base_loop while it is currently being
+ * executed. */
+static void scalliontor_loopexitCallback(ScallionTor* stor) {
 	update_approx_time(time(NULL));
 
-    /* All active linked conns should get their read events activated. */
-    SMARTLIST_FOREACH(active_linked_connection_lst, connection_t *, conn,
-    		event_active(conn->read_event, EV_READ, 1));
+	while(1) {
+		/* All active linked conns should get their read events activated. */
+		SMARTLIST_FOREACH(active_linked_connection_lst, connection_t *, conn,
+				event_active(conn->read_event, EV_READ, 1));
 
-    called_loop_once = smartlist_len(active_linked_connection_lst) ? 1 : 0;
-
-    /* check for remaining active connections */
-    if(called_loop_once) {
-    	/* call back so we can check the linked conns again */
-    	stor->shadowlibFuncs->createCallback((ShadowPluginCallbackFunc)scalliontor_loopexit, (gpointer)stor, 10);
-    }
+		/* if linked conns are still active, enter libevent loop using EVLOOP_ONCE */
+		called_loop_once = smartlist_len(active_linked_connection_lst) ? 1 : 0;
+		if(called_loop_once) {
+			event_base_loop(tor_libevent_get_base(), EVLOOP_ONCE|EVLOOP_NONBLOCK);
+		} else {
+			/* linked conns are done */
+			break;
+		}
+	}
+}
+void scalliontor_loopexit(ScallionTor* stor) {
+	stor->shadowlibFuncs->createCallback((ShadowPluginCallbackFunc)scalliontor_loopexitCallback, (gpointer)stor, 1);
 }
 
 void scalliontor_readCPUWorkerCallback(int sockd, short ev_types, void * arg) {
