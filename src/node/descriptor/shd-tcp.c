@@ -334,7 +334,7 @@ static void _tcp_setState(TCP* tcp, enum TCPState state) {
 	tcp->stateLast = tcp->state;
 	tcp->state = state;
 
-	debug("socket %i moved from TCP state '%s' to '%s'", tcp->super.super.super.handle,
+	debug("%s: moved from TCP state '%s' to '%s'", tcp->super.boundString,
 			tcp_stateToAscii(tcp->stateLast), tcp_stateToAscii(tcp->state));
 
 	/* some state transitions require us to update the descriptor status */
