@@ -825,8 +825,9 @@ gint system_randomBytes(guchar* buf, gint numBytes) {
 
 	while(numBytes > bytesWritten) {
 		gint r = random_nextRandom(random);
-		g_memmove(buf+bytesWritten, &r, MIN(numBytes-bytesWritten, 4));
-		bytesWritten += 4;
+		gint copyLength = MIN(numBytes-bytesWritten, 4);
+		g_memmove(buf+bytesWritten, &r, copyLength);
+		bytesWritten += copyLength;
 	}
 
 	_system_switchOutShadowContext(node);

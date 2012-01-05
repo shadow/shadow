@@ -24,6 +24,7 @@
 #include <sys/epoll.h>
 #include <time.h>
 #include <stddef.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "shadow.h"
@@ -87,8 +88,30 @@ int intercept_rand() {
 	return system_getRandom();
 }
 
+int intercept_rand_r(unsigned int *seedp) {
+	return system_getRandom();
+}
+
 void intercept_srand(unsigned int seed) {
 	return;
+}
+
+long int intercept_random() {
+	return (long int)system_getRandom();
+}
+
+int intercept_random_r(struct random_data *buf, int32_t *result) {
+	g_assert(result != NULL);
+	*result = (int32_t)system_getRandom();
+	return 0;
+}
+
+void intercept_srandom(unsigned int seed) {
+	return;
+}
+
+int intercept_srandom_r(unsigned int seed, struct random_data *buf) {
+	return 0;
 }
 
 /**
