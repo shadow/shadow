@@ -45,9 +45,9 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	/* set options to change defaults for the main group */
 	c->mainOptionGroup = g_option_group_new("main", "Application Options", "Various application related options", NULL, NULL);
 	const GOptionEntry mainEntries[] = {
-	  { "threads", 't', 0, G_OPTION_ARG_INT, &(c->nWorkerThreads), "Use N worker threads [0]", "N" },
-	  { "seed", 's', 0, G_OPTION_ARG_INT, &(c->randomSeed), "Initialize randomness for each worker using seed N [1]", "N" },
 	  { "log-level", 'l', 0, G_OPTION_ARG_STRING, &(c->logLevelInput), "Log LEVEL above which to filter messages (error < critical < warning < message < info < debug) [message]", "LEVEL" },
+	  { "seed", 's', 0, G_OPTION_ARG_INT, &(c->randomSeed), "Initialize randomness for each thread using seed N [1]", "N" },
+	  { "workers", 'w', 0, G_OPTION_ARG_INT, &(c->nWorkerThreads), "Use N worker threads [0]", "N" },
 	  { "version", 'v', 0, G_OPTION_ARG_NONE, &(c->printSoftwareVersion), "Print software version and exit", NULL },
 	  { NULL },
 	};
@@ -59,10 +59,10 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	c->networkOptionGroup = g_option_group_new("network", "Network Options", "Various network related options", NULL, NULL);
 	const GOptionEntry networkEntries[] =
 	{
+	  { "interface-batch", 0, 0, G_OPTION_ARG_INT, &(c->interfaceBatchTime), "Batch time for network interface sends and receives, in milliseconds [10]", "N" },
+	  { "interface-buffer", 0, 0, G_OPTION_ARG_INT, &(c->interfaceBufferSize), "Size of the network interface receive buffer, in bytes [1024000]", "N" },
 	  { "runahead", 0, 0, G_OPTION_ARG_INT, &(c->minRunAhead), "Minimum allowed TIME workers may run ahead when sending events between nodes, in milliseconds [10]", "TIME" },
 	  { "tcp-windows", 0, 0, G_OPTION_ARG_INT, &(c->initialTCPWindow), "Initialize the TCP send, receive, and congestion windows to N packets [10]", "N" },
-	  { "interface-buffer", 0, 0, G_OPTION_ARG_INT, &(c->interfaceBufferSize), "Size of the network interface receive buffer, in bytes [1024000]", "N" },
-	  { "interface-batch", 0, 0, G_OPTION_ARG_INT, &(c->interfaceBatchTime), "Batch time for network interface sends and receives, in milliseconds [10]", "N" },
 	  { NULL },
 	};
 
