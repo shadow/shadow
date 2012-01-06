@@ -781,7 +781,7 @@ gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 		/* @todo: not sure if this is handled correctly */
 		debug("received RESET packet");
 
-		if(!(tcp->error & TCPE_CONNECTION_RESET)) {
+		if(!(tcp->state & TCPS_LISTEN) && !(tcp->error & TCPE_CONNECTION_RESET)) {
 			tcp->error |= TCPE_CONNECTION_RESET;
 			tcp->flags |= TCPF_REMOTE_CLOSED;
 
