@@ -20,6 +20,7 @@
  */
 
 #include "scallion.h"
+#include <openssl/rand.h>
 
 /* replacement for torflow in Tor. for now just grab the bandwidth we configured
  * in the DSIM and use that as the measured bandwidth value. since our configured
@@ -286,6 +287,11 @@ ScallionTor* scalliontor_new(ShadowlibFunctionTable* shadowlibFuncs, char* hostn
 		config[21] = "--ExitPolicy";
 		config[22] = "reject *:*";
 	}
+
+	/* Shadow intercepts RAND_get_rand_method. get pointers to its funcs. */
+	const RAND_METHOD* shadowRandomMethod = RAND_get_rand_method();
+	/* we need to make sure OpenSSL is using Shadow for randomness. */
+	RAND_set_rand_method(shadowRandomMethod);
 
 	scallion.stor = stor;
 	scalliontor_start(stor, num_args, config);
