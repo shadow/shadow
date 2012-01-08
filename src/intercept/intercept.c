@@ -84,6 +84,32 @@ int intercept_RAND_pseudo_bytes(unsigned char *buf, int num) {
 	return system_randomBytes(buf, num);
 }
 
+void intercept_RAND_cleanup() {}
+
+int intercept_RAND_status() {
+	return 1;
+}
+
+static const struct {
+	void* seed;
+	void* bytes;
+	void* cleanup;
+	void* add;
+	void* pseudorand;
+	void* status;
+} intercept_customRandMethod = {
+	intercept_RAND_seed,
+	intercept_RAND_bytes,
+	intercept_RAND_cleanup,
+	intercept_RAND_add,
+	intercept_RAND_pseudo_bytes,
+	intercept_RAND_status
+};
+
+const void *intercept_RAND_get_rand_method(void) {
+	return (const void *)(&intercept_customRandMethod);
+}
+
 int intercept_rand() {
 	return system_getRandom();
 }

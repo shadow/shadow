@@ -635,6 +635,39 @@ int RAND_pseudo_bytes(unsigned char *buf, int num) {
 	return (*func)(buf, num);
 }
 
+typedef void (*RAND_cleanup_fp)();
+static RAND_cleanup_fp _RAND_cleanup = NULL;
+static RAND_cleanup_fp _intercept_RAND_cleanup = NULL;
+void RAND_cleanup() {
+	RAND_cleanup_fp* func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "RAND_cleanup", _RAND_cleanup, INTERCEPT_PREFIX, _intercept_RAND_cleanup, 1);
+	PRELOAD_LOOKUP(func, funcName,);
+	(*func)();
+}
+
+typedef int (*RAND_status_fp)();
+static RAND_status_fp _RAND_status = NULL;
+static RAND_status_fp _intercept_RAND_status = NULL;
+int RAND_status() {
+	RAND_status_fp* func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "RAND_status", _RAND_status, INTERCEPT_PREFIX, _intercept_RAND_status, 1);
+	PRELOAD_LOOKUP(func, funcName, 0);
+	return (*func)();
+}
+
+typedef const void * (*RAND_get_rand_method_fp)();
+static RAND_get_rand_method_fp _RAND_get_rand_method = NULL;
+static RAND_get_rand_method_fp _intercept_RAND_get_rand_method = NULL;
+const void *RAND_get_rand_method(void) {
+	RAND_get_rand_method_fp* func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "RAND_get_rand_method", _RAND_get_rand_method, INTERCEPT_PREFIX, _intercept_RAND_get_rand_method, 1);
+	PRELOAD_LOOKUP(func, funcName, 0);
+	return (*func)();
+}
+
 typedef int (*rand_fp)(void);
 static rand_fp _rand = NULL;
 static rand_fp _intercept_rand = NULL;
