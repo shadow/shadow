@@ -22,6 +22,9 @@
 #include "scallion.h"
 #include <openssl/rand.h>
 
+// FIXME this should only appear if Tor > 0.2.3.5-alpha
+#define DOREFILL
+
 /* replacement for torflow in Tor. for now just grab the bandwidth we configured
  * in the DSIM and use that as the measured bandwidth value. since our configured
  * bandwidth doesnt change over time, this could just be run once (by setting the
@@ -101,20 +104,38 @@ void scalliontor_free(ScallionTor* stor) {
 }
 
 static void _scalliontor_secondCallback(ScallionTor* stor) {
+	scalliontor_notify(stor);
+
+	/* call Tor's second elapsed function */
 	second_elapsed_callback(NULL, NULL);
+
+	/* make sure we handle any event creations that happened in Tor */
+	scalliontor_notify(stor);
+
+	/* schedule the next callback */
 	if(stor) {
 		stor->shadowlibFuncs->createCallback((ShadowPluginCallbackFunc)_scalliontor_secondCallback,
 				stor, 1000);
 	}
 }
 
+#ifdef DOREFILL
 static void _scalliontor_refillCallback(ScallionTor* stor) {
+	scalliontor_notify(stor);
+
+	/* call Tor's refill function */
 	refill_callback(NULL, NULL);
+
+	/* make sure we handle any event creations that happened in Tor */
+	scalliontor_notify(stor);
+
+	/* schedule the next callback */
 	if(stor) {
 		stor->shadowlibFuncs->createCallback((ShadowPluginCallbackFunc)_scalliontor_refillCallback,
 				stor, stor->refillmsecs);
 	}
 }
+#endif
 
 gint scalliontor_start(ScallionTor* stor, gint argc, gchar *argv[]) {
 	time_t now = time(NULL);
@@ -129,12 +150,18 @@ gint scalliontor_start(ScallionTor* stor, gint argc, gchar *argv[]) {
 
 	  /* load the private keys, if we're supposed to have them, and set up the
 	   * TLS context. */
-	  if (client_identitykey == NULL) {
-	    if (init_keys() < 0) {
-	      log_err(LD_BUG,"Error initializing keys; exiting");
-	      return -1;
-	    }
+	gpointer idkey;
+#ifdef DOREFILL // FIXME this doesnt change in 0.2.3.5-alpha like DOREFILL is meant to (not sure when it changed)
+	idkey = client_identitykey;
+#else
+	idkey = identitykey;
+#endif
+    if (idkey == NULL) {
+	  if (init_keys() < 0) {
+	    log_err(LD_BUG,"Error initializing keys; exiting");
+	    return -1;
 	  }
+    }
 
 	/* Set up the packed_cell_t memory pool. */
 	init_cell_pool();
@@ -189,7 +216,8 @@ gint scalliontor_start(ScallionTor* stor, gint argc, gchar *argv[]) {
 		_scalliontor_secondCallback(stor);
 	}
 
-	// FIXME this block should only appear if Tor > 0.2.3.5-alpha
+
+#ifdef DOREFILL
 #ifndef USE_BUFFEREVENTS
   if (!refill_timer) {
     int msecs = get_options()->TokenBucketRefillInterval;
@@ -207,7 +235,7 @@ gint scalliontor_start(ScallionTor* stor, gint argc, gchar *argv[]) {
 	_scalliontor_refillCallback(stor);
   }
 #endif
-    // end FIXME
+#endif
 
     /* run the startup events */
     scalliontor_notify(stor);
@@ -326,6 +354,8 @@ void scalliontor_notify(ScallionTor* stor) {
 static void scalliontor_loopexitCallback(ScallionTor* stor) {
 	update_approx_time(time(NULL));
 
+	scalliontor_notify(stor);
+
 	while(1) {
 		/* All active linked conns should get their read events activated. */
 		SMARTLIST_FOREACH(active_linked_connection_lst, connection_t *, conn,
@@ -340,6 +370,9 @@ static void scalliontor_loopexitCallback(ScallionTor* stor) {
 			break;
 		}
 	}
+
+	/* make sure we handle any new events caused by the linked conns */
+	scalliontor_notify(stor);
 }
 void scalliontor_loopexit(ScallionTor* stor) {
 	stor->shadowlibFuncs->createCallback((ShadowPluginCallbackFunc)scalliontor_loopexitCallback, (gpointer)stor, 1);
