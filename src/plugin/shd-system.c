@@ -524,9 +524,11 @@ gint system_getSockOpt(gint fd, gint level, gint optname, gpointer optval,
 
 gint system_setSockOpt(gint fd, gint level, gint optname, const gpointer optval,
 		socklen_t optlen) {
+	Node* node = _system_switchInShadowContext();
 	/* @todo: implement socket options */
 	debug("setsockopt not implemented. this is probably OK, depending on usage.");
 	errno = ENOSYS;
+	_system_switchOutShadowContext(node);
 	return -1;
 }
 
