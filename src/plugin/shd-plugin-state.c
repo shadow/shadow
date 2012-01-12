@@ -44,6 +44,8 @@ static PluginStateEntry* _pluginstateentry_new(gpointer reference, gsize size, g
 	PluginStateEntry* entry = g_new0(PluginStateEntry, 1);
 	MAGIC_INIT(entry);
 
+	debug("plugin copied %lu bytes at %p", size, reference);
+
 	entry->reference = reference;
 	entry->size = size;
 	entry->isCopy = isCopy;

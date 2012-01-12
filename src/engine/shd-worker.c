@@ -231,7 +231,7 @@ gdouble worker_getRandomCDFValue(CumulativeDistribution* cdf) {
 }
 
 gboolean worker_isInShadowContext() {
-	if(shadow_engine) {
+	if(shadow_engine && !shadow_engine->killed) {
 		Worker* worker = worker_getPrivate();
 		if(worker->cached_plugin) {
 			return worker->cached_plugin->isShadowContext;
