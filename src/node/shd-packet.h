@@ -67,4 +67,7 @@ gint packet_compareTCPSequence(const Packet* packet1, const Packet* packet2, gpo
 gint packet_getDestinationAssociationKey(Packet* packet);
 gint packet_getSourceAssociationKey(Packet* packet);
 
+/* returned string must be freed with g_free */
+gchar* packet_getString(Packet* packet);
+
 #endif /* SHD_PACKET_H_ */

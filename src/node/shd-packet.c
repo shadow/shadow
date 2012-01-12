@@ -407,3 +407,47 @@ void packet_getTCPHeader(Packet* packet, PacketTCPHeader* header) {
 
 	_packet_unlock(packet);
 }
+
+gchar* packet_getString(Packet* packet) {
+	_packet_lock(packet);
+
+	GString* packetBuffer = g_string_new("");
+
+	switch (packet->protocol) {
+		case PLOCAL: {
+			PacketLocalHeader* header = packet->header;
+			g_string_append_printf(packetBuffer, "%i -> %i bytes %u",
+					header->sourceDescriptorHandle, header->destinationDescriptorHandle,
+					packet->payloadLength);
+			break;
+		}
+
+		case PUDP: {
+			PacketUDPHeader* header = packet->header;
+			g_string_append_printf(packetBuffer, "%s:%u -> ",
+					NTOA(header->sourceIP), ntohs(header->sourcePort));
+			g_string_append_printf(packetBuffer, "%s:%u bytes %u",
+					NTOA(header->destinationIP),ntohs( header->destinationPort),
+					packet->payloadLength);
+			break;
+		}
+
+		case PTCP: {
+			PacketTCPHeader* header = packet->header;
+			g_string_append_printf(packetBuffer, "%s:%u -> ",
+					NTOA(header->sourceIP), ntohs(header->sourcePort));
+			g_string_append_printf(packetBuffer, "%s:%u packet# %u ack# %u window %u bytes %u",
+					NTOA(header->destinationIP), ntohs(header->destinationPort),
+					header->sequence, header->acknowledgement, header->window, packet->payloadLength);
+			break;
+		}
+
+		default: {
+			error("unrecognized protocol");
+			break;
+		}
+	}
+
+	_packet_unlock(packet);
+	return g_string_free(packetBuffer, FALSE);
+}

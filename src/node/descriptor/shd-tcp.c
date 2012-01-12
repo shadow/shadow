@@ -334,7 +334,7 @@ static void _tcp_setState(TCP* tcp, enum TCPState state) {
 	tcp->stateLast = tcp->state;
 	tcp->state = state;
 
-	debug("%s: moved from TCP state '%s' to '%s'", tcp->super.boundString,
+	debug("%s <-> %s: moved from TCP state '%s' to '%s'", tcp->super.boundString, tcp->super.peerString,
 			tcp_stateToAscii(tcp->stateLast), tcp_stateToAscii(tcp->state));
 
 	/* some state transitions require us to update the descriptor status */
@@ -669,6 +669,7 @@ gint tcp_connectToPeer(TCP* tcp, in_addr_t ip, in_port_t port, sa_family_t famil
 	_tcp_bufferPacketOut(tcp, packet);
 	_tcp_flush(tcp);
 
+	debug("%s <-> %s: user initiated connection", tcp->super.boundString, tcp->super.peerString);
 	_tcp_setState(tcp, TCPS_SYNSENT);
 
 	/* we dont block, so return EINPROGRESS while waiting for establishment */
@@ -773,8 +774,10 @@ gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 
 	/* now we have the true TCP for the packet */
 	MAGIC_ASSERT(tcp);
-	debug("%s: processing packet# %u from %s", tcp->super.boundString,
-			header.sequence, tcp->super.peerString);
+
+	/* print packet info for debugging */
+	debug("%s <-> %s: processing packet# %u length %u",
+			tcp->super.boundString, tcp->super.peerString, header.sequence, packetLength);
 
 	/* if packet is reset, don't process */
 	if(header.flags & PTCP_RST) {
@@ -827,6 +830,11 @@ gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 
 				multiplexed->receive.start = header.sequence;
 				multiplexed->receive.next = multiplexed->receive.start + 1;
+
+				debug("%s <-> %s: server multiplexed child socket %s <-> %s",
+						tcp->super.boundString, tcp->super.peerString,
+						multiplexed->super.boundString, multiplexed->super.peerString);
+
 				_tcp_setState(multiplexed, TCPS_SYNRECEIVED);
 
 				/* parent will send response */
@@ -1042,6 +1050,8 @@ gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 
 	/* send control packet if we have one */
 	if(responseFlags != PTCP_NONE) {
+		debug("%s <-> %s: sending response control packet",
+				tcp->super.boundString, tcp->super.peerString);
 		Packet* response = _tcp_createPacket(tcp, responseFlags, NULL, 0);
 		_tcp_bufferPacketOut(tcp, response);
 		_tcp_flush(tcp);
@@ -1079,8 +1089,7 @@ void tcp_droppedPacket(TCP* tcp, Packet* packet) {
 		tcp->congestion.threshold = (guint32) tcp->congestion.window;
 	}
 
-	debug("%s: retransmitting packet seq# %u to %s", tcp->super.boundString,
-			header.sequence, tcp->super.peerString);
+	debug("%s <-> %s: retransmitting packet# %u", tcp->super.boundString, tcp->super.peerString, header.sequence);
 
 	/* buffer and send as appropriate */
 	_tcp_removeRetransmit(tcp, header.sequence);
@@ -1091,7 +1100,7 @@ void tcp_droppedPacket(TCP* tcp, Packet* packet) {
 static void _tcp_endOfFileSignalled(TCP* tcp) {
 	MAGIC_ASSERT(tcp);
 
-	debug("%s: signaling close to user, socket no longer usable", tcp->super.boundString);
+	debug("%s <-> %s: signaling close to user, socket no longer usable", tcp->super.boundString, tcp->super.peerString);
 	tcp->flags |= TCPF_EOF_SIGNALED;
 
 	/* user can no longer access socket */
@@ -1139,8 +1148,7 @@ gssize tcp_sendUserData(TCP* tcp, gconstpointer buffer, gsize nBytes, in_addr_t 
 	/* now flush as much as possible out to socket */
 	_tcp_flush(tcp);
 
-	debug("%s: sending %lu user bytes to %s", tcp->super.boundString,
-			bytesCopied, tcp->super.peerString);
+	debug("%s <-> %s: sending %lu user bytes", tcp->super.boundString, tcp->super.peerString, bytesCopied);
 
 	return (gssize) (bytesCopied == 0 ? -1 : bytesCopied);
 }
@@ -1212,8 +1220,7 @@ gssize tcp_receiveUserData(TCP* tcp, gpointer buffer, gsize nBytes, in_addr_t* i
 		return 0;
 	}
 
-	debug("%s: receiving %lu user bytes from %s", tcp->super.boundString,
-			bytesCopied, tcp->super.peerString);
+	debug("%s <-> %s: receiving %lu user bytes", tcp->super.boundString, tcp->super.peerString, bytesCopied);
 
 	return (gssize) (bytesCopied == 0 ? -1 : bytesCopied);
 }
@@ -1255,7 +1262,7 @@ void tcp_free(TCP* tcp) {
 void tcp_close(TCP* tcp) {
 	MAGIC_ASSERT(tcp);
 
-	debug("%s: user called close", tcp->super.boundString);
+	debug("%s <-> %s:  user closed connection", tcp->super.boundString, tcp->super.peerString);
 	tcp->flags |= TCPF_LOCAL_CLOSED;
 
 	switch (tcp->state) {

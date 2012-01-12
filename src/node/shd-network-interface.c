@@ -203,6 +203,10 @@ static void _networkinterface_scheduleNextReceive(NetworkInterface* interface) {
 		gint key = packet_getDestinationAssociationKey(packet);
 		Socket* socket = g_hash_table_lookup(interface->boundSockets, GINT_TO_POINTER(key));
 
+		gchar* packetString = packet_getString(packet);
+		debug("packet in: %s", packetString);
+		g_free(packetString);
+
 		/* if the socket closed, just drop the packet */
 		if(socket) {
 			gboolean needsRetransmit = socket_pushInPacket(socket, packet);
@@ -323,6 +327,10 @@ static void _networkinterface_scheduleNextSend(NetworkInterface* interface) {
 			/* let the network schedule with appropriate delays */
 			network_schedulePacket(interface->network, packet);
 		}
+
+		gchar* packetString = packet_getString(packet);
+		debug("packet out: %s", packetString);
+		g_free(packetString);
 
 		/* successfully sent, calculate how long it took to 'send' this packet */
 		guint length = packet_getPayloadLength(packet) + packet_getHeaderSize(packet);
