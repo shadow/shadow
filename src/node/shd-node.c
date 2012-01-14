@@ -628,7 +628,7 @@ gint node_listenForPeer(Node* node, gint handle, gint backlog) {
 	Socket* socket = (Socket*) descriptor;
 	TCP* tcp = (TCP*) descriptor;
 
-	if(!socket_getBinding(socket)) {
+	if(!socket_isBound(socket)) {
 		/* implicit bind */
 		in_addr_t bindAddress = htonl(INADDR_ANY);
 		in_port_t bindPort = _node_getRandomFreePort(node, bindAddress, type);

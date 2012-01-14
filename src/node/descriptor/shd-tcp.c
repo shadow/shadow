@@ -1145,16 +1145,24 @@ gssize tcp_sendUserData(TCP* tcp, gconstpointer buffer, gsize nBytes, in_addr_t 
 		bytesCopied += copyLength;
 	}
 
+	debug("%s <-> %s: sending %lu user bytes", tcp->super.boundString, tcp->super.peerString, bytesCopied);
+
 	/* now flush as much as possible out to socket */
 	_tcp_flush(tcp);
-
-	debug("%s <-> %s: sending %lu user bytes", tcp->super.boundString, tcp->super.peerString, bytesCopied);
 
 	return (gssize) (bytesCopied == 0 ? -1 : bytesCopied);
 }
 
 gssize tcp_receiveUserData(TCP* tcp, gpointer buffer, gsize nBytes, in_addr_t* ip, in_port_t* port) {
 	MAGIC_ASSERT(tcp);
+
+	/*
+	 * TODO
+	 * We call descriptor_adjustStatus too many times here, to handle the readable
+	 * state of the socket at times when we have a partially read packet. Consider
+	 * adding a required hook for socket subclasses so the socket layer can
+	 * query TCP for readability status.
+	 */
 
 	/* make sure we pull in all readable user data */
 	_tcp_flush(tcp);
@@ -1185,6 +1193,9 @@ gssize tcp_receiveUserData(TCP* tcp, gpointer buffer, gsize nBytes, in_addr_t* i
 				/* still more partial bytes left */
 				tcp->partialOffset += bytesCopied;
 				g_assert(remaining == 0);
+
+				/* make sure we are still marked as readable for this partial packet */
+				descriptor_adjustStatus(&(tcp->super.super.super), DS_READABLE, TRUE);
 				break;
 			}
 		}
@@ -1192,6 +1203,8 @@ gssize tcp_receiveUserData(TCP* tcp, gpointer buffer, gsize nBytes, in_addr_t* i
 		/* get the next buffered packet */
 		Packet* packet = socket_removeFromInputBuffer((Socket*)tcp);
 		if(!packet) {
+			/* no more packets or partial packets */
+			descriptor_adjustStatus(&(tcp->super.super.super), DS_READABLE, FALSE);
 			break;
 		}
 
@@ -1205,6 +1218,9 @@ gssize tcp_receiveUserData(TCP* tcp, gpointer buffer, gsize nBytes, in_addr_t* i
 			/* we were only able to read part of this packet */
 			tcp->partialUserDataPacket = packet;
 			tcp->partialOffset = copyLength;
+
+			/* make sure we are still marked as readable for this partial packet */
+			descriptor_adjustStatus(&(tcp->super.super.super), DS_READABLE, TRUE);
 			break;
 		} else {
 			/* we read the entire packet, and are now finished with it */

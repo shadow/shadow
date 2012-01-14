@@ -191,6 +191,11 @@ in_addr_t socket_getBinding(Socket* socket) {
 	}
 }
 
+gboolean socket_isBound(Socket* socket) {
+	MAGIC_ASSERT(socket);
+	return (socket->flags & SF_BOUND) ? TRUE : FALSE;
+}
+
 void socket_setBinding(Socket* socket, in_addr_t boundAddress, in_port_t port) {
 	MAGIC_ASSERT(socket);
 	socket->boundAddress = boundAddress;

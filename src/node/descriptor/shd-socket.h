@@ -81,6 +81,7 @@ void socket_init(Socket* socket, SocketFunctionTable* vtable, enum DescriptorTyp
 
 in_addr_t socket_getBinding(Socket* socket);
 void socket_setBinding(Socket* socket, in_addr_t boundAddress, in_port_t port);
+gboolean socket_isBound(Socket* socket);
 gint socket_getAssociationKey(Socket* socket);
 
 gboolean socket_pushInPacket(Socket* socket, Packet* packet);
