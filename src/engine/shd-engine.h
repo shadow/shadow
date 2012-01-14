@@ -83,9 +83,14 @@ struct _Engine {
 	GMutex* engineIdle;
 
 	/*
-	 * TRUE if the engine is not longer running events and is in cleanup mode
+	 * TRUE if the engine is no longer running events and is in cleanup mode
 	 */
 	gboolean killed;
+
+	/*
+	 * We will not enter plugin context when set. Used when destroying threads.
+	 */
+	gboolean forceShadowContext;
 
 	/*
 	 * these values are modified during simulation and must be protected so

@@ -42,28 +42,34 @@ PluginFunctionTable filetransfer_pluginFunctions = {
 };
 
 /* my global structure to hold all variable, node-specific application state */
-FileTransfer* filetransferplugin_globalData;
+FileTransfer filetransferplugin_globalData;
 
-/* shadow calls this function for a one-time initialization */
+/* shadow calls this function for a one-time initialization
+ *
+ * !WARNING! dont malloc() (or g_new()) anything until filetransferplugin_new
+ * unless that memory region is registered with shadow by giving a pointer to it.
+ * its better to register as little as possible because everything that is
+ * registered is copied on every shadow-to-plugin context switch.
+ */
 void __shadow_plugin_init__(ShadowlibFunctionTable* shadowlibFuncs) {
 	/* clear our memory before initializing */
-	filetransferplugin_globalData = g_new0(FileTransfer, 1);
+	memset(&filetransferplugin_globalData, 0, sizeof(FileTransfer));
 
-	/* save the shadow functions we will use */
-	filetransferplugin_globalData->shadowlib = shadowlibFuncs;
+	/* save the shadow functions we will use since it will be the same for all nodes */
+	filetransferplugin_globalData.shadowlib = shadowlibFuncs;
 
 	/* give the filetransfer code a pointer to this global struct, and
 	 * register the global pointer it uses. this basically gives them access
 	 * to our FileTransfer struct without needing to 'extern' it.
 	 */
-	FileTransfer** ftGlobalPointer = filetransfer_init(filetransferplugin_globalData);
+	FileTransfer** ftGlobalPointer = filetransfer_init(&filetransferplugin_globalData);
 
 	/*
 	 * tell shadow which of our functions it can use to notify our plugin,
 	 * and allow it to track our state for each instance of this plugin
 	 */
 	gboolean success = shadowlibFuncs->registerPlugin(&filetransfer_pluginFunctions, 2,
-			sizeof(FileTransfer*), &filetransferplugin_globalData,
+			sizeof(FileTransfer), &filetransferplugin_globalData,
 			sizeof(FileTransfer*), ftGlobalPointer);
 	if(success) {
 		shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "successfully registered filetransfer plug-in state");

@@ -129,12 +129,7 @@ gint shadow_main(gint argc, gchar* argv[]) {
 	gint retval = engine_run(shadow_engine);
 
 	/* join thread pool. workers are auto-deleted when threads end. */
-	debug("engine finished, waiting for workers...");
-	if(n > 0) {
-		engine_teardownWorkerThreads(shadow_engine);
-	}
-
-	shadow_engine->killed = TRUE;
+	debug("engine finished, cleaning up...");
 
 	/* cleanup */
 	configuration_free(config);

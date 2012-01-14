@@ -231,7 +231,11 @@ gdouble worker_getRandomCDFValue(CumulativeDistribution* cdf) {
 }
 
 gboolean worker_isInShadowContext() {
-	if(shadow_engine && !shadow_engine->killed) {
+	/* this must return TRUE while destroying the thread pool to avoid
+	 * calling worker_getPrivate (which messes with threads) while trying to
+	 * shutdown the threads.
+	 */
+	if(shadow_engine && !(shadow_engine->forceShadowContext)) {
 		Worker* worker = worker_getPrivate();
 		if(worker->cached_plugin) {
 			return worker->cached_plugin->isShadowContext;

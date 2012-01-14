@@ -173,9 +173,11 @@ void plugin_registerResidentState(Plugin* plugin, PluginFunctionTable* callbackF
 	}
 
 	/* these are the physical memory addresses and sizes for each variable */
+	debug("registering resident plugin memory locations");
 	plugin->residentState = pluginstate_new(callbackFunctions, nVariables, variableArguments);
 
 	/* also store a copy of the defaults as they exist now */
+	debug("copying resident plugin memory location contents as default start state");
 	plugin->defaultState = pluginstate_copyNew(plugin->residentState);
 
 	/* dont change our resident state or defaults */
