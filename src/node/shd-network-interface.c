@@ -33,9 +33,9 @@ struct _NetworkInterface {
 	Network* network;
 	Address* address;
 
-	guint32 bwDownKiBps;
+	guint64 bwDownKiBps;
 	gdouble timePerByteDown;
-	guint32 bwUpKiBps;
+	guint64 bwUpKiBps;
 	gdouble timePerByteUp;
 
 	/* (protocol,port)-to-socket bindings */
@@ -58,7 +58,7 @@ struct _NetworkInterface {
 };
 
 NetworkInterface* networkinterface_new(Network* network, GQuark address, gchar* name,
-		guint32 bwDownKiBps, guint32 bwUpKiBps) {
+		guint64 bwDownKiBps, guint64 bwUpKiBps) {
 	NetworkInterface* interface = g_new0(NetworkInterface, 1);
 	MAGIC_INIT(interface);
 

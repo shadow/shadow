@@ -21,15 +21,25 @@
 
 #include "shadow.h"
 
+struct _Link {
+	Network* sourceNetwork;
+	Network* destinationNetwork;
+	guint64 latency;
+	guint64 jitter;
+	gdouble packetloss;
+	MAGIC_DECLARE;
+};
+
 Link* link_new(Network* sourceNetwork, Network* destinationNetwork,
-		CumulativeDistribution* latency, gdouble reliability) {
+		guint64 latency, guint64 jitter, gdouble packetloss) {
 	Link* link = g_new0(Link, 1);
 	MAGIC_INIT(link);
 
 	link->sourceNetwork = sourceNetwork;
 	link->destinationNetwork = destinationNetwork;
 	link->latency = latency;
-	link->reliability = reliability;
+	link->jitter = jitter;
+	link->packetloss = packetloss;
 
 	return link;
 }
@@ -53,12 +63,30 @@ Network* link_getDestinationNetwork(Link* link) {
 	return link->destinationNetwork;
 }
 
-gdouble link_getLatency(Link* link) {
+guint64 link_getLatency(Link* link) {
 	MAGIC_ASSERT(link);
-	return worker_getRandomCDFValue(link->latency);
+	return link->latency;
 }
 
-gdouble link_getReliability(Link* link) {
+guint64 link_getJitter(Link* link) {
 	MAGIC_ASSERT(link);
-	return link->reliability;
+	return link->jitter;
+}
+
+gdouble link_getPacketLoss(Link* link) {
+	MAGIC_ASSERT(link);
+	return link->packetloss;
+}
+
+guint64 link_computeDelay(Link* link, gdouble percentile) {
+	MAGIC_ASSERT(link);
+	g_assert((percentile >= 0) && (percentile <= 1));
+
+	guint64 min = link->latency - link->jitter;
+	guint64 max = link->latency + link->jitter;
+
+	guint64 width = max - min;
+	guint64 offset = (guint64)(((gdouble)width) * percentile);
+
+	return (min + offset);
 }

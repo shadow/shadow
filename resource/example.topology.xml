@@ -1,9 +1,8 @@
-<cdf name="useast2useast" path="/tmp/filea.cdf" />
-<cdf name="uswest2uswest" path="/tmp/fileb.cdf" />
-<cdf name="useast2uswest" path="/tmp/filec.cdf" />
-<cdf name="uswest2useast" path="/tmp/filed.cdf" />
-
-<network name="useast" latency="useast2useast" reliability="1.0" />
-<network name="uswest" latency="uswest2uswest" reliability="1.0" />
-
-<link networka="useast" networkb="uswest" latencyab="useast2uswest" reliabilityab="1.0" latencyba="uswest2useast" reliabilityba="1.0" />
+<topology>
+    <cluster id="USMN" bandwidthdown="13585" bandwidthup="2893"/>
+    <cluster id="USDC" bandwidthdown="8814" bandwidthup="3068"/>
+    <link id="link0" clusters="USMN USMN" latency="16" jitter="9" packetloss="0.005"/>
+    <link id="link1" clusters="USMN USDC" latency="22" jitter="7" packetloss="0.04"/>
+    <link id="link2" clusters="USDC USDC" latency="12" jitter="7" packetloss="0.005"/>
+    <link id="link3" clusters="USDC USMN" latency="22" jitter="7" packetloss="0.04"/>
+</topology>  

@@ -54,61 +54,69 @@ void internetwork_free(Internetwork* internet) {
 	g_free(internet);
 }
 
-static void _internetwork_trackLatency(Internetwork* internet, CumulativeDistribution* latency) {
+static void _internetwork_trackLatency(Internetwork* internet, Link* link) {
 	MAGIC_ASSERT(internet);
-	gdouble maxLocal = cdf_getValue(latency, 1.0);
-	if(maxLocal > internet->maximumGlobalLatency) {
-		internet->maximumGlobalLatency = maxLocal;
-	}
-	gdouble minLocal = cdf_getValue(latency, 0.0);
-	if(minLocal < internet->minimumGlobalLatency) {
-		internet->minimumGlobalLatency = minLocal;
-	}
+
+	guint64 latency = link_getLatency(link);
+	guint64 jitter = link_getJitter(link);
+
+	internet->maximumGlobalLatency = MAX(internet->maximumGlobalLatency, (latency+jitter));
+	internet->minimumGlobalLatency = MIN(internet->minimumGlobalLatency, (latency-jitter));
 }
 
-void internetwork_createNetwork(Internetwork* internet, GQuark networkID, CumulativeDistribution* intranetLatency, gdouble intranetReliability) {
+void internetwork_createNetwork(Internetwork* internet, GQuark networkID, guint64 bandwidthdown, guint64 bandwidthup) {
 	MAGIC_ASSERT(internet);
 	g_assert(!internet->isReadOnly);
 
-	Network* network = network_new(networkID);
-	g_hash_table_replace(internet->networks, &(network->id), network);
-
-	Link* selfLink = link_new(network, network, intranetLatency, intranetReliability);
-	network_addOutgoingLink(network, selfLink);
-
-	_internetwork_trackLatency(internet, intranetLatency);
+	Network* network = network_new(networkID, bandwidthdown, bandwidthup);
+	g_hash_table_replace(internet->networks, network_getIDReference(network), network);
 }
 
-void internetwork_connectNetworks(Internetwork* internet, GQuark networkAID, GQuark networkBID,
-		CumulativeDistribution* latencyA2B, CumulativeDistribution* latencyB2A,
-		gdouble reliabilityA2B, gdouble reliabilityB2A) {
+void internetwork_connectNetworks(Internetwork* internet,
+		GQuark sourceClusterID, GQuark destinationClusterID,
+		guint64 latency, guint64 jitter, gdouble packetloss) {
 	MAGIC_ASSERT(internet);
 	g_assert(!internet->isReadOnly);
 
 	/* lookup our networks */
-	Network* networkA = internetwork_getNetwork(internet, networkAID);
-	Network* networkB = internetwork_getNetwork(internet, networkBID);
-	g_assert(networkA && networkB);
+	Network* sourceNetwork = internetwork_getNetwork(internet, sourceClusterID);
+	Network* destinationNetwork = internetwork_getNetwork(internet, destinationClusterID);
+	g_assert(sourceNetwork && destinationNetwork);
 
-	/* create the links */
-	Link* linkA2B = link_new(networkA, networkB, latencyA2B, reliabilityA2B);
-	Link* linkB2A = link_new(networkB, networkA, latencyB2A, reliabilityB2A);
+	/* create the link */
+	Link* link = link_new(sourceNetwork, destinationNetwork, latency, jitter, packetloss);
 
 	/* build links into topology */
-	network_addOutgoingLink(networkA, linkA2B);
-	network_addOutgoingLink(networkB, linkB2A);
-
-	network_addIncomingLink(networkA, linkB2A);
-	network_addIncomingLink(networkB, linkA2B);
+	network_addOutgoingLink(sourceNetwork, link);
+	network_addIncomingLink(destinationNetwork, link);
 
 	/* track latency */
-	_internetwork_trackLatency(internet, latencyA2B);
-	_internetwork_trackLatency(internet, latencyB2A);
+	_internetwork_trackLatency(internet, link);
 }
 
 Network* internetwork_getNetwork(Internetwork* internet, GQuark networkID) {
 	MAGIC_ASSERT(internet);
 	return (Network*) g_hash_table_lookup(internet->networks, &networkID);
+}
+
+Network* internetwork_getRandomNetwork(Internetwork* internet) {
+	MAGIC_ASSERT(internet);
+
+	/* TODO this is ugly.
+	 * I cant believe the g_list iterates the list to count the length...
+	 */
+
+	GList* networkList = g_hash_table_get_values(internet->networks);
+	guint length = g_list_length(networkList);
+
+	gdouble r = random_nextDouble(worker_getPrivate()->random);
+	guint n = (guint)(((gdouble)length) * r);
+	g_assert((n >= 0) && (n <= length));
+
+	Network* network = (Network*) g_list_nth_data(networkList, n);
+	g_list_free(networkList);
+
+	return network;
 }
 
 Network* internetwork_lookupNetwork(Internetwork* internet, in_addr_t ip) {
@@ -131,7 +139,7 @@ static guint32 _internetwork_generateIP(Internetwork* internet) {
 
 void internetwork_createNode(Internetwork* internet, GQuark nodeID,
 		Network* network, Software* software, GString* hostname,
-		guint32 bwDownKiBps, guint32 bwUpKiBps, guint64 cpuBps) {
+		guint64 bwDownKiBps, guint64 bwUpKiBps, guint64 cpuBps) {
 	MAGIC_ASSERT(internet);
 	g_assert(!internet->isReadOnly);
 

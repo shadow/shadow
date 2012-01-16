@@ -21,24 +21,30 @@
 
 #include "shadow.h"
 
+struct _CreateNetworkAction {
+	Action super;
+	GQuark id;
+	guint64 bandwidthdown;
+	guint64 bandwidthup;
+	MAGIC_DECLARE;
+};
+
 RunnableFunctionTable createnetwork_functions = {
 	(RunnableRunFunc) createnetwork_run,
 	(RunnableFreeFunc) createnetwork_free,
 	MAGIC_VALUE
 };
 
-CreateNetworkAction* createnetwork_new(GString* name, GString* latencyCDFName,
-		gdouble reliability)
-{
-	g_assert(name && latencyCDFName);
+CreateNetworkAction* createnetwork_new(GString* name, guint64 bandwidthdown, guint64 bandwidthup) {
+	g_assert(name);
 	CreateNetworkAction* action = g_new0(CreateNetworkAction, 1);
 	MAGIC_INIT(action);
 
 	action_init(&(action->super), &createnetwork_functions);
 
 	action->id = g_quark_from_string((const gchar*)name->str);
-	action->latencyID = g_quark_from_string(latencyCDFName->str);
-	action->reliability = reliability;
+	action->bandwidthdown = bandwidthdown;
+	action->bandwidthup = bandwidthup;
 
 	return action;
 }
@@ -47,15 +53,7 @@ void createnetwork_run(CreateNetworkAction* action) {
 	MAGIC_ASSERT(action);
 
 	Worker* worker = worker_getPrivate();
-
-	CumulativeDistribution* cdf = engine_get(worker->cached_engine, CDFS, action->latencyID);
-	if(!cdf) {
-		critical("failed to create latency '%s' for network '%s'",
-				g_quark_to_string(action->latencyID), g_quark_to_string(action->id));
-		return;
-	}
-
-	internetwork_createNetwork(worker->cached_engine->internet, action->id, cdf, action->reliability);
+	internetwork_createNetwork(worker->cached_engine->internet, action->id, action->bandwidthdown, action->bandwidthup);
 }
 
 void createnetwork_free(CreateNetworkAction* action) {

@@ -29,19 +29,12 @@ typedef struct _Link Link;
 
 typedef struct _Network Network;
 
-struct _Network {
-	GQuark id;
-	/* links to other networks this network can access */
-	GList* outgoingLinks;
-	/* links from other networks that can access this network */
-	GList* incomingLinks;
-	/* map to outgoing links by network id */
-	GHashTable* outgoingLinkMap;
-	MAGIC_DECLARE;
-};
-
-Network* network_new(GQuark id);
+Network* network_new(GQuark id, guint64 bandwidthdown, guint64 bandwidthup);
 void network_free(gpointer data);
+
+GQuark* network_getIDReference(Network* network);
+guint64 network_getBandwidthUp(Network* network);
+guint64 network_getBandwidthDown(Network* network);
 
 gint network_compare(gconstpointer a, gconstpointer b, gpointer user_data);
 gboolean network_isEqual(Network* a, Network* b);

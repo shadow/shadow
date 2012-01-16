@@ -28,7 +28,7 @@
 
 typedef struct _Node Node;
 
-Node* node_new(GQuark id, Network* network, Software* software, guint32 ip, GString* hostname, guint32 bwDownKiBps, guint32 bwUpKiBps, guint64 cpuBps);
+Node* node_new(GQuark id, Network* network, Software* software, guint32 ip, GString* hostname, guint64 bwDownKiBps, guint64 bwUpKiBps, guint64 cpuBps);
 void node_free(gpointer data);
 
 void node_lock(Node* node);

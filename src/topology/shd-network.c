@@ -21,11 +21,26 @@
 
 #include "shadow.h"
 
-Network* network_new(GQuark id) {
+struct _Network {
+	GQuark id;
+	/* links to other networks this network can access */
+	GList* outgoingLinks;
+	/* links from other networks that can access this network */
+	GList* incomingLinks;
+	/* map to outgoing links by network id */
+	GHashTable* outgoingLinkMap;
+	guint64 bandwidthdown;
+	guint64 bandwidthup;
+	MAGIC_DECLARE;
+};
+
+Network* network_new(GQuark id, guint64 bandwidthdown, guint64 bandwidthup) {
 	Network* network = g_new0(Network, 1);
 	MAGIC_INIT(network);
 
 	network->id = id;
+	network->bandwidthdown = bandwidthdown;
+	network->bandwidthup = bandwidthup;
 
 	/* lists are created by setting to NULL */
 	network->incomingLinks = NULL;
@@ -52,6 +67,21 @@ void network_free(gpointer data) {
 
 	MAGIC_CLEAR(network);
 	g_free(network);
+}
+
+GQuark* network_getIDReference(Network* network) {
+	MAGIC_ASSERT(network);
+	return &(network->id);
+}
+
+guint64 network_getBandwidthUp(Network* network) {
+	MAGIC_ASSERT(network);
+	return network->bandwidthup;
+}
+
+guint64 network_getBandwidthDown(Network* network) {
+	MAGIC_ASSERT(network);
+	return network->bandwidthdown;
 }
 
 gint network_compare(gconstpointer a, gconstpointer b, gpointer user_data) {
@@ -99,7 +129,7 @@ gdouble network_getLinkReliability(Network* sourceNetwork, Network* destinationN
 	MAGIC_ASSERT(destinationNetwork);
 	Link* link = g_hash_table_lookup(sourceNetwork->outgoingLinkMap, &(destinationNetwork->id));
 	if(link) {
-		return link->reliability;
+		return (1.0 - link_getPacketLoss(link));
 	} else {
 		critical("unable to find link between networks '%s' and '%s'. Check XML file for errors.",
 				g_quark_to_string(sourceNetwork->id), g_quark_to_string(destinationNetwork->id));
@@ -110,9 +140,11 @@ gdouble network_getLinkReliability(Network* sourceNetwork, Network* destinationN
 gdouble network_getLinkLatency(Network* sourceNetwork, Network* destinationNetwork, gdouble percentile) {
 	MAGIC_ASSERT(sourceNetwork);
 	MAGIC_ASSERT(destinationNetwork);
+
 	Link* link = g_hash_table_lookup(sourceNetwork->outgoingLinkMap, &(destinationNetwork->id));
+
 	if(link) {
-		return cdf_getValue(link->latency, percentile);
+		return link_computeDelay(link, percentile);
 	} else {
 		critical("unable to find link between networks '%s' and '%s'. Check XML file for errors.",
 				g_quark_to_string(sourceNetwork->id), g_quark_to_string(destinationNetwork->id));
@@ -123,14 +155,9 @@ gdouble network_getLinkLatency(Network* sourceNetwork, Network* destinationNetwo
 gdouble network_sampleLinkLatency(Network* sourceNetwork, Network* destinationNetwork) {
 	MAGIC_ASSERT(sourceNetwork);
 	MAGIC_ASSERT(destinationNetwork);
-	Link* link = g_hash_table_lookup(sourceNetwork->outgoingLinkMap, &(destinationNetwork->id));
-	if(link) {
-		return worker_getRandomCDFValue(link->latency);
-	} else {
-		critical("unable to find link between networks '%s' and '%s'. Check XML file for errors.",
-				g_quark_to_string(sourceNetwork->id), g_quark_to_string(destinationNetwork->id));
-		return G_MAXDOUBLE;
-	}
+
+	gdouble percentile = random_nextDouble(worker_getPrivate()->random);
+	return network_getLinkLatency(sourceNetwork, destinationNetwork, percentile);
 }
 
 void network_scheduleClose(GQuark callerID, GQuark sourceID, in_port_t sourcePort,

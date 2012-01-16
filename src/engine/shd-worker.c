@@ -224,12 +224,6 @@ void worker_scheduleEvent(Event* event, SimulationTime nano_delay, GQuark receiv
 	}
 }
 
-gdouble worker_getRandomCDFValue(CumulativeDistribution* cdf) {
-	MAGIC_ASSERT(cdf);
-	gdouble percentile = random_nextDouble(worker_getPrivate()->random);
-	return cdf_getValue(cdf, percentile);
-}
-
 gboolean worker_isInShadowContext() {
 	/* this must return TRUE while destroying the thread pool to avoid
 	 * calling worker_getPrivate (which messes with threads) while trying to

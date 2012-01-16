@@ -56,7 +56,7 @@ struct _Node {
 	MAGIC_DECLARE;
 };
 
-Node* node_new(GQuark id, Network* network, Software* software, guint32 ip, GString* hostname, guint32 bwDownKiBps, guint32 bwUpKiBps, guint64 cpuBps) {
+Node* node_new(GQuark id, Network* network, Software* software, guint32 ip, GString* hostname, guint64 bwDownKiBps, guint64 bwUpKiBps, guint64 cpuBps) {
 	Node* node = g_new0(Node, 1);
 	MAGIC_INIT(node);
 

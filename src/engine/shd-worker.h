@@ -50,7 +50,6 @@ Worker* worker_getPrivate();
 void worker_free(gpointer data);
 
 Plugin* worker_getPlugin(Software* software);
-gdouble worker_getRandomCDFValue(CumulativeDistribution* cdf);
 gboolean worker_isInShadowContext();
 
 /**
