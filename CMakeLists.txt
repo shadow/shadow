@@ -1,4 +1,4 @@
-## (c)2010-2011 Shadow, Rob Jansen jansen@cs.umn.edu
+## (c)2010-2012 Shadow, Rob Jansen jansen@cs.umn.edu
 
 project(Shadow C)
 cmake_minimum_required(VERSION 2.8 FATAL_ERROR)
