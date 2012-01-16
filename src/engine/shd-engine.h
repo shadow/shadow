@@ -1,7 +1,7 @@
 /*
  * The Shadow Simulator
  *
- * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
+ * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
  *
  * This file is part of Shadow.
  *
@@ -36,6 +36,9 @@ struct _Engine {
 	/* general configuration options for the simulation */
 	Configuration* config;
 
+	/* tracks overall wall-clock runtime */
+	GTimer* runTimer;
+
 	/* global simulation time, rough approximate if multi-threaded */
 	SimulationTime clock;
 	/* minimum allowed time jump when sending events between nodes */
@@ -65,7 +68,7 @@ struct _Engine {
 	/* holds a thread-private key that each thread references to get a private
 	 * instance of a worker object
 	 */
-	GPrivate* workerKey;
+	GStaticPrivate workerKey;
 
 	/*
 	 * condition that signals when all node's events have been processed in a
@@ -80,9 +83,14 @@ struct _Engine {
 	GMutex* engineIdle;
 
 	/*
-	 * TRUE if the engine is not longer running events and is in cleanup mode
+	 * TRUE if the engine is no longer running events and is in cleanup mode
 	 */
 	gboolean killed;
+
+	/*
+	 * We will not enter plugin context when set. Used when destroying threads.
+	 */
+	gboolean forceShadowContext;
 
 	/*
 	 * these values are modified during simulation and must be protected so

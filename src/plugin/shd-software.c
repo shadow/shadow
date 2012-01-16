@@ -1,7 +1,7 @@
 /*
  * The Shadow Simulator
  *
- * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
+ * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
  *
  * This file is part of Shadow.
  *
@@ -52,6 +52,10 @@ gint software_getArguments(Software* software, gchar** argvOut[]) {
 
 	gchar* argumentString = g_strdup(software->arguments->str);
 	GQueue *arguments = g_queue_new();
+
+	/* first argument is the name of the program */
+	const gchar* pluginName = g_quark_to_string(software->pluginID);
+	g_queue_push_tail(arguments, g_strdup(pluginName));
 
 	/* parse the full argument string into separate strings */
 	gchar* token = strtok(argumentString, " ");

@@ -1,7 +1,7 @@
 /*
  * The Shadow Simulator
  *
- * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
+ * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
  *
  * This file is part of Shadow.
  *
@@ -26,16 +26,7 @@
 
 typedef struct _CreateNetworkAction CreateNetworkAction;
 
-struct _CreateNetworkAction {
-	Action super;
-	GQuark id;
-	GQuark latencyID;
-	gdouble reliability;
-	MAGIC_DECLARE;
-};
-
-CreateNetworkAction* createnetwork_new(GString* name, GString* latencyCDFName,
-		gdouble reliability);
+CreateNetworkAction* createnetwork_new(GString* name, guint64 bandwidthdown, guint64 bandwidthup);
 void createnetwork_run(CreateNetworkAction* action);
 void createnetwork_free(CreateNetworkAction* action);
 

@@ -1,7 +1,7 @@
 /*
  * The Shadow Simulator
  *
- * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
+ * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
  *
  * This file is part of Shadow.
  *
@@ -23,8 +23,6 @@
 #define SHD_CALLBACK_H_
 
 #include "shadow.h"
-
-typedef void (*CallbackFunc)(gpointer data, gpointer callbackArgument);
 
 typedef struct _CallbackEvent CallbackEvent;
 

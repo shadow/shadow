@@ -1,7 +1,7 @@
 /*
  * The Shadow Simulator
  *
- * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
+ * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
  *
  * This file is part of Shadow.
  *
@@ -26,21 +26,8 @@
 
 typedef struct _ConnectNetworkAction ConnectNetworkAction;
 
-struct _ConnectNetworkAction {
-	Action super;
-	GQuark networkaID;
-	GQuark networkbID;
-	GQuark latencyabCDFID;
-	gdouble reliabilityab;
-	GQuark latencybaCDFID;
-	gdouble reliabilityba;
-	MAGIC_DECLARE;
-};
-
-ConnectNetworkAction* connectnetwork_new(GString* networkaName,
-		GString* networkbName, GString* latencyabCDFName,
-		gdouble reliabilityab, GString* latencybaCDFName,
-		gdouble reliabilityba);
+ConnectNetworkAction* connectnetwork_new(GString* clusters, guint64 latency,
+		guint64 jitter, gdouble packetloss);
 void connectnetwork_run(ConnectNetworkAction* action);
 void connectnetwork_free(ConnectNetworkAction* action);
 

@@ -1,7 +1,7 @@
 /*
  * The Shadow Simulator
  *
- * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
+ * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
  *
  * This file is part of Shadow.
  *
@@ -42,15 +42,15 @@ gboolean shadowevent_run(gpointer data) {
 	Event* event = data;
 	MAGIC_ASSERT(event);
 	MAGIC_ASSERT(event->vtable);
-	MAGIC_ASSERT(event->node);
 
-	SimulationTime cpuDelay = vcpu_adjustDelay(event->node->vsocket_mgr->vcpu, event->time);
+	CPU* cpu = node_getCPU(event->node);
+	SimulationTime cpuDelay = cpu_adjustDelay(cpu, event->time);
 
 	/* check if we are allowed to execute or have to wait for cpu delays */
 	if(cpuDelay > 0) {
 		debug("event blocked on CPU, rescheduled for %lu nanoseconds from now", cpuDelay);
-		/* this event is delayed due to cpu, so reschedule it */
-		worker_scheduleEvent(event, cpuDelay, event->node->id);
+		/* this event is delayed due to cpu, so reschedule it to ourselves */
+		worker_scheduleEvent(event, cpuDelay, 0);
 		/* dont free it, it needs to run again */
 		return FALSE;
 	} else {
@@ -76,7 +76,6 @@ void shadowevent_free(gpointer data) {
 	Event* event = data;
 	MAGIC_ASSERT(event);
 	MAGIC_ASSERT(event->vtable);
-	MAGIC_ASSERT(event->node);
 
 	MAGIC_CLEAR(event);
 	event->vtable->free(event);

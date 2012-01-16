@@ -1,7 +1,7 @@
 /*
  * The Shadow Simulator
  *
- * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
+ * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
  *
  * This file is part of Shadow.
  *
@@ -36,15 +36,19 @@ typedef struct _PluginStateEntry PluginStateEntry;
 struct _PluginStateEntry {
 	gpointer reference;
 	gsize size;
+	gboolean isCopy;
 	MAGIC_DECLARE;
 };
 
-static PluginStateEntry* _pluginstateentry_new(gpointer reference, gsize size) {
+static PluginStateEntry* _pluginstateentry_new(gpointer reference, gsize size, gboolean isCopy) {
 	PluginStateEntry* entry = g_new0(PluginStateEntry, 1);
 	MAGIC_INIT(entry);
 
+	debug("plugin copied %lu bytes at %p", size, reference);
+
 	entry->reference = reference;
 	entry->size = size;
+	entry->isCopy = isCopy;
 
 	return entry;
 }
@@ -52,7 +56,8 @@ static PluginStateEntry* _pluginstateentry_new(gpointer reference, gsize size) {
 static PluginStateEntry* _pluginstateentry_copyNew(PluginStateEntry* entry) {
 	MAGIC_ASSERT(entry);
 	gpointer copy = g_slice_copy(entry->size, entry->reference);
-	return _pluginstateentry_new(copy, entry->size);
+	/* we copied the reference, so we need to free it later */
+	return _pluginstateentry_new(copy, entry->size, TRUE);
 }
 
 static void _pluginstateentry_copy(PluginStateEntry* sourceEntry, PluginStateEntry* destinationEntry) {
@@ -65,9 +70,12 @@ static void _pluginstateentry_copy(PluginStateEntry* sourceEntry, PluginStateEnt
 	g_memmove(destinationEntry->reference, sourceEntry->reference, destinationEntry->size);
 }
 
-static void _pluginstateentry_free(gpointer data) {
-	PluginStateEntry* entry = (PluginStateEntry*) data;
+static void _pluginstateentry_free(PluginStateEntry* entry) {
 	MAGIC_ASSERT(entry);
+
+	if(entry->isCopy) {
+		g_slice_free1(entry->size, entry->reference);
+	}
 
 	MAGIC_CLEAR(entry);
 	g_free(entry);
@@ -96,7 +104,8 @@ PluginState* pluginstate_new(PluginFunctionTable* callbackFunctions, guint nVari
 		gsize size = va_arg(variables, gsize);
 		gpointer reference = va_arg(variables, gpointer);
 
-		PluginStateEntry* entry = _pluginstateentry_new(reference, size);
+		/* we dont own reference, so dont free it later */
+		PluginStateEntry* entry = _pluginstateentry_new(reference, size, FALSE);
 		state->dataEntries = g_slist_prepend(state->dataEntries, entry);
 		(state->nEntries)++;
 		state->totalEntrySize += size;
@@ -169,7 +178,7 @@ void pluginstate_free(PluginState* state) {
 	MAGIC_ASSERT(state);
 
 	g_free(state->functions);
-	g_slist_free_full(state->dataEntries, _pluginstateentry_free);
+	g_slist_free_full(state->dataEntries, (GDestroyNotify)_pluginstateentry_free);
 
 	MAGIC_CLEAR(state);
 	g_free(state);

@@ -1,7 +1,7 @@
 /*
  * The Shadow Simulator
  *
- * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
+ * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
  *
  * This file is part of Shadow.
  *
@@ -38,7 +38,6 @@ StartApplicationEvent* startapplication_new() {
 
 void startapplication_run(StartApplicationEvent* event, Node* node) {
 	MAGIC_ASSERT(event);
-	MAGIC_ASSERT(node);
 
 	node_startApplication(node);
 }

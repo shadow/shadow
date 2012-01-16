@@ -1,7 +1,7 @@
 /*
  * The Shadow Simulator
  *
- * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
+ * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
  *
  * This file is part of Shadow.
  *
@@ -21,7 +21,7 @@
 
 #include "shadow.h"
 
-static Worker* _worker_new(gint id) {
+static Worker* _worker_new(gint id, guint seed) {
 	Worker* worker = g_new0(Worker, 1);
 	MAGIC_INIT(worker);
 
@@ -29,6 +29,8 @@ static Worker* _worker_new(gint id) {
 	worker->clock_now = SIMTIME_INVALID;
 	worker->clock_last = SIMTIME_INVALID;
 	worker->clock_barrier = SIMTIME_INVALID;
+
+	worker->random = random_new(seed);
 
 	/* each worker needs a private copy of each plug-in library */
 	worker->plugins = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, plugin_free);
@@ -53,12 +55,12 @@ Worker* worker_getPrivate() {
 	MAGIC_ASSERT(engine);
 
 	/* get current thread's private worker object */
-	Worker* worker = g_private_get(engine->workerKey);
+	Worker* worker = g_static_private_get(&(engine->workerKey));
 
 	/* todo: should we use g_once here instead? */
 	if(!worker) {
-		worker = _worker_new(engine_generateWorkerID(engine));
-		g_private_set(engine->workerKey, worker);
+		worker = _worker_new(engine_generateWorkerID(engine), engine->config->randomSeed);
+		g_static_private_set(&(engine->workerKey), worker, worker_free);
 	}
 
 	MAGIC_ASSERT(worker);
@@ -88,7 +90,6 @@ void worker_executeEvent(gpointer data, gpointer user_data) {
 	/* worker comes from pool to execute event - cast our data */
 	Engine* engine = user_data;
 	Node* node = data;
-	MAGIC_ASSERT(node);
 
 	/* get current thread's private worker object */
 	Worker* worker = worker_getPrivate();
@@ -176,7 +177,7 @@ void worker_scheduleEvent(Event* event, SimulationTime nano_delay, GQuark receiv
 
 	/* parties involved. sender may be NULL, receiver may not! */
 	Node* sender = worker->cached_node;
-	Node* receiver = internetwork_getNode(worker->cached_engine->internet, receiver_node_id);
+	Node* receiver = receiver_node_id == 0 ? sender : internetwork_getNode(worker->cached_engine->internet, receiver_node_id);
 	g_assert(receiver);
 
 	/* the NodeEvent needs a pointer to the correct node */
@@ -224,9 +225,16 @@ void worker_scheduleEvent(Event* event, SimulationTime nano_delay, GQuark receiv
 }
 
 gboolean worker_isInShadowContext() {
-	Worker* worker = worker_getPrivate();
-	if(worker->cached_plugin) {
-		return worker->cached_plugin->isShadowContext;
+	/* this must return TRUE while destroying the thread pool to avoid
+	 * calling worker_getPrivate (which messes with threads) while trying to
+	 * shutdown the threads.
+	 */
+	if(shadow_engine && !(shadow_engine->forceShadowContext)) {
+		Worker* worker = worker_getPrivate();
+		if(worker->cached_plugin) {
+			return worker->cached_plugin->isShadowContext;
+		}
 	}
-	return FALSE;
+	/* if there is no engine or cached plugin, we are definitely in Shadow context */
+	return TRUE;
 }

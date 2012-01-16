@@ -1,7 +1,7 @@
 /*
  * The Shadow Simulator
  *
- * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
+ * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
  *
  * This file is part of Shadow.
  *
@@ -25,6 +25,8 @@
 #include <glib.h>
 #include <dlfcn.h>
 #include <stdio.h>
+
+#define INTERCEPT_PREFIX "intercept_"
 
 /* handles for dlsym */
 #define RTLD_NEXT ((void *) -1l)
@@ -79,7 +81,7 @@ int preload_worker_isInShadowContext();
  * if the plugin exists, we came from the plugin, and the extra condition holds,
  * we attempt to redirect the call to shadow.
  * pass in "1" for extraCondition if you ALWAYS redirect when coming from a
- * plug-in (i.e. you have no special condition). */
+ * plug-in (i.e. you have no special condition like socket >= MIN_DESCRIPTOR). */
 #define PRELOAD_DECIDE(funcOut, nameOut, sysName, sysPointer, shadowPrefix, shadowPointer, extraCondition) \
 { \
 	/* should we be forwarding to the system call? */ \

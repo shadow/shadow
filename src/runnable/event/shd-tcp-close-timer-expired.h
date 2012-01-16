@@ -1,7 +1,7 @@
 /*
  * The Shadow Simulator
  *
- * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
+ * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
  *
  * This file is part of Shadow.
  *
@@ -26,20 +26,7 @@
 
 typedef struct _TCPCloseTimerExpiredEvent TCPCloseTimerExpiredEvent;
 
-struct _TCPCloseTimerExpiredEvent {
-	Event super;
-	GQuark callerID;
-	GQuark sourceID;
-	in_port_t sourcePort;
-	GQuark destinationID;
-	in_port_t destinationPort;
-	guint32 receiveEnd;
-	MAGIC_DECLARE;
-};
-
-TCPCloseTimerExpiredEvent* tcpclosetimerexpired_new(GQuark callerID,
-		GQuark sourceID, in_port_t sourcePort, GQuark destinationID,
-		in_port_t destinationPort, guint32 receiveEnd);
+TCPCloseTimerExpiredEvent* tcpclosetimerexpired_new(TCP* tcp);
 void tcpclosetimerexpired_run(TCPCloseTimerExpiredEvent* event, Node* node);
 void tcpclosetimerexpired_free(TCPCloseTimerExpiredEvent* event);
 

@@ -1,7 +1,7 @@
 /*
  * The Shadow Simulator
  *
- * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
+ * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
  *
  * This file is part of Shadow.
  *
@@ -25,8 +25,9 @@ Internetwork* internetwork_new() {
 	Internetwork* internet = g_new0(Internetwork, 1);
 	MAGIC_INIT(internet);
 
-	internet->nodes = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, node_free);
+	internet->nodes = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, node_free);
 	internet->networks = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, network_free);
+	internet->networksByIP = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, NULL);
 	internet->ipByName = g_hash_table_new_full(g_str_hash, g_str_equal, NULL, g_free);
 	internet->nameByIp = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, g_free);
 
@@ -45,6 +46,7 @@ void internetwork_free(Internetwork* internet) {
 	/* now cleanup the rest */
 	g_hash_table_destroy(internet->nodes);
 	g_hash_table_destroy(internet->networks);
+	g_hash_table_destroy(internet->networksByIP);
 	g_hash_table_destroy(internet->ipByName);
 	g_hash_table_destroy(internet->nameByIp);
 
@@ -52,56 +54,44 @@ void internetwork_free(Internetwork* internet) {
 	g_free(internet);
 }
 
-static void _internetwork_trackLatency(Internetwork* internet, CumulativeDistribution* latency) {
+static void _internetwork_trackLatency(Internetwork* internet, Link* link) {
 	MAGIC_ASSERT(internet);
-	gdouble maxLocal = cdf_getValue(latency, 1.0);
-	if(maxLocal > internet->maximumGlobalLatency) {
-		internet->maximumGlobalLatency = maxLocal;
-	}
-	gdouble minLocal = cdf_getValue(latency, 0.0);
-	if(minLocal < internet->minimumGlobalLatency) {
-		internet->minimumGlobalLatency = minLocal;
-	}
+
+	guint64 latency = link_getLatency(link);
+	guint64 jitter = link_getJitter(link);
+
+	internet->maximumGlobalLatency = MAX(internet->maximumGlobalLatency, (latency+jitter));
+	internet->minimumGlobalLatency = MIN(internet->minimumGlobalLatency, (latency-jitter));
 }
 
-void internetwork_createNetwork(Internetwork* internet, GQuark networkID, CumulativeDistribution* intranetLatency, gdouble intranetReliability) {
+void internetwork_createNetwork(Internetwork* internet, GQuark networkID, guint64 bandwidthdown, guint64 bandwidthup) {
 	MAGIC_ASSERT(internet);
 	g_assert(!internet->isReadOnly);
 
-	Network* network = network_new(networkID);
-	g_hash_table_replace(internet->networks, &(network->id), network);
-
-	Link* selfLink = link_new(network, network, intranetLatency, intranetReliability);
-	network_addOutgoingLink(network, selfLink);
-
-	_internetwork_trackLatency(internet, intranetLatency);
+	Network* network = network_new(networkID, bandwidthdown, bandwidthup);
+	g_hash_table_replace(internet->networks, network_getIDReference(network), network);
 }
 
-void internetwork_connectNetworks(Internetwork* internet, GQuark networkAID, GQuark networkBID,
-		CumulativeDistribution* latencyA2B, CumulativeDistribution* latencyB2A,
-		gdouble reliabilityA2B, gdouble reliabilityB2A) {
+void internetwork_connectNetworks(Internetwork* internet,
+		GQuark sourceClusterID, GQuark destinationClusterID,
+		guint64 latency, guint64 jitter, gdouble packetloss) {
 	MAGIC_ASSERT(internet);
 	g_assert(!internet->isReadOnly);
 
 	/* lookup our networks */
-	Network* networkA = internetwork_getNetwork(internet, networkAID);
-	Network* networkB = internetwork_getNetwork(internet, networkBID);
-	g_assert(networkA && networkB);
+	Network* sourceNetwork = internetwork_getNetwork(internet, sourceClusterID);
+	Network* destinationNetwork = internetwork_getNetwork(internet, destinationClusterID);
+	g_assert(sourceNetwork && destinationNetwork);
 
-	/* create the links */
-	Link* linkA2B = link_new(networkA, networkB, latencyA2B, reliabilityA2B);
-	Link* linkB2A = link_new(networkB, networkA, latencyB2A, reliabilityB2A);
+	/* create the link */
+	Link* link = link_new(sourceNetwork, destinationNetwork, latency, jitter, packetloss);
 
 	/* build links into topology */
-	network_addOutgoingLink(networkA, linkA2B);
-	network_addOutgoingLink(networkB, linkB2A);
-
-	network_addIncomingLink(networkA, linkB2A);
-	network_addIncomingLink(networkB, linkA2B);
+	network_addOutgoingLink(sourceNetwork, link);
+	network_addIncomingLink(destinationNetwork, link);
 
 	/* track latency */
-	_internetwork_trackLatency(internet, latencyA2B);
-	_internetwork_trackLatency(internet, latencyB2A);
+	_internetwork_trackLatency(internet, link);
 }
 
 Network* internetwork_getNetwork(Internetwork* internet, GQuark networkID) {
@@ -109,13 +99,38 @@ Network* internetwork_getNetwork(Internetwork* internet, GQuark networkID) {
 	return (Network*) g_hash_table_lookup(internet->networks, &networkID);
 }
 
-guint32 _internetwork_generateIP(Internetwork* internet) {
+Network* internetwork_getRandomNetwork(Internetwork* internet) {
+	MAGIC_ASSERT(internet);
+
+	/* TODO this is ugly.
+	 * I cant believe the g_list iterates the list to count the length...
+	 */
+
+	GList* networkList = g_hash_table_get_values(internet->networks);
+	guint length = g_list_length(networkList);
+
+	gdouble r = random_nextDouble(worker_getPrivate()->random);
+	guint n = (guint)(((gdouble)length) * r);
+	g_assert((n >= 0) && (n <= length));
+
+	Network* network = (Network*) g_list_nth_data(networkList, n);
+	g_list_free(networkList);
+
+	return network;
+}
+
+Network* internetwork_lookupNetwork(Internetwork* internet, in_addr_t ip) {
+	MAGIC_ASSERT(internet);
+	return (Network*) g_hash_table_lookup(internet->networksByIP, &ip);
+}
+
+static guint32 _internetwork_generateIP(Internetwork* internet) {
 	MAGIC_ASSERT(internet);
 	internet->ipCounter++;
 	while(internet->ipCounter == htonl(INADDR_NONE) ||
-			internet->ipCounter == htonl(INADDR_NONE) ||
-			internet->ipCounter == htonl(INADDR_NONE) ||
-			internet->ipCounter == htonl(INADDR_NONE))
+			internet->ipCounter == htonl(INADDR_ANY) ||
+			internet->ipCounter == htonl(INADDR_LOOPBACK) ||
+			internet->ipCounter == htonl(INADDR_BROADCAST))
 	{
 		internet->ipCounter++;
 	}
@@ -124,24 +139,27 @@ guint32 _internetwork_generateIP(Internetwork* internet) {
 
 void internetwork_createNode(Internetwork* internet, GQuark nodeID,
 		Network* network, Software* software, GString* hostname,
-		guint32 bwDownKiBps, guint32 bwUpKiBps, guint64 cpuBps) {
+		guint64 bwDownKiBps, guint64 bwUpKiBps, guint64 cpuBps) {
 	MAGIC_ASSERT(internet);
 	g_assert(!internet->isReadOnly);
 
 	guint32 ip = _internetwork_generateIP(internet);
+	ip = (guint32) nodeID;
 	Node* node = node_new(nodeID, network, software, ip, hostname, bwDownKiBps, bwUpKiBps, cpuBps);
-	g_hash_table_replace(internet->nodes, &(node->id), node);
+	g_hash_table_replace(internet->nodes, GUINT_TO_POINTER((guint)nodeID), node);
+
 
 	gchar* mapName = g_strdup((const gchar*) hostname->str);
 	guint32* mapIP = g_new0(guint32, 1);
 	*mapIP = ip;
+	g_hash_table_replace(internet->networksByIP, mapIP, network);
 	g_hash_table_replace(internet->ipByName, mapName, mapIP);
 	g_hash_table_replace(internet->nameByIp, mapIP, mapName);
 }
 
 Node* internetwork_getNode(Internetwork* internet, GQuark nodeID) {
 	MAGIC_ASSERT(internet);
-	return (Node*) g_hash_table_lookup(internet->nodes, &nodeID);
+	return (Node*) g_hash_table_lookup(internet->nodes, GUINT_TO_POINTER((guint)nodeID));
 }
 
 GList* internetwork_getAllNodes(Internetwork* internet) {
@@ -183,38 +201,40 @@ gdouble internetwork_getMinimumGlobalLatency(Internetwork* internet) {
 guint32 internetwork_getNodeBandwidthUp(Internetwork* internet, GQuark nodeID) {
 	MAGIC_ASSERT(internet);
 	Node* node = internetwork_getNode(internet, nodeID);
-	return node_getBandwidthUp(node);
+	NetworkInterface* interface = node_lookupInterface(node, nodeID);
+	return networkinterface_getSpeedUpKiBps(interface);
 }
 
 guint32 internetwork_getNodeBandwidthDown(Internetwork* internet, GQuark nodeID) {
 	MAGIC_ASSERT(internet);
 	Node* node = internetwork_getNode(internet, nodeID);
-	return node_getBandwidthDown(node);
+	NetworkInterface* interface = node_lookupInterface(node, nodeID);
+	return networkinterface_getSpeedDownKiBps(interface);
 }
 
 gdouble internetwork_getReliability(Internetwork* internet, GQuark sourceNodeID, GQuark destinationNodeID) {
 	MAGIC_ASSERT(internet);
 	Node* sourceNode = internetwork_getNode(internet, sourceNodeID);
-	MAGIC_ASSERT(sourceNode);
+	Network* sourceNetwork = node_getNetwork(sourceNode);
 	Node* destinationNode = internetwork_getNode(internet, destinationNodeID);
-	MAGIC_ASSERT(destinationNode);
-	return network_getLinkReliability(sourceNode->network, destinationNode->network);
+	Network* destinationNetwork = node_getNetwork(destinationNode);
+	return network_getLinkReliability(sourceNetwork, destinationNetwork);
 }
 
 gdouble internetwork_getLatency(Internetwork* internet, GQuark sourceNodeID, GQuark destinationNodeID, gdouble percentile) {
 	MAGIC_ASSERT(internet);
 	Node* sourceNode = internetwork_getNode(internet, sourceNodeID);
-	MAGIC_ASSERT(sourceNode);
+	Network* sourceNetwork = node_getNetwork(sourceNode);
 	Node* destinationNode = internetwork_getNode(internet, destinationNodeID);
-	MAGIC_ASSERT(destinationNode);
-	return network_getLinkLatency(sourceNode->network, destinationNode->network, percentile);
+	Network* destinationNetwork = node_getNetwork(destinationNode);
+	return network_getLinkLatency(sourceNetwork, destinationNetwork, percentile);
 }
 
 gdouble internetwork_sampleLatency(Internetwork* internet, GQuark sourceNodeID, GQuark destinationNodeID) {
 	MAGIC_ASSERT(internet);
 	Node* sourceNode = internetwork_getNode(internet, sourceNodeID);
-	MAGIC_ASSERT(sourceNode);
+	Network* sourceNetwork = node_getNetwork(sourceNode);
 	Node* destinationNode = internetwork_getNode(internet, destinationNodeID);
-	MAGIC_ASSERT(destinationNode);
-	return network_sampleLinkLatency(sourceNode->network, destinationNode->network);
+	Network* destinationNetwork = node_getNetwork(destinationNode);
+	return network_sampleLinkLatency(sourceNetwork, destinationNetwork);
 }

@@ -1,17 +1,29 @@
-<plugin name="fileserver" path="/home/rob/shadow/build/shadow/src/plugin/libraries/echo/libshadow-plugin-echo.so" />
+<!-- 
+  -- plugin paths are relative to "~/.shadow/lib/" unless abosolute paths are given
+  -->
+<plugin id="filex" path="libshadow-plugin-filetransfer.so" />
 
-<cdf name="cpudelay" center="100000000" width="20000000" tail="20000000" />
-<cdf name="upstream" center="1024" width="0" tail="0" />
-<cdf name="downstream" center="1024" width="0" tail="0" />
+<!-- 
+  -- CDFs may be loaded from a file, or generated as below 
+  -- CDFS are unused right now
+  -->
+<!-- <cdf id="cpudelay" center="100000000" width="20000000" tail="20000000" /> -->
+<!-- <cdf id="pause" path="/tmp/pausetimes.cdf" /> -->
 
-<software name="server" plugin="fileserver" time="60" arguments="8080 share/shadow/" />
+<!-- 
+  -- software specifies the plugin to use, application args, and starting time in seconds
+  -- args are plugin-specific
+  -->
+<software id="server" plugin="filex" time="10" arguments="server 8080 /bin/" />
+<software id="client" plugin="filex" time="20" arguments="client single server.node 8080 none 0 10 /ls" />
 
-<node name="1.fileserver.shd" software="server" network="useast" bandwidthup="upstream" bandwidthdown="downstream" cpu="cpudelay" />
-<node name="2.fileserver.shd" software="server" network="useast" bandwidthup="upstream" bandwidthdown="downstream" cpu="cpudelay" />
-<node name="3.fileserver.shd" software="server" network="useast" bandwidthup="upstream" bandwidthdown="downstream" cpu="cpudelay" />
-<node name="4.fileserver.shd" software="server" network="useast" bandwidthup="upstream" bandwidthdown="downstream" cpu="cpudelay" />
-<node name="5.fileserver.shd" software="server" network="useast" bandwidthup="upstream" bandwidthdown="downstream" cpu="cpudelay" />
-
-<node name="fileserver.shd" quantity="5" software="server" network="useast" bandwidthup="upstream" bandwidthdown="downstream" cpu="cpudelay" />
+<!-- 
+  -- node specifies hostnames (the id) and the software to run
+  -- use "quantity" to generate multiple nodes
+  -- use "cluster" to assign to a specific cluster (o/w random assignment)
+  -- use "bandwidthdown" and "bandwidthup" to override cluster values (in KiB/s)
+  -->
+<node id="server.node" software="server" cluster="USMN" bandwidthdown="60000" bandwidthup="30000" />
+<node id="client.node" software="client" quantity="10" />
 
 <kill time="600" />

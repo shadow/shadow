@@ -1,7 +1,7 @@
 /*
  * The Shadow Simulator
  *
- * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
+ * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
  *
  * This file is part of Shadow.
  *
@@ -26,22 +26,8 @@
 
 typedef struct _CreateNodesAction CreateNodesAction;
 
-struct _CreateNodesAction {
-	Action super;
-	guint64 quantity;
-	GQuark id;
-	GQuark softwareID;
-	GQuark cpudelayCDFID;
-	GQuark networkID;
-	GQuark bandwidthupID;
-	GQuark bandwidthdownID;
-	MAGIC_DECLARE;
-};
-
-CreateNodesAction* createnodes_new(guint64 quantity, GString* name,
-		GString* applicationName, GString* cpudelayCDFName,
-		GString* networkName, GString* bandwidthupCDFName,
-		GString* bandwidthdownCDFName);
+CreateNodesAction* createnodes_new(GString* name, GString* software, GString* cluster,
+		guint64 bandwidthdown, guint64 bandwidthup, guint64 quantity);
 void createnodes_run(CreateNodesAction* action);
 void createnodes_free(CreateNodesAction* action);
 

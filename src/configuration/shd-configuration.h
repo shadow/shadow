@@ -1,7 +1,7 @@
 /*
  * The Shadow Simulator
  *
- * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
+ * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
  *
  * This file is part of Shadow.
  *
@@ -119,19 +119,21 @@ typedef guint64 SimulationTime;
 
 /**
  * We intercept read, write, and close calls since they may be done on our
- * virtual sockets. However, applications may also want to read/write/close a
- * regular file. We differentiate these by handing out high descriptors for
- * our virtual sockets. Any descriptor below this cutoff can be considered a
- * real file.
+ * virtual descriptors. However, applications may also want to read/write/close
+ * a regular file. We differentiate these by handing out high descriptors.
+ * Any descriptor below this cutoff can be considered a real file.
  *
  * It is important to set this high enough so in large simulations the system
- * file descriptor counter doesnt collide with our sockets. So this should be
- * set over the ulimit -n value.
- *
- * @todo FIXME we should implement socket descriptors greater than ugint16 so we can use
- * all 31 bits of the gint!
+ * file descriptor counter doesn't collide with our sockets. So this should be
+ * set at least over the ulimit -n value.
  */
-#define VNETWORK_MIN_SD 30000
+#define MIN_DESCRIPTOR 1000000
+
+/**
+ * The start of our random port range in host order, used if application doesn't
+ * specify the port it wants to bind to, and for client connections.
+ */
+#define MIN_RANDOM_PORT 10000
 
 /**
  * A shortcut for turning an IP address in network format to a string in
@@ -143,11 +145,11 @@ typedef guint64 SimulationTime;
 #define NTOA(ip) inet_ntoa((struct in_addr){ip})
 
 /**
- * We always use TCP_autotuning unless this is set to TRUE
+ * We always use TCP_autotuning unless this is set to FALSE
  *
  * @todo change this to a command line option accessible via #Configuration
  */
-#define CONFIG_SEND_BUFFER_SIZE_FORCE FALSE
+#define CONFIG_TCPAUTOTUNE TRUE
 
 /**
  * Default size of the send buffer per socket if TCP-autotuning is not used.
@@ -166,11 +168,39 @@ typedef guint64 SimulationTime;
 #define CONFIG_RECV_BUFFER_SIZE 174760
 
 /**
- * TRUE if we should do delayed acknowledgments, FALSE otherwise
- *
- * @todo change this to a command line option accessible via #Configuration
+ * Default size for pipes. Value taken from "man 7 pipe".
  */
-#define CONFIG_DO_DELAYED_ACKS FALSE
+#define CONFIG_PIPE_BUFFER_SIZE 65536
+
+/**
+ * Default batching time when the network interface receives packets
+ */
+#define CONFIG_RECEIVE_BATCH_TIME (10*SIMTIME_ONE_MILLISECOND)
+
+/**
+ * Header size of a packet with UDP/IP encapsulation
+ */
+#define CONFIG_UDPIP_HEADER_SIZE 28
+
+/**
+ * Header size of a packet with TCP/IP encapsulation
+ */
+#define CONFIG_TCPIP_HEADER_SIZE 40
+
+/**
+ * Maximum size of an IP packet without fragmenting over Ethernetv2
+ */
+#define CONFIG_MTU 1500
+
+/**
+ * Maximum size of a datagram we are allowed to send out over the network
+ */
+#define CONFIG_DATAGRAM_MAX_SIZE 65507
+
+/**
+ * Delay in nanoseconds for a TCP close timer.
+ */
+#define CONFIG_TCPCLOSETIMER_DELAY (60 * SIMTIME_ONE_SECOND)
 
 typedef struct _Configuration Configuration;
 
@@ -180,13 +210,16 @@ struct _Configuration {
 	GOptionGroup* mainOptionGroup;
 	gchar* logLevelInput;
 	gint nWorkerThreads;
+	guint randomSeed;
 	gboolean printSoftwareVersion;
 
 	GOptionGroup* networkOptionGroup;
 	gint minRunAhead;
+	gint initialTCPWindow;
+	gint interfaceBufferSize;
+	SimulationTime interfaceBatchTime;
 
 	GOptionGroup* pluginsOptionGroup;
-	gboolean runPingExample;
 	gboolean runEchoExample;
 	gboolean runFileExample;
 

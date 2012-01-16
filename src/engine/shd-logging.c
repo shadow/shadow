@@ -1,7 +1,7 @@
 /*
  * The Shadow Simulator
  *
- * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
+ * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
  *
  * This file is part of Shadow.
  *
@@ -72,14 +72,14 @@ void logging_handleLog(const gchar *log_domain, GLogLevelFlags log_level, const 
 		return;
 	}
 
-	/* callback from GLib, no access to workers */
-	GDateTime* dt_now = g_date_time_new_now_local();
-	gchar* dt_format = g_date_time_format(dt_now, "%F %H:%M:%S:%N");
+	gulong hours, minutes, seconds, microseconds;
+	gulong elapsed = (gulong) g_timer_elapsed(shadow_engine->runTimer, &microseconds);
+	hours = elapsed / 3600;
+	elapsed %= 3600;
+	minutes = elapsed / 60;
+	seconds = elapsed % 60;
 
-	g_print("%s %s\n", dt_format, message);
-
-	g_date_time_unref(dt_now);
-	g_free(dt_format);
+	g_print("%lu:%lu:%lu:%06lu %s\n", hours, minutes, seconds, microseconds, message);
 
 	if(log_level & G_LOG_LEVEL_ERROR) {
 		g_print("\t**aborting**\n");
@@ -91,7 +91,7 @@ void logging_logv(const gchar *log_domain, GLogLevelFlags log_level, const gchar
 	Worker* w = worker_getPrivate();
 
 	/* format the simulation time if we are running an event */
-	GString* simtime = NULL;
+	GString* clockStringBuffer = g_string_new("");
 	if(w->clock_now != SIMTIME_INVALID) {
 		SimulationTime hours, minutes, seconds, remainder;
 		remainder = w->clock_now;
@@ -103,17 +103,23 @@ void logging_logv(const gchar *log_domain, GLogLevelFlags log_level, const gchar
 		seconds = remainder / SIMTIME_ONE_SECOND;
 		remainder %= SIMTIME_ONE_SECOND;
 
-		simtime = g_string_new("");
-		g_string_append_printf(simtime, "%lu:%lu:%lu:%lu", hours, minutes, seconds, remainder);
+		g_string_printf(clockStringBuffer, "%lu:%lu:%lu:%09lu", hours, minutes, seconds, remainder);
+	} else {
+		g_string_printf(clockStringBuffer, "n/a");
 	}
 
-	/* the time - we'll need to free clockString later */
-	gchar* clockString = !simtime ? g_strdup("n/a") : g_string_free(simtime, FALSE);
+	/* we'll need to free clockString later */
+	gchar* clockString = g_string_free(clockStringBuffer, FALSE);
 
 	/* node identifier, if we are running a node
 	 * dont free this since we dont own the ip address string */
-	const gchar* nodeString = !w->cached_node ? "n/a" :
-			address_toHostName(w->cached_node->address);
+	GString* nodeStringBuffer = g_string_new("");
+	if(w->cached_node) {
+		g_string_printf(nodeStringBuffer, "%s-%s", node_getName(w->cached_node), node_getDefaultIPName(w->cached_node));
+	} else {
+		g_string_printf(nodeStringBuffer, "n/a");
+	}
+	gchar* nodeString = g_string_free(nodeStringBuffer, FALSE);
 
 	/* the function name - no need to free this */
 	const gchar* functionString = !functionName ? "n/a" : functionName;
@@ -136,6 +142,7 @@ void logging_logv(const gchar *log_domain, GLogLevelFlags log_level, const gchar
 	/* cleanup */
 	g_free(newLogFormat);
 	g_free(clockString);
+	g_free(nodeString);
 }
 
 void logging_log(const gchar *log_domain, GLogLevelFlags log_level, const gchar* functionName, const gchar *format, ...) {

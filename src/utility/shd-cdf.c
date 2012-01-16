@@ -1,7 +1,7 @@
 /*
  * The Shadow Simulator
  *
- * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
+ * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
  *
  * This file is part of Shadow.
  *
@@ -202,10 +202,4 @@ gdouble cdf_getValue(CumulativeDistribution* cdf, gdouble percentile) {
 	}
 
 	return (gdouble) 0;
-}
-
-gdouble cdf_getRandomValue(CumulativeDistribution* cdf) {
-	MAGIC_ASSERT(cdf);
-	gdouble percentile = dvn_rand_unit();
-	return cdf_getValue(cdf, percentile);
 }

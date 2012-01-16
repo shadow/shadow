@@ -1,7 +1,7 @@
 /*
  * The Shadow Simulator
  *
- * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
+ * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
  *
  * This file is part of Shadow.
  *
@@ -41,7 +41,7 @@ void application_free(Application* application) {
 	/* need to get thread-private plugin from current worker */
 	Plugin* plugin = worker_getPlugin(application->software);
 
-	/* tell the plug-in to free its data */
+	/* tell the plug-in module (user code) to free its data */
 	plugin_executeFree(plugin, application->state);
 
 	/* free our copy of plug-in resources */
@@ -72,18 +72,10 @@ void application_boot(Application* application) {
 	g_free(argv);
 }
 
-void application_readable(Application* application, gint socketDescriptor) {
+void application_notify(Application* application) {
 	MAGIC_ASSERT(application);
 
 	/* need to get thread-private plugin from current worker */
 	Plugin* plugin = worker_getPlugin(application->software);
-	plugin_executeReadable(plugin, application->state, socketDescriptor);
-}
-
-void application_writable(Application* application, gint socketDescriptor) {
-	MAGIC_ASSERT(application);
-
-	/* need to get thread-private plugin from current worker */
-	Plugin* plugin = worker_getPlugin(application->software);
-	plugin_executeWritable(plugin, application->state, socketDescriptor);
+	plugin_executeNotify(plugin, application->state);
 }

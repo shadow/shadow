@@ -1,7 +1,7 @@
 /*
  * The Shadow Simulator
  *
- * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
+ * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
  *
  * This file is part of Shadow.
  *
@@ -29,19 +29,12 @@ typedef struct _Link Link;
 
 typedef struct _Network Network;
 
-struct _Network {
-	GQuark id;
-	/* links to other networks this network can access */
-	GList* outgoingLinks;
-	/* links from other networks that can access this network */
-	GList* incomingLinks;
-	/* map to outgoing links by network id */
-	GHashTable* outgoingLinkMap;
-	MAGIC_DECLARE;
-};
-
-Network* network_new(GQuark id);
+Network* network_new(GQuark id, guint64 bandwidthdown, guint64 bandwidthup);
 void network_free(gpointer data);
+
+GQuark* network_getIDReference(Network* network);
+guint64 network_getBandwidthUp(Network* network);
+guint64 network_getBandwidthDown(Network* network);
 
 gint network_compare(gconstpointer a, gconstpointer b, gpointer user_data);
 gboolean network_isEqual(Network* a, Network* b);
@@ -53,10 +46,11 @@ gdouble network_getLinkReliability(Network* sourceNetwork, Network* destinationN
 gdouble network_getLinkLatency(Network* sourceNetwork, Network* destinationNetwork, gdouble percentile);
 gdouble network_sampleLinkLatency(Network* sourceNetwork, Network* destinationNetwork);
 
+void network_schedulePacket(Network* sourceNetwork, Packet* packet);
+void network_scheduleRetransmit(Network* network, Packet* packet);
+
 // TODO these are out of place...
 void network_scheduleClose(GQuark callerID, GQuark sourceID, in_port_t sourcePort,
 		GQuark destinationID, in_port_t destinationPort, guint32 receiveEnd);
-void network_scheduleRetransmit(rc_vpacket_pod_tp rc_packet, GQuark callerID);
-void network_schedulePacket(rc_vpacket_pod_tp rc_packet);
 
 #endif /* SHD_NETWORK_H_ */

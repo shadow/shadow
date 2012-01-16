@@ -1,7 +1,7 @@
 /*
  * The Shadow Simulator
  *
- * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
+ * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
  *
  * This file is part of Shadow.
  *
@@ -26,13 +26,7 @@
 
 typedef struct _PacketArrivedEvent PacketArrivedEvent;
 
-struct _PacketArrivedEvent {
-	Event super;
-	rc_vpacket_pod_tp rc_packet;
-	MAGIC_DECLARE;
-};
-
-PacketArrivedEvent* packetarrived_new(rc_vpacket_pod_tp rc_packet);
+PacketArrivedEvent* packetarrived_new(Packet* packet);
 void packetarrived_run(PacketArrivedEvent* event, Node* node);
 void packetarrived_free(PacketArrivedEvent* event);
 

@@ -1,7 +1,7 @@
 /*
  * The Shadow Simulator
  *
- * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
+ * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
  *
  * This file is part of Shadow.
  *
@@ -23,30 +23,39 @@
 
 #include <netinet/in.h>
 
+struct _CreateNodesAction {
+	Action super;
+	GQuark id;
+	GQuark softwareID;
+	GQuark networkID;
+	guint64 bandwidthdown;
+	guint64 bandwidthup;
+	guint64 quantity;
+	MAGIC_DECLARE;
+};
+
 RunnableFunctionTable createnodes_functions = {
 		(RunnableRunFunc) createnodes_run,
 		(RunnableFreeFunc) createnodes_free,
 		MAGIC_VALUE
 };
 
-CreateNodesAction* createnodes_new(guint64 quantity, GString* name,
-		GString* applicationName, GString* cpudelayCDFName,
-		GString* networkName, GString* bandwidthupCDFName,
-		GString* bandwidthdownCDFName)
+CreateNodesAction* createnodes_new(GString* name, GString* software, GString* cluster,
+		guint64 bandwidthdown, guint64 bandwidthup, guint64 quantity)
 {
-	g_assert(name && applicationName && cpudelayCDFName && networkName && bandwidthupCDFName && bandwidthdownCDFName);
+	g_assert(name && software);
 	CreateNodesAction* action = g_new0(CreateNodesAction, 1);
 	MAGIC_INIT(action);
 
 	action_init(&(action->super), &createnodes_functions);
 
-	action->quantity = quantity;
 	action->id = g_quark_from_string((const gchar*) name->str);
-	action->softwareID = g_quark_from_string((const gchar*) applicationName->str);
-	action->cpudelayCDFID = g_quark_from_string((const gchar*) cpudelayCDFName->str);
-	action->networkID = g_quark_from_string((const gchar*) networkName->str);
-	action->bandwidthupID = g_quark_from_string((const gchar*) bandwidthupCDFName->str);
-	action->bandwidthdownID = g_quark_from_string((const gchar*) bandwidthdownCDFName->str);
+	action->softwareID = g_quark_from_string((const gchar*) software->str);
+
+	action->networkID = cluster ? g_quark_from_string((const gchar*) cluster->str) : 0;
+	action->bandwidthdown = bandwidthdown;
+	action->bandwidthup = bandwidthup;
+	action->quantity = quantity ? quantity : 1;
 
 	return action;
 }
@@ -56,56 +65,48 @@ void createnodes_run(CreateNodesAction* action) {
 
 	Worker* worker = worker_getPrivate();
 
-	CumulativeDistribution* bwUpCDF = engine_get(worker->cached_engine, CDFS, action->bandwidthupID);
-	CumulativeDistribution* bwDownCDF = engine_get(worker->cached_engine, CDFS, action->bandwidthdownID);
-	CumulativeDistribution* cpuCDF = engine_get(worker->cached_engine, CDFS, action->cpudelayCDFID);
+	const gchar* hostname = g_quark_to_string(action->id);
+	guint hostnameCounter = 0;
 	Software* software = engine_get(worker->cached_engine, SOFTWARE, action->softwareID);
 
-	Network* network = internetwork_getNetwork(worker->cached_engine->internet, action->networkID);
-
-	/* must have one cdf, but the other one can be anything if not a cdf, it will be ignored */
-	if(!bwUpCDF && !bwDownCDF) {
-		critical("Invalid XML file submitted. Please use at least one bandwidth cdf for node creation.");
-		return;
-	}
-
-	if(!cpuCDF || !network || !software) {
+	if(!hostname || !software) {
 		critical("Can not create %lu Node(s) '%s' with NULL components. Check XML file for errors.",
 				action->quantity, g_quark_to_string(action->id));
 		return;
 	}
 
-	guint hostnameCounter = 0;
+	/* if they didnt specify a network, assign to a random network */
+	Network* assignedNetwork = NULL;
+	if(action->networkID) {
+		assignedNetwork = internetwork_getNetwork(worker->cached_engine->internet, action->networkID);
+		g_assert(assignedNetwork);
+	}
 
 	for(gint i = 0; i < action->quantity; i++) {
-		/* get bandwidth */
-		guint32 bwUpKiBps = 0;
-		guint32 bwDownKiBps = 0;
+		Network* network = assignedNetwork ? assignedNetwork :
+				internetwork_getRandomNetwork(worker->cached_engine->internet);
+		g_assert(network);
 
-		/* if we only have 1 id, we have symmetric bandwidth, otherwise asym as specified by cdfs */
-		if(!bwUpCDF || !bwDownCDF) {
-			CumulativeDistribution* symCDF = bwUpCDF != NULL ? bwUpCDF : bwDownCDF;
-			bwUpKiBps = bwDownKiBps = (guint32) cdf_getRandomValue(symCDF);
-		} else {
-			bwUpKiBps = (guint32) cdf_getRandomValue(bwUpCDF);
-			bwDownKiBps = (guint32) cdf_getRandomValue(bwDownCDF);
-		}
+		/* use network bandwidth unless an override was given */
+		guint64 bwUpKiBps = action->bandwidthup ? action->bandwidthup : network_getBandwidthUp(network);
+		guint64 bwDownKiBps = action->bandwidthdown ? action->bandwidthdown : network_getBandwidthDown(network);
 
-		guint64 cpuBps = (guint64) cdf_getRandomValue(cpuCDF);
+		/* FIXME change this when CPU model is added */
+		guint64 cpuBps = 0;
 
 		/* hostname */
-		GString* hostname = g_string_new(g_quark_to_string(action->id));
+		GString* hostnameBuffer = g_string_new(hostname);
 		if(action->quantity > 1) {
 			gchar prefix[20];
 			g_snprintf(prefix, 20, "%u.", ++hostnameCounter);
-			hostname = g_string_prepend(hostname, (const char*) prefix);
+			hostnameBuffer = g_string_prepend(hostnameBuffer, (const char*) prefix);
 		}
-		GQuark id = g_quark_from_string((const gchar*) hostname->str);
+		GQuark id = g_quark_from_string((const gchar*) hostnameBuffer->str);
 
 		/* the node is part of the internet */
-		internetwork_createNode(worker->cached_engine->internet, id, network, software, hostname, bwDownKiBps, bwUpKiBps, cpuBps);
+		internetwork_createNode(worker->cached_engine->internet, id, network, software, hostnameBuffer, bwDownKiBps, bwUpKiBps, cpuBps);
 
-		g_string_free(hostname, TRUE);
+		g_string_free(hostnameBuffer, TRUE);
 
 		StartApplicationEvent* event = startapplication_new();
 

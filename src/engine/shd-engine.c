@@ -1,7 +1,7 @@
 /*
  * The Shadow Simulator
  *
- * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
+ * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
  *
  * This file is part of Shadow.
  *
@@ -28,9 +28,10 @@ Engine* engine_new(Configuration* config) {
 	MAGIC_INIT(engine);
 
 	engine->config = config;
+	engine->runTimer = g_timer_new();
 
 	/* initialize the singleton-per-thread worker class */
-	engine->workerKey = g_private_new(worker_free);
+	engine->workerKey.index = 0;
 
 	/* holds all events if single-threaded, and non-node events otherwise. */
 	engine->masterEventQueue = g_async_queue_new_full(shadowevent_free);
@@ -52,19 +53,34 @@ Engine* engine_new(Configuration* config) {
 void engine_free(Engine* engine) {
 	MAGIC_ASSERT(engine);
 
-	/* its ok if this was already called, its NULL-safe */
-	engine_teardownWorkerThreads(engine);
+	/* engine is now killed */
+	engine->killed = TRUE;
+
+	/* this launches delete on all the plugins and should be called before
+	 * the engine is marked "killed" and workers are destroyed.
+	 */
+	internetwork_free(engine->internet);
+
+	/* we will never execute inside the plugin again */
+	engine->forceShadowContext = TRUE;
+
+	if(engine->workerPool) {
+		engine_teardownWorkerThreads(engine);
+	}
 
 	if(engine->masterEventQueue) {
 		g_async_queue_unref(engine->masterEventQueue);
 	}
 
-	internetwork_free(engine->internet);
 	registry_free(engine->registry);
 	g_cond_free(engine->workersIdle);
 	g_mutex_free(engine->engineIdle);
 
-	message("clean engine shutdown");
+	GDateTime* dt_now = g_date_time_new_now_local();
+	gchar* dt_format = g_date_time_format(dt_now, "%F %H:%M:%S:%N");
+	message("clean engine shutdown at %s", dt_format);
+	g_date_time_unref(dt_now);
+	g_free(dt_format);
 
 	MAGIC_CLEAR(engine);
 	g_free(engine);
@@ -82,6 +98,18 @@ void engine_setupWorkerThreads(Engine* engine, gint nWorkerThreads) {
 			error("thread pool failed: %s", error->message);
 			g_error_free(error);
 		}
+	}
+}
+
+static void _engine_joinWorkerThreads(Engine* engine) {
+	MAGIC_ASSERT(engine);
+
+	/* wait for all workers to process their events. the last worker must
+	 * wait until we are actually listening for the signal before he
+	 * sends us the signal to prevent deadlock. */
+	if(!g_atomic_int_dec_and_test(&(engine->protect.nNodesToProcess))) {
+		while(g_atomic_int_get(&(engine->protect.nNodesToProcess)))
+			g_cond_wait(engine->workersIdle, engine->engineIdle);
 	}
 }
 
@@ -140,7 +168,6 @@ static gint _engine_processEvents(Engine* engine) {
 static void _engine_manageExecutableMail(gpointer data, gpointer user_data) {
 	Node* node = data;
 	Engine* engine = user_data;
-	MAGIC_ASSERT(node);
 	MAGIC_ASSERT(engine);
 
 	/* pop mail from mailbox, check that its in window, push as a task */
@@ -190,20 +217,15 @@ static gint _engine_distributeEvents(Engine* engine) {
 		g_list_foreach(node_list, _engine_manageExecutableMail, engine);
 		g_list_free(node_list);
 
-		/* wait for all workers to process their events. the last worker must
-		 * wait until we are actually listening for the signal before he
-		 * sends us the signal to prevent deadlock. */
-		if(!g_atomic_int_dec_and_test(&(engine->protect.nNodesToProcess))) {
-			while(g_atomic_int_get(&(engine->protect.nNodesToProcess)))
-				g_cond_wait(engine->workersIdle, engine->engineIdle);
-		}
+		/* wait for the workers to finish running */
+		_engine_joinWorkerThreads(engine);
 
 		/* other threads are sleeping */
 
 		/* execute any non-node events
 		 * TODO: parallelize this if it becomes a problem. for now I'm assume
 		 * that we wont have enough non-node events to matter.
-		 * FIXME: this doesnt make sense with actions / events
+		 * FIXME: this doesnt make sense with our action/event layout
 		 */
 		_engine_processEvents(engine);
 

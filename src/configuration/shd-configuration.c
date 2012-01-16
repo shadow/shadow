@@ -1,7 +1,7 @@
 /*
  * The Shadow Simulator
  *
- * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
+ * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
  *
  * This file is part of Shadow.
  *
@@ -37,12 +37,17 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	c->nWorkerThreads = 0;
 	c->minRunAhead = 10;
 	c->printSoftwareVersion = 0;
+	c->initialTCPWindow = 10;
+	c->interfaceBufferSize = 1024000;
+	c->interfaceBatchTime = 10;
+	c->randomSeed = 1;
 
 	/* set options to change defaults for the main group */
 	c->mainOptionGroup = g_option_group_new("main", "Application Options", "Various application related options", NULL, NULL);
 	const GOptionEntry mainEntries[] = {
-	  { "threads", 't', 0, G_OPTION_ARG_INT, &(c->nWorkerThreads), "Use N worker threads", "N" },
-	  { "log-level", 'l', 0, G_OPTION_ARG_STRING, &(c->logLevelInput), "Log LEVEL above which to filter messages (error > critical > warning > message > info > debug)", "LEVEL" },
+	  { "log-level", 'l', 0, G_OPTION_ARG_STRING, &(c->logLevelInput), "Log LEVEL above which to filter messages (error < critical < warning < message < info < debug) [message]", "LEVEL" },
+	  { "seed", 's', 0, G_OPTION_ARG_INT, &(c->randomSeed), "Initialize randomness for each thread using seed N [1]", "N" },
+	  { "workers", 'w', 0, G_OPTION_ARG_INT, &(c->nWorkerThreads), "Use N worker threads [0]", "N" },
 	  { "version", 'v', 0, G_OPTION_ARG_NONE, &(c->printSoftwareVersion), "Print software version and exit", NULL },
 	  { NULL },
 	};
@@ -54,7 +59,10 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	c->networkOptionGroup = g_option_group_new("network", "Network Options", "Various network related options", NULL, NULL);
 	const GOptionEntry networkEntries[] =
 	{
-	  { "runahead", 'r', 0, G_OPTION_ARG_INT, &(c->minRunAhead), "Minimum allowed TIME workers may run ahead when sending events between nodes, in milliseconds", "TIME" },
+	  { "interface-batch", 0, 0, G_OPTION_ARG_INT, &(c->interfaceBatchTime), "Batch time for network interface sends and receives, in milliseconds [10]", "N" },
+	  { "interface-buffer", 0, 0, G_OPTION_ARG_INT, &(c->interfaceBufferSize), "Size of the network interface receive buffer, in bytes [1024000]", "N" },
+	  { "runahead", 0, 0, G_OPTION_ARG_INT, &(c->minRunAhead), "Minimum allowed TIME workers may run ahead when sending events between nodes, in milliseconds [10]", "TIME" },
+	  { "tcp-windows", 0, 0, G_OPTION_ARG_INT, &(c->initialTCPWindow), "Initialize the TCP send, receive, and congestion windows to N packets [10]", "N" },
 	  { NULL },
 	};
 
@@ -65,7 +73,6 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	c->pluginsOptionGroup = g_option_group_new("plug-ins", "Plug-in Examples", "Run example simulations with built-in plug-ins", NULL, NULL);
 	const GOptionEntry pluginEntries[] =
 	{
-	  { "ping", 0, 0, G_OPTION_ARG_NONE, &(c->runPingExample), "Run basic ping-pong simulation", NULL },
 	  { "echo", 0, 0, G_OPTION_ARG_NONE, &(c->runEchoExample), "Run basic echo simulation", NULL },
 	  { "file", 0, 0, G_OPTION_ARG_NONE, &(c->runFileExample), "Run basic HTTP file transfer simulation", NULL },
 	  { NULL },
@@ -86,8 +93,7 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	/* make sure we have the required arguments. program name is first arg.
 	 * printing the software version requires no other args. running a
 	 * plug-in example also requires no other args. */
-	if(!(c->printSoftwareVersion) && !(c->runPingExample) &&
-			!(c->runEchoExample) && !(c->runFileExample) &&
+	if(!(c->printSoftwareVersion) && !(c->runEchoExample) && !(c->runFileExample) &&
 			(argc < nRequiredXMLFiles + 1)) {
 		g_printerr("** Please provide the required parameters **\n");
 		g_printerr(g_option_context_get_help(c->context, TRUE, NULL));
@@ -100,6 +106,20 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	}
 	if(c->logLevelInput == NULL) {
 		c->logLevelInput = g_strdup("message");
+	}
+	if(c->initialTCPWindow < 1) {
+		c->initialTCPWindow = 1;
+	}
+	if(c->interfaceBufferSize < CONFIG_MTU) {
+		c->interfaceBufferSize = CONFIG_MTU;
+	}
+	if(c->interfaceBatchTime < 0) {
+		c->interfaceBatchTime = 0;
+	}
+	c->interfaceBatchTime *= SIMTIME_ONE_MILLISECOND;
+	if(c->interfaceBatchTime == 0) {
+		/* we require at least 1 nanosecond b/c of time granularity */
+		c->interfaceBatchTime = 1;
 	}
 
 	c->inputXMLFilenames = g_queue_new();

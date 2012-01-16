@@ -1,7 +1,7 @@
 /*
  * The Shadow Simulator
  *
- * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
+ * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
  *
  * This file is part of Shadow.
  *
@@ -28,21 +28,16 @@
 
 typedef struct _Link Link;
 
-struct _Link {
-	Network* sourceNetwork;
-	Network* destinationNetwork;
-	CumulativeDistribution* latency;
-	gdouble reliability;
-	MAGIC_DECLARE;
-};
-
 Link* link_new(Network* sourceNetwork, Network* destinationNetwork,
-		CumulativeDistribution* latency, gdouble reliability);
+		guint64 latency, guint64 jitter, gdouble packetloss);
 void link_free(gpointer data);
 
 Network* link_getSourceNetwork(Link* link);
 Network* link_getDestinationNetwork(Link* link);
-gdouble link_getLatency(Link* link);
-gdouble link_getReliability(Link* link);
+
+guint64 link_getLatency(Link* link);
+guint64 link_getJitter(Link* link);
+gdouble link_getPacketLoss(Link* link);
+guint64 link_computeDelay(Link* link, gdouble percentile);
 
 #endif /* SHD_LINK_H_ */

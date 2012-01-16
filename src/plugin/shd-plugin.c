@@ -1,7 +1,7 @@
 /*
  * The Shadow Simulator
  *
- * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
+ * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
  *
  * This file is part of Shadow.
  *
@@ -149,6 +149,13 @@ void plugin_free(gpointer data) {
 	g_unlink(plugin->path->str);
 	g_string_free(plugin->path, TRUE);
 
+	if(plugin->residentState) {
+		pluginstate_free(plugin->residentState);
+	}
+	if(plugin->defaultState) {
+		pluginstate_free(plugin->defaultState);
+	}
+
 	MAGIC_CLEAR(plugin);
 	g_free(plugin);
 }
@@ -166,9 +173,11 @@ void plugin_registerResidentState(Plugin* plugin, PluginFunctionTable* callbackF
 	}
 
 	/* these are the physical memory addresses and sizes for each variable */
+	debug("registering resident plugin memory locations");
 	plugin->residentState = pluginstate_new(callbackFunctions, nVariables, variableArguments);
 
 	/* also store a copy of the defaults as they exist now */
+	debug("copying resident plugin memory location contents as default start state");
 	plugin->defaultState = pluginstate_copyNew(plugin->residentState);
 
 	/* dont change our resident state or defaults */
@@ -219,33 +228,10 @@ void plugin_executeFree(Plugin* plugin, PluginState* state) {
 	_plugin_stopExecuting(plugin, state);
 }
 
-void plugin_executeReadable(Plugin* plugin, PluginState* state, gint socketParam) {
+void plugin_executeNotify(Plugin* plugin, PluginState* state) {
 	MAGIC_ASSERT(plugin);
 	_plugin_startExecuting(plugin, state);
-	pluginstate_getPluginFunctions(plugin->residentState)->readable(socketParam);
-	_plugin_stopExecuting(plugin, state);
-}
-
-void plugin_executeWritable(Plugin* plugin, PluginState* state, gint socketParam) {
-	MAGIC_ASSERT(plugin);
-	_plugin_startExecuting(plugin, state);
-	pluginstate_getPluginFunctions(plugin->residentState)->writable(socketParam);
-	_plugin_stopExecuting(plugin, state);
-}
-
-void plugin_executeWritableReadable(Plugin* plugin, PluginState* state, gint socketParam) {
-	MAGIC_ASSERT(plugin);
-	_plugin_startExecuting(plugin, state);
-	pluginstate_getPluginFunctions(plugin->residentState)->writable(socketParam);
-	pluginstate_getPluginFunctions(plugin->residentState)->readable(socketParam);
-	_plugin_stopExecuting(plugin, state);
-}
-
-void plugin_executeReadableWritable(Plugin* plugin, PluginState* state, gint socketParam) {
-	MAGIC_ASSERT(plugin);
-	_plugin_startExecuting(plugin, state);
-	pluginstate_getPluginFunctions(plugin->residentState)->readable(socketParam);
-	pluginstate_getPluginFunctions(plugin->residentState)->writable(socketParam);
+	pluginstate_getPluginFunctions(plugin->residentState)->notify();
 	_plugin_stopExecuting(plugin, state);
 }
 

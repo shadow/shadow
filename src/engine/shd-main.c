@@ -1,7 +1,7 @@
 /*
  * The Shadow Simulator
  *
- * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
+ * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
  *
  * This file is part of Shadow.
  *
@@ -36,7 +36,7 @@ gint shadow_main(gint argc, gchar* argv[]) {
 		/* incorrect options given */
 		return -1;
 	} else if(config->printSoftwareVersion) {
-		g_printerr("Shadow v%s - (c) 2010-2011 Rob G. Jansen\nReleased under the GNU GPL, v3\n", SHADOW_VERSION);
+		g_printerr("Shadow v%s\n(c) 2010-2012 Rob G. Jansen\nReleased under the GNU GPL, v3\n", SHADOW_VERSION);
 		configuration_free(config);
 		return 0;
 	}
@@ -59,9 +59,14 @@ gint shadow_main(gint argc, gchar* argv[]) {
 	 * during cleanup below. */
 	GLogLevelFlags configuredLogLevel = configuration_getLogLevel(config);
 	g_log_set_default_handler(logging_handleLog, &(configuredLogLevel));
-	debug("log system initialized");
 
-#if 0 /* these are only avail in glib >= 2.30 */
+	GDateTime* dt_now = g_date_time_new_now_local();
+	gchar* dt_format = g_date_time_format(dt_now, "%F %H:%M:%S:%N");
+	message("Shadow v%s engine initialized at %s", SHADOW_VERSION, dt_format);
+	g_date_time_unref(dt_now);
+	g_free(dt_format);
+
+#if 0 /* @todo: these are only avail in glib >= 2.30 */
 	/* setup signal handlers for gracefully handling shutdowns */
 	g_unix_signal_add(SIGTERM, engine_handleInterruptSignal, shadow_engine);
 	g_unix_signal_add(SIGHUP, engine_handleInterruptSignal, shadow_engine);
@@ -74,11 +79,7 @@ gint shadow_main(gint argc, gchar* argv[]) {
 
 	/* parse built-in examples, or input files */
 	gboolean success = TRUE;
-	if(config->runPingExample) {
-		GString* ping = example_getPingExampleContents();
-		success = parser_parseContents(xmlParser, ping->str, ping->len, actions);
-		g_string_free(ping, TRUE);
-	} else if(config->runEchoExample) {
+	if(config->runEchoExample) {
 		GString* echo = example_getEchoExampleContents();
 		success = parser_parseContents(xmlParser, echo->str, echo->len, actions);
 		g_string_free(echo, TRUE);
@@ -128,16 +129,12 @@ gint shadow_main(gint argc, gchar* argv[]) {
 	gint retval = engine_run(shadow_engine);
 
 	/* join thread pool. workers are auto-deleted when threads end. */
-	debug("engine finished, waiting for workers...");
-	if(n > 0) {
-		engine_teardownWorkerThreads(shadow_engine);
-	}
-
-	shadow_engine->killed = TRUE;
+	debug("engine finished, cleaning up...");
 
 	/* cleanup */
 	configuration_free(config);
 	engine_free(shadow_engine);
+	shadow_engine = NULL;
 	worker_free(mainThreadWorker);
 
 	return retval;

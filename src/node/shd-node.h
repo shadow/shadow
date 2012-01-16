@@ -1,7 +1,7 @@
 /*
  * The Shadow Simulator
  *
- * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
+ * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
  *
  * This file is part of Shadow.
  *
@@ -28,36 +28,7 @@
 
 typedef struct _Node Node;
 
-struct _Node {
-	/* asynchronous event priority queue. other nodes may push to this queue. */
-	GAsyncQueue* event_mailbox;
-
-	/* the network this node belongs to */
-	Network* network;
-
-	/* general node lock. nothing that belongs to the node should be touched
-	 * unless holding this lock. everything following this falls under the lock.
-	 */
-	GMutex* node_lock;
-
-	/* a simple priority queue holding events currently being executed.
-	 * events are place in this queue before handing the node off to a
-	 * worker and should not be modified by other nodes. */
-	GQueue* event_priority_queue;
-
-	GQuark id;
-	Address* address;
-	Application* application;
-	vsocket_mgr_tp vsocket_mgr;
-
-	/* all file, socket, and epoll descriptors we know about and track */
-	GTree* descriptors;
-	gint descriptorHandleCounter;
-
-	MAGIC_DECLARE;
-};
-
-Node* node_new(GQuark id, Network* network, Software* software, guint32 ip, GString* hostname, guint32 bwDownKiBps, guint32 bwUpKiBps, guint64 cpuBps);
+Node* node_new(GQuark id, Network* network, Software* software, guint32 ip, GString* hostname, guint64 bwDownKiBps, guint64 bwUpKiBps, guint64 cpuBps);
 void node_free(gpointer data);
 
 void node_lock(Node* node);
@@ -74,14 +45,31 @@ guint node_getNumTasks(Node* node);
 
 gint node_compare(gconstpointer a, gconstpointer b, gpointer user_data);
 gboolean node_isEqual(Node* a, Node* b);
+CPU* node_getCPU(Node* node);
+Network* node_getNetwork(Node* node);
+gchar* node_getName(Node* node);
+in_addr_t node_getDefaultIP(Node* node);
+gchar* node_getDefaultIPName(Node* node);
+Application* node_getApplication(Node* node);
 
-guint32 node_getBandwidthUp(Node* node);
-guint32 node_getBandwidthDown(Node* node);
+gint node_createDescriptor(Node* node, enum DescriptorType type);
+void node_closeDescriptor(Node* node, gint handle);
+gint node_closeUser(Node* node, gint handle);
+Descriptor* node_lookupDescriptor(Node* node, gint handle);
+NetworkInterface* node_lookupInterface(Node* node, in_addr_t handle);
 
-gint node_epollNew(Node* node);
 gint node_epollControl(Node* node, gint epollDescriptor, gint operation,
 		gint fileDescriptor, struct epoll_event* event);
-gint node_epollGetEvents(Node* node, gint epollDescriptor,
-		struct epoll_event* eventArray, gint eventArrayLength, gint* nEvents);
+gint node_epollGetEvents(Node* node, gint handle, struct epoll_event* eventArray,
+		gint eventArrayLength, gint* nEvents);
+
+gint node_bindToInterface(Node* node, gint handle, in_addr_t bindAddress, in_port_t bindPort);
+gint node_connectToPeer(Node* node, gint handle, in_addr_t peerAddress, in_port_t peerPort, sa_family_t family);
+gint node_listenForPeer(Node* node, gint handle, gint backlog);
+gint node_acceptNewPeer(Node* node, gint handle, in_addr_t* ip, in_port_t* port, gint* acceptedHandle);
+gint node_sendUserData(Node* node, gint handle, gconstpointer buffer, gsize nBytes, in_addr_t ip, in_addr_t port, gsize* bytesCopied);
+gint node_receiveUserData(Node* node, gint handle, gpointer buffer, gsize nBytes, in_addr_t* ip, in_port_t* port, gsize* bytesCopied);
+gint node_getPeerName(Node* node, gint handle, in_addr_t* ip, in_port_t* port);
+gint node_getSocketName(Node* node, gint handle, in_addr_t* ip, in_port_t* port);
 
 #endif /* SHD_NODE_H_ */

@@ -1,7 +1,7 @@
 /*
  * The Shadow Simulator
  *
- * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
+ * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
  *
  * This file is part of Shadow.
  *
@@ -32,6 +32,8 @@ struct _Worker {
 	SimulationTime clock_now;
 	SimulationTime clock_last;
 	SimulationTime clock_barrier;
+
+	Random* random;
 
 	Engine* cached_engine;
 	Plugin* cached_plugin;

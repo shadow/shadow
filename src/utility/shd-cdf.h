@@ -1,7 +1,7 @@
 /*
  * The Shadow Simulator
  *
- * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
+ * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
  *
  * This file is part of Shadow.
  *
@@ -71,6 +71,5 @@ void cdf_free(gpointer data);
 gdouble cdf_getValue(CumulativeDistribution* cdf, gdouble percentile);
 gdouble cdf_getMinimumValue(CumulativeDistribution* cdf);
 gdouble cdf_getMaximumValue(CumulativeDistribution* cdf);
-gdouble cdf_getRandomValue(CumulativeDistribution* cdf);
 
 #endif /* SHD_CDF_H_ */

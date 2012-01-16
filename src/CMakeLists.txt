@@ -5,7 +5,7 @@ include_directories(${SHADOW_SOURCE_DIR}/ ${GLIB_INCLUDES})
 add_subdirectory(intercept)
 
 ## build the built-in plug-in libraries
-add_subdirectory(plugin/libraries)
+add_subdirectory(library)
 
 ## sources for our main shadow program
 set(shadow_srcs
@@ -25,22 +25,20 @@ set(shadow_srcs
     plugin/shd-plugin.c
     plugin/shd-plugin-state.c
     plugin/shd-software.c
-    plugin/libraries/shd-library.c
+    plugin/shd-system.c
+    library/shd-library.c
     
     runnable/shd-runnable.c
+    runnable/shd-listener.c
     runnable/event/shd-event.c
     runnable/event/shd-start-application.c
     runnable/event/shd-callback.c
+    runnable/event/shd-interface-received.c
+    runnable/event/shd-interface-sent.c
+    runnable/event/shd-notify-plugin.c
     runnable/event/shd-packet-arrived.c
-    runnable/event/shd-packet-received.c
-    runnable/event/shd-packet-sent.c
-    runnable/event/shd-socket-activated.c
-    runnable/event/shd-socket-poll-timer-expired.c
+    runnable/event/shd-packet-dropped.c
     runnable/event/shd-tcp-close-timer-expired.c
-    runnable/event/shd-tcp-dack-timer-expired.c
-    runnable/event/shd-tcp-retransmit-timer-expired.c
-    runnable/event/shd-spine.c
-    runnable/action/shd-spina.c
     runnable/action/shd-action.c
     runnable/action/shd-connect-network.c
     runnable/action/shd-create-software.c
@@ -51,36 +49,24 @@ set(shadow_srcs
     runnable/action/shd-load-plugin.c
     runnable/action/shd-kill-engine.c
         
-    node/shd-descriptor.c
-    node/shd-epoll.c
-    node/shd-system.c
+    node/descriptor/shd-descriptor.c
+    node/descriptor/shd-epoll.c
+    node/descriptor/shd-transport.c
+    node/descriptor/shd-channel.c
+    node/descriptor/shd-socket.c
+    node/descriptor/shd-tcp.c
+    node/descriptor/shd-udp.c
+    node/shd-packet.c
+    node/shd-cpu.c
+    node/shd-network-interface.c
     node/shd-application.c
     node/shd-node.c
         
+    utility/shd-utility.c
     utility/shd-cdf.c
     utility/shd-registry.c
-    
-    utility/linkedbuffer.c
-    utility/orderedlist.c
-    utility/reference_counter.c
-    utility/rand.c
-    virtual/vbuffer.c
-    virtual/vcpu.c
-    virtual/vepoll.c
-    virtual/vevent_mgr.c
-    virtual/vevent.c
-    virtual/vpacket_mgr.c
-    virtual/vpacket.c
-    virtual/vpeer.c
-    virtual/vpipe.c
-    virtual/vsocket_mgr.c
-    virtual/vsocket.c
-    virtual/vsystem.c
-    virtual/vtcp_server.c
-    virtual/vtcp.c
-    virtual/vtransport_mgr.c
-    virtual/vtransport.c
-    virtual/vudp.c
+    utility/shd-byte-queue.c
+    utility/shd-random.c
     
     main.c
 )
@@ -88,7 +74,7 @@ set(shadow_srcs
 ## specify the main shadow executable, build, link, and install
 add_executable(shadow-bin ${shadow_srcs})
 add_dependencies(shadow-bin shadow-intercept shadow-preload)
-target_link_libraries(shadow-bin shadow-intercept ${M_LIBRARIES} ${EVENT2_LIBRARIES} ${OPENSSL_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES} ${GLIB_LIBRARIES})
+target_link_libraries(shadow-bin shadow-intercept ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES} ${GLIB_LIBRARIES})
 install(TARGETS shadow-bin DESTINATION bin)
 
 ## shadow needs to find libshadow-intercept and custom libs after install

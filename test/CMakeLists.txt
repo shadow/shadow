@@ -1,4 +1,4 @@
-## this project defines tests for DVN
+## this project defines tests
 ENABLE_TESTING()
 
 include_directories(${CMAKE_SOURCE_DIR}/src)

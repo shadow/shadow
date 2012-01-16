@@ -1,7 +1,7 @@
 /*
  * The Shadow Simulator
  *
- * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
+ * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
  *
  * This file is part of Shadow.
  *
@@ -31,6 +31,7 @@ struct _Internetwork {
 
 	GHashTable* nodes;
 	GHashTable* networks;
+	GHashTable* networksByIP;
 	GHashTable* nameByIp;
 	GHashTable* ipByName;
 
@@ -45,15 +46,17 @@ struct _Internetwork {
 Internetwork* internetwork_new();
 void internetwork_free(Internetwork* internet);
 
-void internetwork_createNetwork(Internetwork* internet, GQuark networkID, CumulativeDistribution* intranetLatency, gdouble intranetReliability);
-void internetwork_connectNetworks(Internetwork* internet, GQuark networkAID, GQuark networkBID,
-		CumulativeDistribution* latencyA2B, CumulativeDistribution* latencyB2A,
-		gdouble reliabilityA2B, gdouble reliabilityB2A);
+void internetwork_createNetwork(Internetwork* internet, GQuark networkID, guint64 bandwidthdown, guint64 bandwidthup);
+void internetwork_connectNetworks(Internetwork* internet,
+		GQuark sourceClusterID, GQuark destinationClusterID,
+		guint64 latency, guint64 jitter, gdouble packetloss);
 Network* internetwork_getNetwork(Internetwork* internet, GQuark networkID);
+Network* internetwork_getRandomNetwork(Internetwork* internet);
+Network* internetwork_lookupNetwork(Internetwork* internet, in_addr_t ip);
 
 void internetwork_createNode(Internetwork* internet, GQuark nodeID,
 		Network* network, Software* software, GString* hostname,
-		guint32 bwDownKiBps, guint32 bwUpKiBps, guint64 cpuBps);
+		guint64 bwDownKiBps, guint64 bwUpKiBps, guint64 cpuBps);
 Node* internetwork_getNode(Internetwork* internet, GQuark nodeID);
 GList* internetwork_getAllNodes(Internetwork* internet);
 
@@ -61,12 +64,12 @@ GQuark internetwork_resolveName(Internetwork* internet, gchar* name);
 const gchar* internetwork_resolveIP(Internetwork* internet, guint32 ip);
 const gchar* internetwork_resolveID(Internetwork* internet, GQuark id);
 
-guint32 internetwork_getNodeBandwidthUp(Internetwork* internet, GQuark nodeID);
-guint32 internetwork_getNodeBandwidthDown(Internetwork* internet, GQuark nodeID);
 gdouble internetwork_getReliability(Internetwork* internet, GQuark sourceNodeID, GQuark destinationNodeID);
 gdouble internetwork_getLatency(Internetwork* internet, GQuark sourceNodeID, GQuark destinationNodeID, gdouble percentile);
 gdouble internetwork_sampleLatency(Internetwork* internet, GQuark sourceNodeID, GQuark destinationNodeID);
 gdouble internetwork_getMinimumGlobalLatency(Internetwork* internet);
 gdouble internetwork_getMaximumGlobalLatency(Internetwork* internet);
+guint32 internetwork_getNodeBandwidthUp(Internetwork* internet, GQuark nodeID);
+guint32 internetwork_getNodeBandwidthDown(Internetwork* internet, GQuark nodeID);
 
 #endif /* SHD_INTERNETWORK_H_ */

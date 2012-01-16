@@ -1,7 +1,7 @@
 /*
  * The Shadow Simulator
  *
- * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
+ * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
  *
  * This file is part of Shadow.
  *
@@ -71,6 +71,10 @@ void loadplugin_run(LoadPluginAction* action) {
 
 void loadplugin_free(LoadPluginAction* action) {
 	MAGIC_ASSERT(action);
+
+	if(action->path) {
+		g_string_free(action->path, FALSE);
+	}
 
 	MAGIC_CLEAR(action);
 	g_free(action);

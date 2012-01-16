@@ -1,7 +1,7 @@
 /**
  * The Shadow Simulator
  *
- * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
+ * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
  *
  * This file is part of Shadow.
  *
@@ -21,15 +21,45 @@
 
 #include "shadow.h"
 
-GString* example_getPingExampleContents() {
-	return g_string_new("<plugin name=\"pingpongplugin\" path=\"libshadow-plugin-pingpong.so\" /><cdf name=\"pingpongcpu\" center=\"100000000\" width=\"20000000\" tail=\"20000000\" /><cdf name=\"clientbandwidth\" center=\"512\" width=\"300\" tail=\"100\" /><cdf name=\"serverbandwidth\" center=\"10240\" width=\"300\" tail=\"100\" /><cdf name=\"pingponglatency\" center=\"200\" width=\"40\" tail=\"20\" /><network name=\"pingpongnetwork\" latency=\"pingponglatency\" reliability=\"1.0\" /><software name=\"tcpserver\" plugin=\"pingpongplugin\" time=\"10\" arguments=\"server tcp\" /><software name=\"udpserver\" plugin=\"pingpongplugin\" time=\"10\" arguments=\"server udp\" /><software name=\"tcpclient\" plugin=\"pingpongplugin\" time=\"20\" arguments=\"client tcp tcpserver\" /><software name=\"udpclient\" plugin=\"pingpongplugin\" time=\"20\" arguments=\"client udp udpserver\" /><node name=\"tcpserver\" software=\"tcpserver\" network=\"pingpongnetwork\" bandwidthup=\"serverbandwidth\" bandwidthdown=\"serverbandwidth\" cpu=\"pingpongcpu\" /><node name=\"udpserver\" software=\"udpserver\" network=\"pingpongnetwork\" bandwidthup=\"serverbandwidth\" bandwidthdown=\"serverbandwidth\" cpu=\"pingpongcpu\" /><node name=\"tcpclient\" software=\"tcpclient\" network=\"pingpongnetwork\" bandwidthup=\"clientbandwidth\" bandwidthdown=\"clientbandwidth\" cpu=\"pingpongcpu\" /><node name=\"udpclient\" software=\"udpclient\" network=\"pingpongnetwork\" bandwidthup=\"clientbandwidth\" bandwidthdown=\"clientbandwidth\" cpu=\"pingpongcpu\" /><kill time=\"30\" />");
-}
-
 GString* example_getEchoExampleContents() {
-	return g_string_new("<plugin name=\"echoplugin\" path=\"libshadow-plugin-echo.so\" /><cdf name=\"echocpu\" center=\"100000000\" width=\"20000000\" tail=\"20000000\" /><cdf name=\"echobandwidth\" center=\"10\" width=\"0\" tail=\"0\" /><cdf name=\"echolatency\" center=\"200\" width=\"40\" tail=\"20\" /><network name=\"echonetwork\" latency=\"echolatency\" reliability=\"1.0\" /><software name=\"echoserver\" plugin=\"echoplugin\" time=\"10\" arguments=\"server\" /><software name=\"echoclient\" plugin=\"echoplugin\" time=\"20\" arguments=\"client server.echo\" /><software name=\"echoloopback\" plugin=\"echoplugin\" time=\"20\" arguments=\"loopback\" /><node name=\"server.echo\" software=\"echoserver\" network=\"echonetwork\" bandwidthup=\"echobandwidth\" bandwidthdown=\"echobandwidth\" cpu=\"echocpu\" /><node name=\"client.echo\" software=\"echoclient\" network=\"echonetwork\" bandwidthup=\"echobandwidth\" bandwidthdown=\"echobandwidth\" cpu=\"echocpu\" /><node name=\"loopback.echo\" software=\"echoloopback\" network=\"echonetwork\" bandwidthup=\"echobandwidth\" bandwidthdown=\"echobandwidth\" cpu=\"echocpu\" /><kill time=\"180\" />");
+	return g_string_new(
+		"<plugin id=\"echoplugin\" path=\"libshadow-plugin-echo.so\" />"
+		"<cluster id=\"net0\" bandwidthdown=\"1024\" bandwidthup=\"512\"/>"
+		"<link id=\"link0\" clusters=\"net0 net0\" latency=\"50\" jitter=\"10\" packetloss=\"0.0\" />"
+		"<cluster id=\"net1\" bandwidthdown=\"1024\" bandwidthup=\"512\"/>"
+		"<link id=\"link1\" clusters=\"net1 net1\" latency=\"50\" jitter=\"40\" packetloss=\"0.5\" />"
+		"<software id=\"echoudpserver\" plugin=\"echoplugin\" time=\"10\" arguments=\"udp server\" />"
+		"<software id=\"reliableechoudpclient\" plugin=\"echoplugin\" time=\"20\" arguments=\"udp client reliable.udpserver.echo\" />"
+		"<software id=\"echoudploopback\" plugin=\"echoplugin\" time=\"20\" arguments=\"udp loopback\" />"
+		"<software id=\"echotcpserver\" plugin=\"echoplugin\" time=\"10\" arguments=\"tcp server\" />"
+		"<software id=\"reliableechotcpclient\" plugin=\"echoplugin\" time=\"20\" arguments=\"tcp client reliable.tcpserver.echo\" />"
+		"<software id=\"unreliableechotcpclient\" plugin=\"echoplugin\" time=\"20\" arguments=\"tcp client unreliable.tcpserver.echo\" />"
+		"<software id=\"echotcploopback\" plugin=\"echoplugin\" time=\"20\" arguments=\"tcp loopback\" />"
+		"<software id=\"echosocketpair\" plugin=\"echoplugin\" time=\"20\" arguments=\"tcp socketpair\" />"
+		"<software id=\"echopipe\" plugin=\"echoplugin\" time=\"20\" arguments=\"pipe\" />"
+		"<node id=\"reliable.udpserver.echo\" software=\"echoudpserver\" cluster=\"net0\" />"
+		"<node id=\"reliable.udpclient.echo\" software=\"reliableechoudpclient\" cluster=\"net0\" />"
+		"<node id=\"reliable.udploopback.echo\" software=\"echoudploopback\" cluster=\"net0\" />"
+		"<node id=\"reliable.tcpserver.echo\" software=\"echotcpserver\" cluster=\"net0\" />"
+		"<node id=\"reliable.tcpclient.echo\" software=\"reliableechotcpclient\" cluster=\"net0\" />"
+		"<node id=\"reliable.tcploopback.echo\" software=\"echotcploopback\" cluster=\"net0\" />"
+		"<node id=\"unreliable.tcpserver.echo\" software=\"echotcpserver\" cluster=\"net1\" />"
+		"<node id=\"unreliable.tcpclient.echo\" software=\"unreliableechotcpclient\" cluster=\"net1\" />"
+		"<node id=\"unreliable.tcploopback.echo\" software=\"echotcploopback\" cluster=\"net1\" />"
+		"<node id=\"socketpair.echo\" software=\"echosocketpair\" cluster=\"net0\" />"
+		"<node id=\"pipe.echo\" software=\"echopipe\" cluster=\"net0\" />"
+		"<kill time=\"180\" />");
 }
 
 GString* example_getFileExampleContents() {
 	/* serve and download /bin/ls 10 times for each of 100 clients */
-	return g_string_new("<plugin name=\"filetransfer\" path=\"libshadow-plugin-filetransfer.so\" /><cdf name=\"filecpu\" center=\"100000000\" width=\"20000000\" tail=\"20000000\" /><cdf name=\"serverbandwidth\" center=\"10240\" width=\"0\" tail=\"0\" /><cdf name=\"clientbandwidth\" center=\"1024\" width=\"0\" tail=\"0\" /><cdf name=\"filelatency\" center=\"100\" width=\"20\" tail=\"20\" /><network name=\"filenetwork\" latency=\"filelatency\" reliability=\"1.0\" /><software name=\"fileserver\" plugin=\"filetransfer\" time=\"10\" arguments=\"server 8080 /bin/\" /><software name=\"fileclient\" plugin=\"filetransfer\" time=\"20\" arguments=\"client single server.filetransfer 8080 none 0 10 /ls\" /><node name=\"server.filetransfer\" software=\"fileserver\" network=\"filenetwork\" bandwidthup=\"serverbandwidth\" bandwidthdown=\"serverbandwidth\" cpu=\"filecpu\" /><node name=\"client.filetransfer\" quantity=\"100\" software=\"fileclient\" network=\"filenetwork\" bandwidthup=\"clientbandwidth\" bandwidthdown=\"clientbandwidth\" cpu=\"filecpu\" /><kill time=\"600\" />");
+	return g_string_new(
+		"<plugin id=\"filex\" path=\"libshadow-plugin-filetransfer.so\" />"
+		"<cluster id=\"net0\" bandwidthdown=\"1024\" bandwidthup=\"512\"/>"
+		"<link id=\"link0\" clusters=\"net0 net0\" latency=\"50\" jitter=\"10\" packetloss=\"0.005\"/>"
+		"<software id=\"fileserver\" plugin=\"filex\" time=\"10\" arguments=\"server 8080 /bin/\" />"
+		"<software id=\"fileclient\" plugin=\"filex\" time=\"20\" arguments=\"client single server.filetransfer 8080 none 0 10 /ls\" />"
+		"<node id=\"server.filetransfer\" software=\"fileserver\" cluster=\"net0\" bandwidthup=\"10240\" bandwidthdown=\"5120\" />"
+		"<node id=\"client.filetransfer\" quantity=\"100\" software=\"fileclient\" />"
+		"<kill time=\"600\" />");
 }

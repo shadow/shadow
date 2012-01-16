@@ -1,7 +1,7 @@
 /*
  * The Shadow Simulator
  *
- * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
+ * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
  *
  * This file is part of Shadow.
  *
@@ -36,7 +36,6 @@ Application* application_new(Software* software);
 void application_free(Application* application);
 
 void application_boot(Application* application);
-void application_readable(Application* application, gint socketDescriptor);
-void application_writable(Application* application, gint socketDescriptor);
+void application_notify(Application* application);
 
 #endif /* SHD_APPLICATION_H_ */

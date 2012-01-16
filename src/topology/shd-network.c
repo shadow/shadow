@@ -1,7 +1,7 @@
 /*
  * The Shadow Simulator
  *
- * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
+ * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
  *
  * This file is part of Shadow.
  *
@@ -21,11 +21,26 @@
 
 #include "shadow.h"
 
-Network* network_new(GQuark id) {
+struct _Network {
+	GQuark id;
+	/* links to other networks this network can access */
+	GList* outgoingLinks;
+	/* links from other networks that can access this network */
+	GList* incomingLinks;
+	/* map to outgoing links by network id */
+	GHashTable* outgoingLinkMap;
+	guint64 bandwidthdown;
+	guint64 bandwidthup;
+	MAGIC_DECLARE;
+};
+
+Network* network_new(GQuark id, guint64 bandwidthdown, guint64 bandwidthup) {
 	Network* network = g_new0(Network, 1);
 	MAGIC_INIT(network);
 
 	network->id = id;
+	network->bandwidthdown = bandwidthdown;
+	network->bandwidthup = bandwidthup;
 
 	/* lists are created by setting to NULL */
 	network->incomingLinks = NULL;
@@ -52,6 +67,21 @@ void network_free(gpointer data) {
 
 	MAGIC_CLEAR(network);
 	g_free(network);
+}
+
+GQuark* network_getIDReference(Network* network) {
+	MAGIC_ASSERT(network);
+	return &(network->id);
+}
+
+guint64 network_getBandwidthUp(Network* network) {
+	MAGIC_ASSERT(network);
+	return network->bandwidthup;
+}
+
+guint64 network_getBandwidthDown(Network* network) {
+	MAGIC_ASSERT(network);
+	return network->bandwidthdown;
 }
 
 gint network_compare(gconstpointer a, gconstpointer b, gpointer user_data) {
@@ -99,7 +129,7 @@ gdouble network_getLinkReliability(Network* sourceNetwork, Network* destinationN
 	MAGIC_ASSERT(destinationNetwork);
 	Link* link = g_hash_table_lookup(sourceNetwork->outgoingLinkMap, &(destinationNetwork->id));
 	if(link) {
-		return link->reliability;
+		return (1.0 - link_getPacketLoss(link));
 	} else {
 		critical("unable to find link between networks '%s' and '%s'. Check XML file for errors.",
 				g_quark_to_string(sourceNetwork->id), g_quark_to_string(destinationNetwork->id));
@@ -110,9 +140,11 @@ gdouble network_getLinkReliability(Network* sourceNetwork, Network* destinationN
 gdouble network_getLinkLatency(Network* sourceNetwork, Network* destinationNetwork, gdouble percentile) {
 	MAGIC_ASSERT(sourceNetwork);
 	MAGIC_ASSERT(destinationNetwork);
+
 	Link* link = g_hash_table_lookup(sourceNetwork->outgoingLinkMap, &(destinationNetwork->id));
+
 	if(link) {
-		return cdf_getValue(link->latency, percentile);
+		return link_computeDelay(link, percentile);
 	} else {
 		critical("unable to find link between networks '%s' and '%s'. Check XML file for errors.",
 				g_quark_to_string(sourceNetwork->id), g_quark_to_string(destinationNetwork->id));
@@ -123,132 +155,95 @@ gdouble network_getLinkLatency(Network* sourceNetwork, Network* destinationNetwo
 gdouble network_sampleLinkLatency(Network* sourceNetwork, Network* destinationNetwork) {
 	MAGIC_ASSERT(sourceNetwork);
 	MAGIC_ASSERT(destinationNetwork);
-	Link* link = g_hash_table_lookup(sourceNetwork->outgoingLinkMap, &(destinationNetwork->id));
-	if(link) {
-		return cdf_getRandomValue(link->latency);
-	} else {
-		critical("unable to find link between networks '%s' and '%s'. Check XML file for errors.",
-				g_quark_to_string(sourceNetwork->id), g_quark_to_string(destinationNetwork->id));
-		return G_MAXDOUBLE;
-	}
+
+	gdouble percentile = random_nextDouble(worker_getPrivate()->random);
+	return network_getLinkLatency(sourceNetwork, destinationNetwork, percentile);
 }
 
 void network_scheduleClose(GQuark callerID, GQuark sourceID, in_port_t sourcePort,
 		GQuark destinationID, in_port_t destinationPort, guint32 receiveEnd)
 {
 	/* TODO refactor - this was hacked to allow loopback addresses */
-	SimulationTime delay = 0;
-
-	if(sourceID == htonl(INADDR_LOOPBACK) || destinationID == htonl(INADDR_LOOPBACK)) {
-		/* going to loopback, virtually no delay */
-		delay = 1;
-	} else {
-		Worker* worker = worker_getPrivate();
-		Internetwork* internet = worker->cached_engine->internet;
-		gdouble latency = internetwork_sampleLatency(internet, sourceID, destinationID);
-		delay = (SimulationTime) (latency * SIMTIME_ONE_MILLISECOND);
-	}
-
-	/* deliver to dst_addr, the other end of the conenction. if that is 127.0.0.1,
-	 * then use caller addr so we can do the node lookup.
-	 */
-	GQuark deliverID = 0;
-	if(destinationID == htonl(INADDR_LOOPBACK)) {
-		deliverID = callerID;
-	} else {
-		deliverID = destinationID;
-	}
-
-	TCPCloseTimerExpiredEvent* event = tcpclosetimerexpired_new(callerID, sourceID, sourcePort, destinationID, destinationPort, receiveEnd);
-	worker_scheduleEvent((Event*)event, delay, deliverID);
+//	SimulationTime delay = 0;
+//
+//	if(sourceID == htonl(INADDR_LOOPBACK) || destinationID == htonl(INADDR_LOOPBACK)) {
+//		/* going to loopback, virtually no delay */
+//		delay = 1;
+//	} else {
+//		Worker* worker = worker_getPrivate();
+//		Internetwork* internet = worker->cached_engine->internet;
+//		gdouble latency = internetwork_sampleLatency(internet, sourceID, destinationID);
+//		delay = (SimulationTime) (latency * SIMTIME_ONE_MILLISECOND);
+//	}
+//
+//	/* deliver to dst_addr, the other end of the conenction. if that is 127.0.0.1,
+//	 * then use caller addr so we can do the node lookup.
+//	 */
+//	GQuark deliverID = 0;
+//	if(destinationID == htonl(INADDR_LOOPBACK)) {
+//		deliverID = callerID;
+//	} else {
+//		deliverID = destinationID;
+//	}
+//
+//	TCPCloseTimerExpiredEvent* event = tcpclosetimerexpired_new(callerID, sourceID, sourcePort, destinationID, destinationPort, receiveEnd);
+//	worker_scheduleEvent((Event*)event, delay, deliverID);
 }
 
-void network_scheduleRetransmit(rc_vpacket_pod_tp rc_packet, GQuark callerID) {
-	/* TODO refactor - this was hacked to allow loopback addresses */
-	rc_vpacket_pod_retain_stack(rc_packet);
-	vpacket_tp packet = vpacket_mgr_lockcontrol(rc_packet, LC_OP_READLOCK | LC_TARGET_PACKET);
-	if(packet == NULL) {
-		goto ret;
-	}
+void network_scheduleRetransmit(Network* network, Packet* packet) {
+	MAGIC_ASSERT(network);
 
-	SimulationTime delay;
-	if(packet->header.source_addr == htonl(INADDR_LOOPBACK)) {
-		/* going to loopback, virtually no delay */
-		delay = 1;
+	// FIXME make sure loopback packets dont get here!!
+	// FIXME network_isEqual is wrong!
+
+	/* source should retransmit. use latency to approximate RTT for 'retransmit timer' */
+	Worker* worker = worker_getPrivate();
+	Internetwork* internet = worker->cached_engine->internet;
+
+	in_addr_t sourceIP = packet_getSourceIP(packet);
+	Network* sourceNetwork = internetwork_lookupNetwork(internet, sourceIP);
+	in_addr_t destinationIP = packet_getDestinationIP(packet);
+	Network* destinationNetwork = internetwork_lookupNetwork(internet, destinationIP);
+
+	gdouble latency = 0;
+	if(network_isEqual(network, sourceNetwork)) {
+		/* RTT is two link latencies */
+		latency += network_sampleLinkLatency(sourceNetwork, destinationNetwork);
+		latency += network_sampleLinkLatency(destinationNetwork, sourceNetwork);
 	} else {
-		/* source should retransmit.
-		 * retransmit timers depend on RTT, use latency as approximation since in most
-		 * cases the dest will be dropping a packet and one latency has already been incurred. */
-		Worker* worker = worker_getPrivate();
-		Internetwork* internet = worker->cached_engine->internet;
-		gdouble latency = internetwork_sampleLatency(internet,
-				(GQuark)packet->header.source_addr, (GQuark)packet->header.destination_addr);
-		delay = (SimulationTime) (latency * SIMTIME_ONE_MILLISECOND);
+		/* latency to destination already incurred, RTT is latency back to source */
+		latency += network_sampleLinkLatency(destinationNetwork, sourceNetwork);
 	}
 
-
-	/* deliver to src_addr, the other end of the conenction. if that is 127.0.0.1,
-	 * then use caller addr so we can do the node lookup.
-	 */
-	GQuark deliverID = 0;
-	if(packet->header.source_addr == htonl(INADDR_LOOPBACK)) {
-		deliverID = callerID;
-	} else {
-		deliverID = (GQuark) packet->header.source_addr;
-	}
-
-	TCPRetransmitTimerExpiredEvent* event = tcpretransmittimerexpired_new(callerID,
-			(GQuark)packet->header.source_addr, packet->header.source_port,
-			(GQuark)packet->header.destination_addr, packet->header.destination_port,
-			packet->tcp_header.sequence_number);
-	worker_scheduleEvent((Event*)event, delay, deliverID);
-
-	vpacket_mgr_lockcontrol(rc_packet, LC_OP_READUNLOCK | LC_TARGET_PACKET);
-ret:
-	rc_vpacket_pod_release_stack(rc_packet);
+	SimulationTime delay = (SimulationTime) floor(latency * SIMTIME_ONE_MILLISECOND);
+	PacketDroppedEvent* event = packetdropped_new(packet);
+	worker_scheduleEvent((Event*)event, delay, (GQuark)sourceIP);
 }
 
-void network_schedulePacket(rc_vpacket_pod_tp rc_packet) {
-	rc_vpacket_pod_retain_stack(rc_packet);
-	gint do_unlock = 1;
-
-	vpacket_tp packet = vpacket_mgr_lockcontrol(rc_packet, LC_OP_READLOCK | LC_TARGET_PACKET);
-	if(packet == NULL) {
-		error("packet is NULL!");
-		do_unlock = 0;
-		goto ret;
-	}
-
-	GQuark sourceID = (GQuark) packet->header.source_addr;
-	GQuark destinationID = (GQuark) packet->header.destination_addr;
-
-	vpacket_mgr_lockcontrol(rc_packet, LC_OP_READUNLOCK | LC_TARGET_PACKET);
+void network_schedulePacket(Network* sourceNetwork, Packet* packet) {
+	MAGIC_ASSERT(sourceNetwork);
 
 	Worker* worker = worker_getPrivate();
 	Internetwork* internet = worker->cached_engine->internet;
+	in_addr_t destinationIP = packet_getDestinationIP(packet);
+	Network* destinationNetwork = internetwork_lookupNetwork(internet, destinationIP);
 
 	/* first thing to check is if network reliability forces us to 'drop'
 	 * the packet. if so, get out of dodge doing as little as possible.
 	 */
-	gdouble reliability = internetwork_getReliability(internet, sourceID, destinationID);
-	if(dvn_rand_unit() > reliability){
+	gdouble reliability = network_getLinkReliability(sourceNetwork, destinationNetwork);
+	gdouble chance = random_nextDouble(worker_getPrivate()->random);
+	if(chance > reliability){
 		/* sender side is scheduling packets, but we are simulating
 		 * the packet being dropped between sender and receiver, so
 		 * it will need to be retransmitted */
-		network_scheduleRetransmit(rc_packet, sourceID);
-		goto ret;
+		network_scheduleRetransmit(sourceNetwork, packet);
+	} else {
+		/* packet will make it through, find latency */
+		gdouble latency = network_sampleLinkLatency(sourceNetwork, destinationNetwork);
+		SimulationTime delay = (SimulationTime) floor(latency * SIMTIME_ONE_MILLISECOND);
+
+		PacketArrivedEvent* event = packetarrived_new(packet);
+		worker_scheduleEvent((Event*)event, delay, (GQuark)destinationIP);
 	}
-
-	/* packet will make it through, find latency */
-	gdouble latency = internetwork_sampleLatency(internet, sourceID, destinationID);
-	SimulationTime delay = (SimulationTime) (latency * SIMTIME_ONE_MILLISECOND);
-
-	PacketArrivedEvent* event = packetarrived_new(rc_packet);
-	worker_scheduleEvent((Event*)event, delay, (GQuark) packet->header.destination_addr);
-
-ret:
-	if(do_unlock) {
-		vpacket_mgr_lockcontrol(rc_packet, LC_OP_READUNLOCK | LC_TARGET_PACKET | LC_TARGET_PAYLOAD);
-	}
-	rc_vpacket_pod_release_stack(rc_packet);
 }

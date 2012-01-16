@@ -1,7 +1,7 @@
 /*
  * The Shadow Simulator
  *
- * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
+ * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
  *
  * This file is part of Shadow.
  *
@@ -45,7 +45,6 @@ CallbackEvent* callback_new(CallbackFunc callback, gpointer data, gpointer callb
 
 void callback_run(CallbackEvent* event, Node* node) {
 	MAGIC_ASSERT(event);
-	MAGIC_ASSERT(node);
 
 	event->callback(event->data, event->callbackArgument);
 }
