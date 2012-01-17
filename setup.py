@@ -58,6 +58,10 @@ def main():
     parser_build.add_argument('-g', '--debug', action="store_true", dest="do_debug",
         help="build in extra memory checks and debugging symbols when running Shadow",
         default=False)
+        
+    parser_build.add_argument('-o', '--profile', action="store_true", dest="do_profile",
+        help="build in gprof profiling information when running Shadow",
+        default=False)
     
     parser_build.add_argument('-t', '--test', action="store_true", dest="do_test",
         help="build tests", default=False)
@@ -105,6 +109,7 @@ def build(args):
     # other cmake options
     if args.do_debug: cmake_cmd += " -DSHADOW_DEBUG=ON"
     if args.do_test: cmake_cmd += " -DSHADOW_TEST=ON"
+    if args.do_profile: cmake_cmd += " -DSHADOW_PROFILE=ON"
     
     # we will run from build directory
     calledDirectory = os.getcwd()

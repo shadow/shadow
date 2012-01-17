@@ -39,6 +39,7 @@ MESSAGE(STATUS)
 MESSAGE(STATUS "-------------------------------------------------------------------------------")
 MESSAGE(STATUS "Current settings: (change with '$ cmake -D<OPTION>=<ON|OFF>')")
 MESSAGE(STATUS "SHADOW_DEBUG=${SHADOW_DEBUG}")
+MESSAGE(STATUS "SHADOW_PROFILE=${SHADOW_PROFILE}")
 MESSAGE(STATUS "SHADOW_TEST=${SHADOW_TEST}")
 MESSAGE(STATUS "-------------------------------------------------------------------------------")
 MESSAGE(STATUS)
@@ -47,11 +48,16 @@ MESSAGE(STATUS)
 if(SHADOW_DEBUG STREQUAL ON)
     message(STATUS "CMAKE_BUILD_TYPE Debug enabled.")
     set(CMAKE_BUILD_TYPE Debug)
-    add_definitions(-DDEBUG ${CMAKE_C_FLAGS_DEBUG})
+    add_definitions(-DDEBUG ${CMAKE_C_FLAGS_DEBUG} -g)
 else(SHADOW_DEBUG STREQUAL ON)
     message(STATUS "CMAKE_BUILD_TYPE Release enabled.")
     set(CMAKE_BUILD_TYPE Release)
 endif(SHADOW_DEBUG STREQUAL ON)
+
+if(SHADOW_PROFILE STREQUAL ON)
+    add_definitions(-DDEBUG ${CMAKE_C_FLAGS_DEBUG} -g -pg)
+    set(CMAKE_EXE_LINKER_FLAGS ${CMAKE_EXE_LINKER_FLAGS} -pg)
+endif(SHADOW_PROFILE STREQUAL ON)
 
 ## get general includes
 include(CheckIncludeFile)
@@ -94,7 +100,7 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR})
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/shd-config.h DESTINATION include/shadow)
 
 ## compile options
-add_definitions(-Wall --std=c99 -D__USE_BSD -D_SVID_SOURCE -D_XOPEN_SOURCE=600 -fPIC -g)
+add_definitions(-Wall --std=c99 -D_SVID_SOURCE -D_XOPEN_SOURCE=600 -fPIC)
 
 ## build source
 add_subdirectory(${SHADOW_SOURCE_DIR})
