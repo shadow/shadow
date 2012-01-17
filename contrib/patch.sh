@@ -44,3 +44,11 @@ mv src/or/main.c.patch src/or/main.c
 sed 's/static void refill_callback/void refill_callback/g' src/or/main.c > src/or/main.c.patch
 mv src/or/main.c.patch src/or/main.c
 
+echo "Patching or/routerlist.c to make sure the consensus contains correct bandwidth for our nodes"
+sed 's/#define DEFAULT_MAX_BELIEVABLE_BANDWIDTH 10000000.*$/#define DEFAULT_MAX_BELIEVABLE_BANDWIDTH 1000000000 \/\* 1 GB\/sec \*\//g' src/or/routerlist.c > src/or/routerlist.c.patch
+mv src/or/routerlist.c.patch src/or/routerlist.c
+
+echo "Patching or/or.h to write cell stats more often (every minute instead of every 24 hours)"
+sed 's/#define WRITE_STATS_INTERVAL (24\*60\*60)/#define WRITE_STATS_INTERVAL (60)/g' src/or/or.h > src/or/or.h.patch
+mv src/or/or.h.patch src/or/or.h
+
