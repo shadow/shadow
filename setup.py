@@ -120,7 +120,10 @@ def build(args):
     os.chdir(builddir+"/scallion")
 
     # build up args string for cmake
+    vparts = args.tor_version.split(".")
+    a, b, c, d = int(vparts[0]), int(vparts[1]), int(vparts[2]), int(vparts[3].split("-")[0])
     cmake_cmd = "cmake " + rootdir + " -DCMAKE_BUILD_PREFIX=" + builddir + " -DCMAKE_INSTALL_PREFIX=" + installdir
+    if c >= 3 and d >= 5: cmake_cmd += " -DDOREFILL=1"
     
     if args.extra_includes is None: args.extra_includes = []
     if args.extra_libraries is None: args.extra_libraries = []

@@ -28,6 +28,7 @@ MESSAGE(STATUS)
 MESSAGE(STATUS "-------------------------------------------------------------------------------")
 MESSAGE(STATUS "Current settings: (change with '$ cmake -D<OPTION>=<ON|OFF>')")
 MESSAGE(STATUS "SCALLION_DEBUG=${SHADOW_DEBUG}")
+MESSAGE(STATUS "DOREFILL=${DOREFILL}")
 MESSAGE(STATUS "-------------------------------------------------------------------------------")
 MESSAGE(STATUS)
 
@@ -40,6 +41,11 @@ else(SCALLION_DEBUG STREQUAL ON)
     message(STATUS "CMAKE_BUILD_TYPE Release enabled.")
     set(CMAKE_BUILD_TYPE Release)
 endif(SCALLION_DEBUG STREQUAL ON)
+
+if(DOREFILL)
+    MESSAGE(STATUS "adding -DDOREFILL")
+    add_definitions(-DDOREFILL)
+endif(DOREFILL)
 
 ## get general includes
 include(CheckIncludeFile)

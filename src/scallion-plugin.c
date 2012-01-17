@@ -56,7 +56,8 @@ static in_addr_t _scallion_HostnameCallback(const gchar* hostname) {
 		addr = htonl(INADDR_LOOPBACK);
 	} else {
 		struct addrinfo* info;
-		if(getaddrinfo((gchar*) hostname, NULL, NULL, &info) != -1) {
+		int result = getaddrinfo((gchar*) hostname, NULL, NULL, &info);
+		if(result != -1 && info != NULL) {
 			addr = ((struct sockaddr_in*)(info->ai_addr))->sin_addr.s_addr;
 		} else {
 			scallion.shadowlibFuncs->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "unable to create client: error in getaddrinfo");

@@ -22,8 +22,9 @@
 #include "scallion.h"
 #include <openssl/rand.h>
 
-// FIXME this should only appear if Tor > 0.2.3.5-alpha
-#define DOREFILL
+// this should only appear if Tor > 0.2.3.5-alpha
+// handled in setup.py and CMakelists.txt
+//#define DOREFILL
 
 /* replacement for torflow in Tor. for now just grab the bandwidth we configured
  * in the DSIM and use that as the measured bandwidth value. since our configured

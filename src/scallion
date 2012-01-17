@@ -117,6 +117,8 @@ def main():
     return
 
 def generate(args):
+    print "** Generate functionality needs cleanup and is currently unsupported. Please check resource/scallion.xml for a usable XML file."
+    return
     args.prefix = os.path.abspath(args.prefix)
     args.prefix2 = os.path.abspath(args.prefix + "/share/shadow/scallion/")
     
@@ -637,7 +639,7 @@ def run(args):
     log("set environmental variable: EVENT_NOWIN32")
         
     # run
-    cmd = os.path.abspath(args.prefix+"/bin/shadow")+" --preload=" + os.path.abspath(args.prefix+"/lib/libshadow-plugin-scallion-preload.so") + " scallion.xml"
+    cmd = os.path.abspath(args.prefix+"/bin/shadow")+" --preload=" + os.path.abspath(args.prefix+"/lib/libshadow-preload-scallion.so") + " scallion.xml"
 
     log("calling '" + cmd + "' with logfile '" + logfilepath+"'")
 

@@ -1,32 +1,22 @@
-<plugin name="scallion" path="libshadow-plugin-scallion.so" />
-<plugin name="filetransfer" path="libshadow-plugin-filetransfer.so" />
+<plugin id="scallion" path="libshadow-plugin-scallion.so" />
+<plugin id="filetransfer" path="libshadow-plugin-filetransfer.so" />
 
-<cdf name="cpu" center="100000000" width="20000000" tail="20000000" />
+<cluster id="net0" bandwidthdown="1024" bandwidthup="768" />
+<link id="link0" clusters="net0 net0" latency="60" jitter="20" packetloss="0.0" />
 
-<cdf name="tier1" center="102400" width="0" tail="0" />
-<cdf name="tier2" center="10240" width="0" tail="0" />
-<cdf name="tier3" center="1024" width="0" tail="0" />
-<cdf name="tier4" center="102" width="0" tail="0" />
+<software id="fileserver" plugin="filetransfer" time="1" arguments="server 80 /home/rob/.shadow/share/shadow/scallion" />
+<node id="server.file" software="fileserver" cluster="net0" bandwidthup="102400" bandwidthdown="102400" />
 
-<cdf name="latency" center="80" width="40" tail="20" />
-<network name="network" latency="latency" reliability="1.0" />
+<software id="authority" plugin="scallion" time="1" arguments="dirauth 102400 /home/rob/test/vanilla/authority.torrc /home/rob/test/vanilla/data/authoritydata /home/rob/.shadow/share/shadow/scallion/geoip" />
+<node id="4uthority.tor" software="authority" cluster="net0" bandwidthup="102400" bandwidthdown="102400" />
 
-<software name="fileserver" plugin="filetransfer" time="1" arguments="server 80 /home/rob/.shadow/share/shadow/scallion" />
-<node name="server.file" software="fileserver" network="network" bandwidthup="tier1" bandwidthdown="tier1" cpu="cpu" />
+<software id="exit" plugin="scallion" time="300" arguments="exitrelay 1024 /home/rob/test/vanilla/exit.torrc /home/rob/test/vanilla/data/exitdata /home/rob/.shadow/share/shadow/scallion/geoip" />
+<node id="exit.tor" software="exit" />
 
-<software name="authority" plugin="scallion" time="1" arguments="dirauth 102400 /home/rob/test/vanilla/authority.torrc /home/rob/test/vanilla/data/authoritydata /home/rob/.shadow/share/shadow/scallion/geoip" />
-<node name="4uthority.tor" software="authority" network="network" bandwidthup="tier1" bandwidthdown="tier1" cpu="cpu" />
+<software id="relay" plugin="scallion" time="300" arguments="relay 1024 /home/rob/test/vanilla/relay.torrc /home/rob/test/vanilla/data/relaydata /home/rob/.shadow/share/shadow/scallion/geoip" />
+<node id="relay.tor" software="relay" quantity="2" />
 
-<software name="exit" plugin="scallion" time="300" arguments="exitrelay 300 /home/rob/test/vanilla/exit.torrc /home/rob/test/vanilla/data/exitdata /home/rob/.shadow/share/shadow/scallion/geoip" />
-<node name="exit.tor" quantity="3" software="exit" network="network" bandwidthup="tier3" bandwidthdown="tier3" cpu="cpu" />
-
-<software name="relay" plugin="scallion" time="600" arguments="relay 300 /home/rob/test/vanilla/relay.torrc /home/rob/test/vanilla/data/relaydata /home/rob/.shadow/share/shadow/scallion/geoip" />
-<node name="relay.tor" quantity="3" software="relay" network="network" bandwidthup="tier3" bandwidthdown="tier3" cpu="cpu" />
-
-<software name="exitb" plugin="scallion" time="900" arguments="exitrelay 300 /home/rob/test/vanilla/exit.torrc /home/rob/test/vanilla/data/exitdata /home/rob/.shadow/share/shadow/scallion/geoip" />
-<node name="exitb.tor" quantity="3" software="exitb" network="network" bandwidthup="tier3" bandwidthdown="tier3" cpu="cpu" />
-
-<software name="client" plugin="scallion" time="1800" arguments="client 1024 /home/rob/test/vanilla/client.torrc /home/rob/test/vanilla/data/clientdata /home/rob/.shadow/share/shadow/scallion/geoip client single server.file 80 localhost 9000 10 /1MiB.urnd" />
-<node name="client.tor" quantity="1" software="client" network="network" bandwidthup="tier3" bandwidthdown="tier3" cpu="cpu" />
+<software id="client" plugin="scallion" time="3000" arguments="client 1024 /home/rob/test/vanilla/client.torrc /home/rob/test/vanilla/data/clientdata /home/rob/.shadow/share/shadow/scallion/geoip client single server.file 80 localhost 9000 10 /1MiB.urnd" />
+<node id="client.tor" software="client" />
 
 <kill time="5400" />
