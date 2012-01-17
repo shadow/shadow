@@ -132,6 +132,18 @@ static void scallion_start_socks_client(void* arg) {
 	}
 }
 
+static gchar* _scallion_getHomePath(gchar* path) {
+	GString* sbuffer = g_string_new("");
+	if(g_ascii_strncasecmp(path, "~", 1) == 0) {
+		/* replace ~ with home directory */
+		const gchar* home = g_get_home_dir();
+		g_string_append_printf(sbuffer, "%s%s", home, path+1);
+	} else {
+		g_string_append_printf(sbuffer, "%s", path);
+	}
+	return g_string_free(sbuffer, FALSE);
+}
+
 static void _scallion_new(gint argc, gchar* argv[]) {
 	scallion.shadowlibFuncs->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "scallion_new called");
 
@@ -212,8 +224,7 @@ static void _scallion_new(gint argc, gchar* argv[]) {
 			size_t s;
 
 			s = strnlen(argv[7], 128)+1;
-			args->server_specification_filepath = malloc(s);
-			snprintf(args->server_specification_filepath, s, argv[7]);
+			args->server_specification_filepath = _scallion_getHomePath(argv[7]);
 
 			s = strnlen(argv[8], 128)+1;
 			args->socks_proxy.host = malloc(s);
@@ -223,9 +234,7 @@ static void _scallion_new(gint argc, gchar* argv[]) {
 			args->socks_proxy.port = malloc(s);
 			snprintf(args->socks_proxy.port, s, argv[9]);
 
-			s = strnlen(argv[10], 128)+1;
-			args->thinktimes_cdf_filepath = malloc(s);
-			snprintf(args->thinktimes_cdf_filepath, s, argv[10]);
+			args->thinktimes_cdf_filepath = _scallion_getHomePath(argv[10]);
 
 			s = strnlen(argv[11], 128)+1;
 			args->runtime_seconds = malloc(s);
@@ -267,9 +276,7 @@ static void _scallion_new(gint argc, gchar* argv[]) {
 			args->num_downloads = malloc(s);
 			snprintf(args->num_downloads, s, argv[11]);
 
-			s = strnlen(argv[12], 128)+1;
-			args->filepath = malloc(s);
-			snprintf(args->filepath, s, argv[12]);
+			args->filepath = _scallion_getHomePath(argv[12]);
 
 			args->log_cb = &_scallion_logCallback;
 			args->hostbyname_cb = &_scallion_HostnameCallback;
@@ -297,17 +304,11 @@ static void _scallion_new(gint argc, gchar* argv[]) {
 			args->socks_proxy.port = malloc(s);
 			snprintf(args->socks_proxy.port, s, argv[10]);
 
-			s = strnlen(argv[11], 128)+1;
-			args->filepath1 = malloc(s);
-			snprintf(args->filepath1, s, argv[11]);
+			args->filepath1 = _scallion_getHomePath(argv[11]);
 
-			s = strnlen(argv[12], 128)+1;
-			args->filepath2 = malloc(s);
-			snprintf(args->filepath2, s, argv[12]);
+			args->filepath2 = _scallion_getHomePath(argv[12]);
 
-			s = strnlen(argv[13], 128)+1;
-			args->filepath3 = malloc(s);
-			snprintf(args->filepath3, s, argv[13]);
+			args->filepath3 = _scallion_getHomePath(argv[13]);
 
 			s = strnlen(argv[14], 128)+1;
 			args->pausetime_seconds = malloc(s);

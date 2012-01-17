@@ -269,6 +269,16 @@ ScallionTor* scalliontor_new(ShadowlibFunctionTable* shadowlibFuncs, char* hostn
 	char burstconf[128];
 	snprintf(burstconf, 128, "%i KB", burst);
 
+	/* make sure the geoip path is absolute */
+	GString* geoipBuffer = g_string_new("");
+	if(g_ascii_strncasecmp(geoip_path, "~", 1) == 0) {
+		/* replace ~ with home directory */
+		const gchar* home = g_get_home_dir();
+		g_string_append_printf(geoipBuffer, "%s%s", home, geoip_path+1);
+	} else {
+		g_string_append_printf(geoipBuffer, "%s", geoip_path);
+	}
+
 	/* default args */
 	char *config[num_args];
 	config[0] = "tor";
@@ -279,7 +289,7 @@ ScallionTor* scalliontor_new(ShadowlibFunctionTable* shadowlibFuncs, char* hostn
 	config[5] = "--DataDirectory";
 	config[6] = datadir_path;
 	config[7] = "--GeoIPFile";
-	config[8] = geoip_path;
+	config[8] = geoipBuffer->str;
 	config[9] = "--BandwidthRate";
 	config[10] = bwconf;
 	config[11] = "--BandwidthBurst";
@@ -330,6 +340,7 @@ ScallionTor* scalliontor_new(ShadowlibFunctionTable* shadowlibFuncs, char* hostn
 		scalliontor_init_v3bw(stor);
 	}
 
+	g_string_free(geoipBuffer, TRUE);
 	g_free(nickname);
 
 	return stor;
