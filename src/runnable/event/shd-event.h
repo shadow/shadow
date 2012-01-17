@@ -27,11 +27,8 @@
 typedef struct _Event Event;
 typedef struct _EventFunctionTable EventFunctionTable;
 
-/* FIXME: forward declaration to avoid circular dependencies... */
-typedef struct _Node Node;
-
 /* required functions */
-typedef void (*EventRunFunc)(Event* event, Node* node);
+typedef void (*EventRunFunc)(Event* event, gpointer node); /* XXX: type is "Node*" */
 typedef void (*EventFreeFunc)(Event* event);
 
 /*
@@ -52,7 +49,7 @@ struct _Event {
 	Runnable super;
 	EventFunctionTable* vtable;
 	SimulationTime time;
-	Node* node;
+	gpointer node; /* XXX: type is "Node*" */
 
 	GQuark ownerID;
 	MAGIC_DECLARE;

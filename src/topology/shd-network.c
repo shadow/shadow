@@ -102,7 +102,7 @@ gboolean network_isEqual(Network* a, Network* b) {
 	}
 }
 
-void network_addOutgoingLink(Network* network, Link* outgoingLink) {
+void network_addOutgoingLink(Network* network, gpointer outgoingLink) {
 	MAGIC_ASSERT(network);
 
 	/* prepending is O(1), but appending is O(n) since it traverses the list */
@@ -113,11 +113,11 @@ void network_addOutgoingLink(Network* network, Link* outgoingLink) {
 	 * list of incoming links at the other network)
 	 * this is because we currently only support single links to each network
 	 */
-	Network* destination = link_getDestinationNetwork(outgoingLink);
+	Network* destination = link_getDestinationNetwork((Link*)outgoingLink);
 	g_hash_table_replace(network->outgoingLinkMap, &(destination->id), outgoingLink);
 }
 
-void network_addIncomingLink(Network* network, Link* incomingLink) {
+void network_addIncomingLink(Network* network, gpointer incomingLink) {
 	MAGIC_ASSERT(network);
 
 	/* prepending is O(1), but appending is O(n) since it traverses the list */
@@ -158,36 +158,6 @@ gdouble network_sampleLinkLatency(Network* sourceNetwork, Network* destinationNe
 
 	gdouble percentile = random_nextDouble(worker_getPrivate()->random);
 	return network_getLinkLatency(sourceNetwork, destinationNetwork, percentile);
-}
-
-void network_scheduleClose(GQuark callerID, GQuark sourceID, in_port_t sourcePort,
-		GQuark destinationID, in_port_t destinationPort, guint32 receiveEnd)
-{
-	/* TODO refactor - this was hacked to allow loopback addresses */
-//	SimulationTime delay = 0;
-//
-//	if(sourceID == htonl(INADDR_LOOPBACK) || destinationID == htonl(INADDR_LOOPBACK)) {
-//		/* going to loopback, virtually no delay */
-//		delay = 1;
-//	} else {
-//		Worker* worker = worker_getPrivate();
-//		Internetwork* internet = worker->cached_engine->internet;
-//		gdouble latency = internetwork_sampleLatency(internet, sourceID, destinationID);
-//		delay = (SimulationTime) (latency * SIMTIME_ONE_MILLISECOND);
-//	}
-//
-//	/* deliver to dst_addr, the other end of the conenction. if that is 127.0.0.1,
-//	 * then use caller addr so we can do the node lookup.
-//	 */
-//	GQuark deliverID = 0;
-//	if(destinationID == htonl(INADDR_LOOPBACK)) {
-//		deliverID = callerID;
-//	} else {
-//		deliverID = destinationID;
-//	}
-//
-//	TCPCloseTimerExpiredEvent* event = tcpclosetimerexpired_new(callerID, sourceID, sourcePort, destinationID, destinationPort, receiveEnd);
-//	worker_scheduleEvent((Event*)event, delay, deliverID);
 }
 
 void network_scheduleRetransmit(Network* network, Packet* packet) {

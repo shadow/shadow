@@ -24,9 +24,6 @@
 
 #include "shadow.h"
 
-/* FIXME: forward declaration to avoid circular dependencies... */
-typedef struct _Link Link;
-
 typedef struct _Network Network;
 
 Network* network_new(GQuark id, guint64 bandwidthdown, guint64 bandwidthup);
@@ -39,8 +36,8 @@ guint64 network_getBandwidthDown(Network* network);
 gint network_compare(gconstpointer a, gconstpointer b, gpointer user_data);
 gboolean network_isEqual(Network* a, Network* b);
 
-void network_addOutgoingLink(Network* network, Link* outgoingLink);
-void network_addIncomingLink(Network* network, Link* incomingLink);
+void network_addOutgoingLink(Network* network, gpointer outgoingLink); /* XXX: type is "Link*" */
+void network_addIncomingLink(Network* network, gpointer incomingLink); /* XXX: type is "Link*" */
 
 gdouble network_getLinkReliability(Network* sourceNetwork, Network* destinationNetwork);
 gdouble network_getLinkLatency(Network* sourceNetwork, Network* destinationNetwork, gdouble percentile);
@@ -48,9 +45,5 @@ gdouble network_sampleLinkLatency(Network* sourceNetwork, Network* destinationNe
 
 void network_schedulePacket(Network* sourceNetwork, Packet* packet);
 void network_scheduleRetransmit(Network* network, Packet* packet);
-
-// TODO these are out of place...
-void network_scheduleClose(GQuark callerID, GQuark sourceID, in_port_t sourcePort,
-		GQuark destinationID, in_port_t destinationPort, guint32 receiveEnd);
 
 #endif /* SHD_NETWORK_H_ */

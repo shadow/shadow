@@ -157,7 +157,7 @@ void internetwork_createNode(Internetwork* internet, GQuark nodeID,
 	g_hash_table_replace(internet->nameByIp, mapIP, mapName);
 }
 
-Node* internetwork_getNode(Internetwork* internet, GQuark nodeID) {
+gpointer internetwork_getNode(Internetwork* internet, GQuark nodeID) { /* XXX: return type is "Node*" */
 	MAGIC_ASSERT(internet);
 	return (Node*) g_hash_table_lookup(internet->nodes, GUINT_TO_POINTER((guint)nodeID));
 }

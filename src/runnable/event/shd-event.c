@@ -43,7 +43,9 @@ gboolean shadowevent_run(gpointer data) {
 	MAGIC_ASSERT(event);
 	MAGIC_ASSERT(event->vtable);
 
-	CPU* cpu = node_getCPU(event->node);
+	Node* node = event->node;
+
+	CPU* cpu = node_getCPU(node);
 	SimulationTime cpuDelay = cpu_adjustDelay(cpu, event->time);
 
 	/* check if we are allowed to execute or have to wait for cpu delays */
@@ -55,7 +57,7 @@ gboolean shadowevent_run(gpointer data) {
 		return FALSE;
 	} else {
 		/* ok to execute the event */
-		event->vtable->run(event, event->node);
+		event->vtable->run(event, node);
 		/* we've actually executed it, so its ok to free it */
 		return TRUE;
 	}
