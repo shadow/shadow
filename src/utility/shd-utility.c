@@ -45,3 +45,15 @@ gboolean utility_int16Equal(gconstpointer value1, gconstpointer value2) {
 	key2 = (gint) *((gint16*)value2);
 	return g_int_equal(&key1, &key2);
 }
+
+gchar* utility_getHomePath(const gchar* path) {
+	GString* sbuffer = g_string_new("");
+	if(g_ascii_strncasecmp(path, "~", 1) == 0) {
+		/* replace ~ with home directory */
+		const gchar* home = g_get_home_dir();
+		g_string_append_printf(sbuffer, "%s%s", home, path+1);
+	} else {
+		g_string_append_printf(sbuffer, "%s", path);
+	}
+	return g_string_free(sbuffer, FALSE);
+}

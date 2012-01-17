@@ -82,6 +82,18 @@ static void _filetransfer_sleepCallback(gpointer sfg, guint seconds) {
 	ft->shadowlib->createCallback(&_filetransfer_wakeupCallback, sfg, seconds*1000);
 }
 
+static gchar* _filetransfer_getHomePath(const gchar* path) {
+	GString* sbuffer = g_string_new("");
+	if(g_ascii_strncasecmp(path, "~", 1) == 0) {
+		/* replace ~ with home directory */
+		const gchar* home = g_get_home_dir();
+		g_string_append_printf(sbuffer, "%s%s", home, path+1);
+	} else {
+		g_string_append_printf(sbuffer, "%s", path);
+	}
+	return g_string_free(sbuffer, FALSE);
+}
+
 /* create a new node using this plug-in */
 void filetransfer_new(int argc, char* argv[]) {
 	ft->shadowlib->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "filetransfer_new called");
@@ -124,7 +136,7 @@ void filetransfer_new(int argc, char* argv[]) {
 			args.socks_proxy.host = argv[5];
 			args.socks_proxy.port = argv[6];
 			args.num_downloads = argv[7];
-			args.filepath = argv[8];
+			args.filepath = _filetransfer_getHomePath(argv[8]);
 
 			args.log_cb = &_filetransfer_logCallback;
 			args.hostbyname_cb = &_filetransfer_HostnameCallback;
@@ -136,6 +148,8 @@ void filetransfer_new(int argc, char* argv[]) {
 				g_free(ft->client);
 				ft->client = NULL;
 			}
+
+			g_free(args.filepath);
 		} else if(g_strncasecmp(clientMode, "double", 6) == 0){
 			service_filegetter_double_args_t args;
 
@@ -143,9 +157,9 @@ void filetransfer_new(int argc, char* argv[]) {
 			args.http_server.port = argv[4];
 			args.socks_proxy.host = argv[5];
 			args.socks_proxy.port = argv[6];
-			args.filepath1 = argv[7];
-			args.filepath2 = argv[8];
-			args.filepath3 = argv[9];
+			args.filepath1 = _filetransfer_getHomePath(argv[7]);
+			args.filepath2 = _filetransfer_getHomePath(argv[8]);
+			args.filepath3 = _filetransfer_getHomePath(argv[9]);
 			args.pausetime_seconds = argv[10];
 
 			args.log_cb = &_filetransfer_logCallback;
@@ -159,13 +173,17 @@ void filetransfer_new(int argc, char* argv[]) {
 				g_free(ft->client);
 				ft->client = NULL;
 			}
+
+			g_free(args.filepath1);
+			g_free(args.filepath2);
+			g_free(args.filepath3);
 		} else if(g_strncasecmp(clientMode, "multi", 5) == 0) {
 			service_filegetter_multi_args_t args;
 
-			args.server_specification_filepath = argv[3];
+			args.server_specification_filepath = _filetransfer_getHomePath(argv[3]);
 			args.socks_proxy.host = argv[4];
 			args.socks_proxy.port = argv[5];
-			args.thinktimes_cdf_filepath = argv[6];
+			args.thinktimes_cdf_filepath = _filetransfer_getHomePath(argv[6]);
 			args.runtime_seconds = argv[7];
 
 			if(g_strncasecmp(args.thinktimes_cdf_filepath, "none", 4) == 0) {
@@ -183,6 +201,10 @@ void filetransfer_new(int argc, char* argv[]) {
 				g_free(ft->client);
 				ft->client = NULL;
 			}
+
+			if(args.thinktimes_cdf_filepath)
+				g_free(args.thinktimes_cdf_filepath);
+			g_free(args.server_specification_filepath);
 		} else {
 			/* unknown client mode */
 			g_free(ft->client);
@@ -201,7 +223,7 @@ void filetransfer_new(int argc, char* argv[]) {
 		/* we are running a server */
 		in_addr_t listenIP = INADDR_ANY;
 		in_port_t listenPort = (in_port_t) atoi(argv[2]);
-		gchar* docroot = argv[3];
+		gchar* docroot = _filetransfer_getHomePath(argv[3]);
 
 		ft->server = g_new0(fileserver_t, 1);
 
@@ -215,6 +237,8 @@ void filetransfer_new(int argc, char* argv[]) {
 			g_free(ft->server);
 			ft->server = NULL;
 		}
+
+		g_free(docroot);
 	} else {
 		/* not client or server... */
 		goto printUsage;
