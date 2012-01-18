@@ -38,8 +38,7 @@ void shadowevent_init(Event* event, EventFunctionTable* vtable) {
 	event->vtable = vtable;
 }
 
-gboolean shadowevent_run(gpointer data) {
-	Event* event = data;
+gboolean shadowevent_run(Event* event) {
 	MAGIC_ASSERT(event);
 	MAGIC_ASSERT(event->vtable);
 
@@ -63,19 +62,16 @@ gboolean shadowevent_run(gpointer data) {
 	}
 }
 
-gint shadowevent_compare(gconstpointer a, gconstpointer b, gpointer user_data) {
-	const Event* ea = a;
-	const Event* eb = b;
-	MAGIC_ASSERT(ea);
-	MAGIC_ASSERT(eb);
+gint shadowevent_compare(const Event* a, const Event* b, gpointer user_data) {
+	MAGIC_ASSERT(a);
+	MAGIC_ASSERT(b);
 	/*
 	 * @todo should events already scheduled get priority over new events?
 	 */
-	return ea->time > eb->time ? +1 : ea->time == eb->time ? 0 : -1;
+	return a->time > b->time ? +1 : a->time == b->time ? 0 : -1;
 }
 
-void shadowevent_free(gpointer data) {
-	Event* event = data;
+void shadowevent_free(Event* event) {
 	MAGIC_ASSERT(event);
 	MAGIC_ASSERT(event->vtable);
 

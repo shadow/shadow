@@ -32,81 +32,6 @@ enum _EngineStorage {
 
 typedef struct _Engine Engine;
 
-struct _Engine {
-	/* general configuration options for the simulation */
-	Configuration* config;
-
-	/* tracks overall wall-clock runtime */
-	GTimer* runTimer;
-
-	/* global simulation time, rough approximate if multi-threaded */
-	SimulationTime clock;
-	/* minimum allowed time jump when sending events between nodes */
-	SimulationTime minTimeJump;
-	/* start of current window of execution */
-	SimulationTime executeWindowStart;
-	/* end of current window of execution (start + min_time_jump) */
-	SimulationTime executeWindowEnd;
-	/* the simulator should attempt to end immediately after this time */
-	SimulationTime endTime;
-
-	/* track nodes, networks, links, and topology */
-	Internetwork* internet;
-
-	/*
-	 * track global objects: software, cdfs, plugins
-	 */
-	Registry* registry;
-
-	/* if single threaded, use this global event priority queue. if multi-
-	 * threaded, use this for non-node events */
-	GAsyncQueue* masterEventQueue;
-
-	/* if multi-threaded, we use a worker pool */
-	GThreadPool* workerPool;
-
-	/* holds a thread-private key that each thread references to get a private
-	 * instance of a worker object
-	 */
-	GStaticPrivate workerKey;
-
-	/*
-	 * condition that signals when all node's events have been processed in a
-	 * given execution interval.
-	 */
-	GCond* workersIdle;
-
-	/*
-	 * before signaling the engine that the workers are idle, it must be idle
-	 * to accept the signal.
-	 */
-	GMutex* engineIdle;
-
-	/*
-	 * TRUE if the engine is no longer running events and is in cleanup mode
-	 */
-	gboolean killed;
-
-	/*
-	 * We will not enter plugin context when set. Used when destroying threads.
-	 */
-	gboolean forceShadowContext;
-
-	/*
-	 * these values are modified during simulation and must be protected so
-	 * they are thread safe
-	 */
-	struct {
-		/* number of nodes left to process in current interval */
-		volatile gint nNodesToProcess;
-
-		/* id generation counters */
-		volatile gint workerIDCounter;
-		volatile gint objectIDCounter;
-	} protect;
-	MAGIC_DECLARE;
-};
-
 Engine* engine_new(Configuration* config);
 void engine_free(Engine* engine);
 void engine_setupWorkerThreads(Engine* engine, gint nWorkerThreads);
@@ -124,6 +49,14 @@ gint engine_getNumThreads(Engine* engine);
 SimulationTime engine_getMinTimeJump(Engine* engine);
 SimulationTime engine_getExecutionBarrier(Engine* engine);
 void engine_notifyNodeProcessed(Engine* engine);
+
+Configuration* engine_getConfig(Engine* engine);
+GTimer* engine_getRunTimer(Engine* engine);
+GStaticPrivate* engine_getWorkerKey(Engine* engine);
+Internetwork* engine_getInternet(Engine* engine);
+
+void engine_setKillTime(Engine* engine, SimulationTime endTime);
 gboolean engine_isKilled(Engine* engine);
+gboolean engine_isForced(Engine* engine);
 
 #endif /* SHD_ENGINE_H_ */

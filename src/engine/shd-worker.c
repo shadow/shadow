@@ -52,19 +52,30 @@ void worker_free(gpointer data) {
 Worker* worker_getPrivate() {
 	/* reference the global shadow engine */
 	Engine* engine = shadow_engine;
-	MAGIC_ASSERT(engine);
 
 	/* get current thread's private worker object */
-	Worker* worker = g_static_private_get(&(engine->workerKey));
+	Worker* worker = g_static_private_get(engine_getWorkerKey(engine));
 
 	/* todo: should we use g_once here instead? */
 	if(!worker) {
-		worker = _worker_new(engine_generateWorkerID(engine), engine->config->randomSeed);
-		g_static_private_set(&(engine->workerKey), worker, worker_free);
+		worker = _worker_new(engine_generateWorkerID(engine), engine_getConfig(engine)->randomSeed);
+		g_static_private_set(engine_getWorkerKey(engine), worker, worker_free);
 	}
 
 	MAGIC_ASSERT(worker);
 	return worker;
+}
+
+Internetwork* worker_getInternet() {
+	return engine_getInternet(shadow_engine);
+}
+
+Configuration* worker_getConfig() {
+	return engine_getConfig(shadow_engine);
+}
+
+void worker_setKillTime(SimulationTime endTime) {
+	engine_setKillTime(shadow_engine, endTime);
 }
 
 Plugin* worker_getPlugin(Software* software) {
@@ -177,7 +188,7 @@ void worker_scheduleEvent(Event* event, SimulationTime nano_delay, GQuark receiv
 
 	/* parties involved. sender may be NULL, receiver may not! */
 	Node* sender = worker->cached_node;
-	Node* receiver = receiver_node_id == 0 ? sender : internetwork_getNode(worker->cached_engine->internet, receiver_node_id);
+	Node* receiver = receiver_node_id == 0 ? sender : internetwork_getNode(worker_getInternet(), receiver_node_id);
 	g_assert(receiver);
 
 	/* the NodeEvent needs a pointer to the correct node */
@@ -229,7 +240,7 @@ gboolean worker_isInShadowContext() {
 	 * calling worker_getPrivate (which messes with threads) while trying to
 	 * shutdown the threads.
 	 */
-	if(shadow_engine && !(shadow_engine->forceShadowContext)) {
+	if(shadow_engine && !(engine_isForced(shadow_engine))) {
 		Worker* worker = worker_getPrivate();
 		if(worker->cached_plugin) {
 			return worker->cached_plugin->isShadowContext;

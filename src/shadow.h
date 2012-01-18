@@ -76,6 +76,8 @@
 #include "utility/shd-registry.h"
 #include "utility/shd-cdf.h"
 #include "utility/shd-byte-queue.h"
+#include "utility/shd-priority-queue.h"
+#include "utility/shd-async-priority-queue.h"
 #include "utility/shd-random.h"
 
 #include "library/shd-library.h"

@@ -54,6 +54,11 @@ void internetwork_free(Internetwork* internet) {
 	g_free(internet);
 }
 
+void internetwork_setReadOnly(Internetwork* internet) {
+	MAGIC_ASSERT(internet);
+	internet->isReadOnly = TRUE;
+}
+
 static void _internetwork_trackLatency(Internetwork* internet, Link* link) {
 	MAGIC_ASSERT(internet);
 

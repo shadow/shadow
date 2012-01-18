@@ -75,7 +75,7 @@ NetworkInterface* networkinterface_new(Network* network, GQuark address, gchar* 
 
 	/* incoming packet buffer */
 	interface->inBuffer = g_queue_new();
-	interface->inBufferSize = worker_getPrivate()->cached_engine->config->interfaceBufferSize;
+	interface->inBufferSize = worker_getConfig()->interfaceBufferSize;
 
 	/* incoming packets get passed along to sockets */
 	interface->boundSockets = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, descriptor_unref);
@@ -186,7 +186,7 @@ static void _networkinterface_dropInboundPacket(NetworkInterface* interface, Pac
 
 static void _networkinterface_scheduleNextReceive(NetworkInterface* interface) {
 	/* the next packets need to be received and processed */
-	SimulationTime batchTime = worker_getPrivate()->cached_engine->config->interfaceBatchTime;
+	SimulationTime batchTime = worker_getConfig()->interfaceBatchTime;
 
 	/* receive packets in batches */
 	while(g_queue_get_length(interface->inBuffer) > 0 &&
@@ -299,7 +299,7 @@ void networkinterface_packetDropped(NetworkInterface* interface, Packet* packet)
 static void _networkinterface_scheduleNextSend(NetworkInterface* interface) {
 	/* the next packet needs to be sent according to bandwidth limitations.
 	 * we need to spend time sending it before sending the next it. */
-	SimulationTime batchTime = worker_getPrivate()->cached_engine->config->interfaceBatchTime;
+	SimulationTime batchTime = worker_getConfig()->interfaceBatchTime;
 
 	/* loop until we find a socket that has something to send */
 	while(g_queue_get_length(interface->sendableSockets) > 0 &&

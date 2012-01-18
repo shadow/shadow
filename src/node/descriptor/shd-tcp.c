@@ -267,7 +267,7 @@ static void _tcp_autotune(TCP* tcp) {
 	 * is meant to tune it to an optimal rate. estimate that by taking
 	 * the 80th percentile.
 	 */
-	Internetwork* internet = worker_getPrivate()->cached_engine->internet;
+	Internetwork* internet = worker_getInternet();
 
 	GQuark sourceID = (GQuark) tcp_getIP(tcp);
 	GQuark destinationID = (GQuark) tcp_getPeerIP(tcp);
@@ -1343,7 +1343,7 @@ TCP* tcp_new(gint handle) {
 
 	socket_init(&(tcp->super), &tcp_functions, DT_TCPSOCKET, handle);
 
-	guint32 initial_window = worker_getPrivate()->cached_engine->config->initialTCPWindow;
+	guint32 initial_window = worker_getConfig()->initialTCPWindow;
 
 	tcp->congestion.window = (gdouble)initial_window;
 	tcp->congestion.lastWindow = initial_window;

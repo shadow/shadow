@@ -21,6 +21,81 @@
 
 #include "shadow.h"
 
+struct _Engine {
+	/* general configuration options for the simulation */
+	Configuration* config;
+
+	/* tracks overall wall-clock runtime */
+	GTimer* runTimer;
+
+	/* global simulation time, rough approximate if multi-threaded */
+	SimulationTime clock;
+	/* minimum allowed time jump when sending events between nodes */
+	SimulationTime minTimeJump;
+	/* start of current window of execution */
+	SimulationTime executeWindowStart;
+	/* end of current window of execution (start + min_time_jump) */
+	SimulationTime executeWindowEnd;
+	/* the simulator should attempt to end immediately after this time */
+	SimulationTime endTime;
+
+	/* track nodes, networks, links, and topology */
+	Internetwork* internet;
+
+	/*
+	 * track global objects: software, cdfs, plugins
+	 */
+	Registry* registry;
+
+	/* if single threaded, use this global event priority queue. if multi-
+	 * threaded, use this for non-node events */
+	AsyncPriorityQueue* masterEventQueue;
+
+	/* if multi-threaded, we use a worker pool */
+	GThreadPool* workerPool;
+
+	/* holds a thread-private key that each thread references to get a private
+	 * instance of a worker object
+	 */
+	GStaticPrivate workerKey;
+
+	/*
+	 * condition that signals when all node's events have been processed in a
+	 * given execution interval.
+	 */
+	GCond* workersIdle;
+
+	/*
+	 * before signaling the engine that the workers are idle, it must be idle
+	 * to accept the signal.
+	 */
+	GMutex* engineIdle;
+
+	/*
+	 * TRUE if the engine is no longer running events and is in cleanup mode
+	 */
+	gboolean killed;
+
+	/*
+	 * We will not enter plugin context when set. Used when destroying threads.
+	 */
+	gboolean forceShadowContext;
+
+	/*
+	 * these values are modified during simulation and must be protected so
+	 * they are thread safe
+	 */
+	struct {
+		/* number of nodes left to process in current interval */
+		volatile gint nNodesToProcess;
+
+		/* id generation counters */
+		volatile gint workerIDCounter;
+		volatile gint objectIDCounter;
+	} protect;
+	MAGIC_DECLARE;
+};
+
 Engine* engine_new(Configuration* config) {
 	MAGIC_ASSERT(config);
 
@@ -34,7 +109,9 @@ Engine* engine_new(Configuration* config) {
 	engine->workerKey.index = 0;
 
 	/* holds all events if single-threaded, and non-node events otherwise. */
-	engine->masterEventQueue = g_async_queue_new_full(shadowevent_free);
+	engine->masterEventQueue =
+			asyncpriorityqueue_new((GCompareDataFunc)shadowevent_compare, NULL,
+			(GDestroyNotify)shadowevent_free);
 	engine->workersIdle = g_cond_new();
 	engine->engineIdle = g_mutex_new();
 
@@ -69,7 +146,7 @@ void engine_free(Engine* engine) {
 	}
 
 	if(engine->masterEventQueue) {
-		g_async_queue_unref(engine->masterEventQueue);
+		asyncpriorityqueue_free(engine->masterEventQueue);
 	}
 
 	registry_free(engine->registry);
@@ -129,7 +206,7 @@ static gint _engine_processEvents(Engine* engine) {
 	worker->clock_last = 0;
 	worker->cached_engine = engine;
 
-	Event* next_event = g_async_queue_try_pop(engine->masterEventQueue);
+	Event* next_event = asyncpriorityqueue_pop(engine->masterEventQueue);
 
 	/* process all events in the priority queue */
 	while(next_event && (next_event->time < engine->executeWindowEnd) &&
@@ -154,7 +231,7 @@ static gint _engine_processEvents(Engine* engine) {
 		worker->clock_last = worker->clock_now;
 		worker->clock_now = SIMTIME_INVALID;
 
-		next_event = g_async_queue_try_pop(engine->masterEventQueue);
+		next_event = asyncpriorityqueue_pop(engine->masterEventQueue);
 	}
 
 	/* push the next event in case we didnt execute it */
@@ -263,7 +340,7 @@ gint engine_run(Engine* engine) {
 void engine_pushEvent(Engine* engine, Event* event) {
 	MAGIC_ASSERT(engine);
 	MAGIC_ASSERT(event);
-	g_async_queue_push_sorted(engine->masterEventQueue, event, shadowevent_compare, NULL);
+	asyncpriorityqueue_push(engine->masterEventQueue, event);
 }
 
 void engine_put(Engine* engine, EngineStorage type, GQuark* id, gpointer item) {
@@ -329,9 +406,39 @@ void engine_notifyNodeProcessed(Engine* engine) {
 	}
 }
 
+Internetwork* engine_getInternet(Engine* engine) {
+	MAGIC_ASSERT(engine);
+	return engine->internet;
+}
+
+GStaticPrivate* engine_getWorkerKey(Engine* engine) {
+	MAGIC_ASSERT(engine);
+	return &(engine->workerKey);
+}
+
+GTimer* engine_getRunTimer(Engine* engine) {
+	MAGIC_ASSERT(engine);
+	return engine->runTimer;
+}
+
+Configuration* engine_getConfig(Engine* engine) {
+	MAGIC_ASSERT(engine);
+	return engine->config;
+}
+
+void engine_setKillTime(Engine* engine, SimulationTime endTime) {
+	MAGIC_ASSERT(engine);
+	engine->endTime = endTime;
+}
+
 gboolean engine_isKilled(Engine* engine) {
 	MAGIC_ASSERT(engine);
 	return engine->killed;
+}
+
+gboolean engine_isForced(Engine* engine) {
+	MAGIC_ASSERT(engine);
+	return engine->forceShadowContext;
 }
 
 gboolean engine_handleInterruptSignal(gpointer user_data) {

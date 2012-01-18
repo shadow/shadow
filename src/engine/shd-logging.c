@@ -73,7 +73,7 @@ void logging_handleLog(const gchar *log_domain, GLogLevelFlags log_level, const 
 	}
 
 	gulong hours, minutes, seconds, microseconds;
-	gulong elapsed = (gulong) g_timer_elapsed(shadow_engine->runTimer, &microseconds);
+	gulong elapsed = (gulong) g_timer_elapsed(engine_getRunTimer(shadow_engine), &microseconds);
 	hours = elapsed / 3600;
 	elapsed %= 3600;
 	minutes = elapsed / 60;

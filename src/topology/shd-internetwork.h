@@ -46,6 +46,8 @@ struct _Internetwork {
 Internetwork* internetwork_new();
 void internetwork_free(Internetwork* internet);
 
+void internetwork_setReadOnly(Internetwork* internet);
+
 void internetwork_createNetwork(Internetwork* internet, GQuark networkID, guint64 bandwidthdown, guint64 bandwidthup);
 void internetwork_connectNetworks(Internetwork* internet,
 		GQuark sourceClusterID, GQuark destinationClusterID,

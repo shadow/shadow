@@ -66,6 +66,8 @@ set(shadow_srcs
     utility/shd-cdf.c
     utility/shd-registry.c
     utility/shd-byte-queue.c
+    utility/shd-priority-queue.c
+    utility/shd-async-priority-queue.c
     utility/shd-random.c
     
     main.c

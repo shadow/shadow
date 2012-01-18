@@ -125,7 +125,7 @@ gint shadow_main(gint argc, gchar* argv[]) {
 	}
 
 	/* dont modify internet during simulation, since its not locked for threads */
-	shadow_engine->internet->isReadOnly = 1;
+	internetwork_setReadOnly(engine_getInternet(shadow_engine));
 	gint retval = engine_run(shadow_engine);
 
 	/* join thread pool. workers are auto-deleted when threads end. */

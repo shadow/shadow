@@ -692,13 +692,12 @@ gint system_getAddrInfo(gchar *name, const gchar *service,
 
 	gint result = 0;
 
-	Worker* worker = worker_getPrivate();
 	*res = NULL;
 	if(name != NULL && node != NULL) {
 
 		/* node may be a number-and-dots address, or a hostname. lets hope for hostname
 		 * and try that first, o/w convert to the in_addr_t and do a second lookup. */
-		in_addr_t address = (in_addr_t) internetwork_resolveName(worker->cached_engine->internet, name);
+		in_addr_t address = (in_addr_t) internetwork_resolveName(worker_getInternet(), name);
 
 		if(address == 0) {
 			/* name was not in hostname format. convert to IP format and try again */
@@ -708,7 +707,7 @@ gint system_getAddrInfo(gchar *name, const gchar *service,
 			if(r == 1) {
 				/* successful conversion to IP format, now find the real hostname */
 				GQuark convertedIP = (GQuark) inaddr.s_addr;
-				const gchar* hostname = internetwork_resolveID(worker->cached_engine->internet, convertedIP);
+				const gchar* hostname = internetwork_resolveID(worker_getInternet(), convertedIP);
 
 				if(hostname != NULL) {
 					/* got it, so convertedIP is a valid IP */

@@ -26,6 +26,7 @@
 
 typedef struct _Worker Worker;
 
+/* @todo: move to shd-worker.c and make this an opaque structure */
 struct _Worker {
 	gint thread_id;
 
@@ -49,7 +50,10 @@ struct _Worker {
 Worker* worker_getPrivate();
 void worker_free(gpointer data);
 
+void worker_setKillTime(SimulationTime endTime);
 Plugin* worker_getPlugin(Software* software);
+Internetwork* worker_getInternet();
+Configuration* worker_getConfig();
 gboolean worker_isInShadowContext();
 
 /**

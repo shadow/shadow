@@ -66,8 +66,7 @@ ConnectNetworkAction* connectnetwork_new(GString* clusters, guint64 latency,
 void connectnetwork_run(ConnectNetworkAction* action) {
 	MAGIC_ASSERT(action);
 
-	Worker* worker = worker_getPrivate();
-	internetwork_connectNetworks(worker->cached_engine->internet,
+	internetwork_connectNetworks(worker_getInternet(),
 			action->sourceClusterID, action->destinationClusterID,
 			action->latency, action->jitter, action->packetloss);
 }

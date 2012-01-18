@@ -52,8 +52,7 @@ CreateNetworkAction* createnetwork_new(GString* name, guint64 bandwidthdown, gui
 void createnetwork_run(CreateNetworkAction* action) {
 	MAGIC_ASSERT(action);
 
-	Worker* worker = worker_getPrivate();
-	internetwork_createNetwork(worker->cached_engine->internet, action->id, action->bandwidthdown, action->bandwidthup);
+	internetwork_createNetwork(worker_getInternet(), action->id, action->bandwidthdown, action->bandwidthup);
 }
 
 void createnetwork_free(CreateNetworkAction* action) {

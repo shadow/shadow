@@ -19,31 +19,21 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "shadow.h"
+#ifndef SHD_PRIORITY_QUEUE_H
+#define SHD_PRIORITY_QUEUE_H
 
-RunnableFunctionTable killengine_functions = {
-	(RunnableRunFunc) killengine_run,
-	(RunnableFreeFunc) killengine_free,
-	MAGIC_VALUE
-};
+typedef struct _PriorityQueue PriorityQueue;
 
-KillEngineAction* killengine_new(guint64 endTimeInSeconds) {
-	KillEngineAction* action = g_new0(KillEngineAction, 1);
-	MAGIC_INIT(action);
+PriorityQueue* priorityqueue_new(GCompareDataFunc compareFunc,
+		gpointer compareData, GDestroyNotify freeFunc);
+void priorityqueue_clear(PriorityQueue *q);
+void priorityqueue_free(PriorityQueue *q);
 
-	action_init(&(action->super), &killengine_functions);
-	action->endTime = (SimulationTime)(SIMTIME_ONE_SECOND * endTimeInSeconds);
+gsize priorityqueue_getLength(PriorityQueue *q);
+gboolean priorityqueue_isEmpty(PriorityQueue *q);
+gboolean priorityqueue_push(PriorityQueue *q, gpointer data);
+gpointer priorityqueue_peek(PriorityQueue *q);
+gpointer priorityqueue_find(PriorityQueue *q, gpointer data);
+gpointer priorityqueue_pop(PriorityQueue *q);
 
-	return action;
-}
-
-void killengine_run(KillEngineAction* action) {
-	MAGIC_ASSERT(action);
-	worker_setKillTime(action->endTime);
-}
-
-void killengine_free(KillEngineAction* action) {
-	MAGIC_ASSERT(action);
-	MAGIC_CLEAR(action);
-	g_free(action);
-}
+#endif /* SHD_PRIORITY_QUEUE_H */

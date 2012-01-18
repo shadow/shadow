@@ -167,8 +167,7 @@ void network_scheduleRetransmit(Network* network, Packet* packet) {
 	// FIXME network_isEqual is wrong!
 
 	/* source should retransmit. use latency to approximate RTT for 'retransmit timer' */
-	Worker* worker = worker_getPrivate();
-	Internetwork* internet = worker->cached_engine->internet;
+	Internetwork* internet = worker_getInternet();
 
 	in_addr_t sourceIP = packet_getSourceIP(packet);
 	Network* sourceNetwork = internetwork_lookupNetwork(internet, sourceIP);
@@ -193,8 +192,7 @@ void network_scheduleRetransmit(Network* network, Packet* packet) {
 void network_schedulePacket(Network* sourceNetwork, Packet* packet) {
 	MAGIC_ASSERT(sourceNetwork);
 
-	Worker* worker = worker_getPrivate();
-	Internetwork* internet = worker->cached_engine->internet;
+	Internetwork* internet = worker_getInternet();
 	in_addr_t destinationIP = packet_getDestinationIP(packet);
 	Network* destinationNetwork = internetwork_lookupNetwork(internet, destinationIP);
 

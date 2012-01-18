@@ -56,8 +56,8 @@ struct _Event {
 };
 
 void shadowevent_init(Event* event, EventFunctionTable* vtable);
-gboolean shadowevent_run(gpointer data);
-gint shadowevent_compare(gconstpointer eventa, gconstpointer eventb, gpointer user_data);
-void shadowevent_free(gpointer data);
+gboolean shadowevent_run(Event* event);
+gint shadowevent_compare(const Event* a, const Event* b, gpointer user_data);
+void shadowevent_free(Event* event);
 
 #endif /* SHD_EVENT_H_ */
