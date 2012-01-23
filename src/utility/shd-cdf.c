@@ -185,21 +185,24 @@ gdouble cdf_getValue(CumulativeDistribution* cdf, gdouble percentile) {
 	MAGIC_ASSERT(cdf);
 	g_assert(percentile >= 0.0 && percentile <= 1.0);
 
-	GList* item;
-	if(percentile == 1.0) {
-		item = g_list_last(cdf->entries);
-	} else if(percentile == 0.0) {
-		item = g_list_first(cdf->entries);
-	} else {
-		guint position = (guint) (percentile * (g_list_length(cdf->entries)));
-		item = g_list_nth(cdf->entries, position);
-	}
+	/* start from the back of the list if the percentile is high enough */
+	gboolean reverse = percentile > 0.5 ? TRUE : FALSE;
 
-	if(item) {
+	GList* item = reverse ? g_list_last(cdf->entries) : g_list_first(cdf->entries);
+
+	while(item) {
 		CumulativeDistributionEntry* entry = item->data;
 		MAGIC_ASSERT(entry);
-		return entry->value;
+
+		gboolean found = reverse ? (entry->fraction <= percentile) : (entry->fraction >= percentile);
+
+		if(found) {
+			return entry->value;
+		} else {
+			item = reverse ? g_list_previous(item) : g_list_next(item);
+		}
 	}
 
+	/* TODO didnt find it... is this an error? */
 	return (gdouble) 0;
 }
