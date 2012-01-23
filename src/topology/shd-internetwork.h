@@ -53,12 +53,12 @@ void internetwork_connectNetworks(Internetwork* internet,
 		GQuark sourceClusterID, GQuark destinationClusterID,
 		guint64 latency, guint64 jitter, gdouble packetloss);
 Network* internetwork_getNetwork(Internetwork* internet, GQuark networkID);
-Network* internetwork_getRandomNetwork(Internetwork* internet);
+Network* internetwork_getRandomNetwork(Internetwork* internet, gdouble randomDouble);
 Network* internetwork_lookupNetwork(Internetwork* internet, in_addr_t ip);
 
 void internetwork_createNode(Internetwork* internet, GQuark nodeID,
 		Network* network, Software* software, GString* hostname,
-		guint64 bwDownKiBps, guint64 bwUpKiBps, guint64 cpuBps);
+		guint64 bwDownKiBps, guint64 bwUpKiBps, guint64 cpuBps, guint nodeSeed);
 gpointer internetwork_getNode(Internetwork* internet, GQuark nodeID);/* XXX: return type is "Node*" */
 GList* internetwork_getAllNodes(Internetwork* internet);
 

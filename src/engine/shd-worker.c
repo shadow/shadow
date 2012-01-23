@@ -21,7 +21,7 @@
 
 #include "shadow.h"
 
-static Worker* _worker_new(gint id, guint seed) {
+static Worker* _worker_new(gint id) {
 	Worker* worker = g_new0(Worker, 1);
 	MAGIC_INIT(worker);
 
@@ -29,8 +29,6 @@ static Worker* _worker_new(gint id, guint seed) {
 	worker->clock_now = SIMTIME_INVALID;
 	worker->clock_last = SIMTIME_INVALID;
 	worker->clock_barrier = SIMTIME_INVALID;
-
-	worker->random = random_new(seed);
 
 	/* each worker needs a private copy of each plug-in library */
 	worker->plugins = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, plugin_free);
@@ -58,7 +56,7 @@ Worker* worker_getPrivate() {
 
 	/* todo: should we use g_once here instead? */
 	if(!worker) {
-		worker = _worker_new(engine_generateWorkerID(engine), engine_getConfig(engine)->randomSeed);
+		worker = _worker_new(engine_generateWorkerID(engine));
 		g_static_private_set(engine_getWorkerKey(engine), worker, worker_free);
 	}
 

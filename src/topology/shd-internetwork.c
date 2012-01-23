@@ -104,7 +104,7 @@ Network* internetwork_getNetwork(Internetwork* internet, GQuark networkID) {
 	return (Network*) g_hash_table_lookup(internet->networks, &networkID);
 }
 
-Network* internetwork_getRandomNetwork(Internetwork* internet) {
+Network* internetwork_getRandomNetwork(Internetwork* internet, gdouble randomDouble) {
 	MAGIC_ASSERT(internet);
 
 	/* TODO this is ugly.
@@ -114,8 +114,7 @@ Network* internetwork_getRandomNetwork(Internetwork* internet) {
 	GList* networkList = g_hash_table_get_values(internet->networks);
 	guint length = g_list_length(networkList);
 
-	gdouble r = random_nextDouble(worker_getPrivate()->random);
-	guint n = (guint)(((gdouble)length) * r);
+	guint n = (guint)(((gdouble)length) * randomDouble);
 	g_assert((n >= 0) && (n <= length));
 
 	Network* network = (Network*) g_list_nth_data(networkList, n);
@@ -144,13 +143,13 @@ static guint32 _internetwork_generateIP(Internetwork* internet) {
 
 void internetwork_createNode(Internetwork* internet, GQuark nodeID,
 		Network* network, Software* software, GString* hostname,
-		guint64 bwDownKiBps, guint64 bwUpKiBps, guint64 cpuBps) {
+		guint64 bwDownKiBps, guint64 bwUpKiBps, guint64 cpuBps, guint nodeSeed) {
 	MAGIC_ASSERT(internet);
 	g_assert(!internet->isReadOnly);
 
 	guint32 ip = _internetwork_generateIP(internet);
 	ip = (guint32) nodeID;
-	Node* node = node_new(nodeID, network, software, ip, hostname, bwDownKiBps, bwUpKiBps, cpuBps);
+	Node* node = node_new(nodeID, network, software, ip, hostname, bwDownKiBps, bwUpKiBps, cpuBps, nodeSeed);
 	g_hash_table_replace(internet->nodes, GUINT_TO_POINTER((guint)nodeID), node);
 
 

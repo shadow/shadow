@@ -81,6 +81,11 @@ struct _Engine {
 	 */
 	gboolean forceShadowContext;
 
+	/* global random source from which all node random sources originate */
+	Random* random;
+
+	GMutex* lock;
+
 	/*
 	 * these values are modified during simulation and must be protected so
 	 * they are thread safe
@@ -103,6 +108,7 @@ Engine* engine_new(Configuration* config) {
 	MAGIC_INIT(engine);
 
 	engine->config = config;
+	engine->random = random_new(config->randomSeed);
 	engine->runTimer = g_timer_new();
 
 	/* initialize the singleton-per-thread worker class */
@@ -123,6 +129,8 @@ Engine* engine_new(Configuration* config) {
 	engine->minTimeJump = config->minRunAhead * SIMTIME_ONE_MILLISECOND;
 
 	engine->internet = internetwork_new();
+
+	engine->lock = g_mutex_new();
 
 	return engine;
 }
@@ -158,6 +166,9 @@ void engine_free(Engine* engine) {
 	message("clean engine shutdown at %s", dt_format);
 	g_date_time_unref(dt_now);
 	g_free(dt_format);
+
+	random_free(engine->random);
+	g_mutex_free(engine->lock);
 
 	MAGIC_CLEAR(engine);
 	g_free(engine);
@@ -452,4 +463,30 @@ gboolean engine_handleInterruptSignal(gpointer user_data) {
 
 	/* dont remove the source */
 	return FALSE;
+}
+
+void _engine_lock(Engine* engine) {
+	MAGIC_ASSERT(engine);
+	g_mutex_lock(engine->lock);
+}
+
+void _engine_unlock(Engine* engine) {
+	MAGIC_ASSERT(engine);
+	g_mutex_unlock(engine->lock);
+}
+
+gint engine_nextRandomInt(Engine* engine) {
+	MAGIC_ASSERT(engine);
+	_engine_lock(engine);
+	gint r = random_nextInt(engine->random);
+	_engine_unlock(engine);
+	return r;
+}
+
+gdouble engine_nextRandomDouble(Engine* engine) {
+	MAGIC_ASSERT(engine);
+	_engine_lock(engine);
+	gdouble r = random_nextDouble(engine->random);
+	_engine_unlock(engine);
+	return r;
 }

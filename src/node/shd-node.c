@@ -53,10 +53,13 @@ struct _Node {
 	/* random port counter, in host order */
 	in_port_t randomPortCounter;
 
+	/* random stream */
+	Random* random;
+
 	MAGIC_DECLARE;
 };
 
-Node* node_new(GQuark id, Network* network, Software* software, guint32 ip, GString* hostname, guint64 bwDownKiBps, guint64 bwUpKiBps, guint64 cpuBps) {
+Node* node_new(GQuark id, Network* network, Software* software, guint32 ip, GString* hostname, guint64 bwDownKiBps, guint64 bwUpKiBps, guint64 cpuBps, guint nodeSeed) {
 	Node* node = g_new0(Node, 1);
 	MAGIC_INIT(node);
 
@@ -90,10 +93,11 @@ Node* node_new(GQuark id, Network* network, Software* software, guint32 ip, GStr
 	/* applications this node will run */
 	node->application = application_new(software);
 	node->cpu = cpu_new(cpuBps);
+	node->random = random_new(nodeSeed);
 
-	info("Created Node '%s', ip %s, %u bwUpKiBps, %u bwDownKiBps, %lu cpuBps",
+	info("Created Node '%s', ip %s, %u bwUpKiBps, %u bwDownKiBps, %lu cpuBps, %u seed",
 			g_quark_to_string(node->id), networkinterface_getIPName(node->defaultInterface),
-			bwUpKiBps, bwDownKiBps, cpuBps);
+			bwUpKiBps, bwDownKiBps, cpuBps, nodeSeed);
 
 	return node;
 }
@@ -226,6 +230,11 @@ gchar* node_getDefaultIPName(Node* node) {
 Application* node_getApplication(Node* node) {
 	MAGIC_ASSERT(node);
 	return node->application;
+}
+
+Random* node_getRandom(Node* node) {
+	MAGIC_ASSERT(node);
+	return node->random;
 }
 
 Descriptor* node_lookupDescriptor(Node* node, gint handle) {

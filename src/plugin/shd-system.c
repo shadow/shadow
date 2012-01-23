@@ -821,11 +821,11 @@ void system_addEntropy(gconstpointer buffer, gint numBytes) {
 gint system_randomBytes(guchar* buf, gint numBytes) {
 	Node* node = _system_switchInShadowContext();
 
-	Random* random = worker_getPrivate()->random;
+	Random* random = node_getRandom(node);
 	gint bytesWritten = 0;
 
 	while(numBytes > bytesWritten) {
-		gint r = random_nextRandom(random);
+		gint r = random_nextInt(random);
 		gint copyLength = MIN(numBytes-bytesWritten, 4);
 		g_memmove(buf+bytesWritten, &r, copyLength);
 		bytesWritten += copyLength;
@@ -838,7 +838,7 @@ gint system_randomBytes(guchar* buf, gint numBytes) {
 
 gint system_getRandom() {
 	Node* node = _system_switchInShadowContext();
-	gint r = random_nextRandom(worker_getPrivate()->random);
+	gint r = random_nextInt(node_getRandom(node));
 	_system_switchOutShadowContext(node);
 	return r;
 }

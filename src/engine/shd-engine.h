@@ -59,4 +59,7 @@ void engine_setKillTime(Engine* engine, SimulationTime endTime);
 gboolean engine_isKilled(Engine* engine);
 gboolean engine_isForced(Engine* engine);
 
+gint engine_nextRandomInt(Engine* engine);
+gdouble engine_nextRandomDouble(Engine* engine);
+
 #endif /* SHD_ENGINE_H_ */

@@ -83,8 +83,9 @@ void createnodes_run(CreateNodesAction* action) {
 	}
 
 	for(gint i = 0; i < action->quantity; i++) {
+		gdouble randomDouble = engine_nextRandomDouble(worker->cached_engine);
 		Network* network = assignedNetwork ? assignedNetwork :
-				internetwork_getRandomNetwork(worker_getInternet());
+				internetwork_getRandomNetwork(worker_getInternet(), randomDouble);
 		g_assert(network);
 
 		/* use network bandwidth unless an override was given */
@@ -104,7 +105,8 @@ void createnodes_run(CreateNodesAction* action) {
 		GQuark id = g_quark_from_string((const gchar*) hostnameBuffer->str);
 
 		/* the node is part of the internet */
-		internetwork_createNode(worker_getInternet(), id, network, software, hostnameBuffer, bwDownKiBps, bwUpKiBps, cpuBps);
+		guint nodeSeed = (guint) engine_nextRandomInt(worker->cached_engine);
+		internetwork_createNode(worker_getInternet(), id, network, software, hostnameBuffer, bwDownKiBps, bwUpKiBps, cpuBps, nodeSeed);
 
 		g_string_free(hostnameBuffer, TRUE);
 

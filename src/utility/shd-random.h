@@ -45,7 +45,7 @@ void random_free(Random* random);
  * @param random the random source
  * @return the next integer in the range [0, RAND_MAX]
  */
-gint random_nextRandom(Random* random);
+gint random_nextInt(Random* random);
 
 /**
  * Gets the next double in the range [0,1] from the random source.

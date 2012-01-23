@@ -41,7 +41,7 @@ void random_free(Random* random) {
 	g_free(random);
 }
 
-gint random_nextRandom(Random* random) {
+gint random_nextInt(Random* random) {
 	return (gint) rand_r(&(random->seedState));
 }
 

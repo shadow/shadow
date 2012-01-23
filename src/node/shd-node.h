@@ -28,7 +28,7 @@
 
 typedef struct _Node Node;
 
-Node* node_new(GQuark id, Network* network, Software* software, guint32 ip, GString* hostname, guint64 bwDownKiBps, guint64 bwUpKiBps, guint64 cpuBps);
+Node* node_new(GQuark id, Network* network, Software* software, guint32 ip, GString* hostname, guint64 bwDownKiBps, guint64 bwUpKiBps, guint64 cpuBps, guint nodeSeed);
 void node_free(gpointer data);
 
 void node_lock(Node* node);
@@ -51,6 +51,7 @@ gchar* node_getName(Node* node);
 in_addr_t node_getDefaultIP(Node* node);
 gchar* node_getDefaultIPName(Node* node);
 Application* node_getApplication(Node* node);
+Random* node_getRandom(Node* node);
 
 gint node_createDescriptor(Node* node, enum DescriptorType type);
 void node_closeDescriptor(Node* node, gint handle);
