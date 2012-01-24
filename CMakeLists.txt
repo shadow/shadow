@@ -29,6 +29,7 @@ MESSAGE(STATUS "----------------------------------------------------------------
 MESSAGE(STATUS "Current settings: (change with '$ cmake -D<OPTION>=<ON|OFF>')")
 MESSAGE(STATUS "SCALLION_DEBUG=${SHADOW_DEBUG}")
 MESSAGE(STATUS "DOREFILL=${DOREFILL}")
+MESSAGE(STATUS "TORPATH=${TORPATH}")
 MESSAGE(STATUS "-------------------------------------------------------------------------------")
 MESSAGE(STATUS)
 
@@ -94,5 +95,5 @@ add_definitions(-Wall --std=c99 -fPIC -g -D_GNU_SOURCE)
 ## build source
 add_subdirectory(src)
 
-install(FILES build/tor-0.2.3.8-alpha/src/config/geoip build/50KiB.urnd build/320KiB.urnd build/1MiB.urnd build/5MiB.urnd build/GeoLiteCity.dat DESTINATION share/shadow/scallion)
-install(DIRECTORY resource/ DESTINATION share/shadow/scallion PATTERN "config/*")
+install(FILES ${TORPATH}/src/config/geoip build/50KiB.urnd build/320KiB.urnd build/1MiB.urnd build/5MiB.urnd build/GeoLiteCity.dat DESTINATION share/)
+install(DIRECTORY resource/ DESTINATION share PATTERN "config/*")

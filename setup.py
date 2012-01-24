@@ -32,6 +32,8 @@ DEFAULT_TOR_VERSION="0.2.3.8-alpha"
 TOR_URL="https://archive.torproject.org/tor-package-archive/tor-" + DEFAULT_TOR_VERSION + ".tar.gz"
 MAXMIND_URL="http://geolite.maxmind.com/download/geoip/database/GeoLiteCity.dat.gz"
 
+READYTOR=os.path.abspath(BUILD_PREFIX+"/readytor")
+
 def main():
     parser_main = argparse.ArgumentParser(description='Utility to help setup the scallion plug-in for the shadow simulator', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser_main.add_argument('-q', '--quiet', action="store_true", dest="be_quiet",
@@ -65,23 +67,8 @@ def main():
     parser_install = subparsers_main.add_parser('install', help='install scallion', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser_install.set_defaults(func=install, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     
-    parser_install.add_argument('-v', '--version', action="store", dest="tor_version",
-          help="specify the version of Tor to install", default=DEFAULT_TOR_VERSION)
-    
-    parser_auto = subparsers_main.add_parser('auto', help='build to ./build, install to local prefix. useful for quick local setup and during development.', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser_auto.set_defaults(func=auto, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    
-    parser_auto.add_argument('-p', '--prefix', action="store", dest="prefix",
-          help="install to PATH using libevent and openssl from PATH.", metavar="PATH", default=INSTALL_PREFIX)
-    parser_auto.add_argument('-g', '--debug', action="store_true", dest="do_debug",
-          help="turn on debugging for verbose program output", default=False)
-    parser_auto.add_argument('-v', '--version', action="store", dest="tor_version",
-          help="specify what version of Tor to build and install", default=DEFAULT_TOR_VERSION)
-    
     # get arguments, accessible with args.value
     args = parser_main.parse_args()
-    
-    args.tor_url = TOR_URL.replace(DEFAULT_TOR_VERSION, args.tor_version)
     
     # run chosen command
     args.func(args)
@@ -96,6 +83,8 @@ def make_paths_absolute(list):
 
 def build(args):
     outfile = get_outfile(args)
+    
+    args.tor_url = TOR_URL.replace(DEFAULT_TOR_VERSION, args.tor_version)
     
     filepath=os.path.abspath(__file__)
     rootdir=filepath[:filepath.rfind("/")]
@@ -122,7 +111,7 @@ def build(args):
     # build up args string for cmake
     vparts = args.tor_version.split(".")
     a, b, c, d = int(vparts[0]), int(vparts[1]), int(vparts[2]), int(vparts[3].split("-")[0])
-    cmake_cmd = "cmake " + rootdir + " -DCMAKE_BUILD_PREFIX=" + builddir + " -DCMAKE_INSTALL_PREFIX=" + installdir
+    cmake_cmd = "cmake " + rootdir + " -DCMAKE_BUILD_PREFIX=" + builddir + " -DCMAKE_INSTALL_PREFIX=" + installdir + " -DTORPATH=" + READYTOR
     if c >= 3 and d >= 5: cmake_cmd += " -DDOREFILL=1"
     
     if args.extra_includes is None: args.extra_includes = []
@@ -164,11 +153,11 @@ def install(args):
         return
 
     # patching CMakeFile.txt to look into correct tor directory
-    cmake_file = open("CMakeLists.txt.new","w")
-    patch_cmd = "sed 's/build\/tor-.*\/src/build\/tor-" + args.tor_version + "\/src/g' CMakeLists.txt"
-    retcode = subprocess.call(shlex.split(patch_cmd), stdout=cmake_file)
-    shutil.move(cmake_file.name, "CMakeLists.txt")
-    cmake_file.close()
+#    cmake_file = open("CMakeLists.txt.new","w")
+#    patch_cmd = "sed 's/build\/tor-.*\/src/build\/tor-" + args.tor_version + "\/src/g' CMakeLists.txt"
+#    retcode = subprocess.call(shlex.split(patch_cmd), stdout=cmake_file)
+#    shutil.move(cmake_file.name, "CMakeLists.txt")
+#    cmake_file.close()
 
     # go to build dir and install from makefile
     rundir = os.getcwd()
@@ -183,13 +172,6 @@ def install(args):
     # go back to where we came from
     os.chdir(rundir)
     return retcode
-
-def auto(args):
-    args.prefix_libevent = args.prefix
-    args.prefix_openssl = args.prefix
-    args.extra_includes = [os.path.abspath(args.prefix + "/include")]
-    args.extra_libraries = [os.path.abspath(args.prefix + "/lib")]
-    if build(args) == 0: install(args)
     
 def setup_tor(args):
     rundir = os.getcwd()
@@ -264,6 +246,10 @@ def setup_tor(args):
         if retcode != 0:
             #shutil.rmtree(args.tordir)
             return -1
+        
+    if os.path.exists(READYTOR): shutil.rmtree(READYTOR)
+    shutil.copytree(args.tordir, READYTOR)
+    args.tordir = READYTOR
     
     return retcode
 
