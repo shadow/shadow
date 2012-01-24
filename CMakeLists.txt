@@ -7,7 +7,7 @@ cmake_minimum_required(VERSION 2.8 FATAL_ERROR)
 set(Shadow_VERSION_MAJOR 1)
 set(Shadow_VERSION_MINOR 3)
 set(Shadow_VERSION_BUILD 0)
-set(Shadow_VERSION_SUFFIX "dev")
+set(Shadow_VERSION_SUFFIX "-dev")
 
 ## custom output paths
 #set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
@@ -98,7 +98,7 @@ include_directories(${GLIB_INCLUDES})
 ## generate config header and make sure its on the include path
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config.h.in ${CMAKE_CURRENT_BINARY_DIR}/shd-config.h)
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/shd-config.h DESTINATION include/shadow)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/shd-config.h DESTINATION include/)
 
 ## compile options
 add_definitions(-Wall --std=c99 -D_SVID_SOURCE -D_XOPEN_SOURCE=600 -fPIC)
@@ -114,12 +114,18 @@ endif(SHADOW_TEST STREQUAL ON)
 
 ## install our 'exported' libs so they can be imported by others
 ## put the .cmake file for importing in shadow-specific directory
-#install(EXPORT shadow-externals DESTINATION share/shadow)
+#install(EXPORT shadow-externals DESTINATION share/)
 
 ## install resources useful for simulations
-#install(DIRECTORY ${CMAKE_BUILD_PREFIX}/../shadow-resources/
-#    DESTINATION share/shadow/resources
-#    PATTERN "${CMAKE_BUILD_PREFIX}/../shadow-resources/*")
+if(NOT EXISTS ${CMAKE_SOURCE_DIR}/resource/topology.xml)
+    message(STATUS "Decompressing ${CMAKE_SOURCE_DIR}/resource/topology.xml.xz")
+    execute_process(COMMAND xz -dk topology.xml.xz WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/resource/ RESULT_VARIABLE XZRESULT)
+    if(NOT (${XZRESULT} EQUAL 0))
+        message(FATAL_ERROR "xz -dk topology.xml.xz failed. Is xz-utils installed and in your path?")
+    endif(NOT (${XZRESULT} EQUAL 0))
+endif(NOT EXISTS ${CMAKE_SOURCE_DIR}/resource/topology.xml)
+
+install(FILES ${CMAKE_SOURCE_DIR}/resource/topology.xml DESTINATION share/)
 
 ## do CPack stuff
 add_subdirectory(${CMAKE_SOURCE_DIR}/cpack/)

@@ -26,4 +26,4 @@ add_executable(shadow-filetransfer shd-filetransfer-main.c)
 target_link_libraries(shadow-filetransfer shadow-service-filetransfer ${RT_LIBRARIES} ${GLIB_LIBRARIES})
 install(TARGETS shadow-filetransfer DESTINATION bin)
 
-install(DIRECTORY ./ DESTINATION include/shadow FILES_MATCHING PATTERN "*.h")
+install(DIRECTORY ./ DESTINATION include/ FILES_MATCHING PATTERN "*.h")

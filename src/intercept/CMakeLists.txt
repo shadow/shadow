@@ -9,4 +9,4 @@ add_library(shadow-preload SHARED preload.c)
 ## link with dependency
 target_link_libraries(shadow-preload dl)
 install(TARGETS shadow-preload DESTINATION lib)
-install(FILES preload.h DESTINATION include/shadow)
+install(FILES preload.h DESTINATION include/)
