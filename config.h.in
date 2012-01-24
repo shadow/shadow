@@ -9,5 +9,5 @@
 # endif
 #endif
 
-#define SHADOW_VERSION "${Shadow_VERSION_MAJOR}.${Shadow_VERSION_MINOR}.${Shadow_VERSION_BUILD}"
+#define SHADOW_VERSION "${Shadow_VERSION_MAJOR}.${Shadow_VERSION_MINOR}.${Shadow_VERSION_BUILD}-${Shadow_VERSION_SUFFIX}"
 

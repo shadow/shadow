@@ -7,6 +7,7 @@ cmake_minimum_required(VERSION 2.8 FATAL_ERROR)
 set(Shadow_VERSION_MAJOR 1)
 set(Shadow_VERSION_MINOR 3)
 set(Shadow_VERSION_BUILD 0)
+set(Shadow_VERSION_SUFFIX "dev")
 
 ## custom output paths
 #set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
