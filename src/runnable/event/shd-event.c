@@ -42,24 +42,28 @@ gboolean shadowevent_run(Event* event) {
 	MAGIC_ASSERT(event);
 	MAGIC_ASSERT(event->vtable);
 
+	Worker* worker = worker_getPrivate();
 	Node* node = event->node;
 
-	CPU* cpu = node_getCPU(node);
-	SimulationTime cpuDelay = cpu_adjustDelay(cpu, event->time);
+	if(engine_getConfig(worker->cached_engine)->cpuThreshold >= 0) {
+		/* check if we are allowed to execute or have to wait for cpu delays */
+		CPU* cpu = node_getCPU(node);
+		cpu_updateTime(cpu, event->time);
 
-	/* check if we are allowed to execute or have to wait for cpu delays */
-	if(cpuDelay > 0) {
-		debug("event blocked on CPU, rescheduled for %lu nanoseconds from now", cpuDelay);
-		/* this event is delayed due to cpu, so reschedule it to ourselves */
-		worker_scheduleEvent(event, cpuDelay, 0);
-		/* dont free it, it needs to run again */
-		return FALSE;
-	} else {
-		/* ok to execute the event */
-		event->vtable->run(event, node);
-		/* we've actually executed it, so its ok to free it */
-		return TRUE;
+		if(cpu_isBlocked(cpu)) {
+			SimulationTime cpuDelay = cpu_getDelay(cpu);
+			debug("event blocked on CPU, rescheduled for %lu nanoseconds from now", cpuDelay);
+			/* this event is delayed due to cpu, so reschedule it to ourselves */
+			worker_scheduleEvent(event, cpuDelay, 0);
+			/* dont free it, it needs to run again */
+			return FALSE;
+		}
 	}
+
+	/* if we get here, its ok to execute the event */
+	event->vtable->run(event, node);
+	/* we've actually executed it, so its ok to free it */
+	return TRUE;
 }
 
 gint shadowevent_compare(const Event* a, const Event* b, gpointer user_data) {

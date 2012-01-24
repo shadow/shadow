@@ -54,7 +54,7 @@ void shadowlib_log(GLogLevelFlags level, const gchar* functionName, gchar* forma
 	va_list variableArguments;
 	va_start(variableArguments, format);
 
-	const gchar* domain = g_quark_to_string(worker->cached_plugin->id);
+	const gchar* domain = g_quark_to_string(*plugin_getID(worker->cached_plugin));
 	logging_logv(domain, level, functionName, format, variableArguments);
 
 	va_end(variableArguments);

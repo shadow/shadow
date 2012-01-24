@@ -202,6 +202,11 @@ typedef guint64 SimulationTime;
  */
 #define CONFIG_TCPCLOSETIMER_DELAY (60 * SIMTIME_ONE_SECOND)
 
+/**
+ * Filename to find the CPU speed.
+ */
+#define CONFIG_CPU_MAX_FREQ_FILE "/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq"
+
 typedef struct _Configuration Configuration;
 
 struct _Configuration {
@@ -214,6 +219,7 @@ struct _Configuration {
 	gboolean printSoftwareVersion;
 
 	GOptionGroup* networkOptionGroup;
+	gint cpuThreshold;
 	gint minRunAhead;
 	gint initialTCPWindow;
 	gint interfaceBufferSize;

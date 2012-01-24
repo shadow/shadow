@@ -24,6 +24,36 @@
 
 #include "shadow.h"
 
+struct _Plugin {
+	GQuark id;
+	GString* path;
+	GModule* handle;
+	GTimer* delayTimer;
+	ShadowPluginInitializeFunc init;
+	PluginState* residentState;
+	PluginState* defaultState;
+	gboolean isRegisterred;
+	/*
+	 * TRUE from when we've called into plug-in code until the call completes.
+	 * Note that the plug-in may get back into shadow code during execution, by
+	 * calling one of the shadowlin functions or calling a function that we
+	 * intercept. isShadowContext distinguishes this.
+	 */
+	gboolean isExecuting;
+	/*
+	 * Distinguishes which context we are in. Whenever the flow of execution
+	 * passes into the plug-in, this is FALSE, and whenever it comes back to
+	 * shadow, this is TRUE. This is used to determine if we should actually
+	 * be intercepting functions or not, since we dont want to intercept them
+	 * if they provide shadow with needed functionality.
+	 *
+	 * We must be careful to set this correctly at every boundry (shadowlib,
+	 * interceptions, etc)
+	 */
+	gboolean isShadowContext;
+	MAGIC_DECLARE;
+};
+
 GString* _plugin_getTemporaryFilePath(gchar* originalPath) {
 	/* get the basename of the real plug-in and create a temp file template */
 	gchar* basename = g_path_get_basename(originalPath);
@@ -80,6 +110,9 @@ Plugin* plugin_new(GQuark id, GString* filename) {
 	MAGIC_INIT(plugin);
 
 	plugin->id = id;
+
+	/* timer for CPU delay measurements */
+	plugin->delayTimer = g_timer_new();
 
 	/* do not open the path directly, but rather copy to tmp directory first
 	 * to avoid multiple threads using the same memory space.
@@ -199,6 +232,7 @@ static void _plugin_startExecuting(Plugin* plugin, PluginState* state) {
 	pluginstate_copy(state, plugin->residentState);
 	plugin->isExecuting = TRUE;
 	worker->cached_plugin = plugin;
+	g_timer_start(plugin->delayTimer);
 	plugin_setShadowContext(plugin, FALSE);
 }
 
@@ -208,10 +242,14 @@ static void _plugin_stopExecuting(Plugin* plugin, PluginState* state) {
 	Worker* worker = worker_getPrivate();
 
 	/* context switch back to shadow from plug-in library */
-	pluginstate_copy(plugin->residentState, state);
-	plugin->isExecuting = FALSE;
-	worker->cached_plugin = NULL;
 	plugin_setShadowContext(plugin, TRUE);
+	plugin->isExecuting = FALSE;
+	/* no need to call stop */
+	gdouble elapsed = g_timer_elapsed(plugin->delayTimer, NULL);
+	SimulationTime delay = (SimulationTime) (elapsed * SIMTIME_ONE_SECOND);
+	cpu_addDelay(node_getCPU(worker->cached_node), delay);
+	pluginstate_copy(plugin->residentState, state);
+	worker->cached_plugin = NULL;
 }
 
 void plugin_executeNew(Plugin* plugin, PluginState* state, gint argcParam, gchar* argvParam[]) {
@@ -240,4 +278,19 @@ void plugin_executeGeneric(Plugin* plugin, PluginState* state, CallbackFunc call
 	_plugin_startExecuting(plugin, state);
 	callback(data, callbackArgument);
 	_plugin_stopExecuting(plugin, state);
+}
+
+PluginState* plugin_getDefaultState(Plugin* plugin) {
+	MAGIC_ASSERT(plugin);
+	return plugin->defaultState;
+}
+
+GQuark* plugin_getID(Plugin* plugin) {
+	MAGIC_ASSERT(plugin);
+	return &(plugin->id);
+}
+
+gboolean plugin_isShadowContext(Plugin* plugin) {
+	MAGIC_ASSERT(plugin);
+	return plugin->isShadowContext;
 }

@@ -58,7 +58,7 @@ Network* internetwork_lookupNetwork(Internetwork* internet, in_addr_t ip);
 
 void internetwork_createNode(Internetwork* internet, GQuark nodeID,
 		Network* network, Software* software, GString* hostname,
-		guint64 bwDownKiBps, guint64 bwUpKiBps, guint64 cpuBps, guint nodeSeed);
+		guint64 bwDownKiBps, guint64 bwUpKiBps, guint cpuFrequency, gint cpuThreshold, guint nodeSeed);
 gpointer internetwork_getNode(Internetwork* internet, GQuark nodeID);/* XXX: return type is "Node*" */
 GList* internetwork_getAllNodes(Internetwork* internet);
 

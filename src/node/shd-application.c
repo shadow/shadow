@@ -30,7 +30,7 @@ Application* application_new(Software* software) {
 	Plugin* plugin = worker_getPlugin(software);
 
 	application->software = software;
-	application->state = pluginstate_copyNew(plugin->defaultState);
+	application->state = pluginstate_copyNew(plugin_getDefaultState(plugin));
 
 	return application;
 }

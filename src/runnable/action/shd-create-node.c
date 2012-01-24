@@ -82,6 +82,9 @@ void createnodes_run(CreateNodesAction* action) {
 		g_assert(assignedNetwork);
 	}
 
+	gint cpuThreshold = engine_getConfig(worker->cached_engine)->cpuThreshold;
+	guint cpuFrequency = 2000000; // TODO FIXME add to XML file
+
 	for(gint i = 0; i < action->quantity; i++) {
 		gdouble randomDouble = engine_nextRandomDouble(worker->cached_engine);
 		Network* network = assignedNetwork ? assignedNetwork :
@@ -91,9 +94,6 @@ void createnodes_run(CreateNodesAction* action) {
 		/* use network bandwidth unless an override was given */
 		guint64 bwUpKiBps = action->bandwidthup ? action->bandwidthup : network_getBandwidthUp(network);
 		guint64 bwDownKiBps = action->bandwidthdown ? action->bandwidthdown : network_getBandwidthDown(network);
-
-		/* FIXME change this when CPU model is added */
-		guint64 cpuBps = 0;
 
 		/* hostname */
 		GString* hostnameBuffer = g_string_new(hostname);
@@ -106,7 +106,8 @@ void createnodes_run(CreateNodesAction* action) {
 
 		/* the node is part of the internet */
 		guint nodeSeed = (guint) engine_nextRandomInt(worker->cached_engine);
-		internetwork_createNode(worker_getInternet(), id, network, software, hostnameBuffer, bwDownKiBps, bwUpKiBps, cpuBps, nodeSeed);
+		internetwork_createNode(worker_getInternet(), id, network, software,
+				hostnameBuffer, bwDownKiBps, bwUpKiBps, cpuFrequency, cpuThreshold, nodeSeed);
 
 		g_string_free(hostnameBuffer, TRUE);
 

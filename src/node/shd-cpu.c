@@ -28,22 +28,37 @@
 #include "shadow.h"
 
 struct _CPU {
-	guint64 cpu_speed_Bps;
-	gdouble nanos_per_cpu_aes_byte;
-	gdouble nanos_per_cpu_proc_byte;
+	guint frequencyMHz;
+	guint rawFrequencyMHz;
+	gdouble frequencyRatio;
+	SimulationTime threshold;
 	SimulationTime now;
 	SimulationTime timeCPUAvailable;
 	MAGIC_DECLARE;
 };
 
-CPU* cpu_new(guint64 cpu_speed_Bps) {
+CPU* cpu_new(guint frequencyMHz, gint threshold) {
 	CPU* cpu = g_new0(CPU, 1);
 	MAGIC_INIT(cpu);
 
-	cpu->cpu_speed_Bps = cpu_speed_Bps;
-	cpu->nanos_per_cpu_aes_byte = 1000000000.0 / cpu_speed_Bps;
-	cpu->nanos_per_cpu_proc_byte = cpu->nanos_per_cpu_aes_byte * VCPU_AES_TO_TOR_RATIO;
+	cpu->frequencyMHz = frequencyMHz;
+	cpu->threshold = threshold > 0 ? (threshold * SIMTIME_ONE_MICROSECOND) : SIMTIME_INVALID;
 	cpu->timeCPUAvailable = cpu->now = 0;
+
+	/* get the raw speed of the experiment machine */
+	gchar* contents = NULL;
+	gsize length = 0;
+	GError* error = NULL;
+
+	/* get the original file */
+	if(!g_file_get_contents(CONFIG_CPU_MAX_FREQ_FILE, &contents, &length, &error)) {
+		critical("unable to read '%s' for copying: %s", CONFIG_CPU_MAX_FREQ_FILE, error->message);
+		cpu->rawFrequencyMHz = cpu->frequencyMHz;
+		cpu->frequencyRatio = 1.0;
+	} else {
+		cpu->rawFrequencyMHz = (guint)atoi(contents);
+		cpu->frequencyRatio = (gdouble)((gdouble)cpu->rawFrequencyMHz) / ((gdouble)cpu->frequencyMHz);
+	}
 
 	return cpu;
 }
@@ -54,61 +69,33 @@ void cpu_free(CPU* cpu) {
 	g_free(cpu);
 }
 
-static void cpu_add_load(CPU* cpu, gdouble load) {
+SimulationTime cpu_getDelay(CPU* cpu) {
 	MAGIC_ASSERT(cpu);
 
-	/* convert bytes into nanoseconds to give our node a notion of cpu delay.
-	 * to incorporate general runtime, we multiply by VCPU_LOAD_MULTIPLIER here. */
-	guint64 ns_to_add = (guint64) ceil(load);
-	cpu->timeCPUAvailable += ns_to_add;
-	debug("added %lu nanos of CPU load. CPU is ready at %lu", ns_to_add, cpu->timeCPUAvailable);
-}
-
-void cpu_add_load_aes(CPU* cpu, guint32 bytes) {
-	MAGIC_ASSERT(cpu);
-
-	gdouble adjusted_bytes = (gdouble)(VCPU_LOAD_MULTIPLIER * bytes);
-	gdouble load = adjusted_bytes * cpu->nanos_per_cpu_aes_byte;
-	cpu_add_load(cpu, load);
-}
-
-void cpu_add_load_read(CPU* cpu, guint32 bytes) {
-	MAGIC_ASSERT(cpu);
-
-	gdouble adjusted_bytes = (gdouble)(VCPU_LOAD_MULTIPLIER * bytes);
-	gdouble load = adjusted_bytes * cpu->nanos_per_cpu_proc_byte * VCPU_READ_FRACTION;
-	cpu_add_load(cpu, load);
-}
-
-void cpu_add_load_write(CPU* cpu, guint32 bytes) {
-	MAGIC_ASSERT(cpu);
-
-	gdouble adjusted_bytes = (gdouble)(VCPU_LOAD_MULTIPLIER * bytes);
-	gdouble load = adjusted_bytes * cpu->nanos_per_cpu_proc_byte * VCPU_WRITE_FRACTION;
-	cpu_add_load(cpu, load);
-}
-
-static SimulationTime _cpu_getDelay(CPU* cpu) {
+	/* we only have delay if we've crossed the threshold */
+	SimulationTime builtUpDelay = cpu->timeCPUAvailable - cpu->now;
+	if(builtUpDelay > cpu->threshold) {
+		return builtUpDelay;
+	}
 	return 0;
-//	TODO fix CPU delay modelling
-//	MAGIC_ASSERT(cpu);
-//
-//	/* we only have delay if we've crossed the threshold */
-//	SimulationTime builtUpDelay = cpu->timeCPUAvailable - cpu->now;
-//	if(builtUpDelay > VCPU_DELAY_THRESHOLD_NS) {
-//		return builtUpDelay;
-//	}
-//	return 0;
 }
 
 gboolean cpu_isBlocked(CPU* cpu) {
 	MAGIC_ASSERT(cpu);
-	return _cpu_getDelay(cpu) > 0;
+	return cpu_getDelay(cpu) > 0;
 }
 
-SimulationTime cpu_adjustDelay(CPU* cpu, SimulationTime now) {
+void cpu_updateTime(CPU* cpu, SimulationTime now) {
 	MAGIC_ASSERT(cpu);
 	cpu->now = now;
+	/* the time available is now if we have no delay, otherwise no change
+	 * this is important so that our delay is added from now or into the future
+	 */
 	cpu->timeCPUAvailable = (SimulationTime) MAX(cpu->timeCPUAvailable, now);
-	return _cpu_getDelay(cpu);
+}
+
+void cpu_addDelay(CPU* cpu, SimulationTime delay) {
+	MAGIC_ASSERT(cpu);
+	SimulationTime adjustedDelay = (SimulationTime) (cpu->frequencyRatio * delay);
+	cpu->timeCPUAvailable += adjustedDelay;
 }

@@ -89,7 +89,7 @@ Plugin* worker_getPlugin(Software* software) {
 		 * that so each thread can execute in its own memory space.
 		 */
 		plugin = plugin_new(software->pluginID, software->pluginPath);
-		g_hash_table_replace(worker->plugins, &(plugin->id), plugin);
+		g_hash_table_replace(worker->plugins, plugin_getID(plugin), plugin);
 	}
 
 	return plugin;
@@ -241,7 +241,7 @@ gboolean worker_isInShadowContext() {
 	if(shadow_engine && !(engine_isForced(shadow_engine))) {
 		Worker* worker = worker_getPrivate();
 		if(worker->cached_plugin) {
-			return worker->cached_plugin->isShadowContext;
+			return plugin_isShadowContext(worker->cached_plugin);
 		}
 	}
 	/* if there is no engine or cached plugin, we are definitely in Shadow context */

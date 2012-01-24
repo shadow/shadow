@@ -22,29 +22,14 @@
 #ifndef SHD_CPU_H_
 #define SHD_CPU_H_
 
-/* this is multiplied by the actual number of bytes processed to artificially increase processing penalty.
- * set to 0 to disable CPU load delays. */
-#define VCPU_LOAD_MULTIPLIER 1
-
-/* how long until we block reads and writes? 1 milliseconds */
-#define VCPU_DELAY_THRESHOLD_NS 1000000
-
-/* ratio of AES speed to Tor application processing speed as in a PlanetLab experiment */
-#define VCPU_AES_TO_TOR_RATIO 24.0
-/* estimate of the fraction of time taken to read vs write */
-#define VCPU_READ_FRACTION 0.75
-#define VCPU_WRITE_FRACTION 1 - VCPU_READ_FRACTION
-
 typedef struct _CPU CPU;
 
-CPU* cpu_new(guint64 cpu_speed_Bps);
+CPU* cpu_new(guint frequencyMHz, gint threshold);
 void cpu_free(CPU* cpu);
 
-void cpu_add_load_aes(CPU* cpu, guint32 bytes);
-void cpu_add_load_read(CPU* cpu, guint32 bytes);
-void cpu_add_load_write(CPU* cpu, guint32 bytes);
 gboolean cpu_isBlocked(CPU* cpu);
-
-SimulationTime cpu_adjustDelay(CPU* cpu, SimulationTime now);
+void cpu_updateTime(CPU* cpu, SimulationTime now);
+void cpu_addDelay(CPU* cpu, SimulationTime delay);
+SimulationTime cpu_getDelay(CPU* cpu);
 
 #endif /* SHD_CPU_H_ */

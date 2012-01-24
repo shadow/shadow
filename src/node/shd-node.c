@@ -59,7 +59,9 @@ struct _Node {
 	MAGIC_DECLARE;
 };
 
-Node* node_new(GQuark id, Network* network, Software* software, guint32 ip, GString* hostname, guint64 bwDownKiBps, guint64 bwUpKiBps, guint64 cpuBps, guint nodeSeed) {
+Node* node_new(GQuark id, Network* network, Software* software, guint32 ip,
+		GString* hostname, guint64 bwDownKiBps, guint64 bwUpKiBps,
+		guint cpuFrequency, gint cpuThreshold, guint nodeSeed) {
 	Node* node = g_new0(Node, 1);
 	MAGIC_INIT(node);
 
@@ -92,12 +94,13 @@ Node* node_new(GQuark id, Network* network, Software* software, guint32 ip, GStr
 
 	/* applications this node will run */
 	node->application = application_new(software);
-	node->cpu = cpu_new(cpuBps);
+
+	node->cpu = cpu_new(cpuFrequency, cpuThreshold);
 	node->random = random_new(nodeSeed);
 
-	info("Created Node '%s', ip %s, %u bwUpKiBps, %u bwDownKiBps, %lu cpuBps, %u seed",
+	info("Created Node '%s', ip %s, %u bwUpKiBps, %u bwDownKiBps, %lu cpuFrequency, %i cpuThreshold, %u seed",
 			g_quark_to_string(node->id), networkinterface_getIPName(node->defaultInterface),
-			bwUpKiBps, bwDownKiBps, cpuBps, nodeSeed);
+			bwUpKiBps, bwDownKiBps, cpuFrequency, cpuThreshold, nodeSeed);
 
 	return node;
 }
@@ -791,10 +794,8 @@ gint node_sendUserData(Node* node, gint handle, gconstpointer buffer, gsize nByt
 
 	gssize n = transport_sendUserData(transport, buffer, nBytes, ip, port);
 	if(n > 0) {
-		/* user is writing some bytes. lets assume some cpu processing delay
-		 * here since they will need to copy these and process them. */
+		/* user is writing some bytes. */
 		*bytesCopied = (gsize)n;
-		cpu_add_load_write(node->cpu, (guint32)n);
 	} else if(n < 0) {
 		return EWOULDBLOCK;
 	}
@@ -840,10 +841,8 @@ gint node_receiveUserData(Node* node, gint handle, gpointer buffer, gsize nBytes
 
 	gssize n = transport_receiveUserData(transport, buffer, nBytes, ip, port);
 	if(n > 0) {
-		/* user is reading some bytes. lets assume some cpu processing delay
-		 * here since they will need to copy these and process them. */
+		/* user is reading some bytes. */
 		*bytesCopied = (gsize)n;
-		cpu_add_load_read(node->cpu, (guint32)n);
 	} else if(n < 0) {
 		return EWOULDBLOCK;
 	}
