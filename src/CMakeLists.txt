@@ -80,7 +80,7 @@ target_link_libraries(shadow-bin shadow-intercept ${M_LIBRARIES} ${DL_LIBRARIES}
 install(TARGETS shadow-bin DESTINATION bin)
 
 ## shadow needs to find libshadow-intercept and custom libs after install
-set_target_properties(shadow-bin PROPERTIES INSTALL_RPATH ${CMAKE_INSTALL_PREFIX}/lib INSTALL_RPATH_USE_LINK_PATH TRUE)
+set_target_properties(shadow-bin PROPERTIES INSTALL_RPATH ${CMAKE_INSTALL_PREFIX}/lib INSTALL_RPATH_USE_LINK_PATH TRUE LINK_FLAGS "-Wl,--no-as-needed")
 
 ## install the helper script that sets LD_PRELOAD before launching shadow-bin
 install(PROGRAMS ${SHADOW_SOURCE_DIR}/shadow DESTINATION bin)
