@@ -25,6 +25,7 @@
 #include <glib.h>
 #include <gmodule.h>
 
+#include <stdlib.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>

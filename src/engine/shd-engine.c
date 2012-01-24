@@ -86,6 +86,8 @@ struct _Engine {
 
 	GMutex* lock;
 
+	int rawFrequencyKHz;
+
 	/*
 	 * these values are modified during simulation and must be protected so
 	 * they are thread safe
@@ -131,6 +133,17 @@ Engine* engine_new(Configuration* config) {
 	engine->internet = internetwork_new();
 
 	engine->lock = g_mutex_new();
+
+	/* get the raw speed of the experiment machine */
+	gchar* contents = NULL;
+	gsize length = 0;
+	GError* error = NULL;
+	if(!g_file_get_contents(CONFIG_CPU_MAX_FREQ_FILE, &contents, &length, &error)) {
+		critical("unable to read '%s' for copying: %s", CONFIG_CPU_MAX_FREQ_FILE, error->message);
+		engine->rawFrequencyKHz = 0;
+	} else {
+		engine->rawFrequencyKHz = (guint)atoi(contents);
+	}
 
 	return engine;
 }
@@ -489,4 +502,12 @@ gdouble engine_nextRandomDouble(Engine* engine) {
 	gdouble r = random_nextDouble(engine->random);
 	_engine_unlock(engine);
 	return r;
+}
+
+guint engine_getRawCPUFrequency(Engine* engine) {
+	MAGIC_ASSERT(engine);
+	_engine_lock(engine);
+	guint freq = engine->rawFrequencyKHz;
+	_engine_unlock(engine);
+	return freq;
 }

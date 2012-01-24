@@ -31,17 +31,18 @@ struct _CreateNodesAction {
 	guint64 bandwidthdown;
 	guint64 bandwidthup;
 	guint64 quantity;
+	guint cpuFrequency;
 	MAGIC_DECLARE;
 };
 
 RunnableFunctionTable createnodes_functions = {
-		(RunnableRunFunc) createnodes_run,
-		(RunnableFreeFunc) createnodes_free,
-		MAGIC_VALUE
+	(RunnableRunFunc) createnodes_run,
+	(RunnableFreeFunc) createnodes_free,
+	MAGIC_VALUE
 };
 
 CreateNodesAction* createnodes_new(GString* name, GString* software, GString* cluster,
-		guint64 bandwidthdown, guint64 bandwidthup, guint64 quantity)
+		guint64 bandwidthdown, guint64 bandwidthup, guint64 quantity, guint64 cpuFrequency)
 {
 	g_assert(name && software);
 	CreateNodesAction* action = g_new0(CreateNodesAction, 1);
@@ -56,6 +57,7 @@ CreateNodesAction* createnodes_new(GString* name, GString* software, GString* cl
 	action->bandwidthdown = bandwidthdown;
 	action->bandwidthup = bandwidthup;
 	action->quantity = quantity ? quantity : 1;
+	action->cpuFrequency = (guint)cpuFrequency;
 
 	return action;
 }
@@ -78,14 +80,20 @@ void createnodes_run(CreateNodesAction* action) {
 	/* if they didnt specify a network, assign to a random network */
 	Network* assignedNetwork = NULL;
 	if(action->networkID) {
+		/* they assigned a network, find it */
 		assignedNetwork = internetwork_getNetwork(worker_getInternet(), action->networkID);
 		g_assert(assignedNetwork);
 	}
 
+	/* if they didnt specify a CPU frequency, use the frequency of the box we are running on */
+	guint cpuFrequency = action->cpuFrequency;
+	if(!cpuFrequency) {
+		cpuFrequency = engine_getRawCPUFrequency(worker->cached_engine);
+	}
 	gint cpuThreshold = engine_getConfig(worker->cached_engine)->cpuThreshold;
-	guint cpuFrequency = 2000000; // TODO FIXME add to XML file
 
 	for(gint i = 0; i < action->quantity; i++) {
+		/* get a random network if they didnt assign one */
 		gdouble randomDouble = engine_nextRandomDouble(worker->cached_engine);
 		Network* network = assignedNetwork ? assignedNetwork :
 				internetwork_getRandomNetwork(worker_getInternet(), randomDouble);

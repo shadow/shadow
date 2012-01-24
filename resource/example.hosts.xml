@@ -22,8 +22,9 @@
   -- use "quantity" to generate multiple nodes
   -- use "cluster" to assign to a specific cluster (o/w random assignment)
   -- use "bandwidthdown" and "bandwidthup" to override cluster values (in KiB/s)
+  -- use "cpufrequency" to specify the speed of this nodes virtual CPU (in KiHz)
   -->
-<node id="server.node" software="server" cluster="USMN" bandwidthdown="60000" bandwidthup="30000" />
-<node id="client.node" software="client" quantity="10" />
+<node id="server.node" software="server" cluster="USMN" bandwidthdown="60000" bandwidthup="30000" cpufrequency="2800000" />
+<node id="client.node" software="client" quantity="1" />
 
 <kill time="600" />

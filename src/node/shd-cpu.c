@@ -28,8 +28,8 @@
 #include "shadow.h"
 
 struct _CPU {
-	guint frequencyMHz;
-	guint rawFrequencyMHz;
+	guint frequencyKHz;
+	guint rawFrequencyKHz;
 	gdouble frequencyRatio;
 	SimulationTime threshold;
 	SimulationTime now;
@@ -37,27 +37,23 @@ struct _CPU {
 	MAGIC_DECLARE;
 };
 
-CPU* cpu_new(guint frequencyMHz, gint threshold) {
+CPU* cpu_new(guint frequencyKHz, gint threshold) {
 	CPU* cpu = g_new0(CPU, 1);
 	MAGIC_INIT(cpu);
 
-	cpu->frequencyMHz = frequencyMHz;
+	cpu->frequencyKHz = frequencyKHz;
 	cpu->threshold = threshold > 0 ? (threshold * SIMTIME_ONE_MICROSECOND) : SIMTIME_INVALID;
 	cpu->timeCPUAvailable = cpu->now = 0;
 
 	/* get the raw speed of the experiment machine */
-	gchar* contents = NULL;
-	gsize length = 0;
-	GError* error = NULL;
-
-	/* get the original file */
-	if(!g_file_get_contents(CONFIG_CPU_MAX_FREQ_FILE, &contents, &length, &error)) {
-		critical("unable to read '%s' for copying: %s", CONFIG_CPU_MAX_FREQ_FILE, error->message);
-		cpu->rawFrequencyMHz = cpu->frequencyMHz;
+	guint rawFrequencyKHz = engine_getRawCPUFrequency(worker_getPrivate()->cached_engine);
+	if(!rawFrequencyKHz) {
+		warning("unable to determine raw CPU frequency, using %i KHz as an estimate", cpu->frequencyKHz);
+		cpu->rawFrequencyKHz = cpu->frequencyKHz;
 		cpu->frequencyRatio = 1.0;
 	} else {
-		cpu->rawFrequencyMHz = (guint)atoi(contents);
-		cpu->frequencyRatio = (gdouble)((gdouble)cpu->rawFrequencyMHz) / ((gdouble)cpu->frequencyMHz);
+		cpu->rawFrequencyKHz = rawFrequencyKHz;
+		cpu->frequencyRatio = (gdouble)((gdouble)cpu->rawFrequencyKHz) / ((gdouble)cpu->frequencyKHz);
 	}
 
 	return cpu;

@@ -42,7 +42,7 @@ static const gchar* ParserAttributeStrings[] = {
 	"id", "path", "center", "width", "tail",
 	"plugin", "software", "cluster", "clusters",
 	"bandwidthdown", "bandwidthup", "latency", "jitter", "packetloss",
-	"time", "quantity", "arguments",
+	"cpufrequency", "time", "quantity", "arguments",
 };
 
 /* NOTE - they MUST be synced with ParserAttributeStrings */
@@ -61,6 +61,7 @@ typedef enum {
 	ATTRIBUTE_LATENCY,
 	ATTRIBUTE_JITTER,
 	ATTRIBUTE_PACKETLOSS,
+	ATTRIBUTE_CPUFREQUENCY,
 	ATTRIBUTE_TIME,
 	ATTRIBUTE_QUANTITY,
 	ATTRIBUTE_ARGUMENTS,
@@ -109,6 +110,7 @@ struct _ParserValues {
 	/* time in seconds */
 	guint64 time;
 	guint64 quantity;
+	guint64 cpufrequency;
 	MAGIC_DECLARE;
 };
 
@@ -144,6 +146,8 @@ static ParserValues* _parser_getValues(const gchar *element_name,
 			values->latency = g_ascii_strtoull(*value_cursor, NULL, 10);
 		} else if(g_ascii_strcasecmp(*name_cursor, ParserAttributeStrings[ATTRIBUTE_JITTER]) == 0) {
 			values->jitter = g_ascii_strtoull(*value_cursor, NULL, 10);
+		} else if(g_ascii_strcasecmp(*name_cursor, ParserAttributeStrings[ATTRIBUTE_CPUFREQUENCY]) == 0) {
+			values->cpufrequency = g_ascii_strtoull(*value_cursor, NULL, 10);
 		} else if(g_ascii_strcasecmp(*name_cursor, ParserAttributeStrings[ATTRIBUTE_TIME]) == 0) {
 			values->time = g_ascii_strtoull(*value_cursor, NULL, 10);
 		} else if(g_ascii_strcasecmp(*name_cursor, ParserAttributeStrings[ATTRIBUTE_ID]) == 0) {
@@ -370,7 +374,7 @@ static void _parser_handleElement(GMarkupParseContext *context,
 	} else if(g_ascii_strcasecmp(element_name, ParserElementStrings[ELEMENT_NODE]) == 0) {
 		if(_parser_validateNode(parser, values)) {
 			a = (Action*) createnodes_new(values->id, values->software, values->cluster,
-					values->bandwidthdown, values->bandwidthup, values->quantity);
+					values->bandwidthdown, values->bandwidthup, values->quantity, values->cpufrequency);
 			a->priority = 5;
 		}
 	} else if(g_ascii_strcasecmp(element_name, ParserElementStrings[ELEMENT_KILL]) == 0) {

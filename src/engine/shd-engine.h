@@ -38,7 +38,6 @@ void engine_setupWorkerThreads(Engine* engine, gint nWorkerThreads);
 void engine_teardownWorkerThreads(Engine* engine);
 
 gint engine_run(Engine* engine);
-void engine_pushEvent(Engine* engine, Event* event);
 
 void engine_put(Engine* engine, EngineStorage type, GQuark* id, gpointer item);
 gpointer engine_get(Engine* engine, EngineStorage type, GQuark id);
@@ -59,7 +58,11 @@ void engine_setKillTime(Engine* engine, SimulationTime endTime);
 gboolean engine_isKilled(Engine* engine);
 gboolean engine_isForced(Engine* engine);
 
+/* thread-safe */
+
+void engine_pushEvent(Engine* engine, Event* event);
 gint engine_nextRandomInt(Engine* engine);
 gdouble engine_nextRandomDouble(Engine* engine);
+guint engine_getRawCPUFrequency(Engine* engine);
 
 #endif /* SHD_ENGINE_H_ */
