@@ -103,7 +103,6 @@ def build(args):
     if setup_dependencies(args) != 0: return
     if setup_tor(args) != 0: return
     include_tor(args)
-    if get_maxmind(args) != 0: return
     if gen_www_files(args) != 0: return
     
     os.chdir(builddir+"/scallion")
@@ -269,9 +268,7 @@ def setup_dependencies(args):
     args.tordir = args.target_tor[:args.target_tor.rindex(".tar.gz")]
 
     if not os.path.exists(args.target_tor):
-        log(args, "downloading " + args.tor_url)
-        if download(args.tor_url, args.target_tor) != 0:
-            log(args, "failed to download " + args.tor_url)
+        if download(args, args.tor_url, args.target_tor) != 0:
             return -1
     
     if not os.path.exists(args.tordir):
@@ -283,27 +280,9 @@ def setup_dependencies(args):
 
     return 0
 
-def get_maxmind(args):
-    args.target_maxmind = os.path.abspath(os.path.basename(MAXMIND_URL))
-    args.maxminddb = args.target_maxmind[:args.target_maxmind.rindex('.')]
-    
-    if not os.path.exists(args.target_maxmind):
-        log(args, "downloading " + MAXMIND_URL)
-        if download(MAXMIND_URL, args.target_maxmind) != 0:
-            log(args, "failed to download " + MAXMIND_URL)
-            return -1
-    
-    # gunzip maxmind db
-    if not os.path.exists(args.maxminddb):
-        fin = gzip.open(args.target_maxmind, 'r')
-        fout = open(args.maxminddb, 'w')
-        fout.writelines(fin)
-        fout.close()
-        fin.close()
-        
-    return 0
-
 def gen_www_files(args):
+    dd(args, "16KiB.urnd", 16)
+    dd(args, "32KiB.urnd", 32)
     dd(args, "50KiB.urnd", 50)
     dd(args, "320KiB.urnd", 320)
     dd(args, "1MiB.urnd", 1024)
@@ -316,15 +295,56 @@ def dd(args, filename, kb):
         log(args, "calling " + ddcmd)
         subprocess.call(ddcmd.split())
         
-def download(url, target_path):
-    try:
-        u = urllib2.urlopen(url)
-        localfile = open(target_path, 'w')
-        localfile.write(u.read())
-        localfile.close()
-        return 0
-    except urllib2.URLError:
+def download(args, url, target_path):
+    if query_yes_no("May we download '{0}'?".format(url)):
+        log(args, "attempting to download " + url)
+        try:
+            u = urllib2.urlopen(url)
+            localfile = open(target_path, 'w')
+            localfile.write(u.read())
+            localfile.close()
+            log(args, "successfully downloaded '{0}'".format(url))
+            return 0
+        except urllib2.URLError:
+            log(args, "failed to download '{0}'".format(url))
+            return -1
+    else:
+        log(args, "user denied download permission")
+        ## TODO allow them to give a local path to the download
+        log(args, "supplying a local path is not yet supported, failing")
         return -1
+    
+def query_yes_no(question, default="yes"):
+    """Ask a yes/no question via raw_input() and return their answer.
+
+    "question" is a string that is presented to the user.
+    "default" is the presumed answer if the user just hits <Enter>.
+        It must be "yes" (the default), "no" or None (meaning
+        an answer is required of the user).
+
+    The "answer" return value is one of "yes" or "no".
+    """
+    valid = {"yes":True,   "y":True,  "ye":True,
+             "no":False,     "n":False}
+    if default == None:
+        prompt = " [y/n] "
+    elif default == "yes":
+        prompt = " [Y/n] "
+    elif default == "no":
+        prompt = " [y/N] "
+    else:
+        raise ValueError("invalid default answer: '%s'" % default)
+
+    while True:
+        sys.stdout.write(question + prompt)
+        choice = raw_input().lower()
+        if default is not None and choice == '':
+            return valid[default]
+        elif choice in valid:
+            return valid[choice]
+        else:
+            sys.stdout.write("Please respond with 'yes' or 'no' "\
+                             "(or 'y' or 'n').\n")
 
 def log(args, msg):
     if not args.be_quiet:

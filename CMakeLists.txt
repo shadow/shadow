@@ -95,5 +95,5 @@ add_definitions(-Wall --std=c99 -fPIC -g -D_GNU_SOURCE)
 ## build source
 add_subdirectory(src)
 
-install(FILES ${TORPATH}/src/config/geoip build/50KiB.urnd build/320KiB.urnd build/1MiB.urnd build/5MiB.urnd build/GeoLiteCity.dat DESTINATION share/)
-install(DIRECTORY resource/ DESTINATION share PATTERN "config/*")
+install(FILES ${TORPATH}/src/config/geoip build/16KiB.urnd build/32KiB.urnd build/50KiB.urnd build/320KiB.urnd build/1MiB.urnd build/5MiB.urnd DESTINATION share/)
+#install(DIRECTORY resource/ DESTINATION share PATTERN "config/*")
