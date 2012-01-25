@@ -324,27 +324,18 @@ def query_yes_no(question, default="yes"):
 
     The "answer" return value is one of "yes" or "no".
     """
-    valid = {"yes":True,   "y":True,  "ye":True,
-             "no":False,     "n":False}
-    if default == None:
-        prompt = " [y/n] "
-    elif default == "yes":
-        prompt = " [Y/n] "
-    elif default == "no":
-        prompt = " [y/N] "
-    else:
-        raise ValueError("invalid default answer: '%s'" % default)
+    valid = {"yes":True,   "y":True,  "ye":True, "no":False,     "n":False}
+    if default == None: prompt = " [y/n] "
+    elif default == "yes": prompt = " [Y/n] "
+    elif default == "no": prompt = " [y/N] "
+    else: raise ValueError("invalid default answer: '%s'" % default)
 
     while True:
         sys.stdout.write(question + prompt)
         choice = raw_input().lower()
-        if default is not None and choice == '':
-            return valid[default]
-        elif choice in valid:
-            return valid[choice]
-        else:
-            sys.stdout.write("Please respond with 'yes' or 'no' "\
-                             "(or 'y' or 'n').\n")
+        if default is not None and choice == '': return valid[default]
+        elif choice in valid: return valid[choice]
+        else: sys.stdout.write("Please respond with 'yes' or 'no' (or 'y' or 'n').\n")
 
 def log(args, msg):
     if not args.be_quiet:

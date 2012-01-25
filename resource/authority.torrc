@@ -1,17 +1,15 @@
 ## COMMON SETTINGS ##
 
-DirServer authority v3ident=919CAD4BB055CE7EC5169F19BCA731F3D60EFB19 orport=9111 4uthority.tor:9112 9441 269F 5989 487F 07AE 8240 6334 5A0A 6BCA B279
-#Address 146.57.249.105
+DirServer authority v3ident=919CAD4BB055CE7EC5169F19BCA731F3D60EFB19 orport=9111 4uthority.scallion.shd:9112 9441 269F 5989 487F 07AE 8240 6334 5A0A 6BCA B279
 
 TestingTorNetwork 1
 AllowInvalidNodes "entry,middle,exit,introduction,rendezvous"
 
 ServerDNSDetectHijacking 0
 NumCPUs 1
-Log debug stdout
-#Log notice file auth.notice.log
+Log notice stdout
 SafeLogging 0
-#GeoIPFile geoip
+WarnUnsafeSocks 0
 ContactInfo jansen@cs.umn.edu
 
 # make sure we are not throttled
@@ -19,22 +17,17 @@ MaxOnionsPending 1000000
 
 ## DIRECTORY AUTHORITIES ##
 
-#DataDirectory authoritydata
 V3AuthoritativeDirectory 1
 V2AuthoritativeDirectory 1
 AuthoritativeDirectory 1
 ORPort 9111
 DirPort 9112
 SocksPort 0
-#ExitPolicy "accept *:*"
+ExitPolicy "reject *:*"
 
 CellStatistics 1
 DirReqStatistics 1
 EntryStatistics 1
 ExitPortStatistics 1
 ExtraInfoStatistics 1
-
-CircuitPriorityHalflife 0
-#PerConnBWRate 5 KB
-#PerConnBWBurst 2 MB
 

@@ -21,650 +21,105 @@
 # along with Scallion.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-import os, sys, subprocess, shutil, gzip, argparse, pygeoip, random, socket
+import os, sys, subprocess, shutil, argparse
 from datetime import datetime
-from time import sleep
 
-INSTALL_USER="~/.shadow/"
-INSTALL_PREFIX=os.path.abspath(os.path.expanduser(INSTALL_USER))
-PRELOAD_PATH=os.path.abspath(os.path.dirname(__file__) + "/../lib/libshadow-preload-scallion.so")
-
-DEFAULT_NRELAYS = 10
-DEFAULT_EXITFRAC = 0.4
-DEFAULT_NCLIENTS = 300
-DEFAULT_FBULK = 0.05
-DEFAULT_NSERVERS = 30
+DEFAULTPREFIX=os.path.abspath(os.path.expanduser("~/.shadow/"))
+DEFAULTOUTPUT=os.path.abspath(os.path.expanduser("./"))
 
 def main():
     # setup our commands
-    pmain = argparse.ArgumentParser(description='Utility to assist in setting up scallion plug-in experiments for shadow', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    spmain = pmain.add_subparsers(help='run a subcommand (for help use <subcommand> --help)')
-    pgenerate = spmain.add_parser('generate', help='Generate Tor-style topologies for the scallion plugin to the shadow simulator. You should run this generator in the directory from which you plan to run shadow, and give correct paths to the required files.', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    pgenerate.set_defaults(func=generate)
-    prun = spmain.add_parser('run', help="Run a Tor experiment using previously generated settings", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    prun.set_defaults(func=run)
-    pauto = spmain.add_parser('auto', help="Generate and run a Tor experiment using default settings", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    pauto.set_defaults(func=auto)
-    pclean = spmain.add_parser('clean', help="Clean data directory from previously generated settings", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    pclean.set_defaults(func=clean)
-    
-    ## MAIN
-    pmain.add_argument('-q', '--quiet', action="store_true", dest="be_quiet",
-          help="this script will not display its actions", default=False)
-
-    ## GENERATE
-    pgenerate.add_argument('-p', '--prefix', action="store", dest="prefix",
-          help="PATH to scallion installation", metavar="PATH", default=INSTALL_PREFIX)
-        
-    # network configuration
-    pgenerate.add_argument('--nrelays', action="store", type=int, dest="nrelays",
-          help="number of total relays for the generated topology", metavar='N', default=DEFAULT_NRELAYS)
-    pgenerate.add_argument('--fexit', action="store", type=float, dest="exitfrac",
-          help="fraction of relays that are exits", metavar='F', default=DEFAULT_EXITFRAC)
-    pgenerate.add_argument('--nclients', action="store", type=int, dest="nclients",
-          help="number of total clients for the generated topology", metavar='N', default=DEFAULT_NCLIENTS)
-    pgenerate.add_argument('--fbulk', action="store", type=float, dest="fbulk",
-          help="fraction of bulk downloading clients (remaining are web clients)", metavar='F', default=DEFAULT_FBULK)
-    pgenerate.add_argument('--nservers', action="store", type=int, dest="nservers",
-          help="number of fileservers", metavar='N', default=DEFAULT_NSERVERS)
-
-    # torrc configuration files
-    pgenerate.add_argument('--exit', action="store", type=str, dest="exitrc",
-          help="custom path to a torrc for exit Tor relays", metavar='PATH', default=None)
-    pgenerate.add_argument('--relay', action="store", type=str, dest="relayrc",
-          help="custom path to a torrc for nonexit Tor relays", metavar='PATH', default=None)
-    pgenerate.add_argument('--client', action="store", type=str, dest="clientrc",
-          help="custom path to a torrc for Tor clients", metavar='PATH', default=None)
-    pgenerate.add_argument('--authority', action="store", type=str, dest="authrc",
-          help="custom path to a torrc for the Tor directory authority", metavar='PATH', default=None)
-    
-    pgenerate.add_argument('--authority-keys', action="store", type=str, dest="keys",
-          help="custom path to Tor directory authority keys directory (This can be created with the command\n\"tor --list-fingerprint --DataDirectory . -f authkeys.torrc\"\nwhere authkeys.torrc contains\n\"DirServer test 127.0.0.1:5000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000\nORPort 5000\"", metavar='PATH/TO/AUTHORITY/KEYS', default=None)
-
-    # other files
-    pgenerate.add_argument('--consensus', action="store", type=str, dest="consensus",
-          help="custom path to a Tor consensus file", metavar='PATH', default=None)
-    pgenerate.add_argument('--geoip', action="store", type=str, dest="geoip",
-          help="custom path to the Tor geoip file", metavar='PATH', default=None)
-    pgenerate.add_argument('--geoipcity', action="store", type=str, dest="geoipcity",
-          help="custom path to the Maxmind geoip city database needed for the pygeoip python module", metavar='PATH', default=None)
-    
-    pgenerate.add_argument('--output', action="store", type=str, dest="output",
-          help="path to the output directory for files generated by this script and data produced in the simulation", metavar='PATH', default="scallion-output/")
-
-    ## RUN
-    prun.add_argument('-p', '--prefix', action="store", dest="prefix",
-          help="PATH to scallion installation", metavar="PATH", default=INSTALL_PREFIX)
-    prun.add_argument('--output', action="store", type=str, dest="output",
-          help="path to the output directory where files were generated", metavar='PATH', default="./")
+    ap = argparse.ArgumentParser(description='Run Tor experiments as a plug-in to Shadow', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    ap.add_argument('-p', '--prefix', action="store", dest="prefix", help="PATH to scallion installation", metavar="PATH", default=DEFAULTPREFIX)
+    ap.add_argument('-w', '--working-directory', action="store", type=str, dest="output", help="PATH to directory from which to run Shadow", metavar='PATH', default=DEFAULTOUTPUT)
+    ap.add_argument('-q', '--quiet', action="store_true", dest="be_quiet", help="this script will not display its actions", default=False)
    
-    ## CLEAN
-    pclean.add_argument('--output', action="store", type=str, dest="output",
-          help="path to the output directory for files generated by this script and data produced in the simulation", metavar='PATH', default="./")
-
     # get arguments, accessible with args.value
-    args = pmain.parse_args()
-    # run chosen command
-    retval = args.func(args)
+    args = ap.parse_args()
     
-    log("scallion returned " + str(retval))
-    return
+    args.output = os.path.abspath(os.path.expanduser(args.output))
+    args.prefix = os.path.abspath(os.path.expanduser(args.prefix))
+    
+    datapath = os.path.abspath(args.output+"/data")
+    logpath = os.path.abspath(datapath+"/scallion.log")
+    dstatpath = os.path.abspath(datapath+"/dstat.log")
 
-def generate(args):
-    print "** Generate functionality needs cleanup and is currently unsupported. Please check resource/scallion.xml for a usable XML file."
-    return
-    args.prefix = os.path.abspath(args.prefix)
-    args.prefix2 = os.path.abspath(args.prefix + "/share/shadow/scallion/")
-    
-    # default paths from installation prefix
-    if args.exitrc is None: args.exitrc = args.prefix2 + "/exit.torrc"
-    if args.relayrc is None: args.relayrc = args.prefix2 + "/relay.torrc"
-    if args.clientrc is None: args.clientrc = args.prefix2 + "/client.torrc"
-    if args.authrc is None: args.authrc = args.prefix2 + "/authority.torrc"
-    if args.keys is None: args.keys = args.prefix2 + "/authoritydata/keys"
-    if args.consensus is None: args.consensus = args.prefix2 + "/consensus.txt"
-    if args.geoip is None: args.geoip = args.prefix2 + "/geoip"
-    if args.geoipcity is None: args.geoipcity = args.prefix2 + "/GeoLiteCity.dat"
-    
-    args.cdfs = args.prefix + "/share/shadow/resources"
-    args.output = os.path.abspath(args.output)
-    args.run = args.output
-    args.data = os.path.abspath(args.output + "/data/")
-    args.dsimout = os.path.abspath(args.output + "/scallion.xml")
-    args.www = args.prefix2
-    
-    args.exitrc = os.path.abspath(args.exitrc)
-    args.relayrc = os.path.abspath(args.relayrc)
-    args.clientrc = os.path.abspath(args.clientrc)
-    args.authrc = os.path.abspath(args.authrc)
-    args.keys = os.path.abspath(args.keys)
-    args.consensus = os.path.abspath(args.consensus)
-    args.geoip = os.path.abspath(args.geoip)
-    args.geoipcity = os.path.abspath(args.geoipcity)
-    args.run = os.path.abspath(args.run)
-    args.cdfs = os.path.abspath(args.cdfs)
-    args.data = os.path.abspath(args.data)
-    args.dsimout = os.path.abspath(args.dsimout)
-    
-    if os.path.exists(args.output):
-        log("Please specify an unused output directory with --output")
-        return -1
-    else: os.makedirs(args.output)
-    
-    os.chdir(args.output)
-    os.makedirs(args.data)
-    args.authoritydata = os.path.abspath(args.data + "/authoritydata/")
-    args.exitdata = os.path.abspath(args.data + "/exitdata/")
-    args.relaydata = os.path.abspath(args.data + "/relaydata/")
-    args.clientdata = os.path.abspath(args.data + "/clientdata/")
-    os.makedirs(args.authoritydata)
-    os.makedirs(args.exitdata)
-    os.makedirs(args.relaydata)
-    os.makedirs(args.clientdata)
-    
-    shutil.copytree(args.keys, args.output+"/keys")
-    shutil.copytree(args.keys, args.authoritydata + "/4uthority.tor/keys")
-    
-    shutil.copy(args.exitrc, args.output)
-    args.exitrc = args.output + "/" + os.path.basename(args.exitrc)
-    shutil.copy(args.relayrc, args.output)
-    args.relayrc = args.output + "/" + os.path.basename(args.relayrc)
-    shutil.copy(args.clientrc, args.output)
-    args.clientrc = args.output + "/" + os.path.basename(args.clientrc)
-    shutil.copy(args.authrc, args.output)
-    args.authrc = args.output + "/" + os.path.basename(args.authrc)
-    
-    args.nbulk = float(args.nclients * args.fbulk)
-    args.nweb = float(args.nclients - args.nbulk)
-    if args.nweb < 0: args.nweb = 0
-
-    se = ScallionExperiment(args)
-    se.generate(args)
-    
-    return 0
-
-class ScallionExperiment():
-    def __init__(self, args):
-        self.cp = ConsensusParser(args.consensus, args.geoipcity)
-        self.select = self.cp.parse()
-        self.outfile = open(args.dsimout, 'w')
-        self.relay_choices = []
-        self.choicefile = open(args.run + "/relay-choices.csv", 'w')
-        self.scounter = 0
-        self.ncounter = 0
+    # does our output data directory already have data?
+    if os.path.exists(datapath):
+        log("Data exists in output path")
+        if not query_yes_no("Is it OK to clear data directory {0}?".format(datapath), default="no"): 
+            log("Experiment aborted to prevent destroying {0}".format(datapath))
+            return -1
         
-    def nodeout(self, name, plugin, network, bwup, bwdown, cpu, args, time, quantity=1):
-        sname = name+"-software"+str(self.scounter)
-        self.scounter += 1
-        self.out("<software name=\"{0}\" plugin=\"{1}\" time=\"{2}\" arguments=\"{3}\" />".format(sname, plugin, time, args))
-        self.out("<node name=\"{0}\" software=\"{1}\" network=\"{2}\" bandwidthup=\"{3}\" bandwidthdown=\"{4}\" cpu=\"{5}\" quantity=\"{6}\" />\n".format(name+str(self.ncounter), sname, network, bwup, bwdown, cpu, quantity))
-        self.ncounter += 1
-        
-    def out(self, string):
-        print >> self.outfile, string
+    # reset the data directory
+    reset(args.output)
 
-    def generate(self, args):
-        self.out(
-"<plugin name=\"filetransfer\" path=\"libshadow-plugin-filetransfer.so\" />\n\
-<plugin name=\"scallion\" path=\"libshadow-plugin-scallion.so\" />\n\
-\n\
-<cdf name=\"fastbw_cdf\" center=\"102400\" width=\"0\" tail=\"0\" />\n\
-<cdf name=\"midbw_cdf\" center=\"10240\" width=\"0\" tail=\"0\" />\n\
-<cdf name=\"slowupbw_cdf\" center=\"1024\" width=\"0\" tail=\"0\" />\n\
-<cdf name=\"slowdownbw_cdf\" center=\"3584\" width=\"0\" tail=\"0\" />\n\
-<cdf name=\"normbw_cdf\" path=\"" + args.cdfs + "/umn/synthetic_bandwidth_KiBps.cdf\" />\n\
-\n\
-<cdf name=\"cpu_cdf\" path=\"" + args.cdfs + "/umn/synthetic_cpu_speed_arcachon_Bps.cdf\" />\n\
-<cdf name=\"latency_cdf\" center=\"100\" width=\"0\" tail=\"0\" />\n")
-
-        # get all latency cdfs
-        for region1 in self.cp.sg.shadowregions:
-            for region2 in self.cp.sg.shadowregions:
-                name = region1.name + "_to_" + region2.name + "_latency_cdf"
-                path = args.cdfs + "/umn/plab_latency/" + region1.name + "_to_" + region2.name + ".cdf"
-                self.out("<cdf name=\"{0}\" path=\"{1}\" />".format(name, path))
-                
-        self.out("")
-        
-        # get all networks
-        for region in self.cp.sg.shadowregions:
-            name = region.name + "_network"
-            cdfname = region.name + "_to_" + region.name + "_latency_cdf"
-            self.out("<network name=\"{0}\" latency=\"{1}\" reliability=\"1.0\" />".format(name, cdfname))
-            
-        self.out("")
-
-        # connect all networks
-        for region1 in self.cp.sg.shadowregions:
-            for region2 in self.cp.sg.shadowregions:
-                if region1 != region2:
-                    name1 = region1.name + "_network"
-                    name2 = region2.name + "_network"
-                    cdfname1 = region1.name + "_to_" + region2.name + "_latency_cdf"
-                    cdfname2 = region2.name + "_to_" + region1.name + "_latency_cdf"
-                    self.out("<link networka=\"{0}\" networkb=\"{1}\" latencyab=\"{2}\" reliabilityab=\"1.0\" latencyba=\"{3}\" reliabilityba=\"1.0\" />".format(name1, name2, cdfname1, cdfname2))
-
-        self.out("")
-        
-        # start up the authority and file servers
-        swargs = "dirauth 102400 " + args.authrc + " " + args.authoritydata + " " + args.geoip
-        self.out("<software name=\"4uthority.tor-software\" plugin=\"scallion\" time=\"1\" arguments=\"{0}\" />".format(swargs))
-        self.out("<node name=\"4uthority.tor\" software=\"4uthority.tor-software\" network=\"US_CENTRAL_network\" bandwidthup=\"fastbw_cdf\" bandwidthdown=\"fastbw_cdf\" cpu=\"cpu_cdf\" quantity=\"1\" />\n")
-
-        # spread out the servers geographically
-        networks = ["US_WEST_network", "US_CENTRAL_network", "US_EAST_network", "EU_WEST_network"]
-        n=args.nservers/len(networks)
-        r = args.nservers%len(networks)
-        for network in networks:
-            q = n
-            if r > 0: 
-                q += r
-                r = 0
-            self.nodeout("fileserver.shd", "filetransfer", network, "fastbw_cdf", "fastbw_cdf", "cpu_cdf", "server 8080 " + args.www, 1, quantity=str(q))
-            
-        # the clients will need to know which servers to connect to
-        f = open(args.run + "/bulk.spec", 'w')
-        for i in range(args.nservers):
-            if i == 0: print >> f, "fileserver.shd:8080:/5MiB.urnd"
-            else: print >> f, str(i) + ".fileserver.shd:8080:/5MiB.urnd"
-        f.close()
-        f = open(args.run + "/web.spec", 'w')
-        for i in range(args.nservers):
-            if i == 0: print >> f, "fileserver.shd:8080:/320KiB.urnd"
-            else: print >> f, str(i) + ".fileserver.shd:8080:/320KiB.urnd"
-        f.close()
-
-        total_bw = 0.0;
-        # start the exits first
-        exits = self.select.exits(int(args.nrelays * args.exitfrac))
-        for e in exits: self.relay_choices.append(e)
-        total = len(exits)
-        each = total/5
-        remain = total%5
-
-        for i in xrange(60, 210, 30):
-            time = str(i)
-            q = each
-            if remain > 0:
-                q += remain
-                remain = 0
-            if q <= 0: break
-            for j in xrange(q):
-                exit = exits.pop()
-                total_bw += exit.torbw
-                swargs = "exitrelay " + str(exit.torbw) + " " + args.exitrc + " " + args.exitdata + " " + args.geoip
-                self.nodeout("exit.shd", "scallion", exit.georegion + "_network", self.getbwstr(exit.torbw), self.getbwdownstr(exit.torbw), "cpu_cdf", swargs, time)
-            total -= q
-            if total <= 0: break
-            
-        # now start the other relays
-        relays = self.select.relays(int(args.nrelays - (args.nrelays * args.exitfrac)))
-        for r in relays: self.relay_choices.append(r)
-        total = len(relays)
-        each = total/5
-        remain = total%5
-
-        for i in xrange(240, 390, 30):
-            time = str(i)
-            q = each
-            if remain > 0:
-                q += remain
-                remain = 0
-            if q <= 0: break
-            for j in xrange(q):
-                relay = relays.pop()
-                total_bw += relay.torbw
-                swargs = "relay " + str(relay.torbw) + " " + args.relayrc + " " + args.relaydata + " " + args.geoip
-                self.nodeout("relay.shd", "scallion", relay.georegion + "_network", self.getbwstr(relay.torbw), self.getbwdownstr(relay.torbw), "cpu_cdf", swargs, time)
-            total -= q
-            if total <= 0: break
-                
-        # give time for bootstrapping before the clients
-        each_web = int(args.nweb / 30)
-        remain_web = int(args.nweb % 30)
-        each_bulk = int(args.nbulk / 30)
-        remain_bulk = int(args.nbulk % 30)
-
-        swargs = "client 102400 " + args.clientrc + " " + args.clientdata + " " + args.geoip
-        WEB=" multi " + args.run + "/web.spec localhost 9000 " + args.cdfs + "/unc/think_times_ms.cdf -1"
-        BULK=" multi " + args.run + "/bulk.spec localhost 9000 none -1"
-
-        for i in xrange(1200, 1500, 10):
-            time = str(i)
-            self.nodeout("client.shd", "scallion", self.cp.sg.random_region() + "_network", "slowupbw_cdf", "slowdownbw_cdf", "cpu_cdf", swargs+WEB, time, quantity=str(each_web))
-
-            ncreate = each_bulk;
-            if ncreate == 0 and remain_bulk > 0:
-                ncreate = 1
-                remain_bulk -= 1
-            if ncreate > 0:
-                self.nodeout("client.shd", "scallion", self.cp.sg.random_region() + "_network", "slowupbw_cdf", "slowdownbw_cdf", "cpu_cdf", swargs+BULK, time, quantity=str(ncreate))
-
-        if remain_web > 0 or remain_bulk > 0:
-            if remain_web > 0:
-                self.nodeout("client.shd", "scallion", self.cp.sg.random_region() + "_network", "slowupbw_cdf", "slowdownbw_cdf", "cpu_cdf", swargs+WEB, time, quantity=str(remain_web))
-            if remain_bulk > 0:
-                self.nodeout("client.shd", "scallion", self.cp.sg.random_region() + "_network", "slowupbw_cdf", "slowdownbw_cdf", "cpu_cdf", swargs+BULK, time, quantity=str(remain_bulk))
-
-        self.out("<kill time=\"4980\" >")
-
-        # check out what we generated
-        nlive_relays = float(len(self.select.liverelays) + len(self.select.liveexits))
-        live_bw = self.cp.total_live_bw
-        ngen_relays = float(args.nrelays)
-        gen_bw = total_bw
-        gen_fraction = gen_bw/live_bw
-        expected_fraction = ngen_relays/nlive_relays
-
-        chosen_bws = [r.torbw for r in self.relay_choices]
-        chosen_bws.sort()
-        median_chosen = chosen_bws[int(len(chosen_bws)/2)]
-
-        print >> sys.stderr, "live Tor has " + str(nlive_relays) + " relays with " + str(live_bw) + " total bandwidth"
-        print >> sys.stderr, "generated " + str(ngen_relays) + " relays with " + str(gen_bw) + " total bandwidth"
-        print >> sys.stderr, "bandwidth is " + str(gen_fraction * 100.0) + "% of live Tor, using " + str(expected_fraction * 100.0) + "% of the relays"
-        print >> sys.stderr, "chosen relay bandwidth median: " + str(median_chosen) + ", and mean: " + str(gen_bw/ngen_relays)
-#        diff = gen_fraction - expected_fraction
-#        div = gen_fraction / expected_fraction
-#        if diff > 0.01 or diff < -0.01 or div > 2 or div < 0.5: print >> sys.stderr, "you might want to try again"
-
-        print >> sys.stderr, "see " + args.run + "/relay_choices.csv for relay choice info"
-
-        print >> self.choicefile,  "#ip,bandwidth(KBps),geocode,georegion,isExit"
-        for r in self.relay_choices:
-            print >> self.choicefile, r.toCSV()
-
-    def dump(self):
-        print "#ip,bandwidth(KBps),geocode,georegion,isExit"
-        for r in self.select.liverelays:
-            print r.toCSV()
-
-    def getbwstr(self, torbw):
-        if torbw <= 1024.0 : return "slowupbw_cdf"
-        elif torbw <= 10240.0: return "midbw_cdf"
-        else: return "fastbw_cdf"
-
-    def getbwdownstr(self, torbw):
-        if torbw <= 1024.0 : return "slowdownbw_cdf"
-        elif torbw <= 10240.0: return "midbw_cdf"
-        else: return "fastbw_cdf"
-
-    def getlatencystr(self, name1, name2):
-        return "latency_cdf"
-
-class Relay():
-    def __init__(self, ip, torbw, shadowgeocode, shadowregion, isExit=False):
-        self.ip = ip.replace(".", "_")
-        self.torbw = torbw
-        """ 
-account for shadow network overhead. actual connections are faster than what they are giving to Tor.
-our headers are 40 bytes. so if we want Tor to get X bandwidth, we need to give our node:
-    protocol_overhead = 40/1500
-    newbw = bw + (bw * protocol_overhead)
-or simply:
-    newbw = (1540/1500)*bw
-we also add 20 KB for burst.
-        """
-        self.bw = (torbw * (1540.0/1500.0)) + 20
-        self.isExit = isExit
-        self.geocode = shadowgeocode
-        self.georegion = shadowregion
-
-    def toCSV(self):
-        return ",".join([self.ip.replace("_","."), str(self.torbw), self.geocode, self.georegion, str(self.isExit)])
-
-class RelaySelection():
-    def __init__(self, allrelays):
-        self.liverelays, self.liveexits, self.cutrelays, self.cutexits = [], [], [], []
-        self.cutrelays_deciles, self.cutexits_deciles = {}, {}
-
-        for r in allrelays:
-            if r.isExit: self.liveexits.append(r)
-            else: self.liverelays.append(r)
-            if r.torbw > 20:
-                if r.isExit: self.cutexits.append(r)
-                else: self.cutrelays.append(r)
-
-        self.cutrelays.sort(key=lambda x: x.torbw, reverse=True)
-        self.cutexits.sort(key=lambda x: x.torbw, reverse=True)
-
-        n = len(self.cutrelays)/10
-        j = -1
-        for i in xrange(len(self.cutrelays)):
-            if i % (len(self.cutrelays)/10) == 0: j+=1
-            if j not in self.cutrelays_deciles: self.cutrelays_deciles[j] = []
-            self.cutrelays_deciles[j].append(self.cutrelays[i])
-        n = len(self.cutexits)/10
-        j = -1
-        for i in xrange(len(self.cutexits)):
-            if i % (len(self.cutexits)/10) == 0: j+=1
-            if j not in self.cutexits_deciles: self.cutexits_deciles[j] = []
-            self.cutexits_deciles[j].append(self.cutexits[i])  
-
-    def exits(self, num):
-        exits = []
-        i = 0
-        for j in xrange(num):
-            dlist = self.cutexits_deciles[i]
-            exits.append(random.choice(dlist))
-            i += 1
-            if i == 10: i = 0
-        return exits
-
-    def relays(self, num):
-        relays = []
-        i = 0
-        for j in xrange(num):
-            dlist = self.cutrelays_deciles[i]
-            relays.append(random.choice(dlist))
-            i += 1
-            if i == 10: i = 0
-        return relays       
-
-class ConsensusParser():
-    def __init__(self, consensus_path, geoipcity):
-        self.sg = ShadowGeo(geoipcity)
-        self.consensus = consensus_path
-        self.total_live_bw = 0
-
-    def parse(self):
-        relays = []
-        ip = ""
-        bw = 0.0
-        isExit = False
-        f = open(self.consensus)
-        for line in f:
-            if line[0:2] == "r ":
-                # append the relay that we just built up
-                if ip != "": 
-                    code = self.sg.address_to_shadowgeocode(ip)
-                    region = self.sg.shadowgeocode_to_shadowregion(code)
-                    if region is None: print "!W: cant find region for code: " + code
-                    else:
-                        self.total_live_bw += bw
-                        r = Relay(ip, bw, code, region, isExit)                 
-                        relays.append(r)
-                # reset for the next relay
-                bw = 0.0
-                isExit = False
-                ip = line.strip().split()[6]
-            elif line[0:2] == "s ":
-                if line.strip().split()[1] == "Exit": isExit = True
-            elif line[0:2] == "w ":
-                bw = float(line.strip().split()[1].split("=")[1])
-        f.close()
-        return RelaySelection(relays)
-
-"""
-This class handles conversions from ip and hostnames to regions defined in shadow.
-This is useful for generating a network with latencies that somewhat reflect the real-world.
-
-Dependencies:
-
-pygeoip : http://code.google.com/p/pygeoip/
-usage: http://code.google.com/p/pygeoip/wiki/Usage
-
-Also need maxmind geoip database. They are different sizes because they offer different
-ammounts of information:
-http://geolite.maxmind.com/download/geoip/database/GeoLiteCountry/GeoIP.dat.gz
-http://geolite.maxmind.com/download/geoip/database/GeoLiteCity.dat.gz
-http://geolite.maxmind.com/download/geoip/database/asnum/GeoIPASNum.dat.gz
-
-"""
-
-class ShadowGeo():
-    US_WEST = ["WA", "ID", "MT", "WY", "OR", "NV", "CA", "UT", "CO", "NM", "AZ", "HI"]
-    US_CENTRAL = ["ND", "MN", "WI", "SD", "IA", "IL", "NE", "KS", "MO", "OK", "AR", "LA", "TX", "MI", "IN", "OH", "KY", "TN", "MS", "US"]
-    US_EAST = ["AL", "GA", "FL", "SC", "NC", "VA", "WV", "PA", "NY", "VT", "NH", "ME", "MA", "RI", "CT", "NJ", "DE", "MD", "DC", "VI"]
-    NORTH = ["CA", "AK"]
-    SOUTH = ["BR", "VE", "AR", "UY", "AQ", "BB", "RE", "CI", "CL", "EG", "ZA", "CR", "PY", "NI", "AN"]
-    EU_WEST = ["BE", "FR", "DE", "HU", "FI", "NL", "PT", "NO", "AT", "RO", "PL", "CH", "GR", "IT", "CZ", "IE", "ES", "SE", "GB", "LU", "EE", "HR", "DK", "BG", "BA", "JE", "BY", "LV", "LT", "SK", "UA", "SI", "EU"]
-    EU_EAST = ["JO", "RU", "TR", "PK", "IL", "GE", "SA", "SY", "IR", "CY", "AE", "KW"]
-    ASIA = ["JP", "HK", "TW", "CN", "KR", "SG", "VN", "TH", "MY"]
-    AUSTRALIA = ["NZ", "AU", "MX"]
-
-    def __init__(self, geoipcity_path="/usr/local/share/GeoIP/GeoIPCity.dat"):
-        self.geoip = pygeoip.GeoIP(geoipcity_path)
-        self.shadowregions = list()
-        self.shadowregions.append(ShadowRegion("US_WEST", ShadowGeo.US_WEST))
-        self.shadowregions.append(ShadowRegion("US_CENTRAL", ShadowGeo.US_CENTRAL))
-        self.shadowregions.append(ShadowRegion("US_EAST", ShadowGeo.US_EAST))
-        self.shadowregions.append(ShadowRegion("NORTH", ShadowGeo.NORTH))
-        self.shadowregions.append(ShadowRegion("SOUTH", ShadowGeo.SOUTH))
-        self.shadowregions.append(ShadowRegion("EU_WEST", ShadowGeo.EU_WEST))
-        self.shadowregions.append(ShadowRegion("EU_EAST", ShadowGeo.EU_EAST))
-        self.shadowregions.append(ShadowRegion("ASIA", ShadowGeo.ASIA))
-        self.shadowregions.append(ShadowRegion("AUSTRALIA", ShadowGeo.AUSTRALIA))
-
-        self.shadowgeocode_shadowregion_map = dict()
-        for sr in self.shadowregions:
-            for c in sr.children:
-                self.shadowgeocode_shadowregion_map[c] = sr.name
-
-    def _record_to_shadowgeocode(self, record):
-        rn = record['region_name']
-        cc = record['country_code']
-        if cc == "US" and rn != "": cc = rn
-        return cc
-
-    def address_to_shadowgeocode(self, address):
-        record = self.region_by_addr(address)
-        return self._record_to_shadowgeocode(record)
-
-    def hostname_to_shadowgeocode(self, hostname):
-        record = self.region_by_name(hostname)
-        return self._record_to_shadowgeocode(record)
-
-    def shadowgeocode_to_shadowregion(self, shadowgeocode):
-        if shadowgeocode not in self.shadowgeocode_shadowregion_map: return None
-        else: return self.shadowgeocode_shadowregion_map[shadowgeocode]
-
-    def address_to_shadowregion(self, address):
-        return self.shadowgeocode_to_shadowregion(self.address_to_shadowgeocode(address))
-
-    def hostname_to_shadowregion(self, hostname):
-        return self.shadowgeocode_to_shadowregion(self.hostname_to_shadowgeocode(hostname))
-
-    def random_region(self):
-        return random.choice(self.shadowregions).name
-
-    def region_by_name(self, hostname):
-        addr = socket.gethostbyname(hostname)
-        return self.region_by_addr(addr)
-
-    def region_by_addr(self, address):
-        ipnum = self.ip2long(address)
-        rec = self.geoip._get_record(ipnum)
-        country_code, region = "", ""
-        if rec is not None:
-            if 'country_code' in rec: country_code = rec['country_code'] 
-            if 'region_name' in rec: region = rec['region_name']
-        return {'country_code' : country_code, 'region_name' : region }
-
-    def ip2long(self, ip):
-        """
-        Convert a IPv4 address into a 32-bit integer.
-        
-        @param ip: quad-dotted IPv4 address
-        @type ip: str
-        @return: network byte order 32-bit integer
-        @rtype: int
-        """
-        ip_array = ip.split('.')
-        ip_long = long(ip_array[0]) * 16777216 + long(ip_array[1]) * 65536 + long(ip_array[2]) * 256 + long(ip_array[3])
-        return ip_long
-
-class ShadowRegion():
-     def __init__(self, name, childlist):
-        self.name = name
-        self.children = set()
-        for child in childlist:
-            if child not in self.children: self.children.add(child)
-
-     def contains(self, child):
-        if child in self.children: return True
-        else: return False
-    
-def run(args):
-    os.chdir(args.output)
-    logfilepath = "data/scallion.log"
-    if os.path.exists(logfilepath):
-        log("Logfile already exists. It appears you have already run an experiment. Please copy important data, then clean the data directory with the --clean command")
-        return -1
-    
     # start monitoring, if dstat is in the path
-    dstat_cmd = "dstat -cmstTy --fs --output data/dstat.log"
+    dstat_cmd = "dstat -cmstTy --fs --output {0}".format(dstatpath)
     dstat_p = None
     try: dstat_p = subprocess.Popen(dstat_cmd.split(), stdout=open("/dev/null", 'w'))
     except: dstat_p = None
 
     # libevent must use epoll backend, disable the others
     os.putenv("EVENT_NOSELECT", "1")
-    log("set environmental variable: EVENT_NOSELECT")
     os.putenv("EVENT_NOPOLL", "1")
-    log("set environmental variable: EVENT_NOPOLL")
     os.putenv("EVENT_NOKQUEUE", "1")
-    log("set environmental variable: EVENT_NOKQUEUE")
     os.putenv("EVENT_NODEVPOLL", "1")
-    log("set environmental variable: EVENT_NODEVPOLL")
     os.putenv("EVENT_NOEVPORT", "1")
-    log("set environmental variable: EVENT_NOEVPORT")
     os.putenv("EVENT_NOWIN32", "1")
-    log("set environmental variable: EVENT_NOWIN32")
+    log("set environmental variables for libevent: EVENT_NOSELECT, EVENT_NOPOLL, EVENT_NOKQUEUE, EVENT_NODEVPOLL, EVENT_NOEVPORT, EVENT_NOWIN32")
         
-    # run
-    cmd = os.path.abspath(args.prefix+"/bin/shadow")+" --preload=" + os.path.abspath(args.prefix+"/lib/libshadow-preload-scallion.so") + " scallion.xml"
+    # run paths
+    shadowpath = os.path.abspath("{0}/bin/shadow".format(args.prefix))
+    preloadpath = os.path.abspath("{0}/lib/libshadow-preload-scallion.so".format(args.prefix))
+    xmlpaths = os.path.abspath("{0}/share/topology.xml".format(args.prefix)) + os.path.abspath("{0}/hosts.xml".format(args.output))
+    
+    # command to run
+    cmd = "{0} --preload={1} {2}".format(shadowpath, preloadpath, xmlpaths)
 
-    log("calling '" + cmd + "' with logfile '" + logfilepath+"'")
-
-    f = open(logfilepath, 'w')
+    log("calling '{0}', output directed to '{1}'".format(cmd, logpath))
+    f = open(logpath, 'w')
     start = datetime.now()
-    retcode = subprocess.call(cmd.split(), stdout=f)
+    retcode = subprocess.call(cmd.split(), cwd=args.output, stdout=f)
     end = datetime.now()
     f.close()
 
     if dstat_p is not None: dstat_p.kill()
-
-    log(str(end) + " shadow returned " + str(retcode) + " in " + str(end-start) + " seconds")
-    return 0
-
-def clean(args):
-    args.output = os.path.abspath(args.output)
-    if os.path.exists(args.output+"/data"): shutil.rmtree(args.output+"/data")
+    log("Shadow returned {1} in {2} seconds".format(end, retcode, end-start))
     
-    os.makedirs(args.output+"/data/authoritydata")
-    os.makedirs(args.output+"/data/exitdata")
-    os.makedirs(args.output+"/data/relaydata")
-    os.makedirs(args.output+"/data/clientdata")
-    
-    shutil.copytree(args.output+"/keys", args.output+"/data/authoritydata/4uthority.tor/keys")
-    return 0
+def query_yes_no(question, default="yes"):
+    """Ask a yes/no question via raw_input() and return their answer.
 
-def dd(filename, kb):
-    if not os.path.exists(filename):
-        ddcmd = "/bin/dd if=/dev/urandom of=" + filename + " bs=1024 count=" + str(kb)
-        log("calling " + ddcmd)
-        subprocess.call(ddcmd.split())
+    "question" is a string that is presented to the user.
+    "default" is the presumed answer if the user just hits <Enter>.
+        It must be "yes" (the default), "no" or None (meaning
+        an answer is required of the user).
+
+    The "answer" return value is one of "yes" or "no".
+    """
+    valid = {"yes":True,   "y":True,  "ye":True, "no":False,     "n":False}
+    if default == None: prompt = " [y/n] "
+    elif default == "yes": prompt = " [Y/n] "
+    elif default == "no": prompt = " [y/N] "
+    else: raise ValueError("invalid default answer: '%s'" % default)
+
+    while True:
+        sys.stderr.write(question + prompt)
+        choice = raw_input().lower()
+        if default is not None and choice == '': return valid[default]
+        elif choice in valid: return valid[choice]
+        else: sys.stderr.write("Please respond with 'yes' or 'no' (or 'y' or 'n').\n")
+
+def reset(output):
+    if os.path.exists(output+"/data"): shutil.rmtree(output+"/data")
+    
+    os.makedirs(output+"/data/authoritydata")
+    os.makedirs(output+"/data/exitdata")
+    os.makedirs(output+"/data/relaydata")
+    os.makedirs(output+"/data/clientdata")
+    
+    shutil.copytree(output+"/keys", output+"/data/authoritydata/4uthority.tor/keys")
+    return 0
 
 def log(msg):
     color_start_code = "\033[94m" # red: \033[91m"
