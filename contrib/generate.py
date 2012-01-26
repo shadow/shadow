@@ -21,9 +21,9 @@
 # along with Scallion.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-import os, sys, subprocess, shutil, gzip, argparse, pygeoip, random, socket
+import os, sys, subprocess, argparse
 from datetime import datetime
-from time import sleep
+from lxml import etree
 
 # This should NOT be expanded, we'll use this directly in the XML file
 INSTALLPREFIX="~/.shadow/"
@@ -67,13 +67,14 @@ def main():
     ap.add_argument('--nservers', action="store", type=int, dest="nservers", help="number N of fileservers", metavar='N', default=NSERVERS)
 
     # positional args (required)
-    ap.add_argument('consensus', action="store", type=str, help="PATH to a current Tor consensus file", metavar='PATH', default=None)
-
+    ap.add_argument('consensus', action="store", type=str, help="path to a current Tor CONSENSUS file", metavar='CONSENSUS', default=None)
+    ap.add_argument('alexa', action="store", type=str, help="path to an ALEXA file (produced with contrib/parsealexa.py)", metavar='ALEXA', default=None)
+    
     # get arguments, accessible with args.value
     args = ap.parse_args()
     
     generate(args)
-    log("finished generating {0}/hosts.xml".format(os.getcwd()))
+    log("finished generating:\n{0}/hosts.xml\n{0}/web.dl\n{0}/bulk.dl".format(os.getcwd()))
 
 def generate(args):
     # get list of relays, sorted by increasing bandwidth
@@ -90,6 +91,64 @@ def generate(args):
     exitnodes = sample_relays(exits, nexits)
     nnonexits = args.nrelays - nexits
     nonexitnodes = sample_relays(nonexits, nnonexits)
+    servers = getServers()
+    
+    # we'll need to convert IPs to cluster codes
+    geoippath = os.path.abspath(os.path.expanduser(args.prefix+"/share/geoip"))
+    geoipfile = open(geoippath, "rb")
+    
+    # generate the XML
+    root = etree.Element("hosts")
+    
+    # plug-ins
+    e = etree.SubElement(root, "plugin")
+    e.set("id", "scallion")
+    e.set("path", "~/.shadow/plugins/libshadow-plugin-scallion.so")
+    e = etree.SubElement(root, "plugin")
+    e.set("id", "filetransfer")
+    e.set("path", "~/.shadow/plugins/libshadow-plugin-filetransfer.so")
+    
+    # servers
+    e = etree.SubElement(root, "software")
+    e.set("id", "filesoft")
+    e.set("plugin", "filetransfer")
+    e.set("time", "1")
+    e.set("arguments", "server 80 ~/.shadow/share")
+
+    fweb = open("web.dl", "wb")
+    fbulk = open("bulk.dl", "wb")
+    i = 0
+    while i < args.nservers:
+        serverip = servers[i%len(servers)]
+        servercode = getClusterCode(geoipfile, serverip)
+        i += 1
+        name = "server{0}".format(i)
+        e = etree.SubElement(root, "node")
+        e.set("id", name)
+        e.set("software", "filesoft")
+        e.set("cluster", servercode)
+        e.set("bandwidthup", "102400")
+        e.set("bandwidthdown", "102400")
+        print >>fweb, "{0}:80:/320KiB.urnd".format(name)
+        print >>fbulk, "{0}:80:/5MiB.urnd".format(name)
+    fweb.close()
+    fbulk.close()
+    
+    # authority
+    
+    # exit relays
+    
+    # regular relays
+    
+    geoipfile.close()
+
+def getClusterCode(geoipfile, ip):
+    # TODO use geoip file to turn IPs into our cluster codes
+    return "USUS"
+
+def getServers(args):
+    # TODO turn input from args.alexa into cluster codes, keeping sort order
+    return []
     
 # relays should be sorted by bandwidth
 def sample_relays(relays, k):
