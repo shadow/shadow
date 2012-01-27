@@ -21,7 +21,7 @@
 # along with Scallion.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-import os, sys, subprocess, argparse
+import os, sys, subprocess, argparse, socket
 from datetime import datetime
 from lxml import etree
 
@@ -37,7 +37,7 @@ NSERVERS = 30
 class Relay():
     def __init__(self, ip, bw, isExit=False):
         self.ip = ip
-        self.bw = bw
+        self.bw = int(bw)
         self.isExit = isExit
         self.code = None
         self.bwrate = None
@@ -45,9 +45,9 @@ class Relay():
         self.bwhistory = None
         
     def setTokenBucketBW(self, bwrate, bwburst, bwhistory):
-        self.bwrate = bwrate
-        self.bwburst = bwburst
-        self.bwhistory = bwhistory
+        self.bwrate = int(bwrate)
+        self.bwburst = int(bwburst)
+        self.bwhistory = int(bwhistory)
         
     def setRegionCode(self, code):
         self.code = code
@@ -55,6 +55,12 @@ class Relay():
     def toCSV(self):
         return ",".join([self.ip, self.code, str(self.isExit), str(self.bw), str(self.bwrate), str(self.bwburst), str(self.bwhistory)])
 
+class GeoIPEntry():
+    def __init__(self, lownum, highnum, countrycode):
+        self.lownum = int(lownum)
+        self.highnum = int(highnum)
+        self.countrycode = countrycode
+    
 def main():
     ap = argparse.ArgumentParser(description='Generate hosts.xml file for Scallion Tor experiments in Shadow', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
         
@@ -72,6 +78,14 @@ def main():
     
     # get arguments, accessible with args.value
     args = ap.parse_args()
+    
+    # fixup paths from user
+    args.prefix = os.path.abspath(os.path.expanduser(args.prefix))
+    args.consensus = os.path.abspath(os.path.expanduser(args.consensus))
+    args.alexa = os.path.abspath(os.path.expanduser(args.alexa))
+    
+    # we'll need to convert IPs to cluster codes
+    args.geoippath = os.path.abspath(args.prefix+"/share/geoip")
     
     generate(args)
     log("finished generating:\n{0}/hosts.xml\n{0}/web.dl\n{0}/bulk.dl".format(os.getcwd()))
@@ -91,11 +105,9 @@ def generate(args):
     exitnodes = sample_relays(exits, nexits)
     nnonexits = args.nrelays - nexits
     nonexitnodes = sample_relays(nonexits, nnonexits)
-    servers = getServers()
     
-    # we'll need to convert IPs to cluster codes
-    geoippath = os.path.abspath(os.path.expanduser(args.prefix+"/share/geoip"))
-    geoipfile = open(geoippath, "rb")
+    servers = getServers(args.alexa)
+    geoentries = getGeoEntries(args.geoippath)
     
     # generate the XML
     root = etree.Element("hosts")
@@ -120,13 +132,14 @@ def generate(args):
     i = 0
     while i < args.nservers:
         serverip = servers[i%len(servers)]
-        servercode = getClusterCode(geoipfile, serverip)
+        servercode = getClusterCode(geoentries, serverip)
         i += 1
         name = "server{0}".format(i)
         e = etree.SubElement(root, "node")
         e.set("id", name)
-        e.set("software", "filesoft")
+        e.set("ip", serverip)
         e.set("cluster", servercode)
+        e.set("software", "filesoft")
         e.set("bandwidthup", "102400")
         e.set("bandwidthdown", "102400")
         print >>fweb, "{0}:80:/320KiB.urnd".format(name)
@@ -142,13 +155,48 @@ def generate(args):
     
     geoipfile.close()
 
-def getClusterCode(geoipfile, ip):
-    # TODO use geoip file to turn IPs into our cluster codes
+def ip2long(ip):
+    """
+    Convert a IPv4 address into a 32-bit integer.
+    
+    @param ip: quad-dotted IPv4 address
+    @type ip: str
+    @return: network byte order 32-bit integer
+    @rtype: int
+    """
+    ip_array = ip.split('.')
+    ip_long = long(ip_array[0]) * 16777216 + long(ip_array[1]) * 65536 + long(ip_array[2]) * 256 + long(ip_array[3])
+    return ip_long
+    
+def getClusterCode(geoentries, ip):
+    # use geoip entries to find our cluster code for IP
+    ipnum = ip2long(ip)
+    #print "{0} {1}".format(ip, ipnum)
+    # theres probably a faster way of doing this, but this is python and i dont care
+    for entry in geoentries:
+        if ipnum >= entry.lownum and ipnum <= entry.highnum: return "{0}{0}".format(entry.countrycode)
+    log("Warning: Cant find code for IP '{0}' Num '{1}', defaulting to 'USUS'".format(ip, ipnum))
     return "USUS"
 
-def getServers(args):
-    # TODO turn input from args.alexa into cluster codes, keeping sort order
-    return []
+def getGeoEntries(geoippath):
+    entries = []
+    with open(geoippath, "rb") as f:
+        for line in f:
+            if line[0] == "#": continue
+            parts = line.strip().split(',')
+            entry = GeoIPEntry(parts[0], parts[1], parts[2])
+            entries.append(entry)
+    return entries
+
+def getServers(alexapath):
+    # return IPs from args.alexa, keeping sort order
+    ips = []
+    with open(alexapath, 'rb') as f:
+        for line in f:
+            parts = line.strip().split(',')
+            ip = parts[2]
+            ips.append(ip)
+    return ips
     
 # relays should be sorted by bandwidth
 def sample_relays(relays, k):
