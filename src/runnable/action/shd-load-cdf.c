@@ -35,7 +35,7 @@ LoadCDFAction* loadcdf_new(GString* name, GString* path) {
 	action_init(&(action->super), &loadcdf_functions);
 
 	action->id = g_quark_from_string((const gchar*)name->str);
-	action->path = g_string_new(path->str);
+	action->path = g_string_new(utility_getHomePath(path->str));
 
 	return action;
 }
