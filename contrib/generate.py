@@ -122,14 +122,15 @@ def generate(args):
         if relay.isExit: exits.append(relay)
         else: nonexits.append(relay)
         
+    geoentries = getGeoEntries(args.geoippath)
+
     # sample for the exits and nonexits we'll use for our nodes
     nexits = int(args.exitfrac * args.nrelays)
-    exitnodes = getRelays(exits, nexits, args.descriptors)
+    exitnodes = getRelays(exits, nexits, geoentries, args.descriptors)
     nnonexits = args.nrelays - nexits
-    nonexitnodes = getRelays(nonexits, nnonexits, args.descriptors)
+    nonexitnodes = getRelays(nonexits, nnonexits, geoentries, args.descriptors)
     
     servers = getServers(args.alexa)
-    geoentries = getGeoEntries(args.geoippath)
     clientCountryCodes = getClientCountryChoices(args.connectingusers)
     
     # build the XML
@@ -371,7 +372,7 @@ def getServers(alexapath):
             ips.append(ip)
     return ips
 
-def getRelays(relays, k, descriptorpath):
+def getRelays(relays, k, geoentries, descriptorpath):
     sample = sample_relays(relays, k)
     
     # get a map for easy lookup while parsing descriptors
@@ -414,6 +415,7 @@ def getRelays(relays, k, descriptorpath):
     # make sure we found some info for all of them
     for s in sample:
         assert s.bwrate > 0 and s.bwburst > 0
+        s.setRegionCode(getClusterCode(geoentries, s.ip))
     
     return sample
     
