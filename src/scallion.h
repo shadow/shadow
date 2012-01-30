@@ -116,6 +116,7 @@ void scallion_register_globals(PluginFunctionTable* scallionFuncs, Scallion* sca
 
 ScallionTor* scalliontor_new(ShadowlibFunctionTable* shadowlibFuncs,
 		char* hostname, enum vtor_nodetype type, char* bandwidth,
+		char* bwrate, char* bwburst,
 		char* torrc_path, char* datadir_path, char* geoip_path);
 void scalliontor_notify(ScallionTor* stor);
 void scalliontor_free(ScallionTor* stor);

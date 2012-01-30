@@ -147,7 +147,7 @@ static gchar* _scallion_getHomePath(gchar* path) {
 static void _scallion_new(gint argc, gchar* argv[]) {
 	scallion.shadowlibFuncs->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "scallion_new called");
 
-	gchar* usage = "Scallion USAGE: (\"dirauth\"|\"relay\"|\"exitrelay\"|\"client\") bandwidth torrc_path datadir_base_path geoip_path [client_args for shd-plugin-filegetter...]\n";
+	gchar* usage = "Scallion USAGE: (\"dirauth\"|\"relay\"|\"exitrelay\"|\"client\") consensusbandwidth readbandwidthrate writebandwidthrate torrc_path datadir_base_path geoip_path [client_args for shd-plugin-filegetter...]\n";
 
 	if(argc < 2) {
 		scallion.shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, usage);
@@ -161,9 +161,11 @@ static void _scallion_new(gint argc, gchar* argv[]) {
 	/* parse our arguments */
 	gchar* tortype = argv[0];
 	gchar* bandwidth = argv[1];
-	gchar* torrc_path = argv[2];
-	gchar* datadir_base_path = argv[3];
-	gchar* geoip_path = argv[4];
+	gchar* bwrate = argv[2];
+	gchar* bwburst = argv[3];
+	gchar* torrc_path = argv[4];
+	gchar* datadir_base_path = argv[5];
+	gchar* geoip_path = argv[6];
 
 	enum vtor_nodetype ntype;
 
@@ -180,7 +182,7 @@ static void _scallion_new(gint argc, gchar* argv[]) {
 		return;
 	}
 
-	if(ntype != VTOR_CLIENT && argc != 5) {
+	if(ntype != VTOR_CLIENT && argc != 7) {
 		scallion.shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, usage);
 		return;
 	}
@@ -202,43 +204,46 @@ static void _scallion_new(gint argc, gchar* argv[]) {
 	char datadir_path[size];
 	sprintf(datadir_path, "%s/%s", datadir_base_path, scallion.hostname);
 
-	scallion.stor = scalliontor_new(scallion.shadowlibFuncs, scallion.hostname, ntype, bandwidth, torrc_path, datadir_path, geoip_path);
+	scallion.stor = scalliontor_new(scallion.shadowlibFuncs, scallion.hostname, ntype, bandwidth, bwrate, bwburst, torrc_path, datadir_path, geoip_path);
 
 	scallion.sfg.fg.sockd = 0;
 
+
 	if(ntype == VTOR_CLIENT) {
+		gchar** argvoffset = argv + 7;
+
 		/* get filegetter client args */
 		scallion_launch_client_tp launch = malloc(sizeof(scallion_launch_client_t));
 
-		gchar* filetransferMode = argv[5];
+		gchar* filetransferMode = argvoffset[0];
 		if(strncmp(filetransferMode, "client", 6) != 0) {
 			scallion.shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, usage);
 			return;
 		}
 
-		gchar* fileClientMode = argv[6];
+		gchar* fileClientMode = argvoffset[1];
 
-		if(strncmp(fileClientMode, "multi", 5) == 0 && argc == 12) {
+		if(strncmp(fileClientMode, "multi", 5) == 0 && argc == 14) {
 			service_filegetter_multi_args_tp args = malloc(sizeof(service_filegetter_multi_args_t));
 
 			size_t s;
 
-			s = strnlen(argv[7], 128)+1;
-			args->server_specification_filepath = _scallion_getHomePath(argv[7]);
+			s = strnlen(argvoffset[2], 128)+1;
+			args->server_specification_filepath = _scallion_getHomePath(argvoffset[2]);
 
-			s = strnlen(argv[8], 128)+1;
+			s = strnlen(argvoffset[3], 128)+1;
 			args->socks_proxy.host = malloc(s);
-			snprintf(args->socks_proxy.host, s, argv[8]);
+			snprintf(args->socks_proxy.host, s, argvoffset[3]);
 
-			s = strnlen(argv[9], 128)+1;
+			s = strnlen(argvoffset[4], 128)+1;
 			args->socks_proxy.port = malloc(s);
-			snprintf(args->socks_proxy.port, s, argv[9]);
+			snprintf(args->socks_proxy.port, s, argvoffset[4]);
 
-			args->thinktimes_cdf_filepath = _scallion_getHomePath(argv[10]);
+			args->thinktimes_cdf_filepath = _scallion_getHomePath(argvoffset[5]);
 
-			s = strnlen(argv[11], 128)+1;
+			s = strnlen(argvoffset[6], 128)+1;
 			args->runtime_seconds = malloc(s);
-			snprintf(args->runtime_seconds, s, argv[11]);
+			snprintf(args->runtime_seconds, s, argvoffset[6]);
 
 			if(strncmp(args->thinktimes_cdf_filepath, "none", 4) == 0) {
 				free(args->thinktimes_cdf_filepath);
@@ -251,68 +256,68 @@ static void _scallion_new(gint argc, gchar* argv[]) {
 
 			launch->is_single = 0;
 			launch->service_filegetter_args = args;
-		} else if(strncmp(fileClientMode, "single", 6) == 0 && argc == 13) {
+		} else if(strncmp(fileClientMode, "single", 6) == 0 && argc == 15) {
 			service_filegetter_single_args_tp args = malloc(sizeof(service_filegetter_single_args_t));
 
 			size_t s;
 
-			s = strnlen(argv[7], 128)+1;
+			s = strnlen(argvoffset[2], 128)+1;
 			args->http_server.host = malloc(s);
-			snprintf(args->http_server.host, s, argv[7]);
+			snprintf(args->http_server.host, s, argvoffset[2]);
 
-			s = strnlen(argv[8], 128)+1;
+			s = strnlen(argvoffset[3], 128)+1;
 			args->http_server.port = malloc(s);
-			snprintf(args->http_server.port, s, argv[8]);
+			snprintf(args->http_server.port, s, argvoffset[3]);
 
-			s = strnlen(argv[9], 128)+1;
+			s = strnlen(argvoffset[4], 128)+1;
 			args->socks_proxy.host = malloc(s);
-			snprintf(args->socks_proxy.host, s, argv[9]);
+			snprintf(args->socks_proxy.host, s, argvoffset[4]);
 
-			s = strnlen(argv[10], 128)+1;
+			s = strnlen(argvoffset[5], 128)+1;
 			args->socks_proxy.port = malloc(s);
-			snprintf(args->socks_proxy.port, s, argv[10]);
+			snprintf(args->socks_proxy.port, s, argvoffset[5]);
 
-			s = strnlen(argv[11], 128)+1;
+			s = strnlen(argvoffset[6], 128)+1;
 			args->num_downloads = malloc(s);
-			snprintf(args->num_downloads, s, argv[11]);
+			snprintf(args->num_downloads, s, argvoffset[6]);
 
-			args->filepath = _scallion_getHomePath(argv[12]);
+			args->filepath = _scallion_getHomePath(argvoffset[7]);
 
 			args->log_cb = &_scallion_logCallback;
 			args->hostbyname_cb = &_scallion_HostnameCallback;
 
 			launch->is_single = 1;
 			launch->service_filegetter_args = args;
-		} else if(strncmp(fileClientMode, "double", 6) == 0 && argc == 15) {
+		} else if(strncmp(fileClientMode, "double", 6) == 0 && argc == 17) {
 			service_filegetter_double_args_tp args = malloc(sizeof(service_filegetter_double_args_t));
 
 			size_t s;
 
-			s = strnlen(argv[7], 128)+1;
+			s = strnlen(argvoffset[2], 128)+1;
 			args->http_server.host = malloc(s);
-			snprintf(args->http_server.host, s, argv[7]);
+			snprintf(args->http_server.host, s, argvoffset[2]);
 
-			s = strnlen(argv[8], 128)+1;
+			s = strnlen(argvoffset[3], 128)+1;
 			args->http_server.port = malloc(s);
-			snprintf(args->http_server.port, s, argv[8]);
+			snprintf(args->http_server.port, s, argvoffset[3]);
 
-			s = strnlen(argv[9], 128)+1;
+			s = strnlen(argvoffset[4], 128)+1;
 			args->socks_proxy.host = malloc(s);
-			snprintf(args->socks_proxy.host, s, argv[9]);
+			snprintf(args->socks_proxy.host, s, argvoffset[4]);
 
-			s = strnlen(argv[10], 128)+1;
+			s = strnlen(argvoffset[5], 128)+1;
 			args->socks_proxy.port = malloc(s);
-			snprintf(args->socks_proxy.port, s, argv[10]);
+			snprintf(args->socks_proxy.port, s, argvoffset[5]);
 
-			args->filepath1 = _scallion_getHomePath(argv[11]);
+			args->filepath1 = _scallion_getHomePath(argvoffset[6]);
 
-			args->filepath2 = _scallion_getHomePath(argv[12]);
+			args->filepath2 = _scallion_getHomePath(argvoffset[7]);
 
-			args->filepath3 = _scallion_getHomePath(argv[13]);
+			args->filepath3 = _scallion_getHomePath(argvoffset[8]);
 
-			s = strnlen(argv[14], 128)+1;
+			s = strnlen(argvoffset[9], 128)+1;
 			args->pausetime_seconds = malloc(s);
-			snprintf(args->pausetime_seconds, s, argv[14]);
+			snprintf(args->pausetime_seconds, s, argvoffset[9]);
 
 			args->log_cb = &_scallion_logCallback;
 			args->hostbyname_cb = &_scallion_HostnameCallback;

@@ -10,13 +10,13 @@
 <software id="authority" plugin="scallion" time="1" arguments="dirauth 102400 ./authority.torrc ./data/authoritydata ~/.shadow/share/geoip" />
 <node id="4uthority.tor" software="authority" cluster="net0" bandwidthup="102400" bandwidthdown="102400" />
 
-<software id="exit" plugin="scallion" time="300" arguments="exitrelay 1024 ./exit.torrc ./data/exitdata ~/.shadow/share/geoip" />
+<software id="exit" plugin="scallion" time="300" arguments="exitrelay 1024 10240 10240 ./exit.torrc ./data/exitdata ~/.shadow/share/geoip" />
 <node id="exit.tor" software="exit" />
 
-<software id="relay" plugin="scallion" time="300" arguments="relay 1024 ./relay.torrc ./data/relaydata ~/.shadow/share/geoip" />
+<software id="relay" plugin="scallion" time="300" arguments="relay 1024 10240 10240 ./relay.torrc ./data/relaydata ~/.shadow/share/geoip" />
 <node id="relay.tor" software="relay" quantity="2" />
 
-<software id="client" plugin="scallion" time="3000" arguments="client 1024 ./client.torrc ./data/clientdata ~/.shadow/share/geoip client single server.file 80 localhost 9000 10 /1MiB.urnd" />
+<software id="client" plugin="scallion" time="3000" arguments="client 1024 10240 10240 ./client.torrc ./data/clientdata ~/.shadow/share/geoip client single server.file 80 localhost 9000 10 /1MiB.urnd" />
 <node id="client.tor" software="client" />
 
 <kill time="5400" />

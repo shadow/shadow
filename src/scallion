@@ -32,7 +32,7 @@ def main():
     ap = argparse.ArgumentParser(description='Run Tor experiments as a plug-in to Shadow', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     ap.add_argument('-p', '--prefix', action="store", dest="prefix", help="PATH to scallion installation", metavar="PATH", default=DEFAULTPREFIX)
     ap.add_argument('-w', '--working-directory', action="store", type=str, dest="output", help="PATH to directory from which to run Shadow", metavar='PATH', default=DEFAULTOUTPUT)
-    ap.add_argument('-q', '--quiet', action="store_true", dest="be_quiet", help="this script will not display its actions", default=False)
+    ap.add_argument('-c', '--clear', action="store_true", dest="clear", help="Don't ask before clearing data directory", default=False)
    
     # get arguments, accessible with args.value
     args = ap.parse_args()
@@ -47,7 +47,7 @@ def main():
     # does our output data directory already have data?
     if os.path.exists(datapath):
         log("Data exists in output path")
-        if not query_yes_no("Is it OK to clear data directory {0}?".format(datapath), default="no"): 
+        if not args.clear and not query_yes_no("Is it OK to clear data directory {0}?".format(datapath), default="no"): 
             log("Experiment aborted to prevent destroying {0}".format(datapath))
             return -1
         
@@ -72,7 +72,7 @@ def main():
     # run paths
     shadowpath = os.path.abspath("{0}/bin/shadow".format(args.prefix))
     preloadpath = os.path.abspath("{0}/lib/libshadow-preload-scallion.so".format(args.prefix))
-    xmlpaths = os.path.abspath("{0}/share/topology.xml".format(args.prefix)) + os.path.abspath("{0}/hosts.xml".format(args.output))
+    xmlpaths = os.path.abspath("{0}/share/topology.xml".format(args.prefix)) + " " + os.path.abspath("{0}/hosts.xml".format(args.output))
     
     # command to run
     cmd = "{0} --preload={1} {2}".format(shadowpath, preloadpath, xmlpaths)
@@ -118,7 +118,7 @@ def reset(output):
     os.makedirs(output+"/data/relaydata")
     os.makedirs(output+"/data/clientdata")
     
-    shutil.copytree(output+"/keys", output+"/data/authoritydata/4uthority.tor/keys")
+    shutil.copytree(output+"/keys", output+"/data/authoritydata/4uthority/keys")
     return 0
 
 def log(msg):

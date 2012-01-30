@@ -245,29 +245,12 @@ gint scalliontor_start(ScallionTor* stor, gint argc, gchar *argv[]) {
 }
 
 ScallionTor* scalliontor_new(ShadowlibFunctionTable* shadowlibFuncs, char* hostname, enum vtor_nodetype type,
-		char* bandwidth, char* torrc_path, char* datadir_path, char* geoip_path) {
+		char* bandwidth, char* bwrate, char* bwburst, char* torrc_path, char* datadir_path, char* geoip_path) {
 	ScallionTor* stor = g_new0(ScallionTor, 1);
 	stor->shadowlibFuncs = shadowlibFuncs;
 
 	stor->type = type;
-	stor->bandwidth = atoi(bandwidth);
-
-	/* we use 14 args to tor by 'default' */
-	int num_args = 21;
-	if(stor->type == VTOR_DIRAUTH || stor->type == VTOR_RELAY) {
-		num_args += 2;
-	}
-
-	char bwconf[128];
-	snprintf(bwconf, 128, "%s KB", bandwidth);
-
-	int cap = stor->bandwidth + 5120;
-	int burst = stor->bandwidth * 2;
-	if(burst > cap) {
-		burst = cap;
-	}
-	char burstconf[128];
-	snprintf(burstconf, 128, "%i KB", burst);
+	stor->bandwidth = (unsigned int) atoi(bandwidth);
 
 	/* make sure the geoip path is absolute */
 	GString* geoipBuffer = g_string_new("");
@@ -280,7 +263,7 @@ ScallionTor* scalliontor_new(ShadowlibFunctionTable* shadowlibFuncs, char* hostn
 	}
 
 	/* default args */
-	char *config[num_args];
+	char *config[20];
 	config[0] = "tor";
 	config[1] = "--Address";
 	config[2] = hostname;
@@ -291,15 +274,9 @@ ScallionTor* scalliontor_new(ShadowlibFunctionTable* shadowlibFuncs, char* hostn
 	config[7] = "--GeoIPFile";
 	config[8] = geoipBuffer->str;
 	config[9] = "--BandwidthRate";
-	config[10] = bwconf;
+	config[10] = bwrate;
 	config[11] = "--BandwidthBurst";
-	config[12] = bwconf;
-	config[13] = "--MaxAdvertisedBandwidth";
-	config[14] = bwconf;
-	config[15] = "--RelayBandwidthRate";
-	config[16] = bwconf;
-	config[17] = "--RelayBandwidthBurst";
-	config[18] = bwconf;
+	config[12] = bwburst;
 
 	gchar* nickname = g_strdup(hostname);
 	while(1) {
@@ -311,20 +288,19 @@ ScallionTor* scalliontor_new(ShadowlibFunctionTable* shadowlibFuncs, char* hostn
 		}
 	}
 
-	config[19] = "--Nickname";
-	config[20] = nickname;
+	config[13] = "--Nickname";
+	config[14] = nickname;
 
+	int num_args = 15;
 	/* additional args */
 	if(stor->type == VTOR_DIRAUTH) {
+		num_args += 2;
 		if(snprintf(stor->v3bw_name, 255, "%s/dirauth.v3bw", datadir_path) >= 255) {
 			stor->shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__,
 					"data directory path is too long and was truncated to '%s'\n", stor->v3bw_name);
 		}
-		config[21] = "--V3BandwidthsFile";
-		config[22] = stor->v3bw_name;
-	} else if(stor->type == VTOR_RELAY) {
-		config[21] = "--ExitPolicy";
-		config[22] = "reject *:*";
+		config[15] = "--V3BandwidthsFile";
+		config[16] = stor->v3bw_name;
 	}
 
 	/* Shadow intercepts RAND_get_rand_method. get pointers to its funcs. */
@@ -635,10 +611,6 @@ int intercept_rep_hist_bandwidth_assess() {
 	ScallionTor* stor = scalliontor_getPointer();
 	g_assert(stor);
 
-	/* need to convert to bytes. tor will divide the value we return by 1000 and put it in the descriptor. */
-	int bw = INT_MAX;
-	if((stor->bandwidth * 1000) < bw) {
-		bw = (stor->bandwidth * 1000);
-	}
-	return bw;
+	/* return BW in bytes. tor will divide the value we return by 1000 and put it in the descriptor. */
+	return stor->bandwidth;
 }
