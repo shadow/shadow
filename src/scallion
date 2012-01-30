@@ -26,13 +26,15 @@ from datetime import datetime
 
 DEFAULTPREFIX=os.path.abspath(os.path.expanduser("~/.shadow/"))
 DEFAULTOUTPUT=os.path.abspath(os.path.expanduser("./"))
+DEFAULTINPUT=os.path.abspath(os.path.expanduser("./hosts.xml"))
 
 def main():
     # setup our commands
     ap = argparse.ArgumentParser(description='Run Tor experiments as a plug-in to Shadow', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    ap.add_argument('-c', '--clear', action="store_true", dest="clear", help="Don't ask before clearing data directory", default=False)
+    ap.add_argument('-i', '--input', action="store", dest="input", help="add PATH as a shadow input XML file (in addition to PREFIX/share/topology.xml)", metavar="PATH", default=DEFAULTINPUT)
     ap.add_argument('-p', '--prefix', action="store", dest="prefix", help="PATH to scallion installation", metavar="PATH", default=DEFAULTPREFIX)
     ap.add_argument('-w', '--working-directory', action="store", type=str, dest="output", help="PATH to directory from which to run Shadow", metavar='PATH', default=DEFAULTOUTPUT)
-    ap.add_argument('-c', '--clear', action="store_true", dest="clear", help="Don't ask before clearing data directory", default=False)
    
     # get arguments, accessible with args.value
     args = ap.parse_args()

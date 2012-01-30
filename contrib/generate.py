@@ -1,7 +1,7 @@
 #!/usr/bin/env python2.7
 
 ##
-# Scallion - plug-in for The Shadow Simulator
+# Scallion - Tor plug-in for The Shadow Simulator
 #
 # Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
 #
@@ -21,12 +21,17 @@
 # along with Scallion.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-import os, sys, subprocess, argparse, socket
+import os, sys, subprocess, argparse, socket, time
+from random import choice
 from datetime import datetime
 from lxml import etree
+from lxml.html.builder import INS
 
 # This should NOT be expanded, we'll use this directly in the XML file
 INSTALLPREFIX="~/.shadow/"
+
+# distribution of CPU frequencies, in KHz
+CPUFREQS=["2200000", "2400000", "2600000", "2800000", "3000000", "3200000", "3400000"]
 
 NRELAYS = 10
 FEXIT = 0.4
@@ -37,12 +42,25 @@ NSERVERS = 10
 class Relay():
     def __init__(self, ip, bw, isExit=False):
         self.ip = ip
-        self.bw = int(bw)
+        self.bw = int(bw) # in bytes
         self.isExit = isExit
         self.code = None
         self.bwrate = None # in bytes
         self.bwburst = None # in bytes
         self.bwhistory = None # in bytes
+        
+        self.ispbandwidth = 0 # in KiB
+        kbw = bw / 1024
+        # select correct bandwidth tier
+        if kbw <= 512: self.ispbandwidth = 512
+        elif kbw <= 1024: self.ispbandwidth = 1024 # 1 MiB
+        elif kbw <= 10240: self.ispbandwidth = 10240 # 10 MiB
+        elif kbw <= 25600: self.ispbandwidth = 25600 # 25 MiB
+        elif kbw <= 51200: self.ispbandwidth = 51200 # 50 MiB
+        elif kbw <= 76800: self.ispbandwidth = 76800 # 75 MiB
+        elif kbw <= 102400: self.ispbandwidth = 102400 # 100 MiB
+        elif kbw <= 153600: self.ispbandwidth = 153600 # 150 MiB
+        else: self.ispbandwidth = 204800
         
     def setTokenBucketBW(self, bwrate, bwburst, bwhistory):
         self.bwrate = int(bwrate)
@@ -73,8 +91,10 @@ def main():
     ap.add_argument('--nservers', action="store", type=int, dest="nservers", help="number N of fileservers", metavar='N', default=NSERVERS)
 
     # positional args (required)
-    ap.add_argument('consensus', action="store", type=str, help="path to a current Tor CONSENSUS file", metavar='CONSENSUS', default=None)
     ap.add_argument('alexa', action="store", type=str, help="path to an ALEXA file (produced with contrib/parsealexa.py)", metavar='ALEXA', default=None)
+    ap.add_argument('consensus', action="store", type=str, help="path to a current Tor CONSENSUS file", metavar='CONSENSUS', default=None)
+    ap.add_argument('descriptors', action="store", type=str, help="path to top-level directory containing current Tor server-descriptors", metavar='DESCRIPTORS', default=None)
+    ap.add_argument('connectingusers', action="store", type=str, help="path to csv containing Tor directly connecting user country data", metavar='CONNECTINGUSERS', default=None)
     
     # get arguments, accessible with args.value
     args = ap.parse_args()
@@ -83,6 +103,8 @@ def main():
     args.prefix = os.path.abspath(os.path.expanduser(args.prefix))
     args.consensus = os.path.abspath(os.path.expanduser(args.consensus))
     args.alexa = os.path.abspath(os.path.expanduser(args.alexa))
+    args.descriptors = os.path.abspath(os.path.expanduser(args.descriptors))
+    args.connectingusers = os.path.abspath(os.path.expanduser(args.connectingusers))
     
     # we'll need to convert IPs to cluster codes
     args.geoippath = os.path.abspath(args.prefix+"/share/geoip")
@@ -102,30 +124,23 @@ def generate(args):
         
     # sample for the exits and nonexits we'll use for our nodes
     nexits = int(args.exitfrac * args.nrelays)
-    exitnodes = getRelays(exits, nexits)
+    exitnodes = getRelays(exits, nexits, args.descriptors)
     nnonexits = args.nrelays - nexits
-    nonexitnodes = getRelays(nonexits, nnonexits)
+    nonexitnodes = getRelays(nonexits, nnonexits, args.descriptors)
     
     servers = getServers(args.alexa)
     geoentries = getGeoEntries(args.geoippath)
+    clientCountryCodes = getClientCountryChoices(args.connectingusers)
     
-    # generate the XML
+    # build the XML
     root = etree.Element("hosts")
-    
-    # plug-ins
-    e = etree.SubElement(root, "plugin")
-    e.set("id", "scallion")
-    e.set("path", "~/.shadow/plugins/libshadow-plugin-scallion.so")
-    e = etree.SubElement(root, "plugin")
-    e.set("id", "filetransfer")
-    e.set("path", "~/.shadow/plugins/libshadow-plugin-filetransfer.so")
     
     # servers
     e = etree.SubElement(root, "software")
     e.set("id", "filesoft")
     e.set("plugin", "filetransfer")
     e.set("time", "1")
-    e.set("arguments", "server 80 ~/.shadow/share")
+    e.set("arguments", "server 80 {0}share".format(INSTALLPREFIX))
 
     fweb = open("web.dl", "wb")
     fbulk = open("bulk.dl", "wb")
@@ -142,6 +157,8 @@ def generate(args):
         e.set("software", "filesoft")
         e.set("bandwidthup", "102400") # in KiB
         e.set("bandwidthdown", "102400") # in KiB
+        e.set("quantity", "1")
+        e.set("cpufrequency", choice(CPUFREQS))
         print >>fweb, "{0}:80:/320KiB.urnd".format(name)
         print >>fbulk, "{0}:80:/5MiB.urnd".format(name)
     fweb.close()
@@ -163,8 +180,12 @@ def generate(args):
     name = "4uthority"
     soft = "{0}soft".format(name)
     starttime = "2"
-    softargs = "dirauth {0} {1} {2} ./authority.torrc ./data/authoritydata ~/.shadow/share/geoip".format(authority.bw, authority.bwrate, authority.bwburst) # in bytes
-    addRelayToXML(root, soft, starttime, softargs, name, authority.ip, authority.code)
+    softargs = "dirauth {0} {1} {2} ./authority.torrc ./data/authoritydata {3}share/geoip".format(authority.bw, authority.bwrate, authority.bwburst, INSTALLPREFIX) # in bytes
+    addRelayToXML(root, soft, starttime, softargs, name, authority.ispbandwidth, authority.ip, authority.code)
+    
+    # nod boot-up rates
+    relaysPerSecond = 5
+    clientsPerSecond = 10
     
     # exit relays
     i = 1
@@ -175,11 +196,11 @@ def generate(args):
         name = "exit{0}".format(i)
         soft = "{0}soft".format(name)
         starttime = "{0}".format(timecounter)
-        softargs = "exitrelay {0} {1} {2} ./exit.torrc ./data/exitdata ~/.shadow/share/geoip".format(exit.bw, exit.bwrate, exit.bwburst) # in bytes
+        softargs = "exitrelay {0} {1} {2} ./exit.torrc ./data/exitdata {3}share/geoip".format(exit.bw, exit.bwrate, exit.bwburst, INSTALLPREFIX) # in bytes
         
-        addRelayToXML(root, soft, starttime, softargs, name, exit.ip, exit.code)
+        addRelayToXML(root, soft, starttime, softargs, name, exit.ispbandwidth, exit.ip, exit.code)
         
-        if i % 5 == 0: timecounter += 1 # 5 nodes every second
+        if i % relaysPerSecond == 0: timecounter += 1 # x nodes every second
         i += 1
     
     timecounter += 1
@@ -192,11 +213,11 @@ def generate(args):
         name = "nonexit{0}".format(i)
         soft = "{0}soft".format(name)
         starttime = "{0}".format(timecounter)
-        softargs = "relay {0} {1} {2} ./relay.torrc ./data/relaydata ~/.shadow/share/geoip".format(relay.bw, relay.bwrate, relay.bwburst) # in bytes
+        softargs = "relay {0} {1} {2} ./relay.torrc ./data/relaydata {3}share/geoip".format(relay.bw, relay.bwrate, relay.bwburst, INSTALLPREFIX) # in bytes
         
-        addRelayToXML(root, soft, starttime, softargs, name, relay.ip, relay.code)
+        addRelayToXML(root, soft, starttime, softargs, name, relay.ispbandwidth, relay.ip, relay.code)
     
-        if i % 5 == 0: timecounter += 1 # 5 nodes every second
+        if i % relaysPerSecond == 0: timecounter += 1 # x nodes every second
         i += 1
         
     # clients
@@ -209,11 +230,11 @@ def generate(args):
         name = "webclient{0}".format(i)
         soft = "{0}soft".format(name)
         starttime = "{0}".format(timecounter)
-        softargs = "client {0} {1} {2} ./client.torrc ./data/clientdata ~/.shadow/share/geoip client multi ./web.dl localhost 9000 ./think.dat -1".format(10240000, 10240000, 10240000) # in bytes
+        softargs = "client {0} {1} {2} ./client.torrc ./data/clientdata {3}share/geoip client multi ./web.dl localhost 9000 ./think.dat -1".format(10240000, 5120000, 10240000, INSTALLPREFIX) # in bytes
         
-        addRelayToXML(root, soft, starttime, softargs, name)
+        addRelayToXML(root, soft, starttime, softargs, name, code=choice(clientCountryCodes))
     
-        if i % 5 == 0: timecounter += 1 # 5 nodes every second
+        if i % clientsPerSecond == 0: timecounter += 1 # x nodes every second
         i += 1
     
     i = 1
@@ -222,22 +243,35 @@ def generate(args):
         name = "bulkclient{0}".format(i)
         soft = "{0}soft".format(name)
         starttime = "{0}".format(timecounter)
-        softargs = "client {0} {1} {2} ./client.torrc ./data/clientdata ~/.shadow/share/geoip client multi ./bulk.dl localhost 9000 none -1".format(10240000, 10240000, 10240000) # in bytes
+        softargs = "client {0} {1} {2} ./client.torrc ./data/clientdata {3}share/geoip client multi ./bulk.dl localhost 9000 none -1".format(10240000, 5120000, 10240000, INSTALLPREFIX) # in bytes
         
-        addRelayToXML(root, soft, starttime, softargs, name)
+        addRelayToXML(root, soft, starttime, softargs, name, code=choice(clientCountryCodes))
     
-        if i % 5 == 0: timecounter += 1 # 5 nodes every second
+        if i % clientsPerSecond == 0: timecounter += 1 # x nodes every second
         i += 1
-        
-    # kill time
-    e = etree.SubElement(root, "kill")
-    e.set("time", "5400")
         
     # finally, print the XML file
     with open("hosts.xml", 'wb') as fhosts:
-        print >>fhosts, (etree.tostring(root, pretty_print=True, xml_declaration=True))
+        # plug-ins
+        e = etree.Element("plugin")
+        e.set("id", "scallion")
+        e.set("path", "{0}plugins/libshadow-plugin-scallion.so".format(INSTALLPREFIX))
+        print >>fhosts, (etree.tostring(e, pretty_print=True, xml_declaration=True))
+        
+        e = etree.Element("plugin")
+        e.set("id", "filetransfer")
+        e.set("path", "{0}plugins/libshadow-plugin-filetransfer.so".format(INSTALLPREFIX))
+        print >>fhosts, (etree.tostring(e, pretty_print=True, xml_declaration=False))
+        
+        # kill time
+        e = etree.Element("kill")
+        e.set("time", "3600")
+        print >>fhosts, (etree.tostring(e, pretty_print=True, xml_declaration=False))
+        
+        # all our hosts
+        print >>fhosts, (etree.tostring(root, pretty_print=True, xml_declaration=False))
 
-def addRelayToXML(root, soft, starttime, softargs, name, ip=None, code=None):
+def addRelayToXML(root, soft, starttime, softargs, name, ispbandwidth=0, ip=None, code=None): # bandwidth in KiB
     # software
     e = etree.SubElement(root, "software")
     e.set("id", soft)
@@ -251,9 +285,47 @@ def addRelayToXML(root, soft, starttime, softargs, name, ip=None, code=None):
     if ip is not None: e.set("ip", ip)
     if code is not None: e.set("cluster", code)
     e.set("software", soft)
-    e.set("bandwidthup", "102400") # in KiB
-    e.set("bandwidthdown", "102400") # in KiB
+    if ispbandwidth > 0: # bandwidth is optional in XML, will be assigned based on cluster if not given
+        e.set("bandwidthup", "{0}".format(ispbandwidth)) # in KiB
+        e.set("bandwidthdown", "{0}".format(ispbandwidth)) # in KiB
+    e.set("quantity", "1")
+    e.set("cpufrequency", choice(CPUFREQS))
+
+def getClientCountryChoices(connectinguserspath):
+    lines = None
+    with open(connectinguserspath, 'rb') as f:
+        lines = f.readlines()
     
+    assert len(lines) > 11
+    header = lines[0].strip().split(',')
+    
+    total = 0
+    counts = dict()
+    for linei in xrange(len(lines)-10, len(lines)):
+        line = lines[linei]
+        parts = line.strip().split(',')
+        for i in xrange(2, len(parts)-1): # exclude the last total column "all"
+            if parts[i] != "NA" and parts[i] != "all":
+                country = header[i]
+                n = int(parts[i])
+                total += n
+                if country not in counts: counts[country] = 0
+                counts[country] += n
+                
+    codes = []
+    for c in counts:
+        frac = float(counts[c]) / float(total)
+        n = int(frac * 1000)
+        
+        code = c.upper()
+        if code == "US": code = "USMN"
+        else: code = "{0}{0}".format(code)
+        
+        for i in xrange(n):
+            codes.append(code)
+    
+    return codes
+
 def ip2long(ip):
     """
     Convert a IPv4 address into a 32-bit integer.
@@ -299,11 +371,50 @@ def getServers(alexapath):
             ips.append(ip)
     return ips
 
-def getRelays(relays, k):
+def getRelays(relays, k, descriptorpath):
     sample = sample_relays(relays, k)
+    
+    # get a map for easy lookup while parsing descriptors
+    ipmap = dict()
+    timemap = dict()
     for s in sample:
-        # TODO fix this so it actually gets the correct bandwidths
-        s.setTokenBucketBW(10240000, 10240000, 10240000)
+        if s.ip not in ipmap: 
+            ipmap[s.ip] = s
+            timemap[s.ip] = 0.0
+        
+    # go through all the descriptors and find the bandwidth rate, burst, and
+    # history from the most recent descriptor of each relay in our sample
+    for root, dirs, files in os.walk(descriptorpath):
+        for filename in files: 
+            fullpath = os.path.join(root, filename)
+            with open(fullpath, 'rb') as f:
+                rate, burst, hist = 0, 0, 0
+                ip = ""
+                published = None
+                
+                for line in f:
+                    parts = line.strip().split()
+                    if len(parts) == 0: continue
+                    if parts[0] == "router":
+                        ip = parts[2]
+                        if ip not in ipmap: break
+                    elif parts[0] == "published":
+                        published = "{0} {1}".format(parts[1], parts[2])
+                    elif parts[0] == "bandwidth":
+                        rate, burst, hist = int(parts[1]), int(parts[2]), int(parts[3])
+                        
+                if published is not None and ip in ipmap:
+                    datet = datetime.strptime(published, "%Y-%m-%d %H:%M:%S")
+                    unixt = time.mktime(datet.timetuple())
+                    if unixt >= timemap[ip]:
+                        timemap[ip] = unixt
+                        relay = ipmap[ip]
+                        relay.setTokenBucketBW(rate, burst, hist)
+    
+    # make sure we found some info for all of them
+    for s in sample:
+        assert s.bwrate > 0 and s.bwburst > 0
+    
     return sample
     
 # relays should be sorted by bandwidth
