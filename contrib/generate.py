@@ -319,8 +319,8 @@ def getClientCountryChoices(connectinguserspath):
         n = int(frac * 1000)
         
         code = c.upper()
-        if code == "US": code = "USMN"
-        else: code = "{0}{0}".format(code)
+#        if code == "US" or code == "A1" or code == "A2": code = "USMN"
+        code = "{0}{0}".format(code)
         
         for i in xrange(n):
             codes.append(code)
@@ -347,10 +347,10 @@ def getClusterCode(geoentries, ip):
     # theres probably a faster way of doing this, but this is python and i dont care
     for entry in geoentries:
         if ipnum >= entry.lownum and ipnum <= entry.highnum: 
-            if entry.countrycode == "US": return "USMN" # we have no USUS code (USMN gets USCENTRAL)
+#            if entry.countrycode == "US": return "USMN" # we have no USUS code (USMN gets USCENTRAL)
             return "{0}{0}".format(entry.countrycode)
-    log("Warning: Cant find code for IP '{0}' Num '{1}', defaulting to 'USMN'".format(ip, ipnum))
-    return "USMN"
+    log("Warning: Cant find code for IP '{0}' Num '{1}', defaulting to 'USUS'".format(ip, ipnum))
+    return "USUS"
 
 def getGeoEntries(geoippath):
     entries = []

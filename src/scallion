@@ -31,11 +31,12 @@ DEFAULTINPUT=os.path.abspath(os.path.expanduser("./hosts.xml"))
 def main():
     # setup our commands
     ap = argparse.ArgumentParser(description='Run Tor experiments as a plug-in to Shadow', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    ap.add_argument('-c', '--clear', action="store_true", dest="clear", help="Don't ask before clearing data directory", default=False)
-    ap.add_argument('-i', '--input', action="store", dest="input", help="add PATH as a shadow input XML file (in addition to PREFIX/share/topology.xml)", metavar="PATH", default=DEFAULTINPUT)
     ap.add_argument('-p', '--prefix', action="store", dest="prefix", help="PATH to scallion installation", metavar="PATH", default=DEFAULTPREFIX)
-    ap.add_argument('-w', '--working-directory', action="store", type=str, dest="output", help="PATH to directory from which to run Shadow", metavar='PATH', default=DEFAULTOUTPUT)
-   
+    ap.add_argument('-i', '--input-file', action="store", dest="input", help="add PATH as a shadow input XML file (in addition to PREFIX/share/topology.xml)", metavar="PATH", default=DEFAULTINPUT)
+    ap.add_argument('-o', '--output-dir', action="store", type=str, dest="output", help="PATH to directory from which to run Shadow", metavar='PATH', default=DEFAULTOUTPUT)
+    ap.add_argument('-r', '--reset', action="store_true", dest="reset", help="reset data directory and exit", default=False)
+    ap.add_argument('-y', '--assume-yes', action="store_true", dest="clear", help="don't ask before resetting data directory", default=False)
+    
     # get arguments, accessible with args.value
     args = ap.parse_args()
     
@@ -55,6 +56,9 @@ def main():
         
     # reset the data directory
     reset(args.output)
+    log("Data directory reset in output path")
+    
+    if args.reset: return 0
 
     # start monitoring, if dstat is in the path
     dstat_cmd = "dstat -cmstTy --fs --output {0}".format(dstatpath)
