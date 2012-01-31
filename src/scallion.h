@@ -75,6 +75,10 @@ enum vtor_nodetype {
 /* run every 5 mins */
 #define VTORFLOW_SCHED_PERIOD 60000
 
+enum cpuwstate {
+	CPUW_READTYPE, CPUW_READTAG, CPUW_READCHALLENGE, CPUW_PROCESS, CPUW_WRITERESPONSE
+};
+
 typedef struct vtor_cpuworker_s {
 	int fd;
 	char question[ONIONSKIN_CHALLENGE_LEN];
@@ -86,6 +90,8 @@ typedef struct vtor_cpuworker_s {
 	crypto_pk_env_t *onion_key;
 	crypto_pk_env_t *last_onion_key;
 	struct event read_event;
+	uint offset;
+	enum cpuwstate state;
 } vtor_cpuworker_t, *vtor_cpuworker_tp;
 
 typedef struct _ScallionTor ScallionTor;

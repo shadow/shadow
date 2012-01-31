@@ -366,62 +366,133 @@ void scalliontor_loopexit(ScallionTor* stor) {
 	stor->shadowlibFuncs->createCallback((ShadowPluginCallbackFunc)scalliontor_loopexitCallback, (gpointer)stor, 1);
 }
 
+/* return -1 to kill, 0 for EAGAIN, bytes read/written for success */
+static int scalliontor_checkIOResult(vtor_cpuworker_tp cpuw, int ioResult) {
+	g_assert(cpuw);
+
+	if(ioResult < 0) {
+		if(errno == EAGAIN) {
+			/* dont block! and dont fail! */
+			return 0;
+		} else {
+			/* true error from shadow network layer */
+			log_info(LD_OR,
+					 "CPU worker exiting because of error on connection to Tor "
+					 "process.");
+			log_info(LD_OR,"(Error on %d was %s)",
+					cpuw->fd, tor_socket_strerror(tor_socket_errno(cpuw->fd)));
+			return -1;
+		}
+	} else if (ioResult == 0) {
+		log_info(LD_OR,
+				 "CPU worker exiting because Tor process closed connection "
+				 "(either rotated keys or died).");
+		return -1;
+	}
+
+	return ioResult;
+}
+
 void scalliontor_readCPUWorkerCallback(int sockd, short ev_types, void * arg) {
-	/* taken from cpuworker_main.
+	/* adapted from cpuworker_main.
 	 *
 	 * these are blocking calls in Tor. we need to cope, so the approach we
-	 * take is that if the first read would block, its still ok. after
-	 * that, we fail if the rest of what we expect isnt there.
+	 * take is that if the first read would block, its ok. after that, we
+	 * continue through the state machine until we are able to read and write
+	 * everything we need to, then reset and start with the next question.
 	 *
-	 * FIXME make this completely nonblocking with a state machine.
+	 * this is completely nonblocking with the state machine.
 	 */
 	vtor_cpuworker_tp cpuw = arg;
+	g_assert(cpuw);
 
-	if(cpuw != NULL) {
-		ssize_t r = 0;
+	int ioResult = 0;
+	int action = 0;
 
-		r = recv(cpuw->fd, &(cpuw->question_type), 1, 0);
+enter:
 
-		if(r < 0) {
-			if(errno == EAGAIN) {
-				/* dont block! and dont fail! */
-				goto ret;
-			} else {
-				/* true error from shadow network layer */
-				log_info(LD_OR,
-						 "CPU worker exiting because of error on connection to Tor "
-						 "process.");
-				log_info(LD_OR,"(Error on %d was %s)",
-						cpuw->fd, tor_socket_strerror(tor_socket_errno(cpuw->fd)));
-				goto end;
+	switch(cpuw->state) {
+		case CPUW_READTYPE: {
+			ioResult = 0;
+
+			/* get the type of question */
+			ioResult = recv(cpuw->fd, &(cpuw->question_type), 1, 0);
+
+			action = scalliontor_checkIOResult(cpuw, ioResult);
+			if(action == -1) goto kill;
+			else if(action == 0) goto exit;
+
+			/* we got our initial question type */
+			tor_assert(cpuw->question_type == CPUWORKER_TASK_ONION);
+
+			cpuw->state = CPUW_READTAG;
+			goto enter;
+		}
+
+		case CPUW_READTAG: {
+			ioResult = 0;
+			action = 1;
+			int bytesNeeded = TAG_LEN;
+
+			while(action > 0 && cpuw->offset < bytesNeeded) {
+				ioResult = recv(cpuw->fd, cpuw->tag+cpuw->offset, bytesNeeded-cpuw->offset, 0);
+
+				action = scalliontor_checkIOResult(cpuw, ioResult);
+				if(action == -1) goto kill;
+				else if(action == 0) goto exit;
+
+				/* read some bytes */
+				cpuw->offset += action;
 			}
-		} else if (r == 0) {
-			log_info(LD_OR,
-					 "CPU worker exiting because Tor process closed connection "
-					 "(either rotated keys or died).");
-			goto end;
+
+			/* we got what we needed, assert this */
+			if (cpuw->offset != TAG_LEN) {
+			  log_err(LD_BUG,"read tag failed. Exiting.");
+			  goto kill;
+			}
+
+			cpuw->state = CPUW_READCHALLENGE;
+			cpuw->offset = 0;
+			goto enter;
 		}
 
-		/* we got our initial question */
+		case CPUW_READCHALLENGE: {
+			ioResult = 0;
+			action = 1;
+			int bytesNeeded = ONIONSKIN_CHALLENGE_LEN;
 
-		tor_assert(cpuw->question_type == CPUWORKER_TASK_ONION);
+			while(action > 0 && cpuw->offset < bytesNeeded) {
+				ioResult = recv(cpuw->fd, cpuw->question+cpuw->offset, bytesNeeded-cpuw->offset, 0);
 
-		r = read_all(cpuw->fd, cpuw->tag, TAG_LEN, 1);
+				action = scalliontor_checkIOResult(cpuw, ioResult);
+				if(action == -1) goto kill;
+				else if(action == 0) goto exit;
 
-		if (r != TAG_LEN) {
-		  log_err(LD_BUG,"read tag failed. Exiting.");
-		  goto end;
+				/* read some bytes */
+				cpuw->offset += action;
+			}
+
+			/* we got what we needed, assert this */
+			if (cpuw->offset != ONIONSKIN_CHALLENGE_LEN) {
+			  log_err(LD_BUG,"read question failed. got %i bytes, expecting %i bytes. Exiting.", cpuw->offset, ONIONSKIN_CHALLENGE_LEN);
+			  goto kill;
+			}
+
+			cpuw->state = CPUW_PROCESS;
+			cpuw->offset = 0;
+			goto enter;
 		}
 
-		r = read_all(cpuw->fd, cpuw->question, ONIONSKIN_CHALLENGE_LEN, 1);
+		case CPUW_PROCESS: {
+			if (cpuw->question_type != CPUWORKER_TASK_ONION) {
+				log_debug(LD_OR,"unknown CPU worker question type. ignoring...");
+				cpuw->state = CPUW_READTYPE;
+				cpuw->offset = 0;
+				goto exit;
+			}
 
-		if (r != ONIONSKIN_CHALLENGE_LEN) {
-		  log_err(LD_BUG,"read question failed. Exiting.");
-		  goto end;
-		}
 
-		if (cpuw->question_type == CPUWORKER_TASK_ONION) {
-			r = onion_skin_server_handshake(cpuw->question, cpuw->onion_key, cpuw->last_onion_key,
+			int r = onion_skin_server_handshake(cpuw->question, cpuw->onion_key, cpuw->last_onion_key,
 					  cpuw->reply_to_proxy, cpuw->keys, CPATH_KEY_MATERIAL_LEN);
 
 			if (r < 0) {
@@ -440,19 +511,50 @@ void scalliontor_readCPUWorkerCallback(int sockd, short ev_types, void * arg) {
 				memcpy(cpuw->buf+1+TAG_LEN+ONIONSKIN_REPLY_LEN,cpuw->keys,CPATH_KEY_MATERIAL_LEN);
 			}
 
-			r = write_all(cpuw->fd, cpuw->buf, LEN_ONION_RESPONSE, 1);
+			cpuw->state = CPUW_WRITERESPONSE;
+			cpuw->offset = 0;
+			goto enter;
+		}
 
-			if (r != LEN_ONION_RESPONSE) {
+		case CPUW_WRITERESPONSE: {
+			ioResult = 0;
+			action = 1;
+			int bytesNeeded = LEN_ONION_RESPONSE;
+
+			while(action > 0 && cpuw->offset < bytesNeeded) {
+				ioResult = send(cpuw->fd, cpuw->buf+cpuw->offset, bytesNeeded-cpuw->offset, 0);
+
+				action = scalliontor_checkIOResult(cpuw, ioResult);
+				if(action == -1) goto kill;
+				else if(action == 0) goto exit;
+
+				/* wrote some bytes */
+				cpuw->offset += action;
+			}
+
+			/* we wrote what we needed, assert this */
+			if (cpuw->offset != LEN_ONION_RESPONSE) {
 				log_err(LD_BUG,"writing response buf failed. Exiting.");
-				goto end;
+				goto kill;
 			}
 
 			log_debug(LD_OR,"finished writing response.");
+
+			cpuw->state = CPUW_READTYPE;
+			cpuw->offset = 0;
+			goto enter;
+		}
+
+		default: {
+			log_err(LD_BUG,"unknown CPU worker state. Exiting.");
+			goto kill;
 		}
 	}
-ret:
+
+exit:
 	return;
-end:
+
+kill:
 	if(cpuw != NULL) {
 		if (cpuw->onion_key)
 			crypto_free_pk_env(cpuw->onion_key);
@@ -470,11 +572,12 @@ void scalliontor_newCPUWorker(ScallionTor* stor, int fd) {
 		g_free(stor->cpuw);
 	}
 
-	vtor_cpuworker_tp cpuw = malloc(sizeof(vtor_cpuworker_t));
+	vtor_cpuworker_tp cpuw = calloc(1, sizeof(vtor_cpuworker_t));
 
 	cpuw->fd = fd;
 	cpuw->onion_key = NULL;
 	cpuw->last_onion_key = NULL;
+	cpuw->state = CPUW_READTYPE;
 
 	dup_onion_keys(&(cpuw->onion_key), &(cpuw->last_onion_key));
 
