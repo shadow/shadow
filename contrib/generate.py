@@ -221,12 +221,22 @@ def generate(args):
         if i % relaysPerSecond == 0: timecounter += 1 # x nodes every second
         i += 1
         
+    # earliest client start time
+    timecounter = 900
+
+    # shadowperf
+    name = "shadowperfclient"
+    soft = "{0}soft".format(name)
+    starttime = "{0}".format(timecounter)
+    softargs = "client {0} {1} {2} ./client.torrc ./data/clientdata {3}share/geoip client double server1 80 localhost 9000 {3}share/50KiB.urnd {3}share/1MiB.urnd none 30".format(10240000, 5120000, 10240000, INSTALLPREFIX) # in bytes
+    
+    addRelayToXML(root, soft, starttime, softargs, name, code=choice(clientCountryCodes))
+        
     # clients
     nbulkclients = int(args.fbulk * args.nclients)
     nwebclients = args.nclients - nbulkclients
 
     i = 1
-    timecounter = 900
     while i < nwebclients:
         name = "webclient{0}".format(i)
         soft = "{0}soft".format(name)
@@ -412,9 +422,9 @@ def getRelays(relays, k, geoentries, descriptorpath):
                         relay = ipmap[ip]
                         relay.setTokenBucketBW(rate, burst, hist)
     
-    # make sure we found some info for all of them
+    # make sure we found some info for all of them, otherwise use defaults
     for s in sample:
-        assert s.bwrate > 0 and s.bwburst > 0
+        if s.bwrate <= 0 or s.bwburst <= 0: s.setTokenBucketBW(5120000, 10240000, 0) # 5MB rate, 10MB Burst
         s.setRegionCode(getClusterCode(geoentries, s.ip))
     
     return sample
