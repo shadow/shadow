@@ -84,7 +84,7 @@ find_package(GLIB REQUIRED)
 find_package(TOR REQUIRED)
 find_package(SHADOW REQUIRED)
 
-include_directories(${RT_INCLUDES} ${DL_INCLUDES} ${M_INCLUDES} ${EVENT2_INCLUDES} ${OPENSSL_INCLUDES} ${TOR_INCLUDES} ${SHADOW_INCLUDES})
+include_directories(${RT_INCLUDES} ${DL_INCLUDES} ${M_INCLUDES} ${GLIB_INCLUDES} ${EVENT2_INCLUDES} ${OPENSSL_INCLUDES} ${TOR_INCLUDES} ${SHADOW_INCLUDES})
 
 ## compile options
 add_definitions(-Wall --std=c99 -fPIC -g -D_GNU_SOURCE)
