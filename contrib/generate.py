@@ -228,7 +228,7 @@ def generate(args):
     name = "shadowperfclient"
     soft = "{0}soft".format(name)
     starttime = "{0}".format(timecounter)
-    softargs = "client {0} {1} {2} ./client.torrc ./data/clientdata {3}share/geoip client double server1 80 localhost 9000 {3}share/50KiB.urnd {3}share/1MiB.urnd none 30".format(10240000, 5120000, 10240000, INSTALLPREFIX) # in bytes
+    softargs = "client {0} {1} {2} ./client.torrc ./data/clientdata {3}share/geoip client double server1 80 localhost 9000 /50KiB.urnd /1MiB.urnd none 30".format(10240000, 5120000, 10240000, INSTALLPREFIX) # in bytes
     
     addRelayToXML(root, soft, starttime, softargs, name, code=choice(clientCountryCodes))
         
@@ -425,6 +425,7 @@ def getRelays(relays, k, geoentries, descriptorpath):
     # make sure we found some info for all of them, otherwise use defaults
     for s in sample:
         if s.bwrate <= 0 or s.bwburst <= 0: s.setTokenBucketBW(5120000, 10240000, 0) # 5MB rate, 10MB Burst
+        if s.bwrate < 20480: s.bwrate = 20480 # the min required setting
         s.setRegionCode(getClusterCode(geoentries, s.ip))
     
     return sample

@@ -48,12 +48,12 @@ for N in 1500; do
     cd ../
 done
 
-for N in 4500; do
+for N in 3000; do
     rm -rf large${N}
     mkdir large${N}
     cd large${N}
 
-    python ../../contrib/generate.py --nclients=${N} --nrelays=300 --nservers=300 /storage/projects/shadowtor/alexa-top-1000-ips_2012-01-26.csv /storage/projects/shadowtor/consensus.txt /storage/projects/shadowtor/server-descriptors-2012-01 /storage/projects/shadowtor/direct-users.csv
+    python ../../contrib/generate.py --nclients=${N} --nrelays=200 --nservers=200 /storage/projects/shadowtor/alexa-top-1000-ips_2012-01-26.csv /storage/projects/shadowtor/consensus.txt /storage/projects/shadowtor/server-descriptors-2012-01 /storage/projects/shadowtor/direct-users.csv
 
     cp ../authority.torrc .
     cp ../relay.torrc .
@@ -64,12 +64,12 @@ for N in 4500; do
     cd ../
 done
 
-for N in 9000; do
+for N in 6000; do
     rm -rf jumbo${N}
     mkdir jumbo${N}
     cd jumbo${N}
 
-    python ../../contrib/generate.py --nclients=${N} --nrelays=600 --nservers=600 /storage/projects/shadowtor/alexa-top-1000-ips_2012-01-26.csv /storage/projects/shadowtor/consensus.txt /storage/projects/shadowtor/server-descriptors-2012-01 /storage/projects/shadowtor/direct-users.csv
+    python ../../contrib/generate.py --nclients=${N} --nrelays=400 --nservers=400 /storage/projects/shadowtor/alexa-top-1000-ips_2012-01-26.csv /storage/projects/shadowtor/consensus.txt /storage/projects/shadowtor/server-descriptors-2012-01 /storage/projects/shadowtor/direct-users.csv
 
     cp ../authority.torrc .
     cp ../relay.torrc .
