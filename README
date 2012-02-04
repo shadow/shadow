@@ -79,11 +79,11 @@ generated using data from metrics.torporject.org, and compared to Tor network
 performance statistics to ensure accuracy. The following is a rough
 approximation of the memory requirements of each setup:
 
-tiny:   < 4GB, 20 relays, 180 web clients, 20 bulk clients
-small:  < 16GB, 50 relays, 713 web clients, 37 bulk clients
-medium: < 32GB, 100 relays, 1425 web clients, 75 bulk clients
-large:  < 64GB, 200 relays, 2850 web clients, 150 bulk clients
-jumbo:  < 128GB, 400 relays, 5700 web clients, 300 bulk clients
+tiny:   < 4GB, 20 relays, 200 clients (95% web, 5% bulk)
+small:  < 16GB, 50 relays, 500 clients (95% web, 5% bulk)
+medium: < 32GB, 100 relays, 1000 clients (95% web, 5% bulk)
+large:  < 64GB, 250 relays, 2500 clients (95% web, 5% bulk)
+jumbo:  < 128GB, 500 relays, 5000 clients (95% web, 5% bulk)
 
 If you would like to generate your own topologies, please see the included
 generate script (you'll need to download some Tor data as well):
