@@ -87,7 +87,7 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	GError *error = NULL;
 	if (!g_option_context_parse(c->context, &argc, &argv, &error)) {
 		g_printerr("** %s **\n", error->message);
-		g_printerr(g_option_context_get_help(c->context, TRUE, NULL));
+		g_printerr("%s", g_option_context_get_help(c->context, TRUE, NULL));
 		configuration_free(c);
 		return NULL;
 	}
@@ -98,7 +98,7 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	if(!(c->printSoftwareVersion) && !(c->runEchoExample) && !(c->runFileExample) &&
 			(argc < nRequiredXMLFiles + 1)) {
 		g_printerr("** Please provide the required parameters **\n");
-		g_printerr(g_option_context_get_help(c->context, TRUE, NULL));
+		g_printerr("%s", g_option_context_get_help(c->context, TRUE, NULL));
 		configuration_free(c);
 		return NULL;
 	}

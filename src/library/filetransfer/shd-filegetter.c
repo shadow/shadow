@@ -80,7 +80,7 @@ static const gchar* filegetter_code_strings[] = {
 
 static enum filegetter_code filegetter_die(filegetter_tp fg, gchar* msg) {
 	filegetter_shutdown(fg);
-	fprintf(stderr, msg);
+	fprintf(stderr, "%s", msg);
 	return FG_ERR_FATAL;
 }
 
