@@ -24,7 +24,9 @@ Scallion also requires locally-built versions of:
     Libevent2 (see below)
 
 OpenSSL and Libevent2 may require special args, depending on your system. See
-contrib/insalldeps.sh to install them to ~/.shadow/
+contrib/insalldeps.sh to install them to "~/.shadow/". In most cases, simply run
+the following from the root scallion directory:
+$ ./contrib/installdeps.sh
 
 B. Setup
 --------
@@ -46,10 +48,12 @@ C. Running Scallion
 Scallion works by running as a Shadow plug-in, launching a Tor network, and
 using the file transfer plugin from Shadow to download files through the private
 testing Tor network. The easiest way to get started is to use the included
-small example, and modify as necessary. Everything that is needed is included in
+example, and modify as necessary. Everything that is needed is included in
 the resource/ directory.
 
-An example experiment may be run as follows:
+Small Test Case
+
+To ensure things are working, an example experiment may be run as follows:
 $ cd resource
 $ scallion -i scallion.xml
 
@@ -58,9 +62,23 @@ running scallion. Shadow and Tor output from all nodes is stored in
 data/scallion.log, and CPU and other system information is logged over the 
 experiment using dstat to data/dstat.log.
 
+The example experiment should finish within a minute or two. The following 
+should result in all 5 Tor nodes successfully bootstrapping.
+$ grep "Bootstrapped 100" data/scallion.log
+
+The following should result in 10 completed downloads. You'll probably want to
+use this command or something similar to extract performance results after most
+experiments:
+$ grep "fg-download-complete" data/scallion.log
+
+Non-trivial Shadow-Tor Networks
+
 The resource directory also contains several pre-generated Shadow-Tor network
-configurations which may be useful for getting started. The following is a rough
-approximation of the structure and memory requirements of each:
+configurations which may be useful for getting started. These files have been
+generated using data from metrics.torporject.org, and compared to Tor network
+performance statistics to ensure accuracy. The following is a rough
+approximation of the memory requirements of each setup:
+
 tiny:   < 4GB, 20 relays, 180 web clients, 20 bulk clients
 small:  < 16GB, 50 relays, 713 web clients, 37 bulk clients
 medium: < 32GB, 100 relays, 1425 web clients, 75 bulk clients
@@ -70,3 +88,6 @@ jumbo:  < 128GB, 400 relays, 5700 web clients, 300 bulk clients
 If you would like to generate your own topologies, please see the included
 generate script (you'll need to download some Tor data as well):
 $ python contrib/generate.py --help
+
+You'll then be interested in the following URLs:
+

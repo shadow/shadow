@@ -11,12 +11,12 @@
 <node id="4uthority" software="authority" cluster="net0" bandwidthup="102400" bandwidthdown="102400" cpufrequency="2800000" quantity="1" />
 
 <software id="exit" plugin="scallion" time="300" arguments="exitrelay 1024 102400 102400 ./exit.torrc ./data/exitdata ~/.shadow/share/geoip" />
-<node id="exit.tor" software="exit" cpufrequency="2800000" quantity="1" />
+<node id="exit.tor" cluster="net0" software="exit" cpufrequency="2800000" quantity="1" />
 
 <software id="relay" plugin="scallion" time="300" arguments="relay 1024 102400 102400 ./relay.torrc ./data/relaydata ~/.shadow/share/geoip" />
-<node id="relay.tor" software="relay" cpufrequency="2800000" quantity="2" />
+<node id="relay.tor" cluster="net0" software="relay" cpufrequency="2800000" quantity="2" />
 
 <software id="client" plugin="scallion" time="3000" arguments="client 1024 102400 102400 ./client.torrc ./data/clientdata ~/.shadow/share/geoip client single server.file 80 localhost 9000 10 /1MiB.urnd" />
-<node id="client.tor" software="client" cpufrequency="2800000" quantity="1" />
+<node id="client.tor" cluster="net0" software="client" cpufrequency="2800000" quantity="1" />
 
-<kill time="5400" />
+<kill time="18000" />
