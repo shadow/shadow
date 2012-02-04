@@ -2,7 +2,19 @@ Shadow (c) 2010-2012 Rob Jansen jansen@cs.umn.edu
 
 A. Dependencies
 ---------------
-Shadow requires GLib >= 2.28, CMake >= 2.8, xz-utils, and python 2.7
+Shadow requires the following:
+    gcc
+    make
+    xz-utils
+    Python 2.7
+    CMake >= 2.8
+    GLib >= 2.28.8
+
+On Ubuntu, use something like:
+$ sudo apt-get -y install gcc xz-utils python2.7 cmake libglib2.0 libglib2.0-dev     build-essential bin-utils 
+
+On Fedora, use something like:
+$ sudo yum install -y gcc xz python cmake glib2 glib2-devel
 
 B. Setup
 --------
@@ -100,6 +112,12 @@ Debugging
 
 To add extra debugging information and messages, add the -g flag when building
 shadow. See the help menu with $ python setup.py --help.
+
+To set LD_PRELOAD and run in gdb:
+$ gdb shadow-bin
+> set environment LD_PRELOAD=/home/ubuntu/.shadow/lib/libshadow-preload.so
+> set args --echo
+> run
 
 If you want to be able to run Shadow through valgrind and the application you 
 are running in Shadow uses OpenSSL, you should configure OpenSSL with the 
