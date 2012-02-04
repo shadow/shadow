@@ -11,7 +11,7 @@ Shadow requires the following:
     GLib >= 2.28.8
 
 On Ubuntu, use something like:
-$ sudo apt-get -y install gcc xz-utils python2.7 cmake libglib2.0 libglib2.0-dev     build-essential bin-utils 
+$ sudo apt-get -y install gcc xz-utils python2.7 cmake libglib2.0 libglib2.0-dev
 
 On Fedora, use something like:
 $ sudo yum install -y gcc xz python cmake glib2 glib2-devel
