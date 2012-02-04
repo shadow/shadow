@@ -90,4 +90,10 @@ generate script (you'll need to download some Tor data as well):
 $ python contrib/generate.py --help
 
 You'll then be interested in the following URLs:
+http://bolobolo.torservers.net/tor/status-vote/current/consensus
+http://metrics.torproject.org/data/server-descriptors-2012-01.tar.bz2
+http://metrics.torproject.org/csv/direct-users.csv
 
+You'll also need to parse the alexa data with contrib/parsealexa.py, and pass
+the path to the output file as input to the contrib/generate.py script:
+http://s3.amazonaws.com/alexa-static/top-1m.csv.zip
