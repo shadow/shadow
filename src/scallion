@@ -41,6 +41,7 @@ def main():
     args = ap.parse_args()
     
     args.output = os.path.abspath(os.path.expanduser(args.output))
+    args.input = os.path.abspath(os.path.expanduser(args.input))
     args.prefix = os.path.abspath(os.path.expanduser(args.prefix))
     
     datapath = os.path.abspath(args.output+"/data")
@@ -78,7 +79,7 @@ def main():
     # run paths
     shadowpath = os.path.abspath("{0}/bin/shadow".format(args.prefix))
     preloadpath = os.path.abspath("{0}/lib/libshadow-preload-scallion.so".format(args.prefix))
-    xmlpaths = os.path.abspath("{0}/share/topology.xml".format(args.prefix)) + " " + os.path.abspath("{0}/hosts.xml".format(args.output))
+    xmlpaths = os.path.abspath("{0}/share/topology.xml".format(args.prefix)) + " " + os.path.abspath("{0}".format(args.input))
     
     # command to run
     cmd = "{0} --preload={1} {2}".format(shadowpath, preloadpath, xmlpaths)
