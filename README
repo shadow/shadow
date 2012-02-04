@@ -51,7 +51,7 @@ the resource/ directory.
 
 An example experiment may be run as follows:
 $ cd resource
-$ scallion
+$ scallion -i scallion.xml
 
 Output is stored in the data directory, relative to the working directory when 
 running scallion. Shadow and Tor output from all nodes is stored in 
