@@ -55,6 +55,11 @@ gint shadow_main(gint argc, gchar* argv[]) {
 	/* make the engine available */
 	mainThreadWorker->cached_engine = shadow_engine;
 
+	/* check if we were able to read the CPU freq file */
+	if(engine_getRawCPUFrequency(shadow_engine) == 0) {
+		critical("unable to read '%s' for copying", CONFIG_CPU_MAX_FREQ_FILE);
+	}
+
 	/* hook in our logging system. stack variable used to avoid errors
 	 * during cleanup below. */
 	GLogLevelFlags configuredLogLevel = configuration_getLogLevel(config);

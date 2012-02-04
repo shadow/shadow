@@ -106,6 +106,11 @@ struct _Engine {
 Engine* engine_new(Configuration* config) {
 	MAGIC_ASSERT(config);
 
+	/* Don't do anything in this function that will cause a log message. The
+	 * global engine is still NULL since we are creating it now, and logging
+	 * here will cause an assertion error.
+	 */
+
 	Engine* engine = g_new0(Engine, 1);
 	MAGIC_INIT(engine);
 
@@ -139,7 +144,6 @@ Engine* engine_new(Configuration* config) {
 	gsize length = 0;
 	GError* error = NULL;
 	if(!g_file_get_contents(CONFIG_CPU_MAX_FREQ_FILE, &contents, &length, &error)) {
-		critical("unable to read '%s' for copying: %s", CONFIG_CPU_MAX_FREQ_FILE, error->message);
 		engine->rawFrequencyKHz = 0;
 	} else {
 		engine->rawFrequencyKHz = (guint)atoi(contents);
