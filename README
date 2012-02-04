@@ -115,7 +115,7 @@ shadow. See the help menu with $ python setup.py --help.
 
 To set LD_PRELOAD and run in gdb:
 $ gdb shadow-bin
-> set environment LD_PRELOAD=/home/ubuntu/.shadow/lib/libshadow-preload.so
+> set environment LD_PRELOAD=/home/rob/.shadow/lib/libshadow-preload.so
 > set args --echo
 > run
 
