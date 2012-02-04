@@ -18,8 +18,8 @@ wget https://github.com/downloads/libevent/libevent/libevent-2.0.16-stable.tar.g
 tar xvzf libevent-2.0.16-stable.tar.gz
 cd libevent-2.0.16-stable/
 ## CPPFLAGS="-DUSE_DEBUG"
-#./configure --prefix=${HOME}/.shadow CFLAGS="-fPIC -I${HOME}/.shadow -g -pg" LDFLAGS="-L${HOME}/.shadow" --disable-shared
-./configure --prefix=${HOME}/.shadow CFLAGS="-fPIC -I${HOME}/.shadow" LDFLAGS="-L${HOME}/.shadow" --disable-shared
+#./configure --prefix=${HOME}/.shadow CFLAGS="-fPIC -I${HOME}/.shadow -g -pg" LDFLAGS="-L${HOME}/.shadow"
+./configure --prefix=${HOME}/.shadow CFLAGS="-fPIC -I${HOME}/.shadow" LDFLAGS="-L${HOME}/.shadow"
 make
 make install
 
