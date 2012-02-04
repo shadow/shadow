@@ -184,7 +184,7 @@ def generate(args):
     softargs = "dirauth {0} {1} {2} ./authority.torrc ./data/authoritydata {3}share/geoip".format(authority.bw, authority.bwrate, authority.bwburst, INSTALLPREFIX) # in bytes
     addRelayToXML(root, soft, starttime, softargs, name, authority.ispbandwidth, authority.ip, authority.code)
     
-    # nod boot-up rates
+    # node boot-up rates
     relaysPerSecond = 5
     clientsPerSecond = 10
     
@@ -228,7 +228,7 @@ def generate(args):
     name = "shadowperfclient"
     soft = "{0}soft".format(name)
     starttime = "{0}".format(timecounter)
-    softargs = "client {0} {1} {2} ./client.torrc ./data/clientdata {3}share/geoip client double server1 80 localhost 9000 /50KiB.urnd /1MiB.urnd none 30".format(10240000, 5120000, 10240000, INSTALLPREFIX) # in bytes
+    softargs = "client {0} {1} {2} ./client.torrc ./data/clientdata {3}share/geoip client double server1 80 localhost 9000 /50KiB.urnd /1MiB.urnd none 5".format(10240000, 5120000, 10240000, INSTALLPREFIX) # in bytes
     
     addRelayToXML(root, soft, starttime, softargs, name, code=choice(clientCountryCodes))
         
