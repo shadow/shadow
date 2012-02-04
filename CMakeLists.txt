@@ -1,11 +1,11 @@
 ## (c)2010-2011 Scallion (Shadow Plug-in running Tor) Rob Jansen jansen@cs.umn.edu
 
 project(scallion C)
-cmake_minimum_required(VERSION 2.6 FATAL_ERROR)
+cmake_minimum_required(VERSION 2.8 FATAL_ERROR)
 
 ## set paths and build parameters
-set(VERSION_MAJOR 2)
-set(VERSION_MINOR 0)
+set(VERSION_MAJOR 1)
+set(VERSION_MINOR 3)
 set(VERSION_BUILD 0)
 set(PACKAGE_STRING "Scallion ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_BUILD}")
 
