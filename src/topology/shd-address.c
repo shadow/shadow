@@ -21,19 +21,37 @@
 
 #include "shadow.h"
 
+/*
+ * host order INADDR_LOOPBACK: 2130706433, INADDR_ANY: 0, INADDR_NONE: 4294967295, INADDR_BROADCAST: 4294967295
+ * network order INADDR_LOOPBACK: 16777343, INADDR_ANY: 0, INADDR_NONE: 4294967295, INADDR_BROADCAST: 4294967295
+ */
+
+/* IP must be first so we can cast an Address to an in_addr_t */
+struct _Address {
+	/* the IP in network-order */
+	guint32 ip;
+
+	/* the host-order IP in dots-and-decimals format */
+	gchar* ipString;
+
+	/* the hostname */
+	gchar* name;
+
+	MAGIC_DECLARE;
+};
+
 Address* address_new(guint32 ip, const gchar* name) {
 	Address* address = g_new0(Address, 1);
 	MAGIC_INIT(address);
 
 	address->ip = ip;
-	address->ipString = g_strdup(NTOA(ip));
+	address->ipString = g_strdup(NTOA(ip)); // XXX do we need to use ntohl() first?
 	address->name = g_strdup(name);
 
 	return address;
 }
 
-void address_free(gpointer data) {
-	Address* address = data;
+void address_free(Address* address) {
 	MAGIC_ASSERT(address);
 
 	g_free(address->ipString);

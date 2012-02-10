@@ -33,18 +33,25 @@
 #define RTLD_DEFAULT ((void *) 0)
 
 /**
+ * @warning
  * Its not ok to call shadow function from the preload lib. it is not linked
  * to shadow, so it has to search for the symbols. further, it can only call
  * functions in the intercept lib, because the search only works if the symbol
  * exists in other shared libraries.
  */
 
+/**
+ * Searches for the worker_isInShadowContext function and calls it
+ * @return 1 if we are in shadow context, 0 if we are in plug-in context
+ *
+ * @see worker_isInShadowContext()
+ */
 int preload_worker_isInShadowContext();
 
-// logging causes too much recursion, because something in the log function gets intercepted
+// todo logging causes too much recursion, because something in the log function gets intercepted
 //extern void logging_log(const gchar *log_domain, GLogLevelFlags log_level, const gchar* functionName, const gchar *format, ...);
 
-/* convenience macro for doing the dlsym lookups
+/** convenience macro for doing the dlsym lookups
  * return "ret" if function can't be found. if used in a void function, use a comma
  * but omit the last param, like "PRELOAD_LOOKUP(a, b,)" */
 #define PRELOAD_LOOKUP(my_function, my_search, ret) \
@@ -76,7 +83,7 @@ int preload_worker_isInShadowContext();
 	/* debug("PRELOAD_LOOKUP: calling \"%s\"\n", my_search); */ \
 }
 
-/* convenience macro for deciding if we should intercept the function or
+/** convenience macro for deciding if we should intercept the function or
  * not, depending on if the call came from shadow or the plug-in.
  * if the plugin exists, we came from the plugin, and the extra condition holds,
  * we attempt to redirect the call to shadow.
