@@ -40,9 +40,15 @@ mv src/or/main.c.patch src/or/main.c
 sed ':a;N;$!ba;s/static void\nrefill_callback/void\nrefill_callback/g' src/or/main.c > src/or/main.c.patch
 mv src/or/main.c.patch src/or/main.c
 
+echo Patching infinite loop bugs
+echo ...in main.c
 # bugs causing infinite loops in shadow (multi-line)
 sed ':a;N;$!ba;s/conn->timestamp_lastwritten = now; \/\* reset so we can flush more \*\/\n      }/conn->timestamp_lastwritten = now; \/\* reset so we can flush more \*\/\n      } else if(sz == 0) { \/\* retval is 0 \*\/\n        \/\* wants to flush, but is rate limited \*\/\n        conn->write_blocked_on_bw = 1;\n        connection_stop_writing(conn);\n 	  }/g' src/or/main.c > src/or/main.c.patch
 mv src/or/main.c.patch src/or/main.c
+
+echo ...in connection.c
+sed ':a;N;$!ba;s/if (conn->marked_for_close)\n    return 0; \/\* do nothing \*\//if (conn->marked_for_close) {\n	if (connection_is_reading(conn->read_event))\n		connection_stop_reading(conn);\n    return 0; \/\* do nothing \*\/\n  }/g' src/or/connection.c > src/or/connection.c.patch
+mv src/or/connection.c.patch src/or/connection.c
 
 # single line static function declaration
 sed 's/static void refill_callback/void refill_callback/g' src/or/main.c > src/or/main.c.patch
