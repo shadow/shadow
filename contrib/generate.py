@@ -39,6 +39,8 @@ NCLIENTS = 100
 FBULK = 0.05
 NSERVERS = 10
 
+DOCHURN=False
+
 class Relay():
     def __init__(self, ip, bw, isExit=False):
         self.ip = ip
@@ -89,6 +91,7 @@ def main():
     ap.add_argument('--nclients', action="store", type=int, dest="nclients", help="number N of total clients for the generated topology", metavar='N', default=NCLIENTS)
     ap.add_argument('--fbulk', action="store", type=float, dest="fbulk", help="fraction F of bulk downloading clients (remaining are web clients)", metavar='F', default=FBULK)
     ap.add_argument('--nservers', action="store", type=int, dest="nservers", help="number N of fileservers", metavar='N', default=NSERVERS)
+    ap.add_argument('--dochurn', action="store_true", dest="dochurn", help="use random file selection for clients", default=DOCHURN)
 
     # positional args (required)
     ap.add_argument('alexa', action="store", type=str, help="path to an ALEXA file (produced with contrib/parsealexa.py)", metavar='ALEXA', default=None)
@@ -145,6 +148,13 @@ def generate(args):
 
     fweb = open("web.dl", "wb")
     fbulk = open("bulk.dl", "wb")
+    fall = open("all.dl", "wb")
+    
+    # for all.dl, ratio of bulk to web files needs to be about 1/10 of the
+    # ratio of bulk to web users given as input, so the number of total BT
+    # connections throughout the sim stays at the given ratio
+    webPerBulk = int(1.0 / (args.fbulk / 10.0))
+    
     i = 0
     while i < args.nservers:
         serverip = servers[i%len(servers)]
@@ -162,8 +172,11 @@ def generate(args):
         e.set("cpufrequency", choice(CPUFREQS))
         print >>fweb, "{0}:80:/320KiB.urnd".format(name)
         print >>fbulk, "{0}:80:/5MiB.urnd".format(name)
+        print >>fall, "{0}:80:/5MiB.urnd".format(name)
+        for j in xrange(webPerBulk): print >>fall, "{0}:80:/320KiB.urnd".format(name)
     fweb.close()
     fbulk.close()
+    fall.close()
     
     # think time file for web clients
     maxthink = 20000.0 # milliseconds
@@ -233,33 +246,47 @@ def generate(args):
     addRelayToXML(root, soft, starttime, softargs, name, code=choice(clientCountryCodes))
         
     # clients
-    nbulkclients = int(args.fbulk * args.nclients)
-    nwebclients = args.nclients - nbulkclients
-
-    i = 1
-    while i < nwebclients:
-        name = "webclient{0}".format(i)
-        soft = "{0}soft".format(name)
-        starttime = "{0}".format(timecounter)
-        softargs = "client {0} {1} {2} ./client.torrc ./data/clientdata {3}share/geoip client multi ./web.dl localhost 9000 ./think.dat -1".format(10240000, 5120000, 10240000, INSTALLPREFIX) # in bytes
+    if args.dochurn: # user chooses bulk/web download randomly
+        i = 1
+        while i < args.nclients+1:
+            name = "client{0}".format(i)
+            soft = "{0}soft".format(name)
+            starttime = "{0}".format(timecounter)
+            softargs = "client {0} {1} {2} ./client.torrc ./data/clientdata {3}share/geoip client multi ./all.dl localhost 9000 ./think.dat -1".format(10240000, 5120000, 10240000, INSTALLPREFIX) # in bytes
+            
+            addRelayToXML(root, soft, starttime, softargs, name, code=choice(clientCountryCodes))
         
-        addRelayToXML(root, soft, starttime, softargs, name, code=choice(clientCountryCodes))
-    
-        if i % clientsPerSecond == 0: timecounter += 1 # x nodes every second
-        i += 1
-    
-    i = 1
-    timecounter += 1
-    while i < nbulkclients:
-        name = "bulkclient{0}".format(i)
-        soft = "{0}soft".format(name)
-        starttime = "{0}".format(timecounter)
-        softargs = "client {0} {1} {2} ./client.torrc ./data/clientdata {3}share/geoip client multi ./bulk.dl localhost 9000 none -1".format(10240000, 5120000, 10240000, INSTALLPREFIX) # in bytes
+            if i % clientsPerSecond == 0: timecounter += 1 # x nodes every second
+            i += 1       
         
-        addRelayToXML(root, soft, starttime, softargs, name, code=choice(clientCountryCodes))
+    else: # user are separated into bulk/web downloaders who always download their file type
+        nbulkclients = int(args.fbulk * args.nclients)
+        nwebclients = args.nclients - nbulkclients
     
-        if i % clientsPerSecond == 0: timecounter += 1 # x nodes every second
-        i += 1
+        i = 1
+        while i < nwebclients:
+            name = "webclient{0}".format(i)
+            soft = "{0}soft".format(name)
+            starttime = "{0}".format(timecounter)
+            softargs = "client {0} {1} {2} ./client.torrc ./data/clientdata {3}share/geoip client multi ./web.dl localhost 9000 ./think.dat -1".format(10240000, 5120000, 10240000, INSTALLPREFIX) # in bytes
+            
+            addRelayToXML(root, soft, starttime, softargs, name, code=choice(clientCountryCodes))
+        
+            if i % clientsPerSecond == 0: timecounter += 1 # x nodes every second
+            i += 1
+        
+        i = 1
+        timecounter += 1
+        while i < nbulkclients:
+            name = "bulkclient{0}".format(i)
+            soft = "{0}soft".format(name)
+            starttime = "{0}".format(timecounter)
+            softargs = "client {0} {1} {2} ./client.torrc ./data/clientdata {3}share/geoip client multi ./bulk.dl localhost 9000 none -1".format(10240000, 5120000, 10240000, INSTALLPREFIX) # in bytes
+            
+            addRelayToXML(root, soft, starttime, softargs, name, code=choice(clientCountryCodes))
+        
+            if i % clientsPerSecond == 0: timecounter += 1 # x nodes every second
+            i += 1
         
     # finally, print the XML file
     with open("hosts.xml", 'wb') as fhosts:
