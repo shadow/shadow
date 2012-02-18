@@ -27,7 +27,7 @@
 //#define DOREFILL
 
 /* replacement for torflow in Tor. for now just grab the bandwidth we configured
- * in the DSIM and use that as the measured bandwidth value. since our configured
+ * in the XML and use that as the measured bandwidth value. since our configured
  * bandwidth doesnt change over time, this could just be run once (by setting the
  * time far in the future so the file is not seen as outdated). but we need to
  * run it after all routers are loaded, so its best to re-run periodically.
@@ -83,6 +83,13 @@ void scalliontor_init_v3bw(ScallionTor* stor) {
 		guint bwdown = 0, bwup = 0;
 		stor->shadowlibFuncs->getBandwidth(netaddr, &bwdown, &bwup);
 
+		/* XXX careful here! shadow bandwidth may be different than the consensus
+		 * right now i believe this v3bw file is not used to compute the consensus
+		 * "w Bandwidth" line, and
+		 * intercept_rep_hist_bandwidth_assess and
+		 * intercept_router_get_advertised_bandwidth_capped
+		 * takes care of things. so leave it for now.
+		 */
 		guint bw = MIN(bwup, bwdown);
 
 		if(fprintf(v3bw, "node_id=$%s bw=%u\n", node_id, bw) < 0) {
@@ -710,10 +717,19 @@ int intercept_spawn_func(void (*func)(void *), void *data)
 	return 0;
 }
 
+/* this function is where the relay will return its bandwidth and send to auth */
 int intercept_rep_hist_bandwidth_assess() {
 	ScallionTor* stor = scalliontor_getPointer();
 	g_assert(stor);
 
 	/* return BW in bytes. tor will divide the value we return by 1000 and put it in the descriptor. */
 	return stor->bandwidth;
+}
+
+/* this is the authority function to compute the consensus "w Bandwidth" line */
+uint32_t intercept_router_get_advertised_bandwidth_capped(const routerinfo_t *router)
+{
+  /* this is what the relay told us. dont worry about caps, since this bandwidth
+   * is authoritative in our sims */
+  return router->bandwidthcapacity;
 }

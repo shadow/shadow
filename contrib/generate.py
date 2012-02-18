@@ -143,10 +143,10 @@ class Relay():
         else: self.ispbandwidth = 204800
         '''
         
-    CSVHEADER = "IP,CCode,IsExit,Consensus(KiB/s),Rate(KiB/s),Burst(KiB/s),MaxObserved(KiB/s),MaxRead(KiB/s),MaxWrite(KiB/s),LinkDown(KiB/s),LinkUp(KiB/s)"
+    CSVHEADER = "IP,CCode,IsExit,Consensus(KB/s),Rate(KiB/s),Burst(KiB/s),MaxObserved(KiB/s),MaxRead(KiB/s),MaxWrite(KiB/s),LinkDown(KiB/s),LinkUp(KiB/s)"
 
     def toCSV(self):
-        c = str(int(self.bwconsensus/1024.0))
+        c = str(int(self.bwconsensus/1000.0)) # should be KB, just like in consensus
         r = str(int(self.bwrate/1024.0))
         b = str(int(self.bwburst/1024.0))
         mo = str(int(self.maxobserved/1024.0))
@@ -632,7 +632,7 @@ def parse_consensus(consensus_path):
             elif line[0:2] == "s ":
                 if line.strip().split()[1] == "Exit": isExit = True
             elif line[0:2] == "w ":
-                bw = float(line.strip().split()[1].split("=")[1]) * 1024.0 # KiB to bytes
+                bw = float(line.strip().split()[1].split("=")[1]) * 1000.0 # KB to bytes
     
     return sorted(relays, key=lambda relay: relay.bwconsensus)
 

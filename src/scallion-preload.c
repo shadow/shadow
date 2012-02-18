@@ -88,6 +88,16 @@ int rep_hist_bandwidth_assess(void) {
 	return (*fp_ptr)();
 }
 
+typedef int (*router_get_advertised_bandwidth_capped_fp)(void*);
+static router_get_advertised_bandwidth_capped_fp _router_get_advertised_bandwidth_capped_fp = NULL;
+uint32_t router_get_advertised_bandwidth_capped(void *router) {
+	router_get_advertised_bandwidth_capped_fp* fp_ptr = &_router_get_advertised_bandwidth_capped_fp;
+	char* f_name = TOR_LIB_PREFIX "router_get_advertised_bandwidth_capped";
+
+	PRELOAD_LOOKUP(fp_ptr, f_name, -1);
+	return (*fp_ptr)(router);
+}
+
 typedef int (*event_base_loopexit_fp)();
 static event_base_loopexit_fp _event_base_loopexit_fp = NULL;
 int event_base_loopexit(struct event_base * base, const struct timeval * t) {
