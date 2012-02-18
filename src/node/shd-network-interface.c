@@ -87,7 +87,7 @@ NetworkInterface* networkinterface_new(Network* network, GQuark address, gchar* 
 	char buffer[INET_ADDRSTRLEN];
 	inet_ntop(AF_INET, &address, buffer, INET_ADDRSTRLEN);
 
-	debug("bringing up network interface '%s' at '%s', %u KiBps up and %u KiBps down",
+	info("bringing up network interface '%s' at '%s', %u KiB/s up and %u KiB/s down",
 			name, buffer, bwUpKiBps, bwDownKiBps);
 
 	return interface;
@@ -196,7 +196,11 @@ static void _networkinterface_scheduleNextReceive(NetworkInterface* interface) {
 		g_assert(packet);
 
 		/* free up buffer space */
-		guint length = packet_getPayloadLength(packet) + packet_getHeaderSize(packet);
+		guint length = packet_getPayloadLength(packet);
+		/* ignore our control-only protocol header overhead */
+		if(length > 0) {
+			length += packet_getHeaderSize(packet);
+		}
 		interface->inBufferLength -= length;
 
 		/* hand it off to the correct socket layer */
@@ -239,7 +243,12 @@ void networkinterface_packetArrived(NetworkInterface* interface, Packet* packet)
 	MAGIC_ASSERT(interface);
 
 	/* a packet arrived. lets try to receive or buffer it */
-	gint length = packet_getPayloadLength(packet) + packet_getHeaderSize(packet);
+	gint length = packet_getPayloadLength(packet);
+	/* ignore our control-only protocol header overhead */
+	if(length > 0) {
+		length += packet_getHeaderSize(packet);
+	}
+
 	if(length <= (interface->inBufferSize -interface->inBufferLength)) {
 		/* we have space to buffer it */
 		g_queue_push_tail(interface->inBuffer, packet);
@@ -298,7 +307,7 @@ void networkinterface_packetDropped(NetworkInterface* interface, Packet* packet)
 
 static void _networkinterface_scheduleNextSend(NetworkInterface* interface) {
 	/* the next packet needs to be sent according to bandwidth limitations.
-	 * we need to spend time sending it before sending the next it. */
+	 * we need to spend time sending it before sending the next. */
 	SimulationTime batchTime = worker_getConfig()->interfaceBatchTime;
 
 	/* loop until we find a socket that has something to send */
@@ -333,7 +342,12 @@ static void _networkinterface_scheduleNextSend(NetworkInterface* interface) {
 		g_free(packetString);
 
 		/* successfully sent, calculate how long it took to 'send' this packet */
-		guint length = packet_getPayloadLength(packet) + packet_getHeaderSize(packet);
+		guint length = packet_getPayloadLength(packet);
+		/* ignore our control-only protocol header overhead */
+		if(length > 0) {
+			length += packet_getHeaderSize(packet);
+		}
+
 		interface->sendNanosecondsConsumed += (length * interface->timePerByteUp);
 	}
 
