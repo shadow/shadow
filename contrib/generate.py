@@ -385,17 +385,17 @@ def generate(args):
         e = etree.Element("plugin")
         e.set("id", "scallion")
         e.set("path", "{0}plugins/libshadow-plugin-scallion.so".format(INSTALLPREFIX))
-        print >>fhosts, (etree.tostring(e, pretty_print=True, xml_declaration=True))
+        root.insert(0, e)
         
         e = etree.Element("plugin")
         e.set("id", "filetransfer")
         e.set("path", "{0}plugins/libshadow-plugin-filetransfer.so".format(INSTALLPREFIX))
-        print >>fhosts, (etree.tostring(e, pretty_print=True, xml_declaration=False))
+        root.insert(0, e)
         
         # kill time
         e = etree.Element("kill")
         e.set("time", "3600")
-        print >>fhosts, (etree.tostring(e, pretty_print=True, xml_declaration=False))
+        root.insert(0, e)
         
         # all our hosts
         print >>fhosts, (etree.tostring(root, pretty_print=True, xml_declaration=False))
