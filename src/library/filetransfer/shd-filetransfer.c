@@ -27,12 +27,9 @@
 /* my global structure to hold all variable, node-specific application state */
 FileTransfer* ft;
 
-FileTransfer** filetransfer_init(FileTransfer* existingFT) {
-	/* set our pointer to the global struct, and return its address so the
-	 * caller can register it with shadow.
-	 */
+void filetransfer_init(FileTransfer* existingFT) {
+	/* set our pointer to the existing global struct */
 	ft = existingFT;
-	return &ft;
 }
 
 static void _filetransfer_logCallback(enum service_filegetter_loglevel level, const gchar* message) {
