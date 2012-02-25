@@ -29,14 +29,17 @@ struct _Plugin {
 	GString* path;
 	GModule* handle;
 	GTimer* delayTimer;
+
 	ShadowPluginInitializeFunc init;
+	PluginFunctionTable* callbackFunctions;
+
 	PluginState* residentState;
 	PluginState* defaultState;
 	gboolean isRegisterred;
 	/*
 	 * TRUE from when we've called into plug-in code until the call completes.
 	 * Note that the plug-in may get back into shadow code during execution, by
-	 * calling one of the shadowlin functions or calling a function that we
+	 * calling one of the shadowlib functions or calling a function that we
 	 * intercept. isShadowContext distinguishes this.
 	 */
 	gboolean isExecuting;
@@ -135,9 +138,9 @@ Plugin* plugin_new(GQuark id, GString* filename) {
 	 * functionality is desired, then we must require plugins to separate their
 	 * intercepted functions to a SHARED library, and link the plugin to that.
 	 */
-	plugin->handle = g_module_open(plugin->path->str, G_MODULE_BIND_LAZY);
+	plugin->handle = g_module_open(plugin->path->str, G_MODULE_BIND_LAZY|G_MODULE_BIND_LOCAL);
 	if(plugin->handle) {
-		message("successfully loaded private plug-in '%s'", plugin->path->str);
+		message("successfully loaded private plug-in '%s' at %p", plugin->path->str, plugin);
 	} else {
 		error("unable to load private plug-in '%s'", plugin->path->str);
 	}
@@ -151,6 +154,9 @@ Plugin* plugin_new(GQuark id, GString* filename) {
 		error("unable to find the required function symbol '%s' in plug-in '%s'",
 				PLUGININITSYMBOL, filename->str);
 	}
+
+	/* we will store the callback functions the plug-in tells us */
+	plugin->callbackFunctions = g_new0(PluginFunctionTable, 1);
 
 	/* notify the plugin of our callable functions by calling the init function,
 	 * this is a special version of executing because we still dont know about
@@ -182,6 +188,8 @@ void plugin_free(gpointer data) {
 	g_unlink(plugin->path->str);
 	g_string_free(plugin->path, TRUE);
 
+	g_free(plugin->callbackFunctions);
+
 	if(plugin->residentState) {
 		pluginstate_free(plugin->residentState);
 	}
@@ -205,9 +213,14 @@ void plugin_registerResidentState(Plugin* plugin, PluginFunctionTable* callbackF
 		return;
 	}
 
+	g_assert(callbackFunctions);
+
+	/* store the pointers to the callbacks the plugin wants us to call */
+	*(plugin->callbackFunctions) = *callbackFunctions;
+
 	/* these are the physical memory addresses and sizes for each variable */
 	debug("registering resident plugin memory locations");
-	plugin->residentState = pluginstate_new(callbackFunctions, nVariables, variableArguments);
+	plugin->residentState = pluginstate_new(nVariables, variableArguments);
 
 	/* also store a copy of the defaults as they exist now */
 	debug("copying resident plugin memory location contents as default start state");
@@ -255,21 +268,21 @@ static void _plugin_stopExecuting(Plugin* plugin, PluginState* state) {
 void plugin_executeNew(Plugin* plugin, PluginState* state, gint argcParam, gchar* argvParam[]) {
 	MAGIC_ASSERT(plugin);
 	_plugin_startExecuting(plugin, state);
-	pluginstate_getPluginFunctions(plugin->residentState)->new(argcParam, argvParam);
+	plugin->callbackFunctions->new(argcParam, argvParam);
 	_plugin_stopExecuting(plugin, state);
 }
 
 void plugin_executeFree(Plugin* plugin, PluginState* state) {
 	MAGIC_ASSERT(plugin);
 	_plugin_startExecuting(plugin, state);
-	pluginstate_getPluginFunctions(plugin->residentState)->free();
+	plugin->callbackFunctions->free();
 	_plugin_stopExecuting(plugin, state);
 }
 
 void plugin_executeNotify(Plugin* plugin, PluginState* state) {
 	MAGIC_ASSERT(plugin);
 	_plugin_startExecuting(plugin, state);
-	pluginstate_getPluginFunctions(plugin->residentState)->notify();
+	plugin->callbackFunctions->notify();
 	_plugin_stopExecuting(plugin, state);
 }
 
@@ -280,9 +293,9 @@ void plugin_executeGeneric(Plugin* plugin, PluginState* state, CallbackFunc call
 	_plugin_stopExecuting(plugin, state);
 }
 
-PluginState* plugin_getDefaultState(Plugin* plugin) {
+PluginState* plugin_newDefaultState(Plugin* plugin) {
 	MAGIC_ASSERT(plugin);
-	return plugin->defaultState;
+	return pluginstate_copyNew(plugin->defaultState);
 }
 
 GQuark* plugin_getID(Plugin* plugin) {

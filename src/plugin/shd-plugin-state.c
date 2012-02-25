@@ -81,14 +81,9 @@ static void _pluginstateentry_free(PluginStateEntry* entry) {
 	g_free(entry);
 }
 
-PluginState* pluginstate_new(PluginFunctionTable* callbackFunctions, guint nVariables, va_list vargs) {
-	g_assert(callbackFunctions);
+PluginState* pluginstate_new(guint nVariables, va_list vargs) {
 	PluginState* state = g_new0(PluginState, 1);
 	MAGIC_INIT(state);
-
-	/* store the pointers to the callbacks the plugin wants us to call */
-	state->functions = g_new0(PluginFunctionTable, 1);
-	*(state->functions) = *callbackFunctions;
 
 	/* initialize the empty singly-linked list of variables */
 	state->dataEntries = NULL;
@@ -124,9 +119,6 @@ PluginState* pluginstate_copyNew(PluginState* state) {
 	PluginState* copyState = g_new0(PluginState, 1);
 	MAGIC_INIT(copyState);
 
-	copyState->functions = g_new0(PluginFunctionTable, 1);
-	*(copyState->functions) = *(state->functions);
-
 	copyState->dataEntries = NULL;
 
 	/*
@@ -157,34 +149,26 @@ void pluginstate_copy(PluginState* sourceState, PluginState* destinationState) {
 	g_assert(sourceState->nEntries == destinationState->nEntries);
 	g_assert(sourceState->totalEntrySize == destinationState->totalEntrySize);
 
-	/* if the above asserts pass, these are unnecessary */
-	destinationState->totalEntrySize = sourceState->totalEntrySize;
-	destinationState->nEntries = sourceState->nEntries;
-
-	*(destinationState->functions) = *(sourceState->functions);
-
 	/* go through and copy each entry */
+	gint numEntriesCopied = 0;
 	GSList* nextSource = sourceState->dataEntries;
 	GSList* nextDestination = destinationState->dataEntries;
 	while(nextSource && nextDestination) {
 		_pluginstateentry_copy(nextSource->data, nextDestination->data);
 
+		numEntriesCopied++;
 		nextSource = g_slist_next(nextSource);
 		nextDestination = g_slist_next(nextDestination);
 	}
+
+	g_assert(numEntriesCopied == sourceState->nEntries);
 }
 
 void pluginstate_free(PluginState* state) {
 	MAGIC_ASSERT(state);
 
-	g_free(state->functions);
 	g_slist_free_full(state->dataEntries, (GDestroyNotify)_pluginstateentry_free);
 
 	MAGIC_CLEAR(state);
 	g_free(state);
-}
-
-PluginFunctionTable* pluginstate_getPluginFunctions(PluginState* state) {
-	MAGIC_ASSERT(state);
-	return state->functions;
 }

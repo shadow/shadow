@@ -92,6 +92,8 @@ Plugin* worker_getPlugin(Software* software) {
 		g_hash_table_replace(worker->plugins, plugin_getID(plugin), plugin);
 	}
 
+	debug("worker %i using plug-in at %p", worker->thread_id, plugin);
+
 	return plugin;
 }
 

@@ -28,11 +28,11 @@ typedef struct _Plugin Plugin;
 
 Plugin* plugin_new(GQuark id, GString* filename);
 void plugin_free(gpointer data);
+PluginState* plugin_newDefaultState(Plugin* plugin);
 
 void plugin_setShadowContext(Plugin* plugin, gboolean isShadowContext);
-PluginState* plugin_getDefaultState(Plugin* plugin);
-GQuark* plugin_getID(Plugin* plugin);
 gboolean plugin_isShadowContext(Plugin* plugin);
+GQuark* plugin_getID(Plugin* plugin);
 
 void plugin_registerResidentState(Plugin* plugin, PluginFunctionTable* callbackFunctions, guint nVariables, va_list variableArguments);
 void plugin_executeNew(Plugin* plugin, PluginState* state, gint argcParam, gchar* argvParam[]);

@@ -98,11 +98,30 @@ void load(gchar* path, gboolean useGlib) {
  * So, we need G_MODULE_BIND_LOCAL to keep variables private to the plugin.
  */
 
+void threadload(gchar* path, gpointer user_data) {
+	load(path, TRUE);
+}
+
+gchar* p1 = "/tmp/testplugin1.so";
+gchar* p2 = "/tmp/testplugin2.so";
+gchar* p3 = "/tmp/testplugin3.so";
+gchar* p4 = "/tmp/testplugin4.so";
 int main(void) {
-  g_thread_init(NULL);
-	load("/tmp/testplugin1.so", TRUE);
-	load("/tmp/testplugin2.so", TRUE);
-	load("/tmp/testplugin3.so", FALSE);
-	load("/tmp/testplugin4.so", FALSE);
+	load(p1, TRUE);
+	load(p2, TRUE);
+	load(p3, FALSE);
+	load(p4, FALSE);
+
+	/* so far it seems to work with or without threads */
+    g_thread_init(NULL);
+  	GError *error = NULL;
+	GThreadPool* pool = g_thread_pool_new((GFunc)threadload, NULL, 2, TRUE, &error);
+
+	g_thread_pool_push(pool, p1, &error);
+	g_thread_pool_push(pool, p2, &error);
+	g_thread_pool_push(pool, p3, &error);
+	g_thread_pool_push(pool, p4, &error);
+
+	g_thread_pool_free(pool, FALSE, TRUE);
 	return EXIT_SUCCESS;
 }

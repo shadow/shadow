@@ -33,8 +33,6 @@ gboolean shadowlib_register(PluginFunctionTable* callbackFunctions, guint nVaria
 	Worker* worker = worker_getPrivate();
 	plugin_setShadowContext(worker->cached_plugin, TRUE);
 
-	debug("shadowlib_register called");
-
 	/* collect the variable length argument list*/
 	va_list variableArguments;
 	va_start(variableArguments, nVariables);
