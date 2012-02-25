@@ -796,6 +796,8 @@ gint node_sendUserData(Node* node, gint handle, gconstpointer buffer, gsize nByt
 	if(n > 0) {
 		/* user is writing some bytes. */
 		*bytesCopied = (gsize)n;
+	} else if(n == -2) {
+		return ENOTCONN;
 	} else if(n < 0) {
 		return EWOULDBLOCK;
 	}
@@ -843,6 +845,8 @@ gint node_receiveUserData(Node* node, gint handle, gpointer buffer, gsize nBytes
 	if(n > 0) {
 		/* user is reading some bytes. */
 		*bytesCopied = (gsize)n;
+	} else if(n == -2) {
+		return ENOTCONN;
 	} else if(n < 0) {
 		return EWOULDBLOCK;
 	}

@@ -640,6 +640,9 @@ gint tcp_getConnectError(TCP* tcp) {
 		}
 	} else if(tcp->state == TCPS_SYNSENT || tcp->state == TCPS_SYNRECEIVED) {
 		return EALREADY;
+	} else if(tcp->flags & TCPF_EOF_SIGNALED) {
+		/* we already signaled close, now its an error */
+		return ENOTCONN;
 	} else if(tcp->state != TCPS_CLOSED) {
 		/* @todo: this affects ability to connect. if a socket is closed, can
 		 * we start over and connect again? (reuseaddr socket opt)
@@ -1109,8 +1112,14 @@ gssize tcp_sendUserData(TCP* tcp, gconstpointer buffer, gsize nBytes, in_addr_t 
 	/* return 0 to signal close, if necessary */
 	if(tcp->error & TCPE_SEND_EOF)
 	{
-		_tcp_endOfFileSignalled(tcp);
-		return 0;
+		if(tcp->flags & TCPF_EOF_SIGNALED) {
+			/* we already signaled close, now its an error */
+			return -2;
+		} else {
+			/* we have not signaled close, do that now */
+			_tcp_endOfFileSignalled(tcp);
+			return 0;
+		}
 	}
 
 	/* maximum data we can send network, o/w tcp truncates and only sends 65536*/
@@ -1227,8 +1236,14 @@ gssize tcp_receiveUserData(TCP* tcp, gpointer buffer, gsize nBytes, in_addr_t* i
 	if((tcp->unorderedInputLength == 0) && (tcp->super.inputBufferLength == 0) &&
 			(tcp->error & TCPE_RECEIVE_EOF) && (bytesCopied == 0))
 	{
-		_tcp_endOfFileSignalled(tcp);
-		return 0;
+		if(tcp->flags & TCPF_EOF_SIGNALED) {
+			/* we already signaled close, now its an error */
+			return -2;
+		} else {
+			/* we have not signaled close, do that now */
+			_tcp_endOfFileSignalled(tcp);
+			return 0;
+		}
 	}
 
 	debug("%s <-> %s: receiving %lu user bytes", tcp->super.boundString, tcp->super.peerString, bytesCopied);
