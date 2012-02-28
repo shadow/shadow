@@ -60,6 +60,6 @@ GString* example_getFileExampleContents() {
 		"<software id=\"fileserver\" plugin=\"filex\" time=\"10\" arguments=\"server 8080 /bin/\" />"
 		"<software id=\"fileclient\" plugin=\"filex\" time=\"20\" arguments=\"client single server.filetransfer 8080 none 0 10 /ls\" />"
 		"<node id=\"server.filetransfer\" software=\"fileserver\" cluster=\"net0\" bandwidthup=\"10240\" bandwidthdown=\"5120\" />"
-		"<node id=\"client.filetransfer\" quantity=\"100\" software=\"fileclient\" />"
-		"<kill time=\"600\" />");
+		"<node id=\"client.filetransfer\" quantity=\"1000\" software=\"fileclient\" />"
+		"<kill time=\"300\" />");
 }

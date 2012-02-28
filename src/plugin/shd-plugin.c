@@ -259,8 +259,11 @@ static void _plugin_stopExecuting(Plugin* plugin, PluginState* state) {
 	plugin->isExecuting = FALSE;
 	/* no need to call stop */
 	gdouble elapsed = g_timer_elapsed(plugin->delayTimer, NULL);
+
 	SimulationTime delay = (SimulationTime) (elapsed * SIMTIME_ONE_SECOND);
 	cpu_addDelay(node_getCPU(worker->cached_node), delay);
+	tracker_addProcessingTime(node_getTracker(worker->cached_node), delay);
+
 	pluginstate_copy(plugin->residentState, state);
 	worker->cached_plugin = NULL;
 }

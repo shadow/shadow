@@ -217,6 +217,8 @@ struct _Configuration {
 	gint nWorkerThreads;
 	guint randomSeed;
 	gboolean printSoftwareVersion;
+	guint heartbeatInterval;
+	gchar* heartbeatLogLevelInput;
 
 	GOptionGroup* networkOptionGroup;
 	gint cpuThreshold;
@@ -262,6 +264,16 @@ void configuration_free(Configuration* config);
  * @returns the log level as parsed from command line input
  */
 GLogLevelFlags configuration_getLogLevel(Configuration* config);
+
+/**
+ * Get the configured log level at which heartbeat messages are printed,
+ * based on command line input.
+ *
+ * @param config a #Configuration object created with configuration_new()
+ *
+ * @returns the heartbeat log level as parsed from command line input
+ */
+GLogLevelFlags configuration_getHeartbeatLogLevel(Configuration* config);
 
 /** @} */
 

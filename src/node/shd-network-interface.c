@@ -222,6 +222,7 @@ static void _networkinterface_scheduleNextReceive(NetworkInterface* interface) {
 
 		/* successfully received, calculate how long it took to 'receive' this packet */
 		interface->receiveNanosecondsConsumed += (length * interface->timePerByteDown);
+		tracker_addInputBytes(node_getTracker(worker_getPrivate()->cached_node),(guint64)length);
 	}
 
 	/*
@@ -349,6 +350,7 @@ static void _networkinterface_scheduleNextSend(NetworkInterface* interface) {
 		}
 
 		interface->sendNanosecondsConsumed += (length * interface->timePerByteUp);
+		tracker_addOutputBytes(node_getTracker(worker_getPrivate()->cached_node),(guint64)length);
 	}
 
 	/*

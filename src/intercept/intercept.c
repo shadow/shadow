@@ -331,3 +331,19 @@ gint intercept_epoll_pwait(gint epfd, struct epoll_event *events,
 			gint maxevents, gint timeout, const sigset_t *ss) {
 	return system_epollPWait(epfd, events, maxevents, timeout, ss);
 }
+
+/**
+ * memory management
+ */
+
+gpointer intercept_malloc(gsize size) {
+	return system_malloc(size);
+}
+
+gpointer intercept_calloc(gsize nmemb, gsize size) {
+	return system_calloc(nmemb, size);
+}
+
+void intercept_free(gpointer ptr) {
+	return system_free(ptr);
+}

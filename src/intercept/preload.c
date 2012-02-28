@@ -744,3 +744,44 @@ int srandom_r(unsigned int seed, struct random_data *buf) {
 	PRELOAD_LOOKUP(func, funcName, 0);
 	return (*func)(seed, buf);
 }
+
+/* TODO
+ * The following malloc, calloc, and free were intended to be used for tracking
+ * now much memory the plug-ins are using over time. I ran into some issues
+ * with malloc not working properly during initialization, so skip this for now.
+
+typedef void* (*malloc_fp)(size_t);
+static malloc_fp _malloc = NULL;
+static malloc_fp _intercept_malloc = NULL;
+void *malloc(size_t size) {
+	malloc_fp* func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "malloc", _malloc, INTERCEPT_PREFIX, _intercept_malloc, 1);
+	PRELOAD_LOOKUP(func, funcName, 0);
+	return (*func)(size);
+}
+
+typedef void* (*calloc_fp)(size_t, size_t);
+static calloc_fp _calloc = NULL;
+static calloc_fp _intercept_calloc = NULL;
+void *calloc(size_t nmemb, size_t size) {
+	calloc_fp* func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "calloc", _calloc, INTERCEPT_PREFIX, _intercept_calloc, 1);
+	PRELOAD_LOOKUP(func, funcName, 0);
+	return (*func)(nmemb, size);
+}
+
+typedef int (*free_fp)(void*);
+static free_fp _free = NULL;
+static free_fp _intercept_free = NULL;
+void free(void* ptr) {
+	free_fp* func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "free", _free, INTERCEPT_PREFIX, _intercept_free, 1);
+	PRELOAD_LOOKUP(func, funcName,);
+	(*func)(ptr);
+}
+
+ *
+ */

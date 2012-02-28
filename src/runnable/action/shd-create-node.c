@@ -32,6 +32,7 @@ struct _CreateNodesAction {
 	guint64 bandwidthup;
 	guint64 quantity;
 	guint cpuFrequency;
+
 	MAGIC_DECLARE;
 };
 
@@ -92,6 +93,11 @@ void createnodes_run(CreateNodesAction* action) {
 	}
 	gint cpuThreshold = engine_getConfig(worker->cached_engine)->cpuThreshold;
 
+	/* TODO we could specify these in XML on a per-node basis also... */
+	Configuration* config = engine_getConfig(worker->cached_engine);
+	SimulationTime heartbeatInterval = config->heartbeatInterval * SIMTIME_ONE_SECOND;
+	GLogLevelFlags heartbeatLogLevel = configuration_getHeartbeatLogLevel(config);
+
 	for(gint i = 0; i < action->quantity; i++) {
 		/* get a random network if they didnt assign one */
 		gdouble randomDouble = engine_nextRandomDouble(worker->cached_engine);
@@ -114,16 +120,18 @@ void createnodes_run(CreateNodesAction* action) {
 
 		/* the node is part of the internet */
 		guint nodeSeed = (guint) engine_nextRandomInt(worker->cached_engine);
-		internetwork_createNode(worker_getInternet(), id, network, software,
-				hostnameBuffer, bwDownKiBps, bwUpKiBps, cpuFrequency, cpuThreshold, nodeSeed);
+		Node* node = internetwork_createNode(worker_getInternet(), id, network, software,
+				hostnameBuffer, bwDownKiBps, bwUpKiBps, cpuFrequency, cpuThreshold,
+				nodeSeed, heartbeatInterval, heartbeatLogLevel);
 
 		g_string_free(hostnameBuffer, TRUE);
 
-		StartApplicationEvent* event = startapplication_new();
-
 		/* make sure our bootstrap events are set properly */
 		worker->clock_now = 0;
+		StartApplicationEvent* event = startapplication_new();
 		worker_scheduleEvent((Event*)event, software->startTime, id);
+		HeartbeatEvent* heartbeat = heartbeat_new(node_getTracker(node));
+		worker_scheduleEvent((Event*)heartbeat, heartbeatInterval, id);
 		worker->clock_now = SIMTIME_INVALID;
 	}
 }

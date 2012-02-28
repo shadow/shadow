@@ -92,4 +92,8 @@ void system_addEntropy(gconstpointer buffer, gint numBytes);
 gint system_randomBytes(guchar* buf, gint numBytes);
 gint system_getRandom();
 
+gpointer system_malloc(gsize size);
+gpointer system_calloc(gsize nmemb, gsize size);
+void system_free(gpointer ptr);
+
 #endif /* SHD_SYSTEM_H_ */
