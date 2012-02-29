@@ -36,6 +36,7 @@
 #include <arpa/inet.h>
 
 #include <glib.h>
+#include <gmodule.h>
 #include <shd-library.h>
 #include <shd-filetransfer.h>
 #include <event2/event.h>
@@ -117,6 +118,8 @@ struct _Scallion {
 
 extern Scallion scallion;
 #undef log
+
+void scallionpreload_init(GModule* handle);
 
 void scallion_register_globals(PluginFunctionTable* scallionFuncs, Scallion* scallionData);
 

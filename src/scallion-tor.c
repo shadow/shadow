@@ -697,7 +697,9 @@ void intercept_logv(int severity, uint32_t domain, const char *funcname,
 
 	buf[current_position] = '\0';
 	current_position++;
-	scallion.shadowlibFuncs->log(level, __FUNCTION__, buf);
+
+	ScallionTor* stor = scalliontor_getPointer();
+	stor->shadowlibFuncs->log(level, __FUNCTION__, buf);
 }
 
 int intercept_spawn_func(void (*func)(void *), void *data)

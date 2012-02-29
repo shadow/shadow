@@ -360,14 +360,34 @@ static void _scallion_notify() {
 	scalliontor_notify(scallion.stor);
 }
 
+/* these are required to hook into shadow functions */
+
 PluginFunctionTable scallion_pluginFunctions = {
 	&_scallion_new, &_scallion_free, &_scallion_notify,
 };
 
-void __shadow_plugin_init__(ShadowlibFunctionTable* shadowlibFuncs) {
+/* these are required because shadow loads plugins with
+ * in order for the plugin to intercept functions from tor, we need the module
+ * handle when doing the dlsym lookup
+ */
+
+/* called immediately after the plugin is loaded. shadow loads plugins once for
+ * each worker thread. the GModule* can be used as a handle for g_module_symbol()
+ * symbol lookups.
+ * return NULL for success, or a string describing the error */
+const gchar* g_module_check_init(GModule *module) {
 	/* clear our memory before initializing */
 	memset(&scallion, 0, sizeof(Scallion));
 
+	/* do all the symbol lookups we will need now, and init our thread-specific
+	 * library of intercepted functions. */
+	scallionpreload_init(module);
+
+	return NULL;
+}
+
+/* called after g_module_check_init(), after shadow searches for __shadow_plugin_init__ */
+void __shadow_plugin_init__(ShadowlibFunctionTable* shadowlibFuncs) {
 	/* save the shadow functions we will use */
 	scallion.shadowlibFuncs = shadowlibFuncs;
 
@@ -375,4 +395,11 @@ void __shadow_plugin_init__(ShadowlibFunctionTable* shadowlibFuncs) {
 	scallion_register_globals(&scallion_pluginFunctions, &scallion);
 
 	shadowlibFuncs->log(G_LOG_LEVEL_INFO, __FUNCTION__, "finished registering scallion plug-in state");
+}
+
+/* called immediately after the plugin is unloaded. shadow unloads plugins
+ * once for each worker thread.
+ */
+void g_module_unload(GModule *module) {
+	memset(&scallion, 0, sizeof(Scallion));
 }

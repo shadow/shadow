@@ -10,7 +10,7 @@ set_target_properties(shadow-plugin-scallion PROPERTIES INSTALL_RPATH ${CMAKE_IN
 
 ## preload library for intercepting functions
 add_library(shadow-preload-scallion SHARED scallion-preload.c)
-target_link_libraries(shadow-preload-scallion ${DL_LIBRARIES})
+target_link_libraries(shadow-preload-scallion ${GLIB_LIBRARIES} ${DL_LIBRARIES})
 install(TARGETS shadow-preload-scallion DESTINATION lib)
 
 ## install scallion script
