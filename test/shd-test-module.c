@@ -35,6 +35,8 @@
 #include <stdlib.h>
 #include <dlfcn.h>
 
+#define RTLD_NEXT ((void *) -1l)
+
 #define PLUGININITSYMBOL "__init__"
 typedef void (*InitFunc)(void);
 
@@ -61,6 +63,9 @@ void load(gchar* path, gboolean useGlib) {
 	if(useGlib) {
 		success = g_module_symbol(handle, PLUGININITSYMBOL, (gpointer)&func);
 	} else {
+		/* must use handle to search when using G_MODULE_BIND_LOCAL
+		 * using RTLD_NEXT when searching with G_MODULE_BIND_LOCAL will not work!
+		 */
 		func = dlsym(handle, PLUGININITSYMBOL);
 		success = func ? TRUE : FALSE;
 	}

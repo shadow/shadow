@@ -137,6 +137,9 @@ Plugin* plugin_new(GQuark id, GString* filename) {
 	 * functions using dlsym in the plugin itself. if G_MODULE_BIND_LOCAL
 	 * functionality is desired, then we must require plugins to separate their
 	 * intercepted functions to a SHARED library, and link the plugin to that.
+	 *
+	 * @note this will call g_module_check_init() in the plug-in if it contains
+	 * that function.
 	 */
 	plugin->handle = g_module_open(plugin->path->str, G_MODULE_BIND_LAZY|G_MODULE_BIND_LOCAL);
 	if(plugin->handle) {
