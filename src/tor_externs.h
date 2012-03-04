@@ -6,6 +6,7 @@ extern uint8_t stats_n_padding_cells_processed[8];
 extern uint8_t n_bytes_read_in_interval[8];
 extern uint8_t last_warned1[24];
 extern uint8_t last_warned2[8];
+extern uint8_t pcbw_globals[24];
 extern uint8_t interval_wakeup_time[8];
 extern uint8_t policy_root[24];
 extern uint8_t digestmap_impl_N_PRIMES[4];

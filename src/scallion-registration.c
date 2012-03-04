@@ -29,7 +29,7 @@ const char tor_git_revision[] = "";
 #include "tor_externs.h"
 
 void scallion_register_globals(PluginFunctionTable* scallionFuncs, Scallion* scallionData) {
-	scallionData->shadowlibFuncs->registerPlugin(scallionFuncs, 417,
+	scallionData->shadowlibFuncs->registerPlugin(scallionFuncs, 418,
 		(gsize) sizeof(Scallion), (gpointer) scallionData,
 		(gsize) 0x4, (gpointer) &gzip_is_supported,
 		(gsize) 0x68, (gpointer) &orconn_circid_map_PRIMES,
@@ -37,6 +37,7 @@ void scallion_register_globals(PluginFunctionTable* scallionFuncs, Scallion* sca
 		(gsize) 0x8, (gpointer) &n_bytes_read_in_interval,
 		(gsize) 0x18, (gpointer) &last_warned1,
 		(gsize) 0x8, (gpointer) &last_warned2,
+		(gsize) 0x18, (gpointer) &pcbw_globals,
 		(gsize) 0x8, (gpointer) &interval_wakeup_time,
 		(gsize) 0x18, (gpointer) &policy_root,
 		(gsize) 0x4, (gpointer) &digestmap_impl_N_PRIMES,
