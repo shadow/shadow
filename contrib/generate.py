@@ -596,7 +596,10 @@ def sample_relays(relays, k):
     relays list should be sorted by bandwidth
     """
     n = len(relays)
-    assert k < n
+    if k >= n: 
+        k = n
+        print "choosing {0} of {1} relays".format(k, n)
+    assert k <= n
     
     t = 0
     bins = []
