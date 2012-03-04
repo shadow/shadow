@@ -32,6 +32,7 @@ DEFAULT_TOR_VERSION="0.2.3.8-alpha"
 TOR_URL="https://archive.torproject.org/tor-package-archive/tor-" + DEFAULT_TOR_VERSION + ".tar.gz"
 MAXMIND_URL="http://geolite.maxmind.com/download/geoip/database/GeoLiteCity.dat.gz"
 
+PREPARETOR=os.path.abspath(BUILD_PREFIX+"/preparetor")
 READYTOR=os.path.abspath(BUILD_PREFIX+"/readytor")
 
 def main():
@@ -54,6 +55,8 @@ def main():
     parser_build.add_argument('-l', '--library', action="append", dest="extra_libraries", metavar="PATH",
           help="include PATH when searching for libraries. useful if dependencies are installed to non-standard locations.",
           default=[INSTALL_PREFIX+ "/lib"])
+    parser_build.add_argument('--tor-prefix', action="store", dest="prefix_tor", metavar="PATH",
+          help="PATH to base Tor directory to build. this overrides the remote download triggered with '-v' or '--version' options.", default=None)
     parser_build.add_argument('--libevent-prefix', action="store", dest="prefix_libevent", metavar="PATH",
           help="use non-standard PATH when linking Tor to libevent.", default=INSTALL_PREFIX)
     parser_build.add_argument('--openssl-prefix', action="store", dest="prefix_openssl", metavar="PATH",
@@ -61,7 +64,7 @@ def main():
     parser_build.add_argument('-g', '--debug', action="store_true", dest="do_debug",
           help="turn on debugging for verbose program output", default=False)
     parser_build.add_argument('-v', '--version', action="store", dest="tor_version",
-          help="specify what version of Tor to build", default=DEFAULT_TOR_VERSION)
+          help="specify what version of Tor to download and build. not used if '--tor-prefix' is specified.", default=DEFAULT_TOR_VERSION)
     
     # install subcommand
     parser_install = subparsers_main.add_parser('install', help='install scallion', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -90,6 +93,7 @@ def build(args):
     rootdir=filepath[:filepath.rfind("/")]
     builddir=os.path.abspath(BUILD_PREFIX)
     installdir=os.path.abspath(args.prefix)
+    if args.prefix_tor is not None: args.prefix_tor = os.path.abspath(args.prefix_tor)
     
     # clear cmake cache
     if(os.path.exists(builddir+"/scallion")): shutil.rmtree(builddir+"/scallion")
@@ -100,16 +104,19 @@ def build(args):
     rundir = os.getcwd()
     os.chdir(builddir)
 
+    if gen_www_files(args) != 0: return
     if setup_dependencies(args) != 0: return
     if setup_tor(args) != 0: return
     include_tor(args)
-    if gen_www_files(args) != 0: return
+    torversion = get_tor_version(args)
+    if torversion == None: return
     
     os.chdir(builddir+"/scallion")
 
     # build up args string for cmake
-    vparts = args.tor_version.split(".")
+    vparts = torversion.split(".")
     a, b, c, d = int(vparts[0]), int(vparts[1]), int(vparts[2]), int(vparts[3].split("-")[0])
+
     cmake_cmd = "cmake " + rootdir + " -DCMAKE_BUILD_PREFIX=" + builddir + " -DCMAKE_INSTALL_PREFIX=" + installdir + " -DTORPATH=" + READYTOR
     if c >= 3 and d >= 5: cmake_cmd += " -DDOREFILL=1"
     
@@ -252,6 +259,23 @@ def setup_tor(args):
     
     return retcode
 
+def get_tor_version(args):
+    # get tor version info
+    orconf = os.path.abspath(args.tordir+"/orconfig.h")
+    if not os.path.exists(orconf): 
+        log(args, "ERROR: file '{0}' does not exist".format(orconf))
+        return None
+    
+    search = "#define VERSION "
+    
+    with open(orconf, 'rb') as f:
+        for line in f:
+            if line.find(search) > -1:
+                return line[line.index("\"")+1:line.rindex("\"")]
+               
+    log(args, "ERROR: cant find version information in config file '{0}'".format(orconf)) 
+    return None
+
 def include_tor(args):
     if args.extra_includes is None: args.extra_includes = []
     args.extra_includes.extend([args.tordir, args.tordir+"/src/or", args.tordir+"/src/common"])
@@ -264,19 +288,36 @@ def setup_dependencies(args):
     
     log(args, "checking tor dependencies...")
     
+    args.tordir = PREPARETOR
+    
+    # if local prefix given, always blow away our prepared directory
+    if args.prefix_tor is not None:
+        if os.path.exists(args.tordir): shutil.rmtree(args.tordir)
+        shutil.copytree(args.prefix_tor, args.tordir)
+        return 0
+    
+    # no local prefix. only download if our prepare directory does not exist
+    if os.path.exists(args.tordir): return 0
+    
+    # we have no local directory, check requested url
     args.target_tor = os.path.abspath(os.path.basename(args.tor_url))
-    args.tordir = args.target_tor[:args.target_tor.rindex(".tar.gz")]
 
+    # only download if we dont have the requested URL
     if not os.path.exists(args.target_tor):
         if download(args, args.tor_url, args.target_tor) != 0:
             return -1
     
-    if not os.path.exists(args.tordir):
-        if tarfile.is_tarfile(args.target_tor):
-            tar = tarfile.open(args.target_tor, "r:gz")
-            tar.extractall()
-            tar.close()
-        else: return -1
+    # extract it to our prepare dir
+    if tarfile.is_tarfile(args.target_tor):
+        tar = tarfile.open(args.target_tor, "r:gz")
+        n = tar.next().name
+        while n.find('/') < 0: n = tar.next().name
+        d = os.path.abspath(os.getcwd() + "/" + n[:n.index('/')])
+        tar.extractall()
+        tar.close()
+        shutil.copytree(d, args.tordir)
+        shutil.rmtree(d)
+    else: return -1
 
     return 0
 
