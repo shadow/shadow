@@ -51,7 +51,7 @@ struct _Engine {
 	 * threaded, use this for non-node events */
 	AsyncPriorityQueue* masterEventQueue;
 
-	/* if multi-threaded, we use a worker pool */
+	/* if multi-threaded, we use thread pools */
 	GThreadPool* workerPool;
 
 	/* holds a thread-private key that each thread references to get a private
@@ -191,18 +191,20 @@ void engine_free(Engine* engine) {
 	g_free(engine);
 }
 
-
 void engine_setupWorkerThreads(Engine* engine, gint nWorkerThreads) {
 	MAGIC_ASSERT(engine);
 	if(nWorkerThreads > 0) {
 		/* we need some workers, create a thread pool */
 		GError *error = NULL;
-		engine->workerPool = g_thread_pool_new(worker_executeEvent, engine,
-				nWorkerThreads, TRUE, &error);
+		engine->workerPool = g_thread_pool_new((GFunc)worker_executeEvent, engine,
+				nWorkerThreads, FALSE, &error);
 		if (!engine->workerPool) {
 			error("thread pool failed: %s", error->message);
 			g_error_free(error);
 		}
+
+		guint interval = g_thread_pool_get_max_idle_time();
+		info("Threads are stopped after %lu milliseconds", interval);
 	}
 }
 
@@ -234,13 +236,14 @@ static gint _engine_processEvents(Engine* engine) {
 	worker->clock_last = 0;
 	worker->cached_engine = engine;
 
-	Event* next_event = asyncpriorityqueue_pop(engine->masterEventQueue);
+	Event* next_event = asyncpriorityqueue_peek(engine->masterEventQueue);
 
 	/* process all events in the priority queue */
 	while(next_event && (next_event->time < engine->executeWindowEnd) &&
 			(next_event->time < engine->endTime))
 	{
 		/* get next event */
+		next_event = asyncpriorityqueue_pop(engine->masterEventQueue);
 		worker->cached_event = next_event;
 		MAGIC_ASSERT(worker->cached_event);
 		worker->cached_node = next_event->node;
@@ -259,36 +262,20 @@ static gint _engine_processEvents(Engine* engine) {
 		worker->clock_last = worker->clock_now;
 		worker->clock_now = SIMTIME_INVALID;
 
-		next_event = asyncpriorityqueue_pop(engine->masterEventQueue);
-	}
-
-	/* push the next event in case we didnt execute it */
-	if(next_event) {
-		engine_pushEvent(engine, next_event);
+		next_event = asyncpriorityqueue_peek(engine->masterEventQueue);
 	}
 
 	return 0;
 }
 
-static void _engine_manageExecutableMail(gpointer data, gpointer user_data) {
-	Node* node = data;
-	Engine* engine = user_data;
-	MAGIC_ASSERT(engine);
-
-	/* pop mail from mailbox, check that its in window, push as a task */
-	Event* event = node_popMail(node);
+static void _engine_syncEvents(Node* node, Engine* engine) {
+	/* peek mail from mailbox to check that its in our time window */
+	Event* event = node_peekMail(node);
 	while(event && (event->time < engine->executeWindowEnd)
 			&& (event->time < engine->endTime)) {
 		g_assert(event->time >= engine->executeWindowStart);
-		node_pushTask(node, event);
-		event = node_popMail(node);
-	}
-
-	/* if the last event we popped was beyond the allowed execution window,
-	 * push it back into mailbox so it gets executed during the next iteration
-	 */
-	if(event && (event->time >= engine->executeWindowEnd)) {
-		node_pushMail(node, event);
+		node_pushTask(node, node_popMail(node));
+		event = node_peekMail(node);
 	}
 
 	if(node_getNumTasks(node) > 0) {
@@ -303,6 +290,8 @@ static void _engine_manageExecutableMail(gpointer data, gpointer user_data) {
 static gint _engine_distributeEvents(Engine* engine) {
 	MAGIC_ASSERT(engine);
 
+	GList* nodeList = internetwork_getAllNodes(engine->internet);
+
 	/* process all events in the priority queue */
 	while(engine->executeWindowStart < engine->endTime)
 	{
@@ -315,17 +304,20 @@ static gint _engine_distributeEvents(Engine* engine) {
 		 * from their mailbox into their priority queue for execution. all
 		 * nodes that have executable events are placed in the thread pool and
 		 * processed by a worker thread.
+		 *
+		 * **after calling this, multiple threads are running.**
 		 */
-		GList* node_list = internetwork_getAllNodes(engine->internet);
+		GList* item = g_list_first(nodeList);
+		while(item) {
+			Node* node = item->data;
+			_engine_syncEvents(node, engine);
+			item = g_list_next(item);
+		}
 
-		/* after calling this, multiple threads are running */
-		g_list_foreach(node_list, _engine_manageExecutableMail, engine);
-		g_list_free(node_list);
-
-		/* wait for the workers to finish running */
+		/* wait for the workers to finish syncing and running */
 		_engine_joinWorkerThreads(engine);
 
-		/* other threads are sleeping */
+		/* **other threads are now sleeping**  */
 
 		/* execute any non-node events
 		 * TODO: parallelize this if it becomes a problem. for now I'm assume
@@ -344,6 +336,8 @@ static gint _engine_distributeEvents(Engine* engine) {
 //		debug("updated execution window [%lu--%lu]",
 //				engine->executeWindowStart, engine->executeWindowEnd);
 	}
+
+	g_list_free(nodeList);
 
 	return 0;
 }

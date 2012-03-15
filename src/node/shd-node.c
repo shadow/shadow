@@ -153,6 +153,11 @@ void node_pushMail(Node* node, Event* event) {
 	asyncpriorityqueue_push(node->eventMailbox, event);
 }
 
+Event* node_peekMail(Node* node) {
+	MAGIC_ASSERT(node);
+	return asyncpriorityqueue_peek(node->eventMailbox);
+}
+
 Event* node_popMail(Node* node) {
 	MAGIC_ASSERT(node);
 	return asyncpriorityqueue_pop(node->eventMailbox);

@@ -40,6 +40,7 @@ void node_startApplication(Node* node);
 void node_stopApplication(gpointer key, gpointer value, gpointer user_data);
 
 void node_pushMail(Node* node, Event* event);
+Event* node_peekMail(Node* node);
 Event* node_popMail(Node* node);
 void node_pushTask(Node* node, Event* event);
 Event* node_popTask(Node* node);
