@@ -230,6 +230,7 @@ struct _Configuration {
 	GOptionGroup* pluginsOptionGroup;
 	gboolean runEchoExample;
 	gboolean runFileExample;
+	gboolean runTorrentExample;
 
 	GQueue* inputXMLFilenames;
 

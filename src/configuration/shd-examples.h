@@ -27,5 +27,6 @@
 GString* example_getPingExampleContents();
 GString* example_getEchoExampleContents();
 GString* example_getFileExampleContents();
+GString* example_getTorrentExampleContents();
 
 #endif /* SHD_EXAMPLES_H_ */

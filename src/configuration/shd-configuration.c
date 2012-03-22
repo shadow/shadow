@@ -80,6 +80,7 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	{
 	  { "echo", 0, 0, G_OPTION_ARG_NONE, &(c->runEchoExample), "Run basic echo simulation", NULL },
 	  { "file", 0, 0, G_OPTION_ARG_NONE, &(c->runFileExample), "Run basic HTTP file transfer simulation", NULL },
+	  { "torrent", 0, 0, G_OPTION_ARG_NONE, &(c->runTorrentExample), "Run basic Torrent transfer simulation", NULL },
 	  { NULL },
 	};
 
@@ -98,7 +99,7 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	/* make sure we have the required arguments. program name is first arg.
 	 * printing the software version requires no other args. running a
 	 * plug-in example also requires no other args. */
-	if(!(c->printSoftwareVersion) && !(c->runEchoExample) && !(c->runFileExample) &&
+	if(!(c->printSoftwareVersion) && !(c->runEchoExample) && !(c->runFileExample) && !(c->runTorrentExample) &&
 			(argc < nRequiredXMLFiles + 1)) {
 		g_printerr("** Please provide the required parameters **\n");
 		g_printerr("%s", g_option_context_get_help(c->context, TRUE, NULL));

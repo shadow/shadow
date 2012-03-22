@@ -63,3 +63,16 @@ GString* example_getFileExampleContents() {
 		"<node id=\"client.filetransfer\" quantity=\"1000\" software=\"fileclient\" />"
 		"<kill time=\"300\" />");
 }
+
+GString* example_getTorrentExampleContents() {
+	/* start a P2P torrent download with 10 clients sharing an 8MB file */
+	return g_string_new(
+		"<plugin id=\"torrent\" path=\"libshadow-plugin-torrent.so\" />"
+		"<cluster id=\"net0\" bandwidthdown=\"1024\" bandwidthup=\"512\"/>"
+		"<link id=\"link0\" clusters=\"net0 net0\" latency=\"50\" jitter=\"10\" packetloss=\"0.005\"/>"
+		"<software id=\"torrentauth\" plugin=\"torrent\" time=\"10\" arguments=\"authority 5000\" />"
+		"<software id=\"torrentnode\" plugin=\"torrent\" time=\"20\" arguments=\"node auth.torrent 5000 none 0 6000 8MB\" />"
+		"<node id=\"auth.torrent\" software=\"torrentauth\" cluster=\"net0\" bandwidthup=\"10240\" bandwidthdown=\"5120\" />"
+		"<node id=\"node.torrent\" quantity=\"10\" software=\"torrentnode\" />"
+		"<kill time=\"300\" />");
+}
