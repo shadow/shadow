@@ -26,11 +26,16 @@ typedef struct scallion_launch_client_s {
 	void* service_filegetter_args;
 } scallion_launch_client_t, *scallion_launch_client_tp;
 
+typedef struct scallion_launch_torrent_s {
+	uint8_t isAuthority;
+	void* torrent_args;
+} scallion_launch_torrent_t, *scallion_launch_torrent_tp;
+
 /* my global structure to hold all variable, node-specific application state.
  * the name must not collide with other loaded modules globals. */
 Scallion scallion;
 
-static void _scallion_logCallback(enum service_filegetter_loglevel level, const gchar* message) {
+static void _scallion_sfgLogCallback(enum service_filegetter_loglevel level, const gchar* message) {
 	if(level == SFG_CRITICAL) {
 		scallion.shadowlibFuncs->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "%s", message);
 	} else if(level == SFG_WARNING) {
@@ -40,6 +45,22 @@ static void _scallion_logCallback(enum service_filegetter_loglevel level, const 
 	} else if(level == SFG_INFO) {
 		scallion.shadowlibFuncs->log(G_LOG_LEVEL_INFO, __FUNCTION__, "%s", message);
 	} else if(level == SFG_DEBUG) {
+		scallion.shadowlibFuncs->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "%s", message);
+	} else {
+		/* we dont care */
+	}
+}
+
+static void _scallion_torrentLogCallback(enum torrentService_loglevel level, const gchar* message) {
+	if(level == TSVC_CRITICAL) {
+		scallion.shadowlibFuncs->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "%s", message);
+	} else if(level == TSVC_WARNING) {
+		scallion.shadowlibFuncs->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "%s", message);
+	} else if(level == TSVC_NOTICE) {
+		scallion.shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "%s", message);
+	} else if(level == TSVC_INFO) {
+		scallion.shadowlibFuncs->log(G_LOG_LEVEL_INFO, __FUNCTION__, "%s", message);
+	} else if(level == TSVC_DEBUG) {
 		scallion.shadowlibFuncs->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "%s", message);
 	} else {
 		/* we dont care */
@@ -132,6 +153,32 @@ static void scallion_start_socks_client(void* arg) {
 	}
 }
 
+static void scallion_start_torrent(void* arg) {
+	scallion_launch_torrent_tp launch = arg;
+
+	/* launch our filegetter */
+	if(launch != NULL) {
+		scallion.tsvcServerEpoll = epoll_create(1);
+		scallion.tsvcClientEpoll = epoll_create(1);
+		int sockd = 0;
+
+		TorrentService_NodeArgs *args = launch->torrent_args;
+
+		torrentService_startNode(&(scallion.tsvc), args, scallion.tsvcServerEpoll, scallion.tsvcClientEpoll, &sockd);
+
+		free(args->authorityHostname);
+		free(args->authorityPort);
+		free(args->socksHostname);
+		free(args->socksPort);
+		free(args->serverPort);
+		free(args->fileSize);
+		free(args);
+		free(launch);
+
+		torrentService_activate(&(scallion.tsvc), scallion.tsvc.client->authSockd, EPOLLOUT, scallion.tsvcClientEpoll);
+	}
+}
+
 static gchar* _scallion_getHomePath(gchar* path) {
 	GString* sbuffer = g_string_new("");
 	if(g_ascii_strncasecmp(path, "~", 1) == 0) {
@@ -147,7 +194,7 @@ static gchar* _scallion_getHomePath(gchar* path) {
 static void _scallion_new(gint argc, gchar* argv[]) {
 	scallion.shadowlibFuncs->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "scallion_new called");
 
-	gchar* usage = "Scallion USAGE: (\"dirauth\"|\"relay\"|\"exitrelay\"|\"client\") consensusbandwidth readbandwidthrate writebandwidthrate torrc_path datadir_base_path geoip_path [client_args for shd-plugin-filegetter...]\n";
+	gchar* usage = "Scallion USAGE: (\"dirauth\"|\"relay\"|\"exitrelay\"|\"client\"|\"torrent\") consensusbandwidth readbandwidthrate writebandwidthrate torrc_path datadir_base_path geoip_path [args for client or torrent node...]\n";
 
 	if(argc < 2) {
 		scallion.shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, usage);
@@ -177,12 +224,14 @@ static void _scallion_new(gint argc, gchar* argv[]) {
 		ntype = VTOR_EXITRELAY;
 	} else if(g_strncasecmp(tortype, "client", strlen("client")) == 0) {
 		ntype = VTOR_CLIENT;
+	} else if(g_strncasecmp(tortype, "torrent", strlen("torrent")) == 0) {
+		ntype = VTOR_TORRENT;
 	} else {
-		scallion.shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, usage);
+		scallion.shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "Unrecognized torrent type: %s", usage);
 		return;
 	}
 
-	if(ntype != VTOR_CLIENT && argc != 7) {
+	if(ntype != VTOR_CLIENT && ntype != VTOR_TORRENT && argc != 7) {
 		scallion.shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, usage);
 		return;
 	}
@@ -250,7 +299,7 @@ static void _scallion_new(gint argc, gchar* argv[]) {
 				args->thinktimes_cdf_filepath = NULL;
 			}
 
-			args->log_cb = &_scallion_logCallback;
+			args->log_cb = &_scallion_sfgLogCallback;
 			args->hostbyname_cb = &_scallion_HostnameCallback;
 			args->sleep_cb = &_scallion_sleepCallback;
 
@@ -283,7 +332,7 @@ static void _scallion_new(gint argc, gchar* argv[]) {
 
 			args->filepath = _scallion_getHomePath(argvoffset[7]);
 
-			args->log_cb = &_scallion_logCallback;
+			args->log_cb = &_scallion_sfgLogCallback;
 			args->hostbyname_cb = &_scallion_HostnameCallback;
 
 			launch->is_single = 1;
@@ -319,7 +368,7 @@ static void _scallion_new(gint argc, gchar* argv[]) {
 			args->pausetime_seconds = malloc(s);
 			snprintf(args->pausetime_seconds, s, argvoffset[9]);
 
-			args->log_cb = &_scallion_logCallback;
+			args->log_cb = &_scallion_sfgLogCallback;
 			args->hostbyname_cb = &_scallion_HostnameCallback;
 			args->sleep_cb = &_scallion_sleepCallback;
 
@@ -331,6 +380,45 @@ static void _scallion_new(gint argc, gchar* argv[]) {
 		}
 
 		scallion.shadowlibFuncs->createCallback(&scallion_start_socks_client, launch, 600000);
+	} else if(ntype == VTOR_TORRENT) {
+		gchar** argvoffset = argv + 9;
+
+		scallion_launch_torrent_tp launch = malloc(sizeof(scallion_launch_client_t));
+
+		TorrentService_NodeArgs *args = malloc(sizeof(TorrentService_NodeArgs));
+		size_t s;
+
+		s = strnlen(argvoffset[0], 128)+1;
+		args->authorityHostname = malloc(s);
+		snprintf(args->authorityHostname, s, argvoffset[0]);
+
+		s = strnlen(argvoffset[1], 128)+1;
+		args->authorityPort = malloc(s);
+		snprintf(args->authorityPort, s, argvoffset[1]);
+
+		s = strnlen(argvoffset[2], 128)+1;
+		args->socksHostname = malloc(s);
+		snprintf(args->socksHostname, s, argvoffset[2]);
+
+		s = strnlen(argvoffset[3], 128)+1;
+		args->socksPort = malloc(s);
+		snprintf(args->socksPort, s, argvoffset[3]);
+
+		s = strnlen(argvoffset[4], 128)+1;
+		args->serverPort = malloc(s);
+		snprintf(args->serverPort, s, argvoffset[4]);
+
+		s = strnlen(argvoffset[5], 128)+1;
+		args->fileSize = malloc(s);
+		snprintf(args->fileSize, s, argvoffset[5]);
+
+		args->log_cb = &_scallion_torrentLogCallback;
+		args->hostbyname_cb = &_scallion_HostnameCallback;
+
+		launch->isAuthority = 0;
+		launch->torrent_args = args;
+
+		scallion.shadowlibFuncs->createCallback(&scallion_start_torrent, launch, 600000);
 	}
 
 }
@@ -356,6 +444,33 @@ static void _scallion_notify() {
 			}
 		}
 	}
+
+	if(scallion.tsvcClientEpoll) {
+		struct epoll_event events[10];
+		int nfds = epoll_wait(scallion.tsvcClientEpoll, events, 10, 0);
+		if(nfds == -1) {
+			scallion.shadowlibFuncs->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "error in torrent client epoll_wait");
+		} else {
+			for(int i = 0; i < nfds; i++) {
+				torrentService_activate(&scallion.tsvc, events[i].data.fd, events[i].events, scallion.tsvcClientEpoll);
+			}
+		}
+	}
+
+
+	if(scallion.tsvcServerEpoll) {
+		struct epoll_event events[10];
+		int nfds = epoll_wait(scallion.tsvcServerEpoll, events, 10, 0);
+		if(nfds == -1) {
+			scallion.shadowlibFuncs->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "error in torrent server epoll_wait");
+		} else {
+			for(int i = 0; i < nfds; i++) {
+				torrentService_activate(&scallion.tsvc, events[i].data.fd, events[i].events, scallion.tsvcServerEpoll);
+			}
+		}
+	}
+
+
 
 	scalliontor_notify(scallion.stor);
 }

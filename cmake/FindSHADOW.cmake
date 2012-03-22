@@ -18,10 +18,11 @@ find_path (SHADOW_INCLUDES shd-library.h
 ## Check for the library
 set(FIND_SHADOW_PATHS "/usr/local/lib /usr/lib /lib ${CMAKE_EXTRA_LIBRARIES}")
 
-find_library (SHADOW_SERVICE_LIBRARIES NAMES libshadow-service-filetransfer.a shadow-service-filetransfer PATHS ${FIND_SHADOW_PATHS})
+find_library (SHADOW_FILETRANSFER_LIBRARIES NAMES libshadow-service-filetransfer.a shadow-service-filetransfer PATHS ${FIND_SHADOW_PATHS})
+find_library (SHADOW_TORRENT_LIBRARIES NAMES libshadow-service-torrent.a shadow-service-torrent PATHS ${FIND_SHADOW_PATHS})
 
-mark_as_advanced(${SHADOW_SERVICE_LIBRARIES})
-set(SHADOW_LIBRARIES ${SHADOW_SERVICE_LIBRARIES})
+mark_as_advanced(${SHADOW_FILETRANSFER_LIBRARIES} ${SHADOW_TORRENT_LIBRARIES})
+set(SHADOW_LIBRARIES ${SHADOW_FILETRANSFER_LIBRARIES} ${SHADOW_TORRENT_LIBRARIES})
 
 ## -----------------------------------------------------------------------------
 ## Actions taken when all components have been found
@@ -44,6 +45,8 @@ if (HAVE_SHADOW)
     message (STATUS "Found components for SHADOW")
     message (STATUS "SHADOW_INCLUDES = ${SHADOW_INCLUDES}")
     message (STATUS "SHADOW_LIBRARIES     = ${SHADOW_LIBRARIES}")
+    message (STATUS "    SHADOW_FILETRANSFER_LIBRARIES = ${SHADOW_FILETRANSFER_LIBRARIES}")
+    message (STATUS "    SHADOW_TORRENT_LIBRARIES      = ${SHADOW_TORRENT_LIBRARIES}")
   endif (NOT SHADOW_FIND_QUIETLY)
 else (HAVE_SHADOW)
   if (SHADOW_FIND_REQUIRED)
