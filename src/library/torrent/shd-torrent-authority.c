@@ -45,6 +45,15 @@ static void torrentAuthority_connectionClose(TorrentAuthority*ta, TorrentAuthori
 	g_hash_table_remove(ta->connections, &(connection->sockd));
 }
 
+static void torrentAuthority_connection_destroy_cb(gpointer data) {
+	TorrentAuthority_Connection *conn = data;
+
+	if(conn != NULL) {
+		close(conn->sockd);
+		free(conn);
+	}
+}
+
 gint torrentAuthority_start(TorrentAuthority* ta, gint epolld, in_addr_t listenIP, in_port_t listenPort, gint maxConnections) {
 	if(ta == NULL) {
 		return TA_ERR_INVALID;
@@ -79,8 +88,8 @@ gint torrentAuthority_start(TorrentAuthority* ta, gint epolld, in_addr_t listenI
 	memset(ta, 0, sizeof(TorrentAuthority));
 	ta->listenSockd = sockd;
 	ta->epolld = epolld;
-	ta->connections = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, NULL);
-	ta->nodes = g_hash_table_new_full(g_str_hash, g_str_equal, NULL, NULL);
+	ta->connections = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, torrentAuthority_connection_destroy_cb);
+	ta->nodes = g_hash_table_new_full(g_str_hash, g_str_equal, NULL, g_free);
 
 	/* start watching socket */
 	struct epoll_event ev;
@@ -235,4 +244,17 @@ gint torrentAuthority_accept(TorrentAuthority* ta, gint* sockdOut) {
 	return 0;
 }
 
+gint torrentAuthority_shutdown(TorrentAuthority* ta) {
+	/* destroy the hashtable. this calls the connection destroy function for each. */
+	g_hash_table_destroy(ta->connections);
+	g_hash_table_destroy(ta->nodes);
+
+	epoll_ctl(ta->epolld, EPOLL_CTL_DEL, ta->listenSockd, NULL);
+	if(close(ta->listenSockd) < 0) {
+		return TS_ERR_CLOSE;
+	}
+
+	return TS_SUCCESS;
+
+}
 

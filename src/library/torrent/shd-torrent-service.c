@@ -164,12 +164,25 @@ int torrentService_stop(TorrentService *tsvc) {
 		return -1;
 	}
 
-	if(tsvc->server) {
-		torrentServer_shutdown(tsvc->server);
+	if(tsvc->client) {
+		/* Shutdown the client then free the object */
+		torrentClient_shutdown(tsvc->client);
+		g_free(tsvc->client);
+		tsvc->client = NULL;
 	}
 
-	if(tsvc->client) {
-		torrentClient_shutdown(tsvc->client);
+	if(tsvc->server) {
+		/* Shutdown the server then free the object */
+		torrentServer_shutdown(tsvc->server);
+		g_free(tsvc->client);
+		tsvc->server = NULL;
+	}
+
+	if(tsvc->authority) {
+		/* Shutdown the client then free the object */
+		torrentAuthority_shutdown(tsvc->authority);
+		g_free(tsvc->authority);
+		tsvc->authority = NULL;
 	}
 
 	return 0;

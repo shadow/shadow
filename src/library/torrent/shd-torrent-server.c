@@ -64,6 +64,15 @@ void torrentServer_connectionClose(TorrentServer *ts, TorrentServer_Connection *
 	g_hash_table_remove(ts->connections, &(connection->sockd));
 }
 
+static void torrentServer_connection_destroy_cb(gpointer data) {
+	TorrentServer_Connection *conn = data;
+
+	if(conn != NULL) {
+		close(conn->sockd);
+		free(conn);
+	}
+}
+
 gint torrentServer_start(TorrentServer* ts, gint epolld, in_addr_t listenIP, in_port_t listenPort) {
 	if(ts == NULL) {
 		return TS_ERR_FATAL;
@@ -98,7 +107,7 @@ gint torrentServer_start(TorrentServer* ts, gint epolld, in_addr_t listenIP, in_
 	memset(ts, 0, sizeof(TorrentServer));
 	ts->listenSockd = sockd;
 	ts->epolld = epolld;
-	ts->connections = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, NULL);
+	ts->connections = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, torrentServer_connection_destroy_cb);
 
 	/* start watching socket */
 	struct epoll_event ev;
@@ -131,7 +140,8 @@ gint torrentServer_activate(TorrentServer *ts, gint sockd, gint events) {
 	}
 
 	gchar buf[TS_BLOCK_SIZE];
-	ssize_t bytes;
+	ssize_t bytes = -1;
+
 	switch(connection->state) {
 		case TS_IDLE:
 			connection->downBytesTransfered = 0;
@@ -170,6 +180,14 @@ gint torrentServer_activate(TorrentServer *ts, gint sockd, gint events) {
 				TS_ASSERTIO(ts, bytes, errno == EWOULDBLOCK || errno == ENOTCONN || errno == EALREADY, TS_ERR_SEND);
 
 				connection->upBytesTransfered += bytes;
+			}
+
+			if(connection->downBytesTransfered >= connection->blockSize) {
+				torrentServer_changeEpoll(ts, sockd, EPOLLOUT);
+			}
+
+			if(connection->upBytesTransfered >= connection->blockSize) {
+				torrentServer_changeEpoll(ts, sockd, EPOLLIN);
 			}
 
 			if(connection->downBytesTransfered >= connection->blockSize && connection->upBytesTransfered >= connection->blockSize) {
@@ -229,4 +247,15 @@ gint torrentServer_accept(TorrentServer* ts, gint* sockdOut) {
 	return 0;
 }
 
+gint torrentServer_shutdown(TorrentServer* ts) {
+	/* destroy the hashtable. this calls the connection destroy function for each. */
+	g_hash_table_destroy(ts->connections);
+
+	epoll_ctl(ts->epolld, EPOLL_CTL_DEL, ts->listenSockd, NULL);
+	if(close(ts->listenSockd) < 0) {
+		return TS_ERR_CLOSE;
+	}
+
+	return TS_SUCCESS;
+}
 

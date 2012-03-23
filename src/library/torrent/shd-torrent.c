@@ -267,5 +267,24 @@ void torrent_activate() {
 }
 
 void torrent_free() {
+	if(torrent->client) {
+		/* Shutdown the client then free the object */
+		torrentClient_shutdown(torrent->client);
+		g_free(torrent->client);
+		torrent->client = NULL;
+	}
 
+	if(torrent->server) {
+		/* Shutdown the server then free the object */
+		torrentServer_shutdown(torrent->server);
+		g_free(torrent->client);
+		torrent->server = NULL;
+	}
+
+	if(torrent->authority) {
+		/* Shutdown the client then free the object */
+		torrentAuthority_shutdown(torrent->authority);
+		g_free(torrent->authority);
+		torrent->authority = NULL;
+	}
 }

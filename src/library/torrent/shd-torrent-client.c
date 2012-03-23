@@ -81,7 +81,7 @@ gint torrentClient_start(TorrentClient* tc, gint epolld, in_addr_t socksAddr, in
 	tc->maxConnections = -1;
 	tc->epolld = epolld;
 	tc->servers = NULL;
-	tc->connections = g_hash_table_new(g_int_hash, g_int_equal);
+	tc->connections = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, NULL);
 
 	tc->socksAddr = socksAddr;
 	tc->socksPort = socksPort;
@@ -408,6 +408,14 @@ gint torrentClient_activate(TorrentClient *tc, gint sockd, gint events) {
 				tc->totalBytesUp += bytes;
 			}
 
+			if(server->downBytesTransfered >= server->blockSize) {
+				torrentClient_changeEpoll(tc, sockd, EPOLLOUT);
+			}
+
+			if(server->upBytesTransfered >= server->blockSize) {
+				torrentClient_changeEpoll(tc, sockd, EPOLLIN);
+			}
+
 
 			if(server->downBytesTransfered >= server->blockSize && server->upBytesTransfered >= server->blockSize) {
 				server->state = TC_SERVER_FINISHED;
@@ -440,7 +448,6 @@ gint torrentClient_activate(TorrentClient *tc, gint sockd, gint events) {
 
 	if(tc->totalBytesDown >= tc->fileSize) {
 		clock_gettime(CLOCK_REALTIME, &(tc->download_end));
-		//torrentClient_report(tc, "[client-complete]");
 		torrentClient_shutdown(tc);
 		return TC_SUCCESS;
 	}
@@ -449,27 +456,12 @@ gint torrentClient_activate(TorrentClient *tc, gint sockd, gint events) {
 }
 
 gint torrentClient_shutdown(TorrentClient* tc) {
-	if(tc->sockd != 0) {
-		epoll_ctl(tc->epolld, EPOLL_CTL_DEL, tc->sockd, NULL);
-		close(tc->sockd);
-		tc->sockd = 0;
-	}
-
-	if(tc->authSockd != 0) {
-		epoll_ctl(tc->epolld, EPOLL_CTL_DEL, tc->authSockd, NULL);
-		close(tc->authSockd);
-		tc->authSockd = 0;
-	}
-
 	for(int i = 0; i < g_list_length(tc->servers); i++) {
 		TorrentClient_Server *server = g_list_nth(tc->servers, i)->data;
 		if(server->sockd != 0) {
 			torrentClient_connectionClose(tc, server, 1);
-			free(server);
 		}
 	}
-	g_list_free(tc->servers);
-	tc->servers = NULL;
 
 	return TC_SUCCESS;
 }
