@@ -39,6 +39,7 @@
 #include <gmodule.h>
 #include <shd-library.h>
 #include <shd-filetransfer.h>
+#include <shd-torrent-service.h>
 #include <event2/event.h>
 #include <event2/event_struct.h>
 #include "torlog.h"
@@ -65,7 +66,7 @@ extern void directory_info_has_arrived(time_t now, int from_cache);
 extern int tor_init(int argc, char *argv[]);
 
 enum vtor_nodetype {
-	VTOR_DIRAUTH, VTOR_RELAY, VTOR_EXITRELAY, VTOR_CLIENT
+	VTOR_DIRAUTH, VTOR_RELAY, VTOR_EXITRELAY, VTOR_CLIENT, VTOR_TORRENT,
 };
 
 /** The tag specifies which circuit this onionskin was from. */
@@ -113,6 +114,9 @@ struct _Scallion {
 	ScallionTor* stor;
 	service_filegetter_t sfg;
 	gint sfgEpoll;
+	TorrentService tsvc;
+	gint tsvcClientEpoll;
+	gint tsvcServerEpoll;
 	ShadowlibFunctionTable* shadowlibFuncs;
 };
 
