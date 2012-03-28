@@ -106,8 +106,24 @@ static const struct {
 	intercept_RAND_status
 };
 
-const void *intercept_RAND_get_rand_method(void) {
+const void* intercept_RAND_get_rand_method(void) {
 	return (const void *)(&intercept_customRandMethod);
+}
+
+static void _intercept_cryptoLockingFunc(int mode, int n, const char *file, int line) {
+	return system_cryptoLockingFunc(mode, n, file, line);
+}
+
+void* intercept_CRYPTO_get_locking_callback() {
+	return (void *)(&_intercept_cryptoLockingFunc);
+}
+
+static unsigned int _intercept_cryptoIdFunc() {
+	return system_cryptoIdFunc();
+}
+
+void* intercept_CRYPTO_get_id_callback() {
+	return (void *)(&_intercept_cryptoIdFunc);
 }
 
 int intercept_rand() {

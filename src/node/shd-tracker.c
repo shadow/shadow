@@ -102,10 +102,11 @@ void tracker_heartbeat(Tracker* tracker) {
 	double in = (double)(((double)tracker->inputBytesLastInterval) / seconds);
 	double out = (double)(((double)tracker->outputBytesLastInterval) / seconds);
 	double cpuutil = (double)(((double)tracker->processingTimeLastInterval) / tracker->interval);
+	double mem = (double)(((double)tracker->allocatedBytesTotal) / 1024.0);
 
 	/* log the things we are tracking */
 	logging_log(G_LOG_DOMAIN, tracker->loglevel, __FUNCTION__, "heartbeat: "
-			"%f b/s in, %f b/s out, %f plugin-cpu-util", in, out, cpuutil);
+			"%f b/s in, %f b/s out, %f plugin-cpu-util, %f mem-kib", in, out, cpuutil, mem);
 
 	/* clear interval stats */
 	tracker->processingTimeLastInterval = 0;

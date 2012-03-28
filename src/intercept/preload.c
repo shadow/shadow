@@ -668,6 +668,28 @@ const void *RAND_get_rand_method(void) {
 	return (*func)();
 }
 
+typedef void* (*CRYPTO_get_locking_callback_fp)();
+static CRYPTO_get_locking_callback_fp _CRYPTO_get_locking_callback = NULL;
+static CRYPTO_get_locking_callback_fp _intercept_CRYPTO_get_locking_callback = NULL;
+void* CRYPTO_get_locking_callback(void) {
+	CRYPTO_get_locking_callback_fp* func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "CRYPTO_get_locking_callback", _CRYPTO_get_locking_callback, INTERCEPT_PREFIX, _intercept_CRYPTO_get_locking_callback, 1);
+	PRELOAD_LOOKUP(func, funcName, 0);
+	return (*func)();
+}
+
+typedef void* (*CRYPTO_get_id_callback_fp)();
+static CRYPTO_get_id_callback_fp _CRYPTO_get_id_callback = NULL;
+static CRYPTO_get_id_callback_fp _intercept_CRYPTO_get_id_callback = NULL;
+void* CRYPTO_get_id_callback(void) {
+	CRYPTO_get_id_callback_fp* func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "CRYPTO_get_id_callback", _CRYPTO_get_id_callback, INTERCEPT_PREFIX, _intercept_CRYPTO_get_id_callback, 1);
+	PRELOAD_LOOKUP(func, funcName, 0);
+	return (*func)();
+}
+
 typedef int (*rand_fp)(void);
 static rand_fp _rand = NULL;
 static rand_fp _intercept_rand = NULL;

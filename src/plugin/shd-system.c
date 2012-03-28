@@ -865,3 +865,19 @@ void system_free(gpointer ptr) {
 	tracker_removeAllocatedBytes(node_getTracker(node), ptr);
 	_system_switchOutShadowContext(node);
 }
+
+/* needed for multi-threaded openssl
+ * @see '$man CRYPTO_lock'
+ */
+void system_cryptoLockingFunc(int mode, int n, const char *file, int line) {
+	Worker* worker = worker_getPrivate();
+	engine_cryptoLockingFunc(worker->cached_engine, mode, n);
+}
+
+/* needed for multi-threaded openssl
+ * @see '$man CRYPTO_lock'
+ */
+unsigned long system_cryptoIdFunc() {
+	Worker* worker = worker_getPrivate();
+	return ((unsigned long) (worker->thread_id));
+}

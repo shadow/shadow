@@ -58,6 +58,9 @@ Worker* worker_getPrivate() {
 	if(!worker) {
 		worker = _worker_new(engine_generateWorkerID(engine));
 		g_static_private_set(engine_getWorkerKey(engine), worker, worker_free);
+		gboolean* preloadIsReady = g_new(gboolean, 1);
+		*preloadIsReady = TRUE;
+		g_static_private_set(engine_getPreloadKey(engine), preloadIsReady, g_free);
 	}
 
 	MAGIC_ASSERT(worker);
@@ -238,9 +241,11 @@ gboolean worker_isInShadowContext() {
 	 * shutdown the threads.
 	 */
 	if(shadow_engine && !(engine_isForced(shadow_engine))) {
-		Worker* worker = worker_getPrivate();
-		if(worker->cached_plugin) {
-			return plugin_isShadowContext(worker->cached_plugin);
+		if(g_static_private_get(engine_getPreloadKey(shadow_engine))) {
+			Worker* worker = worker_getPrivate();
+			if(worker->cached_plugin) {
+				return plugin_isShadowContext(worker->cached_plugin);
+			}
 		}
 	}
 	/* if there is no engine or cached plugin, we are definitely in Shadow context */

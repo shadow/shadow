@@ -89,6 +89,7 @@ typedef gboolean (*ShadowlibRegisterFunc)(PluginFunctionTable* callbackFunctions
 typedef void (*ShadowlibLogFunc)(GLogLevelFlags level, const gchar* functionName, gchar* format, ...);
 typedef void (*ShadowlibCreateCallbackFunc)(ShadowPluginCallbackFunc callback, gpointer data, guint millisecondsDelay);
 typedef gboolean (*ShadowlibGetBandwidthFloorFunc)(in_addr_t ip, guint* bwdown, guint* bwup);
+typedef gboolean (*ShadowlibCryptoSetupFunc)(gint numLocks, gpointer* shadowLockFunc, gpointer* shadowIdFunc, gconstpointer* shadowRandomMethod);
 
 typedef struct _ShadowlibFunctionTable ShadowlibFunctionTable;
 extern ShadowlibFunctionTable shadowlibFunctionTable;
@@ -103,6 +104,7 @@ struct _ShadowlibFunctionTable {
 	ShadowlibLogFunc log;
 	ShadowlibCreateCallbackFunc createCallback;
 	ShadowlibGetBandwidthFloorFunc getBandwidth;
+	ShadowlibCryptoSetupFunc cryptoSetup;
 };
 
 /* Plug-ins must implement this function to communicate with Shadow.

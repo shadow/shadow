@@ -58,6 +58,11 @@ struct _Engine {
 	 * instance of a worker object
 	 */
 	GStaticPrivate workerKey;
+	GStaticPrivate preloadKey;
+
+	/* openssl needs us to manage locking */
+	GStaticMutex* cryptoThreadLocks;
+	gint numCryptoThreadLocks;
 
 	/*
 	 * condition that signals when all node's events have been processed in a
@@ -120,6 +125,7 @@ Engine* engine_new(Configuration* config) {
 
 	/* initialize the singleton-per-thread worker class */
 	engine->workerKey.index = 0;
+	engine->preloadKey.index = 0;
 
 	/* holds all events if single-threaded, and non-node events otherwise. */
 	engine->masterEventQueue =
@@ -183,6 +189,10 @@ void engine_free(Engine* engine) {
 	message("clean engine shutdown at %s", dt_format);
 	g_date_time_unref(dt_now);
 	g_free(dt_format);
+
+	for(int i = 0; i < engine->numCryptoThreadLocks; i++) {
+		g_static_mutex_free(&(engine->cryptoThreadLocks[i]));
+	}
 
 	random_free(engine->random);
 	g_mutex_free(engine->lock);
@@ -315,11 +325,11 @@ static SimulationTime _engine_syncEvents(Engine* engine, GList* nodeList) {
 		/* see if this node actually has work for a worker */
 		guint numTasks = node_getNumTasks(node);
 		if(numTasks > 0) {
-			/* now let the worker handle all the node's events */
-			g_thread_pool_push(engine->workerPool, node, NULL);
-
 			/* we just added another node that must be processed */
 			g_atomic_int_inc(&(engine->protect.nNodesToProcess));
+
+			/* now let the worker handle all the node's events */
+			g_thread_pool_push(engine->workerPool, node, NULL);
 		}
 
 		/* get the next node, if any */
@@ -470,6 +480,11 @@ GStaticPrivate* engine_getWorkerKey(Engine* engine) {
 	return &(engine->workerKey);
 }
 
+GStaticPrivate* engine_getPreloadKey(Engine* engine) {
+	MAGIC_ASSERT(engine);
+	return &(engine->preloadKey);
+}
+
 GTimer* engine_getRunTimer(Engine* engine) {
 	MAGIC_ASSERT(engine);
 	return engine->runTimer;
@@ -540,4 +555,47 @@ guint engine_getRawCPUFrequency(Engine* engine) {
 	guint freq = engine->rawFrequencyKHz;
 	_engine_unlock(engine);
 	return freq;
+}
+
+void engine_cryptoLockingFunc(Engine* engine, int mode, int n) {
+/* from /usr/include/openssl/crypto.h */
+#define CRYPTO_LOCK		1
+#define CRYPTO_UNLOCK	2
+#define CRYPTO_READ		4
+#define CRYPTO_WRITE	8
+
+	MAGIC_ASSERT(engine);
+	g_assert(engine->cryptoThreadLocks);
+
+	/* TODO may want to replace this with GRWLock when moving to GLib >= 2.32 */
+	GStaticMutex* lock = &(engine->cryptoThreadLocks[n]);
+	g_assert(lock);
+
+	if(mode & CRYPTO_LOCK) {
+		g_static_mutex_lock(lock);
+	} else {
+		g_static_mutex_unlock(lock);
+	}
+}
+
+gboolean engine_cryptoSetup(Engine* engine, gint numLocks) {
+	MAGIC_ASSERT(engine);
+
+	if(numLocks) {
+		_engine_lock(engine);
+
+		if(engine->cryptoThreadLocks) {
+			g_assert(numLocks <= engine->numCryptoThreadLocks);
+		} else {
+			engine->numCryptoThreadLocks = numLocks;
+			engine->cryptoThreadLocks = g_new0(GStaticMutex, numLocks);
+			for(int i = 0; i < engine->numCryptoThreadLocks; i++) {
+				g_static_mutex_init(&(engine->cryptoThreadLocks[i]));
+			}
+		}
+
+		_engine_unlock(engine);
+	}
+
+	return TRUE;
 }
