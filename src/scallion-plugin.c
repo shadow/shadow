@@ -20,6 +20,7 @@
  */
 
 #include "scallion.h"
+#include <openssl/rand.h>
 
 typedef struct scallion_launch_client_s {
 	uint8_t is_single;
@@ -386,6 +387,9 @@ const gchar* g_module_check_init(GModule *module) {
 	return NULL;
 }
 
+typedef void (*CRYPTO_lock_func)(int mode,int type, const char *file,int line);
+typedef unsigned long (*CRYPTO_id_func)(void);
+
 /* called after g_module_check_init(), after shadow searches for __shadow_plugin_init__ */
 void __shadow_plugin_init__(ShadowlibFunctionTable* shadowlibFuncs) {
 	/* save the shadow functions we will use */
@@ -395,6 +399,36 @@ void __shadow_plugin_init__(ShadowlibFunctionTable* shadowlibFuncs) {
 	scallion_register_globals(&scallion_pluginFunctions, &scallion);
 
 	shadowlibFuncs->log(G_LOG_LEVEL_INFO, __FUNCTION__, "finished registering scallion plug-in state");
+
+#define OPENSSL_THREAD_DEFINES
+#include <openssl/opensslconf.h>
+#if defined(OPENSSL_THREADS)
+	/* thread support enabled */
+
+	/* make sure openssl uses Shadow's random sources and make crypto thread-safe */
+	const RAND_METHOD* shadowRandomMethod = NULL;
+	CRYPTO_lock_func shadowLockFunc = NULL;
+	CRYPTO_id_func shadowIdFunc = NULL;
+	int nLocks = CRYPTO_num_locks();
+
+	gboolean success = shadowlibFuncs->cryptoSetup(nLocks, (gpointer*)&shadowLockFunc,
+			(gpointer*)&shadowIdFunc, (gconstpointer*)&shadowRandomMethod);
+	if(!success) {
+		/* ok, lets see if we can get shadow function pointers through LD_PRELOAD */
+		shadowRandomMethod = RAND_get_rand_method();
+		shadowLockFunc = CRYPTO_get_locking_callback();
+		shadowIdFunc = CRYPTO_get_id_callback();
+	}
+
+	CRYPTO_set_locking_callback(shadowLockFunc);
+	CRYPTO_set_id_callback(shadowIdFunc);
+	RAND_set_rand_method(shadowRandomMethod);
+
+	shadowlibFuncs->log(G_LOG_LEVEL_INFO, __FUNCTION__, "finished initializing crypto state");
+#else
+    /* no thread support */
+	shadowlibFuncs->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "please rebuild openssl with threading support. expect segfaults.");
+#endif
 }
 
 /* called immediately after the plugin is unloaded. shadow unloads plugins

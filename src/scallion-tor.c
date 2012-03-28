@@ -20,7 +20,6 @@
  */
 
 #include "scallion.h"
-#include <openssl/rand.h>
 
 // this should only appear if Tor > 0.2.3.5-alpha
 // handled in setup.py and CMakelists.txt
@@ -310,11 +309,6 @@ ScallionTor* scalliontor_new(ShadowlibFunctionTable* shadowlibFuncs, char* hostn
 		config[16] = stor->v3bw_name;
 	}
 
-	/* Shadow intercepts RAND_get_rand_method. get pointers to its funcs. */
-	const RAND_METHOD* shadowRandomMethod = RAND_get_rand_method();
-	/* we need to make sure OpenSSL is using Shadow for randomness. */
-	RAND_set_rand_method(shadowRandomMethod);
-
 	scallion.stor = stor;
 	scalliontor_start(stor, num_args, config);
 
@@ -564,9 +558,9 @@ exit:
 kill:
 	if(cpuw != NULL) {
 		if (cpuw->onion_key)
-			crypto_free_pk_env(cpuw->onion_key);
+			crypto_pk_free(cpuw->onion_key);
 		if (cpuw->last_onion_key)
-			crypto_free_pk_env(cpuw->last_onion_key);
+			crypto_pk_free(cpuw->last_onion_key);
 		tor_close_socket(cpuw->fd);
 		event_del(&(cpuw->read_event));
 		free(cpuw);

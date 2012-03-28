@@ -88,8 +88,8 @@ typedef struct vtor_cpuworker_s {
 	char reply_to_proxy[ONIONSKIN_REPLY_LEN];
 	char buf[LEN_ONION_RESPONSE];
 	char tag[TAG_LEN];
-	crypto_pk_env_t *onion_key;
-	crypto_pk_env_t *last_onion_key;
+	crypto_pk_t *onion_key;
+	crypto_pk_t *last_onion_key;
 	struct event read_event;
 	uint offset;
 	enum cpuwstate state;
