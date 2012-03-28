@@ -135,8 +135,13 @@ int torrentService_startNode(TorrentService *tsvc, TorrentService_NodeArgs *args
 
 int torrentService_activate(TorrentService *tsvc, gint sockd, gint events, gint epolld) {
 	if(tsvc->client->epolld == epolld) {
-		gint ret;
-		ret = torrentClient_activate(tsvc->client, sockd, events);
+		gint ret = torrentClient_activate(tsvc->client, sockd, events);
+
+		if(ret != TC_SUCCESS && ret != TC_ERR_RECV && ret != TC_ERR_SEND) {
+			torrentService_log(tsvc, TSVC_INFO, "torrent client encountered a "
+					"non-asynch-io related error");
+		}
+
 		if(!tsvc->clientDone && tsvc->client->totalBytesDown > 0) {
 			if(tsvc->client->totalBytesDown >= tsvc->client->fileSize) {
 				torrentService_report(tsvc, "[client-complete]");
