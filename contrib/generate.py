@@ -216,7 +216,7 @@ def generate(args):
     nnonexits = args.nrelays - nexits
     nonexitnodes = getRelays(nonexits, nnonexits, geoentries, args.descriptors, args.extrainfos)
     
-    servers = getServers(args.alexa)
+    servers = getServers(geoentries, args.alexa)
     clientCountryCodes = getClientCountryChoices(args.connectingusers)
     
     # output choices
@@ -248,8 +248,7 @@ def generate(args):
     
     i = 0
     while i < args.nservers:
-        serverip = servers[i%len(servers)]
-        servercode = getClusterCode(geoentries, serverip)
+        serverip, servercode = chooseServer(servers)
         i += 1
         name = "server{0}".format(i)
         e = etree.SubElement(root, "node")
@@ -492,16 +491,44 @@ def getGeoEntries(geoippath):
             entries.append(entry)
     return entries
 
-def getServers(alexapath):
+def getServers(geoentries, alexapath):
     # return IPs from args.alexa, keeping sort order
-    ips = []
+    servers = {}
+    servers['allips'] = []
+    servers['codes'] = {}
+    servers['iptocode'] = {}
+    
     with open(alexapath, 'rb') as f:
         for line in f:
             parts = line.strip().split(',')
             ip = parts[2]
-            ips.append(ip)
-    return ips
+            servers['allips'].append(ip)
 
+            code = getClusterCode(geoentries, ip)
+            servers['iptocode'][ip] = code
+            
+            if code not in servers['codes']:
+                servers['codes'][code] = {}
+                servers['codes'][code]['ips'] = []
+                servers['codes'][code]['index'] = 0
+            
+            servers['codes'][code]['ips'].append(ip)
+            
+    return servers
+
+def chooseServer(servers):
+    # first get a random code
+    tempip = choice(servers['allips'])
+    code = servers['iptocode'][tempip]
+    
+    # now we have our code, get the next index in this code's list
+    s = servers['codes'][code]
+    i = s['index'] % (len(s['ips']))
+    ip = s['ips'][i]
+    s['index'] += 1
+    
+    return ip, code
+    
 def getRelays(relays, k, geoentries, descriptorpath, extrainfopath):
     sample = sample_relays(relays, k)
     
