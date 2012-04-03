@@ -68,7 +68,7 @@ void internetwork_free(Internetwork* internet);
  * @param bandwidthup
  */
 void internetwork_createNetwork(Internetwork* internet, GQuark networkID,
-		guint64 bandwidthdown, guint64 bandwidthup);
+		guint64 bandwidthdown, guint64 bandwidthup, gdouble packetloss);
 
 /**
  *

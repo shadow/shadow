@@ -351,7 +351,8 @@ static void _parser_handleElement(GMarkupParseContext *context,
 		}
 	} else if(g_ascii_strcasecmp(element_name, ParserElementStrings[ELEMENT_CLUSTER]) == 0) {
 		if(_parser_validateCluster(parser, values)) {
-			a = (Action*) createnetwork_new(values->id, values->bandwidthdown, values->bandwidthup);
+			a = (Action*) createnetwork_new(values->id, values->bandwidthdown,
+					values->bandwidthup, values->packetloss);
 			a->priority = 2;
 		}
 	} else if(g_ascii_strcasecmp(element_name, ParserElementStrings[ELEMENT_LINK]) == 0) {

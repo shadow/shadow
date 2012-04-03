@@ -99,11 +99,12 @@ static void _internetwork_trackLatency(Internetwork* internet, Link* link) {
 	internet->minimumGlobalLatency = MIN(internet->minimumGlobalLatency, (latency-jitter));
 }
 
-void internetwork_createNetwork(Internetwork* internet, GQuark networkID, guint64 bandwidthdown, guint64 bandwidthup) {
+void internetwork_createNetwork(Internetwork* internet, GQuark networkID,
+		guint64 bandwidthdown, guint64 bandwidthup, gdouble packetloss) {
 	MAGIC_ASSERT(internet);
 	g_assert(!internet->isReadOnly);
 
-	Network* network = network_new(networkID, bandwidthdown, bandwidthup);
+	Network* network = network_new(networkID, bandwidthdown, bandwidthup, packetloss);
 	g_hash_table_replace(internet->networks, network_getIDReference(network), network);
 }
 
