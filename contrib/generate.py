@@ -58,6 +58,8 @@ class Relay():
         
         self.upload = 0 # in KiB
         self.download = 0 # in KiB
+
+        self.rates = [] # list of bytes/s histories
         
     def setRegionCode(self, code):
         self.code = code
@@ -143,7 +145,7 @@ class Relay():
         else: self.ispbandwidth = 204800
         '''
         
-    CSVHEADER = "IP,CCode,IsExit,Consensus(KB/s),Rate(KiB/s),Burst(KiB/s),MaxObserved(KiB/s),MaxRead(KiB/s),MaxWrite(KiB/s),LinkDown(KiB/s),LinkUp(KiB/s)"
+    CSVHEADER = "IP,CCode,IsExit,Consensus(KB/s),Rate(KiB/s),Burst(KiB/s),MaxObserved(KiB/s),MaxRead(KiB/s),MaxWrite(KiB/s),LinkDown(KiB/s),LinkUp(KiB/s),Load(KiB/s)"
 
     def toCSV(self):
         c = str(int(self.bwconsensus/1000.0)) # should be KB, just like in consensus
@@ -154,7 +156,8 @@ class Relay():
         mw = str(int(self.maxwrite/1024.0))
         ldown = str(int(self.download))
         lup = str(int(self.upload))
-        return ",".join([self.ip, self.code, str(self.isExit), c, r, b, mo, mr, mw, ldown, lup])
+        load = str(int(mean(relay.rates)/1024.0))
+        return ",".join([self.ip, self.code, str(self.isExit), c, r, b, mo, mr, mw, ldown, lup, load])
 
 class GeoIPEntry():
     def __init__(self, lownum, highnum, countrycode):
@@ -583,7 +586,9 @@ def getRelays(relays, k, geoentries, descriptorpath, extrainfopath):
             fullpath = os.path.join(root, filename)
             with open(fullpath, 'rb') as f:
                 maxwrite, maxread = 0, 0
+                totalwrite, totalread = 0, 0
                 fingerprint = None
+                published = None
                 
                 for line in f:
                     parts = line.strip().split()
@@ -592,20 +597,31 @@ def getRelays(relays, k, geoentries, descriptorpath, extrainfopath):
                         if len(parts) < 3: break # cant continue if we dont know the relay
                         fingerprint = parts[2]
                         if fingerprint not in fpmap: break
+                    elif parts[0] == "published":
+                        # only count data from january 2012 towards our totals 
+                        published = "{0} {1}".format(parts[1], parts[2])
+                        datet = datetime.strptime(published, "%Y-%m-%d %H:%M:%S")
+                        if datet.year != 2012 or datet.month != 1:
+                            published = None
                     elif parts[0] == "write-history":
                         if len(parts) < 6: continue # see if we can get other info from this doc
                         seconds = float(int(parts[3][1:]))
                         speeds = parts[5]
-                        maxwrite = int(max([int(i) for i in speeds.split(',')]) / seconds)
+                        bytes = speeds.split(',')
+                        maxwrite = int(max([int(i) for i in bytes]) / seconds)
+                        totalwrite = int(float(sum([int(i) for i in bytes])) / float(seconds*len(bytes)))
                     elif parts[0] == "read-history":
                         if len(parts) < 6: continue # see if we can get other info from this doc
                         seconds = float(int(parts[3][1:]))
                         speeds = parts[5]
-                        maxread = int(max([int(i) for i in speeds.split(',')]) / seconds)
+                        bytes = speeds.split(',')
+                        maxread = int(max([int(i) for i in bytes]) / seconds)
+                        totalread = int(float(sum([int(i) for i in bytes])) / float(seconds*len(bytes)))
                         
                 if fingerprint is not None and fingerprint in fpmap:
                     relay = fpmap[fingerprint]
                     relay.setMaxSpeeds(maxread, maxwrite)
+                    if published is not None: relay.rates.append(totalread + totalwrite)
                         
     # make sure we found some info for all of them, otherwise use defaults
     for s in sample:
