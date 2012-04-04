@@ -24,6 +24,7 @@
 import os, sys, subprocess, argparse, socket, time
 from random import choice
 from datetime import datetime
+from numpy import mean
 from lxml import etree
 from lxml.html.builder import INS
 
@@ -156,7 +157,8 @@ class Relay():
         mw = str(int(self.maxwrite/1024.0))
         ldown = str(int(self.download))
         lup = str(int(self.upload))
-        load = str(int(mean(relay.rates)/1024.0))
+        load = str(0)
+        if len(self.rates) > 0: load = str(int(mean(self.rates)/1024.0))
         return ",".join([self.ip, self.code, str(self.isExit), c, r, b, mo, mr, mw, ldown, lup, load])
 
 class GeoIPEntry():
