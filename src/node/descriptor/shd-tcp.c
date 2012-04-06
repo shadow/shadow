@@ -402,7 +402,7 @@ static void _tcp_updateReceiveWindow(TCP* tcp) {
 	MAGIC_ASSERT(tcp);
 
 	gsize space = socket_getOutputBufferSpace(&(tcp->super));
-	gsize nPackets = space / (CONFIG_MTU - CONFIG_TCPIP_HEADER_SIZE);
+	gsize nPackets = space / (CONFIG_MTU - CONFIG_HEADER_SIZE_TCPIPETH);
 
 	tcp->receive.window = nPackets;
 	if(tcp->receive.window < 1) {
@@ -1128,7 +1128,7 @@ gssize tcp_sendUserData(TCP* tcp, gconstpointer buffer, gsize nBytes, in_addr_t 
 	gsize remaining = MIN(acceptable, space);
 
 	/* break data into segments and send each in a packet */
-	gsize maxPacketLength = CONFIG_MTU - CONFIG_TCPIP_HEADER_SIZE;
+	gsize maxPacketLength = CONFIG_MTU - CONFIG_HEADER_SIZE_TCPIPETH;
 	gsize bytesCopied = 0;
 
 	/* create as many packets as needed */

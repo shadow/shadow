@@ -178,14 +178,18 @@ typedef guint64 SimulationTime;
 #define CONFIG_RECEIVE_BATCH_TIME (10*SIMTIME_ONE_MILLISECOND)
 
 /**
- * Header size of a packet with UDP/IP encapsulation
+ * Header size of a packet with UDP encapsulation
+ * 14 bytes eth2, 20 bytes IP, 8 bytes UDP
+ * Measured using wireshark on normal traffic.
  */
-#define CONFIG_UDPIP_HEADER_SIZE 28
+#define CONFIG_HEADER_SIZE_UDPIPETH 42
 
 /**
- * Header size of a packet with TCP/IP encapsulation
+ * Header size of a packet with TCP encapsulation
+ * 14 bytes eth2, 20 bytes IP, 32 bytes UDP
+ * Measured using wireshark on normal traffic.
  */
-#define CONFIG_TCPIP_HEADER_SIZE 40
+#define CONFIG_HEADER_SIZE_TCPIPETH 66
 
 /**
  * Maximum size of an IP packet without fragmenting over Ethernetv2
