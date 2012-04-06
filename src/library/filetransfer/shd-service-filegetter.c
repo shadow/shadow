@@ -419,7 +419,8 @@ reactivate:;
 		service_filegetter_download_next(sfg);
 		goto reactivate;
 	} else if(result != FG_OK_200 && result != FG_ERR_WOULDBLOCK) {
-		service_filegetter_log(sfg, SFG_CRITICAL, "filegetter shutdown due to protocol error...");
+		service_filegetter_log(sfg, SFG_CRITICAL, "filegetter shutdown due to protocol error '%s'...",
+				filegetter_codetoa(result));
 		filegetter_shutdown(&sfg->fg);
 		return result;
 	}
