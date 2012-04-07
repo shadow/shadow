@@ -198,9 +198,9 @@ static void _networkinterface_scheduleNextReceive(NetworkInterface* interface) {
 		/* free up buffer space */
 		guint length = packet_getPayloadLength(packet);
 		/* ignore our control-only protocol header overhead */
-		if(length > 0) {
-			length += packet_getHeaderSize(packet);
-		}
+//		if(length > 0) {
+		length += packet_getHeaderSize(packet);
+//		}
 		interface->inBufferLength -= length;
 
 		/* hand it off to the correct socket layer */
@@ -245,7 +245,7 @@ void networkinterface_packetArrived(NetworkInterface* interface, Packet* packet)
 
 	/* a packet arrived. lets try to receive or buffer it */
 	gint length = packet_getPayloadLength(packet);
-	/* ignore our control-only protocol header overhead */
+	/* ignore our control-only protocol header overhead in buffer space calc. */
 	if(length > 0) {
 		length += packet_getHeaderSize(packet);
 	}
@@ -345,9 +345,9 @@ static void _networkinterface_scheduleNextSend(NetworkInterface* interface) {
 		/* successfully sent, calculate how long it took to 'send' this packet */
 		guint length = packet_getPayloadLength(packet);
 		/* ignore our control-only protocol header overhead */
-		if(length > 0) {
-			length += packet_getHeaderSize(packet);
-		}
+//		if(length > 0) {
+		length += packet_getHeaderSize(packet);
+//		}
 
 		interface->sendNanosecondsConsumed += (length * interface->timePerByteUp);
 		tracker_addOutputBytes(node_getTracker(worker_getPrivate()->cached_node),(guint64)length);
