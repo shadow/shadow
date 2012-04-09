@@ -411,9 +411,10 @@ reactivate:;
 
 	enum filegetter_code result = filegetter_activate(&sfg->fg);
 
-	if(result == FG_ERR_FATAL) {
+	if(result == FG_ERR_FATAL || result == FG_ERR_SOCKSCONN) {
 		/* it had to shut down, lets try again */
-		service_filegetter_log(sfg, SFG_NOTICE, "filegetter shutdown due to internal fatal error... restarting");
+		service_filegetter_log(sfg, SFG_NOTICE, "filegetter shutdown due to error '%s'... restarting",
+				filegetter_codetoa(result));
 		filegetter_shutdown(&sfg->fg);
 		filegetter_start(&sfg->fg, sfg->fg.epolld);
 		service_filegetter_download_next(sfg);
