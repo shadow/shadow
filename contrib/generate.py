@@ -37,7 +37,10 @@ CPUFREQS=["2200000", "2400000", "2600000", "2800000", "3000000", "3200000", "340
 NRELAYS = 10
 FEXIT = 0.4
 NCLIENTS = 100
-FBULK = 0.05
+FIM = 0.02
+FWEB = 0.91
+FBULK = 0.02
+FP2P = 0.05
 NSERVERS = 10
 
 DOCHURN=False
@@ -175,7 +178,10 @@ def main():
     ap.add_argument('--nrelays', action="store", type=int, dest="nrelays", help="number N of total relays for the generated topology", metavar='N', default=NRELAYS)
     ap.add_argument('--fexit', action="store", type=float, dest="exitfrac", help="fraction F of relays that are exits", metavar='F', default=FEXIT)
     ap.add_argument('--nclients', action="store", type=int, dest="nclients", help="number N of total clients for the generated topology", metavar='N', default=NCLIENTS)
-    ap.add_argument('--fbulk', action="store", type=float, dest="fbulk", help="fraction F of bulk downloading clients (remaining are web clients)", metavar='F', default=FBULK)
+    ap.add_argument('--fim', action="store", type=float, dest="fim", help="fraction F of interactive clients", metavar='F', default=FIM)
+    ap.add_argument('--fweb', action="store", type=float, dest="fweb", help="fraction F of web clients", metavar='F', default=FWEB)
+    ap.add_argument('--fbulk', action="store", type=float, dest="fbulk", help="fraction F of bulk HTTP clients", metavar='F', default=FBULK)
+    ap.add_argument('--fp2p', action="store", type=float, dest="fp2p", help="fraction F of bulk P2P clients", metavar='F', default=FP2P)
     ap.add_argument('--nservers', action="store", type=int, dest="nservers", help="number N of fileservers", metavar='N', default=NSERVERS)
     ap.add_argument('--dochurn', action="store_true", dest="dochurn", help="use random file selection for clients", default=DOCHURN)
 
@@ -189,6 +195,11 @@ def main():
     # get arguments, accessible with args.value
     args = ap.parse_args()
     
+    totalclientf = args.fim + args.fweb + args.fbulk + args.fp2p
+    if totalclientf != 1.0:
+        log("client fractions do not add to 1.0! please fix arguments...")
+        return
+    
     # fixup paths from user
     args.prefix = os.path.abspath(os.path.expanduser(args.prefix))
     args.consensus = os.path.abspath(os.path.expanduser(args.consensus))
@@ -201,7 +212,7 @@ def main():
     args.geoippath = os.path.abspath(args.prefix+"/share/geoip")
     
     generate(args)
-    log("finished generating:\n{0}/relays.csv\n{0}/hosts.xml\n{0}/web.dl\n{0}/bulk.dl\n{0}/think.dat".format(os.getcwd()))
+    log("finished generating:\n{0}/relays.csv\n{0}/hosts.xml\n{0}/im.dl\n{0}/web.dl\n{0}/bulk.dl\n{0}/webthink.dat\n{0}/imthink.dat".format(os.getcwd()))
 
 def generate(args):
     # get list of relays, sorted by increasing bandwidth
@@ -242,6 +253,7 @@ def generate(args):
     e.set("time", "1")
     e.set("arguments", "server 80 {0}share".format(INSTALLPREFIX))
 
+    fim = open("im.dl", "wb")
     fweb = open("web.dl", "wb")
     fbulk = open("bulk.dl", "wb")
     fall = open("all.dl", "wb")
@@ -265,19 +277,47 @@ def generate(args):
         e.set("bandwidthdown", "102400") # in KiB
         e.set("quantity", "1")
         e.set("cpufrequency", choice(CPUFREQS))
+        print >>fim, "{0}:80:/1KiB.urnd".format(name)
         print >>fweb, "{0}:80:/320KiB.urnd".format(name)
         print >>fbulk, "{0}:80:/5MiB.urnd".format(name)
         print >>fall, "{0}:80:/5MiB.urnd".format(name)
         for j in xrange(webPerBulk): print >>fall, "{0}:80:/320KiB.urnd".format(name)
+    fim.close()
     fweb.close()
     fbulk.close()
     fall.close()
+    
+    # torrent auth
+    if args.fp2p > 0.0:
+         e = etree.SubElement(root, "software")
+         e.set("id", "torrentsoft")
+         e.set("plugin", "torrent")
+         e.set("time", "1")
+         e.set("arguments", "authority 5000")
+ 
+         e = etree.SubElement(root, "node")
+         e.set("id", "auth.torrent")
+         e.set("software", "torrentsoft")
+         e.set("bandwidthup", "102400") # in KiB
+         e.set("bandwidthdown", "102400") # in KiB
+         e.set("quantity", "1")
+         e.set("cpufrequency", choice(CPUFREQS))
     
     # think time file for web clients
     maxthink = 20000.0 # milliseconds
     increment = 1.0 / maxthink
     # 1012.000 0.0062491534
-    with open("think.dat", "wb") as fthink:
+    with open("webthink.dat", "wb") as fthink:
+        frac = increment
+        for ms in xrange(1, int(maxthink)+1):
+            assert frac <= 1.0
+            print >>fthink, "{0} {1}".format("%.3f" % ms, "%.10f" % frac)
+            frac += increment
+            
+    # think time file for im clients
+    maxthink = 5000.0 # milliseconds
+    increment = 1.0 / maxthink
+    with open("imthink.dat", "wb") as fthink:
         frac = increment
         for ms in xrange(1, int(maxthink)+1):
             assert frac <= 1.0
@@ -347,7 +387,7 @@ def generate(args):
             name = "client{0}".format(i)
             soft = "{0}soft".format(name)
             starttime = "{0}".format(timecounter)
-            softargs = "client {0} {1} {2} ./client.torrc ./data/clientdata {3}share/geoip client multi ./all.dl localhost 9000 ./think.dat -1".format(10240000, 5120000, 10240000, INSTALLPREFIX) # in bytes
+            softargs = "client {0} {1} {2} ./client.torrc ./data/clientdata {3}share/geoip client multi ./all.dl localhost 9000 ./webthink.dat -1".format(10240000, 5120000, 10240000, INSTALLPREFIX) # in bytes
             
             addRelayToXML(root, soft, starttime, softargs, name, code=choice(clientCountryCodes))
         
@@ -355,15 +395,29 @@ def generate(args):
             i += 1       
         
     else: # user are separated into bulk/web downloaders who always download their file type
+        nimclients = int(args.fim * args.nclients)
         nbulkclients = int(args.fbulk * args.nclients)
-        nwebclients = args.nclients - nbulkclients
-    
+        np2pclients = int(args.fp2p * args.nclients)
+        nwebclients = int(args.nclients - nimclients - nbulkclients - np2pclients)
+ 
+        i = 1
+        while i < nimclients:
+            name = "imclient{0}".format(i)
+            soft = "{0}soft".format(name)
+            starttime = "{0}".format(timecounter)
+            softargs = "client {0} {1} {2} ./client.torrc ./data/clientdata {3}share/geoip client multi ./im.dl localhost 9000 ./imthink.dat -1".format(10240000, 5120000, 10240000, INSTALLPREFIX) # in bytes
+            
+            addRelayToXML(root, soft, starttime, softargs, name, code=choice(clientCountryCodes))
+        
+            if i % clientsPerSecond == 0: timecounter += 1 # x nodes every second
+            i += 1
+                
         i = 1
         while i < nwebclients:
             name = "webclient{0}".format(i)
             soft = "{0}soft".format(name)
             starttime = "{0}".format(timecounter)
-            softargs = "client {0} {1} {2} ./client.torrc ./data/clientdata {3}share/geoip client multi ./web.dl localhost 9000 ./think.dat -1".format(10240000, 5120000, 10240000, INSTALLPREFIX) # in bytes
+            softargs = "client {0} {1} {2} ./client.torrc ./data/clientdata {3}share/geoip client multi ./web.dl localhost 9000 ./webthink.dat -1".format(10240000, 5120000, 10240000, INSTALLPREFIX) # in bytes
             
             addRelayToXML(root, soft, starttime, softargs, name, code=choice(clientCountryCodes))
         
@@ -382,7 +436,19 @@ def generate(args):
         
             if i % clientsPerSecond == 0: timecounter += 1 # x nodes every second
             i += 1
+            
+        i = 1
+        while i < np2pclients:
+            name = "p2pclient{0}".format(i)
+            soft = "{0}soft".format(name)
+            starttime = "{0}".format(timecounter)
+            softargs = "torrent {0} {1} {2} ./client.torrc ./data/clientdata {3}share/geoip torrent node auth.torrent 5000 localhost 9000 6000 32MB".format(10240000, 5120000, 10240000, INSTALLPREFIX) # in bytes
+ 
+            addRelayToXML(root, soft, starttime, softargs, name, code=choice(clientCountryCodes))
         
+            if i % clientsPerSecond == 0: timecounter += 1 # x nodes every second
+            i += 1
+                   
     # finally, print the XML file
     with open("hosts.xml", 'wb') as fhosts:
         # plug-ins
@@ -394,6 +460,11 @@ def generate(args):
         e = etree.Element("plugin")
         e.set("id", "filetransfer")
         e.set("path", "{0}plugins/libshadow-plugin-filetransfer.so".format(INSTALLPREFIX))
+        root.insert(0, e)
+        
+        e = etree.Element("plugin")
+        e.set("id", "torrent")
+        e.set("path", "{0}plugins/libshadow-plugin-torrent.so".format(INSTALLPREFIX))
         root.insert(0, e)
         
         # kill time
