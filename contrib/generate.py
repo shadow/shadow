@@ -276,7 +276,7 @@ def generate(args):
         e.set("bandwidthup", "102400") # in KiB
         e.set("bandwidthdown", "102400") # in KiB
         e.set("quantity", "1")
-        e.set("cpufrequency", choice(CPUFREQS))
+        e.set("cpufrequency", "10000000") # 10 GHz b/c we dont want bottlenecks
         print >>fim, "{0}:80:/1KiB.urnd".format(name)
         print >>fweb, "{0}:80:/320KiB.urnd".format(name)
         print >>fbulk, "{0}:80:/5MiB.urnd".format(name)
@@ -301,7 +301,7 @@ def generate(args):
          e.set("bandwidthup", "102400") # in KiB
          e.set("bandwidthdown", "102400") # in KiB
          e.set("quantity", "1")
-         e.set("cpufrequency", choice(CPUFREQS))
+         e.set("cpufrequency", "10000000") # 10 GHz b/c we dont want bottlenecks
     
     # think time file for web clients
     maxthink = 20000.0 # milliseconds
@@ -442,7 +442,7 @@ def generate(args):
             name = "p2pclient{0}".format(i)
             soft = "{0}soft".format(name)
             starttime = "{0}".format(timecounter)
-            softargs = "torrent {0} {1} {2} ./client.torrc ./data/clientdata {3}share/geoip torrent node auth.torrent 5000 localhost 9000 6000 32MB".format(10240000, 5120000, 10240000, INSTALLPREFIX) # in bytes
+            softargs = "torrent {0} {1} {2} ./client.torrc ./data/clientdata {3}share/geoip torrent node auth.torrent 5000 localhost 9000 6000 700MB".format(10240000, 5120000, 10240000, INSTALLPREFIX) # in bytes
  
             addRelayToXML(root, soft, starttime, softargs, name, code=choice(clientCountryCodes))
         

@@ -326,6 +326,7 @@ def setup_dependencies(args):
     return 0
 
 def gen_www_files(args):
+    dd(args, "1KiB.urnd", 1)
     dd(args, "16KiB.urnd", 16)
     dd(args, "32KiB.urnd", 32)
     dd(args, "50KiB.urnd", 50)
