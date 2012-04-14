@@ -38,9 +38,9 @@ NRELAYS = 10
 FEXIT = 0.4
 NCLIENTS = 100
 FIM = 0.02
-FWEB = 0.91
+FWEB = 0.93
 FBULK = 0.02
-FP2P = 0.05
+FP2P = 0.03
 NSERVERS = 10
 
 DOCHURN=False
@@ -671,10 +671,11 @@ def getRelays(relays, k, geoentries, descriptorpath, extrainfopath):
                         fingerprint = parts[2]
                         if fingerprint not in fpmap: break
                     elif parts[0] == "published":
-                        # only count data from january 2012 towards our totals 
+                        # only count data from march 2012 towards our totals 
+                        # TODO make this work for any month
                         published = "{0} {1}".format(parts[1], parts[2])
                         datet = datetime.strptime(published, "%Y-%m-%d %H:%M:%S")
-                        if datet.year != 2012 or datet.month != 1:
+                        if datet.year != 2012 or datet.month != 3:
                             published = None
                     elif parts[0] == "write-history":
                         if len(parts) < 6: continue # see if we can get other info from this doc
