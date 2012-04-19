@@ -21,7 +21,7 @@
 # along with Scallion.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-import os, sys, subprocess, argparse, socket, time
+import os, sys, subprocess, argparse, socket, time, math
 from random import choice
 from datetime import datetime
 from numpy import mean
@@ -38,9 +38,9 @@ NRELAYS = 10
 FEXIT = 0.4
 NCLIENTS = 100
 FIM = 0.02
-FWEB = 0.93
-FBULK = 0.02
-FP2P = 0.03
+FWEB = 0.89
+FBULK = 0.04
+FP2P = 0.05
 NSERVERS = 10
 
 DOCHURN=False
@@ -178,9 +178,9 @@ def main():
     ap.add_argument('--nrelays', action="store", type=int, dest="nrelays", help="number N of total relays for the generated topology", metavar='N', default=NRELAYS)
     ap.add_argument('--fexit', action="store", type=float, dest="exitfrac", help="fraction F of relays that are exits", metavar='F', default=FEXIT)
     ap.add_argument('--nclients', action="store", type=int, dest="nclients", help="number N of total clients for the generated topology", metavar='N', default=NCLIENTS)
-    ap.add_argument('--fim', action="store", type=float, dest="fim", help="fraction F of interactive clients", metavar='F', default=FIM)
-    ap.add_argument('--fweb', action="store", type=float, dest="fweb", help="fraction F of web clients", metavar='F', default=FWEB)
-    ap.add_argument('--fbulk', action="store", type=float, dest="fbulk", help="fraction F of bulk HTTP clients", metavar='F', default=FBULK)
+    ap.add_argument('--fim', action="store", type=float, dest="fim", help="fraction F of interactive client connections", metavar='F', default=FIM)
+    ap.add_argument('--fweb', action="store", type=float, dest="fweb", help="fraction F of web client connections", metavar='F', default=FWEB)
+    ap.add_argument('--fbulk', action="store", type=float, dest="fbulk", help="fraction F of bulk HTTP client connections", metavar='F', default=FBULK)
     ap.add_argument('--fp2p', action="store", type=float, dest="fp2p", help="fraction F of bulk P2P clients", metavar='F', default=FP2P)
     ap.add_argument('--nservers', action="store", type=int, dest="nservers", help="number N of fileservers", metavar='N', default=NSERVERS)
     ap.add_argument('--dochurn', action="store_true", dest="dochurn", help="use random file selection for clients", default=DOCHURN)
@@ -372,18 +372,10 @@ def generate(args):
     # earliest client start time
     timecounter = 900
 
-    # shadowperf
-    name = "shadowperfclient"
-    soft = "{0}soft".format(name)
-    starttime = "{0}".format(timecounter)
-    softargs = "client {0} {1} {2} ./client.torrc ./data/clientdata {3}share/geoip client double server1 80 localhost 9000 /50KiB.urnd /1MiB.urnd none 5".format(10240000, 5120000, 10240000, INSTALLPREFIX) # in bytes
-    
-    addRelayToXML(root, soft, starttime, softargs, name, code=choice(clientCountryCodes))
-        
     # clients
     if args.dochurn: # user chooses bulk/web download randomly
         i = 1
-        while i < args.nclients+1:
+        while i <= args.nclients:
             name = "client{0}".format(i)
             soft = "{0}soft".format(name)
             starttime = "{0}".format(timecounter)
@@ -397,11 +389,12 @@ def generate(args):
     else: # user are separated into bulk/web downloaders who always download their file type
         nimclients = int(args.fim * args.nclients)
         nbulkclients = int(args.fbulk * args.nclients)
-        np2pclients = int(args.fp2p * args.nclients)
+        # need fp2p connections, not clients (each client connects to each other)
+        np2pclients = int(math.ceil(math.sqrt(float(args.fp2p * args.nclients))))
         nwebclients = int(args.nclients - nimclients - nbulkclients - np2pclients)
  
         i = 1
-        while i < nimclients:
+        while i <= nimclients:
             name = "imclient{0}".format(i)
             soft = "{0}soft".format(name)
             starttime = "{0}".format(timecounter)
@@ -413,7 +406,7 @@ def generate(args):
             i += 1
                 
         i = 1
-        while i < nwebclients:
+        while i <= nwebclients:
             name = "webclient{0}".format(i)
             soft = "{0}soft".format(name)
             starttime = "{0}".format(timecounter)
@@ -426,7 +419,7 @@ def generate(args):
         
         i = 1
         timecounter += 1
-        while i < nbulkclients:
+        while i <= nbulkclients:
             name = "bulkclient{0}".format(i)
             soft = "{0}soft".format(name)
             starttime = "{0}".format(timecounter)
@@ -438,7 +431,7 @@ def generate(args):
             i += 1
             
         i = 1
-        while i < np2pclients:
+        while i <= np2pclients:
             name = "p2pclient{0}".format(i)
             soft = "{0}soft".format(name)
             starttime = "{0}".format(timecounter)
