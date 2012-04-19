@@ -54,6 +54,22 @@ void intercept_AES_decrypt(const guchar *in, guchar *out, const void *key) {
 }
 
 /*
+ * const AES_KEY *key
+ * The key parameter has been voided to avoid requiring Openssl headers
+ */
+void intercept_AES_ctr128_encrypt(const guchar *in, guchar *out, const void *key) {
+	return;
+}
+
+/*
+ * const AES_KEY *key
+ * The key parameter has been voided to avoid requiring Openssl headers
+ */
+void intercept_AES_ctr128_decrypt(const guchar *in, guchar *out, const void *key) {
+	return;
+}
+
+/*
  * EVP_CIPHER_CTX *ctx
  * The ctx parameter has been voided to avoid requiring Openssl headers
  */

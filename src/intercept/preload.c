@@ -566,6 +566,36 @@ void AES_decrypt(const unsigned char *in, unsigned char *out, const void *key) {
 }
 
 /*
+ * const AES_KEY *key
+ * The key parameter has been voided to avoid requiring Openssl headers
+ */
+typedef void (*AES_ctr128_encrypt_fp)(const unsigned char *, unsigned char *, const void *);
+static AES_ctr128_encrypt_fp _AES_ctr128_encrypt = NULL;
+static AES_ctr128_encrypt_fp _intercept_AES_ctr128_encrypt = NULL;
+void AES_ctr128_encrypt(const unsigned char *in, unsigned char *out, const void *key) {
+	AES_ctr128_encrypt_fp* func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "AES_ctr128_encrypt", _AES_ctr128_encrypt, INTERCEPT_PREFIX, _intercept_AES_ctr128_encrypt, 1);
+	PRELOAD_LOOKUP(func, funcName,);
+	(*func)(in, out, key);
+}
+
+/*
+ * const AES_KEY *key
+ * The key parameter has been voided to avoid requiring Openssl headers
+ */
+typedef void (*AES_ctr128_decrypt_fp)(const unsigned char *, unsigned char *, const void *);
+static AES_ctr128_decrypt_fp _AES_ctr128_decrypt = NULL;
+static AES_ctr128_decrypt_fp _intercept_ctr128_AES_decrypt = NULL;
+void AES_ctr128_decrypt(const unsigned char *in, unsigned char *out, const void *key) {
+	AES_ctr128_decrypt_fp* func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "AES_ctr128_decrypt", _AES_ctr128_decrypt, INTERCEPT_PREFIX, _intercept_ctr128_AES_decrypt, 1);
+	PRELOAD_LOOKUP(func, funcName,);
+	(*func)(in, out, key);
+}
+
+/*
  * EVP_CIPHER_CTX *ctx
  * The ctx parameter has been voided to avoid requiring Openssl headers
  */
