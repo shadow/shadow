@@ -53,6 +53,8 @@ static void torrentService_report(TorrentService* tsvc, gchar* preamble) {
 		struct timespec now;
 		struct timespec first_time;
 		struct timespec curr_time;
+		struct timespec block_first_time;
+		struct timespec block_curr_time;
 		TorrentClient *tc = tsvc->client;
 		clock_gettime(CLOCK_REALTIME, &now);
 
@@ -72,11 +74,30 @@ static void torrentService_report(TorrentService* tsvc, gchar* preamble) {
 			curr_time.tv_nsec += 1000000000;
 		}
 
-		torrentService_log(tsvc, TSVC_NOTICE, "%s got first bytes in %lu.%.3d seconds and %d of %d bytes [%d\%] in %lu.%.3d seconds",
-				preamble,
-				first_time.tv_sec, (gint)(first_time.tv_nsec / 1000000),
-				tc->totalBytesDown, tc->fileSize, (gint)((double)tc->totalBytesDown / (double)tc->fileSize * 100.0),
-				curr_time.tv_sec, (gint)(curr_time.tv_nsec / 1000000));
+		/* first byte statistics */
+		block_first_time.tv_sec = tc->lastBlockTransfer->download_first_byte.tv_sec - tc->lastBlockTransfer->download_start.tv_sec;
+		block_first_time.tv_nsec = tc->lastBlockTransfer->download_first_byte.tv_nsec - tc->lastBlockTransfer->download_start.tv_nsec;
+		while(block_first_time.tv_nsec < 0) {
+			block_first_time.tv_sec--;
+			block_first_time.tv_nsec += 1000000000;
+		}
+
+		/* current byte statistics */
+		block_curr_time.tv_sec = now.tv_sec - tc->lastBlockTransfer->download_start.tv_sec;
+		block_curr_time.tv_nsec = now.tv_nsec - tc->lastBlockTransfer->download_start.tv_nsec;
+		while(block_curr_time.tv_nsec < 0) {
+			block_curr_time.tv_sec--;
+			block_curr_time.tv_nsec += 1000000000;
+		}
+
+
+		torrentService_log(tsvc, TSVC_NOTICE, "%s first byte in %lu.%.3d seconds, block %d bytes in %lu.%.3d seconds, total %d of %d bytes in %lu.%.3d seconds (block %d of %d)",
+						preamble,
+						block_first_time.tv_sec, (gint)(block_first_time.tv_nsec / 1000000),
+						tc->lastBlockTransfer->downBytesTransfered,
+						block_curr_time.tv_sec, (gint)(block_curr_time.tv_nsec / 1000000),
+						tc->totalBytesDown, tc->fileSize,  curr_time.tv_sec, (gint)(curr_time.tv_nsec / 1000000),
+						tc->blocksDownloaded, tc->numBlocks);
 	}
 }
 
@@ -137,7 +158,7 @@ int torrentService_activate(TorrentService *tsvc, gint sockd, gint events, gint 
 	if(tsvc->client->epolld == epolld) {
 		gint ret = torrentClient_activate(tsvc->client, sockd, events);
 
-		if(ret != TC_SUCCESS && ret != TC_ERR_RECV && ret != TC_ERR_SEND) {
+		if(ret != TC_SUCCESS && ret != TC_BLOCK_DOWNLOADED && ret != TC_ERR_RECV && ret != TC_ERR_SEND) {
 			torrentService_log(tsvc, TSVC_INFO, "torrent client encountered a "
 					"non-asynch-io related error");
 		}
@@ -146,12 +167,12 @@ int torrentService_activate(TorrentService *tsvc, gint sockd, gint events, gint 
 			if(tsvc->client->totalBytesDown >= tsvc->client->fileSize) {
 				torrentService_report(tsvc, "[client-complete]");
 				tsvc->clientDone = 1;
-			} else {
+			} else if(ret == TC_BLOCK_DOWNLOADED) {
 				struct timespec now;
 				clock_gettime(CLOCK_REALTIME, &now);
 				if(now.tv_sec - tsvc->lastReport.tv_sec > 1) {
 					tsvc->lastReport = now;
-					torrentService_report(tsvc, "[client-progress]");
+					torrentService_report(tsvc, "[client-block-complete]");
 				}
 			}
 		}

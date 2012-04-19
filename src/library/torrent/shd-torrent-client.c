@@ -92,6 +92,9 @@ gint torrentClient_start(TorrentClient* tc, gint epolld, in_addr_t socksAddr, in
 	tc->totalBytesUp = 0;
 	tc->fileSize = fileSize;
 	tc->bytesInProgress = 0;
+	// ceil(fileSize / TC_BLOCK_SIZE)
+	tc->numBlocks = (fileSize + TC_BLOCK_SIZE - 1) / TC_BLOCK_SIZE;
+	tc->blocksDownloaded = 0;
 
 	gint sockd = torrentClient_connect(tc, authAddr, authPort);
 	if(sockd < 0) {
@@ -114,6 +117,7 @@ gint torrentClient_start(TorrentClient* tc, gint epolld, in_addr_t socksAddr, in
 gint torrentClient_activate(TorrentClient *tc, gint sockd, gint events) {
 	gchar buf[TC_BLOCK_SIZE];
 	ssize_t bytes;
+	enum torrentClient_code ret = TC_SUCCESS;
 
 
 	TorrentClient_Server* server = g_hash_table_lookup(tc->connections, &sockd);
@@ -374,10 +378,13 @@ gint torrentClient_activate(TorrentClient *tc, gint sockd, gint events) {
 				clock_gettime(CLOCK_REALTIME, &(tc->download_start));
 			}
 
-			bytes = send(sockd, "GET FILE", strlen("GET FILE"), 0);
+			gchar request[64];
+			sprintf(request, "FILE REQUEST\r\nTOR-COOKIE: %8.8X\r\n", rand() % 4294967296);
+			bytes = send(sockd, request, strlen(request), 0);
 			TC_ASSERTIO(tc, bytes, errno == EWOULDBLOCK || errno == ENOTCONN || errno == EALREADY, TC_ERR_SEND);
 			torrentClient_changeEpoll(tc, sockd, EPOLLIN);
 			server->state = TC_SERVER_TRANSFER;
+			clock_gettime(CLOCK_REALTIME, &(server->download_start));
 			break;
 
 		case TC_SERVER_TRANSFER: {
@@ -387,6 +394,10 @@ gint torrentClient_activate(TorrentClient *tc, gint sockd, gint events) {
 
 				if(tc->totalBytesDown == 0) {
 					clock_gettime(CLOCK_REALTIME, &(tc->download_first_byte));
+				}
+
+				if(server->downBytesTransfered == 0) {
+					clock_gettime(CLOCK_REALTIME, &(server->download_first_byte));
 				}
 
 				server->downBytesTransfered += bytes;
@@ -418,6 +429,10 @@ gint torrentClient_activate(TorrentClient *tc, gint sockd, gint events) {
 
 
 			if(server->downBytesTransfered >= server->blockSize && server->upBytesTransfered >= server->blockSize) {
+				clock_gettime(CLOCK_REALTIME, &(server->download_end));
+				tc->blocksDownloaded++;
+				tc->lastBlockTransfer = server;
+				ret = TC_BLOCK_DOWNLOADED;
 				server->state = TC_SERVER_FINISHED;
 				torrentClient_changeEpoll(tc, sockd, EPOLLIN);
 			}
@@ -449,10 +464,10 @@ gint torrentClient_activate(TorrentClient *tc, gint sockd, gint events) {
 	if(tc->totalBytesDown >= tc->fileSize) {
 		clock_gettime(CLOCK_REALTIME, &(tc->download_end));
 		torrentClient_shutdown(tc);
-		return TC_SUCCESS;
+		return ret;
 	}
 
-	return TC_SUCCESS;
+	return ret;
 }
 
 gint torrentClient_shutdown(TorrentClient* tc) {

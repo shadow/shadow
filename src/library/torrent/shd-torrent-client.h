@@ -44,7 +44,7 @@
 #define TC_BLOCK_SIZE 16*1024
 
 enum torrentClient_code {
-	TC_SUCCESS, TC_CLOSED, TC_ERR_INVALID, TC_ERR_FATAL, TC_ERR_BADSD, TC_ERR_WOULDBLOCK, TC_ERR_BUFSPACE,
+	TC_SUCCESS, TC_BLOCK_DOWNLOADED, TC_CLOSED, TC_ERR_INVALID, TC_ERR_FATAL, TC_ERR_BADSD, TC_ERR_WOULDBLOCK, TC_ERR_BUFSPACE,
 	TC_ERR_SOCKET, TC_ERR_BIND, TC_ERR_LISTEN, TC_ERR_ACCEPT, TC_ERR_RECV, TC_ERR_SEND, TC_ERR_CLOSE, TC_ERR_EPOLL, TC_ERR_CONNECT,
 	TC_ERR_SOCKSINIT, TC_ERR_SOCKSCONN, TC_ERR_NOSERVER,
 };
@@ -92,6 +92,10 @@ struct _TorrentClient_Server {
 	gint blockSize;
 	gint downBytesTransfered;
 	gint upBytesTransfered;
+
+	struct timespec download_start;
+	struct timespec download_first_byte;
+	struct timespec download_end;
 };
 
 typedef struct _TorrentClient TorrentClient;
@@ -115,10 +119,14 @@ struct _TorrentClient {
 	gint totalBytesUp;
 	gint bytesInProgress;
 	gint fileSize;
+	gint blocksDownloaded;
+	gint numBlocks;
 
 	struct timespec download_start;
 	struct timespec download_first_byte;
 	struct timespec download_end;
+
+	TorrentClient_Server *lastBlockTransfer;
 };
 
 gint torrentClient_start(TorrentClient* tc, gint epolld, in_addr_t socksAddr, in_port_t socksPort, in_addr_t authAddr, in_port_t authPort, in_port_t serverPort, gint fileSize);

@@ -153,7 +153,7 @@ gint torrentServer_activate(TorrentServer *ts, gint sockd, gint events) {
 			bytes = recv(sockd, buf, sizeof(buf), 0);
 			TS_ASSERTIO(ts, bytes, errno == EWOULDBLOCK, TS_ERR_RECV);
 
-			gchar *found = strcasestr(buf, "GET FILE");
+			gchar *found = strcasestr(buf, "FILE REQUEST");
 			if(!found) {
 				connection->state = TS_REQUEST;
 			} else {
