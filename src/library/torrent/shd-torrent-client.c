@@ -379,7 +379,7 @@ gint torrentClient_activate(TorrentClient *tc, gint sockd, gint events) {
 			}
 
 			gchar request[64];
-			sprintf(request, "FILE REQUEST\r\nTOR-COOKIE: %8.8X\r\n", rand() % 4294967296);
+			sprintf(request, "FILE REQUEST\r\nTOR-COOKIE: %8.8X\r\n", (unsigned int)(rand() % 4294967296));
 			bytes = send(sockd, request, strlen(request), 0);
 			TC_ASSERTIO(tc, bytes, errno == EWOULDBLOCK || errno == ENOTCONN || errno == EALREADY, TC_ERR_SEND);
 			torrentClient_changeEpoll(tc, sockd, EPOLLIN);
