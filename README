@@ -119,6 +119,10 @@ $ gdb shadow-bin
 > set args --echo
 > run
 
+If this doesn't work and you just see "exited with code 1", instead set
+LD_PRELOAD as follows:
+> set exec-wrapper env LD_PRELOAD=/home/rob/.shadow/lib/libshadow-preload.so
+
 If you want to be able to run Shadow through valgrind and the application you 
 are running in Shadow uses OpenSSL, you should configure OpenSSL with the 
 additional option: "-DPURIFY". This fixes OpenSSL so it doesn't break valgrind.
