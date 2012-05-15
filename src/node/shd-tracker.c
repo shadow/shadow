@@ -83,14 +83,14 @@ void tracker_addOutputBytes(Tracker* tracker, gsize outputBytes) {
 void tracker_addAllocatedBytes(Tracker* tracker, gpointer location, gsize allocatedBytes) {
 	MAGIC_ASSERT(tracker);
 	tracker->allocatedBytesTotal += allocatedBytes;
-	g_hash_table_insert(tracker->allocatedLocations, location, (gpointer)allocatedBytes);
+	g_hash_table_insert(tracker->allocatedLocations, location, GSIZE_TO_POINTER(allocatedBytes));
 }
 
 void tracker_removeAllocatedBytes(Tracker* tracker, gpointer location) {
 	MAGIC_ASSERT(tracker);
 	gpointer value = g_hash_table_lookup(tracker->allocatedLocations, location);
 	if(value) {
-		gsize allocatedBytes = (gsize) value;
+		gsize allocatedBytes = GPOINTER_TO_SIZE(value);
 		tracker->allocatedBytesTotal -= allocatedBytes;
 	}
 }
