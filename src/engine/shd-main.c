@@ -143,7 +143,6 @@ gint shadow_main(gint argc, gchar* argv[]) {
 	/* cleanup */
 	configuration_free(config);
 	engine_free(shadow_engine);
-	shadow_engine = NULL;
 	worker_free(mainThreadWorker);
 
 	return retval;

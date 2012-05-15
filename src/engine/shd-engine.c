@@ -198,6 +198,7 @@ void engine_free(Engine* engine) {
 	g_mutex_free(engine->lock);
 
 	MAGIC_CLEAR(engine);
+	shadow_engine = NULL;
 	g_free(engine);
 }
 
