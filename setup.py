@@ -51,10 +51,10 @@ def main():
           help="path to root directory for scallion installation", metavar="PATH", default=INSTALL_PREFIX)
     parser_build.add_argument('-i', '--include', action="append", dest="extra_includes", metavar="PATH",
           help="include PATH when searching for headers. useful if dependencies are installed to non-standard locations.",
-          default=[INSTALL_PREFIX+ "/include"])
+          default=[INSTALL_PREFIX+ "/include", os.path.expanduser("~/.local/include")])
     parser_build.add_argument('-l', '--library', action="append", dest="extra_libraries", metavar="PATH",
           help="include PATH when searching for libraries. useful if dependencies are installed to non-standard locations.",
-          default=[INSTALL_PREFIX+ "/lib"])
+          default=[INSTALL_PREFIX+ "/lib", os.path.expanduser("~/.local/lib")])
     parser_build.add_argument('--tor-prefix', action="store", dest="prefix_tor", metavar="PATH",
           help="PATH to base Tor directory to build. this overrides the remote download triggered with '-v' or '--version' options.", default=None)
     parser_build.add_argument('--libevent-prefix', action="store", dest="prefix_libevent", metavar="PATH",
