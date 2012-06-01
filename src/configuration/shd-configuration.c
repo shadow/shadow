@@ -159,7 +159,7 @@ void configuration_free(Configuration* config) {
 	g_free(config);
 }
 
-GLogLevelFlags _configuration_getLevel(Configuration* config, const gchar* input) {
+GLogLevelFlags configuration_getLevel(Configuration* config, const gchar* input) {
 	MAGIC_ASSERT(config);
 	if (g_ascii_strcasecmp(input, "error") == 0) {
 		return G_LOG_LEVEL_ERROR;
@@ -181,11 +181,11 @@ GLogLevelFlags _configuration_getLevel(Configuration* config, const gchar* input
 GLogLevelFlags configuration_getLogLevel(Configuration* config) {
 	MAGIC_ASSERT(config);
 	const gchar* l = (const gchar*) config->logLevelInput;
-	return _configuration_getLevel(config, l);
+	return configuration_getLevel(config, l);
 }
 
 GLogLevelFlags configuration_getHeartbeatLogLevel(Configuration* config) {
 	MAGIC_ASSERT(config);
 	const gchar* l = (const gchar*) config->heartbeatLogLevelInput;
-	return _configuration_getLevel(config, l);
+	return configuration_getLevel(config, l);
 }

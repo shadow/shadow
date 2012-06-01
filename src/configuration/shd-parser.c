@@ -42,7 +42,8 @@ static const gchar* ParserAttributeStrings[] = {
 	"id", "path", "center", "width", "tail",
 	"plugin", "software", "cluster", "clusters",
 	"bandwidthdown", "bandwidthup", "latency", "jitter", "packetloss",
-	"cpufrequency", "time", "quantity", "arguments",
+	"cpufrequency", "time", "quantity", "arguments", "heartbeatfrequency",
+	"heartbeatloglevel",
 };
 
 /* NOTE - they MUST be synced with ParserAttributeStrings */
@@ -65,6 +66,8 @@ typedef enum {
 	ATTRIBUTE_TIME,
 	ATTRIBUTE_QUANTITY,
 	ATTRIBUTE_ARGUMENTS,
+	ATTRIBUTE_HEARTBEATFREQUENCY,
+	ATTRIBUTE_HEARTBEATLOGLEVEL,
 } ParserAttributes;
 
 struct _Parser {
@@ -111,6 +114,10 @@ struct _ParserValues {
 	guint64 time;
 	guint64 quantity;
 	guint64 cpufrequency;
+	/* heartbeat frequency */
+	guint64 heartbeatIntervalSeconds;
+	/* heartbeat log level */
+	GString* heartbeatLogLevel;
 	MAGIC_DECLARE;
 };
 
@@ -164,6 +171,10 @@ static ParserValues* _parser_getValues(const gchar *element_name,
 			values->tail = g_ascii_strtoull(*value_cursor, NULL, 10);
 		} else if(g_ascii_strcasecmp(*name_cursor, ParserAttributeStrings[ATTRIBUTE_WIDTH]) == 0) {
 			values->width = g_ascii_strtoull(*value_cursor, NULL, 10);
+		} else if(g_ascii_strcasecmp(*name_cursor, ParserAttributeStrings[ATTRIBUTE_HEARTBEATFREQUENCY]) == 0) {
+			values->heartbeatIntervalSeconds = g_ascii_strtoull(*value_cursor, NULL, 10);
+		} else if(g_ascii_strcasecmp(*name_cursor, ParserAttributeStrings[ATTRIBUTE_HEARTBEATLOGLEVEL]) == 0) {
+			values->heartbeatLogLevel = g_string_new(*value_cursor);
 		} else {
 			warning("unrecognized attribute '%s' for element '%s' while parsing topology. ignoring.", *name_cursor, element_name);
 		}
@@ -192,6 +203,8 @@ static void _parser_freeValues(ParserValues* values) {
 		g_string_free(values->path, TRUE);
 	if(values->plugin)
 		g_string_free(values->plugin, TRUE);
+	if(values->heartbeatLogLevel)
+		g_string_free(values->heartbeatLogLevel, TRUE);
 
 	MAGIC_CLEAR(values);
 	g_free(values);
@@ -375,7 +388,8 @@ static void _parser_handleElement(GMarkupParseContext *context,
 	} else if(g_ascii_strcasecmp(element_name, ParserElementStrings[ELEMENT_NODE]) == 0) {
 		if(_parser_validateNode(parser, values)) {
 			a = (Action*) createnodes_new(values->id, values->software, values->cluster,
-					values->bandwidthdown, values->bandwidthup, values->quantity, values->cpufrequency);
+					values->bandwidthdown, values->bandwidthup, values->quantity, values->cpufrequency,
+					values->heartbeatIntervalSeconds, values->heartbeatLogLevel);
 			a->priority = 5;
 		}
 	} else if(g_ascii_strcasecmp(element_name, ParserElementStrings[ELEMENT_KILL]) == 0) {

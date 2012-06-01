@@ -262,6 +262,19 @@ Configuration* configuration_new(gint argc, gchar* argv[]);
 void configuration_free(Configuration* config);
 
 /**
+ * Get the log level flags corresponding to the given input string. Strings are
+ * compared ignoring case. If an invalid string is supplied, the default flags
+ * are returned.
+ *
+ * @param config a #Configuration object created with configuration_new()
+ * @param input the string representing the log level. Valid strings are:
+ *  'error'; 'critical'; 'warning'; 'message'; 'info'; and 'debug'.
+ * @return the log level parsed from the input string, or the log level
+ * corresponding to 'message' if the input is invalid.
+ */
+GLogLevelFlags configuration_getLevel(Configuration* config, const gchar* input);
+
+/**
  * Get the configured log level based on command line input.
  *
  * @param config a #Configuration object created with configuration_new()

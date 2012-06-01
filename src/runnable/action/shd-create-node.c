@@ -32,6 +32,8 @@ struct _CreateNodesAction {
 	guint64 bandwidthup;
 	guint64 quantity;
 	guint cpuFrequency;
+	SimulationTime heartbeatIntervalSeconds;
+	GString* heartbeatLogLevelString;
 
 	MAGIC_DECLARE;
 };
@@ -43,7 +45,8 @@ RunnableFunctionTable createnodes_functions = {
 };
 
 CreateNodesAction* createnodes_new(GString* name, GString* software, GString* cluster,
-		guint64 bandwidthdown, guint64 bandwidthup, guint64 quantity, guint64 cpuFrequency)
+		guint64 bandwidthdown, guint64 bandwidthup, guint64 quantity, guint64 cpuFrequency,
+		guint64 heartbeatIntervalSeconds, GString* heartbeatLogLevelString)
 {
 	g_assert(name && software);
 	CreateNodesAction* action = g_new0(CreateNodesAction, 1);
@@ -59,6 +62,10 @@ CreateNodesAction* createnodes_new(GString* name, GString* software, GString* cl
 	action->bandwidthup = bandwidthup;
 	action->quantity = quantity ? quantity : 1;
 	action->cpuFrequency = (guint)cpuFrequency;
+	action->heartbeatIntervalSeconds = heartbeatIntervalSeconds;
+	if(heartbeatLogLevelString) {
+		action->heartbeatLogLevelString = g_string_new(heartbeatLogLevelString->str);
+	}
 
 	return action;
 }
@@ -93,10 +100,19 @@ void createnodes_run(CreateNodesAction* action) {
 	}
 	gint cpuThreshold = engine_getConfig(worker->cached_engine)->cpuThreshold;
 
-	/* TODO we could specify these in XML on a per-node basis also... */
 	Configuration* config = engine_getConfig(worker->cached_engine);
-	SimulationTime heartbeatInterval = config->heartbeatInterval * SIMTIME_ONE_SECOND;
-	GLogLevelFlags heartbeatLogLevel = configuration_getHeartbeatLogLevel(config);
+
+	/* prefer node-specific settings, default back to system-wide config */
+	SimulationTime heartbeatInterval = action->heartbeatIntervalSeconds * SIMTIME_ONE_SECOND;
+	if(!heartbeatInterval) {
+		heartbeatInterval = config->heartbeatInterval * SIMTIME_ONE_SECOND;
+	}
+	GLogLevelFlags heartbeatLogLevel = 0;
+	if(action->heartbeatLogLevelString) {
+		heartbeatLogLevel = configuration_getLevel(config, action->heartbeatLogLevelString->str);
+	} else {
+		heartbeatLogLevel = configuration_getHeartbeatLogLevel(config);
+	}
 
 	for(gint i = 0; i < action->quantity; i++) {
 		/* get a random network if they didnt assign one */
@@ -138,6 +154,10 @@ void createnodes_run(CreateNodesAction* action) {
 
 void createnodes_free(CreateNodesAction* action) {
 	MAGIC_ASSERT(action);
+
+	if(action->heartbeatLogLevelString) {
+		g_string_free(action->heartbeatLogLevelString, TRUE);
+	}
 
 	MAGIC_CLEAR(action);
 	g_free(action);
