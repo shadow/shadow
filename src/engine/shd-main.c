@@ -141,9 +141,9 @@ gint shadow_main(gint argc, gchar* argv[]) {
 	debug("engine finished, cleaning up...");
 
 	/* cleanup */
-	configuration_free(config);
 	engine_free(shadow_engine);
 	worker_free(mainThreadWorker);
+	configuration_free(config);
 
 	return retval;
 }

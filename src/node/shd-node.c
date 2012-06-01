@@ -49,6 +49,9 @@ struct _Node {
 	/* a statistics tracker for in/out bytes, CPU, memory, etc. */
 	Tracker* tracker;
 
+	/* this node's loglevel */
+	GLogLevelFlags logLevel;
+
 	/* all file, socket, and epoll descriptors we know about and track */
 	GHashTable* descriptors;
 	gint descriptorHandleCounter;
@@ -65,7 +68,8 @@ struct _Node {
 Node* node_new(GQuark id, Network* network, Software* software, guint32 ip,
 		GString* hostname, guint64 bwDownKiBps, guint64 bwUpKiBps,
 		guint cpuFrequency, gint cpuThreshold, guint nodeSeed,
-		SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel) {
+		SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel,
+		GLogLevelFlags logLevel) {
 	Node* node = g_new0(Node, 1);
 	MAGIC_INIT(node);
 
@@ -102,6 +106,7 @@ Node* node_new(GQuark id, Network* network, Software* software, guint32 ip,
 	node->cpu = cpu_new(cpuFrequency, cpuThreshold);
 	node->random = random_new(nodeSeed);
 	node->tracker = tracker_new(heartbeatInterval, heartbeatLogLevel);
+	node->logLevel = logLevel;
 
 	info("Created Node '%s', ip %s, %u bwUpKiBps, %u bwDownKiBps, %lu cpuFrequency, %i cpuThreshold, %u seed",
 			g_quark_to_string(node->id), networkinterface_getIPName(node->defaultInterface),
@@ -888,4 +893,9 @@ gint node_closeUser(Node* node, gint handle) {
 Tracker* node_getTracker(Node* node) {
 	MAGIC_ASSERT(node);
 	return node->tracker;
+}
+
+GLogLevelFlags node_getLogLevel(Node* node) {
+	MAGIC_ASSERT(node);
+	return node->logLevel;
 }

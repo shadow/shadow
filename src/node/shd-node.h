@@ -30,7 +30,8 @@ typedef struct _Node Node;
 
 Node* node_new(GQuark id, Network* network, Software* software, guint32 ip,
 		GString* hostname, guint64 bwDownKiBps, guint64 bwUpKiBps, guint cpuFrequency, gint cpuThreshold,
-		guint nodeSeed, SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel);
+		guint nodeSeed, SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel,
+		GLogLevelFlags logLevel);
 void node_free(gpointer data);
 
 void node_lock(Node* node);
@@ -77,5 +78,6 @@ gint node_getPeerName(Node* node, gint handle, in_addr_t* ip, in_port_t* port);
 gint node_getSocketName(Node* node, gint handle, in_addr_t* ip, in_port_t* port);
 
 Tracker* node_getTracker(Node* node);
+GLogLevelFlags node_getLogLevel(Node* node);
 
 #endif /* SHD_NODE_H_ */

@@ -34,6 +34,7 @@ struct _CreateNodesAction {
 	guint cpuFrequency;
 	SimulationTime heartbeatIntervalSeconds;
 	GString* heartbeatLogLevelString;
+	GString* logLevelString;
 
 	MAGIC_DECLARE;
 };
@@ -46,7 +47,8 @@ RunnableFunctionTable createnodes_functions = {
 
 CreateNodesAction* createnodes_new(GString* name, GString* software, GString* cluster,
 		guint64 bandwidthdown, guint64 bandwidthup, guint64 quantity, guint64 cpuFrequency,
-		guint64 heartbeatIntervalSeconds, GString* heartbeatLogLevelString)
+		guint64 heartbeatIntervalSeconds, GString* heartbeatLogLevelString,
+		GString* logLevelString)
 {
 	g_assert(name && software);
 	CreateNodesAction* action = g_new0(CreateNodesAction, 1);
@@ -65,6 +67,9 @@ CreateNodesAction* createnodes_new(GString* name, GString* software, GString* cl
 	action->heartbeatIntervalSeconds = heartbeatIntervalSeconds;
 	if(heartbeatLogLevelString) {
 		action->heartbeatLogLevelString = g_string_new(heartbeatLogLevelString->str);
+	}
+	if(logLevelString) {
+		action->logLevelString = g_string_new(logLevelString->str);
 	}
 
 	return action;
@@ -113,6 +118,12 @@ void createnodes_run(CreateNodesAction* action) {
 	} else {
 		heartbeatLogLevel = configuration_getHeartbeatLogLevel(config);
 	}
+	GLogLevelFlags logLevel = 0;
+	if(action->logLevelString) {
+		logLevel = configuration_getLevel(config, action->logLevelString->str);
+	} else {
+		logLevel = configuration_getLogLevel(config);
+	}
 
 	for(gint i = 0; i < action->quantity; i++) {
 		/* get a random network if they didnt assign one */
@@ -138,7 +149,7 @@ void createnodes_run(CreateNodesAction* action) {
 		guint nodeSeed = (guint) engine_nextRandomInt(worker->cached_engine);
 		Node* node = internetwork_createNode(worker_getInternet(), id, network, software,
 				hostnameBuffer, bwDownKiBps, bwUpKiBps, cpuFrequency, cpuThreshold,
-				nodeSeed, heartbeatInterval, heartbeatLogLevel);
+				nodeSeed, heartbeatInterval, heartbeatLogLevel, logLevel);
 
 		g_string_free(hostnameBuffer, TRUE);
 
@@ -157,6 +168,9 @@ void createnodes_free(CreateNodesAction* action) {
 
 	if(action->heartbeatLogLevelString) {
 		g_string_free(action->heartbeatLogLevelString, TRUE);
+	}
+	if(action->logLevelString) {
+		g_string_free(action->logLevelString, TRUE);
 	}
 
 	MAGIC_CLEAR(action);

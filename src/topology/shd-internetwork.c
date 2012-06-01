@@ -182,14 +182,16 @@ static guint32 _internetwork_generateIP(Internetwork* internet) {
 gpointer internetwork_createNode(Internetwork* internet, GQuark nodeID,
 		Network* network, Software* software, GString* hostname,
 		guint64 bwDownKiBps, guint64 bwUpKiBps, guint cpuFrequency, gint cpuThreshold,
-		guint nodeSeed, SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel) {
+		guint nodeSeed, SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel,
+		GLogLevelFlags logLevel) {
 	MAGIC_ASSERT(internet);
 	g_assert(!internet->isReadOnly);
 
 	guint32 ip = _internetwork_generateIP(internet);
 	ip = (guint32) nodeID;
 	Node* node = node_new(nodeID, network, software, ip, hostname, bwDownKiBps, bwUpKiBps,
-			cpuFrequency, cpuThreshold, nodeSeed, heartbeatInterval, heartbeatLogLevel);
+			cpuFrequency, cpuThreshold, nodeSeed, heartbeatInterval, heartbeatLogLevel,
+			logLevel);
 	g_hash_table_replace(internet->nodes, GUINT_TO_POINTER((guint)nodeID), node);
 
 	gchar* mapName = g_strdup((const gchar*) hostname->str);

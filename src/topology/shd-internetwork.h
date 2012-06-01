@@ -104,7 +104,8 @@ gpointer internetwork_createNode(Internetwork* internet, GQuark nodeID,
 		Network* network, Software* software, GString* hostname,
 		guint64 bwDownKiBps, guint64 bwUpKiBps, guint cpuFrequency,
 		gint cpuThreshold, guint nodeSeed,
-		SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel); /* XXX: return type is "Node*" */
+		SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel,
+		GLogLevelFlags logLevel); /* XXX: return type is "Node*" */
 
 /**
  * Marks the given internet as read-only, so no additional nodes or networks may
