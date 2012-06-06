@@ -19,7 +19,7 @@ cd openssl-1.0.1/
 #./config --prefix=${HOME}/.shadow no-shared threads -fPIC -g -pg -DPURIFY -Bsymbolic
 
 ## for normal use
-./config --prefix=${HOME}/.shadow no-shared threads -fPIC
+./config --prefix=${HOME}/.shadow shared threads -fPIC
 
 make
 make install
