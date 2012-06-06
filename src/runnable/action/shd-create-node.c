@@ -32,6 +32,10 @@ struct _CreateNodesAction {
 	guint64 bandwidthup;
 	guint64 quantity;
 	guint cpuFrequency;
+	SimulationTime heartbeatIntervalSeconds;
+	GString* heartbeatLogLevelString;
+	GString* logLevelString;
+
 	MAGIC_DECLARE;
 };
 
@@ -42,7 +46,9 @@ RunnableFunctionTable createnodes_functions = {
 };
 
 CreateNodesAction* createnodes_new(GString* name, GString* software, GString* cluster,
-		guint64 bandwidthdown, guint64 bandwidthup, guint64 quantity, guint64 cpuFrequency)
+		guint64 bandwidthdown, guint64 bandwidthup, guint64 quantity, guint64 cpuFrequency,
+		guint64 heartbeatIntervalSeconds, GString* heartbeatLogLevelString,
+		GString* logLevelString)
 {
 	g_assert(name && software);
 	CreateNodesAction* action = g_new0(CreateNodesAction, 1);
@@ -58,6 +64,13 @@ CreateNodesAction* createnodes_new(GString* name, GString* software, GString* cl
 	action->bandwidthup = bandwidthup;
 	action->quantity = quantity ? quantity : 1;
 	action->cpuFrequency = (guint)cpuFrequency;
+	action->heartbeatIntervalSeconds = heartbeatIntervalSeconds;
+	if(heartbeatLogLevelString) {
+		action->heartbeatLogLevelString = g_string_new(heartbeatLogLevelString->str);
+	}
+	if(logLevelString) {
+		action->logLevelString = g_string_new(logLevelString->str);
+	}
 
 	return action;
 }
@@ -92,6 +105,26 @@ void createnodes_run(CreateNodesAction* action) {
 	}
 	gint cpuThreshold = engine_getConfig(worker->cached_engine)->cpuThreshold;
 
+	Configuration* config = engine_getConfig(worker->cached_engine);
+
+	/* prefer node-specific settings, default back to system-wide config */
+	SimulationTime heartbeatInterval = action->heartbeatIntervalSeconds * SIMTIME_ONE_SECOND;
+	if(!heartbeatInterval) {
+		heartbeatInterval = config->heartbeatInterval * SIMTIME_ONE_SECOND;
+	}
+	GLogLevelFlags heartbeatLogLevel = 0;
+	if(action->heartbeatLogLevelString) {
+		heartbeatLogLevel = configuration_getLevel(config, action->heartbeatLogLevelString->str);
+	} else {
+		heartbeatLogLevel = configuration_getHeartbeatLogLevel(config);
+	}
+	GLogLevelFlags logLevel = 0;
+	if(action->logLevelString) {
+		logLevel = configuration_getLevel(config, action->logLevelString->str);
+	} else {
+		logLevel = configuration_getLogLevel(config);
+	}
+
 	for(gint i = 0; i < action->quantity; i++) {
 		/* get a random network if they didnt assign one */
 		gdouble randomDouble = engine_nextRandomDouble(worker->cached_engine);
@@ -114,22 +147,31 @@ void createnodes_run(CreateNodesAction* action) {
 
 		/* the node is part of the internet */
 		guint nodeSeed = (guint) engine_nextRandomInt(worker->cached_engine);
-		internetwork_createNode(worker_getInternet(), id, network, software,
-				hostnameBuffer, bwDownKiBps, bwUpKiBps, cpuFrequency, cpuThreshold, nodeSeed);
+		Node* node = internetwork_createNode(worker_getInternet(), id, network, software,
+				hostnameBuffer, bwDownKiBps, bwUpKiBps, cpuFrequency, cpuThreshold,
+				nodeSeed, heartbeatInterval, heartbeatLogLevel, logLevel);
 
 		g_string_free(hostnameBuffer, TRUE);
 
-		StartApplicationEvent* event = startapplication_new();
-
 		/* make sure our bootstrap events are set properly */
 		worker->clock_now = 0;
+		StartApplicationEvent* event = startapplication_new();
 		worker_scheduleEvent((Event*)event, software->startTime, id);
+		HeartbeatEvent* heartbeat = heartbeat_new(node_getTracker(node));
+		worker_scheduleEvent((Event*)heartbeat, heartbeatInterval, id);
 		worker->clock_now = SIMTIME_INVALID;
 	}
 }
 
 void createnodes_free(CreateNodesAction* action) {
 	MAGIC_ASSERT(action);
+
+	if(action->heartbeatLogLevelString) {
+		g_string_free(action->heartbeatLogLevelString, TRUE);
+	}
+	if(action->logLevelString) {
+		g_string_free(action->logLevelString, TRUE);
+	}
 
 	MAGIC_CLEAR(action);
 	g_free(action);

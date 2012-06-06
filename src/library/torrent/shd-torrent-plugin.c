@@ -19,54 +19,40 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/*
- * gcc -shared -Wl,-soname,testplugin.so -fPIC -o testplugin.so shd-test-plugin.c
- * cp testplugin.so /tmp/testplugin1.so
- * cp testplugin.so /tmp/testplugin2.so
- *
- * #updated as valid shadow plugin
- * gcc -shared -Wl,-soname,testplugin.so -fPIC -o testplugin.so shd-test-plugin.c `pkg-config --cflags --libs glib-2.0` -I/home/rob/.shadow/include
- */
+#include "shd-torrent.h"
 
-#include <stdio.h>
-#include <glib.h>
-#include <shd-library.h>
 
-ShadowlibFunctionTable* table;
-int test = 0;
-
-void __init__() {
-	test++;
-	printf("%i after increment\n", test);
+void torrentPlugin_new(int argc, char* argv[]) {
+	torrent_new(argc, argv);
 }
 
-void _new(int argc, char* argv[]) {
-	test++;
-	table->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__,
-					"new node, %i total, %p", test, &test);
+void torrentPlugin_free() {
+	torrent_free();
 }
 
-void _free() {
-
+void torrentPlugin_activate() {
+	torrent_activate();
 }
 
-void _ready() {
-
-}
+/* my global structure to hold all variable, node-specific application state.
+ * the name must not collide with other loaded modules globals. */
+Torrent torrentState;
 
 /* function table for Shadow so it knows how to call us */
-PluginFunctionTable pluginFunctions = {
-	&_new, &_free, &_ready,
+PluginFunctionTable torrent_pluginFunctions = {
+	&torrentPlugin_new, &torrentPlugin_free, &torrentPlugin_activate,
 };
 
 void __shadow_plugin_init__(ShadowlibFunctionTable* shadowlibFuncs) {
 	g_assert(shadowlibFuncs);
-	table = shadowlibFuncs;
 
 	/* start out with cleared state */
-	test = 0;
-	table->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__,
-					"registered node, start at %i, %p", test, &test);
+	memset(&torrentState, 0, sizeof(Torrent));
+
+	/* save the functions Shadow makes available to us */
+	torrentState.shadowlib = shadowlibFuncs;
+
+	Torrent** torrentGlobalPointer = torrent_init(&torrentState);
 
 	/*
 	 * tell shadow which of our functions it can use to notify our plugin,
@@ -74,14 +60,16 @@ void __shadow_plugin_init__(ShadowlibFunctionTable* shadowlibFuncs) {
 	 *
 	 * we 'register' our function table, and 1 variable.
 	 */
-	gboolean success = shadowlibFuncs->registerPlugin(&pluginFunctions, 1, sizeof(int), &test);
+	gboolean success = torrentState.shadowlib->registerPlugin(&torrent_pluginFunctions, 2,
+			sizeof(Torrent), &torrentState,
+			sizeof(Torrent*), torrentGlobalPointer);
 
 	/* we log through Shadow by using the log function it supplied to us */
 	if(success) {
-		shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__,
-				"successfully registered echo plug-in state");
+		torrentState.shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__,
+				"successfully registered torrent plug-in state");
 	} else {
-		shadowlibFuncs->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__,
-				"error registering echo plug-in state");
+		torrentState.shadowlib->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__,
+				"error registering torrent plug-in state");
 	}
 }

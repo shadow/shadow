@@ -31,16 +31,18 @@ struct _Network {
 	GHashTable* outgoingLinkMap;
 	guint64 bandwidthdown;
 	guint64 bandwidthup;
+	gdouble packetloss;
 	MAGIC_DECLARE;
 };
 
-Network* network_new(GQuark id, guint64 bandwidthdown, guint64 bandwidthup) {
+Network* network_new(GQuark id, guint64 bandwidthdown, guint64 bandwidthup, gdouble packetloss) {
 	Network* network = g_new0(Network, 1);
 	MAGIC_INIT(network);
 
 	network->id = id;
 	network->bandwidthdown = bandwidthdown;
 	network->bandwidthup = bandwidthup;
+	network->packetloss = packetloss;
 
 	/* lists are created by setting to NULL */
 	network->incomingLinks = NULL;
@@ -129,7 +131,20 @@ gdouble network_getLinkReliability(Network* sourceNetwork, Network* destinationN
 	MAGIC_ASSERT(destinationNetwork);
 	Link* link = g_hash_table_lookup(sourceNetwork->outgoingLinkMap, &(destinationNetwork->id));
 	if(link) {
-		return (1.0 - link_getPacketLoss(link));
+		/* there are three chances to drop a packet here:
+		 * p1 : loss rate from source-node to the source-cluster
+		 * p2 : loss rate on the link between source-cluster and destination-cluster
+		 * p3 : loss rate from destination-cluster to destination-node
+		 *
+		 * The reliability is then the combination of the probability
+		 * that its not dropped in each case:
+		 * P = ((1-p1)(1-p2)(1-p3))
+		 */
+		gdouble p1 = sourceNetwork->packetloss;
+		gdouble p2 = link_getPacketLoss(link);
+		gdouble p3 = destinationNetwork->packetloss;
+		gdouble P = (1.0-p1) * (1.0-p2) * (1.0-p3);
+		return P;
 	} else {
 		critical("unable to find link between networks '%s' and '%s'. Check XML file for errors.",
 				g_quark_to_string(sourceNetwork->id), g_quark_to_string(destinationNetwork->id));

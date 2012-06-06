@@ -411,15 +411,24 @@ reactivate:;
 
 	enum filegetter_code result = filegetter_activate(&sfg->fg);
 
-	if(result == FG_ERR_FATAL) {
-		/* it had to shut down, lets try again */
-		service_filegetter_log(sfg, SFG_NOTICE, "filegetter shutdown due to internal fatal error... restarting");
+	if(result == FG_ERR_FATAL || result == FG_ERR_SOCKSCONN) {
+		/* it had to shut down */
+		service_filegetter_log(sfg, SFG_NOTICE, "filegetter shutdown due to error '%s'... retrying in 60 seconds",
+				filegetter_codetoa(result));
 		filegetter_shutdown(&sfg->fg);
 		filegetter_start(&sfg->fg, sfg->fg.epolld);
-		service_filegetter_download_next(sfg);
-		goto reactivate;
+
+		/* set wakeup timer and call the sleep function  */
+		sfg->state = SFG_THINKING;
+		clock_gettime(CLOCK_REALTIME, &sfg->wakeup);
+		sfg->wakeup.tv_sec += 60;
+		(*sfg->sleep_cb)(sfg, 60);
+		service_filegetter_log(sfg, SFG_NOTICE, "[fg-pause] pausing for 60 seconds");
+
+		return FG_ERR_WOULDBLOCK;
 	} else if(result != FG_OK_200 && result != FG_ERR_WOULDBLOCK) {
-		service_filegetter_log(sfg, SFG_CRITICAL, "filegetter shutdown due to protocol error...");
+		service_filegetter_log(sfg, SFG_CRITICAL, "filegetter shutdown due to protocol error '%s'...",
+				filegetter_codetoa(result));
 		filegetter_shutdown(&sfg->fg);
 		return result;
 	}

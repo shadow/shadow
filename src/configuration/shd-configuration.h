@@ -178,14 +178,18 @@ typedef guint64 SimulationTime;
 #define CONFIG_RECEIVE_BATCH_TIME (10*SIMTIME_ONE_MILLISECOND)
 
 /**
- * Header size of a packet with UDP/IP encapsulation
+ * Header size of a packet with UDP encapsulation
+ * 14 bytes eth2, 20 bytes IP, 8 bytes UDP
+ * Measured using wireshark on normal traffic.
  */
-#define CONFIG_UDPIP_HEADER_SIZE 28
+#define CONFIG_HEADER_SIZE_UDPIPETH 42
 
 /**
- * Header size of a packet with TCP/IP encapsulation
+ * Header size of a packet with TCP encapsulation
+ * 14 bytes eth2, 20 bytes IP, 32 bytes UDP
+ * Measured using wireshark on normal traffic.
  */
-#define CONFIG_TCPIP_HEADER_SIZE 40
+#define CONFIG_HEADER_SIZE_TCPIPETH 66
 
 /**
  * Maximum size of an IP packet without fragmenting over Ethernetv2
@@ -217,6 +221,8 @@ struct _Configuration {
 	gint nWorkerThreads;
 	guint randomSeed;
 	gboolean printSoftwareVersion;
+	guint heartbeatInterval;
+	gchar* heartbeatLogLevelInput;
 
 	GOptionGroup* networkOptionGroup;
 	gint cpuThreshold;
@@ -228,6 +234,7 @@ struct _Configuration {
 	GOptionGroup* pluginsOptionGroup;
 	gboolean runEchoExample;
 	gboolean runFileExample;
+	gboolean runTorrentExample;
 
 	GQueue* inputXMLFilenames;
 
@@ -255,6 +262,19 @@ Configuration* configuration_new(gint argc, gchar* argv[]);
 void configuration_free(Configuration* config);
 
 /**
+ * Get the log level flags corresponding to the given input string. Strings are
+ * compared ignoring case. If an invalid string is supplied, the default flags
+ * are returned.
+ *
+ * @param config a #Configuration object created with configuration_new()
+ * @param input the string representing the log level. Valid strings are:
+ *  'error'; 'critical'; 'warning'; 'message'; 'info'; and 'debug'.
+ * @return the log level parsed from the input string, or the log level
+ * corresponding to 'message' if the input is invalid.
+ */
+GLogLevelFlags configuration_getLevel(Configuration* config, const gchar* input);
+
+/**
  * Get the configured log level based on command line input.
  *
  * @param config a #Configuration object created with configuration_new()
@@ -262,6 +282,16 @@ void configuration_free(Configuration* config);
  * @returns the log level as parsed from command line input
  */
 GLogLevelFlags configuration_getLogLevel(Configuration* config);
+
+/**
+ * Get the configured log level at which heartbeat messages are printed,
+ * based on command line input.
+ *
+ * @param config a #Configuration object created with configuration_new()
+ *
+ * @returns the heartbeat log level as parsed from command line input
+ */
+GLogLevelFlags configuration_getHeartbeatLogLevel(Configuration* config);
 
 /** @} */
 

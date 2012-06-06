@@ -58,19 +58,17 @@ void __shadow_plugin_init__(ShadowlibFunctionTable* shadowlibFuncs) {
 	/* save the shadow functions we will use since it will be the same for all nodes */
 	filetransferplugin_globalData.shadowlib = shadowlibFuncs;
 
-	/* give the filetransfer code a pointer to this global struct, and
-	 * register the global pointer it uses. this basically gives them access
-	 * to our FileTransfer struct without needing to 'extern' it.
+	/* give the filetransfer code a pointer to this global struct. this allows
+	 * access to our FileTransfer struct without needing to 'extern' it.
 	 */
-	FileTransfer** ftGlobalPointer = filetransfer_init(&filetransferplugin_globalData);
+	filetransfer_init(&filetransferplugin_globalData);
 
 	/*
 	 * tell shadow which of our functions it can use to notify our plugin,
 	 * and allow it to track our state for each instance of this plugin
 	 */
-	gboolean success = shadowlibFuncs->registerPlugin(&filetransfer_pluginFunctions, 2,
-			sizeof(FileTransfer), &filetransferplugin_globalData,
-			sizeof(FileTransfer*), ftGlobalPointer);
+	gboolean success = shadowlibFuncs->registerPlugin(&filetransfer_pluginFunctions, 1,
+			sizeof(FileTransfer), &filetransferplugin_globalData);
 	if(success) {
 		shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "successfully registered filetransfer plug-in state");
 	} else {

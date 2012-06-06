@@ -19,44 +19,48 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SHD_FILETRANSFER_H_
-#define SHD_FILETRANSFER_H_
-
-/*
- * This lib provides a minimal http/socks client, socks proxy, and http server.
- *
- * Example http request we support:
- * 	"GET /path/to/file HTTP/1.1\r\nHost: www.somehost.com\r\n\r\n"
- *
- * Example http reply we support:
- *  "HTTP/1.1 404 NOT FOUND\r\n"
- *  "HTTP/1.1 200 OK\r\nContent-Length: 17\r\n\r\nSome data payload"
- */
+#ifndef SHD_TORRENT_H_
+#define SHD_TORRENT_H_
 
 #include <glib.h>
-#include <sys/epoll.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netdb.h>
-#include <unistd.h>
-
 #include <shd-library.h>
 
-#include "shd-filetransfer-defs.h"
-#include "shd-fileserver.h"
-#include "shd-filegetter.h"
-#include "shd-service-filegetter.h"
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/epoll.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h>
+#include <errno.h>
+#include <unistd.h>
 
-typedef struct _FileTransfer FileTransfer;
-struct _FileTransfer {
+#include "shd-torrent-server.h"
+#include "shd-torrent-client.h"
+#include "shd-torrent-authority.h"
+
+#define MAX_EVENTS 10
+
+/**
+ *
+ */
+typedef struct _Torrent Torrent;
+struct _Torrent {
 	ShadowlibFunctionTable* shadowlib;
-	service_filegetter_tp client;
-	fileserver_tp server;
+	TorrentServer* server;
+	TorrentClient* client;
+	TorrentAuthority* authority;
+	struct timespec lastReport;
+	gint clientDone;
 };
 
-void filetransfer_init(FileTransfer* existingFT);
-void filetransfer_new(int argc, char* argv[]);
-void filetransfer_free();
-void filetransfer_activate();
+Torrent**  torrent_init(Torrent* currentTorrent);
+void torrent_new(int argc, char* argv[]);
+void torrent_activate();
+void torrent_free();
 
-#endif /* SHD_FILETRANSFER_H_ */
+
+#endif /* SHD_TORRENT_H_ */

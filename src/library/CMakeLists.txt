@@ -9,3 +9,4 @@ set(SHADOW_PLUGIN_DIR $ENV{HOME}/.shadow/plugins)
 ## build each plug-in
 add_subdirectory(echo)
 add_subdirectory(filetransfer)
+add_subdirectory(torrent)

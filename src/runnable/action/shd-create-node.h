@@ -27,7 +27,9 @@
 typedef struct _CreateNodesAction CreateNodesAction;
 
 CreateNodesAction* createnodes_new(GString* name, GString* software, GString* cluster,
-		guint64 bandwidthdown, guint64 bandwidthup, guint64 quantity, guint64 cpuFrequency);
+		guint64 bandwidthdown, guint64 bandwidthup, guint64 quantity, guint64 cpuFrequency,
+		guint64 heartbeatIntervalSeconds, GString* heartbeatLogLevelString,
+		GString* logLevelString);
 void createnodes_run(CreateNodesAction* action);
 void createnodes_free(CreateNodesAction* action);
 

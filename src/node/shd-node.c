@@ -46,6 +46,12 @@ struct _Node {
 
 	Application* application;
 
+	/* a statistics tracker for in/out bytes, CPU, memory, etc. */
+	Tracker* tracker;
+
+	/* this node's loglevel */
+	GLogLevelFlags logLevel;
+
 	/* all file, socket, and epoll descriptors we know about and track */
 	GHashTable* descriptors;
 	gint descriptorHandleCounter;
@@ -61,7 +67,9 @@ struct _Node {
 
 Node* node_new(GQuark id, Network* network, Software* software, guint32 ip,
 		GString* hostname, guint64 bwDownKiBps, guint64 bwUpKiBps,
-		guint cpuFrequency, gint cpuThreshold, guint nodeSeed) {
+		guint cpuFrequency, gint cpuThreshold, guint nodeSeed,
+		SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel,
+		GLogLevelFlags logLevel) {
 	Node* node = g_new0(Node, 1);
 	MAGIC_INIT(node);
 
@@ -97,6 +105,8 @@ Node* node_new(GQuark id, Network* network, Software* software, guint32 ip,
 
 	node->cpu = cpu_new(cpuFrequency, cpuThreshold);
 	node->random = random_new(nodeSeed);
+	node->tracker = tracker_new(heartbeatInterval, heartbeatLogLevel);
+	node->logLevel = logLevel;
 
 	info("Created Node '%s', ip %s, %u bwUpKiBps, %u bwDownKiBps, %lu cpuFrequency, %i cpuThreshold, %u seed",
 			g_quark_to_string(node->id), networkinterface_getIPName(node->defaultInterface),
@@ -123,6 +133,7 @@ void node_free(gpointer data) {
 	g_free(node->name);
 
 	cpu_free(node->cpu);
+	tracker_free(node->tracker);
 
 	g_mutex_free(node->lock);
 
@@ -145,6 +156,11 @@ void node_pushMail(Node* node, Event* event) {
 	MAGIC_ASSERT(event);
 
 	asyncpriorityqueue_push(node->eventMailbox, event);
+}
+
+Event* node_peekMail(Node* node) {
+	MAGIC_ASSERT(node);
+	return asyncpriorityqueue_peek(node->eventMailbox);
 }
 
 Event* node_popMail(Node* node) {
@@ -796,6 +812,8 @@ gint node_sendUserData(Node* node, gint handle, gconstpointer buffer, gsize nByt
 	if(n > 0) {
 		/* user is writing some bytes. */
 		*bytesCopied = (gsize)n;
+	} else if(n == -2) {
+		return ENOTCONN;
 	} else if(n < 0) {
 		return EWOULDBLOCK;
 	}
@@ -843,6 +861,8 @@ gint node_receiveUserData(Node* node, gint handle, gpointer buffer, gsize nBytes
 	if(n > 0) {
 		/* user is reading some bytes. */
 		*bytesCopied = (gsize)n;
+	} else if(n == -2) {
+		return ENOTCONN;
 	} else if(n < 0) {
 		return EWOULDBLOCK;
 	}
@@ -868,4 +888,14 @@ gint node_closeUser(Node* node, gint handle) {
 	descriptor_close(descriptor);
 
 	return 0;
+}
+
+Tracker* node_getTracker(Node* node) {
+	MAGIC_ASSERT(node);
+	return node->tracker;
+}
+
+GLogLevelFlags node_getLogLevel(Node* node) {
+	MAGIC_ASSERT(node);
+	return node->logLevel;
 }

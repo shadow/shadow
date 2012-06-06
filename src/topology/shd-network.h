@@ -36,7 +36,7 @@ typedef struct _Network Network;
  * @param bandwidthup
  * @return
  */
-Network* network_new(GQuark id, guint64 bandwidthdown, guint64 bandwidthup);
+Network* network_new(GQuark id, guint64 bandwidthdown, guint64 bandwidthup, gdouble packetloss);
 
 /**
  *

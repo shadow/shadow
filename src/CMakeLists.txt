@@ -32,6 +32,7 @@ set(shadow_srcs
     runnable/shd-listener.c
     runnable/event/shd-event.c
     runnable/event/shd-start-application.c
+    runnable/event/shd-heartbeat.c
     runnable/event/shd-callback.c
     runnable/event/shd-interface-received.c
     runnable/event/shd-interface-sent.c
@@ -60,6 +61,7 @@ set(shadow_srcs
     node/shd-cpu.c
     node/shd-network-interface.c
     node/shd-application.c
+    node/shd-tracker.c
     node/shd-node.c
         
     utility/shd-utility.c

@@ -50,6 +50,8 @@ void software_free(gpointer data) {
 gint software_getArguments(Software* software, gchar** argvOut[]) {
 	MAGIC_ASSERT(software);
 
+	gchar* threadBuffer;
+
 	gchar* argumentString = g_strdup(software->arguments->str);
 	GQueue *arguments = g_queue_new();
 
@@ -58,11 +60,11 @@ gint software_getArguments(Software* software, gchar** argvOut[]) {
 	g_queue_push_tail(arguments, g_strdup(pluginName));
 
 	/* parse the full argument string into separate strings */
-	gchar* token = strtok(argumentString, " ");
+	gchar* token = strtok_r(argumentString, " ", &threadBuffer);
 	while(token != NULL) {
 		gchar* argument = g_strdup((const gchar*) token);
 		g_queue_push_tail(arguments, argument);
-		token = strtok(NULL, " ");
+		token = strtok_r(NULL, " ", &threadBuffer);
 	}
 
 	/* setup for creating new plug-in, i.e. format into argc and argv */

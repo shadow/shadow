@@ -68,7 +68,7 @@ void internetwork_free(Internetwork* internet);
  * @param bandwidthup
  */
 void internetwork_createNetwork(Internetwork* internet, GQuark networkID,
-		guint64 bandwidthdown, guint64 bandwidthup);
+		guint64 bandwidthdown, guint64 bandwidthup, gdouble packetloss);
 
 /**
  *
@@ -97,11 +97,15 @@ void internetwork_connectNetworks(Internetwork* internet,
  * @param cpuFrequency
  * @param cpuThreshold
  * @param nodeSeed
+ *
+ * return the created node
  */
-void internetwork_createNode(Internetwork* internet, GQuark nodeID,
+gpointer internetwork_createNode(Internetwork* internet, GQuark nodeID,
 		Network* network, Software* software, GString* hostname,
 		guint64 bwDownKiBps, guint64 bwUpKiBps, guint cpuFrequency,
-		gint cpuThreshold, guint nodeSeed);
+		gint cpuThreshold, guint nodeSeed,
+		SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel,
+		GLogLevelFlags logLevel); /* XXX: return type is "Node*" */
 
 /**
  * Marks the given internet as read-only, so no additional nodes or networks may

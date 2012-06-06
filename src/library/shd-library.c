@@ -33,8 +33,6 @@ gboolean shadowlib_register(PluginFunctionTable* callbackFunctions, guint nVaria
 	Worker* worker = worker_getPrivate();
 	plugin_setShadowContext(worker->cached_plugin, TRUE);
 
-	debug("shadowlib_register called");
-
 	/* collect the variable length argument list*/
 	va_list variableArguments;
 	va_start(variableArguments, nVariables);
@@ -115,6 +113,18 @@ gboolean shadowlib_getBandwidth(in_addr_t ip, guint* bwdown, guint* bwup) {
 	return success;
 }
 
+extern const void* intercept_RAND_get_rand_method(void);
+gboolean shadowlib_cryptoSetup(gint numLocks, gpointer* shadowLockFunc, gpointer* shadowIdFunc, gconstpointer* shadowRandomMethod) {
+	g_assert(shadowLockFunc && shadowIdFunc && shadowRandomMethod);
+	Worker* worker = worker_getPrivate();
+
+	*shadowLockFunc = &system_cryptoLockingFunc;
+	*shadowIdFunc = &system_cryptoIdFunc;
+	*shadowRandomMethod = intercept_RAND_get_rand_method();
+
+	return engine_cryptoSetup(worker->cached_engine, numLocks);
+}
+
 /* we send this FunctionTable to each plug-in so it has pointers to our functions.
  * we use this to export shadow functionality to plug-ins. */
 ShadowlibFunctionTable shadowlibFunctionTable = {
@@ -122,4 +132,5 @@ ShadowlibFunctionTable shadowlibFunctionTable = {
 	&shadowlib_log,
 	&shadowlib_createCallback,
 	&shadowlib_getBandwidth,
+	&shadowlib_cryptoSetup,
 };
