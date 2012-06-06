@@ -106,7 +106,7 @@ void tracker_heartbeat(Tracker* tracker) {
 
 	/* log the things we are tracking */
 	logging_log(G_LOG_DOMAIN, tracker->loglevel, __FUNCTION__, "heartbeat: "
-			"%f b/s in, %f b/s out, %f plugin-cpu-util, %f mem-kib", in, out, cpuutil, mem);
+			"Rx %f B/s, Tx %f B/s, CPU %f \%, MEM %f KiB", in, out, cpuutil, mem);
 
 	/* clear interval stats */
 	tracker->processingTimeLastInterval = 0;
