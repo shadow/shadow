@@ -61,6 +61,10 @@ def main():
           help="use non-standard PATH when linking Tor to libevent.", default=INSTALL_PREFIX)
     parser_build.add_argument('--openssl-prefix', action="store", dest="prefix_openssl", metavar="PATH",
           help="use non-standard PATH when linking Tor to openssl.", default=INSTALL_PREFIX)
+    parser_build.add_argument('--static-openssl', action="store_true", dest="static_openssl",
+          help="tell Tor to link against the static version of openssl", default=True)
+    parser_build.add_argument('--static-libevent', action="store_true", dest="static_libevent",
+          help="tell Tor to link against the static version of libevent", default=True)
     parser_build.add_argument('-g', '--debug', action="store_true", dest="do_debug",
           help="turn on debugging for verbose program output", default=False)
     parser_build.add_argument('-v', '--version', action="store", dest="tor_version",
@@ -214,7 +218,9 @@ def setup_tor(args):
 
             if args.prefix_libevent is not None: configure += " --with-libevent-dir=" + os.path.abspath(args.prefix_libevent)
             if args.prefix_openssl is not None: configure += " --with-openssl-dir=" + os.path.abspath(args.prefix_openssl)
-            
+            if args.static_openssl: configure += " --enable-static-openssl"
+            if args.static_libevent: configure += " --enable-static-libevent"
+
             if retcode == 0:
                 # generate configure
                 log(args, gen)
