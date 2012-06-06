@@ -49,11 +49,11 @@ def main():
     
     parser_build.add_argument('-i', '--include', action="append", dest="extra_includes",
         help="append PATH to the list of paths searched for headers. useful if dependencies are installed to non-standard locations.",
-        default=[INSTALL_PREFIX+ "/include"], metavar="PATH")
+        default=[INSTALL_PREFIX+ "/include", os.path.expanduser("~/.local/include")], metavar="PATH")
     
     parser_build.add_argument('-l', '--library', action="append", dest="extra_libraries",
         help="append PATH to the list of paths searched for libraries. useful if dependencies are installed to non-standard locations.",
-        default=[INSTALL_PREFIX+ "/lib"], metavar="PATH")
+        default=[INSTALL_PREFIX+ "/lib", os.path.expanduser("~/.local/lib")], metavar="PATH")
     
     parser_build.add_argument('-g', '--debug', action="store_true", dest="do_debug",
         help="build in extra memory checks and debugging symbols when running Shadow",

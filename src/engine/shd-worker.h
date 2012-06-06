@@ -62,7 +62,7 @@ gboolean worker_isInShadowContext();
  *
  * Used as the callback for the main thread pool.
  */
-void worker_executeEvent(gpointer data, gpointer user_data);
+void worker_executeEvent(Node* node, Engine* engine);
 
 void worker_scheduleAction(Action* action, SimulationTime nano_delay);
 void worker_scheduleEvent(Event* event, SimulationTime nano_delay, GQuark receiver_node_id);

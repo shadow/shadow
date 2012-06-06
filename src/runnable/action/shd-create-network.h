@@ -26,7 +26,8 @@
 
 typedef struct _CreateNetworkAction CreateNetworkAction;
 
-CreateNetworkAction* createnetwork_new(GString* name, guint64 bandwidthdown, guint64 bandwidthup);
+CreateNetworkAction* createnetwork_new(GString* name, guint64 bandwidthdown,
+		guint64 bandwidthup, gdouble packetloss);
 void createnetwork_run(CreateNetworkAction* action);
 void createnetwork_free(CreateNetworkAction* action);
 

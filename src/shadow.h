@@ -99,9 +99,11 @@
 #include "node/descriptor/shd-udp.h"
 #include "node/shd-application.h"
 #include "node/shd-network-interface.h"
+#include "node/shd-tracker.h"
 #include "plugin/shd-system.h"
 #include "node/shd-node.h"
 
+#include "runnable/event/shd-heartbeat.h"
 #include "runnable/event/shd-callback.h"
 #include "runnable/event/shd-notify-plugin.h"
 #include "runnable/event/shd-interface-received.h"

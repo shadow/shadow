@@ -19,14 +19,37 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SHD_EXAMPLES_H_
-#define SHD_EXAMPLES_H_
+#include "shadow.h"
 
-#include <glib.h>
+EventFunctionTable heartbeat_functions = {
+	(EventRunFunc) heartbeat_run,
+	(EventFreeFunc) heartbeat_free,
+	MAGIC_VALUE
+};
 
-GString* example_getPingExampleContents();
-GString* example_getEchoExampleContents();
-GString* example_getFileExampleContents();
-GString* example_getTorrentExampleContents();
+struct _HeartbeatEvent {
+	Event super;
+	Tracker* tracker;
+	MAGIC_DECLARE;
+};
 
-#endif /* SHD_EXAMPLES_H_ */
+HeartbeatEvent* heartbeat_new(Tracker* tracker) {
+	HeartbeatEvent* event = g_new0(HeartbeatEvent, 1);
+	MAGIC_INIT(event);
+
+	shadowevent_init(&(event->super), &heartbeat_functions);
+	event->tracker = tracker;
+
+	return event;
+}
+
+void heartbeat_run(HeartbeatEvent* event, Node* node) {
+	MAGIC_ASSERT(event);
+	tracker_heartbeat(event->tracker);
+}
+
+void heartbeat_free(HeartbeatEvent* event) {
+	MAGIC_ASSERT(event);
+	MAGIC_CLEAR(event);
+	g_free(event);
+}

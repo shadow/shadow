@@ -207,8 +207,8 @@ guint packet_getPayloadLength(Packet* packet) {
 
 guint packet_getHeaderSize(Packet* packet) {
 	_packet_lock(packet);
-	guint size = packet->protocol == PUDP ? CONFIG_UDPIP_HEADER_SIZE :
-			packet->protocol == PTCP ? CONFIG_TCPIP_HEADER_SIZE : 0;
+	guint size = packet->protocol == PUDP ? CONFIG_HEADER_SIZE_UDPIPETH :
+			packet->protocol == PTCP ? CONFIG_HEADER_SIZE_TCPIPETH : 0;
 	_packet_unlock(packet);
 	return size;
 }

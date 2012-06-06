@@ -19,14 +19,15 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SHD_EXAMPLES_H_
-#define SHD_EXAMPLES_H_
+#ifndef SHD_HEARTBEAT_H_
+#define SHD_HEARTBEAT_H_
 
-#include <glib.h>
+#include "shadow.h"
 
-GString* example_getPingExampleContents();
-GString* example_getEchoExampleContents();
-GString* example_getFileExampleContents();
-GString* example_getTorrentExampleContents();
+typedef struct _HeartbeatEvent HeartbeatEvent;
 
-#endif /* SHD_EXAMPLES_H_ */
+HeartbeatEvent* heartbeat_new(Tracker* tracker);
+void heartbeat_run(HeartbeatEvent* event, Node* node);
+void heartbeat_free(HeartbeatEvent* event);
+
+#endif /* SHD_HEARTBEAT_H_ */

@@ -19,14 +19,19 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SHD_EXAMPLES_H_
-#define SHD_EXAMPLES_H_
+#ifndef SHD_TRACKER_H_
+#define SHD_TRACKER_H_
 
-#include <glib.h>
+typedef struct _Tracker Tracker;
 
-GString* example_getPingExampleContents();
-GString* example_getEchoExampleContents();
-GString* example_getFileExampleContents();
-GString* example_getTorrentExampleContents();
+Tracker* tracker_new();
+void tracker_free(Tracker* tracker);
 
-#endif /* SHD_EXAMPLES_H_ */
+void tracker_addProcessingTime(Tracker* tracker, SimulationTime processingTime);
+void tracker_addInputBytes(Tracker* tracker, gsize inputBytes);
+void tracker_addOutputBytes(Tracker* tracker, gsize outputBytes);
+void tracker_addAllocatedBytes(Tracker* tracker, gpointer location, gsize allocatedBytes);
+void tracker_removeAllocatedBytes(Tracker* tracker, gpointer location);
+void tracker_heartbeat(Tracker* tracker);
+
+#endif /* SHD_TRACKER_H_ */
