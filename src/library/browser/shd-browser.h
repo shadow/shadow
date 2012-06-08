@@ -33,7 +33,7 @@ struct _Browser {
 	ShadowlibFunctionTable shadowlibFuncs;
 };
 
-void browserplugin_new(gint, gchar*);
+void browserplugin_new(gint, gchar**);
 void browserplugin_free();
 void browserplugin_ready();
 

@@ -35,7 +35,7 @@ void __shadow_plugin_init__(ShadowlibFunctionTable* shadowlibFuncs) {
 	}
 }
 
-void browserplugin_new(gint argc, gchar* argv[]) {
+void browserplugin_new(gint argc, gchar** argv) {
   browserstate.shadowlibFuncs.log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "browserplugin_new called");
 }
 
