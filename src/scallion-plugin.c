@@ -173,6 +173,8 @@ static void scallion_start_torrent(void* arg) {
 		free(args->socksPort);
 		free(args->serverPort);
 		free(args->fileSize);
+		if(args->downBlockSize) free(args->downBlockSize);
+		if(args->upBlockSize) free(args->upBlockSize);
 		free(args);
 		free(launch);
 
@@ -412,6 +414,19 @@ static void _scallion_new(gint argc, gchar* argv[]) {
 		s = strnlen(argvoffset[5], 128)+1;
 		args->fileSize = malloc(s);
 		snprintf(args->fileSize, s, argvoffset[5]);
+
+		args->downBlockSize = NULL;
+		args->upBlockSize = NULL;
+
+		if(argc == 17) {
+			s = strnlen(argvoffset[6], 128)+1;
+			args->downBlockSize = malloc(s);
+			snprintf(args->downBlockSize, s, argvoffset[6]);
+
+			s = strnlen(argvoffset[7], 128)+1;
+			args->upBlockSize = malloc(s);
+			snprintf(args->upBlockSize, s, argvoffset[7]);
+		}
 
 		args->log_cb = &_scallion_torrentLogCallback;
 		args->hostbyname_cb = &_scallion_HostnameCallback;
