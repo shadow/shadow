@@ -83,6 +83,10 @@ foreach(library ${CMAKE_EXTRA_LIBRARIES})
     link_directories(${library})
 endforeach(library)
 
+## Check for dependencies with included modules
+include(FindOpenSSL)
+include(FindCURL)
+
 ## check for dependencies with our own Find scripts in "./cmake"
 ## these don't have built-in cmake files in /usr/share/cmake/Modules/Findxxx.cmake
 find_package(RT REQUIRED)
@@ -90,7 +94,7 @@ find_package(DL REQUIRED)
 find_package(M REQUIRED)
 find_package(GLIB REQUIRED)
 
-include_directories(${RT_INCLUDES} ${DL_INCLUDES} ${M_INCLUDES} ${GLIB_INCLUDES})
+include_directories(${RT_INCLUDES} ${DL_INCLUDES} ${M_INCLUDES} ${GLIB_INCLUDES} ${OPENSSL_INCLUDE_DIR} ${CURL_INCLUDES})
 
 ## generate config header and make sure its on the include path
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config.h.in ${CMAKE_CURRENT_BINARY_DIR}/shd-config.h)
