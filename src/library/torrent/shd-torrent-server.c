@@ -73,7 +73,7 @@ static void torrentServer_connection_destroy_cb(gpointer data) {
 	}
 }
 
-gint torrentServer_start(TorrentServer* ts, gint epolld, in_addr_t listenIP, in_port_t listenPort) {
+gint torrentServer_start(TorrentServer* ts, gint epolld, in_addr_t listenIP, in_port_t listenPort, gint downBlockSize, gint upBlockSize) {
 	if(ts == NULL) {
 		return TS_ERR_FATAL;
 	}
@@ -109,6 +109,9 @@ gint torrentServer_start(TorrentServer* ts, gint epolld, in_addr_t listenIP, in_
 	ts->epolld = epolld;
 	ts->connections = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, torrentServer_connection_destroy_cb);
 
+	ts->downBlockSize = downBlockSize;
+	ts->upBlockSize = upBlockSize;
+
 	/* start watching socket */
 	struct epoll_event ev;
 	ev.events = EPOLLIN;
@@ -139,7 +142,7 @@ gint torrentServer_activate(TorrentServer *ts, gint sockd, gint events) {
 		return TS_ERR_NOCONN;
 	}
 
-	gchar buf[TS_BLOCK_SIZE];
+	gchar buf[TS_BUF_SIZE];
 	ssize_t bytes = -1;
 
 	switch(connection->state) {
@@ -163,14 +166,16 @@ gint torrentServer_activate(TorrentServer *ts, gint sockd, gint events) {
 			break;
 
 		case TS_TRANSFER: {
-			if(events & EPOLLIN && connection->downBytesTransfered < connection->blockSize) {
-				bytes = recv(sockd, buf, connection->blockSize, 0);
+			if(events & EPOLLIN && connection->downBytesTransfered < ts->downBlockSize) {
+				int remainingBytes = ts->downBlockSize - connection->downBytesTransfered;
+				int len = (remainingBytes < sizeof(buf) ? remainingBytes : sizeof(buf));
+				bytes = recv(sockd, buf, len, 0);
 				TS_ASSERTIO(ts, bytes, errno == EWOULDBLOCK, TS_ERR_RECV);
 				connection->downBytesTransfered += bytes;
 			}
 
-			if(events & EPOLLOUT && connection->upBytesTransfered < connection->blockSize) {
-				int remainingBytes = connection->blockSize - connection->upBytesTransfered;
+			if(events & EPOLLOUT && connection->upBytesTransfered < ts->upBlockSize) {
+				int remainingBytes = ts->upBlockSize - connection->upBytesTransfered;
 				int len = (remainingBytes < sizeof(buf) ? remainingBytes : sizeof(buf));
 				for(int i = 0; i < len; i++) {
 					buf[i] = rand() % 256;
@@ -182,17 +187,14 @@ gint torrentServer_activate(TorrentServer *ts, gint sockd, gint events) {
 				connection->upBytesTransfered += bytes;
 			}
 
-			if(connection->downBytesTransfered >= connection->blockSize) {
-				torrentServer_changeEpoll(ts, sockd, EPOLLOUT);
-			}
 
-			if(connection->upBytesTransfered >= connection->blockSize) {
-				torrentServer_changeEpoll(ts, sockd, EPOLLIN);
-			}
-
-			if(connection->downBytesTransfered >= connection->blockSize && connection->upBytesTransfered >= connection->blockSize) {
+			if(connection->downBytesTransfered >= ts->downBlockSize && connection->upBytesTransfered >= ts->upBlockSize) {
 				connection->state  = TS_FINISHED;
 				torrentServer_changeEpoll(ts, sockd, EPOLLOUT);
+			} else if(connection->downBytesTransfered >= ts->downBlockSize) {
+				torrentServer_changeEpoll(ts, sockd, EPOLLOUT);
+			} else if(connection->upBytesTransfered >= ts->upBlockSize) {
+				torrentServer_changeEpoll(ts, sockd, EPOLLIN);
 			}
 			break;
 		}
@@ -237,7 +239,6 @@ gint torrentServer_accept(TorrentServer* ts, gint* sockdOut) {
 	connection->state = TS_IDLE;
 	connection->downBytesTransfered = 0;
 	connection->upBytesTransfered = 0;
-	connection->blockSize = TS_BLOCK_SIZE;
 
 	g_hash_table_replace(ts->connections, &(connection->sockd), connection);
 	if(sockdOut != NULL) {

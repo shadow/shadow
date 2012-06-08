@@ -76,7 +76,8 @@ static void torrentClient_connectionClose(TorrentClient* tc, TorrentClient_Serve
 	}
 }
 
-gint torrentClient_start(TorrentClient* tc, gint epolld, in_addr_t socksAddr, in_port_t socksPort, in_addr_t authAddr, in_port_t authPort,  in_port_t serverPort, gint fileSize) {
+gint torrentClient_start(TorrentClient* tc, gint epolld, in_addr_t socksAddr, in_port_t socksPort, in_addr_t authAddr, in_port_t authPort,
+		in_port_t serverPort, gint fileSize, gint downBlockSize, gint upBlockSize) {
 	tc->serverPort = serverPort;
 	tc->maxConnections = -1;
 	tc->epolld = epolld;
@@ -91,10 +92,14 @@ gint torrentClient_start(TorrentClient* tc, gint epolld, in_addr_t socksAddr, in
 	tc->totalBytesDown = 0;
 	tc->totalBytesUp = 0;
 	tc->fileSize = fileSize;
+	tc->downBlockSize = downBlockSize;
+	tc->upBlockSize = upBlockSize;
 	tc->bytesInProgress = 0;
-	// ceil(fileSize / TC_BLOCK_SIZE)
-	tc->numBlocks = (fileSize + TC_BLOCK_SIZE - 1) / TC_BLOCK_SIZE;
+	// TODO: This is for some reason not accurate
+	// ceil(fileSize / downBlockSize)
+	tc->numBlocks = (fileSize + downBlockSize - 1) / downBlockSize;
 	tc->blocksDownloaded = 0;
+	tc->currentBlockTransfer = NULL;
 
 	gint sockd = torrentClient_connect(tc, authAddr, authPort);
 	if(sockd < 0) {
@@ -115,7 +120,7 @@ gint torrentClient_start(TorrentClient* tc, gint epolld, in_addr_t socksAddr, in
 }
 
 gint torrentClient_activate(TorrentClient *tc, gint sockd, gint events) {
-	gchar buf[TC_BLOCK_SIZE];
+	gchar buf[TC_BUF_SIZE];
 	ssize_t bytes;
 	enum torrentClient_code ret = TC_SUCCESS;
 
@@ -349,7 +354,6 @@ gint torrentClient_activate(TorrentClient *tc, gint sockd, gint events) {
 
 					server->downBytesTransfered = 0;
 					server->upBytesTransfered = 0;
-					server->blockSize = TC_BLOCK_SIZE;
 					server->buf_read_offset = 0;
 					server->buf_write_offset = 0;
 					torrentClient_changeEpoll(tc, server->sockd, EPOLLOUT);
@@ -383,13 +387,20 @@ gint torrentClient_activate(TorrentClient *tc, gint sockd, gint events) {
 			bytes = send(sockd, request, strlen(request), 0);
 			TC_ASSERTIO(tc, bytes, errno == EWOULDBLOCK || errno == ENOTCONN || errno == EALREADY, TC_ERR_SEND);
 			torrentClient_changeEpoll(tc, sockd, EPOLLIN);
+
+			server->downBytesTransfered = 0;
+			server->upBytesTransfered = 0;
+			server->buf_read_offset = 0;
+			server->buf_write_offset = 0;
 			server->state = TC_SERVER_TRANSFER;
 			clock_gettime(CLOCK_REALTIME, &(server->download_start));
 			break;
 
 		case TC_SERVER_TRANSFER: {
-			if(events & EPOLLIN && server->downBytesTransfered < server->blockSize) {
-				bytes = recv(sockd, buf, server->blockSize, 0);
+			if(events & EPOLLIN && server->downBytesTransfered < tc->downBlockSize) {
+				int remainingBytes = tc->downBlockSize - server->downBytesTransfered;
+				int len = (remainingBytes < sizeof(buf) ? remainingBytes : sizeof(buf));
+				bytes = recv(sockd, buf, len, 0);
 				TC_ASSERTIO(tc, bytes, errno == EWOULDBLOCK, TC_ERR_RECV);
 
 				if(tc->totalBytesDown == 0) {
@@ -405,8 +416,8 @@ gint torrentClient_activate(TorrentClient *tc, gint sockd, gint events) {
 				tc->bytesInProgress -= bytes;
 			}
 
-			if(events & EPOLLOUT && server->upBytesTransfered < server->blockSize) {
-				int remainingBytes = server->blockSize - server->upBytesTransfered;
+			if(events & EPOLLOUT && server->upBytesTransfered < tc->upBlockSize) {
+				int remainingBytes = tc->upBlockSize - server->upBytesTransfered;
 				int len = (remainingBytes < sizeof(buf) ? remainingBytes : sizeof(buf));
 				for(int i = 0; i < len; i++) {
 					buf[i] = rand() % 256;
@@ -419,21 +430,14 @@ gint torrentClient_activate(TorrentClient *tc, gint sockd, gint events) {
 				tc->totalBytesUp += bytes;
 			}
 
-			if(server->downBytesTransfered >= server->blockSize) {
-				torrentClient_changeEpoll(tc, sockd, EPOLLOUT);
-			}
+			tc->currentBlockTransfer = server;
 
-			if(server->upBytesTransfered >= server->blockSize) {
-				torrentClient_changeEpoll(tc, sockd, EPOLLIN);
-			}
-
-
-			if(server->downBytesTransfered >= server->blockSize && server->upBytesTransfered >= server->blockSize) {
-				clock_gettime(CLOCK_REALTIME, &(server->download_end));
-				tc->blocksDownloaded++;
-				tc->lastBlockTransfer = server;
-				ret = TC_BLOCK_DOWNLOADED;
+			if(server->downBytesTransfered >= tc->downBlockSize && server->upBytesTransfered >= tc->upBlockSize) {
 				server->state = TC_SERVER_FINISHED;
+				torrentClient_changeEpoll(tc, sockd, EPOLLIN);
+			} else if(server->downBytesTransfered >= tc->downBlockSize) {
+				torrentClient_changeEpoll(tc, sockd, EPOLLOUT);
+			} else if(server->upBytesTransfered >= tc->upBlockSize) {
 				torrentClient_changeEpoll(tc, sockd, EPOLLIN);
 			}
 
@@ -441,17 +445,17 @@ gint torrentClient_activate(TorrentClient *tc, gint sockd, gint events) {
 		}
 
 		case TC_SERVER_FINISHED: {
-			bytes = recv(sockd, buf, server->blockSize, 0);
+			bytes = recv(sockd, buf, sizeof(buf), 0);
 			TC_ASSERTIO(tc, bytes, errno == EWOULDBLOCK, TC_ERR_RECV);
 
 			gchar *found = strcasestr(buf, "FINISHED");
 			if(found) {
-				server->downBytesTransfered = 0;
-				server->upBytesTransfered = 0;
-				server->blockSize = TC_BLOCK_SIZE;
-				server->buf_read_offset = 0;
-				server->buf_write_offset = 0;
 				server->state = TC_SERVER_REQUEST;
+				clock_gettime(CLOCK_REALTIME, &(server->download_end));
+
+				tc->currentBlockTransfer = server;
+				tc->blocksDownloaded++;
+				ret = TC_BLOCK_DOWNLOADED;
 				torrentClient_changeEpoll(tc, sockd, EPOLLOUT);
 			}
 			break;
