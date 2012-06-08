@@ -118,7 +118,7 @@ void torrent_new(int argc, char* argv[]) {
 
 	const gchar* USAGE = "Torrent USAGE: \n"
 			"\t'authority port'\n"
-			"\t'node authorityHostname authorityPort socksHostname socksPort serverPort fileSize'";
+			"\t'node authorityHostname authorityPort socksHostname socksPort serverPort fileSize [downBlockSize upBlockSize]'";
 	if(argc < 3) {
 		log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "%s", USAGE);
 		return;
