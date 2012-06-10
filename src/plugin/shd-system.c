@@ -733,10 +733,11 @@ gint system_getAddrInfo(gchar *name, const gchar *service,
 		/* application will expect it in network order */
 		// sa->sin_addr.s_addr = (in_addr_t) htonl((guint32)(*addr));
 		sa->sin_addr.s_addr = address;
+		sa->sin_family = AF_INET; /* libcurl expects this to be set */
 
 		struct addrinfo* ai_out = g_malloc(sizeof(struct addrinfo));
 		ai_out->ai_addr = (struct sockaddr*) sa;
-		ai_out->ai_addrlen = sizeof(in_addr_t);
+		ai_out->ai_addrlen =  sizeof(struct sockaddr_in);
 		ai_out->ai_canonname = NULL;
 		ai_out->ai_family = AF_INET;
 		ai_out->ai_flags = 0;
