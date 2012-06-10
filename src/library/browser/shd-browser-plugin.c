@@ -84,9 +84,9 @@ void browserplugin_new(gint argc, gchar** argv) {
 	curl_easy_setopt(handle, CURLOPT_VERBOSE, 1);
 	curl_easy_setopt(handle, CURLOPT_DEBUGFUNCTION, debug_cb);
 
-	 struct curl_slist *slist=NULL;
-        slist = curl_slist_append(slist, "server.node:80:7.0.0.0");
-	curl_easy_setopt(handle, CURLOPT_RESOLVE, slist);
+// 	 struct curl_slist *slist=NULL;
+//         slist = curl_slist_append(slist, "server.node:80:7.0.0.0");
+// 	curl_easy_setopt(handle, CURLOPT_RESOLVE, slist);
 	
 	/* Get an Epoll handle */
 	browserstate.epolld = epoll_create(1);
