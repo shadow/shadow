@@ -22,7 +22,10 @@
 #ifndef SHD_BROWSER_H_
 #define SHD_BROWSER_H_
 
+#include <unistd.h>
+#include <sys/epoll.h>
 #include <glib.h>
+#include <curl/curl.h>
 #include <shd-library.h>
 
 /**
@@ -31,6 +34,9 @@
 typedef struct _Browser Browser;
 struct _Browser {
 	ShadowlibFunctionTable shadowlibFuncs;
+	CURLSH* share;
+	CURLM* multiHandle;
+  gint epolld;
 };
 
 void browserplugin_new(gint, gchar**);
