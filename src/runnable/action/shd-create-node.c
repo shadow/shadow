@@ -35,6 +35,7 @@ struct _CreateNodesAction {
 	SimulationTime heartbeatIntervalSeconds;
 	GString* heartbeatLogLevelString;
 	GString* logLevelString;
+	GString* logPcapString;
 
 	MAGIC_DECLARE;
 };
@@ -48,7 +49,7 @@ RunnableFunctionTable createnodes_functions = {
 CreateNodesAction* createnodes_new(GString* name, GString* software, GString* cluster,
 		guint64 bandwidthdown, guint64 bandwidthup, guint64 quantity, guint64 cpuFrequency,
 		guint64 heartbeatIntervalSeconds, GString* heartbeatLogLevelString,
-		GString* logLevelString)
+		GString* logLevelString, GString* logPcapString)
 {
 	g_assert(name && software);
 	CreateNodesAction* action = g_new0(CreateNodesAction, 1);
@@ -70,6 +71,9 @@ CreateNodesAction* createnodes_new(GString* name, GString* software, GString* cl
 	}
 	if(logLevelString) {
 		action->logLevelString = g_string_new(logLevelString->str);
+	}
+	if(logPcapString) {
+		action->logPcapString = g_string_new(logPcapString->str);
 	}
 
 	return action;
@@ -125,6 +129,11 @@ void createnodes_run(CreateNodesAction* action) {
 		logLevel = configuration_getLogLevel(config);
 	}
 
+	guint8 logPcap = 0;
+	if(action->logPcapString && !g_ascii_strcasecmp(action->logPcapString->str, "true")) {
+		logPcap = 1;
+	}
+
 	for(gint i = 0; i < action->quantity; i++) {
 		/* get a random network if they didnt assign one */
 		gdouble randomDouble = engine_nextRandomDouble(worker->cached_engine);
@@ -149,7 +158,7 @@ void createnodes_run(CreateNodesAction* action) {
 		guint nodeSeed = (guint) engine_nextRandomInt(worker->cached_engine);
 		Node* node = internetwork_createNode(worker_getInternet(), id, network, software,
 				hostnameBuffer, bwDownKiBps, bwUpKiBps, cpuFrequency, cpuThreshold,
-				nodeSeed, heartbeatInterval, heartbeatLogLevel, logLevel);
+				nodeSeed, heartbeatInterval, heartbeatLogLevel, logLevel, logPcap);
 
 		g_string_free(hostnameBuffer, TRUE);
 
