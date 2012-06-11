@@ -124,6 +124,7 @@ def reset(output):
     os.makedirs(output+"/data/exitdata")
     os.makedirs(output+"/data/relaydata")
     os.makedirs(output+"/data/clientdata")
+    os.makedirs(output+"/data/pcapdata")
     
     shutil.copytree(output+"/keys", output+"/data/authoritydata/4uthority/keys")
     return 0
