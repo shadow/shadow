@@ -537,6 +537,7 @@ reactivate:;
 			} else {
 				/* reset download file */
 				service_filegetter_download_next(sfg);
+				service_filegetter_download_next(sfg);
 				goto reactivate;
 			}
 		}

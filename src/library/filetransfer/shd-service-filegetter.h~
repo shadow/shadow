@@ -39,7 +39,7 @@ enum service_filegetter_state {
 };
 
 enum service_filegetter_type {
-	SFG_SINGLE, SFG_DOUBLE, SFG_MULTI, SFG_BROWSER
+	SFG_SINGLE, SFG_DOUBLE, SFG_MULTI
 };
 
 typedef void (*service_filegetter_log_cb)(enum service_filegetter_loglevel level, const gchar* message);

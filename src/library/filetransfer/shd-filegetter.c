@@ -332,21 +332,20 @@ start:
 			}
 
 			/* must be version 5 */
-	        if(fg->buf[fg->buf_read_offset] != 0x05) {
-	            return FG_ERR_SOCKSINIT;
-	        }
-	        /* must be success */
-	        if(fg->buf[fg->buf_read_offset + 1] != 0x00) {
-	        	return FG_ERR_SOCKSINIT;
-	        }
+			if(fg->buf[fg->buf_read_offset] != 0x05) {
+			return FG_ERR_SOCKSINIT;
+			}
+			/* must be success */
+			if(fg->buf[fg->buf_read_offset + 1] != 0x00) {
+				return FG_ERR_SOCKSINIT;
+			}
 
-	        fg->buf_read_offset += 2;
+			fg->buf_read_offset += 2;
 
-			/* now send the socks connection request */
-			fg->state = FG_REQUEST_SOCKS_CONN;
-
-			goto start;
-		}
+				/* now send the socks connection request */
+				fg->state = FG_REQUEST_SOCKS_CONN;
+				goto start;
+			}
 
 		case FG_REQUEST_SOCKS_CONN: {
 			/* check that we actually have FT_SOCKS_REQ_HEAD_LEN+6 space */
@@ -383,43 +382,43 @@ start:
 			}
 
 			/* must be version 5 */
-	        if(fg->buf[fg->buf_read_offset] != 0x05) {
-	            return FG_ERR_SOCKSCONN;
-	        }
+			if(fg->buf[fg->buf_read_offset] != 0x05) {
+			return FG_ERR_SOCKSCONN;
+			}
 
-	        /* must be success */
-	        if(fg->buf[fg->buf_read_offset + 1] != 0x00) {
-	        	return FG_ERR_SOCKSCONN;
-	        }
+			/* must be success */
+			if(fg->buf[fg->buf_read_offset + 1] != 0x00) {
+				return FG_ERR_SOCKSCONN;
+			}
 
-	        /* check address type for IPv4 */
-	        if(fg->buf[fg->buf_read_offset + 3] != 0x01) {
-	        	return FG_ERR_SOCKSCONN;
-	        }
+			/* check address type for IPv4 */
+			if(fg->buf[fg->buf_read_offset + 3] != 0x01) {
+				return FG_ERR_SOCKSCONN;
+			}
 
-	        /* get address server told us */
-	        in_addr_t socks_bind_addr;
-	        in_port_t socks_bind_port;
-	        memcpy(&socks_bind_addr, &(fg->buf[fg->buf_read_offset + 4]), 4);
-	        memcpy(&socks_bind_port, &(fg->buf[fg->buf_read_offset + 8]), 2);
+			/* get address server told us */
+			in_addr_t socks_bind_addr;
+			in_port_t socks_bind_port;
+			memcpy(&socks_bind_addr, &(fg->buf[fg->buf_read_offset + 4]), 4);
+			memcpy(&socks_bind_port, &(fg->buf[fg->buf_read_offset + 8]), 2);
 
-	        fg->buf_read_offset += 10;
+			fg->buf_read_offset += 10;
 
-	        /* if we were send a new address, we need to reconnect there */
-	        if(socks_bind_addr != 0 && socks_bind_port != 0) {
-				/* reconnect at new address */
-				close(fg->sockd);
-				if(filegetter_connect(fg, socks_bind_addr, socks_bind_port) != FG_SUCCESS) {
-					return FG_ERR_SOCKSCONN;
-				}
-	        }
+			/* if we were send a new address, we need to reconnect there */
+			if(socks_bind_addr != 0 && socks_bind_port != 0) {
+					/* reconnect at new address */
+					close(fg->sockd);
+					if(filegetter_connect(fg, socks_bind_addr, socks_bind_port) != FG_SUCCESS) {
+						return FG_ERR_SOCKSCONN;
+					}
+			}
 
-	        /* now we are ready to send the http request */
-	        fg->state = FG_REQUEST_HTTP;
-	        fg->nextstate = FG_REQUEST_HTTP;
+			/* now we are ready to send the http request */
+			fg->state = FG_REQUEST_HTTP;
+			fg->nextstate = FG_REQUEST_HTTP;
 
-	        goto start;
-		}
+			goto start;
+			}
 
 		case FG_REQUEST_HTTP: {
 			/* write the request to our buffer */
@@ -432,19 +431,19 @@ start:
 			fg->buf_write_offset += bytes;
 
 			/* we are ready to send, then transition to http reply */
-	        filegetter_changeEpoll(fg, EPOLLOUT);
-			fg->state = FG_SEND;
-			fg->nextstate = FG_TOREPLY_HTTP;
+			filegetter_changeEpoll(fg, EPOLLOUT);
+				fg->state = FG_SEND;
+				fg->nextstate = FG_TOREPLY_HTTP;
 
-			goto start;
-		}
+				goto start;
+			}
 
-		case FG_TOREPLY_HTTP: {
-	        filegetter_changeEpoll(fg, EPOLLIN);
-			fg->state = FG_RECEIVE;
-			fg->nextstate = FG_REPLY_HTTP;
-			goto start;
-		}
+			case FG_TOREPLY_HTTP: {
+			filegetter_changeEpoll(fg, EPOLLIN);
+				fg->state = FG_RECEIVE;
+				fg->nextstate = FG_REPLY_HTTP;
+				goto start;
+			}
 
 		case FG_REPLY_HTTP: {
 			fg->buf[fg->buf_write_offset] = '\0';
