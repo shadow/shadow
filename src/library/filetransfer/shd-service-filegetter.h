@@ -29,6 +29,7 @@
 #include "shd-filetransfer-defs.h"
 #include "shd-filegetter.h"
 #include "shd-cdf.h"
+#include "shd-browser.h"
 
 enum service_filegetter_loglevel {
 	SFG_CRITICAL, SFG_WARNING, SFG_NOTICE, SFG_INFO, SFG_DEBUG
@@ -36,6 +37,10 @@ enum service_filegetter_loglevel {
 
 enum service_filegetter_state {
 	SFG_NONE, SFG_THINKING, SFG_DOWNLOADING, SFG_DONE
+};
+
+enum service_filegetter_browser_state {
+	SFG_DOCUMENT, SFG_CHILDREN
 };
 
 enum service_filegetter_type {
@@ -99,6 +104,7 @@ typedef struct service_filegetter_download_s {
 
 typedef struct service_filegetter_s {
 	enum service_filegetter_state state;
+	enum service_filegetter_browser_state browser_state;
 	enum service_filegetter_type type;
 	filegetter_t fg;
 	GTree* downloads;

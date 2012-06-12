@@ -140,6 +140,7 @@ static enum filegetter_code service_filegetter_download_next(service_filegetter_
 			/* follow through to set the download */
 		}
 
+		case SFG_BROWSER:
 		case SFG_SINGLE:
 		case SFG_DOUBLE: {
 			enum filegetter_code result = filegetter_download(&sfg->fg, &sfg->current_download->sspec, &sfg->current_download->fspec);
@@ -384,9 +385,12 @@ enum filegetter_code service_filegetter_start_browser(service_filegetter_tp sfg,
 	if(sfg->current_download == NULL) {
 		return FG_ERR_INVALID;
 	}
+	
+	/* Set to save the first document in a string for parsing */
+	sfg->current_download->fspec.save_to_memory = TRUE;
 
 	/* Set to two and reset accordingly after parsing document */
-	sfg->downloads_requested = 2;
+	sfg->downloads_requested = 1;
 	if(sfg->downloads_requested <= 0) {
 		service_filegetter_log(sfg, SFG_WARNING, "you didn't want to download anything?");
 		return FG_ERR_INVALID;
@@ -479,6 +483,18 @@ reactivate:;
 		/* report completion stats */
 		service_filegetter_report(sfg, SFG_NOTICE, "[fg-download-complete]", &stats, sfg->downloads_completed, sfg->downloads_requested);
 		
+		if (sfg->type == SFG_BROWSER) {
+			GSList* objs = NULL;
+			gchar* content = g_string_free(sfg->fg.content, FALSE);
+			parse_html(content, &objs);
+			service_filegetter_log(sfg, SFG_NOTICE, "[fg-browser] found %i objects in document:", g_slist_length(objs), content);
+			int i;
+			for (i = 1; objs != NULL; i++) {
+				service_filegetter_log(sfg, SFG_NOTICE, "[fg-browser] %i. %s", i, (gchar*) objs->data);
+				objs = g_slist_next(objs);
+			}
+		}
+		
 		if(sfg->downloads_completed == sfg->downloads_requested) {
 			return service_filegetter_expire(sfg);
 		} else {
@@ -532,8 +548,6 @@ reactivate:;
 					service_filegetter_download_next(sfg);
 					goto reactivate;
 				}
-			} else if (sfg->type == SFG_BROWSER) {
-				
 			} else {
 				/* reset download file */
 				service_filegetter_download_next(sfg);

@@ -215,6 +215,11 @@ static enum filegetter_code filegetter_set_specs(filegetter_tp fg, filegetter_se
 	fg->sspec = *sspec;
 	fg->fspec = *fspec;
 
+	if (fg->fspec.save_to_memory) {
+		/* they want us to save what we get to a string */
+		fg->content = g_string_new("");
+	}
+	
 	if(fg->fspec.do_save) {
 		/* they want us to save what we get to a file */
 		fg->f = fopen(fg->fspec.local_path, "w");
@@ -555,6 +560,10 @@ start:
 			if(bytes_avail > 0) {
 				/* progressed since last time */
 				filegetter_metrics_progress(fg);
+			}
+			
+			if (fg->content != NULL) {
+				 fg->content = g_string_append_len(fg->content, fg->buf + fg->buf_read_offset, bytes_avail);
 			}
 
 			if(fg->f != NULL) {
