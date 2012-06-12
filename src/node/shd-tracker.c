@@ -98,14 +98,34 @@ void tracker_removeAllocatedBytes(Tracker* tracker, gpointer location) {
 void tracker_heartbeat(Tracker* tracker) {
 	MAGIC_ASSERT(tracker);
 
-	guint seconds = (guint) (tracker->interval / SIMTIME_ONE_SECOND);
+	/* prefer our level over the global config */
+	GLogLevelFlags level = tracker->loglevel;
+	if(!level) {
+		Worker* w = worker_getPrivate();
+		if(w->cached_engine) {
+			Configuration* c = engine_getConfig(w->cached_engine);
+			level = configuration_getHeartbeatLogLevel(c);
+		}
+	}
+
+	/* prefer our interval over the global config */
+	SimulationTime interval = tracker->interval;
+	if(!interval) {
+		Worker* w = worker_getPrivate();
+		if(w->cached_engine) {
+			Configuration* c = engine_getConfig(w->cached_engine);
+			interval = configuration_getHearbeatInterval(c);
+		}
+	}
+
+	guint seconds = (guint) (interval / SIMTIME_ONE_SECOND);
 	double in = (double)(((double)tracker->inputBytesLastInterval) / seconds);
 	double out = (double)(((double)tracker->outputBytesLastInterval) / seconds);
-	double cpuutil = (double)(((double)tracker->processingTimeLastInterval) / tracker->interval);
+	double cpuutil = (double)(((double)tracker->processingTimeLastInterval) / interval);
 	double mem = (double)(((double)tracker->allocatedBytesTotal) / 1024.0);
 
 	/* log the things we are tracking */
-	logging_log(G_LOG_DOMAIN, tracker->loglevel, __FUNCTION__, "heartbeat: "
+	logging_log(G_LOG_DOMAIN, level, __FUNCTION__, "heartbeat: "
 			"Rx %f B/s, Tx %f B/s, CPU %f \%, MEM %f KiB", in, out, cpuutil, mem);
 
 	/* clear interval stats */
@@ -116,5 +136,5 @@ void tracker_heartbeat(Tracker* tracker) {
 	/* schedule the next heartbeat */
 	tracker->lastHeartbeat = worker_getPrivate()->clock_now;
 	HeartbeatEvent* heartbeat = heartbeat_new(tracker);
-	worker_scheduleEvent((Event*)heartbeat, tracker->interval, 0);
+	worker_scheduleEvent((Event*)heartbeat, interval, 0);
 }

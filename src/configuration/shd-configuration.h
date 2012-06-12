@@ -293,6 +293,13 @@ GLogLevelFlags configuration_getLogLevel(Configuration* config);
  */
 GLogLevelFlags configuration_getHeartbeatLogLevel(Configuration* config);
 
+/**
+ * Get the configured heartbeat printing interval.
+ * @param config a #Configuration object created with configuration_new()
+ * @return the command line heartbeat interval converted to SimulationTime
+ */
+SimulationTime configuration_getHearbeatInterval(Configuration* config);
+
 /** @} */
 
 #endif /* SHD_CONFIGURATION_H_ */

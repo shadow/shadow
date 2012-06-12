@@ -111,22 +111,22 @@ void createnodes_run(CreateNodesAction* action) {
 
 	Configuration* config = engine_getConfig(worker->cached_engine);
 
-	/* prefer node-specific settings, default back to system-wide config */
-	SimulationTime heartbeatInterval = action->heartbeatIntervalSeconds * SIMTIME_ONE_SECOND;
-	if(!heartbeatInterval) {
-		heartbeatInterval = config->heartbeatInterval * SIMTIME_ONE_SECOND;
+	/* set node-specific settings if we have them.
+	 * the node-specific settings should be 0 if its not set so we know to check
+	 * the global settings later. we avoid using globals here to avoid
+	 * updating all the nodes if the globals changes during execution.
+	 */
+	SimulationTime heartbeatInterval = 0;
+	if(action->heartbeatIntervalSeconds) {
+		heartbeatInterval = action->heartbeatIntervalSeconds * SIMTIME_ONE_SECOND;
 	}
 	GLogLevelFlags heartbeatLogLevel = 0;
 	if(action->heartbeatLogLevelString) {
 		heartbeatLogLevel = configuration_getLevel(config, action->heartbeatLogLevelString->str);
-	} else {
-		heartbeatLogLevel = configuration_getHeartbeatLogLevel(config);
 	}
 	GLogLevelFlags logLevel = 0;
 	if(action->logLevelString) {
 		logLevel = configuration_getLevel(config, action->logLevelString->str);
-	} else {
-		logLevel = configuration_getLogLevel(config);
 	}
 
 	guint8 logPcap = 0;
