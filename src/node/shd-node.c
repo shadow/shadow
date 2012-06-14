@@ -52,6 +52,9 @@ struct _Node {
 	/* this node's loglevel */
 	GLogLevelFlags logLevel;
 
+	/* flag on whether or not packets are being captured */
+	gchar logPcap;
+
 	/* all file, socket, and epoll descriptors we know about and track */
 	GHashTable* descriptors;
 	gint descriptorHandleCounter;
@@ -69,7 +72,7 @@ Node* node_new(GQuark id, Network* network, Software* software, guint32 ip,
 		GString* hostname, guint64 bwDownKiBps, guint64 bwUpKiBps,
 		guint cpuFrequency, gint cpuThreshold, guint nodeSeed,
 		SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel,
-		GLogLevelFlags logLevel) {
+		GLogLevelFlags logLevel, gchar logPcap) {
 	Node* node = g_new0(Node, 1);
 	MAGIC_INIT(node);
 
@@ -87,9 +90,11 @@ Node* node_new(GQuark id, Network* network, Software* software, guint32 ip,
 	/* virtual interfaces for managing network I/O */
 	node->interfaces = g_hash_table_new_full(g_direct_hash, g_direct_equal,
 			NULL, (GDestroyNotify) networkinterface_free);
-	NetworkInterface* ethernet = networkinterface_new(network, id, hostname->str, bwDownKiBps, bwUpKiBps);
+	NetworkInterface* ethernet = networkinterface_new(network, id, hostname->str, bwDownKiBps, bwUpKiBps, logPcap);
 	g_hash_table_replace(node->interfaces, GUINT_TO_POINTER((guint)id), ethernet);
-	NetworkInterface* loopback = networkinterface_new(NULL, (GQuark)htonl(INADDR_LOOPBACK), "loopback", G_MAXUINT32, G_MAXUINT32);
+	GString *loopbackName = g_string_new("");
+	g_string_append_printf(loopbackName, "%s-loopback", hostname->str);
+	NetworkInterface* loopback = networkinterface_new(NULL, (GQuark)htonl(INADDR_LOOPBACK), loopbackName->str, G_MAXUINT32, G_MAXUINT32, logPcap);
 	g_hash_table_replace(node->interfaces, GUINT_TO_POINTER((guint)htonl(INADDR_LOOPBACK)), loopback);
 	node->defaultInterface = ethernet;
 
@@ -107,6 +112,7 @@ Node* node_new(GQuark id, Network* network, Software* software, guint32 ip,
 	node->random = random_new(nodeSeed);
 	node->tracker = tracker_new(heartbeatInterval, heartbeatLogLevel);
 	node->logLevel = logLevel;
+	node->logPcap = logPcap;
 
 	info("Created Node '%s', ip %s, %u bwUpKiBps, %u bwDownKiBps, %lu cpuFrequency, %i cpuThreshold, %u seed",
 			g_quark_to_string(node->id), networkinterface_getIPName(node->defaultInterface),
@@ -898,4 +904,9 @@ Tracker* node_getTracker(Node* node) {
 GLogLevelFlags node_getLogLevel(Node* node) {
 	MAGIC_ASSERT(node);
 	return node->logLevel;
+}
+
+gchar node_isLoggingPcap(Node *node) {
+	MAGIC_ASSERT(node);
+	return node->logPcap;
 }

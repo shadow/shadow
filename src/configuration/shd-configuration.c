@@ -189,3 +189,8 @@ GLogLevelFlags configuration_getHeartbeatLogLevel(Configuration* config) {
 	const gchar* l = (const gchar*) config->heartbeatLogLevelInput;
 	return configuration_getLevel(config, l);
 }
+
+SimulationTime configuration_getHearbeatInterval(Configuration* config) {
+	MAGIC_ASSERT(config);
+	return config->heartbeatInterval * SIMTIME_ONE_SECOND;
+}

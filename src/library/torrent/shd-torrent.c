@@ -51,6 +51,8 @@ static void torrent_report(TorrentClient* tc, gchar* preamble) {
 		struct timespec now;
 		struct timespec first_time;
 		struct timespec curr_time;
+		struct timespec block_first_time;
+		struct timespec block_curr_time;
 		clock_gettime(CLOCK_REALTIME, &now);
 
 		/* first byte statistics */
@@ -69,11 +71,33 @@ static void torrent_report(TorrentClient* tc, gchar* preamble) {
 			curr_time.tv_nsec += 1000000000;
 		}
 
-		log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "%s got first bytes in %lu.%.3d seconds and %d of %d bytes [%d\%] in %lu.%.3d seconds",
-				preamble,
-				first_time.tv_sec, (gint)(first_time.tv_nsec / 1000000),
-				tc->totalBytesDown, tc->fileSize, (gint)((double)tc->totalBytesDown / (double)tc->fileSize * 100.0),
-				curr_time.tv_sec, (gint)(curr_time.tv_nsec / 1000000));
+		/* first byte statistics */
+		block_first_time.tv_sec = tc->currentBlockTransfer->download_first_byte.tv_sec - tc->currentBlockTransfer->download_start.tv_sec;
+		block_first_time.tv_nsec = tc->currentBlockTransfer->download_first_byte.tv_nsec - tc->currentBlockTransfer->download_start.tv_nsec;
+		while(block_first_time.tv_nsec < 0) {
+			block_first_time.tv_sec--;
+			block_first_time.tv_nsec += 1000000000;
+		}
+
+		/* current byte statistics */
+		block_curr_time.tv_sec = now.tv_sec - tc->currentBlockTransfer->download_start.tv_sec;
+		block_curr_time.tv_nsec = now.tv_nsec - tc->currentBlockTransfer->download_start.tv_nsec;
+		while(block_curr_time.tv_nsec < 0) {
+			block_curr_time.tv_sec--;
+			block_curr_time.tv_nsec += 1000000000;
+		}
+
+
+		log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "%s first byte in %lu.%.3d seconds, "
+				"%d of %d DOWN and %d of %d UP in %lu.%.3d seconds, total %d of %d bytes [%d\%] in %lu.%.3d seconds (block %d of %d)",
+						preamble,
+						block_first_time.tv_sec, (gint)(block_first_time.tv_nsec / 1000000),
+						tc->currentBlockTransfer->downBytesTransfered, tc->downBlockSize,
+						tc->currentBlockTransfer->upBytesTransfered, tc->upBlockSize,
+						block_curr_time.tv_sec, (gint)(block_curr_time.tv_nsec / 1000000),
+						tc->totalBytesDown, tc->fileSize, (gint)(((gdouble)tc->totalBytesDown / (gdouble)tc->fileSize) * 100),
+						curr_time.tv_sec, (gint)(curr_time.tv_nsec / 1000000),
+						tc->blocksDownloaded, tc->numBlocks);
 	}
 }
 
@@ -94,7 +118,7 @@ void torrent_new(int argc, char* argv[]) {
 
 	const gchar* USAGE = "Torrent USAGE: \n"
 			"\t'authority port'\n"
-			"\t'node authorityHostname authorityPort socksHostname socksPort serverPort fileSize'";
+			"\t'node authorityHostname authorityPort socksHostname socksPort serverPort fileSize [downBlockSize upBlockSize]'";
 	if(argc < 3) {
 		log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "%s", USAGE);
 		return;
@@ -122,6 +146,26 @@ void torrent_new(int argc, char* argv[]) {
 			fileSize = atoi(argv[7]);
 		}
 
+		gint downBlockSize = 16*1024;
+		gint upBlockSize = 16*1024;
+
+		if(argc == 10) {
+			if(strstr(argv[8], "KB") != NULL) {
+				downBlockSize = atoi(strtok(argv[8], "K")) * 1024;
+			} else if(strstr(argv[8], "MB") != NULL) {
+				downBlockSize = atoi(strtok(argv[8], "M")) * 1024 * 1024;
+			} else {
+				downBlockSize = atoi(argv[8]);
+			}
+
+			if(strstr(argv[9], "KB") != NULL) {
+				upBlockSize = atoi(strtok(argv[9], "K")) * 1024;
+			} else if(strstr(argv[9], "MB") != NULL) {
+				upBlockSize = atoi(strtok(argv[9], "M")) * 1024 * 1024;
+			} else {
+				upBlockSize = atoi(argv[9]);
+			}
+		}
 
 		/* create an epoll to wait for I/O events */
 		gint epolld = epoll_create(1);
@@ -136,7 +180,9 @@ void torrent_new(int argc, char* argv[]) {
 		in_port_t listenPort = (in_port_t)serverPort;
 
 		torrent->server = g_new0(TorrentServer, 1);
-		if(torrentServer_start(torrent->server, epolld, htonl(listenIP), htons(listenPort)) < 0) {
+		// NOTE: since the up/down block sizes are in context of the client, we swap them for
+		// the server since it's actually the reverse of what the client has
+		if(torrentServer_start(torrent->server, epolld, htonl(listenIP), htons(listenPort), upBlockSize, downBlockSize) < 0) {
 			log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "torrent server error, not started!");
 			g_free(torrent->server);
 			torrent->server = NULL;
@@ -157,7 +203,8 @@ void torrent_new(int argc, char* argv[]) {
 		in_addr_t authAddr = torrent_resolveHostname(authHostname);
 		in_addr_t socksAddr = torrent_resolveHostname(socksHostname);
 		torrent->client = g_new0(TorrentClient, 1);
-		if(torrentClient_start(torrent->client, epolld, socksAddr, htons(socksPort), authAddr, htons(authPort), serverPort, fileSize) < 0) {
+		if(torrentClient_start(torrent->client, epolld, socksAddr, htons(socksPort), authAddr, htons(authPort), serverPort,
+				fileSize, downBlockSize, upBlockSize) < 0) {
 			log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "torrent client error, not started!");
 			g_free(torrent->client);
 			torrent->client = NULL;
@@ -229,18 +276,21 @@ void torrent_activate() {
 			if(res < 0) {
 				log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "activate returned %d", res);
 			}
-		}
 
-		if(!torrent->clientDone  && torrent->client->totalBytesDown > 0) {
-			if(torrent->client->totalBytesDown >= torrent->client->fileSize) {
-				torrent_report(torrent->client, "[client-complete]");
-				torrent->clientDone = 1;
-			} else {
+			if(!torrent->clientDone  && torrent->client->totalBytesDown > 0) {
 				struct timespec now;
 				clock_gettime(CLOCK_REALTIME, &now);
-				if(now.tv_sec - torrent->lastReport.tv_sec > 1) {
+				if(torrent->client->totalBytesDown >= torrent->client->fileSize) {
+					torrent_report(torrent->client, "[client-complete]");
+					torrent->clientDone = 1;
+				} else if(res == TC_BLOCK_DOWNLOADED) {
 					torrent->lastReport = now;
-					torrent_report(torrent->client, "[client-progress]");
+					torrent_report(torrent->client, "[client-block-complete]");
+				} else if(now.tv_sec - torrent->lastReport.tv_sec > 1 && torrent->client->currentBlockTransfer != NULL &&
+						  (torrent->client->currentBlockTransfer->downBytesTransfered > 0 ||
+						   torrent->client->currentBlockTransfer->upBytesTransfered > 0)) {
+					torrent->lastReport = now;
+					torrent_report(torrent->client, "[client-block-progress]");
 				}
 			}
 		}

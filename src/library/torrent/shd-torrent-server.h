@@ -28,7 +28,7 @@
 #include <netinet/in.h>
 #include <glib-2.0/glib.h>
 
-#define TS_BLOCK_SIZE 16*1024
+#define TS_BUF_SIZE 16384
 
 enum torrentServer_code {
 	TS_SUCCESS, TS_CLOSED, TS_ERR_INVALID, TS_ERR_FATAL, TS_ERR_BADSD, TS_ERR_WOULDBLOCK, TS_ERR_BUFSPACE,
@@ -55,7 +55,6 @@ struct _TorrentServer_Connection {
 	enum torrentServer_state state;
 	gint downBytesTransfered;
 	gint upBytesTransfered;
-	gint blockSize;
 };
 
 typedef struct _TorrentServer TorrentServer;
@@ -64,10 +63,12 @@ struct _TorrentServer {
 	gint listenSockd;
 	/* connections stored by sockd */
 	GHashTable *connections;
+	gint downBlockSize;
+	gint upBlockSize;
 	gint errcode;
 };
 
-gint torrentServer_start(TorrentServer* ts, gint epolld, in_addr_t listenIP, in_port_t listenPort);
+gint torrentServer_start(TorrentServer* ts, gint epolld, in_addr_t listenIP, in_port_t listenPort, gint downBlockSize, gint upBlockSize);
 gint torrentServer_activate(TorrentServer* ts, gint sockd, gint events);
 gint torrentServer_accept(TorrentServer* ts, gint* sockdOut);
 gint torrentServer_shutdown(TorrentServer* ts);

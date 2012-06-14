@@ -35,6 +35,7 @@ struct _CreateNodesAction {
 	SimulationTime heartbeatIntervalSeconds;
 	GString* heartbeatLogLevelString;
 	GString* logLevelString;
+	GString* logPcapString;
 
 	MAGIC_DECLARE;
 };
@@ -48,7 +49,7 @@ RunnableFunctionTable createnodes_functions = {
 CreateNodesAction* createnodes_new(GString* name, GString* software, GString* cluster,
 		guint64 bandwidthdown, guint64 bandwidthup, guint64 quantity, guint64 cpuFrequency,
 		guint64 heartbeatIntervalSeconds, GString* heartbeatLogLevelString,
-		GString* logLevelString)
+		GString* logLevelString, GString* logPcapString)
 {
 	g_assert(name && software);
 	CreateNodesAction* action = g_new0(CreateNodesAction, 1);
@@ -70,6 +71,9 @@ CreateNodesAction* createnodes_new(GString* name, GString* software, GString* cl
 	}
 	if(logLevelString) {
 		action->logLevelString = g_string_new(logLevelString->str);
+	}
+	if(logPcapString) {
+		action->logPcapString = g_string_new(logPcapString->str);
 	}
 
 	return action;
@@ -107,22 +111,27 @@ void createnodes_run(CreateNodesAction* action) {
 
 	Configuration* config = engine_getConfig(worker->cached_engine);
 
-	/* prefer node-specific settings, default back to system-wide config */
-	SimulationTime heartbeatInterval = action->heartbeatIntervalSeconds * SIMTIME_ONE_SECOND;
-	if(!heartbeatInterval) {
-		heartbeatInterval = config->heartbeatInterval * SIMTIME_ONE_SECOND;
+	/* set node-specific settings if we have them.
+	 * the node-specific settings should be 0 if its not set so we know to check
+	 * the global settings later. we avoid using globals here to avoid
+	 * updating all the nodes if the globals changes during execution.
+	 */
+	SimulationTime heartbeatInterval = 0;
+	if(action->heartbeatIntervalSeconds) {
+		heartbeatInterval = action->heartbeatIntervalSeconds * SIMTIME_ONE_SECOND;
 	}
 	GLogLevelFlags heartbeatLogLevel = 0;
 	if(action->heartbeatLogLevelString) {
 		heartbeatLogLevel = configuration_getLevel(config, action->heartbeatLogLevelString->str);
-	} else {
-		heartbeatLogLevel = configuration_getHeartbeatLogLevel(config);
 	}
 	GLogLevelFlags logLevel = 0;
 	if(action->logLevelString) {
 		logLevel = configuration_getLevel(config, action->logLevelString->str);
-	} else {
-		logLevel = configuration_getLogLevel(config);
+	}
+
+	guint8 logPcap = 0;
+	if(action->logPcapString && !g_ascii_strcasecmp(action->logPcapString->str, "true")) {
+		logPcap = 1;
 	}
 
 	for(gint i = 0; i < action->quantity; i++) {
@@ -149,7 +158,7 @@ void createnodes_run(CreateNodesAction* action) {
 		guint nodeSeed = (guint) engine_nextRandomInt(worker->cached_engine);
 		Node* node = internetwork_createNode(worker_getInternet(), id, network, software,
 				hostnameBuffer, bwDownKiBps, bwUpKiBps, cpuFrequency, cpuThreshold,
-				nodeSeed, heartbeatInterval, heartbeatLogLevel, logLevel);
+				nodeSeed, heartbeatInterval, heartbeatLogLevel, logLevel, logPcap);
 
 		g_string_free(hostnameBuffer, TRUE);
 

@@ -55,6 +55,8 @@ struct _TorrentService_NodeArgs {
 	gchar *socksPort;
 	gchar *serverPort;
 	gchar *fileSize;
+	gchar *downBlockSize;
+	gchar *upBlockSize;
 };
 
 typedef struct _TorrentService TorrentService;
