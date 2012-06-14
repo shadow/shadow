@@ -40,7 +40,7 @@ enum service_filegetter_state {
 };
 
 enum service_filegetter_browser_state {
-	SFG_DOCUMENT, SFG_CHILDREN
+	SFG_DOCUMENT, SFG_EMBEDDED_OBJECTES
 };
 
 enum service_filegetter_type {
@@ -102,9 +102,15 @@ typedef struct service_filegetter_download_s {
 	filegetter_serverspec_t sspec;
 } service_filegetter_download_t, *service_filegetter_download_tp;
 
+typedef struct service_filegetter_browser_s {
+	enum service_filegetter_browser_state state;
+	gchar* first_hostname;
+	GHashTable* download_tasks;
+	gint max_concurrent_downloads;
+} service_filegetter_browser_t, *service_filegetter_browser_tp;
+
 typedef struct service_filegetter_s {
 	enum service_filegetter_state state;
-	enum service_filegetter_browser_state browser_state;
 	enum service_filegetter_type type;
 	filegetter_t fg;
 	GTree* downloads;
@@ -112,6 +118,7 @@ typedef struct service_filegetter_s {
 	service_filegetter_download_tp download1;
 	service_filegetter_download_tp download2;
 	service_filegetter_download_tp download3;
+	service_filegetter_browser_tp browser;
 	service_filegetter_hostbyname_cb hostbyname_cb;
 	service_filegetter_sleep_cb sleep_cb;
 	service_filegetter_log_cb log_cb;
@@ -122,6 +129,7 @@ typedef struct service_filegetter_s {
 	gchar log_buffer[1024];
 	gint downloads_requested;
 	gint downloads_completed;
+	
 } service_filegetter_t, *service_filegetter_tp;
 
 enum filegetter_code service_filegetter_start_single(service_filegetter_tp sfg, service_filegetter_single_args_tp args, gint epolld, gint* sockd_out);

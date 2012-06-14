@@ -371,9 +371,13 @@ enum filegetter_code service_filegetter_start_browser(service_filegetter_tp sfg,
 	assert(args);
 	
 	memset(sfg, 0, sizeof(service_filegetter_t));
-
+	
+	sfg->browser = calloc(1, sizeof(service_filegetter_browser_t));
 	sfg->type = SFG_BROWSER;
 	sfg->state = SFG_NONE;
+	sfg->browser->state = SFG_DOCUMENT;
+	sfg->browser->max_concurrent_downloads = atoi(args->max_concurrent_downloads);
+	sfg->browser->first_hostname = g_strdup(args->http_server.host);
 
 	/* if null, we ignore logging */
 	sfg->log_cb = args->log_cb;
@@ -389,7 +393,7 @@ enum filegetter_code service_filegetter_start_browser(service_filegetter_tp sfg,
 	/* Set to save the first document in a string for parsing */
 	sfg->current_download->fspec.save_to_memory = TRUE;
 
-	/* Set to two and reset accordingly after parsing document */
+	/* Set to one and reset accordingly after parsing document */
 	sfg->downloads_requested = 1;
 	if(sfg->downloads_requested <= 0) {
 		service_filegetter_log(sfg, SFG_WARNING, "you didn't want to download anything?");
@@ -483,16 +487,8 @@ reactivate:;
 		/* report completion stats */
 		service_filegetter_report(sfg, SFG_NOTICE, "[fg-download-complete]", &stats, sfg->downloads_completed, sfg->downloads_requested);
 		
-		if (sfg->type == SFG_BROWSER) {
-			GSList* objs = NULL;
-			gchar* content = g_string_free(sfg->fg.content, FALSE);
-			parse_html(content, &objs);
-			service_filegetter_log(sfg, SFG_NOTICE, "[fg-browser] found %i objects in document:", g_slist_length(objs), content);
-			int i;
-			for (i = 1; objs != NULL; i++) {
-				service_filegetter_log(sfg, SFG_NOTICE, "[fg-browser] %i. %s", i, (gchar*) objs->data);
-				objs = g_slist_next(objs);
-			}
+		if (sfg->type == SFG_BROWSER && sfg->browser->state == SFG_DOCUMENT) {
+			get_embedded_objects(sfg);
 		}
 		
 		if(sfg->downloads_completed == sfg->downloads_requested) {

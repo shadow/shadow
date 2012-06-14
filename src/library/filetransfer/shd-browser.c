@@ -1,53 +1,51 @@
-#include <glib.h>
-#include <glib/gprintf.h>
-#include <libxml/HTMLparser.h>
-
 #include "shd-browser.h"
 
-void ignore_xml_errors(void* ctx, const char* msg, ...) {
-  return;
+static void ignore_xml_errors(void* ctx, const char* msg, ...) { }
+
+static gchar* parse_img(GHashTable* attrs) {
+	return g_hash_table_lookup(attrs, "src");
 }
 
-gchar* get_url_base(gchar* url) {
-  gint match_count;
-  GString* base = g_string_new("");
-  gchar** parts = crack_url(url, &match_count);
-  
-  if (match_count < 3) {    
-    g_fprintf(stderr, "Malformed url: %s\n", url);
-    exit(EXIT_FAILURE); 
-  }
+static gchar* parse_link(GHashTable* attrs) {
+	gchar* rel = g_hash_table_lookup(attrs, "rel");
+	gchar* source = g_hash_table_lookup(attrs, "href");
 
-  g_string_append(base, parts[1]);
-  g_string_append(base, parts[2]);
-  g_strfreev(parts);
-  
-  return g_string_free(base, FALSE);
+	if (g_strcmp0(rel, "stylesheet") == 0) {
+		return source;
+	}
+
+	if (g_strcmp0(rel, "shortcut icon") == 0) {
+		return source;
+	}
+
+	return NULL;
 }
 
-gchar** crack_url(gchar* url, gint* match_count) {
-  gchar *url_pattern;
-  gchar** parts;
-  GRegex *regex;
-  GMatchInfo *match_info;
-  
-  if (!url_is_absolute(url)) {
-    g_fprintf(stderr, "URL is not absolute: <%s>\n", url);
-    exit(EXIT_FAILURE); 
-  }
-  
-  url_pattern = "^(http[s]?:\\/\\/)([^\\/]+)(.*?)([^\\/]*)$";
-  regex = g_regex_new(url_pattern, G_REGEX_CASELESS, 0, NULL);
-  g_regex_match(regex, url, 0, &match_info);
-  parts = g_match_info_fetch_all(match_info);
-  *match_count = g_match_info_get_match_count(match_info);
-  g_match_info_free(match_info);
-  g_regex_unref(regex);
-  
-  return parts;
+static gchar* parse_script(GHashTable* attrs) {
+	gchar* rel = g_hash_table_lookup(attrs, "type");
+	gchar* source = g_hash_table_lookup(attrs, "src");
+
+	if (g_strcmp0(rel, "text/javascript") == 0 && source != NULL) {
+		return source;
+	}
+
+	return NULL;
 }
 
-void find_objects(htmlNodePtr element, GSList** objs) {
+static GHashTable* get_attributes(htmlNodePtr node) {
+	xmlAttrPtr curr_attr;
+	gchar* canonical_name;
+	GHashTable* attrs = g_hash_table_new(g_str_hash, g_str_equal);
+
+	for(curr_attr = node->properties; curr_attr != NULL; curr_attr = curr_attr->next) {
+		canonical_name = g_utf8_strdown((const gchar*) curr_attr->name, -1);
+		g_hash_table_insert(attrs, canonical_name, curr_attr->children->content);
+	}
+
+	return attrs;
+}
+
+static void find_objects(htmlNodePtr element, GSList** objs) {
 	htmlNodePtr node = element;
 	gchar* url;
 	GHashTable* attrs;
@@ -78,7 +76,7 @@ void find_objects(htmlNodePtr element, GSList** objs) {
 	}
 }
 
-void parse_html(gchar* html, GSList** objs) {
+static void parse_html(const gchar* html, GSList** objs) {
 	xmlSetGenericErrorFunc(NULL, ignore_xml_errors);
 	htmlDocPtr doc = htmlParseDoc((xmlChar*) html, "UTF-8");
 
@@ -94,75 +92,96 @@ void parse_html(gchar* html, GSList** objs) {
 	}
 }
 
-gchar* parse_img(GHashTable* attrs) {
-	return g_hash_table_lookup(attrs, "src");
+static gchar** crack_url(const gchar* url) {
+	gchar *url_pattern = "^(http[s]?:\\/\\/)([^\\/]+)((.*?)([^\\/]*))$";
+	gchar** parts;
+	gint match_count;
+	GRegex *regex = g_regex_new(url_pattern, G_REGEX_CASELESS, 0, NULL);
+	GMatchInfo *match_info;
+	
+	g_regex_match(regex, url, 0, &match_info);
+	parts = g_match_info_fetch_all(match_info);
+	match_count = g_match_info_get_match_count(match_info);
+	
+	/* clean up */
+	g_match_info_free(match_info);
+	g_regex_unref(regex);
+	
+	/* URL is malforned*/
+	if (match_count < 6) {
+		g_strfreev(parts);
+		return NULL;
+	}
+
+	return parts;
 }
 
-gchar* parse_link(GHashTable* attrs) {
-  gchar* rel = g_hash_table_lookup(attrs, "rel");
-  gchar* source = g_hash_table_lookup(attrs, "href");
-  
-  if (g_strcmp0(rel, "stylesheet") == 0) {
-    return source;
-  }
-  
-  if (g_strcmp0(rel, "shortcut icon") == 0) {
-    return source;
-  }
-  
-  return NULL;
+static gint get_url_parts(const gchar* url, gchar** hostname, gchar** path) {
+	gchar** parts = crack_url(url);
+
+	if (parts == NULL) {    
+		return -1;
+	}
+
+	*hostname = g_strdup(parts[2]);
+	*path = g_strdup(parts[3]);
+	g_strfreev(parts);
+
+	return 0;
 }
 
-gchar* parse_script(GHashTable* attrs) {
-  gchar* rel = g_hash_table_lookup(attrs, "type");
-  gchar* source = g_hash_table_lookup(attrs, "src");
-  
-  if (g_strcmp0(rel, "text/javascript") == 0 && source != NULL) {
-    return source;
-  }
-  
-  return NULL;
+static gboolean url_is_absolute(const gchar* url) {    
+	if (url) {
+		const gchar* ptr = url;
+
+		while (*ptr) {
+			if (*ptr == ':') return TRUE;
+			if (*ptr == '/' || *ptr == '?' || *ptr == '#') break;
+			ptr++;
+		}
+	}
+
+	return FALSE;
 }
 
-GHashTable* get_attributes(htmlNodePtr node) {
-  xmlAttrPtr curr_attr;
-  gchar* canonical_name;
-  GHashTable* attrs = g_hash_table_new(g_str_hash, g_str_equal);
-  
-  for(curr_attr = node->properties; curr_attr != NULL; curr_attr = curr_attr->next) {
-    canonical_name = g_utf8_strdown((const gchar*) curr_attr->name, -1);
-    g_hash_table_insert(attrs, canonical_name, curr_attr->children->content);
-  }
-  
-  return attrs;
-}
+GHashTable* get_embedded_objects(service_filegetter_tp sfg) {
+	GSList* objs = NULL;
+	gchar* html = g_string_free(sfg->fg.content, FALSE);
+	GHashTable* download_tasks = g_hash_table_new(g_str_hash, g_str_equal);
+	
+	/* Parse with libxml2. The result is a linked list with all relative and absolute URLs */
+	parse_html(html, &objs);
+	
+	while (objs != NULL) {
+		gchar* url = (gchar*) objs->data;
+		gchar* hostname = NULL;
+		gchar* path = NULL;
+		
+		if (url_is_absolute(url)) {
+			get_url_parts(url, &hostname ,&path);
+		} else {
+			hostname = sfg->browser->first_hostname;
+			path = g_strdup(url);
+		}
+		
+		browser_download_tasks_tp tasks = g_hash_table_lookup(download_tasks, hostname);
 
-gboolean url_is_absolute(const gchar* url) {    
-  if (url) {
-    const gchar* ptr = url;
-    
-    while (*ptr) {
-      if (*ptr == ':') return TRUE;
-      if (*ptr == '/' || *ptr == '?' || *ptr == '#') break;
-      ptr++;
-    }
-  }
-  
-  return FALSE;
-}
+		/* If for the first time a hostname is used initialize a new queue */
+		if (tasks == NULL) {
+			tasks = g_malloc(sizeof(browser_download_tasks_t));
+			tasks->unfinished = g_queue_new();
+			tasks->running = NULL;
+			g_hash_table_insert(download_tasks, hostname, tasks);
+		}
 
-gchar* get_hostname_from_url(gchar* url) {
-  gint match_count;
-  gchar* hostname;
-  gchar** parts = crack_url(url, &match_count);
-  
-  if (match_count < 3) {    
-    g_fprintf(stderr, "Malformed url: %s\n", url);
-    exit(EXIT_FAILURE); 
-  }
+		g_printf("download_tasks: %s -> %s\n", hostname, path);
 
-  hostname = g_strdup(parts[2]);
-  g_strfreev(parts);
-  
-  return hostname;
+		/* Add the actual URL to the end of the queue */
+		g_queue_push_tail(tasks->unfinished, url);
+		
+		objs = g_slist_next(objs);
+	}
+	
+	g_slist_free_full(objs, NULL);
+	return download_tasks;
 }
