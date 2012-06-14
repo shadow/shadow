@@ -31,6 +31,7 @@
 
 /* this service implements a filegetter and may be used inside or outside of shadow */
 #include "shd-service-filegetter.h"
+#include "shd-browser.h"
 
 static void service_filegetter_log(service_filegetter_tp sfg, enum service_filegetter_loglevel level, const gchar* format, ...) {
 	/* if they gave NULL as a callback, dont log */
@@ -393,8 +394,8 @@ enum filegetter_code service_filegetter_start_browser(service_filegetter_tp sfg,
 	/* Set to save the first document in a string for parsing */
 	sfg->current_download->fspec.save_to_memory = TRUE;
 
-	/* Set to one and reset accordingly after parsing document */
-	sfg->downloads_requested = 1;
+	/* Set to two and reset accordingly after parsing document */
+	sfg->downloads_requested = 2;
 	if(sfg->downloads_requested <= 0) {
 		service_filegetter_log(sfg, SFG_WARNING, "you didn't want to download anything?");
 		return FG_ERR_INVALID;
@@ -487,69 +488,84 @@ reactivate:;
 		/* report completion stats */
 		service_filegetter_report(sfg, SFG_NOTICE, "[fg-download-complete]", &stats, sfg->downloads_completed, sfg->downloads_requested);
 		
-		if (sfg->type == SFG_BROWSER && sfg->browser->state == SFG_DOCUMENT) {
-			get_embedded_objects(sfg);
-		}
-		
 		if(sfg->downloads_completed == sfg->downloads_requested) {
 			return service_filegetter_expire(sfg);
-		} else {
-			if(sfg->type == SFG_MULTI && sfg->think_times != NULL) {
-				/* get think time and set wakeup timer */
-				gdouble percentile = (gdouble)(((gdouble)rand()) / ((gdouble)RAND_MAX));
-				guint sleeptime = (guint) (cdf_getValue(sfg->think_times, percentile) / 1000);
-
-				clock_gettime(CLOCK_REALTIME, &sfg->wakeup);
-				sfg->wakeup.tv_sec += sleeptime;
-
-				/* dont sleep if it would put us beyond our expiration (if its set) */
-				if(sfg->expire.tv_sec > 0 && sfg->wakeup.tv_sec > sfg->expire.tv_sec) {
-					return service_filegetter_expire(sfg);
+		} 
+		
+		if (sfg->type == SFG_BROWSER) {
+			if (sfg->browser->state == SFG_DOCUMENT) {
+				gint obj_count = 0;
+				GHashTable* download_taks = get_embedded_objects(sfg, &obj_count);
+				
+				service_filegetter_log(sfg, SFG_NOTICE, "[fg-browser] document downloaded and parsed, now getting %i additional objects...", obj_count);
+				
+				/* Reset sfg->download_requested to the amount of embedded objects */
+				if (obj_count) {
+					sfg->downloads_requested = obj_count;
+					sfg->downloads_completed = 0;
 				}
+				
+				/* Set state to downloading embedded objects */
+				sfg->browser->state = SFG_EMBEDDED_OBJECTES;
+			} else if (sfg->browser->state == SFG_EMBEDDED_OBJECTES) {
+				
+			}
+		} else if(sfg->type == SFG_MULTI && sfg->think_times != NULL) {
+			/* get think time and set wakeup timer */
+			gdouble percentile = (gdouble)(((gdouble)rand()) / ((gdouble)RAND_MAX));
+			guint sleeptime = (guint) (cdf_getValue(sfg->think_times, percentile) / 1000);
 
-				/* call the sleep function, then check if we are done thinking */
-				(*sfg->sleep_cb)(sfg, sleeptime);
-				goto start_over;
-			} else if(sfg->type == SFG_DOUBLE) {
-				gint time_to_pause = 0;
+			clock_gettime(CLOCK_REALTIME, &sfg->wakeup);
+			sfg->wakeup.tv_sec += sleeptime;
 
-				if(sfg->current_download == sfg->download1) {
-					service_filegetter_log(sfg, SFG_NOTICE, "[fg-gdouble] download1 %lu.%.3d seconds", stats.download_time.tv_sec, (gint) (stats.download_time.tv_nsec / 1000000));
-					sfg->current_download = sfg->download2;
-				} else if(sfg->current_download == sfg->download2) {
-					service_filegetter_log(sfg, SFG_NOTICE, "[fg-gdouble] download2 %lu.%.3d seconds", stats.download_time.tv_sec, (gint) (stats.download_time.tv_nsec / 1000000));
-					if(sfg->download3 == NULL) {
-						time_to_pause = 1;
-						sfg->current_download = sfg->download1;
-					} else {
-						sfg->current_download = sfg->download3;
-					}
-				} else if(sfg->current_download == sfg->download3) {
-					service_filegetter_log(sfg, SFG_NOTICE, "[fg-gdouble] download3 %lu.%.3d seconds", stats.download_time.tv_sec, (gint) (stats.download_time.tv_nsec / 1000000));
+			/* dont sleep if it would put us beyond our expiration (if its set) */
+			if(sfg->expire.tv_sec > 0 && sfg->wakeup.tv_sec > sfg->expire.tv_sec) {
+				return service_filegetter_expire(sfg);
+			}
+
+			/* call the sleep function, then check if we are done thinking */
+			(*sfg->sleep_cb)(sfg, sleeptime);
+			goto start_over;
+		} else if(sfg->type == SFG_DOUBLE) {
+			gint time_to_pause = 0;
+
+			if(sfg->current_download == sfg->download1) {
+				service_filegetter_log(sfg, SFG_NOTICE, "[fg-gdouble] download1 %lu.%.3d seconds", stats.download_time.tv_sec, (gint) (stats.download_time.tv_nsec / 1000000));
+				sfg->current_download = sfg->download2;
+			} else if(sfg->current_download == sfg->download2) {
+				service_filegetter_log(sfg, SFG_NOTICE, "[fg-gdouble] download2 %lu.%.3d seconds", stats.download_time.tv_sec, (gint) (stats.download_time.tv_nsec / 1000000));
+				if(sfg->download3 == NULL) {
 					time_to_pause = 1;
 					sfg->current_download = sfg->download1;
 				} else {
-					service_filegetter_log(sfg, SFG_WARNING, "filegetter download confusion. i dont know what to download next. starting over.");
-					sfg->current_download = sfg->download1;
+					sfg->current_download = sfg->download3;
 				}
+			} else if(sfg->current_download == sfg->download3) {
+				service_filegetter_log(sfg, SFG_NOTICE, "[fg-gdouble] download3 %lu.%.3d seconds", stats.download_time.tv_sec, (gint) (stats.download_time.tv_nsec / 1000000));
+				time_to_pause = 1;
+				sfg->current_download = sfg->download1;
+			} else {
+				service_filegetter_log(sfg, SFG_WARNING, "filegetter download confusion. i dont know what to download next. starting over.");
+				sfg->current_download = sfg->download1;
+			}
 
-				if(time_to_pause) {
-					/* set wakeup timer and call the sleep function  */
-					clock_gettime(CLOCK_REALTIME, &sfg->wakeup);
-					sfg->wakeup.tv_sec += sfg->pausetime_seconds;
-					(*sfg->sleep_cb)(sfg, sfg->pausetime_seconds);
-					service_filegetter_log(sfg, SFG_NOTICE, "[fg-pause] pausing for %i seconds", sfg->pausetime_seconds);
-				} else {
-					/* reset download file */
-					service_filegetter_download_next(sfg);
-					goto reactivate;
-				}
+			if(time_to_pause) {
+				/* set wakeup timer and call the sleep function  */
+				clock_gettime(CLOCK_REALTIME, &sfg->wakeup);
+				sfg->wakeup.tv_sec += sfg->pausetime_seconds;
+				(*sfg->sleep_cb)(sfg, sfg->pausetime_seconds);
+				service_filegetter_log(sfg, SFG_NOTICE, "[fg-pause] pausing for %i seconds", sfg->pausetime_seconds);
 			} else {
 				/* reset download file */
 				service_filegetter_download_next(sfg);
 				goto reactivate;
 			}
+		} else {
+			/* reset download file */
+			service_filegetter_download_next(sfg);
+			goto reactivate;
 		}
+		
 	}
 
 	return result;

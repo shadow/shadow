@@ -165,7 +165,7 @@ static gboolean url_is_absolute(const gchar* url) {
 	return FALSE;
 }
 
-GHashTable* get_embedded_objects(service_filegetter_tp sfg) {
+GHashTable* get_embedded_objects(service_filegetter_tp sfg, gint* obj_count) {
 	GSList* objs = NULL;
 	gchar* html = g_string_free(sfg->fg.content, FALSE);
 	GHashTable* download_tasks = g_hash_table_new(g_str_hash, g_str_equal);
@@ -200,6 +200,7 @@ GHashTable* get_embedded_objects(service_filegetter_tp sfg) {
 		/* Add the actual URL to the end of the queue */
 		g_queue_push_tail(tasks->unfinished, url);
 		
+		(*obj_count)++;
 		objs = g_slist_next(objs);
 	}
 	

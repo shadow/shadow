@@ -36,6 +36,6 @@ typedef struct browser_download_tasks_s {
   GSList* running;
 } browser_download_tasks_t, *browser_download_tasks_tp;
 
-GHashTable* get_embedded_objects(service_filegetter_tp);
+GHashTable* get_embedded_objects(service_filegetter_tp sfg, gint* obj_count);
 
 #endif /* SHD_BROWSER_H_ */
