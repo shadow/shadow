@@ -7,7 +7,6 @@ set(filetransfer_sources
     shd-fileserver.c 
     shd-service-filegetter.c 
     shd-filegetter.c
-    shd-browser.c
     ${SHADOW_SOURCE_DIR}/utility/shd-cdf.c
 )
 
@@ -24,7 +23,7 @@ install(TARGETS shadow-plugin-filetransfer DESTINATION ${SHADOW_PLUGIN_DIR})
 
 ## executable that can run outside of shadow
 add_executable(shadow-filetransfer shd-filetransfer-main.c)
-target_link_libraries(shadow-filetransfer shadow-service-filetransfer ${RT_LIBRARIES} ${GLIB_LIBRARIES} ${LIBXML2_LIBRARIES})
+target_link_libraries(shadow-filetransfer shadow-service-filetransfer ${RT_LIBRARIES} ${GLIB_LIBRARIES})
 install(TARGETS shadow-filetransfer DESTINATION bin)
 
 install(DIRECTORY ./ DESTINATION include/ FILES_MATCHING PATTERN "*.h")

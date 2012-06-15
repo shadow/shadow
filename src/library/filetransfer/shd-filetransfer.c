@@ -102,8 +102,7 @@ void filetransfer_new(int argc, char* argv[]) {
 			"\t'server serverListenPort pathToDocRoot'\n"
 			"\t'client single fileServerHostname fileServerPort socksServerHostname(or 'none') socksServerPort nDownloads pathToFile'\n"
 			"\t'client double fileServerHostname fileServerPort socksServerHostname(or 'none') socksServerPort pathToFile1 pathToFile2 pathToFile3(or 'none') secondsPause'\n"
-			"\t'client multi pathToDownloadSpec socksServerHostname(or 'none') socksServerPort pathToThinktimeCDF(or 'none') secondsRunTime(or '-1')'\n"
-			"\t'client browser fileServerHostname fileServerPort socksServerHostname(or 'none') socksServerPort maxConcurrentDownloads pathToDocument'\n";
+			"\t'client multi pathToDownloadSpec socksServerHostname(or 'none') socksServerPort pathToThinktimeCDF(or 'none') secondsRunTime(or '-1')'\n";
 	if(argc < 2) goto printUsage;
 
 	/* parse command line args, first is program name */
@@ -203,28 +202,6 @@ void filetransfer_new(int argc, char* argv[]) {
 			if(args.thinktimes_cdf_filepath)
 				g_free(args.thinktimes_cdf_filepath);
 			g_free(args.server_specification_filepath);
-		} else if(g_strncasecmp(clientMode, "browser", 7) == 0) {
-			service_filegetter_browser_args_t args;
-
-			args.http_server.host = argv[3];
-			args.http_server.port = argv[4];
-			args.socks_proxy.host = argv[5];
-			args.socks_proxy.port = argv[6];
-			args.max_concurrent_downloads = argv[7];
-			args.document_path = _filetransfer_getHomePath(argv[8]);
-
-			args.log_cb = &_filetransfer_logCallback;
-			args.hostbyname_cb = &_filetransfer_HostnameCallback;
-
-			enum filegetter_code result = service_filegetter_start_browser(ft->client, &args, epolld, &sockd);
-
-			if(result != FG_SUCCESS) {
-				ft->shadowlib->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "fileclient error, not started!");
-				g_free(ft->client);
-				ft->client = NULL;
-			}
-
-			g_free(args.document_path);
 		} else {
 			/* unknown client mode */
 			g_free(ft->client);
