@@ -19,23 +19,12 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SHD_BROWSER_H_
-#define SHD_BROWSER_H_
+#ifndef SHD_URL_H_
+#define SHD_URL_H_
 
 #include <glib.h>
-#include <glib/gprintf.h>
-#include <netinet/in.h>
-#include <libxml/HTMLparser.h>
 
-#include "shd-service-filegetter.h"
+gint url_get_parts(const gchar* url, gchar** hostname, gchar** path);
+gboolean url_is_absolute(const gchar* url);
 
-typedef struct service_filegetter_s service_filegetter_t, *service_filegetter_tp;
-
-typedef struct browser_download_tasks_s {
-  GQueue* unfinished;
-  GSList* running;
-} browser_download_tasks_t, *browser_download_tasks_tp;
-
-GHashTable* get_embedded_objects(service_filegetter_tp sfg, gint* obj_count);
-
-#endif /* SHD_BROWSER_H_ */
+#endif /* SHD_URL_H_ */
