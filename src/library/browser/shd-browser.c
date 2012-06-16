@@ -29,6 +29,7 @@ static browser_download_tasks_tp browser_init_host(browser_tp b, gchar* hostname
 	if (tasks == NULL) {
 		tasks = g_new0(browser_download_tasks_t, 1);
 		tasks->unfinished = g_queue_new();
+		tasks->blocked = g_hash_table_new(g_str_hash, g_str_equal);
 		tasks->running = NULL;
 		g_hash_table_insert(b->download_tasks, hostname, tasks);
 	}
@@ -59,12 +60,16 @@ static void browser_get_embedded_objects(browser_tp b, filegetter_tp fg, gint* o
 		}
 		
 		browser_download_tasks_tp tasks = browser_init_host(b, hostname);
-		
-		b->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "download_tasks: %s -> %s", hostname, path);
 
-		/* Add the actual URL to the end of the queue */
-		if (!g_queue_find(tasks->unfinished, path)) {
+		/* Unless the path is blocked ...*/
+		if (!g_hash_table_contains(tasks->blocked, path)) {
+			b->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "download_tasks: %s -> %s", hostname, path);
+			
+			/* ... add it to the end of the queue */
 			g_queue_push_tail(tasks->unfinished, path);
+			
+			/* And block it to prevent multiple downloads */
+			g_hash_table_add(tasks->blocked, path);
 		}
 		
 		(*obj_count)++;

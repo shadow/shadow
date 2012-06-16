@@ -53,6 +53,8 @@ typedef struct browser_connection_s {
 } browser_connection_t, *browser_connection_tp;
 
 typedef struct browser_download_tasks_s {
+	/* set that contains the paths that were already downloaded */
+	GHashTable* blocked;
 	/* contains paths to download */
 	GQueue* unfinished;
 	/* contains all open connections (browser_connection_t) */
