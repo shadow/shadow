@@ -23,6 +23,7 @@
 
 static browser_download_tasks_tp browser_init_host(browser_tp b, gchar* hostname) {
 	browser_download_tasks_tp tasks = g_hash_table_lookup(b->download_tasks, hostname);
+	assert(b);
 
 	/* Not initialized yet */
 	if (tasks == NULL) {
@@ -37,6 +38,7 @@ static browser_download_tasks_tp browser_init_host(browser_tp b, gchar* hostname
 
 static void browser_get_embedded_objects(browser_tp b, filegetter_tp fg, gint* obj_count) {
 	assert(b);
+	assert(fg);
 	
 	GSList* objs = NULL;
  	gchar* html = g_string_free(fg->content, FALSE);
@@ -73,6 +75,8 @@ static void browser_get_embedded_objects(browser_tp b, filegetter_tp fg, gint* o
 }
 
 static in_addr_t browser_getaddr(browser_tp b, browser_server_args_tp server) {
+	assert(b);
+	
 	gchar* hostname = server->host;
 	/* check if we have an address as a string */
 	struct in_addr in;
@@ -191,6 +195,9 @@ static void browser_activate_filegetter(gpointer element, gpointer user_data) {
 }
 
 static void browser_completed_download(browser_tp b, browser_activate_result_tp result) {
+	assert(b);
+	assert(result);
+	
 	if (b->state == SFG_DOCUMENT) {
 		gint obj_count = 0;
 		
@@ -220,6 +227,8 @@ static void browser_completed_download(browser_tp b, browser_activate_result_tp 
 }
 
 void browser_start(browser_tp b, browser_args_t args) {
+	assert(b);
+	
 	/* create an epoll so we can wait for IO events */
 	b->epolld = epoll_create(1);
 	
