@@ -22,7 +22,7 @@
 #include "shd-url.h"
 
 static gchar** url_crack(const gchar* url) {
-	gchar *url_pattern = "^(http[s]?:\\/\\/)([^\\/]+)((.*?)([^\\/]*))$";
+	gchar *url_pattern = "^(http[s]?:\\/\\/|\\/\\/)([^\\/]+)((.*?)([^\\/]*))$";
 	gchar** parts;
 	gint match_count;
 	GRegex *regex = g_regex_new(url_pattern, G_REGEX_CASELESS, 0, NULL);
@@ -60,15 +60,7 @@ gint url_get_parts(const gchar* url, gchar** hostname, gchar** path) {
 }
 
 gboolean url_is_absolute(const gchar* url) {    
-	if (url) {
-		const gchar* ptr = url;
-
-		while (*ptr) {
-			if (*ptr == ':') return TRUE;
-			if (*ptr == '/' || *ptr == '?' || *ptr == '#') break;
-			ptr++;
-		}
-	}
-
-	return FALSE;
+	return g_str_has_prefix(url, "http://") || 
+		g_str_has_prefix(url, "https://") ||
+		g_str_has_prefix(url, "//");
 }
