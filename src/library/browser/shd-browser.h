@@ -43,7 +43,7 @@
 #include "shd-filegetter.h"
 
 enum browser_state {
-	SFG_NONE, SFG_DOCUMENT, SFG_EMBEDDED_OBJECTS, SFG_DONE
+	SB_DOCUMENT, SB_EMBEDDED_OBJECTS, SB_DONE
 };
 
 typedef struct browser_connection_s {

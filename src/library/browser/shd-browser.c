@@ -146,7 +146,7 @@ static browser_connection_tp browser_prepare_filegetter(browser_tp b, browser_se
 	conn->sspec.socks_addr = socks_addr;
 	conn->sspec.socks_port = socks_port;
 	
-	if (b->state == SFG_DOCUMENT) {
+	if (b->state == SB_DOCUMENT) {
 		conn->fspec.save_to_memory = TRUE;
 	}
 	
@@ -198,7 +198,7 @@ static void browser_completed_download(browser_tp b, browser_activate_result_tp 
 	assert(b);
 	assert(result);
 	
-	if (b->state == SFG_DOCUMENT) {
+	if (b->state == SB_DOCUMENT) {
 		gint obj_count = 0;
 		
 		/* Get embedded objects as a hashtable which associates a hostname with a linked list of paths to download */
@@ -216,11 +216,11 @@ static void browser_completed_download(browser_tp b, browser_activate_result_tp 
 		
 		
 		/* Set state to downloading embedded objects */
-		b->state = SFG_EMBEDDED_OBJECTS;
+		b->state = SB_EMBEDDED_OBJECTS;
 		
 		/* Start as much downloads as allowed by sfg->browser->max_concurrent_downloads */
 		g_hash_table_foreach(b->download_tasks, browser_add_tasks, b);
-	} else if (b->state == SFG_EMBEDDED_OBJECTS) {
+	} else if (b->state == SB_EMBEDDED_OBJECTS) {
 		b->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "Download complete: %s from %s",
 						  result->connection->fspec.remote_path, result->hostname);
 	}
@@ -240,7 +240,7 @@ void browser_start(browser_tp b, browser_args_t args) {
 	
 	b->max_concurrent_downloads = atoi(args.max_concurrent_downloads);
 	b->first_hostname = g_strdup(args.http_server.host);
-	b->state = SFG_DOCUMENT;
+	b->state = SB_DOCUMENT;
 	b->download_tasks = g_hash_table_new(g_str_hash, g_str_equal);
 	
 	/* Initialize the download tasks with the first hostname */
