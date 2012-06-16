@@ -283,10 +283,10 @@ void browser_activate(browser_tp b, gint sockd) {
 		browser_activate_result_t result;
 		g_slist_foreach(tasks->running, browser_activate_filegetter, &result);
 		
-		
 		if (result.code == FG_OK_200) {
 			result.hostname = hostname;
-			browser_completed_download(b, &result);g_slist_remove(tasks->running, result.connection);
+			browser_completed_download(b, &result);
+			tasks->running = g_slist_remove(tasks->running, result.connection);
 		} else if (result.code == FG_ERR_FATAL || result.code == FG_ERR_SOCKSCONN || result.code != FG_ERR_WOULDBLOCK) {
 			b->shadowlib->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "filegetter shutdown due to error '%s'",
 						  filegetter_codetoa(result.code));
