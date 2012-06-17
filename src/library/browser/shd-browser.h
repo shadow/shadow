@@ -50,6 +50,7 @@ typedef struct browser_connection_s {
 	filegetter_t fg;
 	filegetter_filespec_t fspec;
 	filegetter_serverspec_t sspec;
+	gchar* hostname;
 } browser_connection_t, *browser_connection_tp;
 
 typedef struct browser_download_tasks_s {
@@ -88,7 +89,6 @@ typedef struct browser_args_s {
 typedef struct browser_activate_result_s {
 	browser_connection_tp connection;
 	enum filegetter_code code;
-	gchar* hostname;
 } browser_activate_result_t, *browser_activate_result_tp;
 
 void browser_start(browser_tp b, browser_args_t args);
