@@ -49,16 +49,14 @@ enum browser_state {
 typedef struct browser_connection_s {
 	filegetter_t fg;
 	filegetter_filespec_t fspec;
-	filegetter_serverspec_t sspec;	
+	filegetter_serverspec_t sspec;
 } browser_connection_t, *browser_connection_tp;
 
 typedef struct browser_download_tasks_s {
 	/* set that contains the paths that were already downloaded */
-	GHashTable* blocked;
+	GHashTable* finished;
 	/* contains paths to download */
-	GQueue* unfinished;
-	/* contains all open connections (browser_connection_t) */
-	GSList* running;
+	GQueue* pending;
 } browser_download_tasks_t, *browser_download_tasks_tp;
 
 typedef struct browser_server_args_s {
@@ -75,6 +73,8 @@ typedef struct browser_s {
 	browser_server_args_tp socks_proxy;
 	/* hostname (gchar*) -> download tasks (browser_connection_tp) */
 	GHashTable* download_tasks;
+	/* contains all open connections (browser_connection_t) */
+	GSList* connections;
 	gint max_concurrent_downloads;
 } browser_t, *browser_tp;
 

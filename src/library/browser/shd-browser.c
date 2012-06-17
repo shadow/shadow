@@ -28,9 +28,8 @@ static browser_download_tasks_tp browser_init_host(browser_tp b, gchar* hostname
 	/* Not initialized yet */
 	if (tasks == NULL) {
 		tasks = g_new0(browser_download_tasks_t, 1);
-		tasks->unfinished = g_queue_new();
-		tasks->blocked = g_hash_table_new(g_str_hash, g_str_equal);
-		tasks->running = NULL;
+		tasks->pending = g_queue_new();
+		tasks->finished = g_hash_table_new(g_str_hash, g_str_equal);
 		g_hash_table_insert(b->download_tasks, hostname, tasks);
 	}
 
@@ -61,15 +60,15 @@ static void browser_get_embedded_objects(browser_tp b, filegetter_tp fg, gint* o
 		
 		browser_download_tasks_tp tasks = browser_init_host(b, hostname);
 
-		/* Unless the path is blocked ...*/
-		if (!g_hash_table_contains(tasks->blocked, path)) {
+		/* Unless the path was already downloaded ...*/
+		if (!g_hash_table_contains(tasks->finished, path)) {
 			b->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "download_tasks: %s -> %s", hostname, path);
 			
 			/* ... add it to the end of the queue */
-			g_queue_push_tail(tasks->unfinished, path);
+			g_queue_push_tail(tasks->pending, path);
 			
-			/* And block it to prevent multiple downloads */
-			g_hash_table_add(tasks->blocked, path);
+			/* And mark that it was downloaded */
+			g_hash_table_add(tasks->finished, path);
 		}
 		
 		(*obj_count)++;
@@ -172,9 +171,9 @@ static void browser_add_tasks(gpointer key, gpointer value, gpointer user_data) 
 	browser_download_tasks_tp tasks = (browser_download_tasks_tp) value;
 	gchar* hostname = key;
   
-	for (gint i = 0; i < b->max_concurrent_downloads && !g_queue_is_empty(tasks->unfinished); i++) {
+	for (gint i = 0; i < b->max_concurrent_downloads && !g_queue_is_empty(tasks->pending); i++) {
 		/* Get new task from the queue */
-		path = g_queue_pop_head(tasks->unfinished);
+		path = g_queue_pop_head(tasks->pending);
 
 		b->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "Adding Path %s for %s", path, hostname);
 	
@@ -188,7 +187,7 @@ static void browser_add_tasks(gpointer key, gpointer value, gpointer user_data) 
 
 		/* Create a connection object and start establishing a connection */
 		browser_connection_tp conn =  browser_prepare_filegetter(b, http_server, b->socks_proxy, path);
-		tasks->running = g_slist_prepend(tasks->running, conn);
+		b->connections = g_slist_prepend(b->connections, conn);
 	}
 }
 
@@ -252,7 +251,8 @@ void browser_start(browser_tp b, browser_args_t args) {
 	b->socks_proxy->host = g_strdup(args.socks_proxy.host);
 	b->socks_proxy->port = g_strdup(args.socks_proxy.port);
 
-	tasks->running = g_slist_prepend(tasks->running, conn);
+	/* Add the first connection for the document */
+	b->connections = g_slist_prepend(NULL, conn);
 	
 	b->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "Trying to simulate browser access to %s on %s", args.document_path, b->first_hostname);
 }
@@ -272,7 +272,7 @@ void browser_activate(browser_tp b, gint sockd) {
 	while (g_hash_table_iter_next(&iter, &key, &value)) {
 		hostname = key;
 		tasks = value;
-		curr_task = tasks->running;
+		curr_task = b->connections;
 		
 		/* Activate every filegetter in each download task group */
 		while (curr_task) {
@@ -284,7 +284,7 @@ void browser_activate(browser_tp b, gint sockd) {
 			if (result.code == FG_OK_200) {
 				result.hostname = hostname;
 				browser_completed_download(b, &result);
-				tasks->running = g_slist_remove(tasks->running, conn);
+				b->connections = g_slist_remove(b->connections, conn);
 			} else if (result.code == FG_ERR_FATAL || result.code == FG_ERR_SOCKSCONN || result.code != FG_ERR_WOULDBLOCK) {
 				b->shadowlib->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "filegetter shutdown due to error '%s'",
 							filegetter_codetoa(result.code));
