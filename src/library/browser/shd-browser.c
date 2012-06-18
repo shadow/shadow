@@ -298,9 +298,21 @@ void browser_activate(browser_tp b, gint sockd) {
 
 		if (result.code == FG_OK_200) {
 			browser_completed_download(b, &result);
+		} else if (result.code == FG_ERR_404) {
+			if (b->state == SB_DOCUMENT) {
+				b->shadowlib->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "First document wasn't found");
+			} else {
+				b->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "Error 404: %s -> %s", result.connection->hostname, result.connection->fspec.remote_path);
+		
+				/* try to reuse the connection */
+				if (!browser_reuse_connection(b, result.connection)) {
+					filegetter_shutdown(&result.connection->fg);
+					b->connections = g_slist_remove(b->connections, result.connection);
+				}
+			}
 		} else if (result.code == FG_ERR_FATAL || result.code == FG_ERR_SOCKSCONN || result.code != FG_ERR_WOULDBLOCK) {
-			b->shadowlib->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "filegetter shutdown due to error '%s'",
-						filegetter_codetoa(result.code));
+			b->shadowlib->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "filegetter shutdown due to error '%s' for %s -> %s",
+						filegetter_codetoa(result.code), result.connection->hostname, result.connection->fspec.remote_path);
 		}
 
 		curr_task = g_slist_next(curr_task);
