@@ -117,7 +117,6 @@ static enum filegetter_code filegetter_connect(filegetter_tp fg, in_addr_t addr,
 	}
 
 	fg->sockd = sockd;
-	fg->connected = TRUE;
 
 	/* start watching socket */
 	struct epoll_event ev;
@@ -147,9 +146,6 @@ static enum filegetter_code filegetter_disconnect(filegetter_tp fg) {
 		close_err = close(fg->sockd);
 		fg->sockd = 0;
 	}
-	
-	/* set filegetter to disconnected (flag used for persistent connections) */
-	fg->connected = FALSE;
 
 	if(close_err != 0 || fclose_err != 0) {
 		return FG_ERR_CLOSE;
@@ -261,7 +257,7 @@ enum filegetter_code filegetter_download(filegetter_tp fg, filegetter_serverspec
 		clock_gettime(CLOCK_REALTIME, &fg->download_start);
 
 		/* if connection is still established, we are ready for the HTTP request */
-		if (fg->sspec.persistent && fg->connected) {
+		if (fg->sspec.persistent && fg->sockd > 0) {
 			fg->state = FG_REQUEST_HTTP;
 			return FG_SUCCESS;
 		}

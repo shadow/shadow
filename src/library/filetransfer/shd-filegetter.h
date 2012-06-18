@@ -88,7 +88,6 @@ typedef struct filegetter_s {
 	enum filegetter_state state;
 	enum filegetter_state nextstate;
 	enum filegetter_code errcode;
-	gboolean connected;
 } filegetter_t, *filegetter_tp;
 
 enum filegetter_code filegetter_start(filegetter_tp fg, gint epolld);
