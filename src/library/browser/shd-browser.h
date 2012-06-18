@@ -39,7 +39,6 @@
 
 #include "shd-html.h"
 #include "shd-url.h"
-#include "shd-filetransfer-defs.h"
 #include "shd-filegetter.h"
 
 enum browser_state {
