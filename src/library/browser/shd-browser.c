@@ -67,7 +67,7 @@ static void browser_get_embedded_objects(browser_tp b, filegetter_tp fg, gint* o
 
 		/* Unless the path was already downloaded ...*/
 		if (!g_hash_table_contains(tasks->finished, path)) {
-			b->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "%s -> %s", hostname, path);
+			b->shadowlib->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "%s -> %s", hostname, path);
 			
 			/* ... add it to the end of the queue */
 			g_queue_push_tail(tasks->pending, path);
@@ -183,7 +183,7 @@ static gboolean browser_reuse_connection(browser_tp b, browser_connection_tp con
 	gchar* new_path = g_queue_pop_head(tasks->pending);
 	strncpy(conn->fspec.remote_path, new_path, sizeof(conn->fspec.remote_path));
 	enum filegetter_code result = filegetter_download(&conn->fg, &conn->sspec, &conn->fspec);
-	b->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "Adding Path %s for %s", new_path, conn->hostname);
+	b->shadowlib->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "Adding Path %s -> %s", conn->hostname, new_path);
 	b->shadowlib->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "filegetter set specs code: %s", filegetter_codetoa(result));
 	
 	return TRUE;
@@ -198,7 +198,7 @@ static void browser_start_tasks(gpointer key, gpointer value, gpointer user_data
 		/* Get new task from the queue */
 		gchar* path = g_queue_pop_head(tasks->pending);
 
-		b->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "%s -> %s", hostname, path);
+		b->shadowlib->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "%s -> %s", hostname, path);
 	
 		/* Initialize the download tasks with the first hostname */
 		browser_init_host(b, b->first_hostname);
@@ -241,7 +241,7 @@ static void browser_completed_download(browser_tp b, browser_activate_result_tp 
 			g_hash_table_foreach(b->download_tasks, browser_start_tasks, b);
 		}
 	} else if (b->state == SB_EMBEDDED_OBJECTS) {
-		b->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "%s -> %s", result->connection->hostname, result->connection->fspec.remote_path);
+		b->shadowlib->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "%s -> %s", result->connection->hostname, result->connection->fspec.remote_path);
 		
 		if (!browser_reuse_connection(b, result->connection)) {
 			filegetter_shutdown(&result->connection->fg);
@@ -316,5 +316,9 @@ void browser_activate(browser_tp b, gint sockd) {
 		}
 
 		curr_task = g_slist_next(curr_task);
+	}
+	
+	if (b->connections == NULL) {
+		b->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "done downloading embedded files");
 	}
 }
