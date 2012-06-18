@@ -1,6 +1,6 @@
 ## HTTP file server and client for transfering files through shadow
 add_definitions(-D_GNU_SOURCE)
-include_directories(${SHADOW_SOURCE_DIR}/library/filetransfer/)
+include_directories(${SHADOW_SOURCE_DIR}/library/filetransfer/ ${LIBXML2_INCLUDE_DIR})
 
 ## Check for dependencies with included modules
 include(FindLibXml2)
