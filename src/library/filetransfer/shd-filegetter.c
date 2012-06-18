@@ -105,8 +105,8 @@ static enum filegetter_code filegetter_connect(filegetter_tp fg, in_addr_t addr,
 	struct sockaddr_in server;
 	memset(&server, 0, sizeof(server));
 	server.sin_family = AF_INET;
-    server.sin_addr.s_addr = addr;
-    server.sin_port = port;
+	server.sin_addr.s_addr = addr;
+	server.sin_port = port;
 
 	gint result = connect(sockd,(struct sockaddr *) &server, sizeof(server));
 
@@ -117,6 +117,7 @@ static enum filegetter_code filegetter_connect(filegetter_tp fg, in_addr_t addr,
 	}
 
 	fg->sockd = sockd;
+	fg->connected = TRUE;
 
 	/* start watching socket */
 	struct epoll_event ev;
@@ -146,6 +147,9 @@ static enum filegetter_code filegetter_disconnect(filegetter_tp fg) {
 		close_err = close(fg->sockd);
 		fg->sockd = 0;
 	}
+	
+	/* set filegetter to disconnected (flag used for persistent connections) */
+	fg->connected = FALSE;
 
 	if(close_err != 0 || fclose_err != 0) {
 		return FG_ERR_CLOSE;
@@ -256,10 +260,16 @@ enum filegetter_code filegetter_download(filegetter_tp fg, filegetter_serverspec
 		/* start the timer for the download */
 		clock_gettime(CLOCK_REALTIME, &fg->download_start);
 
+		/* if connection is still established, we are ready for the HTTP request */
+		if (fg->sspec.persistent && fg->connected) {
+			fg->state = FG_REQUEST_HTTP;
+			return FG_SUCCESS;
+		}
+		
 		/* if the server spec has socks info, we connect there.
 		 * otherwise we do a direct connection to the fileserver.
 		 */
-		if(fg->sspec.socks_port > 0 && fg->sspec.socks_addr != htonl(INADDR_NONE)) {
+		if (fg->sspec.socks_port > 0 && fg->sspec.socks_addr != htonl(INADDR_NONE)) {
 			/* connect to socks server */
 			result = filegetter_connect(fg, fg->sspec.socks_addr, fg->sspec.socks_port);
 
@@ -283,7 +293,6 @@ enum filegetter_code filegetter_download(filegetter_tp fg, filegetter_serverspec
 	}
 
 	filegetter_changeEpoll(fg, EPOLLOUT);
-
 	return result;
 }
 
@@ -437,17 +446,17 @@ start:
 
 			/* we are ready to send, then transition to http reply */
 			filegetter_changeEpoll(fg, EPOLLOUT);
-				fg->state = FG_SEND;
-				fg->nextstate = FG_TOREPLY_HTTP;
+			fg->state = FG_SEND;
+			fg->nextstate = FG_TOREPLY_HTTP;
 
-				goto start;
+			goto start;
 			}
 
-			case FG_TOREPLY_HTTP: {
+		case FG_TOREPLY_HTTP: {
 			filegetter_changeEpoll(fg, EPOLLIN);
-				fg->state = FG_RECEIVE;
-				fg->nextstate = FG_REPLY_HTTP;
-				goto start;
+			fg->state = FG_RECEIVE;
+			fg->nextstate = FG_REPLY_HTTP;
+			goto start;
 			}
 
 		case FG_REPLY_HTTP: {
@@ -585,8 +594,11 @@ start:
 				/* compute metrics */
 				filegetter_metrics_complete(fg);
 
-				/* done with current connection */
-				filegetter_disconnect(fg);
+				/* if connection is not supposed to be persistent ... */
+				if (!fg->sspec.persistent) {
+					/* ... thus close it */
+					filegetter_disconnect(fg);
+				}
 
 				/* wait for the next file */
 				fg->state = FG_SPEC;

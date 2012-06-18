@@ -67,6 +67,7 @@ typedef struct filegetter_serverspec_s {
 	in_port_t http_port;
 	in_addr_t socks_addr;
 	in_port_t socks_port;
+	gboolean persistent;
 } filegetter_serverspec_t, *filegetter_serverspec_tp;
 
 typedef struct filegetter_s {
@@ -87,6 +88,7 @@ typedef struct filegetter_s {
 	enum filegetter_state state;
 	enum filegetter_state nextstate;
 	enum filegetter_code errcode;
+	gboolean connected;
 } filegetter_t, *filegetter_tp;
 
 enum filegetter_code filegetter_start(filegetter_tp fg, gint epolld);

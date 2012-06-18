@@ -55,7 +55,12 @@ static void browser_get_embedded_objects(browser_tp b, filegetter_tp fg, gint* o
 			url_get_parts(url, &hostname ,&path);
 		} else {
 			hostname = b->first_hostname;
-			path = g_strdup(url);
+			
+			if (!g_str_has_prefix(url, "/")) {
+				path = g_strconcat("/", url, NULL);
+			} else {
+				path = g_strdup(url);
+			}
 		}
 		
 		browser_download_tasks_tp tasks = browser_init_host(b, hostname);
@@ -150,6 +155,7 @@ static browser_connection_tp browser_prepare_filegetter(browser_tp b, browser_se
 	conn->sspec.http_port = http_port;
 	conn->sspec.socks_addr = socks_addr;
 	conn->sspec.socks_port = socks_port;
+	conn->sspec.persistent = TRUE; /* Always create persistent connections */
 	conn->hostname = g_strdup(http_server->host);
 	
 	if (b->state == SB_DOCUMENT) {
