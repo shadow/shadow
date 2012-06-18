@@ -83,9 +83,6 @@ foreach(library ${CMAKE_EXTRA_LIBRARIES})
     link_directories(${library})
 endforeach(library)
 
-## Check for dependencies with included modules
-include(FindLibXml2)
-
 ## check for dependencies with our own Find scripts in "./cmake"
 ## these don't have built-in cmake files in /usr/share/cmake/Modules/Findxxx.cmake
 find_package(RT REQUIRED)

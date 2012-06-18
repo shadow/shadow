@@ -78,7 +78,7 @@ set(shadow_srcs
 ## specify the main shadow executable, build, link, and install
 add_executable(shadow-bin ${shadow_srcs})
 add_dependencies(shadow-bin shadow-intercept shadow-preload)
-target_link_libraries(shadow-bin shadow-intercept ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES} ${GLIB_LIBRARIES} ${LIBXML2_LIBRARIES})
+target_link_libraries(shadow-bin shadow-intercept ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES} ${GLIB_LIBRARIES})
 install(TARGETS shadow-bin DESTINATION bin)
 
 ## shadow needs to find libshadow-intercept and custom libs after install
