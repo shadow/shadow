@@ -14,9 +14,8 @@
   -- software specifies the plugin to use, application args, and starting time in seconds
   -- args are plugin-specific
   -->
-<software id="server" plugin="filex" time="10" arguments="server 8080 /home/caffeine/Masterarbeit/masterarbeit/Experimente/" />
-<!--<software id="client" plugin="filex" time="20" arguments="client single server.node 8080 none 0 5 /index.htm" />-->
-<software id="client" plugin="filex" time="20" arguments="client browser server.node 8080 none 0 6 /index.htm" />
+<software id="server" plugin="filex" time="10" arguments="server 8080 /bin/" />
+<software id="client" plugin="filex" time="20" arguments="client single server.node 8080 none 0 10 /ls" />
 
 <!-- 
   -- node specifies hostnames (the id) and the software to run
