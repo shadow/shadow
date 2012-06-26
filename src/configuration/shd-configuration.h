@@ -235,6 +235,7 @@ struct _Configuration {
 	gboolean runEchoExample;
 	gboolean runFileExample;
 	gboolean runTorrentExample;
+	gboolean runBrowserExample;
 
 	GQueue* inputXMLFilenames;
 
