@@ -151,12 +151,12 @@ static browser_connection_tp browser_prepare_filegetter(browser_tp b, browser_se
 	/* validation successful, let's create the actual connection */
 	browser_connection_tp conn = g_new0(browser_connection_t, 1);
 	strncpy(conn->fspec.remote_path, filepath, sizeof(conn->fspec.remote_path));
+	strncpy(conn->sspec.http_hostname, http_server->host, sizeof(conn->sspec.http_hostname));
 	conn->sspec.http_addr = http_addr;
 	conn->sspec.http_port = http_port;
 	conn->sspec.socks_addr = socks_addr;
 	conn->sspec.socks_port = socks_port;
 	conn->sspec.persistent = TRUE; /* Always create persistent connections */
-	conn->hostname = g_strdup(http_server->host);
 	
 	if (b->state == SB_DOCUMENT) {
 		conn->fspec.save_to_memory = TRUE;
@@ -174,7 +174,7 @@ static browser_connection_tp browser_prepare_filegetter(browser_tp b, browser_se
 }
 
 static gboolean browser_reuse_connection(browser_tp b, browser_connection_tp conn) {
-	browser_download_tasks_tp tasks = g_hash_table_lookup(b->download_tasks, conn->hostname);
+	browser_download_tasks_tp tasks = g_hash_table_lookup(b->download_tasks, conn->sspec.http_hostname);
 	
 	if (g_queue_is_empty(tasks->pending)) {
 		return FALSE;
@@ -183,7 +183,7 @@ static gboolean browser_reuse_connection(browser_tp b, browser_connection_tp con
 	gchar* new_path = g_queue_pop_head(tasks->pending);
 	strncpy(conn->fspec.remote_path, new_path, sizeof(conn->fspec.remote_path));
 	enum filegetter_code result = filegetter_download(&conn->fg, &conn->sspec, &conn->fspec);
-	b->shadowlib->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "Adding Path %s -> %s", conn->hostname, new_path);
+	b->shadowlib->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "Adding Path %s -> %s", conn->sspec.http_hostname, new_path);
 	b->shadowlib->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "filegetter set specs code: %s", filegetter_codetoa(result));
 	
 	return TRUE;
@@ -241,7 +241,7 @@ static void browser_completed_download(browser_tp b, browser_activate_result_tp 
 			g_hash_table_foreach(b->download_tasks, browser_start_tasks, b);
 		}
 	} else if (b->state == SB_EMBEDDED_OBJECTS) {
-		b->shadowlib->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "%s -> %s", result->connection->hostname, result->connection->fspec.remote_path);
+		b->shadowlib->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "%s -> %s", result->connection->sspec.http_hostname, result->connection->fspec.remote_path);
 		
 		if (!browser_reuse_connection(b, result->connection)) {
 			filegetter_shutdown(&result->connection->fg);
@@ -302,7 +302,7 @@ void browser_activate(browser_tp b, gint sockd) {
 			if (b->state == SB_DOCUMENT) {
 				b->shadowlib->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "First document wasn't found");
 			} else {
-				b->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "Error 404: %s -> %s", result.connection->hostname, result.connection->fspec.remote_path);
+				b->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "Error 404: %s -> %s", result.connection->sspec.http_hostname, result.connection->fspec.remote_path);
 		
 				/* try to reuse the connection */
 				if (!browser_reuse_connection(b, result.connection)) {
@@ -312,7 +312,7 @@ void browser_activate(browser_tp b, gint sockd) {
 			}
 		} else if (result.code == FG_ERR_FATAL || result.code == FG_ERR_SOCKSCONN || result.code != FG_ERR_WOULDBLOCK) {
 			b->shadowlib->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "filegetter shutdown due to error '%s' for %s -> %s",
-						filegetter_codetoa(result.code), result.connection->hostname, result.connection->fspec.remote_path);
+						filegetter_codetoa(result.code), result.connection->sspec.http_hostname, result.connection->fspec.remote_path);
 		}
 
 		curr_task = g_slist_next(curr_task);

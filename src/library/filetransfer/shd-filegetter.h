@@ -63,6 +63,7 @@ typedef struct filegetter_filespec_s {
 } filegetter_filespec_t, *filegetter_filespec_tp;
 
 typedef struct filegetter_serverspec_s {
+	gchar http_hostname[FT_STR_SIZE];
 	in_addr_t http_addr;
 	in_port_t http_port;
 	in_addr_t socks_addr;

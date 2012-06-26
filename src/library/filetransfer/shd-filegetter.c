@@ -434,7 +434,7 @@ start:
 			/* write the request to our buffer */
 			ssize_t space = sizeof(fg->buf) - fg->buf_write_offset;
 			assert(space > 0);
-			gint bytes = snprintf(fg->buf + fg->buf_write_offset, (size_t) space, FT_HTTP_GET_FMT, fg->fspec.remote_path, inet_ntoa((struct in_addr){ntohl(fg->sspec.http_addr)}));
+			gint bytes = snprintf(fg->buf + fg->buf_write_offset, (size_t) space, FT_HTTP_GET_FMT, fg->fspec.remote_path, fg->sspec.http_hostname);
 
 			FG_ASSERTBUF(fg, bytes);
 

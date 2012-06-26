@@ -49,7 +49,6 @@ typedef struct browser_connection_s {
 	filegetter_t fg;
 	filegetter_filespec_t fspec;
 	filegetter_serverspec_t sspec;
-	gchar* hostname;
 } browser_connection_t, *browser_connection_tp;
 
 typedef struct browser_download_tasks_s {

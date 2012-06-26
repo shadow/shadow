@@ -114,6 +114,7 @@ static service_filegetter_download_tp service_filegetter_get_download_from_args(
 	/* validation successful */
 	service_filegetter_download_tp dl = calloc(1, sizeof(service_filegetter_download_t));
 	strncpy(dl->fspec.remote_path, filepath, sizeof(dl->fspec.remote_path));
+	strncpy(dl->sspec.http_hostname, http_server->host, sizeof(dl->sspec.http_hostname));
 	dl->sspec.http_addr = http_addr;
 	dl->sspec.http_port = http_port;
 	dl->sspec.socks_addr = socks_addr;
