@@ -23,7 +23,9 @@
 #define SHD_HTML_H_
 
 #include <glib.h>
-#include <libxml/HTMLparser.h>
+#include <tidy/tidy.h>
+#include <tidy/tidyenum.h>
+#include <tidy//buffio.h>
 
 void html_parse(const gchar* html, GSList** objs);
 
