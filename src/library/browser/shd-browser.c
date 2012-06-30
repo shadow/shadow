@@ -315,6 +315,7 @@ void browser_activate(browser_tp b) {
 		} else if (result.code == FG_ERR_404) {
 			if (b->state == SB_DOCUMENT) {
 				b->shadowlib->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "First document wasn't found");
+				b->state = SB_DONE;
 			} else {
 				b->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "Error 404: %s -> %s", result.connection->sspec.http_hostname, result.connection->fspec.remote_path);
 		
@@ -327,6 +328,7 @@ void browser_activate(browser_tp b) {
 		} else if (result.code == FG_ERR_FATAL || result.code == FG_ERR_SOCKSCONN || result.code != FG_ERR_WOULDBLOCK) {
 			b->shadowlib->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "filegetter shutdown due to error '%s' for %s -> %s",
 						filegetter_codetoa(result.code), result.connection->sspec.http_hostname, result.connection->fspec.remote_path);
+			b->state = SB_DONE;
 		}
 
 		curr_task = g_slist_next(curr_task);
