@@ -49,8 +49,9 @@ struct _NetworkInterface {
 	/* Transports wanting to send data out */
 	GQueue* sendableSockets;
 
-	/* PCAP flag and file */
-	gchar logPcap;
+	/* PCAP flag, directory and file */
+	gboolean logPcap;
+	gchar* pcapDir;
 	FILE *pcapFile;
 
 	/* bandwidth accounting */
@@ -194,7 +195,7 @@ void networkinterface_pcapWritePacket(NetworkInterface *interface, Packet *packe
 }
 
 NetworkInterface* networkinterface_new(Network* network, GQuark address, gchar* name,
-		guint64 bwDownKiBps, guint64 bwUpKiBps, gboolean logPcap) {
+		guint64 bwDownKiBps, guint64 bwUpKiBps, gboolean logPcap, gchar* pcapDir) {
 	NetworkInterface* interface = g_new0(NetworkInterface, 1);
 	MAGIC_INIT(interface);
 
@@ -225,10 +226,21 @@ NetworkInterface* networkinterface_new(Network* network, GQuark address, gchar* 
 
 	/* open the PCAP file for writing */
 	interface->logPcap = logPcap;
+	interface->pcapDir = pcapDir;
 	interface->pcapFile = NULL;
 	if(interface->logPcap) {
 		GString *filename = g_string_new("");
-		g_string_append_printf(filename, "data/pcapdata/%s-%s.pcap", name, addressStr);
+		if (interface->pcapDir) {
+			g_string_append(filename, interface->pcapDir);
+			/* Append trailing slash if not present */
+			if (!g_str_has_suffix(interface->pcapDir, "/")) {
+				g_string_append(filename, "/");
+			}
+		} else {
+			/* Use default directory */
+			g_string_append(filename, "data/pcapdata/");
+		}
+		g_string_append_printf(filename, "%s-%s.pcap", name, addressStr);
 		interface->pcapFile = fopen(filename->str, "w");
 		if(!interface->pcapFile) {
 			warning("error trying to open PCAP file '%s' for writing", filename->str);

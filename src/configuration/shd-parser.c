@@ -43,7 +43,7 @@ static const gchar* ParserAttributeStrings[] = {
 	"plugin", "software", "cluster", "clusters",
 	"bandwidthdown", "bandwidthup", "latency", "jitter", "packetloss",
 	"cpufrequency", "time", "quantity", "arguments", "heartbeatfrequency",
-	"heartbeatloglevel", "loglevel", "logpcap",
+	"heartbeatloglevel", "loglevel", "logpcap", "pcapdir",
 };
 
 /* NOTE - they MUST be synced with ParserAttributeStrings */
@@ -70,6 +70,7 @@ typedef enum {
 	ATTRIBUTE_HEARTBEATLOGLEVEL,
 	ATTRIBUTE_LOGLEVEL,
 	ATTRIBUTE_LOGPCAP,
+	ATTRIBUTE_PCAPDIR,
 } ParserAttributes;
 
 struct _Parser {
@@ -124,6 +125,8 @@ struct _ParserValues {
 	GString* heartbeatLogLevel;
 	/* node-specific pcap logging */
 	GString* logPcap;
+	/* node-specific directory for pcap files */
+	GString* pcapDir;
 	MAGIC_DECLARE;
 };
 
@@ -185,6 +188,8 @@ static ParserValues* _parser_getValues(const gchar *element_name,
 			values->logLevel = g_string_new(*value_cursor);
 		} else if(g_ascii_strcasecmp(*name_cursor, ParserAttributeStrings[ATTRIBUTE_LOGPCAP]) == 0) {
 			values->logPcap = g_string_new(*value_cursor);
+		} else if(g_ascii_strcasecmp(*name_cursor, ParserAttributeStrings[ATTRIBUTE_PCAPDIR]) == 0) {
+			values->pcapDir = g_string_new(*value_cursor);
 		} else {
 			warning("unrecognized attribute '%s' for element '%s' while parsing topology. ignoring.", *name_cursor, element_name);
 		}
@@ -219,7 +224,9 @@ static void _parser_freeValues(ParserValues* values) {
 		g_string_free(values->logLevel, TRUE);
 	if(values->logPcap)
 		g_string_free(values->logPcap, TRUE);
-
+	if(values->pcapDir)
+		g_string_free(values->pcapDir, TRUE);
+	
 	MAGIC_CLEAR(values);
 	g_free(values);
 }
@@ -403,7 +410,7 @@ static void _parser_handleElement(GMarkupParseContext *context,
 		if(_parser_validateNode(parser, values)) {
 			a = (Action*) createnodes_new(values->id, values->software, values->cluster,
 					values->bandwidthdown, values->bandwidthup, values->quantity, values->cpufrequency,
-					values->heartbeatIntervalSeconds, values->heartbeatLogLevel, values->logLevel, values->logPcap);
+					values->heartbeatIntervalSeconds, values->heartbeatLogLevel, values->logLevel, values->logPcap, values->pcapDir);
 			a->priority = 5;
 		}
 	} else if(g_ascii_strcasecmp(element_name, ParserElementStrings[ELEMENT_KILL]) == 0) {

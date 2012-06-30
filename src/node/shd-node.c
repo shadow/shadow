@@ -54,6 +54,9 @@ struct _Node {
 
 	/* flag on whether or not packets are being captured */
 	gchar logPcap;
+	
+	/* Directory to save PCAP files to if packets are being captured */
+	gchar* pcapDir;
 
 	/* all file, socket, and epoll descriptors we know about and track */
 	GHashTable* descriptors;
@@ -72,7 +75,7 @@ Node* node_new(GQuark id, Network* network, Software* software, guint32 ip,
 		GString* hostname, guint64 bwDownKiBps, guint64 bwUpKiBps,
 		guint cpuFrequency, gint cpuThreshold, guint nodeSeed,
 		SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel,
-		GLogLevelFlags logLevel, gchar logPcap) {
+		GLogLevelFlags logLevel, gboolean logPcap, gchar* pcapDir) {
 	Node* node = g_new0(Node, 1);
 	MAGIC_INIT(node);
 
@@ -90,11 +93,11 @@ Node* node_new(GQuark id, Network* network, Software* software, guint32 ip,
 	/* virtual interfaces for managing network I/O */
 	node->interfaces = g_hash_table_new_full(g_direct_hash, g_direct_equal,
 			NULL, (GDestroyNotify) networkinterface_free);
-	NetworkInterface* ethernet = networkinterface_new(network, id, hostname->str, bwDownKiBps, bwUpKiBps, logPcap);
+	NetworkInterface* ethernet = networkinterface_new(network, id, hostname->str, bwDownKiBps, bwUpKiBps, logPcap, pcapDir);
 	g_hash_table_replace(node->interfaces, GUINT_TO_POINTER((guint)id), ethernet);
 	GString *loopbackName = g_string_new("");
 	g_string_append_printf(loopbackName, "%s-loopback", hostname->str);
-	NetworkInterface* loopback = networkinterface_new(NULL, (GQuark)htonl(INADDR_LOOPBACK), loopbackName->str, G_MAXUINT32, G_MAXUINT32, logPcap);
+	NetworkInterface* loopback = networkinterface_new(NULL, (GQuark)htonl(INADDR_LOOPBACK), loopbackName->str, G_MAXUINT32, G_MAXUINT32, logPcap, pcapDir);
 	g_hash_table_replace(node->interfaces, GUINT_TO_POINTER((guint)htonl(INADDR_LOOPBACK)), loopback);
 	node->defaultInterface = ethernet;
 
@@ -113,6 +116,7 @@ Node* node_new(GQuark id, Network* network, Software* software, guint32 ip,
 	node->tracker = tracker_new(heartbeatInterval, heartbeatLogLevel);
 	node->logLevel = logLevel;
 	node->logPcap = logPcap;
+	node->pcapDir = pcapDir;
 
 	info("Created Node '%s', ip %s, %u bwUpKiBps, %u bwDownKiBps, %lu cpuFrequency, %i cpuThreshold, %u seed",
 			g_quark_to_string(node->id), networkinterface_getIPName(node->defaultInterface),
