@@ -26,18 +26,7 @@ browser_t b;
 
 /* create a new node using this plug-in */
 static void browserplugin_new(int argc, char* argv[]) {
-	/* Interpret the arguments */
-	browser_args_t args;
-
-	args.http_server.host = argv[1];
-	args.http_server.port = argv[2];
-	args.socks_proxy.host = argv[3];
-	args.socks_proxy.port = argv[4];
-	args.max_concurrent_downloads = argv[5];
-	args.document_path = argv[6];
-	
-	/* Let's download some files */
-	browser_start(&b, args);
+	browser_start(&b, argc, argv);
 }
 
 static void browserplugin_free() {

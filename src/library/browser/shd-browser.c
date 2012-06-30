@@ -250,8 +250,22 @@ static void browser_completed_download(browser_tp b, browser_activate_result_tp 
 	}
 }
 
-void browser_start(browser_tp b, browser_args_t args) {
+void browser_start(browser_tp b, gint argc, gchar** argv) {
 	assert(b);
+	
+	if (argc != 7) {
+		b->shadowlib->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "USAGE: %s <server> <port> <socksserver/none> <port> <max concurrent download> <path>", argv[0]);
+	}
+	
+	/* Interpret the arguments */
+	browser_args_t args;
+
+	args.http_server.host = argv[1];
+	args.http_server.port = argv[2];
+	args.socks_proxy.host = argv[3];
+	args.socks_proxy.port = argv[4];
+	args.max_concurrent_downloads = argv[5];
+	args.document_path = argv[6];
 
 	/* create an epoll so we can wait for IO events */
 	b->epolld = epoll_create(1);

@@ -89,7 +89,7 @@ typedef struct browser_activate_result_s {
 	enum filegetter_code code;
 } browser_activate_result_t, *browser_activate_result_tp;
 
-void browser_start(browser_tp b, browser_args_t args);
+void browser_start(browser_tp b, gint argc, gchar** argv);
 void browser_activate(browser_tp b);
 
 #endif /* SHD_BROWSER_H_ */
