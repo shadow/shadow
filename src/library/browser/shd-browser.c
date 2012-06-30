@@ -284,7 +284,7 @@ void browser_start(browser_tp b, browser_args_t args) {
 	b->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "Trying to simulate browser access to %s on %s", args.document_path, b->first_hostname);
 }
 
-void browser_activate(browser_tp b, gint sockd) {
+void browser_activate(browser_tp b) {
 	assert(b);
 
 	GSList* curr_task = b->connections;
