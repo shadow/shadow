@@ -66,14 +66,14 @@ static void browser_get_embedded_objects(browser_tp b, filegetter_tp fg, gint* o
 		browser_download_tasks_tp tasks = browser_init_host(b, hostname);
 
 		/* Unless the path was already downloaded ...*/
-		if (!g_hash_table_contains(tasks->finished, path)) {
+		if (!g_hash_table_lookup_extended(tasks->finished, path, NULL, NULL)) {
 			b->shadowlib->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "%s -> %s", hostname, path);
 			
 			/* ... add it to the end of the queue */
 			g_queue_push_tail(tasks->pending, path);
 			
 			/* And mark that it was downloaded */
-			g_hash_table_add(tasks->finished, path);
+			g_hash_table_replace(tasks->finished, path, path);
 			
 			(*obj_count)++;
 		}
