@@ -1,0 +1,31 @@
+## Browser-Simulator
+add_definitions(-D_GNU_SOURCE)
+
+## Find libtidy which is needed to parse HTML
+find_package(TIDY REQUIRED)
+
+include_directories(${SHADOW_SOURCE_DIR}/library/filetransfer/ ${TIDY_INCLUDE_DIR})
+
+set(browser_sources
+    shd-browser.c 
+    shd-html.c
+    shd-url.c
+)
+
+## service library to allow browser to be used by any plugin
+add_library(shadow-service-browser STATIC ${browser_sources})
+add_dependencies(shadow-service-browser shadow-util)
+target_link_libraries(shadow-service-browser shadow-service-filetransfer ${RT_LIBRARIES} ${GLIB_LIBRARIES} ${TIDY_LIBRARIES})
+install(TARGETS shadow-service-browser EXPORT shadow-externals DESTINATION lib)
+
+## a stand-alone shared library that can plug into shadow
+add_library(shadow-plugin-browser MODULE shd-browser-plugin.c shd-browser.c shd-url.c shd-html.c)
+target_link_libraries(shadow-plugin-browser shadow-service-filetransfer ${TIDY_LIBRARIES})
+install(TARGETS shadow-plugin-browser DESTINATION ${SHADOW_PLUGIN_DIR})
+
+## executable that can run outside of shadow
+add_executable(shadow-browser shd-browser-main.c)
+target_link_libraries(shadow-browser shadow-service-filetransfer shadow-service-browser ${RT_LIBRARIES} ${GLIB_LIBRARIES} ${TIDY_LIBRARIES})
+install(TARGETS shadow-browser DESTINATION bin)
+
+install(DIRECTORY ./ DESTINATION include/ FILES_MATCHING PATTERN "*.h")

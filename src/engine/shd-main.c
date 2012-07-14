@@ -96,6 +96,10 @@ gint shadow_main(gint argc, gchar* argv[]) {
 		GString* torrent = example_getTorrentExampleContents();
 		success = parser_parseContents(xmlParser, torrent->str, torrent->len, actions);
 		g_string_free(torrent, TRUE);
+	} else if (config->runBrowserExample) {
+		GString* browser = example_getBrowserExampleContents();
+		success = parser_parseContents(xmlParser, browser->str, browser->len, actions);
+		g_string_free(browser, TRUE);
 	} else {
 		/* parse all given input XML files */
 		while(success && g_queue_get_length(config->inputXMLFilenames) > 0) {

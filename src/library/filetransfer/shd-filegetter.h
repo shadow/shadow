@@ -59,13 +59,16 @@ typedef struct filegetter_filespec_s {
 	gchar remote_path[FT_STR_SIZE];
 	gchar local_path[FT_STR_SIZE];
 	guint8 do_save;
+	gboolean save_to_memory;
 } filegetter_filespec_t, *filegetter_filespec_tp;
 
 typedef struct filegetter_serverspec_s {
+	gchar http_hostname[FT_STR_SIZE];
 	in_addr_t http_addr;
 	in_port_t http_port;
 	in_addr_t socks_addr;
 	in_port_t socks_port;
+	gboolean persistent;
 } filegetter_serverspec_t, *filegetter_serverspec_tp;
 
 typedef struct filegetter_s {
@@ -76,6 +79,7 @@ typedef struct filegetter_s {
 	gint sockd;
 	gint epolld;
 	FILE* f;
+	GString* content;
 	gchar buf[FT_BUF_SIZE];
 	size_t buf_write_offset;
 	size_t buf_read_offset;
