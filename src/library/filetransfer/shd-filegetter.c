@@ -105,8 +105,8 @@ static enum filegetter_code filegetter_connect(filegetter_tp fg, in_addr_t addr,
 	struct sockaddr_in server;
 	memset(&server, 0, sizeof(server));
 	server.sin_family = AF_INET;
-    server.sin_addr.s_addr = addr;
-    server.sin_port = port;
+	server.sin_addr.s_addr = addr;
+	server.sin_port = port;
 
 	gint result = connect(sockd,(struct sockaddr *) &server, sizeof(server));
 
@@ -215,6 +215,11 @@ static enum filegetter_code filegetter_set_specs(filegetter_tp fg, filegetter_se
 	fg->sspec = *sspec;
 	fg->fspec = *fspec;
 
+	if (fg->fspec.save_to_memory) {
+		/* they want us to save what we get to a string */
+		fg->content = g_string_new("");
+	}
+	
 	if(fg->fspec.do_save) {
 		/* they want us to save what we get to a file */
 		fg->f = fopen(fg->fspec.local_path, "w");
@@ -251,10 +256,16 @@ enum filegetter_code filegetter_download(filegetter_tp fg, filegetter_serverspec
 		/* start the timer for the download */
 		clock_gettime(CLOCK_REALTIME, &fg->download_start);
 
+		/* if connection is still established, we are ready for the HTTP request */
+		if (fg->sspec.persistent && fg->sockd > 0) {
+			fg->state = FG_REQUEST_HTTP;
+			return FG_SUCCESS;
+		}
+		
 		/* if the server spec has socks info, we connect there.
 		 * otherwise we do a direct connection to the fileserver.
 		 */
-		if(fg->sspec.socks_port > 0 && fg->sspec.socks_addr != htonl(INADDR_NONE)) {
+		if (fg->sspec.socks_port > 0 && fg->sspec.socks_addr != htonl(INADDR_NONE)) {
 			/* connect to socks server */
 			result = filegetter_connect(fg, fg->sspec.socks_addr, fg->sspec.socks_port);
 
@@ -278,7 +289,6 @@ enum filegetter_code filegetter_download(filegetter_tp fg, filegetter_serverspec
 	}
 
 	filegetter_changeEpoll(fg, EPOLLOUT);
-
 	return result;
 }
 
@@ -332,21 +342,20 @@ start:
 			}
 
 			/* must be version 5 */
-	        if(fg->buf[fg->buf_read_offset] != 0x05) {
-	            return FG_ERR_SOCKSINIT;
-	        }
-	        /* must be success */
-	        if(fg->buf[fg->buf_read_offset + 1] != 0x00) {
-	        	return FG_ERR_SOCKSINIT;
-	        }
+			if(fg->buf[fg->buf_read_offset] != 0x05) {
+			return FG_ERR_SOCKSINIT;
+			}
+			/* must be success */
+			if(fg->buf[fg->buf_read_offset + 1] != 0x00) {
+				return FG_ERR_SOCKSINIT;
+			}
 
-	        fg->buf_read_offset += 2;
+			fg->buf_read_offset += 2;
 
-			/* now send the socks connection request */
-			fg->state = FG_REQUEST_SOCKS_CONN;
-
-			goto start;
-		}
+				/* now send the socks connection request */
+				fg->state = FG_REQUEST_SOCKS_CONN;
+				goto start;
+			}
 
 		case FG_REQUEST_SOCKS_CONN: {
 			/* check that we actually have FT_SOCKS_REQ_HEAD_LEN+6 space */
@@ -383,68 +392,68 @@ start:
 			}
 
 			/* must be version 5 */
-	        if(fg->buf[fg->buf_read_offset] != 0x05) {
-	            return FG_ERR_SOCKSCONN;
-	        }
+			if(fg->buf[fg->buf_read_offset] != 0x05) {
+			return FG_ERR_SOCKSCONN;
+			}
 
-	        /* must be success */
-	        if(fg->buf[fg->buf_read_offset + 1] != 0x00) {
-	        	return FG_ERR_SOCKSCONN;
-	        }
+			/* must be success */
+			if(fg->buf[fg->buf_read_offset + 1] != 0x00) {
+				return FG_ERR_SOCKSCONN;
+			}
 
-	        /* check address type for IPv4 */
-	        if(fg->buf[fg->buf_read_offset + 3] != 0x01) {
-	        	return FG_ERR_SOCKSCONN;
-	        }
+			/* check address type for IPv4 */
+			if(fg->buf[fg->buf_read_offset + 3] != 0x01) {
+				return FG_ERR_SOCKSCONN;
+			}
 
-	        /* get address server told us */
-	        in_addr_t socks_bind_addr;
-	        in_port_t socks_bind_port;
-	        memcpy(&socks_bind_addr, &(fg->buf[fg->buf_read_offset + 4]), 4);
-	        memcpy(&socks_bind_port, &(fg->buf[fg->buf_read_offset + 8]), 2);
+			/* get address server told us */
+			in_addr_t socks_bind_addr;
+			in_port_t socks_bind_port;
+			memcpy(&socks_bind_addr, &(fg->buf[fg->buf_read_offset + 4]), 4);
+			memcpy(&socks_bind_port, &(fg->buf[fg->buf_read_offset + 8]), 2);
 
-	        fg->buf_read_offset += 10;
+			fg->buf_read_offset += 10;
 
-	        /* if we were send a new address, we need to reconnect there */
-	        if(socks_bind_addr != 0 && socks_bind_port != 0) {
-				/* reconnect at new address */
-				close(fg->sockd);
-				if(filegetter_connect(fg, socks_bind_addr, socks_bind_port) != FG_SUCCESS) {
-					return FG_ERR_SOCKSCONN;
-				}
-	        }
+			/* if we were send a new address, we need to reconnect there */
+			if(socks_bind_addr != 0 && socks_bind_port != 0) {
+					/* reconnect at new address */
+					close(fg->sockd);
+					if(filegetter_connect(fg, socks_bind_addr, socks_bind_port) != FG_SUCCESS) {
+						return FG_ERR_SOCKSCONN;
+					}
+			}
 
-	        /* now we are ready to send the http request */
-	        fg->state = FG_REQUEST_HTTP;
-	        fg->nextstate = FG_REQUEST_HTTP;
+			/* now we are ready to send the http request */
+			fg->state = FG_REQUEST_HTTP;
+			fg->nextstate = FG_REQUEST_HTTP;
 
-	        goto start;
-		}
+			goto start;
+			}
 
 		case FG_REQUEST_HTTP: {
 			/* write the request to our buffer */
 			ssize_t space = sizeof(fg->buf) - fg->buf_write_offset;
 			assert(space > 0);
-			gint bytes = snprintf(fg->buf + fg->buf_write_offset, (size_t) space, FT_HTTP_GET_FMT, fg->fspec.remote_path, inet_ntoa((struct in_addr){ntohl(fg->sspec.http_addr)}));
+			gint bytes = snprintf(fg->buf + fg->buf_write_offset, (size_t) space, FT_HTTP_GET_FMT, fg->fspec.remote_path, fg->sspec.http_hostname);
 
 			FG_ASSERTBUF(fg, bytes);
 
 			fg->buf_write_offset += bytes;
 
 			/* we are ready to send, then transition to http reply */
-	        filegetter_changeEpoll(fg, EPOLLOUT);
+			filegetter_changeEpoll(fg, EPOLLOUT);
 			fg->state = FG_SEND;
 			fg->nextstate = FG_TOREPLY_HTTP;
 
 			goto start;
-		}
+			}
 
 		case FG_TOREPLY_HTTP: {
-	        filegetter_changeEpoll(fg, EPOLLIN);
+			filegetter_changeEpoll(fg, EPOLLIN);
 			fg->state = FG_RECEIVE;
 			fg->nextstate = FG_REPLY_HTTP;
 			goto start;
-		}
+			}
 
 		case FG_REPLY_HTTP: {
 			fg->buf[fg->buf_write_offset] = '\0';
@@ -557,6 +566,10 @@ start:
 				/* progressed since last time */
 				filegetter_metrics_progress(fg);
 			}
+			
+			if (fg->content != NULL) {
+				 fg->content = g_string_append_len(fg->content, fg->buf + fg->buf_read_offset, bytes_avail);
+			}
 
 			if(fg->f != NULL) {
 				size_t bytes_written = fwrite(fg->buf + fg->buf_read_offset, 1, (size_t)bytes_avail, fg->f);
@@ -577,8 +590,11 @@ start:
 				/* compute metrics */
 				filegetter_metrics_complete(fg);
 
-				/* done with current connection */
-				filegetter_disconnect(fg);
+				/* if connection is not supposed to be persistent ... */
+				if (!fg->sspec.persistent) {
+					/* ... thus close it */
+					filegetter_disconnect(fg);
+				}
 
 				/* wait for the next file */
 				fg->state = FG_SPEC;

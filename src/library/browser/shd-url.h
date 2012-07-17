@@ -1,4 +1,4 @@
-/**
+/*
  * The Shadow Simulator
  *
  * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
@@ -19,15 +19,12 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SHD_EXAMPLES_H_
-#define SHD_EXAMPLES_H_
+#ifndef SHD_URL_H_
+#define SHD_URL_H_
 
 #include <glib.h>
 
-GString* example_getPingExampleContents();
-GString* example_getEchoExampleContents();
-GString* example_getFileExampleContents();
-GString* example_getTorrentExampleContents();
-GString* example_getBrowserExampleContents();
+gint url_get_parts(const gchar* url, gchar** hostname, gchar** path);
+gboolean url_is_absolute(const gchar* url);
 
-#endif /* SHD_EXAMPLES_H_ */
+#endif /* SHD_URL_H_ */
