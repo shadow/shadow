@@ -9,17 +9,26 @@
 ## -----------------------------------------------------------------------------
 ## Check for the header files
 
-find_path (TIDY_INCLUDES tidy/tidy.h
-  PATHS /usr/local/include /usr/include /sw/include
-  PATH_SUFFIXES <optional path extension>
+find_path (TIDY_INCLUDES tidy.h
+  PATHS ${CMAKE_EXTRA_INCLUDES} PATH_SUFFIXES tidy/ tidy/include NO_DEFAULT_PATH
   )
+if(NOT TIDY_INCLUDES)
+    find_path (TIDY_INCLUDES tidy.h
+      PATHS /usr/local/include /usr/include /include /sw/include /usr/lib /usr/lib64 /usr/lib/x86_64-linux-gnu/ ${CMAKE_EXTRA_INCLUDES} PATH_SUFFIXES tidy/ tidy/include
+      )
+endif(NOT TIDY_INCLUDES)
 
 ## -----------------------------------------------------------------------------
 ## Check for the library
 
-find_library (TIDY_LIBRARIES tidy
-  PATHS /usr/local/lib /usr/lib /lib /sw/lib
+find_library (TIDY_LIBRARIES NAMES tidy
+  PATHS ${CMAKE_EXTRA_LIBRARIES} PATH_SUFFIXES tidy/ NO_DEFAULT_PATH
   )
+if(NOT TIDY_LIBRARIES)
+    find_library (TIDY_LIBRARIES NAMES tidy
+      PATHS /usr/local/lib /usr/lib /lib /sw/lib ${CMAKE_EXTRA_LIBRARIES} PATH_SUFFIXES tidy/
+      )
+endif(NOT TIDY_LIBRARIES)
 
 ## -----------------------------------------------------------------------------
 ## Actions taken when all components have been found
