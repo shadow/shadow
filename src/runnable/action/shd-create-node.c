@@ -36,6 +36,7 @@ struct _CreateNodesAction {
 	GString* heartbeatLogLevelString;
 	GString* logLevelString;
 	GString* logPcapString;
+	GString* pcapDirString;
 
 	MAGIC_DECLARE;
 };
@@ -49,7 +50,7 @@ RunnableFunctionTable createnodes_functions = {
 CreateNodesAction* createnodes_new(GString* name, GString* software, GString* cluster,
 		guint64 bandwidthdown, guint64 bandwidthup, guint64 quantity, guint64 cpuFrequency,
 		guint64 heartbeatIntervalSeconds, GString* heartbeatLogLevelString,
-		GString* logLevelString, GString* logPcapString)
+		GString* logLevelString, GString* logPcapString, GString* pcapDirString)
 {
 	g_assert(name && software);
 	CreateNodesAction* action = g_new0(CreateNodesAction, 1);
@@ -74,6 +75,9 @@ CreateNodesAction* createnodes_new(GString* name, GString* software, GString* cl
 	}
 	if(logPcapString) {
 		action->logPcapString = g_string_new(logPcapString->str);
+	}
+	if(pcapDirString) {
+		action->pcapDirString = g_string_new(pcapDirString->str);
 	}
 
 	return action;
@@ -129,9 +133,14 @@ void createnodes_run(CreateNodesAction* action) {
 		logLevel = configuration_getLevel(config, action->logLevelString->str);
 	}
 
-	guint8 logPcap = 0;
+	gboolean logPcap = FALSE;
 	if(action->logPcapString && !g_ascii_strcasecmp(action->logPcapString->str, "true")) {
-		logPcap = 1;
+		logPcap = TRUE;
+	}
+	
+	gchar* pcapDir = NULL;
+	if (action->pcapDirString) {
+		pcapDir = g_strdup(action->pcapDirString->str);
 	}
 
 	for(gint i = 0; i < action->quantity; i++) {
@@ -158,7 +167,7 @@ void createnodes_run(CreateNodesAction* action) {
 		guint nodeSeed = (guint) engine_nextRandomInt(worker->cached_engine);
 		Node* node = internetwork_createNode(worker_getInternet(), id, network, software,
 				hostnameBuffer, bwDownKiBps, bwUpKiBps, cpuFrequency, cpuThreshold,
-				nodeSeed, heartbeatInterval, heartbeatLogLevel, logLevel, logPcap);
+				nodeSeed, heartbeatInterval, heartbeatLogLevel, logLevel, logPcap, pcapDir);
 
 		g_string_free(hostnameBuffer, TRUE);
 
