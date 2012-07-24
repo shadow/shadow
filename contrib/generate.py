@@ -43,6 +43,10 @@ FBULK = 0.04
 FP2P = 0.05
 NSERVERS = 10
 
+# TODO make this work for any month
+DESCRIPTOR_MONTH = 6
+DESCRIPTOR_YEAR = 2012
+
 DOCHURN=False
 
 class Relay():
@@ -304,7 +308,7 @@ def generate(args):
          e.set("cpufrequency", "10000000") # 10 GHz b/c we dont want bottlenecks
     
     # think time file for web clients
-    maxthink = 20000.0 # milliseconds
+    maxthink = 60000.0 # milliseconds
     increment = 1.0 / maxthink
     # 1012.000 0.0062491534
     with open("webthink.dat", "wb") as fthink:
@@ -664,11 +668,10 @@ def getRelays(relays, k, geoentries, descriptorpath, extrainfopath):
                         fingerprint = parts[2]
                         if fingerprint not in fpmap: break
                     elif parts[0] == "published":
-                        # only count data from march 2012 towards our totals 
-                        # TODO make this work for any month
+                        # only count data from our modeled month towards our totals 
                         published = "{0} {1}".format(parts[1], parts[2])
                         datet = datetime.strptime(published, "%Y-%m-%d %H:%M:%S")
-                        if datet.year != 2012 or datet.month != 3:
+                        if datet.year != DESCRIPTOR_YEAR or datet.month != DESCRIPTOR_MONTH:
                             published = None
                     elif parts[0] == "write-history":
                         if len(parts) < 6: continue # see if we can get other info from this doc
