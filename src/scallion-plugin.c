@@ -386,7 +386,7 @@ static void _scallion_new(gint argc, gchar* argv[]) {
 	} else if(ntype == VTOR_TORRENT) {
 		gchar** argvoffset = argv + 9;
 
-		scallion_launch_torrent_tp launch = malloc(sizeof(scallion_launch_client_t));
+		scallion_launch_torrent_tp launch = malloc(sizeof(scallion_launch_torrent_t));
 
 		TorrentService_NodeArgs *args = malloc(sizeof(TorrentService_NodeArgs));
 		size_t s;
