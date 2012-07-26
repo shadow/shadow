@@ -4,7 +4,7 @@ add_definitions(-D_GNU_SOURCE)
 ## Find libtidy which is needed to parse HTML
 find_package(TIDY REQUIRED)
 
-include_directories(${SHADOW_SOURCE_DIR}/library/filetransfer/ ${TIDY_INCLUDE_DIR})
+include_directories(${SHADOW_SOURCE_DIR}/library/filetransfer/ ${TIDY_INCLUDES})
 
 set(browser_sources
     shd-browser.c 
