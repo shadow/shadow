@@ -199,9 +199,6 @@ static void browser_start_tasks(gpointer key, gpointer value, gpointer user_data
 		gchar* path = g_queue_pop_head(tasks->pending);
 
 		b->shadowlib->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "%s -> %s", hostname, path);
-	
-		/* Initialize the download tasks with the first hostname */
-		browser_init_host(b, b->first_hostname);
 		
 		/* Create server_args for HTTP server */
 		browser_server_args_tp http_server = g_new0(browser_server_args_t, 1);
