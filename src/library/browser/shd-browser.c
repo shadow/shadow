@@ -192,6 +192,7 @@ static gboolean browser_reuse_connection(browser_tp b, browser_connection_tp con
 	enum filegetter_code result = filegetter_download(&conn->fg, &conn->sspec, &conn->fspec);
 	b->shadowlib->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "Adding Path %s -> %s", conn->sspec.http_hostname, new_path);
 	b->shadowlib->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "filegetter set specs code: %s", filegetter_codetoa(result));
+	g_free(new_path);
 	
 	return TRUE;
 }
@@ -215,9 +216,8 @@ static void browser_start_tasks(gpointer key, gpointer value, gpointer user_data
 		/* Create a connection object and start establishing a connection */
 		browser_connection_tp conn =  browser_prepare_filegetter(b, http_server, b->socks_proxy, path);
 		b->connections = g_slist_prepend(b->connections, conn);
-		
-		/* Keep track of connections per host */
 		tasks->running++;
+		g_free(path);
 	}
 }
 
