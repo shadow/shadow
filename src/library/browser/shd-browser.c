@@ -30,6 +30,7 @@ static browser_download_tasks_tp browser_init_host(browser_tp b, gchar* hostname
 		tasks = g_new0(browser_download_tasks_t, 1);
 		tasks->pending = g_queue_new();
 		tasks->finished = g_hash_table_new(g_str_hash, g_str_equal);
+		tasks->running = 0;
 		g_hash_table_insert(b->download_tasks, hostname, tasks);
 	}
 
@@ -194,7 +195,7 @@ static void browser_start_tasks(gpointer key, gpointer value, gpointer user_data
 	browser_download_tasks_tp tasks = (browser_download_tasks_tp) value;
 	gchar* hostname = key;
   
-	for (gint i = 0; i < b->max_concurrent_downloads && !g_queue_is_empty(tasks->pending); i++) {
+	while (tasks->running < b->max_concurrent_downloads && !g_queue_is_empty(tasks->pending)) {
 		/* Get new task from the queue */
 		gchar* path = g_queue_pop_head(tasks->pending);
 
@@ -208,6 +209,9 @@ static void browser_start_tasks(gpointer key, gpointer value, gpointer user_data
 		/* Create a connection object and start establishing a connection */
 		browser_connection_tp conn =  browser_prepare_filegetter(b, http_server, b->socks_proxy, path);
 		b->connections = g_slist_prepend(b->connections, conn);
+		
+		/* Keep track of connections per host */
+		tasks->running++;
 	}
 }
 
@@ -223,9 +227,14 @@ static void browser_completed_download(browser_tp b, browser_activate_result_tp 
 
 		b->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "first document downloaded and parsed, now getting %i additional objects...", obj_count);
 
-		/* TODO: Should actually be reused */
-		filegetter_shutdown(&result->connection->fg);
-		b->connections = g_slist_remove(b->connections, result->connection);
+		/* Try to reuse initial connection */
+		if (!browser_reuse_connection(b, result->connection)) {
+			filegetter_shutdown(&result->connection->fg);
+			b->connections = g_slist_remove(b->connections, result->connection);
+		} else {
+			browser_download_tasks_tp tasks = g_hash_table_lookup(b->download_tasks, b->first_hostname);
+			tasks->running = 1;
+		}
 
 		if (!obj_count) {
 			/* if website contains no embedded objectes set the state that we are done */
@@ -241,6 +250,8 @@ static void browser_completed_download(browser_tp b, browser_activate_result_tp 
 		b->shadowlib->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "%s -> %s", result->connection->sspec.http_hostname, result->connection->fspec.remote_path);
 		
 		if (!browser_reuse_connection(b, result->connection)) {
+			browser_download_tasks_tp tasks = g_hash_table_lookup(b->download_tasks, result->connection->sspec.http_hostname);
+			tasks->running--;
 			filegetter_shutdown(&result->connection->fg);
 			b->connections = g_slist_remove(b->connections, result->connection);
 		}

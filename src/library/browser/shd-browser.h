@@ -55,6 +55,8 @@ typedef struct browser_connection_s {
 typedef struct browser_download_tasks_s {
 	/* set that contains the paths that were already downloaded */
 	GHashTable* finished;
+	/* Count of running tasks */
+	gint running;
 	/* contains paths to downloads */
 	GQueue* pending;
 } browser_download_tasks_t, *browser_download_tasks_tp;
