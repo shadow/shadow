@@ -266,36 +266,41 @@ void browser_start(browser_tp b, gint argc, gchar** argv) {
 	args.socks_proxy.port = argv[4];
 	args.max_concurrent_downloads = argv[5];
 	args.document_path = argv[6];
-
+	
 	/* create an epoll so we can wait for IO events */
-	b->epolld = epoll_create(1);
+	gint epolld = epoll_create(1);
 
-	if(b->epolld == -1) {
+	if(epolld == -1) {
 		b->shadowlib->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "Error in server epoll_create");
-		close(b->epolld);
-		b->epolld = 0;
+		close(epolld);
+		epolld = 0;
 	}
+	
+	browser_launch(b, &args, epolld);
+}
 
-	b->max_concurrent_downloads = atoi(args.max_concurrent_downloads);
-	b->first_hostname = g_strdup(args.http_server.host);
+void browser_launch(browser_tp b, browser_args_tp args, gint epolld) {
+	b->epolld = epolld;
+	b->max_concurrent_downloads = atoi(args->max_concurrent_downloads);
+	b->first_hostname = g_strdup(args->http_server.host);
 	b->state = SB_DOCUMENT;
 	b->download_tasks = g_hash_table_new(g_str_hash, g_str_equal);
-
+	
 	/* Initialize the download tasks with the first hostname */
 	browser_init_host(b, b->first_hostname);
 
 	/* Create a connection object and start establishing a connection */
-	browser_connection_tp conn =  browser_prepare_filegetter(b, &args.http_server, &args.socks_proxy, args.document_path);
+	browser_connection_tp conn =  browser_prepare_filegetter(b, &args->http_server, &args->socks_proxy, args->document_path);
 
 	/* Save the socks proxy address and port for later use in other server specs */
 	b->socks_proxy = g_new0(browser_server_args_t, 1);
-	b->socks_proxy->host = g_strdup(args.socks_proxy.host);
-	b->socks_proxy->port = g_strdup(args.socks_proxy.port);
+	b->socks_proxy->host = g_strdup(args->socks_proxy.host);
+	b->socks_proxy->port = g_strdup(args->socks_proxy.port);
 
 	/* Add the first connection for the document */
 	b->connections = g_slist_prepend(NULL, conn);
 
-	b->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "Trying to simulate browser access to %s on %s", args.document_path, b->first_hostname);
+	b->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "Trying to simulate browser access to %s on %s", args->document_path, b->first_hostname);
 }
 
 void browser_activate(browser_tp b) {

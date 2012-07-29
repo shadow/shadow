@@ -37,6 +37,7 @@
 
 #include <shd-library.h>
 
+
 #include "shd-html.h"
 #include "shd-url.h"
 #include "shd-filegetter.h"
@@ -54,7 +55,7 @@ typedef struct browser_connection_s {
 typedef struct browser_download_tasks_s {
 	/* set that contains the paths that were already downloaded */
 	GHashTable* finished;
-	/* contains paths to download */
+	/* contains paths to downloads */
 	GQueue* pending;
 } browser_download_tasks_t, *browser_download_tasks_tp;
 
@@ -91,5 +92,6 @@ typedef struct browser_activate_result_s {
 
 void browser_start(browser_tp b, gint argc, gchar** argv);
 void browser_activate(browser_tp b);
+void browser_launch(browser_tp b, browser_args_tp args, gint epolld);
 
 #endif /* SHD_BROWSER_H_ */
