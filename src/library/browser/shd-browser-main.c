@@ -89,7 +89,7 @@ gint main(gint argc, gchar *argv[])
 
 		/* activate for every socket thats ready */
 		for(int i = 0; i < nReadyFDs; i++) {
-			browser_activate(&b);
+			browser_activate(&b, events[i].data.fd);
 		}
 
 		/* break out if the client is done */

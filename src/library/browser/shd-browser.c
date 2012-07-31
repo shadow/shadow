@@ -215,7 +215,7 @@ static void browser_start_tasks(gpointer key, gpointer value, gpointer user_data
 
 		/* Create a connection object and start establishing a connection */
 		browser_connection_tp conn =  browser_prepare_filegetter(b, http_server, b->socks_proxy, path);
-		b->connections = g_slist_prepend(b->connections, conn);
+		g_hash_table_insert(b->connections, &conn->fg.sockd, conn);
 		tasks->running++;
 		g_free(path);
 	}
@@ -235,8 +235,7 @@ static void browser_completed_download(browser_tp b, browser_activate_result_tp 
 
 		/* Try to reuse initial connection */
 		if (!browser_reuse_connection(b, result->connection)) {
-			filegetter_shutdown(&result->connection->fg);
-			b->connections = g_slist_remove(b->connections, result->connection);
+			g_hash_table_remove(b->connections, &result->connection->fg.sockd);
 		} else {
 			browser_download_tasks_tp tasks = g_hash_table_lookup(b->download_tasks, b->first_hostname);
 			tasks->running = 1;
@@ -256,12 +255,15 @@ static void browser_completed_download(browser_tp b, browser_activate_result_tp 
 		b->shadowlib->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "%s -> %s", result->connection->sspec.http_hostname, result->connection->fspec.remote_path);
 		
 		if (!browser_reuse_connection(b, result->connection)) {
-			browser_download_tasks_tp tasks = g_hash_table_lookup(b->download_tasks, result->connection->sspec.http_hostname);
-			tasks->running--;
-			filegetter_shutdown(&result->connection->fg);
-			b->connections = g_slist_remove(b->connections, result->connection);
+			g_hash_table_remove(b->connections, &result->connection->fg.sockd);
 		}
 	}
+}
+
+static void browser_shutdown_connection(gpointer value) {
+	browser_connection_tp conn = value;
+	
+	filegetter_shutdown(&conn->fg);
 }
 
 void browser_start(browser_tp b, gint argc, gchar** argv) {
@@ -312,20 +314,21 @@ void browser_launch(browser_tp b, browser_args_tp args, gint epolld) {
 	b->socks_proxy->port = g_strdup(args->socks_proxy.port);
 
 	/* Add the first connection for the document */
-	b->connections = g_slist_prepend(NULL, conn);
+	b->connections = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, browser_shutdown_connection);
+	g_hash_table_insert(b->connections, &conn->fg.sockd, conn);
 
 	b->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "Trying to simulate browser access to %s on %s", args->document_path, b->first_hostname);
 }
 
-void browser_activate(browser_tp b) {
+void browser_activate(browser_tp b, gint sockfd) {
 	assert(b);
 
-	GSList* curr_task = b->connections;
+	browser_activate_result_t result;
+	browser_connection_tp conn = g_hash_table_lookup(b->connections, &sockfd);
 
-	/* Activate every filegetter in each download task group */
-	while (curr_task) {
-		browser_activate_result_t result;
-		browser_connection_tp conn = curr_task->data;
+	if (conn == NULL) {
+		b->shadowlib->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "unknown socket");
+	} else {
 		result.code = filegetter_activate(&conn->fg);
 		result.connection = conn;
 
@@ -340,20 +343,13 @@ void browser_activate(browser_tp b) {
 		
 				/* try to reuse the connection */
 				if (!browser_reuse_connection(b, result.connection)) {
-					filegetter_shutdown(&result.connection->fg);
-					b->connections = g_slist_remove(b->connections, result.connection);
+					g_hash_table_remove(b->connections, &sockfd);
 				}
 			}
 		} else if (result.code == FG_ERR_FATAL || result.code == FG_ERR_SOCKSCONN || result.code != FG_ERR_WOULDBLOCK) {
 			b->shadowlib->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "filegetter shutdown due to error '%s' for %s -> %s",
 						filegetter_codetoa(result.code), result.connection->sspec.http_hostname, result.connection->fspec.remote_path);
-			b->state = SB_DONE;
+			g_hash_table_remove(b->connections, &sockfd);
 		}
-
-		curr_task = g_slist_next(curr_task);
-	}
-	
-	if (b->connections == NULL) {
-		b->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "done downloading embedded files");
 	}
 }

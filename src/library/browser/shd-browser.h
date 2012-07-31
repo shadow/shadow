@@ -76,7 +76,7 @@ typedef struct browser_s {
 	/* hostname (gchar*) -> download tasks (browser_connection_tp) */
 	GHashTable* download_tasks;
 	/* contains all open connections (browser_connection_t) */
-	GSList* connections;
+	GHashTable* connections;
 	gint max_concurrent_downloads;
 } browser_t, *browser_tp;
 
@@ -93,7 +93,7 @@ typedef struct browser_activate_result_s {
 } browser_activate_result_t, *browser_activate_result_tp;
 
 void browser_start(browser_tp b, gint argc, gchar** argv);
-void browser_activate(browser_tp b);
+void browser_activate(browser_tp b, gint sockfd);
 void browser_launch(browser_tp b, browser_args_tp args, gint epolld);
 
 #endif /* SHD_BROWSER_H_ */

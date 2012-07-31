@@ -44,7 +44,7 @@ static void browserplugin_activate() {
 		} else {
 			/* finally, activate client for every socket thats ready */
 			for(int i = 0; i < nfds; i++) {
-				browser_activate(&b);
+				browser_activate(&b, events[i].data.fd);
 			}
 		}
 	}
