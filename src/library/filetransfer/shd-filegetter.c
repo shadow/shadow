@@ -256,7 +256,7 @@ enum filegetter_code filegetter_download(filegetter_tp fg, filegetter_serverspec
 	if (fg->sspec.persistent && fg->sockd > 0) {
 		fg->state = FG_REQUEST_HTTP;
 		result = FG_SUCCESS;
-	} else if(result == FG_SUCCESS) {
+	} else if (result == FG_SUCCESS) {
 		/* start the timer for the download */
 		clock_gettime(CLOCK_REALTIME, &fg->download_start);
 		
@@ -590,7 +590,7 @@ start:
 
 				/* if connection is not supposed to be persistent ... */
 				if (!fg->sspec.persistent) {
-					/* ... thus close it */
+					/* ... close it */
 					filegetter_disconnect(fg);
 				}
 
