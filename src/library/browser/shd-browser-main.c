@@ -105,6 +105,7 @@ gint main(gint argc, gchar *argv[])
 	}
 	
 	close(epolld);
+	browser_free(&b);
 
 	return 0;
 }

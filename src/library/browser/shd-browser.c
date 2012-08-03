@@ -159,6 +159,7 @@ static browser_connection_tp browser_prepare_filegetter(browser_tp b, browser_se
 	browser_connection_tp conn = g_new0(browser_connection_t, 1);
 	strncpy(conn->fspec.remote_path, filepath, sizeof(conn->fspec.remote_path));
 	strncpy(conn->sspec.http_hostname, http_server->host, sizeof(conn->sspec.http_hostname));
+	conn->b = b;
 	conn->sspec.http_addr = http_addr;
 	conn->sspec.http_port = http_port;
 	conn->sspec.socks_addr = socks_addr;
@@ -231,7 +232,17 @@ static void browser_completed_download(browser_tp b, browser_activate_result_tp 
 		/* Get embedded objects as a hashtable which associates a hostname with a linked list of paths to download */
 		browser_get_embedded_objects(b, &result->connection->fg, &obj_count);
 
-		b->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "first document downloaded and parsed, now getting %i additional objects...", obj_count);
+		/* Get statistics for document download */
+		filegetter_filestats_t doc_stats;
+		filegetter_stat_download(&result->connection->fg, &doc_stats);
+		b->document_size = doc_stats.bytes_downloaded;
+		
+		b->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__,
+			"first document (%zu bytes) downloaded and parsed in %lu.%.3d seconds, now getting %i additional objects...",
+			b->document_size,
+			doc_stats.download_time.tv_sec,
+			(gint)(doc_stats.download_time.tv_nsec / 1000000),
+			obj_count);
 
 		/* Try to reuse initial connection */
 		if (!browser_reuse_connection(b, result->connection)) {
@@ -247,22 +258,37 @@ static void browser_completed_download(browser_tp b, browser_activate_result_tp 
 		} else {
 			/* Set state to downloading embedded objects */
 			b->state = SB_EMBEDDED_OBJECTS;
+			
+			/* set counters/timers for embedded downloads */
+			clock_gettime(CLOCK_REALTIME, &b->embedded_start_time);
+			b->embedded_downloads_expected = obj_count;
+			b->embedded_downloads_completed = 0;
 
 			/* Start as many downloads as allowed by sfg->browser->max_concurrent_downloads */
 			g_hash_table_foreach(b->download_tasks, browser_start_tasks, b);
 		}
 	} else if (b->state == SB_EMBEDDED_OBJECTS) {
 		b->shadowlib->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "%s -> %s", result->connection->sspec.http_hostname, result->connection->fspec.remote_path);
+		b->embedded_downloads_completed++;
 		
 		if (!browser_reuse_connection(b, result->connection)) {
 			g_hash_table_remove(b->connections, &result->connection->fg.sockd);
+		}
+		
+		/* If there is no connection we are done */
+		if (!g_hash_table_size(b->connections)) {
+			b->state = SB_DONE;
+			clock_gettime(CLOCK_REALTIME, &b->embedded_end_time);
 		}
 	}
 }
 
 static void browser_shutdown_connection(gpointer value) {
 	browser_connection_tp conn = value;
-	
+	/* Get statistics for download */
+	filegetter_filestats_t fg_stats;
+	filegetter_stat_aggregate(&conn->fg, &fg_stats);
+	conn->b->cumulative_size += fg_stats.bytes_downloaded;
 	filegetter_shutdown(&conn->fg);
 }
 
@@ -302,6 +328,11 @@ void browser_launch(browser_tp b, browser_args_tp args, gint epolld) {
 	b->state = SB_DOCUMENT;
 	b->download_tasks = g_hash_table_new(g_str_hash, g_str_equal);
 	
+	/* Stat counters */
+	b->bytes_downloaded = 0;
+	b->bytes_uploaded = 0;
+	b->cumulative_size = 0;
+	
 	/* Initialize the download tasks with the first hostname */
 	browser_init_host(b, b->first_hostname);
 
@@ -328,6 +359,7 @@ void browser_activate(browser_tp b, gint sockfd) {
 
 	if (conn == NULL) {
 		b->shadowlib->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "unknown socket");
+		return;
 	} else {
 		result.code = filegetter_activate(&conn->fg);
 		result.connection = conn;
@@ -351,5 +383,21 @@ void browser_activate(browser_tp b, gint sockfd) {
 						filegetter_codetoa(result.code), result.connection->sspec.http_hostname, result.connection->fspec.remote_path);
 			g_hash_table_remove(b->connections, &sockfd);
 		}
+	}
+}
+
+void browser_free(browser_tp b) {	
+	/* Clean up */
+	g_hash_table_destroy(b->connections);
+	
+	/* report stats */
+	if (&b->embedded_start_time) {
+		b->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__,
+			"Finished downloading %d/%d embedded objects (%zu bytes) in %lu.%.3d seconds",
+			b->embedded_downloads_completed,
+			b->embedded_downloads_expected,
+			b->cumulative_size - b->document_size,
+			b->embedded_end_time.tv_sec - b->embedded_start_time.tv_sec,
+			(gint)((b->embedded_end_time.tv_nsec - b->embedded_start_time.tv_nsec) / 1000000));
 	}
 }
