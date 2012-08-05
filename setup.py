@@ -27,7 +27,7 @@ from datetime import datetime
 BUILD_PREFIX="./build"
 INSTALL_PREFIX=os.path.expanduser("~/.shadow")
 
-DEFAULT_TOR_VERSION="0.2.3.13-alpha"
+DEFAULT_TOR_VERSION="0.2.3.16-alpha"
 
 TOR_URL="https://archive.torproject.org/tor-package-archive/tor-" + DEFAULT_TOR_VERSION + ".tar.gz"
 MAXMIND_URL="http://geolite.maxmind.com/download/geoip/database/GeoLiteCity.dat.gz"
