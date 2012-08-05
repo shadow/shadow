@@ -41,7 +41,10 @@ FIM = 0.02
 FWEB = 0.89
 FBULK = 0.04
 FP2P = 0.05
+
 NSERVERS = 10
+NPERF50K = 0.0
+NPERF1M = 0.0
 
 # TODO make this work for any month
 DESCRIPTOR_MONTH = 6
@@ -186,6 +189,8 @@ def main():
     ap.add_argument('--fweb', action="store", type=float, dest="fweb", help="fraction F of web client connections", metavar='F', default=FWEB)
     ap.add_argument('--fbulk', action="store", type=float, dest="fbulk", help="fraction F of bulk HTTP client connections", metavar='F', default=FBULK)
     ap.add_argument('--fp2p', action="store", type=float, dest="fp2p", help="fraction F of bulk P2P clients", metavar='F', default=FP2P)
+    ap.add_argument('--nperf50k', action="store", type=float, dest="nperf50k", help="number N of 50KiB perf clients", metavar='F', default=NPERF50K)
+    ap.add_argument('--nperf1m', action="store", type=float, dest="nperf1m", help="number N of 1MiB perf clients", metavar='F', default=NPERF1M)
     ap.add_argument('--nservers', action="store", type=int, dest="nservers", help="number N of fileservers", metavar='N', default=NSERVERS)
     ap.add_argument('--dochurn', action="store_true", dest="dochurn", help="use random file selection for clients", default=DOCHURN)
 
@@ -261,6 +266,8 @@ def generate(args):
     fweb = open("web.dl", "wb")
     fbulk = open("bulk.dl", "wb")
     fall = open("all.dl", "wb")
+    fperf50k = open("50kib.dl", "wb")
+    fperf1m = open("1mib.dl", "wb")
     
     # for all.dl, ratio of bulk to web files needs to be about 1/10 of the
     # ratio of bulk to web users given as input, so the number of total BT
@@ -285,11 +292,15 @@ def generate(args):
         print >>fweb, "{0}:80:/320KiB.urnd".format(name)
         print >>fbulk, "{0}:80:/5MiB.urnd".format(name)
         print >>fall, "{0}:80:/5MiB.urnd".format(name)
+        print >>fperf50k, "{0}:80:/50KiB.urnd".format(name)
+        print >>fperf1m, "{0}:80:/1MiB.urnd".format(name)
         for j in xrange(webPerBulk): print >>fall, "{0}:80:/320KiB.urnd".format(name)
     fim.close()
     fweb.close()
     fbulk.close()
     fall.close()
+    fperf50k.close()
+    fperf1m.close()
     
     # torrent auth
     if args.fp2p > 0.0:
@@ -327,6 +338,11 @@ def generate(args):
             assert frac <= 1.0
             print >>fthink, "{0} {1}".format("%.3f" % ms, "%.10f" % frac)
             frac += increment
+
+    # think time file for perf clients
+    ms = 60000.0 # milliseconds
+    with open("perfthink.dat", "wb") as fthink:
+        print >>fthink, "{0} {1}".format("%.3f" % ms, "%.10f" % 1.0)
     
     # authority - choose the fastest relay (no authority is an exit node)
     authority = nonexitnodes.pop(-1)
@@ -393,9 +409,10 @@ def generate(args):
     else: # user are separated into bulk/web downloaders who always download their file type
         nimclients = int(args.fim * args.nclients)
         nbulkclients = int(args.fbulk * args.nclients)
-        # need fp2p connections, not clients (each client connects to each other)
-        np2pclients = int(math.ceil(math.sqrt(float(args.fp2p * args.nclients))))
+        np2pclients = int(args.fp2p * args.nclients)
         nwebclients = int(args.nclients - nimclients - nbulkclients - np2pclients)
+        nperf50kclients = int(args.nperf50k)
+        nperf1mclients = int(args.nperf1m)
  
         i = 1
         while i <= nimclients:
@@ -440,6 +457,30 @@ def generate(args):
             soft = "{0}soft".format(name)
             starttime = "{0}".format(timecounter)
             softargs = "torrent {0} {1} {2} ./client.torrc ./data/clientdata {3}share/geoip torrent node auth.torrent 5000 localhost 9000 6000 700MB".format(10240000, 5120000, 10240000, INSTALLPREFIX) # in bytes
+ 
+            addRelayToXML(root, soft, starttime, softargs, name, code=choice(clientCountryCodes))
+        
+            if i % clientsPerSecond == 0: timecounter += 1 # x nodes every second
+            i += 1
+
+        i = 1
+        while i <= nperf50kclients:
+            name = "perfclient50k{0}".format(i)
+            soft = "{0}soft".format(name)
+            starttime = "{0}".format(timecounter)
+            softargs = "client {0} {1} {2} ./client.torrc ./data/clientdata {3}share/geoip client multi ./50kib.dl localhost 9000 ./perfthink.dat -1".format(10240000, 5120000, 10240000, INSTALLPREFIX) # in bytes
+ 
+            addRelayToXML(root, soft, starttime, softargs, name, code=choice(clientCountryCodes))
+        
+            if i % clientsPerSecond == 0: timecounter += 1 # x nodes every second
+            i += 1
+
+        i = 1
+        while i <= nperf1mclients:
+            name = "perfclient1m{0}".format(i)
+            soft = "{0}soft".format(name)
+            starttime = "{0}".format(timecounter)
+            softargs = "client {0} {1} {2} ./client.torrc ./data/clientdata {3}share/geoip client multi ./1mib.dl localhost 9000 ./perfthink.dat -1".format(10240000, 5120000, 10240000, INSTALLPREFIX) # in bytes
  
             addRelayToXML(root, soft, starttime, softargs, name, code=choice(clientCountryCodes))
         
