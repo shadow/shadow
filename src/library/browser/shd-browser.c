@@ -111,10 +111,11 @@ static in_addr_t browser_getaddr(browser_tp b, browser_server_args_tp server) {
 			addr = htonl(INADDR_LOOPBACK);
 		} else {
 			struct addrinfo* info;
-			if(getaddrinfo((gchar*) hostname, NULL, NULL, &info) != -1) {
+			gint result;
+			if(!(result = getaddrinfo((gchar*) hostname, NULL, NULL, &info))) {
 				addr = ((struct sockaddr_in*)(info->ai_addr))->sin_addr.s_addr;
 			} else {
-				b->shadowlib->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "unable to create client: error in getaddrinfo");
+				b->shadowlib->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "unable to resolve hostname '%s': getaddrinfo returned %d", hostname, result);
 			}
 			freeaddrinfo(info);
 		}
