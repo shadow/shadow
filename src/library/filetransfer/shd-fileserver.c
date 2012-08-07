@@ -366,8 +366,16 @@ start:
 
 			c->reply.buf_write_offset = bytes;
 
-			/* now we need the file, follow through */
-			c->state = FS_REPLY_FILE_CONTINUE;
+			if (c->reply.f_length == 0) {
+				/* File is empty, don't try to send contents */
+				fclose(c->reply.f);
+				c->reply.f = NULL;
+				c->state = FS_REPLY_SEND;
+				goto start;
+			} else {
+				/* We need to read and send the file, follow through */
+				c->state = FS_REPLY_FILE_CONTINUE;
+			}
 		}
 
 		case FS_REPLY_FILE_CONTINUE: {

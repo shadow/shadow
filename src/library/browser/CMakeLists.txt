@@ -19,7 +19,7 @@ target_link_libraries(shadow-service-browser shadow-service-filetransfer ${RT_LI
 install(TARGETS shadow-service-browser EXPORT shadow-externals DESTINATION lib)
 
 ## a stand-alone shared library that can plug into shadow
-add_library(shadow-plugin-browser MODULE shd-browser-plugin.c shd-browser.c shd-url.c shd-html.c)
+add_library(shadow-plugin-browser MODULE shd-browser-plugin.c ${browser_sources})
 target_link_libraries(shadow-plugin-browser shadow-service-filetransfer ${TIDY_LIBRARIES})
 install(TARGETS shadow-plugin-browser DESTINATION ${SHADOW_PLUGIN_DIR})
 
