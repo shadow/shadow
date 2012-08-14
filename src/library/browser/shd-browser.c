@@ -21,76 +21,6 @@
 
 #include "shd-browser.h"
 
-static browser_download_tasks_tp browser_init_host(browser_tp b, gchar* hostname) {
-	browser_download_tasks_tp tasks = g_hash_table_lookup(b->download_tasks, hostname);
-	assert(b);
-
-	/* Not initialized yet */
-	if (tasks == NULL) {
-		tasks = g_new0(browser_download_tasks_t, 1);
-		tasks->pending = g_queue_new();
-		tasks->running = 0;
-		tasks->added = g_hash_table_new(g_str_hash, g_str_equal);
-		g_hash_table_insert(b->download_tasks, hostname, tasks);
-	}
-
-	return tasks;
-}
-
-static void browser_destroy_added_tasks(gpointer key, gpointer value, gpointer user_data) {
-	browser_download_tasks_tp tasks = value;
-	g_hash_table_destroy(tasks->added);
-}
-
-static void browser_get_embedded_objects(browser_tp b, filegetter_tp fg, gint* obj_count) {
-	assert(b);
-	assert(fg);
-	
-	GSList* objs = NULL;
- 	gchar* html = g_string_free(fg->content, FALSE);
-	
-	/* Parse with libxml2. The result is a linked list with all relative and absolute URLs */
-	html_parse(html, &objs);
-	
-	while (objs != NULL) {
-		gchar* url = (gchar*) objs->data;
-		gchar* hostname = NULL;
-		gchar* path = NULL;
-		
-		if (url_is_absolute(url)) {
-			url_get_parts(url, &hostname ,&path);
-		} else {
-			hostname = b->first_hostname;
-			
-			if (!g_str_has_prefix(url, "/")) {
-				path = g_strconcat("/", url, NULL);
-			} else {
-				path = g_strdup(url);
-			}
-		}
-		
-		browser_download_tasks_tp tasks = browser_init_host(b, hostname);
-
-		/* Unless the path was already added...*/
-		if (!g_hash_table_lookup_extended(tasks->added, path, NULL, NULL)) {
-			b->shadowlib->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "%s -> %s", hostname, path);
-			
-			/* ... add it to the end of the queue */
-			g_queue_push_tail(tasks->pending, path);
-			
-			/* And mark that it was added */
-			g_hash_table_replace(tasks->added, path, path);
-			
-			(*obj_count)++;
-		}
-		
-		objs = g_slist_next(objs);
-	}
-	
-	g_hash_table_foreach(b->download_tasks, browser_destroy_added_tasks, NULL);
-	g_slist_free_full(objs, NULL);
-}
-
 static in_addr_t browser_getaddr(browser_tp b, browser_server_args_tp server) {
 	assert(b);
 	
@@ -122,6 +52,82 @@ static in_addr_t browser_getaddr(browser_tp b, browser_server_args_tp server) {
 
 		return addr;
 	}
+}
+
+static browser_download_tasks_tp browser_init_host(browser_tp b, gchar* hostname) {
+	browser_download_tasks_tp tasks = g_hash_table_lookup(b->download_tasks, hostname);
+	assert(b);
+
+	/* Not initialized yet */
+	if (tasks == NULL) {
+		tasks = g_new0(browser_download_tasks_t, 1);
+		tasks->pending = g_queue_new();
+		tasks->running = 0;
+		tasks->added = g_hash_table_new(g_str_hash, g_str_equal);
+		
+		browser_server_args_t server;
+		server.host = hostname;
+		server.port = "80";
+		tasks->reachable = browser_getaddr(b, &server) != 0;
+		
+		g_hash_table_insert(b->download_tasks, hostname, tasks);
+	}
+
+	return tasks;
+}
+
+static void browser_destroy_added_tasks(gpointer key, gpointer value, gpointer user_data) {
+	browser_download_tasks_tp tasks = value;
+	g_hash_table_destroy(tasks->added);
+}
+
+static void browser_get_embedded_objects(browser_tp b, filegetter_tp fg, gint* obj_count) {
+	assert(b);
+	assert(fg);
+	
+	GSList* objs = NULL;
+ 	gchar* html = g_string_free(fg->content, FALSE);
+	
+	/* Parse with libtidy. The result is a linked list with all relative and absolute URLs */
+	html_parse(html, &objs);
+	
+	while (objs != NULL) {
+		gchar* url = (gchar*) objs->data;
+		gchar* hostname = NULL;
+		gchar* path = NULL;
+		
+		if (url_is_absolute(url)) {
+			url_get_parts(url, &hostname ,&path);
+		} else {
+			hostname = b->first_hostname;
+			
+			if (!g_str_has_prefix(url, "/")) {
+				path = g_strconcat("/", url, NULL);
+			} else {
+				path = g_strdup(url);
+			}
+		}
+		
+		browser_download_tasks_tp tasks = browser_init_host(b, hostname);
+
+		/* Unless the path was already added...*/
+		if (tasks->reachable && !g_hash_table_lookup_extended(tasks->added, path, NULL, NULL)) {
+			b->shadowlib->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "%s -> %s", hostname, path);
+			
+			/* ... add it to the end of the queue */
+			g_queue_push_tail(tasks->pending, path);
+			
+			/* And mark that it was added */
+			g_hash_table_replace(tasks->added, path, path);
+			
+			(*obj_count)++;
+		}
+		
+		objs = g_slist_next(objs);
+	}
+	
+	g_hash_table_foreach(b->download_tasks, browser_destroy_added_tasks, NULL);
+	g_slist_free_full(objs, NULL);
 }
 
 static browser_connection_tp browser_prepare_filegetter(browser_tp b, browser_server_args_tp http_server, browser_server_args_tp socks_proxy, gchar* filepath) {
@@ -275,12 +281,6 @@ static void browser_completed_download(browser_tp b, browser_activate_result_tp 
 		if (!browser_reuse_connection(b, result->connection)) {
 			g_hash_table_remove(b->connections, &result->connection->fg.sockd);
 		}
-		
-		/* If there is no connection we are done */
-		if (!g_hash_table_size(b->connections)) {
-			b->state = SB_DONE;
-			clock_gettime(CLOCK_REALTIME, &b->embedded_end_time);
-		}
 	}
 }
 
@@ -322,7 +322,7 @@ void browser_start(browser_tp b, gint argc, gchar** argv) {
 	browser_launch(b, &args, epolld);
 }
 
-void browser_launch(browser_tp b, browser_args_tp args, gint epolld) {
+gint browser_launch(browser_tp b, browser_args_tp args, gint epolld) {
 	b->epolld = epolld;
 	b->max_concurrent_downloads = atoi(args->max_concurrent_downloads);
 	b->first_hostname = g_strdup(args->http_server.host);
@@ -333,7 +333,7 @@ void browser_launch(browser_tp b, browser_args_tp args, gint epolld) {
 	b->bytes_downloaded = 0;
 	b->bytes_uploaded = 0;
 	b->cumulative_size = 0;
-	
+
 	/* Initialize the download tasks with the first hostname */
 	browser_init_host(b, b->first_hostname);
 
@@ -350,11 +350,12 @@ void browser_launch(browser_tp b, browser_args_tp args, gint epolld) {
 	g_hash_table_insert(b->connections, &conn->fg.sockd, conn);
 
 	b->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "Trying to simulate browser access to %s on %s", args->document_path, b->first_hostname);
+	return conn->fg.sockd;
 }
 
 void browser_activate(browser_tp b, gint sockfd) {
 	assert(b);
-
+	
 	browser_activate_result_t result;
 	browser_connection_tp conn = g_hash_table_lookup(b->connections, &sockfd);
 
@@ -382,23 +383,41 @@ void browser_activate(browser_tp b, gint sockfd) {
 		} else if (result.code == FG_ERR_FATAL || result.code == FG_ERR_SOCKSCONN || result.code != FG_ERR_WOULDBLOCK) {
 			b->shadowlib->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "filegetter shutdown due to error '%s' for %s -> %s",
 						filegetter_codetoa(result.code), result.connection->sspec.http_hostname, result.connection->fspec.remote_path);
-			g_hash_table_remove(b->connections, &sockfd);
+			/* TODO: close browser */
+			g_hash_table_steal(b->connections, &sockfd);
+			filegetter_shutdown(&conn->fg);
 		}
+	}
+	
+	/* If there is no connection we are done */
+	if (!g_hash_table_size(b->connections)) {
+		b->state = SB_DONE;
+		clock_gettime(CLOCK_REALTIME, &b->embedded_end_time);
 	}
 }
 
-void browser_free(browser_tp b) {	
+void browser_free(browser_tp b) {
 	/* Clean up */
 	g_hash_table_destroy(b->connections);
 	
 	/* report stats */
 	if (&b->embedded_start_time) {
+		struct timespec duration_embedded_downloads;
+		/* first byte statistics */
+		duration_embedded_downloads.tv_sec = b->embedded_end_time.tv_sec - b->embedded_start_time.tv_sec;
+		duration_embedded_downloads.tv_nsec = b->embedded_end_time.tv_nsec - b->embedded_start_time.tv_nsec;
+		
+		while(duration_embedded_downloads.tv_nsec < 0) {
+			duration_embedded_downloads.tv_sec--;
+			duration_embedded_downloads.tv_nsec += 1000000000;
+		}
+		
 		b->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__,
 			"Finished downloading %d/%d embedded objects (%zu bytes) in %lu.%.3d seconds",
 			b->embedded_downloads_completed,
 			b->embedded_downloads_expected,
 			b->cumulative_size - b->document_size,
-			b->embedded_end_time.tv_sec - b->embedded_start_time.tv_sec,
-			(gint)((b->embedded_end_time.tv_nsec - b->embedded_start_time.tv_nsec) / 1000000));
+			duration_embedded_downloads.tv_sec,
+			(gint)(duration_embedded_downloads.tv_nsec / 1000000));
 	}
 }
