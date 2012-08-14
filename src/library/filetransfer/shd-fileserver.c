@@ -234,8 +234,8 @@ start:
 			gint space = sizeof(c->request.buf) - c->request.buf_write_offset - 1;
 			if(space <= 0) {
 				/* the request wont fit in our buffer, just give up */
-				fileserve_connection_close(fs, c);
-				return FS_ERR_BUFSPACE;
+				c->state = FS_REPLY_404_START;
+				goto start;
 			}
 
 			ssize_t bytes = recv(c->sockd, c->request.buf + c->request.buf_write_offset, space, 0);

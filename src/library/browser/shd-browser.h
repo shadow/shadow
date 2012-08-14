@@ -50,6 +50,8 @@ typedef struct browser_download_tasks_s {
 	gint running;
 	/* set that contains the paths that were already added to the queue */
 	GHashTable* added;
+	/* Flag whether hostname could be resolved */
+	gboolean reachable;
 	/* contains paths to downloads */
 	GQueue* pending;
 } browser_download_tasks_t, *browser_download_tasks_tp;
@@ -103,7 +105,7 @@ typedef struct browser_activate_result_s {
 
 void browser_start(browser_tp b, gint argc, gchar** argv);
 void browser_activate(browser_tp b, gint sockfd);
-void browser_launch(browser_tp b, browser_args_tp args, gint epolld);
+gint browser_launch(browser_tp b, browser_args_tp args, gint epolld);
 void browser_free(browser_tp b);
 
 #endif /* SHD_BROWSER_H_ */
