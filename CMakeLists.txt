@@ -9,6 +9,9 @@ set(Shadow_VERSION_MINOR 4)
 set(Shadow_VERSION_BUILD 0)
 set(Shadow_VERSION_SUFFIX "-dev")
 
+#from scallion plug-in, not sure if we need it...
+#set(PACKAGE_STRING "Scallion ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_BUILD}")
+
 ## custom output paths
 #set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 #set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -33,7 +36,10 @@ endif()
 
 ## setup shadow options
 option(SHADOW_DEBUG "turn on debugging for verbose program output (default: OFF)" OFF)
+option(SHADOW_PROFILE "build with profile settings (default: OFF)" OFF)
 option(SHADOW_TEST "build tests (default: OFF)" OFF)
+option(SCALLION_DOREFILL "Tor should use refill callbacks (default: OFF)" OFF)
+option(SCALLION_TORPATH "path to custom Tor base directory (default: OFF)" OFF)
 
 ## display selected user options
 MESSAGE(STATUS)
@@ -42,6 +48,8 @@ MESSAGE(STATUS "Current settings: (change with '$ cmake -D<OPTION>=<ON|OFF>')")
 MESSAGE(STATUS "SHADOW_DEBUG=${SHADOW_DEBUG}")
 MESSAGE(STATUS "SHADOW_PROFILE=${SHADOW_PROFILE}")
 MESSAGE(STATUS "SHADOW_TEST=${SHADOW_TEST}")
+MESSAGE(STATUS "SCALLION_DOREFILL=${SCALLION_DOREFILL}")
+MESSAGE(STATUS "SCALLION_TORPATH=${SCALLION_TORPATH}")
 MESSAGE(STATUS "-------------------------------------------------------------------------------")
 MESSAGE(STATUS)
 
@@ -59,6 +67,11 @@ if(SHADOW_PROFILE STREQUAL ON)
     add_definitions(-DDEBUG ${CMAKE_C_FLAGS_DEBUG} -g -pg)
     set(CMAKE_EXE_LINKER_FLAGS ${CMAKE_EXE_LINKER_FLAGS} -pg)
 endif(SHADOW_PROFILE STREQUAL ON)
+
+if(SCALLION_DOREFILL)
+    MESSAGE(STATUS "adding -DDOREFILL")
+    add_definitions(-DDOREFILL)
+endif(SCALLION_DOREFILL)
 
 ## get general includes
 include(CheckIncludeFile)
@@ -98,7 +111,7 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR})
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/shd-config.h DESTINATION include/)
 
 ## compile options
-add_definitions(-Wall --std=c99 -D_SVID_SOURCE -D_XOPEN_SOURCE=600 -fPIC)
+add_definitions(-Wall --std=c99 -D_SVID_SOURCE -D_XOPEN_SOURCE=600 -fPIC) #-D_GNU_SOURCE
 
 ## build source
 add_subdirectory(${SHADOW_SOURCE_DIR})
