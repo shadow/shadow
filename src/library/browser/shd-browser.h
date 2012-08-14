@@ -34,7 +34,7 @@
 #include <glib.h>
 #include <glib/gprintf.h>
 #include <assert.h>
-
+#include <time.h>
 #include <shd-library.h>
 
 #include "shd-html.h"
@@ -45,16 +45,12 @@ enum browser_state {
 	SB_DOCUMENT, SB_EMBEDDED_OBJECTS, SB_DONE
 };
 
-typedef struct browser_connection_s {
-	filegetter_t fg;
-	filegetter_filespec_t fspec;
-	filegetter_serverspec_t sspec;
-} browser_connection_t, *browser_connection_tp;
-
 typedef struct browser_download_tasks_s {
-	/* set that contains the paths that were already downloaded */
-	GHashTable* finished;
-	/* contains paths to download */
+	/* Count of running tasks */
+	gint running;
+	/* set that contains the paths that were already added to the queue */
+	GHashTable* added;
+	/* contains paths to downloads */
 	GQueue* pending;
 } browser_download_tasks_t, *browser_download_tasks_tp;
 
@@ -73,9 +69,25 @@ typedef struct browser_s {
 	/* hostname (gchar*) -> download tasks (browser_connection_tp) */
 	GHashTable* download_tasks;
 	/* contains all open connections (browser_connection_t) */
-	GSList* connections;
+	GHashTable* connections;
 	gint max_concurrent_downloads;
+	/* statistics */
+	size_t bytes_downloaded;
+	size_t bytes_uploaded;
+	size_t cumulative_size;
+	gint document_size;
+	gint embedded_downloads_expected;
+	gint embedded_downloads_completed;
+	struct timespec embedded_start_time;
+	struct timespec embedded_end_time;
 } browser_t, *browser_tp;
+
+typedef struct browser_connection_s {
+	browser_tp b;
+	filegetter_t fg;
+	filegetter_filespec_t fspec;
+	filegetter_serverspec_t sspec;
+} browser_connection_t, *browser_connection_tp;
 
 typedef struct browser_args_s {
 	browser_server_args_t http_server;
@@ -90,6 +102,8 @@ typedef struct browser_activate_result_s {
 } browser_activate_result_t, *browser_activate_result_tp;
 
 void browser_start(browser_tp b, gint argc, gchar** argv);
-void browser_activate(browser_tp b);
+void browser_activate(browser_tp b, gint sockfd);
+void browser_launch(browser_tp b, browser_args_tp args, gint epolld);
+void browser_free(browser_tp b);
 
 #endif /* SHD_BROWSER_H_ */

@@ -30,7 +30,7 @@ static void browserplugin_new(int argc, char* argv[]) {
 }
 
 static void browserplugin_free() {
-	
+	browser_free(&b);
 }
 
 static void browserplugin_activate() {
@@ -44,7 +44,7 @@ static void browserplugin_activate() {
 		} else {
 			/* finally, activate client for every socket thats ready */
 			for(int i = 0; i < nfds; i++) {
-				browser_activate(&b);
+				browser_activate(&b, events[i].data.fd);
 			}
 		}
 	}
@@ -76,8 +76,8 @@ void __shadow_plugin_init__(ShadowlibFunctionTable* shadowlibFuncs) {
 	gboolean success = shadowlibFuncs->registerPlugin(&browser_pluginFunctions, 1,
 			sizeof(browser_t), &b);
 	if(success) {
-		shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "successfully registered filetransfer plug-in state");
+		shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "successfully registered browser plug-in state");
 	} else {
-		shadowlibFuncs->log(G_LOG_LEVEL_INFO, __FUNCTION__, "error registering filetransfer plug-in state");
+		shadowlibFuncs->log(G_LOG_LEVEL_INFO, __FUNCTION__, "error registering browser plug-in state");
 	}
 }

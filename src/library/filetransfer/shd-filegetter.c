@@ -252,15 +252,13 @@ static void filegetter_changeEpoll(filegetter_tp fg, gint eventType){
 enum filegetter_code filegetter_download(filegetter_tp fg, filegetter_serverspec_tp sspec, filegetter_filespec_tp fspec) {
 	enum filegetter_code result = filegetter_set_specs(fg, sspec, fspec);
 
-	if(result == FG_SUCCESS) {
+	/* if connection is still established, we are ready for the HTTP request */
+	if (fg->sspec.persistent && fg->sockd > 0) {
+		fg->state = FG_REQUEST_HTTP;
+		result = FG_SUCCESS;
+	} else if (result == FG_SUCCESS) {
 		/* start the timer for the download */
 		clock_gettime(CLOCK_REALTIME, &fg->download_start);
-
-		/* if connection is still established, we are ready for the HTTP request */
-		if (fg->sspec.persistent && fg->sockd > 0) {
-			fg->state = FG_REQUEST_HTTP;
-			return FG_SUCCESS;
-		}
 		
 		/* if the server spec has socks info, we connect there.
 		 * otherwise we do a direct connection to the fileserver.
@@ -592,7 +590,7 @@ start:
 
 				/* if connection is not supposed to be persistent ... */
 				if (!fg->sspec.persistent) {
-					/* ... thus close it */
+					/* ... close it */
 					filegetter_disconnect(fg);
 				}
 

@@ -52,7 +52,7 @@ gint url_get_parts(const gchar* url, gchar** hostname, gchar** path) {
 		return -1;
 	}
 
-	*hostname = g_strdup(parts[2]);
+	*hostname = g_utf8_strdown(g_strdup(parts[2]), -1);
 	*path = g_strdup(parts[3]);
 	g_strfreev(parts);
 
