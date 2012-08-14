@@ -1,0 +1,66 @@
+?DSIM3
+
+# VERY simple example of running a Shadow simulation of Tor using Scallion plug-in
+
+on(time 0:01){
+	fileserver_vm = load_plugin("lib/libshadow-plugin-fileserver.so");
+	scallion_vm = load_plugin("lib/libshadow-plugin-scallion.so");
+	
+	fileserver_hostname = create_hostname("fileserver.shd");
+
+# authority's hostname begins with a digit to make Tor accept the hostname as an arg to --Address
+	authority_hostname = create_hostname("4uthority.scallion.shd");
+	relay_hostname = create_hostname("relay.scallion.shd");
+	exit_hostname = create_hostname("exit.scallion.shd");
+	proxy_hostname = create_hostname("proxy.scallion.shd");
+	
+	cpu_cdf = generate_cdf(100000000, 20000000, 20000000);
+	bandwidth_cdf = generate_cdf(102400, 0, 0);
+	latency_cdf = generate_cdf(100, 20, 20);
+}
+
+on(time 0:02) {
+	network = create_network(latency_cdf, 1.0);
+}
+
+# create file and directory servers
+on(time 1:00) {
+# file server
+	create_nodes(1, fileserver_vm, network, fileserver_hostname, bandwidth_cdf, NULL, cpu_cdf,
+		"8080 www");
+
+# Tor directory authority		
+	create_nodes(1, scallion_vm, network, authority_hostname, bandwidth_cdf, NULL, cpu_cdf,
+		"dirauth 1024 share/shadow/scallion/dirauth.torrc /tmp/scallion-data share/shadow/scallion/geoip");
+}
+
+# launch tor relays
+on(time 60:00) {
+# Tor exit relays
+	create_nodes(1, scallion_vm, network, exit_hostname, bandwidth_cdf, NULL, cpu_cdf,
+		"exitrelay 1024 share/shadow/scallion/relay.torrc /tmp/scallion-data share/shadow/scallion/geoip");
+
+# Tor relays	
+	create_nodes(1, scallion_vm, network, relay_hostname, bandwidth_cdf, NULL, cpu_cdf,
+		"relay 1024 share/shadow/scallion/relay.torrc /tmp/scallion-data share/shadow/scallion/geoip");
+		
+	create_nodes(1, scallion_vm, network, relay_hostname, bandwidth_cdf, NULL, cpu_cdf,
+		"relay 1024 share/shadow/scallion/relay.torrc /tmp/scallion-data share/shadow/scallion/geoip");
+}
+
+# finally, the onion proxies, and start downloading
+on(time 1200:00) {
+# Tor web client
+#	create_nodes(1, scallion_vm, network, proxy_hostname, bandwidth_cdf, bandwidth_cdf, cpu_cdf,
+#		"client 1024 share/shadow/scallion/client.torrc /tmp/scallion-data share/shadow/scallion/geoip multi share/shadow/scallion/web.spec localhost 9000 none -1");
+
+# Tor bulk client
+	create_nodes(1, scallion_vm, network, proxy_hostname, bandwidth_cdf, bandwidth_cdf, cpu_cdf,
+		"client 1024 share/shadow/scallion/client.torrc /tmp/scallion-data share/shadow/resources/geoip multi share/shadow/scallion/bulk.spec localhost 9000 none -1");
+#	create_nodes(1, scallion_vm, network, proxy_hostname, bandwidth_cdf, bandwidth_cdf, cpu_cdf,
+#		"client 1024 share/shadow/scallion/client.torrc /tmp/scallion-data share/shadow/scallion/geoip single fileserver.shd 8080 localhost 9000 1 /5MiB.urnd");
+
+}
+
+# run the client proxies for an hour
+on(time 4200:00){end();}
