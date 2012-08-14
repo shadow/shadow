@@ -182,6 +182,25 @@ static void scallion_start_torrent(void* arg) {
 	}
 }
 
+static void scallion_start_browser(void* arg) {
+	g_assert(arg);
+	browser_args_tp args = arg;
+	scallion.shadowlibFuncs->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "printfdebugging");
+	scallion.browserEpoll = epoll_create(1);
+	scallion.browser.shadowlib = scallion.shadowlibFuncs;
+	gint sockfd = browser_launch(&scallion.browser, args, scallion.browserEpoll);
+	
+	free(args->http_server.host);
+	free(args->http_server.port);
+	free(args->socks_proxy.host);
+	free(args->socks_proxy.port);
+	free(args->max_concurrent_downloads);
+	free(args->document_path);
+	free(args);
+
+	browser_activate(&scallion.browser, sockfd);
+}
+
 static gchar* _scallion_getHomePath(gchar* path) {
 	GString* sbuffer = g_string_new("");
 	if(g_ascii_strncasecmp(path, "~", 1) == 0) {
@@ -197,13 +216,13 @@ static gchar* _scallion_getHomePath(gchar* path) {
 static void _scallion_new(gint argc, gchar* argv[]) {
 	scallion.shadowlibFuncs->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "scallion_new called");
 
-	gchar* usage = "Scallion USAGE: (\"dirauth\"|\"relay\"|\"exitrelay\"|\"client\"|\"torrent\") consensusbandwidth readbandwidthrate writebandwidthrate torrc_path datadir_base_path geoip_path [args for client or torrent node...]\n";
+	gchar* usage = "Scallion USAGE: (\"dirauth\"|\"relay\"|\"exitrelay\"|\"client\"|\"torrent\"|\"browser\") consensusbandwidth readbandwidthrate writebandwidthrate torrc_path datadir_base_path geoip_path [args for client, torrent or browser node...]\n";
 
 	if(argc < 2) {
 		scallion.shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, usage);
 		return;
 	}
-
+	
 	/* take out program name arg */
 	argc--;
 	argv = &argv[1];
@@ -229,12 +248,14 @@ static void _scallion_new(gint argc, gchar* argv[]) {
 		ntype = VTOR_CLIENT;
 	} else if(g_strncasecmp(tortype, "torrent", strlen("torrent")) == 0) {
 		ntype = VTOR_TORRENT;
+	} else if(g_strncasecmp(tortype, "browser", strlen("browser")) == 0) {
+		ntype = VTOR_BROWSER;
 	} else {
 		scallion.shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "Unrecognized torrent type: %s", usage);
 		return;
 	}
 
-	if(ntype != VTOR_CLIENT && ntype != VTOR_TORRENT && argc != 7) {
+	if(ntype != VTOR_CLIENT && ntype != VTOR_TORRENT && ntype != VTOR_BROWSER && argc != 7) {
 		scallion.shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, usage);
 		return;
 	}
@@ -259,7 +280,6 @@ static void _scallion_new(gint argc, gchar* argv[]) {
 	scallion.stor = scalliontor_new(scallion.shadowlibFuncs, scallion.hostname, ntype, bandwidth, bwrate, bwburst, torrc_path, datadir_path, geoip_path);
 
 	scallion.sfg.fg.sockd = 0;
-
 
 	if(ntype == VTOR_CLIENT) {
 		gchar** argvoffset = argv + 7;
@@ -435,6 +455,20 @@ static void _scallion_new(gint argc, gchar* argv[]) {
 		launch->torrent_args = args;
 
 		scallion.shadowlibFuncs->createCallback(&scallion_start_torrent, launch, 600000);
+	} else if (ntype == VTOR_BROWSER) {
+		scallion.shadowlibFuncs->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "printfdebugging");
+		gchar** argvoffset = argv + 7;
+
+		browser_args_tp args = g_new0(browser_args_t, 1);
+	
+		args->http_server.host = g_strdup(argvoffset[0]);
+		args->http_server.port = g_strdup(argvoffset[1]);
+		args->socks_proxy.host = g_strdup(argvoffset[2]);
+		args->socks_proxy.port = g_strdup(argvoffset[3]);
+		args->max_concurrent_downloads = g_strdup(argvoffset[4]);
+		args->document_path = g_strdup(argvoffset[5]);
+
+		scallion.shadowlibFuncs->createCallback(&scallion_start_browser, args, 600000);
 	}
 
 }
@@ -486,7 +520,17 @@ static void _scallion_notify() {
 		}
 	}
 
-
+	if(scallion.browserEpoll) {
+		struct epoll_event events[10];
+		int nfds = epoll_wait(scallion.browserEpoll, events, 10, 0);
+		if(nfds == -1) {
+			scallion.shadowlibFuncs->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "error in browser epoll_wait");
+		} else {
+			for(int i = 0; i < nfds; i++) {
+				browser_activate(&scallion.browser, events[i].data.fd);
+			}
+		}
+	}
 
 	scalliontor_notify(scallion.stor);
 }
