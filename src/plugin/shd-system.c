@@ -733,10 +733,11 @@ gint system_getAddrInfo(gchar *name, const gchar *service,
 		/* application will expect it in network order */
 		// sa->sin_addr.s_addr = (in_addr_t) htonl((guint32)(*addr));
 		sa->sin_addr.s_addr = address;
+		sa->sin_family = AF_INET; /* libcurl expects this to be set */
 
 		struct addrinfo* ai_out = g_malloc(sizeof(struct addrinfo));
 		ai_out->ai_addr = (struct sockaddr*) sa;
-		ai_out->ai_addrlen = sizeof(in_addr_t);
+		ai_out->ai_addrlen =  sizeof(struct sockaddr_in);
 		ai_out->ai_canonname = NULL;
 		ai_out->ai_family = AF_INET;
 		ai_out->ai_flags = 0;
@@ -841,4 +842,43 @@ gint system_getRandom() {
 	gint r = random_nextInt(node_getRandom(node));
 	_system_switchOutShadowContext(node);
 	return r;
+}
+
+gpointer system_malloc(gsize size) {
+	Node* node = _system_switchInShadowContext();
+	gpointer ptr = malloc(size);
+	tracker_addAllocatedBytes(node_getTracker(node), ptr, size);
+	_system_switchOutShadowContext(node);
+	return ptr;
+}
+
+gpointer system_calloc(gsize nmemb, gsize size) {
+	Node* node = _system_switchInShadowContext();
+	gpointer ptr = calloc(nmemb, size);
+	tracker_addAllocatedBytes(node_getTracker(node), ptr, size);
+	_system_switchOutShadowContext(node);
+	return ptr;
+}
+
+void system_free(gpointer ptr) {
+	Node* node = _system_switchInShadowContext();
+	free(ptr);
+	tracker_removeAllocatedBytes(node_getTracker(node), ptr);
+	_system_switchOutShadowContext(node);
+}
+
+/* needed for multi-threaded openssl
+ * @see '$man CRYPTO_lock'
+ */
+void system_cryptoLockingFunc(int mode, int n, const char *file, int line) {
+	Worker* worker = worker_getPrivate();
+	engine_cryptoLockingFunc(worker->cached_engine, mode, n);
+}
+
+/* needed for multi-threaded openssl
+ * @see '$man CRYPTO_lock'
+ */
+unsigned long system_cryptoIdFunc() {
+	Worker* worker = worker_getPrivate();
+	return ((unsigned long) (worker->thread_id));
 }

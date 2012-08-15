@@ -1,6 +1,6 @@
 #!/bin/bash
 
-gcc -shared -Wl,-soname,testplugin.so -fPIC -o testplugin.so shd-test-plugin.c
+gcc `pkg-config --cflags --libs glib-2.0` -I/home/rob/.shadow/include -shared -Wl,-soname,testplugin.so -fPIC -o testplugin.so shd-test-plugin.c
 cp testplugin.so /tmp/testplugin1.so
 cp testplugin.so /tmp/testplugin2.so
 cp testplugin.so /tmp/testplugin3.so

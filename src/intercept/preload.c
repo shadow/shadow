@@ -566,6 +566,36 @@ void AES_decrypt(const unsigned char *in, unsigned char *out, const void *key) {
 }
 
 /*
+ * const AES_KEY *key
+ * The key parameter has been voided to avoid requiring Openssl headers
+ */
+typedef void (*AES_ctr128_encrypt_fp)(const unsigned char *, unsigned char *, const void *);
+static AES_ctr128_encrypt_fp _AES_ctr128_encrypt = NULL;
+static AES_ctr128_encrypt_fp _intercept_AES_ctr128_encrypt = NULL;
+void AES_ctr128_encrypt(const unsigned char *in, unsigned char *out, const void *key) {
+	AES_ctr128_encrypt_fp* func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "AES_ctr128_encrypt", _AES_ctr128_encrypt, INTERCEPT_PREFIX, _intercept_AES_ctr128_encrypt, 1);
+	PRELOAD_LOOKUP(func, funcName,);
+	(*func)(in, out, key);
+}
+
+/*
+ * const AES_KEY *key
+ * The key parameter has been voided to avoid requiring Openssl headers
+ */
+typedef void (*AES_ctr128_decrypt_fp)(const unsigned char *, unsigned char *, const void *);
+static AES_ctr128_decrypt_fp _AES_ctr128_decrypt = NULL;
+static AES_ctr128_decrypt_fp _intercept_ctr128_AES_decrypt = NULL;
+void AES_ctr128_decrypt(const unsigned char *in, unsigned char *out, const void *key) {
+	AES_ctr128_decrypt_fp* func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "AES_ctr128_decrypt", _AES_ctr128_decrypt, INTERCEPT_PREFIX, _intercept_ctr128_AES_decrypt, 1);
+	PRELOAD_LOOKUP(func, funcName,);
+	(*func)(in, out, key);
+}
+
+/*
  * EVP_CIPHER_CTX *ctx
  * The ctx parameter has been voided to avoid requiring Openssl headers
  */
@@ -668,6 +698,28 @@ const void *RAND_get_rand_method(void) {
 	return (*func)();
 }
 
+typedef void* (*CRYPTO_get_locking_callback_fp)();
+static CRYPTO_get_locking_callback_fp _CRYPTO_get_locking_callback = NULL;
+static CRYPTO_get_locking_callback_fp _intercept_CRYPTO_get_locking_callback = NULL;
+void* CRYPTO_get_locking_callback(void) {
+	CRYPTO_get_locking_callback_fp* func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "CRYPTO_get_locking_callback", _CRYPTO_get_locking_callback, INTERCEPT_PREFIX, _intercept_CRYPTO_get_locking_callback, 1);
+	PRELOAD_LOOKUP(func, funcName, 0);
+	return (*func)();
+}
+
+typedef void* (*CRYPTO_get_id_callback_fp)();
+static CRYPTO_get_id_callback_fp _CRYPTO_get_id_callback = NULL;
+static CRYPTO_get_id_callback_fp _intercept_CRYPTO_get_id_callback = NULL;
+void* CRYPTO_get_id_callback(void) {
+	CRYPTO_get_id_callback_fp* func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "CRYPTO_get_id_callback", _CRYPTO_get_id_callback, INTERCEPT_PREFIX, _intercept_CRYPTO_get_id_callback, 1);
+	PRELOAD_LOOKUP(func, funcName, 0);
+	return (*func)();
+}
+
 typedef int (*rand_fp)(void);
 static rand_fp _rand = NULL;
 static rand_fp _intercept_rand = NULL;
@@ -744,3 +796,43 @@ int srandom_r(unsigned int seed, struct random_data *buf) {
 	PRELOAD_LOOKUP(func, funcName, 0);
 	return (*func)(seed, buf);
 }
+
+/* TODO
+ * The following malloc, calloc, and free were intended to be used for tracking
+ * now much memory the plug-ins are using over time. I ran into some issues
+ * with malloc not working properly during initialization, so skip this for now.
+
+typedef void* (*malloc_fp)(size_t);
+static malloc_fp _malloc = NULL;
+static malloc_fp _intercept_malloc = NULL;
+void *malloc(size_t size) {
+	malloc_fp* func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "malloc", _malloc, INTERCEPT_PREFIX, _intercept_malloc, 1);
+	PRELOAD_LOOKUP(func, funcName, 0);
+	return (*func)(size);
+}
+
+typedef void* (*calloc_fp)(size_t, size_t);
+static calloc_fp _calloc = NULL;
+static calloc_fp _intercept_calloc = NULL;
+void *calloc(size_t nmemb, size_t size) {
+	calloc_fp* func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "calloc", _calloc, INTERCEPT_PREFIX, _intercept_calloc, 1);
+	PRELOAD_LOOKUP(func, funcName, 0);
+	return (*func)(nmemb, size);
+}
+
+typedef int (*free_fp)(void*);
+static free_fp _free = NULL;
+static free_fp _intercept_free = NULL;
+void free(void* ptr) {
+	free_fp* func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "free", _free, INTERCEPT_PREFIX, _intercept_free, 1);
+	PRELOAD_LOOKUP(func, funcName,);
+	(*func)(ptr);
+}
+*/
+

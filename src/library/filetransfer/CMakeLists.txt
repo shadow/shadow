@@ -14,7 +14,12 @@ set(filetransfer_sources
 add_library(shadow-service-filetransfer STATIC ${filetransfer_sources})
 add_dependencies(shadow-service-filetransfer shadow-util)
 target_link_libraries(shadow-service-filetransfer ${RT_LIBRARIES})
-install(TARGETS shadow-service-filetransfer EXPORT shadow-externals DESTINATION lib)
+
+## the following two lines are needed if we want to allow external plug-ins to use ours
+if(SHADOW_EXPORT STREQUAL ON)
+    install(TARGETS shadow-service-filetransfer EXPORT shadow-externals DESTINATION lib)
+    install(DIRECTORY ./ DESTINATION include/ FILES_MATCHING PATTERN "*.h")
+endif(SHADOW_EXPORT STREQUAL ON)
 
 ## a stand-alone shared library that can plug into shadow
 add_library(shadow-plugin-filetransfer MODULE shd-filetransfer-plugin.c)
@@ -25,5 +30,3 @@ install(TARGETS shadow-plugin-filetransfer DESTINATION ${SHADOW_PLUGIN_DIR})
 add_executable(shadow-filetransfer shd-filetransfer-main.c)
 target_link_libraries(shadow-filetransfer shadow-service-filetransfer ${RT_LIBRARIES} ${GLIB_LIBRARIES})
 install(TARGETS shadow-filetransfer DESTINATION bin)
-
-install(DIRECTORY ./ DESTINATION include/ FILES_MATCHING PATTERN "*.h")

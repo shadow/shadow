@@ -105,8 +105,8 @@ void logging_handleLog(const gchar *log_domain, GLogLevelFlags log_level, const 
  *
  * In most cases, it is more useful to call logging_log().
  *
- * @param log_domain a string representing a log domain, normally G_LOG_DOMAIN
- * @param log_level the level at which to log the message, one of GLogLevelFlags
+ * @param msgLogDomain a string representing a log domain, normally G_LOG_DOMAIN
+ * @param msgLogLevel the level at which to log the message, one of GLogLevelFlags
  * @param functionName the name of the calling function, usually __FUNCTION__
  * can be used in the calling progress
  * @param format a printf() style format string for logging
@@ -114,7 +114,7 @@ void logging_handleLog(const gchar *log_domain, GLogLevelFlags log_level, const 
  *
  * @see logging_log()
  */
-void logging_logv(const gchar *log_domain, GLogLevelFlags log_level, const gchar* functionName, const gchar *format, va_list vargs);
+void logging_logv(const gchar *msgLogDomain, GLogLevelFlags msgLogLevel, const gchar* functionName, const gchar *format, va_list vargs);
 
 /**
  * High level logging function for logging messages from within a node context.

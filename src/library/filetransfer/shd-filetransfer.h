@@ -54,7 +54,7 @@ struct _FileTransfer {
 	fileserver_tp server;
 };
 
-FileTransfer** filetransfer_init(FileTransfer* existingFT);
+void filetransfer_init(FileTransfer* existingFT);
 void filetransfer_new(int argc, char* argv[]);
 void filetransfer_free();
 void filetransfer_activate();

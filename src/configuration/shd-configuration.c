@@ -42,11 +42,14 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	c->interfaceBatchTime = 10;
 	c->randomSeed = 1;
 	c->cpuThreshold = 1000;
+	c->heartbeatInterval = 60;
 
 	/* set options to change defaults for the main group */
 	c->mainOptionGroup = g_option_group_new("main", "Application Options", "Various application related options", NULL, NULL);
 	const GOptionEntry mainEntries[] = {
 	  { "log-level", 'l', 0, G_OPTION_ARG_STRING, &(c->logLevelInput), "Log LEVEL above which to filter messages (error < critical < warning < message < info < debug) [message]", "LEVEL" },
+	  { "stat-log-level", 'g', 0, G_OPTION_ARG_STRING, &(c->heartbeatLogLevelInput), "Log LEVEL at which to print node statistics [info]", "LEVEL" },
+	  { "stat-interval", 'h', 0, G_OPTION_ARG_INT, &(c->heartbeatInterval), "Log node statistics every N seconds [60]", "N" },
 	  { "seed", 's', 0, G_OPTION_ARG_INT, &(c->randomSeed), "Initialize randomness for each thread using seed N [1]", "N" },
 	  { "workers", 'w', 0, G_OPTION_ARG_INT, &(c->nWorkerThreads), "Use N worker threads [0]", "N" },
 	  { "version", 'v', 0, G_OPTION_ARG_NONE, &(c->printSoftwareVersion), "Print software version and exit", NULL },
@@ -77,6 +80,8 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	{
 	  { "echo", 0, 0, G_OPTION_ARG_NONE, &(c->runEchoExample), "Run basic echo simulation", NULL },
 	  { "file", 0, 0, G_OPTION_ARG_NONE, &(c->runFileExample), "Run basic HTTP file transfer simulation", NULL },
+	  { "torrent", 0, 0, G_OPTION_ARG_NONE, &(c->runTorrentExample), "Run basic Torrent transfer simulation", NULL },
+	  { "browser", 0, 0, G_OPTION_ARG_NONE, &(c->runBrowserExample), "Run basic Browser simulation", NULL },
 	  { NULL },
 	};
 
@@ -95,8 +100,8 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	/* make sure we have the required arguments. program name is first arg.
 	 * printing the software version requires no other args. running a
 	 * plug-in example also requires no other args. */
-	if(!(c->printSoftwareVersion) && !(c->runEchoExample) && !(c->runFileExample) &&
-			(argc < nRequiredXMLFiles + 1)) {
+	if(!(c->printSoftwareVersion) && !(c->runEchoExample) && !(c->runFileExample) && !(c->runTorrentExample) &&
+			!(c->runBrowserExample) && (argc < nRequiredXMLFiles + 1)) {
 		g_printerr("** Please provide the required parameters **\n");
 		g_printerr("%s", g_option_context_get_help(c->context, TRUE, NULL));
 		configuration_free(c);
@@ -108,6 +113,12 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	}
 	if(c->logLevelInput == NULL) {
 		c->logLevelInput = g_strdup("message");
+	}
+	if(c->heartbeatLogLevelInput == NULL) {
+		c->heartbeatLogLevelInput = g_strdup("info");
+	}
+	if(c->heartbeatInterval < 1) {
+		c->heartbeatInterval = 1;
 	}
 	if(c->initialTCPWindow < 1) {
 		c->initialTCPWindow = 1;
@@ -140,6 +151,7 @@ void configuration_free(Configuration* config) {
 		g_queue_free(config->inputXMLFilenames);
 	}
 	g_free(config->logLevelInput);
+	g_free(config->heartbeatLogLevelInput);
 
 	/* groups are freed with the context */
 	g_option_context_free(config->context);
@@ -148,24 +160,38 @@ void configuration_free(Configuration* config) {
 	g_free(config);
 }
 
-GLogLevelFlags configuration_getLogLevel(Configuration* config) {
+GLogLevelFlags configuration_getLevel(Configuration* config, const gchar* input) {
 	MAGIC_ASSERT(config);
-
-	const gchar* l = (const gchar*) config->logLevelInput;
-
-	if (g_ascii_strcasecmp(l, "error") == 0) {
+	if (g_ascii_strcasecmp(input, "error") == 0) {
 		return G_LOG_LEVEL_ERROR;
-	} else if (g_ascii_strcasecmp(l, "critical") == 0) {
+	} else if (g_ascii_strcasecmp(input, "critical") == 0) {
 		return G_LOG_LEVEL_CRITICAL;
-	} else if (g_ascii_strcasecmp(l, "warning") == 0) {
+	} else if (g_ascii_strcasecmp(input, "warning") == 0) {
 		return G_LOG_LEVEL_WARNING;
-	} else if (g_ascii_strcasecmp(l, "message") == 0) {
+	} else if (g_ascii_strcasecmp(input, "message") == 0) {
 		return G_LOG_LEVEL_MESSAGE;
-	} else if (g_ascii_strcasecmp(l, "info") == 0) {
+	} else if (g_ascii_strcasecmp(input, "info") == 0) {
 		return G_LOG_LEVEL_INFO;
-	} else if (g_ascii_strcasecmp(l, "debug") == 0) {
+	} else if (g_ascii_strcasecmp(input, "debug") == 0) {
 		return G_LOG_LEVEL_DEBUG;
 	} else {
 		return G_LOG_LEVEL_MESSAGE;
 	}
+}
+
+GLogLevelFlags configuration_getLogLevel(Configuration* config) {
+	MAGIC_ASSERT(config);
+	const gchar* l = (const gchar*) config->logLevelInput;
+	return configuration_getLevel(config, l);
+}
+
+GLogLevelFlags configuration_getHeartbeatLogLevel(Configuration* config) {
+	MAGIC_ASSERT(config);
+	const gchar* l = (const gchar*) config->heartbeatLogLevelInput;
+	return configuration_getLevel(config, l);
+}
+
+SimulationTime configuration_getHearbeatInterval(Configuration* config) {
+	MAGIC_ASSERT(config);
+	return config->heartbeatInterval * SIMTIME_ONE_SECOND;
 }

@@ -46,6 +46,18 @@ struct _Node {
 
 	Application* application;
 
+	/* a statistics tracker for in/out bytes, CPU, memory, etc. */
+	Tracker* tracker;
+
+	/* this node's loglevel */
+	GLogLevelFlags logLevel;
+
+	/* flag on whether or not packets are being captured */
+	gchar logPcap;
+	
+	/* Directory to save PCAP files to if packets are being captured */
+	gchar* pcapDir;
+
 	/* all file, socket, and epoll descriptors we know about and track */
 	GHashTable* descriptors;
 	gint descriptorHandleCounter;
@@ -61,7 +73,9 @@ struct _Node {
 
 Node* node_new(GQuark id, Network* network, Software* software, guint32 ip,
 		GString* hostname, guint64 bwDownKiBps, guint64 bwUpKiBps,
-		guint cpuFrequency, gint cpuThreshold, guint nodeSeed) {
+		guint cpuFrequency, gint cpuThreshold, guint nodeSeed,
+		SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel,
+		GLogLevelFlags logLevel, gboolean logPcap, gchar* pcapDir) {
 	Node* node = g_new0(Node, 1);
 	MAGIC_INIT(node);
 
@@ -79,9 +93,11 @@ Node* node_new(GQuark id, Network* network, Software* software, guint32 ip,
 	/* virtual interfaces for managing network I/O */
 	node->interfaces = g_hash_table_new_full(g_direct_hash, g_direct_equal,
 			NULL, (GDestroyNotify) networkinterface_free);
-	NetworkInterface* ethernet = networkinterface_new(network, id, hostname->str, bwDownKiBps, bwUpKiBps);
+	NetworkInterface* ethernet = networkinterface_new(network, id, hostname->str, bwDownKiBps, bwUpKiBps, logPcap, pcapDir);
 	g_hash_table_replace(node->interfaces, GUINT_TO_POINTER((guint)id), ethernet);
-	NetworkInterface* loopback = networkinterface_new(NULL, (GQuark)htonl(INADDR_LOOPBACK), "loopback", G_MAXUINT32, G_MAXUINT32);
+	GString *loopbackName = g_string_new("");
+	g_string_append_printf(loopbackName, "%s-loopback", hostname->str);
+	NetworkInterface* loopback = networkinterface_new(NULL, (GQuark)htonl(INADDR_LOOPBACK), loopbackName->str, G_MAXUINT32, G_MAXUINT32, logPcap, pcapDir);
 	g_hash_table_replace(node->interfaces, GUINT_TO_POINTER((guint)htonl(INADDR_LOOPBACK)), loopback);
 	node->defaultInterface = ethernet;
 
@@ -97,6 +113,10 @@ Node* node_new(GQuark id, Network* network, Software* software, guint32 ip,
 
 	node->cpu = cpu_new(cpuFrequency, cpuThreshold);
 	node->random = random_new(nodeSeed);
+	node->tracker = tracker_new(heartbeatInterval, heartbeatLogLevel);
+	node->logLevel = logLevel;
+	node->logPcap = logPcap;
+	node->pcapDir = pcapDir;
 
 	info("Created Node '%s', ip %s, %u bwUpKiBps, %u bwDownKiBps, %lu cpuFrequency, %i cpuThreshold, %u seed",
 			g_quark_to_string(node->id), networkinterface_getIPName(node->defaultInterface),
@@ -123,6 +143,7 @@ void node_free(gpointer data) {
 	g_free(node->name);
 
 	cpu_free(node->cpu);
+	tracker_free(node->tracker);
 
 	g_mutex_free(node->lock);
 
@@ -145,6 +166,11 @@ void node_pushMail(Node* node, Event* event) {
 	MAGIC_ASSERT(event);
 
 	asyncpriorityqueue_push(node->eventMailbox, event);
+}
+
+Event* node_peekMail(Node* node) {
+	MAGIC_ASSERT(node);
+	return asyncpriorityqueue_peek(node->eventMailbox);
 }
 
 Event* node_popMail(Node* node) {
@@ -796,6 +822,8 @@ gint node_sendUserData(Node* node, gint handle, gconstpointer buffer, gsize nByt
 	if(n > 0) {
 		/* user is writing some bytes. */
 		*bytesCopied = (gsize)n;
+	} else if(n == -2) {
+		return ENOTCONN;
 	} else if(n < 0) {
 		return EWOULDBLOCK;
 	}
@@ -843,6 +871,8 @@ gint node_receiveUserData(Node* node, gint handle, gpointer buffer, gsize nBytes
 	if(n > 0) {
 		/* user is reading some bytes. */
 		*bytesCopied = (gsize)n;
+	} else if(n == -2) {
+		return ENOTCONN;
 	} else if(n < 0) {
 		return EWOULDBLOCK;
 	}
@@ -868,4 +898,19 @@ gint node_closeUser(Node* node, gint handle) {
 	descriptor_close(descriptor);
 
 	return 0;
+}
+
+Tracker* node_getTracker(Node* node) {
+	MAGIC_ASSERT(node);
+	return node->tracker;
+}
+
+GLogLevelFlags node_getLogLevel(Node* node) {
+	MAGIC_ASSERT(node);
+	return node->logLevel;
+}
+
+gchar node_isLoggingPcap(Node *node) {
+	MAGIC_ASSERT(node);
+	return node->logPcap;
 }

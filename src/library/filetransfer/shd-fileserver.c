@@ -234,8 +234,8 @@ start:
 			gint space = sizeof(c->request.buf) - c->request.buf_write_offset - 1;
 			if(space <= 0) {
 				/* the request wont fit in our buffer, just give up */
-				fileserve_connection_close(fs, c);
-				return FS_ERR_BUFSPACE;
+				c->state = FS_REPLY_404_START;
+				goto start;
 			}
 
 			ssize_t bytes = recv(c->sockd, c->request.buf + c->request.buf_write_offset, space, 0);
@@ -366,8 +366,16 @@ start:
 
 			c->reply.buf_write_offset = bytes;
 
-			/* now we need the file, follow through */
-			c->state = FS_REPLY_FILE_CONTINUE;
+			if (c->reply.f_length == 0) {
+				/* File is empty, don't try to send contents */
+				fclose(c->reply.f);
+				c->reply.f = NULL;
+				c->state = FS_REPLY_SEND;
+				goto start;
+			} else {
+				/* We need to read and send the file, follow through */
+				c->state = FS_REPLY_FILE_CONTINUE;
+			}
 		}
 
 		case FS_REPLY_FILE_CONTINUE: {

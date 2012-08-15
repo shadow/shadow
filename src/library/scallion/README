@@ -1,0 +1,99 @@
+Scallion (c) 2010-2012 Rob Jansen jansen@cs.umn.edu
+
+A. Dependencies
+---------------
+Scallion requires: 
+    gcc
+    make
+    zlib
+    automake
+    autoconf
+    Python 2.7
+    CMake >= 2.6
+    GLib >= 2.28.8
+    Shadow >= 1.3.0
+    
+On Ubuntu, use something like:
+$ sudo apt-get -y install gcc make zlib-bin zlib1g-dev automake autoconf python2.7 cmake libglib2.0 libglib2.0-dev 
+
+On Fedora, use something like:
+$ sudo yum install -y gcc make zlib zlib-devel automake autoconf python cmake glib2 glib2-devel
+
+Scallion also requires locally-built versions of:
+    OpenSSL (see below)
+    Libevent2 (see below)
+
+OpenSSL and Libevent2 may require special args, depending on your system. See
+contrib/insalldeps.sh to install them to "~/.shadow/". In most cases, simply run
+the following from the root scallion directory:
+$ ./contrib/installdeps.sh
+
+B. Setup
+--------
+The setup.py script will help you configure, build, and install scallion. It has 
+an extensive help menu which can be accessed with:
+$ python setup.py --help
+
+The default and recommended setup is to install to ~/.shadow as follows:
+$ python setup.py build
+$ python setup.py install
+
+All build output is generated out-of-source, by default to the ./build directory.
+The setup.py script is a wrapper to cmake and make. Using cmake and make directly
+is also possible, but strongly discouraged. Installing scallion installs a
+wrapper script for Shadow that assists in running the scallion plug-in to Shadow. 
+
+C. Running Scallion
+-------------------
+Scallion works by running as a Shadow plug-in, launching a Tor network, and
+using the file transfer plugin from Shadow to download files through the private
+testing Tor network. The easiest way to get started is to use the included
+example, and modify as necessary. Everything that is needed is included in
+the resource/ directory.
+
+Small Test Case
+
+To ensure things are working, an example experiment may be run as follows:
+$ cd resource
+$ scallion -i scallion.xml
+
+Output is stored in the data directory, relative to the working directory when 
+running scallion. Shadow and Tor output from all nodes is stored in 
+data/scallion.log, and CPU and other system information is logged over the 
+experiment using dstat to data/dstat.log.
+
+The example experiment should finish within a minute or two. The following 
+should result in all 5 Tor nodes successfully bootstrapping.
+$ grep "Bootstrapped 100" data/scallion.log
+
+The following should result in 10 completed downloads. You'll probably want to
+use this command or something similar to extract performance results after most
+experiments:
+$ grep "fg-download-complete" data/scallion.log
+
+Non-trivial Shadow-Tor Networks
+
+The resource directory also contains several pre-generated Shadow-Tor network
+configurations which may be useful for getting started. These files have been
+generated using data from metrics.torporject.org, and compared to Tor network
+performance statistics to ensure accuracy. The following is a rough
+approximation of the memory requirements of each setup:
+
+tiny:   < 4GB, 20 relays, 200 clients (95% web, 5% bulk)
+small:  < 16GB, 50 relays, 500 clients (95% web, 5% bulk)
+medium: < 32GB, 100 relays, 1000 clients (95% web, 5% bulk)
+large:  < 64GB, 250 relays, 2500 clients (95% web, 5% bulk)
+jumbo:  < 128GB, 500 relays, 5000 clients (95% web, 5% bulk)
+
+If you would like to generate your own topologies, please see the included
+generate script (you'll need to download some Tor data as well):
+$ python contrib/generate.py --help
+
+You'll then be interested in the following URLs:
+http://bolobolo.torservers.net/tor/status-vote/current/consensus
+http://metrics.torproject.org/data/server-descriptors-2012-01.tar.bz2
+http://metrics.torproject.org/csv/direct-users.csv
+
+You'll also need to parse the alexa data with contrib/parsealexa.py, and pass
+the path to the output file as input to the contrib/generate.py script:
+http://s3.amazonaws.com/alexa-static/top-1m.csv.zip

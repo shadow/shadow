@@ -52,6 +52,7 @@ void engine_notifyNodeProcessed(Engine* engine);
 Configuration* engine_getConfig(Engine* engine);
 GTimer* engine_getRunTimer(Engine* engine);
 GStaticPrivate* engine_getWorkerKey(Engine* engine);
+GStaticPrivate* engine_getPreloadKey(Engine* engine);
 Internetwork* engine_getInternet(Engine* engine);
 
 void engine_setKillTime(Engine* engine, SimulationTime endTime);
@@ -64,5 +65,8 @@ void engine_pushEvent(Engine* engine, Event* event);
 gint engine_nextRandomInt(Engine* engine);
 gdouble engine_nextRandomDouble(Engine* engine);
 guint engine_getRawCPUFrequency(Engine* engine);
+
+gboolean engine_cryptoSetup(Engine* engine, gint numLocks);
+void engine_cryptoLockingFunc(Engine* engine, int mode, int n);
 
 #endif /* SHD_ENGINE_H_ */

@@ -21,9 +21,39 @@
 
 #include "shadow.h"
 
+struct _Internetwork {
+	/** if set, dont do anything that changes our data */
+	gboolean isReadOnly;
+
+	/** all the nodes in our simulation, by ID */
+	GHashTable* nodes;
+
+	/** all the networks in our simulation, by ID */
+	GHashTable* networks;
+	/** contains the same networks as above, but keyed by IP */
+	GHashTable* networksByIP;
+
+	/** hostnames and IPs */
+	GHashTable* nameByIp;
+	GHashTable* ipByName;
+
+	/** the maximum latency of all links between all networks we are tracking */
+	gdouble maximumGlobalLatency;
+
+	/** the minimum latency of all links between all networks we are tracking */
+	gdouble minimumGlobalLatency;
+
+	/** used for IP generation */
+	guint32 ipCounter;
+
+	MAGIC_DECLARE;
+};
+
 Internetwork* internetwork_new() {
 	Internetwork* internet = g_new0(Internetwork, 1);
 	MAGIC_INIT(internet);
+
+	/* create our data structures, with the correct destructors */
 
 	internet->nodes = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, node_free);
 	internet->networks = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, network_free);
@@ -69,11 +99,12 @@ static void _internetwork_trackLatency(Internetwork* internet, Link* link) {
 	internet->minimumGlobalLatency = MIN(internet->minimumGlobalLatency, (latency-jitter));
 }
 
-void internetwork_createNetwork(Internetwork* internet, GQuark networkID, guint64 bandwidthdown, guint64 bandwidthup) {
+void internetwork_createNetwork(Internetwork* internet, GQuark networkID,
+		guint64 bandwidthdown, guint64 bandwidthup, gdouble packetloss) {
 	MAGIC_ASSERT(internet);
 	g_assert(!internet->isReadOnly);
 
-	Network* network = network_new(networkID, bandwidthdown, bandwidthup);
+	Network* network = network_new(networkID, bandwidthdown, bandwidthup, packetloss);
 	g_hash_table_replace(internet->networks, network_getIDReference(network), network);
 }
 
@@ -130,6 +161,12 @@ Network* internetwork_lookupNetwork(Internetwork* internet, in_addr_t ip) {
 
 static guint32 _internetwork_generateIP(Internetwork* internet) {
 	MAGIC_ASSERT(internet);
+
+	/* FIXME: there are many more restricted IP ranges
+	 * e.g. 192.168..., 10.0.0.0/8, etc.
+	 * there is an RFC that defines these.
+	 */
+
 	internet->ipCounter++;
 	while(internet->ipCounter == htonl(INADDR_NONE) ||
 			internet->ipCounter == htonl(INADDR_ANY) ||
@@ -141,17 +178,21 @@ static guint32 _internetwork_generateIP(Internetwork* internet) {
 	return internet->ipCounter;
 }
 
-void internetwork_createNode(Internetwork* internet, GQuark nodeID,
+/* XXX: return type is "Node*" */
+gpointer internetwork_createNode(Internetwork* internet, GQuark nodeID,
 		Network* network, Software* software, GString* hostname,
-		guint64 bwDownKiBps, guint64 bwUpKiBps, guint cpuFrequency, gint cpuThreshold, guint nodeSeed) {
+		guint64 bwDownKiBps, guint64 bwUpKiBps, guint cpuFrequency, gint cpuThreshold,
+		guint nodeSeed, SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel,
+		GLogLevelFlags logLevel, gboolean logPcap, gchar* pcapDir) {
 	MAGIC_ASSERT(internet);
 	g_assert(!internet->isReadOnly);
 
 	guint32 ip = _internetwork_generateIP(internet);
 	ip = (guint32) nodeID;
-	Node* node = node_new(nodeID, network, software, ip, hostname, bwDownKiBps, bwUpKiBps, cpuFrequency, cpuThreshold, nodeSeed);
+	Node* node = node_new(nodeID, network, software, ip, hostname, bwDownKiBps, bwUpKiBps,
+			cpuFrequency, cpuThreshold, nodeSeed, heartbeatInterval, heartbeatLogLevel,
+			logLevel, logPcap, pcapDir);
 	g_hash_table_replace(internet->nodes, GUINT_TO_POINTER((guint)nodeID), node);
-
 
 	gchar* mapName = g_strdup((const gchar*) hostname->str);
 	guint32* mapIP = g_new0(guint32, 1);
@@ -159,9 +200,12 @@ void internetwork_createNode(Internetwork* internet, GQuark nodeID,
 	g_hash_table_replace(internet->networksByIP, mapIP, network);
 	g_hash_table_replace(internet->ipByName, mapName, mapIP);
 	g_hash_table_replace(internet->nameByIp, mapIP, mapName);
+
+	return node;
 }
 
-gpointer internetwork_getNode(Internetwork* internet, GQuark nodeID) { /* XXX: return type is "Node*" */
+/* XXX: return type is "Node*" */
+gpointer internetwork_getNode(Internetwork* internet, GQuark nodeID) {
 	MAGIC_ASSERT(internet);
 	return (Node*) g_hash_table_lookup(internet->nodes, GUINT_TO_POINTER((guint)nodeID));
 }

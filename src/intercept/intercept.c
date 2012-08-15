@@ -54,6 +54,22 @@ void intercept_AES_decrypt(const guchar *in, guchar *out, const void *key) {
 }
 
 /*
+ * const AES_KEY *key
+ * The key parameter has been voided to avoid requiring Openssl headers
+ */
+void intercept_AES_ctr128_encrypt(const guchar *in, guchar *out, const void *key) {
+	return;
+}
+
+/*
+ * const AES_KEY *key
+ * The key parameter has been voided to avoid requiring Openssl headers
+ */
+void intercept_AES_ctr128_decrypt(const guchar *in, guchar *out, const void *key) {
+	return;
+}
+
+/*
  * EVP_CIPHER_CTX *ctx
  * The ctx parameter has been voided to avoid requiring Openssl headers
  */
@@ -106,8 +122,24 @@ static const struct {
 	intercept_RAND_status
 };
 
-const void *intercept_RAND_get_rand_method(void) {
+const void* intercept_RAND_get_rand_method(void) {
 	return (const void *)(&intercept_customRandMethod);
+}
+
+static void _intercept_cryptoLockingFunc(int mode, int n, const char *file, int line) {
+	return system_cryptoLockingFunc(mode, n, file, line);
+}
+
+void* intercept_CRYPTO_get_locking_callback() {
+	return (void *)(&_intercept_cryptoLockingFunc);
+}
+
+static unsigned int _intercept_cryptoIdFunc() {
+	return system_cryptoIdFunc();
+}
+
+void* intercept_CRYPTO_get_id_callback() {
+	return (void *)(&_intercept_cryptoIdFunc);
 }
 
 int intercept_rand() {
@@ -330,4 +362,20 @@ gint intercept_epoll_wait(gint epfd, struct epoll_event *events,
 gint intercept_epoll_pwait(gint epfd, struct epoll_event *events,
 			gint maxevents, gint timeout, const sigset_t *ss) {
 	return system_epollPWait(epfd, events, maxevents, timeout, ss);
+}
+
+/**
+ * memory management
+ */
+
+gpointer intercept_malloc(gsize size) {
+	return system_malloc(size);
+}
+
+gpointer intercept_calloc(gsize nmemb, gsize size) {
+	return system_calloc(nmemb, size);
+}
+
+void intercept_free(gpointer ptr) {
+	return system_free(ptr);
 }

@@ -51,12 +51,23 @@ static void service_filegetter_log(service_filegetter_tp sfg, enum service_fileg
 
 static void service_filegetter_report(service_filegetter_tp sfg, enum service_filegetter_loglevel level, gchar* preamble, filegetter_filestats_tp stats, gint current_download, gint total_downloads) {
 	if(preamble != NULL && stats != NULL) {
-		service_filegetter_log(sfg, level, "%s got first bytes in %lu.%.3d seconds and %zu of %zu bytes in %lu.%.3d seconds (download %i of %i)",
+		GString* reportStringBuffer = g_string_new("");
+
+		g_string_printf(reportStringBuffer, "%s got first bytes in %lu.%.3d seconds and %zu of %zu bytes in %lu.%.3d seconds (download %i",
 				preamble,
 				stats->first_byte_time.tv_sec, (gint)(stats->first_byte_time.tv_nsec / 1000000),
 				stats->bytes_downloaded, stats->bytes_expected,
 				stats->download_time.tv_sec, (gint) (stats->download_time.tv_nsec / 1000000),
-				current_download, total_downloads);
+				current_download);
+
+		if(total_downloads > 0) {
+			g_string_append_printf(reportStringBuffer, " of %i)", total_downloads);
+		} else {
+			g_string_append_printf(reportStringBuffer, ")");
+		}
+
+		service_filegetter_log(sfg, level, "%s", reportStringBuffer->str);
+		g_string_free(reportStringBuffer, TRUE);
 	}
 }
 
@@ -114,6 +125,7 @@ static service_filegetter_download_tp service_filegetter_get_download_from_args(
 	/* validation successful */
 	service_filegetter_download_tp dl = calloc(1, sizeof(service_filegetter_download_t));
 	strncpy(dl->fspec.remote_path, filepath, sizeof(dl->fspec.remote_path));
+	strncpy(dl->sspec.http_hostname, http_server->host, sizeof(dl->sspec.http_hostname));
 	dl->sspec.http_addr = http_addr;
 	dl->sspec.http_port = http_port;
 	dl->sspec.socks_addr = socks_addr;
@@ -411,15 +423,24 @@ reactivate:;
 
 	enum filegetter_code result = filegetter_activate(&sfg->fg);
 
-	if(result == FG_ERR_FATAL) {
-		/* it had to shut down, lets try again */
-		service_filegetter_log(sfg, SFG_NOTICE, "filegetter shutdown due to internal fatal error... restarting");
+	if(result == FG_ERR_FATAL || result == FG_ERR_SOCKSCONN) {
+		/* it had to shut down */
+		service_filegetter_log(sfg, SFG_NOTICE, "filegetter shutdown due to error '%s'... retrying in 60 seconds",
+				filegetter_codetoa(result));
 		filegetter_shutdown(&sfg->fg);
 		filegetter_start(&sfg->fg, sfg->fg.epolld);
-		service_filegetter_download_next(sfg);
-		goto reactivate;
+
+		/* set wakeup timer and call the sleep function  */
+		sfg->state = SFG_THINKING;
+		clock_gettime(CLOCK_REALTIME, &sfg->wakeup);
+		sfg->wakeup.tv_sec += 60;
+		(*sfg->sleep_cb)(sfg, 60);
+		service_filegetter_log(sfg, SFG_NOTICE, "[fg-pause] pausing for 60 seconds");
+
+		return FG_ERR_WOULDBLOCK;
 	} else if(result != FG_OK_200 && result != FG_ERR_WOULDBLOCK) {
-		service_filegetter_log(sfg, SFG_CRITICAL, "filegetter shutdown due to protocol error...");
+		service_filegetter_log(sfg, SFG_CRITICAL, "filegetter shutdown due to protocol error '%s'...",
+				filegetter_codetoa(result));
 		filegetter_shutdown(&sfg->fg);
 		return result;
 	}

@@ -26,6 +26,7 @@ struct _CreateNetworkAction {
 	GQuark id;
 	guint64 bandwidthdown;
 	guint64 bandwidthup;
+	gdouble packetloss;
 	MAGIC_DECLARE;
 };
 
@@ -35,7 +36,8 @@ RunnableFunctionTable createnetwork_functions = {
 	MAGIC_VALUE
 };
 
-CreateNetworkAction* createnetwork_new(GString* name, guint64 bandwidthdown, guint64 bandwidthup) {
+CreateNetworkAction* createnetwork_new(GString* name, guint64 bandwidthdown,
+		guint64 bandwidthup, gdouble packetloss) {
 	g_assert(name);
 	CreateNetworkAction* action = g_new0(CreateNetworkAction, 1);
 	MAGIC_INIT(action);
@@ -45,6 +47,7 @@ CreateNetworkAction* createnetwork_new(GString* name, guint64 bandwidthdown, gui
 	action->id = g_quark_from_string((const gchar*)name->str);
 	action->bandwidthdown = bandwidthdown;
 	action->bandwidthup = bandwidthup;
+	action->packetloss = packetloss;
 
 	return action;
 }
@@ -52,7 +55,8 @@ CreateNetworkAction* createnetwork_new(GString* name, guint64 bandwidthdown, gui
 void createnetwork_run(CreateNetworkAction* action) {
 	MAGIC_ASSERT(action);
 
-	internetwork_createNetwork(worker_getInternet(), action->id, action->bandwidthdown, action->bandwidthup);
+	internetwork_createNetwork(worker_getInternet(), action->id,
+			action->bandwidthdown, action->bandwidthup, action->packetloss);
 }
 
 void createnetwork_free(CreateNetworkAction* action) {

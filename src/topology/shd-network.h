@@ -24,26 +24,115 @@
 
 #include "shadow.h"
 
+/**
+ *
+ */
 typedef struct _Network Network;
 
-Network* network_new(GQuark id, guint64 bandwidthdown, guint64 bandwidthup);
+/**
+ *
+ * @param id
+ * @param bandwidthdown
+ * @param bandwidthup
+ * @return
+ */
+Network* network_new(GQuark id, guint64 bandwidthdown, guint64 bandwidthup, gdouble packetloss);
+
+/**
+ *
+ * @param data
+ */
 void network_free(gpointer data);
 
+/**
+ *
+ * @param network
+ * @return
+ */
 GQuark* network_getIDReference(Network* network);
+
+/**
+ *
+ * @param network
+ * @return
+ */
 guint64 network_getBandwidthUp(Network* network);
+
+/**
+ *
+ * @param network
+ * @return
+ */
 guint64 network_getBandwidthDown(Network* network);
 
+/**
+ *
+ * @param a
+ * @param b
+ * @param user_data
+ * @return
+ */
 gint network_compare(gconstpointer a, gconstpointer b, gpointer user_data);
+
+/**
+ *
+ * @param a
+ * @param b
+ * @return
+ */
 gboolean network_isEqual(Network* a, Network* b);
 
+/**
+ *
+ * @param network
+ * @param outgoingLink
+ */
 void network_addOutgoingLink(Network* network, gpointer outgoingLink); /* XXX: type is "Link*" */
+
+/**
+ *
+ * @param network
+ * @param incomingLink
+ */
 void network_addIncomingLink(Network* network, gpointer incomingLink); /* XXX: type is "Link*" */
 
+/**
+ *
+ * @param sourceNetwork
+ * @param destinationNetwork
+ * @return
+ */
 gdouble network_getLinkReliability(Network* sourceNetwork, Network* destinationNetwork);
+
+/**
+ *
+ * @param sourceNetwork
+ * @param destinationNetwork
+ * @param percentile
+ * @return
+ */
 gdouble network_getLinkLatency(Network* sourceNetwork, Network* destinationNetwork, gdouble percentile);
+
+/**
+ *
+ * @param sourceNetwork
+ * @param destinationNetwork
+ * @return
+ */
 gdouble network_sampleLinkLatency(Network* sourceNetwork, Network* destinationNetwork);
 
+/**
+ *
+ * @param sourceNetwork
+ * @param packet
+ */
 void network_schedulePacket(Network* sourceNetwork, Packet* packet);
+
+/**
+ *
+ * @param network
+ * @param packet
+ */
 void network_scheduleRetransmit(Network* network, Packet* packet);
 
 #endif /* SHD_NETWORK_H_ */

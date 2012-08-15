@@ -66,9 +66,38 @@ static const gchar* _logging_getLogDomainString(const gchar *log_domain) {
 	return domains;
 }
 
+static gboolean _logging_messageIsFiltered(const gchar *msgLogDomain, GLogLevelFlags msgLogLevel) {
+	Worker* w = worker_getPrivate();
+
+	/* check the local node log level first */
+	gboolean isNodeLevelSet = FALSE;
+	if(w->cached_node) {
+		GLogLevelFlags nodeLevel = node_getLogLevel(w->cached_node);
+		if(nodeLevel) {
+			isNodeLevelSet = TRUE;
+			if(msgLogLevel > nodeLevel) {
+				return TRUE;
+			}
+		}
+	}
+
+	/* only check the global config if the node didnt have a local setting */
+	if(!isNodeLevelSet && w->cached_engine) {
+		Configuration* c = engine_getConfig(w->cached_engine);
+		if(c && (msgLogLevel > configuration_getLogLevel(c))) {
+			return TRUE;
+		}
+	}
+
+	return FALSE;
+}
+
+/* this func is called whenever g_logv is called, not just in our log code */
 void logging_handleLog(const gchar *log_domain, GLogLevelFlags log_level, const gchar *message, gpointer user_data) {
-	GLogLevelFlags* configuredLogLevel = user_data;
-	if(log_level > *configuredLogLevel) {
+	/* GLogLevelFlags* configuredLogLevel = user_data; */
+
+	/* check again if the message should be filtered */
+	if(_logging_messageIsFiltered(log_domain, log_level)) {
 		return;
 	}
 
@@ -86,9 +115,15 @@ void logging_handleLog(const gchar *log_domain, GLogLevelFlags log_level, const 
 	}
 }
 
-void logging_logv(const gchar *log_domain, GLogLevelFlags log_level, const gchar* functionName, const gchar *format, va_list vargs) {
+void logging_logv(const gchar *msgLogDomain, GLogLevelFlags msgLogLevel,
+		const gchar* functionName, const gchar *format, va_list vargs) {
 	/* this is called by worker threads, so we have access to worker */
 	Worker* w = worker_getPrivate();
+
+	/* see if we can avoid some work because the message is filtered anyway */
+	if(_logging_messageIsFiltered(msgLogDomain, msgLogLevel)) {
+		return;
+	}
 
 	/* format the simulation time if we are running an event */
 	GString* clockStringBuffer = g_string_new("");
@@ -128,8 +163,8 @@ void logging_logv(const gchar *log_domain, GLogLevelFlags log_level, const gchar
 	g_string_printf(newLogFormatBuffer, "[thread-%i] %s [%s-%s] [%s] [%s] %s",
 			w->thread_id,
 			clockString,
-			_logging_getLogDomainString(log_domain),
-			_logging_getLogLevelString(log_level),
+			_logging_getLogDomainString(msgLogDomain),
+			_logging_getLogLevelString(msgLogLevel),
 			nodeString,
 			functionString,
 			format
@@ -137,7 +172,7 @@ void logging_logv(const gchar *log_domain, GLogLevelFlags log_level, const gchar
 
 	/* get the new format out of our string buffer and log it */
 	gchar* newLogFormat = g_string_free(newLogFormatBuffer, FALSE);
-	g_logv(log_domain, log_level, newLogFormat, vargs);
+	g_logv(msgLogDomain, msgLogLevel, newLogFormat, vargs);
 
 	/* cleanup */
 	g_free(newLogFormat);

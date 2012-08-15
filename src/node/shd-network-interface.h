@@ -27,7 +27,7 @@
 typedef struct _NetworkInterface NetworkInterface;
 
 NetworkInterface* networkinterface_new(Network* network, GQuark address, gchar* name,
-		guint64 bwDownKiBps, guint64 bwUpKiBps);
+		guint64 bwDownKiBps, guint64 bwUpKiBps, gboolean logPcap, gchar* pcapDir);
 void networkinterface_free(NetworkInterface* interface);
 
 in_addr_t networkinterface_getIPAddress(NetworkInterface* interface);
