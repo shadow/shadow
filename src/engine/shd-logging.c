@@ -94,7 +94,7 @@ static gboolean _logging_messageIsFiltered(const gchar *msgLogDomain, GLogLevelF
 
 /* this func is called whenever g_logv is called, not just in our log code */
 void logging_handleLog(const gchar *log_domain, GLogLevelFlags log_level, const gchar *message, gpointer user_data) {
-	GLogLevelFlags* configuredLogLevel = user_data;
+	/* GLogLevelFlags* configuredLogLevel = user_data; */
 
 	/* check again if the message should be filtered */
 	if(_logging_messageIsFiltered(log_domain, log_level)) {
