@@ -23,7 +23,7 @@
 
 // this should only appear if Tor > 0.2.3.5-alpha
 // handled in setup.py and CMakelists.txt
-//#define DOREFILL
+//#define SCALLION_DOREFILL
 
 /* replacement for torflow in Tor. for now just grab the bandwidth we configured
  * in the XML and use that as the measured bandwidth value. since our configured
@@ -126,7 +126,7 @@ static void _scalliontor_secondCallback(ScallionTor* stor) {
 	}
 }
 
-#ifdef DOREFILL
+#ifdef SCALLION_DOREFILL
 static void _scalliontor_refillCallback(ScallionTor* stor) {
 	scalliontor_notify(stor);
 
@@ -158,7 +158,7 @@ gint scalliontor_start(ScallionTor* stor, gint argc, gchar *argv[]) {
 	  /* load the private keys, if we're supposed to have them, and set up the
 	   * TLS context. */
 	gpointer idkey;
-#ifdef DOREFILL // FIXME this doesnt change in 0.2.3.5-alpha like DOREFILL is meant to (not sure when it changed)
+#ifdef SCALLION_DOREFILL // FIXME this doesnt change in 0.2.3.5-alpha like SCALLION_DOREFILL is meant to (not sure when it changed)
 	idkey = client_identitykey;
 #else
 	idkey = identitykey;
@@ -224,7 +224,7 @@ gint scalliontor_start(ScallionTor* stor, gint argc, gchar *argv[]) {
 	}
 
 
-#ifdef DOREFILL
+#ifdef SCALLION_DOREFILL
 #ifndef USE_BUFFEREVENTS
   if (!refill_timer) {
     int msecs = get_options()->TokenBucketRefillInterval;

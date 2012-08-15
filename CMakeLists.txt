@@ -38,6 +38,7 @@ endif()
 option(SHADOW_DEBUG "turn on debugging for verbose program output (default: OFF)" OFF)
 option(SHADOW_PROFILE "build with profile settings (default: OFF)" OFF)
 option(SHADOW_TEST "build tests (default: OFF)" OFF)
+option(SHADOW_EXPORT "export service libraries and headers (default: OFF)" OFF)
 option(SCALLION_DOREFILL "Tor should use refill callbacks (default: OFF)" OFF)
 option(SCALLION_TORPATH "path to custom Tor base directory (default: OFF)" OFF)
 
@@ -48,6 +49,7 @@ MESSAGE(STATUS "Current settings: (change with '$ cmake -D<OPTION>=<ON|OFF>')")
 MESSAGE(STATUS "SHADOW_DEBUG=${SHADOW_DEBUG}")
 MESSAGE(STATUS "SHADOW_PROFILE=${SHADOW_PROFILE}")
 MESSAGE(STATUS "SHADOW_TEST=${SHADOW_TEST}")
+MESSAGE(STATUS "SHADOW_EXPORT=${SHADOW_EXPORT}")
 MESSAGE(STATUS "SCALLION_DOREFILL=${SCALLION_DOREFILL}")
 MESSAGE(STATUS "SCALLION_TORPATH=${SCALLION_TORPATH}")
 MESSAGE(STATUS "-------------------------------------------------------------------------------")
@@ -68,9 +70,14 @@ if(SHADOW_PROFILE STREQUAL ON)
     set(CMAKE_EXE_LINKER_FLAGS ${CMAKE_EXE_LINKER_FLAGS} -pg)
 endif(SHADOW_PROFILE STREQUAL ON)
 
+if(SHADOW_EXPORT STREQUAL ON)
+    ## the actual work happens in the CMakeLists files in each plug-in directory
+    MESSAGE(STATUS "will export Shadow plug-in service libraries and headers")
+endif(SHADOW_EXPORT STREQUAL ON)
+
 if(SCALLION_DOREFILL)
-    MESSAGE(STATUS "adding -DDOREFILL")
-    add_definitions(-DDOREFILL)
+    MESSAGE(STATUS "adding -DSCALLION_DOREFILL")
+    add_definitions(-DSCALLION_DOREFILL)
 endif(SCALLION_DOREFILL)
 
 ## get general includes
@@ -123,8 +130,9 @@ if(SHADOW_TEST STREQUAL ON)
 endif(SHADOW_TEST STREQUAL ON)
 
 ## install our 'exported' libs so they can be imported by others
-## put the .cmake file for importing in shadow-specific directory
-#install(EXPORT shadow-externals DESTINATION share/)
+if(SHADOW_EXPORT STREQUAL ON)
+    install(EXPORT shadow-externals DESTINATION share/)
+endif(SHADOW_EXPORT STREQUAL ON)
 
 ## install resources useful for simulations
 if(NOT EXISTS ${CMAKE_SOURCE_DIR}/resource/topology.xml)
@@ -136,6 +144,7 @@ if(NOT EXISTS ${CMAKE_SOURCE_DIR}/resource/topology.xml)
 endif(NOT EXISTS ${CMAKE_SOURCE_DIR}/resource/topology.xml)
 
 install(FILES ${CMAKE_SOURCE_DIR}/resource/topology.xml DESTINATION share/)
+install(FILES ${CMAKE_BUILD_PREFIX}/1KiB.urnd ${CMAKE_BUILD_PREFIX}/16KiB.urnd ${CMAKE_BUILD_PREFIX}/32KiB.urnd ${CMAKE_BUILD_PREFIX}/50KiB.urnd ${CMAKE_BUILD_PREFIX}/320KiB.urnd ${CMAKE_BUILD_PREFIX}/1MiB.urnd ${CMAKE_BUILD_PREFIX}/5MiB.urnd DESTINATION share/)
 
 ## do CPack stuff
 add_subdirectory(${CMAKE_SOURCE_DIR}/cpack/)

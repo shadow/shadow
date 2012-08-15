@@ -21,54 +21,24 @@
 # along with Scallion.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-import sys, os, argparse, subprocess, shlex, shutil, urllib2, tarfile, gzip, stat
-from datetime import datetime
-
-BUILD_PREFIX="./build"
-INSTALL_PREFIX=os.path.expanduser("~/.shadow")
-
-DEFAULT_TOR_VERSION="0.2.3.16-alpha"
-
-TOR_URL="https://archive.torproject.org/tor-package-archive/tor-" + DEFAULT_TOR_VERSION + ".tar.gz"
-MAXMIND_URL="http://geolite.maxmind.com/download/geoip/database/GeoLiteCity.dat.gz"
-
-PREPARETOR=os.path.abspath(BUILD_PREFIX+"/preparetor")
-READYTOR=os.path.abspath(BUILD_PREFIX+"/readytor")
-
 def main():
-    parser_main = argparse.ArgumentParser(description='Utility to help setup the scallion plug-in for the shadow simulator', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser_main.add_argument('-q', '--quiet', action="store_true", dest="be_quiet",
-          help="this script will not display its actions", default=False)
-    
-    # setup our commands
-    subparsers_main = parser_main.add_subparsers(help='run a subcommand (for help use <subcommand> --help)')
-    
-    # configure subcommand
-    parser_build = subparsers_main.add_parser('build', help='configure and build scallion', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser_build.set_defaults(func=build, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    
-    parser_build.add_argument('-p', '--prefix', action="store", dest="prefix",
-          help="path to root directory for scallion installation", metavar="PATH", default=INSTALL_PREFIX)
-    parser_build.add_argument('-i', '--include', action="append", dest="extra_includes", metavar="PATH",
-          help="include PATH when searching for headers. useful if dependencies are installed to non-standard locations.",
-          default=[INSTALL_PREFIX+ "/include", os.path.expanduser("~/.local/include")])
-    parser_build.add_argument('-l', '--library', action="append", dest="extra_libraries", metavar="PATH",
-          help="include PATH when searching for libraries. useful if dependencies are installed to non-standard locations.",
-          default=[INSTALL_PREFIX+ "/lib", os.path.expanduser("~/.local/lib")])
-    parser_build.add_argument('--tor-prefix', action="store", dest="prefix_tor", metavar="PATH",
-          help="PATH to base Tor directory to build. this overrides the remote download triggered with '-v' or '--version' options.", default=None)
+    parser_build.add_argument('--tor-prefix', action="store", dest="tor_prefix", metavar="PATH",
+          help="PATH to a custom base Tor directory to build (overrides '--tor-version)", default=None)
+    parser_build.add_argument('--tor-version', action="store", dest="tor_version",
+          help="specify which version of Tor to download and build (overridden by '--tor-prefix')", default=DEFAULT_TOR_VERSION)
+
     parser_build.add_argument('--libevent-prefix', action="store", dest="prefix_libevent", metavar="PATH",
           help="use non-standard PATH when linking Tor to libevent.", default=INSTALL_PREFIX)
     parser_build.add_argument('--openssl-prefix', action="store", dest="prefix_openssl", metavar="PATH",
           help="use non-standard PATH when linking Tor to openssl.", default=INSTALL_PREFIX)
+
     parser_build.add_argument('--static-openssl', action="store_true", dest="static_openssl",
           help="tell Tor to link against the static version of openssl", default=True)
     parser_build.add_argument('--static-libevent', action="store_true", dest="static_libevent",
           help="tell Tor to link against the static version of libevent", default=True)
+
     parser_build.add_argument('-g', '--debug', action="store_true", dest="do_debug",
           help="turn on debugging for verbose program output", default=False)
-    parser_build.add_argument('-v', '--version', action="store", dest="tor_version",
-          help="specify what version of Tor to download and build. not used if '--tor-prefix' is specified.", default=DEFAULT_TOR_VERSION)
     
     # install subcommand
     parser_install = subparsers_main.add_parser('install', help='install scallion', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -97,7 +67,7 @@ def build(args):
     rootdir=filepath[:filepath.rfind("/")]
     builddir=os.path.abspath(BUILD_PREFIX)
     installdir=os.path.abspath(args.prefix)
-    if args.prefix_tor is not None: args.prefix_tor = os.path.abspath(args.prefix_tor)
+    if args.tor_prefix is not None: args.tor_prefix = os.path.abspath(args.tor_prefix)
     
     # clear cmake cache
     if(os.path.exists(builddir+"/scallion")): shutil.rmtree(builddir+"/scallion")
@@ -301,9 +271,9 @@ def setup_dependencies(args):
     args.tordir = PREPARETOR
     
     # if local prefix given, always blow away our prepared directory
-    if args.prefix_tor is not None:
+    if args.tor_prefix is not None:
         if os.path.exists(args.tordir): shutil.rmtree(args.tordir)
-        shutil.copytree(args.prefix_tor, args.tordir)
+        shutil.copytree(args.tor_prefix, args.tordir)
         return 0
     
     # no local prefix. only download if our prepare directory does not exist

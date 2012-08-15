@@ -16,7 +16,12 @@ set(browser_sources
 add_library(shadow-service-browser STATIC ${browser_sources})
 add_dependencies(shadow-service-browser shadow-util)
 target_link_libraries(shadow-service-browser shadow-service-filetransfer ${RT_LIBRARIES} ${GLIB_LIBRARIES} ${TIDY_LIBRARIES})
-install(TARGETS shadow-service-browser EXPORT shadow-externals DESTINATION lib)
+
+## the following two lines are needed if we want to allow external plug-ins to use ours
+if(SHADOW_EXPORT STREQUAL ON)
+    install(TARGETS shadow-service-browser EXPORT shadow-externals DESTINATION lib)
+    install(DIRECTORY ./ DESTINATION include/ FILES_MATCHING PATTERN "*.h")
+endif(SHADOW_EXPORT STREQUAL ON)
 
 ## a stand-alone shared library that can plug into shadow
 add_library(shadow-plugin-browser MODULE shd-browser-plugin.c ${browser_sources})
@@ -28,4 +33,3 @@ add_executable(shadow-browser shd-browser-main.c)
 target_link_libraries(shadow-browser shadow-service-filetransfer shadow-service-browser ${RT_LIBRARIES} ${GLIB_LIBRARIES} ${TIDY_LIBRARIES})
 install(TARGETS shadow-browser DESTINATION bin)
 
-install(DIRECTORY ./ DESTINATION include/ FILES_MATCHING PATTERN "*.h")
