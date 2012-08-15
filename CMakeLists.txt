@@ -5,9 +5,12 @@ cmake_minimum_required(VERSION 2.8 FATAL_ERROR)
 
 ## set paths and build parameters
 set(Shadow_VERSION_MAJOR 1)
-set(Shadow_VERSION_MINOR 4)
+set(Shadow_VERSION_MINOR 5)
 set(Shadow_VERSION_BUILD 0)
-set(Shadow_VERSION_SUFFIX "-dev")
+
+if(EXISTS ${CMAKE_SOURCE_DIR}/.git)
+    set(Shadow_VERSION_SUFFIX "-dev")
+endif(EXISTS ${CMAKE_SOURCE_DIR}/.git)
 
 #from scallion plug-in, not sure if we need it...
 #set(PACKAGE_STRING "Scallion ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_BUILD}")
