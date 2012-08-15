@@ -12,9 +12,20 @@ D=`pwd`
 mkdir -p build
 cd build
 
-wget http://www.openssl.org/source/openssl-1.0.1.tar.gz
-tar xvzf openssl-1.0.1.tar.gz
-cd openssl-1.0.1/
+wget https://www.openssl.org/source/openssl-1.0.1c.tar.gz
+wget https://www.openssl.org/source/openssl-1.0.1c.tar.gz.asc
+gpg --verify openssl-1.0.1c.tar.gz.asc
+
+if [ $? -eq 0 ]
+then
+    echo Signature is well.
+else
+    echo "Problem with openssl signature. Edit the installdeps.sh script if you want to avoid checking the signature."
+    exit -1
+fi
+
+tar xaf openssl-1.0.1c.tar.gz
+cd openssl-1.0.1c/
 
 ## use ONE of the following:
 
@@ -29,9 +40,21 @@ make install
 
 cd ../
 
-wget https://github.com/downloads/libevent/libevent/libevent-2.0.18-stable.tar.gz
-tar xvzf libevent-2.0.18-stable.tar.gz
-cd libevent-2.0.18-stable/
+wget https://github.com/downloads/libevent/libevent/libevent-2.0.19-stable.tar.gz
+wget https://github.com/downloads/libevent/libevent/libevent-2.0.19-stable.tar.gz.asc
+
+gpg --verify libevent-2.0.19-stable.tar.gz.asc
+
+if [ $? -eq 0 ]
+then
+    echo Signature is well.
+else
+    echo "Problem with libevent signature. Edit the installdeps.sh script if you want to avoid checking the signature."
+    exit -1
+fi
+
+tar xaf libevent-2.0.19-stable.tar.gz
+cd libevent-2.0.19-stable/
 
 ## use ONE of the following:
 
@@ -39,7 +62,7 @@ cd libevent-2.0.18-stable/
 #./configure --prefix=${PREFIX} --enable-shared=no CFLAGS="-fPIC -I${PREFIX} -g -pg" LDFLAGS="-L${PREFIX}" CPPFLAGS="-DUSE_DEBUG"
 
 ## for normal use
-./configure --prefix=${PREFIX} --enable-shared=no CFLAGS="-fPIC -I${PREFIX}" LDFLAGS="-L${PREFIX}"
+./configure --prefix=${PREFIX} --enable-shared CFLAGS="-fPIC -I${PREFIX}" LDFLAGS="-L${PREFIX}"
 
 make
 make install

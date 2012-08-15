@@ -13,6 +13,7 @@ find_package(TOR REQUIRED)
 find_package(TIDY REQUIRED)
 
 include_directories(${RT_INCLUDES} ${DL_INCLUDES} ${M_INCLUDES} ${GLIB_INCLUDES} ${EVENT2_INCLUDES} ${OPENSSL_INCLUDES} ${TOR_INCLUDES} ${SHADOW_INCLUDES} ${TIDY_INCLUDES})
+include_directories(${SHADOW_SOURCE_DIR}/utility)
 include_directories(${SHADOW_SOURCE_DIR}/library/browser)
 include_directories(${SHADOW_SOURCE_DIR}/library/filetransfer)
 include_directories(${SHADOW_SOURCE_DIR}/library/torrent)
