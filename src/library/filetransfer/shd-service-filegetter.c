@@ -51,12 +51,23 @@ static void service_filegetter_log(service_filegetter_tp sfg, enum service_fileg
 
 static void service_filegetter_report(service_filegetter_tp sfg, enum service_filegetter_loglevel level, gchar* preamble, filegetter_filestats_tp stats, gint current_download, gint total_downloads) {
 	if(preamble != NULL && stats != NULL) {
-		service_filegetter_log(sfg, level, "%s got first bytes in %lu.%.3d seconds and %zu of %zu bytes in %lu.%.3d seconds (download %i of %i)",
+		GString* reportStringBuffer = g_string_new("");
+
+		g_string_printf(reportStringBuffer, "%s got first bytes in %lu.%.3d seconds and %zu of %zu bytes in %lu.%.3d seconds (download %i",
 				preamble,
 				stats->first_byte_time.tv_sec, (gint)(stats->first_byte_time.tv_nsec / 1000000),
 				stats->bytes_downloaded, stats->bytes_expected,
 				stats->download_time.tv_sec, (gint) (stats->download_time.tv_nsec / 1000000),
-				current_download, total_downloads);
+				current_download);
+
+		if(total_downloads > 0) {
+			g_string_append_printf(reportStringBuffer, " of %i)", total_downloads);
+		} else {
+			g_string_append_printf(reportStringBuffer, ")");
+		}
+
+		service_filegetter_log(sfg, level, "%s", reportStringBuffer->str);
+		g_string_free(reportStringBuffer, TRUE);
 	}
 }
 
