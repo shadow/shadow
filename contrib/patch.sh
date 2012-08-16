@@ -2,6 +2,7 @@
 
 echo Patching configure
 sed -i 's/-O2/-O0/g' configure
+sed -i 's/-fPIE/-fPIC/g' configure
 
 echo Patching common/log.c
 sed '/static void/ {N;/\nlogv/ {s/static void\nlogv/void logv/}}' src/common/log.c > src/common/log.c.patch
@@ -40,10 +41,11 @@ mv src/or/main.c.patch src/or/main.c
 sed ':a;N;$!ba;s/static void\nrefill_callback/void\nrefill_callback/g' src/or/main.c > src/or/main.c.patch
 mv src/or/main.c.patch src/or/main.c
 
-echo "Patching infinite loop bugs in main.c"
+# needed for most versions before 0.2.3.20-rc
+#echo "Patching infinite loop bugs in main.c"
 # bugs causing infinite loops in shadow (multi-line)
-sed ':a;N;$!ba;s/conn->timestamp_lastwritten = now; \/\* reset so we can flush more \*\/\n      }/conn->timestamp_lastwritten = now; \/\* reset so we can flush more \*\/\n      } else if(sz == 0) { \/\* retval is 0 \*\/\n        \/\* wants to flush, but is rate limited \*\/\n        conn->write_blocked_on_bw = 1;\n        if (connection_is_reading(conn))\n        	connection_stop_reading(conn);\n        if (connection_is_writing(conn))\n        	connection_stop_writing(conn);\n 	  }/g' src/or/main.c > src/or/main.c.patch
-mv src/or/main.c.patch src/or/main.c
+#sed ':a;N;$!ba;s/conn->timestamp_lastwritten = now; \/\* reset so we can flush more \*\/\n      }/conn->timestamp_lastwritten = now; \/\* reset so we can flush more \*\/\n      } else if(sz == 0) { \/\* retval is 0 \*\/\n        \/\* wants to flush, but is rate limited \*\/\n        conn->write_blocked_on_bw = 1;\n        if (connection_is_reading(conn))\n        	connection_stop_reading(conn);\n        if (connection_is_writing(conn))\n        	connection_stop_writing(conn);\n 	  }/g' src/or/main.c > src/or/main.c.patch
+#mv src/or/main.c.patch src/or/main.c
 
 # single line static function declaration
 sed 's/static void refill_callback/void refill_callback/g' src/or/main.c > src/or/main.c.patch
