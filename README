@@ -157,6 +157,6 @@ $ git tag -s v1.5.0
 $ git push --tags
 $ git checkout release
 $ git merge v1.5.0
-$ git archive --prefix=shadow-v1.5.0/ --output=shadow-v1.5.0.tar.gz v1.5.0
+$ git archive --prefix=shadow-v1.5.0/ --format=tar v1.5.0 | gzip > shadow-v1.5.0.tar.gz
 $ gpg -a -b shadow-v1.5.0.tar.gz
 $ gpg --verify shadow-v1.5.0.tar.gz.asc
