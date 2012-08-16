@@ -9,12 +9,13 @@ PREFIX=${PREFIX-${HOME}/.shadow}
 echo "Installing to $PREFIX"
 
 D=`pwd`
+KEYRING=$( cd "$( dirname "$0" )" && pwd )/deps_keyring.gpg
 mkdir -p build
 cd build
 
 wget https://www.openssl.org/source/openssl-1.0.1c.tar.gz
 wget https://www.openssl.org/source/openssl-1.0.1c.tar.gz.asc
-gpg --verify openssl-1.0.1c.tar.gz.asc
+gpg --keyring $KEYRING --verify openssl-1.0.1c.tar.gz.asc
 
 if [ $? -eq 0 ]
 then
@@ -43,7 +44,7 @@ cd ../
 wget https://github.com/downloads/libevent/libevent/libevent-2.0.19-stable.tar.gz
 wget https://github.com/downloads/libevent/libevent/libevent-2.0.19-stable.tar.gz.asc
 
-gpg --verify libevent-2.0.19-stable.tar.gz.asc
+gpg --keyring $KEYRING --verify libevent-2.0.19-stable.tar.gz.asc
 
 if [ $? -eq 0 ]
 then
