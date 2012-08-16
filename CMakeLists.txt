@@ -6,7 +6,7 @@ cmake_minimum_required(VERSION 2.8 FATAL_ERROR)
 ## set paths and build parameters
 set(Shadow_VERSION_MAJOR 1)
 set(Shadow_VERSION_MINOR 5)
-set(Shadow_VERSION_BUILD 0)
+set(Shadow_VERSION_BUILD 1)
 
 if(EXISTS ${CMAKE_SOURCE_DIR}/.git)
     set(Shadow_VERSION_SUFFIX "-dev")
