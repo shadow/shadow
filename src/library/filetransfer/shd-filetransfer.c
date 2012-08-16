@@ -137,6 +137,7 @@ void filetransfer_new(int argc, char* argv[]) {
 
 			args.log_cb = &_filetransfer_logCallback;
 			args.hostbyname_cb = &_filetransfer_HostnameCallback;
+			args.sleep_cb = &_filetransfer_sleepCallback;
 
 			enum filegetter_code result = service_filegetter_start_single(ft->client, &args, epolld, &sockd);
 

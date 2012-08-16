@@ -146,3 +146,17 @@ Limits can be raised by modifying /etc/security/limits.conf and rebooting.
 For example:
 * soft nofile 10000
 * hard nofile 10000
+
+Tagging new versions
+
+The following commands can be used to tag a new version of Shadow. Then the
+archive and signature can be uploaded to github's download section, and linked
+from the Shadow website.
+
+$ git tag -s v1.5.0
+$ git push --tags
+$ git checkout release
+$ git merge v1.5.0
+$ git archive --prefix=shadow-v1.5.0/ --output=shadow-v1.5.0.tar.gz v1.5.0
+$ gpg -a -b shadow-v1.5.0.tar.gz
+$ gpg --verify shadow-v1.5.0.tar.gz.asc
