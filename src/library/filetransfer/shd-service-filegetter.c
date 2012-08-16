@@ -197,6 +197,8 @@ enum filegetter_code service_filegetter_start_single(service_filegetter_tp sfg,
 
 	/* if null, we ignore logging */
 	sfg->log_cb = args->log_cb;
+	sfg->hostbyname_cb = args->hostbyname_cb;
+	sfg->sleep_cb = args->sleep_cb;
 
 	/* we download a single file, store our specification in current */
 	sfg->current_download = service_filegetter_get_download_from_args(sfg, &args->http_server, &args->socks_proxy, args->filepath, args->hostbyname_cb);

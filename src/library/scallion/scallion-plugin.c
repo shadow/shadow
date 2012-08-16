@@ -357,6 +357,7 @@ static void _scallion_new(gint argc, gchar* argv[]) {
 
 			args->log_cb = &_scallion_sfgLogCallback;
 			args->hostbyname_cb = &_scallion_HostnameCallback;
+			args->sleep_cb = &_scallion_sleepCallback;
 
 			launch->is_single = 1;
 			launch->service_filegetter_args = args;

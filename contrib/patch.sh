@@ -1,4 +1,8 @@
-#!/bin/sh 
+#!/bin/sh
+
+## This file is used to patch various pieces of Tor that we need to run it in Shadow.
+## Mainly, its used to remove 'static' from certain functions to make sure we
+## can intercept them.
 
 echo Patching configure
 sed -i 's/-O2/-O0/g' configure
@@ -6,6 +10,8 @@ sed -i 's/-fPIE/-fPIC/g' configure
 
 echo Patching common/log.c
 sed '/static void/ {N;/\nlogv/ {s/static void\nlogv/void logv/}}' src/common/log.c > src/common/log.c.patch
+mv src/common/log.c.patch src/common/log.c
+sed 's/static void logv(int severity, log_domain_mask_t domain, const char/void logv(int severity, log_domain_mask_t domain, const char/g' src/common/log.c > src/common/log.c.patch
 mv src/common/log.c.patch src/common/log.c
 
 echo Patching common/tortls.c

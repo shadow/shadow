@@ -55,6 +55,7 @@ typedef struct service_filegetter_single_args_s {
 	service_filegetter_server_args_t http_server;
 	service_filegetter_server_args_t socks_proxy;
 	service_filegetter_log_cb log_cb;
+	service_filegetter_sleep_cb sleep_cb;
 	service_filegetter_hostbyname_cb hostbyname_cb;
 	gchar* num_downloads;
 	gchar* filepath;
