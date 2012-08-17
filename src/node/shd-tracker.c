@@ -125,7 +125,7 @@ void tracker_heartbeat(Tracker* tracker) {
 	double mem = (double)(((double)tracker->allocatedBytesTotal) / 1024.0);
 
 	/* log the things we are tracking */
-	logging_log(G_LOG_DOMAIN, level, __FUNCTION__, "heartbeat: "
+	logging_log(G_LOG_DOMAIN, level, __FUNCTION__, "shadow-heartbeat: "
 			"Rx %f B/s, Tx %f B/s, CPU %f \%, MEM %f KiB", in, out, cpuutil, mem);
 
 	/* clear interval stats */
