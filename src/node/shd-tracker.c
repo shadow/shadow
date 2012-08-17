@@ -36,6 +36,8 @@ struct _Tracker {
 
 	GHashTable* allocatedLocations;
 	gsize allocatedBytesTotal;
+	gsize allocatedBytesLastInterval;
+	gsize deallocatedBytesLastInterval;
 
 	SimulationTime lastHeartbeat;
 
@@ -83,6 +85,7 @@ void tracker_addOutputBytes(Tracker* tracker, gsize outputBytes) {
 void tracker_addAllocatedBytes(Tracker* tracker, gpointer location, gsize allocatedBytes) {
 	MAGIC_ASSERT(tracker);
 	tracker->allocatedBytesTotal += allocatedBytes;
+	tracker->allocatedBytesLastInterval += allocatedBytes;
 	g_hash_table_insert(tracker->allocatedLocations, location, GSIZE_TO_POINTER(allocatedBytes));
 }
 
@@ -92,6 +95,7 @@ void tracker_removeAllocatedBytes(Tracker* tracker, gpointer location) {
 	if(value) {
 		gsize allocatedBytes = GPOINTER_TO_SIZE(value);
 		tracker->allocatedBytesTotal -= allocatedBytes;
+		tracker->deallocatedBytesLastInterval += allocatedBytes;
 	}
 }
 
@@ -119,19 +123,24 @@ void tracker_heartbeat(Tracker* tracker) {
 	}
 
 	guint seconds = (guint) (interval / SIMTIME_ONE_SECOND);
-	double in = (double)(((double)tracker->inputBytesLastInterval) / seconds);
-	double out = (double)(((double)tracker->outputBytesLastInterval) / seconds);
-	double cpuutil = (double)(((double)tracker->processingTimeLastInterval) / interval);
+	double in = (double) (tracker->inputBytesLastInterval);
+	double out = (double)(tracker->outputBytesLastInterval);
+	double alloc = (double)(((double)tracker->allocatedBytesLastInterval) / 1024.0);
+	double dealloc = (double)(((double)tracker->deallocatedBytesLastInterval) / 1024.0);
 	double mem = (double)(((double)tracker->allocatedBytesTotal) / 1024.0);
+	double cpuutil = (double)(((double)tracker->processingTimeLastInterval) / interval);
 
 	/* log the things we are tracking */
-	logging_log(G_LOG_DOMAIN, level, __FUNCTION__, "shadow-heartbeat: "
-			"Rx %f B/s, Tx %f B/s, CPU %f \%, MEM %f KiB", in, out, cpuutil, mem);
+	logging_log(G_LOG_DOMAIN, level, __FUNCTION__,
+			"shadow-heartbeat: CPU %f \%, MEM %f KiB, interval %u seconds, alloc %f KiB, dealloc %f KiB, Rx %f B, Tx %f B",
+			cpuutil, mem, seconds, alloc, dealloc, in, out);
 
 	/* clear interval stats */
 	tracker->processingTimeLastInterval = 0;
 	tracker->inputBytesLastInterval = 0;
 	tracker->outputBytesLastInterval = 0;
+	tracker->allocatedBytesLastInterval = 0;
+	tracker->deallocatedBytesLastInterval = 0;
 
 	/* schedule the next heartbeat */
 	tracker->lastHeartbeat = worker_getPrivate()->clock_now;

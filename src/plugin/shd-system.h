@@ -95,7 +95,6 @@ void system_cryptoLockingFunc(int mode, int n, const char *file, int line);
 unsigned long system_cryptoIdFunc();
 
 gpointer system_malloc(gsize size);
-gpointer system_calloc(gsize nmemb, gsize size);
 void system_free(gpointer ptr);
 
 #endif /* SHD_SYSTEM_H_ */
