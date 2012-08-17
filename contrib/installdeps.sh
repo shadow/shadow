@@ -5,24 +5,37 @@
 ## to pass special flags so that linking to Tor and running in Shadow both
 ## work properly.
 
+check_signature() {
+  local PKGNAME=`echo $1 | cut -d '-' -f1`
+  read -r -p "Do you want to use the included public keys to verify the signature of $PKGNAME? [Y/n] " RESPONSE
+
+  if [[ $RESPONSE =~ ^([nn][oo]|[nn])$ ]]; then
+    gpg --verify $1.asc
+  else
+    gpg --keyring $KEYRING --verify $1.asc
+  fi
+
+  if [ $? -eq 0 ]; then
+    echo Signature is well.
+  else
+    echo "Problem with $PKGNAME signature. Edit the installdeps.sh script if you want to avoid checking the signature."
+    exit -1
+  fi
+}
+
+
 PREFIX=${PREFIX-${HOME}/.shadow}
 echo "Installing to $PREFIX"
 
 D=`pwd`
+KEYRING=$( cd "$( dirname "$0" )" && pwd )/deps_keyring.gpg
 mkdir -p build
 cd build
 
 wget https://www.openssl.org/source/openssl-1.0.1c.tar.gz
 wget https://www.openssl.org/source/openssl-1.0.1c.tar.gz.asc
-gpg --verify openssl-1.0.1c.tar.gz.asc
 
-if [ $? -eq 0 ]
-then
-    echo Signature is well.
-else
-    echo "Problem with openssl signature. Edit the installdeps.sh script if you want to avoid checking the signature."
-    exit -1
-fi
+check_signature "openssl-1.0.1c.tar.gz"
 
 tar xaf openssl-1.0.1c.tar.gz
 cd openssl-1.0.1c/
@@ -43,15 +56,7 @@ cd ../
 wget https://github.com/downloads/libevent/libevent/libevent-2.0.19-stable.tar.gz
 wget https://github.com/downloads/libevent/libevent/libevent-2.0.19-stable.tar.gz.asc
 
-gpg --verify libevent-2.0.19-stable.tar.gz.asc
-
-if [ $? -eq 0 ]
-then
-    echo Signature is well.
-else
-    echo "Problem with libevent signature. Edit the installdeps.sh script if you want to avoid checking the signature."
-    exit -1
-fi
+check_signature "libevent-2.0.19-stable.tar.gz"
 
 tar xaf libevent-2.0.19-stable.tar.gz
 cd libevent-2.0.19-stable/
