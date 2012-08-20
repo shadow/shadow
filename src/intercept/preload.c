@@ -797,9 +797,12 @@ int srandom_r(unsigned int seed, struct random_data *buf) {
 	return (*func)(seed, buf);
 }
 
-/* TODO
- * malloc may still cause initialization errors when debugging in GDB or Eclipse
+/*
+ * malloc may cause initialization errors when debugging in GDB or Valgrind
+ * Define this with -D to disable malloc/free preloading
  */
+#ifndef SHADOW_DISABLE_MEMTRACKER
+
 typedef void* (*malloc_fp)(size_t);
 static malloc_fp _malloc = NULL;
 static malloc_fp _intercept_malloc = NULL;
@@ -821,3 +824,5 @@ void free(void* ptr) {
 	PRELOAD_LOOKUP(func, funcName,);
 	(*func)(ptr);
 }
+
+#endif

@@ -143,6 +143,11 @@ def main():
         action="store_true", dest="disable_torrent",
         default=False)
     
+    parser_build.add_argument('--disable-memory-tracker', 
+        help="do not preload malloc and free (useful for gdb and valgrind)", 
+        action="store_true", dest="disable_memtracker",
+        default=False)
+    
     # configure install subcommand
     parser_install = subparsers_main.add_parser('install', help='install Shadow', 
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -183,6 +188,7 @@ def build(args):
     if args.do_test: cmake_cmd += " -DSHADOW_TEST=ON"
     if args.do_profile: cmake_cmd += " -DSHADOW_PROFILE=ON"
     if args.export_libraries: cmake_cmd += " -DSHADOW_EXPORT=ON"
+    if args.disable_memtracker: cmake_cmd += " -DSHADOW_DISABLE_MEMTRACKER=ON"
     if args.disable_browser: cmake_cmd += " -DBUILD_BROWSER=OFF"
     if args.disable_echo: cmake_cmd += " -DBUILD_ECHO=OFF"
     if args.disable_filetransfer: cmake_cmd += " -DBUILD_FILETRANSFER=OFF"
