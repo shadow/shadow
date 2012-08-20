@@ -169,10 +169,10 @@ def build(args):
     installdir=os.path.abspath(args.prefix)
     
     # clear cmake cache
-    if os.path.exists(builddir+"/cmake"): shutil.rmtree(builddir+"/cmake")
+    if os.path.exists(builddir+"/shadow"): shutil.rmtree(builddir+"/shadow")
 
     # create directories
-    if not os.path.exists(builddir+"/cmake"): os.makedirs(builddir+"/cmake")
+    if not os.path.exists(builddir+"/shadow"): os.makedirs(builddir+"/shadow")
     if not os.path.exists(installdir): os.makedirs(installdir)
         
     # build up args string for the cmake command
@@ -216,7 +216,7 @@ def build(args):
     
     
     # now we will be using cmake to build shadow and the plug-ins
-    os.chdir(builddir+"/cmake")
+    os.chdir(builddir+"/shadow")
     
     # hack to make passing args to CMAKE work... doesnt seem to like the first arg
     args.extra_includes.insert(0, "./")
@@ -248,7 +248,7 @@ def build(args):
     return retcode
 
 def install(args):
-    builddir=os.path.abspath(BUILD_PREFIX+"/cmake")
+    builddir=os.path.abspath(BUILD_PREFIX+"/shadow")
     if not os.path.exists(builddir): 
         log("ERROR: please build before installing!")
         return
