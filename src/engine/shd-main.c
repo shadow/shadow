@@ -28,6 +28,20 @@
 Engine* shadow_engine;
 
 gint shadow_main(gint argc, gchar* argv[]) {
+    /* check the compiled GLib version */
+    if (GLIB_MAJOR_VERSION != 2 || GLIB_MINOR_VERSION != 28 || GLIB_MICRO_VERSION != 8) {
+	    g_printerr("** GLib version 2.28.8 is required but Shadow was compiled against version %u.%u.%u\n",
+		    GLIB_MAJOR_VERSION, GLIB_MINOR_VERSION, GLIB_MICRO_VERSION);
+	    return -1;
+    }
+
+    /* check the that run-time GLib matches the compiled version */
+    const gchar* mismatch = glib_check_version(GLIB_MAJOR_VERSION, GLIB_MINOR_VERSION, GLIB_MICRO_VERSION);
+    if(mismatch) {
+	    g_printerr("** The run-time GLib library is not compatible with the compiled version: %s\n", mismatch);
+	    return -1;
+    }
+
 	g_thread_init(NULL);
 
 	/* setup configuration - this fails and aborts if invalid */
@@ -65,11 +79,12 @@ gint shadow_main(gint argc, gchar* argv[]) {
 	GLogLevelFlags configuredLogLevel = configuration_getLogLevel(config);
 	g_log_set_default_handler(logging_handleLog, &(configuredLogLevel));
 
-	GDateTime* dt_now = g_date_time_new_now_local();
-	gchar* dt_format = g_date_time_format(dt_now, "%F %H:%M:%S:%N");
-	message("Shadow v%s engine initialized at %s", SHADOW_VERSION, dt_format);
-	g_date_time_unref(dt_now);
-	g_free(dt_format);
+    GDateTime* dt_now = g_date_time_new_now_local();
+    gchar* dt_format = g_date_time_format(dt_now, "%F %H:%M:%S:%N");
+    message("Shadow v%s engine initialized at %s using GLib v%u.%u.%u",
+        SHADOW_VERSION, dt_format, GLIB_MAJOR_VERSION, GLIB_MINOR_VERSION, GLIB_MICRO_VERSION);
+    g_date_time_unref(dt_now);
+    g_free(dt_format);
 
 #if 0 /* @todo: these are only avail in glib >= 2.30 */
 	/* setup signal handlers for gracefully handling shutdowns */
