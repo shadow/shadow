@@ -799,9 +799,9 @@ int srandom_r(unsigned int seed, struct random_data *buf) {
 
 /*
  * malloc may cause initialization errors when debugging in GDB or Valgrind
- * Define this with -D to disable malloc/free preloading
+ * Define this with -D to enable malloc/free preloading
  */
-#ifndef SHADOW_DISABLE_MEMTRACKER
+#ifdef SHADOW_ENABLE_MEMTRACKER
 
 typedef void* (*malloc_fp)(size_t);
 static malloc_fp _malloc = NULL;
