@@ -1,5 +1,9 @@
 Shadow (c) 2010-2012 Rob Jansen jansen@cs.umn.edu
 
+Shadow is a unique discrete-event network simulator that runs real-life applications like Tor. Shadow combines the accuracy of emulation with the efficiency and control of simulation, achieving the best of both approaches.
+
+Also included are core plug-ins for transfering files between clients and servers, and over a private Tor anonymity network.
+
 A. Dependencies
 ---------------
 Shadow requires the following:
