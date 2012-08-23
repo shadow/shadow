@@ -80,43 +80,43 @@ def main():
         default=False)
     
     parser_build.add_argument('--tor-prefix', 
-          help="PATH to a custom base Tor directory to build (overrides '--tor-version)", 
-          metavar="PATH", 
-          action="store", dest="tor_prefix",
-          default=None)
+        help="PATH to a custom base Tor directory to build (overrides '--tor-version)", 
+        metavar="PATH", 
+        action="store", dest="tor_prefix",
+        default=None)
     
     parser_build.add_argument('--tor-version', 
-          help="specify which VERSION of Tor to download and build (overridden by '--tor-prefix')", 
-          metavar="VERSION", 
-          action="store", dest="tor_version",
-          default=TOR_DEFAULT_VERSION)
+        help="specify which VERSION of Tor to download and build (overridden by '--tor-prefix')", 
+        metavar="VERSION", 
+        action="store", dest="tor_version",
+        default=TOR_DEFAULT_VERSION)
     
     parser_build.add_argument('--libevent-prefix', 
-          help="use non-standard PATH when linking Tor to libevent.",
-          metavar="PATH",
-          action="store", dest="libevent_prefix",
-          default=INSTALL_PREFIX)
+        help="use non-standard PATH when linking Tor to libevent.",
+        metavar="PATH",
+        action="store", dest="libevent_prefix",
+        default=INSTALL_PREFIX)
     
     parser_build.add_argument('--static-libevent', 
-          help="tell Tor to link against the static version of libevent", 
-          action="store_true", dest="static_libevent",
-          default=True)
+        help="tell Tor to link against the static version of libevent", 
+        action="store_true", dest="static_libevent",
+        default=True)
     
     parser_build.add_argument('--openssl-prefix', 
-          help="use non-standard PATH when linking Tor to openssl.",
-          metavar="PATH",
-          action="store", dest="openssl_prefix",
-          default=INSTALL_PREFIX)
+        help="use non-standard PATH when linking Tor to openssl.",
+        metavar="PATH",
+        action="store", dest="openssl_prefix",
+        default=INSTALL_PREFIX)
 
     parser_build.add_argument('--static-openssl', 
-          help="tell Tor to link against the static version of openssl", 
-          action="store_true", dest="static_openssl",
-          default=True)
+        help="tell Tor to link against the static version of openssl", 
+        action="store_true", dest="static_openssl",
+        default=True)
     
     parser_build.add_argument('--export-libraries', 
-          help="export Shadow's plug-in service libraries and headers", 
-          action="store_true", dest="export_libraries",
-          default=False)
+        help="export Shadow's plug-in service libraries and headers", 
+        action="store_true", dest="export_libraries",
+        default=False)
         
     parser_build.add_argument('--disable-plugin-browser',
         help="do not build the built-in browser plug-in (HTML browser)", 
