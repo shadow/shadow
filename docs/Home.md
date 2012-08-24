@@ -29,7 +29,7 @@ The wiki contains important information about installing and using Shadow, and a
 
 ### [Using the torrent plug-in](https://github.com/shadow/shadow/wiki/Using-the-torrent-plug-in)
 
-### [Using the scallion (Tor) plug-in](https://github.com/shadow/shadow/wiki/Using-the-scallion-(Tor)-plug-in)
+### [Using the scallion plug-in](https://github.com/shadow/shadow/wiki/Using-the-scallion-plug-in)
 
 ### [Analyzing results](https://github.com/shadow/shadow/wiki/Analyzing-results)
 
