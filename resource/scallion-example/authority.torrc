@@ -14,6 +14,7 @@ ContactInfo jansen@cs.umn.edu
 
 # make sure we are not throttled
 MaxOnionsPending 1000000
+DynamicDHGroups 0
 
 ## DIRECTORY AUTHORITIES ##
 
