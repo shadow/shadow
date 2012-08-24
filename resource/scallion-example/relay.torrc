@@ -14,7 +14,12 @@ ContactInfo jansen@cs.umn.edu
 
 # make sure we are not throttled
 MaxOnionsPending 1000000
+
+# avoid crypto, dont generate our own dh params
 DynamicDHGroups 0
+
+# allows us to attach with gdb during our experiment
+DisableDebuggerAttachment 0
 
 ## RELAYS ##
 
