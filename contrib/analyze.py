@@ -655,25 +655,25 @@ def plot(args):
         labels, fractions = [], []
         if web_num > 0: 
             fractions.append(web_gib/total_gib)
-            labels.append("Web\n{1}%\n{0}GiB".format(decimals(web_gib), decimals(100.0*fractions[-1])))
+            labels.append("Web\n{1}\%\n{0}GiB".format(decimals(web_gib), decimals(100.0*fractions[-1])))
         if bulk_num > 0: 
             fractions.append(bulk_gib/total_gib)
-            labels.append("Bulk\n{1}%\n{0}GiB".format(decimals(bulk_gib), decimals(100.0*fractions[-1])))
+            labels.append("Bulk\n{1}\%\n{0}GiB".format(decimals(bulk_gib), decimals(100.0*fractions[-1])))
         if im_num > 0: 
             fractions.append(im_gib/total_gib)
-            labels.append("IM\n{1}%\n{0}GiB".format(decimals(im_gib), decimals(100.0*fractions[-1])))
+            labels.append("IM\n{1}\%\n{0}GiB".format(decimals(im_gib), decimals(100.0*fractions[-1])))
         if p2p_num > 0: 
             fractions.append(p2p_gib/total_gib)
-            labels.append("P2P\n{1}%\n{0}GiB".format(decimals(p2p_gib), decimals(100.0*fractions[-1])))
+            labels.append("P2P\n{1}\%\n{0}GiB".format(decimals(p2p_gib), decimals(100.0*fractions[-1])))
         if perf50k_num > 0: 
             fractions.append(perf50k_gib/total_gib)
-            labels.append("Perf50K\n{1}%\n{0}GiB".format(decimals(perf50k_gib), decimals(100.0*fractions[-1])))
+            labels.append("Perf50K\n{1}\%\n{0}GiB".format(decimals(perf50k_gib), decimals(100.0*fractions[-1])))
         if perf1m_num > 0: 
             fractions.append(perf1m_gib/total_gib)
-            labels.append("Perf1M\n{1}%\n{0}GiB".format(decimals(perf1m_gib), decimals(100.0*fractions[-1])))
+            labels.append("Perf1M\n{1}\%\n{0}GiB".format(decimals(perf1m_gib), decimals(100.0*fractions[-1])))
         if perf5m_num > 0: 
             fractions.append(perf5m_gib/total_gib)
-            labels.append("Perf5M\n{1}%\n{0}GiB".format(decimals(perf5m_gib), decimals(100.0*fractions[-1])))
+            labels.append("Perf5M\n{1}\%\n{0}GiB".format(decimals(perf5m_gib), decimals(100.0*fractions[-1])))
 
         # show fractions of pie with autopct='%1.2f%%'
         patches = pylab.pie(fractions, explode=[0.1]*len(fractions), autopct=None, shadow=True)
