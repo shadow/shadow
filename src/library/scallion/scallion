@@ -38,7 +38,7 @@ def main():
     ap.add_argument('-y', '--assume-yes', action="store_true", dest="clear", help="don't ask before resetting data directory", default=False)
     
     # get arguments, accessible with args.value
-    args = ap.parse_args()
+    args, unknown_args = ap.parse_known_args()
     
     args.output = os.path.abspath(os.path.expanduser(args.output))
     args.input = os.path.abspath(os.path.expanduser(args.input))
@@ -82,7 +82,7 @@ def main():
     xmlpaths = os.path.abspath("{0}/share/topology.xml".format(args.prefix)) + " " + os.path.abspath("{0}".format(args.input))
     
     # command to run
-    cmd = "{0} --preload={1} {2}".format(shadowpath, preloadpath, xmlpaths)
+    cmd = "{0} --preload={1} {2} {3}".format(shadowpath, preloadpath, ' '.join(unknown_args), xmlpaths)
 
     log("calling '{0}', output directed to '{1}'".format(cmd, logpath))
     f = open(logpath, 'w')
