@@ -7,7 +7,7 @@ Shadow relies on the following tools and libraries to function properly. Version
 * python (= 2.7)
 * cmake (>= 2.8)
 * glib (>= 2.28.8)
-* libtidy (browser plug-in only)
+* libtidy (scallion and browser plug-ins only)
 
 To install these using the Fedora package manager, try something like:
 ```bash
