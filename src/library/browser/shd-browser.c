@@ -361,16 +361,10 @@ gint browser_launch(browser_tp b, browser_args_tp args, gint epolld) {
 static void browser_wakeup(gpointer data) {
 	browser_tp b = data;
 	b->shadowlib->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "Rise and shine!");
-	
-	b->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "%d=1?!", g_hash_table_size(b->connections));
-	
 	filegetter_start(&b->doc_conn->fg, b->epolld);
 	filegetter_download(&b->doc_conn->fg, &b->doc_conn->sspec, &b->doc_conn->fspec);
 	g_hash_table_insert(b->connections, &b->doc_conn->fg.sockd, b->doc_conn);
 	b->state = SB_DOCUMENT;
-	
-	
-	b->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "%d=1?!", g_hash_table_size(b->connections));
 }
 
 void browser_activate(browser_tp b, gint sockfd) {
