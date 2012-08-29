@@ -37,3 +37,5 @@ the log file, parsing and plotting results
 1. [Using the torrent plug-in](wiki/Using-the-torrent-plug-in)
 
 1. [Using the scallion plug-in](wiki/Using-the-scallion-plug-in)
+
+1. [Writing your own plug-in for Shadow](wiki/Writing-Custom-Plug-ins)
