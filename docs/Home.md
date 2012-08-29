@@ -4,10 +4,10 @@ The wiki contains important information about installing and using Shadow, and a
 
 ## Table of Contents
 
-1. [Shadow design overview](https://github.com/shadow/shadow/wiki/Shadow-design-overview)  
+1. [Shadow design overview](Shadow-design-overview)  
 discrete-event engine, plug-in architecture
 
-1. [Preparing your machine](https://github.com/shadow/shadow/wiki/Preparing-your-machine)  
+1. [Preparing your machine](Preparing-your-machine)  
 installing dependencies, obtaining Shadow, manual dependencies, building and installing Shadow and its plug-ins, system configs and limits
 
 1. [Running Shadow](https://github.com/shadow/shadow/wiki/Running-Shadow)  
