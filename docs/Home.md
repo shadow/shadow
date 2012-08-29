@@ -1,6 +1,7 @@
 ## Welcome to the Shadow wiki! 
 
-The wiki contains important information about installing and using Shadow, and analyzing results it produces. Please be patient as it is a work in progress :)
+The wiki contains important information about installing and using Shadow, and analyzing results it produces.  
+**Please be patient** as it is a _work in progress_ :)
 
 ## Getting Started
 
