@@ -23,6 +23,14 @@ check_signature() {
   fi
 }
 
+download() {
+  read -r -p "${1} (${2}) [Y/n] " RESPONSE
+  if [[ $RESPONSE =~ ^([nn][oo]|[nn])$ ]]; then
+    exit -1
+  else
+    wget $2
+  fi
+}
 
 PREFIX=${PREFIX-${HOME}/.shadow}
 echo "Installing to $PREFIX"
@@ -32,13 +40,15 @@ KEYRING=$( cd "$( dirname "$0" )" && pwd )/deps_keyring.gpg
 mkdir -p build
 cd build
 
-wget https://www.openssl.org/source/openssl-1.0.1c.tar.gz
-wget https://www.openssl.org/source/openssl-1.0.1c.tar.gz.asc
+opensslversion=openssl-1.0.1c
 
-check_signature "openssl-1.0.1c.tar.gz"
+download "May we download openssl?" https://www.openssl.org/source/${opensslversion}.tar.gz
+download "May we download the openssl signature?" https://www.openssl.org/source/${opensslversion}.tar.gz.asc
 
-tar xaf openssl-1.0.1c.tar.gz
-cd openssl-1.0.1c/
+check_signature "${opensslversion}.tar.gz"
+
+tar xaf ${opensslversion}.tar.gz
+cd ${opensslversion}/
 
 ## use ONE of the following:
 
@@ -53,13 +63,15 @@ make install
 
 cd ../
 
-wget https://github.com/downloads/libevent/libevent/libevent-2.0.19-stable.tar.gz
-wget https://github.com/downloads/libevent/libevent/libevent-2.0.19-stable.tar.gz.asc
+libeventversion=libevent-2.0.19-stable
 
-check_signature "libevent-2.0.19-stable.tar.gz"
+download "May we download libevent?" https://github.com/downloads/libevent/libevent/${libeventversion}.tar.gz
+download "May we download the libevent signature?" https://github.com/downloads/libevent/libevent/${libeventversion}.tar.gz.asc
 
-tar xaf libevent-2.0.19-stable.tar.gz
-cd libevent-2.0.19-stable/
+check_signature "${libeventversion}.tar.gz"
+
+tar xaf ${libeventversion}.tar.gz
+cd ${libeventversion}/
 
 ## use ONE of the following:
 
