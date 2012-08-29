@@ -1,4 +1,3 @@
-**PLEASE NOTE**: _this page is currently incomplete and in-progress_
 ## installing dependencies
 
 Shadow relies on the following tools and libraries to function properly. Versions and plug-in-specific dependencies are noted in parenthesis where applicable:
