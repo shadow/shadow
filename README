@@ -7,7 +7,7 @@ efficiency and control of simulation, achieving the best of both approaches.
 Also included are core plug-ins and topologies for transferring files between 
 clients and servers, and over a private Tor anonymity network.
 
-Quick Install:
+Quick Setup (installs everything in ~/.shadow):
     $ ./contrib/installdeps.sh
     $ python setup.py build
     $ python setup.py install
