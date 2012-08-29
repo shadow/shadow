@@ -229,60 +229,64 @@ static void browser_start_tasks(gpointer key, gpointer value, gpointer user_data
 	}
 }
 
-static void browser_completed_download(browser_tp b, browser_activate_result_tp result) {
+static void browser_downloaded_document(browser_tp b, browser_activate_result_tp result) {
 	assert(b);
 	assert(result);
 
-	if (b->state == SB_DOCUMENT) {
-		gint obj_count = 0;
+	gint obj_count = 0;
 
-		/* Get embedded objects as a hashtable which associates a hostname with a linked list of paths to download */
-		browser_get_embedded_objects(b, &result->connection->fg, &obj_count);
+	/* Get embedded objects as a hashtable which associates a hostname with a linked list of paths to download */
+	browser_get_embedded_objects(b, &result->connection->fg, &obj_count);
 
-		/* Get statistics for document download */
-		filegetter_filestats_t doc_stats;
-		filegetter_stat_download(&result->connection->fg, &doc_stats);
-		b->document_size = doc_stats.bytes_downloaded;
+	/* Get statistics for document download */
+	filegetter_filestats_t doc_stats;
+	filegetter_stat_download(&result->connection->fg, &doc_stats);
+	b->document_size = doc_stats.bytes_downloaded;
+	
+	b->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__,
+		"first document (%zu bytes) downloaded and parsed in %lu.%.3d seconds, now getting %i additional objects...",
+		b->document_size,
+		doc_stats.download_time.tv_sec,
+		(gint)(doc_stats.download_time.tv_nsec / 1000000),
+		obj_count);
+
+	/* Try to reuse initial connection */
+	if (!browser_reuse_connection(b, result->connection)) {
+		g_hash_table_steal(b->connections, &result->connection->fg.sockd);
+	} else {
+		browser_download_tasks_tp tasks = g_hash_table_lookup(b->download_tasks, b->first_hostname);
+		tasks->running = 1;
+	}
+
+	if (!obj_count) {
+		/* if website contains no embedded objectes set the state that we are done */
+		b->state = SB_DONE;
+	} else {
+		/* Set state to downloading embedded objects */
+		b->state = SB_EMBEDDED_OBJECTS;
 		
-		b->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__,
-			"first document (%zu bytes) downloaded and parsed in %lu.%.3d seconds, now getting %i additional objects...",
-			b->document_size,
-			doc_stats.download_time.tv_sec,
-			(gint)(doc_stats.download_time.tv_nsec / 1000000),
-			obj_count);
+		/* set counters/timers for embedded downloads */
+		clock_gettime(CLOCK_REALTIME, &b->embedded_start_time);
+		b->embedded_downloads_expected = obj_count;
+		b->embedded_downloads_completed = 0;
 
-		/* Try to reuse initial connection */
-		if (!browser_reuse_connection(b, result->connection)) {
-			g_hash_table_remove(b->connections, &result->connection->fg.sockd);
-		} else {
-			browser_download_tasks_tp tasks = g_hash_table_lookup(b->download_tasks, b->first_hostname);
-			tasks->running = 1;
-		}
-
-		if (!obj_count) {
-			/* if website contains no embedded objectes set the state that we are done */
-			b->state = SB_DONE;
-		} else {
-			/* Set state to downloading embedded objects */
-			b->state = SB_EMBEDDED_OBJECTS;
-			
-			/* set counters/timers for embedded downloads */
-			clock_gettime(CLOCK_REALTIME, &b->embedded_start_time);
-			b->embedded_downloads_expected = obj_count;
-			b->embedded_downloads_completed = 0;
-
-			/* Start as many downloads as allowed by sfg->browser->max_concurrent_downloads */
-			g_hash_table_foreach(b->download_tasks, browser_start_tasks, b);
-		}
-	} else if (b->state == SB_EMBEDDED_OBJECTS) {
-		b->shadowlib->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "%s -> %s", result->connection->sspec.http_hostname, result->connection->fspec.remote_path);
-		b->embedded_downloads_completed++;
-		
-		if (!browser_reuse_connection(b, result->connection)) {
-			g_hash_table_remove(b->connections, &result->connection->fg.sockd);
-		}
+		/* Start as many downloads as allowed by sfg->browser->max_concurrent_downloads */
+		g_hash_table_foreach(b->download_tasks, browser_start_tasks, b);
 	}
 }
+
+static void browser_downloaded_object(browser_tp b, browser_activate_result_tp result) {
+	assert(b);
+	assert(result);
+
+	b->shadowlib->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "%s -> %s", result->connection->sspec.http_hostname, result->connection->fspec.remote_path);
+	b->embedded_downloads_completed++;
+	
+	if (!browser_reuse_connection(b, result->connection)) {
+		g_hash_table_remove(b->connections, &result->connection->fg.sockd);
+	}
+}
+
 
 static void browser_shutdown_connection(gpointer value) {
 	browser_connection_tp conn = value;
@@ -348,9 +352,25 @@ gint browser_launch(browser_tp b, browser_args_tp args, gint epolld) {
 	/* Add the first connection for the document */
 	b->connections = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, browser_shutdown_connection);
 	g_hash_table_insert(b->connections, &conn->fg.sockd, conn);
+	b->doc_conn = conn;
 
 	b->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "Trying to simulate browser access to %s on %s", args->document_path, b->first_hostname);
 	return conn->fg.sockd;
+}
+
+static void browser_wakeup(gpointer data) {
+	browser_tp b = data;
+	b->shadowlib->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "Rise and shine!");
+	
+	b->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "%d=1?!", g_hash_table_size(b->connections));
+	
+	filegetter_start(&b->doc_conn->fg, b->epolld);
+	filegetter_download(&b->doc_conn->fg, &b->doc_conn->sspec, &b->doc_conn->fspec);
+	g_hash_table_insert(b->connections, &b->doc_conn->fg.sockd, b->doc_conn);
+	b->state = SB_DOCUMENT;
+	
+	
+	b->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "%d=1?!", g_hash_table_size(b->connections));
 }
 
 void browser_activate(browser_tp b, gint sockfd) {
@@ -359,40 +379,66 @@ void browser_activate(browser_tp b, gint sockfd) {
 	browser_activate_result_t result;
 	browser_connection_tp conn = g_hash_table_lookup(b->connections, &sockfd);
 
-	if (conn == NULL) {
+	if (!conn) {
 		b->shadowlib->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "unknown socket");
 		return;
-	} else {
-		result.code = filegetter_activate(&conn->fg);
-		result.connection = conn;
-
-		if (result.code == FG_OK_200) {
-			browser_completed_download(b, &result);
-		} else if (result.code == FG_ERR_404) {
-			if (b->state == SB_DOCUMENT) {
+	}
+	
+	result.code = filegetter_activate(&conn->fg);
+	result.connection = conn;
+	
+	switch (b->state) {
+		case SB_DOCUMENT:
+			if (result.code == FG_OK_200) {
+				browser_downloaded_document(b, &result);
+			} else if (result.code == FG_ERR_404) {
 				b->shadowlib->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "First document wasn't found");
 				b->state = SB_DONE;
-			} else {
+			} else if (result.code == FG_ERR_FATAL || result.code == FG_ERR_SOCKSCONN) {
+				/* Retry connection in 60 seconds because the Tor network might not be functional yet */
+				b->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "filegetter shutdown due to error '%s'... retrying in 60 seconds", filegetter_codetoa(result.code));
+				g_hash_table_steal(b->connections, &conn->fg.sockd);
+				filegetter_shutdown(&conn->fg);
+				b->state = SB_HIBERNATE;
+				b->shadowlib->createCallback(&browser_wakeup, b, 60*1000);
+			} else if (result.code != FG_ERR_WOULDBLOCK) {
+				b->shadowlib->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "filegetter shutdown due to error '%s' for first document", filegetter_codetoa(result.code));
+				g_hash_table_steal(b->connections, &sockfd);
+				filegetter_shutdown(&conn->fg);
+				b->state = SB_DONE;
+				browser_free(b);
+			}
+			
+			break;
+			
+		case SB_EMBEDDED_OBJECTS:
+			if (result.code == FG_OK_200) {
+				browser_downloaded_object(b, &result);
+			} else if (result.code == FG_ERR_404) {
 				b->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "Error 404: %s -> %s", result.connection->sspec.http_hostname, result.connection->fspec.remote_path);
-		
+	
 				/* try to reuse the connection */
 				if (!browser_reuse_connection(b, result.connection)) {
 					g_hash_table_remove(b->connections, &sockfd);
 				}
+			} else if (result.code == FG_ERR_FATAL || result.code == FG_ERR_SOCKSCONN || result.code != FG_ERR_WOULDBLOCK) {
+				b->shadowlib->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "filegetter shutdown due to error '%s' for %s -> %s",
+					filegetter_codetoa(result.code), result.connection->sspec.http_hostname, result.connection->fspec.remote_path);
+				g_hash_table_steal(b->connections, &sockfd);
+				filegetter_shutdown(&conn->fg);
 			}
-		} else if (result.code == FG_ERR_FATAL || result.code == FG_ERR_SOCKSCONN || result.code != FG_ERR_WOULDBLOCK) {
-			b->shadowlib->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "filegetter shutdown due to error '%s' for %s -> %s",
-						filegetter_codetoa(result.code), result.connection->sspec.http_hostname, result.connection->fspec.remote_path);
-			/* TODO: close browser */
-			g_hash_table_steal(b->connections, &sockfd);
-			filegetter_shutdown(&conn->fg);
-		}
-	}
-	
-	/* If there is no connection we are done */
-	if (!g_hash_table_size(b->connections)) {
-		b->state = SB_DONE;
-		clock_gettime(CLOCK_REALTIME, &b->embedded_end_time);
+			
+			/* If there is no connection left, we are done */
+			if (!g_hash_table_size(b->connections)) {
+				b->state = SB_DONE;
+				clock_gettime(CLOCK_REALTIME, &b->embedded_end_time);
+			}
+			
+			break;
+			
+		default:
+			b->shadowlib->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "Activate was called but state is SB_DOCUMENT nor SB_EMBEDDED_OBJECTS!");
+			break;
 	}
 }
 
