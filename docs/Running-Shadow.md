@@ -40,5 +40,6 @@ during the build process and installed to `~/.shadow/share` (or `/share` in your
 This may prevent the need to generate a synthetic topology and should make 
 running experiments easier by only requiring changes to the hosts.xml file. An 
 experiment using the included topology may then be run:
-$ shadow resource/topology.xml resource/example.hosts.xml
-
+```bash
+shadow resource/topology.xml resource/example.hosts.xml
+```
