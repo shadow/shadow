@@ -1,3 +1,5 @@
+**NOTE** - _this page is currently incomplete, its content is here for historical reasons_
+
 ## Topology File Format
 
 The topology was generated from the PlanetLab experiments from the Shadow design
