@@ -206,7 +206,7 @@ int torrentService_activate(TorrentService *tsvc, gint sockd, gint events, gint 
 			}
 
 			if(tsvc->client->blocksDownloaded >= tsvc->client->numBlocks) {
-				torrent_report(tsvc->client, "[client-complete]");
+				torrentService_report(tsvc->client, "[client-complete]");
 				clock_gettime(CLOCK_REALTIME, &(tsvc->client->download_end));
 				torrentClient_shutdown(tsvc->client);
 				tsvc->clientDone = 1;
