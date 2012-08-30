@@ -474,7 +474,6 @@ static void _scallion_new(gint argc, gchar* argv[]) {
 
 static void _scallion_free() {
 	scallion.shadowlibFuncs->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "scallion_free called");
-	scalliontor_free(scallion.stor);
 	
 	if (scallion.sfgEpoll) {
 		service_filegetter_stop(&scallion.sfg);
@@ -488,7 +487,7 @@ static void _scallion_free() {
 		torrentService_stop(&scallion.tsvc);
 	}
 	
-
+	scalliontor_free(scallion.stor);
 }
 
 static void _scallion_notify() {
