@@ -280,10 +280,7 @@ void torrent_activate() {
 			if(!torrent->clientDone  && torrent->client->totalBytesDown > 0) {
 				struct timespec now;
 				clock_gettime(CLOCK_REALTIME, &now);
-				if(torrent->client->totalBytesDown >= torrent->client->fileSize) {
-					torrent_report(torrent->client, "[client-complete]");
-					torrent->clientDone = 1;
-				} else if(res == TC_BLOCK_DOWNLOADED) {
+				if(res == TC_BLOCK_DOWNLOADED) {
 					torrent->lastReport = now;
 					torrent_report(torrent->client, "[client-block-complete]");
 				} else if(now.tv_sec - torrent->lastReport.tv_sec > 1 && torrent->client->currentBlockTransfer != NULL &&
@@ -291,6 +288,14 @@ void torrent_activate() {
 						   torrent->client->currentBlockTransfer->upBytesTransfered > 0)) {
 					torrent->lastReport = now;
 					torrent_report(torrent->client, "[client-block-progress]");
+				}
+
+				/* if all the blocks have been downloaded, report final statistics and shutdown the client */
+				if(torrent->client->blocksDownloaded >= torrent->client->numBlocks) {
+					torrent_report(torrent->client, "[client-complete]");
+					clock_gettime(CLOCK_REALTIME, &(torrent->client->download_end));
+					torrentClient_shutdown(torrent->client);
+					torrent->clientDone = 1;
 				}
 			}
 		}

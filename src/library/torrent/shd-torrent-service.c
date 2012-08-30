@@ -194,10 +194,8 @@ int torrentService_activate(TorrentService *tsvc, gint sockd, gint events, gint 
 		if(!tsvc->clientDone && tsvc->client && tsvc->client->totalBytesDown > 0) {
 			struct timespec now;
 			clock_gettime(CLOCK_REALTIME, &now);
-			if(tsvc->client->totalBytesDown >= tsvc->client->fileSize) {
-				torrentService_report(tsvc, "[client-complete]");
-				tsvc->clientDone = 1;
-			} else if(ret == TC_BLOCK_DOWNLOADED) {
+
+			if(ret == TC_BLOCK_DOWNLOADED) {
 				tsvc->lastReport = now;
 				torrentService_report(tsvc, "[client-block-complete]");
 			} else if(now.tv_sec - tsvc->lastReport.tv_sec > 1 && tsvc->client->currentBlockTransfer != NULL &&
@@ -205,6 +203,13 @@ int torrentService_activate(TorrentService *tsvc, gint sockd, gint events, gint 
 					   tsvc->client->currentBlockTransfer->upBytesTransfered > 0)) {
 				tsvc->lastReport = now;
 				torrentService_report(tsvc, "[client-block-progress]");
+			}
+
+			if(tsvc->client->blocksDownloaded >= tsvc->client->numBlocks) {
+				torrent_report(tsvc->client, "[client-complete]");
+				clock_gettime(CLOCK_REALTIME, &(tsvc->client->download_end));
+				torrentClient_shutdown(tsvc->client);
+				tsvc->clientDone = 1;
 			}
 		}
 	}

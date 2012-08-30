@@ -98,6 +98,7 @@ gint torrentClient_start(TorrentClient* tc, gint epolld, in_addr_t socksAddr, in
 	// TODO: This is for some reason not accurate
 	// ceil(fileSize / downBlockSize)
 	tc->numBlocks = (fileSize + downBlockSize - 1) / downBlockSize;
+	tc->blocksRemaining = tc->numBlocks;
 	tc->blocksDownloaded = 0;
 	tc->currentBlockTransfer = NULL;
 
@@ -382,18 +383,27 @@ gint torrentClient_activate(TorrentClient *tc, gint sockd, gint events) {
 				clock_gettime(CLOCK_REALTIME, &(tc->download_start));
 			}
 
-			gchar request[64];
-			sprintf(request, "FILE REQUEST\r\nTOR-COOKIE: %8.8X\r\n", (unsigned int)(rand() % UINT_MAX + 1));
-			bytes = send(sockd, request, strlen(request), 0);
-			TC_ASSERTIO(tc, bytes, errno == EWOULDBLOCK || errno == ENOTCONN || errno == EALREADY, TC_ERR_SEND);
-			torrentClient_changeEpoll(tc, sockd, EPOLLIN);
+			/* check to see if there are still blocks that need to be fetched */
+			if(tc->blocksRemaining > 0) {
+				gchar request[64];
+				sprintf(request, "FILE REQUEST\r\nTOR-COOKIE: %8.8X\r\n", (unsigned int)(rand() % UINT_MAX + 1));
+				bytes = send(sockd, request, strlen(request), 0);
+				TC_ASSERTIO(tc, bytes, errno == EWOULDBLOCK || errno == ENOTCONN || errno == EALREADY, TC_ERR_SEND);
+				torrentClient_changeEpoll(tc, sockd, EPOLLIN);
 
-			server->downBytesTransfered = 0;
-			server->upBytesTransfered = 0;
-			server->buf_read_offset = 0;
-			server->buf_write_offset = 0;
-			server->state = TC_SERVER_TRANSFER;
-			clock_gettime(CLOCK_REALTIME, &(server->download_start));
+				tc->blocksRemaining--;
+
+				server->downBytesTransfered = 0;
+				server->upBytesTransfered = 0;
+				server->buf_read_offset = 0;
+				server->buf_write_offset = 0;
+				server->state = TC_SERVER_TRANSFER;
+
+				clock_gettime(CLOCK_REALTIME, &(server->download_start));
+			} else {
+				server->state = TC_SERVER_IDLE;
+				torrentClient_changeEpoll(tc, sockd, EPOLLIN);
+			}
 			break;
 
 		case TC_SERVER_TRANSFER: {
@@ -463,12 +473,6 @@ gint torrentClient_activate(TorrentClient *tc, gint sockd, gint events) {
 
 		default:
 			break;
-	}
-
-	if(tc->totalBytesDown >= tc->fileSize) {
-		clock_gettime(CLOCK_REALTIME, &(tc->download_end));
-		torrentClient_shutdown(tc);
-		return ret;
 	}
 
 	return ret;
