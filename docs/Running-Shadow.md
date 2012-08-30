@@ -1,5 +1,3 @@
-**PLEASE NOTE** - _this page is lacking information and is in progress of being updated. browse with caution!_
-
 So you've got Shadow installed and your machine configured. Its time to see what Shadow can do!
 
 ## logistical crash course
