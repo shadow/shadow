@@ -14,11 +14,11 @@ installing dependencies, obtaining Shadow, manual dependencies, building and ins
 1. [[Running Shadow]]  
 topology and hosts XML files, running with shadow, shadow-bin, and scallion, built-in example experiments
 
-1. [[Running Shadow on EC2]]  
-getting started with our pre-configured AMI
-
 1. [[Analyzing results]]  
 the log file, parsing and plotting results
+
+1. [[Running Shadow on EC2]]  
+getting started with our pre-configured AMI
 
 1. [[Frequently asked questions]]  
 
