@@ -46,11 +46,11 @@ Luckily, Shadow contains a script to do this for you, should you so desire:
 ```bash
 ./contrib/installdeps.sh
 ```
-This script will ask before downloading anything and install openssl and libevent to `~/.shadow` by default. To change the install location (the argument passed to `--prefix`), set the envrionment variable `PREFIX` before running the script, like:
+This script will ask before downloading anything and install openssl and libevent to `~/.shadow` by default. To change the install location, set the envrionment variable `PREFIX` before running the script, like:
 ```bash
 PREFIX=/somewhere/else ./contrib/installdeps.sh
 ```
-Note the install location if you change the default, as you will need it when installing Shadow.
+If you set `PREFIX` as above, note the install location `/somewhere/else` as you will need it when installing Shadow.
 
 If you prefer to do things manually, please see the `contrib/installdeps.sh` script for the steps required. You'll need to configure openssl with something like `./config --prefix=/home/rob/.shadow shared threads -fPIC` and libevent with something like `./configure --prefix=/home/rob/.shadow --enable-shared CFLAGS="-fPIC -I/home/rob/.shadow" LDFLAGS="-L/home/rob/.shadow"`.
 
@@ -73,7 +73,7 @@ python setup install
 Important notes:  
 + The two most useful build options are `-g` or `--debug` to build Shadow with debugging symbols, and `--tor-prefix` to build Scallion with your local custom Tor distribution (instead of downloading one from torproject.org). 
 
-+ If you installed any dependencies somewhere other than `~/.shadow`, you should use the `--include` and `library` flags, and if you want to install Shadow somewhere besides `~/.shadow`, you should use the `--prefix` flag.
++ If you installed any dependencies somewhere other than `~/.shadow`, you should use the `--include` and `--library` flags, and if you want to install Shadow somewhere besides `~/.shadow`, you should use the `--prefix` flag.
 
 + It will probably be useful to add `~/.shadow/bin` (or `/bin` in your non-default install prefix) to your `PATH` following installation.
 
