@@ -185,7 +185,6 @@ static void scallion_start_torrent(void* arg) {
 static void scallion_start_browser(void* arg) {
 	g_assert(arg);
 	browser_args_tp args = arg;
-	scallion.shadowlibFuncs->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "printfdebugging");
 	scallion.browserEpoll = epoll_create(1);
 	scallion.browser.shadowlib = scallion.shadowlibFuncs;
 	gint sockfd = browser_launch(&scallion.browser, args, scallion.browserEpoll);
@@ -457,7 +456,6 @@ static void _scallion_new(gint argc, gchar* argv[]) {
 
 		scallion.shadowlibFuncs->createCallback(&scallion_start_torrent, launch, 600000);
 	} else if (ntype == VTOR_BROWSER) {
-		scallion.shadowlibFuncs->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "printfdebugging");
 		gchar** argvoffset = argv + 7;
 
 		browser_args_tp args = g_new0(browser_args_t, 1);
@@ -477,6 +475,20 @@ static void _scallion_new(gint argc, gchar* argv[]) {
 static void _scallion_free() {
 	scallion.shadowlibFuncs->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "scallion_free called");
 	scalliontor_free(scallion.stor);
+	
+	if (scallion.sfgEpoll) {
+		service_filegetter_stop(&scallion.sfg);
+	}
+	
+	if (scallion.browserEpoll) {
+		browser_free(&scallion.browser);
+	}
+	
+	if(scallion.tsvcClientEpoll || scallion.tsvcServerEpoll) {
+		torrentService_stop(&scallion.tsvc);
+	}
+	
+
 }
 
 static void _scallion_notify() {
