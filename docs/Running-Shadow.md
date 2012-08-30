@@ -1,3 +1,4 @@
+**PLEASE NOTE** - _this page is lacking information and is in progress of being updated. browse with caution!_
 ## running with shadow and shadow-bin
 
 The Shadow wrapper script, `shadow`, is used to handle some environmental variables that
