@@ -139,8 +139,7 @@ Scallion notes:
 + The `scallion` script automatically redirects all output from Tor into `./data`
 + The `./data` directory contains the private data directories from each Tor instance running in the experiment
 + All Shadow and Tor logging for every node is redirected to the `./data/scallion.log` file
-+ If `dstat` is installed, it output is redirected to `./data/dstat.log`
-+ The `scallion` script automatically redirects all output from Tor into `./data`
++ If `dstat` is installed, its output is redirected to `./data/dstat.log`
 
 The above toy example is not realistic for research purposes. More realistic network configurations can be found, compressed, in `resource/scallion-hosts`. To run one of these experiments:
 
