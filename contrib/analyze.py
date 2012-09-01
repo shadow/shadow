@@ -61,6 +61,7 @@ experiments = [
 ## </config>
 ##==========================================================================
 
+## PARSING DEFAULTS
 
 ## default path to shadow log file
 LOGPATH=os.path.abspath(os.path.expanduser("./shadow.log"))
@@ -68,6 +69,8 @@ LOGPATH=os.path.abspath(os.path.expanduser("./shadow.log"))
 OUTPUTPATH=os.path.abspath(os.path.expanduser("./results"))
 ## ignore parsed downloads after a default of 30 minutes
 CUTOFF=1800.0 
+
+## PLOTTING DEFAULTS
 
 ## default directory to store the single graphs we generate
 GRAPHPATH=os.path.abspath(os.path.expanduser("./graphs"))
@@ -699,14 +702,17 @@ def plot(args):
 
 # helper - save files
 def save(outputpath, filename, data):
-    if len(data) > 0: numpy.savetxt("{0}/{1}".format(outputpath, filename), data)
+    if len(data) > 0:
+        p = os.path.abspath(os.path.expanduser("{0}/{1}".format(outputpath, filename)))
+        print "Saving data to '{0}'".format(p)
+        numpy.savetxt(p, data)
 
 ## helper - load the data in the correct format for plotting
 def load(path):
-    p = os.path.abspath(path)
+    p = os.path.abspath(os.path.expanduser(path))
     if not os.path.exists(p): return []
     print "Loading data from '{0}'".format(p)
-    data = numpy.loadtxt(path)
+    data = numpy.loadtxt(p)
     return numpy.atleast_1d(data).tolist()
 
 # helper - parse shadow timestamps
