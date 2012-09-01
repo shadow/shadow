@@ -9,7 +9,9 @@ Then check the `doc/` directory. Documentation is currently sparse.
 
 ## Debugging
 
-To add extra debugging information and messages, add the `-g` flag when building Shadow. See the help menu with `python setup.py build --help`.
+When debugging, it will be helpful to use the Shadow option `--cpu-threshold=-1`. It disable the automatic virtual CPU delay measurement feature. This feature may introduce non-deterministic behaviors, even when running the exact same experiment twice, by the re-ordering of events that occurs due to how the kernel schedules the physical CPU of the experiment machine. Disabling the feature with the above option will ensure a deterministic experiment, making debugging easier. (See [this issue](https://github.com/shadow/shadow/issues/45))
+
+Build Shadow with debugging symbols by using the `-g` flag. See the help menu with `python setup.py build --help`.
 
 You will need to set `LD_PRELOAD` when running in gdb. Its value should contain a colon separated list of every 'preload' library (generally prefixed with `libshadow-preload` and installed to `~/.shadow/lib`):
 ```
