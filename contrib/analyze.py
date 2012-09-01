@@ -27,39 +27,7 @@ Utility to help analyze results from the Shadow simulator. Use
 '$ python analyze --help' to get started
 """
 
-import sys, os, argparse, subprocess, pylab, numpy
-
-##==========================================================================
-## <config>
-"""
-Modify this to include results from several experiments into each figure
-generated with the plot subcommand. Compressed results extracted with the parse 
-subcommand for each experiment should be in a separate directory. Specify those
-directories here, and some other plot options.
-
-Example:
-experiments = [
-("trial1", "b", "-", "./trial1/"),
-("trial2", "r", "--", "./trial2/"),
-]
-
-Format:
-A list of four-tuples for each trial, where:
--index 0 is the pylab label for the legend
--index 1 is the pylab color
--index 2 is the pylab linestyle
--index 3 is the output directory from the parse subcommand, containing the
-parsed gzipped results
-"""
-experiments = [
-    ("results", "k", "-", "./results"),
-#    ("tiny", "g", "-", "./tiny"),
-#    ("small", "b", "-", "./small"),
-#    ("medium", "r", "-", "./medium"),
-#    ("large", "k", "-", "./large"),
-]
-## </config>
-##==========================================================================
+import sys, os, argparse, subprocess, pylab, numpy, itertools
 
 ## PARSING DEFAULTS
 
@@ -75,9 +43,11 @@ CUTOFF=1800.0
 ## default directory to store the single graphs we generate
 GRAPHPATH=os.path.abspath(os.path.expanduser("./graphs"))
 ## the default prefix for the filenames of those graphs
-PREFIX="results-"
+PREFIX="results"
 ## include this title in each graph
 TITLE="Shadow Results"
+## use this line format cycle
+LINEFORMATS="k-,r-,b-,g-,c-,m-,y-,k--,r--,b--,g--,c--,m--,y--,k:,r:,b:,g:,c:,m:,y:,k-.,r-.,b-.,g-.,c-., m-.,y-."
 
 ## make font sizes larger
 #pylab.rcParams.update({'font.size': 16})
@@ -87,6 +57,22 @@ pylab.rcParams.update({'figure.subplot.left': 0.14})
 pylab.rcParams.update({'figure.subplot.right': 0.96})
 pylab.rcParams.update({'figure.subplot.bottom': 0.15})
 pylab.rcParams.update({'figure.subplot.top': 0.87})
+
+# a custom action for passing in experimental data directories when plotting
+class PlotDataAction(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        # extract the path to our data, and the label for the legend
+        datapath = os.path.abspath(os.path.expanduser(values[0]))
+        label = values[1]
+        # check the path exists
+        if not os.path.exists(datapath): raise argparse.ArgumentError(self, "The supplied path to the plot data does not exist: '{0}'".format(datapath))
+        # remove the default
+        if "_didremovedefault" not in namespace:
+            setattr(namespace, self.dest, [])
+            setattr(namespace, "_didremovedefault", True)
+        # append out new experiment path
+        dest = getattr(namespace, self.dest)
+        dest.append([datapath, label])
 
 def main():
     parser_main = argparse.ArgumentParser(
@@ -108,13 +94,14 @@ def main():
     parser_parse.set_defaults(func=parse, 
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     
-    # add parsing options
-    parser_parse.add_argument('-l', '--log', 
-        help="PATH to a Shadow log file", 
-        metavar="PATH",
-        action="store", dest="logpath",
+    # requried positional arg
+    parser_parse.add_argument('logpath', 
+        help="path to a Shadow log file", 
+        metavar="LOGFILE",
+        action="store",
         default=LOGPATH)
 
+    # add parsing options
     parser_parse.add_argument('-o', '--output', 
         help="""PATH to a directory where we should store extracted results. 
                 The directory will be created if it does not exist.""", 
@@ -134,19 +121,26 @@ def main():
                 subcommand to produce figures that graphically represent 
                 the experimental results. 
 
-                If you want to use this script to plot results, YOU MUST EDIT
-                THE SCRIPT WITH THE OUTPUT PATH TO YOUR PARSED RESULTS!
-
                 The output from each run of parse should be placed in separate 
                 directories, and each of those directories should be specified
-                in the "experiments" list at the top of this script. This way 
-                the script knows what results to plot, and we can combine 
-                results from multiple experiments into the same set of graphs.
-                (This may eventually move to a config file instead.)""",
+                with '-d' flags to the 'plot' subcommand (along with labels for 
+                the graph legends). This is done in order to combine results 
+                from multiple experiments into the same set of graphs.""",
         help="produce figures that graphically represent the experimental results",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser_plot.set_defaults(func=plot, 
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+
+    # required option so we know what we are plotting
+    parser_plot.add_argument('-d', '--data', 
+        help="""Append a PATH to the directory containing the compressed data 
+                that was output with the parse subcommand, and the LABEL for 
+                the graph legend for a set of experimental results""", 
+        metavar=("PATH", "LABEL"),
+        nargs=2,
+        required="True",
+        action=PlotDataAction, dest="experiments",
+        default=[[OUTPUTPATH, "results"]])
     
     # add plotting options
     parser_plot.add_argument('-t', '--title', 
@@ -166,6 +160,13 @@ def main():
         metavar="PATH",
         action="store", dest="graphpath",
         default=GRAPHPATH)
+
+    parser_plot.add_argument('-f', '--format',
+        help="""A comma-separated LIST of color/line format strings to cycle to 
+                matplotlib's plot command (see matplotlib.pyplot.plot)""", 
+        metavar="LIST",
+        action="store", dest="format",
+        default=LINEFORMATS)
 
     # get arguments, accessible with args.value
     args = parser_main.parse_args()
@@ -325,29 +326,31 @@ def plot(args):
     graphpath = os.path.abspath(os.path.expanduser(args.graphpath))
     prefix = args.prefix
     title = args.title
+    formats = args.format.strip().split(",")
+    experiments = args.experiments
 
     ## load the data archives
     data = {}
     for e in experiments:
         data[e[0]] = {
-            'ttfb-im': load("{0}/ttfb-im.gz".format(e[3])), 
-            'ttlb-im': load("{0}/ttlb-im.gz".format(e[3])), 
-            'ttfb-web': load("{0}/ttfb-web.gz".format(e[3])), 
-            'ttlb-web': load("{0}/ttlb-web.gz".format(e[3])), 
-            'ttfb-bulk': load("{0}/ttfb-bulk.gz".format(e[3])), 
-            'ttlb-bulk': load("{0}/ttlb-bulk.gz".format(e[3])), 
-            'ttfb-p2p': load("{0}/ttfb-p2p.gz".format(e[3])), 
-            'ttlb-p2p': load("{0}/ttlb-p2p.gz".format(e[3])), 
-            'ttfb-perf50k': load("{0}/ttfb-perf50k.gz".format(e[3])), 
-            'ttlb-perf50k': load("{0}/ttlb-perf50k.gz".format(e[3])), 
-            'ttfb-perf1m': load("{0}/ttfb-perf1m.gz".format(e[3])), 
-            'ttlb-perf1m': load("{0}/ttlb-perf1m.gz".format(e[3])), 
-            'ttfb-perf5m': load("{0}/ttfb-perf5m.gz".format(e[3])), 
-            'ttlb-perf5m': load("{0}/ttlb-perf5m.gz".format(e[3])), 
-            'time-virtual' : load("{0}/time-virtual.gz".format(e[3])),
-            'time-real' : load("{0}/time-real.gz".format(e[3])),
-            'tput-read' : load("{0}/tput-read.gz".format(e[3])),
-            'tput-write' : load("{0}/tput-write.gz".format(e[3])),
+            'ttfb-im': load("{0}/ttfb-im.gz".format(e[0])), 
+            'ttlb-im': load("{0}/ttlb-im.gz".format(e[0])), 
+            'ttfb-web': load("{0}/ttfb-web.gz".format(e[0])), 
+            'ttlb-web': load("{0}/ttlb-web.gz".format(e[0])), 
+            'ttfb-bulk': load("{0}/ttfb-bulk.gz".format(e[0])), 
+            'ttlb-bulk': load("{0}/ttlb-bulk.gz".format(e[0])), 
+            'ttfb-p2p': load("{0}/ttfb-p2p.gz".format(e[0])), 
+            'ttlb-p2p': load("{0}/ttlb-p2p.gz".format(e[0])), 
+            'ttfb-perf50k': load("{0}/ttfb-perf50k.gz".format(e[0])), 
+            'ttlb-perf50k': load("{0}/ttlb-perf50k.gz".format(e[0])), 
+            'ttfb-perf1m': load("{0}/ttfb-perf1m.gz".format(e[0])), 
+            'ttlb-perf1m': load("{0}/ttlb-perf1m.gz".format(e[0])), 
+            'ttfb-perf5m': load("{0}/ttfb-perf5m.gz".format(e[0])), 
+            'ttlb-perf5m': load("{0}/ttlb-perf5m.gz".format(e[0])), 
+            'time-virtual' : load("{0}/time-virtual.gz".format(e[0])),
+            'time-real' : load("{0}/time-real.gz".format(e[0])),
+            'tput-read' : load("{0}/tput-read.gz".format(e[0])),
+            'tput-write' : load("{0}/tput-write.gz".format(e[0])),
         }
 
     if not os.path.exists(graphpath): os.mkdir(graphpath)
@@ -364,13 +367,14 @@ def plot(args):
         if len(data[e[0]]['ttfb-im']) > 0: doplot = True
     if doplot:    
         pylab.figure()
-        for e in experiments: x, y = getcdf(data[e[0]]['ttfb-im']); pylab.plot(x, y, label="{0}".format(e[0]), c=e[1], ls=e[2])
+        styles = itertools.cycle(formats)
+        for e in experiments: x, y = getcdf(data[e[0]]['ttfb-im']); pylab.plot(x, y, styles.next(), label=e[1])
         pylab.title("{0}\nIM Clients".format(title))
         pylab.xlabel("Time to First Byte (s)")
         pylab.ylabel("Cumulative Fraction")
         pylab.xlim(xmin=0.0, xmax=10.0)
         pylab.legend(loc="lower right")
-        figname = "{0}/{1}ttfb-im.pdf".format(graphpath, prefix)
+        figname = "{0}/{1}-ttfb-im.pdf".format(graphpath, prefix)
         savedfigures.append(figname)
         pylab.savefig(figname)
 
@@ -379,13 +383,14 @@ def plot(args):
         if len(data[e[0]]['ttfb-web']) > 0: doplot = True
     if doplot:    
         pylab.figure()
-        for e in experiments: x, y = getcdf(data[e[0]]['ttfb-web']); pylab.plot(x, y, label="{0}".format(e[0]), c=e[1], ls=e[2])
+        styles = itertools.cycle(formats)
+        for e in experiments: x, y = getcdf(data[e[0]]['ttfb-web']); pylab.plot(x, y, styles.next(), label=e[1])
         pylab.title("{0}\nWeb Clients".format(title))
         pylab.xlabel("Time to First Byte (s)")
         pylab.ylabel("Cumulative Fraction")
         pylab.xlim(xmin=0.0, xmax=10.0)
         pylab.legend(loc="lower right")
-        figname = "{0}/{1}ttfb-web.pdf".format(graphpath, prefix)
+        figname = "{0}/{1}-ttfb-web.pdf".format(graphpath, prefix)
         savedfigures.append(figname)
         pylab.savefig(figname)
 
@@ -394,13 +399,14 @@ def plot(args):
         if len(data[e[0]]['ttfb-bulk']) > 0: doplot = True
     if doplot:    
         pylab.figure()
-        for e in experiments: x, y = getcdf(data[e[0]]['ttfb-bulk']); pylab.plot(x, y, label="{0}".format(e[0]), c=e[1], ls=e[2])
+        styles = itertools.cycle(formats)
+        for e in experiments: x, y = getcdf(data[e[0]]['ttfb-bulk']); pylab.plot(x, y, styles.next(), label=e[1])
         pylab.title("{0}\nBulk Clients".format(title))
         pylab.xlabel("Time to First Byte (s)")
         pylab.ylabel("Cumulative Fraction")
         pylab.xlim(xmin=0.0, xmax=10.0)
         pylab.legend(loc="lower right")
-        figname = "{0}/{1}ttfb-bulk.pdf".format(graphpath, prefix)
+        figname = "{0}/{1}-ttfb-bulk.pdf".format(graphpath, prefix)
         savedfigures.append(figname)
         pylab.savefig(figname)
 
@@ -409,13 +415,14 @@ def plot(args):
         if len(data[e[0]]['ttfb-p2p']) > 0: doplot = True
     if doplot:    
         pylab.figure()
-        for e in experiments: x, y = getcdf(data[e[0]]['ttfb-p2p']); pylab.plot(x, y, label="{0}".format(e[0]), c=e[1], ls=e[2])
+        styles = itertools.cycle(formats)
+        for e in experiments: x, y = getcdf(data[e[0]]['ttfb-p2p']); pylab.plot(x, y, styles.next(), label=e[1])
         pylab.title("{0}\nP2P Clients".format(title))
         pylab.xlabel("Time to First Byte (s)")
         pylab.ylabel("Cumulative Fraction")
         pylab.xlim(xmin=0.0, xmax=10.0)
         pylab.legend(loc="lower right")
-        figname = "{0}/{1}ttfb-p2p.pdf".format(graphpath, prefix)
+        figname = "{0}/{1}-ttfb-p2p.pdf".format(graphpath, prefix)
         savedfigures.append(figname)
         pylab.savefig(figname)
 
@@ -424,13 +431,14 @@ def plot(args):
         if len(data[e[0]]['ttfb-perf50k']) > 0: doplot = True
     if doplot:    
         pylab.figure()
-        for e in experiments: x, y = getcdf(data[e[0]]['ttfb-perf50k']); pylab.plot(x, y, label="{0}".format(e[0]), c=e[1], ls=e[2])
+        styles = itertools.cycle(formats)
+        for e in experiments: x, y = getcdf(data[e[0]]['ttfb-perf50k']); pylab.plot(x, y, styles.next(), label=e[1])
         pylab.title("{0}\nShadowPerf 50KiB Clients".format(title))
         pylab.xlabel("Time to First Byte (s)")
         pylab.ylabel("Cumulative Fraction")
         pylab.xlim(xmin=0.0, xmax=10.0)
         pylab.legend(loc="lower right")
-        figname = "{0}/{1}ttfb-perf50k.pdf".format(graphpath, prefix)
+        figname = "{0}/{1}-ttfb-perf50k.pdf".format(graphpath, prefix)
         savedfigures.append(figname)
         pylab.savefig(figname)
 
@@ -439,13 +447,14 @@ def plot(args):
         if len(data[e[0]]['ttfb-perf1m']) > 0: doplot = True
     if doplot:    
         pylab.figure()
-        for e in experiments: x, y = getcdf(data[e[0]]['ttfb-perf1m']); pylab.plot(x, y, label="{0}".format(e[0]), c=e[1], ls=e[2])
+        styles = itertools.cycle(formats)
+        for e in experiments: x, y = getcdf(data[e[0]]['ttfb-perf1m']); pylab.plot(x, y, styles.next(), label=e[1])
         pylab.title("{0}\nShadowPerf 1 MiB Clients".format(title))
         pylab.xlabel("Time to First Byte (s)")
         pylab.ylabel("Cumulative Fraction")
         pylab.xlim(xmin=0.0, xmax=10.0)
         pylab.legend(loc="lower right")
-        figname = "{0}/{1}ttfb-perf1m.pdf".format(graphpath, prefix)
+        figname = "{0}/{1}-ttfb-perf1m.pdf".format(graphpath, prefix)
         savedfigures.append(figname)
         pylab.savefig(figname)
 
@@ -454,13 +463,14 @@ def plot(args):
         if len(data[e[0]]['ttfb-perf5m']) > 0: doplot = True
     if doplot:    
         pylab.figure()
-        for e in experiments: x, y = getcdf(data[e[0]]['ttfb-perf5m']); pylab.plot(x, y, label="{0}".format(e[0]), c=e[1], ls=e[2])
+        styles = itertools.cycle(formats)
+        for e in experiments: x, y = getcdf(data[e[0]]['ttfb-perf5m']); pylab.plot(x, y, styles.next(), label=e[1])
         pylab.title("{0}\nShadowPerf 5MiB Clients".format(title))
         pylab.xlabel("Time to First Byte (s)")
         pylab.ylabel("Cumulative Fraction")
         pylab.xlim(xmin=0.0, xmax=10.0)
         pylab.legend(loc="lower right")
-        figname = "{0}/{1}ttfb-perf5m.pdf".format(graphpath, prefix)
+        figname = "{0}/{1}-ttfb-perf5m.pdf".format(graphpath, prefix)
         savedfigures.append(figname)
         pylab.savefig(figname)
 
@@ -475,13 +485,14 @@ def plot(args):
         if len(data[e[0]]['ttlb-im']) > 0: doplot = True
     if doplot:    
         pylab.figure()
-        for e in experiments: x, y = getcdf(data[e[0]]['ttlb-im']); pylab.plot(x, y, label="{0}".format(e[0]), c=e[1], ls=e[2])
+        styles = itertools.cycle(formats)
+        for e in experiments: x, y = getcdf(data[e[0]]['ttlb-im']); pylab.plot(x, y, styles.next(), label=e[1])
         pylab.title("{0}\nIM Clients".format(title))
         pylab.xlabel("Time to Last Byte (s)")
         pylab.ylabel("Cumulative Fraction")
         pylab.xlim(xmin=0.0, xmax=10.0)
         pylab.legend(loc="lower right")
-        figname = "{0}/{1}ttlb-im.pdf".format(graphpath, prefix)
+        figname = "{0}/{1}-ttlb-im.pdf".format(graphpath, prefix)
         savedfigures.append(figname)
         pylab.savefig(figname)
 
@@ -490,13 +501,14 @@ def plot(args):
         if len(data[e[0]]['ttlb-web']) > 0: doplot = True
     if doplot:    
         pylab.figure()
-        for e in experiments: x, y = getcdf(data[e[0]]['ttlb-web']); pylab.plot(x, y, label="{0}".format(e[0]), c=e[1], ls=e[2])
+        styles = itertools.cycle(formats)
+        for e in experiments: x, y = getcdf(data[e[0]]['ttlb-web']); pylab.plot(x, y, styles.next(), label=e[1])
         pylab.title("{0}\nWeb Clients".format(title))
         pylab.xlabel("Time to Last Byte (s)")
         pylab.ylabel("Cumulative Fraction")
         pylab.xlim(xmin=0.0, xmax=35.0)
         pylab.legend(loc="lower right")
-        figname = "{0}/{1}ttlb-web.pdf".format(graphpath, prefix)
+        figname = "{0}/{1}-ttlb-web.pdf".format(graphpath, prefix)
         savedfigures.append(figname)
         pylab.savefig(figname)
 
@@ -505,13 +517,14 @@ def plot(args):
         if len(data[e[0]]['ttlb-bulk']) > 0: doplot = True
     if doplot:    
         pylab.figure()
-        for e in experiments: x, y = getcdf(data[e[0]]['ttlb-bulk']); pylab.plot(x, y, label="{0}".format(e[0]), c=e[1], ls=e[2])
+        styles = itertools.cycle(formats)
+        for e in experiments: x, y = getcdf(data[e[0]]['ttlb-bulk']); pylab.plot(x, y, styles.next(), label=e[1])
         pylab.title("{0}\nBulk Clients".format(title))
         pylab.xlabel("Time to Last Byte (s)")
         pylab.ylabel("Cumulative Fraction")
         pylab.xlim(xmin=0.0, xmax=150.0)
         pylab.legend(loc="lower right")
-        figname = "{0}/{1}ttlb-bulk.pdf".format(graphpath, prefix)
+        figname = "{0}/{1}-ttlb-bulk.pdf".format(graphpath, prefix)
         savedfigures.append(figname)
         pylab.savefig(figname)
 
@@ -520,13 +533,14 @@ def plot(args):
         if len(data[e[0]]['ttlb-p2p']) > 0: doplot = True
     if doplot:    
         pylab.figure()
-        for e in experiments: x, y = getcdf(data[e[0]]['ttlb-p2p']); pylab.plot(x, y, label="{0}".format(e[0]), c=e[1], ls=e[2])
+        styles = itertools.cycle(formats)
+        for e in experiments: x, y = getcdf(data[e[0]]['ttlb-p2p']); pylab.plot(x, y, styles.next(), label=e[1])
         pylab.title("{0}\nP2P Clients".format(title))
         pylab.xlabel("Time to Last Byte (s)")
         pylab.ylabel("Cumulative Fraction")
         pylab.xlim(xmin=0.0, xmax=25.0)
         pylab.legend(loc="lower right")
-        figname = "{0}/{1}ttlb-p2p.pdf".format(graphpath, prefix)
+        figname = "{0}/{1}-ttlb-p2p.pdf".format(graphpath, prefix)
         savedfigures.append(figname)
         pylab.savefig(figname)
 
@@ -535,13 +549,14 @@ def plot(args):
         if len(data[e[0]]['ttlb-perf50k']) > 0: doplot = True
     if doplot:    
         pylab.figure()
-        for e in experiments: x, y = getcdf(data[e[0]]['ttlb-perf50k']); pylab.plot(x, y, label="{0}".format(e[0]), c=e[1], ls=e[2])
+        styles = itertools.cycle(formats)
+        for e in experiments: x, y = getcdf(data[e[0]]['ttlb-perf50k']); pylab.plot(x, y, styles.next(), label=e[1])
         pylab.title("{0}\nShadowPerf 50KiB Clients".format(title))
         pylab.xlabel("Time to Last Byte (s)")
         pylab.ylabel("Cumulative Fraction")
         pylab.xlim(xmin=0.0, xmax=10.0)
         pylab.legend(loc="lower right")
-        figname = "{0}/{1}ttlb-perf50k.pdf".format(graphpath, prefix)
+        figname = "{0}/{1}-ttlb-perf50k.pdf".format(graphpath, prefix)
         savedfigures.append(figname)
         pylab.savefig(figname)
 
@@ -550,13 +565,14 @@ def plot(args):
         if len(data[e[0]]['ttlb-perf1m']) > 0: doplot = True
     if doplot:    
         pylab.figure()
-        for e in experiments: x, y = getcdf(data[e[0]]['ttlb-perf1m']); pylab.plot(x, y, label="{0}".format(e[0]), c=e[1], ls=e[2])
+        styles = itertools.cycle(formats)
+        for e in experiments: x, y = getcdf(data[e[0]]['ttlb-perf1m']); pylab.plot(x, y, styles.next(), label=e[1])
         pylab.title("{0}\nShadowPerf 1 MiB Clients".format(title))
         pylab.xlabel("Time to Last Byte (s)")
         pylab.ylabel("Cumulative Fraction")
         pylab.xlim(xmin=0.0, xmax=50.0)
         pylab.legend(loc="lower right")
-        figname = "{0}/{1}ttlb-perf1m.pdf".format(graphpath, prefix)
+        figname = "{0}/{1}-ttlb-perf1m.pdf".format(graphpath, prefix)
         savedfigures.append(figname)
         pylab.savefig(figname)
 
@@ -565,13 +581,14 @@ def plot(args):
         if len(data[e[0]]['ttlb-perf5m']) > 0: doplot = True
     if doplot:    
         pylab.figure()
-        for e in experiments: x, y = getcdf(data[e[0]]['ttlb-perf5m']); pylab.plot(x, y, label="{0}".format(e[0]), c=e[1], ls=e[2])
+        styles = itertools.cycle(formats)
+        for e in experiments: x, y = getcdf(data[e[0]]['ttlb-perf5m']); pylab.plot(x, y, styles.next(), label=e[1])
         pylab.title("{0}\nShadowPerf 5MiB Clients".format(title))
         pylab.xlabel("Time to Last Byte (s)")
         pylab.ylabel("Cumulative Fraction")
         pylab.xlim(xmin=0.0, xmax=165.0)
         pylab.legend(loc="lower right")
-        figname = "{0}/{1}ttlb-perf5m.pdf".format(graphpath, prefix)
+        figname = "{0}/{1}-ttlb-perf5m.pdf".format(graphpath, prefix)
         savedfigures.append(figname)
         pylab.savefig(figname)
 
@@ -586,12 +603,13 @@ def plot(args):
         if len(data[e[0]]['time-real']) > 0 and len(data[e[0]]['time-virtual']) > 0: doplot = True
     if doplot:    
         pylab.figure()
-        for e in experiments: x = data[e[0]]['time-real']; y = data[e[0]]['time-virtual']; pylab.plot(x, y, label=e[0], c=e[1], ls=e[2])
+        styles = itertools.cycle(formats)
+        for e in experiments: x = data[e[0]]['time-real']; y = data[e[0]]['time-virtual']; pylab.plot(x, y, styles.next(), label=e[1])
         pylab.title("{0}\nExperiment Timing".format(title))
         pylab.xlabel("Real Time (h)")
         pylab.ylabel("Virtual Time (h)")
         pylab.legend(loc="lower right")
-        figname = "{0}/{1}timing.pdf".format(graphpath, prefix)
+        figname = "{0}/{1}-timing.pdf".format(graphpath, prefix)
         savedfigures.append(figname)
         pylab.savefig(figname)
 
@@ -601,18 +619,21 @@ def plot(args):
 
     print "Generating load/throughput graphs"
 
+    ## load over time
+
     doplot = False
     for e in experiments:
         if len(data[e[0]]['tput-read']) > 0: doplot = True
     if doplot:    
         pylab.figure()
-        for e in experiments: y = data[e[0]]['tput-read']; x = xrange(len(y)); pylab.plot(x, y, label=e[0], c=e[1], ls=e[2])
+        styles = itertools.cycle(formats)
+        for e in experiments: y = data[e[0]]['tput-read']; x = xrange(len(y)); pylab.plot(x, y, styles.next(), label=e[1])
         pylab.title("Network Data Read Over Time")
         pylab.xlabel("Tick (m)")
         pylab.ylabel("Total Read (MiB/s)")
         pylab.legend(loc="lower right")
         pylab.subplots_adjust(left=0.15)
-        figname = "{0}/{1}tput-read.pdf".format(graphpath, prefix)
+        figname = "{0}/{1}-tput-read.pdf".format(graphpath, prefix)
         savedfigures.append(figname)
         pylab.savefig(figname)
 
@@ -621,15 +642,18 @@ def plot(args):
         if len(data[e[0]]['tput-write']) > 0: doplot = True
     if doplot:    
         pylab.figure()
-        for e in experiments: y = data[e[0]]['tput-write']; x = xrange(len(y)); pylab.plot(x, y, label=e[0], c=e[1], ls=e[2])
+        styles = itertools.cycle(formats)
+        for e in experiments: y = data[e[0]]['tput-write']; x = xrange(len(y)); pylab.plot(x, y, styles.next(), label=e[1])
         pylab.title("Network Data Written Over Time")
         pylab.xlabel("Tick (m)")
         pylab.ylabel("Total Writen (MiB/s)")
         pylab.legend(loc="lower right")
         pylab.subplots_adjust(left=0.15)
-        figname = "{0}/{1}tput-write.pdf".format(graphpath, prefix)
+        figname = "{0}/{1}-tput-write.pdf".format(graphpath, prefix)
         savedfigures.append(figname)
         pylab.savefig(figname)
+
+    ## pie charts
 
     for e in experiments:
         web_num = len(data[e[0]]['ttlb-web'])
@@ -684,8 +708,8 @@ def plot(args):
         leg = pylab.legend(patches, labels, loc=(-0.3, -0.05), labelspacing=0.8)
         pylab.setp(leg.get_texts(), fontsize='6')
 
-        pylab.title("{0}\nTotal Client Load, {1}: {2} GiB".format(title, e[0], decimals(total_gib)))
-        figname = "{0}/{1}{2}-client-load.pdf".format(graphpath, prefix, e[0])
+        pylab.title("{0}\nTotal Client Load, {1}: {2} GiB".format(title, e[1], decimals(total_gib)))
+        figname = "{0}/{1}-{2}-clientload.pdf".format(graphpath, prefix, e[1])
         savedfigures.append(figname)
         pylab.savefig(figname)
 
@@ -694,7 +718,7 @@ def plot(args):
         print "Concatenating the graphs from {0} using the 'pdftk' program".format(graphpath)
         cmd = list(savedfigures)
         cmd.insert(0, "pdftk")
-        name = "{0}-combined.pdf".format(prefix[:len(prefix)-1])
+        name = "{0}-combined.pdf".format(prefix)
         cmd.extend(["cat", "output", name])
         subprocess.call(cmd)
         print "Successfully created '{0}'!".format(name)
