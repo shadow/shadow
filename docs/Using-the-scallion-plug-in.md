@@ -2,7 +2,7 @@
 
 The `resource/scallion-hosts` directory contains sample network configurations to get started with some Tor experiments. The maximum memory requirements are given below. Note that the smallest possible EC2 instance required to run these configurations are also given, but the memory requirement guidelines hold for any machine.
 
-The memory requirements of the included topologies, and the EC2 instances supporting those memory requirements are given below. If you wish to run Shadow on EC2, visit https://shadow.cs.umn.edu/cloud/
+The memory requirements of the included topologies, and the EC2 instances supporting those memory requirements are given below. For instructions on running Shadow in the cloud, visit [[Running Shadow on EC2]].
 
 ```
 Size    (# Nodes)                   RAM (GiB)   EC2 Instance
