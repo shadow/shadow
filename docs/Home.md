@@ -1,12 +1,10 @@
 ## Welcome to the Shadow wiki! 
 
-The wiki contains important information about installing and using Shadow, and analyzing results it produces.  
-**Please be patient** as it is a _work in progress_ :)
+The wiki contains important information about installing and using Shadow, and analyzing the results it produces. For details about Shadow's design, including its plug-in architecture and discrete-event engine, please visit [the design page on the Shadow website](http://shadow.cs.umn.edu/design/).
+
+**NOTE** - this wiki is a _work in progress_! You patience is appreciated :)
 
 ## Getting Started
-
-1. [[Shadow design overview]]  
-discrete-event engine, plug-in architecture
 
 1. [[Preparing your machine]]  
 installing dependencies, obtaining Shadow, manual dependencies, building and installing Shadow and its plug-ins, system configs and limits
