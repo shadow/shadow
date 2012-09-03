@@ -4,7 +4,7 @@ This section discusses the format of Shadow's log files, and how to analyze the 
 
 Shadow produces log messages in the following format:
 
-```
+```text
 real-time [thread-id] virtual-time [logdomain-loglevel] [hostname-ip] [function-name] MESSAGE
 ```
 
