@@ -6,17 +6,18 @@ The wiki contains important information about installing and using Shadow, and a
 
 ## Getting Started
 
-1. [[Preparing your machine]]  
-installing dependencies, obtaining Shadow, manual dependencies, building and installing Shadow and its plug-ins, system configs and limits
+1. Shadow Setup
+   + [[Preparing your machine]]  
+dependencies, downloading, building, and installing Shadow and its plug-ins, system configs and limits  
+**-OR-**
+   + [[Preparing an EC2 Instance|Running Shadow on EC2]]  
+getting started with our pre-configured AMI
 
 1. [[Running Shadow]]  
 topology and hosts XML files, running with shadow, shadow-bin, and scallion, built-in example experiments
 
 1. [[Analyzing results]]  
 the log file, parsing and plotting results
-
-1. [[Running Shadow on EC2]]  
-getting started with our pre-configured AMI
 
 1. [[Frequently asked questions]]  
 
