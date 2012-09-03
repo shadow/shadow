@@ -62,17 +62,11 @@ shadow ~/.shadow/share/topology.xml hosts.xml | grep browser_
 The output should be like the following:
 
 ```
-[browser_start] Trying to simulate browser access to /index.html on www.wikipedia.org
-[browser-message] [client.node-23.0.0.0] [browser_completed_download] first document downloaded and parsed, now getting 15 additional objects...
-[browser-message] [client.node-23.0.0.0] [browser_activate] done downloading embedded files
+[browser_launch] Trying to simulate browser access to /index.html on www.wikipedia.org
+[browser_downloaded_document] first document (46166 bytes) downloaded and parsed in 1.176 seconds, now getting 16 additional objects...
+[browser_free] Finished downloading 16/16 embedded objects (28376 bytes) in 1.395 seconds
 ```
 
 ## Implementation
 
 Like a browser, the plugin opens multiple persistent HTTP connections per host. The maximum of concurrent connections per host can be limited though (which all modern browser do [as well](http://www.browserscope.org/?category=network)). When there are more downloads than connections available the connections are reused once a download finishes.
-
-The implementation uses the filegetter-functions from the filetransfer-plugin, and extends those functions a little bit as follows:
-
-1. The flag `save_to_memory` was added to `filegetter_filespec_s` and  `GString*`  `content` was added to `filegetter_s`. If `save_to_memory` is set, then the content of the requested file is written to `content`. This allows parsing the HTML document downloaded initially.
-
-1. To manage persistent connections, the flag  `persistent` was added to `filegetter_serverspec_s`. When `persistent` is set, a connection is not closed when the download is complete (state `FG_CHECK_DOWNLOAD`). This means if `persistent` is set, the connection is not closed until `filegetter_disconnect` is explicitly called by the user and that multiple files can be downloaded through the same connection.
