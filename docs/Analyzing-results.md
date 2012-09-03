@@ -75,4 +75,4 @@ Each of the directories `buffer-128kb/`, `buffer-1mb/`, and `buffer-2mb/` now co
 python contrib/analyze.py plot --title "Shadow Interface Receive Buffer Test" --prefix "buffer" --data buffer-128kb/ "128 KB" --data buffer-1mb/ "1 MB" --data buffer-2mb/ "2 MB"
 ```
 
-See any of the graphs in `./graphs`, or if you have `pdftk` installed, you can simply view the `-combined.pdf` file.
+See any of the graphs in `./graphs`, or if you have `pdftk` installed, you can simply view the `buffer-combined.pdf` file.
