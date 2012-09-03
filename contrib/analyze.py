@@ -182,8 +182,8 @@ def parse(args):
     if not os.path.exists(outputpath): os.makedirs(outputpath)
 
     # will store the perf data we extract, keyed by client type
-    ttfb = {'web': [], 'bulk': [], 'im': [], 'p2p': [], 'perf50k' : [], 'perf1m' : [], 'perf5m' : []}
-    ttlb = {'web': [], 'bulk': [], 'im': [], 'p2p': [], 'perf50k' : [], 'perf1m' : [], 'perf5m' : []}
+    ttfb = {'web': [], 'bulk': [], 'im': [], 'p2p': [], 'perf50k' : [], 'perf1m' : [], 'perf5m' : [], 'other' : []}
+    ttlb = {'web': [], 'bulk': [], 'im': [], 'p2p': [], 'perf50k' : [], 'perf1m' : [], 'perf5m' : [], 'other' : []}
 
     # will store the throughput data (total bytes over time)
     tput = {'read' : {}, 'write' : {}}
@@ -217,7 +217,7 @@ def parse(args):
                 # dont look at perf before the cuttoff
                 if virtualt < cutoff: continue
 
-                # perf data
+                # filetransfer plug-in stats
                 if parts[6] == "[fg-download-complete]":
                     fbtime = float(parts[11])
                     bytes = float(parts[16])
@@ -241,8 +241,12 @@ def parse(args):
                     elif nodename.find("perfclient5m") > -1:
                         ttfb['perf5m'].append(fbtime)
                         ttlb['perf5m'].append(lbtime)
+                    else:
+                        ttfb['other'].append(fbtime)
+                        ttlb['other'].append(lbtime)
 #                   else: print nodename, bytes; assert 0
 
+                # torrent plug-in stats
                 elif parts[6]== "[client-block-complete]":
                     fbtime = float(parts[10])
                     bytes = float(parts[19])
@@ -250,7 +254,7 @@ def parse(args):
                     ttfb['p2p'].append(fbtime)
                     ttlb['p2p'].append(lbtime)
 
-                # throughput data
+                # shadow core stats
                 if parts[5] == "[tracker_heartbeat]":
                     cpu_percent = float(parts[8])
                     mem_total_kib = float(parts[11])
@@ -285,6 +289,7 @@ def parse(args):
     save(outputpath, "ttfb-perf50k.gz", ttfb['perf50k'])
     save(outputpath, "ttfb-perf1m.gz", ttfb['perf1m'])
     save(outputpath, "ttfb-perf5m.gz", ttfb['perf5m'])
+    save(outputpath, "ttfb-other.gz", ttfb['other'])
 
     save(outputpath, "ttlb-im.gz", ttlb['im'])
     save(outputpath, "ttlb-web.gz", ttlb['web'])
@@ -293,6 +298,7 @@ def parse(args):
     save(outputpath, "ttlb-perf50k.gz", ttlb['perf50k'])
     save(outputpath, "ttlb-perf1m.gz", ttlb['perf1m'])
     save(outputpath, "ttlb-perf5m.gz", ttlb['perf5m'])
+    save(outputpath, "ttlb-other.gz", ttlb['other'])
 
     save(outputpath, "time-virtual.gz", times['virtual'])
     save(outputpath, "time-real.gz", times['real'])
@@ -305,7 +311,7 @@ def parse(args):
 
     print "Some quick stats:"
 
-    countmsg = "\tdownload counts: {0} web, {1} bulk".format(len(ttlb['web']), len(ttlb['bulk']))
+    countmsg = "\tdownload counts: {0} web, {1} bulk, {2} im, {3} p2p, {4} perf50k, {5} perf1m, {6} perf5m, {7} other".format(len(ttlb['web']), len(ttlb['bulk']), len(ttlb['im']), len(ttlb['p2p']), len(ttlb['perf50k']), len(ttlb['perf1m']), len(ttlb['perf5m']), len(ttlb['other']))
     tputreadmsg = "\ttput read MiB/s: {0} min, {1} max, {2} median, {3} mean".format(min(tput['read'].values()), max(tput['read'].values()), numpy.median(tput['read'].values()), numpy.mean(tput['read'].values()))
     tputwritemsg = "\ttput write MiB/s: {0} min, {1} max, {2} median, {3} mean".format(min(tput['write'].values()), max(tput['write'].values()), numpy.median(tput['write'].values()), numpy.mean(tput['write'].values()))
     timemsg = "\ttiming hours: {0} virtual in {1} real".format(times['virtual'][-1], times['real'][-1])
@@ -347,6 +353,8 @@ def plot(args):
             'ttlb-perf1m': load("{0}/ttlb-perf1m.gz".format(e[0])), 
             'ttfb-perf5m': load("{0}/ttfb-perf5m.gz".format(e[0])), 
             'ttlb-perf5m': load("{0}/ttlb-perf5m.gz".format(e[0])), 
+            'ttfb-other': load("{0}/ttfb-other.gz".format(e[0])), 
+            'ttlb-other': load("{0}/ttlb-other.gz".format(e[0])), 
             'time-virtual' : load("{0}/time-virtual.gz".format(e[0])),
             'time-real' : load("{0}/time-real.gz".format(e[0])),
             'tput-read' : load("{0}/tput-read.gz".format(e[0])),
@@ -474,6 +482,22 @@ def plot(args):
         savedfigures.append(figname)
         pylab.savefig(figname)
 
+    doplot = False
+    for e in experiments:
+        if len(data[e[0]]['ttfb-other']) > 0: doplot = True
+    if doplot:    
+        pylab.figure()
+        styles = itertools.cycle(formats)
+        for e in experiments: x, y = getcdf(data[e[0]]['ttfb-other']); pylab.plot(x, y, styles.next(), label=e[1])
+        pylab.title("{0}\nOther File Clients".format(title))
+        pylab.xlabel("Time to First Byte (s)")
+        pylab.ylabel("Cumulative Fraction")
+        pylab.xlim(xmin=0.0, xmax=10.0)
+        pylab.legend(loc="lower right")
+        figname = "{0}/{1}-ttfb-other.pdf".format(graphpath, prefix)
+        savedfigures.append(figname)
+        pylab.savefig(figname)
+
     ######################
     # time to last byte  #
     ######################
@@ -592,6 +616,22 @@ def plot(args):
         savedfigures.append(figname)
         pylab.savefig(figname)
 
+    doplot = False
+    for e in experiments:
+        if len(data[e[0]]['ttlb-other']) > 0: doplot = True
+    if doplot:    
+        pylab.figure()
+        styles = itertools.cycle(formats)
+        for e in experiments: x, y = getcdf(data[e[0]]['ttlb-other']); pylab.plot(x, y, styles.next(), label=e[1])
+        pylab.title("{0}\nOther File Clients".format(title))
+        pylab.xlabel("Time to Last Byte (s)")
+        pylab.ylabel("Cumulative Fraction")
+        pylab.xlim(xmin=0.0, xmax=165.0)
+        pylab.legend(loc="lower right")
+        figname = "{0}/{1}-ttlb-other.pdf".format(graphpath, prefix)
+        savedfigures.append(figname)
+        pylab.savefig(figname)
+
     ######################
     # run timings        #
     ######################
@@ -664,6 +704,9 @@ def plot(args):
         perf1m_num = len(data[e[0]]['ttlb-perf1m'])
         perf5m_num = len(data[e[0]]['ttlb-perf5m'])
 
+        ## we generally dont know the size of these downloads
+        #other_num = len(data[e[0]]['ttlb-other'])
+
         total_num = web_num + bulk_num + im_num + p2p_num + perf50k_num + perf1m_num + perf5m_num
 
         web_gib = web_num * 320.0 / (1024.0*1024.0)
@@ -676,42 +719,43 @@ def plot(args):
 
         total_gib = web_gib + bulk_gib + im_gib + p2p_gib + perf50k_gib + perf1m_gib + perf5m_gib
 
-        pylab.figure()
-        pylab.axes([0.2, 0.05, 0.6, 0.8])
+        if total_num > 0:
+            pylab.figure()
+            pylab.axes([0.2, 0.05, 0.6, 0.8])
 
-        labels, fractions = [], []
-        if web_num > 0: 
-            fractions.append(web_gib/total_gib)
-            labels.append("Web\n{1}\%\n{0}GiB".format(decimals(web_gib), decimals(100.0*fractions[-1])))
-        if bulk_num > 0: 
-            fractions.append(bulk_gib/total_gib)
-            labels.append("Bulk\n{1}\%\n{0}GiB".format(decimals(bulk_gib), decimals(100.0*fractions[-1])))
-        if im_num > 0: 
-            fractions.append(im_gib/total_gib)
-            labels.append("IM\n{1}\%\n{0}GiB".format(decimals(im_gib), decimals(100.0*fractions[-1])))
-        if p2p_num > 0: 
-            fractions.append(p2p_gib/total_gib)
-            labels.append("P2P\n{1}\%\n{0}GiB".format(decimals(p2p_gib), decimals(100.0*fractions[-1])))
-        if perf50k_num > 0: 
-            fractions.append(perf50k_gib/total_gib)
-            labels.append("Perf50K\n{1}\%\n{0}GiB".format(decimals(perf50k_gib), decimals(100.0*fractions[-1])))
-        if perf1m_num > 0: 
-            fractions.append(perf1m_gib/total_gib)
-            labels.append("Perf1M\n{1}\%\n{0}GiB".format(decimals(perf1m_gib), decimals(100.0*fractions[-1])))
-        if perf5m_num > 0: 
-            fractions.append(perf5m_gib/total_gib)
-            labels.append("Perf5M\n{1}\%\n{0}GiB".format(decimals(perf5m_gib), decimals(100.0*fractions[-1])))
+            labels, fractions = [], []
+            if web_num > 0: 
+                fractions.append(web_gib/total_gib)
+                labels.append("Web\n{1}\%\n{0}GiB".format(decimals(web_gib), decimals(100.0*fractions[-1])))
+            if bulk_num > 0: 
+                fractions.append(bulk_gib/total_gib)
+                labels.append("Bulk\n{1}\%\n{0}GiB".format(decimals(bulk_gib), decimals(100.0*fractions[-1])))
+            if im_num > 0: 
+                fractions.append(im_gib/total_gib)
+                labels.append("IM\n{1}\%\n{0}GiB".format(decimals(im_gib), decimals(100.0*fractions[-1])))
+            if p2p_num > 0: 
+                fractions.append(p2p_gib/total_gib)
+                labels.append("P2P\n{1}\%\n{0}GiB".format(decimals(p2p_gib), decimals(100.0*fractions[-1])))
+            if perf50k_num > 0: 
+                fractions.append(perf50k_gib/total_gib)
+                labels.append("Perf50K\n{1}\%\n{0}GiB".format(decimals(perf50k_gib), decimals(100.0*fractions[-1])))
+            if perf1m_num > 0: 
+                fractions.append(perf1m_gib/total_gib)
+                labels.append("Perf1M\n{1}\%\n{0}GiB".format(decimals(perf1m_gib), decimals(100.0*fractions[-1])))
+            if perf5m_num > 0: 
+                fractions.append(perf5m_gib/total_gib)
+                labels.append("Perf5M\n{1}\%\n{0}GiB".format(decimals(perf5m_gib), decimals(100.0*fractions[-1])))
 
-        # show fractions of pie with autopct='%1.2f%%'
-        patches = pylab.pie(fractions, explode=[0.1]*len(fractions), autopct=None, shadow=True)
+            # show fractions of pie with autopct='%1.2f%%'
+            patches = pylab.pie(fractions, explode=[0.1]*len(fractions), autopct=None, shadow=True)
 
-        leg = pylab.legend(patches, labels, loc=(-0.3, -0.05), labelspacing=0.8)
-        pylab.setp(leg.get_texts(), fontsize='6')
+            leg = pylab.legend(patches, labels, loc=(-0.3, -0.05), labelspacing=0.8)
+            pylab.setp(leg.get_texts(), fontsize='6')
 
-        pylab.title("{0}\nTotal Client Load, {1}: {2} GiB".format(title, e[1], decimals(total_gib)))
-        figname = "{0}/{1}-{2}-clientload.pdf".format(graphpath, prefix, e[1])
-        savedfigures.append(figname)
-        pylab.savefig(figname)
+            pylab.title("{0}\nTotal Client Load, {1}: {2} GiB".format(title, e[1], decimals(total_gib)))
+            figname = "{0}/{1}-{2}-clientload.pdf".format(graphpath, prefix, e[1])
+            savedfigures.append(figname)
+            pylab.savefig(figname)  
 
     ## concat the subgraphs into a single .pdf
     if which('pdftk') is not None:
