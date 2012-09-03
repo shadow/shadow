@@ -17,7 +17,7 @@ cd ../
 
 This will create directories for each hostname (namely `bits.wikimedia.org`,`en.wikipedia.org`, `upload.wikimedia.org` and `www.wikipedia.org`) and download the HTML document and the embedded resources to the respective directory.
 
-Then each hostname need to node in shadow. The host file, hosts.xml, for this example should therefore look something like this:
+Then each hostname needs to have a node in Shadow. The host file, hosts.xml, for this example should therefore look something like this:
 
 ```xml
 <!-- 
@@ -50,13 +50,13 @@ The arguments for the browser plugin denote the following:
 2. HTTP server port
 3. SOCKS proxy address/name
 4. SOCKS proxy port
-5. Maximum amount of concurrent connection per host
+5. Maximum amount of concurrent connections per host
 6. Path of the HTML document
 
-To run the example, make sure you have './hosts.xml', './some-directory/', and '~/.shadow/share/topology.xml'.
+To run the example, make sure you have `./hosts.xml`, `./some-directory/`, and `~/.shadow/share/topology.xml`.
 
 ```
-shadow ~/.shadow/share/topology.xml hosts.xml
+shadow ~/.shadow/share/topology.xml hosts.xml | grep browser_
 ```
 
 The output should be like the following:
