@@ -56,23 +56,21 @@ python contrib/analyze.py plot --help
 As a quick example of how to use the script, consider a set of experiments where we would like to analyze the effect of changing the size of our nodes' network interface receive buffer. We run the following 3 experiments:
 
 ```bash
-shadow --interface-buffer=128000 --file > buffer-128kb.log
-shadow --interface-buffer=1024000 --file > buffer-1mb.log
-shadow --interface-buffer=2024000 --file > buffer-2mb.log
+shadow --tcp-windows=1 --file > window1.log
+shadow --tcp-windows=1000 --file > window1000.log
 ```
 
 To parse these log files, we use the `contrib/analyze.py` script as follows:
 
 ```bash
-python contrib/analyze.py parse --cutoff=0 --output=buffer-128kb buffer-128kb.log
-python contrib/analyze.py parse --cutoff=0 --output=buffer-1mb buffer-1mb.log
-python contrib/analyze.py parse --cutoff=0 --output=buffer-2mb buffer-2mb.log
+python contrib/analyze.py parse --cutoff=0 --output=window1 window1.log
+python contrib/analyze.py parse --cutoff=0 --output=window1000 window1000.log
 ```
 
-Each of the directories `buffer-128kb/`, `buffer-1mb/`, and `buffer-2mb/` now contain data statistics files extracted from the log files. We can now combine and visualize these results by plotting them with pylab:
+Each of the directories `window1/` and `window1000/` now contain data statistics files extracted from the log files. We can now combine and visualize these results by plotting them with pylab:
 
 ```bash
-python contrib/analyze.py plot --title "Shadow Interface Receive Buffer Test" --prefix "buffer" --data buffer-128kb/ "128 KB" --data buffer-1mb/ "1 MB" --data buffer-2mb/ "2 MB"
+python contrib/analyze.py plot --title "Shadow TCP Window Test" --prefix "window" --data window1/ "1 packet" --data window1000/ "1000 packets"
 ```
 
-See any of the graphs in `./graphs`, or if you have `pdftk` installed, you can simply view the `buffer-combined.pdf` file.
+See any of the graphs in `./graphs`, or if you have `pdftk` installed, you can simply view the `window-combined.pdf` file.
