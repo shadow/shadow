@@ -9,7 +9,7 @@ The wiki contains important information about installing and using Shadow, and a
 1. Shadow Setup
    + [[Preparing your machine]]  
 dependencies, downloading, building, and installing Shadow and its plug-ins, system configs and limits  
-**-OR-**
+_-or-_
    + [[Preparing an EC2 Instance|Running Shadow on EC2]]  
 getting started with our pre-configured AMI
 
