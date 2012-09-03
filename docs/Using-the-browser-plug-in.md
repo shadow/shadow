@@ -1,4 +1,4 @@
-This plug-in tries to immitate the behaviour of a modern browser: it not only downloads an HTML document (which is already possible with the [filetransfer plug-in](https://github.com/shadow/shadow/wiki/Using-the-filetransfer-plug-in)), but also parses the HTML and downloads the following embedded objects:
+This plug-in tries to immitate the behaviour of a modern browser: it not only downloads an HTML document (which is already possible with the [filetransfer plug-in](https://github.com/shadow/shadow/wiki/Using-the-filetransfer-plug-in)), but also parses the HTML and downloads the following types of embedded objects:
 
 + favorite icons
 + stylesheets (embedded with a link-tag)
