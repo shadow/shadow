@@ -9,7 +9,7 @@ real-time [thread-id] virtual-time [logdomain-loglevel] [hostname-ip] [function-
 ```
 
 + _real-time_:  
-the wall clock time since the start of the experiment, represented as `hours:minutes:seconds:nanoseconds`
+the wall clock time since the start of the experiment, represented as `hours:minutes:seconds:microseconds`
 + _thread-id_:  
 the ID of the worker thread that generated the message
 + _virtual-time_:  
