@@ -220,7 +220,6 @@ def build(args):
             cmake_cmd += " -DSCALLION_DOREFILL=1"
             log("Tor configured to use refill callbacks")
     
-    
     # now we will be using cmake to build shadow and the plug-ins
     os.chdir(builddir+"/shadow")
     
@@ -277,6 +276,10 @@ def install(args):
 
 def setup_tor(args):
     log("checking Tor source dependencies...")
+
+    if which("aclocal") is None or which("autoheader") is None or which("autoconf") is None or which("automake") is None:
+        log("ERROR!: missing dependencies - please install 'automake' and 'autoconf', or make sure they are in your PATH")
+        return -1
     
     # if custom Tor prefix given, always blow away Tor's build directory
     if args.tor_prefix is not None:
@@ -456,6 +459,21 @@ def query_yes_no(question, default="yes"):
         if default is not None and choice == '': return valid[default]
         elif choice in valid: return valid[choice]
         else: sys.stdout.write("Please respond with 'yes' or 'no' (or 'y' or 'n').\n")
+
+## helper - test if program is in path
+def which(program):
+    def is_exe(fpath):
+        return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
+    fpath, fname = os.path.split(program)
+    if fpath:
+        if is_exe(program):
+            return program
+    else:
+        for path in os.environ["PATH"].split(os.pathsep):
+            exe_file = os.path.join(path, program)
+            if is_exe(exe_file):
+                return exe_file
+    return None
     
 def log(msg):
     color_start_code = "\033[94m" # red: \033[91m"
