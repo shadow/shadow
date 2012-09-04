@@ -4,21 +4,21 @@ This page discusses how to prepare your machine to begin running Shadow experime
 Shadow relies on the following tools and libraries to function properly. Versions and plug-in-specific dependencies are noted in parenthesis where applicable:
 * gcc
 * make
-* automake (scallion plug-in only)
-* autoconf (scallion plug-in only)
 * xz-utils
 * python (= 2.7)
 * cmake (>= 2.8)
 * glib (>= 2.28.8)
+* automake (scallion plug-in only)
+* autoconf (scallion plug-in only)
 * libtidy (scallion and browser plug-ins only)
 
 To install these using the Fedora package manager, try something like:
 ```bash
-sudo yum install -y gcc xz python cmake libtidy libtidy-devel glib2 glib2-devel
+sudo yum install -y gcc xz automake autoconf python cmake libtidy libtidy-devel glib2 glib2-devel
 ```
 On Ubuntu, try:
 ```bash
-sudo apt-get -y install gcc xz-utils python2.7 cmake tidy libtidy-dev libglib2.0 libglib2.0-dev
+sudo apt-get -y install gcc xz-utils  automake autoconf python2.7 cmake tidy libtidy-dev libglib2.0 libglib2.0-dev
 ```
 These may also be downloaded and installed locally if preferred.
 
