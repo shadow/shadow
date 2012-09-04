@@ -121,7 +121,7 @@ scallion -y
 cd ../
 ```
 
-Since the `scallion` script redirect log messages to `data/scallion.log`, the following commands can be used to parse and plot those results:
+Since the `scallion` script redirects log messages to `data/scallion.log`, the following commands can be used to parse and plot those results:
 
 ```bash
 python ../../contrib/analyze.py parse --output vanilla-results vanilla/data/scallion.log
