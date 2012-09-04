@@ -119,6 +119,11 @@ scallion -y
 cd ../priority
 scallion -y
 cd ../
+```
+
+Since the `scallion` script redirect log messages to `data/scallion.log`, the following commands can be used to parse and plot those results:
+
+```bash
 python ../../contrib/analyze.py parse --output vanilla-results vanilla/data/scallion.log
 python ../../contrib/analyze.py parse --output priority-results priority/data/scallion.log
 python ../../contrib/analyze.py plot --title "Shadow Scheduler Test" --prefix "scheduler" --data vanilla-results/ "vanilla" --data priority-results/ "priority"
