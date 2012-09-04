@@ -75,7 +75,7 @@ python contrib/analyze.py plot --help
 Here are some quick examples of how to use the `analyze.py` script.
 
 ### filetransfer
-Consider a set of experiments where we would like to analyze the effect of changing the size of our nodes' network interface receive buffer. We run the following 3 experiments:
+Consider a set of experiments where we would like to analyze the effect of changing the size of our nodes' network interface receive buffer. We run the following 2 experiments:
 
 ```bash
 shadow --tcp-windows=1 --file > window1.log
