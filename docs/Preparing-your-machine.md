@@ -18,7 +18,7 @@ sudo yum install -y gcc xz automake autoconf python cmake libtidy libtidy-devel 
 ```
 On Ubuntu, try:
 ```bash
-sudo apt-get -y install gcc xz-utils  automake autoconf python2.7 cmake tidy libtidy-dev libglib2.0 libglib2.0-dev
+sudo apt-get -y install gcc xz-utils automake autoconf python2.7 cmake tidy libtidy-dev libglib2.0 libglib2.0-dev
 ```
 These may also be downloaded and installed locally if preferred.
 
