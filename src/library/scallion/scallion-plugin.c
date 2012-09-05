@@ -108,7 +108,7 @@ static void scallion_start_socks_client(void* arg) {
 		scallion.sfgEpoll = epoll_create(1);
 		int sockd = 0;
 
-		if(launch->is_single == 1) {
+		if(launch->is_single) {
 			service_filegetter_single_args_tp args = launch->service_filegetter_args;
 
 			service_filegetter_start_single(&scallion.sfg, args, scallion.sfgEpoll, &sockd);
@@ -119,20 +119,6 @@ static void scallion_start_socks_client(void* arg) {
 			free(args->socks_proxy.port);
 			free(args->num_downloads);
 			free(args->filepath);
-			free(args);
-		} else if(launch->is_single == 2) {
-			service_filegetter_double_args_tp args = launch->service_filegetter_args;
-
-			service_filegetter_start_double(&scallion.sfg, args, scallion.sfgEpoll, &sockd);
-
-			free(args->http_server.host);
-			free(args->http_server.port);
-			free(args->socks_proxy.host);
-			free(args->socks_proxy.port);
-			free(args->filepath1);
-			free(args->filepath2);
-			free(args->filepath3);
-			free(args->pausetime_seconds);
 			free(args);
 		} else {
 			service_filegetter_multi_args_tp args = launch->service_filegetter_args;
@@ -359,43 +345,6 @@ static void _scallion_new(gint argc, gchar* argv[]) {
 			args->sleep_cb = &_scallion_sleepCallback;
 
 			launch->is_single = 1;
-			launch->service_filegetter_args = args;
-		} else if(strncmp(fileClientMode, "double", 6) == 0 && argc == 17) {
-			service_filegetter_double_args_tp args = malloc(sizeof(service_filegetter_double_args_t));
-
-			size_t s;
-
-			s = strnlen(argvoffset[2], 128)+1;
-			args->http_server.host = malloc(s);
-			snprintf(args->http_server.host, s, argvoffset[2]);
-
-			s = strnlen(argvoffset[3], 128)+1;
-			args->http_server.port = malloc(s);
-			snprintf(args->http_server.port, s, argvoffset[3]);
-
-			s = strnlen(argvoffset[4], 128)+1;
-			args->socks_proxy.host = malloc(s);
-			snprintf(args->socks_proxy.host, s, argvoffset[4]);
-
-			s = strnlen(argvoffset[5], 128)+1;
-			args->socks_proxy.port = malloc(s);
-			snprintf(args->socks_proxy.port, s, argvoffset[5]);
-
-			args->filepath1 = _scallion_getHomePath(argvoffset[6]);
-
-			args->filepath2 = _scallion_getHomePath(argvoffset[7]);
-
-			args->filepath3 = _scallion_getHomePath(argvoffset[8]);
-
-			s = strnlen(argvoffset[9], 128)+1;
-			args->pausetime_seconds = malloc(s);
-			snprintf(args->pausetime_seconds, s, argvoffset[9]);
-
-			args->log_cb = &_scallion_sfgLogCallback;
-			args->hostbyname_cb = &_scallion_HostnameCallback;
-			args->sleep_cb = &_scallion_sleepCallback;
-
-			launch->is_single = 2;
 			launch->service_filegetter_args = args;
 		} else {
 			scallion.shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, usage);

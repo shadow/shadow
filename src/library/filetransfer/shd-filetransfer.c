@@ -21,6 +21,7 @@
 
 #include <arpa/inet.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "shd-filetransfer.h"
 
@@ -101,7 +102,6 @@ void filetransfer_new(int argc, char* argv[]) {
 	const gchar* USAGE = "\nFiletransfer usage:\n"
 			"\t'server serverListenPort pathToDocRoot'\n"
 			"\t'client single fileServerHostname fileServerPort socksServerHostname(or 'none') socksServerPort nDownloads pathToFile'\n"
-			"\t'client double fileServerHostname fileServerPort socksServerHostname(or 'none') socksServerPort pathToFile1 pathToFile2 pathToFile3(or 'none') secondsPause'\n"
 			"\t'client multi pathToDownloadSpec socksServerHostname(or 'none') socksServerPort pathToThinktimeCDF(or 'none') secondsRunTime(or '-1')'\n";
 	if(argc < 2) goto printUsage;
 
@@ -148,35 +148,9 @@ void filetransfer_new(int argc, char* argv[]) {
 			}
 
 			g_free(args.filepath);
-		} else if(g_strncasecmp(clientMode, "double", 6) == 0){
-			service_filegetter_double_args_t args;
-
-			args.http_server.host = argv[3];
-			args.http_server.port = argv[4];
-			args.socks_proxy.host = argv[5];
-			args.socks_proxy.port = argv[6];
-			args.filepath1 = _filetransfer_getHomePath(argv[7]);
-			args.filepath2 = _filetransfer_getHomePath(argv[8]);
-			args.filepath3 = _filetransfer_getHomePath(argv[9]);
-			args.pausetime_seconds = argv[10];
-
-			args.log_cb = &_filetransfer_logCallback;
-			args.hostbyname_cb = &_filetransfer_HostnameCallback;
-			args.sleep_cb = &_filetransfer_sleepCallback;
-
-			enum filegetter_code result = service_filegetter_start_double(ft->client, &args, epolld, &sockd);
-
-			if(result != FG_SUCCESS) {
-				ft->shadowlib->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "fileclient error, not started!");
-				g_free(ft->client);
-				ft->client = NULL;
-			}
-
-			g_free(args.filepath1);
-			g_free(args.filepath2);
-			g_free(args.filepath3);
 		} else if(g_strncasecmp(clientMode, "multi", 5) == 0) {
 			service_filegetter_multi_args_t args;
+			memset(&args, 0, sizeof(service_filegetter_multi_args_t));
 
 			args.server_specification_filepath = _filetransfer_getHomePath(argv[3]);
 			args.socks_proxy.host = argv[4];

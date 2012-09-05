@@ -39,7 +39,7 @@ enum service_filegetter_state {
 };
 
 enum service_filegetter_type {
-	SFG_SINGLE, SFG_DOUBLE, SFG_MULTI
+	SFG_SINGLE, SFG_MULTI,
 };
 
 typedef void (*service_filegetter_log_cb)(enum service_filegetter_loglevel level, const gchar* message);
@@ -60,18 +60,6 @@ typedef struct service_filegetter_single_args_s {
 	gchar* num_downloads;
 	gchar* filepath;
 } service_filegetter_single_args_t, *service_filegetter_single_args_tp;
-
-typedef struct service_filegetter_double_args_s {
-	service_filegetter_server_args_t http_server;
-	service_filegetter_server_args_t socks_proxy;
-	service_filegetter_log_cb log_cb;
-	service_filegetter_hostbyname_cb hostbyname_cb;
-	service_filegetter_sleep_cb sleep_cb;
-	gchar* pausetime_seconds;
-	gchar* filepath1;
-	gchar* filepath2;
-	gchar* filepath3;
-} service_filegetter_double_args_t, *service_filegetter_double_args_tp;
 
 typedef struct service_filegetter_multi_args_s {
 	gchar* server_specification_filepath;
@@ -94,9 +82,6 @@ typedef struct service_filegetter_s {
 	filegetter_t fg;
 	GTree* downloads;
 	service_filegetter_download_tp current_download;
-	service_filegetter_download_tp download1;
-	service_filegetter_download_tp download2;
-	service_filegetter_download_tp download3;
 	service_filegetter_hostbyname_cb hostbyname_cb;
 	service_filegetter_sleep_cb sleep_cb;
 	service_filegetter_log_cb log_cb;
@@ -110,7 +95,6 @@ typedef struct service_filegetter_s {
 } service_filegetter_t, *service_filegetter_tp;
 
 enum filegetter_code service_filegetter_start_single(service_filegetter_tp sfg, service_filegetter_single_args_tp args, gint epolld, gint* sockd_out);
-enum filegetter_code service_filegetter_start_double(service_filegetter_tp sfg, service_filegetter_double_args_tp args, gint epolld, gint* sockd_out);
 enum filegetter_code service_filegetter_start_multi(service_filegetter_tp sfg, service_filegetter_multi_args_tp args, gint epolld, gint* sockd_out);
 enum filegetter_code service_filegetter_activate(service_filegetter_tp sfg, gint sockd);
 enum filegetter_code service_filegetter_stop(service_filegetter_tp sfg);

@@ -152,8 +152,7 @@ static enum filegetter_code service_filegetter_download_next(service_filegetter_
 			/* follow through to set the download */
 		}
 
-		case SFG_SINGLE:
-		case SFG_DOUBLE: {
+		case SFG_SINGLE: {
 			enum filegetter_code result = filegetter_download(&sfg->fg, &sfg->current_download->sspec, &sfg->current_download->fspec);
 			service_filegetter_log(sfg, SFG_DEBUG, "filegetter set specs code: %s", filegetter_codetoa(result));
 
@@ -210,56 +209,6 @@ enum filegetter_code service_filegetter_start_single(service_filegetter_tp sfg,
 	if(sfg->downloads_requested <= 0) {
 		service_filegetter_log(sfg, SFG_WARNING, "you didn't want to download anything?");
 		return FG_ERR_INVALID;
-	}
-
-	return service_filegetter_launch(sfg, epolld, sockd_out);
-}
-
-enum filegetter_code service_filegetter_start_double(service_filegetter_tp sfg,
-		service_filegetter_double_args_tp args, gint epolld, gint* sockd_out) {
-	assert(sfg);
-	assert(args);
-
-	memset(sfg, 0, sizeof(service_filegetter_t));
-
-	sfg->type = SFG_DOUBLE;
-	sfg->state = SFG_NONE;
-
-	/* if null, we ignore logging */
-	sfg->log_cb = args->log_cb;
-
-	/* not required if they only give us addresses. we complain later if needed */
-	sfg->hostbyname_cb = args->hostbyname_cb;
-
-	sfg->sleep_cb = args->sleep_cb;
-	if(sfg->sleep_cb == NULL) {
-		service_filegetter_log(sfg, SFG_CRITICAL, "sleep callback function required");
-		return FG_ERR_INVALID;
-	}
-
-	/* we download two files, store our specification in current and next */
-	sfg->download1 = service_filegetter_get_download_from_args(sfg, &args->http_server, &args->socks_proxy, args->filepath1, args->hostbyname_cb);
-	sfg->download2 = service_filegetter_get_download_from_args(sfg, &args->http_server, &args->socks_proxy, args->filepath2, args->hostbyname_cb);
-
-	if(sfg->download1 == NULL || sfg->download2 == NULL) {
-		return FG_ERR_INVALID;
-	}
-
-	if(g_strncasecmp(args->filepath3, "none", 4) == 0) {
-		sfg->download3 = NULL;
-	} else {
-		sfg->download3 = service_filegetter_get_download_from_args(sfg, &args->http_server, &args->socks_proxy, args->filepath3, args->hostbyname_cb);
-		if(sfg->download3 == NULL) {
-			return FG_ERR_INVALID;
-		}
-	}
-
-	sfg->current_download = sfg->download1;
-
-	sfg->pausetime_seconds = atoi(args->pausetime_seconds);
-	if(sfg->pausetime_seconds < 0) {
-		service_filegetter_log(sfg, SFG_WARNING, "silently setting incorrect pausetime to 1 second?");
-		sfg->pausetime_seconds = 1;
 	}
 
 	return service_filegetter_launch(sfg, epolld, sockd_out);
@@ -481,40 +430,6 @@ reactivate:;
 				/* call the sleep function, then check if we are done thinking */
 				(*sfg->sleep_cb)(sfg, sleeptime);
 				goto start_over;
-			} else if(sfg->type == SFG_DOUBLE) {
-				gint time_to_pause = 0;
-
-				if(sfg->current_download == sfg->download1) {
-					service_filegetter_log(sfg, SFG_NOTICE, "[fg-gdouble] download1 %lu.%.3d seconds", stats.download_time.tv_sec, (gint) (stats.download_time.tv_nsec / 1000000));
-					sfg->current_download = sfg->download2;
-				} else if(sfg->current_download == sfg->download2) {
-					service_filegetter_log(sfg, SFG_NOTICE, "[fg-gdouble] download2 %lu.%.3d seconds", stats.download_time.tv_sec, (gint) (stats.download_time.tv_nsec / 1000000));
-					if(sfg->download3 == NULL) {
-						time_to_pause = 1;
-						sfg->current_download = sfg->download1;
-					} else {
-						sfg->current_download = sfg->download3;
-					}
-				} else if(sfg->current_download == sfg->download3) {
-					service_filegetter_log(sfg, SFG_NOTICE, "[fg-gdouble] download3 %lu.%.3d seconds", stats.download_time.tv_sec, (gint) (stats.download_time.tv_nsec / 1000000));
-					time_to_pause = 1;
-					sfg->current_download = sfg->download1;
-				} else {
-					service_filegetter_log(sfg, SFG_WARNING, "filegetter download confusion. i dont know what to download next. starting over.");
-					sfg->current_download = sfg->download1;
-				}
-
-				if(time_to_pause) {
-					/* set wakeup timer and call the sleep function  */
-					clock_gettime(CLOCK_REALTIME, &sfg->wakeup);
-					sfg->wakeup.tv_sec += sfg->pausetime_seconds;
-					(*sfg->sleep_cb)(sfg, sfg->pausetime_seconds);
-					service_filegetter_log(sfg, SFG_NOTICE, "[fg-pause] pausing for %i seconds", sfg->pausetime_seconds);
-				} else {
-					/* reset download file */
-					service_filegetter_download_next(sfg);
-					goto reactivate;
-				}
 			} else {
 				/* reset download file */
 				service_filegetter_download_next(sfg);
