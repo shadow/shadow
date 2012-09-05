@@ -1,7 +1,9 @@
 This page discusses how to prepare your machine to begin running Shadow experiments.
 ## installing dependencies
 
-Shadow relies on the following tools and libraries to function properly. Versions and plug-in-specific dependencies are noted in parenthesis where applicable:
+Shadow relies on the following tools and libraries to function properly. Versions and plug-in-specific dependencies are noted in parenthesis where applicable
+
+Required:
 * gcc
 * make
 * xz-utils
@@ -12,13 +14,20 @@ Shadow relies on the following tools and libraries to function properly. Version
 * autoconf (scallion plug-in only)
 * libtidy (scallion and browser plug-ins only)
 
+Recommended:
+* dstat
+* pdftk
+* matplotlib
+* numpy
+* scipy
+
 To install these using the Fedora package manager, try something like:
 ```bash
-sudo yum install -y gcc xz automake autoconf python cmake libtidy libtidy-devel glib2 glib2-devel
+sudo yum install -y gcc xz automake autoconf python cmake libtidy libtidy-devel glib2 glib2-devel python-matplotlib numpy scipy
 ```
 On Ubuntu, try:
 ```bash
-sudo apt-get -y install gcc xz-utils automake autoconf python2.7 cmake tidy libtidy-dev libglib2.0 libglib2.0-dev
+sudo apt-get -y install gcc xz-utils automake autoconf python2.7 cmake tidy libtidy-dev libglib2.0 libglib2.0-dev python-matplotlib python-numpy python-scipy 
 ```
 These may also be downloaded and installed locally if preferred.
 
