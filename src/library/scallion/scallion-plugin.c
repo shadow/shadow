@@ -132,6 +132,9 @@ static void scallion_start_socks_client(void* arg) {
 				free(args->thinktimes_cdf_filepath);
 			}
 			free(args->runtime_seconds);
+			if(args->num_downloads != NULL) {
+				free(args->num_downloads);
+			}
 			free(args);
 		}
 		free(launch);
@@ -280,8 +283,8 @@ static void _scallion_new(gint argc, gchar* argv[]) {
 
 		gchar* fileClientMode = argvoffset[1];
 
-		if(strncmp(fileClientMode, "multi", 5) == 0 && argc == 14) {
-			service_filegetter_multi_args_tp args = malloc(sizeof(service_filegetter_multi_args_t));
+		if(strncmp(fileClientMode, "multi", 5) == 0 && (argc == 14 || argc == 15)) {
+			service_filegetter_multi_args_tp args = g_new0(service_filegetter_multi_args_t, 1);
 
 			size_t s;
 
@@ -301,6 +304,12 @@ static void _scallion_new(gint argc, gchar* argv[]) {
 			s = strnlen(argvoffset[6], 128)+1;
 			args->runtime_seconds = malloc(s);
 			snprintf(args->runtime_seconds, s, argvoffset[6]);
+
+			if(argc > 14) {
+				s = strnlen(argvoffset[7], 128)+1;
+				args->num_downloads = malloc(s);
+				snprintf(args->num_downloads, s, argvoffset[7]);
+			}
 
 			if(strncmp(args->thinktimes_cdf_filepath, "none", 4) == 0) {
 				free(args->thinktimes_cdf_filepath);

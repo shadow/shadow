@@ -65,6 +65,7 @@ typedef struct service_filegetter_multi_args_s {
 	gchar* server_specification_filepath;
 	gchar* thinktimes_cdf_filepath;
 	gchar* runtime_seconds;
+	gchar* num_downloads;
 	service_filegetter_server_args_t socks_proxy;
 	service_filegetter_hostbyname_cb hostbyname_cb;
 	service_filegetter_sleep_cb sleep_cb;

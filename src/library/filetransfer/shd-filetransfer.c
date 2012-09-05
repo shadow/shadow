@@ -102,7 +102,7 @@ void filetransfer_new(int argc, char* argv[]) {
 	const gchar* USAGE = "\nFiletransfer usage:\n"
 			"\t'server serverListenPort pathToDocRoot'\n"
 			"\t'client single fileServerHostname fileServerPort socksServerHostname(or 'none') socksServerPort nDownloads pathToFile'\n"
-			"\t'client multi pathToDownloadSpec socksServerHostname(or 'none') socksServerPort pathToThinktimeCDF(or 'none') secondsRunTime(or '-1')'\n";
+			"\t'client multi pathToDownloadSpec socksServerHostname(or 'none') socksServerPort pathToThinktimeCDF(or 'none') secondsRunTime(or '-1') [nDownloads(or '-1')]'\n";
 	if(argc < 2) goto printUsage;
 
 	/* parse command line args, first is program name */
@@ -157,6 +157,10 @@ void filetransfer_new(int argc, char* argv[]) {
 			args.socks_proxy.port = argv[5];
 			args.thinktimes_cdf_filepath = _filetransfer_getHomePath(argv[6]);
 			args.runtime_seconds = argv[7];
+
+			if(argc > 8) {
+				args.num_downloads = argv[8];
+			}
 
 			if(g_strncasecmp(args.thinktimes_cdf_filepath, "none", 4) == 0) {
 				args.thinktimes_cdf_filepath = NULL;

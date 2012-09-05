@@ -324,6 +324,10 @@ enum filegetter_code service_filegetter_start_multi(service_filegetter_tp sfg,
 		sfg->expire.tv_sec += runtime_seconds;
 	}
 
+	if(args->num_downloads) {
+		sfg->downloads_requested = atoi(args->num_downloads);
+	}
+
 	return service_filegetter_launch(sfg, epolld, sockd_out);
 }
 
@@ -411,7 +415,8 @@ reactivate:;
 		/* report completion stats */
 		service_filegetter_report(sfg, SFG_NOTICE, "[fg-download-complete]", &stats, sfg->downloads_completed, sfg->downloads_requested);
 
-		if(sfg->downloads_completed == sfg->downloads_requested) {
+		if(sfg->downloads_requested > 0 &&
+				sfg->downloads_completed >= sfg->downloads_requested) {
 			return service_filegetter_expire(sfg);
 		} else {
 			if(sfg->type == SFG_MULTI && sfg->think_times != NULL) {
