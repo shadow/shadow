@@ -25,16 +25,16 @@ the log file, parsing and plotting results
 
 1. [[Developer Notes]]
 
-1. [[Generating network configurations]]
-
 1. [[XML Topology Format|Topology Format]]
 
-1. [[Using the filetransfer plug-in]]
+1. Documentation for the built-in plug-ins
 
-1. [[Using the browser plug-in]]
++ [[Using filetransfer|Using the filetransfer plug-in]]
 
-1. [[Using the torrent plug-in]]
++ [[Using browser|Using the browser plug-in]]
 
-1. [[Using the scallion plug-in]]
++ [[Using torrent|Using the torrent plug-in]]
+
++ [[Using scallion|Using the scallion plug-in]]
 
 1. [[Writing your own plug-in for Shadow|Writing Custom Plug-ins]]
