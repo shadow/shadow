@@ -37,7 +37,7 @@ Shadow includes a heartbeat message that contains some useful system information
 
 + CPU _value_ %:  
 the percentage of time spent executing code _inside_ the plug-in over the previous interval  
-**NOTE**: _this value will be 0 if using `--cpu-threshold=-1`__
+**NOTE**: _this value will be 0 if using `--cpu-threshold=-1`_
 + MEM _value_ KiB:  
 the total memory currently consumed by the node's plug-in, in Kibibytes
 + interval _value_ seconds:  
