@@ -150,4 +150,4 @@ cd tiny-m1.large
 scallion -i hosts.xml
 ```
 
-Note that these experiments will take on the order of 30 minutes to several hours, and consume ~4 to ~64 GiB of RAM, depending which size you run (tiny, small, medium, large). See [[Using the scallion plug-in]] for more information, [[Analyzing results]] for help parsing the output, and [[Generating network configurations]] for details on generating your own Scallion `hosts.xml` file.
+Note that these experiments will take on the order of 30 minutes to several hours, and consume ~4 to ~64 GiB of RAM, depending which size you run (tiny, small, medium, large). See [[Using the scallion plug-in]] for more information and for details on generating your own Scallion `hosts.xml` file, and [[Analyzing results]] for help parsing the output.
