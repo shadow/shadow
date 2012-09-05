@@ -28,13 +28,9 @@ the log file, parsing and plotting results
 1. [[XML Topology Format|Topology Format]]
 
 1. Documentation for the built-in plug-ins
-
-+ [[Using filetransfer|Using the filetransfer plug-in]]
-
-+ [[Using browser|Using the browser plug-in]]
-
-+ [[Using torrent|Using the torrent plug-in]]
-
-+ [[Using scallion|Using the scallion plug-in]]
+   + [[Using filetransfer|Using the filetransfer plug-in]]
+   + [[Using browser|Using the browser plug-in]]
+   + [[Using torrent|Using the torrent plug-in]]
+   + [[Using scallion|Using the scallion plug-in]]
 
 1. [[Writing your own plug-in for Shadow|Writing Custom Plug-ins]]
