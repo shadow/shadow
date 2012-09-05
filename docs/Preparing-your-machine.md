@@ -3,7 +3,7 @@ This page discusses how to prepare your machine to begin running Shadow experime
 
 Shadow relies on the following tools and libraries to function properly. Versions and plug-in-specific dependencies are noted in parenthesis where applicable
 
-Required:
+**Required**:
 * gcc
 * make
 * xz-utils
@@ -14,7 +14,7 @@ Required:
 * autoconf (scallion plug-in only)
 * libtidy (scallion and browser plug-ins only)
 
-Recommended:
+**Recommended**:
 * dstat
 * pdftk
 * matplotlib
