@@ -1173,68 +1173,70 @@ gssize tcp_receiveUserData(TCP* tcp, gpointer buffer, gsize nBytes, in_addr_t* i
 
 	gsize remaining = nBytes;
 	gsize bytesCopied = 0;
+	gsize totalCopied = 0;
 	gsize offset = 0;
 	gsize copyLength = 0;
 
-	while(remaining > 0) {
-		/* check if we have a partial packet waiting to get finished */
-		if(tcp->partialUserDataPacket) {
-			guint partialLength = packet_getPayloadLength(tcp->partialUserDataPacket);
-			guint partialBytes = partialLength - tcp->partialOffset;
-			g_assert(partialBytes > 0);
+	/* check if we have a partial packet waiting to get finished */
+	if(remaining > 0 && tcp->partialUserDataPacket) {
+		guint partialLength = packet_getPayloadLength(tcp->partialUserDataPacket);
+		guint partialBytes = partialLength - tcp->partialOffset;
+		g_assert(partialBytes > 0);
 
-			copyLength = MIN(partialBytes, remaining);
-			bytesCopied += packet_copyPayload(tcp->partialUserDataPacket, tcp->partialOffset, buffer, copyLength);
-			remaining -= copyLength;
-			offset += copyLength;
+		copyLength = MIN(partialBytes, remaining);
+		bytesCopied = packet_copyPayload(tcp->partialUserDataPacket, tcp->partialOffset, buffer, copyLength);
+		totalCopied += bytesCopied;
+		remaining -= bytesCopied;
+		offset += bytesCopied;
 
-			if(copyLength >= partialBytes) {
-				/* we finished off the partial packet */
-				packet_unref(tcp->partialUserDataPacket);
-				tcp->partialUserDataPacket = NULL;
-				tcp->partialOffset = 0;
-			} else {
-				/* still more partial bytes left */
-				tcp->partialOffset += bytesCopied;
-				g_assert(remaining == 0);
-
-				/* make sure we are still marked as readable for this partial packet */
-				descriptor_adjustStatus(&(tcp->super.super.super), DS_READABLE, TRUE);
-				break;
-			}
+		if(bytesCopied >= partialBytes) {
+			/* we finished off the partial packet */
+			packet_unref(tcp->partialUserDataPacket);
+			tcp->partialUserDataPacket = NULL;
+			tcp->partialOffset = 0;
+		} else {
+			/* still more partial bytes left */
+			tcp->partialOffset += bytesCopied;
+			g_assert(remaining == 0);
 		}
+	}
 
-		/* get the next buffered packet */
+	while(remaining > 0) {
+		/* if we get here, we should have read the partial packet above, or
+		 * broken out below */
+		g_assert(tcp->partialUserDataPacket == NULL);
+		g_assert(tcp->partialOffset == 0);
+
+		/* get the next buffered packet - we'll always need it.
+		 * this could mark the socket as unreadable if this is its last packet.*/
 		Packet* packet = socket_removeFromInputBuffer((Socket*)tcp);
 		if(!packet) {
 			/* no more packets or partial packets */
-			descriptor_adjustStatus(&(tcp->super.super.super), DS_READABLE, FALSE);
 			break;
 		}
 
 		guint packetLength = packet_getPayloadLength(packet);
 		copyLength = MIN(packetLength, remaining);
-		bytesCopied += packet_copyPayload(packet, 0, buffer + offset, copyLength);
-		remaining -= copyLength;
-		offset += copyLength;
+		bytesCopied = packet_copyPayload(packet, 0, buffer + offset, copyLength);
+		totalCopied += bytesCopied;
+		remaining -= bytesCopied;
+		offset += bytesCopied;
 
-		if(copyLength < packetLength) {
+		if(bytesCopied < packetLength) {
 			/* we were only able to read part of this packet */
 			tcp->partialUserDataPacket = packet;
-			tcp->partialOffset = copyLength;
-
-			/* make sure we are still marked as readable for this partial packet */
-			descriptor_adjustStatus(&(tcp->super.super.super), DS_READABLE, TRUE);
+			tcp->partialOffset = bytesCopied;
 			break;
-		} else {
-			/* we read the entire packet, and are now finished with it */
-			packet_unref(packet);
 		}
+
+		/* we read the entire packet, and are now finished with it */
+		packet_unref(packet);
 	}
 
 	/* return 0 to signal close if we have EOF and no more data */
 	if((tcp->unorderedInputLength == 0) && (tcp->super.inputBufferLength == 0) &&
-			(tcp->error & TCPE_RECEIVE_EOF) && (bytesCopied == 0))
+			(tcp->partialUserDataPacket == NULL) &&(tcp->error & TCPE_RECEIVE_EOF)
+			&& (totalCopied == 0))
 	{
 		if(tcp->flags & TCPF_EOF_SIGNALED) {
 			/* we already signaled close, now its an error */
@@ -1246,9 +1248,17 @@ gssize tcp_receiveUserData(TCP* tcp, gpointer buffer, gsize nBytes, in_addr_t* i
 		}
 	}
 
-	debug("%s <-> %s: receiving %lu user bytes", tcp->super.boundString, tcp->super.peerString, bytesCopied);
+	if((tcp->super.inputBufferLength > 0) || (tcp->partialUserDataPacket != NULL)) {
+		/* we still have readable data */
+		descriptor_adjustStatus(&(tcp->super.super.super), DS_READABLE, TRUE);
+	} else {
+		/* all of our ordered user data is gone */
+		descriptor_adjustStatus(&(tcp->super.super.super), DS_READABLE, FALSE);
+	}
 
-	return (gssize) (bytesCopied == 0 ? -1 : bytesCopied);
+	debug("%s <-> %s: receiving %lu user bytes", tcp->super.boundString, tcp->super.peerString, totalCopied);
+
+	return (gssize) (totalCopied == 0 ? -1 : totalCopied);
 }
 
 void tcp_free(TCP* tcp) {
