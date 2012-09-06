@@ -1233,27 +1233,33 @@ gssize tcp_receiveUserData(TCP* tcp, gpointer buffer, gsize nBytes, in_addr_t* i
 		packet_unref(packet);
 	}
 
-	/* return 0 to signal close if we have EOF and no more data */
-	if((tcp->unorderedInputLength == 0) && (tcp->super.inputBufferLength == 0) &&
-			(tcp->partialUserDataPacket == NULL) &&(tcp->error & TCPE_RECEIVE_EOF)
-			&& (totalCopied == 0))
-	{
-		if(tcp->flags & TCPF_EOF_SIGNALED) {
-			/* we already signaled close, now its an error */
-			return -2;
-		} else {
-			/* we have not signaled close, do that now */
-			_tcp_endOfFileSignalled(tcp);
-			return 0;
-		}
-	}
-
+	/* now we update readability of the socket */
 	if((tcp->super.inputBufferLength > 0) || (tcp->partialUserDataPacket != NULL)) {
 		/* we still have readable data */
 		descriptor_adjustStatus(&(tcp->super.super.super), DS_READABLE, TRUE);
 	} else {
-		/* all of our ordered user data is gone */
-		descriptor_adjustStatus(&(tcp->super.super.super), DS_READABLE, FALSE);
+		/* all of our ordered user data has been read */
+		if((tcp->unorderedInputLength == 0) && (tcp->error & TCPE_RECEIVE_EOF)) {
+			/* there is no more unordered data either, and we need to signal EOF */
+			if(totalCopied > 0) {
+				/* we just received bytes, so we can't EOF until the next call.
+				 * make sure we stay readable so we DO actually EOF the socket */
+				descriptor_adjustStatus(&(tcp->super.super.super), DS_READABLE, TRUE);
+			} else {
+				/* OK, no more data and nothing just received. */
+				if(tcp->flags & TCPF_EOF_SIGNALED) {
+					/* we already signaled close, now its an error */
+					return -2;
+				} else {
+					/* we have not signaled close, do that now and close out the socket */
+					_tcp_endOfFileSignalled(tcp);
+					return 0;
+				}
+			}
+		} else {
+			/* our socket still has unordered data or is still open, but empty for now */
+			descriptor_adjustStatus(&(tcp->super.super.super), DS_READABLE, FALSE);
+		}
 	}
 
 	debug("%s <-> %s: receiving %lu user bytes", tcp->super.boundString, tcp->super.peerString, totalCopied);
