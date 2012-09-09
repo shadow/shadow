@@ -73,7 +73,7 @@ struct _Node {
 
 Node* node_new(GQuark id, Network* network, Software* software, guint32 ip,
 		GString* hostname, guint64 bwDownKiBps, guint64 bwUpKiBps,
-		guint cpuFrequency, gint cpuThreshold, guint nodeSeed,
+		guint cpuFrequency, gint cpuThreshold, gint cpuPrecision, guint nodeSeed,
 		SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel,
 		GLogLevelFlags logLevel, gboolean logPcap, gchar* pcapDir) {
 	Node* node = g_new0(Node, 1);
@@ -111,16 +111,16 @@ Node* node_new(GQuark id, Network* network, Software* software, guint32 ip,
 	/* applications this node will run */
 	node->application = application_new(software);
 
-	node->cpu = cpu_new(cpuFrequency, cpuThreshold);
+	node->cpu = cpu_new(cpuFrequency, cpuThreshold, cpuPrecision);
 	node->random = random_new(nodeSeed);
 	node->tracker = tracker_new(heartbeatInterval, heartbeatLogLevel);
 	node->logLevel = logLevel;
 	node->logPcap = logPcap;
 	node->pcapDir = pcapDir;
 
-	info("Created Node '%s', ip %s, %u bwUpKiBps, %u bwDownKiBps, %lu cpuFrequency, %i cpuThreshold, %u seed",
+	info("Created Node '%s', ip %s, %u bwUpKiBps, %u bwDownKiBps, %lu cpuFrequency, %i cpuThreshold, %i cpuPrecision, %u seed",
 			g_quark_to_string(node->id), networkinterface_getIPName(node->defaultInterface),
-			bwUpKiBps, bwDownKiBps, cpuFrequency, cpuThreshold, nodeSeed);
+			bwUpKiBps, bwDownKiBps, cpuFrequency, cpuThreshold, cpuPrecision, nodeSeed);
 
 	return node;
 }

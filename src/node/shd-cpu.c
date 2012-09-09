@@ -32,17 +32,19 @@ struct _CPU {
 	guint rawFrequencyKHz;
 	gdouble frequencyRatio;
 	SimulationTime threshold;
+	SimulationTime precision;
 	SimulationTime now;
 	SimulationTime timeCPUAvailable;
 	MAGIC_DECLARE;
 };
 
-CPU* cpu_new(guint frequencyKHz, gint threshold) {
+CPU* cpu_new(guint frequencyKHz, gint threshold, gint precision) {
 	CPU* cpu = g_new0(CPU, 1);
 	MAGIC_INIT(cpu);
 
 	cpu->frequencyKHz = frequencyKHz;
 	cpu->threshold = threshold > 0 ? (threshold * SIMTIME_ONE_MICROSECOND) : SIMTIME_INVALID;
+	cpu->precision = precision > 0 ? (precision * SIMTIME_ONE_MICROSECOND) : SIMTIME_INVALID;
 	cpu->timeCPUAvailable = cpu->now = 0;
 
 	/* get the raw speed of the experiment machine */
@@ -93,6 +95,24 @@ void cpu_updateTime(CPU* cpu, SimulationTime now) {
 
 void cpu_addDelay(CPU* cpu, SimulationTime delay) {
 	MAGIC_ASSERT(cpu);
+
+	/* first normalize the physical CPU to the virtual CPU */
 	SimulationTime adjustedDelay = (SimulationTime) (cpu->frequencyRatio * delay);
+
+	/* round the adjusted delay to the nearest precision if needed */
+	if(cpu->precision != SIMTIME_INVALID) {
+		SimulationTime remainder = (SimulationTime) (adjustedDelay % cpu->precision);
+
+		/* first round down (this is also the first step to rounding up) */
+		adjustedDelay -= remainder;
+
+		/* now check if we should round up */
+		SimulationTime halfPrecision = (SimulationTime) (cpu->precision / 2);
+		if(remainder >= halfPrecision) {
+			/* we should have rounded up, so adjust up by one interval */
+			adjustedDelay += cpu->precision;
+		}
+	}
+
 	cpu->timeCPUAvailable += adjustedDelay;
 }

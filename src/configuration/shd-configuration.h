@@ -226,6 +226,7 @@ struct _Configuration {
 
 	GOptionGroup* networkOptionGroup;
 	gint cpuThreshold;
+	gint cpuPrecision;
 	gint minRunAhead;
 	gint initialTCPWindow;
 	gint interfaceBufferSize;
