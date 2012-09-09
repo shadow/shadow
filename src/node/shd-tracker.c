@@ -28,6 +28,11 @@ struct _Tracker {
 	SimulationTime processingTimeTotal;
 	SimulationTime processingTimeLastInterval;
 
+	gsize numDelayedTotal;
+	SimulationTime delayTimeTotal;
+	gsize numDelayedLastInterval;
+	SimulationTime delayTimeLastInterval;
+
 	gsize inputBytesTotal;
 	gsize inputBytesLastInterval;
 
@@ -68,6 +73,14 @@ void tracker_addProcessingTime(Tracker* tracker, SimulationTime processingTime) 
 	MAGIC_ASSERT(tracker);
 	tracker->processingTimeTotal += processingTime;
 	tracker->processingTimeLastInterval += processingTime;
+}
+
+void tracker_addVirtualProcessingDelay(Tracker* tracker, SimulationTime delay) {
+	MAGIC_ASSERT(tracker);
+	(tracker->numDelayedTotal)++;
+	tracker->delayTimeTotal += delay;
+	(tracker->numDelayedLastInterval)++;
+	tracker->delayTimeLastInterval += delay;
 }
 
 void tracker_addInputBytes(Tracker* tracker, gsize inputBytes) {
@@ -123,20 +136,27 @@ void tracker_heartbeat(Tracker* tracker) {
 	}
 
 	guint seconds = (guint) (interval / SIMTIME_ONE_SECOND);
+
 	double in = (double) (tracker->inputBytesLastInterval);
 	double out = (double)(tracker->outputBytesLastInterval);
 	double alloc = (double)(((double)tracker->allocatedBytesLastInterval) / 1024.0);
 	double dealloc = (double)(((double)tracker->deallocatedBytesLastInterval) / 1024.0);
+
 	double mem = (double)(((double)tracker->allocatedBytesTotal) / 1024.0);
 	double cpuutil = (double)(((double)tracker->processingTimeLastInterval) / interval);
 
+	double delayms = (double) (((double)tracker->delayTimeLastInterval) / ((double)SIMTIME_ONE_MILLISECOND));
+	double avedelayms = (double) (delayms / ((double) tracker->numDelayedLastInterval));
+
 	/* log the things we are tracking */
 	logging_log(G_LOG_DOMAIN, level, __FUNCTION__,
-			"shadow-heartbeat: CPU %f \%, MEM %f KiB, interval %u seconds, alloc %f KiB, dealloc %f KiB, Rx %f B, Tx %f B",
-			cpuutil, mem, seconds, alloc, dealloc, in, out);
+			"[shadow-heartbeat] CPU %f \%, MEM %f KiB, interval %u seconds, alloc %f KiB, dealloc %f KiB, Rx %f B, Tx %f B, avgdelay %f milliseconds",
+			cpuutil, mem, seconds, alloc, dealloc, in, out, avedelayms);
 
 	/* clear interval stats */
 	tracker->processingTimeLastInterval = 0;
+	tracker->delayTimeLastInterval = 0;
+	tracker->numDelayedLastInterval = 0;
 	tracker->inputBytesLastInterval = 0;
 	tracker->outputBytesLastInterval = 0;
 	tracker->allocatedBytesLastInterval = 0;

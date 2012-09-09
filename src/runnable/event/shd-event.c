@@ -45,19 +45,22 @@ gboolean shadowevent_run(Event* event) {
 	Worker* worker = worker_getPrivate();
 	Node* node = event->node;
 
-	if(engine_getConfig(worker->cached_engine)->cpuThreshold >= 0) {
-		/* check if we are allowed to execute or have to wait for cpu delays */
-		CPU* cpu = node_getCPU(node);
-		cpu_updateTime(cpu, event->time);
+	/* check if we are allowed to execute or have to wait for cpu delays */
+	CPU* cpu = node_getCPU(node);
+	cpu_updateTime(cpu, event->time);
 
-		if(cpu_isBlocked(cpu)) {
-			SimulationTime cpuDelay = cpu_getDelay(cpu);
-			debug("event blocked on CPU, rescheduled for %lu nanoseconds from now", cpuDelay);
-			/* this event is delayed due to cpu, so reschedule it to ourselves */
-			worker_scheduleEvent(event, cpuDelay, 0);
-			/* dont free it, it needs to run again */
-			return FALSE;
-		}
+	if(cpu_isBlocked(cpu)) {
+		SimulationTime cpuDelay = cpu_getDelay(cpu);
+		debug("event blocked on CPU, rescheduled for %lu nanoseconds from now", cpuDelay);
+
+		/* track the event delay time */
+		tracker_addVirtualProcessingDelay(node_getTracker(node), cpuDelay);
+
+		/* this event is delayed due to cpu, so reschedule it to ourselves */
+		worker_scheduleEvent(event, cpuDelay, 0);
+
+		/* dont free it, it needs to run again */
+		return FALSE;
 	}
 
 	/* if we get here, its ok to execute the event */

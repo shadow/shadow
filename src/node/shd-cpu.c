@@ -81,7 +81,11 @@ SimulationTime cpu_getDelay(CPU* cpu) {
 
 gboolean cpu_isBlocked(CPU* cpu) {
 	MAGIC_ASSERT(cpu);
-	return cpu_getDelay(cpu) > 0;
+	if(cpu->threshold == SIMTIME_INVALID) {
+		return FALSE;
+	} else {
+		return cpu_getDelay(cpu) > 0;
+	}
 }
 
 void cpu_updateTime(CPU* cpu, SimulationTime now) {
