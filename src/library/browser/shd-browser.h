@@ -42,7 +42,7 @@
 #include "shd-filegetter.h"
 
 enum browser_state {
-	SB_DOCUMENT, SB_HIBERNATE, SB_EMBEDDED_OBJECTS, SB_DONE
+	SB_DOCUMENT, SB_HIBERNATE, SB_EMBEDDED_OBJECTS, SB_SUCCESS, SB_404, SB_FAILURE
 };
 
 typedef struct browser_download_tasks_s {

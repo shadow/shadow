@@ -51,8 +51,10 @@ enum filegetter_state {
 typedef struct filegetter_filestats_s {
 	struct timespec first_byte_time;
 	struct timespec download_time;
+	size_t body_bytes_downloaded;
+	size_t body_bytes_expected;
 	size_t bytes_downloaded;
-	size_t bytes_expected;
+	size_t bytes_uploaded;
 } filegetter_filestats_t, *filegetter_filestats_tp;
 
 typedef struct filegetter_filespec_s {
