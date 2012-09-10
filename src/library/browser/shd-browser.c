@@ -241,7 +241,7 @@ static void browser_downloaded_document(browser_tp b, browser_activate_result_tp
 	/* Get statistics for document download */
 	filegetter_filestats_t doc_stats;
 	filegetter_stat_download(&result->connection->fg, &doc_stats);
-	b->document_size = doc_stats.bytes_downloaded;
+	b->document_size = doc_stats.body_bytes_downloaded;
 	
 	b->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__,
 		"first document (%zu bytes) downloaded and parsed in %lu.%.3d seconds, now getting %i additional objects...",
@@ -260,7 +260,7 @@ static void browser_downloaded_document(browser_tp b, browser_activate_result_tp
 
 	if (!obj_count) {
 		/* if website contains no embedded objectes set the state that we are done */
-		b->state = SB_DONE;
+		b->state = SB_SUCCESS;
 	} else {
 		/* Set state to downloading embedded objects */
 		b->state = SB_EMBEDDED_OBJECTS;
@@ -293,7 +293,9 @@ static void browser_shutdown_connection(gpointer value) {
 	/* Get statistics for download */
 	filegetter_filestats_t fg_stats;
 	filegetter_stat_aggregate(&conn->fg, &fg_stats);
-	conn->b->cumulative_size += fg_stats.bytes_downloaded;
+	conn->b->bytes_downloaded += fg_stats.bytes_downloaded;
+	conn->b->bytes_uploaded += fg_stats.bytes_uploaded;
+	conn->b->cumulative_size += fg_stats.body_bytes_downloaded;
 	filegetter_shutdown(&conn->fg);
 }
 
@@ -387,19 +389,19 @@ void browser_activate(browser_tp b, gint sockfd) {
 				browser_downloaded_document(b, &result);
 			} else if (result.code == FG_ERR_404) {
 				b->shadowlib->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "First document wasn't found");
-				b->state = SB_DONE;
+				b->state = SB_404;
 			} else if (result.code == FG_ERR_FATAL || result.code == FG_ERR_SOCKSCONN) {
 				/* Retry connection in 60 seconds because the Tor network might not be functional yet */
 				b->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "filegetter shutdown due to error '%s'... retrying in 60 seconds", filegetter_codetoa(result.code));
 				g_hash_table_steal(b->connections, &conn->fg.sockd);
-				filegetter_shutdown(&conn->fg);
+				filegetter_shutdown(&conn->fg);		
 				b->state = SB_HIBERNATE;
 				b->shadowlib->createCallback(&browser_wakeup, b, 60*1000);
 			} else if (result.code != FG_ERR_WOULDBLOCK) {
 				b->shadowlib->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "filegetter shutdown due to error '%s' for first document", filegetter_codetoa(result.code));
 				g_hash_table_steal(b->connections, &sockfd);
 				filegetter_shutdown(&conn->fg);
-				b->state = SB_DONE;
+				b->state = SB_FAILURE;
 				browser_free(b);
 			}
 			
@@ -424,14 +426,14 @@ void browser_activate(browser_tp b, gint sockfd) {
 			
 			/* If there is no connection left, we are done */
 			if (!g_hash_table_size(b->connections)) {
-				b->state = SB_DONE;
+				b->state = SB_SUCCESS;
 				clock_gettime(CLOCK_REALTIME, &b->embedded_end_time);
 			}
 			
 			break;
 			
 		default:
-			b->shadowlib->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "Activate was called but state is SB_DOCUMENT nor SB_EMBEDDED_OBJECTS!");
+			b->shadowlib->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "Activate was called but state is neither SB_DOCUMENT nor SB_EMBEDDED_OBJECTS!");
 			break;
 	}
 }
@@ -441,7 +443,7 @@ void browser_free(browser_tp b) {
 	g_hash_table_destroy(b->connections);
 	
 	/* report stats */
-	if (&b->embedded_start_time) {
+	if (b->state == SB_SUCCESS) {
 		struct timespec duration_embedded_downloads;
 		/* first byte statistics */
 		duration_embedded_downloads.tv_sec = b->embedded_end_time.tv_sec - b->embedded_start_time.tv_sec;
@@ -453,11 +455,13 @@ void browser_free(browser_tp b) {
 		}
 		
 		b->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__,
-			"Finished downloading %d/%d embedded objects (%zu bytes) in %lu.%.3d seconds",
+			"Finished downloading %d/%d embedded objects (%zu bytes) in %lu.%.3d seconds, %d total bytes sent, %d total bytes received",
 			b->embedded_downloads_completed,
 			b->embedded_downloads_expected,
 			b->cumulative_size - b->document_size,
 			duration_embedded_downloads.tv_sec,
-			(gint)(duration_embedded_downloads.tv_nsec / 1000000));
+			(gint)(duration_embedded_downloads.tv_nsec / 1000000),
+			b->bytes_uploaded,
+ 			b->bytes_downloaded);
 	}
 }
