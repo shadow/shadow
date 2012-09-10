@@ -103,7 +103,7 @@ void internetwork_connectNetworks(Internetwork* internet,
 gpointer internetwork_createNode(Internetwork* internet, GQuark nodeID,
 		Network* network, Software* software, GString* hostname,
 		guint64 bwDownKiBps, guint64 bwUpKiBps, guint cpuFrequency,
-		gint cpuThreshold, guint nodeSeed,
+		gint cpuThreshold, gint cpuPrecision, guint nodeSeed,
 		SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel,
 		GLogLevelFlags logLevel, gboolean logPcap, gchar* pcapDir); /* XXX: return type is "Node*" */
 

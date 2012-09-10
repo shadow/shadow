@@ -198,7 +198,7 @@ def parse(args):
 
         for line in f:
             parts = line.strip().split()
-            if parts[0].find(':') < 0: continue
+            if len(parts) < 1 or parts[0].find(':') < 0: continue
 
             nodename = parts[4]
             

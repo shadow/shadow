@@ -42,6 +42,7 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	c->interfaceBatchTime = 10;
 	c->randomSeed = 1;
 	c->cpuThreshold = 1000;
+	c->cpuPrecision = 200;
 	c->heartbeatInterval = 60;
 
 	/* set options to change defaults for the main group */
@@ -64,6 +65,7 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	const GOptionEntry networkEntries[] =
 	{
 	  { "cpu-threshold", 0, 0, G_OPTION_ARG_INT, &(c->cpuThreshold), "TIME delay threshold after which the CPU becomes blocked, in microseconds (negative value to disable CPU delays) [1000]", "TIME" },
+	  { "cpu-precision", 0, 0, G_OPTION_ARG_INT, &(c->cpuPrecision), "round measured CPU delays to the nearest TIME, in microseconds (negative value to disable fuzzy CPU delays) [200]", "TIME" },
 	  { "interface-batch", 0, 0, G_OPTION_ARG_INT, &(c->interfaceBatchTime), "Batch TIME for network interface sends and receives, in milliseconds [10]", "TIME" },
 	  { "interface-buffer", 0, 0, G_OPTION_ARG_INT, &(c->interfaceBufferSize), "Size of the network interface receive buffer, in bytes [1024000]", "N" },
 	  { "runahead", 0, 0, G_OPTION_ARG_INT, &(c->minRunAhead), "Minimum allowed TIME workers may run ahead when sending events between nodes, in milliseconds [10]", "TIME" },

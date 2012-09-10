@@ -87,6 +87,7 @@ void createnodes_run(CreateNodesAction* action) {
 	MAGIC_ASSERT(action);
 
 	Worker* worker = worker_getPrivate();
+	Configuration* config = engine_getConfig(worker->cached_engine);
 
 	const gchar* hostname = g_quark_to_string(action->id);
 	guint hostnameCounter = 0;
@@ -111,9 +112,9 @@ void createnodes_run(CreateNodesAction* action) {
 	if(!cpuFrequency) {
 		cpuFrequency = engine_getRawCPUFrequency(worker->cached_engine);
 	}
-	gint cpuThreshold = engine_getConfig(worker->cached_engine)->cpuThreshold;
+	gint cpuThreshold = config->cpuThreshold;
+	gint cpuPrecision = config->cpuPrecision;
 
-	Configuration* config = engine_getConfig(worker->cached_engine);
 
 	/* set node-specific settings if we have them.
 	 * the node-specific settings should be 0 if its not set so we know to check
@@ -166,7 +167,7 @@ void createnodes_run(CreateNodesAction* action) {
 		/* the node is part of the internet */
 		guint nodeSeed = (guint) engine_nextRandomInt(worker->cached_engine);
 		Node* node = internetwork_createNode(worker_getInternet(), id, network, software,
-				hostnameBuffer, bwDownKiBps, bwUpKiBps, cpuFrequency, cpuThreshold,
+				hostnameBuffer, bwDownKiBps, bwUpKiBps, cpuFrequency, cpuThreshold, cpuPrecision,
 				nodeSeed, heartbeatInterval, heartbeatLogLevel, logLevel, logPcap, pcapDir);
 
 		g_string_free(hostnameBuffer, TRUE);
