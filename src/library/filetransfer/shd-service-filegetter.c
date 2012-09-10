@@ -56,7 +56,7 @@ static void service_filegetter_report(service_filegetter_tp sfg, enum service_fi
 		g_string_printf(reportStringBuffer, "%s got first bytes in %lu.%.3d seconds and %zu of %zu bytes in %lu.%.3d seconds (download %i",
 				preamble,
 				stats->first_byte_time.tv_sec, (gint)(stats->first_byte_time.tv_nsec / 1000000),
-				stats->bytes_downloaded, stats->bytes_expected,
+				stats->body_bytes_downloaded, stats->body_bytes_expected,
 				stats->download_time.tv_sec, (gint) (stats->download_time.tv_nsec / 1000000),
 				current_download);
 
