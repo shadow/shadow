@@ -42,7 +42,6 @@ gboolean shadowevent_run(Event* event) {
 	MAGIC_ASSERT(event);
 	MAGIC_ASSERT(event->vtable);
 
-	Worker* worker = worker_getPrivate();
 	Node* node = event->node;
 
 	/* check if we are allowed to execute or have to wait for cpu delays */
