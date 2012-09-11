@@ -145,8 +145,11 @@ void tracker_heartbeat(Tracker* tracker) {
 	double mem = (double)(((double)tracker->allocatedBytesTotal) / 1024.0);
 	double cpuutil = (double)(((double)tracker->processingTimeLastInterval) / interval);
 
-	double delayms = (double) (((double)tracker->delayTimeLastInterval) / ((double)SIMTIME_ONE_MILLISECOND));
-	double avedelayms = (double) (delayms / ((double) tracker->numDelayedLastInterval));
+	double avedelayms = 0.0;
+	if(tracker->numDelayedLastInterval > 0) {
+		double delayms = (double) (((double)tracker->delayTimeLastInterval) / ((double)SIMTIME_ONE_MILLISECOND));
+		avedelayms = (double) (delayms / ((double) tracker->numDelayedLastInterval));
+	}
 
 	/* log the things we are tracking */
 	logging_log(G_LOG_DOMAIN, level, __FUNCTION__,
