@@ -152,6 +152,22 @@ typedef guint64 SimulationTime;
 #define CONFIG_TCPAUTOTUNE TRUE
 
 /**
+ * Minimum size of the send buffer per socket when TCP-autotuning is used.
+ * This value was computed from "man tcp"
+ *
+ * @todo change this to a command line option accessible via #Configuration
+ */
+#define CONFIG_SEND_BUFFER_MIN_SIZE 16384
+
+/**
+ * Minimum size of the receive buffer per socket when TCP-autotuning is used.
+ * This value was computed from "man tcp"
+ *
+ * @todo change this to a command line option accessible via #Configuration
+ */
+#define CONFIG_RECV_BUFFER_MIN_SIZE 87380
+
+/**
  * Default size of the send buffer per socket if TCP-autotuning is not used.
  * This value was computed from "man tcp"
  *

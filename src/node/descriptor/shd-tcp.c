@@ -310,6 +310,14 @@ static void _tcp_autotune(TCP* tcp) {
 	/* the delay bandwidth product is how many bytes I can receive at once to keep the pipe full */
 	guint64 receivebuf_size = (guint64) (rtt_milliseconds * receive_bottleneck_bw * 1.25);
 
+    /* keep minimum buffer size bounds */
+    if(sendbuf_size < CONFIG_SEND_BUFFER_MIN_SIZE) {
+    	sendbuf_size = CONFIG_SEND_BUFFER_MIN_SIZE;
+    }
+    if(receivebuf_size < CONFIG_RECV_BUFFER_MIN_SIZE) {
+        receivebuf_size = CONFIG_RECV_BUFFER_MIN_SIZE;
+    }
+
 	/* make sure the user hasnt already written to the buffer, because if we
 	 * shrink it, our buffer math would overflow the size variable
 	 */
