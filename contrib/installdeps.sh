@@ -9,7 +9,7 @@ check_signature() {
   local PKGNAME=`echo $1 | cut -d '-' -f1`
   read -r -p "Do you want to use the included public keys to verify the signature of $PKGNAME? [Y/n] " RESPONSE
 
-  if [[ $RESPONSE =~ ^([nn][oo]|[nn])$ ]]; then
+  if [[ $RESPONSE =~ ^([Nn][Oo]|[Nn])$ ]]; then
     gpg --verify $1.asc
   else
     gpg --keyring $KEYRING --verify $1.asc
@@ -25,7 +25,7 @@ check_signature() {
 
 download() {
   read -r -p "${1} (${2}) [Y/n] " RESPONSE
-  if [[ $RESPONSE =~ ^([nn][oo]|[nn])$ ]]; then
+  if [[ $RESPONSE =~ ^([Nn][Oo]|[Nn])$ ]]; then
     exit -1
   else
     wget $2
