@@ -1,31 +1,10 @@
-**NOTE** - _this page is currently in progress - the description is out of date_
-
 ## Topology Description
 
-The topology was generated from the PlanetLab experiments from the Shadow design
-paper. The format is general enough to easily swap out specific measurements of 
-latency, jitter, packetloss, etc, once we have a better data source without
-changing the format. There are two main elements:
+The topology files included in Shadow were generated from a variety of data sources, including [iPlane](http://iplane.cs.washington.edu/), [Net Index](http://www.netindex.com/), and our own PlanetLab traces. The format is general enough so that it is easy to swap out specific measurements of latency, jitter, packetloss, etc, if desired. See [our Tor modeling paper](http://www-users.cs.umn.edu/~jansen/papers/tormodel-cset2012.pdf) for all the details.
 
-```xml
-<cluster id="BGBG" bandwidthdown="22429" bandwidthup="11805"/>
-```
+For the _cluster_ elements, the format of the _id_ attributes is as follows: For US and CA, the cluster ID is the two letter country code followed by the two letter state/territory code (e.g. USMN or CAON). For other countries, the two letter country code is given twice (e.g. DEDE). This gives a unique ID for each cluster. Cluster packetloss rates, and bandwidth down and up are taken from Net Index data.
 
-For US and CA, the cluster ID is the two letter country code followed by
-the two letter state/territory code. For other countries, the two letter
-country code is given twice. This gives a unique ID for each cluster.
-Bandwidth down and up is taken from netindex data.
-
-```xml
-<link id="link1" clusters="ARAR BGBG" latency="145" jitter="13" packetloss="0.026"/>
-```
-
-Links are directed, connecting the given clusters. The link ID is
-meaningless other than to provide uniqueness. Latency was computed as
-the median of our measurements from inter-node planetlab pings between
-the given clusters. Packetloss was taken from netindex data. Jitter was
-computed as the average difference of the first and third quartiles from
-the median, i.e.:
+Links are directed, connecting the given clusters. Link latency and packetloss are assigned by querying the iPlane interface as well as our own PlanetLab measurements, as the median of all measurements between the given clusters. Jitter was computed as the average difference of the first and third quartiles from the median, i.e.:
 
 ```python
 q1, latency, q3 = getQuartiles()
@@ -33,9 +12,6 @@ jitter = ((latency-q1) + (q3-latency)) / 2.0
 if jitter >= latency: jitter = min(latency-q1, q3-latency)
 assert jitter < latency
 ```
-
-I believe this covers every country/state for which there is a code.
-
 ## Topology Format
 
 The following are valid elements and their attributes:
@@ -110,10 +86,11 @@ The _cluster_ attribute optionally specifies to which network vertex this _node_
 
 _bandwidthdown_ and _bandwidthup_ optionally specify the downstream and upstream bandwidth capacities for this _node_, and override any default bandwidth values set in the _cluster_ element corresponding to the _cluster_ attribute. If not given, the default bandwidth values from the assigned _cluster_ element are used.
 
-_loglevel_ and _heartbeatloglovel_ are node-specific overrides for the simulator default log levels (which themselves are adjustable with shadow arguments `--log-level` and `--stat-log-level`). Valid strings include 
-'error', 'critical', 'warning', 'message', 'info', and 'debug'. (See `shadow --help` for more info.)
+_loglevel_ and _heartbeatloglovel_ are node-specific overrides for the simulator default log levels (the defaults are adjustable with shadow arguments `--log-level` and `--heartbeat-log-level`). Valid strings include 'error', 'critical', 'warning', 'message', 'info', and 'debug'. _heartbeatfrequency_ is a node-specific override for the default number of seconds between which heartbeat messages are logged (the default is adjustable with shadow argument `--heartbeat-frequency`). Each heartbeat message contains useful statistics about the _node_.
 
-logpcap is a case insenstive boolean string (e.h. "true")
+_cpufrequency_ is the speed of this _node's_ virtual CPU in kilohertz. Along with the CPU processing requirements of the plug-in application, this determines how often events for this _node_ are delayed during simulation.
+
+_logpcap_ is a case insenstive boolean string (e.g. "true") that specifies that Shadow should log all network input and output for this _node_ in PCAP format (for viewing in e.g. wireshark). _pcapdir_ is the directory to which the logs should be saved for this _node_.
 
 ### The _plugin_ element
 ```xml
