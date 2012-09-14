@@ -80,7 +80,6 @@ shadow --torrent > torrenttest.log
 
 Useful statistics here are contained in messages labeled with `client-block-complete`, which is printed for each node upon the completion of each 16 KiB block, and `client-complete`, which is printed when the transfer finishes. An 8 MiB file should contain 512 blocks, so for all 10 clients there should be **5120** blocks total:
 
-**NOTE** - _[a bug in the torrent plug-in](https://github.com/shadow/shadow/issues/82) is currently causing an incorrect number of blocks from being downloaded_
 ```bash
 grep "client-block-complete" torrenttest.log | wc -l
 ```
