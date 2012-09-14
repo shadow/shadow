@@ -65,9 +65,11 @@ The _time_ attribute represents the number of virtual seconds to simulate, after
 <link clusters="STRING STRING" latency="INTEGER" jitter="INTEGER" packetloss="FLOAT" />
 ```
 **Required attributes**: _clusters_, _latency_  
-**Optional attributes**: _jitter_, _packetloss_
+**Optional attributes**: _id_, _jitter_, _packetloss_
 
-The _link_ element represents an edge in the network topology, and is used to connect two _clusters_. The _clusters_ attribute is a string that specifies the _ids_ of the two clusters the link is connecting, separated by a space. So, to connect `<cluster id="c1" ...` and `<cluster id="c2" ...`, you would set `clusters="c1 c2"`. 
+The _link_ element represents an edge in the network topology, and is used to connect two _clusters_. The _id_ attribute identifies this _link_ and must be a string that is unique among all _id_ attributes for any element in the XML file.
+
+The _clusters_ attribute is a string that specifies the _ids_ of the two clusters the link is connecting, separated by a space. So, to connect `<cluster id="c1" ...` and `<cluster id="c2" ...`, you would set `clusters="c1 c2"`. 
 
 The packet delay across this _link_ in is specified with the _latency_ attribute, and the average variation in packet delay is specified with the _jitter_ attribute. Both _latency_ and _jitter_ are specified in milliseconds. 
 
