@@ -18,8 +18,6 @@ include_directories(${SHADOW_SOURCE_DIR}/library/browser)
 include_directories(${SHADOW_SOURCE_DIR}/library/filetransfer)
 include_directories(${SHADOW_SOURCE_DIR}/library/torrent)
 
-add_definitions(-D_GNU_SOURCE)
-
 ## import shadow libs
 #INCLUDE(${CMAKE_INSTALL_PREFIX}/share/shadow/shadow-externals.cmake)
 

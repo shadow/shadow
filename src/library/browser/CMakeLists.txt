@@ -1,5 +1,4 @@
 ## Browser-Simulator
-add_definitions(-D_GNU_SOURCE)
 
 ## Find libtidy which is needed to parse HTML
 find_package(TIDY REQUIRED)

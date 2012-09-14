@@ -1,5 +1,4 @@
 ## HTTP file server and client for transfering files through shadow
-add_definitions(-D_GNU_SOURCE)
 include_directories(${SHADOW_SOURCE_DIR}/utility)
 
 set(filetransfer_sources
