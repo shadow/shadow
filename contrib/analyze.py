@@ -685,7 +685,7 @@ def plot(args):
         pylab.title("Network Data Written Over Time")
         pylab.xlabel("Tick (m)")
         pylab.ylabel("Total Writen (MiB/s)")
-        pylab.legend(loc="lower right")
+        pylab.legend(loc="upper left")
         pylab.subplots_adjust(left=0.15)
         figname = "{0}/{1}-tput-write.pdf".format(graphpath, prefix)
         savedfigures.append(figname)
