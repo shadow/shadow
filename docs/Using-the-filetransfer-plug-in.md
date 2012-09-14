@@ -1,5 +1,3 @@
-**NOTE** - _This page is incomplete_
-
 The filetransfer plug-in is used to transfer files between virtual nodes. It contains very simple and custom implementations of an HTTP client and an HTTP server. The client sends GET requests to the server, and the server responds with the file contents.
 
 ## Argument Usage
