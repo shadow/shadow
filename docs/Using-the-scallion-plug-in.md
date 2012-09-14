@@ -37,24 +37,67 @@ Usage:
    1. the plug-in mode can be one of:
       + _dirauth_, for a Tor directory authority
       + _relay_, for a Tor non-exit relay
-      + _exitrelay, for a Tor exit relay
+      + _exitrelay_, for a Tor exit relay
       + _client_, for a filetransfer HTTP client over a local Tor SOCKS proxy server
       + _torrent_, for a torrent P2P client over a local Tor SOCKS proxy server
       + _browser_, for a browser client over a local Tor SOCKS proxy server
-   1. the bandwidth _weight_ that should appear in the Tor consensus for this relay, in KiB
-   1. the global _rate limit_ for this Tor in bytes, passed as Tor's `--BandwidthRate` option
-   1. the global _burst limit_ for this Tor in bytes, passed as Tor's `--BandwidthBurst` option
-   1. the path to the _torrc file_ for this Tor, passed as Tor's `-f` option
-   1. the path to the _base data directory_ for this Tor, passed as Tor's `--DataDirectory` option
-   1. the path to the _geoip file_ for this Tor, passed as Tor's `--GeoIPFile` option
-   1. if the first argument was _client_, _torrent_, or _browser_, then the required arguments for each of those plugins should be appended to the above options
+   1. _weight_, the bandwidth _weight_ that should appear in the Tor consensus for this relay, in KiB
+   1. _rate_, the global _rate limit_ for this Tor in bytes, passed as Tor's `--BandwidthRate` option
+   1. _burst_, the global _burst limit_ for this Tor in bytes, passed as Tor's `--BandwidthBurst` option
+   1. _torrc_, the path to the _torrc file_ for this Tor, passed as Tor's `-f` option
+   1. _datadir_, the path to the _base data directory_ for this Tor, passed as Tor's `--DataDirectory` option
+   1. _geoip_, the path to the _geoip file_ for this Tor, passed as Tor's `--GeoIPFile` option
+   1. _clientargs_, if the first argument was _client_, _torrent_, or _browser_, then the required arguments for each of those plugins should be appended to the above options
 
 ## Example
 
 Here is an example XML file that contains each type of Tor node possible to configure:
 
 ```xml
-[...]
+<!-- our network -->
+
+<cluster id="vnet" bandwidthdown="1024" bandwidthup="768" />
+<link clusters="vnet vnet" latency="60" jitter="20" packetloss="0.0" />
+
+<!-- the plug-ins we will be using -->
+
+<plugin id="filex" path="~/.shadow/plugins/libshadow-plugin-filetransfer.so" />
+<plugin id="torrent" path="~/.shadow/plugins/libshadow-plugin-torrent.so" />
+<plugin id="scallion" path="~/.shadow/plugins/libshadow-plugin-scallion.so" />
+
+<!-- the length of our experiment in seconds -->
+
+<kill time="1800" />
+
+<!-- our services -->
+
+<software id="fileserverapp" plugin="filex" time="1" arguments="server 80 ~/.shadow/share/" />
+<software id="webserverapp" plugin="filex" time="1" arguments="server 80 ../browser-example/" />
+<software id="torrentauthapp" plugin="torrent" time="1" arguments="authority 5000"/>
+
+<node id="fileserver" software="fileserverapp" bandwidthdown="102400" bandwidthup="102400" />
+<node id="webserver" software="webserverapp" bandwidthdown="102400" bandwidthup="102400" />
+<node id="torrentauth" software="torrentauthapp" bandwidthdown="102400" bandwidthup="102400" />
+
+<!-- our Tor network infrastructure -->
+
+<software id="authorityapp" plugin="scallion" time="1" arguments="dirauth 1024 1024000 1024000 ./authority.torrc ./data/authoritydata ~/.shadow/share/geoip" />
+<software id="exitapp" plugin="scallion" time="60" arguments="exitrelay 1024 1024000 1024000 ./exit.torrc ./data/exitdata ~/.shadow/share/geoip" />
+<software id="relayapp" plugin="scallion" time="60" arguments="relay 1024 1024000 1024000 ./relay.torrc ./data/relaydata ~/.shadow/share/geoip" />
+
+<node id="4uthority" software="authorityapp" />
+<node id="exit" software="exitapp" quantity="2" />
+<node id="relay" software="relayapp" quantity="2" />
+
+<!-- our Tor clients -->
+
+<software id="fileclientapp" plugin="scallion" time="600" arguments="client 1024 1024000 1024000 ./client.torrc ./data/clientdata ~/.shadow/share/geoip client single fileserver 80 localhost 9000 10 /1MiB.urnd" />
+<software id="browserclientapp" plugin="scallion" time="600" arguments="browser 1024 1024000 1024000 ./client.torrc ./data/clientdata ~/.shadow/share/geoip webserver 80 localhost 9000 6 /index.htm" />
+<software id="torrentnodeapp" plugin="scallion" time="600" arguments="torrent 1024 1024000 1024000 ./client.torrc ./data/clientdata ~/.shadow/share/geoip torrent node torrentauth 5000 localhost 9000 6000 1MB" />
+
+<node id="fileclient" software="fileclientapp" />
+<node id="browserclient" software="browserclientapp" />
+<node id="torrentnode" software="torrentnodeapp" quantity="3" />
 ```
 
 From the `resource/scallion-example` directory, save this file as `mytor.xml` and run it like:
