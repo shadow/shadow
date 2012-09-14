@@ -77,7 +77,7 @@ The _packetloss_ attribute is optional and represents the percentage chance that
 
 ### The _node_ element
 ```xml
-<node id="STRING" software="STRING" clusters="STRING" quantity="INTEGER" bandwidthdown="INTEGER" bandwidthup="INTEGER" loglevel="STRING" heartbeatloglevel="STRING" heartbeatfrequency="INTEGER" cpufrequency="INTEGER" logpcap="STRING" pcapdir="STRING" />
+<node id="STRING" software="STRING" cluster="STRING" quantity="INTEGER" bandwidthdown="INTEGER" bandwidthup="INTEGER" loglevel="STRING" heartbeatloglevel="STRING" heartbeatfrequency="INTEGER" cpufrequency="INTEGER" logpcap="STRING" pcapdir="STRING" />
 ```
 **Required attributes**: _id_, _software_  
 **Optional attributes**: _cluster_, _quantity_, _bandwidthdown_, _bandwidthup_, _loglevel_, _heartbeatloglevel_, _heartbeatfrequency_, _cpufrequency_, _logpcap_, _pcapdir_
