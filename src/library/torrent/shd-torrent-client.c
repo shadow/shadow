@@ -486,7 +486,7 @@ gint torrentClient_shutdown(TorrentClient* tc) {
 		}
 	}
 
-	close(tc->epolld);
+//	close(tc->epolld);
 
 	return TC_SUCCESS;
 }

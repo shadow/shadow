@@ -250,7 +250,7 @@ gint torrentAuthority_shutdown(TorrentAuthority* ta) {
 	g_hash_table_destroy(ta->nodes);
 
 	epoll_ctl(ta->epolld, EPOLL_CTL_DEL, ta->listenSockd, NULL);
-	close(ta->epolld);
+//	close(ta->epolld);
 	if(close(ta->listenSockd) < 0) {
 		return TS_ERR_CLOSE;
 	}

@@ -260,7 +260,7 @@ gint torrentServer_shutdown(TorrentServer* ts) {
 	g_hash_table_destroy(ts->connections);
 
 	epoll_ctl(ts->epolld, EPOLL_CTL_DEL, ts->listenSockd, NULL);
-	close(ts->epolld);
+//	close(ts->epolld);
 	if(close(ts->listenSockd) < 0) {
 		return TS_ERR_CLOSE;
 	}
