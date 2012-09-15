@@ -15,4 +15,4 @@ Our EC2 AMI can help you get running Tor experiments on EC2 in minutes:
 ```bash
 ssh -i your-key.pem ubuntu@your-public-dns.amazonaws.com
 ```
-1. Once logged in, view `~/README`, `~/dev-git/shadow/README` and `~/dev-git/scallion/README` for more information
+1. Once logged in, view `~/README` and `~/shadow-git-clone/README` for more information
