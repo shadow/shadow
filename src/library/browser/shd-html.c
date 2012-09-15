@@ -54,7 +54,7 @@ static gchar* html_parse_script(GHashTable* attrs) {
 static GHashTable* html_get_attributes(TidyNode node) {
 	TidyAttr curr_attr = tidyAttrFirst(node);
 	GHashTable* attrs = g_hash_table_new(g_str_hash, g_str_equal);
-	gchar* canonical_name, * value;
+	gchar* canonical_name = NULL, * value = NULL;
 
 	while(curr_attr) {
 		canonical_name = g_utf8_strdown(tidyAttrName(curr_attr), -1);
@@ -67,10 +67,10 @@ static GHashTable* html_get_attributes(TidyNode node) {
 }
 
 static void html_find_objects(TidyNode node, GSList** objs) {
-	gchar* url;
 	TidyNode child;
-	const gchar* name;
-	GHashTable* attrs;
+	gchar* url = NULL;
+	const gchar* name = NULL;
+	GHashTable* attrs = NULL;
   
 	for (child = tidyGetChild(node); child; child = tidyGetNext(child)) {
 		attrs = html_get_attributes(child);
@@ -99,7 +99,7 @@ static void html_find_objects(TidyNode node, GSList** objs) {
 void html_parse(const gchar* html, GSList** objs) {
 	TidyDoc tdoc = tidyCreate();
 	TidyBuffer tidy_errbuf = {0};
-	int err;
+	int err = 0;
   
 	tidyOptSetBool(tdoc, TidyForceOutput, yes); /* try harder */ 
 	tidyOptSetInt(tdoc, TidyWrapLen, 4096);

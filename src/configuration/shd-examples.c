@@ -84,9 +84,9 @@ GString* example_getBrowserExampleContents() {
 		"<plugin id=\"browser\" path=\"libshadow-plugin-browser.so\" />"
 		"<cluster id=\"net0\" bandwidthdown=\"1024\" bandwidthup=\"512\" packetloss=\"0.005\"/>"
 		"<link id=\"link0\" clusters=\"net0 net0\" latency=\"50\" jitter=\"10\"/>"
-		"<software id=\"server\" plugin=\"filex\" time=\"10\" arguments=\"server 80 ./resource/browser-example/\" />"
-		"<software id=\"browser\" plugin=\"browser\" time=\"20\" arguments=\"server.node 80 none 0 6 /index.htm\" />"
-		"<node id=\"server.node\" software=\"server\" cluster=\"net0\" bandwidthup=\"10240\" bandwidthdown=\"5120\" />"
-		"<node id=\"browser.node\"software=\"browser\" cluster=\"net0\"  bandwidthup=\"10240\" bandwidthdown=\"5120\" />"
+		"<software id=\"serverapp\" plugin=\"filex\" time=\"10\" arguments=\"server 80 ./resource/browser-example/\" />"
+		"<software id=\"browserapp\" plugin=\"browser\" time=\"20\" arguments=\"webserver 80 none 0 6 /index.htm\" />"
+		"<node id=\"webserver\" software=\"serverapp\" cluster=\"net0\" bandwidthup=\"10240\" bandwidthdown=\"5120\" />"
+		"<node id=\"browserclient\"software=\"browserapp\" cluster=\"net0\"  bandwidthup=\"10240\" bandwidthdown=\"5120\" />"
 		"<kill time=\"300\" />");
 }
