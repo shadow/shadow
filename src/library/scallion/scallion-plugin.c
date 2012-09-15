@@ -475,6 +475,9 @@ static void _scallion_notify() {
 				torrentService_activate(&scallion.tsvc, events[i].data.fd, events[i].events, scallion.tsvcClientEpoll);
 			}
 		}
+		if(!scallion.tsvc.client) {
+			scallion.tsvcClientEpoll = 0;
+		}
 	}
 
 
@@ -487,6 +490,9 @@ static void _scallion_notify() {
 			for(int i = 0; i < nfds; i++) {
 				torrentService_activate(&scallion.tsvc, events[i].data.fd, events[i].events, scallion.tsvcServerEpoll);
 			}
+		}
+		if(!scallion.tsvc.server) {
+			scallion.tsvcServerEpoll = 0;
 		}
 	}
 

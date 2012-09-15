@@ -183,12 +183,14 @@ int torrentService_startNode(TorrentService *tsvc, TorrentService_NodeArgs *args
 }
 
 int torrentService_activate(TorrentService *tsvc, gint sockd, gint events, gint epolld) {
-	if(tsvc->client->epolld == epolld) {
+	if(tsvc->client && tsvc->client->epolld == epolld) {
 		gint ret = torrentClient_activate(tsvc->client, sockd, events);
 
 		if(ret != TC_SUCCESS && ret != TC_BLOCK_DOWNLOADED && ret != TC_ERR_RECV && ret != TC_ERR_SEND) {
 			torrentService_log(tsvc, TSVC_INFO, "torrent client encountered a "
-					"non-asynch-io related error");
+					"non-asynch-io related error, giving up.");
+			/* TODO: we should retry in 60 seconds instead of stopping for good */
+			return torrentService_stop(tsvc);
 		}
 
 		if(!tsvc->clientDone && tsvc->client && tsvc->client->totalBytesDown > 0) {
@@ -214,7 +216,7 @@ int torrentService_activate(TorrentService *tsvc, gint sockd, gint events, gint 
 		}
 	}
 
-	if(tsvc->server->epolld == epolld) {
+	if(tsvc->server && tsvc->server->epolld == epolld) {
 		torrentServer_activate(tsvc->server, sockd, events);
 	}
 
@@ -236,7 +238,7 @@ int torrentService_stop(TorrentService *tsvc) {
 	if(tsvc->server) {
 		/* Shutdown the server then free the object */
 		torrentServer_shutdown(tsvc->server);
-		g_free(tsvc->client);
+		g_free(tsvc->server);
 		tsvc->server = NULL;
 	}
 
