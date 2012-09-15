@@ -7,7 +7,7 @@ AllowInvalidNodes "entry,middle,exit,introduction,rendezvous"
 
 ServerDNSDetectHijacking 0
 NumCPUs 1
-Log notice stdout
+Log info stdout
 SafeLogging 0
 WarnUnsafeSocks 0
 ContactInfo jansen@cs.umn.edu
