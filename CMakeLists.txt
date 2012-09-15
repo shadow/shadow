@@ -12,8 +12,8 @@ endif(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
 
 ## set paths and build parameters
 set(Shadow_VERSION_MAJOR 1)
-set(Shadow_VERSION_MINOR 5)
-set(Shadow_VERSION_BUILD 1)
+set(Shadow_VERSION_MINOR 6)
+set(Shadow_VERSION_BUILD 0)
 
 if(EXISTS ${CMAKE_SOURCE_DIR}/.git)
     ## encode today's date in the variable 'TODAY' as YYYYMMDD
