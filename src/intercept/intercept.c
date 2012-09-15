@@ -372,10 +372,6 @@ gpointer intercept_malloc(gsize size) {
 	return system_malloc(size);
 }
 
-gpointer intercept_calloc(gsize nmemb, gsize size) {
-	return system_calloc(nmemb, size);
-}
-
 void intercept_free(gpointer ptr) {
 	return system_free(ptr);
 }

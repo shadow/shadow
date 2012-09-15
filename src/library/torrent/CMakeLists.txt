@@ -1,4 +1,4 @@
-add_definitions(-D_GNU_SOURCE)
+## P2P torrent transfers plug-in
 
 ## service library to allow torrent to be used by any plugin
 add_library(shadow-service-torrent STATIC shd-torrent-service.c shd-torrent.c shd-torrent-server.c shd-torrent-client.c shd-torrent-authority.c)

@@ -2,18 +2,25 @@
 
 project(Shadow C)
 cmake_minimum_required(VERSION 2.8 FATAL_ERROR)
+## check for unix environment (CMAKE_SYSTEM_NAME == "Linux")
+if(NOT UNIX)
+	message(FATAL_ERROR "Shadow requires a UNIX-like environment.")
+endif(NOT UNIX)
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    message(FATAL_ERROR "Shadow requires a Linux environment.")
+endif(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
 
 ## set paths and build parameters
 set(Shadow_VERSION_MAJOR 1)
-set(Shadow_VERSION_MINOR 5)
-set(Shadow_VERSION_BUILD 1)
+set(Shadow_VERSION_MINOR 6)
+set(Shadow_VERSION_BUILD 0)
 
 if(EXISTS ${CMAKE_SOURCE_DIR}/.git)
-    set(Shadow_VERSION_SUFFIX "-dev")
+    ## encode today's date in the variable 'TODAY' as YYYYMMDD
+    EXECUTE_PROCESS(COMMAND "date" "+%d/%m/%Y" OUTPUT_VARIABLE TODAY)
+    string(REGEX REPLACE "(..)/(..)/(....).*" "\\3\\2\\1" TODAY ${TODAY})
+    set(Shadow_VERSION_SUFFIX "-git-${TODAY}")
 endif(EXISTS ${CMAKE_SOURCE_DIR}/.git)
-
-#from scallion plug-in, not sure if we need it...
-#set(PACKAGE_STRING "Scallion ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_BUILD}")
 
 ## custom output paths
 #set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
@@ -23,25 +30,18 @@ endif(EXISTS ${CMAKE_SOURCE_DIR}/.git)
 set(SHADOW_SOURCE_DIR ${CMAKE_SOURCE_DIR}/src)
 set(SHADOW_TEST_DIR ${CMAKE_SOURCE_DIR}/test)
 
-## check for unix environment (CMAKE_SYSTEM_NAME == "Linux")
-if(NOT UNIX)
-	message(FATAL_ERROR "Shadow requires a UNIX-like environment.")
-endif()
-if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    message(FATAL_ERROR "Shadow requires a Linux environment.")
-endif(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
-
 ## disallow in-source build
 string(COMPARE EQUAL "${CMAKE_SOURCE_DIR}" "${CMAKE_BUILD_PREFIX}" buildInSource)
 if(buildInSource)
-	message(FATAL_ERROR "Shadow requires an out-of-source build. Please create a separate build directory and run 'cmake path/to/shadow/src [options]' there.")
-endif()
+    message(FATAL_ERROR "Shadow requires an out-of-source build. Please create a separate build directory and run 'cmake path/to/shadow/src [options]' there.")
+endif(buildInSource)
 
 ## setup shadow options
 option(SHADOW_DEBUG "turn on debugging for verbose program output (default: OFF)" OFF)
 option(SHADOW_PROFILE "build with profile settings (default: OFF)" OFF)
 option(SHADOW_TEST "build tests (default: OFF)" OFF)
 option(SHADOW_EXPORT "export service libraries and headers (default: OFF)" OFF)
+option(SHADOW_ENABLE_MEMTRACKER "enable preloading malloc and free (experimental!) (default: OFF)" OFF)
 option(SCALLION_DOREFILL "Tor should use refill callbacks (default: OFF)" OFF)
 option(SCALLION_TORPATH "path to custom Tor base directory (default: OFF)" OFF)
 
@@ -53,6 +53,7 @@ MESSAGE(STATUS "SHADOW_DEBUG=${SHADOW_DEBUG}")
 MESSAGE(STATUS "SHADOW_PROFILE=${SHADOW_PROFILE}")
 MESSAGE(STATUS "SHADOW_TEST=${SHADOW_TEST}")
 MESSAGE(STATUS "SHADOW_EXPORT=${SHADOW_EXPORT}")
+MESSAGE(STATUS "SHADOW_ENABLE_MEMTRACKER=${SHADOW_ENABLE_MEMTRACKER}")
 MESSAGE(STATUS "SCALLION_DOREFILL=${SCALLION_DOREFILL}")
 MESSAGE(STATUS "SCALLION_TORPATH=${SCALLION_TORPATH}")
 MESSAGE(STATUS "-------------------------------------------------------------------------------")
@@ -72,6 +73,10 @@ if(SHADOW_PROFILE STREQUAL ON)
     add_definitions(-DDEBUG ${CMAKE_C_FLAGS_DEBUG} -g -pg)
     set(CMAKE_EXE_LINKER_FLAGS ${CMAKE_EXE_LINKER_FLAGS} -pg)
 endif(SHADOW_PROFILE STREQUAL ON)
+
+if(SHADOW_ENABLE_MEMTRACKER STREQUAL ON)
+    add_definitions(-DSHADOW_ENABLE_MEMTRACKER)
+endif(SHADOW_ENABLE_MEMTRACKER STREQUAL ON)
 
 if(SHADOW_EXPORT STREQUAL ON)
     ## the actual work happens in the CMakeLists files in each plug-in directory

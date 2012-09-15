@@ -852,14 +852,6 @@ gpointer system_malloc(gsize size) {
 	return ptr;
 }
 
-gpointer system_calloc(gsize nmemb, gsize size) {
-	Node* node = _system_switchInShadowContext();
-	gpointer ptr = calloc(nmemb, size);
-	tracker_addAllocatedBytes(node_getTracker(node), ptr, size);
-	_system_switchOutShadowContext(node);
-	return ptr;
-}
-
 void system_free(gpointer ptr) {
 	Node* node = _system_switchInShadowContext();
 	free(ptr);

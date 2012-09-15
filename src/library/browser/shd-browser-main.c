@@ -93,7 +93,7 @@ gint main(gint argc, gchar *argv[])
 		}
 
 		/* break out if the client is done */
-		if(b.state == SB_DONE) {
+		if(b.state == SB_SUCCESS) {
 			break;
 		}
 	}

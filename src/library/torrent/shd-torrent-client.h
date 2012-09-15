@@ -121,6 +121,7 @@ struct _TorrentClient {
 	gint downBlockSize;
 	gint upBlockSize;
 	gint blocksDownloaded;
+	gint blocksRemaining;
 	gint numBlocks;
 
 	struct timespec download_start;

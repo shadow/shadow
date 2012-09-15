@@ -42,7 +42,7 @@
 #include "shd-filegetter.h"
 
 enum browser_state {
-	SB_DOCUMENT, SB_EMBEDDED_OBJECTS, SB_DONE
+	SB_DOCUMENT, SB_HIBERNATE, SB_EMBEDDED_OBJECTS, SB_SUCCESS, SB_404, SB_FAILURE
 };
 
 typedef struct browser_download_tasks_s {
@@ -60,6 +60,8 @@ typedef struct browser_server_args_s {
 	gchar* host;
 	gchar* port;
 } browser_server_args_t, *browser_server_args_tp;
+
+typedef struct browser_connection_s browser_connection_t, *browser_connection_tp;
 
 typedef struct browser_s { 
 	ShadowlibFunctionTable* shadowlib;
@@ -82,14 +84,15 @@ typedef struct browser_s {
 	gint embedded_downloads_completed;
 	struct timespec embedded_start_time;
 	struct timespec embedded_end_time;
+	browser_connection_tp doc_conn;
 } browser_t, *browser_tp;
 
-typedef struct browser_connection_s {
+struct browser_connection_s {
 	browser_tp b;
 	filegetter_t fg;
 	filegetter_filespec_t fspec;
 	filegetter_serverspec_t sspec;
-} browser_connection_t, *browser_connection_tp;
+};
 
 typedef struct browser_args_s {
 	browser_server_args_t http_server;

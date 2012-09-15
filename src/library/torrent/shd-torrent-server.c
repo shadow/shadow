@@ -154,6 +154,13 @@ gint torrentServer_activate(TorrentServer *ts, gint sockd, gint events) {
 
 		case TS_REQUEST:
 			bytes = recv(sockd, buf, sizeof(buf), 0);
+
+			/* its not a fatal error if the other end closes while we are idle */
+			if(bytes == 0) {
+				torrentServer_connectionClose(ts, connection);
+				break;
+			}
+
 			TS_ASSERTIO(ts, bytes, errno == EWOULDBLOCK, TS_ERR_RECV);
 
 			gchar *found = strcasestr(buf, "FILE REQUEST");
@@ -253,6 +260,7 @@ gint torrentServer_shutdown(TorrentServer* ts) {
 	g_hash_table_destroy(ts->connections);
 
 	epoll_ctl(ts->epolld, EPOLL_CTL_DEL, ts->listenSockd, NULL);
+//	close(ts->epolld);
 	if(close(ts->listenSockd) < 0) {
 		return TS_ERR_CLOSE;
 	}

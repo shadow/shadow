@@ -230,8 +230,10 @@ static enum filegetter_code filegetter_set_specs(filegetter_tp fg, filegetter_se
 
 	fg->buf_read_offset = 0;
 	fg->buf_write_offset = 0;
-	fg->curstats.bytes_expected = 0;
+	fg->curstats.body_bytes_expected = 0;
+	fg->curstats.body_bytes_downloaded = 0;
 	fg->curstats.bytes_downloaded = 0;
+	fg->curstats.bytes_uploaded = 0;
 	fg->curstats.download_time.tv_sec = 0;
 	fg->curstats.download_time.tv_nsec = 0;
 	fg->curstats.first_byte_time.tv_sec = 0;
@@ -492,8 +494,8 @@ start:
 
 			cl += FT_CONTENT_LEN;
 			content[0] = '\0';
-			fg->curstats.bytes_expected = (size_t) atoi(cl);
-			fg->allstats.bytes_expected += fg->curstats.bytes_expected;
+			fg->curstats.body_bytes_expected = (size_t) atoi(cl);
+			fg->allstats.body_bytes_expected += fg->curstats.body_bytes_expected;
 
 			/* start reading the buf from the payload */
 			fg->buf_read_offset = payload - fg->buf;
@@ -514,6 +516,8 @@ start:
 			FG_ASSERTIO(fg, bytes, errno == EWOULDBLOCK || errno == ENOTCONN || errno == EALREADY, FG_ERR_SEND);
 
 			fg->buf_read_offset += bytes;
+			fg->curstats.bytes_uploaded += bytes;
+			fg->allstats.bytes_uploaded += bytes;
 
 			if(fg->buf_read_offset == fg->buf_write_offset) {
 				/* we've sent everything we can, reset offsets */
@@ -538,6 +542,8 @@ start:
 			FG_ASSERTIO(fg, bytes, errno == EWOULDBLOCK, FG_ERR_RECV);
 
 			fg->buf_write_offset += bytes;
+			fg->curstats.bytes_downloaded += bytes;
+			fg->allstats.bytes_downloaded += bytes;
 
 			/* go to the next state to check new data */
 			fg->state = fg->nextstate;
@@ -549,7 +555,7 @@ start:
 			/* save any bytes from our buffer, and check if we're done */
 			size_t bytes_avail = fg->buf_write_offset - fg->buf_read_offset;
 
-			if(fg->curstats.bytes_downloaded == 0 && bytes_avail > 0) {
+			if(fg->curstats.body_bytes_downloaded == 0 && bytes_avail > 0) {
 				/* got first bytes, get timestamp */
 				clock_gettime(CLOCK_REALTIME, &fg->download_first_byte);
 
@@ -557,8 +563,8 @@ start:
 				filegetter_metrics_first(fg);
 			}
 
-			fg->curstats.bytes_downloaded += bytes_avail;
-			fg->allstats.bytes_downloaded += bytes_avail;
+			fg->curstats.body_bytes_downloaded += bytes_avail;
+			fg->allstats.body_bytes_downloaded += bytes_avail;
 
 			if(bytes_avail > 0) {
 				/* progressed since last time */
@@ -581,7 +587,7 @@ start:
 			fg->buf_write_offset = 0;
 			fg->buf_read_offset = 0;
 
-			if(fg->curstats.bytes_downloaded >= fg->curstats.bytes_expected) {
+			if(fg->curstats.body_bytes_downloaded >= fg->curstats.body_bytes_expected) {
 				/* done downloading, get timestamp */
 				clock_gettime(CLOCK_REALTIME, &fg->download_end);
 

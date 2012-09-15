@@ -5,27 +5,50 @@
 ## to pass special flags so that linking to Tor and running in Shadow both
 ## work properly.
 
+check_signature() {
+  local PKGNAME=`echo $1 | cut -d '-' -f1`
+  read -r -p "Do you want to use the included public keys to verify the signature of $PKGNAME? [Y/n] " RESPONSE
+
+  if [[ $RESPONSE =~ ^([Nn][Oo]|[Nn])$ ]]; then
+    gpg --verify $1.asc
+  else
+    gpg --keyring $KEYRING --verify $1.asc
+  fi
+
+  if [ $? -eq 0 ]; then
+    echo Signature is well.
+  else
+    echo "Problem with $PKGNAME signature. Edit the installdeps.sh script if you want to avoid checking the signature."
+    exit -1
+  fi
+}
+
+download() {
+  read -r -p "${1} (${2}) [Y/n] " RESPONSE
+  if [[ $RESPONSE =~ ^([Nn][Oo]|[Nn])$ ]]; then
+    exit -1
+  else
+    wget $2
+  fi
+}
+
 PREFIX=${PREFIX-${HOME}/.shadow}
 echo "Installing to $PREFIX"
 
 D=`pwd`
+KEYRING=$( cd "$( dirname "$0" )" && pwd )/deps_keyring.gpg
 mkdir -p build
 cd build
 
-wget https://www.openssl.org/source/openssl-1.0.1c.tar.gz
-wget https://www.openssl.org/source/openssl-1.0.1c.tar.gz.asc
-gpg --verify openssl-1.0.1c.tar.gz.asc
+opensslversion=openssl-1.0.1c
 
-if [ $? -eq 0 ]
-then
-    echo Signature is well.
-else
-    echo "Problem with openssl signature. Edit the installdeps.sh script if you want to avoid checking the signature."
-    exit -1
-fi
+download "May we download openssl?" https://www.openssl.org/source/${opensslversion}.tar.gz
+download "May we download the openssl signature?" https://www.openssl.org/source/${opensslversion}.tar.gz.asc
 
-tar xaf openssl-1.0.1c.tar.gz
-cd openssl-1.0.1c/
+check_signature "${opensslversion}.tar.gz"
+
+tar xaf ${opensslversion}.tar.gz
+cd ${opensslversion}/
 
 ## use ONE of the following:
 
@@ -40,21 +63,15 @@ make install
 
 cd ../
 
-wget https://github.com/downloads/libevent/libevent/libevent-2.0.19-stable.tar.gz
-wget https://github.com/downloads/libevent/libevent/libevent-2.0.19-stable.tar.gz.asc
+libeventversion=libevent-2.0.19-stable
 
-gpg --verify libevent-2.0.19-stable.tar.gz.asc
+download "May we download libevent?" https://github.com/downloads/libevent/libevent/${libeventversion}.tar.gz
+download "May we download the libevent signature?" https://github.com/downloads/libevent/libevent/${libeventversion}.tar.gz.asc
 
-if [ $? -eq 0 ]
-then
-    echo Signature is well.
-else
-    echo "Problem with libevent signature. Edit the installdeps.sh script if you want to avoid checking the signature."
-    exit -1
-fi
+check_signature "${libeventversion}.tar.gz"
 
-tar xaf libevent-2.0.19-stable.tar.gz
-cd libevent-2.0.19-stable/
+tar xaf ${libeventversion}.tar.gz
+cd ${libeventversion}/
 
 ## use ONE of the following:
 

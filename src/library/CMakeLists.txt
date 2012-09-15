@@ -6,6 +6,9 @@ install(FILES ${SHADOW_SOURCE_DIR}/utility/shd-cdf.h DESTINATION include/)
 ## plug-ins should install here
 set(SHADOW_PLUGIN_DIR $ENV{HOME}/.shadow/plugins)
 
+## plug-ins need to disable fortification to ensure syscalls are intercepted
+add_definitions(-D_GNU_SOURCE -U_FORTIFY_SOURCE)
+
 ## build each plug-in that was not disabled in setup.py
 
 if(NOT BUILD_BROWSER STREQUAL OFF)

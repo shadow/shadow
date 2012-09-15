@@ -24,7 +24,7 @@
 
 typedef struct _CPU CPU;
 
-CPU* cpu_new(guint frequencyMHz, gint threshold);
+CPU* cpu_new(guint frequencyMHz, gint threshold, gint precision);
 void cpu_free(CPU* cpu);
 
 gboolean cpu_isBlocked(CPU* cpu);

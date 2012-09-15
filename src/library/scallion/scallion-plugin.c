@@ -108,7 +108,7 @@ static void scallion_start_socks_client(void* arg) {
 		scallion.sfgEpoll = epoll_create(1);
 		int sockd = 0;
 
-		if(launch->is_single == 1) {
+		if(launch->is_single) {
 			service_filegetter_single_args_tp args = launch->service_filegetter_args;
 
 			service_filegetter_start_single(&scallion.sfg, args, scallion.sfgEpoll, &sockd);
@@ -119,20 +119,6 @@ static void scallion_start_socks_client(void* arg) {
 			free(args->socks_proxy.port);
 			free(args->num_downloads);
 			free(args->filepath);
-			free(args);
-		} else if(launch->is_single == 2) {
-			service_filegetter_double_args_tp args = launch->service_filegetter_args;
-
-			service_filegetter_start_double(&scallion.sfg, args, scallion.sfgEpoll, &sockd);
-
-			free(args->http_server.host);
-			free(args->http_server.port);
-			free(args->socks_proxy.host);
-			free(args->socks_proxy.port);
-			free(args->filepath1);
-			free(args->filepath2);
-			free(args->filepath3);
-			free(args->pausetime_seconds);
 			free(args);
 		} else {
 			service_filegetter_multi_args_tp args = launch->service_filegetter_args;
@@ -146,6 +132,9 @@ static void scallion_start_socks_client(void* arg) {
 				free(args->thinktimes_cdf_filepath);
 			}
 			free(args->runtime_seconds);
+			if(args->num_downloads != NULL) {
+				free(args->num_downloads);
+			}
 			free(args);
 		}
 		free(launch);
@@ -185,7 +174,6 @@ static void scallion_start_torrent(void* arg) {
 static void scallion_start_browser(void* arg) {
 	g_assert(arg);
 	browser_args_tp args = arg;
-	scallion.shadowlibFuncs->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "printfdebugging");
 	scallion.browserEpoll = epoll_create(1);
 	scallion.browser.shadowlib = scallion.shadowlibFuncs;
 	gint sockfd = browser_launch(&scallion.browser, args, scallion.browserEpoll);
@@ -295,8 +283,8 @@ static void _scallion_new(gint argc, gchar* argv[]) {
 
 		gchar* fileClientMode = argvoffset[1];
 
-		if(strncmp(fileClientMode, "multi", 5) == 0 && argc == 14) {
-			service_filegetter_multi_args_tp args = malloc(sizeof(service_filegetter_multi_args_t));
+		if(strncmp(fileClientMode, "multi", 5) == 0 && (argc == 14 || argc == 15)) {
+			service_filegetter_multi_args_tp args = g_new0(service_filegetter_multi_args_t, 1);
 
 			size_t s;
 
@@ -316,6 +304,12 @@ static void _scallion_new(gint argc, gchar* argv[]) {
 			s = strnlen(argvoffset[6], 128)+1;
 			args->runtime_seconds = malloc(s);
 			snprintf(args->runtime_seconds, s, argvoffset[6]);
+
+			if(argc > 14) {
+				s = strnlen(argvoffset[7], 128)+1;
+				args->num_downloads = malloc(s);
+				snprintf(args->num_downloads, s, argvoffset[7]);
+			}
 
 			if(strncmp(args->thinktimes_cdf_filepath, "none", 4) == 0) {
 				free(args->thinktimes_cdf_filepath);
@@ -360,43 +354,6 @@ static void _scallion_new(gint argc, gchar* argv[]) {
 			args->sleep_cb = &_scallion_sleepCallback;
 
 			launch->is_single = 1;
-			launch->service_filegetter_args = args;
-		} else if(strncmp(fileClientMode, "double", 6) == 0 && argc == 17) {
-			service_filegetter_double_args_tp args = malloc(sizeof(service_filegetter_double_args_t));
-
-			size_t s;
-
-			s = strnlen(argvoffset[2], 128)+1;
-			args->http_server.host = malloc(s);
-			snprintf(args->http_server.host, s, argvoffset[2]);
-
-			s = strnlen(argvoffset[3], 128)+1;
-			args->http_server.port = malloc(s);
-			snprintf(args->http_server.port, s, argvoffset[3]);
-
-			s = strnlen(argvoffset[4], 128)+1;
-			args->socks_proxy.host = malloc(s);
-			snprintf(args->socks_proxy.host, s, argvoffset[4]);
-
-			s = strnlen(argvoffset[5], 128)+1;
-			args->socks_proxy.port = malloc(s);
-			snprintf(args->socks_proxy.port, s, argvoffset[5]);
-
-			args->filepath1 = _scallion_getHomePath(argvoffset[6]);
-
-			args->filepath2 = _scallion_getHomePath(argvoffset[7]);
-
-			args->filepath3 = _scallion_getHomePath(argvoffset[8]);
-
-			s = strnlen(argvoffset[9], 128)+1;
-			args->pausetime_seconds = malloc(s);
-			snprintf(args->pausetime_seconds, s, argvoffset[9]);
-
-			args->log_cb = &_scallion_sfgLogCallback;
-			args->hostbyname_cb = &_scallion_HostnameCallback;
-			args->sleep_cb = &_scallion_sleepCallback;
-
-			launch->is_single = 2;
 			launch->service_filegetter_args = args;
 		} else {
 			scallion.shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, usage);
@@ -457,7 +414,6 @@ static void _scallion_new(gint argc, gchar* argv[]) {
 
 		scallion.shadowlibFuncs->createCallback(&scallion_start_torrent, launch, 600000);
 	} else if (ntype == VTOR_BROWSER) {
-		scallion.shadowlibFuncs->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "printfdebugging");
 		gchar** argvoffset = argv + 7;
 
 		browser_args_tp args = g_new0(browser_args_t, 1);
@@ -476,6 +432,19 @@ static void _scallion_new(gint argc, gchar* argv[]) {
 
 static void _scallion_free() {
 	scallion.shadowlibFuncs->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "scallion_free called");
+	
+	if (scallion.sfgEpoll) {
+		service_filegetter_stop(&scallion.sfg);
+	}
+	
+	if (scallion.browserEpoll) {
+		browser_free(&scallion.browser);
+	}
+	
+	if(scallion.tsvcClientEpoll || scallion.tsvcServerEpoll) {
+		torrentService_stop(&scallion.tsvc);
+	}
+	
 	scalliontor_free(scallion.stor);
 }
 
@@ -506,6 +475,9 @@ static void _scallion_notify() {
 				torrentService_activate(&scallion.tsvc, events[i].data.fd, events[i].events, scallion.tsvcClientEpoll);
 			}
 		}
+		if(!scallion.tsvc.client) {
+			scallion.tsvcClientEpoll = 0;
+		}
 	}
 
 
@@ -518,6 +490,9 @@ static void _scallion_notify() {
 			for(int i = 0; i < nfds; i++) {
 				torrentService_activate(&scallion.tsvc, events[i].data.fd, events[i].events, scallion.tsvcServerEpoll);
 			}
+		}
+		if(!scallion.tsvc.server) {
+			scallion.tsvcServerEpoll = 0;
 		}
 	}
 
