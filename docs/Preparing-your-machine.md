@@ -23,11 +23,11 @@ Shadow relies on the following tools and libraries to function properly. Version
 
 To install these using the Fedora package manager, try something like:
 ```bash
-sudo yum install -y gcc xz automake autoconf python cmake libtidy libtidy-devel glib2 glib2-devel dstat pdftk python-matplotlib numpy scipy
+sudo yum install -y gcc xz make automake autoconf cmake libtidy libtidy-devel glib2 glib2-devel dstat pdftk python python-matplotlib numpy scipy
 ```
 On Ubuntu, try:
 ```bash
-sudo apt-get -y install gcc xz-utils automake autoconf python2.7 cmake tidy libtidy-dev libglib2.0 libglib2.0-dev dstat pdftk python-matplotlib python-numpy python-scipy 
+sudo apt-get -y install gcc xz-utils make automake autoconf cmake tidy libtidy-dev libglib2.0 libglib2.0-dev dstat pdftk python2.7 python-matplotlib python-numpy python-scipy 
 ```
 These may also be downloaded and installed locally if preferred.
 
