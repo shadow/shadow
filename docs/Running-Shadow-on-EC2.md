@@ -5,7 +5,7 @@ Shadow can be run on Amazon’s [Elastic Compute Cloud (EC2)](http://aws.amazon.
 Our EC2 AMI can help you get running Tor experiments on EC2 in minutes:
 
 1. Sign up for [Amazon EC2 access](https://aws-portal.amazon.com/gp/aws/developer/registration)
-1. Launch an instance using our pre-installed and configured [Shadow-cloud AMI (ami-c178c8a8)](https://console.aws.amazon.com/ec2/home?region=us-east-1#launchAmi=ami-c178c8a8) based on Ubuntu-11.10
+1. Launch an instance using our pre-installed and configured [Shadow-cloud AMI (ami-c178c8a8)](https://console.aws.amazon.com/ec2/home?region=us-east-1#launchAmi=ami-c178c8a8) based on Ubuntu-12.04 LTS
 1. Follow the New Instance Wizard
    + the **instance type** you’ll need depends on what size Shadow-Tor network you’ll want to simulate (see [[the plug-in page|Using the scallion plug-in]])
    + create and download a new **keypair** if you don’t already have one, since you’ll need it for SSH access
