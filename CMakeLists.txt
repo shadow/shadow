@@ -1,40 +1,40 @@
 ## (c) 2010-2012 Shadow, Rob Jansen jansen@cs.umn.edu
 
 project(Shadow C)
+
+## ensure cmake version
 cmake_minimum_required(VERSION 2.8 FATAL_ERROR)
-## check for unix environment (CMAKE_SYSTEM_NAME == "Linux")
-if(NOT UNIX)
-	message(FATAL_ERROR "Shadow requires a UNIX-like environment.")
-endif(NOT UNIX)
-if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    message(FATAL_ERROR "Shadow requires a Linux environment.")
-endif(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+
+## ensure unix environment (CMAKE_SYSTEM_NAME == "Linux")
+if((NOT UNIX) OR (NOT (CMAKE_SYSTEM_NAME STREQUAL "Linux")))
+    message(FATAL_ERROR "Shadow requires a Unix/Linux environment.")
+endif((NOT UNIX) OR (NOT (CMAKE_SYSTEM_NAME STREQUAL "Linux")))
+
+## ensure out-of-source build
+if(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
+    message(FATAL_ERROR "Shadow requires an out-of-source build. Please create a separate build directory and run 'cmake path/to/shadow [options]' there.")
+endif(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
 
 ## set paths and build parameters
 set(Shadow_VERSION_MAJOR 1)
 set(Shadow_VERSION_MINOR 6)
 set(Shadow_VERSION_BUILD 0)
 
+## set version suffix
 if(EXISTS ${CMAKE_SOURCE_DIR}/.git)
-    ## encode today's date in the variable 'TODAY' as YYYYMMDD
+    ## current git commit as a short hash
+    EXECUTE_PROCESS(COMMAND "git" "log" "--pretty=format:%h" "-n"  "1" OUTPUT_VARIABLE SHORTHASH)
+    if(SHORTHASH)
+        set(Shadow_VERSION_SUFFIX "${Shadow_VERSION_SUFFIX}-${SHORTHASH}")
+    endif(SHORTHASH)
+    ## todays date as YYYYMMDD
+    set(Shadow_VERSION_SUFFIX "${Shadow_VERSION_SUFFIX}-dev")
     EXECUTE_PROCESS(COMMAND "date" "+%d/%m/%Y" OUTPUT_VARIABLE TODAY)
     string(REGEX REPLACE "(..)/(..)/(....).*" "\\3\\2\\1" TODAY ${TODAY})
-    set(Shadow_VERSION_SUFFIX "-git-${TODAY}")
+    if(TODAY)
+        set(Shadow_VERSION_SUFFIX "${Shadow_VERSION_SUFFIX}-${TODAY}")
+    endif(TODAY)
 endif(EXISTS ${CMAKE_SOURCE_DIR}/.git)
-
-## custom output paths
-#set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-#set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
-
-## output locations
-set(SHADOW_SOURCE_DIR ${CMAKE_SOURCE_DIR}/src)
-set(SHADOW_TEST_DIR ${CMAKE_SOURCE_DIR}/test)
-
-## disallow in-source build
-string(COMPARE EQUAL "${CMAKE_SOURCE_DIR}" "${CMAKE_BUILD_PREFIX}" buildInSource)
-if(buildInSource)
-    message(FATAL_ERROR "Shadow requires an out-of-source build. Please create a separate build directory and run 'cmake path/to/shadow/src [options]' there.")
-endif(buildInSource)
 
 ## setup shadow options
 option(SHADOW_DEBUG "turn on debugging for verbose program output (default: OFF)" OFF)
@@ -92,18 +92,24 @@ endif(SCALLION_DOREFILL)
 include(CheckIncludeFile)
 include(CheckFunctionExists)
 include(CheckLibraryExists)
+include(TestBigEndian)
 
-## run system-wide tests
-include (TestBigEndian)
+## general tests and configurations
 TEST_BIG_ENDIAN(IS_BIG_ENDIAN)
+set(CMAKE_INCLUDE_DIRECTORIES_BEFORE ON)
+set(CMAKE_INCLUDE_DIRECTORIES_PROJECT_BEFORE ON)
+set(CMAKE_INCLUDE_CURRENT_DIR ON)
+set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/" ${CMAKE_MODULE_PATH})
+#set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+#set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
-## enable our custom modules
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
+## compile flags
+add_definitions(-Wall --std=c99 -D_SVID_SOURCE -D_XOPEN_SOURCE=600 -fPIC) #-D_GNU_SOURCE
 
 ## additional user-defined include directories
 foreach(include ${CMAKE_EXTRA_INCLUDES})
     include_directories(${include})
-    set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${include}")
+    set(CMAKE_MODULE_PATH "${include}" ${CMAKE_MODULE_PATH})
 endforeach(include)
 
 ## additional user-defined library directories
@@ -125,11 +131,10 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config.h.in ${CMAKE_CURRENT_BINARY_DI
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/shd-config.h DESTINATION include/)
 
-## compile options
-add_definitions(-Wall --std=c99 -D_SVID_SOURCE -D_XOPEN_SOURCE=600 -fPIC) #-D_GNU_SOURCE
-
-## build source
-add_subdirectory(${SHADOW_SOURCE_DIR})
+## recurse our project tree
+add_subdirectory(${CMAKE_SOURCE_DIR}/src/)
+add_subdirectory(${CMAKE_SOURCE_DIR}/cpack/)
+add_subdirectory(${CMAKE_SOURCE_DIR}/resource/)
 
 ## build test if enabled
 if(SHADOW_TEST STREQUAL ON)
@@ -142,17 +147,3 @@ if(SHADOW_EXPORT STREQUAL ON)
     install(EXPORT shadow-externals DESTINATION share/)
 endif(SHADOW_EXPORT STREQUAL ON)
 
-## install resources useful for simulations
-if(NOT EXISTS ${CMAKE_SOURCE_DIR}/resource/topology.xml)
-    message(STATUS "Decompressing ${CMAKE_SOURCE_DIR}/resource/topology.xml.xz")
-    execute_process(COMMAND xz -dk topology.xml.xz WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/resource/ RESULT_VARIABLE XZRESULT)
-    if(NOT (${XZRESULT} EQUAL 0))
-        message(FATAL_ERROR "xz -dk topology.xml.xz failed. Is xz-utils installed and in your path?")
-    endif(NOT (${XZRESULT} EQUAL 0))
-endif(NOT EXISTS ${CMAKE_SOURCE_DIR}/resource/topology.xml)
-
-install(FILES ${CMAKE_SOURCE_DIR}/resource/topology.xml DESTINATION share/)
-install(FILES ${CMAKE_BUILD_PREFIX}/1KiB.urnd ${CMAKE_BUILD_PREFIX}/16KiB.urnd ${CMAKE_BUILD_PREFIX}/32KiB.urnd ${CMAKE_BUILD_PREFIX}/50KiB.urnd ${CMAKE_BUILD_PREFIX}/320KiB.urnd ${CMAKE_BUILD_PREFIX}/1MiB.urnd ${CMAKE_BUILD_PREFIX}/5MiB.urnd DESTINATION share/)
-
-## do CPack stuff
-add_subdirectory(${CMAKE_SOURCE_DIR}/cpack/)

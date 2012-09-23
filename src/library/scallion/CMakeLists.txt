@@ -13,10 +13,10 @@ find_package(TOR REQUIRED)
 find_package(TIDY REQUIRED)
 
 include_directories(${RT_INCLUDES} ${DL_INCLUDES} ${M_INCLUDES} ${GLIB_INCLUDES} ${EVENT2_INCLUDES} ${OPENSSL_INCLUDES} ${TOR_INCLUDES} ${SHADOW_INCLUDES} ${TIDY_INCLUDES})
-include_directories(${SHADOW_SOURCE_DIR}/utility)
-include_directories(${SHADOW_SOURCE_DIR}/library/browser)
-include_directories(${SHADOW_SOURCE_DIR}/library/filetransfer)
-include_directories(${SHADOW_SOURCE_DIR}/library/torrent)
+include_directories(${CMAKE_SOURCE_DIR}/src/utility)
+include_directories(${CMAKE_SOURCE_DIR}/src/library/browser)
+include_directories(${CMAKE_SOURCE_DIR}/src/library/filetransfer)
+include_directories(${CMAKE_SOURCE_DIR}/src/library/torrent)
 
 ## import shadow libs
 #INCLUDE(${CMAKE_INSTALL_PREFIX}/share/shadow/shadow-externals.cmake)

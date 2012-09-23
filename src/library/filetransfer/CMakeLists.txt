@@ -1,12 +1,12 @@
 ## HTTP file server and client for transfering files through shadow
-include_directories(${SHADOW_SOURCE_DIR}/utility)
+include_directories(${CMAKE_SOURCE_DIR}/src/utility)
 
 set(filetransfer_sources
     shd-filetransfer.c 
     shd-fileserver.c 
     shd-service-filegetter.c 
     shd-filegetter.c
-    ${SHADOW_SOURCE_DIR}/utility/shd-cdf.c
+    ${CMAKE_SOURCE_DIR}/src/utility/shd-cdf.c
 )
 
 ## service library to allow filetransfer to be used by any plugin
