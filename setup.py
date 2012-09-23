@@ -186,7 +186,7 @@ def build(args):
     if not os.path.exists(installdir): os.makedirs(installdir)
         
     # build up args string for the cmake command
-    cmake_cmd = "cmake " + rootdir + " -DCMAKE_BUILD_PREFIX=" + builddir + " -DCMAKE_INSTALL_PREFIX=" + installdir
+    cmake_cmd = "cmake " + rootdir + " -DCMAKE_INSTALL_PREFIX=" + installdir
     
     # other cmake options
     if args.do_debug: cmake_cmd += " -DSHADOW_DEBUG=ON"
@@ -206,7 +206,6 @@ def build(args):
     
     # run build tasks
     os.chdir(builddir)
-    if generate_files() != 0: return
     
     # check if we need to setup Tor
     if not args.disable_scallion:
@@ -410,22 +409,6 @@ def get_tor_version(args):
 def make_paths_absolute(list):
     for i in xrange(len(list)): list[i] = os.path.abspath(list[i])
     
-def generate_files():
-    dd("1KiB.urnd", 1)
-    dd("16KiB.urnd", 16)
-    dd("32KiB.urnd", 32)
-    dd("50KiB.urnd", 50)
-    dd("320KiB.urnd", 320)
-    dd("1MiB.urnd", 1024)
-    dd("5MiB.urnd", 5120)
-    return 0
-    
-def dd(filename, kb):
-    if not os.path.exists(filename):
-        ddcmd = "/bin/dd if=/dev/urandom of=" + filename + " bs=1024 count=" + str(kb)
-        log("calling " + ddcmd)
-        subprocess.call(ddcmd.split())
-        
 def download(url, target_path):
     if query_yes_no("May we download \'{0}\'?".format(url)):
         log("attempting to download " + url)

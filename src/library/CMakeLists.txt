@@ -1,7 +1,7 @@
 ## the plug-ins need to include shd-library.h
-include_directories(${SHADOW_SOURCE_DIR}/library)
+include_directories(${CMAKE_SOURCE_DIR}/src/library)
 install(FILES shd-library.h DESTINATION include/)
-install(FILES ${SHADOW_SOURCE_DIR}/utility/shd-cdf.h DESTINATION include/)
+install(FILES ${CMAKE_SOURCE_DIR}/src/utility/shd-cdf.h DESTINATION include/)
 
 ## plug-ins should install here
 set(SHADOW_PLUGIN_DIR $ENV{HOME}/.shadow/plugins)
