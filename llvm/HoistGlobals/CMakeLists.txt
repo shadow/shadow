@@ -1,1 +1,0 @@
-add_llvm_loadable_module(LLVMHoistGlobals hoist_globals.cpp)

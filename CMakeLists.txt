@@ -103,9 +103,6 @@ set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/" ${CMAKE_MODULE_PATH})
 #set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 #set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
-## compile flags
-add_definitions(-Wall --std=c99 -D_SVID_SOURCE -D_XOPEN_SOURCE=600 -fPIC) #-D_GNU_SOURCE
-
 ## additional user-defined include directories
 foreach(include ${CMAKE_EXTRA_INCLUDES})
     include_directories(${include})
@@ -126,7 +123,7 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/shd-config.h DESTINATION include/)
 
 ## recurse our project tree
 add_subdirectory(${CMAKE_SOURCE_DIR}/resource/)
-#add_subdirectory(${CMAKE_SOURCE_DIR}/llvm/)
+add_subdirectory(${CMAKE_SOURCE_DIR}/llvm/)
 add_subdirectory(${CMAKE_SOURCE_DIR}/src/)
 add_subdirectory(${CMAKE_SOURCE_DIR}/cpack/)
 
