@@ -112,19 +112,12 @@ foreach(include ${CMAKE_EXTRA_INCLUDES})
     set(CMAKE_MODULE_PATH "${include}" ${CMAKE_MODULE_PATH})
 endforeach(include)
 
+message(STATUS "CMAKE_MODULE_PATH = ${CMAKE_MODULE_PATH}")
+
 ## additional user-defined library directories
 foreach(library ${CMAKE_EXTRA_LIBRARIES})
     link_directories(${library})
 endforeach(library)
-
-## check for dependencies with our own Find scripts in "./cmake"
-## these don't have built-in cmake files in /usr/share/cmake/Modules/Findxxx.cmake
-find_package(RT REQUIRED)
-find_package(DL REQUIRED)
-find_package(M REQUIRED)
-find_package(GLIB REQUIRED)
-
-include_directories(${RT_INCLUDES} ${DL_INCLUDES} ${M_INCLUDES} ${GLIB_INCLUDES})
 
 ## generate config header and make sure its on the include path
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config.h.in ${CMAKE_CURRENT_BINARY_DIR}/shd-config.h)
@@ -132,9 +125,10 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR})
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/shd-config.h DESTINATION include/)
 
 ## recurse our project tree
+add_subdirectory(${CMAKE_SOURCE_DIR}/resource/)
+#add_subdirectory(${CMAKE_SOURCE_DIR}/llvm/)
 add_subdirectory(${CMAKE_SOURCE_DIR}/src/)
 add_subdirectory(${CMAKE_SOURCE_DIR}/cpack/)
-add_subdirectory(${CMAKE_SOURCE_DIR}/resource/)
 
 ## build test if enabled
 if(SHADOW_TEST STREQUAL ON)

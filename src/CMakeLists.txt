@@ -1,5 +1,14 @@
+## check for dependencies with our own Find scripts in "./cmake"
+## these don't have built-in cmake files in /usr/share/cmake/Modules/Findxxx.cmake
+find_package(RT REQUIRED)
+find_package(DL REQUIRED)
+find_package(M REQUIRED)
+find_package(GLIB REQUIRED)
+
+include_directories(${RT_INCLUDES} ${DL_INCLUDES} ${M_INCLUDES} ${GLIB_INCLUDES})
+
 ## make sure shadow.h is in the include path
-include_directories(${CMAKE_SOURCE_DIR}/src/ ${GLIB_INCLUDES})
+include_directories(${CMAKE_SOURCE_DIR}/src/)
 
 ## build the required libraries for intercepting system and library calls
 add_subdirectory(intercept)
