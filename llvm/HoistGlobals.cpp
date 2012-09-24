@@ -27,6 +27,9 @@
 #include "llvm/Constants.h"
 #include "llvm/GlobalVariable.h"
 #include "llvm/Support/CallSite.h"
+
+#include "llvm/Support/raw_ostream.h"
+
 #include <string>
 
 #include "llvm/Analysis/Verifier.h"
@@ -48,9 +51,12 @@ namespace
       SmallVector<Constant*, 16> GlobalInitializers;
       SmallVector<GlobalVariable*, 16> Globals;
 
+      errs() << "Running\n";
+
       for (Module::global_iterator i = M.global_begin(), e = M.global_end() ; i != e ; ++i) {
         // Skip anything that isn't a global variable
-        if (GlobalVariable *GV = dyn_cast<GlobalVariable>(i)) {
+        GlobalVariable *GV = dyn_cast<GlobalVariable>(i);
+        if (GV) {
           // If this is not a definition, skip it
           if (GV->isDeclaration()) continue;
           // If it's constant, it can be shared
@@ -64,8 +70,11 @@ namespace
 
       if (!modified) return false;
 
+      errs() << "Modified!\n";
+
       StructType *HoistedTy = StructType::create(GlobalTypes, "hoisted_globals");
       Constant *HoistedInit = ConstantStruct::get(HoistedTy, GlobalInitializers);
+      // PrivateLinkage InternalLinkage ExternalLinkage
       GlobalVariable *Hoisted = new GlobalVariable(M, HoistedTy, false,
           GlobalValue::PrivateLinkage, HoistedInit, "__hoisted_globals");
       Type *Int32Ty = Type::getInt32Ty(M.getContext());
@@ -76,10 +85,12 @@ namespace
           ConstantInt::get(Int32Ty, 0),
           ConstantInt::get(Int32Ty, Field++) };
 
+        errs() << "Replacing!\n";
+
         Constant *GEP = ConstantExpr::getGetElementPtr(Hoisted, GEPIndexes, true);
         GV->replaceAllUsesWith(GEP);
         assert(GV->use_empty());
-        //GV->removeFromParent();
+        GV->eraseFromParent();
       }
 #ifndef NDEBUG
       verifyModule(M);
