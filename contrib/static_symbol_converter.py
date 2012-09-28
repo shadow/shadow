@@ -83,12 +83,15 @@ def main():
                 sym_rename_file = open('sym_rename', 'w')
                 sym_globalize_file = open('sym_globalize', 'w')
 
+		file_format = objdump[1]
                 # Remove the first 4 and last 3 lines, these don't contain symbol information
                 objdump = objdump[4:len(objdump)-3]
                 for line in objdump:
                     symbol_name = line.rsplit(' ',1)[1]
+                    symbol_type = line[15] if file_format.find("elf32") > -1 else line[23]
+                    #print "found sym: {0}, type: {1}".format(symbol_name, symbol_type)
                     # Check to make sure symbol is an object
-                    if line[23] == 'O':
+                    if symbol_type == 'O':
                         variable = symbol_name
                         variable_orig = variable
 
