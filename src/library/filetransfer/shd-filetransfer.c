@@ -53,9 +53,9 @@ static in_addr_t _filetransfer_HostnameCallback(const gchar* hostname) {
 	in_addr_t addr = 0;
 
 	/* get the address in network order */
-	if(g_strncasecmp(hostname, "none", 4) == 0) {
+	if(g_ascii_strncasecmp(hostname, "none", 4) == 0) {
 		addr = htonl(INADDR_NONE);
-	} else if(g_strncasecmp(hostname, "localhost", 9) == 0) {
+	} else if(g_ascii_strncasecmp(hostname, "localhost", 9) == 0) {
 		addr = htonl(INADDR_LOOPBACK);
 	} else {
 		struct addrinfo* info;
@@ -116,7 +116,7 @@ void filetransfer_new(int argc, char* argv[]) {
 		epolld = 0;
 	}
 
-	if(g_strcasecmp(mode, "client") == 0) {
+	if(g_ascii_strncasecmp(mode, "client", 6) == 0) {
 		/* check client args */
 		if(argc < 3) goto printUsage;
 
@@ -125,7 +125,7 @@ void filetransfer_new(int argc, char* argv[]) {
 		gchar* clientMode = argv[2];
 		gint sockd = -1;
 
-		if(g_strncasecmp(clientMode, "single", 6) == 0) {
+		if(g_ascii_strncasecmp(clientMode, "single", 6) == 0) {
 			service_filegetter_single_args_t args;
 
 			args.http_server.host = argv[3];
@@ -148,7 +148,7 @@ void filetransfer_new(int argc, char* argv[]) {
 			}
 
 			g_free(args.filepath);
-		} else if(g_strncasecmp(clientMode, "multi", 5) == 0) {
+		} else if(g_ascii_strncasecmp(clientMode, "multi", 5) == 0) {
 			service_filegetter_multi_args_t args;
 			memset(&args, 0, sizeof(service_filegetter_multi_args_t));
 
@@ -162,7 +162,7 @@ void filetransfer_new(int argc, char* argv[]) {
 				args.num_downloads = argv[8];
 			}
 
-			if(g_strncasecmp(args.thinktimes_cdf_filepath, "none", 4) == 0) {
+			if(g_ascii_strncasecmp(args.thinktimes_cdf_filepath, "none", 4) == 0) {
 				args.thinktimes_cdf_filepath = NULL;
 			}
 
@@ -192,7 +192,7 @@ void filetransfer_new(int argc, char* argv[]) {
 		if(sockd >= 0) {
 			service_filegetter_activate(ft->client, sockd);
 		}
-	} else if(g_strcasecmp(mode, "server") == 0) {
+	} else if(g_ascii_strncasecmp(mode, "server", 6) == 0) {
 		/* check server args */
 		if(argc < 4) goto printUsage;
 

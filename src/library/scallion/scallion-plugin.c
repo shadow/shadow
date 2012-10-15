@@ -72,9 +72,9 @@ static in_addr_t _scallion_HostnameCallback(const gchar* hostname) {
 	in_addr_t addr = 0;
 
 	/* get the address in network order */
-	if(g_strncasecmp(hostname, "none", 4) == 0) {
+	if(g_ascii_strncasecmp(hostname, "none", 4) == 0) {
 		addr = htonl(INADDR_NONE);
-	} else if(g_strncasecmp(hostname, "localhost", 9) == 0) {
+	} else if(g_ascii_strncasecmp(hostname, "localhost", 9) == 0) {
 		addr = htonl(INADDR_LOOPBACK);
 	} else {
 		struct addrinfo* info;
@@ -226,17 +226,17 @@ static void _scallion_new(gint argc, gchar* argv[]) {
 
 	enum vtor_nodetype ntype;
 
-	if(g_strncasecmp(tortype, "dirauth", strlen("dirauth")) == 0) {
+	if(g_ascii_strncasecmp(tortype, "dirauth", strlen("dirauth")) == 0) {
 		ntype = VTOR_DIRAUTH;
-	} else if(g_strncasecmp(tortype, "relay", strlen("relay")) == 0) {
+	} else if(g_ascii_strncasecmp(tortype, "relay", strlen("relay")) == 0) {
 		ntype = VTOR_RELAY;
-	} else if(g_strncasecmp(tortype, "exitrelay", strlen("exitrelay")) == 0) {
+	} else if(g_ascii_strncasecmp(tortype, "exitrelay", strlen("exitrelay")) == 0) {
 		ntype = VTOR_EXITRELAY;
-	} else if(g_strncasecmp(tortype, "client", strlen("client")) == 0) {
+	} else if(g_ascii_strncasecmp(tortype, "client", strlen("client")) == 0) {
 		ntype = VTOR_CLIENT;
-	} else if(g_strncasecmp(tortype, "torrent", strlen("torrent")) == 0) {
+	} else if(g_ascii_strncasecmp(tortype, "torrent", strlen("torrent")) == 0) {
 		ntype = VTOR_TORRENT;
-	} else if(g_strncasecmp(tortype, "browser", strlen("browser")) == 0) {
+	} else if(g_ascii_strncasecmp(tortype, "browser", strlen("browser")) == 0) {
 		ntype = VTOR_BROWSER;
 	} else {
 		scallion.shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "Unrecognized torrent type: %s", usage);

@@ -208,7 +208,7 @@ EchoTCP* echotcp_new(ShadowlibLogFunc log, int argc, char* argv[]) {
 	gchar* mode = argv[0];
 	gboolean isError = FALSE;
 
-	if(g_strncasecmp(mode, "client", 6) == 0)
+	if(g_ascii_strncasecmp(mode, "client", 6) == 0)
 	{
 		if(argc < 2) {
 			isError = TRUE;
@@ -226,7 +226,7 @@ EchoTCP* echotcp_new(ShadowlibLogFunc log, int argc, char* argv[]) {
 			freeaddrinfo(serverInfo);
 		}
 	}
-	else if (g_strncasecmp(mode, "server", 6) == 0)
+	else if (g_ascii_strncasecmp(mode, "server", 6) == 0)
 	{
 		char myHostName[128];
 
@@ -248,13 +248,13 @@ EchoTCP* echotcp_new(ShadowlibLogFunc log, int argc, char* argv[]) {
 			isError = TRUE;
 		}
 	}
-	else if (g_strncasecmp(mode, "loopback", 8) == 0)
+	else if (g_ascii_strncasecmp(mode, "loopback", 8) == 0)
 	{
 		in_addr_t serverIP = htonl(INADDR_LOOPBACK);
 		etcp->server = _echotcp_newServer(log, serverIP);
 		etcp->client = _echotcp_newClient(log, serverIP);
 	}
-	else if (g_strncasecmp(mode, "socketpair", 10) == 0)
+	else if (g_ascii_strncasecmp(mode, "socketpair", 10) == 0)
 	{
 		_echotcp_newPair(log, &(etcp->client), &(etcp->server));
 	}
