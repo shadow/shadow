@@ -77,19 +77,19 @@ void echoplugin_new(int argc, char* argv[]) {
 	gboolean isError = TRUE;
 
 	/* check for the protocol option and create the correct application state */
-	if(g_strncasecmp(protocol, "tcp", 3) == 0)
+	if(g_ascii_strncasecmp(protocol, "tcp", 3) == 0)
 	{
 		echostate.protocol = ECHOP_TCP;
 		echostate.etcp = echotcp_new(echostate.shadowlibFuncs.log, argc - 2, &argv[2]);
 		isError = (echostate.etcp == NULL) ? TRUE : FALSE;
 	}
-	else if(g_strncasecmp(protocol, "udp", 3) == 0)
+	else if(g_ascii_strncasecmp(protocol, "udp", 3) == 0)
 	{
 		echostate.protocol = ECHOP_UDP;
 		echostate.eudp = echoudp_new(echostate.shadowlibFuncs.log, argc - 2, &argv[2]);
 		isError = (echostate.eudp == NULL) ? TRUE : FALSE;
 	}
-	else if(g_strncasecmp(protocol, "pipe", 4) == 0)
+	else if(g_ascii_strncasecmp(protocol, "pipe", 4) == 0)
 	{
 		echostate.protocol = ECHOP_PIPE;
 		echostate.epipe = echopipe_new(echostate.shadowlibFuncs.log);
