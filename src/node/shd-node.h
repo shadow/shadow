@@ -37,15 +37,10 @@ void node_free(gpointer data);
 void node_lock(Node* node);
 void node_unlock(Node* node);
 
+EventQueue* node_getEvents(Node* node);
+
 void node_startApplication(Node* node);
 void node_stopApplication(gpointer key, gpointer value, gpointer user_data);
-
-void node_pushMail(Node* node, Event* event);
-Event* node_peekMail(Node* node);
-Event* node_popMail(Node* node);
-void node_pushTask(Node* node, Event* event);
-Event* node_popTask(Node* node);
-guint node_getNumTasks(Node* node);
 
 gint node_compare(gconstpointer a, gconstpointer b, gpointer user_data);
 gboolean node_isEqual(Node* a, Node* b);

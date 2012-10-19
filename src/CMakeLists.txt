@@ -12,6 +12,7 @@ set(shadow_srcs
     configuration/shd-examples.c
     configuration/shd-configuration.c
     configuration/shd-parser.c
+    engine/shd-event-queue.c
     engine/shd-logging.c
     engine/shd-main.c
     engine/shd-engine.c
@@ -70,6 +71,8 @@ set(shadow_srcs
     utility/shd-byte-queue.c
     utility/shd-priority-queue.c
     utility/shd-async-priority-queue.c
+    utility/shd-async-tree.c
+    utility/shd-count-down-latch.c
     utility/shd-random.c
     
     main.c
