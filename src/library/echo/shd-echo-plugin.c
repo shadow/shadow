@@ -24,9 +24,13 @@
 /* my global structure to hold all variable, node-specific application state.
  * the name must not collide with other loaded modules globals. */
 Echo echostate;
+int counter = 0;
+int mycount = 0;
+int a = 23;
+int b = 33;
 
 /* function table for Shadow so it knows how to call us */
-PluginFunctionTable echo_pluginFunctions = {
+static const PluginFunctionTable echo_pluginFunctions = {
 	&echoplugin_new, &echoplugin_free, &echoplugin_ready,
 };
 
@@ -45,7 +49,9 @@ void __shadow_plugin_init__(ShadowlibFunctionTable* shadowlibFuncs) {
 	 *
 	 * we 'register' our function table, and 1 variable.
 	 */
-	gboolean success = echostate.shadowlibFuncs.registerPlugin(&echo_pluginFunctions, 1, sizeof(Echo), &echostate);
+	gboolean success = echostate.shadowlibFuncs.registerPlugin(&echo_pluginFunctions, 2,
+			sizeof(Echo), &echostate,
+			sizeof(int), &mycount);
 
 	/* we log through Shadow by using the log function it supplied to us */
 	if(success) {
@@ -65,6 +71,11 @@ void echoplugin_new(int argc, char* argv[]) {
 			"'udp client serverIP', 'udp server', 'udp loopback', 'pipe'\n"
 			"** clients and servers must be paired together, but loopback, socketpair,"
 			"and pipe modes stand on their own.";
+
+
+	mycount++;
+	counter++;
+	printf("mine at %p is %d, global at %p is %d\n", &mycount, mycount, &counter, counter);
 
 	/* 0 is the plugin name, 1 is the protocol */
 	if(argc < 2) {

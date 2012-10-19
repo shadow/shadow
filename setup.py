@@ -184,7 +184,7 @@ def build(args):
     cmake_cmd = "cmake " + rootdir + " -DCMAKE_INSTALL_PREFIX=" + installdir
     
     # other cmake options
-    if args.do_debug: cmake_cmd += " -DSHADOW_DEBUG=ON"
+    if args.do_debug: cmake_cmd += " -DSHADOW_DEBUG=ON"; os.putenv("VERBOSE", "1")
     if args.do_test: cmake_cmd += " -DSHADOW_TEST=ON"
     if args.do_profile: cmake_cmd += " -DSHADOW_PROFILE=ON"
     if args.export_libraries: cmake_cmd += " -DSHADOW_EXPORT=ON"
@@ -233,6 +233,20 @@ def build(args):
     # make sure we can access them from cmake
     cmake_cmd += " -DCMAKE_EXTRA_INCLUDES=" + ';'.join(args.extra_includes)
     cmake_cmd += " -DCMAKE_EXTRA_LIBRARIES=" + ';'.join(args.extra_libraries)
+
+    # look for the clang/clang++ compilers
+    clangccpath = which("clang")
+    if clangccpath is None: 
+        log("ERROR: can't find 'clang' compiler in your PATH! Is it installed?")
+    clangcxxpath = which("clang++")
+    if clangcxxpath is None: 
+        log("ERROR: can't find 'clang++' compiler in your PATH! Is it installed?")
+    if clangccpath is None or clangcxxpath is None: return -1
+    
+    # set clang/llvm as compiler
+    os.putenv("CC", clangccpath)
+    os.putenv("CXX", clangcxxpath)
+    #cmake_cmd += " -D_CMAKE_TOOLCHAIN_PREFIX=llvm-"
     
     # call cmake to configure the make process, wait for completion
     log("running \'{0}\' from \'{1}\'".format(cmake_cmd, os.getcwd()))

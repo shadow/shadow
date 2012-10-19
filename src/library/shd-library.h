@@ -33,6 +33,14 @@
 #define PLUGININITSYMBOL "__shadow_plugin_init__"
 
 /**
+ * Global symbols added after using LLVM to automatically extract variable state
+ */
+#define PLUGINGLOBALSSYMBOL "__hoisted_globals"
+#define PLUGINGLOBALSSIZESYMBOL "__hoisted_globals_size"
+#define PLUGINGLOBALSPOINTERSYMBOL "__hoisted_globals_pointer"
+
+
+/**
  * Signature of a function that Shadow calls when creating a new node instance
  * with the plug-in. The parameters are meant to mirror those passed to the
  * main() function of a standard C program.

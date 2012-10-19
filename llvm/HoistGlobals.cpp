@@ -1,7 +1,7 @@
 /**
  * The Shadow Simulator
  *
- * Copyright (c) 2012 David Chisnall
+ * Copyright (c) 2012 David Chisnall, Rob Jansen
  *
  * This file is part of Shadow.
  *
@@ -27,8 +27,7 @@
 #include "llvm/Constants.h"
 #include "llvm/GlobalVariable.h"
 #include "llvm/Support/CallSite.h"
-
-#include "llvm/Support/raw_ostream.h"
+#include "llvm/Target/TargetData.h"
 
 #include <string>
 
@@ -37,74 +36,120 @@
 using namespace llvm;
 using std::string;
 
-namespace
-{
-  class HoistGlobalsPass : public ModulePass
-  {
-    public:
-    static char ID;
-    HoistGlobalsPass() : ModulePass(ID) {}
+namespace {
+class HoistGlobalsPass: public ModulePass {
 
-    virtual bool runOnModule(Module &M) {
-      bool modified = false;
-      SmallVector<Type*, 16> GlobalTypes;
-      SmallVector<Constant*, 16> GlobalInitializers;
-      SmallVector<GlobalVariable*, 16> Globals;
+private:
+	// require TargetData so we can get variable sizes
+	void getAnalysisUsage(AnalysisUsage &AU) const {
+		AU.addRequired<TargetData>();
+	}
 
-      errs() << "Running\n";
+public:
+	static char ID;
+	HoistGlobalsPass() : ModulePass(ID) {}
 
-      for (Module::global_iterator i = M.global_begin(), e = M.global_end() ; i != e ; ++i) {
-        // Skip anything that isn't a global variable
-        GlobalVariable *GV = dyn_cast<GlobalVariable>(i);
-        if (GV) {
-          // If this is not a definition, skip it
-          if (GV->isDeclaration()) continue;
-          // If it's constant, it can be shared
-          if (GV->isConstant()) continue;
-          modified = true;
-          GlobalTypes.push_back(cast<PointerType>(GV->getType())->getElementType());
-          GlobalInitializers.push_back(GV->getInitializer());
-          Globals.push_back(GV);
-        }
-      }
+	bool runOnModule(Module &M) {
+		bool modified = false;
 
-      if (!modified) return false;
+		// lists to store our globals, their types, and their initial values
+		SmallVector<GlobalVariable*, 16> Globals;
+		SmallVector<Type*, 16> GlobalTypes;
+		SmallVector<Constant*, 16> GlobalInitializers;
 
-      errs() << "Modified!\n";
+		for (Module::global_iterator i = M.global_begin(), e = M.global_end();
+				i != e; ++i) {
+			// Skip anything that isn't a global variable
+			GlobalVariable *GV = dyn_cast<GlobalVariable>(i);
+			if (GV) {
+				// If this is not a definition, skip it
+				if (GV->isDeclaration())
+					continue;
+				// If it's constant, it can be shared
+				if (GV->isConstant())
+					continue;
 
-      StructType *HoistedTy = StructType::create(GlobalTypes, "hoisted_globals");
-      Constant *HoistedInit = ConstantStruct::get(HoistedTy, GlobalInitializers);
-      // PrivateLinkage InternalLinkage ExternalLinkage
-      GlobalVariable *Hoisted = new GlobalVariable(M, HoistedTy, false,
-          GlobalValue::PrivateLinkage, HoistedInit, "__hoisted_globals");
-      Type *Int32Ty = Type::getInt32Ty(M.getContext());
-      uint64_t Field = 0;
-      for (GlobalVariable **i = Globals.begin(), **e=Globals.end() ; i!=e ; ++i) {
-        GlobalVariable *GV = *i;
-        Constant *GEPIndexes[] = {
-          ConstantInt::get(Int32Ty, 0),
-          ConstantInt::get(Int32Ty, Field++) };
+				// We found a global variable, keep track of it
+				modified = true;
 
-        errs() << "Replacing!\n";
+				GlobalTypes.push_back(
+						cast<PointerType>(GV->getType())->getElementType());
+				GlobalInitializers.push_back(GV->getInitializer());
+				Globals.push_back(GV);
+			}
+		}
 
-        Constant *GEP = ConstantExpr::getGetElementPtr(Hoisted, GEPIndexes, true);
-        GV->replaceAllUsesWith(GEP);
-        assert(GV->use_empty());
-        GV->eraseFromParent();
-      }
+		// There is nothing to do if we have no globals
+		if (!modified)
+			return false;
+
+		// Now we need a new structure to store all of the globals we found
+		// its type is a combination of the types of all of its elements
+		// we will initialize each of the elements as done previously
+		// choice of: PrivateLinkage InternalLinkage ExternalLinkage
+
+		Type *Int32Ty = Type::getInt32Ty(M.getContext());
+
+		StructType *HoistedStructType = StructType::create(GlobalTypes,
+				"hoisted_globals");
+		Constant *HoistedStructInitializer = ConstantStruct::get(
+				HoistedStructType, GlobalInitializers);
+		GlobalVariable *HoistedStruct = new GlobalVariable(M, HoistedStructType,
+				false, GlobalValue::ExternalLinkage, HoistedStructInitializer,
+				"__hoisted_globals");
+
+		// and we need the size of the struct so we know how much to copy in
+		// and out for each node
+
+		uint64_t rawsize = getAnalysis<TargetData>().getTypeStoreSize(
+				HoistedStructType);
+		Constant *HoistedStructSize = ConstantInt::get(Int32Ty, rawsize, false);
+		GlobalVariable *HoistedSize = new GlobalVariable(M, Int32Ty, true,
+				GlobalValue::ExternalLinkage, HoistedStructSize,
+				"__hoisted_globals_size");
+
+		// replace all accesses to the original variables with pointer indirection
+		// this replaces uses with pointers into the global struct
+		uint64_t Field = 0;
+		for (GlobalVariable **i = Globals.begin(), **e = Globals.end(); i != e;
+				++i) {
+			GlobalVariable *GV = *i;
+
+			Constant *GEPIndexes[] = { ConstantInt::get(Int32Ty, 0),
+					ConstantInt::get(Int32Ty, Field++) };
+			Constant *GEP = ConstantExpr::getGetElementPtr(HoistedStruct,
+					GEPIndexes, true);
+			GV->replaceAllUsesWith(GEP);
+
+			assert(GV->use_empty());
+			GV->eraseFromParent();
+		}
+
+		// now create a new pointer variable that will be loaded and evaluated
+		// before accessing the hoisted globals struct
+
+		PointerType *HoistedPointerType = PointerType::get(HoistedStructType,
+				0);
+		GlobalVariable *HoistedPointer = new GlobalVariable(M,
+				HoistedPointerType, false, GlobalValue::ExternalLinkage,
+				HoistedStruct, "__hoisted_globals_pointer");
+
+//      Constant *GEPIndexes[] = {ConstantInt::get(Int32Ty, 0), ConstantInt::get(Int32Ty, 0)};
+//      Constant *GEP = ConstantExpr::getGetElementPtr(HoistedPointer, GEPIndexes, true);
+//      Constant *NewPtr = ConstantExpr::getBitCast(HoistedPointer, HoistedStruct->getType());
+//      HoistedStruct->replaceAllUsesWith(GEP);
+
 #ifndef NDEBUG
-      verifyModule(M);
+		verifyModule(M);
 #endif
-      return true;
-    }
-  };
+		return true;
+	}
+};
 
-  char HoistGlobalsPass::ID = 0;
-  RegisterPass<HoistGlobalsPass> X("hoist-globals",
-          "Turn globals into indirections via a single pointer");
-}
+char HoistGlobalsPass::ID = 0;
+RegisterPass<HoistGlobalsPass> X("hoist-globals", "Turn globals into indirections via a single pointer");
+} // namespace
 
-ModulePass *createHoistGlobalsPass(void)
-{
-  return new HoistGlobalsPass();
+ModulePass *createHoistGlobalsPass() {
+	return new HoistGlobalsPass();
 }

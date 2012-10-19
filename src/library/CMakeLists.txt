@@ -12,7 +12,7 @@ add_definitions(-D_GNU_SOURCE -U_FORTIFY_SOURCE)
 ## build each plug-in that was not disabled in setup.py
 
 if(NOT BUILD_BROWSER STREQUAL OFF)
-    add_subdirectory(browser)
+#    add_subdirectory(browser)
 endif(NOT BUILD_BROWSER STREQUAL OFF)
 
 if(NOT BUILD_ECHO STREQUAL OFF)
@@ -20,13 +20,13 @@ if(NOT BUILD_ECHO STREQUAL OFF)
 endif(NOT BUILD_ECHO STREQUAL OFF)
 
 if(NOT BUILD_FILETRANSFER STREQUAL OFF)
-    add_subdirectory(filetransfer)
+#    add_subdirectory(filetransfer)
 endif(NOT BUILD_FILETRANSFER STREQUAL OFF)
 
 if(NOT BUILD_SCALLION STREQUAL OFF)
-    add_subdirectory(scallion)
+#    add_subdirectory(scallion)
 endif(NOT BUILD_SCALLION STREQUAL OFF)
 
 if(NOT BUILD_TORRENT STREQUAL OFF)
-    add_subdirectory(torrent)
+#    add_subdirectory(torrent)
 endif(NOT BUILD_TORRENT STREQUAL OFF)

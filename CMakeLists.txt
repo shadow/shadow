@@ -123,7 +123,7 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/shd-config.h DESTINATION include/)
 
 ## recurse our project tree
 add_subdirectory(${CMAKE_SOURCE_DIR}/resource/)
-#add_subdirectory(${CMAKE_SOURCE_DIR}/llvm/)
+add_subdirectory(${CMAKE_SOURCE_DIR}/llvm/)
 add_subdirectory(${CMAKE_SOURCE_DIR}/src/)
 add_subdirectory(${CMAKE_SOURCE_DIR}/cpack/)
 

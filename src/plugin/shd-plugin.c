@@ -33,6 +33,10 @@ struct _Plugin {
 	ShadowPluginInitializeFunc init;
 	PluginFunctionTable* callbackFunctions;
 
+	gpointer hoistedGlobals;
+	gsize hoistedGlobalsSize;
+	gpointer hoistedGlobalsPointer;
+
 	PluginState* residentState;
 	PluginState* defaultState;
 	gboolean isRegisterred;
@@ -149,13 +153,45 @@ Plugin* plugin_new(GQuark id, GString* filename) {
 	}
 
 	/* make sure it has the required init function */
-	gpointer func;
-	gboolean success = g_module_symbol(plugin->handle, PLUGININITSYMBOL, &func);
+	gpointer initFunc, hoistedGlobals, hoistedGlobalsSize, hoistedGlobalsPointer;
+	gboolean success;
+
+	success = g_module_symbol(plugin->handle, PLUGININITSYMBOL, &initFunc);
 	if(success) {
-		plugin->init = func;
+		plugin->init = initFunc;
+		message("found '%s' at %p", PLUGININITSYMBOL, initFunc);
 	} else {
 		error("unable to find the required function symbol '%s' in plug-in '%s'",
 				PLUGININITSYMBOL, filename->str);
+	}
+
+	success = g_module_symbol(plugin->handle, PLUGINGLOBALSSYMBOL, &hoistedGlobals);
+	if(success) {
+		plugin->hoistedGlobals = hoistedGlobals;
+		message("found '%s' at %p", PLUGINGLOBALSSYMBOL, hoistedGlobals);
+	} else {
+		error("unable to find the required merged globals struct symbol '%s' in plug-in '%s'",
+				PLUGINGLOBALSSYMBOL, filename->str);
+	}
+
+	success = g_module_symbol(plugin->handle, PLUGINGLOBALSPOINTERSYMBOL, &hoistedGlobalsPointer);
+	if(success) {
+		plugin->hoistedGlobalsPointer = hoistedGlobalsPointer;
+		message("found '%s' at %p", PLUGINGLOBALSPOINTERSYMBOL, hoistedGlobalsPointer);
+	} else {
+		error("unable to find the required merged globals struct symbol '%s' in plug-in '%s'",
+				PLUGINGLOBALSPOINTERSYMBOL, filename->str);
+	}
+
+	success = g_module_symbol(plugin->handle, PLUGINGLOBALSSIZESYMBOL, &hoistedGlobalsSize);
+	if(success) {
+		g_assert(hoistedGlobalsSize);
+		gint s = *((gint*) hoistedGlobalsSize);
+		plugin->hoistedGlobalsSize = (gsize) s;
+		message("found '%s' of value '%i' at %p", PLUGINGLOBALSSIZESYMBOL, s, hoistedGlobalsSize);
+	} else {
+		error("unable to find the required merged globals struct symbol '%s' in plug-in '%s'",
+				PLUGINGLOBALSSIZESYMBOL, filename->str);
 	}
 
 	/* we will store the callback functions the plug-in tells us */
