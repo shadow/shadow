@@ -22,8 +22,8 @@
 #include "shadow.h"
 
 struct _Node {
-	/* asynchronous event priority queue. other nodes may push to this queue. */
-	AsyncPriorityQueue* eventMailbox;
+	/* holds this node's events */
+	EventQueue* events;
 
 	/* the network this node belongs to */
 	Network* network;
@@ -32,11 +32,6 @@ struct _Node {
 	 * unless holding this lock. everything following this falls under the lock.
 	 */
 	GMutex* lock;
-
-	/* a simple priority queue holding events currently being executed.
-	 * events are placed in this queue before handing the node off to a
-	 * worker and should not be modified by other nodes. */
-	PriorityQueue* localEventQueue;
 
 	GQuark id;
 	gchar* name;
@@ -84,8 +79,7 @@ Node* node_new(GQuark id, Network* network, Software* software, guint32 ip,
 	node->lock = g_mutex_new();
 
 	/* thread-level event communication with other nodes */
-	node->eventMailbox = asyncpriorityqueue_new((GCompareDataFunc)shadowevent_compare, NULL, (GDestroyNotify)shadowevent_free);
-	node->localEventQueue = priorityqueue_new((GCompareDataFunc)shadowevent_compare, NULL, (GDestroyNotify)shadowevent_free);
+	node->events = eventqueue_new();
 
 	/* where we are in the network topology */
 	node->network = network;
@@ -137,11 +131,9 @@ void node_free(gpointer data) {
 	g_hash_table_destroy(node->interfaces);
 	g_hash_table_destroy(node->descriptors);
 
-	asyncpriorityqueue_free(node->eventMailbox);
-	priorityqueue_free(node->localEventQueue);
-
 	g_free(node->name);
 
+	eventqueue_free(node->events);
 	cpu_free(node->cpu);
 	tracker_free(node->tracker);
 
@@ -161,38 +153,9 @@ void node_unlock(Node* node) {
 	g_mutex_unlock(node->lock);
 }
 
-void node_pushMail(Node* node, Event* event) {
+EventQueue* node_getEvents(Node* node) {
 	MAGIC_ASSERT(node);
-	MAGIC_ASSERT(event);
-
-	asyncpriorityqueue_push(node->eventMailbox, event);
-}
-
-Event* node_peekMail(Node* node) {
-	MAGIC_ASSERT(node);
-	return asyncpriorityqueue_peek(node->eventMailbox);
-}
-
-Event* node_popMail(Node* node) {
-	MAGIC_ASSERT(node);
-	return asyncpriorityqueue_pop(node->eventMailbox);
-}
-
-void node_pushTask(Node* node, Event* event) {
-	MAGIC_ASSERT(node);
-	MAGIC_ASSERT(event);
-
-	priorityqueue_push(node->localEventQueue, event);
-}
-
-Event* node_popTask(Node* node) {
-	MAGIC_ASSERT(node);
-	return priorityqueue_pop(node->localEventQueue);
-}
-
-guint node_getNumTasks(Node* node) {
-	MAGIC_ASSERT(node);
-	return priorityqueue_getLength(node->localEventQueue);
+	return node->events;
 }
 
 void node_startApplication(Node* node) {

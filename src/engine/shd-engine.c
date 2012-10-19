@@ -42,9 +42,7 @@ struct _Engine {
 	/* track nodes, networks, links, and topology */
 	Internetwork* internet;
 
-	/*
-	 * track global objects: software, cdfs, plugins
-	 */
+	/* track global objects: software, cdfs, plugins */
 	Registry* registry;
 
 	/* if single threaded, use this global event priority queue. if multi-
@@ -53,6 +51,7 @@ struct _Engine {
 
 	/* if multi-threaded, we use thread pools */
 	GThreadPool* workerPool;
+	CountDownLatch* processingLatch;
 
 	/* holds a thread-private key that each thread references to get a private
 	 * instance of a worker object
@@ -63,18 +62,6 @@ struct _Engine {
 	/* openssl needs us to manage locking */
 	GStaticMutex* cryptoThreadLocks;
 	gint numCryptoThreadLocks;
-
-	/*
-	 * condition that signals when all node's events have been processed in a
-	 * given execution interval.
-	 */
-	GCond* workersIdle;
-
-	/*
-	 * before signaling the engine that the workers are idle, it must be idle
-	 * to accept the signal.
-	 */
-	GMutex* engineIdle;
 
 	/*
 	 * TRUE if the engine is no longer running events and is in cleanup mode
@@ -91,16 +78,15 @@ struct _Engine {
 
 	GMutex* lock;
 
-	int rawFrequencyKHz;
+	gint rawFrequencyKHz;
+	guint numEventsCurrentInterval;
+	guint numNodesWithEventsCurrentInterval;
 
 	/*
 	 * these values are modified during simulation and must be protected so
 	 * they are thread safe
 	 */
 	struct {
-		/* number of nodes left to process in current interval */
-		volatile gint nNodesToProcess;
-
 		/* id generation counters */
 		volatile gint workerIDCounter;
 		volatile gint objectIDCounter;
@@ -131,8 +117,6 @@ Engine* engine_new(Configuration* config) {
 	engine->masterEventQueue =
 			asyncpriorityqueue_new((GCompareDataFunc)shadowevent_compare, NULL,
 			(GDestroyNotify)shadowevent_free);
-	engine->workersIdle = g_cond_new();
-	engine->engineIdle = g_mutex_new();
 
 	engine->registry = registry_new();
 	registry_register(engine->registry, SOFTWARE, NULL, software_free);
@@ -181,8 +165,6 @@ void engine_free(Engine* engine) {
 	}
 
 	registry_free(engine->registry);
-	g_cond_free(engine->workersIdle);
-	g_mutex_free(engine->engineIdle);
 
 	GDateTime* dt_now = g_date_time_new_now_local();
 	gchar* dt_format = g_date_time_format(dt_now, "%F %H:%M:%S:%N");
@@ -207,7 +189,7 @@ void engine_setupWorkerThreads(Engine* engine, gint nWorkerThreads) {
 	if(nWorkerThreads > 0) {
 		/* we need some workers, create a thread pool */
 		GError *error = NULL;
-		engine->workerPool = g_thread_pool_new((GFunc)worker_executeEvent, engine,
+		engine->workerPool = g_thread_pool_new((GFunc)worker_threadPoolProcessNode, engine,
 				nWorkerThreads, FALSE, &error);
 		if (!engine->workerPool) {
 			error("thread pool failed: %s", error->message);
@@ -216,18 +198,6 @@ void engine_setupWorkerThreads(Engine* engine, gint nWorkerThreads) {
 
 		guint interval = g_thread_pool_get_max_idle_time();
 		info("Threads are stopped after %lu milliseconds", interval);
-	}
-}
-
-static void _engine_joinWorkerThreads(Engine* engine) {
-	MAGIC_ASSERT(engine);
-
-	/* wait for all workers to process their events. the last worker must
-	 * wait until we are actually listening for the signal before he
-	 * sends us the signal to prevent deadlock. */
-	if(!g_atomic_int_dec_and_test(&(engine->protect.nNodesToProcess))) {
-		while(g_atomic_int_get(&(engine->protect.nNodesToProcess)))
-			g_cond_wait(engine->workersIdle, engine->engineIdle);
 	}
 }
 
@@ -280,106 +250,78 @@ static gint _engine_processEvents(Engine* engine) {
 	return 0;
 }
 
-/*
- * check all nodes, moving events that are within the execute window
- * from their mailbox into their priority queue for execution. all
- * nodes that have executable events are placed in the thread pool and
- * processed by a worker thread.
- *
- * @warning multiple threads are running as soon as the first node is
- * pushed into the thread pool
- */
-static SimulationTime _engine_syncEvents(Engine* engine, GList* nodeList) {
-	/* we want to return the minimum time of all events, in case we can
-	 * fast-forward the next time window */
-	SimulationTime minEventTime = 0;
-	gboolean isMinEventTimeInitiated = FALSE;
-
-	/* iterate the list of nodes by stepping through the items */
-	GList* item = g_list_first(nodeList);
-	while(item) {
-		Node* node = item->data;
-
-		/* peek mail from mailbox to check that its in our time window */
-		Event* event = node_peekMail(node);
-
-		if(event) {
-			/* the first event is used to track the min event time of all nodes */
-			if(isMinEventTimeInitiated) {
-				minEventTime = MIN(minEventTime, event->time);
-			} else {
-				minEventTime = event->time;
-				isMinEventTimeInitiated = TRUE;
-			}
-			while(event && (event->time < engine->executeWindowEnd) &&
-					(event->time < engine->endTime)) {
-				g_assert(event->time >= engine->executeWindowStart);
-
-				/* this event now becomes a task that a worker will execute */
-				node_pushTask(node, node_popMail(node));
-
-				/* get the next event, if any */
-				event = node_peekMail(node);
-			}
-		}
-
-		/* see if this node actually has work for a worker */
-		guint numTasks = node_getNumTasks(node);
-		if(numTasks > 0) {
-			/* we just added another node that must be processed */
-			g_atomic_int_inc(&(engine->protect.nNodesToProcess));
-
-			/* now let the worker handle all the node's events */
-			g_thread_pool_push(engine->workerPool, node, NULL);
-		}
-
-		/* get the next node, if any */
-		item = g_list_next(item);
-	}
-
-	/* its ok if it wasnt initiated, b/c we have a min time jump override */
-	return minEventTime;
-}
-
 static gint _engine_distributeEvents(Engine* engine) {
 	MAGIC_ASSERT(engine);
 
 	GList* nodeList = internetwork_getAllNodes(engine->internet);
-	SimulationTime earliestEventTime = 0;
+	guint nNodes = g_list_length(nodeList);
+
+	/* track when workers finish processing all nodes */
+	engine->processingLatch = countdownlatch_new(nNodes);
 
 	/* process all events in the priority queue */
 	while(engine->executeWindowStart < engine->endTime)
 	{
-		/* set to one, so after adding nodes we can decrement and check
-		 * if all nodes are done by checking for 0 */
-		g_atomic_int_set(&(engine->protect.nNodesToProcess), 1);
+		GList* item = g_list_first(nodeList);
 
-		/* sync up our nodes, start executing events in current window.
-		 * @note other threads are awoke in this call */
-		earliestEventTime = _engine_syncEvents(engine, nodeList);
+		/* add all nodes to the work queue so they get processed */
+		while(item) {
+			Node* node = item->data;
+			g_thread_pool_push(engine->workerPool, node, NULL);
+			item = g_list_next(item);
+		}
 
-		/* wait for the workers to finish running node events */
-		_engine_joinWorkerThreads(engine);
+		/* wait for the workers to finish processing nodes */
+		countdownlatch_await(engine->processingLatch);
 
-		/* @note other threads are now sleeping */
+		/* reset for next round */
+		countdownlatch_reset(engine->processingLatch);
 
-		/* execute any non-node events
-		 * TODO: parallelize this if it becomes a problem. for now I'm assume
-		 * that we wont have enough non-node events to matter.
-		 * FIXME: this doesnt make sense with our action/event layout
-		 */
-		_engine_processEvents(engine);
+		SimulationTime intervalNumber = engine->executeWindowEnd / engine->minTimeJump;
+		message("interval %u, ran %u events from %u active nodes",
+				intervalNumber, engine->numEventsCurrentInterval,
+				engine->numNodesWithEventsCurrentInterval);
 
-		/* finally, update the allowed event execution window.
-		 * if the earliest time is before executeWindowEnd, it was just executed */
-		engine->executeWindowStart = earliestEventTime > engine->executeWindowEnd ?
-				earliestEventTime : engine->executeWindowEnd;
-		engine->executeWindowEnd = engine->executeWindowStart + engine->minTimeJump;
+		/* update the allowed event execution window
+		 * check if we should either step or fast-forward through intervals */
+		if(engine->numEventsCurrentInterval == 0) {
+			/* we had no events in that interval, lets try to fast forward */
+			SimulationTime minNextEventTime = SIMTIME_INVALID;
+
+			item = g_list_first(nodeList);
+			while(item) {
+				Node* node = item->data;
+				EventQueue* eventq = node_getEvents(node);
+				Event* nextEvent = eventqueue_peek(eventq);
+				if(nextEvent && (nextEvent->time < minNextEventTime)) {
+					minNextEventTime = nextEvent->time;
+				}
+				item = g_list_next(item);
+			}
+
+			SimulationTime nextEventInterval = minNextEventTime / engine->minTimeJump;
+			engine->executeWindowStart = nextEventInterval * engine->minTimeJump;
+			engine->executeWindowEnd = engine->executeWindowStart + engine->minTimeJump;
+		} else {
+			/* we still have events, lets just step one interval */
+			engine->executeWindowStart += engine->minTimeJump;
+			engine->executeWindowEnd += engine->minTimeJump;
+		}
+
+		/* make sure we dont run over the end */
+		if(engine->executeWindowEnd > engine->endTime) {
+			engine->executeWindowEnd = engine->endTime;
+		}
+
+		/* reset our event tracking stats */
+		engine->numEventsCurrentInterval = 0;
+		engine->numNodesWithEventsCurrentInterval = 0;
 
 //		debug("updated execution window [%lu--%lu]",
 //				engine->executeWindowStart, engine->executeWindowEnd);
 	}
 
+	countdownlatch_free(engine->processingLatch);
 	g_list_free(nodeList);
 
 	return 0;
@@ -405,6 +347,7 @@ gint engine_run(Engine* engine) {
 void engine_pushEvent(Engine* engine, Event* event) {
 	MAGIC_ASSERT(engine);
 	MAGIC_ASSERT(event);
+	g_assert(engine_getNumThreads(engine) == 1);
 	asyncpriorityqueue_push(engine->masterEventQueue, event);
 }
 
@@ -456,21 +399,6 @@ SimulationTime engine_getExecutionBarrier(Engine* engine) {
 	return engine->executeWindowEnd;
 }
 
-void engine_notifyNodeProcessed(Engine* engine) {
-	MAGIC_ASSERT(engine);
-
-	/*
-	 * if all the nodes have been processed and the engine is done adding nodes,
-	 * nNodesToProcess could be 0. if it is, get the engine lock to ensure it
-	 * is listening for the signal, then signal the condition.
-	 */
-	if(g_atomic_int_dec_and_test(&(engine->protect.nNodesToProcess))) {
-		g_mutex_lock(engine->engineIdle);
-		g_cond_signal(engine->workersIdle);
-		g_mutex_unlock(engine->engineIdle);
-	}
-}
-
 Internetwork* engine_getInternet(Engine* engine) {
 	MAGIC_ASSERT(engine);
 	return engine->internet;
@@ -511,27 +439,38 @@ gboolean engine_isForced(Engine* engine) {
 	return engine->forceShadowContext;
 }
 
+static void _engine_lock(Engine* engine) {
+	MAGIC_ASSERT(engine);
+	g_mutex_lock(engine->lock);
+}
+
+static void _engine_unlock(Engine* engine) {
+	MAGIC_ASSERT(engine);
+	g_mutex_unlock(engine->lock);
+}
+
 gboolean engine_handleInterruptSignal(gpointer user_data) {
 	Engine* engine = user_data;
 	MAGIC_ASSERT(engine);
 
 	/* handle (SIGHUP, SIGTERM, SIGINT), shutdown cleanly */
-	g_mutex_lock(engine->engineIdle);
+	_engine_lock(engine);
 	engine->endTime = 0;
-	g_mutex_unlock(engine->engineIdle);
+	_engine_unlock(engine);
 
 	/* dont remove the source */
 	return FALSE;
 }
 
-void _engine_lock(Engine* engine) {
+void engine_notifyNodeProcessed(Engine* engine, guint numberEventsProcessed) {
 	MAGIC_ASSERT(engine);
-	g_mutex_lock(engine->lock);
-}
-
-void _engine_unlock(Engine* engine) {
-	MAGIC_ASSERT(engine);
-	g_mutex_unlock(engine->lock);
+	_engine_lock(engine);
+	engine->numEventsCurrentInterval += numberEventsProcessed;
+	if(numberEventsProcessed > 0) {
+		engine->numNodesWithEventsCurrentInterval += 1;
+	}
+	_engine_unlock(engine);
+	countdownlatch_countDown(engine->processingLatch);
 }
 
 gint engine_nextRandomInt(Engine* engine) {

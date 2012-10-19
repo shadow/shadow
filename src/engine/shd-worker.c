@@ -100,8 +100,8 @@ Plugin* worker_getPlugin(Software* software) {
 	return plugin;
 }
 
-void worker_executeEvent(Node* node, Engine* engine) {
-	/* worker comes from pool to execute event
+void worker_threadPoolProcessNode(Node* node, Engine* engine) {
+	/* worker comes from pool to execute node's events
 	 *  get current thread's private worker object */
 	Worker* worker = worker_getPrivate();
 
@@ -112,14 +112,22 @@ void worker_executeEvent(Node* node, Engine* engine) {
 	worker->clock_now = SIMTIME_INVALID;
 	worker->clock_barrier = engine_getExecutionBarrier(engine);
 
+	SimulationTime jump = engine_getMinTimeJump(engine);
+	SimulationTime intervalNumber = worker->clock_barrier / jump;
+
 	/* lock the node */
 	node_lock(worker->cached_node);
 
-	worker->cached_event = (Event*) node_popTask(worker->cached_node);
+	EventQueue* eventq = node_getEvents(worker->cached_node);
+	eventqueue_startInterval(eventq, intervalNumber);
+	Event* nextEvent = eventqueue_peek(eventq);
+
+	guint n = 0;
 
 	/* process all events in the nodes local queue */
-	while(worker->cached_event)
+	while(nextEvent && (nextEvent->time < worker->clock_barrier))
 	{
+		worker->cached_event = eventqueue_pop(eventq);
 		MAGIC_ASSERT(worker->cached_event);
 
 		/* make sure we don't jump backward in time */
@@ -130,6 +138,7 @@ void worker_executeEvent(Node* node, Engine* engine) {
 
 		/* do the local task */
 		gboolean complete = shadowevent_run(worker->cached_event);
+		n++;
 
 		/* update times */
 		worker->clock_last = worker->clock_now;
@@ -141,8 +150,10 @@ void worker_executeEvent(Node* node, Engine* engine) {
 		}
 
 		/* get the next event, or NULL will tell us to break */
-		worker->cached_event = (Event*) node_popTask(worker->cached_node);
+		nextEvent = eventqueue_peek(eventq);
 	}
+
+	eventqueue_endInterval(eventq, intervalNumber);
 
 	/* unlock, clear cache */
 	node_unlock(worker->cached_node);
@@ -150,28 +161,9 @@ void worker_executeEvent(Node* node, Engine* engine) {
 	worker->cached_event = NULL;
 	worker->cached_engine = NULL;
 
-	engine_notifyNodeProcessed(engine);
+	engine_notifyNodeProcessed(engine, n);
 
 	/* worker thread now returns to the pool */
-}
-
-void worker_scheduleAction(Action* action, SimulationTime nano_delay) {
-	/* its not clear to me that we should schedule "actions": scheduled actions
-	 * are basically events
-	 */
-//	MAGIC_ASSERT(action);
-//
-//	/* get our thread-private worker */
-//	Worker* worker = worker_getPrivate();
-//
-//	/* when the event will execute. this will be approximate if multi-threaded,
-//	 * since the master's time jumps between scheduling 'intervals'.
-//	 * i.e. some threads may execute events slightly after this one before
-//	 * this one actually gets executed by the engine. */
-//	action->time = worker->clock_now + nano_delay;
-//
-//	/* always push to master queue since there is no node associated */
-//	engine_pushEvent(worker->cached_engine, action);
 }
 
 void worker_scheduleEvent(Event* event, SimulationTime nano_delay, GQuark receiver_node_id) {
@@ -200,37 +192,30 @@ void worker_scheduleEvent(Event* event, SimulationTime nano_delay, GQuark receiv
 		return;
 	}
 
-	/* we are not killed, we better have set the time correctly */
+	/* engine is not killed, assert accurate worker clock */
 	g_assert(worker->clock_now != SIMTIME_INVALID);
 
-	/* single threaded mode is simpler than multi threaded */
-	if(engine_getNumThreads(engine) > 1) {
-		/* multi threaded, figure out where to push event */
-		if(node_isEqual(receiver, sender) &&
-				(event->time < worker->clock_barrier))
-		{
-			/* this is for our current node, push to its local queue. its ok if
-			 * the event time inside of the min delay since its a local event */
-			node_pushTask(receiver, event);
-		} else {
-			/* this is for another node. send it as mail. make sure delay
-			 * follows the configured minimum delay.
-			 */
-			SimulationTime jump = engine_getMinTimeJump(engine);
-			SimulationTime min_time = worker->clock_now + jump;
+	/* non-local events must be properly delayed */
+	SimulationTime jump = engine_getMinTimeJump(engine);
+	if(!node_isEqual(receiver, sender)) {
+		SimulationTime minTime = worker->clock_now + jump;
 
-			/* warn and adjust time if needed */
-			if(event->time < min_time) {
-				debug("Inter-node event time %lu changed to %lu due to minimum delay %lu",
-						event->time, min_time, jump);
-				event->time = min_time;
-			}
-
-			/* send event to node's mailbox */
-			node_pushMail(receiver, event);
+		/* warn and adjust time if needed */
+		if(event->time < minTime) {
+			debug("Inter-node event time %lu changed to %lu due to minimum delay %lu",
+					event->time, minTime, jump);
+			event->time = minTime;
 		}
+	}
+
+	/* figure out where to push the event */
+	if(engine_getNumThreads(engine) > 1) {
+		/* multi-threaded, push event to receiver node */
+		SimulationTime intervalNumber = event->time / jump;
+		EventQueue* eventq = node_getEvents(receiver);
+		eventqueue_push(eventq, event, intervalNumber);
 	} else {
-		/* single threaded, push to master queue */
+		/* single-threaded, push to master queue */
 		engine_pushEvent(engine, (Event*)event);
 	}
 }

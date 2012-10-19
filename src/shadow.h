@@ -79,7 +79,11 @@
 #include "utility/shd-byte-queue.h"
 #include "utility/shd-priority-queue.h"
 #include "utility/shd-async-priority-queue.h"
+#include "utility/shd-async-tree.h"
+#include "utility/shd-count-down-latch.h"
 #include "utility/shd-random.h"
+
+#include "engine/shd-event-queue.h"
 
 #include "library/shd-library.h"
 #include "plugin/shd-plugin-state.h"

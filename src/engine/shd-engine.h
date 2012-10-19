@@ -47,7 +47,7 @@ gint engine_generateNodeID(Engine* engine);
 gint engine_getNumThreads(Engine* engine);
 SimulationTime engine_getMinTimeJump(Engine* engine);
 SimulationTime engine_getExecutionBarrier(Engine* engine);
-void engine_notifyNodeProcessed(Engine* engine);
+void engine_notifyNodeProcessed(Engine* engine, guint numberEventsProcessed);
 
 Configuration* engine_getConfig(Engine* engine);
 GTimer* engine_getRunTimer(Engine* engine);
