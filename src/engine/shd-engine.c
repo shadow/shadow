@@ -274,16 +274,12 @@ static gint _engine_distributeEvents(Engine* engine) {
 		/* wait for the workers to finish processing nodes */
 		countdownlatch_await(engine->processingLatch);
 
-		/* reset for next round */
-		countdownlatch_reset(engine->processingLatch);
-
-		SimulationTime intervalNumber = engine->executeWindowEnd / engine->minTimeJump;
-		message("interval %u, ran %u events from %u active nodes",
-				intervalNumber, engine->numEventsCurrentInterval,
+		message("execution window [%lu--%lu] ran %u events from %u active nodes",
+				engine->executeWindowStart, engine->executeWindowEnd,
+				engine->numEventsCurrentInterval,
 				engine->numNodesWithEventsCurrentInterval);
 
-		/* update the allowed event execution window
-		 * check if we should either step or fast-forward through intervals */
+		/* check if we should step or fast-forward our execute window */
 		if(engine->numEventsCurrentInterval == 0) {
 			/* we had no events in that interval, lets try to fast forward */
 			SimulationTime minNextEventTime = SIMTIME_INVALID;
@@ -299,26 +295,22 @@ static gint _engine_distributeEvents(Engine* engine) {
 				item = g_list_next(item);
 			}
 
-			SimulationTime nextEventInterval = minNextEventTime / engine->minTimeJump;
-			engine->executeWindowStart = nextEventInterval * engine->minTimeJump;
-			engine->executeWindowEnd = engine->executeWindowStart + engine->minTimeJump;
+			engine->executeWindowStart = minNextEventTime;
 		} else {
 			/* we still have events, lets just step one interval */
-			engine->executeWindowStart += engine->minTimeJump;
-			engine->executeWindowEnd += engine->minTimeJump;
+			engine->executeWindowStart = engine->executeWindowEnd;
 		}
 
 		/* make sure we dont run over the end */
+		engine->executeWindowEnd = engine->executeWindowStart + engine->minTimeJump;
 		if(engine->executeWindowEnd > engine->endTime) {
 			engine->executeWindowEnd = engine->endTime;
 		}
 
-		/* reset our event tracking stats */
+		/* reset for next round */
+		countdownlatch_reset(engine->processingLatch);
 		engine->numEventsCurrentInterval = 0;
 		engine->numNodesWithEventsCurrentInterval = 0;
-
-//		debug("updated execution window [%lu--%lu]",
-//				engine->executeWindowStart, engine->executeWindowEnd);
 	}
 
 	countdownlatch_free(engine->processingLatch);
@@ -467,7 +459,7 @@ void engine_notifyNodeProcessed(Engine* engine, guint numberEventsProcessed) {
 	_engine_lock(engine);
 	engine->numEventsCurrentInterval += numberEventsProcessed;
 	if(numberEventsProcessed > 0) {
-		engine->numNodesWithEventsCurrentInterval += 1;
+		(engine->numNodesWithEventsCurrentInterval)++;
 	}
 	_engine_unlock(engine);
 	countdownlatch_countDown(engine->processingLatch);

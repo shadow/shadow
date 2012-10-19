@@ -112,19 +112,14 @@ void worker_threadPoolProcessNode(Node* node, Engine* engine) {
 	worker->clock_now = SIMTIME_INVALID;
 	worker->clock_barrier = engine_getExecutionBarrier(engine);
 
-	SimulationTime jump = engine_getMinTimeJump(engine);
-	SimulationTime intervalNumber = worker->clock_barrier / jump;
-
 	/* lock the node */
 	node_lock(worker->cached_node);
 
 	EventQueue* eventq = node_getEvents(worker->cached_node);
-	eventqueue_startInterval(eventq, intervalNumber);
 	Event* nextEvent = eventqueue_peek(eventq);
 
-	guint n = 0;
-
 	/* process all events in the nodes local queue */
+	guint nEventsProcessed = 0;
 	while(nextEvent && (nextEvent->time < worker->clock_barrier))
 	{
 		worker->cached_event = eventqueue_pop(eventq);
@@ -138,7 +133,6 @@ void worker_threadPoolProcessNode(Node* node, Engine* engine) {
 
 		/* do the local task */
 		gboolean complete = shadowevent_run(worker->cached_event);
-		n++;
 
 		/* update times */
 		worker->clock_last = worker->clock_now;
@@ -147,13 +141,12 @@ void worker_threadPoolProcessNode(Node* node, Engine* engine) {
 		/* finished event can now be destroyed */
 		if(complete) {
 			shadowevent_free(worker->cached_event);
+			nEventsProcessed++;
 		}
 
 		/* get the next event, or NULL will tell us to break */
 		nextEvent = eventqueue_peek(eventq);
 	}
-
-	eventqueue_endInterval(eventq, intervalNumber);
 
 	/* unlock, clear cache */
 	node_unlock(worker->cached_node);
@@ -161,7 +154,7 @@ void worker_threadPoolProcessNode(Node* node, Engine* engine) {
 	worker->cached_event = NULL;
 	worker->cached_engine = NULL;
 
-	engine_notifyNodeProcessed(engine, n);
+	engine_notifyNodeProcessed(engine, nEventsProcessed);
 
 	/* worker thread now returns to the pool */
 }
@@ -211,9 +204,8 @@ void worker_scheduleEvent(Event* event, SimulationTime nano_delay, GQuark receiv
 	/* figure out where to push the event */
 	if(engine_getNumThreads(engine) > 1) {
 		/* multi-threaded, push event to receiver node */
-		SimulationTime intervalNumber = event->time / jump;
 		EventQueue* eventq = node_getEvents(receiver);
-		eventqueue_push(eventq, event, intervalNumber);
+		eventqueue_push(eventq, event);
 	} else {
 		/* single-threaded, push to master queue */
 		engine_pushEvent(engine, (Event*)event);
