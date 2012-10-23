@@ -5,7 +5,7 @@
 #)
 
 ## when linking: link the bitcode, hoist globals, then create the plug-in module
-## this is run from: shadow/build/shadow/src/library/echo
+## this is run from: shadow/build/shadow/src/plugins/echo
 set(CMAKE_C_CREATE_SHARED_MODULE 
     "llvm-link -o <TARGET>.bc <OBJECTS>"
     "opt -load=../../hoist/LLVMHoistGlobals.so -hoist-globals <TARGET>.bc -o <TARGET>.hoisted.bc"
