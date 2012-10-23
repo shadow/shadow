@@ -8,7 +8,7 @@
 ## this is run from: shadow/build/shadow/src/library/echo
 set(CMAKE_C_CREATE_SHARED_MODULE 
     "llvm-link -o <TARGET>.bc <OBJECTS>"
-    "opt -load=../../../llvm/LLVMHoistGlobals.so -hoist-globals <TARGET>.bc -o <TARGET>.hoisted.bc"
+    "opt -load=../../hoist/LLVMHoistGlobals.so -hoist-globals <TARGET>.bc -o <TARGET>.hoisted.bc"
     "<CMAKE_C_COMPILER> -shared -fPIC <LINK_FLAGS> <TARGET>.hoisted.bc -o <TARGET> <LINK_LIBRARIES>"
 )
 
