@@ -20,7 +20,7 @@ add_definitions(-Wall --std=c99 -D_SVID_SOURCE -D_XOPEN_SOURCE=600 -fPIC) #-D_GN
 add_subdirectory(intercept)
 
 ## build the built-in plug-in libraries
-add_subdirectory(library)
+add_subdirectory(plugins)
 
 ## sources for our main shadow program
 set(shadow_srcs
@@ -37,10 +37,10 @@ set(shadow_srcs
     topology/shd-link.c
     topology/shd-internetwork.c
     
-    plugin/shd-plugin.c
-    plugin/shd-software.c
-    plugin/shd-system.c
-    library/shd-library.c
+    engine/shd-plugin.c
+    engine/shd-software.c
+    engine/shd-system.c
+    plugins/shd-library.c
     
     runnable/shd-runnable.c
     runnable/shd-listener.c
