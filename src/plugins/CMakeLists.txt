@@ -1,5 +1,5 @@
 ## the plug-ins need to include shd-library.h
-include_directories(${CMAKE_SOURCE_DIR}/src/library)
+include_directories(${CMAKE_SOURCE_DIR}/src/plugins)
 install(FILES shd-library.h DESTINATION include/)
 install(FILES ${CMAKE_SOURCE_DIR}/src/utility/shd-cdf.h DESTINATION include/)
 
