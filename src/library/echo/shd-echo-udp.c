@@ -137,7 +137,7 @@ EchoUDP* echoudp_new(ShadowLogFunc log, int argc, char* argv[]) {
 	gchar* mode = argv[0];
 	gboolean isError = FALSE;
 
-	if(g_strncasecmp(mode, "client", 6) == 0)
+	if(g_ascii_strncasecmp(mode, "client", 6) == 0)
 	{
 		if(argc < 2) {
 			isError = TRUE;
@@ -155,7 +155,7 @@ EchoUDP* echoudp_new(ShadowLogFunc log, int argc, char* argv[]) {
 			freeaddrinfo(serverInfo);
 		}
 	}
-	else if (g_strncasecmp(mode, "server", 6) == 0)
+	else if (g_ascii_strncasecmp(mode, "server", 6) == 0)
 	{
 		char myHostName[128];
 
@@ -177,7 +177,7 @@ EchoUDP* echoudp_new(ShadowLogFunc log, int argc, char* argv[]) {
 			isError = TRUE;
 		}
 	}
-	else if (g_strncasecmp(mode, "loopback", 8) == 0)
+	else if (g_ascii_strncasecmp(mode, "loopback", 8) == 0)
 	{
 		in_addr_t serverIP = htonl(INADDR_LOOPBACK);
 		eudp->server = _echoudp_newServer(log, serverIP);

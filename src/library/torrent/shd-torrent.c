@@ -28,9 +28,9 @@ static in_addr_t torrent_resolveHostname(const gchar* hostname) {
 	in_addr_t addr = 0;
 
 	/* get the address in network order */
-	if(g_strncasecmp(hostname, "none", 4) == 0) {
+	if(g_ascii_strncasecmp(hostname, "none", 4) == 0) {
 		addr = htonl(INADDR_NONE);
-	} else if(g_strncasecmp(hostname, "localhost", 9) == 0) {
+	} else if(g_ascii_strncasecmp(hostname, "localhost", 9) == 0) {
 		addr = htonl(INADDR_LOOPBACK);
 	} else {
 		struct addrinfo* info;
@@ -126,7 +126,7 @@ void torrent_new(int argc, char* argv[]) {
 
 	gchar *mode = argv[1];
 
-	if(g_strcasecmp(mode, "node") == 0) {
+	if(g_ascii_strncasecmp(mode, "node", 4) == 0) {
 		if(argc < 5) {
 			log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "%s", USAGE);
 			return;
@@ -212,7 +212,7 @@ void torrent_new(int argc, char* argv[]) {
 		} else {
 			//log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "torrent client running");
 		}
-	} else if(g_strcasecmp(mode, "authority") == 0) {
+	} else if(g_ascii_strncasecmp(mode, "authority", 9) == 0) {
 		gint authPort = atoi(argv[2]);
 
 		/* create an epoll to wait for I/O events */
