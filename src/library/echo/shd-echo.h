@@ -71,7 +71,7 @@ enum EchoProtocol {
  */
 typedef struct _EchoClient EchoClient;
 struct _EchoClient {
-	ShadowlibLogFunc log;
+	ShadowLogFunc log;
 	in_addr_t serverIP;
 	gint epolld;
 	gint socketd;
@@ -88,7 +88,7 @@ struct _EchoClient {
  */
 typedef struct _EchoServer EchoServer;
 struct _EchoServer {
-	ShadowlibLogFunc log;
+	ShadowLogFunc log;
 	gint epolld;
 	gint listend;
 	gint socketd;
@@ -103,7 +103,7 @@ struct _EchoServer {
  */
 typedef struct _EchoTCP EchoTCP;
 struct _EchoTCP {
-	ShadowlibLogFunc log;
+	ShadowLogFunc log;
 	EchoClient* client;
 	EchoServer* server;
 };
@@ -113,7 +113,7 @@ struct _EchoTCP {
  */
 typedef struct _EchoUDP EchoUDP;
 struct _EchoUDP {
-	ShadowlibLogFunc log;
+	ShadowLogFunc log;
 	EchoClient* client;
 	EchoServer* server;
 };
@@ -123,7 +123,7 @@ struct _EchoUDP {
  */
 typedef struct _EchoPipe EchoPipe;
 struct _EchoPipe {
-	ShadowlibLogFunc log;
+	ShadowLogFunc log;
 	gint writefd;
 	gchar inputBuffer[BUFFERSIZE];
 	gboolean didWrite;
@@ -138,7 +138,7 @@ struct _EchoPipe {
  */
 typedef struct _Echo Echo;
 struct _Echo {
-	ShadowlibFunctionTable shadowlibFuncs;
+	ShadowFunctionTable shadowlibFuncs;
 	enum EchoProtocol protocol;
 	EchoTCP* etcp;
 	EchoUDP* eudp;
@@ -149,15 +149,15 @@ void echoplugin_new(int argc, char* argv[]);
 void echoplugin_free();
 void echoplugin_ready();
 
-EchoTCP* echotcp_new(ShadowlibLogFunc log, int argc, char* argv[]);
+EchoTCP* echotcp_new(ShadowLogFunc log, int argc, char* argv[]);
 void echotcp_free(EchoTCP* etcp);
 void echotcp_ready(EchoTCP* etcp);
 
-EchoUDP* echoudp_new(ShadowlibLogFunc log, int argc, char* argv[]);
+EchoUDP* echoudp_new(ShadowLogFunc log, int argc, char* argv[]);
 void echoudp_free(EchoUDP* eudp);
 void echoudp_ready(EchoUDP* eudp);
 
-EchoPipe* echopipe_new(ShadowlibLogFunc log);
+EchoPipe* echopipe_new(ShadowLogFunc log);
 void echopipe_free(EchoPipe* epipe);
 void echopipe_ready(EchoPipe* epipe);
 

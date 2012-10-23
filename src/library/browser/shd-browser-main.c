@@ -43,7 +43,7 @@ void bmain_createCallback(ShadowPluginCallbackFunc callback, gpointer data, guin
 	callback(data);
 }
 
-ShadowlibFunctionTable bmain_functionTable = {
+ShadowFunctionTable bmain_functionTable = {
 	NULL,
 	&bmain_log,
 	&bmain_createCallback,

@@ -48,7 +48,7 @@ void torrent_createCallback(ShadowPluginCallbackFunc callback, gpointer data, gu
 	callback(data);
 }
 
-ShadowlibFunctionTable torrent_functionTable = {
+ShadowFunctionTable torrent_functionTable = {
 	NULL,
 	&torrent_log,
 	&torrent_createCallback,

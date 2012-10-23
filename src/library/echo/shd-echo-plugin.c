@@ -24,17 +24,8 @@
 /* my global structure to hold all variable, node-specific application state.
  * the name must not collide with other loaded modules globals. */
 Echo echostate;
-int counter = 0;
-int mycount = 0;
-int a = 23;
-int b = 33;
 
-/* function table for Shadow so it knows how to call us */
-static const PluginFunctionTable echo_pluginFunctions = {
-	&echoplugin_new, &echoplugin_free, &echoplugin_ready,
-};
-
-void __shadow_plugin_init__(ShadowlibFunctionTable* shadowlibFuncs) {
+void __shadow_plugin_init__(ShadowFunctionTable* shadowlibFuncs) {
 	g_assert(shadowlibFuncs);
 
 	/* start out with cleared state */
@@ -44,14 +35,10 @@ void __shadow_plugin_init__(ShadowlibFunctionTable* shadowlibFuncs) {
 	echostate.shadowlibFuncs = *shadowlibFuncs;
 
 	/*
-	 * tell shadow which of our functions it can use to notify our plugin,
-	 * and allow it to track our state for each instance of this plugin
-	 *
-	 * we 'register' our function table, and 1 variable.
+	 * we 'register' our function table, telling shadow which of our functions
+	 * it can use to notify our plugin
 	 */
-	gboolean success = echostate.shadowlibFuncs.registerPlugin(&echo_pluginFunctions, 2,
-			sizeof(Echo), &echostate,
-			sizeof(int), &mycount);
+	gboolean success = echostate.shadowlibFuncs.registerPlugin(&echoplugin_new, &echoplugin_free, &echoplugin_ready);
 
 	/* we log through Shadow by using the log function it supplied to us */
 	if(success) {
@@ -72,10 +59,6 @@ void echoplugin_new(int argc, char* argv[]) {
 			"** clients and servers must be paired together, but loopback, socketpair,"
 			"and pipe modes stand on their own.";
 
-
-	mycount++;
-	counter++;
-	printf("mine at %p is %d, global at %p is %d\n", &mycount, mycount, &counter, counter);
 
 	/* 0 is the plugin name, 1 is the protocol */
 	if(argc < 2) {

@@ -104,7 +104,7 @@ struct _ScallionTor {
 	unsigned int bandwidth;
 	int refillmsecs;
 	vtor_cpuworker_tp cpuw;
-	ShadowlibFunctionTable* shadowlibFuncs;
+	ShadowFunctionTable* shadowlibFuncs;
 };
 
 typedef struct _Scallion Scallion;
@@ -120,7 +120,7 @@ struct _Scallion {
 	gint tsvcServerEpoll;
 	browser_t browser;
 	gint browserEpoll;
-	ShadowlibFunctionTable* shadowlibFuncs;
+	ShadowFunctionTable* shadowlibFuncs;
 };
 
 extern Scallion scallion;
@@ -130,7 +130,7 @@ void scallionpreload_init(GModule* handle);
 
 void scallion_register_globals(PluginFunctionTable* scallionFuncs, Scallion* scallionData);
 
-ScallionTor* scalliontor_new(ShadowlibFunctionTable* shadowlibFuncs,
+ScallionTor* scalliontor_new(ShadowFunctionTable* shadowlibFuncs,
 		char* hostname, enum vtor_nodetype type, char* bandwidth,
 		char* bwrate, char* bwburst,
 		char* torrc_path, char* datadir_path, char* geoip_path);

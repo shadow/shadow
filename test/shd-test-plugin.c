@@ -32,7 +32,7 @@
 #include <glib.h>
 #include <shd-library.h>
 
-ShadowlibFunctionTable* table;
+ShadowFunctionTable* table;
 int test = 0;
 
 void __init__() {
@@ -59,7 +59,7 @@ PluginFunctionTable pluginFunctions = {
 	&_new, &_free, &_ready,
 };
 
-void __shadow_plugin_init__(ShadowlibFunctionTable* shadowlibFuncs) {
+void __shadow_plugin_init__(ShadowFunctionTable* shadowlibFuncs) {
 	g_assert(shadowlibFuncs);
 	table = shadowlibFuncs;
 

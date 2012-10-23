@@ -51,7 +51,7 @@ FileTransfer filetransferplugin_globalData;
  * its better to register as little as possible because everything that is
  * registered is copied on every shadow-to-plugin context switch.
  */
-void __shadow_plugin_init__(ShadowlibFunctionTable* shadowlibFuncs) {
+void __shadow_plugin_init__(ShadowFunctionTable* shadowlibFuncs) {
 	/* clear our memory before initializing */
 	memset(&filetransferplugin_globalData, 0, sizeof(FileTransfer));
 

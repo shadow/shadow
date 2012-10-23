@@ -82,7 +82,6 @@
 #include "utility/shd-random.h"
 
 #include "library/shd-library.h"
-#include "plugin/shd-plugin-state.h"
 #include "plugin/shd-plugin.h"
 #include "plugin/shd-software.h"
 

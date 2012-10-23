@@ -29,7 +29,7 @@
 
 #include "shd-echo.h"
 
-static EchoClient* _echoudp_newClient(ShadowlibLogFunc log, in_addr_t serverIPAddress) {
+static EchoClient* _echoudp_newClient(ShadowLogFunc log, in_addr_t serverIPAddress) {
 	g_assert(log);
 
 	/* create the socket and get a socket descriptor */
@@ -70,7 +70,7 @@ static EchoClient* _echoudp_newClient(ShadowlibLogFunc log, in_addr_t serverIPAd
 	return ec;
 }
 
-static EchoServer* _echoudp_newServer(ShadowlibLogFunc log, in_addr_t bindIPAddress) {
+static EchoServer* _echoudp_newServer(ShadowLogFunc log, in_addr_t bindIPAddress) {
 	g_assert(log);
 
 	/* create the socket and get a socket descriptor */
@@ -124,7 +124,7 @@ static EchoServer* _echoudp_newServer(ShadowlibLogFunc log, in_addr_t bindIPAddr
 	return es;
 }
 
-EchoUDP* echoudp_new(ShadowlibLogFunc log, int argc, char* argv[]) {
+EchoUDP* echoudp_new(ShadowLogFunc log, int argc, char* argv[]) {
 	g_assert(log);
 
 	if(argc < 1) {

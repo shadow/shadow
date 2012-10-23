@@ -31,14 +31,16 @@ struct _Plugin {
 	GTimer* delayTimer;
 
 	ShadowPluginInitializeFunc init;
-	PluginFunctionTable* callbackFunctions;
 
-	gpointer hoistedGlobals;
-	gsize hoistedGlobalsSize;
-	gpointer hoistedGlobalsPointer;
+	PluginNewInstanceFunc new;
+	PluginNotifyFunc free;
+	PluginNotifyFunc notify;
 
-	PluginState* residentState;
-	PluginState* defaultState;
+	gsize residentStateSize;
+	gpointer residentStatePointer;
+	gpointer residentState;
+	PluginState defaultState;
+
 	gboolean isRegisterred;
 	/*
 	 * TRUE from when we've called into plug-in code until the call completes.
@@ -167,7 +169,7 @@ Plugin* plugin_new(GQuark id, GString* filename) {
 
 	success = g_module_symbol(plugin->handle, PLUGINGLOBALSSYMBOL, &hoistedGlobals);
 	if(success) {
-		plugin->hoistedGlobals = hoistedGlobals;
+		plugin->residentState = hoistedGlobals;
 		message("found '%s' at %p", PLUGINGLOBALSSYMBOL, hoistedGlobals);
 	} else {
 		error("unable to find the required merged globals struct symbol '%s' in plug-in '%s'",
@@ -176,7 +178,7 @@ Plugin* plugin_new(GQuark id, GString* filename) {
 
 	success = g_module_symbol(plugin->handle, PLUGINGLOBALSPOINTERSYMBOL, &hoistedGlobalsPointer);
 	if(success) {
-		plugin->hoistedGlobalsPointer = hoistedGlobalsPointer;
+		plugin->residentStatePointer = hoistedGlobalsPointer;
 		message("found '%s' at %p", PLUGINGLOBALSPOINTERSYMBOL, hoistedGlobalsPointer);
 	} else {
 		error("unable to find the required merged globals struct symbol '%s' in plug-in '%s'",
@@ -187,15 +189,12 @@ Plugin* plugin_new(GQuark id, GString* filename) {
 	if(success) {
 		g_assert(hoistedGlobalsSize);
 		gint s = *((gint*) hoistedGlobalsSize);
-		plugin->hoistedGlobalsSize = (gsize) s;
+		plugin->residentStateSize = (gsize) s;
 		message("found '%s' of value '%i' at %p", PLUGINGLOBALSSIZESYMBOL, s, hoistedGlobalsSize);
 	} else {
 		error("unable to find the required merged globals struct symbol '%s' in plug-in '%s'",
 				PLUGINGLOBALSSIZESYMBOL, filename->str);
 	}
-
-	/* we will store the callback functions the plug-in tells us */
-	plugin->callbackFunctions = g_new0(PluginFunctionTable, 1);
 
 	/* notify the plugin of our callable functions by calling the init function,
 	 * this is a special version of executing because we still dont know about
@@ -227,13 +226,8 @@ void plugin_free(gpointer data) {
 	g_unlink(plugin->path->str);
 	g_string_free(plugin->path, TRUE);
 
-	g_free(plugin->callbackFunctions);
-
-	if(plugin->residentState) {
-		pluginstate_free(plugin->residentState);
-	}
 	if(plugin->defaultState) {
-		pluginstate_free(plugin->defaultState);
+		plugin_freeState(plugin, plugin->defaultState);
 	}
 
 	MAGIC_CLEAR(plugin);
@@ -245,31 +239,29 @@ void plugin_setShadowContext(Plugin* plugin, gboolean isShadowContext) {
 	plugin->isShadowContext = isShadowContext;
 }
 
-void plugin_registerResidentState(Plugin* plugin, PluginFunctionTable* callbackFunctions, guint nVariables, va_list variableArguments) {
+void plugin_registerResidentState(Plugin* plugin, PluginNewInstanceFunc new, PluginNotifyFunc free, PluginNotifyFunc notify) {
 	MAGIC_ASSERT(plugin);
 	if(plugin->isRegisterred) {
 		warning("ignoring duplicate state registration");
 		return;
 	}
 
-	g_assert(callbackFunctions);
+	g_assert(new && free && notify);
 
 	/* store the pointers to the callbacks the plugin wants us to call */
-	*(plugin->callbackFunctions) = *callbackFunctions;
-
-	/* these are the physical memory addresses and sizes for each variable */
-	debug("registering resident plugin memory locations");
-	plugin->residentState = pluginstate_new(nVariables, variableArguments);
+	plugin->new = new;
+	plugin->free = free;
+	plugin->notify = notify;
 
 	/* also store a copy of the defaults as they exist now */
 	debug("copying resident plugin memory location contents as default start state");
-	plugin->defaultState = pluginstate_copyNew(plugin->residentState);
+	plugin->defaultState = g_slice_copy(plugin->residentStateSize, plugin->residentState);
 
 	/* dont change our resident state or defaults */
 	plugin->isRegisterred = TRUE;
 }
 
-static void _plugin_startExecuting(Plugin* plugin, PluginState* state) {
+static void _plugin_startExecuting(Plugin* plugin, PluginState state) {
 	MAGIC_ASSERT(plugin);
 	g_assert(!plugin->isExecuting);
 
@@ -281,14 +273,16 @@ static void _plugin_startExecuting(Plugin* plugin, PluginState* state) {
 	 * was loaded... if the physical memory locations still has our state,
 	 * there is no need to copy it in again. similarly for stopExecuting()
 	 */
-	pluginstate_copy(state, plugin->residentState);
+	/* destination, source, size */
+	g_memmove(plugin->residentState, state, plugin->residentStateSize);
+
 	plugin->isExecuting = TRUE;
 	worker->cached_plugin = plugin;
 	g_timer_start(plugin->delayTimer);
 	plugin_setShadowContext(plugin, FALSE);
 }
 
-static void _plugin_stopExecuting(Plugin* plugin, PluginState* state) {
+static void _plugin_stopExecuting(Plugin* plugin, PluginState state) {
 	MAGIC_ASSERT(plugin);
 
 	Worker* worker = worker_getPrivate();
@@ -303,41 +297,47 @@ static void _plugin_stopExecuting(Plugin* plugin, PluginState* state) {
 	cpu_addDelay(node_getCPU(worker->cached_node), delay);
 	tracker_addProcessingTime(node_getTracker(worker->cached_node), delay);
 
-	pluginstate_copy(plugin->residentState, state);
+	/* destination, source, size */
+	g_memmove(state, plugin->residentState, plugin->residentStateSize);
 	worker->cached_plugin = NULL;
 }
 
-void plugin_executeNew(Plugin* plugin, PluginState* state, gint argcParam, gchar* argvParam[]) {
+void plugin_executeNew(Plugin* plugin, PluginState state, gint argcParam, gchar* argvParam[]) {
 	MAGIC_ASSERT(plugin);
 	_plugin_startExecuting(plugin, state);
-	plugin->callbackFunctions->new(argcParam, argvParam);
+	plugin->new(argcParam, argvParam);
 	_plugin_stopExecuting(plugin, state);
 }
 
-void plugin_executeFree(Plugin* plugin, PluginState* state) {
+void plugin_executeFree(Plugin* plugin, PluginState state) {
 	MAGIC_ASSERT(plugin);
 	_plugin_startExecuting(plugin, state);
-	plugin->callbackFunctions->free();
+	plugin->free();
 	_plugin_stopExecuting(plugin, state);
 }
 
-void plugin_executeNotify(Plugin* plugin, PluginState* state) {
+void plugin_executeNotify(Plugin* plugin, PluginState state) {
 	MAGIC_ASSERT(plugin);
 	_plugin_startExecuting(plugin, state);
-	plugin->callbackFunctions->notify();
+	plugin->notify();
 	_plugin_stopExecuting(plugin, state);
 }
 
-void plugin_executeGeneric(Plugin* plugin, PluginState* state, CallbackFunc callback, gpointer data, gpointer callbackArgument) {
+void plugin_executeGeneric(Plugin* plugin, PluginState state, CallbackFunc callback, gpointer data, gpointer callbackArgument) {
 	MAGIC_ASSERT(plugin);
 	_plugin_startExecuting(plugin, state);
 	callback(data, callbackArgument);
 	_plugin_stopExecuting(plugin, state);
 }
 
-PluginState* plugin_newDefaultState(Plugin* plugin) {
+PluginState plugin_newDefaultState(Plugin* plugin) {
 	MAGIC_ASSERT(plugin);
-	return pluginstate_copyNew(plugin->defaultState);
+	return g_slice_copy(plugin->residentStateSize, plugin->defaultState);
+}
+
+void plugin_freeState(Plugin* plugin, gpointer state) {
+	MAGIC_ASSERT(plugin);
+	g_slice_free1(plugin->residentStateSize, state);
 }
 
 GQuark* plugin_getID(Plugin* plugin) {

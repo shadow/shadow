@@ -250,7 +250,7 @@ gint scalliontor_start(ScallionTor* stor, gint argc, gchar *argv[]) {
 	return 0;
 }
 
-ScallionTor* scalliontor_new(ShadowlibFunctionTable* shadowlibFuncs, char* hostname, enum vtor_nodetype type,
+ScallionTor* scalliontor_new(ShadowFunctionTable* shadowlibFuncs, char* hostname, enum vtor_nodetype type,
 		char* bandwidth, char* bwrate, char* bwburst, char* torrc_path, char* datadir_path, char* geoip_path) {
 	ScallionTor* stor = g_new0(ScallionTor, 1);
 	stor->shadowlibFuncs = shadowlibFuncs;

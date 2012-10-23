@@ -49,7 +49,7 @@
  */
 typedef struct _Torrent Torrent;
 struct _Torrent {
-	ShadowlibFunctionTable* shadowlib;
+	ShadowFunctionTable* shadowlib;
 	TorrentServer* server;
 	TorrentClient* client;
 	TorrentAuthority* authority;

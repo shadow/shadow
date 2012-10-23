@@ -541,7 +541,7 @@ typedef void (*CRYPTO_lock_func)(int mode,int type, const char *file,int line);
 typedef unsigned long (*CRYPTO_id_func)(void);
 
 /* called after g_module_check_init(), after shadow searches for __shadow_plugin_init__ */
-void __shadow_plugin_init__(ShadowlibFunctionTable* shadowlibFuncs) {
+void __shadow_plugin_init__(ShadowFunctionTable* shadowlibFuncs) {
 	/* save the shadow functions we will use */
 	scallion.shadowlibFuncs = shadowlibFuncs;
 

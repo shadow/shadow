@@ -35,7 +35,6 @@ set(shadow_srcs
     topology/shd-internetwork.c
     
     plugin/shd-plugin.c
-    plugin/shd-plugin-state.c
     plugin/shd-software.c
     plugin/shd-system.c
     library/shd-library.c

@@ -64,7 +64,7 @@ typedef struct browser_server_args_s {
 typedef struct browser_connection_s browser_connection_t, *browser_connection_tp;
 
 typedef struct browser_s { 
-	ShadowlibFunctionTable* shadowlib;
+	ShadowFunctionTable* shadowlib;
 	enum browser_state state;
 	gint epolld;
 	gchar* first_hostname;

@@ -23,7 +23,7 @@
 #include <unistd.h>
 #include "shd-echo.h"
 
-EchoPipe* echopipe_new(ShadowlibLogFunc log) {
+EchoPipe* echopipe_new(ShadowLogFunc log) {
 	EchoPipe* epipe = g_new0(EchoPipe, 1);
 
 	epipe->log = log;

@@ -21,7 +21,7 @@
 
 #include "shd-echo.h"
 
-static EchoClient* _echotcp_newClient(ShadowlibLogFunc log, in_addr_t serverIPAddress) {
+static EchoClient* _echotcp_newClient(ShadowLogFunc log, in_addr_t serverIPAddress) {
 	g_assert(log);
 
 	/* create the socket and get a socket descriptor */
@@ -76,7 +76,7 @@ static EchoClient* _echotcp_newClient(ShadowlibLogFunc log, in_addr_t serverIPAd
 	return ec;
 }
 
-static EchoServer* _echotcp_newServer(ShadowlibLogFunc log, in_addr_t bindIPAddress) {
+static EchoServer* _echotcp_newServer(ShadowLogFunc log, in_addr_t bindIPAddress) {
 	g_assert(log);
 
 	/* create the socket and get a socket descriptor */
@@ -137,7 +137,7 @@ static EchoServer* _echotcp_newServer(ShadowlibLogFunc log, in_addr_t bindIPAddr
 	return es;
 }
 
-static gboolean _echotcp_newPair(ShadowlibLogFunc log, EchoClient** client, EchoServer** server) {
+static gboolean _echotcp_newPair(ShadowLogFunc log, EchoClient** client, EchoServer** server) {
 	g_assert(client && server);
 
 	gint sdarray[2];
@@ -195,7 +195,7 @@ static gboolean _echotcp_newPair(ShadowlibLogFunc log, EchoClient** client, Echo
 	return TRUE;
 }
 
-EchoTCP* echotcp_new(ShadowlibLogFunc log, int argc, char* argv[]) {
+EchoTCP* echotcp_new(ShadowLogFunc log, int argc, char* argv[]) {
 	g_assert(log);
 
 	if(argc < 1) {

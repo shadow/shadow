@@ -49,7 +49,7 @@
 
 typedef struct _FileTransfer FileTransfer;
 struct _FileTransfer {
-	ShadowlibFunctionTable* shadowlib;
+	ShadowFunctionTable* shadowlib;
 	service_filegetter_tp client;
 	fileserver_tp server;
 };

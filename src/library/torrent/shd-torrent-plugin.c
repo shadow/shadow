@@ -43,7 +43,7 @@ PluginFunctionTable torrent_pluginFunctions = {
 	&torrentPlugin_new, &torrentPlugin_free, &torrentPlugin_activate,
 };
 
-void __shadow_plugin_init__(ShadowlibFunctionTable* shadowlibFuncs) {
+void __shadow_plugin_init__(ShadowFunctionTable* shadowlibFuncs) {
 	g_assert(shadowlibFuncs);
 
 	/* start out with cleared state */

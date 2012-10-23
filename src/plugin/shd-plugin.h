@@ -25,19 +25,22 @@
 #include "shadow.h"
 
 typedef struct _Plugin Plugin;
+typedef gpointer PluginState;
 
 Plugin* plugin_new(GQuark id, GString* filename);
 void plugin_free(gpointer data);
-PluginState* plugin_newDefaultState(Plugin* plugin);
+
+PluginState plugin_newDefaultState(Plugin* plugin);
+void plugin_freeState(Plugin* plugin, PluginState state);
 
 void plugin_setShadowContext(Plugin* plugin, gboolean isShadowContext);
 gboolean plugin_isShadowContext(Plugin* plugin);
 GQuark* plugin_getID(Plugin* plugin);
 
-void plugin_registerResidentState(Plugin* plugin, PluginFunctionTable* callbackFunctions, guint nVariables, va_list variableArguments);
-void plugin_executeNew(Plugin* plugin, PluginState* state, gint argcParam, gchar* argvParam[]);
-void plugin_executeFree(Plugin* plugin, PluginState* state);
-void plugin_executeNotify(Plugin* plugin, PluginState* state);
-void plugin_executeGeneric(Plugin* plugin, PluginState* state, CallbackFunc callback, gpointer data, gpointer callbackArgument);
+void plugin_registerResidentState(Plugin* plugin, PluginNewInstanceFunc new, PluginNotifyFunc free, PluginNotifyFunc notify);
+void plugin_executeNew(Plugin* plugin, PluginState state, gint argcParam, gchar* argvParam[]);
+void plugin_executeFree(Plugin* plugin, PluginState state);
+void plugin_executeNotify(Plugin* plugin, PluginState state);
+void plugin_executeGeneric(Plugin* plugin, PluginState state, CallbackFunc callback, gpointer data, gpointer callbackArgument);
 
 #endif /* SHD_PLUGIN_H_ */

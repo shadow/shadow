@@ -24,7 +24,7 @@
 Torrent* torrent;
 
 static in_addr_t torrent_resolveHostname(const gchar* hostname) {
-	ShadowlibLogFunc log = torrent->shadowlib->log;
+	ShadowLogFunc log = torrent->shadowlib->log;
 	in_addr_t addr = 0;
 
 	/* get the address in network order */
@@ -47,7 +47,7 @@ static in_addr_t torrent_resolveHostname(const gchar* hostname) {
 
 static void torrent_report(TorrentClient* tc, gchar* preamble) {
 	if(tc != NULL && preamble != NULL) {
-		ShadowlibLogFunc log = torrent->shadowlib->log;
+		ShadowLogFunc log = torrent->shadowlib->log;
 		struct timespec now;
 		struct timespec first_time;
 		struct timespec curr_time;
@@ -107,7 +107,7 @@ Torrent**  torrent_init(Torrent* currentTorrent) {
 }
 
 void torrent_new(int argc, char* argv[]) {
-	ShadowlibLogFunc log = torrent->shadowlib->log;
+	ShadowLogFunc log = torrent->shadowlib->log;
 	log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "torrent_new called");
 
 	torrent->server = NULL;
@@ -239,7 +239,7 @@ void torrent_new(int argc, char* argv[]) {
 }
 
 void torrent_activate() {
-	ShadowlibLogFunc log = torrent->shadowlib->log;
+	ShadowLogFunc log = torrent->shadowlib->log;
 	log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "torrent_activate called");
 
 	if(torrent->server) {

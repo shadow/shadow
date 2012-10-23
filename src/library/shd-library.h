@@ -61,7 +61,14 @@ typedef void (*PluginNewInstanceFunc)(gint argc, gchar* argv[]);
  */
 typedef void (*PluginNotifyFunc)();
 
-typedef struct _PluginFunctionTable PluginFunctionTable;
+/*
+ * signature for plug-in callback functions
+ */
+typedef void (*ShadowPluginCallbackFunc)(gpointer data);
+
+/*
+ * function signatures for available shadow functions
+ */
 
 /**
  * A collection of functions implemented by a plug-in. The functions
@@ -69,38 +76,19 @@ typedef struct _PluginFunctionTable PluginFunctionTable;
  * with the plug-in, allowing Shadow to perform callbacks into user-specified
  * functions when creating and freeing nodes, and when a socket may be read or
  * written without blocking.
+ *
+ *  @param new - Pointer to a function to call when creating a new node instance.
+ *  @param free - Pointer to a function to call when freeing a node instance.
+ *  @param notify - Pointer to a function to call when descriptors are ready.
  */
-struct _PluginFunctionTable {
-	/**
-	 * Pointer to a function to call when creating a new node instance.
-	 */
-	PluginNewInstanceFunc new;
+typedef gboolean (*ShadowRegisterFunc)(PluginNewInstanceFunc new, PluginNotifyFunc free, PluginNotifyFunc notify);
+typedef void (*ShadowLogFunc)(GLogLevelFlags level, const gchar* functionName, gchar* format, ...);
+typedef void (*ShadowCreateCallbackFunc)(ShadowPluginCallbackFunc callback, gpointer data, guint millisecondsDelay);
+typedef gboolean (*ShadowGetBandwidthFloorFunc)(in_addr_t ip, guint* bwdown, guint* bwup);
+typedef gboolean (*ShadowCryptoSetupFunc)(gint numLocks, gpointer* shadowLockFunc, gpointer* shadowIdFunc, gconstpointer* shadowRandomMethod);
 
-	/**
-	 * Pointer to a function to call when freeing a node instance.
-	 */
-	PluginNotifyFunc free;
-
-	/**
-	 * Pointer to a function to call when descriptors are ready.
-	 */
-	PluginNotifyFunc notify;
-};
-
-/*
- * signature for plug-in callback functions
- */
-typedef void (*ShadowPluginCallbackFunc)(gpointer data);
-
-/* function signatures for available shadow functions */
-typedef gboolean (*ShadowlibRegisterFunc)(PluginFunctionTable* callbackFunctions, guint nVariables, ...);
-typedef void (*ShadowlibLogFunc)(GLogLevelFlags level, const gchar* functionName, gchar* format, ...);
-typedef void (*ShadowlibCreateCallbackFunc)(ShadowPluginCallbackFunc callback, gpointer data, guint millisecondsDelay);
-typedef gboolean (*ShadowlibGetBandwidthFloorFunc)(in_addr_t ip, guint* bwdown, guint* bwup);
-typedef gboolean (*ShadowlibCryptoSetupFunc)(gint numLocks, gpointer* shadowLockFunc, gpointer* shadowIdFunc, gconstpointer* shadowRandomMethod);
-
-typedef struct _ShadowlibFunctionTable ShadowlibFunctionTable;
-extern ShadowlibFunctionTable shadowlibFunctionTable;
+typedef struct _ShadowlibFunctionTable ShadowFunctionTable;
+extern ShadowFunctionTable shadowlibFunctionTable;
 
 /**
  * A collection of functions exported to a plug-in. Each pointer in this table
@@ -108,15 +96,15 @@ extern ShadowlibFunctionTable shadowlibFunctionTable;
  * functions to hook into Shadow's logging and event systems.
  */
 struct _ShadowlibFunctionTable {
-	ShadowlibRegisterFunc registerPlugin;
-	ShadowlibLogFunc log;
-	ShadowlibCreateCallbackFunc createCallback;
-	ShadowlibGetBandwidthFloorFunc getBandwidth;
-	ShadowlibCryptoSetupFunc cryptoSetup;
+	ShadowRegisterFunc registerPlugin;
+	ShadowLogFunc log;
+	ShadowCreateCallbackFunc createCallback;
+	ShadowGetBandwidthFloorFunc getBandwidth;
+	ShadowCryptoSetupFunc cryptoSetup;
 };
 
 /* Plug-ins must implement this function to communicate with Shadow.
  * the function name symbol must be PLUGININITSYMBOL */
-typedef void (*ShadowPluginInitializeFunc)(ShadowlibFunctionTable* shadowlibFunctions);
+typedef void (*ShadowPluginInitializeFunc)(ShadowFunctionTable* shadowlibFunctions);
 
 #endif /* SHD_LIBRARY_H_ */

@@ -29,17 +29,11 @@
  * a common interface and re-directs to the appropriate shadow function.
  */
 
-gboolean shadowlib_register(PluginFunctionTable* callbackFunctions, guint nVariables, ...) {
+gboolean shadowlib_register(PluginNewInstanceFunc new, PluginNotifyFunc free, PluginNotifyFunc notify) {
 	Worker* worker = worker_getPrivate();
 	plugin_setShadowContext(worker->cached_plugin, TRUE);
 
-	/* collect the variable length argument list*/
-	va_list variableArguments;
-	va_start(variableArguments, nVariables);
-
-	plugin_registerResidentState(worker->cached_plugin, callbackFunctions, nVariables, variableArguments);
-
-	va_end(variableArguments);
+	plugin_registerResidentState(worker->cached_plugin, new, free, notify);
 
 	plugin_setShadowContext(worker->cached_plugin, FALSE);
 	return TRUE;
@@ -127,7 +121,7 @@ gboolean shadowlib_cryptoSetup(gint numLocks, gpointer* shadowLockFunc, gpointer
 
 /* we send this FunctionTable to each plug-in so it has pointers to our functions.
  * we use this to export shadow functionality to plug-ins. */
-ShadowlibFunctionTable shadowlibFunctionTable = {
+ShadowFunctionTable shadowlibFunctionTable = {
 	&shadowlib_register,
 	&shadowlib_log,
 	&shadowlib_createCallback,

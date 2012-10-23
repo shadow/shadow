@@ -42,7 +42,7 @@ void ftmain_createCallback(ShadowPluginCallbackFunc callback, gpointer data, gui
 	callback(data);
 }
 
-ShadowlibFunctionTable ftmain_functionTable = {
+ShadowFunctionTable ftmain_functionTable = {
 	NULL,
 	&ftmain_log,
 	&ftmain_createCallback,
