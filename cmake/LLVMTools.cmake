@@ -113,6 +113,11 @@ add_dependencies(${target} ${target}.hoisted.bc)
 set_property(TARGET ${target} PROPERTY LINKER_LANGUAGE C)
 set_property(SOURCE ${target}.hoisted.bc PROPERTY EXTERNAL_OBJECT TRUE)
 
+## make sure we have the bitcode we need before building the .so
+foreach(bctarget ${ARGN})
+    add_dependencies(${target} ${bctarget})
+endforeach(bctarget)
+
 endmacro(add_plugin)
 
 #####

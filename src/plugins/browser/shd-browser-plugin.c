@@ -50,11 +50,6 @@ static void browserplugin_activate() {
 	}
 }
 
-PluginFunctionTable browser_pluginFunctions = {
-	&browserplugin_new, &browserplugin_free,
-	&browserplugin_activate,
-};
-
 /* shadow calls this function for a one-time initialization
  *
  * !WARNING! dont malloc() (or g_new()) anything until filetransferplugin_new
@@ -73,8 +68,7 @@ void __shadow_plugin_init__(ShadowFunctionTable* shadowlibFuncs) {
 	 * tell shadow which of our functions it can use to notify our plugin,
 	 * and allow it to track our state for each instance of this plugin
 	 */
-	gboolean success = shadowlibFuncs->registerPlugin(&browser_pluginFunctions, 1,
-			sizeof(browser_t), &b);
+	gboolean success = shadowlibFuncs->registerPlugin(&browserplugin_new, &browserplugin_free, &browserplugin_activate);
 	if(success) {
 		shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "successfully registered browser plug-in state");
 	} else {
