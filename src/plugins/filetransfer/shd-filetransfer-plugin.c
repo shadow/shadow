@@ -36,11 +36,6 @@ static void filetransferplugin_activate() {
 	filetransfer_activate();
 }
 
-PluginFunctionTable filetransfer_pluginFunctions = {
-	&filetransferplugin_new, &filetransferplugin_free,
-	&filetransferplugin_activate,
-};
-
 /* my global structure to hold all variable, node-specific application state */
 FileTransfer filetransferplugin_globalData;
 
@@ -67,8 +62,7 @@ void __shadow_plugin_init__(ShadowFunctionTable* shadowlibFuncs) {
 	 * tell shadow which of our functions it can use to notify our plugin,
 	 * and allow it to track our state for each instance of this plugin
 	 */
-	gboolean success = shadowlibFuncs->registerPlugin(&filetransfer_pluginFunctions, 1,
-			sizeof(FileTransfer), &filetransferplugin_globalData);
+	gboolean success = shadowlibFuncs->registerPlugin(&filetransferplugin_new, &filetransferplugin_free, &filetransferplugin_activate);
 	if(success) {
 		shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "successfully registered filetransfer plug-in state");
 	} else {

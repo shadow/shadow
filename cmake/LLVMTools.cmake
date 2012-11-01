@@ -51,19 +51,21 @@ foreach(srcfile ${ARGN})
     foreach(DIRECTORY ${INCLUDE_DIRECTORIES})
         list(APPEND srcincludes -I${DIRECTORY})
     endforeach()
+    
+    get_filename_component(outfile ${srcfile} NAME)
 
     ## the command to generate the bitcode for this file
-    add_custom_command(OUTPUT ${srcfile}.bc
+    add_custom_command(OUTPUT ${outfile}.bc
       COMMAND ${LLVM_BC_C_COMPILER} -emit-llvm ${srcdefs} ${srcflags} ${srcincludes}
         -c ${CMAKE_CURRENT_SOURCE_DIR}/${srcfile}
-        -o ${CMAKE_CURRENT_BINARY_DIR}/${srcfile}.bc
-      COMMENT "Building LLVM bitcode ${srcfile}.bc"
+        -o ${outfile}.bc
+      COMMENT "Building LLVM bitcode ${outfile}.bc"
       VERBATIM
     )
-    set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_MAKE_CLEAN_FILES ${srcfile}.bc)
+    set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_MAKE_CLEAN_FILES ${outfile}.bc)
 
     ## keep track of every bitcode file we need to create
-    list(APPEND bcfiles ${CMAKE_CURRENT_BINARY_DIR}/${srcfile}.bc)
+    list(APPEND bcfiles ${outfile}.bc)
 endforeach(srcfile)
 
 ## link all the bitcode files together to the target

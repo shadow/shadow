@@ -18,7 +18,7 @@ if(NOT BUILD_ECHO STREQUAL OFF)
 endif(NOT BUILD_ECHO STREQUAL OFF)
 
 if(NOT BUILD_FILETRANSFER STREQUAL OFF)
-#    add_subdirectory(filetransfer)
+    add_subdirectory(filetransfer)
 endif(NOT BUILD_FILETRANSFER STREQUAL OFF)
 
 if(NOT BUILD_SCALLION STREQUAL OFF)
