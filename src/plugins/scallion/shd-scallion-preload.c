@@ -21,8 +21,10 @@
 
 #include <sys/time.h>
 #include <stdint.h>
+#include <stdarg.h>
 
-#include "scallion.h"
+#include <glib.h>
+#include <gmodule.h>
 
 #define TOR_LIB_PREFIX "intercept_"
 
@@ -113,6 +115,7 @@ uint32_t router_get_advertised_bandwidth_capped(void *router) {
 	return _scallionpreload_getWorker()->f(router);
 }
 
-int event_base_loopexit(struct event_base * base, const struct timeval * t) {
+/* struct event_base* base */
+int event_base_loopexit(gpointer base, const struct timeval * t) {
 	return _scallionpreload_getWorker()->g(base, t);
 }

@@ -42,9 +42,10 @@ foreach(srcfile ${ARGN})
     endforeach()
 
     set(srcflags "")
-    if(NOT ${CMAKE_C_FLAGS} STREQUAL "")
-        string(REPLACE " " ";" srcflags ${CMAKE_C_FLAGS})
-    endif()
+    separate_arguments(srcflags UNIX_COMMAND ${CMAKE_C_FLAGS})
+#    if(NOT ${CMAKE_C_FLAGS} STREQUAL "")
+#        string(REPLACE " " ";" srcflags ${CMAKE_C_FLAGS})
+#    endif()
 
     set(srcincludes "")
     get_directory_property(INCLUDE_DIRECTORIES INCLUDE_DIRECTORIES)
@@ -53,12 +54,12 @@ foreach(srcfile ${ARGN})
     endforeach()
     
     get_filename_component(outfile ${srcfile} NAME)
+    get_filename_component(infile ${srcfile} ABSOLUTE)
 
     ## the command to generate the bitcode for this file
     add_custom_command(OUTPUT ${outfile}.bc
       COMMAND ${LLVM_BC_C_COMPILER} -emit-llvm ${srcdefs} ${srcflags} ${srcincludes}
-        -c ${CMAKE_CURRENT_SOURCE_DIR}/${srcfile}
-        -o ${outfile}.bc
+        -c ${infile} -o ${outfile}.bc
       COMMENT "Building LLVM bitcode ${outfile}.bc"
       VERBATIM
     )

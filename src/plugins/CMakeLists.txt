@@ -26,5 +26,5 @@ if(NOT BUILD_TORRENT STREQUAL OFF)
 endif(NOT BUILD_TORRENT STREQUAL OFF)
 
 if(NOT BUILD_SCALLION STREQUAL OFF)
-#    add_subdirectory(scallion)
+    add_subdirectory(scallion)
 endif(NOT BUILD_SCALLION STREQUAL OFF)

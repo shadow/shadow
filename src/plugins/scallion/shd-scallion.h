@@ -32,21 +32,74 @@
 #include <string.h>
 #include <errno.h>
 #include <sys/time.h>
+#include <sys/types.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
 #include <glib.h>
 #include <gmodule.h>
-#include <shd-library.h>
-#include <shd-filetransfer.h>
-#include <shd-browser.h>
-#include <shd-torrent-service.h>
 #include <event2/event.h>
 #include <event2/event_struct.h>
-#include "torlog.h"
 
-#include "tor_includes.h"
-#include "tor_externs.h"
+#include "shd-library.h"
+#include "shd-filetransfer.h"
+#include "shd-browser.h"
+#include "shd-torrent-service.h"
+
+/* includes from Tor */
+#undef NDEBUG
+//#ifndef _GNU_SOURCE
+//#define _GNU_SOURCE 1
+//#endif
+# ifndef __daddr_t_defined
+typedef __daddr_t daddr_t;
+typedef __caddr_t caddr_t;
+#  define __daddr_t_defined
+# ifndef __u_char_defined
+# endif
+typedef __u_char u_char;
+typedef __u_short u_short;
+typedef __u_int u_int;
+typedef __u_long u_long;
+typedef __quad_t quad_t;
+typedef __u_quad_t u_quad_t;
+typedef __fsid_t fsid_t;
+#  define __u_char_defined
+# endif
+
+#include "orconfig.h"
+#include "src/or/or.h"
+#include "src/common/util.h"
+#include "src/common/address.h"
+#include "src/common/compat_libevent.h"
+#include "src/common/compat.h"
+#include "src/common/container.h"
+#include "src/common/ht.h"
+#include "src/common/memarea.h"
+#include "src/common/mempool.h"
+#include "src/common/torlog.h"
+#include "src/common/tortls.h"
+#include "src/or/buffers.h"
+#include "src/or/config.h"
+#include "src/or/cpuworker.h"
+#include "src/or/dirserv.h"
+#include "src/or/dirvote.h"
+#include "src/or/hibernate.h"
+#include "src/or/rephist.h"
+#include "src/or/router.h"
+#include "src/or/routerparse.h"
+#include "src/or/onion.h"
+#include "src/or/control.h"
+#include "src/or/networkstatus.h"
+//#include "src/common/OpenBSD_malloc_Linux.h"
+#include "src/or/dns.h"
+#include "src/or/circuitlist.h"
+#include "src/or/policies.h"
+#include "src/or/geoip.h"
+#include <openssl/bn.h>
+#include <openssl/ssl.h>
+#include <pthread.h>
+#include <time.h>
 
 /* externals from Tor */
 extern int n_sockets_open;
@@ -65,6 +118,16 @@ extern int trusted_dirs_reload_certs(void);
 extern int router_reload_router_list(void);
 extern void directory_info_has_arrived(time_t now, int from_cache);
 extern int tor_init(int argc, char *argv[]);
+
+extern int global_write_bucket;
+extern int stats_prev_global_write_bucket;
+extern int global_read_bucket;
+extern int stats_prev_global_read_bucket;
+extern periodic_timer_t * second_timer;
+extern periodic_timer_t * refill_timer;
+extern smartlist_t * active_linked_connection_lst;
+extern crypto_pk_t * client_identitykey;
+extern int called_loop_once;
 
 enum vtor_nodetype {
 	VTOR_DIRAUTH, VTOR_RELAY, VTOR_EXITRELAY, VTOR_CLIENT, VTOR_TORRENT, VTOR_BROWSER,
@@ -127,8 +190,6 @@ extern Scallion scallion;
 #undef log
 
 void scallionpreload_init(GModule* handle);
-
-void scallion_register_globals(PluginFunctionTable* scallionFuncs, Scallion* scallionData);
 
 ScallionTor* scalliontor_new(ShadowFunctionTable* shadowlibFuncs,
 		char* hostname, enum vtor_nodetype type, char* bandwidth,

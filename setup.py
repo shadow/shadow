@@ -215,8 +215,8 @@ def build(args):
         log("detected tor version {0}".format(torversion))
         vparts = torversion.split(".")
         a, b, c, d = int(vparts[0]), int(vparts[1]), int(vparts[2]), int(vparts[3].split("-")[0])
-        if c > 3 or (c == 3 and d >= 5): 
-            cmake_cmd += " -DSCALLION_DOREFILL=1"
+        if c < 3 or (c == 3 and d < 5): 
+            cmake_cmd += " -DSCALLION_SKIPREFILL=1"
             log("Tor configured to use refill callbacks")
     
     # now we will be using cmake to build shadow and the plug-ins
@@ -260,6 +260,7 @@ def build(args):
         log("make returned " + str(retcode))
         if retcode == 0: log("now run \'python setup.py install\'")
         else: log("ERROR! Non-zero return code from make.")
+    else: log("ERROR! Non-zero return code from cmake.")
 
     # go back to where we came from
     os.chdir(calledDirectory)
@@ -331,10 +332,10 @@ def setup_tor(args):
     shutil.copy("../contrib/static_symbol_converter.py", args.tordir)
     shutil.copy("../contrib/patch.sh", args.tordir)
 
-    # if we already built successfully, dont patch or re-configure
+    # if we already configured successfully, dont patch or re-configure
     if os.path.exists(args.tordir):
         os.chdir(args.tordir)
-        if not os.path.exists(args.tordir+"/src/or/tor"):
+        if not os.path.exists(args.tordir+"/orconfig.h"):
             # patch then configure first
             cflags = "-fPIC -fno-inline"
             if args.extra_includes is not None:
@@ -371,28 +372,29 @@ def setup_tor(args):
                 log("running \'{0}\'".format(configure))
                 retcode = subprocess.call(shlex.split(configure))
 
-        # configure done now
-        if retcode == 0:
-            # build
-            build = "make clean && make"
-            log("running \'{0}\'".format(build))
-            for cmd in build.split('&&'):
-                retcode = retcode | subprocess.call(shlex.split(cmd.strip()))
-    
-        if retcode == 0:
-            convert = "python static_symbol_converter.py " + args.tor_version
-            log("running \'{0}\'".format(convert))
-            retcode = subprocess.call(shlex.split(convert))
-
-        if retcode == 0:
-            make = "make"
-            log("running \'{0}\'".format(make))
-            retcode = subprocess.call(shlex.split(make))
-
-        # if we had a failure, start over with patching
-        if retcode != 0:
-            #shutil.rmtree(args.tordir)
-            return -1
+            # configure done now
+            if False:
+                if retcode == 0:
+                    # build
+                    build = "make clean && make"
+                    log("running \'{0}\'".format(build))
+                    for cmd in build.split('&&'):
+                        retcode = retcode | subprocess.call(shlex.split(cmd.strip()))
+            
+                if retcode == 0:
+                    convert = "python static_symbol_converter.py " + args.tor_version
+                    log("running \'{0}\'".format(convert))
+                    retcode = subprocess.call(shlex.split(convert))
+        
+                if retcode == 0:
+                    make = "make"
+                    log("running \'{0}\'".format(make))
+                    retcode = subprocess.call(shlex.split(make))
+        
+            # if we had a failure, start over with patching
+            if retcode != 0:
+                #shutil.rmtree(args.tordir)
+                return -1
         
     return retcode
 

@@ -19,7 +19,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "scallion.h"
+#include "shd-scallion.h"
 
 // this should only appear if Tor > 0.2.3.5-alpha
 // handled in setup.py and CMakelists.txt
@@ -126,7 +126,7 @@ static void _scalliontor_secondCallback(ScallionTor* stor) {
 	}
 }
 
-#ifdef SCALLION_DOREFILL
+#ifndef SCALLION_SKIPREFILL
 static void _scalliontor_refillCallback(ScallionTor* stor) {
 	scalliontor_notify(stor);
 
@@ -158,7 +158,7 @@ gint scalliontor_start(ScallionTor* stor, gint argc, gchar *argv[]) {
 	  /* load the private keys, if we're supposed to have them, and set up the
 	   * TLS context. */
 	gpointer idkey;
-#ifdef SCALLION_DOREFILL // FIXME this doesnt change in 0.2.3.5-alpha like SCALLION_DOREFILL is meant to (not sure when it changed)
+#ifndef SCALLION_SKIPREFILL // FIXME this doesnt change in 0.2.3.5-alpha like SCALLION_DOREFILL is meant to (not sure when it changed)
 	idkey = client_identitykey;
 #else
 	idkey = identitykey;
@@ -224,7 +224,7 @@ gint scalliontor_start(ScallionTor* stor, gint argc, gchar *argv[]) {
 	}
 
 
-#ifdef SCALLION_DOREFILL
+#ifndef SCALLION_SKIPREFILL
 #ifndef USE_BUFFEREVENTS
   if (!refill_timer) {
     int msecs = get_options()->TokenBucketRefillInterval;

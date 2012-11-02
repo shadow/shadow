@@ -19,7 +19,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "scallion.h"
+#include "shd-scallion.h"
 #include <openssl/rand.h>
 
 typedef struct scallion_launch_client_s {
@@ -511,19 +511,8 @@ static void _scallion_notify() {
 	scalliontor_notify(scallion.stor);
 }
 
-/* these are required to hook into shadow functions */
-
-PluginFunctionTable scallion_pluginFunctions = {
-	&_scallion_new, &_scallion_free, &_scallion_notify,
-};
-
-/* these are required because shadow loads plugins with
- * in order for the plugin to intercept functions from tor, we need the module
- * handle when doing the dlsym lookup
- */
-
 /* called immediately after the plugin is loaded. shadow loads plugins once for
- * each worker thread. the GModule* can be used as a handle for g_module_symbol()
+ * each worker thread. the GModule* is needed as a handle for g_module_symbol()
  * symbol lookups.
  * return NULL for success, or a string describing the error */
 const gchar* g_module_check_init(GModule *module) {
@@ -545,8 +534,8 @@ void __shadow_plugin_init__(ShadowFunctionTable* shadowlibFuncs) {
 	/* save the shadow functions we will use */
 	scallion.shadowlibFuncs = shadowlibFuncs;
 
-	/* register all of our state with shadow */
-	scallion_register_globals(&scallion_pluginFunctions, &scallion);
+	/* tell shadow which functions it should call to manage nodes */
+	shadowlibFuncs->registerPlugin(&_scallion_new, &_scallion_free, &_scallion_notify);
 
 	shadowlibFuncs->log(G_LOG_LEVEL_INFO, __FUNCTION__, "finished registering scallion plug-in state");
 
