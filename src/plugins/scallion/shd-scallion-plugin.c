@@ -276,14 +276,14 @@ static void _scallion_new(gint argc, gchar* argv[]) {
 		scallion_launch_client_tp launch = malloc(sizeof(scallion_launch_client_t));
 
 		gchar* filetransferMode = argvoffset[0];
-		if(g_strncasecmp(filetransferMode, "client", 6) != 0) {
+		if(g_ascii_strncasecmp(filetransferMode, "client", 6) != 0) {
 			scallion.shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, usage);
 			return;
 		}
 
 		gchar* fileClientMode = argvoffset[1];
 
-		if(g_strncasecmp(fileClientMode, "multi", 5) == 0 && (argc == 14 || argc == 15)) {
+		if(g_ascii_strncasecmp(fileClientMode, "multi", 5) == 0 && (argc == 14 || argc == 15)) {
 			service_filegetter_multi_args_tp args = g_new0(service_filegetter_multi_args_t, 1);
 
 			size_t s;
@@ -311,7 +311,7 @@ static void _scallion_new(gint argc, gchar* argv[]) {
 				g_snprintf(args->num_downloads, s, "%s", argvoffset[7]);
 			}
 
-			if(g_strncasecmp(args->thinktimes_cdf_filepath, "none", 4) == 0) {
+			if(g_ascii_strncasecmp(args->thinktimes_cdf_filepath, "none", 4) == 0) {
 				free(args->thinktimes_cdf_filepath);
 				args->thinktimes_cdf_filepath = NULL;
 			}
@@ -322,7 +322,7 @@ static void _scallion_new(gint argc, gchar* argv[]) {
 
 			launch->is_single = 0;
 			launch->service_filegetter_args = args;
-		} else if(g_strncasecmp(fileClientMode, "single", 6) == 0 && argc == 15) {
+		} else if(g_ascii_strncasecmp(fileClientMode, "single", 6) == 0 && argc == 15) {
 			service_filegetter_single_args_tp args = malloc(sizeof(service_filegetter_single_args_t));
 
 			size_t s;
