@@ -636,32 +636,32 @@ void intercept_logv(int severity, uint32_t domain, const char *funcname,
 
 	switch (severity) {
 		case LOG_DEBUG:
-			sev_str = "tor-debug";
+			sev_str = "debug";
 			level = G_LOG_LEVEL_DEBUG;
 		break;
 
 		case LOG_INFO:
-			sev_str = "tor-info";
+			sev_str = "info";
 			level = G_LOG_LEVEL_INFO;
 		break;
 
 		case LOG_NOTICE:
-			sev_str = "tor-notice";
+			sev_str = "notice";
 			level = G_LOG_LEVEL_MESSAGE;
 		break;
 
 		case LOG_WARN:
-			sev_str = "tor-warn";
+			sev_str = "warn";
 			level = G_LOG_LEVEL_WARNING;
 		break;
 
 		case LOG_ERR:
-			sev_str = "tor-err";
+			sev_str = "err";
 			level = G_LOG_LEVEL_ERROR;
 		break;
 
 		default:
-			sev_str = "tor-UNKNOWN";
+			sev_str = "UNKNOWN";
 			level = G_LOG_LEVEL_DEBUG;
 		break;
 	}
