@@ -269,7 +269,7 @@ ScallionTor* scalliontor_new(ShadowlibFunctionTable* shadowlibFuncs, char* hostn
 	}
 
 	/* default args */
-	char *config[20];
+	char *config[24];
 	config[0] = "tor";
 	config[1] = "--Address";
 	config[2] = hostname;
@@ -297,7 +297,15 @@ ScallionTor* scalliontor_new(ShadowlibFunctionTable* shadowlibFuncs, char* hostn
 	config[13] = "--Nickname";
 	config[14] = nickname;
 
-	int num_args = 15;
+	config[15] = "--ControlPort";
+    config[16] = "9051";
+    config[17] = "--ControlListenAddress";
+    config[18] = hostname;
+    config[19] = "HashedControlPassword";
+    config[20] = "16:25662F13DA7881D46091AB96726A8E5245CBF98BA6961A5B8C9CEEBB25";
+
+
+	int num_args = 21;
 	/* additional args */
 	if(stor->type == VTOR_DIRAUTH) {
 		num_args += 2;
@@ -305,8 +313,8 @@ ScallionTor* scalliontor_new(ShadowlibFunctionTable* shadowlibFuncs, char* hostn
 			stor->shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__,
 					"data directory path is too long and was truncated to '%s'\n", stor->v3bw_name);
 		}
-		config[15] = "--V3BandwidthsFile";
-		config[16] = stor->v3bw_name;
+		config[21] = "--V3BandwidthsFile";
+		config[22] = stor->v3bw_name;
 	}
 
 	scallion.stor = stor;
@@ -694,6 +702,11 @@ void intercept_logv(int severity, uint32_t domain, const char *funcname,
 
 	ScallionTor* stor = scalliontor_getPointer();
 	stor->shadowlibFuncs->log(level, __FUNCTION__, buf);
+
+	for(GList *iter = stor->logfiles; iter; iter = g_list_next(iter)) {
+        vtor_logfile_tp lf = iter->data;
+        lf->callback(severity, domain, buf);
+    }
 }
 
 int intercept_spawn_func(void (*func)(void *), void *data)
@@ -728,4 +741,19 @@ uint32_t intercept_router_get_advertised_bandwidth_capped(const routerinfo_t *ro
   /* this is what the relay told us. dont worry about caps, since this bandwidth
    * is authoritative in our sims */
   return router->bandwidthcapacity;
+}
+
+/* for the tor control, need to know all the callbacks where log messages get sent */
+int intercept_add_callback_log(const log_severity_list_t *severity, log_callback cb) {
+    ScallionTor* stor = scalliontor_getPointer();
+    g_assert(stor);
+
+    vtor_logfile_tp lf = g_new0(vtor_logfile_t, 1);
+    lf->fd = -1;
+    lf->severities = g_memdup(severity, sizeof(log_severity_list_t));
+    lf->callback = cb;
+
+    stor->logfiles = g_list_append(stor->logfiles, lf);
+
+    return 0;
 }

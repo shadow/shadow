@@ -97,6 +97,19 @@ typedef struct vtor_cpuworker_s {
 	enum cpuwstate state;
 } vtor_cpuworker_t, *vtor_cpuworker_tp;
 
+typedef struct vtor_logfile_s {
+    struct logfile_t *next; /**< Next logfile_t in the linked list. */
+    char *filename; /**< Filename to open. */
+    int fd; /**< fd to receive log messages, or -1 for none. */
+    int seems_dead; /**< Boolean: true if the stream seems to be kaput. */
+    int needs_close; /**< Boolean: true if the stream gets closed on shutdown. */
+    int is_temporary; /**< Boolean: close after initializing logging subsystem.*/
+    int is_syslog; /**< Boolean: send messages to syslog. */
+    log_callback callback; /**< If not NULL, send messages to this function. */
+    log_severity_list_t *severities; /**< Which severity of messages should we
+                                      * log for each log domain? */
+} vtor_logfile_t, *vtor_logfile_tp;
+
 typedef struct _ScallionTor ScallionTor;
 struct _ScallionTor {
 	char v3bw_name[255];
@@ -104,6 +117,7 @@ struct _ScallionTor {
 	unsigned int bandwidth;
 	int refillmsecs;
 	vtor_cpuworker_tp cpuw;
+	GList *logfiles;
 	ShadowlibFunctionTable* shadowlibFuncs;
 };
 
