@@ -47,7 +47,8 @@ list(REMOVE_ITEM toror_sources
 #endforeach(headerpath)
 
 ## tor needs these defined
-add_definitions(-DLOCALSTATEDIR="/usr/local/var" -DSHARE_DATADIR="/usr/local/var")
+add_definitions(-DLOCALSTATEDIR="/usr/local/var" -DSHARE_DATADIR="/usr/local/var" -DBINDIR="/usr/local/bin")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC -fno-inline -fno-strict-aliasing")
 
 ## create and install a shared library that can plug into shadow
 add_bitcode(shadow-plugin-scallion-bitcode 
@@ -56,9 +57,15 @@ add_plugin(shadow-plugin-scallion shadow-plugin-scallion-bitcode
     shadow-service-filetransfer-bitcode shadow-service-browser-bitcode shadow-service-torrent-bitcode)
 add_dependencies(shadow-plugin-scallion shadow-plugin-filetransfer shadow-plugin-torrent shadow-plugin-browser)
 
+## normal, non-bitcode library without hoisting globals
+#add_library(shadow-plugin-scallion MODULE shd-scallion-plugin.c shd-scallion.c ${toror_sources} ${torcommon_sources})
+#add_dependencies(shadow-plugin-scallion shadow-service-torrent shadow-service-browser shadow-service-filetransfer)
+#target_link_libraries(shadow-plugin-scallion shadow-service-torrent shadow-service-browser shadow-service-filetransfer)
+
 target_link_libraries(shadow-plugin-scallion
     ${TOR_LIBRARIES} ${GLIB_LIBRARIES} ${EVENT2_LIBRARIES} ${OPENSSL_LIBRARIES} 
     ${TIDY_LIBRARIES} ${ZLIB_LIBRARIES} ${M_LIBRARIES} ${RT_LIBRARIES} ${DL_LIBRARIES})
+
 install(TARGETS shadow-plugin-scallion DESTINATION plugins)
 set_target_properties(shadow-plugin-scallion PROPERTIES INSTALL_RPATH ${CMAKE_INSTALL_PREFIX}/lib INSTALL_RPATH_USE_LINK_PATH TRUE)
 

@@ -35,6 +35,8 @@ typedef struct scallion_launch_torrent_s {
 /* my global structure to hold all variable, node-specific application state.
  * the name must not collide with other loaded modules globals. */
 Scallion scallion;
+/* needed because we dont link tor_main.c */
+const char tor_git_revision[] = "";
 
 static void _scallion_sfgLogCallback(enum service_filegetter_loglevel level, const gchar* message) {
 	if(level == SFG_CRITICAL) {

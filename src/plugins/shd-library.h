@@ -87,7 +87,7 @@ typedef void (*ShadowCreateCallbackFunc)(ShadowPluginCallbackFunc callback, gpoi
 typedef gboolean (*ShadowGetBandwidthFloorFunc)(in_addr_t ip, guint* bwdown, guint* bwup);
 typedef gboolean (*ShadowCryptoSetupFunc)(gint numLocks, gpointer* shadowLockFunc, gpointer* shadowIdFunc, gconstpointer* shadowRandomMethod);
 
-typedef struct _ShadowlibFunctionTable ShadowFunctionTable;
+typedef struct _ShadowFunctionTable ShadowFunctionTable;
 extern ShadowFunctionTable shadowlibFunctionTable;
 
 /**
@@ -95,7 +95,7 @@ extern ShadowFunctionTable shadowlibFunctionTable;
  * may be dereferenced to call a function in Shadow. Plug-ins may use these
  * functions to hook into Shadow's logging and event systems.
  */
-struct _ShadowlibFunctionTable {
+struct _ShadowFunctionTable {
 	ShadowRegisterFunc registerPlugin;
 	ShadowLogFunc log;
 	ShadowCreateCallbackFunc createCallback;

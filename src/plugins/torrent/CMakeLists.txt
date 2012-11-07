@@ -8,6 +8,10 @@ set(torrent_sources
     shd-torrent-authority.c
 )
 
+## service target to allow torrent service to be used by any plugin
+add_library(shadow-service-torrent STATIC ${torrent_sources})
+target_link_libraries(shadow-service-torrent ${RT_LIBRARIES} ${GLIB_LIBRARIES})
+
 ## executable that can run outside of shadow
 add_executable(shadow-torrent shd-torrent-main.c ${torrent_sources})
 target_link_libraries(shadow-torrent ${RT_LIBRARIES} ${GLIB_LIBRARIES})

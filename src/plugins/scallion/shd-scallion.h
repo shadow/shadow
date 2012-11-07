@@ -102,7 +102,6 @@ typedef __fsid_t fsid_t;
 #include <time.h>
 
 /* externals from Tor */
-extern int n_sockets_open;
 extern void socket_accounting_lock();
 extern void socket_accounting_unlock();
 extern routerlist_t *router_get_routerlist(void);
@@ -110,7 +109,6 @@ extern struct event_base * tor_libevent_get_base(void);
 extern void tor_cleanup(void);
 extern void second_elapsed_callback(periodic_timer_t *timer, void *arg);
 extern void refill_callback(periodic_timer_t *timer, void *arg);
-extern int identity_key_is_set(void);
 extern int init_keys(void);
 extern void init_cell_pool(void);
 extern void connection_bucket_init(void);
@@ -119,6 +117,7 @@ extern int router_reload_router_list(void);
 extern void directory_info_has_arrived(time_t now, int from_cache);
 extern int tor_init(int argc, char *argv[]);
 
+extern int n_sockets_open;
 extern int global_write_bucket;
 extern int stats_prev_global_write_bucket;
 extern int global_read_bucket;

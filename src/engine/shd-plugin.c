@@ -151,6 +151,8 @@ Plugin* plugin_new(GQuark id, GString* filename) {
 	if(plugin->handle) {
 		message("successfully loaded private plug-in '%s' at %p", plugin->path->str, plugin);
 	} else {
+		const gchar* errorMessage = g_module_error();
+		critical("g_module_open() failed: %s", errorMessage);
 		error("unable to load private plug-in '%s'", plugin->path->str);
 	}
 
@@ -163,6 +165,8 @@ Plugin* plugin_new(GQuark id, GString* filename) {
 		plugin->init = initFunc;
 		message("found '%s' at %p", PLUGININITSYMBOL, initFunc);
 	} else {
+		const gchar* errorMessage = g_module_error();
+		critical("g_module_symbol() failed: %s", errorMessage);
 		error("unable to find the required function symbol '%s' in plug-in '%s'",
 				PLUGININITSYMBOL, filename->str);
 	}
@@ -172,6 +176,8 @@ Plugin* plugin_new(GQuark id, GString* filename) {
 		plugin->residentState = hoistedGlobals;
 		message("found '%s' at %p", PLUGINGLOBALSSYMBOL, hoistedGlobals);
 	} else {
+		const gchar* errorMessage = g_module_error();
+		critical("g_module_symbol() failed: %s", errorMessage);
 		error("unable to find the required merged globals struct symbol '%s' in plug-in '%s'",
 				PLUGINGLOBALSSYMBOL, filename->str);
 	}
@@ -181,6 +187,8 @@ Plugin* plugin_new(GQuark id, GString* filename) {
 		plugin->residentStatePointer = hoistedGlobalsPointer;
 		message("found '%s' at %p", PLUGINGLOBALSPOINTERSYMBOL, hoistedGlobalsPointer);
 	} else {
+		const gchar* errorMessage = g_module_error();
+		critical("g_module_symbol() failed: %s", errorMessage);
 		error("unable to find the required merged globals struct symbol '%s' in plug-in '%s'",
 				PLUGINGLOBALSPOINTERSYMBOL, filename->str);
 	}
@@ -192,6 +200,8 @@ Plugin* plugin_new(GQuark id, GString* filename) {
 		plugin->residentStateSize = (gsize) s;
 		message("found '%s' of value '%i' at %p", PLUGINGLOBALSSIZESYMBOL, s, hoistedGlobalsSize);
 	} else {
+		const gchar* errorMessage = g_module_error();
+		critical("g_module_symbol() failed: %s", errorMessage);
 		error("unable to find the required merged globals struct symbol '%s' in plug-in '%s'",
 				PLUGINGLOBALSSIZESYMBOL, filename->str);
 	}
@@ -217,8 +227,9 @@ void plugin_free(gpointer data) {
 
 	if(plugin->handle) {
 		gboolean success = g_module_close(plugin->handle);
-		/* TODO: what to do if failure? */
 		if(!success) {
+			const gchar* errorMessage = g_module_error();
+			warning("g_module_close() failed: %s", errorMessage);
 			warning("failed closing plugin '%s'", plugin->path->str);
 		}
 	}

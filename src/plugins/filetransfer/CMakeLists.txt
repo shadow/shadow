@@ -12,7 +12,7 @@ set(filetransfer_sources
 ## service target to allow filetransfer service to be used by any plugin
 add_library(shadow-service-filetransfer STATIC ${filetransfer_sources})
 add_dependencies(shadow-service-filetransfer shadow-util)
-target_link_libraries(shadow-service-filetransfer ${RT_LIBRARIES})
+target_link_libraries(shadow-service-filetransfer ${RT_LIBRARIES} ${GLIB_LIBRARIES})
 
 ## executable that can run outside of shadow
 add_executable(shadow-filetransfer shd-filetransfer-main.c)

@@ -26,8 +26,13 @@
 #include "llvm/Instructions.h"
 #include "llvm/Constants.h"
 #include "llvm/GlobalVariable.h"
+#include "llvm/GlobalValue.h"
 #include "llvm/Support/CallSite.h"
 #include "llvm/Target/TargetData.h"
+
+#ifdef DEBUG
+#include "llvm/Support/raw_ostream.h"
+#endif
 
 #include <string>
 
@@ -69,6 +74,19 @@ public:
 				if (GV->isConstant())
 					continue;
 
+				/* linkage types:
+				 * global -> llvm::GlobalValue::CommonLinkage
+				 * static -> llvm::GlobalValue::InternalLinkage
+				 * extern -> llvm::GlobalValue::ExternalLinkage
+				 */
+//				if(GV->hasLocalLinkage() || GV->hasExternalLinkage()) {
+//					errs() << "local or extern '" << GV->getName() << "'\n";
+//					GV->setLinkage(GlobalValue::CommonLinkage);
+//				}
+
+#ifdef DEBUG
+				errs() << "Hoisting global '" << GV->getName() << "'\n";
+#endif
 				// We found a global variable, keep track of it
 				modified = true;
 
@@ -86,7 +104,7 @@ public:
 		// Now we need a new structure to store all of the globals we found
 		// its type is a combination of the types of all of its elements
 		// we will initialize each of the elements as done previously
-		// choice of: PrivateLinkage InternalLinkage ExternalLinkage
+		// choice of: PrivateLinkage InternalLinkage ExternalLinkage CommonLinkage
 
 		Type *Int32Ty = Type::getInt32Ty(M.getContext());
 
