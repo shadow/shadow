@@ -10,14 +10,18 @@ include_directories(${RT_INCLUDES} ${DL_INCLUDES} ${M_INCLUDES} ${GLIB_INCLUDES}
 ## make sure shadow.h is in the include path
 include_directories(${CMAKE_SOURCE_DIR}/src/)
 
-## compile flags
-add_definitions(-Wall --std=c99 -D_SVID_SOURCE -D_XOPEN_SOURCE=600 -fPIC) #-D_GNU_SOURCE
+## build the LLVM plugin that we'll use to get plugin state automatically
+add_subdirectory(hoist)
+
+## compile defs and flags
+add_definitions(-D_SVID_SOURCE -D_XOPEN_SOURCE=600) #-D_GNU_SOURCE
+add_cflags(-fPIC)
 
 ## build the required libraries for intercepting system and library calls
 add_subdirectory(intercept)
 
 ## build the built-in plug-in libraries
-add_subdirectory(library)
+add_subdirectory(plugins)
 
 ## sources for our main shadow program
 set(shadow_srcs
@@ -35,11 +39,10 @@ set(shadow_srcs
     topology/shd-link.c
     topology/shd-internetwork.c
     
-    plugin/shd-plugin.c
-    plugin/shd-plugin-state.c
-    plugin/shd-software.c
-    plugin/shd-system.c
-    library/shd-library.c
+    engine/shd-plugin.c
+    engine/shd-software.c
+    engine/shd-system.c
+    plugins/shd-library.c
     
     runnable/shd-runnable.c
     runnable/shd-listener.c

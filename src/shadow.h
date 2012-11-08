@@ -83,11 +83,9 @@
 #include "utility/shd-random.h"
 
 #include "engine/shd-event-queue.h"
-
-#include "library/shd-library.h"
-#include "plugin/shd-plugin-state.h"
-#include "plugin/shd-plugin.h"
-#include "plugin/shd-software.h"
+#include "plugins/shd-library.h"
+#include "engine/shd-plugin.h"
+#include "engine/shd-software.h"
 
 #include "topology/shd-address.h"
 #include "topology/shd-network.h"
@@ -103,7 +101,7 @@
 #include "node/shd-application.h"
 #include "node/shd-network-interface.h"
 #include "node/shd-tracker.h"
-#include "plugin/shd-system.h"
+#include "engine/shd-system.h"
 #include "node/shd-node.h"
 
 #include "runnable/event/shd-heartbeat.h"

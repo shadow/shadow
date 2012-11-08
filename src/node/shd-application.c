@@ -45,7 +45,7 @@ void application_free(Application* application) {
 	plugin_executeFree(plugin, application->state);
 
 	/* free our copy of plug-in resources */
-	pluginstate_free(application->state);
+	plugin_freeState(plugin, application->state);
 
 	MAGIC_CLEAR(application);
 	g_free(application);

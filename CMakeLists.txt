@@ -36,13 +36,17 @@ if(EXISTS ${CMAKE_SOURCE_DIR}/.git)
     endif(TODAY)
 endif(EXISTS ${CMAKE_SOURCE_DIR}/.git)
 
+macro(add_cflags)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${ARGN}")
+endmacro(add_cflags)
+
 ## setup shadow options
 option(SHADOW_DEBUG "turn on debugging for verbose program output (default: OFF)" OFF)
 option(SHADOW_PROFILE "build with profile settings (default: OFF)" OFF)
 option(SHADOW_TEST "build tests (default: OFF)" OFF)
 option(SHADOW_EXPORT "export service libraries and headers (default: OFF)" OFF)
 option(SHADOW_ENABLE_MEMTRACKER "enable preloading malloc and free (experimental!) (default: OFF)" OFF)
-option(SCALLION_DOREFILL "Tor should use refill callbacks (default: OFF)" OFF)
+option(SCALLION_SKIPREFILL "Tor should not use refill callbacks (default: OFF)" OFF)
 option(SCALLION_TORPATH "path to custom Tor base directory (default: OFF)" OFF)
 
 ## display selected user options
@@ -54,23 +58,29 @@ MESSAGE(STATUS "SHADOW_PROFILE=${SHADOW_PROFILE}")
 MESSAGE(STATUS "SHADOW_TEST=${SHADOW_TEST}")
 MESSAGE(STATUS "SHADOW_EXPORT=${SHADOW_EXPORT}")
 MESSAGE(STATUS "SHADOW_ENABLE_MEMTRACKER=${SHADOW_ENABLE_MEMTRACKER}")
-MESSAGE(STATUS "SCALLION_DOREFILL=${SCALLION_DOREFILL}")
+MESSAGE(STATUS "SCALLION_SKIPREFILL=${SCALLION_SKIPREFILL}")
 MESSAGE(STATUS "SCALLION_TORPATH=${SCALLION_TORPATH}")
 MESSAGE(STATUS "-------------------------------------------------------------------------------")
 MESSAGE(STATUS)
 
-## now handle the options
+## now handle the options, set up our own flags
+set(CMAKE_C_FLAGS_DEBUG "")
+set(CMAKE_C_FLAGS_RELEASE "")
 if(SHADOW_DEBUG STREQUAL ON)
     message(STATUS "CMAKE_BUILD_TYPE Debug enabled.")
     set(CMAKE_BUILD_TYPE Debug)
-    add_definitions(-DDEBUG ${CMAKE_C_FLAGS_DEBUG} -g)
+    add_definitions(-DDEBUG)
+    add_cflags(-g)
 else(SHADOW_DEBUG STREQUAL ON)
     message(STATUS "CMAKE_BUILD_TYPE Release enabled.")
     set(CMAKE_BUILD_TYPE Release)
+    add_definitions(-DNDEBUG)
+    #add_cflags(-O3) # causes segfault in Tor
 endif(SHADOW_DEBUG STREQUAL ON)
 
 if(SHADOW_PROFILE STREQUAL ON)
-    add_definitions(-DDEBUG ${CMAKE_C_FLAGS_DEBUG} -g -pg)
+    add_definitions(-DDEBUG)
+    add_cflags(-pg)
     set(CMAKE_EXE_LINKER_FLAGS ${CMAKE_EXE_LINKER_FLAGS} -pg)
 endif(SHADOW_PROFILE STREQUAL ON)
 
@@ -83,10 +93,10 @@ if(SHADOW_EXPORT STREQUAL ON)
     MESSAGE(STATUS "will export Shadow plug-in service libraries and headers")
 endif(SHADOW_EXPORT STREQUAL ON)
 
-if(SCALLION_DOREFILL)
-    MESSAGE(STATUS "adding -DSCALLION_DOREFILL")
-    add_definitions(-DSCALLION_DOREFILL)
-endif(SCALLION_DOREFILL)
+if(SCALLION_SKIPREFILL)
+    MESSAGE(STATUS "adding -DSCALLION_SKIPREFILL")
+    add_definitions(-DSCALLION_SKIPREFILL)
+endif(SCALLION_SKIPREFILL)
 
 ## get general includes
 include(CheckIncludeFile)
@@ -123,7 +133,6 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/shd-config.h DESTINATION include/)
 
 ## recurse our project tree
 add_subdirectory(${CMAKE_SOURCE_DIR}/resource/)
-#add_subdirectory(${CMAKE_SOURCE_DIR}/llvm/)
 add_subdirectory(${CMAKE_SOURCE_DIR}/src/)
 add_subdirectory(${CMAKE_SOURCE_DIR}/cpack/)
 

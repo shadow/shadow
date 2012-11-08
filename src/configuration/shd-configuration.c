@@ -128,9 +128,6 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	if(c->interfaceBufferSize < CONFIG_MTU) {
 		c->interfaceBufferSize = CONFIG_MTU;
 	}
-	if(c->interfaceBatchTime < 0) {
-		c->interfaceBatchTime = 0;
-	}
 	c->interfaceBatchTime *= SIMTIME_ONE_MILLISECOND;
 	if(c->interfaceBatchTime == 0) {
 		/* we require at least 1 nanosecond b/c of time granularity */

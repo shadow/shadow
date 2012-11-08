@@ -28,7 +28,7 @@ typedef struct _Application Application;
 
 struct _Application {
 	Software* software;
-	PluginState* state;
+	PluginState state;
 	MAGIC_DECLARE;
 };
 
