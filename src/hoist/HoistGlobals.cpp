@@ -84,9 +84,6 @@ public:
 //					GV->setLinkage(GlobalValue::CommonLinkage);
 //				}
 
-#ifdef DEBUG
-				errs() << "Hoisting global '" << GV->getName() << "'\n";
-#endif
 				// We found a global variable, keep track of it
 				modified = true;
 
@@ -126,6 +123,10 @@ public:
 				GlobalValue::ExternalLinkage, HoistedStructSize,
 				"__hoisted_globals_size");
 
+
+#ifdef DEBUG
+		errs() << "Hoisting globals: ";
+#endif
 		// replace all accesses to the original variables with pointer indirection
 		// this replaces uses with pointers into the global struct
 		uint64_t Field = 0;
@@ -139,9 +140,17 @@ public:
 					GEPIndexes, true);
 			GV->replaceAllUsesWith(GEP);
 
+#ifdef DEBUG
+			errs() << GV->getName() << ", ";
+#endif
+
 			assert(GV->use_empty());
 			GV->eraseFromParent();
 		}
+
+#ifdef DEBUG
+		errs() << "\n";
+#endif
 
 		// now create a new pointer variable that will be loaded and evaluated
 		// before accessing the hoisted globals struct

@@ -182,7 +182,7 @@ def build(args):
         
     # build up args string for the cmake command
     cmake_cmd = "cmake " + rootdir + " -DCMAKE_INSTALL_PREFIX=" + installdir
-    
+
     # other cmake options
     if args.do_debug: cmake_cmd += " -DSHADOW_DEBUG=ON"; os.putenv("VERBOSE", "1")
     if args.do_test: cmake_cmd += " -DSHADOW_TEST=ON"
@@ -204,8 +204,6 @@ def build(args):
     # check if we need to setup Tor
     if not args.disable_scallion:
         args.tordir = os.path.abspath(builddir+"/tor")
-        args.extra_includes.extend([args.tordir, args.tordir+"/src/or", args.tordir+"/src/common"])
-        args.extra_libraries.extend([args.tordir, args.tordir+"/src/or", args.tordir+"/src/common"])
 
         if setup_tor(args) != 0: return -1
         cmake_cmd += " -DSCALLION_TORPATH=" + args.tordir
@@ -324,19 +322,15 @@ def setup_tor(args):
             log("ERROR!: \'{0}\' is not a tarfile".format(target_tor))
             return -1
     
-    log("building Tor from source...")
-        
     retcode = 0
 
     # Copy patch and static symbol converter scripts to the build directory
-    shutil.copy("../contrib/static_symbol_converter.py", args.tordir)
     shutil.copy("../contrib/patch.sh", args.tordir)
 
     # if we already configured successfully, dont patch or re-configure
     if os.path.exists(args.tordir):
         os.chdir(args.tordir)
         if not os.path.exists(args.tordir+"/orconfig.h"):
-            # patch then configure first
             cflags = "-fPIC -fno-inline"
             if args.extra_includes is not None:
                 for i in args.extra_includes: cflags += " -I" + i.strip()
@@ -345,8 +339,7 @@ def setup_tor(args):
             ldflags = ""
             if args.extra_libraries is not None:
                 for l in args.extra_libraries: ldflags += " -L" + l.strip()
-        
-            patch = "./patch.sh"
+
             gen = "aclocal && autoheader && autoconf && automake --add-missing --copy"
             configure = "./configure --disable-transparent --disable-asciidoc CFLAGS=\"" + cflags + "\" LDFLAGS=\"" + ldflags + "\" LIBS=-lrt"
 
@@ -355,46 +348,22 @@ def setup_tor(args):
             if args.static_openssl: configure += " --enable-static-openssl"
             if args.static_libevent: configure += " --enable-static-libevent"
 
-            if retcode == 0:
-                # generate configure
-                log("running \'{0}\'".format(gen))
-                for cmd in gen.split('&&'):
-                    retcode = retcode | subprocess.call(shlex.split(cmd.strip()))
+            # generate configure
+            log("running \'{0}\'".format(gen))
+            for cmd in gen.split('&&'):
+                retcode = retcode | subprocess.call(shlex.split(cmd.strip()))
+            if retcode !=0: return retcode
             
             # need to patch AFTER generating configure to avoid overwriting the patched configure
-            if retcode == 0:
-                # patch
-                log("running \'{0}\'".format(patch))
-                retcode = subprocess.call(shlex.split(patch))
+            # patch static variables/functions
+            patch = "./patch.sh"
+            log("running \'{0}\'".format(patch))
+            retcode = subprocess.call(shlex.split(patch))
+            if retcode !=0: return retcode
             
-            if retcode == 0:
-                # configure
-                log("running \'{0}\'".format(configure))
-                retcode = subprocess.call(shlex.split(configure))
-
-            # configure done now
-            if False:
-                if retcode == 0:
-                    # build
-                    build = "make clean && make"
-                    log("running \'{0}\'".format(build))
-                    for cmd in build.split('&&'):
-                        retcode = retcode | subprocess.call(shlex.split(cmd.strip()))
-            
-                if retcode == 0:
-                    convert = "python static_symbol_converter.py " + args.tor_version
-                    log("running \'{0}\'".format(convert))
-                    retcode = subprocess.call(shlex.split(convert))
-        
-                if retcode == 0:
-                    make = "make"
-                    log("running \'{0}\'".format(make))
-                    retcode = subprocess.call(shlex.split(make))
-        
-            # if we had a failure, start over with patching
-            if retcode != 0:
-                #shutil.rmtree(args.tordir)
-                return -1
+            # configure
+            log("running \'{0}\'".format(configure))
+            retcode = subprocess.call(shlex.split(configure))
         
     return retcode
 

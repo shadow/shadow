@@ -36,6 +36,10 @@ if(EXISTS ${CMAKE_SOURCE_DIR}/.git)
     endif(TODAY)
 endif(EXISTS ${CMAKE_SOURCE_DIR}/.git)
 
+macro(add_cflags)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${ARGN}")
+endmacro(add_cflags)
+
 ## setup shadow options
 option(SHADOW_DEBUG "turn on debugging for verbose program output (default: OFF)" OFF)
 option(SHADOW_PROFILE "build with profile settings (default: OFF)" OFF)
@@ -59,18 +63,24 @@ MESSAGE(STATUS "SCALLION_TORPATH=${SCALLION_TORPATH}")
 MESSAGE(STATUS "-------------------------------------------------------------------------------")
 MESSAGE(STATUS)
 
-## now handle the options
+## now handle the options, set up our own flags
+set(CMAKE_C_FLAGS_DEBUG "")
+set(CMAKE_C_FLAGS_RELEASE "")
 if(SHADOW_DEBUG STREQUAL ON)
     message(STATUS "CMAKE_BUILD_TYPE Debug enabled.")
     set(CMAKE_BUILD_TYPE Debug)
-    add_definitions(-DDEBUG ${CMAKE_C_FLAGS_DEBUG} -g)
+    add_definitions(-DDEBUG)
+    add_cflags(-g)
 else(SHADOW_DEBUG STREQUAL ON)
     message(STATUS "CMAKE_BUILD_TYPE Release enabled.")
     set(CMAKE_BUILD_TYPE Release)
+    add_definitions(-DNDEBUG)
+    #add_cflags(-O3) # causes segfault in Tor
 endif(SHADOW_DEBUG STREQUAL ON)
 
 if(SHADOW_PROFILE STREQUAL ON)
-    add_definitions(-DDEBUG ${CMAKE_C_FLAGS_DEBUG} -g -pg)
+    add_definitions(-DDEBUG)
+    add_cflags(-pg)
     set(CMAKE_EXE_LINKER_FLAGS ${CMAKE_EXE_LINKER_FLAGS} -pg)
 endif(SHADOW_PROFILE STREQUAL ON)
 

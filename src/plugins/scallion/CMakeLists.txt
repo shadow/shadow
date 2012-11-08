@@ -9,8 +9,13 @@ find_package(M REQUIRED)
 find_package(OPENSSL REQUIRED)
 find_package(EVENT2 REQUIRED)
 find_package(GLIB REQUIRED)
-#find_package(TOR REQUIRED)
 find_package(TIDY REQUIRED)
+
+#find_package(TOR REQUIRED)
+get_filename_component(CURRENT_TOR_DIR "${CMAKE_BINARY_DIR}/../tor" ABSOLUTE)
+include_directories(${CURRENT_TOR_DIR})
+include_directories(${CURRENT_TOR_DIR}/src/common)
+include_directories(${CURRENT_TOR_DIR}/src/or)
 
 include_directories(${RT_INCLUDES} ${DL_INCLUDES} ${M_INCLUDES} ${GLIB_INCLUDES} ${EVENT2_INCLUDES} ${OPENSSL_INCLUDES} ${TOR_INCLUDES} ${SHADOW_INCLUDES} ${TIDY_INCLUDES})
 include_directories(${CMAKE_SOURCE_DIR}/src/utility)
@@ -20,8 +25,6 @@ include_directories(${CMAKE_SOURCE_DIR}/src/plugins/torrent)
 
 ## import shadow libs
 #INCLUDE(${CMAKE_INSTALL_PREFIX}/share/shadow/shadow-externals.cmake)
-
-set(CURRENT_TOR_DIR "${CMAKE_BINARY_DIR}/../tor")
 
 ## get tor source files, but ignore some of them
 aux_source_directory(${CURRENT_TOR_DIR}/src/common torcommon_sources)
@@ -48,7 +51,7 @@ list(REMOVE_ITEM toror_sources
 
 ## tor needs these defined
 add_definitions(-DLOCALSTATEDIR="/usr/local/var" -DSHARE_DATADIR="/usr/local/var" -DBINDIR="/usr/local/bin")
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC -fno-inline -fno-strict-aliasing")
+remove_definitions(-DNDEBUG)
 
 ## create and install a shared library that can plug into shadow
 add_bitcode(shadow-plugin-scallion-bitcode 

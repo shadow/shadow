@@ -4,7 +4,8 @@ install(FILES shd-library.h DESTINATION include/)
 install(FILES ${CMAKE_SOURCE_DIR}/src/utility/shd-cdf.h DESTINATION include/)
 
 ## plug-ins need to disable fortification to ensure syscalls are intercepted
-add_definitions(-D_GNU_SOURCE -U_FORTIFY_SOURCE)
+add_definitions(-D_GNU_SOURCE)
+add_cflags("-fno-inline -fno-strict-aliasing -U_FORTIFY_SOURCE")
 
 ## now use LLVM to build each plug-in that was not disabled in setup.py
 include(LLVMTools)
