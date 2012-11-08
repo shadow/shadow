@@ -35,6 +35,7 @@ typedef int (*spawn_func_fp)();
 typedef int (*rep_hist_bandwidth_assess_fp)();
 typedef int (*router_get_advertised_bandwidth_capped_fp)(void*);
 typedef int (*event_base_loopexit_fp)();
+typedef int (*add_callback_log_fp)(const log_severity_list_t *, log_callback);
 
 /* the key used to store each threads version of their searched function library.
  * the use this key to retrieve this library when intercepting functions from tor.
@@ -52,6 +53,7 @@ struct _ScallionPreloadWorker {
 	rep_hist_bandwidth_assess_fp e;
 	router_get_advertised_bandwidth_capped_fp f;
 	event_base_loopexit_fp g;
+	add_callback_log_fp h;
 };
 
 /* scallionpreload_init must be called before this so the worker gets created */
@@ -86,6 +88,7 @@ void scallionpreload_init(GModule* handle) {
 	g_assert(g_module_symbol(handle, TOR_LIB_PREFIX "rep_hist_bandwidth_assess", (gpointer*)&(worker->e)));
 	g_assert(g_module_symbol(handle, TOR_LIB_PREFIX "router_get_advertised_bandwidth_capped", (gpointer*)&(worker->f)));
 	g_assert(g_module_symbol(handle, TOR_LIB_PREFIX "event_base_loopexit", (gpointer*)&(worker->g)));
+	g_assert(g_module_symbol(handle, TOR_LIB_PREFIX "add_callback_log", (gpointer*)&(worker->h)));
 
 	g_static_private_set(&scallionWorkerKey, worker, g_free);
 }
@@ -118,4 +121,8 @@ uint32_t router_get_advertised_bandwidth_capped(void *router) {
 /* struct event_base* base */
 int event_base_loopexit(gpointer base, const struct timeval * t) {
 	return _scallionpreload_getWorker()->g(base, t);
+}
+
+int add_callback_log(const log_severity_list_t *severity, log_callback cb) {
+    return _scallionpreload_getWorker()->h(severity, cb);
 }
