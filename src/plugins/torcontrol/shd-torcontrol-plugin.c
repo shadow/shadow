@@ -19,7 +19,7 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "shd-tor-control.h"
+#include "shd-torcontrol.h"
 
 /* my global structure to hold all variable, node-specific application state.
  * the name must not collide with other loaded modules globals. */

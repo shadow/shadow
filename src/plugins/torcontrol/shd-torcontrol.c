@@ -32,8 +32,8 @@
 
 #include <string.h>
 
-#include "shd-tor-control.h"
-#include "shd-tor-control-circuitbuild.h"
+#include "shd-torcontrol.h"
+#include "shd-torcontrol-circuitbuild.h"
 
 TorControl* torControl;
 

@@ -39,7 +39,7 @@
 #include <unistd.h>
 #include <event.h>
 
-#include "shd-tor-control.h"
+#include "shd-torcontrol.h"
 
 enum TorCtlCircuitBuild_State {
 	TORCTL_CIRCBUILD_STATE_AUTHENTICATE,

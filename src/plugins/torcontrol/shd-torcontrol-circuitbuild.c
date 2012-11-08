@@ -32,7 +32,7 @@
 
 #include <string.h>
 
-#include "shd-tor-control-circuitbuild.h"
+#include "shd-torcontrol-circuitbuild.h"
 
 TorCtlCircuitBuild *torControlCircuitBuild_new(ShadowLogFunc logFunc, gint sockd, gchar **args, TorControl_EventHandlers *handlers) {
     handlers->initialize = torControlCircuitBuild_initialize;
