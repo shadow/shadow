@@ -284,7 +284,7 @@ void torControl_changeEpoll(gint epolld, gint sockd, gint event) {
 }
 
 static in_addr_t torControl_resolveHostname(const gchar* hostname) {
-	ShadowlibLogFunc log = torControl->shadowlib->log;
+	ShadowLogFunc log = torControl->shadowlib->log;
 	in_addr_t addr = 0;
 
 	/* get the address in network order */
@@ -337,7 +337,7 @@ gint torControl_connect(in_addr_t addr, in_port_t port) {
 }
 
 gint torControl_createConnection(gchar *hostname, in_port_t port, gchar *mode, gchar **args) {
-    ShadowlibLogFunc log = torControl->shadowlib->log;
+    ShadowLogFunc log = torControl->shadowlib->log;
     TorControl_Connection *connection = g_new0(TorControl_Connection, 1);
     connection->hostname = g_strdup(hostname);
     connection->ip = torControl_resolveHostname(connection->hostname);
@@ -371,7 +371,7 @@ void torControl_freeReplyLine(gpointer data) {
 }
 
 gint torControl_processReply(TorControl_Connection *connection, GList *reply) {
-	ShadowlibLogFunc log = torControl->shadowlib->log;
+	ShadowLogFunc log = torControl->shadowlib->log;
 	TorControl_ReplyLine *replyLine = g_list_first(reply)->data;
 
     log(G_LOG_LEVEL_INFO, __FUNCTION__, "[%s] [%d] %s", connection->hostname, replyLine->code, replyLine->body);
@@ -548,7 +548,7 @@ gint torControl_processReply(TorControl_Connection *connection, GList *reply) {
  */
 
 gint torControl_sendCommand(gint sockd, gchar *command) {
-    ShadowlibLogFunc log = torControl->shadowlib->log;
+    ShadowLogFunc log = torControl->shadowlib->log;
     TorControl_Connection *connection = g_hash_table_lookup(torControl->connections, &sockd);
 
     /* all commands must end with CRLF */
@@ -605,7 +605,7 @@ gint torControl_setevents(gint sockd, gchar *events) {
 }
 
 gint torControl_buildCircuit(gint sockd, GList *circuit) {
-    ShadowlibLogFunc log = torControl->shadowlib->log;
+    ShadowLogFunc log = torControl->shadowlib->log;
     if(g_list_length(circuit) == 0) {
         log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Cannot create circuit of length 0");
         return -1;
@@ -646,13 +646,12 @@ gint torControl_getInfoBootstrapStatus(gint sockd) {
  * Tor control plugin functions
  */
 
-TorControl**  torControl_init(TorControl* currentTorControl) {
+void torControl_init(TorControl* currentTorControl) {
 	torControl = currentTorControl;
-	return &torControl;
 }
 
 void torControl_new(TorControl_Args *args) {
-	ShadowlibLogFunc log = torControl->shadowlib->log;
+	ShadowLogFunc log = torControl->shadowlib->log;
 	log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "torControl_new called");
 
 	/* create an epoll to wait for I/O events */
@@ -700,7 +699,7 @@ void torControl_new(TorControl_Args *args) {
 }
 
 gint torControl_activate() {
-	ShadowlibLogFunc log = torControl->shadowlib->log;
+	ShadowLogFunc log = torControl->shadowlib->log;
 
 	struct epoll_event events[10];
 	int nfds = epoll_wait(torControl->epolld, events, 10, 0);

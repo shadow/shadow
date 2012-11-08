@@ -14,6 +14,7 @@ find_package(TIDY REQUIRED)
 #find_package(TOR REQUIRED)
 get_filename_component(CURRENT_TOR_DIR "${CMAKE_BINARY_DIR}/../tor" ABSOLUTE)
 include_directories(${CURRENT_TOR_DIR})
+include_directories(${CURRENT_TOR_DIR}/src)
 include_directories(${CURRENT_TOR_DIR}/src/common)
 include_directories(${CURRENT_TOR_DIR}/src/or)
 

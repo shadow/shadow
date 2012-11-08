@@ -49,12 +49,7 @@ void torControlPlugin_activate() {
 	torControl_activate();
 }
 
-/* function table for Shadow so it knows how to call us */
-PluginFunctionTable torControl_pluginFunctions = {
-	&torControlPlugin_new, &torControlPlugin_free, &torControlPlugin_activate,
-};
-
-void __shadow_plugin_init__(ShadowlibFunctionTable* shadowlibFuncs) {
+void __shadow_plugin_init__(ShadowFunctionTable* shadowlibFuncs) {
 	g_assert(shadowlibFuncs);
 
 	/* start out with cleared state */
@@ -63,7 +58,7 @@ void __shadow_plugin_init__(ShadowlibFunctionTable* shadowlibFuncs) {
 	/* save the functions Shadow makes available to us */
 	torControlState.shadowlib = shadowlibFuncs;
 
-	TorControl** pingGlobalPointer = torControl_init(&torControlState);
+	torControl_init(&torControlState);
 
 	/*
 	 * tell shadow which of our functions it can use to notify our plugin,
@@ -71,9 +66,8 @@ void __shadow_plugin_init__(ShadowlibFunctionTable* shadowlibFuncs) {
 	 *
 	 * we 'register' our function table, and 1 variable.
 	 */
-	gboolean success = torControlState.shadowlib->registerPlugin(&torControl_pluginFunctions, 2,
-			sizeof(TorControl), &torControlState,
-			sizeof(TorControl*), pingGlobalPointer);
+	gboolean success = torControlState.shadowlib->registerPlugin(&torControlPlugin_new,
+			&torControlPlugin_free, &torControlPlugin_activate);
 
 	/* we log through Shadow by using the log function it supplied to us */
 	if(success) {

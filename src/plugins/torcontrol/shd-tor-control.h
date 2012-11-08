@@ -298,14 +298,14 @@ struct _TorControl_Connection {
 
 typedef struct _TorControl TorControl;
 struct _TorControl {
-	ShadowlibFunctionTable* shadowlib;
+	ShadowFunctionTable* shadowlib;
 	gint epolld;
 	gint sockd;
 
 	GHashTable *connections;
 };
 
-TorControl**  torControl_init(TorControl* currentTorControl);
+void torControl_init(TorControl* currentTorControl);
 void torControl_new(TorControl_Args *args);
 gint torControl_activate();
 void torControl_free();

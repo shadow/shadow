@@ -48,7 +48,7 @@ void torControl_createCallback(ShadowPluginCallbackFunc callback, gpointer data,
 	callback(data);
 }
 
-ShadowlibFunctionTable torControl_functionTable = {
+ShadowFunctionTable torControl_functionTable = {
 	NULL,
 	&torControl_log,
 	&torControl_createCallback,

@@ -26,6 +26,8 @@
 #include <glib.h>
 #include <gmodule.h>
 
+#include "torlog.h"
+
 #define TOR_LIB_PREFIX "intercept_"
 
 typedef int (*tor_open_socket_fp)(int, int, int);

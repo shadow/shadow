@@ -34,7 +34,7 @@
 
 #include "shd-tor-control-circuitbuild.h"
 
-TorCtlCircuitBuild *torControlCircuitBuild_new(ShadowlibLogFunc logFunc, gint sockd, gchar **args, TorControl_EventHandlers *handlers) {
+TorCtlCircuitBuild *torControlCircuitBuild_new(ShadowLogFunc logFunc, gint sockd, gchar **args, TorControl_EventHandlers *handlers) {
     handlers->initialize = torControlCircuitBuild_initialize;
 	handlers->circEvent = torControlCircuitBuild_circEvent;
 	handlers->streamEvent = torControlCircuitBuild_streamEvent;
@@ -62,7 +62,7 @@ TorCtlCircuitBuild *torControlCircuitBuild_new(ShadowlibLogFunc logFunc, gint so
 
 gint torControlCircuitBuild_initialize(gpointer moduleData) {
     TorCtlCircuitBuild *circuitBuild = moduleData;
-    ShadowlibLogFunc log = circuitBuild->log;
+    ShadowLogFunc log = circuitBuild->log;
 
     gint sockd = circuitBuild->sockd;
     gint initialized = 0;
@@ -109,6 +109,11 @@ gint torControlCircuitBuild_initialize(gpointer moduleData) {
             }
             break;
         }
+
+        case TORCTL_CIRCBUILD_STATE_CREATE_CIRCUIT:
+        case TORCTL_CIRCBUILD_STATE_GET_CIRC_ID:
+        case TORCTL_CIRCBUILD_STATE_ATTACH_STREAMS:
+        	break;
     }
 
     return initialized;
@@ -117,7 +122,7 @@ gint torControlCircuitBuild_initialize(gpointer moduleData) {
 void torControlCircuitBuild_circEvent(gpointer moduleData, gint code, gint circID, gint status,
 		gint buildFlags, gint purpose, gint reason) {
 	TorCtlCircuitBuild *circuitBuild = moduleData;
-	ShadowlibLogFunc log = circuitBuild->log;
+	ShadowLogFunc log = circuitBuild->log;
 
 	log(G_LOG_LEVEL_INFO, __FUNCTION__, "[%d] CIRC: circID=%d status=%d buildFlags=%d purpose=%d reason=%d",
 			code, circID, status, buildFlags, purpose, reason);
@@ -134,7 +139,7 @@ void torControlCircuitBuild_streamEvent(gpointer moduleData, gint code, gint str
 		gint remoteReason, gchar *source, in_addr_t sourceIP, in_port_t sourcePort,
 		gint purpose) {
 	TorCtlCircuitBuild *circuitBuild = moduleData;
-	ShadowlibLogFunc log = circuitBuild->log;
+	ShadowLogFunc log = circuitBuild->log;
 
 	log(G_LOG_LEVEL_INFO, __FUNCTION__, "[%d] STREAM: status=\"%s\" streamID=%d  circID=%d",
 	        code, torControl_streamStatusString[status], streamID, circID);
@@ -152,7 +157,7 @@ void torControlCircuitBuild_streamEvent(gpointer moduleData, gint code, gint str
 void torControlCircuitBuild_orConnEvent(gpointer moduleData, gint code, gchar *target, gint status,
 		gint reason, gint numCircuits) {
 	TorCtlCircuitBuild *circuitBuild = moduleData;
-	ShadowlibLogFunc log = circuitBuild->log;
+	ShadowLogFunc log = circuitBuild->log;
 
 	log(G_LOG_LEVEL_INFO, __FUNCTION__, "[%d] ORCONN: target=%s status=%d reason=%d ncircs=%d",
 			code, target, status, reason, numCircuits);
@@ -161,7 +166,7 @@ void torControlCircuitBuild_orConnEvent(gpointer moduleData, gint code, gchar *t
 
 void torControlCircuitBuild_bwEvent(gpointer moduleData, gint code, gint bytesRead, gint bytesWritten) {
 	TorCtlCircuitBuild *circuitBuild = moduleData;
-	ShadowlibLogFunc log = circuitBuild->log;
+	ShadowLogFunc log = circuitBuild->log;
 
 	log(G_LOG_LEVEL_INFO, __FUNCTION__, "[%d] BW: read=%d written=%d", code, bytesRead, bytesWritten);
 
@@ -169,7 +174,7 @@ void torControlCircuitBuild_bwEvent(gpointer moduleData, gint code, gint bytesRe
 
 void torControlCircuitBuild_logEvent(gpointer moduleData, gint code, gint severity, gchar *msg) {
 	TorCtlCircuitBuild *circuitBuild = moduleData;
-	ShadowlibLogFunc log = circuitBuild->log;
+	ShadowLogFunc log = circuitBuild->log;
 	log(G_LOG_LEVEL_INFO, __FUNCTION__, "[%d] LOG: sev=%d  msg=%s", code, severity, msg);
 
 	if(!circuitBuild->bootstrapped && severity == TORCTL_LOG_SEVERITY_NOTICE &&
@@ -182,7 +187,7 @@ void torControlCircuitBuild_logEvent(gpointer moduleData, gint code, gint severi
 
 void torControlCircuitBuild_responseEvent(gpointer moduleData, GList *reply, gpointer userData) {
 	TorCtlCircuitBuild *circuitBuild = moduleData;
-	ShadowlibLogFunc log = circuitBuild->log;
+	ShadowLogFunc log = circuitBuild->log;
 
 	TorControl_ReplyLine *replyLine = g_list_first(reply)->data;
 	switch(TORCTL_CODE_TYPE(replyLine->code)) {
@@ -233,6 +238,10 @@ void torControlCircuitBuild_responseEvent(gpointer moduleData, GList *reply, gpo
 	                }
                     break;
 	            }
+
+	            case TORCTL_CIRCBUILD_STATE_CREATE_CIRCUIT:
+	            case TORCTL_CIRCBUILD_STATE_ATTACH_STREAMS:
+	            	break;
             }
 	    }
 

@@ -53,7 +53,7 @@ enum TorCtlCircuitBuild_State {
 
 typedef struct _TorCtlCircuitBuild TorCtlCircuitBuild;
 struct _TorCtlCircuitBuild {
-	ShadowlibLogFunc log;
+	ShadowLogFunc log;
 
 	gchar bootstrapped;
 	GList *circuit;
@@ -65,7 +65,7 @@ struct _TorCtlCircuitBuild {
 	enum TorCtlCircuitBuild_State nextState;
 };
 
-TorCtlCircuitBuild *torControlCircuitBuild_new(ShadowlibLogFunc logFunc, gint sockd, gchar **args, TorControl_EventHandlers *handlers);
+TorCtlCircuitBuild *torControlCircuitBuild_new(ShadowLogFunc logFunc, gint sockd, gchar **args, TorControl_EventHandlers *handlers);
 
 gint torControlCircuitBuild_initialize(gpointer moduleData);
 
