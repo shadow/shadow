@@ -33,6 +33,23 @@
 
 #include "shd-torrent.h"
 
+static void torrentAuthority_log(TorrentAuthority *ta, enum torrentAuthority_loglevel level, const gchar* format, ...) {
+	/* if they gave NULL as a callback, dont log */
+	if(ta != NULL && ta->log_cb != NULL) {
+		va_list vargs, vargs_copy;
+		size_t s = sizeof(ta->logBuffer);
+
+		va_start(vargs, format);
+		va_copy(vargs_copy, vargs);
+		vsnprintf(ta->logBuffer, s, format, vargs);
+		va_end(vargs_copy);
+
+		ta->logBuffer[s-1] = '\0';
+
+		(*(ta->log_cb))(level, ta->logBuffer);
+	}
+}
+
 void torrentAuthority_changeEpoll(TorrentAuthority *ta, gint sockd, gint event) {
 	struct epoll_event ev;
 	ev.events = event;
@@ -88,8 +105,10 @@ gint torrentAuthority_start(TorrentAuthority* ta, gint epolld, in_addr_t listenI
 	memset(ta, 0, sizeof(TorrentAuthority));
 	ta->listenSockd = sockd;
 	ta->epolld = epolld;
+	ta->servers = NULL;
+	ta->clients = NULL;
 	ta->connections = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, torrentAuthority_connection_destroy_cb);
-	ta->nodes = g_hash_table_new_full(g_str_hash, g_str_equal, NULL, g_free);
+//	ta->nodes = g_hash_table_new_full(g_str_hash, g_str_equal, NULL, g_free);
 
 	/* start watching socket */
 	struct epoll_event ev;
@@ -121,8 +140,7 @@ gint torrentAuthority_activate(TorrentAuthority* ta, gint sockd) {
 		return TA_ERR_NOCONN;
 	}
 
-	TorrentAuthority_Node* node;
-	guchar buffer[1024];
+	guchar buffer[4096];
 	ssize_t bytes = recv(sockd, buffer, sizeof(buffer), 0);
 	if(bytes < 0) {
 		if(errno == EWOULDBLOCK) {
@@ -141,55 +159,41 @@ gint torrentAuthority_activate(TorrentAuthority* ta, gint sockd) {
 
 	switch(buffer[0]) {
 		case TA_MSG_REGISTER: {
-			if(connection) {
-				addr = connection->addr;
-			}
+			addr = connection->addr;
 			memcpy(&port, &buffer[1], sizeof(port));
+			connection->serverPort = port;
 
-			node = g_new0(TorrentAuthority_Node, 1);
-			node->addr = addr;
-			node->port = port;
-			node->sockd = sockd;
+			ta->servers = g_list_append(ta->servers, connection);
+			//torrentAuthority_changeEpoll(ta, sockd, EPOLLOUT);
 
-			torrentAuthority_changeEpoll(ta, sockd, EPOLLOUT);
+			for(GList *iter = ta->clients; iter; iter = g_list_next(iter)) {
+				TorrentAuthority_Connection *client = iter->data;
+				gint offset = 1;
+				buffer[0] = 1;
+				memcpy(buffer + offset, &addr, sizeof(addr));
+				offset += sizeof(addr);
+				memcpy(buffer + offset, &port, sizeof(port));
+				offset += sizeof(port);
 
-			gchar *key = g_new(gchar, 32);
-			sprintf(key, "%s:%d",inet_ntoa((struct in_addr){addr}), port);
-			g_hash_table_replace(ta->nodes, key, node);
-
-			GList *currKey = g_hash_table_get_keys(ta->nodes);
-			while(currKey != NULL) {
-				TorrentAuthority_Node *currNode = g_hash_table_lookup(ta->nodes, currKey->data);
-				if(currNode->addr != addr || currNode->port != port) {
-					gint offset = 1;
-					buffer[0] = 1;
-					memcpy(buffer + offset, &(node->addr), sizeof(node->addr));
-					offset += sizeof(node->addr);
-					memcpy(buffer + offset, &(node->port), sizeof(node->port));
-					offset += sizeof(node->port);
-
-					bytes = send(currNode->sockd, buffer, offset, 0);
-					if(bytes < 0) {
-						return TA_ERR_SEND;
-					}
+				bytes = send(client->sockd, buffer, offset, 0);
+				if(bytes < 0) {
+					return TA_ERR_SEND;
 				}
-				currKey = g_list_next(currKey);
 			}
+			break;
 		}
 
 		case TA_MSG_REQUEST_NODES: {
+			ta->clients = g_list_append(ta->clients, connection);
+
+			buffer[0] = g_list_length(ta->servers);
 			gint offset = 1;
-			GList *nodes = g_hash_table_get_values(ta->nodes);
-			gint numNodes = g_list_length(nodes);
-			buffer[0] = numNodes - 1;
-			for(int i = 0; i < numNodes; i++) {
-				node = g_list_nth(nodes, i)->data;
-				if(node->sockd != sockd) {
-					memcpy(buffer + offset, &(node->addr), sizeof(node->addr));
-					offset += sizeof(node->addr);
-					memcpy(buffer + offset, &(node->port), sizeof(node->port));
-					offset += sizeof(node->port);
-				}
+			for(GList *iter = ta->servers; iter; iter = g_list_next(iter)) {
+				TorrentAuthority_Connection *server = iter->data;
+				memcpy(buffer + offset, &(server->addr), sizeof(server->addr));
+				offset += sizeof(server->addr);
+				memcpy(buffer + offset, &(server->serverPort), sizeof(server->serverPort));
+				offset += sizeof(server->serverPort);
 			}
 
 			bytes = send(sockd, buffer, offset, 0);
@@ -246,11 +250,11 @@ gint torrentAuthority_accept(TorrentAuthority* ta, gint* sockdOut) {
 
 gint torrentAuthority_shutdown(TorrentAuthority* ta) {
 	/* destroy the hashtable. this calls the connection destroy function for each. */
+	g_list_free(ta->servers);
+	g_list_free(ta->clients);
 	g_hash_table_destroy(ta->connections);
-	g_hash_table_destroy(ta->nodes);
 
 	epoll_ctl(ta->epolld, EPOLL_CTL_DEL, ta->listenSockd, NULL);
-//	close(ta->epolld);
 	if(close(ta->listenSockd) < 0) {
 		return TS_ERR_CLOSE;
 	}

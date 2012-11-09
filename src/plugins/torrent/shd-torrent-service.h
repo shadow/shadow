@@ -49,6 +49,8 @@ typedef struct _TorrentService_NodeArgs TorrentService_NodeArgs;
 struct _TorrentService_NodeArgs {
 	torrentService_log_cb log_cb;
 	torrentService_hostbyname_cb hostbyname_cb;
+	torrentService_sleep_cb sleep_cb;
+	gchar *nodeType;
 	gchar *authorityHostname;
 	gchar *authorityPort;
 	gchar *socksHostname;
@@ -67,16 +69,17 @@ struct _TorrentService {
 
 	torrentService_hostbyname_cb hostbyname_cb;
 	torrentService_log_cb log_cb;
+	torrentService_sleep_cb sleep_cb;
 	gchar logBuffer[1024];
 
 	struct timespec lastReport;
 	gint clientDone;
+	struct timespec wakeupTime;
 };
 
 int torrentService_startAuthority(TorrentService *tsvc, TorrentService_AuthorityArgs *args, gint epolld, gint* sockd_out);
 int torrentService_startNode(TorrentService *tsvc, TorrentService_NodeArgs *args, gint serverEpolld, gint clientEpolld, gint* sockd_out);
 int torrentService_activate(TorrentService *tsvc, gint sockd, gint events, gint epolld);
 int torrentService_stop(TorrentService *tsvc);
-
 
 #endif

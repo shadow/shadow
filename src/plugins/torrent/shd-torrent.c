@@ -28,13 +28,14 @@ static in_addr_t torrent_resolveHostname(const gchar* hostname) {
 	in_addr_t addr = 0;
 
 	/* get the address in network order */
-	if(g_ascii_strncasecmp(hostname, "none", 4) == 0) {
+	if(g_strncasecmp(hostname, "none", 4) == 0) {
 		addr = htonl(INADDR_NONE);
-	} else if(g_ascii_strncasecmp(hostname, "localhost", 9) == 0) {
+	} else if(g_strncasecmp(hostname, "localhost", 9) == 0) {
 		addr = htonl(INADDR_LOOPBACK);
 	} else {
 		struct addrinfo* info;
-		if(getaddrinfo((gchar*) hostname, NULL, NULL, &info) != -1) {
+		int ret = getaddrinfo((gchar*) hostname, NULL, NULL, &info);
+		if(ret >= 0) {
 			addr = ((struct sockaddr_in*)(info->ai_addr))->sin_addr.s_addr;
 		} else {
 			log(G_LOG_LEVEL_WARNING, __FUNCTION__, "unable to create client: error in getaddrinfo");
@@ -87,17 +88,16 @@ static void torrent_report(TorrentClient* tc, gchar* preamble) {
 			block_curr_time.tv_nsec += 1000000000;
 		}
 
-
-		log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "%s first byte in %lu.%.3d seconds, "
-				"%d of %d DOWN and %d of %d UP in %lu.%.3d seconds, total %d of %d bytes [%d\%] in %lu.%.3d seconds (block %d of %d)",
-						preamble,
+		log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "%s first byte from %s in %lu.%.3d seconds, "
+				"%d of %d DOWN and %d of %d UP in %lu.%.3d seconds, total %d of %d bytes [%d\%] in %lu.%.3d seconds (block %d of %d  [%d])",
+						preamble, inet_ntoa((struct in_addr){tc->currentBlockTransfer->addr}),
 						block_first_time.tv_sec, (gint)(block_first_time.tv_nsec / 1000000),
 						tc->currentBlockTransfer->downBytesTransfered, tc->downBlockSize,
 						tc->currentBlockTransfer->upBytesTransfered, tc->upBlockSize,
 						block_curr_time.tv_sec, (gint)(block_curr_time.tv_nsec / 1000000),
 						tc->totalBytesDown, tc->fileSize, (gint)(((gdouble)tc->totalBytesDown / (gdouble)tc->fileSize) * 100),
 						curr_time.tv_sec, (gint)(curr_time.tv_nsec / 1000000),
-						tc->blocksDownloaded, tc->numBlocks);
+						tc->blocksDownloaded, tc->numBlocks, tc->blocksRemaining);
 	}
 }
 
@@ -118,15 +118,15 @@ void torrent_new(int argc, char* argv[]) {
 
 	const gchar* USAGE = "Torrent USAGE: \n"
 			"\t'authority port'\n"
-			"\t'node authorityHostname authorityPort socksHostname socksPort serverPort fileSize [downBlockSize upBlockSize]'";
+			"\t'nodeType (\"client\",\"server\",\"node\") authorityHostname authorityPort socksHostname socksPort serverPort fileSize [downBlockSize upBlockSize]'";
 	if(argc < 3) {
 		log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "%s", USAGE);
 		return;
 	}
 
-	gchar *mode = argv[1];
+	gchar *nodeType = argv[1];
 
-	if(g_ascii_strncasecmp(mode, "node", 4) == 0) {
+	if(!g_strcasecmp(nodeType, "client") || !g_strcasecmp(nodeType, "server") || !g_strcasecmp(nodeType, "node")) {
 		if(argc < 5) {
 			log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "%s", USAGE);
 			return;
@@ -167,52 +167,60 @@ void torrent_new(int argc, char* argv[]) {
 			}
 		}
 
-		/* create an epoll to wait for I/O events */
-		gint epolld = epoll_create(1);
-		if(epolld == -1) {
-			log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_create");
-			close(epolld);
-			epolld = 0;
+
+		if(!g_strcasecmp(nodeType, "server") || !g_strcasecmp(nodeType, "node")) {
+			/* create an epoll to wait for I/O events */
+			gint epolld = epoll_create(1);
+			if(epolld == -1) {
+				log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_create");
+				close(epolld);
+				epolld = 0;
+			}
+
+			/* start server to listen for connections */
+			in_addr_t listenIP = INADDR_ANY;
+			in_port_t listenPort = (in_port_t)serverPort;
+			in_addr_t authAddr = torrent_resolveHostname(authHostname);
+
+			torrent->server = g_new0(TorrentServer, 1);
+			// NOTE: since the up/down block sizes are in context of the client, we swap them for
+			// the server since it's actually the reverse of what the client has
+			if(torrentServer_start(torrent->server, epolld, htonl(listenIP), htons(listenPort), authAddr, htons(authPort),
+					upBlockSize, downBlockSize) < 0) {
+				log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "torrent server error, not started!");
+				g_free(torrent->server);
+				torrent->server = NULL;
+				return;
+			} else {
+				log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "torrent server running on at %s:%u", inet_ntoa((struct in_addr){listenIP}), listenPort);
+			}
 		}
 
-		/* start server to listen for connections */
-		in_addr_t listenIP = INADDR_ANY;
-		in_port_t listenPort = (in_port_t)serverPort;
+		if(!g_strcasecmp(nodeType, "client") || !g_strcasecmp(nodeType, "node")) {
+			/* create an epoll to wait for I/O events */
+			gint epolld = epoll_create(1);
+			if(epolld == -1) {
+				log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_create");
+				close(epolld);
+				epolld = 0;
+			}
 
-		torrent->server = g_new0(TorrentServer, 1);
-		// NOTE: since the up/down block sizes are in context of the client, we swap them for
-		// the server since it's actually the reverse of what the client has
-		if(torrentServer_start(torrent->server, epolld, htonl(listenIP), htons(listenPort), upBlockSize, downBlockSize) < 0) {
-			log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "torrent server error, not started!");
-			g_free(torrent->server);
-			torrent->server = NULL;
-			return;
-		} else {
-			log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "torrent server running on at %s:%u", inet_ntoa((struct in_addr){listenIP}), listenPort);
-		}
+			/* start up client */
+			in_addr_t socksAddr = torrent_resolveHostname(socksHostname);
+			in_addr_t authAddr = torrent_resolveHostname(authHostname);
 
-		/* create an epoll to wait for I/O events */
-		epolld = epoll_create(1);
-		if(epolld == -1) {
-			log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_create");
-			close(epolld);
-			epolld = 0;
+			torrent->client = g_new0(TorrentClient, 1);
+			if(torrentClient_start(torrent->client, epolld, socksAddr, htons(socksPort), authAddr, htons(authPort), serverPort,
+					fileSize, downBlockSize, upBlockSize) < 0) {
+				log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "torrent client error, not started!");
+				g_free(torrent->client);
+				torrent->client = NULL;
+				return;
+			} else {
+				log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "torrent client running");
+			}
 		}
-
-		/* start up client */
-		in_addr_t authAddr = torrent_resolveHostname(authHostname);
-		in_addr_t socksAddr = torrent_resolveHostname(socksHostname);
-		torrent->client = g_new0(TorrentClient, 1);
-		if(torrentClient_start(torrent->client, epolld, socksAddr, htons(socksPort), authAddr, htons(authPort), serverPort,
-				fileSize, downBlockSize, upBlockSize) < 0) {
-			log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "torrent client error, not started!");
-			g_free(torrent->client);
-			torrent->client = NULL;
-			return;
-		} else {
-			//log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "torrent client running");
-		}
-	} else if(g_ascii_strncasecmp(mode, "authority", 9) == 0) {
+	} else if(g_strcasecmp(nodeType, "authority") == 0) {
 		gint authPort = atoi(argv[2]);
 
 		/* create an epoll to wait for I/O events */
@@ -261,6 +269,15 @@ void torrent_activate() {
 				log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "activate returned %d", res);
 			}
 		}
+
+		TorrentServer_PacketInfo *info = (TorrentServer_PacketInfo *)g_queue_pop_head(torrent->server->packetInfo);
+		while(info) {
+			guint latency = (info->recvTime - info->sendTime) / 1000000;
+			log(G_LOG_LEVEL_INFO, __FUNCTION__, "cookie: %4.4X sent: %f recv: %f latency: %d ms",
+					info->cookie,  (gdouble)(info->sendTime) / 1000000000.0, (gdouble)(info->recvTime) / 1000000000.0, latency);
+
+			info = (TorrentServer_PacketInfo *)g_queue_pop_head(torrent->server->packetInfo);
+		}
 	}
 
 	if(torrent->client) {
@@ -280,6 +297,7 @@ void torrent_activate() {
 			if(!torrent->clientDone  && torrent->client->totalBytesDown > 0) {
 				struct timespec now;
 				clock_gettime(CLOCK_REALTIME, &now);
+
 				if(res == TC_BLOCK_DOWNLOADED) {
 					torrent->lastReport = now;
 					torrent_report(torrent->client, "[client-block-complete]");
@@ -290,12 +308,10 @@ void torrent_activate() {
 					torrent_report(torrent->client, "[client-block-progress]");
 				}
 
-				/* if all the blocks have been downloaded, report final statistics and shutdown the client */
 				if(torrent->client->blocksDownloaded >= torrent->client->numBlocks) {
 					torrent_report(torrent->client, "[client-complete]");
-					clock_gettime(CLOCK_REALTIME, &(torrent->client->download_end));
-					torrentClient_shutdown(torrent->client);
 					torrent->clientDone = 1;
+					torrent_free();
 				}
 			}
 		}

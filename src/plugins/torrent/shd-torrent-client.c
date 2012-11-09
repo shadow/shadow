@@ -34,6 +34,8 @@
 
 #include "shd-torrent.h"
 
+#define TIME_TO_NS(ts) ((ts.tv_sec * 1000000000) + ts.tv_nsec)
+
 #define TC_ASSERTIO(tc, retcode, allowed_errno_logic, ts_errcode) \
 	/* check result */ \
 	if(retcode < 0) { \
@@ -53,6 +55,22 @@
 		return TC_ERR_FATAL; \
 	}
 
+static void torrentClient_log(TorrentClient *tc, enum torrentClient_loglevel level, const gchar* format, ...) {
+	/* if they gave NULL as a callback, dont log */
+	if(tc != NULL && tc->log_cb != NULL) {
+		va_list vargs, vargs_copy;
+		size_t s = sizeof(tc->logBuffer);
+
+		va_start(vargs, format);
+		va_copy(vargs_copy, vargs);
+		vsnprintf(tc->logBuffer, s, format, vargs);
+		va_end(vargs_copy);
+
+		tc->logBuffer[s-1] = '\0';
+
+		(*(tc->log_cb))(level, tc->logBuffer);
+	}
+}
 
 int torrentClient_changeEpoll(TorrentClient *tc, gint sockd, gint event) {
 	struct epoll_event ev;
@@ -62,6 +80,13 @@ int torrentClient_changeEpoll(TorrentClient *tc, gint sockd, gint event) {
 		return TC_ERR_EPOLL;
 	}
 	return 0;
+}
+
+void torrentClient_fillBuffer(gchar *buf, gint length, gchar *filler) {
+	memset(buf, 0, length);
+	for(int i = 0; i < length - strlen(filler); i += strlen(filler)) {
+		memcpy(&buf[i], filler, strlen(filler));
+	}
 }
 
 static void torrentClient_connectionClose(TorrentClient* tc, TorrentClient_Server* server, int closeSocket) {
@@ -112,7 +137,7 @@ gint torrentClient_start(TorrentClient* tc, gint epolld, in_addr_t socksAddr, in
 	server->addr = authAddr;
 	server->port = authPort;
 	server->sockd = sockd;
-	server->state = TC_AUTH_REGISTER;
+	server->state = TC_AUTH_REQUEST_NODES;
 	g_hash_table_insert(tc->connections, &server->sockd, server);
 
 	torrentClient_changeEpoll(tc, sockd, EPOLLOUT);
@@ -124,7 +149,6 @@ gint torrentClient_activate(TorrentClient *tc, gint sockd, gint events) {
 	gchar buf[TC_BUF_SIZE];
 	ssize_t bytes;
 	enum torrentClient_code ret = TC_SUCCESS;
-
 
 	TorrentClient_Server* server = g_hash_table_lookup(tc->connections, &sockd);
 	if(server == NULL) {
@@ -302,16 +326,25 @@ gint torrentClient_activate(TorrentClient *tc, gint sockd, gint events) {
 			goto start;
 		}
 
-		case TC_AUTH_REGISTER:
-			buf[0] = 0x01;
-			memcpy(&buf[1], &(tc->serverPort), sizeof(tc->serverPort));
+//		case TC_AUTH_REGISTER:
+//			buf[0] = 0x01;
+//			memcpy(&buf[1], &(tc->serverPort), sizeof(tc->serverPort));
+//
+//			bytes = send(sockd, buf, sizeof(tc->serverPort) + 1, 0);
+//			TC_ASSERTIO(tc, bytes, errno == EWOULDBLOCK || errno == ENOTCONN || errno == EALREADY, TC_ERR_SEND);
+//
+//			torrentClient_changeEpoll(tc, sockd, EPOLLIN);
+//			server->state = TC_AUTH_REQUEST_NODES;
+//			//break;
 
-			bytes = send(sockd, buf, sizeof(tc->serverPort) + 1, 0);
+
+		case TC_AUTH_REQUEST_NODES:
+			buf[0] = TA_MSG_REQUEST_NODES;
+			bytes = send(sockd, buf, 1, 0);
 			TC_ASSERTIO(tc, bytes, errno == EWOULDBLOCK || errno == ENOTCONN || errno == EALREADY, TC_ERR_SEND);
-
 			torrentClient_changeEpoll(tc, sockd, EPOLLIN);
-			server->state = TC_AUTH_REQUEST_NODES;
-			//break;
+			server->state = TC_AUTH_RECEIVE_NODES;
+			break;
 
 		case TC_AUTH_RECEIVE_NODES:
 			bytes = recv(sockd, buf, 1024, 0);
@@ -348,6 +381,7 @@ gint torrentClient_activate(TorrentClient *tc, gint sockd, gint events) {
 						server->sockd = torrentClient_connect(tc, tc->socksAddr, tc->socksPort);
 						server->state = TC_SOCKS_REQUEST_INIT;
 					}
+					server->cookie = rand() % G_MAXUINT;
 
 					if(server->sockd < 0) {
 						return TC_ERR_CONNECT;
@@ -369,41 +403,32 @@ gint torrentClient_activate(TorrentClient *tc, gint sockd, gint events) {
 
 			break;
 
-		case TC_AUTH_REQUEST_NODES:
-			buf[0] = 0x02;
-			bytes = send(sockd, buf, 1, 0);
-			TC_ASSERTIO(tc, bytes, errno == EWOULDBLOCK || errno == ENOTCONN || errno == EALREADY, TC_ERR_SEND);
-			torrentClient_changeEpoll(tc, sockd, EPOLLIN);
-			server->state = TC_AUTH_RECEIVE_NODES;
-			break;
-
-
 		case TC_SERVER_REQUEST:
 			if(tc->totalBytesDown == 0) {
 				clock_gettime(CLOCK_REALTIME, &(tc->download_start));
 			}
 
-			/* check to see if there are still blocks that need to be fetched */
-			if(tc->blocksRemaining > 0) {
-				gchar request[64];
-				sprintf(request, "FILE REQUEST\r\nTOR-COOKIE: %8.8X\r\n", (unsigned int)(rand() % UINT_MAX + 1));
-				bytes = send(sockd, request, strlen(request), 0);
-				TC_ASSERTIO(tc, bytes, errno == EWOULDBLOCK || errno == ENOTCONN || errno == EALREADY, TC_ERR_SEND);
-				torrentClient_changeEpoll(tc, sockd, EPOLLIN);
-
-				tc->blocksRemaining--;
-
-				server->downBytesTransfered = 0;
-				server->upBytesTransfered = 0;
-				server->buf_read_offset = 0;
-				server->buf_write_offset = 0;
-				server->state = TC_SERVER_TRANSFER;
-
-				clock_gettime(CLOCK_REALTIME, &(server->download_start));
-			} else {
+			if(tc->blocksRemaining <= 0) {
 				server->state = TC_SERVER_IDLE;
 				torrentClient_changeEpoll(tc, sockd, EPOLLIN);
+				break;
 			}
+
+			gchar request[64];
+			sprintf(request, "FILE REQUEST\r\nTOR-COOKIE: %8.8X\r\n", server->cookie);
+
+			bytes = send(sockd, request, strlen(request), 0);
+			TC_ASSERTIO(tc, bytes, errno == EWOULDBLOCK || errno == ENOTCONN || errno == EALREADY, TC_ERR_SEND);
+			torrentClient_changeEpoll(tc, sockd, EPOLLIN);
+
+			tc->blocksRemaining--;
+
+			server->downBytesTransfered = 0;
+			server->upBytesTransfered = 0;
+			server->buf_read_offset = 0;
+			server->buf_write_offset = 0;
+			server->state = TC_SERVER_TRANSFER;
+			clock_gettime(CLOCK_REALTIME, &(server->download_start));
 			break;
 
 		case TC_SERVER_TRANSFER: {
@@ -429,9 +454,12 @@ gint torrentClient_activate(TorrentClient *tc, gint sockd, gint events) {
 			if(events & EPOLLOUT && server->upBytesTransfered < tc->upBlockSize) {
 				int remainingBytes = tc->upBlockSize - server->upBytesTransfered;
 				int len = (remainingBytes < sizeof(buf) ? remainingBytes : sizeof(buf));
-				for(int i = 0; i < len; i++) {
-					buf[i] = rand() % 256;
-				}
+
+				struct timespec now;
+				clock_gettime(CLOCK_REALTIME, &now);
+				gchar filler[64];
+				sprintf(filler, TC_BUF_FILLER, server->cookie, TIME_TO_NS(now));
+				torrentClient_fillBuffer(buf, len, filler);
 
 				bytes = send(sockd, buf, len, 0);
 				TC_ASSERTIO(tc, bytes, errno == EWOULDBLOCK || errno == ENOTCONN || errno == EALREADY, TC_ERR_SEND);
@@ -486,7 +514,7 @@ gint torrentClient_shutdown(TorrentClient* tc) {
 		}
 	}
 
-//	close(tc->epolld);
+	g_hash_table_destroy(tc->connections);
 
 	return TC_SUCCESS;
 }

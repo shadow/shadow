@@ -40,6 +40,12 @@ enum torrentAuthority_messages {
 	TA_MSG_REQUEST_NODES = 2,
 };
 
+enum torrentAuthority_loglevel {
+	TA_CRITICAL, TA_WARNING, TA_NOTICE, TA_INFO, TA_DEBUG
+};
+
+typedef void (*torrentAuthority_log_cb)(enum torrentAuthority_loglevel level, const gchar* message);
+
 typedef struct _TorrentAuthority_Args TorrentAuthority_Args;
 struct _TorrentAuthority_Args {
 	gchar *authPort;
@@ -49,13 +55,7 @@ typedef struct _TorrentAuthority_Connection TorrentAuthority_Connection;
 struct _TorrentAuthority_Connection {
 	gint sockd;
 	in_addr_t addr;
-};
-
-typedef struct _TorrentAuthority_Node TorrentAuthority_Node;
-struct _TorrentAuthority_Node {
-	in_addr_t addr;
-	in_port_t port;
-	gint sockd;
+	in_port_t serverPort;
 };
 
 /**
@@ -65,9 +65,11 @@ typedef struct _TorrentAuthority TorrentAuthority;
 struct _TorrentAuthority {
 	gint epolld;
 	gint listenSockd;
-	/* connections stored by sockd */
+	GList *servers, *clients;
 	GHashTable *connections;
-	GHashTable *nodes;
+	//GHashTable *nodes;
+	torrentAuthority_log_cb log_cb;
+	gchar logBuffer[1024];
 };
 
 gint torrentAuthority_start(TorrentAuthority* ta, gint epolld, in_addr_t listenIP, in_port_t listenPort, gint maxConnections);
