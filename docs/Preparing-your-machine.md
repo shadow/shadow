@@ -84,7 +84,7 @@ python setup install
 Important notes:  
 + The two most useful build options are `-g` or `--debug` to build Shadow with debugging symbols, and `--tor-prefix` to build Scallion with your local custom Tor distribution (instead of downloading one from torproject.org). 
 
-+ If you installed any dependencies somewhere other than `~/.shadow`, you should use the `--include` and `--library` flags, and if you want to install Shadow somewhere besides `~/.shadow`, you should use the `--prefix` flag.
++ If you installed any dependencies somewhere other than `~/.shadow`, you should use the `--include`, `--library`, `--openssl-prefix` and `--libevent-prefix` flags, and if you want to install Shadow somewhere besides `~/.shadow`, you should use the `--prefix` flag.
 
 + It will probably be useful to add `~/.shadow/bin` (or `/bin` in your non-default install prefix) to your `PATH` following installation.
 
