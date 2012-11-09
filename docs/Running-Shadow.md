@@ -67,7 +67,7 @@ grep "fg-download-complete" filetest.log | wc -l
 We can also look at the fileserver statistics:
 
 ```bash
-grep "fileserver stats" filetests.log
+grep "fileserver stats" filetest.log
 ```
 
 ### torrent
