@@ -26,6 +26,10 @@ if(NOT BUILD_TORRENT STREQUAL OFF)
     add_subdirectory(torrent)
 endif(NOT BUILD_TORRENT STREQUAL OFF)
 
+if(NOT BUILD_PING STREQUAL OFF)
+    add_subdirectory(ping)
+endif(NOT BUILD_PING STREQUAL OFF)
+
 if(NOT BUILD_TORCONTROL STREQUAL OFF)
     add_subdirectory(torcontrol)
 endif(NOT BUILD_TORCONTROL STREQUAL OFF)

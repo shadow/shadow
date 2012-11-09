@@ -23,6 +23,7 @@ include_directories(${CMAKE_SOURCE_DIR}/src/utility)
 include_directories(${CMAKE_SOURCE_DIR}/src/plugins/browser)
 include_directories(${CMAKE_SOURCE_DIR}/src/plugins/filetransfer)
 include_directories(${CMAKE_SOURCE_DIR}/src/plugins/torrent)
+include_directories(${CMAKE_SOURCE_DIR}/src/plugins/ping)
 
 ## import shadow libs
 #INCLUDE(${CMAKE_INSTALL_PREFIX}/share/shadow/shadow-externals.cmake)
@@ -58,8 +59,8 @@ remove_definitions(-DNDEBUG)
 add_bitcode(shadow-plugin-scallion-bitcode 
     shd-scallion-plugin.c shd-scallion.c ${toror_sources} ${torcommon_sources})
 add_plugin(shadow-plugin-scallion shadow-plugin-scallion-bitcode 
-    shadow-service-filetransfer-bitcode shadow-service-browser-bitcode shadow-service-torrent-bitcode)
-add_dependencies(shadow-plugin-scallion shadow-plugin-filetransfer shadow-plugin-torrent shadow-plugin-browser)
+    shadow-service-filetransfer-bitcode shadow-service-browser-bitcode shadow-service-torrent-bitcode shadow-service-ping-bitcode)
+add_dependencies(shadow-plugin-scallion shadow-plugin-filetransfer shadow-plugin-torrent shadow-plugin-browser shadow-plugin-ping)
 
 ## normal, non-bitcode library without hoisting globals
 #add_library(shadow-plugin-scallion MODULE shd-scallion-plugin.c shd-scallion.c ${toror_sources} ${torcommon_sources})

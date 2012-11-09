@@ -32,6 +32,10 @@ typedef struct scallion_launch_torrent_s {
 	void* torrent_args;
 } scallion_launch_torrent_t, *scallion_launch_torrent_tp;
 
+typedef struct scallion_launch_ping_s {
+	void* ping_args;
+} scallion_launch_ping_t, *scallion_launch_ping_tp;
+
 /* my global structure to hold all variable, node-specific application state.
  * the name must not collide with other loaded modules globals. */
 Scallion scallion;
@@ -64,6 +68,22 @@ static void _scallion_torrentLogCallback(enum torrentService_loglevel level, con
 	} else if(level == TSVC_INFO) {
 		scallion.shadowlibFuncs->log(G_LOG_LEVEL_INFO, __FUNCTION__, "%s", message);
 	} else if(level == TSVC_DEBUG) {
+		scallion.shadowlibFuncs->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "%s", message);
+	} else {
+		/* we dont care */
+	}
+}
+
+static void _scallion_pingLogCallback(enum pingService_loglevel level, const gchar* message) {
+	if(level == PING_CRITICAL) {
+		scallion.shadowlibFuncs->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "%s", message);
+	} else if(level == PING_WARNING) {
+		scallion.shadowlibFuncs->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "%s", message);
+	} else if(level == PING_NOTICE) {
+		scallion.shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "%s", message);
+	} else if(level == PING_INFO) {
+		scallion.shadowlibFuncs->log(G_LOG_LEVEL_INFO, __FUNCTION__, "%s", message);
+	} else if(level == PING_DEBUG) {
 		scallion.shadowlibFuncs->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "%s", message);
 	} else {
 		/* we dont care */
@@ -202,6 +222,26 @@ static void scallion_start_browser(void* arg) {
 	browser_activate(&scallion.browser, sockfd);
 }
 
+static void scallion_start_ping(void *arg) {
+	scallion_launch_ping_tp launch = arg;
+
+	if(launch != NULL) {
+		scallion.pingServerEpoll = epoll_create(1);
+		scallion.pingClientEpoll = epoll_create(1);
+
+		PingService_Args *args = launch->ping_args;
+
+		pingService_startNode(&(scallion.pingSvc), args, scallion.pingServerEpoll, scallion.pingClientEpoll);
+
+		free(args->socksHostname);
+		free(args->socksPort);
+		free(args->pingInterval);
+		if(args->pingSize) free(args->pingSize);
+
+		pingService_activate(&(scallion.pingSvc), scallion.pingSvc.client->sockd, EPOLLOUT, scallion.pingClientEpoll);
+	}
+}
+
 static gchar* _scallion_getHomePath(gchar* path) {
 	GString* sbuffer = g_string_new("");
 	if(g_ascii_strncasecmp(path, "~", 1) == 0) {
@@ -217,7 +257,7 @@ static gchar* _scallion_getHomePath(gchar* path) {
 static void _scallion_new(gint argc, gchar* argv[]) {
 	scallion.shadowlibFuncs->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "scallion_new called");
 
-	gchar* usage = "Scallion USAGE: (\"dirauth\"|\"relay\"|\"exitrelay\"|\"client\"|\"torrent\"|\"browser\") consensusbandwidth readbandwidthrate writebandwidthrate torrc_path datadir_base_path geoip_path [args for client, torrent or browser node...]\n";
+	gchar* usage = "Scallion USAGE: (\"dirauth\"|\"relay\"|\"exitrelay\"|\"client\"|\"torrent\"|\"browser\"|\"ping\") consensusbandwidth readbandwidthrate writebandwidthrate torrc_path datadir_base_path geoip_path [args for client, torrent or browser node...]\n";
 
 	if(argc < 2) {
 		scallion.shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, usage);
@@ -251,12 +291,14 @@ static void _scallion_new(gint argc, gchar* argv[]) {
 		ntype = VTOR_TORRENT;
 	} else if(g_ascii_strncasecmp(tortype, "browser", strlen("browser")) == 0) {
 		ntype = VTOR_BROWSER;
+	} else if(g_ascii_strncasecmp(tortype, "ping", strlen("ping")) == 0) {
+			ntype = VTOR_PING;
 	} else {
 		scallion.shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "Unrecognized torrent type: %s", usage);
 		return;
 	}
 
-	if(ntype != VTOR_CLIENT && ntype != VTOR_TORRENT && ntype != VTOR_BROWSER && argc != 7) {
+	if(ntype != VTOR_CLIENT && ntype != VTOR_TORRENT && ntype != VTOR_BROWSER && ntype != VTOR_PING && argc != 7) {
 		scallion.shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, usage);
 		return;
 	}
@@ -384,31 +426,31 @@ static void _scallion_new(gint argc, gchar* argv[]) {
 
 		s = strnlen(argvoffset[0], 128)+1;
 		args->nodeType = malloc(s);
-		snprintf(args->nodeType, s, argvoffset[0]);
+		g_snprintf(args->nodeType, s, "%s", argvoffset[0]);
 
 		s = strnlen(argvoffset[1], 128)+1;
 		args->authorityHostname = malloc(s);
-		snprintf(args->authorityHostname, s, argvoffset[1]);
+		g_snprintf(args->authorityHostname, s, "%s", argvoffset[1]);
 
 		s = strnlen(argvoffset[2], 128)+1;
 		args->authorityPort = malloc(s);
-		snprintf(args->authorityPort, s, argvoffset[2]);
+		g_snprintf(args->authorityPort, s, "%s", argvoffset[2]);
 
 		s = strnlen(argvoffset[3], 128)+1;
 		args->socksHostname = malloc(s);
-		snprintf(args->socksHostname, s, argvoffset[3]);
+		g_snprintf(args->socksHostname, s, "%s", argvoffset[3]);
 
 		s = strnlen(argvoffset[4], 128)+1;
 		args->socksPort = malloc(s);
-		snprintf(args->socksPort, s, argvoffset[4]);
+		g_snprintf(args->socksPort, s, "%s", argvoffset[4]);
 
 		s = strnlen(argvoffset[5], 128)+1;
 		args->serverPort = malloc(s);
-		snprintf(args->serverPort, s, argvoffset[5]);
+		g_snprintf(args->serverPort, s, "%s", argvoffset[5]);
 
 		s = strnlen(argvoffset[6], 128)+1;
 		args->fileSize = malloc(s);
-		snprintf(args->fileSize, s, argvoffset[6]);
+		g_snprintf(args->fileSize, s, "%s", argvoffset[6]);
 
 		args->downBlockSize = NULL;
 		args->upBlockSize = NULL;
@@ -416,11 +458,11 @@ static void _scallion_new(gint argc, gchar* argv[]) {
 		if(argc == 17) {
 			s = strnlen(argvoffset[7], 128)+1;
 			args->downBlockSize = malloc(s);
-			snprintf(args->downBlockSize, s, argvoffset[7]);
+			g_snprintf(args->downBlockSize, s, "%s", argvoffset[7]);
 
 			s = strnlen(argvoffset[8], 128)+1;
 			args->upBlockSize = malloc(s);
-			snprintf(args->upBlockSize, s, argvoffset[8]);
+			g_snprintf(args->upBlockSize, s, "%s", argvoffset[8]);
 		}
 
 		args->log_cb = &_scallion_torrentLogCallback;
@@ -444,6 +486,39 @@ static void _scallion_new(gint argc, gchar* argv[]) {
 		args->document_path = g_strdup(argvoffset[5]);
 
 		scallion.shadowlibFuncs->createCallback(&scallion_start_browser, args, 600000);
+	} else if(ntype == VTOR_PING) {
+		gchar** argvoffset = argv + 7;
+
+		scallion_launch_ping_tp launch = malloc(sizeof(scallion_launch_ping_tp));
+
+		PingService_Args *args = malloc(sizeof(PingService_Args));
+		size_t s;
+
+		s = strnlen(argvoffset[0], 128)+1;
+		args->socksHostname = malloc(s);
+		g_snprintf(args->socksHostname, s, "%s", argvoffset[0]);
+
+		s = strnlen(argvoffset[1], 128)+1;
+		args->socksPort = malloc(s);
+		g_snprintf(args->socksPort, s, "%s", argvoffset[1]);
+
+		s = strnlen(argvoffset[2], 128)+1;
+		args->pingInterval = malloc(s);
+		g_snprintf(args->pingInterval, s, "%s", argvoffset[2]);
+
+		if(argc == 11) {
+			s = strnlen(argvoffset[3], 128)+1;
+			args->pingSize = malloc(s);
+			snprintf(args->pingSize, s, argvoffset[3]);
+		}
+
+		args->log_cb = &_scallion_pingLogCallback;
+		args->hostbyname_cb = &_scallion_HostnameCallback;
+		args->callback_cb = scallion.shadowlibFuncs->createCallback;
+
+		launch->ping_args = args;
+
+		scallion.shadowlibFuncs->createCallback(&scallion_start_ping, launch, 600000);
 	}
 
 }
@@ -522,6 +597,30 @@ static void _scallion_notify() {
 		} else {
 			for(int i = 0; i < nfds; i++) {
 				browser_activate(&scallion.browser, events[i].data.fd);
+			}
+		}
+	}
+
+	if(scallion.pingServerEpoll) {
+		struct epoll_event events[10];
+		int nfds = epoll_wait(scallion.pingServerEpoll, events, 10, 0);
+		if(nfds == -1) {
+			scallion.shadowlibFuncs->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "error in torrent server epoll_wait");
+		} else {
+			for(int i = 0; i < nfds; i++) {
+				pingService_activate(&scallion.pingSvc, events[i].data.fd, events[i].events, scallion.pingServerEpoll);
+			}
+		}
+	}
+
+	if(scallion.pingClientEpoll) {
+		struct epoll_event events[10];
+		int nfds = epoll_wait(scallion.pingClientEpoll, events, 10, 0);
+		if(nfds == -1) {
+			scallion.shadowlibFuncs->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "error in torrent server epoll_wait");
+		} else {
+			for(int i = 0; i < nfds; i++) {
+				pingService_activate(&scallion.pingSvc, events[i].data.fd, events[i].events, scallion.pingClientEpoll);
 			}
 		}
 	}

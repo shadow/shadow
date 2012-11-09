@@ -143,6 +143,11 @@ def main():
         action="store_true", dest="disable_torrent",
         default=False)
     
+    parser_build.add_argument('--disable-plugin-ping', 
+        help="do not build the built-in ping plug-in (pings over Tor circuits)", 
+        action="store_true", dest="disable_ping",
+        default=False)
+
     parser_build.add_argument('--enable-memory-tracker', 
         help="preload malloc and free and track nodes memory usage (experimental!)", 
         action="store_true", dest="enable_memtracker",
@@ -194,6 +199,7 @@ def build(args):
     if args.disable_filetransfer: cmake_cmd += " -DBUILD_FILETRANSFER=OFF"
     if args.disable_scallion: cmake_cmd += " -DBUILD_SCALLION=OFF"
     if args.disable_torrent: cmake_cmd += " -DBUILD_TORRENT=OFF"
+    if args.disable_ping: cmake_cmd += " -DBUILD_PING=OFF"
 
     # we will run from build directory
     calledDirectory = os.getcwd()

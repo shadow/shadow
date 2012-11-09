@@ -45,6 +45,7 @@
 #include "shd-filetransfer.h"
 #include "shd-browser.h"
 #include "shd-torrent-service.h"
+#include "shd-ping-service.h"
 
 /* includes from Tor */
 #undef NDEBUG
@@ -129,7 +130,7 @@ extern crypto_pk_t * client_identitykey;
 extern int called_loop_once;
 
 enum vtor_nodetype {
-	VTOR_DIRAUTH, VTOR_RELAY, VTOR_EXITRELAY, VTOR_CLIENT, VTOR_TORRENT, VTOR_BROWSER,
+	VTOR_DIRAUTH, VTOR_RELAY, VTOR_EXITRELAY, VTOR_CLIENT, VTOR_TORRENT, VTOR_BROWSER, VTOR_PING
 };
 
 /** The tag specifies which circuit this onionskin was from. */
@@ -196,6 +197,9 @@ struct _Scallion {
 	gint tsvcServerEpoll;
 	browser_t browser;
 	gint browserEpoll;
+	PingService pingSvc;
+	gint pingServerEpoll;
+	gint pingClientEpoll;
 	ShadowFunctionTable* shadowlibFuncs;
 };
 
