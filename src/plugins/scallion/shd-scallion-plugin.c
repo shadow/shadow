@@ -102,6 +102,17 @@ static void _scallion_sleepCallback(gpointer sfg, guint seconds) {
 	scallion.shadowlibFuncs->createCallback(&_scallion_wakeupCallback, sfg, seconds*1000);
 }
 
+static void _scallion_torrentWakeupCallback(gpointer data) {
+	TorrentService *tsvc = data;
+	torrentService_activate(tsvc, tsvc->client->authSockd, EPOLLOUT, tsvc->client->epolld);
+}
+
+/* called from inner filegetter code when it wants to sleep for some seconds */
+static void _scallion_torrentSleepCallback(gpointer tsvc, guint seconds) {
+	/* schedule a callback from shadow to wakeup the filegetter */
+	scallion.shadowlibFuncs->createCallback(&_scallion_torrentWakeupCallback, tsvc, seconds*1000);
+}
+
 static void scallion_start_socks_client(void* arg) {
 	scallion_launch_client_tp launch = arg;
 
@@ -364,52 +375,57 @@ static void _scallion_new(gint argc, gchar* argv[]) {
 
 		scallion.shadowlibFuncs->createCallback(&scallion_start_socks_client, launch, 600000);
 	} else if(ntype == VTOR_TORRENT) {
-		gchar** argvoffset = argv + 9;
+		gchar** argvoffset = argv + 8;
 
-		scallion_launch_torrent_tp launch = malloc(sizeof(scallion_launch_torrent_t));
+		scallion_launch_torrent_tp launch = malloc(sizeof(scallion_launch_client_t));
 
 		TorrentService_NodeArgs *args = malloc(sizeof(TorrentService_NodeArgs));
 		size_t s;
 
 		s = strnlen(argvoffset[0], 128)+1;
-		args->authorityHostname = malloc(s);
-		g_snprintf(args->authorityHostname, s, "%s", argvoffset[0]);
+		args->nodeType = malloc(s);
+		snprintf(args->nodeType, s, argvoffset[0]);
 
 		s = strnlen(argvoffset[1], 128)+1;
-		args->authorityPort = malloc(s);
-		g_snprintf(args->authorityPort, s, "%s", argvoffset[1]);
+		args->authorityHostname = malloc(s);
+		snprintf(args->authorityHostname, s, argvoffset[1]);
 
 		s = strnlen(argvoffset[2], 128)+1;
-		args->socksHostname = malloc(s);
-		g_snprintf(args->socksHostname, s, "%s", argvoffset[2]);
+		args->authorityPort = malloc(s);
+		snprintf(args->authorityPort, s, argvoffset[2]);
 
 		s = strnlen(argvoffset[3], 128)+1;
-		args->socksPort = malloc(s);
-		g_snprintf(args->socksPort, s, "%s", argvoffset[3]);
+		args->socksHostname = malloc(s);
+		snprintf(args->socksHostname, s, argvoffset[3]);
 
 		s = strnlen(argvoffset[4], 128)+1;
-		args->serverPort = malloc(s);
-		g_snprintf(args->serverPort, s, "%s", argvoffset[4]);
+		args->socksPort = malloc(s);
+		snprintf(args->socksPort, s, argvoffset[4]);
 
 		s = strnlen(argvoffset[5], 128)+1;
+		args->serverPort = malloc(s);
+		snprintf(args->serverPort, s, argvoffset[5]);
+
+		s = strnlen(argvoffset[6], 128)+1;
 		args->fileSize = malloc(s);
-		g_snprintf(args->fileSize, s, "%s", argvoffset[5]);
+		snprintf(args->fileSize, s, argvoffset[6]);
 
 		args->downBlockSize = NULL;
 		args->upBlockSize = NULL;
 
 		if(argc == 17) {
-			s = strnlen(argvoffset[6], 128)+1;
-			args->downBlockSize = malloc(s);
-			g_snprintf(args->downBlockSize, s, "%s", argvoffset[6]);
-
 			s = strnlen(argvoffset[7], 128)+1;
+			args->downBlockSize = malloc(s);
+			snprintf(args->downBlockSize, s, argvoffset[7]);
+
+			s = strnlen(argvoffset[8], 128)+1;
 			args->upBlockSize = malloc(s);
-			g_snprintf(args->upBlockSize, s, "%s", argvoffset[7]);
+			snprintf(args->upBlockSize, s, argvoffset[8]);
 		}
 
 		args->log_cb = &_scallion_torrentLogCallback;
 		args->hostbyname_cb = &_scallion_HostnameCallback;
+		args->sleep_cb = &_scallion_torrentSleepCallback;
 
 		launch->isAuthority = 0;
 		launch->torrent_args = args;
