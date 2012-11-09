@@ -42,6 +42,7 @@ static const gchar* ParserAttributeStrings[] = {
 	"id", "path", "center", "width", "tail",
 	"plugin", "software", "cluster", "clusters",
 	"bandwidthdown", "bandwidthup", "latency", "jitter", "packetloss",
+	"latencymin", "latencyQ1", "latencymean", "latencyQ3", "latencymax",
 	"cpufrequency", "time", "quantity", "arguments", "heartbeatfrequency",
 	"heartbeatloglevel", "loglevel", "logpcap", "pcapdir",
 };
@@ -62,6 +63,11 @@ typedef enum {
 	ATTRIBUTE_LATENCY,
 	ATTRIBUTE_JITTER,
 	ATTRIBUTE_PACKETLOSS,
+	ATTRIBUTE_LATENCY_MIN,
+	ATTRIBUTE_LATENCY_Q1,
+	ATTRIBUTE_LATENCY_MEAN,
+	ATTRIBUTE_LATENCY_Q3,
+	ATTRIBUTE_LATENCY_MAX,
 	ATTRIBUTE_CPUFREQUENCY,
 	ATTRIBUTE_TIME,
 	ATTRIBUTE_QUANTITY,
@@ -111,6 +117,16 @@ struct _ParserValues {
 	guint64 jitter;
 	/* fraction between 0 and 1 - liklihood that a packet gets dropped */
 	gdouble packetloss;
+	/* latency quintile information - min*/
+	guint64 latencymin;
+	/* latency quintile information - Q1*/
+	guint64 latencyQ1;
+	/* latency quintile information - mean*/
+	guint64 latencymean;
+	/* latency quintile information - Q3*/
+	guint64 latencyQ3;
+	/* latency quintile information - max*/
+	guint64 latencymax;
 	/* string of arguments that will be passed to the software */
 	GString* arguments;
 	/* time in seconds */
@@ -162,6 +178,16 @@ static ParserValues* _parser_getValues(const gchar *element_name,
 			values->latency = g_ascii_strtoull(*value_cursor, NULL, 10);
 		} else if(g_ascii_strcasecmp(*name_cursor, ParserAttributeStrings[ATTRIBUTE_JITTER]) == 0) {
 			values->jitter = g_ascii_strtoull(*value_cursor, NULL, 10);
+		} else if(g_ascii_strcasecmp(*name_cursor, ParserAttributeStrings[ATTRIBUTE_LATENCY_MIN]) == 0) {
+			values->latencymin = g_ascii_strtoull(*value_cursor, NULL, 10);
+		} else if(g_ascii_strcasecmp(*name_cursor, ParserAttributeStrings[ATTRIBUTE_LATENCY_Q1]) == 0) {
+			values->latencyQ1 = g_ascii_strtoull(*value_cursor, NULL, 10);
+		} else if(g_ascii_strcasecmp(*name_cursor, ParserAttributeStrings[ATTRIBUTE_LATENCY_MEAN]) == 0) {
+			values->latencymean = g_ascii_strtoull(*value_cursor, NULL, 10);
+		} else if(g_ascii_strcasecmp(*name_cursor, ParserAttributeStrings[ATTRIBUTE_LATENCY_Q3]) == 0) {
+			values->latencyQ3 = g_ascii_strtoull(*value_cursor, NULL, 10);
+		} else if(g_ascii_strcasecmp(*name_cursor, ParserAttributeStrings[ATTRIBUTE_LATENCY_MAX]) == 0) {
+			values->latencymax = g_ascii_strtoull(*value_cursor, NULL, 10);
 		} else if(g_ascii_strcasecmp(*name_cursor, ParserAttributeStrings[ATTRIBUTE_CPUFREQUENCY]) == 0) {
 			values->cpufrequency = g_ascii_strtoull(*value_cursor, NULL, 10);
 		} else if(g_ascii_strcasecmp(*name_cursor, ParserAttributeStrings[ATTRIBUTE_TIME]) == 0) {
@@ -226,7 +252,7 @@ static void _parser_freeValues(ParserValues* values) {
 		g_string_free(values->logPcap, TRUE);
 	if(values->pcapDir)
 		g_string_free(values->pcapDir, TRUE);
-	
+
 	MAGIC_CLEAR(values);
 	g_free(values);
 }
@@ -392,7 +418,9 @@ static void _parser_handleElement(GMarkupParseContext *context,
 	} else if(g_ascii_strcasecmp(element_name, ParserElementStrings[ELEMENT_LINK]) == 0) {
 		if(_parser_validateLink(parser, values)) {
 			a = (Action*) connectnetwork_new(values->linkedclusters,
-					values->latency, values->jitter, values->packetloss);
+					values->latency, values->jitter, values->packetloss,
+					values->latencymin, values->latencyQ1, values->latencymean,
+					values->latencyQ3, values->latencymax);
 			a->priority = 3;
 		}
 	} else if(g_ascii_strcasecmp(element_name, ParserElementStrings[ELEMENT_PLUGIN]) == 0) {
@@ -407,7 +435,7 @@ static void _parser_handleElement(GMarkupParseContext *context,
 			a->priority = 4;
 		}
 	} else if(g_ascii_strcasecmp(element_name, ParserElementStrings[ELEMENT_NODE]) == 0) {
-		if(_parser_validateNode(parser, values)) {
+		if(_parser_validateNode(parser, values) && values->quantity > 0) {
 			a = (Action*) createnodes_new(values->id, values->software, values->cluster,
 					values->bandwidthdown, values->bandwidthup, values->quantity, values->cpufrequency,
 					values->heartbeatIntervalSeconds, values->heartbeatLogLevel, values->logLevel, values->logPcap, values->pcapDir);

@@ -80,9 +80,9 @@ void internetwork_createNetwork(Internetwork* internet, GQuark networkID,
  * @param jitter
  * @param packetloss
  */
-void internetwork_connectNetworks(Internetwork* internet,
-		GQuark sourceClusterID, GQuark destinationClusterID, guint64 latency,
-		guint64 jitter, gdouble packetloss);
+void internetwork_connectNetworks(Internetwork* internet, GQuark sourceClusterID, GQuark destinationClusterID,
+		guint64 latency, guint64 jitter, gdouble packetloss, guint64 latencymin, guint64 latencyQ1,
+		guint64 latencymean, guint64 latencyQ3, guint64 latencymax);
 
 /**
  *
@@ -102,10 +102,9 @@ void internetwork_connectNetworks(Internetwork* internet,
  */
 gpointer internetwork_createNode(Internetwork* internet, GQuark nodeID,
 		Network* network, Software* software, GString* hostname,
-		guint64 bwDownKiBps, guint64 bwUpKiBps, guint cpuFrequency,
-		gint cpuThreshold, gint cpuPrecision, guint nodeSeed,
-		SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel,
-		GLogLevelFlags logLevel, gboolean logPcap, gchar* pcapDir); /* XXX: return type is "Node*" */
+		guint64 bwDownKiBps, guint64 bwUpKiBps, guint cpuFrequency, gint cpuThreshold, gint cpuPrecision,
+		guint nodeSeed, SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel,
+		GLogLevelFlags logLevel, gchar logPcap, gchar *pcapDir); /* XXX: return type is "Node*" */
 
 /**
  * Marks the given internet as read-only, so no additional nodes or networks may

@@ -40,8 +40,9 @@ typedef struct _Link Link;
  * @param packetloss
  * @return
  */
-Link* link_new(Network* sourceNetwork, Network* destinationNetwork,
-		guint64 latency, guint64 jitter, gdouble packetloss);
+Link* link_new(Network* sourceNetwork, Network* destinationNetwork, guint64 latency,
+		guint64 jitter, gdouble packetloss, guint64 latencymin, guint64 latencyQ1,
+		guint64 latencymean, guint64 latencyQ3, guint64 latencymax);
 
 /**
  *
@@ -83,6 +84,8 @@ guint64 link_getJitter(Link* link);
  * @return
  */
 gdouble link_getPacketLoss(Link* link);
+
+void link_getLatencyMetrics(Link *link, guint64 *min, guint64 *q1, guint64 *mean, guint64 *q3, guint64 *max);
 
 /**
  *
