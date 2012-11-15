@@ -469,7 +469,10 @@ gint torControl_processReply(TorControl_Connection *connection, GList *reply) {
 
                 gchar **target = g_strsplit(parts[4], ":", 2);
                 in_addr_t targetIP = inet_addr(target[0]);
-                in_port_t targetPort = atoi(target[1]);
+                in_port_t targetPort = 0;
+                if(target[1]) {
+                	targetPort = atoi(target[1]);
+                }
                 g_strfreev(target);
 
                 gint reason = TORCTL_STREAM_REASON_NONE;
@@ -774,6 +777,8 @@ gint torControl_activate() {
             if(lines[idx] && strlen(lines[idx]) > 0) {
                 strcpy(connection->buf, lines[idx]);
                 connection->bufOffset = strlen(lines[idx]);
+            } else {
+            	connection->bufOffset = 0;
             }
 
             g_strfreev(lines);
