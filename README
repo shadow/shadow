@@ -8,7 +8,7 @@ Also included are core plug-ins and topologies for transferring files between
 clients and servers, and over a private Tor anonymity network.
 
 Quick Setup (installs everything in ~/.shadow):
-    $ ./contrib/installdeps.sh
+    $ python setup.py dependencies
     $ python setup.py build
     $ python setup.py install
 
