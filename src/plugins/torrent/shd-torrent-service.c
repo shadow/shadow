@@ -108,6 +108,7 @@ int torrentService_startNode(TorrentService *tsvc, TorrentService_NodeArgs *args
 	assert(tsvc);
 	assert(args);
 
+	gchar* nodeType = args->nodeType;
 	gchar* authorityHostname = args->authorityHostname;
 	gint authorityPort = atoi(args->authorityPort);
 	gchar* socksHostname = args->socksHostname;
@@ -146,37 +147,46 @@ int torrentService_startNode(TorrentService *tsvc, TorrentService_NodeArgs *args
 
 	tsvc->log_cb = args->log_cb;
 	tsvc->hostbyname_cb = args->hostbyname_cb;
+	tsvc->sleep_cb = args->sleep_cb;
 
-	/* start server to listen for connections */
-	in_addr_t listenIP = INADDR_ANY;
-	in_port_t listenPort = (in_port_t)serverPort;
+	torrentService_log(tsvc, TSVC_NOTICE, "attempting to start torrent node of type '%s'", nodeType);
 
-	tsvc->server = g_new0(TorrentServer, 1);
-	// NOTE: since the up/down block sizes are in context of the client, we swap them for
-	// the server since it's actually the reverse of what the client has
-	int ret = torrentServer_start(tsvc->server, serverEpolld, htonl(listenIP), htons(listenPort), upBlockSize, downBlockSize);
-	if(ret < 0) {
-		torrentService_log(tsvc, TSVC_WARNING, "torrent server error, not started");
-		g_free(tsvc->server);
-		tsvc->server = NULL;
-		return -1;
-	} else {
-		torrentService_log(tsvc, TSVC_NOTICE, "torrent server running on at %s:%u", inet_ntoa((struct in_addr){listenIP}), listenPort);
+	in_addr_t authAddr = (*(tsvc->hostbyname_cb))(authorityHostname);
+	if(!g_strcasecmp(nodeType, "server") || !g_strcasecmp(nodeType, "node")) {
+		/* start server to listen for connections */
+		in_addr_t listenIP = INADDR_ANY;
+		in_port_t listenPort = (in_port_t)serverPort;
+
+		tsvc->server = g_new0(TorrentServer, 1);
+		// NOTE: since the up/down block sizes are in context of the client, we swap them for
+		// the server since it's actually the reverse of what the client has
+		int ret = torrentServer_start(tsvc->server, serverEpolld, htonl(listenIP), htons(listenPort), authAddr, htons(authorityPort), upBlockSize, downBlockSize);
+		if(ret < 0) {
+			torrentService_log(tsvc, TSVC_WARNING, "torrent server error, not started");
+			g_free(tsvc->server);
+			tsvc->server = NULL;
+			return -1;
+		} else {
+			torrentService_log(tsvc, TSVC_NOTICE, "torrent server running on at %s:%u", inet_ntoa((struct in_addr){listenIP}), listenPort);
+		}
 	}
 
-	/* start up client */
-	in_addr_t authAddr = (*(tsvc->hostbyname_cb))(authorityHostname);
-	in_addr_t socksAddr = (*(tsvc->hostbyname_cb))(socksHostname);
+	if(!g_strcasecmp(nodeType, "client") || !g_strcasecmp(nodeType, "node")) {
+		/* start up client */
+		in_addr_t socksAddr = (*(tsvc->hostbyname_cb))(socksHostname);
+		in_addr_t authAddr = (*(tsvc->hostbyname_cb))(authorityHostname);
 
-	tsvc->client = g_new0(TorrentClient, 1);
-	if(torrentClient_start(tsvc->client, clientEpolld, socksAddr, htons(socksPort), authAddr, htons(authorityPort), serverPort,
-			fileSize, downBlockSize, upBlockSize) < 0) {
-		torrentService_log(tsvc, TSVC_WARNING, "torrent client error, not started!");
-		g_free(tsvc->client);
-		tsvc->client = NULL;
-		return -1;
-	} else {
-		torrentService_log(tsvc, TSVC_NOTICE, "torrent client running");
+		tsvc->client = g_new0(TorrentClient, 1);
+		if(torrentClient_start(tsvc->client, clientEpolld, socksAddr, htons(socksPort), authAddr, htons(authorityPort), serverPort,
+				fileSize, downBlockSize, upBlockSize) < 0) {
+			torrentService_log(tsvc, TSVC_WARNING, "torrent client error, not started!");
+			g_free(tsvc->client);
+			tsvc->client = NULL;
+			return -1;
+		} else {
+			torrentService_log(tsvc, TSVC_NOTICE, "torrent client running");
+		}
+		tsvc->client->log_cb = args->log_cb;
 	}
 
 	return 0;
@@ -186,18 +196,33 @@ int torrentService_activate(TorrentService *tsvc, gint sockd, gint events, gint 
 	if(tsvc->client && tsvc->client->epolld == epolld) {
 		gint ret = torrentClient_activate(tsvc->client, sockd, events);
 
-		if(ret != TC_SUCCESS && ret != TC_BLOCK_DOWNLOADED && ret != TC_ERR_RECV && ret != TC_ERR_SEND) {
+		 if(ret == TC_ERR_FATAL || ret == TC_ERR_SOCKSCONN) {
+			torrentService_log(tsvc, TSVC_NOTICE, "torrent client shutdown with error %d...retrying in 60 seconds", ret);
+
+			torrentClient_shutdown(tsvc->client);
+			torrentClient_start(tsvc->client, tsvc->client->epolld, tsvc->client->socksAddr, tsvc->client->socksPort,
+					tsvc->client->authAddr, tsvc->client->authPort, tsvc->client->serverPort, tsvc->client->fileSize,
+					tsvc->client->downBlockSize, tsvc->client->upBlockSize);
+
+			/* set wakup timer and call sleep function */
+			clock_gettime(CLOCK_REALTIME, &tsvc->wakeupTime);
+			tsvc->wakeupTime.tv_sec += 60;
+			tsvc->wakeupTime.tv_nsec = 0;
+			(*tsvc->sleep_cb)(tsvc, 60);
+
+			return -1;
+		} else if(ret != TC_SUCCESS && ret != TC_BLOCK_DOWNLOADED && ret != TC_ERR_RECV && ret != TC_ERR_SEND) {
 			torrentService_log(tsvc, TSVC_INFO, "torrent client encountered a "
-					"non-asynch-io related error, giving up.");
-			/* TODO: we should retry in 60 seconds instead of stopping for good */
-			return torrentService_stop(tsvc);
+					"non-asynch-io related error");
 		}
 
 		if(!tsvc->clientDone && tsvc->client && tsvc->client->totalBytesDown > 0) {
 			struct timespec now;
 			clock_gettime(CLOCK_REALTIME, &now);
-
-			if(ret == TC_BLOCK_DOWNLOADED) {
+			if(tsvc->client->totalBytesDown >= tsvc->client->fileSize) {
+				torrentService_report(tsvc, "[client-complete]");
+				tsvc->clientDone = 1;
+			} else if(ret == TC_BLOCK_DOWNLOADED) {
 				tsvc->lastReport = now;
 				torrentService_report(tsvc, "[client-block-complete]");
 			} else if(now.tv_sec - tsvc->lastReport.tv_sec > 1 && tsvc->client->currentBlockTransfer != NULL &&
@@ -205,13 +230,6 @@ int torrentService_activate(TorrentService *tsvc, gint sockd, gint events, gint 
 					   tsvc->client->currentBlockTransfer->upBytesTransfered > 0)) {
 				tsvc->lastReport = now;
 				torrentService_report(tsvc, "[client-block-progress]");
-			}
-
-			if(tsvc->client->blocksDownloaded >= tsvc->client->numBlocks) {
-				torrentService_report(tsvc, "[client-complete]");
-				clock_gettime(CLOCK_REALTIME, &(tsvc->client->download_end));
-				torrentClient_shutdown(tsvc->client);
-				tsvc->clientDone = 1;
 			}
 		}
 	}
@@ -238,7 +256,7 @@ int torrentService_stop(TorrentService *tsvc) {
 	if(tsvc->server) {
 		/* Shutdown the server then free the object */
 		torrentServer_shutdown(tsvc->server);
-		g_free(tsvc->server);
+		g_free(tsvc->client);
 		tsvc->server = NULL;
 	}
 

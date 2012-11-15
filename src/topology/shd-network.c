@@ -23,12 +23,9 @@
 
 struct _Network {
 	GQuark id;
-	/* links to other networks this network can access */
-	GList* outgoingLinks;
-	/* links from other networks that can access this network */
-	GList* incomingLinks;
-	/* map to outgoing links by network id */
-	GHashTable* outgoingLinkMap;
+	GHashTable *linksByCluster;
+	GHashTable *linksByNode;
+
 	guint64 bandwidthdown;
 	guint64 bandwidthup;
 	gdouble packetloss;
@@ -44,12 +41,8 @@ Network* network_new(GQuark id, guint64 bandwidthdown, guint64 bandwidthup, gdou
 	network->bandwidthup = bandwidthup;
 	network->packetloss = packetloss;
 
-	/* lists are created by setting to NULL */
-	network->incomingLinks = NULL;
-	network->outgoingLinks = NULL;
-
-	/* the keys will belong to other networks, outgoing links belong to us */
-	network->outgoingLinkMap = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, link_free);
+	network->linksByCluster = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, NULL);
+	network->linksByNode = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, NULL);
 
 	return network;
 }
@@ -58,14 +51,8 @@ void network_free(gpointer data) {
 	Network* network = data;
 	MAGIC_ASSERT(network);
 
-	/* outgoing links are destroyed with the linkmap */
-	if(network->incomingLinks){
-		g_list_free(network->incomingLinks);
-	}
-	if(network->outgoingLinks) {
-		g_list_free(network->outgoingLinks);
-	}
-	g_hash_table_destroy(network->outgoingLinkMap);
+	g_hash_table_destroy(network->linksByCluster);
+	g_hash_table_destroy(network->linksByNode);
 
 	MAGIC_CLEAR(network);
 	g_free(network);
@@ -104,32 +91,96 @@ gboolean network_isEqual(Network* a, Network* b) {
 	}
 }
 
-void network_addOutgoingLink(Network* network, gpointer outgoingLink) {
+void network_addLink(Network* network, gpointer link) {
 	MAGIC_ASSERT(network);
 
-	/* prepending is O(1), but appending is O(n) since it traverses the list */
-	network->outgoingLinks = g_list_prepend(network->outgoingLinks, outgoingLink);
-
-	/* FIXME: if this link replaces an existing, the existing will be freed in
-	 * the replace call but still exist in the list of outgoing links (and the
-	 * list of incoming links at the other network)
-	 * this is because we currently only support single links to each network
-	 */
-	Network* destination = link_getDestinationNetwork((Link*)outgoingLink);
-	g_hash_table_replace(network->outgoingLinkMap, &(destination->id), outgoingLink);
+	Network* destination = link_getDestinationNetwork((Link*)link);
+	GList *links = g_hash_table_lookup(network->linksByCluster, &(destination->id));
+	links = g_list_append(links, link);
+	g_hash_table_replace(network->linksByCluster, &(destination->id), links);
 }
 
-void network_addIncomingLink(Network* network, gpointer incomingLink) {
+Link* network_getLink(Network *network, in_addr_t sourceIP, in_addr_t destinationIP) {
 	MAGIC_ASSERT(network);
 
-	/* prepending is O(1), but appending is O(n) since it traverses the list */
-	network->incomingLinks = g_list_prepend(network->incomingLinks, incomingLink);
+	gint *key;
+
+	/* check to see if we already have hash table of links for source */
+	GHashTable *nodeLinks = g_hash_table_lookup(network->linksByNode, &sourceIP);
+	if(!nodeLinks) {
+		nodeLinks = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, NULL);
+		key = g_new0(gint, 1);
+		*key = sourceIP;
+		g_hash_table_insert(network->linksByNode, key, nodeLinks);
+	}
+
+	/* lookup link to destination IP */
+	Link *link = g_hash_table_lookup(nodeLinks, &destinationIP);
+	if(!link) {
+		Internetwork* internet = worker_getInternet();
+		Network *destinationNetwork = internetwork_lookupNetwork(internet, destinationIP);
+
+		/* get list of possible links to destination network */
+		GList *links = g_hash_table_lookup(network->linksByCluster, &(destinationNetwork->id));
+		if(!links) {
+			return NULL;
+		}
+
+		/* randomly select link to assign between the nodes */
+		Random* random = node_getRandom(worker_getPrivate()->cached_node);
+		gdouble randomDouble = random_nextDouble(random);
+		guint length = g_list_length(links);
+
+		guint n = (guint)(((gdouble)length - 1) * randomDouble);
+		g_assert((n >= 0) && (n < length));
+
+		/* get random link from list */
+		link = g_list_nth_data(links, n);
+
+		guint64 latency, jitter;
+		guint64 min,q1,mean,q3,max;
+
+		latency = link_getLatency(link);
+		jitter = link_getJitter(link);
+		link_getLatencyMetrics(link, &min, &q1, &mean, &q3, &max);
+		struct in_addr addr;
+		gchar *srcIP = g_strdup(inet_ntoa((struct in_addr){sourceIP}));
+		gchar *dstIP = g_strdup(inet_ntoa((struct in_addr){destinationIP}));
+		message("link for connection [%s] %s -> %s [%s] chosen: latency=%d jitter=%d metrics=%d %d %d %d %d",
+				g_quark_to_string(network->id), srcIP, dstIP, g_quark_to_string(destinationNetwork->id),
+				latency, jitter, min, q1, mean, q3, max);
+		g_free(srcIP);
+		g_free(dstIP);
+
+		/* insert link into source network */
+		key = g_new0(gint, 1);
+		*key = destinationIP;
+
+		g_hash_table_insert(nodeLinks, key, link);
+
+		/* insert link into destination network */
+		nodeLinks = g_hash_table_lookup(destinationNetwork->linksByNode, &destinationIP);
+		if(!nodeLinks) {
+			nodeLinks = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, NULL);
+			key = g_new0(gint, 1);
+			*key = destinationIP;
+			g_hash_table_insert(destinationNetwork->linksByNode, key, nodeLinks);
+		}
+
+		key = g_new0(gint, 1);
+		*key = sourceIP;
+		g_hash_table_insert(nodeLinks, key, link);
+	}
+
+	return link;
 }
 
-gdouble network_getLinkReliability(Network* sourceNetwork, Network* destinationNetwork) {
-	MAGIC_ASSERT(sourceNetwork);
-	MAGIC_ASSERT(destinationNetwork);
-	Link* link = g_hash_table_lookup(sourceNetwork->outgoingLinkMap, &(destinationNetwork->id));
+gdouble network_getLinkReliability(in_addr_t sourceIP, in_addr_t destinationIP) {
+	Internetwork* internet = worker_getInternet();
+	Network *sourceNetwork = internetwork_lookupNetwork(internet, sourceIP);
+	Network *destinationNetwork = internetwork_lookupNetwork(internet, destinationIP);
+
+	Link *link = network_getLink(sourceNetwork, sourceIP, destinationIP);
 	if(link) {
 		/* there are three chances to drop a packet here:
 		 * p1 : loss rate from source-node to the source-cluster
@@ -152,11 +203,12 @@ gdouble network_getLinkReliability(Network* sourceNetwork, Network* destinationN
 	}
 }
 
-gdouble network_getLinkLatency(Network* sourceNetwork, Network* destinationNetwork, gdouble percentile) {
-	MAGIC_ASSERT(sourceNetwork);
-	MAGIC_ASSERT(destinationNetwork);
+gdouble network_getLinkLatency(in_addr_t sourceIP, in_addr_t destinationIP, gdouble percentile) {
+	Internetwork* internet = worker_getInternet();
+	Network *sourceNetwork = internetwork_lookupNetwork(internet, sourceIP);
+	Network *destinationNetwork = internetwork_lookupNetwork(internet, destinationIP);
 
-	Link* link = g_hash_table_lookup(sourceNetwork->outgoingLinkMap, &(destinationNetwork->id));
+	Link *link = network_getLink(sourceNetwork, sourceIP, destinationIP);
 
 	if(link) {
 		return link_computeDelay(link, percentile);
@@ -167,13 +219,10 @@ gdouble network_getLinkLatency(Network* sourceNetwork, Network* destinationNetwo
 	}
 }
 
-gdouble network_sampleLinkLatency(Network* sourceNetwork, Network* destinationNetwork) {
-	MAGIC_ASSERT(sourceNetwork);
-	MAGIC_ASSERT(destinationNetwork);
-
+gdouble network_sampleLinkLatency(in_addr_t sourceIP, in_addr_t destinationIP) {
 	Random* random = node_getRandom(worker_getPrivate()->cached_node);
 	gdouble percentile = random_nextDouble(random);
-	return network_getLinkLatency(sourceNetwork, destinationNetwork, percentile);
+	return network_getLinkLatency(sourceIP, destinationIP, percentile);
 }
 
 void network_scheduleRetransmit(Network* network, Packet* packet) {
@@ -193,11 +242,11 @@ void network_scheduleRetransmit(Network* network, Packet* packet) {
 	gdouble latency = 0;
 	if(network_isEqual(network, sourceNetwork)) {
 		/* RTT is two link latencies */
-		latency += network_sampleLinkLatency(sourceNetwork, destinationNetwork);
-		latency += network_sampleLinkLatency(destinationNetwork, sourceNetwork);
+		latency += network_sampleLinkLatency(sourceIP, destinationIP);
+		latency += network_sampleLinkLatency(destinationIP, sourceIP);
 	} else {
 		/* latency to destination already incurred, RTT is latency back to source */
-		latency += network_sampleLinkLatency(destinationNetwork, sourceNetwork);
+		latency += network_sampleLinkLatency(destinationIP, sourceIP);
 	}
 
 	SimulationTime delay = (SimulationTime) floor(latency * SIMTIME_ONE_MILLISECOND);
@@ -209,13 +258,13 @@ void network_schedulePacket(Network* sourceNetwork, Packet* packet) {
 	MAGIC_ASSERT(sourceNetwork);
 
 	Internetwork* internet = worker_getInternet();
+	in_addr_t sourceIP = packet_getSourceIP(packet);
 	in_addr_t destinationIP = packet_getDestinationIP(packet);
-	Network* destinationNetwork = internetwork_lookupNetwork(internet, destinationIP);
 
 	/* first thing to check is if network reliability forces us to 'drop'
 	 * the packet. if so, get out of dodge doing as little as possible.
 	 */
-	gdouble reliability = network_getLinkReliability(sourceNetwork, destinationNetwork);
+	gdouble reliability = network_getLinkReliability(sourceIP, destinationIP);
 	Random* random = node_getRandom(worker_getPrivate()->cached_node);
 	gdouble chance = random_nextDouble(random);
 	if(chance > reliability){
@@ -225,7 +274,7 @@ void network_schedulePacket(Network* sourceNetwork, Packet* packet) {
 		network_scheduleRetransmit(sourceNetwork, packet);
 	} else {
 		/* packet will make it through, find latency */
-		gdouble latency = network_sampleLinkLatency(sourceNetwork, destinationNetwork);
+		gdouble latency = network_sampleLinkLatency(sourceIP, destinationIP);
 		SimulationTime delay = (SimulationTime) floor(latency * SIMTIME_ONE_MILLISECOND);
 
 		PacketArrivedEvent* event = packetarrived_new(packet);

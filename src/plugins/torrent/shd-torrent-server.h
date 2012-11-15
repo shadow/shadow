@@ -32,11 +32,13 @@
 
 enum torrentServer_code {
 	TS_SUCCESS, TS_CLOSED, TS_ERR_INVALID, TS_ERR_FATAL, TS_ERR_BADSD, TS_ERR_WOULDBLOCK, TS_ERR_BUFSPACE,
-	TS_ERR_SOCKET, TS_ERR_BIND, TS_ERR_LISTEN, TS_ERR_ACCEPT, TS_ERR_RECV, TS_ERR_SEND, TS_ERR_CLOSE, TS_ERR_EPOLL, TS_ERR_NOCONN
+	TS_ERR_SOCKET, TS_ERR_CONNECT, TS_ERR_BIND, TS_ERR_LISTEN, TS_ERR_ACCEPT, TS_ERR_RECV, TS_ERR_SEND, TS_ERR_CLOSE, TS_ERR_EPOLL, TS_ERR_NOCONN
 };
 
 enum torrentServer_state {
 	TS_IDLE,
+	TS_AUTH_REGISTER,
+	TS_AUTH_IDLE,
 	TS_REQUEST,
 	TS_TRANSFER,
 	TS_FINISHED,
@@ -48,6 +50,14 @@ struct _TorrentServer_Args {
 	gchar *maxConnections;
 };
 
+typedef struct _TorrentServer_PacketInfo TorrentServer_PacketInfo ;
+struct _TorrentServer_PacketInfo {
+	gint64 sendTime;
+	gint64 recvTime;
+	guint32 cookie;
+};
+
+
 typedef struct _TorrentServer_Connection TorrentServer_Connection;
 struct _TorrentServer_Connection {
 	gint sockd;
@@ -55,20 +65,24 @@ struct _TorrentServer_Connection {
 	enum torrentServer_state state;
 	gint downBytesTransfered;
 	gint upBytesTransfered;
+	guint32 cookie;
 };
 
 typedef struct _TorrentServer TorrentServer;
 struct _TorrentServer {
 	gint epolld;
 	gint listenSockd;
-	/* connections stored by sockd */
+	gint authSockd;
+	in_port_t serverPort;
 	GHashTable *connections;
 	gint downBlockSize;
 	gint upBlockSize;
 	gint errcode;
+	GQueue *packetInfo;
 };
 
-gint torrentServer_start(TorrentServer* ts, gint epolld, in_addr_t listenIP, in_port_t listenPort, gint downBlockSize, gint upBlockSize);
+gint torrentServer_start(TorrentServer* ts, gint epolld, in_addr_t listenAddr, in_port_t listenPort,
+		in_addr_t authAddr, in_port_t authPort, gint downBlockSize, gint upBlockSize);
 gint torrentServer_activate(TorrentServer* ts, gint sockd, gint events);
 gint torrentServer_accept(TorrentServer* ts, gint* sockdOut);
 gint torrentServer_shutdown(TorrentServer* ts);

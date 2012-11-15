@@ -108,9 +108,9 @@ void internetwork_createNetwork(Internetwork* internet, GQuark networkID,
 	g_hash_table_replace(internet->networks, network_getIDReference(network), network);
 }
 
-void internetwork_connectNetworks(Internetwork* internet,
-		GQuark sourceClusterID, GQuark destinationClusterID,
-		guint64 latency, guint64 jitter, gdouble packetloss) {
+void internetwork_connectNetworks(Internetwork* internet, GQuark sourceClusterID, GQuark destinationClusterID,
+		guint64 latency, guint64 jitter, gdouble packetloss, guint64 latencymin, guint64 latencyQ1,
+		guint64 latencymean, guint64 latencyQ3, guint64 latencymax) {
 	MAGIC_ASSERT(internet);
 	g_assert(!internet->isReadOnly);
 
@@ -119,15 +119,19 @@ void internetwork_connectNetworks(Internetwork* internet,
 	Network* destinationNetwork = internetwork_getNetwork(internet, destinationClusterID);
 	g_assert(sourceNetwork && destinationNetwork);
 
-	/* create the link */
-	Link* link = link_new(sourceNetwork, destinationNetwork, latency, jitter, packetloss);
+	/* create the links */
+	Link* link1 = link_new(sourceNetwork, destinationNetwork, latency, jitter, packetloss,
+			latencymin, latencyQ1, latencymean, latencyQ3, latencymax);
+	Link* link2 = link_new(destinationNetwork, sourceNetwork, latency, jitter, packetloss,
+				latencymin, latencyQ1, latencymean, latencyQ3, latencymax);
 
 	/* build links into topology */
-	network_addOutgoingLink(sourceNetwork, link);
-	network_addIncomingLink(destinationNetwork, link);
+	network_addLink(sourceNetwork, link1);
+	network_addLink(destinationNetwork, link2);
 
 	/* track latency */
-	_internetwork_trackLatency(internet, link);
+	_internetwork_trackLatency(internet, link1);
+	_internetwork_trackLatency(internet, link2);
 }
 
 Network* internetwork_getNetwork(Internetwork* internet, GQuark networkID) {
@@ -183,7 +187,7 @@ gpointer internetwork_createNode(Internetwork* internet, GQuark nodeID,
 		Network* network, Software* software, GString* hostname,
 		guint64 bwDownKiBps, guint64 bwUpKiBps, guint cpuFrequency, gint cpuThreshold, gint cpuPrecision,
 		guint nodeSeed, SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel,
-		GLogLevelFlags logLevel, gboolean logPcap, gchar* pcapDir) {
+		GLogLevelFlags logLevel, gchar logPcap, gchar *pcapDir) {
 	MAGIC_ASSERT(internet);
 	g_assert(!internet->isReadOnly);
 
@@ -263,26 +267,26 @@ guint32 internetwork_getNodeBandwidthDown(Internetwork* internet, GQuark nodeID)
 gdouble internetwork_getReliability(Internetwork* internet, GQuark sourceNodeID, GQuark destinationNodeID) {
 	MAGIC_ASSERT(internet);
 	Node* sourceNode = internetwork_getNode(internet, sourceNodeID);
-	Network* sourceNetwork = node_getNetwork(sourceNode);
+	in_addr_t sourceIP = node_getDefaultIP(sourceNode);
 	Node* destinationNode = internetwork_getNode(internet, destinationNodeID);
-	Network* destinationNetwork = node_getNetwork(destinationNode);
-	return network_getLinkReliability(sourceNetwork, destinationNetwork);
+	in_addr_t destinationIP = node_getDefaultIP(destinationNode);
+	return network_getLinkReliability(sourceIP, destinationIP);
 }
 
 gdouble internetwork_getLatency(Internetwork* internet, GQuark sourceNodeID, GQuark destinationNodeID, gdouble percentile) {
 	MAGIC_ASSERT(internet);
 	Node* sourceNode = internetwork_getNode(internet, sourceNodeID);
-	Network* sourceNetwork = node_getNetwork(sourceNode);
+	in_addr_t sourceIP = node_getDefaultIP(sourceNode);
 	Node* destinationNode = internetwork_getNode(internet, destinationNodeID);
-	Network* destinationNetwork = node_getNetwork(destinationNode);
-	return network_getLinkLatency(sourceNetwork, destinationNetwork, percentile);
+	in_addr_t destinationIP = node_getDefaultIP(destinationNode);
+	return network_getLinkLatency(sourceIP, destinationIP, percentile);
 }
 
 gdouble internetwork_sampleLatency(Internetwork* internet, GQuark sourceNodeID, GQuark destinationNodeID) {
 	MAGIC_ASSERT(internet);
 	Node* sourceNode = internetwork_getNode(internet, sourceNodeID);
-	Network* sourceNetwork = node_getNetwork(sourceNode);
+	in_addr_t sourceIP = node_getDefaultIP(sourceNode);
 	Node* destinationNode = internetwork_getNode(internet, destinationNodeID);
-	Network* destinationNetwork = node_getNetwork(destinationNode);
-	return network_sampleLinkLatency(sourceNetwork, destinationNetwork);
+	in_addr_t destinationIP = node_getDefaultIP(destinationNode);
+	return network_sampleLinkLatency(sourceIP, destinationIP);
 }

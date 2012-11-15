@@ -28,6 +28,11 @@ struct _ConnectNetworkAction {
 	guint64 latency;
 	guint64 jitter;
 	gdouble packetloss;
+	guint64 latencymin;
+	guint64 latencyQ1;
+	guint64 latencymean;
+	guint64 latencyQ3;
+	guint64 latencymax;
 	MAGIC_DECLARE;
 };
 
@@ -37,9 +42,8 @@ RunnableFunctionTable connectnetwork_functions = {
 		MAGIC_VALUE
 };
 
-ConnectNetworkAction* connectnetwork_new(GString* clusters, guint64 latency,
-		guint64 jitter, gdouble packetloss)
-{
+ConnectNetworkAction* connectnetwork_new(GString* clusters, guint64 latency, guint64 jitter, gdouble packetloss,
+		guint64 latencymin, guint64 latencyQ1, guint64 latencymean, guint64 latencyQ3, guint64 latencymax) {
 	g_assert(clusters);
 	ConnectNetworkAction* action = g_new0(ConnectNetworkAction, 1);
 	MAGIC_INIT(action);
@@ -59,6 +63,11 @@ ConnectNetworkAction* connectnetwork_new(GString* clusters, guint64 latency,
 	action->latency = latency;
 	action->jitter = jitter;
 	action->packetloss = packetloss;
+	action->latencymin = latencymin;
+	action->latencyQ1 = latencyQ1;
+	action->latencymean = latencymean;
+	action->latencyQ3 = latencyQ3;
+	action->latencymax = latencymax;
 
 	return action;
 }
@@ -68,7 +77,10 @@ void connectnetwork_run(ConnectNetworkAction* action) {
 
 	internetwork_connectNetworks(worker_getInternet(),
 			action->sourceClusterID, action->destinationClusterID,
-			action->latency, action->jitter, action->packetloss);
+			action->latency, action->jitter, action->packetloss,
+			action->latencymin, action->latencyQ1, action->latencymean,
+			action->latencyQ3, action->latencymax);
+
 }
 
 void connectnetwork_free(ConnectNetworkAction* action) {

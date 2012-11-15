@@ -27,6 +27,7 @@
 #include <stdio.h>
 #include <netinet/in.h>
 #include <glib-2.0/glib.h>
+#include "shd-torrent-server.h"
 
 /* version 5, one supported auth method, no auth */
 #define TC_SOCKS_INIT "\x05\x01\x00"
@@ -40,6 +41,8 @@
 /* v5, status, reserved, IPV4, ip_addr (4 bytes), port (2 bytes) */
 #define TC_SOCKS_RESP_HEAD "\x05\x00\x00\x01"
 #define TC_SOCKS_RESP_HEAD_LEN 4
+
+#define TC_BUF_FILLER "TOR-COOKIE: %8.8X\r\nTIME: %lu\r\n"
 
 #define TC_BUF_SIZE 16384
 
@@ -58,7 +61,6 @@ enum TorrentClient_State {
 	TC_SOCKS_REPLY_CONN,
 	TC_SEND,
 	TC_RECEIVE,
-	TC_AUTH_REGISTER,
 	TC_AUTH_REQUEST_NODES,
 	TC_AUTH_RECEIVE_NODES,
 	TC_AUTH_IDLE,
@@ -68,6 +70,12 @@ enum TorrentClient_State {
 	TC_SERVER_IDLE,
 	TC_SERVER_INVALID,
 };
+
+enum torrentClient_loglevel {
+	TC_CRITICAL, TC_WARNING, TC_NOTICE, TC_INFO, TC_DEBUG
+};
+
+typedef void (*torrentClient_log_cb)(enum torrentClient_loglevel level, const gchar* message);
 
 typedef struct _TorrentClient_Args TorrentClient_Args;
 struct _TorrentClient_Args {
@@ -88,6 +96,8 @@ struct _TorrentClient_Server {
 	gchar buf[TC_BUF_SIZE];
 	size_t buf_write_offset;
 	size_t buf_read_offset;
+
+	guint32 cookie;
 
 	gint downBytesTransfered;
 	gint upBytesTransfered;
@@ -129,6 +139,9 @@ struct _TorrentClient {
 	struct timespec download_end;
 
 	TorrentClient_Server *currentBlockTransfer;
+
+	torrentClient_log_cb log_cb;
+	gchar logBuffer[1024];
 };
 
 gint torrentClient_start(TorrentClient* tc, gint epolld, in_addr_t socksAddr, in_port_t socksPort, in_addr_t authAddr, in_port_t authPort,
