@@ -498,9 +498,12 @@ def get(targetdir, fileurl, sigurl, keyring):
     targetsig = getfullpath(targetdir + "/" + os.path.basename(sigurl))
     
     if not os.path.exists(targetfile) and (download(fileurl, targetfile) < 0): return None
+
+    if not query_yes_no("Do you want to download and check the signature?"): return targetfile
+
     if (not os.path.exists(targetsig)) and (download(sigurl, targetsig) < 0): return None
     
-    question = "Choose 'yes' to verify the signature with the included keyring, or 'no' to verify with your own keys"
+    question = "Do you want to use the included keyring instead of the running user's keyring?"
     retcode = 0
     if query_yes_no(question):
         gpg = "gpg --keyring {0} --verify {1}".format(keyring, targetsig)
@@ -516,9 +519,10 @@ def get(targetdir, fileurl, sigurl, keyring):
         time.sleep(1)
         return targetfile
     else: 
-        log("ERROR!: signature is bad")
+        log("WARNING!: signature is bad")
         time.sleep(1)
-        return None
+        if query_yes_no("Do you want to continue without verifying the signature?"): return targetfile
+        else: return None
         
 def download(url, target_path):
     if query_yes_no("May we download \'{0}\'?".format(url)):
