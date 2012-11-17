@@ -58,9 +58,9 @@ static in_addr_t ping_resolveHostname(const gchar* hostname) {
 	in_addr_t addr = 0;
 
 	/* get the address in network order */
-	if(g_strncasecmp(hostname, "none", 4) == 0) {
+	if(g_ascii_strncasecmp(hostname, "none", 4) == 0) {
 		addr = htonl(INADDR_NONE);
-	} else if(g_strncasecmp(hostname, "localhost", 9) == 0) {
+	} else if(g_ascii_strncasecmp(hostname, "localhost", 9) == 0) {
 		addr = htonl(INADDR_LOOPBACK);
 	} else {
 		struct addrinfo* info;

@@ -152,7 +152,7 @@ int torrentService_startNode(TorrentService *tsvc, TorrentService_NodeArgs *args
 	torrentService_log(tsvc, TSVC_NOTICE, "attempting to start torrent node of type '%s'", nodeType);
 
 	in_addr_t authAddr = (*(tsvc->hostbyname_cb))(authorityHostname);
-	if(!g_strcasecmp(nodeType, "server") || !g_strcasecmp(nodeType, "node")) {
+	if(!g_ascii_strncasecmp(nodeType, "server", 6) || !g_ascii_strncasecmp(nodeType, "node", 4)) {
 		/* start server to listen for connections */
 		in_addr_t listenIP = INADDR_ANY;
 		in_port_t listenPort = (in_port_t)serverPort;
@@ -171,7 +171,7 @@ int torrentService_startNode(TorrentService *tsvc, TorrentService_NodeArgs *args
 		}
 	}
 
-	if(!g_strcasecmp(nodeType, "client") || !g_strcasecmp(nodeType, "node")) {
+	if(!g_ascii_strncasecmp(nodeType, "client", 6) || !g_ascii_strncasecmp(nodeType, "node", 4)) {
 		/* start up client */
 		in_addr_t socksAddr = (*(tsvc->hostbyname_cb))(socksHostname);
 		in_addr_t authAddr = (*(tsvc->hostbyname_cb))(authorityHostname);

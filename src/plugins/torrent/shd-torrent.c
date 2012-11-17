@@ -28,9 +28,9 @@ static in_addr_t torrent_resolveHostname(const gchar* hostname) {
 	in_addr_t addr = 0;
 
 	/* get the address in network order */
-	if(g_strncasecmp(hostname, "none", 4) == 0) {
+	if(g_ascii_strncasecmp(hostname, "none", 4) == 0) {
 		addr = htonl(INADDR_NONE);
-	} else if(g_strncasecmp(hostname, "localhost", 9) == 0) {
+	} else if(g_ascii_strncasecmp(hostname, "localhost", 9) == 0) {
 		addr = htonl(INADDR_LOOPBACK);
 	} else {
 		struct addrinfo* info;
@@ -126,7 +126,8 @@ void torrent_new(int argc, char* argv[]) {
 
 	gchar *nodeType = argv[1];
 
-	if(!g_strcasecmp(nodeType, "client") || !g_strcasecmp(nodeType, "server") || !g_strcasecmp(nodeType, "node")) {
+	if(!g_ascii_strncasecmp(nodeType, "client", 6) ||
+			!g_ascii_strncasecmp(nodeType, "server", 6) || !g_ascii_strncasecmp(nodeType, "node", 4)) {
 		if(argc < 5) {
 			log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "%s", USAGE);
 			return;
@@ -168,7 +169,7 @@ void torrent_new(int argc, char* argv[]) {
 		}
 
 
-		if(!g_strcasecmp(nodeType, "server") || !g_strcasecmp(nodeType, "node")) {
+		if(!g_ascii_strncasecmp(nodeType, "server", 6) || !g_ascii_strncasecmp(nodeType, "node", 4)) {
 			/* create an epoll to wait for I/O events */
 			gint epolld = epoll_create(1);
 			if(epolld == -1) {
@@ -196,7 +197,7 @@ void torrent_new(int argc, char* argv[]) {
 			}
 		}
 
-		if(!g_strcasecmp(nodeType, "client") || !g_strcasecmp(nodeType, "node")) {
+		if(!g_ascii_strncasecmp(nodeType, "client", 6) || !g_ascii_strncasecmp(nodeType, "node", 4)) {
 			/* create an epoll to wait for I/O events */
 			gint epolld = epoll_create(1);
 			if(epolld == -1) {
@@ -220,7 +221,7 @@ void torrent_new(int argc, char* argv[]) {
 				log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "torrent client running");
 			}
 		}
-	} else if(g_strcasecmp(nodeType, "authority") == 0) {
+	} else if(g_ascii_strncasecmp(nodeType, "authority", 9) == 0) {
 		gint authPort = atoi(argv[2]);
 
 		/* create an epoll to wait for I/O events */
