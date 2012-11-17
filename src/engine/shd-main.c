@@ -80,8 +80,8 @@ gint shadow_main(gint argc, gchar* argv[]) {
 	g_log_set_default_handler(logging_handleLog, &(configuredLogLevel));
 
     GDateTime* dt_now = g_date_time_new_now_local();
-    gchar* dt_format = g_date_time_format(dt_now, "%F %H:%M:%S:%N");
-    message("Shadow v%s engine initialized at %s using GLib v%u.%u.%u",
+    gchar* dt_format = g_date_time_format(dt_now, "%F %H:%M:%S");
+    message("Shadow v%s initialized at %s using GLib v%u.%u.%u",
         SHADOW_VERSION, dt_format, GLIB_MAJOR_VERSION, GLIB_MINOR_VERSION, GLIB_MICRO_VERSION);
     g_date_time_unref(dt_now);
     g_free(dt_format);
@@ -161,6 +161,7 @@ gint shadow_main(gint argc, gchar* argv[]) {
 
 	/* cleanup */
 	engine_free(shadow_engine);
+	shadow_engine = NULL;
 	worker_free(mainThreadWorker);
 	configuration_free(config);
 

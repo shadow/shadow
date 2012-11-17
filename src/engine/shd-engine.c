@@ -167,10 +167,10 @@ void engine_free(Engine* engine) {
 	registry_free(engine->registry);
 
 	GDateTime* dt_now = g_date_time_new_now_local();
-	gchar* dt_format = g_date_time_format(dt_now, "%F %H:%M:%S:%N");
-	message("clean engine shutdown at %s", dt_format);
-	g_date_time_unref(dt_now);
-	g_free(dt_format);
+    gchar* dt_format = g_date_time_format(dt_now, "%F %H:%M:%S");
+    message("Shadow v%s shut down cleanly at %s", SHADOW_VERSION, dt_format);
+    g_date_time_unref(dt_now);
+    g_free(dt_format);
 
 	for(int i = 0; i < engine->numCryptoThreadLocks; i++) {
 		g_static_mutex_free(&(engine->cryptoThreadLocks[i]));
