@@ -3,7 +3,7 @@
 project(Shadow C)
 
 ## ensure cmake version
-cmake_minimum_required(VERSION 2.8 FATAL_ERROR)
+cmake_minimum_required(VERSION 2.8.8 FATAL_ERROR)
 
 ## ensure unix environment (CMAKE_SYSTEM_NAME == "Linux")
 if((NOT UNIX) OR (NOT (CMAKE_SYSTEM_NAME STREQUAL "Linux")))

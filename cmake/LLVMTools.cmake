@@ -88,7 +88,11 @@ macro(add_plugin target)
 
 set(bctargets "")
 foreach(bctarget ${ARGN})
+    set(bcpath "")
     get_property(bcpath TARGET ${bctarget} PROPERTY LOCATION)
+    if(${bcpath} STREQUAL "")
+        message(FATAL_ERROR "Can't find property path for target '${bctarget}'")
+    endif()
     list(APPEND bctargets ${bcpath})
 endforeach(bctarget)
 
@@ -99,6 +103,7 @@ add_custom_command(OUTPUT ${target}.bc
     COMMENT "Linking LLVM bitcode ${target}.bc"
 )
 set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_MAKE_CLEAN_FILES ${target}.bc)
+
 add_custom_command(OUTPUT ${target}.hoisted.bc
     COMMAND ${LLVM_BC_OPT} -load=${LLVMHoistGlobalsPATH} -hoist-globals ${target}.bc -o ${target}.hoisted.bc
     DEPENDS ${target}.bc LLVMHoistGlobals
