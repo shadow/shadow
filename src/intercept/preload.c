@@ -596,6 +596,12 @@ void AES_ctr128_decrypt(const unsigned char *in, unsigned char *out, const void 
 }
 
 /*
+ * There is a corner case on certain machines that causes padding-related errors
+ * when the EVP_Cipher is set to use aesni_cbc_hmac_sha1_cipher. Our memmove
+ * implementation does not handle padding, so we disable it by default.
+ */
+#ifdef SHADOW_ENABLE_EVPCIPHER
+/*
  * EVP_CIPHER_CTX *ctx
  * The ctx parameter has been voided to avoid requiring Openssl headers
  */
@@ -609,6 +615,7 @@ int EVP_Cipher(void *ctx, unsigned char *out, const unsigned char *in, unsigned 
 	PRELOAD_LOOKUP(func, funcName, -1);
 	return (*func)(ctx, out, in, inl);
 }
+#endif
 
 typedef void (*RAND_seed_fp)(const void *buf,int num);
 static RAND_seed_fp _RAND_seed = NULL;

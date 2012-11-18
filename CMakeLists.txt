@@ -43,6 +43,7 @@ option(SHADOW_TEST "build tests (default: OFF)" OFF)
 option(SHADOW_EXPORT "export service libraries and headers (default: OFF)" OFF)
 option(SHADOW_ENABLE_MEMTRACKER "enable preloading malloc and free (experimental!) (default: OFF)" OFF)
 option(SCALLION_DOREFILL "Tor should use refill callbacks (default: OFF)" OFF)
+option(SHADOW_ENABLE_EVPCIPHER "enable preloading EVP_Cipher (experimental!) (default: OFF)" OFF)
 option(SCALLION_TORPATH "path to custom Tor base directory (default: OFF)" OFF)
 
 ## display selected user options
@@ -55,6 +56,7 @@ MESSAGE(STATUS "SHADOW_TEST=${SHADOW_TEST}")
 MESSAGE(STATUS "SHADOW_EXPORT=${SHADOW_EXPORT}")
 MESSAGE(STATUS "SHADOW_ENABLE_MEMTRACKER=${SHADOW_ENABLE_MEMTRACKER}")
 MESSAGE(STATUS "SCALLION_DOREFILL=${SCALLION_DOREFILL}")
+MESSAGE(STATUS "SHADOW_ENABLE_EVPCIPHER=${SHADOW_ENABLE_EVPCIPHER}")
 MESSAGE(STATUS "SCALLION_TORPATH=${SCALLION_TORPATH}")
 MESSAGE(STATUS "-------------------------------------------------------------------------------")
 MESSAGE(STATUS)
@@ -77,6 +79,10 @@ endif(SHADOW_PROFILE STREQUAL ON)
 if(SHADOW_ENABLE_MEMTRACKER STREQUAL ON)
     add_definitions(-DSHADOW_ENABLE_MEMTRACKER)
 endif(SHADOW_ENABLE_MEMTRACKER STREQUAL ON)
+
+if(SHADOW_ENABLE_EVPCIPHER STREQUAL ON)
+    add_definitions(-DSHADOW_ENABLE_EVPCIPHER)
+endif(SHADOW_ENABLE_EVPCIPHER STREQUAL ON)
 
 if(SHADOW_EXPORT STREQUAL ON)
     ## the actual work happens in the CMakeLists files in each plug-in directory
