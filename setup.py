@@ -175,6 +175,11 @@ def main():
         help="preload malloc and free and track nodes memory usage (experimental!)", 
         action="store_true", dest="enable_memtracker",
         default=False)
+        
+    parser_build.add_argument('--enable-evp-cipher', 
+        help="preload EVP_Cipher to save CPU cycles on evp crypto ciphers (experimental!)", 
+        action="store_true", dest="enable_evpcipher",
+        default=False)
     
     # configure install subcommand
     parser_install = subparsers_main.add_parser('install', help='install Shadow', 
@@ -281,6 +286,7 @@ def build(args):
     if args.do_profile: cmake_cmd += " -DSHADOW_PROFILE=ON"
     if args.export_libraries: cmake_cmd += " -DSHADOW_EXPORT=ON"
     if args.enable_memtracker: cmake_cmd += " -DSHADOW_ENABLE_MEMTRACKER=ON"
+    if args.enable_evpcipher: cmake_cmd += " -DSHADOW_ENABLE_EVPCIPHER=ON"
     if args.disable_browser: cmake_cmd += " -DBUILD_BROWSER=OFF"
     if args.disable_echo: cmake_cmd += " -DBUILD_ECHO=OFF"
     if args.disable_filetransfer: cmake_cmd += " -DBUILD_FILETRANSFER=OFF"
