@@ -20,13 +20,13 @@
 # along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-import sys, os, argparse, subprocess, shlex, shutil, urllib2, tarfile, gzip, stat, time
+import sys, os, argparse, subprocess, multiprocessing, shlex, shutil, urllib2, tarfile, gzip, stat, time
 from datetime import datetime
 
 BUILD_PREFIX="./build"
 INSTALL_PREFIX=os.path.expanduser("~/.shadow")
 
-TOR_DEFAULT_VERSION="0.2.3.20-rc"
+TOR_DEFAULT_VERSION="0.2.3.24-rc"
 TOR_URL="https://archive.torproject.org/tor-package-archive/tor-{0}.tar.gz".format(TOR_DEFAULT_VERSION)
 TOR_URL_SIG="https://archive.torproject.org/tor-package-archive/tor-{0}.tar.gz.asc".format(TOR_DEFAULT_VERSION)
 
@@ -60,7 +60,7 @@ def main():
         metavar="PATH",
         action="store", dest="prefix",
         default=INSTALL_PREFIX)
-    
+        
     # configure build subcommand
     parser_build = subparsers_main.add_parser('build',
         help='configure and build Shadow', 
@@ -91,6 +91,12 @@ def main():
         help="build in extra memory checks and debugging symbols when running Shadow",
         action="store_true", dest="do_debug",
         default=False)
+        
+    parser_build.add_argument('-j', '--jobs',
+        help="number of jobs to run simultaneously during the build",
+        metavar="N", type=int,
+        action="store", dest="njobs",
+        default=multiprocessing.cpu_count())
         
     parser_build.add_argument('-o', '--profile',
         help="build in gprof profiling information when running Shadow",
@@ -352,8 +358,9 @@ def build(args):
     
     if retcode == 0:
         # call make, wait for it to finish
-        log("calling \'make\'")
-        retcode = subprocess.call(["make"])
+        make = "make -j{0}".format(args.njobs)
+        log("calling " + make)
+        retcode = subprocess.call(shlex.split(make))
         log("make returned " + str(retcode))
         if retcode == 0: log("now run \'python setup.py install\'")
         else: log("ERROR! Non-zero return code from make.")
@@ -505,7 +512,7 @@ def get(targetdir, fileurl, sigurl, keyring):
     
     if not os.path.exists(targetfile) and (download(fileurl, targetfile) < 0): return None
 
-    if not query_yes_no("Do you want to download and check the signature?"): return targetfile
+    if not query_yes_no("Do you want to check the signature of {0}?".format(os.path.basename(fileurl))): return targetfile
 
     if (not os.path.exists(targetsig)) and (download(sigurl, targetsig) < 0): return None
     
@@ -562,9 +569,11 @@ def query_yes_no(question, default="yes"):
     elif default == "yes": prompt = " [Y/n] "
     elif default == "no": prompt = " [y/N] "
     else: raise ValueError("invalid default answer: '%s'" % default)
-
+    
+    color_start_code = "\033[1m" + "\033[93m" # <- bold+yellow
+    color_end_code = "\033[0m"
     while True:
-        sys.stdout.write(question + prompt)
+        sys.stdout.write(color_start_code + question + color_end_code + prompt)
         choice = raw_input().lower()
         if default is not None and choice == '': return valid[default]
         elif choice in valid: return valid[choice]
