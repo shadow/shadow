@@ -3,7 +3,8 @@
 ## Find libtidy which is needed to parse HTML
 find_package(TIDY REQUIRED)
 
-include_directories(${CMAKE_SOURCE_DIR}/src/plugins/filetransfer/ ${TIDY_INCLUDES})
+include_directories(${CMAKE_SOURCE_DIR}/src/plugins/filetransfer)
+include_directories(AFTER ${TIDY_INCLUDES})
 
 set(browser_sources
     shd-browser.c 

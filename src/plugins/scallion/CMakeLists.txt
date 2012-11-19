@@ -18,12 +18,12 @@ include_directories(${CURRENT_TOR_DIR}/src)
 include_directories(${CURRENT_TOR_DIR}/src/common)
 include_directories(${CURRENT_TOR_DIR}/src/or)
 
-include_directories(${RT_INCLUDES} ${DL_INCLUDES} ${M_INCLUDES} ${GLIB_INCLUDES} ${EVENT2_INCLUDES} ${OPENSSL_INCLUDES} ${TOR_INCLUDES} ${SHADOW_INCLUDES} ${TIDY_INCLUDES})
-include_directories(${CMAKE_SOURCE_DIR}/src/utility)
-include_directories(${CMAKE_SOURCE_DIR}/src/plugins/browser)
-include_directories(${CMAKE_SOURCE_DIR}/src/plugins/filetransfer)
+include_directories(AFTER ${RT_INCLUDES} ${DL_INCLUDES} ${M_INCLUDES} ${GLIB_INCLUDES} ${EVENT2_INCLUDES} ${OPENSSL_INCLUDES} ${TOR_INCLUDES} ${SHADOW_INCLUDES} ${TIDY_INCLUDES})
 include_directories(${CMAKE_SOURCE_DIR}/src/plugins/torrent)
 include_directories(${CMAKE_SOURCE_DIR}/src/plugins/ping)
+include_directories(${CMAKE_SOURCE_DIR}/src/plugins/browser)
+include_directories(${CMAKE_SOURCE_DIR}/src/plugins/filetransfer)
+include_directories(${CMAKE_SOURCE_DIR}/src/utility)
 
 ## import shadow libs
 #INCLUDE(${CMAKE_INSTALL_PREFIX}/share/shadow/shadow-externals.cmake)
