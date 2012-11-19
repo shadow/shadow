@@ -22,18 +22,19 @@ set(Shadow_VERSION_BUILD 0)
 
 ## set version suffix
 if(EXISTS ${CMAKE_SOURCE_DIR}/.git)
-    ## current git commit as a short hash
+    set(Shadow_VERSION_SUFFIX "${Shadow_VERSION_SUFFIX}-dev")
+    
+    ## current git commit short hash
     EXECUTE_PROCESS(COMMAND "git" "log" "--pretty=format:%h" "-n"  "1" OUTPUT_VARIABLE SHORTHASH)
     if(SHORTHASH)
         set(Shadow_VERSION_SUFFIX "${Shadow_VERSION_SUFFIX}-${SHORTHASH}")
     endif(SHORTHASH)
-    ## todays date as YYYYMMDD
-    set(Shadow_VERSION_SUFFIX "${Shadow_VERSION_SUFFIX}-dev")
-    EXECUTE_PROCESS(COMMAND "date" "+%d/%m/%Y" OUTPUT_VARIABLE TODAY)
-    string(REGEX REPLACE "(..)/(..)/(....).*" "\\3\\2\\1" TODAY ${TODAY})
-    if(TODAY)
-        set(Shadow_VERSION_SUFFIX "${Shadow_VERSION_SUFFIX}-${TODAY}")
-    endif(TODAY)
+    
+    ## current git commit short date
+    EXECUTE_PROCESS(COMMAND "git" "log" "--pretty=format:%ad" "--date=short" "-n"  "1" OUTPUT_VARIABLE SHORTDATE)
+    if(SHORTDATE)
+        set(Shadow_VERSION_SUFFIX "${Shadow_VERSION_SUFFIX} ${SHORTDATE}")
+    endif(SHORTDATE)
 endif(EXISTS ${CMAKE_SOURCE_DIR}/.git)
 
 macro(add_cflags)
