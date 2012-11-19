@@ -26,7 +26,7 @@ from datetime import datetime
 BUILD_PREFIX="./build"
 INSTALL_PREFIX=os.path.expanduser("~/.shadow")
 
-TOR_DEFAULT_VERSION="0.2.3.24-rc"
+TOR_DEFAULT_VERSION="0.2.3.25"
 TOR_URL="https://archive.torproject.org/tor-package-archive/tor-{0}.tar.gz".format(TOR_DEFAULT_VERSION)
 TOR_URL_SIG="https://archive.torproject.org/tor-package-archive/tor-{0}.tar.gz.asc".format(TOR_DEFAULT_VERSION)
 
