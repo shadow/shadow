@@ -120,18 +120,18 @@ void internetwork_connectNetworks(Internetwork* internet, GQuark sourceClusterID
 	g_assert(sourceNetwork && destinationNetwork);
 
 	/* create the links */
-	Link* link1 = link_new(sourceNetwork, destinationNetwork, latency, jitter, packetloss,
+	Link* link = link_new(sourceNetwork, destinationNetwork, latency, jitter, packetloss,
 			latencymin, latencyQ1, latencymean, latencyQ3, latencymax);
-	Link* link2 = link_new(destinationNetwork, sourceNetwork, latency, jitter, packetloss,
+	network_addLink(sourceNetwork, link);
+	_internetwork_trackLatency(internet, link);
+
+	/* if not the same clusters, create the reverse link */
+	if(sourceClusterID != destinationClusterID) {
+	    link = link_new(destinationNetwork, sourceNetwork, latency, jitter, packetloss,
 				latencymin, latencyQ1, latencymean, latencyQ3, latencymax);
-
-	/* build links into topology */
-	network_addLink(sourceNetwork, link1);
-	network_addLink(destinationNetwork, link2);
-
-	/* track latency */
-	_internetwork_trackLatency(internet, link1);
-	_internetwork_trackLatency(internet, link2);
+	    network_addLink(destinationNetwork, link);
+        _internetwork_trackLatency(internet, link);
+	}
 }
 
 Network* internetwork_getNetwork(Internetwork* internet, GQuark networkID) {

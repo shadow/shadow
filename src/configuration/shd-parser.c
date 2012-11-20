@@ -155,6 +155,9 @@ static ParserValues* _parser_getValues(const gchar *element_name,
 	ParserValues* values = g_new0(ParserValues, 1);
 	MAGIC_INIT(values);
 
+	/* if there is no quantity value, default should be 1 (allows a value of 0 to be explicity set) */
+	values->quantity = 1;
+
 	/* loop through all the attributes, fill in values as we find them */
 	while (*name_cursor) {
 		debug("found attribute '%s=%s'", *name_cursor, *value_cursor);
