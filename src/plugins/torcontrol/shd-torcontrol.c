@@ -34,6 +34,7 @@
 
 #include "shd-torcontrol.h"
 #include "shd-torcontrol-circuitbuild.h"
+#include "shd-torcontrol-statistics.h"
 
 TorControl* torControl;
 
@@ -350,8 +351,10 @@ gint torControl_createConnection(gchar *hostname, in_port_t port, gchar *mode, g
         return -1;
     }
     connection->mode = g_strdup(mode);
-    if(!g_ascii_strcasecmp(connection->mode, "circuitBuild")) {
+    if(!g_ascii_strncasecmp(connection->mode, "circuitBuild", 12)) {
         connection->moduleData = torControlCircuitBuild_new(log, connection->sockd, args, &(connection->eventHandlers));
+    } else if(!g_ascii_strncasecmp(connection->mode, "statistics", 10)) {
+        connection->moduleData = torcontrolstatistics_new(log, connection->sockd, args, &(connection->eventHandlers));
     }
     torControl_changeEpoll(torControl->epolld, connection->sockd, EPOLLOUT);
 
@@ -790,4 +793,5 @@ gint torControl_activate() {
 
 void torControl_free() {
     /* TODO: free connections and other allocated memory */
+	/* TODO: call the handlers->free function for each connection module */
 }

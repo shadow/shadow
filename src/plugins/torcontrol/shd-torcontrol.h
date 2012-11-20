@@ -217,8 +217,9 @@ enum torControl_logSeverity {
 	TORCTL_LOG_SEVERITY_UNKNOWN,
 };
 
-/* initialize function handler */
+/* initialize/free function handler */
 typedef gint (*TorControlInitialize)(gpointer moduleData);
+typedef gint (*TorControlFree)(gpointer moduleData);
 
 /* event function handlers */
 typedef void (*TorControlCircEventFunc)(gpointer moduleData, gint code, gint circID, gint status,
@@ -239,6 +240,7 @@ typedef void (*TorControlResponseFunc)(gpointer moduleData, GList *reply, gpoint
 typedef struct _TorControl_EventHandlers TorControl_EventHandlers;
 struct _TorControl_EventHandlers {
     TorControlInitialize initialize;
+    TorControlFree free;
 	TorControlCircEventFunc circEvent;
 	TorControlStreamEventFunc streamEvent;
 	TorControlORConnEventFunc orconnEvent;
@@ -290,7 +292,7 @@ struct _TorControl_Connection {
 	gchar readingData;
 
 	TorControl_EventHandlers eventHandlers;
-	gchar initialized;
+	gboolean initialized;
 
 	/* object returned by module init function */
 	gpointer moduleData;

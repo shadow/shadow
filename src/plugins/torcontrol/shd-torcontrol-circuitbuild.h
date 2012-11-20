@@ -68,6 +68,7 @@ struct _TorCtlCircuitBuild {
 TorCtlCircuitBuild *torControlCircuitBuild_new(ShadowLogFunc logFunc, gint sockd, gchar **args, TorControl_EventHandlers *handlers);
 
 gint torControlCircuitBuild_initialize(gpointer moduleData);
+void torControlCircuitBuild_free(TorCtlCircuitBuild* circuitBuild);
 
 void torControlCircuitBuild_circEvent(gpointer moduleData, gint code, gint circID, gint status,
 		gint buildFlags, gint purpose, gint reason);

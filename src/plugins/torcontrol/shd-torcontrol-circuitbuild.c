@@ -35,7 +35,10 @@
 #include "shd-torcontrol-circuitbuild.h"
 
 TorCtlCircuitBuild *torControlCircuitBuild_new(ShadowLogFunc logFunc, gint sockd, gchar **args, TorControl_EventHandlers *handlers) {
-    handlers->initialize = torControlCircuitBuild_initialize;
+    g_assert(handlers && args);
+
+	handlers->initialize = torControlCircuitBuild_initialize;
+    handlers->free = torControlCircuitBuild_free;
 	handlers->circEvent = torControlCircuitBuild_circEvent;
 	handlers->streamEvent = torControlCircuitBuild_streamEvent;
 	handlers->orconnEvent = torControlCircuitBuild_orConnEvent;
@@ -60,12 +63,16 @@ TorCtlCircuitBuild *torControlCircuitBuild_new(ShadowLogFunc logFunc, gint sockd
 	return circuitBuild;
 }
 
-gint torControlCircuitBuild_initialize(gpointer moduleData) {
+void torControlCircuitBuild_free(TorCtlCircuitBuild* circuitBuild) {
+	// FIXME
+}
+
+gboolean torControlCircuitBuild_initialize(gpointer moduleData) {
     TorCtlCircuitBuild *circuitBuild = moduleData;
     ShadowLogFunc log = circuitBuild->log;
 
     gint sockd = circuitBuild->sockd;
-    gint initialized = 0;
+    gboolean initialized = 0;
 
     if(circuitBuild->waitingForResponse) {
         return 0;
