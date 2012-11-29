@@ -252,6 +252,9 @@ void torControlCircuitBuild_responseEvent(gpointer moduleData, GList *reply, gpo
             }
 	    }
 
+	    /* make sure we proceed with the next state */
+	    torControlCircuitBuild_initialize(moduleData);
+
 	    break;
 	}
 }

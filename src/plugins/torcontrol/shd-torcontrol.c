@@ -433,12 +433,6 @@ gint torControl_processReply(TorControl_Connection *connection, GList *reply) {
 		        }
 		    }
 
-		    /* activate() callback occurs every nanosecond when sendCommand()
-		     * removes EPOLLOUT but it gets added back here */
-//		    if(!connection->initialized) {
-//		        torControl_changeEpoll(torControl->epolld, connection->sockd, EPOLLIN | EPOLLOUT);
-//		    }
-
 			break;
 		}
 
@@ -726,8 +720,8 @@ gint torControl_activate() {
 			continue;
 		}
 
-		/* if the event is EPOLLOUT, this only occurs when the module needs to initialize */
-		if((events[i].events & EPOLLOUT) && !connection->initialized) {
+		/* keep calling initialize as needed */
+		if(!connection->initialized) {
 		    connection->initialized = connection->eventHandlers.initialize(connection->moduleData);
 		}
 
