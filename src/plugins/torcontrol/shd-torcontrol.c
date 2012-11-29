@@ -354,7 +354,8 @@ gint torControl_createConnection(gchar *hostname, in_port_t port, gchar *mode, g
     if(!g_ascii_strncasecmp(connection->mode, "circuitBuild", 12)) {
         connection->moduleData = torControlCircuitBuild_new(log, connection->sockd, args, &(connection->eventHandlers));
     } else if(!g_ascii_strncasecmp(connection->mode, "statistics", 10)) {
-        connection->moduleData = torcontrolstatistics_new(log, connection->sockd, args, &(connection->eventHandlers));
+        connection->moduleData = torcontrolstatistics_new(log, hostname, connection->ip, connection->port,
+        		connection->sockd, args, &(connection->eventHandlers));
     }
     torControl_changeEpoll(torControl->epolld, connection->sockd, EPOLLOUT);
 
@@ -432,9 +433,11 @@ gint torControl_processReply(TorControl_Connection *connection, GList *reply) {
 		        }
 		    }
 
-		    if(!connection->initialized) {
-		        torControl_changeEpoll(torControl->epolld, connection->sockd, EPOLLIN | EPOLLOUT);
-		    }
+		    /* activate() callback occurs every nanosecond when sendCommand()
+		     * removes EPOLLOUT but it gets added back here */
+//		    if(!connection->initialized) {
+//		        torControl_changeEpoll(torControl->epolld, connection->sockd, EPOLLIN | EPOLLOUT);
+//		    }
 
 			break;
 		}
@@ -567,7 +570,7 @@ gint torControl_sendCommand(gint sockd, gchar *command) {
     TORCTL_ASSERTIO(torControl, bytes, errno == EWOULDBLOCK || errno == ENOTCONN || errno == EALREADY, TORCTL_ERR_SEND);
 
     log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "[%s] CMD: %s", connection->hostname, command);
-    if(bytes > 0) {
+    if(bytes >= buf->len) {
         torControl_changeEpoll(torControl->epolld, sockd, EPOLLIN);
     }
 

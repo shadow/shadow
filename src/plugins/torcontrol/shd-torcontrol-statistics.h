@@ -24,7 +24,14 @@
 
 typedef struct _TorControlStatistics TorControlStatistics;
 
-TorControlStatistics* torcontrolstatistics_new(ShadowLogFunc logFunc, gint sockd,
-		gchar **args, TorControl_EventHandlers *handlers);
+enum torcontrolstatistic_state {
+	TCS_IDLE,
+	TCS_SEND_AUTHENTICATE, TCS_RECV_AUTHENTICATE,
+	TCS_SEND_SETEVENTS, TCS_RECV_SETEVENTS,
+};
+
+TorControlStatistics* torcontrolstatistics_new(ShadowLogFunc logFunc,
+		gchar* hostname, in_addr_t ip, in_port_t port, gint sockd, gchar **args,
+		TorControl_EventHandlers *handlers);
 
 #endif /* SHD_TORCONTROL_STATISTICS_H_ */

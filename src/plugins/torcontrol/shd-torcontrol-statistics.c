@@ -25,59 +25,162 @@
 #include "shd-torcontrol-statistics.h"
 
 struct _TorControlStatistics {
+	ShadowLogFunc log;
 
+	GString* targetHostname;
+	in_addr_t targetIP;
+	in_port_t targetPort;
+	gint targetSockd;
+
+	gboolean waitingForResponse;
+	enum torcontrolstatistic_state currentState;
+	enum torcontrolstatistic_state nextState;
 };
 
-static gboolean torcontrolstatistics_initialize(TorControlStatistics* torstats) {
+static gboolean _torcontrolstatistics_manageState(TorControlStatistics* tstats) {
+
+beginmanage:
+	switch(tstats->currentState) {
+
+		case TCS_SEND_AUTHENTICATE: {
+            /* authenticate with the control port */
+            if(torControl_authenticate(tstats->targetSockd, "password") > 0) {
+            	/* idle until we receive the response, then move to next state */
+            	tstats->currentState = TCS_IDLE;
+            	tstats->nextState = TCS_RECV_AUTHENTICATE;
+            }
+			break;
+		}
+
+		case TCS_RECV_AUTHENTICATE: {
+			tstats->currentState = TCS_SEND_SETEVENTS;
+			goto beginmanage;
+			break;
+		}
+
+		case TCS_SEND_SETEVENTS: {
+            /* send list of events to listen on */
+            if(torControl_setevents(tstats->targetSockd, "CIRC STREAM ORCONN BW") > 0) {
+            	/* idle until we receive the response, then move to next state */
+            	tstats->currentState = TCS_IDLE;
+            	tstats->nextState = TCS_RECV_SETEVENTS;
+            }
+			break;
+		}
+
+		case TCS_RECV_SETEVENTS: {
+			/* all done */
+        	tstats->currentState = TCS_IDLE;
+        	tstats->nextState = TCS_IDLE;
+        	goto beginmanage;
+			break;
+		}
+
+		case TCS_IDLE: {
+			if(tstats->nextState == TCS_IDLE) {
+				return TRUE;
+			}
+			break;
+		}
+
+		default:
+			break;
+	}
+
 	return FALSE;
 }
 
-static void torcontrolstatistics_circEvent(TorControlStatistics* tstats,
-		gint code, gint circID, gint status, gint buildFlags, gint purpose,
-		gint reason) {
-
+static gboolean _torcontrolstatistics_initialize(TorControlStatistics* tstats) {
+	return _torcontrolstatistics_manageState(tstats);
 }
 
-static void torcontrolstatistics_streamEvent(TorControlStatistics* tstats,
+static void _torcontrolstatistics_handleORConnEvent(TorControlStatistics* tstats,
+		gint code, gchar *target, gint status, gint reason, gint numCircuits) {
+	tstats->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__,
+			"%s:%i ORCONN %i: target=%s status=%i reason=%i numcircs=%i",
+			tstats->targetHostname->str, tstats->targetPort, code,
+			target, status, reason, numCircuits);
+}
+
+static void _torcontrolstatistics_handleCircEvent(TorControlStatistics* tstats,
+		gint code, gint circID, gint status, gint buildFlags, gint purpose,
+		gint reason) {
+	tstats->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__,
+			"%s:%i CIRC %i: cid=%i status=%i buildflags=%i purpose=%i reason=%i",
+			tstats->targetHostname->str, tstats->targetPort, code,
+			circID, status, buildFlags, purpose, reason);
+}
+
+static void _torcontrolstatistics_handleStreamEvent(TorControlStatistics* tstats,
 		gint code, gint streamID, gint circID, in_addr_t targetIP,
 		in_port_t targetPort, gint status, gint reason, gint remoteReason,
 		gchar *source, in_addr_t sourceIP, in_port_t sourcePort, gint purpose) {
-
+//	tstats->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__,
+//			"%s:%i STREAM %i: sid=%i cid=%i destip",
+//			tstats->targetHostname->str, tstats->targetPort, code);
 }
 
-static void torcontrolstatistics_orConnEvent(TorControlStatistics* tstats,
-		gint code, gchar *target, gint status, gint reason, gint numCircuits) {
-
-}
-
-static void torcontrolstatistics_bwEvent(TorControlStatistics* tstats,
+static void _torcontrolstatistics_handleBWEvent(TorControlStatistics* tstats,
 		gint code, gint bytesRead, gint bytesWritten) {
-
+	tstats->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__,
+			"%s:%i BW %i: read=%i write=%i",
+			tstats->targetHostname->str, tstats->targetPort, code, bytesRead,
+			bytesWritten);
 }
 
-static void torcontrolstatistics_responseEvent(TorControlStatistics* tstats,
+static void _torcontrolstatistics_handleResponseEvent(TorControlStatistics* tstats,
 		GList *reply, gpointer userData) {
+	TorControl_ReplyLine *replyLine = g_list_first(reply)->data;
 
+	switch(TORCTL_CODE_TYPE(replyLine->code)) {
+		case TORCTL_REPLY_ERROR: {
+			tstats->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "[%d] ERROR: %s", replyLine->code, replyLine->body);
+			break;
+		}
+
+		case TORCTL_REPLY_SUCCESS: {
+			tstats->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "[%d] SUCCESS: %s", replyLine->code, replyLine->body);
+			tstats->currentState = tstats->nextState;
+			_torcontrolstatistics_manageState(tstats);
+			break;
+		}
+
+		default:
+			break;
+	}
 }
 
-static void torcontrolstatistics_free(TorControlStatistics* tstats) {
+static void _torcontrolstatistics_free(TorControlStatistics* tstats) {
 	g_assert(tstats);
+
+	g_string_free(tstats->targetHostname, TRUE);
+
 	g_free(tstats);
 }
 
-TorControlStatistics* torcontrolstatistics_new(ShadowLogFunc logFunc, gint sockd,
-		gchar **args, TorControl_EventHandlers *handlers) {
+TorControlStatistics* torcontrolstatistics_new(ShadowLogFunc logFunc,
+		gchar* hostname, in_addr_t ip, in_port_t port, gint sockd, gchar **args,
+		TorControl_EventHandlers *handlers) {
 	g_assert(handlers);
 
-	handlers->initialize = torcontrolstatistics_initialize;
-    handlers->free = torcontrolstatistics_free;
-	handlers->circEvent = torcontrolstatistics_circEvent;
-	handlers->streamEvent = torcontrolstatistics_streamEvent;
-	handlers->orconnEvent = torcontrolstatistics_orConnEvent;
-	handlers->bwEvent = torcontrolstatistics_bwEvent;
-	handlers->responseEvent = torcontrolstatistics_responseEvent;
+	handlers->initialize = _torcontrolstatistics_initialize;
+    handlers->free = _torcontrolstatistics_free;
+	handlers->circEvent = _torcontrolstatistics_handleCircEvent;
+	handlers->streamEvent = _torcontrolstatistics_handleStreamEvent;
+	handlers->orconnEvent = _torcontrolstatistics_handleORConnEvent;
+	handlers->bwEvent = _torcontrolstatistics_handleBWEvent;
+	handlers->responseEvent = _torcontrolstatistics_handleResponseEvent;
 
-	TorControlStatistics* tcstats = g_new0(TorControlStatistics, 1);
+	TorControlStatistics* tstats = g_new0(TorControlStatistics, 1);
 
-	return tcstats;
+	tstats->log = logFunc;
+
+	tstats->targetHostname = g_string_new(hostname);
+	tstats->targetIP = ip;
+	tstats->targetPort = port;
+	tstats->targetSockd = sockd;
+
+	tstats->currentState = TCS_SEND_AUTHENTICATE;
+
+	return tstats;
 }
