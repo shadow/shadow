@@ -76,6 +76,7 @@ struct _TorControl_Args {
 /*
  * CIRC parameter values (status, build flags, purpose and reason)
  */
+
 enum torControl_circStatus {
 	TORCTL_CIRC_STATUS_NONE,
 	TORCTL_CIRC_STATUS_LAUNCHED,
@@ -129,10 +130,7 @@ enum torControl_circReason {
 /*
  * STREAM parameter values (status, purpose, reason)
  */
-static const gchar *torControl_streamStatusString[] = {
-        "NONE", "NEW", "NEW_RESOLVE", "REMAP", "SENT_CONNECT", "SENT_RESOLVE",
-        "SUCCEECED", "FAILED", "CLOSED", "DETATCHED", "UNKNOWN"
-};
+
 enum torControl_streamStatus {
 	TORCTL_STREAM_STATUS_NONE,
 	TORCTL_STREAM_STATUS_NEW,
@@ -181,6 +179,7 @@ enum torControl_streamPurpose {
 /*
  * ORCONN parameter values (status, reason)
  */
+
 enum torControl_orconnStatus {
 	TORCTL_ORCONN_STATUS_NONE,
 	TORCTL_ORCONN_STATUS_NEW,
@@ -222,8 +221,8 @@ typedef gint (*TorControlInitialize)(gpointer moduleData);
 typedef gint (*TorControlFree)(gpointer moduleData);
 
 /* event function handlers */
-typedef void (*TorControlCircEventFunc)(gpointer moduleData, gint code, gint circID, gint status,
-        gint buildFlags, gint purpose, gint reason);
+typedef void (*TorControlCircEventFunc)(gpointer moduleData, gint code, gint circID, GString* path, gint status,
+        gint buildFlags, gint purpose, gint reason, GDateTime* createTime);
 typedef void (*TorControlStreamEventFunc)(gpointer moduleData, gint code, gint streamID, gint circID,
         in_addr_t targetIP, in_port_t targetPort, gint status, gint reason,
         gint remoteReason, gchar *source, in_addr_t sourceIP, in_port_t sourcePort,
@@ -322,5 +321,14 @@ gint torControl_buildCircuit(gint sockd, GList *circuit);
 gint torControl_attachStream(gint sockd, gint streamID, gint circID);
 
 gint torControl_getInfoBootstrapStatus(gint sockd);
+
+const gchar* torControl_getCircStatusString(enum torControl_circStatus status);
+const gchar* torControl_getCircPurposeString(enum torControl_circPurpose purpose);
+const gchar* torControl_getCircReasonString(enum torControl_circReason reason);
+const gchar* torControl_getStreamStatusString(enum torControl_streamStatus status);
+const gchar* torControl_getStreamReasonString(enum torControl_streamReason reason);
+const gchar* torControl_getStreamPurposeString(enum torControl_streamPurpose purpose);
+const gchar* torControl_getORConnStatusString(enum torControl_orconnStatus status);
+const gchar* torControl_getORConnReasonString(enum torControl_orconnReason reason);
 
 #endif /* SHD_TOR_CONTROL_H_ */

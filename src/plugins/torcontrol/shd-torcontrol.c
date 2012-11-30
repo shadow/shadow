@@ -56,24 +56,31 @@ TorControl* torControl;
 	}
 
 /*
- * util functions for converting CIRC strings to enum
+ * util functions for converting CIRC strings <-> enum
  */
-gint torControl_getCircStatus(gchar *str) {
-	if(!g_ascii_strcasecmp(str, "LAUNCHED")) {
+
+static const gchar* _circuitStatusStrings[] = {
+        "NONE", "LAUNCHED", "BUILT", "EXTENDED", "FAILED", "CLOSED", "UNKNOWN",
+};
+const gchar* torControl_getCircStatusString(enum torControl_circStatus status) {
+	return _circuitStatusStrings[status];
+}
+static gint _torControl_getCircStatus(gchar *str) {
+	if(!g_ascii_strcasecmp(str, torControl_getCircStatusString(TORCTL_CIRC_STATUS_LAUNCHED))) {
 		return TORCTL_CIRC_STATUS_LAUNCHED;
-	} else if(!g_ascii_strcasecmp(str, "BUILT")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getCircStatusString(TORCTL_CIRC_STATUS_BUILT))) {
 		return TORCTL_CIRC_STATUS_BUILT;
-	} else if(!g_ascii_strcasecmp(str, "EXTENDED")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getCircStatusString(TORCTL_CIRC_STATUS_EXTENDED))) {
 		return TORCTL_CIRC_STATUS_EXTENDED;
-	} else if(!g_ascii_strcasecmp(str, "FAILED")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getCircStatusString(TORCTL_CIRC_STATUS_FAILED))) {
 		return TORCTL_CIRC_STATUS_FAILED;
-	} else if(!g_ascii_strcasecmp(str, "CLOSED")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getCircStatusString(TORCTL_CIRC_STATUS_CLOSED))) {
 		return TORCTL_CIRC_STATUS_CLOSED;
 	}
 	return TORCTL_CIRC_STATUS_UNKNOWN;
 }
 
-gint torControl_getCircBuildFlags(gchar *str) {
+static gint _torControl_getCircBuildFlags(gchar *str) {
 	gint ret = TORCTL_CIRC_BUILD_FLAGS_NONE;
 	gchar **flags = g_strsplit(str, ",", 0);
 	for(gint idx = 0; flags[idx]; idx++) {
@@ -92,122 +99,162 @@ gint torControl_getCircBuildFlags(gchar *str) {
 	return ret;
 }
 
-gint torControl_getCircPurpose(gchar *str) {
-	if(!g_ascii_strcasecmp(str, "GENERAL")) {
+static const gchar* _circuitPurposeStrings[] = {
+        "NONE", "GENERAL", "HS_CLIENT_INTRO", "HS_CLIENT_REND", "HS_SERVICE_INTRO",
+        "HS_SERVICE_REND", "TESTING", "CONTROLLER", "UNKNOWN",
+};
+const gchar* torControl_getCircPurposeString(enum torControl_circPurpose purpose) {
+	return _circuitPurposeStrings[purpose];
+}
+static gint _torControl_getCircPurpose(gchar *str) {
+	if(!g_ascii_strcasecmp(str, torControl_getCircPurposeString(TORCTL_CIRC_PURPOSE_GENERAL))) {
 		return TORCTL_CIRC_PURPOSE_GENERAL;
-	} else if(!g_ascii_strcasecmp(str, "HS_CLIENT_INTRO")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getCircPurposeString(TORCTL_CIRC_PURPOSE_HS_CLIENT_INTRO))) {
 		return TORCTL_CIRC_PURPOSE_HS_CLIENT_INTRO;
-	} else if(!g_ascii_strcasecmp(str, "HS_CLIENT_REND")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getCircPurposeString(TORCTL_CIRC_PURPOSE_HS_CLIENT_REND))) {
 		return TORCTL_CIRC_PURPOSE_HS_CLIENT_REND;
-	} else if(!g_ascii_strcasecmp(str, "HS_SERVICE_INTRO")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getCircPurposeString(TORCTL_CIRC_PURPOSE_HS_SERVICE_INTRO))) {
 		return TORCTL_CIRC_PURPOSE_HS_SERVICE_INTRO;
-	} else if(!g_ascii_strcasecmp(str, "HS_SERVICE_REND")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getCircPurposeString(TORCTL_CIRC_PURPOSE_HS_SERVICE_REND))) {
 		return TORCTL_CIRC_PURPOSE_HS_SERVICE_REND;
-	} else if(!g_ascii_strcasecmp(str, "TESTING")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getCircPurposeString(TORCTL_CIRC_PURPOSE_TESTING))) {
 		return TORCTL_CIRC_PURPOSE_TESTING;
-	} else if(!g_ascii_strcasecmp(str, "CONTROLLER")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getCircPurposeString(TORCTL_CIRC_PURPOSE_CONTROLLER))) {
 		return TORCTL_CIRC_PURPOSE_CONTROLLER;
 	}
 	return TORCTL_CIRC_PURPOSE_UNKNOWN;
 }
 
-gint torControl_getCircReason(gchar *str) {
-	if(!g_ascii_strcasecmp(str, "NONE")) {
+static const gchar* _circuitReasonStrings[] = {
+        "NONE", "TORPROTOCOL", "INTERNAL", "REQUESTED", "HIBERNATING",
+        "RESOURCELIMIT", "CONNECTFAILED", "OR_IDENTITY", "OR_CONN_CLOSED",
+        "TIMEOUT", "FINISHED", "DESTROYED", "NOPATH", "NOSUCHSERVICE",
+        "MEASUREMENT_EXPIRED", "UNKNOWN",
+};
+const gchar* torControl_getCircReasonString(enum torControl_circReason reason) {
+	return _circuitReasonStrings[reason];
+}
+static gint _torControl_getCircReason(gchar *str) {
+	if(!g_ascii_strcasecmp(str, torControl_getCircReasonString(TORCTL_CIRC_REASON_NONE))) {
 		return TORCTL_CIRC_REASON_NONE;
-	} else if(!g_ascii_strcasecmp(str, "TORPROTOCOL")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getCircReasonString(TORCTL_CIRC_REASON_TORPROTOCOL))) {
 		return TORCTL_CIRC_REASON_TORPROTOCOL;
-	} else if(!g_ascii_strcasecmp(str, "INTERNAL")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getCircReasonString(TORCTL_CIRC_REASON_INTERNAL))) {
 		return TORCTL_CIRC_REASON_INTERNAL;
-	} else if(!g_ascii_strcasecmp(str, "REQUESTED")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getCircReasonString(TORCTL_CIRC_REASON_REQUESTED))) {
 		return TORCTL_CIRC_REASON_REQUESTED;
-	} else if(!g_ascii_strcasecmp(str, "HIBERNATING")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getCircReasonString(TORCTL_CIRC_REASON_HIBERNATING))) {
 		return TORCTL_CIRC_REASON_HIBERNATING;
-	} else if(!g_ascii_strcasecmp(str, "RESOURCELIMIT")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getCircReasonString(TORCTL_CIRC_REASON_RESOURCELIMIT))) {
 		return TORCTL_CIRC_REASON_RESOURCELIMIT;
-	} else if(!g_ascii_strcasecmp(str, "CONNECTFAILED")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getCircReasonString(TORCTL_CIRC_REASON_CONNECTFAILED))) {
 		return TORCTL_CIRC_REASON_CONNECTFAILED;
-	} else if(!g_ascii_strcasecmp(str, "OR_IDENTITY")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getCircReasonString(TORCTL_CIRC_REASON_OR_IDENTITY))) {
 		return TORCTL_CIRC_REASON_OR_IDENTITY;
-	} else if(!g_ascii_strcasecmp(str, "OR_CONN_CLOSED")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getCircReasonString(TORCTL_CIRC_REASON_OR_CONN_CLOSED))) {
 		return TORCTL_CIRC_REASON_OR_CONN_CLOSED;
-	} else if(!g_ascii_strcasecmp(str, "TIMEOUT")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getCircReasonString(TORCTL_CIRC_REASON_TIMEOUT))) {
 		return TORCTL_CIRC_REASON_TIMEOUT;
-	} else if(!g_ascii_strcasecmp(str, "FINISHED")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getCircReasonString(TORCTL_CIRC_REASON_FINISHED))) {
 		return TORCTL_CIRC_REASON_FINISHED;
-	} else if(!g_ascii_strcasecmp(str, "DESTROYED")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getCircReasonString(TORCTL_CIRC_REASON_DESTROYED))) {
 		return TORCTL_CIRC_REASON_DESTROYED;
-	} else if(!g_ascii_strcasecmp(str, "NOPATH")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getCircReasonString(TORCTL_CIRC_REASON_NOPATH))) {
 		return TORCTL_CIRC_REASON_NOPATH;
-	} else if(!g_ascii_strcasecmp(str, "NOSUCHSERVICE")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getCircReasonString(TORCTL_CIRC_REASON_NOSUCHSERVICE))) {
 		return TORCTL_CIRC_REASON_NOSUCHSERVICE;
-	} else if(!g_ascii_strcasecmp(str, "MEASUREMENT_EXPIRED")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getCircReasonString(TORCTL_CIRC_REASON_MEASUREMENT_EXPIRED))) {
 		return TORCTL_CIRC_REASON_MEASUREMENT_EXPIRED;
 	}
 	return TORCTL_CIRC_REASON_UNKNOWN;
 }
 
 /*
- * util functions for converting STREAM strings to enum
+ * util functions for converting STREAM strings <-> enum
  */
-gint torControl_getStreamStatus(gchar *str) {
-	if(!g_ascii_strcasecmp(str, "NEW")) {
+
+static const gchar* _streamStatusStrings[] = {
+        "NONE", "NEW", "NEW_RESOLVE", "REMAP", "SENT_CONNECT", "SENT_RESOLVE",
+        "SUCCEECED", "FAILED", "CLOSED", "DETATCHED", "UNKNOWN"
+};
+const gchar* torControl_getStreamStatusString(enum torControl_streamStatus status) {
+	return _streamStatusStrings[status];
+}
+static gint _torControl_getStreamStatus(gchar *str) {
+	if(!g_ascii_strcasecmp(str, torControl_getStreamStatusString(TORCTL_STREAM_STATUS_NEW))) {
 		return TORCTL_STREAM_STATUS_NEW;
-	} else if(!g_ascii_strcasecmp(str, "NEWRESOLVE")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getStreamStatusString(TORCTL_STREAM_STATUS_NEWRESOLVE))) {
 		return TORCTL_STREAM_STATUS_NEWRESOLVE;
-	} else if(!g_ascii_strcasecmp(str, "REMAP")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getStreamStatusString(TORCTL_STREAM_STATUS_REMAP))) {
 		return TORCTL_STREAM_STATUS_REMAP;
-	} else if(!g_ascii_strcasecmp(str, "SENTCONNECT")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getStreamStatusString(TORCTL_STREAM_STATUS_SENTCONNECT))) {
 		return TORCTL_STREAM_STATUS_SENTCONNECT;
-	} else if(!g_ascii_strcasecmp(str, "SENTRESOLVE")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getStreamStatusString(TORCTL_STREAM_STATUS_SENTRESOLVE))) {
 		return TORCTL_STREAM_STATUS_SENTRESOLVE;
-	} else if(!g_ascii_strcasecmp(str, "SUCCEEDED")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getStreamStatusString(TORCTL_STREAM_STATUS_SUCCEEDED))) {
 		return TORCTL_STREAM_STATUS_SUCCEEDED;
-	} else if(!g_ascii_strcasecmp(str, "FAILED")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getStreamStatusString(TORCTL_STREAM_STATUS_FAILED))) {
 		return TORCTL_STREAM_STATUS_FAILED;
-	} else if(!g_ascii_strcasecmp(str, "CLOSED")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getStreamStatusString(TORCTL_STREAM_STATUS_CLOSED))) {
 		return TORCTL_STREAM_STATUS_CLOSED;
-	} else if(!g_ascii_strcasecmp(str, "DETATCHED")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getStreamStatusString(TORCTL_STREAM_STATUS_DETATCHED))) {
 		return TORCTL_STREAM_STATUS_DETATCHED;
 	}
 	return TORCTL_STREAM_STATUS_UNKNOWN;
 }
-gint torControl_getStreamReason(gchar *str) {
-	if(!g_ascii_strcasecmp(str, "MISC")) {
+
+static const gchar* _streamReasonStrings[] = {
+        "NONE", "MISC", "RESOLVEFAILED", "CONNECTREFUSED", "EXITPOLICY", "DESTROY",
+        "DONE", "TIMEOUT", "NOROUTE", "HIBERNATING", "INTERNAL", "RESOURCELIMIT",
+        "CONNRESET", "TORPROTOCOL", "NOTDIRECTORY", "END", "PRIVATE_ADDR", "UNKNOWN",
+};
+const gchar* torControl_getStreamReasonString(enum torControl_streamReason reason) {
+	return _streamReasonStrings[reason];
+}
+static gint _torControl_getStreamReason(gchar *str) {
+	if(!g_ascii_strcasecmp(str, torControl_getStreamReasonString(TORCTL_STREAM_REASON_MISC))) {
 		return TORCTL_STREAM_REASON_MISC;
-	} else if(!g_ascii_strcasecmp(str, "RESOLVEFAILED")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getStreamReasonString(TORCTL_STREAM_REASON_RESOLVEFAILED))) {
 		return TORCTL_STREAM_REASON_RESOLVEFAILED;
-	} else if(!g_ascii_strcasecmp(str, "CONNECTREFUSED")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getStreamReasonString(TORCTL_STREAM_REASON_CONNECTREFUSED))) {
 		return TORCTL_STREAM_REASON_CONNECTREFUSED;
-	} else if(!g_ascii_strcasecmp(str, "EXITPOLIC")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getStreamReasonString(TORCTL_STREAM_REASON_EXITPOLICY))) {
 		return TORCTL_STREAM_REASON_EXITPOLICY;
-	} else if(!g_ascii_strcasecmp(str, "DESTROY")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getStreamReasonString(TORCTL_STREAM_REASON_DESTROY))) {
 		return TORCTL_STREAM_REASON_DESTROY;
-	} else if(!g_ascii_strcasecmp(str, "DONE")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getStreamReasonString(TORCTL_STREAM_REASON_DONE))) {
 		return TORCTL_STREAM_REASON_DONE;
-	} else if(!g_ascii_strcasecmp(str, "TIMEOUT")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getStreamReasonString(TORCTL_STREAM_REASON_TIMEOUT))) {
 		return TORCTL_STREAM_REASON_TIMEOUT;
-	} else if(!g_ascii_strcasecmp(str, "NOROUTE")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getStreamReasonString(TORCTL_STREAM_REASON_NOROUTE))) {
 		return TORCTL_STREAM_REASON_NOROUTE;
-	} else if(!g_ascii_strcasecmp(str, "HIBERNATING")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getStreamReasonString(TORCTL_STREAM_REASON_HIBERNATING))) {
 		return TORCTL_STREAM_REASON_HIBERNATING;
-	} else if(!g_ascii_strcasecmp(str, "INTERNAL")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getStreamReasonString(TORCTL_STREAM_REASON_INTERNAL))) {
 		return TORCTL_STREAM_REASON_INTERNAL;
-	} else if(!g_ascii_strcasecmp(str, "RESOURCELIMIT")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getStreamReasonString(TORCTL_STREAM_REASON_RESOURCELIMIT))) {
 		return TORCTL_STREAM_REASON_RESOURCELIMIT;
-	} else if(!g_ascii_strcasecmp(str, "CONNRESET")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getStreamReasonString(TORCTL_STREAM_REASON_CONNRESET))) {
 		return TORCTL_STREAM_REASON_CONNRESET;
-	} else if(!g_ascii_strcasecmp(str, "TORPROTOCOL")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getStreamReasonString(TORCTL_STREAM_REASON_TORPROTOCOL))) {
 		return TORCTL_STREAM_REASON_TORPROTOCOL;
-	} else if(!g_ascii_strcasecmp(str, "NOTDIRECTORY")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getStreamReasonString(TORCTL_STREAM_REASON_NOTDIRECTORY))) {
 		return TORCTL_STREAM_REASON_NOTDIRECTORY;
-	} else if(!g_ascii_strcasecmp(str, "END")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getStreamReasonString(TORCTL_STREAM_REASON_END))) {
 		return TORCTL_STREAM_REASON_END;
-	} else if(!g_ascii_strcasecmp(str, "PRIVATE_ADDR")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getStreamReasonString(TORCTL_STREAM_REASON_PRIVATE_ADDR))) {
 		return TORCTL_STREAM_REASON_PRIVATE_ADDR;
 	}
 	return TORCTL_STREAM_REASON_UNKNOWN;
 }
-gint torControl_getStreamPurpose(gchar *str) {
+
+static const gchar* _streamPurposeStrings[] = {
+        "NONE", "DIR_FETCH", "UPLOAD_DESC", "DNS_REQUEST", "USER", "DIRPORT_TEST", "UNKNOWN",
+};
+const gchar* torControl_getStreamPurposeString(enum torControl_streamPurpose purpose) {
+	return _streamPurposeStrings[purpose];
+}
+static gint _torControl_getStreamPurpose(gchar *str) {
 	if(!g_ascii_strcasecmp(str, "DIR_FETCH")) {
 		return TORCTL_STREAM_PURPOSE_DIR_FETCH;
 	} else if(!g_ascii_strcasecmp(str, "UPLOAD_DESC")) {
@@ -222,38 +269,52 @@ gint torControl_getStreamPurpose(gchar *str) {
 	return TORCTL_STREAM_PURPOSE_UNKNOWN;
 }
 
-gint torControl_getORConnStatus(gchar *str) {
-	if(!g_ascii_strcasecmp(str, "NEW")) {
+static const gchar* _orconnStatusStrings[] = {
+        "NONE", "NEW", "LAUNCHED", "CONNECTED", "FAILED", "CLOSED", "UNKNOWN",
+};
+const gchar* torControl_getORConnStatusString(enum torControl_orconnStatus status) {
+	return _orconnStatusStrings[status];
+}
+static gint _torControl_getORConnStatus(gchar *str) {
+	if(!g_ascii_strcasecmp(str, torControl_getORConnStatusString(TORCTL_ORCONN_STATUS_NEW))) {
 		return TORCTL_ORCONN_STATUS_NEW;
-	} else if(!g_ascii_strcasecmp(str, "LAUNCHED")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getORConnStatusString(TORCTL_ORCONN_STATUS_LAUNCHED))) {
 		return TORCTL_ORCONN_STATUS_LAUNCHED;
-	} else if(!g_ascii_strcasecmp(str, "CONNECTED")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getORConnStatusString(TORCTL_ORCONN_STATUS_CONNECTED))) {
 		return TORCTL_ORCONN_STATUS_CONNECTED;
-	} else if(!g_ascii_strcasecmp(str, "FAILED")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getORConnStatusString(TORCTL_ORCONN_STATUS_FAILED))) {
 		return TORCTL_ORCONN_STATUS_FAILED;
-	} else if(!g_ascii_strcasecmp(str, "CLOSED")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getORConnStatusString(TORCTL_ORCONN_STATUS_CLOSED))) {
 		return TORCTL_ORCONN_STATUS_CLOSED;
 	}
 	return TORCTL_ORCONN_STATUS_UNKNOWN;
 }
-gint torControl_getORConnReason(gchar *str) {
-	if(!g_ascii_strcasecmp(str, "MISC")) {
+
+static const gchar* _orconnReasonStrings[] = {
+        "NONE", "MISC", "DONE", "CONNECTREFUSED", "IDENTITY", "CONNECTRESET",
+        "TIMEOUT", "NOROUTE", "IOERROR", "RESOURCELIMIT", "UNKNOWN",
+};
+const gchar* torControl_getORConnReasonString(enum torControl_orconnReason reason) {
+	return _orconnReasonStrings[reason];
+}
+static gint _torControl_getORConnReason(gchar *str) {
+	if(!g_ascii_strcasecmp(str, torControl_getORConnReasonString(TORCTL_ORCONN_REASON_MISC))) {
 		return TORCTL_ORCONN_REASON_MISC;
-	} else if(!g_ascii_strcasecmp(str, "DONE")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getORConnReasonString(TORCTL_ORCONN_REASON_DONE))) {
 		return TORCTL_ORCONN_REASON_DONE;
-	} else if(!g_ascii_strcasecmp(str, "CONNECTREFUSED")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getORConnReasonString(TORCTL_ORCONN_REASON_CONNECTREFUSED))) {
 		return TORCTL_ORCONN_REASON_CONNECTREFUSED;
-	} else if(!g_ascii_strcasecmp(str, "IDENTITY")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getORConnReasonString(TORCTL_ORCONN_REASON_IDENTITY))) {
 		return TORCTL_ORCONN_REASON_IDENTITY;
-	} else if(!g_ascii_strcasecmp(str, "CONNECTRESET")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getORConnReasonString(TORCTL_ORCONN_REASON_CONNECTRESET))) {
 		return TORCTL_ORCONN_REASON_CONNECTRESET;
-	} else if(!g_ascii_strcasecmp(str, "TIMEOUT")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getORConnReasonString(TORCTL_ORCONN_REASON_TIMEOUT))) {
 		return TORCTL_ORCONN_REASON_TIMEOUT;
-	} else if(!g_ascii_strcasecmp(str, "NOROUTE")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getORConnReasonString(TORCTL_ORCONN_REASON_NOROUTE))) {
 		return TORCTL_ORCONN_REASON_NOROUTE;
-	} else if(!g_ascii_strcasecmp(str, "IOERROR")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getORConnReasonString(TORCTL_ORCONN_REASON_IOERROR))) {
 		return TORCTL_ORCONN_REASON_IOERROR;
-	} else if(!g_ascii_strcasecmp(str, "RESOURCELIMIT")) {
+	} else if(!g_ascii_strcasecmp(str, torControl_getORConnReasonString(TORCTL_ORCONN_REASON_RESOURCELIMIT))) {
 		return TORCTL_ORCONN_REASON_RESOURCELIMIT;
 	}
 	return TORCTL_ORCONN_REASON_UNKNOWN;
@@ -262,7 +323,7 @@ gint torControl_getORConnReason(gchar *str) {
 /*
  * LOG
  */
-gint torControl_getLogSeverity(gchar *str) {
+static gint _torControl_getLogSeverity(gchar *str) {
 	if(!g_ascii_strcasecmp(str, "DEBUG")) {
 		return TORCTL_LOG_SEVERITY_DEBUG;
 	} else if(!g_ascii_strcasecmp(str, "INFO")) {
@@ -277,7 +338,38 @@ gint torControl_getLogSeverity(gchar *str) {
 	return TORCTL_LOG_SEVERITY_UNKNOWN;
 }
 
-void torControl_changeEpoll(gint epolld, gint sockd, gint event) {
+static GDateTime* _torControl_getCreateTime(gchar* datetimestamp) {
+	gint year = 0, month = 0, day = 0, hour = 0, min = 0;
+	gdouble sec = 0;
+
+	/* parse the stamp format: 1970-01-01T00:07:09.000000 */
+	g_assert(datetimestamp);
+	gchar** parts = g_strsplit(datetimestamp, "T", 2);
+	gchar* date = parts[0];
+	gchar* time = parts[1];
+	g_assert(date && time);
+
+	gchar** dateparts = g_strsplit(date, "-", 3);
+	year = atoi(dateparts[0]);
+	month = atoi(dateparts[1]);
+	day = atoi(dateparts[2]);
+
+	gchar** timeparts = g_strsplit(time, ":", 3);
+	hour = atoi(timeparts[0]);
+	min = atoi(timeparts[1]);
+	sec = atof(timeparts[2]);
+
+	g_strfreev(dateparts);
+	g_strfreev(timeparts);
+	g_strfreev(parts);
+
+	GTimeZone* tz = g_time_zone_new_utc();
+	GDateTime* dt = g_date_time_new(tz, year, month, day, hour, min, sec);
+	g_time_zone_unref(tz);
+	return dt;
+}
+
+static void _torControl_changeEpoll(gint epolld, gint sockd, gint event) {
     struct epoll_event ev;
     ev.events = event;
     ev.data.fd = sockd;
@@ -357,7 +449,7 @@ gint torControl_createConnection(gchar *hostname, in_port_t port, gchar *mode, g
         connection->moduleData = torcontrolstatistics_new(log, hostname, connection->ip, connection->port,
         		connection->sockd, args, &(connection->eventHandlers));
     }
-    torControl_changeEpoll(torControl->epolld, connection->sockd, EPOLLOUT);
+    _torControl_changeEpoll(torControl->epolld, connection->sockd, EPOLLOUT);
 
     connection->bufOffset = 0;
     connection->reply = NULL;
@@ -372,6 +464,139 @@ void torControl_freeReplyLine(gpointer data) {
     g_free(replyLine->body);
     g_list_free_full(replyLine->data, g_free);
     g_free(replyLine);
+}
+
+static void _torControl_processAsyncCircReply(TorControlCircEventFunc circEvent, gpointer moduleData, gint code, gchar** parts) {
+	/* parts[0] is "CIRC" */
+	gint circID = atoi(parts[1]);
+	gint status = _torControl_getCircStatus(parts[2]);
+	gint buildFlags = TORCTL_CIRC_BUILD_FLAGS_NONE;
+	gint purpose = TORCTL_CIRC_PURPOSE_NONE;
+	gint reason = TORCTL_CIRC_REASON_NONE;
+	GDateTime* createTime = NULL;
+	GString* path = NULL;
+
+	for(gint idx = 3; parts[idx]; idx++) {
+		gchar **param = g_strsplit(parts[idx], "=", 2);
+		if(param[0]) {
+			if(!g_ascii_strcasecmp(param[0], "BUILD_FLAGS")) {
+				buildFlags = _torControl_getCircBuildFlags(param[1]);
+			} else if(!g_ascii_strcasecmp(param[0], "PURPOSE")) {
+				purpose = _torControl_getCircPurpose(param[1]);
+			} else if(!g_ascii_strcasecmp(param[0], "REASON")) {
+				reason = _torControl_getCircReason(param[1]);
+			} else if(!g_ascii_strcasecmp(param[0], "TIME_CREATED")) {
+				createTime = _torControl_getCreateTime(param[1]);
+			} else if(!param[1]) {
+				/* get the path elements */
+				/* $F67E278C346268AB43DE50254D8A8F44FFE486A5~2exit,$9441269F5989487F07AE824063345A0A6BCAB279~4uthority,$F456519D90D678620D591F7465033AE1A4C6582B~1exit */
+				gchar** longnames = g_strsplit(param[0], ",", 10);
+				for(gint lni = 0; longnames[lni]; lni++) {
+					gchar** nameparts = g_strsplit(longnames[lni], "~", 2);
+					if(nameparts[1]) {
+						if(path) {
+							g_string_append_printf(path, ",%s", nameparts[1]);
+						} else {
+							path = g_string_new(nameparts[1]);
+						}
+					}
+					g_strfreev(nameparts);
+				}
+				g_strfreev(longnames);
+			}
+		}
+		g_strfreev(param);
+	}
+
+	/* notify the module that the event has occured */
+	circEvent(moduleData, code, circID, path, status, buildFlags, purpose, reason, createTime);
+
+	/* cleanup */
+	if(createTime) {
+		g_date_time_unref(createTime);
+	}
+	if(path) {
+		g_string_free(path, TRUE);
+	}
+}
+
+static void _torControl_processAsyncStreamReply(TorControlStreamEventFunc streamEvent, gpointer moduleData, gint code, gchar** parts) {
+	gint streamID = atoi(parts[1]);
+	gint status = _torControl_getStreamStatus(parts[2]);
+	gint circID = atoi(parts[3]);
+
+	gchar **target = g_strsplit(parts[4], ":", 2);
+	in_addr_t targetIP = inet_addr(target[0]);
+	in_port_t targetPort = 0;
+	if(target[1]) {
+		targetPort = atoi(target[1]);
+	}
+	g_strfreev(target);
+
+	gint reason = TORCTL_STREAM_REASON_NONE;
+	gint remoteReason = TORCTL_STREAM_REASON_NONE;
+	gchar *source = NULL;
+	in_addr_t sourceIP = INADDR_NONE;
+	in_port_t sourcePort = 0;
+	gint purpose = TORCTL_STREAM_PURPOSE_NONE;
+
+	for(gint idx = 5; parts[idx]; idx++) {
+		gchar **param = g_strsplit(parts[idx], "=", 2);
+		if(param[0]) {
+			if(!g_ascii_strcasecmp(param[0], "REASON")) {
+				reason = _torControl_getStreamReason(param[1]);
+			} else if(!g_ascii_strcasecmp(param[0], "REMOTE_REASON")) {
+				remoteReason = _torControl_getStreamReason(param[1]);
+			} else if(!g_ascii_strcasecmp(param[0], "SOURCE")) {
+				source = g_strdup(param[1]);
+			} else if(!g_ascii_strcasecmp(param[0], "SOURCE_ADDR")) {
+				gchar **addr = g_strsplit(param[1], ":", 2);
+//                            in_addr_t sourceIP = inet_addr(addr[0]);
+//                            in_port_t sourcePort = atoi(addr[1]);
+				g_strfreev(addr);
+			} else if(!g_ascii_strcasecmp(param[0], "PURPOSE")) {
+				purpose = _torControl_getStreamPurpose(param[1]);
+			}
+		}
+		g_strfreev(param);
+	}
+
+	streamEvent(moduleData, code, streamID, circID, targetIP, targetPort,
+			status, reason, remoteReason, source, sourceIP, sourcePort, purpose);
+}
+
+static void _torControl_processAsyncORConnReply(TorControlORConnEventFunc orconnEvent, gpointer moduleData, gint code, gchar** parts) {
+    gchar *target = parts[1];
+    gint status = _torControl_getORConnStatus(parts[2]);
+
+    gint reason = TORCTL_ORCONN_REASON_NONE;
+    gint numCircuits = 0;
+    for(gint idx = 3; parts[idx]; idx++) {
+        gchar **param = g_strsplit(parts[idx], "=", 2);
+        if(param[0]) {
+            if(!g_ascii_strcasecmp(param[0], "REASON")) {
+                reason = _torControl_getORConnReason(param[1]);
+            } else if(!g_ascii_strcasecmp(param[0], "NCIRCS")) {
+                numCircuits = atoi(param[1]);
+            }
+        }
+        g_strfreev(param);
+    }
+
+    orconnEvent(moduleData, code, target, status, reason, numCircuits);
+}
+
+static void _torControl_processAsyncBWReply(TorControlBWEventFunc bwEvent, gpointer moduleData, gint code, gchar** parts) {
+    gint bytesRead = atoi(parts[1]);
+    gint bytesWritten = atoi(parts[2]);
+    bwEvent(moduleData, code, bytesRead, bytesWritten);
+}
+
+static void _torControl_processAsyncLogReply(TorControlLogEventFunc logEvent, gpointer moduleData, gint code, gchar* line) {
+    gchar **message = g_strsplit(line, " ", 3);
+    gint severity = _torControl_getLogSeverity(message[0]);
+    logEvent(moduleData, code, severity, message[2]);
+    g_strfreev(message);
 }
 
 gint torControl_processReply(TorControl_Connection *connection, GList *reply) {
@@ -440,102 +665,19 @@ gint torControl_processReply(TorControl_Connection *connection, GList *reply) {
         case TORCTL_REPLY_EVENT: {
             gchar **parts = g_strsplit(line, " ", 0);
             gchar *event = parts[0];
+
             if(funcs->circEvent && !g_ascii_strcasecmp(event, "CIRC")) {
-                gint circID = atoi(parts[1]);
-                gint status = torControl_getCircStatus(parts[2]);
-                gint buildFlags = TORCTL_CIRC_BUILD_FLAGS_NONE;
-                gint purpose = TORCTL_CIRC_PURPOSE_NONE;
-                gint reason = TORCTL_CIRC_REASON_NONE;
-
-                for(gint idx = 3; parts[idx]; idx++) {
-                    gchar **param = g_strsplit(parts[idx], "=", 2);
-                    if(param[0]) {
-                        if(!g_ascii_strcasecmp(param[0], "BUILD_FLAGS")) {
-                            buildFlags = torControl_getCircBuildFlags(param[1]);
-                        } else if(!g_ascii_strcasecmp(param[0], "PURPOSE")) {
-                            purpose = torControl_getCircPurpose(param[1]);
-                        } else if(!g_ascii_strcasecmp(param[0], "REASON")) {
-                            reason = torControl_getCircReason(param[1]);
-                        }
-                    }
-                    g_strfreev(param);
-                }
-
-                funcs->circEvent(connection->moduleData, code, circID, status, buildFlags, purpose, reason);
+                _torControl_processAsyncCircReply(funcs->circEvent, connection->moduleData, code, parts);
             } else if(funcs->streamEvent && !g_ascii_strcasecmp(event, "STREAM")) {
-                gint streamID = atoi(parts[1]);
-                gint status = torControl_getStreamStatus(parts[2]);
-                gint circID = atoi(parts[3]);
-
-                gchar **target = g_strsplit(parts[4], ":", 2);
-                in_addr_t targetIP = inet_addr(target[0]);
-                in_port_t targetPort = 0;
-                if(target[1]) {
-                	targetPort = atoi(target[1]);
-                }
-                g_strfreev(target);
-
-                gint reason = TORCTL_STREAM_REASON_NONE;
-                gint remoteReason = TORCTL_STREAM_REASON_NONE;
-                gchar *source = NULL;
-                in_addr_t sourceIP = INADDR_NONE;
-                in_port_t sourcePort = 0;
-                gint purpose = TORCTL_STREAM_PURPOSE_NONE;
-
-                for(gint idx = 5; parts[idx]; idx++) {
-                    gchar **param = g_strsplit(parts[idx], "=", 2);
-                    if(param[0]) {
-                        if(!g_ascii_strcasecmp(param[0], "REASON")) {
-                            reason = torControl_getStreamReason(param[1]);
-                        } else if(!g_ascii_strcasecmp(param[0], "REMOTE_REASON")) {
-                            remoteReason = torControl_getStreamReason(param[1]);
-                        } else if(!g_ascii_strcasecmp(param[0], "SOURCE")) {
-                            source = g_strdup(param[1]);
-                        } else if(!g_ascii_strcasecmp(param[0], "SOURCE_ADDR")) {
-                            gchar **addr = g_strsplit(param[1], ":", 2);
-//                            in_addr_t sourceIP = inet_addr(addr[0]);
-//                            in_port_t sourcePort = atoi(addr[1]);
-                            g_strfreev(addr);
-                        } else if(!g_ascii_strcasecmp(param[0], "PURPOSE")) {
-                            purpose = torControl_getStreamPurpose(param[1]);
-                        }
-                    }
-                    g_strfreev(param);
-                }
-
-                funcs->streamEvent(connection->moduleData, code, streamID, circID, targetIP, targetPort,
-                        status, reason, remoteReason, source, sourceIP, sourcePort, purpose);
+                _torControl_processAsyncStreamReply(funcs->streamEvent, connection->moduleData, code, parts);
             } else if(funcs->orconnEvent && !g_ascii_strcasecmp(event, "ORCONN")) {
-                gchar *target = parts[1];
-                gint status = torControl_getORConnStatus(parts[2]);
-
-                gint reason = TORCTL_ORCONN_REASON_NONE;
-                gint numCircuits = 0;
-                for(gint idx = 3; parts[idx]; idx++) {
-                    gchar **param = g_strsplit(parts[idx], "=", 2);
-                    if(param[0]) {
-                        if(!g_ascii_strcasecmp(param[0], "REASON")) {
-                            reason = torControl_getORConnReason(param[1]);
-                        } else if(!g_ascii_strcasecmp(param[0], "NCIRCS")) {
-                            numCircuits = atoi(param[1]);
-                        }
-                    }
-                    g_strfreev(param);
-                }
-
-                funcs->orconnEvent(connection->moduleData, code, target, status, reason, numCircuits);
+            	_torControl_processAsyncORConnReply(funcs->orconnEvent, connection->moduleData, code, parts);
             } else if(funcs->bwEvent && !g_ascii_strcasecmp(event, "BW")) {
-                gint bytesRead = atoi(parts[1]);
-                gint bytesWritten = atoi(parts[2]);
-
-                funcs->bwEvent(connection->moduleData, code, bytesRead, bytesWritten);
+                _torControl_processAsyncBWReply(funcs->bwEvent, connection->moduleData, code, parts);
             } else if(funcs->logEvent && (!g_ascii_strcasecmp(event, "DEBUG") ||
                     !g_ascii_strcasecmp(event, "INFO") || !g_ascii_strcasecmp(event, "NOTICE") ||
                     !g_ascii_strcasecmp(event, "WARN") || !g_ascii_strcasecmp(event, "ERR"))) {
-                gchar **message = g_strsplit(line, " ", 3);
-                gint severity = torControl_getLogSeverity(message[0]);
-                funcs->logEvent(connection->moduleData, code, severity, message[2]);
-                g_strfreev(message);
+            	_torControl_processAsyncLogReply(funcs->logEvent, connection->moduleData, code, line);
             }
 
             g_strfreev(parts);
@@ -558,14 +700,14 @@ gint torControl_sendCommand(gint sockd, gchar *command) {
     GString *buf = g_string_new("");
     g_string_printf(buf, "%s\r\n", command);
 
-    torControl_changeEpoll(torControl->epolld, sockd, EPOLLOUT);
+    _torControl_changeEpoll(torControl->epolld, sockd, EPOLLOUT);
     gint bytes = send(sockd, buf->str, buf->len, 0);
     g_string_free(buf, TRUE);
     TORCTL_ASSERTIO(torControl, bytes, errno == EWOULDBLOCK || errno == ENOTCONN || errno == EALREADY, TORCTL_ERR_SEND);
 
     log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "[%s] CMD: %s", connection->hostname, command);
     if(bytes >= buf->len) {
-        torControl_changeEpoll(torControl->epolld, sockd, EPOLLIN);
+        _torControl_changeEpoll(torControl->epolld, sockd, EPOLLIN);
     }
 
     return bytes;
