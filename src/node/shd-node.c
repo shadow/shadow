@@ -752,7 +752,7 @@ gint node_sendUserData(Node* node, gint handle, gconstpointer buffer, gsize nByt
 		/* make sure that we have somewhere to send it */
 		Socket* socket = (Socket*)transport;
 		if(ip == 0 || port == 0) {
-			/* its ok as long as they setup a default destination with connect() */
+			/* its ok as long as they setup a default destination with connect()*/
 			if(socket->peerIP == 0 || socket->peerPort == 0) {
 				/* we have nowhere to send it */
 				return EDESTADDRREQ;
@@ -760,12 +760,14 @@ gint node_sendUserData(Node* node, gint handle, gconstpointer buffer, gsize nByt
 		}
 
 		/* if this socket is not bound, do an implicit bind to a random port */
-		in_addr_t bindAddress = ip == htonl(INADDR_LOOPBACK) ? htonl(INADDR_LOOPBACK) :
-				networkinterface_getIPAddress(node->defaultInterface);
-		in_port_t bindPort = _node_getRandomFreePort(node, bindAddress, type);
+		if(!socket_getBinding(socket)) {
+			in_addr_t bindAddress = ip == htonl(INADDR_LOOPBACK) ? htonl(INADDR_LOOPBACK) :
+					networkinterface_getIPAddress(node->defaultInterface);
+			in_port_t bindPort = _node_getRandomFreePort(node, bindAddress, type);
 
-		/* bind port and set associations */
-		_node_associateInterface(node, socket, bindAddress, bindPort);
+			/* bind port and set associations */
+			_node_associateInterface(node, socket, bindAddress, bindPort);
+		}
 	}
 
 	if(type == DT_TCPSOCKET) {
