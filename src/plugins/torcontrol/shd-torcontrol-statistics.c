@@ -36,8 +36,10 @@ struct _TorControlStatistics {
 
 	GHashTable* circuits;
 	GHashTable* streams;
+};
 
-	guint nCircuitTimeouts;
+typedef struct _ConnectionStats ConnectionStats;
+struct _ConnectionStats {
 };
 
 typedef struct _CircuitStats CircuitStats;
@@ -63,6 +65,18 @@ struct _StreamStats {
 	guint totalReadBytes;
 	guint totalWriteBytes;
 };
+
+static ConnectionStats* _connectionstats_new() {
+	ConnectionStats* cs = g_new0(ConnectionStats, 1);
+
+	return cs;
+}
+
+static void _connectionstats_free(ConnectionStats* cs) {
+	g_assert(cs);
+
+	g_free(cs);
+}
 
 static CircuitStats* _circuitstats_new(GDateTime* launchTime, gint circuitId,
 		GString* path, enum torControl_circPurpose purpose, gboolean isInternal, gboolean isOneHop) {
@@ -202,6 +216,20 @@ static void _torcontrolstatistics_handleORConnEvent(TorControlStatistics* tstats
 			"%s:%i ORCONN %i: target=%s status=%i reason=%i numcircs=%i",
 			tstats->targetHostname->str, tstats->targetPort, code,
 			target, status, reason, numCircuits);
+
+	if(status == TORCTL_ORCONN_STATUS_CONNECTED) {
+		tstats->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__,
+			"host %s orconnection connected",
+			tstats->targetHostname->str);
+	}
+
+	if(status == TORCTL_ORCONN_STATUS_FAILED) {
+
+	}
+
+	if(status == TORCTL_ORCONN_STATUS_CLOSED) {
+
+	}
 }
 
 static void _torcontrolstatistics_handleCircEvent(TorControlStatistics* tstats,
@@ -217,8 +245,14 @@ static void _torcontrolstatistics_handleCircEvent(TorControlStatistics* tstats,
 
 	/* circuit build timeout */
 	if(status == TORCTL_CIRC_STATUS_FAILED && reason == TORCTL_CIRC_REASON_TIMEOUT) {
-		(tstats->nCircuitTimeouts)++;
-		// TODO: track the time that the timeout occurred
+		GDateTime* failed = g_date_time_new_now_utc();
+		GTimeSpan buildTimeoutMicros = g_date_time_difference(createTime, failed);
+
+		tstats->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__,
+			"host %s circuit failed timeout %ld milliseconds",
+			tstats->targetHostname->str, buildTimeoutMicros/1000L);
+
+		g_date_time_unref(failed);
 	}
 
 	/* circuit was built */
@@ -247,6 +281,9 @@ static void _torcontrolstatistics_handleCircEvent(TorControlStatistics* tstats,
 			// TODO: log all of this circuits stats, remove from hashtable, free
 
 //			g_printf("buildtime=%lu runtime=%lu\n", buildTimeMicros/1000L, runTimeMicros/1000L);
+
+			g_hash_table_remove(tstats->circuits, &circID);
+			_circuitstats_free(cs);
 		}
 	}
 }
