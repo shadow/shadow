@@ -91,6 +91,11 @@ def main():
         help="build in extra memory checks and debugging symbols when running Shadow",
         action="store_true", dest="do_debug",
         default=False)
+
+    parser_build.add_argument('-v', '--verbose',
+        help="print verbose output from the compiler",
+        action="store_true", dest="do_verbose",
+        default=False)
         
     parser_build.add_argument('-j', '--jobs',
         help="number of jobs to run simultaneously during the build",
@@ -287,7 +292,8 @@ def build(args):
     cmake_cmd = "cmake " + rootdir + " -DCMAKE_INSTALL_PREFIX=" + installdir
 
     # other cmake options
-    if args.do_debug: cmake_cmd += " -DSHADOW_DEBUG=ON"; os.putenv("VERBOSE", "1")
+    if args.do_debug: cmake_cmd += " -DSHADOW_DEBUG=ON"
+    if args.do_verbose: os.putenv("VERBOSE", "1")
     if args.do_test: cmake_cmd += " -DSHADOW_TEST=ON"
     if args.do_profile: cmake_cmd += " -DSHADOW_PROFILE=ON"
     if args.export_libraries: cmake_cmd += " -DSHADOW_EXPORT=ON"
