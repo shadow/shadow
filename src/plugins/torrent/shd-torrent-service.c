@@ -235,7 +235,10 @@ int torrentService_activate(TorrentService *tsvc, gint sockd, gint events, gint 
 	}
 
 	if(tsvc->server && tsvc->server->epolld == epolld) {
-		torrentServer_activate(tsvc->server, sockd, events);
+		gint ret = torrentServer_activate(tsvc->server, sockd, events);
+		if(ret == TS_ERR_FATAL) {
+		    torrentService_log(tsvc, TSVC_NOTICE, "Fatal error on server activate with socket %d", sockd);
+		}
 	}
 
 	return 0;

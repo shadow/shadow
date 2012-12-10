@@ -269,6 +269,17 @@ void torrent_activate() {
 			if(res < 0) {
 				log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "activate returned %d", res);
 			}
+
+            if(res == TS_ERR_FATAL) {
+                TorrentServer_Connection *conn = g_hash_table_lookup(torrent->server->connections, &(events[i].data.fd));
+                if(conn) {
+                    log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Fatal error on server activate with socket %d on address %s",
+                                            events[i].data.fd, inet_ntoa((struct in_addr){conn->addr}));
+                } else {
+                    log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Fatal error on server activate with socket %d", events[i].data.fd);
+                }
+
+            }
 		}
 
 		TorrentServer_PacketInfo *info = (TorrentServer_PacketInfo *)g_queue_pop_head(torrent->server->packetInfo);

@@ -46,9 +46,10 @@
 			/* some other send error */ \
 			ts->errcode = ts_errcode; \
 			fprintf(stderr, "torrent server fatal error: %s\n", strerror(errno)); \
-			return TC_ERR_FATAL; \
+			return TS_ERR_FATAL; \
 		} \
 	} else if(retcode == 0) { \
+	    torrentServer_connectionClose(ts, connection); \
 		/* other side closed */ \
 		ts->errcode = TS_CLOSED; \
 		return TS_ERR_FATAL; \
