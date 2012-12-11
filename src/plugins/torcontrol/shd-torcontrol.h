@@ -217,8 +217,8 @@ enum torControl_logSeverity {
 };
 
 /* initialize/free function handler */
-typedef gint (*TorControlInitialize)(gpointer moduleData);
-typedef gint (*TorControlFree)(gpointer moduleData);
+typedef gboolean (*TorControlInitialize)(gpointer moduleData);
+typedef void (*TorControlFree)(gpointer moduleData);
 
 /* event function handlers */
 typedef void (*TorControlCircEventFunc)(gpointer moduleData, gint code, gint circID, GString* path, gint status,
@@ -227,9 +227,13 @@ typedef void (*TorControlStreamEventFunc)(gpointer moduleData, gint code, gint s
         in_addr_t targetIP, in_port_t targetPort, gint status, gint reason,
         gint remoteReason, gchar *source, in_addr_t sourceIP, in_port_t sourcePort,
         gint purpose);
-typedef void (*TorControlORConnEventFunc)(gpointer moduleData, gint code, gchar *target, gint status,
+typedef void (*TorControlORConnEventFunc)(gpointer moduleData, gint code, gint connID, gchar *target, gint status,
         gint reason, gint numCircuits);
 typedef void (*TorControlBWEventFunc)(gpointer moduleData, gint code, gint bytesRead, gint bytesWritten);
+typedef void (*TorControlExtendedBWEventFunc)(gpointer moduleData, gchar* type, gint code, gint streamID, gint bytesRead, gint bytesWritten);
+typedef void (*TorControlCellStatsEventFunc)(gpointer moduleData, gint code, gint circID, gint nextHopCircID,
+		gint appProcessed, gint appTotalWaitMillis, double appMeanQueueLength,
+		gint exitProcessed, gint exitTotalWaitMillis, double exitMeanQueueLength);
 typedef void (*TorControlLogEventFunc)(gpointer moduleData, gint code, gint severity, gchar *msg);
 
 /* response handler */
@@ -244,6 +248,8 @@ struct _TorControl_EventHandlers {
 	TorControlStreamEventFunc streamEvent;
 	TorControlORConnEventFunc orconnEvent;
 	TorControlBWEventFunc bwEvent;
+	TorControlExtendedBWEventFunc extendedBWEvent;
+	TorControlCellStatsEventFunc cellStatsEvent;
 	TorControlLogEventFunc logEvent;
 	TorControlResponseFunc responseEvent;
 };

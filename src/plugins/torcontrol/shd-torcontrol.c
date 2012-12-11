@@ -466,6 +466,16 @@ void torControl_freeReplyLine(gpointer data) {
     g_free(replyLine);
 }
 
+static GString* _torControl_getShortName(gchar* longname) {
+	GString* shortName = NULL;
+	gchar** nameparts = g_strsplit(longname, "~", 2);
+	if(nameparts[1]) {
+		shortName = g_string_new(nameparts[1]);
+	}
+	g_strfreev(nameparts);
+	return shortName;
+}
+
 static void _torControl_processAsyncCircReply(TorControlCircEventFunc circEvent, gpointer moduleData, gint code, gchar** parts) {
 	/* parts[0] is "CIRC" */
 	gint circID = atoi(parts[1]);
@@ -492,15 +502,15 @@ static void _torControl_processAsyncCircReply(TorControlCircEventFunc circEvent,
 				/* $F67E278C346268AB43DE50254D8A8F44FFE486A5~2exit,$9441269F5989487F07AE824063345A0A6BCAB279~4uthority,$F456519D90D678620D591F7465033AE1A4C6582B~1exit */
 				gchar** longnames = g_strsplit(param[0], ",", 10);
 				for(gint lni = 0; longnames[lni]; lni++) {
-					gchar** nameparts = g_strsplit(longnames[lni], "~", 2);
-					if(nameparts[1]) {
+					GString* shortName = _torControl_getShortName(longnames[lni]);
+					if(shortName) {
 						if(path) {
-							g_string_append_printf(path, ",%s", nameparts[1]);
+							g_string_append_printf(path, ",%s", shortName->str);
 						} else {
-							path = g_string_new(nameparts[1]);
+							path = g_string_new(shortName->str);
 						}
+						g_string_free(shortName, TRUE);
 					}
-					g_strfreev(nameparts);
 				}
 				g_strfreev(longnames);
 			}
@@ -571,6 +581,7 @@ static void _torControl_processAsyncORConnReply(TorControlORConnEventFunc orconn
 
     gint reason = TORCTL_ORCONN_REASON_NONE;
     gint numCircuits = 0;
+    gint connID = 0;
     for(gint idx = 3; parts[idx]; idx++) {
         gchar **param = g_strsplit(parts[idx], "=", 2);
         if(param[0]) {
@@ -578,18 +589,48 @@ static void _torControl_processAsyncORConnReply(TorControlORConnEventFunc orconn
                 reason = _torControl_getORConnReason(param[1]);
             } else if(!g_ascii_strcasecmp(param[0], "NCIRCS")) {
                 numCircuits = atoi(param[1]);
+            } else if(!g_ascii_strcasecmp(param[0], "ID")) {
+            	connID = atoi(param[1]);
             }
         }
         g_strfreev(param);
     }
 
-    orconnEvent(moduleData, code, target, status, reason, numCircuits);
+    GString* shortName = _torControl_getShortName(target);
+    if(shortName) {
+    	target = shortName->str;
+    }
+
+    orconnEvent(moduleData, code, connID, target, status, reason, numCircuits);
+
+    if(shortName) {
+    	g_string_free(shortName, TRUE);
+    }
 }
 
 static void _torControl_processAsyncBWReply(TorControlBWEventFunc bwEvent, gpointer moduleData, gint code, gchar** parts) {
     gint bytesRead = atoi(parts[1]);
     gint bytesWritten = atoi(parts[2]);
     bwEvent(moduleData, code, bytesRead, bytesWritten);
+}
+
+static void _torControl_processAsyncExtendedBWReply(TorControlExtendedBWEventFunc extendedBWEvent, gchar* type, gpointer moduleData, gint code, gchar** parts) {
+    gint id = atoi(parts[1]);
+    gint bytesWritten = atoi(parts[2]);
+    gint bytesRead = atoi(parts[3]);
+	extendedBWEvent(moduleData, type, code, id, bytesRead, bytesWritten);
+}
+
+static void _torControl_processAsyncCellStatsReply(TorControlCellStatsEventFunc cellStatsEvent, gpointer moduleData, gint code, gchar** parts) {
+	gint circid = atoi(parts[1]);
+	gint nextHopCircID = atoi(parts[2]);
+	gint appProcessed = atoi(parts[3]);
+	gint appTotalWaitMillis = atoi(parts[4]);
+	double appMeanQueueLength = atof(parts[5]);
+	gint exitProcessed = atoi(parts[6]);
+	gint exitTotalWaitMillis = atoi(parts[7]);
+	double exitMeanQueueLength = atof(parts[8]);
+	cellStatsEvent(moduleData, code, circid, nextHopCircID, appProcessed, appTotalWaitMillis, appMeanQueueLength, exitProcessed, exitTotalWaitMillis, exitMeanQueueLength);
 }
 
 static void _torControl_processAsyncLogReply(TorControlLogEventFunc logEvent, gpointer moduleData, gint code, gchar* line) {
@@ -674,7 +715,15 @@ gint torControl_processReply(TorControl_Connection *connection, GList *reply) {
             	_torControl_processAsyncORConnReply(funcs->orconnEvent, connection->moduleData, code, parts);
             } else if(funcs->bwEvent && !g_ascii_strcasecmp(event, "BW")) {
                 _torControl_processAsyncBWReply(funcs->bwEvent, connection->moduleData, code, parts);
-            } else if(funcs->logEvent && (!g_ascii_strcasecmp(event, "DEBUG") ||
+            } else if(funcs->extendedBWEvent &&
+            		(!g_ascii_strcasecmp(event, "STREAM_BW") ||
+            		!g_ascii_strcasecmp(event, "ORCONN_BW") ||
+            		!g_ascii_strcasecmp(event, "DIRCONN_BW") ||
+            		!g_ascii_strcasecmp(event, "EXITCONN_BW"))) {
+            	_torControl_processAsyncExtendedBWReply(funcs->extendedBWEvent, event, connection->moduleData, code, parts);
+            } else if (funcs->cellStatsEvent && !g_ascii_strcasecmp(event, "CELL_STATS")) {
+            	_torControl_processAsyncCellStatsReply(funcs->cellStatsEvent, connection->moduleData, code, parts);
+            }else if(funcs->logEvent && (!g_ascii_strcasecmp(event, "DEBUG") ||
                     !g_ascii_strcasecmp(event, "INFO") || !g_ascii_strcasecmp(event, "NOTICE") ||
                     !g_ascii_strcasecmp(event, "WARN") || !g_ascii_strcasecmp(event, "ERR"))) {
             	_torControl_processAsyncLogReply(funcs->logEvent, connection->moduleData, code, line);

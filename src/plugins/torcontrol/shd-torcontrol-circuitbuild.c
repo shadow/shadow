@@ -151,7 +151,7 @@ static void _torControlCircuitBuild_streamEvent(gpointer moduleData, gint code, 
 	}
 }
 
-static void _torControlCircuitBuild_orConnEvent(gpointer moduleData, gint code, gchar *target, gint status,
+static void _torControlCircuitBuild_orConnEvent(gpointer moduleData, gint code, gint connID, gchar *target, gint status,
 		gint reason, gint numCircuits) {
 	TorCtlCircuitBuild *circuitBuild = moduleData;
 	ShadowLogFunc log = circuitBuild->log;
