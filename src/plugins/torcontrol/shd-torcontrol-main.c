@@ -62,7 +62,9 @@ gint main(gint argc, gchar *argv[]) {
 
 	if(argc < 2) {
 		const gchar* USAGE = "TorControl USAGE: controlHostsFile ('hostname:port mode [modeArgs]')\n"
-					"\t'circuitBuild hop1 hop2 ... -1'\n";
+					"available modules:\n"
+					"\t'circuitBuild hop1 hop2 ... -1'\n"
+					"\t'log -1'\n";
 		torControl_log(G_LOG_LEVEL_WARNING, __FUNCTION__, "%s", USAGE);
 		return -1;
 	}
