@@ -76,6 +76,7 @@ struct _TorControl_Args {
 /*
  * CIRC parameter values (status, build flags, purpose and reason)
  */
+
 enum torControl_circStatus {
 	TORCTL_CIRC_STATUS_NONE,
 	TORCTL_CIRC_STATUS_LAUNCHED,
@@ -129,10 +130,7 @@ enum torControl_circReason {
 /*
  * STREAM parameter values (status, purpose, reason)
  */
-static const gchar *torControl_streamStatusString[] = {
-        "NONE", "NEW", "NEW_RESOLVE", "REMAP", "SENT_CONNECT", "SENT_RESOLVE",
-        "SUCCEECED", "FAILED", "CLOSED", "DETATCHED", "UNKNOWN"
-};
+
 enum torControl_streamStatus {
 	TORCTL_STREAM_STATUS_NONE,
 	TORCTL_STREAM_STATUS_NEW,
@@ -181,6 +179,7 @@ enum torControl_streamPurpose {
 /*
  * ORCONN parameter values (status, reason)
  */
+
 enum torControl_orconnStatus {
 	TORCTL_ORCONN_STATUS_NONE,
 	TORCTL_ORCONN_STATUS_NEW,
@@ -217,19 +216,26 @@ enum torControl_logSeverity {
 	TORCTL_LOG_SEVERITY_UNKNOWN,
 };
 
-/* initialize function handler */
-typedef gint (*TorControlInitialize)(gpointer moduleData);
+/* initialize/free function handler */
+typedef gboolean (*TorControlInitialize)(gpointer moduleData);
+typedef void (*TorControlFree)(gpointer moduleData);
 
 /* event function handlers */
-typedef void (*TorControlCircEventFunc)(gpointer moduleData, gint code, gint circID, gint status,
-        gint buildFlags, gint purpose, gint reason);
-typedef void (*TorControlStreamEventFunc)(gpointer moduleData, gint code, gint streamID, gint circID,
+typedef void (*TorControlCircEventFunc)(gpointer moduleData, gint code, gchar* line, gint circID, GString* path, gint status,
+        gint buildFlags, gint purpose, gint reason, GDateTime* createTime);
+typedef void (*TorControlStreamEventFunc)(gpointer moduleData, gint code, gchar* line, gint streamID, gint circID,
         in_addr_t targetIP, in_port_t targetPort, gint status, gint reason,
         gint remoteReason, gchar *source, in_addr_t sourceIP, in_port_t sourcePort,
         gint purpose);
-typedef void (*TorControlORConnEventFunc)(gpointer moduleData, gint code, gchar *target, gint status,
+typedef void (*TorControlORConnEventFunc)(gpointer moduleData, gint code, gchar* line, gint connID, gchar *target, gint status,
         gint reason, gint numCircuits);
-typedef void (*TorControlBWEventFunc)(gpointer moduleData, gint code, gint bytesRead, gint bytesWritten);
+typedef void (*TorControlBWEventFunc)(gpointer moduleData, gint code, gchar* line, gint bytesRead, gint bytesWritten);
+typedef void (*TorControlExtendedBWEventFunc)(gpointer moduleData, gint code, gchar* line, gchar* type, gint streamID, gint bytesRead, gint bytesWritten);
+typedef void (*TorControlCellStatsEventFunc)(gpointer moduleData, gint code, gchar* line, gint circID, gint nextHopCircID, gint prevHopCircID,
+		gint appProcessed, gint appTotalWaitMillis, double appMeanQueueLength,
+		gint exitProcessed, gint exitTotalWaitMillis, double exitMeanQueueLength);
+typedef void (*TorControlTokenEventFunc)(gpointer moduleData, gint code, gchar* line);
+typedef void (*TorControlORTokenEventFunc)(gpointer moduleData, gint code, gchar* line);
 typedef void (*TorControlLogEventFunc)(gpointer moduleData, gint code, gint severity, gchar *msg);
 
 /* response handler */
@@ -239,10 +245,15 @@ typedef void (*TorControlResponseFunc)(gpointer moduleData, GList *reply, gpoint
 typedef struct _TorControl_EventHandlers TorControl_EventHandlers;
 struct _TorControl_EventHandlers {
     TorControlInitialize initialize;
+    TorControlFree free;
 	TorControlCircEventFunc circEvent;
 	TorControlStreamEventFunc streamEvent;
 	TorControlORConnEventFunc orconnEvent;
 	TorControlBWEventFunc bwEvent;
+	TorControlExtendedBWEventFunc extendedBWEvent;
+	TorControlCellStatsEventFunc cellStatsEvent;
+	TorControlTokenEventFunc tokenEvent;
+	TorControlORTokenEventFunc orTokenEvent;
 	TorControlLogEventFunc logEvent;
 	TorControlResponseFunc responseEvent;
 };
@@ -290,7 +301,7 @@ struct _TorControl_Connection {
 	gchar readingData;
 
 	TorControl_EventHandlers eventHandlers;
-	gchar initialized;
+	gboolean initialized;
 
 	/* object returned by module init function */
 	gpointer moduleData;
@@ -320,5 +331,14 @@ gint torControl_buildCircuit(gint sockd, GList *circuit);
 gint torControl_attachStream(gint sockd, gint streamID, gint circID);
 
 gint torControl_getInfoBootstrapStatus(gint sockd);
+
+const gchar* torControl_getCircStatusString(enum torControl_circStatus status);
+const gchar* torControl_getCircPurposeString(enum torControl_circPurpose purpose);
+const gchar* torControl_getCircReasonString(enum torControl_circReason reason);
+const gchar* torControl_getStreamStatusString(enum torControl_streamStatus status);
+const gchar* torControl_getStreamReasonString(enum torControl_streamReason reason);
+const gchar* torControl_getStreamPurposeString(enum torControl_streamPurpose purpose);
+const gchar* torControl_getORConnStatusString(enum torControl_orconnStatus status);
+const gchar* torControl_getORConnReasonString(enum torControl_orconnReason reason);
 
 #endif /* SHD_TOR_CONTROL_H_ */

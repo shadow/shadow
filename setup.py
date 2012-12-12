@@ -472,6 +472,11 @@ def setup_tor(args):
             # configure
             log("running \'{0}\'".format(configure))
             retcode = subprocess.call(shlex.split(configure))
+            if retcode !=0: return retcode
+
+            make = "make -j{0}".format(args.njobs)
+            log("running \'{0}\'".format(make))
+            retcode = subprocess.call(shlex.split(make))
         
     return retcode
 

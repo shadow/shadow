@@ -1,7 +1,7 @@
-/*
+/**
  * The Shadow Simulator
  *
- * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
+ * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
  *
  * This file is part of Shadow.
  *
@@ -19,16 +19,19 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SHD_TOR_CTL_CIRCUITBUILD_H_
-#define SHD_TOR_CTL_CIRCUITBUILD_H_
+#ifndef SHD_TORCONTROL_LOGGER_H_
+#define SHD_TORCONTROL_LOGGER_H_
 
-#include <glib.h>
-#include <shd-library.h>
+typedef struct _TorControlLogger TorControlLogger;
 
-#include "shd-torcontrol.h"
+enum torcontrollogger_state {
+	TCS_IDLE,
+	TCS_SEND_AUTHENTICATE, TCS_RECV_AUTHENTICATE,
+	TCS_SEND_SETEVENTS, TCS_RECV_SETEVENTS,
+};
 
-typedef struct _TorCtlCircuitBuild TorCtlCircuitBuild;
+TorControlLogger* torcontrollogger_new(ShadowLogFunc logFunc,
+		gchar* hostname, in_addr_t ip, in_port_t port, gint sockd, gchar **args,
+		TorControl_EventHandlers *handlers);
 
-TorCtlCircuitBuild *torControlCircuitBuild_new(ShadowLogFunc logFunc, gint sockd, gchar **args, TorControl_EventHandlers *handlers);
-
-#endif /* SHD_TOR_CTL_CIRCUITBUILD_H_ */
+#endif /* SHD_TORCONTROL_LOGGER_H_ */
