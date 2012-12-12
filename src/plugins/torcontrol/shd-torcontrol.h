@@ -221,17 +221,17 @@ typedef gboolean (*TorControlInitialize)(gpointer moduleData);
 typedef void (*TorControlFree)(gpointer moduleData);
 
 /* event function handlers */
-typedef void (*TorControlCircEventFunc)(gpointer moduleData, gint code, gint circID, GString* path, gint status,
+typedef void (*TorControlCircEventFunc)(gpointer moduleData, gint code, gchar* line, gint circID, GString* path, gint status,
         gint buildFlags, gint purpose, gint reason, GDateTime* createTime);
-typedef void (*TorControlStreamEventFunc)(gpointer moduleData, gint code, gint streamID, gint circID,
+typedef void (*TorControlStreamEventFunc)(gpointer moduleData, gint code, gchar* line, gint streamID, gint circID,
         in_addr_t targetIP, in_port_t targetPort, gint status, gint reason,
         gint remoteReason, gchar *source, in_addr_t sourceIP, in_port_t sourcePort,
         gint purpose);
-typedef void (*TorControlORConnEventFunc)(gpointer moduleData, gint code, gint connID, gchar *target, gint status,
+typedef void (*TorControlORConnEventFunc)(gpointer moduleData, gint code, gchar* line, gint connID, gchar *target, gint status,
         gint reason, gint numCircuits);
-typedef void (*TorControlBWEventFunc)(gpointer moduleData, gint code, gint bytesRead, gint bytesWritten);
-typedef void (*TorControlExtendedBWEventFunc)(gpointer moduleData, gchar* type, gint code, gint streamID, gint bytesRead, gint bytesWritten);
-typedef void (*TorControlCellStatsEventFunc)(gpointer moduleData, gint code, gint circID, gint nextHopCircID,
+typedef void (*TorControlBWEventFunc)(gpointer moduleData, gint code, gchar* line, gint bytesRead, gint bytesWritten);
+typedef void (*TorControlExtendedBWEventFunc)(gpointer moduleData, gint code, gchar* line, gchar* type, gint streamID, gint bytesRead, gint bytesWritten);
+typedef void (*TorControlCellStatsEventFunc)(gpointer moduleData, gint code, gchar* line, gint circID, gint nextHopCircID, gint prevHopCircID,
 		gint appProcessed, gint appTotalWaitMillis, double appMeanQueueLength,
 		gint exitProcessed, gint exitTotalWaitMillis, double exitMeanQueueLength);
 typedef void (*TorControlLogEventFunc)(gpointer moduleData, gint code, gint severity, gchar *msg);

@@ -116,7 +116,7 @@ static gboolean _torControlCircuitBuild_initialize(gpointer moduleData) {
     return initialized;
 }
 
-static void _torControlCircuitBuild_circEvent(gpointer moduleData, gint code, gint circID, GString* path, gint status,
+static void _torControlCircuitBuild_circEvent(gpointer moduleData, gint code, gchar* line, gint circID, GString* path, gint status,
 		gint buildFlags, gint purpose, gint reason, GDateTime* createTime) {
 	TorCtlCircuitBuild *circuitBuild = moduleData;
 	ShadowLogFunc log = circuitBuild->log;
@@ -131,7 +131,7 @@ static void _torControlCircuitBuild_circEvent(gpointer moduleData, gint code, gi
 	}
 }
 
-static void _torControlCircuitBuild_streamEvent(gpointer moduleData, gint code, gint streamID, gint circID,
+static void _torControlCircuitBuild_streamEvent(gpointer moduleData, gint code, gchar* line, gint streamID, gint circID,
 		in_addr_t targetIP, in_port_t targetPort, gint status, gint reason,
 		gint remoteReason, gchar *source, in_addr_t sourceIP, in_port_t sourcePort,
 		gint purpose) {
@@ -151,7 +151,7 @@ static void _torControlCircuitBuild_streamEvent(gpointer moduleData, gint code, 
 	}
 }
 
-static void _torControlCircuitBuild_orConnEvent(gpointer moduleData, gint code, gint connID, gchar *target, gint status,
+static void _torControlCircuitBuild_orConnEvent(gpointer moduleData, gint code, gchar* line, gint connID, gchar *target, gint status,
 		gint reason, gint numCircuits) {
 	TorCtlCircuitBuild *circuitBuild = moduleData;
 	ShadowLogFunc log = circuitBuild->log;
@@ -161,7 +161,7 @@ static void _torControlCircuitBuild_orConnEvent(gpointer moduleData, gint code, 
 
 }
 
-static void _torControlCircuitBuild_bwEvent(gpointer moduleData, gint code, gint bytesRead, gint bytesWritten) {
+static void _torControlCircuitBuild_bwEvent(gpointer moduleData, gint code, gchar* line, gint bytesRead, gint bytesWritten) {
 	TorCtlCircuitBuild *circuitBuild = moduleData;
 	ShadowLogFunc log = circuitBuild->log;
 
@@ -257,7 +257,7 @@ TorCtlCircuitBuild *torControlCircuitBuild_new(ShadowLogFunc logFunc, gint sockd
     g_assert(handlers && args);
 
 	handlers->initialize = _torControlCircuitBuild_initialize;
-    handlers->free = _torControlCircuitBuild_free;
+    handlers->free = (TorControlFree) _torControlCircuitBuild_free;
 	handlers->circEvent = _torControlCircuitBuild_circEvent;
 	handlers->streamEvent = _torControlCircuitBuild_streamEvent;
 	handlers->orconnEvent = _torControlCircuitBuild_orConnEvent;
