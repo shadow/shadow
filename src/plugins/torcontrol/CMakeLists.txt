@@ -1,6 +1,6 @@
 set(torcontrol-modules
 	shd-torcontrol-circuitbuild.c
-    shd-torcontrol-statistics.c
+    shd-torcontrol-logger.c
 )
 
 ## executable that can run outside of shadow

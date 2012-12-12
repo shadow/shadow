@@ -34,7 +34,7 @@
 
 #include "shd-torcontrol.h"
 #include "shd-torcontrol-circuitbuild.h"
-#include "shd-torcontrol-statistics.h"
+#include "shd-torcontrol-logger.h"
 
 TorControl* torControl;
 
@@ -446,8 +446,8 @@ gint torControl_createConnection(gchar *hostname, in_port_t port, gchar *mode, g
     connection->mode = g_strdup(mode);
     if(!g_ascii_strncasecmp(connection->mode, "circuitBuild", 12)) {
         connection->moduleData = torControlCircuitBuild_new(log, connection->sockd, args, &(connection->eventHandlers));
-    } else if(!g_ascii_strncasecmp(connection->mode, "statistics", 10)) {
-        connection->moduleData = torcontrolstatistics_new(log, hostname, connection->ip, connection->port,
+    } else if(!g_ascii_strncasecmp(connection->mode, "log", 10)) {
+        connection->moduleData = torcontrollogger_new(log, hostname, connection->ip, connection->port,
         		connection->sockd, args, &(connection->eventHandlers));
     }
     _torControl_changeEpoll(torControl->epolld, connection->sockd, EPOLLOUT);
@@ -651,6 +651,14 @@ static void _torControl_processAsyncCellStatsReply(TorControlCellStatsEventFunc 
 	cellStatsEvent(moduleData, code, line, circid, nextHopCircID, prevHopCircID, appProcessed, appTotalWaitMillis, appMeanQueueLength, exitProcessed, exitTotalWaitMillis, exitMeanQueueLength);
 }
 
+static void _torControl_processAsyncTokenReply(TorControlTokenEventFunc tokenEvent, gpointer moduleData, gint code, gchar* line) {
+	tokenEvent(moduleData, code, line);
+}
+
+static void _torControl_processAsyncORTokenReply(TorControlORTokenEventFunc orTokenEvent, gpointer moduleData, gint code, gchar* line) {
+	orTokenEvent(moduleData, code, line);
+}
+
 static void _torControl_processAsyncLogReply(TorControlLogEventFunc logEvent, gpointer moduleData, gint code, gchar* line) {
     gchar **message = g_strsplit(line, " ", 3);
     gint severity = _torControl_getLogSeverity(message[0]);
@@ -741,7 +749,11 @@ gint torControl_processReply(TorControl_Connection *connection, GList *reply) {
             	_torControl_processAsyncExtendedBWReply(funcs->extendedBWEvent, event, connection->moduleData, code, line);
             } else if (funcs->cellStatsEvent && !g_ascii_strcasecmp(event, "CELL_STATS")) {
             	_torControl_processAsyncCellStatsReply(funcs->cellStatsEvent, connection->moduleData, code, line);
-            }else if(funcs->logEvent && (!g_ascii_strcasecmp(event, "DEBUG") ||
+            } else if (funcs->tokenEvent && !g_ascii_strcasecmp(event, "TOKENS")) {
+            	_torControl_processAsyncTokenReply(funcs->tokenEvent, connection->moduleData, code, line);
+            } else if (funcs->orTokenEvent && !g_ascii_strcasecmp(event, "OR_TOKENS")) {
+            	_torControl_processAsyncORTokenReply(funcs->orTokenEvent, connection->moduleData, code, line);
+            } else if(funcs->logEvent && (!g_ascii_strcasecmp(event, "DEBUG") ||
                     !g_ascii_strcasecmp(event, "INFO") || !g_ascii_strcasecmp(event, "NOTICE") ||
                     !g_ascii_strcasecmp(event, "WARN") || !g_ascii_strcasecmp(event, "ERR"))) {
             	_torControl_processAsyncLogReply(funcs->logEvent, connection->moduleData, code, line);

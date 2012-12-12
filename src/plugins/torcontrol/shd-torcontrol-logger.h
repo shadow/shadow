@@ -19,19 +19,19 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SHD_TORCONTROL_STATISTICS_H_
-#define SHD_TORCONTROL_STATISTICS_H_
+#ifndef SHD_TORCONTROL_LOGGER_H_
+#define SHD_TORCONTROL_LOGGER_H_
 
-typedef struct _TorControlStatistics TorControlStatistics;
+typedef struct _TorControlLogger TorControlLogger;
 
-enum torcontrolstatistic_state {
+enum torcontrollogger_state {
 	TCS_IDLE,
 	TCS_SEND_AUTHENTICATE, TCS_RECV_AUTHENTICATE,
 	TCS_SEND_SETEVENTS, TCS_RECV_SETEVENTS,
 };
 
-TorControlStatistics* torcontrolstatistics_new(ShadowLogFunc logFunc,
+TorControlLogger* torcontrollogger_new(ShadowLogFunc logFunc,
 		gchar* hostname, in_addr_t ip, in_port_t port, gint sockd, gchar **args,
 		TorControl_EventHandlers *handlers);
 
-#endif /* SHD_TORCONTROL_STATISTICS_H_ */
+#endif /* SHD_TORCONTROL_LOGGER_H_ */
