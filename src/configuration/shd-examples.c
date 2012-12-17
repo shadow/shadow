@@ -24,12 +24,10 @@
 GString* example_getEchoExampleContents() {
 	return g_string_new(
 		"<plugin id=\"echoplugin\" path=\"libshadow-plugin-echo.so\" />"
-		"<cluster id=\"net0\" bandwidthdown=\"1024\" bandwidthup=\"512\" packetloss=\"0.0\" >"
-		"	<link cluster=\"net0\" latency=\"50\" jitter=\"10\"/>"
-		"</cluster >"
-		"<cluster id=\"net1\" bandwidthdown=\"1024\" bandwidthup=\"512\" packetloss=\"0.5\" >"
-		"	<link cluster=\"net1\" latency=\"50\" jitter=\"40\"/>"
-		"</cluster >"
+		"<cluster id=\"net0\" bandwidthdown=\"1024\" bandwidthup=\"512\" packetloss=\"0.0\" \>"
+		"<cluster id=\"net1\" bandwidthdown=\"1024\" bandwidthup=\"512\" packetloss=\"0.5\" \>"
+		"<link clusters=\"net0 net0\" latency=\"50\" jitter=\"10\"/>"
+		"<link clusters=\"net1 net1\" latency=\"50\" jitter=\"40\"/>"
 		"<node id=\"reliable.udpserver.echo\" cluster=\"net0\" >"
 		"	<application plugin=\"echoplugin\" time=\"10\" arguments=\"udp server\" />"
 		"</node >"
@@ -70,9 +68,8 @@ GString* example_getFileExampleContents() {
 	/* serve and download /bin/ls 10 times for each of 100 clients */
 	return g_string_new(
 		"<plugin id=\"filex\" path=\"libshadow-plugin-filetransfer.so\" />"
-		"<cluster id=\"net0\" bandwidthdown=\"1024\" bandwidthup=\"512\" packetloss=\"0.005\" >"
-		"	<link cluster=\"net0\" latency=\"50\" jitter=\"10\"/>"
-		"</cluster >"
+		"<cluster id=\"net0\" bandwidthdown=\"1024\" bandwidthup=\"512\" packetloss=\"0.005\" />"
+		"<link clusters=\"net0 net0\" latency=\"50\" jitter=\"10\"/>"
 		"<node id=\"fileserver\" cluster=\"net0\" bandwidthup=\"10240\" bandwidthdown=\"5120\" >"
 		"	<application plugin=\"filex\" time=\"10\" arguments=\"server 8080 /bin/\" />"
 		"</node >"
@@ -86,9 +83,8 @@ GString* example_getTorrentExampleContents() {
 	/* start a P2P torrent download with 10 clients sharing an 8MB file */
 	return g_string_new(
 		"<plugin id=\"torrent\" path=\"libshadow-plugin-torrent.so\" />"
-		"<cluster id=\"net0\" bandwidthdown=\"1024\" bandwidthup=\"512\" packetloss=\"0.005\" >"
-		"	<link cluster=\"net0\" latency=\"50\" jitter=\"10\"/>"
-		"</cluster >"
+		"<cluster id=\"net0\" bandwidthdown=\"1024\" bandwidthup=\"512\" packetloss=\"0.005\" />"
+		"<link clusters=\"net0 net0\" latency=\"50\" jitter=\"10\"/>"
 		"<node id=\"auth.torrent\" cluster=\"net0\" bandwidthup=\"10240\" bandwidthdown=\"5120\" >"
 		"	<application plugin=\"torrent\" time=\"10\" arguments=\"authority 5000\" />"
 		"</node >"
@@ -103,9 +99,8 @@ GString* example_getBrowserExampleContents() {
 	return g_string_new(
 		"<plugin id=\"filex\" path=\"libshadow-plugin-filetransfer.so\" />"
 		"<plugin id=\"browser\" path=\"libshadow-plugin-browser.so\" />"
-		"<cluster id=\"net0\" bandwidthdown=\"1024\" bandwidthup=\"512\" packetloss=\"0.005\" >"
-		"	<link cluster=\"net0\" latency=\"50\" jitter=\"10\"/>"
-		"</cluster >"
+		"<cluster id=\"net0\" bandwidthdown=\"1024\" bandwidthup=\"512\" packetloss=\"0.005\" />"
+		"<link clusters=\"net0 net0\" latency=\"50\" jitter=\"10\"/>"
 		"<node id=\"webserver\" cluster=\"net0\" bandwidthup=\"10240\" bandwidthdown=\"5120\" >"
 		"	<application plugin=\"filex\" time=\"10\" arguments=\"server 80 ./resource/browser-example/\" />"
 		"</node >"

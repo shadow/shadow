@@ -32,10 +32,6 @@ struct _Parser {
 
 	GMarkupParser parser;
 
-	GMarkupParser clusterSubParser;
-	GString* currentParentClusterID;
-	gint nChildLinks;
-
 	GMarkupParser nodeSubParser;
 	CreateNodesAction* currentNodeAction;
 	gint nChildApplications;
@@ -89,7 +85,7 @@ static GError* _parser_handleCDFAttributes(Parser* parser, const gchar** attribu
 	}
 
 	/* validate the values */
-	if(!id || (!path && !center)) {
+	if(!error && (!id || (!path && !center))) {
 		error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
 				"element 'cdf' requires attributes 'id' and either 'path' or 'center'");
 	}
@@ -156,7 +152,7 @@ static GError* _parser_handleClusterAttributes(Parser* parser, const gchar** att
 	}
 
 	/* validate the values */
-	if(!id || !bandwidthdown || !bandwidthup) {
+	if(!error && (!id || !bandwidthdown || !bandwidthup)) {
 		error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
 				"element 'cluster' requires attributes 'bandwidthdown' 'bandwidthup'");
 	}
@@ -166,9 +162,6 @@ static GError* _parser_handleClusterAttributes(Parser* parser, const gchar** att
 		Action* a = (Action*) createnetwork_new(id, bandwidthdown, bandwidthup, packetloss);
 		a->priority = 2;
 		_parser_addAction(parser, a);
-
-		/* save the parent so child links can reference it */
-		parser->currentParentClusterID = g_string_new(id->str);
 	}
 
 	/* clean up */
@@ -209,7 +202,7 @@ static GError* _parser_handlePluginAttributes(Parser* parser, const gchar** attr
 	}
 
 	/* validate the values */
-	if(!id || !path) {
+	if(!error && (!id || !path)) {
 		error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
 				"element 'plugin' requires attributes 'id' 'path'");
 	}
@@ -292,7 +285,7 @@ static GError* _parser_handleNodeAttributes(Parser* parser, const gchar** attrib
 	}
 
 	/* validate the values */
-	if(!id) {
+	if(!error && !id) {
 		error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
 				"element 'node' requires attributes 'id'");
 	}
@@ -360,7 +353,7 @@ static GError* _parser_handleKillAttributes(Parser* parser, const gchar** attrib
 	}
 
 	/* validate the values */
-	if(!time) {
+	if(!error && !time) {
 		error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
 				"element 'kill' requires attributes 'time'");
 	}
@@ -378,7 +371,7 @@ static GError* _parser_handleKillAttributes(Parser* parser, const gchar** attrib
 }
 
 static GError* _parser_handleLinkAttributes(Parser* parser, const gchar** attributeNames, const gchar** attributeValues) {
-	GString* cluster = NULL;
+	GString* clusters = NULL;
 	guint64 latency = 0;
 	guint64 jitter = 0;
 	gdouble packetloss = 0.0;
@@ -400,8 +393,8 @@ static GError* _parser_handleLinkAttributes(Parser* parser, const gchar** attrib
 
 		debug("found attribute '%s=%s'", name, value);
 
-		if(!cluster && !g_ascii_strcasecmp(name, "cluster")) {
-			cluster = g_string_new(value);
+		if(!clusters && !g_ascii_strcasecmp(name, "clusters")) {
+			clusters = g_string_new(value);
 		} else if (!latency && !g_ascii_strcasecmp(name, "latency")) {
 			latency = g_ascii_strtoull(value, NULL, 10);
 		} else if (!jitter && !g_ascii_strcasecmp(name, "jitter")) {
@@ -418,6 +411,8 @@ static GError* _parser_handleLinkAttributes(Parser* parser, const gchar** attrib
 			latencymax = g_ascii_strtoull(value, NULL, 10);
 		} else if (!packetloss && !g_ascii_strcasecmp(name, "packetloss")) {
 			packetloss = g_ascii_strtod(value, NULL);
+		} else if (!g_ascii_strcasecmp(name, "id")) {
+			/* TODO: ignore for now */
 		} else {
 			error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ATTRIBUTE,
 							"unknown 'link' attribute '%s'", name);
@@ -428,25 +423,41 @@ static GError* _parser_handleLinkAttributes(Parser* parser, const gchar** attrib
 	}
 
 	/* validate the values */
-	if(!cluster || !latency) {
+	if(!error && (!clusters || !latency)) {
 		error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
-				"element 'link' requires attributes 'cluster' 'latency'");
+				"element 'link' requires attributes 'clusters' 'latency'");
 	}
 
+	GString* srcCluster = NULL;
+	GString* destCluster = NULL;
+
 	if(!error) {
+		/* parse clusters string like "ABCD DCBA" into separate IDs */
+		gchar** tokens = g_strsplit(clusters->str, " ", 2);
+		g_assert(g_strrstr(tokens[1], " ") == NULL);
+
+		srcCluster = g_string_new(tokens[0]);
+		destCluster = g_string_new(tokens[1]);
+
+		g_strfreev(tokens);
+
 		/* no error, create the action */
-		Action*  a = (Action*) connectnetwork_new(parser->currentParentClusterID, cluster,
+		Action*  a = (Action*) connectnetwork_new(srcCluster, destCluster,
 				latency, jitter, packetloss,
 				latencymin, latencyQ1, latencymean, latencyQ3, latencymax);
 		a->priority = 3;
 		_parser_addAction(parser, a);
-
-		(parser->nChildLinks)++;
 	}
 
 	/* clean up */
-	if(cluster) {
-		g_string_free(cluster, TRUE);
+	if(clusters) {
+		g_string_free(clusters, TRUE);
+	}
+	if(srcCluster) {
+		g_string_free(srcCluster, TRUE);
+	}
+	if(destCluster) {
+		g_string_free(destCluster, TRUE);
 	}
 
 	return error;
@@ -485,7 +496,7 @@ static GError* _parser_handleApplicationAttributes(Parser* parser, const gchar**
 	}
 
 	/* validate the values */
-	if(!plugin || !arguments || !time) {
+	if(!error && (!plugin || !arguments || !time)) {
 		error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
 				"element 'application' requires attributes 'plugin' 'arguments' 'time'");
 	}
@@ -508,39 +519,6 @@ static GError* _parser_handleApplicationAttributes(Parser* parser, const gchar**
 	}
 
 	return error;
-}
-
-static void _parser_handleClusterChildStartElement(GMarkupParseContext* context,
-		const gchar* elementName, const gchar** attributeNames,
-		const gchar** attributeValues, gpointer userData, GError** error) {
-	Parser* parser = (Parser*) userData;
-	MAGIC_ASSERT(parser);
-	g_assert(context && error);
-
-	debug("found 'cluster' child starting element '%s'", elementName);
-
-	/* check for cluster child-level elements */
-	if (!g_ascii_strcasecmp(elementName, "link")) {
-		*error = _parser_handleLinkAttributes(parser, attributeNames, attributeValues);
-	} else {
-		*error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ELEMENT,
-				"unknown 'cluster' child starting element '%s'", elementName);
-	}
-}
-
-static void _parser_handleClusterChildEndElement(GMarkupParseContext* context,
-		const gchar* elementName, gpointer userData, GError** error) {
-	Parser* parser = (Parser*) userData;
-	MAGIC_ASSERT(parser);
-	g_assert(context && error);
-
-	debug("found 'cluster' child ending element '%s'", elementName);
-
-	/* check for cluster child-level elements */
-	if (!(!g_ascii_strcasecmp(elementName, "link"))) {
-		*error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ELEMENT,
-				"unknown 'cluster' child ending element '%s'", elementName);
-	}
 }
 
 static void _parser_handleNodeChildStartElement(GMarkupParseContext* context,
@@ -590,8 +568,8 @@ static void _parser_handleRootStartElement(GMarkupParseContext* context,
 		*error = _parser_handleCDFAttributes(parser, attributeNames, attributeValues);
 	} else if (!g_ascii_strcasecmp(elementName, "cluster")) {
 		*error = _parser_handleClusterAttributes(parser, attributeNames, attributeValues);
-		/* handle internal elements in a sub parser */
-		g_markup_parse_context_push(context, &(parser->clusterSubParser), parser);
+	} else if (!g_ascii_strcasecmp(elementName, "link")) {
+		*error = _parser_handleLinkAttributes(parser, attributeNames, attributeValues);
 	} else if (!g_ascii_strcasecmp(elementName, "plugin")) {
 		*error = _parser_handlePluginAttributes(parser, attributeNames, attributeValues);
 	} else if (!g_ascii_strcasecmp(elementName, "node")) {
@@ -615,21 +593,7 @@ static void _parser_handleRootEndElement(GMarkupParseContext* context,
 	debug("found end element '%s'", elementName);
 
 	/* check for root-level elements */
-	if (!g_ascii_strcasecmp(elementName, "cluster")) {
-		/* validate children */
-		if (parser->nChildLinks <= 0) {
-			*error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_EMPTY,
-					"element 'cluster' requires at least 1 child 'link'");
-		}
-		g_markup_parse_context_pop(context);
-
-		/* reset child cache */
-		parser->nChildLinks = 0;
-		if (parser->currentParentClusterID) {
-			g_string_free(parser->currentParentClusterID, TRUE);
-			parser->currentParentClusterID = NULL;
-		}
-	} else if (!g_ascii_strcasecmp(elementName, "node")) {
+	if (!g_ascii_strcasecmp(elementName, "node")) {
 		/* validate children */
 		if (parser->nChildApplications <= 0) {
 			*error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_EMPTY,
@@ -644,7 +608,9 @@ static void _parser_handleRootEndElement(GMarkupParseContext* context,
 			parser->currentNodeAction = NULL;
 		}
 	} else {
-		if(!(!g_ascii_strcasecmp(elementName, "plugin") ||
+		if(!(!g_ascii_strcasecmp(elementName, "cluster") ||
+				!g_ascii_strcasecmp(elementName, "link") ||
+				!g_ascii_strcasecmp(elementName, "plugin") ||
 				!g_ascii_strcasecmp(elementName, "cdf") ||
 				!g_ascii_strcasecmp(elementName, "kill"))) {
 			*error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ELEMENT,
@@ -670,8 +636,6 @@ Parser* parser_new() {
 	parser->context = g_markup_parse_context_new(&(parser->parser), 0, parser, NULL);
 
 	/* sub parsers, without their own context */
-	parser->clusterSubParser.start_element = &_parser_handleClusterChildStartElement;
-	parser->clusterSubParser.end_element = &_parser_handleClusterChildEndElement;
 	parser->nodeSubParser.start_element = &_parser_handleNodeChildStartElement;
 	parser->nodeSubParser.end_element = &_parser_handleNodeChildEndElement;
 
