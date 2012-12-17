@@ -28,7 +28,7 @@
 
 typedef struct _Node Node;
 
-Node* node_new(GQuark id, Network* network, Software* software, guint32 ip,
+Node* node_new(GQuark id, Network* network, guint32 ip,
 		GString* hostname, guint64 bwDownKiBps, guint64 bwUpKiBps, guint cpuFrequency, gint cpuThreshold, gint cpuPrecision,
 		guint nodeSeed, SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel,
 		GLogLevelFlags logLevel, gboolean logPcap, gchar* pcapDir);
@@ -39,8 +39,9 @@ void node_unlock(Node* node);
 
 EventQueue* node_getEvents(Node* node);
 
-void node_startApplication(Node* node);
-void node_stopApplication(gpointer key, gpointer value, gpointer user_data);
+void node_addApplication(Node* node, GQuark pluginID, gchar* pluginPath, SimulationTime startTime, gchar* arguments);
+void node_startApplication(Node* node, Application* application);
+void node_stopAllApplications(gpointer key, gpointer value, gpointer user_data);
 
 gint node_compare(gconstpointer a, gconstpointer b, gpointer user_data);
 gboolean node_isEqual(Node* a, Node* b);
@@ -49,7 +50,6 @@ Network* node_getNetwork(Node* node);
 gchar* node_getName(Node* node);
 in_addr_t node_getDefaultIP(Node* node);
 gchar* node_getDefaultIPName(Node* node);
-Application* node_getApplication(Node* node);
 Random* node_getRandom(Node* node);
 
 gint node_createDescriptor(Node* node, enum DescriptorType type);

@@ -50,6 +50,8 @@ struct _Epoll {
 	gint osEpollDescriptor;
 	SimulationTime lastWaitTime;
 
+	Application* ownerApplication;
+
 	MAGIC_DECLARE;
 };
 
@@ -128,6 +130,12 @@ Epoll* epoll_new(gint handle) {
 	if(epoll->osEpollDescriptor == -1) {
 		warning("error in epoll_create for OS events, errno=%i", errno);
 	}
+
+	/* keep track of which virtual application we need to notify of events */
+	Worker* worker = worker_getPrivate();
+	/* epoll_new should be called as a result of an application syscall */
+	g_assert(worker->cached_application);
+	epoll->ownerApplication = worker->cached_application;
 
 	return epoll;
 }
@@ -342,7 +350,7 @@ void epoll_descriptorStatusChanged(Epoll* epoll, Descriptor* descriptor) {
 	_epoll_check(epoll, watch);
 }
 
-void epoll_ensureTriggers(Epoll* epoll) {
+static void _epoll_ensureTriggers(Epoll* epoll) {
 	MAGIC_ASSERT(epoll);
 
 	/* check all of our watched descriptors and schedule a notification if there
@@ -357,7 +365,7 @@ void epoll_ensureTriggers(Epoll* epoll) {
 	}
 }
 
-gboolean epoll_isReadyToNotify(Epoll* epoll) {
+static gboolean _epoll_isReadyToNotify(Epoll* epoll) {
 	MAGIC_ASSERT(epoll);
 
 	/* event is being executed from the scheduler */
@@ -368,6 +376,17 @@ gboolean epoll_isReadyToNotify(Epoll* epoll) {
 		return TRUE;
 	} else {
 		return FALSE;
+	}
+}
+
+void epoll_tryNotify(Epoll* epoll) {
+	MAGIC_ASSERT(epoll);
+
+	if(_epoll_isReadyToNotify(epoll)) {
+		application_notify(epoll->ownerApplication);
+
+		/* check if we need to be notified again */
+		_epoll_ensureTriggers(epoll);
 	}
 }
 

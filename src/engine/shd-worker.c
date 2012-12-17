@@ -79,19 +79,18 @@ void worker_setKillTime(SimulationTime endTime) {
 	engine_setKillTime(shadow_engine, endTime);
 }
 
-Plugin* worker_getPlugin(Software* software) {
-	MAGIC_ASSERT(software);
-	g_assert(software->pluginPath);
+Plugin* worker_getPlugin(GQuark pluginID, GString* pluginPath) {
+	g_assert(pluginPath);
 
 	/* worker has a private plug-in for each plugin ID */
 	Worker* worker = worker_getPrivate();
-	Plugin* plugin = g_hash_table_lookup(worker->plugins, &(software->pluginID));
+	Plugin* plugin = g_hash_table_lookup(worker->plugins, &pluginID);
 	if(!plugin) {
 		/* plug-in has yet to be loaded by this worker. do that now. this call
 		 * will copy the plug-in library to the temporary directory, and open
 		 * that so each thread can execute in its own memory space.
 		 */
-		plugin = plugin_new(software->pluginID, software->pluginPath);
+		plugin = plugin_new(pluginID, pluginPath);
 		g_hash_table_replace(worker->plugins, plugin_getID(plugin), plugin);
 	}
 

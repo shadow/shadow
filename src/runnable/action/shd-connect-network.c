@@ -42,22 +42,17 @@ RunnableFunctionTable connectnetwork_functions = {
 		MAGIC_VALUE
 };
 
-ConnectNetworkAction* connectnetwork_new(GString* clusters, guint64 latency, guint64 jitter, gdouble packetloss,
+ConnectNetworkAction* connectnetwork_new(GString* startCluster, GString* endCluster,
+		guint64 latency, guint64 jitter, gdouble packetloss,
 		guint64 latencymin, guint64 latencyQ1, guint64 latencymean, guint64 latencyQ3, guint64 latencymax) {
-	g_assert(clusters);
+	g_assert(startCluster && endCluster);
 	ConnectNetworkAction* action = g_new0(ConnectNetworkAction, 1);
 	MAGIC_INIT(action);
 
 	action_init(&(action->super), &connectnetwork_functions);
 
-	/* parse clusters string like "ABCD DCBA" into separate IDs */
-	gchar** tokens = g_strsplit(clusters->str, " ", 2);
-	g_assert(g_strrstr(tokens[1], " ") == NULL);
-
-	action->sourceClusterID = g_quark_from_string(tokens[0]);
-	action->destinationClusterID = g_quark_from_string(tokens[1]);
-
-	g_strfreev(tokens);
+	action->sourceClusterID = g_quark_from_string(startCluster->str);
+	action->destinationClusterID = g_quark_from_string(endCluster->str);
 
 	/* copy the other network properties */
 	action->latency = latency;

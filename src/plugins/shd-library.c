@@ -24,6 +24,12 @@
 #include <stdarg.h>
 #include <string.h>
 
+typedef struct _CallbackData CallbackData;
+struct _CallbackData {
+	gpointer applicationData;
+	Application* application;
+};
+
 /**
  * This file provides functionality exported to plug-ins. It mostly provides
  * a common interface and re-directs to the appropriate shadow function.
@@ -59,25 +65,12 @@ static void _shadowlib_executeCallbackInPluginContext(gpointer data, gpointer ar
 	callback(data);
 }
 
-static void _shadowlib_timerExpired(gpointer data, gpointer argument) {
-	Worker* worker = worker_getPrivate();
-	Application* a = node_getApplication(worker->cached_node);
-	Plugin* plugin = worker_getPlugin(a->software);
-	plugin_executeGeneric(plugin, a->state, _shadowlib_executeCallbackInPluginContext, data, argument);
-}
-
 void shadowlib_createCallback(ShadowPluginCallbackFunc callback, gpointer data, guint millisecondsDelay) {
 	Worker* worker = worker_getPrivate();
 	plugin_setShadowContext(worker->cached_plugin, TRUE);
 
-	/* the plugin wants a callback. since we need it to happen in the plug-in
-	 * context, we create a callback to our own function, then execute theirs
-	 */
-	CallbackEvent* event = callback_new(_shadowlib_timerExpired, data, callback);
-	SimulationTime nanos = SIMTIME_ONE_MILLISECOND * millisecondsDelay;
-
-	/* callback to our own node */
-	worker_scheduleEvent((Event*)event, nanos, 0);
+	application_callback(worker->cached_application,
+			_shadowlib_executeCallbackInPluginContext, data, callback, millisecondsDelay);
 
 	plugin_setShadowContext(worker->cached_plugin, FALSE);
 }

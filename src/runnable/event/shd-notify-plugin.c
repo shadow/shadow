@@ -42,13 +42,7 @@ void notifyplugin_run(NotifyPluginEvent* event, Node* node) {
 
 	/* check in with epoll to make sure we should carry out the notification */
 	Epoll* epoll = (Epoll*) node_lookupDescriptor(node, event->epollHandle);
-
-	if(epoll_isReadyToNotify(epoll)) {
-		application_notify(node_getApplication(node));
-
-		/* check if we need to be notified again */
-		epoll_ensureTriggers(epoll);
-	}
+	epoll_tryNotify(epoll);
 }
 
 void notifyplugin_free(NotifyPluginEvent* event) {

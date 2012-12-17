@@ -39,7 +39,8 @@ struct _Node {
 	NetworkInterface* defaultInterface;
 	CPU* cpu;
 
-	Application* application;
+	/* the applications this node is running */
+	GList* applications;
 
 	/* a statistics tracker for in/out bytes, CPU, memory, etc. */
 	Tracker* tracker;
@@ -66,7 +67,7 @@ struct _Node {
 	MAGIC_DECLARE;
 };
 
-Node* node_new(GQuark id, Network* network, Software* software, guint32 ip,
+Node* node_new(GQuark id, Network* network, guint32 ip,
 		GString* hostname, guint64 bwDownKiBps, guint64 bwUpKiBps,
 		guint cpuFrequency, gint cpuThreshold, gint cpuPrecision, guint nodeSeed,
 		SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel,
@@ -103,7 +104,7 @@ Node* node_new(GQuark id, Network* network, Software* software, guint32 ip,
 	node->randomPortCounter = MIN_RANDOM_PORT;
 
 	/* applications this node will run */
-	node->application = application_new(software);
+//	node->application = application_new(software);
 
 	node->cpu = cpu_new(cpuFrequency, cpuThreshold, cpuPrecision);
 	node->random = random_new(nodeSeed);
@@ -122,11 +123,6 @@ Node* node_new(GQuark id, Network* network, Software* software, guint32 ip,
 void node_free(gpointer data) {
 	Node* node = data;
 	MAGIC_ASSERT(node);
-
-	/* this was hopefully freed in node_stopApplication */
-	if(node->application) {
-		node_stopApplication(NULL, node, NULL);
-	}
 
 	g_hash_table_destroy(node->interfaces);
 	g_hash_table_destroy(node->descriptors);
@@ -158,20 +154,37 @@ EventQueue* node_getEvents(Node* node) {
 	return node->events;
 }
 
-void node_startApplication(Node* node) {
+void node_addApplication(Node* node, GQuark pluginID, gchar* pluginPath, SimulationTime startTime, gchar* arguments) {
 	MAGIC_ASSERT(node);
-	application_boot(node->application);
+	Application* application = application_new(pluginID, pluginPath, startTime, arguments);
+	node->applications = g_list_append(node->applications, application);
+
+	Worker* worker = worker_getPrivate();
+	StartApplicationEvent* event = startapplication_new(application);
+	worker_scheduleEvent((Event*)event, startTime, node->id);
 }
 
-void node_stopApplication(gpointer key, gpointer value, gpointer user_data) {
+void node_startApplication(Node* node, Application* application) {
+	MAGIC_ASSERT(node);
+	application_boot(application);
+}
+
+void node_stopAllApplications(gpointer key, gpointer value, gpointer user_data) {
 	Node* node = value;
 	MAGIC_ASSERT(node);
 
 	Worker* worker = worker_getPrivate();
 	worker->cached_node = node;
 
-	application_free(node->application);
-	node->application = NULL;
+	GList* item = node->applications;
+	while (item && item->data) {
+		Application* application = (Application*) item->data;
+		application_free(application);
+		item->data = NULL;
+		item = g_list_next(item);
+	}
+	g_list_free(node->applications);
+	node->applications = NULL;
 
 	worker->cached_node = NULL;
 }
@@ -217,11 +230,6 @@ in_addr_t node_getDefaultIP(Node* node) {
 gchar* node_getDefaultIPName(Node* node) {
 	MAGIC_ASSERT(node);
 	return networkinterface_getIPName(node->defaultInterface);
-}
-
-Application* node_getApplication(Node* node) {
-	MAGIC_ASSERT(node);
-	return node->application;
 }
 
 Random* node_getRandom(Node* node) {

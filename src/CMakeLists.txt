@@ -40,7 +40,6 @@ set(shadow_srcs
     topology/shd-internetwork.c
     
     engine/shd-plugin.c
-    engine/shd-software.c
     engine/shd-system.c
     plugins/shd-library.c
     
@@ -58,7 +57,6 @@ set(shadow_srcs
     runnable/event/shd-tcp-close-timer-expired.c
     runnable/action/shd-action.c
     runnable/action/shd-connect-network.c
-    runnable/action/shd-create-software.c
     runnable/action/shd-create-network.c
     runnable/action/shd-create-node.c
     runnable/action/shd-generate-cdf.c

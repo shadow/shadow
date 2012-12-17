@@ -119,7 +119,6 @@ Engine* engine_new(Configuration* config) {
 			(GDestroyNotify)shadowevent_free);
 
 	engine->registry = registry_new();
-	registry_register(engine->registry, SOFTWARE, NULL, software_free);
 	registry_register(engine->registry, CDFS, NULL, cdf_free);
 	registry_register(engine->registry, PLUGINPATHS, g_free, g_free);
 

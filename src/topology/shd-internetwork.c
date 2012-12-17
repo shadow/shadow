@@ -71,7 +71,7 @@ void internetwork_free(Internetwork* internet) {
 	 * applications may cause close() to get called on sockets which needs
 	 * other node information.
 	 */
-	g_hash_table_foreach(internet->nodes, node_stopApplication, NULL);
+	g_hash_table_foreach(internet->nodes, node_stopAllApplications, NULL);
 
 	/* now cleanup the rest */
 	g_hash_table_destroy(internet->nodes);
@@ -184,7 +184,7 @@ static guint32 _internetwork_generateIP(Internetwork* internet) {
 
 /* XXX: return type is "Node*" */
 gpointer internetwork_createNode(Internetwork* internet, GQuark nodeID,
-		Network* network, Software* software, GString* hostname,
+		Network* network, GString* hostname,
 		guint64 bwDownKiBps, guint64 bwUpKiBps, guint cpuFrequency, gint cpuThreshold, gint cpuPrecision,
 		guint nodeSeed, SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel,
 		GLogLevelFlags logLevel, gchar logPcap, gchar *pcapDir) {
@@ -193,7 +193,7 @@ gpointer internetwork_createNode(Internetwork* internet, GQuark nodeID,
 
 	guint32 ip = _internetwork_generateIP(internet);
 	ip = (guint32) nodeID;
-	Node* node = node_new(nodeID, network, software, ip, hostname, bwDownKiBps, bwUpKiBps,
+	Node* node = node_new(nodeID, network, ip, hostname, bwDownKiBps, bwUpKiBps,
 			cpuFrequency, cpuThreshold, cpuPrecision, nodeSeed, heartbeatInterval, heartbeatLogLevel,
 			logLevel, logPcap, pcapDir);
 	g_hash_table_replace(internet->nodes, GUINT_TO_POINTER((guint)nodeID), node);

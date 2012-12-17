@@ -27,7 +27,7 @@
 typedef enum _EngineStorage EngineStorage;
 
 enum _EngineStorage {
-	SOFTWARE, CDFS, PLUGINPATHS
+	CDFS, PLUGINPATHS
 };
 
 typedef struct _Engine Engine;

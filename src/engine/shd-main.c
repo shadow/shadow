@@ -126,7 +126,9 @@ gint shadow_main(gint argc, gchar* argv[]) {
 	parser_free(xmlParser);
 
 	/* if there was an error parsing, bounce out */
-	if(!success) {
+	if(success) {
+		message("successfully parsed Shadow XML input!");
+	} else {
 		g_queue_free(actions);
 		return -1;
 	}

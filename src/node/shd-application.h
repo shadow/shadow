@@ -26,16 +26,12 @@
 
 typedef struct _Application Application;
 
-struct _Application {
-	Software* software;
-	PluginState state;
-	MAGIC_DECLARE;
-};
-
-Application* application_new(Software* software);
+Application* application_new(GQuark pluginID, gchar* pluginPath, SimulationTime startTime, gchar* arguments);
 void application_free(Application* application);
 
 void application_boot(Application* application);
 void application_notify(Application* application);
+void application_callback(Application* application, CallbackFunc userCallback,
+		gpointer userData, gpointer userArgument, guint millisecondsDelay);
 
 #endif /* SHD_APPLICATION_H_ */

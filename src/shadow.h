@@ -85,7 +85,6 @@
 #include "engine/shd-event-queue.h"
 #include "plugins/shd-library.h"
 #include "engine/shd-plugin.h"
-#include "engine/shd-software.h"
 
 #include "topology/shd-address.h"
 #include "topology/shd-network.h"
@@ -114,7 +113,6 @@
 #include "runnable/event/shd-start-application.h"
 #include "runnable/event/shd-tcp-close-timer-expired.h"
 #include "runnable/action/shd-connect-network.h"
-#include "runnable/action/shd-create-software.h"
 #include "runnable/action/shd-create-network.h"
 #include "runnable/action/shd-create-node.h"
 #include "runnable/action/shd-generate-cdf.h"

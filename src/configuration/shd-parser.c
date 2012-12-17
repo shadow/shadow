@@ -21,457 +21,659 @@
 
 #include "shadow.h"
 
-/* NOTE - these MUST be synced with ParserElements */
-static const gchar* ParserElementStrings[] = {
-	"plugin", "cdf", "software", "node", "cluster", "link", "kill",
-};
-
-/* NOTE - they MUST be synced with ParserElementStrings */
-typedef enum {
-	ELEMENT_PLUGIN,
-	ELEMENT_CDF,
-	ELEMENT_SOFTWARE,
-	ELEMENT_NODE,
-	ELEMENT_CLUSTER,
-	ELEMENT_LINK,
-	ELEMENT_KILL,
-} ParserElements;
-
-/* NOTE - these MUST be synced with ParserAttributes in */
-static const gchar* ParserAttributeStrings[] = {
-	"id", "path", "center", "width", "tail",
-	"plugin", "software", "cluster", "clusters",
-	"bandwidthdown", "bandwidthup", "latency", "jitter", "packetloss",
-	"latencymin", "latencyQ1", "latencymean", "latencyQ3", "latencymax",
-	"cpufrequency", "time", "quantity", "arguments", "heartbeatfrequency",
-	"heartbeatloglevel", "loglevel", "logpcap", "pcapdir",
-};
-
-/* NOTE - they MUST be synced with ParserAttributeStrings */
-typedef enum {
-	ATTRIBUTE_ID,
-	ATTRIBUTE_PATH,
-	ATTRIBUTE_CENTER,
-	ATTRIBUTE_WIDTH,
-	ATTRIBUTE_TAIL,
-	ATTRIBUTE_PLUGIN,
-	ATTRIBUTE_SOFTWARE,
-	ATTRIBUTE_CLUSTER,
-	ATTRIBUTE_CLUSTERS,
-	ATTRIBUTE_BANDWIDTHDOWN,
-	ATTRIBUTE_BANDWIDTHUP,
-	ATTRIBUTE_LATENCY,
-	ATTRIBUTE_JITTER,
-	ATTRIBUTE_PACKETLOSS,
-	ATTRIBUTE_LATENCY_MIN,
-	ATTRIBUTE_LATENCY_Q1,
-	ATTRIBUTE_LATENCY_MEAN,
-	ATTRIBUTE_LATENCY_Q3,
-	ATTRIBUTE_LATENCY_MAX,
-	ATTRIBUTE_CPUFREQUENCY,
-	ATTRIBUTE_TIME,
-	ATTRIBUTE_QUANTITY,
-	ATTRIBUTE_ARGUMENTS,
-	ATTRIBUTE_HEARTBEATFREQUENCY,
-	ATTRIBUTE_HEARTBEATLOGLEVEL,
-	ATTRIBUTE_LOGLEVEL,
-	ATTRIBUTE_LOGPCAP,
-	ATTRIBUTE_PCAPDIR,
-} ParserAttributes;
+/*
+ * each action is given a priority so they are created in the correct order.
+ * that way when e.g. a node needs a link to its network, the network
+ * already exists, etc.
+ */
 
 struct _Parser {
-	GMarkupParser parser;
 	GMarkupParseContext* context;
+
+	GMarkupParser parser;
+
+	GMarkupParser clusterSubParser;
+	GString* currentParentClusterID;
+	gint nChildLinks;
+
+	GMarkupParser nodeSubParser;
+	CreateNodesAction* currentNodeAction;
+	gint nChildApplications;
+
 	GQueue* actions;
-	gboolean hasValidationError;
 	MAGIC_DECLARE;
 };
 
-typedef struct _ParserValues ParserValues;
+static void _parser_addAction(Parser* parser, Action* action) {
+	MAGIC_ASSERT(parser);
+	MAGIC_ASSERT(action);
+	g_queue_insert_sorted(parser->actions, action, action_compare, NULL);
+}
 
-struct _ParserValues {
-	/* represents a unique ID */
-	GString* id;
-	/* path to a file */
-	GString* path;
-	/* center of base of CDF - meaning dependent on what the CDF represents */
-	guint64 center;
-	/* width of base of CDF - meaning dependent on what the CDF represents */
-	guint64 width;
-	/* width of tail of CDF - meaning dependent on what the CDF represents */
-	guint64 tail;
-	/* holds the unique ID name of a plugin */
-	GString* plugin;
-	/* holds the unique ID name of software */
-	GString* software;
-	/* holds the unique ID name of cluster */
-	GString* cluster;
-	GString* linkedclusters;
-	/* holds the bandwidth (KiB/s) */
-	guint64 bandwidthup;
-	/* holds the bandwidth (KiB/s) */
-	guint64 bandwidthdown;
-	/* holds the latency (milliseconds) */
-	guint64 latency;
-	/* holds the variation in latency (milliseconds) */
-	guint64 jitter;
-	/* fraction between 0 and 1 - liklihood that a packet gets dropped */
-	gdouble packetloss;
-	/* latency quintile information - min*/
-	guint64 latencymin;
-	/* latency quintile information - Q1*/
-	guint64 latencyQ1;
-	/* latency quintile information - mean*/
-	guint64 latencymean;
-	/* latency quintile information - Q3*/
-	guint64 latencyQ3;
-	/* latency quintile information - max*/
-	guint64 latencymax;
-	/* string of arguments that will be passed to the software */
-	GString* arguments;
-	/* time in seconds */
-	guint64 time;
-	guint64 quantity;
-	guint64 cpufrequency;
-	/* node-specific log level */
-	GString* logLevel;
-	/* node-specific heartbeat frequency */
-	guint64 heartbeatIntervalSeconds;
-	/* node-specific heartbeat log level */
-	GString* heartbeatLogLevel;
-	/* node-specific pcap logging */
-	GString* logPcap;
-	/* node-specific directory for pcap files */
-	GString* pcapDir;
-	MAGIC_DECLARE;
-};
+static GError* _parser_handleCDFAttributes(Parser* parser, const gchar** attributeNames, const gchar** attributeValues) {
+	GString* id = NULL;
+	GString* path = NULL;
+	guint64 center = 0;
+	guint64 width = 0;
+	guint64 tail = 0;
 
-static ParserValues* _parser_getValues(const gchar *element_name,
-		const gchar **attribute_names, const gchar **attribute_values)
-{
-	const gchar **name_cursor = attribute_names;
-	const gchar **value_cursor = attribute_values;
+	GError* error = NULL;
 
-	ParserValues* values = g_new0(ParserValues, 1);
-	MAGIC_INIT(values);
+	const gchar **nameCursor = attributeNames;
+	const gchar **valueCursor = attributeValues;
 
-	/* if there is no quantity value, default should be 1 (allows a value of 0 to be explicity set) */
-	values->quantity = 1;
+	/* check the attributes */
+	while (!error && *nameCursor) {
+		const gchar* name = *nameCursor;
+		const gchar* value = *valueCursor;
 
-	/* loop through all the attributes, fill in values as we find them */
-	while (*name_cursor) {
-		debug("found attribute '%s=%s'", *name_cursor, *value_cursor);
+		debug("found attribute '%s=%s'", name, value);
 
-		/* contains the actual logic for parsing attributes of topology files. */
-		if (g_ascii_strcasecmp(*name_cursor, ParserAttributeStrings[ATTRIBUTE_SOFTWARE]) == 0) {
-			values->software = g_string_new(*value_cursor);
-		} else if (g_ascii_strcasecmp(*name_cursor, ParserAttributeStrings[ATTRIBUTE_ARGUMENTS]) == 0) {
-			values->arguments = g_string_new(*value_cursor);
-		} else if(g_ascii_strcasecmp(*name_cursor, ParserAttributeStrings[ATTRIBUTE_BANDWIDTHDOWN]) == 0) {
-			values->bandwidthdown = g_ascii_strtoull(*value_cursor, NULL, 10);
-		} else if(g_ascii_strcasecmp(*name_cursor, ParserAttributeStrings[ATTRIBUTE_BANDWIDTHUP]) == 0) {
-			values->bandwidthup = g_ascii_strtoull(*value_cursor, NULL, 10);
-		} else if(g_ascii_strcasecmp(*name_cursor, ParserAttributeStrings[ATTRIBUTE_CENTER]) == 0) {
-			values->center = g_ascii_strtoull(*value_cursor, NULL, 10);
-		} else if(g_ascii_strcasecmp(*name_cursor, ParserAttributeStrings[ATTRIBUTE_CLUSTER]) == 0) {
-			values->cluster = g_string_new(*value_cursor);
-		} else if(g_ascii_strcasecmp(*name_cursor, ParserAttributeStrings[ATTRIBUTE_CLUSTERS]) == 0) {
-			values->linkedclusters = g_string_new(*value_cursor);
-		} else if(g_ascii_strcasecmp(*name_cursor, ParserAttributeStrings[ATTRIBUTE_LATENCY]) == 0) {
-			values->latency = g_ascii_strtoull(*value_cursor, NULL, 10);
-		} else if(g_ascii_strcasecmp(*name_cursor, ParserAttributeStrings[ATTRIBUTE_JITTER]) == 0) {
-			values->jitter = g_ascii_strtoull(*value_cursor, NULL, 10);
-		} else if(g_ascii_strcasecmp(*name_cursor, ParserAttributeStrings[ATTRIBUTE_LATENCY_MIN]) == 0) {
-			values->latencymin = g_ascii_strtoull(*value_cursor, NULL, 10);
-		} else if(g_ascii_strcasecmp(*name_cursor, ParserAttributeStrings[ATTRIBUTE_LATENCY_Q1]) == 0) {
-			values->latencyQ1 = g_ascii_strtoull(*value_cursor, NULL, 10);
-		} else if(g_ascii_strcasecmp(*name_cursor, ParserAttributeStrings[ATTRIBUTE_LATENCY_MEAN]) == 0) {
-			values->latencymean = g_ascii_strtoull(*value_cursor, NULL, 10);
-		} else if(g_ascii_strcasecmp(*name_cursor, ParserAttributeStrings[ATTRIBUTE_LATENCY_Q3]) == 0) {
-			values->latencyQ3 = g_ascii_strtoull(*value_cursor, NULL, 10);
-		} else if(g_ascii_strcasecmp(*name_cursor, ParserAttributeStrings[ATTRIBUTE_LATENCY_MAX]) == 0) {
-			values->latencymax = g_ascii_strtoull(*value_cursor, NULL, 10);
-		} else if(g_ascii_strcasecmp(*name_cursor, ParserAttributeStrings[ATTRIBUTE_CPUFREQUENCY]) == 0) {
-			values->cpufrequency = g_ascii_strtoull(*value_cursor, NULL, 10);
-		} else if(g_ascii_strcasecmp(*name_cursor, ParserAttributeStrings[ATTRIBUTE_TIME]) == 0) {
-			values->time = g_ascii_strtoull(*value_cursor, NULL, 10);
-		} else if(g_ascii_strcasecmp(*name_cursor, ParserAttributeStrings[ATTRIBUTE_ID]) == 0) {
-			values->id = g_string_new(*value_cursor);
-		} else if(g_ascii_strcasecmp(*name_cursor, ParserAttributeStrings[ATTRIBUTE_PATH]) == 0) {
-			values->path = g_string_new(*value_cursor);
-		} else if(g_ascii_strcasecmp(*name_cursor, ParserAttributeStrings[ATTRIBUTE_PLUGIN]) == 0) {
-			values->plugin = g_string_new(*value_cursor);
-		} else if(g_ascii_strcasecmp(*name_cursor, ParserAttributeStrings[ATTRIBUTE_QUANTITY]) == 0) {
-			values->quantity = g_ascii_strtoull(*value_cursor, NULL, 10);
-		} else if(g_ascii_strcasecmp(*name_cursor, ParserAttributeStrings[ATTRIBUTE_PACKETLOSS]) == 0) {
-			values->packetloss = g_ascii_strtod(*value_cursor, NULL);
-		} else if(g_ascii_strcasecmp(*name_cursor, ParserAttributeStrings[ATTRIBUTE_TAIL]) == 0) {
-			values->tail = g_ascii_strtoull(*value_cursor, NULL, 10);
-		} else if(g_ascii_strcasecmp(*name_cursor, ParserAttributeStrings[ATTRIBUTE_WIDTH]) == 0) {
-			values->width = g_ascii_strtoull(*value_cursor, NULL, 10);
-		} else if(g_ascii_strcasecmp(*name_cursor, ParserAttributeStrings[ATTRIBUTE_HEARTBEATFREQUENCY]) == 0) {
-			values->heartbeatIntervalSeconds = g_ascii_strtoull(*value_cursor, NULL, 10);
-		} else if(g_ascii_strcasecmp(*name_cursor, ParserAttributeStrings[ATTRIBUTE_HEARTBEATLOGLEVEL]) == 0) {
-			values->heartbeatLogLevel = g_string_new(*value_cursor);
-		} else if(g_ascii_strcasecmp(*name_cursor, ParserAttributeStrings[ATTRIBUTE_LOGLEVEL]) == 0) {
-			values->logLevel = g_string_new(*value_cursor);
-		} else if(g_ascii_strcasecmp(*name_cursor, ParserAttributeStrings[ATTRIBUTE_LOGPCAP]) == 0) {
-			values->logPcap = g_string_new(*value_cursor);
-		} else if(g_ascii_strcasecmp(*name_cursor, ParserAttributeStrings[ATTRIBUTE_PCAPDIR]) == 0) {
-			values->pcapDir = g_string_new(*value_cursor);
+		if(!id && !g_ascii_strcasecmp(name, "id")) {
+			id = g_string_new(value);
+		} else if (!path && !g_ascii_strcasecmp(name, "path")) {
+			path = g_string_new(value);
+		} else if (!center && !g_ascii_strcasecmp(name, "center")) {
+			center = g_ascii_strtoull(value, NULL, 10);
+		} else if (!width && !g_ascii_strcasecmp(name, "width")) {
+			width  = g_ascii_strtoull(value, NULL, 10);
+		} else if (!tail && !g_ascii_strcasecmp(name, "tail")) {
+			tail = g_ascii_strtoull(value, NULL, 10);
 		} else {
-			warning("unrecognized attribute '%s' for element '%s' while parsing topology. ignoring.", *name_cursor, element_name);
+			error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ATTRIBUTE,
+							"unknown 'cdf' attribute '%s'", name);
 		}
 
-		name_cursor++;
-		value_cursor++;
+		nameCursor++;
+		valueCursor++;
 	}
 
-	return values;
-}
-
-static void _parser_freeValues(ParserValues* values) {
-	MAGIC_ASSERT(values);
-
-	if(values->software)
-		g_string_free(values->software, TRUE);
-	if(values->arguments)
-		g_string_free(values->arguments, TRUE);
-	if(values->cluster)
-		g_string_free(values->cluster, TRUE);
-	if(values->linkedclusters)
-		g_string_free(values->linkedclusters, TRUE);
-	if(values->id)
-		g_string_free(values->id, TRUE);
-	if(values->path)
-		g_string_free(values->path, TRUE);
-	if(values->plugin)
-		g_string_free(values->plugin, TRUE);
-	if(values->heartbeatLogLevel)
-		g_string_free(values->heartbeatLogLevel, TRUE);
-	if(values->logLevel)
-		g_string_free(values->logLevel, TRUE);
-	if(values->logPcap)
-		g_string_free(values->logPcap, TRUE);
-	if(values->pcapDir)
-		g_string_free(values->pcapDir, TRUE);
-
-	MAGIC_CLEAR(values);
-	g_free(values);
-}
-
-static gboolean _parser_validateCDF(Parser* parser, ParserValues* values) {
-	MAGIC_ASSERT(parser);
-	MAGIC_ASSERT(values);
-
-	if(!values->id || (!values->path && !values->center)) {
-		critical("element '%s' requires attributes '%s' and either '%s' or '%s'",
-				ParserElementStrings[ELEMENT_CDF],
-				ParserAttributeStrings[ATTRIBUTE_ID],
-				ParserAttributeStrings[ATTRIBUTE_PATH],
-				ParserAttributeStrings[ATTRIBUTE_CENTER]);
-		parser->hasValidationError = TRUE;
-		return FALSE;
+	/* validate the values */
+	if(!id || (!path && !center)) {
+		error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
+				"element 'cdf' requires attributes 'id' and either 'path' or 'center'");
 	}
-	return TRUE;
-}
 
-static gboolean _parser_validateCluster(Parser* parser, ParserValues* values) {
-	MAGIC_ASSERT(parser);
-	MAGIC_ASSERT(values);
-
-	if(!values->id || !values->bandwidthdown || !values->bandwidthup) {
-		critical("element '%s' requires attributes '%s' '%s' '%s'",
-				ParserElementStrings[ELEMENT_CLUSTER],
-				ParserAttributeStrings[ATTRIBUTE_ID],
-				ParserAttributeStrings[ATTRIBUTE_BANDWIDTHDOWN],
-				ParserAttributeStrings[ATTRIBUTE_BANDWIDTHUP]);
-		parser->hasValidationError = TRUE;
-		return FALSE;
-	}
-	return TRUE;
-}
-
-static gboolean _parser_validateLink(Parser* parser, ParserValues* values) {
-	MAGIC_ASSERT(parser);
-	MAGIC_ASSERT(values);
-
-	if(!values->linkedclusters || !values->latency) {
-		critical("element '%s' requires attributes '%s' '%s'",
-				ParserElementStrings[ELEMENT_LINK],
-				ParserAttributeStrings[ATTRIBUTE_CLUSTERS],
-				ParserAttributeStrings[ATTRIBUTE_LATENCY]);
-		parser->hasValidationError = TRUE;
-		return FALSE;
-	}
-	return TRUE;
-}
-
-static gboolean _parser_validatePlugin(Parser* parser, ParserValues* values) {
-	MAGIC_ASSERT(parser);
-	MAGIC_ASSERT(values);
-
-	if(!values->id || !values->path) {
-		critical("element '%s' requires attributes '%s' '%s'",
-				ParserElementStrings[ELEMENT_PLUGIN],
-				ParserAttributeStrings[ATTRIBUTE_ID],
-				ParserAttributeStrings[ATTRIBUTE_PATH]);
-		parser->hasValidationError = TRUE;
-		return FALSE;
-	}
-	return TRUE;
-}
-
-static gboolean _parser_validateApplication(Parser* parser, ParserValues* values) {
-	MAGIC_ASSERT(parser);
-	MAGIC_ASSERT(values);
-
-	if(!values->id || !values->plugin || !values->time || !values->arguments) {
-		critical("element '%s' requires attributes '%s' '%s' '%s' '%s'",
-				ParserElementStrings[ELEMENT_SOFTWARE],
-				ParserAttributeStrings[ATTRIBUTE_ID],
-				ParserAttributeStrings[ATTRIBUTE_PLUGIN],
-				ParserAttributeStrings[ATTRIBUTE_TIME],
-				ParserAttributeStrings[ATTRIBUTE_ARGUMENTS]);
-		parser->hasValidationError = TRUE;
-		return FALSE;
-	}
-	return TRUE;
-}
-
-static gboolean _parser_validateNode(Parser* parser, ParserValues* values) {
-	MAGIC_ASSERT(parser);
-	MAGIC_ASSERT(values);
-
-	if(!values->id || !values->software)
-	{
-		critical("element '%s' requires attributes '%s' '%s'",
-				ParserElementStrings[ELEMENT_NODE],
-				ParserAttributeStrings[ATTRIBUTE_ID],
-				ParserAttributeStrings[ATTRIBUTE_SOFTWARE]);
-		parser->hasValidationError = TRUE;
-		return FALSE;
-	}
-	return TRUE;
-}
-
-static gboolean _parser_validateKill(Parser* parser, ParserValues* values) {
-	MAGIC_ASSERT(parser);
-	MAGIC_ASSERT(values);
-
-	if(!values->time)
-	{
-		critical("element '%s' requires attributes '%s'",
-				ParserElementStrings[ELEMENT_KILL],
-				ParserAttributeStrings[ATTRIBUTE_TIME]);
-		parser->hasValidationError = TRUE;
-		return FALSE;
-	}
-	return TRUE;
-}
-
-static void _parser_handleElement(GMarkupParseContext *context,
-		const gchar *element_name, const gchar **attribute_names,
-		const gchar **attribute_values, gpointer user_data, GError **error) {
-	g_assert(context);
-	Parser* parser = user_data;
-	MAGIC_ASSERT(parser);
-
-	debug("found element '%s'", element_name);
-
-	ParserValues* values = _parser_getValues(element_name, attribute_names, attribute_values);
-	MAGIC_ASSERT(values);
-
-	/*
-	 * TODO: we should really check if attributes are set for an element
-	 * that are invalid for that element and print out a warning.
-	 * we might be able to do this easier in getValues()
-	 */
-
-	/* we hope to extract an action from the element */
-	Action* a = NULL;
-
-	/* each action is given a priority so they are created in the correct order.
-	 * that way when e.g. a node needs a link to its network, the network
-	 * already exists, etc.
-	 */
-
-	/* contains logic for building actions from topology file elements */
-	if(g_ascii_strcasecmp(element_name, ParserElementStrings[ELEMENT_CDF]) == 0) {
-		/* first check that we have all the types we need */
-		 if(_parser_validateCDF(parser, values)) {
-			/*
-			 * now we either load or generate a cdf, depending on path
-			 * if a path is given, we ignore the other attributes
-			 */
-			if(values->path) {
-				a = (Action*) loadcdf_new(values->id, values->path);
-			} else {
-				a = (Action*) generatecdf_new(values->id, values->center,
-						values->width, values->tail);
-			}
+	if(!error) {
+		/* no error, either load or generate a cdf
+		 * if a path is given, we ignore the other attributes
+		 */
+		if(path) {
+			Action* a = (Action*) loadcdf_new(id, path);
 			a->priority = 1;
+			_parser_addAction(parser, a);
+		} else {
+			Action* a = (Action*) generatecdf_new(id, center, width, tail);
+			a->priority = 1;
+			_parser_addAction(parser, a);
 		}
-	} else if(g_ascii_strcasecmp(element_name, ParserElementStrings[ELEMENT_CLUSTER]) == 0) {
-		if(_parser_validateCluster(parser, values)) {
-			a = (Action*) createnetwork_new(values->id, values->bandwidthdown,
-					values->bandwidthup, values->packetloss);
-			a->priority = 2;
+	}
+
+	/* clean up */
+	if(path) {
+		g_string_free(path, TRUE);
+	}
+	if(id) {
+		g_string_free(id, TRUE);
+	}
+
+	return error;
+}
+
+static GError* _parser_handleClusterAttributes(Parser* parser, const gchar** attributeNames, const gchar** attributeValues) {
+	GString* id = NULL;
+	guint64 bandwidthdown = 0;
+	guint64 bandwidthup = 0;
+	gdouble packetloss = 0;
+
+	GError* error = NULL;
+
+	const gchar **nameCursor = attributeNames;
+	const gchar **valueCursor = attributeValues;
+
+	/* check the attributes */
+	while (!error && *nameCursor) {
+		const gchar* name = *nameCursor;
+		const gchar* value = *valueCursor;
+
+		debug("found attribute '%s=%s'", name, value);
+
+		if(!id && !g_ascii_strcasecmp(name, "id")) {
+			id = g_string_new(value);
+		} else if (!bandwidthdown && !g_ascii_strcasecmp(name, "bandwidthdown")) {
+			bandwidthdown = g_ascii_strtoull(value, NULL, 10);
+		} else if (!bandwidthup && !g_ascii_strcasecmp(name, "bandwidthup")) {
+			bandwidthup  = g_ascii_strtoull(value, NULL, 10);
+		} else if (!packetloss && !g_ascii_strcasecmp(name, "packetloss")) {
+			packetloss = g_ascii_strtod(value, NULL);
+		} else {
+			error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ATTRIBUTE,
+							"unknown 'cluster' attribute '%s'", name);
 		}
-	} else if(g_ascii_strcasecmp(element_name, ParserElementStrings[ELEMENT_LINK]) == 0) {
-		if(_parser_validateLink(parser, values)) {
-			a = (Action*) connectnetwork_new(values->linkedclusters,
-					values->latency, values->jitter, values->packetloss,
-					values->latencymin, values->latencyQ1, values->latencymean,
-					values->latencyQ3, values->latencymax);
-			a->priority = 3;
+
+		nameCursor++;
+		valueCursor++;
+	}
+
+	/* validate the values */
+	if(!id || !bandwidthdown || !bandwidthup) {
+		error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
+				"element 'cluster' requires attributes 'bandwidthdown' 'bandwidthup'");
+	}
+
+	if(!error) {
+		/* no error, create the action */
+		Action* a = (Action*) createnetwork_new(id, bandwidthdown, bandwidthup, packetloss);
+		a->priority = 2;
+		_parser_addAction(parser, a);
+
+		/* save the parent so child links can reference it */
+		parser->currentParentClusterID = g_string_new(id->str);
+	}
+
+	/* clean up */
+	if(id) {
+		g_string_free(id, TRUE);
+	}
+
+	return error;
+}
+
+static GError* _parser_handlePluginAttributes(Parser* parser, const gchar** attributeNames, const gchar** attributeValues) {
+	GString* id = NULL;
+	GString* path = NULL;
+
+	GError* error = NULL;
+
+	const gchar **nameCursor = attributeNames;
+	const gchar **valueCursor = attributeValues;
+
+	/* check the attributes */
+	while (!error && *nameCursor) {
+		const gchar* name = *nameCursor;
+		const gchar* value = *valueCursor;
+
+		debug("found attribute '%s=%s'", name, value);
+
+		if(!id && !g_ascii_strcasecmp(name, "id")) {
+			id = g_string_new(value);
+		} else if (!path && !g_ascii_strcasecmp(name, "path")) {
+			path = g_string_new(value);
+		} else {
+			error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ATTRIBUTE,
+							"unknown 'plugin' attribute '%s'", name);
 		}
-	} else if(g_ascii_strcasecmp(element_name, ParserElementStrings[ELEMENT_PLUGIN]) == 0) {
-		if(_parser_validatePlugin(parser, values)) {
-			a = (Action*) loadplugin_new(values->id, values->path);
-			a->priority = 0;
+
+		nameCursor++;
+		valueCursor++;
+	}
+
+	/* validate the values */
+	if(!id || !path) {
+		error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
+				"element 'plugin' requires attributes 'id' 'path'");
+	}
+
+	if(!error) {
+		/* no error, create the action */
+		Action* a = (Action*) loadplugin_new(id, path);
+		a->priority = 0;
+		_parser_addAction(parser, a);
+	}
+
+	/* clean up */
+	if(id) {
+		g_string_free(id, TRUE);
+	}
+	if(path) {
+		g_string_free(path, TRUE);
+	}
+
+	return error;
+}
+
+static GError* _parser_handleNodeAttributes(Parser* parser, const gchar** attributeNames, const gchar** attributeValues) {
+	GString* id = NULL;
+	GString* cluster = NULL;
+	GString* loglevel = NULL;
+	GString* heartbeatloglevel = NULL;
+	GString* logpcap = NULL;
+	GString* pcapdir = NULL;
+	guint64 bandwidthdown = 0;
+	guint64 bandwidthup = 0;
+	guint64 heartbeatfrequency = 0;
+	guint64 cpufrequency = 0;
+	/* if there is no quantity value, default should be 1 (allows a value of 0 to be explicity set) */
+	guint64 quantity = 1;
+	gboolean quantityIsSet = FALSE;
+
+	GError* error = NULL;
+
+	const gchar **nameCursor = attributeNames;
+	const gchar **valueCursor = attributeValues;
+
+	/* check the attributes */
+	while (!error && *nameCursor) {
+		const gchar* name = *nameCursor;
+		const gchar* value = *valueCursor;
+
+		debug("found attribute '%s=%s'", name, value);
+
+		if(!id && !g_ascii_strcasecmp(name, "id")) {
+			id = g_string_new(value);
+		} else if (!cluster && !g_ascii_strcasecmp(name, "cluster")) {
+			cluster = g_string_new(value);
+		} else if (!loglevel && !g_ascii_strcasecmp(name, "loglevel")) {
+			loglevel = g_string_new(value);
+		} else if (!heartbeatloglevel && !g_ascii_strcasecmp(name, "heartbeatloglevel")) {
+			heartbeatloglevel = g_string_new(value);
+		} else if (!logpcap && !g_ascii_strcasecmp(name, "logpcap")) {
+			logpcap = g_string_new(value);
+		} else if (!pcapdir && !g_ascii_strcasecmp(name, "pcapdir")) {
+			pcapdir = g_string_new(value);
+		} else if (!quantityIsSet && !g_ascii_strcasecmp(name, "quantity")) {
+			quantity = g_ascii_strtoull(value, NULL, 10);
+			quantityIsSet = TRUE;
+		} else if (!bandwidthdown && !g_ascii_strcasecmp(name, "bandwidthdown")) {
+			bandwidthdown  = g_ascii_strtoull(value, NULL, 10);
+		} else if (!bandwidthup && !g_ascii_strcasecmp(name, "bandwidthup")) {
+			bandwidthup = g_ascii_strtoull(value, NULL, 10);
+		} else if (!heartbeatfrequency && !g_ascii_strcasecmp(name, "heartbeatfrequency")) {
+			heartbeatfrequency = g_ascii_strtoull(value, NULL, 10);
+		} else if (!cpufrequency && !g_ascii_strcasecmp(name, "cpufrequency")) {
+			cpufrequency = g_ascii_strtoull(value, NULL, 10);
+		} else {
+			error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ATTRIBUTE,
+							"unknown 'node' attribute '%s'", name);
 		}
-	} else if(g_ascii_strcasecmp(element_name, ParserElementStrings[ELEMENT_SOFTWARE]) == 0) {
-		if(_parser_validateApplication(parser, values)) {
-			a = (Action*) createsoftware_new(values->id, values->plugin,
-					values->arguments, values->time);
-			a->priority = 4;
+
+		nameCursor++;
+		valueCursor++;
+	}
+
+	/* validate the values */
+	if(!id) {
+		error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
+				"element 'node' requires attributes 'id'");
+	}
+
+	if(!error) {
+		/* no error, create the action */
+		Action* a = (Action*) createnodes_new(id, cluster,
+				bandwidthdown, bandwidthup, quantity, cpufrequency,
+				heartbeatfrequency, heartbeatloglevel, loglevel, logpcap, pcapdir);
+		a->priority = 5;
+		_parser_addAction(parser, a);
+
+		/* save the parent so child applications can reference it */
+		g_assert(!parser->currentNodeAction);
+		parser->currentNodeAction = (CreateNodesAction*)a;
+	}
+
+	/* clean up */
+	if(id) {
+		g_string_free(id, TRUE);
+	}
+	if(cluster) {
+		g_string_free(cluster, TRUE);
+	}
+	if(loglevel) {
+		g_string_free(loglevel, TRUE);
+	}
+	if(heartbeatloglevel) {
+		g_string_free(heartbeatloglevel, TRUE);
+	}
+	if(logpcap) {
+		g_string_free(logpcap, TRUE);
+	}
+	if(pcapdir) {
+		g_string_free(pcapdir, TRUE);
+	}
+
+	return error;
+}
+
+static GError* _parser_handleKillAttributes(Parser* parser, const gchar** attributeNames, const gchar** attributeValues) {
+	guint64 time = 0;
+
+	GError* error = NULL;
+
+	const gchar **nameCursor = attributeNames;
+	const gchar **valueCursor = attributeValues;
+
+	/* check the attributes */
+	while (!error && *nameCursor) {
+		const gchar* name = *nameCursor;
+		const gchar* value = *valueCursor;
+
+		debug("found attribute '%s=%s'", name, value);
+
+		if (!time && !g_ascii_strcasecmp(name, "time")) {
+			time = g_ascii_strtoull(value, NULL, 10);
+		} else {
+			error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ATTRIBUTE,
+							"unknown 'kill' attribute '%s'", name);
 		}
-	} else if(g_ascii_strcasecmp(element_name, ParserElementStrings[ELEMENT_NODE]) == 0) {
-		if(_parser_validateNode(parser, values) && values->quantity > 0) {
-			a = (Action*) createnodes_new(values->id, values->software, values->cluster,
-					values->bandwidthdown, values->bandwidthup, values->quantity, values->cpufrequency,
-					values->heartbeatIntervalSeconds, values->heartbeatLogLevel, values->logLevel, values->logPcap, values->pcapDir);
-			a->priority = 5;
+
+		nameCursor++;
+		valueCursor++;
+	}
+
+	/* validate the values */
+	if(!time) {
+		error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
+				"element 'kill' requires attributes 'time'");
+	}
+
+	if(!error) {
+		/* no error, create the action */
+		Action* a = (Action*) killengine_new((SimulationTime) time);
+		a->priority = 6;
+		_parser_addAction(parser, a);
+	}
+
+	/* nothing to clean up */
+
+	return error;
+}
+
+static GError* _parser_handleLinkAttributes(Parser* parser, const gchar** attributeNames, const gchar** attributeValues) {
+	GString* cluster = NULL;
+	guint64 latency = 0;
+	guint64 jitter = 0;
+	gdouble packetloss = 0.0;
+	guint64 latencymin = 0;
+	guint64 latencyQ1 = 0;
+	guint64 latencymean = 0;
+	guint64 latencyQ3 = 0;
+	guint64 latencymax = 0;
+
+	GError* error = NULL;
+
+	const gchar **nameCursor = attributeNames;
+	const gchar **valueCursor = attributeValues;
+
+	/* check the attributes */
+	while (!error && *nameCursor) {
+		const gchar* name = *nameCursor;
+		const gchar* value = *valueCursor;
+
+		debug("found attribute '%s=%s'", name, value);
+
+		if(!cluster && !g_ascii_strcasecmp(name, "cluster")) {
+			cluster = g_string_new(value);
+		} else if (!latency && !g_ascii_strcasecmp(name, "latency")) {
+			latency = g_ascii_strtoull(value, NULL, 10);
+		} else if (!jitter && !g_ascii_strcasecmp(name, "jitter")) {
+			jitter = g_ascii_strtoull(value, NULL, 10);
+		} else if (!latencymin && !g_ascii_strcasecmp(name, "latencymin")) {
+			latencymin = g_ascii_strtoull(value, NULL, 10);
+		} else if (!latencyQ1 && !g_ascii_strcasecmp(name, "latencyQ1")) {
+			latencyQ1 = g_ascii_strtoull(value, NULL, 10);
+		} else if (!latencymean && !g_ascii_strcasecmp(name, "latencymean")) {
+			latencymean = g_ascii_strtoull(value, NULL, 10);
+		} else if (!latencyQ3 && !g_ascii_strcasecmp(name, "latencyQ3")) {
+			latencyQ3 = g_ascii_strtoull(value, NULL, 10);
+		} else if (!latencymax && !g_ascii_strcasecmp(name, "latencymax")) {
+			latencymax = g_ascii_strtoull(value, NULL, 10);
+		} else if (!packetloss && !g_ascii_strcasecmp(name, "packetloss")) {
+			packetloss = g_ascii_strtod(value, NULL);
+		} else {
+			error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ATTRIBUTE,
+							"unknown 'link' attribute '%s'", name);
 		}
-	} else if(g_ascii_strcasecmp(element_name, ParserElementStrings[ELEMENT_KILL]) == 0) {
-		if(_parser_validateKill(parser, values)) {
-			a = (Action*) killengine_new((SimulationTime) values->time);
-			a->priority = 6;
+
+		nameCursor++;
+		valueCursor++;
+	}
+
+	/* validate the values */
+	if(!cluster || !latency) {
+		error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
+				"element 'link' requires attributes 'cluster' 'latency'");
+	}
+
+	if(!error) {
+		/* no error, create the action */
+		Action*  a = (Action*) connectnetwork_new(parser->currentParentClusterID, cluster,
+				latency, jitter, packetloss,
+				latencymin, latencyQ1, latencymean, latencyQ3, latencymax);
+		a->priority = 3;
+		_parser_addAction(parser, a);
+
+		(parser->nChildLinks)++;
+	}
+
+	/* clean up */
+	if(cluster) {
+		g_string_free(cluster, TRUE);
+	}
+
+	return error;
+}
+
+static GError* _parser_handleApplicationAttributes(Parser* parser, const gchar** attributeNames, const gchar** attributeValues) {
+	GString* plugin = NULL;
+	GString* arguments = NULL;
+	guint64 time = 0;
+
+	GError* error = NULL;
+
+	const gchar **nameCursor = attributeNames;
+	const gchar **valueCursor = attributeValues;
+
+	/* check the attributes */
+	while (!error && *nameCursor) {
+		const gchar* name = *nameCursor;
+		const gchar* value = *valueCursor;
+
+		debug("found attribute '%s=%s'", name, value);
+
+		if(!plugin && !g_ascii_strcasecmp(name, "plugin")) {
+			plugin = g_string_new(value);
+		} else if (!arguments && !g_ascii_strcasecmp(name, "arguments")) {
+			arguments = g_string_new(value);
+		} else if (!time && !g_ascii_strcasecmp(name, "time")) {
+			time = g_ascii_strtoull(value, NULL, 10);
+		} else {
+			error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ATTRIBUTE,
+							"unknown 'application' attribute '%s'", name);
+		}
+
+		nameCursor++;
+		valueCursor++;
+	}
+
+	/* validate the values */
+	if(!plugin || !arguments || !time) {
+		error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
+				"element 'application' requires attributes 'plugin' 'arguments' 'time'");
+	}
+
+	if(!error) {
+		/* no error, application configs get added to the node creation event
+		 * in order to handle nodes with quantity > 1 */
+		g_assert(parser->currentNodeAction);
+		createnodes_addApplication(parser->currentNodeAction, plugin, arguments, time);
+
+		(parser->nChildApplications)++;
+	}
+
+	/* clean up */
+	if(plugin) {
+		g_string_free(plugin, TRUE);
+	}
+	if(arguments) {
+		g_string_free(arguments, TRUE);
+	}
+
+	return error;
+}
+
+static void _parser_handleClusterChildStartElement(GMarkupParseContext* context,
+		const gchar* elementName, const gchar** attributeNames,
+		const gchar** attributeValues, gpointer userData, GError** error) {
+	Parser* parser = (Parser*) userData;
+	MAGIC_ASSERT(parser);
+	g_assert(context && error);
+
+	debug("found 'cluster' child starting element '%s'", elementName);
+
+	/* check for cluster child-level elements */
+	if (!g_ascii_strcasecmp(elementName, "link")) {
+		*error = _parser_handleLinkAttributes(parser, attributeNames, attributeValues);
+	} else {
+		*error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ELEMENT,
+				"unknown 'cluster' child starting element '%s'", elementName);
+	}
+}
+
+static void _parser_handleClusterChildEndElement(GMarkupParseContext* context,
+		const gchar* elementName, gpointer userData, GError** error) {
+	Parser* parser = (Parser*) userData;
+	MAGIC_ASSERT(parser);
+	g_assert(context && error);
+
+	debug("found 'cluster' child ending element '%s'", elementName);
+
+	/* check for cluster child-level elements */
+	if (!(!g_ascii_strcasecmp(elementName, "link"))) {
+		*error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ELEMENT,
+				"unknown 'cluster' child ending element '%s'", elementName);
+	}
+}
+
+static void _parser_handleNodeChildStartElement(GMarkupParseContext* context,
+		const gchar* elementName, const gchar** attributeNames,
+		const gchar** attributeValues, gpointer userData, GError** error) {
+	Parser* parser = (Parser*) userData;
+	MAGIC_ASSERT(parser);
+	g_assert(context && error);
+
+	debug("found 'node' child starting element '%s'", elementName);
+
+	/* check for cluster child-level elements */
+	if (!g_ascii_strcasecmp(elementName, "application")) {
+		*error = _parser_handleApplicationAttributes(parser, attributeNames, attributeValues);
+	} else {
+		*error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ELEMENT,
+				"unknown 'node' child starting element '%s'", elementName);
+	}
+}
+
+static void _parser_handleNodeChildEndElement(GMarkupParseContext* context,
+		const gchar* elementName, gpointer userData, GError** error) {
+	Parser* parser = (Parser*) userData;
+	MAGIC_ASSERT(parser);
+	g_assert(context && error);
+
+	debug("found 'node' child ending element '%s'", elementName);
+
+	/* check for cluster child-level elements */
+	if (!(!g_ascii_strcasecmp(elementName, "application"))) {
+		*error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ELEMENT,
+				"unknown 'node' child ending element '%s'", elementName);
+	}
+}
+
+static void _parser_handleRootStartElement(GMarkupParseContext* context,
+		const gchar* elementName, const gchar** attributeNames,
+		const gchar** attributeValues, gpointer userData, GError** error) {
+	Parser* parser = (Parser*) userData;
+	MAGIC_ASSERT(parser);
+	g_assert(context && error);
+
+	debug("found start element '%s'", elementName);
+
+	/* check for root-level elements */
+	if (!g_ascii_strcasecmp(elementName, "cdf")) {
+		*error = _parser_handleCDFAttributes(parser, attributeNames, attributeValues);
+	} else if (!g_ascii_strcasecmp(elementName, "cluster")) {
+		*error = _parser_handleClusterAttributes(parser, attributeNames, attributeValues);
+		/* handle internal elements in a sub parser */
+		g_markup_parse_context_push(context, &(parser->clusterSubParser), parser);
+	} else if (!g_ascii_strcasecmp(elementName, "plugin")) {
+		*error = _parser_handlePluginAttributes(parser, attributeNames, attributeValues);
+	} else if (!g_ascii_strcasecmp(elementName, "node")) {
+		*error = _parser_handleNodeAttributes(parser, attributeNames, attributeValues);
+		/* handle internal elements in a sub parser */
+		g_markup_parse_context_push(context, &(parser->nodeSubParser), parser);
+	} else if (!g_ascii_strcasecmp(elementName, "kill")) {
+		*error = _parser_handleKillAttributes(parser, attributeNames, attributeValues);
+	} else {
+		*error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ELEMENT,
+				"unknown 'root' child starting element '%s'", elementName);
+	}
+}
+
+static void _parser_handleRootEndElement(GMarkupParseContext* context,
+		const gchar* elementName, gpointer userData, GError** error) {
+	Parser* parser = (Parser*) userData;
+	MAGIC_ASSERT(parser);
+	g_assert(context && error);
+
+	debug("found end element '%s'", elementName);
+
+	/* check for root-level elements */
+	if (!g_ascii_strcasecmp(elementName, "cluster")) {
+		/* validate children */
+		if (parser->nChildLinks <= 0) {
+			*error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_EMPTY,
+					"element 'cluster' requires at least 1 child 'link'");
+		}
+		g_markup_parse_context_pop(context);
+
+		/* reset child cache */
+		parser->nChildLinks = 0;
+		if (parser->currentParentClusterID) {
+			g_string_free(parser->currentParentClusterID, TRUE);
+			parser->currentParentClusterID = NULL;
+		}
+	} else if (!g_ascii_strcasecmp(elementName, "node")) {
+		/* validate children */
+		if (parser->nChildApplications <= 0) {
+			*error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_EMPTY,
+					"element 'node' requires at least 1 child 'application'");
+		}
+		g_markup_parse_context_pop(context);
+
+		/* reset child cache */
+		parser->nChildApplications = 0;
+		if (parser->currentNodeAction) {
+			/* this is in the actions queue and will get free'd later */
+			parser->currentNodeAction = NULL;
 		}
 	} else {
-		warning("unrecognized element '%s' while parsing topology. ignoring.", element_name);
+		if(!(!g_ascii_strcasecmp(elementName, "plugin") ||
+				!g_ascii_strcasecmp(elementName, "cdf") ||
+				!g_ascii_strcasecmp(elementName, "kill"))) {
+			*error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ELEMENT,
+							"unknown 'root' child ending element '%s'", elementName);
+		}
 	}
-
-	/* keep track of our actions */
-	if(a) {
-		g_queue_insert_sorted(parser->actions, a, action_compare, NULL);
-	}
-
-	_parser_freeValues(values);
 }
+
+/* public interface */
 
 Parser* parser_new() {
 	Parser* parser = g_new0(Parser, 1);
 	MAGIC_INIT(parser);
 
-	/* we handle everything in start_element callback, and ignore end_element,
+	/* we handle the start_element and end_element callbacks, but ignore
 	 * text, passthrough (comments), and errors
 	 * handle both hosts and topology files.
 	 */
 
-	parser->parser.start_element = &_parser_handleElement;
-	parser->context = g_markup_parse_context_new(&parser->parser, 0, parser, NULL);
+	/* main root parser */
+	parser->parser.start_element = &_parser_handleRootStartElement;
+	parser->parser.end_element = &_parser_handleRootEndElement;
+	parser->context = g_markup_parse_context_new(&(parser->parser), 0, parser, NULL);
+
+	/* sub parsers, without their own context */
+	parser->clusterSubParser.start_element = &_parser_handleClusterChildStartElement;
+	parser->clusterSubParser.end_element = &_parser_handleClusterChildEndElement;
+	parser->nodeSubParser.start_element = &_parser_handleNodeChildStartElement;
+	parser->nodeSubParser.end_element = &_parser_handleNodeChildEndElement;
 
 	return parser;
 }
@@ -486,19 +688,14 @@ gboolean parser_parseContents(Parser* parser, gchar* contents, gsize length, GQu
 	parser->actions = NULL;
 
 	/* check for success in parsing and validating the XML */
-	if(success && !parser->hasValidationError) {
+	if(success && !error) {
 		return TRUE;
 	} else {
 		/* some kind of error occurred, check the parser */
-		if (!success) {
-			error("g_markup_parse_context_parse: %s", error->message);
-			g_error_free(error);
-		}
-
-		/* also check for validation */
-		if(parser->hasValidationError) {
-			critical("XML validation error");
-		}
+		g_assert(error);
+		error("g_markup_parse_context_parse: Shadow XML parsing error %i: %s",
+				error->code, error->message);
+		g_error_free(error);
 
 		return FALSE;
 	}
@@ -525,7 +722,7 @@ gboolean parser_parseFile(Parser* parser, GString* filename, GQueue* actions) {
 	/* do the actual parsing */
 	debug("attempting to parse XML file '%s'", filename->str);
 	gboolean result = parser_parseContents(parser, content, length, actions);
-	message("finished parsing XML file '%s'", filename->str);
+	debug("finished parsing XML file '%s'", filename->str);
 
 	g_free(content);
 
