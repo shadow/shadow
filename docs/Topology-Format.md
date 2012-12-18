@@ -77,10 +77,13 @@ The _packetloss_ attribute is optional and represents the percentage chance that
 
 ### The _node_ element
 ```xml
-<node id="STRING" software="STRING" cluster="STRING" quantity="INTEGER" bandwidthdown="INTEGER" bandwidthup="INTEGER" loglevel="STRING" heartbeatloglevel="STRING" heartbeatfrequency="INTEGER" cpufrequency="INTEGER" logpcap="STRING" pcapdir="STRING" />
+<node id="STRING" software="STRING" cluster="STRING" quantity="INTEGER" bandwidthdown="INTEGER" bandwidthup="INTEGER" loglevel="STRING" heartbeatloglevel="STRING" heartbeatfrequency="INTEGER" cpufrequency="INTEGER" logpcap="STRING" pcapdir="STRING" >
+  <application ...
+</node>
 ```
 **Required attributes**: _id_, _software_  
-**Optional attributes**: _cluster_, _quantity_, _bandwidthdown_, _bandwidthup_, _loglevel_, _heartbeatloglevel_, _heartbeatfrequency_, _cpufrequency_, _logpcap_, _pcapdir_
+**Optional attributes**: _cluster_, _quantity_, _bandwidthdown_, _bandwidthup_, _loglevel_, _heartbeatloglevel_, _heartbeatfrequency_, _cpufrequency_, _logpcap_, _pcapdir_  
+**Required child element**: \<application\>  
 
 The _node_ element represents a node or virtual host in the simulation. The _id_ attribute identifies this _node_ and must be a string that is unique among all _id_ attributes for any element in the XML file. _id_ will also be used as the network hostname of this _node_. The _software_ attribute should be set to the _id_ of the _software_ that this host should run during the simulation.
 
@@ -104,12 +107,13 @@ The _plugin_ element represents a library plug-in that Shadow should dynamically
 
 The _path_ attribute holds the system path to the plug-in `*.so` library. If _path_ begins with `~/`, the path will be considered relative to the current user's home directory.
 
-### The _software_ element
+### The _application_ element
 ```xml
-<software id="STRING" plugin="STRING" time="INTEGER" arguments="STRING" />
+<application plugin="STRING" time="INTEGER" arguments="STRING" />
 ```
-**Required attributes**: _id_, _plugin_, _time_, _arguments_  
+**Required attributes**: _plugin_, _time_, _arguments_  
+**Required parent element**: \<node\>
 
-The _software_ element represents an application the node will run. The _id_ attribute identifies this _software_ and must be a string that is unique among all _id_ attributes for any element in the XML file. The _plugin_ attribute should be set to the _id_ of the _plugin_ element that represents the plug-in that should be used to launch this application at _time_ virtual seconds from the beginning of the simulation. 
+The _application_ element represents an application the node will run. The _plugin_ attribute should be set to the _id_ of the _plugin_ element that represents the plug-in that should be used to launch this application at _time_ virtual seconds from the beginning of the simulation. 
 
 The _arguments_ attribute should be set to a string holding the required plug-in arguments. This string will be passed to the plug-in in an `argv`-style array, similar to how arguments are passed to the main function in a `C` program. Please see the plug-in documentation for usage and format of the argument string.
