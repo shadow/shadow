@@ -66,7 +66,6 @@ def main():
     fout.write(etree.tostring(kill, pretty_print=True, xml_declaration=False))
 
     for plugin in plugins:
-        print etree.tostring(plugin, pretty_print=True, xml_declaration=False)
         fout.write(etree.tostring(plugin, pretty_print=True, xml_declaration=False))
     fout.write('\n')
 
