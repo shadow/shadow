@@ -296,6 +296,7 @@ struct _TorControl_Connection {
 	gint sockd;
 	gchar buf[16384];
 	gsize bufOffset;
+	GString *sendBuf;
 
 	GList *reply;
 	gchar readingData;
