@@ -190,16 +190,6 @@ struct _Scallion {
 	gchar ipstring[40];
 	gchar hostname[128];
 	ScallionTor* stor;
-	service_filegetter_t sfg;
-	gint sfgEpoll;
-	TorrentService tsvc;
-	gint tsvcClientEpoll;
-	gint tsvcServerEpoll;
-	browser_t browser;
-	gint browserEpoll;
-	PingService pingSvc;
-	gint pingServerEpoll;
-	gint pingClientEpoll;
 	ShadowFunctionTable* shadowlibFuncs;
 };
 

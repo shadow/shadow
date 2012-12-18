@@ -250,6 +250,18 @@ gint scalliontor_start(ScallionTor* stor, gint argc, gchar *argv[]) {
 	return 0;
 }
 
+static GString* _scalliontor_getHomePath(gchar* path) {
+	GString* sbuffer = g_string_new("");
+	if(g_ascii_strncasecmp(path, "~", 1) == 0) {
+		/* replace ~ with home directory */
+		const gchar* home = g_get_home_dir();
+		g_string_append_printf(sbuffer, "%s%s", home, path+1);
+	} else {
+		g_string_append_printf(sbuffer, "%s", path);
+	}
+	return sbuffer;
+}
+
 ScallionTor* scalliontor_new(ShadowFunctionTable* shadowlibFuncs, char* hostname, enum vtor_nodetype type,
 		char* bandwidth, char* bwrate, char* bwburst, char* torrc_path, char* datadir_path, char* geoip_path) {
 	ScallionTor* stor = g_new0(ScallionTor, 1);
@@ -258,15 +270,10 @@ ScallionTor* scalliontor_new(ShadowFunctionTable* shadowlibFuncs, char* hostname
 	stor->type = type;
 	stor->bandwidth = (unsigned int) atoi(bandwidth);
 
-	/* make sure the geoip path is absolute */
-	GString* geoipBuffer = g_string_new("");
-	if(g_ascii_strncasecmp(geoip_path, "~", 1) == 0) {
-		/* replace ~ with home directory */
-		const gchar* home = g_get_home_dir();
-		g_string_append_printf(geoipBuffer, "%s%s", home, geoip_path+1);
-	} else {
-		g_string_append_printf(geoipBuffer, "%s", geoip_path);
-	}
+	/* make sure the paths are absolute */
+	GString* torrcBuffer = _scalliontor_getHomePath(torrc_path);
+	GString* datadirBuffer = _scalliontor_getHomePath(datadir_path);
+	GString* geoipBuffer = _scalliontor_getHomePath(geoip_path);
 
 	/* default args */
 	char *config[24];
@@ -274,9 +281,9 @@ ScallionTor* scalliontor_new(ShadowFunctionTable* shadowlibFuncs, char* hostname
 	config[1] = "--Address";
 	config[2] = hostname;
 	config[3] = "-f";
-	config[4] = torrc_path;
+	config[4] = torrcBuffer->str;
 	config[5] = "--DataDirectory";
-	config[6] = datadir_path;
+	config[6] = datadirBuffer->str;
 	config[7] = "--GeoIPFile";
 	config[8] = geoipBuffer->str;
 	config[9] = "--BandwidthRate";
@@ -300,12 +307,13 @@ ScallionTor* scalliontor_new(ShadowFunctionTable* shadowlibFuncs, char* hostname
 	config[15] = "--ControlPort";
     config[16] = "9051";
     config[17] = "--ControlListenAddress";
-    config[18] = hostname;
-    config[19] = "HashedControlPassword";
-    config[20] = "16:25662F13DA7881D46091AB96726A8E5245CBF98BA6961A5B8C9CEEBB25";
+    config[18] = "127.0.0.1";
+    config[19] = "--ControlListenAddress";
+    config[20] = hostname;
+    config[21] = "HashedControlPassword";
+    config[22] = "16:25662F13DA7881D46091AB96726A8E5245CBF98BA6961A5B8C9CEEBB25";
 
-
-	int num_args = 21;
+	int num_args = 23;
 	/* additional args */
 	if(stor->type == VTOR_DIRAUTH) {
 		num_args += 2;
@@ -313,8 +321,8 @@ ScallionTor* scalliontor_new(ShadowFunctionTable* shadowlibFuncs, char* hostname
 			stor->shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__,
 					"data directory path is too long and was truncated to '%s'\n", stor->v3bw_name);
 		}
-		config[21] = "--V3BandwidthsFile";
-		config[22] = stor->v3bw_name;
+		config[23] = "--V3BandwidthsFile";
+		config[24] = stor->v3bw_name;
 	}
 
 	scallion.stor = stor;
@@ -325,6 +333,8 @@ ScallionTor* scalliontor_new(ShadowFunctionTable* shadowlibFuncs, char* hostname
 		scalliontor_init_v3bw(stor);
 	}
 
+	g_string_free(torrcBuffer, TRUE);
+	g_string_free(datadirBuffer, TRUE);
 	g_string_free(geoipBuffer, TRUE);
 	g_free(nickname);
 

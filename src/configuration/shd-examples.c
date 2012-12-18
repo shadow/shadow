@@ -24,8 +24,8 @@
 GString* example_getEchoExampleContents() {
 	return g_string_new(
 		"<plugin id=\"echoplugin\" path=\"libshadow-plugin-echo.so\" />"
-		"<cluster id=\"net0\" bandwidthdown=\"1024\" bandwidthup=\"512\" packetloss=\"0.0\" \>"
-		"<cluster id=\"net1\" bandwidthdown=\"1024\" bandwidthup=\"512\" packetloss=\"0.5\" \>"
+		"<cluster id=\"net0\" bandwidthdown=\"1024\" bandwidthup=\"512\" packetloss=\"0.0\" />"
+		"<cluster id=\"net1\" bandwidthdown=\"1024\" bandwidthup=\"512\" packetloss=\"0.5\" />"
 		"<link clusters=\"net0 net0\" latency=\"50\" jitter=\"10\"/>"
 		"<link clusters=\"net1 net1\" latency=\"50\" jitter=\"40\"/>"
 		"<node id=\"reliable.udpserver.echo\" cluster=\"net0\" >"

@@ -122,7 +122,7 @@ static void _torcontrollogger_handleResponseEvent(TorControlLogger* tcl,
 
 static void _torcontrollogger_handleEvents(TorControlLogger* tcl, gint code,
 		gchar* line, ...) {
-	tcl->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "%s:%i %s",
+	tcl->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "[torcontrol-log] %s:%i %s",
 			tcl->targetHostname->str, tcl->targetPort, line);
 }
 
