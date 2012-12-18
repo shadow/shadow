@@ -453,6 +453,7 @@ gint torControl_createConnection(gchar *hostname, in_port_t port, gchar *mode, g
     _torControl_changeEpoll(torControl->epolld, connection->sockd, EPOLLOUT);
 
     connection->bufOffset = 0;
+    connection->sendBuf = g_string_new("");
     connection->reply = NULL;
     connection->readingData = FALSE;
     g_hash_table_insert(torControl->connections, &(connection->sockd), connection);
@@ -776,17 +777,16 @@ gint torControl_sendCommand(gint sockd, gchar *command) {
     TorControl_Connection *connection = g_hash_table_lookup(torControl->connections, &sockd);
 
     /* all commands must end with CRLF */
-    GString *buf = g_string_new("");
-    g_string_printf(buf, "%s\r\n", command);
+    g_string_append_printf(connection->sendBuf, "%s\r\n", command);
 
     _torControl_changeEpoll(torControl->epolld, sockd, EPOLLOUT);
-    gint bytes = send(sockd, buf->str, buf->len, 0);
-    g_string_free(buf, TRUE);
+    gint bytes = send(sockd, connection->sendBuf->str, connection->sendBuf->len, 0);
+    log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "[%s] CMD: %s (%d)", connection->hostname, command, bytes);
     TORCTL_ASSERTIO(torControl, bytes, errno == EWOULDBLOCK || errno == ENOTCONN || errno == EALREADY, TORCTL_ERR_SEND);
 
-    log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "[%s] CMD: %s", connection->hostname, command);
-    if(bytes >= buf->len) {
+    if(bytes >= connection->sendBuf->len) {
         _torControl_changeEpoll(torControl->epolld, sockd, EPOLLIN);
+        g_string_printf(connection->sendBuf, "");
     }
 
     return bytes;
@@ -909,14 +909,19 @@ void torControl_new(TorControl_Args *args) {
 		gchar *hostname = parts[0];
 		in_port_t port = atoi(parts[1]);
 		gchar *mode = parts[2];
-		gchar **args = g_strsplit(parts[3], " ", 0);
+		gchar **args = NULL;
+		if(parts[3]) {
+		    args = g_strsplit(parts[3], " ", 0);
+		}
 
 		gint ret = torControl_createConnection(hostname, port, mode, args);
 		if(ret < 0) {
 		    log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "Error creating connection to %s:%d for %s", hostname, port, mode);
 		}
 
-		g_strfreev(args);
+		if(args) {
+		    g_strfreev(args);
+		}
 		g_strfreev(parts);
 	}
 	g_strfreev(lines);
@@ -942,8 +947,23 @@ gint torControl_activate() {
 		}
 
 		/* keep calling initialize as needed */
-		if(!connection->initialized) {
+		if(!connection->initialized && connection->eventHandlers.initialize) {
 		    connection->initialized = connection->eventHandlers.initialize(connection->moduleData);
+		}
+
+		/* check if the send buffer needs to be flushed */
+		if(events[i].events & EPOLLOUT) {
+		    if(connection->sendBuf->len > 0) {
+                bytes = send(sockd, connection->sendBuf->str, connection->sendBuf->len, 0);
+                TORCTL_ASSERTIO(torControl, bytes, errno == EWOULDBLOCK || errno == ENOTCONN || errno == EALREADY, TORCTL_ERR_SEND);
+
+                if(bytes >= connection->sendBuf->len) {
+                    _torControl_changeEpoll(torControl->epolld, sockd, EPOLLIN);
+                    g_string_printf(connection->sendBuf, "");
+                }
+		    } else {
+               _torControl_changeEpoll(torControl->epolld, sockd, EPOLLIN);
+		    }
 		}
 
 		if(events[i].events & EPOLLIN) {
