@@ -70,7 +70,6 @@ Here is an example XML file that contains each type of Tor node possible to conf
 
 <!-- our services -->
 
-
 <node id="fileserver" bandwidthdown="102400" bandwidthup="102400" >
   <application plugin="filex" time="1" arguments="server 80 ~/.shadow/share/" />
 </node>
@@ -83,7 +82,6 @@ Here is an example XML file that contains each type of Tor node possible to conf
 
 <!-- our Tor network infrastructure -->
 
-
 <node id="4uthority" software="authorityapp" >
   <application plugin="scallion" time="1" arguments="dirauth 1024 1024000 1024000 ./authority.torrc ./data/authoritydata ~/.shadow/share/geoip" />
 </node>
@@ -95,7 +93,6 @@ Here is an example XML file that contains each type of Tor node possible to conf
 </node>
 
 <!-- our Tor clients -->
-
 
 <node id="fileclient" />
   <application plugin="scallion" time="600" arguments="client 1024 1024000 1024000 ./client.torrc ./data/clientdata ~/.shadow/share/geoip client single fileserver 80 localhost 9000 10 /1MiB.urnd" />
