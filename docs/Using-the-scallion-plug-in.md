@@ -28,7 +28,7 @@ The maximum memory requirements of our included sample network configurations ar
 ## Argument Usage
 
 ```xml
-<software [...] arguments="arg1 arg2 arg3 [...]" />
+<application [...] arguments="arg1 arg2 arg3 [...]" />
 ```
 
 The _arguments_ attribute of the _software_ XML element specifies application arguments for configuring a node's instance of the plug-in. Each argument is separated by a space.
