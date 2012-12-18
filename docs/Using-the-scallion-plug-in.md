@@ -47,7 +47,6 @@ Usage:
    1. _torrc_, the path to the _torrc file_ for this Tor, passed as Tor's `-f` option
    1. _datadir_, the path to the _base data directory_ for this Tor, passed as Tor's `--DataDirectory` option
    1. _geoip_, the path to the _geoip file_ for this Tor, passed as Tor's `--GeoIPFile` option
-   1. _clientargs_, if the first argument was _client_, _torrent_, or _browser_, then the required arguments for each of those plugins should be appended to the above options
 
 ## Example
 
@@ -71,33 +70,42 @@ Here is an example XML file that contains each type of Tor node possible to conf
 
 <!-- our services -->
 
-<software id="fileserverapp" plugin="filex" time="1" arguments="server 80 ~/.shadow/share/" />
-<software id="webserverapp" plugin="filex" time="1" arguments="server 80 ../browser-example/" />
-<software id="torrentauthapp" plugin="torrent" time="1" arguments="authority 5000"/>
 
-<node id="fileserver" software="fileserverapp" bandwidthdown="102400" bandwidthup="102400" />
-<node id="webserver" software="webserverapp" bandwidthdown="102400" bandwidthup="102400" />
-<node id="torrentauth" software="torrentauthapp" bandwidthdown="102400" bandwidthup="102400" />
+<node id="fileserver" bandwidthdown="102400" bandwidthup="102400" >
+  <application plugin="filex" time="1" arguments="server 80 ~/.shadow/share/" />
+</node>
+<node id="webserver" bandwidthdown="102400" bandwidthup="102400" />
+  <application plugin="filex" time="1" arguments="server 80 ../browser-example/" />
+</node>
+<node id="torrentauth" bandwidthdown="102400" bandwidthup="102400" >
+  <application plugin="torrent" time="1" arguments="authority 5000"/>
+</node>
 
 <!-- our Tor network infrastructure -->
 
-<software id="authorityapp" plugin="scallion" time="1" arguments="dirauth 1024 1024000 1024000 ./authority.torrc ./data/authoritydata ~/.shadow/share/geoip" />
-<software id="exitapp" plugin="scallion" time="60" arguments="exitrelay 1024 1024000 1024000 ./exit.torrc ./data/exitdata ~/.shadow/share/geoip" />
-<software id="relayapp" plugin="scallion" time="60" arguments="relay 1024 1024000 1024000 ./relay.torrc ./data/relaydata ~/.shadow/share/geoip" />
 
-<node id="4uthority" software="authorityapp" />
-<node id="exit" software="exitapp" quantity="2" />
-<node id="relay" software="relayapp" quantity="2" />
+<node id="4uthority" software="authorityapp" >
+  <application plugin="scallion" time="1" arguments="dirauth 1024 1024000 1024000 ./authority.torrc ./data/authoritydata ~/.shadow/share/geoip" />
+</node>
+<node id="exit" software="exitapp" quantity="2" >
+  <application plugin="scallion" time="60" arguments="exitrelay 1024 1024000 1024000 ./exit.torrc ./data/exitdata ~/.shadow/share/geoip" />
+</node>
+<node id="relay" software="relayapp" quantity="2" >
+  <application plugin="scallion" time="60" arguments="relay 1024 1024000 1024000 ./relay.torrc ./data/relaydata ~/.shadow/share/geoip" />
+</node>
 
 <!-- our Tor clients -->
 
-<software id="fileclientapp" plugin="scallion" time="600" arguments="client 1024 1024000 1024000 ./client.torrc ./data/clientdata ~/.shadow/share/geoip client single fileserver 80 localhost 9000 10 /1MiB.urnd" />
-<software id="browserclientapp" plugin="scallion" time="600" arguments="browser 1024 1024000 1024000 ./client.torrc ./data/clientdata ~/.shadow/share/geoip webserver 80 localhost 9000 6 /index.htm" />
-<software id="torrentnodeapp" plugin="scallion" time="600" arguments="torrent 1024 1024000 1024000 ./client.torrc ./data/clientdata ~/.shadow/share/geoip torrent node torrentauth 5000 localhost 9000 6000 1MB" />
 
-<node id="fileclient" software="fileclientapp" />
-<node id="browserclient" software="browserclientapp" />
-<node id="torrentnode" software="torrentnodeapp" quantity="3" />
+<node id="fileclient" />
+  <application plugin="scallion" time="600" arguments="client 1024 1024000 1024000 ./client.torrc ./data/clientdata ~/.shadow/share/geoip client single fileserver 80 localhost 9000 10 /1MiB.urnd" />
+</node>
+<node id="browserclient" />
+  <application plugin="scallion" time="600" arguments="browser 1024 1024000 1024000 ./client.torrc ./data/clientdata ~/.shadow/share/geoip webserver 80 localhost 9000 6 /index.htm" />
+</node>
+<node id="torrentnode" quantity="3" />
+  <application plugin="scallion" time="600" arguments="torrent 1024 1024000 1024000 ./client.torrc ./data/clientdata ~/.shadow/share/geoip torrent node torrentauth 5000 localhost 9000 6000 1MB" />
+</node>
 ```
 
 From the `resource/scallion-example` directory, save this file as `mytor.xml` and run it like:
