@@ -39,7 +39,7 @@ enum pingService_loglevel {
 typedef void (*pingService_log_cb)(enum pingService_loglevel level, const gchar* message);
 typedef void (*pingService_sleep_cb)(gpointer sfg, guint seconds);
 typedef in_addr_t (*pingService_hostbyname_cb)(const gchar* hostname);
-typedef void (*pingService_createCallback_cb)(void *func, void *data, gint milliseconds);
+typedef void (*pingService_createCallback_cb)(void *func, void *data, guint milliseconds);
 
 typedef struct _PingService_Args PingService_Args;
 struct _PingService_Args {

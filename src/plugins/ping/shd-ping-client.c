@@ -111,7 +111,7 @@ void pingClient_sendPing(PingClient *pingClient) {
 	}
 	g_string_free(buf, TRUE);
 
-	pingClient->createCallback(pingClient_sendPing, pingClient, pingClient->pingInterval);
+	pingClient->createCallback(pingClient_sendPing, pingClient, (guint)pingClient->pingInterval);
 }
 
 gint pingClient_wakeup(PingClient *pingClient) {
@@ -333,9 +333,13 @@ gint pingClient_activate(PingClient *pingClient, gint sockd) {
 
 			struct timespec now;
 			clock_gettime(CLOCK_REALTIME, &now);
-			gint timeToPing = (1000000000 - now.tv_nsec) / 1000000;
+			guint timeToPing = (guint)((1000000000 - now.tv_nsec) / 1000000);
 			pingClient->createCallback(pingClient_sendPing, pingClient, timeToPing);
 
+			break;
+		}
+
+		case PING_CLIENT_IDLE: {
 			break;
 		}
 	}

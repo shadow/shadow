@@ -117,7 +117,7 @@ void ping_new(int argc, char* argv[]) {
 	int ret = 0;
 	ping->server = g_new0(PingServer, 1);
 	ping->client = g_new0(PingClient, 1);
-	ping->client->createCallback = ping->shadowlib->createCallback;
+	ping->client->createCallback = (pingClient_createCallback_cb) ping->shadowlib->createCallback;
 	ping->pingsTransfered = 0;
 
 	/* start the server that will listen for the ping */

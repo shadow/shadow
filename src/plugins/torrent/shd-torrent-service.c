@@ -186,7 +186,7 @@ int torrentService_startNode(TorrentService *tsvc, TorrentService_NodeArgs *args
 		} else {
 			torrentService_log(tsvc, TSVC_NOTICE, "torrent client running");
 		}
-		tsvc->client->log_cb = args->log_cb;
+		tsvc->client->log_cb = (torrentClient_log_cb)args->log_cb;
 	}
 
 	return 0;

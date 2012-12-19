@@ -77,7 +77,7 @@ enum PingClient_State {
 
 #define PING_CLIENT_BUF_SIZE 16384
 
-typedef void (*pingClient_createCallback_cb)(void *func, void *data, gint milliseconds);
+typedef void (*pingClient_createCallback_cb)(void *func, void *data, guint milliseconds);
 
 typedef struct _PingClient PingClient;
 struct _PingClient {

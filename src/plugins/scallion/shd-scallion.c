@@ -276,7 +276,7 @@ ScallionTor* scalliontor_new(ShadowFunctionTable* shadowlibFuncs, char* hostname
 	GString* geoipBuffer = _scalliontor_getHomePath(geoip_path);
 
 	/* default args */
-	char *config[24];
+	char *config[25];
 	config[0] = "tor";
 	config[1] = "--Address";
 	config[2] = hostname;
