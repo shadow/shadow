@@ -227,6 +227,7 @@ static GError* _parser_handlePluginAttributes(Parser* parser, const gchar** attr
 
 static GError* _parser_handleNodeAttributes(Parser* parser, const gchar** attributeNames, const gchar** attributeValues) {
 	GString* id = NULL;
+	GString* ip = NULL;
 	GString* cluster = NULL;
 	GString* loglevel = NULL;
 	GString* heartbeatloglevel = NULL;
@@ -254,6 +255,8 @@ static GError* _parser_handleNodeAttributes(Parser* parser, const gchar** attrib
 
 		if(!id && !g_ascii_strcasecmp(name, "id")) {
 			id = g_string_new(value);
+		} else if (!ip && !g_ascii_strcasecmp(name, "ip")) {
+			ip = g_string_new(value);
 		} else if (!cluster && !g_ascii_strcasecmp(name, "cluster")) {
 			cluster = g_string_new(value);
 		} else if (!loglevel && !g_ascii_strcasecmp(name, "loglevel")) {
@@ -306,6 +309,9 @@ static GError* _parser_handleNodeAttributes(Parser* parser, const gchar** attrib
 	/* clean up */
 	if(id) {
 		g_string_free(id, TRUE);
+	}
+	if(ip) {
+		g_string_free(ip, TRUE);
 	}
 	if(cluster) {
 		g_string_free(cluster, TRUE);
@@ -578,6 +584,9 @@ static void _parser_handleRootStartElement(GMarkupParseContext* context,
 		g_markup_parse_context_push(context, &(parser->nodeSubParser), parser);
 	} else if (!g_ascii_strcasecmp(elementName, "kill")) {
 		*error = _parser_handleKillAttributes(parser, attributeNames, attributeValues);
+	} else if (!g_ascii_strcasecmp(elementName, "hosts") ||
+			!g_ascii_strcasecmp(elementName, "topology")) {
+		/* do nothing, this is a root element */
 	} else {
 		*error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ELEMENT,
 				"unknown 'root' child starting element '%s'", elementName);
@@ -612,7 +621,9 @@ static void _parser_handleRootEndElement(GMarkupParseContext* context,
 				!g_ascii_strcasecmp(elementName, "link") ||
 				!g_ascii_strcasecmp(elementName, "plugin") ||
 				!g_ascii_strcasecmp(elementName, "cdf") ||
-				!g_ascii_strcasecmp(elementName, "kill"))) {
+				!g_ascii_strcasecmp(elementName, "kill") ||
+				!g_ascii_strcasecmp(elementName, "hosts") ||
+				!g_ascii_strcasecmp(elementName, "topology"))) {
 			*error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ELEMENT,
 							"unknown 'root' child ending element '%s'", elementName);
 		}

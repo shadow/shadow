@@ -9,7 +9,6 @@ find_package(M REQUIRED)
 find_package(OPENSSL REQUIRED)
 find_package(EVENT2 REQUIRED)
 find_package(GLIB REQUIRED)
-find_package(TIDY REQUIRED)
 
 #find_package(TOR REQUIRED)
 get_filename_component(CURRENT_TOR_DIR "${CMAKE_BINARY_DIR}/../tor" ABSOLUTE)
@@ -18,12 +17,7 @@ include_directories(${CURRENT_TOR_DIR}/src)
 include_directories(${CURRENT_TOR_DIR}/src/common)
 include_directories(${CURRENT_TOR_DIR}/src/or)
 
-include_directories(AFTER ${RT_INCLUDES} ${DL_INCLUDES} ${M_INCLUDES} ${GLIB_INCLUDES} ${EVENT2_INCLUDES} ${OPENSSL_INCLUDES} ${TOR_INCLUDES} ${SHADOW_INCLUDES} ${TIDY_INCLUDES})
-include_directories(${CMAKE_SOURCE_DIR}/src/plugins/torrent)
-include_directories(${CMAKE_SOURCE_DIR}/src/plugins/ping)
-include_directories(${CMAKE_SOURCE_DIR}/src/plugins/browser)
-include_directories(${CMAKE_SOURCE_DIR}/src/plugins/filetransfer)
-include_directories(${CMAKE_SOURCE_DIR}/src/utility)
+include_directories(AFTER ${RT_INCLUDES} ${DL_INCLUDES} ${M_INCLUDES} ${GLIB_INCLUDES} ${EVENT2_INCLUDES} ${OPENSSL_INCLUDES} ${TOR_INCLUDES} ${SHADOW_INCLUDES})
 
 ## import shadow libs
 #INCLUDE(${CMAKE_INSTALL_PREFIX}/share/shadow/shadow-externals.cmake)
@@ -58,18 +52,11 @@ remove_definitions(-DNDEBUG)
 ## create and install a shared library that can plug into shadow
 add_bitcode(shadow-plugin-scallion-bitcode 
     shd-scallion-plugin.c shd-scallion.c ${toror_sources} ${torcommon_sources})
-add_plugin(shadow-plugin-scallion shadow-plugin-scallion-bitcode 
-    shadow-service-filetransfer-bitcode shadow-service-browser-bitcode shadow-service-torrent-bitcode shadow-service-ping-bitcode)
-add_dependencies(shadow-plugin-scallion shadow-plugin-filetransfer shadow-plugin-torrent shadow-plugin-browser shadow-plugin-ping)
-
-## normal, non-bitcode library without hoisting globals
-#add_library(shadow-plugin-scallion MODULE shd-scallion-plugin.c shd-scallion.c ${toror_sources} ${torcommon_sources})
-#add_dependencies(shadow-plugin-scallion shadow-service-torrent shadow-service-browser shadow-service-filetransfer)
-#target_link_libraries(shadow-plugin-scallion shadow-service-torrent shadow-service-browser shadow-service-filetransfer)
+add_plugin(shadow-plugin-scallion shadow-plugin-scallion-bitcode)
 
 target_link_libraries(shadow-plugin-scallion
     ${TOR_LIBRARIES} ${GLIB_LIBRARIES} ${EVENT2_LIBRARIES} ${OPENSSL_LIBRARIES} 
-    ${TIDY_LIBRARIES} ${ZLIB_LIBRARIES} ${M_LIBRARIES} ${RT_LIBRARIES} ${DL_LIBRARIES})
+    ${ZLIB_LIBRARIES} ${M_LIBRARIES} ${RT_LIBRARIES} ${DL_LIBRARIES})
 
 install(TARGETS shadow-plugin-scallion DESTINATION plugins)
 set_target_properties(shadow-plugin-scallion PROPERTIES INSTALL_RPATH ${CMAKE_INSTALL_PREFIX}/lib INSTALL_RPATH_USE_LINK_PATH TRUE)

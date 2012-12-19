@@ -11,20 +11,17 @@
 <!-- <cdf id="pause" path="/tmp/pausetimes.cdf" /> -->
 
 <!-- 
-  -- software specifies the plugin to use, application args, and starting time in seconds
-  -- args are plugin-specific
-  -->
-<software id="server" plugin="filex" time="10" arguments="server 8080 /bin/" />
-<software id="client" plugin="filex" time="20" arguments="client single server.node 8080 none 0 10 /ls" />
-
-<!-- 
-  -- node specifies hostnames (the id) and the software to run
+  -- node specifies hostnames (the id) and the application to run at t seconds
   -- use "quantity" to generate multiple nodes
   -- use "cluster" to assign to a specific cluster (o/w random assignment)
   -- use "bandwidthdown" and "bandwidthup" to override cluster values (in KiB/s)
   -- use "cpufrequency" to specify the speed of this nodes virtual CPU (in KiHz)
   -->
-<node id="server.node" software="server" cluster="USMN" bandwidthdown="60000" bandwidthup="30000" cpufrequency="2800000" />
-<node id="client.node" software="client" quantity="1" />
+<node id="server.node" cluster="USMN" bandwidthdown="60000" bandwidthup="30000" cpufrequency="2800000">
+    <application plugin="filex" time="10" arguments="server 8080 /bin/" />
+</node>
+<node id="client.node" quantity="1">
+    <application plugin="filex" time="20" arguments="client single server.node 8080 none 0 10 /ls" />
+</node>
 
 <kill time="600" />

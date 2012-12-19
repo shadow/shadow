@@ -38,14 +38,12 @@
 
 #include <glib.h>
 #include <gmodule.h>
+#include <glib/gprintf.h>
+
 #include <event2/event.h>
 #include <event2/event_struct.h>
 
 #include "shd-library.h"
-#include "shd-filetransfer.h"
-#include "shd-browser.h"
-#include "shd-torrent-service.h"
-#include "shd-ping-service.h"
 
 /* includes from Tor */
 #undef NDEBUG
