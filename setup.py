@@ -34,7 +34,7 @@ OPENSSL_DEFAULT_VERSION="openssl-1.0.1c"
 OPENSSL_URL="https://www.openssl.org/source/{0}.tar.gz".format(OPENSSL_DEFAULT_VERSION)
 OPENSSL_URL_SIG="https://www.openssl.org/source/{0}.tar.gz.asc".format(OPENSSL_DEFAULT_VERSION)
 
-LIBEVENT_DEFAULT_VERSION="libevent-2.0.19-stable"
+LIBEVENT_DEFAULT_VERSION="libevent-2.0.21-stable"
 LIBEVENT_URL="https://github.com/downloads/libevent/libevent/{0}.tar.gz".format(LIBEVENT_DEFAULT_VERSION)
 LIBEVENT_URL_SIG="https://github.com/downloads/libevent/libevent/{0}.tar.gz.asc".format(LIBEVENT_DEFAULT_VERSION)
 
