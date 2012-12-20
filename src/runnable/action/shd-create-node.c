@@ -181,7 +181,7 @@ void createnodes_run(CreateNodesAction* action) {
 		if(action->quantity > 1) {
 			gchar prefix[20];
 			g_snprintf(prefix, 20, "%u", ++hostnameCounter);
-			hostnameBuffer = g_string_prepend(hostnameBuffer, (const char*) prefix);
+			hostnameBuffer = g_string_append(hostnameBuffer, (const char*) prefix);
 		}
 		GQuark id = g_quark_from_string((const gchar*) hostnameBuffer->str);
 
