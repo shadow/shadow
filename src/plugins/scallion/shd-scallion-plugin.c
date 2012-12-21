@@ -21,6 +21,7 @@
 
 #include "shd-scallion.h"
 #include <openssl/rand.h>
+#include <event2/thread.h>
 
 /* my global structure to hold all variable, node-specific application state.
  * the name must not collide with other loaded modules globals. */
@@ -142,6 +143,8 @@ void __shadow_plugin_init__(ShadowFunctionTable* shadowlibFuncs) {
 
 	shadowlibFuncs->log(G_LOG_LEVEL_INFO, __FUNCTION__, "finished registering scallion plug-in state");
 
+	/* setup openssl locks */
+
 #define OPENSSL_THREAD_DEFINES
 #include <openssl/opensslconf.h>
 #if defined(OPENSSL_THREADS)
@@ -166,10 +169,21 @@ void __shadow_plugin_init__(ShadowFunctionTable* shadowlibFuncs) {
 	CRYPTO_set_id_callback(shadowIdFunc);
 	RAND_set_rand_method(shadowRandomMethod);
 
-	shadowlibFuncs->log(G_LOG_LEVEL_INFO, __FUNCTION__, "finished initializing crypto state");
+	shadowlibFuncs->log(G_LOG_LEVEL_INFO, __FUNCTION__, "finished initializing crypto thread state");
 #else
     /* no thread support */
 	shadowlibFuncs->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "please rebuild openssl with threading support. expect segfaults.");
+#endif
+
+	/* setup libevent locks */
+
+#ifdef EVTHREAD_USE_PTHREADS_IMPLEMENTED
+	if(evthread_use_pthreads()) {
+		shadowlibFuncs->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "error in evthread_use_pthreads()");
+	}
+	shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "finished initializing event thread state evthread_use_pthreads()");
+#else
+	shadowlibFuncs->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "please rebuild libevent with threading support, or link with event_pthread. expect segfaults.");
 #endif
 }
 
