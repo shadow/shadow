@@ -157,8 +157,11 @@ Plugin* plugin_new(GQuark id, GString* filename) {
 	}
 
 	/* make sure it has the required init function */
-	gpointer initFunc, hoistedGlobals, hoistedGlobalsSize, hoistedGlobalsPointer;
-	gboolean success;
+	gpointer initFunc = NULL;
+	gpointer hoistedGlobals = NULL;
+	gpointer hoistedGlobalsSize = NULL;
+	gpointer hoistedGlobalsPointer = NULL;
+	gboolean success = FALSE;
 
 	success = g_module_symbol(plugin->handle, PLUGININITSYMBOL, &initFunc);
 	if(success) {
@@ -218,6 +221,10 @@ Plugin* plugin_new(GQuark id, GString* filename) {
 	plugin->isExecuting = FALSE;
 	worker->cached_plugin = NULL;
 
+	if(!(plugin->isRegisterred)) {
+		error("The plug-in '%s' must call shadowlib_register()", plugin->path->str);
+	}
+
 	return plugin;
 }
 
@@ -265,8 +272,10 @@ void plugin_registerResidentState(Plugin* plugin, PluginNewInstanceFunc new, Plu
 	plugin->notify = notify;
 
 	/* also store a copy of the defaults as they exist now */
-	debug("copying resident plugin memory location contents as default start state");
+	debug("copying resident plugin memory contents at %p-%p (%lu bytes) as default start state",
+			plugin->residentState, plugin->residentState+plugin->residentStateSize, plugin->residentStateSize);
 	plugin->defaultState = g_slice_copy(plugin->residentStateSize, plugin->residentState);
+	debug("stored default state at %p", plugin->defaultState);
 
 	/* dont change our resident state or defaults */
 	plugin->isRegisterred = TRUE;
