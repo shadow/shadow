@@ -150,15 +150,7 @@ gint shadow_main(gint argc, gchar* argv[]) {
 	/* run the engine to drive the simulation. when this returns, we are done */
 	gint n = config->nWorkerThreads;
 	debug("starting %i-threaded engine (main + %i workers)", (n + 1), n);
-	if(n > 0) {
-		engine_setupWorkerThreads(shadow_engine, n);
-	}
-
-	/* dont modify internet during simulation, since its not locked for threads */
-	internetwork_setReadOnly(engine_getInternet(shadow_engine));
 	gint retval = engine_run(shadow_engine);
-
-	/* join thread pool. workers are auto-deleted when threads end. */
 	debug("engine finished, cleaning up...");
 
 	/* cleanup */

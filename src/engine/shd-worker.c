@@ -21,11 +21,12 @@
 
 #include "shadow.h"
 
-static Worker* _worker_new(gint id) {
+static Worker* _worker_new(Engine* engine) {
 	Worker* worker = g_new0(Worker, 1);
 	MAGIC_INIT(worker);
 
-	worker->thread_id = id;
+	worker->cached_engine = engine;
+	worker->thread_id = engine_generateWorkerID(engine);
 	worker->clock_now = SIMTIME_INVALID;
 	worker->clock_last = SIMTIME_INVALID;
 	worker->clock_barrier = SIMTIME_INVALID;
@@ -56,7 +57,7 @@ Worker* worker_getPrivate() {
 
 	/* todo: should we use g_once here instead? */
 	if(!worker) {
-		worker = _worker_new(engine_generateWorkerID(engine));
+		worker = _worker_new(engine);
 		g_static_private_set(engine_getWorkerKey(engine), worker, worker_free);
 		gboolean* preloadIsReady = g_new(gboolean, 1);
 		*preloadIsReady = TRUE;
@@ -99,17 +100,12 @@ Plugin* worker_getPlugin(GQuark pluginID, GString* pluginPath) {
 	return plugin;
 }
 
-void worker_threadPoolProcessNode(Node* node, Engine* engine) {
-	/* worker comes from pool to execute node's events
-	 *  get current thread's private worker object */
-	Worker* worker = worker_getPrivate();
-
+static guint _worker_processNode(Worker* worker, Node* node, SimulationTime barrier) {
 	/* update cache, reset clocks */
-	worker->cached_engine = engine;
 	worker->cached_node = node;
 	worker->clock_last = SIMTIME_INVALID;
 	worker->clock_now = SIMTIME_INVALID;
-	worker->clock_barrier = engine_getExecutionBarrier(engine);
+	worker->clock_barrier = barrier;
 
 	/* lock the node */
 	node_lock(worker->cached_node);
@@ -151,11 +147,35 @@ void worker_threadPoolProcessNode(Node* node, Engine* engine) {
 	node_unlock(worker->cached_node);
 	worker->cached_node = NULL;
 	worker->cached_event = NULL;
-	worker->cached_engine = NULL;
 
-	engine_notifyNodeProcessed(engine, nEventsProcessed);
+	return nEventsProcessed;
+}
 
-	/* worker thread now returns to the pool */
+gpointer worker_run(GSList* nodes) {
+	/* get current thread's private worker object */
+	Worker* worker = worker_getPrivate();
+
+	while(!engine_isKilled(worker->cached_engine)) {
+		SimulationTime barrier = engine_getExecutionBarrier(worker->cached_engine);
+		guint nEventsProcessed = 0;
+		guint nNodesWithEvents = 0;
+
+		GSList* item = nodes;
+		while(item) {
+			Node* node = item->data;
+			guint n = _worker_processNode(worker, node, barrier);
+			nEventsProcessed += n;
+			if(n > 0) {
+				nNodesWithEvents++;
+			}
+			item = g_slist_next(item);
+		}
+
+		engine_notifyProcessed(worker->cached_engine, nEventsProcessed, nNodesWithEvents);
+	}
+
+	g_thread_exit(NULL);
+	return NULL;
 }
 
 void worker_scheduleEvent(Event* event, SimulationTime nano_delay, GQuark receiver_node_id) {

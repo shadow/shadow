@@ -66,6 +66,19 @@ void countdownlatch_countDown(CountDownLatch* latch) {
 	g_mutex_unlock(latch->lock);
 }
 
+void countdownlatch_countDownAwait(CountDownLatch* latch) {
+	g_assert(latch);
+	g_mutex_lock(latch->lock);
+	g_assert(latch->count > 0);
+	(latch->count)--;
+	if(latch->count == 0) {
+		g_cond_broadcast(latch->waiters);
+	} else {
+		g_cond_wait(latch->waiters, latch->lock);
+	}
+	g_mutex_unlock(latch->lock);
+}
+
 void countdownlatch_reset(CountDownLatch* latch) {
 	g_assert(latch);
 	g_mutex_lock(latch->lock);

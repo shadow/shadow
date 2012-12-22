@@ -51,19 +51,13 @@ struct _Worker {
 Worker* worker_getPrivate();
 void worker_free(gpointer data);
 
+gpointer worker_run(GSList* nodes);
+
 void worker_setKillTime(SimulationTime endTime);
 Plugin* worker_getPlugin(GQuark pluginID, GString* pluginPath);
 Internetwork* worker_getInternet();
 Configuration* worker_getConfig();
 gboolean worker_isInShadowContext();
-
-/**
- * Execute the given event. Return TRUE if the event was executed successfully,
- * or FALSE if there was an error during execution.
- *
- * Used as the callback for the main thread pool.
- */
-void worker_threadPoolProcessNode(Node* node, Engine* engine);
 
 void worker_scheduleEvent(Event* event, SimulationTime nano_delay, GQuark receiver_node_id);
 

@@ -49,9 +49,9 @@ struct _Engine {
 	 * threaded, use this for non-node events */
 	AsyncPriorityQueue* masterEventQueue;
 
-	/* if multi-threaded, we use thread pools */
-	GThreadPool* workerPool;
+	/* if multi-threaded, we use worker thread */
 	CountDownLatch* processingLatch;
+	CountDownLatch* barrierLatch;
 
 	/* holds a thread-private key that each thread references to get a private
 	 * instance of a worker object
@@ -155,10 +155,6 @@ void engine_free(Engine* engine) {
 	/* we will never execute inside the plugin again */
 	engine->forceShadowContext = TRUE;
 
-	if(engine->workerPool) {
-		engine_teardownWorkerThreads(engine);
-	}
-
 	if(engine->masterEventQueue) {
 		asyncpriorityqueue_free(engine->masterEventQueue);
 	}
@@ -181,31 +177,6 @@ void engine_free(Engine* engine) {
 	MAGIC_CLEAR(engine);
 	shadow_engine = NULL;
 	g_free(engine);
-}
-
-void engine_setupWorkerThreads(Engine* engine, gint nWorkerThreads) {
-	MAGIC_ASSERT(engine);
-	if(nWorkerThreads > 0) {
-		/* we need some workers, create a thread pool */
-		GError *error = NULL;
-		engine->workerPool = g_thread_pool_new((GFunc)worker_threadPoolProcessNode, engine,
-				nWorkerThreads, FALSE, &error);
-		if (!engine->workerPool) {
-			error("thread pool failed: %s", error->message);
-			g_error_free(error);
-		}
-
-		guint interval = g_thread_pool_get_max_idle_time();
-		info("Threads are stopped after %lu milliseconds", interval);
-	}
-}
-
-void engine_teardownWorkerThreads(Engine* engine) {
-	MAGIC_ASSERT(engine);
-	if(engine->workerPool) {
-		g_thread_pool_free(engine->workerPool, FALSE, TRUE);
-		engine->workerPool = NULL;
-	}
 }
 
 static gint _engine_processEvents(Engine* engine) {
@@ -255,23 +226,41 @@ static gint _engine_distributeEvents(Engine* engine) {
 	GList* nodeList = internetwork_getAllNodes(engine->internet);
 	guint nNodes = g_list_length(nodeList);
 
-	/* track when workers finish processing all nodes */
-	engine->processingLatch = countdownlatch_new(nNodes);
+	/* assign nodes to the worker threads so they get processed */
+	GSList* listArray[engine->config->nWorkerThreads];
+	memset(listArray, 0, engine->config->nWorkerThreads * sizeof(GSList*));
+	gint counter = 0;
+	GList* item = g_list_first(nodeList);
+	while(item) {
+		Node* node = item->data;
+
+		gint i = counter % engine->config->nWorkerThreads;
+		listArray[i] = g_slist_append(listArray[i], node);
+
+		counter++;
+		item = g_list_next(item);
+	}
+
+	/* we will track when workers finish processing their nodes */
+	engine->processingLatch = countdownlatch_new(engine->config->nWorkerThreads + 1);
+	/* after the workers finish processing, wait for barrier update */
+	engine->barrierLatch = countdownlatch_new(engine->config->nWorkerThreads + 1);
+
+	/* start up the workers */
+	GSList* workerThreads = NULL;
+	for(gint i = 0; i < engine->config->nWorkerThreads; i++) {
+		GString* name = g_string_new(NULL);
+		g_string_printf(name, "worker-%i", (i+1));
+		GThread* t = g_thread_new(name->str, (GThreadFunc)worker_run, (gpointer)listArray[i]);
+		workerThreads = g_slist_append(workerThreads, t);
+		g_string_free(name, TRUE);
+	}
 
 	/* process all events in the priority queue */
 	while(engine->executeWindowStart < engine->endTime)
 	{
-		GList* item = g_list_first(nodeList);
-
-		/* add all nodes to the work queue so they get processed */
-		while(item) {
-			Node* node = item->data;
-			g_thread_pool_push(engine->workerPool, node, NULL);
-			item = g_list_next(item);
-		}
-
 		/* wait for the workers to finish processing nodes */
-		countdownlatch_await(engine->processingLatch);
+		countdownlatch_countDownAwait(engine->processingLatch);
 
 		message("execution window [%lu--%lu] ran %u events from %u active nodes",
 				engine->executeWindowStart, engine->executeWindowEnd,
@@ -310,9 +299,18 @@ static gint _engine_distributeEvents(Engine* engine) {
 		countdownlatch_reset(engine->processingLatch);
 		engine->numEventsCurrentInterval = 0;
 		engine->numNodesWithEventsCurrentInterval = 0;
+
+		if(engine->executeWindowStart >= engine->endTime) {
+			engine->killed = TRUE;
+		}
+
+		countdownlatch_countDownAwait(engine->barrierLatch);
+		countdownlatch_reset(engine->barrierLatch);
 	}
 
+	// TODO celan up!!
 	countdownlatch_free(engine->processingLatch);
+	countdownlatch_free(engine->barrierLatch);
 	g_list_free(nodeList);
 
 	return 0;
@@ -320,6 +318,9 @@ static gint _engine_distributeEvents(Engine* engine) {
 
 gint engine_run(Engine* engine) {
 	MAGIC_ASSERT(engine);
+
+	/* dont modify internet during simulation, since its not locked for threads */
+	internetwork_setReadOnly(engine->internet);
 
 	/* simulation mode depends on configured number of workers */
 	if(engine->config->nWorkerThreads > 0) {
@@ -453,15 +454,14 @@ gboolean engine_handleInterruptSignal(gpointer user_data) {
 	return FALSE;
 }
 
-void engine_notifyNodeProcessed(Engine* engine, guint numberEventsProcessed) {
+void engine_notifyProcessed(Engine* engine, guint numberEventsProcessed, guint numberNodesWithEvents) {
 	MAGIC_ASSERT(engine);
 	_engine_lock(engine);
 	engine->numEventsCurrentInterval += numberEventsProcessed;
-	if(numberEventsProcessed > 0) {
-		(engine->numNodesWithEventsCurrentInterval)++;
-	}
+	engine->numNodesWithEventsCurrentInterval += numberNodesWithEvents;
 	_engine_unlock(engine);
 	countdownlatch_countDown(engine->processingLatch);
+	countdownlatch_countDownAwait(engine->barrierLatch);
 }
 
 gint engine_nextRandomInt(Engine* engine) {
