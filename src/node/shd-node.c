@@ -122,11 +122,6 @@ Node* node_new(GQuark id, Network* network, Software* software, guint32 ip,
 void node_free(Node* node, gpointer userData) {
 	MAGIC_ASSERT(node);
 
-	/* this was hopefully freed in node_stopApplication */
-	if(node->application) {
-		node_stopApplication(NULL, node, NULL);
-	}
-
 	g_hash_table_destroy(node->interfaces);
 	g_hash_table_destroy(node->descriptors);
 
