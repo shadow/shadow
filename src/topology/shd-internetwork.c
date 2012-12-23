@@ -55,7 +55,7 @@ Internetwork* internetwork_new() {
 
 	/* create our data structures, with the correct destructors */
 
-	internet->nodes = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, node_free);
+	internet->nodes = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, NULL);
 	internet->networks = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, network_free);
 	internet->networksByIP = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, NULL);
 	internet->ipByName = g_hash_table_new_full(g_str_hash, g_str_equal, NULL, g_free);
@@ -66,12 +66,6 @@ Internetwork* internetwork_new() {
 
 void internetwork_free(Internetwork* internet) {
 	MAGIC_ASSERT(internet);
-
-	/* free all applications before freeing any of the nodes since freeing
-	 * applications may cause close() to get called on sockets which needs
-	 * other node information.
-	 */
-	g_hash_table_foreach(internet->nodes, node_stopApplication, NULL);
 
 	/* now cleanup the rest */
 	g_hash_table_destroy(internet->nodes);

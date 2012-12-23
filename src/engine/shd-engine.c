@@ -82,15 +82,9 @@ struct _Engine {
 	guint numEventsCurrentInterval;
 	guint numNodesWithEventsCurrentInterval;
 
-	/*
-	 * these values are modified during simulation and must be protected so
-	 * they are thread safe
-	 */
-	struct {
-		/* id generation counters */
-		volatile gint workerIDCounter;
-		volatile gint objectIDCounter;
-	} protect;
+	/* id generation counters, must be protected for thread safety */
+	volatile gint workerIDCounter;
+
 	MAGIC_DECLARE;
 };
 
@@ -225,12 +219,12 @@ static gint _engine_distributeEvents(Engine* engine) {
 	MAGIC_ASSERT(engine);
 
 	GList* nodeList = internetwork_getAllNodes(engine->internet);
-	guint nNodes = g_list_length(nodeList);
 
 	/* assign nodes to the worker threads so they get processed */
 	GSList* listArray[engine->config->nWorkerThreads];
 	memset(listArray, 0, engine->config->nWorkerThreads * sizeof(GSList*));
 	gint counter = 0;
+
 	GList* item = g_list_first(nodeList);
 	while(item) {
 		Node* node = item->data;
@@ -260,16 +254,20 @@ static gint _engine_distributeEvents(Engine* engine) {
 	/* process all events in the priority queue */
 	while(engine->executeWindowStart < engine->endTime)
 	{
-		/* wait for the workers to finish processing nodes */
+		/* wait for the workers to finish processing nodes before we touch them */
 		countdownlatch_countDownAwait(engine->processingLatch);
 
+		/* we are in control now, the workers are waiting at barrierLatch */
 		message("execution window [%lu--%lu] ran %u events from %u active nodes",
 				engine->executeWindowStart, engine->executeWindowEnd,
 				engine->numEventsCurrentInterval,
 				engine->numNodesWithEventsCurrentInterval);
 
-		/* check if we should step or fast-forward our execute window */
-		if(engine->numEventsCurrentInterval == 0) {
+		/* check if we should take 1 step ahead or fast-forward our execute window.
+		 * since looping through all the nodes to find the minimum event is
+		 * potentially expensive, we use a heuristic of only trying to jump ahead
+		 * if the last interval had only a few events in it. */
+		if(engine->numEventsCurrentInterval < 10) {
 			/* we had no events in that interval, lets try to fast forward */
 			SimulationTime minNextEventTime = SIMTIME_INVALID;
 
@@ -284,6 +282,7 @@ static gint _engine_distributeEvents(Engine* engine) {
 				item = g_list_next(item);
 			}
 
+			/* fast forward to the next event */
 			engine->executeWindowStart = minNextEventTime;
 		} else {
 			/* we still have events, lets just step one interval */
@@ -301,17 +300,35 @@ static gint _engine_distributeEvents(Engine* engine) {
 		engine->numEventsCurrentInterval = 0;
 		engine->numNodesWithEventsCurrentInterval = 0;
 
+		/* if we are done, make sure the workers know about it */
 		if(engine->executeWindowStart >= engine->endTime) {
 			engine->killed = TRUE;
 		}
 
+		/* release the workers for the next round, or to exit */
 		countdownlatch_countDownAwait(engine->barrierLatch);
 		countdownlatch_reset(engine->barrierLatch);
 	}
 
-	// TODO celan up!!
+	/* wait for the threads to finish their cleanup */
+	GSList* threadItem = workerThreads;
+	while(threadItem) {
+		GThread* t = threadItem->data;
+		g_thread_join(t);
+		g_thread_unref(t);
+		threadItem = g_slist_next(threadItem);
+	}
+	g_slist_free(workerThreads);
+
+	for(gint i = 0; i < engine->config->nWorkerThreads; i++) {
+		g_slist_free(listArray[i]);
+	}
+
 	countdownlatch_free(engine->processingLatch);
 	countdownlatch_free(engine->barrierLatch);
+
+	/* frees the list struct we own, but not the nodes it holds (those were
+	 * taken care of by the workers) */
 	g_list_free(nodeList);
 
 	return 0;
@@ -364,16 +381,6 @@ gpointer engine_get(Engine* engine, EngineStorage type, GQuark id) {
 	 * is read-only.
 	 */
 	return registry_get(engine->registry, type, &id);
-}
-
-gint engine_generateWorkerID(Engine* engine) {
-	MAGIC_ASSERT(engine);
-	return g_atomic_int_exchange_and_add(&(engine->protect.workerIDCounter), 1);
-}
-
-gint engine_generateObjectID(Engine* engine) {
-	MAGIC_ASSERT(engine);
-	return g_atomic_int_exchange_and_add(&(engine->protect.objectIDCounter), 1);
 }
 
 gint engine_getNumThreads(Engine* engine) {
@@ -442,6 +449,15 @@ static void _engine_unlock(Engine* engine) {
 	g_mutex_unlock(engine->lock);
 }
 
+gint engine_generateWorkerID(Engine* engine) {
+	MAGIC_ASSERT(engine);
+	_engine_lock(engine);
+	gint id = engine->workerIDCounter;
+	(engine->workerIDCounter)++;
+	_engine_unlock(engine);
+	return id;
+}
+
 gboolean engine_handleInterruptSignal(gpointer user_data) {
 	Engine* engine = user_data;
 	MAGIC_ASSERT(engine);
@@ -461,7 +477,7 @@ void engine_notifyProcessed(Engine* engine, guint numberEventsProcessed, guint n
 	engine->numEventsCurrentInterval += numberEventsProcessed;
 	engine->numNodesWithEventsCurrentInterval += numberNodesWithEvents;
 	_engine_unlock(engine);
-	countdownlatch_countDown(engine->processingLatch);
+	countdownlatch_countDownAwait(engine->processingLatch);
 	countdownlatch_countDownAwait(engine->barrierLatch);
 }
 

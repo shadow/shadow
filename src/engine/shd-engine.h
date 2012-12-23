@@ -43,7 +43,6 @@ void engine_put(Engine* engine, EngineStorage type, GQuark* id, gpointer item);
 gpointer engine_get(Engine* engine, EngineStorage type, GQuark id);
 
 gint engine_generateWorkerID(Engine* engine);
-gint engine_generateNodeID(Engine* engine);
 gint engine_getNumThreads(Engine* engine);
 SimulationTime engine_getMinTimeJump(Engine* engine);
 SimulationTime engine_getExecutionBarrier(Engine* engine);

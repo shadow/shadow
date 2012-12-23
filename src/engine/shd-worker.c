@@ -156,6 +156,8 @@ gpointer worker_run(GSList* nodes) {
 	/* get current thread's private worker object */
 	Worker* worker = worker_getPrivate();
 
+	/* continuously run all events for this worker's assigned nodes.
+	 * the simulation is done when the engine is killed. */
 	while(!engine_isKilled(worker->cached_engine)) {
 		SimulationTime barrier = engine_getExecutionBarrier(worker->cached_engine);
 		guint nEventsProcessed = 0;
@@ -175,6 +177,13 @@ gpointer worker_run(GSList* nodes) {
 		engine_notifyProcessed(worker->cached_engine, nEventsProcessed, nNodesWithEvents);
 	}
 
+	/* free all applications before freeing any of the nodes since freeing
+	 * applications may cause close() to get called on sockets which needs
+	 * other node information.
+	 */
+	g_slist_foreach(nodes, (GFunc) node_stopAllApplications, NULL);
+	g_slist_foreach(nodes, (GFunc) node_free, NULL);
+
 	g_thread_exit(NULL);
 	return NULL;
 }
@@ -193,6 +202,8 @@ void worker_scheduleEvent(Event* event, SimulationTime nano_delay, GQuark receiv
 
 	/* parties involved. sender may be NULL, receiver may not! */
 	Node* sender = worker->cached_node;
+
+	/* we MAY NOT OWN the receiver, so do not write to it! */
 	Node* receiver = receiver_node_id == 0 ? sender : internetwork_getNode(worker_getInternet(), receiver_node_id);
 	g_assert(receiver);
 

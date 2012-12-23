@@ -32,7 +32,7 @@ Node* node_new(GQuark id, Network* network, Software* software, guint32 ip,
 		GString* hostname, guint64 bwDownKiBps, guint64 bwUpKiBps, guint cpuFrequency, gint cpuThreshold, gint cpuPrecision,
 		guint nodeSeed, SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel,
 		GLogLevelFlags logLevel, gboolean logPcap, gchar* pcapDir);
-void node_free(gpointer data);
+void node_free(Node* node, gpointer userData);
 
 void node_lock(Node* node);
 void node_unlock(Node* node);
@@ -40,7 +40,7 @@ void node_unlock(Node* node);
 EventQueue* node_getEvents(Node* node);
 
 void node_startApplication(Node* node);
-void node_stopApplication(gpointer key, gpointer value, gpointer user_data);
+void node_stopAllApplications(Node* node, gpointer userData);
 
 gint node_compare(gconstpointer a, gconstpointer b, gpointer user_data);
 gboolean node_isEqual(Node* a, Node* b);

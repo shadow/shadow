@@ -119,8 +119,7 @@ Node* node_new(GQuark id, Network* network, Software* software, guint32 ip,
 	return node;
 }
 
-void node_free(gpointer data) {
-	Node* node = data;
+void node_free(Node* node, gpointer userData) {
 	MAGIC_ASSERT(node);
 
 	/* this was hopefully freed in node_stopApplication */
@@ -163,8 +162,7 @@ void node_startApplication(Node* node) {
 	application_boot(node->application);
 }
 
-void node_stopApplication(gpointer key, gpointer value, gpointer user_data) {
-	Node* node = value;
+void node_stopAllApplications(Node* node, gpointer userData) {
 	MAGIC_ASSERT(node);
 
 	Worker* worker = worker_getPrivate();

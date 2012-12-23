@@ -29,8 +29,8 @@ Engine* shadow_engine;
 
 gint shadow_main(gint argc, gchar* argv[]) {
     /* check the compiled GLib version */
-    if (!GLIB_CHECK_VERSION(2, 28, 8)) {
-	    g_printerr("** GLib version 2.28.8 or above is required but Shadow was compiled against version %u.%u.%u\n",
+    if (!GLIB_CHECK_VERSION(2, 32, 0)) {
+	    g_printerr("** GLib version 2.32.0 or above is required but Shadow was compiled against version %u.%u.%u\n",
 		    GLIB_MAJOR_VERSION, GLIB_MINOR_VERSION, GLIB_MICRO_VERSION);
 	    return -1;
     }
