@@ -120,8 +120,7 @@ Node* node_new(GQuark id, Network* network, guint32 ip,
 	return node;
 }
 
-void node_free(gpointer data) {
-	Node* node = data;
+void node_free(Node* node, gpointer userData) {
 	MAGIC_ASSERT(node);
 
 	g_hash_table_destroy(node->interfaces);
@@ -169,8 +168,7 @@ void node_startApplication(Node* node, Application* application) {
 	application_boot(application);
 }
 
-void node_stopAllApplications(gpointer key, gpointer value, gpointer user_data) {
-	Node* node = value;
+void node_stopAllApplications(Node* node, gpointer userData) {
 	MAGIC_ASSERT(node);
 
 	Worker* worker = worker_getPrivate();

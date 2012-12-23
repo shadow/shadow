@@ -106,7 +106,9 @@ void scalliontor_init_v3bw(ScallionTor* stor) {
 }
 
 void scalliontor_free(ScallionTor* stor) {
-	tor_cleanup();
+	/* FIXME: we need to intercept crypto_global_cleanup() and clean up all of the
+	 * node-specific state while only calling the global openssl cleanup funcs once */
+//	tor_cleanup();
 	g_free(stor);
 }
 

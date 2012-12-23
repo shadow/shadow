@@ -449,7 +449,7 @@ def setup_tor(args):
                 for l in args.extra_libraries: ldflags += " -L" + l.strip()
 
             gen = "aclocal && autoheader && autoconf && automake --add-missing --copy"
-            configure = "./configure --disable-transparent --disable-asciidoc CFLAGS=\"" + cflags + "\" LDFLAGS=\"" + ldflags + "\" LIBS=-lrt"
+            configure = "./configure --disable-transparent --disable-asciidoc --disable-threads CFLAGS=\"" + cflags + "\" LDFLAGS=\"" + ldflags + "\" LIBS=-lrt"
 
             if args.libevent_prefix is not None: configure += " --with-libevent-dir=" + getfullpath(args.libevent_prefix)
             if args.openssl_prefix is not None: configure += " --with-openssl-dir=" + getfullpath(args.openssl_prefix)
