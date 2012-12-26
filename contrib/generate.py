@@ -72,17 +72,25 @@ class Relay():
         self.download = 0 # in KiB
 
         self.rates = [] # list of bytes/s histories
+
+    def getBWRateArg(self): # the min required Tor config
+        return 30720 if self.bwrate < 30720 else self.bwrate
+
+    def getBWBurstArg(self):
+        return 30720 if self.bwburst < 30720 else self.bwburst
+
+    def getBWConsensusArg(self):
+        return 1000 if self.bwconsensus <= 0 else self.bwconsensus
         
     def setRegionCode(self, code):
         self.code = code
         
     def setLimits(self, bwrate, bwburst, bwtstamp):
         # defaults are 5MiB rate (5120000), 10MiB Burst (10240000)
-        # minimums are 20KiB rate (20480)
+        # minimums are 30KiB rate (30720)
         if bwtstamp > self.bwtstamp:
             self.bwtstamp = bwtstamp
             self.bwrate = int(bwrate)
-            if self.bwrate < 20480: self.bwrate = 20480 # the min required Tor config
             self.bwburst = int(bwburst)
         
     # max observed from server descriptor (min of max-read and max-write over 10 second intervals)
@@ -352,7 +360,7 @@ def generate(args):
     authority = nonexitnodes.pop(-1)
     name = "4uthority"
     starttime = "2"
-    torargs = "dirauth {0} {1} {2} ./authority.torrc ./data/authoritydata {3}share/geoip".format(authority.bwconsensus, authority.bwrate, authority.bwburst, INSTALLPREFIX) # in bytes
+    torargs = "dirauth {0} {1} {2} ./authority.torrc ./data/authoritydata {3}share/geoip".format(authority.getBWConsensusArg(), authority.getBWRateArg(), authority.getBWBurstArg(), INSTALLPREFIX) # in bytes
     addRelayToXML(root, starttime, torargs, None, None, name, authority.download, authority.upload, authority.ip, authority.code)
     
     # node boot-up rates
@@ -367,7 +375,7 @@ def generate(args):
         
         name = "exit{0}".format(i)
         starttime = "{0}".format(timecounter)
-        torargs = "exitrelay {0} {1} {2} ./exit.torrc ./data/exitdata {3}share/geoip".format(exit.bwconsensus, exit.bwrate, exit.bwburst, INSTALLPREFIX) # in bytes
+        torargs = "exitrelay {0} {1} {2} ./exit.torrc ./data/exitdata {3}share/geoip".format(exit.getBWConsensusArg(), exit.getBWRateArg(), exit.getBWBurstArg(), INSTALLPREFIX) # in bytes
         
         addRelayToXML(root, starttime, torargs, None, None, name, exit.download, exit.upload, exit.ip, exit.code)
         
@@ -383,7 +391,7 @@ def generate(args):
         
         name = "nonexit{0}".format(i)
         starttime = "{0}".format(timecounter)
-        torargs = "relay {0} {1} {2} ./relay.torrc ./data/relaydata {3}share/geoip".format(relay.bwconsensus, relay.bwrate, relay.bwburst, INSTALLPREFIX) # in bytes
+        torargs = "relay {0} {1} {2} ./relay.torrc ./data/relaydata {3}share/geoip".format(relay.getBWConsensusArg(), relay.getBWRateArg(), relay.getBWBurstArg(), INSTALLPREFIX) # in bytes
         
         addRelayToXML(root, starttime, torargs, None, None, name, relay.download, relay.upload, relay.ip, relay.code)
     
@@ -814,7 +822,7 @@ def parse_consensus(consensus_path):
             elif line[0:2] == "w ":
                 bw = float(line.strip().split()[1].split("=")[1]) * 1000.0 # KB to bytes
     
-    return sorted(relays, key=lambda relay: relay.bwconsensus)
+    return sorted(relays, key=lambda relay: relay.getBWConsensusArg())
 
 def log(msg):
     color_start_code = "\033[94m" # red: \033[91m"
