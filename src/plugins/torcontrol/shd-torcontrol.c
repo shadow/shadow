@@ -390,8 +390,6 @@ static in_addr_t torControl_resolveHostname(const gchar* hostname) {
 		int ret = getaddrinfo((gchar*) hostname, NULL, NULL, &info);
 		if(ret >= 0) {
 			addr = ((struct sockaddr_in*)(info->ai_addr))->sin_addr.s_addr;
-		} else {
-			log(G_LOG_LEVEL_WARNING, __FUNCTION__, "unable to create client: error in getaddrinfo");
 		}
 		freeaddrinfo(info);
 	}
@@ -434,6 +432,13 @@ gint torControl_createConnection(gchar *hostname, in_port_t port, gchar *mode, g
     TorControl_Connection *connection = g_new0(TorControl_Connection, 1);
     connection->hostname = g_strdup(hostname);
     connection->ip = torControl_resolveHostname(connection->hostname);
+    if(!connection->ip) {
+		log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error resolving hostname %s", hostname);
+		g_free(connection->hostname);
+		g_free(connection);
+		return -1;
+    }
+
     connection->port = port;
     connection->sockd = torControl_connect(connection->ip, htons(connection->port));
     if(connection->sockd < 0) {
@@ -443,6 +448,7 @@ gint torControl_createConnection(gchar *hostname, in_port_t port, gchar *mode, g
         g_free(connection);
         return -1;
     }
+
     connection->mode = g_strdup(mode);
     if(!g_ascii_strncasecmp(connection->mode, "circuitBuild", 12)) {
         connection->moduleData = torControlCircuitBuild_new(log, connection->sockd, args, &(connection->eventHandlers));
@@ -451,6 +457,14 @@ gint torControl_createConnection(gchar *hostname, in_port_t port, gchar *mode, g
         		connection->sockd, args, &(connection->eventHandlers));
     }
     _torControl_changeEpoll(torControl->epolld, connection->sockd, EPOLLOUT);
+
+    if(!connection->moduleData) {
+    	// TODO: Create free function for freeing connection objects
+    	g_free(connection->hostname);
+    	g_free(connection->mode);
+    	g_free(connection);
+    	return -1;
+    }
 
     connection->bufOffset = 0;
     connection->sendBuf = g_string_new("");
@@ -781,7 +795,7 @@ gint torControl_sendCommand(gint sockd, gchar *command) {
 
     _torControl_changeEpoll(torControl->epolld, sockd, EPOLLOUT);
     gint bytes = send(sockd, connection->sendBuf->str, connection->sendBuf->len, 0);
-    log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "[%s] CMD: %s (%d)", connection->hostname, command, bytes);
+    log(G_LOG_LEVEL_INFO, __FUNCTION__, "[%s] CMD: %s", connection->hostname, command);
     TORCTL_ASSERTIO(torControl, bytes, errno == EWOULDBLOCK || errno == ENOTCONN || errno == EALREADY, TORCTL_ERR_SEND);
 
     if(bytes >= connection->sendBuf->len) {
@@ -874,6 +888,28 @@ void torControl_init(TorControl* currentTorControl) {
 	torControl = currentTorControl;
 }
 
+void _torControl_startModule(int argc, gchar **argv) {
+	ShadowLogFunc log = torControl->shadowlib->log;
+	log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "torControl_startModule called");
+
+	/* hostname:port mode [args] */
+	gchar **parts = g_strsplit_set(argv[0], ":", 2);
+	gchar *hostname = parts[0];
+	in_port_t port = atoi(parts[1]);
+	gchar *mode = argv[1];
+	gchar **moduleArgs = NULL;
+	if(argc > 2) {
+		moduleArgs = &argv[2];
+	}
+
+	gint ret = torControl_createConnection(hostname, port, mode, moduleArgs);
+	if(ret < 0) {
+		log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "Error creating connection to %s:%d for %s", hostname, port, mode);
+	}
+
+	g_strfreev(parts);
+}
+
 void torControl_new(TorControl_Args *args) {
 	ShadowLogFunc log = torControl->shadowlib->log;
 	log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "torControl_new called");
@@ -887,44 +923,61 @@ void torControl_new(TorControl_Args *args) {
 		return;
 	}
 
-	/* read in filename with hosts to connect to */
-	gchar *contents;
-	gsize length;
-	GError *error;
-
-	if(!g_file_get_contents(args->hostsFilename, &contents, &length, &error)) {
-		/* TODO: HANDLE ERROR */
-	}
-
 	torControl->connections = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, NULL);
 
-	gchar **lines = g_strsplit(contents, "\n", 0);
-	for(gint lineNum = 0; lines[lineNum]; lineNum++) {
-		if(strlen(lines[lineNum]) == 0) {
-			continue;
-		}
-		log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "%s", lines[lineNum]);
-		/* hostname:port mode [args] */
-		gchar **parts = g_strsplit_set(lines[lineNum], " :", 4);
-		gchar *hostname = parts[0];
-		in_port_t port = atoi(parts[1]);
-		gchar *mode = parts[2];
-		gchar **args = NULL;
-		if(parts[3]) {
-		    args = g_strsplit(parts[3], " ", 0);
+	if(!g_strcmp0(args->mode, "single")) {
+		/* hostname port mode [args] */
+		gchar *hostname = args->argv[0];
+		in_port_t port = atoi(args->argv[1]);
+		gchar *mode = args->argv[2];
+		gchar **moduleArgs = NULL;
+		if(args->argc > 3) {
+			moduleArgs = &args->argv[3];
 		}
 
-		gint ret = torControl_createConnection(hostname, port, mode, args);
+		gint ret = torControl_createConnection(hostname, port, mode, moduleArgs);
 		if(ret < 0) {
-		    log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "Error creating connection to %s:%d for %s", hostname, port, mode);
+			log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "Error creating connection to %s:%d for %s", hostname, port, mode);
+		}
+	} else if(!g_strcmp0(args->mode, "multi")) {
+		/* read in filename with hosts to connect to */
+		gchar *contents;
+		gsize length;
+		GError *error;
+
+		gchar *filename = args->argv[0];
+		if(!g_file_get_contents(filename, &contents, &length, &error)) {
+			/* TODO: HANDLE ERROR */
 		}
 
-		if(args) {
-		    g_strfreev(args);
+		gchar **lines = g_strsplit(contents, "\n", 0);
+		for(gint lineNum = 0; lines[lineNum]; lineNum++) {
+			if(strlen(lines[lineNum]) == 0 || lines[lineNum][0] == '#') {
+				continue;
+			}
+
+			/* hostname:port mode [args] */
+		    gchar **parts = g_strsplit_set(lines[lineNum], " :", 4);
+			gchar *hostname = parts[0];
+			in_port_t port = atoi(parts[1]);
+		    gchar *mode = parts[2];
+		    gchar **args = NULL;
+		    if(parts[3]) {
+		    	args = g_strsplit(parts[3], " ", 0);
+		    }
+
+		    gint ret = torControl_createConnection(hostname, port, mode, args);
+		    if(ret < 0) {
+		    	log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "Error creating connection to %s:%d for %s", hostname, port, mode);
+			}
+
+		    if(args) {
+		    	g_strfreev(args);
+		    }
+			g_strfreev(parts);
 		}
-		g_strfreev(parts);
+		g_strfreev(lines);
 	}
-	g_strfreev(lines);
 }
 
 gint torControl_activate() {

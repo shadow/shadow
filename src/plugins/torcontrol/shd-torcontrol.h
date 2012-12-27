@@ -70,7 +70,9 @@ enum torControl_events {
 
 typedef struct _TorControl_Args TorControl_Args;
 struct _TorControl_Args {
-	gchar *hostsFilename;
+	gchar *mode;
+	gint argc;
+	gchar **argv;
 };
 
 /*

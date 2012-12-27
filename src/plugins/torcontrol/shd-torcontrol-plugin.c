@@ -27,18 +27,27 @@ TorControl torControlState;
 
 void torControlPlugin_new(int argc, char* argv[]) {
 	if(argc < 2) {
-		const gchar* USAGE = "TorControl USAGE: controlHostsFile ('hostname:port mode [modeArgs]')\n"
-					"\t'circuitBuild hop1 hop2 ... -1'\n";
+		const gchar* USAGE = "TorControl USAGE:\n"
+				"\tsingle hostname port [module moduleArgs]\n"
+				"\tmulti controlHostsFile\n\n"
+				"available modules:\n"
+				"\t'circuitBuild node1,node2,...,nodeN'\n"
+				"\t'log'\n";
 		torControlState.shadowlib->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "%s", USAGE);
 		return;
 	}
 
 	TorControl_Args args;
-	args.hostsFilename = g_strdup(argv[1]);
+	args.mode = g_strdup(argv[1]);
+	args.argc = argc - 2;
+	args.argv = NULL;
+	if(argc > 2) {
+		args.argv = &argv[2];
+	}
 
 	torControl_new(&args);
 
-	g_free(args.hostsFilename);
+	g_free(args.mode);
 }
 
 void torControlPlugin_free() {

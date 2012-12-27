@@ -121,7 +121,7 @@ static void _torControlCircuitBuild_circEvent(gpointer moduleData, gint code, gc
 	TorCtlCircuitBuild *circuitBuild = moduleData;
 	ShadowLogFunc log = circuitBuild->log;
 
-	log(G_LOG_LEVEL_INFO, __FUNCTION__, "[%d] CIRC: circID=%d status=%d buildFlags=%d purpose=%d reason=%d",
+	log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "[%d] CIRC: circID=%d status=%d buildFlags=%d purpose=%d reason=%d",
 			code, circID, status, buildFlags, purpose, reason);
 
 	/* if our circuit was closed, build new one */
@@ -138,7 +138,7 @@ static void _torControlCircuitBuild_streamEvent(gpointer moduleData, gint code, 
 	TorCtlCircuitBuild *circuitBuild = moduleData;
 	ShadowLogFunc log = circuitBuild->log;
 
-	log(G_LOG_LEVEL_INFO, __FUNCTION__, "[%d] STREAM: status=\"%s\" streamID=%d  circID=%d",
+	log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "[%d] STREAM: status=\"%s\" streamID=%d  circID=%d",
 	        code, torControl_getStreamStatusString(status), streamID, circID);
 
 	if(status == TORCTL_STREAM_STATUS_NEW && circuitBuild->bootstrapped) {
@@ -151,28 +151,11 @@ static void _torControlCircuitBuild_streamEvent(gpointer moduleData, gint code, 
 	}
 }
 
-static void _torControlCircuitBuild_orConnEvent(gpointer moduleData, gint code, gchar* line, gint connID, gchar *target, gint status,
-		gint reason, gint numCircuits) {
-	TorCtlCircuitBuild *circuitBuild = moduleData;
-	ShadowLogFunc log = circuitBuild->log;
-
-	log(G_LOG_LEVEL_INFO, __FUNCTION__, "[%d] ORCONN: target=%s status=%d reason=%d ncircs=%d",
-			code, target, status, reason, numCircuits);
-
-}
-
-static void _torControlCircuitBuild_bwEvent(gpointer moduleData, gint code, gchar* line, gint bytesRead, gint bytesWritten) {
-	TorCtlCircuitBuild *circuitBuild = moduleData;
-	ShadowLogFunc log = circuitBuild->log;
-
-	log(G_LOG_LEVEL_INFO, __FUNCTION__, "[%d] BW: read=%d written=%d", code, bytesRead, bytesWritten);
-
-}
-
 static void _torControlCircuitBuild_logEvent(gpointer moduleData, gint code, gint severity, gchar *msg) {
 	TorCtlCircuitBuild *circuitBuild = moduleData;
 	ShadowLogFunc log = circuitBuild->log;
-	log(G_LOG_LEVEL_INFO, __FUNCTION__, "[%d] LOG: sev=%d  msg=%s", code, severity, msg);
+
+	log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "[%d] LOG: sev=%d  msg=%s", code, severity, msg);
 
 	if(!circuitBuild->bootstrapped && severity == TORCTL_LOG_SEVERITY_NOTICE &&
 			g_str_has_suffix(msg, "Bootstrapped 100%: Done.")) {
@@ -260,10 +243,14 @@ TorCtlCircuitBuild *torControlCircuitBuild_new(ShadowLogFunc logFunc, gint sockd
     handlers->free = (TorControlFree) _torControlCircuitBuild_free;
 	handlers->circEvent = _torControlCircuitBuild_circEvent;
 	handlers->streamEvent = _torControlCircuitBuild_streamEvent;
-	handlers->orconnEvent = _torControlCircuitBuild_orConnEvent;
-	handlers->bwEvent = _torControlCircuitBuild_bwEvent;
 	handlers->logEvent = _torControlCircuitBuild_logEvent;
 	handlers->responseEvent = _torControlCircuitBuild_responseEvent;
+
+
+	if(!args[0]) {
+		logFunc(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error! Did not specify circuit to build!");
+		return NULL;
+	}
 
 	/* create structure with module data to return */
 	TorCtlCircuitBuild *circuitBuild = g_new0(TorCtlCircuitBuild, 1);
@@ -271,9 +258,11 @@ TorCtlCircuitBuild *torControlCircuitBuild_new(ShadowLogFunc logFunc, gint sockd
 	circuitBuild->sockd = sockd;
 
 	circuitBuild->circuit = NULL;
-	for(gint idx = 0; g_strcmp0(args[idx], "-1"); idx++) {
-		circuitBuild->circuit = g_list_append(circuitBuild->circuit, strdup(args[idx]));
+	gchar **nodes = g_strsplit(args[0], ",", 0);
+	for(gint idx = 0; nodes[idx]; idx++) {
+		circuitBuild->circuit = g_list_append(circuitBuild->circuit, strdup(nodes[idx]));
 	}
+	g_strfreev(nodes);
 
 	circuitBuild->state = TORCTL_CIRCBUILD_STATE_AUTHENTICATE;
 
