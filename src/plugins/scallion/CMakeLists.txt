@@ -48,6 +48,8 @@ list(REMOVE_ITEM toror_sources
 ## tor needs these defined
 add_definitions(-DLOCALSTATEDIR="/usr/local/var" -DSHARE_DATADIR="/usr/local/var" -DBINDIR="/usr/local/bin")
 remove_definitions(-DNDEBUG)
+## disable warnings from tor code
+add_cflags("-w")
 
 ## create and install a shared library that can plug into shadow
 add_bitcode(shadow-plugin-scallion-bitcode 
