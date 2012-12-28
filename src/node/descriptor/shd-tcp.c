@@ -36,11 +36,7 @@ static const gchar* tcpStateStrings[] = {
 };
 
 static const gchar* tcp_stateToAscii(enum TCPState state) {
-	if(state < sizeof(tcpStateStrings)) {
-		return tcpStateStrings[state];
-	} else {
-		return (const gchar*) "";
-	}
+	return tcpStateStrings[state];
 }
 
 enum TCPFlags {
