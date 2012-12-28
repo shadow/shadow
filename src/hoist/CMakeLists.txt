@@ -1,6 +1,7 @@
 project(llvm-hoist CXX)
 cmake_minimum_required(VERSION 2.8 FATAL_ERROR)
 
+set(CMAKE_CXX_FLAGS "-fno-rtti")
 find_package(LLVM REQUIRED)
 
 # Define add_llvm_* macro's.

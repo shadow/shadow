@@ -28,7 +28,7 @@
 #include "llvm/GlobalVariable.h"
 #include "llvm/GlobalValue.h"
 #include "llvm/Support/CallSite.h"
-#include "llvm/Target/TargetData.h"
+#include "llvm/DataLayout.h"
 
 #ifdef DEBUG
 #include "llvm/Support/raw_ostream.h"
@@ -45,9 +45,9 @@ namespace {
 class HoistGlobalsPass: public ModulePass {
 
 private:
-	// require TargetData so we can get variable sizes
+	// require DataLayout so we can get variable sizes
 	void getAnalysisUsage(AnalysisUsage &AU) const {
-		AU.addRequired<TargetData>();
+		AU.addRequired<DataLayout>();
 	}
 
 public:
@@ -87,8 +87,8 @@ public:
 				// We found a global variable, keep track of it
 				modified = true;
 
-				GlobalTypes.push_back(
-						cast<PointerType>(GV->getType())->getElementType());
+//				GV->setThreadLocalMode(GlobalVariable::GeneralDynamicTLSModel);
+				GlobalTypes.push_back(cast<PointerType>(GV->getType())->getElementType());
 				GlobalInitializers.push_back(GV->getInitializer());
 				Globals.push_back(GV);
 			}
@@ -102,6 +102,10 @@ public:
 		// its type is a combination of the types of all of its elements
 		// we will initialize each of the elements as done previously
 		// choice of: PrivateLinkage InternalLinkage ExternalLinkage CommonLinkage
+		//
+		// lets use thread-local storage so each thread gets its own copy
+		// choice of: NotThreadLocal, GeneralDynamicTLSModel, LocalDynamicTLSModel,
+		//				InitialExecTLSModel, LocalExecTLSModel
 
 		Type *Int32Ty = Type::getInt32Ty(M.getContext());
 
@@ -111,17 +115,17 @@ public:
 				HoistedStructType, GlobalInitializers);
 		GlobalVariable *HoistedStruct = new GlobalVariable(M, HoistedStructType,
 				false, GlobalValue::ExternalLinkage, HoistedStructInitializer,
-				"__hoisted_globals");
+				"__hoisted_globals", 0, GlobalVariable::GeneralDynamicTLSModel, 0);
 
 		// and we need the size of the struct so we know how much to copy in
 		// and out for each node
 
-		uint64_t rawsize = getAnalysis<TargetData>().getTypeStoreSize(
+		uint64_t rawsize = getAnalysis<DataLayout>().getTypeStoreSize(
 				HoistedStructType);
 		Constant *HoistedStructSize = ConstantInt::get(Int32Ty, rawsize, false);
 		GlobalVariable *HoistedSize = new GlobalVariable(M, Int32Ty, true,
 				GlobalValue::ExternalLinkage, HoistedStructSize,
-				"__hoisted_globals_size");
+				"__hoisted_globals_size", 0, GlobalVariable::GeneralDynamicTLSModel, 0);
 
 
 #ifdef DEBUG
@@ -134,11 +138,20 @@ public:
 				++i) {
 			GlobalVariable *GV = *i;
 
-			Constant *GEPIndexes[] = { ConstantInt::get(Int32Ty, 0),
-					ConstantInt::get(Int32Ty, Field++) };
-			Constant *GEP = ConstantExpr::getGetElementPtr(HoistedStruct,
-					GEPIndexes, true);
+			Constant *GEPIndexes[] = { ConstantInt::get(Int32Ty, 0), ConstantInt::get(Int32Ty, Field++) };
+			Constant *GEP = ConstantExpr::getGetElementPtr(HoistedStruct, GEPIndexes, true);
+//			GetElementPtrInst *GEP2 = GetElementPtrInst::Create(HoistedStruct, GEPIndexes);
+
+			// we have to do this manually so we can preserve debug info
 			GV->replaceAllUsesWith(GEP);
+
+//			for (Value::use_iterator ui = GV->use_begin(); ui != GV->use_end(); ++ui) {
+//				User *u = dyn_cast < User > (*ui);
+//				if (Instruction *ins = dyn_cast < Instruction > (*ui)) {
+//					MDNode *N = ins->getMetadata("dbg");
+//				}
+//				u->replaceUsesOfWith(GV, GEP); // this doesn't work !
+//			}
 
 #ifdef DEBUG
 			errs() << GV->getName() << ", ";
@@ -155,11 +168,12 @@ public:
 		// now create a new pointer variable that will be loaded and evaluated
 		// before accessing the hoisted globals struct
 
-		PointerType *HoistedPointerType = PointerType::get(HoistedStructType,
-				0);
+		PointerType *HoistedPointerType = PointerType::get(HoistedStructType, 0);
+
 		GlobalVariable *HoistedPointer = new GlobalVariable(M,
 				HoistedPointerType, false, GlobalValue::ExternalLinkage,
-				HoistedStruct, "__hoisted_globals_pointer");
+				HoistedStruct, "__hoisted_globals_pointer", 0,
+				GlobalVariable::GeneralDynamicTLSModel, 0);
 
 //      Constant *GEPIndexes[] = {ConstantInt::get(Int32Ty, 0), ConstantInt::get(Int32Ty, 0)};
 //      Constant *GEP = ConstantExpr::getGetElementPtr(HoistedPointer, GEPIndexes, true);

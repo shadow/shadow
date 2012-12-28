@@ -126,14 +126,15 @@ Plugin* plugin_new(GQuark id, GString* filename) {
 	/* do not open the path directly, but rather copy to tmp directory first
 	 * to avoid multiple threads using the same memory space.
 	 */
-	plugin->path = _plugin_getTemporaryFilePath(filename->str);
+//	plugin->path = _plugin_getTemporaryFilePath(filename->str);
+	plugin->path = g_string_new(filename->str);
 
 	/* now we need to copy the actual contents to our new file */
-	if(!_plugin_copyFile(filename->str, plugin->path->str)) {
-		g_string_free(plugin->path, TRUE);
-		g_free(plugin);
-		return NULL;
-	}
+//	if(!_plugin_copyFile(filename->str, plugin->path->str)) {
+//		g_string_free(plugin->path, TRUE);
+//		g_free(plugin);
+//		return NULL;
+//	}
 
 	/*
 	 * now get the plugin handle from our private copy of the library.
@@ -241,7 +242,7 @@ void plugin_free(gpointer data) {
 		}
 	}
 
-	g_unlink(plugin->path->str);
+//	g_unlink(plugin->path->str);
 	g_string_free(plugin->path, TRUE);
 
 	if(plugin->defaultState) {
