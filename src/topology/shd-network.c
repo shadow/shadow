@@ -23,6 +23,7 @@
 
 struct _Network {
 	GQuark id;
+	GMutex* lock;
 	GHashTable *linksByCluster;
 	GHashTable *linksByNode;
 
@@ -44,6 +45,8 @@ Network* network_new(GQuark id, guint64 bandwidthdown, guint64 bandwidthup, gdou
 	network->linksByCluster = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, NULL);
 	network->linksByNode = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, NULL);
 
+	network->lock = g_mutex_new();
+
 	return network;
 }
 
@@ -51,8 +54,13 @@ void network_free(gpointer data) {
 	Network* network = data;
 	MAGIC_ASSERT(network);
 
+	g_mutex_lock(network->lock);
+
 	g_hash_table_destroy(network->linksByCluster);
 	g_hash_table_destroy(network->linksByNode);
+
+	g_mutex_unlock(network->lock);
+	g_mutex_free(network->lock);
 
 	MAGIC_CLEAR(network);
 	g_free(network);
@@ -103,6 +111,12 @@ void network_addLink(Network* network, gpointer link) {
 Link* network_getLink(Network *network, in_addr_t sourceIP, in_addr_t destinationIP) {
 	MAGIC_ASSERT(network);
 
+	/* FIXME this is not thread-safe!
+	 * we should rewrite this functionality so that all of the hashtables are
+	 * precomputed before we start processing nodes to avoid thread collisions.
+	 */
+	g_mutex_lock(network->lock);
+
 	gint *key;
 
 	/* check to see if we already have hash table of links for source */
@@ -123,6 +137,7 @@ Link* network_getLink(Network *network, in_addr_t sourceIP, in_addr_t destinatio
 		/* get list of possible links to destination network */
 		GList *links = g_hash_table_lookup(network->linksByCluster, &(destinationNetwork->id));
 		if(!links) {
+			g_mutex_unlock(network->lock);
 			return NULL;
 		}
 
@@ -171,6 +186,8 @@ Link* network_getLink(Network *network, in_addr_t sourceIP, in_addr_t destinatio
 		*key = sourceIP;
 		g_hash_table_insert(nodeLinks, key, link);
 	}
+
+	g_mutex_unlock(network->lock);
 
 	return link;
 }

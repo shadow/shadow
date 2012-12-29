@@ -47,24 +47,24 @@ Application* application_new(GQuark pluginID, gchar* pluginPath, SimulationTime 
 	application->startTime = startTime;
 	application->arguments = g_string_new(arguments);
 
-	/* need to get thread-private plugin from current worker */
-	Plugin* plugin = worker_getPlugin(application->pluginID, application->pluginPath);
-	application->state = plugin_newDefaultState(plugin);
-
 	return application;
 }
 
 void application_free(Application* application) {
 	MAGIC_ASSERT(application);
 
-	/* need to get thread-private plugin from current worker */
-	Plugin* plugin = worker_getPlugin(application->pluginID, application->pluginPath);
+	/* we only have state if we've booted */
+	if(application->state) {
+		/* need to get thread-private plugin from current worker */
+		Plugin* plugin = worker_getPlugin(application->pluginID, application->pluginPath);
 
-	/* tell the plug-in module (user code) to free its data */
-	plugin_executeFree(plugin, application->state);
+		/* tell the plug-in module (user code) to free its data */
+		plugin_executeFree(plugin, application->state);
 
-	/* free our copy of plug-in resources, and other application state */
-	plugin_freeState(plugin, application->state);
+		/* free our copy of plug-in resources, and other application state */
+		plugin_freeState(plugin, application->state);
+	}
+
 	g_string_free(application->pluginPath, TRUE);
 	g_string_free(application->arguments, TRUE);
 
@@ -124,6 +124,8 @@ void application_boot(Application* application) {
 	Plugin* plugin = worker_getPlugin(application->pluginID, application->pluginPath);
 
 	worker->cached_application = application;
+	/* create our default state as we run in our assigned worker */
+	application->state = plugin_newDefaultState(plugin);
 	plugin_executeNew(plugin, application->state, argc, argv);
 	worker->cached_application = NULL;
 
