@@ -115,7 +115,7 @@ public:
 				HoistedStructType, GlobalInitializers);
 		GlobalVariable *HoistedStruct = new GlobalVariable(M, HoistedStructType,
 				false, GlobalValue::ExternalLinkage, HoistedStructInitializer,
-				"__hoisted_globals", 0, GlobalVariable::GeneralDynamicTLSModel, 0);
+				"__hoisted_globals", 0, GlobalVariable::NotThreadLocal, 0);
 
 		// and we need the size of the struct so we know how much to copy in
 		// and out for each node
@@ -125,7 +125,7 @@ public:
 		Constant *HoistedStructSize = ConstantInt::get(Int32Ty, rawsize, false);
 		GlobalVariable *HoistedSize = new GlobalVariable(M, Int32Ty, true,
 				GlobalValue::ExternalLinkage, HoistedStructSize,
-				"__hoisted_globals_size", 0, GlobalVariable::GeneralDynamicTLSModel, 0);
+				"__hoisted_globals_size", 0, GlobalVariable::NotThreadLocal, 0);
 
 
 #ifdef DEBUG
@@ -173,7 +173,7 @@ public:
 		GlobalVariable *HoistedPointer = new GlobalVariable(M,
 				HoistedPointerType, false, GlobalValue::ExternalLinkage,
 				HoistedStruct, "__hoisted_globals_pointer", 0,
-				GlobalVariable::GeneralDynamicTLSModel, 0);
+				GlobalVariable::NotThreadLocal, 0);
 
 //      Constant *GEPIndexes[] = {ConstantInt::get(Int32Ty, 0), ConstantInt::get(Int32Ty, 0)};
 //      Constant *GEP = ConstantExpr::getGetElementPtr(HoistedPointer, GEPIndexes, true);
