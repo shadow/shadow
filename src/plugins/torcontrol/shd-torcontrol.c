@@ -666,12 +666,8 @@ static void _torControl_processAsyncCellStatsReply(TorControlCellStatsEventFunc 
 	cellStatsEvent(moduleData, code, line, circid, nextHopCircID, prevHopCircID, appProcessed, appTotalWaitMillis, appMeanQueueLength, exitProcessed, exitTotalWaitMillis, exitMeanQueueLength);
 }
 
-static void _torControl_processAsyncTokenReply(TorControlTokenEventFunc tokenEvent, gpointer moduleData, gint code, gchar* line) {
-	tokenEvent(moduleData, code, line);
-}
-
-static void _torControl_processAsyncORTokenReply(TorControlORTokenEventFunc orTokenEvent, gpointer moduleData, gint code, gchar* line) {
-	orTokenEvent(moduleData, code, line);
+static void _torControl_processGenericReply(TorControlGenericEventFunc genericEvent, gpointer moduleData, gint code, gchar* line) {
+	genericEvent(moduleData, code, line);
 }
 
 static void _torControl_processAsyncLogReply(TorControlLogEventFunc logEvent, gpointer moduleData, gint code, gchar* line) {
@@ -765,9 +761,17 @@ gint torControl_processReply(TorControl_Connection *connection, GList *reply) {
             } else if (funcs->cellStatsEvent && !g_ascii_strcasecmp(event, "CELL_STATS")) {
             	_torControl_processAsyncCellStatsReply(funcs->cellStatsEvent, connection->moduleData, code, line);
             } else if (funcs->tokenEvent && !g_ascii_strcasecmp(event, "TOKENS")) {
-            	_torControl_processAsyncTokenReply(funcs->tokenEvent, connection->moduleData, code, line);
+            	_torControl_processGenericReply(funcs->tokenEvent, connection->moduleData, code, line);
             } else if (funcs->orTokenEvent && !g_ascii_strcasecmp(event, "OR_TOKENS")) {
-            	_torControl_processAsyncORTokenReply(funcs->orTokenEvent, connection->moduleData, code, line);
+            	_torControl_processGenericReply(funcs->orTokenEvent, connection->moduleData, code, line);
+            } else if (funcs->clientsSeenEvent && !g_ascii_strcasecmp(event, "CLIENTS_SEEN")) {
+            	_torControl_processGenericReply(funcs->clientsSeenEvent, connection->moduleData, code, line);
+            } else if (funcs->guardEvent && !g_ascii_strcasecmp(event, "GUARD")) {
+            	_torControl_processGenericReply(funcs->guardEvent, connection->moduleData, code, line);
+            } else if (funcs->buildtimeoutSetEvent && !g_ascii_strcasecmp(event, "BUILDTIMEOUT_SET")) {
+            	_torControl_processGenericReply(funcs->buildtimeoutSetEvent, connection->moduleData, code, line);
+            } else if (funcs->circMinorEvent && !g_ascii_strcasecmp(event, "CIRC_MINOR")) {
+            	_torControl_processGenericReply(funcs->circMinorEvent, connection->moduleData, code, line);
             } else if(funcs->logEvent && (!g_ascii_strcasecmp(event, "DEBUG") ||
                     !g_ascii_strcasecmp(event, "INFO") || !g_ascii_strcasecmp(event, "NOTICE") ||
                     !g_ascii_strcasecmp(event, "WARN") || !g_ascii_strcasecmp(event, "ERR"))) {

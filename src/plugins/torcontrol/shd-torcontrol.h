@@ -236,8 +236,7 @@ typedef void (*TorControlExtendedBWEventFunc)(gpointer moduleData, gint code, gc
 typedef void (*TorControlCellStatsEventFunc)(gpointer moduleData, gint code, gchar* line, gint circID, gint nextHopCircID, gint prevHopCircID,
 		gint appProcessed, gint appTotalWaitMillis, double appMeanQueueLength,
 		gint exitProcessed, gint exitTotalWaitMillis, double exitMeanQueueLength);
-typedef void (*TorControlTokenEventFunc)(gpointer moduleData, gint code, gchar* line);
-typedef void (*TorControlORTokenEventFunc)(gpointer moduleData, gint code, gchar* line);
+typedef void (*TorControlGenericEventFunc)(gpointer moduleData, gint code, gchar* line);
 typedef void (*TorControlLogEventFunc)(gpointer moduleData, gint code, gint severity, gchar *msg);
 
 /* response handler */
@@ -254,8 +253,12 @@ struct _TorControl_EventHandlers {
 	TorControlBWEventFunc bwEvent;
 	TorControlExtendedBWEventFunc extendedBWEvent;
 	TorControlCellStatsEventFunc cellStatsEvent;
-	TorControlTokenEventFunc tokenEvent;
-	TorControlORTokenEventFunc orTokenEvent;
+	TorControlGenericEventFunc tokenEvent;
+	TorControlGenericEventFunc orTokenEvent;
+	TorControlGenericEventFunc circMinorEvent;
+	TorControlGenericEventFunc buildtimeoutSetEvent;
+	TorControlGenericEventFunc clientsSeenEvent;
+	TorControlGenericEventFunc guardEvent;
 	TorControlLogEventFunc logEvent;
 	TorControlResponseFunc responseEvent;
 };

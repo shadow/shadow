@@ -61,12 +61,14 @@ static gboolean _torcontrollogger_manageState(TorControlLogger* tcl) {
 
 	case TCS_SEND_SETEVENTS: {
 		/* send list of events to listen on */
-		if (torControl_setevents(tcl->targetSockd,
-				"CIRC STREAM ORCONN BW STREAM_BW") > 0) {
+		GString* events = g_string_new("CIRC STREAM ORCONN BW STREAM_BW CIRC_MINOR BUILDTIMEOUT_SET CLIENTS_SEEN GUARD");
+		if (torControl_setevents(tcl->targetSockd, events->str) > 0) {
 			/* idle until we receive the response, then move to next state */
 			tcl->currentState = TCS_IDLE;
 			tcl->nextState = TCS_RECV_SETEVENTS;
+			tcl->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "set tor control events '%s'", events->str);
 		}
+		g_string_free(events, TRUE);
 		break;
 	}
 
@@ -153,8 +155,12 @@ TorControlLogger* torcontrollogger_new(ShadowLogFunc logFunc,
 	handlers->bwEvent = (TorControlBWEventFunc) _torcontrollogger_handleEvents;
 	handlers->extendedBWEvent = (TorControlExtendedBWEventFunc) _torcontrollogger_handleEvents;
 	handlers->cellStatsEvent = (TorControlCellStatsEventFunc) _torcontrollogger_handleEvents;
-	handlers->tokenEvent = (TorControlTokenEventFunc) _torcontrollogger_handleEvents;
-	handlers->orTokenEvent = (TorControlORTokenEventFunc) _torcontrollogger_handleEvents;
+	handlers->tokenEvent = (TorControlGenericEventFunc) _torcontrollogger_handleEvents;
+	handlers->orTokenEvent = (TorControlGenericEventFunc) _torcontrollogger_handleEvents;
+	handlers->circMinorEvent = (TorControlGenericEventFunc) _torcontrollogger_handleEvents;
+	handlers->guardEvent = (TorControlGenericEventFunc) _torcontrollogger_handleEvents;
+	handlers->buildtimeoutSetEvent = (TorControlGenericEventFunc) _torcontrollogger_handleEvents;
+	handlers->clientsSeenEvent = (TorControlGenericEventFunc) _torcontrollogger_handleEvents;
 
 	TorControlLogger* tcl = g_new0(TorControlLogger, 1);
 
