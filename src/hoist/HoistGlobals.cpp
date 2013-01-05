@@ -27,8 +27,12 @@
 #include "llvm/Constants.h"
 #include "llvm/GlobalVariable.h"
 #include "llvm/GlobalValue.h"
-#include "llvm/Support/CallSite.h"
 #include "llvm/DataLayout.h"
+#include "llvm/BasicBlock.h"
+#include "llvm/Transforms/Utils/BasicBlockUtils.h"
+#include "llvm/Support/CallSite.h"
+#include "llvm/Support/CFG.h"
+#include "llvm/Support/DebugLoc.h"
 
 #ifdef DEBUG
 #include "llvm/Support/raw_ostream.h"
@@ -62,32 +66,20 @@ public:
 		SmallVector<Type*, 16> GlobalTypes;
 		SmallVector<Constant*, 16> GlobalInitializers;
 
-		for (Module::global_iterator i = M.global_begin(), e = M.global_end();
-				i != e; ++i) {
+		for (Module::global_iterator i = M.global_begin(), e = M.global_end(); i != e; ++i) {
 			// Skip anything that isn't a global variable
-			GlobalVariable *GV = dyn_cast<GlobalVariable>(i);
-			if (GV) {
+			if (GlobalVariable *GV = dyn_cast<GlobalVariable>(i)) {
 				// If this is not a definition, skip it
 				if (GV->isDeclaration())
 					continue;
+
 				// If it's constant, it can be shared
 				if (GV->isConstant())
 					continue;
 
-				/* linkage types:
-				 * global -> llvm::GlobalValue::CommonLinkage
-				 * static -> llvm::GlobalValue::InternalLinkage
-				 * extern -> llvm::GlobalValue::ExternalLinkage
-				 */
-//				if(GV->hasLocalLinkage() || GV->hasExternalLinkage()) {
-//					errs() << "local or extern '" << GV->getName() << "'\n";
-//					GV->setLinkage(GlobalValue::CommonLinkage);
-//				}
-
 				// We found a global variable, keep track of it
 				modified = true;
 
-//				GV->setThreadLocalMode(GlobalVariable::GeneralDynamicTLSModel);
 				GlobalTypes.push_back(cast<PointerType>(GV->getType())->getElementType());
 				GlobalInitializers.push_back(GV->getInitializer());
 				Globals.push_back(GV);
@@ -101,18 +93,24 @@ public:
 		// Now we need a new structure to store all of the globals we found
 		// its type is a combination of the types of all of its elements
 		// we will initialize each of the elements as done previously
-		// choice of: PrivateLinkage InternalLinkage ExternalLinkage CommonLinkage
+		// linkage types:
+		// GlobalValue::ExternalLinkage (extern)
+		// GlobalValue::CommonLinkage (global, must have zero initializer)
+		// GlobalValue::InternalLinkage (static)
+		// GlobalValue::PrivateLinkage
 		//
 		// lets use thread-local storage so each thread gets its own copy
-		// choice of: NotThreadLocal, GeneralDynamicTLSModel, LocalDynamicTLSModel,
-		//				InitialExecTLSModel, LocalExecTLSModel
+		// thread options:
+		// GlobalVariable::NotThreadLocal
+		// GlobalVariable::GeneralDynamicTLSModel
+		// GlobalVariable::LocalDynamicTLSModel
+		// GlobalVariable::InitialExecTLSModel
+		// GlobalVariable::LocalExecTLSModel
 
 		Type *Int32Ty = Type::getInt32Ty(M.getContext());
 
-		StructType *HoistedStructType = StructType::create(GlobalTypes,
-				"hoisted_globals");
-		Constant *HoistedStructInitializer = ConstantStruct::get(
-				HoistedStructType, GlobalInitializers);
+		StructType *HoistedStructType = StructType::create(GlobalTypes, "hoisted_globals");
+		Constant *HoistedStructInitializer = ConstantStruct::get(HoistedStructType, GlobalInitializers);
 		GlobalVariable *HoistedStruct = new GlobalVariable(M, HoistedStructType,
 				false, GlobalValue::ExternalLinkage, HoistedStructInitializer,
 				"__hoisted_globals", 0, GlobalVariable::NotThreadLocal, 0);
@@ -120,37 +118,50 @@ public:
 		// and we need the size of the struct so we know how much to copy in
 		// and out for each node
 
-		uint64_t rawsize = getAnalysis<DataLayout>().getTypeStoreSize(
-				HoistedStructType);
+		uint64_t rawsize = getAnalysis<DataLayout>().getTypeStoreSize(HoistedStructType);
 		Constant *HoistedStructSize = ConstantInt::get(Int32Ty, rawsize, false);
 		GlobalVariable *HoistedSize = new GlobalVariable(M, Int32Ty, true,
 				GlobalValue::ExternalLinkage, HoistedStructSize,
 				"__hoisted_globals_size", 0, GlobalVariable::NotThreadLocal, 0);
 
-
 #ifdef DEBUG
 		errs() << "Hoisting globals: ";
 #endif
+
 		// replace all accesses to the original variables with pointer indirection
 		// this replaces uses with pointers into the global struct
 		uint64_t Field = 0;
-		for (GlobalVariable **i = Globals.begin(), **e = Globals.end(); i != e;
-				++i) {
+		for (GlobalVariable **i = Globals.begin(), **e = Globals.end(); i != e; ++i) {
 			GlobalVariable *GV = *i;
+			assert(GV);
 
-			Constant *GEPIndexes[] = { ConstantInt::get(Int32Ty, 0), ConstantInt::get(Int32Ty, Field++) };
-			Constant *GEP = ConstantExpr::getGetElementPtr(HoistedStruct, GEPIndexes, true);
-//			GetElementPtrInst *GEP2 = GetElementPtrInst::Create(HoistedStruct, GEPIndexes);
+			SmallVector<Value*, 2> GEPIndexes;
+			GEPIndexes.push_back(ConstantInt::get(Int32Ty, 0));
+			GEPIndexes.push_back(ConstantInt::get(Int32Ty, Field++));
+//			ArrayRef<Value*>* a = new ArrayRef<Value*>(GEPIndexes);
 
 			// we have to do this manually so we can preserve debug info
+			Constant *GEP = ConstantExpr::getGetElementPtr(HoistedStruct, GEPIndexes, true);
 			GV->replaceAllUsesWith(GEP);
 
 //			for (Value::use_iterator ui = GV->use_begin(); ui != GV->use_end(); ++ui) {
-//				User *u = dyn_cast < User > (*ui);
-//				if (Instruction *ins = dyn_cast < Instruction > (*ui)) {
-//					MDNode *N = ins->getMetadata("dbg");
+//				if(Instruction *ins = dyn_cast < Instruction > (*ui)) {
+//					if(User *u = dyn_cast < User > (*ui)) {
+//						GetElementPtrInst *GEP = GetElementPtrInst::CreateInBounds(HoistedStruct, *a, "", ins);
+//						u->replaceUsesOfWith(GV, GEP);
+//					}
 //				}
-//				u->replaceUsesOfWith(GV, GEP); // this doesn't work !
+//			    // replace user with new user
+//				// copy metadata, change storage location reference
+//				// create load instruction to load the GEP before existing user
+//				if(Instruction *ins = dyn_cast < Instruction > (*ui)) {
+//					MDNode *N = ins->getMetadata(LLVMContext::MD_dbg);
+//					GetElementPtrInst *GEP = GetElementPtrInst::CreateInBounds(HoistedStruct, *a, "", ins);
+//					ins->eraseFromParent();
+//					LoadInst *loadGEP = new LoadInst(GEP, "");
+//					BasicBlock::iterator ii(ins);
+//					ReplaceInstWithInst(ins->getParent()->getInstList(), ii, loadGEP);
+//				}
 //			}
 
 #ifdef DEBUG
