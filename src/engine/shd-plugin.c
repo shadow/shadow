@@ -63,7 +63,7 @@ struct _Plugin {
 	MAGIC_DECLARE;
 };
 
-GString* _plugin_getTemporaryFilePath(gchar* originalPath) {
+static GString* _plugin_getTemporaryFilePath(gchar* originalPath) {
 	/* get the basename of the real plug-in and create a temp file template */
 	gchar* basename = g_path_get_basename(originalPath);
 	GString* templateBuffer = g_string_new(basename);
@@ -89,7 +89,7 @@ GString* _plugin_getTemporaryFilePath(gchar* originalPath) {
 	return templatePath;
 }
 
-gboolean _plugin_copyFile(gchar* fromPath, gchar* toPath) {
+static gboolean _plugin_copyFile(gchar* fromPath, gchar* toPath) {
 	gchar* contents = NULL;
 	gsize length = 0;
 	GError* error = NULL;
@@ -125,16 +125,18 @@ Plugin* plugin_new(GQuark id, GString* filename) {
 
 	/* do not open the path directly, but rather copy to tmp directory first
 	 * to avoid multiple threads using the same memory space.
+	 * TODO: this should eventually be replaced when we have thread-local
+	 * storage working correctly in the LLVM module-pass code
 	 */
-//	plugin->path = _plugin_getTemporaryFilePath(filename->str);
-	plugin->path = g_string_new(filename->str);
+	plugin->path = _plugin_getTemporaryFilePath(filename->str);
+//	plugin->path = g_string_new(filename->str);
 
 	/* now we need to copy the actual contents to our new file */
-//	if(!_plugin_copyFile(filename->str, plugin->path->str)) {
-//		g_string_free(plugin->path, TRUE);
-//		g_free(plugin);
-//		return NULL;
-//	}
+	if(!_plugin_copyFile(filename->str, plugin->path->str)) {
+		g_string_free(plugin->path, TRUE);
+		g_free(plugin);
+		return NULL;
+	}
 
 	/*
 	 * now get the plugin handle from our private copy of the library.
@@ -242,7 +244,10 @@ void plugin_free(gpointer data) {
 		}
 	}
 
-//	g_unlink(plugin->path->str);
+	/* TODO: this unlink should be removed when we no longer copy plugins
+	 * before loading them. see the other TODO above in this file.
+	 */
+	g_unlink(plugin->path->str);
 	g_string_free(plugin->path, TRUE);
 
 	if(plugin->defaultState) {
