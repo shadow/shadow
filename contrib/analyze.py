@@ -738,7 +738,7 @@ def parse(args):
                 if tick not in myctpqproc: myctpqproc[tick] = 0.0
                 myctpqproc[tick] += proc
                 myccpqproc.append(proc)
-        cellcdf['pqproc'].append(myproctotal/myproccount)
+        cellcdf['pqproc'].append(0.0 if myproccount==0 else myproctotal/myproccount)
 
         # queue time appward
         for tick in n.cellpqw:
@@ -754,7 +754,7 @@ def parse(args):
                 myctpqwait[tick] += wait
                 myccpqwait.append(wait)
                 myccpqcellwait.append(0.0 if proc==0 else wait/proc)
-        cellcdf['pqwait'].append(mywaittotal/mywaitcount)
+        cellcdf['pqwait'].append(0.0 if mywaitcount==0 else mywaittotal/mywaitcount)
 
         # ave queue time per cell appward
         cellcdf['pqcellwait'].append(0.0 if myproctotal==0 else mywaittotal/myproctotal)
