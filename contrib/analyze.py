@@ -1116,7 +1116,7 @@ def parse(args):
         print >>f, timemsg
         print timemsg
 
-    with open(, 'wb') as f:
+    with open("{0}/circuit-choices".format(outputpath), 'wb') as f:
         total = sum(circs['hops'].values())
         print >>f, "RELAY,HOPS%"
         for relay in sorted(circs['hops'].keys()):
