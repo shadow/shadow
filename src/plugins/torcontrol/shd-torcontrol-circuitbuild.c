@@ -90,7 +90,7 @@ static gboolean _torControlCircuitBuild_initialize(gpointer moduleData) {
 
         case TORCTL_CIRCBUILD_STATE_SETEVENTS: {
             /* send list of events to listen on */
-            if(torControl_setevents(sockd, "CIRC STREAM NOTICE") > 0) {
+            if(torControl_setevents(sockd, "CIRC STREAM STATUS_CLIENT") > 0) {
                 circuitBuild->nextState = TORCTL_CIRCBUILD_STATE_CHECKSTATUS;
                 circuitBuild->waitingForResponse = TRUE;
             }
@@ -151,18 +151,21 @@ static void _torControlCircuitBuild_streamEvent(gpointer moduleData, gint code, 
 	}
 }
 
-static void _torControlCircuitBuild_logEvent(gpointer moduleData, gint code, gint severity, gchar *msg) {
-	TorCtlCircuitBuild *circuitBuild = moduleData;
-	ShadowLogFunc log = circuitBuild->log;
+static void _torControlCircuitBuild_statusEvent(gpointer moduleData, gint code, gchar* line,
+        gint type, gint severity, gchar *action, GHashTable *arguments) {
+    TorCtlCircuitBuild *circuitBuild = moduleData;
+    ShadowLogFunc log = circuitBuild->log;
 
-	log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "[%d] LOG: sev=%d  msg=%s", code, severity, msg);
-
-	if(!circuitBuild->bootstrapped && severity == TORCTL_LOG_SEVERITY_NOTICE &&
-			g_str_has_suffix(msg, "Bootstrapped 100%: Done.")) {
-		circuitBuild->bootstrapped = TRUE;
-		torControl_buildCircuit(circuitBuild->sockd, circuitBuild->circuit);
-		circuitBuild->state = TORCTL_CIRCBUILD_STATE_GET_CIRC_ID;
-	}
+    if(type == TORCTL_STATUS_TYPE_CLIENT && !g_ascii_strcasecmp(action, "BOOTSTRAP")) {
+        gchar *progress = g_hash_table_lookup(arguments, "PROGRESS");
+        if(!progress) {
+            log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Could not find argument PROGRESS in bootstrap status");
+        } else if(!g_ascii_strcasecmp(progress, "100")) {
+            circuitBuild->bootstrapped = TRUE;
+            torControl_buildCircuit(circuitBuild->sockd, circuitBuild->circuit);
+            circuitBuild->state = TORCTL_CIRCBUILD_STATE_GET_CIRC_ID;
+        }
+    }
 }
 
 static void _torControlCircuitBuild_responseEvent(gpointer moduleData, GList *reply, gpointer userData) {
@@ -243,7 +246,7 @@ TorCtlCircuitBuild *torControlCircuitBuild_new(ShadowLogFunc logFunc, gint sockd
     handlers->free = (TorControlFree) _torControlCircuitBuild_free;
 	handlers->circEvent = _torControlCircuitBuild_circEvent;
 	handlers->streamEvent = _torControlCircuitBuild_streamEvent;
-	handlers->logEvent = _torControlCircuitBuild_logEvent;
+	handlers->statusEvent = _torControlCircuitBuild_statusEvent;
 	handlers->responseEvent = _torControlCircuitBuild_responseEvent;
 
 

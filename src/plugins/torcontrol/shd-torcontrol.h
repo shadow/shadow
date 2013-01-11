@@ -207,6 +207,24 @@ enum torControl_orconnReason {
 };
 
 /*
+ * STATUS parameter values (type, severity)
+ */
+
+enum torControl_statusType {
+    TORCTL_STATUS_TYPE_GENERAL,
+    TORCTL_STATUS_TYPE_CLIENT,
+    TORCTL_STATUS_TYPE_SERVER,
+    TORCTL_STATUS_TYPE_UNKNOWN,
+};
+
+enum torControl_statusSeverity {
+    TORCTL_STATUS_SEVERITY_NOTICE,
+    TORCTL_STATUS_SEVERITY_WARN,
+    TORCTL_STATUS_SEVERITY_ERR,
+    TORCTL_STATUS_SEVERITY_UNKNOWN,
+};
+
+/*
  * LOG parameter values (severity)
  */
 enum torControl_logSeverity {
@@ -236,6 +254,7 @@ typedef void (*TorControlExtendedBWEventFunc)(gpointer moduleData, gint code, gc
 typedef void (*TorControlCellStatsEventFunc)(gpointer moduleData, gint code, gchar* line, gint circID, gint nextHopCircID, gint prevHopCircID,
 		gint appProcessed, gint appTotalWaitMillis, double appMeanQueueLength,
 		gint exitProcessed, gint exitTotalWaitMillis, double exitMeanQueueLength);
+typedef void (*TorControlStatusEventFunc)(gpointer moduleData, gint code, gchar* line, gint type, gint severity, gchar* action, GHashTable *arguments);
 typedef void (*TorControlGenericEventFunc)(gpointer moduleData, gint code, gchar* line);
 typedef void (*TorControlLogEventFunc)(gpointer moduleData, gint code, gint severity, gchar *msg);
 
@@ -253,6 +272,7 @@ struct _TorControl_EventHandlers {
 	TorControlBWEventFunc bwEvent;
 	TorControlExtendedBWEventFunc extendedBWEvent;
 	TorControlCellStatsEventFunc cellStatsEvent;
+	TorControlStatusEventFunc statusEvent;
 	TorControlGenericEventFunc tokenEvent;
 	TorControlGenericEventFunc orTokenEvent;
 	TorControlGenericEventFunc circMinorEvent;

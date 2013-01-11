@@ -338,6 +338,31 @@ static gint _torControl_getLogSeverity(gchar *str) {
 	return TORCTL_LOG_SEVERITY_UNKNOWN;
 }
 
+/*
+ * STATUS_CLIENT
+ */
+static gint _torControl_getStatusType(gchar *str) {
+    if(!g_ascii_strcasecmp(str, "STATUS_GENERAL")) {
+        return TORCTL_STATUS_TYPE_GENERAL;
+    } else if(!g_ascii_strcasecmp(str, "STATUS_CLIENT")) {
+        return TORCTL_STATUS_TYPE_CLIENT;
+    } else if(!g_ascii_strcasecmp(str, "STATUS_SERVER")) {
+        return TORCTL_STATUS_TYPE_SERVER;
+    }
+    return TORCTL_STATUS_TYPE_UNKNOWN;
+}
+
+static gint _torControl_getStatusSeverity(gchar *str) {
+    if(!g_ascii_strcasecmp(str, "NOTICE")) {
+        return TORCTL_STATUS_SEVERITY_NOTICE;
+    } else if(!g_ascii_strcasecmp(str, "WARN")) {
+        return TORCTL_STATUS_SEVERITY_WARN;
+    } else if(!g_ascii_strcasecmp(str, "ERR")) {
+        return TORCTL_STATUS_SEVERITY_ERR;
+    }
+    return TORCTL_STATUS_SEVERITY_UNKNOWN;
+}
+
 static GDateTime* _torControl_getCreateTime(gchar* datetimestamp) {
 	gint year = 0, month = 0, day = 0, hour = 0, min = 0;
 	gdouble sec = 0;
@@ -677,6 +702,26 @@ static void _torControl_processAsyncLogReply(TorControlLogEventFunc logEvent, gp
     g_strfreev(message);
 }
 
+static void _torControl_processAsyncStatusReply(TorControlStatusEventFunc statusEvent, gpointer moduleData, gint code, gchar* line) {
+    gchar **parts = g_strsplit(line, " ", 0);
+    gint type = _torControl_getStatusType(parts[0]);
+    gint severity = _torControl_getStatusSeverity(parts[1]);
+    gchar* action = g_strdup(parts[2]);
+
+    GHashTable *arguments = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
+    for(gint idx = 3; parts[idx]; idx++) {
+        gchar **values = g_strsplit(parts[idx], "=", 2);
+        g_hash_table_insert(arguments, g_strdup(values[0]), g_strdup(values[1]));
+        g_strfreev(values);
+    }
+
+    statusEvent(moduleData, code, line, type, severity, action, arguments);
+
+    g_free(action);
+    g_hash_table_destroy(arguments);
+    g_strfreev(parts);
+}
+
 gint torControl_processReply(TorControl_Connection *connection, GList *reply) {
 	ShadowLogFunc log = torControl->shadowlib->log;
 	TorControl_ReplyLine *replyLine = g_list_first(reply)->data;
@@ -776,6 +821,8 @@ gint torControl_processReply(TorControl_Connection *connection, GList *reply) {
                     !g_ascii_strcasecmp(event, "INFO") || !g_ascii_strcasecmp(event, "NOTICE") ||
                     !g_ascii_strcasecmp(event, "WARN") || !g_ascii_strcasecmp(event, "ERR"))) {
             	_torControl_processAsyncLogReply(funcs->logEvent, connection->moduleData, code, line);
+            } else if(funcs->statusEvent && !g_ascii_strcasecmp(event, "STATUS_CLIENT")) {
+                _torControl_processAsyncStatusReply(funcs->statusEvent, connection->moduleData, code, line);
             }
 
             g_strfreev(parts);
