@@ -819,7 +819,7 @@ def parse(args):
                 if tick not in myctnqlen: myctnqlen[tick] = 0.0
                 myctnqlen[tick] += length
                 myccnqlen.append(length)
-        cellcdf['nqlen'].append(length)
+        cellcdf['nqlen'].append(0.0 if mylencount==0 else mylentotal/mylencount)
 
         tokenstotal, tokenscount = 0.0, 0.0
 
