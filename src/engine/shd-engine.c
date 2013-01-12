@@ -77,6 +77,7 @@ struct _Engine {
 	Random* random;
 
 	GMutex* lock;
+	GMutex* pluginInitLock;
 
 	gint rawFrequencyKHz;
 	guint numEventsCurrentInterval;
@@ -121,6 +122,7 @@ Engine* engine_new(Configuration* config) {
 	engine->internet = internetwork_new();
 
 	engine->lock = g_mutex_new();
+	engine->pluginInitLock = g_mutex_new();
 
 	/* get the raw speed of the experiment machine */
 	gchar* contents = NULL;
@@ -167,6 +169,7 @@ void engine_free(Engine* engine) {
 
 	random_free(engine->random);
 	g_mutex_free(engine->lock);
+	g_mutex_free(engine->pluginInitLock);
 
 	MAGIC_CLEAR(engine);
 	shadow_engine = NULL;
@@ -436,6 +439,16 @@ gboolean engine_isKilled(Engine* engine) {
 gboolean engine_isForced(Engine* engine) {
 	MAGIC_ASSERT(engine);
 	return engine->forceShadowContext;
+}
+
+void engine_lockPluginInit(Engine* engine) {
+	MAGIC_ASSERT(engine);
+	g_mutex_lock(engine->pluginInitLock);
+}
+
+void engine_unlockPluginInit(Engine* engine) {
+	MAGIC_ASSERT(engine);
+	g_mutex_unlock(engine->pluginInitLock);
 }
 
 static void _engine_lock(Engine* engine) {

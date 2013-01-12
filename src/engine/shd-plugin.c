@@ -331,7 +331,18 @@ static void _plugin_stopExecuting(Plugin* plugin, PluginState state) {
 void plugin_executeNew(Plugin* plugin, PluginState state, gint argcParam, gchar* argvParam[]) {
 	MAGIC_ASSERT(plugin);
 	_plugin_startExecuting(plugin, state);
+
+	/* FIXME:
+	 * this quick lock hack was thrown in because tor was segfaulting during its
+	 * global crypto initialization in OPENSSL_add_all_algorithms_noconf().
+	 * we should instead have a better way of globally initializing openssl once
+	 * instead of every time a virtual node is created.
+	 */
+	Worker* worker = worker_getPrivate();
+	engine_lockPluginInit(worker->cached_engine);
 	plugin->new(argcParam, argvParam);
+	engine_unlockPluginInit(worker->cached_engine);
+
 	_plugin_stopExecuting(plugin, state);
 }
 

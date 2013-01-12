@@ -58,6 +58,9 @@ void engine_setKillTime(Engine* engine, SimulationTime endTime);
 gboolean engine_isKilled(Engine* engine);
 gboolean engine_isForced(Engine* engine);
 
+void engine_lockPluginInit(Engine* engine);
+void engine_unlockPluginInit(Engine* engine);
+
 /* thread-safe */
 
 void engine_pushEvent(Engine* engine, Event* event);
