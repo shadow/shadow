@@ -61,6 +61,9 @@ struct _Node {
 	/* random port counter, in host order */
 	in_port_t randomPortCounter;
 
+	/* track the order in which the application sent us application data */
+	gdouble packetPriorityCounter;
+
 	/* random stream */
 	Random* random;
 
@@ -71,7 +74,7 @@ Node* node_new(GQuark id, Network* network, guint32 ip,
 		GString* hostname, guint64 bwDownKiBps, guint64 bwUpKiBps,
 		guint cpuFrequency, gint cpuThreshold, gint cpuPrecision, guint nodeSeed,
 		SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel,
-		GLogLevelFlags logLevel, gboolean logPcap, gchar* pcapDir) {
+		GLogLevelFlags logLevel, gboolean logPcap, gchar* pcapDir, gchar* qdisc) {
 	Node* node = g_new0(Node, 1);
 	MAGIC_INIT(node);
 
@@ -88,11 +91,11 @@ Node* node_new(GQuark id, Network* network, guint32 ip,
 	/* virtual interfaces for managing network I/O */
 	node->interfaces = g_hash_table_new_full(g_direct_hash, g_direct_equal,
 			NULL, (GDestroyNotify) networkinterface_free);
-	NetworkInterface* ethernet = networkinterface_new(network, id, hostname->str, bwDownKiBps, bwUpKiBps, logPcap, pcapDir);
+	NetworkInterface* ethernet = networkinterface_new(network, id, hostname->str, bwDownKiBps, bwUpKiBps, logPcap, pcapDir, qdisc);
 	g_hash_table_replace(node->interfaces, GUINT_TO_POINTER((guint)id), ethernet);
 	GString *loopbackName = g_string_new("");
 	g_string_append_printf(loopbackName, "%s-loopback", hostname->str);
-	NetworkInterface* loopback = networkinterface_new(NULL, (GQuark)htonl(INADDR_LOOPBACK), loopbackName->str, G_MAXUINT32, G_MAXUINT32, logPcap, pcapDir);
+	NetworkInterface* loopback = networkinterface_new(NULL, (GQuark)htonl(INADDR_LOOPBACK), loopbackName->str, G_MAXUINT32, G_MAXUINT32, logPcap, pcapDir, qdisc);
 	g_hash_table_replace(node->interfaces, GUINT_TO_POINTER((guint)htonl(INADDR_LOOPBACK)), loopback);
 	node->defaultInterface = ethernet;
 
@@ -884,4 +887,9 @@ GLogLevelFlags node_getLogLevel(Node* node) {
 gchar node_isLoggingPcap(Node *node) {
 	MAGIC_ASSERT(node);
 	return node->logPcap;
+}
+
+gdouble node_getNextPacketPriority(Node* node) {
+	MAGIC_ASSERT(node);
+	return ++(node->packetPriorityCounter);
 }

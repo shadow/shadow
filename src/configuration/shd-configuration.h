@@ -246,6 +246,7 @@ struct _Configuration {
 	gint minRunAhead;
 	gint initialTCPWindow;
 	gint interfaceBufferSize;
+	gchar* interfaceQueuingDiscipline;
 	SimulationTime interfaceBatchTime;
 
 	GOptionGroup* pluginsOptionGroup;
@@ -317,6 +318,14 @@ GLogLevelFlags configuration_getHeartbeatLogLevel(Configuration* config);
  * @return the command line heartbeat interval converted to SimulationTime
  */
 SimulationTime configuration_getHearbeatInterval(Configuration* config);
+
+/**
+ * Get the string form that represents the queuing discipline the network
+ * interface uses to select which of the sendable sockets should get priority.
+ * @param config a #Configuration object created with configuration_new()
+ * @return the qdisc string. the caller does not own the string.
+ */
+gchar* configuration_getQueuingDiscipline(Configuration* config);
 
 /** @} */
 

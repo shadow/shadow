@@ -165,6 +165,8 @@ void createnodes_run(CreateNodesAction* action) {
 		pcapDir = g_strdup(action->pcapDirString->str);
 	}
 
+	gchar* qdisc = configuration_getQueuingDiscipline(config);
+
 	for(gint i = 0; i < action->quantity; i++) {
 		/* get a random network if they didnt assign one */
 		gdouble randomDouble = engine_nextRandomDouble(worker->cached_engine);
@@ -189,7 +191,7 @@ void createnodes_run(CreateNodesAction* action) {
 		guint nodeSeed = (guint) engine_nextRandomInt(worker->cached_engine);
 		Node* node = internetwork_createNode(worker_getInternet(), id, network,
 				hostnameBuffer, bwDownKiBps, bwUpKiBps, cpuFrequency, cpuThreshold, cpuPrecision,
-				nodeSeed, heartbeatInterval, heartbeatLogLevel, logLevel, logPcap, pcapDir);
+				nodeSeed, heartbeatInterval, heartbeatLogLevel, logLevel, logPcap, pcapDir, qdisc);
 
 		g_string_free(hostnameBuffer, TRUE);
 

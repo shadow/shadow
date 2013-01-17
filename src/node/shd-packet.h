@@ -56,6 +56,7 @@ void packet_setTCP(Packet* packet, enum ProtocolTCPFlags flags,
 void packet_updateTCP(Packet* packet, guint acknowledgement, guint window);
 
 guint packet_getPayloadLength(Packet* packet);
+gdouble packet_getPriority(Packet* packet);
 guint packet_getHeaderSize(Packet* packet);
 in_addr_t packet_getDestinationIP(Packet* packet);
 in_addr_t packet_getSourceIP(Packet* packet);

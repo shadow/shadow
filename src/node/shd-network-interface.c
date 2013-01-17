@@ -27,8 +27,13 @@ enum NetworkInterfaceFlags {
 	NIF_RECEIVING = 1 << 1,
 };
 
+enum NetworkInterfaceQDisc {
+	NIQ_NONE=0, NIQ_FIFO=1, NIQ_RR=2,
+};
+
 struct _NetworkInterface {
 	enum NetworkInterfaceFlags flags;
+	enum NetworkInterfaceQDisc qdisc;
 
 	Network* network;
 	Address* address;
@@ -195,7 +200,7 @@ void networkinterface_pcapWritePacket(NetworkInterface *interface, Packet *packe
 }
 
 NetworkInterface* networkinterface_new(Network* network, GQuark address, gchar* name,
-		guint64 bwDownKiBps, guint64 bwUpKiBps, gboolean logPcap, gchar* pcapDir) {
+		guint64 bwDownKiBps, guint64 bwUpKiBps, gboolean logPcap, gchar* pcapDir, gchar* qdisc) {
 	NetworkInterface* interface = g_new0(NetworkInterface, 1);
 	MAGIC_INIT(interface);
 
@@ -219,6 +224,13 @@ NetworkInterface* networkinterface_new(Network* network, GQuark address, gchar* 
 
 	/* sockets tell us when they want to start sending */
 	interface->sendableSockets = g_queue_new();
+
+	/* parse queuing discipline */
+	if (qdisc && !g_ascii_strcasecmp(qdisc, "rr")) {
+		interface->qdisc = NIQ_RR;
+	} else {
+		interface->qdisc = NIQ_FIFO;
+	}
 
 	/* log status */
 	char addressStr[INET_ADDRSTRLEN];
@@ -249,8 +261,9 @@ NetworkInterface* networkinterface_new(Network* network, GQuark address, gchar* 
 		}
 	}
 
-	info("bringing up network interface '%s' at '%s', %u KiB/s up and %u KiB/s down",
-			name, addressStr, bwUpKiBps, bwDownKiBps);
+	info("bringing up network interface '%s' at '%s', %u KiB/s up and %u KiB/s down using queuing discipline %s",
+			name, addressStr, bwUpKiBps, bwDownKiBps,
+			interface->qdisc == NIQ_RR ? "rr" : "fifo");
 
 	return interface;
 }
@@ -471,26 +484,93 @@ void networkinterface_packetDropped(NetworkInterface* interface, Packet* packet)
 	}
 }
 
+/* round robin queuing discipline ($ man tc)*/
+static Packet* _networkinterface_selectRoundRobin(NetworkInterface* interface) {
+	/* do round robin to get the next packet from the next socket */
+	Socket* socket = g_queue_pop_head(interface->sendableSockets);
+	Packet* packet = socket_pullOutPacket(socket);
+
+	if(packet) {
+		/* socket might have more packets, and is still reffed from before */
+		g_queue_push_tail(interface->sendableSockets, socket);
+	} else {
+		/* socket has no more packets, unref it from the sendable queue */
+		descriptor_unref((Descriptor*) socket);
+	}
+
+	return packet;
+}
+
+/* first-in-first-out queuing discipline ($ man tc)*/
+static Packet* _networkinterface_selectFirstInFirstOut(NetworkInterface* interface) {
+	/* use packet priority field to select based on application ordering.
+	 * this is really a simplification of prioritizing on timestamps. */
+	Socket* selectedSocket = NULL;
+
+	/* loop the queue once, track the original tail for loop termination */
+	Socket* tailSocket = g_queue_peek_tail(interface->sendableSockets);
+
+	/* make sure we have at least one sendable */
+	if(tailSocket) {
+		/* now loop all the sockets to find the min priority */
+		gdouble minPriority = DBL_MAX;
+		Socket* nextSocket = g_queue_pop_head(interface->sendableSockets);
+		while(nextSocket) {
+			Packet* candidate = socket_peekNextPacket(nextSocket);
+
+			if(candidate) {
+				/* socket might have more packets, and is still reffed from before */
+				g_queue_push_tail(interface->sendableSockets, nextSocket);
+
+				/* update selection based on the desired application order */
+				gdouble priority = packet_getPriority(candidate);
+				if(priority < minPriority) {
+					minPriority = priority;
+					selectedSocket = nextSocket;
+				}
+			} else {
+				/* socket has no more packets, unref it from the sendable queue */
+				descriptor_unref((Descriptor*) nextSocket);
+			}
+
+			/* check termination condition */
+			if(nextSocket == tailSocket) {
+				/* we've checked them all, break the loop */
+				nextSocket = NULL;
+			} else {
+				nextSocket = g_queue_pop_head(interface->sendableSockets);
+			}
+		}
+	}
+
+	return selectedSocket ? socket_pullOutPacket(selectedSocket) : NULL;
+}
+
 static void _networkinterface_scheduleNextSend(NetworkInterface* interface) {
 	/* the next packet needs to be sent according to bandwidth limitations.
 	 * we need to spend time sending it before sending the next. */
 	SimulationTime batchTime = worker_getConfig()->interfaceBatchTime;
 
 	/* loop until we find a socket that has something to send */
-	while(g_queue_get_length(interface->sendableSockets) > 0 &&
+	while(!g_queue_is_empty(interface->sendableSockets) &&
 			interface->sendNanosecondsConsumed <= batchTime) {
-		/* do round robin on all ready sockets */
-		Socket* socket = g_queue_pop_head(interface->sendableSockets);
 
-		Packet* packet = socket_pullOutPacket(socket);
+		/* choose which packet to send next based on our queuing discipline */
+		Packet* packet;
+		switch(interface->qdisc) {
+			case NIQ_RR: {
+				packet = _networkinterface_selectRoundRobin(interface);
+				break;
+			}
+			case NIQ_FIFO:
+			default: {
+				packet = _networkinterface_selectFirstInFirstOut(interface);
+				break;
+			}
+		}
 		if(!packet) {
-			/* socket has no more packets, unref it from round robin queue */
-			descriptor_unref((Descriptor*) socket);
 			continue;
 		}
-
-		/* socket might have more packets, and is still reffed from before */
-		g_queue_push_tail(interface->sendableSockets, socket);
 
 		/* now actually send the packet somewhere */
 		if(networkinterface_getIPAddress(interface) == packet_getDestinationIP(packet)) {

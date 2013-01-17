@@ -49,6 +49,13 @@ struct _Packet {
 	gpointer payload;
 	guint payloadLength;
 
+	/* tracks application priority so we flush packets from the interface to
+	 * the wire in the order intended by the application. this is used in
+	 * the default FIFO network interface scheduling discipline.
+	 * smaller values have greater priority.
+	 */
+	gdouble priority;
+
 	MAGIC_DECLARE;
 };
 
@@ -60,8 +67,13 @@ Packet* packet_new(gconstpointer payload, gsize payloadLength) {
 	packet->referenceCount = 1;
 
 	packet->payloadLength = payloadLength;
-	/* if length is 0, this returns NULL */
-	packet->payload = g_memdup(payload, payloadLength);
+	if(payloadLength > 0) {
+		/* if length is 0, this returns NULL */
+		packet->payload = g_memdup(payload, payloadLength);
+
+		/* application data needs a priority ordering for FIFO onto the wire */
+		packet->priority = node_getNextPacketPriority(worker_getPrivate()->cached_node);
+	}
 
 	return packet;
 }
@@ -199,10 +211,14 @@ void packet_updateTCP(Packet* packet, guint acknowledgement, guint window) {
 }
 
 guint packet_getPayloadLength(Packet* packet) {
-	_packet_lock(packet);
+	/* not locked, read only */
 	guint length = packet->payloadLength;
-	_packet_unlock(packet);
 	return length;
+}
+
+gdouble packet_getPriority(Packet* packet) {
+	/* not locked, read only */
+	return packet->priority;
 }
 
 guint packet_getHeaderSize(Packet* packet) {

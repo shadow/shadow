@@ -86,6 +86,7 @@ gint socket_getAssociationKey(Socket* socket);
 
 gboolean socket_pushInPacket(Socket* socket, Packet* packet);
 Packet* socket_pullOutPacket(Socket* socket);
+Packet* socket_peekNextPacket(Socket* socket);
 void socket_droppedPacket(Socket* socket, Packet* packet);
 
 gsize socket_getInputBufferSpace(Socket* socket);
