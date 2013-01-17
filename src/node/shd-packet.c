@@ -212,8 +212,7 @@ void packet_updateTCP(Packet* packet, guint acknowledgement, guint window) {
 
 guint packet_getPayloadLength(Packet* packet) {
 	/* not locked, read only */
-	guint length = packet->payloadLength;
-	return length;
+	return packet->payloadLength;
 }
 
 gdouble packet_getPriority(Packet* packet) {

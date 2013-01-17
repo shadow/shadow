@@ -125,7 +125,8 @@ Packet* socket_pullOutPacket(Socket* socket) {
 	return socket_removeFromOutputBuffer(socket);
 }
 
-Packet* socket_peekNextPacket(Socket* socket) {
+Packet* socket_peekNextPacket(const Socket* socket) {
+	MAGIC_ASSERT(socket);
 	return g_queue_peek_head(socket->outputBuffer);
 }
 
