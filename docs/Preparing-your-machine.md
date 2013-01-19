@@ -4,9 +4,9 @@ This page discusses how to prepare your machine to begin running Shadow experime
 Shadow relies on the following tools and libraries to function properly. Versions and plug-in-specific dependencies are noted in parenthesis where applicable
 
 **Required**:
-* clang, llvm (3.1)
+* clang, llvm (3.2)
 * glib (>= 2.28.8)
-* cmake (>= 2.8)
+* cmake (>= 2.8.8)
 * make
 * python (= 2.7)
 * xz-utils
@@ -16,15 +16,17 @@ Shadow relies on the following tools and libraries to function properly. Version
 * libtidy (browser plug-in only)
 
 **Recommended**:
+* htop
+* screen
 * dstat
-* pdftk
-* matplotlib
 * numpy
 * scipy
+* matplotlib
+* pdftk
 
 To install these using the Fedora package manager, try something like:
 ```bash
-sudo yum install -y gcc xz make automake autoconf cmake libtidy libtidy-devel glib2 glib2-devel dstat pdftk python python-matplotlib numpy scipy
+sudo yum install -y gcc xz make automake autoconf cmake libtidy libtidy-devel glib2 glib2-devel python htop screen dstat numpy scipy python-matplotlib pdftk
 ```
 On Ubuntu, try:
 ```bash
