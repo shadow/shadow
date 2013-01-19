@@ -38,6 +38,8 @@ These may also be downloaded and installed locally if preferred.
 You'll also need to manually build and install **clang/llvm** from source because for some reason the OS packages do not include the shared CMake module files Shadow requires. Try the following (replace 'username' with your username):
 
 ```bash
+wget http://www.llvm.org/releases/3.2/llvm-3.2.src.tar.gz
+wget http://www.llvm.org/releases/3.2/clang-3.2.src.tar.gz
 tar xaf llvm-3.2.src.tar.gz
 tar xaf clang-3.2.src.tar.gz
 cp -R clang-3.2.src llvm-3.2.src/tools/clang
