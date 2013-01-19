@@ -33,6 +33,7 @@ struct _TorControlLogger {
 	in_addr_t targetIP;
 	in_port_t targetPort;
 	gint targetSockd;
+	gchar* torctlEvents;
 };
 
 /*
@@ -61,14 +62,12 @@ static gboolean _torcontrollogger_manageState(TorControlLogger* tcl) {
 
 	case TCS_SEND_SETEVENTS: {
 		/* send list of events to listen on */
-		GString* events = g_string_new("CIRC STREAM ORCONN BW STREAM_BW CIRC_MINOR BUILDTIMEOUT_SET CLIENTS_SEEN GUARD");
-		if (torControl_setevents(tcl->targetSockd, events->str) > 0) {
+		if (torControl_setevents(tcl->targetSockd, tcl->torctlEvents) > 0) {
 			/* idle until we receive the response, then move to next state */
 			tcl->currentState = TCS_IDLE;
 			tcl->nextState = TCS_RECV_SETEVENTS;
-			tcl->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "set tor control events '%s'", events->str);
+			tcl->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "set tor control events '%s'", tcl->torctlEvents);
 		}
-		g_string_free(events, TRUE);
 		break;
 	}
 
@@ -136,19 +135,21 @@ static void _torcontrollogger_free(TorControlLogger* tcl) {
 	g_assert(tcl);
 
 	g_string_free(tcl->targetHostname, TRUE);
+	g_free(tcl->torctlEvents);
 
 	g_free(tcl);
 }
 
 TorControlLogger* torcontrollogger_new(ShadowLogFunc logFunc,
-		gchar* hostname, in_addr_t ip, in_port_t port, gint sockd, gchar **args,
-		TorControl_EventHandlers *handlers) {
+		gchar* hostname, in_addr_t ip, in_port_t port, gint sockd,
+		gchar **moduleArgs, TorControl_EventHandlers *handlers) {
 	g_assert(handlers);
 
 	handlers->initialize = (TorControlInitialize) _torcontrollogger_manageState;
 	handlers->free = (TorControlFree) _torcontrollogger_free;
 	handlers->responseEvent = (TorControlResponseFunc) _torcontrollogger_handleResponseEvent;
 
+	/* all events get processed by the same function that simply logs tor output directly */
 	handlers->circEvent = (TorControlCircEventFunc) _torcontrollogger_handleEvents;
 	handlers->streamEvent = (TorControlStreamEventFunc) _torcontrollogger_handleEvents;
 	handlers->orconnEvent = (TorControlORConnEventFunc) _torcontrollogger_handleEvents;
@@ -162,6 +163,12 @@ TorControlLogger* torcontrollogger_new(ShadowLogFunc logFunc,
 	handlers->buildtimeoutSetEvent = (TorControlGenericEventFunc) _torcontrollogger_handleEvents;
 	handlers->clientsSeenEvent = (TorControlGenericEventFunc) _torcontrollogger_handleEvents;
 
+	/* make sure they specified events */
+	if(!moduleArgs[0]) {
+		logFunc(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error! Did not specify torctl events to log!");
+		return NULL;
+	}
+
 	TorControlLogger* tcl = g_new0(TorControlLogger, 1);
 
 	tcl->log = logFunc;
@@ -170,6 +177,12 @@ TorControlLogger* torcontrollogger_new(ShadowLogFunc logFunc,
 	tcl->targetIP = ip;
 	tcl->targetPort = port;
 	tcl->targetSockd = sockd;
+
+	/* store the events a string so we can register it later
+	 * g_ascii_strup duplicates and converts the str to uppercase
+	 * g_strdelimit replaces ',' with ' ' in place */
+	tcl->torctlEvents = g_strdelimit(g_ascii_strup(moduleArgs[0], -1), ",", ' ');
+	g_assert(tcl->torctlEvents);
 
 	tcl->currentState = TCS_SEND_AUTHENTICATE;
 

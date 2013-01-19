@@ -239,8 +239,9 @@ static void _torControlCircuitBuild_free(TorCtlCircuitBuild* circuitBuild) {
 	// FIXME
 }
 
-TorCtlCircuitBuild *torControlCircuitBuild_new(ShadowLogFunc logFunc, gint sockd, gchar **args, TorControl_EventHandlers *handlers) {
-    g_assert(handlers && args);
+TorCtlCircuitBuild *torControlCircuitBuild_new(ShadowLogFunc logFunc, gint sockd,
+		gchar **moduleArgs, TorControl_EventHandlers *handlers) {
+    g_assert(handlers && moduleArgs);
 
 	handlers->initialize = _torControlCircuitBuild_initialize;
     handlers->free = (TorControlFree) _torControlCircuitBuild_free;
@@ -250,7 +251,7 @@ TorCtlCircuitBuild *torControlCircuitBuild_new(ShadowLogFunc logFunc, gint sockd
 	handlers->responseEvent = _torControlCircuitBuild_responseEvent;
 
 
-	if(!args[0]) {
+	if(!moduleArgs[0]) {
 		logFunc(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error! Did not specify circuit to build!");
 		return NULL;
 	}
@@ -261,7 +262,7 @@ TorCtlCircuitBuild *torControlCircuitBuild_new(ShadowLogFunc logFunc, gint sockd
 	circuitBuild->sockd = sockd;
 
 	circuitBuild->circuit = NULL;
-	gchar **nodes = g_strsplit(args[0], ",", 0);
+	gchar **nodes = g_strsplit(moduleArgs[0], ",", 0);
 	for(gint idx = 0; nodes[idx]; idx++) {
 		circuitBuild->circuit = g_list_append(circuitBuild->circuit, strdup(nodes[idx]));
 	}

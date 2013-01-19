@@ -347,7 +347,7 @@ void torControl_new(TorControl_Args *args);
 gint torControl_activate();
 void torControl_free();
 
-gint torControl_createConnection(gchar *hostname, in_port_t port, gchar *mode, gchar **args);
+gint torControl_createConnection(gchar *hostname, in_port_t port, gchar *mode, gchar **moduleArgs);
 
 gint torControl_authenticate(gint sockd, gchar *password);
 gint torControl_setconf(gint sockd, gchar **confValues);

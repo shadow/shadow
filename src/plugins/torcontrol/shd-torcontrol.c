@@ -452,7 +452,7 @@ gint torControl_connect(in_addr_t addr, in_port_t port) {
 	return sockd;
 }
 
-gint torControl_createConnection(gchar *hostname, in_port_t port, gchar *mode, gchar **args) {
+gint torControl_createConnection(gchar *hostname, in_port_t port, gchar *mode, gchar **moduleArgs) {
     ShadowLogFunc log = torControl->shadowlib->log;
     TorControl_Connection *connection = g_new0(TorControl_Connection, 1);
     connection->hostname = g_strdup(hostname);
@@ -476,10 +476,10 @@ gint torControl_createConnection(gchar *hostname, in_port_t port, gchar *mode, g
 
     connection->mode = g_strdup(mode);
     if(!g_ascii_strncasecmp(connection->mode, "circuitBuild", 12)) {
-        connection->moduleData = torControlCircuitBuild_new(log, connection->sockd, args, &(connection->eventHandlers));
-    } else if(!g_ascii_strncasecmp(connection->mode, "log", 10)) {
+        connection->moduleData = torControlCircuitBuild_new(log, connection->sockd, moduleArgs, &(connection->eventHandlers));
+    } else if(!g_ascii_strncasecmp(connection->mode, "log", 3)) {
         connection->moduleData = torcontrollogger_new(log, hostname, connection->ip, connection->port,
-        		connection->sockd, args, &(connection->eventHandlers));
+        		connection->sockd, moduleArgs, &(connection->eventHandlers));
     }
     _torControl_changeEpoll(torControl->epolld, connection->sockd, EPOLLOUT);
 
@@ -939,28 +939,6 @@ void torControl_init(TorControl* currentTorControl) {
 	torControl = currentTorControl;
 }
 
-void _torControl_startModule(int argc, gchar **argv) {
-	ShadowLogFunc log = torControl->shadowlib->log;
-	log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "torControl_startModule called");
-
-	/* hostname:port mode [args] */
-	gchar **parts = g_strsplit_set(argv[0], ":", 2);
-	gchar *hostname = parts[0];
-	in_port_t port = atoi(parts[1]);
-	gchar *mode = argv[1];
-	gchar **moduleArgs = NULL;
-	if(argc > 2) {
-		moduleArgs = &argv[2];
-	}
-
-	gint ret = torControl_createConnection(hostname, port, mode, moduleArgs);
-	if(ret < 0) {
-		log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "Error creating connection to %s:%d for %s", hostname, port, mode);
-	}
-
-	g_strfreev(parts);
-}
-
 void torControl_new(TorControl_Args *args) {
 	ShadowLogFunc log = torControl->shadowlib->log;
 	log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "torControl_new called");
@@ -1012,18 +990,18 @@ void torControl_new(TorControl_Args *args) {
 			gchar *hostname = parts[0];
 			in_port_t port = atoi(parts[1]);
 		    gchar *mode = parts[2];
-		    gchar **args = NULL;
+		    gchar **moduleArgs = NULL;
 		    if(parts[3]) {
-		    	args = g_strsplit(parts[3], " ", 0);
+		    	moduleArgs = g_strsplit(parts[3], " ", 0);
 		    }
 
-		    gint ret = torControl_createConnection(hostname, port, mode, args);
+		    gint ret = torControl_createConnection(hostname, port, mode, moduleArgs);
 		    if(ret < 0) {
 		    	log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "Error creating connection to %s:%d for %s", hostname, port, mode);
 			}
 
-		    if(args) {
-		    	g_strfreev(args);
+		    if(moduleArgs) {
+		    	g_strfreev(moduleArgs);
 		    }
 			g_strfreev(parts);
 		}

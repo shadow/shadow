@@ -29,6 +29,7 @@
 
 typedef struct _TorCtlCircuitBuild TorCtlCircuitBuild;
 
-TorCtlCircuitBuild *torControlCircuitBuild_new(ShadowLogFunc logFunc, gint sockd, gchar **args, TorControl_EventHandlers *handlers);
+TorCtlCircuitBuild *torControlCircuitBuild_new(ShadowLogFunc logFunc, gint sockd,
+		gchar **moduleArgs, TorControl_EventHandlers *handlers);
 
 #endif /* SHD_TOR_CTL_CIRCUITBUILD_H_ */

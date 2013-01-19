@@ -32,17 +32,19 @@ void torControlPlugin_new(int argc, char* argv[]) {
 				"\tmulti controlHostsFile\n\n"
 				"available modules:\n"
 				"\t'circuitBuild node1,node2,...,nodeN'\n"
-				"\t'log'\n";
+				"\t'log event1,event2,...,eventN'\n";
 		torControlState.shadowlib->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "%s", USAGE);
 		return;
 	}
 
+	/* argv[0] is our plugin name */
 	TorControl_Args args;
 	args.mode = g_strdup(argv[1]);
-	args.argc = argc - 2;
+	args.argc = 0;
 	args.argv = NULL;
 	if(argc > 2) {
 		args.argv = &argv[2];
+		args.argc = argc - 2;
 	}
 
 	torControl_new(&args);

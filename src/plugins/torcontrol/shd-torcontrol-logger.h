@@ -31,7 +31,7 @@ enum torcontrollogger_state {
 };
 
 TorControlLogger* torcontrollogger_new(ShadowLogFunc logFunc,
-		gchar* hostname, in_addr_t ip, in_port_t port, gint sockd, gchar **args,
-		TorControl_EventHandlers *handlers);
+		gchar* hostname, in_addr_t ip, in_port_t port, gint sockd,
+		gchar **moduleArgs, TorControl_EventHandlers *handlers);
 
 #endif /* SHD_TORCONTROL_LOGGER_H_ */
