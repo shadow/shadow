@@ -52,7 +52,7 @@ make install
 
 For best results, release versions are recommended and can be obtained in various ways:
 * by visiting https://shadow.cs.umn.edu/download/
-* by visiting https://github.com/shadow/shadow/downloads
+* by visiting https://github.com/shadow/shadow/tags
 * by using git (see below)
 
 Using git to obtain the latest development changes:
