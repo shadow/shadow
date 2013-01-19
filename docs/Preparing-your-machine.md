@@ -36,7 +36,7 @@ These may also be downloaded and installed locally if preferred.
 
 You'll also need to manually build and install **clang/llvm** from source because for some reason the OS packages do not include the shared CMake module files Shadow requires.  
 
-Try the following (replace 'username' with your username and 'N' with the number of threads for a parallel build):
+Try the following (replace '_username_' with your username and '_N_' with the number of threads for a parallel build):
 
 ```bash
 wget http://www.llvm.org/releases/3.2/llvm-3.2.src.tar.gz
