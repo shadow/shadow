@@ -30,7 +30,7 @@ sudo yum install -y gcc xz make automake autoconf cmake libtidy libtidy-devel gl
 ```
 On Ubuntu, try:
 ```bash
-sudo apt-get -y install gcc xz-utils make automake autoconf cmake tidy libtidy-dev libglib2.0 libglib2.0-dev dstat pdftk python2.7 python-matplotlib python-numpy python-scipy 
+sudo apt-get -y install gcc xz-utils make automake autoconf cmake tidy libtidy-dev libglib2.0 libglib2.0-dev dstat pdftk python2.7 python-matplotlib python-numpy python-scipy htop screen
 ```
 These may also be downloaded and installed locally if preferred.
 
