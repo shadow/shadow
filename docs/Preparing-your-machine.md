@@ -34,7 +34,8 @@ sudo apt-get -y install gcc xz-utils make automake autoconf cmake tidy libtidy-d
 ```
 These may also be downloaded and installed locally if preferred.
 
-You'll also need to manually build and install clang/llvm from source because for some reason the OS packages do not include the shared CMake module files Shadow requires. Try the following (replace 'username' with your username):
+
+You'll also need to manually build and install **clang/llvm** from source because for some reason the OS packages do not include the shared CMake module files Shadow requires. Try the following (replace 'username' with your username):
 
 ```bash
 tar xaf llvm-3.2.src.tar.gz
