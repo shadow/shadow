@@ -50,8 +50,8 @@ void engine_notifyProcessed(Engine* engine, guint numberEventsProcessed, guint n
 
 Configuration* engine_getConfig(Engine* engine);
 GTimer* engine_getRunTimer(Engine* engine);
-GStaticPrivate* engine_getWorkerKey(Engine* engine);
-GStaticPrivate* engine_getPreloadKey(Engine* engine);
+GPrivate* engine_getWorkerKey(Engine* engine);
+GPrivate* engine_getPreloadKey(Engine* engine);
 Internetwork* engine_getInternet(Engine* engine);
 
 void engine_setKillTime(Engine* engine, SimulationTime endTime);

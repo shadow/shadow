@@ -42,8 +42,6 @@ gint shadow_main(gint argc, gchar* argv[]) {
 	    return -1;
     }
 
-	g_thread_init(NULL);
-
 	/* setup configuration - this fails and aborts if invalid */
 	Configuration* config = configuration_new(argc, argv);
 	if(!config) {

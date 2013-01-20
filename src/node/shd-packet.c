@@ -41,7 +41,7 @@ struct _PacketUDPHeader {
 };
 
 struct _Packet {
-	GMutex* lock;
+	GMutex lock;
 	guint referenceCount;
 
 	enum ProtocolType protocol;
@@ -63,7 +63,7 @@ Packet* packet_new(gconstpointer payload, gsize payloadLength) {
 	Packet* packet = g_new0(Packet, 1);
 	MAGIC_INIT(packet);
 
-	packet->lock = g_mutex_new();
+	g_mutex_init(&(packet->lock));
 	packet->referenceCount = 1;
 
 	packet->payloadLength = payloadLength;
@@ -81,7 +81,7 @@ Packet* packet_new(gconstpointer payload, gsize payloadLength) {
 static void _packet_free(Packet* packet) {
 	MAGIC_ASSERT(packet);
 
-	g_mutex_free(packet->lock);
+	g_mutex_clear(&(packet->lock));
 	if(packet->header) {
 		g_free(packet->header);
 	}
@@ -93,14 +93,14 @@ static void _packet_free(Packet* packet) {
 	g_free(packet);
 }
 
-static void _packet_lock(const Packet* packet) {
+static void _packet_lock(Packet* packet) {
 	MAGIC_ASSERT(packet);
-	g_mutex_lock(packet->lock);
+	g_mutex_lock(&(packet->lock));
 }
 
-static void _packet_unlock(const Packet* packet) {
+static void _packet_unlock(Packet* packet) {
 	MAGIC_ASSERT(packet);
-	g_mutex_unlock(packet->lock);
+	g_mutex_unlock(&(packet->lock));
 }
 
 void packet_ref(Packet* packet) {
@@ -122,7 +122,7 @@ void packet_unref(Packet* packet) {
 	}
 }
 
-gint packet_compareTCPSequence(const Packet* packet1, const Packet* packet2, gpointer user_data) {
+gint packet_compareTCPSequence(Packet* packet1, Packet* packet2, gpointer user_data) {
 	if(packet1 == packet2){
 		MAGIC_ASSERT(packet1);
 		MAGIC_ASSERT(packet2);

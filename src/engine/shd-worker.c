@@ -53,15 +53,15 @@ Worker* worker_getPrivate() {
 	Engine* engine = shadow_engine;
 
 	/* get current thread's private worker object */
-	Worker* worker = g_static_private_get(engine_getWorkerKey(engine));
+	Worker* worker = g_private_get(engine_getWorkerKey(engine));
 
 	/* todo: should we use g_once here instead? */
 	if(!worker) {
 		worker = _worker_new(engine);
-		g_static_private_set(engine_getWorkerKey(engine), worker, worker_free);
+		g_private_replace(engine_getWorkerKey(engine), worker);
 		gboolean* preloadIsReady = g_new(gboolean, 1);
 		*preloadIsReady = TRUE;
-		g_static_private_set(engine_getPreloadKey(engine), preloadIsReady, g_free);
+		g_private_replace(engine_getPreloadKey(engine), preloadIsReady);
 	}
 
 	MAGIC_ASSERT(worker);
@@ -248,7 +248,7 @@ gboolean worker_isInShadowContext() {
 	 * shutdown the threads.
 	 */
 	if(shadow_engine && !(engine_isForced(shadow_engine))) {
-		if(g_static_private_get(engine_getPreloadKey(shadow_engine))) {
+		if(g_private_get(engine_getPreloadKey(shadow_engine))) {
 			Worker* worker = worker_getPrivate();
 			if(worker->cached_plugin) {
 				return plugin_isShadowContext(worker->cached_plugin);

@@ -31,7 +31,7 @@ struct _Node {
 	/* general node lock. nothing that belongs to the node should be touched
 	 * unless holding this lock. everything following this falls under the lock.
 	 */
-	GMutex* lock;
+	GMutex lock;
 
 	GQuark id;
 	gchar* name;
@@ -80,7 +80,7 @@ Node* node_new(GQuark id, Network* network, guint32 ip,
 
 	node->id = id;
 	node->name = g_strdup(hostname->str);
-	node->lock = g_mutex_new();
+	g_mutex_init(&(node->lock));
 
 	/* thread-level event communication with other nodes */
 	node->events = eventqueue_new();
@@ -135,7 +135,7 @@ void node_free(Node* node, gpointer userData) {
 	cpu_free(node->cpu);
 	tracker_free(node->tracker);
 
-	g_mutex_free(node->lock);
+	g_mutex_clear(&(node->lock));
 
 	MAGIC_CLEAR(node);
 	g_free(node);
@@ -143,12 +143,12 @@ void node_free(Node* node, gpointer userData) {
 
 void node_lock(Node* node) {
 	MAGIC_ASSERT(node);
-	g_mutex_lock(node->lock);
+	g_mutex_lock(&(node->lock));
 }
 
 void node_unlock(Node* node) {
 	MAGIC_ASSERT(node);
-	g_mutex_unlock(node->lock);
+	g_mutex_unlock(&(node->lock));
 }
 
 EventQueue* node_getEvents(Node* node) {
