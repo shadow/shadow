@@ -405,11 +405,10 @@ gint node_epollControl(Node* node, gint epollDescriptor, gint operation,
 
 	/* if this is for a system file, forward to system call */
 	if(fileDescriptor < MIN_DESCRIPTOR) {
-		gint epolld = epoll_getOSEpollDescriptor(epoll);
-		return epoll_ctl(epolld, operation, fileDescriptor, event);
+		return epoll_controlOS(epoll, operation, fileDescriptor, event);
 	}
 
-	/* EBADF  fd is not a valid file descriptor. */
+	/* EBADF  fd is not a valid shadow file descriptor. */
 	descriptor = node_lookupDescriptor(node, fileDescriptor);
 	if(descriptor == NULL) {
 		return EBADF;
