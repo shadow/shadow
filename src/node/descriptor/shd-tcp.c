@@ -525,11 +525,14 @@ static void _tcp_addRetransmit(TCP* tcp, guint sequence, guint length) {
 
 static void _tcp_removeRetransmit(TCP* tcp, guint sequence) {
 	MAGIC_ASSERT(tcp);
-	/* update buffer lengths */
-	guint length = ((guint)GPOINTER_TO_INT(g_hash_table_lookup(tcp->retransmission, GINT_TO_POINTER(sequence))));
-	if(length) {
-		tcp->retransmissionLength -= length;
-		g_hash_table_remove(tcp->retransmission, GINT_TO_POINTER(sequence));
+	gpointer key = GINT_TO_POINTER(sequence);
+	if(g_hash_table_contains(tcp->retransmission, key)) {
+		/* update buffer lengths */
+		guint length = ((guint)GPOINTER_TO_INT(g_hash_table_lookup(tcp->retransmission, key)));
+		if(length) {
+			tcp->retransmissionLength -= length;
+			g_hash_table_remove(tcp->retransmission, key);
+		}
 	}
 }
 
