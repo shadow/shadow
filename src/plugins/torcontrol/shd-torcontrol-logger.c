@@ -150,18 +150,7 @@ TorControlLogger* torcontrollogger_new(ShadowLogFunc logFunc,
 	handlers->responseEvent = (TorControlResponseFunc) _torcontrollogger_handleResponseEvent;
 
 	/* all events get processed by the same function that simply logs tor output directly */
-	handlers->circEvent = (TorControlCircEventFunc) _torcontrollogger_handleEvents;
-	handlers->streamEvent = (TorControlStreamEventFunc) _torcontrollogger_handleEvents;
-	handlers->orconnEvent = (TorControlORConnEventFunc) _torcontrollogger_handleEvents;
-	handlers->bwEvent = (TorControlBWEventFunc) _torcontrollogger_handleEvents;
-	handlers->extendedBWEvent = (TorControlExtendedBWEventFunc) _torcontrollogger_handleEvents;
-	handlers->cellStatsEvent = (TorControlCellStatsEventFunc) _torcontrollogger_handleEvents;
-	handlers->tokenEvent = (TorControlGenericEventFunc) _torcontrollogger_handleEvents;
-	handlers->orTokenEvent = (TorControlGenericEventFunc) _torcontrollogger_handleEvents;
-	handlers->circMinorEvent = (TorControlGenericEventFunc) _torcontrollogger_handleEvents;
-	handlers->guardEvent = (TorControlGenericEventFunc) _torcontrollogger_handleEvents;
-	handlers->buildtimeoutSetEvent = (TorControlGenericEventFunc) _torcontrollogger_handleEvents;
-	handlers->clientsSeenEvent = (TorControlGenericEventFunc) _torcontrollogger_handleEvents;
+	handlers->genericEvent = (TorControlGenericEventFunc) _torcontrollogger_handleEvents;
 
 	/* make sure they specified events */
 	if(!moduleArgs[0]) {
