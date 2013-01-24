@@ -287,12 +287,26 @@ void filetransfer_activate() {
 				ft->shadowlib->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "error in server epoll_wait");
 			} else {
 				/* finally, activate server for every socket thats ready */
+				fileserver_progress_t progress;
 				for(int i = 0; i < nfds; i++) {
-					enum fileserver_code result = fileserver_activate(ft->server, events[i].data.fd);
+					memset(&progress, 0, sizeof(fileserver_progress_t));
+					enum fileserver_code result = fileserver_activate(ft->server, events[i].data.fd, &progress);
+
 					ft->shadowlib->log(G_LOG_LEVEL_DEBUG, __FUNCTION__,
-							"fileserver activation result: %s (%lu bytes in, %lu bytes out, %lu replies)",
-							fileserver_codetoa(result),  ft->server->bytes_received,
-							ft->server->bytes_sent, ft->server->replies_sent);
+							"fileserver activation result: %s", fileserver_codetoa(result));
+
+					if(progress.changed) {
+						ft->shadowlib->log(G_LOG_LEVEL_INFO, __FUNCTION__,
+							"[fs-progress] socket %i %lu bytes read %lu of %lu bytes written total %lu bytes read %lu bytes written %lu replies",
+							progress.sockd, progress.bytes_read, progress.bytes_written, progress.reply_length,
+							ft->server->bytes_received, ft->server->bytes_sent, ft->server->replies_sent);
+
+						if(progress.reply_done) {
+							ft->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__,
+									"[fs-reply-complete] socket %i %lu bytes read %lu of %lu bytes written",
+									progress.sockd, progress.bytes_read, progress.bytes_written, progress.reply_length);
+						}
+					}
 				}
 			}
 		}

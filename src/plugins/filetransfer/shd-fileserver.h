@@ -45,6 +45,16 @@ enum fileserver_state {
 	FS_IDLE, FS_REQUEST, FS_REPLY_404_START, FS_REPLY_FILE_START, FS_REPLY_FILE_CONTINUE, FS_REPLY_SEND
 };
 
+typedef struct fileserver_progress_s {
+	gint sockd;
+	gsize bytes_read;
+	gsize bytes_written;
+	gsize reply_length;
+	gboolean request_done;
+	gboolean reply_done;
+	gboolean changed;
+} fileserver_progress_t, *fileserver_progress_tp;
+
 typedef struct fileserver_reply_s {
 	FILE* f;
 	size_t f_length;
@@ -52,6 +62,8 @@ typedef struct fileserver_reply_s {
 	gchar buf[FT_BUF_SIZE];
 	size_t buf_read_offset;
 	size_t buf_write_offset;
+	size_t bytes_sent;
+	gboolean done;
 } fileserver_reply_t, *fileserver_reply_tp;
 
 typedef struct fileserver_request_s {
@@ -59,6 +71,8 @@ typedef struct fileserver_request_s {
 	gchar buf[FT_STR_SIZE];
 	size_t buf_read_offset;
 	size_t buf_write_offset;
+	size_t bytes_received;
+	gboolean done;
 } fileserver_request_t, *fileserver_request_tp;
 
 typedef struct fileserver_connection_s {
@@ -105,7 +119,7 @@ enum fileserver_code fileserver_accept_one(fileserver_tp fs, gint* sockd_out);
  * otherwise, handles the connection associated with sockd, if any, by replying
  * with the requested content or 404 errors.
  */
-enum fileserver_code fileserver_activate(fileserver_tp fs, gint sockd);
+enum fileserver_code fileserver_activate(fileserver_tp fs, gint sockd, fileserver_progress_tp progress);
 
 /* close all connections and shutdown the fileserver */
 enum fileserver_code fileserver_shutdown(fileserver_tp fs);
