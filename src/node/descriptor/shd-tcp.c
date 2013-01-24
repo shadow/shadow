@@ -1021,9 +1021,11 @@ gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 			 * deadlocks (unless we are blocked b/c user should read)
 			 */
 			gboolean isNextPacket = (header.sequence == tcp->receive.next) ? TRUE : FALSE;
-			gboolean waitingUserRead = (socket_getInputBufferSpace(&(tcp->super)) > 0) ? TRUE : FALSE;
 			gboolean packetFits = (packetLength <= _tcp_getBufferSpaceIn(tcp)) ? TRUE : FALSE;
 
+			enum DescriptorStatus s = descriptor_getStatus((Descriptor*) tcp);
+			gboolean waitingUserRead = (s & DS_READABLE) ? TRUE : FALSE;
+			
 			if((isNextPacket && !waitingUserRead) || (packetFits)) {
 				/* make sure its in order */
 				_tcp_bufferPacketIn(tcp, packet);
