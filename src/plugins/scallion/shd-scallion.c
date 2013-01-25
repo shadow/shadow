@@ -135,6 +135,9 @@ static void _scalliontor_refillCallback(ScallionTor* stor) {
 	/* call Tor's refill function */
 	refill_callback(NULL, NULL);
 
+        /* notify stream BW events */
+        control_event_stream_bandwidth_used();
+
 	/* make sure we handle any event creations that happened in Tor */
 	scalliontor_notify(stor);
 
