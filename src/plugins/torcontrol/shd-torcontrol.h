@@ -273,12 +273,7 @@ struct _TorControl_EventHandlers {
 	TorControlExtendedBWEventFunc extendedBWEvent;
 	TorControlCellStatsEventFunc cellStatsEvent;
 	TorControlStatusEventFunc statusEvent;
-	TorControlGenericEventFunc tokenEvent;
-	TorControlGenericEventFunc orTokenEvent;
-	TorControlGenericEventFunc circMinorEvent;
-	TorControlGenericEventFunc buildtimeoutSetEvent;
-	TorControlGenericEventFunc clientsSeenEvent;
-	TorControlGenericEventFunc guardEvent;
+	TorControlGenericEventFunc genericEvent;
 	TorControlLogEventFunc logEvent;
 	TorControlResponseFunc responseEvent;
 };

@@ -178,14 +178,14 @@ void networkinterface_free(NetworkInterface* interface) {
 	MAGIC_ASSERT(interface);
 
 	/* unref all packets sitting in our input buffer */
-	while(interface->inBuffer && g_queue_get_length(interface->inBuffer)) {
+	while(interface->inBuffer && !g_queue_is_empty(interface->inBuffer)) {
 		Packet* packet = g_queue_pop_head(interface->inBuffer);
 		packet_unref(packet);
 	}
 	g_queue_free(interface->inBuffer);
 
 	/* unref all sockets wanting to send */
-	while(interface->rrQueue && g_queue_get_length(interface->rrQueue)) {
+	while(interface->rrQueue && !g_queue_is_empty(interface->rrQueue)) {
 		Socket* socket = g_queue_pop_head(interface->rrQueue);
 		descriptor_unref(socket);
 	}
@@ -378,15 +378,14 @@ static void _networkinterface_scheduleNextReceive(NetworkInterface* interface) {
 	SimulationTime batchTime = worker_getConfig()->interfaceBatchTime;
 
 	/* receive packets in batches */
-	while(g_queue_get_length(interface->inBuffer) > 0 &&
+	while(!g_queue_is_empty(interface->inBuffer) &&
 			interface->receiveNanosecondsConsumed <= batchTime) {
 		/* get the next packet */
 		Packet* packet = g_queue_pop_head(interface->inBuffer);
 		g_assert(packet);
 
 		/* free up buffer space */
-		guint length = packet_getPayloadLength(packet);
-		length += packet_getHeaderSize(packet);
+		guint length = packet_getPayloadLength(packet) + packet_getHeaderSize(packet);
 		interface->inBufferLength -= length;
 
 		/* hand it off to the correct socket layer */
@@ -432,13 +431,11 @@ void networkinterface_packetArrived(NetworkInterface* interface, Packet* packet)
 	MAGIC_ASSERT(interface);
 
 	/* a packet arrived. lets try to receive or buffer it */
-	gint length = packet_getPayloadLength(packet);
-	/* ignore our control-only protocol header overhead in buffer space calc. */
-	if(length > 0) {
-		length += packet_getHeaderSize(packet);
-	}
+	guint length = packet_getPayloadLength(packet) + packet_getHeaderSize(packet);
+	gssize space = interface->inBufferSize - interface->inBufferLength;
+	g_assert(space >= 0);
 
-	if(length <= (interface->inBufferSize -interface->inBufferLength)) {
+	if(length <= space) {
 		/* we have space to buffer it */
 		g_queue_push_tail(interface->inBuffer, packet);
 		interface->inBufferLength += length;
@@ -579,8 +576,7 @@ static void _networkinterface_scheduleNextSend(NetworkInterface* interface) {
 		g_free(packetString);
 
 		/* successfully sent, calculate how long it took to 'send' this packet */
-		guint length = packet_getPayloadLength(packet);
-		length += packet_getHeaderSize(packet);
+		guint length = packet_getPayloadLength(packet) + packet_getHeaderSize(packet);
 
 		interface->sendNanosecondsConsumed += (length * interface->timePerByteUp);
 		tracker_addOutputBytes(node_getTracker(worker_getPrivate()->cached_node),(guint64)length);

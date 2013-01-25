@@ -186,7 +186,8 @@ static void fileserve_connection_close(fileserver_tp fs, fileserver_connection_t
 	g_hash_table_remove(fs->connections, &(c->sockd));
 }
 
-enum fileserver_code fileserver_activate(fileserver_tp fs, gint sockd) {
+/* if progress is non-null, it is filled in when read/write progress occurs */
+enum fileserver_code fileserver_activate(fileserver_tp fs, gint sockd, fileserver_progress_tp progress) {
 	/* check user inputs */
 	if(fs == NULL || sockd < 0) {
 		return FS_ERR_INVALID;
@@ -205,6 +206,17 @@ enum fileserver_code fileserver_activate(fileserver_tp fs, gint sockd) {
 	fileserver_connection_tp c = g_hash_table_lookup(fs->connections, &sockd);
 	if(c == NULL) {
 		return FS_ERR_BADSD;
+	}
+
+	/* fill it in now, then update it as needed in the switch statement */
+	if(progress) {
+		progress->sockd = c->sockd;
+		progress->bytes_read = c->request.bytes_received;
+		progress->bytes_written = c->reply.bytes_sent;
+		progress->reply_done = c->reply.done;
+		progress->request_done = c->request.done;
+		progress->reply_length = c->reply.f_length;
+		progress->changed = FALSE;
 	}
 
 start:
@@ -255,8 +267,14 @@ start:
 			}
 
 			c->request.buf_write_offset += bytes;
+			c->request.bytes_received += bytes;
 			fs->bytes_received += bytes;
 			c->request.buf[c->request.buf_write_offset] = '\0';
+
+			if(progress) {
+				progress->bytes_read = c->request.bytes_received;
+				progress->changed = TRUE;
+			}
 
 			/* check if the request is all here */
 			gchar* found = strcasestr(c->request.buf, FT_2CRLF);
@@ -295,6 +313,12 @@ start:
 
 				strncpy(c->request.filepath, relpath, copy_len);
 				c->request.filepath[copy_len] = '\0';
+
+				c->request.done = 1;
+				if(progress) {
+					progress->request_done = TRUE;
+					progress->changed = TRUE;
+				}
 
 				/* re-enter the state machine so we can reply */
 				c->state = FS_REPLY_FILE_START;
@@ -427,7 +451,12 @@ start:
 				return FS_CLOSED;
 			} else {
 				c->reply.buf_read_offset += bytes;
+				c->reply.bytes_sent += bytes;
 				fs->bytes_sent += bytes;
+				if(progress) {
+					progress->bytes_written = c->reply.bytes_sent;
+					progress->changed = TRUE;
+				}
 			}
 
 			if(c->reply.buf_read_offset == c->reply.buf_write_offset) {
@@ -437,7 +466,12 @@ start:
 
 				/* we can exit if we've now sent everything */
 				if(c->reply.f == NULL) {
+					c->reply.done = 1;
 					fs->replies_sent++;
+					if(progress) {
+						progress->reply_done = TRUE;
+						progress->changed = TRUE;
+					}
 					c->state = FS_IDLE;
 					break;
 				}
