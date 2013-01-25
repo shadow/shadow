@@ -44,13 +44,20 @@ enum TorCtlCircuitBuild_State {
 	TORCTL_CIRCBUILD_STATE_ATTACH_STREAMS,
 };
 
+typedef struct _TorCtlCircuitBuild_Circuit TorCtlCircuitBuild_Circuit;
+struct _TorCtlCircuitBuild_Circuit {
+	gint startTime, endTime;
+	gchar *relays;
+	gint circID;
+};
+
 struct _TorCtlCircuitBuild {
 	ShadowLogFunc log;
 
 	gchar bootstrapped;
-	GList *circuit;
+	GList *circuits;
+	GQueue *circuitsToBuild;
 	gint sockd;
-	gint circID;
 	GList *streamsToAttach;
 	gchar waitingForResponse;
 	enum TorCtlCircuitBuild_State state;
@@ -125,9 +132,23 @@ static void _torControlCircuitBuild_circEvent(gpointer moduleData, gint code, gc
 			code, circID, status, buildFlags, purpose, reason);
 
 	/* if our circuit was closed, build new one */
-	if(circID == circuitBuild->circID && status == TORCTL_CIRC_STATUS_CLOSED) {
-	    torControl_buildCircuit(circuitBuild->sockd, circuitBuild->circuit);
-	    circuitBuild->state = TORCTL_CIRCBUILD_STATE_GET_CIRC_ID;
+	if(status == TORCTL_CIRC_STATUS_CLOSED) {
+		TorCtlCircuitBuild_Circuit *circuit = NULL;
+		for(GList *iter = g_list_first(circuitBuild->circuits); iter && !circuit; iter = g_list_next(iter)) {
+			TorCtlCircuitBuild_Circuit *tmp = iter->data;
+			if(tmp->circID == circID) {
+				circuit = tmp;
+			}
+		}
+
+		if(circuit) {
+			log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "circuit %d closed, rebuilding", circuit->circID);
+			g_queue_push_tail(circuitBuild->circuitsToBuild, circuit);
+			if(g_queue_get_length(circuitBuild->circuitsToBuild) == 1) {
+				torControl_buildCircuit(circuitBuild->sockd, circuit->relays);
+			}
+			circuitBuild->state = TORCTL_CIRCBUILD_STATE_GET_CIRC_ID;
+		}
 	}
 }
 
@@ -142,12 +163,30 @@ static void _torControlCircuitBuild_streamEvent(gpointer moduleData, gint code, 
 	        code, torControl_getStreamStatusString(status), streamID, circID);
 
 	if(status == TORCTL_STREAM_STATUS_NEW && circuitBuild->bootstrapped) {
-	    /* if we're in the process of building a circuit, add stream ID to list so we can reattach it later */
-        if(circuitBuild->state == TORCTL_CIRCBUILD_STATE_ATTACH_STREAMS) {
-            torControl_attachStream(circuitBuild->sockd, streamID, circuitBuild->circID);
-        } else {
-            circuitBuild->streamsToAttach = g_list_append(circuitBuild->streamsToAttach, GINT_TO_POINTER(streamID));
-        }
+		struct timespec now;
+		clock_gettime(CLOCK_REALTIME, &now);
+
+		TorCtlCircuitBuild_Circuit *circuit = NULL;
+		for(GList *iter = g_list_first(circuitBuild->circuits); iter && !circuit; iter = g_list_next(iter)) {
+			TorCtlCircuitBuild_Circuit *tmp = iter->data;
+			if(now.tv_sec >= tmp->startTime && (now.tv_sec < tmp->endTime || tmp->endTime == -1)) {
+				circuit = tmp;
+			}
+		}
+
+		if(circuit) {
+			torControl_attachStream(circuitBuild->sockd, streamID, circuit->circID);
+		} else {
+			log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Could not find any circuit time span for stream %d", streamID);
+			torControl_attachStream(circuitBuild->sockd, streamID, 0);
+		}
+
+//	    /* if we're in the process of building a circuit, add stream ID to list so we can reattach it later */
+//        if(circuitBuild->state == TORCTL_CIRCBUILD_STATE_ATTACH_STREAMS) {
+//            torControl_attachStream(circuitBuild->sockd, streamID, circuitBuild->circID);
+//        } else {
+//            circuitBuild->streamsToAttach = g_list_append(circuitBuild->streamsToAttach, GINT_TO_POINTER(streamID));
+//        }
 	}
 }
 
@@ -162,8 +201,13 @@ static void _torControlCircuitBuild_statusEvent(gpointer moduleData, gint code, 
             log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Could not find argument PROGRESS in bootstrap status");
         } else if(!g_ascii_strcasecmp(progress, "100")) {
             circuitBuild->bootstrapped = TRUE;
-            torControl_buildCircuit(circuitBuild->sockd, circuitBuild->circuit);
-            circuitBuild->state = TORCTL_CIRCBUILD_STATE_GET_CIRC_ID;
+            TorCtlCircuitBuild_Circuit *circuit = g_queue_peek_head(circuitBuild->circuitsToBuild);
+            if(circuit) {
+            	torControl_buildCircuit(circuitBuild->sockd, circuit->relays);
+            	circuitBuild->state = TORCTL_CIRCBUILD_STATE_GET_CIRC_ID;
+            } else {
+            	log(G_LOG_LEVEL_WARNING, __FUNCTION__, "No circuit found to build");
+            }
         }
     }
 }
@@ -195,7 +239,8 @@ static void _torControlCircuitBuild_responseEvent(gpointer moduleData, GList *re
                         TorControl_BootstrapPhase *phase = userData;
                         if(phase->progress == 100) {
                             circuitBuild->bootstrapped = TRUE;
-                            torControl_buildCircuit(circuitBuild->sockd, circuitBuild->circuit);
+                            TorCtlCircuitBuild_Circuit *circuit = g_queue_peek_head(circuitBuild->circuitsToBuild);
+							torControl_buildCircuit(circuitBuild->sockd, circuit->relays);
                             circuitBuild->state = TORCTL_CIRCBUILD_STATE_GET_CIRC_ID;
                         } else {
                             circuitBuild->state = TORCTL_CIRCBUILD_STATE_CREATE_CIRCUIT;
@@ -207,17 +252,26 @@ static void _torControlCircuitBuild_responseEvent(gpointer moduleData, GList *re
 	            case TORCTL_CIRCBUILD_STATE_GET_CIRC_ID: {
 	                if(userData) {
                         TorControl_ReplyExtended *extended = userData;
-                        circuitBuild->circID = extended->circID;
+//                        circuitBuild->circID = extended->circID;
                         circuitBuild->state = TORCTL_CIRCBUILD_STATE_ATTACH_STREAMS;
 
-                        /* go through and reattach streams to this circuit */
-                        for(GList *iter = circuitBuild->streamsToAttach; iter; iter = g_list_next(iter)) {
-                            gint streamID = (gint)iter->data;
-                            torControl_attachStream(circuitBuild->sockd, streamID, circuitBuild->circID);
+                        /* pop off circuit from queue, assign circ ID and check for any more to create */
+                        TorCtlCircuitBuild_Circuit *circuit = g_queue_pop_head(circuitBuild->circuitsToBuild);
+                        circuit->circID = extended->circID;
+                        if(g_queue_get_length(circuitBuild->circuitsToBuild) > 0) {
+                        	TorCtlCircuitBuild_Circuit *circuit = g_queue_peek_head(circuitBuild->circuitsToBuild);
+							torControl_buildCircuit(circuitBuild->sockd, circuit->relays);
+							circuitBuild->state = TORCTL_CIRCBUILD_STATE_GET_CIRC_ID;
                         }
 
-                        g_list_free(circuitBuild->streamsToAttach);
-                        circuitBuild->streamsToAttach = NULL;
+//                        /* go through and reattach streams to this circuit */
+//                        for(GList *iter = circuitBuild->streamsToAttach; iter; iter = g_list_next(iter)) {
+//                            gint streamID = (gint)iter->data;
+//                            torControl_attachStream(circuitBuild->sockd, streamID, circuitBuild->circID);
+//                        }
+//
+//                        g_list_free(circuitBuild->streamsToAttach);
+//                        circuitBuild->streamsToAttach = NULL;
 	                }
                     break;
 	            }
@@ -261,12 +315,43 @@ TorCtlCircuitBuild *torControlCircuitBuild_new(ShadowLogFunc logFunc, gint sockd
 	circuitBuild->log = logFunc;
 	circuitBuild->sockd = sockd;
 
-	circuitBuild->circuit = NULL;
-	gchar **nodes = g_strsplit(moduleArgs[0], ",", 0);
-	for(gint idx = 0; nodes[idx]; idx++) {
-		circuitBuild->circuit = g_list_append(circuitBuild->circuit, strdup(nodes[idx]));
+	circuitBuild->circuits = NULL;
+	circuitBuild->circuitsToBuild = g_queue_new();
+
+	for(gint idx = 0; moduleArgs[idx]; idx++) {
+		logFunc(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "%s", moduleArgs[idx]);
+		TorCtlCircuitBuild_Circuit *circuit = g_new0(TorCtlCircuitBuild_Circuit, 1);
+		circuit->startTime = 0;
+		circuit->endTime = -1;
+		circuit->relays = NULL;
+		circuit->circID = -1;
+
+		/* time:hop1,hop2,hop3 OR hop1,hop2,hop3 */
+		gchar **parts = g_strsplit(moduleArgs[idx], ":", 2);
+		if(!parts[1]) {
+			circuit->relays = g_strdup(parts[0]);
+		} else {
+			circuit->startTime = g_ascii_strtoll(parts[0], NULL, 10);
+			circuit->relays = g_strdup(parts[1]);
+		}
+		g_strfreev(parts);
+
+		circuitBuild->circuits = g_list_append(circuitBuild->circuits, circuit);
+		g_queue_push_tail(circuitBuild->circuitsToBuild, circuit);
 	}
-	g_strfreev(nodes);
+
+
+	for(GList *iter = g_list_first(circuitBuild->circuits); iter && iter->next; iter = g_list_next(iter)) {
+		TorCtlCircuitBuild_Circuit *circ1 = iter->data;
+		TorCtlCircuitBuild_Circuit *circ2 = iter->next->data;
+		circ1->endTime = circ2->startTime;
+	}
+
+//	gchar **nodes = g_strsplit(moduleArgs[0], ",", 0);
+//	for(gint idx = 0; nodes[idx]; idx++) {
+//		circuitBuild->circuit = g_list_append(circuitBuild->circuit, strdup(nodes[idx]));
+//	}
+//	g_strfreev(nodes);
 
 	circuitBuild->state = TORCTL_CIRCBUILD_STATE_AUTHENTICATE;
 

@@ -881,18 +881,11 @@ gint torControl_setevents(gint sockd, gchar *events) {
     return bytes;
 }
 
-gint torControl_buildCircuit(gint sockd, GList *circuit) {
+gint torControl_buildCircuit(gint sockd, gchar *circuit) {
     ShadowLogFunc log = torControl->shadowlib->log;
-    if(g_list_length(circuit) == 0) {
-        log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Cannot create circuit of length 0");
-        return -1;
-    }
 
     GString *command = g_string_new("");
-    g_string_printf(command, "EXTENDCIRCUIT 0 %s", (gchar *)(g_list_first(circuit)->data));
-    for(GList *iter = g_list_next(g_list_first(circuit)); iter; iter = g_list_next(iter)) {
-        g_string_append_printf(command, ",%s", (gchar *)iter->data);
-    }
+    g_string_printf(command, "EXTENDCIRCUIT 0 %s", circuit);
 
     gint bytes = torControl_sendCommand(sockd, command->str);
     g_string_free(command, TRUE);
@@ -949,7 +942,11 @@ void torControl_new(TorControl_Args *args) {
 		gchar *mode = args->argv[2];
 		gchar **moduleArgs = NULL;
 		if(args->argc > 3) {
-			moduleArgs = &args->argv[3];
+                        /* this just puts the moduleArgs into a NULL terminated list (same format that g_strsplit returns) */
+			moduleArgs = g_new0(gchar*,args->argc - 2);
+			for(gint idx = 0; idx < args->argc - 3; idx++) {
+				moduleArgs[idx] = args->argv[idx + 3];
+			}
 		}
 
 		gint ret = torControl_createConnection(hostname, port, mode, moduleArgs);
