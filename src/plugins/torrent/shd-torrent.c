@@ -101,6 +101,15 @@ static void torrent_report(TorrentClient* tc, gchar* preamble) {
 	}
 }
 
+static void torrent_wakeupCallback(gpointer data) {
+    torrent_activate();
+}
+
+/* called from inner filegetter code when it wants to sleep for some seconds */
+static void torrent_sleepCallback(guint seconds) {
+    torrent->shadowlib->createCallback(&torrent_wakeupCallback, NULL, seconds*1000);
+}
+
 Torrent**  torrent_init(Torrent* currentTorrent) {
 	torrent = currentTorrent;
 	return &torrent;
@@ -301,16 +310,28 @@ void torrent_activate() {
 		}
 
 		for(int i = 0; i < nfds; i++) {
-			gint res = torrentClient_activate(torrent->client, events[i].data.fd, events[i].events);
-			if(res < 0) {
-				log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "activate returned %d", res);
-			}
+			gint ret = torrentClient_activate(torrent->client, events[i].data.fd, events[i].events);
+			if(ret == TC_ERR_FATAL || ret == TC_ERR_SOCKSCONN) {
+                log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "torrent client shutdown with error %d...retrying in 60 seconds", ret);
+
+                torrentClient_shutdown(torrent->client);
+                torrentClient_start(torrent->client, torrent->client->epolld, torrent->client->socksAddr, torrent->client->socksPort,
+                        torrent->client->authAddr, torrent->client->authPort, torrent->client->serverPort, torrent->client->fileSize,
+                        torrent->client->downBlockSize, torrent->client->upBlockSize);
+
+                /* set wakup timer and call sleep function */
+                torrent_sleepCallback(60);
+
+                return;
+            } else if(ret != TC_SUCCESS && ret != TC_BLOCK_DOWNLOADED && ret != TC_ERR_RECV && ret != TC_ERR_SEND) {
+                log(G_LOG_LEVEL_INFO, __FUNCTION__, "torrent client encountered a non-asynch-io related error");
+            }
 
 			if(!torrent->clientDone  && torrent->client->totalBytesDown > 0) {
 				struct timespec now;
 				clock_gettime(CLOCK_REALTIME, &now);
 
-				if(res == TC_BLOCK_DOWNLOADED) {
+				if(ret == TC_BLOCK_DOWNLOADED) {
 					torrent->lastReport = now;
 					torrent_report(torrent->client, "[client-block-complete]");
 				} else if(now.tv_sec - torrent->lastReport.tv_sec > 1 && torrent->client->currentBlockTransfer != NULL &&
