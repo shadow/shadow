@@ -69,3 +69,6 @@ echo "Patching or/router.c"
 # static variable
 sed -i${bext} 's/static crypto_pk_t \*client_identitykey/crypto_pk_t \*client_identitykey/g' src/or/router.c
 
+echo "Patching or/control.c"
+# comments out checking for single hop exists in the tor controller
+sed -i 's/!node_allows_single_hop_exits(node)/\/\/!node_allows_single_hop_exits(node)/g' src/or/control.c
