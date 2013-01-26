@@ -411,6 +411,7 @@ def setup_tor(args):
         if os.path.exists(args.tordir): shutil.rmtree(args.tordir)
         shutil.copytree(args.tor_prefix, args.tordir)
         distcleancmd = "make distclean"
+        log("running \'{0}\'".format(distcleancmd))
         subprocess.call(shlex.split(distcleancmd.strip()))
     
     if not os.path.exists(args.tordir):
