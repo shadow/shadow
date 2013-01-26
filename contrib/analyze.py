@@ -738,7 +738,7 @@ def parse(args):
                 if tick not in myctpqproc: myctpqproc[tick] = 0.0
                 myctpqproc[tick] += proc
                 myccpqproc.append(proc)
-        cellcdf['pqproc'].append(0.0 if myproccount==0 else myproctotal/myproccount)
+        if myproctotal > 0: cellcdf['pqproc'].append(0.0 if myproccount==0 else myproctotal/myproccount)
 
         # queue time appward
         for tick in n.cellpqw:
@@ -754,10 +754,10 @@ def parse(args):
                 myctpqwait[tick] += wait
                 myccpqwait.append(wait)
                 myccpqcellwait.append(0.0 if proc==0 else wait/proc)
-        cellcdf['pqwait'].append(0.0 if mywaitcount==0 else mywaittotal/mywaitcount)
+        if mywaittotal > 0: cellcdf['pqwait'].append(0.0 if mywaitcount==0 else mywaittotal/mywaitcount)
 
         # ave queue time per cell appward
-        cellcdf['pqcellwait'].append(0.0 if myproctotal==0 else mywaittotal/myproctotal)
+        if mywaittotal > 0: cellcdf['pqcellwait'].append(0.0 if myproctotal==0 else mywaittotal/myproctotal)
 
         # queue len appward
         for tick in n.cellpql:
@@ -771,7 +771,7 @@ def parse(args):
                 if tick not in myctpqlen: myctpqlen[tick] = 0.0
                 myctpqlen[tick] += length
                 myccpqlen.append(length)
-        cellcdf['pqlen'].append(0.0 if mylencount==0 else mylentotal/mylencount)
+        if mylentotal > 0: cellcdf['pqlen'].append(0.0 if mylencount==0 else mylentotal/mylencount)
 
         myproctotal, myproccount, mywaittotal, mywaitcount, mylentotal, mylencount = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
 
@@ -786,7 +786,7 @@ def parse(args):
                 if tick not in myctnqproc: myctnqproc[tick] = 0.0
                 myctnqproc[tick] += proc
                 myccnqproc.append(proc)
-        cellcdf['nqproc'].append(0.0 if myproccount==0 else myproctotal/myproccount)
+        if myproctotal > 0: cellcdf['nqproc'].append(0.0 if myproccount==0 else myproctotal/myproccount)
 
         # queue time exitward
         for tick in n.cellnqw:
@@ -802,10 +802,10 @@ def parse(args):
                 myctnqwait[tick] += wait
                 myccnqwait.append(wait)
                 myccnqcellwait.append(0.0 if proc==0 else wait/proc)
-        cellcdf['nqwait'].append(0.0 if mywaitcount==0 else mywaittotal/mywaitcount)
+        if mywaittotal > 0: cellcdf['nqwait'].append(0.0 if mywaitcount==0 else mywaittotal/mywaitcount)
 
         # ave queue time per cell exitward
-        cellcdf['nqcellwait'].append(0.0 if myproctotal==0 else mywaittotal/myproctotal)
+        if mywaittotal > 0: cellcdf['nqcellwait'].append(0.0 if myproctotal==0 else mywaittotal/myproctotal)
 
         # queue len exitward
         for tick in n.cellnql:
@@ -819,7 +819,7 @@ def parse(args):
                 if tick not in myctnqlen: myctnqlen[tick] = 0.0
                 myctnqlen[tick] += length
                 myccnqlen.append(length)
-        cellcdf['nqlen'].append(0.0 if mylencount==0 else mylentotal/mylencount)
+        if mylentotal > 0: cellcdf['nqlen'].append(0.0 if mylencount==0 else mylentotal/mylencount)
 
         tokenstotal, tokenscount = 0.0, 0.0
 
@@ -835,7 +835,7 @@ def parse(args):
                 if tick not in myttgread: myttgread[tick] = []
                 myttgread[tick].append(tokens)
                 mytcgread.append(tokens)
-        tokencdf['gread'].append(0.0 if tokenscount==0 else tokenstotal/tokenscount)
+        if tokenstotal > 0: tokencdf['gread'].append(0.0 if tokenscount==0 else tokenstotal/tokenscount)
 
         tokenstotal, tokenscount = 0.0, 0.0
 
@@ -850,7 +850,7 @@ def parse(args):
                 if tick not in myttgwrite: myttgwrite[tick] = []
                 myttgwrite[tick].append(tokens)
                 mytcgwrite.append(tokens)
-        tokencdf['gwrite'].append(0.0 if tokenscount==0 else tokenstotal/tokenscount)
+        if tokenstotal > 0: tokencdf['gwrite'].append(0.0 if tokenscount==0 else tokenstotal/tokenscount)
 
         tokenstotal, tokenscount = 0.0, 0.0
 
@@ -866,7 +866,7 @@ def parse(args):
                 if tick not in myttrread: myttrread[tick] = []
                 myttrread[tick].append(tokens)
                 mytcrread.append(tokens)
-        tokencdf['rread'].append(0.0 if tokenscount==0 else tokenstotal/tokenscount)
+        if tokenstotal > 0: tokencdf['rread'].append(0.0 if tokenscount==0 else tokenstotal/tokenscount)
 
         tokenstotal, tokenscount = 0.0, 0.0
 
@@ -881,7 +881,7 @@ def parse(args):
                 if tick not in myttrwrite: myttrwrite[tick] = []
                 myttrwrite[tick].append(tokens)
                 mytcrwrite.append(tokens)
-        tokencdf['rwrite'].append(0.0 if tokenscount==0 else tokenstotal/tokenscount)
+        if tokenstotal > 0: tokencdf['rwrite'].append(0.0 if tokenscount==0 else tokenstotal/tokenscount)
 
         tokenstotal, tokenscount = 0.0, 0.0
 
@@ -897,7 +897,7 @@ def parse(args):
                 if tick not in myttoread: myttoread[tick] = []
                 myttoread[tick].append(tokens)
                 mytcoread.append(tokens)
-        tokencdf['oread'].append(0.0 if tokenscount==0 else tokenstotal/tokenscount)
+        if tokenstotal > 0: tokencdf['oread'].append(0.0 if tokenscount==0 else tokenstotal/tokenscount)
 
         tokenstotal, tokenscount = 0.0, 0.0
 
@@ -912,7 +912,7 @@ def parse(args):
                 if tick not in myttowrite: myttowrite[tick] = []
                 myttowrite[tick].append(tokens)
                 mytcowrite.append(tokens)
-        tokencdf['owrite'].append(0.0 if tokenscount==0 else tokenstotal/tokenscount)
+        if tokenstotal > 0: tokencdf['owrite'].append(0.0 if tokenscount==0 else tokenstotal/tokenscount)
 
         if args.all:
             for tokendata in [myttgread, myttgwrite, myttrread, myttrwrite, myttoread, myttowrite]:
