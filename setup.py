@@ -405,10 +405,13 @@ def setup_tor(args):
         log("ERROR!: missing dependencies - please install 'automake' and 'autoconf', or make sure they are in your PATH")
         return -1
     
-    # if custom Tor prefix given, always blow away Tor's build directory
+    # if custom Tor prefix is given, always blow away Tor's build directory
+    # and clean the potentially dirty custom directory
     if args.tor_prefix is not None:
         if os.path.exists(args.tordir): shutil.rmtree(args.tordir)
         shutil.copytree(args.tor_prefix, args.tordir)
+        distcleancmd = "make distclean"
+        subprocess.call(shlex.split(distcleancmd.strip()))
     
     if not os.path.exists(args.tordir):
         # we have no Tor build directory, check requested url
