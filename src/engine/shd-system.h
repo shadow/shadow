@@ -75,6 +75,8 @@ gint system_getHostName(gchar *name, size_t len);
 gint system_getAddrInfo(gchar *name, const gchar *service,
 		const struct addrinfo *hgints, struct addrinfo **res);
 void system_freeAddrInfo(struct addrinfo *res);
+int system_getnameinfo(const struct sockaddr *sa, socklen_t salen,
+		char *host, size_t hostlen, char *serv, size_t servlen, int flags);
 struct hostent* system_getHostByName(const gchar* name);
 int system_getHostByName_r(const gchar *name,
                struct hostent *ret, gchar *buf, gsize buflen,

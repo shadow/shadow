@@ -201,6 +201,13 @@ void intercept_freeaddrinfo(struct addrinfo *res) {
 	system_freeAddrInfo(res);
 }
 
+int intercept_getnameinfo(const struct sockaddr *sa, socklen_t salen,
+		char *host, size_t hostlen, char *serv, size_t servlen, int flags) {
+	return system_getnameinfo(sa, salen, host, hostlen, serv, servlen, flags);
+}
+
+
+
 struct hostent* intercept_gethostbyname(const gchar* name) {
 	return system_getHostByName(name);
 }

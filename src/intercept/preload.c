@@ -459,6 +459,20 @@ void freeaddrinfo(struct addrinfo *res) {
 	(*func)(res);
 }
 
+typedef int (*getnameinfo_fp)(const struct sockaddr *, socklen_t, char *, size_t, char *, size_t, int);
+static getnameinfo_fp _getnameinfo = NULL;
+static getnameinfo_fp _vsystem_getnameinfo = NULL;
+int getnameinfo (const struct sockaddr *__restrict sa,
+			socklen_t salen, char *__restrict host,
+			socklen_t hostlen, char *__restrict serv,
+			socklen_t servlen, int flags) {
+	getnameinfo_fp* func;
+	char* funcName;
+	PRELOAD_DECIDE(func, funcName, "getnameinfo", _getnameinfo, INTERCEPT_PREFIX, _vsystem_getnameinfo, 1);
+	PRELOAD_LOOKUP(func, funcName, -1);
+	return (*func)(sa, salen, host, hostlen, serv, servlen, flags);
+}
+
 typedef struct hostent* (*gethostbyname_fp)(const gchar*);
 static gethostbyname_fp _gethostbyname = NULL;
 static gethostbyname_fp _vsystem_gethostbyname = NULL;

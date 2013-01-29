@@ -766,6 +766,29 @@ void system_freeAddrInfo(struct addrinfo *res) {
 	}
 }
 
+int system_getnameinfo(const struct sockaddr *sa, socklen_t salen,
+		char *host, size_t hostlen, char *serv, size_t servlen, int flags) {
+	/* FIXME this is not fully implemented */
+	if(!sa) {
+		return EAI_FAIL;
+	}
+
+	gint retval = 0;
+	Node* node = _system_switchInShadowContext();
+
+	GQuark convertedIP = (GQuark) (((struct sockaddr_in*)sa)->sin_addr.s_addr);
+	const gchar* hostname = internetwork_resolveID(worker_getInternet(), convertedIP);
+
+	if(hostname) {
+		g_utf8_strncpy(host, hostname, hostlen);
+	} else {
+		retval = EAI_NONAME;
+	}
+
+	_system_switchOutShadowContext(node);
+	return retval;
+}
+
 struct hostent* system_getHostByName(const gchar* name) {
 	warning("gethostbyname not yet implemented");
 	return NULL;
