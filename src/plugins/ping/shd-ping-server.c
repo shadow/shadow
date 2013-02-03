@@ -157,9 +157,9 @@ gint pingServer_activate(PingServer *pingServer, gint sockd) {
 				}
 			} else {
 				gchar **data = g_strsplit(parts[idx], ": ", 2);
-				if(!g_strcmp0(data[0], "TOR-COOKIE")) {
+				if(!g_strcmp0(data[0], "TOR-COOKIE") && data[1]) {
 					cookie = g_ascii_strtoull(data[1], NULL, 16);
-				} else if(!g_strcmp0(data[0], "TIME")) {
+				} else if(!g_strcmp0(data[0], "TIME") && data[1]) {
 					sentTime = g_ascii_strtoull(data[1], NULL, 10);
 				}
 				g_strfreev(data);
