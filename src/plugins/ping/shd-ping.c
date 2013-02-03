@@ -58,7 +58,7 @@ static in_addr_t ping_resolveHostname(const gchar* hostname) {
 	in_addr_t addr = 0;
 
 	/* get the address in network order */
-	if(g_ascii_strncasecmp(hostname, "none", 4) == 0) {
+	if(g_ascii_strcasecmp(hostname, "none") == 0) {
 		addr = htonl(INADDR_NONE);
 	} else if(g_ascii_strncasecmp(hostname, "localhost", 9) == 0) {
 		addr = htonl(INADDR_LOOPBACK);
@@ -92,7 +92,7 @@ void ping_new(int argc, char* argv[]) {
 	}
 
 	in_addr_t socksAddr = ping_resolveHostname(argv[1]);
-	in_port_t socksPort = atoi(argv[2]);
+	in_port_t socksPort = htons(atoi(argv[2]));
 	gint pingInterval = atoi(argv[3]);
 	gint pingSize = 64;
 	if(argc > 4) {
@@ -103,7 +103,7 @@ void ping_new(int argc, char* argv[]) {
 	gchar myHostname[128];
 	gethostname(myHostname, sizeof(myHostname));
 	in_addr_t serverAddr = ping_resolveHostname(myHostname);
-	in_port_t serverPort = PING_PORT;
+	in_port_t serverPort = htons(PING_PORT);
 
 	/* create an epoll to wait for I/O events */
 	ping->epolld = epoll_create(1);
@@ -134,7 +134,7 @@ void ping_new(int argc, char* argv[]) {
 		log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error while starting the ping client");
 		return;
 	}
-	log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "successfully started client [%8.8X]", ping->client->cookie);
+	log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "successfully started client [%8.8X] connected to %s:%d", ping->client->cookie, argv[1], argv[2]);
 }
 
 
@@ -152,7 +152,17 @@ void ping_activate() {
 		gint sockd = events[i].data.fd;
 
 		if(sockd == ping->client->sockd) {
-			pingClient_activate(ping->client, sockd);
+		    gint ret = pingClient_activate(ping->client, sockd);
+            if(ret == PING_CLIENT_ERR_FATAL || ret == PING_CLIENT_ERR_SOCKSCONN) {
+                log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "ping client shutdown with error %d...retrying in 60 seconds", ret);
+
+                pingClient_shutdown(ping->client);
+                pingClient_start(ping->client, ping->client->epolld, ping->client->socksAddr, ping->client->socksPort,
+                        ping->client->serverAddr, ping->client->serverPort, ping->client->pingInterval, ping->client->pingSize);
+
+                /* set wakeup timer and call sleep function */
+                ping->shadowlib->createCallback(pingClient_wakeup, ping->client, 60);
+            }
 		} else {
 			pingServer_activate(ping->server, sockd);
 

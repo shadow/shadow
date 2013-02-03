@@ -102,16 +102,22 @@ void pingClient_sendPing(PingClient *pingClient) {
 	for(gint i = 0; i < 1; i++) {
 		gint bytes = send(sockd, buf->str,  pingClient->pingSize, 0);
 		//PING_CLIENT_ASSERTIO(ping, bytes, errno == EWOULDBLOCK || errno == ENOTCONN || errno == EALREADY, PING_CLIENT_ERR_SEND);
+		if(bytes < 0 && errno != EWOULDBLOCK && errno != ENOTCONN && errno != EALREADY) {
+            pingClient_shutdown(pingClient);
+            pingClient_start(pingClient, pingClient->epolld, pingClient->socksAddr, pingClient->socksPort,
+                    pingClient->serverAddr, pingClient->serverPort, pingClient->pingInterval, pingClient->pingSize);
 
-		if(bytes > 0) {
+            /* set wakeup timer and call sleep function */
+            pingClient->createCallback(pingClient_wakeup, pingClient, 60);
+		} else {
 			gint64 nanoseconds = TIME_TO_NS(now);
 			g_queue_push_tail(pingClient->pingTimes, (gpointer)nanoseconds);
 			pingClient->pingsSent++;
+			pingClient->createCallback(pingClient_sendPing, pingClient, (guint)pingClient->pingInterval);
 		}
 	}
 	g_string_free(buf, TRUE);
 
-	pingClient->createCallback(pingClient_sendPing, pingClient, (guint)pingClient->pingInterval);
 }
 
 gint pingClient_wakeup(PingClient *pingClient) {
