@@ -24,12 +24,6 @@
 
 typedef struct _TorControlLogger TorControlLogger;
 
-enum torcontrollogger_state {
-	TCS_IDLE,
-	TCS_SEND_AUTHENTICATE, TCS_RECV_AUTHENTICATE,
-	TCS_SEND_SETEVENTS, TCS_RECV_SETEVENTS,
-};
-
 TorControlLogger* torcontrollogger_new(ShadowLogFunc logFunc,
 		gchar* hostname, in_addr_t ip, in_port_t port, gint sockd,
 		gchar **moduleArgs, TorControl_EventHandlers *handlers);

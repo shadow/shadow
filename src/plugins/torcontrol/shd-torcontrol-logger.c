@@ -24,6 +24,12 @@
 #include "shd-torcontrol.h"
 #include "shd-torcontrol-logger.h"
 
+enum torcontrollogger_state {
+	TCLS_IDLE,
+	TCLS_SEND_AUTHENTICATE, TCLS_RECV_AUTHENTICATE,
+	TCLS_SEND_SETEVENTS, TCLS_RECV_SETEVENTS,
+};
+
 struct _TorControlLogger {
 	ShadowLogFunc log;
 	enum torcontrollogger_state currentState;
@@ -44,43 +50,43 @@ static gboolean _torcontrollogger_manageState(TorControlLogger* tcl) {
 
 	beginmanage: switch (tcl->currentState) {
 
-	case TCS_SEND_AUTHENTICATE: {
+	case TCLS_SEND_AUTHENTICATE: {
 		/* authenticate with the control port */
 		if (torControl_authenticate(tcl->targetSockd, "password") > 0) {
 			/* idle until we receive the response, then move to next state */
-			tcl->currentState = TCS_IDLE;
-			tcl->nextState = TCS_RECV_AUTHENTICATE;
+			tcl->currentState = TCLS_IDLE;
+			tcl->nextState = TCLS_RECV_AUTHENTICATE;
 		}
 		break;
 	}
 
-	case TCS_RECV_AUTHENTICATE: {
-		tcl->currentState = TCS_SEND_SETEVENTS;
+	case TCLS_RECV_AUTHENTICATE: {
+		tcl->currentState = TCLS_SEND_SETEVENTS;
 		goto beginmanage;
 		break;
 	}
 
-	case TCS_SEND_SETEVENTS: {
+	case TCLS_SEND_SETEVENTS: {
 		/* send list of events to listen on */
 		if (torControl_setevents(tcl->targetSockd, tcl->torctlEvents) > 0) {
 			/* idle until we receive the response, then move to next state */
-			tcl->currentState = TCS_IDLE;
-			tcl->nextState = TCS_RECV_SETEVENTS;
+			tcl->currentState = TCLS_IDLE;
+			tcl->nextState = TCLS_RECV_SETEVENTS;
 			tcl->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "set tor control events '%s'", tcl->torctlEvents);
 		}
 		break;
 	}
 
-	case TCS_RECV_SETEVENTS: {
+	case TCLS_RECV_SETEVENTS: {
 		/* all done */
-		tcl->currentState = TCS_IDLE;
-		tcl->nextState = TCS_IDLE;
+		tcl->currentState = TCLS_IDLE;
+		tcl->nextState = TCLS_IDLE;
 		goto beginmanage;
 		break;
 	}
 
-	case TCS_IDLE: {
-		if (tcl->nextState == TCS_IDLE) {
+	case TCLS_IDLE: {
+		if (tcl->nextState == TCLS_IDLE) {
 			return TRUE;
 		}
 		break;
@@ -173,7 +179,7 @@ TorControlLogger* torcontrollogger_new(ShadowLogFunc logFunc,
 	tcl->torctlEvents = g_strdelimit(g_ascii_strup(moduleArgs[0], -1), ",", ' ');
 	g_assert(tcl->torctlEvents);
 
-	tcl->currentState = TCS_SEND_AUTHENTICATE;
+	tcl->currentState = TCLS_SEND_AUTHENTICATE;
 
 	return tcl;
 }
