@@ -24,7 +24,7 @@
 
 typedef struct _TorControlPinger TorControlPinger;
 
-TorControlPinger* torcontrolpinger_new(ShadowLogFunc logFunc,
+TorControlPinger* torcontrolpinger_new(ShadowLogFunc logFunc, ShadowCreateCallbackFunc cbFunc,
 		gchar* hostname, in_addr_t ip, in_port_t port, gint sockd,
 		gchar **moduleArgs, TorControl_EventHandlers *handlers);
 

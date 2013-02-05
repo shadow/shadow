@@ -455,6 +455,8 @@ gint torControl_connect(in_addr_t addr, in_port_t port) {
 
 gint torControl_createConnection(gchar *hostname, in_port_t port, gchar *mode, gchar **moduleArgs) {
     ShadowLogFunc log = torControl->shadowlib->log;
+    ShadowCreateCallbackFunc cb = torControl->shadowlib->createCallback;
+
     TorControl_Connection *connection = g_new0(TorControl_Connection, 1);
     connection->hostname = g_strdup(hostname);
     connection->ip = torControl_resolveHostname(connection->hostname);
@@ -482,7 +484,7 @@ gint torControl_createConnection(gchar *hostname, in_port_t port, gchar *mode, g
         connection->moduleData = torcontrollogger_new(log, hostname, connection->ip, connection->port,
         		connection->sockd, moduleArgs, &(connection->eventHandlers));
     } else if(!g_ascii_strncasecmp(connection->mode, "ping", 3)) {
-        connection->moduleData = torcontrolpinger_new(log, hostname, connection->ip, connection->port,
+        connection->moduleData = torcontrolpinger_new(log, cb, hostname, connection->ip, connection->port,
         		connection->sockd, moduleArgs, &(connection->eventHandlers));
     }
     _torControl_changeEpoll(torControl->epolld, connection->sockd, EPOLLOUT);

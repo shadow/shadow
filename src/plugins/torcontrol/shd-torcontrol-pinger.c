@@ -32,6 +32,8 @@ enum torcontrolpinger_state {
 
 struct _TorControlPinger {
 	ShadowLogFunc log;
+	ShadowCreateCallbackFunc createCallback;
+
 	enum torcontrolpinger_state currentState;
 	enum torcontrolpinger_state nextState;
 
@@ -40,16 +42,21 @@ struct _TorControlPinger {
 	in_port_t targetPort;
 	gint targetSockd;
 
-	GDateTime* pingStartTime;
 	gchar* pingRelay;
+	GHashTable* outstandingPings;
 };
 
-static void _torcontrolpinger_doPingAsExtend(TorControlPinger* tcp) {
-	/* start a ping if there is not one in progress */
-	if(!tcp->pingStartTime) {
-		tcp->pingStartTime = g_date_time_new_now_utc();
-		torControl_buildCircuit(tcp->targetSockd, tcp->pingRelay);
-	}
+/* 'ping' a single tor relay and record the RTT
+ * the ping is really an circ extend to one relay hop, then a circ destroy. */
+static void _torcontrolpinger_doPingCallback(TorControlPinger* tcp) {
+	g_assert(tcp);
+	/* send an EXTENDCIRCUIT command, the result and the circID
+	 * will pop up in _torcontrolpinger_handleResponseEvent
+	 */
+	torControl_buildCircuit(tcp->targetSockd, tcp->pingRelay);
+
+	/* start another ping to this relay in 1 second */
+	tcp->createCallback((ShadowPluginCallbackFunc)_torcontrolpinger_doPingCallback, tcp, 1000);
 }
 
 /*
@@ -91,7 +98,7 @@ static gboolean _torcontrolpinger_manageState(TorControlPinger* tcp) {
 		/* all done */
 		tcp->currentState = TCPS_IDLE;
 		tcp->nextState = TCPS_IDLE;
-		_torcontrolpinger_doPingAsExtend(tcp);
+		_torcontrolpinger_doPingCallback(tcp);
 		goto beginmanage;
 		break;
 	}
@@ -122,8 +129,21 @@ static void _torcontrolpinger_handleResponseEvent(TorControlPinger* tcp,
 	}
 
 	case TORCTL_REPLY_SUCCESS: {
-		tcp->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "[%d] SUCCESS: %s",
+		tcp->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "[%d] SUCCESS: %s",
 				replyLine->code, replyLine->body);
+
+		/* check if this is a successful start of a ping */
+		gchar** parts = g_strsplit(replyLine->body, " ", 10);
+		if(!g_strcmp0(parts[0], "EXTENDED")) {
+			/* take circID and start time for ping RTT */
+			GDateTime* pingStartTime = g_date_time_new_now_utc();
+			gint* circID = g_new0(gint, 1);
+			*circID = (gint) g_ascii_strtoll(parts[1], NULL, 10);
+			g_hash_table_replace(tcp->outstandingPings, circID, pingStartTime);
+
+			tcp->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "ping started for circ %i", *circID);
+		}
+
 		tcp->currentState = tcp->nextState;
 		_torcontrolpinger_manageState(tcp);
 		break;
@@ -141,32 +161,39 @@ static void _torcontrolpinger_handleResponseEvent(TorControlPinger* tcp,
 static void _torcontrolpinger_handleCircEvent(TorControlPinger* tcp, gint code,
 		gchar* line, gint circID, GString* path, gint status, gint buildFlags,
 		gint purpose, gint reason, GDateTime* createTime) {
-	tcp->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "[torcontrol-ping] %s:%i %s",
+
+	tcp->log(G_LOG_LEVEL_INFO, __FUNCTION__, "[torcontrol-ping] %s:%i %s",
 			tcp->targetHostname->str, tcp->targetPort, line);
 
-	if(status == TORCTL_CIRC_STATUS_EXTENDED && tcp->pingStartTime &&
-			path && !g_strcmp0(tcp->pingRelay, path->str)) {
-		GDateTime* pingEndTime = g_date_time_new_now_utc();
+	/* check if this is a ping circuit */
+	GDateTime* pingStartTime = g_hash_table_lookup(tcp->outstandingPings, &circID);
+	if(pingStartTime) {
+		tcp->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "got ping start for circ %i", circID);
 
-		GTimeSpan pingMicros = g_date_time_difference(pingEndTime, tcp->pingStartTime);
-		GTimeSpan pingMicrosCirc = g_date_time_difference(pingEndTime, createTime);
+		/* if it was successfully extended, record the time */
+		if(status == TORCTL_CIRC_STATUS_EXTENDED) {
+			GDateTime* pingEndTime = g_date_time_new_now_utc();
 
-		/* make sure we are checking the correct ping circuit and not
-		 * some other tor circuit thats being built in the background */
-		if(pingMicros == pingMicrosCirc) {
-			GTimeSpan pingMillis = (GTimeSpan) pingMicros / 1000;
+			GTimeSpan pingMicros = g_date_time_difference(pingEndTime, pingStartTime);
+			GTimeSpan pingMillis = (GTimeSpan) (pingMicros / 1000);
+			GTimeSpan pingMicrosCirc = g_date_time_difference(pingEndTime, createTime);
+			GTimeSpan pingMillisCirc = (GTimeSpan) (pingMicrosCirc / 1000);
 
 			tcp->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__,
-					"[torcontrol-ping] %s:%i pinger pinged %s in %ld millis %ld",
-					tcp->targetHostname->str, tcp->targetPort, path->str, pingMillis);
+				"[torcontrol-ping] %s:%i pinger pinged %s "
+				"on circ %i in %ld millis (%ld millis since create)",
+				tcp->targetHostname->str, tcp->targetPort, path->str,
+				circID, pingMillis, pingMillisCirc);
 
+			/* we no longer need the ping circuit */
 			g_date_time_unref(pingEndTime);
-			g_date_time_unref(tcp->pingStartTime);
-			tcp->pingStartTime = NULL;
-
-			torControl_closeCircuit(tcp->targetSockd, circID);
-			_torcontrolpinger_doPingAsExtend(tcp);
+		} else {
+			tcp->log(G_LOG_LEVEL_INFO, __FUNCTION__, "ping circ %i failed", circID);
 		}
+
+		/* remove no mater what - it may have extended or failed or closed */
+		g_hash_table_remove(tcp->outstandingPings, &circID);
+		torControl_closeCircuit(tcp->targetSockd, circID);
 	}
 }
 
@@ -179,11 +206,12 @@ static void _torcontrolpinger_free(TorControlPinger* tcp) {
 
 	g_string_free(tcp->targetHostname, TRUE);
 	g_free(tcp->pingRelay);
+	g_hash_table_destroy(tcp->outstandingPings);
 
 	g_free(tcp);
 }
 
-TorControlPinger* torcontrolpinger_new(ShadowLogFunc logFunc,
+TorControlPinger* torcontrolpinger_new(ShadowLogFunc logFunc, ShadowCreateCallbackFunc cbFunc,
 		gchar* hostname, in_addr_t ip, in_port_t port, gint sockd,
 		gchar **moduleArgs, TorControl_EventHandlers *handlers) {
 	g_assert(handlers);
@@ -204,6 +232,7 @@ TorControlPinger* torcontrolpinger_new(ShadowLogFunc logFunc,
 	TorControlPinger* tcp = g_new0(TorControlPinger, 1);
 
 	tcp->log = logFunc;
+	tcp->createCallback = cbFunc;
 
 	tcp->targetHostname = g_string_new(hostname);
 	tcp->targetIP = ip;
@@ -214,6 +243,10 @@ TorControlPinger* torcontrolpinger_new(ShadowLogFunc logFunc,
 	 * and then destroying the circuit */
 	tcp->pingRelay = g_strdup(moduleArgs[0]);
 	g_assert(tcp->pingRelay);
+
+	/* holds outstanding pings as a GDateTime by a gint circID */
+	tcp->outstandingPings = g_hash_table_new_full(g_int_hash, g_int_equal,
+			g_free, (GDestroyNotify)g_date_time_unref);
 
 	tcp->currentState = TCPS_SEND_AUTHENTICATE;
 
