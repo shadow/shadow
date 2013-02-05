@@ -349,6 +349,7 @@ gint torControl_setconf(gint sockd, gchar **confValues);
 gint torControl_setevents(gint sockd, gchar *events);
 
 gint torControl_buildCircuit(gint sockd, gchar *circuit);
+gint torControl_closeCircuit(gint sockd, gint circID);
 gint torControl_attachStream(gint sockd, gint streamID, gint circID);
 
 gint torControl_getInfoBootstrapStatus(gint sockd);

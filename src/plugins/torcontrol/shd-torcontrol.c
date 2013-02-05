@@ -35,6 +35,7 @@
 #include "shd-torcontrol.h"
 #include "shd-torcontrol-circuitbuild.h"
 #include "shd-torcontrol-logger.h"
+#include "shd-torcontrol-pinger.h"
 
 TorControl* torControl;
 
@@ -480,6 +481,9 @@ gint torControl_createConnection(gchar *hostname, in_port_t port, gchar *mode, g
     } else if(!g_ascii_strncasecmp(connection->mode, "log", 3)) {
         connection->moduleData = torcontrollogger_new(log, hostname, connection->ip, connection->port,
         		connection->sockd, moduleArgs, &(connection->eventHandlers));
+    } else if(!g_ascii_strncasecmp(connection->mode, "ping", 3)) {
+        connection->moduleData = torcontrolpinger_new(log, hostname, connection->ip, connection->port,
+        		connection->sockd, moduleArgs, &(connection->eventHandlers));
     }
     _torControl_changeEpoll(torControl->epolld, connection->sockd, EPOLLOUT);
 
@@ -886,6 +890,18 @@ gint torControl_buildCircuit(gint sockd, gchar *circuit) {
 
     GString *command = g_string_new("");
     g_string_printf(command, "EXTENDCIRCUIT 0 %s", circuit);
+
+    gint bytes = torControl_sendCommand(sockd, command->str);
+    g_string_free(command, TRUE);
+
+    return bytes;
+}
+
+gint torControl_closeCircuit(gint sockd, gint circID) {
+    ShadowLogFunc log = torControl->shadowlib->log;
+
+    GString *command = g_string_new("");
+    g_string_printf(command, "CLOSECIRCUIT %i", circID);
 
     gint bytes = torControl_sendCommand(sockd, command->str);
     g_string_free(command, TRUE);
