@@ -187,13 +187,18 @@ static void _torcontrolpinger_handleCircEvent(TorControlPinger* tcp, gint code,
 
 			/* we no longer need the ping circuit */
 			g_date_time_unref(pingEndTime);
-		} else {
-			tcp->log(G_LOG_LEVEL_INFO, __FUNCTION__, "ping circ %i failed", circID);
 		}
 
-		/* remove no mater what - it may have extended or failed or closed */
-		g_hash_table_remove(tcp->outstandingPings, &circID);
-		torControl_closeCircuit(tcp->targetSockd, circID);
+		if(status == TORCTL_CIRC_STATUS_EXTENDED ||
+				status == TORCTL_CIRC_STATUS_FAILED ||
+				status == TORCTL_CIRC_STATUS_CLOSED) {
+			/* remove no mater what - it may have extended or failed or closed */
+			tcp->log(G_LOG_LEVEL_INFO, __FUNCTION__, "ping circ %i %s", circID,
+					torControl_getCircStatusString(status));
+			g_hash_table_remove(tcp->outstandingPings, &circID);
+			torControl_closeCircuit(tcp->targetSockd, circID);
+		}
+
 	}
 }
 
