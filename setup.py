@@ -422,7 +422,7 @@ def setup_tor(args):
         if not os.path.exists(target_tor):
             if get("./", args.tor_url, args.tor_sig_url, args.keyring) == None:
 #            if download(args.tor_url, target_tor) != 0: 
-                log("ERROR!: problem downloading \'{0}\'".format(args.tor_url))
+                log("ERROR!: problem getting \'{0}\'".format(args.tor_url))
                 return -1
 
         # we are either extracting a cached tarball, or one we just downloaded
@@ -542,15 +542,16 @@ def get(targetdir, fileurl, sigurl, keyring):
         log("running \'{0}\'".format(gpg))
         retcode = subprocess.call(shlex.split(gpg))
 
+    success = False
     if retcode == 0: 
         log("Signature is good")
-        time.sleep(1)
-        return targetfile
+        success = True
     else: 
         log("WARNING!: signature is bad")
-        time.sleep(1)
-        if query_yes_no("Do you want to continue without verifying the signature?"): return targetfile
-        else: return None
+        if query_yes_no("Do you want to continue without verifying the signature?"): success = True
+
+    if success and query_yes_no("Everything looks good. OK to proceed?"): return targetfile
+    else: return None
         
 def download(url, target_path):
     if query_yes_no("May we download \'{0}\'?".format(url)):
