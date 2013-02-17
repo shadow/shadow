@@ -38,6 +38,7 @@ typedef int (*rep_hist_bandwidth_assess_fp)();
 typedef int (*router_get_advertised_bandwidth_capped_fp)(void*);
 typedef int (*event_base_loopexit_fp)();
 typedef int (*add_callback_log_fp)(const log_severity_list_t *, log_callback);
+typedef int (*crypto_global_cleanup_fp)(void);
 
 /* the key used to store each threads version of their searched function library.
  * the use this key to retrieve this library when intercepting functions from tor.
@@ -56,6 +57,7 @@ struct _ScallionPreloadWorker {
 	router_get_advertised_bandwidth_capped_fp f;
 	event_base_loopexit_fp g;
 	add_callback_log_fp h;
+	crypto_global_cleanup_fp i;
 };
 
 /* scallionpreload_init must be called before this so the worker gets created */
@@ -91,6 +93,7 @@ void scallionpreload_init(GModule* handle) {
 	g_assert(g_module_symbol(handle, TOR_LIB_PREFIX "router_get_advertised_bandwidth_capped", (gpointer*)&(worker->f)));
 	g_assert(g_module_symbol(handle, TOR_LIB_PREFIX "event_base_loopexit", (gpointer*)&(worker->g)));
 	g_assert(g_module_symbol(handle, TOR_LIB_PREFIX "add_callback_log", (gpointer*)&(worker->h)));
+	g_assert(g_module_symbol(handle, TOR_LIB_PREFIX "crypto_global_cleanup", (gpointer*)&(worker->i)));
 
 	g_static_private_set(&scallionWorkerKey, worker, g_free);
 }
@@ -127,4 +130,8 @@ int event_base_loopexit(gpointer base, const struct timeval * t) {
 
 int add_callback_log(const log_severity_list_t *severity, log_callback cb) {
     return _scallionpreload_getWorker()->h(severity, cb);
+}
+
+int crypto_global_cleanup(void) {
+	return _scallionpreload_getWorker()->i();
 }

@@ -39,9 +39,11 @@ void node_unlock(Node* node);
 
 EventQueue* node_getEvents(Node* node);
 
-void node_addApplication(Node* node, GQuark pluginID, gchar* pluginPath, SimulationTime startTime, gchar* arguments);
+void node_addApplication(Node* node, GQuark pluginID, gchar* pluginPath,
+		SimulationTime startTime, SimulationTime stopTime, gchar* arguments);
 void node_startApplication(Node* node, Application* application);
-void node_stopAllApplications(Node* node, gpointer userData);
+void node_stopApplication(Node* node, Application* application);
+void node_freeAllApplications(Node* node, gpointer userData);
 
 gint node_compare(gconstpointer a, gconstpointer b, gpointer user_data);
 gboolean node_isEqual(Node* a, Node* b);

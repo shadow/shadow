@@ -45,7 +45,8 @@ typedef struct _NodeApplication NodeApplication;
 struct _NodeApplication {
 	GQuark pluginID;
 	GString* arguments;
-	SimulationTime launchtime;
+	SimulationTime starttime;
+	SimulationTime stoptime;
 	MAGIC_DECLARE;
 };
 
@@ -91,7 +92,7 @@ CreateNodesAction* createnodes_new(GString* name, GString* cluster,
 }
 
 void createnodes_addApplication(CreateNodesAction* action, GString* pluginName,
-		GString* arguments, guint64 launchtime)
+		GString* arguments, guint64 starttime, guint64 stoptime)
 {
 	g_assert(pluginName && arguments);
 	MAGIC_ASSERT(action);
@@ -100,7 +101,8 @@ void createnodes_addApplication(CreateNodesAction* action, GString* pluginName,
 
 	nodeApp->pluginID = g_quark_from_string((const gchar*) pluginName->str);
 	nodeApp->arguments = g_string_new(arguments->str);
-	nodeApp->launchtime = (SimulationTime) (launchtime * SIMTIME_ONE_SECOND);
+	nodeApp->starttime = (SimulationTime) (starttime * SIMTIME_ONE_SECOND);
+	nodeApp->stoptime = (SimulationTime) (stoptime * SIMTIME_ONE_SECOND);
 
 	action->applications = g_list_append(action->applications, nodeApp);
 }
@@ -203,7 +205,8 @@ void createnodes_run(CreateNodesAction* action) {
 
 			/* make sure our bootstrap events are set properly */
 			worker->clock_now = 0;
-			node_addApplication(node, app->pluginID, pluginPath, app->launchtime, app->arguments->str);
+			node_addApplication(node, app->pluginID, pluginPath,
+					app->starttime, app->stoptime, app->arguments->str);
 			worker->clock_now = SIMTIME_INVALID;
 
 			item = g_list_next(item);

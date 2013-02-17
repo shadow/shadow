@@ -19,20 +19,39 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SHD_CREATE_NODES_H_
-#define SHD_CREATE_NODES_H_
-
 #include "shadow.h"
 
-typedef struct _CreateNodesAction CreateNodesAction;
+struct _StopApplicationEvent {
+	Event super;
+	Application* application;
+	MAGIC_DECLARE;
+};
 
-CreateNodesAction* createnodes_new(GString* name, GString* cluster,
-		guint64 bandwidthdown, guint64 bandwidthup, guint64 quantity, guint64 cpuFrequency,
-		guint64 heartbeatIntervalSeconds, GString* heartbeatLogLevelString,
-		GString* logLevelString, GString* logPcapString, GString* pcapDirString);
-void createnodes_addApplication(CreateNodesAction* action, GString* pluginName,
-		GString* arguments, guint64 starttime, guint64 stoptime);
-void createnodes_run(CreateNodesAction* action);
-void createnodes_free(CreateNodesAction* action);
+EventFunctionTable stopapplication_functions = {
+	(EventRunFunc) stopapplication_run,
+	(EventFreeFunc) stopapplication_free,
+	MAGIC_VALUE
+};
 
-#endif /* SHD_CREATE_NODES_H_ */
+StopApplicationEvent* stopapplication_new(Application* application) {
+	StopApplicationEvent* event = g_new0(StopApplicationEvent, 1);
+	MAGIC_INIT(event);
+
+	shadowevent_init(&(event->super), &stopapplication_functions);
+
+	event->application = application;
+
+	return event;
+}
+
+void stopapplication_run(StopApplicationEvent* event, Node* node) {
+	MAGIC_ASSERT(event);
+
+	node_stopApplication(node, event->application);
+}
+
+void stopapplication_free(StopApplicationEvent* event) {
+	MAGIC_ASSERT(event);
+	MAGIC_CLEAR(event);
+	g_free(event);
+}

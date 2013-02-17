@@ -106,9 +106,7 @@ void scalliontor_init_v3bw(ScallionTor* stor) {
 }
 
 void scalliontor_free(ScallionTor* stor) {
-	/* FIXME: we need to intercept crypto_global_cleanup() and clean up all of the
-	 * node-specific state while only calling the global openssl cleanup funcs once */
-//	tor_cleanup();
+	tor_cleanup();
 	g_free(stor);
 }
 
@@ -771,4 +769,15 @@ int intercept_add_callback_log(const log_severity_list_t *severity, log_callback
     stor->logfiles = g_list_append(stor->logfiles, lf);
 
     return 0;
+}
+
+int intercept_crypto_global_cleanup(void) {
+	/* FIXME: we need to clean up all of the node-specific state while only
+	 * calling the global openssl cleanup funcs once.
+	 *
+	 * node-specific state can be cleaned up here
+	 *
+	 * other stuff may be able to be cleaned up in g_module_unload(), but that
+	 * is called once per thread which still may piss off openssl. */
+	return 0;
 }

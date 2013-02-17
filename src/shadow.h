@@ -111,6 +111,7 @@
 #include "runnable/event/shd-packet-arrived.h"
 #include "runnable/event/shd-packet-dropped.h"
 #include "runnable/event/shd-start-application.h"
+#include "runnable/event/shd-stop-application.h"
 #include "runnable/event/shd-tcp-close-timer-expired.h"
 #include "runnable/action/shd-connect-network.h"
 #include "runnable/action/shd-create-network.h"

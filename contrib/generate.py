@@ -294,7 +294,7 @@ def generate(args):
         e.set("cpufrequency", "10000000") # 10 GHz b/c we dont want bottlenecks
         a = etree.SubElement(e, "application")
         a.set("plugin", "filetransfer")
-        a.set("time", "1")
+        a.set("starttime", "1")
         a.set("arguments", "server 80 {0}share".format(INSTALLPREFIX))
         print >>fim, "{0}:80:/1KiB.urnd".format(name)
         print >>fweb, "{0}:80:/320KiB.urnd".format(name)
@@ -322,7 +322,7 @@ def generate(args):
         e.set("cpufrequency", "10000000") # 10 GHz b/c we dont want bottlenecks
         a = etree.SubElement(e, "application")
         a.set("plugin", "torrent")
-        a.set("time", "1")
+        a.set("starttime", "1")
         a.set("arguments", "authority 5000")
     
     # think time file for web clients
@@ -550,17 +550,17 @@ def addRelayToXML(root, starttime, torargs, fileargs, torrentargs, name, downloa
     if torargs is not None:
         a = etree.SubElement(e, "application")
         a.set("plugin", "scallion")
-        a.set("time", "{0}".format(int(starttime)))
+        a.set("starttime", "{0}".format(int(starttime)))
         a.set("arguments", torargs)
     if fileargs is not None:
         a = etree.SubElement(e, "application")
         a.set("plugin", "filetransfer")
-        a.set("time", "{0}".format(int(starttime)+300))
+        a.set("starttime", "{0}".format(int(starttime)+300))
         a.set("arguments", fileargs)
     if torrentargs is not None:
         a = etree.SubElement(e, "application")
         a.set("plugin", "torrent")
-        a.set("time", "{0}".format(int(starttime)+300))
+        a.set("starttime", "{0}".format(int(starttime)+300))
         a.set("arguments", torrentargs)
 
 def getClientCountryChoices(connectinguserspath):

@@ -19,20 +19,19 @@
  * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SHD_CREATE_NODES_H_
-#define SHD_CREATE_NODES_H_
+#ifndef SHD_STOP_APPLICATION_H_
+#define SHD_STOP_APPLICATION_H_
 
 #include "shadow.h"
 
-typedef struct _CreateNodesAction CreateNodesAction;
+/**
+ * Stop a given application for a given Node.
+ */
 
-CreateNodesAction* createnodes_new(GString* name, GString* cluster,
-		guint64 bandwidthdown, guint64 bandwidthup, guint64 quantity, guint64 cpuFrequency,
-		guint64 heartbeatIntervalSeconds, GString* heartbeatLogLevelString,
-		GString* logLevelString, GString* logPcapString, GString* pcapDirString);
-void createnodes_addApplication(CreateNodesAction* action, GString* pluginName,
-		GString* arguments, guint64 starttime, guint64 stoptime);
-void createnodes_run(CreateNodesAction* action);
-void createnodes_free(CreateNodesAction* action);
+typedef struct _StopApplicationEvent StopApplicationEvent;
 
-#endif /* SHD_CREATE_NODES_H_ */
+StopApplicationEvent* stopapplication_new(Application* application);
+void stopapplication_run(StopApplicationEvent* event, Node* node);
+void stopapplication_free(StopApplicationEvent* event);
+
+#endif /* SHD_STOP_APPLICATION_H_ */

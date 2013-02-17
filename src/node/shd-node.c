@@ -156,22 +156,33 @@ EventQueue* node_getEvents(Node* node) {
 	return node->events;
 }
 
-void node_addApplication(Node* node, GQuark pluginID, gchar* pluginPath, SimulationTime startTime, gchar* arguments) {
+void node_addApplication(Node* node, GQuark pluginID, gchar* pluginPath,
+		SimulationTime startTime, SimulationTime stopTime, gchar* arguments) {
 	MAGIC_ASSERT(node);
-	Application* application = application_new(pluginID, pluginPath, startTime, arguments);
+	Application* application = application_new(pluginID, pluginPath, startTime, stopTime, arguments);
 	node->applications = g_list_append(node->applications, application);
 
 	Worker* worker = worker_getPrivate();
 	StartApplicationEvent* event = startapplication_new(application);
 	worker_scheduleEvent((Event*)event, startTime, node->id);
+
+	if(stopTime > startTime) {
+		StopApplicationEvent* event = stopapplication_new(application);
+		worker_scheduleEvent((Event*)event, stopTime, node->id);
+	}
 }
 
 void node_startApplication(Node* node, Application* application) {
 	MAGIC_ASSERT(node);
-	application_boot(application);
+	application_start(application);
 }
 
-void node_stopAllApplications(Node* node, gpointer userData) {
+void node_stopApplication(Node* node, Application* application) {
+	MAGIC_ASSERT(node);
+	application_stop(application);
+}
+
+void node_freeAllApplications(Node* node, gpointer userData) {
 	MAGIC_ASSERT(node);
 
 	Worker* worker = worker_getPrivate();

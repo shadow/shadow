@@ -202,7 +202,7 @@ static void _epoll_trySchedule(Epoll* epoll) {
 	if(!g_queue_is_empty(epoll->reporting)) {
 		/* avoid duplicating events in the shadow event queue for our epoll */
 		gboolean isScheduled = (epoll->flags & EF_SCHEDULED) ? TRUE : FALSE;
-		if(!isScheduled) {
+		if(!isScheduled && application_isRunning(epoll->ownerApplication)) {
 			/* schedule a notification event for our node */
 			NotifyPluginEvent* event = notifyplugin_new(epoll->super.handle);
 			SimulationTime delay = 1;

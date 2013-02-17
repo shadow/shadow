@@ -180,7 +180,7 @@ gpointer worker_run(GSList* nodes) {
 	 * applications may cause close() to get called on sockets which needs
 	 * other node information.
 	 */
-	g_slist_foreach(nodes, (GFunc) node_stopAllApplications, NULL);
+	g_slist_foreach(nodes, (GFunc) node_freeAllApplications, NULL);
 	g_slist_foreach(nodes, (GFunc) node_free, NULL);
 
 	g_thread_exit(NULL);

@@ -472,7 +472,8 @@ static GError* _parser_handleLinkAttributes(Parser* parser, const gchar** attrib
 static GError* _parser_handleApplicationAttributes(Parser* parser, const gchar** attributeNames, const gchar** attributeValues) {
 	GString* plugin = NULL;
 	GString* arguments = NULL;
-	guint64 time = 0;
+	guint64 starttime = 0;
+	guint64 stoptime = 0;
 
 	GError* error = NULL;
 
@@ -490,8 +491,12 @@ static GError* _parser_handleApplicationAttributes(Parser* parser, const gchar**
 			plugin = g_string_new(value);
 		} else if (!arguments && !g_ascii_strcasecmp(name, "arguments")) {
 			arguments = g_string_new(value);
-		} else if (!time && !g_ascii_strcasecmp(name, "time")) {
-			time = g_ascii_strtoull(value, NULL, 10);
+		} else if (!starttime && !g_ascii_strcasecmp(name, "starttime")) {
+			starttime = g_ascii_strtoull(value, NULL, 10);
+		} else if (!starttime && !g_ascii_strcasecmp(name, "time")) { /* TODO deprecate 'time' */
+			starttime = g_ascii_strtoull(value, NULL, 10);
+		} else if (!stoptime && !g_ascii_strcasecmp(name, "stoptime")) {
+			stoptime = g_ascii_strtoull(value, NULL, 10);
 		} else {
 			error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ATTRIBUTE,
 							"unknown 'application' attribute '%s'", name);
@@ -502,16 +507,16 @@ static GError* _parser_handleApplicationAttributes(Parser* parser, const gchar**
 	}
 
 	/* validate the values */
-	if(!error && (!plugin || !arguments || !time)) {
+	if(!error && (!plugin || !arguments || !starttime)) {
 		error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
-				"element 'application' requires attributes 'plugin' 'arguments' 'time'");
+				"element 'application' requires attributes 'plugin' 'arguments' 'starttime'");
 	}
 
 	if(!error) {
 		/* no error, application configs get added to the node creation event
 		 * in order to handle nodes with quantity > 1 */
 		g_assert(parser->currentNodeAction);
-		createnodes_addApplication(parser->currentNodeAction, plugin, arguments, time);
+		createnodes_addApplication(parser->currentNodeAction, plugin, arguments, starttime, stoptime);
 
 		(parser->nChildApplications)++;
 	}

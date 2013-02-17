@@ -47,6 +47,7 @@ set(shadow_srcs
     runnable/shd-listener.c
     runnable/event/shd-event.c
     runnable/event/shd-start-application.c
+    runnable/event/shd-stop-application.c
     runnable/event/shd-heartbeat.c
     runnable/event/shd-callback.c
     runnable/event/shd-interface-received.c

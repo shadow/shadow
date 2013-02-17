@@ -38,7 +38,8 @@ struct _ApplicationCallbackData {
 	gpointer argument;
 };
 
-Application* application_new(GQuark pluginID, gchar* pluginPath, SimulationTime startTime, gchar* arguments) {
+Application* application_new(GQuark pluginID, gchar* pluginPath,
+		SimulationTime startTime, SimulationTime stopTime, gchar* arguments) {
 	Application* application = g_new0(Application, 1);
 	MAGIC_INIT(application);
 
@@ -53,17 +54,7 @@ Application* application_new(GQuark pluginID, gchar* pluginPath, SimulationTime 
 void application_free(Application* application) {
 	MAGIC_ASSERT(application);
 
-	/* we only have state if we've booted */
-	if(application->state) {
-		/* need to get thread-private plugin from current worker */
-		Plugin* plugin = worker_getPlugin(application->pluginID, application->pluginPath);
-
-		/* tell the plug-in module (user code) to free its data */
-		plugin_executeFree(plugin, application->state);
-
-		/* free our copy of plug-in resources, and other application state */
-		plugin_freeState(plugin, application->state);
-	}
+	application_stop(application);
 
 	g_string_free(application->pluginPath, TRUE);
 	g_string_free(application->arguments, TRUE);
@@ -108,59 +99,89 @@ static gint _application_getArguments(Application* application, gchar** argvOut[
 	return argc;
 }
 
-void application_boot(Application* application) {
+gboolean application_isRunning(Application* application) {
+	MAGIC_ASSERT(application);
+	return application->state ? TRUE : FALSE;
+}
+
+void application_start(Application* application) {
 	MAGIC_ASSERT(application);
 
-	Worker* worker = worker_getPrivate();
+	/* dont do anything if we are already running */
+	if(!application_isRunning(application)) {
+		Worker* worker = worker_getPrivate();
 
-	/* get arguments from the configured software */
-	gchar** argv;
-	gint argc = _application_getArguments(application, &argv);
+		/* get arguments from the configured software */
+		gchar** argv;
+		gint argc = _application_getArguments(application, &argv);
 
-	/* we will need to free each argument, copy argc in case they change it */
-	gint n = argc;
+		/* we will need to free each argument, copy argc in case they change it */
+		gint n = argc;
 
-	/* need to get thread-private plugin from current worker */
-	Plugin* plugin = worker_getPlugin(application->pluginID, application->pluginPath);
+		/* need to get thread-private plugin from current worker */
+		Plugin* plugin = worker_getPlugin(application->pluginID, application->pluginPath);
 
-	worker->cached_application = application;
-	/* create our default state as we run in our assigned worker */
-	application->state = plugin_newDefaultState(plugin);
-	plugin_executeNew(plugin, application->state, argc, argv);
-	worker->cached_application = NULL;
+		worker->cached_application = application;
+		/* create our default state as we run in our assigned worker */
+		application->state = plugin_newDefaultState(plugin);
+		plugin_executeNew(plugin, application->state, argc, argv);
+		worker->cached_application = NULL;
 
-	/* free the arguments */
-	for(gint i = 0; i < n; i++) {
-		g_free(argv[i]);
+		/* free the arguments */
+		for(gint i = 0; i < n; i++) {
+			g_free(argv[i]);
+		}
+		g_free(argv);
 	}
-	g_free(argv);
+}
+
+void application_stop(Application* application) {
+	MAGIC_ASSERT(application);
+
+	/* we only have state if we are running */
+	if(application_isRunning(application)) {
+		/* need to get thread-private plugin from current worker */
+		Plugin* plugin = worker_getPlugin(application->pluginID, application->pluginPath);
+
+		/* tell the plug-in module (user code) to free its data */
+		plugin_executeFree(plugin, application->state);
+
+		/* free our copy of plug-in resources, and other application state */
+		plugin_freeState(plugin, application->state);
+		application->state = NULL;
+	}
 }
 
 void application_notify(Application* application) {
 	MAGIC_ASSERT(application);
 
-	Worker* worker = worker_getPrivate();
+	/* only notify if we are running */
+	if(application_isRunning(application)) {
+		Worker* worker = worker_getPrivate();
 
-	/* need to get thread-private plugin from current worker */
-	Plugin* plugin = worker_getPlugin(application->pluginID, application->pluginPath);
+		/* need to get thread-private plugin from current worker */
+		Plugin* plugin = worker_getPlugin(application->pluginID, application->pluginPath);
 
-	worker->cached_application = application;
-	plugin_executeNotify(plugin, application->state);
-	worker->cached_application = NULL;
+		worker->cached_application = application;
+		plugin_executeNotify(plugin, application->state);
+		worker->cached_application = NULL;
+	}
 }
 
 static void _application_callbackTimerExpired(Application* application, ApplicationCallbackData* data) {
 	MAGIC_ASSERT(application);
 	g_assert(data);
 
-	Worker* worker = worker_getPrivate();
+	if(application_isRunning(application)) {
+		Worker* worker = worker_getPrivate();
 
-	/* need to get thread-private plugin from current worker */
-	Plugin* plugin = worker_getPlugin(application->pluginID, application->pluginPath);
+		/* need to get thread-private plugin from current worker */
+		Plugin* plugin = worker_getPlugin(application->pluginID, application->pluginPath);
 
-	worker->cached_application = application;
-	plugin_executeGeneric(plugin, application->state, data->callback, data->data, data->argument);
-	worker->cached_application = NULL;
+		worker->cached_application = application;
+		plugin_executeGeneric(plugin, application->state, data->callback, data->data, data->argument);
+		worker->cached_application = NULL;
+	}
 
 	g_free(data);
 }
@@ -168,6 +189,7 @@ static void _application_callbackTimerExpired(Application* application, Applicat
 void application_callback(Application* application, CallbackFunc userCallback,
 		gpointer userData, gpointer userArgument, guint millisecondsDelay) {
 	MAGIC_ASSERT(application);
+	g_assert(application_isRunning(application));
 
 	/* the application wants a callback. since we need it to happen in our
 	 * application and plug-in context, we create a callback to our own
