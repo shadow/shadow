@@ -4,6 +4,8 @@ The wiki contains important information about installing and using Shadow, and a
 
 **NOTE** - this wiki is a _work in progress_! Your patience is appreciated :)
 
+**Setup instructions are written for the latest release.** Please [let us know](https://wwws.cs.umn.edu/mm-cs/listinfo/shadow-dev) if you notice something out of date.
+
 ## Getting Started
 
 1. Shadow Setup
