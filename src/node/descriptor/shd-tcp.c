@@ -324,7 +324,7 @@ static void _tcp_autotune(TCP* tcp) {
 	tcp->super.inputBufferSize = receivebuf_size;
 	tcp->super.outputBufferSize = sendbuf_size;
 
-	debug("set network buffer sizes: send %lu receive %lu", sendbuf_size, receivebuf_size);
+	info("set network buffer sizes: send %lu receive %lu", sendbuf_size, receivebuf_size);
 }
 
 static void _tcp_setState(TCP* tcp, enum TCPState state) {

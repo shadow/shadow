@@ -116,7 +116,7 @@ Node* node_new(GQuark id, Network* network, guint32 ip,
 	node->logPcap = logPcap;
 	node->pcapDir = pcapDir;
 
-	info("Created Node '%s', ip %s, %u bwUpKiBps, %u bwDownKiBps, %lu cpuFrequency, %i cpuThreshold, %i cpuPrecision, %u seed",
+	message("Created Node '%s', ip %s, %u bwUpKiBps, %u bwDownKiBps, %lu cpuFrequency, %i cpuThreshold, %i cpuPrecision, %u seed",
 			g_quark_to_string(node->id), networkinterface_getIPName(node->defaultInterface),
 			bwUpKiBps, bwDownKiBps, cpuFrequency, cpuThreshold, cpuPrecision, nodeSeed);
 
