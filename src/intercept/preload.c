@@ -29,6 +29,7 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
+#include <features.h>
 
 #include "preload.h"
 #include "shadow.h"
@@ -465,12 +466,18 @@ static getnameinfo_fp _vsystem_getnameinfo = NULL;
 int getnameinfo (const struct sockaddr *__restrict sa,
 			socklen_t salen, char *__restrict host,
 			socklen_t hostlen, char *__restrict serv,
-			socklen_t servlen, int flags) {
+			socklen_t servlen,
+/* glibc-headers changed type of the flags arg after 2.12 */
+#if (__GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ > 12))
+			int flags) {
+#else
+			unsigned int flags) {
+#endif
 	getnameinfo_fp* func;
 	char* funcName;
 	PRELOAD_DECIDE(func, funcName, "getnameinfo", _getnameinfo, INTERCEPT_PREFIX, _vsystem_getnameinfo, 1);
 	PRELOAD_LOOKUP(func, funcName, -1);
-	return (*func)(sa, salen, host, hostlen, serv, servlen, flags);
+	return (*func)(sa, salen, host, hostlen, serv, servlen, (int)flags);
 }
 
 typedef struct hostent* (*gethostbyname_fp)(const gchar*);
