@@ -16,6 +16,7 @@ include_directories(${CURRENT_TOR_DIR})
 include_directories(${CURRENT_TOR_DIR}/src)
 include_directories(${CURRENT_TOR_DIR}/src/common)
 include_directories(${CURRENT_TOR_DIR}/src/or)
+include_directories(${CURRENT_TOR_DIR}/src/ext)
 
 include_directories(AFTER ${RT_INCLUDES} ${DL_INCLUDES} ${M_INCLUDES} ${GLIB_INCLUDES} ${EVENT2_INCLUDES} ${OPENSSL_INCLUDES} ${TOR_INCLUDES} ${SHADOW_INCLUDES})
 
