@@ -324,9 +324,10 @@ def build(args):
         log("detected tor version {0}".format(torversion))
         vparts = torversion.split(".")
         a, b, c, d = int(vparts[0]), int(vparts[1]), int(vparts[2]), int(vparts[3].split("-")[0])
-        if c < 3 or (c == 3 and d < 5): 
-            cmake_cmd += " -DSCALLION_SKIPREFILL=1"
-            log("Tor configured to use refill callbacks")
+        cmake_cmd += " -DTOR_VERSION_A={0}".format(a)
+        cmake_cmd += " -DTOR_VERSION_B={0}".format(b)
+        cmake_cmd += " -DTOR_VERSION_C={0}".format(c)
+        cmake_cmd += " -DTOR_VERSION_D={0}".format(d)
     
     # now we will be using cmake to build shadow and the plug-ins
     os.chdir(builddir+"/shadow")

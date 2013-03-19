@@ -131,18 +131,32 @@ enum vtor_nodetype {
 	VTOR_DIRAUTH, VTOR_RELAY, VTOR_EXITRELAY, VTOR_CLIENT, VTOR_TORRENT, VTOR_BROWSER, VTOR_PING
 };
 
-/** The tag specifies which circuit this onionskin was from. */
-#define TAG_LEN 10
-/** How many bytes are sent from the cpuworker back to tor? */
-#define LEN_ONION_RESPONSE (1+TAG_LEN+ONIONSKIN_REPLY_LEN+CPATH_KEY_MATERIAL_LEN)
+#if ((TOR_VERSION_A<=0) && (TOR_VERSION_B<=2) && (TOR_VERSION_C<=3) && (TOR_VERSION_D<=4))
+#define SCALLION_DOREFILLCALLBACKS 0
+#else
+#define SCALLION_DOREFILLCALLBACKS 1
+#endif
+
+#if ((TOR_VERSION_A<=0) && (TOR_VERSION_B<=2) && (TOR_VERSION_C<=4) && (TOR_VERSION_D<=7))
+#define CPUWORKER_IS_V1 1
+#else
+#define CPUWORKER_IS_V1 0
+#endif
 
 /* run every 5 mins */
 #define VTORFLOW_SCHED_PERIOD 60000
 
 enum cpuwstate {
-	CPUW_READTYPE, CPUW_READTAG, CPUW_READCHALLENGE, CPUW_PROCESS, CPUW_WRITERESPONSE
+	CPUW_READTYPE, CPUW_READTAG, CPUW_READCHALLENGE, CPUW_PROCESS, CPUW_WRITERESPONSE,
+	CPUW_V2_READ, CPUW_V2_PROCESS, CPUW_V2_WRITE,
 };
 
+/** The tag specifies which circuit this onionskin was from. */
+#define TAG_LEN 10
+
+#if CPUWORKER_IS_V1
+/** How many bytes are sent from the cpuworker back to tor? */
+#define LEN_ONION_RESPONSE (1+TAG_LEN+ONIONSKIN_REPLY_LEN+CPATH_KEY_MATERIAL_LEN)
 typedef struct vtor_cpuworker_s {
 	int fd;
 	char question[ONIONSKIN_CHALLENGE_LEN];
@@ -157,6 +171,58 @@ typedef struct vtor_cpuworker_s {
 	uint offset;
 	enum cpuwstate state;
 } vtor_cpuworker_t, *vtor_cpuworker_tp;
+#else
+/** Magic numbers to make sure our cpuworker_requests don't grow any
+ * mis-framing bugs. */
+#define CPUWORKER_REQUEST_MAGIC 0xda4afeed
+#define CPUWORKER_REPLY_MAGIC 0x5eedf00d
+
+/** A request sent to a cpuworker. */
+typedef struct cpuworker_request_t {
+  /** Magic number; must be CPUWORKER_REQUEST_MAGIC. */
+  uint32_t magic;
+  /** Opaque tag to identify the job */
+  uint8_t tag[TAG_LEN];
+  /** Task code. Must be one of CPUWORKER_TASK_* */
+  uint8_t task;
+
+  /** A create cell for the cpuworker to process. */
+  create_cell_t create_cell;
+
+  /* Turn the above into a tagged union if needed. */
+} cpuworker_request_t;
+
+/** A reply sent by a cpuworker. */
+typedef struct cpuworker_reply_t {
+  /** Magic number; must be CPUWORKER_REPLY_MAGIC. */
+  uint32_t magic;
+  /** Opaque tag to identify the job; matches the request's tag.*/
+  uint8_t tag[TAG_LEN];
+  /** True iff we got a successful request. */
+  uint8_t success;
+
+  /** Output of processing a create cell
+   *
+   * @{
+   */
+  /** The created cell to send back. */
+  created_cell_t created_cell;
+  /** The keys to use on this circuit. */
+  uint8_t keys[CPATH_KEY_MATERIAL_LEN];
+  /** Input to use for authenticating introduce1 cells. */
+  uint8_t rend_auth_material[DIGEST_LEN];
+} cpuworker_reply_t;
+
+typedef struct vtor_cpuworker_s {
+	int fd;
+	server_onion_keys_t onion_keys;
+	cpuworker_request_t req;
+	cpuworker_reply_t rpl;
+	struct event read_event;
+	uint offset;
+	enum cpuwstate state;
+} vtor_cpuworker_t, *vtor_cpuworker_tp;
+#endif
 
 typedef struct vtor_logfile_s {
     struct logfile_t *next; /**< Next logfile_t in the linked list. */
