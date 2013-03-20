@@ -122,7 +122,7 @@ static void _scalliontor_secondCallback(ScallionTor* stor) {
 	}
 }
 
-#if SCALLION_DOREFILLCALLBACKS
+#ifdef SCALLION_DOREFILLCALLBACKS
 static void _scalliontor_refillCallback(ScallionTor* stor) {
 	scalliontor_notify(stor);
 
@@ -157,7 +157,7 @@ gint scalliontor_start(ScallionTor* stor, gint argc, gchar *argv[]) {
 	  /* load the private keys, if we're supposed to have them, and set up the
 	   * TLS context. */
 	gpointer idkey;
-#if SCALLION_DOREFILLCALLBACKS // FIXME this doesnt change in 0.2.3.5-alpha like SCALLION_DOREFILL is meant to (not sure when it changed)
+#ifdef SCALLION_DOREFILLCALLBACKS // FIXME this doesnt change in 0.2.3.5-alpha like SCALLION_DOREFILL is meant to (not sure when it changed)
 	idkey = client_identitykey;
 #else
 	idkey = identitykey;
@@ -223,7 +223,7 @@ gint scalliontor_start(ScallionTor* stor, gint argc, gchar *argv[]) {
 	}
 
 
-#if SCALLION_DOREFILLCALLBACKS
+#ifdef SCALLION_DOREFILLCALLBACKS
 #ifndef USE_BUFFEREVENTS
   if (!refill_timer) {
     int msecs = get_options()->TokenBucketRefillInterval;
@@ -411,7 +411,141 @@ static int scalliontor_checkIOResult(vtor_cpuworker_tp cpuw, int ioResult) {
 	return ioResult;
 }
 
-#if CPUWORKER_IS_V1
+#ifdef SCALLION_USEV2CPUWORKER
+void scalliontor_readCPUWorkerCallback(int sockd, short ev_types, void * arg) {
+	vtor_cpuworker_tp cpuw = arg;
+	g_assert(cpuw);
+
+	int ioResult = 0;
+	int action = 0;
+
+enter:
+	switch (cpuw->state) {
+	case CPUW_V2_READ: {
+		ioResult = 0;
+		action = 1;
+		int bytesNeeded = sizeof(cpuw->req);
+
+		/* look for request */
+		while(action > 0 && cpuw->offset < bytesNeeded) {
+			ioResult = recv(cpuw->fd, &(cpuw->req)+cpuw->offset, bytesNeeded-cpuw->offset, 0);
+
+			action = scalliontor_checkIOResult(cpuw, ioResult);
+			if(action == -1) goto end; // error, kill ourself
+			else if(action == 0) goto ret; // EAGAIN
+
+			/* read some bytes */
+			cpuw->offset += action;
+		}
+
+		/* we got what we needed, assert this */
+		if (cpuw->offset != bytesNeeded) {
+		  log_err(LD_BUG,"read tag failed. Exiting.");
+		  goto end;
+		}
+
+		/* got request, process it */
+		cpuw->state = CPUW_V2_PROCESS;
+		cpuw->offset = 0;
+		goto enter;
+	}
+
+	case CPUW_V2_PROCESS: {
+		tor_assert(cpuw->req.magic == CPUWORKER_REQUEST_MAGIC);
+
+		memset(&cpuw->rpl, 0, sizeof(cpuw->rpl));
+
+		if (cpuw->req.task == CPUWORKER_TASK_ONION) {
+			const create_cell_t *cc = &cpuw->req.create_cell;
+			created_cell_t *cell_out = &cpuw->rpl.created_cell;
+			int n;
+			n = onion_skin_server_handshake(cc->handshake_type, cc->onionskin,
+					cc->handshake_len, &cpuw->onion_keys, cell_out->reply,
+					cpuw->rpl.keys, CPATH_KEY_MATERIAL_LEN,
+					cpuw->rpl.rend_auth_material);
+			if (n < 0) {
+				/* failure */
+				log_debug(LD_OR, "onion_skin_server_handshake failed.");
+				memset(&cpuw->rpl, 0, sizeof(cpuw->rpl));
+				memcpy(cpuw->rpl.tag, cpuw->req.tag, TAG_LEN);
+				cpuw->rpl.success = 0;
+			} else {
+				/* success */
+				log_debug(LD_OR, "onion_skin_server_handshake succeeded.");
+				memcpy(cpuw->rpl.tag, cpuw->req.tag, TAG_LEN);
+				cell_out->handshake_len = n;
+				switch (cc->cell_type) {
+				case CELL_CREATE:
+					cell_out->cell_type = CELL_CREATED;
+					break;
+				case CELL_CREATE2:
+					cell_out->cell_type = CELL_CREATED2;
+					break;
+				case CELL_CREATE_FAST:
+					cell_out->cell_type = CELL_CREATED_FAST;
+					break;
+				default:
+					tor_assert(0);
+					goto end;
+				}
+				cpuw->rpl.success = 1;
+			}
+			cpuw->rpl.magic = CPUWORKER_REPLY_MAGIC;
+		} else if (cpuw->req.task == CPUWORKER_TASK_SHUTDOWN) {
+			log_info(LD_OR, "Clean shutdown: exiting");
+			goto end;
+		}
+
+		cpuw->state = CPUW_V2_WRITE;
+		goto enter;
+	}
+
+	case CPUW_V2_WRITE: {
+		ioResult = 0;
+		action = 1;
+		int bytesNeeded = sizeof(cpuw->rpl);
+
+		while(action > 0 && cpuw->offset < bytesNeeded) {
+			ioResult = send(cpuw->fd, &cpuw->rpl+cpuw->offset, bytesNeeded-cpuw->offset, 0);
+
+			action = scalliontor_checkIOResult(cpuw, ioResult);
+			if(action == -1) goto end;
+			else if(action == 0) goto ret;
+
+			/* wrote some bytes */
+			cpuw->offset += action;
+		}
+
+		/* we wrote what we needed, assert this */
+		if (cpuw->offset != bytesNeeded) {
+			log_err(LD_BUG,"writing response buf failed. Exiting.");
+			goto end;
+		}
+
+		log_debug(LD_OR,"finished writing response.");
+
+		cpuw->state = CPUW_V2_READ;
+		cpuw->offset = 0;
+		memwipe(&cpuw->req, 0, sizeof(cpuw->req));
+		memwipe(&cpuw->rpl, 0, sizeof(cpuw->req));
+		goto enter;
+	}
+	}
+
+ret:
+	return;
+
+end:
+	if (cpuw != NULL) {
+		memwipe(&cpuw->req, 0, sizeof(cpuw->req));
+		memwipe(&cpuw->rpl, 0, sizeof(cpuw->req));
+		release_server_onion_keys(&cpuw->onion_keys);
+		tor_close_socket(cpuw->fd);
+		event_del(&(cpuw->read_event));
+		free(cpuw);
+	}
+}
+#else
 void scalliontor_readCPUWorkerCallback(int sockd, short ev_types, void * arg) {
 	/* adapted from cpuworker_main.
 	 *
@@ -584,140 +718,6 @@ kill:
 		free(cpuw);
 	}
 }
-#else
-void scalliontor_readCPUWorkerCallback(int sockd, short ev_types, void * arg) {
-	vtor_cpuworker_tp cpuw = arg;
-	g_assert(cpuw);
-
-	int ioResult = 0;
-	int action = 0;
-
-enter:
-	switch (cpuw->state) {
-	case CPUW_V2_READ: {
-		ioResult = 0;
-		action = 1;
-		int bytesNeeded = sizeof(cpuw->req);
-
-		/* look for request */
-		while(action > 0 && cpuw->offset < bytesNeeded) {
-			ioResult = recv(cpuw->fd, &(cpuw->req)+cpuw->offset, bytesNeeded-cpuw->offset, 0);
-
-			action = scalliontor_checkIOResult(cpuw, ioResult);
-			if(action == -1) goto end; // error, kill ourself
-			else if(action == 0) goto ret; // EAGAIN
-
-			/* read some bytes */
-			cpuw->offset += action;
-		}
-
-		/* we got what we needed, assert this */
-		if (cpuw->offset != bytesNeeded) {
-		  log_err(LD_BUG,"read tag failed. Exiting.");
-		  goto end;
-		}
-
-		/* got request, process it */
-		cpuw->state = CPUW_V2_PROCESS;
-		cpuw->offset = 0;
-		goto enter;
-	}
-
-	case CPUW_V2_PROCESS: {
-		tor_assert(cpuw->req.magic == CPUWORKER_REQUEST_MAGIC);
-
-		memset(&cpuw->rpl, 0, sizeof(cpuw->rpl));
-
-		if (cpuw->req.task == CPUWORKER_TASK_ONION) {
-			const create_cell_t *cc = &cpuw->req.create_cell;
-			created_cell_t *cell_out = &cpuw->rpl.created_cell;
-			int n;
-			n = onion_skin_server_handshake(cc->handshake_type, cc->onionskin,
-					cc->handshake_len, &cpuw->onion_keys, cell_out->reply,
-					cpuw->rpl.keys, CPATH_KEY_MATERIAL_LEN,
-					cpuw->rpl.rend_auth_material);
-			if (n < 0) {
-				/* failure */
-				log_debug(LD_OR, "onion_skin_server_handshake failed.");
-				memset(&cpuw->rpl, 0, sizeof(cpuw->rpl));
-				memcpy(cpuw->rpl.tag, cpuw->req.tag, TAG_LEN);
-				cpuw->rpl.success = 0;
-			} else {
-				/* success */
-				log_debug(LD_OR, "onion_skin_server_handshake succeeded.");
-				memcpy(cpuw->rpl.tag, cpuw->req.tag, TAG_LEN);
-				cell_out->handshake_len = n;
-				switch (cc->cell_type) {
-				case CELL_CREATE:
-					cell_out->cell_type = CELL_CREATED;
-					break;
-				case CELL_CREATE2:
-					cell_out->cell_type = CELL_CREATED2;
-					break;
-				case CELL_CREATE_FAST:
-					cell_out->cell_type = CELL_CREATED_FAST;
-					break;
-				default:
-					tor_assert(0);
-					goto end;
-				}
-				cpuw->rpl.success = 1;
-			}
-			cpuw->rpl.magic = CPUWORKER_REPLY_MAGIC;
-		} else if (cpuw->req.task == CPUWORKER_TASK_SHUTDOWN) {
-			log_info(LD_OR, "Clean shutdown: exiting");
-			goto end;
-		}
-
-		cpuw->state = CPUW_V2_WRITE;
-		goto enter;
-	}
-
-	case CPUW_V2_WRITE: {
-		ioResult = 0;
-		action = 1;
-		int bytesNeeded = sizeof(cpuw->rpl);
-
-		while(action > 0 && cpuw->offset < bytesNeeded) {
-			ioResult = send(cpuw->fd, &cpuw->rpl+cpuw->offset, bytesNeeded-cpuw->offset, 0);
-
-			action = scalliontor_checkIOResult(cpuw, ioResult);
-			if(action == -1) goto end;
-			else if(action == 0) goto ret;
-
-			/* wrote some bytes */
-			cpuw->offset += action;
-		}
-
-		/* we wrote what we needed, assert this */
-		if (cpuw->offset != bytesNeeded) {
-			log_err(LD_BUG,"writing response buf failed. Exiting.");
-			goto end;
-		}
-
-		log_debug(LD_OR,"finished writing response.");
-
-		cpuw->state = CPUW_V2_READ;
-		cpuw->offset = 0;
-		memwipe(&cpuw->req, 0, sizeof(cpuw->req));
-		memwipe(&cpuw->rpl, 0, sizeof(cpuw->req));
-		goto enter;
-	}
-	}
-
-ret:
-	return;
-
-end:
-	if (cpuw != NULL) {
-		memwipe(&cpuw->req, 0, sizeof(cpuw->req));
-		memwipe(&cpuw->rpl, 0, sizeof(cpuw->req));
-		release_server_onion_keys(&cpuw->onion_keys);
-		tor_close_socket(cpuw->fd);
-		event_del(&(cpuw->read_event));
-		free(cpuw);
-	}
-}
 #endif
 
 void scalliontor_newCPUWorker(ScallionTor* stor, int fd) {
@@ -731,10 +731,10 @@ void scalliontor_newCPUWorker(ScallionTor* stor, int fd) {
 	cpuw->fd = fd;
 	cpuw->state = CPUW_READTYPE;
 
-#if CPUWORKER_IS_V1
-	dup_onion_keys(&(cpuw->onion_key), &(cpuw->last_onion_key));
-#else
+#ifdef SCALLION_USEV2CPUWORKER
 	setup_server_onion_keys(&(cpuw->onion_keys));
+#else
+	dup_onion_keys(&(cpuw->onion_key), &(cpuw->last_onion_key));
 #endif
 
 	/* setup event so we will get a callback */

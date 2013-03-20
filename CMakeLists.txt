@@ -100,11 +100,6 @@ if(SHADOW_EXPORT STREQUAL ON)
     MESSAGE(STATUS "will export Shadow plug-in service libraries and headers")
 endif(SHADOW_EXPORT STREQUAL ON)
 
-add_definitions(-DTOR_VERSION_A=${TOR_VERSION_A})
-add_definitions(-DTOR_VERSION_B=${TOR_VERSION_B})
-add_definitions(-DTOR_VERSION_C=${TOR_VERSION_C})
-add_definitions(-DTOR_VERSION_D=${TOR_VERSION_D})
-
 ## get general includes
 include(CheckIncludeFile)
 include(CheckFunctionExists)

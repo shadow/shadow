@@ -131,18 +131,6 @@ enum vtor_nodetype {
 	VTOR_DIRAUTH, VTOR_RELAY, VTOR_EXITRELAY, VTOR_CLIENT, VTOR_TORRENT, VTOR_BROWSER, VTOR_PING
 };
 
-#if ((TOR_VERSION_A<=0) && (TOR_VERSION_B<=2) && (TOR_VERSION_C<=3) && (TOR_VERSION_D<=4))
-#define SCALLION_DOREFILLCALLBACKS 0
-#else
-#define SCALLION_DOREFILLCALLBACKS 1
-#endif
-
-#if ((TOR_VERSION_A<=0) && (TOR_VERSION_B<=2) && (TOR_VERSION_C<=4) && (TOR_VERSION_D<=7))
-#define CPUWORKER_IS_V1 1
-#else
-#define CPUWORKER_IS_V1 0
-#endif
-
 /* run every 5 mins */
 #define VTORFLOW_SCHED_PERIOD 60000
 
@@ -154,24 +142,7 @@ enum cpuwstate {
 /** The tag specifies which circuit this onionskin was from. */
 #define TAG_LEN 10
 
-#if CPUWORKER_IS_V1
-/** How many bytes are sent from the cpuworker back to tor? */
-#define LEN_ONION_RESPONSE (1+TAG_LEN+ONIONSKIN_REPLY_LEN+CPATH_KEY_MATERIAL_LEN)
-typedef struct vtor_cpuworker_s {
-	int fd;
-	char question[ONIONSKIN_CHALLENGE_LEN];
-	uint8_t question_type;
-	char keys[CPATH_KEY_MATERIAL_LEN];
-	char reply_to_proxy[ONIONSKIN_REPLY_LEN];
-	char buf[LEN_ONION_RESPONSE];
-	char tag[TAG_LEN];
-	crypto_pk_t *onion_key;
-	crypto_pk_t *last_onion_key;
-	struct event read_event;
-	uint offset;
-	enum cpuwstate state;
-} vtor_cpuworker_t, *vtor_cpuworker_tp;
-#else
+#ifdef SCALLION_USEV2CPUWORKER
 /** Magic numbers to make sure our cpuworker_requests don't grow any
  * mis-framing bugs. */
 #define CPUWORKER_REQUEST_MAGIC 0xda4afeed
@@ -221,6 +192,23 @@ typedef struct vtor_cpuworker_s {
 	struct event read_event;
 	uint offset;
 	enum cpuwstate state;
+} vtor_cpuworker_t, *vtor_cpuworker_tp;
+#else
+/** How many bytes are sent from the cpuworker back to tor? */
+#define LEN_ONION_RESPONSE (1+TAG_LEN+ONIONSKIN_REPLY_LEN+CPATH_KEY_MATERIAL_LEN)
+typedef struct vtor_cpuworker_s {
+  int fd;
+  char question[ONIONSKIN_CHALLENGE_LEN];
+  uint8_t question_type;
+  char keys[CPATH_KEY_MATERIAL_LEN];
+  char reply_to_proxy[ONIONSKIN_REPLY_LEN];
+  char buf[LEN_ONION_RESPONSE];
+  char tag[TAG_LEN];
+  crypto_pk_t *onion_key;
+  crypto_pk_t *last_onion_key;
+  struct event read_event;
+  uint offset;
+  enum cpuwstate state;
 } vtor_cpuworker_t, *vtor_cpuworker_tp;
 #endif
 
