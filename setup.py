@@ -402,7 +402,7 @@ def install(args):
 def setup_tor(args):
     log("checking Tor source dependencies...")
 
-    if which("aclocal") is None or which("autoheader") is None or which("autoconf") is None or which("automake") is None:
+    if which("autoreconf") is None or which("aclocal") is None or which("autoheader") is None or which("autoconf") is None or which("automake") is None:
         log("ERROR!: missing dependencies - please install 'automake' and 'autoconf', or make sure they are in your PATH")
         return -1
     
@@ -453,7 +453,6 @@ def setup_tor(args):
             if args.extra_libraries is not None:
                 for l in args.extra_libraries: ldflags += " -L" + l.strip()
 
-            gen = "aclocal && autoheader && autoconf && automake --add-missing --copy"
             configure = "./configure --disable-transparent --disable-asciidoc --disable-threads CFLAGS=\"" + cflags + "\" LDFLAGS=\"" + ldflags + "\" LIBS=-lrt"
 
             if args.libevent_prefix is not None: configure += " --with-libevent-dir=" + getfullpath(args.libevent_prefix)
@@ -461,11 +460,20 @@ def setup_tor(args):
             if args.static_openssl: configure += " --enable-static-openssl"
             if args.static_libevent: configure += " --enable-static-libevent"
 
-            # generate configure
-            log("running \'{0}\'".format(gen))
-            for cmd in gen.split('&&'):
-                retcode = retcode | subprocess.call(shlex.split(cmd.strip()))
-            if retcode !=0: return retcode
+            # generate configure script
+            if os.path.exists(args.tordir+"/configure"):
+                reconf = which('autoconf')
+                log("running \'{0}\'".format(reconf))
+                retcode = subprocess.call(shlex.split(reconf))
+                if retcode !=0: return retcode
+            else:
+                autogen = os.path.abspath(os.path.expanduser(args.tordir+"/autogen.sh"))
+                if not os.path.exists(autogen):
+                    log("ERROR: neither 'configure' nor 'autogen.sh' exist. unable to configure Tor")
+                    return -2
+                log("running \'{0}\'".format(autogen))
+                retcode = subprocess.call(shlex.split(autogen))
+                if retcode !=0: return retcode
             
             # need to patch AFTER generating configure to avoid overwriting the patched configure
             # patch static variables/functions
