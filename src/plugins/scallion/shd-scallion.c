@@ -416,6 +416,10 @@ void scalliontor_readCPUWorkerCallback(int sockd, short ev_types, void * arg) {
 	vtor_cpuworker_tp cpuw = arg;
 	g_assert(cpuw);
 
+	if(cpuw->state == CPUW_NONE) {
+		cpuw->state = CPUW_V2_READ;
+	}
+
 	int ioResult = 0;
 	int action = 0;
 
@@ -558,6 +562,10 @@ void scalliontor_readCPUWorkerCallback(int sockd, short ev_types, void * arg) {
 	 */
 	vtor_cpuworker_tp cpuw = arg;
 	g_assert(cpuw);
+
+	if(cpuw->state == CPUW_NONE) {
+		cpuw->state = CPUW_READTYPE;
+	}
 
 	int ioResult = 0;
 	int action = 0;
@@ -729,7 +737,7 @@ void scalliontor_newCPUWorker(ScallionTor* stor, int fd) {
 	vtor_cpuworker_tp cpuw = calloc(1, sizeof(vtor_cpuworker_t));
 
 	cpuw->fd = fd;
-	cpuw->state = CPUW_READTYPE;
+	cpuw->state = CPUW_NONE;
 
 #ifdef SCALLION_USEV2CPUWORKER
 	setup_server_onion_keys(&(cpuw->onion_keys));
