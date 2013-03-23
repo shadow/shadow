@@ -82,17 +82,17 @@ You've downloaded Shadow and changed to its **top-level directory**. Next, you'l
 Luckily, Shadow contains a script to do this for you, and will help you configure, build, and install Shadow. It has 
 extensive help menus which can be accessed with:
 ```bash
-python setup.py --help
-python setup.py dependencies --help
-python setup.py build --help
-python setup.py install --help
+./setup --help
+./setup dependencies --help
+./setup build --help
+./setup install --help
 ```
 Shadow does not require root privileges, and the default and recommended setup
 is to install to `~/.shadow`:
 ```bash
-python setup.py dependencies
-python setup.py build
-python setup.py install
+./setup dependencies
+./setup build
+./setup install
 ```
 
 If you prefer to install **openssl** and **libevent** manually, you'll need to configure openssl with something like `./config --prefix=/home/rob/.shadow shared threads -fPIC` and libevent with something like `./configure --prefix=/home/rob/.shadow --enable-shared CFLAGS="-fPIC -I/home/rob/.shadow" LDFLAGS="-L/home/rob/.shadow"`.
