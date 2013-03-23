@@ -8,9 +8,9 @@ Also included are core plug-ins and topologies for transferring files between
 clients and servers, and over a private Tor anonymity network.
 
 Quick Setup (installs everything in ~/.shadow):
-    $ python setup.py dependencies
-    $ python setup.py build
-    $ python setup.py install
+    $ ./setup dependencies
+    $ ./setup build
+    $ ./setup install
 
 Setup Instructions, User Documentation, FAQs:
     https://github.com/shadow/shadow/wiki
@@ -20,4 +20,4 @@ Homepage:
     
 Download New Releases:
     https://shadow.cs.umn.edu/download
-    https://github.com/shadow/shadow/downloads
+    https://github.com/shadow/shadow/tags
