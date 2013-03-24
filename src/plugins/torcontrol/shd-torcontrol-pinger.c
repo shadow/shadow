@@ -54,9 +54,6 @@ static void _torcontrolpinger_doPingCallback(TorControlPinger* tcp) {
 	 * will pop up in _torcontrolpinger_handleResponseEvent
 	 */
 	torControl_buildCircuit(tcp->targetSockd, tcp->pingRelay);
-
-	/* start another ping to this relay in 1 second */
-	tcp->createCallback((ShadowPluginCallbackFunc)_torcontrolpinger_doPingCallback, tcp, 1000);
 }
 
 /*
@@ -195,8 +192,12 @@ static void _torcontrolpinger_handleCircEvent(TorControlPinger* tcp, gint code,
 			/* remove no mater what - it may have extended or failed or closed */
 			tcp->log(G_LOG_LEVEL_INFO, __FUNCTION__, "ping circ %i %s", circID,
 					torControl_getCircStatusString(status));
+
 			g_hash_table_remove(tcp->outstandingPings, &circID);
 			torControl_closeCircuit(tcp->targetSockd, circID);
+
+			/* start another ping to this relay in 1 second */
+			tcp->createCallback((ShadowPluginCallbackFunc)_torcontrolpinger_doPingCallback, tcp, 1000);
 		}
 
 	}
