@@ -369,7 +369,7 @@ def build(args):
         log("calling " + make)
         retcode = subprocess.call(shlex.split(make))
         log("make returned " + str(retcode))
-        if retcode == 0: log("now run \'python setup.py install\'")
+        if retcode == 0: log("now run \'./setup install\'")
         else: log("ERROR! Non-zero return code from make.")
     else: log("ERROR! Non-zero return code from cmake.")
 
