@@ -106,10 +106,17 @@ void tor_gettimeofday(struct timeval *timeval) {
 	_scallionpreload_getWorker()->b(timeval);
 }
 
+#ifdef SCALLION_LOGVWITHSUFFIX
 void logv(int severity, uint32_t domain, const char *funcname,
-     const char *format, va_list ap) {
+	const char *suffix, const char *format, va_list ap) {
+	_scallionpreload_getWorker()->c(severity, domain, funcname, suffix, format, ap);
+}
+#else
+void logv(int severity, uint32_t domain, const char *funcname,
+    const char *format, va_list ap) {
 	_scallionpreload_getWorker()->c(severity, domain, funcname, format, ap);
 }
+#endif
 
 int spawn_func(void (*func)(void *), void *data) {
 	return _scallionpreload_getWorker()->d(func, data);

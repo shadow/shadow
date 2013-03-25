@@ -785,8 +785,13 @@ void intercept_tor_gettimeofday(struct timeval *timeval) {
 	timeval->tv_usec = tp.tv_nsec/1000;
 }
 
+#ifdef SCALLION_LOGVWITHSUFFIX
+void intercept_logv(int severity, uint32_t domain, const char *funcname,
+     const char *suffix, const char *format, va_list ap) {
+#else
 void intercept_logv(int severity, uint32_t domain, const char *funcname,
      const char *format, va_list ap) {
+#endif
 	char* sev_str = NULL;
 	const size_t buflen = 10024;
 	char buf[buflen];
@@ -850,6 +855,15 @@ void intercept_logv(int severity, uint32_t domain, const char *funcname,
 		current_position = buflen - 3;
 	} else {
 		current_position += res;
+#ifdef SCALLION_LOGVWITHSUFFIX
+	    if (suffix) {
+	      size_t suffix_len = strlen(suffix);
+	      if (buflen-current_position >= suffix_len) {
+	        snprintf(&buf[current_position], suffix_len+1, "%s", suffix);
+	        current_position += suffix_len;
+	      }
+	    }
+#endif
 	}
 
 	buf[current_position] = '\0';

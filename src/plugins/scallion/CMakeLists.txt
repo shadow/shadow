@@ -23,6 +23,7 @@ include_directories(AFTER ${RT_INCLUDES} ${DL_INCLUDES} ${M_INCLUDES} ${GLIB_INC
 ## import shadow libs
 #INCLUDE(${CMAKE_INSTALL_PREFIX}/share/shadow/shadow-externals.cmake)
 
+## Version-specific defines to handle changes to Tor's functionality
 # version >= 0.2.3.5
 if(${TOR_VERSION_A} GREATER -1 AND ${TOR_VERSION_B} GREATER 1 AND ${TOR_VERSION_C} GREATER 2 AND ${TOR_VERSION_D} GREATER 4)
     add_definitions(-DSCALLION_DOREFILLCALLBACKS)
@@ -32,6 +33,11 @@ endif()
 if(${TOR_VERSION_A} GREATER -1 AND ${TOR_VERSION_B} GREATER 1 AND ${TOR_VERSION_C} GREATER 3 AND ${TOR_VERSION_D} GREATER 7)
     add_definitions(-DSCALLION_USEV2CPUWORKER)
 	message(STATUS "Added definition SCALLION_USEV2CPUWORKER")
+endif()
+# version >= 0.2.4.11
+if(${TOR_VERSION_A} GREATER -1 AND ${TOR_VERSION_B} GREATER 1 AND ${TOR_VERSION_C} GREATER 3 AND ${TOR_VERSION_D} GREATER 10)
+    add_definitions(-DSCALLION_LOGVWITHSUFFIX)
+    message(STATUS "Added definition SCALLION_LOGVWITHSUFFIX")
 endif()
 
 ## get tor source files, but ignore some of them
