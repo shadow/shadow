@@ -1,6 +1,6 @@
 The scallion plug-in is used to experiment with the [Tor anonymity network](https://www.torproject.org/). The plug-in is a wrapper around [Tor's source code](https://gitweb.torproject.org/tor.git), and utilizes code from [[the browser plug-in|Using the browser plug-in]], [[the filetransfer plug-in|Using the filetransfer plug-in]], and [[the torrent plug-in|Using the torrent plug-in]] to transfer data across the anonymity network and measure performance characteristics.
 
-The `resource/scallion-hosts` directory of the source distribution contains sample network configurations that work with Scallion, to get started with Tor experimentation.
+The `resource/examples/scallion/` directory of the source distribution contains sample network configurations that work with Scallion, to get started with Tor experimentation.
 
 ## Scalability
 
@@ -31,16 +31,14 @@ The maximum memory requirements of our included sample network configurations ar
 <application [...] arguments="arg1 arg2 arg3 [...]" />
 ```
 
-The _arguments_ attribute of the _software_ XML element specifies application arguments for configuring a node's instance of the plug-in. Each argument is separated by a space.
+The _arguments_ attribute of the _application_ XML element specifies application arguments for configuring a node's instance of the plug-in. Each argument is separated by a space.
 
-Usage:
-   1. the plug-in mode can be one of:
+Usage, by arg number:
+   1. the scallion plug-in mode can be one of:
       + _dirauth_, for a Tor directory authority
       + _relay_, for a Tor non-exit relay
       + _exitrelay_, for a Tor exit relay
       + _client_, for a filetransfer HTTP client over a local Tor SOCKS proxy server
-      + _torrent_, for a torrent P2P client over a local Tor SOCKS proxy server
-      + _browser_, for a browser client over a local Tor SOCKS proxy server
    1. _weight_, the bandwidth _weight_ that should appear in the Tor consensus for this relay, in KiB
    1. _rate_, the global _rate limit_ for this Tor in bytes, passed as Tor's `--BandwidthRate` option
    1. _burst_, the global _burst limit_ for this Tor in bytes, passed as Tor's `--BandwidthBurst` option
@@ -105,7 +103,7 @@ Here is an example XML file that contains each type of Tor node possible to conf
 </node>
 ```
 
-From the `resource/scallion-example` directory, save this file as `mytor.xml` and run it like:
+From the `resource/examples/scallion/` directory, save this file as `mytor.xml` and run it like:
 ```bash
-scallion -y -i mytor.xml
+scallion -i mytor.xml
 ```
