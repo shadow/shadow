@@ -112,8 +112,8 @@ The _path_ attribute holds the system path to the plug-in `*.so` library. If _pa
 ```xml
 <application plugin="STRING" starttime="INTEGER" stoptime="INTEGER" arguments="STRING" />
 ```
-**Required attributes**: _plugin_, _starttime_, _arguments_ 
-**Optional attributes**: _stoptime_, 
+**Required attributes**: _plugin_, _starttime_, _arguments_  
+**Optional attributes**: _stoptime_,  
 **Required parent element**: \<node\>
 
 The _application_ element represents an application the node will run. The _plugin_ attribute should be set to the _id_ of the _plugin_ element that represents the plug-in that should be used to launch this application at _starttime_ virtual seconds from the beginning of the simulation. The application will be stopped at _stoptime_ virtual seconds if given.
