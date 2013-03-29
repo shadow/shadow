@@ -2,9 +2,10 @@
 
 The wiki contains important information about installing and using Shadow, and analyzing the results it produces. For details about Shadow's design, including its plug-in architecture and discrete-event engine, please visit [the design page on the Shadow website](http://shadow.cs.umn.edu/design/).
 
-**NOTE** - this wiki is a _work in progress_! Your patience is appreciated :)
-
-**Setup instructions are written for the latest release.** Please [let us know](https://wwws.cs.umn.edu/mm-cs/listinfo/shadow-dev) if you notice something out of date.
+### NOTES
+  + this wiki is a **work in progress**! Your patience is appreciated :)
+  + Setup instructions are current for the [latest release](https://github.com/shadow/shadow/tree/release)
+  + Please [let us know](https://wwws.cs.umn.edu/mm-cs/listinfo/shadow-dev) if you notice something out of date
 
 ## Getting Started
 
