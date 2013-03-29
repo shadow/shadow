@@ -25,8 +25,19 @@ if(EXISTS ${CMAKE_SOURCE_DIR}/.git)
     ## this is a dev version for the next (+1) minor release
     MATH(EXPR Shadow_VERSION_MINOR "${Shadow_VERSION_MINOR} + 1")
     set(Shadow_VERSION_BUILD 0)
-    set(Shadow_VERSION_SUFFIX "${Shadow_VERSION_SUFFIX}-dev ")
+    set(Shadow_VERSION_SUFFIX "${Shadow_VERSION_SUFFIX}-dev")
+endif(EXISTS ${CMAKE_SOURCE_DIR}/.git)
+
+set(Shadow_VERSION_SUFFIX "${Shadow_VERSION_SUFFIX} ")
+
+## current build date
+EXECUTE_PROCESS(COMMAND "date" "+%d/%m/%Y" OUTPUT_VARIABLE BUILDDATE)
+if(BUILDDATE)
+    string(REGEX REPLACE "(..)/(..)/(....).*" "\\3-\\2-\\1" BUILDDATE ${BUILDDATE})
+    set(Shadow_VERSION_SUFFIX "${Shadow_VERSION_SUFFIX}[build-date: ${BUILDDATE}]")
+endif(BUILDDATE)
     
+if(EXISTS ${CMAKE_SOURCE_DIR}/.git)
     ## current git commit short date
     EXECUTE_PROCESS(COMMAND "git" "log" "--pretty=format:%ad" "--date=short" "-n"  "1" OUTPUT_VARIABLE SHORTDATE)
     if(SHORTDATE)
@@ -39,13 +50,6 @@ if(EXISTS ${CMAKE_SOURCE_DIR}/.git)
         set(Shadow_VERSION_SUFFIX "${Shadow_VERSION_SUFFIX}[git-commit: ${SHORTHASH}]")
     endif(SHORTHASH)
 endif(EXISTS ${CMAKE_SOURCE_DIR}/.git)
-
-## current build date
-EXECUTE_PROCESS(COMMAND "date" "+%d/%m/%Y" OUTPUT_VARIABLE BUILDDATE)
-if(BUILDDATE)
-    string(REGEX REPLACE "(..)/(..)/(....).*" "\\3-\\2-\\1" BUILDDATE ${BUILDDATE})
-    set(Shadow_VERSION_SUFFIX "${Shadow_VERSION_SUFFIX}[build-date: ${BUILDDATE}]")
-endif(BUILDDATE)
 
 macro(add_cflags)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${ARGN}")
