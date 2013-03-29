@@ -106,7 +106,7 @@ If you prefer to install **openssl** and **libevent** manually, you'll need to c
 
 **Other notes:**  
 + All build output is generated out-of-source, by default to the `./build` directory.
-+ The setup.py script is a wrapper to `cmake` and `make`. Using `cmake` and `make` directly is also possible, but strongly discouraged. 
++ The `setup` script is a wrapper to `cmake` and `make`. Using `cmake` and `make` directly is also possible, but strongly discouraged. 
 + When you install Shadow you are installing the Shadow binary (`shadow-bin`) and an additional python wrapper script (`shadow`) that assists in running the Shadow binary, as well as various built-in plug-ins. You can avoid building plug-ins using the '--disable-plugin-*' setup script options.
 
 ## system configs and limits
