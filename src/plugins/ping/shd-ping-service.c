@@ -110,7 +110,7 @@ gint pingService_activate(PingService *pingSvc, gint sockd, gint events, gint ep
 			clock_gettime(CLOCK_REALTIME, &wakeupTime);
 			wakeupTime.tv_sec += 60;
 			wakeupTime.tv_nsec = 0;
-			pingSvc->callback_cb(pingClient_wakeup, pingSvc->client, 60);
+			pingSvc->callback_cb((ShadowPluginCallbackFunc)pingClient_wakeup, pingSvc->client, 60);
 
 			return ret;
 		}

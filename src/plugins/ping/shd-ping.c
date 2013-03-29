@@ -161,7 +161,7 @@ void ping_activate() {
                         ping->client->serverAddr, ping->client->serverPort, ping->client->pingInterval, ping->client->pingSize);
 
                 /* set wakeup timer and call sleep function */
-                ping->shadowlib->createCallback(pingClient_wakeup, ping->client, 60);
+                ping->shadowlib->createCallback((ShadowPluginCallbackFunc)pingClient_wakeup, ping->client, 60);
             }
 		} else {
 			pingServer_activate(ping->server, sockd);

@@ -108,7 +108,7 @@ void pingClient_sendPing(PingClient *pingClient) {
                     pingClient->serverAddr, pingClient->serverPort, pingClient->pingInterval, pingClient->pingSize);
 
             /* set wakeup timer and call sleep function */
-            pingClient->createCallback(pingClient_wakeup, pingClient, 60);
+            pingClient->createCallback((ShadowPluginCallbackFunc)pingClient_wakeup, pingClient, 60);
 		} else {
 			gint64 nanoseconds = TIME_TO_NS(now);
 			g_queue_push_tail(pingClient->pingTimes, (gpointer)nanoseconds);
@@ -120,8 +120,8 @@ void pingClient_sendPing(PingClient *pingClient) {
 
 }
 
-gint pingClient_wakeup(PingClient *pingClient) {
-	return pingClient_activate(pingClient, pingClient->sockd);
+void pingClient_wakeup(PingClient *pingClient) {
+	pingClient_activate(pingClient, pingClient->sockd);
 }
 
 gint pingClient_start(PingClient *pingClient, gint epolld, in_addr_t socksAddr, in_port_t socksPort, in_addr_t serverAddr, in_port_t serverPort,

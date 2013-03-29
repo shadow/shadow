@@ -106,7 +106,7 @@ struct _PingClient {
 gint pingClient_start(PingClient *pingClient, gint epolld, in_addr_t socksAddr, in_port_t socksPort, in_addr_t serverAddr, in_port_t serverPort,
 		gint pingInterval, gint pingSize);
 gint pingClient_activate(PingClient *pingClient, gint sockd);
-gint pingClient_wakeup(PingClient *pingClient);
+void pingClient_wakeup(PingClient *pingClient);
 gint pingClient_shutdown(PingClient *pingClient);
 
 
