@@ -102,7 +102,7 @@ If you prefer to install **openssl** and **libevent** manually, you'll need to c
 
 + If you installed any dependencies somewhere other than `~/.shadow`, you should use the `--include`, `--library`, `--openssl-prefix` and `--libevent-prefix` flags, and if you want to install Shadow somewhere besides `~/.shadow`, you should use the `--prefix` flag.
 
-+ It will probably be useful to add `~/.shadow/bin` (or `/bin` in your non-default install prefix) to your `PATH` following installation.
++ It will probably be useful to add `~/.shadow/bin` (or `your/prefix/bin`) to your `PATH` following installation.
 
 **Other notes:**  
 + All build output is generated out-of-source, by default to the `./build` directory.
