@@ -44,8 +44,11 @@ from the Shadow website.
 git tag -s v1.5.0
 git push --tags
 git checkout release
-git merge v1.5.0
+git merge -Xtheirs v1.5.0
+git rm {DELETED-FILE-NAMES}
 git archive --prefix=shadow-v1.5.0/ --format=tar v1.5.0 | gzip > shadow-v1.5.0.tar.gz
 gpg -a -b shadow-v1.5.0.tar.gz
 gpg --verify shadow-v1.5.0.tar.gz.asc
 ```
+
+Note that `git merge -Xtheirs v1.5.0` will assume all conflicts can be fixed by taking the remote tag/branch that you are merging into the current branch. This is exactly what to keep our releases following master.
