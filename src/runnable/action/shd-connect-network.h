@@ -26,8 +26,8 @@
 
 typedef struct _ConnectNetworkAction ConnectNetworkAction;
 
-ConnectNetworkAction* connectnetwork_new(GString* clusters, guint64 latency,
-		guint64 jitter, gdouble packetloss);
+ConnectNetworkAction* connectnetwork_new(GString* startCluster, GString* endCluster, guint64 latency, guint64 jitter, gdouble packetloss,
+		guint64 latencymin, guint64 latencyQ1, guint64 latencymean, guint64 latencyQ3, guint64 latencymax);
 void connectnetwork_run(ConnectNetworkAction* action);
 void connectnetwork_free(ConnectNetworkAction* action);
 

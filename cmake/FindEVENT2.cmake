@@ -21,14 +21,26 @@ endif(NOT EVENT2_INCLUDES)
 ## -----------------------------------------------------------------------------
 ## Check for the library, prirotize user inputs
 
-find_library (EVENT2_LIBRARIES event-2.0 event
+find_library (EVENT2_CORE_LIBRARIES NAMES event-2.0 event
   PATHS ${CMAKE_EXTRA_LIBRARIES} NO_DEFAULT_PATH
   )
-if(NOT EVENT2_LIBRARIES)
-    find_library (EVENT2_LIBRARIES event-2.0 event
+if(NOT EVENT2_CORE_LIBRARIES)
+    find_library (EVENT2_CORE_LIBRARIES NAMES event-2.0 event
       PATHS /usr/local/lib /usr/lib /lib ${CMAKE_EXTRA_LIBRARIES}
       )
-endif(NOT EVENT2_LIBRARIES)
+endif(NOT EVENT2_CORE_LIBRARIES)
+
+find_library (EVENT2_THREAD_LIBRARIES NAMES event_pthreads
+  PATHS ${CMAKE_EXTRA_LIBRARIES} NO_DEFAULT_PATH
+  )
+if(NOT EVENT2_THREAD_LIBRARIES)
+    find_library (EVENT2_THREAD_LIBRARIES NAMES event_pthreads
+      PATHS /usr/local/lib /usr/lib /lib ${CMAKE_EXTRA_LIBRARIES}
+      )
+endif(NOT EVENT2_THREAD_LIBRARIES)
+
+MARK_AS_ADVANCED(EVENT2_CORE_LIBRARIES EVENT2_THREAD_LIBRARIES)
+SET(EVENT2_LIBRARIES ${EVENT2_CORE_LIBRARIES} ${EVENT2_THREAD_LIBRARIES})
 
 ## -----------------------------------------------------------------------------
 ## Actions taken when all components have been found

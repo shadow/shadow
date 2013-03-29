@@ -31,13 +31,7 @@
 
 typedef struct _StartApplicationEvent StartApplicationEvent;
 
-struct _StartApplicationEvent {
-	Event super;
-
-	MAGIC_DECLARE;
-};
-
-StartApplicationEvent* startapplication_new();
+StartApplicationEvent* startapplication_new(Application* application);
 void startapplication_run(StartApplicationEvent* event, Node* node);
 void startapplication_free(StartApplicationEvent* event);
 

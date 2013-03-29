@@ -53,14 +53,8 @@ struct _Engine {
 	CountDownLatch* processingLatch;
 	CountDownLatch* barrierLatch;
 
-	/* holds a thread-private key that each thread references to get a private
-	 * instance of a worker object
-	 */
-	GStaticPrivate workerKey;
-	GStaticPrivate preloadKey;
-
 	/* openssl needs us to manage locking */
-	GStaticMutex* cryptoThreadLocks;
+	GMutex* cryptoThreadLocks;
 	gint numCryptoThreadLocks;
 
 	/*
@@ -76,7 +70,8 @@ struct _Engine {
 	/* global random source from which all node random sources originate */
 	Random* random;
 
-	GMutex* lock;
+	GMutex lock;
+	GMutex pluginInitLock;
 
 	gint rawFrequencyKHz;
 	guint numEventsCurrentInterval;
@@ -87,6 +82,11 @@ struct _Engine {
 
 	MAGIC_DECLARE;
 };
+
+/* holds a thread-private key that each thread references to get a private
+ * instance of a worker object */
+static GPrivate workerKey = G_PRIVATE_INIT(worker_free);
+static GPrivate preloadKey = G_PRIVATE_INIT(g_free);
 
 Engine* engine_new(Configuration* config) {
 	MAGIC_ASSERT(config);
@@ -103,17 +103,12 @@ Engine* engine_new(Configuration* config) {
 	engine->random = random_new(config->randomSeed);
 	engine->runTimer = g_timer_new();
 
-	/* initialize the singleton-per-thread worker class */
-	engine->workerKey.index = 0;
-	engine->preloadKey.index = 0;
-
 	/* holds all events if single-threaded, and non-node events otherwise. */
 	engine->masterEventQueue =
 			asyncpriorityqueue_new((GCompareDataFunc)shadowevent_compare, NULL,
 			(GDestroyNotify)shadowevent_free);
 
 	engine->registry = registry_new();
-	registry_register(engine->registry, SOFTWARE, NULL, software_free);
 	registry_register(engine->registry, CDFS, NULL, cdf_free);
 	registry_register(engine->registry, PLUGINPATHS, g_free, g_free);
 
@@ -121,7 +116,8 @@ Engine* engine_new(Configuration* config) {
 
 	engine->internet = internetwork_new();
 
-	engine->lock = g_mutex_new();
+	g_mutex_init(&(engine->lock));
+	g_mutex_init(&(engine->pluginInitLock));
 
 	/* get the raw speed of the experiment machine */
 	gchar* contents = NULL;
@@ -163,11 +159,12 @@ void engine_free(Engine* engine) {
     g_free(dt_format);
 
 	for(int i = 0; i < engine->numCryptoThreadLocks; i++) {
-		g_static_mutex_free(&(engine->cryptoThreadLocks[i]));
+		g_mutex_clear(&(engine->cryptoThreadLocks[i]));
 	}
 
 	random_free(engine->random);
-	g_mutex_free(engine->lock);
+	g_mutex_clear(&(engine->lock));
+	g_mutex_clear(&(engine->pluginInitLock));
 
 	MAGIC_CLEAR(engine);
 	shadow_engine = NULL;
@@ -404,14 +401,14 @@ Internetwork* engine_getInternet(Engine* engine) {
 	return engine->internet;
 }
 
-GStaticPrivate* engine_getWorkerKey(Engine* engine) {
+GPrivate* engine_getWorkerKey(Engine* engine) {
 	MAGIC_ASSERT(engine);
-	return &(engine->workerKey);
+	return &(workerKey);
 }
 
-GStaticPrivate* engine_getPreloadKey(Engine* engine) {
+GPrivate* engine_getPreloadKey(Engine* engine) {
 	MAGIC_ASSERT(engine);
-	return &(engine->preloadKey);
+	return &(preloadKey);
 }
 
 GTimer* engine_getRunTimer(Engine* engine) {
@@ -439,14 +436,24 @@ gboolean engine_isForced(Engine* engine) {
 	return engine->forceShadowContext;
 }
 
+void engine_lockPluginInit(Engine* engine) {
+	MAGIC_ASSERT(engine);
+	g_mutex_lock(&(engine->pluginInitLock));
+}
+
+void engine_unlockPluginInit(Engine* engine) {
+	MAGIC_ASSERT(engine);
+	g_mutex_unlock(&(engine->pluginInitLock));
+}
+
 static void _engine_lock(Engine* engine) {
 	MAGIC_ASSERT(engine);
-	g_mutex_lock(engine->lock);
+	g_mutex_lock(&(engine->lock));
 }
 
 static void _engine_unlock(Engine* engine) {
 	MAGIC_ASSERT(engine);
-	g_mutex_unlock(engine->lock);
+	g_mutex_unlock(&(engine->lock));
 }
 
 gint engine_generateWorkerID(Engine* engine) {
@@ -516,13 +523,13 @@ void engine_cryptoLockingFunc(Engine* engine, int mode, int n) {
 	g_assert(engine->cryptoThreadLocks);
 
 	/* TODO may want to replace this with GRWLock when moving to GLib >= 2.32 */
-	GStaticMutex* lock = &(engine->cryptoThreadLocks[n]);
+	GMutex* lock = &(engine->cryptoThreadLocks[n]);
 	g_assert(lock);
 
 	if(mode & CRYPTO_LOCK) {
-		g_static_mutex_lock(lock);
+		g_mutex_lock(lock);
 	} else {
-		g_static_mutex_unlock(lock);
+		g_mutex_unlock(lock);
 	}
 }
 
@@ -536,9 +543,9 @@ gboolean engine_cryptoSetup(Engine* engine, gint numLocks) {
 			g_assert(numLocks <= engine->numCryptoThreadLocks);
 		} else {
 			engine->numCryptoThreadLocks = numLocks;
-			engine->cryptoThreadLocks = g_new0(GStaticMutex, numLocks);
+			engine->cryptoThreadLocks = g_new0(GMutex, numLocks);
 			for(int i = 0; i < engine->numCryptoThreadLocks; i++) {
-				g_static_mutex_init(&(engine->cryptoThreadLocks[i]));
+				g_mutex_init(&(engine->cryptoThreadLocks[i]));
 			}
 		}
 

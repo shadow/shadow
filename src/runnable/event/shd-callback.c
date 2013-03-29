@@ -21,6 +21,15 @@
 
 #include "shadow.h"
 
+struct _CallbackEvent {
+	Event super;
+
+	CallbackFunc callback;
+	gpointer data;
+	gpointer callbackArgument;
+
+	MAGIC_DECLARE;
+};
 EventFunctionTable callback_functions = {
 	(EventRunFunc) callback_run,
 	(EventFreeFunc) callback_free,

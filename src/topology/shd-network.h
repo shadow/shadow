@@ -85,16 +85,9 @@ gboolean network_isEqual(Network* a, Network* b);
 /**
  *
  * @param network
- * @param outgoingLink
+ * @param link
  */
-void network_addOutgoingLink(Network* network, gpointer outgoingLink); /* XXX: type is "Link*" */
-
-/**
- *
- * @param network
- * @param incomingLink
- */
-void network_addIncomingLink(Network* network, gpointer incomingLink); /* XXX: type is "Link*" */
+void network_addLink(Network* network, gpointer link); /* XXX: type is "Link*" */
 
 /**
  *
@@ -102,7 +95,7 @@ void network_addIncomingLink(Network* network, gpointer incomingLink); /* XXX: t
  * @param destinationNetwork
  * @return
  */
-gdouble network_getLinkReliability(Network* sourceNetwork, Network* destinationNetwork);
+gdouble network_getLinkReliability(in_addr_t sourceIP, in_addr_t destinationIP);
 
 /**
  *
@@ -111,7 +104,7 @@ gdouble network_getLinkReliability(Network* sourceNetwork, Network* destinationN
  * @param percentile
  * @return
  */
-gdouble network_getLinkLatency(Network* sourceNetwork, Network* destinationNetwork, gdouble percentile);
+gdouble network_getLinkLatency(in_addr_t sourceIP, in_addr_t destinationIP, gdouble percentile);
 
 /**
  *
@@ -119,7 +112,7 @@ gdouble network_getLinkLatency(Network* sourceNetwork, Network* destinationNetwo
  * @param destinationNetwork
  * @return
  */
-gdouble network_sampleLinkLatency(Network* sourceNetwork, Network* destinationNetwork);
+gdouble network_sampleLinkLatency(in_addr_t sourceIP, in_addr_t destinationIP);
 
 /**
  *

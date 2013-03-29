@@ -26,10 +26,12 @@
 
 typedef struct _CreateNodesAction CreateNodesAction;
 
-CreateNodesAction* createnodes_new(GString* name, GString* software, GString* cluster,
+CreateNodesAction* createnodes_new(GString* name, GString* cluster,
 		guint64 bandwidthdown, guint64 bandwidthup, guint64 quantity, guint64 cpuFrequency,
 		guint64 heartbeatIntervalSeconds, GString* heartbeatLogLevelString,
 		GString* logLevelString, GString* logPcapString, GString* pcapDirString);
+void createnodes_addApplication(CreateNodesAction* action, GString* pluginName,
+		GString* arguments, guint64 starttime, guint64 stoptime);
 void createnodes_run(CreateNodesAction* action);
 void createnodes_free(CreateNodesAction* action);
 

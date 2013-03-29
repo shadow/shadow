@@ -48,7 +48,7 @@ NPERF1M = 0.0
 NPERF5M = 0.0
 
 # TODO make this work for any month
-DESCRIPTOR_MONTH = 6
+DESCRIPTOR_MONTH = 11
 DESCRIPTOR_YEAR = 2012
 
 DOCHURN=False
@@ -72,17 +72,25 @@ class Relay():
         self.download = 0 # in KiB
 
         self.rates = [] # list of bytes/s histories
+
+    def getBWRateArg(self): # the min required Tor config
+        return 30720 if self.bwrate < 30720 else self.bwrate
+
+    def getBWBurstArg(self):
+        return 30720 if self.bwburst < 30720 else self.bwburst
+
+    def getBWConsensusArg(self):
+        return 1000 if self.bwconsensus <= 0 else self.bwconsensus
         
     def setRegionCode(self, code):
         self.code = code
         
     def setLimits(self, bwrate, bwburst, bwtstamp):
         # defaults are 5MiB rate (5120000), 10MiB Burst (10240000)
-        # minimums are 20KiB rate (20480)
+        # minimums are 30KiB rate (30720)
         if bwtstamp > self.bwtstamp:
             self.bwtstamp = bwtstamp
             self.bwrate = int(bwrate)
-            if self.bwrate < 20480: self.bwrate = 20480 # the min required Tor config
             self.bwburst = int(bwburst)
         
     # max observed from server descriptor (min of max-read and max-write over 10 second intervals)
@@ -258,12 +266,6 @@ def generate(args):
     root = etree.Element("hosts")
     
     # servers
-    e = etree.SubElement(root, "software")
-    e.set("id", "filesoft")
-    e.set("plugin", "filetransfer")
-    e.set("time", "1")
-    e.set("arguments", "server 80 {0}share".format(INSTALLPREFIX))
-
     fim = open("im.dl", "wb")
     fweb = open("web.dl", "wb")
     fbulk = open("bulk.dl", "wb")
@@ -286,11 +288,14 @@ def generate(args):
         e.set("id", name)
         e.set("ip", serverip)
         e.set("cluster", servercode)
-        e.set("software", "filesoft")
         e.set("bandwidthup", "102400") # in KiB
         e.set("bandwidthdown", "102400") # in KiB
         e.set("quantity", "1")
         e.set("cpufrequency", "10000000") # 10 GHz b/c we dont want bottlenecks
+        a = etree.SubElement(e, "application")
+        a.set("plugin", "filetransfer")
+        a.set("starttime", "1")
+        a.set("arguments", "server 80 {0}share".format(INSTALLPREFIX))
         print >>fim, "{0}:80:/1KiB.urnd".format(name)
         print >>fweb, "{0}:80:/320KiB.urnd".format(name)
         print >>fbulk, "{0}:80:/5MiB.urnd".format(name)
@@ -309,19 +314,16 @@ def generate(args):
     
     # torrent auth
     if args.fp2p > 0.0:
-         e = etree.SubElement(root, "software")
-         e.set("id", "torrentsoft")
-         e.set("plugin", "torrent")
-         e.set("time", "1")
-         e.set("arguments", "authority 5000")
- 
-         e = etree.SubElement(root, "node")
-         e.set("id", "auth.torrent")
-         e.set("software", "torrentsoft")
-         e.set("bandwidthup", "102400") # in KiB
-         e.set("bandwidthdown", "102400") # in KiB
-         e.set("quantity", "1")
-         e.set("cpufrequency", "10000000") # 10 GHz b/c we dont want bottlenecks
+        e = etree.SubElement(root, "node")
+        e.set("id", "auth.torrent")
+        e.set("bandwidthup", "102400") # in KiB
+        e.set("bandwidthdown", "102400") # in KiB
+        e.set("quantity", "1")
+        e.set("cpufrequency", "10000000") # 10 GHz b/c we dont want bottlenecks
+        a = etree.SubElement(e, "application")
+        a.set("plugin", "torrent")
+        a.set("starttime", "1")
+        a.set("arguments", "authority 5000")
     
     # think time file for web clients
     maxthink = 60000.0 # milliseconds
@@ -357,157 +359,151 @@ def generate(args):
     # authority - choose the fastest relay (no authority is an exit node)
     authority = nonexitnodes.pop(-1)
     name = "4uthority"
-    soft = "{0}soft".format(name)
     starttime = "2"
-    softargs = "dirauth {0} {1} {2} ./authority.torrc ./data/authoritydata {3}share/geoip".format(authority.bwconsensus, authority.bwrate, authority.bwburst, INSTALLPREFIX) # in bytes
-    addRelayToXML(root, soft, starttime, softargs, name, authority.download, authority.upload, authority.ip, authority.code)
+    torargs = "dirauth {0} {1} {2} ./authority.torrc ./data/authoritydata {3}share/geoip".format(authority.getBWConsensusArg(), authority.getBWRateArg(), authority.getBWBurstArg(), INSTALLPREFIX) # in bytes
+    addRelayToXML(root, starttime, torargs, None, None, name, authority.download, authority.upload, authority.ip, authority.code)
     
-    # node boot-up rates
-    relaysPerSecond = 5
-    clientsPerSecond = 10
+    # boot relays equally spread out between 1 and 11 minutes
+    secondsPerRelay = 600.0 / (len(exitnodes) + len(nonexitnodes))
+    relayStartTime = 60.0 # minute 1
     
     # exit relays
     i = 1
-    timecounter = 60 # start creating exit nodes at 60 seconds
     for exit in exitnodes:
         assert exit.isExit is True
         
         name = "exit{0}".format(i)
-        soft = "{0}soft".format(name)
-        starttime = "{0}".format(timecounter)
-        softargs = "exitrelay {0} {1} {2} ./exit.torrc ./data/exitdata {3}share/geoip".format(exit.bwconsensus, exit.bwrate, exit.bwburst, INSTALLPREFIX) # in bytes
+        starttime = "{0}".format(int(round(relayStartTime)))
+        torargs = "exitrelay {0} {1} {2} ./exit.torrc ./data/exitdata {3}share/geoip".format(exit.getBWConsensusArg(), exit.getBWRateArg(), exit.getBWBurstArg(), INSTALLPREFIX) # in bytes
         
-        addRelayToXML(root, soft, starttime, softargs, name, exit.download, exit.upload, exit.ip, exit.code)
+        addRelayToXML(root, starttime, torargs, None, None, name, exit.download, exit.upload, exit.ip, exit.code)
         
-        if i % relaysPerSecond == 0: timecounter += 1 # x nodes every second
+        relayStartTime += secondsPerRelay
         i += 1
     
-    timecounter += 1
-    i = 1
-        
     # regular relays
+    i = 1
     for relay in nonexitnodes:
         assert relay.isExit is not True
         
         name = "nonexit{0}".format(i)
-        soft = "{0}soft".format(name)
-        starttime = "{0}".format(timecounter)
-        softargs = "relay {0} {1} {2} ./relay.torrc ./data/relaydata {3}share/geoip".format(relay.bwconsensus, relay.bwrate, relay.bwburst, INSTALLPREFIX) # in bytes
+        starttime = "{0}".format(int(round(relayStartTime)))
+        torargs = "relay {0} {1} {2} ./relay.torrc ./data/relaydata {3}share/geoip".format(relay.getBWConsensusArg(), relay.getBWRateArg(), relay.getBWBurstArg(), INSTALLPREFIX) # in bytes
         
-        addRelayToXML(root, soft, starttime, softargs, name, relay.download, relay.upload, relay.ip, relay.code)
+        addRelayToXML(root, starttime, torargs, None, None, name, relay.download, relay.upload, relay.ip, relay.code)
     
-        if i % relaysPerSecond == 0: timecounter += 1 # x nodes every second
+        relayStartTime += secondsPerRelay
         i += 1
-        
-    # earliest client start time
-    timecounter = 900
 
     # clients
+    nimclients = int(args.fim * args.nclients)
+    nbulkclients = int(args.fbulk * args.nclients)
+    np2pclients = int(args.fp2p * args.nclients)
+    nwebclients = int(args.nclients - nimclients - nbulkclients - np2pclients)
+    nperf50kclients = int(args.nperf50k)
+    nperf1mclients = int(args.nperf1m)
+    nperf5mclients = int(args.nperf5m)
+        
+    # boot clients equally spread out between 15 and 25 minutes
+    secondsPerClient = 600.0 / (nimclients+nbulkclients+np2pclients+nwebclients+nperf50kclients+nperf1mclients+nperf5mclients)
+    clientStartTime = 900.0 # minute 15
+
     if args.dochurn: # user chooses bulk/web download randomly
         i = 1
         while i <= args.nclients:
             name = "client{0}".format(i)
-            soft = "{0}soft".format(name)
-            starttime = "{0}".format(timecounter)
-            softargs = "client {0} {1} {2} ./client.torrc ./data/clientdata {3}share/geoip client multi ./all.dl localhost 9000 ./webthink.dat -1".format(10240000, 5120000, 10240000, INSTALLPREFIX) # in bytes
+            starttime = "{0}".format(int(round(clientStartTime)))
+            torargs = "client {0} {1} {2} ./client.torrc ./data/clientdata {3}share/geoip".format(10240000, 5120000, 10240000, INSTALLPREFIX) # in bytes
+            fileargs = "client multi ./all.dl localhost 9000 ./webthink.dat -1"
             
-            addRelayToXML(root, soft, starttime, softargs, name, code=choice(clientCountryCodes))
+            addRelayToXML(root, starttime, torargs, fileargs, None, name, code=choice(clientCountryCodes))
         
-            if i % clientsPerSecond == 0: timecounter += 1 # x nodes every second
+            clientStartTime += secondsPerClient
             i += 1       
         
     else: # user are separated into bulk/web downloaders who always download their file type
-        nimclients = int(args.fim * args.nclients)
-        nbulkclients = int(args.fbulk * args.nclients)
-        np2pclients = int(args.fp2p * args.nclients)
-        nwebclients = int(args.nclients - nimclients - nbulkclients - np2pclients)
-        nperf50kclients = int(args.nperf50k)
-        nperf1mclients = int(args.nperf1m)
-        nperf5mclients = int(args.nperf5m)
- 
         i = 1
         while i <= nimclients:
             name = "imclient{0}".format(i)
-            soft = "{0}soft".format(name)
-            starttime = "{0}".format(timecounter)
-            softargs = "client {0} {1} {2} ./client.torrc ./data/clientdata {3}share/geoip client multi ./im.dl localhost 9000 ./imthink.dat -1".format(10240000, 5120000, 10240000, INSTALLPREFIX) # in bytes
+            starttime = "{0}".format(int(round(clientStartTime)))
+            torargs = "client {0} {1} {2} ./client.torrc ./data/clientdata {3}share/geoip".format(10240000, 5120000, 10240000, INSTALLPREFIX) # in bytes
+            fileargs = "client multi ./im.dl localhost 9000 ./imthink.dat -1"
             
-            addRelayToXML(root, soft, starttime, softargs, name, code=choice(clientCountryCodes))
+            addRelayToXML(root, starttime, torargs, fileargs, None, name, code=choice(clientCountryCodes))
         
-            if i % clientsPerSecond == 0: timecounter += 1 # x nodes every second
+            clientStartTime += secondsPerClient
             i += 1
                 
         i = 1
         while i <= nwebclients:
             name = "webclient{0}".format(i)
-            soft = "{0}soft".format(name)
-            starttime = "{0}".format(timecounter)
-            softargs = "client {0} {1} {2} ./client.torrc ./data/clientdata {3}share/geoip client multi ./web.dl localhost 9000 ./webthink.dat -1".format(10240000, 5120000, 10240000, INSTALLPREFIX) # in bytes
+            starttime = "{0}".format(int(round(clientStartTime)))
+            torargs = "client {0} {1} {2} ./client.torrc ./data/clientdata {3}share/geoip".format(10240000, 5120000, 10240000, INSTALLPREFIX) # in bytes
+            fileargs = "client multi ./web.dl localhost 9000 ./webthink.dat -1"
             
-            addRelayToXML(root, soft, starttime, softargs, name, code=choice(clientCountryCodes))
+            addRelayToXML(root, starttime, torargs, fileargs, None, name, code=choice(clientCountryCodes))
         
-            if i % clientsPerSecond == 0: timecounter += 1 # x nodes every second
+            clientStartTime += secondsPerClient
             i += 1
         
         i = 1
-        timecounter += 1
         while i <= nbulkclients:
             name = "bulkclient{0}".format(i)
-            soft = "{0}soft".format(name)
-            starttime = "{0}".format(timecounter)
-            softargs = "client {0} {1} {2} ./client.torrc ./data/clientdata {3}share/geoip client multi ./bulk.dl localhost 9000 none -1".format(10240000, 5120000, 10240000, INSTALLPREFIX) # in bytes
+            starttime = "{0}".format(int(round(clientStartTime)))
+            torargs = "client {0} {1} {2} ./client.torrc ./data/clientdata {3}share/geoip".format(10240000, 5120000, 10240000, INSTALLPREFIX) # in bytes
+            fileargs = "client multi ./bulk.dl localhost 9000 none -1"
             
-            addRelayToXML(root, soft, starttime, softargs, name, code=choice(clientCountryCodes))
+            addRelayToXML(root, starttime, torargs, fileargs, None, name, code=choice(clientCountryCodes))
         
-            if i % clientsPerSecond == 0: timecounter += 1 # x nodes every second
+            clientStartTime += secondsPerClient
             i += 1
             
         i = 1
         while i <= np2pclients:
             name = "p2pclient{0}".format(i)
-            soft = "{0}soft".format(name)
-            starttime = "{0}".format(timecounter)
-            softargs = "torrent {0} {1} {2} ./client.torrc ./data/clientdata {3}share/geoip torrent node auth.torrent 5000 localhost 9000 6000 700MB".format(10240000, 5120000, 10240000, INSTALLPREFIX) # in bytes
+            starttime = "{0}".format(int(round(clientStartTime)))
+            torargs = "client {0} {1} {2} ./client.torrc ./data/clientdata {3}share/geoip".format(10240000, 5120000, 10240000, INSTALLPREFIX) # in bytes
+            torrentargs = "torrent node auth.torrent 5000 localhost 9000 6000 700MB"
  
-            addRelayToXML(root, soft, starttime, softargs, name, code=choice(clientCountryCodes))
+            addRelayToXML(root, starttime, torargs, None, torrentargs, name, code=choice(clientCountryCodes))
         
-            if i % clientsPerSecond == 0: timecounter += 1 # x nodes every second
+            clientStartTime += secondsPerClient
             i += 1
 
         i = 1
         while i <= nperf50kclients:
             name = "perfclient50k{0}".format(i)
-            soft = "{0}soft".format(name)
-            starttime = "{0}".format(timecounter)
-            softargs = "client {0} {1} {2} ./torperf.torrc ./data/clientdata {3}share/geoip client multi ./50kib.dl localhost 9000 ./perfthink.dat -1".format(10240000, 5120000, 10240000, INSTALLPREFIX) # in bytes
+            starttime = "{0}".format(int(round(clientStartTime)))
+            torargs = "client {0} {1} {2} ./torperf.torrc ./data/clientdata {3}share/geoip".format(10240000, 5120000, 10240000, INSTALLPREFIX) # in bytes
+            fileargs = "client multi ./50kib.dl localhost 9000 ./perfthink.dat -1"
  
-            addRelayToXML(root, soft, starttime, softargs, name, code=choice(clientCountryCodes))
+            addRelayToXML(root, starttime, torargs, fileargs, None, name, code=choice(clientCountryCodes))
         
-            if i % clientsPerSecond == 0: timecounter += 1 # x nodes every second
+            clientStartTime += secondsPerClient
             i += 1
 
         i = 1
         while i <= nperf1mclients:
             name = "perfclient1m{0}".format(i)
-            soft = "{0}soft".format(name)
-            starttime = "{0}".format(timecounter)
-            softargs = "client {0} {1} {2} ./torperf.torrc ./data/clientdata {3}share/geoip client multi ./1mib.dl localhost 9000 ./perfthink.dat -1".format(10240000, 5120000, 10240000, INSTALLPREFIX) # in bytes
+            starttime = "{0}".format(int(round(clientStartTime)))
+            torargs = "client {0} {1} {2} ./torperf.torrc ./data/clientdata {3}share/geoip".format(10240000, 5120000, 10240000, INSTALLPREFIX) # in bytes
+            fileargs = "client multi ./1mib.dl localhost 9000 ./perfthink.dat -1"
  
-            addRelayToXML(root, soft, starttime, softargs, name, code=choice(clientCountryCodes))
+            addRelayToXML(root, starttime, torargs, fileargs, None, name, code=choice(clientCountryCodes))
         
-            if i % clientsPerSecond == 0: timecounter += 1 # x nodes every second
+            clientStartTime += secondsPerClient
             i += 1
 
         i = 1
         while i <= nperf5mclients:
             name = "perfclient5m{0}".format(i)
-            soft = "{0}soft".format(name)
-            starttime = "{0}".format(timecounter)
-            softargs = "client {0} {1} {2} ./torperf.torrc ./data/clientdata {3}share/geoip client multi ./5mib.dl localhost 9000 ./perfthink.dat -1".format(10240000, 5120000, 10240000, INSTALLPREFIX) # in bytes
+            starttime = "{0}".format(int(round(clientStartTime)))
+            torargs = "client {0} {1} {2} ./torperf.torrc ./data/clientdata {3}share/geoip".format(10240000, 5120000, 10240000, INSTALLPREFIX) # in bytes
+            fileargs = "client multi ./5mib.dl localhost 9000 ./perfthink.dat -1"
  
-            addRelayToXML(root, soft, starttime, softargs, name, code=choice(clientCountryCodes))
+            addRelayToXML(root, starttime, torargs, fileargs, None, name, code=choice(clientCountryCodes))
         
-            if i % clientsPerSecond == 0: timecounter += 1 # x nodes every second
+            clientStartTime += secondsPerClient
             i += 1
                    
     # finally, print the XML file
@@ -536,20 +532,12 @@ def generate(args):
         # all our hosts
         print >>fhosts, (etree.tostring(root, pretty_print=True, xml_declaration=False))
 
-def addRelayToXML(root, soft, starttime, softargs, name, download=0, upload=0, ip=None, code=None): # bandwidth in KiB
-    # software
-    e = etree.SubElement(root, "software")
-    e.set("id", soft)
-    e.set("plugin", "scallion")
-    e.set("time", starttime)
-    e.set("arguments", softargs)
-    
+def addRelayToXML(root, starttime, torargs, fileargs, torrentargs, name, download=0, upload=0, ip=None, code=None): # bandwidth in KiB
     # node
     e = etree.SubElement(root, "node")
     e.set("id", name)
     if ip is not None: e.set("ip", ip)
     if code is not None: e.set("cluster", code)
-    e.set("software", soft)
     
     # bandwidth is optional in XML, will be assigned based on cluster if not given
     if download > 0: e.set("bandwidthdown", "{0}".format(download)) # in KiB
@@ -557,6 +545,23 @@ def addRelayToXML(root, soft, starttime, softargs, name, download=0, upload=0, i
     
     e.set("quantity", "1")
     e.set("cpufrequency", choice(CPUFREQS))
+
+    # applications - wait 5 minutes to start applications
+    if torargs is not None:
+        a = etree.SubElement(e, "application")
+        a.set("plugin", "scallion")
+        a.set("starttime", "{0}".format(int(starttime)))
+        a.set("arguments", torargs)
+    if fileargs is not None:
+        a = etree.SubElement(e, "application")
+        a.set("plugin", "filetransfer")
+        a.set("starttime", "{0}".format(int(starttime)+300))
+        a.set("arguments", fileargs)
+    if torrentargs is not None:
+        a = etree.SubElement(e, "application")
+        a.set("plugin", "torrent")
+        a.set("starttime", "{0}".format(int(starttime)+300))
+        a.set("arguments", torrentargs)
 
 def getClientCountryChoices(connectinguserspath):
     lines = None
@@ -814,7 +819,7 @@ def parse_consensus(consensus_path):
             elif line[0:2] == "w ":
                 bw = float(line.strip().split()[1].split("=")[1]) * 1000.0 # KB to bytes
     
-    return sorted(relays, key=lambda relay: relay.bwconsensus)
+    return sorted(relays, key=lambda relay: relay.getBWConsensusArg())
 
 def log(msg):
     color_start_code = "\033[94m" # red: \033[91m"

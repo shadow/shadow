@@ -27,7 +27,7 @@
 typedef enum _EngineStorage EngineStorage;
 
 enum _EngineStorage {
-	SOFTWARE, CDFS, PLUGINPATHS
+	CDFS, PLUGINPATHS
 };
 
 typedef struct _Engine Engine;
@@ -50,13 +50,16 @@ void engine_notifyProcessed(Engine* engine, guint numberEventsProcessed, guint n
 
 Configuration* engine_getConfig(Engine* engine);
 GTimer* engine_getRunTimer(Engine* engine);
-GStaticPrivate* engine_getWorkerKey(Engine* engine);
-GStaticPrivate* engine_getPreloadKey(Engine* engine);
+GPrivate* engine_getWorkerKey(Engine* engine);
+GPrivate* engine_getPreloadKey(Engine* engine);
 Internetwork* engine_getInternet(Engine* engine);
 
 void engine_setKillTime(Engine* engine, SimulationTime endTime);
 gboolean engine_isKilled(Engine* engine);
 gboolean engine_isForced(Engine* engine);
+
+void engine_lockPluginInit(Engine* engine);
+void engine_unlockPluginInit(Engine* engine);
 
 /* thread-safe */
 

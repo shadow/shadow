@@ -27,8 +27,13 @@ enum NetworkInterfaceFlags {
 	NIF_RECEIVING = 1 << 1,
 };
 
+enum NetworkInterfaceQDisc {
+	NIQ_NONE=0, NIQ_FIFO=1, NIQ_RR=2,
+};
+
 struct _NetworkInterface {
 	enum NetworkInterfaceFlags flags;
+	enum NetworkInterfaceQDisc qdisc;
 
 	Network* network;
 	Address* address;
@@ -47,7 +52,8 @@ struct _NetworkInterface {
 	gsize inBufferLength;
 
 	/* Transports wanting to send data out */
-	GQueue* sendableSockets;
+	GQueue* rrQueue;
+	PriorityQueue* fifoQueue;
 
 	/* PCAP flag, directory and file */
 	gboolean logPcap;
@@ -62,7 +68,7 @@ struct _NetworkInterface {
 	MAGIC_DECLARE;
 };
 
-void networkinterface_pcapInit(NetworkInterface *interface) {
+static void _networkinterface_pcapInit(NetworkInterface *interface) {
 	if(!interface || !interface->logPcap || !interface->pcapFile) {
 		return;
 	}
@@ -92,7 +98,165 @@ void networkinterface_pcapInit(NetworkInterface *interface) {
 	fwrite(&network, 1, sizeof(network), interface->pcapFile);
 }
 
-void networkinterface_pcapWritePacket(NetworkInterface *interface, Packet *packet) {
+static gint _networkinterface_compareSocket(const Socket* sa, const Socket* sb, gpointer userData) {
+	Packet* pa = socket_peekNextPacket(sa);
+	Packet* pb = socket_peekNextPacket(sa);
+	return packet_getPriority(pa) > packet_getPriority(pb) ? +1 : -1;
+}
+
+NetworkInterface* networkinterface_new(Network* network, GQuark address, gchar* name,
+		guint64 bwDownKiBps, guint64 bwUpKiBps, gboolean logPcap, gchar* pcapDir, gchar* qdisc) {
+	NetworkInterface* interface = g_new0(NetworkInterface, 1);
+	MAGIC_INIT(interface);
+
+	interface->network = network;
+	interface->address = address_new(address, (const gchar*) name);
+
+	/* interface speeds */
+	interface->bwUpKiBps = bwUpKiBps;
+	gdouble bytesPerSecond = (gdouble)(bwUpKiBps * 1024);
+	interface->timePerByteUp = (gdouble) (((gdouble)SIMTIME_ONE_SECOND) / bytesPerSecond);
+	interface->bwDownKiBps = bwDownKiBps;
+	bytesPerSecond = (gdouble)(bwDownKiBps * 1024);
+	interface->timePerByteDown = (gdouble) (((gdouble)SIMTIME_ONE_SECOND) / bytesPerSecond);
+
+	/* incoming packet buffer */
+	interface->inBuffer = g_queue_new();
+	interface->inBufferSize = worker_getConfig()->interfaceBufferSize;
+
+	/* incoming packets get passed along to sockets */
+	interface->boundSockets = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, descriptor_unref);
+
+	/* sockets tell us when they want to start sending */
+	interface->rrQueue = g_queue_new();
+	interface->fifoQueue = priorityqueue_new((GCompareDataFunc)_networkinterface_compareSocket, NULL, descriptor_unref);
+
+	/* parse queuing discipline */
+	if (qdisc && !g_ascii_strcasecmp(qdisc, "rr")) {
+		interface->qdisc = NIQ_RR;
+	} else {
+		interface->qdisc = NIQ_FIFO;
+	}
+
+	/* log status */
+	char addressStr[INET_ADDRSTRLEN];
+	inet_ntop(AF_INET, &address, addressStr, INET_ADDRSTRLEN);
+
+	/* open the PCAP file for writing */
+	interface->logPcap = logPcap;
+	interface->pcapDir = pcapDir;
+	interface->pcapFile = NULL;
+	if(interface->logPcap) {
+		GString *filename = g_string_new("");
+		if (interface->pcapDir) {
+			g_string_append(filename, interface->pcapDir);
+			/* Append trailing slash if not present */
+			if (!g_str_has_suffix(interface->pcapDir, "/")) {
+				g_string_append(filename, "/");
+			}
+		} else {
+			/* Use default directory */
+			g_string_append(filename, "data/pcapdata/");
+		}
+		g_string_append_printf(filename, "%s-%s.pcap", name, addressStr);
+		interface->pcapFile = fopen(filename->str, "w");
+		if(!interface->pcapFile) {
+			warning("error trying to open PCAP file '%s' for writing", filename->str);
+		} else {
+			_networkinterface_pcapInit(interface);
+		}
+	}
+
+	info("bringing up network interface '%s' at '%s', %u KiB/s up and %u KiB/s down using queuing discipline %s",
+			name, addressStr, bwUpKiBps, bwDownKiBps,
+			interface->qdisc == NIQ_RR ? "rr" : "fifo");
+
+	return interface;
+}
+
+void networkinterface_free(NetworkInterface* interface) {
+	MAGIC_ASSERT(interface);
+
+	/* unref all packets sitting in our input buffer */
+	while(interface->inBuffer && !g_queue_is_empty(interface->inBuffer)) {
+		Packet* packet = g_queue_pop_head(interface->inBuffer);
+		packet_unref(packet);
+	}
+	g_queue_free(interface->inBuffer);
+
+	/* unref all sockets wanting to send */
+	while(interface->rrQueue && !g_queue_is_empty(interface->rrQueue)) {
+		Socket* socket = g_queue_pop_head(interface->rrQueue);
+		descriptor_unref(socket);
+	}
+	g_queue_free(interface->rrQueue);
+
+	priorityqueue_free(interface->fifoQueue);
+
+	g_hash_table_destroy(interface->boundSockets);
+	address_free(interface->address);
+
+	if(interface->pcapFile) {
+		fclose(interface->pcapFile);
+	}
+
+	MAGIC_CLEAR(interface);
+	g_free(interface);
+}
+
+in_addr_t networkinterface_getIPAddress(NetworkInterface* interface) {
+	MAGIC_ASSERT(interface);
+	return address_toNetworkIP(interface->address);
+}
+
+gchar* networkinterface_getIPName(NetworkInterface* interface) {
+	MAGIC_ASSERT(interface);
+	return address_toHostIPString(interface->address);
+}
+
+guint32 networkinterface_getSpeedUpKiBps(NetworkInterface* interface) {
+	MAGIC_ASSERT(interface);
+	return interface->bwUpKiBps;
+}
+
+guint32 networkinterface_getSpeedDownKiBps(NetworkInterface* interface) {
+	MAGIC_ASSERT(interface);
+	return interface->bwDownKiBps;
+}
+
+gboolean networkinterface_isAssociated(NetworkInterface* interface, gint key) {
+	MAGIC_ASSERT(interface);
+
+	if(g_hash_table_lookup(interface->boundSockets, GINT_TO_POINTER(key))) {
+		return TRUE;
+	} else {
+		return FALSE;
+	}
+}
+
+void networkinterface_associate(NetworkInterface* interface, Socket* socket) {
+	MAGIC_ASSERT(interface);
+
+	gint key = socket_getAssociationKey(socket);
+
+	/* make sure there is no collision */
+	g_assert(!networkinterface_isAssociated(interface, key));
+
+	/* insert to our storage */
+	g_hash_table_replace(interface->boundSockets, GINT_TO_POINTER(key), socket);
+	descriptor_ref(socket);
+}
+
+void networkinterface_disassociate(NetworkInterface* interface, Socket* socket) {
+	MAGIC_ASSERT(interface);
+
+	gint key = socket_getAssociationKey(socket);
+
+	/* we will no longer receive packets for this port, this unrefs descriptor */
+	g_hash_table_remove(interface->boundSockets, GINT_TO_POINTER(key));
+}
+
+static void _networkinterface_pcapWritePacket(NetworkInterface *interface, Packet *packet) {
 	if(!interface || !interface->logPcap || !interface->pcapFile || !packet) {
 		return;
 	}
@@ -194,147 +358,6 @@ void networkinterface_pcapWritePacket(NetworkInterface *interface, Packet *packe
 	g_free(payload);
 }
 
-NetworkInterface* networkinterface_new(Network* network, GQuark address, gchar* name,
-		guint64 bwDownKiBps, guint64 bwUpKiBps, gboolean logPcap, gchar* pcapDir) {
-	NetworkInterface* interface = g_new0(NetworkInterface, 1);
-	MAGIC_INIT(interface);
-
-	interface->network = network;
-	interface->address = address_new(address, (const gchar*) name);
-
-	/* interface speeds */
-	interface->bwUpKiBps = bwUpKiBps;
-	gdouble bytesPerSecond = (gdouble)(bwUpKiBps * 1024);
-	interface->timePerByteUp = (gdouble) (((gdouble)SIMTIME_ONE_SECOND) / bytesPerSecond);
-	interface->bwDownKiBps = bwDownKiBps;
-	bytesPerSecond = (gdouble)(bwDownKiBps * 1024);
-	interface->timePerByteDown = (gdouble) (((gdouble)SIMTIME_ONE_SECOND) / bytesPerSecond);
-
-	/* incoming packet buffer */
-	interface->inBuffer = g_queue_new();
-	interface->inBufferSize = worker_getConfig()->interfaceBufferSize;
-
-	/* incoming packets get passed along to sockets */
-	interface->boundSockets = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, descriptor_unref);
-
-	/* sockets tell us when they want to start sending */
-	interface->sendableSockets = g_queue_new();
-
-	/* log status */
-	char addressStr[INET_ADDRSTRLEN];
-	inet_ntop(AF_INET, &address, addressStr, INET_ADDRSTRLEN);
-
-	/* open the PCAP file for writing */
-	interface->logPcap = logPcap;
-	interface->pcapDir = pcapDir;
-	interface->pcapFile = NULL;
-	if(interface->logPcap) {
-		GString *filename = g_string_new("");
-		if (interface->pcapDir) {
-			g_string_append(filename, interface->pcapDir);
-			/* Append trailing slash if not present */
-			if (!g_str_has_suffix(interface->pcapDir, "/")) {
-				g_string_append(filename, "/");
-			}
-		} else {
-			/* Use default directory */
-			g_string_append(filename, "data/pcapdata/");
-		}
-		g_string_append_printf(filename, "%s-%s.pcap", name, addressStr);
-		interface->pcapFile = fopen(filename->str, "w");
-		if(!interface->pcapFile) {
-			warning("error trying to open PCAP file '%s' for writing", filename->str);
-		} else {
-			networkinterface_pcapInit(interface);
-		}
-	}
-
-	info("bringing up network interface '%s' at '%s', %u KiB/s up and %u KiB/s down",
-			name, addressStr, bwUpKiBps, bwDownKiBps);
-
-	return interface;
-}
-
-void networkinterface_free(NetworkInterface* interface) {
-	MAGIC_ASSERT(interface);
-
-	/* unref all packets sitting in our input buffer */
-	while(interface->inBuffer && g_queue_get_length(interface->inBuffer)) {
-		Packet* packet = g_queue_pop_head(interface->inBuffer);
-		packet_unref(packet);
-	}
-	g_queue_free(interface->inBuffer);
-
-	/* unref all sockets wanting to send */
-	while(interface->sendableSockets && g_queue_get_length(interface->sendableSockets)) {
-		Socket* socket = g_queue_pop_head(interface->sendableSockets);
-		descriptor_unref(socket);
-	}
-	g_queue_free(interface->sendableSockets);
-
-	g_hash_table_destroy(interface->boundSockets);
-	address_free(interface->address);
-
-	if(interface->pcapFile) {
-		fclose(interface->pcapFile);
-	}
-
-	MAGIC_CLEAR(interface);
-	g_free(interface);
-}
-
-in_addr_t networkinterface_getIPAddress(NetworkInterface* interface) {
-	MAGIC_ASSERT(interface);
-	return address_toNetworkIP(interface->address);
-}
-
-gchar* networkinterface_getIPName(NetworkInterface* interface) {
-	MAGIC_ASSERT(interface);
-	return address_toHostIPString(interface->address);
-}
-
-guint32 networkinterface_getSpeedUpKiBps(NetworkInterface* interface) {
-	MAGIC_ASSERT(interface);
-	return interface->bwUpKiBps;
-}
-
-guint32 networkinterface_getSpeedDownKiBps(NetworkInterface* interface) {
-	MAGIC_ASSERT(interface);
-	return interface->bwDownKiBps;
-}
-
-gboolean networkinterface_isAssociated(NetworkInterface* interface, gint key) {
-	MAGIC_ASSERT(interface);
-
-	if(g_hash_table_lookup(interface->boundSockets, GINT_TO_POINTER(key))) {
-		return TRUE;
-	} else {
-		return FALSE;
-	}
-}
-
-void networkinterface_associate(NetworkInterface* interface, Socket* socket) {
-	MAGIC_ASSERT(interface);
-
-	gint key = socket_getAssociationKey(socket);
-
-	/* make sure there is no collision */
-	g_assert(!networkinterface_isAssociated(interface, key));
-
-	/* insert to our storage */
-	g_hash_table_replace(interface->boundSockets, GINT_TO_POINTER(key), socket);
-	descriptor_ref(socket);
-}
-
-void networkinterface_disassociate(NetworkInterface* interface, Socket* socket) {
-	MAGIC_ASSERT(interface);
-
-	gint key = socket_getAssociationKey(socket);
-
-	/* we will no longer receive packets for this port, this unrefs descriptor */
-	g_hash_table_remove(interface->boundSockets, GINT_TO_POINTER(key));
-}
-
 static void _networkinterface_dropInboundPacket(NetworkInterface* interface, Packet* packet) {
 	MAGIC_ASSERT(interface);
 
@@ -355,15 +378,14 @@ static void _networkinterface_scheduleNextReceive(NetworkInterface* interface) {
 	SimulationTime batchTime = worker_getConfig()->interfaceBatchTime;
 
 	/* receive packets in batches */
-	while(g_queue_get_length(interface->inBuffer) > 0 &&
+	while(!g_queue_is_empty(interface->inBuffer) &&
 			interface->receiveNanosecondsConsumed <= batchTime) {
 		/* get the next packet */
 		Packet* packet = g_queue_pop_head(interface->inBuffer);
 		g_assert(packet);
 
 		/* free up buffer space */
-		guint length = packet_getPayloadLength(packet);
-		length += packet_getHeaderSize(packet);
+		guint length = packet_getPayloadLength(packet) + packet_getHeaderSize(packet);
 		interface->inBufferLength -= length;
 
 		/* hand it off to the correct socket layer */
@@ -374,7 +396,7 @@ static void _networkinterface_scheduleNextReceive(NetworkInterface* interface) {
 		debug("packet in: %s", packetString);
 		g_free(packetString);
 
-		networkinterface_pcapWritePacket(interface, packet);
+		_networkinterface_pcapWritePacket(interface, packet);
 
 		/* if the socket closed, just drop the packet */
 		if(socket) {
@@ -409,13 +431,11 @@ void networkinterface_packetArrived(NetworkInterface* interface, Packet* packet)
 	MAGIC_ASSERT(interface);
 
 	/* a packet arrived. lets try to receive or buffer it */
-	gint length = packet_getPayloadLength(packet);
-	/* ignore our control-only protocol header overhead in buffer space calc. */
-	if(length > 0) {
-		length += packet_getHeaderSize(packet);
-	}
+	guint length = packet_getPayloadLength(packet) + packet_getHeaderSize(packet);
+	gssize space = interface->inBufferSize - interface->inBufferLength;
+	g_assert(space >= 0);
 
-	if(length <= (interface->inBufferSize -interface->inBufferLength)) {
+	if(length <= space) {
 		/* we have space to buffer it */
 		g_queue_push_tail(interface->inBuffer, packet);
 		interface->inBufferLength += length;
@@ -466,9 +486,53 @@ void networkinterface_packetDropped(NetworkInterface* interface, Packet* packet)
 	if(socket) {
 		socket_droppedPacket(socket, packet);
 	} else {
-		debug("interface dropping packet from %s:%u, no socket registerred at %i",
-				NTOA(packet_getSourceIP(packet)), packet_getSourcePort(packet)), key;
+		debug("interface dropping packet from %s:%u, no socket registered at %i",
+				NTOA(packet_getSourceIP(packet)), packet_getSourcePort(packet), key);
 	}
+}
+
+/* round robin queuing discipline ($ man tc)*/
+static Packet* _networkinterface_selectRoundRobin(NetworkInterface* interface) {
+	Packet* packet = NULL;
+
+	while(!packet && !g_queue_is_empty(interface->rrQueue)) {
+		/* do round robin to get the next packet from the next socket */
+		Socket* socket = g_queue_pop_head(interface->rrQueue);
+		packet = socket_pullOutPacket(socket);
+
+		if(socket_peekNextPacket(socket)) {
+			/* socket has more packets, and is still reffed from before */
+			g_queue_push_tail(interface->rrQueue, socket);
+		} else {
+			/* socket has no more packets, unref it from the sendable queue */
+			descriptor_unref((Descriptor*) socket);
+		}
+	}
+
+	return packet;
+}
+
+/* first-in-first-out queuing discipline ($ man tc)*/
+static Packet* _networkinterface_selectFirstInFirstOut(NetworkInterface* interface) {
+	/* use packet priority field to select based on application ordering.
+	 * this is really a simplification of prioritizing on timestamps. */
+	Packet* packet = NULL;
+
+	while(!packet && !priorityqueue_isEmpty(interface->fifoQueue)) {
+		/* do fifo to get the next packet from the next socket */
+		Socket* socket = priorityqueue_pop(interface->fifoQueue);
+		packet = socket_pullOutPacket(socket);
+
+		if(socket_peekNextPacket(socket)) {
+			/* socket has more packets, and is still reffed from before */
+			priorityqueue_push(interface->fifoQueue, socket);
+		} else {
+			/* socket has no more packets, unref it from the sendable queue */
+			descriptor_unref((Descriptor*) socket);
+		}
+	}
+
+	return packet;
 }
 
 static void _networkinterface_scheduleNextSend(NetworkInterface* interface) {
@@ -477,20 +541,24 @@ static void _networkinterface_scheduleNextSend(NetworkInterface* interface) {
 	SimulationTime batchTime = worker_getConfig()->interfaceBatchTime;
 
 	/* loop until we find a socket that has something to send */
-	while(g_queue_get_length(interface->sendableSockets) > 0 &&
-			interface->sendNanosecondsConsumed <= batchTime) {
-		/* do round robin on all ready sockets */
-		Socket* socket = g_queue_pop_head(interface->sendableSockets);
+	while(interface->sendNanosecondsConsumed <= batchTime) {
 
-		Packet* packet = socket_pullOutPacket(socket);
-		if(!packet) {
-			/* socket has no more packets, unref it from round robin queue */
-			descriptor_unref((Descriptor*) socket);
-			continue;
+		/* choose which packet to send next based on our queuing discipline */
+		Packet* packet;
+		switch(interface->qdisc) {
+			case NIQ_RR: {
+				packet = _networkinterface_selectRoundRobin(interface);
+				break;
+			}
+			case NIQ_FIFO:
+			default: {
+				packet = _networkinterface_selectFirstInFirstOut(interface);
+				break;
+			}
 		}
-
-		/* socket might have more packets, and is still reffed from before */
-		g_queue_push_tail(interface->sendableSockets, socket);
+		if(!packet) {
+			break;
+		}
 
 		/* now actually send the packet somewhere */
 		if(networkinterface_getIPAddress(interface) == packet_getDestinationIP(packet)) {
@@ -508,12 +576,11 @@ static void _networkinterface_scheduleNextSend(NetworkInterface* interface) {
 		g_free(packetString);
 
 		/* successfully sent, calculate how long it took to 'send' this packet */
-		guint length = packet_getPayloadLength(packet);
-		length += packet_getHeaderSize(packet);
+		guint length = packet_getPayloadLength(packet) + packet_getHeaderSize(packet);
 
 		interface->sendNanosecondsConsumed += (length * interface->timePerByteUp);
 		tracker_addOutputBytes(node_getTracker(worker_getPrivate()->cached_node),(guint64)length);
-		networkinterface_pcapWritePacket(interface, packet);
+		_networkinterface_pcapWritePacket(interface, packet);
 	}
 
 	/*
@@ -535,9 +602,22 @@ void networkinterface_wantsSend(NetworkInterface* interface, Socket* socket) {
 	MAGIC_ASSERT(interface);
 
 	/* track the new socket for sending if not already tracking */
-	if(!g_queue_find(interface->sendableSockets, socket)) {
-		descriptor_ref(socket);
-		g_queue_push_tail(interface->sendableSockets, socket);
+	switch(interface->qdisc) {
+		case NIQ_RR: {
+			if(!g_queue_find(interface->rrQueue, socket)) {
+				descriptor_ref(socket);
+				g_queue_push_tail(interface->rrQueue, socket);
+			}
+			break;
+		}
+		case NIQ_FIFO:
+		default: {
+			if(!priorityqueue_find(interface->fifoQueue, socket)) {
+				descriptor_ref(socket);
+				priorityqueue_push(interface->fifoQueue, socket);
+			}
+			break;
+		}
 	}
 
 	/* trigger a send if we are currently idle */

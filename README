@@ -1,4 +1,4 @@
-Shadow (c) 2010-2012 Rob Jansen jansen@cs.umn.edu
+Shadow (c) 2010-2012 Rob Jansen shadow-support@cs.umn.edu
 
 Shadow is a unique discrete-event network simulator that runs real-life 
 applications like Tor. Shadow combines the accuracy of emulation with the 
@@ -8,9 +8,9 @@ Also included are core plug-ins and topologies for transferring files between
 clients and servers, and over a private Tor anonymity network.
 
 Quick Setup (installs everything in ~/.shadow):
-    $ ./contrib/installdeps.sh
-    $ python setup.py build
-    $ python setup.py install
+    $ ./setup dependencies
+    $ ./setup build
+    $ ./setup install
 
 Setup Instructions, User Documentation, FAQs:
     https://github.com/shadow/shadow/wiki
@@ -20,4 +20,4 @@ Homepage:
     
 Download New Releases:
     https://shadow.cs.umn.edu/download
-    https://github.com/shadow/shadow/downloads
+    https://github.com/shadow/shadow/tags

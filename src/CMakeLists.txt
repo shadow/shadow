@@ -1,11 +1,27 @@
+## check for dependencies with our own Find scripts in "./cmake"
+## these don't have built-in cmake files in /usr/share/cmake/Modules/Findxxx.cmake
+find_package(RT REQUIRED)
+find_package(DL REQUIRED)
+find_package(M REQUIRED)
+find_package(GLIB REQUIRED)
+
+include_directories(${RT_INCLUDES} ${DL_INCLUDES} ${M_INCLUDES} ${GLIB_INCLUDES})
+
 ## make sure shadow.h is in the include path
-include_directories(${CMAKE_SOURCE_DIR}/src/ ${GLIB_INCLUDES})
+include_directories(${CMAKE_SOURCE_DIR}/src/)
+
+## build the LLVM plugin that we'll use to get plugin state automatically
+add_subdirectory(hoist)
+
+## compile defs and flags
+add_definitions(-D_SVID_SOURCE -D_XOPEN_SOURCE=600) #-D_GNU_SOURCE
+add_cflags(-fPIC)
 
 ## build the required libraries for intercepting system and library calls
 add_subdirectory(intercept)
 
 ## build the built-in plug-in libraries
-add_subdirectory(library)
+add_subdirectory(plugins)
 
 ## sources for our main shadow program
 set(shadow_srcs
@@ -23,16 +39,15 @@ set(shadow_srcs
     topology/shd-link.c
     topology/shd-internetwork.c
     
-    plugin/shd-plugin.c
-    plugin/shd-plugin-state.c
-    plugin/shd-software.c
-    plugin/shd-system.c
-    library/shd-library.c
+    engine/shd-plugin.c
+    engine/shd-system.c
+    plugins/shd-library.c
     
     runnable/shd-runnable.c
     runnable/shd-listener.c
     runnable/event/shd-event.c
     runnable/event/shd-start-application.c
+    runnable/event/shd-stop-application.c
     runnable/event/shd-heartbeat.c
     runnable/event/shd-callback.c
     runnable/event/shd-interface-received.c
@@ -43,7 +58,6 @@ set(shadow_srcs
     runnable/event/shd-tcp-close-timer-expired.c
     runnable/action/shd-action.c
     runnable/action/shd-connect-network.c
-    runnable/action/shd-create-software.c
     runnable/action/shd-create-network.c
     runnable/action/shd-create-node.c
     runnable/action/shd-generate-cdf.c

@@ -40,15 +40,13 @@ NotifyPluginEvent* notifyplugin_new(gint epollHandle) {
 void notifyplugin_run(NotifyPluginEvent* event, Node* node) {
 	MAGIC_ASSERT(event);
 
+	debug("event started");
+
 	/* check in with epoll to make sure we should carry out the notification */
 	Epoll* epoll = (Epoll*) node_lookupDescriptor(node, event->epollHandle);
+	epoll_tryNotify(epoll);
 
-	if(epoll_isReadyToNotify(epoll)) {
-		application_notify(node_getApplication(node));
-
-		/* check if we need to be notified again */
-		epoll_ensureTriggers(epoll);
-	}
+	debug("event finished");
 }
 
 void notifyplugin_free(NotifyPluginEvent* event) {

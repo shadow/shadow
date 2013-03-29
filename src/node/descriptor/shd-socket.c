@@ -125,6 +125,11 @@ Packet* socket_pullOutPacket(Socket* socket) {
 	return socket_removeFromOutputBuffer(socket);
 }
 
+Packet* socket_peekNextPacket(const Socket* socket) {
+	MAGIC_ASSERT(socket);
+	return g_queue_peek_head(socket->outputBuffer);
+}
+
 gint socket_getPeerName(Socket* socket, in_addr_t* ip, in_port_t* port) {
 	MAGIC_ASSERT(socket);
 	g_assert(ip && port);

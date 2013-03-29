@@ -56,13 +56,14 @@ void packet_setTCP(Packet* packet, enum ProtocolTCPFlags flags,
 void packet_updateTCP(Packet* packet, guint acknowledgement, guint window);
 
 guint packet_getPayloadLength(Packet* packet);
+gdouble packet_getPriority(Packet* packet);
 guint packet_getHeaderSize(Packet* packet);
 in_addr_t packet_getDestinationIP(Packet* packet);
 in_addr_t packet_getSourceIP(Packet* packet);
 in_port_t packet_getSourcePort(Packet* packet);
 guint packet_copyPayload(Packet* packet, gsize payloadOffset, gpointer buffer, gsize bufferLength);
 void packet_getTCPHeader(Packet* packet, PacketTCPHeader* header);
-gint packet_compareTCPSequence(const Packet* packet1, const Packet* packet2, gpointer user_data);
+gint packet_compareTCPSequence(Packet* packet1, Packet* packet2, gpointer user_data);
 
 gint packet_getDestinationAssociationKey(Packet* packet);
 gint packet_getSourceAssociationKey(Packet* packet);

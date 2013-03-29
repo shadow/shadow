@@ -38,6 +38,7 @@ struct _Worker {
 
 	Engine* cached_engine;
 	Plugin* cached_plugin;
+	Application* cached_application;
 	Node* cached_node;
 	Event* cached_event;
 
@@ -53,7 +54,7 @@ void worker_free(gpointer data);
 gpointer worker_run(GSList* nodes);
 
 void worker_setKillTime(SimulationTime endTime);
-Plugin* worker_getPlugin(Software* software);
+Plugin* worker_getPlugin(GQuark pluginID, GString* pluginPath);
 Internetwork* worker_getInternet();
 Configuration* worker_getConfig();
 gboolean worker_isInShadowContext();

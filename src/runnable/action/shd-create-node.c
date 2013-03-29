@@ -26,7 +26,6 @@
 struct _CreateNodesAction {
 	Action super;
 	GQuark id;
-	GQuark softwareID;
 	GQuark networkID;
 	guint64 bandwidthdown;
 	guint64 bandwidthup;
@@ -38,6 +37,16 @@ struct _CreateNodesAction {
 	GString* logPcapString;
 	GString* pcapDirString;
 
+	GList* applications;
+	MAGIC_DECLARE;
+};
+
+typedef struct _NodeApplication NodeApplication;
+struct _NodeApplication {
+	GQuark pluginID;
+	GString* arguments;
+	SimulationTime starttime;
+	SimulationTime stoptime;
 	MAGIC_DECLARE;
 };
 
@@ -47,19 +56,18 @@ RunnableFunctionTable createnodes_functions = {
 	MAGIC_VALUE
 };
 
-CreateNodesAction* createnodes_new(GString* name, GString* software, GString* cluster,
+CreateNodesAction* createnodes_new(GString* name, GString* cluster,
 		guint64 bandwidthdown, guint64 bandwidthup, guint64 quantity, guint64 cpuFrequency,
 		guint64 heartbeatIntervalSeconds, GString* heartbeatLogLevelString,
 		GString* logLevelString, GString* logPcapString, GString* pcapDirString)
 {
-	g_assert(name && software);
+	g_assert(name);
 	CreateNodesAction* action = g_new0(CreateNodesAction, 1);
 	MAGIC_INIT(action);
 
 	action_init(&(action->super), &createnodes_functions);
 
 	action->id = g_quark_from_string((const gchar*) name->str);
-	action->softwareID = g_quark_from_string((const gchar*) software->str);
 
 	action->networkID = cluster ? g_quark_from_string((const gchar*) cluster->str) : 0;
 	action->bandwidthdown = bandwidthdown;
@@ -83,6 +91,22 @@ CreateNodesAction* createnodes_new(GString* name, GString* software, GString* cl
 	return action;
 }
 
+void createnodes_addApplication(CreateNodesAction* action, GString* pluginName,
+		GString* arguments, guint64 starttime, guint64 stoptime)
+{
+	g_assert(pluginName && arguments);
+	MAGIC_ASSERT(action);
+
+	NodeApplication* nodeApp = g_new0(NodeApplication, 1);
+
+	nodeApp->pluginID = g_quark_from_string((const gchar*) pluginName->str);
+	nodeApp->arguments = g_string_new(arguments->str);
+	nodeApp->starttime = (SimulationTime) (starttime * SIMTIME_ONE_SECOND);
+	nodeApp->stoptime = (SimulationTime) (stoptime * SIMTIME_ONE_SECOND);
+
+	action->applications = g_list_append(action->applications, nodeApp);
+}
+
 void createnodes_run(CreateNodesAction* action) {
 	MAGIC_ASSERT(action);
 
@@ -91,9 +115,8 @@ void createnodes_run(CreateNodesAction* action) {
 
 	const gchar* hostname = g_quark_to_string(action->id);
 	guint hostnameCounter = 0;
-	Software* software = engine_get(worker->cached_engine, SOFTWARE, action->softwareID);
 
-	if(!hostname || !software) {
+	if(!hostname) {
 		critical("Can not create %lu Node(s) '%s' with NULL components. Check XML file for errors.",
 				action->quantity, g_quark_to_string(action->id));
 		return;
@@ -144,6 +167,8 @@ void createnodes_run(CreateNodesAction* action) {
 		pcapDir = g_strdup(action->pcapDirString->str);
 	}
 
+	gchar* qdisc = configuration_getQueuingDiscipline(config);
+
 	for(gint i = 0; i < action->quantity; i++) {
 		/* get a random network if they didnt assign one */
 		gdouble randomDouble = engine_nextRandomDouble(worker->cached_engine);
@@ -159,23 +184,36 @@ void createnodes_run(CreateNodesAction* action) {
 		GString* hostnameBuffer = g_string_new(hostname);
 		if(action->quantity > 1) {
 			gchar prefix[20];
-			g_snprintf(prefix, 20, "%u.", ++hostnameCounter);
-			hostnameBuffer = g_string_prepend(hostnameBuffer, (const char*) prefix);
+			g_snprintf(prefix, 20, "%u", ++hostnameCounter);
+			hostnameBuffer = g_string_append(hostnameBuffer, (const char*) prefix);
 		}
 		GQuark id = g_quark_from_string((const gchar*) hostnameBuffer->str);
 
 		/* the node is part of the internet */
 		guint nodeSeed = (guint) engine_nextRandomInt(worker->cached_engine);
-		Node* node = internetwork_createNode(worker_getInternet(), id, network, software,
+		Node* node = internetwork_createNode(worker_getInternet(), id, network,
 				hostnameBuffer, bwDownKiBps, bwUpKiBps, cpuFrequency, cpuThreshold, cpuPrecision,
-				nodeSeed, heartbeatInterval, heartbeatLogLevel, logLevel, logPcap, pcapDir);
+				nodeSeed, heartbeatInterval, heartbeatLogLevel, logLevel, logPcap, pcapDir, qdisc);
 
 		g_string_free(hostnameBuffer, TRUE);
 
+		/* loop through and create, add, and boot all applications */
+		GList* item = action->applications;
+		while (item && item->data) {
+			NodeApplication* app = (NodeApplication*) item->data;
+			gchar* pluginPath = engine_get(worker->cached_engine, PLUGINPATHS, app->pluginID);
+
+			/* make sure our bootstrap events are set properly */
+			worker->clock_now = 0;
+			node_addApplication(node, app->pluginID, pluginPath,
+					app->starttime, app->stoptime, app->arguments->str);
+			worker->clock_now = SIMTIME_INVALID;
+
+			item = g_list_next(item);
+		}
+
 		/* make sure our bootstrap events are set properly */
 		worker->clock_now = 0;
-		StartApplicationEvent* event = startapplication_new();
-		worker_scheduleEvent((Event*)event, software->startTime, id);
 		HeartbeatEvent* heartbeat = heartbeat_new(node_getTracker(node));
 		worker_scheduleEvent((Event*)heartbeat, heartbeatInterval, id);
 		worker->clock_now = SIMTIME_INVALID;
@@ -191,6 +229,14 @@ void createnodes_free(CreateNodesAction* action) {
 	if(action->logLevelString) {
 		g_string_free(action->logLevelString, TRUE);
 	}
+
+	GList* item = action->applications;
+	while (item && item->data) {
+		NodeApplication* nodeApp = (NodeApplication*) item->data;
+		g_string_free(nodeApp->arguments, TRUE);
+		item = g_list_next(item);
+	}
+	g_list_free(action->applications);
 
 	MAGIC_CLEAR(action);
 	g_free(action);

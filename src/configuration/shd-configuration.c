@@ -48,8 +48,8 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	/* set options to change defaults for the main group */
 	c->mainOptionGroup = g_option_group_new("main", "Application Options", "Various application related options", NULL, NULL);
 	const GOptionEntry mainEntries[] = {
-	  { "log-level", 'l', 0, G_OPTION_ARG_STRING, &(c->logLevelInput), "Log LEVEL above which to filter messages (error < critical < warning < message < info < debug) [message]", "LEVEL" },
-	  { "heartbeat-log-level", 'g', 0, G_OPTION_ARG_STRING, &(c->heartbeatLogLevelInput), "Log LEVEL at which to print node statistics [message]", "LEVEL" },
+	  { "log-level", 'l', 0, G_OPTION_ARG_STRING, &(c->logLevelInput), "Log LEVEL above which to filter messages ('error' < 'critical' < 'warning' < 'message' < 'info' < 'debug') ['message']", "LEVEL" },
+	  { "heartbeat-log-level", 'g', 0, G_OPTION_ARG_STRING, &(c->heartbeatLogLevelInput), "Log LEVEL at which to print node statistics ['message']", "LEVEL" },
 	  { "heartbeat-frequency", 'h', 0, G_OPTION_ARG_INT, &(c->heartbeatInterval), "Log node statistics every N seconds [60]", "N" },
 	  { "seed", 's', 0, G_OPTION_ARG_INT, &(c->randomSeed), "Initialize randomness for each thread using seed N [1]", "N" },
 	  { "workers", 'w', 0, G_OPTION_ARG_INT, &(c->nWorkerThreads), "Use N worker threads [0]", "N" },
@@ -68,6 +68,7 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	  { "cpu-precision", 0, 0, G_OPTION_ARG_INT, &(c->cpuPrecision), "round measured CPU delays to the nearest TIME, in microseconds (negative value to disable fuzzy CPU delays) [200]", "TIME" },
 	  { "interface-batch", 0, 0, G_OPTION_ARG_INT, &(c->interfaceBatchTime), "Batch TIME for network interface sends and receives, in milliseconds [10]", "TIME" },
 	  { "interface-buffer", 0, 0, G_OPTION_ARG_INT, &(c->interfaceBufferSize), "Size of the network interface receive buffer, in bytes [1024000]", "N" },
+	  { "interface-qdisc", 0, 0, G_OPTION_ARG_STRING, &(c->interfaceQueuingDiscipline), "The interface queuing discipline QDISC used to select the next sendable socket ('fifo' or 'rr') ['fifo']", "QDISC" },
 	  { "runahead", 0, 0, G_OPTION_ARG_INT, &(c->minRunAhead), "Minimum allowed TIME workers may run ahead when sending events between nodes, in milliseconds [10]", "TIME" },
 	  { "tcp-windows", 0, 0, G_OPTION_ARG_INT, &(c->initialTCPWindow), "Initialize the TCP send, receive, and congestion windows to N packets [10]", "N" },
 	  { NULL },
@@ -128,13 +129,13 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	if(c->interfaceBufferSize < CONFIG_MTU) {
 		c->interfaceBufferSize = CONFIG_MTU;
 	}
-	if(c->interfaceBatchTime < 0) {
-		c->interfaceBatchTime = 0;
-	}
 	c->interfaceBatchTime *= SIMTIME_ONE_MILLISECOND;
 	if(c->interfaceBatchTime == 0) {
 		/* we require at least 1 nanosecond b/c of time granularity */
 		c->interfaceBatchTime = 1;
+	}
+	if(c->interfaceQueuingDiscipline == NULL) {
+		c->interfaceQueuingDiscipline = g_strdup("fifo");
 	}
 
 	c->inputXMLFilenames = g_queue_new();
@@ -154,6 +155,7 @@ void configuration_free(Configuration* config) {
 	}
 	g_free(config->logLevelInput);
 	g_free(config->heartbeatLogLevelInput);
+	g_free(config->interfaceQueuingDiscipline);
 
 	/* groups are freed with the context */
 	g_option_context_free(config->context);
@@ -196,4 +198,9 @@ GLogLevelFlags configuration_getHeartbeatLogLevel(Configuration* config) {
 SimulationTime configuration_getHearbeatInterval(Configuration* config) {
 	MAGIC_ASSERT(config);
 	return config->heartbeatInterval * SIMTIME_ONE_SECOND;
+}
+
+gchar* configuration_getQueuingDiscipline(Configuration* config) {
+	MAGIC_ASSERT(config);
+	return config->interfaceQueuingDiscipline;
 }

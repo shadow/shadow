@@ -53,15 +53,15 @@ Worker* worker_getPrivate() {
 	Engine* engine = shadow_engine;
 
 	/* get current thread's private worker object */
-	Worker* worker = g_static_private_get(engine_getWorkerKey(engine));
+	Worker* worker = g_private_get(engine_getWorkerKey(engine));
 
 	/* todo: should we use g_once here instead? */
 	if(!worker) {
 		worker = _worker_new(engine);
-		g_static_private_set(engine_getWorkerKey(engine), worker, worker_free);
+		g_private_replace(engine_getWorkerKey(engine), worker);
 		gboolean* preloadIsReady = g_new(gboolean, 1);
 		*preloadIsReady = TRUE;
-		g_static_private_set(engine_getPreloadKey(engine), preloadIsReady, g_free);
+		g_private_replace(engine_getPreloadKey(engine), preloadIsReady);
 	}
 
 	MAGIC_ASSERT(worker);
@@ -80,19 +80,18 @@ void worker_setKillTime(SimulationTime endTime) {
 	engine_setKillTime(shadow_engine, endTime);
 }
 
-Plugin* worker_getPlugin(Software* software) {
-	MAGIC_ASSERT(software);
-	g_assert(software->pluginPath);
+Plugin* worker_getPlugin(GQuark pluginID, GString* pluginPath) {
+	g_assert(pluginPath);
 
 	/* worker has a private plug-in for each plugin ID */
 	Worker* worker = worker_getPrivate();
-	Plugin* plugin = g_hash_table_lookup(worker->plugins, &(software->pluginID));
+	Plugin* plugin = g_hash_table_lookup(worker->plugins, &pluginID);
 	if(!plugin) {
 		/* plug-in has yet to be loaded by this worker. do that now. this call
 		 * will copy the plug-in library to the temporary directory, and open
 		 * that so each thread can execute in its own memory space.
 		 */
-		plugin = plugin_new(software->pluginID, software->pluginPath);
+		plugin = plugin_new(pluginID, pluginPath);
 		g_hash_table_replace(worker->plugins, plugin_getID(plugin), plugin);
 	}
 
@@ -181,7 +180,7 @@ gpointer worker_run(GSList* nodes) {
 	 * applications may cause close() to get called on sockets which needs
 	 * other node information.
 	 */
-	g_slist_foreach(nodes, (GFunc) node_stopAllApplications, NULL);
+	g_slist_foreach(nodes, (GFunc) node_freeAllApplications, NULL);
 	g_slist_foreach(nodes, (GFunc) node_free, NULL);
 
 	g_thread_exit(NULL);
@@ -249,7 +248,7 @@ gboolean worker_isInShadowContext() {
 	 * shutdown the threads.
 	 */
 	if(shadow_engine && !(engine_isForced(shadow_engine))) {
-		if(g_static_private_get(engine_getPreloadKey(shadow_engine))) {
+		if(g_private_get(engine_getPreloadKey(shadow_engine))) {
 			Worker* worker = worker_getPrivate();
 			if(worker->cached_plugin) {
 				return plugin_isShadowContext(worker->cached_plugin);

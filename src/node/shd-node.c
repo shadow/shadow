@@ -31,7 +31,7 @@ struct _Node {
 	/* general node lock. nothing that belongs to the node should be touched
 	 * unless holding this lock. everything following this falls under the lock.
 	 */
-	GMutex* lock;
+	GMutex lock;
 
 	GQuark id;
 	gchar* name;
@@ -39,7 +39,8 @@ struct _Node {
 	NetworkInterface* defaultInterface;
 	CPU* cpu;
 
-	Application* application;
+	/* the applications this node is running */
+	GList* applications;
 
 	/* a statistics tracker for in/out bytes, CPU, memory, etc. */
 	Tracker* tracker;
@@ -60,23 +61,26 @@ struct _Node {
 	/* random port counter, in host order */
 	in_port_t randomPortCounter;
 
+	/* track the order in which the application sent us application data */
+	gdouble packetPriorityCounter;
+
 	/* random stream */
 	Random* random;
 
 	MAGIC_DECLARE;
 };
 
-Node* node_new(GQuark id, Network* network, Software* software, guint32 ip,
+Node* node_new(GQuark id, Network* network, guint32 ip,
 		GString* hostname, guint64 bwDownKiBps, guint64 bwUpKiBps,
 		guint cpuFrequency, gint cpuThreshold, gint cpuPrecision, guint nodeSeed,
 		SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel,
-		GLogLevelFlags logLevel, gboolean logPcap, gchar* pcapDir) {
+		GLogLevelFlags logLevel, gboolean logPcap, gchar* pcapDir, gchar* qdisc) {
 	Node* node = g_new0(Node, 1);
 	MAGIC_INIT(node);
 
 	node->id = id;
 	node->name = g_strdup(hostname->str);
-	node->lock = g_mutex_new();
+	g_mutex_init(&(node->lock));
 
 	/* thread-level event communication with other nodes */
 	node->events = eventqueue_new();
@@ -87,11 +91,11 @@ Node* node_new(GQuark id, Network* network, Software* software, guint32 ip,
 	/* virtual interfaces for managing network I/O */
 	node->interfaces = g_hash_table_new_full(g_direct_hash, g_direct_equal,
 			NULL, (GDestroyNotify) networkinterface_free);
-	NetworkInterface* ethernet = networkinterface_new(network, id, hostname->str, bwDownKiBps, bwUpKiBps, logPcap, pcapDir);
+	NetworkInterface* ethernet = networkinterface_new(network, id, hostname->str, bwDownKiBps, bwUpKiBps, logPcap, pcapDir, qdisc);
 	g_hash_table_replace(node->interfaces, GUINT_TO_POINTER((guint)id), ethernet);
 	GString *loopbackName = g_string_new("");
 	g_string_append_printf(loopbackName, "%s-loopback", hostname->str);
-	NetworkInterface* loopback = networkinterface_new(NULL, (GQuark)htonl(INADDR_LOOPBACK), loopbackName->str, G_MAXUINT32, G_MAXUINT32, logPcap, pcapDir);
+	NetworkInterface* loopback = networkinterface_new(NULL, (GQuark)htonl(INADDR_LOOPBACK), loopbackName->str, G_MAXUINT32, G_MAXUINT32, logPcap, pcapDir, qdisc);
 	g_hash_table_replace(node->interfaces, GUINT_TO_POINTER((guint)htonl(INADDR_LOOPBACK)), loopback);
 	node->defaultInterface = ethernet;
 
@@ -103,7 +107,7 @@ Node* node_new(GQuark id, Network* network, Software* software, guint32 ip,
 	node->randomPortCounter = MIN_RANDOM_PORT;
 
 	/* applications this node will run */
-	node->application = application_new(software);
+//	node->application = application_new(software);
 
 	node->cpu = cpu_new(cpuFrequency, cpuThreshold, cpuPrecision);
 	node->random = random_new(nodeSeed);
@@ -112,7 +116,7 @@ Node* node_new(GQuark id, Network* network, Software* software, guint32 ip,
 	node->logPcap = logPcap;
 	node->pcapDir = pcapDir;
 
-	info("Created Node '%s', ip %s, %u bwUpKiBps, %u bwDownKiBps, %lu cpuFrequency, %i cpuThreshold, %i cpuPrecision, %u seed",
+	message("Created Node '%s', ip %s, %u bwUpKiBps, %u bwDownKiBps, %lu cpuFrequency, %i cpuThreshold, %i cpuPrecision, %u seed",
 			g_quark_to_string(node->id), networkinterface_getIPName(node->defaultInterface),
 			bwUpKiBps, bwDownKiBps, cpuFrequency, cpuThreshold, cpuPrecision, nodeSeed);
 
@@ -131,7 +135,7 @@ void node_free(Node* node, gpointer userData) {
 	cpu_free(node->cpu);
 	tracker_free(node->tracker);
 
-	g_mutex_free(node->lock);
+	g_mutex_clear(&(node->lock));
 
 	MAGIC_CLEAR(node);
 	g_free(node);
@@ -139,12 +143,12 @@ void node_free(Node* node, gpointer userData) {
 
 void node_lock(Node* node) {
 	MAGIC_ASSERT(node);
-	g_mutex_lock(node->lock);
+	g_mutex_lock(&(node->lock));
 }
 
 void node_unlock(Node* node) {
 	MAGIC_ASSERT(node);
-	g_mutex_unlock(node->lock);
+	g_mutex_unlock(&(node->lock));
 }
 
 EventQueue* node_getEvents(Node* node) {
@@ -152,19 +156,47 @@ EventQueue* node_getEvents(Node* node) {
 	return node->events;
 }
 
-void node_startApplication(Node* node) {
+void node_addApplication(Node* node, GQuark pluginID, gchar* pluginPath,
+		SimulationTime startTime, SimulationTime stopTime, gchar* arguments) {
 	MAGIC_ASSERT(node);
-	application_boot(node->application);
+	Application* application = application_new(pluginID, pluginPath, startTime, stopTime, arguments);
+	node->applications = g_list_append(node->applications, application);
+
+	Worker* worker = worker_getPrivate();
+	StartApplicationEvent* event = startapplication_new(application);
+	worker_scheduleEvent((Event*)event, startTime, node->id);
+
+	if(stopTime > startTime) {
+		StopApplicationEvent* event = stopapplication_new(application);
+		worker_scheduleEvent((Event*)event, stopTime, node->id);
+	}
 }
 
-void node_stopAllApplications(Node* node, gpointer userData) {
+void node_startApplication(Node* node, Application* application) {
+	MAGIC_ASSERT(node);
+	application_start(application);
+}
+
+void node_stopApplication(Node* node, Application* application) {
+	MAGIC_ASSERT(node);
+	application_stop(application);
+}
+
+void node_freeAllApplications(Node* node, gpointer userData) {
 	MAGIC_ASSERT(node);
 
 	Worker* worker = worker_getPrivate();
 	worker->cached_node = node;
 
-	application_free(node->application);
-	node->application = NULL;
+	GList* item = node->applications;
+	while (item && item->data) {
+		Application* application = (Application*) item->data;
+		application_free(application);
+		item->data = NULL;
+		item = g_list_next(item);
+	}
+	g_list_free(node->applications);
+	node->applications = NULL;
 
 	worker->cached_node = NULL;
 }
@@ -210,11 +242,6 @@ in_addr_t node_getDefaultIP(Node* node) {
 gchar* node_getDefaultIPName(Node* node) {
 	MAGIC_ASSERT(node);
 	return networkinterface_getIPName(node->defaultInterface);
-}
-
-Application* node_getApplication(Node* node) {
-	MAGIC_ASSERT(node);
-	return node->application;
 }
 
 Random* node_getRandom(Node* node) {
@@ -389,11 +416,10 @@ gint node_epollControl(Node* node, gint epollDescriptor, gint operation,
 
 	/* if this is for a system file, forward to system call */
 	if(fileDescriptor < MIN_DESCRIPTOR) {
-		gint epolld = epoll_getOSEpollDescriptor(epoll);
-		return epoll_ctl(epolld, operation, fileDescriptor, event);
+		return epoll_controlOS(epoll, operation, fileDescriptor, event);
 	}
 
-	/* EBADF  fd is not a valid file descriptor. */
+	/* EBADF  fd is not a valid shadow file descriptor. */
 	descriptor = node_lookupDescriptor(node, fileDescriptor);
 	if(descriptor == NULL) {
 		return EBADF;
@@ -871,4 +897,9 @@ GLogLevelFlags node_getLogLevel(Node* node) {
 gchar node_isLoggingPcap(Node *node) {
 	MAGIC_ASSERT(node);
 	return node->logPcap;
+}
+
+gdouble node_getNextPacketPriority(Node* node) {
+	MAGIC_ASSERT(node);
+	return ++(node->packetPriorityCounter);
 }

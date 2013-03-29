@@ -41,13 +41,20 @@ struct _PacketUDPHeader {
 };
 
 struct _Packet {
-	GMutex* lock;
+	GMutex lock;
 	guint referenceCount;
 
 	enum ProtocolType protocol;
 	gpointer header;
 	gpointer payload;
 	guint payloadLength;
+
+	/* tracks application priority so we flush packets from the interface to
+	 * the wire in the order intended by the application. this is used in
+	 * the default FIFO network interface scheduling discipline.
+	 * smaller values have greater priority.
+	 */
+	gdouble priority;
 
 	MAGIC_DECLARE;
 };
@@ -56,12 +63,17 @@ Packet* packet_new(gconstpointer payload, gsize payloadLength) {
 	Packet* packet = g_new0(Packet, 1);
 	MAGIC_INIT(packet);
 
-	packet->lock = g_mutex_new();
+	g_mutex_init(&(packet->lock));
 	packet->referenceCount = 1;
 
 	packet->payloadLength = payloadLength;
-	/* if length is 0, this returns NULL */
-	packet->payload = g_memdup(payload, payloadLength);
+	if(payloadLength > 0) {
+		/* if length is 0, this returns NULL */
+		packet->payload = g_memdup(payload, payloadLength);
+
+		/* application data needs a priority ordering for FIFO onto the wire */
+		packet->priority = node_getNextPacketPriority(worker_getPrivate()->cached_node);
+	}
 
 	return packet;
 }
@@ -69,7 +81,7 @@ Packet* packet_new(gconstpointer payload, gsize payloadLength) {
 static void _packet_free(Packet* packet) {
 	MAGIC_ASSERT(packet);
 
-	g_mutex_free(packet->lock);
+	g_mutex_clear(&(packet->lock));
 	if(packet->header) {
 		g_free(packet->header);
 	}
@@ -81,14 +93,14 @@ static void _packet_free(Packet* packet) {
 	g_free(packet);
 }
 
-static void _packet_lock(const Packet* packet) {
+static void _packet_lock(Packet* packet) {
 	MAGIC_ASSERT(packet);
-	g_mutex_lock(packet->lock);
+	g_mutex_lock(&(packet->lock));
 }
 
-static void _packet_unlock(const Packet* packet) {
+static void _packet_unlock(Packet* packet) {
 	MAGIC_ASSERT(packet);
-	g_mutex_unlock(packet->lock);
+	g_mutex_unlock(&(packet->lock));
 }
 
 void packet_ref(Packet* packet) {
@@ -110,7 +122,7 @@ void packet_unref(Packet* packet) {
 	}
 }
 
-gint packet_compareTCPSequence(const Packet* packet1, const Packet* packet2, gpointer user_data) {
+gint packet_compareTCPSequence(Packet* packet1, Packet* packet2, gpointer user_data) {
 	if(packet1 == packet2){
 		MAGIC_ASSERT(packet1);
 		MAGIC_ASSERT(packet2);
@@ -199,10 +211,13 @@ void packet_updateTCP(Packet* packet, guint acknowledgement, guint window) {
 }
 
 guint packet_getPayloadLength(Packet* packet) {
-	_packet_lock(packet);
-	guint length = packet->payloadLength;
-	_packet_unlock(packet);
-	return length;
+	/* not locked, read only */
+	return packet->payloadLength;
+}
+
+gdouble packet_getPriority(Packet* packet) {
+	/* not locked, read only */
+	return packet->priority;
 }
 
 guint packet_getHeaderSize(Packet* packet) {
