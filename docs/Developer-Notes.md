@@ -51,4 +51,4 @@ gpg -a -b shadow-v1.5.0.tar.gz
 gpg --verify shadow-v1.5.0.tar.gz.asc
 ```
 
-Note that `git merge -Xtheirs v1.5.0` will assume all conflicts can be fixed by taking the remote tag/branch that you are merging into the current branch. This is exactly what to keep our releases following master.
+Note that `git merge -Xtheirs v1.5.0` will assume all conflicts can be fixed by taking the remote tag/branch that you are merging into the current branch. This will keep our releases following master.
