@@ -38,8 +38,14 @@ You'll also need to manually build and install **clang/llvm** from source becaus
 
 First install clang/llvm dependencies:
 
+Fedora:
 ```bash
 sudo yum install -y libxml2-devel libxslt-devel
+```
+
+Ubuntu:
+```bash
+sudo apt-get install -y libxml2-dev libxslt-dev
 ```
 
 Then try the following (replace 'username' with your username and 'N' with the number of threads for a parallel build):
