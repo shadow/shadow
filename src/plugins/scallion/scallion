@@ -27,13 +27,14 @@ from datetime import datetime
 DEFAULTPREFIX=os.path.abspath(os.path.expanduser("~/.shadow/"))
 DEFAULTOUTPUT=os.path.abspath(os.path.expanduser("./"))
 DEFAULTINPUT=os.path.abspath(os.path.expanduser("./hosts.xml"))
-
+        
 def main():
     # setup our commands
     ap = argparse.ArgumentParser(description='Run Tor experiments as a plug-in to Shadow', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     ap.add_argument('-p', '--prefix', action="store", dest="prefix", help="PATH to scallion installation", metavar="PATH", default=DEFAULTPREFIX)
     ap.add_argument('-i', '--input-file', action="store", dest="input", help="add PATH as a shadow input XML file (in addition to PREFIX/share/topology.xml)", metavar="PATH", default=DEFAULTINPUT)
     ap.add_argument('-o', '--output-dir', action="store", type=str, dest="output", help="PATH to directory from which to run Shadow", metavar='PATH', default=DEFAULTOUTPUT)
+    ap.add_argument('-c', '--compress', action="store", dest="compress", help="use N xz threads to compress the logfile inline", default=0)
     ap.add_argument('-r', '--reset', action="store_true", dest="reset", help="reset data directory and exit", default=False)
     ap.add_argument('-y', '--assume-yes', action="store_true", dest="clear", help="don't ask before resetting data directory", default=False)
     
@@ -83,13 +84,20 @@ def main():
     
     # command to run
     cmd = "{0} --preload={1} {2} {3}".format(shadowpath, preloadpath, ' '.join(unknown_args), xmlpaths)
-
     log("calling '{0}', output directed to '{1}'".format(cmd, logpath))
-    f = open(logpath, 'w')
     start = datetime.now()
-    retcode = subprocess.call(cmd.split(), cwd=args.output, stdout=f)
+    
+    retcode = None
+    if args.compress > 0: # compress with threaded xz
+        xz_p = subprocess.Popen("xz -T {0} > {1}.xz".format(args.compress, logpath), stdin=subprocess.PIPE, shell=True)
+        retcode = subprocess.call(cmd.split(), cwd=args.output, stdout=xz_p.stdin)
+        xz_p.stdin.close()
+        xz_p.wait()
+    else:
+        with open(logpath, 'wb') as f:
+            retcode = subprocess.call(cmd.split(), cwd=args.output, stdout=f)
+    
     end = datetime.now()
-    f.close()
 
     if dstat_p is not None: dstat_p.kill()
     log("Shadow returned {1} in {2} seconds".format(end, retcode, end-start))
