@@ -34,7 +34,7 @@ def main():
     ap.add_argument('-p', '--prefix', action="store", dest="prefix", help="PATH to scallion installation", metavar="PATH", default=DEFAULTPREFIX)
     ap.add_argument('-i', '--input-file', action="store", dest="input", help="add PATH as a shadow input XML file (in addition to PREFIX/share/topology.xml)", metavar="PATH", default=DEFAULTINPUT)
     ap.add_argument('-o', '--output-dir', action="store", type=str, dest="output", help="PATH to directory from which to run Shadow", metavar='PATH', default=DEFAULTOUTPUT)
-    ap.add_argument('-c', '--compress', action="store", dest="compress", help="use N xz threads to compress the logfile inline", default=0)
+    ap.add_argument('-c', '--compress', action="store", dest="compress", help="use N xz threads to compress the logfile inline", metavar="N", default=0)
     ap.add_argument('-r', '--reset', action="store_true", dest="reset", help="reset data directory and exit", default=False)
     ap.add_argument('-y', '--assume-yes', action="store_true", dest="clear", help="don't ask before resetting data directory", default=False)
     
