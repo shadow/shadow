@@ -414,6 +414,9 @@ def setup_tor(args):
         distcleancmd = "make distclean"
         log("running \'{0}\'".format(distcleancmd))
         subprocess.call(shlex.split(distcleancmd.strip()))
+    # otherwise blow it away if there were problems building it so we try again
+    elif os.path.exists(args.tordir) and not os.path.exists(args.tordir+"/src/or/tor"):
+        shutil.rmtree(args.tordir)
     
     if not os.path.exists(args.tordir):
         # we have no Tor build directory, check requested url
