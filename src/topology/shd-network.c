@@ -133,6 +133,10 @@ Link* network_getLink(Network *network, in_addr_t sourceIP, in_addr_t destinatio
 	if(!link) {
 		Internetwork* internet = worker_getInternet();
 		Network *destinationNetwork = internetwork_lookupNetwork(internet, destinationIP);
+		if(!destinationNetwork) {
+			g_mutex_unlock(&(network->lock));
+			return NULL;
+		}
 
 		/* get list of possible links to destination network */
 		GList *links = g_hash_table_lookup(network->linksByCluster, &(destinationNetwork->id));
@@ -197,27 +201,30 @@ gdouble network_getLinkReliability(in_addr_t sourceIP, in_addr_t destinationIP) 
 	Network *sourceNetwork = internetwork_lookupNetwork(internet, sourceIP);
 	Network *destinationNetwork = internetwork_lookupNetwork(internet, destinationIP);
 
-	Link *link = network_getLink(sourceNetwork, sourceIP, destinationIP);
-	if(link) {
-		/* there are three chances to drop a packet here:
-		 * p1 : loss rate from source-node to the source-cluster
-		 * p2 : loss rate on the link between source-cluster and destination-cluster
-		 * p3 : loss rate from destination-cluster to destination-node
-		 *
-		 * The reliability is then the combination of the probability
-		 * that its not dropped in each case:
-		 * P = ((1-p1)(1-p2)(1-p3))
-		 */
-		gdouble p1 = sourceNetwork->packetloss;
-		gdouble p2 = link_getPacketLoss(link);
-		gdouble p3 = destinationNetwork->packetloss;
-		gdouble P = (1.0-p1) * (1.0-p2) * (1.0-p3);
-		return P;
-	} else {
-		critical("unable to find link between networks '%s' and '%s'. Check XML file for errors.",
-				g_quark_to_string(sourceNetwork->id), g_quark_to_string(destinationNetwork->id));
-		return G_MINDOUBLE;
+	if(sourceNetwork && destinationNetwork) {
+		Link *link = network_getLink(sourceNetwork, sourceIP, destinationIP);
+		if(link) {
+			/* there are three chances to drop a packet here:
+			 * p1 : loss rate from source-node to the source-cluster
+			 * p2 : loss rate on the link between source-cluster and destination-cluster
+			 * p3 : loss rate from destination-cluster to destination-node
+			 *
+			 * The reliability is then the combination of the probability
+			 * that its not dropped in each case:
+			 * P = ((1-p1)(1-p2)(1-p3))
+			 */
+			gdouble p1 = sourceNetwork->packetloss;
+			gdouble p2 = link_getPacketLoss(link);
+			gdouble p3 = destinationNetwork->packetloss;
+			gdouble P = (1.0-p1) * (1.0-p2) * (1.0-p3);
+			return P;
+		}
 	}
+
+	critical("unable to find link between networks '%s' and '%s'. Check XML file for errors.",
+			sourceNetwork ? g_quark_to_string(sourceNetwork->id) : "NULL",
+			destinationNetwork ? g_quark_to_string(destinationNetwork->id) : "NULL");
+	return G_MINDOUBLE;
 }
 
 gdouble network_getLinkLatency(in_addr_t sourceIP, in_addr_t destinationIP, gdouble percentile) {
@@ -225,15 +232,17 @@ gdouble network_getLinkLatency(in_addr_t sourceIP, in_addr_t destinationIP, gdou
 	Network *sourceNetwork = internetwork_lookupNetwork(internet, sourceIP);
 	Network *destinationNetwork = internetwork_lookupNetwork(internet, destinationIP);
 
-	Link *link = network_getLink(sourceNetwork, sourceIP, destinationIP);
-
-	if(link) {
-		return link_computeDelay(link, percentile);
-	} else {
-		critical("unable to find link between networks '%s' and '%s'. Check XML file for errors.",
-				g_quark_to_string(sourceNetwork->id), g_quark_to_string(destinationNetwork->id));
-		return G_MAXDOUBLE;
+	if(sourceNetwork && destinationNetwork) {
+		Link *link = network_getLink(sourceNetwork, sourceIP, destinationIP);
+		if(link) {
+			return link_computeDelay(link, percentile);
+		}
 	}
+
+	critical("unable to find link between networks '%s' and '%s'. Check XML file for errors.",
+			sourceNetwork ? g_quark_to_string(sourceNetwork->id) : "NULL",
+			destinationNetwork ? g_quark_to_string(destinationNetwork->id) : "NULL");
+	return G_MAXDOUBLE;
 }
 
 gdouble network_sampleLinkLatency(in_addr_t sourceIP, in_addr_t destinationIP) {

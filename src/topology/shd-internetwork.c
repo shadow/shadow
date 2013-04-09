@@ -154,7 +154,11 @@ Network* internetwork_getRandomNetwork(Internetwork* internet, gdouble randomDou
 
 Network* internetwork_lookupNetwork(Internetwork* internet, in_addr_t ip) {
 	MAGIC_ASSERT(internet);
-	return (Network*) g_hash_table_lookup(internet->networksByIP, &ip);
+	Network* net = (Network*) g_hash_table_lookup(internet->networksByIP, &ip);
+	if(!net) {
+		critical("unable to find a network for ip %s", NTOA(ip));
+	}
+	return net;
 }
 
 static guint32 _internetwork_generateIP(Internetwork* internet) {
