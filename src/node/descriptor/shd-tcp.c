@@ -227,13 +227,15 @@ static void _tcpserver_free(TCPServer* server) {
 static in_addr_t tcp_getIP(TCP* tcp) {
 	in_addr_t ip = 0;
 	if(tcp->server) {
-		ip = socket_getBinding(&(tcp->super));
-		if(ip == 0) {
+		if(socket_isBound(&(tcp->super))) {
+			ip = socket_getBinding(&(tcp->super));
+		} else {
 			ip = tcp->server->lastIP;
 		}
 	} else if(tcp->child) {
-		ip = socket_getBinding(&(tcp->child->parent->super));
-		if(ip == 0) {
+		if(socket_isBound(&(tcp->child->parent->super))) {
+			ip = socket_getBinding(&(tcp->child->parent->super));
+		} else {
 			ip = tcp->child->parent->server->lastIP;
 		}
 	} else {
@@ -265,8 +267,20 @@ static void _tcp_autotune(TCP* tcp) {
 	 */
 	Internetwork* internet = worker_getInternet();
 
-	GQuark sourceID = (GQuark) tcp_getIP(tcp);
-	GQuark destinationID = (GQuark) tcp_getPeerIP(tcp);
+	in_addr_t sourceIP = tcp_getIP(tcp);
+	in_addr_t destinationIP = tcp_getPeerIP(tcp);
+
+	if(sourceIP == htonl(INADDR_ANY)) {
+		/* source interface depends on destination */
+		if(destinationIP == htonl(INADDR_LOOPBACK)) {
+			sourceIP = htonl(INADDR_LOOPBACK);
+		} else {
+			sourceIP = node_getDefaultIP(worker_getPrivate()->cached_node);
+		}
+	}
+
+	GQuark sourceID = (GQuark) sourceIP;
+	GQuark destinationID = (GQuark) destinationIP;
 
 	if(sourceID == destinationID) {
 		/* 16 MiB as max */
@@ -456,9 +470,13 @@ static Packet* _tcp_createPacket(TCP* tcp, enum ProtocolTCPFlags flags, gconstpo
 	in_addr_t destinationIP = tcp_getPeerIP(tcp);
 	in_port_t destinationPort = (tcp->server) ? tcp->server->lastPeerPort : tcp->super.peerPort;
 
-
 	if(sourceIP == htonl(INADDR_ANY)) {
-		sourceIP = node_getDefaultIP(worker_getPrivate()->cached_node);
+		/* source interface depends on destination */
+		if(destinationIP == htonl(INADDR_LOOPBACK)) {
+			sourceIP = htonl(INADDR_LOOPBACK);
+		} else {
+			sourceIP = node_getDefaultIP(worker_getPrivate()->cached_node);
+		}
 	}
 
 	g_assert(sourceIP && sourcePort && destinationIP && destinationPort);
