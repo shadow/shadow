@@ -82,7 +82,7 @@ Luckily, Shadow contains a script to do this for you, and will help you configur
 
 For more details, add `--help` to each of those commands.
 
-If you prefer to instead install **openssl** and **libevent** manually, you'll need to configure openssl with something like `./config --prefix=/home/rob/.shadow shared threads -fPIC` and libevent with something like `./configure --prefix=/home/rob/.shadow --enable-shared CFLAGS="-fPIC -I/home/rob/.shadow" LDFLAGS="-L/home/rob/.shadow"`.
+If you prefer to install **openssl** and **libevent** manually instead of using `./setup dependencies`, you'll need to configure openssl with something like `./config --prefix=/home/rob/.shadow shared threads -fPIC` and libevent with something like `./configure --prefix=/home/rob/.shadow --enable-shared CFLAGS="-fPIC -I/home/rob/.shadow" LDFLAGS="-L/home/rob/.shadow"`.
 
 **Important notes:**  
 + The two most useful build options are `-g` or `--debug` to build Shadow with debugging symbols, and `--tor-prefix` to build Scallion with your local custom Tor distribution (instead of downloading one from torproject.org). 
