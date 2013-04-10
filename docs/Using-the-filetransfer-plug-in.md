@@ -3,7 +3,7 @@ The filetransfer plug-in is used to transfer files between virtual nodes. It con
 ## Argument Usage
 
 ```xml
-<software [...] arguments="arg1 arg2 arg3 [...]" />
+<application [...] arguments="arg1 arg2 arg3 [...]" />
 ```
 
 The _arguments_ attribute of the _software_ XML element specifies application arguments for configuring a node's instance of the plug-in. Each argument is separated by a space. For the filetransfer plug-in, the first item of the _arguments_ attribute specifies the mode, one of either _client_ or _server_, and _client_ mode can either be _single_ mode (download _n_ times from one server) or _multi_ mode (download multiple times from multiple servers).
