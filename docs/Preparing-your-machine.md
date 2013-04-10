@@ -51,44 +51,38 @@ make -jN
 make install
 ```
 
+**NOTE**: if you have a system version of Clang/LLVM installed, make sure to note its location as it may cause conflicts as you build Shadow later.
+
 ## obtaining Shadow
 
 For best results, release versions are recommended and can be obtained in various ways:
 * by visiting https://shadow.cs.umn.edu/download/
 * by visiting https://github.com/shadow/shadow/tags
-* by using git (see below)
+* by using git:
 
-Using git to obtain the latest development changes:
 ```bash
 git clone https://github.com/shadow/shadow.git
 cd shadow
-```
-You can also use git to obtain the latest stable release by also running:  
-```bash
 git checkout release
 ```
+
+The master branch contains the latest unstable development changes.
 
 ## building and installing Shadow and its plug-ins
 
 You've downloaded Shadow and changed to its **top-level directory**. Next, you'll want to take care of some manual dependencies required to build Tor as a Shadow plug-in during a full build. We'll need to install **openssl** and **libevent** after downloading and building them with custom configuration options.
 
-Luckily, Shadow contains a script to do this for you, and will help you configure, build, and install Shadow. It has 
-extensive help menus which can be accessed with:
-```bash
-./setup --help
-./setup dependencies --help
-./setup build --help
-./setup install --help
-```
-Shadow does not require root privileges, and the default and recommended setup
-is to install to `~/.shadow`:
+Luckily, Shadow contains a script to do this for you, and will help you configure, build, and install Shadow. The default and recommended setup is to install to `~/.shadow` as follows:
+
 ```bash
 ./setup dependencies
 ./setup build
 ./setup install
 ```
 
-If you prefer to install **openssl** and **libevent** manually, you'll need to configure openssl with something like `./config --prefix=/home/rob/.shadow shared threads -fPIC` and libevent with something like `./configure --prefix=/home/rob/.shadow --enable-shared CFLAGS="-fPIC -I/home/rob/.shadow" LDFLAGS="-L/home/rob/.shadow"`.
+For more details, add `--help` to each of those commands.
+
+If you prefer to instead install **openssl** and **libevent** manually, you'll need to configure openssl with something like `./config --prefix=/home/rob/.shadow shared threads -fPIC` and libevent with something like `./configure --prefix=/home/rob/.shadow --enable-shared CFLAGS="-fPIC -I/home/rob/.shadow" LDFLAGS="-L/home/rob/.shadow"`.
 
 **Important notes:**  
 + The two most useful build options are `-g` or `--debug` to build Shadow with debugging symbols, and `--tor-prefix` to build Scallion with your local custom Tor distribution (instead of downloading one from torproject.org). 
