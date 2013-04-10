@@ -61,11 +61,13 @@ Then, we create a hosts.xml with the following:
 ```xml
 <plugin id="filex" path="~/.shadow/plugins/libshadow-plugin-filetransfer.so" />
 
-<software id="serverapp" plugin="filex" time="10" arguments="server 80 docroot/" />
-<node id="servername" software="serverapp" />
+<node id="servername">
+  <application plugin="filex" starttime="10" arguments="server 80 docroot/" />
+</node>
 
-<software id="clientapp" plugin="filex" time="20" arguments="client single servername 80 none 0 5 /myfile" />
-<node id="clientname" software="clientapp" />
+<node id="clientname">
+  <application plugin="filex" starttime="20" arguments="client single servername 80 none 0 5 /myfile" />
+</node>
 
 <kill time="600" />
 ```
