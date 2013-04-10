@@ -51,7 +51,7 @@ make -jN
 make install
 ```
 
-**NOTE**: if you have a system version of Clang/LLVM installed, make sure to note its location as it may cause conflicts as you build Shadow later.
+**NOTE**: if you also have a system version of Clang/LLVM installed, make sure to note its location as it may cause conflicts as you build Shadow later.
 
 ## obtaining Shadow
 
