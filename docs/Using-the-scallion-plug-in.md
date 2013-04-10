@@ -93,13 +93,16 @@ Here is an example XML file that contains each type of Tor node possible to conf
 <!-- our Tor clients -->
 
 <node id="fileclient" />
-  <application plugin="scallion" time="600" arguments="client 1024 1024000 1024000 ./client.torrc ./data/clientdata ~/.shadow/share/geoip client single fileserver 80 localhost 9000 10 /1MiB.urnd" />
+  <application plugin="scallion" time="600" arguments="client 1024 1024000 1024000 ./client.torrc ./data/clientdata ~/.shadow/share/geoip" />
+  <application plugin="filex" time="900" arguments="client single fileserver 80 localhost 9000 10 /1MiB.urnd" />
 </node>
 <node id="browserclient" />
-  <application plugin="scallion" time="600" arguments="browser 1024 1024000 1024000 ./client.torrc ./data/clientdata ~/.shadow/share/geoip webserver 80 localhost 9000 6 /index.htm" />
+  <application plugin="scallion" time="600" arguments="browser 1024 1024000 1024000 ./client.torrc ./data/clientdata ~/.shadow/share/geoip" />
+  <application plugin="filex" time="900" arguments="webserver 80 localhost 9000 6 /index.htm" />
 </node>
 <node id="torrentnode" quantity="3" />
-  <application plugin="scallion" time="600" arguments="torrent 1024 1024000 1024000 ./client.torrc ./data/clientdata ~/.shadow/share/geoip torrent node torrentauth 5000 localhost 9000 6000 1MB" />
+  <application plugin="scallion" time="600" arguments="torrent 1024 1024000 1024000 ./client.torrc ./data/clientdata ~/.shadow/share/geoip" />
+  <application plugin="filex" time="900" arguments="torrent node torrentauth 5000 localhost 9000 6000 1MB" />
 </node>
 ```
 
