@@ -80,13 +80,13 @@ Here is an example XML file that contains each type of Tor node possible to conf
 
 <!-- our Tor network infrastructure -->
 
-<node id="4uthority" software="authorityapp" >
+<node id="4uthority" >
   <application plugin="scallion" time="1" arguments="dirauth 1024 1024000 1024000 ./authority.torrc ./data/authoritydata ~/.shadow/share/geoip" />
 </node>
-<node id="exit" software="exitapp" quantity="2" >
+<node id="exit" quantity="2" >
   <application plugin="scallion" time="60" arguments="exitrelay 1024 1024000 1024000 ./exit.torrc ./data/exitdata ~/.shadow/share/geoip" />
 </node>
-<node id="relay" software="relayapp" quantity="2" >
+<node id="relay" quantity="2" >
   <application plugin="scallion" time="60" arguments="relay 1024 1024000 1024000 ./relay.torrc ./data/relaydata ~/.shadow/share/geoip" />
 </node>
 
