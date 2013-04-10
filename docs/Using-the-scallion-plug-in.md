@@ -69,40 +69,40 @@ Here is an example XML file that contains each type of Tor node possible to conf
 <!-- our services -->
 
 <node id="fileserver" bandwidthdown="102400" bandwidthup="102400" >
-  <application plugin="filex" time="1" arguments="server 80 ~/.shadow/share/" />
+  <application plugin="filex" starttime="1" arguments="server 80 ~/.shadow/share/" />
 </node>
 <node id="webserver" bandwidthdown="102400" bandwidthup="102400" />
-  <application plugin="filex" time="1" arguments="server 80 ../browser-example/" />
+  <application plugin="filex" starttime="1" arguments="server 80 ../browser-example/" />
 </node>
 <node id="torrentauth" bandwidthdown="102400" bandwidthup="102400" >
-  <application plugin="torrent" time="1" arguments="authority 5000"/>
+  <application plugin="torrent" starttime="1" arguments="authority 5000"/>
 </node>
 
 <!-- our Tor network infrastructure -->
 
 <node id="4uthority" >
-  <application plugin="scallion" time="1" arguments="dirauth 1024 1024000 1024000 ./authority.torrc ./data/authoritydata ~/.shadow/share/geoip" />
+  <application plugin="scallion" starttime="1" arguments="dirauth 1024 1024000 1024000 ./authority.torrc ./data/authoritydata ~/.shadow/share/geoip" />
 </node>
 <node id="exit" quantity="2" >
-  <application plugin="scallion" time="60" arguments="exitrelay 1024 1024000 1024000 ./exit.torrc ./data/exitdata ~/.shadow/share/geoip" />
+  <application plugin="scallion" starttime="60" arguments="exitrelay 1024 1024000 1024000 ./exit.torrc ./data/exitdata ~/.shadow/share/geoip" />
 </node>
 <node id="relay" quantity="2" >
-  <application plugin="scallion" time="60" arguments="relay 1024 1024000 1024000 ./relay.torrc ./data/relaydata ~/.shadow/share/geoip" />
+  <application plugin="scallion" starttime="60" arguments="relay 1024 1024000 1024000 ./relay.torrc ./data/relaydata ~/.shadow/share/geoip" />
 </node>
 
 <!-- our Tor clients -->
 
 <node id="fileclient" />
-  <application plugin="scallion" time="600" arguments="client 1024 1024000 1024000 ./client.torrc ./data/clientdata ~/.shadow/share/geoip" />
-  <application plugin="filex" time="900" arguments="client single fileserver 80 localhost 9000 10 /1MiB.urnd" />
+  <application plugin="scallion" starttime="600" arguments="client 1024 1024000 1024000 ./client.torrc ./data/clientdata ~/.shadow/share/geoip" />
+  <application plugin="filex" starttime="900" arguments="client single fileserver 80 localhost 9000 10 /1MiB.urnd" />
 </node>
 <node id="browserclient" />
-  <application plugin="scallion" time="600" arguments="browser 1024 1024000 1024000 ./client.torrc ./data/clientdata ~/.shadow/share/geoip" />
-  <application plugin="filex" time="900" arguments="webserver 80 localhost 9000 6 /index.htm" />
+  <application plugin="scallion" starttime="600" arguments="browser 1024 1024000 1024000 ./client.torrc ./data/clientdata ~/.shadow/share/geoip" />
+  <application plugin="filex" starttime="900" arguments="webserver 80 localhost 9000 6 /index.htm" />
 </node>
 <node id="torrentnode" quantity="3" />
-  <application plugin="scallion" time="600" arguments="torrent 1024 1024000 1024000 ./client.torrc ./data/clientdata ~/.shadow/share/geoip" />
-  <application plugin="filex" time="900" arguments="torrent node torrentauth 5000 localhost 9000 6000 1MB" />
+  <application plugin="scallion" starttime="600" arguments="torrent 1024 1024000 1024000 ./client.torrc ./data/clientdata ~/.shadow/share/geoip" />
+  <application plugin="filex" starttime="900" arguments="torrent node torrentauth 5000 localhost 9000 6000 1MB" />
 </node>
 ```
 
