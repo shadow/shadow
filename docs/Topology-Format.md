@@ -82,11 +82,11 @@ The _packetloss_ attribute is optional and represents the percentage chance that
   ...
 </node>
 ```
-**Required attributes**: _id_, _software_  
+**Required attributes**: _id_  
 **Optional attributes**: _cluster_, _quantity_, _bandwidthdown_, _bandwidthup_, _loglevel_, _heartbeatloglevel_, _heartbeatfrequency_, _cpufrequency_, _logpcap_, _pcapdir_  
 **Required child element**: \<application\>  
 
-The _node_ element represents a node or virtual host in the simulation. The _id_ attribute identifies this _node_ and must be a string that is unique among all _id_ attributes for any element in the XML file. _id_ will also be used as the network hostname of this _node_. The _software_ attribute should be set to the _id_ of the _software_ that this host should run during the simulation.
+The _node_ element represents a node or virtual host in the simulation. The _id_ attribute identifies this _node_ and must be a string that is unique among all _id_ attributes for any element in the XML file. _id_ will also be used as the network hostname of this _node_.
 
 The _cluster_ attribute optionally specifies to which network vertex this _node_ should be assigned. If not given, a random vertex will be chosen internally. The _quantity_ attribute specifies the number of hosts of this type to start. If _quantity_ is greater than 1, each host's hostname will be prefixed with a counter. For example, a _node_ with an _id_ of `host` and _quantity_=2 would produce nodes with hostnames `1.host` and `2.host`.
 
@@ -97,6 +97,8 @@ _loglevel_ and _heartbeatloglovel_ are node-specific overrides for the simulator
 _cpufrequency_ is the speed of this _node's_ virtual CPU in kilohertz. Along with the CPU processing requirements of the plug-in application, this determines how often events for this _node_ are delayed during simulation.
 
 _logpcap_ is a case insenstive boolean string (e.g. "true") that specifies that Shadow should log all network input and output for this _node_ in PCAP format (for viewing in e.g. wireshark). _pcapdir_ is the directory to which the logs should be saved for this _node_.
+
+Nodes must have at least one child \<application\> (see below), and may have more than one.
 
 ### The _plugin_ element
 ```xml
