@@ -27,19 +27,23 @@ Then each hostname needs to have a node in Shadow. The host file, hosts.xml, for
 <plugin id="browser" path="libshadow-plugin-browser.so" />
  
 <!-- Wikipedia -->
-<software id="wikipedia1-server" plugin="filex" time="10" arguments="server 80 some-directory/www.wikipedia.org/" />
-<software id="wikipedia2-server" plugin="filex" time="10" arguments="server 80 some-directory/en.wikipedia.org/" />
-<software id="wikipedia-cdn1-server" plugin="filex" time="10" arguments="server 80 some-directory/upload.wikimedia.org/" />
-<software id="wikipedia-cdn2-server" plugin="filex" time="10" arguments="server 80 some-directory/bits.wikimedia.org/" />
-
-<node id="www.wikipedia.org" software="wikipedia1-server" cluster="USMN" bandwidthdown="60000" bandwidthup="30000" cpufrequency="2800000" />
-<node id="en.wikipedia.org" software="wikipedia2-server" cluster="USMN" bandwidthdown="60000" bandwidthup="30000" cpufrequency="2800000" />
-<node id="upload.wikimedia.org" software="wikipedia-cdn1-server" cluster="USMN" bandwidthdown="60000" bandwidthup="30000" cpufrequency="2800000" />
-<node id="bits.wikimedia.org" software="wikipedia-cdn2-server" cluster="USMN" bandwidthdown="60000" bandwidthup="30000" cpufrequency="2800000" />
+<node id="www.wikipedia.org" cluster="USMN" bandwidthdown="60000" bandwidthup="30000" cpufrequency="2800000">
+  <application plugin="filex" starttime="10" arguments="server 80 some-directory/www.wikipedia.org/" />
+</node>
+<node id="en.wikipedia.org" cluster="USMN" bandwidthdown="60000" bandwidthup="30000" cpufrequency="2800000">
+  <application plugin="filex" starttime="10" arguments="server 80 some-directory/en.wikipedia.org/" />
+</node>
+<node id="upload.wikimedia.org" cluster="USMN" bandwidthdown="60000" bandwidthup="30000" cpufrequency="2800000">
+  <application plugin="filex" starttime="10" arguments="server 80 some-directory/upload.wikimedia.org/" />
+</node>
+<node id="bits.wikimedia.org" cluster="USMN" bandwidthdown="60000" bandwidthup="30000" cpufrequency="2800000">
+  <application plugin="filex" starttime="10" arguments="server 80 some-directory/bits.wikimedia.org/" />
+</node>
 
 <!-- Browser -->
-<software id="client" plugin="browser" time="20" arguments="www.wikipedia.org 80 none 0 6 /index.html" />
-<node id="client.node" software="client" quantity="1" />
+<node id="client.node" quantity="1">
+  <application plugin="browser" starttime="20" arguments="www.wikipedia.org 80 none 0 6 /index.html" />
+</node>
 
 <kill time="600" />
 ```
