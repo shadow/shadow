@@ -9,19 +9,53 @@ The maximum memory requirements of our included sample network configurations ar
 <table>
   <caption>Scallion Network Sizes and Memory Requirements</caption>
   <tr>
-    <th>Size</th><th>Number of Nodes</th><th>RAM (GiB)</th><th>EC2 Instance</th>
+    <th>Size</th><th>RAM (GiB)</th><th>EC2 Instance</th>
   </tr>
   <tr>
-    <td>tiny</td><td>20 relays, 200 clients</td><td>&lt; 4</td><td>m1.large</td>
+    <td>tiny</td><td>&lt; 4</td><td>m1.large</td>
   </tr>
   <tr>
-    <td>small</td><td>50 relays, 500 clients</td><td>&lt; 16</td><td>m1.xlarge <i>or</i> m2.xlarge</td>
+    <td>small</td><td>&lt; 16</td><td>m1.xlarge <i>or</i> m2.xlarge</td>
   </tr>
   <tr>
-    <td>medium</td><td>100 relays, 1000 clients</td><td>&lt; 32</td><td>m2.2xlarge</td>
+    <td>medium</td><td>&lt; 32</td><td>m2.2xlarge</td>
   </tr>
   <tr>
-    <td>large</td><td>250 relays, 2500 clients</td><td>&lt; 64</td><td>m2.4xlarge</td>
+    <td>large</td><td>&lt; 64</td><td>m2.4xlarge</td>
+  </tr>
+</table>
+
+<table>
+  <caption>Scallion Network Node Breakdown by Type</caption>
+  <tr>
+    <th>Node Type | Size</th><th>Tiny</th><th>Small</th><th>Medium</th><th>Large</th>
+  </tr>
+  <tr>
+    <td>Web Clients</td><td>190</td><td>475</td><td>950</td><td>2400</td>
+  </tr>
+  <tr>
+    <td>Bulk Clients</td><td>10</td><td>25</td><td>50</td><td>180</td>
+  </tr>
+  <tr>
+    <td>TorPerf 50KiB</td><td>5</td><td>10</td><td>20</td><td>75</td>
+  </tr>
+  <tr>
+    <td>TorPerf 1MiB</td><td>5</td><td>10</td><td>20</td><td>75</td>
+  </tr>
+  <tr>
+    <td>TorPerf 5MiB</td><td>5</td><td>10</td><td>20</td><td>75</td>
+  </tr>
+  <tr>
+    <td>Web Servers</td><td>20</td><td>50</td><td>100</td><td>500</td>
+  </tr>
+  <tr>
+    <td>Non-exit Relays</td><td>11</td><td>29</td><td>59</td><td>224</td>
+  </tr>
+  <tr>
+    <td>Exit Relays</td><td>8</td><td>20</td><td>40</td><td>150</td>
+  </tr>
+  <tr>
+    <td>Directory Authorities</td><td>1</td><td>1</td><td>1</td><td>1</td>
   </tr>
 </table>
 
