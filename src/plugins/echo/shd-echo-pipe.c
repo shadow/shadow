@@ -1,22 +1,22 @@
-/**
+/*
  * The Shadow Simulator
  *
- * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
+ * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
+ * Copyright (c) 2011-2013
+ * To the extent that a federal employee is an author of a portion
+ * of this software or a derivative work thereof, no copyright is
+ * claimed by the United States Government, as represented by the
+ * Secretary of the Navy ("GOVERNMENT") under Title 17, U.S. Code.
+ * All Other Rights Reserved.
  *
- * This file is part of Shadow.
- *
- * Shadow is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Shadow is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
+ * Permission to use, copy, and modify this software and its
+ * documentation is hereby granted, provided that both the copyright
+ * notice and this permission notice appear in all copies of the
+ * software, derivative works or modified versions, and any portions
+ * thereof, and that both notices appear in supporting documentation.
+ * GOVERNMENT ALLOWS FREE USE OF THIS SOFTWARE IN ITS "AS IS" CONDITION
+ * AND DISCLAIMS ANY LIABILITY OF ANY KIND FOR ANY DAMAGES WHATSOEVER
+ * RESULTING FROM THE USE OF THIS SOFTWARE.
  */
 
 #include <fcntl.h>
