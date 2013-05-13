@@ -6,5 +6,7 @@ ORPort 5000
 ## then run:
 ## tor-gencert --create-identity-key -m 24
 ## and give it password: shadowprivatenetwork
+## can do it like this:
+## echo shadowprivatenetwork | ./tor-gencert --create-identity-key -m 24 --passphrase-fd 0
 
 ## https://trac.torproject.org/projects/tor/wiki/doc/TorFAQ#HowdoIsetupmyownprivateTornetwork

@@ -136,7 +136,7 @@ def reset(output):
     os.makedirs(output+"/data/clientdata")
     os.makedirs(output+"/data/pcapdata")
     
-    shutil.copytree(output+"/keys", output+"/data/authoritydata/4uthority/keys")
+    shutil.copytree(output+"/authoritydata", output+"/data/.")
     return 0
 
 def log(msg):
