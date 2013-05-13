@@ -130,7 +130,6 @@ def query_yes_no(question, default="yes"):
 def reset(output):
     if os.path.exists(output+"/data"): shutil.rmtree(output+"/data")
     
-    os.makedirs(output+"/data/authoritydata")
     os.makedirs(output+"/data/exitdata")
     os.makedirs(output+"/data/relaydata")
     os.makedirs(output+"/data/clientdata")
