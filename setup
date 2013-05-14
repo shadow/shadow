@@ -82,7 +82,7 @@ def main():
         help="append PATH to the list of paths searched for headers. useful if dependencies are installed to non-standard locations.",
         metavar="PATH",
         action="append", dest="extra_includes",
-        default=[INSTALL_PREFIX+ "/include", os.path.expanduser("~/.local/include")])
+        default=[INSTALL_PREFIX+ "/include", os.path.expanduser("~/.local/include"), os.path.expanduser("~/.local/share/llvm/cmake")])
     
     parser_build.add_argument('-l', '--library', 
         help="append PATH to the list of paths searched for libraries. useful if dependencies are installed to non-standard locations.",
