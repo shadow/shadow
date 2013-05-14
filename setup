@@ -233,7 +233,9 @@ def dependencies(args):
     
     ## for debugging and profiling (you may want to enable -g and -pg independently)
     #configure = "./config --prefix={0} no-shared threads -fPIC -g -pg -DPURIFY -Bsymbolic".format(args.prefix)
-    configure = "./config --prefix={0} shared threads -fPIC".format(args.prefix)
+    is64 = sys.maxsize > 2**32
+    ecopt = "enable-ec_nistp_64_gcc_128" if is64 else ""
+    configure = "./config --prefix={0} shared threads {1} -fPIC".format(args.prefix, ecopt)
 
     log("now attempting to build openssl with '{0}'".format(configure))
     if automake(configure, "make", "make install") != 0: 
