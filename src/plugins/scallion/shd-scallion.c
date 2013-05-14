@@ -463,6 +463,14 @@ enter:
 			const create_cell_t *cc = &cpuw->req.create_cell;
 			created_cell_t *cell_out = &cpuw->rpl.created_cell;
 			int n;
+#ifdef SCALLION_USEV2CPUWORKERTIMING
+			struct timeval tv_start, tv_end;
+			cpuw->rpl.timed = cpuw->req.timed;
+			cpuw->rpl.started_at = cpuw->req.started_at;
+			cpuw->rpl.handshake_type = cc->handshake_type;
+			if (cpuw->req.timed)
+			  tor_gettimeofday(&tv_start);
+#endif
 			n = onion_skin_server_handshake(cc->handshake_type, cc->onionskin,
 					cc->handshake_len, &cpuw->onion_keys, cell_out->reply,
 					cpuw->rpl.keys, CPATH_KEY_MATERIAL_LEN,
@@ -495,6 +503,22 @@ enter:
 				cpuw->rpl.success = 1;
 			}
 			cpuw->rpl.magic = CPUWORKER_REPLY_MAGIC;
+#ifdef SCALLION_USEV2CPUWORKERTIMING
+			if (cpuw->req.timed) {
+			  struct timeval tv_diff;
+			  int64_t usec;
+			  tor_gettimeofday(&tv_end);
+			  timersub(&tv_end, &tv_start, &tv_diff);
+			  usec = ((int64_t)tv_diff.tv_sec)*1000000 + tv_diff.tv_usec;
+/** If any onionskin takes longer than this, we clip them to this
+* time. (microseconds) */
+#define MAX_BELIEVABLE_ONIONSKIN_DELAY (2*1000*1000)
+			  if (usec < 0 || usec > MAX_BELIEVABLE_ONIONSKIN_DELAY)
+				cpuw->rpl.n_usec = MAX_BELIEVABLE_ONIONSKIN_DELAY;
+			  else
+				cpuw->rpl.n_usec = (uint32_t) usec;
+			  }
+#endif
 		} else if (cpuw->req.task == CPUWORKER_TASK_SHUTDOWN) {
 			log_info(LD_OR, "Clean shutdown: exiting");
 			goto end;
