@@ -852,8 +852,8 @@ def write_torrc_files(auths):
     dirauths = ""
     for auth in auths:
         dirauths += "DirServer authority v3ident={0} orport=9111 {1}:9112 {2}\n".format(auth[1], auth[0], auth[2])
-    common = '\
-{0}\
+    common = \
+'{0}\
 TestingTorNetwork 1\n\
 AllowInvalidNodes "entry,middle,exit,introduction,rendezvous"\n\
 ServerDNSDetectHijacking 0\n\
@@ -869,28 +869,24 @@ CellStatistics 1\n\
 DirReqStatistics 1\n\
 EntryStatistics 1\n\
 ExitPortStatistics 1\n\
-ExtraInfoStatistics 1\n\
-    '.format(dirauths)
-    clients = '\
-ORPort 0\n\
+ExtraInfoStatistics 1\n'.format(dirauths)
+    clients = \
+'ORPort 0\n\
 DirPort 0\n\
 ClientOnly 1\n\
 SocksPort 9000\n\
-SocksListenAddress 127.0.0.1\n\
-    '
-    relays = '\
-ORPort 9111\n\
+SocksListenAddress 127.0.0.1\n'
+    relays = \
+'ORPort 9111\n\
 DirPort 9112\n\
-SocksPort 0\n\
-    ' # note - also need exit policy
-    authorities = '\
-V3AuthoritativeDirectory 1\n\
+SocksPort 0\n' # note - also need exit policy
+    authorities = \
+'V3AuthoritativeDirectory 1\n\
 V2AuthoritativeDirectory 1\n\
 AuthoritativeDirectory 1\n\
 ORPort 9111\n\
 DirPort 9112\n\
-SocksPort 0\n\
-    ' # note - also need exit policy
+SocksPort 0\n' # note - also need exit policy
     epreject = 'ExitPolicy "reject *:*"\n'
     epaccept = 'ExitPolicy "accept *:*"\n'
     maxdirty = 'MaxCircuitDirtiness 10 seconds\n'
