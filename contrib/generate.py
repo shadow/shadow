@@ -340,12 +340,13 @@ def generate(args):
         print >>fthink, "{0} {1}".format("%.3f" % ms, "%.10f" % 1.0)
     
     # tor authorities - choose the fastest relays (no authority is an exit node)
-    i = 1
     auths = [] # [name, v3ident, fingerprint] for torrc files
     os.makedirs("authoritydata")
     os.chdir("authoritydata")
     with open("authgen.torrc", 'w') as fauthgen: print >>fauthgen, "DirServer test 127.0.0.1:5000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000\nORPort 5000\n"
     with open("authgen.pw", 'w') as fauthgenpw: print >>fauthgenpw, "shadowprivatenetwork\n"
+    starttime = 5
+    i = 1
     while i <= args.nauths:
         auth = []
         name = "4uthority{0}".format(i)
@@ -353,7 +354,6 @@ def generate(args):
 
         # add to shadow hosts file
         authority = nonexitnodes.pop(-1)
-        starttime = "2"
         torargs = "dirauth {0} {1} {2} ./authority.torrc ./data/authoritydata {3}share/geoip".format(authority.getBWConsensusArg(), authority.getBWRateArg(), authority.getBWBurstArg(), INSTALLPREFIX) # in bytes
         addRelayToXML(root, starttime, torargs, None, None, name, authority.download, authority.upload, authority.ip, authority.code)
 
@@ -378,6 +378,7 @@ def generate(args):
         shutil.move("authority_identity_key", "keys/.")
         shutil.move("authority_signing_key", "keys/.")
         os.chdir("..")
+        starttime += 5
         i += 1
     os.chdir("..")
 
