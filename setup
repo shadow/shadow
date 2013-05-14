@@ -117,7 +117,7 @@ def main():
         default=False)
     
     parser_build.add_argument('--tor-prefix', 
-        help="PATH to a custom base Tor directory to build (overrides '--tor-version)", 
+        help="PATH to a custom base Tor directory to build (overrides '--tor-version')", 
         metavar="PATH", 
         action="store", dest="tor_prefix",
         default=None)
