@@ -863,7 +863,6 @@ Log notice stdout\n\
 SafeLogging 0\n\
 WarnUnsafeSocks 0\n\
 ContactInfo shadow-support@cs.umn.edu\n\
-MaxOnionsPending 1000000\n\
 DynamicDHGroups 0\n\
 DisableDebuggerAttachment 0\n\
 CellStatistics 1\n\
