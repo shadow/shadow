@@ -859,7 +859,6 @@ TestingTorNetwork 1\n\
 AllowInvalidNodes "entry,middle,exit,introduction,rendezvous"\n\
 ServerDNSDetectHijacking 0\n\
 NumCPUs 1\n\
-Log notice stdout\n\
 SafeLogging 0\n\
 WarnUnsafeSocks 0\n\
 ContactInfo shadow-support@cs.umn.edu\n\

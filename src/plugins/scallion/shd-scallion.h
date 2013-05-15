@@ -257,7 +257,6 @@ struct _ScallionTor {
 	unsigned int bandwidth;
 	int refillmsecs;
 	vtor_cpuworker_tp cpuw;
-	GList *logfiles;
 	ShadowFunctionTable* shadowlibFuncs;
 };
 
