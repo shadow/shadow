@@ -42,7 +42,13 @@ foreach(srcfile ${ARGN})
     endforeach()
 
     set(srcflags "")
-    separate_arguments(srcflags UNIX_COMMAND ${CMAKE_C_FLAGS})
+    if(${srcfile} MATCHES "(.*).cpp")
+        separate_arguments(srcflags UNIX_COMMAND ${CMAKE_CXX_FLAGS})
+        set(src_bc_compiler ${LLVM_BC_CXX_COMPILER})
+    else()
+        separate_arguments(srcflags UNIX_COMMAND ${CMAKE_C_FLAGS})
+        set(src_bc_compiler ${LLVM_BC_C_COMPILER} )
+    endif()
 #    if(NOT ${CMAKE_C_FLAGS} STREQUAL "")
 #        string(REPLACE " " ";" srcflags ${CMAKE_C_FLAGS})
 #    endif()
@@ -58,7 +64,7 @@ foreach(srcfile ${ARGN})
 
     ## the command to generate the bitcode for this file
     add_custom_command(OUTPUT ${outfile}.bc
-      COMMAND ${LLVM_BC_C_COMPILER} -emit-llvm ${srcdefs} ${srcflags} ${srcincludes}
+      COMMAND ${src_bc_compiler} -emit-llvm ${srcdefs} ${srcflags} ${srcincludes}
         -c ${infile} -o ${outfile}.bc
       COMMENT "Building LLVM bitcode ${outfile}.bc"
       VERBATIM
