@@ -31,7 +31,8 @@ typedef struct _Node Node;
 Node* node_new(GQuark id, Network* network, guint32 ip,
 		GString* hostname, guint64 bwDownKiBps, guint64 bwUpKiBps, guint cpuFrequency, gint cpuThreshold, gint cpuPrecision,
 		guint nodeSeed, SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel,
-		GLogLevelFlags logLevel, gboolean logPcap, gchar* pcapDir, gchar* qdisc);
+		GLogLevelFlags logLevel, gboolean logPcap, gchar* pcapDir, gchar* qdisc,
+		guint64 receiveBufferSize, guint64 sendBufferSize, guint64 interfaceReceiveLength);
 void node_free(Node* node, gpointer userData);
 
 void node_lock(Node* node);

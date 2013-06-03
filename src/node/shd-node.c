@@ -57,6 +57,8 @@ struct _Node {
 	/* all file, socket, and epoll descriptors we know about and track */
 	GHashTable* descriptors;
 	gint descriptorHandleCounter;
+	guint64 receiveBufferSize;
+	guint64 sendBufferSize;
 
 	/* random port counter, in host order */
 	in_port_t randomPortCounter;
@@ -74,7 +76,8 @@ Node* node_new(GQuark id, Network* network, guint32 ip,
 		GString* hostname, guint64 bwDownKiBps, guint64 bwUpKiBps,
 		guint cpuFrequency, gint cpuThreshold, gint cpuPrecision, guint nodeSeed,
 		SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel,
-		GLogLevelFlags logLevel, gboolean logPcap, gchar* pcapDir, gchar* qdisc) {
+		GLogLevelFlags logLevel, gboolean logPcap, gchar* pcapDir, gchar* qdisc,
+		guint64 receiveBufferSize, guint64 sendBufferSize, guint64 interfaceReceiveLength) {
 	Node* node = g_new0(Node, 1);
 	MAGIC_INIT(node);
 
@@ -91,17 +94,19 @@ Node* node_new(GQuark id, Network* network, guint32 ip,
 	/* virtual interfaces for managing network I/O */
 	node->interfaces = g_hash_table_new_full(g_direct_hash, g_direct_equal,
 			NULL, (GDestroyNotify) networkinterface_free);
-	NetworkInterface* ethernet = networkinterface_new(network, id, hostname->str, bwDownKiBps, bwUpKiBps, logPcap, pcapDir, qdisc);
+	NetworkInterface* ethernet = networkinterface_new(network, id, hostname->str, bwDownKiBps, bwUpKiBps, logPcap, pcapDir, qdisc, interfaceReceiveLength);
 	g_hash_table_replace(node->interfaces, GUINT_TO_POINTER((guint)id), ethernet);
 	GString *loopbackName = g_string_new("");
 	g_string_append_printf(loopbackName, "%s-loopback", hostname->str);
-	NetworkInterface* loopback = networkinterface_new(NULL, (GQuark)htonl(INADDR_LOOPBACK), loopbackName->str, G_MAXUINT32, G_MAXUINT32, logPcap, pcapDir, qdisc);
+	NetworkInterface* loopback = networkinterface_new(NULL, (GQuark)htonl(INADDR_LOOPBACK), loopbackName->str, G_MAXUINT32, G_MAXUINT32, logPcap, pcapDir, qdisc, interfaceReceiveLength);
 	g_hash_table_replace(node->interfaces, GUINT_TO_POINTER((guint)htonl(INADDR_LOOPBACK)), loopback);
 	node->defaultInterface = ethernet;
 
 	/* virtual descriptor management */
 	node->descriptors = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, descriptor_unref);
 	node->descriptorHandleCounter = MIN_DESCRIPTOR;
+	node->receiveBufferSize = receiveBufferSize;
+	node->sendBufferSize = sendBufferSize;
 
 	/* host order so increments make sense */
 	node->randomPortCounter = MIN_RANDOM_PORT;
@@ -116,9 +121,10 @@ Node* node_new(GQuark id, Network* network, guint32 ip,
 	node->logPcap = logPcap;
 	node->pcapDir = pcapDir;
 
-	message("Created Node '%s', ip %s, %u bwUpKiBps, %u bwDownKiBps, %lu cpuFrequency, %i cpuThreshold, %i cpuPrecision, %u seed",
+	message("Created Node '%s', ip %s, %u bwUpKiBps, %u bwDownKiBps, %lu initSockSendBufSize, %lu initSockRecvBufSize, %lu cpuFrequency, %i cpuThreshold, %i cpuPrecision, %u seed",
 			g_quark_to_string(node->id), networkinterface_getIPName(node->defaultInterface),
-			bwUpKiBps, bwDownKiBps, cpuFrequency, cpuThreshold, cpuPrecision, nodeSeed);
+			bwUpKiBps, bwDownKiBps, sendBufferSize, receiveBufferSize,
+			cpuFrequency, cpuThreshold, cpuPrecision, nodeSeed);
 
 	return node;
 }
@@ -343,12 +349,14 @@ gint node_createDescriptor(Node* node, enum DescriptorType type) {
 		}
 
 		case DT_TCPSOCKET: {
-			descriptor = (Descriptor*) tcp_new((node->descriptorHandleCounter)++);
+			descriptor = (Descriptor*) tcp_new((node->descriptorHandleCounter)++,
+					node->receiveBufferSize, node->sendBufferSize);
 			break;
 		}
 
 		case DT_UDPSOCKET: {
-			descriptor = (Descriptor*) udp_new((node->descriptorHandleCounter)++);
+			descriptor = (Descriptor*) udp_new((node->descriptorHandleCounter)++,
+					node->receiveBufferSize, node->sendBufferSize);
 			break;
 		}
 

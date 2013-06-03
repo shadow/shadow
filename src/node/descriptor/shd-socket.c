@@ -76,7 +76,8 @@ TransportFunctionTable socket_functions = {
 	MAGIC_VALUE
 };
 
-void socket_init(Socket* socket, SocketFunctionTable* vtable, enum DescriptorType type, gint handle) {
+void socket_init(Socket* socket, SocketFunctionTable* vtable, enum DescriptorType type, gint handle,
+		guint receiveBufferSize, guint sendBufferSize) {
 	g_assert(socket && vtable);
 
 	transport_init(&(socket->super), &socket_functions, type, handle);
@@ -88,9 +89,9 @@ void socket_init(Socket* socket, SocketFunctionTable* vtable, enum DescriptorTyp
 
 	socket->protocol = type == DT_TCPSOCKET ? PTCP : type == DT_UDPSOCKET ? PUDP : PLOCAL;
 	socket->inputBuffer = g_queue_new();
-	socket->inputBufferSize = CONFIG_RECV_BUFFER_SIZE;
+	socket->inputBufferSize = receiveBufferSize;
 	socket->outputBuffer = g_queue_new();
-	socket->outputBufferSize = CONFIG_SEND_BUFFER_SIZE;
+	socket->outputBufferSize = sendBufferSize;
 }
 
 /* interface functions, implemented by subtypes */

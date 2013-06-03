@@ -105,7 +105,8 @@ static gint _networkinterface_compareSocket(const Socket* sa, const Socket* sb, 
 }
 
 NetworkInterface* networkinterface_new(Network* network, GQuark address, gchar* name,
-		guint64 bwDownKiBps, guint64 bwUpKiBps, gboolean logPcap, gchar* pcapDir, gchar* qdisc) {
+		guint64 bwDownKiBps, guint64 bwUpKiBps, gboolean logPcap, gchar* pcapDir, gchar* qdisc,
+		guint64 interfaceReceiveLength) {
 	NetworkInterface* interface = g_new0(NetworkInterface, 1);
 	MAGIC_INIT(interface);
 
@@ -122,7 +123,7 @@ NetworkInterface* networkinterface_new(Network* network, GQuark address, gchar* 
 
 	/* incoming packet buffer */
 	interface->inBuffer = g_queue_new();
-	interface->inBufferSize = worker_getConfig()->interfaceBufferSize;
+	interface->inBufferSize = interfaceReceiveLength;
 
 	/* incoming packets get passed along to sockets */
 	interface->boundSockets = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, descriptor_unref);

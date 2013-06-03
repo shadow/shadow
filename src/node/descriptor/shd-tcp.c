@@ -1390,11 +1390,11 @@ SocketFunctionTable tcp_functions = {
 	MAGIC_VALUE
 };
 
-TCP* tcp_new(gint handle) {
+TCP* tcp_new(gint handle, guint receiveBufferSize, guint sendBufferSize) {
 	TCP* tcp = g_new0(TCP, 1);
 	MAGIC_INIT(tcp);
 
-	socket_init(&(tcp->super), &tcp_functions, DT_TCPSOCKET, handle);
+	socket_init(&(tcp->super), &tcp_functions, DT_TCPSOCKET, handle, receiveBufferSize, sendBufferSize);
 
 	guint32 initial_window = worker_getConfig()->initialTCPWindow;
 

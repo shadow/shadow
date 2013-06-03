@@ -237,6 +237,9 @@ static GError* _parser_handleNodeAttributes(Parser* parser, const gchar** attrib
 	guint64 bandwidthup = 0;
 	guint64 heartbeatfrequency = 0;
 	guint64 cpufrequency = 0;
+	guint64 socketReceiveBufferSize = 0;
+	guint64 socketSendBufferSize = 0;
+	guint64 interfaceReceiveBufferLength = 0;
 	/* if there is no quantity value, default should be 1 (allows a value of 0 to be explicity set) */
 	guint64 quantity = 1;
 	gboolean quantityIsSet = FALSE;
@@ -278,6 +281,12 @@ static GError* _parser_handleNodeAttributes(Parser* parser, const gchar** attrib
 			heartbeatfrequency = g_ascii_strtoull(value, NULL, 10);
 		} else if (!cpufrequency && !g_ascii_strcasecmp(name, "cpufrequency")) {
 			cpufrequency = g_ascii_strtoull(value, NULL, 10);
+		} else if (!socketReceiveBufferSize && !g_ascii_strcasecmp(name, "socketrecvbuffer")) {
+			socketReceiveBufferSize = g_ascii_strtoull(value, NULL, 10);
+		} else if (!socketSendBufferSize && !g_ascii_strcasecmp(name, "socketsendbuffer")) {
+			socketSendBufferSize = g_ascii_strtoull(value, NULL, 10);
+		} else if (!interfaceReceiveBufferLength && !g_ascii_strcasecmp(name, "interfacebuffer")) {
+			interfaceReceiveBufferLength = g_ascii_strtoull(value, NULL, 10);
 		} else {
 			error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ATTRIBUTE,
 							"unknown 'node' attribute '%s'", name);
@@ -297,7 +306,8 @@ static GError* _parser_handleNodeAttributes(Parser* parser, const gchar** attrib
 		/* no error, create the action */
 		Action* a = (Action*) createnodes_new(id, cluster,
 				bandwidthdown, bandwidthup, quantity, cpufrequency,
-				heartbeatfrequency, heartbeatloglevel, loglevel, logpcap, pcapdir);
+				heartbeatfrequency, heartbeatloglevel, loglevel, logpcap, pcapdir,
+				socketReceiveBufferSize, socketSendBufferSize, interfaceReceiveBufferLength);
 		a->priority = 5;
 		_parser_addAction(parser, a);
 

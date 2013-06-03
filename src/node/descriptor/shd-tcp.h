@@ -26,7 +26,7 @@
 
 typedef struct _TCP TCP;
 
-TCP* tcp_new(gint handle);
+TCP* tcp_new(gint handle, guint receiveBufferSize, guint sendBufferSize);
 gint tcp_getConnectError(TCP* tcp);
 void tcp_enterServerMode(TCP* tcp, gint backlog);
 gint tcp_acceptServerPeer(TCP* tcp, in_addr_t* ip, in_port_t* port, gint* acceptedHandle);

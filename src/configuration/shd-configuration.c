@@ -38,6 +38,8 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	c->minRunAhead = 10;
 	c->printSoftwareVersion = 0;
 	c->initialTCPWindow = 10;
+	c->initialSocketReceiveBufferSize = CONFIG_RECV_BUFFER_SIZE;
+	c->initialSocketSendBufferSize = CONFIG_SEND_BUFFER_SIZE;
 	c->interfaceBufferSize = 1024000;
 	c->interfaceBatchTime = 10;
 	c->randomSeed = 1;
@@ -61,6 +63,11 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	g_option_context_set_main_group(c->context, c->mainOptionGroup);
 
 	/* now fill in the network option group */
+	GString* sockrecv = g_string_new("");
+	g_string_printf(sockrecv, "Initialize the socket receive buffer to N bytes [%i]", CONFIG_RECV_BUFFER_SIZE);
+	GString* socksend = g_string_new("");
+	g_string_printf(socksend, "Initialize the socket send buffer to N bytes [%i]", CONFIG_SEND_BUFFER_SIZE);
+
 	c->networkOptionGroup = g_option_group_new("network", "System Options", "Various system and network related options", NULL, NULL);
 	const GOptionEntry networkEntries[] =
 	{
@@ -71,6 +78,8 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	  { "interface-qdisc", 0, 0, G_OPTION_ARG_STRING, &(c->interfaceQueuingDiscipline), "The interface queuing discipline QDISC used to select the next sendable socket ('fifo' or 'rr') ['fifo']", "QDISC" },
 	  { "runahead", 0, 0, G_OPTION_ARG_INT, &(c->minRunAhead), "Minimum allowed TIME workers may run ahead when sending events between nodes, in milliseconds [10]", "TIME" },
 	  { "tcp-windows", 0, 0, G_OPTION_ARG_INT, &(c->initialTCPWindow), "Initialize the TCP send, receive, and congestion windows to N packets [10]", "N" },
+	  { "socket-recv-buffer", 0, 0, G_OPTION_ARG_INT, &(c->initialSocketReceiveBufferSize), sockrecv->str, "N" },
+	  { "socket-send-buffer", 0, 0, G_OPTION_ARG_INT, &(c->initialSocketSendBufferSize), socksend->str, "N" },
 	  { NULL },
 	};
 
@@ -142,6 +151,13 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	for(gint i = 1; i < argc; i++) {
 		GString* filename = g_string_new(argv[i]);
 		g_queue_push_tail(c->inputXMLFilenames, filename);
+	}
+
+	if(socksend) {
+		g_string_free(socksend, TRUE);
+	}
+	if(sockrecv) {
+		g_string_free(sockrecv, TRUE);
 	}
 
 	return c;

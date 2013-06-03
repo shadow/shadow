@@ -77,7 +77,8 @@ struct _Socket {
 	MAGIC_DECLARE;
 };
 
-void socket_init(Socket* socket, SocketFunctionTable* vtable, enum DescriptorType type, gint handle);
+void socket_init(Socket* socket, SocketFunctionTable* vtable, enum DescriptorType type, gint handle,
+		guint receiveBufferSize, guint sendBufferSize);
 
 in_addr_t socket_getBinding(Socket* socket);
 void socket_setBinding(Socket* socket, in_addr_t boundAddress, in_port_t port);

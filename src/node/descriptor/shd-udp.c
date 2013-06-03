@@ -171,11 +171,11 @@ SocketFunctionTable udp_functions = {
 	MAGIC_VALUE
 };
 
-UDP* udp_new(gint handle) {
+UDP* udp_new(gint handle, guint receiveBufferSize, guint sendBufferSize) {
 	UDP* udp = g_new0(UDP, 1);
 	MAGIC_INIT(udp);
 
-	socket_init(&(udp->super), &udp_functions, DT_UDPSOCKET, handle);
+	socket_init(&(udp->super), &udp_functions, DT_UDPSOCKET, handle, receiveBufferSize, sendBufferSize);
 
 	/* we are immediately active because UDP doesnt wait for accept or connect */
 	descriptor_adjustStatus((Descriptor*) udp, DS_ACTIVE|DS_WRITABLE, TRUE);

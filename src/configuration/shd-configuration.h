@@ -170,16 +170,12 @@ typedef guint64 SimulationTime;
 /**
  * Default size of the send buffer per socket if TCP-autotuning is not used.
  * This value was computed from "man tcp"
- *
- * @todo change this to a command line option accessible via #Configuration
  */
 #define CONFIG_SEND_BUFFER_SIZE 131072
 
 /**
  * Default size of the receive buffer per socket if TCP-autotuning is not used
  * This value was computed from "man tcp"
- *
- * @todo change this to a command line option accessible via #Configuration
  */
 #define CONFIG_RECV_BUFFER_SIZE 174760
 
@@ -246,6 +242,8 @@ struct _Configuration {
 	gint minRunAhead;
 	gint initialTCPWindow;
 	gint interfaceBufferSize;
+	gint initialSocketReceiveBufferSize;
+	gint initialSocketSendBufferSize;
 	gchar* interfaceQueuingDiscipline;
 	SimulationTime interfaceBatchTime;
 

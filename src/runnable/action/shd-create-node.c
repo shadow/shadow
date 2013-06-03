@@ -36,6 +36,9 @@ struct _CreateNodesAction {
 	GString* logLevelString;
 	GString* logPcapString;
 	GString* pcapDirString;
+	guint64 socketReceiveBufferSize;
+	guint64 socketSendBufferSize;
+	guint64 interfaceReceiveBufferLength;
 
 	GList* applications;
 	MAGIC_DECLARE;
@@ -59,7 +62,8 @@ RunnableFunctionTable createnodes_functions = {
 CreateNodesAction* createnodes_new(GString* name, GString* cluster,
 		guint64 bandwidthdown, guint64 bandwidthup, guint64 quantity, guint64 cpuFrequency,
 		guint64 heartbeatIntervalSeconds, GString* heartbeatLogLevelString,
-		GString* logLevelString, GString* logPcapString, GString* pcapDirString)
+		GString* logLevelString, GString* logPcapString, GString* pcapDirString,
+		guint64 socketReceiveBufferSize, guint64 socketSendBufferSize, guint64 interfaceReceiveBufferLength)
 {
 	g_assert(name);
 	CreateNodesAction* action = g_new0(CreateNodesAction, 1);
@@ -86,6 +90,15 @@ CreateNodesAction* createnodes_new(GString* name, GString* cluster,
 	}
 	if(pcapDirString) {
 		action->pcapDirString = g_string_new(pcapDirString->str);
+	}
+	if(socketReceiveBufferSize) {
+		action->socketReceiveBufferSize = socketReceiveBufferSize;
+	}
+	if(socketSendBufferSize) {
+		action->socketSendBufferSize = socketSendBufferSize;
+	}
+	if(interfaceReceiveBufferLength) {
+		action->interfaceReceiveBufferLength = interfaceReceiveBufferLength;
 	}
 
 	return action;
@@ -169,6 +182,19 @@ void createnodes_run(CreateNodesAction* action) {
 
 	gchar* qdisc = configuration_getQueuingDiscipline(config);
 
+	guint64 sockRecv = action->socketReceiveBufferSize; /* bytes */
+	if(!sockRecv) {
+		sockRecv = worker_getConfig()->initialSocketReceiveBufferSize;
+	}
+	guint64 sockSend = action->socketSendBufferSize; /* bytes */
+	if(!sockSend) {
+		sockSend = worker_getConfig()->initialSocketSendBufferSize;
+	}
+	guint64 ifaceRecv = action->interfaceReceiveBufferLength; /* N packets */
+	if(!ifaceRecv) {
+		ifaceRecv = worker_getConfig()->interfaceBufferSize;
+	}
+
 	for(gint i = 0; i < action->quantity; i++) {
 		/* get a random network if they didnt assign one */
 		gdouble randomDouble = engine_nextRandomDouble(worker->cached_engine);
@@ -193,7 +219,8 @@ void createnodes_run(CreateNodesAction* action) {
 		guint nodeSeed = (guint) engine_nextRandomInt(worker->cached_engine);
 		Node* node = internetwork_createNode(worker_getInternet(), id, network,
 				hostnameBuffer, bwDownKiBps, bwUpKiBps, cpuFrequency, cpuThreshold, cpuPrecision,
-				nodeSeed, heartbeatInterval, heartbeatLogLevel, logLevel, logPcap, pcapDir, qdisc);
+				nodeSeed, heartbeatInterval, heartbeatLogLevel, logLevel, logPcap, pcapDir, qdisc,
+				sockSend, sockRecv, ifaceRecv);
 
 		g_string_free(hostnameBuffer, TRUE);
 
