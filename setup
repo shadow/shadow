@@ -99,6 +99,11 @@ def main():
         help="print verbose output from the compiler",
         action="store_true", dest="do_verbose",
         default=False)
+
+    parser_build.add_argument('-f', '--force',
+        help="force a full rebuild of Shadow by removing build cache",
+        action="store_true", dest="do_force_rebuild",
+        default=False)
         
     parser_build.add_argument('-j', '--jobs',
         help="number of jobs to run simultaneously during the build",
@@ -287,7 +292,7 @@ def build(args):
     args.keyring = getfullpath(rootdir + "/contrib/deps_keyring.gpg")
     
     # clear cmake cache
-    if os.path.exists(builddir+"/shadow"): shutil.rmtree(builddir+"/shadow")
+    if args.do_force_rebuild and os.path.exists(builddir+"/shadow"): shutil.rmtree(builddir+"/shadow")
 
     # create directories
     if not os.path.exists(builddir+"/shadow"): os.makedirs(builddir+"/shadow")
