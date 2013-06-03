@@ -169,7 +169,9 @@ static void scalliontor_logmsg_cb(int severity, uint32_t domain, const char *msg
 			level = G_LOG_LEVEL_DEBUG;
 		break;
 	}
-	scalliontor_getPointer()->shadowlibFuncs->log(level, __FUNCTION__, "%s", g_strchomp(msg));
+	gchar* msg_dup = g_strdup(msg);
+	scalliontor_getPointer()->shadowlibFuncs->log(level, __FUNCTION__, "%s", g_strchomp(msg_dup));
+	g_free(msg_dup);
 }
 
 static void scalliontor_setLogging() {
