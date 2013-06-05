@@ -191,8 +191,5 @@ python ~/shadow/contrib/generate.py --help
 python ~/shadow/contrib/generate.py --nauths 1 --nrelays 20 --nclients 200 --nservers 20 --fim 0.0 --fweb 0.90 --fp2p 0.0 --fbulk 0.10 --nperf50k 10 --nperf1m 10 --nperf5m 10 ../alexa-top-1000-ips.csv ../2013-04-30-23-00-00-consensus ../server-descriptors-2013-04/ ../extra-infos-2013-04/ ../direct-users-2013-04.csv
 ```
 
-If everything went smoothly, scallion can be run from inside the 'mytor' directory as usual:
-
-```bash
-scallion
+If everything went smoothly, `scallion` can be run from inside the 'mytor' directory as usual.
 ```
