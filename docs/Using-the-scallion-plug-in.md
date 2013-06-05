@@ -148,3 +148,40 @@ scallion -i mytor.xml
 ## Generating your own Tor Network
 
 If you don't want to use the Scallion examples included in the Shadow distribution or you want to customize the network, you can generate your own. Shadow contains a script to help you generate your own Tor network.
+
+**NOTE**: this process assumes you have an Internet connection and that the Shadow base directory exists in your home directory at `~/`
+
+### Prepare Alexa website data
+
+The following produces `alexa-top-1000-ips.csv`: a csv list of the top 1000 servers.
+
+```bash
+wget http://s3.amazonaws.com/alexa-static/top-1m.csv.zip
+gunzip top-1m.csv.zip
+python ~/shadow/contrib/parsealexa.py
+```
+
+### Prepare Tor metrics data
+
+This process requires lots of data and metrics from Tor. Be prepared to wait for the following downloads to complete.
+
+**NOTE**: you may want to modify the URLs below to grab more up-to-date metrics data.
+
+```bash
+wget https://metrics.torproject.org/data/server-descriptors-2013-04.tar.bz2
+tar xaf server-descriptors-2013-04.tar.bz2
+wget https://metrics.torproject.org/data/extra-infos-2013-04.tar.bz2
+tar xaf extra-infos-2013-04.tar.bz2
+wget https://metrics.torproject.org/data/consensuses-2013-04.tar.bz2
+tar xaf consensuses-2013-04.tar.bz2
+wget https://metrics.torproject.org/csv/direct-users.csv
+```
+
+### Start generating!
+
+You'll need to use one of the consensus files from the consensuses-2013-04 directory in the following steps.
+
+```python
+python ~/shadow/contrib/generate.py --help
+python ~/shadow/contrib/generate.py --nauths 1 --nrelays 20 --nclients 200 --nservers 20 --fim 0.0 --fweb 0.90 --fp2p 0.0 --fbulk 0.10 --nperf50k 10 --nperf1m 10 --nperf5m 10 alexa-top-1000-ips.csv 2013-04-30-23-00-00-consensus server-descriptors-2013-04/ extra-infos-2013-04/ direct-users-2013-04.csv
+```
