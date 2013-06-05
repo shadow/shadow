@@ -179,9 +179,20 @@ wget https://metrics.torproject.org/csv/direct-users.csv
 
 ### Start generating!
 
-You'll need to use one of the consensus files from the consensuses-2013-04 directory in the following steps.
+**NOTES**:
+  + You'll need to use one of the consensus files from the consensuses-2013-04 directory in the following steps.
+  + You should have already build Shadow+Scallion (using './setup build') because this process requires the `tor` and `tor-gencert` binaries to complete successfully.
 
 ```python
+export PATH=${PATH}:~/shadow/build/tor/src/or:~/shadow/build/tor/src/tools
+mkdir mytor
+cd mytor
 python ~/shadow/contrib/generate.py --help
-python ~/shadow/contrib/generate.py --nauths 1 --nrelays 20 --nclients 200 --nservers 20 --fim 0.0 --fweb 0.90 --fp2p 0.0 --fbulk 0.10 --nperf50k 10 --nperf1m 10 --nperf5m 10 alexa-top-1000-ips.csv 2013-04-30-23-00-00-consensus server-descriptors-2013-04/ extra-infos-2013-04/ direct-users-2013-04.csv
+python ~/shadow/contrib/generate.py --nauths 1 --nrelays 20 --nclients 200 --nservers 20 --fim 0.0 --fweb 0.90 --fp2p 0.0 --fbulk 0.10 --nperf50k 10 --nperf1m 10 --nperf5m 10 ../alexa-top-1000-ips.csv ../2013-04-30-23-00-00-consensus ../server-descriptors-2013-04/ ../extra-infos-2013-04/ ../direct-users-2013-04.csv
+```
+
+If everything went smoothly, scallion can be run from inside the 'mytor' directory as usual:
+
+```bash
+scallion
 ```
