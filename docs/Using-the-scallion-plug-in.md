@@ -144,3 +144,7 @@ From the `resource/examples/scallion/` directory, save this file as `mytor.xml` 
 ```bash
 scallion -i mytor.xml
 ```
+
+## Generating your own Tor Network
+
+If you don't want to use the Scallion examples included in the Shadow distribution or you want to customize the network, you can generate your own. Shadow contains a script to help you generate your own Tor network.
