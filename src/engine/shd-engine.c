@@ -125,8 +125,13 @@ Engine* engine_new(Configuration* config) {
 	GError* error = NULL;
 	if(!g_file_get_contents(CONFIG_CPU_MAX_FREQ_FILE, &contents, &length, &error)) {
 		engine->rawFrequencyKHz = 0;
+		if(error) {
+			g_error_free(error);
+		}
 	} else {
+		g_assert(contents);
 		engine->rawFrequencyKHz = (guint)atoi(contents);
+		g_free(contents);
 	}
 
 	return engine;
