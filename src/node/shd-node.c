@@ -586,6 +586,18 @@ gint node_connectToPeer(Node* node, gint handle, in_addr_t peerAddress,
 		in_port_t peerPort, sa_family_t family) {
 	MAGIC_ASSERT(node);
 
+	in_addr_t loIP = htonl(INADDR_LOOPBACK);
+
+	/* make sure we will be able to route this later */
+	if(peerAddress != loIP) {
+		Internetwork* internet = worker_getInternet();
+		Network *peerNetwork = internetwork_lookupNetwork(internet, peerAddress);
+		if(!peerNetwork) {
+			/* can't route it - there is no node with this address */
+			return ECONNREFUSED;
+		}
+	}
+
 	Descriptor* descriptor = node_lookupDescriptor(node, handle);
 	if(descriptor == NULL) {
 		warning("descriptor handle '%i' not found", handle);
@@ -620,7 +632,6 @@ gint node_connectToPeer(Node* node, gint handle, in_addr_t peerAddress,
 	if(!socket_getBinding(socket)) {
 		/* do an implicit bind to a random port.
 		 * use default interface unless the remote peer is on loopback */
-		in_addr_t loIP = htonl(INADDR_LOOPBACK);
 		in_addr_t defaultIP = networkinterface_getIPAddress(node->defaultInterface);
 
 		in_addr_t bindAddress = loIP == peerAddress ? loIP : defaultIP;
