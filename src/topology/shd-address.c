@@ -45,7 +45,7 @@ Address* address_new(guint32 ip, const gchar* name) {
 	MAGIC_INIT(address);
 
 	address->ip = ip;
-	address->ipString = g_strdup(NTOA(ip)); // XXX do we need to use ntohl() first?
+	address->ipString = address_ipToNewString((in_addr_t)ip); // XXX do we need to use ntohl() first?
 	address->name = g_strdup(name);
 
 	return address;
@@ -91,4 +91,12 @@ guint32 address_toNetworkIP(Address* address) {
 gchar* address_toHostName(Address* address) {
 	MAGIC_ASSERT(address);
 	return address->name;
+}
+
+gchar* address_ipToNewString(in_addr_t ip) {
+	gchar* ipStringBuffer = g_malloc0(INET6_ADDRSTRLEN+1);
+	const gchar* ipString = inet_ntop(AF_INET, &ip, ipStringBuffer, INET6_ADDRSTRLEN);
+	GString* result = ipString ? g_string_new(ipString) : g_string_new("NULL");
+	g_free(ipStringBuffer);
+	return g_string_free(result, FALSE);
 }

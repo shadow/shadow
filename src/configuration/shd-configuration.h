@@ -136,15 +136,6 @@ typedef guint64 SimulationTime;
 #define MIN_RANDOM_PORT 10000
 
 /**
- * A shortcut for turning an IP address in network format to a string in
- * dot-and-number format. The returned string is returned in a statically
- * allocated buffer and so is not thread-safe.
- *
- * @todo FIXME this needs to change as its not thread safe and leaks memory
- */
-#define NTOA(ip) inet_ntoa((struct in_addr){ip})
-
-/**
  * We always use TCP_autotuning unless this is set to FALSE
  *
  * @todo change this to a command line option accessible via #Configuration

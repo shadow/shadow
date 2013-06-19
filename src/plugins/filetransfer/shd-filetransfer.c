@@ -208,7 +208,10 @@ void filetransfer_new(int argc, char* argv[]) {
 		enum fileserver_code res = fileserver_start(ft->server, epolld, htonl(listenIP), htons(listenPort), docroot, 1000);
 
 		if(res == FS_SUCCESS) {
-			ft->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "fileserver running on at %s:%u", inet_ntoa((struct in_addr){listenIP}), listenPort);
+			gchar ipStringBuffer[INET_ADDRSTRLEN+1];
+			memset(ipStringBuffer, 0, INET_ADDRSTRLEN+1);
+			inet_ntop(AF_INET, &listenIP, ipStringBuffer, INET_ADDRSTRLEN);
+			ft->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "fileserver running on at %s:%u", ipStringBuffer, listenPort);
 		} else {
 			ft->shadowlib->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "fileserver error, not started!");
 			g_free(ft->server);

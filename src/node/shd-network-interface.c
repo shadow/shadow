@@ -487,8 +487,11 @@ void networkinterface_packetDropped(NetworkInterface* interface, Packet* packet)
 	if(socket) {
 		socket_droppedPacket(socket, packet);
 	} else {
+		in_addr_t ip = packet_getSourceIP(packet);
+		gchar* ipString = address_ipToNewString(ip);
 		debug("interface dropping packet from %s:%u, no socket registered at %i",
-				NTOA(packet_getSourceIP(packet)), packet_getSourcePort(packet), key);
+				ipString, packet_getSourcePort(packet), key);
+		g_free(ipString);
 	}
 }
 

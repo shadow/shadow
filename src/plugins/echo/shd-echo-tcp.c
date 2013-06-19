@@ -239,7 +239,10 @@ EchoTCP* echotcp_new(ShadowLogFunc log, int argc, char* argv[]) {
 				isError = TRUE;
 			} else {
 				in_addr_t myIP = ((struct sockaddr_in*)(myInfo->ai_addr))->sin_addr.s_addr;
-				log(G_LOG_LEVEL_INFO, __FUNCTION__, "binding to %s", inet_ntoa((struct in_addr){myIP}));
+				gchar ipStringBuffer[INET_ADDRSTRLEN+1];
+				memset(ipStringBuffer, 0, INET_ADDRSTRLEN+1);
+				inet_ntop(AF_INET, &myIP, ipStringBuffer, INET_ADDRSTRLEN);
+				log(G_LOG_LEVEL_INFO, __FUNCTION__, "binding to %s", ipStringBuffer);
 				etcp->server = _echotcp_newServer(log, myIP);
 			}
 			freeaddrinfo(myInfo);

@@ -163,13 +163,13 @@ Link* network_getLink(Network *network, in_addr_t sourceIP, in_addr_t destinatio
 		jitter = link_getJitter(link);
 		link_getLatencyMetrics(link, &min, &q1, &mean, &q3, &max);
 		struct in_addr addr;
-		gchar *srcIP = g_strdup(inet_ntoa((struct in_addr){sourceIP}));
-		gchar *dstIP = g_strdup(inet_ntoa((struct in_addr){destinationIP}));
+		gchar *sourceIPString = address_ipToNewString(sourceIP);
+		gchar *destinationIPString = address_ipToNewString(destinationIP);
 		message("link for connection [%s] %s -> %s [%s] chosen: latency=%d jitter=%d metrics=%d %d %d %d %d",
-				g_quark_to_string(network->id), srcIP, dstIP, g_quark_to_string(destinationNetwork->id),
-				latency, jitter, min, q1, mean, q3, max);
-		g_free(srcIP);
-		g_free(dstIP);
+				g_quark_to_string(network->id), sourceIPString, destinationIPString,
+				g_quark_to_string(destinationNetwork->id), latency, jitter, min, q1, mean, q3, max);
+		g_free(sourceIPString);
+		g_free(destinationIPString);
 
 		/* insert link into source network */
 		key = g_new0(gint, 1);

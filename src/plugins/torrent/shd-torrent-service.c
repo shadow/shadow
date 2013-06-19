@@ -167,7 +167,10 @@ int torrentService_startNode(TorrentService *tsvc, TorrentService_NodeArgs *args
 			tsvc->server = NULL;
 			return -1;
 		} else {
-			torrentService_log(tsvc, TSVC_NOTICE, "torrent server running on at %s:%u", inet_ntoa((struct in_addr){listenIP}), listenPort);
+			gchar ipStringBuffer[INET_ADDRSTRLEN+1];
+			memset(ipStringBuffer, 0, INET_ADDRSTRLEN+1);
+			inet_ntop(AF_INET, &listenIP, ipStringBuffer, INET_ADDRSTRLEN);
+			torrentService_log(tsvc, TSVC_NOTICE, "torrent server running on at %s:%u", ipStringBuffer, listenPort);
 		}
 	}
 

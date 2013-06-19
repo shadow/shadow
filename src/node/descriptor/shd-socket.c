@@ -155,7 +155,9 @@ void socket_setPeerName(Socket* socket, in_addr_t ip, in_port_t port) {
 	if(socket->peerString) {
 		g_free(socket->peerString);
 	}
-	GString* stringBuffer = g_string_new(NTOA(ip));
+	gchar* ipString = address_ipToNewString(ip);
+	GString* stringBuffer = g_string_new(ipString);
+	g_free(ipString);
 	g_string_append_printf(stringBuffer, ":%u", ntohs(port));
 	socket->peerString = g_string_free(stringBuffer, FALSE);
 }
@@ -211,7 +213,10 @@ void socket_setBinding(Socket* socket, in_addr_t boundAddress, in_port_t port) {
 	if(socket->boundString) {
 		g_free(socket->boundString);
 	}
-	GString* stringBuffer = g_string_new(NTOA(boundAddress));
+
+	gchar* ipString = address_ipToNewString(boundAddress);
+	GString* stringBuffer = g_string_new(ipString);
+	g_free(ipString);
 	g_string_append_printf(stringBuffer, ":%u (descriptor %i)", ntohs(port), socket->super.super.handle);
 	socket->boundString = g_string_free(stringBuffer, FALSE);
 

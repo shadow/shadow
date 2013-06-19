@@ -88,9 +88,13 @@ static void torrent_report(TorrentClient* tc, gchar* preamble) {
 			block_curr_time.tv_nsec += 1000000000;
 		}
 
+		gchar ipStringBuffer[INET_ADDRSTRLEN+1];
+		memset(ipStringBuffer, 0, INET_ADDRSTRLEN+1);
+		inet_ntop(AF_INET, &(tc->currentBlockTransfer->addr), ipStringBuffer, INET_ADDRSTRLEN);
+
 		log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "%s first byte from %s in %lu.%.3d seconds, "
 				"%d of %d DOWN and %d of %d UP in %lu.%.3d seconds, total %d of %d bytes [%d\%] in %lu.%.3d seconds (block %d of %d  [%d])",
-						preamble, inet_ntoa((struct in_addr){tc->currentBlockTransfer->addr}),
+						preamble, ipStringBuffer,
 						block_first_time.tv_sec, (gint)(block_first_time.tv_nsec / 1000000),
 						tc->currentBlockTransfer->downBytesTransfered, tc->downBlockSize,
 						tc->currentBlockTransfer->upBytesTransfered, tc->upBlockSize,
@@ -202,7 +206,11 @@ void torrent_new(int argc, char* argv[]) {
 				torrent->server = NULL;
 				return;
 			} else {
-				log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "torrent server running on at %s:%u", inet_ntoa((struct in_addr){listenIP}), listenPort);
+				gchar ipStringBuffer[INET_ADDRSTRLEN+1];
+				memset(ipStringBuffer, 0, INET_ADDRSTRLEN+1);
+				inet_ntop(AF_INET, &listenIP, ipStringBuffer, INET_ADDRSTRLEN);
+
+				log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "torrent server running on at %s:%u", ipStringBuffer, listenPort);
 			}
 		}
 
@@ -251,7 +259,11 @@ void torrent_new(int argc, char* argv[]) {
 			torrent->authority = NULL;
 			return;
 		} else {
-			log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "torrent authority running on at %s:%u", inet_ntoa((struct in_addr){listenIP}), listenPort);
+			gchar ipStringBuffer[INET_ADDRSTRLEN+1];
+			memset(ipStringBuffer, 0, INET_ADDRSTRLEN+1);
+			inet_ntop(AF_INET, &listenIP, ipStringBuffer, INET_ADDRSTRLEN);
+
+			log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "torrent authority running on at %s:%u", ipStringBuffer, listenPort);
 		}
 	}
 }
@@ -282,8 +294,12 @@ void torrent_activate() {
             if(res == TS_ERR_FATAL) {
                 TorrentServer_Connection *conn = g_hash_table_lookup(torrent->server->connections, &(events[i].data.fd));
                 if(conn) {
+    				gchar ipStringBuffer[INET_ADDRSTRLEN+1];
+    				memset(ipStringBuffer, 0, INET_ADDRSTRLEN+1);
+    				inet_ntop(AF_INET, &(conn->addr), ipStringBuffer, INET_ADDRSTRLEN);
+
                     log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Fatal error on server activate with socket %d on address %s",
-                                            events[i].data.fd, inet_ntoa((struct in_addr){conn->addr}));
+                                            events[i].data.fd, ipStringBuffer);
                 } else {
                     log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Fatal error on server activate with socket %d", events[i].data.fd);
                 }

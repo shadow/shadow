@@ -156,7 +156,9 @@ Network* internetwork_lookupNetwork(Internetwork* internet, in_addr_t ip) {
 	MAGIC_ASSERT(internet);
 	Network* net = (Network*) g_hash_table_lookup(internet->networksByIP, &ip);
 	if(!net) {
-		critical("unable to find a network for ip %s", NTOA(ip));
+		gchar* ipString = address_ipToNewString(ip);
+		critical("unable to find a network for ip %s", ipString);
+		g_free(ipString);
 	}
 	return net;
 }

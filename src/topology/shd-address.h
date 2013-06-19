@@ -101,4 +101,9 @@ guint32 address_toNetworkIP(Address* address);
  */
 gchar* address_toHostName(Address* address);
 
+/**
+ * Turns the IPv4 address into a newly allocated string that should be freed by the caller.
+ */
+gchar* address_ipToNewString(in_addr_t ip);
+
 #endif /* SHD_ADDRESS_H_ */

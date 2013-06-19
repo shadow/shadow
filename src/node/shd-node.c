@@ -594,7 +594,9 @@ gint node_connectToPeer(Node* node, gint handle, in_addr_t peerAddress,
 		Network *peerNetwork = internetwork_lookupNetwork(internet, peerAddress);
 		if(!peerNetwork) {
 			/* can't route it - there is no node with this address */
-			warning("attempting to connect to address '%s' for which no node exists", NTOA(peerAddress));
+			gchar* peerAddressString = address_ipToNewString(ntohl(peerAddress));
+			warning("attempting to connect to address '%s:%u' for which no node exists", peerAddressString, ntohs(peerPort));
+			g_free(peerAddressString);
 			return ECONNREFUSED;
 		}
 	}

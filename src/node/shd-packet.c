@@ -439,21 +439,33 @@ gchar* packet_getString(Packet* packet) {
 
 		case PUDP: {
 			PacketUDPHeader* header = packet->header;
+			gchar* sourceIPString = address_ipToNewString(header->sourceIP);
+			gchar* destinationIPString = address_ipToNewString(header->destinationIP);
+
 			g_string_append_printf(packetBuffer, "%s:%u -> ",
-					NTOA(header->sourceIP), ntohs(header->sourcePort));
+					sourceIPString, ntohs(header->sourcePort));
 			g_string_append_printf(packetBuffer, "%s:%u bytes %u",
-					NTOA(header->destinationIP),ntohs( header->destinationPort),
+					destinationIPString, ntohs( header->destinationPort),
 					packet->payloadLength);
+
+			g_free(sourceIPString);
+			g_free(destinationIPString);
 			break;
 		}
 
 		case PTCP: {
 			PacketTCPHeader* header = packet->header;
+			gchar* sourceIPString = address_ipToNewString(header->sourceIP);
+			gchar* destinationIPString = address_ipToNewString(header->destinationIP);
+
 			g_string_append_printf(packetBuffer, "%s:%u -> ",
-					NTOA(header->sourceIP), ntohs(header->sourcePort));
+					sourceIPString, ntohs(header->sourcePort));
 			g_string_append_printf(packetBuffer, "%s:%u packet# %u ack# %u window %u bytes %u",
-					NTOA(header->destinationIP), ntohs(header->destinationPort),
+					destinationIPString, ntohs(header->destinationPort),
 					header->sequence, header->acknowledgement, header->window, packet->payloadLength);
+
+			g_free(sourceIPString);
+			g_free(destinationIPString);
 			break;
 		}
 
