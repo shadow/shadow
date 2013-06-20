@@ -27,6 +27,20 @@ If this doesn't work and you just see "exited with code 1", instead set
 > set exec-wrapper env LD_PRELOAD=/home/rob/.shadow/lib/libshadow-preload.so
 ```
 
+The following example shows how to run a scallion experiment in gdb:
+
+```
+gdb shadow-bin
+> set env EVENT_NOSELECT=1
+> set env EVENT_NOPOLL=1
+> set env EVENT_NOKQUEUE=1
+> set env EVENT_NODEVPOLL=1
+> set env EVENT_NOEVPORT=1
+> set env EVENT_NOWIN32=1
+> set env LD_PRELOAD=/home/rob/.shadow/lib/libshadow-preload.so:/home/rob/.shadow/lib/libshadow-preload-scallion.so
+> set args /home/rob/.shadow/share/topology.xml /home/rob/test/small-m1.xlarge/hosts.xml
+```
+
 If you want to be able to run Shadow through valgrind and the application you 
 are running in Shadow uses OpenSSL (i.e. the Scallion plug-in), you should configure OpenSSL with the 
 additional option: `-DPURIFY`. This fixes OpenSSL so it doesn't break valgrind.
