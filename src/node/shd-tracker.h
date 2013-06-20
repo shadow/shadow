@@ -33,6 +33,11 @@ void tracker_addInputBytes(Tracker* tracker, gsize inputBytes);
 void tracker_addOutputBytes(Tracker* tracker, gsize outputBytes);
 void tracker_addAllocatedBytes(Tracker* tracker, gpointer location, gsize allocatedBytes);
 void tracker_removeAllocatedBytes(Tracker* tracker, gpointer location);
+void tracker_addSocket(Tracker* tracker, gint handle, gsize inputBufferSize, gsize outputBufferSize);
+void tracker_updateSocketPeer(Tracker* tracker, gint handle, in_addr_t peerIP, in_port_t peerPort);
+void tracker_updateSocketInputBuffer(Tracker* tracker, gint handle, gsize inputBufferLength, gsize inputBufferSize);
+void tracker_updateSocketOutputBuffer(Tracker* tracker, gint handle, gsize outputBufferLength, gsize outputBufferSize);
+void tracker_removeSocket(Tracker* tracker, gint handle);
 void tracker_heartbeat(Tracker* tracker);
 
 #endif /* SHD_TRACKER_H_ */

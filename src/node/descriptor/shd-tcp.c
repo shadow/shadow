@@ -634,6 +634,13 @@ static void _tcp_flush(TCP* tcp) {
 		break;
 	}
 
+	/* update the tracker input/output buffer stats */
+	Tracker* tracker = node_getTracker(worker_getPrivate()->cached_node);
+	Socket* socket = (Socket* )tcp;
+	Descriptor* descriptor = (Descriptor *)socket;
+	tracker_updateSocketInputBuffer(tracker, descriptor->handle, socket->inputBufferSize - _tcp_getBufferSpaceIn(tcp), socket->inputBufferSize);
+	tracker_updateSocketOutputBuffer(tracker, descriptor->handle, socket->outputBufferSize - _tcp_getBufferSpaceOut(tcp), socket->outputBufferSize);
+
 	/* check if user needs an EOF signal */
 	gboolean wantsEOF = ((tcp->flags & TCPF_LOCAL_CLOSED) || (tcp->flags & TCPF_REMOTE_CLOSED)) ? TRUE : FALSE;
 	if(wantsEOF) {

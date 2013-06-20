@@ -33,6 +33,7 @@ struct _CreateNodesAction {
 	guint cpuFrequency;
 	SimulationTime heartbeatIntervalSeconds;
 	GString* heartbeatLogLevelString;
+	GString* heartbeatLogInfoString;
 	GString* logLevelString;
 	GString* logPcapString;
 	GString* pcapDirString;
@@ -61,7 +62,7 @@ RunnableFunctionTable createnodes_functions = {
 
 CreateNodesAction* createnodes_new(GString* name, GString* cluster,
 		guint64 bandwidthdown, guint64 bandwidthup, guint64 quantity, guint64 cpuFrequency,
-		guint64 heartbeatIntervalSeconds, GString* heartbeatLogLevelString,
+		guint64 heartbeatIntervalSeconds, GString* heartbeatLogLevelString, GString* heartbeatLogInfoString,
 		GString* logLevelString, GString* logPcapString, GString* pcapDirString,
 		guint64 socketReceiveBufferSize, guint64 socketSendBufferSize, guint64 interfaceReceiveBufferLength)
 {
@@ -81,6 +82,9 @@ CreateNodesAction* createnodes_new(GString* name, GString* cluster,
 	action->heartbeatIntervalSeconds = heartbeatIntervalSeconds;
 	if(heartbeatLogLevelString) {
 		action->heartbeatLogLevelString = g_string_new(heartbeatLogLevelString->str);
+	}
+	if(heartbeatLogInfoString) {
+		action->heartbeatLogInfoString = g_string_new(heartbeatLogInfoString->str);
 	}
 	if(logLevelString) {
 		action->logLevelString = g_string_new(logLevelString->str);
@@ -165,6 +169,10 @@ void createnodes_run(CreateNodesAction* action) {
 	if(action->heartbeatLogLevelString) {
 		heartbeatLogLevel = configuration_getLevel(config, action->heartbeatLogLevelString->str);
 	}
+	gchar* heartbeatLogInfo = NULL;
+	if(action->heartbeatLogInfoString) {
+		heartbeatLogInfo = g_strdup(action->heartbeatLogInfoString->str);
+	}
 	GLogLevelFlags logLevel = 0;
 	if(action->logLevelString) {
 		logLevel = configuration_getLevel(config, action->logLevelString->str);
@@ -219,8 +227,8 @@ void createnodes_run(CreateNodesAction* action) {
 		guint nodeSeed = (guint) engine_nextRandomInt(worker->cached_engine);
 		Node* node = internetwork_createNode(worker_getInternet(), id, network,
 				hostnameBuffer, bwDownKiBps, bwUpKiBps, cpuFrequency, cpuThreshold, cpuPrecision,
-				nodeSeed, heartbeatInterval, heartbeatLogLevel, logLevel, logPcap, pcapDir, qdisc,
-				sockSend, sockRecv, ifaceRecv);
+				nodeSeed, heartbeatInterval, heartbeatLogLevel, heartbeatLogInfo, logLevel, logPcap, pcapDir,
+				qdisc, sockSend, sockRecv, ifaceRecv);
 
 		g_string_free(hostnameBuffer, TRUE);
 
