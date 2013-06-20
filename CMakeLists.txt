@@ -159,6 +159,8 @@ if(SHADOW_TEST STREQUAL ON)
 endif(SHADOW_TEST STREQUAL ON)
 
 ## install our 'exported' libs so they can be imported by others
+file(GLOB CMAKE_CUSTOM_MODULES "${CMAKE_SOURCE_DIR}/cmake/*cmake")
+install(FILES ${CMAKE_CUSTOM_MODULES} DESTINATION share/cmake/Modules/)
 if(SHADOW_EXPORT STREQUAL ON)
     install(EXPORT shadow-externals DESTINATION share/)
 endif(SHADOW_EXPORT STREQUAL ON)

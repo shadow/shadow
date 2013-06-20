@@ -149,7 +149,4 @@ endif()
 
 CheckEmitLlvmFlag()
 
-get_property(LLVMHoistGlobalsPATH TARGET LLVMHoistGlobals PROPERTY LOCATION)
-message(STATUS "LLVMHoistGlobalsPATH = ${LLVMHoistGlobalsPATH}")
-
 #####
