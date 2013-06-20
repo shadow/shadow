@@ -39,6 +39,7 @@ gdb shadow-bin
 > set env EVENT_NOWIN32=1
 > set env LD_PRELOAD=/home/rob/.shadow/lib/libshadow-preload.so:/home/rob/.shadow/lib/libshadow-preload-scallion.so
 > set args /home/rob/.shadow/share/topology.xml /home/rob/test/small-m1.xlarge/hosts.xml
+> run
 ```
 
 If you want to be able to run Shadow through valgrind and the application you 
