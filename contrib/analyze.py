@@ -7,7 +7,7 @@ Utility to help analyze results from the Shadow simulator. Use
 '$ python analyze --help' to get started
 """
 
-import sys, os, argparse, subprocess, pylab, numpy, itertools
+import sys, os, argparse, subprocess, pylab, numpy, itertools, gzip, cPickle
 
 ## PARSING DEFAULTS
 
@@ -79,19 +79,22 @@ class NodeStats():
         self.strmttf = {} # time to failure over time
         self.strmrt = {} # time streams were open over time
 
+        self.sktbufs = {} # socket buffer length/size
+        self.socketpeers = {}
+
     def parse(self, parts):
         virtualt = parsetimestamp(parts[2])
         tick = int(round(virtualt)) # second
 
-        # shadow heartbeat stats
-        if parts[5] == "[tracker_heartbeat]":
-            cpu_percent = float(parts[8])
-            mem_total_kib = float(parts[11])
-            seconds = float(int(parts[14]))
-            allocated_kib = float(parts[17])
-            deallocated_kib = float(parts[20])
-            received_bytes = float(parts[23])
-            sent_bytes = float(parts[26])
+        # shadow heartbeat node stats
+        if parts[5] == "[tracker_heartbeat]" and parts[7] == "[node]":
+            cpu_percent = float(parts[9])
+            mem_total_kib = float(parts[12])
+            seconds = float(int(parts[15]))
+            allocated_kib = float(parts[18])
+            deallocated_kib = float(parts[21])
+            received_bytes = float(parts[24])
+            sent_bytes = float(parts[27])
 
             # MiB/s
             r_mibps = received_bytes / (seconds*1024.0*1024.0)
@@ -108,6 +111,36 @@ class NodeStats():
             if tick not in self.mem: self.mem[tick] = 0.0
             self.mem[tick] += (mem_total_kib)
 
+        elif parts[5] == "[tracker_heartbeat]" and parts[7] == "[socket]":
+            sockets = parts[8].strip(';').split(';')
+
+            total_input_length = 0
+            total_input_size = 0
+            total_output_length = 0
+            total_output_size = 0
+            for socket_buffer in sockets:
+                info = socket_buffer.split(',')
+                descriptor = '{0} - {1}'.format(info[0], info[1])
+                input_buffer_length = int(info[2])
+                input_buffer_size = int(info[3])
+                output_buffer_length = int(info[4])
+                output_buffer_size = int(info[5])
+                
+                if '127.0.0.1' in descriptor:
+                    continue
+                
+                total_input_length += input_buffer_length
+                total_input_size += input_buffer_size
+                total_output_length += output_buffer_length
+                total_output_size += output_buffer_size
+                
+                if descriptor not in self.sktbufs: self.sktbufs[descriptor] = []
+                self.sktbufs[descriptor].append([tick, input_buffer_length, input_buffer_size, output_buffer_length, output_buffer_size])
+            
+            
+            if 'total' not in self.sktbufs: self.sktbufs['total'] = []
+            self.sktbufs['total'].append([tick, total_input_length, total_input_size, total_output_length, total_output_size])    
+            
         # tor controller stats
         elif parts[6] == "[torcontrol-log]":
             event = parts[8]
@@ -666,6 +699,8 @@ def parse(args):
             for t in runs: strms['runtime'].append(t)
             if args.all:
                 for t in runs: mystruntimes.append(t)
+                
+        mysktbufs = n.sktbufs
 
         if args.all:
             # sort data for plotting
@@ -694,7 +729,10 @@ def parse(args):
             save(outputpath, "node/{0}/strms-buildtime-cdf.gz".format(name), mystbuildtimes)
             save(outputpath, "node/{0}/strms-failtime-cdf.gz".format(name), mystfailtimes)
             save(outputpath, "node/{0}/strms-runtime-cdf.gz".format(name), mystruntimes)
+            
+            savepickle(outputpath, "node/{0}/socket-buffers.gz".format(name), mysktbufs)
 
+            
     pqlencounter = 0.0
     nqlencounter = 0.0
     for name in relays.keys():
@@ -1078,23 +1116,26 @@ def parse(args):
     save(outputpath, "tokens-owrite-cdf.gz", tokencdf['owrite'])
 
     # quick aggregate stats
-
     print "Some quick stats:"
-
-    countmsg = "\tdownload counts: {0} web, {1} bulk, {2} im, {3} p2p, {4} perf50k, {5} perf1m, {6} perf5m, {7} other".format(len(ttlb['web']), len(ttlb['bulk']), len(ttlb['im']), len(ttlb['p2p']), len(ttlb['perf50k']), len(ttlb['perf1m']), len(ttlb['perf5m']), len(ttlb['other']))
-    tputreadmsg = "\ttput read MiB/s: {0} min, {1} max, {2} median, {3} mean".format(min(tput['read'].values()), max(tput['read'].values()), numpy.median(tput['read'].values()), numpy.mean(tput['read'].values()))
-    tputwritemsg = "\ttput write MiB/s: {0} min, {1} max, {2} median, {3} mean".format(min(tput['write'].values()), max(tput['write'].values()), numpy.median(tput['write'].values()), numpy.mean(tput['write'].values()))
-    timemsg = "\ttiming hours: {0} virtual in {1} real".format(times['virtual'][-1], times['real'][-1])
-
     with open("{0}/parse-stats".format(outputpath), 'wb') as f:
+        countmsg = "\tdownload counts: {0} web, {1} bulk, {2} im, {3} p2p, {4} perf50k, {5} perf1m, {6} perf5m, {7} other".format(len(ttlb['web']), len(ttlb['bulk']), len(ttlb['im']), len(ttlb['p2p']), len(ttlb['perf50k']), len(ttlb['perf1m']), len(ttlb['perf5m']), len(ttlb['other']))
         print >>f, countmsg
         print countmsg
-        print >>f, tputreadmsg
-        print tputreadmsg
-        print >>f, tputwritemsg
-        print tputwritemsg
-        print >>f, timemsg
-        print timemsg
+        
+        if len(tput['read']) > 0:
+            tputreadmsg = "\ttput read MiB/s: {0} min, {1} max, {2} median, {3} mean".format(min(tput['read'].values()), max(tput['read'].values()), numpy.median(tput['read'].values()), numpy.mean(tput['read'].values()))
+            print >>f, tputreadmsg
+            print tputreadmsg
+        
+        if len(tput['write']) > 0:
+            tputwritemsg = "\ttput write MiB/s: {0} min, {1} max, {2} median, {3} mean".format(min(tput['write'].values()), max(tput['write'].values()), numpy.median(tput['write'].values()), numpy.mean(tput['write'].values()))
+            print >>f, tputwritemsg
+            print tputwritemsg
+        
+        if len(times['virtual']) > 0:
+            timemsg = "\ttiming hours: {0} virtual in {1} real".format(times['virtual'][-1], times['real'][-1])
+            print >>f, timemsg
+            print timemsg
 
     with open("{0}/circuit-choices".format(outputpath), 'wb') as f:
         total = sum(circs['hops'].values())
@@ -1150,6 +1191,7 @@ def plot(args):
             'strms-buildtime-cdf' : load("{0}/strms-buildtime-cdf.gz".format(e[0])),
             'strms-failtime-cdf' : load("{0}/strms-failtime-cdf.gz".format(e[0])),
             'strms-runtime-cdf' : load("{0}/strms-runtime-cdf.gz".format(e[0])),
+            'socket-buffers' : loadpickle("{0}/socket-buffers.gz".format(e[0])),
             'cells-pqproc' : load("{0}/cells-pqproc.gz".format(e[0])),
             'cells-nqproc' : load("{0}/cells-nqproc.gz".format(e[0])),
             'cells-pqwait' : load("{0}/cells-pqwait.gz".format(e[0])),
@@ -1177,6 +1219,19 @@ def plot(args):
             'tokens-oread-cdf' : load("{0}/tokens-oread-cdf.gz".format(e[0])),
             'tokens-owrite-cdf' : load("{0}/tokens-owrite-cdf.gz".format(e[0])),
         }
+        
+        data[e[0]]['nodes'] = {}
+        for node in os.listdir("{0}/node".format(e[0])):
+            data[e[0]]['nodes'][node] = {
+                'circs-build' : load("{0}/node/{1}/circs-build.gz".format(e[0], node)),
+                'circs-buildtime-cdf' : load("{0}/node/{1}/circs-buildtime-cdf.gz".format(e[0], node)),
+                'circs-hops' : load("{0}/node/{1}/circs-hops.gz".format(e[0], node)),
+                'socket-buffers' : loadpickle("{0}/node/{1}/socket-buffers.gz".format(e[0], node)),
+                'tput-read' : load("{0}/node/{1}/tput-read.gz".format(e[0], node)),
+                'tput-write' : load("{0}/node/{1}/tput-write.gz".format(e[0], node)),
+            }
+        
+            
 
     if not os.path.exists(graphpath): os.mkdir(graphpath)
     savedfigures = []
@@ -1862,6 +1917,97 @@ def plot(args):
         figname = "{0}/{1}-strms-runtime-cdf.pdf".format(graphpath, prefix)
         savedfigures.append(figname)
         pylab.savefig(figname)
+        
+    ######################
+    # buffer stats       #
+    ######################
+    print "Generating socket buffer graphs"
+    
+    for e in experiments:
+        for node in data[e[0]]['nodes'].keys():
+            buffers = data[e[0]]['nodes'][node]['socket-buffers']
+            total = {}
+            for descriptor in buffers:
+                tick = [d[0] / 60.0 for d in buffers[descriptor]]
+                input_buffer_length = [d[1] / 1024.0 for d in buffers[descriptor]]
+                input_buffer_size = [d[2] / 1024.0 for d in buffers[descriptor]]
+                input_buffer_space = [(d[2] - d[1]) / 1024.0 for d in buffers[descriptor]]
+                output_buffer_length = [d[3] / 1024.0 for d in buffers[descriptor]]
+                output_buffer_size = [d[4] / 1024.0 for d in buffers[descriptor]]
+                output_buffer_space = [(d[4] - d[3]) / 1024.0 for d in buffers[descriptor]]
+                
+                ####
+                # Input Buffers
+                ####
+                
+                
+                if float(max(input_buffer_length)) / float(max(input_buffer_size)) > 0.05:
+                    pylab.figure()
+                    styles = itertools.cycle(formats)
+                    pylab.plot(tick, input_buffer_size, styles.next(), label='Buffer Size')
+                    pylab.plot(tick, input_buffer_length, styles.next(), label='Buffer Length')
+                    pylab.title("{0} - {1} - Input Buffer".format(node, descriptor), fontsize=titlesize, x="1.0", ha='right')
+                    pylab.xlabel("Tick (m)")
+                    pylab.ylabel("Buffer Length (KB)")
+                    pylab.ylim(0, max(input_buffer_size) * 1.25)
+                    pylab.ticklabel_format(style='plain',axis='y')
+                    pylab.legend(loc="upper left")
+                    figname = "{0}/{1}/sockets/{3}/input-buffer-size.pdf".format(graphpath, node, prefix, descriptor.split(' ')[0])
+                    dir = figname[:figname.rindex('/')]
+                    if not os.path.exists(dir): os.makedirs(dir)
+                    pylab.savefig(figname)
+                    
+                    pylab.figure()
+                    styles = itertools.cycle(formats)
+                    pylab.plot(tick, input_buffer_space, styles.next(), label='Buffer Space')
+                    pylab.title("{0} - {1} - Input Buffer".format(node, descriptor), fontsize=titlesize, x="1.0", ha='right')
+                    pylab.xlabel("Tick (m)")
+                    pylab.ylabel("Buffer Length (KB)")
+                    pylab.ylim(0, max(input_buffer_space) * 1.25)
+                    pylab.ticklabel_format(style='plain',axis='y')
+                    pylab.legend(loc="upper left")
+                    figname = "{0}/{1}/sockets/{3}/input-buffer-space.pdf".format(graphpath, node, prefix, descriptor.split(' ')[0])
+                    dir = figname[:figname.rindex('/')]
+                    if not os.path.exists(dir): os.makedirs(dir)
+                    pylab.savefig(figname)
+                
+                ####
+                # Output Buffers
+                ####
+                
+                if float(max(output_buffer_length)) / float(max(output_buffer_size)) > 0.05:
+                    pylab.figure()
+                    styles = itertools.cycle(formats)
+                    pylab.plot(tick, output_buffer_size, styles.next(), label='Buffer Size')
+                    pylab.plot(tick, output_buffer_length, styles.next(), label='Buffer Length')
+                    pylab.title("{0} - {1} - Output Buffer".format(node, descriptor), fontsize=titlesize, x="1.0", ha='right')
+                    pylab.xlabel("Tick (m)")
+                    pylab.ylabel("Buffer Length (KB)")
+                    pylab.ylim(0, max(output_buffer_size) * 1.25)
+                    pylab.ticklabel_format(style='plain',axis='y')
+                    pylab.legend(loc="upper left")
+                    figname = "{0}/{1}/sockets/{3}/output-buffer-size.pdf".format(graphpath, node, prefix, descriptor.split(' ')[0])
+                    dir = figname[:figname.rindex('/')]
+                    if not os.path.exists(dir): os.makedirs(dir)
+                    pylab.savefig(figname)
+                    
+                    pylab.figure()
+                    styles = itertools.cycle(formats)
+                    pylab.plot(tick, output_buffer_space, styles.next(), label='Buffer Space')
+                    pylab.title("{0} - {1} - Output Buffer".format(node, descriptor), fontsize=titlesize, x="1.0", ha='right')
+                    pylab.xlabel("Tick (m)")
+                    pylab.ylabel("Buffer Length (KB)")
+                    pylab.ylim(0, max(output_buffer_space) * 1.25)
+                    pylab.ticklabel_format(style='plain',axis='y')
+                    pylab.legend(loc="upper left")
+                    figname = "{0}/{1}/sockets/{3}/output-buffer-space.pdf".format(graphpath, node, prefix, descriptor.split(' ')[0])
+                    dir = figname[:figname.rindex('/')]
+                    if not os.path.exists(dir): os.makedirs(dir)
+                    #savedfigures.append(figname)
+                    pylab.savefig(figname)
+                
+                
+        
 
     ######################
     # cell queue stats   #
@@ -2463,6 +2609,26 @@ def load(path):
     data = numpy.loadtxt(p)
     return numpy.atleast_1d(data).tolist()
 
+# helper - save files with pick
+def savepickle(outputpath, filename, data):
+    p = os.path.abspath(os.path.expanduser("{0}/{1}".format(outputpath, filename)))
+    dir = p[:p.rindex('/')]
+    if not os.path.exists(dir): os.makedirs(dir)
+    print "Saving data to '{0}'".format(p)
+    fp = gzip.open(p,'wb')
+    cPickle.dump(data, fp)
+    fp.close()
+    
+# helper - load the data from pickle file
+def loadpickle(path):
+    p = os.path.abspath(os.path.expanduser(path))
+    if not os.path.exists(p): return []
+    print "Loading data from '{0}'".format(p)
+    fp = gzip.open(p, 'rb')
+    data = cPickle.load(fp)
+    fp.close()
+    return data
+        
 # helper - parse shadow timestamps
 def parsetimestamp(stamp):
     parts = stamp.split(":")
