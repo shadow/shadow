@@ -184,7 +184,7 @@ static guint32 _internetwork_generateIP(Internetwork* internet) {
 gpointer internetwork_createNode(Internetwork* internet, GQuark nodeID,
 		Network* network, GString* hostname,
 		guint64 bwDownKiBps, guint64 bwUpKiBps, guint cpuFrequency, gint cpuThreshold, gint cpuPrecision,
-		guint nodeSeed, SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel,
+		guint nodeSeed, SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel, gchar* heartbeatLogInfo,
 		GLogLevelFlags logLevel, gchar logPcap, gchar *pcapDir, gchar* qdisc,
 		guint64 receiveBufferSize, guint64 sendBufferSize, guint64 interfaceReceiveLength) {
 	MAGIC_ASSERT(internet);
@@ -193,7 +193,7 @@ gpointer internetwork_createNode(Internetwork* internet, GQuark nodeID,
 	guint32 ip = _internetwork_generateIP(internet);
 	ip = (guint32) nodeID;
 	Node* node = node_new(nodeID, network, ip, hostname, bwDownKiBps, bwUpKiBps,
-			cpuFrequency, cpuThreshold, cpuPrecision, nodeSeed, heartbeatInterval, heartbeatLogLevel,
+			cpuFrequency, cpuThreshold, cpuPrecision, nodeSeed, heartbeatInterval, heartbeatLogLevel, heartbeatLogInfo,
 			logLevel, logPcap, pcapDir, qdisc, receiveBufferSize, sendBufferSize, interfaceReceiveLength);
 	g_hash_table_replace(internet->nodes, GUINT_TO_POINTER((guint)nodeID), node);
 

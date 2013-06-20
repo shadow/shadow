@@ -52,6 +52,10 @@ void socket_close(Socket* socket) {
 	MAGIC_ASSERT(socket);
 	MAGIC_ASSERT(socket->vtable);
 	socket->vtable->close((Descriptor*)socket);
+
+	Tracker* tracker = node_getTracker(worker_getPrivate()->cached_node);
+	Descriptor* descriptor = (Descriptor *)socket;
+	tracker_removeSocket(tracker, descriptor->handle);
 }
 
 gssize socket_sendUserData(Socket* socket, gconstpointer buffer, gsize nBytes,
@@ -92,6 +96,10 @@ void socket_init(Socket* socket, SocketFunctionTable* vtable, enum DescriptorTyp
 	socket->inputBufferSize = receiveBufferSize;
 	socket->outputBuffer = g_queue_new();
 	socket->outputBufferSize = sendBufferSize;
+
+	Tracker* tracker = node_getTracker(worker_getPrivate()->cached_node);
+	Descriptor* descriptor = (Descriptor *)socket;
+	tracker_addSocket(tracker, descriptor->handle, socket->inputBufferSize, socket->outputBufferSize);
 }
 
 /* interface functions, implemented by subtypes */
@@ -105,6 +113,11 @@ gboolean socket_isFamilySupported(Socket* socket, sa_family_t family) {
 gint socket_connectToPeer(Socket* socket, in_addr_t ip, in_port_t port, sa_family_t family) {
 	MAGIC_ASSERT(socket);
 	MAGIC_ASSERT(socket->vtable);
+
+	Tracker* tracker = node_getTracker(worker_getPrivate()->cached_node);
+	Descriptor* descriptor = (Descriptor *)socket;
+	tracker_updateSocketPeer(tracker, descriptor->handle, ip, ntohs(port));
+
 	return socket->vtable->connectToPeer(socket, ip, port, family);
 }
 
@@ -244,6 +257,11 @@ gboolean socket_addToInputBuffer(Socket* socket, Packet* packet) {
 	g_queue_push_tail(socket->inputBuffer, packet);
 	socket->inputBufferLength += length;
 
+	/* update the tracker input buffer stats */
+	Tracker* tracker = node_getTracker(worker_getPrivate()->cached_node);
+	Descriptor* descriptor = (Descriptor *)socket;
+	tracker_updateSocketInputBuffer(tracker, descriptor->handle, socket->inputBufferLength, socket->inputBufferSize);
+
 	/* we just added a packet, so we are readable */
 	if(socket->inputBufferLength > 0) {
 		descriptor_adjustStatus((Descriptor*)socket, DS_READABLE, TRUE);
@@ -261,6 +279,11 @@ Packet* socket_removeFromInputBuffer(Socket* socket) {
 		/* just removed a packet */
 		guint length = packet_getPayloadLength(packet);
 		socket->inputBufferLength -= length;
+
+		/* update the tracker input buffer stats */
+		Tracker* tracker = node_getTracker(worker_getPrivate()->cached_node);
+		Descriptor* descriptor = (Descriptor *)socket;
+		tracker_updateSocketInputBuffer(tracker, descriptor->handle, socket->inputBufferLength, socket->inputBufferSize);
 
 		/* we are not readable if we are now empty */
 		if(socket->inputBufferLength <= 0) {
@@ -290,6 +313,11 @@ gboolean socket_addToOutputBuffer(Socket* socket, Packet* packet) {
 	g_queue_push_tail(socket->outputBuffer, packet);
 	socket->outputBufferLength += length;
 
+	/* update the tracker input buffer stats */
+	Tracker* tracker = node_getTracker(worker_getPrivate()->cached_node);
+	Descriptor* descriptor = (Descriptor *)socket;
+	tracker_updateSocketOutputBuffer(tracker, descriptor->handle, socket->outputBufferLength, socket->outputBufferSize);
+
 	/* we just added a packet, we are no longer writable if full */
 	if(socket_getOutputBufferSpace(socket) <= 0) {
 		descriptor_adjustStatus((Descriptor*)socket, DS_WRITABLE, FALSE);
@@ -312,6 +340,11 @@ Packet* socket_removeFromOutputBuffer(Socket* socket) {
 		/* just removed a packet */
 		guint length = packet_getPayloadLength(packet);
 		socket->outputBufferLength -= length;
+
+		/* update the tracker input buffer stats */
+		Tracker* tracker = node_getTracker(worker_getPrivate()->cached_node);
+		Descriptor* descriptor = (Descriptor *)socket;
+		tracker_updateSocketOutputBuffer(tracker, descriptor->handle, socket->outputBufferLength, socket->outputBufferSize);
 
 		/* we are writable if we now have space */
 		if(socket_getOutputBufferSpace(socket) > 0) {

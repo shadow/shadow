@@ -75,7 +75,7 @@ struct _Node {
 Node* node_new(GQuark id, Network* network, guint32 ip,
 		GString* hostname, guint64 bwDownKiBps, guint64 bwUpKiBps,
 		guint cpuFrequency, gint cpuThreshold, gint cpuPrecision, guint nodeSeed,
-		SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel,
+		SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel, gchar* heartbeatLogInfo,
 		GLogLevelFlags logLevel, gboolean logPcap, gchar* pcapDir, gchar* qdisc,
 		guint64 receiveBufferSize, guint64 sendBufferSize, guint64 interfaceReceiveLength) {
 	Node* node = g_new0(Node, 1);
@@ -116,7 +116,7 @@ Node* node_new(GQuark id, Network* network, guint32 ip,
 
 	node->cpu = cpu_new(cpuFrequency, cpuThreshold, cpuPrecision);
 	node->random = random_new(nodeSeed);
-	node->tracker = tracker_new(heartbeatInterval, heartbeatLogLevel);
+	node->tracker = tracker_new(heartbeatInterval, heartbeatLogLevel, heartbeatLogInfo);
 	node->logLevel = logLevel;
 	node->logPcap = logPcap;
 	node->pcapDir = pcapDir;

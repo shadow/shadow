@@ -52,6 +52,7 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	const GOptionEntry mainEntries[] = {
 	  { "log-level", 'l', 0, G_OPTION_ARG_STRING, &(c->logLevelInput), "Log LEVEL above which to filter messages ('error' < 'critical' < 'warning' < 'message' < 'info' < 'debug') ['message']", "LEVEL" },
 	  { "heartbeat-log-level", 'g', 0, G_OPTION_ARG_STRING, &(c->heartbeatLogLevelInput), "Log LEVEL at which to print node statistics ['message']", "LEVEL" },
+	  { "heartbeat-log-info", 'i', 0, G_OPTION_ARG_STRING, &(c->heartbeatLogInfo), "Comma separated list of information contained in heartbeat ('node','socket') ['node']", "LIST"},
 	  { "heartbeat-frequency", 'h', 0, G_OPTION_ARG_INT, &(c->heartbeatInterval), "Log node statistics every N seconds [60]", "N" },
 	  { "seed", 's', 0, G_OPTION_ARG_INT, &(c->randomSeed), "Initialize randomness for each thread using seed N [1]", "N" },
 	  { "workers", 'w', 0, G_OPTION_ARG_INT, &(c->nWorkerThreads), "Use N worker threads [0]", "N" },
@@ -133,6 +134,9 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	if(c->heartbeatLogLevelInput == NULL) {
 		c->heartbeatLogLevelInput = g_strdup("message");
 	}
+	if(c->heartbeatLogInfo == NULL) {
+		c->heartbeatLogInfo = g_strdup("node");
+	}
 	if(c->heartbeatInterval < 1) {
 		c->heartbeatInterval = 1;
 	}
@@ -175,6 +179,7 @@ void configuration_free(Configuration* config) {
 	}
 	g_free(config->logLevelInput);
 	g_free(config->heartbeatLogLevelInput);
+	g_free(config->heartbeatLogInfo);
 	g_free(config->interfaceQueuingDiscipline);
 
 	/* groups are freed with the context */

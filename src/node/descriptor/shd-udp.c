@@ -109,6 +109,12 @@ gssize udp_sendUserData(UDP* udp, gconstpointer buffer, gsize nBytes, in_addr_t 
 		}
 	}
 
+	/* update the tracker output buffer stats */
+	Tracker* tracker = node_getTracker(worker_getPrivate()->cached_node);
+	Socket* socket = (Socket* )udp;
+	Descriptor* descriptor = (Descriptor *)socket;
+	tracker_updateSocketOutputBuffer(tracker, descriptor->handle, socket->outputBufferLength, socket->outputBufferSize);
+
 	debug("buffered %lu outbound UDP bytes from user", offset);
 
 	return (gssize) offset;
@@ -139,6 +145,12 @@ gssize udp_receiveUserData(UDP* udp, gpointer buffer, gsize nBytes, in_addr_t* i
 
 	/* destroy packet, throwing away any bytes not claimed by the app */
 	packet_unref(packet);
+
+	/* update the tracker output buffer stats */
+	Tracker* tracker = node_getTracker(worker_getPrivate()->cached_node);
+	Socket* socket = (Socket* )udp;
+	Descriptor* descriptor = (Descriptor *)socket;
+	tracker_updateSocketOutputBuffer(tracker, descriptor->handle, socket->outputBufferLength, socket->outputBufferSize);
 
 	debug("user read %lu inbound UDP bytes", bytesCopied);
 

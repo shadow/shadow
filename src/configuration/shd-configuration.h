@@ -235,6 +235,7 @@ struct _Configuration {
 	gboolean printSoftwareVersion;
 	guint heartbeatInterval;
 	gchar* heartbeatLogLevelInput;
+	gchar* heartbeatLogInfo;
 
 	GOptionGroup* networkOptionGroup;
 	gint cpuThreshold;

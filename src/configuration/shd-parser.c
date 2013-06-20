@@ -231,6 +231,7 @@ static GError* _parser_handleNodeAttributes(Parser* parser, const gchar** attrib
 	GString* cluster = NULL;
 	GString* loglevel = NULL;
 	GString* heartbeatloglevel = NULL;
+	GString* heartbeatloginfo = NULL;
 	GString* logpcap = NULL;
 	GString* pcapdir = NULL;
 	guint64 bandwidthdown = 0;
@@ -266,6 +267,8 @@ static GError* _parser_handleNodeAttributes(Parser* parser, const gchar** attrib
 			loglevel = g_string_new(value);
 		} else if (!heartbeatloglevel && !g_ascii_strcasecmp(name, "heartbeatloglevel")) {
 			heartbeatloglevel = g_string_new(value);
+		} else if (!heartbeatloginfo && !g_ascii_strcasecmp(name, "heartbeatloginfo")) {
+			heartbeatloginfo = g_string_new(value);
 		} else if (!logpcap && !g_ascii_strcasecmp(name, "logpcap")) {
 			logpcap = g_string_new(value);
 		} else if (!pcapdir && !g_ascii_strcasecmp(name, "pcapdir")) {
@@ -306,7 +309,7 @@ static GError* _parser_handleNodeAttributes(Parser* parser, const gchar** attrib
 		/* no error, create the action */
 		Action* a = (Action*) createnodes_new(id, cluster,
 				bandwidthdown, bandwidthup, quantity, cpufrequency,
-				heartbeatfrequency, heartbeatloglevel, loglevel, logpcap, pcapdir,
+				heartbeatfrequency, heartbeatloglevel, heartbeatloginfo, loglevel, logpcap, pcapdir,
 				socketReceiveBufferSize, socketSendBufferSize, interfaceReceiveBufferLength);
 		a->priority = 5;
 		_parser_addAction(parser, a);
