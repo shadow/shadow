@@ -168,7 +168,7 @@ NetworkInterface* networkinterface_new(Network* network, GQuark address, gchar* 
 		}
 	}
 
-	info("bringing up network interface '%s' at '%s', %u KiB/s up and %u KiB/s down using queuing discipline %s",
+	info("bringing up network interface '%s' at '%s', %"G_GUINT64_FORMAT" KiB/s up and %"G_GUINT64_FORMAT" KiB/s down using queuing discipline %s",
 			name, addressStr, bwUpKiBps, bwDownKiBps,
 			interface->qdisc == NIQ_RR ? "rr" : "fifo");
 
