@@ -30,7 +30,7 @@ void scalliontor_init_v3bw(ScallionTor* stor) {
 	/* open the bw file, clearing it if it exists */
 	FILE *v3bw = fopen(stor->v3bw_name, "w");
 	if(v3bw == NULL) {
-		stor->shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__,
+		stor->shadowlibFuncs->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__,
 				"v3bandwidth file not updated: can not open file '%s'\n", stor->v3bw_name);
 		return;
 	}
@@ -40,7 +40,7 @@ void scalliontor_init_v3bw(ScallionTor* stor) {
 	/* print time part on first line */
 	if(fprintf(v3bw, "%lu\n", maxtime) < 0) {
 		/* uhhhh... */
-		stor->shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__,
+		stor->shadowlibFuncs->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__,
 		"v3bandwidth file not updated: can write time '%u' to file '%s'\n", maxtime, stor->v3bw_name);
 		return;
 	}
@@ -74,7 +74,7 @@ void scalliontor_init_v3bw(ScallionTor* stor) {
 
 		if(fprintf(v3bw, "node_id=$%s bw=%u\n", node_id, bw) < 0) {
 			/* uhhhh... */
-			stor->shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__,
+			stor->shadowlibFuncs->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__,
 					"v3bandwidth file not updated: can write line 'node_id=$%s bw=%u\n' to file '%s'\n", node_id, bw, stor->v3bw_name);
 			return;
 		}
@@ -133,25 +133,25 @@ static ScallionTor* scalliontor_getPointer() {
 }
 
 static void scalliontor_logmsg_cb(int severity, uint32_t domain, const char *msg) {
-	GLogLevelFlags level;
+	ShadowLogLevel level;
 	switch (severity) {
 		case LOG_DEBUG:
-			level = G_LOG_LEVEL_DEBUG;
+			level = SHADOW_LOG_LEVEL_DEBUG;
 		break;
 		case LOG_INFO:
-			level = G_LOG_LEVEL_INFO;
+			level = SHADOW_LOG_LEVEL_INFO;
 		break;
 		case LOG_NOTICE:
-			level = G_LOG_LEVEL_MESSAGE;
+			level = SHADOW_LOG_LEVEL_MESSAGE;
 		break;
 		case LOG_WARN:
-			level = G_LOG_LEVEL_WARNING;
+			level = SHADOW_LOG_LEVEL_WARNING;
 		break;
 		case LOG_ERR:
-			level = G_LOG_LEVEL_ERROR;
+			level = SHADOW_LOG_LEVEL_ERROR;
 		break;
 		default:
-			level = G_LOG_LEVEL_DEBUG;
+			level = SHADOW_LOG_LEVEL_DEBUG;
 		break;
 	}
 	gchar* msg_dup = g_strdup(msg);
@@ -346,7 +346,7 @@ ScallionTor* scalliontor_new(ShadowFunctionTable* shadowlibFuncs, char* hostname
 	if(stor->type == VTOR_DIRAUTH) {
 		num_args += 2;
 		if(snprintf(stor->v3bw_name, 255, "%s/dirauth.v3bw", datadir_path) >= 255) {
-			stor->shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__,
+			stor->shadowlibFuncs->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__,
 					"data directory path is too long and was truncated to '%s'\n", stor->v3bw_name);
 		}
 		config[24] = "--V3BandwidthsFile";

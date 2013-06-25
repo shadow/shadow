@@ -57,7 +57,7 @@ static gboolean _torcontrollogger_manageState(TorControlLogger* tcl) {
 			/* idle until we receive the response, then move to next state */
 			tcl->currentState = TCLS_IDLE;
 			tcl->nextState = TCLS_RECV_SETEVENTS;
-			tcl->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "set tor control events '%s'", tcl->torctlEvents);
+			tcl->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, "set tor control events '%s'", tcl->torctlEvents);
 		}
 		break;
 	}
@@ -90,13 +90,13 @@ static void _torcontrollogger_handleResponseEvent(TorControlLogger* tcl,
 
 	switch (TORCTL_CODE_TYPE(replyLine->code)) {
 	case TORCTL_REPLY_ERROR: {
-		tcl->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "[%d] ERROR: %s",
+		tcl->log(SHADOW_LOG_LEVEL_CRITICAL, __FUNCTION__, "[%d] ERROR: %s",
 				replyLine->code, replyLine->body);
 		break;
 	}
 
 	case TORCTL_REPLY_SUCCESS: {
-		tcl->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "[%d] SUCCESS: %s",
+		tcl->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, "[%d] SUCCESS: %s",
 				replyLine->code, replyLine->body);
 		tcl->currentState = tcl->nextState;
 		_torcontrollogger_manageState(tcl);
@@ -114,7 +114,7 @@ static void _torcontrollogger_handleResponseEvent(TorControlLogger* tcl,
 
 static void _torcontrollogger_handleEvents(TorControlLogger* tcl, gint code,
 		gchar* line, ...) {
-	tcl->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "[torcontrol-log] %s:%i %s",
+	tcl->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, "[torcontrol-log] %s:%i %s",
 			tcl->targetHostname->str, tcl->targetPort, line);
 }
 
@@ -145,7 +145,7 @@ TorControlLogger* torcontrollogger_new(ShadowLogFunc logFunc,
 
 	/* make sure they specified events */
 	if(!moduleArgs[0]) {
-		logFunc(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error! Did not specify torctl events to log!");
+		logFunc(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "Error! Did not specify torctl events to log!");
 		return NULL;
 	}
 

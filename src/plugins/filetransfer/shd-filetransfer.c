@@ -21,15 +21,15 @@ void filetransfer_init(FileTransfer* existingFT) {
 
 static void _filetransfer_logCallback(enum service_filegetter_loglevel level, const gchar* message) {
 	if(level == SFG_CRITICAL) {
-		ft->shadowlib->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "%s", message);
+		ft->shadowlib->log(SHADOW_LOG_LEVEL_CRITICAL, __FUNCTION__, "%s", message);
 	} else if(level == SFG_WARNING) {
-		ft->shadowlib->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "%s", message);
+		ft->shadowlib->log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "%s", message);
 	} else if(level == SFG_NOTICE) {
-		ft->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "%s", message);
+		ft->shadowlib->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, "%s", message);
 	} else if(level == SFG_INFO) {
-		ft->shadowlib->log(G_LOG_LEVEL_INFO, __FUNCTION__, "%s", message);
+		ft->shadowlib->log(SHADOW_LOG_LEVEL_INFO, __FUNCTION__, "%s", message);
 	} else if(level == SFG_DEBUG) {
-		ft->shadowlib->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "%s", message);
+		ft->shadowlib->log(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__, "%s", message);
 	} else {
 		/* we dont care */
 	}
@@ -48,7 +48,7 @@ static in_addr_t _filetransfer_HostnameCallback(const gchar* hostname) {
 		if(getaddrinfo((gchar*) hostname, NULL, NULL, &info) != -1) {
 			addr = ((struct sockaddr_in*)(info->ai_addr))->sin_addr.s_addr;
 		} else {
-			ft->shadowlib->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "unable to create client: error in getaddrinfo");
+			ft->shadowlib->log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "unable to create client: error in getaddrinfo");
 		}
 		freeaddrinfo(info);
 	}
@@ -80,7 +80,7 @@ static gchar* _filetransfer_getHomePath(const gchar* path) {
 
 /* create a new node using this plug-in */
 void filetransfer_new(int argc, char* argv[]) {
-	ft->shadowlib->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "filetransfer_new called");
+	ft->shadowlib->log(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__, "filetransfer_new called");
 
 	ft->client = NULL;
 	ft->server = NULL;
@@ -97,7 +97,7 @@ void filetransfer_new(int argc, char* argv[]) {
 	/* create an epoll so we can wait for IO events */
 	gint epolld = epoll_create(1);
 	if(epolld == -1) {
-		ft->shadowlib->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in server epoll_create");
+		ft->shadowlib->log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "Error in server epoll_create");
 		close(epolld);
 		epolld = 0;
 	}
@@ -128,7 +128,7 @@ void filetransfer_new(int argc, char* argv[]) {
 			enum filegetter_code result = service_filegetter_start_single(ft->client, &args, epolld, &sockd);
 
 			if(result != FG_SUCCESS) {
-				ft->shadowlib->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "fileclient error, not started!");
+				ft->shadowlib->log(SHADOW_LOG_LEVEL_CRITICAL, __FUNCTION__, "fileclient error, not started!");
 				g_free(ft->client);
 				ft->client = NULL;
 			}
@@ -159,7 +159,7 @@ void filetransfer_new(int argc, char* argv[]) {
 			enum filegetter_code result = service_filegetter_start_multi(ft->client, &args, epolld, &sockd);
 
 			if(result != FG_SUCCESS) {
-				ft->shadowlib->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "fileclient error, not started!");
+				ft->shadowlib->log(SHADOW_LOG_LEVEL_CRITICAL, __FUNCTION__, "fileclient error, not started!");
 				g_free(ft->client);
 				ft->client = NULL;
 			}
@@ -189,16 +189,16 @@ void filetransfer_new(int argc, char* argv[]) {
 
 		ft->server = g_new0(fileserver_t, 1);
 
-		ft->shadowlib->log(G_LOG_LEVEL_INFO, __FUNCTION__, "serving '%s' on port %u", docroot, listenPort);
+		ft->shadowlib->log(SHADOW_LOG_LEVEL_INFO, __FUNCTION__, "serving '%s' on port %u", docroot, listenPort);
 		enum fileserver_code res = fileserver_start(ft->server, epolld, htonl(listenIP), htons(listenPort), docroot, 1000);
 
 		if(res == FS_SUCCESS) {
 			gchar ipStringBuffer[INET_ADDRSTRLEN+1];
 			memset(ipStringBuffer, 0, INET_ADDRSTRLEN+1);
 			inet_ntop(AF_INET, &listenIP, ipStringBuffer, INET_ADDRSTRLEN);
-			ft->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "fileserver running on at %s:%u", ipStringBuffer, listenPort);
+			ft->shadowlib->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, "fileserver running on at %s:%u", ipStringBuffer, listenPort);
 		} else {
-			ft->shadowlib->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "fileserver error, not started!");
+			ft->shadowlib->log(SHADOW_LOG_LEVEL_CRITICAL, __FUNCTION__, "fileserver error, not started!");
 			g_free(ft->server);
 			ft->server = NULL;
 		}
@@ -211,12 +211,12 @@ void filetransfer_new(int argc, char* argv[]) {
 
 	return;
 printUsage:
-	ft->shadowlib->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, (gchar*)USAGE);
+	ft->shadowlib->log(SHADOW_LOG_LEVEL_CRITICAL, __FUNCTION__, (gchar*)USAGE);
 	return;
 }
 
 void filetransfer_free() {
-	ft->shadowlib->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "filetransfer_free called");
+	ft->shadowlib->log(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__, "filetransfer_free called");
 
 	if(ft->client) {
 		/* stop the client */
@@ -229,13 +229,13 @@ void filetransfer_free() {
 
 	if(ft->server) {
 		/* log statistics */
-		ft->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__,
+		ft->shadowlib->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__,
 				"fileserver stats: %lu bytes in, %lu bytes out, %lu replies",
 				ft->server->bytes_received, ft->server->bytes_sent,
 				ft->server->replies_sent);
 
 		/* shutdown fileserver */
-		ft->shadowlib->log(G_LOG_LEVEL_INFO, __FUNCTION__, "shutting down fileserver");
+		ft->shadowlib->log(SHADOW_LOG_LEVEL_INFO, __FUNCTION__, "shutting down fileserver");
 		fileserver_shutdown(ft->server);
 
 		/* cleanup */
@@ -245,17 +245,17 @@ void filetransfer_free() {
 }
 
 void filetransfer_activate() {
-	ft->shadowlib->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "checking epoll for ready sockets");
+	ft->shadowlib->log(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__, "checking epoll for ready sockets");
 
 	/* check clients epoll descriptor for events, and activate each ready socket */
 	if(ft->client) {
 		if(!ft->client->fg.epolld) {
-			ft->shadowlib->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "client cant wait on epoll without epoll descriptor");
+			ft->shadowlib->log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "client cant wait on epoll without epoll descriptor");
 		} else {
 			struct epoll_event events[10];
 			int nfds = epoll_wait(ft->client->fg.epolld, events, 10, 0);
 			if(nfds == -1) {
-				ft->shadowlib->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "error in client epoll_wait");
+				ft->shadowlib->log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "error in client epoll_wait");
 			} else {
 				/* finally, activate client for every socket thats ready */
 				for(int i = 0; i < nfds; i++) {
@@ -268,12 +268,12 @@ void filetransfer_activate() {
 	/* check servers epoll descriptor for events, and activate each ready socket */
 	if(ft->server) {
 		if(!ft->server->epolld) {
-			ft->shadowlib->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "server cant wait on epoll without epoll descriptor");
+			ft->shadowlib->log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "server cant wait on epoll without epoll descriptor");
 		} else {
 			struct epoll_event events[10];
 			int nfds = epoll_wait(ft->server->epolld, events, 10, 0);
 			if(nfds == -1) {
-				ft->shadowlib->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "error in server epoll_wait");
+				ft->shadowlib->log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "error in server epoll_wait");
 			} else {
 				/* finally, activate server for every socket thats ready */
 				fileserver_progress_t progress;
@@ -281,17 +281,17 @@ void filetransfer_activate() {
 					memset(&progress, 0, sizeof(fileserver_progress_t));
 					enum fileserver_code result = fileserver_activate(ft->server, events[i].data.fd, &progress);
 
-					ft->shadowlib->log(G_LOG_LEVEL_DEBUG, __FUNCTION__,
+					ft->shadowlib->log(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__,
 							"fileserver activation result: %s", fileserver_codetoa(result));
 
 					if(progress.changed) {
-						ft->shadowlib->log(G_LOG_LEVEL_INFO, __FUNCTION__,
+						ft->shadowlib->log(SHADOW_LOG_LEVEL_INFO, __FUNCTION__,
 							"[fs-progress] socket %i %lu bytes read %lu of %lu bytes written total %lu bytes read %lu bytes written %lu replies",
 							progress.sockd, progress.bytes_read, progress.bytes_written, progress.reply_length,
 							ft->server->bytes_received, ft->server->bytes_sent, ft->server->replies_sent);
 
 						if(progress.reply_done) {
-							ft->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__,
+							ft->shadowlib->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__,
 									"[fs-reply-complete] socket %i %lu bytes read %lu of %lu bytes written",
 									progress.sockd, progress.bytes_read, progress.bytes_written, progress.reply_length);
 						}

@@ -49,8 +49,8 @@ void __shadow_plugin_init__(ShadowFunctionTable* shadowlibFuncs) {
 	 */
 	gboolean success = shadowlibFuncs->registerPlugin(&filetransferplugin_new, &filetransferplugin_free, &filetransferplugin_activate);
 	if(success) {
-		shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "successfully registered filetransfer plug-in state");
+		shadowlibFuncs->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, "successfully registered filetransfer plug-in state");
 	} else {
-		shadowlibFuncs->log(G_LOG_LEVEL_INFO, __FUNCTION__, "error registering filetransfer plug-in state");
+		shadowlibFuncs->log(SHADOW_LOG_LEVEL_INFO, __FUNCTION__, "error registering filetransfer plug-in state");
 	}
 }

@@ -18,7 +18,7 @@ void torControlPlugin_new(int argc, char* argv[]) {
 				"available modules:\n"
 				"\t'circuitBuild node1,node2,...,nodeN'\n"
 				"\t'log event1,event2,...,eventN'\n";
-		torControlState.shadowlib->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "%s", USAGE);
+		torControlState.shadowlib->log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "%s", USAGE);
 		return;
 	}
 
@@ -67,10 +67,10 @@ void __shadow_plugin_init__(ShadowFunctionTable* shadowlibFuncs) {
 
 	/* we log through Shadow by using the log function it supplied to us */
 	if(success) {
-		torControlState.shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__,
+		torControlState.shadowlib->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__,
 				"successfully registered ping plug-in state");
 	} else {
-		torControlState.shadowlib->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__,
+		torControlState.shadowlib->log(SHADOW_LOG_LEVEL_CRITICAL, __FUNCTION__,
 				"error registering ping plug-in state");
 	}
 }

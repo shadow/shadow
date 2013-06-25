@@ -20,14 +20,14 @@ static EchoClient* _echoudp_newClient(ShadowLogFunc log, in_addr_t serverIPAddre
 	/* create the socket and get a socket descriptor */
 	gint socketd = socket(AF_INET, (SOCK_DGRAM | SOCK_NONBLOCK), 0);
 	if (socketd == -1) {
-		log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in socket");
+		log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "Error in socket");
 		return NULL;
 	}
 
 	/* create an epoll so we can wait for IO events */
 	gint epolld = epoll_create(1);
 	if(epolld == -1) {
-		log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_create");
+		log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_create");
 		close(socketd);
 		return NULL;
 	}
@@ -40,7 +40,7 @@ static EchoClient* _echoudp_newClient(ShadowLogFunc log, in_addr_t serverIPAddre
 	/* start watching out socket */
 	gint result = epoll_ctl(epolld, EPOLL_CTL_ADD, socketd, &ev);
 	if(result == -1) {
-		log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_ctl");
+		log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_ctl");
 		close(epolld);
 		close(socketd);
 		return NULL;
@@ -61,7 +61,7 @@ static EchoServer* _echoudp_newServer(ShadowLogFunc log, in_addr_t bindIPAddress
 	/* create the socket and get a socket descriptor */
 	gint socketd = socket(AF_INET, (SOCK_DGRAM | SOCK_NONBLOCK), 0);
 	if (socketd == -1) {
-		log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in socket");
+		log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "Error in socket");
 		return NULL;
 	}
 
@@ -75,14 +75,14 @@ static EchoServer* _echoudp_newServer(ShadowLogFunc log, in_addr_t bindIPAddress
 	/* bind the socket to the server port */
 	gint result = bind(socketd, (struct sockaddr *) &bindAddr, sizeof(bindAddr));
 	if (result == -1) {
-		log(G_LOG_LEVEL_WARNING, __FUNCTION__, "error in bind");
+		log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "error in bind");
 		return NULL;
 	}
 
 	/* create an epoll so we can wait for IO events */
 	gint epolld = epoll_create(1);
 	if(epolld == -1) {
-		log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_create");
+		log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_create");
 		close(socketd);
 		return NULL;
 	}
@@ -95,7 +95,7 @@ static EchoServer* _echoudp_newServer(ShadowLogFunc log, in_addr_t bindIPAddress
 	/* start watching out socket */
 	result = epoll_ctl(epolld, EPOLL_CTL_ADD, socketd, &ev);
 	if(result == -1) {
-		log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_ctl");
+		log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_ctl");
 		close(epolld);
 		close(socketd);
 		return NULL;
@@ -131,7 +131,7 @@ EchoUDP* echoudp_new(ShadowLogFunc log, int argc, char* argv[]) {
 			struct addrinfo* serverInfo;
 
 			if(getaddrinfo(serverHostName, NULL, NULL, &serverInfo) == -1) {
-				log(G_LOG_LEVEL_WARNING, __FUNCTION__, "unable to create client: error in getaddrinfo");
+				log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "unable to create client: error in getaddrinfo");
 				isError = TRUE;
 			} else {
 				in_addr_t serverIP = ((struct sockaddr_in*)(serverInfo->ai_addr))->sin_addr.s_addr;
@@ -149,19 +149,19 @@ EchoUDP* echoudp_new(ShadowLogFunc log, int argc, char* argv[]) {
 			struct addrinfo* myInfo;
 
 			if(getaddrinfo(myHostName, NULL, NULL, &myInfo) == -1) {
-				log(G_LOG_LEVEL_WARNING, __FUNCTION__, "unable to create server: error in getaddrinfo");
+				log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "unable to create server: error in getaddrinfo");
 				isError = TRUE;
 			} else {
 				in_addr_t myIP = ((struct sockaddr_in*)(myInfo->ai_addr))->sin_addr.s_addr;
 				gchar ipStringBuffer[INET_ADDRSTRLEN+1];
 				memset(ipStringBuffer, 0, INET_ADDRSTRLEN+1);
 				inet_ntop(AF_INET, &myIP, ipStringBuffer, INET_ADDRSTRLEN);
-				log(G_LOG_LEVEL_INFO, __FUNCTION__, "binding to %s", ipStringBuffer);
+				log(SHADOW_LOG_LEVEL_INFO, __FUNCTION__, "binding to %s", ipStringBuffer);
 				eudp->server = _echoudp_newServer(log, myIP);
 			}
 			freeaddrinfo(myInfo);
 		} else {
-			log(G_LOG_LEVEL_WARNING, __FUNCTION__, "unable to create server: error in gethostname");
+			log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "unable to create server: error in gethostname");
 			isError = TRUE;
 		}
 	}
@@ -200,37 +200,37 @@ void echoudp_free(EchoUDP* eudp) {
 }
 
 static void _echoudp_clientReadable(EchoClient* ec, gint socketd) {
-	ec->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "trying to read socket %i", socketd);
+	ec->log(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__, "trying to read socket %i", socketd);
 
 	if(!ec->is_done) {
 		ssize_t b = 0;
 		while(ec->amount_sent-ec->recv_offset > 0 &&
 				(b = recvfrom(socketd, ec->recvBuffer+ec->recv_offset, ec->amount_sent-ec->recv_offset, 0, NULL, NULL)) > 0) {
-			ec->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "client socket %i read %i bytes: '%s'", socketd, b, ec->recvBuffer+ec->recv_offset);
+			ec->log(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__, "client socket %i read %i bytes: '%s'", socketd, b, ec->recvBuffer+ec->recv_offset);
 			ec->recv_offset += b;
 		}
 
 		if(ec->recv_offset >= ec->amount_sent) {
 			ec->is_done = 1;
 			if(memcmp(ec->sendBuffer, ec->recvBuffer, ec->amount_sent)) {
-				ec->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "inconsistent echo received!");
+				ec->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, "inconsistent echo received!");
 			} else {
-				ec->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "consistent echo received!");
+				ec->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, "consistent echo received!");
 			}
 
 			if(epoll_ctl(ec->epolld, EPOLL_CTL_DEL, socketd, NULL) == -1) {
-				ec->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_ctl");
+				ec->log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_ctl");
 			}
 
 			close(socketd);
 		} else {
-			ec->log(G_LOG_LEVEL_INFO, __FUNCTION__, "echo progress: %i of %i bytes", ec->recv_offset, ec->amount_sent);
+			ec->log(SHADOW_LOG_LEVEL_INFO, __FUNCTION__, "echo progress: %i of %i bytes", ec->recv_offset, ec->amount_sent);
 		}
 	}
 }
 
 static void _echoudp_serverReadable(EchoServer* es, gint socketd) {
-	es->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "trying to read socket %i", socketd);
+	es->log(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__, "trying to read socket %i", socketd);
 
 	socklen_t len = sizeof(es->address);
 
@@ -244,7 +244,7 @@ static void _echoudp_serverReadable(EchoServer* es, gint socketd) {
 			close(es->listend);
 			close(socketd);
 		} else if(bread > 0) {
-			es->log(G_LOG_LEVEL_INFO, __FUNCTION__, "server socket %i read %i bytes", socketd, (gint)bread);
+			es->log(SHADOW_LOG_LEVEL_INFO, __FUNCTION__, "server socket %i read %i bytes", socketd, (gint)bread);
 			es->read_offset += bread;
 			read_size -= bread;
 
@@ -252,7 +252,7 @@ static void _echoudp_serverReadable(EchoServer* es, gint socketd) {
 			ev.events = EPOLLIN|EPOLLOUT;
 			ev.data.fd = socketd;
 			if(epoll_ctl(es->epolld, EPOLL_CTL_MOD, socketd, &ev) == -1) {
-				es->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_ctl");
+				es->log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_ctl");
 			}
 		}
 	}
@@ -268,7 +268,7 @@ static void _echoudp_fillCharBuffer(gchar* buffer, gint size) {
 
 static void _echoudp_clientWritable(EchoClient* ec, gint socketd) {
 	if(!ec->sent_msg) {
-		ec->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "trying to write to socket %i", socketd);
+		ec->log(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__, "trying to write to socket %i", socketd);
 
 		struct sockaddr_in server;
 		memset(&server, 0, sizeof(server));
@@ -283,7 +283,7 @@ static void _echoudp_clientWritable(EchoClient* ec, gint socketd) {
 		ssize_t b = sendto(socketd, ec->sendBuffer, sizeof(ec->sendBuffer), 0, (struct sockaddr*) (&server), len);
 		ec->sent_msg = 1;
 		ec->amount_sent += b;
-		ec->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "client socket %i wrote %i bytes: '%s'", socketd, b, ec->sendBuffer);
+		ec->log(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__, "client socket %i wrote %i bytes: '%s'", socketd, b, ec->sendBuffer);
 
 		if(ec->amount_sent >= sizeof(ec->sendBuffer)) {
 			/* we sent everything, so stop trying to write */
@@ -291,14 +291,14 @@ static void _echoudp_clientWritable(EchoClient* ec, gint socketd) {
 			ev.events = EPOLLIN;
 			ev.data.fd = socketd;
 			if(epoll_ctl(ec->epolld, EPOLL_CTL_MOD, socketd, &ev) == -1) {
-				ec->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_ctl");
+				ec->log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_ctl");
 			}
 		}
 	}
 }
 
 static void _echoudp_serverWritable(EchoServer* es, gint socketd) {
-	es->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "trying to read socket %i", socketd);
+	es->log(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__, "trying to read socket %i", socketd);
 
 	socklen_t len = sizeof(es->address);
 
@@ -309,10 +309,10 @@ static void _echoudp_serverWritable(EchoServer* es, gint socketd) {
 		ssize_t bwrote = sendto(socketd, es->echoBuffer + es->write_offset, write_size, 0, (struct sockaddr*)&es->address, len);
 		if(bwrote == 0) {
 			if(epoll_ctl(es->epolld, EPOLL_CTL_DEL, socketd, NULL) == -1) {
-				es->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_ctl");
+				es->log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_ctl");
 			}
 		} else if(bwrote > 0) {
-			es->log(G_LOG_LEVEL_INFO, __FUNCTION__, "server socket %i wrote %i bytes", socketd, (gint)bwrote);
+			es->log(SHADOW_LOG_LEVEL_INFO, __FUNCTION__, "server socket %i wrote %i bytes", socketd, (gint)bwrote);
 			es->write_offset += bwrote;
 			write_size -= bwrote;
 		}
@@ -324,7 +324,7 @@ static void _echoudp_serverWritable(EchoServer* es, gint socketd) {
 		ev.events = EPOLLIN;
 		ev.data.fd = socketd;
 		if(epoll_ctl(es->epolld, EPOLL_CTL_MOD, socketd, &ev) == -1) {
-			es->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_ctl");
+			es->log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_ctl");
 		}
 	}
 }
@@ -337,7 +337,7 @@ void echoudp_ready(EchoUDP* eudp) {
 
 		int nfds = epoll_wait(eudp->client->epolld, events, MAX_EVENTS, 0);
 		if(nfds == -1) {
-			eudp->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "error in epoll_wait");
+			eudp->log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "error in epoll_wait");
 		}
 
 		for(int i = 0; i < nfds; i++) {
@@ -355,7 +355,7 @@ void echoudp_ready(EchoUDP* eudp) {
 
 		int nfds = epoll_wait(eudp->server->epolld, events, MAX_EVENTS, 0);
 		if(nfds == -1) {
-			eudp->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "error in epoll_wait");
+			eudp->log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "error in epoll_wait");
 		}
 
 		for(int i = 0; i < nfds; i++) {

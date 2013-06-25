@@ -42,10 +42,10 @@ void __shadow_plugin_init__(ShadowFunctionTable* shadowlibFuncs) {
 
 	/* we log through Shadow by using the log function it supplied to us */
 	if(success) {
-		torrentState.shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__,
+		torrentState.shadowlib->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__,
 				"successfully registered torrent plug-in state");
 	} else {
-		torrentState.shadowlib->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__,
+		torrentState.shadowlib->log(SHADOW_LOG_LEVEL_CRITICAL, __FUNCTION__,
 				"error registering torrent plug-in state");
 	}
 }

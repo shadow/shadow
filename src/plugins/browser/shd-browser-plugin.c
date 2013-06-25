@@ -20,12 +20,12 @@ static void browserplugin_free() {
 
 static void browserplugin_activate() {
 	if(!b.epolld) {
-		b.shadowlib->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "client cant wait on epoll without epoll descriptor");
+		b.shadowlib->log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "client cant wait on epoll without epoll descriptor");
 	} else {
 		struct epoll_event events[10];
 		int nfds = epoll_wait(b.epolld, events, 10, 0);
 		if(nfds == -1) {
-			b.shadowlib->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "error in client epoll_wait");
+			b.shadowlib->log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "error in client epoll_wait");
 		} else {
 			/* finally, activate client for every socket thats ready */
 			for(int i = 0; i < nfds; i++) {
@@ -55,8 +55,8 @@ void __shadow_plugin_init__(ShadowFunctionTable* shadowlibFuncs) {
 	 */
 	gboolean success = shadowlibFuncs->registerPlugin(&browserplugin_new, &browserplugin_free, &browserplugin_activate);
 	if(success) {
-		shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "successfully registered browser plug-in state");
+		shadowlibFuncs->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, "successfully registered browser plug-in state");
 	} else {
-		shadowlibFuncs->log(G_LOG_LEVEL_INFO, __FUNCTION__, "error registering browser plug-in state");
+		shadowlibFuncs->log(SHADOW_LOG_LEVEL_INFO, __FUNCTION__, "error registering browser plug-in state");
 	}
 }

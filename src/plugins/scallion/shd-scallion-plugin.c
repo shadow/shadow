@@ -28,7 +28,7 @@ static in_addr_t _scallion_HostnameCallback(const gchar* hostname) {
 		if(result != -1 && info != NULL) {
 			addr = ((struct sockaddr_in*)(info->ai_addr))->sin_addr.s_addr;
 		} else {
-			scallion.shadowlibFuncs->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "unable to create client: error in getaddrinfo");
+			scallion.shadowlibFuncs->log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "unable to create client: error in getaddrinfo");
 		}
 		freeaddrinfo(info);
 	}
@@ -37,12 +37,12 @@ static in_addr_t _scallion_HostnameCallback(const gchar* hostname) {
 }
 
 static void _scallion_new(gint argc, gchar* argv[]) {
-	scallion.shadowlibFuncs->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "scallion_new called");
+	scallion.shadowlibFuncs->log(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__, "scallion_new called");
 
 	gchar* usage = "Scallion USAGE: (\"dirauth\"|\"relay\"|\"exitrelay\"|\"client\") consensusbandwidth readbandwidthrate writebandwidthrate torrc_path datadir_base_path geoip_path\n";
 
 	if(argc != 8) {
-		scallion.shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, usage);
+		scallion.shadowlibFuncs->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, usage);
 		return;
 	}
 	
@@ -66,13 +66,13 @@ static void _scallion_new(gint argc, gchar* argv[]) {
 	} else if(g_ascii_strncasecmp(tortype, "client", strlen("client")) == 0) {
 		ntype = VTOR_CLIENT;
 	} else {
-		scallion.shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "Unrecognized torrent type: %s", usage);
+		scallion.shadowlibFuncs->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, "Unrecognized torrent type: %s", usage);
 		return;
 	}
 
 	/* get the hostname */
 	if(gethostname(scallion.hostname, 128) < 0) {
-		scallion.shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "error getting hostname");
+		scallion.shadowlibFuncs->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, "error getting hostname");
 		return;
 	}
 
@@ -91,12 +91,12 @@ static void _scallion_new(gint argc, gchar* argv[]) {
 }
 
 static void _scallion_free() {
-	scallion.shadowlibFuncs->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "scallion_free called");
+	scallion.shadowlibFuncs->log(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__, "scallion_free called");
 	scalliontor_free(scallion.stor);
 }
 
 static void _scallion_notify() {
-	scallion.shadowlibFuncs->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "_scallion_notify called");
+	scallion.shadowlibFuncs->log(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__, "_scallion_notify called");
 	scalliontor_notify(scallion.stor);
 }
 
@@ -126,7 +126,7 @@ void __shadow_plugin_init__(ShadowFunctionTable* shadowlibFuncs) {
 	/* tell shadow which functions it should call to manage nodes */
 	shadowlibFuncs->registerPlugin(&_scallion_new, &_scallion_free, &_scallion_notify);
 
-	shadowlibFuncs->log(G_LOG_LEVEL_INFO, __FUNCTION__, "finished registering scallion plug-in state");
+	shadowlibFuncs->log(SHADOW_LOG_LEVEL_INFO, __FUNCTION__, "finished registering scallion plug-in state");
 
 	/* setup openssl locks */
 
@@ -154,21 +154,21 @@ void __shadow_plugin_init__(ShadowFunctionTable* shadowlibFuncs) {
 	CRYPTO_set_id_callback(shadowIdFunc);
 	RAND_set_rand_method(shadowRandomMethod);
 
-	shadowlibFuncs->log(G_LOG_LEVEL_INFO, __FUNCTION__, "finished initializing crypto thread state");
+	shadowlibFuncs->log(SHADOW_LOG_LEVEL_INFO, __FUNCTION__, "finished initializing crypto thread state");
 #else
     /* no thread support */
-	shadowlibFuncs->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "please rebuild openssl with threading support. expect segfaults.");
+	shadowlibFuncs->log(SHADOW_LOG_LEVEL_CRITICAL, __FUNCTION__, "please rebuild openssl with threading support. expect segfaults.");
 #endif
 
 	/* setup libevent locks */
 
 #ifdef EVTHREAD_USE_PTHREADS_IMPLEMENTED
 	if(evthread_use_pthreads()) {
-		shadowlibFuncs->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "error in evthread_use_pthreads()");
+		shadowlibFuncs->log(SHADOW_LOG_LEVEL_CRITICAL, __FUNCTION__, "error in evthread_use_pthreads()");
 	}
-	shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "finished initializing event thread state evthread_use_pthreads()");
+	shadowlibFuncs->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, "finished initializing event thread state evthread_use_pthreads()");
 #else
-	shadowlibFuncs->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "please rebuild libevent with threading support, or link with event_pthread. expect segfaults.");
+	shadowlibFuncs->log(SHADOW_LOG_LEVEL_CRITICAL, __FUNCTION__, "please rebuild libevent with threading support, or link with event_pthread. expect segfaults.");
 #endif
 }
 

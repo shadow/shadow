@@ -42,10 +42,10 @@ void __shadow_plugin_init__(ShadowFunctionTable* shadowlibFuncs) {
 
 	/* we log through Shadow by using the log function it supplied to us */
 	if(success) {
-		pingState.shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__,
+		pingState.shadowlib->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__,
 				"successfully registered ping plug-in state");
 	} else {
-		pingState.shadowlib->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__,
+		pingState.shadowlib->log(SHADOW_LOG_LEVEL_CRITICAL, __FUNCTION__,
 				"error registering ping plug-in state");
 	}
 }

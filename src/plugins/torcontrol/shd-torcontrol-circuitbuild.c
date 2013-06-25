@@ -114,7 +114,7 @@ static void _torControlCircuitBuild_circEvent(gpointer moduleData, gint code, gc
 	TorCtlCircuitBuild *circuitBuild = moduleData;
 	ShadowLogFunc log = circuitBuild->log;
 
-	log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "[%d] CIRC: circID=%d status=%d buildFlags=%d purpose=%d reason=%d",
+	log(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__, "[%d] CIRC: circID=%d status=%d buildFlags=%d purpose=%d reason=%d",
 			code, circID, status, buildFlags, purpose, reason);
 
 	/* if our circuit was closed, build new one */
@@ -128,7 +128,7 @@ static void _torControlCircuitBuild_circEvent(gpointer moduleData, gint code, gc
 		}
 
 		if(circuit) {
-			log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "circuit %d closed, rebuilding", circuit->circID);
+			log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, "circuit %d closed, rebuilding", circuit->circID);
 			g_queue_push_tail(circuitBuild->circuitsToBuild, circuit);
 			if(g_queue_get_length(circuitBuild->circuitsToBuild) == 1) {
 				torControl_buildCircuit(circuitBuild->sockd, circuit->relays);
@@ -145,7 +145,7 @@ static void _torControlCircuitBuild_streamEvent(gpointer moduleData, gint code, 
 	TorCtlCircuitBuild *circuitBuild = moduleData;
 	ShadowLogFunc log = circuitBuild->log;
 
-	log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "[%d] STREAM: status=\"%s\" streamID=%d  circID=%d",
+	log(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__, "[%d] STREAM: status=\"%s\" streamID=%d  circID=%d",
 	        code, torControl_getStreamStatusString(status), streamID, circID);
 
 	if(status == TORCTL_STREAM_STATUS_NEW && circuitBuild->bootstrapped) {
@@ -163,7 +163,7 @@ static void _torControlCircuitBuild_streamEvent(gpointer moduleData, gint code, 
 		if(circuit) {
 			torControl_attachStream(circuitBuild->sockd, streamID, circuit->circID);
 		} else {
-			log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Could not find any circuit time span for stream %d", streamID);
+			log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "Could not find any circuit time span for stream %d", streamID);
 			torControl_attachStream(circuitBuild->sockd, streamID, 0);
 		}
 
@@ -184,7 +184,7 @@ static void _torControlCircuitBuild_statusEvent(gpointer moduleData, gint code, 
     if(type == TORCTL_STATUS_TYPE_CLIENT && !g_ascii_strcasecmp(action, "BOOTSTRAP")) {
         gchar *progress = g_hash_table_lookup(arguments, "PROGRESS");
         if(!progress) {
-            log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Could not find argument PROGRESS in bootstrap status");
+            log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "Could not find argument PROGRESS in bootstrap status");
         } else if(!g_ascii_strcasecmp(progress, "100")) {
             circuitBuild->bootstrapped = TRUE;
             TorCtlCircuitBuild_Circuit *circuit = g_queue_peek_head(circuitBuild->circuitsToBuild);
@@ -192,7 +192,7 @@ static void _torControlCircuitBuild_statusEvent(gpointer moduleData, gint code, 
             	torControl_buildCircuit(circuitBuild->sockd, circuit->relays);
             	circuitBuild->state = TORCTL_CIRCBUILD_STATE_GET_CIRC_ID;
             } else {
-            	log(G_LOG_LEVEL_WARNING, __FUNCTION__, "No circuit found to build");
+            	log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "No circuit found to build");
             }
         }
     }
@@ -205,12 +205,12 @@ static void _torControlCircuitBuild_responseEvent(gpointer moduleData, GList *re
 	TorControl_ReplyLine *replyLine = g_list_first(reply)->data;
 	switch(TORCTL_CODE_TYPE(replyLine->code)) {
         case TORCTL_REPLY_ERROR: {
-            log(G_LOG_LEVEL_WARNING, __FUNCTION__, "[%d] ERROR: %s", replyLine->code, replyLine->body);
+            log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "[%d] ERROR: %s", replyLine->code, replyLine->body);
             break;
         }
 
 	    case TORCTL_REPLY_SUCCESS: {
-	        log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "[%d] SUCCESS: %s", replyLine->code, replyLine->body);
+	        log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, "[%d] SUCCESS: %s", replyLine->code, replyLine->body);
 
 	        switch(circuitBuild->state) {
 	            case TORCTL_CIRCBUILD_STATE_AUTHENTICATE:
@@ -292,7 +292,7 @@ TorCtlCircuitBuild *torControlCircuitBuild_new(ShadowLogFunc logFunc, gint sockd
 
 
 	if(!moduleArgs[0]) {
-		logFunc(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error! Did not specify circuit to build!");
+		logFunc(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "Error! Did not specify circuit to build!");
 		return NULL;
 	}
 
@@ -305,7 +305,7 @@ TorCtlCircuitBuild *torControlCircuitBuild_new(ShadowLogFunc logFunc, gint sockd
 	circuitBuild->circuitsToBuild = g_queue_new();
 
 	for(gint idx = 0; moduleArgs[idx]; idx++) {
-		logFunc(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "%s", moduleArgs[idx]);
+		logFunc(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, "%s", moduleArgs[idx]);
 		TorCtlCircuitBuild_Circuit *circuit = g_new0(TorCtlCircuitBuild_Circuit, 1);
 		circuit->startTime = 0;
 		circuit->endTime = -1;
@@ -341,7 +341,7 @@ TorCtlCircuitBuild *torControlCircuitBuild_new(ShadowLogFunc logFunc, gint sockd
 
 	circuitBuild->state = TORCTL_CIRCBUILD_STATE_AUTHENTICATE;
 
-	logFunc(G_LOG_LEVEL_INFO, __FUNCTION__, "Successfully initialized the circuit build Tor control module.");
+	logFunc(SHADOW_LOG_LEVEL_INFO, __FUNCTION__, "Successfully initialized the circuit build Tor control module.");
 
 	return circuitBuild;
 }

@@ -12,17 +12,17 @@
 
 Ping pingData;
 
-void ping_log(GLogLevelFlags level, const gchar* functionName, gchar* format, ...) {
+void ping_log(ShadowLogLevel level, const gchar* functionName, const gchar* format, ...) {
 	va_list vargs;
 	va_start(vargs, format);
 
-	if(level == G_LOG_LEVEL_DEBUG) {
+	if(level == SHADOW_LOG_LEVEL_DEBUG) {
 		return;
 	}
 
 	GString* newformat = g_string_new(NULL);
 	g_string_append_printf(newformat, "[%s] %s", functionName, format);
-	g_logv(G_LOG_DOMAIN, level, newformat->str, vargs);
+	g_logv(G_LOG_DOMAIN, (GLogLevelFlags)level, newformat->str, vargs);
 	g_string_free(newformat, TRUE);
 
 	va_end(vargs);
@@ -49,7 +49,7 @@ gint main(gint argc, gchar *argv[]) {
 
 	gint epolld = epoll_create(1);
 	if(epolld == -1) {
-		ping_log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_create");
+		ping_log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_create");
 		close(epolld);
 		return -1;
 	}
@@ -70,11 +70,11 @@ gint main(gint argc, gchar *argv[]) {
 		/* wait for some events */
 		nReadyFDs = epoll_wait(epolld, events, 10, 0);
 		if(nReadyFDs == -1) {
-			ping_log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_wait");
+			ping_log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_wait");
 			return -1;
 		}
 
-		//ping_log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "have %d fds ready", nReadyFDs);
+		//ping_log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, "have %d fds ready", nReadyFDs);
 		for(int i = 0; i < nReadyFDs; i++) {
 			ping_activate();
 		}

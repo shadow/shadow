@@ -71,7 +71,7 @@ static gboolean _torcontrolpinger_manageState(TorControlPinger* tcp) {
 			/* idle until we receive the response, then move to next state */
 			tcp->currentState = TCPS_IDLE;
 			tcp->nextState = TCPS_RECV_SETEVENTS;
-			tcp->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "set tor control events 'CIRC'");
+			tcp->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, "set tor control events 'CIRC'");
 		}
 		break;
 	}
@@ -105,13 +105,13 @@ static void _torcontrolpinger_handleResponseEvent(TorControlPinger* tcp,
 
 	switch (TORCTL_CODE_TYPE(replyLine->code)) {
 	case TORCTL_REPLY_ERROR: {
-		tcp->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "[%d] ERROR: %s",
+		tcp->log(SHADOW_LOG_LEVEL_CRITICAL, __FUNCTION__, "[%d] ERROR: %s",
 				replyLine->code, replyLine->body);
 		break;
 	}
 
 	case TORCTL_REPLY_SUCCESS: {
-		tcp->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "[%d] SUCCESS: %s",
+		tcp->log(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__, "[%d] SUCCESS: %s",
 				replyLine->code, replyLine->body);
 
 		/* check if this is a successful start of a ping */
@@ -123,7 +123,7 @@ static void _torcontrolpinger_handleResponseEvent(TorControlPinger* tcp,
 			*circID = (gint) g_ascii_strtoll(parts[1], NULL, 10);
 			g_hash_table_replace(tcp->outstandingPings, circID, pingStartTime);
 
-			tcp->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "ping started for circ %i", *circID);
+			tcp->log(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__, "ping started for circ %i", *circID);
 		}
 
 		tcp->currentState = tcp->nextState;
@@ -144,13 +144,13 @@ static void _torcontrolpinger_handleCircEvent(TorControlPinger* tcp, gint code,
 		gchar* line, gint circID, GString* path, gint status, gint buildFlags,
 		gint purpose, gint reason, GDateTime* createTime) {
 
-	tcp->log(G_LOG_LEVEL_INFO, __FUNCTION__, "[torcontrol-ping] %s:%i %s",
+	tcp->log(SHADOW_LOG_LEVEL_INFO, __FUNCTION__, "[torcontrol-ping] %s:%i %s",
 			tcp->targetHostname->str, tcp->targetPort, line);
 
 	/* check if this is a ping circuit */
 	GDateTime* pingStartTime = g_hash_table_lookup(tcp->outstandingPings, &circID);
 	if(pingStartTime) {
-		tcp->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "got ping start for circ %i", circID);
+		tcp->log(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__, "got ping start for circ %i", circID);
 
 		/* if it was successfully extended, record the time */
 		if(status == TORCTL_CIRC_STATUS_EXTENDED) {
@@ -161,7 +161,7 @@ static void _torcontrolpinger_handleCircEvent(TorControlPinger* tcp, gint code,
 			GTimeSpan pingMicrosCirc = g_date_time_difference(pingEndTime, createTime);
 			GTimeSpan pingMillisCirc = (GTimeSpan) (pingMicrosCirc / 1000);
 
-			tcp->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__,
+			tcp->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__,
 				"[torcontrol-ping] %s:%i pinger pinged %s "
 				"on circ %i in %ld millis (%ld millis since create)",
 				tcp->targetHostname->str, tcp->targetPort, path->str,
@@ -175,7 +175,7 @@ static void _torcontrolpinger_handleCircEvent(TorControlPinger* tcp, gint code,
 				status == TORCTL_CIRC_STATUS_FAILED ||
 				status == TORCTL_CIRC_STATUS_CLOSED) {
 			/* remove no mater what - it may have extended or failed or closed */
-			tcp->log(G_LOG_LEVEL_INFO, __FUNCTION__, "ping circ %i %s", circID,
+			tcp->log(SHADOW_LOG_LEVEL_INFO, __FUNCTION__, "ping circ %i %s", circID,
 					torControl_getCircStatusString(status));
 
 			g_hash_table_remove(tcp->outstandingPings, &circID);
@@ -216,7 +216,7 @@ TorControlPinger* torcontrolpinger_new(ShadowLogFunc logFunc, ShadowCreateCallba
 
 	/* make sure they specified events */
 	if(!moduleArgs[0]) {
-		logFunc(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error! Did not specify pingRelay to ping!");
+		logFunc(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "Error! Did not specify pingRelay to ping!");
 		return NULL;
 	}
 

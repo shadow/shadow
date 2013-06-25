@@ -30,7 +30,7 @@ static in_addr_t browser_getaddr(browser_tp b, browser_server_args_tp server) {
 			if(!(result = getaddrinfo((gchar*) hostname, NULL, NULL, &info))) {
 				addr = ((struct sockaddr_in*)(info->ai_addr))->sin_addr.s_addr;
 			} else {
-				b->shadowlib->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "unable to resolve hostname '%s': getaddrinfo returned %d", hostname, result);
+				b->shadowlib->log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "unable to resolve hostname '%s': getaddrinfo returned %d", hostname, result);
 			}
 			freeaddrinfo(info);
 		}
@@ -97,7 +97,7 @@ static void browser_get_embedded_objects(browser_tp b, filegetter_tp fg, gint* o
 
 		/* Unless the path was already added...*/
 		if (tasks->reachable && !g_hash_table_lookup_extended(tasks->added, path, NULL, NULL)) {
-			b->shadowlib->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "%s -> %s", hostname, path);
+			b->shadowlib->log(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__, "%s -> %s", hostname, path);
 			
 			/* ... add it to the end of the queue */
 			g_queue_push_tail(tasks->pending, path);
@@ -120,13 +120,13 @@ static browser_connection_tp browser_prepare_filegetter(browser_tp b, browser_se
 	
 	/* absolute file path to get from server */
 	if(filepath[0] != '/') {
-		b->shadowlib->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "filepath %s does not begin with '/'", filepath);
+		b->shadowlib->log(SHADOW_LOG_LEVEL_CRITICAL, __FUNCTION__, "filepath %s does not begin with '/'", filepath);
 		return NULL;
 	}
 
 	/* we require http info */
 	if(http_server == NULL) {
-		b->shadowlib->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "no HTTP server specified");
+		b->shadowlib->log(SHADOW_LOG_LEVEL_CRITICAL, __FUNCTION__, "no HTTP server specified");
 		return NULL;
 	}
 
@@ -134,7 +134,7 @@ static browser_connection_tp browser_prepare_filegetter(browser_tp b, browser_se
 	in_port_t http_port = htons((in_port_t) atoi(http_server->port));
 	
 	if(http_addr == 0 || http_port == 0) {
-		b->shadowlib->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "HTTP server specified but 0");
+		b->shadowlib->log(SHADOW_LOG_LEVEL_CRITICAL, __FUNCTION__, "HTTP server specified but 0");
 		return NULL;
 	}
 
@@ -164,11 +164,11 @@ static browser_connection_tp browser_prepare_filegetter(browser_tp b, browser_se
 	
 	/* init the filegetter */
 	enum filegetter_code result = filegetter_start(&conn->fg, b->epolld);
-	b->shadowlib->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "filegetter startup code: %s", filegetter_codetoa(result));
+	b->shadowlib->log(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__, "filegetter startup code: %s", filegetter_codetoa(result));
 
 	/* set the sepcs */
 	result = filegetter_download(&conn->fg, &conn->sspec, &conn->fspec);
-	b->shadowlib->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "filegetter set specs code: %s", filegetter_codetoa(result));
+	b->shadowlib->log(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__, "filegetter set specs code: %s", filegetter_codetoa(result));
 	
 	return conn;
 }
@@ -183,8 +183,8 @@ static gboolean browser_reuse_connection(browser_tp b, browser_connection_tp con
 	gchar* new_path = g_queue_pop_head(tasks->pending);
 	strncpy(conn->fspec.remote_path, new_path, sizeof(conn->fspec.remote_path));
 	enum filegetter_code result = filegetter_download(&conn->fg, &conn->sspec, &conn->fspec);
-	b->shadowlib->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "Adding Path %s -> %s", conn->sspec.http_hostname, new_path);
-	b->shadowlib->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "filegetter set specs code: %s", filegetter_codetoa(result));
+	b->shadowlib->log(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__, "Adding Path %s -> %s", conn->sspec.http_hostname, new_path);
+	b->shadowlib->log(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__, "filegetter set specs code: %s", filegetter_codetoa(result));
 	g_free(new_path);
 	
 	return TRUE;
@@ -199,7 +199,7 @@ static void browser_start_tasks(gpointer key, gpointer value, gpointer user_data
 		/* Get new task from the queue */
 		gchar* path = g_queue_pop_head(tasks->pending);
 
-		b->shadowlib->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "%s -> %s", hostname, path);
+		b->shadowlib->log(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__, "%s -> %s", hostname, path);
 		
 		/* Create server_args for HTTP server */
 		browser_server_args_tp http_server = g_new0(browser_server_args_t, 1);
@@ -228,7 +228,7 @@ static void browser_downloaded_document(browser_tp b, browser_activate_result_tp
 	filegetter_stat_download(&result->connection->fg, &doc_stats);
 	b->document_size = doc_stats.body_bytes_downloaded;
 	
-	b->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__,
+	b->shadowlib->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__,
 		"first document (%zu bytes) downloaded and parsed in %lu.%.3d seconds, now getting %i additional objects...",
 		b->document_size,
 		doc_stats.download_time.tv_sec,
@@ -264,7 +264,7 @@ static void browser_downloaded_object(browser_tp b, browser_activate_result_tp r
 	assert(b);
 	assert(result);
 
-	b->shadowlib->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "%s -> %s", result->connection->sspec.http_hostname, result->connection->fspec.remote_path);
+	b->shadowlib->log(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__, "%s -> %s", result->connection->sspec.http_hostname, result->connection->fspec.remote_path);
 	b->embedded_downloads_completed++;
 	
 	if (!browser_reuse_connection(b, result->connection)) {
@@ -288,7 +288,7 @@ void browser_start(browser_tp b, gint argc, gchar** argv) {
 	assert(b);
 	
 	if (argc != 7) {
-		b->shadowlib->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "USAGE: %s <server> <port> <socksserver/none> <port> <max concurrent download> <path>", argv[0]);
+		b->shadowlib->log(SHADOW_LOG_LEVEL_CRITICAL, __FUNCTION__, "USAGE: %s <server> <port> <socksserver/none> <port> <max concurrent download> <path>", argv[0]);
 	}
 	
 	/* Interpret the arguments */
@@ -305,7 +305,7 @@ void browser_start(browser_tp b, gint argc, gchar** argv) {
 	gint epolld = epoll_create(1);
 
 	if(epolld == -1) {
-		b->shadowlib->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "Error in server epoll_create");
+		b->shadowlib->log(SHADOW_LOG_LEVEL_CRITICAL, __FUNCTION__, "Error in server epoll_create");
 		close(epolld);
 		epolld = 0;
 	}
@@ -341,13 +341,13 @@ gint browser_launch(browser_tp b, browser_args_tp args, gint epolld) {
 	g_hash_table_insert(b->connections, &conn->fg.sockd, conn);
 	b->doc_conn = conn;
 
-	b->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "Trying to simulate browser access to %s on %s", args->document_path, b->first_hostname);
+	b->shadowlib->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, "Trying to simulate browser access to %s on %s", args->document_path, b->first_hostname);
 	return conn->fg.sockd;
 }
 
 static void browser_wakeup(gpointer data) {
 	browser_tp b = data;
-	b->shadowlib->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "Rise and shine!");
+	b->shadowlib->log(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__, "Rise and shine!");
 	filegetter_start(&b->doc_conn->fg, b->epolld);
 	filegetter_download(&b->doc_conn->fg, &b->doc_conn->sspec, &b->doc_conn->fspec);
 	g_hash_table_insert(b->connections, &b->doc_conn->fg.sockd, b->doc_conn);
@@ -361,7 +361,7 @@ void browser_activate(browser_tp b, gint sockfd) {
 	browser_connection_tp conn = g_hash_table_lookup(b->connections, &sockfd);
 
 	if (!conn) {
-		b->shadowlib->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "unknown socket");
+		b->shadowlib->log(SHADOW_LOG_LEVEL_CRITICAL, __FUNCTION__, "unknown socket");
 		return;
 	}
 	
@@ -373,17 +373,17 @@ void browser_activate(browser_tp b, gint sockfd) {
 			if (result.code == FG_OK_200) {
 				browser_downloaded_document(b, &result);
 			} else if (result.code == FG_ERR_404) {
-				b->shadowlib->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "First document wasn't found");
+				b->shadowlib->log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "First document wasn't found");
 				b->state = SB_404;
 			} else if (result.code == FG_ERR_FATAL || result.code == FG_ERR_SOCKSCONN) {
 				/* Retry connection in 60 seconds because the Tor network might not be functional yet */
-				b->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "filegetter shutdown due to error '%s'... retrying in 60 seconds", filegetter_codetoa(result.code));
+				b->shadowlib->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, "filegetter shutdown due to error '%s'... retrying in 60 seconds", filegetter_codetoa(result.code));
 				g_hash_table_steal(b->connections, &conn->fg.sockd);
 				filegetter_shutdown(&conn->fg);		
 				b->state = SB_HIBERNATE;
 				b->shadowlib->createCallback(&browser_wakeup, b, 60*1000);
 			} else if (result.code != FG_ERR_WOULDBLOCK) {
-				b->shadowlib->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "filegetter shutdown due to error '%s' for first document", filegetter_codetoa(result.code));
+				b->shadowlib->log(SHADOW_LOG_LEVEL_CRITICAL, __FUNCTION__, "filegetter shutdown due to error '%s' for first document", filegetter_codetoa(result.code));
 				g_hash_table_steal(b->connections, &sockfd);
 				filegetter_shutdown(&conn->fg);
 				b->state = SB_FAILURE;
@@ -396,14 +396,14 @@ void browser_activate(browser_tp b, gint sockfd) {
 			if (result.code == FG_OK_200) {
 				browser_downloaded_object(b, &result);
 			} else if (result.code == FG_ERR_404) {
-				b->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "Error 404: %s -> %s", result.connection->sspec.http_hostname, result.connection->fspec.remote_path);
+				b->shadowlib->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, "Error 404: %s -> %s", result.connection->sspec.http_hostname, result.connection->fspec.remote_path);
 	
 				/* try to reuse the connection */
 				if (!browser_reuse_connection(b, result.connection)) {
 					g_hash_table_remove(b->connections, &sockfd);
 				}
 			} else if (result.code == FG_ERR_FATAL || result.code == FG_ERR_SOCKSCONN || result.code != FG_ERR_WOULDBLOCK) {
-				b->shadowlib->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "filegetter shutdown due to error '%s' for %s -> %s",
+				b->shadowlib->log(SHADOW_LOG_LEVEL_CRITICAL, __FUNCTION__, "filegetter shutdown due to error '%s' for %s -> %s",
 					filegetter_codetoa(result.code), result.connection->sspec.http_hostname, result.connection->fspec.remote_path);
 				g_hash_table_steal(b->connections, &sockfd);
 				filegetter_shutdown(&conn->fg);
@@ -418,7 +418,7 @@ void browser_activate(browser_tp b, gint sockfd) {
 			break;
 			
 		default:
-			b->shadowlib->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "Activate was called but state is neither SB_DOCUMENT nor SB_EMBEDDED_OBJECTS!");
+			b->shadowlib->log(SHADOW_LOG_LEVEL_CRITICAL, __FUNCTION__, "Activate was called but state is neither SB_DOCUMENT nor SB_EMBEDDED_OBJECTS!");
 			break;
 	}
 }
@@ -439,7 +439,7 @@ void browser_free(browser_tp b) {
 			duration_embedded_downloads.tv_nsec += 1000000000;
 		}
 		
-		b->shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__,
+		b->shadowlib->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__,
 			"Finished downloading %d/%d embedded objects (%zu bytes) in %lu.%.3d seconds, %d total bytes sent, %d total bytes received",
 			b->embedded_downloads_completed,
 			b->embedded_downloads_expected,

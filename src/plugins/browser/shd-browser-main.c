@@ -11,13 +11,13 @@
 /* my global structure with application state */
 browser_t b;
 
-void bmain_log(GLogLevelFlags level, const gchar* functionName, gchar* format, ...) {
+void bmain_log(ShadowLogLevel level, const gchar* functionName, const gchar* format, ...) {
 	va_list vargs;
 	va_start(vargs, format);
 
 	GString* newformat = g_string_new(NULL);
 	g_string_append_printf(newformat, "[%s] %s", functionName, format);
-	g_logv(G_LOG_DOMAIN, level, newformat->str, vargs);
+	g_logv(G_LOG_DOMAIN, (GLogLevelFlags)level, newformat->str, vargs);
 	g_string_free(newformat, TRUE);
 
 	va_end(vargs);
@@ -46,7 +46,7 @@ gint main(gint argc, gchar *argv[])
 	/* now we need to watch all the epoll descriptors in our main loop */
 	gint epolld = epoll_create(1);
 	if(epolld == -1) {
-		bmain_log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in server epoll_create");
+		bmain_log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "Error in server epoll_create");
 		close(epolld);
 		return -1;
 	}
@@ -68,7 +68,7 @@ gint main(gint argc, gchar *argv[])
 		/* wait for some events */
 		nReadyFDs = epoll_wait(epolld, events, 10, 0);
 		if(nReadyFDs == -1) {
-			bmain_log(G_LOG_LEVEL_WARNING, __FUNCTION__, "error in client epoll_wait");
+			bmain_log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "error in client epoll_wait");
 			return -1;
 		}
 

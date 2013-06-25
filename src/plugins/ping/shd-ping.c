@@ -54,7 +54,7 @@ static in_addr_t ping_resolveHostname(const gchar* hostname) {
 		if(ret >= 0) {
 			addr = ((struct sockaddr_in*)(info->ai_addr))->sin_addr.s_addr;
 		} else {
-			log(G_LOG_LEVEL_WARNING, __FUNCTION__, "unable to create client: error in getaddrinfo");
+			log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "unable to create client: error in getaddrinfo");
 		}
 		freeaddrinfo(info);
 	}
@@ -69,11 +69,11 @@ Ping**  ping_init(Ping* currentPing) {
 
 void ping_new(int argc, char* argv[]) {
 	ShadowLogFunc log = ping->shadowlib->log;
-	log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "ping_new called");
+	log(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__, "ping_new called");
 
 	const gchar* USAGE = "Ping USAGE: socksHostname socksPort pingInterval [pingSize (default=64)]";
 	if(argc < 4) {
-		log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "%s", USAGE);
+		log(SHADOW_LOG_LEVEL_CRITICAL, __FUNCTION__, "%s", USAGE);
 		return;
 	}
 
@@ -94,7 +94,7 @@ void ping_new(int argc, char* argv[]) {
 	/* create an epoll to wait for I/O events */
 	ping->epolld = epoll_create(1);
 	if(ping->epolld == -1) {
-		log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_create");
+		log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_create");
 		close(ping->epolld);
 		ping->epolld = 0;
 		return;
@@ -109,18 +109,18 @@ void ping_new(int argc, char* argv[]) {
 	/* start the server that will listen for the ping */
 	ret = pingServer_start(ping->server, ping->epolld, serverAddr, serverPort);
 	if(ret < 0) {
-		log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error while starting the ping server");
+		log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "Error while starting the ping server");
 		return;
 	}
-	log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "successfully started server on port %d", serverPort);
+	log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, "successfully started server on port %d", serverPort);
 
 	/* create client socket so we can connect to socks and/or server */
 	ret = pingClient_start(ping->client, ping->epolld, socksAddr, socksPort, serverAddr, serverPort, pingInterval, pingSize);
 	if(ret < 0) {
-		log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error while starting the ping client");
+		log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "Error while starting the ping client");
 		return;
 	}
-	log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "successfully started client [%8.8X] connected to %s:%d", ping->client->cookie, argv[1], argv[2]);
+	log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, "successfully started client [%8.8X] connected to %s:%d", ping->client->cookie, argv[1], argv[2]);
 }
 
 
@@ -130,7 +130,7 @@ void ping_activate() {
 	struct epoll_event events[10];
 	int nfds = epoll_wait(ping->epolld, events, 10, 0);
 	if(nfds == -1) {
-		log(G_LOG_LEVEL_WARNING, __FUNCTION__, "error in epoll_wait");
+		log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "error in epoll_wait");
 		return;
 	}
 
@@ -140,7 +140,7 @@ void ping_activate() {
 		if(sockd == ping->client->sockd) {
 		    gint ret = pingClient_activate(ping->client, sockd);
             if(ret == PING_CLIENT_ERR_FATAL || ret == PING_CLIENT_ERR_SOCKSCONN) {
-                log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "ping client shutdown with error %d...retrying in 60 seconds", ret);
+                log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, "ping client shutdown with error %d...retrying in 60 seconds", ret);
 
                 pingClient_shutdown(ping->client);
                 pingClient_start(ping->client, ping->client->epolld, ping->client->socksAddr, ping->client->socksPort,
@@ -158,7 +158,7 @@ void ping_activate() {
 					PingInfo *info = iter->data;
 
 					ping->pingsTransfered++;
-					log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "[%d.%9.9d] [%8.8X] received ping %d in %f ms", info->sentTime / 1000000000, info->sentTime % 1000000000,
+					log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, "[%d.%9.9d] [%8.8X] received ping %d in %f ms", info->sentTime / 1000000000, info->sentTime % 1000000000,
 							info->cookie, ping->pingsTransfered, (gdouble)(info->recvTime - info->sentTime) / 1000000.0);
 				}
 
