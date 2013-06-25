@@ -1221,15 +1221,16 @@ def plot(args):
         }
         
         data[e[0]]['nodes'] = {}
-        for node in os.listdir("{0}/node".format(e[0])):
-            data[e[0]]['nodes'][node] = {
-                'circs-build' : load("{0}/node/{1}/circs-build.gz".format(e[0], node)),
-                'circs-buildtime-cdf' : load("{0}/node/{1}/circs-buildtime-cdf.gz".format(e[0], node)),
-                'circs-hops' : load("{0}/node/{1}/circs-hops.gz".format(e[0], node)),
-                'socket-buffers' : loadpickle("{0}/node/{1}/socket-buffers.gz".format(e[0], node)),
-                'tput-read' : load("{0}/node/{1}/tput-read.gz".format(e[0], node)),
-                'tput-write' : load("{0}/node/{1}/tput-write.gz".format(e[0], node)),
-            }
+        if os.path.exists("{0}/node".format(e[0])):
+            for node in os.listdir("{0}/node".format(e[0])):
+                data[e[0]]['nodes'][node] = {
+                    'circs-build' : load("{0}/node/{1}/circs-build.gz".format(e[0], node)),
+                    'circs-buildtime-cdf' : load("{0}/node/{1}/circs-buildtime-cdf.gz".format(e[0], node)),
+                    'circs-hops' : load("{0}/node/{1}/circs-hops.gz".format(e[0], node)),
+                    'socket-buffers' : loadpickle("{0}/node/{1}/socket-buffers.gz".format(e[0], node)),
+                    'tput-read' : load("{0}/node/{1}/tput-read.gz".format(e[0], node)),
+                    'tput-write' : load("{0}/node/{1}/tput-write.gz".format(e[0], node)),
+                }
         
             
 
@@ -1923,88 +1924,93 @@ def plot(args):
     ######################
     print "Generating socket buffer graphs"
     
+
+    doplot = False
     for e in experiments:
-        for node in data[e[0]]['nodes'].keys():
-            buffers = data[e[0]]['nodes'][node]['socket-buffers']
-            total = {}
-            for descriptor in buffers:
-                tick = [d[0] / 60.0 for d in buffers[descriptor]]
-                input_buffer_length = [d[1] / 1024.0 for d in buffers[descriptor]]
-                input_buffer_size = [d[2] / 1024.0 for d in buffers[descriptor]]
-                input_buffer_space = [(d[2] - d[1]) / 1024.0 for d in buffers[descriptor]]
-                output_buffer_length = [d[3] / 1024.0 for d in buffers[descriptor]]
-                output_buffer_size = [d[4] / 1024.0 for d in buffers[descriptor]]
-                output_buffer_space = [(d[4] - d[3]) / 1024.0 for d in buffers[descriptor]]
-                
-                ####
-                # Input Buffers
-                ####
-                
-                
-                if float(max(input_buffer_length)) / float(max(input_buffer_size)) > 0.05:
-                    pylab.figure()
-                    styles = itertools.cycle(formats)
-                    pylab.plot(tick, input_buffer_size, styles.next(), label='Buffer Size')
-                    pylab.plot(tick, input_buffer_length, styles.next(), label='Buffer Length')
-                    pylab.title("{0} - {1} - Input Buffer".format(node, descriptor), fontsize=titlesize, x="1.0", ha='right')
-                    pylab.xlabel("Tick (m)")
-                    pylab.ylabel("Buffer Length (KB)")
-                    pylab.ylim(0, max(input_buffer_size) * 1.25)
-                    pylab.ticklabel_format(style='plain',axis='y')
-                    pylab.legend(loc="upper left")
-                    figname = "{0}/{1}/sockets/{3}/input-buffer-size.pdf".format(graphpath, node, prefix, descriptor.split(' ')[0])
-                    dir = figname[:figname.rindex('/')]
-                    if not os.path.exists(dir): os.makedirs(dir)
-                    pylab.savefig(figname)
+        if len(data[e[0]]['nodes']) > 0: doplot = True
+    if doplot:    
+        for e in experiments:
+            for node in data[e[0]]['nodes'].keys():
+                buffers = data[e[0]]['nodes'][node]['socket-buffers']
+                total = {}
+                for descriptor in buffers:
+                    tick = [d[0] / 60.0 for d in buffers[descriptor]]
+                    input_buffer_length = [d[1] / 1024.0 for d in buffers[descriptor]]
+                    input_buffer_size = [d[2] / 1024.0 for d in buffers[descriptor]]
+                    input_buffer_space = [(d[2] - d[1]) / 1024.0 for d in buffers[descriptor]]
+                    output_buffer_length = [d[3] / 1024.0 for d in buffers[descriptor]]
+                    output_buffer_size = [d[4] / 1024.0 for d in buffers[descriptor]]
+                    output_buffer_space = [(d[4] - d[3]) / 1024.0 for d in buffers[descriptor]]
                     
-                    pylab.figure()
-                    styles = itertools.cycle(formats)
-                    pylab.plot(tick, input_buffer_space, styles.next(), label='Buffer Space')
-                    pylab.title("{0} - {1} - Input Buffer".format(node, descriptor), fontsize=titlesize, x="1.0", ha='right')
-                    pylab.xlabel("Tick (m)")
-                    pylab.ylabel("Buffer Length (KB)")
-                    pylab.ylim(0, max(input_buffer_space) * 1.25)
-                    pylab.ticklabel_format(style='plain',axis='y')
-                    pylab.legend(loc="upper left")
-                    figname = "{0}/{1}/sockets/{3}/input-buffer-space.pdf".format(graphpath, node, prefix, descriptor.split(' ')[0])
-                    dir = figname[:figname.rindex('/')]
-                    if not os.path.exists(dir): os.makedirs(dir)
-                    pylab.savefig(figname)
-                
-                ####
-                # Output Buffers
-                ####
-                
-                if float(max(output_buffer_length)) / float(max(output_buffer_size)) > 0.05:
-                    pylab.figure()
-                    styles = itertools.cycle(formats)
-                    pylab.plot(tick, output_buffer_size, styles.next(), label='Buffer Size')
-                    pylab.plot(tick, output_buffer_length, styles.next(), label='Buffer Length')
-                    pylab.title("{0} - {1} - Output Buffer".format(node, descriptor), fontsize=titlesize, x="1.0", ha='right')
-                    pylab.xlabel("Tick (m)")
-                    pylab.ylabel("Buffer Length (KB)")
-                    pylab.ylim(0, max(output_buffer_size) * 1.25)
-                    pylab.ticklabel_format(style='plain',axis='y')
-                    pylab.legend(loc="upper left")
-                    figname = "{0}/{1}/sockets/{3}/output-buffer-size.pdf".format(graphpath, node, prefix, descriptor.split(' ')[0])
-                    dir = figname[:figname.rindex('/')]
-                    if not os.path.exists(dir): os.makedirs(dir)
-                    pylab.savefig(figname)
+                    ####
+                    # Input Buffers
+                    ####
                     
-                    pylab.figure()
-                    styles = itertools.cycle(formats)
-                    pylab.plot(tick, output_buffer_space, styles.next(), label='Buffer Space')
-                    pylab.title("{0} - {1} - Output Buffer".format(node, descriptor), fontsize=titlesize, x="1.0", ha='right')
-                    pylab.xlabel("Tick (m)")
-                    pylab.ylabel("Buffer Length (KB)")
-                    pylab.ylim(0, max(output_buffer_space) * 1.25)
-                    pylab.ticklabel_format(style='plain',axis='y')
-                    pylab.legend(loc="upper left")
-                    figname = "{0}/{1}/sockets/{3}/output-buffer-space.pdf".format(graphpath, node, prefix, descriptor.split(' ')[0])
-                    dir = figname[:figname.rindex('/')]
-                    if not os.path.exists(dir): os.makedirs(dir)
-                    #savedfigures.append(figname)
-                    pylab.savefig(figname)
+                    
+                    if float(max(input_buffer_length)) / float(max(input_buffer_size)) > 0.05:
+                        pylab.figure()
+                        styles = itertools.cycle(formats)
+                        pylab.plot(tick, input_buffer_size, styles.next(), label='Buffer Size')
+                        pylab.plot(tick, input_buffer_length, styles.next(), label='Buffer Length')
+                        pylab.title("{0} - {1} - Input Buffer".format(node, descriptor), fontsize=titlesize, x="1.0", ha='right')
+                        pylab.xlabel("Tick (m)")
+                        pylab.ylabel("Buffer Length (KB)")
+                        pylab.ylim(0, max(input_buffer_size) * 1.25)
+                        pylab.ticklabel_format(style='plain',axis='y')
+                        pylab.legend(loc="upper left")
+                        figname = "{0}/{1}/sockets/{3}/input-buffer-size.pdf".format(graphpath, node, prefix, descriptor.split(' ')[0])
+                        dir = figname[:figname.rindex('/')]
+                        if not os.path.exists(dir): os.makedirs(dir)
+                        pylab.savefig(figname)
+                        
+                        pylab.figure()
+                        styles = itertools.cycle(formats)
+                        pylab.plot(tick, input_buffer_space, styles.next(), label='Buffer Space')
+                        pylab.title("{0} - {1} - Input Buffer".format(node, descriptor), fontsize=titlesize, x="1.0", ha='right')
+                        pylab.xlabel("Tick (m)")
+                        pylab.ylabel("Buffer Length (KB)")
+                        pylab.ylim(0, max(input_buffer_space) * 1.25)
+                        pylab.ticklabel_format(style='plain',axis='y')
+                        pylab.legend(loc="upper left")
+                        figname = "{0}/{1}/sockets/{3}/input-buffer-space.pdf".format(graphpath, node, prefix, descriptor.split(' ')[0])
+                        dir = figname[:figname.rindex('/')]
+                        if not os.path.exists(dir): os.makedirs(dir)
+                        pylab.savefig(figname)
+                    
+                    ####
+                    # Output Buffers
+                    ####
+                    
+                    if float(max(output_buffer_length)) / float(max(output_buffer_size)) > 0.05:
+                        pylab.figure()
+                        styles = itertools.cycle(formats)
+                        pylab.plot(tick, output_buffer_size, styles.next(), label='Buffer Size')
+                        pylab.plot(tick, output_buffer_length, styles.next(), label='Buffer Length')
+                        pylab.title("{0} - {1} - Output Buffer".format(node, descriptor), fontsize=titlesize, x="1.0", ha='right')
+                        pylab.xlabel("Tick (m)")
+                        pylab.ylabel("Buffer Length (KB)")
+                        pylab.ylim(0, max(output_buffer_size) * 1.25)
+                        pylab.ticklabel_format(style='plain',axis='y')
+                        pylab.legend(loc="upper left")
+                        figname = "{0}/{1}/sockets/{3}/output-buffer-size.pdf".format(graphpath, node, prefix, descriptor.split(' ')[0])
+                        dir = figname[:figname.rindex('/')]
+                        if not os.path.exists(dir): os.makedirs(dir)
+                        pylab.savefig(figname)
+                        
+                        pylab.figure()
+                        styles = itertools.cycle(formats)
+                        pylab.plot(tick, output_buffer_space, styles.next(), label='Buffer Space')
+                        pylab.title("{0} - {1} - Output Buffer".format(node, descriptor), fontsize=titlesize, x="1.0", ha='right')
+                        pylab.xlabel("Tick (m)")
+                        pylab.ylabel("Buffer Length (KB)")
+                        pylab.ylim(0, max(output_buffer_space) * 1.25)
+                        pylab.ticklabel_format(style='plain',axis='y')
+                        pylab.legend(loc="upper left")
+                        figname = "{0}/{1}/sockets/{3}/output-buffer-space.pdf".format(graphpath, node, prefix, descriptor.split(' ')[0])
+                        dir = figname[:figname.rindex('/')]
+                        if not os.path.exists(dir): os.makedirs(dir)
+                        #savedfigures.append(figname)
+                        pylab.savefig(figname)
                 
                 
         
