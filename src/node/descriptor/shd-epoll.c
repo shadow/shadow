@@ -358,8 +358,10 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray,
 			/* report the event */
 			eventArray[eventArrayIndex] = watch->event;
 			eventArray[eventArrayIndex].events = 0;
-			eventArray[eventArrayIndex].events |= (status & EWF_READABLE) ? EPOLLIN : 0;
-			eventArray[eventArrayIndex].events |= (status & EWF_WRITEABLE) ? EPOLLOUT : 0;
+			eventArray[eventArrayIndex].events |=
+					(status & EWF_READABLE) && (status & EWF_WAITINGREAD) ? EPOLLIN : 0;
+			eventArray[eventArrayIndex].events |=
+					(status & EWF_WRITEABLE) && (status & EWF_WAITINGWRITE) ? EPOLLOUT : 0;
 			eventArrayIndex++;
 			g_assert(eventArrayIndex <= eventArrayLength);
 
