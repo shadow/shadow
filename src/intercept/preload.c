@@ -453,7 +453,7 @@ int getnameinfo (const struct sockaddr *__restrict sa,
 			socklen_t hostlen, char *__restrict serv,
 			socklen_t servlen,
 /* glibc-headers changed type of the flags arg after 2.12 */
-#if (__GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ > 12))
+#if (__GLIBC__ > 2 || (__GLIBC__ == 2 && (__GLIBC_MINOR__ < 2 || __GLIBC_MINOR__ > 13)))
 			int flags) {
 #else
 			unsigned int flags) {
