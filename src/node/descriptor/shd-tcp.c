@@ -109,7 +109,7 @@ struct _TCP {
 	gboolean isSlowStart;
 	struct {
 		/* our current calculated congestion window */
-		gdouble window;
+		guint32 window;
 		guint32 threshold;
 		/* their last advertised window */
 		guint32 lastWindow;
@@ -404,12 +404,20 @@ static void _tcp_setState(TCP* tcp, enum TCPState state) {
 static void _tcp_updateReceiveWindow(TCP* tcp) {
 	MAGIC_ASSERT(tcp);
 
-	gsize space = socket_getOutputBufferSpace(&(tcp->super));
+	/* the receive window is how much we are willing to accept to our input buffer */
+	gsize space = socket_getInputBufferSpace(&(tcp->super));
 	gsize nPackets = space / (CONFIG_MTU - CONFIG_HEADER_SIZE_TCPIPETH);
-
 	tcp->receive.window = nPackets;
-	if(tcp->receive.window < 1) {
-		tcp->receive.window = 1;
+
+	/* handle window updates */
+	if(tcp->receive.window == 0) {
+		/* we must ensure that we never advertise a 0 window if there is no way
+		 * for the client to drain the input buffer to further open the window.
+		 * otherwise, we may get into a deadlock situation where we never accept
+		 * any packets and the client never reads. */
+		g_assert(!(tcp->super.inputBufferLength == 0));
+		info("%s <-> %s: receive window is 0, we have space for %"G_GSIZE_FORMAT" bytes in the input buffer",
+				tcp->super.boundString, tcp->super.peerString, space);
 	}
 }
 
@@ -417,28 +425,51 @@ static void _tcp_updateSendWindow(TCP* tcp) {
 	MAGIC_ASSERT(tcp);
 
 	/* send window is minimum of congestion window and the last advertised window */
-	tcp->send.window = MIN(((guint32)tcp->congestion.window), tcp->congestion.lastWindow);
-	if(tcp->send.window < 1) {
-		tcp->send.window = 1;
-	}
+	tcp->send.window = MIN(tcp->congestion.window, tcp->congestion.lastWindow);
 }
 
+/* nPacketsAcked == 0 means a congestion event (packet was dropped) */
 static void _tcp_updateCongestionWindow(TCP* tcp, guint nPacketsAcked) {
 	MAGIC_ASSERT(tcp);
 
-	if(tcp->isSlowStart) {
-		/* threshold not set => no timeout yet => slow start phase 1
-		 *  i.e. multiplicative increase until retransmit event (which sets threshold)
-		 * threshold set => timeout => slow start phase 2
-		 *  i.e. multiplicative increase until threshold */
-		tcp->congestion.window += ((gdouble)nPacketsAcked);
-		if(tcp->congestion.threshold != 0 && tcp->congestion.window >= tcp->congestion.threshold) {
-			tcp->isSlowStart = FALSE;
+	if(nPacketsAcked > 0) {
+		if(tcp->isSlowStart) {
+			/* threshold not set => no timeout yet => slow start phase 1
+			 *  i.e. multiplicative increase until retransmit event (which sets threshold)
+			 * threshold set => timeout => slow start phase 2
+			 *  i.e. multiplicative increase until threshold */
+			tcp->congestion.window += ((guint32)nPacketsAcked);
+			if(tcp->congestion.threshold != 0 && tcp->congestion.window >= tcp->congestion.threshold) {
+				tcp->isSlowStart = FALSE;
+			}
+		} else {
+			/* slow start is over
+			 * simple additive increase part of AIMD */
+			gdouble n = ((gdouble) nPacketsAcked);
+			gdouble increment = n * n / ((gdouble) tcp->congestion.window);
+			tcp->congestion.window += (guint32)(ceil(increment));
 		}
 	} else {
-		/* slow start is over
-		 * simple additive increase part of AIMD */
-		tcp->congestion.window += (gdouble)(nPacketsAcked * ((gdouble)(nPacketsAcked / tcp->congestion.window)));
+		/* a packet was "dropped" - this is basically a negative ack.
+		 * TCP-Reno-like fast retransmit, i.e. multiplicative decrease. */
+		tcp->congestion.window = (guint32) ceil((gdouble)tcp->congestion.window / (gdouble)2);
+
+		if(tcp->isSlowStart && tcp->congestion.threshold == 0) {
+			tcp->congestion.threshold = tcp->congestion.window;
+		}
+	}
+
+	/* unlike the send and receive/advertised windows, our cong window should never be 0
+	 *
+	 * from https://tools.ietf.org/html/rfc5681 [page 6]:
+	 *
+	 * "Implementation Note: Since integer arithmetic is usually used in TCP
+   	 *  implementations, the formula given in equation (3) can fail to
+   	 *  increase cwnd when the congestion window is larger than SMSS*SMSS.
+   	 *  If the above formula yields 0, the result SHOULD be rounded up to 1 byte."
+	 */
+	if(tcp->congestion.window == 0) {
+		tcp->congestion.window = 1;
 	}
 }
 
@@ -1006,9 +1037,17 @@ gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 			tcp->send.unacked = header.acknowledgement;
 
 			/* update congestion window and keep track of when it was updated */
-			tcp->congestion.lastWindow = header.window;
-			tcp->congestion.lastSequence = header.sequence;
-			tcp->congestion.lastAcknowledgement = header.acknowledgement;
+			tcp->congestion.lastWindow = (guint32) header.window;
+			tcp->congestion.lastSequence = (guint32) header.sequence;
+			tcp->congestion.lastAcknowledgement = (guint32) header.acknowledgement;
+		}
+
+		/* if this is a dup ack, take the new advertised window if it opened */
+		if(tcp->congestion.lastAcknowledgement == (guint32) header.acknowledgement &&
+				tcp->congestion.lastWindow < (guint32) header.window &&
+				header.sequence == 0) {
+			/* other end is telling us that its window opened and we can send more */
+			tcp->congestion.lastWindow = (guint32) header.window;
 		}
 	}
 
@@ -1052,8 +1091,11 @@ gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 		responseFlags = PTCP_RST;
 	}
 
-	/* try to update congestion window based on potentially new info */
-	_tcp_updateCongestionWindow(tcp, nPacketsAcked);
+	/* update congestion window only if we received new acks.
+	 * dont update if nPacketsAcked is 0, as that denotes a congestion event */
+	if(nPacketsAcked > 0) {
+		_tcp_updateCongestionWindow(tcp, nPacketsAcked);
+	}
 
 	/* now flush as many packets as we can to socket */
 	_tcp_flush(tcp);
@@ -1095,16 +1137,8 @@ void tcp_droppedPacket(TCP* tcp, Packet* packet) {
 		return;
 	}
 
-	/* the packet was "dropped" - this is basically a negative ack.
-	 * handle congestion control.
-	 * TCP-Reno-like fast retransmit, i.e. multiplicative decrease. */
-	tcp->congestion.window /= 2;
-	if(tcp->congestion.window < 1) {
-		tcp->congestion.window = 1;
-	}
-	if(tcp->isSlowStart && tcp->congestion.threshold == 0) {
-		tcp->congestion.threshold = (guint32) tcp->congestion.window;
-	}
+	/* the packet was "dropped", handle congestion control */
+	_tcp_updateCongestionWindow(tcp, 0); /* 0 means congestion event */
 
 	debug("%s <-> %s: retransmitting packet# %u", tcp->super.boundString, tcp->super.peerString, header.sequence);
 
@@ -1281,6 +1315,20 @@ gssize tcp_receiveUserData(TCP* tcp, gpointer buffer, gsize nBytes, in_addr_t* i
 		}
 	}
 
+	/* if we have advertised a 0 window because the application wasn't reading,
+	 * we now have to update the window and let the sender know */
+	_tcp_updateReceiveWindow(tcp);
+	if(tcp->send.lastWindow == 0 && tcp->receive.window > 0) {
+		/* our receive window just opened, make sure the sender knows it can
+		 * send more. otherwise we get into a deadlock situation! */
+		info("%s <-> %s: receive window opened, advertising the new "
+				"receive window %"G_GUINT32_FORMAT" as an ACK control packet",
+				tcp->super.boundString, tcp->super.peerString, tcp->receive.window);
+		Packet* windowUpdate = _tcp_createPacket(tcp, PTCP_ACK, NULL, 0);
+		_tcp_bufferPacketOut(tcp, windowUpdate);
+		_tcp_flush(tcp);
+	}
+
 	debug("%s <-> %s: receiving %lu user bytes", tcp->super.boundString, tcp->super.peerString, totalCopied);
 
 	return (gssize) (totalCopied == 0 ? -1 : totalCopied);
@@ -1390,7 +1438,7 @@ TCP* tcp_new(gint handle, guint receiveBufferSize, guint sendBufferSize) {
 
 	guint32 initial_window = worker_getConfig()->initialTCPWindow;
 
-	tcp->congestion.window = (gdouble)initial_window;
+	tcp->congestion.window = initial_window;
 	tcp->congestion.lastWindow = initial_window;
 	tcp->send.window = initial_window;
 	tcp->send.lastWindow = initial_window;
