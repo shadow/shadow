@@ -110,7 +110,7 @@
 #include "engine/shd-engine.h"
 #include "engine/shd-worker.h"
 
-#include "intercept/preload.h"
+#include "interposition/preload.h"
 
 extern Engine* shadow_engine;
 
