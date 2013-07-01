@@ -7,22 +7,9 @@ The `resource/examples/scallion/` directory of the source distribution contains 
 The maximum memory requirements of our included sample network configurations are given below. Also included is the smallest possible EC2 instance required to run these configurations, as a convenience for selecting an EC2 instance type for [[Running Shadow on EC2]].
 
 <table>
-  <caption>Scallion Memory Requirements</caption>
+  <caption>Scallion Network Node Breakdown by Type, and Memory Requirements</caption>
   <tr>
-    <th></th><th>Tiny</th><th>Small</th><th>Medium</th><th>Large</th>
-  </tr>
-  <tr>
-    <th>RAM Required (GiB)</th><td>&lt; 4</td><td>&lt; 16</td><td>&lt; 32</td><td>&lt; 64</td>
-  </tr>
-  <tr>
-    <th>EC2 Instance</th><td>m1.large</td><td>m1.xlarge <i>or</i> m2.xlarge</td><td>m2.2xlarge</td><td>m2.4xlarge</td>
-  </tr>
-</table>
-
-<table>
-  <caption>Scallion Network Node Breakdown by Type</caption>
-  <tr>
-    <th>Node Type | Size</th><th>Tiny</th><th>Small</th><th>Medium</th><th>Large</th>
+    <th>Node Type</th><th>Tiny</th><th>Small</th><th>Medium</th><th>Large</th>
   </tr>
   <tr>
     <td>Web Clients</td><td>190</td><td>475</td><td>950</td><td>2400</td>
@@ -50,6 +37,12 @@ The maximum memory requirements of our included sample network configurations ar
   </tr>
   <tr>
     <td>Directory Authorities</td><td>1</td><td>1</td><td>1</td><td>1</td>
+  </tr>
+  <tr>
+    <th>RAM Required (GiB)</th><td>&lt; 4</td><td>&lt; 16</td><td>&lt; 32</td><td>&lt; 64</td>
+  </tr>
+  <tr>
+    <th>EC2 Instance</th><td>m1.large</td><td>m1.xlarge <i>or</i><br /> m2.xlarge</td><td>m2.2xlarge</td><td>m2.4xlarge</td>
   </tr>
 </table>
 
