@@ -57,6 +57,9 @@ The maximum memory requirements of our included sample network configurations ar
   <tr>
     <td>Directory Authorities</td><td>1</td><td>1</td><td>1</td><td>1</td>
   </tr>
+  <tr>
+    <th>RAM required</th><th>&lt; 4</th><th>&lt; 16</th><th>&lt; 32</th><th>&lt; 64</th>
+  </tr>
 </table>
 
 ## Argument Usage
