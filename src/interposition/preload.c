@@ -816,14 +816,46 @@ int srandom_r(unsigned int seed, struct random_data *buf) {
  */
 #ifdef SHADOW_ENABLE_MEMTRACKER
 
+__thread unsigned int entered = 0;
+
+int start_call() {
+  return __sync_fetch_and_add(&entered, 1);
+}
+
+void end_call() {
+  __sync_fetch_and_sub(&entered, 1);
+}
+
+char tmpbuf[1024];
+unsigned long tmppos = 0;
+unsigned long tmpallocs = 0;
+
+void* dummy_malloc(size_t size) {
+    if (tmppos + size >= sizeof(tmpbuf)) exit(1);
+    void *retptr = tmpbuf + tmppos;
+    tmppos += size;
+    ++tmpallocs;
+    return retptr;
+}
+
 typedef void* (*malloc_fp)(size_t);
 static malloc_fp _malloc = NULL;
 static malloc_fp _intercept_malloc = NULL;
 void *malloc(size_t size) {
 	malloc_fp* func;
 	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "malloc", _malloc, INTERCEPT_PREFIX, _intercept_malloc, 1);
-	PRELOAD_LOOKUP(func, funcName, 0);
+
+	int isRecursive = __sync_fetch_and_add(&entered, 1);
+
+	if(isRecursive) {
+		func = dummy_malloc;
+	} else {
+		PRELOAD_DECIDE(func, funcName, "malloc", _malloc, INTERCEPT_PREFIX, _intercept_malloc, 1);
+		PRELOAD_LOOKUP(func, funcName, 0);
+	}
+
+	__sync_fetch_and_sub(&entered, 1);
+
 	return (*func)(size);
 }
 

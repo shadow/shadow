@@ -364,6 +364,34 @@ gpointer intercept_malloc(gsize size) {
 	return system_malloc(size);
 }
 
+gpointer intercept_calloc(gsize nmemb, gsize size) {
+    return system_calloc(nmemb, size);
+}
+
+gpointer intercept_realloc(gpointer ptr, gsize size) {
+    return system_realloc(ptr, size);
+}
+
 void intercept_free(gpointer ptr) {
 	return system_free(ptr);
+}
+
+gint intercept_posix_memalign(gpointer* memptr, gsize alignment, gsize size) {
+    return system_posix_memalign(memptr, alignment, size);
+}
+
+gpointer intercept_memalign(gsize blocksize, gsize bytes) {
+    return system_memalign(blocksize, bytes);
+}
+
+gpointer intercept_aligned_alloc(gsize alignment, gsize size) {
+	return system_aligned_alloc(alignment, size);
+}
+
+gpointer intercept_valloc(gsize size) {
+    return system_valloc(size);
+}
+
+gpointer intercept_pvalloc(gsize size) {
+	return system_pvalloc(size);
 }

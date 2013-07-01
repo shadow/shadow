@@ -12,6 +12,8 @@
 #include <netdb.h>
 #include <string.h>
 #include <fcntl.h>
+#include <stdlib.h>
+#include <malloc.h>
 
 #include "shadow.h"
 
@@ -855,9 +857,45 @@ gint system_getRandom() {
 gpointer system_malloc(gsize size) {
 	Node* node = _system_switchInShadowContext();
 	gpointer ptr = malloc(size);
-	tracker_addAllocatedBytes(node_getTracker(node), ptr, size);
+	if(size) {
+		tracker_addAllocatedBytes(node_getTracker(node), ptr, size);
+	}
 	_system_switchOutShadowContext(node);
 	return ptr;
+}
+
+gpointer system_calloc(gsize nmemb, gsize size) {
+	Node* node = _system_switchInShadowContext();
+	gpointer ptr = calloc(nmemb, size);
+	if(size) {
+		tracker_addAllocatedBytes(node_getTracker(node), ptr, size);
+	}
+	_system_switchOutShadowContext(node);
+	return ptr;
+}
+
+gpointer system_realloc(gpointer ptr, gsize size) {
+	Node* node = _system_switchInShadowContext();
+
+	gpointer newptr = realloc(ptr, size);
+	if(ptr == NULL) {
+		/* equivalent to malloc */
+		if(size) {
+			tracker_addAllocatedBytes(node_getTracker(node), newptr, size);
+		}
+	} else if (size == 0) {
+		/* equivalent to free */
+		tracker_removeAllocatedBytes(node_getTracker(node), ptr);
+	} else {
+		/* true realloc */
+		tracker_removeAllocatedBytes(node_getTracker(node), ptr);
+		if(size) {
+			tracker_addAllocatedBytes(node_getTracker(node), newptr, size);
+		}
+	}
+
+	_system_switchOutShadowContext(node);
+	return newptr;
 }
 
 void system_free(gpointer ptr) {
@@ -865,6 +903,56 @@ void system_free(gpointer ptr) {
 	free(ptr);
 	tracker_removeAllocatedBytes(node_getTracker(node), ptr);
 	_system_switchOutShadowContext(node);
+}
+
+int system_posix_memalign(gpointer* memptr, gsize alignment, gsize size) {
+	Node* node = _system_switchInShadowContext();
+	gint ret = posix_memalign(memptr, alignment, size);
+	if(ret == 0 && size) {
+		tracker_addAllocatedBytes(node_getTracker(node), *memptr, size);
+	}
+	_system_switchOutShadowContext(node);
+	return ret;
+}
+
+gpointer system_memalign(gsize blocksize, gsize bytes) {
+	Node* node = _system_switchInShadowContext();
+	gpointer ptr = memalign(blocksize, bytes);
+	if(bytes) {
+		tracker_addAllocatedBytes(node_getTracker(node), ptr, bytes);
+	}
+	_system_switchOutShadowContext(node);
+	return ptr;
+}
+
+gpointer system_aligned_alloc(gsize alignment, gsize size) {
+	Node* node = _system_switchInShadowContext();
+	gpointer ptr = aligned_alloc(alignment, size);
+	if(size) {
+		tracker_addAllocatedBytes(node_getTracker(node), ptr, size);
+	}
+	_system_switchOutShadowContext(node);
+	return ptr;
+}
+
+gpointer system_valloc(gsize size) {
+	Node* node = _system_switchInShadowContext();
+	gpointer ptr = valloc(size);
+	if(size) {
+		tracker_addAllocatedBytes(node_getTracker(node), ptr, size);
+	}
+	_system_switchOutShadowContext(node);
+	return ptr;
+}
+
+gpointer system_pvalloc(gsize size) {
+	Node* node = _system_switchInShadowContext();
+	gpointer ptr = pvalloc(size);
+	if(size) {
+		tracker_addAllocatedBytes(node_getTracker(node), ptr, size);
+	}
+	_system_switchOutShadowContext(node);
+	return ptr;
 }
 
 /* needed for multi-threaded openssl

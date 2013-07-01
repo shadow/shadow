@@ -82,6 +82,13 @@ void system_cryptoLockingFunc(int mode, int n, const char *file, int line);
 unsigned long system_cryptoIdFunc();
 
 gpointer system_malloc(gsize size);
+gpointer system_calloc(gsize nmemb, gsize size);
+gpointer system_realloc(gpointer ptr, gsize size);
 void system_free(gpointer ptr);
+int system_posix_memalign(gpointer* memptr, gsize alignment, gsize size);
+gpointer system_memalign(gsize blocksize, gsize bytes);
+gpointer system_aligned_alloc(gsize alignment, gsize size);
+gpointer system_valloc(gsize size);
+gpointer system_pvalloc(gsize size);
 
 #endif /* SHD_SYSTEM_H_ */
