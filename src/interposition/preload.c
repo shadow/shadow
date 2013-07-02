@@ -1,604 +1,885 @@
 /*
  * The Shadow Simulator
- * Copyright (c) 2010-2011, Rob Jansen
  * See LICENSE for licensing information
  */
 
-#include <glib.h>
+#define _GNU_SOURCE
+#include <dlfcn.h>
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/socket.h>
 #include <sys/epoll.h>
 #include <sys/time.h>
 #include <time.h>
 #include <netdb.h>
 #include <stdarg.h>
-#include <stddef.h>
-#include <stdlib.h>
-#include <string.h>
 #include <features.h>
 
-#include "preload.h"
 #include "shadow.h"
 
+#define SETSYM_OR_FAIL(funcptr, funcstr) { \
+	dlerror(); \
+	funcptr = dlsym(RTLD_NEXT, funcstr); \
+	char* errorMessage = dlerror(); \
+	if(errorMessage != NULL) { \
+		fprintf(stderr, "dlsym(%s): dlerror(): %s\n", funcstr, errorMessage); \
+		exit(EXIT_FAILURE); \
+	} else if(funcptr == NULL) { \
+		fprintf(stderr, "dlsym(%s): returned NULL pointer\n", funcstr); \
+		exit(EXIT_FAILURE); \
+	} \
+}
+
 typedef int (*WorkerIsInShadowContextFunc)();
-static WorkerIsInShadowContextFunc _worker_isInShadowContext = NULL;
 
-int preload_worker_isInShadowContext() {
-	WorkerIsInShadowContextFunc* func = &_worker_isInShadowContext;
-	PRELOAD_LOOKUP(func, "intercept_worker_isInShadowContext", 0);
-	return (*func)();
+/* memory allocation family */
+
+typedef void* (*MallocFunc)(size_t);
+typedef void* (*CallocFunc)(size_t, size_t);
+typedef void* (*ReallocFunc)(void*, size_t);
+typedef int (*PosixMemalignFunc)(void**, size_t, size_t);
+typedef void* (*MemalignFunc)(size_t, size_t);
+typedef void* (*AlignedAllocFunc)(size_t, size_t);
+typedef void* (*VallocFunc)(size_t);
+typedef void* (*PvallocFunc)(size_t);
+typedef void (*FreeFunc)(void*);
+
+/* event family */
+
+typedef int (*EpollCreateFunc)(int);
+typedef int (*EpollCreate1Func)(int);
+typedef int (*EpollCtlFunc)(int, int, int, struct epoll_event*);
+typedef int (*EpollWaitFunc)(int, struct epoll_event*, int, int);
+typedef int (*EpollPWaitFunc)(int, struct epoll_event*, int, int, const sigset_t*);
+
+/* socket/io family */
+
+typedef int (*SocketFunc)(int, int, int);
+typedef int (*SocketpairFunc)(int, int, int, int[]);
+typedef int (*BindFunc)(int, __CONST_SOCKADDR_ARG, socklen_t);
+typedef int (*GetsocknameFunc)(int, __SOCKADDR_ARG, socklen_t*);
+typedef int (*ConnectFunc)(int, __CONST_SOCKADDR_ARG, socklen_t);
+typedef int (*GetpeernameFunc)(int, __SOCKADDR_ARG, socklen_t*);
+typedef size_t (*SendFunc)(int, const void*, size_t, int);
+typedef size_t (*SendtoFunc)(int, const void*, size_t, int, __CONST_SOCKADDR_ARG, socklen_t);
+typedef size_t (*SendmsgFunc)(int, const struct msghdr*, int);
+typedef size_t (*RecvFunc)(int, void*, size_t, int);
+typedef size_t (*RecvfromFunc)(int, void*, size_t, int, __SOCKADDR_ARG, socklen_t*);
+typedef size_t (*RecvmsgFunc)(int, struct msghdr*, int);
+typedef int (*GetsockoptFunc)(int, int, int, void*, socklen_t*);
+typedef int (*SetsockoptFunc)(int, int, int, const void*, socklen_t);
+typedef int (*ListenFunc)(int, int);
+typedef int (*AcceptFunc)(int, __SOCKADDR_ARG, socklen_t*);
+typedef int (*Accept4Func)(int, __SOCKADDR_ARG, socklen_t*, int);
+typedef int (*ShutdownFunc)(int, int);
+typedef int (*PipeFunc)(int [2]);
+typedef int (*Pipe2Func)(int [2], int);
+typedef size_t (*ReadFunc)(int, void*, int);
+typedef size_t (*WriteFunc)(int, const void*, int);
+typedef int (*CloseFunc)(int);
+typedef int (*FcntlFunc)(int, int, ...);
+
+/* time family */
+
+typedef time_t (*TimeFunc)(time_t*);
+typedef int (*ClockGettimeFunc)(clockid_t, struct timespec *);
+typedef int (*GettimeofdayFunc)(struct timeval*, __timezone_ptr_t);
+
+/* name/address family */
+
+typedef int (*GethostnameFunc)(char*, size_t);
+typedef int (*GetaddrinfoFunc)(const char*, const char*, const struct addrinfo*, struct addrinfo**);
+typedef int (*FreeaddrinfoFunc)(struct addrinfo*);
+typedef int (*GetnameinfoFunc)(const struct sockaddr *, socklen_t, char *, size_t, char *, size_t, int);
+typedef struct hostent* (*GethostbynameFunc)(const char*);
+typedef int (*GethostbynameRFunc)(const char*, struct hostent*, char*, size_t, struct hostent**, int*);
+typedef struct hostent* (*Gethostbyname2Func)(const char*, int);
+typedef int (*Gethostbyname2RFunc)(const char*, int, struct hostent *, char *, size_t, struct hostent**, int*);
+typedef struct hostent* (*GethostbyaddrFunc)(const void*, socklen_t, int);
+typedef int (*GethostbyaddrRFunc)(const void*, socklen_t, int, struct hostent*, char*, size_t, struct hostent **, int*);
+
+/* random family */
+
+typedef int (*RandFunc)();
+typedef int (*RandRFunc)(unsigned int*);
+typedef void (*SrandFunc)(unsigned int);
+typedef long int (*RandomFunc)(void);
+typedef int (*RandomRFunc)(struct random_data*, int32_t*);
+typedef void (*SrandomFunc)(unsigned int);
+typedef int (*SrandomRFunc)(unsigned int, struct random_data*);
+
+/* openssl family - only used if OpenSSL is linked */
+
+typedef void (*AESEncryptFunc)(const unsigned char*, unsigned char*, const void*);
+typedef void (*AESDecryptFunc)(const unsigned char*, unsigned char*, const void*);
+typedef void (*AESCtr128EncryptFunc)(const unsigned char*, unsigned char*, const void*);
+typedef void (*AESCtr128DecryptFunc)(const unsigned char*, unsigned char*, const void*);
+typedef int (*EVPCipherFunc)(void*, unsigned char*, const unsigned char*, unsigned int);
+typedef void* (*CRYPTOGetLockingCallbackFunc)();
+typedef void* (*CRYPTOGetIdCallbackFunc)();
+typedef void (*RANDSeedFunc)(const void*, int);
+typedef void (*RANDAddFunc)(const void*, int, double);
+typedef int (*RANDPollFunc)();
+typedef int (*RANDBytesFunc)(unsigned char*, int);
+typedef int (*RANDPseudoBytesFunc)(unsigned char*, int);
+typedef void (*RANDCleanupFunc)();
+typedef int (*RANDStatusFunc)();
+typedef const void * (*RANDGetRandMethodFunc)();
+
+typedef struct {
+	MallocFunc malloc;
+	CallocFunc calloc;
+	ReallocFunc realloc;
+	PosixMemalignFunc posix_memalign;
+	MemalignFunc memalign;
+	AlignedAllocFunc aligned_alloc;
+	VallocFunc valloc;
+	PvallocFunc pvalloc;
+	FreeFunc free;
+
+	EpollCreateFunc epoll_create;
+	EpollCreate1Func epoll_create1;
+	EpollCtlFunc epoll_ctl;
+	EpollWaitFunc epoll_wait;
+	EpollPWaitFunc epoll_pwait;
+
+	SocketFunc socket;
+	SocketpairFunc socketpair;
+	BindFunc bind;
+	GetsocknameFunc getsockname;
+	ConnectFunc connect;
+	GetpeernameFunc getpeername;
+	SendFunc send;
+	SendtoFunc sendto;
+	SendmsgFunc sendmsg;
+	RecvFunc recv;
+	RecvfromFunc recvfrom;
+	RecvmsgFunc recvmsg;
+	GetsockoptFunc getsockopt;
+	SetsockoptFunc setsockopt;
+	ListenFunc listen;
+	AcceptFunc accept;
+	Accept4Func accept4;
+	ShutdownFunc shutdown;
+	PipeFunc pipe;
+	Pipe2Func pipe2;
+	ReadFunc read;
+	WriteFunc write;
+	CloseFunc close;
+	FcntlFunc fcntl;
+
+	TimeFunc time;
+	ClockGettimeFunc clock_gettime;
+	GettimeofdayFunc gettimeofday;
+
+	GethostnameFunc gethostname;
+	GetaddrinfoFunc getaddrinfo;
+	FreeaddrinfoFunc freeaddrinfo;
+	GetnameinfoFunc getnameinfo;
+	GethostbynameFunc gethostbyname;
+	GethostbynameRFunc gethostbyname_r;
+	Gethostbyname2Func gethostbyname2;
+	Gethostbyname2RFunc gethostbyname2_r;
+	GethostbyaddrFunc gethostbyaddr;
+	GethostbyaddrRFunc gethostbyaddr_r;
+
+	RandFunc rand;
+	RandRFunc rand_r;
+	SrandFunc srand;
+	RandomFunc random;
+	RandomRFunc random_r;
+	SrandomFunc srandom;
+	SrandomRFunc srandom_r;
+
+	AESEncryptFunc AES_encrypt;
+	AESDecryptFunc AES_decrypt;
+	AESCtr128EncryptFunc AES_ctr128_encrypt;
+	AESCtr128DecryptFunc AES_ctr128_decrypt;
+	EVPCipherFunc EVP_Cipher;
+	CRYPTOGetLockingCallbackFunc CRYPTO_get_locking_callback;
+	CRYPTOGetIdCallbackFunc CRYPTO_get_id_callback;
+
+	RANDSeedFunc RAND_seed;
+	RANDAddFunc RAND_add;
+	RANDPollFunc RAND_poll;
+	RANDBytesFunc RAND_bytes;
+	RANDPseudoBytesFunc RAND_pseudo_bytes;
+	RANDCleanupFunc RAND_cleanup;
+	RANDStatusFunc RAND_status;
+	RANDGetRandMethodFunc RAND_get_rand_method;
+} PreloadFuncs;
+
+typedef struct {
+	struct {
+		char buf[10240];
+		unsigned long pos;
+		unsigned long nallocs;
+		unsigned long ndeallocs;
+	} dummy;
+	PreloadFuncs real;
+	PreloadFuncs shadow;
+	WorkerIsInShadowContextFunc isShadowFunc;
+	unsigned long isRecursive;
+} FuncDirector;
+
+__thread FuncDirector director;
+
+static inline int shouldRedirect() {
+	int doRedirect = 0;
+	/* recursive calls always go to the syscall */
+	int isRecursive = __sync_fetch_and_add(&director.isRecursive, 1);
+	if(!isRecursive) {
+		/* ask shadow if this call is a plug-in that should be intercepted */
+		doRedirect = director.isShadowFunc() ? 0 : 1;
+	}
+	__sync_fetch_and_sub(&director.isRecursive, 1);
+	return doRedirect;
 }
 
-/** Here we setup and save function pointers to the function symbols we will be
- * searching for in the library that we are preempting. We do not need to
- * register these variables in Shadow since we expect the locations of the
- * functions to be the same for all nodes.
- *
- * We save a static pointer to the shadow version, and the real system function
- * to avoid doing the dlsym lookup on every interception.
- */
+static void* dummy_malloc(size_t size) {
+    if (director.dummy.pos + size >= sizeof(director.dummy.buf)) exit(1);
+    void *retptr = director.dummy.buf + director.dummy.pos;
+    director.dummy.pos += size;
+    ++director.dummy.nallocs;
+    return retptr;
+}
 
-/**
- * system interface to epoll library
- */
+static void* dummy_calloc(size_t nmemb, size_t size) {
+    void *ptr = dummy_malloc(nmemb * size);
+    unsigned int i = 0;
+    for (; i < nmemb * size; ++i)
+        *((char*)(ptr + i)) = '\0';
+    return ptr;
+}
 
-typedef int (*epoll_create_fp)(int);
-static epoll_create_fp _epoll_create = NULL;
-static epoll_create_fp _epoll_create_redirect = NULL;
+static void dummy_free(void *ptr) {
+	++director.dummy.ndeallocs;
+	if(director.dummy.ndeallocs == director.dummy.nallocs){
+		director.dummy.pos = 0;
+	}
+}
+
+/* this function is called when the library is loaded */
+void __attribute__((constructor)) LoadPreloadFuncs() {
+	/* use dummy malloc during initial dlsym calls to avoid recursive stack segfaults */
+	memset(&director, 0, sizeof(FuncDirector));
+	director.real.malloc = dummy_malloc;
+	director.real.calloc = dummy_calloc;
+	director.real.free = dummy_free;
+
+	PreloadFuncs temp;
+	memset(&temp, 0, sizeof(PreloadFuncs));
+
+	/* ensure we never intercept during initialization */
+	__sync_fetch_and_add(&director.isRecursive, 1);
+
+	SETSYM_OR_FAIL(temp.malloc, "malloc");
+	SETSYM_OR_FAIL(temp.calloc, "calloc");
+	SETSYM_OR_FAIL(temp.free, "free");
+
+	SETSYM_OR_FAIL(director.real.realloc, "realloc");
+	SETSYM_OR_FAIL(director.real.posix_memalign, "posix_memalign");
+	SETSYM_OR_FAIL(director.real.memalign, "memalign");
+	SETSYM_OR_FAIL(director.real.aligned_alloc, "aligned_alloc");
+	SETSYM_OR_FAIL(director.real.valloc, "valloc");
+	SETSYM_OR_FAIL(director.real.pvalloc, "pvalloc");
+
+	SETSYM_OR_FAIL(director.real.epoll_create, "epoll_create");
+	SETSYM_OR_FAIL(director.real.epoll_create1, "epoll_create1");
+	SETSYM_OR_FAIL(director.real.epoll_ctl, "epoll_ctl");
+	SETSYM_OR_FAIL(director.real.epoll_wait, "epoll_wait");
+	SETSYM_OR_FAIL(director.real.epoll_pwait, "epoll_pwait");
+
+	SETSYM_OR_FAIL(director.real.socket, "socket");
+	SETSYM_OR_FAIL(director.real.socketpair, "socketpair");
+	SETSYM_OR_FAIL(director.real.bind, "bind");
+	SETSYM_OR_FAIL(director.real.getsockname, "getsockname");
+	SETSYM_OR_FAIL(director.real.connect, "connect");
+	SETSYM_OR_FAIL(director.real.getpeername, "getpeername");
+	SETSYM_OR_FAIL(director.real.send, "send");
+	SETSYM_OR_FAIL(director.real.sendto, "sendto");
+	SETSYM_OR_FAIL(director.real.sendmsg, "sendmsg");
+	SETSYM_OR_FAIL(director.real.recv, "recv");
+	SETSYM_OR_FAIL(director.real.recvfrom, "recvfrom");
+	SETSYM_OR_FAIL(director.real.recvmsg, "recvmsg");
+	SETSYM_OR_FAIL(director.real.getsockopt, "getsockopt");
+	SETSYM_OR_FAIL(director.real.setsockopt, "setsockopt");
+	SETSYM_OR_FAIL(director.real.listen, "listen");
+	SETSYM_OR_FAIL(director.real.accept, "accept");
+	SETSYM_OR_FAIL(director.real.accept4, "accept4");
+	SETSYM_OR_FAIL(director.real.shutdown, "shutdown");
+	SETSYM_OR_FAIL(director.real.pipe, "pipe");
+	SETSYM_OR_FAIL(director.real.pipe2, "pipe2");
+	SETSYM_OR_FAIL(director.real.read, "read");
+	SETSYM_OR_FAIL(director.real.write, "write");
+	SETSYM_OR_FAIL(director.real.close, "close");
+	SETSYM_OR_FAIL(director.real.fcntl, "fcntl");
+
+	SETSYM_OR_FAIL(director.real.time, "time");
+	SETSYM_OR_FAIL(director.real.clock_gettime, "clock_gettime");
+	SETSYM_OR_FAIL(director.real.gettimeofday, "gettimeofday");
+
+	SETSYM_OR_FAIL(director.real.gethostname, "gethostname");
+	SETSYM_OR_FAIL(director.real.getaddrinfo, "getaddrinfo");
+	SETSYM_OR_FAIL(director.real.freeaddrinfo, "freeaddrinfo");
+	SETSYM_OR_FAIL(director.real.getnameinfo, "getnameinfo");
+	SETSYM_OR_FAIL(director.real.gethostbyname, "gethostbyname");
+	SETSYM_OR_FAIL(director.real.gethostbyname_r, "gethostbyname_r");
+	SETSYM_OR_FAIL(director.real.gethostbyname2, "gethostbyname2");
+	SETSYM_OR_FAIL(director.real.gethostbyname2_r, "gethostbyname2_r");
+	SETSYM_OR_FAIL(director.real.gethostbyaddr, "gethostbyaddr");
+	SETSYM_OR_FAIL(director.real.gethostbyaddr_r, "gethostbyaddr_r");
+
+	SETSYM_OR_FAIL(director.real.rand, "rand");
+	SETSYM_OR_FAIL(director.real.rand_r, "rand_r");
+	SETSYM_OR_FAIL(director.real.srand, "srand");
+	SETSYM_OR_FAIL(director.real.random, "random");
+	SETSYM_OR_FAIL(director.real.random_r, "random_r");
+	SETSYM_OR_FAIL(director.real.srandom, "srandom");
+	SETSYM_OR_FAIL(director.real.srandom_r, "srandom_r");
+
+	/* openssl funcs are missing above because we must search those lazily
+	 * since they are part of a dynamic library plugin that is not
+	 * loaded at the time shadow starts. if we ever preload other dynamic
+	 * library funcs, the same technique should be used.
+	 */
+
+	SETSYM_OR_FAIL(director.shadow.malloc, "intercept_malloc");
+	SETSYM_OR_FAIL(director.shadow.calloc, "intercept_calloc");
+	SETSYM_OR_FAIL(director.shadow.realloc, "intercept_realloc");
+	SETSYM_OR_FAIL(director.shadow.posix_memalign, "intercept_posix_memalign");
+	SETSYM_OR_FAIL(director.shadow.memalign, "intercept_memalign");
+	SETSYM_OR_FAIL(director.shadow.aligned_alloc, "intercept_aligned_alloc");
+	SETSYM_OR_FAIL(director.shadow.valloc, "intercept_valloc");
+	SETSYM_OR_FAIL(director.shadow.pvalloc, "intercept_pvalloc");
+	SETSYM_OR_FAIL(director.shadow.free, "intercept_free");
+
+	SETSYM_OR_FAIL(director.shadow.epoll_create, "intercept_epoll_create");
+	SETSYM_OR_FAIL(director.shadow.epoll_create1, "intercept_epoll_create1");
+	SETSYM_OR_FAIL(director.shadow.epoll_ctl, "intercept_epoll_ctl");
+	SETSYM_OR_FAIL(director.shadow.epoll_wait, "intercept_epoll_wait");
+	SETSYM_OR_FAIL(director.shadow.epoll_pwait, "intercept_epoll_pwait");
+
+	SETSYM_OR_FAIL(director.shadow.socket, "intercept_socket");
+	SETSYM_OR_FAIL(director.shadow.socketpair, "intercept_socketpair");
+	SETSYM_OR_FAIL(director.shadow.bind, "intercept_bind");
+	SETSYM_OR_FAIL(director.shadow.getsockname, "intercept_getsockname");
+	SETSYM_OR_FAIL(director.shadow.connect, "intercept_connect");
+	SETSYM_OR_FAIL(director.shadow.getpeername, "intercept_getpeername");
+	SETSYM_OR_FAIL(director.shadow.send, "intercept_send");
+	SETSYM_OR_FAIL(director.shadow.sendto, "intercept_sendto");
+	SETSYM_OR_FAIL(director.shadow.sendmsg, "intercept_sendmsg");
+	SETSYM_OR_FAIL(director.shadow.recv, "intercept_recv");
+	SETSYM_OR_FAIL(director.shadow.recvfrom, "intercept_recvfrom");
+	SETSYM_OR_FAIL(director.shadow.recvmsg, "intercept_recvmsg");
+	SETSYM_OR_FAIL(director.shadow.getsockopt, "intercept_getsockopt");
+	SETSYM_OR_FAIL(director.shadow.setsockopt, "intercept_setsockopt");
+	SETSYM_OR_FAIL(director.shadow.listen, "intercept_listen");
+	SETSYM_OR_FAIL(director.shadow.accept, "intercept_accept");
+	SETSYM_OR_FAIL(director.shadow.accept4, "intercept_accept4");
+	SETSYM_OR_FAIL(director.shadow.shutdown, "intercept_shutdown");
+	SETSYM_OR_FAIL(director.shadow.pipe, "intercept_pipe");
+	SETSYM_OR_FAIL(director.shadow.pipe2, "intercept_pipe2");
+	SETSYM_OR_FAIL(director.shadow.read, "intercept_read");
+	SETSYM_OR_FAIL(director.shadow.write, "intercept_write");
+	SETSYM_OR_FAIL(director.shadow.close, "intercept_close");
+	SETSYM_OR_FAIL(director.shadow.fcntl, "intercept_fcntl");
+
+	SETSYM_OR_FAIL(director.shadow.time, "intercept_time");
+	SETSYM_OR_FAIL(director.shadow.clock_gettime, "intercept_clock_gettime");
+	SETSYM_OR_FAIL(director.shadow.gettimeofday, "intercept_gettimeofday");
+
+	SETSYM_OR_FAIL(director.shadow.gethostname, "intercept_gethostname");
+	SETSYM_OR_FAIL(director.shadow.getaddrinfo, "intercept_getaddrinfo");
+	SETSYM_OR_FAIL(director.shadow.freeaddrinfo, "intercept_freeaddrinfo");
+	SETSYM_OR_FAIL(director.shadow.getnameinfo, "intercept_getnameinfo");
+	SETSYM_OR_FAIL(director.shadow.gethostbyname, "intercept_gethostbyname");
+	SETSYM_OR_FAIL(director.shadow.gethostbyname_r, "intercept_gethostbyname_r");
+	SETSYM_OR_FAIL(director.shadow.gethostbyname2, "intercept_gethostbyname2");
+	SETSYM_OR_FAIL(director.shadow.gethostbyname2_r, "intercept_gethostbyname2_r");
+	SETSYM_OR_FAIL(director.shadow.gethostbyaddr, "intercept_gethostbyaddr");
+	SETSYM_OR_FAIL(director.shadow.gethostbyaddr_r, "intercept_gethostbyaddr_r");
+
+	SETSYM_OR_FAIL(director.shadow.AES_encrypt, "intercept_AES_encrypt");
+	SETSYM_OR_FAIL(director.shadow.AES_decrypt, "intercept_AES_decrypt");
+	SETSYM_OR_FAIL(director.shadow.AES_ctr128_encrypt, "intercept_AES_ctr128_encrypt");
+	SETSYM_OR_FAIL(director.shadow.AES_ctr128_decrypt, "intercept_AES_ctr128_decrypt");
+	SETSYM_OR_FAIL(director.shadow.EVP_Cipher, "intercept_EVP_Cipher");
+	SETSYM_OR_FAIL(director.shadow.CRYPTO_get_locking_callback, "intercept_CRYPTO_get_locking_callback");
+	SETSYM_OR_FAIL(director.shadow.CRYPTO_get_id_callback, "intercept_CRYPTO_get_id_callback");
+
+	SETSYM_OR_FAIL(director.shadow.RAND_seed, "intercept_RAND_seed");
+	SETSYM_OR_FAIL(director.shadow.RAND_add, "intercept_RAND_add");
+	SETSYM_OR_FAIL(director.shadow.RAND_poll, "intercept_RAND_poll");
+	SETSYM_OR_FAIL(director.shadow.RAND_bytes, "intercept_RAND_bytes");
+	SETSYM_OR_FAIL(director.shadow.RAND_pseudo_bytes, "intercept_RAND_pseudo_bytes");
+	SETSYM_OR_FAIL(director.shadow.RAND_cleanup, "intercept_RAND_cleanup");
+	SETSYM_OR_FAIL(director.shadow.RAND_status, "intercept_RAND_status");
+	SETSYM_OR_FAIL(director.shadow.RAND_get_rand_method, "intercept_RAND_get_rand_method");
+
+	SETSYM_OR_FAIL(director.shadow.rand, "intercept_rand");
+	SETSYM_OR_FAIL(director.shadow.rand_r, "intercept_rand_r");
+	SETSYM_OR_FAIL(director.shadow.srand, "intercept_srand");
+	SETSYM_OR_FAIL(director.shadow.random, "intercept_random");
+	SETSYM_OR_FAIL(director.shadow.random_r, "intercept_random_r");
+	SETSYM_OR_FAIL(director.shadow.srandom, "intercept_srandom");
+	SETSYM_OR_FAIL(director.shadow.srandom_r, "intercept_srandom_r");
+
+	SETSYM_OR_FAIL(director.isShadowFunc, "intercept_worker_isInShadowContext");
+
+	/* stop using the dummy malloc funcs now */
+	director.real.malloc = temp.malloc;
+	director.real.calloc = temp.calloc;
+	director.real.free = temp.free;
+
+    __sync_fetch_and_sub(&director.isRecursive, 1);
+}
+
+/* this function is called when the library is unloaded */
+void __attribute__((destructor)) UnloadPreloadFuncs() {
+}
+
+/* memory allocation family */
+
+#ifdef SHADOW_ENABLE_MEMTRACKER
+void* malloc(size_t size) {
+    return shouldRedirect() ?
+    		director.shadow.malloc(size) :
+    		director.real.malloc(size);
+}
+
+void* calloc(size_t nmemb, size_t size) {
+    return shouldRedirect() ?
+    		director.shadow.calloc(nmemb, size) :
+    		director.real.calloc(nmemb, size);
+}
+
+void* realloc(void *ptr, size_t size) {
+    return shouldRedirect() ?
+    		director.shadow.realloc(ptr, size) :
+    		director.real.realloc(ptr, size);
+}
+
+void free(void *ptr) {
+    shouldRedirect() ?
+    		director.shadow.free(ptr) :
+    		director.real.free(ptr);
+}
+
+int posix_memalign(void** memptr, size_t alignment, size_t size) {
+    return shouldRedirect() ?
+    		director.shadow.posix_memalign(memptr, alignment, size) :
+    		director.real.posix_memalign(memptr, alignment, size);
+}
+
+void* memalign(size_t blocksize, size_t bytes) {
+    return shouldRedirect() ?
+    		director.shadow.memalign(blocksize, bytes) :
+    		director.real.memalign(blocksize, bytes);
+}
+
+void* aligned_alloc(size_t alignment, size_t size) {
+	return shouldRedirect() ?
+			director.shadow.aligned_alloc(alignment, size) :
+			director.real.aligned_alloc(alignment, size);
+}
+
+void* valloc(size_t size) {
+    return shouldRedirect() ?
+    		director.shadow.valloc(size) :
+    		director.real.valloc(size);
+}
+
+void* pvalloc(size_t size) {
+	return shouldRedirect() ?
+			director.shadow.pvalloc(size) :
+			director.real.pvalloc(size);
+}
+#endif
+
+/* event family */
+
 int epoll_create(int size) {
-	epoll_create_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "epoll_create", _epoll_create, INTERCEPT_PREFIX, _epoll_create_redirect, 1);
-	PRELOAD_LOOKUP(func, funcName, -1);
-	return (*func)(size);
+	return shouldRedirect() ?
+			director.shadow.epoll_create(size) :
+			director.real.epoll_create(size);
 }
 
-typedef int (*epoll_create1_fp)(int);
-static epoll_create1_fp _epoll_create1 = NULL;
-static epoll_create1_fp _epoll_create1_redirect = NULL;
 int epoll_create1(int flags) {
-	epoll_create1_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "epoll_create1", _epoll_create1, INTERCEPT_PREFIX, _epoll_create1_redirect, 1);
-	PRELOAD_LOOKUP(func, funcName, -1);
-	return (*func)(flags);
+	return shouldRedirect() ?
+			director.shadow.epoll_create1(flags) :
+			director.real.epoll_create1(flags);
 }
 
-typedef int (*epoll_ctl_fp)(int, int, int, struct epoll_event*);
-static epoll_ctl_fp _epoll_ctl = NULL;
-static epoll_ctl_fp _epoll_ctl_redirect = NULL;
 int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event) {
-	epoll_ctl_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "epoll_ctl", _epoll_ctl, INTERCEPT_PREFIX, _epoll_ctl_redirect, 1);
-	PRELOAD_LOOKUP(func, funcName, -1);
-	return (*func)(epfd, op, fd, event);
+	return shouldRedirect() ?
+			director.shadow.epoll_ctl(epfd, op, fd, event) :
+			director.real.epoll_ctl(epfd, op, fd, event);
 }
 
-typedef int (*epoll_wait_fp)(int, struct epoll_event*, int, int);
-static epoll_wait_fp _epoll_wait = NULL;
-static epoll_wait_fp _epoll_wait_redirect = NULL;
 int epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout) {
-	epoll_wait_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "epoll_wait", _epoll_wait, INTERCEPT_PREFIX, _epoll_wait_redirect, 1);
-	PRELOAD_LOOKUP(func, funcName, -1);
-	return (*func)(epfd, events, maxevents, timeout);
+	return shouldRedirect() ?
+			director.shadow.epoll_wait(epfd, events, maxevents, timeout) :
+			director.real.epoll_wait(epfd, events, maxevents, timeout);
 }
 
-typedef int (*epoll_pwait_fp)(int, struct epoll_event*, int, int, const sigset_t*);
-static epoll_pwait_fp _epoll_pwait = NULL;
-static epoll_pwait_fp _epoll_pwait_redirect = NULL;
 int epoll_pwait(int epfd, struct epoll_event *events, int maxevents, int timeout, const sigset_t *ss) {
-	epoll_pwait_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "epoll_pwait", _epoll_pwait, INTERCEPT_PREFIX, _epoll_pwait_redirect, 1);
-	PRELOAD_LOOKUP(func, funcName, -1);
-	return (*func)(epfd, events, maxevents, timeout, ss);
+	return shouldRedirect() ?
+			director.shadow.epoll_pwait(epfd, events, maxevents, timeout, ss) :
+			director.real.epoll_pwait(epfd, events, maxevents, timeout, ss);
 }
 
-/**
- * system interface to socket and IO library
- */
+/* socket/io family */
 
-typedef int (*socket_fp)(int, int, int);
-static socket_fp _socket = NULL;
-static socket_fp _vsocket_socket = NULL;
 int socket(int domain, int type, int protocol) {
-	socket_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "socket", _socket, INTERCEPT_PREFIX, _vsocket_socket, 1);
-	PRELOAD_LOOKUP(func, funcName, -1);
-	return (*func)(domain, type, protocol);
+	return shouldRedirect() ?
+			director.shadow.socket(domain, type, protocol) :
+			director.real.socket(domain, type, protocol);
 }
 
-typedef int (*socketpair_fp)(int, int, int, int[]);
-static socketpair_fp _socketpair = NULL;
-static socketpair_fp _vsocket_socketpair = NULL;
 int socketpair(int domain, int type, int protocol, int fds[2]) {
-	socketpair_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "socketpair", _socketpair, INTERCEPT_PREFIX, _vsocket_socketpair, 1);
-	PRELOAD_LOOKUP(func, funcName, -1);
-	return (*func)(domain, type, protocol, fds);
+	return shouldRedirect() ?
+			director.shadow.socketpair(domain, type, protocol, fds) :
+			director.real.socketpair(domain, type, protocol, fds);
 }
 
-typedef int (*bind_fp)(int, const struct sockaddr*, socklen_t);
-static bind_fp _bind = NULL;
-static bind_fp _vsocket_bind = NULL;
 int bind(int fd, __CONST_SOCKADDR_ARG addr, socklen_t len)  {
-	bind_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "bind", _bind, INTERCEPT_PREFIX, _vsocket_bind, fd >= MIN_DESCRIPTOR);
-	PRELOAD_LOOKUP(func, funcName, -1);
-	return (*func)(fd, addr, len);
+	return (fd >= MIN_DESCRIPTOR && shouldRedirect()) ?
+			director.shadow.bind(fd, addr, len) :
+			director.real.bind(fd, addr, len);
 }
 
-typedef int (*getsockname_fp)(int, struct sockaddr*, socklen_t*);
-static getsockname_fp _getsockname = NULL;
-static getsockname_fp _vsocket_getsockname = NULL;
-int getsockname(int fd, __SOCKADDR_ARG addr,socklen_t *__restrict len)  {
-	getsockname_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "getsockname", _getsockname, INTERCEPT_PREFIX, _vsocket_getsockname, fd >= MIN_DESCRIPTOR);
-	PRELOAD_LOOKUP(func, funcName, -1);
-	return (*func)(fd, addr, len);
+int getsockname(int fd, __SOCKADDR_ARG addr, socklen_t *__restrict len)  {
+	return (fd >= MIN_DESCRIPTOR && shouldRedirect()) ?
+			director.shadow.getsockname(fd, addr, len) :
+			director.real.getsockname(fd, addr, len);
 }
 
-typedef int (*connect_fp)(int, const struct sockaddr*, socklen_t);
-static connect_fp _connect = NULL;
-static connect_fp _vsocket_connect = NULL;
-int connect(int fd, __CONST_SOCKADDR_ARG addr,socklen_t len)  {
-	connect_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "connect", _connect, INTERCEPT_PREFIX, _vsocket_connect, fd >= MIN_DESCRIPTOR);
-	PRELOAD_LOOKUP(func, funcName, -1);
-	return (*func)(fd, addr, len);
+int connect(int fd, __CONST_SOCKADDR_ARG addr, socklen_t len)  {
+	return (fd >= MIN_DESCRIPTOR && shouldRedirect()) ?
+			director.shadow.connect(fd, addr, len) :
+			director.real.connect(fd, addr, len);
 }
 
-typedef int (*getpeername_fp)(int, struct sockaddr*, socklen_t*);
-static getpeername_fp _getpeername = NULL;
-static getpeername_fp _vsocket_getpeername = NULL;
-int getpeername(int fd, __SOCKADDR_ARG addr,socklen_t *__restrict len)  {
-	getpeername_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "getpeername", _getpeername, INTERCEPT_PREFIX, _vsocket_getpeername, fd >= MIN_DESCRIPTOR);
-	PRELOAD_LOOKUP(func, funcName, -1);
-	return (*func)(fd, addr, len);
+int getpeername(int fd, __SOCKADDR_ARG addr, socklen_t *__restrict len)  {
+	return (fd >= MIN_DESCRIPTOR && shouldRedirect()) ?
+			director.shadow.getpeername(fd, addr, len) :
+			director.real.getpeername(fd, addr, len);
 }
 
-typedef size_t (*send_fp)(int, const void*, size_t, int);
-static send_fp _send = NULL;
-static send_fp _vsocket_send = NULL;
 ssize_t send(int fd, __const void *buf, size_t n, int flags) {
-	send_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "send", _send, INTERCEPT_PREFIX, _vsocket_send, fd >= MIN_DESCRIPTOR);
-	PRELOAD_LOOKUP(func, funcName, -1);
-	return (*func)(fd, buf, n, flags);
+	return (fd >= MIN_DESCRIPTOR && shouldRedirect()) ?
+			director.shadow.send(fd, buf, n, flags) :
+			director.real.send(fd, buf, n, flags);
 }
 
-typedef size_t (*sendto_fp)(int, const void*, size_t, int, const struct sockaddr*, socklen_t);
-static sendto_fp _sendto = NULL;
-static sendto_fp _vsocket_sendto = NULL;
-ssize_t sendto(int fd, const void *buf, size_t n, int flags,
-		__CONST_SOCKADDR_ARG  addr,socklen_t addr_len)  {
-	sendto_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "sendto", _sendto, INTERCEPT_PREFIX, _vsocket_sendto, fd >= MIN_DESCRIPTOR);
-	PRELOAD_LOOKUP(func, funcName, -1);
-	return (*func)(fd, buf, n, flags, addr, addr_len);
+ssize_t sendto(int fd, const void *buf, size_t n, int flags, __CONST_SOCKADDR_ARG addr, socklen_t addr_len)  {
+	return (fd >= MIN_DESCRIPTOR && shouldRedirect()) ?
+			director.shadow.sendto(fd, buf, n, flags, addr, addr_len) :
+			director.real.sendto(fd, buf, n, flags, addr, addr_len);
 }
 
-typedef size_t (*sendmsg_fp)(int, const struct msghdr*, int);
-static sendmsg_fp _sendmsg = NULL;
-static sendmsg_fp _vsocket_sendmsg = NULL;
 ssize_t sendmsg(int fd, __const struct msghdr *message, int flags) {
-	sendmsg_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "sendmsg", _sendmsg, INTERCEPT_PREFIX, _vsocket_sendmsg, fd >= MIN_DESCRIPTOR);
-	PRELOAD_LOOKUP(func, funcName, -1);
-	return (*func)(fd, message, flags);
+	return (fd >= MIN_DESCRIPTOR && shouldRedirect()) ?
+			director.shadow.sendmsg(fd, message, flags) :
+			director.real.sendmsg(fd, message, flags);
 }
 
-typedef size_t (*recv_fp)(int, void*, size_t, int);
-static recv_fp _recv = NULL;
-static recv_fp _vsocket_recv = NULL;
 ssize_t recv(int fd, void *buf, size_t n, int flags) {
-	recv_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "recv", _recv, INTERCEPT_PREFIX, _vsocket_recv, fd >= MIN_DESCRIPTOR);
-	PRELOAD_LOOKUP(func, funcName, -1);
-	return (*func)(fd, buf, n, flags);
+	return (fd >= MIN_DESCRIPTOR && shouldRedirect()) ?
+			director.shadow.recv(fd, buf, n, flags) :
+			director.real.recv(fd, buf, n, flags);
 }
 
-typedef size_t (*recvfrom_fp)(int, void*, size_t, int, struct sockaddr*, socklen_t*);
-static recvfrom_fp _recvfrom = NULL;
-static recvfrom_fp _vsocket_recvfrom = NULL;
-ssize_t recvfrom(int fd, void *buf, size_t n, int flags, __SOCKADDR_ARG  addr,socklen_t *restrict addr_len)  {
-	recvfrom_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "recvfrom", _recvfrom, INTERCEPT_PREFIX, _vsocket_recvfrom, fd >= MIN_DESCRIPTOR);
-	PRELOAD_LOOKUP(func, funcName, -1);
-	return (*func)(fd, buf, n, flags, addr, addr_len);
+ssize_t recvfrom(int fd, void *buf, size_t n, int flags, __SOCKADDR_ARG addr, socklen_t *restrict addr_len)  {
+	return (fd >= MIN_DESCRIPTOR && shouldRedirect()) ?
+			director.shadow.recvfrom(fd, buf, n, flags, addr, addr_len) :
+			director.real.recvfrom(fd, buf, n, flags, addr, addr_len);
 }
 
-typedef size_t (*recvmsg_fp)(int, struct msghdr*, int);
-static recvmsg_fp _recvmsg = NULL;
-static recvmsg_fp _vsocket_recvmsg = NULL;
 ssize_t recvmsg(int fd, struct msghdr *message, int flags) {
-	recvmsg_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "recvmsg", _recvmsg, INTERCEPT_PREFIX, _vsocket_recvmsg, fd >= MIN_DESCRIPTOR);
-	PRELOAD_LOOKUP(func, funcName, -1);
-	return (*func)(fd, message, flags);
+	return (fd >= MIN_DESCRIPTOR && shouldRedirect()) ?
+			director.shadow.recvmsg(fd, message, flags) :
+			director.real.recvmsg(fd, message, flags);
 }
 
-typedef int (*getsockopt_fp)(int, int, int, void*, socklen_t*);
-static getsockopt_fp _getsockopt = NULL;
-static getsockopt_fp _vsocket_getsockopt = NULL;
-int getsockopt(int fd, int level, int optname, void *__restrict optval,
-		socklen_t *__restrict optlen) {
-	getsockopt_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "getsockopt", _getsockopt, INTERCEPT_PREFIX, _vsocket_getsockopt, fd >= MIN_DESCRIPTOR);
-	PRELOAD_LOOKUP(func, funcName, -1);
-	return (*func)(fd, level, optname, optval, optlen);
+int getsockopt(int fd, int level, int optname, void *__restrict optval, socklen_t *__restrict optlen) {
+	return (fd >= MIN_DESCRIPTOR && shouldRedirect()) ?
+			director.shadow.getsockopt(fd, level, optname, optval, optlen) :
+			director.real.getsockopt(fd, level, optname, optval, optlen);
 }
 
-typedef int (*setsockopt_fp)(int, int, int, const void*, socklen_t);
-static setsockopt_fp _setsockopt = NULL;
-static setsockopt_fp _vsocket_setsockopt = NULL;
-int setsockopt(int fd, int level, int optname, __const void *optval,
-		socklen_t optlen) {
-	setsockopt_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "setsockopt", _setsockopt, INTERCEPT_PREFIX, _vsocket_setsockopt, fd >= MIN_DESCRIPTOR);
-	PRELOAD_LOOKUP(func, funcName, -1);
-	return (*func)(fd, level, optname, optval, optlen);
+int setsockopt(int fd, int level, int optname, __const void *optval, socklen_t optlen) {
+	return (fd >= MIN_DESCRIPTOR && shouldRedirect()) ?
+			director.shadow.setsockopt(fd, level, optname, optval, optlen) :
+			director.real.setsockopt(fd, level, optname, optval, optlen);
 }
 
-typedef int (*listen_fp)(int, int);
-static listen_fp _listen = NULL;
-static listen_fp _vsocket_listen = NULL;
 int listen(int fd, int n) {
-	listen_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "listen", _listen, INTERCEPT_PREFIX, _vsocket_listen, fd >= MIN_DESCRIPTOR);
-	PRELOAD_LOOKUP(func, funcName, -1);
-	return (*func)(fd, n);
+	return (fd >= MIN_DESCRIPTOR && shouldRedirect()) ?
+			director.shadow.listen(fd, n) :
+			director.real.listen(fd, n);
 }
 
-typedef int (*accept_fp)(int, struct sockaddr*, socklen_t*);
-static accept_fp _accept = NULL;
-static accept_fp _vsocket_accept = NULL;
-int accept(int fd, __SOCKADDR_ARG  addr,socklen_t *__restrict addr_len)  {
-	accept_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "accept", _accept, INTERCEPT_PREFIX, _vsocket_accept, fd >= MIN_DESCRIPTOR);
-	PRELOAD_LOOKUP(func, funcName, -1);
-	return (*func)(fd, addr, addr_len);
+int accept(int fd, __SOCKADDR_ARG addr, socklen_t *__restrict addr_len)  {
+	return (fd >= MIN_DESCRIPTOR && shouldRedirect()) ?
+			director.shadow.accept(fd, addr, addr_len) :
+			director.real.accept(fd, addr, addr_len);
 }
 
-typedef int (*accept4_fp)(int, struct sockaddr*, socklen_t*, int);
-static accept4_fp _accept4 = NULL;
-static accept4_fp _vsocket_accept4 = NULL;
-int accept4(int fd, __SOCKADDR_ARG  addr,socklen_t *__restrict addr_len, int flags)  {
-	accept4_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "accept4", _accept4, INTERCEPT_PREFIX, _vsocket_accept4, fd >= MIN_DESCRIPTOR);
-	PRELOAD_LOOKUP(func, funcName, -1);
-	return (*func)(fd, addr, addr_len, flags);
+int accept4(int fd, __SOCKADDR_ARG addr, socklen_t *__restrict addr_len, int flags)  {
+	return (fd >= MIN_DESCRIPTOR && shouldRedirect()) ?
+			director.shadow.accept4(fd, addr, addr_len, flags) :
+			director.real.accept4(fd, addr, addr_len, flags);
 }
 
-typedef int (*shutdown_fp)(int, int);
-static shutdown_fp _shutdown = NULL;
-static shutdown_fp _vsocket_shutdown = NULL;
 int shutdown(int fd, int how) {
-	shutdown_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "shutdown", _shutdown, INTERCEPT_PREFIX, _vsocket_shutdown, fd >= MIN_DESCRIPTOR);
-	PRELOAD_LOOKUP(func, funcName, -1);
-	return (*func)(fd, how);
+	return (fd >= MIN_DESCRIPTOR && shouldRedirect()) ?
+			director.shadow.shutdown(fd, how) :
+			director.real.shutdown(fd, how);
 }
 
-typedef int (*pipe_fp)(int [2]);
-static pipe_fp _pipe = NULL;
-static pipe_fp _vsystem_pipe = NULL;
-int pipe(int pipefd[2]) {
-	pipe_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "pipe", _pipe, INTERCEPT_PREFIX, _vsystem_pipe, 1);
-	PRELOAD_LOOKUP(func, funcName, -1);
-	return (*func)(pipefd);
-}
-
-typedef int (*pipe2_fp)(int [2], int);
-static pipe2_fp _pipe2 = NULL;
-static pipe2_fp _vsystem_pipe2 = NULL;
-int pipe2(int pipefd[2], int flags) {
-	pipe2_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "pipe2", _pipe2, INTERCEPT_PREFIX, _vsystem_pipe2, 1);
-	PRELOAD_LOOKUP(func, funcName, -1);
-	return (*func)(pipefd, flags);
-}
-
-typedef size_t (*read_fp)(int, void*, int);
-static read_fp _read = NULL;
-static read_fp _vsocket_read = NULL;
 ssize_t read(int fd, void *buff, int numbytes) {
-	read_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "read", _read, INTERCEPT_PREFIX, _vsocket_read, fd >= MIN_DESCRIPTOR);
-	PRELOAD_LOOKUP(func, funcName, -1);
-	return (*func)(fd, buff, numbytes);
+	return (fd >= MIN_DESCRIPTOR && shouldRedirect()) ?
+			director.shadow.read(fd, buff, numbytes) :
+			director.real.read(fd, buff, numbytes);
 }
 
-typedef size_t (*write_fp)(int, const void*, int);
-static write_fp _write = NULL;
-static write_fp _vsocket_write = NULL;
 ssize_t write(int fd, const void *buff, int n) {
-	write_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "write", _write, INTERCEPT_PREFIX, _vsocket_write, fd >= MIN_DESCRIPTOR);
-	PRELOAD_LOOKUP(func, funcName, -1);
-	return (*func)(fd, buff, n);
+	return (fd >= MIN_DESCRIPTOR && shouldRedirect()) ?
+			director.shadow.write(fd, buff, n) :
+			director.real.write(fd, buff, n);
 }
 
-typedef int (*close_fp)(int);
-static close_fp _close = NULL;
-static close_fp _vsocket_close = NULL;
 int close(int fd) {
-	close_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "close", _close, INTERCEPT_PREFIX, _vsocket_close, fd >= MIN_DESCRIPTOR);
-	PRELOAD_LOOKUP(func, funcName, -1);
-	return (*func)(fd);
+	return (fd >= MIN_DESCRIPTOR && shouldRedirect()) ?
+			director.shadow.close(fd) :
+			director.real.close(fd);
 }
 
-typedef int (*fcntl_fp)(int, int, ...);
-static fcntl_fp _fcntl = NULL;
-static fcntl_fp _vsocket_fcntl = NULL;
 int fcntl(int fd, int cmd, ...) {
-	fcntl_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "fcntl", _fcntl, INTERCEPT_PREFIX, _vsocket_fcntl, fd >= MIN_DESCRIPTOR);
-	PRELOAD_LOOKUP(func, funcName, -1);
-
 	va_list farg;
 	va_start(farg, cmd);
-	int result = (*func)(fd, cmd, va_arg(farg, void*));
+	int result = (fd >= MIN_DESCRIPTOR && shouldRedirect()) ?
+			director.shadow.fcntl(fd, cmd, va_arg(farg, void*)) :
+			director.real.fcntl(fd, cmd, va_arg(farg, void*));
 	va_end(farg);
 
 	return result;
 }
 
-/**
- * system util interface
- */
+int pipe(int pipefd[2]) {
+	return shouldRedirect() ?
+			director.shadow.pipe(pipefd) :
+			director.real.pipe(pipefd);
+}
 
-typedef time_t (*time_fp)(time_t*);
-static time_fp _time = NULL;
-static time_fp _vsystem_time = NULL;
+int pipe2(int pipefd[2], int flags) {
+	return shouldRedirect() ?
+			director.shadow.pipe2(pipefd, flags) :
+			director.real.pipe2(pipefd, flags);
+}
+
+/* time family */
+
 time_t time(time_t *t)  {
-	time_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "time", _time, INTERCEPT_PREFIX, _vsystem_time, 1);
-	PRELOAD_LOOKUP(func, funcName, -1);
-	return (*func)(t);
+	return shouldRedirect() ?
+			director.shadow.time(t) :
+			director.real.time(t);
 }
 
-typedef int (*clock_gettime_fp)(clockid_t, struct timespec *);
-static clock_gettime_fp _clock_gettime = NULL;
-static clock_gettime_fp _vsystem_clock_gettime = NULL;
 int clock_gettime(clockid_t clk_id, struct timespec *tp) {
-	clock_gettime_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "clock_gettime", _clock_gettime, INTERCEPT_PREFIX, _vsystem_clock_gettime, 1);
-	PRELOAD_LOOKUP(func, funcName, -1);
-	return (*func)(clk_id, tp);
+	return shouldRedirect() ?
+			director.shadow.clock_gettime(clk_id, tp) :
+			director.real.clock_gettime(clk_id, tp);
 }
 
-typedef int (*gettimeofday_fp)(struct timeval *, void *);
-static gettimeofday_fp _gettimeofday = NULL;
-static gettimeofday_fp _gettimeofday_redirect = NULL;
-int gettimeofday(struct timeval *tv, void *tz) {
-	gettimeofday_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "gettimeofday", _gettimeofday, INTERCEPT_PREFIX, _gettimeofday_redirect, 1);
-	PRELOAD_LOOKUP(func, funcName, -1);
-	return (*func)(tv, tz);
+int gettimeofday(struct timeval* tv, __timezone_ptr_t tz) {
+	return shouldRedirect() ?
+			director.shadow.gettimeofday(tv, tz) :
+			director.real.gettimeofday(tv, tz);
 }
 
-typedef int (*gethostname_fp)(char*, size_t);
-static gethostname_fp _gethostname = NULL;
-static gethostname_fp _vsystem_gethostname = NULL;
+/* name/address family */
+
+
 int gethostname(char* name, size_t len) {
-	gethostname_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "gethostname", _gethostname, INTERCEPT_PREFIX, _vsystem_gethostname, 1);
-	PRELOAD_LOOKUP(func, funcName, -1);
-	return (*func)(name, len);
+	return shouldRedirect() ?
+			director.shadow.gethostname(name, len) :
+			director.real.gethostname(name, len);
 }
 
-typedef int (*getaddrinfo_fp)(const char*, const char*, const struct addrinfo*, struct addrinfo**);
-static getaddrinfo_fp _getaddrinfo = NULL;
-static getaddrinfo_fp _vsystem_getaddrinfo = NULL;
 int getaddrinfo(const char *node, const char *service,
-                       const struct addrinfo *hints,
-                       struct addrinfo **res) {
-	getaddrinfo_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "getaddrinfo", _getaddrinfo, INTERCEPT_PREFIX, _vsystem_getaddrinfo, 1);
-	PRELOAD_LOOKUP(func, funcName, -1);
-	return (*func)(node, service, hints, res);
+		const struct addrinfo *hints, struct addrinfo **res) {
+	return shouldRedirect() ?
+			director.shadow.getaddrinfo(node, service, hints, res) :
+			director.real.getaddrinfo(node, service, hints, res);
 }
 
-typedef int (*freeaddrinfo_fp)(struct addrinfo*);
-static freeaddrinfo_fp _freeaddrinfo = NULL;
-static freeaddrinfo_fp _vsystem_freeaddrinfo = NULL;
 void freeaddrinfo(struct addrinfo *res) {
-	freeaddrinfo_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "freeaddrinfo", _freeaddrinfo, INTERCEPT_PREFIX, _vsystem_freeaddrinfo, 1);
-	PRELOAD_LOOKUP(func, funcName,);
-	(*func)(res);
+	shouldRedirect() ?
+			director.shadow.freeaddrinfo(res) :
+			director.real.freeaddrinfo(res);
 }
 
-typedef int (*getnameinfo_fp)(const struct sockaddr *, socklen_t, char *, size_t, char *, size_t, int);
-static getnameinfo_fp _getnameinfo = NULL;
-static getnameinfo_fp _vsystem_getnameinfo = NULL;
-int getnameinfo (const struct sockaddr *__restrict sa,
-			socklen_t salen, char *__restrict host,
-			socklen_t hostlen, char *__restrict serv,
-			socklen_t servlen,
-/* glibc-headers changed type of the flags arg after 2.12 */
+int getnameinfo(const struct sockaddr *__restrict sa, socklen_t salen,
+		char *__restrict host, socklen_t hostlen, char *__restrict serv,
+		socklen_t servlen,
+/* glibc-headers changed type of the flags, and then changed back */
 #if (__GLIBC__ > 2 || (__GLIBC__ == 2 && (__GLIBC_MINOR__ < 2 || __GLIBC_MINOR__ > 13)))
 			int flags) {
 #else
 			unsigned int flags) {
 #endif
-	getnameinfo_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "getnameinfo", _getnameinfo, INTERCEPT_PREFIX, _vsystem_getnameinfo, 1);
-	PRELOAD_LOOKUP(func, funcName, -1);
-	return (*func)(sa, salen, host, hostlen, serv, servlen, (int)flags);
+	return shouldRedirect() ?
+			director.shadow.getnameinfo(sa, salen, host, hostlen, serv, servlen, (int)flags) :
+			director.real.getnameinfo(sa, salen, host, hostlen, serv, servlen, (int)flags);
 }
 
-typedef struct hostent* (*gethostbyname_fp)(const gchar*);
-static gethostbyname_fp _gethostbyname = NULL;
-static gethostbyname_fp _vsystem_gethostbyname = NULL;
 struct hostent* gethostbyname(const gchar* name) {
-	gethostbyname_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "gethostbyname", _gethostbyname, INTERCEPT_PREFIX, _vsystem_gethostbyname, 1);
-	PRELOAD_LOOKUP(func, funcName, NULL);
-	return (*func)(name);
+	return shouldRedirect() ?
+			director.shadow.gethostbyname(name) :
+			director.real.gethostbyname(name);
 }
 
-typedef int (*gethostbyname_r_fp)(const gchar *, struct hostent *, gchar *, gsize , struct hostent **, gint *);
-static gethostbyname_r_fp _gethostbyname_r = NULL;
-static gethostbyname_r_fp _vsystem_gethostbyname_r = NULL;
-int gethostbyname_r(const gchar *name,
-               struct hostent *ret, gchar *buf, gsize buflen,
-               struct hostent **result, gint *h_errnop) {
-	gethostbyname_r_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "gethostbyname_r", _gethostbyname_r, INTERCEPT_PREFIX, _vsystem_gethostbyname_r, 1);
-	PRELOAD_LOOKUP(func, funcName, -1);
-	return (*func)(name, ret, buf, buflen, result, h_errnop);
+int gethostbyname_r(const gchar *name, struct hostent *ret, gchar *buf,
+		gsize buflen, struct hostent **result, gint *h_errnop) {
+	return shouldRedirect() ?
+			director.shadow.gethostbyname_r(name, ret, buf, buflen, result, h_errnop) :
+			director.real.gethostbyname_r(name, ret, buf, buflen, result, h_errnop);
 }
 
-typedef struct hostent* (*gethostbyname2_fp)(const gchar*, gint);
-static gethostbyname2_fp _gethostbyname2 = NULL;
-static gethostbyname2_fp _vsystem_gethostbyname2 = NULL;
 struct hostent* gethostbyname2(const gchar* name, gint af) {
-	gethostbyname2_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "gethostbyname2", _gethostbyname2, INTERCEPT_PREFIX, _vsystem_gethostbyname2, 1);
-	PRELOAD_LOOKUP(func, funcName, NULL);
-	return (*func)(name, af);
+	return shouldRedirect() ?
+			director.shadow.gethostbyname2(name, af) :
+			director.real.gethostbyname2(name, af);
 }
 
-typedef int (*gethostbyname2_r_fp)(const gchar *, gint, struct hostent *, gchar *, gsize , struct hostent **, gint *);
-static gethostbyname2_r_fp _gethostbyname2_r = NULL;
-static gethostbyname2_r_fp _vsystem_gethostbyname2_r = NULL;
-int gethostbyname2_r(const gchar *name, gint af,
-               struct hostent *ret, gchar *buf, gsize buflen,
-               struct hostent **result, gint *h_errnop) {
-	gethostbyname2_r_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "gethostbyname2_r", _gethostbyname2_r, INTERCEPT_PREFIX, _vsystem_gethostbyname2_r, 1);
-	PRELOAD_LOOKUP(func, funcName, -1);
-	return (*func)(name, af, ret, buf, buflen, result, h_errnop);
+int gethostbyname2_r(const gchar *name, gint af, struct hostent *ret,
+		gchar *buf, gsize buflen, struct hostent **result, gint *h_errnop) {
+	return shouldRedirect() ?
+			director.shadow.gethostbyname2_r(name, af, ret, buf, buflen, result, h_errnop) :
+			director.real.gethostbyname2_r(name, af, ret, buf, buflen, result, h_errnop);
 }
 
-typedef struct hostent* (*gethostbyaddr_fp)(const void*, socklen_t, gint);
-static gethostbyaddr_fp _gethostbyaddr = NULL;
-static gethostbyaddr_fp _vsystem_gethostbyaddr = NULL;
 struct hostent* gethostbyaddr(const void* addr, socklen_t len, gint type) {
-	gethostbyaddr_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "gethostbyaddr", _gethostbyaddr, INTERCEPT_PREFIX, _vsystem_gethostbyaddr, 1);
-	PRELOAD_LOOKUP(func, funcName, NULL);
-	return (*func)(addr, len, type);
+	return shouldRedirect() ?
+			director.shadow.gethostbyaddr(addr, len, type) :
+			director.real.gethostbyaddr(addr, len, type);
 }
 
-typedef int (*gethostbyaddr_r_fp)(const void *, socklen_t, gint, struct hostent *, gchar *, gsize , struct hostent **, gint *);
-static gethostbyaddr_r_fp _gethostbyaddr_r = NULL;
-static gethostbyaddr_r_fp _vsystem_gethostbyaddr_r = NULL;
 int gethostbyaddr_r(const void *addr, socklen_t len, gint type,
-               struct hostent *ret, gchar *buf, gsize buflen,
-               struct hostent **result, gint *h_errnop) {
-	gethostbyaddr_r_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "gethostbyaddr_r", _gethostbyaddr_r, INTERCEPT_PREFIX, _vsystem_gethostbyaddr_r, 1);
-	PRELOAD_LOOKUP(func, funcName, -1);
-	return (*func)(addr, len, type, ret, buf, buflen, result, h_errnop);
+		struct hostent *ret, char *buf, gsize buflen, struct hostent **result,
+		gint *h_errnop) {
+	return shouldRedirect() ?
+			director.shadow.gethostbyaddr_r(addr, len, type, ret, buf, buflen, result, h_errnop) :
+			director.real.gethostbyaddr_r(addr, len, type, ret, buf, buflen, result, h_errnop);
 }
 
-/**
- * crypto interface
- */
+/* random family */
+
+int rand() {
+	return shouldRedirect() ?
+			director.shadow.rand() :
+			director.real.rand();
+}
+
+int rand_r(unsigned int *seedp) {
+	return shouldRedirect() ?
+			director.shadow.rand_r(seedp) :
+			director.real.rand_r(seedp);
+}
+
+void srand(unsigned int seed) {
+	shouldRedirect() ?
+			director.shadow.srand(seed) :
+			director.real.srand(seed);
+}
+
+long int random() {
+	return shouldRedirect() ?
+			director.shadow.random() :
+			director.real.random();
+}
+
+int random_r(struct random_data *buf, int32_t *result) {
+	return shouldRedirect() ?
+			director.shadow.random_r(buf, result) :
+			director.real.random_r(buf, result);
+}
+
+void srandom(unsigned int seed) {
+	shouldRedirect() ?
+			director.shadow.srandom(seed) :
+			director.real.srandom(seed);
+}
+
+int srandom_r(unsigned int seed, struct random_data *buf) {
+	return shouldRedirect() ?
+			director.shadow.srandom_r(seed, buf) :
+			director.real.srandom_r(seed, buf);
+}
+
+/* openssl family
+ * these functions are lazily loaded to ensure the symbol exists when searching.
+ * this is necessary because openssl is dynamically loaded as part of plugin code */
 
 /*
  * const AES_KEY *key
  * The key parameter has been voided to avoid requiring Openssl headers
  */
-typedef void (*AES_encrypt_fp)(const unsigned char *, unsigned char *, const void *);
-static AES_encrypt_fp _AES_encrypt = NULL;
-static AES_encrypt_fp _intercept_AES_encrypt = NULL;
 void AES_encrypt(const unsigned char *in, unsigned char *out, const void *key) {
-	AES_encrypt_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "AES_encrypt", _AES_encrypt, INTERCEPT_PREFIX, _intercept_AES_encrypt, 1);
-	PRELOAD_LOOKUP(func, funcName,);
-	(*func)(in, out, key);
+	if(shouldRedirect()) {
+		director.shadow.AES_encrypt(in, out, key);
+	} else {
+		if(!director.real.AES_encrypt)
+			SETSYM_OR_FAIL(director.real.AES_encrypt, "AES_encrypt");
+		director.real.AES_encrypt(in, out, key);
+	}
 }
 
 /*
  * const AES_KEY *key
  * The key parameter has been voided to avoid requiring Openssl headers
  */
-typedef void (*AES_decrypt_fp)(const unsigned char *, unsigned char *, const void *);
-static AES_decrypt_fp _AES_decrypt = NULL;
-static AES_decrypt_fp _intercept_AES_decrypt = NULL;
 void AES_decrypt(const unsigned char *in, unsigned char *out, const void *key) {
-	AES_decrypt_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "AES_decrypt", _AES_decrypt, INTERCEPT_PREFIX, _intercept_AES_decrypt, 1);
-	PRELOAD_LOOKUP(func, funcName,);
-	(*func)(in, out, key);
+	if(shouldRedirect()) {
+		director.shadow.AES_decrypt(in, out, key);
+	} else {
+		if(!director.real.AES_decrypt)
+			SETSYM_OR_FAIL(director.real.AES_decrypt, "AES_decrypt");
+		director.real.AES_decrypt(in, out, key);
+	}
 }
 
 /*
  * const AES_KEY *key
  * The key parameter has been voided to avoid requiring Openssl headers
  */
-typedef void (*AES_ctr128_encrypt_fp)(const unsigned char *, unsigned char *, const void *);
-static AES_ctr128_encrypt_fp _AES_ctr128_encrypt = NULL;
-static AES_ctr128_encrypt_fp _intercept_AES_ctr128_encrypt = NULL;
 void AES_ctr128_encrypt(const unsigned char *in, unsigned char *out, const void *key) {
-	AES_ctr128_encrypt_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "AES_ctr128_encrypt", _AES_ctr128_encrypt, INTERCEPT_PREFIX, _intercept_AES_ctr128_encrypt, 1);
-	PRELOAD_LOOKUP(func, funcName,);
-	(*func)(in, out, key);
+	if(shouldRedirect()) {
+		director.shadow.AES_ctr128_encrypt(in, out, key);
+	} else {
+		if(!director.real.AES_ctr128_encrypt)
+			SETSYM_OR_FAIL(director.real.AES_ctr128_encrypt, "AES_ctr128_encrypt");
+		director.real.AES_ctr128_encrypt(in, out, key);
+	}
 }
 
 /*
  * const AES_KEY *key
  * The key parameter has been voided to avoid requiring Openssl headers
  */
-typedef void (*AES_ctr128_decrypt_fp)(const unsigned char *, unsigned char *, const void *);
-static AES_ctr128_decrypt_fp _AES_ctr128_decrypt = NULL;
-static AES_ctr128_decrypt_fp _intercept_ctr128_AES_decrypt = NULL;
 void AES_ctr128_decrypt(const unsigned char *in, unsigned char *out, const void *key) {
-	AES_ctr128_decrypt_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "AES_ctr128_decrypt", _AES_ctr128_decrypt, INTERCEPT_PREFIX, _intercept_ctr128_AES_decrypt, 1);
-	PRELOAD_LOOKUP(func, funcName,);
-	(*func)(in, out, key);
+	if(shouldRedirect()) {
+		director.shadow.AES_ctr128_decrypt(in, out, key);
+	} else {
+		if(!director.real.AES_ctr128_decrypt)
+			SETSYM_OR_FAIL(director.real.AES_ctr128_decrypt, "AES_ctr128_decrypt");
+		director.real.AES_ctr128_decrypt(in, out, key);
+	}
 }
 
 /*
@@ -611,263 +892,113 @@ void AES_ctr128_decrypt(const unsigned char *in, unsigned char *out, const void 
  * EVP_CIPHER_CTX *ctx
  * The ctx parameter has been voided to avoid requiring Openssl headers
  */
-typedef int (*EVP_Cipher_fp)(void *ctx, unsigned char *out, const unsigned char *in, unsigned int inl);
-static EVP_Cipher_fp _EVP_Cipher = NULL;
-static EVP_Cipher_fp _intercept_EVP_Cipher = NULL;
 int EVP_Cipher(void *ctx, unsigned char *out, const unsigned char *in, unsigned int inl){
-	EVP_Cipher_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "EVP_Cipher", _EVP_Cipher, INTERCEPT_PREFIX, _intercept_EVP_Cipher, 1);
-	PRELOAD_LOOKUP(func, funcName, -1);
-	return (*func)(ctx, out, in, inl);
-}
-#endif
-
-typedef void (*RAND_seed_fp)(const void *buf,int num);
-static RAND_seed_fp _RAND_seed = NULL;
-static RAND_seed_fp _intercept_RAND_seed = NULL;
-void RAND_seed(const void *buf,int num) {
-	RAND_seed_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "RAND_seed", _RAND_seed, INTERCEPT_PREFIX, _intercept_RAND_seed, 1);
-	PRELOAD_LOOKUP(func, funcName,);
-	(*func)(buf, num);
-}
-
-typedef void (*RAND_add_fp)(const void *buf,int num, double entropy);
-static RAND_add_fp _RAND_add = NULL;
-static RAND_add_fp _intercept_RAND_add = NULL;
-void RAND_add(const void *buf,int num,double entropy) {
-	RAND_add_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "RAND_add", _RAND_add, INTERCEPT_PREFIX, _intercept_RAND_add, 1);
-	PRELOAD_LOOKUP(func, funcName,);
-	(*func)(buf, num, entropy);
-}
-
-typedef int (*RAND_poll_fp)(void);
-static RAND_poll_fp _RAND_poll = NULL;
-static RAND_poll_fp _intercept_RAND_poll = NULL;
-int RAND_poll(void) {
-	RAND_poll_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "RAND_poll", _RAND_poll, INTERCEPT_PREFIX, _intercept_RAND_poll, 1);
-	PRELOAD_LOOKUP(func, funcName, 0);
-	return (*func)();
-}
-
-typedef int (*RAND_bytes_fp)(unsigned char *buf, int num);
-static RAND_bytes_fp _RAND_bytes = NULL;
-static RAND_bytes_fp _intercept_RAND_bytes = NULL;
-int RAND_bytes(unsigned char *buf, int num) {
-	RAND_bytes_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "RAND_bytes", _RAND_bytes, INTERCEPT_PREFIX, _intercept_RAND_bytes, 1);
-	PRELOAD_LOOKUP(func, funcName, 0);
-	return (*func)(buf, num);
-}
-
-typedef int (*RAND_pseudo_bytes_fp)(unsigned char *buf, int num);
-static RAND_pseudo_bytes_fp _RAND_pseudo_bytes = NULL;
-static RAND_pseudo_bytes_fp _intercept_RAND_pseudo_bytes = NULL;
-int RAND_pseudo_bytes(unsigned char *buf, int num) {
-	RAND_pseudo_bytes_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "RAND_pseudo_bytes", _RAND_pseudo_bytes, INTERCEPT_PREFIX, _intercept_RAND_pseudo_bytes, 1);
-	PRELOAD_LOOKUP(func, funcName, 0);
-	return (*func)(buf, num);
-}
-
-typedef void (*RAND_cleanup_fp)();
-static RAND_cleanup_fp _RAND_cleanup = NULL;
-static RAND_cleanup_fp _intercept_RAND_cleanup = NULL;
-void RAND_cleanup() {
-	RAND_cleanup_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "RAND_cleanup", _RAND_cleanup, INTERCEPT_PREFIX, _intercept_RAND_cleanup, 1);
-	PRELOAD_LOOKUP(func, funcName,);
-	(*func)();
-}
-
-typedef int (*RAND_status_fp)();
-static RAND_status_fp _RAND_status = NULL;
-static RAND_status_fp _intercept_RAND_status = NULL;
-int RAND_status() {
-	RAND_status_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "RAND_status", _RAND_status, INTERCEPT_PREFIX, _intercept_RAND_status, 1);
-	PRELOAD_LOOKUP(func, funcName, 0);
-	return (*func)();
-}
-
-typedef const void * (*RAND_get_rand_method_fp)();
-static RAND_get_rand_method_fp _RAND_get_rand_method = NULL;
-static RAND_get_rand_method_fp _intercept_RAND_get_rand_method = NULL;
-const void *RAND_get_rand_method(void) {
-	RAND_get_rand_method_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "RAND_get_rand_method", _RAND_get_rand_method, INTERCEPT_PREFIX, _intercept_RAND_get_rand_method, 1);
-	PRELOAD_LOOKUP(func, funcName, 0);
-	return (*func)();
-}
-
-typedef void* (*CRYPTO_get_locking_callback_fp)();
-static CRYPTO_get_locking_callback_fp _CRYPTO_get_locking_callback = NULL;
-static CRYPTO_get_locking_callback_fp _intercept_CRYPTO_get_locking_callback = NULL;
-void* CRYPTO_get_locking_callback(void) {
-	CRYPTO_get_locking_callback_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "CRYPTO_get_locking_callback", _CRYPTO_get_locking_callback, INTERCEPT_PREFIX, _intercept_CRYPTO_get_locking_callback, 1);
-	PRELOAD_LOOKUP(func, funcName, 0);
-	return (*func)();
-}
-
-typedef void* (*CRYPTO_get_id_callback_fp)();
-static CRYPTO_get_id_callback_fp _CRYPTO_get_id_callback = NULL;
-static CRYPTO_get_id_callback_fp _intercept_CRYPTO_get_id_callback = NULL;
-void* CRYPTO_get_id_callback(void) {
-	CRYPTO_get_id_callback_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "CRYPTO_get_id_callback", _CRYPTO_get_id_callback, INTERCEPT_PREFIX, _intercept_CRYPTO_get_id_callback, 1);
-	PRELOAD_LOOKUP(func, funcName, 0);
-	return (*func)();
-}
-
-typedef int (*rand_fp)(void);
-static rand_fp _rand = NULL;
-static rand_fp _intercept_rand = NULL;
-int rand(void) {
-	rand_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "rand", _rand, INTERCEPT_PREFIX, _intercept_rand, 1);
-	PRELOAD_LOOKUP(func, funcName, 0);
-	return (*func)();
-}
-
-typedef int (*rand_r_fp)(unsigned int *seedp);
-static rand_r_fp _rand_r = NULL;
-static rand_r_fp _intercept_rand_r = NULL;
-int rand_r(unsigned int *seedp) {
-	rand_r_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "rand_r", _rand_r, INTERCEPT_PREFIX, _intercept_rand_r, 1);
-	PRELOAD_LOOKUP(func, funcName, 0);
-	return (*func)(seedp);
-}
-
-typedef void (*srand_fp)(unsigned int seed);
-static srand_fp _srand = NULL;
-static srand_fp _intercept_srand = NULL;
-void srand(unsigned int seed) {
-	srand_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "srand", _srand, INTERCEPT_PREFIX, _intercept_srand, 1);
-	PRELOAD_LOOKUP(func, funcName,);
-	(*func)(seed);
-}
-
-typedef long int (*random_fp)(void);
-static random_fp _random = NULL;
-static random_fp _intercept_random = NULL;
-long int random(void) {
-	random_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "random", _random, INTERCEPT_PREFIX, _intercept_random, 1);
-	PRELOAD_LOOKUP(func, funcName, 0);
-	return (*func)();
-}
-
-typedef int (*random_r_fp)(struct random_data *buf, int32_t *result);
-static random_r_fp _random_r = NULL;
-static random_r_fp _intercept_random_r = NULL;
-int random_r(struct random_data *buf, int32_t *result) {
-	random_r_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "random_r", _random_r, INTERCEPT_PREFIX, _intercept_random_r, 1);
-	PRELOAD_LOOKUP(func, funcName, 0);
-	return (*func)(buf, result);
-}
-
-typedef void (*srandom_fp)(unsigned int seed);
-static srandom_fp _srandom = NULL;
-static srandom_fp _intercept_srandom = NULL;
-void srandom(unsigned int seed) {
-	srandom_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "srandom", _srandom, INTERCEPT_PREFIX, _intercept_srandom, 1);
-	PRELOAD_LOOKUP(func, funcName,);
-	(*func)(seed);
-}
-
-typedef int (*srandom_r_fp)(unsigned int seed, struct random_data *buf);
-static srandom_r_fp _srandom_r = NULL;
-static srandom_r_fp _intercept_srandom_r = NULL;
-int srandom_r(unsigned int seed, struct random_data *buf) {
-	srandom_r_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "srandom_r", _srandom_r, INTERCEPT_PREFIX, _intercept_srandom_r, 1);
-	PRELOAD_LOOKUP(func, funcName, 0);
-	return (*func)(seed, buf);
-}
-
-/*
- * malloc may cause initialization errors when debugging in GDB or Valgrind
- * Define this with -D to enable malloc/free preloading
- */
-#ifdef SHADOW_ENABLE_MEMTRACKER
-
-__thread unsigned int entered = 0;
-
-int start_call() {
-  return __sync_fetch_and_add(&entered, 1);
-}
-
-void end_call() {
-  __sync_fetch_and_sub(&entered, 1);
-}
-
-char tmpbuf[1024];
-unsigned long tmppos = 0;
-unsigned long tmpallocs = 0;
-
-void* dummy_malloc(size_t size) {
-    if (tmppos + size >= sizeof(tmpbuf)) exit(1);
-    void *retptr = tmpbuf + tmppos;
-    tmppos += size;
-    ++tmpallocs;
-    return retptr;
-}
-
-typedef void* (*malloc_fp)(size_t);
-static malloc_fp _malloc = NULL;
-static malloc_fp _intercept_malloc = NULL;
-void *malloc(size_t size) {
-	malloc_fp* func;
-	char* funcName;
-
-	int isRecursive = __sync_fetch_and_add(&entered, 1);
-
-	if(isRecursive) {
-		func = dummy_malloc;
+	if(shouldRedirect()) {
+		return director.shadow.EVP_Cipher(ctx, out, in, inl);
 	} else {
-		PRELOAD_DECIDE(func, funcName, "malloc", _malloc, INTERCEPT_PREFIX, _intercept_malloc, 1);
-		PRELOAD_LOOKUP(func, funcName, 0);
+		if(!director.real.EVP_Cipher)
+			SETSYM_OR_FAIL(director.real.EVP_Cipher, "EVP_Cipher");
+		return director.real.EVP_Cipher(ctx, out, in, inl);
 	}
-
-	__sync_fetch_and_sub(&entered, 1);
-
-	return (*func)(size);
 }
-
-typedef int (*free_fp)(void*);
-static free_fp _free = NULL;
-static free_fp _intercept_free = NULL;
-void free(void* ptr) {
-	free_fp* func;
-	char* funcName;
-	PRELOAD_DECIDE(func, funcName, "free", _free, INTERCEPT_PREFIX, _intercept_free, 1);
-	PRELOAD_LOOKUP(func, funcName,);
-	(*func)(ptr);
-}
-
 #endif
+
+void* CRYPTO_get_locking_callback() {
+	if(shouldRedirect()) {
+		return director.shadow.CRYPTO_get_locking_callback();
+	} else {
+		if(!director.real.CRYPTO_get_locking_callback)
+			SETSYM_OR_FAIL(director.real.CRYPTO_get_locking_callback, "CRYPTO_get_locking_callback");
+		return director.real.CRYPTO_get_locking_callback();
+	}
+}
+
+void* CRYPTO_get_id_callback() {
+	if(shouldRedirect()) {
+		return director.shadow.CRYPTO_get_id_callback();
+	} else {
+		if(!director.real.CRYPTO_get_id_callback)
+			SETSYM_OR_FAIL(director.real.CRYPTO_get_id_callback, "CRYPTO_get_id_callback");
+		return director.real.CRYPTO_get_id_callback();
+	}
+}
+
+void RAND_seed(const void *buf, int num) {
+	if(shouldRedirect()) {
+		director.shadow.RAND_seed(buf, num);
+	} else {
+		if(!director.real.RAND_seed)
+			SETSYM_OR_FAIL(director.real.RAND_seed, "RAND_seed");
+		director.real.RAND_seed(buf, num);
+	}
+}
+
+void RAND_add(const void *buf, int num, double entropy) {
+	if(shouldRedirect()) {
+		director.shadow.RAND_add(buf, num, entropy);
+	} else {
+		if(!director.real.RAND_add)
+			SETSYM_OR_FAIL(director.real.RAND_add, "RAND_add");
+		director.real.RAND_add(buf, num, entropy);
+	}
+}
+
+int RAND_poll() {
+	if(shouldRedirect()) {
+		return director.shadow.RAND_poll();
+	} else {
+		if(!director.real.RAND_poll)
+			SETSYM_OR_FAIL(director.real.RAND_poll, "RAND_poll");
+		return director.real.RAND_poll();
+	}
+}
+
+int RAND_bytes(unsigned char *buf, int num) {
+	if(shouldRedirect()) {
+		return director.shadow.RAND_bytes(buf, num);
+	} else {
+		if(!director.real.RAND_bytes)
+			SETSYM_OR_FAIL(director.real.RAND_bytes, "RAND_bytes");
+		return director.real.RAND_bytes(buf, num);
+	}
+}
+
+int RAND_pseudo_bytes(unsigned char *buf, int num) {
+	if(shouldRedirect()) {
+		return director.shadow.RAND_pseudo_bytes(buf, num);
+	} else {
+		if(!director.real.RAND_pseudo_bytes)
+			SETSYM_OR_FAIL(director.real.RAND_pseudo_bytes, "RAND_pseudo_bytes");
+		return director.real.RAND_pseudo_bytes(buf, num);
+	}
+}
+
+void RAND_cleanup() {
+	if(shouldRedirect()) {
+		director.shadow.RAND_cleanup();
+	} else {
+		if(!director.real.RAND_cleanup)
+			SETSYM_OR_FAIL(director.real.RAND_cleanup, "RAND_cleanup");
+		director.real.RAND_cleanup();
+	}
+}
+
+int RAND_status() {
+	if(shouldRedirect()) {
+		return director.shadow.RAND_status();
+	} else {
+		if(!director.real.RAND_status)
+			SETSYM_OR_FAIL(director.real.RAND_status, "RAND_status");
+		return director.real.RAND_status();
+	}
+}
+
+const void *RAND_get_rand_method() {
+	if(shouldRedirect()) {
+		return director.shadow.RAND_get_rand_method();
+	} else {
+		if(!director.real.RAND_get_rand_method)
+			SETSYM_OR_FAIL(director.real.RAND_get_rand_method, "RAND_get_rand_method");
+		return director.real.RAND_get_rand_method();
+	}
+}

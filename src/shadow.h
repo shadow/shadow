@@ -11,6 +11,7 @@
 #include <gmodule.h>
 
 #include <stdlib.h>
+#include <stdio.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -109,8 +110,6 @@
 #include "engine/shd-logging.h"
 #include "engine/shd-engine.h"
 #include "engine/shd-worker.h"
-
-#include "interposition/preload.h"
 
 extern Engine* shadow_engine;
 
