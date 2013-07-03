@@ -221,25 +221,35 @@ typedef struct {
 	PreloadFuncs real;
 	PreloadFuncs shadow;
 	WorkerIsInShadowContextFunc isShadowFunc;
-	unsigned long isRecursive;
 } FuncDirector;
 
-__thread FuncDirector director;
+/* the director is initialized at library load time before
+ * threads are created, and once initialized it is shared among all threads.
+ *
+ * the openssl functions will be NULL until they are called, at which point the
+ * threads will do the lookup and set the function pointers. this part is not really
+ * thread-safe, but if two threads lookup the same function at the same time, the
+ * resulting pointer will be identical anyway - so we avoid protecting it.
+ *
+ * if this becomes a problem, we can make the director thread-local (__thread), initialize
+ * it separately in each thread, and then each thread will have its own function state.
+ * in this case, threads should access it ONLY via a &director pointer lookup, which is how
+ * they get their copy of the data.
+ * http://gcc.gnu.org/onlinedocs/gcc-4.3.6/gcc/Thread_002dLocal.html
+ */
+static FuncDirector director;
 
-static inline int shouldRedirect() {
-	int doRedirect = 0;
-	/* recursive calls always go to the syscall */
-	int isRecursive = __sync_fetch_and_add(&director.isRecursive, 1);
-	if(!isRecursive) {
-		/* ask shadow if this call is a plug-in that should be intercepted */
-		doRedirect = director.isShadowFunc() ? 0 : 1;
-	}
-	__sync_fetch_and_sub(&director.isRecursive, 1);
-	return doRedirect;
-}
+/* whether or not we are in a recursive loop is thread-specific, since each thread
+ * will have their own call stacks.
+ *
+ * threads MUST access this via &isRecursive to ensure it has its own copy
+ * http://gcc.gnu.org/onlinedocs/gcc-4.3.6/gcc/Thread_002dLocal.html*/
+static __thread unsigned long isRecursive = 0;
 
 static void* dummy_malloc(size_t size) {
-    if (director.dummy.pos + size >= sizeof(director.dummy.buf)) exit(1);
+    if (director.dummy.pos + size >= sizeof(director.dummy.buf)) {
+    	exit(EXIT_FAILURE);
+    }
     void *retptr = director.dummy.buf + director.dummy.pos;
     director.dummy.pos += size;
     ++director.dummy.nallocs;
@@ -249,8 +259,9 @@ static void* dummy_malloc(size_t size) {
 static void* dummy_calloc(size_t nmemb, size_t size) {
     void *ptr = dummy_malloc(nmemb * size);
     unsigned int i = 0;
-    for (; i < nmemb * size; ++i)
+    for (; i < nmemb * size; ++i) {
         *((char*)(ptr + i)) = '\0';
+    }
     return ptr;
 }
 
@@ -261,23 +272,29 @@ static void dummy_free(void *ptr) {
 	}
 }
 
-/* this function is called when the library is loaded */
-void __attribute__((constructor)) LoadPreloadFuncs() {
-	/* use dummy malloc during initial dlsym calls to avoid recursive stack segfaults */
+static void initialize() {
+	/* ensure we never intercept during initialization */
+	__sync_fetch_and_add(&isRecursive, 1);
+
 	memset(&director, 0, sizeof(FuncDirector));
+
+	/* use dummy malloc during initial dlsym calls to avoid recursive stack segfaults */
 	director.real.malloc = dummy_malloc;
 	director.real.calloc = dummy_calloc;
 	director.real.free = dummy_free;
 
-	PreloadFuncs temp;
-	memset(&temp, 0, sizeof(PreloadFuncs));
+	MallocFunc tempMalloc;
+	CallocFunc tempCalloc;
+	FreeFunc tempFree;
 
-	/* ensure we never intercept during initialization */
-	__sync_fetch_and_add(&director.isRecursive, 1);
+	SETSYM_OR_FAIL(tempMalloc, "malloc");
+	SETSYM_OR_FAIL(tempCalloc, "calloc");
+	SETSYM_OR_FAIL(tempFree, "free");
 
-	SETSYM_OR_FAIL(temp.malloc, "malloc");
-	SETSYM_OR_FAIL(temp.calloc, "calloc");
-	SETSYM_OR_FAIL(temp.free, "free");
+	/* stop using the dummy malloc funcs now */
+	director.real.malloc = tempMalloc;
+	director.real.calloc = tempCalloc;
+	director.real.free = tempFree;
 
 	SETSYM_OR_FAIL(director.real.realloc, "realloc");
 	SETSYM_OR_FAIL(director.real.posix_memalign, "posix_memalign");
@@ -429,17 +446,29 @@ void __attribute__((constructor)) LoadPreloadFuncs() {
 
 	SETSYM_OR_FAIL(director.isShadowFunc, "intercept_worker_isInShadowContext");
 
-	/* stop using the dummy malloc funcs now */
-	director.real.malloc = temp.malloc;
-	director.real.calloc = temp.calloc;
-	director.real.free = temp.free;
+    __sync_fetch_and_sub(&isRecursive, 1);
+}
 
-    __sync_fetch_and_sub(&director.isRecursive, 1);
+static inline int shouldRedirect() {
+	int doRedirect = 0;
+	/* recursive calls always go to the syscall */
+	if(!__sync_fetch_and_add(&isRecursive, 1)) {
+		/* ask shadow if this call is a plug-in that should be intercepted */
+		doRedirect = director.isShadowFunc() ? 0 : 1;
+	}
+	__sync_fetch_and_sub(&isRecursive, 1);
+	return doRedirect;
+}
+
+/* this function is called when the library is loaded,
+ * and only once per program not once per thread */
+void __attribute__((constructor)) construct() {
+	/* here we are guaranteed no threads have started yet */
+	initialize();
 }
 
 /* this function is called when the library is unloaded */
-void __attribute__((destructor)) UnloadPreloadFuncs() {
-}
+//void __attribute__((destructor)) destruct() {}
 
 /* memory allocation family */
 
