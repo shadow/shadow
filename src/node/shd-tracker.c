@@ -6,18 +6,18 @@
 
 #include "shadow.h"
 
-typedef enum _TrackerLogInfo TrackerLogInfo;
-enum _TrackerLogInfo {
-	TRACKER_INFO_NONE = 0,
-	TRACKER_INFO_NODE = 1<<0,
-	TRACKER_INFO_SOCKET = 1<<1,
+typedef enum _TrackerFlags TrackerFlags;
+enum _TrackerFlags {
+	TRACKER_FLAGS_NONE = 0,
+	TRACKER_FLAGS_NODE = 1<<0,
+	TRACKER_FLAGS_SOCKET = 1<<1,
+	TRACKER_FLAGS_RAM = 1<<2,
 };
-
 
 struct _Tracker {
 	SimulationTime interval;
 	GLogLevelFlags loglevel;
-	TrackerLogInfo loginfo;
+	TrackerFlags flags;
 
 	SimulationTime processingTimeTotal;
 	SimulationTime processingTimeLastInterval;
@@ -60,16 +60,18 @@ struct _TrackerSocket {
 	MAGIC_DECLARE;
 };
 
-TrackerLogInfo _tracker_getLogInfo(gchar* info) {
-	TrackerLogInfo loginfo = TRACKER_INFO_NONE;
-	if(info) {
+static TrackerFlags _tracker_parseFlagString(gchar* flagString) {
+	TrackerFlags flags = TRACKER_FLAGS_NONE;
+	if(flagString) {
 		/* info string can either be comma or space separated */
-		gchar** parts = g_strsplit_set(info, " ,", -1);
+		gchar** parts = g_strsplit_set(flagString, " ,", -1);
 		for(gint idx = 0; parts[idx]; idx++) {
 			if(!g_ascii_strcasecmp(parts[idx], "node")) {
-				loginfo |= TRACKER_INFO_NODE;
+				flags |= TRACKER_FLAGS_NODE;
 			} else if(!g_ascii_strcasecmp(parts[idx], "socket")) {
-				loginfo |= TRACKER_INFO_SOCKET;
+				flags |= TRACKER_FLAGS_SOCKET;
+			} else if(!g_ascii_strcasecmp(parts[idx], "ram")) {
+				flags |= TRACKER_FLAGS_RAM;
 			} else {
 				logging_log(G_LOG_DOMAIN, G_LOG_LEVEL_WARNING, __FUNCTION__,
 						"Did not recognize log info '%s', possible choices are 'node','socket'.", parts[idx]);
@@ -78,16 +80,55 @@ TrackerLogInfo _tracker_getLogInfo(gchar* info) {
 		g_strfreev(parts);
 	}
 
-	return loginfo;
+	return flags;
 }
 
-Tracker* tracker_new(SimulationTime interval, GLogLevelFlags loglevel, gchar* loginfo) {
+static GLogLevelFlags _tracker_getLogLevel(Tracker* tracker) {
+	/* prefer our level over the global config */
+	GLogLevelFlags level = tracker->loglevel;
+	if(!level) {
+		Worker* w = worker_getPrivate();
+		if(w->cached_engine) {
+			Configuration* c = engine_getConfig(w->cached_engine);
+			level = configuration_getHeartbeatLogLevel(c);
+		}
+	}
+	return level;
+}
+
+static SimulationTime _tracker_getLogInterval(Tracker* tracker) {
+	/* prefer our interval over the global config */
+	SimulationTime interval = tracker->interval;
+	if(!interval) {
+		Worker* w = worker_getPrivate();
+		if(w->cached_engine) {
+			Configuration* c = engine_getConfig(w->cached_engine);
+			interval = configuration_getHearbeatInterval(c);
+		}
+	}
+	return interval;
+}
+
+static TrackerFlags _tracker_getFlags(Tracker* tracker) {
+	/* prefer our log info over the global config */
+	TrackerFlags flags = tracker->flags;
+	if(!flags) {
+		Worker* w = worker_getPrivate();
+		if(w->cached_engine) {
+			Configuration* c = engine_getConfig(w->cached_engine);
+			flags = _tracker_parseFlagString(c->heartbeatLogInfo);
+		}
+	}
+	return flags;
+}
+
+Tracker* tracker_new(SimulationTime interval, GLogLevelFlags loglevel, gchar* flagString) {
 	Tracker* tracker = g_new0(Tracker, 1);
 	MAGIC_INIT(tracker);
 
 	tracker->interval = interval;
 	tracker->loglevel = loglevel;
-	tracker->loginfo = _tracker_getLogInfo(loginfo);
+	tracker->flags = _tracker_parseFlagString(flagString);
 
 	tracker->allocatedLocations = g_hash_table_new(g_direct_hash, g_direct_equal);
 	tracker->sockets = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, g_free);
@@ -107,186 +148,198 @@ void tracker_free(Tracker* tracker) {
 
 void tracker_addProcessingTime(Tracker* tracker, SimulationTime processingTime) {
 	MAGIC_ASSERT(tracker);
-	tracker->processingTimeTotal += processingTime;
-	tracker->processingTimeLastInterval += processingTime;
+
+	if(_tracker_getFlags(tracker) & TRACKER_FLAGS_NODE) {
+		tracker->processingTimeTotal += processingTime;
+		tracker->processingTimeLastInterval += processingTime;
+	}
 }
 
 void tracker_addVirtualProcessingDelay(Tracker* tracker, SimulationTime delay) {
 	MAGIC_ASSERT(tracker);
-	(tracker->numDelayedTotal)++;
-	tracker->delayTimeTotal += delay;
-	(tracker->numDelayedLastInterval)++;
-	tracker->delayTimeLastInterval += delay;
+
+	if(_tracker_getFlags(tracker) & TRACKER_FLAGS_NODE) {
+		(tracker->numDelayedTotal)++;
+		tracker->delayTimeTotal += delay;
+		(tracker->numDelayedLastInterval)++;
+		tracker->delayTimeLastInterval += delay;
+	}
 }
 
 void tracker_addInputBytes(Tracker* tracker, gsize inputBytes) {
 	MAGIC_ASSERT(tracker);
-	tracker->inputBytesTotal += inputBytes;
-	tracker->inputBytesLastInterval += inputBytes;
+
+	if(_tracker_getFlags(tracker) & TRACKER_FLAGS_NODE) {
+		tracker->inputBytesTotal += inputBytes;
+		tracker->inputBytesLastInterval += inputBytes;
+	}
 }
 
 void tracker_addOutputBytes(Tracker* tracker, gsize outputBytes) {
 	MAGIC_ASSERT(tracker);
-	tracker->outputBytesTotal += outputBytes;
-	tracker->outputBytesLastInterval += outputBytes;
+
+	if(_tracker_getFlags(tracker) & TRACKER_FLAGS_NODE) {
+		tracker->outputBytesTotal += outputBytes;
+		tracker->outputBytesLastInterval += outputBytes;
+	}
 }
 
 void tracker_addAllocatedBytes(Tracker* tracker, gpointer location, gsize allocatedBytes) {
 	MAGIC_ASSERT(tracker);
-	tracker->allocatedBytesTotal += allocatedBytes;
-	tracker->allocatedBytesLastInterval += allocatedBytes;
-	g_hash_table_insert(tracker->allocatedLocations, location, GSIZE_TO_POINTER(allocatedBytes));
+
+	if(_tracker_getFlags(tracker) & TRACKER_FLAGS_RAM) {
+		tracker->allocatedBytesTotal += allocatedBytes;
+		tracker->allocatedBytesLastInterval += allocatedBytes;
+		g_hash_table_insert(tracker->allocatedLocations, location, GSIZE_TO_POINTER(allocatedBytes));
+	}
 }
 
 void tracker_removeAllocatedBytes(Tracker* tracker, gpointer location) {
 	MAGIC_ASSERT(tracker);
-	gpointer value = NULL;
-	gboolean exists = g_hash_table_lookup_extended(tracker->allocatedLocations, location, NULL, &value);
-	if(exists) {
-		g_assert(g_hash_table_remove(tracker->allocatedLocations, location));
-		gsize allocatedBytes = GPOINTER_TO_SIZE(value);
-		tracker->allocatedBytesTotal -= allocatedBytes;
-		tracker->deallocatedBytesLastInterval += allocatedBytes;
-	} else {
-		(tracker->numFailedFrees)++;
+
+	if(_tracker_getFlags(tracker) & TRACKER_FLAGS_RAM) {
+		gpointer value = NULL;
+		gboolean exists = g_hash_table_lookup_extended(tracker->allocatedLocations, location, NULL, &value);
+		if(exists) {
+			g_assert(g_hash_table_remove(tracker->allocatedLocations, location));
+			gsize allocatedBytes = GPOINTER_TO_SIZE(value);
+			tracker->allocatedBytesTotal -= allocatedBytes;
+			tracker->deallocatedBytesLastInterval += allocatedBytes;
+		} else {
+			(tracker->numFailedFrees)++;
+		}
 	}
 }
 
 void tracker_addSocket(Tracker* tracker, gint handle, gsize inputBufferSize, gsize outputBufferSize) {
 	MAGIC_ASSERT(tracker);
 
-	TrackerSocket* socket = g_new0(TrackerSocket, 1);
-	socket->handle = handle;
-	socket->inputBufferSize = inputBufferSize;
-	socket->outputBufferSize = outputBufferSize;
+	if(_tracker_getFlags(tracker) & TRACKER_FLAGS_SOCKET) {
+		TrackerSocket* socket = g_new0(TrackerSocket, 1);
+		socket->handle = handle;
+		socket->inputBufferSize = inputBufferSize;
+		socket->outputBufferSize = outputBufferSize;
 
-	g_hash_table_insert(tracker->sockets, &(socket->handle), socket);
+		g_hash_table_insert(tracker->sockets, &(socket->handle), socket);
+	}
 }
 
 void tracker_updateSocketPeer(Tracker* tracker, gint handle, in_addr_t peerIP, in_port_t peerPort) {
 	MAGIC_ASSERT(tracker);
 
-	TrackerSocket* socket = g_hash_table_lookup(tracker->sockets, &handle);
-	if(socket) {
-		socket->peerIP = peerIP;
-		socket->peerPort = peerPort;
+	if(_tracker_getFlags(tracker) & TRACKER_FLAGS_SOCKET) {
+		TrackerSocket* socket = g_hash_table_lookup(tracker->sockets, &handle);
+		if(socket) {
+			socket->peerIP = peerIP;
+			socket->peerPort = peerPort;
 
-		Internetwork* internetwork = worker_getInternet();
-		socket->peerHostname = g_strdup(internetwork_resolveIP(internetwork, peerIP));
+			Internetwork* internetwork = worker_getInternet();
+			socket->peerHostname = g_strdup(internetwork_resolveIP(internetwork, peerIP));
+		}
 	}
 }
 
 void tracker_updateSocketInputBuffer(Tracker* tracker, gint handle, gsize inputBufferLength, gsize inputBufferSize) {
 	MAGIC_ASSERT(tracker);
 
-	TrackerSocket* socket = g_hash_table_lookup(tracker->sockets, &handle);
-	if(socket) {
-		socket->inputBufferLength = inputBufferLength;
-		socket->inputBufferSize = inputBufferSize;
+	if(_tracker_getFlags(tracker) & TRACKER_FLAGS_SOCKET) {
+		TrackerSocket* socket = g_hash_table_lookup(tracker->sockets, &handle);
+		if(socket) {
+			socket->inputBufferLength = inputBufferLength;
+			socket->inputBufferSize = inputBufferSize;
+		}
 	}
 }
 
 void tracker_updateSocketOutputBuffer(Tracker* tracker, gint handle, gsize outputBufferLength, gsize outputBufferSize) {
 	MAGIC_ASSERT(tracker);
 
-	TrackerSocket* socket = g_hash_table_lookup(tracker->sockets, &handle);
-	if(socket) {
-		socket->outputBufferLength = outputBufferLength;
-		socket->outputBufferSize = outputBufferSize;
+	if(_tracker_getFlags(tracker) & TRACKER_FLAGS_SOCKET) {
+		TrackerSocket* socket = g_hash_table_lookup(tracker->sockets, &handle);
+		if(socket) {
+			socket->outputBufferLength = outputBufferLength;
+			socket->outputBufferSize = outputBufferSize;
+		}
 	}
 }
 
 void tracker_removeSocket(Tracker* tracker, gint handle) {
 	MAGIC_ASSERT(tracker);
-	g_hash_table_remove(tracker->sockets, &handle);
+
+	if(_tracker_getFlags(tracker) & TRACKER_FLAGS_SOCKET) {
+		g_hash_table_remove(tracker->sockets, &handle);
+	}
+}
+
+static void _tracker_logNode(Tracker* tracker, GLogLevelFlags level, SimulationTime interval) {
+	guint seconds = (guint) (interval / SIMTIME_ONE_SECOND);
+	gdouble cpuutil = (gdouble)(((gdouble)tracker->processingTimeLastInterval) / ((gdouble)interval));
+	gdouble avgdelayms = 0.0;
+
+	if(tracker->numDelayedLastInterval > 0) {
+		gdouble delayms = (gdouble) (((gdouble)tracker->delayTimeLastInterval) / ((gdouble)SIMTIME_ONE_MILLISECOND));
+		avgdelayms = (gdouble) (delayms / ((gdouble) tracker->numDelayedLastInterval));
+	}
+
+	logging_log(G_LOG_DOMAIN, level, __FUNCTION__,
+		"[shadow-heartbeat] [node] interval %u seconds, rx %"G_GSIZE_FORMAT" bytes, tx %"G_GSIZE_FORMAT" bytes, cpu %f \%, delayed %"G_GSIZE_FORMAT" events, avgdelay %f milliseconds",
+		seconds, tracker->inputBytesLastInterval, tracker->outputBytesLastInterval, cpuutil, tracker->numDelayedLastInterval, avgdelayms);
+}
+
+static void _tracker_logSocket(Tracker* tracker, GLogLevelFlags level, SimulationTime interval) {
+	GList* socketList = g_hash_table_get_values(tracker->sockets);
+	gint numSockets = 0;
+	if(socketList) {
+		GString* msg = g_string_new("[shadow-heartbeat] [socket] ");
+		/* loop through all sockets we have in the hash table to log */
+		for(GList* iter = g_list_first(socketList); iter; iter = g_list_next(iter)) {
+			TrackerSocket* socket = (TrackerSocket* )iter->data;
+			/* don't log sockets that don't have peer IP/port set */
+			if(socket->peerIP) {
+				g_string_append_printf(msg, "%d,%s:%d,%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT";",
+						socket->handle, /*inet_ntoa((struct in_addr){socket->peerIP})*/ socket->peerHostname, socket->peerPort,
+						socket->inputBufferLength, socket->inputBufferSize,	socket->outputBufferLength, socket->outputBufferSize);
+				numSockets++;
+			}
+		}
+
+		if(numSockets > 0) {
+			logging_log(G_LOG_DOMAIN, level, __FUNCTION__, "%s", msg->str);
+		}
+		g_string_free(msg, TRUE);
+	}
+}
+
+static void _tracker_logRAM(Tracker* tracker, GLogLevelFlags level, SimulationTime interval) {
+	guint seconds = (guint) (interval / SIMTIME_ONE_SECOND);
+	guint numptrs = g_hash_table_size(tracker->allocatedLocations);
+	logging_log(G_LOG_DOMAIN, level, __FUNCTION__,
+		"[shadow-heartbeat] [ram] interval %u seconds, total %"G_GSIZE_FORMAT" bytes, alloc %"G_GSIZE_FORMAT" bytes, dealloc %"G_GSIZE_FORMAT" bytes, tracking %u ptrs, failed %u frees",
+		seconds, tracker->allocatedBytesTotal, tracker->allocatedBytesLastInterval,
+		tracker->deallocatedBytesLastInterval, numptrs, tracker->numFailedFrees);
 }
 
 void tracker_heartbeat(Tracker* tracker) {
 	MAGIC_ASSERT(tracker);
 
-	/* prefer our level over the global config */
-	GLogLevelFlags level = tracker->loglevel;
-	if(!level) {
-		Worker* w = worker_getPrivate();
-		if(w->cached_engine) {
-			Configuration* c = engine_getConfig(w->cached_engine);
-			level = configuration_getHeartbeatLogLevel(c);
-		}
-	}
-
-	/* prefer our log info over the global config */
-	TrackerLogInfo loginfo = tracker->loginfo;
-	if(!loginfo) {
-		Worker* w = worker_getPrivate();
-		if(w->cached_engine) {
-			Configuration* c = engine_getConfig(w->cached_engine);
-			loginfo = _tracker_getLogInfo(c->heartbeatLogInfo);
-		}
-	}
-
-	/* prefer our interval over the global config */
-	SimulationTime interval = tracker->interval;
-	if(!interval) {
-		Worker* w = worker_getPrivate();
-		if(w->cached_engine) {
-			Configuration* c = engine_getConfig(w->cached_engine);
-			interval = configuration_getHearbeatInterval(c);
-		}
-	}
-
-	guint seconds = (guint) (interval / SIMTIME_ONE_SECOND);
-
-	double in = (double) (tracker->inputBytesLastInterval);
-	double out = (double)(tracker->outputBytesLastInterval);
-	double alloc = (double)(((double)tracker->allocatedBytesLastInterval) / 1024.0);
-	double dealloc = (double)(((double)tracker->deallocatedBytesLastInterval) / 1024.0);
-
-	double mem = (double)(((double)tracker->allocatedBytesTotal) / 1024.0);
-	double cpuutil = (double)(((double)tracker->processingTimeLastInterval) / interval);
-
-	double avedelayms = 0.0;
-	if(tracker->numDelayedLastInterval > 0) {
-		double delayms = (double) (((double)tracker->delayTimeLastInterval) / ((double)SIMTIME_ONE_MILLISECOND));
-		avedelayms = (double) (delayms / ((double) tracker->numDelayedLastInterval));
-	}
-
-//	if(loginfo & TRACKER_INFO_NODE) {
-//		guint numptrs = g_hash_table_size(tracker->allocatedLocations);
-//		logging_log(G_LOG_DOMAIN, level, __FUNCTION__,
-//						"[shadow-memtracker] %u numptrs, %u failedfrees", numptrs, tracker->numFailedFrees);
-//	}
+	TrackerFlags flags = _tracker_getFlags(tracker);
+	GLogLevelFlags level = _tracker_getLogLevel(tracker);
+	SimulationTime interval = _tracker_getLogInterval(tracker);
 
 	/* check to see if node info is being logged */
-	if(loginfo & TRACKER_INFO_NODE) {
-		logging_log(G_LOG_DOMAIN, level, __FUNCTION__,
-				"[shadow-heartbeat] [node] CPU %f \%, MEM %f KiB, interval %u seconds, alloc %f KiB, dealloc %f KiB, Rx %f B, Tx %f B, avgdelay %f milliseconds",
-				cpuutil, mem, seconds, alloc, dealloc, in, out, avedelayms);
+	if(flags & TRACKER_FLAGS_NODE) {
+		_tracker_logNode(tracker, level, interval);
 	}
 
 	/* check to see if socket buffer info is being logged */
-	if(loginfo & TRACKER_INFO_SOCKET) {
-		GList* socketList = g_hash_table_get_values(tracker->sockets);
-		gint numSockets = 0;
-		if(socketList) {
-			GString* msg = g_string_new("[shadow-heartbeat] [socket] ");
-			/* loop through all sockets we have in the hash table to log */
-			for(GList* iter = g_list_first(socketList); iter; iter = g_list_next(iter)) {
-				TrackerSocket* socket = (TrackerSocket* )iter->data;
-				/* don't log sockets that don't have peer IP/port set */
-				if(socket->peerIP) {
-					g_string_append_printf(msg, "%d,%s:%d,%lu,%lu,%lu,%lu;", socket->handle, /*inet_ntoa((struct in_addr){socket->peerIP})*/ socket->peerHostname, socket->peerPort,
-							socket->inputBufferLength, socket->inputBufferSize,	socket->outputBufferLength, socket->outputBufferSize);
-					numSockets++;
-				}
-			}
-
-			if(numSockets > 0) {
-				logging_log(G_LOG_DOMAIN, level, __FUNCTION__, "%s", msg->str);
-			}
-			g_string_free(msg, TRUE);
-		}
+	if(flags & TRACKER_FLAGS_SOCKET) {
+		_tracker_logSocket(tracker, level, interval);
 	}
 
+	/* check to see if ram info is being logged */
+	if(flags & TRACKER_FLAGS_RAM) {
+		_tracker_logRAM(tracker, level, interval);
+	}
 
 	/* clear interval stats */
 	tracker->processingTimeLastInterval = 0;

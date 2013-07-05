@@ -384,9 +384,12 @@ gpointer intercept_memalign(gsize blocksize, gsize bytes) {
     return system_memalign(blocksize, bytes);
 }
 
+/* aligned_alloc doesnt exist in glibc in the current LTS version of ubuntu */
+#if 0
 gpointer intercept_aligned_alloc(gsize alignment, gsize size) {
 	return system_aligned_alloc(alignment, size);
 }
+#endif
 
 gpointer intercept_valloc(gsize size) {
     return system_valloc(size);

@@ -985,6 +985,8 @@ gpointer system_memalign(gsize blocksize, gsize bytes) {
 	return ptr;
 }
 
+/* aligned_alloc doesnt exist in glibc in the current LTS version of ubuntu */
+#if 0
 gpointer system_aligned_alloc(gsize alignment, gsize size) {
 	Node* node = _system_switchInShadowContext();
 	gpointer ptr = aligned_alloc(alignment, size);
@@ -994,6 +996,7 @@ gpointer system_aligned_alloc(gsize alignment, gsize size) {
 	_system_switchOutShadowContext(node);
 	return ptr;
 }
+#endif
 
 gpointer system_valloc(gsize size) {
 	Node* node = _system_switchInShadowContext();

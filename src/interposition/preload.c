@@ -322,7 +322,6 @@ void __attribute__((constructor)) construct() {
 
 /* memory allocation family */
 
-#ifdef SHADOW_ENABLE_MEMTRACKER
 void* malloc(size_t size) {
     if(shouldRedirect()) {
         ENSURE(shadow, "intercept_", malloc);
@@ -383,6 +382,8 @@ void* memalign(size_t blocksize, size_t bytes) {
     }
 }
 
+/* aligned_alloc doesnt exist in glibc in the current LTS version of ubuntu */
+#if 0
 void* aligned_alloc(size_t alignment, size_t size) {
     if(shouldRedirect()) {
         ENSURE(shadow, "intercept_", aligned_alloc);
@@ -392,6 +393,7 @@ void* aligned_alloc(size_t alignment, size_t size) {
         return director.real.aligned_alloc(alignment, size);
     }
 }
+#endif
 
 void* valloc(size_t size) {
     if(shouldRedirect()) {
@@ -412,7 +414,6 @@ void* pvalloc(size_t size) {
         return director.real.pvalloc(size);
     }
 }
-#endif
 
 /* event family */
 
