@@ -37,6 +37,7 @@ struct _Tracker {
 	gsize allocatedBytesTotal;
 	gsize allocatedBytesLastInterval;
 	gsize deallocatedBytesLastInterval;
+	guint numFailedFrees;
 
 	GHashTable* sockets;
 
@@ -139,11 +140,15 @@ void tracker_addAllocatedBytes(Tracker* tracker, gpointer location, gsize alloca
 
 void tracker_removeAllocatedBytes(Tracker* tracker, gpointer location) {
 	MAGIC_ASSERT(tracker);
-	gpointer value = g_hash_table_lookup(tracker->allocatedLocations, location);
-	if(value) {
+	gpointer value = NULL;
+	gboolean exists = g_hash_table_lookup_extended(tracker->allocatedLocations, location, NULL, &value);
+	if(exists) {
+		g_assert(g_hash_table_remove(tracker->allocatedLocations, location));
 		gsize allocatedBytes = GPOINTER_TO_SIZE(value);
 		tracker->allocatedBytesTotal -= allocatedBytes;
 		tracker->deallocatedBytesLastInterval += allocatedBytes;
+	} else {
+		(tracker->numFailedFrees)++;
 	}
 }
 
@@ -244,6 +249,12 @@ void tracker_heartbeat(Tracker* tracker) {
 		double delayms = (double) (((double)tracker->delayTimeLastInterval) / ((double)SIMTIME_ONE_MILLISECOND));
 		avedelayms = (double) (delayms / ((double) tracker->numDelayedLastInterval));
 	}
+
+//	if(loginfo & TRACKER_INFO_NODE) {
+//		guint numptrs = g_hash_table_size(tracker->allocatedLocations);
+//		logging_log(G_LOG_DOMAIN, level, __FUNCTION__,
+//						"[shadow-memtracker] %u numptrs, %u failedfrees", numptrs, tracker->numFailedFrees);
+//	}
 
 	/* check to see if node info is being logged */
 	if(loginfo & TRACKER_INFO_NODE) {
