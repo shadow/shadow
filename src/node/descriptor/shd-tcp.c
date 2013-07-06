@@ -319,11 +319,17 @@ static void _tcp_autotune(TCP* tcp) {
 	g_assert(tcp->super.inputBufferLength == 0);
 	g_assert(tcp->super.outputBufferLength == 0);
 
-	/* its ok to change buffer sizes since the user hasn't written anything yet */
-	tcp->super.inputBufferSize = receivebuf_size;
-	tcp->super.outputBufferSize = sendbuf_size;
+	/* check to see if the node should set buffer sizes via autotuning, or
+	 * they were specified by configuration or parameters in XML */
+	Node* node = worker_getPrivate()->cached_node;
+	if(node_autotuneReceiveBuffer(node)) {
+		tcp->super.inputBufferSize = receivebuf_size;
+	}
+	if(node_autotuneSendBuffer(node)) {
+		tcp->super.outputBufferSize = sendbuf_size;
+	}
 
-	info("set network buffer sizes: send %lu receive %lu", sendbuf_size, receivebuf_size);
+	info("set network buffer sizes: send %lu receive %lu", tcp->super.outputBufferSize, tcp->super.inputBufferSize);
 }
 
 static void _tcp_setState(TCP* tcp, enum TCPState state) {

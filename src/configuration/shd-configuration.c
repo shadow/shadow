@@ -23,8 +23,10 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	c->minRunAhead = 10;
 	c->printSoftwareVersion = 0;
 	c->initialTCPWindow = 10;
-	c->initialSocketReceiveBufferSize = CONFIG_RECV_BUFFER_SIZE;
-	c->initialSocketSendBufferSize = CONFIG_SEND_BUFFER_SIZE;
+	c->initialSocketReceiveBufferSize = 0;
+	c->initialSocketSendBufferSize = 0;
+	c->autotuneSocketReceiveBuffer = FALSE;
+	c->autotuneSocketSendBuffer = FALSE;
 	c->interfaceBufferSize = 1024000;
 	c->interfaceBatchTime = 10;
 	c->randomSeed = 1;
@@ -138,6 +140,14 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	}
 	if(c->interfaceQueuingDiscipline == NULL) {
 		c->interfaceQueuingDiscipline = g_strdup("fifo");
+	}
+	if(!c->initialSocketReceiveBufferSize) {
+		c->initialSocketReceiveBufferSize = CONFIG_RECV_BUFFER_SIZE;
+		c->autotuneSocketReceiveBuffer = TRUE;
+	}
+	if(!c->initialSocketSendBufferSize) {
+		c->initialSocketSendBufferSize = CONFIG_SEND_BUFFER_SIZE;
+		c->autotuneSocketSendBuffer = TRUE;
 	}
 
 	c->inputXMLFilenames = g_queue_new();

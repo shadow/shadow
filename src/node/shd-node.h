@@ -17,7 +17,8 @@ Node* node_new(GQuark id, Network* network, guint32 ip,
 		GString* hostname, guint64 bwDownKiBps, guint64 bwUpKiBps, guint cpuFrequency, gint cpuThreshold, gint cpuPrecision,
 		guint nodeSeed, SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel, gchar* heartbeatLogInfo,
 		GLogLevelFlags logLevel, gboolean logPcap, gchar* pcapDir, gchar* qdisc,
-		guint64 receiveBufferSize, guint64 sendBufferSize, guint64 interfaceReceiveLength);
+		guint64 receiveBufferSize, gboolean autotuneReceiveBuffer, guint64 sendBufferSize, gboolean autotuneSendBuffer,
+		guint64 interfaceReceiveLength);
 void node_free(Node* node, gpointer userData);
 
 void node_lock(Node* node);
@@ -40,6 +41,9 @@ in_addr_t node_getDefaultIP(Node* node);
 gchar* node_getDefaultIPName(Node* node);
 Random* node_getRandom(Node* node);
 gdouble node_getNextPacketPriority(Node* node);
+
+gboolean node_autotuneReceiveBuffer(Node* node);
+gboolean node_autotuneSendBuffer(Node* node);
 
 gint node_createDescriptor(Node* node, enum DescriptorType type);
 void node_closeDescriptor(Node* node, gint handle);

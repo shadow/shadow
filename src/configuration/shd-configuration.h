@@ -221,6 +221,8 @@ struct _Configuration {
 	gint interfaceBufferSize;
 	gint initialSocketReceiveBufferSize;
 	gint initialSocketSendBufferSize;
+	gboolean autotuneSocketReceiveBuffer;
+	gboolean autotuneSocketSendBuffer;
 	gchar* interfaceQueuingDiscipline;
 	SimulationTime interfaceBatchTime;
 

@@ -44,6 +44,8 @@ struct _Node {
 	gint descriptorHandleCounter;
 	guint64 receiveBufferSize;
 	guint64 sendBufferSize;
+	gboolean autotuneReceiveBuffer;
+	gboolean autotuneSendBuffer;
 
 	/* random port counter, in host order */
 	in_port_t randomPortCounter;
@@ -62,7 +64,8 @@ Node* node_new(GQuark id, Network* network, guint32 ip,
 		guint cpuFrequency, gint cpuThreshold, gint cpuPrecision, guint nodeSeed,
 		SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel, gchar* heartbeatLogInfo,
 		GLogLevelFlags logLevel, gboolean logPcap, gchar* pcapDir, gchar* qdisc,
-		guint64 receiveBufferSize, guint64 sendBufferSize, guint64 interfaceReceiveLength) {
+		guint64 receiveBufferSize, gboolean autotuneReceiveBuffer, guint64 sendBufferSize, gboolean autotuneSendBuffer,
+		guint64 interfaceReceiveLength) {
 	Node* node = g_new0(Node, 1);
 	MAGIC_INIT(node);
 
@@ -92,6 +95,8 @@ Node* node_new(GQuark id, Network* network, guint32 ip,
 	node->descriptorHandleCounter = MIN_DESCRIPTOR;
 	node->receiveBufferSize = receiveBufferSize;
 	node->sendBufferSize = sendBufferSize;
+	node->autotuneReceiveBuffer = autotuneReceiveBuffer;
+	node->autotuneSendBuffer = autotuneSendBuffer;
 
 	/* host order so increments make sense */
 	node->randomPortCounter = MIN_RANDOM_PORT;
@@ -238,6 +243,16 @@ gchar* node_getDefaultIPName(Node* node) {
 Random* node_getRandom(Node* node) {
 	MAGIC_ASSERT(node);
 	return node->random;
+}
+
+gboolean node_autotuneReceiveBuffer(Node* node) {
+	MAGIC_ASSERT(node);
+	return node->autotuneReceiveBuffer;
+}
+
+gboolean node_autotuneSendBuffer(Node* node) {
+	MAGIC_ASSERT(node);
+	return node->autotuneSendBuffer;
 }
 
 Descriptor* node_lookupDescriptor(Node* node, gint handle) {
