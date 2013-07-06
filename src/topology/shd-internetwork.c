@@ -173,7 +173,8 @@ gpointer internetwork_createNode(Internetwork* internet, GQuark nodeID,
 		guint64 bwDownKiBps, guint64 bwUpKiBps, guint cpuFrequency, gint cpuThreshold, gint cpuPrecision,
 		guint nodeSeed, SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel, gchar* heartbeatLogInfo,
 		GLogLevelFlags logLevel, gchar logPcap, gchar *pcapDir, gchar* qdisc,
-		guint64 receiveBufferSize, guint64 sendBufferSize, guint64 interfaceReceiveLength) {
+		guint64 receiveBufferSize, gboolean autotuneReceiveBuffer, guint64 sendBufferSize, gboolean autotuneSendBuffer,
+		guint64 interfaceReceiveLength) {
 	MAGIC_ASSERT(internet);
 	g_assert(!internet->isReadOnly);
 
@@ -181,7 +182,8 @@ gpointer internetwork_createNode(Internetwork* internet, GQuark nodeID,
 	ip = (guint32) nodeID;
 	Node* node = node_new(nodeID, network, ip, hostname, bwDownKiBps, bwUpKiBps,
 			cpuFrequency, cpuThreshold, cpuPrecision, nodeSeed, heartbeatInterval, heartbeatLogLevel, heartbeatLogInfo,
-			logLevel, logPcap, pcapDir, qdisc, receiveBufferSize, sendBufferSize, interfaceReceiveLength);
+			logLevel, logPcap, pcapDir, qdisc, receiveBufferSize, autotuneReceiveBuffer, sendBufferSize, autotuneSendBuffer,
+			interfaceReceiveLength);
 	g_hash_table_replace(internet->nodes, GUINT_TO_POINTER((guint)nodeID), node);
 
 	gchar* mapName = g_strdup((const gchar*) hostname->str);

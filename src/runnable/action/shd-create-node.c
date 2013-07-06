@@ -176,12 +176,16 @@ void createnodes_run(CreateNodesAction* action) {
 	gchar* qdisc = configuration_getQueuingDiscipline(config);
 
 	guint64 sockRecv = action->socketReceiveBufferSize; /* bytes */
+	gboolean autotuneRecv = FALSE;
 	if(!sockRecv) {
 		sockRecv = worker_getConfig()->initialSocketReceiveBufferSize;
+		autotuneRecv = worker_getConfig()->autotuneSocketReceiveBuffer;
 	}
 	guint64 sockSend = action->socketSendBufferSize; /* bytes */
+	gboolean autotuneSend = FALSE;
 	if(!sockSend) {
 		sockSend = worker_getConfig()->initialSocketSendBufferSize;
+		autotuneSend = worker_getConfig()->autotuneSocketSendBuffer;
 	}
 	guint64 ifaceRecv = action->interfaceReceiveBufferLength; /* N packets */
 	if(!ifaceRecv) {
@@ -211,10 +215,9 @@ void createnodes_run(CreateNodesAction* action) {
 		/* the node is part of the internet */
 		guint nodeSeed = (guint) engine_nextRandomInt(worker->cached_engine);
 		Node* node = internetwork_createNode(worker_getInternet(), id, network,
-				hostnameBuffer, bwDownKiBps, bwUpKiBps, cpuFrequency, cpuThreshold, cpuPrecision,
-				nodeSeed, heartbeatInterval, heartbeatLogLevel, heartbeatLogInfo, logLevel, logPcap, pcapDir,
-				qdisc, sockSend, sockRecv, ifaceRecv);
-
+						hostnameBuffer, bwDownKiBps, bwUpKiBps, cpuFrequency, cpuThreshold, cpuPrecision,
+						nodeSeed, heartbeatInterval, heartbeatLogLevel, heartbeatLogInfo, logLevel, logPcap, pcapDir,
+						qdisc, sockRecv, autotuneRecv, sockSend, autotuneSend, ifaceRecv);
 		g_string_free(hostnameBuffer, TRUE);
 
 		/* loop through and create, add, and boot all applications */

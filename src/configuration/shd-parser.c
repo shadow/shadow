@@ -225,6 +225,8 @@ static GError* _parser_handleNodeAttributes(Parser* parser, const gchar** attrib
 	guint64 cpufrequency = 0;
 	guint64 socketReceiveBufferSize = 0;
 	guint64 socketSendBufferSize = 0;
+	gboolean autotuneReceiveBuffer = TRUE;
+	gboolean autotuneSendBuffer = TRUE;
 	guint64 interfaceReceiveBufferLength = 0;
 	/* if there is no quantity value, default should be 1 (allows a value of 0 to be explicity set) */
 	guint64 quantity = 1;

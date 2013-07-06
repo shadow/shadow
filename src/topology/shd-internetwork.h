@@ -90,7 +90,8 @@ gpointer internetwork_createNode(Internetwork* internet, GQuark nodeID,
 		guint64 bwDownKiBps, guint64 bwUpKiBps, guint cpuFrequency, gint cpuThreshold, gint cpuPrecision,
 		guint nodeSeed, SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel, gchar* heartbeatLogInfo,
 		GLogLevelFlags logLevel, gchar logPcap, gchar *pcapDir, gchar* qdisc,
-		guint64 receiveBufferSize, guint64 sendBufferSize, guint64 interfaceReceiveLength); /* XXX: return type is "Node*" */
+		guint64 receiveBufferSize, gboolean autotuneReceiveBuffer, guint64 sendBufferSize, gboolean autotuneSendBuffer,
+		guint64 interfaceReceiveLength); /* XXX: return type is "Node*" */
 
 /**
  * Marks the given internet as read-only, so no additional nodes or networks may
