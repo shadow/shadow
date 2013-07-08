@@ -19,6 +19,10 @@ struct _Tracker {
 	GLogLevelFlags loglevel;
 	TrackerFlags flags;
 
+	gboolean didLogNodeHeader;
+	gboolean didLogRAMHeader;
+	gboolean didLogSocketHeader;
+
 	SimulationTime processingTimeTotal;
 	SimulationTime processingTimeLastInterval;
 
@@ -281,12 +285,24 @@ static void _tracker_logNode(Tracker* tracker, GLogLevelFlags level, SimulationT
 		avgdelayms = (gdouble) (delayms / ((gdouble) tracker->numDelayedLastInterval));
 	}
 
+	if(!tracker->didLogNodeHeader) {
+		tracker->didLogNodeHeader = TRUE;
+		logging_log(G_LOG_DOMAIN, level, __FUNCTION__,
+				"[shadow-heartbeat] [node-header] interval-seconds,rx-bytes,tx-bytes,cpu-percent,delayed-count,avgdelay-milliseconds");
+	}
+
 	logging_log(G_LOG_DOMAIN, level, __FUNCTION__,
-		"[shadow-heartbeat] [node] interval %u seconds, rx %"G_GSIZE_FORMAT" bytes, tx %"G_GSIZE_FORMAT" bytes, cpu %f \%, delayed %"G_GSIZE_FORMAT" events, avgdelay %f milliseconds",
+		"[shadow-heartbeat] [node] %u,%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT",%f,%"G_GSIZE_FORMAT",%f",
 		seconds, tracker->inputBytesLastInterval, tracker->outputBytesLastInterval, cpuutil, tracker->numDelayedLastInterval, avgdelayms);
 }
 
 static void _tracker_logSocket(Tracker* tracker, GLogLevelFlags level, SimulationTime interval) {
+	if(!tracker->didLogSocketHeader) {
+		tracker->didLogSocketHeader = TRUE;
+		logging_log(G_LOG_DOMAIN, level, __FUNCTION__,
+				"[shadow-heartbeat] [socket-header] descriptor-number,hostname:port-peer,inbuflen:bytes,inbufsize:bytes,outbuflen:bytes,outbufsize:bytes;...");
+	}
+
 	GList* socketList = g_hash_table_get_values(tracker->sockets);
 	gint numSockets = 0;
 	if(socketList) {
@@ -313,10 +329,17 @@ static void _tracker_logSocket(Tracker* tracker, GLogLevelFlags level, Simulatio
 static void _tracker_logRAM(Tracker* tracker, GLogLevelFlags level, SimulationTime interval) {
 	guint seconds = (guint) (interval / SIMTIME_ONE_SECOND);
 	guint numptrs = g_hash_table_size(tracker->allocatedLocations);
+
+	if(!tracker->didLogRAMHeader) {
+		tracker->didLogRAMHeader = TRUE;
+		logging_log(G_LOG_DOMAIN, level, __FUNCTION__,
+				"[shadow-heartbeat] [ram-header] interval-seconds,alloc-bytes,dealloc-bytes,total-bytes,pointers-count,failfree-count");
+	}
+
 	logging_log(G_LOG_DOMAIN, level, __FUNCTION__,
-		"[shadow-heartbeat] [ram] interval %u seconds, total %"G_GSIZE_FORMAT" bytes, alloc %"G_GSIZE_FORMAT" bytes, dealloc %"G_GSIZE_FORMAT" bytes, tracking %u ptrs, failed %u frees",
-		seconds, tracker->allocatedBytesTotal, tracker->allocatedBytesLastInterval,
-		tracker->deallocatedBytesLastInterval, numptrs, tracker->numFailedFrees);
+		"[shadow-heartbeat] [ram] %u,%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT",%u,%u",
+		seconds, tracker->allocatedBytesLastInterval, tracker->deallocatedBytesLastInterval,
+		tracker->allocatedBytesTotal, numptrs, tracker->numFailedFrees);
 }
 
 void tracker_heartbeat(Tracker* tracker) {

@@ -66,7 +66,9 @@ class NodeStats():
         self.rtput = {} # read throughput over time
         self.wtput = {} # write throughput over time
         self.cpu = {} # cpu usage over time
-        self.mem = {} # mem usage over time
+        self.mem = {} # running total mem usage over time
+        self.alloc = {} # mem allocated at time
+        self.dealloc = {} # mem deallocated at time
 
         self.circuits = {} # circuits by id
         self.circttb = {} # time to build over time
@@ -87,18 +89,19 @@ class NodeStats():
         tick = int(round(virtualt)) # second
 
         # shadow heartbeat node stats
-        if parts[5] == "[tracker_heartbeat]" and parts[7] == "[node]":
-            cpu_percent = float(parts[9])
-            mem_total_kib = float(parts[12])
-            seconds = float(int(parts[15]))
-            allocated_kib = float(parts[18])
-            deallocated_kib = float(parts[21])
-            received_bytes = float(parts[24])
-            sent_bytes = float(parts[27])
+        if 'shadow-heartbeat' in parts[6] and parts[7] == "[node]":
+            nodeparts = parts[8].split(',')
+
+            seconds = int(nodeparts[0])
+            received = int(nodeparts[1]) # in bytes
+            sent = int(nodeparts[2]) # in bytes
+            cpu = float(nodeparts[3]) # in percentage (utilization)
+            n_events_delayed = int(nodeparts[4])
+            avg_delay = float(nodeparts[5]) # milliseconds
 
             # MiB/s
-            r_mibps = received_bytes / (seconds*1024.0*1024.0)
-            w_mibps = sent_bytes / (seconds*1024.0*1024.0)
+            r_mibps = received / (seconds*1024.0*1024.0)
+            w_mibps = sent / (seconds*1024.0*1024.0)
 
             # redefine tick
             tick = int(float(virtualt) / seconds)
@@ -107,11 +110,31 @@ class NodeStats():
             if tick not in self.wtput: self.wtput[tick] = 0.0
             self.wtput[tick] += (w_mibps)
             if tick not in self.cpu: self.cpu[tick] = 0.0
-            self.cpu[tick] += (cpu_percent)
-            if tick not in self.mem: self.mem[tick] = 0.0
-            self.mem[tick] += (mem_total_kib)
+            self.cpu[tick] += (cpu)
 
-        elif parts[5] == "[tracker_heartbeat]" and parts[7] == "[socket]":
+        elif 'shadow-heartbeat' in parts[6] and parts[7] == "[ram]":
+            ramparts = parts[8].split(',')
+
+            seconds = int(ramparts[0])
+            allocated = int(ramparts[1]) # in bytes
+            deallocated = int(ramparts[2]) # in bytes
+            total = int(ramparts[3]) # in bytes
+            n_pointers_tracked = int(ramparts[4])
+            n_failed_frees = int(ramparts[5])
+
+            alloc_mib = allocated / (1024.0*1024.0)
+            dealloc_mib = deallocated / (1024.0*1024.0)
+            total_mib = total / (1024.0*1024.0)
+
+            tick = int(float(virtualt) / float(seconds))
+            if tick not in self.mem: self.mem[tick] = 0.0
+            self.mem[tick] += total_mib
+            if tick not in self.alloc: self.alloc[tick] = 0.0
+            self.alloc[tick] += alloc_mib
+            if tick not in self.dealloc: self.dealloc[tick] = 0.0
+            self.dealloc[tick] += dealloc_mib
+
+        elif 'shadow-heartbeat' in parts[6] and parts[7] == "[socket]":
             sockets = parts[8].strip(';').split(';')
 
             total_input_length = 0
@@ -547,10 +570,10 @@ def parse(args):
                 # now parse the node-specific stats
                 if nodename == "[n/a]": continue
                 name = nodename[1:nodename.index("-")]
-                if name.find("client") > -1:
+                if 'client' in name:
                     if name not in clients: clients[name] = ClientStats(name)
                     clients[name].parse(parts)
-                elif name.find("exit") > -1:
+                elif 'exit' in name or 'relay' in name or 'uthority' in name:
                     if name not in relays: relays[name] = RelayStats(name)
                     relays[name].parse(parts)
 
@@ -594,8 +617,9 @@ def parse(args):
     for k in ttfb: ttfb[k].sort()
     for k in ttlb: ttlb[k].sort()
 
-    # will store the throughput data (total bytes over time)
+    # will store the throughput and memory data (total bytes over time)
     tput = {'read' : {}, 'write' : {}}
+    mem = {'alloc' : {}, 'dealloc' : {}, 'total' : {}}
     # circuit builds and failures over time, timings, and relay usage
     circs = {'build' : {}, 'fail' : {}, 'buildtime' : [], 'failtime' : [], 'runtime' : [], 'hops' : {}}
     # stream builds and failures over time, and timings
@@ -611,6 +635,7 @@ def parse(args):
         n = clients[name] if name in clients else relays[name]
 
         myrtput, mywtput = {}, {}
+        myalloc, mydealloc, mymem = {}, {}, {}
         mycibuilds, mycifails, mycihops = {}, {}, {}
         mycibuildtimes, mycifailtimes, myciruntimes = [], [], []
         mystbuilds, mystfails = {}, {}
@@ -631,6 +656,30 @@ def parse(args):
             if args.all:
                 if tick not in mywtput: mywtput[tick] = 0.0
                 mywtput[tick] += (n.wtput[tick])
+
+        # allocated mem
+        for tick in n.alloc:
+            if tick not in mem['alloc']: mem['alloc'][tick] = 0.0
+            mem['alloc'][tick] += (n.alloc[tick])
+            if args.all:
+                if tick not in myalloc: myalloc[tick] = 0.0
+                myalloc[tick] += (n.alloc[tick])
+
+        # allocated mem
+        for tick in n.dealloc:
+            if tick not in mem['dealloc']: mem['dealloc'][tick] = 0.0
+            mem['dealloc'][tick] += (n.dealloc[tick])
+            if args.all:
+                if tick not in mydealloc: mydealloc[tick] = 0.0
+                mydealloc[tick] += (n.dealloc[tick])
+
+        # total mem
+        for tick in n.mem:
+            if tick not in mem['total']: mem['total'][tick] = 0.0
+            mem['total'][tick] += (n.mem[tick])
+            if args.all:
+                if tick not in mymem: mymem[tick] = 0.0
+                mymem[tick] += (n.mem[tick])
 
         # circuit builds over time, and buildtimes
         for tick in n.circttb:
@@ -718,6 +767,9 @@ def parse(args):
             # save
             save(outputpath, "node/{0}/tput-read.gz".format(name), myrtput.values())
             save(outputpath, "node/{0}/tput-write.gz".format(name), mywtput.values())
+            save(outputpath, "node/{0}/mem-alloc.gz".format(name), myalloc.values())
+            save(outputpath, "node/{0}/mem-dealloc.gz".format(name), mydealloc.values())
+            save(outputpath, "node/{0}/mem-total.gz".format(name), mymem.values())
             save(outputpath, "node/{0}/circs-build.gz".format(name), mycibuilds.values())
             save(outputpath, "node/{0}/circs-fail.gz".format(name), mycifails.values())
             save(outputpath, "node/{0}/circs-buildtime-cdf.gz".format(name), mycibuildtimes)
@@ -1073,6 +1125,10 @@ def parse(args):
     save(outputpath, "tput-read.gz", tput['read'].values())
     save(outputpath, "tput-write.gz", tput['write'].values())
 
+    save(outputpath, "mem-alloc.gz", mem['alloc'].values())
+    save(outputpath, "mem-dealloc.gz", mem['dealloc'].values())
+    save(outputpath, "mem-total.gz", mem['total'].values())
+
     save(outputpath, "circs-build.gz", circs['build'].values())
     save(outputpath, "circs-fail.gz", circs['fail'].values())
     save(outputpath, "circs-buildtime-cdf.gz", circs['buildtime'])
@@ -1131,6 +1187,21 @@ def parse(args):
             tputwritemsg = "\ttput write MiB/s: {0} min, {1} max, {2} median, {3} mean".format(min(tput['write'].values()), max(tput['write'].values()), numpy.median(tput['write'].values()), numpy.mean(tput['write'].values()))
             print >>f, tputwritemsg
             print tputwritemsg
+
+        if len(mem['alloc']) > 0:
+            memallocmsg = "\tmem alloc MiB: {0} min, {1} max, {2} median, {3} mean".format(min(mem['alloc'].values()), max(mem['alloc'].values()), numpy.median(mem['alloc'].values()), numpy.mean(mem['alloc'].values()))
+            print >>f, memallocmsg
+            print memallocmsg
+
+        if len(mem['dealloc']) > 0:
+            memdeallocmsg = "\tmem dealloc MiB: {0} min, {1} max, {2} median, {3} mean".format(min(mem['dealloc'].values()), max(mem['dealloc'].values()), numpy.median(mem['dealloc'].values()), numpy.mean(mem['dealloc'].values()))
+            print >>f, memdeallocmsg
+            print memdeallocmsg
+
+        if len(mem['total']) > 0:
+            memtotalmsg = "\tmem usage MiB: {0} min, {1} max, {2} median, {3} mean".format(min(mem['total'].values()), max(mem['total'].values()), numpy.median(mem['total'].values()), numpy.mean(mem['total'].values()))
+            print >>f, memtotalmsg
+            print memtotalmsg
         
         if len(times['virtual']) > 0:
             timemsg = "\ttiming hours: {0} virtual in {1} real".format(times['virtual'][-1], times['real'][-1])
@@ -1180,6 +1251,9 @@ def plot(args):
             'time-real' : load("{0}/time-real.gz".format(e[0])),
             'tput-read' : load("{0}/tput-read.gz".format(e[0])),
             'tput-write' : load("{0}/tput-write.gz".format(e[0])),
+            'mem-alloc' : load("{0}/mem-alloc.gz".format(e[0])),
+            'mem-dealloc' : load("{0}/mem-dealloc.gz".format(e[0])),
+            'mem-total' : load("{0}/mem-total.gz".format(e[0])),
             'circs-build' : load("{0}/circs-build.gz".format(e[0])),
             'circs-fail' : load("{0}/circs-fail.gz".format(e[0])),
             'circs-buildtime-cdf' : load("{0}/circs-buildtime-cdf.gz".format(e[0])),
@@ -1230,10 +1304,11 @@ def plot(args):
                     'socket-buffers' : loadpickle("{0}/node/{1}/socket-buffers.gz".format(e[0], node)),
                     'tput-read' : load("{0}/node/{1}/tput-read.gz".format(e[0], node)),
                     'tput-write' : load("{0}/node/{1}/tput-write.gz".format(e[0], node)),
+                    'mem-alloc' : load("{0}/node/{1}/mem-alloc.gz".format(e[0], node)),
+                    'mem-dealloc' : load("{0}/node/{1}/mem-dealloc.gz".format(e[0], node)),
+                    'mem-total' : load("{0}/node/{1}/mem-total.gz".format(e[0], node)),
                 }
         
-            
-
     if not os.path.exists(graphpath): os.mkdir(graphpath)
     savedfigures = []
 
@@ -1688,6 +1763,74 @@ def plot(args):
             figname = "{0}/{1}-{2}-clientload.pdf".format(graphpath, prefix, e[1])
             savedfigures.append(figname)
             pylab.savefig(figname)  
+
+    ######################
+    # memory             #
+    ######################
+
+    print "Generating memory usage graphs"
+
+    ## memory usage over time
+
+    doplot = False
+    for e in experiments:
+        if len(data[e[0]]['mem-alloc']) > 0: doplot = True
+    if doplot:    
+        pylab.figure()
+        styles = itertools.cycle(formats)
+        for e in experiments: 
+            y = data[e[0]]['mem-alloc']
+            x = xrange(len(y))
+            pylab.plot(x, y, styles.next(), label=e[1])
+        if stitle is not None: pylab.suptitle(stitle, fontsize=stitlesize)
+        pylab.title("Plug-in Memory Allocated Over Time", fontsize=titlesize, x='1.0', ha='right')
+        pylab.xlabel("Tick (m)")
+        pylab.ylabel("Total Allocated (MiB)")
+        pylab.legend(loc="lower right")
+        pylab.subplots_adjust(left=0.15)
+        figname = "{0}/{1}-mem-alloc.pdf".format(graphpath, prefix)
+        savedfigures.append(figname)
+        pylab.savefig(figname)
+
+    doplot = False
+    for e in experiments:
+        if len(data[e[0]]['mem-dealloc']) > 0: doplot = True
+    if doplot:    
+        pylab.figure()
+        styles = itertools.cycle(formats)
+        for e in experiments: 
+            y = data[e[0]]['mem-dealloc']
+            x = xrange(len(y))
+            pylab.plot(x, y, styles.next(), label=e[1])
+        if stitle is not None: pylab.suptitle(stitle, fontsize=stitlesize)
+        pylab.title("Plug-in Memory Deallocated Over Time", fontsize=titlesize, x='1.0', ha='right')
+        pylab.xlabel("Tick (m)")
+        pylab.ylabel("Total Deallocated (MiB)")
+        pylab.legend(loc="lower right")
+        pylab.subplots_adjust(left=0.15)
+        figname = "{0}/{1}-mem-dealloc.pdf".format(graphpath, prefix)
+        savedfigures.append(figname)
+        pylab.savefig(figname)
+
+    doplot = False
+    for e in experiments:
+        if len(data[e[0]]['mem-total']) > 0: doplot = True
+    if doplot:    
+        pylab.figure()
+        styles = itertools.cycle(formats)
+        for e in experiments: 
+            y = data[e[0]]['mem-total']
+            x = xrange(len(y))
+            pylab.plot(x, y, styles.next(), label=e[1])
+        if stitle is not None: pylab.suptitle(stitle, fontsize=stitlesize)
+        pylab.title("Plug-in Memory Usage Over Time", fontsize=titlesize, x='1.0', ha='right')
+        pylab.xlabel("Tick (m)")
+        pylab.ylabel("Total Used (MiB)")
+        pylab.legend(loc="lower right")
+        pylab.subplots_adjust(left=0.15)
+        figname = "{0}/{1}-mem-total.pdf".format(graphpath, prefix)
+        savedfigures.append(figname)
+        pylab.savefig(figname)
 
     ######################
     # circuits           #

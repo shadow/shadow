@@ -383,7 +383,7 @@ gint system_accept4(gint fd, struct sockaddr* addr, socklen_t* len, gint flags) 
 	/* just ignore the flags and call accept */
 	if(flags) {
 		Node* node = _system_switchInShadowContext();
-		warning("accept4 ignoring flags argument");
+		debug("accept4 ignoring flags argument");
 		_system_switchOutShadowContext(node);
 	}
 	return system_accept(fd, addr, len);
