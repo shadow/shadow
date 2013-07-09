@@ -149,7 +149,7 @@ add_subdirectory(${CMAKE_SOURCE_DIR}/cpack/)
 ## build test if enabled
 if(SHADOW_TEST STREQUAL ON)
     message(STATUS "SHADOW_TEST enabled")
-    add_subdirectory(${SHADOW_TEST_DIR})
+    add_subdirectory(${CMAKE_SOURCE_DIR}/test/)
 endif(SHADOW_TEST STREQUAL ON)
 
 ## install our 'exported' libs so they can be imported by others
