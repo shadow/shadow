@@ -34,6 +34,7 @@ struct _Event {
 	Runnable super;
 	EventFunctionTable* vtable;
 	SimulationTime time;
+	SimulationTime sequence;
 	gpointer node; /* XXX: type is "Node*" */
 
 	GQuark ownerID;

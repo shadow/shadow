@@ -56,10 +56,9 @@ gboolean shadowevent_run(Event* event) {
 gint shadowevent_compare(const Event* a, const Event* b, gpointer user_data) {
 	MAGIC_ASSERT(a);
 	MAGIC_ASSERT(b);
-	/*
-	 * @todo should events already scheduled get priority over new events?
-	 */
-	return a->time > b->time ? +1 : a->time == b->time ? 0 : -1;
+	/* events already scheduled get priority over new events */
+	return (a->time > b->time) ? +1 : (a->time < b->time) ? -1 :
+			(a->sequence > b->sequence) ? +1 : (a->sequence < b->sequence) ? -1 : 0;
 }
 
 void shadowevent_free(Event* event) {

@@ -10,6 +10,7 @@ struct _EventQueue {
 	AsyncPriorityQueue* events;
 	gsize nPushed;
 	gsize nPopped;
+	SimulationTime sequenceCounter;
 
 	MAGIC_DECLARE;
 };
@@ -36,6 +37,7 @@ void eventqueue_free(EventQueue* eventq) {
 void eventqueue_push(EventQueue* eventq, Event* event) {
 	MAGIC_ASSERT(eventq);
 	if(event) {
+		event->sequence = ++(eventq->sequenceCounter);
 		asyncpriorityqueue_push(eventq->events, event);
 		(eventq->nPushed)++;
 	}

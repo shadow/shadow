@@ -3,8 +3,13 @@
 #include <string.h>
 #include "shadow.h"
 
+//gint shadowevent_compare(const Event* a, const Event* b, gpointer user_data) {
+//	return a->time > b->time ? +1 : a->time == b->time ? 0 : -1;
+//}
 gint shadowevent_compare(const Event* a, const Event* b, gpointer user_data) {
-	return a->time > b->time ? +1 : a->time == b->time ? 0 : -1;
+	/* events already scheduled get priority over new events */
+	return (a->time > b->time) ? +1 : (a->time < b->time) ? -1 :
+			(a->sequence > b->sequence) ? +1 : (a->sequence < b->sequence) ? -1 : 0;
 }
 
 void shadowevent_free(Event* event) {}
@@ -47,7 +52,7 @@ gint main(gint argc, gchar * argv[]) {
 	gboolean isSet = FALSE;
 	for(gint k = 0; k < N; k++) {
 		Event* e = eventqueue_pop(eq);
-		g_printf("%u,%lu\n", e->magic, e->time);
+		g_printf("%u,%lu,%lu\n", e->magic, e->time,e->sequence);
 
 		if(isSet) {
 			g_assert(e->magic > lastMagic);
