@@ -7,7 +7,8 @@
 #include "shadow.h"
 
 struct _EventQueue {
-	AsyncPriorityQueue* events;
+	GMutex lock;
+	PriorityQueue* pq;
 	gsize nPushed;
 	gsize nPopped;
 	SimulationTime sequenceCounter;
@@ -19,7 +20,9 @@ EventQueue* eventqueue_new() {
 	EventQueue* eventq = g_new0(EventQueue, 1);
 	MAGIC_INIT(eventq);
 
-	eventq->events = asyncpriorityqueue_new((GCompareDataFunc)shadowevent_compare, NULL, (GDestroyNotify)shadowevent_free);
+	eventq->pq = priorityqueue_new((GCompareDataFunc)shadowevent_compare, NULL, (GDestroyNotify)shadowevent_free);
+	g_mutex_init(&(eventq->lock));
+
 	eventq->nPushed = eventq->nPopped = 0;
 
 	return eventq;
@@ -28,7 +31,11 @@ EventQueue* eventqueue_new() {
 void eventqueue_free(EventQueue* eventq) {
 	MAGIC_ASSERT(eventq);
 
-	asyncpriorityqueue_free(eventq->events);
+	g_mutex_lock(&(eventq->lock));
+	priorityqueue_free(eventq->pq);
+	eventq->pq = NULL;
+	g_mutex_unlock(&(eventq->lock));
+	g_mutex_clear(&(eventq->lock));
 
 	MAGIC_CLEAR(eventq);
 	g_free(eventq);
@@ -37,21 +44,30 @@ void eventqueue_free(EventQueue* eventq) {
 void eventqueue_push(EventQueue* eventq, Event* event) {
 	MAGIC_ASSERT(eventq);
 	if(event) {
+		g_mutex_lock(&(eventq->lock));
 		event->sequence = ++(eventq->sequenceCounter);
-		asyncpriorityqueue_push(eventq->events, event);
+		priorityqueue_push(eventq->pq, event);
 		(eventq->nPushed)++;
+		g_mutex_unlock(&(eventq->lock));
 	}
+
 }
 
 Event* eventqueue_pop(EventQueue* eventq) {
 	MAGIC_ASSERT(eventq);
-	Event* event = (Event*) asyncpriorityqueue_pop(eventq->events);
-	if(event) {
+	g_mutex_lock(&(eventq->lock));
+	Event* retEvent = priorityqueue_pop(eventq->pq);
+	if(retEvent) {
 		(eventq->nPopped)++;
 	}
-	return event;
+	g_mutex_unlock(&(eventq->lock));
+	return retEvent;
 }
 
 Event* eventqueue_peek(EventQueue* eventq) {
-	return (Event*) asyncpriorityqueue_peek(eventq->events);
+	MAGIC_ASSERT(eventq);
+	g_mutex_lock(&(eventq->lock));
+	Event* retEvent = priorityqueue_peek(eventq->pq);
+	g_mutex_unlock(&(eventq->lock));
+	return retEvent;
 }
