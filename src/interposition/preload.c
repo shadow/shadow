@@ -1000,7 +1000,7 @@ void AES_ctr128_decrypt(const unsigned char *in, unsigned char *out, const void 
  * when the EVP_Cipher is set to use aesni_cbc_hmac_sha1_cipher. Our memmove
  * implementation does not handle padding, so we disable it by default.
  */
-#ifdef SHADOW_ENABLE_EVPCIPHER
+#ifndef SHADOW_DISABLE_EVPCIPHER
 /*
  * EVP_CIPHER_CTX *ctx
  * The ctx parameter has been voided to avoid requiring Openssl headers
