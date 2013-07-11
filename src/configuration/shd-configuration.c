@@ -33,6 +33,7 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	c->cpuThreshold = 1000;
 	c->cpuPrecision = 200;
 	c->heartbeatInterval = 60;
+	c->latencySampleInterval = 1;
 
 	/* set options to change defaults for the main group */
 	c->mainOptionGroup = g_option_group_new("main", "Application Options", "Various application related options", NULL, NULL);
@@ -68,6 +69,7 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	  { "tcp-windows", 0, 0, G_OPTION_ARG_INT, &(c->initialTCPWindow), "Initialize the TCP send, receive, and congestion windows to N packets [10]", "N" },
 	  { "socket-recv-buffer", 0, 0, G_OPTION_ARG_INT, &(c->initialSocketReceiveBufferSize), sockrecv->str, "N" },
 	  { "socket-send-buffer", 0, 0, G_OPTION_ARG_INT, &(c->initialSocketSendBufferSize), socksend->str, "N" },
+	  { "latency-sample-interval", 0, 0, G_OPTION_ARG_INT, &(c->latencySampleInterval), "Interval to sample latency values for links, in seconds [1]", "N" },
 	  { NULL },
 	};
 
@@ -218,6 +220,11 @@ GLogLevelFlags configuration_getHeartbeatLogLevel(Configuration* config) {
 SimulationTime configuration_getHearbeatInterval(Configuration* config) {
 	MAGIC_ASSERT(config);
 	return config->heartbeatInterval * SIMTIME_ONE_SECOND;
+}
+
+SimulationTime configuration_getLatencySampleInterval(Configuration* config) {
+	MAGIC_ASSERT(config);
+	return config->latencySampleInterval * SIMTIME_ONE_SECOND;
 }
 
 gchar* configuration_getQueuingDiscipline(Configuration* config) {
