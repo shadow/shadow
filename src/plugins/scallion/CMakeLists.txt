@@ -97,6 +97,10 @@ target_link_libraries(shadow-plugin-scallion
     ${TOR_LIBRARIES} ${GLIB_LIBRARIES} ${EVENT2_LIBRARIES} ${OPENSSL_LIBRARIES} 
     ${ZLIB_LIBRARIES} ${M_LIBRARIES} ${RT_LIBRARIES} ${DL_LIBRARIES})
 
+foreach(lib ${CMAKE_TOR_LIBRARIES})
+    target_link_libraries(shadow-plugin-scallion ${lib})
+endforeach(lib ${CMAKE_TOR_LIBRARIES})
+
 install(TARGETS shadow-plugin-scallion DESTINATION plugins)
 set_target_properties(shadow-plugin-scallion PROPERTIES INSTALL_RPATH ${CMAKE_INSTALL_PREFIX}/lib INSTALL_RPATH_USE_LINK_PATH TRUE)
 

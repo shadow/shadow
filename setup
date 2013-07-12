@@ -64,13 +64,13 @@ def main():
         default=INSTALL_PREFIX)
     
     parser_build.add_argument('-i', '--include', 
-        help="append PATH to the list of paths searched for headers. useful if dependencies are installed to non-standard locations.",
+        help="append PATH to the list of paths searched for headers. useful if dependencies are installed to non-standard locations, or when compiling custom libraries.",
         metavar="PATH",
         action="append", dest="extra_includes",
         default=[INSTALL_PREFIX+ "/include", os.path.expanduser("~/.local/include"), os.path.expanduser("~/.local/share/llvm/cmake")])
     
     parser_build.add_argument('-l', '--library', 
-        help="append PATH to the list of paths searched for libraries. useful if dependencies are installed to non-standard locations.",
+        help="append PATH to the list of paths searched for libraries. useful if dependencies are installed to non-standard locations, or when compiling custom libraries.",
         metavar="PATH",
         action="append", dest="extra_libraries",
         default=[INSTALL_PREFIX+ "/lib", os.path.expanduser("~/.local/lib")])
@@ -117,6 +117,12 @@ def main():
         metavar="VERSION", 
         action="store", dest="tor_version",
         default=TOR_DEFAULT_VERSION)
+
+    parser_build.add_argument('--tor-lib', 
+        help="append LIB to the list of libraries that get linked with Tor and scallion. Useful when compiling and linking custom libraries.",
+        metavar="LIB",
+        action="append", dest="tor_libraries",
+        default=[])
     
     parser_build.add_argument('--libevent-prefix', 
         help="use non-standard PATH when linking Tor to libevent.",
@@ -332,6 +338,7 @@ def build(args):
     # make sure we can access them from cmake
     cmake_cmd += " -DCMAKE_EXTRA_INCLUDES=" + ';'.join(args.extra_includes)
     cmake_cmd += " -DCMAKE_EXTRA_LIBRARIES=" + ';'.join(args.extra_libraries)
+    cmake_cmd += " -DCMAKE_TOR_LIBRARIES=" + ';'.join(args.tor_libraries)
 
     # look for the clang/clang++ compilers
     clangccpath = which("clang")
@@ -445,7 +452,11 @@ def setup_tor(args):
             if args.extra_libraries is not None:
                 for l in args.extra_libraries: ldflags += " -L" + l.strip()
 
-            configure = "./configure --disable-transparent --disable-asciidoc --disable-threads CFLAGS=\"" + cflags + "\" LDFLAGS=\"" + ldflags + "\" LIBS=-lrt"
+            libs = ""
+            if len(args.tor_libraries) > 0:
+                for l in args.tor_libraries: libs += " -l" + l.strip()
+
+            configure = "./configure --disable-transparent --disable-asciidoc --disable-threads CFLAGS=\"{0}\" LDFLAGS=\"{1}\" LIBS=\"{2}\"".format(cflags, ldflags, libs)
 
             if args.libevent_prefix is not None: configure += " --with-libevent-dir=" + getfullpath(args.libevent_prefix)
             if args.openssl_prefix is not None: configure += " --with-openssl-dir=" + getfullpath(args.openssl_prefix)
