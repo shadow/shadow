@@ -92,6 +92,8 @@ static void _epollwatch_free(EpollWatch* watch) {
 static void _epoll_free(Epoll* epoll) {
 	MAGIC_ASSERT(epoll);
 
+	descriptor_adjustStatus(&(epoll->super), DS_READABLE, FALSE);
+
 	/* this will go through all epollwatch items and remove the listeners
 	 * only from those that dont already exist in the watching table */
 	while(!g_queue_is_empty(epoll->reporting)) {
@@ -155,6 +157,9 @@ Epoll* epoll_new(gint handle) {
 	g_assert(worker->cached_application);
 	epoll->ownerApplication = worker->cached_application;
 
+	/* the epoll descriptor itself is always able to be epolled */
+	descriptor_adjustStatus(&(epoll->super), DS_ACTIVE, TRUE);
+
 	return epoll;
 }
 
@@ -208,8 +213,15 @@ static void _epoll_check(Epoll* epoll, EpollWatch* watch) {
 	if(needsNotify) {
 		/* we need to report an event to user */
 		if(!watch->isReporting) {
+			/* check if parent epoll can read our child epoll event */
+			gboolean setReadable = g_queue_is_empty(epoll->reporting);
+
 			g_queue_push_tail(epoll->reporting, watch);
 			watch->isReporting = TRUE;
+
+			if(setReadable) {
+				descriptor_adjustStatus(&(epoll->super), DS_READABLE, TRUE);
+			}
 		}
 	} else {
 		/* this watch no longer needs reporting
@@ -219,9 +231,15 @@ static void _epoll_check(Epoll* epoll, EpollWatch* watch) {
 		 * the node to collect events and lazily removing this later. */
 		if(watch->isReporting) {
 			g_queue_remove(epoll->reporting, watch);
+
 			watch->isReporting = FALSE;
 			if(!watch->isWatching) {
 				_epollwatch_free(watch);
+			}
+
+			/* check if parent epoll can still read child epoll events */
+			if(g_queue_is_empty(epoll->reporting)) {
+				descriptor_adjustStatus(&(epoll->super), DS_READABLE, FALSE);
 			}
 		}
 	}
@@ -356,6 +374,12 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray,
 		} else {
 			watch->isReporting = FALSE;
 		}
+	}
+
+	/* if we consumed all the events that we had to report,
+	 * then our parent descriptor can no longer read child epolls */
+	if(reportableLength > 0 && g_queue_is_empty(epoll->reporting)) {
+		descriptor_adjustStatus(&(epoll->super), DS_READABLE, FALSE);
 	}
 
 	gint space = eventArrayLength - eventArrayIndex;
