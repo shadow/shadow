@@ -1,23 +1,30 @@
 The Shadow Simulator <shadow-support@cs.umn.edu>
 
-Shadow is a unique discrete-event network simulator that runs real-life 
-applications like Tor. Shadow combines the accuracy of emulation with the 
+Shadow is a unique discrete-event network simulator that runs real 
+applications like Tor, and distributed systems of thousands of nodes
+on a single machine. Shadow combines the accuracy of emulation with the 
 efficiency and control of simulation, achieving the best of both approaches.
 
-Also included are core plug-ins and topologies for transferring files between 
-clients and servers, and over a private Tor anonymity network.
+Also included are core plug-ins and topologies for transferring files
+between clients and servers, and over a private Tor anonymity network.
 
 Quick Setup (installs everything in ~/.shadow):
     $ ./setup dependencies
     $ ./setup build
     $ ./setup install
 
+Homepage:
+    http://shadow.github.io
+    
+Download New Releases:
+    http://shadow.github.io/download
+
+Project Development:
+    https://github.com/shadow
+
 Setup Instructions, User Documentation, FAQs:
     https://github.com/shadow/shadow/wiki
 
-Homepage:
-    https://shadow.cs.umn.edu
-    
-Download New Releases:
-    https://shadow.cs.umn.edu/download
-    https://github.com/shadow/shadow/tags
+Bug Reports:
+    https://github.com/shadow/shadow/issues
+
