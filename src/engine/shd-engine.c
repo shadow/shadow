@@ -32,7 +32,7 @@ struct _Engine {
 
 	/* if single threaded, use this global event priority queue. if multi-
 	 * threaded, use this for non-node events */
-	AsyncPriorityQueue* masterEventQueue;
+	EventQueue* masterEventQueue;
 
 	/* if multi-threaded, we use worker thread */
 	CountDownLatch* processingLatch;
@@ -89,9 +89,7 @@ Engine* engine_new(Configuration* config) {
 	engine->runTimer = g_timer_new();
 
 	/* holds all events if single-threaded, and non-node events otherwise. */
-	engine->masterEventQueue =
-			asyncpriorityqueue_new((GCompareDataFunc)shadowevent_compare, NULL,
-			(GDestroyNotify)shadowevent_free);
+	engine->masterEventQueue = eventqueue_new();
 
 	engine->registry = registry_new();
 	registry_register(engine->registry, CDFS, NULL, cdf_free);
@@ -137,7 +135,7 @@ void engine_free(Engine* engine) {
 	engine->forceShadowContext = TRUE;
 
 	if(engine->masterEventQueue) {
-		asyncpriorityqueue_free(engine->masterEventQueue);
+		eventqueue_free(engine->masterEventQueue);
 	}
 
 	registry_free(engine->registry);
@@ -164,7 +162,7 @@ void engine_free(Engine* engine) {
 static gint _engine_processEvents(Engine* engine) {
 	MAGIC_ASSERT(engine);
 
-	Event* next_event = asyncpriorityqueue_peek(engine->masterEventQueue);
+	Event* next_event = eventqueue_peek(engine->masterEventQueue);
 	if(next_event) {
 		Worker* worker = worker_getPrivate();
 		worker->clock_now = SIMTIME_INVALID;
@@ -176,7 +174,7 @@ static gint _engine_processEvents(Engine* engine) {
 				(next_event->time < engine->endTime))
 		{
 			/* get next event */
-			next_event = asyncpriorityqueue_pop(engine->masterEventQueue);
+			next_event = eventqueue_pop(engine->masterEventQueue);
 			worker->cached_event = next_event;
 			MAGIC_ASSERT(worker->cached_event);
 			worker->cached_node = next_event->node;
@@ -195,7 +193,7 @@ static gint _engine_processEvents(Engine* engine) {
 			worker->clock_last = worker->clock_now;
 			worker->clock_now = SIMTIME_INVALID;
 
-			next_event = asyncpriorityqueue_peek(engine->masterEventQueue);
+			next_event = eventqueue_peek(engine->masterEventQueue);
 		}
 	}
 
@@ -345,7 +343,7 @@ void engine_pushEvent(Engine* engine, Event* event) {
 	MAGIC_ASSERT(engine);
 	MAGIC_ASSERT(event);
 	g_assert(engine_getNumThreads(engine) == 1);
-	asyncpriorityqueue_push(engine->masterEventQueue, event);
+	eventqueue_push(engine->masterEventQueue, event);
 }
 
 void engine_put(Engine* engine, EngineStorage type, GQuark* id, gpointer item) {
