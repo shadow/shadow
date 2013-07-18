@@ -13,6 +13,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <errno.h>
 
 #include <string.h>
@@ -206,6 +207,7 @@ enum fileserver_code fileserver_activate(fileserver_tp fs, gint sockd, fileserve
 	}
 
 start:
+
 	/* state machine for handling connections */
 	switch (c->state) {
 

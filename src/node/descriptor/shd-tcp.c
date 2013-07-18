@@ -708,6 +708,54 @@ gint tcp_getConnectError(TCP* tcp) {
 	return 0;
 }
 
+void tcp_getInfo(TCP* tcp, struct tcp_info *tcpinfo) {
+	MAGIC_ASSERT(tcp);
+
+	memset(tcpinfo, 0, sizeof(struct tcp_info));
+
+	tcpinfo->tcpi_state = tcp->state;
+//	tcpinfo->tcpi_ca_state;
+//	tcpinfo->tcpi_retransmits;
+//	tcpinfo->tcpi_probes;
+//	tcpinfo->tcpi_backoff;
+//	tcpinfo->tcpi_options;
+//	tcpinfo->tcpi_snd_wscale;
+//	tcpinfo->tcpi_rcv_wscale;
+
+//	tcpinfo->tcpi_rto;
+//	tcpinfo->tcpi_ato;
+	tcpinfo->tcpi_snd_mss = 1;
+	tcpinfo->tcpi_rcv_mss = 1;
+
+	tcpinfo->tcpi_unacked = tcp->send.unacked;
+//	tcpinfo->tcpi_sacked;
+//	tcpinfo->tcpi_lost;
+//	tcpinfo->tcpi_retrans;
+//	tcpinfo->tcpi_fackets;
+
+	/* Times. */
+//	tcpinfo->tcpi_last_data_sent;
+//	tcpinfo->tcpi_last_ack_sent;
+//	tcpinfo->tcpi_last_data_recv;
+//	tcpinfo->tcpi_last_ack_recv;
+
+	/* Metrics. */
+//	tcpinfo->tcpi_pmtu;
+//	tcpinfo->tcpi_rcv_ssthresh;
+//	tcpinfo->tcpi_rtt;
+//	tcpinfo->tcpi_rttvar;
+	tcpinfo->tcpi_snd_ssthresh = tcp->congestion.threshold;
+	tcpinfo->tcpi_snd_cwnd = tcp->congestion.window;
+//	tcpinfo->tcpi_advmss;
+//	tcpinfo->tcpi_reordering;
+
+//	tcpinfo->tcpi_rcv_rtt;
+//	tcpinfo->tcpi_rcv_space;
+
+//	tcpinfo->tcpi_total_retrans;
+}
+
+
 gint tcp_connectToPeer(TCP* tcp, in_addr_t ip, in_port_t port, sa_family_t family) {
 	MAGIC_ASSERT(tcp);
 
