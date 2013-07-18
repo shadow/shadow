@@ -6,7 +6,6 @@
 
 
 #include <arpa/inet.h>
-#include <netinet/tcp.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -281,39 +280,6 @@ void filetransfer_activate() {
 				for(int i = 0; i < nfds; i++) {
 					memset(&progress, 0, sizeof(fileserver_progress_t));
 					enum fileserver_code result = fileserver_activate(ft->server, events[i].data.fd, &progress);
-
-					struct tcp_info tcpinfo;
-					gint tcp_info_length = sizeof(tcpinfo);
-					int ret = getsockopt(events[i].data.fd, SOL_TCP, TCP_INFO, (void *)&tcpinfo, &tcp_info_length );
-					ft->shadowlib->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, "getsockopt: %d", ret);
-					if (ret == 0 ) {
-						ft->shadowlib->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, "[fs-server-socket-info] "\
-								"last_data_send: %u  "\
-								"last_data_recv: %u  "\
-								"snd_cwnd: %u  "\
-								"snd_ssthresh: %u  "\
-								"rcv_ssthresh: %u  "\
-								"rtt: %u  "\
-								"rttvar: %u  "\
-								"unacked: %u  "\
-								"sacked: %u  "\
-								"lost: %u  "\
-								"retrans: %u  "\
-								"fackets: %u",
-								tcpinfo.tcpi_last_data_sent,
-								tcpinfo.tcpi_last_data_recv,
-								tcpinfo.tcpi_snd_cwnd,
-								tcpinfo.tcpi_snd_ssthresh,
-								tcpinfo.tcpi_rcv_ssthresh,
-								tcpinfo.tcpi_rtt,
-								tcpinfo.tcpi_rttvar,
-								tcpinfo.tcpi_unacked,
-								tcpinfo.tcpi_sacked,
-								tcpinfo.tcpi_lost,
-								tcpinfo.tcpi_retrans,
-								tcpinfo.tcpi_fackets
-							   );
-					}
 
 					ft->shadowlib->log(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__,
 							"fileserver activation result: %s", fileserver_codetoa(result));
