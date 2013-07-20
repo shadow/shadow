@@ -509,37 +509,45 @@ gint system_getSockOpt(gint fd, gint level, gint optname, gpointer optval,
 	Node* node = _system_switchInShadowContext();
 	Descriptor* descriptor = node_lookupDescriptor(node, fd);
 
+	gint result = 0;
+
 	/* @todo: implement socket optsions */
 	if(level == SOL_SOCKET || level == SOL_IP || level == SOL_TCP) {
 		switch (optname) {
 			case TCP_INFO:
 				if(descriptor_getType(descriptor) != DT_TCPSOCKET) {
 					warning("called getsockopt with SOL_TCP on non-TCP socket");
-					return -1;
+					result = -1;
+					break;
 				}
 				TCP* tcp = (TCP*)descriptor;
 				tcp_getInfo(tcp, (struct tcp_info *)optval);
 				*optlen = sizeof(struct tcp_info);
 
+				result = 0;
 				break;
 
 			case SO_ERROR:
 				*((gint*)optval) = 0;
 				*optlen = sizeof(gint);
+
+				result = 0;
 				break;
 
 			default:
 				warning("option not implemented");
 				errno = ENOSYS;
-				return -1;
+				result = -1;
+				break;
 		}
-
-		return 0;
 	} else {
 		warning("socket option level not implemented");
 		errno = ENOSYS;
-		return -1;
+		result = -1;
 	}
+
+	_system_switchOutShadowContext(node);
+	return result;
 }
 
 gint system_setSockOpt(gint fd, gint level, gint optname, const gpointer optval,
