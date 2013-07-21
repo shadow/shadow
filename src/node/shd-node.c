@@ -336,7 +336,7 @@ static void _node_unmonitorDescriptor(Node* node, gint handle) {
 	}
 }
 
-gint node_createDescriptor(Node* node, enum DescriptorType type) {
+gint node_createDescriptor(Node* node, DescriptorType type) {
 	MAGIC_ASSERT(node);
 
 	/* get a unique descriptor that can be "closed" later */
@@ -408,7 +408,7 @@ gint node_epollControl(Node* node, gint epollDescriptor, gint operation,
 		return EBADF;
 	}
 
-	enum DescriptorStatus status = descriptor_getStatus(descriptor);
+	DescriptorStatus status = descriptor_getStatus(descriptor);
 	if(status & DS_CLOSED) {
 		warning("descriptor handle '%i' not a valid open descriptor", epollDescriptor);
 		return EBADF;
@@ -453,7 +453,7 @@ gint node_epollGetEvents(Node* node, gint handle,
 		return EBADF;
 	}
 
-	enum DescriptorStatus status = descriptor_getStatus(descriptor);
+	DescriptorStatus status = descriptor_getStatus(descriptor);
 	if(status & DS_CLOSED) {
 		warning("descriptor handle '%i' not a valid open descriptor", handle);
 		return EBADF;
@@ -484,7 +484,7 @@ static gboolean _node_doesInterfaceExist(Node* node, in_addr_t interfaceIP) {
 }
 
 static gboolean _node_isInterfaceAvailable(Node* node, in_addr_t interfaceIP,
-		enum DescriptorType type, in_port_t port) {
+		DescriptorType type, in_port_t port) {
 	MAGIC_ASSERT(node);
 
 	enum ProtocolType protocol = type == DT_TCPSOCKET ? PTCP : type == DT_UDPSOCKET ? PUDP : PLOCAL;
@@ -516,7 +516,7 @@ static gboolean _node_isInterfaceAvailable(Node* node, in_addr_t interfaceIP,
 
 
 static in_port_t _node_getRandomFreePort(Node* node, in_addr_t interfaceIP,
-		enum DescriptorType type) {
+		DescriptorType type) {
 	MAGIC_ASSERT(node);
 
 	in_port_t randomPort = 0;
@@ -540,13 +540,13 @@ gint node_bindToInterface(Node* node, gint handle, in_addr_t bindAddress, in_por
 		return EBADF;
 	}
 
-	enum DescriptorStatus status = descriptor_getStatus(descriptor);
+	DescriptorStatus status = descriptor_getStatus(descriptor);
 	if(status & DS_CLOSED) {
 		warning("descriptor handle '%i' not a valid open descriptor", handle);
 		return EBADF;
 	}
 
-	enum DescriptorType type = descriptor_getType(descriptor);
+	DescriptorType type = descriptor_getType(descriptor);
 	if(type != DT_TCPSOCKET && type != DT_UDPSOCKET) {
 		warning("wrong type for descriptor handle '%i'", handle);
 		return ENOTSOCK;
@@ -607,13 +607,13 @@ gint node_connectToPeer(Node* node, gint handle, in_addr_t peerAddress,
 		return EBADF;
 	}
 
-	enum DescriptorStatus status = descriptor_getStatus(descriptor);
+	DescriptorStatus status = descriptor_getStatus(descriptor);
 	if(status & DS_CLOSED) {
 		warning("descriptor handle '%i' not a valid open descriptor", handle);
 		return EBADF;
 	}
 
-	enum DescriptorType type = descriptor_getType(descriptor);
+	DescriptorType type = descriptor_getType(descriptor);
 	if(type != DT_TCPSOCKET && type != DT_UDPSOCKET) {
 		warning("wrong type for descriptor handle '%i'", handle);
 		return ENOTSOCK;
@@ -655,13 +655,13 @@ gint node_listenForPeer(Node* node, gint handle, gint backlog) {
 		return EBADF;
 	}
 
-	enum DescriptorStatus status = descriptor_getStatus(descriptor);
+	DescriptorStatus status = descriptor_getStatus(descriptor);
 	if(status & DS_CLOSED) {
 		warning("descriptor handle '%i' not a valid open descriptor", handle);
 		return EBADF;
 	}
 
-	enum DescriptorType type = descriptor_getType(descriptor);
+	DescriptorType type = descriptor_getType(descriptor);
 	if(type != DT_TCPSOCKET) {
 		warning("wrong type for descriptor handle '%i'", handle);
 		return EOPNOTSUPP;
@@ -691,13 +691,13 @@ gint node_acceptNewPeer(Node* node, gint handle, in_addr_t* ip, in_port_t* port,
 		return EBADF;
 	}
 
-	enum DescriptorStatus status = descriptor_getStatus(descriptor);
+	DescriptorStatus status = descriptor_getStatus(descriptor);
 	if(status & DS_CLOSED) {
 		warning("descriptor handle '%i' not a valid open descriptor", handle);
 		return EBADF;
 	}
 
-	enum DescriptorType type = descriptor_getType(descriptor);
+	DescriptorType type = descriptor_getType(descriptor);
 	if(type != DT_TCPSOCKET) {
 		return EOPNOTSUPP;
 	}
@@ -714,13 +714,13 @@ gint node_getPeerName(Node* node, gint handle, in_addr_t* ip, in_port_t* port) {
 		return EBADF;
 	}
 
-	enum DescriptorStatus status = descriptor_getStatus(descriptor);
+	DescriptorStatus status = descriptor_getStatus(descriptor);
 	if(status & DS_CLOSED) {
 		warning("descriptor handle '%i' not a valid open descriptor", handle);
 		return EBADF;
 	}
 
-	enum DescriptorType type = descriptor_getType(descriptor);
+	DescriptorType type = descriptor_getType(descriptor);
 	if(type != DT_TCPSOCKET) {
 		return ENOTCONN;
 	}
@@ -737,13 +737,13 @@ gint node_getSocketName(Node* node, gint handle, in_addr_t* ip, in_port_t* port)
 		return EBADF;
 	}
 
-	enum DescriptorStatus status = descriptor_getStatus(descriptor);
+	DescriptorStatus status = descriptor_getStatus(descriptor);
 	if(status & DS_CLOSED) {
 		warning("descriptor handle '%i' not a valid open descriptor", handle);
 		return EBADF;
 	}
 
-	enum DescriptorType type = descriptor_getType(descriptor);
+	DescriptorType type = descriptor_getType(descriptor);
 	if(type != DT_TCPSOCKET && type != DT_UDPSOCKET) {
 		warning("wrong type for descriptor handle '%i'", handle);
 		return ENOTSOCK;
@@ -763,13 +763,13 @@ gint node_sendUserData(Node* node, gint handle, gconstpointer buffer, gsize nByt
 		return EBADF;
 	}
 
-	enum DescriptorStatus status = descriptor_getStatus(descriptor);
+	DescriptorStatus status = descriptor_getStatus(descriptor);
 	if(status & DS_CLOSED) {
 		warning("descriptor handle '%i' not a valid open descriptor", handle);
 		return EBADF;
 	}
 
-	enum DescriptorType type = descriptor_getType(descriptor);
+	DescriptorType type = descriptor_getType(descriptor);
 	if(type != DT_TCPSOCKET && type != DT_UDPSOCKET && type != DT_PIPE) {
 		return EBADF;
 	}
@@ -853,7 +853,7 @@ gint node_receiveUserData(Node* node, gint handle, gpointer buffer, gsize nBytes
 	 * longer has data, and the above lookup will fail and return EBADF.
 	 */
 
-	enum DescriptorType type = descriptor_getType(descriptor);
+	DescriptorType type = descriptor_getType(descriptor);
 	if(type != DT_TCPSOCKET && type != DT_UDPSOCKET && type != DT_PIPE) {
 		return EBADF;
 	}
@@ -895,7 +895,7 @@ gint node_closeUser(Node* node, gint handle) {
 		return EBADF;
 	}
 
-	enum DescriptorStatus status = descriptor_getStatus(descriptor);
+	DescriptorStatus status = descriptor_getStatus(descriptor);
 	if(status & DS_CLOSED) {
 		warning("descriptor handle '%i' not a valid open descriptor", handle);
 		return EBADF;

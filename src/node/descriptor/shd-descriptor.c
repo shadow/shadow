@@ -6,7 +6,7 @@
 
 #include "shadow.h"
 
-void descriptor_init(Descriptor* descriptor, enum DescriptorType type,
+void descriptor_init(Descriptor* descriptor, DescriptorType type,
 		DescriptorFunctionTable* funcTable, gint handle) {
 	g_assert(descriptor && funcTable);
 	g_assert(handle >= MIN_DESCRIPTOR);
@@ -63,7 +63,7 @@ gint descriptor_compare(const Descriptor* foo, const Descriptor* bar, gpointer u
 	return foo->handle > bar->handle ? +1 : foo->handle == bar->handle ? 0 : -1;
 }
 
-enum DescriptorType descriptor_getType(Descriptor* descriptor) {
+DescriptorType descriptor_getType(Descriptor* descriptor) {
 	MAGIC_ASSERT(descriptor);
 	return descriptor->type;
 }
@@ -78,7 +78,7 @@ static void _descriptor_notifyListener(gpointer data, gpointer user_data) {
 	listener_notify(listener);
 }
 
-void descriptor_adjustStatus(Descriptor* descriptor, enum DescriptorStatus status, gboolean doSetBits){
+void descriptor_adjustStatus(Descriptor* descriptor, DescriptorStatus status, gboolean doSetBits){
 	MAGIC_ASSERT(descriptor);
 
 	/* adjust our status as requested */
@@ -122,10 +122,10 @@ void descriptor_adjustStatus(Descriptor* descriptor, enum DescriptorStatus statu
 	g_slist_foreach(descriptor->readyListeners, _descriptor_notifyListener, NULL);
 }
 
-enum DescriptorStatus descriptor_getStatus(Descriptor* descriptor) {
+DescriptorStatus descriptor_getStatus(Descriptor* descriptor) {
 	MAGIC_ASSERT(descriptor);
 
-	enum DescriptorStatus status = DS_NONE;
+	DescriptorStatus status = DS_NONE;
 
 	if(descriptor->status & DS_ACTIVE) {
 		status |= DS_ACTIVE;

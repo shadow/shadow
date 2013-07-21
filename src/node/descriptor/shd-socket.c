@@ -65,7 +65,7 @@ TransportFunctionTable socket_functions = {
 	MAGIC_VALUE
 };
 
-void socket_init(Socket* socket, SocketFunctionTable* vtable, enum DescriptorType type, gint handle,
+void socket_init(Socket* socket, SocketFunctionTable* vtable, DescriptorType type, gint handle,
 		guint receiveBufferSize, guint sendBufferSize) {
 	g_assert(socket && vtable);
 
@@ -232,6 +232,16 @@ gsize socket_getInputBufferSpace(Socket* socket) {
 	MAGIC_ASSERT(socket);
 	g_assert(socket->inputBufferSize >= socket->inputBufferLength);
 	return (socket->inputBufferSize - socket->inputBufferLength);
+}
+
+gsize socket_getInputBufferLength(Socket* socket) {
+	MAGIC_ASSERT(socket);
+	return socket->inputBufferLength;
+}
+
+gsize socket_getOutputBufferLength(Socket* socket) {
+	MAGIC_ASSERT(socket);
+	return socket->outputBufferLength;
 }
 
 gboolean socket_addToInputBuffer(Socket* socket, Packet* packet) {

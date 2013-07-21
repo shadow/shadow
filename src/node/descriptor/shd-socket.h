@@ -62,7 +62,7 @@ struct _Socket {
 	MAGIC_DECLARE;
 };
 
-void socket_init(Socket* socket, SocketFunctionTable* vtable, enum DescriptorType type, gint handle,
+void socket_init(Socket* socket, SocketFunctionTable* vtable, DescriptorType type, gint handle,
 		guint receiveBufferSize, guint sendBufferSize);
 
 in_addr_t socket_getBinding(Socket* socket);
@@ -75,10 +75,12 @@ Packet* socket_pullOutPacket(Socket* socket);
 Packet* socket_peekNextPacket(const Socket* socket);
 void socket_droppedPacket(Socket* socket, Packet* packet);
 
+gsize socket_getInputBufferLength(Socket* socket);
 gsize socket_getInputBufferSpace(Socket* socket);
 gboolean socket_addToInputBuffer(Socket* socket, Packet* packet);
 Packet* socket_removeFromInputBuffer(Socket* socket);
 
+gsize socket_getOutputBufferLength(Socket* socket);
 gsize socket_getOutputBufferSpace(Socket* socket);
 gboolean socket_addToOutputBuffer(Socket* socket, Packet* packet);
 Packet* socket_removeFromOutputBuffer(Socket* socket);

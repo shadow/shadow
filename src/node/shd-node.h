@@ -45,7 +45,7 @@ gdouble node_getNextPacketPriority(Node* node);
 gboolean node_autotuneReceiveBuffer(Node* node);
 gboolean node_autotuneSendBuffer(Node* node);
 
-gint node_createDescriptor(Node* node, enum DescriptorType type);
+gint node_createDescriptor(Node* node, DescriptorType type);
 void node_closeDescriptor(Node* node, gint handle);
 gint node_closeUser(Node* node, gint handle);
 Descriptor* node_lookupDescriptor(Node* node, gint handle);

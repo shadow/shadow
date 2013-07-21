@@ -16,6 +16,7 @@
 #include <netdb.h>
 #include <stdarg.h>
 #include <features.h>
+#include <sys/ioctl.h>
 
 #include "shadow.h"
 
@@ -86,6 +87,7 @@ typedef size_t (*ReadFunc)(int, void*, int);
 typedef size_t (*WriteFunc)(int, const void*, int);
 typedef int (*CloseFunc)(int);
 typedef int (*FcntlFunc)(int, int, ...);
+typedef int (*IoctlFunc)(int, int, ...);
 
 /* time family */
 
@@ -175,6 +177,7 @@ typedef struct {
 	WriteFunc write;
 	CloseFunc close;
 	FcntlFunc fcntl;
+	IoctlFunc ioctl;
 
 	TimeFunc time;
 	ClockGettimeFunc clock_gettime;
@@ -693,6 +696,22 @@ int fcntl(int fd, int cmd, ...) {
 	va_end(farg);
 	return result;
 }
+
+int ioctl(int fd, unsigned long int request, ...) {
+	va_list farg;
+	va_start(farg, request);
+	int result = 0;
+	if(fd >= MIN_DESCRIPTOR && shouldRedirect()) {
+		ENSURE(shadow, "intercept_", ioctl);
+		result = director.shadow.ioctl(fd, request, va_arg(farg, void*));
+	} else {
+		ENSURE(real, "", ioctl);
+		result = director.real.ioctl(fd, request, va_arg(farg, void*));
+	}
+	va_end(farg);
+	return result;
+}
+
 
 int pipe(int pipefd[2]) {
     if(shouldRedirect()) {

@@ -26,7 +26,7 @@ DescriptorFunctionTable transport_functions = {
 	MAGIC_VALUE
 };
 
-void transport_init(Transport* transport, TransportFunctionTable* vtable, enum DescriptorType type, gint handle) {
+void transport_init(Transport* transport, TransportFunctionTable* vtable, DescriptorType type, gint handle) {
 	g_assert(transport && vtable);
 
 	descriptor_init(&(transport->super), type, &transport_functions, handle);

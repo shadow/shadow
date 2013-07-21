@@ -330,6 +330,20 @@ gint intercept_fcntl(int fd, int cmd, ...) {
 	return result;
 }
 
+gint intercept_ioctl(int fd, unsigned long int request, ...) {
+	va_list farg;
+	va_start(farg, request);
+	gint result = system_ioctl(fd, request, farg);
+	va_end(farg);
+
+	if(result != 0) {
+		errno = result;
+		return -1;
+	} else {
+		return 0;
+	}
+}
+
 /**
  * System epoll
  */

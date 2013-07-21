@@ -14,6 +14,8 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <malloc.h>
+#include <sys/ioctl.h>
+#include <linux/sockios.h>
 
 #include "shadow.h"
 
@@ -216,7 +218,7 @@ gint system_socket(gint domain, gint type, gint protocol) {
 
 	if(result == 0) {
 		/* we are all set to create the socket */
-		enum DescriptorType dtype = type == SOCK_STREAM ? DT_TCPSOCKET : DT_UDPSOCKET;
+		DescriptorType dtype = type == SOCK_STREAM ? DT_TCPSOCKET : DT_UDPSOCKET;
 		result = node_createDescriptor(node, dtype);
 	}
 
@@ -657,6 +659,45 @@ gint system_fcntl(int fd, int cmd, va_list farg) {
 	/* normally, the type of farg depends on the cmd */
 
 	return 0;
+}
+
+gint system_ioctl(int fd, unsigned long int request, va_list farg) {
+	/* check if this is a socket */
+	if(fd < MIN_DESCRIPTOR){
+		errno = EBADF;
+		return -1;
+	}
+
+	gint result = 0;
+
+	/* normally, the type of farg depends on the request */
+	Node* node = _system_switchInShadowContext();
+	Descriptor* descriptor = node_lookupDescriptor(node, fd);
+
+	if(descriptor) {
+		DescriptorType t = descriptor_getType(descriptor);
+		if(t == DT_TCPSOCKET || t == DT_UDPSOCKET) {
+			Socket* socket = (Socket*) descriptor;
+			if(request == SIOCINQ || request == FIONREAD) {
+				gsize bufferLength = socket_getInputBufferLength(socket);
+				gint* lengthOut = va_arg(farg, int*);
+				*lengthOut = (gint)bufferLength;
+			} else if (request == SIOCOUTQ || request == TIOCOUTQ) {
+				gsize bufferLength = socket_getOutputBufferLength(socket);
+				gint* lengthOut = va_arg(farg, int*);
+				*lengthOut = (gint)bufferLength;
+			} else {
+				result = ENOTTY;
+			}
+		} else {
+			result = ENOTTY;
+		}
+	} else {
+		result = EBADF;
+	}
+
+	_system_switchOutShadowContext(node);
+	return result;
 }
 
 /**

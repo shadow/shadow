@@ -167,7 +167,7 @@ static enum EpollWatchFlags _epollwatch_getStatus(EpollWatch* watch) {
 	enum EpollWatchFlags flags = EWF_NONE;
 
 	/* check status */
-	enum DescriptorStatus status = descriptor_getStatus(watch->descriptor);
+	DescriptorStatus status = descriptor_getStatus(watch->descriptor);
 	flags |= (status & DS_ACTIVE) ? EWF_ACTIVE : EWF_NONE;
 	flags |= (status & DS_READABLE) ? EWF_READABLE : EWF_NONE;
 	flags |= (status & DS_WRITABLE) ? EWF_WRITEABLE : EWF_NONE;

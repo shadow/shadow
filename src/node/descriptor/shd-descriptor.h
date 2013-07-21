@@ -9,11 +9,13 @@
 
 #include "shadow.h"
 
-enum DescriptorType {
+typedef enum _DescriptorType DescriptorType;
+enum _DescriptorType {
 	DT_TCPSOCKET, DT_UDPSOCKET, DT_PIPE, DT_SOCKETPAIR, DT_EPOLL
 };
 
-enum DescriptorStatus {
+typedef enum _DescriptorStatus DescriptorStatus;
+enum _DescriptorStatus {
 	DS_NONE = 0,
 	/* ok to notify user as far as we know, socket is ready.
 	 * o/w never notify user (b/c they e.g. closed the socket or did not accept yet) */
@@ -45,25 +47,25 @@ struct _DescriptorFunctionTable {
 struct _Descriptor {
 	DescriptorFunctionTable* funcTable;
 	gint handle;
-	enum DescriptorType type;
-	enum DescriptorStatus status;
+	DescriptorType type;
+	DescriptorStatus status;
 	GSList* readyListeners;
 	gint referenceCount;
 	MAGIC_DECLARE;
 };
 
-void descriptor_init(Descriptor* descriptor, enum DescriptorType type,
+void descriptor_init(Descriptor* descriptor, DescriptorType type,
 		DescriptorFunctionTable* funcTable, gint handle);
 void descriptor_ref(gpointer data);
 void descriptor_unref(gpointer data);
 void descriptor_close(Descriptor* descriptor);
 gint descriptor_compare(const Descriptor* foo, const Descriptor* bar, gpointer user_data);
 
-enum DescriptorType descriptor_getType(Descriptor* descriptor);
+DescriptorType descriptor_getType(Descriptor* descriptor);
 gint* descriptor_getHandleReference(Descriptor* descriptor);
 
-void descriptor_adjustStatus(Descriptor* descriptor, enum DescriptorStatus status, gboolean doSetBits);
-enum DescriptorStatus descriptor_getStatus(Descriptor* descriptor);
+void descriptor_adjustStatus(Descriptor* descriptor, DescriptorStatus status, gboolean doSetBits);
+DescriptorStatus descriptor_getStatus(Descriptor* descriptor);
 
 void descriptor_addStatusListener(Descriptor* descriptor, Listener* listener);
 void descriptor_removeStatusListener(Descriptor* descriptor, Listener* listener);

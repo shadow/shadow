@@ -1126,7 +1126,7 @@ gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 			gboolean isNextPacket = (header.sequence == tcp->receive.next) ? TRUE : FALSE;
 			gboolean packetFits = (packetLength <= _tcp_getBufferSpaceIn(tcp)) ? TRUE : FALSE;
 
-			enum DescriptorStatus s = descriptor_getStatus((Descriptor*) tcp);
+			DescriptorStatus s = descriptor_getStatus((Descriptor*) tcp);
 			gboolean waitingUserRead = (s & DS_READABLE) ? TRUE : FALSE;
 			
 			if((isNextPacket && !waitingUserRead) || (packetFits)) {
