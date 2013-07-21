@@ -5,6 +5,7 @@
  */
 
 #include "shadow.h"
+#include "shd-event-internal.h"
 
 RunnableFunctionTable event_functions = {
 	(RunnableRunFunc) shadowevent_run,
@@ -51,6 +52,31 @@ gboolean shadowevent_run(Event* event) {
 	event->vtable->run(event, node);
 	/* we've actually executed it, so its ok to free it */
 	return TRUE;
+}
+
+void shadowevent_setSequence(Event* event, SimulationTime sequence) {
+	MAGIC_ASSERT(event);
+	event->sequence = sequence;
+}
+
+SimulationTime shadowevent_getTime(Event* event) {
+	MAGIC_ASSERT(event);
+	return event->time;
+}
+
+void shadowevent_setTime(Event* event, SimulationTime time) {
+	MAGIC_ASSERT(event);
+	event->time = time;
+}
+
+gpointer shadowevent_getNode(Event* event) {/* XXX: return type is "Node*" */
+	MAGIC_ASSERT(event);
+	return event->node;
+}
+
+void shadowevent_setNode(Event* event, gpointer node) {/* XXX: return type is "Node*" */
+	MAGIC_ASSERT(event);
+	event->node = node;
 }
 
 gint shadowevent_compare(const Event* a, const Event* b, gpointer user_data) {

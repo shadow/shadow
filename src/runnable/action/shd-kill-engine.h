@@ -11,12 +11,6 @@
 
 typedef struct _KillEngineAction KillEngineAction;
 
-struct _KillEngineAction {
-	Action super;
-	SimulationTime endTime;
-	MAGIC_DECLARE;
-};
-
 KillEngineAction* killengine_new(guint64 endTimeInSeconds);
 void killengine_run(KillEngineAction* action);
 void killengine_free(KillEngineAction* action);

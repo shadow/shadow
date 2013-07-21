@@ -27,7 +27,6 @@ struct _Parser {
 
 static void _parser_addAction(Parser* parser, Action* action) {
 	MAGIC_ASSERT(parser);
-	MAGIC_ASSERT(action);
 	g_queue_insert_sorted(parser->actions, action, action_compare, NULL);
 }
 
@@ -81,11 +80,11 @@ static GError* _parser_handleCDFAttributes(Parser* parser, const gchar** attribu
 		 */
 		if(path) {
 			Action* a = (Action*) loadcdf_new(id, path);
-			a->priority = 1;
+			action_setPriority(a, 1);
 			_parser_addAction(parser, a);
 		} else {
 			Action* a = (Action*) generatecdf_new(id, center, width, tail);
-			a->priority = 1;
+			action_setPriority(a, 1);
 			_parser_addAction(parser, a);
 		}
 	}
@@ -145,7 +144,7 @@ static GError* _parser_handleClusterAttributes(Parser* parser, const gchar** att
 	if(!error) {
 		/* no error, create the action */
 		Action* a = (Action*) createnetwork_new(id, bandwidthdown, bandwidthup, packetloss);
-		a->priority = 2;
+		action_setPriority(a, 2);
 		_parser_addAction(parser, a);
 	}
 
@@ -195,7 +194,7 @@ static GError* _parser_handlePluginAttributes(Parser* parser, const gchar** attr
 	if(!error) {
 		/* no error, create the action */
 		Action* a = (Action*) loadplugin_new(id, path);
-		a->priority = 0;
+		action_setPriority(a, 0);
 		_parser_addAction(parser, a);
 	}
 
@@ -298,7 +297,7 @@ static GError* _parser_handleNodeAttributes(Parser* parser, const gchar** attrib
 				bandwidthdown, bandwidthup, quantity, cpufrequency,
 				heartbeatfrequency, heartbeatloglevel, heartbeatloginfo, loglevel, logpcap, pcapdir,
 				socketReceiveBufferSize, socketSendBufferSize, interfaceReceiveBufferLength);
-		a->priority = 5;
+		action_setPriority(a, 5);
 		_parser_addAction(parser, a);
 
 		/* save the parent so child applications can reference it */
@@ -367,7 +366,7 @@ static GError* _parser_handleKillAttributes(Parser* parser, const gchar** attrib
 	if(!error) {
 		/* no error, create the action */
 		Action* a = (Action*) killengine_new((SimulationTime) time);
-		a->priority = 6;
+		action_setPriority(a, 6);
 		_parser_addAction(parser, a);
 	}
 
@@ -451,7 +450,7 @@ static GError* _parser_handleLinkAttributes(Parser* parser, const gchar** attrib
 		Action*  a = (Action*) connectnetwork_new(srcCluster, destCluster,
 				latency, jitter, packetloss,
 				latencymin, latencyQ1, latencymean, latencyQ3, latencymax);
-		a->priority = 3;
+		action_setPriority(a, 3);
 		_parser_addAction(parser, a);
 	}
 

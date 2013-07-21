@@ -11,13 +11,6 @@
 
 typedef struct _LoadPluginAction LoadPluginAction;
 
-struct _LoadPluginAction {
-	Action super;
-	GQuark id;
-	GString* path;
-	MAGIC_DECLARE;
-};
-
 LoadPluginAction* loadplugin_new(GString* name, GString* path);
 void loadplugin_run(LoadPluginAction* action);
 void loadplugin_free(LoadPluginAction* action);

@@ -11,13 +11,8 @@
 
 typedef struct _Action Action;
 
-struct _Action {
-	Runnable super;
-	gint priority;
-	MAGIC_DECLARE;
-};
-
 void action_init(Action* a, RunnableFunctionTable* vtable);
+void action_setPriority(Action* a, gint priority);
 gint action_compare(gconstpointer a, gconstpointer b, gpointer user_data);
 
 #endif /* SHD_ACTION_H_ */

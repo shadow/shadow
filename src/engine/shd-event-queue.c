@@ -45,7 +45,7 @@ void eventqueue_push(EventQueue* eventq, Event* event) {
 	MAGIC_ASSERT(eventq);
 	if(event) {
 		g_mutex_lock(&(eventq->lock));
-		event->sequence = ++(eventq->sequenceCounter);
+		shadowevent_setSequence(event, ++(eventq->sequenceCounter));
 		priorityqueue_push(eventq->pq, event);
 		(eventq->nPushed)++;
 		g_mutex_unlock(&(eventq->lock));

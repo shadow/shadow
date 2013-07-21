@@ -5,6 +5,13 @@
  */
 
 #include "shadow.h"
+#include "shd-event-internal.h"
+
+struct _NotifyPluginEvent {
+	Event super;
+	gint epollHandle;
+	MAGIC_DECLARE;
+};
 
 EventFunctionTable notifyplugin_functions = {
 	(EventRunFunc) notifyplugin_run,

@@ -5,6 +5,14 @@
  */
 
 #include "shadow.h"
+#include "shd-action-internal.h"
+
+struct _LoadCDFAction {
+	Action super;
+	GQuark id;
+	GString* path;
+	MAGIC_DECLARE;
+};
 
 RunnableFunctionTable loadcdf_functions = {
 	(RunnableRunFunc) loadcdf_run,

@@ -5,6 +5,7 @@
  */
 
 #include "shadow.h"
+#include "shd-event-internal.h"
 
 struct _TCPCloseTimerExpiredEvent {
 	Event super;

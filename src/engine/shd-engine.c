@@ -162,25 +162,24 @@ void engine_free(Engine* engine) {
 static gint _engine_processEvents(Engine* engine) {
 	MAGIC_ASSERT(engine);
 
-	Event* next_event = eventqueue_peek(engine->masterEventQueue);
-	if(next_event) {
+	Event* nextEvent = eventqueue_peek(engine->masterEventQueue);
+	if(nextEvent) {
 		Worker* worker = worker_getPrivate();
 		worker->clock_now = SIMTIME_INVALID;
 		worker->clock_last = 0;
 		worker->cached_engine = engine;
 
 		/* process all events in the priority queue */
-		while(next_event && (next_event->time < engine->executeWindowEnd) &&
-				(next_event->time < engine->endTime))
+		while(nextEvent && (shadowevent_getTime(nextEvent) < engine->executeWindowEnd) &&
+				(shadowevent_getTime(nextEvent) < engine->endTime))
 		{
 			/* get next event */
-			next_event = eventqueue_pop(engine->masterEventQueue);
-			worker->cached_event = next_event;
-			MAGIC_ASSERT(worker->cached_event);
-			worker->cached_node = next_event->node;
+			nextEvent = eventqueue_pop(engine->masterEventQueue);
+			worker->cached_event = nextEvent;
+			worker->cached_node = shadowevent_getNode(nextEvent);
 
 			/* ensure priority */
-			worker->clock_now = worker->cached_event->time;
+			worker->clock_now = shadowevent_getTime(worker->cached_event);
 			engine->clock = worker->clock_now;
 			g_assert(worker->clock_now >= worker->clock_last);
 
@@ -193,7 +192,7 @@ static gint _engine_processEvents(Engine* engine) {
 			worker->clock_last = worker->clock_now;
 			worker->clock_now = SIMTIME_INVALID;
 
-			next_event = eventqueue_peek(engine->masterEventQueue);
+			nextEvent = eventqueue_peek(engine->masterEventQueue);
 		}
 	}
 
@@ -261,8 +260,9 @@ static gint _engine_distributeEvents(Engine* engine) {
 				Node* node = item->data;
 				EventQueue* eventq = node_getEvents(node);
 				Event* nextEvent = eventqueue_peek(eventq);
-				if(nextEvent && (nextEvent->time < minNextEventTime)) {
-					minNextEventTime = nextEvent->time;
+				SimulationTime nextEventTime = shadowevent_getTime(nextEvent);
+				if(nextEvent && (nextEventTime < minNextEventTime)) {
+					minNextEventTime = nextEventTime;
 				}
 				item = g_list_next(item);
 			}
@@ -341,7 +341,7 @@ gint engine_run(Engine* engine) {
 
 void engine_pushEvent(Engine* engine, Event* event) {
 	MAGIC_ASSERT(engine);
-	MAGIC_ASSERT(event);
+	g_assert(event);
 	g_assert(engine_getNumThreads(engine) == 1);
 	eventqueue_push(engine->masterEventQueue, event);
 }

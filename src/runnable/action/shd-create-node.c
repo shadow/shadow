@@ -5,6 +5,7 @@
  */
 
 #include "shadow.h"
+#include "shd-action-internal.h"
 
 #include <netinet/in.h>
 

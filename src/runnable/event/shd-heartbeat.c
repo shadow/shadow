@@ -5,6 +5,7 @@
  */
 
 #include "shadow.h"
+#include "shd-event-internal.h"
 
 EventFunctionTable heartbeat_functions = {
 	(EventRunFunc) heartbeat_run,

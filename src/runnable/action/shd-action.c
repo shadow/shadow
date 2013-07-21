@@ -5,6 +5,7 @@
  */
 
 #include "shadow.h"
+#include "shd-action-internal.h"
 
 void action_init(Action* a, RunnableFunctionTable* vtable) {
 	g_assert(a && vtable);
@@ -12,6 +13,11 @@ void action_init(Action* a, RunnableFunctionTable* vtable) {
 	MAGIC_INIT(vtable);
 	a->priority = 0;
 	runnable_init(&(a->super), vtable);
+}
+
+void action_setPriority(Action* a, gint priority) {
+	MAGIC_ASSERT(a);
+	a->priority = priority;
 }
 
 gint action_compare(gconstpointer a, gconstpointer b, gpointer user_data) {

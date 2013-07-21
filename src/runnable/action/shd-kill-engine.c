@@ -5,6 +5,13 @@
  */
 
 #include "shadow.h"
+#include "shd-action-internal.h"
+
+struct _KillEngineAction {
+	Action super;
+	SimulationTime endTime;
+	MAGIC_DECLARE;
+};
 
 RunnableFunctionTable killengine_functions = {
 	(RunnableRunFunc) killengine_run,

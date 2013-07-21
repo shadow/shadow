@@ -5,6 +5,7 @@
  */
 
 #include "shadow.h"
+#include "shd-event-internal.h"
 
 struct _StopApplicationEvent {
 	Event super;
@@ -22,7 +23,7 @@ StopApplicationEvent* stopapplication_new(Application* application) {
 	StopApplicationEvent* event = g_new0(StopApplicationEvent, 1);
 	MAGIC_INIT(event);
 
-	shadowevent_init(&(event->super), &stopapplication_functions);
+	shadowevent_init((Event*) event, &stopapplication_functions);
 
 	event->application = application;
 

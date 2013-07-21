@@ -5,6 +5,16 @@
  */
 
 #include "shadow.h"
+#include "shd-action-internal.h"
+
+struct _GenerateCDFAction {
+	Action super;
+	GQuark id;
+	guint64 center;
+	guint64 width;
+	guint64 tail;
+	MAGIC_DECLARE;
+};
 
 RunnableFunctionTable generatecdf_functions = {
 	(RunnableRunFunc) generatecdf_run,

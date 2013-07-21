@@ -11,12 +11,6 @@
 
 typedef struct _NotifyPluginEvent NotifyPluginEvent;
 
-struct _NotifyPluginEvent {
-	Event super;
-	gint epollHandle;
-	MAGIC_DECLARE;
-};
-
 NotifyPluginEvent* notifyplugin_new(gint epollHandle);
 void notifyplugin_run(NotifyPluginEvent* event, Node* node);
 void notifyplugin_free(NotifyPluginEvent* event);

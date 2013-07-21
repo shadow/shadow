@@ -5,6 +5,14 @@
  */
 
 #include "shadow.h"
+#include "shd-action-internal.h"
+
+struct _LoadPluginAction {
+	Action super;
+	GQuark id;
+	GString* path;
+	MAGIC_DECLARE;
+};
 
 RunnableFunctionTable loadplugin_functions = {
 	(RunnableRunFunc) loadplugin_run,

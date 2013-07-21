@@ -5,6 +5,7 @@
  */
 
 #include "shadow.h"
+#include "shd-event-internal.h"
 
 struct _StartApplicationEvent {
 	Event super;
@@ -22,7 +23,7 @@ StartApplicationEvent* startapplication_new(Application* application) {
 	StartApplicationEvent* event = g_new0(StartApplicationEvent, 1);
 	MAGIC_INIT(event);
 
-	shadowevent_init(&(event->super), &startapplication_functions);
+	shadowevent_init((Event*) event, &startapplication_functions);
 
 	event->application = application;
 
