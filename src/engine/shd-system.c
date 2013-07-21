@@ -508,43 +508,98 @@ gssize system_read(gint fd, gpointer buf, gint n) {
 
 gint system_getSockOpt(gint fd, gint level, gint optname, gpointer optval,
 		socklen_t* optlen) {
+	if(!optlen) {
+		errno = EFAULT;
+		return -1;
+	}
+
 	Node* node = _system_switchInShadowContext();
 	Descriptor* descriptor = node_lookupDescriptor(node, fd);
 
 	gint result = 0;
 
-	/* @todo: implement socket optsions */
-	if(level == SOL_SOCKET || level == SOL_IP || level == SOL_TCP) {
-		switch (optname) {
-			case TCP_INFO:
-				if(descriptor_getType(descriptor) != DT_TCPSOCKET) {
-					warning("called getsockopt with SOL_TCP on non-TCP socket");
+	/* TODO: implement socket options */
+	if(descriptor) {
+		if(level == SOL_SOCKET || level == SOL_IP || level == SOL_TCP) {
+			DescriptorType t = descriptor_getType(descriptor);
+			switch (optname) {
+				case TCP_INFO: {
+					if(t == DT_TCPSOCKET) {
+						if(optval) {
+							TCP* tcp = (TCP*)descriptor;
+							tcp_getInfo(tcp, (struct tcp_info *)optval);
+						}
+						*optlen = sizeof(struct tcp_info);
+						result = 0;
+					} else {
+						warning("called getsockopt with TCP_INFO on non-TCP socket");
+						errno = ENOPROTOOPT;
+						result = -1;
+					}
+
+					break;
+				}
+
+				case SO_SNDBUF: {
+					if(*optlen < sizeof(gint)) {
+						warning("called getsockopt with SO_SNDBUF with optlen < %i", (gint)(sizeof(gint)));
+						errno = EINVAL;
+						result = -1;
+					} else if (t != DT_TCPSOCKET && t != DT_UDPSOCKET) {
+						warning("called getsockopt with SO_SNDBUF on non-socket");
+						errno = ENOPROTOOPT;
+						result = -1;
+					} else {
+						if(optval) {
+							*((gint*) optval) = (gint) socket_getOutputBufferSize((Socket*)descriptor);
+						}
+						*optlen = sizeof(gint);
+					}
+					break;
+				}
+
+				case SO_RCVBUF: {
+					if(*optlen < sizeof(gint)) {
+						warning("called getsockopt with SO_RCVBUF with optlen < %i", (gint)(sizeof(gint)));
+						errno = EINVAL;
+						result = -1;
+					} else if (t != DT_TCPSOCKET && t != DT_UDPSOCKET) {
+						warning("called getsockopt with SO_RCVBUF on non-socket");
+						errno = ENOPROTOOPT;
+						result = -1;
+					} else {
+						if(optval) {
+							*((gint*) optval) = (gint) socket_getInputBufferSize((Socket*)descriptor);
+						}
+						*optlen = sizeof(gint);
+					}
+					break;
+				}
+
+				case SO_ERROR: {
+					if(optval) {
+						*((gint*)optval) = 0;
+					}
+					*optlen = sizeof(gint);
+
+					result = 0;
+					break;
+				}
+
+				default: {
+					warning("getsockopt optname %i not implemented", optname);
+					errno = ENOSYS;
 					result = -1;
 					break;
 				}
-				TCP* tcp = (TCP*)descriptor;
-				tcp_getInfo(tcp, (struct tcp_info *)optval);
-				*optlen = sizeof(struct tcp_info);
-
-				result = 0;
-				break;
-
-			case SO_ERROR:
-				*((gint*)optval) = 0;
-				*optlen = sizeof(gint);
-
-				result = 0;
-				break;
-
-			default:
-				warning("option not implemented");
-				errno = ENOSYS;
-				result = -1;
-				break;
+			}
+		} else {
+			warning("getsockopt level %i not implemented", level);
+			errno = ENOSYS;
+			result = -1;
 		}
 	} else {
-		warning("socket option level not implemented");
-		errno = ENOSYS;
+		errno = EBADF;
 		result = -1;
 	}
 
@@ -554,12 +609,79 @@ gint system_getSockOpt(gint fd, gint level, gint optname, gpointer optval,
 
 gint system_setSockOpt(gint fd, gint level, gint optname, const gpointer optval,
 		socklen_t optlen) {
+	if(!optval) {
+		errno = EFAULT;
+		return -1;
+	}
+
 	Node* node = _system_switchInShadowContext();
-	/* @todo: implement socket options */
-	debug("setsockopt not implemented. this is probably OK, depending on usage.");
-	errno = ENOSYS;
+	Descriptor* descriptor = node_lookupDescriptor(node, fd);
+
+	gint result = 0;
+
+	/* TODO: implement socket options */
+	if(descriptor) {
+		if(level == SOL_SOCKET) {
+			DescriptorType t = descriptor_getType(descriptor);
+			switch (optname) {
+				case SO_SNDBUF: {
+					if(optlen < sizeof(gint)) {
+						warning("called setsockopt with SO_SNDBUF with optlen < %i", (gint)(sizeof(gint)));
+						errno = EINVAL;
+						result = -1;
+					} else if (t != DT_TCPSOCKET && t != DT_UDPSOCKET) {
+						warning("called setsockopt with SO_SNDBUF on non-socket");
+						errno = ENOPROTOOPT;
+						result = -1;
+					} else {
+						gint v = *((gint*) optval);
+						socket_setOutputBufferSize((Socket*)descriptor, (gsize)v*2);
+					}
+					break;
+				}
+
+				case SO_RCVBUF: {
+					if(optlen < sizeof(gint)) {
+						warning("called setsockopt with SO_RCVBUF with optlen < %i", (gint)(sizeof(gint)));
+						errno = EINVAL;
+						result = -1;
+					} else if (t != DT_TCPSOCKET && t != DT_UDPSOCKET) {
+						warning("called setsockopt with SO_RCVBUF on non-socket");
+						errno = ENOPROTOOPT;
+						result = -1;
+					} else {
+						gint v = *((gint*) optval);
+						socket_setInputBufferSize((Socket*)descriptor, (gsize)v*2);
+					}
+					break;
+				}
+
+				case SO_REUSEADDR: {
+					// TODO implement this!
+					// XXX Tor actually uses this option!!
+					debug("setsockopt SO_REUSEADDR not yet implemented");
+					break;
+				}
+
+				default: {
+					warning("setsockopt optname %i not implemented", optname);
+					errno = ENOSYS;
+					result = -1;
+					break;
+				}
+			}
+		} else {
+			warning("setsockopt level %i not implemented", level);
+			errno = ENOSYS;
+			result = -1;
+		}
+	} else {
+		errno = EBADF;
+		result = -1;
+	}
+
 	_system_switchOutShadowContext(node);
-	return -1;
+	return result;
 }
 
 gint system_listen(gint fd, gint backlog) {

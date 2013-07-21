@@ -234,6 +234,12 @@ gsize socket_getInputBufferSpace(Socket* socket) {
 	return (socket->inputBufferSize - socket->inputBufferLength);
 }
 
+gsize socket_getOutputBufferSpace(Socket* socket) {
+	MAGIC_ASSERT(socket);
+	g_assert(socket->outputBufferSize >= socket->outputBufferLength);
+	return (socket->outputBufferSize - socket->outputBufferLength);
+}
+
 gsize socket_getInputBufferLength(Socket* socket) {
 	MAGIC_ASSERT(socket);
 	return socket->inputBufferLength;
@@ -242,6 +248,34 @@ gsize socket_getInputBufferLength(Socket* socket) {
 gsize socket_getOutputBufferLength(Socket* socket) {
 	MAGIC_ASSERT(socket);
 	return socket->outputBufferLength;
+}
+
+gsize socket_getInputBufferSize(Socket* socket) {
+	MAGIC_ASSERT(socket);
+	return socket->inputBufferSize;
+}
+
+gsize socket_getOutputBufferSize(Socket* socket) {
+	MAGIC_ASSERT(socket);
+	return socket->outputBufferSize;
+}
+
+void socket_setInputBufferSize(Socket* socket, gsize newSize) {
+	MAGIC_ASSERT(socket);
+	if(newSize > socket->inputBufferSize) {
+		socket->inputBufferSize = newSize;
+	} else {
+		socket->pendingInputBufferSize = newSize;
+	}
+}
+
+void socket_setOutputBufferSize(Socket* socket, gsize newSize) {
+	MAGIC_ASSERT(socket);
+	if(newSize > socket->outputBufferSize) {
+		socket->outputBufferSize = newSize;
+	} else {
+		socket->pendingOutputBufferSize = newSize;
+	}
 }
 
 gboolean socket_addToInputBuffer(Socket* socket, Packet* packet) {
@@ -292,12 +326,6 @@ Packet* socket_removeFromInputBuffer(Socket* socket) {
 	}
 
 	return packet;
-}
-
-gsize socket_getOutputBufferSpace(Socket* socket) {
-	MAGIC_ASSERT(socket);
-	g_assert(socket->outputBufferSize >= socket->outputBufferLength);
-	return (socket->outputBufferSize - socket->outputBufferLength);
 }
 
 gboolean socket_addToOutputBuffer(Socket* socket, Packet* packet) {

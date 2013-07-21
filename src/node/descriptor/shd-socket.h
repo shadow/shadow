@@ -52,11 +52,13 @@ struct _Socket {
 	/* buffering packets readable by user */
 	GQueue* inputBuffer;
 	gsize inputBufferSize;
+	gsize pendingInputBufferSize;
 	gsize inputBufferLength;
 
 	/* buffering packets ready to send */
 	GQueue* outputBuffer;
 	gsize outputBufferSize;
+	gsize pendingOutputBufferSize;
 	gsize outputBufferLength;
 
 	MAGIC_DECLARE;
@@ -75,11 +77,15 @@ Packet* socket_pullOutPacket(Socket* socket);
 Packet* socket_peekNextPacket(const Socket* socket);
 void socket_droppedPacket(Socket* socket, Packet* packet);
 
+gsize socket_getInputBufferSize(Socket* socket);
+void socket_setInputBufferSize(Socket* socket, gsize newSize);
 gsize socket_getInputBufferLength(Socket* socket);
 gsize socket_getInputBufferSpace(Socket* socket);
 gboolean socket_addToInputBuffer(Socket* socket, Packet* packet);
 Packet* socket_removeFromInputBuffer(Socket* socket);
 
+gsize socket_getOutputBufferSize(Socket* socket);
+void socket_setOutputBufferSize(Socket* socket, gsize newSize);
 gsize socket_getOutputBufferLength(Socket* socket);
 gsize socket_getOutputBufferSpace(Socket* socket);
 gboolean socket_addToOutputBuffer(Socket* socket, Packet* packet);
