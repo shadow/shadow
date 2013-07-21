@@ -219,7 +219,7 @@ def generate(args):
     # get list of relays, sorted by increasing bandwidth
     validyear, validmonth, relays = parse_consensus(args.consensus)
     
-    # separate out exits and nonexits
+    # separate out relays
     exitguards, exits, guards, middles = [], [], [], []
     for relay in relays:
         if relay.isExit and relay.isGuard: exitguards.append(relay)
@@ -229,21 +229,21 @@ def generate(args):
         
     geoentries = getGeoEntries(args.geoippath)
 
-    # sample for the exits and nonexits we'll use for our nodes
+    # sample for the relays we'll use for our nodes
     n_exitguards = int(float(len(exitguards)) / float(len(relays)) * args.nrelays)
-    n_exits = int(float(len(exits)) / float(len(relays)) * args.nrelays)
     n_guards = int(float(len(guards)) / float(len(relays)) * args.nrelays)
+    n_exits = int(float(len(exits)) / float(len(relays)) * args.nrelays)
     n_middles = int(float(len(middles)) / float(len(relays)) * args.nrelays)
     
     exitguards_nodes = getRelays(exitguards, n_exitguards, geoentries, args.descriptors, args.extrainfos, validyear, validmonth)
-    exits_nodes = getRelays(exits, n_exits, geoentries, args.descriptors, args.extrainfos, validyear, validmonth)
     guards_nodes = getRelays(guards, n_guards, geoentries, args.descriptors, args.extrainfos, validyear, validmonth)
+    exits_nodes = getRelays(exits, n_exits, geoentries, args.descriptors, args.extrainfos, validyear, validmonth)
     middles_nodes = getRelays(middles, n_middles, geoentries, args.descriptors, args.extrainfos, validyear, validmonth)
 
     # get the fastest nodes at the front
     exitguards_nodes.reverse()
-    exits_nodes.reverse()
     guards_nodes.reverse()
+    exits_nodes.reverse()
     middles_nodes.reverse()
     
     servers = getServers(geoentries, args.alexa)
@@ -252,10 +252,10 @@ def generate(args):
     # output choices
     with open("relays.csv", "wb") as f:
         print >>f, Relay.CSVHEADER
-        for r in exitnodes:
-            print >>f, r.toCSV()
-        for r in nonexitnodes:
-            print >>f, r.toCSV()
+        for r in exitguards_nodes: print >>f, r.toCSV()
+        for r in guards_nodes: print >>f, r.toCSV()
+        for r in exits_nodes: print >>f, r.toCSV()
+        for r in middles_nodes: print >>f, r.toCSV()
     
     # build the XML
     root = etree.Element("hosts")
