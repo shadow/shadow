@@ -22,7 +22,6 @@ struct _Channel {
 
 static void channel_close(Channel* channel) {
 	MAGIC_ASSERT(channel);
-	descriptor_adjustStatus((Descriptor*)channel, DS_CLOSED, TRUE);
 	node_closeDescriptor(worker_getPrivate()->cached_node, channel->super.super.handle);
 }
 

@@ -54,6 +54,7 @@ void descriptor_unref(gpointer data) {
 void descriptor_close(Descriptor* descriptor) {
 	MAGIC_ASSERT(descriptor);
 	MAGIC_ASSERT(descriptor->funcTable);
+	descriptor_adjustStatus(descriptor, DS_CLOSED, TRUE);
 	descriptor->funcTable->close(descriptor);
 }
 

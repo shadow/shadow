@@ -14,6 +14,7 @@ enum EpollWatchFlags {
 	EWF_WAITINGREAD = 1 << 2,
 	EWF_WRITEABLE = 1 << 3,
 	EWF_WAITINGWRITE = 1 << 4,
+	EWF_CLOSED = 1 << 5,
 };
 
 typedef struct _EpollWatch EpollWatch;
@@ -92,8 +93,6 @@ static void _epollwatch_free(EpollWatch* watch) {
 static void _epoll_free(Epoll* epoll) {
 	MAGIC_ASSERT(epoll);
 
-	descriptor_adjustStatus(&(epoll->super), DS_READABLE, FALSE);
-
 	/* this will go through all epollwatch items and remove the listeners
 	 * only from those that dont already exist in the watching table */
 	while(!g_queue_is_empty(epoll->reporting)) {
@@ -122,7 +121,6 @@ static void _epoll_free(Epoll* epoll) {
 
 static void _epoll_close(Epoll* epoll) {
 	MAGIC_ASSERT(epoll);
-	descriptor_adjustStatus(&(epoll->super), DS_CLOSED, TRUE);
 	node_closeDescriptor(worker_getPrivate()->cached_node, epoll->super.handle);
 }
 
@@ -171,6 +169,7 @@ static enum EpollWatchFlags _epollwatch_getStatus(EpollWatch* watch) {
 	flags |= (status & DS_ACTIVE) ? EWF_ACTIVE : EWF_NONE;
 	flags |= (status & DS_READABLE) ? EWF_READABLE : EWF_NONE;
 	flags |= (status & DS_WRITABLE) ? EWF_WRITEABLE : EWF_NONE;
+	flags |= (status & DS_CLOSED) ? EWF_CLOSED : EWF_NONE;
 	flags |= (watch->event.events & EPOLLIN) ? EWF_WAITINGREAD : EWF_NONE;
 	flags |= (watch->event.events & EPOLLOUT) ? EWF_WAITINGWRITE : EWF_NONE;
 
@@ -178,7 +177,7 @@ static enum EpollWatchFlags _epollwatch_getStatus(EpollWatch* watch) {
 }
 
 static gboolean _epollwatch_needsNotify(enum EpollWatchFlags f) {
-	if((f & EWF_ACTIVE) &&
+	if(!(f & EWF_CLOSED) && (f & EWF_ACTIVE) &&
 			(((f & EWF_READABLE) && (f & EWF_WAITINGREAD)) ||
 			((f & EWF_WRITEABLE) && (f & EWF_WAITINGWRITE)))) {
 		return TRUE;
@@ -207,8 +206,9 @@ static void _epoll_check(Epoll* epoll, EpollWatch* watch) {
 	MAGIC_ASSERT(epoll);
 	MAGIC_ASSERT(watch);
 
-	/* check if we need to schedule a notification */
-	gboolean needsNotify = _epollwatch_needsNotify(_epollwatch_getStatus(watch));
+	/* check status to see if we need to schedule a notification */
+	enum EpollWatchFlags ewf = _epollwatch_getStatus(watch);
+	gboolean needsNotify = _epollwatch_needsNotify(ewf);
 
 	if(needsNotify) {
 		/* we need to report an event to user */
@@ -231,16 +231,16 @@ static void _epoll_check(Epoll* epoll, EpollWatch* watch) {
 		 * the node to collect events and lazily removing this later. */
 		if(watch->isReporting) {
 			g_queue_remove(epoll->reporting, watch);
-
 			watch->isReporting = FALSE;
-			if(!watch->isWatching) {
-				_epollwatch_free(watch);
-			}
 
 			/* check if parent epoll can still read child epoll events */
 			if(g_queue_is_empty(epoll->reporting)) {
 				descriptor_adjustStatus(&(epoll->super), DS_READABLE, FALSE);
 			}
+		}
+
+		if((ewf & EWF_CLOSED) || (!watch->isWatching && !watch->isReporting)) {
+			_epollwatch_free(watch);
 		}
 	}
 
