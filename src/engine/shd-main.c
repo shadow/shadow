@@ -33,7 +33,7 @@ gint shadow_main(gint argc, gchar* argv[]) {
 		/* incorrect options given */
 		return -1;
 	} else if(config->printSoftwareVersion) {
-		g_printerr("Shadow v%s\n(c) 2010-2012 Rob G. Jansen\nReleased under the GNU GPL, v3\n", SHADOW_VERSION);
+		g_printerr("Shadow v%s\nFor more information, visit http://shadow.github.io or https://github.com/shadow\n", SHADOW_VERSION);
 		configuration_free(config);
 		return 0;
 	}
