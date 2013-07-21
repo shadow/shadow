@@ -115,8 +115,13 @@ def query_yes_no(question, default="yes"):
 def reset(output):
     if os.path.exists(output+"/data"): shutil.rmtree(output+"/data")
     
+    if os.path.exists(output+"/relay.torrc"):
+        os.makedirs(output+"/data/relaydata")
+    else:
+        os.makedirs(output+"/data/exitguarddata")
+        os.makedirs(output+"/data/guarddata")
+        os.makedirs(output+"/data/middledata")
     os.makedirs(output+"/data/exitdata")
-    os.makedirs(output+"/data/relaydata")
     os.makedirs(output+"/data/clientdata")
     os.makedirs(output+"/data/pcapdata")
     
