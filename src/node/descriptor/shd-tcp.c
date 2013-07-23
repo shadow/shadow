@@ -280,6 +280,9 @@ static void _tcp_autotune(TCP* tcp) {
 	/* get latency in milliseconds */
 	guint32 send_latency = (guint32) internetwork_getLatency(internet, sourceID, destinationID, 0.8);
 	guint32 receive_latency = (guint32) internetwork_getLatency(internet, destinationID, sourceID, 0.8);
+	if(send_latency == 0 || receive_latency == 0) {
+	  error("autotuning needs nonzero latency, source=%u dest=%u send=%u recv=%u", sourceID, destinationID, send_latency, receive_latency);
+	}
 	g_assert(send_latency > 0 && receive_latency > 0);
 
 	guint32 rtt_milliseconds = send_latency + receive_latency;

@@ -122,6 +122,8 @@ guint64 link_computeDelay(Link* link, gdouble percentile) {
 			delay = min + (width * r);
 		}
 
+		if(delay == 0)
+		    delay = 1;
 		link->latencySample = delay;
 		link->lastSampleTime = now;
 	}
