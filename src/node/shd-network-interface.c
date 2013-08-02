@@ -385,7 +385,9 @@ static void _networkinterface_scheduleNextReceive(NetworkInterface* interface) {
 		_networkinterface_pcapWritePacket(interface, packet);
 
 		/* if the socket closed, just drop the packet */
+		gint socketHandle = -1;
 		if(socket) {
+			socketHandle = *descriptor_getHandleReference((Descriptor*)socket);
 			gboolean needsRetransmit = socket_pushInPacket(socket, packet);
 			if(needsRetransmit) {
 				/* socket can not handle it now, so drop it */
@@ -395,7 +397,7 @@ static void _networkinterface_scheduleNextReceive(NetworkInterface* interface) {
 
 		/* successfully received, calculate how long it took to 'receive' this packet */
 		interface->receiveNanosecondsConsumed += (length * interface->timePerByteDown);
-		tracker_addInputBytes(node_getTracker(worker_getPrivate()->cached_node),(guint64)length);
+		tracker_addInputBytes(node_getTracker(worker_getPrivate()->cached_node),(guint64)length, socketHandle);
 	}
 
 	/*
@@ -481,13 +483,14 @@ void networkinterface_packetDropped(NetworkInterface* interface, Packet* packet)
 }
 
 /* round robin queuing discipline ($ man tc)*/
-static Packet* _networkinterface_selectRoundRobin(NetworkInterface* interface) {
+static Packet* _networkinterface_selectRoundRobin(NetworkInterface* interface, gint* socketHandle) {
 	Packet* packet = NULL;
 
 	while(!packet && !g_queue_is_empty(interface->rrQueue)) {
 		/* do round robin to get the next packet from the next socket */
 		Socket* socket = g_queue_pop_head(interface->rrQueue);
 		packet = socket_pullOutPacket(socket);
+		*socketHandle = *descriptor_getHandleReference((Descriptor*)socket);
 
 		if(socket_peekNextPacket(socket)) {
 			/* socket has more packets, and is still reffed from before */
@@ -502,7 +505,7 @@ static Packet* _networkinterface_selectRoundRobin(NetworkInterface* interface) {
 }
 
 /* first-in-first-out queuing discipline ($ man tc)*/
-static Packet* _networkinterface_selectFirstInFirstOut(NetworkInterface* interface) {
+static Packet* _networkinterface_selectFirstInFirstOut(NetworkInterface* interface, gint* socketHandle) {
 	/* use packet priority field to select based on application ordering.
 	 * this is really a simplification of prioritizing on timestamps. */
 	Packet* packet = NULL;
@@ -511,6 +514,7 @@ static Packet* _networkinterface_selectFirstInFirstOut(NetworkInterface* interfa
 		/* do fifo to get the next packet from the next socket */
 		Socket* socket = priorityqueue_pop(interface->fifoQueue);
 		packet = socket_pullOutPacket(socket);
+		*socketHandle = *descriptor_getHandleReference((Descriptor*)socket);
 
 		if(socket_peekNextPacket(socket)) {
 			/* socket has more packets, and is still reffed from before */
@@ -531,17 +535,18 @@ static void _networkinterface_scheduleNextSend(NetworkInterface* interface) {
 
 	/* loop until we find a socket that has something to send */
 	while(interface->sendNanosecondsConsumed <= batchTime) {
+		gint socketHandle = -1;
 
 		/* choose which packet to send next based on our queuing discipline */
 		Packet* packet;
 		switch(interface->qdisc) {
 			case NIQ_RR: {
-				packet = _networkinterface_selectRoundRobin(interface);
+				packet = _networkinterface_selectRoundRobin(interface, &socketHandle);
 				break;
 			}
 			case NIQ_FIFO:
 			default: {
-				packet = _networkinterface_selectFirstInFirstOut(interface);
+				packet = _networkinterface_selectFirstInFirstOut(interface, &socketHandle);
 				break;
 			}
 		}
@@ -568,7 +573,7 @@ static void _networkinterface_scheduleNextSend(NetworkInterface* interface) {
 		guint length = packet_getPayloadLength(packet) + packet_getHeaderSize(packet);
 
 		interface->sendNanosecondsConsumed += (length * interface->timePerByteUp);
-		tracker_addOutputBytes(node_getTracker(worker_getPrivate()->cached_node),(guint64)length);
+		tracker_addOutputBytes(node_getTracker(worker_getPrivate()->cached_node),(guint64)length, socketHandle);
 		_networkinterface_pcapWritePacket(interface, packet);
 	}
 

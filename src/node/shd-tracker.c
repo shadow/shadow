@@ -53,13 +53,21 @@ struct _Tracker {
 typedef struct _TrackerSocket TrackerSocket;
 struct _TrackerSocket {
 	gint handle;
+	enum ProtocolType type;
+
 	in_addr_t peerIP;
 	in_port_t peerPort;
 	gchar* peerHostname;
+
 	gsize inputBufferSize;
 	gsize inputBufferLength;
 	gsize outputBufferSize;
 	gsize outputBufferLength;
+
+	gsize inputBytesTotal;
+	gsize inputBytesLastInterval;
+	gsize outputBytesTotal;
+	gsize outputBytesLastInterval;
 
 	MAGIC_DECLARE;
 };
@@ -170,21 +178,37 @@ void tracker_addVirtualProcessingDelay(Tracker* tracker, SimulationTime delay) {
 	}
 }
 
-void tracker_addInputBytes(Tracker* tracker, gsize inputBytes) {
+void tracker_addInputBytes(Tracker* tracker, gsize inputBytes, gint handle) {
 	MAGIC_ASSERT(tracker);
 
 	if(_tracker_getFlags(tracker) & TRACKER_FLAGS_NODE) {
 		tracker->inputBytesTotal += inputBytes;
 		tracker->inputBytesLastInterval += inputBytes;
 	}
+
+	if(_tracker_getFlags(tracker) & TRACKER_FLAGS_SOCKET) {
+		TrackerSocket* socket = g_hash_table_lookup(tracker->sockets, &handle);
+		if(socket) {
+			socket->inputBytesTotal += inputBytes;
+			socket->inputBytesLastInterval += inputBytes;
+		}
+	}
 }
 
-void tracker_addOutputBytes(Tracker* tracker, gsize outputBytes) {
+void tracker_addOutputBytes(Tracker* tracker, gsize outputBytes, gint handle) {
 	MAGIC_ASSERT(tracker);
 
 	if(_tracker_getFlags(tracker) & TRACKER_FLAGS_NODE) {
 		tracker->outputBytesTotal += outputBytes;
 		tracker->outputBytesLastInterval += outputBytes;
+	}
+
+	if(_tracker_getFlags(tracker) & TRACKER_FLAGS_SOCKET) {
+		TrackerSocket* socket = g_hash_table_lookup(tracker->sockets, &handle);
+		if(socket) {
+			socket->outputBytesTotal += outputBytes;
+			socket->outputBytesLastInterval += outputBytes;
+		}
 	}
 }
 
@@ -215,12 +239,13 @@ void tracker_removeAllocatedBytes(Tracker* tracker, gpointer location) {
 	}
 }
 
-void tracker_addSocket(Tracker* tracker, gint handle, gsize inputBufferSize, gsize outputBufferSize) {
+void tracker_addSocket(Tracker* tracker, gint handle, enum ProtocolType type, gsize inputBufferSize, gsize outputBufferSize) {
 	MAGIC_ASSERT(tracker);
 
 	if(_tracker_getFlags(tracker) & TRACKER_FLAGS_SOCKET) {
 		TrackerSocket* socket = g_new0(TrackerSocket, 1);
 		socket->handle = handle;
+		socket->type = type;
 		socket->inputBufferSize = inputBufferSize;
 		socket->outputBufferSize = outputBufferSize;
 
@@ -300,30 +325,36 @@ static void _tracker_logSocket(Tracker* tracker, GLogLevelFlags level, Simulatio
 	if(!tracker->didLogSocketHeader) {
 		tracker->didLogSocketHeader = TRUE;
 		logging_log(G_LOG_DOMAIN, level, __FUNCTION__,
-				"[shadow-heartbeat] [socket-header] descriptor-number,hostname:port-peer,inbuflen:bytes,inbufsize:bytes,outbuflen:bytes,outbufsize:bytes;...");
+				"[shadow-heartbeat] [socket-header] descriptor-number,protocol-string,hostname:port-peer,inbuflen-bytes,inbufsize-bytes,outbuflen-bytes,outbufsize-bytes,rx-bytes,tx-bytes;...");
 	}
 
-	GList* socketList = g_hash_table_get_values(tracker->sockets);
-	gint numSockets = 0;
-	if(socketList) {
-		GString* msg = g_string_new("[shadow-heartbeat] [socket] ");
-		/* loop through all sockets we have in the hash table to log */
-		for(GList* iter = g_list_first(socketList); iter; iter = g_list_next(iter)) {
-			TrackerSocket* socket = (TrackerSocket* )iter->data;
-			/* don't log sockets that don't have peer IP/port set */
-			if(socket->peerIP) {
-				g_string_append_printf(msg, "%d,%s:%d,%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT";",
-						socket->handle, /*inet_ntoa((struct in_addr){socket->peerIP})*/ socket->peerHostname, socket->peerPort,
-						socket->inputBufferLength, socket->inputBufferSize,	socket->outputBufferLength, socket->outputBufferSize);
-				numSockets++;
-			}
-		}
+	/* construct the log message from all sockets we have in the hash table */
+	GString* msg = g_string_new("[shadow-heartbeat] [socket] ");
+	TrackerSocket* socket = NULL;
+	gint socketLogCount = 0;
+	GHashTableIter socketIterator;
+	g_hash_table_iter_init(&socketIterator, tracker->sockets);
 
-		if(numSockets > 0) {
-			logging_log(G_LOG_DOMAIN, level, __FUNCTION__, "%s", msg->str);
-		}
-		g_string_free(msg, TRUE);
+	while(g_hash_table_iter_next(&socketIterator, NULL, (gpointer*)&socket)) {
+		/* don't log sockets that don't have peer IP/port set */
+	    if(socket && socket->peerIP) {
+			g_string_append_printf(msg, "%d,%s,%s:%d,%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT";",
+					socket->handle, /*inet_ntoa((struct in_addr){socket->peerIP})*/
+					socket->type == PTCP ? "TCP" : socket->type == PUDP ? "UDP" :
+						socket->type == PLOCAL ? "LOCAL" : "UNKNOWN",
+					socket->peerHostname, socket->peerPort,
+					socket->inputBufferLength, socket->inputBufferSize,
+					socket->outputBufferLength, socket->outputBufferSize,
+					socket->inputBytesLastInterval, socket->outputBytesLastInterval);
+			socketLogCount++;
+	    }
 	}
+
+	if(socketLogCount > 0) {
+		logging_log(G_LOG_DOMAIN, level, __FUNCTION__, "%s", msg->str);
+	}
+
+	g_string_free(msg, TRUE);
 }
 
 static void _tracker_logRAM(Tracker* tracker, GLogLevelFlags level, SimulationTime interval) {
@@ -372,6 +403,16 @@ void tracker_heartbeat(Tracker* tracker) {
 	tracker->outputBytesLastInterval = 0;
 	tracker->allocatedBytesLastInterval = 0;
 	tracker->deallocatedBytesLastInterval = 0;
+
+	TrackerSocket* socket = NULL;
+	GHashTableIter socketIterator;
+	g_hash_table_iter_init(&socketIterator, tracker->sockets);
+	while (g_hash_table_iter_next(&socketIterator, NULL, (gpointer*)&socket)) {
+	    if(socket) {
+	    	socket->inputBytesLastInterval = 0;
+	    	socket->outputBytesLastInterval = 0;
+	    }
+	}
 
 	/* schedule the next heartbeat */
 	tracker->lastHeartbeat = worker_getPrivate()->clock_now;

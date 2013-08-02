@@ -84,7 +84,12 @@ void socket_init(Socket* socket, SocketFunctionTable* vtable, DescriptorType typ
 
 	Tracker* tracker = node_getTracker(worker_getPrivate()->cached_node);
 	Descriptor* descriptor = (Descriptor *)socket;
-	tracker_addSocket(tracker, descriptor->handle, socket->inputBufferSize, socket->outputBufferSize);
+	tracker_addSocket(tracker, descriptor->handle, socket->protocol, socket->inputBufferSize, socket->outputBufferSize);
+}
+
+enum ProtocolType socket_getProtocol(Socket* socket) {
+	MAGIC_ASSERT(socket);
+	return socket->protocol;
 }
 
 /* interface functions, implemented by subtypes */
