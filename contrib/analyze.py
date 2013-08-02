@@ -31,23 +31,39 @@ TITLE_SIZE="x-small"
 ## use this line format cycle
 LINEFORMATS="k-,r-,b-,g-,c-,m-,y-,k--,r--,b--,g--,c--,m--,y--,k:,r:,b:,g:,c:,m:,y:,k-.,r-.,b-.,g-.,c-., m-.,y-."
 
-## dont fail when we dont have a display
-pylab.rcParams.update({'backend': 'PDF'})
-
-## make font sizes larger
-#pylab.rcParams.update({'font.size': 16})
-
-## move around the viewing scope
-pylab.rcParams.update({'figure.subplot.left': 0.14})
-pylab.rcParams.update({'figure.subplot.right': 0.96})
-pylab.rcParams.update({'figure.subplot.bottom': 0.15})
-pylab.rcParams.update({'figure.subplot.top': 0.87})
-
-## sci notation
-pylab.rcParams.update({'axes.formatter.limits': (-3, 3)})
-
-## grid lines
-pylab.rcParams.update({'grid.color': '0.1'})
+pylab.rcParams.update({
+    'backend': 'PDF',
+#    'font.size': 16,
+    'figure.figsize': (4,3),
+    'figure.dpi': 100.0,
+    'figure.subplot.left': 0.14,
+    'figure.subplot.right': 0.96,
+    'figure.subplot.bottom': 0.15,
+    'figure.subplot.top': 0.87,
+    'grid.color': '0.1',
+    'axes.grid' : True,
+    'axes.titlesize' : 'small',
+    'axes.labelsize' : 'small',
+    'axes.formatter.limits': (-3,3),
+    'xtick.labelsize' : 'small',
+    'ytick.labelsize' : 'small',
+    'lines.linewidth' : 2.0,
+    'lines.markeredgewidth' : 0.5,
+    'lines.markersize' : 5,
+    'legend.fontsize' : 'x-small',
+    'legend.fancybox' : False,
+    'legend.shadow' : False,
+    'legend.ncol' : 1.0,
+    'legend.borderaxespad' : 0.5,
+    'legend.numpoints' : 1,
+    'legend.handletextpad' : 0.5,
+    'legend.handlelength' : 2.25,
+    'legend.labelspacing' : 0.25,
+    'legend.markerscale' : 1.0,
+#    'ps.useafm' : True,
+#    'pdf.use14corefonts' : True,
+#    'text.usetex' : True,
+})
 
 # a custom action for passing in experimental data directories when plotting
 class PlotDataAction(argparse.Action):
