@@ -31,6 +31,9 @@ TITLE_SIZE="x-small"
 ## use this line format cycle
 LINEFORMATS="k-,r-,b-,g-,c-,m-,y-,k--,r--,b--,g--,c--,m--,y--,k:,r:,b:,g:,c:,m:,y:,k-.,r-.,b-.,g-.,c-., m-.,y-."
 
+## dont fail when we dont have a display
+pylab.rcParams.update({'backend': 'PDF'})
+
 ## make font sizes larger
 #pylab.rcParams.update({'font.size': 16})
 
@@ -42,6 +45,9 @@ pylab.rcParams.update({'figure.subplot.top': 0.87})
 
 ## sci notation
 pylab.rcParams.update({'axes.formatter.limits': (-3, 3)})
+
+## grid lines
+pylab.rcParams.update({'grid.color': '0.1'})
 
 # a custom action for passing in experimental data directories when plotting
 class PlotDataAction(argparse.Action):
