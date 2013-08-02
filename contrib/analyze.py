@@ -165,11 +165,11 @@ class NodeStats():
             total_output_size = 0
             for socket_buffer in sockets:
                 info = socket_buffer.split(',')
-                descriptor = '{0} - {1}'.format(info[0], info[1])
-                input_buffer_length = int(info[2])
-                input_buffer_size = int(info[3])
-                output_buffer_length = int(info[4])
-                output_buffer_size = int(info[5])
+                descriptor = '{0} - {1}'.format(info[0], info[2])
+                input_buffer_length = int(info[3])
+                input_buffer_size = int(info[4])
+                output_buffer_length = int(info[5])
+                output_buffer_size = int(info[6])
                 
                 if '127.0.0.1' in descriptor:
                     continue

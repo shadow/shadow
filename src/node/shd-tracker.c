@@ -69,6 +69,8 @@ struct _TrackerSocket {
 	gsize outputBytesTotal;
 	gsize outputBytesLastInterval;
 
+	gboolean removeAfterNextLog;
+
 	MAGIC_DECLARE;
 };
 
@@ -296,7 +298,10 @@ void tracker_removeSocket(Tracker* tracker, gint handle) {
 	MAGIC_ASSERT(tracker);
 
 	if(_tracker_getFlags(tracker) & TRACKER_FLAGS_SOCKET) {
-		g_hash_table_remove(tracker->sockets, &handle);
+		TrackerSocket* socket = g_hash_table_lookup(tracker->sockets, &handle);
+		if(socket) {
+			socket->removeAfterNextLog = TRUE;
+		}
 	}
 }
 
@@ -330,10 +335,15 @@ static void _tracker_logSocket(Tracker* tracker, GLogLevelFlags level, Simulatio
 
 	/* construct the log message from all sockets we have in the hash table */
 	GString* msg = g_string_new("[shadow-heartbeat] [socket] ");
+
 	TrackerSocket* socket = NULL;
-	gint socketLogCount = 0;
 	GHashTableIter socketIterator;
 	g_hash_table_iter_init(&socketIterator, tracker->sockets);
+
+	/* as we iterate, keep track of sockets that we should remove. we cant remove them
+	 * during the iteration because it will invalidate the iterator */
+	GQueue* handlesToRemove = g_queue_new();
+	gint socketLogCount = 0;
 
 	while(g_hash_table_iter_next(&socketIterator, NULL, (gpointer*)&socket)) {
 		/* don't log sockets that don't have peer IP/port set */
@@ -348,11 +358,22 @@ static void _tracker_logSocket(Tracker* tracker, GLogLevelFlags level, Simulatio
 					socket->inputBytesLastInterval, socket->outputBytesLastInterval);
 			socketLogCount++;
 	    }
+
+	    /* check if we should remove the socket after iterating */
+	    if(socket && socket->removeAfterNextLog) {
+	    	g_queue_push_tail(handlesToRemove, GINT_TO_POINTER(socket->handle));
+	    }
 	}
 
 	if(socketLogCount > 0) {
 		logging_log(G_LOG_DOMAIN, level, __FUNCTION__, "%s", msg->str);
 	}
+
+	while(!g_queue_is_empty(handlesToRemove)) {
+		gint handle = GPOINTER_TO_INT(g_queue_pop_head(handlesToRemove));
+		g_hash_table_remove(tracker->sockets, &handle);
+	}
+	g_queue_free(handlesToRemove);
 
 	g_string_free(msg, TRUE);
 }
