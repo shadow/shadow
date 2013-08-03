@@ -43,15 +43,15 @@ struct _Tracker {
 	gsize deallocatedBytesLastInterval;
 	guint numFailedFrees;
 
-	GHashTable* sockets;
+	GHashTable* socketStats;
 
 	SimulationTime lastHeartbeat;
 
 	MAGIC_DECLARE;
 };
 
-typedef struct _TrackerSocket TrackerSocket;
-struct _TrackerSocket {
+typedef struct _SocketStats SocketStats;
+struct _SocketStats {
 	gint handle;
 	enum ProtocolType type;
 
@@ -73,6 +73,28 @@ struct _TrackerSocket {
 
 	MAGIC_DECLARE;
 };
+
+static SocketStats* _socketstats_new(gint handle, enum ProtocolType type,
+		gsize inputBufferSize, gsize outputBufferSize) {
+	SocketStats* ss = g_new0(SocketStats, 1);
+
+	ss->handle = handle;
+	ss->type = type;
+	ss->inputBufferSize = inputBufferSize;
+	ss->outputBufferSize = outputBufferSize;
+	ss->peerHostname = g_strdup("UNSPEC");
+
+	return ss;
+}
+
+static void _socketstats_free(SocketStats* ss) {
+	if(ss) {
+		if(ss->peerHostname) {
+			g_free(ss->peerHostname);
+		}
+		g_free(ss);
+	}
+}
 
 static TrackerFlags _tracker_parseFlagString(gchar* flagString) {
 	TrackerFlags flags = TRACKER_FLAGS_NONE;
@@ -145,7 +167,7 @@ Tracker* tracker_new(SimulationTime interval, GLogLevelFlags loglevel, gchar* fl
 	tracker->flags = _tracker_parseFlagString(flagString);
 
 	tracker->allocatedLocations = g_hash_table_new(g_direct_hash, g_direct_equal);
-	tracker->sockets = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, g_free);
+	tracker->socketStats = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, (GDestroyNotify)_socketstats_free);
 
 	return tracker;
 }
@@ -154,7 +176,7 @@ void tracker_free(Tracker* tracker) {
 	MAGIC_ASSERT(tracker);
 
 	g_hash_table_destroy(tracker->allocatedLocations);
-	g_hash_table_destroy(tracker->sockets);
+	g_hash_table_destroy(tracker->socketStats);
 
 	MAGIC_CLEAR(tracker);
 	g_free(tracker);
@@ -189,10 +211,10 @@ void tracker_addInputBytes(Tracker* tracker, gsize inputBytes, gint handle) {
 	}
 
 	if(_tracker_getFlags(tracker) & TRACKER_FLAGS_SOCKET) {
-		TrackerSocket* socket = g_hash_table_lookup(tracker->sockets, &handle);
-		if(socket) {
-			socket->inputBytesTotal += inputBytes;
-			socket->inputBytesLastInterval += inputBytes;
+		SocketStats* ss = g_hash_table_lookup(tracker->socketStats, &handle);
+		if(ss) {
+			ss->inputBytesTotal += inputBytes;
+			ss->inputBytesLastInterval += inputBytes;
 		}
 	}
 }
@@ -206,10 +228,10 @@ void tracker_addOutputBytes(Tracker* tracker, gsize outputBytes, gint handle) {
 	}
 
 	if(_tracker_getFlags(tracker) & TRACKER_FLAGS_SOCKET) {
-		TrackerSocket* socket = g_hash_table_lookup(tracker->sockets, &handle);
-		if(socket) {
-			socket->outputBytesTotal += outputBytes;
-			socket->outputBytesLastInterval += outputBytes;
+		SocketStats* ss = g_hash_table_lookup(tracker->socketStats, &handle);
+		if(ss) {
+			ss->outputBytesTotal += outputBytes;
+			ss->outputBytesLastInterval += outputBytes;
 		}
 	}
 }
@@ -245,13 +267,8 @@ void tracker_addSocket(Tracker* tracker, gint handle, enum ProtocolType type, gs
 	MAGIC_ASSERT(tracker);
 
 	if(_tracker_getFlags(tracker) & TRACKER_FLAGS_SOCKET) {
-		TrackerSocket* socket = g_new0(TrackerSocket, 1);
-		socket->handle = handle;
-		socket->type = type;
-		socket->inputBufferSize = inputBufferSize;
-		socket->outputBufferSize = outputBufferSize;
-
-		g_hash_table_insert(tracker->sockets, &(socket->handle), socket);
+		SocketStats* ss = _socketstats_new(handle, type, inputBufferSize, outputBufferSize);
+		g_hash_table_insert(tracker->socketStats, &(ss->handle), ss);
 	}
 }
 
@@ -259,13 +276,28 @@ void tracker_updateSocketPeer(Tracker* tracker, gint handle, in_addr_t peerIP, i
 	MAGIC_ASSERT(tracker);
 
 	if(_tracker_getFlags(tracker) & TRACKER_FLAGS_SOCKET) {
-		TrackerSocket* socket = g_hash_table_lookup(tracker->sockets, &handle);
+		SocketStats* socket = g_hash_table_lookup(tracker->socketStats, &handle);
 		if(socket) {
 			socket->peerIP = peerIP;
 			socket->peerPort = peerPort;
 
-			Internetwork* internetwork = worker_getInternet();
-			socket->peerHostname = g_strdup(internetwork_resolveIP(internetwork, peerIP));
+			GString* hostnameBuffer = g_string_new(NULL);
+
+			if(peerIP == htonl(INADDR_LOOPBACK)) {
+				g_string_printf(hostnameBuffer, "127.0.0.1");
+			} else if (peerIP == htonl(INADDR_ANY)) {
+				g_string_printf(hostnameBuffer, "0.0.0.0");
+			} else {
+				Internetwork* internetwork = worker_getInternet();
+				g_string_printf(hostnameBuffer, "%s", internetwork_resolveIP(internetwork, peerIP));
+			}
+
+			/* free the old string if we already have one */
+			if(socket->peerHostname) {
+				g_free(socket->peerHostname);
+			}
+
+			socket->peerHostname = g_string_free(hostnameBuffer, FALSE);
 		}
 	}
 }
@@ -274,10 +306,10 @@ void tracker_updateSocketInputBuffer(Tracker* tracker, gint handle, gsize inputB
 	MAGIC_ASSERT(tracker);
 
 	if(_tracker_getFlags(tracker) & TRACKER_FLAGS_SOCKET) {
-		TrackerSocket* socket = g_hash_table_lookup(tracker->sockets, &handle);
-		if(socket) {
-			socket->inputBufferLength = inputBufferLength;
-			socket->inputBufferSize = inputBufferSize;
+		SocketStats* ss = g_hash_table_lookup(tracker->socketStats, &handle);
+		if(ss) {
+			ss->inputBufferLength = inputBufferLength;
+			ss->inputBufferSize = inputBufferSize;
 		}
 	}
 }
@@ -286,10 +318,10 @@ void tracker_updateSocketOutputBuffer(Tracker* tracker, gint handle, gsize outpu
 	MAGIC_ASSERT(tracker);
 
 	if(_tracker_getFlags(tracker) & TRACKER_FLAGS_SOCKET) {
-		TrackerSocket* socket = g_hash_table_lookup(tracker->sockets, &handle);
-		if(socket) {
-			socket->outputBufferLength = outputBufferLength;
-			socket->outputBufferSize = outputBufferSize;
+		SocketStats* ss = g_hash_table_lookup(tracker->socketStats, &handle);
+		if(ss) {
+			ss->outputBufferLength = outputBufferLength;
+			ss->outputBufferSize = outputBufferSize;
 		}
 	}
 }
@@ -298,9 +330,10 @@ void tracker_removeSocket(Tracker* tracker, gint handle) {
 	MAGIC_ASSERT(tracker);
 
 	if(_tracker_getFlags(tracker) & TRACKER_FLAGS_SOCKET) {
-		TrackerSocket* socket = g_hash_table_lookup(tracker->sockets, &handle);
-		if(socket) {
-			socket->removeAfterNextLog = TRUE;
+		SocketStats* ss = g_hash_table_lookup(tracker->socketStats, &handle);
+		if(ss) {
+			/* remove after we log the stats we have */
+			ss->removeAfterNextLog = TRUE;
 		}
 	}
 }
@@ -336,32 +369,34 @@ static void _tracker_logSocket(Tracker* tracker, GLogLevelFlags level, Simulatio
 	/* construct the log message from all sockets we have in the hash table */
 	GString* msg = g_string_new("[shadow-heartbeat] [socket] ");
 
-	TrackerSocket* socket = NULL;
+	SocketStats* ss = NULL;
 	GHashTableIter socketIterator;
-	g_hash_table_iter_init(&socketIterator, tracker->sockets);
+	g_hash_table_iter_init(&socketIterator, tracker->socketStats);
 
 	/* as we iterate, keep track of sockets that we should remove. we cant remove them
 	 * during the iteration because it will invalidate the iterator */
 	GQueue* handlesToRemove = g_queue_new();
 	gint socketLogCount = 0;
 
-	while(g_hash_table_iter_next(&socketIterator, NULL, (gpointer*)&socket)) {
-		/* don't log sockets that don't have peer IP/port set */
-	    if(socket && socket->peerIP) {
-			g_string_append_printf(msg, "%d,%s,%s:%d,%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT";",
-					socket->handle, /*inet_ntoa((struct in_addr){socket->peerIP})*/
-					socket->type == PTCP ? "TCP" : socket->type == PUDP ? "UDP" :
-						socket->type == PLOCAL ? "LOCAL" : "UNKNOWN",
-					socket->peerHostname, socket->peerPort,
-					socket->inputBufferLength, socket->inputBufferSize,
-					socket->outputBufferLength, socket->outputBufferSize,
-					socket->inputBytesLastInterval, socket->outputBytesLastInterval);
-			socketLogCount++;
-	    }
+	while(g_hash_table_iter_next(&socketIterator, NULL, (gpointer*)&ss)) {
+		/* don't log tcp sockets that don't have peer IP/port set */
+		if(!ss || (ss->type == PTCP && !ss->peerIP)) {
+			continue;
+		}
+
+		socketLogCount++;
+		g_string_append_printf(msg, "%d,%s,%s:%d,%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT";",
+				ss->handle, /*inet_ntoa((struct in_addr){socket->peerIP})*/
+				ss->type == PTCP ? "TCP" : ss->type == PUDP ? "UDP" :
+					ss->type == PLOCAL ? "LOCAL" : "UNKNOWN",
+				ss->peerHostname, ss->peerPort,
+				ss->inputBufferLength, ss->inputBufferSize,
+				ss->outputBufferLength, ss->outputBufferSize,
+				ss->inputBytesLastInterval, ss->outputBytesLastInterval);
 
 	    /* check if we should remove the socket after iterating */
-	    if(socket && socket->removeAfterNextLog) {
-	    	g_queue_push_tail(handlesToRemove, GINT_TO_POINTER(socket->handle));
+	    if(ss->removeAfterNextLog) {
+	    	g_queue_push_tail(handlesToRemove, GINT_TO_POINTER(ss->handle));
 	    }
 	}
 
@@ -369,9 +404,10 @@ static void _tracker_logSocket(Tracker* tracker, GLogLevelFlags level, Simulatio
 		logging_log(G_LOG_DOMAIN, level, __FUNCTION__, "%s", msg->str);
 	}
 
+	/* free all the tracker instances of the sockets that were closed, now that we logged the info */
 	while(!g_queue_is_empty(handlesToRemove)) {
 		gint handle = GPOINTER_TO_INT(g_queue_pop_head(handlesToRemove));
-		g_hash_table_remove(tracker->sockets, &handle);
+		g_hash_table_remove(tracker->socketStats, &handle);
 	}
 	g_queue_free(handlesToRemove);
 
@@ -425,13 +461,13 @@ void tracker_heartbeat(Tracker* tracker) {
 	tracker->allocatedBytesLastInterval = 0;
 	tracker->deallocatedBytesLastInterval = 0;
 
-	TrackerSocket* socket = NULL;
+	SocketStats* ss = NULL;
 	GHashTableIter socketIterator;
-	g_hash_table_iter_init(&socketIterator, tracker->sockets);
-	while (g_hash_table_iter_next(&socketIterator, NULL, (gpointer*)&socket)) {
-	    if(socket) {
-	    	socket->inputBytesLastInterval = 0;
-	    	socket->outputBytesLastInterval = 0;
+	g_hash_table_iter_init(&socketIterator, tracker->socketStats);
+	while (g_hash_table_iter_next(&socketIterator, NULL, (gpointer*)&ss)) {
+	    if(ss) {
+	    	ss->inputBytesLastInterval = 0;
+	    	ss->outputBytesLastInterval = 0;
 	    }
 	}
 
