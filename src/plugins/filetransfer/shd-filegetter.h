@@ -57,6 +57,8 @@ typedef struct filegetter_serverspec_s {
 	in_addr_t socks_addr;
 	in_port_t socks_port;
 	gboolean persistent;
+	gboolean useHostname;
+	gint hostnameLength;
 } filegetter_serverspec_t, *filegetter_serverspec_tp;
 
 typedef struct filegetter_s {

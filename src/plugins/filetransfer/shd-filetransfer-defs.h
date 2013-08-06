@@ -13,7 +13,7 @@
 #endif
 
 #define FT_STR_SIZE 256
-#define FT_BUF_SIZE 16384
+#define FT_BUF_SIZE 51200
 
 #define FT_HTTP_200 "HTTP/1.1 200 OK\r\n"
 #define FT_HTTP_200_LEN 17

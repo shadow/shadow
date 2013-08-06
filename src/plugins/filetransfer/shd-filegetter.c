@@ -344,16 +344,31 @@ start:
 			}
 
 		case FG_REQUEST_SOCKS_CONN: {
-			/* check that we actually have FT_SOCKS_REQ_HEAD_LEN+6 space */
-			assert(sizeof(fg->buf) - fg->buf_write_offset >= FT_SOCKS_REQ_HEAD_LEN + 6);
+			if(fg->sspec.useHostname) {
+				/* check that we actually have FT_SOCKS_REQ_HEAD_LEN+6 space */
+				assert(sizeof(fg->buf) - fg->buf_write_offset >= FT_SOCKS_REQ_HEAD_LEN + 1 + fg->sspec.hostnameLength + 2);
 
-			/* write connection request, including intended destination */
-			memcpy(fg->buf + fg->buf_write_offset, FT_SOCKS_REQ_HEAD, FT_SOCKS_REQ_HEAD_LEN);
-			fg->buf_write_offset += FT_SOCKS_REQ_HEAD_LEN;
-			memcpy(fg->buf + fg->buf_write_offset, &(fg->sspec.http_addr), 4);
-			fg->buf_write_offset += 4;
-			memcpy(fg->buf + fg->buf_write_offset, &(fg->sspec.http_port), 2);
-			fg->buf_write_offset += 2;
+				/* write connection request, including intended destination */
+				memcpy(fg->buf + fg->buf_write_offset, "\x05\x01\x00\x03", FT_SOCKS_REQ_HEAD_LEN);
+				fg->buf_write_offset += FT_SOCKS_REQ_HEAD_LEN;
+				memcpy(fg->buf + fg->buf_write_offset, &(fg->sspec.hostnameLength), 1);
+				fg->buf_write_offset += 1;
+				memcpy(fg->buf + fg->buf_write_offset, &(fg->sspec.http_hostname), fg->sspec.hostnameLength);
+				fg->buf_write_offset += fg->sspec.hostnameLength;
+				memcpy(fg->buf + fg->buf_write_offset, &(fg->sspec.http_port), 2);
+				fg->buf_write_offset += 2;
+			} else {
+				/* check that we actually have FT_SOCKS_REQ_HEAD_LEN+6 space */
+				assert(sizeof(fg->buf) - fg->buf_write_offset >= FT_SOCKS_REQ_HEAD_LEN + 6);
+
+				/* write connection request, including intended destination */
+				memcpy(fg->buf + fg->buf_write_offset, FT_SOCKS_REQ_HEAD, FT_SOCKS_REQ_HEAD_LEN);
+				fg->buf_write_offset += FT_SOCKS_REQ_HEAD_LEN;
+				memcpy(fg->buf + fg->buf_write_offset, &(fg->sspec.http_addr), 4);
+				fg->buf_write_offset += 4;
+				memcpy(fg->buf + fg->buf_write_offset, &(fg->sspec.http_port), 2);
+				fg->buf_write_offset += 2;
+			}
 
 			/* we are ready to send, then transition to socks conn reply */
 			fg->state = FG_SEND;

@@ -128,6 +128,8 @@ def reset(output):
     if os.path.exists(output+"/authoritydata"): shutil.copytree(output+"/authoritydata", output+"/data/authoritydata")
     else: shutil.copytree(output+"/keys", output+"/data/authoritydata/4uthority/keys")
     
+    if os.path.exists(output+"/hiddenserverdata"): shutil.copytree(output+"/hiddenserverdata", output+"/data/hiddenserverdata")
+    
     return 0
 
 def log(msg):
