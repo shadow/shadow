@@ -408,8 +408,8 @@ def setup_tor(args):
         if os.path.exists(args.tordir): shutil.rmtree(args.tordir)
         shutil.copytree(args.tor_prefix, args.tordir)
         distcleancmd = "make distclean"
-        log("running \'{0}\'".format(distcleancmd))
-        subprocess.call(shlex.split(distcleancmd.strip()))
+        log("running \'{0}\' in \'{1}\'".format(distcleancmd, args.tordir))
+        subprocess.call(shlex.split(distcleancmd.strip()), cwd=args.tordir)
     # otherwise blow it away if there were problems building it so we try again
     elif os.path.exists(args.tordir) and not os.path.exists(args.tordir+"/src/or/tor"):
         shutil.rmtree(args.tordir)
