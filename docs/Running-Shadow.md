@@ -72,6 +72,8 @@ grep "fileserver stats" filetest.log
 
 ### torrent
 
+**NOTE: the torrent plug-in currently [contains bugs](https://github.com/shadow/shadow/issues/125) and is not expected to work correctly. If you run into problems, please skip this section.**
+
 The `torrent` plug-in built-in example configures a BitTorrent-like P2P swarm to share an 8 MiB file between all of 10 clients. A torrent 'authority' represents a tracker and assists clients in joining the swarm, and the file is shared in 16 KiB chunks. This example will also take a few minutes, and redirecting output is advised:
 
 ```bash
