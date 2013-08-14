@@ -296,7 +296,7 @@ static void _tcp_autotune(TCP* tcp) {
 	guint32 send_bottleneck_bw = my_send_bw < their_receive_bw ? my_send_bw : their_receive_bw;
 
 	/* the delay bandwidth product is how many bytes I can send at once to keep the pipe full */
-	guint64 sendbuf_size = (guint64) (rtt_milliseconds * send_bottleneck_bw * 1.25f);
+	guint64 sendbuf_size = (guint64) ((rtt_milliseconds * send_bottleneck_bw * 1024.0f * 1.25f) / 1000.0f);
 
 	/* now the same thing for my receive buf */
 	guint32 my_receive_bw = internetwork_getNodeBandwidthDown(internet, sourceID);
@@ -306,7 +306,7 @@ static void _tcp_autotune(TCP* tcp) {
 	guint32 receive_bottleneck_bw = my_receive_bw < their_send_bw ? my_receive_bw : their_send_bw;
 
 	/* the delay bandwidth product is how many bytes I can receive at once to keep the pipe full */
-	guint64 receivebuf_size = (guint64) (rtt_milliseconds * receive_bottleneck_bw * 1.25);
+	guint64 receivebuf_size = (guint64) ((rtt_milliseconds * receive_bottleneck_bw * 1024.0f * 1.25f) / 1000.0f);
 
     /* keep minimum buffer size bounds */
     if(sendbuf_size < CONFIG_SEND_BUFFER_MIN_SIZE) {
@@ -332,7 +332,7 @@ static void _tcp_autotune(TCP* tcp) {
 		tcp->super.outputBufferSize = sendbuf_size;
 	}
 
-	info("set network buffer sizes: send %lu receive %lu", tcp->super.outputBufferSize, tcp->super.inputBufferSize);
+	info("set network buffer sizes: send %zu receive %zu", tcp->super.outputBufferSize, tcp->super.inputBufferSize);
 }
 
 static void _tcp_setState(TCP* tcp, enum TCPState state) {
