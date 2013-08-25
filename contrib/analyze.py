@@ -7,6 +7,7 @@ Utility to help analyze results from the Shadow simulator. Use
 '$ python analyze --help' to get started
 """
 
+import matplotlib; matplotlib.use('Agg') # for systems without X11
 import sys, os, argparse, subprocess, pylab, numpy, itertools, gzip, cPickle
 
 ## PARSING DEFAULTS
