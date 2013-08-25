@@ -52,7 +52,7 @@ static GError* _parser_handleCDFAttributes(Parser* parser, const gchar** attribu
 		if(!id && !g_ascii_strcasecmp(name, "id")) {
 			id = g_string_new(value);
 		} else if (!path && !g_ascii_strcasecmp(name, "path")) {
-			path = g_string_new(value);
+			path = g_string_new(utility_getHomePath(value));
 		} else if (!center && !g_ascii_strcasecmp(name, "center")) {
 			center = g_ascii_strtoull(value, NULL, 10);
 		} else if (!width && !g_ascii_strcasecmp(name, "width")) {
@@ -72,6 +72,10 @@ static GError* _parser_handleCDFAttributes(Parser* parser, const gchar** attribu
 	if(!error && (!id || (!path && !center))) {
 		error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
 				"element 'cdf' requires attributes 'id' and either 'path' or 'center'");
+	}
+	if(path && (!g_file_test(path->str, G_FILE_TEST_EXISTS) || !g_file_test(path->str, G_FILE_TEST_IS_REGULAR))) {
+		error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT,
+				"attribute 'path': '%s' is not a valid path to an existing regular file", path->str);
 	}
 
 	if(!error) {
@@ -175,7 +179,7 @@ static GError* _parser_handlePluginAttributes(Parser* parser, const gchar** attr
 		if(!id && !g_ascii_strcasecmp(name, "id")) {
 			id = g_string_new(value);
 		} else if (!path && !g_ascii_strcasecmp(name, "path")) {
-			path = g_string_new(value);
+			path = g_string_new(utility_getHomePath(value));
 		} else {
 			error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ATTRIBUTE,
 							"unknown 'plugin' attribute '%s'", name);
@@ -189,6 +193,23 @@ static GError* _parser_handlePluginAttributes(Parser* parser, const gchar** attr
 	if(!error && (!id || !path)) {
 		error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
 				"element 'plugin' requires attributes 'id' 'path'");
+	}
+	if(path) {
+		/* make sure the path is absolute */
+		if(!g_path_is_absolute(path->str)) {
+			/* ok, we look in ~/.shadow/plugins */
+			const gchar* home = g_get_home_dir();
+			gchar* oldstr = g_string_free(path, FALSE);
+			gchar* newstr = g_build_path("/", home, ".shadow", "plugins", oldstr, NULL);
+			g_free(oldstr);
+			path = g_string_new(newstr);
+			g_free(newstr);
+		}
+
+		if(!g_file_test(path->str, G_FILE_TEST_EXISTS) || !g_file_test(path->str, G_FILE_TEST_IS_REGULAR)) {
+			error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT,
+					"attribute 'path': '%s' is not a valid path to an existing regular file", path->str);
+		}
 	}
 
 	if(!error) {
