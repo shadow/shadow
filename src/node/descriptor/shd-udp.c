@@ -100,7 +100,7 @@ gssize udp_sendUserData(UDP* udp, gconstpointer buffer, gsize nBytes, in_addr_t 
 	Descriptor* descriptor = (Descriptor *)socket;
 	tracker_updateSocketOutputBuffer(tracker, descriptor->handle, socket->outputBufferLength, socket->outputBufferSize);
 
-	debug("buffered %lu outbound UDP bytes from user", offset);
+	debug("buffered %"G_GSIZE_FORMAT" outbound UDP bytes from user", offset);
 
 	return (gssize) offset;
 }
@@ -137,7 +137,7 @@ gssize udp_receiveUserData(UDP* udp, gpointer buffer, gsize nBytes, in_addr_t* i
 	Descriptor* descriptor = (Descriptor *)socket;
 	tracker_updateSocketOutputBuffer(tracker, descriptor->handle, socket->outputBufferLength, socket->outputBufferSize);
 
-	debug("user read %lu inbound UDP bytes", bytesCopied);
+	debug("user read %u inbound UDP bytes", bytesCopied);
 
 	return (gssize)bytesCopied;
 }

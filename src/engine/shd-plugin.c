@@ -263,7 +263,7 @@ void plugin_registerResidentState(Plugin* plugin, PluginNewInstanceFunc new, Plu
 	plugin->notify = notify;
 
 	/* also store a copy of the defaults as they exist now */
-	debug("copying resident plugin memory contents at %p-%p (%lu bytes) as default start state",
+	debug("copying resident plugin memory contents at %p-%p (%"G_GSIZE_FORMAT" bytes) as default start state",
 			plugin->residentState, plugin->residentState+plugin->residentStateSize, plugin->residentStateSize);
 	plugin->defaultState = g_slice_copy(plugin->residentStateSize, plugin->residentState);
 	debug("stored default state at %p", plugin->defaultState);

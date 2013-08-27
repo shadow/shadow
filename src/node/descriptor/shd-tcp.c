@@ -281,7 +281,7 @@ static void _tcp_autotune(TCP* tcp) {
 	guint32 send_latency = (guint32) internetwork_getLatency(internet, sourceID, destinationID, 0.8);
 	guint32 receive_latency = (guint32) internetwork_getLatency(internet, destinationID, sourceID, 0.8);
 	if(send_latency == 0 || receive_latency == 0) {
-	  error("autotuning needs nonzero latency, source=%u dest=%u send=%u recv=%u", sourceID, destinationID, send_latency, receive_latency);
+	  error("autotuning needs nonzero latency, source=%u dest=%u send=%"G_GUINT32_FORMAT" recv=%"G_GUINT32_FORMAT, sourceID, destinationID, send_latency, receive_latency);
 	}
 	g_assert(send_latency > 0 && receive_latency > 0);
 
@@ -332,7 +332,7 @@ static void _tcp_autotune(TCP* tcp) {
 		tcp->super.outputBufferSize = sendbuf_size;
 	}
 
-	info("set network buffer sizes: send %zu receive %zu", tcp->super.outputBufferSize, tcp->super.inputBufferSize);
+	info("set network buffer sizes: send %"G_GSIZE_FORMAT" receive %"G_GSIZE_FORMAT, tcp->super.outputBufferSize, tcp->super.inputBufferSize);
 }
 
 static void _tcp_setState(TCP* tcp, enum TCPState state) {
@@ -1259,7 +1259,7 @@ gssize tcp_sendUserData(TCP* tcp, gconstpointer buffer, gsize nBytes, in_addr_t 
 		bytesCopied += copyLength;
 	}
 
-	debug("%s <-> %s: sending %lu user bytes", tcp->super.boundString, tcp->super.peerString, bytesCopied);
+	debug("%s <-> %s: sending %"G_GSIZE_FORMAT" user bytes", tcp->super.boundString, tcp->super.peerString, bytesCopied);
 
 	/* now flush as much as possible out to socket */
 	_tcp_flush(tcp);
@@ -1386,7 +1386,7 @@ gssize tcp_receiveUserData(TCP* tcp, gpointer buffer, gsize nBytes, in_addr_t* i
 		_tcp_flush(tcp);
 	}
 
-	debug("%s <-> %s: receiving %lu user bytes", tcp->super.boundString, tcp->super.peerString, totalCopied);
+	debug("%s <-> %s: receiving %"G_GSIZE_FORMAT" user bytes", tcp->super.boundString, tcp->super.peerString, totalCopied);
 
 	return (gssize) (totalCopied == 0 ? -1 : totalCopied);
 }

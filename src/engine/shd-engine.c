@@ -242,7 +242,7 @@ static gint _engine_distributeEvents(Engine* engine) {
 		countdownlatch_countDownAwait(engine->processingLatch);
 
 		/* we are in control now, the workers are waiting at barrierLatch */
-		message("execution window [%lu--%lu] ran %u events from %u active nodes",
+		message("execution window [%"G_GUINT64_FORMAT"--%"G_GUINT64_FORMAT"] ran %u events from %u active nodes",
 				engine->executeWindowStart, engine->executeWindowEnd,
 				engine->numEventsCurrentInterval,
 				engine->numNodesWithEventsCurrentInterval);

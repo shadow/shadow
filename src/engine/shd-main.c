@@ -65,7 +65,7 @@ gint shadow_main(gint argc, gchar* argv[]) {
     GDateTime* dt_now = g_date_time_new_now_local();
     gchar* dt_format = g_date_time_format(dt_now, "%F %H:%M:%S");
     message("Shadow v%s initialized at %s using GLib v%u.%u.%u",
-        SHADOW_VERSION, dt_format, GLIB_MAJOR_VERSION, GLIB_MINOR_VERSION, GLIB_MICRO_VERSION);
+        SHADOW_VERSION, dt_format, (guint)GLIB_MAJOR_VERSION, (guint)GLIB_MINOR_VERSION, (guint)GLIB_MICRO_VERSION);
     g_date_time_unref(dt_now);
     g_free(dt_format);
 

@@ -24,6 +24,7 @@ struct _CPU {
 };
 
 CPU* cpu_new(guint frequencyKHz, gint threshold, gint precision) {
+	g_assert(frequencyKHz > 0);
 	CPU* cpu = g_new0(CPU, 1);
 	MAGIC_INIT(cpu);
 
@@ -35,7 +36,7 @@ CPU* cpu_new(guint frequencyKHz, gint threshold, gint precision) {
 	/* get the raw speed of the experiment machine */
 	guint rawFrequencyKHz = engine_getRawCPUFrequency(worker_getPrivate()->cached_engine);
 	if(!rawFrequencyKHz) {
-		warning("unable to determine raw CPU frequency, setting %i KHz as a raw "
+		warning("unable to determine raw CPU frequency, setting %u KHz as a raw "
 				"estimate, and using delay ratio of 1.0 to the simulator host", cpu->frequencyKHz);
 		cpu->rawFrequencyKHz = cpu->frequencyKHz;
 		cpu->frequencyRatio = 1.0;

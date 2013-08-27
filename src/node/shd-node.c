@@ -111,7 +111,9 @@ Node* node_new(GQuark id, Network* network, guint32 ip,
 	node->logPcap = logPcap;
 	node->pcapDir = pcapDir;
 
-	message("Created Node '%s', ip %s, %u bwUpKiBps, %u bwDownKiBps, %lu initSockSendBufSize, %lu initSockRecvBufSize, %lu cpuFrequency, %i cpuThreshold, %i cpuPrecision, %u seed",
+	message("Created Node '%s', ip %s, "
+			"%"G_GUINT64_FORMAT" bwUpKiBps, %"G_GUINT64_FORMAT" bwDownKiBps, %"G_GUINT64_FORMAT" initSockSendBufSize, %"G_GUINT64_FORMAT" initSockRecvBufSize, "
+			"%u cpuFrequency, %i cpuThreshold, %i cpuPrecision, %u seed",
 			g_quark_to_string(node->id), networkinterface_getIPName(node->defaultInterface),
 			bwUpKiBps, bwDownKiBps, sendBufferSize, receiveBufferSize,
 			cpuFrequency, cpuThreshold, cpuPrecision, nodeSeed);
@@ -385,7 +387,7 @@ gint node_createDescriptor(Node* node, DescriptorType type) {
 		}
 
 		default: {
-			warning("unknown descriptor type: %i", (int)type);
+			warning("unknown descriptor type: %i", (gint)type);
 			return EINVAL;
 		}
 	}
@@ -778,7 +780,7 @@ gint node_sendUserData(Node* node, gint handle, gconstpointer buffer, gsize nByt
 
 	/* we should block if our cpu has been too busy lately */
 	if(cpu_isBlocked(node->cpu)) {
-		debug("blocked on CPU when trying to send %lu bytes from socket %i", nBytes, handle);
+		debug("blocked on CPU when trying to send %"G_GSIZE_FORMAT" bytes from socket %i", nBytes, handle);
 
 		/*
 		 * immediately schedule an event to tell the socket it can write. it will
@@ -862,7 +864,7 @@ gint node_receiveUserData(Node* node, gint handle, gpointer buffer, gsize nBytes
 
 	/* we should block if our cpu has been too busy lately */
 	if(cpu_isBlocked(node->cpu)) {
-		debug("blocked on CPU when trying to send %lu bytes from socket %i", nBytes, handle);
+		debug("blocked on CPU when trying to send %"G_GSIZE_FORMAT" bytes from socket %i", nBytes, handle);
 
 		/*
 		 * immediately schedule an event to tell the socket it can read. it will

@@ -150,7 +150,9 @@ Link* network_getLink(Network *network, in_addr_t sourceIP, in_addr_t destinatio
 		struct in_addr addr;
 		gchar *sourceIPString = address_ipToNewString(sourceIP);
 		gchar *destinationIPString = address_ipToNewString(destinationIP);
-		message("link for connection [%s] %s -> %s [%s] chosen: latency=%d jitter=%d metrics=%d %d %d %d %d",
+		message("link for connection [%s] %s -> %s [%s] chosen: "
+				"latency=%"G_GUINT64_FORMAT" jitter=%"G_GUINT64_FORMAT" "
+				"metrics=%"G_GUINT64_FORMAT" %"G_GUINT64_FORMAT" %"G_GUINT64_FORMAT" %"G_GUINT64_FORMAT" %"G_GUINT64_FORMAT,
 				g_quark_to_string(network->id), sourceIPString, destinationIPString,
 				g_quark_to_string(destinationNetwork->id), latency, jitter, min, q1, mean, q3, max);
 		g_free(sourceIPString);

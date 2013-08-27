@@ -137,6 +137,10 @@ void createnodes_run(CreateNodesAction* action) {
 	guint cpuFrequency = action->cpuFrequency;
 	if(!cpuFrequency) {
 		cpuFrequency = engine_getRawCPUFrequency(worker->cached_engine);
+		if(!cpuFrequency) {
+			cpuFrequency = 2500000; /* 2.5 GHz */
+			debug("both configured and raw cpu frequencies unavailable, using 2500000 KHz");
+		}
 	}
 	gint cpuThreshold = config->cpuThreshold;
 	gint cpuPrecision = config->cpuPrecision;

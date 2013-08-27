@@ -36,7 +36,7 @@ gboolean shadowevent_run(Event* event) {
 
 	if(cpu_isBlocked(cpu)) {
 		SimulationTime cpuDelay = cpu_getDelay(cpu);
-		debug("event blocked on CPU, rescheduled for %lu nanoseconds from now", cpuDelay);
+		debug("event blocked on CPU, rescheduled for %"G_GUINT64_FORMAT" nanoseconds from now", cpuDelay);
 
 		/* track the event delay time */
 		tracker_addVirtualProcessingDelay(node_getTracker(node), cpuDelay);
