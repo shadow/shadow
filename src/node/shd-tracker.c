@@ -385,7 +385,7 @@ static void _tracker_logSocket(Tracker* tracker, GLogLevelFlags level, Simulatio
 		}
 
 		socketLogCount++;
-		g_string_append_printf(msg, "%d,%s,%s:%d,%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT";",
+		g_string_append_printf(msg, "%d,%s,%s:%u,%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT";",
 				ss->handle, /*inet_ntoa((struct in_addr){socket->peerIP})*/
 				ss->type == PTCP ? "TCP" : ss->type == PUDP ? "UDP" :
 					ss->type == PLOCAL ? "LOCAL" : "UNKNOWN",

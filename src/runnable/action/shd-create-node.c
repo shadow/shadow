@@ -120,7 +120,7 @@ void createnodes_run(CreateNodesAction* action) {
 	guint hostnameCounter = 0;
 
 	if(!hostname) {
-		critical("Can not create %lu Node(s) '%s' with NULL components. Check XML file for errors.",
+		critical("Can not create %"G_GUINT64_FORMAT" Node(s) '%s' with NULL components. Check XML file for errors.",
 				action->quantity, g_quark_to_string(action->id));
 		return;
 	}

@@ -53,9 +53,9 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 
 	/* now fill in the network option group */
 	GString* sockrecv = g_string_new("");
-	g_string_printf(sockrecv, "Initialize the socket receive buffer to N bytes [%i]", CONFIG_RECV_BUFFER_SIZE);
+	g_string_printf(sockrecv, "Initialize the socket receive buffer to N bytes [%i]", (gint)CONFIG_RECV_BUFFER_SIZE);
 	GString* socksend = g_string_new("");
-	g_string_printf(socksend, "Initialize the socket send buffer to N bytes [%i]", CONFIG_SEND_BUFFER_SIZE);
+	g_string_printf(socksend, "Initialize the socket send buffer to N bytes [%i]", (gint)CONFIG_SEND_BUFFER_SIZE);
 
 	c->networkOptionGroup = g_option_group_new("network", "System Options", "Various system and network related options", NULL, NULL);
 	const GOptionEntry networkEntries[] =

@@ -123,7 +123,7 @@ void logging_logv(const gchar *msgLogDomain, GLogLevelFlags msgLogLevel,
 		seconds = remainder / SIMTIME_ONE_SECOND;
 		remainder %= SIMTIME_ONE_SECOND;
 
-		g_string_printf(clockStringBuffer, "%lu:%lu:%lu:%09lu", hours, minutes, seconds, remainder);
+		g_string_printf(clockStringBuffer, "%"G_GUINT64_FORMAT":%"G_GUINT64_FORMAT":%"G_GUINT64_FORMAT":%09"G_GUINT64_FORMAT"", hours, minutes, seconds, remainder);
 	} else {
 		g_string_printf(clockStringBuffer, "n/a");
 	}

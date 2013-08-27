@@ -281,7 +281,8 @@ static void _tcp_autotune(TCP* tcp) {
 	guint32 send_latency = (guint32) internetwork_getLatency(internet, sourceID, destinationID, 0.8);
 	guint32 receive_latency = (guint32) internetwork_getLatency(internet, destinationID, sourceID, 0.8);
 	if(send_latency == 0 || receive_latency == 0) {
-	  error("autotuning needs nonzero latency, source=%u dest=%u send=%"G_GUINT32_FORMAT" recv=%"G_GUINT32_FORMAT, sourceID, destinationID, send_latency, receive_latency);
+	  error("autotuning needs nonzero latency, source=%"G_GUINT32_FORMAT" dest=%"G_GUINT32_FORMAT" send=%"G_GUINT32_FORMAT" recv=%"G_GUINT32_FORMAT,
+			  sourceID, destinationID, send_latency, receive_latency);
 	}
 	g_assert(send_latency > 0 && receive_latency > 0);
 
