@@ -33,7 +33,7 @@ On Ubuntu, try:
 sudo apt-get -y install gcc xz-utils make automake autoconf cmake tidy libtidy-dev libglib2.0 libglib2.0-dev dstat pdftk python2.7 python-matplotlib python-numpy python-scipy htop screen libxml2-dev libxslt-dev
 ```
 
-You'll also need to manually build and install **clang/llvm** from source because for some reason the OS packages do not include the shared CMake module files Shadow requires.  
+You'll also need to manually build and install **clang/llvm** from source because for some reason the OS packages do not include the shared CMake module files Shadow requires. (Bug reports have been filed for [Fedora](https://bugzilla.redhat.com/show_bug.cgi?id=914713) and [Debian](http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=701153))  
 
 Replace 'username' with your username and 'N' with the number of threads for a parallel build:
 
