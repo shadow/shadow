@@ -23,7 +23,10 @@ gint shadow_main(gint argc, gchar* argv[]) {
     /* check the that run-time GLib matches the compiled version */
     const gchar* mismatch = glib_check_version(GLIB_MAJOR_VERSION, GLIB_MINOR_VERSION, GLIB_MICRO_VERSION);
     if(mismatch) {
-	    g_printerr("** The run-time GLib library is not compatible with the compiled version: %s\n", mismatch);
+	    g_printerr("** The version of the run-time GLib library (%u.%u.%u) is not compatible with the version against which Shadow was compiled (%u.%u.%u). GLib message: '%s'\n",
+        glib_major_version, glib_minor_version, glib_micro_version,
+        (guint)GLIB_MAJOR_VERSION, (guint)GLIB_MINOR_VERSION, (guint)GLIB_MICRO_VERSION,
+        mismatch);
 	    return -1;
     }
 
