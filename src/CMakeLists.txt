@@ -66,19 +66,19 @@ set(shadow_srcs
     runnable/action/shd-load-plugin.c
     runnable/action/shd-kill-engine.c
         
-    node/descriptor/shd-descriptor.c
-    node/descriptor/shd-epoll.c
-    node/descriptor/shd-transport.c
-    node/descriptor/shd-channel.c
-    node/descriptor/shd-socket.c
-    node/descriptor/shd-tcp.c
-    node/descriptor/shd-udp.c
-    node/shd-packet.c
-    node/shd-cpu.c
-    node/shd-network-interface.c
-    node/shd-application.c
-    node/shd-tracker.c
-    node/shd-node.c
+    host/descriptor/shd-descriptor.c
+    host/descriptor/shd-epoll.c
+    host/descriptor/shd-transport.c
+    host/descriptor/shd-channel.c
+    host/descriptor/shd-socket.c
+    host/descriptor/shd-tcp.c
+    host/descriptor/shd-udp.c
+    host/shd-packet.c
+    host/shd-cpu.c
+    host/shd-network-interface.c
+    host/shd-application.c
+    host/shd-tracker.c
+    host/shd-host.c
         
     utility/shd-utility.c
     utility/shd-cdf.c

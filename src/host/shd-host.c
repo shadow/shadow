@@ -6,7 +6,7 @@
 
 #include "shadow.h"
 
-struct _Node {
+struct _Host {
 	/* holds this node's events */
 	EventQueue* events;
 
@@ -59,217 +59,217 @@ struct _Node {
 	MAGIC_DECLARE;
 };
 
-Node* node_new(GQuark id, Network* network, guint32 ip,
+Host* host_new(GQuark id, Network* network, guint32 ip,
 		GString* hostname, guint64 bwDownKiBps, guint64 bwUpKiBps,
 		guint cpuFrequency, gint cpuThreshold, gint cpuPrecision, guint nodeSeed,
 		SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel, gchar* heartbeatLogInfo,
 		GLogLevelFlags logLevel, gboolean logPcap, gchar* pcapDir, gchar* qdisc,
 		guint64 receiveBufferSize, gboolean autotuneReceiveBuffer, guint64 sendBufferSize, gboolean autotuneSendBuffer,
 		guint64 interfaceReceiveLength) {
-	Node* node = g_new0(Node, 1);
-	MAGIC_INIT(node);
+	Host* host = g_new0(Host, 1);
+	MAGIC_INIT(host);
 
-	node->id = id;
-	node->name = g_strdup(hostname->str);
-	g_mutex_init(&(node->lock));
+	host->id = id;
+	host->name = g_strdup(hostname->str);
+	g_mutex_init(&(host->lock));
 
 	/* thread-level event communication with other nodes */
-	node->events = eventqueue_new();
+	host->events = eventqueue_new();
 
 	/* where we are in the network topology */
-	node->network = network;
+	host->network = network;
 
 	/* virtual interfaces for managing network I/O */
-	node->interfaces = g_hash_table_new_full(g_direct_hash, g_direct_equal,
+	host->interfaces = g_hash_table_new_full(g_direct_hash, g_direct_equal,
 			NULL, (GDestroyNotify) networkinterface_free);
 	NetworkInterface* ethernet = networkinterface_new(network, id, hostname->str, bwDownKiBps, bwUpKiBps, logPcap, pcapDir, qdisc, interfaceReceiveLength);
-	g_hash_table_replace(node->interfaces, GUINT_TO_POINTER((guint)id), ethernet);
+	g_hash_table_replace(host->interfaces, GUINT_TO_POINTER((guint)id), ethernet);
 	GString *loopbackName = g_string_new("");
 	g_string_append_printf(loopbackName, "%s-loopback", hostname->str);
 	NetworkInterface* loopback = networkinterface_new(NULL, (GQuark)htonl(INADDR_LOOPBACK), loopbackName->str, G_MAXUINT32, G_MAXUINT32, logPcap, pcapDir, qdisc, interfaceReceiveLength);
-	g_hash_table_replace(node->interfaces, GUINT_TO_POINTER((guint)htonl(INADDR_LOOPBACK)), loopback);
-	node->defaultInterface = ethernet;
+	g_hash_table_replace(host->interfaces, GUINT_TO_POINTER((guint)htonl(INADDR_LOOPBACK)), loopback);
+	host->defaultInterface = ethernet;
 
 	/* virtual descriptor management */
-	node->descriptors = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, descriptor_unref);
-	node->descriptorHandleCounter = MIN_DESCRIPTOR;
-	node->receiveBufferSize = receiveBufferSize;
-	node->sendBufferSize = sendBufferSize;
-	node->autotuneReceiveBuffer = autotuneReceiveBuffer;
-	node->autotuneSendBuffer = autotuneSendBuffer;
+	host->descriptors = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, descriptor_unref);
+	host->descriptorHandleCounter = MIN_DESCRIPTOR;
+	host->receiveBufferSize = receiveBufferSize;
+	host->sendBufferSize = sendBufferSize;
+	host->autotuneReceiveBuffer = autotuneReceiveBuffer;
+	host->autotuneSendBuffer = autotuneSendBuffer;
 
 	/* host order so increments make sense */
-	node->randomPortCounter = MIN_RANDOM_PORT;
+	host->randomPortCounter = MIN_RANDOM_PORT;
 
 	/* applications this node will run */
 //	node->application = application_new(software);
 
-	node->cpu = cpu_new(cpuFrequency, cpuThreshold, cpuPrecision);
-	node->random = random_new(nodeSeed);
-	node->tracker = tracker_new(heartbeatInterval, heartbeatLogLevel, heartbeatLogInfo);
-	node->logLevel = logLevel;
-	node->logPcap = logPcap;
-	node->pcapDir = pcapDir;
+	host->cpu = cpu_new(cpuFrequency, cpuThreshold, cpuPrecision);
+	host->random = random_new(nodeSeed);
+	host->tracker = tracker_new(heartbeatInterval, heartbeatLogLevel, heartbeatLogInfo);
+	host->logLevel = logLevel;
+	host->logPcap = logPcap;
+	host->pcapDir = pcapDir;
 
-	message("Created Node '%s', ip %s, "
+	message("Created Host '%s', ip %s, "
 			"%"G_GUINT64_FORMAT" bwUpKiBps, %"G_GUINT64_FORMAT" bwDownKiBps, %"G_GUINT64_FORMAT" initSockSendBufSize, %"G_GUINT64_FORMAT" initSockRecvBufSize, "
 			"%u cpuFrequency, %i cpuThreshold, %i cpuPrecision, %u seed",
-			g_quark_to_string(node->id), networkinterface_getIPName(node->defaultInterface),
+			g_quark_to_string(host->id), networkinterface_getIPName(host->defaultInterface),
 			bwUpKiBps, bwDownKiBps, sendBufferSize, receiveBufferSize,
 			cpuFrequency, cpuThreshold, cpuPrecision, nodeSeed);
 
-	return node;
+	return host;
 }
 
-void node_free(Node* node, gpointer userData) {
-	MAGIC_ASSERT(node);
+void host_free(Host* host, gpointer userData) {
+	MAGIC_ASSERT(host);
 
-	g_hash_table_destroy(node->interfaces);
-	g_hash_table_destroy(node->descriptors);
+	g_hash_table_destroy(host->interfaces);
+	g_hash_table_destroy(host->descriptors);
 
-	g_free(node->name);
+	g_free(host->name);
 
-	eventqueue_free(node->events);
-	cpu_free(node->cpu);
-	tracker_free(node->tracker);
+	eventqueue_free(host->events);
+	cpu_free(host->cpu);
+	tracker_free(host->tracker);
 
-	g_mutex_clear(&(node->lock));
+	g_mutex_clear(&(host->lock));
 
-	MAGIC_CLEAR(node);
-	g_free(node);
+	MAGIC_CLEAR(host);
+	g_free(host);
 }
 
-void node_lock(Node* node) {
-	MAGIC_ASSERT(node);
-	g_mutex_lock(&(node->lock));
+void host_lock(Host* host) {
+	MAGIC_ASSERT(host);
+	g_mutex_lock(&(host->lock));
 }
 
-void node_unlock(Node* node) {
-	MAGIC_ASSERT(node);
-	g_mutex_unlock(&(node->lock));
+void host_unlock(Host* host) {
+	MAGIC_ASSERT(host);
+	g_mutex_unlock(&(host->lock));
 }
 
-EventQueue* node_getEvents(Node* node) {
-	MAGIC_ASSERT(node);
-	return node->events;
+EventQueue* host_getEvents(Host* host) {
+	MAGIC_ASSERT(host);
+	return host->events;
 }
 
-void node_addApplication(Node* node, GQuark pluginID, gchar* pluginPath,
+void host_addApplication(Host* host, GQuark pluginID, gchar* pluginPath,
 		SimulationTime startTime, SimulationTime stopTime, gchar* arguments) {
-	MAGIC_ASSERT(node);
+	MAGIC_ASSERT(host);
 	Application* application = application_new(pluginID, pluginPath, startTime, stopTime, arguments);
-	node->applications = g_list_append(node->applications, application);
+	host->applications = g_list_append(host->applications, application);
 
 	Worker* worker = worker_getPrivate();
 	StartApplicationEvent* event = startapplication_new(application);
-	worker_scheduleEvent((Event*)event, startTime, node->id);
+	worker_scheduleEvent((Event*)event, startTime, host->id);
 
 	if(stopTime > startTime) {
 		StopApplicationEvent* event = stopapplication_new(application);
-		worker_scheduleEvent((Event*)event, stopTime, node->id);
+		worker_scheduleEvent((Event*)event, stopTime, host->id);
 	}
 }
 
-void node_startApplication(Node* node, Application* application) {
-	MAGIC_ASSERT(node);
+void host_startApplication(Host* host, Application* application) {
+	MAGIC_ASSERT(host);
 	application_start(application);
 }
 
-void node_stopApplication(Node* node, Application* application) {
-	MAGIC_ASSERT(node);
+void host_stopApplication(Host* host, Application* application) {
+	MAGIC_ASSERT(host);
 	application_stop(application);
 }
 
-void node_freeAllApplications(Node* node, gpointer userData) {
-	MAGIC_ASSERT(node);
+void host_freeAllApplications(Host* host, gpointer userData) {
+	MAGIC_ASSERT(host);
 
 	Worker* worker = worker_getPrivate();
-	worker->cached_node = node;
+	worker->cached_node = host;
 
-	GList* item = node->applications;
+	GList* item = host->applications;
 	while (item && item->data) {
 		Application* application = (Application*) item->data;
 		application_free(application);
 		item->data = NULL;
 		item = g_list_next(item);
 	}
-	g_list_free(node->applications);
-	node->applications = NULL;
+	g_list_free(host->applications);
+	host->applications = NULL;
 
 	worker->cached_node = NULL;
 }
 
-gint node_compare(gconstpointer a, gconstpointer b, gpointer user_data) {
-	const Node* na = a;
-	const Node* nb = b;
+gint host_compare(gconstpointer a, gconstpointer b, gpointer user_data) {
+	const Host* na = a;
+	const Host* nb = b;
 	MAGIC_ASSERT(na);
 	MAGIC_ASSERT(nb);
 	return na->id > nb->id ? +1 : na->id == nb->id ? 0 : -1;
 }
 
-gboolean node_isEqual(Node* a, Node* b) {
+gboolean host_isEqual(Host* a, Host* b) {
 	if(a == NULL && b == NULL) {
 		return TRUE;
 	} else if(a == NULL || b == NULL) {
 		return FALSE;
 	} else {
-		return node_compare(a, b, NULL) == 0;
+		return host_compare(a, b, NULL) == 0;
 	}
 }
 
-CPU* node_getCPU(Node* node) {
-	MAGIC_ASSERT(node);
-	return node->cpu;
+CPU* host_getCPU(Host* host) {
+	MAGIC_ASSERT(host);
+	return host->cpu;
 }
 
-Network* node_getNetwork(Node* node) {
-	MAGIC_ASSERT(node);
-	return node->network;
+Network* host_getNetwork(Host* host) {
+	MAGIC_ASSERT(host);
+	return host->network;
 }
 
-gchar* node_getName(Node* node) {
-	MAGIC_ASSERT(node);
-	return node->name;
+gchar* host_getName(Host* host) {
+	MAGIC_ASSERT(host);
+	return host->name;
 }
 
-in_addr_t node_getDefaultIP(Node* node) {
-	MAGIC_ASSERT(node);
-	return networkinterface_getIPAddress(node->defaultInterface);
+in_addr_t host_getDefaultIP(Host* host) {
+	MAGIC_ASSERT(host);
+	return networkinterface_getIPAddress(host->defaultInterface);
 }
 
-gchar* node_getDefaultIPName(Node* node) {
-	MAGIC_ASSERT(node);
-	return networkinterface_getIPName(node->defaultInterface);
+gchar* host_getDefaultIPName(Host* host) {
+	MAGIC_ASSERT(host);
+	return networkinterface_getIPName(host->defaultInterface);
 }
 
-Random* node_getRandom(Node* node) {
-	MAGIC_ASSERT(node);
-	return node->random;
+Random* host_getRandom(Host* host) {
+	MAGIC_ASSERT(host);
+	return host->random;
 }
 
-gboolean node_autotuneReceiveBuffer(Node* node) {
-	MAGIC_ASSERT(node);
-	return node->autotuneReceiveBuffer;
+gboolean host_autotuneReceiveBuffer(Host* host) {
+	MAGIC_ASSERT(host);
+	return host->autotuneReceiveBuffer;
 }
 
-gboolean node_autotuneSendBuffer(Node* node) {
-	MAGIC_ASSERT(node);
-	return node->autotuneSendBuffer;
+gboolean host_autotuneSendBuffer(Host* host) {
+	MAGIC_ASSERT(host);
+	return host->autotuneSendBuffer;
 }
 
-Descriptor* node_lookupDescriptor(Node* node, gint handle) {
-	MAGIC_ASSERT(node);
-	return g_hash_table_lookup(node->descriptors, (gconstpointer) &handle);
+Descriptor* host_lookupDescriptor(Host* host, gint handle) {
+	MAGIC_ASSERT(host);
+	return g_hash_table_lookup(host->descriptors, (gconstpointer) &handle);
 }
 
-NetworkInterface* node_lookupInterface(Node* node, in_addr_t handle) {
-	MAGIC_ASSERT(node);
-	return g_hash_table_lookup(node->interfaces, GUINT_TO_POINTER(handle));
+NetworkInterface* host_lookupInterface(Host* host, in_addr_t handle) {
+	MAGIC_ASSERT(host);
+	return g_hash_table_lookup(host->interfaces, GUINT_TO_POINTER(handle));
 }
 
-static void _node_associateInterface(Node* node, Socket* socket,
+static void _host_associateInterface(Host* host, Socket* socket,
 		in_addr_t bindAddress, in_port_t bindPort) {
-	MAGIC_ASSERT(node);
+	MAGIC_ASSERT(host);
 
 	/* connect up socket layer */
 	socket_setBinding(socket, bindAddress, bindPort);
@@ -279,26 +279,26 @@ static void _node_associateInterface(Node* node, Socket* socket,
 		/* need to associate all interfaces */
 		GHashTableIter iter;
 		gpointer key, value;
-		g_hash_table_iter_init(&iter, node->interfaces);
+		g_hash_table_iter_init(&iter, host->interfaces);
 
 		while(g_hash_table_iter_next(&iter, &key, &value)) {
 			NetworkInterface* interface = value;
 			networkinterface_associate(interface, socket);
 		}
 	} else {
-		NetworkInterface* interface = node_lookupInterface(node, bindAddress);
+		NetworkInterface* interface = host_lookupInterface(host, bindAddress);
 		networkinterface_associate(interface, socket);
 	}
 }
 
-static void _node_disassociateInterface(Node* node, Socket* socket) {
+static void _host_disassociateInterface(Host* host, Socket* socket) {
 	in_addr_t bindAddress = socket_getBinding(socket);
 
 	if(bindAddress == htonl(INADDR_ANY)) {
 		/* need to dissociate all interfaces */
 		GHashTableIter iter;
 		gpointer key, value;
-		g_hash_table_iter_init(&iter, node->interfaces);
+		g_hash_table_iter_init(&iter, host->interfaces);
 
 		while(g_hash_table_iter_next(&iter, &key, &value)) {
 			NetworkInterface* interface = value;
@@ -306,82 +306,82 @@ static void _node_disassociateInterface(Node* node, Socket* socket) {
 		}
 
 	} else {
-		NetworkInterface* interface = node_lookupInterface(node, bindAddress);
+		NetworkInterface* interface = host_lookupInterface(host, bindAddress);
 		networkinterface_disassociate(interface, socket);
 	}
 
 }
 
-static gint _node_monitorDescriptor(Node* node, Descriptor* descriptor) {
-	MAGIC_ASSERT(node);
+static gint _host_monitorDescriptor(Host* host, Descriptor* descriptor) {
+	MAGIC_ASSERT(host);
 
 	/* make sure there are no collisions before inserting */
 	gint* handle = descriptor_getHandleReference(descriptor);
-	g_assert(handle && !node_lookupDescriptor(node, *handle));
-	g_hash_table_replace(node->descriptors, handle, descriptor);
+	g_assert(handle && !host_lookupDescriptor(host, *handle));
+	g_hash_table_replace(host->descriptors, handle, descriptor);
 
 	return *handle;
 }
 
-static void _node_unmonitorDescriptor(Node* node, gint handle) {
-	MAGIC_ASSERT(node);
+static void _host_unmonitorDescriptor(Host* host, gint handle) {
+	MAGIC_ASSERT(host);
 
-	Descriptor* descriptor = node_lookupDescriptor(node, handle);
+	Descriptor* descriptor = host_lookupDescriptor(host, handle);
 	if(descriptor) {
 		if(descriptor->type == DT_TCPSOCKET || descriptor->type == DT_UDPSOCKET)
 		{
 			Socket* socket = (Socket*) descriptor;
-			_node_disassociateInterface(node, socket);
+			_host_disassociateInterface(host, socket);
 		}
 
-		g_hash_table_remove(node->descriptors, (gconstpointer) &handle);
+		g_hash_table_remove(host->descriptors, (gconstpointer) &handle);
 	}
 }
 
-gint node_createDescriptor(Node* node, DescriptorType type) {
-	MAGIC_ASSERT(node);
+gint host_createDescriptor(Host* host, DescriptorType type) {
+	MAGIC_ASSERT(host);
 
 	/* get a unique descriptor that can be "closed" later */
 	Descriptor* descriptor;
 
 	switch(type) {
 		case DT_EPOLL: {
-			descriptor = (Descriptor*) epoll_new((node->descriptorHandleCounter)++);
+			descriptor = (Descriptor*) epoll_new((host->descriptorHandleCounter)++);
 			break;
 		}
 
 		case DT_TCPSOCKET: {
-			descriptor = (Descriptor*) tcp_new((node->descriptorHandleCounter)++,
-					node->receiveBufferSize, node->sendBufferSize);
+			descriptor = (Descriptor*) tcp_new((host->descriptorHandleCounter)++,
+					host->receiveBufferSize, host->sendBufferSize);
 			break;
 		}
 
 		case DT_UDPSOCKET: {
-			descriptor = (Descriptor*) udp_new((node->descriptorHandleCounter)++,
-					node->receiveBufferSize, node->sendBufferSize);
+			descriptor = (Descriptor*) udp_new((host->descriptorHandleCounter)++,
+					host->receiveBufferSize, host->sendBufferSize);
 			break;
 		}
 
 		case DT_SOCKETPAIR: {
-			gint handle = (node->descriptorHandleCounter)++;
-			gint linkedHandle = (node->descriptorHandleCounter)++;
+			gint handle = (host->descriptorHandleCounter)++;
+			gint linkedHandle = (host->descriptorHandleCounter)++;
 
 			/* each channel is readable and writable */
 			descriptor = (Descriptor*) channel_new(handle, linkedHandle, CT_NONE);
 			Descriptor* linked = (Descriptor*) channel_new(linkedHandle, handle, CT_NONE);
-			_node_monitorDescriptor(node, linked);
+			_host_monitorDescriptor(host, linked);
 
 			break;
 		}
 
 		case DT_PIPE: {
-			gint handle = (node->descriptorHandleCounter)++;
-			gint linkedHandle = (node->descriptorHandleCounter)++;
+			gint handle = (host->descriptorHandleCounter)++;
+			gint linkedHandle = (host->descriptorHandleCounter)++;
 
 			/* one side is readonly, the other is writeonly */
 			descriptor = (Descriptor*) channel_new(handle, linkedHandle, CT_READONLY);
 			Descriptor* linked = (Descriptor*) channel_new(linkedHandle, handle, CT_WRITEONLY);
-			_node_monitorDescriptor(node, linked);
+			_host_monitorDescriptor(host, linked);
 
 			break;
 		}
@@ -392,20 +392,20 @@ gint node_createDescriptor(Node* node, DescriptorType type) {
 		}
 	}
 
-	return _node_monitorDescriptor(node, descriptor);
+	return _host_monitorDescriptor(host, descriptor);
 }
 
-void node_closeDescriptor(Node* node, gint handle) {
-	MAGIC_ASSERT(node);
-	_node_unmonitorDescriptor(node, handle);
+void host_closeDescriptor(Host* host, gint handle) {
+	MAGIC_ASSERT(host);
+	_host_unmonitorDescriptor(host, handle);
 }
 
-gint node_epollControl(Node* node, gint epollDescriptor, gint operation,
+gint host_epollControl(Host* host, gint epollDescriptor, gint operation,
 		gint fileDescriptor, struct epoll_event* event) {
-	MAGIC_ASSERT(node);
+	MAGIC_ASSERT(host);
 
 	/* EBADF  epfd is not a valid file descriptor. */
-	Descriptor* descriptor = node_lookupDescriptor(node, epollDescriptor);
+	Descriptor* descriptor = host_lookupDescriptor(host, epollDescriptor);
 	if(descriptor == NULL) {
 		return EBADF;
 	}
@@ -430,7 +430,7 @@ gint node_epollControl(Node* node, gint epollDescriptor, gint operation,
 	}
 
 	/* EBADF  fd is not a valid shadow file descriptor. */
-	descriptor = node_lookupDescriptor(node, fileDescriptor);
+	descriptor = host_lookupDescriptor(host, fileDescriptor);
 	if(descriptor == NULL) {
 		return EBADF;
 	}
@@ -445,12 +445,12 @@ gint node_epollControl(Node* node, gint epollDescriptor, gint operation,
 
 }
 
-gint node_epollGetEvents(Node* node, gint handle,
+gint host_epollGetEvents(Host* host, gint handle,
 		struct epoll_event* eventArray, gint eventArrayLength, gint* nEvents) {
-	MAGIC_ASSERT(node);
+	MAGIC_ASSERT(host);
 
 	/* EBADF  epfd is not a valid file descriptor. */
-	Descriptor* descriptor = node_lookupDescriptor(node, handle);
+	Descriptor* descriptor = host_lookupDescriptor(host, handle);
 	if(descriptor == NULL) {
 		return EBADF;
 	}
@@ -470,14 +470,14 @@ gint node_epollGetEvents(Node* node, gint handle,
 	return epoll_getEvents(epoll, eventArray, eventArrayLength, nEvents);
 }
 
-static gboolean _node_doesInterfaceExist(Node* node, in_addr_t interfaceIP) {
-	MAGIC_ASSERT(node);
+static gboolean _host_doesInterfaceExist(Host* host, in_addr_t interfaceIP) {
+	MAGIC_ASSERT(host);
 
-	if(interfaceIP == htonl(INADDR_ANY) && node->defaultInterface) {
+	if(interfaceIP == htonl(INADDR_ANY) && host->defaultInterface) {
 		return TRUE;
 	}
 
-	NetworkInterface* interface = node_lookupInterface(node, interfaceIP);
+	NetworkInterface* interface = host_lookupInterface(host, interfaceIP);
 	if(interface) {
 		return TRUE;
 	}
@@ -485,9 +485,9 @@ static gboolean _node_doesInterfaceExist(Node* node, in_addr_t interfaceIP) {
 	return FALSE;
 }
 
-static gboolean _node_isInterfaceAvailable(Node* node, in_addr_t interfaceIP,
+static gboolean _host_isInterfaceAvailable(Host* host, in_addr_t interfaceIP,
 		DescriptorType type, in_port_t port) {
-	MAGIC_ASSERT(node);
+	MAGIC_ASSERT(host);
 
 	enum ProtocolType protocol = type == DT_TCPSOCKET ? PTCP : type == DT_UDPSOCKET ? PUDP : PLOCAL;
 	gint associationKey = PROTOCOL_DEMUX_KEY(protocol, port);
@@ -497,7 +497,7 @@ static gboolean _node_isInterfaceAvailable(Node* node, in_addr_t interfaceIP,
 		/* need to check that all interfaces are free */
 		GHashTableIter iter;
 		gpointer key, value;
-		g_hash_table_iter_init(&iter, node->interfaces);
+		g_hash_table_iter_init(&iter, host->interfaces);
 
 		while(g_hash_table_iter_next(&iter, &key, &value)) {
 			NetworkInterface* interface = value;
@@ -509,7 +509,7 @@ static gboolean _node_isInterfaceAvailable(Node* node, in_addr_t interfaceIP,
 			}
 		}
 	} else {
-		NetworkInterface* interface = node_lookupInterface(node, interfaceIP);
+		NetworkInterface* interface = host_lookupInterface(host, interfaceIP);
 		isAvailable = !networkinterface_isAssociated(interface, associationKey);
 	}
 
@@ -517,26 +517,26 @@ static gboolean _node_isInterfaceAvailable(Node* node, in_addr_t interfaceIP,
 }
 
 
-static in_port_t _node_getRandomFreePort(Node* node, in_addr_t interfaceIP,
+static in_port_t _host_getRandomFreePort(Host* host, in_addr_t interfaceIP,
 		DescriptorType type) {
-	MAGIC_ASSERT(node);
+	MAGIC_ASSERT(host);
 
 	in_port_t randomPort = 0;
 	gboolean available = FALSE;
 
 	while(!available) {
-		randomPort = htons((node->randomPortCounter)++);
-		g_assert(node->randomPortCounter >= MIN_RANDOM_PORT);
-		available = _node_isInterfaceAvailable(node, interfaceIP, type, randomPort);
+		randomPort = htons((host->randomPortCounter)++);
+		g_assert(host->randomPortCounter >= MIN_RANDOM_PORT);
+		available = _host_isInterfaceAvailable(host, interfaceIP, type, randomPort);
 	}
 
 	return randomPort;
 }
 
-gint node_bindToInterface(Node* node, gint handle, in_addr_t bindAddress, in_port_t bindPort) {
-	MAGIC_ASSERT(node);
+gint host_bindToInterface(Host* host, gint handle, in_addr_t bindAddress, in_port_t bindPort) {
+	MAGIC_ASSERT(host);
 
-	Descriptor* descriptor = node_lookupDescriptor(node, handle);
+	Descriptor* descriptor = host_lookupDescriptor(host, handle);
 	if(descriptor == NULL) {
 		warning("descriptor handle '%i' not found", handle);
 		return EBADF;
@@ -555,7 +555,7 @@ gint node_bindToInterface(Node* node, gint handle, in_addr_t bindAddress, in_por
 	}
 
 	/* make sure we have an interface at that address */
-	if(!_node_doesInterfaceExist(node, bindAddress)) {
+	if(!_host_doesInterfaceExist(host, bindAddress)) {
 		return EADDRNOTAVAIL;
 	}
 
@@ -570,23 +570,23 @@ gint node_bindToInterface(Node* node, gint handle, in_addr_t bindAddress, in_por
 	/* make sure we have a proper port */
 	if(bindPort == 0) {
 		/* we know it will be available */
-		bindPort = _node_getRandomFreePort(node, bindAddress, type);
+		bindPort = _host_getRandomFreePort(host, bindAddress, type);
 	} else {
 		/* make sure their port is available at that address for this protocol. */
-		if(!_node_isInterfaceAvailable(node, bindAddress, type, bindPort)) {
+		if(!_host_isInterfaceAvailable(host, bindAddress, type, bindPort)) {
 			return EADDRINUSE;
 		}
 	}
 
 	/* bind port and set associations */
-	_node_associateInterface(node, socket, bindAddress, bindPort);
+	_host_associateInterface(host, socket, bindAddress, bindPort);
 
 	return 0;
 }
 
-gint node_connectToPeer(Node* node, gint handle, in_addr_t peerAddress,
+gint host_connectToPeer(Host* host, gint handle, in_addr_t peerAddress,
 		in_port_t peerPort, sa_family_t family) {
-	MAGIC_ASSERT(node);
+	MAGIC_ASSERT(host);
 
 	in_addr_t loIP = htonl(INADDR_LOOPBACK);
 
@@ -597,13 +597,13 @@ gint node_connectToPeer(Node* node, gint handle, in_addr_t peerAddress,
 		if(!peerNetwork) {
 			/* can't route it - there is no node with this address */
 			gchar* peerAddressString = address_ipToNewString(ntohl(peerAddress));
-			warning("attempting to connect to address '%s:%u' for which no node exists", peerAddressString, ntohs(peerPort));
+			warning("attempting to connect to address '%s:%u' for which no host exists", peerAddressString, ntohs(peerPort));
 			g_free(peerAddressString);
 			return ECONNREFUSED;
 		}
 	}
 
-	Descriptor* descriptor = node_lookupDescriptor(node, handle);
+	Descriptor* descriptor = host_lookupDescriptor(host, handle);
 	if(descriptor == NULL) {
 		warning("descriptor handle '%i' not found", handle);
 		return EBADF;
@@ -637,21 +637,21 @@ gint node_connectToPeer(Node* node, gint handle, in_addr_t peerAddress,
 	if(!socket_getBinding(socket)) {
 		/* do an implicit bind to a random port.
 		 * use default interface unless the remote peer is on loopback */
-		in_addr_t defaultIP = networkinterface_getIPAddress(node->defaultInterface);
+		in_addr_t defaultIP = networkinterface_getIPAddress(host->defaultInterface);
 
 		in_addr_t bindAddress = loIP == peerAddress ? loIP : defaultIP;
-		in_port_t bindPort = _node_getRandomFreePort(node, bindAddress, type);
+		in_port_t bindPort = _host_getRandomFreePort(host, bindAddress, type);
 
-		_node_associateInterface(node, socket, bindAddress, bindPort);
+		_host_associateInterface(host, socket, bindAddress, bindPort);
 	}
 
 	return socket_connectToPeer(socket, peerAddress, peerPort, family);
 }
 
-gint node_listenForPeer(Node* node, gint handle, gint backlog) {
-	MAGIC_ASSERT(node);
+gint host_listenForPeer(Host* host, gint handle, gint backlog) {
+	MAGIC_ASSERT(host);
 
-	Descriptor* descriptor = node_lookupDescriptor(node, handle);
+	Descriptor* descriptor = host_lookupDescriptor(host, handle);
 	if(descriptor == NULL) {
 		warning("descriptor handle '%i' not found", handle);
 		return EBADF;
@@ -675,19 +675,19 @@ gint node_listenForPeer(Node* node, gint handle, gint backlog) {
 	if(!socket_isBound(socket)) {
 		/* implicit bind */
 		in_addr_t bindAddress = htonl(INADDR_ANY);
-		in_port_t bindPort = _node_getRandomFreePort(node, bindAddress, type);
+		in_port_t bindPort = _host_getRandomFreePort(host, bindAddress, type);
 
-		_node_associateInterface(node, socket, bindAddress, bindPort);
+		_host_associateInterface(host, socket, bindAddress, bindPort);
 	}
 
 	tcp_enterServerMode(tcp, backlog);
 	return 0;
 }
 
-gint node_acceptNewPeer(Node* node, gint handle, in_addr_t* ip, in_port_t* port, gint* acceptedHandle) {
-	MAGIC_ASSERT(node);
+gint host_acceptNewPeer(Host* host, gint handle, in_addr_t* ip, in_port_t* port, gint* acceptedHandle) {
+	MAGIC_ASSERT(host);
 
-	Descriptor* descriptor = node_lookupDescriptor(node, handle);
+	Descriptor* descriptor = host_lookupDescriptor(host, handle);
 	if(descriptor == NULL) {
 		warning("descriptor handle '%i' not found", handle);
 		return EBADF;
@@ -707,10 +707,10 @@ gint node_acceptNewPeer(Node* node, gint handle, in_addr_t* ip, in_port_t* port,
 	return tcp_acceptServerPeer((TCP*)descriptor, ip, port, acceptedHandle);
 }
 
-gint node_getPeerName(Node* node, gint handle, in_addr_t* ip, in_port_t* port) {
-	MAGIC_ASSERT(node);
+gint host_getPeerName(Host* host, gint handle, in_addr_t* ip, in_port_t* port) {
+	MAGIC_ASSERT(host);
 
-	Descriptor* descriptor = node_lookupDescriptor(node, handle);
+	Descriptor* descriptor = host_lookupDescriptor(host, handle);
 	if(descriptor == NULL) {
 		warning("descriptor handle '%i' not found", handle);
 		return EBADF;
@@ -730,10 +730,10 @@ gint node_getPeerName(Node* node, gint handle, in_addr_t* ip, in_port_t* port) {
 	return socket_getPeerName((Socket*)descriptor, ip, port);
 }
 
-gint node_getSocketName(Node* node, gint handle, in_addr_t* ip, in_port_t* port) {
-	MAGIC_ASSERT(node);
+gint host_getSocketName(Host* host, gint handle, in_addr_t* ip, in_port_t* port) {
+	MAGIC_ASSERT(host);
 
-	Descriptor* descriptor = node_lookupDescriptor(node, handle);
+	Descriptor* descriptor = host_lookupDescriptor(host, handle);
 	if(descriptor == NULL) {
 		warning("descriptor handle '%i' not found", handle);
 		return EBADF;
@@ -754,12 +754,12 @@ gint node_getSocketName(Node* node, gint handle, in_addr_t* ip, in_port_t* port)
 	return socket_getSocketName((Socket*)descriptor, ip, port);
 }
 
-gint node_sendUserData(Node* node, gint handle, gconstpointer buffer, gsize nBytes,
+gint host_sendUserData(Host* host, gint handle, gconstpointer buffer, gsize nBytes,
 		in_addr_t ip, in_addr_t port, gsize* bytesCopied) {
-	MAGIC_ASSERT(node);
+	MAGIC_ASSERT(host);
 	g_assert(bytesCopied);
 
-	Descriptor* descriptor = node_lookupDescriptor(node, handle);
+	Descriptor* descriptor = host_lookupDescriptor(host, handle);
 	if(descriptor == NULL) {
 		warning("descriptor handle '%i' not found", handle);
 		return EBADF;
@@ -779,7 +779,7 @@ gint node_sendUserData(Node* node, gint handle, gconstpointer buffer, gsize nByt
 	Transport* transport = (Transport*) descriptor;
 
 	/* we should block if our cpu has been too busy lately */
-	if(cpu_isBlocked(node->cpu)) {
+	if(cpu_isBlocked(host->cpu)) {
 		debug("blocked on CPU when trying to send %"G_GSIZE_FORMAT" bytes from socket %i", nBytes, handle);
 
 		/*
@@ -805,11 +805,11 @@ gint node_sendUserData(Node* node, gint handle, gconstpointer buffer, gsize nByt
 		/* if this socket is not bound, do an implicit bind to a random port */
 		if(!socket_getBinding(socket)) {
 			in_addr_t bindAddress = ip == htonl(INADDR_LOOPBACK) ? htonl(INADDR_LOOPBACK) :
-					networkinterface_getIPAddress(node->defaultInterface);
-			in_port_t bindPort = _node_getRandomFreePort(node, bindAddress, type);
+					networkinterface_getIPAddress(host->defaultInterface);
+			in_port_t bindPort = _host_getRandomFreePort(host, bindAddress, type);
 
 			/* bind port and set associations */
-			_node_associateInterface(node, socket, bindAddress, bindPort);
+			_host_associateInterface(host, socket, bindAddress, bindPort);
 		}
 	}
 
@@ -839,12 +839,12 @@ gint node_sendUserData(Node* node, gint handle, gconstpointer buffer, gsize nByt
 	return 0;
 }
 
-gint node_receiveUserData(Node* node, gint handle, gpointer buffer, gsize nBytes,
+gint host_receiveUserData(Host* host, gint handle, gpointer buffer, gsize nBytes,
 		in_addr_t* ip, in_port_t* port, gsize* bytesCopied) {
-	MAGIC_ASSERT(node);
+	MAGIC_ASSERT(host);
 	g_assert(ip && port && bytesCopied);
 
-	Descriptor* descriptor = node_lookupDescriptor(node, handle);
+	Descriptor* descriptor = host_lookupDescriptor(host, handle);
 	if(descriptor == NULL) {
 		warning("descriptor handle '%i' not found", handle);
 		return EBADF;
@@ -863,7 +863,7 @@ gint node_receiveUserData(Node* node, gint handle, gpointer buffer, gsize nBytes
 	Transport* transport = (Transport*) descriptor;
 
 	/* we should block if our cpu has been too busy lately */
-	if(cpu_isBlocked(node->cpu)) {
+	if(cpu_isBlocked(host->cpu)) {
 		debug("blocked on CPU when trying to send %"G_GSIZE_FORMAT" bytes from socket %i", nBytes, handle);
 
 		/*
@@ -888,10 +888,10 @@ gint node_receiveUserData(Node* node, gint handle, gpointer buffer, gsize nBytes
 	return 0;
 }
 
-gint node_closeUser(Node* node, gint handle) {
-	MAGIC_ASSERT(node);
+gint host_closeUser(Host* host, gint handle) {
+	MAGIC_ASSERT(host);
 
-	Descriptor* descriptor = node_lookupDescriptor(node, handle);
+	Descriptor* descriptor = host_lookupDescriptor(host, handle);
 	if(descriptor == NULL) {
 		warning("descriptor handle '%i' not found", handle);
 		return EBADF;
@@ -908,22 +908,22 @@ gint node_closeUser(Node* node, gint handle) {
 	return 0;
 }
 
-Tracker* node_getTracker(Node* node) {
-	MAGIC_ASSERT(node);
-	return node->tracker;
+Tracker* host_getTracker(Host* host) {
+	MAGIC_ASSERT(host);
+	return host->tracker;
 }
 
-GLogLevelFlags node_getLogLevel(Node* node) {
-	MAGIC_ASSERT(node);
-	return node->logLevel;
+GLogLevelFlags host_getLogLevel(Host* host) {
+	MAGIC_ASSERT(host);
+	return host->logLevel;
 }
 
-gchar node_isLoggingPcap(Node *node) {
-	MAGIC_ASSERT(node);
-	return node->logPcap;
+gchar host_isLoggingPcap(Host *host) {
+	MAGIC_ASSERT(host);
+	return host->logPcap;
 }
 
-gdouble node_getNextPacketPriority(Node* node) {
-	MAGIC_ASSERT(node);
-	return ++(node->packetPriorityCounter);
+gdouble host_getNextPacketPriority(Host* host) {
+	MAGIC_ASSERT(host);
+	return ++(host->packetPriorityCounter);
 }

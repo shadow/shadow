@@ -36,7 +36,7 @@ enum SystemCallType {
 	SCT_BIND, SCT_CONNECT, SCT_GETSOCKNAME, SCT_GETPEERNAME,
 };
 
-static Node* _system_switchInShadowContext() {
+static Host* _system_switchInShadowContext() {
 	Worker* worker = worker_getPrivate();
 	if(worker->cached_plugin) {
 		plugin_setShadowContext(worker->cached_plugin, TRUE);
@@ -44,7 +44,7 @@ static Node* _system_switchInShadowContext() {
 	return worker->cached_node;
 }
 
-static void _system_switchOutShadowContext(Node* node) {
+static void _system_switchOutShadowContext(Host* node) {
 	Worker* worker = worker_getPrivate();
 	if(worker->cached_plugin) {
 		plugin_setShadowContext(worker->cached_plugin, FALSE);
@@ -63,8 +63,8 @@ gint system_epollCreate(gint size) {
 	}
 
 	/* switch into shadow and create the new descriptor */
-	Node* node = _system_switchInShadowContext();
-	gint handle = node_createDescriptor(node, DT_EPOLL);
+	Host* node = _system_switchInShadowContext();
+	gint handle = host_createDescriptor(node, DT_EPOLL);
 	_system_switchOutShadowContext(node);
 
 	return handle;
@@ -97,8 +97,8 @@ gint system_epollCtl(gint epollDescriptor, gint operation, gint fileDescriptor,
 	}
 
 	/* switch into shadow and do the operation */
-	Node* node = _system_switchInShadowContext();
-	gint result = node_epollControl(node, epollDescriptor, operation, fileDescriptor, event);
+	Host* node = _system_switchInShadowContext();
+	gint result = host_epollControl(node, epollDescriptor, operation, fileDescriptor, event);
 	_system_switchOutShadowContext(node);
 
 	/*
@@ -124,7 +124,7 @@ gint system_epollWait(gint epollDescriptor, struct epoll_event* eventArray,
 	}
 
 	/* switch to shadow context and try to get events if we have any */
-	Node* node = _system_switchInShadowContext();
+	Host* node = _system_switchInShadowContext();
 
 	/*
 	 * initial checks: we can't block, so timeout must be 0. anything else will
@@ -138,7 +138,7 @@ gint system_epollWait(gint epollDescriptor, struct epoll_event* eventArray,
 	}
 
 	gint nEvents = 0;
-	gint result = node_epollGetEvents(node, epollDescriptor, eventArray,
+	gint result = host_epollGetEvents(node, epollDescriptor, eventArray,
 			eventArrayLength, &nEvents);
 	_system_switchOutShadowContext(node);
 
@@ -171,7 +171,7 @@ gint system_epollPWait(gint epollDescriptor, struct epoll_event* events,
 	 * @warning we dont handle signals
 	 */
 	if(signalSet) {
-		Node* node = _system_switchInShadowContext();
+		Host* node = _system_switchInShadowContext();
 		warning("epollpwait using a signalset is not yet supported");
 		_system_switchOutShadowContext(node);
 	}
@@ -199,7 +199,7 @@ gint system_socket(gint domain, gint type, gint protocol) {
 	}
 
 	gint result = 0;
-	Node* node = _system_switchInShadowContext();
+	Host* node = _system_switchInShadowContext();
 
 	/* check inputs for what we support */
 	if(isBlocking) {
@@ -219,7 +219,7 @@ gint system_socket(gint domain, gint type, gint protocol) {
 	if(result == 0) {
 		/* we are all set to create the socket */
 		DescriptorType dtype = type == SOCK_STREAM ? DT_TCPSOCKET : DT_UDPSOCKET;
-		result = node_createDescriptor(node, dtype);
+		result = host_createDescriptor(node, dtype);
 	}
 
 	_system_switchOutShadowContext(node);
@@ -253,7 +253,7 @@ gint system_socketPair(gint domain, gint type, gint protocol, gint fds[2]) {
 	}
 
 	gint result = 0;
-	Node* node = _system_switchInShadowContext();
+	Host* node = _system_switchInShadowContext();
 
 	if(isBlocking) {
 		warning("we only support non-blocking sockets: please bitwise OR 'SOCK_NONBLOCK' with type flags");
@@ -262,9 +262,9 @@ gint system_socketPair(gint domain, gint type, gint protocol, gint fds[2]) {
 	}
 
 	if(result == 0) {
-		gint handle = node_createDescriptor(node, DT_SOCKETPAIR);
+		gint handle = host_createDescriptor(node, DT_SOCKETPAIR);
 
-		Channel* channel = (Channel*) node_lookupDescriptor(node, handle);
+		Channel* channel = (Channel*) host_lookupDescriptor(node, handle);
 		gint linkedHandle = channel_getLinkedHandle(channel);
 
 		fds[0] = handle;
@@ -277,7 +277,7 @@ gint system_socketPair(gint domain, gint type, gint protocol, gint fds[2]) {
 
 static gint _system_addressHelper(gint fd, const struct sockaddr* addr, socklen_t* len,
 		enum SystemCallType type) {
-	Node* node = _system_switchInShadowContext();
+	Host* node = _system_switchInShadowContext();
 	gint result = 0;
 
 	/* check if this is a virtual socket */
@@ -300,20 +300,20 @@ static gint _system_addressHelper(gint fd, const struct sockaddr* addr, socklen_
 
 		switch(type) {
 			case SCT_BIND: {
-				result = node_bindToInterface(node, fd, ip, port);
+				result = host_bindToInterface(node, fd, ip, port);
 				break;
 			}
 
 			case SCT_CONNECT: {
-				result = node_connectToPeer(node, fd, ip, port, family);
+				result = host_connectToPeer(node, fd, ip, port, family);
 				break;
 			}
 
 			case SCT_GETPEERNAME:
 			case SCT_GETSOCKNAME: {
 				result = type == SCT_GETPEERNAME ?
-						node_getPeerName(node, fd, &(saddr->sin_addr.s_addr), &(saddr->sin_port)) :
-						node_getSocketName(node, fd, &(saddr->sin_addr.s_addr), &(saddr->sin_port));
+						host_getPeerName(node, fd, &(saddr->sin_addr.s_addr), &(saddr->sin_port)) :
+						host_getSocketName(node, fd, &(saddr->sin_addr.s_addr), &(saddr->sin_port));
 
 				if(result == 0) {
 					saddr->sin_family = AF_INET;
@@ -344,7 +344,7 @@ static gint _system_addressHelper(gint fd, const struct sockaddr* addr, socklen_
 
 
 gint system_accept(gint fd, struct sockaddr* addr, socklen_t* len) {
-	Node* node = _system_switchInShadowContext();
+	Host* node = _system_switchInShadowContext();
 	gint result = 0;
 
 	/* check if this is a virtual socket */
@@ -359,7 +359,7 @@ gint system_accept(gint fd, struct sockaddr* addr, socklen_t* len) {
 
 	if(result == 0) {
 		/* direct to node for further checks */
-		result = node_acceptNewPeer(node, fd, &ip, &port, &handle);
+		result = host_acceptNewPeer(node, fd, &ip, &port, &handle);
 	}
 
 	_system_switchOutShadowContext(node);
@@ -384,7 +384,7 @@ gint system_accept(gint fd, struct sockaddr* addr, socklen_t* len) {
 gint system_accept4(gint fd, struct sockaddr* addr, socklen_t* len, gint flags) {
 	/* just ignore the flags and call accept */
 	if(flags) {
-		Node* node = _system_switchInShadowContext();
+		Host* node = _system_switchInShadowContext();
 		debug("accept4 ignoring flags argument");
 		_system_switchOutShadowContext(node);
 	}
@@ -426,9 +426,9 @@ gssize system_sendTo(gint fd, const gpointer buf, gsize n, gint flags,
 		port = si->sin_port;
 	}
 
-	Node* node = _system_switchInShadowContext();
+	Host* node = _system_switchInShadowContext();
 	gsize bytes = 0;
-	gint result = node_sendUserData(node, fd, buf, n, ip, port, &bytes);
+	gint result = host_sendUserData(node, fd, buf, n, ip, port, &bytes);
 	_system_switchOutShadowContext(node);
 
 	if(result != 0) {
@@ -444,7 +444,7 @@ gssize system_send(gint fd, const gpointer buf, gsize n, gint flags) {
 
 gssize system_sendMsg(gint fd, const struct msghdr* message, gint flags) {
 	/* TODO implement */
-	Node* node = _system_switchInShadowContext();
+	Host* node = _system_switchInShadowContext();
 	warning("sendmsg not implemented");
 	_system_switchOutShadowContext(node);
 	errno = ENOSYS;
@@ -467,9 +467,9 @@ gssize system_recvFrom(gint fd, gpointer buf, size_t n, gint flags,
 	in_addr_t ip = 0;
 	in_port_t port = 0;
 
-	Node* node = _system_switchInShadowContext();
+	Host* node = _system_switchInShadowContext();
 	gsize bytes = 0;
-	gint result = node_receiveUserData(node, fd, buf, n, &ip, &port, &bytes);
+	gint result = host_receiveUserData(node, fd, buf, n, &ip, &port, &bytes);
 	_system_switchOutShadowContext(node);
 
 	if(result != 0) {
@@ -495,7 +495,7 @@ gssize system_recv(gint fd, gpointer buf, gsize n, gint flags) {
 
 gssize system_recvMsg(gint fd, struct msghdr* message, gint flags) {
 	/* TODO implement */
-	Node* node = _system_switchInShadowContext();
+	Host* node = _system_switchInShadowContext();
 	warning("recvmsg not implemented");
 	_system_switchOutShadowContext(node);
 	errno = ENOSYS;
@@ -513,8 +513,8 @@ gint system_getSockOpt(gint fd, gint level, gint optname, gpointer optval,
 		return -1;
 	}
 
-	Node* node = _system_switchInShadowContext();
-	Descriptor* descriptor = node_lookupDescriptor(node, fd);
+	Host* node = _system_switchInShadowContext();
+	Descriptor* descriptor = host_lookupDescriptor(node, fd);
 
 	gint result = 0;
 
@@ -614,8 +614,8 @@ gint system_setSockOpt(gint fd, gint level, gint optname, const gpointer optval,
 		return -1;
 	}
 
-	Node* node = _system_switchInShadowContext();
-	Descriptor* descriptor = node_lookupDescriptor(node, fd);
+	Host* node = _system_switchInShadowContext();
+	Descriptor* descriptor = host_lookupDescriptor(node, fd);
 
 	gint result = 0;
 
@@ -691,8 +691,8 @@ gint system_listen(gint fd, gint backlog) {
 		return -1;
 	}
 
-	Node* node = _system_switchInShadowContext();
-	gint result = node_listenForPeer(node, fd, backlog);
+	Host* node = _system_switchInShadowContext();
+	gint result = host_listenForPeer(node, fd, backlog);
 	_system_switchOutShadowContext(node);
 
 	/* check if there was an error */
@@ -705,7 +705,7 @@ gint system_listen(gint fd, gint backlog) {
 }
 
 gint system_shutdown(gint fd, gint how) {
-	Node* node = _system_switchInShadowContext();
+	Host* node = _system_switchInShadowContext();
 	warning("shutdown not implemented");
 	_system_switchOutShadowContext(node);
 	errno = ENOSYS;
@@ -731,7 +731,7 @@ gint system_pipe2(gint pipefds[2], gint flags) {
 		isBlocking = FALSE;
 	}
 
-	Node* node = _system_switchInShadowContext();
+	Host* node = _system_switchInShadowContext();
 	gint result = 0;
 
 	/* check inputs for what we support */
@@ -739,9 +739,9 @@ gint system_pipe2(gint pipefds[2], gint flags) {
 		warning("we only support non-blocking pipes: please bitwise OR 'O_NONBLOCK' with flags");
 		result = EINVAL;
 	} else {
-		gint handle = node_createDescriptor(node, DT_PIPE);
+		gint handle = host_createDescriptor(node, DT_PIPE);
 
-		Channel* channel = (Channel*) node_lookupDescriptor(node, handle);
+		Channel* channel = (Channel*) host_lookupDescriptor(node, handle);
 		gint linkedHandle = channel_getLinkedHandle(channel);
 
 		pipefds[0] = handle; /* reader */
@@ -765,8 +765,8 @@ gint system_close(gint fd) {
 		return -1;
 	}
 
-	Node* node = _system_switchInShadowContext();
-	gint r = node_closeUser(node, fd);
+	Host* node = _system_switchInShadowContext();
+	gint r = host_closeUser(node, fd);
 	_system_switchOutShadowContext(node);
 	return r;
 }
@@ -793,8 +793,8 @@ gint system_ioctl(int fd, unsigned long int request, va_list farg) {
 	gint result = 0;
 
 	/* normally, the type of farg depends on the request */
-	Node* node = _system_switchInShadowContext();
-	Descriptor* descriptor = node_lookupDescriptor(node, fd);
+	Host* node = _system_switchInShadowContext();
+	Descriptor* descriptor = host_lookupDescriptor(node, fd);
 
 	if(descriptor) {
 		DescriptorType t = descriptor_getType(descriptor);
@@ -828,7 +828,7 @@ gint system_ioctl(int fd, unsigned long int request, va_list farg) {
  */
 
 time_t system_time(time_t* t) {
-	Node* node = _system_switchInShadowContext();
+	Host* node = _system_switchInShadowContext();
 	time_t secs = (time_t) (worker_getPrivate()->clock_now / SIMTIME_ONE_SECOND);
 	if(t != NULL){
 		*t = secs;
@@ -843,7 +843,7 @@ gint system_clockGetTime(clockid_t clk_id, struct timespec *tp) {
 		return -1;
 	}
 
-	Node* node = _system_switchInShadowContext();
+	Host* node = _system_switchInShadowContext();
 
 	SimulationTime now = worker_getPrivate()->clock_now;
 	tp->tv_sec = now / SIMTIME_ONE_SECOND;
@@ -855,7 +855,7 @@ gint system_clockGetTime(clockid_t clk_id, struct timespec *tp) {
 
 gint system_getTimeOfDay(struct timeval *tv) {
 	if(tv) {
-		Node* node = _system_switchInShadowContext();
+		Host* node = _system_switchInShadowContext();
 		SimulationTime now = worker_getPrivate()->clock_now;
 		tv->tv_sec = now / SIMTIME_ONE_SECOND;
 		tv->tv_usec = (now % SIMTIME_ONE_SECOND) / SIMTIME_ONE_MICROSECOND;
@@ -865,7 +865,7 @@ gint system_getTimeOfDay(struct timeval *tv) {
 }
 
 gint system_getHostName(gchar *name, size_t len) {
-	Node* node = _system_switchInShadowContext();
+	Host* node = _system_switchInShadowContext();
 	gint result = 0;
 
 //	in_addr_t ip = node_getDefaultIP(node);
@@ -874,7 +874,7 @@ gint system_getHostName(gchar *name, size_t len) {
 	if(name != NULL && node != NULL) {
 
 		/* resolve my address to a hostname */
-		const gchar* sysname = node_getName(node);
+		const gchar* sysname = host_getName(node);
 
 		if(sysname != NULL && len > strlen(sysname)) {
 			if(strncpy(name, sysname, len) != NULL) {
@@ -894,7 +894,7 @@ gint system_getHostName(gchar *name, size_t len) {
 
 gint system_getAddrInfo(gchar *name, const gchar *service,
 		const struct addrinfo *hgints, struct addrinfo **res) {
-	Node* node = _system_switchInShadowContext();
+	Host* node = _system_switchInShadowContext();
 
 	gint result = 0;
 
@@ -965,7 +965,7 @@ gint system_getAddrInfo(gchar *name, const gchar *service,
 }
 
 void system_freeAddrInfo(struct addrinfo *res) {
-	Node* node = _system_switchInShadowContext();
+	Host* node = _system_switchInShadowContext();
 	if(res && res->ai_addr != NULL) {
 		g_free(res->ai_addr);
 		res->ai_addr = NULL;
@@ -982,7 +982,7 @@ int system_getnameinfo(const struct sockaddr *sa, socklen_t salen,
 	}
 
 	gint retval = 0;
-	Node* node = _system_switchInShadowContext();
+	Host* node = _system_switchInShadowContext();
 
 	GQuark convertedIP = (GQuark) (((struct sockaddr_in*)sa)->sin_addr.s_addr);
 	const gchar* hostname = internetwork_resolveID(worker_getInternet(), convertedIP);
@@ -998,7 +998,7 @@ int system_getnameinfo(const struct sockaddr *sa, socklen_t salen,
 }
 
 struct hostent* system_getHostByName(const gchar* name) {
-	Node* node = _system_switchInShadowContext();
+	Host* node = _system_switchInShadowContext();
 	warning("gethostbyname not yet implemented");
 	_system_switchOutShadowContext(node);
 	return NULL;
@@ -1007,14 +1007,14 @@ struct hostent* system_getHostByName(const gchar* name) {
 int system_getHostByName_r(const gchar *name,
                struct hostent *ret, gchar *buf, gsize buflen,
                struct hostent **result, gint *h_errnop) {
-	Node* node = _system_switchInShadowContext();
+	Host* node = _system_switchInShadowContext();
 	warning("gethostbyname_r not yet implemented");
 	_system_switchOutShadowContext(node);
 	return -1;
 }
 
 struct hostent* system_getHostByName2(const gchar* name, gint af) {
-	Node* node = _system_switchInShadowContext();
+	Host* node = _system_switchInShadowContext();
 	warning("gethostbyname2 not yet implemented");
 	_system_switchOutShadowContext(node);
 	return NULL;
@@ -1023,14 +1023,14 @@ struct hostent* system_getHostByName2(const gchar* name, gint af) {
 int system_getHostByName2_r(const gchar *name, gint af,
                struct hostent *ret, gchar *buf, gsize buflen,
                struct hostent **result, gint *h_errnop) {
-	Node* node = _system_switchInShadowContext();
+	Host* node = _system_switchInShadowContext();
 	warning("gethostbyname2_r not yet implemented");
 	_system_switchOutShadowContext(node);
 	return -1;
 }
 
 struct hostent* system_getHostByAddr(const void* addr, socklen_t len, gint type) {
-	Node* node = _system_switchInShadowContext();
+	Host* node = _system_switchInShadowContext();
 	warning("gethostbyaddr not yet implemented");
 	_system_switchOutShadowContext(node);
 	return NULL;
@@ -1039,7 +1039,7 @@ struct hostent* system_getHostByAddr(const void* addr, socklen_t len, gint type)
 int system_getHostByAddr_r(const void *addr, socklen_t len, gint type,
                struct hostent *ret, gchar *buf, gsize buflen,
                struct hostent **result, gint *h_errnop) {
-	Node* node = _system_switchInShadowContext();
+	Host* node = _system_switchInShadowContext();
 	warning("gethostbyaddr_r not yet implemented");
 	_system_switchOutShadowContext(node);
 	return -1;
@@ -1063,9 +1063,9 @@ void system_addEntropy(gconstpointer buffer, gint numBytes) {
 }
 
 gint system_randomBytes(guchar* buf, gint numBytes) {
-	Node* node = _system_switchInShadowContext();
+	Host* node = _system_switchInShadowContext();
 
-	Random* random = node_getRandom(node);
+	Random* random = host_getRandom(node);
 	gint bytesWritten = 0;
 
 	while(numBytes > bytesWritten) {
@@ -1081,50 +1081,50 @@ gint system_randomBytes(guchar* buf, gint numBytes) {
 }
 
 gint system_getRandom() {
-	Node* node = _system_switchInShadowContext();
-	gint r = random_nextInt(node_getRandom(node));
+	Host* node = _system_switchInShadowContext();
+	gint r = random_nextInt(host_getRandom(node));
 	_system_switchOutShadowContext(node);
 	return r;
 }
 
 gpointer system_malloc(gsize size) {
-	Node* node = _system_switchInShadowContext();
+	Host* node = _system_switchInShadowContext();
 	gpointer ptr = malloc(size);
 	if(size && ptr != NULL) {
-		tracker_addAllocatedBytes(node_getTracker(node), ptr, size);
+		tracker_addAllocatedBytes(host_getTracker(node), ptr, size);
 	}
 	_system_switchOutShadowContext(node);
 	return ptr;
 }
 
 gpointer system_calloc(gsize nmemb, gsize size) {
-	Node* node = _system_switchInShadowContext();
+	Host* node = _system_switchInShadowContext();
 	gpointer ptr = calloc(nmemb, size);
 	if(size && ptr != NULL) {
-		tracker_addAllocatedBytes(node_getTracker(node), ptr, size);
+		tracker_addAllocatedBytes(host_getTracker(node), ptr, size);
 	}
 	_system_switchOutShadowContext(node);
 	return ptr;
 }
 
 gpointer system_realloc(gpointer ptr, gsize size) {
-	Node* node = _system_switchInShadowContext();
+	Host* node = _system_switchInShadowContext();
 
 	gpointer newptr = realloc(ptr, size);
 	if(newptr != NULL) {
 		if(ptr == NULL) {
 			/* equivalent to malloc */
 			if(size) {
-				tracker_addAllocatedBytes(node_getTracker(node), newptr, size);
+				tracker_addAllocatedBytes(host_getTracker(node), newptr, size);
 			}
 		} else if (size == 0) {
 			/* equivalent to free */
-			tracker_removeAllocatedBytes(node_getTracker(node), ptr);
+			tracker_removeAllocatedBytes(host_getTracker(node), ptr);
 		} else {
 			/* true realloc */
-			tracker_removeAllocatedBytes(node_getTracker(node), ptr);
+			tracker_removeAllocatedBytes(host_getTracker(node), ptr);
 			if(size) {
-				tracker_addAllocatedBytes(node_getTracker(node), newptr, size);
+				tracker_addAllocatedBytes(host_getTracker(node), newptr, size);
 			}
 		}
 	}
@@ -1134,29 +1134,29 @@ gpointer system_realloc(gpointer ptr, gsize size) {
 }
 
 void system_free(gpointer ptr) {
-	Node* node = _system_switchInShadowContext();
+	Host* node = _system_switchInShadowContext();
 	free(ptr);
 	if(ptr != NULL) {
-		tracker_removeAllocatedBytes(node_getTracker(node), ptr);
+		tracker_removeAllocatedBytes(host_getTracker(node), ptr);
 	}
 	_system_switchOutShadowContext(node);
 }
 
 int system_posix_memalign(gpointer* memptr, gsize alignment, gsize size) {
-	Node* node = _system_switchInShadowContext();
+	Host* node = _system_switchInShadowContext();
 	gint ret = posix_memalign(memptr, alignment, size);
 	if(ret == 0 && size) {
-		tracker_addAllocatedBytes(node_getTracker(node), *memptr, size);
+		tracker_addAllocatedBytes(host_getTracker(node), *memptr, size);
 	}
 	_system_switchOutShadowContext(node);
 	return ret;
 }
 
 gpointer system_memalign(gsize blocksize, gsize bytes) {
-	Node* node = _system_switchInShadowContext();
+	Host* node = _system_switchInShadowContext();
 	gpointer ptr = memalign(blocksize, bytes);
 	if(bytes && ptr != NULL) {
-		tracker_addAllocatedBytes(node_getTracker(node), ptr, bytes);
+		tracker_addAllocatedBytes(host_getTracker(node), ptr, bytes);
 	}
 	_system_switchOutShadowContext(node);
 	return ptr;
@@ -1165,10 +1165,10 @@ gpointer system_memalign(gsize blocksize, gsize bytes) {
 /* aligned_alloc doesnt exist in glibc in the current LTS version of ubuntu */
 #if 0
 gpointer system_aligned_alloc(gsize alignment, gsize size) {
-	Node* node = _system_switchInShadowContext();
+	Host* node = _system_switchInShadowContext();
 	gpointer ptr = aligned_alloc(alignment, size);
 	if(size && ptr != NULL) {
-		tracker_addAllocatedBytes(node_getTracker(node), ptr, size);
+		tracker_addAllocatedBytes(host_getTracker(node), ptr, size);
 	}
 	_system_switchOutShadowContext(node);
 	return ptr;
@@ -1176,20 +1176,20 @@ gpointer system_aligned_alloc(gsize alignment, gsize size) {
 #endif
 
 gpointer system_valloc(gsize size) {
-	Node* node = _system_switchInShadowContext();
+	Host* node = _system_switchInShadowContext();
 	gpointer ptr = valloc(size);
 	if(size && ptr != NULL) {
-		tracker_addAllocatedBytes(node_getTracker(node), ptr, size);
+		tracker_addAllocatedBytes(host_getTracker(node), ptr, size);
 	}
 	_system_switchOutShadowContext(node);
 	return ptr;
 }
 
 gpointer system_pvalloc(gsize size) {
-	Node* node = _system_switchInShadowContext();
+	Host* node = _system_switchInShadowContext();
 	gpointer ptr = pvalloc(size);
 	if(size && ptr != NULL) {
-		tracker_addAllocatedBytes(node_getTracker(node), ptr, size);
+		tracker_addAllocatedBytes(host_getTracker(node), ptr, size);
 	}
 	_system_switchOutShadowContext(node);
 	return ptr;
@@ -1199,7 +1199,7 @@ gpointer system_pvalloc(gsize size) {
  * @see '$man CRYPTO_lock'
  */
 void system_cryptoLockingFunc(int mode, int n, const char *file, int line) {
-	Node* node = _system_switchInShadowContext();
+	Host* node = _system_switchInShadowContext();
 	Worker* worker = worker_getPrivate();
 	engine_cryptoLockingFunc(worker->cached_engine, mode, n);
 	_system_switchOutShadowContext(node);
@@ -1209,7 +1209,7 @@ void system_cryptoLockingFunc(int mode, int n, const char *file, int line) {
  * @see '$man CRYPTO_lock'
  */
 unsigned long system_cryptoIdFunc() {
-	Node* node = _system_switchInShadowContext();
+	Host* node = _system_switchInShadowContext();
 	Worker* worker = worker_getPrivate();
 	unsigned long result = ((unsigned long) (worker->thread_id));
 	_system_switchOutShadowContext(node);

@@ -12,7 +12,7 @@
 typedef struct _InterfaceSentEvent InterfaceSentEvent;
 
 InterfaceSentEvent* interfacesent_new(NetworkInterface* interface);
-void interfacesent_run(InterfaceSentEvent* event, Node* node);
+void interfacesent_run(InterfaceSentEvent* event, Host* node);
 void interfacesent_free(InterfaceSentEvent* event);
 
 #endif /* SHD_INTERFACE_SENT_H_ */

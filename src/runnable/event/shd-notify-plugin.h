@@ -12,7 +12,7 @@
 typedef struct _NotifyPluginEvent NotifyPluginEvent;
 
 NotifyPluginEvent* notifyplugin_new(gint epollHandle);
-void notifyplugin_run(NotifyPluginEvent* event, Node* node);
+void notifyplugin_run(NotifyPluginEvent* event, Host* node);
 void notifyplugin_free(NotifyPluginEvent* event);
 
 #endif /* SHD_NOTIFY_PLUGIN_H_ */

@@ -95,7 +95,7 @@ gssize udp_sendUserData(UDP* udp, gconstpointer buffer, gsize nBytes, in_addr_t 
 	}
 
 	/* update the tracker output buffer stats */
-	Tracker* tracker = node_getTracker(worker_getPrivate()->cached_node);
+	Tracker* tracker = host_getTracker(worker_getPrivate()->cached_node);
 	Socket* socket = (Socket* )udp;
 	Descriptor* descriptor = (Descriptor *)socket;
 	tracker_updateSocketOutputBuffer(tracker, descriptor->handle, socket->outputBufferLength, socket->outputBufferSize);
@@ -132,7 +132,7 @@ gssize udp_receiveUserData(UDP* udp, gpointer buffer, gsize nBytes, in_addr_t* i
 	packet_unref(packet);
 
 	/* update the tracker output buffer stats */
-	Tracker* tracker = node_getTracker(worker_getPrivate()->cached_node);
+	Tracker* tracker = host_getTracker(worker_getPrivate()->cached_node);
 	Socket* socket = (Socket* )udp;
 	Descriptor* descriptor = (Descriptor *)socket;
 	tracker_updateSocketOutputBuffer(tracker, descriptor->handle, socket->outputBufferLength, socket->outputBufferSize);
@@ -151,7 +151,7 @@ void udp_free(UDP* udp) {
 
 void udp_close(UDP* udp) {
 	MAGIC_ASSERT(udp);
-	node_closeDescriptor(worker_getPrivate()->cached_node, udp->super.super.super.handle);
+	host_closeDescriptor(worker_getPrivate()->cached_node, udp->super.super.super.handle);
 }
 
 /* we implement the socket interface, this describes our function suite */

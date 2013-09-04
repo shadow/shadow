@@ -57,7 +57,7 @@ static gboolean _logging_messageIsFiltered(const gchar *msgLogDomain, GLogLevelF
 	/* check the local node log level first */
 	gboolean isNodeLevelSet = FALSE;
 	if(w->cached_node) {
-		GLogLevelFlags nodeLevel = node_getLogLevel(w->cached_node);
+		GLogLevelFlags nodeLevel = host_getLogLevel(w->cached_node);
 		if(nodeLevel) {
 			isNodeLevelSet = TRUE;
 			if(msgLogLevel > nodeLevel) {
@@ -135,7 +135,7 @@ void logging_logv(const gchar *msgLogDomain, GLogLevelFlags msgLogLevel,
 	 * dont free this since we dont own the ip address string */
 	GString* nodeStringBuffer = g_string_new("");
 	if(w->cached_node) {
-		g_string_printf(nodeStringBuffer, "%s-%s", node_getName(w->cached_node), node_getDefaultIPName(w->cached_node));
+		g_string_printf(nodeStringBuffer, "%s-%s", host_getName(w->cached_node), host_getDefaultIPName(w->cached_node));
 	} else {
 		g_string_printf(nodeStringBuffer, "n/a");
 	}

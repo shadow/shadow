@@ -397,7 +397,7 @@ static void _networkinterface_scheduleNextReceive(NetworkInterface* interface) {
 
 		/* successfully received, calculate how long it took to 'receive' this packet */
 		interface->receiveNanosecondsConsumed += (length * interface->timePerByteDown);
-		tracker_addInputBytes(node_getTracker(worker_getPrivate()->cached_node),(guint64)length, socketHandle);
+		tracker_addInputBytes(host_getTracker(worker_getPrivate()->cached_node),(guint64)length, socketHandle);
 	}
 
 	/*
@@ -573,7 +573,7 @@ static void _networkinterface_scheduleNextSend(NetworkInterface* interface) {
 		guint length = packet_getPayloadLength(packet) + packet_getHeaderSize(packet);
 
 		interface->sendNanosecondsConsumed += (length * interface->timePerByteUp);
-		tracker_addOutputBytes(node_getTracker(worker_getPrivate()->cached_node),(guint64)length, socketHandle);
+		tracker_addOutputBytes(host_getTracker(worker_getPrivate()->cached_node),(guint64)length, socketHandle);
 		_networkinterface_pcapWritePacket(interface, packet);
 	}
 

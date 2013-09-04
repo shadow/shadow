@@ -31,13 +31,13 @@ PacketDroppedEvent* packetdropped_new(Packet* packet) {
 	return event;
 }
 
-void packetdropped_run(PacketDroppedEvent* event, Node* node) {
+void packetdropped_run(PacketDroppedEvent* event, Host* node) {
 	MAGIC_ASSERT(event);
 
 	debug("event started");
 
 	in_addr_t ip = packet_getSourceIP(event->packet);
-	NetworkInterface* interface = node_lookupInterface(node, ip);
+	NetworkInterface* interface = host_lookupInterface(node, ip);
 	networkinterface_packetDropped(interface, event->packet);
 
 	debug("event finished");

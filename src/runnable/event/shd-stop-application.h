@@ -16,7 +16,7 @@
 typedef struct _StopApplicationEvent StopApplicationEvent;
 
 StopApplicationEvent* stopapplication_new(Application* application);
-void stopapplication_run(StopApplicationEvent* event, Node* node);
+void stopapplication_run(StopApplicationEvent* event, Host* node);
 void stopapplication_free(StopApplicationEvent* event);
 
 #endif /* SHD_STOP_APPLICATION_H_ */

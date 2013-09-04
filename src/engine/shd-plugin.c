@@ -305,8 +305,8 @@ static void _plugin_stopExecuting(Plugin* plugin, PluginState state) {
 	gdouble elapsed = g_timer_elapsed(plugin->delayTimer, NULL);
 
 	SimulationTime delay = (SimulationTime) (elapsed * SIMTIME_ONE_SECOND);
-	cpu_addDelay(node_getCPU(worker->cached_node), delay);
-	tracker_addProcessingTime(node_getTracker(worker->cached_node), delay);
+	cpu_addDelay(host_getCPU(worker->cached_node), delay);
+	tracker_addProcessingTime(host_getTracker(worker->cached_node), delay);
 
 	/* destination, source, size */
 	g_memmove(state, plugin->residentState, plugin->residentStateSize);

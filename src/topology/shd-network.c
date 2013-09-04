@@ -131,7 +131,7 @@ Link* network_getLink(Network *network, in_addr_t sourceIP, in_addr_t destinatio
 		}
 
 		/* randomly select link to assign between the nodes */
-		Random* random = node_getRandom(worker_getPrivate()->cached_node);
+		Random* random = host_getRandom(worker_getPrivate()->cached_node);
 		gdouble randomDouble = random_nextDouble(random);
 		guint length = g_list_length(links);
 
@@ -233,7 +233,7 @@ gdouble network_getLinkLatency(in_addr_t sourceIP, in_addr_t destinationIP, gdou
 }
 
 gdouble network_sampleLinkLatency(in_addr_t sourceIP, in_addr_t destinationIP) {
-	Random* random = node_getRandom(worker_getPrivate()->cached_node);
+	Random* random = host_getRandom(worker_getPrivate()->cached_node);
 	gdouble percentile = random_nextDouble(random);
 	return network_getLinkLatency(sourceIP, destinationIP, percentile);
 }
@@ -278,7 +278,7 @@ void network_schedulePacket(Network* sourceNetwork, Packet* packet) {
 	 * the packet. if so, get out of dodge doing as little as possible.
 	 */
 	gdouble reliability = network_getLinkReliability(sourceIP, destinationIP);
-	Random* random = node_getRandom(worker_getPrivate()->cached_node);
+	Random* random = host_getRandom(worker_getPrivate()->cached_node);
 	gdouble chance = random_nextDouble(random);
 	if(chance > reliability){
 		/* sender side is scheduling packets, but we are simulating

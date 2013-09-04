@@ -211,7 +211,7 @@ static gint _engine_distributeEvents(Engine* engine) {
 
 	GList* item = g_list_first(nodeList);
 	while(item) {
-		Node* node = item->data;
+		Host* node = item->data;
 
 		gint i = counter % engine->config->nWorkerThreads;
 		listArray[i] = g_slist_append(listArray[i], node);
@@ -257,8 +257,8 @@ static gint _engine_distributeEvents(Engine* engine) {
 
 			item = g_list_first(nodeList);
 			while(item) {
-				Node* node = item->data;
-				EventQueue* eventq = node_getEvents(node);
+				Host* node = item->data;
+				EventQueue* eventq = host_getEvents(node);
 				Event* nextEvent = eventqueue_peek(eventq);
 				SimulationTime nextEventTime = shadowevent_getTime(nextEvent);
 				if(nextEvent && (nextEventTime < minNextEventTime)) {

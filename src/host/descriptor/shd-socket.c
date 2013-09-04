@@ -38,7 +38,7 @@ void socket_close(Socket* socket) {
 	MAGIC_ASSERT(socket->vtable);
 	socket->vtable->close((Descriptor*)socket);
 
-	Tracker* tracker = node_getTracker(worker_getPrivate()->cached_node);
+	Tracker* tracker = host_getTracker(worker_getPrivate()->cached_node);
 	Descriptor* descriptor = (Descriptor *)socket;
 	tracker_removeSocket(tracker, descriptor->handle);
 }
@@ -82,7 +82,7 @@ void socket_init(Socket* socket, SocketFunctionTable* vtable, DescriptorType typ
 	socket->outputBuffer = g_queue_new();
 	socket->outputBufferSize = sendBufferSize;
 
-	Tracker* tracker = node_getTracker(worker_getPrivate()->cached_node);
+	Tracker* tracker = host_getTracker(worker_getPrivate()->cached_node);
 	Descriptor* descriptor = (Descriptor *)socket;
 	tracker_addSocket(tracker, descriptor->handle, socket->protocol, socket->inputBufferSize, socket->outputBufferSize);
 }
@@ -104,7 +104,7 @@ gint socket_connectToPeer(Socket* socket, in_addr_t ip, in_port_t port, sa_famil
 	MAGIC_ASSERT(socket);
 	MAGIC_ASSERT(socket->vtable);
 
-	Tracker* tracker = node_getTracker(worker_getPrivate()->cached_node);
+	Tracker* tracker = host_getTracker(worker_getPrivate()->cached_node);
 	Descriptor* descriptor = (Descriptor *)socket;
 	tracker_updateSocketPeer(tracker, descriptor->handle, ip, ntohs(port));
 
@@ -297,7 +297,7 @@ gboolean socket_addToInputBuffer(Socket* socket, Packet* packet) {
 	socket->inputBufferLength += length;
 
 	/* update the tracker input buffer stats */
-	Tracker* tracker = node_getTracker(worker_getPrivate()->cached_node);
+	Tracker* tracker = host_getTracker(worker_getPrivate()->cached_node);
 	Descriptor* descriptor = (Descriptor *)socket;
 	tracker_updateSocketInputBuffer(tracker, descriptor->handle, socket->inputBufferLength, socket->inputBufferSize);
 
@@ -320,7 +320,7 @@ Packet* socket_removeFromInputBuffer(Socket* socket) {
 		socket->inputBufferLength -= length;
 
 		/* update the tracker input buffer stats */
-		Tracker* tracker = node_getTracker(worker_getPrivate()->cached_node);
+		Tracker* tracker = host_getTracker(worker_getPrivate()->cached_node);
 		Descriptor* descriptor = (Descriptor *)socket;
 		tracker_updateSocketInputBuffer(tracker, descriptor->handle, socket->inputBufferLength, socket->inputBufferSize);
 
@@ -347,7 +347,7 @@ gboolean socket_addToOutputBuffer(Socket* socket, Packet* packet) {
 	socket->outputBufferLength += length;
 
 	/* update the tracker input buffer stats */
-	Tracker* tracker = node_getTracker(worker_getPrivate()->cached_node);
+	Tracker* tracker = host_getTracker(worker_getPrivate()->cached_node);
 	Descriptor* descriptor = (Descriptor *)socket;
 	tracker_updateSocketOutputBuffer(tracker, descriptor->handle, socket->outputBufferLength, socket->outputBufferSize);
 
@@ -358,7 +358,7 @@ gboolean socket_addToOutputBuffer(Socket* socket, Packet* packet) {
 
 	/* tell the interface to include us when sending out to the network */
 	in_addr_t ip = packet_getSourceIP(packet);
-	NetworkInterface* interface = node_lookupInterface(worker_getPrivate()->cached_node, ip);
+	NetworkInterface* interface = host_lookupInterface(worker_getPrivate()->cached_node, ip);
 	networkinterface_wantsSend(interface, socket);
 
 	return TRUE;
@@ -375,7 +375,7 @@ Packet* socket_removeFromOutputBuffer(Socket* socket) {
 		socket->outputBufferLength -= length;
 
 		/* update the tracker input buffer stats */
-		Tracker* tracker = node_getTracker(worker_getPrivate()->cached_node);
+		Tracker* tracker = host_getTracker(worker_getPrivate()->cached_node);
 		Descriptor* descriptor = (Descriptor *)socket;
 		tracker_updateSocketOutputBuffer(tracker, descriptor->handle, socket->outputBufferLength, socket->outputBufferSize);
 

@@ -38,7 +38,7 @@ CallbackEvent* callback_new(CallbackFunc callback, gpointer data, gpointer callb
 	return event;
 }
 
-void callback_run(CallbackEvent* event, Node* node) {
+void callback_run(CallbackEvent* event, Host* node) {
 	MAGIC_ASSERT(event);
 
 	event->callback(event->data, event->callbackArgument);

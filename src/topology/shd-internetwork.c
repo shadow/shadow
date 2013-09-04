@@ -180,7 +180,7 @@ gpointer internetwork_createNode(Internetwork* internet, GQuark nodeID,
 
 	guint32 ip = _internetwork_generateIP(internet);
 	ip = (guint32) nodeID;
-	Node* node = node_new(nodeID, network, ip, hostname, bwDownKiBps, bwUpKiBps,
+	Host* node = host_new(nodeID, network, ip, hostname, bwDownKiBps, bwUpKiBps,
 			cpuFrequency, cpuThreshold, cpuPrecision, nodeSeed, heartbeatInterval, heartbeatLogLevel, heartbeatLogInfo,
 			logLevel, logPcap, pcapDir, qdisc, receiveBufferSize, autotuneReceiveBuffer, sendBufferSize, autotuneSendBuffer,
 			interfaceReceiveLength);
@@ -199,7 +199,7 @@ gpointer internetwork_createNode(Internetwork* internet, GQuark nodeID,
 /* XXX: return type is "Node*" */
 gpointer internetwork_getNode(Internetwork* internet, GQuark nodeID) {
 	MAGIC_ASSERT(internet);
-	return (Node*) g_hash_table_lookup(internet->nodes, GUINT_TO_POINTER((guint)nodeID));
+	return (Host*) g_hash_table_lookup(internet->nodes, GUINT_TO_POINTER((guint)nodeID));
 }
 
 GList* internetwork_getAllNodes(Internetwork* internet) {
@@ -240,41 +240,41 @@ gdouble internetwork_getMinimumGlobalLatency(Internetwork* internet) {
 
 guint32 internetwork_getNodeBandwidthUp(Internetwork* internet, GQuark nodeID) {
 	MAGIC_ASSERT(internet);
-	Node* node = internetwork_getNode(internet, nodeID);
-	NetworkInterface* interface = node_lookupInterface(node, nodeID);
+	Host* node = internetwork_getNode(internet, nodeID);
+	NetworkInterface* interface = host_lookupInterface(node, nodeID);
 	return networkinterface_getSpeedUpKiBps(interface);
 }
 
 guint32 internetwork_getNodeBandwidthDown(Internetwork* internet, GQuark nodeID) {
 	MAGIC_ASSERT(internet);
-	Node* node = internetwork_getNode(internet, nodeID);
-	NetworkInterface* interface = node_lookupInterface(node, nodeID);
+	Host* node = internetwork_getNode(internet, nodeID);
+	NetworkInterface* interface = host_lookupInterface(node, nodeID);
 	return networkinterface_getSpeedDownKiBps(interface);
 }
 
 gdouble internetwork_getReliability(Internetwork* internet, GQuark sourceNodeID, GQuark destinationNodeID) {
 	MAGIC_ASSERT(internet);
-	Node* sourceNode = internetwork_getNode(internet, sourceNodeID);
-	in_addr_t sourceIP = node_getDefaultIP(sourceNode);
-	Node* destinationNode = internetwork_getNode(internet, destinationNodeID);
-	in_addr_t destinationIP = node_getDefaultIP(destinationNode);
+	Host* sourceNode = internetwork_getNode(internet, sourceNodeID);
+	in_addr_t sourceIP = host_getDefaultIP(sourceNode);
+	Host* destinationNode = internetwork_getNode(internet, destinationNodeID);
+	in_addr_t destinationIP = host_getDefaultIP(destinationNode);
 	return network_getLinkReliability(sourceIP, destinationIP);
 }
 
 gdouble internetwork_getLatency(Internetwork* internet, GQuark sourceNodeID, GQuark destinationNodeID, gdouble percentile) {
 	MAGIC_ASSERT(internet);
-	Node* sourceNode = internetwork_getNode(internet, sourceNodeID);
-	in_addr_t sourceIP = node_getDefaultIP(sourceNode);
-	Node* destinationNode = internetwork_getNode(internet, destinationNodeID);
-	in_addr_t destinationIP = node_getDefaultIP(destinationNode);
+	Host* sourceNode = internetwork_getNode(internet, sourceNodeID);
+	in_addr_t sourceIP = host_getDefaultIP(sourceNode);
+	Host* destinationNode = internetwork_getNode(internet, destinationNodeID);
+	in_addr_t destinationIP = host_getDefaultIP(destinationNode);
 	return network_getLinkLatency(sourceIP, destinationIP, percentile);
 }
 
 gdouble internetwork_sampleLatency(Internetwork* internet, GQuark sourceNodeID, GQuark destinationNodeID) {
 	MAGIC_ASSERT(internet);
-	Node* sourceNode = internetwork_getNode(internet, sourceNodeID);
-	in_addr_t sourceIP = node_getDefaultIP(sourceNode);
-	Node* destinationNode = internetwork_getNode(internet, destinationNodeID);
-	in_addr_t destinationIP = node_getDefaultIP(destinationNode);
+	Host* sourceNode = internetwork_getNode(internet, sourceNodeID);
+	in_addr_t sourceIP = host_getDefaultIP(sourceNode);
+	Host* destinationNode = internetwork_getNode(internet, destinationNodeID);
+	in_addr_t destinationIP = host_getDefaultIP(destinationNode);
 	return network_sampleLinkLatency(sourceIP, destinationIP);
 }

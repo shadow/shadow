@@ -121,7 +121,7 @@ static void _epoll_free(Epoll* epoll) {
 
 static void _epoll_close(Epoll* epoll) {
 	MAGIC_ASSERT(epoll);
-	node_closeDescriptor(worker_getPrivate()->cached_node, epoll->super.handle);
+	host_closeDescriptor(worker_getPrivate()->cached_node, epoll->super.handle);
 }
 
 DescriptorFunctionTable epollFunctions = {

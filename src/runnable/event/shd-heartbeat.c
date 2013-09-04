@@ -29,7 +29,7 @@ HeartbeatEvent* heartbeat_new(Tracker* tracker) {
 	return event;
 }
 
-void heartbeat_run(HeartbeatEvent* event, Node* node) {
+void heartbeat_run(HeartbeatEvent* event, Host* node) {
 	MAGIC_ASSERT(event);
 	tracker_heartbeat(event->tracker);
 }

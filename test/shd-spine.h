@@ -34,7 +34,7 @@ struct _SpinEvent {
 };
 
 SpinEvent* spine_new(guint seconds);
-void spine_run(SpinEvent* event, Node* node);
+void spine_run(SpinEvent* event, Host* node);
 void spine_free(SpinEvent* event);
 
 #endif /* SHD_SPINE_H_ */

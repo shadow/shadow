@@ -31,13 +31,13 @@ PacketArrivedEvent* packetarrived_new(Packet* packet) {
 	return event;
 }
 
-void packetarrived_run(PacketArrivedEvent* event, Node* node) {
+void packetarrived_run(PacketArrivedEvent* event, Host* node) {
 	MAGIC_ASSERT(event);
 
 	debug("event started");
 
 	in_addr_t ip = packet_getDestinationIP(event->packet);
-	NetworkInterface* interface = node_lookupInterface(node, ip);
+	NetworkInterface* interface = host_lookupInterface(node, ip);
 	networkinterface_packetArrived(interface, event->packet);
 
 	debug("event finished");

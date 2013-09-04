@@ -85,7 +85,7 @@ Plugin* worker_getPlugin(GQuark pluginID, GString* pluginPath) {
 	return plugin;
 }
 
-static guint _worker_processNode(Worker* worker, Node* node, SimulationTime barrier) {
+static guint _worker_processNode(Worker* worker, Host* node, SimulationTime barrier) {
 	/* update cache, reset clocks */
 	worker->cached_node = node;
 	worker->clock_last = SIMTIME_INVALID;
@@ -93,9 +93,9 @@ static guint _worker_processNode(Worker* worker, Node* node, SimulationTime barr
 	worker->clock_barrier = barrier;
 
 	/* lock the node */
-	node_lock(worker->cached_node);
+	host_lock(worker->cached_node);
 
-	EventQueue* eventq = node_getEvents(worker->cached_node);
+	EventQueue* eventq = host_getEvents(worker->cached_node);
 	Event* nextEvent = eventqueue_peek(eventq);
 
 	/* process all events in the nodes local queue */
@@ -128,7 +128,7 @@ static guint _worker_processNode(Worker* worker, Node* node, SimulationTime barr
 	}
 
 	/* unlock, clear cache */
-	node_unlock(worker->cached_node);
+	host_unlock(worker->cached_node);
 	worker->cached_node = NULL;
 	worker->cached_event = NULL;
 
@@ -148,7 +148,7 @@ gpointer worker_run(GSList* nodes) {
 
 		GSList* item = nodes;
 		while(item) {
-			Node* node = item->data;
+			Host* node = item->data;
 			guint n = _worker_processNode(worker, node, barrier);
 			nEventsProcessed += n;
 			if(n > 0) {
@@ -164,8 +164,8 @@ gpointer worker_run(GSList* nodes) {
 	 * applications may cause close() to get called on sockets which needs
 	 * other node information.
 	 */
-	g_slist_foreach(nodes, (GFunc) node_freeAllApplications, NULL);
-	g_slist_foreach(nodes, (GFunc) node_free, NULL);
+	g_slist_foreach(nodes, (GFunc) host_freeAllApplications, NULL);
+	g_slist_foreach(nodes, (GFunc) host_free, NULL);
 
 	g_thread_exit(NULL);
 	return NULL;
@@ -183,10 +183,10 @@ void worker_scheduleEvent(Event* event, SimulationTime nano_delay, GQuark receiv
 	shadowevent_setTime(event, worker->clock_now + nano_delay);
 
 	/* parties involved. sender may be NULL, receiver may not! */
-	Node* sender = worker->cached_node;
+	Host* sender = worker->cached_node;
 
 	/* we MAY NOT OWN the receiver, so do not write to it! */
-	Node* receiver = receiver_node_id == 0 ? sender : internetwork_getNode(worker_getInternet(), receiver_node_id);
+	Host* receiver = receiver_node_id == 0 ? sender : internetwork_getNode(worker_getInternet(), receiver_node_id);
 	g_assert(receiver);
 
 	/* the NodeEvent needs a pointer to the correct node */
@@ -203,7 +203,7 @@ void worker_scheduleEvent(Event* event, SimulationTime nano_delay, GQuark receiv
 
 	/* non-local events must be properly delayed */
 	SimulationTime jump = engine_getMinTimeJump(engine);
-	if(!node_isEqual(receiver, sender)) {
+	if(!host_isEqual(receiver, sender)) {
 		SimulationTime minTime = worker->clock_now + jump;
 
 		/* warn and adjust time if needed */
@@ -218,7 +218,7 @@ void worker_scheduleEvent(Event* event, SimulationTime nano_delay, GQuark receiv
 	/* figure out where to push the event */
 	if(engine_getNumThreads(engine) > 1) {
 		/* multi-threaded, push event to receiver node */
-		EventQueue* eventq = node_getEvents(receiver);
+		EventQueue* eventq = host_getEvents(receiver);
 		eventqueue_push(eventq, event);
 	} else {
 		/* single-threaded, push to master queue */

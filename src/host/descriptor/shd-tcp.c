@@ -260,7 +260,7 @@ static void _tcp_autotune(TCP* tcp) {
 		if(destinationIP == htonl(INADDR_LOOPBACK)) {
 			sourceIP = htonl(INADDR_LOOPBACK);
 		} else {
-			sourceIP = node_getDefaultIP(worker_getPrivate()->cached_node);
+			sourceIP = host_getDefaultIP(worker_getPrivate()->cached_node);
 		}
 	}
 
@@ -325,11 +325,11 @@ static void _tcp_autotune(TCP* tcp) {
 
 	/* check to see if the node should set buffer sizes via autotuning, or
 	 * they were specified by configuration or parameters in XML */
-	Node* node = worker_getPrivate()->cached_node;
-	if(node_autotuneReceiveBuffer(node)) {
+	Host* node = worker_getPrivate()->cached_node;
+	if(host_autotuneReceiveBuffer(node)) {
 		tcp->super.inputBufferSize = receivebuf_size;
 	}
-	if(node_autotuneSendBuffer(node)) {
+	if(host_autotuneSendBuffer(node)) {
 		tcp->super.outputBufferSize = sendbuf_size;
 	}
 
@@ -391,12 +391,12 @@ static void _tcp_setState(TCP* tcp, enum TCPState state) {
 					g_assert(parent->server);
 					if((parent->state == TCPS_CLOSED) && (g_hash_table_size(parent->server->children) <= 0)) {
 						/* this will unbind from the network interface and free socket */
-						node_closeDescriptor(worker_getPrivate()->cached_node, parent->super.super.super.handle);
+						host_closeDescriptor(worker_getPrivate()->cached_node, parent->super.super.super.handle);
 					}
 				}
 
 				/* this will unbind from the network interface and free socket */
-				node_closeDescriptor(worker_getPrivate()->cached_node, tcp->super.super.super.handle);
+				host_closeDescriptor(worker_getPrivate()->cached_node, tcp->super.super.super.handle);
 			}
 			break;
 		}
@@ -501,7 +501,7 @@ static Packet* _tcp_createPacket(TCP* tcp, enum ProtocolTCPFlags flags, gconstpo
 		if(destinationIP == htonl(INADDR_LOOPBACK)) {
 			sourceIP = htonl(INADDR_LOOPBACK);
 		} else {
-			sourceIP = node_getDefaultIP(worker_getPrivate()->cached_node);
+			sourceIP = host_getDefaultIP(worker_getPrivate()->cached_node);
 		}
 	}
 
@@ -661,7 +661,7 @@ static void _tcp_flush(TCP* tcp) {
 	}
 
 	/* update the tracker input/output buffer stats */
-	Tracker* tracker = node_getTracker(worker_getPrivate()->cached_node);
+	Tracker* tracker = host_getTracker(worker_getPrivate()->cached_node);
 	Socket* socket = (Socket* )tcp;
 	Descriptor* descriptor = (Descriptor *)socket;
 	tracker_updateSocketInputBuffer(tracker, descriptor->handle, socket->inputBufferSize - _tcp_getBufferSpaceIn(tcp), socket->inputBufferSize);
@@ -924,9 +924,9 @@ gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 				wasProcessed = TRUE;
 
 				/* we need to multiplex a new child */
-				Node* node = worker_getPrivate()->cached_node;
-				gint multiplexedHandle = node_createDescriptor(node, DT_TCPSOCKET);
-				TCP* multiplexed = (TCP*) node_lookupDescriptor(node, multiplexedHandle);
+				Host* node = worker_getPrivate()->cached_node;
+				gint multiplexedHandle = host_createDescriptor(node, DT_TCPSOCKET);
+				TCP* multiplexed = (TCP*) host_lookupDescriptor(node, multiplexedHandle);
 
 				multiplexed->child = _tcpchild_new(multiplexed, tcp, header.sourceIP, header.sourcePort);
 				g_assert(g_hash_table_lookup(tcp->server->children, &(multiplexed->child->key)) == NULL);

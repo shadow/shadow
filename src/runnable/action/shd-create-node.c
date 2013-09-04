@@ -219,7 +219,7 @@ void createnodes_run(CreateNodesAction* action) {
 
 		/* the node is part of the internet */
 		guint nodeSeed = (guint) engine_nextRandomInt(worker->cached_engine);
-		Node* node = internetwork_createNode(worker_getInternet(), id, network,
+		Host* node = internetwork_createNode(worker_getInternet(), id, network,
 						hostnameBuffer, bwDownKiBps, bwUpKiBps, cpuFrequency, cpuThreshold, cpuPrecision,
 						nodeSeed, heartbeatInterval, heartbeatLogLevel, heartbeatLogInfo, logLevel, logPcap, pcapDir,
 						qdisc, sockRecv, autotuneRecv, sockSend, autotuneSend, ifaceRecv);
@@ -233,7 +233,7 @@ void createnodes_run(CreateNodesAction* action) {
 
 			/* make sure our bootstrap events are set properly */
 			worker->clock_now = 0;
-			node_addApplication(node, app->pluginID, pluginPath,
+			host_addApplication(node, app->pluginID, pluginPath,
 					app->starttime, app->stoptime, app->arguments->str);
 			worker->clock_now = SIMTIME_INVALID;
 
@@ -242,7 +242,7 @@ void createnodes_run(CreateNodesAction* action) {
 
 		/* make sure our bootstrap events are set properly */
 		worker->clock_now = 0;
-		HeartbeatEvent* heartbeat = heartbeat_new(node_getTracker(node));
+		HeartbeatEvent* heartbeat = heartbeat_new(host_getTracker(node));
 		worker_scheduleEvent((Event*)heartbeat, heartbeatInterval, id);
 		worker->clock_now = SIMTIME_INVALID;
 	}

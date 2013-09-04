@@ -24,7 +24,7 @@ struct _Worker {
 	Engine* cached_engine;
 	Plugin* cached_plugin;
 	Application* cached_application;
-	Node* cached_node;
+	Host* cached_node;
 	Event* cached_event;
 
 	GHashTable* plugins;

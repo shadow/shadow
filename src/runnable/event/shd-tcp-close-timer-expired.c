@@ -30,7 +30,7 @@ TCPCloseTimerExpiredEvent* tcpclosetimerexpired_new(TCP* tcp) {
 	return event;
 }
 
-void tcpclosetimerexpired_run(TCPCloseTimerExpiredEvent* event, Node* node) {
+void tcpclosetimerexpired_run(TCPCloseTimerExpiredEvent* event, Host* node) {
 	MAGIC_ASSERT(event);
 	tcp_closeTimerExpired(event->tcp);
 }

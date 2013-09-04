@@ -37,7 +37,7 @@ SpinEvent* spine_new(guint seconds) {
 	return event;
 }
 
-void spine_run(SpinEvent* event, Node* node) {
+void spine_run(SpinEvent* event, Host* node) {
 	MAGIC_ASSERT(event);
 	MAGIC_ASSERT(node);
 

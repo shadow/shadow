@@ -57,7 +57,7 @@ Packet* packet_new(gconstpointer payload, gsize payloadLength) {
 		packet->payload = g_memdup(payload, payloadLength);
 
 		/* application data needs a priority ordering for FIFO onto the wire */
-		packet->priority = node_getNextPacketPriority(worker_getPrivate()->cached_node);
+		packet->priority = host_getNextPacketPriority(worker_getPrivate()->cached_node);
 	}
 
 	return packet;

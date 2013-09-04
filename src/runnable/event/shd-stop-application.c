@@ -30,10 +30,10 @@ StopApplicationEvent* stopapplication_new(Application* application) {
 	return event;
 }
 
-void stopapplication_run(StopApplicationEvent* event, Node* node) {
+void stopapplication_run(StopApplicationEvent* event, Host* node) {
 	MAGIC_ASSERT(event);
 
-	node_stopApplication(node, event->application);
+	host_stopApplication(node, event->application);
 }
 
 void stopapplication_free(StopApplicationEvent* event) {

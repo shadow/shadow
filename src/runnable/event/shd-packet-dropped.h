@@ -12,7 +12,7 @@
 typedef struct _PacketDroppedEvent PacketDroppedEvent;
 
 PacketDroppedEvent* packetdropped_new(Packet* packet);
-void packetdropped_run(PacketDroppedEvent* event, Node* node);
+void packetdropped_run(PacketDroppedEvent* event, Host* node);
 void packetdropped_free(PacketDroppedEvent* event);
 
 #endif /* SHD_PACKET_DROPPED_H_ */
