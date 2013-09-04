@@ -36,6 +36,11 @@ set(shadow_srcs
     engine/shd-worker.c
     
     topology/shd-address.c
+    topology/shd-poi.c
+    topology/shd-pop.c
+    topology/shd-path.c
+    topology/shd-topology.c
+    
     topology/shd-network.c
     topology/shd-link.c
     topology/shd-internetwork.c

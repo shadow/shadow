@@ -9,6 +9,7 @@
 
 #include <glib.h>
 #include <gmodule.h>
+#include <igraph/igraph.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -74,6 +75,11 @@
 #include "engine/shd-plugin.h"
 
 #include "topology/shd-address.h"
+#include "topology/shd-poi.h"
+#include "topology/shd-pop.h"
+#include "topology/shd-path.h"
+#include "topology/shd-topology.h"
+
 #include "topology/shd-network.h"
 #include "topology/shd-link.h"
 #include "topology/shd-internetwork.h"
