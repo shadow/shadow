@@ -160,6 +160,70 @@ static GError* _parser_handleClusterAttributes(Parser* parser, const gchar** att
 	return error;
 }
 
+static GError* _parser_handleTopologyAttributes(Parser* parser, const gchar** attributeNames, const gchar** attributeValues) {
+	GString* path = NULL;
+
+	GError* error = NULL;
+
+	const gchar **nameCursor = attributeNames;
+	const gchar **valueCursor = attributeValues;
+
+	/* check the attributes */
+	while (!error && *nameCursor) {
+		const gchar* name = *nameCursor;
+		const gchar* value = *valueCursor;
+
+		debug("found attribute '%s=%s'", name, value);
+
+		if (!path && !g_ascii_strcasecmp(name, "path")) {
+			path = g_string_new(utility_getHomePath(value));
+		} else {
+			error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ATTRIBUTE,
+							"unknown 'topology' attribute '%s'", name);
+		}
+
+		nameCursor++;
+		valueCursor++;
+	}
+
+	/* validate the values */
+	if(!error && !path) {
+		error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
+				"element 'topology' requires attributes 'path'");
+	}
+	if(path) {
+		/* make sure the path is absolute */
+		if(!g_path_is_absolute(path->str)) {
+			/* ok, we look in ~/.shadow/share */
+			const gchar* home = g_get_home_dir();
+			gchar* oldstr = g_string_free(path, FALSE);
+			gchar* newstr = g_build_path("/", home, ".shadow", "share", oldstr, NULL);
+			g_free(oldstr);
+			path = g_string_new(newstr);
+			g_free(newstr);
+		}
+
+		if(!g_file_test(path->str, G_FILE_TEST_EXISTS) || !g_file_test(path->str, G_FILE_TEST_IS_REGULAR)) {
+			error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT,
+					"attribute 'topology': '%s' is not a valid path to an existing regular file", path->str);
+		}
+	}
+
+	if(!error) {
+		/* no error, create the action */
+		Action* a = (Action*) loadtopology_new(path);
+		action_setPriority(a, -1);
+		_parser_addAction(parser, a);
+	}
+
+	/* clean up */
+	if(path) {
+		g_string_free(path, TRUE);
+	}
+
+	return error;
+}
+
 static GError* _parser_handlePluginAttributes(Parser* parser, const gchar** attributeNames, const gchar** attributeValues) {
 	GString* id = NULL;
 	GString* path = NULL;
@@ -609,8 +673,9 @@ static void _parser_handleRootStartElement(GMarkupParseContext* context,
 		g_markup_parse_context_push(context, &(parser->nodeSubParser), parser);
 	} else if (!g_ascii_strcasecmp(elementName, "kill")) {
 		*error = _parser_handleKillAttributes(parser, attributeNames, attributeValues);
-	} else if (!g_ascii_strcasecmp(elementName, "hosts") ||
-			!g_ascii_strcasecmp(elementName, "topology")) {
+	} else if (!g_ascii_strcasecmp(elementName, "topology")) {
+		*error = _parser_handleTopologyAttributes(parser, attributeNames, attributeValues);
+	} else if (!g_ascii_strcasecmp(elementName, "hosts")) {
 		/* do nothing, this is a root element */
 	} else {
 		*error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ELEMENT,

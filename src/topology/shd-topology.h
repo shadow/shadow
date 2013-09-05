@@ -11,7 +11,7 @@
 
 typedef struct _Topology Topology;
 
-Topology* topology_new();
-void topology_free(Topology* topology);
+Topology* topology_new(gchar* graphPath);
+void topology_free(Topology* top);
 
 #endif /* SHD_TOPOLOGY_H_ */

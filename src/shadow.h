@@ -113,6 +113,7 @@
 #include "runnable/action/shd-kill-engine.h"
 #include "runnable/action/shd-load-cdf.h"
 #include "runnable/action/shd-load-plugin.h"
+#include "runnable/action/shd-load-topology.h"
 
 #include "engine/shd-logging.h"
 #include "engine/shd-engine.h"

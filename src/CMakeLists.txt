@@ -69,6 +69,7 @@ set(shadow_srcs
     runnable/action/shd-generate-cdf.c
     runnable/action/shd-load-cdf.c
     runnable/action/shd-load-plugin.c
+    runnable/action/shd-load-topology.c
     runnable/action/shd-kill-engine.c
         
     host/descriptor/shd-descriptor.c
