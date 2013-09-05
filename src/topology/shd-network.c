@@ -66,7 +66,7 @@ guint64 network_getBandwidthDown(Network* network) {
 	return network->bandwidthdown;
 }
 
-gint network_compare(gconstpointer a, gconstpointer b, gpointer user_data) {
+static gint _network_compare(gconstpointer a, gconstpointer b, gpointer user_data) {
 	const Network* na = a;
 	const Network* nb = b;
 	MAGIC_ASSERT(na);
@@ -74,13 +74,13 @@ gint network_compare(gconstpointer a, gconstpointer b, gpointer user_data) {
 	return na->id > nb->id ? +1 : na->id == nb->id ? 0 : -1;
 }
 
-gboolean network_isEqual(Network* a, Network* b) {
+static gboolean _network_isEqual(Network* a, Network* b) {
 	if(a == NULL && b == NULL) {
 		return TRUE;
 	} else if(a == NULL || b == NULL) {
 		return FALSE;
 	} else {
-		return network_compare(a, b, NULL) == 0;
+		return _network_compare(a, b, NULL) == 0;
 	}
 }
 
@@ -93,7 +93,7 @@ void network_addLink(Network* network, gpointer link) {
 	g_hash_table_replace(network->linksByCluster, &(destination->id), links);
 }
 
-Link* network_getLink(Network *network, in_addr_t sourceIP, in_addr_t destinationIP) {
+static Link* network_getLink(Network *network, in_addr_t sourceIP, in_addr_t destinationIP) {
 	MAGIC_ASSERT(network);
 
 	/* FIXME this is not thread-safe!
@@ -183,7 +183,7 @@ Link* network_getLink(Network *network, in_addr_t sourceIP, in_addr_t destinatio
 	return link;
 }
 
-gdouble network_getLinkReliability(in_addr_t sourceIP, in_addr_t destinationIP) {
+static gdouble network_getLinkReliability(in_addr_t sourceIP, in_addr_t destinationIP) {
 	Internetwork* internet = worker_getInternet();
 	Network *sourceNetwork = internetwork_lookupNetwork(internet, sourceIP);
 	Network *destinationNetwork = internetwork_lookupNetwork(internet, destinationIP);
@@ -253,7 +253,7 @@ void network_scheduleRetransmit(Network* network, Packet* packet) {
 	Network* destinationNetwork = internetwork_lookupNetwork(internet, destinationIP);
 
 	gdouble latency = 0;
-	if(network_isEqual(network, sourceNetwork)) {
+	if(_network_isEqual(network, sourceNetwork)) {
 		/* RTT is two link latencies */
 		latency += network_sampleLinkLatency(sourceIP, destinationIP);
 		latency += network_sampleLinkLatency(destinationIP, sourceIP);

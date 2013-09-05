@@ -252,15 +252,6 @@ guint32 internetwork_getNodeBandwidthDown(Internetwork* internet, GQuark nodeID)
 	return networkinterface_getSpeedDownKiBps(interface);
 }
 
-gdouble internetwork_getReliability(Internetwork* internet, GQuark sourceNodeID, GQuark destinationNodeID) {
-	MAGIC_ASSERT(internet);
-	Host* sourceNode = internetwork_getNode(internet, sourceNodeID);
-	in_addr_t sourceIP = host_getDefaultIP(sourceNode);
-	Host* destinationNode = internetwork_getNode(internet, destinationNodeID);
-	in_addr_t destinationIP = host_getDefaultIP(destinationNode);
-	return network_getLinkReliability(sourceIP, destinationIP);
-}
-
 gdouble internetwork_getLatency(Internetwork* internet, GQuark sourceNodeID, GQuark destinationNodeID, gdouble percentile) {
 	MAGIC_ASSERT(internet);
 	Host* sourceNode = internetwork_getNode(internet, sourceNodeID);
@@ -268,13 +259,4 @@ gdouble internetwork_getLatency(Internetwork* internet, GQuark sourceNodeID, GQu
 	Host* destinationNode = internetwork_getNode(internet, destinationNodeID);
 	in_addr_t destinationIP = host_getDefaultIP(destinationNode);
 	return network_getLinkLatency(sourceIP, destinationIP, percentile);
-}
-
-gdouble internetwork_sampleLatency(Internetwork* internet, GQuark sourceNodeID, GQuark destinationNodeID) {
-	MAGIC_ASSERT(internet);
-	Host* sourceNode = internetwork_getNode(internet, sourceNodeID);
-	in_addr_t sourceIP = host_getDefaultIP(sourceNode);
-	Host* destinationNode = internetwork_getNode(internet, destinationNodeID);
-	in_addr_t destinationIP = host_getDefaultIP(destinationNode);
-	return network_sampleLinkLatency(sourceIP, destinationIP);
 }

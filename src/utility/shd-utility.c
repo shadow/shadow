@@ -31,6 +31,12 @@ gboolean utility_int16Equal(gconstpointer value1, gconstpointer value2) {
 	return g_int_equal(&key1, &key2);
 }
 
+gint utility_doubleCompare(const gdouble* value1, const gdouble* value2, gpointer userData) {
+	g_assert(value1 && value2);
+	/* return neg if first before second, pos if second before first, 0 if equal */
+	return value1 == value2 ? 0 : value1 < value2 ? -1 : +1;
+}
+
 gchar* utility_getHomePath(const gchar* path) {
 	GString* sbuffer = g_string_new("");
 	if(g_ascii_strncasecmp(path, "~", 1) == 0) {

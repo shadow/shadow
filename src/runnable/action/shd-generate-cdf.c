@@ -45,7 +45,7 @@ void generatecdf_run(GenerateCDFAction* action) {
 	CumulativeDistribution* cdf = cdf_generate(action->id, action->center, action->width, action->tail);
 	if(cdf) {
 		Worker* worker = worker_getPrivate();
-		engine_put(worker->cached_engine, CDFS, &(cdf->id), cdf);
+		engine_put(worker->cached_engine, CDFS, cdf_getIDReference(cdf), cdf);
 	} else {
 		critical("generating cdf '%s' failed", g_quark_to_string(action->id));
 	}

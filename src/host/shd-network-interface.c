@@ -180,7 +180,7 @@ void networkinterface_free(NetworkInterface* interface) {
 	priorityqueue_free(interface->fifoQueue);
 
 	g_hash_table_destroy(interface->boundSockets);
-	address_free(interface->address);
+	address_unref(interface->address);
 
 	if(interface->pcapFile) {
 		fclose(interface->pcapFile);

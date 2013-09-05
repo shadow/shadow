@@ -30,14 +30,8 @@ typedef struct _Address Address;
  */
 Address* address_new(guint32 ip, const gchar* name);
 
-/**
- * Frees the associated structures associated with the given address
- * @param address a valid, non-NULL Address structure previously created
- * with address_new()
- *
- * @see address_new()
- */
-void address_free(Address* address);
+void address_ref(Address* address);
+void address_unref(Address* address);
 
 /**
  * Checks if the given addresses are equal. This function is NULL safe, so

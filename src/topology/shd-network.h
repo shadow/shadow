@@ -52,35 +52,10 @@ guint64 network_getBandwidthDown(Network* network);
 
 /**
  *
- * @param a
- * @param b
- * @param user_data
- * @return
- */
-gint network_compare(gconstpointer a, gconstpointer b, gpointer user_data);
-
-/**
- *
- * @param a
- * @param b
- * @return
- */
-gboolean network_isEqual(Network* a, Network* b);
-
-/**
- *
  * @param network
  * @param link
  */
 void network_addLink(Network* network, gpointer link); /* XXX: type is "Link*" */
-
-/**
- *
- * @param sourceNetwork
- * @param destinationNetwork
- * @return
- */
-gdouble network_getLinkReliability(in_addr_t sourceIP, in_addr_t destinationIP);
 
 /**
  *

@@ -22,6 +22,8 @@ struct _Address {
 	/* the hostname */
 	gchar* name;
 
+	gint referenceCount;
+
 	MAGIC_DECLARE;
 };
 
@@ -32,11 +34,13 @@ Address* address_new(guint32 ip, const gchar* name) {
 	address->ip = ip;
 	address->ipString = address_ipToNewString((in_addr_t)ip); // XXX do we need to use ntohl() first?
 	address->name = g_strdup(name);
+	address->referenceCount = 1;
+	// DNS should pass in a unique ID
 
 	return address;
 }
 
-void address_free(Address* address) {
+static void _address_free(Address* address) {
 	MAGIC_ASSERT(address);
 
 	g_free(address->ipString);
@@ -44,6 +48,19 @@ void address_free(Address* address) {
 
 	MAGIC_CLEAR(address);
 	g_free(address);
+}
+
+void address_ref(Address* address) {
+	MAGIC_ASSERT(address);
+	address->referenceCount++;
+}
+
+void address_unref(Address* address) {
+	MAGIC_ASSERT(address);
+	address->referenceCount--;
+	if(address->referenceCount <= 0) {
+		_address_free(address);
+	}
 }
 
 gboolean address_isEqual(Address* a, Address* b) {

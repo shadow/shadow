@@ -1,3 +1,4 @@
+<topology path="/home/rob/shadow/resource/examples/test.graphml.xml" />
 <!-- 
   -- plugin paths are relative to "~/.shadow/lib/" unless abosolute paths are given
   -->

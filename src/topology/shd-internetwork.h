@@ -181,33 +181,11 @@ const gchar* internetwork_resolveID(Internetwork* internet, GQuark id);
  * with internetwork_new()
  * @param sourceNodeID
  * @param destinationNodeID
- * @return
- */
-gdouble internetwork_getReliability(Internetwork* internet, GQuark sourceNodeID,
-		GQuark destinationNodeID);
-
-/**
- *
- * @param internet a valid, non-NULL Internetwork structure previously created
- * with internetwork_new()
- * @param sourceNodeID
- * @param destinationNodeID
  * @param percentile
  * @return
  */
 gdouble internetwork_getLatency(Internetwork* internet, GQuark sourceNodeID,
 		GQuark destinationNodeID, gdouble percentile);
-
-/**
- *
- * @param internet a valid, non-NULL Internetwork structure previously created
- * with internetwork_new()
- * @param sourceNodeID
- * @param destinationNodeID
- * @return
- */
-gdouble internetwork_sampleLatency(Internetwork* internet, GQuark sourceNodeID,
-		GQuark destinationNodeID);
 
 /* TODO refactor these out */
 guint32 internetwork_getNodeBandwidthUp(Internetwork* internet, GQuark nodeID);

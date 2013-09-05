@@ -39,7 +39,7 @@ void loadcdf_run(LoadCDFAction* action) {
 	CumulativeDistribution* cdf = cdf_new(action->id, action->path->str);
 	if(cdf) {
 		Worker* worker = worker_getPrivate();
-		engine_put(worker->cached_engine, CDFS, &(cdf->id), cdf);
+		engine_put(worker->cached_engine, CDFS, cdf_getIDReference(cdf), cdf);
 	} else {
 		critical("loading cdf '%s' from '%s' failed", g_quark_to_string(action->id), action->path->str);
 	}
