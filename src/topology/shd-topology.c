@@ -97,16 +97,17 @@ static gboolean _topology_checkGraphVertices(Topology* top) {
 	/* count the vertices as we iterate */
 	igraph_integer_t vertexCount = 0;
 	while (!IGRAPH_VIT_END(vertexIterator)) {
-		long int vertexID = IGRAPH_VIT_GET(vertexIterator);
+		long int vertexIndex = IGRAPH_VIT_GET(vertexIterator);
 
 		/* get vertex attributes: S for string and N for numeric */
-		const gchar* nodeIDStr = VAS(&top->graph, "nodeid", vertexID);
-		const gchar* nodeTypeStr = VAS(&top->graph, "nodetype", vertexID);
-		const gchar* geocodesStr = VAS(&top->graph, "geocodes", vertexID);
-		gdouble asNumber = VAN(&top->graph, "asn", vertexID);
+		const gchar* idStr = VAS(&top->graph, "id", vertexIndex);
+		const gchar* nodeIDStr = VAS(&top->graph, "nodeid", vertexIndex);
+		const gchar* nodeTypeStr = VAS(&top->graph, "nodetype", vertexIndex);
+		const gchar* geocodesStr = VAS(&top->graph, "geocodes", vertexIndex);
+		gdouble asNumber = VAN(&top->graph, "asn", vertexIndex);
 
-		debug("found vertex %li nodeid=%s nodetype=%s geocodes=%s asn=%i",
-				vertexID, nodeIDStr, nodeTypeStr, geocodesStr, asNumber);
+		debug("found vertex %li (%s), nodeid=%s nodetype=%s geocodes=%s asn=%i",
+				vertexIndex, idStr, nodeIDStr, nodeTypeStr, geocodesStr, asNumber);
 
 		vertexCount++;
 		IGRAPH_VIT_NEXT(vertexIterator);
@@ -148,15 +149,19 @@ static gboolean _topology_checkGraphEdges(Topology* top) {
 	/* count the edges as we iterate */
 	igraph_integer_t edgeCount = 0;
 	while (!IGRAPH_EIT_END(edgeIterator)) {
-		long int edgeID = IGRAPH_EIT_GET(edgeIterator);
-		long int fromVertexID = IGRAPH_FROM(&top->graph, edgeID);
-		long int toVertexID = IGRAPH_TO(&top->graph, edgeID);
+		long int edgeIndex = IGRAPH_EIT_GET(edgeIterator);
 
-		/* get vertex attributes: S for string and N for numeric */
-		const gchar* latenciesStr = EAS(&top->graph, "latencies", edgeID);
+		long int fromVertexIndex = IGRAPH_FROM(&top->graph, edgeIndex);
+		const gchar* fromIDStr = VAS(&top->graph, "id", fromVertexIndex);
 
-		debug("found edge %li from vertex %li to vertex %li latencies=%s",
-				edgeID, fromVertexID, toVertexID, latenciesStr);
+		long int toVertexIndex = IGRAPH_TO(&top->graph, edgeIndex);
+		const gchar* toIDStr = VAS(&top->graph, "id", toVertexIndex);
+
+		/* get edge attributes: S for string and N for numeric */
+		const gchar* latenciesStr = EAS(&top->graph, "latencies", edgeIndex);
+
+		debug("found edge %li from vertex %li (%s) to vertex %li (%s) latencies=%s",
+				edgeIndex, fromVertexIndex, fromIDStr, toVertexIndex, toIDStr, latenciesStr);
 
 		edgeCount++;
 		IGRAPH_EIT_NEXT(edgeIterator);
