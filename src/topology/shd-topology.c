@@ -7,21 +7,34 @@
 #include "shadow.h"
 
 struct _Topology {
+	/* the file path of the graphml file */
 	GString* graphPath;
+	/* the imported igraph graph data */
 	igraph_t graph;
 
+	/* graph properties of the imported graph */
 	igraph_integer_t clusterCount;
 	igraph_integer_t vertexCount;
 	igraph_integer_t edgeCount;
 	igraph_bool_t isConnected;
 
-//	igraph_vector_t currentEdgeWeights;
-//	igraph_es_t allEdges;
-//	igraph_vs_t allVertices;
+	/* the edge weights currently used when computing shortest paths */
+	igraph_vector_t* currentEdgeWeights;
+
+	GHashTable* geocodeToVertex; // so we know where to place hosts
+	GHashTable* addressToPoI; // so we know how to get latency
+
+	/* cached latencies to avoid excessive shortest path lookups
+	 * fromAddress->toAddress->latencyDouble*/
+	GHashTable* latencyCache;
 	MAGIC_DECLARE;
 };
 
+typedef void (*EdgeIteratorFunc)(Topology* top, long int edgeIndex);
+typedef void (*VertexIteratorFunc)(Topology* top, long int vertexIndex);
+
 static gboolean _topology_loadGraph(Topology* top) {
+	MAGIC_ASSERT(top);
 	/* initialize the built-in C attribute handler */
 	igraph_attribute_table_t* oldHandler = igraph_i_set_attribute_table(&igraph_cattribute_table);
 
@@ -47,17 +60,22 @@ static gboolean _topology_loadGraph(Topology* top) {
 }
 
 static gboolean _topology_checkGraphProperties(Topology* top) {
+	MAGIC_ASSERT(top);
 	gint result = 0;
 
-	/* check some graph properties */
-	result = igraph_is_connected(&top->graph, &(top->isConnected), IGRAPH_WEAK);
+	info("checking graph properties...");
+
+	/* IGRAPH_WEAK means the undirected version of the graph is connected
+	 * IGRAPH_STRONG means a vertex can reach all others via a directed path
+	 * we must be able to send packets in both directions, so we want IGRAPH_STRONG */
+	result = igraph_is_connected(&top->graph, &(top->isConnected), IGRAPH_STRONG);
 	if(result != IGRAPH_SUCCESS) {
 		critical("igraph_is_connected return non-success code %i", result);
 		return FALSE;
 	}
 
 	igraph_integer_t clusterCount;
-	result = igraph_clusters(&top->graph, NULL, NULL, &(top->clusterCount), IGRAPH_WEAK);
+	result = igraph_clusters(&top->graph, NULL, NULL, &(top->clusterCount), IGRAPH_STRONG);
 	if(result != IGRAPH_SUCCESS) {
 		critical("igraph_clusters return non-success code %i", result);
 		return FALSE;
@@ -65,25 +83,40 @@ static gboolean _topology_checkGraphProperties(Topology* top) {
 
 	/* it must be connected */
 	if(!top->isConnected || top->clusterCount > 1) {
-		critical("topology must be but is not fully connected", top->graphPath->str);
+		critical("topology must be but is not strongly connected", top->graphPath->str);
 		return FALSE;
 	}
 
-	info("topology is %sconnected with %u clusters", top->isConnected ? "" : "dis", (guint)top->clusterCount);
+	info("graph is %s with %u %s",
+			top->isConnected ? "strongly connected" : "disconnected",
+			(guint)top->clusterCount, top->clusterCount == 1 ? "cluster" : "clusters");
 	return TRUE;
 }
 
-static gboolean _topology_checkGraphVertices(Topology* top) {
-	gint result = 0;
+static void _topology_checkGraphVerticesHelperHook(Topology* top, long int vertexIndex) {
+	MAGIC_ASSERT(top);
 
-	info("checking graph vertices");
+	/* get vertex attributes: S for string and N for numeric */
+	const gchar* idStr = VAS(&top->graph, "id", vertexIndex);
+	const gchar* nodeIDStr = VAS(&top->graph, "nodeid", vertexIndex);
+	const gchar* nodeTypeStr = VAS(&top->graph, "nodetype", vertexIndex);
+	const gchar* geocodesStr = VAS(&top->graph, "geocodes", vertexIndex);
+	gdouble asNumber = VAN(&top->graph, "asn", vertexIndex);
+
+	debug("found vertex %li (%s), nodeid=%s nodetype=%s geocodes=%s asn=%i",
+			vertexIndex, idStr, nodeIDStr, nodeTypeStr, geocodesStr, asNumber);
+}
+
+static igraph_integer_t _topology_iterateAllVertices(Topology* top, VertexIteratorFunc hook) {
+	MAGIC_ASSERT(top);
+	g_assert(hook);
 
 	/* initialize our vertex set to select from all vertices in the graph */
 	igraph_vs_t allVertices;
-	result = igraph_vs_all(&allVertices);
+	gint result = igraph_vs_all(&allVertices);
 	if(result != IGRAPH_SUCCESS) {
 		critical("igraph_vs_all return non-success code %i", result);
-		return FALSE;
+		return -1;
 	}
 
 	/* we will iterate through the vertices */
@@ -91,7 +124,7 @@ static gboolean _topology_checkGraphVertices(Topology* top) {
 	result = igraph_vit_create(&top->graph, allVertices, &vertexIterator);
 	if(result != IGRAPH_SUCCESS) {
 		critical("igraph_vit_create return non-success code %i", result);
-		return FALSE;
+		return -1;
 	}
 
 	/* count the vertices as we iterate */
@@ -99,15 +132,8 @@ static gboolean _topology_checkGraphVertices(Topology* top) {
 	while (!IGRAPH_VIT_END(vertexIterator)) {
 		long int vertexIndex = IGRAPH_VIT_GET(vertexIterator);
 
-		/* get vertex attributes: S for string and N for numeric */
-		const gchar* idStr = VAS(&top->graph, "id", vertexIndex);
-		const gchar* nodeIDStr = VAS(&top->graph, "nodeid", vertexIndex);
-		const gchar* nodeTypeStr = VAS(&top->graph, "nodetype", vertexIndex);
-		const gchar* geocodesStr = VAS(&top->graph, "geocodes", vertexIndex);
-		gdouble asNumber = VAN(&top->graph, "asn", vertexIndex);
-
-		debug("found vertex %li (%s), nodeid=%s nodetype=%s geocodes=%s asn=%i",
-				vertexIndex, idStr, nodeIDStr, nodeTypeStr, geocodesStr, asNumber);
+		/* call the hook function for each edge */
+		hook(top, vertexIndex);
 
 		vertexCount++;
 		IGRAPH_VIT_NEXT(vertexIterator);
@@ -117,8 +143,21 @@ static gboolean _topology_checkGraphVertices(Topology* top) {
 	igraph_vit_destroy(&vertexIterator);
 	igraph_vs_destroy(&allVertices);
 
-	top->vertexCount = igraph_vcount(&top->graph);
+	return vertexCount;
+}
 
+static gboolean _topology_checkGraphVertices(Topology* top) {
+	MAGIC_ASSERT(top);
+
+	info("checking graph vertices...");
+
+	igraph_integer_t vertexCount = _topology_iterateAllVertices(top, _topology_checkGraphVerticesHelperHook);
+	if(vertexCount < 0) {
+		/* there was some kind of error */
+		return FALSE;
+	}
+
+	top->vertexCount = igraph_vcount(&top->graph);
 	if(top->vertexCount != vertexCount) {
 		warning("igraph_vcount does not match iterator count");
 	}
@@ -128,14 +167,32 @@ static gboolean _topology_checkGraphVertices(Topology* top) {
 	return TRUE;
 }
 
-static gboolean _topology_checkGraphEdges(Topology* top) {
-	gint result = 0;
+static void _topology_checkGraphEdgesHelperHook(Topology* top, long int edgeIndex) {
+	MAGIC_ASSERT(top);
 
+	long int fromVertexIndex = IGRAPH_FROM(&top->graph, edgeIndex);
+	const gchar* fromIDStr = VAS(&top->graph, "id", fromVertexIndex);
+
+	long int toVertexIndex = IGRAPH_TO(&top->graph, edgeIndex);
+	const gchar* toIDStr = VAS(&top->graph, "id", toVertexIndex);
+
+	/* get edge attributes: S for string and N for numeric */
+	const gchar* latenciesStr = EAS(&top->graph, "latencies", edgeIndex);
+
+	debug("found edge %li from vertex %li (%s) to vertex %li (%s) latencies=%s",
+			edgeIndex, fromVertexIndex, fromIDStr, toVertexIndex, toIDStr, latenciesStr);
+}
+
+static igraph_integer_t _topology_iterateAllEdges(Topology* top, EdgeIteratorFunc hook) {
+	MAGIC_ASSERT(top);
+	g_assert(hook);
+
+	/* our selector will consider all edges, ordered by the igraph edge indices */
 	igraph_es_t allEdges;
-	result = igraph_es_all(&allEdges, IGRAPH_EDGEORDER_ID);
+	gint result = igraph_es_all(&allEdges, IGRAPH_EDGEORDER_ID);
 	if(result != IGRAPH_SUCCESS) {
 		critical("igraph_es_all return non-success code %i", result);
-		return FALSE;
+		return -1;
 	}
 
 	/* we will iterate through the edges */
@@ -143,7 +200,7 @@ static gboolean _topology_checkGraphEdges(Topology* top) {
 	result = igraph_eit_create(&top->graph, allEdges, &edgeIterator);
 	if(result != IGRAPH_SUCCESS) {
 		critical("igraph_eit_create return non-success code %i", result);
-		return FALSE;
+		return -1;
 	}
 
 	/* count the edges as we iterate */
@@ -151,17 +208,8 @@ static gboolean _topology_checkGraphEdges(Topology* top) {
 	while (!IGRAPH_EIT_END(edgeIterator)) {
 		long int edgeIndex = IGRAPH_EIT_GET(edgeIterator);
 
-		long int fromVertexIndex = IGRAPH_FROM(&top->graph, edgeIndex);
-		const gchar* fromIDStr = VAS(&top->graph, "id", fromVertexIndex);
-
-		long int toVertexIndex = IGRAPH_TO(&top->graph, edgeIndex);
-		const gchar* toIDStr = VAS(&top->graph, "id", toVertexIndex);
-
-		/* get edge attributes: S for string and N for numeric */
-		const gchar* latenciesStr = EAS(&top->graph, "latencies", edgeIndex);
-
-		debug("found edge %li from vertex %li (%s) to vertex %li (%s) latencies=%s",
-				edgeIndex, fromVertexIndex, fromIDStr, toVertexIndex, toIDStr, latenciesStr);
+		/* call the hook function for each edge */
+		hook(top, edgeIndex);
 
 		edgeCount++;
 		IGRAPH_EIT_NEXT(edgeIterator);
@@ -170,8 +218,21 @@ static gboolean _topology_checkGraphEdges(Topology* top) {
 	igraph_eit_destroy(&edgeIterator);
 	igraph_es_destroy(&allEdges);
 
-	top->edgeCount = igraph_ecount(&top->graph);
+	return edgeCount;
+}
 
+static gboolean _topology_checkGraphEdges(Topology* top) {
+	MAGIC_ASSERT(top);
+
+	info("checking graph edges...");
+
+	igraph_integer_t edgeCount = _topology_iterateAllEdges(top, _topology_checkGraphEdgesHelperHook);
+	if(edgeCount < 0) {
+		/* there was some kind of error */
+		return FALSE;
+	}
+
+	top->edgeCount = igraph_ecount(&top->graph);
 	if(top->edgeCount != edgeCount) {
 		warning("igraph_vcount does not match iterator count");
 	}
@@ -189,7 +250,7 @@ static gboolean _topology_checkGraph(Topology* top) {
 
 	message("successfully parsed graphml at '%s' and validated topology: "
 			"graph is %s with %u %s, %u %s, and %u %s",
-			top->graphPath->str, top->isConnected ? "connected" : "disconnected",
+			top->graphPath->str, top->isConnected ? "strongly connected" : "disconnected",
 			(guint)top->clusterCount, top->clusterCount == 1 ? "cluster" : "clusters",
 			(guint)top->vertexCount, top->vertexCount == 1 ? "vertex" : "vertices",
 			(guint)top->edgeCount, top->edgeCount == 1 ? "edge" : "edges");
@@ -197,25 +258,50 @@ static gboolean _topology_checkGraph(Topology* top) {
 	return TRUE;
 }
 
-Topology* topology_new(gchar* graphPath) {
-	g_assert(graphPath);
-	Topology* top = g_new0(Topology, 1);
-	MAGIC_INIT(top);
+static void _topology_updateEdgeWeightsHelperHook(Topology* top, long int edgeIndex) {
+	/* get the array of latencies for this edge */
+	const gchar* latenciesStr = EAS(&top->graph, "latencies", edgeIndex);
+	gchar** latencyParts = g_strsplit(latenciesStr, ",", 0);
 
-	top->graphPath = g_string_new(graphPath);
-
-	/* first read in the graph and make sure its formed correctly */
-	if(!_topology_loadGraph(top) || !_topology_checkGraph(top)) {
-		g_string_free(top->graphPath, TRUE);
-		return NULL;
+	/* get length of the latency array */
+	gint length = 0;
+	while(latencyParts[length] != NULL) {
+		length++;
 	}
 
-	/* setup our current weights for shortest path */
-//	igraph_vector_init(&top->currentEdgeWeights, 0);
-//	result = igraph_cattribute_EANV(&top->graph, "latency", top->allEdges,
-//			top->currentEdgeWeights);
+	// TODO FIXME get random
+	gint randomIndex = (length > 2 ? 1 : 0);
+	igraph_real_t latency = (igraph_real_t) atof(latencyParts[randomIndex]);
+	igraph_vector_push_back(top->currentEdgeWeights, latency);
 
-	return top;
+	g_strfreev(latencyParts);
+}
+
+static gboolean _topology_updateEdgeWeights(Topology* top) {
+	MAGIC_ASSERT(top);
+
+	/* create new or clear existing edge weights */
+	if(!top->currentEdgeWeights) {
+		top->currentEdgeWeights = g_new0(igraph_vector_t, 1);
+	} else {
+		igraph_vector_destroy(top->currentEdgeWeights);
+		memset(top->currentEdgeWeights, 0, sizeof(igraph_vector_t));
+	}
+
+	/* now we have fresh memory */
+	gint result = igraph_vector_init(&top->currentEdgeWeights, 0);
+	if(result != IGRAPH_SUCCESS) {
+		critical("igraph_vector_init return non-success code %i", result);
+		return FALSE;
+	}
+
+	igraph_integer_t edgeCount = _topology_iterateAllEdges(top, _topology_updateEdgeWeightsHelperHook);
+	if(edgeCount < 0) {
+		/* there was some kind of error */
+		return FALSE;
+	}
+
+	return TRUE;
 }
 
 void topology_free(Topology* top) {
@@ -225,11 +311,31 @@ void topology_free(Topology* top) {
 		g_string_free(top->graphPath, TRUE);
 	}
 
-//	igraph_vs_destroy(&top->allVertices);
-//	igraph_es_destroy(&top->allEdges);
+	if(top->currentEdgeWeights) {
+		igraph_vector_destroy(top->currentEdgeWeights);
+		g_free(top->currentEdgeWeights);
+	}
 
 	MAGIC_CLEAR(top);
 	g_free(top);
+}
+
+Topology* topology_new(gchar* graphPath) {
+	g_assert(graphPath);
+	Topology* top = g_new0(Topology, 1);
+	MAGIC_INIT(top);
+
+	top->graphPath = g_string_new(graphPath);
+
+	/* first read in the graph and make sure its formed correctly,
+	 * then setup our edge weights for shortest path */
+	if(!_topology_loadGraph(top) || !_topology_checkGraph(top) ||
+			!_topology_updateEdgeWeights(top)) {
+		topology_free(top);
+		return NULL;
+	}
+
+	return top;
 }
 
 //gboolean topology_connect(Address* hostAddress) {
@@ -247,26 +353,42 @@ void topology_free(Topology* top) {
 //static void _topology_setCachedLatency(Topology* top, Address* source, Address* destination) {
 //
 //}
-//
-//gdouble topology_getLatency(Topology* top, Address* srcAddress, Address* dstAddress) {
-//	MAGIC_ASSERT(top);
-//
-//	PoI* srcPoI;
-//	PoI* dstPoI;
-//
-//	gdouble cachedLatency = _topology_getCachedLatency(top, srcAddress, dstAddress);
-//	if(cachedLatency) {
-//		return cachedLatency;
-//	}
-//
-//	gboolean cached;
-//	if(!cached) {
-////		igraph_vs_t dstVertexSet;
-////		igraph_integer_t dstVertexID;
-////		gint result = igraph_vs_1(&dstVertexSet, dstVertexID);
-////
-////		igraph_get_shortest_paths_dijkstra(&top->graph, 0, edges, sourceVertexID,
-////				possibleVertexDestinations, &edge_weights, IGRAPH_OUT);
-//	}
-//	return G_MAXDOUBLE;
-//}
+
+gdouble topology_getLatency(Topology* top, Address* srcAddress, Address* dstAddress) {
+	MAGIC_ASSERT(top);
+
+	gdouble cachedLatency = _topology_getCachedLatency(top, srcAddress, dstAddress);
+	if(cachedLatency) {
+		return cachedLatency;
+	}
+
+	igraph_integer_t srcVertexIndex;
+	igraph_integer_t dstVertexIndex;
+	igraph_vs_t dstVertexSet;
+	gint result = igraph_vs_1(&dstVertexSet, dstVertexIndex);
+
+//	igraph_vector_t edge_weights;
+//	igraph_vector_init(&edge_weights, 0);
+//	igraph_es_t all_edges;
+//	igraph_es_all(&all_edges, IGRAPH_EDGEORDER_ID);
+//	igraph_cattribute_EANV(&graph, "latency", all_edges, &edge_weights);
+
+	igraph_vector_ptr_t pathEdgesLists;
+	igraph_vector_ptr_init(&pathEdgesLists, 0);
+
+	igraph_get_shortest_paths_dijkstra(&top->graph, &pathEdgesLists, srcVertexIndex,
+			dstVertexSet, top->currentEdgeWeights, IGRAPH_OUT);
+
+	// TODO iterate the pathEdges vector and sum the latencies
+    for (gint i = 0; i < igraph_vector_ptr_size(&pathEdgesLists); i++) {
+      igraph_vector_t* pathEdges = (igraph_vector_t*) igraph_vector_ptr_e(pathEdgesLists, i);
+
+//      process_computed_edge(&graph, edge_list, v2_vid);
+
+      igraph_vector_clear(pathEdges);
+    }
+
+	igraph_vector_ptr_destroy(&pathEdgesLists);
+
+	return G_MAXDOUBLE;
+}
