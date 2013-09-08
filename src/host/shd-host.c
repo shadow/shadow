@@ -95,12 +95,6 @@ Host* host_new(GQuark id, Network* network, guint32 ip,
 	host->autotuneReceiveBuffer = autotuneReceiveBuffer;
 	host->autotuneSendBuffer = autotuneSendBuffer;
 
-<<<<<<< HEAD:src/host/shd-host.c
-	/* host order so increments make sense */
-	host->randomPortCounter = MIN_RANDOM_PORT;
-
-=======
->>>>>>> master:src/node/shd-node.c
 	/* applications this node will run */
 //	node->application = application_new(software);
 

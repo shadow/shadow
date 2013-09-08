@@ -269,8 +269,14 @@ static void _topology_updateEdgeWeightsHelperHook(Topology* top, long int edgeIn
 		length++;
 	}
 
-	// TODO FIXME get random
-	gint randomIndex = (length > 2 ? 1 : 0);
+	/* select a random index from the latency list */
+	gdouble randomDouble = engine_nextRandomDouble(worker_getPrivate()->cached_engine);
+	gint randomIndex = (gint)(length * randomDouble) - 1;
+	if(randomIndex < 0) {
+		randomIndex = 0;
+	}
+
+	/* set the selected latency as the current weight for this edge */
 	igraph_real_t latency = (igraph_real_t) atof(latencyParts[randomIndex]);
 	igraph_vector_push_back(top->currentEdgeWeights, latency);
 
@@ -289,7 +295,7 @@ static gboolean _topology_updateEdgeWeights(Topology* top) {
 	}
 
 	/* now we have fresh memory */
-	gint result = igraph_vector_init(&top->currentEdgeWeights, 0);
+	gint result = igraph_vector_init(top->currentEdgeWeights, 0);
 	if(result != IGRAPH_SUCCESS) {
 		critical("igraph_vector_init return non-success code %i", result);
 		return FALSE;
@@ -357,10 +363,10 @@ Topology* topology_new(gchar* graphPath) {
 gdouble topology_getLatency(Topology* top, Address* srcAddress, Address* dstAddress) {
 	MAGIC_ASSERT(top);
 
-	gdouble cachedLatency = _topology_getCachedLatency(top, srcAddress, dstAddress);
-	if(cachedLatency) {
-		return cachedLatency;
-	}
+//	gdouble cachedLatency = _topology_getCachedLatency(top, srcAddress, dstAddress);
+//	if(cachedLatency > 0) {
+//		return cachedLatency;
+//	}
 
 	igraph_integer_t srcVertexIndex;
 	igraph_integer_t dstVertexIndex;
@@ -381,7 +387,7 @@ gdouble topology_getLatency(Topology* top, Address* srcAddress, Address* dstAddr
 
 	// TODO iterate the pathEdges vector and sum the latencies
     for (gint i = 0; i < igraph_vector_ptr_size(&pathEdgesLists); i++) {
-      igraph_vector_t* pathEdges = (igraph_vector_t*) igraph_vector_ptr_e(pathEdgesLists, i);
+      igraph_vector_t* pathEdges = (igraph_vector_t*) igraph_vector_ptr_e(&pathEdgesLists, i);
 
 //      process_computed_edge(&graph, edge_list, v2_vid);
 
