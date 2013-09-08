@@ -47,9 +47,6 @@ struct _Node {
 	gboolean autotuneReceiveBuffer;
 	gboolean autotuneSendBuffer;
 
-	/* random port counter, in host order */
-	in_port_t randomPortCounter;
-
 	/* track the order in which the application sent us application data */
 	gdouble packetPriorityCounter;
 
@@ -97,9 +94,6 @@ Node* node_new(GQuark id, Network* network, guint32 ip,
 	node->sendBufferSize = sendBufferSize;
 	node->autotuneReceiveBuffer = autotuneReceiveBuffer;
 	node->autotuneSendBuffer = autotuneSendBuffer;
-
-	/* host order so increments make sense */
-	node->randomPortCounter = MIN_RANDOM_PORT;
 
 	/* applications this node will run */
 //	node->application = application_new(software);
@@ -521,16 +515,18 @@ static in_port_t _node_getRandomFreePort(Node* node, in_addr_t interfaceIP,
 		DescriptorType type) {
 	MAGIC_ASSERT(node);
 
-	in_port_t randomPort = 0;
+	in_port_t randomNetworkPort = 0;
 	gboolean available = FALSE;
 
 	while(!available) {
-		randomPort = htons((node->randomPortCounter)++);
-		g_assert(node->randomPortCounter >= MIN_RANDOM_PORT);
-		available = _node_isInterfaceAvailable(node, interfaceIP, type, randomPort);
+		gdouble randomFraction = random_nextDouble(node->random);
+		in_port_t randomHostPort = (in_port_t) (randomFraction * (UINT16_MAX - MIN_RANDOM_PORT)) + MIN_RANDOM_PORT;
+		g_assert(randomHostPort >= MIN_RANDOM_PORT);
+		randomNetworkPort = htons(randomHostPort);
+		available = _node_isInterfaceAvailable(node, interfaceIP, type, randomNetworkPort);
 	}
 
-	return randomPort;
+	return randomNetworkPort;
 }
 
 gint node_bindToInterface(Node* node, gint handle, in_addr_t bindAddress, in_port_t bindPort) {
