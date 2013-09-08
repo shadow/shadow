@@ -11,7 +11,8 @@ if len(sys.argv) != 3: print >>sys.stderr, "{0} input.xml output.xml".format(sys
 infname = sys.argv[1]
 outfname = sys.argv[2]
 
-tree = etree.parse(infname)
+parser = etree.XMLParser(remove_blank_text=True)
+tree = etree.parse(infname, parser)
 root = tree.getroot()
 
 p = etree.SubElement(root, "plugin")

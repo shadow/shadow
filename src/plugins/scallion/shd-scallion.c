@@ -851,7 +851,10 @@ int intercept_spawn_func(void (*func)(void *), void *data)
 	return 0;
 }
 
-/* this function is where the relay will return its bandwidth and send to auth */
+/* this function is where the relay will return its bandwidth and send to auth.
+ * this should be computing an estimate of the relay's actual bandwidth capacity.
+ * let the maximum 10 second rolling average bytes be MAX10S; then, this should compute:
+ * min(MAX10S read, MAX10S write) */
 int intercept_rep_hist_bandwidth_assess() {
 	ScallionTor* stor = scalliontor_getPointer();
 	g_assert(stor);

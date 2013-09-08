@@ -47,9 +47,6 @@ struct _Host {
 	gboolean autotuneReceiveBuffer;
 	gboolean autotuneSendBuffer;
 
-	/* random port counter, in host order */
-	in_port_t randomPortCounter;
-
 	/* track the order in which the application sent us application data */
 	gdouble packetPriorityCounter;
 
@@ -98,9 +95,12 @@ Host* host_new(GQuark id, Network* network, guint32 ip,
 	host->autotuneReceiveBuffer = autotuneReceiveBuffer;
 	host->autotuneSendBuffer = autotuneSendBuffer;
 
+<<<<<<< HEAD:src/host/shd-host.c
 	/* host order so increments make sense */
 	host->randomPortCounter = MIN_RANDOM_PORT;
 
+=======
+>>>>>>> master:src/node/shd-node.c
 	/* applications this node will run */
 //	node->application = application_new(software);
 
@@ -521,16 +521,18 @@ static in_port_t _host_getRandomFreePort(Host* host, in_addr_t interfaceIP,
 		DescriptorType type) {
 	MAGIC_ASSERT(host);
 
-	in_port_t randomPort = 0;
+	in_port_t randomNetworkPort = 0;
 	gboolean available = FALSE;
 
 	while(!available) {
-		randomPort = htons((host->randomPortCounter)++);
-		g_assert(host->randomPortCounter >= MIN_RANDOM_PORT);
-		available = _host_isInterfaceAvailable(host, interfaceIP, type, randomPort);
+		gdouble randomFraction = random_nextDouble(host->random);
+		in_port_t randomHostPort = (in_port_t) (randomFraction * (UINT16_MAX - MIN_RANDOM_PORT)) + MIN_RANDOM_PORT;
+		g_assert(randomHostPort >= MIN_RANDOM_PORT);
+		randomNetworkPort = htons(randomHostPort);
+		available = _host_isInterfaceAvailable(host, interfaceIP, type, randomNetworkPort);
 	}
 
-	return randomPort;
+	return randomNetworkPort;
 }
 
 gint host_bindToInterface(Host* host, gint handle, in_addr_t bindAddress, in_port_t bindPort) {
