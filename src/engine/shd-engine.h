@@ -37,14 +37,24 @@ Configuration* engine_getConfig(Engine* engine);
 GTimer* engine_getRunTimer(Engine* engine);
 GPrivate* engine_getWorkerKey(Engine* engine);
 GPrivate* engine_getPreloadKey(Engine* engine);
-Internetwork* engine_getInternet(Engine* engine);
 
 void engine_setKillTime(Engine* engine, SimulationTime endTime);
 gboolean engine_isKilled(Engine* engine);
 gboolean engine_isForced(Engine* engine);
 
+void engine_setTopology(Engine* engine, Topology* top);
+void engine_addHost(Engine* engine, Host* host, guint hostID);
+
 void engine_lockPluginInit(Engine* engine);
 void engine_unlockPluginInit(Engine* engine);
+
+gpointer engine_getHost(Engine* engine, GQuark nodeID);
+GList* engine_getAllHosts(Engine* engine);
+guint32 engine_getNodeBandwidthUp(Engine* engine, GQuark nodeID);
+guint32 engine_getNodeBandwidthDown(Engine* engine, GQuark nodeID);
+gdouble engine_getLatency(Engine* engine, GQuark sourceNodeID, GQuark destinationNodeID);
+DNS* engine_getDNS(Engine* engine);
+Topology* engine_getTopology(Engine* engine);
 
 /* thread-safe */
 

@@ -22,6 +22,11 @@
 typedef guint64 SimulationTime;
 
 /**
+ * Unique object id reference
+ */
+typedef guint ShadowID;
+
+/**
  * Represents an invalid simulation time.
  */
 #define SIMTIME_INVALID G_MAXUINT64

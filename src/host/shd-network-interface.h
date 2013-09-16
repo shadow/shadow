@@ -11,11 +11,12 @@
 
 typedef struct _NetworkInterface NetworkInterface;
 
-NetworkInterface* networkinterface_new(Network* network, GQuark address, gchar* name,
+NetworkInterface* networkinterface_new(GQuark hostID, gchar* hostName, gchar* requestedIP,
 		guint64 bwDownKiBps, guint64 bwUpKiBps, gboolean logPcap, gchar* pcapDir, gchar* qdisc,
 		guint64 interfaceReceiveLength);
 void networkinterface_free(NetworkInterface* interface);
 
+Address* networkinterface_getAddress(NetworkInterface* interface);
 in_addr_t networkinterface_getIPAddress(NetworkInterface* interface);
 gchar* networkinterface_getIPName(NetworkInterface* interface);
 guint32 networkinterface_getSpeedUpKiBps(NetworkInterface* interface);

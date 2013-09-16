@@ -13,11 +13,13 @@
 
 typedef struct _Host Host;
 
-Host* host_new(GQuark id, Network* network, guint32 ip,
-		GString* hostname, guint64 bwDownKiBps, guint64 bwUpKiBps, guint cpuFrequency, gint cpuThreshold, gint cpuPrecision,
-		guint nodeSeed, SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel, gchar* heartbeatLogInfo,
+Host* host_new(GQuark id, gchar* hostname, gchar* requestedIP, gchar* requestedCluster,
+		guint64 bwDownKiBps, guint64 bwUpKiBps,
+		guint cpuFrequency, gint cpuThreshold, gint cpuPrecision, guint nodeSeed,
+		SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel, gchar* heartbeatLogInfo,
 		GLogLevelFlags logLevel, gboolean logPcap, gchar* pcapDir, gchar* qdisc,
-		guint64 receiveBufferSize, gboolean autotuneReceiveBuffer, guint64 sendBufferSize, gboolean autotuneSendBuffer,
+		guint64 receiveBufferSize, gboolean autotuneReceiveBuffer,
+		guint64 sendBufferSize, gboolean autotuneSendBuffer,
 		guint64 interfaceReceiveLength);
 void host_free(Host* host, gpointer userData);
 
@@ -35,8 +37,8 @@ void host_freeAllApplications(Host* host, gpointer userData);
 gint host_compare(gconstpointer a, gconstpointer b, gpointer user_data);
 gboolean host_isEqual(Host* a, Host* b);
 CPU* host_getCPU(Host* host);
-Network* host_getNetwork(Host* host);
 gchar* host_getName(Host* host);
+Address* host_getDefaultAddress(Host* host);
 in_addr_t host_getDefaultIP(Host* host);
 gchar* host_getDefaultIPName(Host* host);
 Random* host_getRandom(Host* host);

@@ -12,7 +12,8 @@
 struct _CreateNodesAction {
 	Action super;
 	GQuark id;
-	GQuark networkID;
+	GString* requestedIP;
+	GString* requestedCluster;
 	guint64 bandwidthdown;
 	guint64 bandwidthup;
 	guint64 quantity;
@@ -46,7 +47,7 @@ RunnableFunctionTable createnodes_functions = {
 	MAGIC_VALUE
 };
 
-CreateNodesAction* createnodes_new(GString* name, GString* cluster,
+CreateNodesAction* createnodes_new(GString* name, GString* ip, GString* cluster,
 		guint64 bandwidthdown, guint64 bandwidthup, guint64 quantity, guint64 cpuFrequency,
 		guint64 heartbeatIntervalSeconds, GString* heartbeatLogLevelString, GString* heartbeatLogInfoString,
 		GString* logLevelString, GString* logPcapString, GString* pcapDirString,
@@ -60,12 +61,18 @@ CreateNodesAction* createnodes_new(GString* name, GString* cluster,
 
 	action->id = g_quark_from_string((const gchar*) name->str);
 
-	action->networkID = cluster ? g_quark_from_string((const gchar*) cluster->str) : 0;
 	action->bandwidthdown = bandwidthdown;
 	action->bandwidthup = bandwidthup;
 	action->quantity = quantity ? quantity : 1;
 	action->cpuFrequency = (guint)cpuFrequency;
 	action->heartbeatIntervalSeconds = heartbeatIntervalSeconds;
+
+	if(ip) {
+		action->requestedIP = g_string_new(ip->str);
+	}
+	if(cluster) {
+		action->requestedCluster = g_string_new(cluster->str);
+	}
 	if(heartbeatLogLevelString) {
 		action->heartbeatLogLevelString = g_string_new(heartbeatLogLevelString->str);
 	}
@@ -125,14 +132,6 @@ void createnodes_run(CreateNodesAction* action) {
 		return;
 	}
 
-	/* if they didnt specify a network, assign to a random network */
-	Network* assignedNetwork = NULL;
-	if(action->networkID) {
-		/* they assigned a network, find it */
-		assignedNetwork = internetwork_getNetwork(worker_getInternet(), action->networkID);
-		g_assert(assignedNetwork);
-	}
-
 	/* if they didnt specify a CPU frequency, use the frequency of the box we are running on */
 	guint cpuFrequency = action->cpuFrequency;
 	if(!cpuFrequency) {
@@ -180,34 +179,24 @@ void createnodes_run(CreateNodesAction* action) {
 
 	gchar* qdisc = configuration_getQueuingDiscipline(config);
 
-	guint64 sockRecv = action->socketReceiveBufferSize; /* bytes */
-	gboolean autotuneRecv = FALSE;
-	if(!sockRecv) {
-		sockRecv = worker_getConfig()->initialSocketReceiveBufferSize;
-		autotuneRecv = worker_getConfig()->autotuneSocketReceiveBuffer;
+	guint64 receiveBufferSize = action->socketReceiveBufferSize; /* bytes */
+	gboolean autotuneReceiveBuffer = FALSE;
+	if(!receiveBufferSize) {
+		receiveBufferSize = worker_getConfig()->initialSocketReceiveBufferSize;
+		autotuneReceiveBuffer = worker_getConfig()->autotuneSocketReceiveBuffer;
 	}
-	guint64 sockSend = action->socketSendBufferSize; /* bytes */
-	gboolean autotuneSend = FALSE;
-	if(!sockSend) {
-		sockSend = worker_getConfig()->initialSocketSendBufferSize;
-		autotuneSend = worker_getConfig()->autotuneSocketSendBuffer;
+	guint64 sendBufferSize = action->socketSendBufferSize; /* bytes */
+	gboolean autotuneSendBuffer = FALSE;
+	if(!sendBufferSize) {
+		sendBufferSize = worker_getConfig()->initialSocketSendBufferSize;
+		autotuneSendBuffer = worker_getConfig()->autotuneSocketSendBuffer;
 	}
-	guint64 ifaceRecv = action->interfaceReceiveBufferLength; /* N packets */
-	if(!ifaceRecv) {
-		ifaceRecv = worker_getConfig()->interfaceBufferSize;
+	guint64 interfaceReceiveLength = action->interfaceReceiveBufferLength; /* N packets */
+	if(!interfaceReceiveLength) {
+		interfaceReceiveLength = worker_getConfig()->interfaceBufferSize;
 	}
 
 	for(gint i = 0; i < action->quantity; i++) {
-		/* get a random network if they didnt assign one */
-		gdouble randomDouble = engine_nextRandomDouble(worker->cached_engine);
-		Network* network = assignedNetwork ? assignedNetwork :
-				internetwork_getRandomNetwork(worker_getInternet(), randomDouble);
-		g_assert(network);
-
-		/* use network bandwidth unless an override was given */
-		guint64 bwUpKiBps = action->bandwidthup ? action->bandwidthup : network_getBandwidthUp(network);
-		guint64 bwDownKiBps = action->bandwidthdown ? action->bandwidthdown : network_getBandwidthDown(network);
-
 		/* hostname */
 		GString* hostnameBuffer = g_string_new(hostname);
 		if(action->quantity > 1) {
@@ -219,10 +208,17 @@ void createnodes_run(CreateNodesAction* action) {
 
 		/* the node is part of the internet */
 		guint nodeSeed = (guint) engine_nextRandomInt(worker->cached_engine);
-		Host* node = internetwork_createNode(worker_getInternet(), id, network,
-						hostnameBuffer, bwDownKiBps, bwUpKiBps, cpuFrequency, cpuThreshold, cpuPrecision,
-						nodeSeed, heartbeatInterval, heartbeatLogLevel, heartbeatLogInfo, logLevel, logPcap, pcapDir,
-						qdisc, sockRecv, autotuneRecv, sockSend, autotuneSend, ifaceRecv);
+
+		Host* host = host_new(id, hostnameBuffer->str,
+				action->requestedIP ? action->requestedIP->str : NULL,
+				action->requestedCluster ? action->requestedCluster->str : NULL,
+				action->bandwidthdown, action->bandwidthup,
+				cpuFrequency, cpuThreshold, cpuPrecision, nodeSeed,
+				heartbeatInterval, heartbeatLogLevel, heartbeatLogInfo,
+				logLevel, logPcap, pcapDir, qdisc,
+				receiveBufferSize, autotuneReceiveBuffer, sendBufferSize, autotuneSendBuffer,
+				interfaceReceiveLength);
+
 		g_string_free(hostnameBuffer, TRUE);
 
 		/* loop through and create, add, and boot all applications */
@@ -233,16 +229,19 @@ void createnodes_run(CreateNodesAction* action) {
 
 			/* make sure our bootstrap events are set properly */
 			worker->clock_now = 0;
-			host_addApplication(node, app->pluginID, pluginPath,
+			host_addApplication(host, app->pluginID, pluginPath,
 					app->starttime, app->stoptime, app->arguments->str);
 			worker->clock_now = SIMTIME_INVALID;
 
 			item = g_list_next(item);
 		}
 
+		/* save the node somewhere */
+		engine_addHost(worker->cached_engine, host, (guint) id);
+
 		/* make sure our bootstrap events are set properly */
 		worker->clock_now = 0;
-		HeartbeatEvent* heartbeat = heartbeat_new(host_getTracker(node));
+		HeartbeatEvent* heartbeat = heartbeat_new(host_getTracker(host));
 		worker_scheduleEvent((Event*)heartbeat, heartbeatInterval, id);
 		worker->clock_now = SIMTIME_INVALID;
 	}

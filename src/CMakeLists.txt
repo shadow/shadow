@@ -26,74 +26,70 @@ add_subdirectory(plugins)
 
 ## sources for our main shadow program
 set(shadow_srcs
-    configuration/shd-examples.c
     configuration/shd-configuration.c
+    configuration/shd-examples.c
     configuration/shd-parser.c
+
+    engine/shd-engine.c
     engine/shd-event-queue.c
     engine/shd-logging.c
     engine/shd-main.c
-    engine/shd-engine.c
-    engine/shd-worker.c
-    
-    topology/shd-address.c
-    topology/shd-poi.c
-    topology/shd-pop.c
-    topology/shd-path.c
-    topology/shd-topology.c
-    
-    topology/shd-network.c
-    topology/shd-link.c
-    topology/shd-internetwork.c
-    
     engine/shd-plugin.c
     engine/shd-system.c
+    engine/shd-worker.c
+    
+    host/descriptor/shd-channel.c
+    host/descriptor/shd-descriptor.c
+    host/descriptor/shd-epoll.c
+    host/descriptor/shd-socket.c
+    host/descriptor/shd-tcp.c
+    host/descriptor/shd-transport.c
+    host/descriptor/shd-udp.c
+    host/shd-application.c
+    host/shd-cpu.c
+    host/shd-host.c
+    host/shd-network-interface.c
+    host/shd-packet.c
+    host/shd-tracker.c
+    
     plugins/shd-library.c
     
-    runnable/shd-runnable.c
-    runnable/shd-listener.c
-    runnable/event/shd-event.c
-    runnable/event/shd-start-application.c
-    runnable/event/shd-stop-application.c
-    runnable/event/shd-heartbeat.c
+    runnable/action/shd-action.c
+    runnable/action/shd-create-node.c
+    runnable/action/shd-generate-cdf.c
+    runnable/action/shd-kill-engine.c
+    runnable/action/shd-load-cdf.c
+    runnable/action/shd-load-plugin.c
+    runnable/action/shd-load-topology.c
     runnable/event/shd-callback.c
+    runnable/event/shd-event.c
+    runnable/event/shd-heartbeat.c
     runnable/event/shd-interface-received.c
     runnable/event/shd-interface-sent.c
     runnable/event/shd-notify-plugin.c
     runnable/event/shd-packet-arrived.c
     runnable/event/shd-packet-dropped.c
+    runnable/event/shd-start-application.c
+    runnable/event/shd-stop-application.c
     runnable/event/shd-tcp-close-timer-expired.c
-    runnable/action/shd-action.c
-    runnable/action/shd-connect-network.c
-    runnable/action/shd-create-network.c
-    runnable/action/shd-create-node.c
-    runnable/action/shd-generate-cdf.c
-    runnable/action/shd-load-cdf.c
-    runnable/action/shd-load-plugin.c
-    runnable/action/shd-load-topology.c
-    runnable/action/shd-kill-engine.c
+    runnable/shd-listener.c
+    runnable/shd-runnable.c
+
+    topology/shd-address.c
+    topology/shd-dns.c
+    topology/shd-path.c
+    topology/shd-poi.c
+    topology/shd-pop.c
+    topology/shd-topology.c
         
-    host/descriptor/shd-descriptor.c
-    host/descriptor/shd-epoll.c
-    host/descriptor/shd-transport.c
-    host/descriptor/shd-channel.c
-    host/descriptor/shd-socket.c
-    host/descriptor/shd-tcp.c
-    host/descriptor/shd-udp.c
-    host/shd-packet.c
-    host/shd-cpu.c
-    host/shd-network-interface.c
-    host/shd-application.c
-    host/shd-tracker.c
-    host/shd-host.c
-        
-    utility/shd-utility.c
-    utility/shd-cdf.c
-    utility/shd-registry.c
-    utility/shd-byte-queue.c
-    utility/shd-priority-queue.c
     utility/shd-async-priority-queue.c
+    utility/shd-byte-queue.c
+    utility/shd-cdf.c
     utility/shd-count-down-latch.c
+    utility/shd-priority-queue.c
     utility/shd-random.c
+    utility/shd-registry.c
+    utility/shd-utility.c
     
     main.c
 )

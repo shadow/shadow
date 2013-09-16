@@ -18,10 +18,10 @@
   -- use "bandwidthdown" and "bandwidthup" to override cluster values (in KiB/s)
   -- use "cpufrequency" to specify the speed of this nodes virtual CPU (in KiHz)
   -->
-<node id="server.node" cluster="USMN" bandwidthdown="60000" bandwidthup="30000" cpufrequency="2800000">
+<node id="server.node" ip="141.161.20.54" cluster="USDC" bandwidthdown="60000" bandwidthup="30000" cpufrequency="2800000">
     <application plugin="filex" time="10" arguments="server 8080 /bin/" />
 </node>
-<node id="client.node" quantity="1">
+<node id="client.node" ip="137.150.145.240" cluster="DE" bandwidthdown="2048" bandwidthup="1024" quantity="1">
     <application plugin="filex" time="20" arguments="client single server.node 8080 none 0 10 /ls" />
 </node>
 

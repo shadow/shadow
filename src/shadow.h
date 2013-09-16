@@ -75,14 +75,10 @@
 #include "engine/shd-plugin.h"
 
 #include "topology/shd-address.h"
+#include "topology/shd-dns.h"
 #include "topology/shd-poi.h"
 #include "topology/shd-pop.h"
 #include "topology/shd-path.h"
-#include "topology/shd-topology.h"
-
-#include "topology/shd-network.h"
-#include "topology/shd-link.h"
-#include "topology/shd-internetwork.h"
 
 #include "host/descriptor/shd-epoll.h"
 #include "host/descriptor/shd-transport.h"
@@ -96,6 +92,8 @@
 #include "engine/shd-system.h"
 #include "host/shd-host.h"
 
+#include "topology/shd-topology.h"
+
 #include "runnable/event/shd-heartbeat.h"
 #include "runnable/event/shd-callback.h"
 #include "runnable/event/shd-notify-plugin.h"
@@ -106,8 +104,6 @@
 #include "runnable/event/shd-start-application.h"
 #include "runnable/event/shd-stop-application.h"
 #include "runnable/event/shd-tcp-close-timer-expired.h"
-#include "runnable/action/shd-connect-network.h"
-#include "runnable/action/shd-create-network.h"
 #include "runnable/action/shd-create-node.h"
 #include "runnable/action/shd-generate-cdf.h"
 #include "runnable/action/shd-kill-engine.h"

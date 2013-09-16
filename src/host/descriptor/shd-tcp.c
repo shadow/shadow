@@ -247,10 +247,9 @@ static void _tcp_autotune(TCP* tcp) {
 	/* our buffers need to be large enough to send and receive
 	 * a full delay*bandwidth worth of bytes to keep the pipe full.
 	 * but not too large that we'll just buffer everything. autotuning
-	 * is meant to tune it to an optimal rate. estimate that by taking
-	 * the 80th percentile.
+	 * is meant to tune it to an optimal rate.
 	 */
-	Internetwork* internet = worker_getInternet();
+	Worker* worker = worker_getPrivate();
 
 	in_addr_t sourceIP = tcp_getIP(tcp);
 	in_addr_t destinationIP = tcp_getPeerIP(tcp);
@@ -260,7 +259,7 @@ static void _tcp_autotune(TCP* tcp) {
 		if(destinationIP == htonl(INADDR_LOOPBACK)) {
 			sourceIP = htonl(INADDR_LOOPBACK);
 		} else {
-			sourceIP = host_getDefaultIP(worker_getPrivate()->cached_node);
+			sourceIP = host_getDefaultIP(worker->cached_node);
 		}
 	}
 
@@ -278,8 +277,8 @@ static void _tcp_autotune(TCP* tcp) {
 	}
 
 	/* get latency in milliseconds */
-	guint32 send_latency = (guint32) internetwork_getLatency(internet, sourceID, destinationID, 0.8);
-	guint32 receive_latency = (guint32) internetwork_getLatency(internet, destinationID, sourceID, 0.8);
+	guint32 send_latency = (guint32) engine_getLatency(worker->cached_engine, sourceID, destinationID);
+	guint32 receive_latency = (guint32) engine_getLatency(worker->cached_engine, destinationID, sourceID);
 	if(send_latency == 0 || receive_latency == 0) {
 	  error("autotuning needs nonzero latency, source=%"G_GUINT32_FORMAT" dest=%"G_GUINT32_FORMAT" send=%"G_GUINT32_FORMAT" recv=%"G_GUINT32_FORMAT,
 			  sourceID, destinationID, send_latency, receive_latency);
@@ -290,8 +289,8 @@ static void _tcp_autotune(TCP* tcp) {
 
 	/* i got delay, now i need values for my send and receive buffer
 	 * sizes based on bandwidth in both directions. do my send size first. */
-	guint32 my_send_bw = internetwork_getNodeBandwidthUp(internet, sourceID);
-	guint32 their_receive_bw = internetwork_getNodeBandwidthDown(internet, destinationID);
+	guint32 my_send_bw = engine_getNodeBandwidthUp(worker->cached_engine, sourceID);
+	guint32 their_receive_bw = engine_getNodeBandwidthDown(worker->cached_engine, destinationID);
 
 	/* KiBps is the same as Bpms, which works with our RTT calculation. */
 	guint32 send_bottleneck_bw = my_send_bw < their_receive_bw ? my_send_bw : their_receive_bw;
@@ -300,8 +299,8 @@ static void _tcp_autotune(TCP* tcp) {
 	guint64 sendbuf_size = (guint64) ((rtt_milliseconds * send_bottleneck_bw * 1024.0f * 1.25f) / 1000.0f);
 
 	/* now the same thing for my receive buf */
-	guint32 my_receive_bw = internetwork_getNodeBandwidthDown(internet, sourceID);
-	guint32 their_send_bw = internetwork_getNodeBandwidthUp(internet, destinationID);
+	guint32 my_receive_bw = engine_getNodeBandwidthDown(worker->cached_engine, sourceID);
+	guint32 their_send_bw = engine_getNodeBandwidthUp(worker->cached_engine, destinationID);
 
 	/* KiBps is the same as Bpms, which works with our RTT calculation. */
 	guint32 receive_bottleneck_bw = my_receive_bw < their_send_bw ? my_receive_bw : their_send_bw;

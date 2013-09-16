@@ -288,8 +288,7 @@ void tracker_updateSocketPeer(Tracker* tracker, gint handle, in_addr_t peerIP, i
 			} else if (peerIP == htonl(INADDR_ANY)) {
 				g_string_printf(hostnameBuffer, "0.0.0.0");
 			} else {
-				Internetwork* internetwork = worker_getInternet();
-				g_string_printf(hostnameBuffer, "%s", internetwork_resolveIP(internetwork, peerIP));
+				g_string_printf(hostnameBuffer, "%s", dns_resolveIPToName(worker_getDNS(), peerIP));
 			}
 
 			/* free the old string if we already have one */

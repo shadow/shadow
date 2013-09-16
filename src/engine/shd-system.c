@@ -903,7 +903,7 @@ gint system_getAddrInfo(gchar *name, const gchar *service,
 
 		/* node may be a number-and-dots address, or a hostname. lets hope for hostname
 		 * and try that first, o/w convert to the in_addr_t and do a second lookup. */
-		in_addr_t address = (in_addr_t) internetwork_resolveName(worker_getInternet(), name);
+		in_addr_t address = (in_addr_t) dns_resolveNameToIP(worker_getDNS(), name);
 
 		if(address == 0) {
 			/* name was not in hostname format. convert to IP format and try again */
@@ -913,7 +913,7 @@ gint system_getAddrInfo(gchar *name, const gchar *service,
 			if(r == 1) {
 				/* successful conversion to IP format, now find the real hostname */
 				GQuark convertedIP = (GQuark) inaddr.s_addr;
-				const gchar* hostname = internetwork_resolveID(worker_getInternet(), convertedIP);
+				const gchar* hostname = dns_resolveIPToName(worker_getDNS(), convertedIP);
 
 				if(hostname != NULL) {
 					/* got it, so convertedIP is a valid IP */
@@ -985,7 +985,7 @@ int system_getnameinfo(const struct sockaddr *sa, socklen_t salen,
 	Host* node = _system_switchInShadowContext();
 
 	GQuark convertedIP = (GQuark) (((struct sockaddr_in*)sa)->sin_addr.s_addr);
-	const gchar* hostname = internetwork_resolveID(worker_getInternet(), convertedIP);
+	const gchar* hostname = dns_resolveIPToName(worker_getDNS(), convertedIP);
 
 	if(hostname) {
 		g_utf8_strncpy(host, hostname, hostlen);

@@ -53,8 +53,12 @@ Worker* worker_getPrivate() {
 	return worker;
 }
 
-Internetwork* worker_getInternet() {
-	return engine_getInternet(shadow_engine);
+DNS* worker_getDNS() {
+	return engine_getDNS(shadow_engine);
+}
+
+Topology* worker_getTopology() {
+	return engine_getTopology(shadow_engine);
 }
 
 Configuration* worker_getConfig() {
@@ -186,7 +190,7 @@ void worker_scheduleEvent(Event* event, SimulationTime nano_delay, GQuark receiv
 	Host* sender = worker->cached_node;
 
 	/* we MAY NOT OWN the receiver, so do not write to it! */
-	Host* receiver = receiver_node_id == 0 ? sender : internetwork_getNode(worker_getInternet(), receiver_node_id);
+	Host* receiver = receiver_node_id == 0 ? sender : engine_getHost(worker->cached_engine, receiver_node_id);
 	g_assert(receiver);
 
 	/* the NodeEvent needs a pointer to the correct node */
@@ -223,6 +227,57 @@ void worker_scheduleEvent(Event* event, SimulationTime nano_delay, GQuark receiv
 	} else {
 		/* single-threaded, push to master queue */
 		engine_pushEvent(engine, (Event*)event);
+	}
+}
+
+void worker_scheduleRetransmit(Packet* packet) {
+	/* source should retransmit. use latency to approximate RTT for 'retransmit timer' */
+	in_addr_t srcIP = packet_getSourceIP(packet);
+	in_addr_t dstIP = packet_getDestinationIP(packet);
+
+	Address* srcAddress = dns_resolveIPToAddress(worker_getDNS(), (guint32) srcIP);
+	Address* dstAddress = dns_resolveIPToAddress(worker_getDNS(), (guint32) dstIP);
+
+	PacketDroppedEvent* event = packetdropped_new(packet);
+
+	SimulationTime delay = 0;
+	if(address_isLocal(srcAddress) || address_isLocal(dstAddress)) {
+		g_assert(address_isLocal(srcAddress));
+		g_assert(address_isLocal(dstAddress));
+		delay = 1;
+	} else {
+		gdouble latency = topology_getLatency(worker_getTopology(), srcAddress, dstAddress);
+		SimulationTime delay = (SimulationTime) floor(latency * SIMTIME_ONE_MILLISECOND);
+	}
+
+	worker_scheduleEvent((Event*)event, delay, (GQuark) srcIP);
+}
+
+void worker_schedulePacket(Packet* packet) {
+	in_addr_t srcIP = packet_getSourceIP(packet);
+	in_addr_t dstIP = packet_getDestinationIP(packet);
+
+	Address* srcAddress = dns_resolveIPToAddress(worker_getDNS(), (guint32) srcIP);
+	Address* dstAddress = dns_resolveIPToAddress(worker_getDNS(), (guint32) dstIP);
+
+	/* first thing to check is if network reliability forces us to 'drop'
+	 * the packet. if so, get out of dodge doing as little as possible. */
+	gdouble reliability = topology_getReliability(worker_getTopology(), srcAddress, dstAddress);
+	Random* random = host_getRandom(worker_getPrivate()->cached_node);
+	gdouble chance = random_nextDouble(random);
+
+	if(chance > reliability){
+		/* sender side is scheduling packets, but we are simulating
+		 * the packet being dropped between sender and receiver, so
+		 * it will need to be retransmitted */
+		worker_scheduleRetransmit(packet);
+	} else {
+		/* packet will make it through, find latency */
+		gdouble latency = topology_getLatency(worker_getTopology(), srcAddress, dstAddress);
+		SimulationTime delay = (SimulationTime) floor(latency * SIMTIME_ONE_MILLISECOND);
+
+		PacketArrivedEvent* event = packetarrived_new(packet);
+		worker_scheduleEvent((Event*)event, delay, (GQuark)dstIP);
 	}
 }
 

@@ -34,12 +34,13 @@ LoadTopologyAction* loadtopology_new(GString* path) {
 void loadtopology_run(LoadTopologyAction* action) {
 	MAGIC_ASSERT(action);
 
-	Worker* worker = worker_getPrivate();
 	Topology* topology = topology_new(action->path->str);
 	if(!topology) {
 		error("error loading topology file '%s'", action->path->str);
 	}
-//	engine_setTopology(worker->cached_engine, topology);
+
+	Worker* worker = worker_getPrivate();
+	engine_setTopology(worker->cached_engine, topology);
 }
 
 void loadtopology_free(LoadTopologyAction* action) {

@@ -24,8 +24,12 @@ struct _Engine {
 	/* the simulator should attempt to end immediately after this time */
 	SimulationTime endTime;
 
-	/* track nodes, networks, links, and topology */
-	Internetwork* internet;
+	/* network connectivity */
+	Topology* topology;
+	DNS* dns;
+
+	/* virtual hosts */
+	GHashTable* hosts;
 
 	/* track global objects: software, cdfs, plugins */
 	Registry* registry;
@@ -97,8 +101,6 @@ Engine* engine_new(Configuration* config) {
 
 	engine->minTimeJump = config->minRunAhead * SIMTIME_ONE_MILLISECOND;
 
-	engine->internet = internetwork_new();
-
 	g_mutex_init(&(engine->lock));
 	g_mutex_init(&(engine->pluginInitLock));
 
@@ -117,6 +119,9 @@ Engine* engine_new(Configuration* config) {
 		g_free(contents);
 	}
 
+	engine->dns = dns_new();
+	engine->hosts = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, NULL);
+
 	return engine;
 }
 
@@ -129,7 +134,14 @@ void engine_free(Engine* engine) {
 	/* this launches delete on all the plugins and should be called before
 	 * the engine is marked "killed" and workers are destroyed.
 	 */
-	internetwork_free(engine->internet);
+	g_hash_table_destroy(engine->hosts);
+
+	if(engine->topology) {
+		topology_free(engine->topology);
+	}
+	if(engine->dns) {
+		dns_free(engine->dns);
+	}
 
 	/* we will never execute inside the plugin again */
 	engine->forceShadowContext = TRUE;
@@ -157,6 +169,49 @@ void engine_free(Engine* engine) {
 	MAGIC_CLEAR(engine);
 	shadow_engine = NULL;
 	g_free(engine);
+}
+
+gpointer engine_getHost(Engine* engine, GQuark nodeID) {
+	MAGIC_ASSERT(engine);
+	return (Host*) g_hash_table_lookup(engine->hosts, GUINT_TO_POINTER((guint)nodeID));
+}
+
+GList* engine_getAllHosts(Engine* engine) {
+	MAGIC_ASSERT(engine);
+	return g_hash_table_get_values(engine->hosts);
+}
+
+guint32 engine_getNodeBandwidthUp(Engine* engine, GQuark nodeID) {
+	MAGIC_ASSERT(engine);
+	Host* host = engine_getHost(engine, nodeID);
+	NetworkInterface* interface = host_lookupInterface(host, nodeID);
+	return networkinterface_getSpeedUpKiBps(interface);
+}
+
+guint32 engine_getNodeBandwidthDown(Engine* engine, GQuark nodeID) {
+	MAGIC_ASSERT(engine);
+	Host* host = engine_getHost(engine, nodeID);
+	NetworkInterface* interface = host_lookupInterface(host, nodeID);
+	return networkinterface_getSpeedDownKiBps(interface);
+}
+
+gdouble engine_getLatency(Engine* engine, GQuark sourceNodeID, GQuark destinationNodeID) {
+	MAGIC_ASSERT(engine);
+	Host* sourceNode = engine_getHost(engine, sourceNodeID);
+	Host* destinationNode = engine_getHost(engine, destinationNodeID);
+	Address* sourceAddress = host_getDefaultAddress(sourceNode);
+	Address* destinationAddress = host_getDefaultAddress(destinationNode);
+	return topology_getLatency(engine->topology, sourceAddress, destinationAddress);
+}
+
+DNS* engine_getDNS(Engine* engine) {
+	MAGIC_ASSERT(engine);
+	return engine->dns;
+}
+
+Topology* engine_getTopology(Engine* engine) {
+	MAGIC_ASSERT(engine);
+	return engine->topology;
 }
 
 static gint _engine_processEvents(Engine* engine) {
@@ -202,7 +257,7 @@ static gint _engine_processEvents(Engine* engine) {
 static gint _engine_distributeEvents(Engine* engine) {
 	MAGIC_ASSERT(engine);
 
-	GList* nodeList = internetwork_getAllNodes(engine->internet);
+	GList* nodeList = g_hash_table_get_values(engine->hosts);
 
 	/* assign nodes to the worker threads so they get processed */
 	GSList* listArray[engine->config->nWorkerThreads];
@@ -322,9 +377,6 @@ static gint _engine_distributeEvents(Engine* engine) {
 gint engine_run(Engine* engine) {
 	MAGIC_ASSERT(engine);
 
-	/* dont modify internet during simulation, since its not locked for threads */
-	internetwork_setReadOnly(engine->internet);
-
 	/* simulation mode depends on configured number of workers */
 	if(engine->config->nWorkerThreads > 0) {
 		/* multi threaded, manage the other workers */
@@ -384,11 +436,6 @@ SimulationTime engine_getExecutionBarrier(Engine* engine) {
 	return engine->executeWindowEnd;
 }
 
-Internetwork* engine_getInternet(Engine* engine) {
-	MAGIC_ASSERT(engine);
-	return engine->internet;
-}
-
 GPrivate* engine_getWorkerKey(Engine* engine) {
 	MAGIC_ASSERT(engine);
 	return &(workerKey);
@@ -412,6 +459,16 @@ Configuration* engine_getConfig(Engine* engine) {
 void engine_setKillTime(Engine* engine, SimulationTime endTime) {
 	MAGIC_ASSERT(engine);
 	engine->endTime = endTime;
+}
+
+void engine_setTopology(Engine* engine, Topology* top) {
+	MAGIC_ASSERT(engine);
+	engine->topology = top;
+}
+
+void engine_addHost(Engine* engine, Host* host, guint hostID) {
+	MAGIC_ASSERT(engine);
+	g_hash_table_replace(engine->hosts, GUINT_TO_POINTER(hostID), host);
 }
 
 gboolean engine_isKilled(Engine* engine) {

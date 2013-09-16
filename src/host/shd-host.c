@@ -10,9 +10,6 @@ struct _Host {
 	/* holds this node's events */
 	EventQueue* events;
 
-	/* the network this node belongs to */
-	Network* network;
-
 	/* general node lock. nothing that belongs to the node should be touched
 	 * unless holding this lock. everything following this falls under the lock.
 	 */
@@ -56,36 +53,37 @@ struct _Host {
 	MAGIC_DECLARE;
 };
 
-Host* host_new(GQuark id, Network* network, guint32 ip,
-		GString* hostname, guint64 bwDownKiBps, guint64 bwUpKiBps,
+Host* host_new(GQuark id, gchar* hostname, gchar* requestedIP, gchar* requestedCluster,
+		guint64 bwDownKiBps, guint64 bwUpKiBps,
 		guint cpuFrequency, gint cpuThreshold, gint cpuPrecision, guint nodeSeed,
 		SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel, gchar* heartbeatLogInfo,
 		GLogLevelFlags logLevel, gboolean logPcap, gchar* pcapDir, gchar* qdisc,
-		guint64 receiveBufferSize, gboolean autotuneReceiveBuffer, guint64 sendBufferSize, gboolean autotuneSendBuffer,
+		guint64 receiveBufferSize, gboolean autotuneReceiveBuffer,
+		guint64 sendBufferSize, gboolean autotuneSendBuffer,
 		guint64 interfaceReceiveLength) {
 	Host* host = g_new0(Host, 1);
 	MAGIC_INIT(host);
 
 	host->id = id;
-	host->name = g_strdup(hostname->str);
-	g_mutex_init(&(host->lock));
+	host->name = g_strdup(hostname);
 
-	/* thread-level event communication with other nodes */
-	host->events = eventqueue_new();
+	/* virtual addresses and interfaces for managing network I/O */
+	NetworkInterface* ethernet = networkinterface_new(host->id, host->name, requestedIP,
+			bwDownKiBps, bwUpKiBps, logPcap, pcapDir, qdisc, interfaceReceiveLength);
+	NetworkInterface* loopback = networkinterface_new(host->id, host->name, "127.0.0.1",
+			G_MAXUINT32, G_MAXUINT32, logPcap, pcapDir, qdisc, interfaceReceiveLength);
 
-	/* where we are in the network topology */
-	host->network = network;
-
-	/* virtual interfaces for managing network I/O */
 	host->interfaces = g_hash_table_new_full(g_direct_hash, g_direct_equal,
 			NULL, (GDestroyNotify) networkinterface_free);
-	NetworkInterface* ethernet = networkinterface_new(network, id, hostname->str, bwDownKiBps, bwUpKiBps, logPcap, pcapDir, qdisc, interfaceReceiveLength);
 	g_hash_table_replace(host->interfaces, GUINT_TO_POINTER((guint)id), ethernet);
-	GString *loopbackName = g_string_new("");
-	g_string_append_printf(loopbackName, "%s-loopback", hostname->str);
-	NetworkInterface* loopback = networkinterface_new(NULL, (GQuark)htonl(INADDR_LOOPBACK), loopbackName->str, G_MAXUINT32, G_MAXUINT32, logPcap, pcapDir, qdisc, interfaceReceiveLength);
 	g_hash_table_replace(host->interfaces, GUINT_TO_POINTER((guint)htonl(INADDR_LOOPBACK)), loopback);
+
 	host->defaultInterface = ethernet;
+	topology_connect(worker_getTopology(), networkinterface_getAddress(host->defaultInterface), requestedCluster);
+
+	/* thread-level event communication with other nodes */
+	g_mutex_init(&(host->lock));
+	host->events = eventqueue_new();
 
 	/* virtual descriptor management */
 	host->descriptors = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, descriptor_unref);
@@ -94,9 +92,6 @@ Host* host_new(GQuark id, Network* network, guint32 ip,
 	host->sendBufferSize = sendBufferSize;
 	host->autotuneReceiveBuffer = autotuneReceiveBuffer;
 	host->autotuneSendBuffer = autotuneSendBuffer;
-
-	/* applications this node will run */
-//	node->application = application_new(software);
 
 	host->cpu = cpu_new(cpuFrequency, cpuThreshold, cpuPrecision);
 	host->random = random_new(nodeSeed);
@@ -117,6 +112,8 @@ Host* host_new(GQuark id, Network* network, guint32 ip,
 
 void host_free(Host* host, gpointer userData) {
 	MAGIC_ASSERT(host);
+
+	topology_disconnect(worker_getTopology(), networkinterface_getAddress(host->defaultInterface));
 
 	g_hash_table_destroy(host->interfaces);
 	g_hash_table_destroy(host->descriptors);
@@ -216,21 +213,23 @@ CPU* host_getCPU(Host* host) {
 	return host->cpu;
 }
 
-Network* host_getNetwork(Host* host) {
-	MAGIC_ASSERT(host);
-	return host->network;
-}
-
 gchar* host_getName(Host* host) {
 	MAGIC_ASSERT(host);
 	return host->name;
 }
 
+Address* host_getDefaultAddress(Host* host) {
+	MAGIC_ASSERT(host);
+	return networkinterface_getAddress(host->defaultInterface);
+}
+
+// TODO replace this with address object functions
 in_addr_t host_getDefaultIP(Host* host) {
 	MAGIC_ASSERT(host);
 	return networkinterface_getIPAddress(host->defaultInterface);
 }
 
+// TODO replace this with address object functions
 gchar* host_getDefaultIPName(Host* host) {
 	MAGIC_ASSERT(host);
 	return networkinterface_getIPName(host->defaultInterface);
@@ -580,19 +579,19 @@ gint host_bindToInterface(Host* host, gint handle, in_addr_t bindAddress, in_por
 	return 0;
 }
 
-gint host_connectToPeer(Host* host, gint handle, in_addr_t peerAddress,
+gint host_connectToPeer(Host* host, gint handle, in_addr_t peerIP,
 		in_port_t peerPort, sa_family_t family) {
 	MAGIC_ASSERT(host);
 
 	in_addr_t loIP = htonl(INADDR_LOOPBACK);
 
 	/* make sure we will be able to route this later */
-	if(peerAddress != loIP) {
-		Internetwork* internet = worker_getInternet();
-		Network *peerNetwork = internetwork_lookupNetwork(internet, peerAddress);
-		if(!peerNetwork) {
+	if(peerIP != loIP) {
+		Address* myAddress = networkinterface_getAddress(host->defaultInterface);
+		Address* peerAddress = dns_resolveIPToAddress(worker_getDNS(), peerIP);
+		if(!topology_isRoutable(worker_getTopology(), myAddress, peerAddress)) {
 			/* can't route it - there is no node with this address */
-			gchar* peerAddressString = address_ipToNewString(ntohl(peerAddress));
+			gchar* peerAddressString = address_ipToNewString(ntohl(peerIP));
 			warning("attempting to connect to address '%s:%u' for which no host exists", peerAddressString, ntohs(peerPort));
 			g_free(peerAddressString);
 			return ECONNREFUSED;
@@ -635,13 +634,13 @@ gint host_connectToPeer(Host* host, gint handle, in_addr_t peerAddress,
 		 * use default interface unless the remote peer is on loopback */
 		in_addr_t defaultIP = networkinterface_getIPAddress(host->defaultInterface);
 
-		in_addr_t bindAddress = loIP == peerAddress ? loIP : defaultIP;
+		in_addr_t bindAddress = loIP == peerIP ? loIP : defaultIP;
 		in_port_t bindPort = _host_getRandomFreePort(host, bindAddress, type);
 
 		_host_associateInterface(host, socket, bindAddress, bindPort);
 	}
 
-	return socket_connectToPeer(socket, peerAddress, peerPort, family);
+	return socket_connectToPeer(socket, peerIP, peerPort, family);
 }
 
 gint host_listenForPeer(Host* host, gint handle, gint backlog) {

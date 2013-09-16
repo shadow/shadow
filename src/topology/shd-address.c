@@ -16,26 +16,38 @@ struct _Address {
 	/* the IP in network-order */
 	guint32 ip;
 
+	/* globally unique mac address */
+	guint mac;
+
 	/* the host-order IP in dots-and-decimals format */
 	gchar* ipString;
 
 	/* the hostname */
 	gchar* name;
 
+	gchar* idString;
+
 	gint referenceCount;
 
+	gboolean isLocal;
 	MAGIC_DECLARE;
 };
 
-Address* address_new(guint32 ip, const gchar* name) {
+Address* address_new(guint mac, guint32 ip, const gchar* name, gboolean isLocal) {
 	Address* address = g_new0(Address, 1);
 	MAGIC_INIT(address);
 
+	address->mac = mac;
 	address->ip = ip;
-	address->ipString = address_ipToNewString((in_addr_t)ip); // XXX do we need to use ntohl() first?
+	address->ipString = address_ipToNewString((in_addr_t)ip);
+	address->isLocal = isLocal;
 	address->name = g_strdup(name);
 	address->referenceCount = 1;
-	// DNS should pass in a unique ID
+
+	GString* stringBuffer = g_string_new(NULL);
+	g_string_printf(stringBuffer, "%s-%s (%s,mac=%i)", address->name, address->ipString,
+			address->isLocal ? "lo" : "eth", address->mac);
+	address->idString = g_string_free(stringBuffer, FALSE);
 
 	return address;
 }
@@ -45,9 +57,15 @@ static void _address_free(Address* address) {
 
 	g_free(address->ipString);
 	g_free(address->name);
+	g_free(address->idString);
 
 	MAGIC_CLEAR(address);
 	g_free(address);
+}
+
+ShadowID address_getID(Address* address) {
+	MAGIC_ASSERT(address);
+	return (ShadowID) address->ip;
 }
 
 void address_ref(Address* address) {
@@ -61,6 +79,11 @@ void address_unref(Address* address) {
 	if(address->referenceCount <= 0) {
 		_address_free(address);
 	}
+}
+
+gboolean address_isLocal(Address* address) {
+	MAGIC_ASSERT(address);
+	return address->isLocal;
 }
 
 gboolean address_isEqual(Address* a, Address* b) {
@@ -95,10 +118,24 @@ gchar* address_toHostName(Address* address) {
 	return address->name;
 }
 
+gchar* address_toString(Address* address) {
+	MAGIC_ASSERT(address);
+	return address->idString;
+}
+
 gchar* address_ipToNewString(in_addr_t ip) {
 	gchar* ipStringBuffer = g_malloc0(INET6_ADDRSTRLEN+1);
 	const gchar* ipString = inet_ntop(AF_INET, &ip, ipStringBuffer, INET6_ADDRSTRLEN);
 	GString* result = ipString ? g_string_new(ipString) : g_string_new("NULL");
 	g_free(ipStringBuffer);
 	return g_string_free(result, FALSE);
+}
+
+in_addr_t address_stringToIP(const gchar* ipString) {
+	struct in_addr inaddr;
+	if(1 == inet_pton(AF_INET, ipString, &inaddr)) {
+		return inaddr.s_addr;
+	} else {
+		return INADDR_NONE;
+	}
 }

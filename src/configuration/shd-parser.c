@@ -104,62 +104,6 @@ static GError* _parser_handleCDFAttributes(Parser* parser, const gchar** attribu
 	return error;
 }
 
-static GError* _parser_handleClusterAttributes(Parser* parser, const gchar** attributeNames, const gchar** attributeValues) {
-	GString* id = NULL;
-	guint64 bandwidthdown = 0;
-	guint64 bandwidthup = 0;
-	gdouble packetloss = 0;
-
-	GError* error = NULL;
-
-	const gchar **nameCursor = attributeNames;
-	const gchar **valueCursor = attributeValues;
-
-	/* check the attributes */
-	while (!error && *nameCursor) {
-		const gchar* name = *nameCursor;
-		const gchar* value = *valueCursor;
-
-		debug("found attribute '%s=%s'", name, value);
-
-		if(!id && !g_ascii_strcasecmp(name, "id")) {
-			id = g_string_new(value);
-		} else if (!bandwidthdown && !g_ascii_strcasecmp(name, "bandwidthdown")) {
-			bandwidthdown = g_ascii_strtoull(value, NULL, 10);
-		} else if (!bandwidthup && !g_ascii_strcasecmp(name, "bandwidthup")) {
-			bandwidthup  = g_ascii_strtoull(value, NULL, 10);
-		} else if (!packetloss && !g_ascii_strcasecmp(name, "packetloss")) {
-			packetloss = g_ascii_strtod(value, NULL);
-		} else {
-			error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ATTRIBUTE,
-							"unknown 'cluster' attribute '%s'", name);
-		}
-
-		nameCursor++;
-		valueCursor++;
-	}
-
-	/* validate the values */
-	if(!error && (!id || !bandwidthdown || !bandwidthup)) {
-		error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
-				"element 'cluster' requires attributes 'bandwidthdown' 'bandwidthup'");
-	}
-
-	if(!error) {
-		/* no error, create the action */
-		Action* a = (Action*) createnetwork_new(id, bandwidthdown, bandwidthup, packetloss);
-		action_setPriority(a, 2);
-		_parser_addAction(parser, a);
-	}
-
-	/* clean up */
-	if(id) {
-		g_string_free(id, TRUE);
-	}
-
-	return error;
-}
-
 static GError* _parser_handleTopologyAttributes(Parser* parser, const gchar** attributeNames, const gchar** attributeValues) {
 	GString* path = NULL;
 
@@ -378,7 +322,7 @@ static GError* _parser_handleNodeAttributes(Parser* parser, const gchar** attrib
 
 	if(!error) {
 		/* no error, create the action */
-		Action* a = (Action*) createnodes_new(id, cluster,
+		Action* a = (Action*) createnodes_new(id, ip, cluster,
 				bandwidthdown, bandwidthup, quantity, cpufrequency,
 				heartbeatfrequency, heartbeatloglevel, heartbeatloginfo, loglevel, logpcap, pcapdir,
 				socketReceiveBufferSize, socketSendBufferSize, interfaceReceiveBufferLength);
@@ -456,99 +400,6 @@ static GError* _parser_handleKillAttributes(Parser* parser, const gchar** attrib
 	}
 
 	/* nothing to clean up */
-
-	return error;
-}
-
-static GError* _parser_handleLinkAttributes(Parser* parser, const gchar** attributeNames, const gchar** attributeValues) {
-	GString* clusters = NULL;
-	guint64 latency = 0;
-	guint64 jitter = 0;
-	gdouble packetloss = 0.0;
-	guint64 latencymin = 0;
-	guint64 latencyQ1 = 0;
-	guint64 latencymean = 0;
-	guint64 latencyQ3 = 0;
-	guint64 latencymax = 0;
-
-	GError* error = NULL;
-
-	const gchar **nameCursor = attributeNames;
-	const gchar **valueCursor = attributeValues;
-
-	/* check the attributes */
-	while (!error && *nameCursor) {
-		const gchar* name = *nameCursor;
-		const gchar* value = *valueCursor;
-
-		debug("found attribute '%s=%s'", name, value);
-
-		if(!clusters && !g_ascii_strcasecmp(name, "clusters")) {
-			clusters = g_string_new(value);
-		} else if (!latency && !g_ascii_strcasecmp(name, "latency")) {
-			latency = g_ascii_strtoull(value, NULL, 10);
-		} else if (!jitter && !g_ascii_strcasecmp(name, "jitter")) {
-			jitter = g_ascii_strtoull(value, NULL, 10);
-		} else if (!latencymin && !g_ascii_strcasecmp(name, "latencymin")) {
-			latencymin = g_ascii_strtoull(value, NULL, 10);
-		} else if (!latencyQ1 && !g_ascii_strcasecmp(name, "latencyQ1")) {
-			latencyQ1 = g_ascii_strtoull(value, NULL, 10);
-		} else if (!latencymean && !g_ascii_strcasecmp(name, "latencymean")) {
-			latencymean = g_ascii_strtoull(value, NULL, 10);
-		} else if (!latencyQ3 && !g_ascii_strcasecmp(name, "latencyQ3")) {
-			latencyQ3 = g_ascii_strtoull(value, NULL, 10);
-		} else if (!latencymax && !g_ascii_strcasecmp(name, "latencymax")) {
-			latencymax = g_ascii_strtoull(value, NULL, 10);
-		} else if (!packetloss && !g_ascii_strcasecmp(name, "packetloss")) {
-			packetloss = g_ascii_strtod(value, NULL);
-		} else if (!g_ascii_strcasecmp(name, "id")) {
-			/* TODO: ignore for now */
-		} else {
-			error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ATTRIBUTE,
-							"unknown 'link' attribute '%s'", name);
-		}
-
-		nameCursor++;
-		valueCursor++;
-	}
-
-	/* validate the values */
-	if(!error && (!clusters || !latency)) {
-		error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
-				"element 'link' requires attributes 'clusters' 'latency'");
-	}
-
-	GString* srcCluster = NULL;
-	GString* destCluster = NULL;
-
-	if(!error) {
-		/* parse clusters string like "ABCD DCBA" into separate IDs */
-		gchar** tokens = g_strsplit(clusters->str, " ", 2);
-		g_assert(g_strrstr(tokens[1], " ") == NULL);
-
-		srcCluster = g_string_new(tokens[0]);
-		destCluster = g_string_new(tokens[1]);
-
-		g_strfreev(tokens);
-
-		/* no error, create the action */
-		Action*  a = (Action*) connectnetwork_new(srcCluster, destCluster,
-				latency, jitter, packetloss,
-				latencymin, latencyQ1, latencymean, latencyQ3, latencymax);
-		action_setPriority(a, 3);
-		_parser_addAction(parser, a);
-	}
-
-	/* clean up */
-	if(clusters) {
-		g_string_free(clusters, TRUE);
-	}
-	if(srcCluster) {
-		g_string_free(srcCluster, TRUE);
-	}
-	if(destCluster) {
-		g_string_free(destCluster, TRUE);
-	}
 
 	return error;
 }
@@ -661,10 +512,6 @@ static void _parser_handleRootStartElement(GMarkupParseContext* context,
 	/* check for root-level elements */
 	if (!g_ascii_strcasecmp(elementName, "cdf")) {
 		*error = _parser_handleCDFAttributes(parser, attributeNames, attributeValues);
-	} else if (!g_ascii_strcasecmp(elementName, "cluster")) {
-		*error = _parser_handleClusterAttributes(parser, attributeNames, attributeValues);
-	} else if (!g_ascii_strcasecmp(elementName, "link")) {
-		*error = _parser_handleLinkAttributes(parser, attributeNames, attributeValues);
 	} else if (!g_ascii_strcasecmp(elementName, "plugin")) {
 		*error = _parser_handlePluginAttributes(parser, attributeNames, attributeValues);
 	} else if (!g_ascii_strcasecmp(elementName, "node")) {
@@ -707,9 +554,7 @@ static void _parser_handleRootEndElement(GMarkupParseContext* context,
 			parser->currentNodeAction = NULL;
 		}
 	} else {
-		if(!(!g_ascii_strcasecmp(elementName, "cluster") ||
-				!g_ascii_strcasecmp(elementName, "link") ||
-				!g_ascii_strcasecmp(elementName, "plugin") ||
+		if(!(!g_ascii_strcasecmp(elementName, "plugin") ||
 				!g_ascii_strcasecmp(elementName, "cdf") ||
 				!g_ascii_strcasecmp(elementName, "kill") ||
 				!g_ascii_strcasecmp(elementName, "hosts") ||

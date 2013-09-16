@@ -96,7 +96,7 @@ int shadowlib_getBandwidth(in_addr_t ip, uint* bwdown, uint* bwup) {
 	Worker* worker = worker_getPrivate();
 	plugin_setShadowContext(worker->cached_plugin, TRUE);
 
-	Host* n = internetwork_getNode(worker_getInternet(), (GQuark)ip);
+	Host* n = engine_getHost(worker->cached_engine, (GQuark)ip);
 	if(n) {
 		NetworkInterface* interface = host_lookupInterface(n, ip);
 		if(interface) {

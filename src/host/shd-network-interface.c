@@ -20,7 +20,6 @@ struct _NetworkInterface {
 	enum NetworkInterfaceFlags flags;
 	enum NetworkInterfaceQDisc qdisc;
 
-	Network* network;
 	Address* address;
 
 	guint64 bwDownKiBps;
@@ -89,14 +88,13 @@ static gint _networkinterface_compareSocket(const Socket* sa, const Socket* sb, 
 	return packet_getPriority(pa) > packet_getPriority(pb) ? +1 : -1;
 }
 
-NetworkInterface* networkinterface_new(Network* network, GQuark address, gchar* name,
+NetworkInterface* networkinterface_new(GQuark hostID, gchar* hostName, gchar* requestedIP,
 		guint64 bwDownKiBps, guint64 bwUpKiBps, gboolean logPcap, gchar* pcapDir, gchar* qdisc,
 		guint64 interfaceReceiveLength) {
 	NetworkInterface* interface = g_new0(NetworkInterface, 1);
 	MAGIC_INIT(interface);
 
-	interface->network = network;
-	interface->address = address_new(address, (const gchar*) name);
+	interface->address = dns_register(worker_getDNS(), hostID, hostName, requestedIP);
 
 	/* interface speeds */
 	interface->bwUpKiBps = bwUpKiBps;
@@ -124,10 +122,6 @@ NetworkInterface* networkinterface_new(Network* network, GQuark address, gchar* 
 		interface->qdisc = NIQ_FIFO;
 	}
 
-	/* log status */
-	char addressStr[INET_ADDRSTRLEN];
-	inet_ntop(AF_INET, &address, addressStr, INET_ADDRSTRLEN);
-
 	/* open the PCAP file for writing */
 	interface->logPcap = logPcap;
 	interface->pcapDir = pcapDir;
@@ -144,7 +138,8 @@ NetworkInterface* networkinterface_new(Network* network, GQuark address, gchar* 
 			/* Use default directory */
 			g_string_append(filename, "data/pcapdata/");
 		}
-		g_string_append_printf(filename, "%s-%s.pcap", name, addressStr);
+		/* log status */
+		g_string_append_printf(filename, "%s-%s.pcap", address_toHostName(interface->address), address_toHostIPString(interface->address));
 		interface->pcapFile = fopen(filename->str, "w");
 		if(!interface->pcapFile) {
 			warning("error trying to open PCAP file '%s' for writing", filename->str);
@@ -154,7 +149,7 @@ NetworkInterface* networkinterface_new(Network* network, GQuark address, gchar* 
 	}
 
 	info("bringing up network interface '%s' at '%s', %"G_GUINT64_FORMAT" KiB/s up and %"G_GUINT64_FORMAT" KiB/s down using queuing discipline %s",
-			name, addressStr, bwUpKiBps, bwDownKiBps,
+			address_toHostName(interface->address), address_toHostIPString(interface->address), bwUpKiBps, bwDownKiBps,
 			interface->qdisc == NIQ_RR ? "rr" : "fifo");
 
 	return interface;
@@ -180,6 +175,8 @@ void networkinterface_free(NetworkInterface* interface) {
 	priorityqueue_free(interface->fifoQueue);
 
 	g_hash_table_destroy(interface->boundSockets);
+
+	dns_deregister(worker_getDNS(), interface->address);
 	address_unref(interface->address);
 
 	if(interface->pcapFile) {
@@ -190,11 +187,18 @@ void networkinterface_free(NetworkInterface* interface) {
 	g_free(interface);
 }
 
+Address* networkinterface_getAddress(NetworkInterface* interface) {
+	MAGIC_ASSERT(interface);
+	return interface->address;
+}
+
+// TODO remove this in favor of address func above
 in_addr_t networkinterface_getIPAddress(NetworkInterface* interface) {
 	MAGIC_ASSERT(interface);
 	return address_toNetworkIP(interface->address);
 }
 
+// TODO remove this in favor of address func above
 gchar* networkinterface_getIPName(NetworkInterface* interface) {
 	MAGIC_ASSERT(interface);
 	return address_toHostIPString(interface->address);
@@ -354,8 +358,8 @@ static void _networkinterface_dropInboundPacket(NetworkInterface* interface, Pac
 		PacketDroppedEvent* event = packetdropped_new(packet);
 		worker_scheduleEvent((Event*)event, 1, 0);
 	} else {
-		/* let the network schedule the event with appropriate delays */
-		network_scheduleRetransmit(interface->network, packet);
+		/* let the worker schedule the event with appropriate delays */
+		worker_scheduleRetransmit(packet);
 	}
 }
 
@@ -561,8 +565,8 @@ static void _networkinterface_scheduleNextSend(NetworkInterface* interface) {
 			/* event destination is our node */
 			worker_scheduleEvent((Event*)event, 1, 0);
 		} else {
-			/* let the network schedule with appropriate delays */
-			network_schedulePacket(interface->network, packet);
+			/* let the worker schedule with appropriate delays */
+			worker_schedulePacket(packet);
 		}
 
 		gchar* packetString = packet_getString(packet);

@@ -40,10 +40,13 @@ gpointer worker_run(GSList* nodes);
 
 void worker_setKillTime(SimulationTime endTime);
 Plugin* worker_getPlugin(GQuark pluginID, GString* pluginPath);
-Internetwork* worker_getInternet();
 Configuration* worker_getConfig();
+DNS* worker_getDNS();
+Topology* worker_getTopology();
 gboolean worker_isInShadowContext();
 
 void worker_scheduleEvent(Event* event, SimulationTime nano_delay, GQuark receiver_node_id);
+void worker_schedulePacket(Packet* packet);
+void worker_scheduleRetransmit(Packet* packet);
 
 #endif /* SHD_WORKER_H_ */
