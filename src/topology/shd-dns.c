@@ -57,7 +57,7 @@ Address* dns_register(DNS* dns, GQuark id, gchar* name, gchar* requestedIP) {
 	if(requestedIP) {
 		struct in_addr inaddr;
 		if(1 == inet_pton(AF_INET, requestedIP, &inaddr)) {
-			ip = htonl(inaddr.s_addr);
+			ip = inaddr.s_addr;
 			/* restricted is OK if this is a localhost address, otherwise it must be unique */
 			if(!_dns_isRestricted(dns, ip) && !_dns_isIPUnique(dns, ip)) {
 				ip = _dns_generateIP(dns);

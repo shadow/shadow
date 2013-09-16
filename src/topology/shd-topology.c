@@ -37,6 +37,12 @@ struct _Topology {
 	igraph_integer_t edgeCount;
 	igraph_bool_t isConnected;
 
+	/* FIXME hack for broken graph attributes */
+	const gchar* plossStr;
+	const gchar* bwupStr;
+	const gchar* bwdownStr;
+	/* end hack */
+
 	/* the edge weights currently used when computing shortest paths */
 	igraph_vector_t* currentEdgeWeights;
 
@@ -154,12 +160,14 @@ static gboolean _topology_checkGraphProperties(Topology* top) {
 	}
 
 	/* make sure we can get our required graph attributes */
+	/* FIXME re-enable this after graph attribute hack is removed
 	const gchar* plossStr = GAS(&top->graph, "packetloss");
 	debug("found graph attribute packetloss=%s", plossStr);
 	const gchar* bwupStr = GAS(&top->graph, "bandwidthup");
 	debug("found graph attribute bandwidthup=%s", bwupStr);
 	const gchar* bwdownStr = GAS(&top->graph, "bandwidthdown");
 	debug("found graph attribute bandwidthdown=%s", bwdownStr);
+	*/
 
 	info("successfully verified graph attributes");
 
@@ -203,6 +211,24 @@ static igraph_integer_t _topology_iterateAllVertices(Topology* top, VertexNotify
 	igraph_integer_t vertexCount = 0;
 	while (!IGRAPH_VIT_END(vertexIterator)) {
 		long int vertexIndex = IGRAPH_VIT_GET(vertexIterator);
+
+		/* FIXME hack for broken graph attributes */
+		const gchar* idStr = VAS(&top->graph, "id", vertexIndex);
+		if(!g_ascii_strcasecmp(idStr, "dummynode")) {
+			if(!top->plossStr) {
+				top->plossStr = VAS(&top->graph, "packetloss", vertexIndex);
+			}
+			if(!top->bwupStr) {
+				top->bwupStr = VAS(&top->graph, "bandwidthup", vertexIndex);
+			}
+			if(!top->bwdownStr) {
+				top->bwdownStr = VAS(&top->graph, "bandwidthdown", vertexIndex);
+			}
+			vertexCount++;
+			IGRAPH_VIT_NEXT(vertexIterator);
+			continue;
+		}
+		/* end hack */
 
 		/* call the hook function for each edge */
 		hook(top, (igraph_integer_t) vertexIndex);
@@ -471,14 +497,20 @@ static void _topology_extractClustersHelper(Topology* top, const gchar* clusterS
 static void _topology_extractClusters(Topology* top) {
 	MAGIC_ASSERT(top);
 
+	/* FIXME re-enable after graph attribute hack is removed
 	const gchar* plossStr = GAS(&top->graph, "packetloss");
-	_topology_extractClustersHelper(top, plossStr, CA_PACKETLOSS);
-
 	const gchar* bwupStr = GAS(&top->graph, "bandwidthup");
-	_topology_extractClustersHelper(top, bwupStr, CA_BANDWIDTHUP);
-
 	const gchar* bwdownStr = GAS(&top->graph, "bandwidthdown");
+	*/
+	const gchar* plossStr = top->plossStr;
+	const gchar* bwupStr = top->bwupStr;
+	const gchar* bwdownStr = top->bwdownStr;
+
+	_topology_extractClustersHelper(top, plossStr, CA_PACKETLOSS);
+	_topology_extractClustersHelper(top, bwupStr, CA_BANDWIDTHUP);
 	_topology_extractClustersHelper(top, bwdownStr, CA_BANDWIDTHDOWN);
+
+	info("found %u geocode clusters", g_hash_table_size(top->geocodeToGeoCluster));
 }
 
 static gboolean _topology_setupGraph(Topology* top) {
