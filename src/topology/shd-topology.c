@@ -114,8 +114,46 @@ static gboolean _topology_checkGraphProperties(Topology* top) {
 		return FALSE;
 	}
 
-	/* check our graph attributes */
-	debug("checking graph attributes...");
+	info("graph is %s with %u %s",
+			top->isConnected ? "strongly connected" : "disconnected",
+			(guint)top->clusterCount, top->clusterCount == 1 ? "cluster" : "clusters");
+
+	info("checking graph attributes...");
+
+	/* now check list of all attributes */
+	igraph_strvector_t gnames, vnames, enames;
+	igraph_vector_t gtypes, vtypes, etypes;
+	igraph_strvector_init(&gnames, 1);
+	igraph_vector_init(&gtypes, 1);
+	igraph_strvector_init(&vnames, igraph_vcount(&top->graph));
+	igraph_vector_init(&vtypes, igraph_vcount(&top->graph));
+	igraph_strvector_init(&enames, igraph_ecount(&top->graph));
+	igraph_vector_init(&etypes, igraph_ecount(&top->graph));
+
+	result = igraph_cattribute_list(&top->graph, &gnames, &gtypes, &vnames, &vtypes, &enames, &etypes);
+	if(result != IGRAPH_SUCCESS) {
+		critical("igraph_cattribute_list return non-success code %i", result);
+		return FALSE;
+	}
+
+	gint i = 0;
+	for(i = 0; i < igraph_strvector_size(&gnames); i++) {
+		gchar* name = NULL;
+		igraph_strvector_get(&gnames, (glong) i, &name);
+		debug("found graph attribute '%s'", name);
+	}
+	for(i = 0; i < igraph_strvector_size(&vnames); i++) {
+		gchar* name = NULL;
+		igraph_strvector_get(&vnames, (glong) i, &name);
+		debug("found vertex attribute '%s'", name);
+	}
+	for(i = 0; i < igraph_strvector_size(&enames); i++) {
+		gchar* name = NULL;
+		igraph_strvector_get(&enames, (glong) i, &name);
+		debug("found edge attribute '%s'", name);
+	}
+
+	/* make sure we can get our required graph attributes */
 	const gchar* plossStr = GAS(&top->graph, "packetloss");
 	debug("found graph attribute packetloss=%s", plossStr);
 	const gchar* bwupStr = GAS(&top->graph, "bandwidthup");
@@ -123,9 +161,8 @@ static gboolean _topology_checkGraphProperties(Topology* top) {
 	const gchar* bwdownStr = GAS(&top->graph, "bandwidthdown");
 	debug("found graph attribute bandwidthdown=%s", bwdownStr);
 
-	info("graph is %s with %u %s",
-			top->isConnected ? "strongly connected" : "disconnected",
-			(guint)top->clusterCount, top->clusterCount == 1 ? "cluster" : "clusters");
+	info("successfully verified graph attributes");
+
 	return TRUE;
 }
 
@@ -577,8 +614,13 @@ static gboolean _topology_computePath(Topology* top, Address* srcAddress, Addres
 	g_assert(&resultPathVertices == igraph_vector_ptr_e(&resultPaths, 0));
 
 	/* run dijkstra's shortest path algorithm */
+#ifndef IGRAPH_VERSION
 	result = igraph_get_shortest_paths_dijkstra(&top->graph, &resultPaths,
 			srcVertexIndex, dstVertexSet, top->currentEdgeWeights, IGRAPH_OUT);
+#else
+	result = igraph_get_shortest_paths_dijkstra(&top->graph, &resultPaths, NULL,
+			srcVertexIndex, dstVertexSet, top->currentEdgeWeights, IGRAPH_OUT);
+#endif
 	if(result != IGRAPH_SUCCESS) {
 		critical("igraph_get_shortest_paths_dijkstra return non-success code %i", result);
 		return FALSE;
@@ -613,7 +655,11 @@ static gboolean _topology_computePath(Topology* top, Address* srcAddress, Addres
 	for (gint i = 1; i < igraph_vector_size(&resultPathVertices); i++) {
 		/* get the edge */
 		toVertexIndex = VECTOR(resultPathVertices)[i];
+#ifndef IGRAPH_VERSION
 		result = igraph_get_eid(&top->graph, &edgeIndex, fromVertexIndex, toVertexIndex, (igraph_bool_t)TRUE);
+#else
+		result = igraph_get_eid(&top->graph, &edgeIndex, fromVertexIndex, toVertexIndex, (igraph_bool_t)TRUE, (igraph_bool_t)TRUE);
+#endif
 		if(result != IGRAPH_SUCCESS) {
 			warning("igraph_get_eid return non-success code %i", result);
 			return FALSE;
