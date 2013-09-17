@@ -75,7 +75,7 @@ Host* host_new(GQuark id, gchar* hostname, gchar* requestedIP, gchar* requestedC
 
 	host->interfaces = g_hash_table_new_full(g_direct_hash, g_direct_equal,
 			NULL, (GDestroyNotify) networkinterface_free);
-	g_hash_table_replace(host->interfaces, GUINT_TO_POINTER((guint)id), ethernet);
+	g_hash_table_replace(host->interfaces, GUINT_TO_POINTER((guint)networkinterface_getIPAddress(ethernet)), ethernet);
 	g_hash_table_replace(host->interfaces, GUINT_TO_POINTER((guint)htonl(INADDR_LOOPBACK)), loopback);
 
 	host->defaultInterface = ethernet;

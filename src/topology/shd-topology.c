@@ -431,14 +431,13 @@ static void _topology_extractPointsOfInterestHelperHook(Topology* top, igraph_in
 
 	if(g_ascii_strcasecmp(nodeTypeStr, "pop")) {
 		/* this is a point of interest (poi) not a point of presence (pop) */
-		in_addr_t hostIP = address_stringToIP(idStr);
-		if(hostIP == INADDR_NONE) {
+		in_addr_t networkIP = address_stringToIP(idStr);
+		if(networkIP == INADDR_NONE) {
 			error("graph topology error: points of interest (nodes that are not 'pop's) should have IP address as ID");
 			return;
 		}
 
 		/* this is a PoI that we can connect hosts to, track its graph index */
-		in_addr_t networkIP = htonl(hostIP);
 		g_hash_table_replace(top->ipToVertexIndex, GUINT_TO_POINTER(networkIP), GINT_TO_POINTER(vertexIndex));
 
 		/* add it to the list of vertices by its geoclusters, for assigning hosts randomly later */
@@ -591,14 +590,15 @@ static igraph_integer_t _topology_getConnectedVertexIndex(Topology* top, Address
 	MAGIC_ASSERT(top);
 
 	in_addr_t ip = address_toNetworkIP(address);
-	igraph_integer_t* vertexIndex = g_hash_table_lookup(top->ipToVertexIndex, GUINT_TO_POINTER(ip));
+	gpointer vertexIndexPtr = g_hash_table_lookup(top->ipToVertexIndex, GUINT_TO_POINTER(ip));
+	igraph_integer_t vertexIndex = (igraph_integer_t) GPOINTER_TO_UINT(vertexIndexPtr);
 
 	if(!vertexIndex) {
 		warning("address %s is not connected to the topology", address_toString(address));
 		return (igraph_integer_t) -1;
 	}
 
-	return *vertexIndex;
+	return vertexIndex;
 }
 
 static gboolean _topology_computePath(Topology* top, Address* srcAddress, Address* dstAddress) {

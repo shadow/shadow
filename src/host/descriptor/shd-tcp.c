@@ -263,10 +263,7 @@ static void _tcp_autotune(TCP* tcp) {
 		}
 	}
 
-	GQuark sourceID = (GQuark) sourceIP;
-	GQuark destinationID = (GQuark) destinationIP;
-
-	if(sourceID == destinationID) {
+	if(sourceIP == destinationIP) {
 		/* 16 MiB as max */
 		g_assert(16777216 > tcp->super.inputBufferSize);
 		g_assert(16777216 > tcp->super.outputBufferSize);
@@ -275,6 +272,11 @@ static void _tcp_autotune(TCP* tcp) {
 		debug("set loopback buffer sizes to 16777216");
 		return;
 	}
+
+	Address* srcAddress = dns_resolveIPToAddress(worker_getDNS(), sourceIP);
+	GQuark sourceID = (GQuark)address_getID(srcAddress);
+	Address* dstAddress = dns_resolveIPToAddress(worker_getDNS(), destinationIP);
+	GQuark destinationID = (GQuark)address_getID(dstAddress);
 
 	/* get latency in milliseconds */
 	guint32 send_latency = (guint32) engine_getLatency(worker->cached_engine, sourceID, destinationID);
@@ -289,8 +291,8 @@ static void _tcp_autotune(TCP* tcp) {
 
 	/* i got delay, now i need values for my send and receive buffer
 	 * sizes based on bandwidth in both directions. do my send size first. */
-	guint32 my_send_bw = engine_getNodeBandwidthUp(worker->cached_engine, sourceID);
-	guint32 their_receive_bw = engine_getNodeBandwidthDown(worker->cached_engine, destinationID);
+	guint32 my_send_bw = engine_getNodeBandwidthUp(worker->cached_engine, sourceID, sourceIP);
+	guint32 their_receive_bw = engine_getNodeBandwidthDown(worker->cached_engine, destinationID, destinationIP);
 
 	/* KiBps is the same as Bpms, which works with our RTT calculation. */
 	guint32 send_bottleneck_bw = my_send_bw < their_receive_bw ? my_send_bw : their_receive_bw;
@@ -299,8 +301,8 @@ static void _tcp_autotune(TCP* tcp) {
 	guint64 sendbuf_size = (guint64) ((rtt_milliseconds * send_bottleneck_bw * 1024.0f * 1.25f) / 1000.0f);
 
 	/* now the same thing for my receive buf */
-	guint32 my_receive_bw = engine_getNodeBandwidthDown(worker->cached_engine, sourceID);
-	guint32 their_send_bw = engine_getNodeBandwidthUp(worker->cached_engine, destinationID);
+	guint32 my_receive_bw = engine_getNodeBandwidthDown(worker->cached_engine, sourceID, sourceIP);
+	guint32 their_send_bw = engine_getNodeBandwidthUp(worker->cached_engine, destinationID, destinationIP);
 
 	/* KiBps is the same as Bpms, which works with our RTT calculation. */
 	guint32 receive_bottleneck_bw = my_receive_bw < their_send_bw ? my_receive_bw : their_send_bw;

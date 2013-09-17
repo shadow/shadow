@@ -219,6 +219,9 @@ void createnodes_run(CreateNodesAction* action) {
 				receiveBufferSize, autotuneReceiveBuffer, sendBufferSize, autotuneSendBuffer,
 				interfaceReceiveLength);
 
+		/* save the node somewhere */
+		engine_addHost(worker->cached_engine, host, (guint) id);
+
 		g_string_free(hostnameBuffer, TRUE);
 
 		/* loop through and create, add, and boot all applications */
@@ -235,9 +238,6 @@ void createnodes_run(CreateNodesAction* action) {
 
 			item = g_list_next(item);
 		}
-
-		/* save the node somewhere */
-		engine_addHost(worker->cached_engine, host, (guint) id);
 
 		/* make sure our bootstrap events are set properly */
 		worker->clock_now = 0;

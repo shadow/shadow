@@ -29,7 +29,7 @@ typedef struct _Address Address;
  *
  * @see address_free()
  */
-Address* address_new(guint mac, guint32 ip, const gchar* name, gboolean isLocal);
+Address* address_new(GQuark hostID, guint mac, guint32 ip, const gchar* name, gboolean isLocal);
 
 ShadowID address_getID(Address* address);
 void address_ref(Address* address);

@@ -55,26 +55,21 @@ Address* dns_register(DNS* dns, GQuark id, gchar* name, gchar* requestedIP) {
 
 	/* if requestedIP is NULL, we should generate one ourselves */
 	if(requestedIP) {
-		struct in_addr inaddr;
-		if(1 == inet_pton(AF_INET, requestedIP, &inaddr)) {
-			ip = inaddr.s_addr;
-			/* restricted is OK if this is a localhost address, otherwise it must be unique */
-			if(!_dns_isRestricted(dns, ip) && !_dns_isIPUnique(dns, ip)) {
-				ip = _dns_generateIP(dns);
-			}
-		} else {
-			error("inet_pton: error converting requested IP address '%s' to network IP address", requestedIP);
+		ip = address_stringToIP(requestedIP);
+		/* restricted is OK if this is a localhost address, otherwise it must be unique */
+		if(!_dns_isRestricted(dns, ip) && !_dns_isIPUnique(dns, ip)) {
+			ip = _dns_generateIP(dns);
 		}
 	} else {
 		ip = _dns_generateIP(dns);
 	}
 
 	gboolean isLocal = _dns_isRestricted(dns, ip);
-	Address* address = address_new(mac, (guint32) ip, name, isLocal);
+	Address* address = address_new(id, mac, (guint32) ip, name, isLocal);
 
 	/* store the ip/name mappings */
 	if(!isLocal) {
-		g_hash_table_replace(dns->addressByIP, GUINT_TO_POINTER(address_toHostIP(address)), address);
+		g_hash_table_replace(dns->addressByIP, GUINT_TO_POINTER(address_toNetworkIP(address)), address);
 		address_ref(address);
 		g_hash_table_replace(dns->addressByName, address_toHostName(address), address);
 		address_ref(address);
@@ -97,12 +92,22 @@ void dns_deregister(DNS* dns, Address* address) {
 
 Address* dns_resolveIPToAddress(DNS* dns, guint32 ip) {
 	MAGIC_ASSERT(dns);
-	return (Address*) g_hash_table_lookup(dns->addressByIP, &ip);
+	Address* result = g_hash_table_lookup(dns->addressByIP, GUINT_TO_POINTER(ip));
+	if(!result) {
+		gchar* ipStr = address_ipToNewString(ip);
+		warning("unable to find address from ip '%s'", ipStr);
+		g_free(ipStr);
+	}
+	return result;
 }
 
 Address* dns_resolveNameToAddress(DNS* dns, gchar* name) {
 	MAGIC_ASSERT(dns);
-	return (Address*) g_hash_table_lookup(dns->addressByName, name);
+	Address* result = g_hash_table_lookup(dns->addressByName, name);
+	if(!result) {
+		warning("unable to find address from name '%s'", name);
+	}
+	return result;
 }
 
 //TODO remove this func

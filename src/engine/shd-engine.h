@@ -50,8 +50,8 @@ void engine_unlockPluginInit(Engine* engine);
 
 gpointer engine_getHost(Engine* engine, GQuark nodeID);
 GList* engine_getAllHosts(Engine* engine);
-guint32 engine_getNodeBandwidthUp(Engine* engine, GQuark nodeID);
-guint32 engine_getNodeBandwidthDown(Engine* engine, GQuark nodeID);
+guint32 engine_getNodeBandwidthUp(Engine* engine, GQuark nodeID, in_addr_t ip);
+guint32 engine_getNodeBandwidthDown(Engine* engine, GQuark nodeID, in_addr_t ip);
 gdouble engine_getLatency(Engine* engine, GQuark sourceNodeID, GQuark destinationNodeID);
 DNS* engine_getDNS(Engine* engine);
 Topology* engine_getTopology(Engine* engine);

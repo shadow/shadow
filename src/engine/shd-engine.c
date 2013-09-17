@@ -171,6 +171,11 @@ void engine_free(Engine* engine) {
 	g_free(engine);
 }
 
+void engine_addHost(Engine* engine, Host* host, guint hostID) {
+	MAGIC_ASSERT(engine);
+	g_hash_table_replace(engine->hosts, GUINT_TO_POINTER(hostID), host);
+}
+
 gpointer engine_getHost(Engine* engine, GQuark nodeID) {
 	MAGIC_ASSERT(engine);
 	return (Host*) g_hash_table_lookup(engine->hosts, GUINT_TO_POINTER((guint)nodeID));
@@ -181,17 +186,17 @@ GList* engine_getAllHosts(Engine* engine) {
 	return g_hash_table_get_values(engine->hosts);
 }
 
-guint32 engine_getNodeBandwidthUp(Engine* engine, GQuark nodeID) {
+guint32 engine_getNodeBandwidthUp(Engine* engine, GQuark nodeID, in_addr_t ip) {
 	MAGIC_ASSERT(engine);
 	Host* host = engine_getHost(engine, nodeID);
-	NetworkInterface* interface = host_lookupInterface(host, nodeID);
+	NetworkInterface* interface = host_lookupInterface(host, ip);
 	return networkinterface_getSpeedUpKiBps(interface);
 }
 
-guint32 engine_getNodeBandwidthDown(Engine* engine, GQuark nodeID) {
+guint32 engine_getNodeBandwidthDown(Engine* engine, GQuark nodeID, in_addr_t ip) {
 	MAGIC_ASSERT(engine);
 	Host* host = engine_getHost(engine, nodeID);
-	NetworkInterface* interface = host_lookupInterface(host, nodeID);
+	NetworkInterface* interface = host_lookupInterface(host, ip);
 	return networkinterface_getSpeedDownKiBps(interface);
 }
 
@@ -464,11 +469,6 @@ void engine_setKillTime(Engine* engine, SimulationTime endTime) {
 void engine_setTopology(Engine* engine, Topology* top) {
 	MAGIC_ASSERT(engine);
 	engine->topology = top;
-}
-
-void engine_addHost(Engine* engine, Host* host, guint hostID) {
-	MAGIC_ASSERT(engine);
-	g_hash_table_replace(engine->hosts, GUINT_TO_POINTER(hostID), host);
 }
 
 gboolean engine_isKilled(Engine* engine) {

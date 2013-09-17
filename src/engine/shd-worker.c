@@ -250,7 +250,7 @@ void worker_scheduleRetransmit(Packet* packet) {
 		SimulationTime delay = (SimulationTime) floor(latency * SIMTIME_ONE_MILLISECOND);
 	}
 
-	worker_scheduleEvent((Event*)event, delay, (GQuark) srcIP);
+	worker_scheduleEvent((Event*)event, delay, (GQuark) address_getID(srcAddress));
 }
 
 void worker_schedulePacket(Packet* packet) {
@@ -277,7 +277,7 @@ void worker_schedulePacket(Packet* packet) {
 		SimulationTime delay = (SimulationTime) floor(latency * SIMTIME_ONE_MILLISECOND);
 
 		PacketArrivedEvent* event = packetarrived_new(packet);
-		worker_scheduleEvent((Event*)event, delay, (GQuark)dstIP);
+		worker_scheduleEvent((Event*)event, delay, (GQuark)address_getID(dstAddress));
 	}
 }
 
