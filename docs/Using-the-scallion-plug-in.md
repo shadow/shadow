@@ -9,7 +9,7 @@ The maximum memory requirements of our included sample network configurations ar
 <table>
   <caption>Scallion Network Node Breakdown by Type, and Memory Requirements</caption>
   <tr>
-    <th>Node Type</th><th>Tiny</th><th>Small</th><th>Medium</th><th>Large</th>
+    <th>Node Type</th><th>Tiny</th><th>Small</th><th>Medium</th><th>Large *</th>
   </tr>
   <tr>
     <td>Web Clients</td><td>190</td><td>475</td><td>950</td><td>2400</td>
@@ -45,6 +45,8 @@ The maximum memory requirements of our included sample network configurations ar
     <th>EC2 Instance</th><td>m1.large</td><td>m1.xlarge <i>or</i><br /> m2.xlarge</td><td>m2.2xlarge</td><td>m2.4xlarge</td>
   </tr>
 </table>
+
+\* For the large configuration, you might run up against open file limits (messages from scallion: `Couldn't open ... for locking: Too many open files` and `Acting on config options left us in a broken state. Dying.`). Increasing the limit (e.g., with `ulimit -n`) to 16384 resolves the issue, but lower limits might work, too.
 
 ## Argument Usage
 
