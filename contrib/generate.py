@@ -590,7 +590,7 @@ def addRelayToXML(root, starttime, torargs, fileargs, torrentargs, name, downloa
     # node
     e = etree.SubElement(root, "node")
     e.set("id", name)
-    if ip is not None: e.set("ip", ip)
+    if ip is not None and ip != "127.0.0.1": e.set("ip", ip)
     if code is not None: e.set("cluster", code)
     
     # bandwidth is optional in XML, will be assigned based on cluster if not given

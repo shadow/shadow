@@ -295,6 +295,8 @@ static gint _engine_distributeEvents(Engine* engine) {
 		g_string_free(name, TRUE);
 	}
 
+	message("started %i worker threads", engine->config->nWorkerThreads);
+
 	/* process all events in the priority queue */
 	while(engine->executeWindowStart < engine->endTime)
 	{
@@ -302,7 +304,7 @@ static gint _engine_distributeEvents(Engine* engine) {
 		countdownlatch_countDownAwait(engine->processingLatch);
 
 		/* we are in control now, the workers are waiting at barrierLatch */
-		message("execution window [%"G_GUINT64_FORMAT"--%"G_GUINT64_FORMAT"] ran %u events from %u active nodes",
+		info("execution window [%"G_GUINT64_FORMAT"--%"G_GUINT64_FORMAT"] ran %u events from %u active nodes",
 				engine->executeWindowStart, engine->executeWindowEnd,
 				engine->numEventsCurrentInterval,
 				engine->numNodesWithEventsCurrentInterval);
@@ -355,6 +357,8 @@ static gint _engine_distributeEvents(Engine* engine) {
 		countdownlatch_reset(engine->barrierLatch);
 	}
 
+	message("waiting for %i worker threads to finish", engine->config->nWorkerThreads);
+
 	/* wait for the threads to finish their cleanup */
 	GSList* threadItem = workerThreads;
 	while(threadItem) {
@@ -364,6 +368,8 @@ static gint _engine_distributeEvents(Engine* engine) {
 		threadItem = g_slist_next(threadItem);
 	}
 	g_slist_free(workerThreads);
+
+	message("%i worker threads finished", engine->config->nWorkerThreads);
 
 	for(gint i = 0; i < engine->config->nWorkerThreads; i++) {
 		g_slist_free(listArray[i]);

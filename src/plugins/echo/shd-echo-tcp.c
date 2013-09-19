@@ -362,19 +362,17 @@ static void _echotcp_clientWritable(EchoClient* ec, gint socketd) {
 
 		_echotcp_fillCharBuffer(ec->sendBuffer, sizeof(ec->sendBuffer)-1);
 
-		ssize_t b = send(socketd, ec->sendBuffer, sizeof(ec->sendBuffer), 0);
-		ec->sent_msg = 1;
+		ssize_t b = send(socketd, ec->sendBuffer+ec->amount_sent, sizeof(ec->sendBuffer)-ec->amount_sent, 0);
 		ec->amount_sent += b;
 		ec->log(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__, "client socket %i wrote %i bytes: '%s'", socketd, b, ec->sendBuffer);
 
-		if(ec->amount_sent >= sizeof(ec->sendBuffer)) {
-			/* we sent everything, so stop trying to write */
-			struct epoll_event ev;
-			ev.events = EPOLLIN;
-			ev.data.fd = socketd;
-			if(epoll_ctl(ec->epolld, EPOLL_CTL_MOD, socketd, &ev) == -1) {
-				ec->log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_ctl");
-			}
+		/* we sent everything, so stop trying to write */
+		ec->sent_msg = 1;
+		struct epoll_event ev;
+		ev.events = EPOLLIN;
+		ev.data.fd = socketd;
+		if(epoll_ctl(ec->epolld, EPOLL_CTL_MOD, socketd, &ev) == -1) {
+			ec->log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_ctl");
 		}
 	}
 }
