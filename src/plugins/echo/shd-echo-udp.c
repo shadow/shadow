@@ -285,14 +285,12 @@ static void _echoudp_clientWritable(EchoClient* ec, gint socketd) {
 		ec->amount_sent += b;
 		ec->log(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__, "client socket %i wrote %i bytes: '%s'", socketd, b, ec->sendBuffer);
 
-		if(ec->amount_sent >= sizeof(ec->sendBuffer)) {
-			/* we sent everything, so stop trying to write */
-			struct epoll_event ev;
-			ev.events = EPOLLIN;
-			ev.data.fd = socketd;
-			if(epoll_ctl(ec->epolld, EPOLL_CTL_MOD, socketd, &ev) == -1) {
-				ec->log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_ctl");
-			}
+		/* we sent everything, so stop trying to write */
+		struct epoll_event ev;
+		ev.events = EPOLLIN;
+		ev.data.fd = socketd;
+		if(epoll_ctl(ec->epolld, EPOLL_CTL_MOD, socketd, &ev) == -1) {
+			ec->log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_ctl");
 		}
 	}
 }
