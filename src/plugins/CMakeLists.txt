@@ -36,6 +36,10 @@ if(NOT BUILD_TORCONTROL STREQUAL OFF)
     add_subdirectory(torcontrol)
 endif(NOT BUILD_TORCONTROL STREQUAL OFF)
 
+if(NOT BUILD_TORCTL STREQUAL OFF)
+    add_subdirectory(torctl)
+endif(NOT BUILD_TORCTL STREQUAL OFF)
+
 if(NOT BUILD_SCALLION STREQUAL OFF)
     add_subdirectory(scallion)
 endif(NOT BUILD_SCALLION STREQUAL OFF)
