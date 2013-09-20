@@ -54,7 +54,7 @@ struct _Host {
 };
 
 Host* host_new(GQuark id, gchar* hostname, gchar* requestedIP, gchar* requestedCluster,
-		guint64 bwDownKiBps, guint64 bwUpKiBps,
+		guint64 requestedBWDownKiBps, guint64 requestedBWUpKiBps,
 		guint cpuFrequency, gint cpuThreshold, gint cpuPrecision, guint nodeSeed,
 		SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel, gchar* heartbeatLogInfo,
 		GLogLevelFlags logLevel, gboolean logPcap, gchar* pcapDir, gchar* qdisc,
@@ -67,11 +67,27 @@ Host* host_new(GQuark id, gchar* hostname, gchar* requestedIP, gchar* requestedC
 	host->id = id;
 	host->name = g_strdup(hostname);
 
+	/* get unique virtual address identifiers for each network interface */
+	Address* loopbackAddress = dns_register(worker_getDNS(), host->id, host->name, "127.0.0.1");
+	Address* ethernetAddress = dns_register(worker_getDNS(), host->id, host->name, requestedIP);
+
+	/* connect to topology and get the default bandwidth */
+	guint64 bwDownKiBps = 0, bwUpKiBps = 0;
+	topology_connect(worker_getTopology(), ethernetAddress, requestedCluster, &bwDownKiBps, &bwUpKiBps);
+
+	/* prefer assigned bandwidth if available */
+	if(requestedBWDownKiBps) {
+		bwDownKiBps = requestedBWDownKiBps;
+	}
+	if(requestedBWUpKiBps) {
+		bwUpKiBps = requestedBWUpKiBps;
+	}
+
 	/* virtual addresses and interfaces for managing network I/O */
-	NetworkInterface* ethernet = networkinterface_new(host->id, host->name, requestedIP,
-			bwDownKiBps, bwUpKiBps, logPcap, pcapDir, qdisc, interfaceReceiveLength);
-	NetworkInterface* loopback = networkinterface_new(host->id, host->name, "127.0.0.1",
-			G_MAXUINT32, G_MAXUINT32, logPcap, pcapDir, qdisc, interfaceReceiveLength);
+	NetworkInterface* loopback = networkinterface_new(loopbackAddress, G_MAXUINT32, G_MAXUINT32,
+			logPcap, pcapDir, qdisc, interfaceReceiveLength);
+	NetworkInterface* ethernet = networkinterface_new(ethernetAddress, bwDownKiBps, bwUpKiBps,
+			logPcap, pcapDir, qdisc, interfaceReceiveLength);
 
 	host->interfaces = g_hash_table_new_full(g_direct_hash, g_direct_equal,
 			NULL, (GDestroyNotify) networkinterface_free);
@@ -79,7 +95,6 @@ Host* host_new(GQuark id, gchar* hostname, gchar* requestedIP, gchar* requestedC
 	g_hash_table_replace(host->interfaces, GUINT_TO_POINTER((guint)htonl(INADDR_LOOPBACK)), loopback);
 
 	host->defaultInterface = ethernet;
-	topology_connect(worker_getTopology(), networkinterface_getAddress(host->defaultInterface), requestedCluster);
 
 	/* thread-level event communication with other nodes */
 	g_mutex_init(&(host->lock));

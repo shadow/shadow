@@ -88,13 +88,13 @@ static gint _networkinterface_compareSocket(const Socket* sa, const Socket* sb, 
 	return packet_getPriority(pa) > packet_getPriority(pb) ? +1 : -1;
 }
 
-NetworkInterface* networkinterface_new(GQuark hostID, gchar* hostName, gchar* requestedIP,
-		guint64 bwDownKiBps, guint64 bwUpKiBps, gboolean logPcap, gchar* pcapDir, gchar* qdisc,
-		guint64 interfaceReceiveLength) {
+NetworkInterface* networkinterface_new(Address* address, guint64 bwDownKiBps, guint64 bwUpKiBps,
+		gboolean logPcap, gchar* pcapDir, gchar* qdisc, guint64 interfaceReceiveLength) {
 	NetworkInterface* interface = g_new0(NetworkInterface, 1);
 	MAGIC_INIT(interface);
 
-	interface->address = dns_register(worker_getDNS(), hostID, hostName, requestedIP);
+	interface->address = address;
+	address_ref(interface->address);
 
 	/* interface speeds */
 	interface->bwUpKiBps = bwUpKiBps;

@@ -76,8 +76,7 @@
 
 #include "topology/shd-address.h"
 #include "topology/shd-dns.h"
-#include "topology/shd-poi.h"
-#include "topology/shd-pop.h"
+#include "topology/shd-cluster.h"
 #include "topology/shd-path.h"
 
 #include "host/descriptor/shd-epoll.h"

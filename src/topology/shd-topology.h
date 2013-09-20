@@ -14,7 +14,8 @@ typedef struct _Topology Topology;
 Topology* topology_new(gchar* graphPath);
 void topology_free(Topology* top);
 
-gboolean topology_connect(Topology* top, Address* address, gchar* requestedCluster);
+gboolean topology_connect(Topology* top, Address* address, gchar* requestedCluster,
+		guint64* bwDown, guint64* bwUp);
 void topology_disconnect(Topology* top, Address* address);
 gboolean topology_isRoutable(Topology* top, Address* srcAddress, Address* dstAddress);
 gdouble topology_getLatency(Topology* top, Address* srcAddress, Address* dstAddress);

@@ -13,5 +13,7 @@ typedef struct _Path Path;
 
 Path* path_new();
 void path_free(Path* path);
+gdouble path_getLatency(Path* path);
+gdouble path_getReliability(Path* path);
 
 #endif /* SHD_PATH_H_ */
