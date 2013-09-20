@@ -53,7 +53,7 @@ struct _Host {
 	MAGIC_DECLARE;
 };
 
-Host* host_new(GQuark id, gchar* hostname, gchar* requestedIP, gchar* requestedCluster,
+Host* host_new(GQuark id, gchar* hostname, gchar* ipHint, gchar* clusterHint,
 		guint64 requestedBWDownKiBps, guint64 requestedBWUpKiBps,
 		guint cpuFrequency, gint cpuThreshold, gint cpuPrecision, guint nodeSeed,
 		SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel, gchar* heartbeatLogInfo,
@@ -66,14 +66,15 @@ Host* host_new(GQuark id, gchar* hostname, gchar* requestedIP, gchar* requestedC
 
 	host->id = id;
 	host->name = g_strdup(hostname);
+	host->random = random_new(nodeSeed);
 
 	/* get unique virtual address identifiers for each network interface */
 	Address* loopbackAddress = dns_register(worker_getDNS(), host->id, host->name, "127.0.0.1");
-	Address* ethernetAddress = dns_register(worker_getDNS(), host->id, host->name, requestedIP);
+	Address* ethernetAddress = dns_register(worker_getDNS(), host->id, host->name, ipHint);
 
 	/* connect to topology and get the default bandwidth */
 	guint64 bwDownKiBps = 0, bwUpKiBps = 0;
-	topology_connect(worker_getTopology(), ethernetAddress, requestedCluster, &bwDownKiBps, &bwUpKiBps);
+	topology_connect(worker_getTopology(), ethernetAddress, host->random, ipHint, clusterHint, &bwDownKiBps, &bwUpKiBps);
 
 	/* prefer assigned bandwidth if available */
 	if(requestedBWDownKiBps) {
@@ -109,7 +110,6 @@ Host* host_new(GQuark id, gchar* hostname, gchar* requestedIP, gchar* requestedC
 	host->autotuneSendBuffer = autotuneSendBuffer;
 
 	host->cpu = cpu_new(cpuFrequency, cpuThreshold, cpuPrecision);
-	host->random = random_new(nodeSeed);
 	host->tracker = tracker_new(heartbeatInterval, heartbeatLogLevel, heartbeatLogInfo);
 	host->logLevel = logLevel;
 	host->logPcap = logPcap;
@@ -606,7 +606,7 @@ gint host_connectToPeer(Host* host, gint handle, in_addr_t peerIP,
 		Address* peerAddress = dns_resolveIPToAddress(worker_getDNS(), peerIP);
 		if(!topology_isRoutable(worker_getTopology(), myAddress, peerAddress)) {
 			/* can't route it - there is no node with this address */
-			gchar* peerAddressString = address_ipToNewString(ntohl(peerIP));
+			gchar* peerAddressString = address_ipToNewString(peerIP);
 			warning("attempting to connect to address '%s:%u' for which no host exists", peerAddressString, ntohs(peerPort));
 			g_free(peerAddressString);
 			return ECONNREFUSED;

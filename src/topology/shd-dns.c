@@ -95,7 +95,7 @@ Address* dns_resolveIPToAddress(DNS* dns, guint32 ip) {
 	Address* result = g_hash_table_lookup(dns->addressByIP, GUINT_TO_POINTER(ip));
 	if(!result) {
 		gchar* ipStr = address_ipToNewString(ip);
-		warning("unable to find address from ip '%s'", ipStr);
+		info("address for '%s' does not yet exist", ipStr);
 		g_free(ipStr);
 	}
 	return result;

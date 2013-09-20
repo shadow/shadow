@@ -36,10 +36,12 @@ struct _Topology {
 	/* each connected virtual host is assigned to a PoI. we store the mapping
 	 * so we can correctly lookup the assigned edge when computing latency. */
 	GHashTable* poiIPToVertexIndex; /* read-only after initialization! */
+
 	GHashTable* virtualIPToPoIIP;
+	GHashTable* virtualIPToCluster;
 	GRWLock virtualIPLock;
 
-	/* stores the mapping between geocode and its cluster properties.
+	/* stores the mapping between geocode (state/prov/country) and its cluster properties.
 	 * this is useful when placing hosts without an IP in the topology */
 	GHashTable* geocodeToCluster; /* read-only after initialization! */
 
@@ -595,11 +597,11 @@ static igraph_integer_t _topology_getConnectedVertexIndex(Topology* top, Address
 	gpointer vertexIndexPtr = g_hash_table_lookup(top->poiIPToVertexIndex, poiIPPtr);
 
 	if(!poiIPPtr || !vertexIndexPtr) {
-		warning("address %s is not connected to the topology", address_toString(address));
+		warning("address %s is not connected to the topology", address_toHostIPString(address));
 		return (igraph_integer_t) -1;
 	}
 
-	return (igraph_integer_t) GPOINTER_TO_UINT(vertexIndexPtr);
+	return (igraph_integer_t) GPOINTER_TO_INT(vertexIndexPtr);
 }
 
 static gboolean _topology_computePath(Topology* top, Address* srcAddress, Address* dstAddress) {
@@ -674,11 +676,25 @@ static gboolean _topology_computePath(Topology* top, Address* srcAddress, Addres
 
 	/* now get edge latencies and loss rates from the list of vertices (igraph fail!) */
 	GString* pathString = g_string_new(NULL);
-	igraph_real_t totalLatency = 0, edgeLatency;
-	igraph_real_t totalReliability = 1, edgeReliability;
-	igraph_integer_t edgeIndex, fromVertexIndex, toVertexIndex;
+	igraph_real_t totalLatency = 0, edgeLatency = 0;
+	igraph_real_t totalReliability = 1, edgeReliability = 1;
+	igraph_integer_t edgeIndex = 0, fromVertexIndex = 0, toVertexIndex = 0;
 
-	// XXX add reliability for src and dst
+	/* reliability for the src and dst vertices */
+	in_addr_t srcNodeIP = address_toNetworkIP(srcAddress);
+	in_addr_t dstNodeIP = address_toNetworkIP(dstAddress);
+
+	g_rw_lock_reader_lock(&(top->virtualIPLock));
+	Cluster* srcCluster = g_hash_table_lookup(top->virtualIPToCluster, GUINT_TO_POINTER(srcNodeIP));
+	Cluster* dstCluster = g_hash_table_lookup(top->virtualIPToCluster, GUINT_TO_POINTER(dstNodeIP));
+	g_rw_lock_reader_unlock(&(top->virtualIPLock));
+
+	if(srcCluster) {
+		totalReliability *= (1.0 - cluster_getPacketLoss(srcCluster));
+	}
+	if(dstCluster) {
+		totalReliability *= (1.0 - cluster_getPacketLoss(dstCluster));
+	}
 
 	/* the first vertex is our starting point
 	 * igraph_vector_size can be 0 for paths to ourself */
@@ -709,7 +725,7 @@ static gboolean _topology_computePath(Topology* top, Address* srcAddress, Addres
 		totalLatency += edgeLatency;
 
 		// TODO add actual edge reliability
-		edgeReliability = 1;
+		edgeReliability = 1.0;
 		totalReliability *= edgeReliability;
 
 		/* accumulate path information */
@@ -786,19 +802,100 @@ gboolean topology_isRoutable(Topology* top, Address* srcAddress, Address* dstAdd
 	return topology_getLatency(top, srcAddress, dstAddress) > -1;
 }
 
-gboolean topology_connect(Topology* top, Address* address, gchar* requestedCluster,
-		guint64* bwDown, guint64* bwUp) {
+void topology_connect(Topology* top, Address* address, Random* randomSourcePool,
+		gchar* ipHint, gchar* clusterHint, guint64* bwDownOut, guint64* bwUpOut) {
 	MAGIC_ASSERT(top);
-	// XXX connect this address to a PoI and register it in our hashtable
-	// ip may already be in the vertex table because it matches a poi
-	// what if we have several hosts attached to a poi?
-	// we may have to select based on geocode or longest prefix match
-	//
-	// if ip, use that, else if cluster, choose longest prefix matched poi from geocluster queue
-	// else choose longest prefix match from all pois
-	//
-	// XXX return bandwidth up/down in case they never got assigned one
-	return FALSE;
+	g_assert(address);
+
+	// XXX we can connect to non-PoI pops too, as they have a larger list of countries!
+
+	in_addr_t nodeIP = address_toNetworkIP(address);
+	in_addr_t poiIP = 0;
+	Cluster* cluster = NULL;
+
+	/* we need to connect a host's network interface to the topology so that it can route.
+	 * the address of the interface is required, but the remaining params are optional.
+	 *
+	 * there are several ways to connect; we use this logic:
+	 *  1. if the ipHint (from hosts.xml) is given and
+	 *   1a. it specifies an existing PoI in the topology, we connect there
+	 *   1b. it does not specify an existing PoI, then we check the clusterHint, and
+	 *    1aa. if it exists and contains PoIs, we connect to the longest prefix matched PoI
+	 *         from the existing cluster
+	 *    1ab. if it exists but does not contain PoIs, we connect to the longest prefix matched
+	 *         PoI from the list of all PoIs, but use the cluster bandwidth and loss attributes
+	 *    1ac. if NULL or it does not exist, we connect to the global longest prefix matched PoI
+	 *  2. if ipHint is NULL, we check the clusterHint, and
+	 *   2a. if it exists and contains PoIs, we select one at random
+	 *   2b. if it exists but does not contain PoIs, we choose a random PoI, but use the cluster
+	 *       bandwidth attributes
+	 *   2c. if NULL or it does not exist, we choose a random PoI and its cluster
+	 */
+
+//	if(ipHint) { XXX
+	if(FALSE) {
+
+	} else {
+		/* no ipHint, case 2 */
+		if(clusterHint) {
+			cluster = g_hash_table_lookup(top->geocodeToCluster, clusterHint);
+			if(cluster && cluster_getPoICount(cluster) > 0) {
+				/* case 2a */
+				poiIP = cluster_getRandomPoI(cluster, randomSourcePool);
+			}
+		}
+
+		if(!poiIP) {
+			/* case 2b, choose a random PoI */
+			GList* keyList = g_hash_table_get_keys(top->poiIPToVertexIndex);
+			guint keyIndexRange = g_list_length(keyList) - 1;
+
+			gdouble randomDouble = random_nextDouble(randomSourcePool);
+			guint randomIndex = (guint) round((gdouble)(keyIndexRange * randomDouble));
+			gpointer randomKeyPtr = g_list_nth_data(keyList, randomIndex);
+
+			g_list_free(keyList);
+
+			poiIP = (in_addr_t) GPOINTER_TO_UINT(randomKeyPtr);
+			gpointer randomVertexIndexPtr = g_hash_table_lookup(top->poiIPToVertexIndex, randomKeyPtr);
+			g_assert(randomVertexIndexPtr != NULL);
+
+			if(!cluster) {
+				/* case 2c, choose the random PoIs cluster too */
+				igraph_integer_t randomVertexIndex = (igraph_integer_t) GPOINTER_TO_INT(randomVertexIndexPtr);
+				const gchar* geocodesStr = VAS(&top->graph, "geocodes", randomVertexIndex);
+				cluster = g_hash_table_lookup(top->geocodeToCluster, geocodesStr);
+			}
+		}
+	}
+
+	/* make sure we found somewhere to attach it */
+	if(!poiIP || !cluster) {
+		gchar* addressStr = address_toHostIPString(address);
+		error("unable to assign host address %s to a PoI/Cluster using ipHint %s and clusterHint %s",
+				addressStr, ipHint ? ipHint : "(null)", clusterHint ? clusterHint : "(null)");
+	}
+	g_assert(poiIP && cluster);
+
+	/* attach it, i.e. store the mapping so we can route later */
+	cluster_ref(cluster);
+	g_rw_lock_writer_lock(&(top->virtualIPLock));
+	g_hash_table_replace(top->virtualIPToPoIIP, GUINT_TO_POINTER(nodeIP), GUINT_TO_POINTER(poiIP));
+	g_hash_table_replace(top->virtualIPToCluster, GUINT_TO_POINTER(nodeIP), cluster);
+	g_rw_lock_writer_unlock(&(top->virtualIPLock));
+
+	/* give them the default cluster bandwidths if they asked */
+	if(bwUpOut) {
+		*bwUpOut = cluster_getBandwidthUp(cluster);
+	}
+	if(bwDownOut) {
+		*bwDownOut = cluster_getBandwidthDown(cluster);
+	}
+
+	gchar* poiIPStr = address_ipToNewString(poiIP);
+	info("connected address '%s' to PoI '%s' and cluster '%s'",
+			address_toHostIPString(address), poiIPStr, cluster_getGeoCode(cluster));
+	g_free(poiIPStr);
 }
 
 void topology_disconnect(Topology* top, Address* address) {
@@ -813,30 +910,32 @@ void topology_disconnect(Topology* top, Address* address) {
 void topology_free(Topology* top) {
 	MAGIC_ASSERT(top);
 
-	g_rw_lock_writer_lock(&(top->weightsLock));
-	g_rw_lock_writer_lock(&(top->virtualIPLock));
-	g_rw_lock_writer_lock(&(top->pathCacheLock));
-
 	if(top->graphPath) {
 		g_string_free(top->graphPath, TRUE);
 	}
+
+	g_rw_lock_writer_lock(&(top->weightsLock));
+	g_rw_lock_writer_lock(&(top->virtualIPLock));
+
+	/* this functions grabs and releases the pathCache write lock */
+	_topology_clearCache(top);
+	g_rw_lock_clear(&(top->pathCacheLock));
 
 	if(top->currentEdgeWeights) {
 		igraph_vector_destroy(top->currentEdgeWeights);
 		g_free(top->currentEdgeWeights);
 	}
-
-	_topology_clearCache(top);
-	g_hash_table_destroy(top->virtualIPToPoIIP);
-	g_hash_table_destroy(top->poiIPToVertexIndex);
-	g_hash_table_destroy(top->geocodeToCluster);
-
 	top->currentEdgeWeights = NULL;
-	top->virtualIPToPoIIP = NULL;
-	top->pathCache = NULL;
 
-	g_rw_lock_writer_unlock(&(top->pathCacheLock));
-	g_rw_lock_clear(&(top->pathCacheLock));
+	g_hash_table_destroy(top->virtualIPToPoIIP);
+	top->virtualIPToPoIIP = NULL;
+	g_hash_table_destroy(top->virtualIPToCluster);
+	top->virtualIPToCluster = NULL;
+	g_hash_table_destroy(top->poiIPToVertexIndex);
+	top->poiIPToVertexIndex = NULL;
+	g_hash_table_destroy(top->geocodeToCluster);
+	top->geocodeToCluster = NULL;
+
 	g_rw_lock_writer_unlock(&(top->virtualIPLock));
 	g_rw_lock_clear(&(top->virtualIPLock));
 	g_rw_lock_writer_unlock(&(top->weightsLock));
@@ -854,7 +953,10 @@ Topology* topology_new(gchar* graphPath) {
 	top->graphPath = g_string_new(graphPath);
 	top->poiIPToVertexIndex = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, NULL);
 	top->virtualIPToPoIIP = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, NULL);
-	top->geocodeToCluster = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
+	top->geocodeToCluster = g_hash_table_new_full(g_str_hash, g_str_equal,
+			g_free, (GDestroyNotify) cluster_unref);
+	top->virtualIPToCluster = g_hash_table_new_full(g_direct_hash, g_direct_equal,
+			NULL, (GDestroyNotify) cluster_unref);
 
 	/* first read in the graph and make sure its formed correctly,
 	 * then setup our edge weights for shortest path */
