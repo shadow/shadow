@@ -51,6 +51,10 @@ struct _Topology {
 	GHashTable* pathCache;
 	GRWLock pathCacheLock;
 
+	/* keep track of how long we spend computing shortest paths */
+	gdouble shortestPathTotalTime;
+	GMutex shortestPathTotalTimeLock;
+
 	MAGIC_DECLARE;
 };
 
@@ -529,6 +533,8 @@ static void _topology_clearCache(Topology* top) {
 		top->pathCache = NULL;
 	}
 	g_rw_lock_writer_unlock(&(top->pathCacheLock));
+
+	message("path cache cleared, spent %f seconds computing shortest paths", top->shortestPathTotalTime);
 }
 
 static Path* _topology_getPathFromCache(Topology* top, Address* source, Address* destination) {
@@ -649,6 +655,7 @@ static gboolean _topology_computePath(Topology* top, Address* srcAddress, Addres
 	g_assert(&resultPathVertices == igraph_vector_ptr_e(&resultPaths, 0));
 
 	g_rw_lock_reader_lock(&(top->weightsLock));
+	GTimer* pathTimer = g_timer_new();
 	/* run dijkstra's shortest path algorithm */
 #ifndef IGRAPH_VERSION
 	result = igraph_get_shortest_paths_dijkstra(&top->graph, &resultPaths,
@@ -657,7 +664,13 @@ static gboolean _topology_computePath(Topology* top, Address* srcAddress, Addres
 	result = igraph_get_shortest_paths_dijkstra(&top->graph, &resultPaths, NULL,
 			srcVertexIndex, dstVertexSet, top->currentEdgeWeights, IGRAPH_OUT);
 #endif
+	gdouble elapsedSeconds = g_timer_elapsed(pathTimer, NULL);
 	g_rw_lock_reader_unlock(&(top->weightsLock));
+
+	g_timer_destroy(pathTimer);
+	g_mutex_lock(&(top->shortestPathTotalTimeLock));
+	top->shortestPathTotalTime += elapsedSeconds;
+	g_mutex_unlock(&(top->shortestPathTotalTimeLock));
 
 	if(result != IGRAPH_SUCCESS) {
 		critical("igraph_get_shortest_paths_dijkstra return non-success code %i", result);
@@ -941,6 +954,8 @@ void topology_free(Topology* top) {
 	g_rw_lock_writer_unlock(&(top->weightsLock));
 	g_rw_lock_clear(&(top->weightsLock));
 
+	g_mutex_clear(&(top->shortestPathTotalTimeLock));
+
 	MAGIC_CLEAR(top);
 	g_free(top);
 }
@@ -968,6 +983,7 @@ Topology* topology_new(gchar* graphPath) {
 	g_rw_lock_init(&(top->weightsLock));
 	g_rw_lock_init(&(top->virtualIPLock));
 	g_rw_lock_init(&(top->pathCacheLock));
+	g_mutex_init(&(top->shortestPathTotalTimeLock));
 
 	return top;
 }
