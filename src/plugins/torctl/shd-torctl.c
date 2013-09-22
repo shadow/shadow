@@ -14,7 +14,7 @@ enum _TorCTLState {
 	TCS_NONE, TCS_AUTHENTICATING, TCS_BOOTSTRAPPING, TCS_LOGGING,
 };
 
-/* all state for hello is stored here */
+/* all state for torctl is stored here */
 struct _TorCTL {
 	/* the function we use to log messages
 	 * needs level, functionname, and format */
@@ -334,9 +334,15 @@ TorCTL* torctl_new(gint argc, gchar* argv[], ShadowLogFunc slogf) {
 
 	torctl->hostname = g_string_new(argv[1]);
 	torctl->netport = (in_port_t) htons((in_port_t)atoi(argv[2]));
-	torctl->eventsCommand = g_string_new(NULL);
-	g_string_printf(torctl->eventsCommand, "SETEVENTS %s\r\n", argv[3]);
 
+	gchar** eventStrs = g_strsplit(argv[3], ",", 0);
+	gchar* eventStr = g_strjoinv(" ", eventStrs);
+	torctl->eventsCommand = g_string_new(NULL);
+	g_string_printf(torctl->eventsCommand, "SETEVENTS %s\r\n", eventStr);
+	g_free(eventStr);
+	g_strfreev(eventStrs);
+
+	torctl->slogf = slogf;
 	torctl->commands = g_queue_new();
 
 	if(!_torctl_start(torctl)) {
