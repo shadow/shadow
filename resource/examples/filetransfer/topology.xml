@@ -1,8 +1,0 @@
-<topology>
-    <cluster id="USMN" bandwidthdown="13585" bandwidthup="2893" packetloss="0.005"/>
-    <cluster id="USDC" bandwidthdown="8814" bandwidthup="3068" packetloss="0.04"/>
-    <link id="link0" clusters="USMN USMN" latency="16" jitter="9"/>
-    <link id="link1" clusters="USMN USDC" latency="22" jitter="7"/>
-    <link id="link2" clusters="USDC USDC" latency="12" jitter="7"/>
-    <link id="link3" clusters="USDC USMN" latency="22" jitter="7"/>
-</topology>  

@@ -32,7 +32,7 @@ macro(ddexe ddfilename ddkib)
     install(FILES ${ddfilepath} DESTINATION share/)
 endmacro()
 
-xzexe(topology.xml)
+xzexe(topology.graphml.xml)
 
 ddexe("1KiB.urnd" 1)
 ddexe("16KiB.urnd" 16)

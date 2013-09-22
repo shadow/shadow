@@ -522,7 +522,7 @@ static void _parser_handleRootStartElement(GMarkupParseContext* context,
 		*error = _parser_handleKillAttributes(parser, attributeNames, attributeValues);
 	} else if (!g_ascii_strcasecmp(elementName, "topology")) {
 		*error = _parser_handleTopologyAttributes(parser, attributeNames, attributeValues);
-	} else if (!g_ascii_strcasecmp(elementName, "hosts")) {
+	} else if (!g_ascii_strcasecmp(elementName, "shadow")) {
 		/* do nothing, this is a root element */
 	} else {
 		*error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ELEMENT,
@@ -557,8 +557,8 @@ static void _parser_handleRootEndElement(GMarkupParseContext* context,
 		if(!(!g_ascii_strcasecmp(elementName, "plugin") ||
 				!g_ascii_strcasecmp(elementName, "cdf") ||
 				!g_ascii_strcasecmp(elementName, "kill") ||
-				!g_ascii_strcasecmp(elementName, "hosts") ||
-				!g_ascii_strcasecmp(elementName, "topology"))) {
+				!g_ascii_strcasecmp(elementName, "topology") ||
+				!g_ascii_strcasecmp(elementName, "shadow"))) {
 			*error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ELEMENT,
 							"unknown 'root' child ending element '%s'", elementName);
 		}

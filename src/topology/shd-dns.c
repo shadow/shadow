@@ -17,13 +17,62 @@ struct _DNS {
 	MAGIC_DECLARE;
 };
 
-static gboolean _dns_isRestricted(DNS* dns, in_addr_t ip) {
-	/* FIXME: there are many more restricted IP ranges
-	 * e.g. 192.168..., 10.0.0.0/8, etc.
-	 * there is an RFC that defines these.
-	 */
-	if(ip == htonl(INADDR_NONE) || ip == htonl(INADDR_ANY) ||
-			ip == htonl(INADDR_LOOPBACK) || ip == htonl(INADDR_BROADCAST)) {
+static gboolean _dns_isIPInRange(const in_addr_t netIP, const gchar* cidrStr) {
+	g_assert(cidrStr);
+
+	gchar** cidrParts = g_strsplit(cidrStr, "/", 0);
+	gchar* cidrIPStr = cidrParts[0];
+	gint cidrBits = atoi(cidrParts[1]);
+	g_assert(cidrBits >= 0 && cidrBits <= 32);
+
+	/* first create the mask in network order */
+	in_addr_t netmask = 0;
+	for(gint i = 0; i < cidrBits; i++) {
+		/* move right one so LSB is 0 */
+		netmask = netmask << 1;
+		/* flip the LSB */
+		netmask++;
+	}
+
+	/* get the subnet ip in network order */
+	in_addr_t subnetIP = address_stringToIP(cidrIPStr);
+
+	g_strfreev(cidrParts);
+
+	/* all non-subnet bits should be flipped */
+	if((netIP & netmask) == (subnetIP & netmask)) {
+		gchar* ipStr = address_ipToNewString(netIP);
+		gchar* subnetIPStr = address_ipToNewString(subnetIP);
+		gchar* netmaskStr = address_ipToNewString(netmask);
+		debug("ip '%s' is in range '%s' using subnet '%s' and mask '%s'",
+				ipStr, cidrStr, subnetIPStr, netmaskStr);
+		g_free(ipStr);
+		g_free(subnetIPStr);
+		g_free(netmaskStr);
+		return TRUE;
+	} else {
+		return FALSE;
+	}
+}
+
+static gboolean _dns_isRestricted(DNS* dns, in_addr_t netIP) {
+	/* http://en.wikipedia.org/wiki/Reserved_IP_addresses#Reserved_IPv4_addresses */
+	if(_dns_isIPInRange(netIP, "0.0.0.0/8") ||
+			_dns_isIPInRange(netIP, "10.0.0.0/8") ||
+			_dns_isIPInRange(netIP, "100.64.0.0/10") ||
+			_dns_isIPInRange(netIP, "127.0.0.0/8") ||
+			_dns_isIPInRange(netIP, "169.254.0.0/16") ||
+			_dns_isIPInRange(netIP, "172.16.0.0/12") ||
+			_dns_isIPInRange(netIP, "192.0.0.0/29") ||
+			_dns_isIPInRange(netIP, "192.0.2.0/24") ||
+			_dns_isIPInRange(netIP, "192.88.99.0/24") ||
+			_dns_isIPInRange(netIP, "192.168.0.0/16") ||
+			_dns_isIPInRange(netIP, "198.18.0.0/15") ||
+			_dns_isIPInRange(netIP, "198.51.100.0/24") ||
+			_dns_isIPInRange(netIP, "203.0.113.0/24") ||
+			_dns_isIPInRange(netIP, "224.0.0.0/4") ||
+			_dns_isIPInRange(netIP, "240.0.0.0/4") ||
+			_dns_isIPInRange(netIP, "255.255.255.255/32")) {
 		return TRUE;
 	} else {
 		return FALSE;
@@ -138,6 +187,9 @@ DNS* dns_new() {
 
 	dns->addressByIP = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, (GDestroyNotify) address_unref);
 	dns->addressByName = g_hash_table_new_full(g_str_hash, g_str_equal, NULL, (GDestroyNotify) address_unref);
+
+	/* 11.0.0.0 -- 100.0.0.0 is the longest available unrestricted range */
+	dns->ipAddressCounter = ntohl(address_stringToIP("11.0.0.0"));
 
 	return dns;
 }

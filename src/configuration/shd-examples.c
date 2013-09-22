@@ -8,6 +8,7 @@
 
 GString* example_getEchoExampleContents() {
 	return g_string_new(
+		"<shadow>"
 		"<plugin id=\"echoplugin\" path=\"libshadow-plugin-echo.so\" />"
 		"<cluster id=\"net0\" bandwidthdown=\"1024\" bandwidthup=\"512\" packetloss=\"0.0\" />"
 		"<cluster id=\"net1\" bandwidthdown=\"1024\" bandwidthup=\"512\" packetloss=\"0.5\" />"
@@ -46,12 +47,14 @@ GString* example_getEchoExampleContents() {
 		"<node id=\"pipe.echo\" cluster=\"net0\" >"
 		"	<application plugin=\"echoplugin\" time=\"20\" arguments=\"pipe\" />"
 		"</node >"
-		"<kill time=\"180\" />");
+		"<kill time=\"180\" />"
+		"</shadow>");
 }
 
 GString* example_getFileExampleContents() {
 	/* serve and download /bin/ls 10 times for each of 100 clients */
 	return g_string_new(
+		"<shadow>"
 		"<plugin id=\"filex\" path=\"libshadow-plugin-filetransfer.so\" />"
 		"<cluster id=\"net0\" bandwidthdown=\"1024\" bandwidthup=\"512\" packetloss=\"0.005\" />"
 		"<link clusters=\"net0 net0\" latency=\"50\" jitter=\"10\"/>"
@@ -61,12 +64,14 @@ GString* example_getFileExampleContents() {
 		"<node id=\"fileclient\" quantity=\"1000\" >"
 		"	<application plugin=\"filex\" time=\"20\" arguments=\"client single fileserver 8080 none 0 10 /ls\" />"
 		"</node >"
-		"<kill time=\"300\" />");
+		"<kill time=\"300\" />"
+		"</shadow>");
 }
 
 GString* example_getTorrentExampleContents() {
 	/* start a P2P torrent download with 10 clients sharing an 8MB file */
 	return g_string_new(
+		"<shadow>"
 		"<plugin id=\"torrent\" path=\"libshadow-plugin-torrent.so\" />"
 		"<cluster id=\"net0\" bandwidthdown=\"1024\" bandwidthup=\"512\" packetloss=\"0.005\" />"
 		"<link clusters=\"net0 net0\" latency=\"50\" jitter=\"10\"/>"
@@ -76,12 +81,14 @@ GString* example_getTorrentExampleContents() {
 		"<node id=\"node.torrent\" quantity=\"10\" >"
 		"	<application plugin=\"torrent\" time=\"20\" arguments=\"node auth.torrent 5000 none 0 6000 8MB\" />"
 		"</node >"
-		"<kill time=\"300\" />");
+		"<kill time=\"300\" />"
+		"</shadow>");
 }
 
 GString* example_getBrowserExampleContents() {
 	/* start a server and simulate a browser downloading index.htm */
 	return g_string_new(
+		"<shadow>"
 		"<plugin id=\"filex\" path=\"libshadow-plugin-filetransfer.so\" />"
 		"<plugin id=\"browser\" path=\"libshadow-plugin-browser.so\" />"
 		"<cluster id=\"net0\" bandwidthdown=\"1024\" bandwidthup=\"512\" packetloss=\"0.005\" />"
@@ -92,5 +99,6 @@ GString* example_getBrowserExampleContents() {
 		"<node id=\"browserclient\" cluster=\"net0\" bandwidthup=\"10240\" bandwidthdown=\"5120\" >"
 		"	<application plugin=\"browser\" time=\"20\" arguments=\"webserver 80 none 0 6 /index.htm\" />"
 		"</node >"
-		"<kill time=\"300\" />");
+		"<kill time=\"300\" />"
+		"</shadow>");
 }

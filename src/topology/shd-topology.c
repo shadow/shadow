@@ -430,7 +430,7 @@ static void _topology_extractPointsOfInterestHelperHook(Topology* top, igraph_in
 	const gchar* nodeTypeStr = VAS(&top->graph, "nodetype", vertexIndex);
 	const gchar* geocodesStr = VAS(&top->graph, "geocodes", vertexIndex);
 
-	if(g_ascii_strcasecmp(nodeTypeStr, "pop")) {
+	if(!g_ascii_strcasecmp(nodeTypeStr, "relay") || !g_ascii_strcasecmp(nodeTypeStr, "server")) {
 		/* this is a point of interest (poi) not a point of presence (pop) */
 		in_addr_t networkIP = address_stringToIP(idStr);
 		if(networkIP == INADDR_NONE) {
@@ -709,47 +709,53 @@ static gboolean _topology_computePath(Topology* top, Address* srcAddress, Addres
 		totalReliability *= (1.0 - cluster_getPacketLoss(dstCluster));
 	}
 
+	glong nVertices = igraph_vector_size(&resultPathVertices);
+
 	/* the first vertex is our starting point
 	 * igraph_vector_size can be 0 for paths to ourself */
-	if(igraph_vector_size(&resultPathVertices) > 0) {
+	if(nVertices > 0) {
 		fromVertexIndex = VECTOR(resultPathVertices)[0];
 		const gchar* fromIDStr = VAS(&top->graph, "id", fromVertexIndex);
 		g_string_append_printf(pathString, "%s", fromIDStr);
 	}
+	if(nVertices < 2){
+		/* we have no edges, src and dst are in the same vertex, or path to self */
+		totalLatency = 1.0;
+	} else {
+		/* iterate the edges in the path and sum the latencies */
+		for (gint i = 1; i < nVertices; i++) {
+			/* get the edge */
+			toVertexIndex = VECTOR(resultPathVertices)[i];
+	#ifndef IGRAPH_VERSION
+			result = igraph_get_eid(&top->graph, &edgeIndex, fromVertexIndex, toVertexIndex, (igraph_bool_t)TRUE);
+	#else
+			result = igraph_get_eid(&top->graph, &edgeIndex, fromVertexIndex, toVertexIndex, (igraph_bool_t)TRUE, (igraph_bool_t)TRUE);
+	#endif
+			if(result != IGRAPH_SUCCESS) {
+				warning("igraph_get_eid return non-success code %i", result);
+				return FALSE;
+			}
 
-	/* iterate the edges in the path and sum the latencies */
-	for (gint i = 1; i < igraph_vector_size(&resultPathVertices); i++) {
-		/* get the edge */
-		toVertexIndex = VECTOR(resultPathVertices)[i];
-#ifndef IGRAPH_VERSION
-		result = igraph_get_eid(&top->graph, &edgeIndex, fromVertexIndex, toVertexIndex, (igraph_bool_t)TRUE);
-#else
-		result = igraph_get_eid(&top->graph, &edgeIndex, fromVertexIndex, toVertexIndex, (igraph_bool_t)TRUE, (igraph_bool_t)TRUE);
-#endif
-		if(result != IGRAPH_SUCCESS) {
-			warning("igraph_get_eid return non-success code %i", result);
-			return FALSE;
+			/* add edge latency */
+			g_rw_lock_reader_lock(&(top->weightsLock));
+			edgeLatency = VECTOR(*(top->currentEdgeWeights))[(gint)edgeIndex];
+			g_rw_lock_reader_unlock(&(top->weightsLock));
+			totalLatency += edgeLatency;
+
+			// TODO add actual edge reliability
+			edgeReliability = 1.0;
+			totalReliability *= edgeReliability;
+
+			/* accumulate path information */
+			const gchar* toIDStr = VAS(&top->graph, "id", toVertexIndex);
+			g_string_append_printf(pathString, "--[%f,%f]-->%s", edgeLatency, edgeReliability, toIDStr);
+
+			/* update for next edge */
+			fromVertexIndex = toVertexIndex;
 		}
-
-		/* add edge latency */
-		g_rw_lock_reader_lock(&(top->weightsLock));
-		edgeLatency = VECTOR(*(top->currentEdgeWeights))[(gint)edgeIndex];
-		g_rw_lock_reader_unlock(&(top->weightsLock));
-		totalLatency += edgeLatency;
-
-		// TODO add actual edge reliability
-		edgeReliability = 1.0;
-		totalReliability *= edgeReliability;
-
-		/* accumulate path information */
-		const gchar* toIDStr = VAS(&top->graph, "id", toVertexIndex);
-		g_string_append_printf(pathString, "--[%f,%f]-->%s", edgeLatency, edgeReliability, toIDStr);
-
-		/* update for next edge */
-		fromVertexIndex = toVertexIndex;
 	}
 
-	debug("shortest path %s-->%s is %f ms %f loss: %s", srcIDStr, dstIDStr,
+	debug("shortest path %s-->%s is %f ms with %f loss, path: %s", srcIDStr, dstIDStr,
 			totalLatency, 1-totalReliability, pathString->str);
 
 	/* clean up */
@@ -773,6 +779,7 @@ static gboolean _topology_getPathEntry(Topology* top, Address* srcAddress, Addre
 	if(!path) {
 		/* cache miss, compute the path using shortest latency path from src to dst */
 		gboolean isSuccess = _topology_computePath(top, srcAddress, dstAddress);
+		g_assert(isSuccess);
 		path = _topology_getPathFromCache(top, srcAddress, dstAddress);
 	}
 
