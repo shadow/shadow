@@ -87,6 +87,8 @@ def main():
     nx.write_graphml(G, outfname)
 
 def getcode(code):
+    if 'USUS' in code: return "US"
+    elif 'CACA' in code: return "CA"
     c = code[0:2]
     if c == "US" or c == "CA": return code
     else: return c

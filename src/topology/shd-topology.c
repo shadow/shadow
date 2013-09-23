@@ -868,7 +868,17 @@ void topology_connect(Topology* top, Address* address, Random* randomSourcePool,
 		if(!poiIP) {
 			/* case 2b, choose a random PoI */
 			GList* keyList = g_hash_table_get_keys(top->poiIPToVertexIndex);
-			guint keyIndexRange = g_list_length(keyList) - 1;
+			guint listLength = 0;
+			if(keyList) {
+				listLength = g_list_length(keyList);
+			}
+
+			if(listLength < 1) {
+				error("the topology contains no points of interest to which we can assign hosts");
+			}
+
+			g_assert(listLength > 0);
+			guint keyIndexRange = listLength - 1;
 
 			gdouble randomDouble = random_nextDouble(randomSourcePool);
 			guint randomIndex = (guint) round((gdouble)(keyIndexRange * randomDouble));

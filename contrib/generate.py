@@ -163,7 +163,7 @@ class GeoIPEntry():
         self.countrycode = countrycode
     
 def main():
-    ap = argparse.ArgumentParser(description='Generate hosts.xml file for Scallion Tor experiments in Shadow', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    ap = argparse.ArgumentParser(description='Generate shadow.config.xml file for Scallion Tor experiments in Shadow', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
         
     # configuration options
     ap.add_argument('-p', '--prefix', action="store", dest="prefix", help="PATH to base Shadow installation", metavar="PATH", default=INSTALLPREFIX)
@@ -213,7 +213,7 @@ def main():
     args.geoippath = os.path.abspath(args.prefix+"/share/geoip")
     
     generate(args)
-    log("finished generating:\n{0}/relays.csv\n{0}/hosts.xml\n{0}/im.dl\n{0}/web.dl\n{0}/bulk.dl\n{0}/webthink.dat\n{0}/imthink.dat".format(os.getcwd()))
+    log("finished generating:\n{0}/relays.csv\n{0}/shadow.config.xml\n{0}/im.dl\n{0}/web.dl\n{0}/bulk.dl\n{0}/webthink.dat\n{0}/imthink.dat".format(os.getcwd()))
 
 def generate(args):
     # get list of relays, sorted by increasing bandwidth
@@ -258,7 +258,7 @@ def generate(args):
         for r in middles_nodes: print >>f, r.toCSV()
     
     # build the XML
-    root = etree.Element("hosts")
+    root = etree.Element("shadow")
     
     # servers
     fim = open("im.dl", "wb")
@@ -561,7 +561,7 @@ def generate(args):
             i += 1
                    
     # finally, print the XML file
-    with open("hosts.xml", 'wb') as fhosts:
+    with open("shadow.config.xml", 'wb') as fhosts:
         # plug-ins
         e = etree.Element("plugin")
         e.set("id", "scallion")
@@ -573,10 +573,11 @@ def generate(args):
         e.set("path", "{0}plugins/libshadow-plugin-filetransfer.so".format(INSTALLPREFIX))
         root.insert(0, e)
         
-        e = etree.Element("plugin")
-        e.set("id", "torrent")
-        e.set("path", "{0}plugins/libshadow-plugin-torrent.so".format(INSTALLPREFIX))
-        root.insert(0, e)
+        if np2pclients > 0:
+            e = etree.Element("plugin")
+            e.set("id", "torrent")
+            e.set("path", "{0}plugins/libshadow-plugin-torrent.so".format(INSTALLPREFIX))
+            root.insert(0, e)
         
         # kill time
         e = etree.Element("kill")
@@ -645,7 +646,7 @@ def getClientCountryChoices(connectinguserspath):
         
         code = c.upper()
 #        if code == "US" or code == "A1" or code == "A2": code = "USMN"
-        code = "{0}{0}".format(code)
+        code = "{0}".format(code)
         
         for i in xrange(n):
             codes.append(code)
@@ -673,9 +674,9 @@ def getClusterCode(geoentries, ip):
     for entry in geoentries:
         if ipnum >= entry.lownum and ipnum <= entry.highnum: 
 #            if entry.countrycode == "US": return "USMN" # we have no USUS code (USMN gets USCENTRAL)
-            return "{0}{0}".format(entry.countrycode)
-    log("Warning: Cant find code for IP '{0}' Num '{1}', defaulting to 'USUS'".format(ip, ipnum))
-    return "USUS"
+            return "{0}".format(entry.countrycode)
+    log("Warning: Cant find code for IP '{0}' Num '{1}', defaulting to 'US'".format(ip, ipnum))
+    return "US"
 
 def getGeoEntries(geoippath):
     entries = []
