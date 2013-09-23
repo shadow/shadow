@@ -15,9 +15,13 @@ enum _TrackerFlags {
 };
 
 struct _Tracker {
+	/* our personal settings as configured in the shadow xml config file */
 	SimulationTime interval;
 	GLogLevelFlags loglevel;
-	TrackerFlags flags;
+	TrackerFlags privateFlags;
+
+	/* simulation global flags, only to be used if we have no personal flags set */
+	TrackerFlags globalFlags;
 
 	gboolean didLogNodeHeader;
 	gboolean didLogRAMHeader;
@@ -109,13 +113,22 @@ static TrackerFlags _tracker_parseFlagString(gchar* flagString) {
 			} else if(!g_ascii_strcasecmp(parts[idx], "ram")) {
 				flags |= TRACKER_FLAGS_RAM;
 			} else {
-				logging_log(G_LOG_DOMAIN, G_LOG_LEVEL_WARNING, __FUNCTION__,
-						"Did not recognize log info '%s', possible choices are 'node','socket'.", parts[idx]);
+				warning("Did not recognize log info '%s', possible choices are 'node','socket','ram'.", parts[idx]);
 			}
 		}
 		g_strfreev(parts);
 	}
 
+	return flags;
+}
+
+static TrackerFlags _tracker_parseGlobalFlags() {
+	TrackerFlags flags = TRACKER_FLAGS_NONE;
+	Worker* w = worker_getPrivate();
+	if(w->cached_engine) {
+		Configuration* c = engine_getConfig(w->cached_engine);
+		flags = _tracker_parseFlagString(c->heartbeatLogInfo);
+	}
 	return flags;
 }
 
@@ -147,15 +160,7 @@ static SimulationTime _tracker_getLogInterval(Tracker* tracker) {
 
 static TrackerFlags _tracker_getFlags(Tracker* tracker) {
 	/* prefer our log info over the global config */
-	TrackerFlags flags = tracker->flags;
-	if(!flags) {
-		Worker* w = worker_getPrivate();
-		if(w->cached_engine) {
-			Configuration* c = engine_getConfig(w->cached_engine);
-			flags = _tracker_parseFlagString(c->heartbeatLogInfo);
-		}
-	}
-	return flags;
+	return tracker->privateFlags ? tracker->privateFlags : tracker->globalFlags;
 }
 
 Tracker* tracker_new(SimulationTime interval, GLogLevelFlags loglevel, gchar* flagString) {
@@ -164,7 +169,8 @@ Tracker* tracker_new(SimulationTime interval, GLogLevelFlags loglevel, gchar* fl
 
 	tracker->interval = interval;
 	tracker->loglevel = loglevel;
-	tracker->flags = _tracker_parseFlagString(flagString);
+	tracker->privateFlags = _tracker_parseFlagString(flagString);
+	tracker->globalFlags = _tracker_parseGlobalFlags();
 
 	tracker->allocatedLocations = g_hash_table_new(g_direct_hash, g_direct_equal);
 	tracker->socketStats = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, (GDestroyNotify)_socketstats_free);
@@ -451,6 +457,9 @@ void tracker_heartbeat(Tracker* tracker) {
 	if(flags & TRACKER_FLAGS_RAM) {
 		_tracker_logRAM(tracker, level, interval);
 	}
+
+	/* make sure we have the latest global configured flags */
+	tracker->globalFlags = _tracker_parseGlobalFlags();
 
 	/* clear interval stats */
 	tracker->processingTimeLastInterval = 0;
