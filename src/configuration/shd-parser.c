@@ -22,6 +22,7 @@ struct _Parser {
 	gint nChildApplications;
 
 	GQueue* actions;
+	gboolean foundTopology;
 	MAGIC_DECLARE;
 };
 
@@ -158,6 +159,7 @@ static GError* _parser_handleTopologyAttributes(Parser* parser, const gchar** at
 		Action* a = (Action*) loadtopology_new(path);
 		action_setPriority(a, -1);
 		_parser_addAction(parser, a);
+		parser->foundTopology = TRUE;
 	}
 
 	/* clean up */
@@ -553,12 +555,16 @@ static void _parser_handleRootEndElement(GMarkupParseContext* context,
 			/* this is in the actions queue and will get free'd later */
 			parser->currentNodeAction = NULL;
 		}
+	} else if(!g_ascii_strcasecmp(elementName, "shadow")) {
+		if (!parser->foundTopology) {
+			*error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_EMPTY,
+					"element 'shadow' requires at least 1 child 'topology'");
+		}
 	} else {
 		if(!(!g_ascii_strcasecmp(elementName, "plugin") ||
 				!g_ascii_strcasecmp(elementName, "cdf") ||
 				!g_ascii_strcasecmp(elementName, "kill") ||
-				!g_ascii_strcasecmp(elementName, "topology") ||
-				!g_ascii_strcasecmp(elementName, "shadow"))) {
+				!g_ascii_strcasecmp(elementName, "topology"))) {
 			*error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ELEMENT,
 							"unknown 'root' child ending element '%s'", elementName);
 		}

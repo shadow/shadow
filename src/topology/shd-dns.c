@@ -101,19 +101,21 @@ Address* dns_register(DNS* dns, GQuark id, gchar* name, gchar* requestedIP) {
 
 	in_addr_t ip = 0;
 	guint mac = ++dns->macAddressCounter;
+	gboolean isLocal = FALSE;
 
 	/* if requestedIP is NULL, we should generate one ourselves */
 	if(requestedIP) {
 		ip = address_stringToIP(requestedIP);
 		/* restricted is OK if this is a localhost address, otherwise it must be unique */
-		if(!_dns_isRestricted(dns, ip) && !_dns_isIPUnique(dns, ip)) {
+		if(ip == address_stringToIP("127.0.0.1")) {
+			isLocal = TRUE;
+		} else if(_dns_isRestricted(dns, ip) || !_dns_isIPUnique(dns, ip)) {
 			ip = _dns_generateIP(dns);
 		}
 	} else {
 		ip = _dns_generateIP(dns);
 	}
 
-	gboolean isLocal = _dns_isRestricted(dns, ip);
 	Address* address = address_new(id, mac, (guint32) ip, name, isLocal);
 
 	/* store the ip/name mappings */

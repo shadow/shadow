@@ -562,6 +562,11 @@ def generate(args):
                    
     # finally, print the XML file
     with open("shadow.config.xml", 'wb') as fhosts:
+
+        e = etree.Element("topology")
+        e.set("path", "{0}share/topology.graphml.xml".format(INSTALLPREFIX))
+        root.insert(0, e)
+
         # plug-ins
         e = etree.Element("plugin")
         e.set("id", "scallion")
