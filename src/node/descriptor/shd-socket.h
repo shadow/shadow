@@ -52,13 +52,13 @@ struct _Socket {
 	/* buffering packets readable by user */
 	GQueue* inputBuffer;
 	gsize inputBufferSize;
-	gsize pendingInputBufferSize;
+	gsize inputBufferSizePending;
 	gsize inputBufferLength;
 
 	/* buffering packets ready to send */
 	GQueue* outputBuffer;
 	gsize outputBufferSize;
-	gsize pendingOutputBufferSize;
+	gsize outputBufferSizePending;
 	gsize outputBufferLength;
 
 	MAGIC_DECLARE;

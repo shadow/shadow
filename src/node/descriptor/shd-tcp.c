@@ -269,10 +269,12 @@ static void _tcp_autotune(TCP* tcp) {
 
 	if(sourceID == destinationID) {
 		/* 16 MiB as max */
-		g_assert(16777216 > tcp->super.inputBufferSize);
-		g_assert(16777216 > tcp->super.outputBufferSize);
-		tcp->super.inputBufferSize = 16777216;
-		tcp->super.outputBufferSize = 16777216;
+		gsize inSize = socket_getInputBufferSize(&(tcp->super));
+		gsize outSize = socket_getOutputBufferSize(&(tcp->super));
+		g_assert(16777216 > inSize);
+		g_assert(16777216 > outSize);
+		socket_setInputBufferSize(&(tcp->super), (gsize) 16777216);
+		socket_setOutputBufferSize(&(tcp->super), (gsize) 16777216);
 		debug("set loopback buffer sizes to 16777216");
 		return;
 	}
@@ -320,20 +322,21 @@ static void _tcp_autotune(TCP* tcp) {
 	/* make sure the user hasnt already written to the buffer, because if we
 	 * shrink it, our buffer math would overflow the size variable
 	 */
-	g_assert(tcp->super.inputBufferLength == 0);
-	g_assert(tcp->super.outputBufferLength == 0);
+	g_assert(socket_getInputBufferLength(&(tcp->super)) == 0);
+	g_assert(socket_getOutputBufferLength(&(tcp->super)) == 0);
 
 	/* check to see if the node should set buffer sizes via autotuning, or
 	 * they were specified by configuration or parameters in XML */
 	Node* node = worker_getPrivate()->cached_node;
 	if(node_autotuneReceiveBuffer(node)) {
-		tcp->super.inputBufferSize = receivebuf_size;
+		socket_setInputBufferSize(&(tcp->super), (gsize) receivebuf_size);
 	}
 	if(node_autotuneSendBuffer(node)) {
-		tcp->super.outputBufferSize = sendbuf_size;
+		socket_setOutputBufferSize(&(tcp->super), (gsize) sendbuf_size);
 	}
 
-	info("set network buffer sizes: send %"G_GSIZE_FORMAT" receive %"G_GSIZE_FORMAT, tcp->super.outputBufferSize, tcp->super.inputBufferSize);
+	info("network buffer sizes: send %"G_GSIZE_FORMAT" receive %"G_GSIZE_FORMAT,
+			socket_getOutputBufferSize(&(tcp->super)), socket_getInputBufferSize(&(tcp->super)));
 }
 
 static void _tcp_setState(TCP* tcp, enum TCPState state) {
@@ -425,7 +428,7 @@ static void _tcp_updateReceiveWindow(TCP* tcp) {
 		 * for the client to drain the input buffer to further open the window.
 		 * otherwise, we may get into a deadlock situation where we never accept
 		 * any packets and the client never reads. */
-		g_assert(!(tcp->super.inputBufferLength == 0));
+		g_assert(!(socket_getInputBufferLength(&(tcp->super)) == 0));
 		info("%s <-> %s: receive window is 0, we have space for %"G_GSIZE_FORMAT" bytes in the input buffer",
 				tcp->super.boundString, tcp->super.peerString, space);
 	}
@@ -664,8 +667,10 @@ static void _tcp_flush(TCP* tcp) {
 	Tracker* tracker = node_getTracker(worker_getPrivate()->cached_node);
 	Socket* socket = (Socket* )tcp;
 	Descriptor* descriptor = (Descriptor *)socket;
-	tracker_updateSocketInputBuffer(tracker, descriptor->handle, socket->inputBufferSize - _tcp_getBufferSpaceIn(tcp), socket->inputBufferSize);
-	tracker_updateSocketOutputBuffer(tracker, descriptor->handle, socket->outputBufferSize - _tcp_getBufferSpaceOut(tcp), socket->outputBufferSize);
+	gsize inSize = socket_getInputBufferSize(&(tcp->super));
+	gsize outSize = socket_getOutputBufferSize(&(tcp->super));
+	tracker_updateSocketInputBuffer(tracker, descriptor->handle, inSize - _tcp_getBufferSpaceIn(tcp), inSize);
+	tracker_updateSocketOutputBuffer(tracker, descriptor->handle, outSize - _tcp_getBufferSpaceOut(tcp), outSize);
 
 	/* check if user needs an EOF signal */
 	gboolean wantsEOF = ((tcp->flags & TCPF_LOCAL_CLOSED) || (tcp->flags & TCPF_REMOTE_CLOSED)) ? TRUE : FALSE;
@@ -1345,7 +1350,7 @@ gssize tcp_receiveUserData(TCP* tcp, gpointer buffer, gsize nBytes, in_addr_t* i
 	}
 
 	/* now we update readability of the socket */
-	if((tcp->super.inputBufferLength > 0) || (tcp->partialUserDataPacket != NULL)) {
+	if((socket_getInputBufferLength(&(tcp->super)) > 0) || (tcp->partialUserDataPacket != NULL)) {
 		/* we still have readable data */
 		descriptor_adjustStatus(&(tcp->super.super.super), DS_READABLE, TRUE);
 	} else {
