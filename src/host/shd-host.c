@@ -604,7 +604,7 @@ gint host_connectToPeer(Host* host, gint handle, in_addr_t peerIP,
 	if(peerIP != loIP) {
 		Address* myAddress = networkinterface_getAddress(host->defaultInterface);
 		Address* peerAddress = dns_resolveIPToAddress(worker_getDNS(), peerIP);
-		if(!topology_isRoutable(worker_getTopology(), myAddress, peerAddress)) {
+		if(!peerAddress || !topology_isRoutable(worker_getTopology(), myAddress, peerAddress)) {
 			/* can't route it - there is no node with this address */
 			gchar* peerAddressString = address_ipToNewString(peerIP);
 			warning("attempting to connect to address '%s:%u' for which no host exists", peerAddressString, ntohs(peerPort));
