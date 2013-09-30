@@ -14,24 +14,25 @@ enum _ClusterAttribute {
 struct _Topology {
 	/* the file path of the graphml file */
 	GString* graphPath;
-	/* the imported igraph graph data */
-	igraph_t graph;  /* read-only after initialization! */
 
-	/* graph properties of the imported graph */
-	igraph_integer_t clusterCount;
-	igraph_integer_t vertexCount;
-	igraph_integer_t edgeCount;
-	igraph_bool_t isConnected;
+	/******/
+	/* START global igraph lock - igraph is not thread-safe!*/
+	GMutex graphLock;
 
-	/* FIXME hack for broken graph attributes */
-	const gchar* plossStr;
-	const gchar* bwupStr;
-	const gchar* bwdownStr;
-	/* end hack */
+	/* the imported igraph graph data - operations on it after initializations
+	 * MUST be locked because igraph is not thread-safe! */
+	igraph_t graph;
 
-	/* the edge weights currently used when computing shortest paths */
+	/* the edge weights currently used when computing shortest paths.
+	 * this is protected by the graph lock */
 	igraph_vector_t* currentEdgeWeights;
-	GRWLock weightsLock;
+
+	/* keep track of how long we spend computing shortest paths,
+	 * protected by the graph lock */
+	gdouble shortestPathTotalTime;
+
+	/* END global igraph lock - igraph is not thread-safe!*/
+	/******/
 
 	/* each connected virtual host is assigned to a PoI. we store the mapping
 	 * so we can correctly lookup the assigned edge when computing latency. */
@@ -51,9 +52,17 @@ struct _Topology {
 	GHashTable* pathCache;
 	GRWLock pathCacheLock;
 
-	/* keep track of how long we spend computing shortest paths */
-	gdouble shortestPathTotalTime;
-	GMutex shortestPathTotalTimeLock;
+	/* graph properties of the imported graph */
+	igraph_integer_t clusterCount;
+	igraph_integer_t vertexCount;
+	igraph_integer_t edgeCount;
+	igraph_bool_t isConnected;
+
+	/* FIXME hack for broken graph attributes */
+	const gchar* plossStr;
+	const gchar* bwupStr;
+	const gchar* bwdownStr;
+	/* end hack */
 
 	MAGIC_DECLARE;
 };
@@ -385,7 +394,7 @@ static void _topology_updateEdgeWeightsHelperHook(Topology* top, igraph_integer_
 static gboolean _topology_updateEdgeWeights(Topology* top) {
 	MAGIC_ASSERT(top);
 
-	g_rw_lock_writer_lock(&(top->weightsLock));
+	g_mutex_lock(&top->graphLock);
 
 	/* create new or clear existing edge weights */
 	if(!top->currentEdgeWeights) {
@@ -404,7 +413,7 @@ static gboolean _topology_updateEdgeWeights(Topology* top) {
 
 	igraph_integer_t edgeCount = _topology_iterateAllEdges(top, _topology_updateEdgeWeightsHelperHook);
 
-	g_rw_lock_writer_unlock(&(top->weightsLock));
+	g_mutex_unlock(&top->graphLock);
 
 	if(edgeCount < 0) {
 		/* there was some kind of error */
@@ -610,6 +619,7 @@ static igraph_integer_t _topology_getConnectedVertexIndex(Topology* top, Address
 	return (igraph_integer_t) GPOINTER_TO_INT(vertexIndexPtr);
 }
 
+/* unfortunately, igraph is not thread safe, so this function must be locked */
 static gboolean _topology_computePath(Topology* top, Address* srcAddress, Address* dstAddress) {
 	MAGIC_ASSERT(top);
 
@@ -654,7 +664,6 @@ static gboolean _topology_computePath(Topology* top, Address* srcAddress, Addres
 	igraph_vector_ptr_set(&resultPaths, 0, &resultPathVertices);
 	g_assert(&resultPathVertices == igraph_vector_ptr_e(&resultPaths, 0));
 
-	g_rw_lock_reader_lock(&(top->weightsLock));
 	GTimer* pathTimer = g_timer_new();
 	/* run dijkstra's shortest path algorithm */
 #ifndef IGRAPH_VERSION
@@ -665,12 +674,9 @@ static gboolean _topology_computePath(Topology* top, Address* srcAddress, Addres
 			srcVertexIndex, dstVertexSet, top->currentEdgeWeights, IGRAPH_OUT);
 #endif
 	gdouble elapsedSeconds = g_timer_elapsed(pathTimer, NULL);
-	g_rw_lock_reader_unlock(&(top->weightsLock));
 
 	g_timer_destroy(pathTimer);
-	g_mutex_lock(&(top->shortestPathTotalTimeLock));
 	top->shortestPathTotalTime += elapsedSeconds;
-	g_mutex_unlock(&(top->shortestPathTotalTimeLock));
 
 	if(result != IGRAPH_SUCCESS) {
 		critical("igraph_get_shortest_paths_dijkstra return non-success code %i", result);
@@ -737,9 +743,7 @@ static gboolean _topology_computePath(Topology* top, Address* srcAddress, Addres
 			}
 
 			/* add edge latency */
-			g_rw_lock_reader_lock(&(top->weightsLock));
 			edgeLatency = VECTOR(*(top->currentEdgeWeights))[(gint)edgeIndex];
-			g_rw_lock_reader_unlock(&(top->weightsLock));
 			totalLatency += edgeLatency;
 
 			// TODO add actual edge reliability
@@ -778,7 +782,9 @@ static gboolean _topology_getPathEntry(Topology* top, Address* srcAddress, Addre
 	Path* path = _topology_getPathFromCache(top, srcAddress, dstAddress);
 	if(!path) {
 		/* cache miss, compute the path using shortest latency path from src to dst */
+		g_mutex_lock(&top->graphLock);
 		gboolean isSuccess = _topology_computePath(top, srcAddress, dstAddress);
+		g_mutex_unlock(&top->graphLock);
 		g_assert(isSuccess);
 		path = _topology_getPathFromCache(top, srcAddress, dstAddress);
 	}
@@ -940,11 +946,12 @@ void topology_disconnect(Topology* top, Address* address) {
 void topology_free(Topology* top) {
 	MAGIC_ASSERT(top);
 
+	g_mutex_lock(&top->graphLock);
+
 	if(top->graphPath) {
 		g_string_free(top->graphPath, TRUE);
 	}
 
-	g_rw_lock_writer_lock(&(top->weightsLock));
 	g_rw_lock_writer_lock(&(top->virtualIPLock));
 
 	/* this functions grabs and releases the pathCache write lock */
@@ -968,10 +975,9 @@ void topology_free(Topology* top) {
 
 	g_rw_lock_writer_unlock(&(top->virtualIPLock));
 	g_rw_lock_clear(&(top->virtualIPLock));
-	g_rw_lock_writer_unlock(&(top->weightsLock));
-	g_rw_lock_clear(&(top->weightsLock));
 
-	g_mutex_clear(&(top->shortestPathTotalTimeLock));
+	g_mutex_unlock(&top->graphLock);
+	g_mutex_clear(&(top->graphLock));
 
 	MAGIC_CLEAR(top);
 	g_free(top);
@@ -997,10 +1003,9 @@ Topology* topology_new(gchar* graphPath) {
 		return NULL;
 	}
 
-	g_rw_lock_init(&(top->weightsLock));
 	g_rw_lock_init(&(top->virtualIPLock));
 	g_rw_lock_init(&(top->pathCacheLock));
-	g_mutex_init(&(top->shortestPathTotalTimeLock));
+	g_mutex_init(&(top->graphLock));
 
 	return top;
 }
