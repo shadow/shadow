@@ -67,7 +67,8 @@ CreateNodesAction* createnodes_new(GString* name, GString* ip, GString* cluster,
 	action->cpuFrequency = (guint)cpuFrequency;
 	action->heartbeatIntervalSeconds = heartbeatIntervalSeconds;
 
-	if(ip) {
+	/* ignore 127.0.0.1 ip address settings - that is reserved for internal use */
+	if(ip && address_stringToIP(ip->str) != address_stringToIP("127.0.0.1")) {
 		action->requestedIP = g_string_new(ip->str);
 	}
 	if(cluster) {

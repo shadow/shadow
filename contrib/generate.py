@@ -704,6 +704,7 @@ def getServers(geoentries, alexapath):
         for line in f:
             parts = line.strip().split(',')
             ip = parts[2]
+            if ip == "127.0.0.1": continue
             servers['allips'].append(ip)
 
             code = getClusterCode(geoentries, ip)
