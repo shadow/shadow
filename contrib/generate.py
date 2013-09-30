@@ -563,10 +563,6 @@ def generate(args):
     # finally, print the XML file
     with open("shadow.config.xml", 'wb') as fhosts:
 
-        e = etree.Element("topology")
-        e.set("path", "{0}share/topology.graphml.xml".format(INSTALLPREFIX))
-        root.insert(0, e)
-
         # plug-ins
         e = etree.Element("plugin")
         e.set("id", "scallion")
@@ -587,6 +583,11 @@ def generate(args):
         # kill time
         e = etree.Element("kill")
         e.set("time", "3600")
+        root.insert(0, e)
+
+        # internet topology map
+        e = etree.Element("topology")
+        e.set("path", "{0}share/topology.graphml.xml".format(INSTALLPREFIX))
         root.insert(0, e)
         
         # all our hosts
