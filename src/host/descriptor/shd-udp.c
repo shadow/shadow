@@ -57,7 +57,7 @@ void udp_droppedPacket(UDP* udp, Packet* packet) {
 gssize udp_sendUserData(UDP* udp, gconstpointer buffer, gsize nBytes, in_addr_t ip, in_port_t port) {
 	MAGIC_ASSERT(udp);
 
-	gsize space = udp->super.outputBufferSize - udp->super.outputBufferLength;
+	gsize space = socket_getOutputBufferSpace(&(udp->super));
 	if(space < nBytes) {
 		/* not enough space to buffer the data */
 		return -1;
@@ -98,7 +98,9 @@ gssize udp_sendUserData(UDP* udp, gconstpointer buffer, gsize nBytes, in_addr_t 
 	Tracker* tracker = host_getTracker(worker_getPrivate()->cached_node);
 	Socket* socket = (Socket* )udp;
 	Descriptor* descriptor = (Descriptor *)socket;
-	tracker_updateSocketOutputBuffer(tracker, descriptor->handle, socket->outputBufferLength, socket->outputBufferSize);
+	gsize outLength = socket_getOutputBufferLength(socket);
+	gsize outSize = socket_getOutputBufferSize(socket);
+	tracker_updateSocketOutputBuffer(tracker, descriptor->handle, outLength, outSize);
 
 	debug("buffered %"G_GSIZE_FORMAT" outbound UDP bytes from user", offset);
 
@@ -135,7 +137,9 @@ gssize udp_receiveUserData(UDP* udp, gpointer buffer, gsize nBytes, in_addr_t* i
 	Tracker* tracker = host_getTracker(worker_getPrivate()->cached_node);
 	Socket* socket = (Socket* )udp;
 	Descriptor* descriptor = (Descriptor *)socket;
-	tracker_updateSocketOutputBuffer(tracker, descriptor->handle, socket->outputBufferLength, socket->outputBufferSize);
+	gsize outLength = socket_getOutputBufferLength(socket);
+	gsize outSize = socket_getOutputBufferSize(socket);
+	tracker_updateSocketOutputBuffer(tracker, descriptor->handle, outLength, outSize);
 
 	debug("user read %u inbound UDP bytes", bytesCopied);
 

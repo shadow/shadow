@@ -267,19 +267,25 @@ gsize socket_getOutputBufferSize(Socket* socket) {
 
 void socket_setInputBufferSize(Socket* socket, gsize newSize) {
 	MAGIC_ASSERT(socket);
-	if(newSize > socket->inputBufferSize) {
+	if(newSize >= socket->inputBufferLength) {
 		socket->inputBufferSize = newSize;
+		socket->inputBufferSizePending = 0;
 	} else {
-		socket->pendingInputBufferSize = newSize;
+		/* ensure positive size, reduce size as buffer drains */
+		socket->inputBufferSize = socket->inputBufferLength;
+		socket->inputBufferSizePending = newSize;
 	}
 }
 
 void socket_setOutputBufferSize(Socket* socket, gsize newSize) {
 	MAGIC_ASSERT(socket);
-	if(newSize > socket->outputBufferSize) {
+	if(newSize >= socket->outputBufferLength) {
 		socket->outputBufferSize = newSize;
+		socket->outputBufferSizePending = 0;
 	} else {
-		socket->pendingOutputBufferSize = newSize;
+		/* ensure positive size, reduce size as buffer drains */
+		socket->outputBufferSize = socket->outputBufferLength;
+		socket->outputBufferSizePending = newSize;
 	}
 }
 
@@ -318,6 +324,11 @@ Packet* socket_removeFromInputBuffer(Socket* socket) {
 		/* just removed a packet */
 		guint length = packet_getPayloadLength(packet);
 		socket->inputBufferLength -= length;
+
+		/* check if we need to reduce the buffer size */
+		if(socket->inputBufferSizePending > 0) {
+			socket_setInputBufferSize(socket, socket->inputBufferSizePending);
+		}
 
 		/* update the tracker input buffer stats */
 		Tracker* tracker = host_getTracker(worker_getPrivate()->cached_node);
@@ -373,6 +384,11 @@ Packet* socket_removeFromOutputBuffer(Socket* socket) {
 		/* just removed a packet */
 		guint length = packet_getPayloadLength(packet);
 		socket->outputBufferLength -= length;
+
+		/* check if we need to reduce the buffer size */
+		if(socket->outputBufferSizePending > 0) {
+			socket_setOutputBufferSize(socket, socket->outputBufferSizePending);
+		}
 
 		/* update the tracker input buffer stats */
 		Tracker* tracker = host_getTracker(worker_getPrivate()->cached_node);
