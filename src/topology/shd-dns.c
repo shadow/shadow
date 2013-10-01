@@ -132,12 +132,9 @@ Address* dns_register(DNS* dns, GQuark id, gchar* name, gchar* requestedIP) {
 void dns_deregister(DNS* dns, Address* address) {
 	MAGIC_ASSERT(dns);
 	if(!address_isLocal(address)) {
-		if(g_hash_table_remove(dns->addressByIP, GUINT_TO_POINTER(address_toHostIP(address)))) {
-			address_unref(address);
-		}
-		if(g_hash_table_remove(dns->addressByName, address_toHostName(address))) {
-			address_unref(address);
-		}
+		/* these remove functions will call address_unref as necessary */
+		g_hash_table_remove(dns->addressByIP, GUINT_TO_POINTER(address_toHostIP(address)));
+		g_hash_table_remove(dns->addressByName, address_toHostName(address));
 	}
 }
 
