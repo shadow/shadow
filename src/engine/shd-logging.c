@@ -99,19 +99,18 @@ void logging_handleLog(const gchar *log_domain, GLogLevelFlags log_level, const 
 
 void logging_logv(const gchar *msgLogDomain, GLogLevelFlags msgLogLevel,
 		const gchar* functionName, const gchar *format, va_list vargs) {
-
-	const gchar* logDomainStr = msgLogDomain ? msgLogDomain : "shadow";
-	const gchar* logFunctionStr = functionName ? functionName : "n/a";
-	const gchar* formatStr = format ? format : "n/a";
-	gchar* logLevelStr = _logging_getNewLogLevelString(msgLogLevel);
-
 	/* this is called by worker threads, so we have access to worker */
 	Worker* w = worker_getPrivate();
 
 	/* see if we can avoid some work because the message is filtered anyway */
+	const gchar* logDomainStr = msgLogDomain ? msgLogDomain : "shadow";
 	if(_logging_messageIsFiltered(logDomainStr, msgLogLevel)) {
 		return;
 	}
+
+	const gchar* logFunctionStr = functionName ? functionName : "n/a";
+	const gchar* formatStr = format ? format : "n/a";
+	gchar* logLevelStr = _logging_getNewLogLevelString(msgLogLevel);
 
 	/* format the simulation time if we are running an event */
 	GString* clockStringBuffer = g_string_new("");
