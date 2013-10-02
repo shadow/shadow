@@ -6,7 +6,7 @@
 
 #include "shadow.h"
 
-static gchar* _logging_getLogLevelString(GLogLevelFlags log_level) {
+static gchar* _logging_getNewLogLevelString(GLogLevelFlags log_level) {
 	gchar* levels;
 	switch (log_level) {
 		case G_LOG_LEVEL_ERROR: {
@@ -43,12 +43,7 @@ static gchar* _logging_getLogLevelString(GLogLevelFlags log_level) {
 			break;
 		}
 	}
-	return levels;
-}
-
-static const gchar* _logging_getLogDomainString(const gchar *log_domain) {
-	const gchar* domains = log_domain != NULL ? log_domain : "shadow";
-	return domains;
+	return g_strdup(levels);
 }
 
 static gboolean _logging_messageIsFiltered(const gchar *msgLogDomain, GLogLevelFlags msgLogLevel) {
@@ -80,33 +75,41 @@ static gboolean _logging_messageIsFiltered(const gchar *msgLogDomain, GLogLevelF
 /* this func is called whenever g_logv is called, not just in our log code */
 void logging_handleLog(const gchar *log_domain, GLogLevelFlags log_level, const gchar *message, gpointer user_data) {
 	/* GLogLevelFlags* configuredLogLevel = user_data; */
+	const gchar* logDomainStr = log_domain ? log_domain : "shadow";
+	const gchar* messageStr = message ? message : "n/a";
 
 	/* check again if the message should be filtered */
-	if(_logging_messageIsFiltered(log_domain, log_level)) {
+	if(_logging_messageIsFiltered(logDomainStr, log_level)) {
 		return;
 	}
 
-	gulong hours, minutes, seconds, microseconds;
+	gulong hours = 0, minutes = 0, seconds = 0, microseconds = 0;
 	gulong elapsed = (gulong) g_timer_elapsed(engine_getRunTimer(shadow_engine), &microseconds);
 	hours = elapsed / 3600;
 	elapsed %= 3600;
 	minutes = elapsed / 60;
 	seconds = elapsed % 60;
 
-	g_print("%lu:%lu:%lu:%06lu %s\n", hours, minutes, seconds, microseconds, message);
+	g_print("%lu:%lu:%lu:%06lu %s\n", hours, minutes, seconds, microseconds, messageStr);
 
 	if(log_level & G_LOG_LEVEL_ERROR) {
-		g_print("\t**aborting**\n");
+		g_print("%s", "\t**aborting**\n");
 	}
 }
 
 void logging_logv(const gchar *msgLogDomain, GLogLevelFlags msgLogLevel,
 		const gchar* functionName, const gchar *format, va_list vargs) {
+
+	const gchar* logDomainStr = msgLogDomain ? msgLogDomain : "shadow";
+	const gchar* logFunctionStr = functionName ? functionName : "n/a";
+	const gchar* formatStr = format ? format : "n/a";
+	gchar* logLevelStr = _logging_getNewLogLevelString(msgLogLevel);
+
 	/* this is called by worker threads, so we have access to worker */
 	Worker* w = worker_getPrivate();
 
 	/* see if we can avoid some work because the message is filtered anyway */
-	if(_logging_messageIsFiltered(msgLogDomain, msgLogLevel)) {
+	if(_logging_messageIsFiltered(logDomainStr, msgLogLevel)) {
 		return;
 	}
 
@@ -142,27 +145,19 @@ void logging_logv(const gchar *msgLogDomain, GLogLevelFlags msgLogLevel,
 	gchar* nodeString = g_string_free(nodeStringBuffer, FALSE);
 
 	/* the function name - no need to free this */
-	const gchar* functionString = !functionName ? "n/a" : functionName;
-
 	GString* newLogFormatBuffer = g_string_new(NULL);
 	g_string_printf(newLogFormatBuffer, "[thread-%i] %s [%s-%s] [%s] [%s] %s",
-			w->thread_id,
-			clockString,
-			_logging_getLogDomainString(msgLogDomain),
-			_logging_getLogLevelString(msgLogLevel),
-			nodeString,
-			functionString,
-			format
-			);
+			w->thread_id, clockString, logDomainStr, logLevelStr, nodeString, logFunctionStr, formatStr);
 
 	/* get the new format out of our string buffer and log it */
 	gchar* newLogFormat = g_string_free(newLogFormatBuffer, FALSE);
-	g_logv(msgLogDomain, msgLogLevel, newLogFormat, vargs);
+	g_logv(logDomainStr, msgLogLevel, newLogFormat, vargs);
 
 	/* cleanup */
 	g_free(newLogFormat);
 	g_free(clockString);
 	g_free(nodeString);
+	g_free(logLevelStr);
 }
 
 void logging_log(const gchar *log_domain, GLogLevelFlags log_level, const gchar* functionName, const gchar *format, ...) {

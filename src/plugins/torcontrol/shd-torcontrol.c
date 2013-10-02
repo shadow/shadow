@@ -799,7 +799,7 @@ gint torControl_processReply(TorControl_Connection *connection, GList *reply) {
             	_torControl_processAsyncLogReply(funcs->logEvent, connection->moduleData, code, line);
             } else if(funcs->statusEvent && !g_ascii_strcasecmp(event, "STATUS_CLIENT")) {
                 _torControl_processAsyncStatusReply(funcs->statusEvent, connection->moduleData, code, line);
-            } else if(funcs->genericEvent) {
+            } else if(line && event && funcs->genericEvent) {
             	/* send all other events to the module generic event handler, including
             	 * those that dont have other event handlers installed */
             	funcs->genericEvent(connection->moduleData, code, line);

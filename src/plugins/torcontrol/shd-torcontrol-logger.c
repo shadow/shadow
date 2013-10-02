@@ -112,8 +112,7 @@ static void _torcontrollogger_handleResponseEvent(TorControlLogger* tcl,
  * handling the asynchronous events from control port
  */
 
-static void _torcontrollogger_handleEvents(TorControlLogger* tcl, gint code,
-		gchar* line, ...) {
+static void _torcontrollogger_handleEvents(TorControlLogger* tcl, gint code, gchar* line) {
 	tcl->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, "[torcontrol-log] %s:%i %s",
 			tcl->targetHostname->str, tcl->targetPort, line);
 }

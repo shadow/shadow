@@ -18,6 +18,12 @@ struct _Network {
 	MAGIC_DECLARE;
 };
 
+static void _network_freeLinks(gpointer key, GList* linksList, gpointer userData) {
+	if(linksList) {
+		g_list_free_full(linksList, (GDestroyNotify) link_free);
+	}
+}
+
 Network* network_new(GQuark id, guint64 bandwidthdown, guint64 bandwidthup, gdouble packetloss) {
 	Network* network = g_new0(Network, 1);
 	MAGIC_INIT(network);
@@ -28,7 +34,7 @@ Network* network_new(GQuark id, guint64 bandwidthdown, guint64 bandwidthup, gdou
 	network->packetloss = packetloss;
 
 	network->linksByCluster = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, NULL);
-	network->linksByNode = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, NULL);
+	network->linksByNode = g_hash_table_new_full(g_int_hash, g_int_equal, g_free, (GDestroyNotify) g_hash_table_destroy);
 
 	g_mutex_init(&(network->lock));
 
@@ -41,6 +47,7 @@ void network_free(gpointer data) {
 
 	g_mutex_lock(&(network->lock));
 
+	g_hash_table_foreach(network->linksByCluster, (GHFunc) _network_freeLinks, NULL);
 	g_hash_table_destroy(network->linksByCluster);
 	g_hash_table_destroy(network->linksByNode);
 
@@ -107,7 +114,7 @@ Link* network_getLink(Network *network, in_addr_t sourceIP, in_addr_t destinatio
 	/* check to see if we already have hash table of links for source */
 	GHashTable *nodeLinks = g_hash_table_lookup(network->linksByNode, &sourceIP);
 	if(!nodeLinks) {
-		nodeLinks = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, NULL);
+		nodeLinks = g_hash_table_new_full(g_int_hash, g_int_equal, g_free, NULL);
 		key = g_new0(gint, 1);
 		*key = sourceIP;
 		g_hash_table_insert(network->linksByNode, key, nodeLinks);
@@ -167,7 +174,7 @@ Link* network_getLink(Network *network, in_addr_t sourceIP, in_addr_t destinatio
 		/* insert link into destination network */
 		nodeLinks = g_hash_table_lookup(destinationNetwork->linksByNode, &destinationIP);
 		if(!nodeLinks) {
-			nodeLinks = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, NULL);
+			nodeLinks = g_hash_table_new_full(g_int_hash, g_int_equal, g_free, NULL);
 			key = g_new0(gint, 1);
 			*key = destinationIP;
 			g_hash_table_insert(destinationNetwork->linksByNode, key, nodeLinks);
