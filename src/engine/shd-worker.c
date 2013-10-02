@@ -247,7 +247,7 @@ void worker_scheduleRetransmit(Packet* packet) {
 		delay = 1;
 	} else {
 		gdouble latency = topology_getLatency(worker_getTopology(), srcAddress, dstAddress);
-		SimulationTime delay = (SimulationTime) floor(latency * SIMTIME_ONE_MILLISECOND);
+		delay = (SimulationTime) floor(latency * SIMTIME_ONE_MILLISECOND);
 	}
 
 	worker_scheduleEvent((Event*)event, delay, (GQuark) address_getID(srcAddress));
