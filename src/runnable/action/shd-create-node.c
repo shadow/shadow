@@ -1,25 +1,11 @@
 /*
  * The Shadow Simulator
- *
- * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
- *
- * This file is part of Shadow.
- *
- * Shadow is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Shadow is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright (c) 2010-2011, Rob Jansen
+ * See LICENSE for licensing information
  */
 
 #include "shadow.h"
+#include "shd-action-internal.h"
 
 #include <netinet/in.h>
 
@@ -33,9 +19,13 @@ struct _CreateNodesAction {
 	guint cpuFrequency;
 	SimulationTime heartbeatIntervalSeconds;
 	GString* heartbeatLogLevelString;
+	GString* heartbeatLogInfoString;
 	GString* logLevelString;
 	GString* logPcapString;
 	GString* pcapDirString;
+	guint64 socketReceiveBufferSize;
+	guint64 socketSendBufferSize;
+	guint64 interfaceReceiveBufferLength;
 
 	GList* applications;
 	MAGIC_DECLARE;
@@ -58,8 +48,9 @@ RunnableFunctionTable createnodes_functions = {
 
 CreateNodesAction* createnodes_new(GString* name, GString* cluster,
 		guint64 bandwidthdown, guint64 bandwidthup, guint64 quantity, guint64 cpuFrequency,
-		guint64 heartbeatIntervalSeconds, GString* heartbeatLogLevelString,
-		GString* logLevelString, GString* logPcapString, GString* pcapDirString)
+		guint64 heartbeatIntervalSeconds, GString* heartbeatLogLevelString, GString* heartbeatLogInfoString,
+		GString* logLevelString, GString* logPcapString, GString* pcapDirString,
+		guint64 socketReceiveBufferSize, guint64 socketSendBufferSize, guint64 interfaceReceiveBufferLength)
 {
 	g_assert(name);
 	CreateNodesAction* action = g_new0(CreateNodesAction, 1);
@@ -78,6 +69,9 @@ CreateNodesAction* createnodes_new(GString* name, GString* cluster,
 	if(heartbeatLogLevelString) {
 		action->heartbeatLogLevelString = g_string_new(heartbeatLogLevelString->str);
 	}
+	if(heartbeatLogInfoString) {
+		action->heartbeatLogInfoString = g_string_new(heartbeatLogInfoString->str);
+	}
 	if(logLevelString) {
 		action->logLevelString = g_string_new(logLevelString->str);
 	}
@@ -86,6 +80,15 @@ CreateNodesAction* createnodes_new(GString* name, GString* cluster,
 	}
 	if(pcapDirString) {
 		action->pcapDirString = g_string_new(pcapDirString->str);
+	}
+	if(socketReceiveBufferSize) {
+		action->socketReceiveBufferSize = socketReceiveBufferSize;
+	}
+	if(socketSendBufferSize) {
+		action->socketSendBufferSize = socketSendBufferSize;
+	}
+	if(interfaceReceiveBufferLength) {
+		action->interfaceReceiveBufferLength = interfaceReceiveBufferLength;
 	}
 
 	return action;
@@ -117,7 +120,7 @@ void createnodes_run(CreateNodesAction* action) {
 	guint hostnameCounter = 0;
 
 	if(!hostname) {
-		critical("Can not create %lu Node(s) '%s' with NULL components. Check XML file for errors.",
+		critical("Can not create %"G_GUINT64_FORMAT" Node(s) '%s' with NULL components. Check XML file for errors.",
 				action->quantity, g_quark_to_string(action->id));
 		return;
 	}
@@ -134,6 +137,10 @@ void createnodes_run(CreateNodesAction* action) {
 	guint cpuFrequency = action->cpuFrequency;
 	if(!cpuFrequency) {
 		cpuFrequency = engine_getRawCPUFrequency(worker->cached_engine);
+		if(!cpuFrequency) {
+			cpuFrequency = 2500000; /* 2.5 GHz */
+			debug("both configured and raw cpu frequencies unavailable, using 2500000 KHz");
+		}
 	}
 	gint cpuThreshold = config->cpuThreshold;
 	gint cpuPrecision = config->cpuPrecision;
@@ -152,6 +159,10 @@ void createnodes_run(CreateNodesAction* action) {
 	if(action->heartbeatLogLevelString) {
 		heartbeatLogLevel = configuration_getLevel(config, action->heartbeatLogLevelString->str);
 	}
+	gchar* heartbeatLogInfo = NULL;
+	if(action->heartbeatLogInfoString) {
+		heartbeatLogInfo = g_strdup(action->heartbeatLogInfoString->str);
+	}
 	GLogLevelFlags logLevel = 0;
 	if(action->logLevelString) {
 		logLevel = configuration_getLevel(config, action->logLevelString->str);
@@ -168,6 +179,23 @@ void createnodes_run(CreateNodesAction* action) {
 	}
 
 	gchar* qdisc = configuration_getQueuingDiscipline(config);
+
+	guint64 sockRecv = action->socketReceiveBufferSize; /* bytes */
+	gboolean autotuneRecv = FALSE;
+	if(!sockRecv) {
+		sockRecv = worker_getConfig()->initialSocketReceiveBufferSize;
+		autotuneRecv = worker_getConfig()->autotuneSocketReceiveBuffer;
+	}
+	guint64 sockSend = action->socketSendBufferSize; /* bytes */
+	gboolean autotuneSend = FALSE;
+	if(!sockSend) {
+		sockSend = worker_getConfig()->initialSocketSendBufferSize;
+		autotuneSend = worker_getConfig()->autotuneSocketSendBuffer;
+	}
+	guint64 ifaceRecv = action->interfaceReceiveBufferLength; /* N packets */
+	if(!ifaceRecv) {
+		ifaceRecv = worker_getConfig()->interfaceBufferSize;
+	}
 
 	for(gint i = 0; i < action->quantity; i++) {
 		/* get a random network if they didnt assign one */
@@ -192,9 +220,9 @@ void createnodes_run(CreateNodesAction* action) {
 		/* the node is part of the internet */
 		guint nodeSeed = (guint) engine_nextRandomInt(worker->cached_engine);
 		Node* node = internetwork_createNode(worker_getInternet(), id, network,
-				hostnameBuffer, bwDownKiBps, bwUpKiBps, cpuFrequency, cpuThreshold, cpuPrecision,
-				nodeSeed, heartbeatInterval, heartbeatLogLevel, logLevel, logPcap, pcapDir, qdisc);
-
+						hostnameBuffer, bwDownKiBps, bwUpKiBps, cpuFrequency, cpuThreshold, cpuPrecision,
+						nodeSeed, heartbeatInterval, heartbeatLogLevel, heartbeatLogInfo, logLevel, logPcap, pcapDir,
+						qdisc, sockRecv, autotuneRecv, sockSend, autotuneSend, ifaceRecv);
 		g_string_free(hostnameBuffer, TRUE);
 
 		/* loop through and create, add, and boot all applications */

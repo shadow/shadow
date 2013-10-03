@@ -1,22 +1,7 @@
 /*
  * The Shadow Simulator
- *
- * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
- *
- * This file is part of Shadow.
- *
- * Shadow is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Shadow is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright (c) 2010-2011, Rob Jansen
+ * See LICENSE for licensing information
  */
 
 #include "shadow.h"
@@ -45,7 +30,7 @@ Address* address_new(guint32 ip, const gchar* name) {
 	MAGIC_INIT(address);
 
 	address->ip = ip;
-	address->ipString = g_strdup(NTOA(ip)); // XXX do we need to use ntohl() first?
+	address->ipString = address_ipToNewString((in_addr_t)ip); // XXX do we need to use ntohl() first?
 	address->name = g_strdup(name);
 
 	return address;
@@ -91,4 +76,12 @@ guint32 address_toNetworkIP(Address* address) {
 gchar* address_toHostName(Address* address) {
 	MAGIC_ASSERT(address);
 	return address->name;
+}
+
+gchar* address_ipToNewString(in_addr_t ip) {
+	gchar* ipStringBuffer = g_malloc0(INET6_ADDRSTRLEN+1);
+	const gchar* ipString = inet_ntop(AF_INET, &ip, ipStringBuffer, INET6_ADDRSTRLEN);
+	GString* result = ipString ? g_string_new(ipString) : g_string_new("NULL");
+	g_free(ipStringBuffer);
+	return g_string_free(result, FALSE);
 }

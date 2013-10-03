@@ -1,22 +1,7 @@
-/**
+/*
  * The Shadow Simulator
- *
- * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
- *
- * This file is part of Shadow.
- *
- * Shadow is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Shadow is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright (c) 2010-2011, Rob Jansen
+ * See LICENSE for licensing information
  */
 
 #ifndef SHD_SYSTEM_H_
@@ -65,6 +50,7 @@ gssize system_read(gint fd, gpointer buf, gint n);
 gssize system_write(gint fd, const gpointer buf, gint n);
 gint system_close(gint fd);
 gint system_fcntl(int fd, int cmd, va_list farg);
+gint system_ioctl(int fd, unsigned long int request, va_list farg);
 
 gint system_pipe(gint pipefds[2]);
 gint system_pipe2(gint pipefds[2], gint flags);
@@ -97,6 +83,13 @@ void system_cryptoLockingFunc(int mode, int n, const char *file, int line);
 unsigned long system_cryptoIdFunc();
 
 gpointer system_malloc(gsize size);
+gpointer system_calloc(gsize nmemb, gsize size);
+gpointer system_realloc(gpointer ptr, gsize size);
 void system_free(gpointer ptr);
+int system_posix_memalign(gpointer* memptr, gsize alignment, gsize size);
+gpointer system_memalign(gsize blocksize, gsize bytes);
+gpointer system_aligned_alloc(gsize alignment, gsize size);
+gpointer system_valloc(gsize size);
+gpointer system_pvalloc(gsize size);
 
 #endif /* SHD_SYSTEM_H_ */

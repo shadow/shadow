@@ -1,25 +1,12 @@
 #!/usr/bin/env python2.7
 
-##
-# Scallion - plug-in for The Shadow Simulator
-#
-# Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
-#
-# This file is part of Scallion.
-#
-# Scallion is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# Scallion is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with Scallion.  If not, see <http://www.gnu.org/licenses/>.
-#
+'''
+/*
+ * The Shadow Simulator
+ * Copyright (c) 2010-2011, Rob Jansen
+ * See LICENSE for licensing information
+ */
+'''
 
 import os, sys, subprocess, shutil, argparse
 from datetime import datetime
@@ -27,13 +14,14 @@ from datetime import datetime
 DEFAULTPREFIX=os.path.abspath(os.path.expanduser("~/.shadow/"))
 DEFAULTOUTPUT=os.path.abspath(os.path.expanduser("./"))
 DEFAULTINPUT=os.path.abspath(os.path.expanduser("./hosts.xml"))
-
+        
 def main():
     # setup our commands
     ap = argparse.ArgumentParser(description='Run Tor experiments as a plug-in to Shadow', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     ap.add_argument('-p', '--prefix', action="store", dest="prefix", help="PATH to scallion installation", metavar="PATH", default=DEFAULTPREFIX)
     ap.add_argument('-i', '--input-file', action="store", dest="input", help="add PATH as a shadow input XML file (in addition to PREFIX/share/topology.xml)", metavar="PATH", default=DEFAULTINPUT)
     ap.add_argument('-o', '--output-dir', action="store", type=str, dest="output", help="PATH to directory from which to run Shadow", metavar='PATH', default=DEFAULTOUTPUT)
+    ap.add_argument('-c', '--compress', action="store", dest="compress", help="use N xz threads to compress the logfile inline", metavar="N", default=0)
     ap.add_argument('-r', '--reset', action="store_true", dest="reset", help="reset data directory and exit", default=False)
     ap.add_argument('-y', '--assume-yes', action="store_true", dest="clear", help="don't ask before resetting data directory", default=False)
     
@@ -83,13 +71,20 @@ def main():
     
     # command to run
     cmd = "{0} --preload={1} {2} {3}".format(shadowpath, preloadpath, ' '.join(unknown_args), xmlpaths)
-
     log("calling '{0}', output directed to '{1}'".format(cmd, logpath))
-    f = open(logpath, 'w')
     start = datetime.now()
-    retcode = subprocess.call(cmd.split(), cwd=args.output, stdout=f)
+    
+    retcode = None
+    if args.compress > 0: # compress with threaded xz
+        xz_p = subprocess.Popen("xz -T {0} > {1}.xz".format(args.compress, logpath), stdin=subprocess.PIPE, shell=True)
+        retcode = subprocess.call(cmd.split(), cwd=args.output, stdout=xz_p.stdin)
+        xz_p.stdin.close()
+        xz_p.wait()
+    else:
+        with open(logpath, 'wb') as f:
+            retcode = subprocess.call(cmd.split(), cwd=args.output, stdout=f)
+    
     end = datetime.now()
-    f.close()
 
     if dstat_p is not None: dstat_p.kill()
     log("Shadow returned {1} in {2} seconds".format(end, retcode, end-start))
@@ -120,13 +115,21 @@ def query_yes_no(question, default="yes"):
 def reset(output):
     if os.path.exists(output+"/data"): shutil.rmtree(output+"/data")
     
-    os.makedirs(output+"/data/authoritydata")
+    if os.path.exists(output+"/relay.torrc"):
+        os.makedirs(output+"/data/relaydata")
+    else:
+        os.makedirs(output+"/data/exitguarddata")
+        os.makedirs(output+"/data/guarddata")
+        os.makedirs(output+"/data/middledata")
     os.makedirs(output+"/data/exitdata")
-    os.makedirs(output+"/data/relaydata")
     os.makedirs(output+"/data/clientdata")
     os.makedirs(output+"/data/pcapdata")
     
-    shutil.copytree(output+"/keys", output+"/data/authoritydata/4uthority/keys")
+    if os.path.exists(output+"/authoritydata"): shutil.copytree(output+"/authoritydata", output+"/data/authoritydata")
+    else: shutil.copytree(output+"/keys", output+"/data/authoritydata/4uthority/keys")
+    
+    if os.path.exists(output+"/hiddenserverdata"): shutil.copytree(output+"/hiddenserverdata", output+"/data/hiddenserverdata")
+    
     return 0
 
 def log(msg):

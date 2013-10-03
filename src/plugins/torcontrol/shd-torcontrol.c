@@ -1,23 +1,9 @@
-/**
+/*
  * The Shadow Simulator
- *
- * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
- *
- * This file is part of Shadow.
- *
- * Shadow is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Shadow is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright (c) 2010-2011, Rob Jansen
+ * See LICENSE for licensing information
  */
+
 #include <glib.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -461,7 +447,7 @@ gint torControl_createConnection(gchar *hostname, in_port_t port, gchar *mode, g
     connection->hostname = g_strdup(hostname);
     connection->ip = torControl_resolveHostname(connection->hostname);
     if(!connection->ip) {
-		log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error resolving hostname %s", hostname);
+		log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "Error resolving hostname %s", hostname);
 		g_free(connection->hostname);
 		g_free(connection);
 		return -1;
@@ -470,7 +456,7 @@ gint torControl_createConnection(gchar *hostname, in_port_t port, gchar *mode, g
     connection->port = port;
     connection->sockd = torControl_connect(connection->ip, htons(connection->port));
     if(connection->sockd < 0) {
-        log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error connecting to control host %s:%d",
+        log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "Error connecting to control host %s:%d",
                 connection->hostname, connection->port);
         g_free(connection->hostname);
         g_free(connection);
@@ -728,7 +714,7 @@ gint torControl_processReply(TorControl_Connection *connection, GList *reply) {
 	ShadowLogFunc log = torControl->shadowlib->log;
 	TorControl_ReplyLine *replyLine = g_list_first(reply)->data;
 
-    log(G_LOG_LEVEL_INFO, __FUNCTION__, "[%s] [%d] %s", connection->hostname, replyLine->code, replyLine->body);
+    log(SHADOW_LOG_LEVEL_INFO, __FUNCTION__, "[%s] [%d] %s", connection->hostname, replyLine->code, replyLine->body);
 
     TorControl_EventHandlers *funcs = &(connection->eventHandlers);
     gint code = replyLine->code;
@@ -813,7 +799,7 @@ gint torControl_processReply(TorControl_Connection *connection, GList *reply) {
             	_torControl_processAsyncLogReply(funcs->logEvent, connection->moduleData, code, line);
             } else if(funcs->statusEvent && !g_ascii_strcasecmp(event, "STATUS_CLIENT")) {
                 _torControl_processAsyncStatusReply(funcs->statusEvent, connection->moduleData, code, line);
-            } else if(funcs->genericEvent) {
+            } else if(line && event && funcs->genericEvent) {
             	/* send all other events to the module generic event handler, including
             	 * those that dont have other event handlers installed */
             	funcs->genericEvent(connection->moduleData, code, line);
@@ -840,7 +826,7 @@ gint torControl_sendCommand(gint sockd, gchar *command) {
 
     _torControl_changeEpoll(torControl->epolld, sockd, EPOLLOUT);
     gint bytes = send(sockd, connection->sendBuf->str, connection->sendBuf->len, 0);
-    log(G_LOG_LEVEL_INFO, __FUNCTION__, "[%s] CMD: %s", connection->hostname, command);
+    log(SHADOW_LOG_LEVEL_INFO, __FUNCTION__, "[%s] CMD: %s", connection->hostname, command);
     TORCTL_ASSERTIO(torControl, bytes, errno == EWOULDBLOCK || errno == ENOTCONN || errno == EALREADY, TORCTL_ERR_SEND);
 
     if(bytes >= connection->sendBuf->len) {
@@ -940,12 +926,12 @@ void torControl_init(TorControl* currentTorControl) {
 
 void torControl_new(TorControl_Args *args) {
 	ShadowLogFunc log = torControl->shadowlib->log;
-	log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "torControl_new called");
+	log(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__, "torControl_new called");
 
 	/* create an epoll to wait for I/O events */
 	torControl->epolld = epoll_create(1);
 	if(torControl->epolld == -1) {
-		log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_create");
+		log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_create");
 		close(torControl->epolld);
 		torControl->epolld = 0;
 		return;
@@ -969,7 +955,7 @@ void torControl_new(TorControl_Args *args) {
 
 		gint ret = torControl_createConnection(hostname, port, mode, moduleArgs);
 		if(ret < 0) {
-			log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "Error creating connection to %s:%d for %s", hostname, port, mode);
+			log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, "Error creating connection to %s:%d for %s", hostname, port, mode);
 		}
 	} else if(!g_strcmp0(args->mode, "multi")) {
 		/* read in filename with hosts to connect to */
@@ -1000,7 +986,7 @@ void torControl_new(TorControl_Args *args) {
 
 		    gint ret = torControl_createConnection(hostname, port, mode, moduleArgs);
 		    if(ret < 0) {
-		    	log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "Error creating connection to %s:%d for %s", hostname, port, mode);
+		    	log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, "Error creating connection to %s:%d for %s", hostname, port, mode);
 			}
 
 		    if(moduleArgs) {
@@ -1018,7 +1004,7 @@ gint torControl_activate() {
 	struct epoll_event events[10];
 	int nfds = epoll_wait(torControl->epolld, events, 10, 0);
 	if(nfds == -1) {
-		log(G_LOG_LEVEL_WARNING, __FUNCTION__, "error in epoll_wait");
+		log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "error in epoll_wait");
 		return -1;
 	}
 
@@ -1027,7 +1013,7 @@ gint torControl_activate() {
 		gint sockd = events[i].data.fd;
 		TorControl_Connection *connection = g_hash_table_lookup(torControl->connections, &sockd);
 		if(!connection) {
-			log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error: could not find sockd %d", sockd);
+			log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "Error: could not find sockd %d", sockd);
 			continue;
 		}
 

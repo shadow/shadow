@@ -36,6 +36,12 @@ if((${TOR_VERSION_A} EQUAL 0 AND ${TOR_VERSION_B} EQUAL 2 AND ${TOR_VERSION_C} E
     add_definitions(-DSCALLION_USEV2CPUWORKER)
 	message(STATUS "Added definition SCALLION_USEV2CPUWORKER")
 endif()
+# version >= 0.2.4.10
+if((${TOR_VERSION_A} EQUAL 0 AND ${TOR_VERSION_B} EQUAL 2 AND ${TOR_VERSION_C} EQUAL 4 AND ${TOR_VERSION_D} GREATER 9) OR 
+    (${TOR_VERSION_A} GREATER -1 AND ${TOR_VERSION_B} GREATER 1 AND ${TOR_VERSION_C} GREATER 4))
+    add_definitions(-DSCALLION_USEV2CPUWORKERTIMING)
+    message(STATUS "Added definition SCALLION_USEV2CPUWORKERTIMING")
+endif()
 # version >= 0.2.4.11
 if((${TOR_VERSION_A} EQUAL 0 AND ${TOR_VERSION_B} EQUAL 2 AND ${TOR_VERSION_C} EQUAL 4 AND ${TOR_VERSION_D} GREATER 10) OR 
     (${TOR_VERSION_A} GREATER -1 AND ${TOR_VERSION_B} GREATER 1 AND ${TOR_VERSION_C} GREATER 4))
@@ -90,6 +96,10 @@ add_plugin(shadow-plugin-scallion shadow-plugin-scallion-bitcode)
 target_link_libraries(shadow-plugin-scallion
     ${TOR_LIBRARIES} ${GLIB_LIBRARIES} ${EVENT2_LIBRARIES} ${OPENSSL_LIBRARIES} 
     ${ZLIB_LIBRARIES} ${M_LIBRARIES} ${RT_LIBRARIES} ${DL_LIBRARIES})
+
+foreach(lib ${CMAKE_TOR_LIBRARIES})
+    target_link_libraries(shadow-plugin-scallion ${lib})
+endforeach(lib ${CMAKE_TOR_LIBRARIES})
 
 install(TARGETS shadow-plugin-scallion DESTINATION plugins)
 set_target_properties(shadow-plugin-scallion PROPERTIES INSTALL_RPATH ${CMAKE_INSTALL_PREFIX}/lib INSTALL_RPATH_USE_LINK_PATH TRUE)

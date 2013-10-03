@@ -1,26 +1,12 @@
 /*
  * The Shadow Simulator
- *
- * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
- *
- * This file is part of Shadow.
- *
- * Shadow is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Shadow is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright (c) 2010-2011, Rob Jansen
+ * See LICENSE for licensing information
  */
 
 #include "shadow.h"
 
+#include <glib.h>
 #include <stdarg.h>
 #include <string.h>
 
@@ -35,7 +21,7 @@ struct _CallbackData {
  * a common interface and re-directs to the appropriate shadow function.
  */
 
-gboolean shadowlib_register(PluginNewInstanceFunc new, PluginNotifyFunc free, PluginNotifyFunc notify) {
+int shadowlib_register(PluginNewInstanceFunc new, PluginNotifyFunc free, PluginNotifyFunc notify) {
 	Worker* worker = worker_getPrivate();
 	plugin_setShadowContext(worker->cached_plugin, TRUE);
 
@@ -45,15 +31,40 @@ gboolean shadowlib_register(PluginNewInstanceFunc new, PluginNotifyFunc free, Pl
 	return TRUE;
 }
 
-void shadowlib_log(GLogLevelFlags level, const gchar* functionName, gchar* format, ...) {
+void shadowlib_log(ShadowLogLevel level, const char* functionName, const char* format, ...) {
 	Worker* worker = worker_getPrivate();
 	plugin_setShadowContext(worker->cached_plugin, TRUE);
+
+	GLogLevelFlags glevel = 0;
+	switch(level) {
+	case SHADOW_LOG_LEVEL_ERROR:
+		glevel = G_LOG_LEVEL_ERROR;
+		break;
+	case SHADOW_LOG_LEVEL_CRITICAL:
+		glevel = G_LOG_LEVEL_CRITICAL;
+		break;
+	case SHADOW_LOG_LEVEL_WARNING:
+		glevel = G_LOG_LEVEL_WARNING;
+		break;
+	case SHADOW_LOG_LEVEL_MESSAGE:
+		glevel = G_LOG_LEVEL_MESSAGE;
+		break;
+	case SHADOW_LOG_LEVEL_INFO:
+		glevel = G_LOG_LEVEL_INFO;
+		break;
+	case SHADOW_LOG_LEVEL_DEBUG:
+		glevel = G_LOG_LEVEL_DEBUG;
+		break;
+	default:
+		glevel = G_LOG_LEVEL_MESSAGE;
+		break;
+	}
 
 	va_list variableArguments;
 	va_start(variableArguments, format);
 
 	const gchar* domain = g_quark_to_string(*plugin_getID(worker->cached_plugin));
-	logging_logv(domain, level, functionName, format, variableArguments);
+	logging_logv(domain, glevel, functionName, format, variableArguments);
 
 	va_end(variableArguments);
 
@@ -65,7 +76,7 @@ static void _shadowlib_executeCallbackInPluginContext(gpointer data, gpointer ar
 	callback(data);
 }
 
-void shadowlib_createCallback(ShadowPluginCallbackFunc callback, gpointer data, guint millisecondsDelay) {
+void shadowlib_createCallback(ShadowPluginCallbackFunc callback, void* data, uint millisecondsDelay) {
 	Worker* worker = worker_getPrivate();
 	plugin_setShadowContext(worker->cached_plugin, TRUE);
 
@@ -75,7 +86,7 @@ void shadowlib_createCallback(ShadowPluginCallbackFunc callback, gpointer data, 
 	plugin_setShadowContext(worker->cached_plugin, FALSE);
 }
 
-gboolean shadowlib_getBandwidth(in_addr_t ip, guint* bwdown, guint* bwup) {
+int shadowlib_getBandwidth(in_addr_t ip, uint* bwdown, uint* bwup) {
 	if(!bwdown || !bwup) {
 		return FALSE;
 	}
@@ -101,7 +112,7 @@ gboolean shadowlib_getBandwidth(in_addr_t ip, guint* bwdown, guint* bwup) {
 }
 
 extern const void* intercept_RAND_get_rand_method(void);
-gboolean shadowlib_cryptoSetup(gint numLocks, gpointer* shadowLockFunc, gpointer* shadowIdFunc, gconstpointer* shadowRandomMethod) {
+int shadowlib_cryptoSetup(int numLocks, void** shadowLockFunc, void** shadowIdFunc, const void** shadowRandomMethod) {
 	g_assert(shadowLockFunc && shadowIdFunc && shadowRandomMethod);
 	Worker* worker = worker_getPrivate();
 

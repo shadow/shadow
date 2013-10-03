@@ -1,22 +1,7 @@
 /*
  * The Shadow Simulator
- *
- * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
- *
- * This file is part of Shadow.
- *
- * Shadow is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Shadow is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright (c) 2010-2011, Rob Jansen
+ * See LICENSE for licensing information
  */
 
 #include <glib.h>
@@ -345,6 +330,20 @@ gint intercept_fcntl(int fd, int cmd, ...) {
 	return result;
 }
 
+gint intercept_ioctl(int fd, unsigned long int request, ...) {
+	va_list farg;
+	va_start(farg, request);
+	gint result = system_ioctl(fd, request, farg);
+	va_end(farg);
+
+	if(result != 0) {
+		errno = result;
+		return -1;
+	} else {
+		return 0;
+	}
+}
+
 /**
  * System epoll
  */
@@ -379,6 +378,37 @@ gpointer intercept_malloc(gsize size) {
 	return system_malloc(size);
 }
 
+gpointer intercept_calloc(gsize nmemb, gsize size) {
+    return system_calloc(nmemb, size);
+}
+
+gpointer intercept_realloc(gpointer ptr, gsize size) {
+    return system_realloc(ptr, size);
+}
+
 void intercept_free(gpointer ptr) {
 	return system_free(ptr);
+}
+
+gint intercept_posix_memalign(gpointer* memptr, gsize alignment, gsize size) {
+    return system_posix_memalign(memptr, alignment, size);
+}
+
+gpointer intercept_memalign(gsize blocksize, gsize bytes) {
+    return system_memalign(blocksize, bytes);
+}
+
+/* aligned_alloc doesnt exist in glibc in the current LTS version of ubuntu */
+#if 0
+gpointer intercept_aligned_alloc(gsize alignment, gsize size) {
+	return system_aligned_alloc(alignment, size);
+}
+#endif
+
+gpointer intercept_valloc(gsize size) {
+    return system_valloc(size);
+}
+
+gpointer intercept_pvalloc(gsize size) {
+	return system_pvalloc(size);
 }

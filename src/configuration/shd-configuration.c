@@ -1,22 +1,7 @@
 /*
  * The Shadow Simulator
- *
- * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
- *
- * This file is part of Shadow.
- *
- * Shadow is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Shadow is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright (c) 2010-2011, Rob Jansen
+ * See LICENSE for licensing information
  */
 
 #include "shadow.h"
@@ -38,18 +23,24 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	c->minRunAhead = 10;
 	c->printSoftwareVersion = 0;
 	c->initialTCPWindow = 10;
+	c->initialSocketReceiveBufferSize = 0;
+	c->initialSocketSendBufferSize = 0;
+	c->autotuneSocketReceiveBuffer = FALSE;
+	c->autotuneSocketSendBuffer = FALSE;
 	c->interfaceBufferSize = 1024000;
 	c->interfaceBatchTime = 10;
 	c->randomSeed = 1;
 	c->cpuThreshold = 1000;
 	c->cpuPrecision = 200;
 	c->heartbeatInterval = 60;
+	c->latencySampleInterval = 1;
 
 	/* set options to change defaults for the main group */
 	c->mainOptionGroup = g_option_group_new("main", "Application Options", "Various application related options", NULL, NULL);
 	const GOptionEntry mainEntries[] = {
 	  { "log-level", 'l', 0, G_OPTION_ARG_STRING, &(c->logLevelInput), "Log LEVEL above which to filter messages ('error' < 'critical' < 'warning' < 'message' < 'info' < 'debug') ['message']", "LEVEL" },
 	  { "heartbeat-log-level", 'g', 0, G_OPTION_ARG_STRING, &(c->heartbeatLogLevelInput), "Log LEVEL at which to print node statistics ['message']", "LEVEL" },
+	  { "heartbeat-log-info", 'i', 0, G_OPTION_ARG_STRING, &(c->heartbeatLogInfo), "Comma separated list of information contained in heartbeat ('node','socket','ram') ['node']", "LIST"},
 	  { "heartbeat-frequency", 'h', 0, G_OPTION_ARG_INT, &(c->heartbeatInterval), "Log node statistics every N seconds [60]", "N" },
 	  { "seed", 's', 0, G_OPTION_ARG_INT, &(c->randomSeed), "Initialize randomness for each thread using seed N [1]", "N" },
 	  { "workers", 'w', 0, G_OPTION_ARG_INT, &(c->nWorkerThreads), "Use N worker threads [0]", "N" },
@@ -61,6 +52,11 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	g_option_context_set_main_group(c->context, c->mainOptionGroup);
 
 	/* now fill in the network option group */
+	GString* sockrecv = g_string_new("");
+	g_string_printf(sockrecv, "Initialize the socket receive buffer to N bytes [%i]", (gint)CONFIG_RECV_BUFFER_SIZE);
+	GString* socksend = g_string_new("");
+	g_string_printf(socksend, "Initialize the socket send buffer to N bytes [%i]", (gint)CONFIG_SEND_BUFFER_SIZE);
+
 	c->networkOptionGroup = g_option_group_new("network", "System Options", "Various system and network related options", NULL, NULL);
 	const GOptionEntry networkEntries[] =
 	{
@@ -71,6 +67,9 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	  { "interface-qdisc", 0, 0, G_OPTION_ARG_STRING, &(c->interfaceQueuingDiscipline), "The interface queuing discipline QDISC used to select the next sendable socket ('fifo' or 'rr') ['fifo']", "QDISC" },
 	  { "runahead", 0, 0, G_OPTION_ARG_INT, &(c->minRunAhead), "Minimum allowed TIME workers may run ahead when sending events between nodes, in milliseconds [10]", "TIME" },
 	  { "tcp-windows", 0, 0, G_OPTION_ARG_INT, &(c->initialTCPWindow), "Initialize the TCP send, receive, and congestion windows to N packets [10]", "N" },
+	  { "socket-recv-buffer", 0, 0, G_OPTION_ARG_INT, &(c->initialSocketReceiveBufferSize), sockrecv->str, "N" },
+	  { "socket-send-buffer", 0, 0, G_OPTION_ARG_INT, &(c->initialSocketSendBufferSize), socksend->str, "N" },
+	  { "latency-sample-interval", 0, 0, G_OPTION_ARG_INT, &(c->latencySampleInterval), "Interval to sample latency values for links, in seconds [1]", "N" },
 	  { NULL },
 	};
 
@@ -95,7 +94,9 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	GError *error = NULL;
 	if (!g_option_context_parse(c->context, &argc, &argv, &error)) {
 		g_printerr("** %s **\n", error->message);
-		g_printerr("%s", g_option_context_get_help(c->context, TRUE, NULL));
+		gchar* helpString = g_option_context_get_help(c->context, TRUE, NULL);
+		g_printerr("%s", helpString);
+		g_free(helpString);
 		configuration_free(c);
 		return NULL;
 	}
@@ -106,7 +107,9 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	if(!(c->printSoftwareVersion) && !(c->runEchoExample) && !(c->runFileExample) && !(c->runTorrentExample) &&
 			!(c->runBrowserExample) && (argc < nRequiredXMLFiles + 1)) {
 		g_printerr("** Please provide the required parameters **\n");
-		g_printerr("%s", g_option_context_get_help(c->context, TRUE, NULL));
+		gchar* helpString = g_option_context_get_help(c->context, TRUE, NULL);
+		g_printerr("%s", helpString);
+		g_free(helpString);
 		configuration_free(c);
 		return NULL;
 	}
@@ -119,6 +122,9 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	}
 	if(c->heartbeatLogLevelInput == NULL) {
 		c->heartbeatLogLevelInput = g_strdup("message");
+	}
+	if(c->heartbeatLogInfo == NULL) {
+		c->heartbeatLogInfo = g_strdup("node");
 	}
 	if(c->heartbeatInterval < 1) {
 		c->heartbeatInterval = 1;
@@ -137,11 +143,26 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	if(c->interfaceQueuingDiscipline == NULL) {
 		c->interfaceQueuingDiscipline = g_strdup("fifo");
 	}
+	if(!c->initialSocketReceiveBufferSize) {
+		c->initialSocketReceiveBufferSize = CONFIG_RECV_BUFFER_SIZE;
+		c->autotuneSocketReceiveBuffer = TRUE;
+	}
+	if(!c->initialSocketSendBufferSize) {
+		c->initialSocketSendBufferSize = CONFIG_SEND_BUFFER_SIZE;
+		c->autotuneSocketSendBuffer = TRUE;
+	}
 
 	c->inputXMLFilenames = g_queue_new();
 	for(gint i = 1; i < argc; i++) {
 		GString* filename = g_string_new(argv[i]);
 		g_queue_push_tail(c->inputXMLFilenames, filename);
+	}
+
+	if(socksend) {
+		g_string_free(socksend, TRUE);
+	}
+	if(sockrecv) {
+		g_string_free(sockrecv, TRUE);
 	}
 
 	return c;
@@ -155,6 +176,7 @@ void configuration_free(Configuration* config) {
 	}
 	g_free(config->logLevelInput);
 	g_free(config->heartbeatLogLevelInput);
+	g_free(config->heartbeatLogInfo);
 	g_free(config->interfaceQueuingDiscipline);
 
 	/* groups are freed with the context */
@@ -198,6 +220,11 @@ GLogLevelFlags configuration_getHeartbeatLogLevel(Configuration* config) {
 SimulationTime configuration_getHearbeatInterval(Configuration* config) {
 	MAGIC_ASSERT(config);
 	return config->heartbeatInterval * SIMTIME_ONE_SECOND;
+}
+
+SimulationTime configuration_getLatencySampleInterval(Configuration* config) {
+	MAGIC_ASSERT(config);
+	return config->latencySampleInterval * SIMTIME_ONE_SECOND;
 }
 
 gchar* configuration_getQueuingDiscipline(Configuration* config) {

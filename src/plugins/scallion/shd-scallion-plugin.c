@@ -1,22 +1,7 @@
-/**
+/*
  * The Shadow Simulator
- *
- * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
- *
- * This file is part of Shadow.
- *
- * Shadow is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Shadow is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright (c) 2010-2011, Rob Jansen
+ * See LICENSE for licensing information
  */
 
 #include "shd-scallion.h"
@@ -43,7 +28,7 @@ static in_addr_t _scallion_HostnameCallback(const gchar* hostname) {
 		if(result != -1 && info != NULL) {
 			addr = ((struct sockaddr_in*)(info->ai_addr))->sin_addr.s_addr;
 		} else {
-			scallion.shadowlibFuncs->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "unable to create client: error in getaddrinfo");
+			scallion.shadowlibFuncs->log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "unable to create client: error in getaddrinfo");
 		}
 		freeaddrinfo(info);
 	}
@@ -52,12 +37,12 @@ static in_addr_t _scallion_HostnameCallback(const gchar* hostname) {
 }
 
 static void _scallion_new(gint argc, gchar* argv[]) {
-	scallion.shadowlibFuncs->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "scallion_new called");
+	scallion.shadowlibFuncs->log(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__, "scallion_new called");
 
 	gchar* usage = "Scallion USAGE: (\"dirauth\"|\"relay\"|\"exitrelay\"|\"client\") consensusbandwidth readbandwidthrate writebandwidthrate torrc_path datadir_base_path geoip_path\n";
 
 	if(argc != 8) {
-		scallion.shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, usage);
+		scallion.shadowlibFuncs->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, usage);
 		return;
 	}
 	
@@ -81,13 +66,13 @@ static void _scallion_new(gint argc, gchar* argv[]) {
 	} else if(g_ascii_strncasecmp(tortype, "client", strlen("client")) == 0) {
 		ntype = VTOR_CLIENT;
 	} else {
-		scallion.shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "Unrecognized torrent type: %s", usage);
+		scallion.shadowlibFuncs->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, "Unrecognized torrent type: %s", usage);
 		return;
 	}
 
 	/* get the hostname */
 	if(gethostname(scallion.hostname, 128) < 0) {
-		scallion.shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "error getting hostname");
+		scallion.shadowlibFuncs->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, "error getting hostname");
 		return;
 	}
 
@@ -106,12 +91,12 @@ static void _scallion_new(gint argc, gchar* argv[]) {
 }
 
 static void _scallion_free() {
-	scallion.shadowlibFuncs->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "scallion_free called");
+	scallion.shadowlibFuncs->log(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__, "scallion_free called");
 	scalliontor_free(scallion.stor);
 }
 
 static void _scallion_notify() {
-	scallion.shadowlibFuncs->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "_scallion_notify called");
+	scallion.shadowlibFuncs->log(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__, "_scallion_notify called");
 	scalliontor_notify(scallion.stor);
 }
 
@@ -141,7 +126,7 @@ void __shadow_plugin_init__(ShadowFunctionTable* shadowlibFuncs) {
 	/* tell shadow which functions it should call to manage nodes */
 	shadowlibFuncs->registerPlugin(&_scallion_new, &_scallion_free, &_scallion_notify);
 
-	shadowlibFuncs->log(G_LOG_LEVEL_INFO, __FUNCTION__, "finished registering scallion plug-in state");
+	shadowlibFuncs->log(SHADOW_LOG_LEVEL_INFO, __FUNCTION__, "finished registering scallion plug-in state");
 
 	/* setup openssl locks */
 
@@ -169,21 +154,21 @@ void __shadow_plugin_init__(ShadowFunctionTable* shadowlibFuncs) {
 	CRYPTO_set_id_callback(shadowIdFunc);
 	RAND_set_rand_method(shadowRandomMethod);
 
-	shadowlibFuncs->log(G_LOG_LEVEL_INFO, __FUNCTION__, "finished initializing crypto thread state");
+	shadowlibFuncs->log(SHADOW_LOG_LEVEL_INFO, __FUNCTION__, "finished initializing crypto thread state");
 #else
     /* no thread support */
-	shadowlibFuncs->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "please rebuild openssl with threading support. expect segfaults.");
+	shadowlibFuncs->log(SHADOW_LOG_LEVEL_CRITICAL, __FUNCTION__, "please rebuild openssl with threading support. expect segfaults.");
 #endif
 
 	/* setup libevent locks */
 
 #ifdef EVTHREAD_USE_PTHREADS_IMPLEMENTED
 	if(evthread_use_pthreads()) {
-		shadowlibFuncs->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "error in evthread_use_pthreads()");
+		shadowlibFuncs->log(SHADOW_LOG_LEVEL_CRITICAL, __FUNCTION__, "error in evthread_use_pthreads()");
 	}
-	shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "finished initializing event thread state evthread_use_pthreads()");
+	shadowlibFuncs->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, "finished initializing event thread state evthread_use_pthreads()");
 #else
-	shadowlibFuncs->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "please rebuild libevent with threading support, or link with event_pthread. expect segfaults.");
+	shadowlibFuncs->log(SHADOW_LOG_LEVEL_CRITICAL, __FUNCTION__, "please rebuild libevent with threading support, or link with event_pthread. expect segfaults.");
 #endif
 }
 

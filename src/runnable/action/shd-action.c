@@ -1,25 +1,11 @@
 /*
  * The Shadow Simulator
- *
- * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
- *
- * This file is part of Shadow.
- *
- * Shadow is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Shadow is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright (c) 2010-2011, Rob Jansen
+ * See LICENSE for licensing information
  */
 
 #include "shadow.h"
+#include "shd-action-internal.h"
 
 void action_init(Action* a, RunnableFunctionTable* vtable) {
 	g_assert(a && vtable);
@@ -27,6 +13,11 @@ void action_init(Action* a, RunnableFunctionTable* vtable) {
 	MAGIC_INIT(vtable);
 	a->priority = 0;
 	runnable_init(&(a->super), vtable);
+}
+
+void action_setPriority(Action* a, gint priority) {
+	MAGIC_ASSERT(a);
+	a->priority = priority;
 }
 
 gint action_compare(gconstpointer a, gconstpointer b, gpointer user_data) {

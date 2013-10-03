@@ -1,22 +1,7 @@
 /*
  * The Shadow Simulator
- *
- * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
- *
- * This file is part of Shadow.
- *
- * Shadow is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Shadow is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright (c) 2010-2011, Rob Jansen
+ * See LICENSE for licensing information
  */
 
 #include "shadow.h"
@@ -33,6 +18,12 @@ struct _Network {
 	MAGIC_DECLARE;
 };
 
+static void _network_freeLinks(gpointer key, GList* linksList, gpointer userData) {
+	if(linksList) {
+		g_list_free_full(linksList, (GDestroyNotify) link_free);
+	}
+}
+
 Network* network_new(GQuark id, guint64 bandwidthdown, guint64 bandwidthup, gdouble packetloss) {
 	Network* network = g_new0(Network, 1);
 	MAGIC_INIT(network);
@@ -43,7 +34,7 @@ Network* network_new(GQuark id, guint64 bandwidthdown, guint64 bandwidthup, gdou
 	network->packetloss = packetloss;
 
 	network->linksByCluster = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, NULL);
-	network->linksByNode = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, NULL);
+	network->linksByNode = g_hash_table_new_full(g_int_hash, g_int_equal, g_free, (GDestroyNotify) g_hash_table_destroy);
 
 	g_mutex_init(&(network->lock));
 
@@ -56,6 +47,7 @@ void network_free(gpointer data) {
 
 	g_mutex_lock(&(network->lock));
 
+	g_hash_table_foreach(network->linksByCluster, (GHFunc) _network_freeLinks, NULL);
 	g_hash_table_destroy(network->linksByCluster);
 	g_hash_table_destroy(network->linksByNode);
 
@@ -122,7 +114,7 @@ Link* network_getLink(Network *network, in_addr_t sourceIP, in_addr_t destinatio
 	/* check to see if we already have hash table of links for source */
 	GHashTable *nodeLinks = g_hash_table_lookup(network->linksByNode, &sourceIP);
 	if(!nodeLinks) {
-		nodeLinks = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, NULL);
+		nodeLinks = g_hash_table_new_full(g_int_hash, g_int_equal, g_free, NULL);
 		key = g_new0(gint, 1);
 		*key = sourceIP;
 		g_hash_table_insert(network->linksByNode, key, nodeLinks);
@@ -133,6 +125,10 @@ Link* network_getLink(Network *network, in_addr_t sourceIP, in_addr_t destinatio
 	if(!link) {
 		Internetwork* internet = worker_getInternet();
 		Network *destinationNetwork = internetwork_lookupNetwork(internet, destinationIP);
+		if(!destinationNetwork) {
+			g_mutex_unlock(&(network->lock));
+			return NULL;
+		}
 
 		/* get list of possible links to destination network */
 		GList *links = g_hash_table_lookup(network->linksByCluster, &(destinationNetwork->id));
@@ -159,13 +155,15 @@ Link* network_getLink(Network *network, in_addr_t sourceIP, in_addr_t destinatio
 		jitter = link_getJitter(link);
 		link_getLatencyMetrics(link, &min, &q1, &mean, &q3, &max);
 		struct in_addr addr;
-		gchar *srcIP = g_strdup(inet_ntoa((struct in_addr){sourceIP}));
-		gchar *dstIP = g_strdup(inet_ntoa((struct in_addr){destinationIP}));
-		message("link for connection [%s] %s -> %s [%s] chosen: latency=%d jitter=%d metrics=%d %d %d %d %d",
-				g_quark_to_string(network->id), srcIP, dstIP, g_quark_to_string(destinationNetwork->id),
-				latency, jitter, min, q1, mean, q3, max);
-		g_free(srcIP);
-		g_free(dstIP);
+		gchar *sourceIPString = address_ipToNewString(sourceIP);
+		gchar *destinationIPString = address_ipToNewString(destinationIP);
+		message("link for connection [%s] %s -> %s [%s] chosen: "
+				"latency=%"G_GUINT64_FORMAT" jitter=%"G_GUINT64_FORMAT" "
+				"metrics=%"G_GUINT64_FORMAT" %"G_GUINT64_FORMAT" %"G_GUINT64_FORMAT" %"G_GUINT64_FORMAT" %"G_GUINT64_FORMAT,
+				g_quark_to_string(network->id), sourceIPString, destinationIPString,
+				g_quark_to_string(destinationNetwork->id), latency, jitter, min, q1, mean, q3, max);
+		g_free(sourceIPString);
+		g_free(destinationIPString);
 
 		/* insert link into source network */
 		key = g_new0(gint, 1);
@@ -176,7 +174,7 @@ Link* network_getLink(Network *network, in_addr_t sourceIP, in_addr_t destinatio
 		/* insert link into destination network */
 		nodeLinks = g_hash_table_lookup(destinationNetwork->linksByNode, &destinationIP);
 		if(!nodeLinks) {
-			nodeLinks = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, NULL);
+			nodeLinks = g_hash_table_new_full(g_int_hash, g_int_equal, g_free, NULL);
 			key = g_new0(gint, 1);
 			*key = destinationIP;
 			g_hash_table_insert(destinationNetwork->linksByNode, key, nodeLinks);
@@ -197,27 +195,30 @@ gdouble network_getLinkReliability(in_addr_t sourceIP, in_addr_t destinationIP) 
 	Network *sourceNetwork = internetwork_lookupNetwork(internet, sourceIP);
 	Network *destinationNetwork = internetwork_lookupNetwork(internet, destinationIP);
 
-	Link *link = network_getLink(sourceNetwork, sourceIP, destinationIP);
-	if(link) {
-		/* there are three chances to drop a packet here:
-		 * p1 : loss rate from source-node to the source-cluster
-		 * p2 : loss rate on the link between source-cluster and destination-cluster
-		 * p3 : loss rate from destination-cluster to destination-node
-		 *
-		 * The reliability is then the combination of the probability
-		 * that its not dropped in each case:
-		 * P = ((1-p1)(1-p2)(1-p3))
-		 */
-		gdouble p1 = sourceNetwork->packetloss;
-		gdouble p2 = link_getPacketLoss(link);
-		gdouble p3 = destinationNetwork->packetloss;
-		gdouble P = (1.0-p1) * (1.0-p2) * (1.0-p3);
-		return P;
-	} else {
-		critical("unable to find link between networks '%s' and '%s'. Check XML file for errors.",
-				g_quark_to_string(sourceNetwork->id), g_quark_to_string(destinationNetwork->id));
-		return G_MINDOUBLE;
+	if(sourceNetwork && destinationNetwork) {
+		Link *link = network_getLink(sourceNetwork, sourceIP, destinationIP);
+		if(link) {
+			/* there are three chances to drop a packet here:
+			 * p1 : loss rate from source-node to the source-cluster
+			 * p2 : loss rate on the link between source-cluster and destination-cluster
+			 * p3 : loss rate from destination-cluster to destination-node
+			 *
+			 * The reliability is then the combination of the probability
+			 * that its not dropped in each case:
+			 * P = ((1-p1)(1-p2)(1-p3))
+			 */
+			gdouble p1 = sourceNetwork->packetloss;
+			gdouble p2 = link_getPacketLoss(link);
+			gdouble p3 = destinationNetwork->packetloss;
+			gdouble P = (1.0-p1) * (1.0-p2) * (1.0-p3);
+			return P;
+		}
 	}
+
+	critical("unable to find link between networks '%s' and '%s'. Check XML file for errors.",
+			sourceNetwork ? g_quark_to_string(sourceNetwork->id) : "NULL",
+			destinationNetwork ? g_quark_to_string(destinationNetwork->id) : "NULL");
+	return G_MINDOUBLE;
 }
 
 gdouble network_getLinkLatency(in_addr_t sourceIP, in_addr_t destinationIP, gdouble percentile) {
@@ -225,15 +226,17 @@ gdouble network_getLinkLatency(in_addr_t sourceIP, in_addr_t destinationIP, gdou
 	Network *sourceNetwork = internetwork_lookupNetwork(internet, sourceIP);
 	Network *destinationNetwork = internetwork_lookupNetwork(internet, destinationIP);
 
-	Link *link = network_getLink(sourceNetwork, sourceIP, destinationIP);
-
-	if(link) {
-		return link_computeDelay(link, percentile);
-	} else {
-		critical("unable to find link between networks '%s' and '%s'. Check XML file for errors.",
-				g_quark_to_string(sourceNetwork->id), g_quark_to_string(destinationNetwork->id));
-		return G_MAXDOUBLE;
+	if(sourceNetwork && destinationNetwork) {
+		Link *link = network_getLink(sourceNetwork, sourceIP, destinationIP);
+		if(link) {
+			return link_computeDelay(link, percentile);
+		}
 	}
+
+	critical("unable to find link between networks '%s' and '%s'. Check XML file for errors.",
+			sourceNetwork ? g_quark_to_string(sourceNetwork->id) : "NULL",
+			destinationNetwork ? g_quark_to_string(destinationNetwork->id) : "NULL");
+	return G_MAXDOUBLE;
 }
 
 gdouble network_sampleLinkLatency(in_addr_t sourceIP, in_addr_t destinationIP) {

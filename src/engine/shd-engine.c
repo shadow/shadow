@@ -1,22 +1,7 @@
 /*
  * The Shadow Simulator
- *
- * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
- *
- * This file is part of Shadow.
- *
- * Shadow is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Shadow is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright (c) 2010-2011, Rob Jansen
+ * See LICENSE for licensing information
  */
 
 #include "shadow.h"
@@ -47,7 +32,7 @@ struct _Engine {
 
 	/* if single threaded, use this global event priority queue. if multi-
 	 * threaded, use this for non-node events */
-	AsyncPriorityQueue* masterEventQueue;
+	EventQueue* masterEventQueue;
 
 	/* if multi-threaded, we use worker thread */
 	CountDownLatch* processingLatch;
@@ -104,9 +89,7 @@ Engine* engine_new(Configuration* config) {
 	engine->runTimer = g_timer_new();
 
 	/* holds all events if single-threaded, and non-node events otherwise. */
-	engine->masterEventQueue =
-			asyncpriorityqueue_new((GCompareDataFunc)shadowevent_compare, NULL,
-			(GDestroyNotify)shadowevent_free);
+	engine->masterEventQueue = eventqueue_new();
 
 	engine->registry = registry_new();
 	registry_register(engine->registry, CDFS, NULL, cdf_free);
@@ -126,7 +109,12 @@ Engine* engine_new(Configuration* config) {
 	if(!g_file_get_contents(CONFIG_CPU_MAX_FREQ_FILE, &contents, &length, &error)) {
 		engine->rawFrequencyKHz = 0;
 	} else {
+		g_assert(contents);
 		engine->rawFrequencyKHz = (guint)atoi(contents);
+		g_free(contents);
+	}
+	if(error) {
+		g_error_free(error);
 	}
 
 	return engine;
@@ -147,7 +135,7 @@ void engine_free(Engine* engine) {
 	engine->forceShadowContext = TRUE;
 
 	if(engine->masterEventQueue) {
-		asyncpriorityqueue_free(engine->masterEventQueue);
+		eventqueue_free(engine->masterEventQueue);
 	}
 
 	registry_free(engine->registry);
@@ -174,25 +162,24 @@ void engine_free(Engine* engine) {
 static gint _engine_processEvents(Engine* engine) {
 	MAGIC_ASSERT(engine);
 
-	Event* next_event = asyncpriorityqueue_peek(engine->masterEventQueue);
-	if(next_event) {
+	Event* nextEvent = eventqueue_peek(engine->masterEventQueue);
+	if(nextEvent) {
 		Worker* worker = worker_getPrivate();
 		worker->clock_now = SIMTIME_INVALID;
 		worker->clock_last = 0;
 		worker->cached_engine = engine;
 
 		/* process all events in the priority queue */
-		while(next_event && (next_event->time < engine->executeWindowEnd) &&
-				(next_event->time < engine->endTime))
+		while(nextEvent && (shadowevent_getTime(nextEvent) < engine->executeWindowEnd) &&
+				(shadowevent_getTime(nextEvent) < engine->endTime))
 		{
 			/* get next event */
-			next_event = asyncpriorityqueue_pop(engine->masterEventQueue);
-			worker->cached_event = next_event;
-			MAGIC_ASSERT(worker->cached_event);
-			worker->cached_node = next_event->node;
+			nextEvent = eventqueue_pop(engine->masterEventQueue);
+			worker->cached_event = nextEvent;
+			worker->cached_node = shadowevent_getNode(nextEvent);
 
 			/* ensure priority */
-			worker->clock_now = worker->cached_event->time;
+			worker->clock_now = shadowevent_getTime(worker->cached_event);
 			engine->clock = worker->clock_now;
 			g_assert(worker->clock_now >= worker->clock_last);
 
@@ -205,9 +192,17 @@ static gint _engine_processEvents(Engine* engine) {
 			worker->clock_last = worker->clock_now;
 			worker->clock_now = SIMTIME_INVALID;
 
-			next_event = asyncpriorityqueue_peek(engine->masterEventQueue);
+			nextEvent = eventqueue_peek(engine->masterEventQueue);
 		}
 	}
+
+	engine->killed = TRUE;
+
+	/* in single thread mode, we must free the nodes */
+	GList* nodeList = internetwork_getAllNodes(engine->internet);
+	g_list_foreach(nodeList, (GFunc) node_freeAllApplications, NULL);
+	g_list_foreach(nodeList, (GFunc) node_free, NULL);
+	g_list_free(nodeList);
 
 	return 0;
 }
@@ -248,6 +243,8 @@ static gint _engine_distributeEvents(Engine* engine) {
 		g_string_free(name, TRUE);
 	}
 
+	message("started %i worker threads", engine->config->nWorkerThreads);
+
 	/* process all events in the priority queue */
 	while(engine->executeWindowStart < engine->endTime)
 	{
@@ -255,7 +252,7 @@ static gint _engine_distributeEvents(Engine* engine) {
 		countdownlatch_countDownAwait(engine->processingLatch);
 
 		/* we are in control now, the workers are waiting at barrierLatch */
-		message("execution window [%lu--%lu] ran %u events from %u active nodes",
+		info("execution window [%"G_GUINT64_FORMAT"--%"G_GUINT64_FORMAT"] ran %u events from %u active nodes",
 				engine->executeWindowStart, engine->executeWindowEnd,
 				engine->numEventsCurrentInterval,
 				engine->numNodesWithEventsCurrentInterval);
@@ -273,8 +270,9 @@ static gint _engine_distributeEvents(Engine* engine) {
 				Node* node = item->data;
 				EventQueue* eventq = node_getEvents(node);
 				Event* nextEvent = eventqueue_peek(eventq);
-				if(nextEvent && (nextEvent->time < minNextEventTime)) {
-					minNextEventTime = nextEvent->time;
+				SimulationTime nextEventTime = shadowevent_getTime(nextEvent);
+				if(nextEvent && (nextEventTime < minNextEventTime)) {
+					minNextEventTime = nextEventTime;
 				}
 				item = g_list_next(item);
 			}
@@ -307,6 +305,8 @@ static gint _engine_distributeEvents(Engine* engine) {
 		countdownlatch_reset(engine->barrierLatch);
 	}
 
+	message("waiting for %i worker threads to finish", engine->config->nWorkerThreads);
+
 	/* wait for the threads to finish their cleanup */
 	GSList* threadItem = workerThreads;
 	while(threadItem) {
@@ -316,6 +316,8 @@ static gint _engine_distributeEvents(Engine* engine) {
 		threadItem = g_slist_next(threadItem);
 	}
 	g_slist_free(workerThreads);
+
+	message("%i worker threads finished", engine->config->nWorkerThreads);
 
 	for(gint i = 0; i < engine->config->nWorkerThreads; i++) {
 		g_slist_free(listArray[i]);
@@ -353,9 +355,9 @@ gint engine_run(Engine* engine) {
 
 void engine_pushEvent(Engine* engine, Event* event) {
 	MAGIC_ASSERT(engine);
-	MAGIC_ASSERT(event);
+	g_assert(event);
 	g_assert(engine_getNumThreads(engine) == 1);
-	asyncpriorityqueue_push(engine->masterEventQueue, event);
+	eventqueue_push(engine->masterEventQueue, event);
 }
 
 void engine_put(Engine* engine, EngineStorage type, GQuark* id, gpointer item) {

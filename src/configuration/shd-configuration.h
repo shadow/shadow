@@ -1,22 +1,7 @@
 /*
  * The Shadow Simulator
- *
- * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
- *
- * This file is part of Shadow.
- *
- * Shadow is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Shadow is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright (c) 2010-2011, Rob Jansen
+ * See LICENSE for licensing information
  */
 
 #ifndef SHD_CONFIGURATION_H_
@@ -136,15 +121,6 @@ typedef guint64 SimulationTime;
 #define MIN_RANDOM_PORT 10000
 
 /**
- * A shortcut for turning an IP address in network format to a string in
- * dot-and-number format. The returned string is returned in a statically
- * allocated buffer and so is not thread-safe.
- *
- * @todo FIXME this needs to change as its not thread safe and leaks memory
- */
-#define NTOA(ip) inet_ntoa((struct in_addr){ip})
-
-/**
  * We always use TCP_autotuning unless this is set to FALSE
  *
  * @todo change this to a command line option accessible via #Configuration
@@ -170,16 +146,12 @@ typedef guint64 SimulationTime;
 /**
  * Default size of the send buffer per socket if TCP-autotuning is not used.
  * This value was computed from "man tcp"
- *
- * @todo change this to a command line option accessible via #Configuration
  */
 #define CONFIG_SEND_BUFFER_SIZE 131072
 
 /**
  * Default size of the receive buffer per socket if TCP-autotuning is not used
  * This value was computed from "man tcp"
- *
- * @todo change this to a command line option accessible via #Configuration
  */
 #define CONFIG_RECV_BUFFER_SIZE 174760
 
@@ -239,6 +211,7 @@ struct _Configuration {
 	gboolean printSoftwareVersion;
 	guint heartbeatInterval;
 	gchar* heartbeatLogLevelInput;
+	gchar* heartbeatLogInfo;
 
 	GOptionGroup* networkOptionGroup;
 	gint cpuThreshold;
@@ -246,8 +219,13 @@ struct _Configuration {
 	gint minRunAhead;
 	gint initialTCPWindow;
 	gint interfaceBufferSize;
+	gint initialSocketReceiveBufferSize;
+	gint initialSocketSendBufferSize;
+	gboolean autotuneSocketReceiveBuffer;
+	gboolean autotuneSocketSendBuffer;
 	gchar* interfaceQueuingDiscipline;
 	SimulationTime interfaceBatchTime;
+	gint latencySampleInterval;
 
 	GOptionGroup* pluginsOptionGroup;
 	gboolean runEchoExample;
@@ -318,6 +296,13 @@ GLogLevelFlags configuration_getHeartbeatLogLevel(Configuration* config);
  * @return the command line heartbeat interval converted to SimulationTime
  */
 SimulationTime configuration_getHearbeatInterval(Configuration* config);
+
+/**
+ * Get the configured latency sample interval.
+ * @param config a #Configuration object created with configuration_new()
+ * @return the command line latency sample interval converted to SimulationTime
+ */
+SimulationTime configuration_getLatencySampleInterval(Configuration* config);
 
 /**
  * Get the string form that represents the queuing discipline the network

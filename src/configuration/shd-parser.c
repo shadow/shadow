@@ -1,22 +1,7 @@
 /*
  * The Shadow Simulator
- *
- * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
- *
- * This file is part of Shadow.
- *
- * Shadow is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Shadow is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright (c) 2010-2011, Rob Jansen
+ * See LICENSE for licensing information
  */
 
 #include "shadow.h"
@@ -42,7 +27,6 @@ struct _Parser {
 
 static void _parser_addAction(Parser* parser, Action* action) {
 	MAGIC_ASSERT(parser);
-	MAGIC_ASSERT(action);
 	g_queue_insert_sorted(parser->actions, action, action_compare, NULL);
 }
 
@@ -68,7 +52,7 @@ static GError* _parser_handleCDFAttributes(Parser* parser, const gchar** attribu
 		if(!id && !g_ascii_strcasecmp(name, "id")) {
 			id = g_string_new(value);
 		} else if (!path && !g_ascii_strcasecmp(name, "path")) {
-			path = g_string_new(value);
+			path = g_string_new(utility_getHomePath(value));
 		} else if (!center && !g_ascii_strcasecmp(name, "center")) {
 			center = g_ascii_strtoull(value, NULL, 10);
 		} else if (!width && !g_ascii_strcasecmp(name, "width")) {
@@ -89,6 +73,10 @@ static GError* _parser_handleCDFAttributes(Parser* parser, const gchar** attribu
 		error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
 				"element 'cdf' requires attributes 'id' and either 'path' or 'center'");
 	}
+	if(path && (!g_file_test(path->str, G_FILE_TEST_EXISTS) || !g_file_test(path->str, G_FILE_TEST_IS_REGULAR))) {
+		error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT,
+				"attribute 'path': '%s' is not a valid path to an existing regular file", path->str);
+	}
 
 	if(!error) {
 		/* no error, either load or generate a cdf
@@ -96,11 +84,11 @@ static GError* _parser_handleCDFAttributes(Parser* parser, const gchar** attribu
 		 */
 		if(path) {
 			Action* a = (Action*) loadcdf_new(id, path);
-			a->priority = 1;
+			action_setPriority(a, 1);
 			_parser_addAction(parser, a);
 		} else {
 			Action* a = (Action*) generatecdf_new(id, center, width, tail);
-			a->priority = 1;
+			action_setPriority(a, 1);
 			_parser_addAction(parser, a);
 		}
 	}
@@ -160,7 +148,7 @@ static GError* _parser_handleClusterAttributes(Parser* parser, const gchar** att
 	if(!error) {
 		/* no error, create the action */
 		Action* a = (Action*) createnetwork_new(id, bandwidthdown, bandwidthup, packetloss);
-		a->priority = 2;
+		action_setPriority(a, 2);
 		_parser_addAction(parser, a);
 	}
 
@@ -191,7 +179,7 @@ static GError* _parser_handlePluginAttributes(Parser* parser, const gchar** attr
 		if(!id && !g_ascii_strcasecmp(name, "id")) {
 			id = g_string_new(value);
 		} else if (!path && !g_ascii_strcasecmp(name, "path")) {
-			path = g_string_new(value);
+			path = g_string_new(utility_getHomePath(value));
 		} else {
 			error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ATTRIBUTE,
 							"unknown 'plugin' attribute '%s'", name);
@@ -206,11 +194,28 @@ static GError* _parser_handlePluginAttributes(Parser* parser, const gchar** attr
 		error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
 				"element 'plugin' requires attributes 'id' 'path'");
 	}
+	if(path) {
+		/* make sure the path is absolute */
+		if(!g_path_is_absolute(path->str)) {
+			/* ok, we look in ~/.shadow/plugins */
+			const gchar* home = g_get_home_dir();
+			gchar* oldstr = g_string_free(path, FALSE);
+			gchar* newstr = g_build_path("/", home, ".shadow", "plugins", oldstr, NULL);
+			g_free(oldstr);
+			path = g_string_new(newstr);
+			g_free(newstr);
+		}
+
+		if(!g_file_test(path->str, G_FILE_TEST_EXISTS) || !g_file_test(path->str, G_FILE_TEST_IS_REGULAR)) {
+			error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT,
+					"attribute 'path': '%s' is not a valid path to an existing regular file", path->str);
+		}
+	}
 
 	if(!error) {
 		/* no error, create the action */
 		Action* a = (Action*) loadplugin_new(id, path);
-		a->priority = 0;
+		action_setPriority(a, 0);
 		_parser_addAction(parser, a);
 	}
 
@@ -231,12 +236,18 @@ static GError* _parser_handleNodeAttributes(Parser* parser, const gchar** attrib
 	GString* cluster = NULL;
 	GString* loglevel = NULL;
 	GString* heartbeatloglevel = NULL;
+	GString* heartbeatloginfo = NULL;
 	GString* logpcap = NULL;
 	GString* pcapdir = NULL;
 	guint64 bandwidthdown = 0;
 	guint64 bandwidthup = 0;
 	guint64 heartbeatfrequency = 0;
 	guint64 cpufrequency = 0;
+	guint64 socketReceiveBufferSize = 0;
+	guint64 socketSendBufferSize = 0;
+	gboolean autotuneReceiveBuffer = TRUE;
+	gboolean autotuneSendBuffer = TRUE;
+	guint64 interfaceReceiveBufferLength = 0;
 	/* if there is no quantity value, default should be 1 (allows a value of 0 to be explicity set) */
 	guint64 quantity = 1;
 	gboolean quantityIsSet = FALSE;
@@ -263,6 +274,8 @@ static GError* _parser_handleNodeAttributes(Parser* parser, const gchar** attrib
 			loglevel = g_string_new(value);
 		} else if (!heartbeatloglevel && !g_ascii_strcasecmp(name, "heartbeatloglevel")) {
 			heartbeatloglevel = g_string_new(value);
+		} else if (!heartbeatloginfo && !g_ascii_strcasecmp(name, "heartbeatloginfo")) {
+			heartbeatloginfo = g_string_new(value);
 		} else if (!logpcap && !g_ascii_strcasecmp(name, "logpcap")) {
 			logpcap = g_string_new(value);
 		} else if (!pcapdir && !g_ascii_strcasecmp(name, "pcapdir")) {
@@ -278,6 +291,12 @@ static GError* _parser_handleNodeAttributes(Parser* parser, const gchar** attrib
 			heartbeatfrequency = g_ascii_strtoull(value, NULL, 10);
 		} else if (!cpufrequency && !g_ascii_strcasecmp(name, "cpufrequency")) {
 			cpufrequency = g_ascii_strtoull(value, NULL, 10);
+		} else if (!socketReceiveBufferSize && !g_ascii_strcasecmp(name, "socketrecvbuffer")) {
+			socketReceiveBufferSize = g_ascii_strtoull(value, NULL, 10);
+		} else if (!socketSendBufferSize && !g_ascii_strcasecmp(name, "socketsendbuffer")) {
+			socketSendBufferSize = g_ascii_strtoull(value, NULL, 10);
+		} else if (!interfaceReceiveBufferLength && !g_ascii_strcasecmp(name, "interfacebuffer")) {
+			interfaceReceiveBufferLength = g_ascii_strtoull(value, NULL, 10);
 		} else {
 			error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ATTRIBUTE,
 							"unknown 'node' attribute '%s'", name);
@@ -297,8 +316,9 @@ static GError* _parser_handleNodeAttributes(Parser* parser, const gchar** attrib
 		/* no error, create the action */
 		Action* a = (Action*) createnodes_new(id, cluster,
 				bandwidthdown, bandwidthup, quantity, cpufrequency,
-				heartbeatfrequency, heartbeatloglevel, loglevel, logpcap, pcapdir);
-		a->priority = 5;
+				heartbeatfrequency, heartbeatloglevel, heartbeatloginfo, loglevel, logpcap, pcapdir,
+				socketReceiveBufferSize, socketSendBufferSize, interfaceReceiveBufferLength);
+		action_setPriority(a, 5);
 		_parser_addAction(parser, a);
 
 		/* save the parent so child applications can reference it */
@@ -367,7 +387,7 @@ static GError* _parser_handleKillAttributes(Parser* parser, const gchar** attrib
 	if(!error) {
 		/* no error, create the action */
 		Action* a = (Action*) killengine_new((SimulationTime) time);
-		a->priority = 6;
+		action_setPriority(a, 6);
 		_parser_addAction(parser, a);
 	}
 
@@ -451,7 +471,7 @@ static GError* _parser_handleLinkAttributes(Parser* parser, const gchar** attrib
 		Action*  a = (Action*) connectnetwork_new(srcCluster, destCluster,
 				latency, jitter, packetloss,
 				latencymin, latencyQ1, latencymean, latencyQ3, latencymax);
-		a->priority = 3;
+		action_setPriority(a, 3);
 		_parser_addAction(parser, a);
 	}
 

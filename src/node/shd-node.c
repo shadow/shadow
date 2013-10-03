@@ -1,22 +1,7 @@
 /*
  * The Shadow Simulator
- *
- * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
- *
- * This file is part of Shadow.
- *
- * Shadow is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Shadow is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright (c) 2010-2011, Rob Jansen
+ * See LICENSE for licensing information
  */
 
 #include "shadow.h"
@@ -40,7 +25,7 @@ struct _Node {
 	CPU* cpu;
 
 	/* the applications this node is running */
-	GList* applications;
+	GQueue* applications;
 
 	/* a statistics tracker for in/out bytes, CPU, memory, etc. */
 	Tracker* tracker;
@@ -57,9 +42,10 @@ struct _Node {
 	/* all file, socket, and epoll descriptors we know about and track */
 	GHashTable* descriptors;
 	gint descriptorHandleCounter;
-
-	/* random port counter, in host order */
-	in_port_t randomPortCounter;
+	guint64 receiveBufferSize;
+	guint64 sendBufferSize;
+	gboolean autotuneReceiveBuffer;
+	gboolean autotuneSendBuffer;
 
 	/* track the order in which the application sent us application data */
 	gdouble packetPriorityCounter;
@@ -73,8 +59,10 @@ struct _Node {
 Node* node_new(GQuark id, Network* network, guint32 ip,
 		GString* hostname, guint64 bwDownKiBps, guint64 bwUpKiBps,
 		guint cpuFrequency, gint cpuThreshold, gint cpuPrecision, guint nodeSeed,
-		SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel,
-		GLogLevelFlags logLevel, gboolean logPcap, gchar* pcapDir, gchar* qdisc) {
+		SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel, gchar* heartbeatLogInfo,
+		GLogLevelFlags logLevel, gboolean logPcap, gchar* pcapDir, gchar* qdisc,
+		guint64 receiveBufferSize, gboolean autotuneReceiveBuffer, guint64 sendBufferSize, gboolean autotuneSendBuffer,
+		guint64 interfaceReceiveLength) {
 	Node* node = g_new0(Node, 1);
 	MAGIC_INIT(node);
 
@@ -91,34 +79,38 @@ Node* node_new(GQuark id, Network* network, guint32 ip,
 	/* virtual interfaces for managing network I/O */
 	node->interfaces = g_hash_table_new_full(g_direct_hash, g_direct_equal,
 			NULL, (GDestroyNotify) networkinterface_free);
-	NetworkInterface* ethernet = networkinterface_new(network, id, hostname->str, bwDownKiBps, bwUpKiBps, logPcap, pcapDir, qdisc);
+	NetworkInterface* ethernet = networkinterface_new(network, id, hostname->str, bwDownKiBps, bwUpKiBps, logPcap, pcapDir, qdisc, interfaceReceiveLength);
 	g_hash_table_replace(node->interfaces, GUINT_TO_POINTER((guint)id), ethernet);
 	GString *loopbackName = g_string_new("");
 	g_string_append_printf(loopbackName, "%s-loopback", hostname->str);
-	NetworkInterface* loopback = networkinterface_new(NULL, (GQuark)htonl(INADDR_LOOPBACK), loopbackName->str, G_MAXUINT32, G_MAXUINT32, logPcap, pcapDir, qdisc);
+	NetworkInterface* loopback = networkinterface_new(NULL, (GQuark)htonl(INADDR_LOOPBACK), loopbackName->str, G_MAXUINT32, G_MAXUINT32, logPcap, pcapDir, qdisc, interfaceReceiveLength);
 	g_hash_table_replace(node->interfaces, GUINT_TO_POINTER((guint)htonl(INADDR_LOOPBACK)), loopback);
 	node->defaultInterface = ethernet;
 
 	/* virtual descriptor management */
 	node->descriptors = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, descriptor_unref);
 	node->descriptorHandleCounter = MIN_DESCRIPTOR;
-
-	/* host order so increments make sense */
-	node->randomPortCounter = MIN_RANDOM_PORT;
+	node->receiveBufferSize = receiveBufferSize;
+	node->sendBufferSize = sendBufferSize;
+	node->autotuneReceiveBuffer = autotuneReceiveBuffer;
+	node->autotuneSendBuffer = autotuneSendBuffer;
 
 	/* applications this node will run */
-//	node->application = application_new(software);
+	node->applications = g_queue_new();
 
 	node->cpu = cpu_new(cpuFrequency, cpuThreshold, cpuPrecision);
 	node->random = random_new(nodeSeed);
-	node->tracker = tracker_new(heartbeatInterval, heartbeatLogLevel);
+	node->tracker = tracker_new(heartbeatInterval, heartbeatLogLevel, heartbeatLogInfo);
 	node->logLevel = logLevel;
 	node->logPcap = logPcap;
 	node->pcapDir = pcapDir;
 
-	message("Created Node '%s', ip %s, %u bwUpKiBps, %u bwDownKiBps, %lu cpuFrequency, %i cpuThreshold, %i cpuPrecision, %u seed",
+	message("Created Node '%s', ip %s, "
+			"%"G_GUINT64_FORMAT" bwUpKiBps, %"G_GUINT64_FORMAT" bwDownKiBps, %"G_GUINT64_FORMAT" initSockSendBufSize, %"G_GUINT64_FORMAT" initSockRecvBufSize, "
+			"%u cpuFrequency, %i cpuThreshold, %i cpuPrecision, %u seed",
 			g_quark_to_string(node->id), networkinterface_getIPName(node->defaultInterface),
-			bwUpKiBps, bwDownKiBps, cpuFrequency, cpuThreshold, cpuPrecision, nodeSeed);
+			bwUpKiBps, bwDownKiBps, sendBufferSize, receiveBufferSize,
+			cpuFrequency, cpuThreshold, cpuPrecision, nodeSeed);
 
 	return node;
 }
@@ -160,7 +152,7 @@ void node_addApplication(Node* node, GQuark pluginID, gchar* pluginPath,
 		SimulationTime startTime, SimulationTime stopTime, gchar* arguments) {
 	MAGIC_ASSERT(node);
 	Application* application = application_new(pluginID, pluginPath, startTime, stopTime, arguments);
-	node->applications = g_list_append(node->applications, application);
+	g_queue_push_tail(node->applications, application);
 
 	Worker* worker = worker_getPrivate();
 	StartApplicationEvent* event = startapplication_new(application);
@@ -188,14 +180,7 @@ void node_freeAllApplications(Node* node, gpointer userData) {
 	Worker* worker = worker_getPrivate();
 	worker->cached_node = node;
 
-	GList* item = node->applications;
-	while (item && item->data) {
-		Application* application = (Application*) item->data;
-		application_free(application);
-		item->data = NULL;
-		item = g_list_next(item);
-	}
-	g_list_free(node->applications);
+	g_queue_free_full(node->applications, (GDestroyNotify)application_free);
 	node->applications = NULL;
 
 	worker->cached_node = NULL;
@@ -247,6 +232,16 @@ gchar* node_getDefaultIPName(Node* node) {
 Random* node_getRandom(Node* node) {
 	MAGIC_ASSERT(node);
 	return node->random;
+}
+
+gboolean node_autotuneReceiveBuffer(Node* node) {
+	MAGIC_ASSERT(node);
+	return node->autotuneReceiveBuffer;
+}
+
+gboolean node_autotuneSendBuffer(Node* node) {
+	MAGIC_ASSERT(node);
+	return node->autotuneSendBuffer;
 }
 
 Descriptor* node_lookupDescriptor(Node* node, gint handle) {
@@ -330,7 +325,7 @@ static void _node_unmonitorDescriptor(Node* node, gint handle) {
 	}
 }
 
-gint node_createDescriptor(Node* node, enum DescriptorType type) {
+gint node_createDescriptor(Node* node, DescriptorType type) {
 	MAGIC_ASSERT(node);
 
 	/* get a unique descriptor that can be "closed" later */
@@ -343,12 +338,14 @@ gint node_createDescriptor(Node* node, enum DescriptorType type) {
 		}
 
 		case DT_TCPSOCKET: {
-			descriptor = (Descriptor*) tcp_new((node->descriptorHandleCounter)++);
+			descriptor = (Descriptor*) tcp_new((node->descriptorHandleCounter)++,
+					node->receiveBufferSize, node->sendBufferSize);
 			break;
 		}
 
 		case DT_UDPSOCKET: {
-			descriptor = (Descriptor*) udp_new((node->descriptorHandleCounter)++);
+			descriptor = (Descriptor*) udp_new((node->descriptorHandleCounter)++,
+					node->receiveBufferSize, node->sendBufferSize);
 			break;
 		}
 
@@ -377,7 +374,7 @@ gint node_createDescriptor(Node* node, enum DescriptorType type) {
 		}
 
 		default: {
-			warning("unknown descriptor type: %i", (int)type);
+			warning("unknown descriptor type: %i", (gint)type);
 			return EINVAL;
 		}
 	}
@@ -400,7 +397,7 @@ gint node_epollControl(Node* node, gint epollDescriptor, gint operation,
 		return EBADF;
 	}
 
-	enum DescriptorStatus status = descriptor_getStatus(descriptor);
+	DescriptorStatus status = descriptor_getStatus(descriptor);
 	if(status & DS_CLOSED) {
 		warning("descriptor handle '%i' not a valid open descriptor", epollDescriptor);
 		return EBADF;
@@ -445,7 +442,7 @@ gint node_epollGetEvents(Node* node, gint handle,
 		return EBADF;
 	}
 
-	enum DescriptorStatus status = descriptor_getStatus(descriptor);
+	DescriptorStatus status = descriptor_getStatus(descriptor);
 	if(status & DS_CLOSED) {
 		warning("descriptor handle '%i' not a valid open descriptor", handle);
 		return EBADF;
@@ -476,7 +473,7 @@ static gboolean _node_doesInterfaceExist(Node* node, in_addr_t interfaceIP) {
 }
 
 static gboolean _node_isInterfaceAvailable(Node* node, in_addr_t interfaceIP,
-		enum DescriptorType type, in_port_t port) {
+		DescriptorType type, in_port_t port) {
 	MAGIC_ASSERT(node);
 
 	enum ProtocolType protocol = type == DT_TCPSOCKET ? PTCP : type == DT_UDPSOCKET ? PUDP : PLOCAL;
@@ -508,19 +505,21 @@ static gboolean _node_isInterfaceAvailable(Node* node, in_addr_t interfaceIP,
 
 
 static in_port_t _node_getRandomFreePort(Node* node, in_addr_t interfaceIP,
-		enum DescriptorType type) {
+		DescriptorType type) {
 	MAGIC_ASSERT(node);
 
-	in_port_t randomPort = 0;
+	in_port_t randomNetworkPort = 0;
 	gboolean available = FALSE;
 
 	while(!available) {
-		randomPort = htons((node->randomPortCounter)++);
-		g_assert(node->randomPortCounter >= MIN_RANDOM_PORT);
-		available = _node_isInterfaceAvailable(node, interfaceIP, type, randomPort);
+		gdouble randomFraction = random_nextDouble(node->random);
+		in_port_t randomHostPort = (in_port_t) (randomFraction * (UINT16_MAX - MIN_RANDOM_PORT)) + MIN_RANDOM_PORT;
+		g_assert(randomHostPort >= MIN_RANDOM_PORT);
+		randomNetworkPort = htons(randomHostPort);
+		available = _node_isInterfaceAvailable(node, interfaceIP, type, randomNetworkPort);
 	}
 
-	return randomPort;
+	return randomNetworkPort;
 }
 
 gint node_bindToInterface(Node* node, gint handle, in_addr_t bindAddress, in_port_t bindPort) {
@@ -532,13 +531,13 @@ gint node_bindToInterface(Node* node, gint handle, in_addr_t bindAddress, in_por
 		return EBADF;
 	}
 
-	enum DescriptorStatus status = descriptor_getStatus(descriptor);
+	DescriptorStatus status = descriptor_getStatus(descriptor);
 	if(status & DS_CLOSED) {
 		warning("descriptor handle '%i' not a valid open descriptor", handle);
 		return EBADF;
 	}
 
-	enum DescriptorType type = descriptor_getType(descriptor);
+	DescriptorType type = descriptor_getType(descriptor);
 	if(type != DT_TCPSOCKET && type != DT_UDPSOCKET) {
 		warning("wrong type for descriptor handle '%i'", handle);
 		return ENOTSOCK;
@@ -578,19 +577,34 @@ gint node_connectToPeer(Node* node, gint handle, in_addr_t peerAddress,
 		in_port_t peerPort, sa_family_t family) {
 	MAGIC_ASSERT(node);
 
+	in_addr_t loIP = htonl(INADDR_LOOPBACK);
+
+	/* make sure we will be able to route this later */
+	if(peerAddress != loIP) {
+		Internetwork* internet = worker_getInternet();
+		Network *peerNetwork = internetwork_lookupNetwork(internet, peerAddress);
+		if(!peerNetwork) {
+			/* can't route it - there is no node with this address */
+			gchar* peerAddressString = address_ipToNewString(ntohl(peerAddress));
+			warning("attempting to connect to address '%s:%u' for which no node exists", peerAddressString, ntohs(peerPort));
+			g_free(peerAddressString);
+			return ECONNREFUSED;
+		}
+	}
+
 	Descriptor* descriptor = node_lookupDescriptor(node, handle);
 	if(descriptor == NULL) {
 		warning("descriptor handle '%i' not found", handle);
 		return EBADF;
 	}
 
-	enum DescriptorStatus status = descriptor_getStatus(descriptor);
+	DescriptorStatus status = descriptor_getStatus(descriptor);
 	if(status & DS_CLOSED) {
 		warning("descriptor handle '%i' not a valid open descriptor", handle);
 		return EBADF;
 	}
 
-	enum DescriptorType type = descriptor_getType(descriptor);
+	DescriptorType type = descriptor_getType(descriptor);
 	if(type != DT_TCPSOCKET && type != DT_UDPSOCKET) {
 		warning("wrong type for descriptor handle '%i'", handle);
 		return ENOTSOCK;
@@ -612,7 +626,6 @@ gint node_connectToPeer(Node* node, gint handle, in_addr_t peerAddress,
 	if(!socket_getBinding(socket)) {
 		/* do an implicit bind to a random port.
 		 * use default interface unless the remote peer is on loopback */
-		in_addr_t loIP = htonl(INADDR_LOOPBACK);
 		in_addr_t defaultIP = networkinterface_getIPAddress(node->defaultInterface);
 
 		in_addr_t bindAddress = loIP == peerAddress ? loIP : defaultIP;
@@ -633,13 +646,13 @@ gint node_listenForPeer(Node* node, gint handle, gint backlog) {
 		return EBADF;
 	}
 
-	enum DescriptorStatus status = descriptor_getStatus(descriptor);
+	DescriptorStatus status = descriptor_getStatus(descriptor);
 	if(status & DS_CLOSED) {
 		warning("descriptor handle '%i' not a valid open descriptor", handle);
 		return EBADF;
 	}
 
-	enum DescriptorType type = descriptor_getType(descriptor);
+	DescriptorType type = descriptor_getType(descriptor);
 	if(type != DT_TCPSOCKET) {
 		warning("wrong type for descriptor handle '%i'", handle);
 		return EOPNOTSUPP;
@@ -669,13 +682,13 @@ gint node_acceptNewPeer(Node* node, gint handle, in_addr_t* ip, in_port_t* port,
 		return EBADF;
 	}
 
-	enum DescriptorStatus status = descriptor_getStatus(descriptor);
+	DescriptorStatus status = descriptor_getStatus(descriptor);
 	if(status & DS_CLOSED) {
 		warning("descriptor handle '%i' not a valid open descriptor", handle);
 		return EBADF;
 	}
 
-	enum DescriptorType type = descriptor_getType(descriptor);
+	DescriptorType type = descriptor_getType(descriptor);
 	if(type != DT_TCPSOCKET) {
 		return EOPNOTSUPP;
 	}
@@ -692,13 +705,13 @@ gint node_getPeerName(Node* node, gint handle, in_addr_t* ip, in_port_t* port) {
 		return EBADF;
 	}
 
-	enum DescriptorStatus status = descriptor_getStatus(descriptor);
+	DescriptorStatus status = descriptor_getStatus(descriptor);
 	if(status & DS_CLOSED) {
 		warning("descriptor handle '%i' not a valid open descriptor", handle);
 		return EBADF;
 	}
 
-	enum DescriptorType type = descriptor_getType(descriptor);
+	DescriptorType type = descriptor_getType(descriptor);
 	if(type != DT_TCPSOCKET) {
 		return ENOTCONN;
 	}
@@ -715,13 +728,13 @@ gint node_getSocketName(Node* node, gint handle, in_addr_t* ip, in_port_t* port)
 		return EBADF;
 	}
 
-	enum DescriptorStatus status = descriptor_getStatus(descriptor);
+	DescriptorStatus status = descriptor_getStatus(descriptor);
 	if(status & DS_CLOSED) {
 		warning("descriptor handle '%i' not a valid open descriptor", handle);
 		return EBADF;
 	}
 
-	enum DescriptorType type = descriptor_getType(descriptor);
+	DescriptorType type = descriptor_getType(descriptor);
 	if(type != DT_TCPSOCKET && type != DT_UDPSOCKET) {
 		warning("wrong type for descriptor handle '%i'", handle);
 		return ENOTSOCK;
@@ -741,13 +754,13 @@ gint node_sendUserData(Node* node, gint handle, gconstpointer buffer, gsize nByt
 		return EBADF;
 	}
 
-	enum DescriptorStatus status = descriptor_getStatus(descriptor);
+	DescriptorStatus status = descriptor_getStatus(descriptor);
 	if(status & DS_CLOSED) {
 		warning("descriptor handle '%i' not a valid open descriptor", handle);
 		return EBADF;
 	}
 
-	enum DescriptorType type = descriptor_getType(descriptor);
+	DescriptorType type = descriptor_getType(descriptor);
 	if(type != DT_TCPSOCKET && type != DT_UDPSOCKET && type != DT_PIPE) {
 		return EBADF;
 	}
@@ -756,7 +769,7 @@ gint node_sendUserData(Node* node, gint handle, gconstpointer buffer, gsize nByt
 
 	/* we should block if our cpu has been too busy lately */
 	if(cpu_isBlocked(node->cpu)) {
-		debug("blocked on CPU when trying to send %lu bytes from socket %i", nBytes, handle);
+		debug("blocked on CPU when trying to send %"G_GSIZE_FORMAT" bytes from socket %i", nBytes, handle);
 
 		/*
 		 * immediately schedule an event to tell the socket it can write. it will
@@ -831,7 +844,7 @@ gint node_receiveUserData(Node* node, gint handle, gpointer buffer, gsize nBytes
 	 * longer has data, and the above lookup will fail and return EBADF.
 	 */
 
-	enum DescriptorType type = descriptor_getType(descriptor);
+	DescriptorType type = descriptor_getType(descriptor);
 	if(type != DT_TCPSOCKET && type != DT_UDPSOCKET && type != DT_PIPE) {
 		return EBADF;
 	}
@@ -840,7 +853,7 @@ gint node_receiveUserData(Node* node, gint handle, gpointer buffer, gsize nBytes
 
 	/* we should block if our cpu has been too busy lately */
 	if(cpu_isBlocked(node->cpu)) {
-		debug("blocked on CPU when trying to send %lu bytes from socket %i", nBytes, handle);
+		debug("blocked on CPU when trying to send %"G_GSIZE_FORMAT" bytes from socket %i", nBytes, handle);
 
 		/*
 		 * immediately schedule an event to tell the socket it can read. it will
@@ -873,7 +886,7 @@ gint node_closeUser(Node* node, gint handle) {
 		return EBADF;
 	}
 
-	enum DescriptorStatus status = descriptor_getStatus(descriptor);
+	DescriptorStatus status = descriptor_getStatus(descriptor);
 	if(status & DS_CLOSED) {
 		warning("descriptor handle '%i' not a valid open descriptor", handle);
 		return EBADF;

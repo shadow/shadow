@@ -1,23 +1,9 @@
 /*
  * The Shadow Simulator
- *
- * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
- *
- * This file is part of Shadow.
- *
- * Shadow is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Shadow is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright (c) 2010-2011, Rob Jansen
+ * See LICENSE for licensing information
  */
+
 
 #include <glib.h>
 #include <shd-library.h>
@@ -25,13 +11,13 @@
 
 FileTransfer ftmain_globalData;
 
-void ftmain_log(GLogLevelFlags level, const gchar* functionName, gchar* format, ...) {
+void ftmain_log(ShadowLogLevel level, const gchar* functionName, const gchar* format, ...) {
 	va_list vargs;
 	va_start(vargs, format);
 
 	GString* newformat = g_string_new(NULL);
 	g_string_append_printf(newformat, "[%s] %s", functionName, format);
-	g_logv(G_LOG_DOMAIN, level, newformat->str, vargs);
+	g_logv(G_LOG_DOMAIN, (GLogLevelFlags)level, newformat->str, vargs);
 	g_string_free(newformat, TRUE);
 
 	va_end(vargs);
@@ -67,7 +53,7 @@ gint main(gint argc, gchar *argv[])
 	/* now we need to watch all the epoll descriptors in our main loop */
 	gint epolld = epoll_create(1);
 	if(epolld == -1) {
-		ftmain_log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in server epoll_create");
+		ftmain_log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "Error in server epoll_create");
 		close(epolld);
 		return -1;
 	}
@@ -93,7 +79,7 @@ gint main(gint argc, gchar *argv[])
 		/* wait for some events */
 		nReadyFDs = epoll_wait(epolld, events, 10, 0);
 		if(nReadyFDs == -1) {
-			ftmain_log(G_LOG_LEVEL_WARNING, __FUNCTION__, "error in client epoll_wait");
+			ftmain_log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "error in client epoll_wait");
 			return -1;
 		}
 

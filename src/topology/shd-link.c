@@ -1,22 +1,7 @@
 /*
  * The Shadow Simulator
- *
- * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
- *
- * This file is part of Shadow.
- *
- * Shadow is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Shadow is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright (c) 2010-2011, Rob Jansen
+ * See LICENSE for licensing information
  */
 
 #include "shadow.h"
@@ -32,6 +17,9 @@ struct _Link {
 	guint64 latencymean;
 	guint64 latencyQ3;
 	guint64 latencymax;
+
+	guint64 latencySample;
+	SimulationTime lastSampleTime;
 	MAGIC_DECLARE;
 };
 
@@ -94,41 +82,53 @@ guint64 link_computeDelay(Link* link, gdouble percentile) {
 	MAGIC_ASSERT(link);
 	g_assert((percentile >= 0) && (percentile <= 1));
 
-	guint64 delay;
-	if(link->latencymin == 0) {
-		guint64 min = link->latency - link->jitter;
-		guint64 max = link->latency + link->jitter;
+	Configuration* c = engine_getConfig(worker_getPrivate()->cached_engine);
 
-		guint64 width = max - min;
-		guint64 offset = (guint64)(((gdouble)width) * percentile);
+	/* check to see if we need to resample the latency */
+	SimulationTime now = worker_getPrivate()->clock_now;
+	SimulationTime sampleInterval = configuration_getLatencySampleInterval(c);
+	if(now - link->lastSampleTime >= sampleInterval) {
+		guint64 delay;
+		if(link->latencymin == 0) {
+			guint64 min = link->latency - link->jitter;
+			guint64 max = link->latency + link->jitter;
 
-		delay = min + offset;
-	} else {
-		guint64 min;
-		guint64 width;
-		gdouble r;
-		if(percentile <= 0.25) {
-			min = link->latencymin;
-			width = link->latencyQ1 - link->latencymin;
-			r = percentile / 0.25;
-		} else if(percentile <= 0.5) {
-			min = link->latencyQ1;
-			width = link->latency - link->latencyQ1;
-			r = (percentile - 0.25) / 0.25;
-		} else if(percentile <= 0.75) {
-			min = link->latency;
-			width = link->latencyQ3 - link->latency;
-			r = (percentile - 0.50) / 0.25;
+			guint64 width = max - min;
+			guint64 offset = (guint64)(((gdouble)width) * percentile);
+
+			delay = min + offset;
 		} else {
-			min = link->latencyQ3;
-			width = link->latencymax - link->latencyQ3;
-			r = (percentile - 0.75) / 0.25;
+			guint64 min;
+			guint64 width;
+			gdouble r;
+			if(percentile <= 0.25) {
+				min = link->latencymin;
+				width = link->latencyQ1 - link->latencymin;
+				r = percentile / 0.25;
+			} else if(percentile <= 0.5) {
+				min = link->latencyQ1;
+				width = link->latency - link->latencyQ1;
+				r = (percentile - 0.25) / 0.25;
+			} else if(percentile <= 0.75) {
+				min = link->latency;
+				width = link->latencyQ3 - link->latency;
+				r = (percentile - 0.50) / 0.25;
+			} else {
+				min = link->latencyQ3;
+				width = link->latencymax - link->latencyQ3;
+				r = (percentile - 0.75) / 0.25;
+			}
+
+			delay = min + (width * r);
 		}
 
-		delay = min + (width * r);
+		if(delay == 0)
+		    delay = 1;
+		link->latencySample = delay;
+		link->lastSampleTime = now;
 	}
 
-	return delay;
+	return link->latencySample;
 }
 
 void link_getLatencyMetrics(Link *link, guint64 *min, guint64 *q1, guint64 *mean, guint64 *q3, guint64 *max) {

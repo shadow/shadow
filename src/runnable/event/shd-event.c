@@ -1,25 +1,11 @@
 /*
  * The Shadow Simulator
- *
- * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
- *
- * This file is part of Shadow.
- *
- * Shadow is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Shadow is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright (c) 2010-2011, Rob Jansen
+ * See LICENSE for licensing information
  */
 
 #include "shadow.h"
+#include "shd-event-internal.h"
 
 RunnableFunctionTable event_functions = {
 	(RunnableRunFunc) shadowevent_run,
@@ -50,7 +36,7 @@ gboolean shadowevent_run(Event* event) {
 
 	if(cpu_isBlocked(cpu)) {
 		SimulationTime cpuDelay = cpu_getDelay(cpu);
-		debug("event blocked on CPU, rescheduled for %lu nanoseconds from now", cpuDelay);
+		debug("event blocked on CPU, rescheduled for %"G_GUINT64_FORMAT" nanoseconds from now", cpuDelay);
 
 		/* track the event delay time */
 		tracker_addVirtualProcessingDelay(node_getTracker(node), cpuDelay);
@@ -68,13 +54,37 @@ gboolean shadowevent_run(Event* event) {
 	return TRUE;
 }
 
+void shadowevent_setSequence(Event* event, SimulationTime sequence) {
+	MAGIC_ASSERT(event);
+	event->sequence = sequence;
+}
+
+SimulationTime shadowevent_getTime(Event* event) {
+	MAGIC_ASSERT(event);
+	return event->time;
+}
+
+void shadowevent_setTime(Event* event, SimulationTime time) {
+	MAGIC_ASSERT(event);
+	event->time = time;
+}
+
+gpointer shadowevent_getNode(Event* event) {/* XXX: return type is "Node*" */
+	MAGIC_ASSERT(event);
+	return event->node;
+}
+
+void shadowevent_setNode(Event* event, gpointer node) {/* XXX: return type is "Node*" */
+	MAGIC_ASSERT(event);
+	event->node = node;
+}
+
 gint shadowevent_compare(const Event* a, const Event* b, gpointer user_data) {
 	MAGIC_ASSERT(a);
 	MAGIC_ASSERT(b);
-	/*
-	 * @todo should events already scheduled get priority over new events?
-	 */
-	return a->time > b->time ? +1 : a->time == b->time ? 0 : -1;
+	/* events already scheduled get priority over new events */
+	return (a->time > b->time) ? +1 : (a->time < b->time) ? -1 :
+			(a->sequence > b->sequence) ? +1 : (a->sequence < b->sequence) ? -1 : 0;
 }
 
 void shadowevent_free(Event* event) {

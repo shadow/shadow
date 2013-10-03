@@ -1,22 +1,7 @@
 /*
  * The Shadow Simulator
- *
- * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
- *
- * This file is part of Shadow.
- *
- * Shadow is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Shadow is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright (c) 2010-2011, Rob Jansen
+ * See LICENSE for licensing information
  */
 
 #include <glib.h>
@@ -51,12 +36,19 @@ PriorityQueue* priorityqueue_new(GCompareDataFunc compareFunc,
 
 void priorityqueue_clear(PriorityQueue *q) {
 	g_assert(q);
+	if(q->freeFunc) {
+		for (guint i = 0; i < q->size; i++) {
+			q->freeFunc(q->heap[i]);
+			q->heap[i] = NULL;
+		}
+	}
 	q->size = 0;
 	g_hash_table_remove_all(q->map);
 }
 
 void priorityqueue_free(PriorityQueue *q) {
 	g_assert(q);
+	priorityqueue_clear(q);
 	g_hash_table_destroy(q->map);
 	g_free(q->heap);
 	g_slice_free(PriorityQueue, q);

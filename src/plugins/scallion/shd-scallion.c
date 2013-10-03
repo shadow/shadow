@@ -1,22 +1,7 @@
-/**
+/*
  * The Shadow Simulator
- *
- * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
- *
- * This file is part of Shadow.
- *
- * Shadow is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Shadow is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright (c) 2010-2011, Rob Jansen
+ * See LICENSE for licensing information
  */
 
 #include "shd-scallion.h"
@@ -45,7 +30,7 @@ void scalliontor_init_v3bw(ScallionTor* stor) {
 	/* open the bw file, clearing it if it exists */
 	FILE *v3bw = fopen(stor->v3bw_name, "w");
 	if(v3bw == NULL) {
-		stor->shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__,
+		stor->shadowlibFuncs->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__,
 				"v3bandwidth file not updated: can not open file '%s'\n", stor->v3bw_name);
 		return;
 	}
@@ -55,7 +40,7 @@ void scalliontor_init_v3bw(ScallionTor* stor) {
 	/* print time part on first line */
 	if(fprintf(v3bw, "%lu\n", maxtime) < 0) {
 		/* uhhhh... */
-		stor->shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__,
+		stor->shadowlibFuncs->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__,
 		"v3bandwidth file not updated: can write time '%u' to file '%s'\n", maxtime, stor->v3bw_name);
 		return;
 	}
@@ -89,7 +74,7 @@ void scalliontor_init_v3bw(ScallionTor* stor) {
 
 		if(fprintf(v3bw, "node_id=$%s bw=%u\n", node_id, bw) < 0) {
 			/* uhhhh... */
-			stor->shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__,
+			stor->shadowlibFuncs->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__,
 					"v3bandwidth file not updated: can write line 'node_id=$%s bw=%u\n' to file '%s'\n", node_id, bw, stor->v3bw_name);
 			return;
 		}
@@ -143,6 +128,46 @@ static void _scalliontor_refillCallback(ScallionTor* stor) {
 }
 #endif
 
+static ScallionTor* scalliontor_getPointer() {
+	return scallion.stor;
+}
+
+static void scalliontor_logmsg_cb(int severity, uint32_t domain, const char *msg) {
+	ShadowLogLevel level;
+	switch (severity) {
+		case LOG_DEBUG:
+			level = SHADOW_LOG_LEVEL_DEBUG;
+		break;
+		case LOG_INFO:
+			level = SHADOW_LOG_LEVEL_INFO;
+		break;
+		case LOG_NOTICE:
+			level = SHADOW_LOG_LEVEL_MESSAGE;
+		break;
+		case LOG_WARN:
+			level = SHADOW_LOG_LEVEL_WARNING;
+		break;
+		case LOG_ERR:
+			level = SHADOW_LOG_LEVEL_ERROR;
+		break;
+		default:
+			level = SHADOW_LOG_LEVEL_DEBUG;
+		break;
+	}
+	gchar* msg_dup = g_strdup(msg);
+	scalliontor_getPointer()->shadowlibFuncs->log(level, __FUNCTION__, "%s", g_strchomp(msg_dup));
+	g_free(msg_dup);
+}
+
+static void scalliontor_setLogging() {
+	/* setup a callback so we can log into shadow */
+    log_severity_list_t *severity = g_new0(log_severity_list_t, 1);
+    /* we'll log everything according to Shadow's filter */
+    set_log_severity_config(LOG_DEBUG, LOG_ERR, severity);
+    add_callback_log(severity, scalliontor_logmsg_cb);
+    g_free(severity);
+}
+
 gint scalliontor_start(ScallionTor* stor, gint argc, gchar *argv[]) {
 	time_t now = time(NULL);
 
@@ -150,9 +175,12 @@ gint scalliontor_start(ScallionTor* stor, gint argc, gchar *argv[]) {
 	tor_threads_init();
 	init_logging();
 
+	/* tor_init() loses our logging, so set it before AND after */
+	scalliontor_setLogging();
 	if (tor_init(argc, argv) < 0) {
 		return -1;
 	}
+	scalliontor_setLogging();
 
 	  /* load the private keys, if we're supposed to have them, and set up the
 	   * TLS context. */
@@ -275,20 +303,21 @@ ScallionTor* scalliontor_new(ShadowFunctionTable* shadowlibFuncs, char* hostname
 	GString* geoipBuffer = _scalliontor_getHomePath(geoip_path);
 
 	/* default args */
-	char *config[25];
+	char *config[26];
 	config[0] = "tor";
-	config[1] = "--Address";
-	config[2] = hostname;
-	config[3] = "-f";
-	config[4] = torrcBuffer->str;
-	config[5] = "--DataDirectory";
-	config[6] = datadirBuffer->str;
-	config[7] = "--GeoIPFile";
-	config[8] = geoipBuffer->str;
-	config[9] = "--BandwidthRate";
-	config[10] = bwrate;
-	config[11] = "--BandwidthBurst";
-	config[12] = bwburst;
+	config[1] = "--quiet";
+	config[2] = "--Address";
+	config[3] = hostname;
+	config[4] = "-f";
+	config[5] = torrcBuffer->str;
+	config[6] = "--DataDirectory";
+	config[7] = datadirBuffer->str;
+	config[8] = "--GeoIPFile";
+	config[9] = geoipBuffer->str;
+	config[10] = "--BandwidthRate";
+	config[11] = bwrate;
+	config[12] = "--BandwidthBurst";
+	config[13] = bwburst;
 
 	gchar* nickname = g_strdup(hostname);
 	while(1) {
@@ -300,28 +329,28 @@ ScallionTor* scalliontor_new(ShadowFunctionTable* shadowlibFuncs, char* hostname
 		}
 	}
 
-	config[13] = "--Nickname";
-	config[14] = nickname;
+	config[14] = "--Nickname";
+	config[15] = nickname;
 
-	config[15] = "--ControlPort";
-    config[16] = "9051";
-    config[17] = "--ControlListenAddress";
-    config[18] = "127.0.0.1";
-    config[19] = "--ControlListenAddress";
-    config[20] = hostname;
-    config[21] = "HashedControlPassword";
-    config[22] = "16:25662F13DA7881D46091AB96726A8E5245CBF98BA6961A5B8C9CEEBB25";
+	config[16] = "--ControlPort";
+    config[17] = "9051";
+    config[18] = "--ControlListenAddress";
+    config[19] = "127.0.0.1";
+    config[20] = "--ControlListenAddress";
+    config[21] = hostname;
+    config[22] = "HashedControlPassword";
+    config[23] = "16:25662F13DA7881D46091AB96726A8E5245CBF98BA6961A5B8C9CEEBB25";
 
-	int num_args = 23;
+	int num_args = 24;
 	/* additional args */
 	if(stor->type == VTOR_DIRAUTH) {
 		num_args += 2;
 		if(snprintf(stor->v3bw_name, 255, "%s/dirauth.v3bw", datadir_path) >= 255) {
-			stor->shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__,
+			stor->shadowlibFuncs->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__,
 					"data directory path is too long and was truncated to '%s'\n", stor->v3bw_name);
 		}
-		config[23] = "--V3BandwidthsFile";
-		config[24] = stor->v3bw_name;
+		config[24] = "--V3BandwidthsFile";
+		config[25] = stor->v3bw_name;
 	}
 
 	scallion.stor = stor;
@@ -463,6 +492,14 @@ enter:
 			const create_cell_t *cc = &cpuw->req.create_cell;
 			created_cell_t *cell_out = &cpuw->rpl.created_cell;
 			int n;
+#ifdef SCALLION_USEV2CPUWORKERTIMING
+			struct timeval tv_start, tv_end;
+			cpuw->rpl.timed = cpuw->req.timed;
+			cpuw->rpl.started_at = cpuw->req.started_at;
+			cpuw->rpl.handshake_type = cc->handshake_type;
+			if (cpuw->req.timed)
+			  tor_gettimeofday(&tv_start);
+#endif
 			n = onion_skin_server_handshake(cc->handshake_type, cc->onionskin,
 					cc->handshake_len, &cpuw->onion_keys, cell_out->reply,
 					cpuw->rpl.keys, CPATH_KEY_MATERIAL_LEN,
@@ -495,6 +532,22 @@ enter:
 				cpuw->rpl.success = 1;
 			}
 			cpuw->rpl.magic = CPUWORKER_REPLY_MAGIC;
+#ifdef SCALLION_USEV2CPUWORKERTIMING
+			if (cpuw->req.timed) {
+			  struct timeval tv_diff;
+			  int64_t usec;
+			  tor_gettimeofday(&tv_end);
+			  timersub(&tv_end, &tv_start, &tv_diff);
+			  usec = ((int64_t)tv_diff.tv_sec)*1000000 + tv_diff.tv_usec;
+/** If any onionskin takes longer than this, we clip them to this
+* time. (microseconds) */
+#define MAX_BELIEVABLE_ONIONSKIN_DELAY (2*1000*1000)
+			  if (usec < 0 || usec > MAX_BELIEVABLE_ONIONSKIN_DELAY)
+				cpuw->rpl.n_usec = MAX_BELIEVABLE_ONIONSKIN_DELAY;
+			  else
+				cpuw->rpl.n_usec = (uint32_t) usec;
+			  }
+#endif
 		} else if (cpuw->req.task == CPUWORKER_TASK_SHUTDOWN) {
 			log_info(LD_OR, "Clean shutdown: exiting");
 			goto end;
@@ -750,10 +803,6 @@ void scalliontor_newCPUWorker(ScallionTor* stor, int fd) {
 	event_add(&(cpuw->read_event), NULL);
 }
 
-static ScallionTor* scalliontor_getPointer() {
-	return scallion.stor;
-}
-
 /*
  * Tor function interceptions
  */
@@ -785,99 +834,6 @@ void intercept_tor_gettimeofday(struct timeval *timeval) {
 	timeval->tv_usec = tp.tv_nsec/1000;
 }
 
-#ifdef SCALLION_LOGVWITHSUFFIX
-void intercept_logv(int severity, uint32_t domain, const char *funcname,
-     const char *suffix, const char *format, va_list ap) {
-#else
-void intercept_logv(int severity, uint32_t domain, const char *funcname,
-     const char *format, va_list ap) {
-#endif
-	char* sev_str = NULL;
-	const size_t buflen = 10024;
-	char buf[buflen];
-	size_t current_position = 0;
-
-	/* Call assert, not tor_assert, since tor_assert calls log on failure. */
-	assert(format);
-
-	GLogLevelFlags level;
-
-	switch (severity) {
-		case LOG_DEBUG:
-			sev_str = "debug";
-			level = G_LOG_LEVEL_DEBUG;
-		break;
-
-		case LOG_INFO:
-			sev_str = "info";
-			level = G_LOG_LEVEL_INFO;
-		break;
-
-		case LOG_NOTICE:
-			sev_str = "notice";
-			level = G_LOG_LEVEL_MESSAGE;
-		break;
-
-		case LOG_WARN:
-			sev_str = "warn";
-			level = G_LOG_LEVEL_WARNING;
-		break;
-
-		case LOG_ERR:
-			sev_str = "err";
-			level = G_LOG_LEVEL_ERROR;
-		break;
-
-		default:
-			sev_str = "UNKNOWN";
-			level = G_LOG_LEVEL_DEBUG;
-		break;
-	}
-
-	snprintf(&buf[current_position], strlen(sev_str)+4, "[%s] ", sev_str);
-	current_position += strlen(sev_str)+3;
-
-	if (domain == LD_BUG) {
-		snprintf(&buf[current_position], 6, "BUG: ");
-		current_position += 5;
-	}
-
-	if(funcname != NULL) {
-		snprintf(&buf[current_position], strlen(funcname)+4, "%s() ", funcname);
-		current_position += strlen(funcname)+3;
-	}
-
-	size_t size = buflen-current_position-2;
-	int res = vsnprintf(&buf[current_position], size, format, ap);
-
-	if(res >= size) {
-		/* truncated */
-		current_position = buflen - 3;
-	} else {
-		current_position += res;
-#ifdef SCALLION_LOGVWITHSUFFIX
-	    if (suffix) {
-	      size_t suffix_len = strlen(suffix);
-	      if (buflen-current_position >= suffix_len) {
-	        snprintf(&buf[current_position], suffix_len+1, "%s", suffix);
-	        current_position += suffix_len;
-	      }
-	    }
-#endif
-	}
-
-	buf[current_position] = '\0';
-	current_position++;
-
-	ScallionTor* stor = scalliontor_getPointer();
-	stor->shadowlibFuncs->log(level, __FUNCTION__, buf);
-
-	for(GList *iter = stor->logfiles; iter; iter = g_list_next(iter)) {
-        vtor_logfile_tp lf = iter->data;
-        lf->callback(severity, domain, buf);
-    }
-}
-
 int intercept_spawn_func(void (*func)(void *), void *data)
 {
 	ScallionTor* stor = scalliontor_getPointer();
@@ -895,7 +851,10 @@ int intercept_spawn_func(void (*func)(void *), void *data)
 	return 0;
 }
 
-/* this function is where the relay will return its bandwidth and send to auth */
+/* this function is where the relay will return its bandwidth and send to auth.
+ * this should be computing an estimate of the relay's actual bandwidth capacity.
+ * let the maximum 10 second rolling average bytes be MAX10S; then, this should compute:
+ * min(MAX10S read, MAX10S write) */
 int intercept_rep_hist_bandwidth_assess() {
 	ScallionTor* stor = scalliontor_getPointer();
 	g_assert(stor);
@@ -910,21 +869,6 @@ uint32_t intercept_router_get_advertised_bandwidth_capped(const routerinfo_t *ro
   /* this is what the relay told us. dont worry about caps, since this bandwidth
    * is authoritative in our sims */
   return router->bandwidthcapacity;
-}
-
-/* for the tor control, need to know all the callbacks where log messages get sent */
-int intercept_add_callback_log(const log_severity_list_t *severity, log_callback cb) {
-    ScallionTor* stor = scalliontor_getPointer();
-    g_assert(stor);
-
-    vtor_logfile_tp lf = g_new0(vtor_logfile_t, 1);
-    lf->fd = -1;
-    lf->severities = g_memdup(severity, sizeof(log_severity_list_t));
-    lf->callback = cb;
-
-    stor->logfiles = g_list_append(stor->logfiles, lf);
-
-    return 0;
 }
 
 int intercept_crypto_global_cleanup(void) {

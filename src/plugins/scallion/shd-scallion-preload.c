@@ -1,22 +1,7 @@
-/**
+/*
  * The Shadow Simulator
- *
- * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
- *
- * This file is part of Shadow.
- *
- * Shadow is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Shadow is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright (c) 2010-2011, Rob Jansen
+ * See LICENSE for licensing information
  */
 
 #include <sys/time.h>
@@ -32,12 +17,10 @@
 
 typedef int (*tor_open_socket_fp)(int, int, int);
 typedef int (*tor_gettimeofday_fp)(struct timeval *);
-typedef void (*logv_fp)();
 typedef int (*spawn_func_fp)();
 typedef int (*rep_hist_bandwidth_assess_fp)();
 typedef int (*router_get_advertised_bandwidth_capped_fp)(void*);
 typedef int (*event_base_loopexit_fp)();
-typedef int (*add_callback_log_fp)(const log_severity_list_t *, log_callback);
 typedef int (*crypto_global_cleanup_fp)(void);
 
 /* the key used to store each threads version of their searched function library.
@@ -51,13 +34,11 @@ struct _ScallionPreloadWorker {
 	GModule* handle;
 	tor_open_socket_fp a;
 	tor_gettimeofday_fp b;
-	logv_fp c;
 	spawn_func_fp d;
 	rep_hist_bandwidth_assess_fp e;
 	router_get_advertised_bandwidth_capped_fp f;
 	event_base_loopexit_fp g;
-	add_callback_log_fp h;
-	crypto_global_cleanup_fp i;
+	crypto_global_cleanup_fp h;
 };
 
 /* scallionpreload_init must be called before this so the worker gets created */
@@ -87,13 +68,11 @@ void scallionpreload_init(GModule* handle) {
 	/* lookup all our required symbols in this worker's module, asserting success */
 	g_assert(g_module_symbol(handle, TOR_LIB_PREFIX "tor_open_socket", (gpointer*)&(worker->a)));
 	g_assert(g_module_symbol(handle, TOR_LIB_PREFIX "tor_gettimeofday", (gpointer*)&(worker->b)));
-	g_assert(g_module_symbol(handle, TOR_LIB_PREFIX "logv", (gpointer*)&(worker->c)));
 	g_assert(g_module_symbol(handle, TOR_LIB_PREFIX "spawn_func", (gpointer*)&(worker->d)));
 	g_assert(g_module_symbol(handle, TOR_LIB_PREFIX "rep_hist_bandwidth_assess", (gpointer*)&(worker->e)));
 	g_assert(g_module_symbol(handle, TOR_LIB_PREFIX "router_get_advertised_bandwidth_capped", (gpointer*)&(worker->f)));
 	g_assert(g_module_symbol(handle, TOR_LIB_PREFIX "event_base_loopexit", (gpointer*)&(worker->g)));
-	g_assert(g_module_symbol(handle, TOR_LIB_PREFIX "add_callback_log", (gpointer*)&(worker->h)));
-	g_assert(g_module_symbol(handle, TOR_LIB_PREFIX "crypto_global_cleanup", (gpointer*)&(worker->i)));
+	g_assert(g_module_symbol(handle, TOR_LIB_PREFIX "crypto_global_cleanup", (gpointer*)&(worker->h)));
 
 	g_static_private_set(&scallionWorkerKey, worker, g_free);
 }
@@ -105,18 +84,6 @@ int tor_open_socket(int domain, int type, int protocol) {
 void tor_gettimeofday(struct timeval *timeval) {
 	_scallionpreload_getWorker()->b(timeval);
 }
-
-#ifdef SCALLION_LOGVWITHSUFFIX
-void logv(int severity, uint32_t domain, const char *funcname,
-	const char *suffix, const char *format, va_list ap) {
-	_scallionpreload_getWorker()->c(severity, domain, funcname, suffix, format, ap);
-}
-#else
-void logv(int severity, uint32_t domain, const char *funcname,
-    const char *format, va_list ap) {
-	_scallionpreload_getWorker()->c(severity, domain, funcname, format, ap);
-}
-#endif
 
 int spawn_func(void (*func)(void *), void *data) {
 	return _scallionpreload_getWorker()->d(func, data);
@@ -135,10 +102,6 @@ int event_base_loopexit(gpointer base, const struct timeval * t) {
 	return _scallionpreload_getWorker()->g(base, t);
 }
 
-int add_callback_log(const log_severity_list_t *severity, log_callback cb) {
-    return _scallionpreload_getWorker()->h(severity, cb);
-}
-
 int crypto_global_cleanup(void) {
-	return _scallionpreload_getWorker()->i();
+	return _scallionpreload_getWorker()->h();
 }

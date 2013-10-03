@@ -1,22 +1,7 @@
-/**
+/*
  * The Shadow Simulator
- *
- * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
- *
- * This file is part of Shadow.
- *
- * Shadow is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Shadow is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright (c) 2010-2011, Rob Jansen
+ * See LICENSE for licensing information
  */
 
 #include "shadow.h"
@@ -72,7 +57,7 @@ void udp_droppedPacket(UDP* udp, Packet* packet) {
 gssize udp_sendUserData(UDP* udp, gconstpointer buffer, gsize nBytes, in_addr_t ip, in_port_t port) {
 	MAGIC_ASSERT(udp);
 
-	gsize space = udp->super.outputBufferSize - udp->super.outputBufferLength;
+	gsize space = socket_getOutputBufferSpace(&(udp->super));
 	if(space < nBytes) {
 		/* not enough space to buffer the data */
 		return -1;
@@ -109,7 +94,15 @@ gssize udp_sendUserData(UDP* udp, gconstpointer buffer, gsize nBytes, in_addr_t 
 		}
 	}
 
-	debug("buffered %lu outbound UDP bytes from user", offset);
+	/* update the tracker output buffer stats */
+	Tracker* tracker = node_getTracker(worker_getPrivate()->cached_node);
+	Socket* socket = (Socket* )udp;
+	Descriptor* descriptor = (Descriptor *)socket;
+	gsize outLength = socket_getOutputBufferLength(socket);
+	gsize outSize = socket_getOutputBufferSize(socket);
+	tracker_updateSocketOutputBuffer(tracker, descriptor->handle, outLength, outSize);
+
+	debug("buffered %"G_GSIZE_FORMAT" outbound UDP bytes from user", offset);
 
 	return (gssize) offset;
 }
@@ -140,7 +133,15 @@ gssize udp_receiveUserData(UDP* udp, gpointer buffer, gsize nBytes, in_addr_t* i
 	/* destroy packet, throwing away any bytes not claimed by the app */
 	packet_unref(packet);
 
-	debug("user read %lu inbound UDP bytes", bytesCopied);
+	/* update the tracker output buffer stats */
+	Tracker* tracker = node_getTracker(worker_getPrivate()->cached_node);
+	Socket* socket = (Socket* )udp;
+	Descriptor* descriptor = (Descriptor *)socket;
+	gsize outLength = socket_getOutputBufferLength(socket);
+	gsize outSize = socket_getOutputBufferSize(socket);
+	tracker_updateSocketOutputBuffer(tracker, descriptor->handle, outLength, outSize);
+
+	debug("user read %u inbound UDP bytes", bytesCopied);
 
 	return (gssize)bytesCopied;
 }
@@ -154,7 +155,6 @@ void udp_free(UDP* udp) {
 
 void udp_close(UDP* udp) {
 	MAGIC_ASSERT(udp);
-	descriptor_adjustStatus(&(udp->super.super.super), DS_CLOSED, TRUE);
 	node_closeDescriptor(worker_getPrivate()->cached_node, udp->super.super.super.handle);
 }
 
@@ -171,11 +171,11 @@ SocketFunctionTable udp_functions = {
 	MAGIC_VALUE
 };
 
-UDP* udp_new(gint handle) {
+UDP* udp_new(gint handle, guint receiveBufferSize, guint sendBufferSize) {
 	UDP* udp = g_new0(UDP, 1);
 	MAGIC_INIT(udp);
 
-	socket_init(&(udp->super), &udp_functions, DT_UDPSOCKET, handle);
+	socket_init(&(udp->super), &udp_functions, DT_UDPSOCKET, handle, receiveBufferSize, sendBufferSize);
 
 	/* we are immediately active because UDP doesnt wait for accept or connect */
 	descriptor_adjustStatus((Descriptor*) udp, DS_ACTIVE|DS_WRITABLE, TRUE);

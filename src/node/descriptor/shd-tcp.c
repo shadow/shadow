@@ -1,22 +1,7 @@
-/**
+/*
  * The Shadow Simulator
- *
- * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
- *
- * This file is part of Shadow.
- *
- * Shadow is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Shadow is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright (c) 2010-2011, Rob Jansen
+ * See LICENSE for licensing information
  */
 
 #include "shadow.h"
@@ -124,7 +109,7 @@ struct _TCP {
 	gboolean isSlowStart;
 	struct {
 		/* our current calculated congestion window */
-		gdouble window;
+		guint32 window;
 		guint32 threshold;
 		/* their last advertised window */
 		guint32 lastWindow;
@@ -227,13 +212,15 @@ static void _tcpserver_free(TCPServer* server) {
 static in_addr_t tcp_getIP(TCP* tcp) {
 	in_addr_t ip = 0;
 	if(tcp->server) {
-		ip = socket_getBinding(&(tcp->super));
-		if(ip == 0) {
+		if(socket_isBound(&(tcp->super))) {
+			ip = socket_getBinding(&(tcp->super));
+		} else {
 			ip = tcp->server->lastIP;
 		}
 	} else if(tcp->child) {
-		ip = socket_getBinding(&(tcp->child->parent->super));
-		if(ip == 0) {
+		if(socket_isBound(&(tcp->child->parent->super))) {
+			ip = socket_getBinding(&(tcp->child->parent->super));
+		} else {
 			ip = tcp->child->parent->server->lastIP;
 		}
 	} else {
@@ -265,15 +252,29 @@ static void _tcp_autotune(TCP* tcp) {
 	 */
 	Internetwork* internet = worker_getInternet();
 
-	GQuark sourceID = (GQuark) tcp_getIP(tcp);
-	GQuark destinationID = (GQuark) tcp_getPeerIP(tcp);
+	in_addr_t sourceIP = tcp_getIP(tcp);
+	in_addr_t destinationIP = tcp_getPeerIP(tcp);
+
+	if(sourceIP == htonl(INADDR_ANY)) {
+		/* source interface depends on destination */
+		if(destinationIP == htonl(INADDR_LOOPBACK)) {
+			sourceIP = htonl(INADDR_LOOPBACK);
+		} else {
+			sourceIP = node_getDefaultIP(worker_getPrivate()->cached_node);
+		}
+	}
+
+	GQuark sourceID = (GQuark) sourceIP;
+	GQuark destinationID = (GQuark) destinationIP;
 
 	if(sourceID == destinationID) {
 		/* 16 MiB as max */
-		g_assert(16777216 > tcp->super.inputBufferSize);
-		g_assert(16777216 > tcp->super.outputBufferSize);
-		tcp->super.inputBufferSize = 16777216;
-		tcp->super.outputBufferSize = 16777216;
+		gsize inSize = socket_getInputBufferSize(&(tcp->super));
+		gsize outSize = socket_getOutputBufferSize(&(tcp->super));
+		g_assert(16777216 > inSize);
+		g_assert(16777216 > outSize);
+		socket_setInputBufferSize(&(tcp->super), (gsize) 16777216);
+		socket_setOutputBufferSize(&(tcp->super), (gsize) 16777216);
 		debug("set loopback buffer sizes to 16777216");
 		return;
 	}
@@ -281,6 +282,10 @@ static void _tcp_autotune(TCP* tcp) {
 	/* get latency in milliseconds */
 	guint32 send_latency = (guint32) internetwork_getLatency(internet, sourceID, destinationID, 0.8);
 	guint32 receive_latency = (guint32) internetwork_getLatency(internet, destinationID, sourceID, 0.8);
+	if(send_latency == 0 || receive_latency == 0) {
+	  error("autotuning needs nonzero latency, source=%"G_GUINT32_FORMAT" dest=%"G_GUINT32_FORMAT" send=%"G_GUINT32_FORMAT" recv=%"G_GUINT32_FORMAT,
+			  sourceID, destinationID, send_latency, receive_latency);
+	}
 	g_assert(send_latency > 0 && receive_latency > 0);
 
 	guint32 rtt_milliseconds = send_latency + receive_latency;
@@ -294,7 +299,7 @@ static void _tcp_autotune(TCP* tcp) {
 	guint32 send_bottleneck_bw = my_send_bw < their_receive_bw ? my_send_bw : their_receive_bw;
 
 	/* the delay bandwidth product is how many bytes I can send at once to keep the pipe full */
-	guint64 sendbuf_size = (guint64) (rtt_milliseconds * send_bottleneck_bw * 1.25f);
+	guint64 sendbuf_size = (guint64) ((rtt_milliseconds * send_bottleneck_bw * 1024.0f * 1.25f) / 1000.0f);
 
 	/* now the same thing for my receive buf */
 	guint32 my_receive_bw = internetwork_getNodeBandwidthDown(internet, sourceID);
@@ -304,7 +309,7 @@ static void _tcp_autotune(TCP* tcp) {
 	guint32 receive_bottleneck_bw = my_receive_bw < their_send_bw ? my_receive_bw : their_send_bw;
 
 	/* the delay bandwidth product is how many bytes I can receive at once to keep the pipe full */
-	guint64 receivebuf_size = (guint64) (rtt_milliseconds * receive_bottleneck_bw * 1.25);
+	guint64 receivebuf_size = (guint64) ((rtt_milliseconds * receive_bottleneck_bw * 1024.0f * 1.25f) / 1000.0f);
 
     /* keep minimum buffer size bounds */
     if(sendbuf_size < CONFIG_SEND_BUFFER_MIN_SIZE) {
@@ -317,14 +322,21 @@ static void _tcp_autotune(TCP* tcp) {
 	/* make sure the user hasnt already written to the buffer, because if we
 	 * shrink it, our buffer math would overflow the size variable
 	 */
-	g_assert(tcp->super.inputBufferLength == 0);
-	g_assert(tcp->super.outputBufferLength == 0);
+	g_assert(socket_getInputBufferLength(&(tcp->super)) == 0);
+	g_assert(socket_getOutputBufferLength(&(tcp->super)) == 0);
 
-	/* its ok to change buffer sizes since the user hasn't written anything yet */
-	tcp->super.inputBufferSize = receivebuf_size;
-	tcp->super.outputBufferSize = sendbuf_size;
+	/* check to see if the node should set buffer sizes via autotuning, or
+	 * they were specified by configuration or parameters in XML */
+	Node* node = worker_getPrivate()->cached_node;
+	if(node_autotuneReceiveBuffer(node)) {
+		socket_setInputBufferSize(&(tcp->super), (gsize) receivebuf_size);
+	}
+	if(node_autotuneSendBuffer(node)) {
+		socket_setOutputBufferSize(&(tcp->super), (gsize) sendbuf_size);
+	}
 
-	info("set network buffer sizes: send %lu receive %lu", sendbuf_size, receivebuf_size);
+	info("network buffer sizes: send %"G_GSIZE_FORMAT" receive %"G_GSIZE_FORMAT,
+			socket_getOutputBufferSize(&(tcp->super)), socket_getInputBufferSize(&(tcp->super)));
 }
 
 static void _tcp_setState(TCP* tcp, enum TCPState state) {
@@ -405,12 +417,20 @@ static void _tcp_setState(TCP* tcp, enum TCPState state) {
 static void _tcp_updateReceiveWindow(TCP* tcp) {
 	MAGIC_ASSERT(tcp);
 
-	gsize space = socket_getOutputBufferSpace(&(tcp->super));
+	/* the receive window is how much we are willing to accept to our input buffer */
+	gsize space = socket_getInputBufferSpace(&(tcp->super));
 	gsize nPackets = space / (CONFIG_MTU - CONFIG_HEADER_SIZE_TCPIPETH);
-
 	tcp->receive.window = nPackets;
-	if(tcp->receive.window < 1) {
-		tcp->receive.window = 1;
+
+	/* handle window updates */
+	if(tcp->receive.window == 0) {
+		/* we must ensure that we never advertise a 0 window if there is no way
+		 * for the client to drain the input buffer to further open the window.
+		 * otherwise, we may get into a deadlock situation where we never accept
+		 * any packets and the client never reads. */
+		g_assert(!(socket_getInputBufferLength(&(tcp->super)) == 0));
+		info("%s <-> %s: receive window is 0, we have space for %"G_GSIZE_FORMAT" bytes in the input buffer",
+				tcp->super.boundString, tcp->super.peerString, space);
 	}
 }
 
@@ -418,28 +438,51 @@ static void _tcp_updateSendWindow(TCP* tcp) {
 	MAGIC_ASSERT(tcp);
 
 	/* send window is minimum of congestion window and the last advertised window */
-	tcp->send.window = MIN(((guint32)tcp->congestion.window), tcp->congestion.lastWindow);
-	if(tcp->send.window < 1) {
-		tcp->send.window = 1;
-	}
+	tcp->send.window = MIN(tcp->congestion.window, tcp->congestion.lastWindow);
 }
 
+/* nPacketsAcked == 0 means a congestion event (packet was dropped) */
 static void _tcp_updateCongestionWindow(TCP* tcp, guint nPacketsAcked) {
 	MAGIC_ASSERT(tcp);
 
-	if(tcp->isSlowStart) {
-		/* threshold not set => no timeout yet => slow start phase 1
-		 *  i.e. multiplicative increase until retransmit event (which sets threshold)
-		 * threshold set => timeout => slow start phase 2
-		 *  i.e. multiplicative increase until threshold */
-		tcp->congestion.window += ((gdouble)nPacketsAcked);
-		if(tcp->congestion.threshold != 0 && tcp->congestion.window >= tcp->congestion.threshold) {
-			tcp->isSlowStart = FALSE;
+	if(nPacketsAcked > 0) {
+		if(tcp->isSlowStart) {
+			/* threshold not set => no timeout yet => slow start phase 1
+			 *  i.e. multiplicative increase until retransmit event (which sets threshold)
+			 * threshold set => timeout => slow start phase 2
+			 *  i.e. multiplicative increase until threshold */
+			tcp->congestion.window += ((guint32)nPacketsAcked);
+			if(tcp->congestion.threshold != 0 && tcp->congestion.window >= tcp->congestion.threshold) {
+				tcp->isSlowStart = FALSE;
+			}
+		} else {
+			/* slow start is over
+			 * simple additive increase part of AIMD */
+			gdouble n = ((gdouble) nPacketsAcked);
+			gdouble increment = n * n / ((gdouble) tcp->congestion.window);
+			tcp->congestion.window += (guint32)(ceil(increment));
 		}
 	} else {
-		/* slow start is over
-		 * simple additive increase part of AIMD */
-		tcp->congestion.window += (gdouble)(nPacketsAcked * ((gdouble)(nPacketsAcked / tcp->congestion.window)));
+		/* a packet was "dropped" - this is basically a negative ack.
+		 * TCP-Reno-like fast retransmit, i.e. multiplicative decrease. */
+		tcp->congestion.window = (guint32) ceil((gdouble)tcp->congestion.window / (gdouble)2);
+
+		if(tcp->isSlowStart && tcp->congestion.threshold == 0) {
+			tcp->congestion.threshold = tcp->congestion.window;
+		}
+	}
+
+	/* unlike the send and receive/advertised windows, our cong window should never be 0
+	 *
+	 * from https://tools.ietf.org/html/rfc5681 [page 6]:
+	 *
+	 * "Implementation Note: Since integer arithmetic is usually used in TCP
+   	 *  implementations, the formula given in equation (3) can fail to
+   	 *  increase cwnd when the congestion window is larger than SMSS*SMSS.
+   	 *  If the above formula yields 0, the result SHOULD be rounded up to 1 byte."
+	 */
+	if(tcp->congestion.window == 0) {
+		tcp->congestion.window = 1;
 	}
 }
 
@@ -456,9 +499,13 @@ static Packet* _tcp_createPacket(TCP* tcp, enum ProtocolTCPFlags flags, gconstpo
 	in_addr_t destinationIP = tcp_getPeerIP(tcp);
 	in_port_t destinationPort = (tcp->server) ? tcp->server->lastPeerPort : tcp->super.peerPort;
 
-
 	if(sourceIP == htonl(INADDR_ANY)) {
-		sourceIP = node_getDefaultIP(worker_getPrivate()->cached_node);
+		/* source interface depends on destination */
+		if(destinationIP == htonl(INADDR_LOOPBACK)) {
+			sourceIP = htonl(INADDR_LOOPBACK);
+		} else {
+			sourceIP = node_getDefaultIP(worker_getPrivate()->cached_node);
+		}
 	}
 
 	g_assert(sourceIP && sourcePort && destinationIP && destinationPort);
@@ -616,6 +663,15 @@ static void _tcp_flush(TCP* tcp) {
 		break;
 	}
 
+	/* update the tracker input/output buffer stats */
+	Tracker* tracker = node_getTracker(worker_getPrivate()->cached_node);
+	Socket* socket = (Socket* )tcp;
+	Descriptor* descriptor = (Descriptor *)socket;
+	gsize inSize = socket_getInputBufferSize(&(tcp->super));
+	gsize outSize = socket_getOutputBufferSize(&(tcp->super));
+	tracker_updateSocketInputBuffer(tracker, descriptor->handle, inSize - _tcp_getBufferSpaceIn(tcp), inSize);
+	tracker_updateSocketOutputBuffer(tracker, descriptor->handle, outSize - _tcp_getBufferSpaceOut(tcp), outSize);
+
 	/* check if user needs an EOF signal */
 	gboolean wantsEOF = ((tcp->flags & TCPF_LOCAL_CLOSED) || (tcp->flags & TCPF_REMOTE_CLOSED)) ? TRUE : FALSE;
 	if(wantsEOF) {
@@ -660,6 +716,54 @@ gint tcp_getConnectError(TCP* tcp) {
 
 	return 0;
 }
+
+void tcp_getInfo(TCP* tcp, struct tcp_info *tcpinfo) {
+	MAGIC_ASSERT(tcp);
+
+	memset(tcpinfo, 0, sizeof(struct tcp_info));
+
+	tcpinfo->tcpi_state = tcp->state;
+//	tcpinfo->tcpi_ca_state;
+//	tcpinfo->tcpi_retransmits;
+//	tcpinfo->tcpi_probes;
+//	tcpinfo->tcpi_backoff;
+//	tcpinfo->tcpi_options;
+//	tcpinfo->tcpi_snd_wscale;
+//	tcpinfo->tcpi_rcv_wscale;
+
+//	tcpinfo->tcpi_rto;
+//	tcpinfo->tcpi_ato;
+	tcpinfo->tcpi_snd_mss = 1;
+	tcpinfo->tcpi_rcv_mss = 1;
+
+	tcpinfo->tcpi_unacked = tcp->send.unacked;
+//	tcpinfo->tcpi_sacked;
+//	tcpinfo->tcpi_lost;
+//	tcpinfo->tcpi_retrans;
+//	tcpinfo->tcpi_fackets;
+
+	/* Times. */
+//	tcpinfo->tcpi_last_data_sent;
+//	tcpinfo->tcpi_last_ack_sent;
+//	tcpinfo->tcpi_last_data_recv;
+//	tcpinfo->tcpi_last_ack_recv;
+
+	/* Metrics. */
+//	tcpinfo->tcpi_pmtu;
+//	tcpinfo->tcpi_rcv_ssthresh;
+//	tcpinfo->tcpi_rtt;
+//	tcpinfo->tcpi_rttvar;
+	tcpinfo->tcpi_snd_ssthresh = tcp->congestion.threshold;
+	tcpinfo->tcpi_snd_cwnd = tcp->congestion.window;
+//	tcpinfo->tcpi_advmss;
+//	tcpinfo->tcpi_reordering;
+
+//	tcpinfo->tcpi_rcv_rtt;
+//	tcpinfo->tcpi_rcv_space;
+
+//	tcpinfo->tcpi_total_retrans;
+}
+
 
 gint tcp_connectToPeer(TCP* tcp, in_addr_t ip, in_port_t port, sa_family_t family) {
 	MAGIC_ASSERT(tcp);
@@ -996,9 +1100,17 @@ gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 			tcp->send.unacked = header.acknowledgement;
 
 			/* update congestion window and keep track of when it was updated */
-			tcp->congestion.lastWindow = header.window;
-			tcp->congestion.lastSequence = header.sequence;
-			tcp->congestion.lastAcknowledgement = header.acknowledgement;
+			tcp->congestion.lastWindow = (guint32) header.window;
+			tcp->congestion.lastSequence = (guint32) header.sequence;
+			tcp->congestion.lastAcknowledgement = (guint32) header.acknowledgement;
+		}
+
+		/* if this is a dup ack, take the new advertised window if it opened */
+		if(tcp->congestion.lastAcknowledgement == (guint32) header.acknowledgement &&
+				tcp->congestion.lastWindow < (guint32) header.window &&
+				header.sequence == 0) {
+			/* other end is telling us that its window opened and we can send more */
+			tcp->congestion.lastWindow = (guint32) header.window;
 		}
 	}
 
@@ -1023,7 +1135,7 @@ gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 			gboolean isNextPacket = (header.sequence == tcp->receive.next) ? TRUE : FALSE;
 			gboolean packetFits = (packetLength <= _tcp_getBufferSpaceIn(tcp)) ? TRUE : FALSE;
 
-			enum DescriptorStatus s = descriptor_getStatus((Descriptor*) tcp);
+			DescriptorStatus s = descriptor_getStatus((Descriptor*) tcp);
 			gboolean waitingUserRead = (s & DS_READABLE) ? TRUE : FALSE;
 			
 			if((isNextPacket && !waitingUserRead) || (packetFits)) {
@@ -1042,8 +1154,11 @@ gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 		responseFlags = PTCP_RST;
 	}
 
-	/* try to update congestion window based on potentially new info */
-	_tcp_updateCongestionWindow(tcp, nPacketsAcked);
+	/* update congestion window only if we received new acks.
+	 * dont update if nPacketsAcked is 0, as that denotes a congestion event */
+	if(nPacketsAcked > 0) {
+		_tcp_updateCongestionWindow(tcp, nPacketsAcked);
+	}
 
 	/* now flush as many packets as we can to socket */
 	_tcp_flush(tcp);
@@ -1085,16 +1200,8 @@ void tcp_droppedPacket(TCP* tcp, Packet* packet) {
 		return;
 	}
 
-	/* the packet was "dropped" - this is basically a negative ack.
-	 * handle congestion control.
-	 * TCP-Reno-like fast retransmit, i.e. multiplicative decrease. */
-	tcp->congestion.window /= 2;
-	if(tcp->congestion.window < 1) {
-		tcp->congestion.window = 1;
-	}
-	if(tcp->isSlowStart && tcp->congestion.threshold == 0) {
-		tcp->congestion.threshold = (guint32) tcp->congestion.window;
-	}
+	/* the packet was "dropped", handle congestion control */
+	_tcp_updateCongestionWindow(tcp, 0); /* 0 means congestion event */
 
 	debug("%s <-> %s: retransmitting packet# %u", tcp->super.boundString, tcp->super.peerString, header.sequence);
 
@@ -1158,7 +1265,7 @@ gssize tcp_sendUserData(TCP* tcp, gconstpointer buffer, gsize nBytes, in_addr_t 
 		bytesCopied += copyLength;
 	}
 
-	debug("%s <-> %s: sending %lu user bytes", tcp->super.boundString, tcp->super.peerString, bytesCopied);
+	debug("%s <-> %s: sending %"G_GSIZE_FORMAT" user bytes", tcp->super.boundString, tcp->super.peerString, bytesCopied);
 
 	/* now flush as much as possible out to socket */
 	_tcp_flush(tcp);
@@ -1243,7 +1350,7 @@ gssize tcp_receiveUserData(TCP* tcp, gpointer buffer, gsize nBytes, in_addr_t* i
 	}
 
 	/* now we update readability of the socket */
-	if((tcp->super.inputBufferLength > 0) || (tcp->partialUserDataPacket != NULL)) {
+	if((socket_getInputBufferLength(&(tcp->super)) > 0) || (tcp->partialUserDataPacket != NULL)) {
 		/* we still have readable data */
 		descriptor_adjustStatus(&(tcp->super.super.super), DS_READABLE, TRUE);
 	} else {
@@ -1271,7 +1378,21 @@ gssize tcp_receiveUserData(TCP* tcp, gpointer buffer, gsize nBytes, in_addr_t* i
 		}
 	}
 
-	debug("%s <-> %s: receiving %lu user bytes", tcp->super.boundString, tcp->super.peerString, totalCopied);
+	/* if we have advertised a 0 window because the application wasn't reading,
+	 * we now have to update the window and let the sender know */
+	_tcp_updateReceiveWindow(tcp);
+	if(tcp->send.lastWindow == 0 && tcp->receive.window > 0) {
+		/* our receive window just opened, make sure the sender knows it can
+		 * send more. otherwise we get into a deadlock situation! */
+		info("%s <-> %s: receive window opened, advertising the new "
+				"receive window %"G_GUINT32_FORMAT" as an ACK control packet",
+				tcp->super.boundString, tcp->super.peerString, tcp->receive.window);
+		Packet* windowUpdate = _tcp_createPacket(tcp, PTCP_ACK, NULL, 0);
+		_tcp_bufferPacketOut(tcp, windowUpdate);
+		_tcp_flush(tcp);
+	}
+
+	debug("%s <-> %s: receiving %"G_GSIZE_FORMAT" user bytes", tcp->super.boundString, tcp->super.peerString, totalCopied);
 
 	return (gssize) (totalCopied == 0 ? -1 : totalCopied);
 }
@@ -1372,15 +1493,15 @@ SocketFunctionTable tcp_functions = {
 	MAGIC_VALUE
 };
 
-TCP* tcp_new(gint handle) {
+TCP* tcp_new(gint handle, guint receiveBufferSize, guint sendBufferSize) {
 	TCP* tcp = g_new0(TCP, 1);
 	MAGIC_INIT(tcp);
 
-	socket_init(&(tcp->super), &tcp_functions, DT_TCPSOCKET, handle);
+	socket_init(&(tcp->super), &tcp_functions, DT_TCPSOCKET, handle, receiveBufferSize, sendBufferSize);
 
 	guint32 initial_window = worker_getConfig()->initialTCPWindow;
 
-	tcp->congestion.window = (gdouble)initial_window;
+	tcp->congestion.window = initial_window;
 	tcp->congestion.lastWindow = initial_window;
 	tcp->send.window = initial_window;
 	tcp->send.lastWindow = initial_window;

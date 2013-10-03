@@ -1,22 +1,7 @@
-/**
+/*
  * The Shadow Simulator
- *
- * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
- *
- * This file is part of Shadow.
- *
- * Shadow is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Shadow is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright (c) 2010-2011, Rob Jansen
+ * See LICENSE for licensing information
  */
 
 #include "shadow.h"
@@ -105,7 +90,8 @@ static gint _networkinterface_compareSocket(const Socket* sa, const Socket* sb, 
 }
 
 NetworkInterface* networkinterface_new(Network* network, GQuark address, gchar* name,
-		guint64 bwDownKiBps, guint64 bwUpKiBps, gboolean logPcap, gchar* pcapDir, gchar* qdisc) {
+		guint64 bwDownKiBps, guint64 bwUpKiBps, gboolean logPcap, gchar* pcapDir, gchar* qdisc,
+		guint64 interfaceReceiveLength) {
 	NetworkInterface* interface = g_new0(NetworkInterface, 1);
 	MAGIC_INIT(interface);
 
@@ -122,7 +108,7 @@ NetworkInterface* networkinterface_new(Network* network, GQuark address, gchar* 
 
 	/* incoming packet buffer */
 	interface->inBuffer = g_queue_new();
-	interface->inBufferSize = worker_getConfig()->interfaceBufferSize;
+	interface->inBufferSize = interfaceReceiveLength;
 
 	/* incoming packets get passed along to sockets */
 	interface->boundSockets = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, descriptor_unref);
@@ -167,7 +153,7 @@ NetworkInterface* networkinterface_new(Network* network, GQuark address, gchar* 
 		}
 	}
 
-	info("bringing up network interface '%s' at '%s', %u KiB/s up and %u KiB/s down using queuing discipline %s",
+	info("bringing up network interface '%s' at '%s', %"G_GUINT64_FORMAT" KiB/s up and %"G_GUINT64_FORMAT" KiB/s down using queuing discipline %s",
 			name, addressStr, bwUpKiBps, bwDownKiBps,
 			interface->qdisc == NIQ_RR ? "rr" : "fifo");
 
@@ -399,7 +385,9 @@ static void _networkinterface_scheduleNextReceive(NetworkInterface* interface) {
 		_networkinterface_pcapWritePacket(interface, packet);
 
 		/* if the socket closed, just drop the packet */
+		gint socketHandle = -1;
 		if(socket) {
+			socketHandle = *descriptor_getHandleReference((Descriptor*)socket);
 			gboolean needsRetransmit = socket_pushInPacket(socket, packet);
 			if(needsRetransmit) {
 				/* socket can not handle it now, so drop it */
@@ -409,7 +397,7 @@ static void _networkinterface_scheduleNextReceive(NetworkInterface* interface) {
 
 		/* successfully received, calculate how long it took to 'receive' this packet */
 		interface->receiveNanosecondsConsumed += (length * interface->timePerByteDown);
-		tracker_addInputBytes(node_getTracker(worker_getPrivate()->cached_node),(guint64)length);
+		tracker_addInputBytes(node_getTracker(worker_getPrivate()->cached_node),(guint64)length, socketHandle);
 	}
 
 	/*
@@ -486,19 +474,23 @@ void networkinterface_packetDropped(NetworkInterface* interface, Packet* packet)
 	if(socket) {
 		socket_droppedPacket(socket, packet);
 	} else {
+		in_addr_t ip = packet_getSourceIP(packet);
+		gchar* ipString = address_ipToNewString(ip);
 		debug("interface dropping packet from %s:%u, no socket registered at %i",
-				NTOA(packet_getSourceIP(packet)), packet_getSourcePort(packet), key);
+				ipString, packet_getSourcePort(packet), key);
+		g_free(ipString);
 	}
 }
 
 /* round robin queuing discipline ($ man tc)*/
-static Packet* _networkinterface_selectRoundRobin(NetworkInterface* interface) {
+static Packet* _networkinterface_selectRoundRobin(NetworkInterface* interface, gint* socketHandle) {
 	Packet* packet = NULL;
 
 	while(!packet && !g_queue_is_empty(interface->rrQueue)) {
 		/* do round robin to get the next packet from the next socket */
 		Socket* socket = g_queue_pop_head(interface->rrQueue);
 		packet = socket_pullOutPacket(socket);
+		*socketHandle = *descriptor_getHandleReference((Descriptor*)socket);
 
 		if(socket_peekNextPacket(socket)) {
 			/* socket has more packets, and is still reffed from before */
@@ -513,7 +505,7 @@ static Packet* _networkinterface_selectRoundRobin(NetworkInterface* interface) {
 }
 
 /* first-in-first-out queuing discipline ($ man tc)*/
-static Packet* _networkinterface_selectFirstInFirstOut(NetworkInterface* interface) {
+static Packet* _networkinterface_selectFirstInFirstOut(NetworkInterface* interface, gint* socketHandle) {
 	/* use packet priority field to select based on application ordering.
 	 * this is really a simplification of prioritizing on timestamps. */
 	Packet* packet = NULL;
@@ -522,6 +514,7 @@ static Packet* _networkinterface_selectFirstInFirstOut(NetworkInterface* interfa
 		/* do fifo to get the next packet from the next socket */
 		Socket* socket = priorityqueue_pop(interface->fifoQueue);
 		packet = socket_pullOutPacket(socket);
+		*socketHandle = *descriptor_getHandleReference((Descriptor*)socket);
 
 		if(socket_peekNextPacket(socket)) {
 			/* socket has more packets, and is still reffed from before */
@@ -542,17 +535,18 @@ static void _networkinterface_scheduleNextSend(NetworkInterface* interface) {
 
 	/* loop until we find a socket that has something to send */
 	while(interface->sendNanosecondsConsumed <= batchTime) {
+		gint socketHandle = -1;
 
 		/* choose which packet to send next based on our queuing discipline */
 		Packet* packet;
 		switch(interface->qdisc) {
 			case NIQ_RR: {
-				packet = _networkinterface_selectRoundRobin(interface);
+				packet = _networkinterface_selectRoundRobin(interface, &socketHandle);
 				break;
 			}
 			case NIQ_FIFO:
 			default: {
-				packet = _networkinterface_selectFirstInFirstOut(interface);
+				packet = _networkinterface_selectFirstInFirstOut(interface, &socketHandle);
 				break;
 			}
 		}
@@ -579,7 +573,7 @@ static void _networkinterface_scheduleNextSend(NetworkInterface* interface) {
 		guint length = packet_getPayloadLength(packet) + packet_getHeaderSize(packet);
 
 		interface->sendNanosecondsConsumed += (length * interface->timePerByteUp);
-		tracker_addOutputBytes(node_getTracker(worker_getPrivate()->cached_node),(guint64)length);
+		tracker_addOutputBytes(node_getTracker(worker_getPrivate()->cached_node),(guint64)length, socketHandle);
 		_networkinterface_pcapWritePacket(interface, packet);
 	}
 

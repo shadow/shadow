@@ -1,22 +1,7 @@
 /*
  * The Shadow Simulator
- *
- * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
- *
- * This file is part of Shadow.
- *
- * Shadow is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Shadow is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright (c) 2010-2011, Rob Jansen
+ * See LICENSE for licensing information
  */
 
 #include "shd-browser.h"
@@ -35,12 +20,12 @@ static void browserplugin_free() {
 
 static void browserplugin_activate() {
 	if(!b.epolld) {
-		b.shadowlib->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "client cant wait on epoll without epoll descriptor");
+		b.shadowlib->log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "client cant wait on epoll without epoll descriptor");
 	} else {
 		struct epoll_event events[10];
 		int nfds = epoll_wait(b.epolld, events, 10, 0);
 		if(nfds == -1) {
-			b.shadowlib->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "error in client epoll_wait");
+			b.shadowlib->log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "error in client epoll_wait");
 		} else {
 			/* finally, activate client for every socket thats ready */
 			for(int i = 0; i < nfds; i++) {
@@ -70,8 +55,8 @@ void __shadow_plugin_init__(ShadowFunctionTable* shadowlibFuncs) {
 	 */
 	gboolean success = shadowlibFuncs->registerPlugin(&browserplugin_new, &browserplugin_free, &browserplugin_activate);
 	if(success) {
-		shadowlibFuncs->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "successfully registered browser plug-in state");
+		shadowlibFuncs->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, "successfully registered browser plug-in state");
 	} else {
-		shadowlibFuncs->log(G_LOG_LEVEL_INFO, __FUNCTION__, "error registering browser plug-in state");
+		shadowlibFuncs->log(SHADOW_LOG_LEVEL_INFO, __FUNCTION__, "error registering browser plug-in state");
 	}
 }

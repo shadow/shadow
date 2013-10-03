@@ -1,22 +1,7 @@
 /*
  * The Shadow Simulator
- *
- * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
- *
- * This file is part of Shadow.
- *
- * Shadow is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Shadow is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright (c) 2010-2011, Rob Jansen
+ * See LICENSE for licensing information
  */
 
 #include <glib.h>
@@ -167,7 +152,10 @@ int torrentService_startNode(TorrentService *tsvc, TorrentService_NodeArgs *args
 			tsvc->server = NULL;
 			return -1;
 		} else {
-			torrentService_log(tsvc, TSVC_NOTICE, "torrent server running on at %s:%u", inet_ntoa((struct in_addr){listenIP}), listenPort);
+			gchar ipStringBuffer[INET_ADDRSTRLEN+1];
+			memset(ipStringBuffer, 0, INET_ADDRSTRLEN+1);
+			inet_ntop(AF_INET, &listenIP, ipStringBuffer, INET_ADDRSTRLEN);
+			torrentService_log(tsvc, TSVC_NOTICE, "torrent server running on at %s:%u", ipStringBuffer, listenPort);
 		}
 	}
 

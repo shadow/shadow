@@ -1,22 +1,7 @@
-/**
+/*
  * The Shadow Simulator
- *
- * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
- *
- * This file is part of Shadow.
- *
- * Shadow is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Shadow is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright (c) 2010-2011, Rob Jansen
+ * See LICENSE for licensing information
  */
 
 #include "shd-torrent.h"
@@ -38,7 +23,7 @@ static in_addr_t torrent_resolveHostname(const gchar* hostname) {
 		if(ret >= 0) {
 			addr = ((struct sockaddr_in*)(info->ai_addr))->sin_addr.s_addr;
 		} else {
-			log(G_LOG_LEVEL_WARNING, __FUNCTION__, "unable to create client: error in getaddrinfo");
+			log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "unable to create client: error in getaddrinfo");
 		}
 		freeaddrinfo(info);
 	}
@@ -88,9 +73,13 @@ static void torrent_report(TorrentClient* tc, gchar* preamble) {
 			block_curr_time.tv_nsec += 1000000000;
 		}
 
-		log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "%s first byte from %s in %lu.%.3d seconds, "
+		gchar ipStringBuffer[INET_ADDRSTRLEN+1];
+		memset(ipStringBuffer, 0, INET_ADDRSTRLEN+1);
+		inet_ntop(AF_INET, &(tc->currentBlockTransfer->addr), ipStringBuffer, INET_ADDRSTRLEN);
+
+		log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, "%s first byte from %s in %lu.%.3d seconds, "
 				"%d of %d DOWN and %d of %d UP in %lu.%.3d seconds, total %d of %d bytes [%d\%] in %lu.%.3d seconds (block %d of %d  [%d])",
-						preamble, inet_ntoa((struct in_addr){tc->currentBlockTransfer->addr}),
+						preamble, ipStringBuffer,
 						block_first_time.tv_sec, (gint)(block_first_time.tv_nsec / 1000000),
 						tc->currentBlockTransfer->downBytesTransfered, tc->downBlockSize,
 						tc->currentBlockTransfer->upBytesTransfered, tc->upBlockSize,
@@ -117,7 +106,7 @@ Torrent**  torrent_init(Torrent* currentTorrent) {
 
 void torrent_new(int argc, char* argv[]) {
 	ShadowLogFunc log = torrent->shadowlib->log;
-	log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "torrent_new called");
+	log(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__, "torrent_new called");
 
 	torrent->server = NULL;
 	torrent->client = NULL;
@@ -129,7 +118,7 @@ void torrent_new(int argc, char* argv[]) {
 			"\t'authority port'\n"
 			"\t'nodeType (\"client\",\"server\",\"node\") authorityHostname authorityPort socksHostname socksPort serverPort fileSize [downBlockSize upBlockSize]'";
 	if(argc < 3) {
-		log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "%s", USAGE);
+		log(SHADOW_LOG_LEVEL_CRITICAL, __FUNCTION__, "%s", USAGE);
 		return;
 	}
 
@@ -138,7 +127,7 @@ void torrent_new(int argc, char* argv[]) {
 	if(!g_ascii_strncasecmp(nodeType, "client", 6) ||
 			!g_ascii_strncasecmp(nodeType, "server", 6) || !g_ascii_strncasecmp(nodeType, "node", 4)) {
 		if(argc < 5) {
-			log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "%s", USAGE);
+			log(SHADOW_LOG_LEVEL_CRITICAL, __FUNCTION__, "%s", USAGE);
 			return;
 		}
 		gchar* authHostname = argv[2];
@@ -182,7 +171,7 @@ void torrent_new(int argc, char* argv[]) {
 			/* create an epoll to wait for I/O events */
 			gint epolld = epoll_create(1);
 			if(epolld == -1) {
-				log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_create");
+				log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_create");
 				close(epolld);
 				epolld = 0;
 			}
@@ -197,12 +186,16 @@ void torrent_new(int argc, char* argv[]) {
 			// the server since it's actually the reverse of what the client has
 			if(torrentServer_start(torrent->server, epolld, htonl(listenIP), htons(listenPort), authAddr, htons(authPort),
 					upBlockSize, downBlockSize) < 0) {
-				log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "torrent server error, not started!");
+				log(SHADOW_LOG_LEVEL_CRITICAL, __FUNCTION__, "torrent server error, not started!");
 				g_free(torrent->server);
 				torrent->server = NULL;
 				return;
 			} else {
-				log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "torrent server running on at %s:%u", inet_ntoa((struct in_addr){listenIP}), listenPort);
+				gchar ipStringBuffer[INET_ADDRSTRLEN+1];
+				memset(ipStringBuffer, 0, INET_ADDRSTRLEN+1);
+				inet_ntop(AF_INET, &listenIP, ipStringBuffer, INET_ADDRSTRLEN);
+
+				log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, "torrent server running on at %s:%u", ipStringBuffer, listenPort);
 			}
 		}
 
@@ -210,7 +203,7 @@ void torrent_new(int argc, char* argv[]) {
 			/* create an epoll to wait for I/O events */
 			gint epolld = epoll_create(1);
 			if(epolld == -1) {
-				log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_create");
+				log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_create");
 				close(epolld);
 				epolld = 0;
 			}
@@ -222,12 +215,12 @@ void torrent_new(int argc, char* argv[]) {
 			torrent->client = g_new0(TorrentClient, 1);
 			if(torrentClient_start(torrent->client, epolld, socksAddr, htons(socksPort), authAddr, htons(authPort), serverPort,
 					fileSize, downBlockSize, upBlockSize) < 0) {
-				log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "torrent client error, not started!");
+				log(SHADOW_LOG_LEVEL_CRITICAL, __FUNCTION__, "torrent client error, not started!");
 				g_free(torrent->client);
 				torrent->client = NULL;
 				return;
 			} else {
-				log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "torrent client running");
+				log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, "torrent client running");
 			}
 		}
 	} else if(g_ascii_strncasecmp(nodeType, "authority", 9) == 0) {
@@ -236,7 +229,7 @@ void torrent_new(int argc, char* argv[]) {
 		/* create an epoll to wait for I/O events */
 		gint epolld = epoll_create(1);
 		if(epolld == -1) {
-			log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_create");
+			log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_create");
 			close(epolld);
 			epolld = 0;
 		}
@@ -246,46 +239,54 @@ void torrent_new(int argc, char* argv[]) {
 
 		torrent->authority = g_new0(TorrentAuthority, 1);
 		if(torrentAuthority_start(torrent->authority, epolld, htonl(listenIP), htons(listenPort), 0) < 0) {
-			log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "torrent authority error, not started!");
+			log(SHADOW_LOG_LEVEL_CRITICAL, __FUNCTION__, "torrent authority error, not started!");
 			g_free(torrent->authority);
 			torrent->authority = NULL;
 			return;
 		} else {
-			log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "torrent authority running on at %s:%u", inet_ntoa((struct in_addr){listenIP}), listenPort);
+			gchar ipStringBuffer[INET_ADDRSTRLEN+1];
+			memset(ipStringBuffer, 0, INET_ADDRSTRLEN+1);
+			inet_ntop(AF_INET, &listenIP, ipStringBuffer, INET_ADDRSTRLEN);
+
+			log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, "torrent authority running on at %s:%u", ipStringBuffer, listenPort);
 		}
 	}
 }
 
 void torrent_activate() {
 	ShadowLogFunc log = torrent->shadowlib->log;
-	log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "torrent_activate called");
+	log(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__, "torrent_activate called");
 
 	if(torrent->server) {
 		if(!torrent->server->epolld) {
-			log(G_LOG_LEVEL_WARNING, __FUNCTION__, "server can't wait on epoll without epoll descriptor");
+			log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "server can't wait on epoll without epoll descriptor");
 			return;
 		}
 
 		struct epoll_event events[10];
 		int nfds = epoll_wait(torrent->server->epolld, events, 10, 0);
 		if(nfds == -1) {
-			log(G_LOG_LEVEL_WARNING, __FUNCTION__, "error in server epoll_wait");
+			log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "error in server epoll_wait");
 			return;
 		}
 
 		for(int i = 0; i < nfds; i++) {
 			gint res = torrentServer_activate(torrent->server, events[i].data.fd, events[i].events);
 			if(res < 0) {
-				log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "activate returned %d", res);
+				log(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__, "activate returned %d", res);
 			}
 
             if(res == TS_ERR_FATAL) {
                 TorrentServer_Connection *conn = g_hash_table_lookup(torrent->server->connections, &(events[i].data.fd));
                 if(conn) {
-                    log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Fatal error on server activate with socket %d on address %s",
-                                            events[i].data.fd, inet_ntoa((struct in_addr){conn->addr}));
+    				gchar ipStringBuffer[INET_ADDRSTRLEN+1];
+    				memset(ipStringBuffer, 0, INET_ADDRSTRLEN+1);
+    				inet_ntop(AF_INET, &(conn->addr), ipStringBuffer, INET_ADDRSTRLEN);
+
+                    log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "Fatal error on server activate with socket %d on address %s",
+                                            events[i].data.fd, ipStringBuffer);
                 } else {
-                    log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Fatal error on server activate with socket %d", events[i].data.fd);
+                    log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "Fatal error on server activate with socket %d", events[i].data.fd);
                 }
 
             }
@@ -294,7 +295,7 @@ void torrent_activate() {
 		TorrentServer_PacketInfo *info = (TorrentServer_PacketInfo *)g_queue_pop_head(torrent->server->packetInfo);
 		while(info) {
 			guint latency = (info->recvTime - info->sendTime) / 1000000;
-			log(G_LOG_LEVEL_INFO, __FUNCTION__, "cookie: %4.4X sent: %f recv: %f latency: %d ms",
+			log(SHADOW_LOG_LEVEL_INFO, __FUNCTION__, "cookie: %4.4X sent: %f recv: %f latency: %d ms",
 					info->cookie,  (gdouble)(info->sendTime) / 1000000000.0, (gdouble)(info->recvTime) / 1000000000.0, latency);
 
 			info = (TorrentServer_PacketInfo *)g_queue_pop_head(torrent->server->packetInfo);
@@ -305,14 +306,14 @@ void torrent_activate() {
 		struct epoll_event events[10];
 		int nfds = epoll_wait(torrent->client->epolld, events, 10, 0);
 		if(nfds == -1) {
-			log(G_LOG_LEVEL_WARNING, __FUNCTION__, "error in client epoll_wait");
+			log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "error in client epoll_wait");
 			return;
 		}
 
 		for(int i = 0; i < nfds; i++) {
 			gint ret = torrentClient_activate(torrent->client, events[i].data.fd, events[i].events);
 			if(ret == TC_ERR_FATAL || ret == TC_ERR_SOCKSCONN) {
-                log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "torrent client shutdown with error %d...retrying in 60 seconds", ret);
+                log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, "torrent client shutdown with error %d...retrying in 60 seconds", ret);
 
                 torrentClient_shutdown(torrent->client);
                 torrentClient_start(torrent->client, torrent->client->epolld, torrent->client->socksAddr, torrent->client->socksPort,
@@ -324,7 +325,7 @@ void torrent_activate() {
 
                 return;
             } else if(ret != TC_SUCCESS && ret != TC_BLOCK_DOWNLOADED && ret != TC_ERR_RECV && ret != TC_ERR_SEND) {
-                log(G_LOG_LEVEL_INFO, __FUNCTION__, "torrent client encountered a non-asynch-io related error");
+                log(SHADOW_LOG_LEVEL_INFO, __FUNCTION__, "torrent client encountered a non-asynch-io related error");
             }
 
 			if(!torrent->clientDone  && torrent->client->totalBytesDown > 0) {
@@ -350,21 +351,21 @@ void torrent_activate() {
 		}
 	} else if(torrent->authority) {
 		if(!torrent->authority->epolld) {
-			log(G_LOG_LEVEL_WARNING, __FUNCTION__, "authority can't wait on epoll without epoll descriptor");
+			log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "authority can't wait on epoll without epoll descriptor");
 			return;
 		}
 
 		struct epoll_event events[10];
 		int nfds = epoll_wait(torrent->authority->epolld, events, 10, 0);
 		if(nfds == -1) {
-			log(G_LOG_LEVEL_WARNING, __FUNCTION__, "error in server epoll_wait");
+			log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "error in server epoll_wait");
 			return;
 		}
 
 		for(int i = 0; i < nfds; i++) {
 			gint res = torrentAuthority_activate(torrent->authority, events[i].data.fd);
 			if(res < 0) {
-				log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "activate returned %d", res);
+				log(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__, "activate returned %d", res);
 			}
 		}
 	}

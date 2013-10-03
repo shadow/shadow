@@ -1,22 +1,7 @@
 /*
  * The Shadow Simulator
- *
- * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
- *
- * This file is part of Shadow.
- *
- * Shadow is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Shadow is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright (c) 2010-2011, Rob Jansen
+ * See LICENSE for licensing information
  */
 
 #include "shadow.h"
@@ -154,7 +139,13 @@ Network* internetwork_getRandomNetwork(Internetwork* internet, gdouble randomDou
 
 Network* internetwork_lookupNetwork(Internetwork* internet, in_addr_t ip) {
 	MAGIC_ASSERT(internet);
-	return (Network*) g_hash_table_lookup(internet->networksByIP, &ip);
+	Network* net = (Network*) g_hash_table_lookup(internet->networksByIP, &ip);
+	if(!net) {
+		gchar* ipString = address_ipToNewString(ip);
+		critical("unable to find a network for ip %s", ipString);
+		g_free(ipString);
+	}
+	return net;
 }
 
 static guint32 _internetwork_generateIP(Internetwork* internet) {
@@ -180,16 +171,19 @@ static guint32 _internetwork_generateIP(Internetwork* internet) {
 gpointer internetwork_createNode(Internetwork* internet, GQuark nodeID,
 		Network* network, GString* hostname,
 		guint64 bwDownKiBps, guint64 bwUpKiBps, guint cpuFrequency, gint cpuThreshold, gint cpuPrecision,
-		guint nodeSeed, SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel,
-		GLogLevelFlags logLevel, gchar logPcap, gchar *pcapDir, gchar* qdisc) {
+		guint nodeSeed, SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel, gchar* heartbeatLogInfo,
+		GLogLevelFlags logLevel, gchar logPcap, gchar *pcapDir, gchar* qdisc,
+		guint64 receiveBufferSize, gboolean autotuneReceiveBuffer, guint64 sendBufferSize, gboolean autotuneSendBuffer,
+		guint64 interfaceReceiveLength) {
 	MAGIC_ASSERT(internet);
 	g_assert(!internet->isReadOnly);
 
 	guint32 ip = _internetwork_generateIP(internet);
 	ip = (guint32) nodeID;
 	Node* node = node_new(nodeID, network, ip, hostname, bwDownKiBps, bwUpKiBps,
-			cpuFrequency, cpuThreshold, cpuPrecision, nodeSeed, heartbeatInterval, heartbeatLogLevel,
-			logLevel, logPcap, pcapDir, qdisc);
+			cpuFrequency, cpuThreshold, cpuPrecision, nodeSeed, heartbeatInterval, heartbeatLogLevel, heartbeatLogInfo,
+			logLevel, logPcap, pcapDir, qdisc, receiveBufferSize, autotuneReceiveBuffer, sendBufferSize, autotuneSendBuffer,
+			interfaceReceiveLength);
 	g_hash_table_replace(internet->nodes, GUINT_TO_POINTER((guint)nodeID), node);
 
 	gchar* mapName = g_strdup((const gchar*) hostname->str);

@@ -1,24 +1,12 @@
 #!/usr/bin/env python2.7
 
-# The Shadow Simulator
-#
-# Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
-#
-# This file is part of Shadow.
-#
-# Shadow is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# Shadow is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
-#
+'''
+/*
+ * The Shadow Simulator
+ * Copyright (c) 2010-2011, Rob Jansen
+ * See LICENSE for licensing information
+ */
+'''
 
 import sys, os, argparse, subprocess, multiprocessing, shlex, shutil, urllib2, tarfile, gzip, stat, time
 from datetime import datetime
@@ -76,13 +64,13 @@ def main():
         default=INSTALL_PREFIX)
     
     parser_build.add_argument('-i', '--include', 
-        help="append PATH to the list of paths searched for headers. useful if dependencies are installed to non-standard locations.",
+        help="append PATH to the list of paths searched for headers. useful if dependencies are installed to non-standard locations, or when compiling custom libraries.",
         metavar="PATH",
         action="append", dest="extra_includes",
-        default=[INSTALL_PREFIX+ "/include", os.path.expanduser("~/.local/include")])
+        default=[INSTALL_PREFIX+ "/include", os.path.expanduser("~/.local/include"), os.path.expanduser("~/.local/share/llvm/cmake")])
     
     parser_build.add_argument('-l', '--library', 
-        help="append PATH to the list of paths searched for libraries. useful if dependencies are installed to non-standard locations.",
+        help="append PATH to the list of paths searched for libraries. useful if dependencies are installed to non-standard locations, or when compiling custom libraries.",
         metavar="PATH",
         action="append", dest="extra_libraries",
         default=[INSTALL_PREFIX+ "/lib", os.path.expanduser("~/.local/lib")])
@@ -95,6 +83,11 @@ def main():
     parser_build.add_argument('-v', '--verbose',
         help="print verbose output from the compiler",
         action="store_true", dest="do_verbose",
+        default=False)
+
+    parser_build.add_argument('-f', '--force',
+        help="force a full rebuild of Shadow by removing build cache",
+        action="store_true", dest="do_force_rebuild",
         default=False)
         
     parser_build.add_argument('-j', '--jobs',
@@ -114,7 +107,7 @@ def main():
         default=False)
     
     parser_build.add_argument('--tor-prefix', 
-        help="PATH to a custom base Tor directory to build (overrides '--tor-version)", 
+        help="PATH to a custom base Tor directory to build (overrides '--tor-version')", 
         metavar="PATH", 
         action="store", dest="tor_prefix",
         default=None)
@@ -124,6 +117,12 @@ def main():
         metavar="VERSION", 
         action="store", dest="tor_version",
         default=TOR_DEFAULT_VERSION)
+
+    parser_build.add_argument('--tor-lib', 
+        help="append LIB to the list of libraries that get linked with Tor and scallion. Useful when compiling and linking custom libraries.",
+        metavar="LIB",
+        action="append", dest="tor_libraries",
+        default=[])
     
     parser_build.add_argument('--libevent-prefix', 
         help="use non-standard PATH when linking Tor to libevent.",
@@ -181,15 +180,10 @@ def main():
         help="do not build the built-in ping plug-in (pings over Tor circuits)", 
         action="store_true", dest="disable_ping",
         default=False)
-
-    parser_build.add_argument('--enable-memory-tracker', 
-        help="preload malloc and free and track nodes memory usage (experimental!)", 
-        action="store_true", dest="enable_memtracker",
-        default=False)
         
-    parser_build.add_argument('--enable-evp-cipher', 
-        help="preload EVP_Cipher to save CPU cycles on evp crypto ciphers (experimental!)", 
-        action="store_true", dest="enable_evpcipher",
+    parser_build.add_argument('--disable-evp-cipher', 
+        help="do not preload EVP_Cipher and use actual EVP cipher functions (experimental!)", 
+        action="store_true", dest="disable_evpcipher",
         default=False)
     
     # configure install subcommand
@@ -230,7 +224,9 @@ def dependencies(args):
     
     ## for debugging and profiling (you may want to enable -g and -pg independently)
     #configure = "./config --prefix={0} no-shared threads -fPIC -g -pg -DPURIFY -Bsymbolic".format(args.prefix)
-    configure = "./config --prefix={0} shared threads -fPIC".format(args.prefix)
+    is64 = sys.maxsize > 2**32
+    ecopt = "enable-ec_nistp_64_gcc_128" if is64 else ""
+    configure = "./config --prefix={0} shared threads {1} -fPIC".format(args.prefix, ecopt)
 
     log("now attempting to build openssl with '{0}'".format(configure))
     if automake(configure, "make", "make install") != 0: 
@@ -282,7 +278,8 @@ def build(args):
     args.keyring = getfullpath(rootdir + "/contrib/deps_keyring.gpg")
     
     # clear cmake cache
-    if os.path.exists(builddir+"/shadow"): shutil.rmtree(builddir+"/shadow")
+    if args.do_force_rebuild and os.path.exists(builddir+"/shadow"): shutil.rmtree(builddir+"/shadow")
+    elif not args.disable_scallion and args.tor_prefix != None and os.path.exists(builddir+"/shadow/src/plugins/scallion"): shutil.rmtree(builddir+"/shadow/src/plugins/scallion")
 
     # create directories
     if not os.path.exists(builddir+"/shadow"): os.makedirs(builddir+"/shadow")
@@ -297,8 +294,7 @@ def build(args):
     if args.do_test: cmake_cmd += " -DSHADOW_TEST=ON"
     if args.do_profile: cmake_cmd += " -DSHADOW_PROFILE=ON"
     if args.export_libraries: cmake_cmd += " -DSHADOW_EXPORT=ON"
-    if args.enable_memtracker: cmake_cmd += " -DSHADOW_ENABLE_MEMTRACKER=ON"
-    if args.enable_evpcipher: cmake_cmd += " -DSHADOW_ENABLE_EVPCIPHER=ON"
+    if args.disable_evpcipher: cmake_cmd += " -DSHADOW_DISABLE_EVPCIPHER=ON"
     if args.disable_browser: cmake_cmd += " -DBUILD_BROWSER=OFF"
     if args.disable_echo: cmake_cmd += " -DBUILD_ECHO=OFF"
     if args.disable_filetransfer: cmake_cmd += " -DBUILD_FILETRANSFER=OFF"
@@ -343,6 +339,7 @@ def build(args):
     # make sure we can access them from cmake
     cmake_cmd += " -DCMAKE_EXTRA_INCLUDES=" + ';'.join(args.extra_includes)
     cmake_cmd += " -DCMAKE_EXTRA_LIBRARIES=" + ';'.join(args.extra_libraries)
+    cmake_cmd += " -DCMAKE_TOR_LIBRARIES=" + ';'.join(args.tor_libraries)
 
     # look for the clang/clang++ compilers
     clangccpath = which("clang")
@@ -412,8 +409,11 @@ def setup_tor(args):
         if os.path.exists(args.tordir): shutil.rmtree(args.tordir)
         shutil.copytree(args.tor_prefix, args.tordir)
         distcleancmd = "make distclean"
-        log("running \'{0}\'".format(distcleancmd))
-        subprocess.call(shlex.split(distcleancmd.strip()))
+        log("running \'{0}\' in \'{1}\'".format(distcleancmd, args.tordir))
+        subprocess.call(shlex.split(distcleancmd.strip()), cwd=args.tordir)
+    # otherwise blow it away if there were problems building it so we try again
+    elif os.path.exists(args.tordir) and not os.path.exists(args.tordir+"/src/or/tor"):
+        shutil.rmtree(args.tordir)
     
     if not os.path.exists(args.tordir):
         # we have no Tor build directory, check requested url
@@ -453,7 +453,11 @@ def setup_tor(args):
             if args.extra_libraries is not None:
                 for l in args.extra_libraries: ldflags += " -L" + l.strip()
 
-            configure = "./configure --disable-transparent --disable-asciidoc --disable-threads CFLAGS=\"" + cflags + "\" LDFLAGS=\"" + ldflags + "\" LIBS=-lrt"
+            libs = ""
+            if len(args.tor_libraries) > 0:
+                for l in args.tor_libraries: libs += " -l" + l.strip()
+
+            configure = "./configure --disable-transparent --disable-asciidoc --disable-threads CFLAGS=\"{0}\" LDFLAGS=\"{1}\" LIBS=\"{2}\"".format(cflags, ldflags, libs)
 
             if args.libevent_prefix is not None: configure += " --with-libevent-dir=" + getfullpath(args.libevent_prefix)
             if args.openssl_prefix is not None: configure += " --with-openssl-dir=" + getfullpath(args.openssl_prefix)

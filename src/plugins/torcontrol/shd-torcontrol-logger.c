@@ -1,22 +1,7 @@
-/**
+/*
  * The Shadow Simulator
- *
- * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
- *
- * This file is part of Shadow.
- *
- * Shadow is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Shadow is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright (c) 2010-2011, Rob Jansen
+ * See LICENSE for licensing information
  */
 
 #include <glib.h>
@@ -72,7 +57,7 @@ static gboolean _torcontrollogger_manageState(TorControlLogger* tcl) {
 			/* idle until we receive the response, then move to next state */
 			tcl->currentState = TCLS_IDLE;
 			tcl->nextState = TCLS_RECV_SETEVENTS;
-			tcl->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "set tor control events '%s'", tcl->torctlEvents);
+			tcl->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, "set tor control events '%s'", tcl->torctlEvents);
 		}
 		break;
 	}
@@ -105,13 +90,13 @@ static void _torcontrollogger_handleResponseEvent(TorControlLogger* tcl,
 
 	switch (TORCTL_CODE_TYPE(replyLine->code)) {
 	case TORCTL_REPLY_ERROR: {
-		tcl->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "[%d] ERROR: %s",
+		tcl->log(SHADOW_LOG_LEVEL_CRITICAL, __FUNCTION__, "[%d] ERROR: %s",
 				replyLine->code, replyLine->body);
 		break;
 	}
 
 	case TORCTL_REPLY_SUCCESS: {
-		tcl->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "[%d] SUCCESS: %s",
+		tcl->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, "[%d] SUCCESS: %s",
 				replyLine->code, replyLine->body);
 		tcl->currentState = tcl->nextState;
 		_torcontrollogger_manageState(tcl);
@@ -127,9 +112,8 @@ static void _torcontrollogger_handleResponseEvent(TorControlLogger* tcl,
  * handling the asynchronous events from control port
  */
 
-static void _torcontrollogger_handleEvents(TorControlLogger* tcl, gint code,
-		gchar* line, ...) {
-	tcl->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "[torcontrol-log] %s:%i %s",
+static void _torcontrollogger_handleEvents(TorControlLogger* tcl, gint code, gchar* line) {
+	tcl->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, "[torcontrol-log] %s:%i %s",
 			tcl->targetHostname->str, tcl->targetPort, line);
 }
 
@@ -160,7 +144,7 @@ TorControlLogger* torcontrollogger_new(ShadowLogFunc logFunc,
 
 	/* make sure they specified events */
 	if(!moduleArgs[0]) {
-		logFunc(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error! Did not specify torctl events to log!");
+		logFunc(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "Error! Did not specify torctl events to log!");
 		return NULL;
 	}
 

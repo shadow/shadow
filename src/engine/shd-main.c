@@ -1,22 +1,7 @@
 /*
  * The Shadow Simulator
- *
- * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
- *
- * This file is part of Shadow.
- *
- * Shadow is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Shadow is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright (c) 2010-2011, Rob Jansen
+ * See LICENSE for licensing information
  */
 
 #if 0 /* these are only avail in glib >= 2.30, needed for signals */
@@ -31,14 +16,17 @@ gint shadow_main(gint argc, gchar* argv[]) {
     /* check the compiled GLib version */
     if (!GLIB_CHECK_VERSION(2, 32, 0)) {
 	    g_printerr("** GLib version 2.32.0 or above is required but Shadow was compiled against version %u.%u.%u\n",
-		    GLIB_MAJOR_VERSION, GLIB_MINOR_VERSION, GLIB_MICRO_VERSION);
+		    (guint)GLIB_MAJOR_VERSION, (guint)GLIB_MINOR_VERSION, (guint)GLIB_MICRO_VERSION);
 	    return -1;
     }
 
     /* check the that run-time GLib matches the compiled version */
     const gchar* mismatch = glib_check_version(GLIB_MAJOR_VERSION, GLIB_MINOR_VERSION, GLIB_MICRO_VERSION);
     if(mismatch) {
-	    g_printerr("** The run-time GLib library is not compatible with the compiled version: %s\n", mismatch);
+	    g_printerr("** The version of the run-time GLib library (%u.%u.%u) is not compatible with the version against which Shadow was compiled (%u.%u.%u). GLib message: '%s'\n",
+        glib_major_version, glib_minor_version, glib_micro_version,
+        (guint)GLIB_MAJOR_VERSION, (guint)GLIB_MINOR_VERSION, (guint)GLIB_MICRO_VERSION,
+        mismatch);
 	    return -1;
     }
 
@@ -48,7 +36,7 @@ gint shadow_main(gint argc, gchar* argv[]) {
 		/* incorrect options given */
 		return -1;
 	} else if(config->printSoftwareVersion) {
-		g_printerr("Shadow v%s\n(c) 2010-2012 Rob G. Jansen\nReleased under the GNU GPL, v3\n", SHADOW_VERSION);
+		g_printerr("Shadow v%s\nFor more information, visit http://shadow.github.io or https://github.com/shadow\n", SHADOW_VERSION);
 		configuration_free(config);
 		return 0;
 	}
@@ -80,7 +68,7 @@ gint shadow_main(gint argc, gchar* argv[]) {
     GDateTime* dt_now = g_date_time_new_now_local();
     gchar* dt_format = g_date_time_format(dt_now, "%F %H:%M:%S");
     message("Shadow v%s initialized at %s using GLib v%u.%u.%u",
-        SHADOW_VERSION, dt_format, GLIB_MAJOR_VERSION, GLIB_MINOR_VERSION, GLIB_MICRO_VERSION);
+        SHADOW_VERSION, dt_format, (guint)GLIB_MAJOR_VERSION, (guint)GLIB_MINOR_VERSION, (guint)GLIB_MICRO_VERSION);
     g_date_time_unref(dt_now);
     g_free(dt_format);
 

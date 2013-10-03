@@ -1,22 +1,7 @@
-/**
+/*
  * The Shadow Simulator
- *
- * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
- *
- * This file is part of Shadow.
- *
- * Shadow is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Shadow is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright (c) 2010-2011, Rob Jansen
+ * See LICENSE for licensing information
  */
 
 #include <fcntl.h>
@@ -31,7 +16,7 @@ EchoPipe* echopipe_new(ShadowLogFunc log) {
 	gint fds[2];
 	gint pipeResult = pipe(fds);
 	if(pipeResult < 0) {
-		log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in pipe");
+		log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "Error in pipe");
 		return NULL;
 	}
 
@@ -41,7 +26,7 @@ EchoPipe* echopipe_new(ShadowLogFunc log) {
 	/* create an epoll so we can wait for IO events */
 	gint epolld = epoll_create(1);
 	if(epolld == -1) {
-		log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_create");
+		log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_create");
 		close(epipe->readfd);
 		close(epipe->writefd);
 		return NULL;
@@ -58,7 +43,7 @@ EchoPipe* echopipe_new(ShadowLogFunc log) {
 	gint resultr = epoll_ctl(epolld, EPOLL_CTL_ADD, epipe->readfd, &evr);
 	gint resultw = epoll_ctl(epolld, EPOLL_CTL_ADD, epipe->writefd, &evw);
 	if(resultr == -1 || resultw == -1) {
-		log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_ctl");
+		log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_ctl");
 		close(epolld);
 		close(epipe->readfd);
 		close(epipe->writefd);
@@ -95,7 +80,7 @@ void echopipe_ready(EchoPipe* epipe) {
 
 	int nfds = epoll_wait(epipe->epolld, events, MAX_EVENTS, 0);
 	if(nfds == -1) {
-		epipe->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "error in epoll_wait");
+		epipe->log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "error in epoll_wait");
 	}
 
 	gint ioResult = 0;
@@ -106,17 +91,17 @@ void echopipe_ready(EchoPipe* epipe) {
 		if(!(epipe->didRead) && (events[i].events & EPOLLIN)) {
 			ioResult = read(socketd, epipe->outputBuffer, BUFFERSIZE);
 			if(ioResult < 0) {
-				epipe->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "read returned < 0");
+				epipe->log(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__, "read returned < 0");
 			}
 
 			if(memcmp(epipe->inputBuffer, epipe->outputBuffer, BUFFERSIZE)) {
-				epipe->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "inconsistent echo received!");
+				epipe->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, "inconsistent echo received!");
 			} else {
-				epipe->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__, "consistent echo received!");
+				epipe->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, "consistent echo received!");
 			}
 
 			if(epoll_ctl(epipe->epolld, EPOLL_CTL_DEL, socketd, NULL) == -1) {
-				epipe->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_ctl");
+				epipe->log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_ctl");
 			}
 
 			close(socketd);
@@ -127,11 +112,11 @@ void echopipe_ready(EchoPipe* epipe) {
 			_echopipe_fillCharBuffer(epipe->inputBuffer, BUFFERSIZE);
 			ioResult = write(socketd, (gconstpointer) epipe->inputBuffer, BUFFERSIZE);
 			if(ioResult < 0) {
-				epipe->log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "write returned < 0");
+				epipe->log(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__, "write returned < 0");
 			}
 
 			if(epoll_ctl(epipe->epolld, EPOLL_CTL_DEL, socketd, NULL) == -1) {
-				epipe->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_ctl");
+				epipe->log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "Error in epoll_ctl");
 			}
 
 			close(socketd);

@@ -1,22 +1,7 @@
-/**
+/*
  * The Shadow Simulator
- *
- * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
- *
- * This file is part of Shadow.
- *
- * Shadow is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Shadow is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright (c) 2010-2011, Rob Jansen
+ * See LICENSE for licensing information
  */
 
 #include "shd-torcontrol.h"
@@ -33,7 +18,7 @@ void torControlPlugin_new(int argc, char* argv[]) {
 				"available modules:\n"
 				"\t'circuitBuild node1,node2,...,nodeN'\n"
 				"\t'log event1,event2,...,eventN'\n";
-		torControlState.shadowlib->log(G_LOG_LEVEL_WARNING, __FUNCTION__, "%s", USAGE);
+		torControlState.shadowlib->log(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, "%s", USAGE);
 		return;
 	}
 
@@ -82,10 +67,10 @@ void __shadow_plugin_init__(ShadowFunctionTable* shadowlibFuncs) {
 
 	/* we log through Shadow by using the log function it supplied to us */
 	if(success) {
-		torControlState.shadowlib->log(G_LOG_LEVEL_MESSAGE, __FUNCTION__,
+		torControlState.shadowlib->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__,
 				"successfully registered ping plug-in state");
 	} else {
-		torControlState.shadowlib->log(G_LOG_LEVEL_CRITICAL, __FUNCTION__,
+		torControlState.shadowlib->log(SHADOW_LOG_LEVEL_CRITICAL, __FUNCTION__,
 				"error registering ping plug-in state");
 	}
 }

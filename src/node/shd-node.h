@@ -1,22 +1,7 @@
 /*
  * The Shadow Simulator
- *
- * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
- *
- * This file is part of Shadow.
- *
- * Shadow is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Shadow is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright (c) 2010-2011, Rob Jansen
+ * See LICENSE for licensing information
  */
 
 #ifndef SHD_NODE_H_
@@ -30,8 +15,10 @@ typedef struct _Node Node;
 
 Node* node_new(GQuark id, Network* network, guint32 ip,
 		GString* hostname, guint64 bwDownKiBps, guint64 bwUpKiBps, guint cpuFrequency, gint cpuThreshold, gint cpuPrecision,
-		guint nodeSeed, SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel,
-		GLogLevelFlags logLevel, gboolean logPcap, gchar* pcapDir, gchar* qdisc);
+		guint nodeSeed, SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel, gchar* heartbeatLogInfo,
+		GLogLevelFlags logLevel, gboolean logPcap, gchar* pcapDir, gchar* qdisc,
+		guint64 receiveBufferSize, gboolean autotuneReceiveBuffer, guint64 sendBufferSize, gboolean autotuneSendBuffer,
+		guint64 interfaceReceiveLength);
 void node_free(Node* node, gpointer userData);
 
 void node_lock(Node* node);
@@ -55,7 +42,10 @@ gchar* node_getDefaultIPName(Node* node);
 Random* node_getRandom(Node* node);
 gdouble node_getNextPacketPriority(Node* node);
 
-gint node_createDescriptor(Node* node, enum DescriptorType type);
+gboolean node_autotuneReceiveBuffer(Node* node);
+gboolean node_autotuneSendBuffer(Node* node);
+
+gint node_createDescriptor(Node* node, DescriptorType type);
 void node_closeDescriptor(Node* node, gint handle);
 gint node_closeUser(Node* node, gint handle);
 Descriptor* node_lookupDescriptor(Node* node, gint handle);

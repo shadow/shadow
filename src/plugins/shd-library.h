@@ -1,28 +1,12 @@
-/**
+/*
  * The Shadow Simulator
- *
- * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
- *
- * This file is part of Shadow.
- *
- * Shadow is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Shadow is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright (c) 2010-2011, Rob Jansen
+ * See LICENSE for licensing information
  */
 
 #ifndef SHD_LIBRARY_H_
 #define SHD_LIBRARY_H_
 
-#include <glib.h>
 #include <netinet/in.h>
 
 /**
@@ -39,6 +23,15 @@
 #define PLUGINGLOBALSSIZESYMBOL "__hoisted_globals_size"
 #define PLUGINGLOBALSPOINTERSYMBOL "__hoisted_globals_pointer"
 
+/* Shadow log levels, mirrors glib. */
+typedef enum {
+  SHADOW_LOG_LEVEL_ERROR             = 1 << 2,       /* always fatal */
+  SHADOW_LOG_LEVEL_CRITICAL          = 1 << 3,
+  SHADOW_LOG_LEVEL_WARNING           = 1 << 4,
+  SHADOW_LOG_LEVEL_MESSAGE           = 1 << 5,
+  SHADOW_LOG_LEVEL_INFO              = 1 << 6,
+  SHADOW_LOG_LEVEL_DEBUG             = 1 << 7,
+} ShadowLogLevel;
 
 /**
  * Signature of a function that Shadow calls when creating a new node instance
@@ -51,7 +44,7 @@
  *
  * @see #PluginFunctionTable
  */
-typedef void (*PluginNewInstanceFunc)(gint argc, gchar* argv[]);
+typedef void (*PluginNewInstanceFunc)(int argc, char* argv[]);
 
 /**
  * Signature of a function that Shadow calls to notify of an event or to
@@ -64,7 +57,7 @@ typedef void (*PluginNotifyFunc)();
 /*
  * signature for plug-in callback functions
  */
-typedef void (*ShadowPluginCallbackFunc)(gpointer data);
+typedef void (*ShadowPluginCallbackFunc)(void* data);
 
 /*
  * function signatures for available shadow functions
@@ -81,11 +74,11 @@ typedef void (*ShadowPluginCallbackFunc)(gpointer data);
  *  @param free - Pointer to a function to call when freeing a node instance.
  *  @param notify - Pointer to a function to call when descriptors are ready.
  */
-typedef gboolean (*ShadowRegisterFunc)(PluginNewInstanceFunc new, PluginNotifyFunc free, PluginNotifyFunc notify);
-typedef void (*ShadowLogFunc)(GLogLevelFlags level, const gchar* functionName, gchar* format, ...);
-typedef void (*ShadowCreateCallbackFunc)(ShadowPluginCallbackFunc callback, gpointer data, guint millisecondsDelay);
-typedef gboolean (*ShadowGetBandwidthFloorFunc)(in_addr_t ip, guint* bwdown, guint* bwup);
-typedef gboolean (*ShadowCryptoSetupFunc)(gint numLocks, gpointer* shadowLockFunc, gpointer* shadowIdFunc, gconstpointer* shadowRandomMethod);
+typedef int (*ShadowRegisterFunc)(PluginNewInstanceFunc new, PluginNotifyFunc free, PluginNotifyFunc notify);
+typedef void (*ShadowLogFunc)(ShadowLogLevel level, const char* functionName, const char* format, ...);
+typedef void (*ShadowCreateCallbackFunc)(ShadowPluginCallbackFunc callback, void* data, uint millisecondsDelay);
+typedef int (*ShadowGetBandwidthFloorFunc)(in_addr_t ip, uint* bwdown, uint* bwup);
+typedef int (*ShadowCryptoSetupFunc)(int numLocks, void** shadowLockFunc, void** shadowIdFunc, const void** shadowRandomMethod);
 
 typedef struct _ShadowFunctionTable ShadowFunctionTable;
 extern ShadowFunctionTable shadowlibFunctionTable;

@@ -1,22 +1,7 @@
-/**
+/*
  * The Shadow Simulator
- *
- * Copyright (c) 2010-2011 Rob Jansen <jansen@cs.umn.edu>
- *
- * This file is part of Shadow.
- *
- * Shadow is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Shadow is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright (c) 2010-2011, Rob Jansen
+ * See LICENSE for licensing information
  */
 
 #ifndef SCALLION_H_
@@ -141,7 +126,11 @@ enum cpuwstate {
 };
 
 /** The tag specifies which circuit this onionskin was from. */
+#ifdef SCALLION_LOGVWITHSUFFIX /* >= tor-0.2.4.11 */
+#define TAG_LEN 12
+#else
 #define TAG_LEN 10
+#endif
 
 #ifdef SCALLION_USEV2CPUWORKER
 /** Magic numbers to make sure our cpuworker_requests don't grow any
@@ -158,6 +147,13 @@ typedef struct cpuworker_request_t {
   /** Task code. Must be one of CPUWORKER_TASK_* */
   uint8_t task;
 
+#ifdef SCALLION_USEV2CPUWORKERTIMING
+  /** Flag: Are we timing this request? */
+  unsigned timed : 1;
+  /** If we're timing this request, when was it sent to the cpuworker? */
+  struct timeval started_at;
+#endif
+
   /** A create cell for the cpuworker to process. */
   create_cell_t create_cell;
 
@@ -172,6 +168,19 @@ typedef struct cpuworker_reply_t {
   uint8_t tag[TAG_LEN];
   /** True iff we got a successful request. */
   uint8_t success;
+
+#ifdef SCALLION_USEV2CPUWORKERTIMING
+  /** Are we timing this request? */
+  unsigned int timed : 1;
+  /** What handshake type was the request? (Used for timing) */
+  uint16_t handshake_type;
+  /** When did we send the request to the cpuworker? */
+  struct timeval started_at;
+  /** Once the cpuworker received the request, how many microseconds did it
+   * take? (This shouldn't overflow; 4 billion micoseconds is over an hour,
+   * and we'll never have an onion handshake that takes so long.) */
+  uint32_t n_usec;
+#endif
 
   /** Output of processing a create cell
    *
@@ -233,7 +242,6 @@ struct _ScallionTor {
 	unsigned int bandwidth;
 	int refillmsecs;
 	vtor_cpuworker_tp cpuw;
-	GList *logfiles;
 	ShadowFunctionTable* shadowlibFuncs;
 };
 

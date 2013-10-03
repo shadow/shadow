@@ -1,22 +1,7 @@
-/**
+/*
  * The Shadow Simulator
- *
- * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
- *
- * This file is part of Shadow.
- *
- * Shadow is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Shadow is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright (c) 2010-2011, Rob Jansen
+ * See LICENSE for licensing information
  */
 
 #include <glib.h>
@@ -39,6 +24,7 @@ struct _CPU {
 };
 
 CPU* cpu_new(guint frequencyKHz, gint threshold, gint precision) {
+	g_assert(frequencyKHz > 0);
 	CPU* cpu = g_new0(CPU, 1);
 	MAGIC_INIT(cpu);
 
@@ -50,7 +36,7 @@ CPU* cpu_new(guint frequencyKHz, gint threshold, gint precision) {
 	/* get the raw speed of the experiment machine */
 	guint rawFrequencyKHz = engine_getRawCPUFrequency(worker_getPrivate()->cached_engine);
 	if(!rawFrequencyKHz) {
-		warning("unable to determine raw CPU frequency, setting %i KHz as a raw "
+		warning("unable to determine raw CPU frequency, setting %u KHz as a raw "
 				"estimate, and using delay ratio of 1.0 to the simulator host", cpu->frequencyKHz);
 		cpu->rawFrequencyKHz = cpu->frequencyKHz;
 		cpu->frequencyRatio = 1.0;

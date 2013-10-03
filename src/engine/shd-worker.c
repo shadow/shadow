@@ -1,22 +1,7 @@
 /*
  * The Shadow Simulator
- *
- * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
- *
- * This file is part of Shadow.
- *
- * Shadow is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Shadow is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright (c) 2010-2011, Rob Jansen
+ * See LICENSE for licensing information
  */
 
 #include "shadow.h"
@@ -115,13 +100,12 @@ static guint _worker_processNode(Worker* worker, Node* node, SimulationTime barr
 
 	/* process all events in the nodes local queue */
 	guint nEventsProcessed = 0;
-	while(nextEvent && (nextEvent->time < worker->clock_barrier))
+	while(nextEvent && (shadowevent_getTime(nextEvent) < worker->clock_barrier))
 	{
 		worker->cached_event = eventqueue_pop(eventq);
-		MAGIC_ASSERT(worker->cached_event);
 
 		/* make sure we don't jump backward in time */
-		worker->clock_now = worker->cached_event->time;
+		worker->clock_now = shadowevent_getTime(worker->cached_event);
 		if(worker->clock_last != SIMTIME_INVALID) {
 			g_assert(worker->clock_now >= worker->clock_last);
 		}
@@ -189,15 +173,14 @@ gpointer worker_run(GSList* nodes) {
 
 void worker_scheduleEvent(Event* event, SimulationTime nano_delay, GQuark receiver_node_id) {
 	/* TODO create accessors, or better yet refactor the work to event class */
-	MAGIC_ASSERT(event);
-	MAGIC_ASSERT((&(event->super)));
+	g_assert(event);
 
 	/* get our thread-private worker */
 	Worker* worker = worker_getPrivate();
 	Engine* engine = worker->cached_engine;
 
 	/* when the event will execute */
-	event->time = worker->clock_now + nano_delay;
+	shadowevent_setTime(event, worker->clock_now + nano_delay);
 
 	/* parties involved. sender may be NULL, receiver may not! */
 	Node* sender = worker->cached_node;
@@ -207,7 +190,7 @@ void worker_scheduleEvent(Event* event, SimulationTime nano_delay, GQuark receiv
 	g_assert(receiver);
 
 	/* the NodeEvent needs a pointer to the correct node */
-	event->node = receiver;
+	shadowevent_setNode(event, receiver);
 
 	/* if we are not going to execute any more events, free it and return */
 	if(engine_isKilled(engine)) {
@@ -224,10 +207,11 @@ void worker_scheduleEvent(Event* event, SimulationTime nano_delay, GQuark receiv
 		SimulationTime minTime = worker->clock_now + jump;
 
 		/* warn and adjust time if needed */
-		if(event->time < minTime) {
-			debug("Inter-node event time %lu changed to %lu due to minimum delay %lu",
-					event->time, minTime, jump);
-			event->time = minTime;
+		SimulationTime eventTime = shadowevent_getTime(event);
+		if(eventTime < minTime) {
+			debug("Inter-node event time %"G_GUINT64_FORMAT" changed to %"G_GUINT64_FORMAT" due to minimum delay %"G_GUINT64_FORMAT,
+					eventTime, minTime, jump);
+			shadowevent_setTime(event, minTime);
 		}
 	}
 

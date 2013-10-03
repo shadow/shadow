@@ -1,22 +1,7 @@
 /*
  * The Shadow Simulator
- *
- * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
- *
- * This file is part of Shadow.
- *
- * Shadow is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Shadow is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright (c) 2010-2011, Rob Jansen
+ * See LICENSE for licensing information
  */
 
 #include <glib.h>
@@ -107,9 +92,17 @@ static service_filegetter_download_tp service_filegetter_get_download_from_args(
 		return NULL;
 	}
 
-	in_addr_t http_addr = service_filegetter_getaddr(sfg, http_server, hostbyname_cb);
+	GString* strbuf = g_string_new(http_server->host);
+	gint hostlength = strbuf->len;
+	gboolean isOnionAddress = g_strstr_len(strbuf->str, strbuf->len, ".onion") ? TRUE : FALSE;
+	g_string_free(strbuf, TRUE);
+
+	in_addr_t http_addr = 0;
+	if(!isOnionAddress) {
+		http_addr = service_filegetter_getaddr(sfg, http_server, hostbyname_cb);
+	}
 	in_port_t http_port = htons((in_port_t) atoi(http_server->port));
-	if(http_addr == 0 || http_port == 0) {
+	if((!isOnionAddress && http_addr == 0) || http_port == 0) {
 		service_filegetter_log(sfg, SFG_CRITICAL, "HTTP server specified but 0");
 		return NULL;
 	}
@@ -122,6 +115,11 @@ static service_filegetter_download_tp service_filegetter_get_download_from_args(
 		socks_port = htons((in_port_t) atoi(socks_proxy->port));
 	}
 
+	if(isOnionAddress && !socks_addr) {
+		service_filegetter_log(sfg, SFG_WARNING, "it probably wont work to specify an .onion address without a Tor socks proxy");
+		return NULL;
+	}
+
 	/* validation successful */
 	service_filegetter_download_tp dl = calloc(1, sizeof(service_filegetter_download_t));
 	strncpy(dl->fspec.remote_path, filepath, sizeof(dl->fspec.remote_path));
@@ -130,7 +128,8 @@ static service_filegetter_download_tp service_filegetter_get_download_from_args(
 	dl->sspec.http_port = http_port;
 	dl->sspec.socks_addr = socks_addr;
 	dl->sspec.socks_port = socks_port;
-
+	dl->sspec.useHostname = isOnionAddress;
+	dl->sspec.hostnameLength = hostlength;
 	return dl;
 }
 

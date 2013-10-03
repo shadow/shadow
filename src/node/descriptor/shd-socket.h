@@ -1,22 +1,7 @@
-/**
+/*
  * The Shadow Simulator
- *
- * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
- *
- * This file is part of Shadow.
- *
- * Shadow is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Shadow is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright (c) 2010-2011, Rob Jansen
+ * See LICENSE for licensing information
  */
 
 #ifndef SHD_SOCKET_H_
@@ -67,17 +52,20 @@ struct _Socket {
 	/* buffering packets readable by user */
 	GQueue* inputBuffer;
 	gsize inputBufferSize;
+	gsize inputBufferSizePending;
 	gsize inputBufferLength;
 
 	/* buffering packets ready to send */
 	GQueue* outputBuffer;
 	gsize outputBufferSize;
+	gsize outputBufferSizePending;
 	gsize outputBufferLength;
 
 	MAGIC_DECLARE;
 };
 
-void socket_init(Socket* socket, SocketFunctionTable* vtable, enum DescriptorType type, gint handle);
+void socket_init(Socket* socket, SocketFunctionTable* vtable, DescriptorType type, gint handle,
+		guint receiveBufferSize, guint sendBufferSize);
 
 in_addr_t socket_getBinding(Socket* socket);
 void socket_setBinding(Socket* socket, in_addr_t boundAddress, in_port_t port);
@@ -89,10 +77,16 @@ Packet* socket_pullOutPacket(Socket* socket);
 Packet* socket_peekNextPacket(const Socket* socket);
 void socket_droppedPacket(Socket* socket, Packet* packet);
 
+gsize socket_getInputBufferSize(Socket* socket);
+void socket_setInputBufferSize(Socket* socket, gsize newSize);
+gsize socket_getInputBufferLength(Socket* socket);
 gsize socket_getInputBufferSpace(Socket* socket);
 gboolean socket_addToInputBuffer(Socket* socket, Packet* packet);
 Packet* socket_removeFromInputBuffer(Socket* socket);
 
+gsize socket_getOutputBufferSize(Socket* socket);
+void socket_setOutputBufferSize(Socket* socket, gsize newSize);
+gsize socket_getOutputBufferLength(Socket* socket);
 gsize socket_getOutputBufferSpace(Socket* socket);
 gboolean socket_addToOutputBuffer(Socket* socket, Packet* packet);
 Packet* socket_removeFromOutputBuffer(Socket* socket);
@@ -101,6 +95,8 @@ gint socket_getPeerName(Socket* socket, in_addr_t* ip, in_port_t* port);
 void socket_setPeerName(Socket* socket, in_addr_t ip, in_port_t port);
 gint socket_getSocketName(Socket* socket, in_addr_t* ip, in_port_t* port);
 void socket_setSocketName(Socket* socket, in_addr_t ip, in_port_t port);
+
+enum ProtocolType socket_getProtocol(Socket* socket);
 
 gboolean socket_isFamilySupported(Socket* socket, sa_family_t family);
 gint socket_connectToPeer(Socket* socket, in_addr_t ip, in_port_t port, sa_family_t family);

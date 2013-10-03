@@ -14,11 +14,11 @@ include_directories(${CMAKE_SOURCE_DIR}/src/)
 add_subdirectory(hoist)
 
 ## compile defs and flags
-add_definitions(-D_SVID_SOURCE -D_XOPEN_SOURCE=600) #-D_GNU_SOURCE
+add_definitions(-D_SVID_SOURCE -D_XOPEN_SOURCE=600 -D_ISOC11_SOURCE) #-D_GNU_SOURCE
 add_cflags(-fPIC)
 
 ## build the required libraries for intercepting system and library calls
-add_subdirectory(intercept)
+add_subdirectory(interposition)
 
 ## build the built-in plug-in libraries
 add_subdirectory(plugins)

@@ -1,22 +1,7 @@
-/**
+/*
  * The Shadow Simulator
- *
- * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
- *
- * This file is part of Shadow.
- *
- * Shadow is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Shadow is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright (c) 2010-2011, Rob Jansen
+ * See LICENSE for licensing information
  */
 
 #include "shadow.h"
@@ -52,6 +37,10 @@ void socket_close(Socket* socket) {
 	MAGIC_ASSERT(socket);
 	MAGIC_ASSERT(socket->vtable);
 	socket->vtable->close((Descriptor*)socket);
+
+	Tracker* tracker = node_getTracker(worker_getPrivate()->cached_node);
+	Descriptor* descriptor = (Descriptor *)socket;
+	tracker_removeSocket(tracker, descriptor->handle);
 }
 
 gssize socket_sendUserData(Socket* socket, gconstpointer buffer, gsize nBytes,
@@ -76,7 +65,8 @@ TransportFunctionTable socket_functions = {
 	MAGIC_VALUE
 };
 
-void socket_init(Socket* socket, SocketFunctionTable* vtable, enum DescriptorType type, gint handle) {
+void socket_init(Socket* socket, SocketFunctionTable* vtable, DescriptorType type, gint handle,
+		guint receiveBufferSize, guint sendBufferSize) {
 	g_assert(socket && vtable);
 
 	transport_init(&(socket->super), &socket_functions, type, handle);
@@ -88,9 +78,18 @@ void socket_init(Socket* socket, SocketFunctionTable* vtable, enum DescriptorTyp
 
 	socket->protocol = type == DT_TCPSOCKET ? PTCP : type == DT_UDPSOCKET ? PUDP : PLOCAL;
 	socket->inputBuffer = g_queue_new();
-	socket->inputBufferSize = CONFIG_RECV_BUFFER_SIZE;
+	socket->inputBufferSize = receiveBufferSize;
 	socket->outputBuffer = g_queue_new();
-	socket->outputBufferSize = CONFIG_SEND_BUFFER_SIZE;
+	socket->outputBufferSize = sendBufferSize;
+
+	Tracker* tracker = node_getTracker(worker_getPrivate()->cached_node);
+	Descriptor* descriptor = (Descriptor *)socket;
+	tracker_addSocket(tracker, descriptor->handle, socket->protocol, socket->inputBufferSize, socket->outputBufferSize);
+}
+
+enum ProtocolType socket_getProtocol(Socket* socket) {
+	MAGIC_ASSERT(socket);
+	return socket->protocol;
 }
 
 /* interface functions, implemented by subtypes */
@@ -104,6 +103,11 @@ gboolean socket_isFamilySupported(Socket* socket, sa_family_t family) {
 gint socket_connectToPeer(Socket* socket, in_addr_t ip, in_port_t port, sa_family_t family) {
 	MAGIC_ASSERT(socket);
 	MAGIC_ASSERT(socket->vtable);
+
+	Tracker* tracker = node_getTracker(worker_getPrivate()->cached_node);
+	Descriptor* descriptor = (Descriptor *)socket;
+	tracker_updateSocketPeer(tracker, descriptor->handle, ip, ntohs(port));
+
 	return socket->vtable->connectToPeer(socket, ip, port, family);
 }
 
@@ -154,7 +158,9 @@ void socket_setPeerName(Socket* socket, in_addr_t ip, in_port_t port) {
 	if(socket->peerString) {
 		g_free(socket->peerString);
 	}
-	GString* stringBuffer = g_string_new(NTOA(ip));
+	gchar* ipString = address_ipToNewString(ip);
+	GString* stringBuffer = g_string_new(ipString);
+	g_free(ipString);
 	g_string_append_printf(stringBuffer, ":%u", ntohs(port));
 	socket->peerString = g_string_free(stringBuffer, FALSE);
 }
@@ -210,7 +216,10 @@ void socket_setBinding(Socket* socket, in_addr_t boundAddress, in_port_t port) {
 	if(socket->boundString) {
 		g_free(socket->boundString);
 	}
-	GString* stringBuffer = g_string_new(NTOA(boundAddress));
+
+	gchar* ipString = address_ipToNewString(boundAddress);
+	GString* stringBuffer = g_string_new(ipString);
+	g_free(ipString);
 	g_string_append_printf(stringBuffer, ":%u (descriptor %i)", ntohs(port), socket->super.super.handle);
 	socket->boundString = g_string_free(stringBuffer, FALSE);
 
@@ -230,6 +239,56 @@ gsize socket_getInputBufferSpace(Socket* socket) {
 	return (socket->inputBufferSize - socket->inputBufferLength);
 }
 
+gsize socket_getOutputBufferSpace(Socket* socket) {
+	MAGIC_ASSERT(socket);
+	g_assert(socket->outputBufferSize >= socket->outputBufferLength);
+	return (socket->outputBufferSize - socket->outputBufferLength);
+}
+
+gsize socket_getInputBufferLength(Socket* socket) {
+	MAGIC_ASSERT(socket);
+	return socket->inputBufferLength;
+}
+
+gsize socket_getOutputBufferLength(Socket* socket) {
+	MAGIC_ASSERT(socket);
+	return socket->outputBufferLength;
+}
+
+gsize socket_getInputBufferSize(Socket* socket) {
+	MAGIC_ASSERT(socket);
+	return socket->inputBufferSize;
+}
+
+gsize socket_getOutputBufferSize(Socket* socket) {
+	MAGIC_ASSERT(socket);
+	return socket->outputBufferSize;
+}
+
+void socket_setInputBufferSize(Socket* socket, gsize newSize) {
+	MAGIC_ASSERT(socket);
+	if(newSize >= socket->inputBufferLength) {
+		socket->inputBufferSize = newSize;
+		socket->inputBufferSizePending = 0;
+	} else {
+		/* ensure positive size, reduce size as buffer drains */
+		socket->inputBufferSize = socket->inputBufferLength;
+		socket->inputBufferSizePending = newSize;
+	}
+}
+
+void socket_setOutputBufferSize(Socket* socket, gsize newSize) {
+	MAGIC_ASSERT(socket);
+	if(newSize >= socket->outputBufferLength) {
+		socket->outputBufferSize = newSize;
+		socket->outputBufferSizePending = 0;
+	} else {
+		/* ensure positive size, reduce size as buffer drains */
+		socket->outputBufferSize = socket->outputBufferLength;
+		socket->outputBufferSizePending = newSize;
+	}
+}
+
 gboolean socket_addToInputBuffer(Socket* socket, Packet* packet) {
 	MAGIC_ASSERT(socket);
 
@@ -242,6 +301,11 @@ gboolean socket_addToInputBuffer(Socket* socket, Packet* packet) {
 	/* add to our queue */
 	g_queue_push_tail(socket->inputBuffer, packet);
 	socket->inputBufferLength += length;
+
+	/* update the tracker input buffer stats */
+	Tracker* tracker = node_getTracker(worker_getPrivate()->cached_node);
+	Descriptor* descriptor = (Descriptor *)socket;
+	tracker_updateSocketInputBuffer(tracker, descriptor->handle, socket->inputBufferLength, socket->inputBufferSize);
 
 	/* we just added a packet, so we are readable */
 	if(socket->inputBufferLength > 0) {
@@ -261,6 +325,16 @@ Packet* socket_removeFromInputBuffer(Socket* socket) {
 		guint length = packet_getPayloadLength(packet);
 		socket->inputBufferLength -= length;
 
+		/* check if we need to reduce the buffer size */
+		if(socket->inputBufferSizePending > 0) {
+			socket_setInputBufferSize(socket, socket->inputBufferSizePending);
+		}
+
+		/* update the tracker input buffer stats */
+		Tracker* tracker = node_getTracker(worker_getPrivate()->cached_node);
+		Descriptor* descriptor = (Descriptor *)socket;
+		tracker_updateSocketInputBuffer(tracker, descriptor->handle, socket->inputBufferLength, socket->inputBufferSize);
+
 		/* we are not readable if we are now empty */
 		if(socket->inputBufferLength <= 0) {
 			descriptor_adjustStatus((Descriptor*)socket, DS_READABLE, FALSE);
@@ -268,12 +342,6 @@ Packet* socket_removeFromInputBuffer(Socket* socket) {
 	}
 
 	return packet;
-}
-
-gsize socket_getOutputBufferSpace(Socket* socket) {
-	MAGIC_ASSERT(socket);
-	g_assert(socket->outputBufferSize >= socket->outputBufferLength);
-	return (socket->outputBufferSize - socket->outputBufferLength);
 }
 
 gboolean socket_addToOutputBuffer(Socket* socket, Packet* packet) {
@@ -288,6 +356,11 @@ gboolean socket_addToOutputBuffer(Socket* socket, Packet* packet) {
 	/* add to our queue */
 	g_queue_push_tail(socket->outputBuffer, packet);
 	socket->outputBufferLength += length;
+
+	/* update the tracker input buffer stats */
+	Tracker* tracker = node_getTracker(worker_getPrivate()->cached_node);
+	Descriptor* descriptor = (Descriptor *)socket;
+	tracker_updateSocketOutputBuffer(tracker, descriptor->handle, socket->outputBufferLength, socket->outputBufferSize);
 
 	/* we just added a packet, we are no longer writable if full */
 	if(socket_getOutputBufferSpace(socket) <= 0) {
@@ -311,6 +384,16 @@ Packet* socket_removeFromOutputBuffer(Socket* socket) {
 		/* just removed a packet */
 		guint length = packet_getPayloadLength(packet);
 		socket->outputBufferLength -= length;
+
+		/* check if we need to reduce the buffer size */
+		if(socket->outputBufferSizePending > 0) {
+			socket_setOutputBufferSize(socket, socket->outputBufferSizePending);
+		}
+
+		/* update the tracker input buffer stats */
+		Tracker* tracker = node_getTracker(worker_getPrivate()->cached_node);
+		Descriptor* descriptor = (Descriptor *)socket;
+		tracker_updateSocketOutputBuffer(tracker, descriptor->handle, socket->outputBufferLength, socket->outputBufferSize);
 
 		/* we are writable if we now have space */
 		if(socket_getOutputBufferSpace(socket) > 0) {

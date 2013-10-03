@@ -1,22 +1,7 @@
-/**
+/*
  * The Shadow Simulator
- *
- * Copyright (c) 2010-2012 Rob Jansen <jansen@cs.umn.edu>
- *
- * This file is part of Shadow.
- *
- * Shadow is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Shadow is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Shadow.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright (c) 2010-2011, Rob Jansen
+ * See LICENSE for licensing information
  */
 
 #include "shd-echo.h"
@@ -42,16 +27,16 @@ void __shadow_plugin_init__(ShadowFunctionTable* shadowlibFuncs) {
 
 	/* we log through Shadow by using the log function it supplied to us */
 	if(success) {
-		echostate.shadowlibFuncs.log(G_LOG_LEVEL_MESSAGE, __FUNCTION__,
+		echostate.shadowlibFuncs.log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__,
 				"successfully registered echo plug-in state");
 	} else {
-		echostate.shadowlibFuncs.log(G_LOG_LEVEL_CRITICAL, __FUNCTION__,
+		echostate.shadowlibFuncs.log(SHADOW_LOG_LEVEL_CRITICAL, __FUNCTION__,
 				"error registering echo plug-in state");
 	}
 }
 
 void echoplugin_new(int argc, char* argv[]) {
-	echostate.shadowlibFuncs.log(G_LOG_LEVEL_DEBUG, __FUNCTION__,
+	echostate.shadowlibFuncs.log(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__,
 			"echoplugin_new called");
 
 	const char* USAGE = "Echo USAGE: 'tcp client serverIP', 'tcp server', 'tcp loopback', 'tcp socketpair', "
@@ -62,7 +47,7 @@ void echoplugin_new(int argc, char* argv[]) {
 
 	/* 0 is the plugin name, 1 is the protocol */
 	if(argc < 2) {
-		echostate.shadowlibFuncs.log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "%s", USAGE);
+		echostate.shadowlibFuncs.log(SHADOW_LOG_LEVEL_CRITICAL, __FUNCTION__, "%s", USAGE);
 		return;
 	}
 
@@ -92,12 +77,12 @@ void echoplugin_new(int argc, char* argv[]) {
 
 	if(isError) {
 		/* unknown argument for protocol, log usage information through Shadow */
-		echostate.shadowlibFuncs.log(G_LOG_LEVEL_CRITICAL, __FUNCTION__, "%s", USAGE);
+		echostate.shadowlibFuncs.log(SHADOW_LOG_LEVEL_CRITICAL, __FUNCTION__, "%s", USAGE);
 	}
 }
 
 void echoplugin_free() {
-	echostate.shadowlibFuncs.log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "echoplugin_free called");
+	echostate.shadowlibFuncs.log(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__, "echoplugin_free called");
 
 	/* call the correct version depending on what we are running */
 	switch(echostate.protocol) {
@@ -117,7 +102,7 @@ void echoplugin_free() {
 		}
 
 		default: {
-			echostate.shadowlibFuncs.log(G_LOG_LEVEL_CRITICAL, __FUNCTION__,
+			echostate.shadowlibFuncs.log(SHADOW_LOG_LEVEL_CRITICAL, __FUNCTION__,
 					"unknown protocol in echoplugin_free");
 			break;
 		}
@@ -125,7 +110,7 @@ void echoplugin_free() {
 }
 
 void echoplugin_ready() {
-	echostate.shadowlibFuncs.log(G_LOG_LEVEL_DEBUG, __FUNCTION__, "echoplugin_ready called");
+	echostate.shadowlibFuncs.log(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__, "echoplugin_ready called");
 
 	/* call the correct version depending on what we are running */
 	switch(echostate.protocol) {
@@ -145,7 +130,7 @@ void echoplugin_ready() {
 		}
 
 		default: {
-			echostate.shadowlibFuncs.log(G_LOG_LEVEL_CRITICAL, __FUNCTION__,
+			echostate.shadowlibFuncs.log(SHADOW_LOG_LEVEL_CRITICAL, __FUNCTION__,
 					"unknown protocol in echoplugin_ready");
 			break;
 		}

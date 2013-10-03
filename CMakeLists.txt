@@ -17,7 +17,7 @@ endif(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
 
 ## set paths and build parameters
 set(Shadow_VERSION_MAJOR 1)
-set(Shadow_VERSION_MINOR 7)
+set(Shadow_VERSION_MINOR 8)
 set(Shadow_VERSION_BUILD 0)
 
 ## set version suffix
@@ -60,8 +60,7 @@ option(SHADOW_DEBUG "turn on debugging for verbose program output (default: OFF)
 option(SHADOW_PROFILE "build with profile settings (default: OFF)" OFF)
 option(SHADOW_TEST "build tests (default: OFF)" OFF)
 option(SHADOW_EXPORT "export service libraries and headers (default: OFF)" OFF)
-option(SHADOW_ENABLE_MEMTRACKER "enable preloading malloc and free (experimental!) (default: OFF)" OFF)
-option(SHADOW_ENABLE_EVPCIPHER "enable preloading EVP_Cipher (experimental!) (default: OFF)" OFF)
+option(SHADOW_DISABLE_EVPCIPHER "disable preloading EVP_Cipher (experimental!) (default: OFF)" OFF)
 option(SCALLION_SKIPREFILL "Tor should not use refill callbacks (default: OFF)" OFF)
 option(SCALLION_TORPATH "path to custom Tor base directory (default: OFF)" OFF)
 
@@ -73,8 +72,7 @@ MESSAGE(STATUS "SHADOW_DEBUG=${SHADOW_DEBUG}")
 MESSAGE(STATUS "SHADOW_PROFILE=${SHADOW_PROFILE}")
 MESSAGE(STATUS "SHADOW_TEST=${SHADOW_TEST}")
 MESSAGE(STATUS "SHADOW_EXPORT=${SHADOW_EXPORT}")
-MESSAGE(STATUS "SHADOW_ENABLE_MEMTRACKER=${SHADOW_ENABLE_MEMTRACKER}")
-MESSAGE(STATUS "SHADOW_ENABLE_EVPCIPHER=${SHADOW_ENABLE_EVPCIPHER}")
+MESSAGE(STATUS "SHADOW_DISABLE_EVPCIPHER=${SHADOW_DISABLE_EVPCIPHER}")
 MESSAGE(STATUS "SCALLION_TORPATH=${SCALLION_TORPATH}")
 MESSAGE(STATUS "TOR_VERSION=${TOR_VERSION_A}.${TOR_VERSION_B}.${TOR_VERSION_C}.${TOR_VERSION_D}")
 MESSAGE(STATUS "-------------------------------------------------------------------------------")
@@ -101,13 +99,9 @@ if(SHADOW_PROFILE STREQUAL ON)
     set(CMAKE_EXE_LINKER_FLAGS ${CMAKE_EXE_LINKER_FLAGS} -pg)
 endif(SHADOW_PROFILE STREQUAL ON)
 
-if(SHADOW_ENABLE_MEMTRACKER STREQUAL ON)
-    add_definitions(-DSHADOW_ENABLE_MEMTRACKER)
-endif(SHADOW_ENABLE_MEMTRACKER STREQUAL ON)
-
-if(SHADOW_ENABLE_EVPCIPHER STREQUAL ON)
-    add_definitions(-DSHADOW_ENABLE_EVPCIPHER)
-endif(SHADOW_ENABLE_EVPCIPHER STREQUAL ON)
+if(SHADOW_DISABLE_EVPCIPHER STREQUAL ON)
+    add_definitions(-DSHADOW_DISABLE_EVPCIPHER)
+endif(SHADOW_DISABLE_EVPCIPHER STREQUAL ON)
 
 if(SHADOW_EXPORT STREQUAL ON)
     ## the actual work happens in the CMakeLists files in each plug-in directory
@@ -155,10 +149,12 @@ add_subdirectory(${CMAKE_SOURCE_DIR}/cpack/)
 ## build test if enabled
 if(SHADOW_TEST STREQUAL ON)
     message(STATUS "SHADOW_TEST enabled")
-    add_subdirectory(${SHADOW_TEST_DIR})
+    add_subdirectory(${CMAKE_SOURCE_DIR}/test/)
 endif(SHADOW_TEST STREQUAL ON)
 
 ## install our 'exported' libs so they can be imported by others
+file(GLOB CMAKE_CUSTOM_MODULES "${CMAKE_SOURCE_DIR}/cmake/*cmake")
+install(FILES ${CMAKE_CUSTOM_MODULES} DESTINATION share/cmake/Modules/)
 if(SHADOW_EXPORT STREQUAL ON)
     install(EXPORT shadow-externals DESTINATION share/)
 endif(SHADOW_EXPORT STREQUAL ON)
