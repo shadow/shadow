@@ -17,7 +17,7 @@ endif(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
 
 ## set paths and build parameters
 set(Shadow_VERSION_MAJOR 1)
-set(Shadow_VERSION_MINOR 7)
+set(Shadow_VERSION_MINOR 8)
 set(Shadow_VERSION_BUILD 0)
 
 ## set version suffix
