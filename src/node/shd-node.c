@@ -25,7 +25,7 @@ struct _Node {
 	CPU* cpu;
 
 	/* the applications this node is running */
-	GList* applications;
+	GQueue* applications;
 
 	/* a statistics tracker for in/out bytes, CPU, memory, etc. */
 	Tracker* tracker;
@@ -96,7 +96,7 @@ Node* node_new(GQuark id, Network* network, guint32 ip,
 	node->autotuneSendBuffer = autotuneSendBuffer;
 
 	/* applications this node will run */
-//	node->application = application_new(software);
+	node->applications = g_queue_new();
 
 	node->cpu = cpu_new(cpuFrequency, cpuThreshold, cpuPrecision);
 	node->random = random_new(nodeSeed);
@@ -152,7 +152,7 @@ void node_addApplication(Node* node, GQuark pluginID, gchar* pluginPath,
 		SimulationTime startTime, SimulationTime stopTime, gchar* arguments) {
 	MAGIC_ASSERT(node);
 	Application* application = application_new(pluginID, pluginPath, startTime, stopTime, arguments);
-	node->applications = g_list_append(node->applications, application);
+	g_queue_push_tail(node->applications, application);
 
 	Worker* worker = worker_getPrivate();
 	StartApplicationEvent* event = startapplication_new(application);
@@ -180,14 +180,7 @@ void node_freeAllApplications(Node* node, gpointer userData) {
 	Worker* worker = worker_getPrivate();
 	worker->cached_node = node;
 
-	GList* item = node->applications;
-	while (item && item->data) {
-		Application* application = (Application*) item->data;
-		application_free(application);
-		item->data = NULL;
-		item = g_list_next(item);
-	}
-	g_list_free(node->applications);
+	g_queue_free_full(node->applications, (GDestroyNotify)application_free);
 	node->applications = NULL;
 
 	worker->cached_node = NULL;

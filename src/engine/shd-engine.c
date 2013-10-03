@@ -196,8 +196,11 @@ static gint _engine_processEvents(Engine* engine) {
 		}
 	}
 
+	engine->killed = TRUE;
+
 	/* in single thread mode, we must free the nodes */
 	GList* nodeList = internetwork_getAllNodes(engine->internet);
+	g_list_foreach(nodeList, (GFunc) node_freeAllApplications, NULL);
 	g_list_foreach(nodeList, (GFunc) node_free, NULL);
 	g_list_free(nodeList);
 
