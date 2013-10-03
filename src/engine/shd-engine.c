@@ -110,13 +110,13 @@ Engine* engine_new(Configuration* config) {
 	GError* error = NULL;
 	if(!g_file_get_contents(CONFIG_CPU_MAX_FREQ_FILE, &contents, &length, &error)) {
 		engine->rawFrequencyKHz = 0;
-		if(error) {
-			g_error_free(error);
-		}
 	} else {
 		g_assert(contents);
 		engine->rawFrequencyKHz = (guint)atoi(contents);
 		g_free(contents);
+	}
+	if(error) {
+		g_error_free(error);
 	}
 
 	engine->dns = dns_new();
@@ -255,6 +255,14 @@ static gint _engine_processEvents(Engine* engine) {
 			nextEvent = eventqueue_peek(engine->masterEventQueue);
 		}
 	}
+
+	engine->killed = TRUE;
+
+	/* in single thread mode, we must free the nodes */
+	GList* nodeList = internetwork_getAllNodes(engine->internet);
+	g_list_foreach(nodeList, (GFunc) node_freeAllApplications, NULL);
+	g_list_foreach(nodeList, (GFunc) node_free, NULL);
+	g_list_free(nodeList);
 
 	return 0;
 }

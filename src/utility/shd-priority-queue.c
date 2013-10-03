@@ -36,12 +36,19 @@ PriorityQueue* priorityqueue_new(GCompareDataFunc compareFunc,
 
 void priorityqueue_clear(PriorityQueue *q) {
 	g_assert(q);
+	if(q->freeFunc) {
+		for (guint i = 0; i < q->size; i++) {
+			q->freeFunc(q->heap[i]);
+			q->heap[i] = NULL;
+		}
+	}
 	q->size = 0;
 	g_hash_table_remove_all(q->map);
 }
 
 void priorityqueue_free(PriorityQueue *q) {
 	g_assert(q);
+	priorityqueue_clear(q);
 	g_hash_table_destroy(q->map);
 	g_free(q->heap);
 	g_slice_free(PriorityQueue, q);

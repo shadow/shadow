@@ -178,9 +178,16 @@ Tracker* tracker_new(SimulationTime interval, GLogLevelFlags loglevel, gchar* fl
 	return tracker;
 }
 
+static void _tracker_freeAllocatedLocations(gpointer key, gpointer value, gpointer userData) {
+	if(key) {
+		g_free(key);
+	}
+}
+
 void tracker_free(Tracker* tracker) {
 	MAGIC_ASSERT(tracker);
 
+	g_hash_table_foreach(tracker->allocatedLocations, _tracker_freeAllocatedLocations, NULL);
 	g_hash_table_destroy(tracker->allocatedLocations);
 	g_hash_table_destroy(tracker->socketStats);
 

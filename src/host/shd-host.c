@@ -22,7 +22,7 @@ struct _Host {
 	CPU* cpu;
 
 	/* the applications this node is running */
-	GList* applications;
+	GQueue* applications;
 
 	/* a statistics tracker for in/out bytes, CPU, memory, etc. */
 	Tracker* tracker;
@@ -109,6 +109,9 @@ Host* host_new(GQuark id, gchar* hostname, gchar* ipHint, gchar* clusterHint,
 	host->autotuneReceiveBuffer = autotuneReceiveBuffer;
 	host->autotuneSendBuffer = autotuneSendBuffer;
 
+	/* applications this node will run */
+	host->applications = g_queue_new();
+
 	host->cpu = cpu_new(cpuFrequency, cpuThreshold, cpuPrecision);
 	host->tracker = tracker_new(heartbeatInterval, heartbeatLogLevel, heartbeatLogInfo);
 	host->logLevel = logLevel;
@@ -116,6 +119,7 @@ Host* host_new(GQuark id, gchar* hostname, gchar* ipHint, gchar* clusterHint,
 	host->pcapDir = pcapDir;
 
 	message("Created Host '%s', ip %s, "
+
 			"%"G_GUINT64_FORMAT" bwUpKiBps, %"G_GUINT64_FORMAT" bwDownKiBps, %"G_GUINT64_FORMAT" initSockSendBufSize, %"G_GUINT64_FORMAT" initSockRecvBufSize, "
 			"%u cpuFrequency, %i cpuThreshold, %i cpuPrecision, %u seed",
 			g_quark_to_string(host->id), networkinterface_getIPName(host->defaultInterface),
@@ -127,6 +131,8 @@ Host* host_new(GQuark id, gchar* hostname, gchar* ipHint, gchar* clusterHint,
 
 void host_free(Host* host, gpointer userData) {
 	MAGIC_ASSERT(host);
+
+	g_queue_free(host->applications);
 
 	topology_disconnect(worker_getTopology(), networkinterface_getAddress(host->defaultInterface));
 
@@ -164,7 +170,7 @@ void host_addApplication(Host* host, GQuark pluginID, gchar* pluginPath,
 		SimulationTime startTime, SimulationTime stopTime, gchar* arguments) {
 	MAGIC_ASSERT(host);
 	Application* application = application_new(pluginID, pluginPath, startTime, stopTime, arguments);
-	host->applications = g_list_append(host->applications, application);
+	g_queue_push_tail(host->applications, application);
 
 	Worker* worker = worker_getPrivate();
 	StartApplicationEvent* event = startapplication_new(application);
@@ -192,15 +198,9 @@ void host_freeAllApplications(Host* host, gpointer userData) {
 	Worker* worker = worker_getPrivate();
 	worker->cached_node = host;
 
-	GList* item = host->applications;
-	while (item && item->data) {
-		Application* application = (Application*) item->data;
-		application_free(application);
-		item->data = NULL;
-		item = g_list_next(item);
+	while(!g_queue_is_empty(host->applications)) {
+		application_free(g_queue_pop_head(host->applications));
 	}
-	g_list_free(host->applications);
-	host->applications = NULL;
 
 	worker->cached_node = NULL;
 }
