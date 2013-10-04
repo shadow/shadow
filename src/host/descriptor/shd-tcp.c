@@ -646,11 +646,6 @@ static void _tcp_flush(TCP* tcp) {
 
 		/* we already checked for space, so this should always succeed */
 		g_assert(success);
-
-		/* we moved the packet to a different layer, so this shouldn't matter, but check anyway */
-		if(_tcp_getBufferSpaceOut(tcp) > 0) {
-			descriptor_adjustStatus((Descriptor*)tcp, DS_WRITABLE, TRUE);
-		}
 	}
 
 	/* any packets now in order can be pushed to our user input buffer */
