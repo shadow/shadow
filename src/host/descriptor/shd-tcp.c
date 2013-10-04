@@ -697,6 +697,12 @@ static void _tcp_flush(TCP* tcp) {
 			descriptor_adjustStatus((Descriptor*)tcp, DS_READABLE, TRUE);
 		}
 	}
+
+	if(_tcp_getBufferSpaceOut(tcp) > 0) {
+		descriptor_adjustStatus((Descriptor*)tcp, DS_WRITABLE, TRUE);
+	} else {
+		descriptor_adjustStatus((Descriptor*)tcp, DS_WRITABLE, FALSE);
+	}
 }
 
 gboolean tcp_isFamilySupported(TCP* tcp, sa_family_t family) {
