@@ -128,6 +128,7 @@ void packet_setLocal(Packet* packet, enum ProtocolLocalFlags flags,
 		gint sourceDescriptorHandle, gint destinationDescriptorHandle, in_port_t port) {
 	_packet_lock(packet);
 	g_assert(!(packet->header) && packet->protocol == PNONE);
+	g_assert(port > 0);
 
 	PacketLocalHeader* header = g_new0(PacketLocalHeader, 1);
 
@@ -146,6 +147,7 @@ void packet_setUDP(Packet* packet, enum ProtocolUDPFlags flags,
 		in_addr_t destinationIP, in_port_t destinationPort) {
 	_packet_lock(packet);
 	g_assert(!(packet->header) && packet->protocol == PNONE);
+	g_assert(sourceIP && sourcePort && destinationIP && destinationPort);
 
 	PacketUDPHeader* header = g_new0(PacketUDPHeader, 1);
 
@@ -166,6 +168,7 @@ void packet_setTCP(Packet* packet, enum ProtocolTCPFlags flags,
 		guint sequence, guint acknowledgement, guint window) {
 	_packet_lock(packet);
 	g_assert(!(packet->header) && packet->protocol == PNONE);
+	g_assert(sourceIP && sourcePort && destinationIP && destinationPort);
 
 	PacketTCPHeader* header = g_new0(PacketTCPHeader, 1);
 

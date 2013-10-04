@@ -536,10 +536,7 @@ static gsize _tcp_getBufferSpaceOut(TCP* tcp) {
 	MAGIC_ASSERT(tcp);
 	/* account for throttled and retransmission buffer */
 	gssize s = (gssize)(socket_getOutputBufferSpace(&(tcp->super)) - tcp->throttledOutputLength - tcp->retransmissionLength);
-	gsize space = MAX(0, s);
-	if(space == 0) {
-		descriptor_adjustStatus((Descriptor*)tcp, DS_WRITABLE, FALSE);
-	}
+	gsize space = (gsize) MAX(0, s);
 	return space;
 }
 
@@ -549,6 +546,9 @@ static void _tcp_bufferPacketOut(TCP* tcp, Packet* packet) {
 	/* TCP wants to avoid congestion */
 	g_queue_insert_sorted(tcp->throttledOutput, packet, (GCompareDataFunc)packet_compareTCPSequence, NULL);
 	tcp->throttledOutputLength += packet_getPayloadLength(packet);
+	if(_tcp_getBufferSpaceOut(tcp) == 0) {
+		descriptor_adjustStatus((Descriptor*)tcp, DS_WRITABLE, FALSE);
+	}
 }
 
 static gsize _tcp_getBufferSpaceIn(TCP* tcp) {
@@ -570,6 +570,9 @@ static void _tcp_addRetransmit(TCP* tcp, guint sequence, guint length) {
 	MAGIC_ASSERT(tcp);
 	g_hash_table_replace(tcp->retransmission, GINT_TO_POINTER(sequence), GINT_TO_POINTER(length));
 	tcp->retransmissionLength += length;
+	if(_tcp_getBufferSpaceOut(tcp) == 0) {
+		descriptor_adjustStatus((Descriptor*)tcp, DS_WRITABLE, FALSE);
+	}
 }
 
 static void _tcp_removeRetransmit(TCP* tcp, guint sequence) {
@@ -581,6 +584,9 @@ static void _tcp_removeRetransmit(TCP* tcp, guint sequence) {
 		if(length) {
 			tcp->retransmissionLength -= length;
 			g_hash_table_remove(tcp->retransmission, key);
+			if(_tcp_getBufferSpaceOut(tcp) > 0) {
+				descriptor_adjustStatus((Descriptor*)tcp, DS_WRITABLE, TRUE);
+			}
 		}
 	}
 }
@@ -640,6 +646,11 @@ static void _tcp_flush(TCP* tcp) {
 
 		/* we already checked for space, so this should always succeed */
 		g_assert(success);
+
+		/* we moved the packet to a different layer, so this shouldn't matter, but check anyway */
+		if(_tcp_getBufferSpaceOut(tcp) > 0) {
+			descriptor_adjustStatus((Descriptor*)tcp, DS_WRITABLE, TRUE);
+		}
 	}
 
 	/* any packets now in order can be pushed to our user input buffer */

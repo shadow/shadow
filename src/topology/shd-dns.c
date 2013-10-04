@@ -109,7 +109,8 @@ Address* dns_register(DNS* dns, GQuark id, gchar* name, gchar* requestedIP) {
 		/* restricted is OK if this is a localhost address, otherwise it must be unique */
 		if(ip == address_stringToIP("127.0.0.1")) {
 			isLocal = TRUE;
-		} else if(_dns_isRestricted(dns, ip) || !_dns_isIPUnique(dns, ip)) {
+		//} else if(_dns_isRestricted(dns, ip) || !_dns_isIPUnique(dns, ip)) {
+		} else {
 			ip = _dns_generateIP(dns);
 		}
 	} else {
@@ -133,7 +134,7 @@ void dns_deregister(DNS* dns, Address* address) {
 	MAGIC_ASSERT(dns);
 	if(!address_isLocal(address)) {
 		/* these remove functions will call address_unref as necessary */
-		g_hash_table_remove(dns->addressByIP, GUINT_TO_POINTER(address_toHostIP(address)));
+		g_hash_table_remove(dns->addressByIP, GUINT_TO_POINTER(address_toNetworkIP(address)));
 		g_hash_table_remove(dns->addressByName, address_toHostName(address));
 	}
 }
