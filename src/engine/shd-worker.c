@@ -260,6 +260,12 @@ void worker_schedulePacket(Packet* packet) {
 	Address* srcAddress = dns_resolveIPToAddress(worker_getDNS(), (guint32) srcIP);
 	Address* dstAddress = dns_resolveIPToAddress(worker_getDNS(), (guint32) dstIP);
 
+    /* XXX FIXME this needs to be fixed! */
+	if(!srcAddress || !dstAddress) {
+	    critical("unable to schedule packet because of null addresses, ignoring");
+		return;
+    }
+
 	/* first thing to check is if network reliability forces us to 'drop'
 	 * the packet. if so, get out of dodge doing as little as possible. */
 	gdouble reliability = topology_getReliability(worker_getTopology(), srcAddress, dstAddress);
