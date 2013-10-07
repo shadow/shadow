@@ -609,9 +609,10 @@ static igraph_integer_t _topology_getConnectedVertexIndex(Topology* top, Address
 	g_rw_lock_reader_unlock(&(top->virtualIPLock));
 
 	/* now get the PoI vertex index from the pop IP */
-	gpointer vertexIndexPtr = g_hash_table_lookup(top->poiIPToVertexIndex, poiIPPtr);
+	gpointer vertexIndexPtr = NULL;
+	gboolean found = g_hash_table_lookup_extended(top->poiIPToVertexIndex, poiIPPtr, NULL, &vertexIndexPtr);
 
-	if(!poiIPPtr || !vertexIndexPtr) {
+	if(!poiIPPtr || !found) {
 		warning("address %s is not connected to the topology", address_toHostIPString(address));
 		return (igraph_integer_t) -1;
 	}
@@ -873,28 +874,27 @@ void topology_connect(Topology* top, Address* address, Random* randomSourcePool,
 
 		if(!poiIP) {
 			/* case 2b, choose a random PoI */
-			GList* keyList = g_hash_table_get_keys(top->poiIPToVertexIndex);
-			guint listLength = 0;
-			if(keyList) {
-				listLength = g_list_length(keyList);
-			}
-
-			if(listLength < 1) {
+			guint tableSize = g_hash_table_size(top->poiIPToVertexIndex);
+			if(tableSize < 1) {
 				error("the topology contains no points of interest to which we can assign hosts");
 			}
 
-			g_assert(listLength > 0);
-			guint keyIndexRange = listLength - 1;
+			GList* keyList = g_hash_table_get_keys(top->poiIPToVertexIndex);
+			guint keyIndexRange = tableSize - 1;
 
 			gdouble randomDouble = random_nextDouble(randomSourcePool);
 			guint randomIndex = (guint) round((gdouble)(keyIndexRange * randomDouble));
 			gpointer randomKeyPtr = g_list_nth_data(keyList, randomIndex);
 
+			/* sanity checks */
+			g_assert(randomKeyPtr);
+			gpointer randomVertexIndexPtr = NULL;
+			gboolean vertexIndexIsFound = g_hash_table_lookup_extended(top->poiIPToVertexIndex, randomKeyPtr, NULL, &randomVertexIndexPtr);
+			g_assert(vertexIndexIsFound);
+
 			g_list_free(keyList);
 
 			poiIP = (in_addr_t) GPOINTER_TO_UINT(randomKeyPtr);
-			gpointer randomVertexIndexPtr = g_hash_table_lookup(top->poiIPToVertexIndex, randomKeyPtr);
-			g_assert(randomVertexIndexPtr != NULL);
 
 			if(!cluster) {
 				/* case 2c, choose the random PoIs cluster too */
