@@ -26,16 +26,16 @@ add_subdirectory(plugins)
 
 ## sources for our main shadow program
 set(shadow_srcs
-    configuration/shd-configuration.c
-    configuration/shd-examples.c
-    configuration/shd-parser.c
+    support/shd-configuration.c
+    support/shd-examples.c
+    support/shd-parser.c
 
     engine/shd-engine.c
-    engine/shd-event-queue.c
-    engine/shd-logging.c
+    support/shd-event-queue.c
+    support/shd-logging.c
     engine/shd-main.c
-    engine/shd-plugin.c
-    engine/shd-system.c
+    support/shd-plugin.c
+    support/shd-system.c
     engine/shd-worker.c
     
     host/descriptor/shd-channel.c

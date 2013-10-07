@@ -48,15 +48,15 @@
 #include "engine/shd-main.h"
 
 /* configuration, base runnables, and input parsing */
-#include "configuration/shd-examples.h"
-#include "configuration/shd-configuration.h"
+#include "support/shd-examples.h"
+#include "support/shd-configuration.h"
 #include "runnable/shd-listener.h"
 #include "host/shd-protocol.h"
 #include "host/descriptor/shd-descriptor.h"
 #include "runnable/shd-runnable.h"
 #include "runnable/event/shd-event.h"
 #include "runnable/action/shd-action.h"
-#include "configuration/shd-parser.h"
+#include "support/shd-parser.h"
 #include "host/shd-packet.h"
 #include "host/shd-cpu.h"
 
@@ -70,9 +70,9 @@
 #include "utility/shd-count-down-latch.h"
 #include "utility/shd-random.h"
 
-#include "engine/shd-event-queue.h"
+#include "support/shd-event-queue.h"
 #include "plugins/shd-library.h"
-#include "engine/shd-plugin.h"
+#include "support/shd-plugin.h"
 
 #include "topology/shd-address.h"
 #include "topology/shd-dns.h"
@@ -88,7 +88,7 @@
 #include "host/shd-application.h"
 #include "host/shd-network-interface.h"
 #include "host/shd-tracker.h"
-#include "engine/shd-system.h"
+#include "support/shd-system.h"
 #include "host/shd-host.h"
 
 #include "topology/shd-topology.h"
@@ -110,7 +110,7 @@
 #include "runnable/action/shd-load-plugin.h"
 #include "runnable/action/shd-load-topology.h"
 
-#include "engine/shd-logging.h"
+#include "support/shd-logging.h"
 #include "engine/shd-engine.h"
 #include "engine/shd-worker.h"
 
