@@ -233,10 +233,7 @@ struct _Configuration {
 	gint latencySampleInterval;
 
 	GOptionGroup* pluginsOptionGroup;
-	gboolean runEchoExample;
 	gboolean runFileExample;
-	gboolean runTorrentExample;
-	gboolean runBrowserExample;
 
 	GQueue* inputXMLFilenames;
 

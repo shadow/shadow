@@ -80,10 +80,7 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	c->pluginsOptionGroup = g_option_group_new("plug-ins", "Plug-in Examples", "Run example simulations with built-in plug-ins", NULL, NULL);
 	const GOptionEntry pluginEntries[] =
 	{
-	  { "echo", 0, 0, G_OPTION_ARG_NONE, &(c->runEchoExample), "Run basic echo simulation", NULL },
 	  { "file", 0, 0, G_OPTION_ARG_NONE, &(c->runFileExample), "Run basic HTTP file transfer simulation", NULL },
-	  { "torrent", 0, 0, G_OPTION_ARG_NONE, &(c->runTorrentExample), "Run basic Torrent transfer simulation", NULL },
-	  { "browser", 0, 0, G_OPTION_ARG_NONE, &(c->runBrowserExample), "Run basic Browser simulation", NULL },
 	  { NULL },
 	};
 
@@ -104,8 +101,7 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	/* make sure we have the required arguments. program name is first arg.
 	 * printing the software version requires no other args. running a
 	 * plug-in example also requires no other args. */
-	if(!(c->printSoftwareVersion) && !(c->runEchoExample) && !(c->runFileExample) && !(c->runTorrentExample) &&
-			!(c->runBrowserExample) && (argc < nRequiredXMLFiles + 1)) {
+	if(!(c->printSoftwareVersion) && !(c->runFileExample) && (argc < nRequiredXMLFiles + 1)) {
 		g_printerr("** Please provide the required parameters **\n");
 		gchar* helpString = g_option_context_get_help(c->context, TRUE, NULL);
 		g_printerr("%s", helpString);
