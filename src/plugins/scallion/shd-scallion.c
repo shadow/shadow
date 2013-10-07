@@ -303,7 +303,7 @@ ScallionTor* scalliontor_new(ShadowFunctionTable* shadowlibFuncs, char* hostname
 	GString* geoipBuffer = _scalliontor_getHomePath(geoip_path);
 
 	/* default args */
-	char *config[26];
+	char *config[28];
 	config[0] = "tor";
 	config[1] = "--quiet";
 	config[2] = "--Address";
@@ -344,13 +344,15 @@ ScallionTor* scalliontor_new(ShadowFunctionTable* shadowlibFuncs, char* hostname
 	int num_args = 24;
 	/* additional args */
 	if(stor->type == VTOR_DIRAUTH) {
-		num_args += 2;
+		num_args += 4;
 		if(snprintf(stor->v3bw_name, 255, "%s/dirauth.v3bw", datadir_path) >= 255) {
 			stor->shadowlibFuncs->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__,
 					"data directory path is too long and was truncated to '%s'\n", stor->v3bw_name);
 		}
 		config[24] = "--V3BandwidthsFile";
 		config[25] = stor->v3bw_name;
+                config[26] = "--TestingDirAuthVoteGuard";
+                config[27] = "*";
 	}
 
 	scallion.stor = stor;
