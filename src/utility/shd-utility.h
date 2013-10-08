@@ -14,5 +14,6 @@ guint utility_int16Hash(gconstpointer value);
 gboolean utility_int16Equal(gconstpointer value1, gconstpointer value2);
 gint utility_doubleCompare(const gdouble* value1, const gdouble* value2, gpointer userData);
 gchar* utility_getHomePath(const gchar* path);
+guint utility_getRawCPUFrequency(const gchar* freqFilename);
 
 #endif /* SHD_UTILITY_H_ */

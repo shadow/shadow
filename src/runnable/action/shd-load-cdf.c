@@ -36,13 +36,8 @@ LoadCDFAction* loadcdf_new(GString* name, GString* path) {
 void loadcdf_run(LoadCDFAction* action) {
 	MAGIC_ASSERT(action);
 
-	CumulativeDistribution* cdf = cdf_new(action->id, action->path->str);
-	if(cdf) {
-		Worker* worker = worker_getPrivate();
-		engine_put(worker->cached_engine, CDFS, cdf_getIDReference(cdf), cdf);
-	} else {
-		critical("loading cdf '%s' from '%s' failed", g_quark_to_string(action->id), action->path->str);
-	}
+//	CumulativeDistribution* cdf = cdf_new(action->id, action->path->str);
+	warning("cdf '%s' from '%s' not supported", g_quark_to_string(action->id), action->path->str);
 }
 
 void loadcdf_free(LoadCDFAction* action) {

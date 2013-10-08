@@ -22,7 +22,7 @@ struct _Channel {
 
 static void channel_close(Channel* channel) {
 	MAGIC_ASSERT(channel);
-	host_closeDescriptor(worker_getPrivate()->cached_node, channel->super.super.handle);
+	host_closeDescriptor(worker_getCurrentHost(), channel->super.super.handle);
 }
 
 static void channel_free(Channel* channel) {
@@ -58,7 +58,7 @@ static gssize channel_linkedWrite(Channel* channel, gconstpointer buffer, gsize 
 
 static Channel* channel_getLinkedChannel(Channel* channel) {
 	MAGIC_ASSERT(channel);
-	return (Channel*)host_lookupDescriptor(worker_getPrivate()->cached_node, channel->linkedHandle);
+	return (Channel*)host_lookupDescriptor(worker_getCurrentHost(), channel->linkedHandle);
 }
 
 static gssize channel_sendUserData(Channel* channel, gconstpointer buffer, gsize nBytes, in_addr_t ip, in_port_t port) {

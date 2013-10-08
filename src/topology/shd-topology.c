@@ -377,7 +377,7 @@ static void _topology_updateEdgeWeightsHelperHook(Topology* top, igraph_integer_
 	}
 
 	/* select a random index from the latency list */
-	gdouble randomDouble = engine_nextRandomDouble(worker_getPrivate()->cached_engine);
+	gdouble randomDouble = worker_nextRandomDouble();
 	gint randomIndex = (gint)(length * randomDouble) - 1;
 	if(randomIndex < 0) {
 		randomIndex = 0;

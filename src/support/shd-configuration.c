@@ -227,3 +227,8 @@ gchar* configuration_getQueuingDiscipline(Configuration* config) {
 	MAGIC_ASSERT(config);
 	return config->interfaceQueuingDiscipline;
 }
+
+gint configuration_getNWorkerThreads(Configuration* config) {
+	MAGIC_ASSERT(config);
+	return config->nWorkerThreads;
+}

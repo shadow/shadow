@@ -257,7 +257,7 @@ static void _networkinterface_pcapWritePacket(NetworkInterface *interface, Packe
 	guint32 orig_len;       /* actual length of packet */
 
 	/* get the current time that the packet is being sent/received */
-	SimulationTime now = worker_getPrivate()->clock_now;
+	SimulationTime now = worker_getCurrentTime();
 	ts_sec = now / SIMTIME_ONE_SECOND;
 	ts_usec = (now % SIMTIME_ONE_SECOND) / SIMTIME_ONE_MICROSECOND;
 
@@ -401,7 +401,7 @@ static void _networkinterface_scheduleNextReceive(NetworkInterface* interface) {
 
 		/* successfully received, calculate how long it took to 'receive' this packet */
 		interface->receiveNanosecondsConsumed += (length * interface->timePerByteDown);
-		tracker_addInputBytes(host_getTracker(worker_getPrivate()->cached_node),(guint64)length, socketHandle);
+		tracker_addInputBytes(host_getTracker(worker_getCurrentHost()),(guint64)length, socketHandle);
 	}
 
 	/*
@@ -449,7 +449,7 @@ void networkinterface_received(NetworkInterface* interface) {
 	interface->flags &= ~NIF_RECEIVING;
 
 	/* decide how much delay we get to absorb based on the passed time */
-	SimulationTime now = worker_getPrivate()->clock_now;
+	SimulationTime now = worker_getCurrentTime();
 	SimulationTime absorbInterval = now - interface->lastTimeReceived;
 
 	if(absorbInterval > 0) {
@@ -577,7 +577,7 @@ static void _networkinterface_scheduleNextSend(NetworkInterface* interface) {
 		guint length = packet_getPayloadLength(packet) + packet_getHeaderSize(packet);
 
 		interface->sendNanosecondsConsumed += (length * interface->timePerByteUp);
-		tracker_addOutputBytes(host_getTracker(worker_getPrivate()->cached_node),(guint64)length, socketHandle);
+		tracker_addOutputBytes(host_getTracker(worker_getCurrentHost()),(guint64)length, socketHandle);
 		_networkinterface_pcapWritePacket(interface, packet);
 	}
 
@@ -631,7 +631,7 @@ void networkinterface_sent(NetworkInterface* interface) {
 	interface->flags &= ~NIF_SENDING;
 
 	/* decide how much delay we get to absorb based on the passed time */
-	SimulationTime now = worker_getPrivate()->clock_now;
+	SimulationTime now = worker_getCurrentTime();
 	SimulationTime absorbInterval = now - interface->lastTimeSent;
 
 	if(absorbInterval > 0) {

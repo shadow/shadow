@@ -314,6 +314,8 @@ SimulationTime configuration_getLatencySampleInterval(Configuration* config);
  */
 gchar* configuration_getQueuingDiscipline(Configuration* config);
 
+gint configuration_getNWorkerThreads(Configuration* config);
+
 /** @} */
 
 #endif /* SHD_CONFIGURATION_H_ */

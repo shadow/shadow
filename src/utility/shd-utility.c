@@ -48,3 +48,20 @@ gchar* utility_getHomePath(const gchar* path) {
 	}
 	return g_string_free(sbuffer, FALSE);
 }
+
+guint utility_getRawCPUFrequency(const gchar* freqFilename) {
+	/* get the raw speed of the experiment machine */
+	guint rawFrequencyKHz = 0;
+	gchar* contents = NULL;
+	gsize length = 0;
+	GError* error = NULL;
+	if(freqFilename && g_file_get_contents(freqFilename, &contents, &length, &error)) {
+		g_assert(contents);
+		rawFrequencyKHz = (guint)atoi(contents);
+		g_free(contents);
+	}
+	if(error) {
+		g_error_free(error);
+	}
+	return rawFrequencyKHz;
+}

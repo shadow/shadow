@@ -39,8 +39,7 @@ void loadtopology_run(LoadTopologyAction* action) {
 		error("error loading topology file '%s'", action->path->str);
 	}
 
-	Worker* worker = worker_getPrivate();
-	engine_setTopology(worker->cached_engine, topology);
+	worker_setTopology(topology);
 }
 
 void loadtopology_free(LoadTopologyAction* action) {

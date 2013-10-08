@@ -200,14 +200,13 @@ Plugin* plugin_new(GQuark id, GString* filename) {
 	/* notify the plugin of our callable functions by calling the init function,
 	 * this is a special version of executing because we still dont know about
 	 * the plug-in libraries state. */
-	Worker* worker = worker_getPrivate();
 	plugin->isExecuting = TRUE;
-	worker->cached_plugin = plugin;
+	worker_setCurrentPlugin(plugin);
 	plugin_setShadowContext(plugin, FALSE);
 	plugin->init(&shadowlibFunctionTable);
 	plugin_setShadowContext(plugin, TRUE);
 	plugin->isExecuting = FALSE;
-	worker->cached_plugin = NULL;
+	worker_setCurrentPlugin(NULL);
 
 	if(!(plugin->isRegisterred)) {
 		error("The plug-in '%s' must call shadowlib_register()", plugin->path->str);
@@ -276,8 +275,6 @@ static void _plugin_startExecuting(Plugin* plugin, PluginState state) {
 	MAGIC_ASSERT(plugin);
 	g_assert(!plugin->isExecuting);
 
-	Worker* worker = worker_getPrivate();
-
 	/* context switch from shadow to plug-in library
 	 *
 	 * TODO: we can be smarter here - save a pointer to the last plugin that
@@ -288,7 +285,7 @@ static void _plugin_startExecuting(Plugin* plugin, PluginState state) {
 	g_memmove(plugin->residentState, state, plugin->residentStateSize);
 
 	plugin->isExecuting = TRUE;
-	worker->cached_plugin = plugin;
+	worker_setCurrentPlugin(plugin);
 	g_timer_start(plugin->delayTimer);
 	plugin_setShadowContext(plugin, FALSE);
 }
@@ -296,21 +293,20 @@ static void _plugin_startExecuting(Plugin* plugin, PluginState state) {
 static void _plugin_stopExecuting(Plugin* plugin, PluginState state) {
 	MAGIC_ASSERT(plugin);
 
-	Worker* worker = worker_getPrivate();
-
 	/* context switch back to shadow from plug-in library */
 	plugin_setShadowContext(plugin, TRUE);
 	plugin->isExecuting = FALSE;
 	/* no need to call stop */
 	gdouble elapsed = g_timer_elapsed(plugin->delayTimer, NULL);
 
+	Host* currentHost = worker_getCurrentHost();
 	SimulationTime delay = (SimulationTime) (elapsed * SIMTIME_ONE_SECOND);
-	cpu_addDelay(host_getCPU(worker->cached_node), delay);
-	tracker_addProcessingTime(host_getTracker(worker->cached_node), delay);
+	cpu_addDelay(host_getCPU(currentHost), delay);
+	tracker_addProcessingTime(host_getTracker(currentHost), delay);
 
 	/* destination, source, size */
 	g_memmove(state, plugin->residentState, plugin->residentStateSize);
-	worker->cached_plugin = NULL;
+	worker_setCurrentPlugin(NULL);
 }
 
 void plugin_executeNew(Plugin* plugin, PluginState state, gint argcParam, gchar* argvParam[]) {
@@ -323,10 +319,9 @@ void plugin_executeNew(Plugin* plugin, PluginState state, gint argcParam, gchar*
 	 * we should instead have a better way of globally initializing openssl once
 	 * instead of every time a virtual node is created.
 	 */
-	Worker* worker = worker_getPrivate();
-	engine_lockPluginInit(worker->cached_engine);
+	worker_lockPluginInit();
 	plugin->new(argcParam, argvParam);
-	engine_unlockPluginInit(worker->cached_engine);
+	worker_unlockPluginInit();
 
 	_plugin_stopExecuting(plugin, state);
 }

@@ -139,7 +139,7 @@ static void _epoll_free(Epoll* epoll) {
 
 static void _epoll_close(Epoll* epoll) {
 	MAGIC_ASSERT(epoll);
-	host_closeDescriptor(worker_getPrivate()->cached_node, epoll->super.handle);
+	host_closeDescriptor(worker_getCurrentHost(), epoll->super.handle);
 }
 
 DescriptorFunctionTable epollFunctions = {
@@ -167,11 +167,10 @@ Epoll* epoll_new(gint handle) {
 		warning("error in epoll_create for OS events, errno=%i", errno);
 	}
 
-	/* keep track of which virtual application we need to notify of events */
-	Worker* worker = worker_getPrivate();
-	/* epoll_new should be called as a result of an application syscall */
-	g_assert(worker->cached_application);
-	epoll->ownerApplication = worker->cached_application;
+	/* keep track of which virtual application we need to notify of events
+	epoll_new should be called as a result of an application syscall */
+	epoll->ownerApplication = worker_getCurrentApplication();
+	g_assert(epoll->ownerApplication);
 
 	/* the epoll descriptor itself is always able to be epolled */
 	descriptor_adjustStatus(&(epoll->super), DS_ACTIVE, TRUE);
@@ -394,7 +393,7 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray,
 	MAGIC_ASSERT(epoll);
 	g_assert(nEvents);
 
-	epoll->lastWaitTime = worker_getPrivate()->clock_now;
+	epoll->lastWaitTime = worker_getCurrentTime();
 
 	/* return the available events in the eventArray, making sure not to
 	 * overflow. the number of actual events is returned in nEvents. */

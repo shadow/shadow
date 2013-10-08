@@ -11,42 +11,52 @@
 
 typedef struct _Worker Worker;
 
-/* @todo: move to shd-worker.c and make this an opaque structure */
-struct _Worker {
-	gint thread_id;
-
-	SimulationTime clock_now;
-	SimulationTime clock_last;
-	SimulationTime clock_barrier;
-
-	Random* random;
-
-	Engine* cached_engine;
-	Plugin* cached_plugin;
-	Application* cached_application;
-	Host* cached_node;
-	Event* cached_event;
-
-	GHashTable* plugins;
-
-	MAGIC_DECLARE;
+typedef struct _WorkLoad WorkLoad;
+struct _WorkLoad {
+	/* the simulation master */
+	Master* master;
+	/* the slave that owns this worker */
+	Slave* slave;
+	/* the virtual hosts assigned to this worker */
+	GList* hosts;
 };
 
-/* returns the worker associated with the current thread */
-Worker* worker_getPrivate();
-void worker_free(gpointer data);
-
-gpointer worker_run(GSList* nodes);
-
-void worker_setKillTime(SimulationTime endTime);
-Plugin* worker_getPlugin(GQuark pluginID, GString* pluginPath);
-Configuration* worker_getConfig();
+Worker* worker_new(Slave* slave);
+void worker_free(Worker* worker);
 DNS* worker_getDNS();
 Topology* worker_getTopology();
-gboolean worker_isInShadowContext();
-
+Configuration* worker_getConfig();
+void worker_setKillTime(SimulationTime endTime);
+Plugin* worker_getPlugin(GQuark pluginID, GString* pluginPath);
+gpointer worker_runParallel(WorkLoad* workload);
+gpointer worker_runSerial(WorkLoad* workload);
 void worker_scheduleEvent(Event* event, SimulationTime nano_delay, GQuark receiver_node_id);
-void worker_schedulePacket(Packet* packet);
 void worker_scheduleRetransmit(Packet* packet);
+void worker_schedulePacket(Packet* packet);
+gboolean worker_isAlive();
+gboolean worker_isInShadowContext();
+Host* worker_getCurrentHost();
+Application* worker_getCurrentApplication();
+void worker_setCurrentApplication(Application* application);
+Plugin* worker_getCurrentPlugin();
+void worker_setCurrentPlugin(Plugin* plugin);
+SimulationTime worker_getCurrentTime();
+guint worker_getRawCPUFrequency();
+gdouble worker_nextRandomDouble();
+gint worker_nextRandomInt();
+void worker_lockPluginInit();
+void worker_unlockPluginInit();
+guint32 worker_getNodeBandwidthUp(GQuark nodeID, in_addr_t ip);
+guint32 worker_getNodeBandwidthDown(GQuark nodeID, in_addr_t ip);
+gdouble worker_getLatency(GQuark sourceNodeID, GQuark destinationNodeID);
+void worker_addHost(Host* host, guint hostID);
+void worker_cryptoLockingFunc(gint mode, gint n);
+gboolean worker_cryptoSetup(gint numLocks);
+gint worker_getThreadID();
+void worker_storePluginPath(GQuark pluginID, const gchar* pluginPath);
+const gchar* worker_getPluginPath(GQuark pluginID);
+void worker_setTopology(Topology* topology);
+GTimer* worker_getRunTimer();
+void worker_setCurrentTime(SimulationTime time);
 
 #endif /* SHD_WORKER_H_ */

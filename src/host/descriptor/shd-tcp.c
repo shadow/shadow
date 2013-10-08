@@ -249,7 +249,6 @@ static void _tcp_autotune(TCP* tcp) {
 	 * but not too large that we'll just buffer everything. autotuning
 	 * is meant to tune it to an optimal rate.
 	 */
-	Worker* worker = worker_getPrivate();
 
 	in_addr_t sourceIP = tcp_getIP(tcp);
 	in_addr_t destinationIP = tcp_getPeerIP(tcp);
@@ -259,7 +258,7 @@ static void _tcp_autotune(TCP* tcp) {
 		if(destinationIP == htonl(INADDR_LOOPBACK)) {
 			sourceIP = htonl(INADDR_LOOPBACK);
 		} else {
-			sourceIP = host_getDefaultIP(worker->cached_node);
+			sourceIP = host_getDefaultIP(worker_getCurrentHost());
 		}
 	}
 
@@ -281,8 +280,8 @@ static void _tcp_autotune(TCP* tcp) {
 	GQuark destinationID = (GQuark)address_getID(dstAddress);
 
 	/* get latency in milliseconds */
-	guint32 send_latency = (guint32) engine_getLatency(worker->cached_engine, sourceID, destinationID);
-	guint32 receive_latency = (guint32) engine_getLatency(worker->cached_engine, destinationID, sourceID);
+	guint32 send_latency = (guint32) worker_getLatency(sourceID, destinationID);
+	guint32 receive_latency = (guint32) worker_getLatency(destinationID, sourceID);
 	if(send_latency == 0 || receive_latency == 0) {
 	  error("autotuning needs nonzero latency, source=%"G_GUINT32_FORMAT" dest=%"G_GUINT32_FORMAT" send=%"G_GUINT32_FORMAT" recv=%"G_GUINT32_FORMAT,
 			  sourceID, destinationID, send_latency, receive_latency);
@@ -293,8 +292,8 @@ static void _tcp_autotune(TCP* tcp) {
 
 	/* i got delay, now i need values for my send and receive buffer
 	 * sizes based on bandwidth in both directions. do my send size first. */
-	guint32 my_send_bw = engine_getNodeBandwidthUp(worker->cached_engine, sourceID, sourceIP);
-	guint32 their_receive_bw = engine_getNodeBandwidthDown(worker->cached_engine, destinationID, destinationIP);
+	guint32 my_send_bw = worker_getNodeBandwidthUp(sourceID, sourceIP);
+	guint32 their_receive_bw = worker_getNodeBandwidthDown(destinationID, destinationIP);
 
 	/* KiBps is the same as Bpms, which works with our RTT calculation. */
 	guint32 send_bottleneck_bw = my_send_bw < their_receive_bw ? my_send_bw : their_receive_bw;
@@ -303,8 +302,8 @@ static void _tcp_autotune(TCP* tcp) {
 	guint64 sendbuf_size = (guint64) ((rtt_milliseconds * send_bottleneck_bw * 1024.0f * 1.25f) / 1000.0f);
 
 	/* now the same thing for my receive buf */
-	guint32 my_receive_bw = engine_getNodeBandwidthDown(worker->cached_engine, sourceID, sourceIP);
-	guint32 their_send_bw = engine_getNodeBandwidthUp(worker->cached_engine, destinationID, destinationIP);
+	guint32 my_receive_bw = worker_getNodeBandwidthDown(sourceID, sourceIP);
+	guint32 their_send_bw = worker_getNodeBandwidthUp(destinationID, destinationIP);
 
 	/* KiBps is the same as Bpms, which works with our RTT calculation. */
 	guint32 receive_bottleneck_bw = my_receive_bw < their_send_bw ? my_receive_bw : their_send_bw;
@@ -328,7 +327,7 @@ static void _tcp_autotune(TCP* tcp) {
 
 	/* check to see if the node should set buffer sizes via autotuning, or
 	 * they were specified by configuration or parameters in XML */
-	Host* node = worker_getPrivate()->cached_node;
+	Host* node = worker_getCurrentHost();
 	if(host_autotuneReceiveBuffer(node)) {
 		socket_setInputBufferSize(&(tcp->super), (gsize) receivebuf_size);
 	}
@@ -396,12 +395,12 @@ static void _tcp_setState(TCP* tcp, enum TCPState state) {
 					g_assert(parent->server);
 					if((parent->state == TCPS_CLOSED) && (g_hash_table_size(parent->server->children) <= 0)) {
 						/* this will unbind from the network interface and free socket */
-						host_closeDescriptor(worker_getPrivate()->cached_node, parent->super.super.super.handle);
+						host_closeDescriptor(worker_getCurrentHost(), parent->super.super.super.handle);
 					}
 				}
 
 				/* this will unbind from the network interface and free socket */
-				host_closeDescriptor(worker_getPrivate()->cached_node, tcp->super.super.super.handle);
+				host_closeDescriptor(worker_getCurrentHost(), tcp->super.super.super.handle);
 			}
 			break;
 		}
@@ -506,7 +505,7 @@ static Packet* _tcp_createPacket(TCP* tcp, enum ProtocolTCPFlags flags, gconstpo
 		if(destinationIP == htonl(INADDR_LOOPBACK)) {
 			sourceIP = htonl(INADDR_LOOPBACK);
 		} else {
-			sourceIP = host_getDefaultIP(worker_getPrivate()->cached_node);
+			sourceIP = host_getDefaultIP(worker_getCurrentHost());
 		}
 	}
 
@@ -672,7 +671,7 @@ static void _tcp_flush(TCP* tcp) {
 	}
 
 	/* update the tracker input/output buffer stats */
-	Tracker* tracker = host_getTracker(worker_getPrivate()->cached_node);
+	Tracker* tracker = host_getTracker(worker_getCurrentHost());
 	Socket* socket = (Socket* )tcp;
 	Descriptor* descriptor = (Descriptor *)socket;
 	gsize inSize = socket_getInputBufferSize(&(tcp->super));
@@ -943,7 +942,7 @@ gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 				wasProcessed = TRUE;
 
 				/* we need to multiplex a new child */
-				Host* node = worker_getPrivate()->cached_node;
+				Host* node = worker_getCurrentHost();
 				gint multiplexedHandle = host_createDescriptor(node, DT_TCPSOCKET);
 				TCP* multiplexed = (TCP*) host_lookupDescriptor(node, multiplexedHandle);
 

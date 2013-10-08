@@ -11,7 +11,7 @@
 
 typedef struct _Application Application;
 
-Application* application_new(GQuark pluginID, gchar* pluginPath,
+Application* application_new(GQuark pluginID, const gchar* pluginPath,
 		SimulationTime startTime, SimulationTime stopTime, gchar* arguments);
 void application_free(Application* application);
 

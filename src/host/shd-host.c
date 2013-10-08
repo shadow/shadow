@@ -166,13 +166,12 @@ EventQueue* host_getEvents(Host* host) {
 	return host->events;
 }
 
-void host_addApplication(Host* host, GQuark pluginID, gchar* pluginPath,
+void host_addApplication(Host* host, GQuark pluginID, const gchar* pluginPath,
 		SimulationTime startTime, SimulationTime stopTime, gchar* arguments) {
 	MAGIC_ASSERT(host);
 	Application* application = application_new(pluginID, pluginPath, startTime, stopTime, arguments);
 	g_queue_push_tail(host->applications, application);
 
-	Worker* worker = worker_getPrivate();
 	StartApplicationEvent* event = startapplication_new(application);
 	worker_scheduleEvent((Event*)event, startTime, host->id);
 
@@ -192,17 +191,11 @@ void host_stopApplication(Host* host, Application* application) {
 	application_stop(application);
 }
 
-void host_freeAllApplications(Host* host, gpointer userData) {
+void host_freeAllApplications(Host* host) {
 	MAGIC_ASSERT(host);
-
-	Worker* worker = worker_getPrivate();
-	worker->cached_node = host;
-
 	while(!g_queue_is_empty(host->applications)) {
 		application_free(g_queue_pop_head(host->applications));
 	}
-
-	worker->cached_node = NULL;
 }
 
 gint host_compare(gconstpointer a, gconstpointer b, gpointer user_data) {

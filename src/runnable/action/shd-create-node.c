@@ -121,8 +121,7 @@ void createnodes_addApplication(CreateNodesAction* action, GString* pluginName,
 void createnodes_run(CreateNodesAction* action) {
 	MAGIC_ASSERT(action);
 
-	Worker* worker = worker_getPrivate();
-	Configuration* config = engine_getConfig(worker->cached_engine);
+	Configuration* config = worker_getConfig();
 
 	const gchar* hostname = g_quark_to_string(action->id);
 	guint hostnameCounter = 0;
@@ -136,7 +135,7 @@ void createnodes_run(CreateNodesAction* action) {
 	/* if they didnt specify a CPU frequency, use the frequency of the box we are running on */
 	guint cpuFrequency = action->cpuFrequency;
 	if(!cpuFrequency) {
-		cpuFrequency = engine_getRawCPUFrequency(worker->cached_engine);
+		cpuFrequency = worker_getRawCPUFrequency();
 		if(!cpuFrequency) {
 			cpuFrequency = 2500000; /* 2.5 GHz */
 			debug("both configured and raw cpu frequencies unavailable, using 2500000 KHz");
@@ -208,7 +207,7 @@ void createnodes_run(CreateNodesAction* action) {
 		GQuark id = g_quark_from_string((const gchar*) hostnameBuffer->str);
 
 		/* the node is part of the internet */
-		guint nodeSeed = (guint) engine_nextRandomInt(worker->cached_engine);
+		guint nodeSeed = (guint) worker_nextRandomInt();
 
 		Host* host = host_new(id, hostnameBuffer->str,
 				action->requestedIP ? action->requestedIP->str : NULL,
@@ -221,7 +220,7 @@ void createnodes_run(CreateNodesAction* action) {
 				interfaceReceiveLength);
 
 		/* save the node somewhere */
-		engine_addHost(worker->cached_engine, host, (guint) id);
+		worker_addHost(host, (guint) id);
 
 		g_string_free(hostnameBuffer, TRUE);
 
@@ -229,22 +228,22 @@ void createnodes_run(CreateNodesAction* action) {
 		GList* item = action->applications;
 		while (item && item->data) {
 			NodeApplication* app = (NodeApplication*) item->data;
-			gchar* pluginPath = engine_get(worker->cached_engine, PLUGINPATHS, app->pluginID);
+			const gchar* pluginPath = worker_getPluginPath(app->pluginID);
 
 			/* make sure our bootstrap events are set properly */
-			worker->clock_now = 0;
+			worker_setCurrentTime(0);
 			host_addApplication(host, app->pluginID, pluginPath,
 					app->starttime, app->stoptime, app->arguments->str);
-			worker->clock_now = SIMTIME_INVALID;
+			worker_setCurrentTime(SIMTIME_INVALID);
 
 			item = g_list_next(item);
 		}
 
 		/* make sure our bootstrap events are set properly */
-		worker->clock_now = 0;
+		worker_setCurrentTime(0);
 		HeartbeatEvent* heartbeat = heartbeat_new(host_getTracker(host));
 		worker_scheduleEvent((Event*)heartbeat, heartbeatInterval, id);
-		worker->clock_now = SIMTIME_INVALID;
+		worker_setCurrentTime(SIMTIME_INVALID);
 	}
 }
 

@@ -111,9 +111,8 @@
 #include "runnable/action/shd-load-topology.h"
 
 #include "support/shd-logging.h"
-#include "engine/shd-engine.h"
+#include "engine/shd-master.h"
+#include "engine/shd-slave.h"
 #include "engine/shd-worker.h"
-
-extern Engine* shadow_engine;
 
 #endif /* SHADOW_H_ */

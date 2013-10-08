@@ -124,11 +124,8 @@ static TrackerFlags _tracker_parseFlagString(gchar* flagString) {
 
 static TrackerFlags _tracker_parseGlobalFlags() {
 	TrackerFlags flags = TRACKER_FLAGS_NONE;
-	Worker* w = worker_getPrivate();
-	if(w->cached_engine) {
-		Configuration* c = engine_getConfig(w->cached_engine);
-		flags = _tracker_parseFlagString(c->heartbeatLogInfo);
-	}
+	Configuration* c = worker_getConfig();
+	flags = _tracker_parseFlagString(c->heartbeatLogInfo);
 	return flags;
 }
 
@@ -136,11 +133,8 @@ static GLogLevelFlags _tracker_getLogLevel(Tracker* tracker) {
 	/* prefer our level over the global config */
 	GLogLevelFlags level = tracker->loglevel;
 	if(!level) {
-		Worker* w = worker_getPrivate();
-		if(w->cached_engine) {
-			Configuration* c = engine_getConfig(w->cached_engine);
-			level = configuration_getHeartbeatLogLevel(c);
-		}
+		Configuration* c = worker_getConfig();
+		level = configuration_getHeartbeatLogLevel(c);
 	}
 	return level;
 }
@@ -149,11 +143,8 @@ static SimulationTime _tracker_getLogInterval(Tracker* tracker) {
 	/* prefer our interval over the global config */
 	SimulationTime interval = tracker->interval;
 	if(!interval) {
-		Worker* w = worker_getPrivate();
-		if(w->cached_engine) {
-			Configuration* c = engine_getConfig(w->cached_engine);
-			interval = configuration_getHearbeatInterval(c);
-		}
+		Configuration* c = worker_getConfig();
+		interval = configuration_getHearbeatInterval(c);
 	}
 	return interval;
 }
@@ -487,7 +478,7 @@ void tracker_heartbeat(Tracker* tracker) {
 	}
 
 	/* schedule the next heartbeat */
-	tracker->lastHeartbeat = worker_getPrivate()->clock_now;
+	tracker->lastHeartbeat = worker_getCurrentTime();
 	HeartbeatEvent* heartbeat = heartbeat_new(tracker);
 	worker_scheduleEvent((Event*)heartbeat, interval, 0);
 }

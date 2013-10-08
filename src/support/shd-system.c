@@ -37,17 +37,17 @@ enum SystemCallType {
 };
 
 static Host* _system_switchInShadowContext() {
-	Worker* worker = worker_getPrivate();
-	if(worker->cached_plugin) {
-		plugin_setShadowContext(worker->cached_plugin, TRUE);
+	Plugin* plugin = worker_getCurrentPlugin();
+	if(plugin) {
+		plugin_setShadowContext(plugin, TRUE);
 	}
-	return worker->cached_node;
+	return worker_getCurrentHost();
 }
 
 static void _system_switchOutShadowContext(Host* node) {
-	Worker* worker = worker_getPrivate();
-	if(worker->cached_plugin) {
-		plugin_setShadowContext(worker->cached_plugin, FALSE);
+	Plugin* plugin = worker_getCurrentPlugin();
+	if(plugin) {
+		plugin_setShadowContext(plugin, FALSE);
 	}
 }
 
@@ -829,7 +829,7 @@ gint system_ioctl(int fd, unsigned long int request, va_list farg) {
 
 time_t system_time(time_t* t) {
 	Host* node = _system_switchInShadowContext();
-	time_t secs = (time_t) (worker_getPrivate()->clock_now / SIMTIME_ONE_SECOND);
+	time_t secs = (time_t) (worker_getCurrentTime() / SIMTIME_ONE_SECOND);
 	if(t != NULL){
 		*t = secs;
 	}
@@ -845,7 +845,7 @@ gint system_clockGetTime(clockid_t clk_id, struct timespec *tp) {
 
 	Host* node = _system_switchInShadowContext();
 
-	SimulationTime now = worker_getPrivate()->clock_now;
+	SimulationTime now = worker_getCurrentTime();
 	tp->tv_sec = now / SIMTIME_ONE_SECOND;
 	tp->tv_nsec = now % SIMTIME_ONE_SECOND;
 
@@ -856,7 +856,7 @@ gint system_clockGetTime(clockid_t clk_id, struct timespec *tp) {
 gint system_getTimeOfDay(struct timeval *tv) {
 	if(tv) {
 		Host* node = _system_switchInShadowContext();
-		SimulationTime now = worker_getPrivate()->clock_now;
+		SimulationTime now = worker_getCurrentTime();
 		tv->tv_sec = now / SIMTIME_ONE_SECOND;
 		tv->tv_usec = (now % SIMTIME_ONE_SECOND) / SIMTIME_ONE_MICROSECOND;
 		_system_switchOutShadowContext(node);
@@ -1200,8 +1200,7 @@ gpointer system_pvalloc(gsize size) {
  */
 void system_cryptoLockingFunc(int mode, int n, const char *file, int line) {
 	Host* node = _system_switchInShadowContext();
-	Worker* worker = worker_getPrivate();
-	engine_cryptoLockingFunc(worker->cached_engine, mode, n);
+	worker_cryptoLockingFunc(mode, n);
 	_system_switchOutShadowContext(node);
 }
 
@@ -1210,8 +1209,7 @@ void system_cryptoLockingFunc(int mode, int n, const char *file, int line) {
  */
 unsigned long system_cryptoIdFunc() {
 	Host* node = _system_switchInShadowContext();
-	Worker* worker = worker_getPrivate();
-	unsigned long result = ((unsigned long) (worker->thread_id));
+	unsigned long result = ((unsigned long) worker_getThreadID());
 	_system_switchOutShadowContext(node);
 	return result;
 }

@@ -34,7 +34,7 @@ CPU* cpu_new(guint frequencyKHz, gint threshold, gint precision) {
 	cpu->timeCPUAvailable = cpu->now = 0;
 
 	/* get the raw speed of the experiment machine */
-	guint rawFrequencyKHz = engine_getRawCPUFrequency(worker_getPrivate()->cached_engine);
+	guint rawFrequencyKHz = worker_getRawCPUFrequency();
 	if(!rawFrequencyKHz) {
 		warning("unable to determine raw CPU frequency, setting %u KHz as a raw "
 				"estimate, and using delay ratio of 1.0 to the simulator host", cpu->frequencyKHz);
