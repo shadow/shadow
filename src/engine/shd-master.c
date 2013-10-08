@@ -19,8 +19,6 @@ struct _Master {
 	/* global random source from which all node random sources originate */
 	Random* random;
 
-	/* global simulation time, rough approximate if multi-threaded */
-	SimulationTime clock;
 	/* minimum allowed time jump when sending events between nodes */
 	SimulationTime minTimeJump;
 	/* start of current window of execution */
@@ -32,9 +30,6 @@ struct _Master {
 
 	/* TRUE if the engine is no longer running events and is in cleanup mode */
 	gboolean killed;
-
-	/* We will not enter plugin context when set. Used when destroying threads */
-	gboolean forceShadowContext;
 
 	MAGIC_DECLARE;
 };
@@ -178,140 +173,6 @@ void master_run(Master* master) {
 	slave_free(slave);
 }
 
-//static gint _engine_processEvents(Master* engine) {
-//	MAGIC_ASSERT(engine);
-//
-//
-//
-//	return 0;
-//}
-//
-//static gint _engine_distributeEvents(Master* engine) {
-//	MAGIC_ASSERT(engine);
-//
-//	GList* nodeList = g_hash_table_get_values(engine->hosts);
-//
-//	/* assign nodes to the worker threads so they get processed */
-//	GSList* listArray[engine->config->nWorkerThreads];
-//	memset(listArray, 0, engine->config->nWorkerThreads * sizeof(GSList*));
-//	gint counter = 0;
-//
-//	GList* item = g_list_first(nodeList);
-//	while(item) {
-//		Host* node = item->data;
-//
-//		gint i = counter % engine->config->nWorkerThreads;
-//		listArray[i] = g_slist_append(listArray[i], node);
-//
-//		counter++;
-//		item = g_list_next(item);
-//	}
-//
-//	/* we will track when workers finish processing their nodes */
-//	engine->processingLatch = countdownlatch_new(engine->config->nWorkerThreads + 1);
-//	/* after the workers finish processing, wait for barrier update */
-//	engine->barrierLatch = countdownlatch_new(engine->config->nWorkerThreads + 1);
-//
-//	/* start up the workers */
-//	GSList* workerThreads = NULL;
-//	for(gint i = 0; i < engine->config->nWorkerThreads; i++) {
-//		GString* name = g_string_new(NULL);
-//		g_string_printf(name, "worker-%i", (i+1));
-//		GThread* t = g_thread_new(name->str, (GThreadFunc)worker_run, (gpointer)listArray[i]);
-//		workerThreads = g_slist_append(workerThreads, t);
-//		g_string_free(name, TRUE);
-//	}
-//
-//	message("started %i worker threads", engine->config->nWorkerThreads);
-//
-//	/* process all events in the priority queue */
-//	while(engine->executeWindowStart < engine->endTime)
-//	{
-//		/* wait for the workers to finish processing nodes before we touch them */
-//		countdownlatch_countDownAwait(engine->processingLatch);
-//
-//		/* we are in control now, the workers are waiting at barrierLatch */
-//		info("execution window [%"G_GUINT64_FORMAT"--%"G_GUINT64_FORMAT"] ran %u events from %u active nodes",
-//				engine->executeWindowStart, engine->executeWindowEnd,
-//				engine->numEventsCurrentInterval,
-//				engine->numNodesWithEventsCurrentInterval);
-//
-//		/* check if we should take 1 step ahead or fast-forward our execute window.
-//		 * since looping through all the nodes to find the minimum event is
-//		 * potentially expensive, we use a heuristic of only trying to jump ahead
-//		 * if the last interval had only a few events in it. */
-//		if(engine->numEventsCurrentInterval < 10) {
-//			/* we had no events in that interval, lets try to fast forward */
-//			SimulationTime minNextEventTime = SIMTIME_INVALID;
-//
-//			item = g_list_first(nodeList);
-//			while(item) {
-//				Host* node = item->data;
-//				EventQueue* eventq = host_getEvents(node);
-//				Event* nextEvent = eventqueue_peek(eventq);
-//				SimulationTime nextEventTime = shadowevent_getTime(nextEvent);
-//				if(nextEvent && (nextEventTime < minNextEventTime)) {
-//					minNextEventTime = nextEventTime;
-//				}
-//				item = g_list_next(item);
-//			}
-//
-//			/* fast forward to the next event */
-//			engine->executeWindowStart = minNextEventTime;
-//		} else {
-//			/* we still have events, lets just step one interval */
-//			engine->executeWindowStart = engine->executeWindowEnd;
-//		}
-//
-//		/* make sure we dont run over the end */
-//		engine->executeWindowEnd = engine->executeWindowStart + engine->minTimeJump;
-//		if(engine->executeWindowEnd > engine->endTime) {
-//			engine->executeWindowEnd = engine->endTime;
-//		}
-//
-//		/* reset for next round */
-//		countdownlatch_reset(engine->processingLatch);
-//		engine->numEventsCurrentInterval = 0;
-//		engine->numNodesWithEventsCurrentInterval = 0;
-//
-//		/* if we are done, make sure the workers know about it */
-//		if(engine->executeWindowStart >= engine->endTime) {
-//			engine->killed = TRUE;
-//		}
-//
-//		/* release the workers for the next round, or to exit */
-//		countdownlatch_countDownAwait(engine->barrierLatch);
-//		countdownlatch_reset(engine->barrierLatch);
-//	}
-//
-//	message("waiting for %i worker threads to finish", engine->config->nWorkerThreads);
-//
-//	/* wait for the threads to finish their cleanup */
-//	GSList* threadItem = workerThreads;
-//	while(threadItem) {
-//		GThread* t = threadItem->data;
-//		g_thread_join(t);
-//		g_thread_unref(t);
-//		threadItem = g_slist_next(threadItem);
-//	}
-//	g_slist_free(workerThreads);
-//
-//	message("%i worker threads finished", engine->config->nWorkerThreads);
-//
-//	for(gint i = 0; i < engine->config->nWorkerThreads; i++) {
-//		g_slist_free(listArray[i]);
-//	}
-//
-//	countdownlatch_free(engine->processingLatch);
-//	countdownlatch_free(engine->barrierLatch);
-//
-//	/* frees the list struct we own, but not the nodes it holds (those were
-//	 * taken care of by the workers) */
-//	g_list_free(nodeList);
-//
-//	return 0;
-//}
-
 SimulationTime master_getMinTimeJump(Master* master) {
 	MAGIC_ASSERT(master);
 	return master->minTimeJump;
@@ -345,6 +206,21 @@ void master_setKilled(Master* master, gboolean isKilled) {
 SimulationTime master_getExecuteWindowEnd(Master* master) {
 	MAGIC_ASSERT(master);
 	return master->executeWindowEnd;
+}
+
+void master_setExecuteWindowEnd(Master* master, SimulationTime end) {
+	MAGIC_ASSERT(master);
+	master->executeWindowEnd = end;
+}
+
+SimulationTime master_getExecuteWindowStart(Master* master) {
+	MAGIC_ASSERT(master);
+	return master->executeWindowStart;
+}
+
+void master_setExecuteWindowStart(Master* master, SimulationTime start) {
+	MAGIC_ASSERT(master);
+	master->executeWindowStart = start;
 }
 
 SimulationTime master_getEndTime(Master* master) {

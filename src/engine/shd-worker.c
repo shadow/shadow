@@ -179,8 +179,45 @@ static guint _worker_processNode(Worker* worker, Host* node, SimulationTime barr
 
 gpointer worker_runParallel(WorkLoad* workload) {
 	g_assert(workload);
+	/* get current thread's private worker object */
 	Worker* worker = worker_new(workload->slave);
 
+	/* continuously run all events for this worker's assigned nodes.
+	 * the simulation is done when the engine is killed. */
+	while(!slave_isKilled(worker->slave)) {
+		SimulationTime barrier = slave_getExecutionBarrier(worker->slave);
+		guint nEventsProcessed = 0;
+		guint nNodesWithEvents = 0;
+
+		GList* item = workload->hosts;
+		while(item) {
+			Host* node = item->data;
+			guint n = _worker_processNode(worker, node, barrier);
+			nEventsProcessed += n;
+			if(n > 0) {
+				nNodesWithEvents++;
+			}
+			item = g_list_next(item);
+		}
+
+		slave_notifyProcessed(worker->slave, nEventsProcessed, nNodesWithEvents);
+	}
+
+	/* free all applications before freeing any of the nodes since freeing
+	 * applications may cause close() to get called on sockets which needs
+	 * other node information.
+	 */
+	GList* hosts = workload->hosts;
+	while(hosts) {
+		worker->cached_node = hosts->data;
+		host_freeAllApplications(worker->cached_node);
+		worker->cached_node = NULL;
+		hosts = hosts->next;
+	}
+
+	g_list_foreach(workload->hosts, (GFunc) host_free, NULL);
+
+	g_thread_exit(NULL);
 	return NULL;
 }
 
@@ -236,42 +273,6 @@ gpointer worker_runSerial(WorkLoad* workload) {
 
 	return NULL;
 }
-
-//gpointer worker_run(WorkLoad* workload) {
-//	/* get current thread's private worker object */
-//	Worker* worker = _worker_getPrivate();
-//
-//	/* continuously run all events for this worker's assigned nodes.
-//	 * the simulation is done when the engine is killed. */
-//	while(!engine_isKilled(worker->cached_engine)) {
-//		SimulationTime barrier = engine_getExecutionBarrier(worker->cached_engine);
-//		guint nEventsProcessed = 0;
-//		guint nNodesWithEvents = 0;
-//
-//		GSList* item = nodes;
-//		while(item) {
-//			Host* node = item->data;
-//			guint n = _worker_processNode(worker, node, barrier);
-//			nEventsProcessed += n;
-//			if(n > 0) {
-//				nNodesWithEvents++;
-//			}
-//			item = g_slist_next(item);
-//		}
-//
-//		slave_notifyProcessed(worker->slave, nEventsProcessed, nNodesWithEvents);
-//	}
-//
-//	/* free all applications before freeing any of the nodes since freeing
-//	 * applications may cause close() to get called on sockets which needs
-//	 * other node information.
-//	 */
-//	g_slist_foreach(nodes, (GFunc) host_freeAllApplications, NULL);
-//	g_slist_foreach(nodes, (GFunc) host_free, NULL);
-//
-//	g_thread_exit(NULL);
-//	return NULL;
-//}
 
 void worker_scheduleEvent(Event* event, SimulationTime nano_delay, GQuark receiver_node_id) {
 	/* TODO create accessors, or better yet refactor the work to event class */

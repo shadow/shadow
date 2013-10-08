@@ -34,6 +34,8 @@ struct _Slave {
 	GMutex* cryptoThreadLocks;
 	gint numCryptoThreadLocks;
 
+	/* the number of worker threads not counting main thread.
+	 * this is the number of threads we need to spawn. */
 	guint nWorkers;
 
 	/* id generation counters, must be protected for thread safety */
@@ -286,6 +288,11 @@ guint slave_getWorkerCount(Slave* slave) {
 	return slave->nWorkers + 1;
 }
 
+SimulationTime slave_getExecutionBarrier(Slave* slave) {
+	MAGIC_ASSERT(slave);
+	return master_getExecutionBarrier(slave->master);
+}
+
 void slave_cryptoLockingFunc(Slave* slave, gint mode, gint n) {
 /* from /usr/include/openssl/crypto.h */
 #define CRYPTO_LOCK		1
@@ -341,6 +348,132 @@ void slave_notifyProcessed(Slave* slave, guint numberEventsProcessed, guint numb
 
 void slave_runParallel(Slave* slave) {
 	MAGIC_ASSERT(slave);
+
+	GList* nodeList = _slave_getAllHosts(slave);
+
+	/* assign nodes to the worker threads so they get processed */
+	WorkLoad workArray[slave->nWorkers];
+	memset(workArray, 0, slave->nWorkers * sizeof(WorkLoad));
+	gint counter = 0;
+
+	GList* item = g_list_first(nodeList);
+	while(item) {
+		Host* node = item->data;
+
+		gint i = counter % slave->nWorkers;
+		workArray[i].hosts = g_list_append(workArray[i].hosts, node);
+
+		counter++;
+		item = g_list_next(item);
+	}
+
+	/* we will track when workers finish processing their nodes */
+	slave->processingLatch = countdownlatch_new(slave->nWorkers + 1);
+	/* after the workers finish processing, wait for barrier update */
+	slave->barrierLatch = countdownlatch_new(slave->nWorkers + 1);
+
+	/* start up the workers */
+	GSList* workerThreads = NULL;
+	for(gint i = 0; i < slave->nWorkers; i++) {
+		GString* name = g_string_new(NULL);
+		g_string_printf(name, "worker-%i", (i+1));
+
+		workArray[i].slave = slave;
+		workArray[i].master = slave->master;
+
+		GThread* t = g_thread_new(name->str, (GThreadFunc)worker_runParallel, &(workArray[i]));
+		workerThreads = g_slist_append(workerThreads, t);
+
+		g_string_free(name, TRUE);
+	}
+
+	message("started %i worker threads", slave->nWorkers);
+
+	/* process all events in the priority queue */
+	while(master_getExecuteWindowStart(slave->master) < master_getEndTime(slave->master))
+	{
+		/* wait for the workers to finish processing nodes before we touch them */
+		countdownlatch_countDownAwait(slave->processingLatch);
+
+		/* we are in control now, the workers are waiting at barrierLatch */
+		info("execution window [%"G_GUINT64_FORMAT"--%"G_GUINT64_FORMAT"] ran %u events from %u active nodes",
+				master_getExecuteWindowStart(slave->master), master_getExecuteWindowEnd(slave->master),
+				slave->numEventsCurrentInterval, slave->numNodesWithEventsCurrentInterval);
+
+		/* check if we should take 1 step ahead or fast-forward our execute window.
+		 * since looping through all the nodes to find the minimum event is
+		 * potentially expensive, we use a heuristic of only trying to jump ahead
+		 * if the last interval had only a few events in it. */
+		if(slave->numEventsCurrentInterval < 10) {
+			/* we had no events in that interval, lets try to fast forward */
+			SimulationTime minNextEventTime = SIMTIME_INVALID;
+
+			item = g_list_first(nodeList);
+			while(item) {
+				Host* node = item->data;
+				EventQueue* eventq = host_getEvents(node);
+				Event* nextEvent = eventqueue_peek(eventq);
+				SimulationTime nextEventTime = shadowevent_getTime(nextEvent);
+				if(nextEvent && (nextEventTime < minNextEventTime)) {
+					minNextEventTime = nextEventTime;
+				}
+				item = g_list_next(item);
+			}
+
+			/* fast forward to the next event */
+			master_setExecuteWindowStart(slave->master, minNextEventTime);
+		} else {
+			/* we still have events, lets just step one interval */
+			master_setExecuteWindowStart(slave->master, master_getExecuteWindowEnd(slave->master));
+		}
+
+		/* make sure we dont run over the end */
+		SimulationTime newEnd = master_getExecuteWindowStart(slave->master) + master_getMinTimeJump(slave->master);
+		master_setExecuteWindowEnd(slave->master, newEnd);
+		if(master_getExecuteWindowEnd(slave->master) > master_getEndTime(slave->master)) {
+			master_setExecuteWindowEnd(slave->master, master_getEndTime(slave->master));
+		}
+
+		/* reset for next round */
+		countdownlatch_reset(slave->processingLatch);
+		slave->numEventsCurrentInterval = 0;
+		slave->numNodesWithEventsCurrentInterval = 0;
+
+		/* if we are done, make sure the workers know about it */
+		if(master_getExecuteWindowStart(slave->master) >= master_getEndTime(slave->master)) {
+			master_setKilled(slave->master, TRUE);
+		}
+
+		/* release the workers for the next round, or to exit */
+		countdownlatch_countDownAwait(slave->barrierLatch);
+		countdownlatch_reset(slave->barrierLatch);
+	}
+
+	message("waiting for %i worker threads to finish", slave->nWorkers);
+
+	/* wait for the threads to finish their cleanup */
+	GSList* threadItem = workerThreads;
+	while(threadItem) {
+		GThread* t = threadItem->data;
+		g_thread_join(t);
+		g_thread_unref(t);
+		threadItem = g_slist_next(threadItem);
+	}
+	g_slist_free(workerThreads);
+
+	message("%i worker threads finished", slave->nWorkers);
+
+	for(gint i = 0; i < slave->nWorkers; i++) {
+		WorkLoad w = workArray[i];
+		g_list_free(w.hosts);
+	}
+
+	countdownlatch_free(slave->processingLatch);
+	countdownlatch_free(slave->barrierLatch);
+
+	/* frees the list struct we own, but not the nodes it holds (those were
+	 * taken care of by the workers) */
+	g_list_free(nodeList);
 }
 
 void slave_runSerial(Slave* slave) {
@@ -350,4 +483,5 @@ void slave_runSerial(Slave* slave) {
 	w.slave = slave;
 	w.hosts = _slave_getAllHosts(slave);
 	worker_runSerial(&w);
+	g_list_free(w.hosts);
 }

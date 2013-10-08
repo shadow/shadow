@@ -52,6 +52,7 @@ void slave_setKillTime(Slave* slave, SimulationTime endTime);
 void slave_setKilled(Slave* slave, gboolean isKilled);
 SimulationTime slave_getMinTimeJump(Slave* slave);
 guint slave_getWorkerCount(Slave* slave);
+SimulationTime slave_getExecutionBarrier(Slave* slave);
 void slave_cryptoLockingFunc(Slave* slave, gint mode, gint n);
 gboolean slave_cryptoSetup(Slave* slave, gint numLocks);
 void slave_notifyProcessed(Slave* slave, guint numberEventsProcessed, guint numberNodesWithEvents);
