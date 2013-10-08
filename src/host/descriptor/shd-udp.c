@@ -120,7 +120,7 @@ gssize udp_receiveUserData(UDP* udp, gpointer buffer, gsize nBytes, in_addr_t* i
 	gsize copyLength = MIN(nBytes, packetLength);
 	guint bytesCopied = packet_copyPayload(packet, 0, buffer, copyLength);
 
-	g_assert(bytesCopied == copyLength);
+	utility_assert(bytesCopied == copyLength);
 
 	/* fill in address info */
 	if(ip) {

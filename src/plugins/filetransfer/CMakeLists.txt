@@ -7,6 +7,7 @@ set(filetransfer_sources
     shd-service-filegetter.c 
     shd-filegetter.c
     ../../utility/shd-cdf.c
+    ../../utility/shd-utility.c
 )
 
 ## service target to allow filetransfer service to be used by any plugin

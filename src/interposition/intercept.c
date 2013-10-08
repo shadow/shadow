@@ -144,7 +144,7 @@ long int intercept_random() {
 }
 
 int intercept_random_r(struct random_data *buf, int32_t *result) {
-	g_assert(result != NULL);
+	utility_assert(result != NULL);
 	*result = (int32_t)system_getRandom();
 	return 0;
 }

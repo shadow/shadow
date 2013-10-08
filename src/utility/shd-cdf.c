@@ -88,7 +88,7 @@ CumulativeDistribution* cdf_new(GQuark id, const gchar* filename) {
 }
 
 static void _cdf_addEntry(gdouble* data, GList** list) {
-	g_assert(data && list && *list);
+	utility_assert(data && list && *list);
 	CumulativeDistributionEntry* entry = cdfentry_create();
 	entry->value = *data;
 	entry->fraction = 0.0;
@@ -96,7 +96,7 @@ static void _cdf_addEntry(gdouble* data, GList** list) {
 }
 
 CumulativeDistribution* cdf_newFromQueue(GQueue* doubleValues) {
-	g_assert(doubleValues);
+	utility_assert(doubleValues);
 	CumulativeDistribution* cdf = g_new0(CumulativeDistribution, 1);
 	MAGIC_INIT(cdf);
 
@@ -113,7 +113,7 @@ CumulativeDistribution* cdf_newFromQueue(GQueue* doubleValues) {
 		CumulativeDistributionEntry* entry = list->data;
 		entry->fraction = cumFrac;
 		cumFrac += increment;
-		g_assert(cumFrac <= 1);
+		utility_assert(cumFrac <= 1);
 		list = list->next;
 	}
 
@@ -213,7 +213,7 @@ void cdf_free(gpointer data) {
 
 gdouble cdf_getValue(CumulativeDistribution* cdf, gdouble percentile) {
 	MAGIC_ASSERT(cdf);
-	g_assert(percentile >= 0.0 && percentile <= 1.0);
+	utility_assert(percentile >= 0.0 && percentile <= 1.0);
 
 	/* start from the back of the list if the percentile is high enough */
 	gboolean reverse = percentile > 0.5 ? TRUE : FALSE;

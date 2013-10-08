@@ -301,11 +301,11 @@ void slave_cryptoLockingFunc(Slave* slave, gint mode, gint n) {
 #define CRYPTO_WRITE	8
 
 	MAGIC_ASSERT(slave);
-	g_assert(slave->cryptoThreadLocks);
+	utility_assert(slave->cryptoThreadLocks);
 
 	/* TODO may want to replace this with GRWLock when moving to GLib >= 2.32 */
 	GMutex* lock = &(slave->cryptoThreadLocks[n]);
-	g_assert(lock);
+	utility_assert(lock);
 
 	if(mode & CRYPTO_LOCK) {
 		g_mutex_lock(lock);
@@ -321,7 +321,7 @@ gboolean slave_cryptoSetup(Slave* slave, gint numLocks) {
 		_slave_lock(slave);
 
 		if(slave->cryptoThreadLocks) {
-			g_assert(numLocks <= slave->numCryptoThreadLocks);
+			utility_assert(numLocks <= slave->numCryptoThreadLocks);
 		} else {
 			slave->numCryptoThreadLocks = numLocks;
 			slave->cryptoThreadLocks = g_new0(GMutex, numLocks);

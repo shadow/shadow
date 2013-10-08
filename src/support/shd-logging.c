@@ -5,7 +5,6 @@
  */
 
 #include "shadow.h"
-#include <execinfo.h>
 
 static gchar* _logging_getNewLogLevelString(GLogLevelFlags log_level) {
 	gchar* levels;
@@ -99,21 +98,7 @@ void logging_handleLog(const gchar *log_domain, GLogLevelFlags log_level, const 
 	g_print("%lu:%lu:%lu:%06lu %s\n", hours, minutes, seconds, microseconds, messageStr);
 
 	if(log_level & G_LOG_LEVEL_ERROR) {
-		g_print("%s", "**BACKTRACE**\n");
-		void *array[20];
-		gsize size, i;
-		gchar **strings;
-
-		size = backtrace(array, 20);
-		strings = backtrace_symbols(array, size);
-
-		g_print("Obtained %zd stack frames:\n", size);
-
-		for (i = 0; i < size; i++) {
-			g_print("\t%s\n", strings[i]);
-		}
-
-		g_free(strings);
+		utility_printBacktrace();
 		g_print("%s", "**ABORTING**\n");
 	}
 }

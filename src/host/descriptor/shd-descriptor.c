@@ -8,8 +8,8 @@
 
 void descriptor_init(Descriptor* descriptor, DescriptorType type,
 		DescriptorFunctionTable* funcTable, gint handle) {
-	g_assert(descriptor && funcTable);
-	g_assert(handle >= MIN_DESCRIPTOR);
+	utility_assert(descriptor && funcTable);
+	utility_assert(handle >= MIN_DESCRIPTOR);
 
 	MAGIC_INIT(descriptor);
 	MAGIC_INIT(funcTable);
@@ -45,7 +45,7 @@ void descriptor_unref(gpointer data) {
 	MAGIC_ASSERT(descriptor);
 
 	(descriptor->referenceCount)--;
-	g_assert(descriptor->referenceCount >= 0);
+	utility_assert(descriptor->referenceCount >= 0);
 	if(descriptor->referenceCount == 0) {
 		_descriptor_free(descriptor);
 	}

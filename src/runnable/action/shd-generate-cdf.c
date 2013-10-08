@@ -25,7 +25,7 @@ RunnableFunctionTable generatecdf_functions = {
 GenerateCDFAction* generatecdf_new(GString* name, guint64 center, guint64 width,
 		guint64 tail)
 {
-	g_assert(name);
+	utility_assert(name);
 	GenerateCDFAction* action = g_new0(GenerateCDFAction, 1);
 	MAGIC_INIT(action);
 

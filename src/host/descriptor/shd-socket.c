@@ -67,7 +67,7 @@ TransportFunctionTable socket_functions = {
 
 void socket_init(Socket* socket, SocketFunctionTable* vtable, DescriptorType type, gint handle,
 		guint receiveBufferSize, guint sendBufferSize) {
-	g_assert(socket && vtable);
+	utility_assert(socket && vtable);
 
 	transport_init(&(socket->super), &socket_functions, type, handle);
 
@@ -136,7 +136,7 @@ Packet* socket_peekNextPacket(const Socket* socket) {
 
 gint socket_getPeerName(Socket* socket, in_addr_t* ip, in_port_t* port) {
 	MAGIC_ASSERT(socket);
-	g_assert(ip && port);
+	utility_assert(ip && port);
 
 	if(socket->peerIP == 0 || socket->peerPort == 0) {
 		return ENOTCONN;
@@ -167,7 +167,7 @@ void socket_setPeerName(Socket* socket, in_addr_t ip, in_port_t port) {
 
 gint socket_getSocketName(Socket* socket, in_addr_t* ip, in_port_t* port) {
 	MAGIC_ASSERT(socket);
-	g_assert(ip && port);
+	utility_assert(ip && port);
 
 	/* boundAddress could be 0 (INADDR_NONE), so just check port */
 	if(socket->boundPort == 0) {
@@ -229,19 +229,19 @@ void socket_setBinding(Socket* socket, in_addr_t boundAddress, in_port_t port) {
 
 gint socket_getAssociationKey(Socket* socket) {
 	MAGIC_ASSERT(socket);
-	g_assert((socket->flags & SF_BOUND));
+	utility_assert((socket->flags & SF_BOUND));
 	return socket->associationKey;
 }
 
 gsize socket_getInputBufferSpace(Socket* socket) {
 	MAGIC_ASSERT(socket);
-	g_assert(socket->inputBufferSize >= socket->inputBufferLength);
+	utility_assert(socket->inputBufferSize >= socket->inputBufferLength);
 	return (socket->inputBufferSize - socket->inputBufferLength);
 }
 
 gsize socket_getOutputBufferSpace(Socket* socket) {
 	MAGIC_ASSERT(socket);
-	g_assert(socket->outputBufferSize >= socket->outputBufferLength);
+	utility_assert(socket->outputBufferSize >= socket->outputBufferLength);
 	return (socket->outputBufferSize - socket->outputBufferLength);
 }
 

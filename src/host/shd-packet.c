@@ -98,7 +98,7 @@ void packet_unref(Packet* packet) {
 	_packet_lock(packet);
 
 	(packet->referenceCount)--;
-	g_assert(packet->referenceCount >= 0);
+	utility_assert(packet->referenceCount >= 0);
 	if(packet->referenceCount == 0) {
 		_packet_unlock(packet);
 		_packet_free(packet);
@@ -116,7 +116,7 @@ gint packet_compareTCPSequence(Packet* packet1, Packet* packet2, gpointer user_d
 	_packet_lock(packet1);
 	_packet_lock(packet2);
 
-	g_assert(packet1->protocol == PTCP && packet2->protocol == PTCP);
+	utility_assert(packet1->protocol == PTCP && packet2->protocol == PTCP);
 	gint result = ((PacketTCPHeader*)(packet1->header))->sequence < ((PacketTCPHeader*)(packet2->header))->sequence ? -1 : 1;
 
 	_packet_unlock(packet2);
@@ -127,8 +127,8 @@ gint packet_compareTCPSequence(Packet* packet1, Packet* packet2, gpointer user_d
 void packet_setLocal(Packet* packet, enum ProtocolLocalFlags flags,
 		gint sourceDescriptorHandle, gint destinationDescriptorHandle, in_port_t port) {
 	_packet_lock(packet);
-	g_assert(!(packet->header) && packet->protocol == PNONE);
-	g_assert(port > 0);
+	utility_assert(!(packet->header) && packet->protocol == PNONE);
+	utility_assert(port > 0);
 
 	PacketLocalHeader* header = g_new0(PacketLocalHeader, 1);
 
@@ -146,8 +146,8 @@ void packet_setUDP(Packet* packet, enum ProtocolUDPFlags flags,
 		in_addr_t sourceIP, in_port_t sourcePort,
 		in_addr_t destinationIP, in_port_t destinationPort) {
 	_packet_lock(packet);
-	g_assert(!(packet->header) && packet->protocol == PNONE);
-	g_assert(sourceIP && sourcePort && destinationIP && destinationPort);
+	utility_assert(!(packet->header) && packet->protocol == PNONE);
+	utility_assert(sourceIP && sourcePort && destinationIP && destinationPort);
 
 	PacketUDPHeader* header = g_new0(PacketUDPHeader, 1);
 
@@ -167,8 +167,8 @@ void packet_setTCP(Packet* packet, enum ProtocolTCPFlags flags,
 		in_addr_t destinationIP, in_port_t destinationPort,
 		guint sequence, guint acknowledgement, guint window) {
 	_packet_lock(packet);
-	g_assert(!(packet->header) && packet->protocol == PNONE);
-	g_assert(sourceIP && sourcePort && destinationIP && destinationPort);
+	utility_assert(!(packet->header) && packet->protocol == PNONE);
+	utility_assert(sourceIP && sourcePort && destinationIP && destinationPort);
 
 	PacketTCPHeader* header = g_new0(PacketTCPHeader, 1);
 
@@ -188,7 +188,7 @@ void packet_setTCP(Packet* packet, enum ProtocolTCPFlags flags,
 
 void packet_updateTCP(Packet* packet, guint acknowledgement, guint window) {
 	_packet_lock(packet);
-	g_assert(packet->header && (packet->protocol == PTCP));
+	utility_assert(packet->header && (packet->protocol == PTCP));
 
 	PacketTCPHeader* header = (PacketTCPHeader*) packet->header;
 
@@ -319,7 +319,7 @@ in_port_t packet_getSourcePort(Packet* packet) {
 guint packet_copyPayload(Packet* packet, gsize payloadOffset, gpointer buffer, gsize bufferLength) {
 	_packet_lock(packet);
 
-	g_assert(payloadOffset <= packet->payloadLength);
+	utility_assert(payloadOffset <= packet->payloadLength);
 
 	guint targetLength = packet->payloadLength - ((guint)payloadOffset);
 	guint copyLength = MIN(targetLength, bufferLength);
@@ -405,7 +405,7 @@ gint packet_getSourceAssociationKey(Packet* packet) {
 void packet_getTCPHeader(Packet* packet, PacketTCPHeader* header) {
 	_packet_lock(packet);
 
-	g_assert(packet->protocol == PTCP);
+	utility_assert(packet->protocol == PTCP);
 	*header = *((PacketTCPHeader*)packet->header);
 
 	_packet_unlock(packet);

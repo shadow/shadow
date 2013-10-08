@@ -27,7 +27,7 @@ DescriptorFunctionTable transport_functions = {
 };
 
 void transport_init(Transport* transport, TransportFunctionTable* vtable, DescriptorType type, gint handle) {
-	g_assert(transport && vtable);
+	utility_assert(transport && vtable);
 
 	descriptor_init(&(transport->super), type, &transport_functions, handle);
 

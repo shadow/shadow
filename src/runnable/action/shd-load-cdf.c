@@ -21,7 +21,7 @@ RunnableFunctionTable loadcdf_functions = {
 };
 
 LoadCDFAction* loadcdf_new(GString* name, GString* path) {
-	g_assert(name && path);
+	utility_assert(name && path);
 	LoadCDFAction* action = g_new0(LoadCDFAction, 1);
 	MAGIC_INIT(action);
 

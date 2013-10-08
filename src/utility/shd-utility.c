@@ -5,6 +5,7 @@
  */
 
 #include "shadow.h"
+#include <execinfo.h>
 
 guint utility_ipPortHash(in_addr_t ip, in_port_t port) {
 	GString* buffer = g_string_new(NULL);
@@ -15,7 +16,7 @@ guint utility_ipPortHash(in_addr_t ip, in_port_t port) {
 }
 
 guint utility_int16Hash(gconstpointer value) {
-	g_assert(value);
+	utility_assert(value);
 	/* make sure upper bits are zero */
 	gint key = 0;
 	key = (gint) *((gint16*)value);
@@ -23,7 +24,7 @@ guint utility_int16Hash(gconstpointer value) {
 }
 
 gboolean utility_int16Equal(gconstpointer value1, gconstpointer value2) {
-	g_assert(value1 && value2);
+	utility_assert(value1 && value2);
 	/* make sure upper bits are zero */
 	gint key1 = 0, key2 = 0;
 	key1 = (gint) *((gint16*)value1);
@@ -32,7 +33,7 @@ gboolean utility_int16Equal(gconstpointer value1, gconstpointer value2) {
 }
 
 gint utility_doubleCompare(const gdouble* value1, const gdouble* value2, gpointer userData) {
-	g_assert(value1 && value2);
+	utility_assert(value1 && value2);
 	/* return neg if first before second, pos if second before first, 0 if equal */
 	return value1 == value2 ? 0 : value1 < value2 ? -1 : +1;
 }
@@ -56,7 +57,7 @@ guint utility_getRawCPUFrequency(const gchar* freqFilename) {
 	gsize length = 0;
 	GError* error = NULL;
 	if(freqFilename && g_file_get_contents(freqFilename, &contents, &length, &error)) {
-		g_assert(contents);
+		utility_assert(contents);
 		rawFrequencyKHz = (guint)atoi(contents);
 		g_free(contents);
 	}
@@ -64,4 +65,23 @@ guint utility_getRawCPUFrequency(const gchar* freqFilename) {
 		g_error_free(error);
 	}
 	return rawFrequencyKHz;
+}
+
+void utility_printBacktrace() {
+	g_print("%s", "**BEGIN BACKTRACE**\n");
+	void *array[50];
+	gsize size, i;
+	gchar **strings;
+
+	size = backtrace(array, 50);
+	strings = backtrace_symbols(array, size);
+
+	g_print("Obtained %zd stack frames:\n", size);
+
+	for (i = 0; i < size; i++) {
+		g_print("\t%s\n", strings[i]);
+	}
+
+	g_free(strings);
+	g_print("%s", "**END BACKTRACE**\n");
 }

@@ -318,7 +318,7 @@ static gint _host_monitorDescriptor(Host* host, Descriptor* descriptor) {
 
 	/* make sure there are no collisions before inserting */
 	gint* handle = descriptor_getHandleReference(descriptor);
-	g_assert(handle && !host_lookupDescriptor(host, *handle));
+	utility_assert(handle && !host_lookupDescriptor(host, *handle));
 	g_hash_table_replace(host->descriptors, handle, descriptor);
 
 	return *handle;
@@ -528,7 +528,7 @@ static in_port_t _host_getRandomFreePort(Host* host, in_addr_t interfaceIP,
 	while(!available) {
 		gdouble randomFraction = random_nextDouble(host->random);
 		in_port_t randomHostPort = (in_port_t) (randomFraction * (UINT16_MAX - MIN_RANDOM_PORT)) + MIN_RANDOM_PORT;
-		g_assert(randomHostPort >= MIN_RANDOM_PORT);
+		utility_assert(randomHostPort >= MIN_RANDOM_PORT);
 		randomNetworkPort = htons(randomHostPort);
 		available = _host_isInterfaceAvailable(host, interfaceIP, type, randomNetworkPort);
 	}
@@ -760,7 +760,7 @@ gint host_getSocketName(Host* host, gint handle, in_addr_t* ip, in_port_t* port)
 gint host_sendUserData(Host* host, gint handle, gconstpointer buffer, gsize nBytes,
 		in_addr_t ip, in_addr_t port, gsize* bytesCopied) {
 	MAGIC_ASSERT(host);
-	g_assert(bytesCopied);
+	utility_assert(bytesCopied);
 
 	Descriptor* descriptor = host_lookupDescriptor(host, handle);
 	if(descriptor == NULL) {
@@ -845,7 +845,7 @@ gint host_sendUserData(Host* host, gint handle, gconstpointer buffer, gsize nByt
 gint host_receiveUserData(Host* host, gint handle, gpointer buffer, gsize nBytes,
 		in_addr_t* ip, in_port_t* port, gsize* bytesCopied) {
 	MAGIC_ASSERT(host);
-	g_assert(ip && port && bytesCopied);
+	utility_assert(ip && port && bytesCopied);
 
 	Descriptor* descriptor = host_lookupDescriptor(host, handle);
 	if(descriptor == NULL) {

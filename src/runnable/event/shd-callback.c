@@ -24,7 +24,7 @@ EventFunctionTable callback_functions = {
 
 CallbackEvent* callback_new(CallbackFunc callback, gpointer data, gpointer callbackArgument) {
 	/* better have a non-null callback if we are going to execute it */
-	g_assert(callback);
+	utility_assert(callback);
 
 	CallbackEvent* event = g_new0(CallbackEvent, 1);
 	MAGIC_INIT(event);

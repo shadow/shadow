@@ -99,7 +99,7 @@ static gboolean _plugin_copyFile(gchar* fromPath, gchar* toPath) {
 }
 
 Plugin* plugin_new(GQuark id, GString* filename) {
-	g_assert(filename);
+	utility_assert(filename);
 	Plugin* plugin = g_new0(Plugin, 1);
 	MAGIC_INIT(plugin);
 
@@ -186,7 +186,7 @@ Plugin* plugin_new(GQuark id, GString* filename) {
 
 	success = g_module_symbol(plugin->handle, PLUGINGLOBALSSIZESYMBOL, &hoistedGlobalsSize);
 	if(success) {
-		g_assert(hoistedGlobalsSize);
+		utility_assert(hoistedGlobalsSize);
 		gint s = *((gint*) hoistedGlobalsSize);
 		plugin->residentStateSize = (gsize) s;
 		message("found '%s' of value '%i' at %p", PLUGINGLOBALSSIZESYMBOL, s, hoistedGlobalsSize);
@@ -254,7 +254,7 @@ void plugin_registerResidentState(Plugin* plugin, PluginNewInstanceFunc new, Plu
 		return;
 	}
 
-	g_assert(new && free && notify);
+	utility_assert(new && free && notify);
 
 	/* store the pointers to the callbacks the plugin wants us to call */
 	plugin->new = new;
@@ -273,7 +273,7 @@ void plugin_registerResidentState(Plugin* plugin, PluginNewInstanceFunc new, Plu
 
 static void _plugin_startExecuting(Plugin* plugin, PluginState state) {
 	MAGIC_ASSERT(plugin);
-	g_assert(!plugin->isExecuting);
+	utility_assert(!plugin->isExecuting);
 
 	/* context switch from shadow to plug-in library
 	 *

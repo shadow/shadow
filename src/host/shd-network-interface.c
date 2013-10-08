@@ -230,7 +230,7 @@ void networkinterface_associate(NetworkInterface* interface, Socket* socket) {
 	gint key = socket_getAssociationKey(socket);
 
 	/* make sure there is no collision */
-	g_assert(!networkinterface_isAssociated(interface, key));
+	utility_assert(!networkinterface_isAssociated(interface, key));
 
 	/* insert to our storage */
 	g_hash_table_replace(interface->boundSockets, GINT_TO_POINTER(key), socket);
@@ -372,7 +372,7 @@ static void _networkinterface_scheduleNextReceive(NetworkInterface* interface) {
 			interface->receiveNanosecondsConsumed <= batchTime) {
 		/* get the next packet */
 		Packet* packet = g_queue_pop_head(interface->inBuffer);
-		g_assert(packet);
+		utility_assert(packet);
 
 		/* free up buffer space */
 		guint length = packet_getPayloadLength(packet) + packet_getHeaderSize(packet);
@@ -425,7 +425,7 @@ void networkinterface_packetArrived(NetworkInterface* interface, Packet* packet)
 	/* a packet arrived. lets try to receive or buffer it */
 	guint length = packet_getPayloadLength(packet) + packet_getHeaderSize(packet);
 	gssize space = interface->inBufferSize - interface->inBufferLength;
-	g_assert(space >= 0);
+	utility_assert(space >= 0);
 
 	if(length <= space) {
 		/* we have space to buffer it */

@@ -6,6 +6,7 @@
 
 #include <glib.h>
 
+#include "shd-utility.h"
 #include "shd-count-down-latch.h"
 
 struct _CountDownLatch {
@@ -25,14 +26,14 @@ CountDownLatch* countdownlatch_new(guint count) {
 }
 
 void countdownlatch_free(CountDownLatch* latch) {
-	g_assert(latch);
+	utility_assert(latch);
 	g_cond_clear(&(latch->waiters));
 	g_mutex_clear(&(latch->lock));
 	g_free(latch);
 }
 
 void countdownlatch_await(CountDownLatch* latch) {
-	g_assert(latch);
+	utility_assert(latch);
 	g_mutex_lock(&(latch->lock));
 	while(latch->count > 0) {
 		g_cond_wait(&(latch->waiters), &(latch->lock));
@@ -41,9 +42,9 @@ void countdownlatch_await(CountDownLatch* latch) {
 }
 
 void countdownlatch_countDown(CountDownLatch* latch) {
-	g_assert(latch);
+	utility_assert(latch);
 	g_mutex_lock(&(latch->lock));
-	g_assert(latch->count > 0);
+	utility_assert(latch->count > 0);
 	(latch->count)--;
 	if(latch->count == 0) {
 		g_cond_broadcast(&(latch->waiters));
@@ -52,9 +53,9 @@ void countdownlatch_countDown(CountDownLatch* latch) {
 }
 
 void countdownlatch_countDownAwait(CountDownLatch* latch) {
-	g_assert(latch);
+	utility_assert(latch);
 	g_mutex_lock(&(latch->lock));
-	g_assert(latch->count > 0);
+	utility_assert(latch->count > 0);
 	(latch->count)--;
 	if(latch->count == 0) {
 		g_cond_broadcast(&(latch->waiters));
@@ -65,9 +66,9 @@ void countdownlatch_countDownAwait(CountDownLatch* latch) {
 }
 
 void countdownlatch_reset(CountDownLatch* latch) {
-	g_assert(latch);
+	utility_assert(latch);
 	g_mutex_lock(&(latch->lock));
-	g_assert(latch->count == 0);
+	utility_assert(latch->count == 0);
 	latch->count = latch->initialCount;
 	g_mutex_unlock(&(latch->lock));
 }

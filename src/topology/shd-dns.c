@@ -18,12 +18,12 @@ struct _DNS {
 };
 
 static gboolean _dns_isIPInRange(const in_addr_t netIP, const gchar* cidrStr) {
-	g_assert(cidrStr);
+	utility_assert(cidrStr);
 
 	gchar** cidrParts = g_strsplit(cidrStr, "/", 0);
 	gchar* cidrIPStr = cidrParts[0];
 	gint cidrBits = atoi(cidrParts[1]);
-	g_assert(cidrBits >= 0 && cidrBits <= 32);
+	utility_assert(cidrBits >= 0 && cidrBits <= 32);
 
 	/* first create the mask in network order */
 	in_addr_t netmask = 0;
@@ -97,7 +97,7 @@ static in_addr_t _dns_generateIP(DNS* dns) {
 
 Address* dns_register(DNS* dns, GQuark id, gchar* name, gchar* requestedIP) {
 	MAGIC_ASSERT(dns);
-	g_assert(name);
+	utility_assert(name);
 
 	in_addr_t ip = 0;
 	guint mac = ++dns->macAddressCounter;

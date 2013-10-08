@@ -53,7 +53,7 @@ CreateNodesAction* createnodes_new(GString* name, GString* ip, GString* cluster,
 		GString* logLevelString, GString* logPcapString, GString* pcapDirString,
 		guint64 socketReceiveBufferSize, guint64 socketSendBufferSize, guint64 interfaceReceiveBufferLength)
 {
-	g_assert(name);
+	utility_assert(name);
 	CreateNodesAction* action = g_new0(CreateNodesAction, 1);
 	MAGIC_INIT(action);
 
@@ -105,7 +105,7 @@ CreateNodesAction* createnodes_new(GString* name, GString* ip, GString* cluster,
 void createnodes_addApplication(CreateNodesAction* action, GString* pluginName,
 		GString* arguments, guint64 starttime, guint64 stoptime)
 {
-	g_assert(pluginName && arguments);
+	utility_assert(pluginName && arguments);
 	MAGIC_ASSERT(action);
 
 	NodeApplication* nodeApp = g_new0(NodeApplication, 1);

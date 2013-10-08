@@ -266,8 +266,8 @@ static void _tcp_autotune(TCP* tcp) {
 		/* 16 MiB as max */
 		gsize inSize = socket_getInputBufferSize(&(tcp->super));
 		gsize outSize = socket_getOutputBufferSize(&(tcp->super));
-		g_assert(16777216 > inSize);
-		g_assert(16777216 > outSize);
+		utility_assert(16777216 > inSize);
+		utility_assert(16777216 > outSize);
 		socket_setInputBufferSize(&(tcp->super), (gsize) 16777216);
 		socket_setOutputBufferSize(&(tcp->super), (gsize) 16777216);
 		debug("set loopback buffer sizes to 16777216");
@@ -286,7 +286,7 @@ static void _tcp_autotune(TCP* tcp) {
 	  error("autotuning needs nonzero latency, source=%"G_GUINT32_FORMAT" dest=%"G_GUINT32_FORMAT" send=%"G_GUINT32_FORMAT" recv=%"G_GUINT32_FORMAT,
 			  sourceID, destinationID, send_latency, receive_latency);
 	}
-	g_assert(send_latency > 0 && receive_latency > 0);
+	utility_assert(send_latency > 0 && receive_latency > 0);
 
 	guint32 rtt_milliseconds = send_latency + receive_latency;
 
@@ -322,8 +322,8 @@ static void _tcp_autotune(TCP* tcp) {
 	/* make sure the user hasnt already written to the buffer, because if we
 	 * shrink it, our buffer math would overflow the size variable
 	 */
-	g_assert(socket_getInputBufferLength(&(tcp->super)) == 0);
-	g_assert(socket_getOutputBufferLength(&(tcp->super)) == 0);
+	utility_assert(socket_getInputBufferLength(&(tcp->super)) == 0);
+	utility_assert(socket_getOutputBufferLength(&(tcp->super)) == 0);
 
 	/* check to see if the node should set buffer sizes via autotuning, or
 	 * they were specified by configuration or parameters in XML */
@@ -392,7 +392,7 @@ static void _tcp_setState(TCP* tcp, enum TCPState state) {
 					g_hash_table_remove(tcp->child->parent->server->children, (gconstpointer)&(tcp->child->key));
 
 					/* if i was the server's last child and its waiting to close, close it */
-					g_assert(parent->server);
+					utility_assert(parent->server);
 					if((parent->state == TCPS_CLOSED) && (g_hash_table_size(parent->server->children) <= 0)) {
 						/* this will unbind from the network interface and free socket */
 						host_closeDescriptor(worker_getCurrentHost(), parent->super.super.super.handle);
@@ -429,7 +429,7 @@ static void _tcp_updateReceiveWindow(TCP* tcp) {
 		 * for the client to drain the input buffer to further open the window.
 		 * otherwise, we may get into a deadlock situation where we never accept
 		 * any packets and the client never reads. */
-		g_assert(!(socket_getInputBufferLength(&(tcp->super)) == 0));
+		utility_assert(!(socket_getInputBufferLength(&(tcp->super)) == 0));
 		info("%s <-> %s: receive window is 0, we have space for %"G_GSIZE_FORMAT" bytes in the input buffer",
 				tcp->super.boundString, tcp->super.peerString, space);
 	}
@@ -509,7 +509,7 @@ static Packet* _tcp_createPacket(TCP* tcp, enum ProtocolTCPFlags flags, gconstpo
 		}
 	}
 
-	g_assert(sourceIP && sourcePort && destinationIP && destinationPort);
+	utility_assert(sourceIP && sourcePort && destinationIP && destinationPort);
 
 	/* make sure our receive window is up to date before putting it in the packet */
 	_tcp_updateReceiveWindow(tcp);
@@ -644,7 +644,7 @@ static void _tcp_flush(TCP* tcp) {
 		gboolean success = socket_addToOutputBuffer(&(tcp->super), packet);
 
 		/* we already checked for space, so this should always succeed */
-		g_assert(success);
+		utility_assert(success);
 	}
 
 	/* any packets now in order can be pushed to our user input buffer */
@@ -810,7 +810,7 @@ void tcp_enterServerMode(TCP* tcp, gint backlog) {
 
 gint tcp_acceptServerPeer(TCP* tcp, in_addr_t* ip, in_port_t* port, gint* acceptedHandle) {
 	MAGIC_ASSERT(tcp);
-	g_assert(acceptedHandle);
+	utility_assert(acceptedHandle);
 
 	/* make sure we are listening and bound to an ip and port */
 	if(tcp->state != TCPS_LISTEN || !(tcp->super.flags & SF_BOUND)) {
@@ -834,10 +834,10 @@ gint tcp_acceptServerPeer(TCP* tcp, in_addr_t* ip, in_port_t* port, gint* accept
 	}
 
 	MAGIC_ASSERT(child);
-	g_assert(child->tcp);
+	utility_assert(child->tcp);
 
 	/* better have a peer if we are established */
-	g_assert(child->tcp->super.peerIP && child->tcp->super.peerPort);
+	utility_assert(child->tcp->super.peerIP && child->tcp->super.peerPort);
 
 	/* child now gets "accepted" */
 	child->state = TCPCS_ACCEPTED;
@@ -947,7 +947,7 @@ gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 				TCP* multiplexed = (TCP*) host_lookupDescriptor(node, multiplexedHandle);
 
 				multiplexed->child = _tcpchild_new(multiplexed, tcp, header.sourceIP, header.sourcePort);
-				g_assert(g_hash_table_lookup(tcp->server->children, &(multiplexed->child->key)) == NULL);
+				utility_assert(g_hash_table_lookup(tcp->server->children, &(multiplexed->child->key)) == NULL);
 				g_hash_table_replace(tcp->server->children, &(multiplexed->child->key), multiplexed->child);
 
 				multiplexed->receive.start = header.sequence;
@@ -1163,7 +1163,7 @@ gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 
 	/* if it is a spurious packet, send a reset */
 	if(!wasProcessed) {
-		g_assert(responseFlags == PTCP_NONE);
+		utility_assert(responseFlags == PTCP_NONE);
 		responseFlags = PTCP_RST;
 	}
 
@@ -1310,7 +1310,7 @@ gssize tcp_receiveUserData(TCP* tcp, gpointer buffer, gsize nBytes, in_addr_t* i
 	if(remaining > 0 && tcp->partialUserDataPacket) {
 		guint partialLength = packet_getPayloadLength(tcp->partialUserDataPacket);
 		guint partialBytes = partialLength - tcp->partialOffset;
-		g_assert(partialBytes > 0);
+		utility_assert(partialBytes > 0);
 
 		copyLength = MIN(partialBytes, remaining);
 		bytesCopied = packet_copyPayload(tcp->partialUserDataPacket, tcp->partialOffset, buffer, copyLength);
@@ -1326,15 +1326,15 @@ gssize tcp_receiveUserData(TCP* tcp, gpointer buffer, gsize nBytes, in_addr_t* i
 		} else {
 			/* still more partial bytes left */
 			tcp->partialOffset += bytesCopied;
-			g_assert(remaining == 0);
+			utility_assert(remaining == 0);
 		}
 	}
 
 	while(remaining > 0) {
 		/* if we get here, we should have read the partial packet above, or
 		 * broken out below */
-		g_assert(tcp->partialUserDataPacket == NULL);
-		g_assert(tcp->partialOffset == 0);
+		utility_assert(tcp->partialUserDataPacket == NULL);
+		utility_assert(tcp->partialOffset == 0);
 
 		/* get the next buffered packet - we'll always need it.
 		 * this could mark the socket as unreadable if this is its last packet.*/

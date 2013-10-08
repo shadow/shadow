@@ -22,7 +22,7 @@ struct _Listener {
 
 Listener* listener_new(CallbackFunc callback, gpointer data, gpointer callbackArgument) {
 	/* better have a non-null callback if we are going to execute it */
-	g_assert(callback);
+	utility_assert(callback);
 
 	Listener* listener = g_new0(Listener, 1);
 	MAGIC_INIT(listener);

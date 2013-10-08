@@ -21,7 +21,7 @@ RunnableFunctionTable loadplugin_functions = {
 };
 
 LoadPluginAction* loadplugin_new(GString* name, GString* path) {
-	g_assert(name && path);
+	utility_assert(name && path);
 	LoadPluginAction* action = g_new0(LoadPluginAction, 1);
 	MAGIC_INIT(action);
 

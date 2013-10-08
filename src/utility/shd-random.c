@@ -7,6 +7,7 @@
 #include <glib.h>
 #include <stdlib.h>
 
+#include "shd-utility.h"
 #include "shd-random.h"
 
 struct _Random {
@@ -22,7 +23,7 @@ Random* random_new(guint seed) {
 }
 
 void random_free(Random* random) {
-	g_assert(random);
+	utility_assert(random);
 	g_free(random);
 }
 
@@ -31,6 +32,6 @@ gint random_nextInt(Random* random) {
 }
 
 gdouble random_nextDouble(Random* random) {
-	g_assert(random);
+	utility_assert(random);
 	return (gdouble)(((gdouble)rand_r(&(random->seedState))) / ((gdouble)RAND_MAX));
 }

@@ -151,7 +151,7 @@ void application_notify(Application* application) {
 
 static void _application_callbackTimerExpired(Application* application, ApplicationCallbackData* data) {
 	MAGIC_ASSERT(application);
-	g_assert(data);
+	utility_assert(data);
 
 	if(application_isRunning(application)) {
 		/* need to get thread-private plugin from current worker */
@@ -168,7 +168,7 @@ static void _application_callbackTimerExpired(Application* application, Applicat
 void application_callback(Application* application, CallbackFunc userCallback,
 		gpointer userData, gpointer userArgument, guint millisecondsDelay) {
 	MAGIC_ASSERT(application);
-	g_assert(application_isRunning(application));
+	utility_assert(application_isRunning(application));
 
 	/* the application wants a callback. since we need it to happen in our
 	 * application and plug-in context, we create a callback to our own

@@ -8,7 +8,7 @@
 #include "shd-action-internal.h"
 
 void action_init(Action* a, RunnableFunctionTable* vtable) {
-	g_assert(a && vtable);
+	utility_assert(a && vtable);
 	MAGIC_INIT(a);
 	MAGIC_INIT(vtable);
 	a->priority = 0;

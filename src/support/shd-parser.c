@@ -332,7 +332,7 @@ static GError* _parser_handleNodeAttributes(Parser* parser, const gchar** attrib
 		_parser_addAction(parser, a);
 
 		/* save the parent so child applications can reference it */
-		g_assert(!parser->currentNodeAction);
+		utility_assert(!parser->currentNodeAction);
 		parser->currentNodeAction = (CreateNodesAction*)a;
 	}
 
@@ -452,7 +452,7 @@ static GError* _parser_handleApplicationAttributes(Parser* parser, const gchar**
 	if(!error) {
 		/* no error, application configs get added to the node creation event
 		 * in order to handle nodes with quantity > 1 */
-		g_assert(parser->currentNodeAction);
+		utility_assert(parser->currentNodeAction);
 		createnodes_addApplication(parser->currentNodeAction, plugin, arguments, starttime, stoptime);
 
 		(parser->nChildApplications)++;
@@ -474,7 +474,7 @@ static void _parser_handleNodeChildStartElement(GMarkupParseContext* context,
 		const gchar** attributeValues, gpointer userData, GError** error) {
 	Parser* parser = (Parser*) userData;
 	MAGIC_ASSERT(parser);
-	g_assert(context && error);
+	utility_assert(context && error);
 
 	debug("found 'node' child starting element '%s'", elementName);
 
@@ -491,7 +491,7 @@ static void _parser_handleNodeChildEndElement(GMarkupParseContext* context,
 		const gchar* elementName, gpointer userData, GError** error) {
 	Parser* parser = (Parser*) userData;
 	MAGIC_ASSERT(parser);
-	g_assert(context && error);
+	utility_assert(context && error);
 
 	debug("found 'node' child ending element '%s'", elementName);
 
@@ -507,7 +507,7 @@ static void _parser_handleRootStartElement(GMarkupParseContext* context,
 		const gchar** attributeValues, gpointer userData, GError** error) {
 	Parser* parser = (Parser*) userData;
 	MAGIC_ASSERT(parser);
-	g_assert(context && error);
+	utility_assert(context && error);
 
 	debug("found start element '%s'", elementName);
 
@@ -536,7 +536,7 @@ static void _parser_handleRootEndElement(GMarkupParseContext* context,
 		const gchar* elementName, gpointer userData, GError** error) {
 	Parser* parser = (Parser*) userData;
 	MAGIC_ASSERT(parser);
-	g_assert(context && error);
+	utility_assert(context && error);
 
 	debug("found end element '%s'", elementName);
 
@@ -608,7 +608,7 @@ gboolean parser_parseContents(Parser* parser, gchar* contents, gsize length, GQu
 		return TRUE;
 	} else {
 		/* some kind of error occurred, check the parser */
-		g_assert(error);
+		utility_assert(error);
 		error("g_markup_parse_context_parse: Shadow XML parsing error %i: %s",
 				error->code, error->message);
 		g_error_free(error);
@@ -619,7 +619,7 @@ gboolean parser_parseContents(Parser* parser, gchar* contents, gsize length, GQu
 
 gboolean parser_parseFile(Parser* parser, GString* filename, GQueue* actions) {
 	MAGIC_ASSERT(parser);
-	g_assert(filename && actions);
+	utility_assert(filename && actions);
 
 	gchar* content;
 	gsize length;

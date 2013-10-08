@@ -20,7 +20,7 @@ RunnableFunctionTable loadtopology_functions = {
 };
 
 LoadTopologyAction* loadtopology_new(GString* path) {
-	g_assert(path);
+	utility_assert(path);
 	LoadTopologyAction* action = g_new0(LoadTopologyAction, 1);
 	MAGIC_INIT(action);
 

@@ -14,7 +14,7 @@ RunnableFunctionTable event_functions = {
 };
 
 void shadowevent_init(Event* event, EventFunctionTable* vtable) {
-	g_assert(event && vtable);
+	utility_assert(event && vtable);
 
 	runnable_init(&(event->super), &event_functions);
 

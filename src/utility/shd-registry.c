@@ -17,7 +17,7 @@ Registry* registry_new() {
 
 static gboolean _registry_removeEntry(gpointer key, gpointer value, gpointer user_data) {
 	GHashTable* entry = value;
-	g_assert(entry);
+	utility_assert(entry);
 	g_hash_table_destroy(entry);
 	return TRUE;
 }
@@ -56,7 +56,7 @@ void registry_register(Registry* registry, gint index,
 
 static GHashTable* _registry_getEntry(Registry* registry, gint index) {
 	GHashTable* entry = g_hash_table_lookup(registry->storage, (gconstpointer)(&index));
-	g_assert(entry);
+	utility_assert(entry);
 	return entry;
 }
 
@@ -67,7 +67,7 @@ void registry_put(Registry* registry, gint index, GQuark* key, gpointer value) {
 	GHashTable* entry = _registry_getEntry(registry, index);
 
 	/* make sure an object doesnt exist at this key */
-	g_assert(!g_hash_table_lookup_extended(entry, (gconstpointer)key, NULL, NULL));
+	utility_assert(!g_hash_table_lookup_extended(entry, (gconstpointer)key, NULL, NULL));
 
 	g_hash_table_insert(entry, (gpointer)key, value);
 }

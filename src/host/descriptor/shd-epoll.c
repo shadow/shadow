@@ -80,7 +80,7 @@ struct _Epoll {
 static EpollWatch* _epollwatch_new(Epoll* epoll, Descriptor* descriptor, struct epoll_event* event) {
 	EpollWatch* watch = g_new0(EpollWatch, 1);
 	MAGIC_INIT(watch);
-	g_assert(event);
+	utility_assert(event);
 
 	/* ref it for the EpollWatch, which also covers the listener reference
 	 * (which is freed below in _epollwatch_free) */
@@ -149,7 +149,7 @@ DescriptorFunctionTable epollFunctions = {
 };
 
 Epoll* epoll_new(gint handle) {
-	g_assert(handle >= MIN_DESCRIPTOR);
+	utility_assert(handle >= MIN_DESCRIPTOR);
 	Epoll* epoll = g_new0(Epoll, 1);
 	MAGIC_INIT(epoll);
 
@@ -170,7 +170,7 @@ Epoll* epoll_new(gint handle) {
 	/* keep track of which virtual application we need to notify of events
 	epoll_new should be called as a result of an application syscall */
 	epoll->ownerApplication = worker_getCurrentApplication();
-	g_assert(epoll->ownerApplication);
+	utility_assert(epoll->ownerApplication);
 
 	/* the epoll descriptor itself is always able to be epolled */
 	descriptor_adjustStatus(&(epoll->super), DS_ACTIVE, TRUE);
@@ -340,7 +340,7 @@ gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor,
 			}
 
 			MAGIC_ASSERT(watch);
-			g_assert(event && (watch->flags & EWF_WATCHING));
+			utility_assert(event && (watch->flags & EWF_WATCHING));
 
 			/* the user set new events */
 			watch->event = *event;
@@ -391,7 +391,7 @@ gint epoll_controlOS(Epoll* epoll, gint operation, gint fileDescriptor,
 gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray,
 		gint eventArrayLength, gint* nEvents) {
 	MAGIC_ASSERT(epoll);
-	g_assert(nEvents);
+	utility_assert(nEvents);
 
 	epoll->lastWaitTime = worker_getCurrentTime();
 
@@ -423,7 +423,7 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray,
 					((watch->flags & EWF_WRITEABLE) && (watch->flags & EWF_WAITINGWRITE)) ? EPOLLOUT : 0;
 			eventArray[eventArrayIndex].events |= (watch->flags & EWF_EDGETRIGGER) ? EPOLLET : 0;
 			eventArrayIndex++;
-			g_assert(eventArrayIndex <= eventArrayLength);
+			utility_assert(eventArrayIndex <= eventArrayLength);
 
 			if(watch->flags & EWF_ONESHOT) {
 				/* they collected the event, dont report any more */
@@ -431,7 +431,7 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray,
 			} else {
 				/* this watch persists until the descriptor status changes */
 				g_queue_push_tail(epoll->reporting, watch);
-				g_assert(watch->flags & EWF_REPORTING);
+				utility_assert(watch->flags & EWF_REPORTING);
 			}
 		} else {
 			watch->flags &= ~EWF_REPORTING;
@@ -459,7 +459,7 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray,
 		for(gint j = 0; j < nos; j++) {
 			eventArray[eventArrayIndex] = osEvents[j];
 			eventArrayIndex++;
-			g_assert(eventArrayIndex <= eventArrayLength);
+			utility_assert(eventArrayIndex <= eventArrayLength);
 		}
 	}
 
@@ -476,7 +476,7 @@ void epoll_descriptorStatusChanged(Epoll* epoll, Descriptor* descriptor) {
 			descriptor_getHandleReference(descriptor));
 
 	/* if we are not watching, its an error because we shouldn't be listening */
-	g_assert(watch && (watch->descriptor == descriptor));
+	utility_assert(watch && (watch->descriptor == descriptor));
 
 	/* check the status and take the appropriate action */
 	_epoll_check(epoll, watch);

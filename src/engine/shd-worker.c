@@ -38,7 +38,7 @@ static GPrivate preloadKey = G_PRIVATE_INIT(g_free);
 
 Worker* worker_new(Slave* slave) {
 	/* make sure this isnt called twice on the same thread! */
-	g_assert(!g_private_get(&workerKey));
+	utility_assert(!g_private_get(&workerKey));
 
 	Worker* worker = g_new0(Worker, 1);
 	MAGIC_INIT(worker);
@@ -108,7 +108,7 @@ void worker_setKillTime(SimulationTime endTime) {
 }
 
 Plugin* worker_getPlugin(GQuark pluginID, GString* pluginPath) {
-	g_assert(pluginPath);
+	utility_assert(pluginPath);
 
 	/* worker has a private plug-in for each plugin ID */
 	Worker* worker = _worker_getPrivate();
@@ -149,7 +149,7 @@ static guint _worker_processNode(Worker* worker, Host* node, SimulationTime barr
 		/* make sure we don't jump backward in time */
 		worker->clock_now = shadowevent_getTime(worker->cached_event);
 		if(worker->clock_last != SIMTIME_INVALID) {
-			g_assert(worker->clock_now >= worker->clock_last);
+			utility_assert(worker->clock_now >= worker->clock_last);
 		}
 
 		/* do the local task */
@@ -178,7 +178,7 @@ static guint _worker_processNode(Worker* worker, Host* node, SimulationTime barr
 }
 
 gpointer worker_runParallel(WorkLoad* workload) {
-	g_assert(workload);
+	utility_assert(workload);
 	/* get current thread's private worker object */
 	Worker* worker = worker_new(workload->slave);
 
@@ -222,7 +222,7 @@ gpointer worker_runParallel(WorkLoad* workload) {
 }
 
 gpointer worker_runSerial(WorkLoad* workload) {
-	g_assert(workload);
+	utility_assert(workload);
 	Worker* worker = _worker_getPrivate();
 
 	Event* nextEvent = eventqueue_peek(worker->serialEventQueue);
@@ -243,7 +243,7 @@ gpointer worker_runSerial(WorkLoad* workload) {
 			/* ensure priority */
 			worker->clock_now = shadowevent_getTime(worker->cached_event);
 //			engine->clock = worker->clock_now;
-			g_assert(worker->clock_now >= worker->clock_last);
+			utility_assert(worker->clock_now >= worker->clock_last);
 
 			gboolean complete = shadowevent_run(worker->cached_event);
 			if(complete) {
@@ -276,7 +276,7 @@ gpointer worker_runSerial(WorkLoad* workload) {
 
 void worker_scheduleEvent(Event* event, SimulationTime nano_delay, GQuark receiver_node_id) {
 	/* TODO create accessors, or better yet refactor the work to event class */
-	g_assert(event);
+	utility_assert(event);
 
 	/* get our thread-private worker */
 	Worker* worker = _worker_getPrivate();
@@ -289,7 +289,7 @@ void worker_scheduleEvent(Event* event, SimulationTime nano_delay, GQuark receiv
 
 	/* we MAY NOT OWN the receiver, so do not write to it! */
 	Host* receiver = receiver_node_id == 0 ? sender : _slave_getHost(worker->slave, receiver_node_id);
-	g_assert(receiver);
+	utility_assert(receiver);
 
 	/* the NodeEvent needs a pointer to the correct node */
 	shadowevent_setNode(event, receiver);
@@ -301,7 +301,7 @@ void worker_scheduleEvent(Event* event, SimulationTime nano_delay, GQuark receiv
 	}
 
 	/* engine is not killed, assert accurate worker clock */
-	g_assert(worker->clock_now != SIMTIME_INVALID);
+	utility_assert(worker->clock_now != SIMTIME_INVALID);
 
 	/* non-local events must be properly delayed */
 	SimulationTime jump = slave_getMinTimeJump(worker->slave);
@@ -340,8 +340,8 @@ void worker_scheduleRetransmit(Packet* packet) {
 
 	SimulationTime delay = 0;
 	if(address_isLocal(srcAddress) || address_isLocal(dstAddress)) {
-		g_assert(address_isLocal(srcAddress));
-		g_assert(address_isLocal(dstAddress));
+		utility_assert(address_isLocal(srcAddress));
+		utility_assert(address_isLocal(dstAddress));
 		delay = 1;
 	} else {
 		gdouble latency = topology_getLatency(worker_getTopology(), srcAddress, dstAddress);

@@ -193,7 +193,7 @@ static void _topology_checkGraphVerticesHelperHook(Topology* top, igraph_integer
 
 static igraph_integer_t _topology_iterateAllVertices(Topology* top, VertexNotifyFunc hook) {
 	MAGIC_ASSERT(top);
-	g_assert(hook);
+	utility_assert(hook);
 
 	/* initialize our vertex set to select from all vertices in the graph */
 	igraph_vs_t allVertices;
@@ -291,7 +291,7 @@ static void _topology_checkGraphEdgesHelperHook(Topology* top, igraph_integer_t 
 
 static igraph_integer_t _topology_iterateAllEdges(Topology* top, EdgeNotifyFunc hook) {
 	MAGIC_ASSERT(top);
-	g_assert(hook);
+	utility_assert(hook);
 
 	/* our selector will consider all edges, ordered by the igraph edge indices */
 	igraph_es_t allEdges;
@@ -481,7 +481,7 @@ static void _topology_extractClustersHelper(Topology* top, const gchar* clusterS
 
 		gchar* geocode = parts[0];
 		gchar* value = parts[1];
-		g_assert(geocode && value);
+		utility_assert(geocode && value);
 
 		Cluster* cluster = g_hash_table_lookup(top->geocodeToCluster, geocode);
 		if(!cluster) {
@@ -663,7 +663,7 @@ static gboolean _topology_computePath(Topology* top, Address* srcAddress, Addres
 
 	/* assign our element to the result vector */
 	igraph_vector_ptr_set(&resultPaths, 0, &resultPathVertices);
-	g_assert(&resultPathVertices == igraph_vector_ptr_e(&resultPaths, 0));
+	utility_assert(&resultPathVertices == igraph_vector_ptr_e(&resultPaths, 0));
 
 	GTimer* pathTimer = g_timer_new();
 	/* run dijkstra's shortest path algorithm */
@@ -786,7 +786,7 @@ static gboolean _topology_getPathEntry(Topology* top, Address* srcAddress, Addre
 		g_mutex_lock(&top->graphLock);
 		gboolean isSuccess = _topology_computePath(top, srcAddress, dstAddress);
 		g_mutex_unlock(&top->graphLock);
-		g_assert(isSuccess);
+		utility_assert(isSuccess);
 		path = _topology_getPathFromCache(top, srcAddress, dstAddress);
 	}
 
@@ -832,7 +832,7 @@ gboolean topology_isRoutable(Topology* top, Address* srcAddress, Address* dstAdd
 void topology_connect(Topology* top, Address* address, Random* randomSourcePool,
 		gchar* ipHint, gchar* clusterHint, guint64* bwDownOut, guint64* bwUpOut) {
 	MAGIC_ASSERT(top);
-	g_assert(address);
+	utility_assert(address);
 
 	// XXX we can connect to non-PoI pops too, as they have a larger list of countries!
 
@@ -887,10 +887,10 @@ void topology_connect(Topology* top, Address* address, Random* randomSourcePool,
 			gpointer randomKeyPtr = g_list_nth_data(keyList, randomIndex);
 
 			/* sanity checks */
-			g_assert(randomKeyPtr);
+			utility_assert(randomKeyPtr);
 			gpointer randomVertexIndexPtr = NULL;
 			gboolean vertexIndexIsFound = g_hash_table_lookup_extended(top->poiIPToVertexIndex, randomKeyPtr, NULL, &randomVertexIndexPtr);
-			g_assert(vertexIndexIsFound);
+			utility_assert(vertexIndexIsFound);
 
 			g_list_free(keyList);
 
@@ -911,7 +911,7 @@ void topology_connect(Topology* top, Address* address, Random* randomSourcePool,
 		error("unable to assign host address %s to a PoI/Cluster using ipHint %s and clusterHint %s",
 				addressStr, ipHint ? ipHint : "(null)", clusterHint ? clusterHint : "(null)");
 	}
-	g_assert(poiIP && cluster);
+	utility_assert(poiIP && cluster);
 
 	/* attach it, i.e. store the mapping so we can route later */
 	cluster_ref(cluster);
@@ -984,7 +984,7 @@ void topology_free(Topology* top) {
 }
 
 Topology* topology_new(gchar* graphPath) {
-	g_assert(graphPath);
+	utility_assert(graphPath);
 	Topology* top = g_new0(Topology, 1);
 	MAGIC_INIT(top);
 

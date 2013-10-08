@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+#include "shd-utility.h"
 #include "shd-byte-queue.h"
 
 typedef struct _ByteChunk ByteChunk;
@@ -40,7 +41,7 @@ static ByteChunk* bytechunk_new(gsize chunkSize){
 }
 
 static void bytechunk_free(ByteChunk* chunk){
-	g_assert(chunk);
+	utility_assert(chunk);
 
 	if(chunk->buf != NULL){
 		g_free(chunk->buf);
@@ -105,7 +106,7 @@ ByteQueue* bytequeue_new(gsize chunkSize){
 }
 
 void bytequeue_free(ByteQueue* bqueue){
-	g_assert(bqueue);
+	utility_assert(bqueue);
 
 	ByteChunk* chunk = bqueue->tail;
 	while(chunk != NULL){
@@ -119,7 +120,7 @@ void bytequeue_free(ByteQueue* bqueue){
 }
 
 gsize bytequeue_pop(ByteQueue* bqueue, gpointer outBuffer, gsize nBytes){
-	g_assert(bqueue && outBuffer);
+	utility_assert(bqueue && outBuffer);
 	gsize bytes_left = nBytes;
 	guint32 dest_offset = 0;
 
@@ -166,7 +167,7 @@ gsize bytequeue_pop(ByteQueue* bqueue, gpointer outBuffer, gsize nBytes){
 }
 
 gsize bytequeue_push(ByteQueue* bqueue, gconstpointer inputBuffer, gsize nBytes){
-	g_assert(bqueue && inputBuffer);
+	utility_assert(bqueue && inputBuffer);
 	gsize bytes_left = nBytes;
 	guint32 src_offset = 0;
 

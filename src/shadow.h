@@ -46,6 +46,7 @@
  */
 
 #include "engine/shd-main.h"
+#include "utility/shd-utility.h"
 
 /* configuration, base runnables, and input parsing */
 #include "support/shd-examples.h"
@@ -61,7 +62,6 @@
 #include "host/shd-cpu.h"
 
 /* utilities with limited dependencies */
-#include "utility/shd-utility.h"
 #include "utility/shd-registry.h"
 #include "utility/shd-cdf.h"
 #include "utility/shd-byte-queue.h"

@@ -60,7 +60,7 @@ guint cluster_getPoICount(Cluster* cluster) {
 
 in_addr_t cluster_getRandomPoI(Cluster* cluster, Random* randomSourcePool) {
 	MAGIC_ASSERT(cluster);
-	g_assert(randomSourcePool);
+	utility_assert(randomSourcePool);
 
 	gdouble randomDouble = random_nextDouble(randomSourcePool);
 	guint length = g_queue_get_length(cluster->poiIPs);
@@ -81,7 +81,7 @@ const gchar* cluster_getGeoCode(Cluster* cluster) {
 
 void cluster_setPacketLoss(Cluster* cluster, gdouble packetLoss) {
 	MAGIC_ASSERT(cluster);
-	g_assert(packetLoss >= 0.0 && packetLoss <= 1.0);
+	utility_assert(packetLoss >= 0.0 && packetLoss <= 1.0);
 	cluster->packetLoss = packetLoss;
 }
 

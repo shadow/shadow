@@ -37,7 +37,7 @@ static void channel_free(Channel* channel) {
 static gssize channel_linkedWrite(Channel* channel, gconstpointer buffer, gsize nBytes) {
 	MAGIC_ASSERT(channel);
 	/* our linked channel is trying to send us data, make sure we can read it */
-	g_assert(!(channel->type & CT_WRITEONLY));
+	utility_assert(!(channel->type & CT_WRITEONLY));
 
 	gsize available = channel->bufferSize - channel->bufferLength;
 	if(available == 0) {
@@ -64,7 +64,7 @@ static Channel* channel_getLinkedChannel(Channel* channel) {
 static gssize channel_sendUserData(Channel* channel, gconstpointer buffer, gsize nBytes, in_addr_t ip, in_port_t port) {
 	MAGIC_ASSERT(channel);
 	/* the read end of a unidirectional pipe can not write! */
-	g_assert(channel->type != CT_READONLY);
+	utility_assert(channel->type != CT_READONLY);
 
 	gint result = 0;
 
@@ -84,7 +84,7 @@ static gssize channel_sendUserData(Channel* channel, gconstpointer buffer, gsize
 static gssize channel_receiveUserData(Channel* channel, gpointer buffer, gsize nBytes, in_addr_t* ip, in_port_t* port) {
 	MAGIC_ASSERT(channel);
 	/* the write end of a unidirectional pipe can not read! */
-	g_assert(channel->type != CT_WRITEONLY);
+	utility_assert(channel->type != CT_WRITEONLY);
 
 	gsize available = channel->bufferLength;
 	if(available == 0) {
