@@ -62,7 +62,6 @@
 #include "host/shd-cpu.h"
 
 /* utilities with limited dependencies */
-#include "utility/shd-registry.h"
 #include "utility/shd-cdf.h"
 #include "utility/shd-byte-queue.h"
 #include "utility/shd-priority-queue.h"

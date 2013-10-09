@@ -88,7 +88,6 @@ set(shadow_srcs
     utility/shd-count-down-latch.c
     utility/shd-priority-queue.c
     utility/shd-random.c
-    utility/shd-registry.c
     utility/shd-utility.c
     
     main.c
