@@ -11,10 +11,10 @@
 
 #define utility_assert(expr) \
 do { \
-	if G_LIKELY (expr) ; \
-	else { \
-		utility_printBacktrace(); \
-		g_assertion_message_expr (G_LOG_DOMAIN, __FILE__, __LINE__, G_STRFUNC,  #expr); \
+	if G_LIKELY (expr) { \
+		; \
+	} else { \
+		utility_handleError(__FILE__, __LINE__, G_STRFUNC, #expr); \
 	} \
 } while (0)
 
@@ -24,6 +24,7 @@ gboolean utility_int16Equal(gconstpointer value1, gconstpointer value2);
 gint utility_doubleCompare(const gdouble* value1, const gdouble* value2, gpointer userData);
 gchar* utility_getHomePath(const gchar* path);
 guint utility_getRawCPUFrequency(const gchar* freqFilename);
-void utility_printBacktrace();
+
+void utility_handleError(const gchar* file, gint line, const gchar* funtcion, const gchar* message);
 
 #endif /* SHD_UTILITY_H_ */

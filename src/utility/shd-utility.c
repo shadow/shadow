@@ -6,6 +6,8 @@
 
 #include "shadow.h"
 #include <execinfo.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 guint utility_ipPortHash(in_addr_t ip, in_port_t port) {
 	GString* buffer = g_string_new(NULL);
@@ -67,21 +69,42 @@ guint utility_getRawCPUFrequency(const gchar* freqFilename) {
 	return rawFrequencyKHz;
 }
 
-void utility_printBacktrace() {
-	g_print("%s", "**BEGIN BACKTRACE**\n");
-	void *array[50];
+static GString* _utility_formatError(const gchar* file, gint line, const gchar* function, const gchar* message) {
+	GString* errorString = g_string_new("**ERROR ENCOUNTERED**\n");
+	g_string_append_printf(errorString, "\tAt process: %i (parent %i)\n", (gint) getpid(), (gint) getppid());
+	g_string_append_printf(errorString, "\tAt file: %s\n", file);
+	g_string_append_printf(errorString, "\tAt line: %i\n", line);
+	g_string_append_printf(errorString, "\tAt function: %s\n", function);
+	g_string_append_printf(errorString, "\tMessage: %s\n", message);
+	return errorString;
+}
+
+static GString* _utility_formatBacktrace() {
+	GString* backtraceString = g_string_new("**BEGIN BACKTRACE**\n");
+	void *array[100];
 	gsize size, i;
 	gchar **strings;
 
-	size = backtrace(array, 50);
+	size = backtrace(array, 100);
 	strings = backtrace_symbols(array, size);
 
-	g_print("Obtained %zd stack frames:\n", size);
+	g_string_append_printf(backtraceString, "Obtained %zd stack frames:\n", size);
 
 	for (i = 0; i < size; i++) {
-		g_print("\t%s\n", strings[i]);
+		g_string_append_printf(backtraceString, "\t%s\n", strings[i]);
 	}
 
 	g_free(strings);
-	g_print("%s", "**END BACKTRACE**\n");
+	g_string_append_printf(backtraceString, "**END BACKTRACE**\n");
+	return backtraceString;
+}
+
+void utility_handleError(const gchar* file, gint line, const gchar* function, const gchar* message) {
+	GString* errorString = _utility_formatError(file, line, function, message);
+	GString* backtraceString = _utility_formatBacktrace();
+	g_print("%s%s**ABORTING**\n", errorString->str, backtraceString->str);
+	g_printerr("%s%s**ABORTING**\n", errorString->str, backtraceString->str);
+	g_string_free(errorString, TRUE);
+	g_string_free(backtraceString, TRUE);
+	abort();
 }

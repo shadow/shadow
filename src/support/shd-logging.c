@@ -98,8 +98,9 @@ void logging_handleLog(const gchar *log_domain, GLogLevelFlags log_level, const 
 	g_print("%lu:%lu:%lu:%06lu %s\n", hours, minutes, seconds, microseconds, messageStr);
 
 	if(log_level & G_LOG_LEVEL_ERROR) {
-		utility_printBacktrace();
-		g_print("%s", "**ABORTING**\n");
+		/* error level logs always abort, but glibs messages are not that useful.
+		 * lets override that with our own debug info and preemtively abort */
+		utility_assert(FALSE && "failure due to error-level log message");
 	}
 }
 
