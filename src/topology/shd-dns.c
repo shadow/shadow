@@ -109,8 +109,7 @@ Address* dns_register(DNS* dns, GQuark id, gchar* name, gchar* requestedIP) {
 		/* restricted is OK if this is a localhost address, otherwise it must be unique */
 		if(ip == address_stringToIP("127.0.0.1")) {
 			isLocal = TRUE;
-		//} else if(_dns_isRestricted(dns, ip) || !_dns_isIPUnique(dns, ip)) {
-		} else {
+		} else if(_dns_isRestricted(dns, ip) || !_dns_isIPUnique(dns, ip)) {
 			ip = _dns_generateIP(dns);
 		}
 	} else {

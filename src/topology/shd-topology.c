@@ -829,6 +829,26 @@ gboolean topology_isRoutable(Topology* top, Address* srcAddress, Address* dstAdd
 	return topology_getLatency(top, srcAddress, dstAddress) > -1;
 }
 
+static in_addr_t _topology_getLongestPrefixMatch(GList* ipSet, in_addr_t ip) {
+	utility_assert(ipSet);
+
+	in_addr_t bestMatch = 0;
+	in_addr_t bestIP = 0;
+
+	GList* nextIPItem = ipSet;
+	while(nextIPItem) {
+		in_addr_t nextIP = (in_addr_t) GPOINTER_TO_UINT(nextIPItem->data);
+		in_addr_t match = (nextIP & ip);
+		if(match > bestMatch) {
+			bestMatch = match;
+			bestIP = nextIP;
+		}
+		nextIPItem = nextIPItem->next;
+	}
+
+	return bestIP;
+}
+
 void topology_connect(Topology* top, Address* address, Random* randomSourcePool,
 		gchar* ipHint, gchar* clusterHint, guint64* bwDownOut, guint64* bwUpOut) {
 	MAGIC_ASSERT(top);
@@ -840,18 +860,18 @@ void topology_connect(Topology* top, Address* address, Random* randomSourcePool,
 	in_addr_t poiIP = 0;
 	Cluster* cluster = NULL;
 
-	/* we need to connect a host's network interface to the topology so that it can route.
+	/* we need to attach a host's network interface to the topology so that it can route.
 	 * the address of the interface is required, but the remaining params are optional.
 	 *
-	 * there are several ways to connect; we use this logic:
-	 *  1. if the ipHint (from hosts.xml) is given and
-	 *   1a. it specifies an existing PoI in the topology, we connect there
+	 * there are several ways to attach; we use this logic:
+	 *  1. if the ipHint (from shadow.config.xml) is given and
+	 *   1a. it specifies an existing PoI in the topology, we attach there
 	 *   1b. it does not specify an existing PoI, then we check the clusterHint, and
-	 *    1aa. if it exists and contains PoIs, we connect to the longest prefix matched PoI
+	 *    1ba. if it exists and contains PoIs, we attach to the longest prefix matched PoI
 	 *         from the existing cluster
-	 *    1ab. if it exists but does not contain PoIs, we connect to the longest prefix matched
+	 *    1bb. if it exists but does not contain PoIs, we attach to the longest prefix matched
 	 *         PoI from the list of all PoIs, but use the cluster bandwidth and loss attributes
-	 *    1ac. if NULL or it does not exist, we connect to the global longest prefix matched PoI
+	 *    1bc. if NULL or it does not exist, we attach to the global longest prefix matched PoI
 	 *  2. if ipHint is NULL, we check the clusterHint, and
 	 *   2a. if it exists and contains PoIs, we select one at random
 	 *   2b. if it exists but does not contain PoIs, we choose a random PoI, but use the cluster
@@ -861,7 +881,43 @@ void topology_connect(Topology* top, Address* address, Random* randomSourcePool,
 
 //	if(ipHint) { XXX
 	if(FALSE) {
+		gboolean poiVertexIndexFound = FALSE;
+		gpointer poiVertexIndexPtr = NULL;
 
+		in_addr_t ip = address_stringToIP(ipHint);
+		if(ip != INADDR_NONE) {
+			poiVertexIndexFound = g_hash_table_lookup_extended(top->poiIPToVertexIndex,
+					GUINT_TO_POINTER(ip), NULL, &poiVertexIndexPtr);
+		}
+
+		if(poiVertexIndexFound) {
+			/* ip matches a poi, case 1a */
+			poiIP = ip;
+
+			if(clusterHint) {
+				cluster = g_hash_table_lookup(top->geocodeToCluster, clusterHint);
+			}
+
+			if(!cluster) {
+
+			}
+		} else {
+			/* no poi found, case 1b */
+			if(clusterHint) {
+				cluster = g_hash_table_lookup(top->geocodeToCluster, clusterHint);
+			}
+
+			if(cluster) {
+				if(cluster_getPoICount(cluster) > 0) {
+					/* our cluster has pois, case 1ba */
+				} else {
+					/* cluster has no pois, case 1bb */
+
+				}
+			} else {
+				/* no poi or cluster, case 1bc */
+			}
+		}
 	} else {
 		/* no ipHint, case 2 */
 		if(clusterHint) {
