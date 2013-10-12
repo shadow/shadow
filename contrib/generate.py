@@ -1,11 +1,10 @@
 #!/usr/bin/env python2.7
 
-import os, sys, subprocess, argparse, socket, time, math, shlex, shutil
+import os, sys, subprocess, argparse, time, shlex, shutil
 from random import choice
 from datetime import datetime
 from numpy import mean
 from lxml import etree
-from lxml.html.builder import INS
 
 # This should NOT be expanded, we'll use this directly in the XML file
 INSTALLPREFIX="~/.shadow/"
@@ -298,7 +297,7 @@ def generate(args):
         print >>fperf50k, "{0}:80:/50KiB.urnd".format(name)
         print >>fperf1m, "{0}:80:/1MiB.urnd".format(name)
         print >>fperf5m, "{0}:80:/5MiB.urnd".format(name)
-        for j in xrange(webPerBulk): print >>fall, "{0}:80:/320KiB.urnd".format(name)
+        for _ in xrange(webPerBulk): print >>fall, "{0}:80:/320KiB.urnd".format(name)
     fim.close()
     fweb.close()
     fbulk.close()
@@ -736,7 +735,7 @@ def getRelays(relays, k, geoentries, descriptorpath, extrainfopath, validyear, v
         
     # go through all the descriptors and find the bandwidth rate, burst, and
     # history from the most recent descriptor of each relay in our sample
-    for root, dirs, files in os.walk(descriptorpath):
+    for root, _, files in os.walk(descriptorpath):
         for filename in files: 
             fullpath = os.path.join(root, filename)
             with open(fullpath, 'rb') as f:
@@ -774,7 +773,7 @@ def getRelays(relays, k, geoentries, descriptorpath, extrainfopath, validyear, v
     # now check for extra info docs for our chosen relays, so we get read and write histories
     # here the published time doesnt matter b/c we are trying to estimate the
     # relay's ISP link speed
-    for root, dirs, files in os.walk(extrainfopath):
+    for root, _, files in os.walk(extrainfopath):
         for filename in files: 
             fullpath = os.path.join(root, filename)
             with open(fullpath, 'rb') as f:
@@ -839,15 +838,15 @@ def sample_relays(relays, k):
     
     t = 0
     bins = []
-    for i in range(k):
-        bin = []
-        for j in range(n/k):
-            bin.append(relays[t])
+    for _ in range(k):
+        abin = []
+        for _ in range(n/k):
+            abin.append(relays[t])
             t += 1
-        bins.append(bin)
+        bins.append(abin)
     
     sample = []
-    for bin in bins: sample.append(bin[len(bin)/2])
+    for abin in bins: sample.append(abin[len(abin)/2])
     
     return sample
     
