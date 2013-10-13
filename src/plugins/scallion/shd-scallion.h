@@ -113,10 +113,10 @@ extern crypto_pk_t * client_identitykey;
 extern int called_loop_once;
 
 enum vtor_nodetype {
-	VTOR_DIRAUTH, VTOR_RELAY, VTOR_EXITRELAY, VTOR_CLIENT, VTOR_TORRENT, VTOR_BROWSER, VTOR_PING
+  VTOR_DIRAUTH, VTOR_RELAY, VTOR_EXITRELAY, VTOR_CLIENT, VTOR_TORRENT, VTOR_BROWSER, VTOR_PING, VTOR_BRIDGEAUTH, VTOR_BRIDGE, VTOR_BRIDGECLIENT
 };
 
-/* run every 5 mins */
+/* run once per minute */
 #define VTORFLOW_SCHED_PERIOD 60000
 
 enum cpuwstate {

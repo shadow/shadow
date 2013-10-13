@@ -123,11 +123,14 @@ def reset(output):
         os.makedirs(output+"/data/middledata")
     os.makedirs(output+"/data/exitdata")
     os.makedirs(output+"/data/clientdata")
+    os.makedirs(output+"/data/bridgedata")
     os.makedirs(output+"/data/pcapdata")
     
     if os.path.exists(output+"/authoritydata"): shutil.copytree(output+"/authoritydata", output+"/data/authoritydata")
     else: shutil.copytree(output+"/keys", output+"/data/authoritydata/4uthority/keys")
     
+    if os.path.exists(output+"/bridgeauthoritydata"): shutil.copytree(output+"/bridgeauthoritydata", output+"/data/bridgeauthoritydata")
+
     if os.path.exists(output+"/hiddenserverdata"): shutil.copytree(output+"/hiddenserverdata", output+"/data/hiddenserverdata")
     
     return 0
