@@ -59,14 +59,20 @@ static void _scallion_new(gint argc, gchar* argv[]) {
 
 	if(g_ascii_strncasecmp(tortype, "dirauth", strlen("dirauth")) == 0) {
 		ntype = VTOR_DIRAUTH;
+	} else if(g_ascii_strncasecmp(tortype, "bridgeauth", strlen("bridgeauth")) == 0) {
+		ntype = VTOR_BRIDGEAUTH;
 	} else if(g_ascii_strncasecmp(tortype, "relay", strlen("relay")) == 0) {
 		ntype = VTOR_RELAY;
 	} else if(g_ascii_strncasecmp(tortype, "exitrelay", strlen("exitrelay")) == 0) {
 		ntype = VTOR_EXITRELAY;
+	} else if(g_ascii_strncasecmp(tortype, "bridge", strlen("bridge")) == 0) {
+		ntype = VTOR_BRIDGE;
 	} else if(g_ascii_strncasecmp(tortype, "client", strlen("client")) == 0) {
 		ntype = VTOR_CLIENT;
+	} else if(g_ascii_strncasecmp(tortype, "bridgeclient", strlen("bridgeclient")) == 0) {
+		ntype = VTOR_BRIDGECLIENT;
 	} else {
-		scallion.shadowlibFuncs->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, "Unrecognized torrent type: %s", usage);
+		scallion.shadowlibFuncs->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, "Unrecognized relay type: %s", usage);
 		return;
 	}
 
