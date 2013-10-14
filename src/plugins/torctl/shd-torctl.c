@@ -155,7 +155,7 @@ static void _torctl_activate(TorCTL* torctl, uint32_t events) {
 	/* bootstrap */
 	if(torctl->state == TCS_NONE && (events & EPOLLOUT)) {
 		/* our control socket is connected */
-		g_queue_push_tail(torctl->commands, g_string_new("AUTHENTICATE \"password\"\r\n"));
+		g_queue_push_tail(torctl->commands, g_string_new("AUTHENTICATE\r\n"));
 		torctl->state = TCS_AUTHENTICATING;
 	}
 

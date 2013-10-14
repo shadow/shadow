@@ -932,7 +932,7 @@ def parse_consensus(consensus_path):
                 if " Exit " in line: isExit = True
                 if " Guard " in line: isGuard = True
             elif line[0:2] == "w ":
-                bw = float(line.strip().split()[1].split("=")[1]) * 1000.0 # KB to bytes
+                bw = float(line.strip().split()[1].split("=")[1]) # KiB
     
     return validyear, validmonth, sorted(relays, key=lambda relay: relay.getBWConsensusArg())
 
