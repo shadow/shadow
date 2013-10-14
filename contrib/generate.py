@@ -371,11 +371,13 @@ def generate(args):
     ms = 60000.0 # milliseconds
     with open("perfthink.dat", "wb") as fthink:
         print >>fthink, "{0} {1}".format("%.3f" % ms, "%.10f" % 1.0)
+
+    default_tor_args = "--quiet --Address ${NODEID} --Nickname ${NODEID} --DataDirectory ./data/${NODEID} --GeoIPFile "+INSTALLPREFIX+"/share/geoip"
     
     # tor directory authorities - choose the fastest relays (no authority is an exit node)
     dirauths = [] # [name, v3ident, fingerprint] for torrc files
-    os.makedirs("authoritydata")
-    os.chdir("authoritydata")
+    os.makedirs("initdata")
+    os.chdir("initdata")
     with open("authgen.torrc", 'w') as fauthgen: print >>fauthgen, "DirServer test 127.0.0.1:5000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000\nORPort 5000\n"
     with open("authgen.pw", 'w') as fauthgenpw: print >>fauthgenpw, "shadowprivatenetwork\n"
     starttime = 5
@@ -387,7 +389,7 @@ def generate(args):
 
         # add to shadow hosts file
         authority = guards_nodes.pop()
-        torargs = "dirauth {0} {1} {2} ./authority.torrc ./data/authoritydata {3}share/geoip".format(authority.getBWConsensusArg(), authority.getBWRateArg(), authority.getBWBurstArg(), INSTALLPREFIX) # in bytes
+        torargs = "dirauth {0} {1} -f ./authority.torrc --BandwidthRate {2} --BandwidthBurst {3}".format(authority.getBWConsensusArg(), default_tor_args, authority.getBWRateArg(), authority.getBWBurstArg()) # in bytes
         addRelayToXML(root, starttime, torargs, None, None, name, authority.download, authority.upload, authority.ip, authority.code)
 
         # generate keys for tor
@@ -413,17 +415,17 @@ def generate(args):
 
     # tor bridge authority
     bridgeauths = []                    # [name, None, fingerprint]
-    os.makedirs("bridgeauthoritydata")
-    os.chdir("bridgeauthoritydata")
+    os.makedirs("initdata")
+    os.chdir("initdata")
     with open("bridgeauthgen.torrc", 'w') as fauthgen: print >>fauthgen, "DirServer test 127.0.0.1:5000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000\nORPort 5000\n"
     i = 1
     while i <= args.nbridgeauths:
         auth = []
-        name = "8ridgeauth{0}".format(i)
+        name = "4uthoritybridge{0}".format(i)
         auth.append(name)
         auth.append(None)
         bridgeauthority = guards_nodes.pop()
-        torargs = "bridgeauth {0} {1} {2} ./bridgeauthority.torrc ./data/bridgeauthoritydata {3}share/geoip".format(bridgeauthority.getBWConsensusArg(), bridgeauthority.getBWRateArg(), bridgeauthority.getBWBurstArg(), INSTALLPREFIX) # in bytes
+        torargs = "bridgeauth {0} {1} -f ./bridgeauthority.torrc --BandwidthRate {2} --BandwidthBurst {3}".format(bridgeauthority.getBWConsensusArg(), default_tor_args, bridgeauthority.getBWRateArg(), bridgeauthority.getBWBurstArg()) # in bytes
         addRelayToXML(root, starttime, torargs, None, None, name, bridgeauthority.download, bridgeauthority.upload, bridgeauthority.ip, bridgeauthority.code)
 
         # generate certificate in order to get the fingerprint
@@ -448,7 +450,7 @@ def generate(args):
         assert r.isGuard is True
         name = "relayexitguard{0}".format(i)
         starttime = "{0}".format(int(round(relayStartTime)))
-        torargs = "exitrelay {0} {1} {2} ./exitguard.torrc ./data/exitguarddata {3}share/geoip".format(r.getBWConsensusArg(), r.getBWRateArg(), r.getBWBurstArg(), INSTALLPREFIX) # in bytes
+        torargs = "exitrelay {0} {1} -f ./exitguard.torrc --BandwidthRate {2} --BandwidthBurst {3}".format(r.getBWConsensusArg(), default_tor_args, r.getBWRateArg(), r.getBWBurstArg()) # in bytes
         addRelayToXML(root, starttime, torargs, None, None, name, r.download, r.upload, r.ip, r.code)
         relayStartTime += secondsPerRelay
         i += 1
@@ -460,7 +462,7 @@ def generate(args):
         assert r.isGuard is True
         name = "relayguard{0}".format(i)
         starttime = "{0}".format(int(round(relayStartTime)))
-        torargs = "relay {0} {1} {2} ./guard.torrc ./data/guarddata {3}share/geoip".format(r.getBWConsensusArg(), r.getBWRateArg(), r.getBWBurstArg(), INSTALLPREFIX) # in bytes
+        torargs = "relay {0} {1} -f ./guard.torrc --BandwidthRate {2} --BandwidthBurst {3}".format(r.getBWConsensusArg(), default_tor_args, r.getBWRateArg(), r.getBWBurstArg()) # in bytes
         addRelayToXML(root, starttime, torargs, None, None, name, r.download, r.upload, r.ip, r.code)
         relayStartTime += secondsPerRelay
         i += 1
@@ -472,7 +474,7 @@ def generate(args):
         assert r.isGuard is not True
         name = "relayexit{0}".format(i)
         starttime = "{0}".format(int(round(relayStartTime)))
-        torargs = "exitrelay {0} {1} {2} ./exit.torrc ./data/exitdata {3}share/geoip".format(r.getBWConsensusArg(), r.getBWRateArg(), r.getBWBurstArg(), INSTALLPREFIX) # in bytes
+        torargs = "exitrelay {0} {1} -f ./exit.torrc --BandwidthRate {2} --BandwidthBurst {3}".format(r.getBWConsensusArg(), default_tor_args, r.getBWRateArg(), r.getBWBurstArg()) # in bytes
         addRelayToXML(root, starttime, torargs, None, None, name, r.download, r.upload, r.ip, r.code)
         relayStartTime += secondsPerRelay
         i += 1
@@ -484,7 +486,7 @@ def generate(args):
         assert r.isGuard is not True
         name = "relaymiddle{0}".format(i)
         starttime = "{0}".format(int(round(relayStartTime)))
-        torargs = "relay {0} {1} {2} ./middle.torrc ./data/middledata {3}share/geoip".format(r.getBWConsensusArg(), r.getBWRateArg(), r.getBWBurstArg(), INSTALLPREFIX) # in bytes
+        torargs = "relay {0} {1} -f ./middle.torrc --BandwidthRate {2} --BandwidthBurst {3}".format(r.getBWConsensusArg(), default_tor_args, r.getBWRateArg(), r.getBWBurstArg()) # in bytes
         addRelayToXML(root, starttime, torargs, None, None, name, r.download, r.upload, r.ip, r.code)
         relayStartTime += secondsPerRelay
         i += 1
@@ -507,7 +509,7 @@ def generate(args):
         while i <= args.nclients:
             name = "client{0}".format(i)
             starttime = "{0}".format(int(round(clientStartTime)))
-            torargs = "client {0} {1} {2} ./client.torrc ./data/clientdata {3}share/geoip".format(10240000, 5120000, 10240000, INSTALLPREFIX) # in bytes
+            torargs = "client {0} {1} -f ./client.torrc --BandwidthRate {2} --BandwidthBurst {3}".format(10240, default_tor_args, 5120000, 10240000) # in bytes
             fileargs = "client multi ./all.dl localhost 9000 ./webthink.dat -1"
             
             addRelayToXML(root, starttime, torargs, fileargs, None, name, code=choice(clientCountryCodes))
@@ -520,7 +522,7 @@ def generate(args):
         while i <= nimclients:
             name = "imclient{0}".format(i)
             starttime = "{0}".format(int(round(clientStartTime)))
-            torargs = "client {0} {1} {2} ./client.torrc ./data/clientdata {3}share/geoip".format(10240000, 5120000, 10240000, INSTALLPREFIX) # in bytes
+            torargs = "client {0} {1} -f ./client.torrc --BandwidthRate {2} --BandwidthBurst {3}".format(10240, default_tor_args, 5120000, 10240000) # in bytes
             fileargs = "client multi ./im.dl localhost 9000 ./imthink.dat -1"
             
             addRelayToXML(root, starttime, torargs, fileargs, None, name, code=choice(clientCountryCodes))
@@ -532,7 +534,7 @@ def generate(args):
         while i <= nwebclients:
             name = "webclient{0}".format(i)
             starttime = "{0}".format(int(round(clientStartTime)))
-            torargs = "client {0} {1} {2} ./client.torrc ./data/clientdata {3}share/geoip".format(10240000, 5120000, 10240000, INSTALLPREFIX) # in bytes
+            torargs = "client {0} {1} -f ./client.torrc --BandwidthRate {2} --BandwidthBurst {3}".format(10240, default_tor_args, 5120000, 10240000) # in bytes
             fileargs = "client multi ./web.dl localhost 9000 ./webthink.dat -1"
             
             addRelayToXML(root, starttime, torargs, fileargs, None, name, code=choice(clientCountryCodes))
@@ -544,7 +546,7 @@ def generate(args):
         while i <= nbulkclients:
             name = "bulkclient{0}".format(i)
             starttime = "{0}".format(int(round(clientStartTime)))
-            torargs = "client {0} {1} {2} ./client.torrc ./data/clientdata {3}share/geoip".format(10240000, 5120000, 10240000, INSTALLPREFIX) # in bytes
+            torargs = "client {0} {1} -f ./client.torrc --BandwidthRate {2} --BandwidthBurst {3}".format(10240, default_tor_args, 5120000, 10240000) # in bytes
             fileargs = "client multi ./bulk.dl localhost 9000 none -1"
             
             addRelayToXML(root, starttime, torargs, fileargs, None, name, code=choice(clientCountryCodes))
@@ -556,7 +558,7 @@ def generate(args):
         while i <= np2pclients:
             name = "p2pclient{0}".format(i)
             starttime = "{0}".format(int(round(clientStartTime)))
-            torargs = "client {0} {1} {2} ./client.torrc ./data/clientdata {3}share/geoip".format(10240000, 5120000, 10240000, INSTALLPREFIX) # in bytes
+            torargs = "client {0} {1} -f ./client.torrc --BandwidthRate {2} --BandwidthBurst {3}".format(10240, default_tor_args, 5120000, 10240000) # in bytes
             torrentargs = "torrent node auth.torrent 5000 localhost 9000 6000 700MB"
  
             addRelayToXML(root, starttime, torargs, None, torrentargs, name, code=choice(clientCountryCodes))
@@ -568,7 +570,7 @@ def generate(args):
         while i <= nperf50kclients:
             name = "perfclient50k{0}".format(i)
             starttime = "{0}".format(int(round(clientStartTime)))
-            torargs = "client {0} {1} {2} ./torperf.torrc ./data/clientdata {3}share/geoip".format(10240000, 5120000, 10240000, INSTALLPREFIX) # in bytes
+            torargs = "client {0} {1} -f ./torperf.torrc --BandwidthRate {2} --BandwidthBurst {3}".format(10240, default_tor_args, 5120000, 10240000) # in bytes
             fileargs = "client multi ./50kib.dl localhost 9000 ./perfthink.dat -1"
  
             addRelayToXML(root, starttime, torargs, fileargs, None, name, code=choice(clientCountryCodes))
@@ -580,7 +582,7 @@ def generate(args):
         while i <= nperf1mclients:
             name = "perfclient1m{0}".format(i)
             starttime = "{0}".format(int(round(clientStartTime)))
-            torargs = "client {0} {1} {2} ./torperf.torrc ./data/clientdata {3}share/geoip".format(10240000, 5120000, 10240000, INSTALLPREFIX) # in bytes
+            torargs = "client {0} {1} -f ./torperf.torrc --BandwidthRate {2} --BandwidthBurst {3}".format(10240, default_tor_args, 5120000, 10240000) # in bytes
             fileargs = "client multi ./1mib.dl localhost 9000 ./perfthink.dat -1"
  
             addRelayToXML(root, starttime, torargs, fileargs, None, name, code=choice(clientCountryCodes))
@@ -592,7 +594,7 @@ def generate(args):
         while i <= nperf5mclients:
             name = "perfclient5m{0}".format(i)
             starttime = "{0}".format(int(round(clientStartTime)))
-            torargs = "client {0} {1} {2} ./torperf.torrc ./data/clientdata {3}share/geoip".format(10240000, 5120000, 10240000, INSTALLPREFIX) # in bytes
+            torargs = "client {0} {1} -f ./torperf.torrc --BandwidthRate {2} --BandwidthBurst {3}".format(10240, default_tor_args, 5120000, 10240000) # in bytes
             fileargs = "client multi ./5mib.dl localhost 9000 ./perfthink.dat -1"
  
             addRelayToXML(root, starttime, torargs, fileargs, None, name, code=choice(clientCountryCodes))
@@ -606,6 +608,16 @@ def generate(args):
 
     # finally, print the XML file
     with open("shadow.config.xml", 'wb') as fhosts:
+        
+        # kill time
+        e = etree.Element("kill")
+        e.set("time", "3600")
+        root.insert(0, e)
+
+        # internet topology map
+        e = etree.Element("topology")
+        e.set("path", "{0}share/topology.graphml.xml".format(INSTALLPREFIX))
+        root.insert(0, e)
 
         # plug-ins
         e = etree.Element("plugin")
@@ -623,16 +635,6 @@ def generate(args):
             e.set("id", "torrent")
             e.set("path", "{0}plugins/libshadow-plugin-torrent.so".format(INSTALLPREFIX))
             root.insert(0, e)
-        
-        # kill time
-        e = etree.Element("kill")
-        e.set("time", "3600")
-        root.insert(0, e)
-
-        # internet topology map
-        e = etree.Element("topology")
-        e.set("path", "{0}share/topology.graphml.xml".format(INSTALLPREFIX))
-        root.insert(0, e)
         
         # all our hosts
         print >>fhosts, (etree.tostring(root, pretty_print=True, xml_declaration=False))
