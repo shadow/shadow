@@ -119,6 +119,17 @@ struct _TCP {
 		guint32 lastAcknowledgement;
 	} congestion;
 
+	/* TODO: these should probably be stamped when the network interface sends
+	 * instead of when the tcp layer sends down to the socket layer */
+	struct {
+		SimulationTime lastDataSent;
+		SimulationTime lastAckSent;
+		SimulationTime lastDataReceived;
+		SimulationTime lastAckReceived;
+		gsize retransmitCount;
+		guint32 rtt;
+	} info;
+
 	/* TCP throttles outgoing data packets if too many are in flight */
 	GQueue* throttledOutput;
 	gsize throttledOutputLength;
@@ -270,6 +281,7 @@ static void _tcp_autotune(TCP* tcp) {
 		utility_assert(16777216 > outSize);
 		socket_setInputBufferSize(&(tcp->super), (gsize) 16777216);
 		socket_setOutputBufferSize(&(tcp->super), (gsize) 16777216);
+		tcp->info.rtt = G_MAXUINT32;
 		debug("set loopback buffer sizes to 16777216");
 		return;
 	}
@@ -289,6 +301,7 @@ static void _tcp_autotune(TCP* tcp) {
 	utility_assert(send_latency > 0 && receive_latency > 0);
 
 	guint32 rtt_milliseconds = send_latency + receive_latency;
+	tcp->info.rtt = rtt_milliseconds;
 
 	/* i got delay, now i need values for my send and receive buffer
 	 * sizes based on bandwidth in both directions. do my send size first. */
@@ -627,6 +640,7 @@ static void _tcp_flush(TCP* tcp) {
 				/* we will send: store length in virtual retransmission buffer
 				 * so we can reduce buffer space consumed when we receive the ack */
 				_tcp_addRetransmit(tcp, header.sequence, length);
+				tcp->info.lastDataSent = worker_getCurrentTime();
 			}
 		}
 
@@ -639,6 +653,7 @@ static void _tcp_flush(TCP* tcp) {
 		/* keep track of the last things we sent them */
 		tcp->send.lastAcknowledgement = tcp->receive.next;
 		tcp->send.lastWindow = tcp->receive.window;
+		tcp->info.lastAckSent = worker_getCurrentTime();
 
 		 /* socket will queue it ASAP */
 		gboolean success = socket_addToOutputBuffer(&(tcp->super), packet);
@@ -730,12 +745,29 @@ gint tcp_getConnectError(TCP* tcp) {
 	return 0;
 }
 
+static guint8 _tcp_getTCPInfoState(TCP* tcp) {
+    switch(tcp->state) {
+		case TCPS_ESTABLISHED: return (guint8) TCP_ESTABLISHED;
+		case TCPS_SYNSENT: return (guint) TCP_SYN_SENT;
+		case TCPS_SYNRECEIVED: return (guint) TCP_SYN_RECV;
+		case TCPS_FINWAIT1: return (guint) TCP_FIN_WAIT1;
+		case TCPS_FINWAIT2: return (guint) TCP_FIN_WAIT2;
+		case TCPS_TIMEWAIT: return (guint) TCP_TIME_WAIT;
+		case TCPS_CLOSED: return (guint) TCP_CLOSE;
+		case TCPS_CLOSEWAIT: return (guint) TCP_CLOSE_WAIT;
+		case TCPS_LASTACK: return (guint) TCP_LAST_ACK;
+		case TCPS_LISTEN: return (guint) TCP_LISTEN;
+		case TCPS_CLOSING: return (guint) TCP_CLOSING;
+		default: return (guint8) 0;
+    }
+}
+
 void tcp_getInfo(TCP* tcp, struct tcp_info *tcpinfo) {
 	MAGIC_ASSERT(tcp);
 
 	memset(tcpinfo, 0, sizeof(struct tcp_info));
 
-	tcpinfo->tcpi_state = tcp->state;
+	tcpinfo->tcpi_state = (u_int8_t) _tcp_getTCPInfoState(tcp);
 //	tcpinfo->tcpi_ca_state;
 //	tcpinfo->tcpi_retransmits;
 //	tcpinfo->tcpi_probes;
@@ -746,33 +778,33 @@ void tcp_getInfo(TCP* tcp, struct tcp_info *tcpinfo) {
 
 //	tcpinfo->tcpi_rto;
 //	tcpinfo->tcpi_ato;
-	tcpinfo->tcpi_snd_mss = 1;
-	tcpinfo->tcpi_rcv_mss = 1;
+	tcpinfo->tcpi_snd_mss = (u_int32_t)(CONFIG_MTU - CONFIG_HEADER_SIZE_TCPIPETH);
+	tcpinfo->tcpi_rcv_mss = (u_int32_t)(CONFIG_MTU - CONFIG_HEADER_SIZE_TCPIPETH);
 
-	tcpinfo->tcpi_unacked = tcp->send.unacked;
+	tcpinfo->tcpi_unacked = tcp->send.next - tcp->send.unacked;
 //	tcpinfo->tcpi_sacked;
 //	tcpinfo->tcpi_lost;
-//	tcpinfo->tcpi_retrans;
+	tcpinfo->tcpi_retrans = (u_int32_t) tcp->info.retransmitCount;
 //	tcpinfo->tcpi_fackets;
 
 	/* Times. */
-//	tcpinfo->tcpi_last_data_sent;
-//	tcpinfo->tcpi_last_ack_sent;
-//	tcpinfo->tcpi_last_data_recv;
-//	tcpinfo->tcpi_last_ack_recv;
+	tcpinfo->tcpi_last_data_sent = (u_int32_t)(tcp->info.lastDataSent/SIMTIME_ONE_MICROSECOND);
+	tcpinfo->tcpi_last_ack_sent = (u_int32_t)(tcp->info.lastAckSent/SIMTIME_ONE_MICROSECOND);
+	tcpinfo->tcpi_last_data_recv = (u_int32_t)(tcp->info.lastDataReceived/SIMTIME_ONE_MICROSECOND);
+	tcpinfo->tcpi_last_ack_recv = (u_int32_t)(tcp->info.lastAckReceived/SIMTIME_ONE_MICROSECOND);
 
 	/* Metrics. */
-//	tcpinfo->tcpi_pmtu;
+	tcpinfo->tcpi_pmtu = (u_int32_t)(CONFIG_MTU);
 //	tcpinfo->tcpi_rcv_ssthresh;
-//	tcpinfo->tcpi_rtt;
+	tcpinfo->tcpi_rtt = tcp->info.rtt;
 //	tcpinfo->tcpi_rttvar;
 	tcpinfo->tcpi_snd_ssthresh = tcp->congestion.threshold;
 	tcpinfo->tcpi_snd_cwnd = tcp->congestion.window;
-//	tcpinfo->tcpi_advmss;
+	tcpinfo->tcpi_advmss = (u_int32_t)(CONFIG_MTU - CONFIG_HEADER_SIZE_TCPIPETH);
 //	tcpinfo->tcpi_reordering;
 
-//	tcpinfo->tcpi_rcv_rtt;
-//	tcpinfo->tcpi_rcv_space;
+	tcpinfo->tcpi_rcv_rtt = tcp->info.rtt;
+	tcpinfo->tcpi_rcv_space = tcp->congestion.lastWindow;
 
 //	tcpinfo->tcpi_total_retrans;
 }
@@ -1125,6 +1157,8 @@ gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 			/* other end is telling us that its window opened and we can send more */
 			tcp->congestion.lastWindow = (guint32) header.window;
 		}
+
+		tcp->info.lastAckReceived = worker_getCurrentTime();
 	}
 
 	gboolean doRetransmitData = FALSE;
@@ -1154,6 +1188,7 @@ gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 			if((isNextPacket && !waitingUserRead) || (packetFits)) {
 				/* make sure its in order */
 				_tcp_bufferPacketIn(tcp, packet);
+				tcp->info.lastDataReceived = worker_getCurrentTime();
 			} else {
 				debug("no space for packet even though its in our window");
 				doRetransmitData = TRUE;
@@ -1222,6 +1257,7 @@ void tcp_droppedPacket(TCP* tcp, Packet* packet) {
 	_tcp_removeRetransmit(tcp, header.sequence);
 	_tcp_bufferPacketOut(tcp, packet);
 	_tcp_flush(tcp);
+	tcp->info.retransmitCount++;
 }
 
 static void _tcp_endOfFileSignalled(TCP* tcp) {
