@@ -76,10 +76,24 @@ gssize udp_sendUserData(UDP* udp, gconstpointer buffer, gsize nBytes, in_addr_t 
 		in_addr_t destinationIP = (ip != 0) ? ip : udp->super.peerIP;
 		in_port_t destinationPort = (port != 0) ? port : udp->super.peerPort;
 
+		in_addr_t sourceIP = 0;
+		in_port_t sourcePort = 0;
+		socket_getSocketName(&(udp->super), &sourceIP, &sourcePort);
+
+		if(sourceIP == htonl(INADDR_ANY)) {
+			/* source interface depends on destination */
+			if(destinationIP == htonl(INADDR_LOOPBACK)) {
+				sourceIP = htonl(INADDR_LOOPBACK);
+			} else {
+				sourceIP = node_getDefaultIP(worker_getPrivate()->cached_node);
+			}
+		}
+
+		g_assert(sourceIP && sourcePort && destinationIP && destinationPort);
+
 		/* create the UDP packet */
 		Packet* packet = packet_new(buffer + offset, copyLength);
-		packet_setUDP(packet, PUDP_NONE, socket_getBinding(&(udp->super)),
-				udp->super.boundPort, destinationIP, destinationPort);
+		packet_setUDP(packet, PUDP_NONE, sourceIP, sourcePort, destinationIP, destinationPort);
 
 		/* buffer it in the transport layer, to be sent out when possible */
 		gboolean success = socket_addToOutputBuffer((Socket*) udp, packet);

@@ -134,18 +134,22 @@ Packet* socket_peekNextPacket(const Socket* socket) {
 	return g_queue_peek_head(socket->outputBuffer);
 }
 
-gint socket_getPeerName(Socket* socket, in_addr_t* ip, in_port_t* port) {
+gboolean socket_getPeerName(Socket* socket, in_addr_t* ip, in_port_t* port) {
 	MAGIC_ASSERT(socket);
 	g_assert(ip && port);
 
 	if(socket->peerIP == 0 || socket->peerPort == 0) {
-		return ENOTCONN;
+		return FALSE;
 	}
 
-	*ip = socket->peerIP;
-	*port = socket->peerPort;
+	if(ip) {
+		*ip = socket->peerIP;
+	}
+	if(port) {
+		*port = socket->peerPort;
+	}
 
-	return 0;
+	return TRUE;
 }
 
 void socket_setPeerName(Socket* socket, in_addr_t ip, in_port_t port) {
@@ -165,51 +169,28 @@ void socket_setPeerName(Socket* socket, in_addr_t ip, in_port_t port) {
 	socket->peerString = g_string_free(stringBuffer, FALSE);
 }
 
-gint socket_getSocketName(Socket* socket, in_addr_t* ip, in_port_t* port) {
+gboolean socket_getSocketName(Socket* socket, in_addr_t* ip, in_port_t* port) {
 	MAGIC_ASSERT(socket);
-	g_assert(ip && port);
 
 	/* boundAddress could be 0 (INADDR_NONE), so just check port */
-	if(socket->boundPort == 0) {
-		return ENOTCONN;
+	if(!socket_isBound(socket)) {
+		return FALSE;
 	}
 
-	*ip = socket->boundAddress;
-	*port = socket->boundPort;
-
-	return 0;
-}
-
-void socket_setSocketName(Socket* socket, in_addr_t ip, in_port_t port) {
-	MAGIC_ASSERT(socket);
-	socket_setBinding(socket, ip, port);
-
-	/* children of server sockets must not have the same key as the parent
-	 * otherwise when the child is closed, the parent's interface assoication
-	 * will be removed.
-	 *
-	 * @todo: this should be handled more elegantly.
-	 */
-	socket->associationKey = 0;
-}
-
-in_addr_t socket_getBinding(Socket* socket) {
-	MAGIC_ASSERT(socket);
-	if(socket->flags & SF_BOUND) {
-		return socket->boundAddress;
-	} else {
-		return 0;
+	if(ip) {
+		*ip = socket->boundAddress;
 	}
+	if(port) {
+		*port = socket->boundPort;
+	}
+
+	return TRUE;
 }
 
-gboolean socket_isBound(Socket* socket) {
+void socket_setSocketName(Socket* socket, in_addr_t ip, in_port_t port, gboolean isInternal) {
 	MAGIC_ASSERT(socket);
-	return (socket->flags & SF_BOUND) ? TRUE : FALSE;
-}
 
-void socket_setBinding(Socket* socket, in_addr_t boundAddress, in_port_t port) {
-	MAGIC_ASSERT(socket);
-	socket->boundAddress = boundAddress;
+	socket->boundAddress = ip;
 	socket->boundPort = port;
 
 	/* store the new ascii name of this socket endpoint */
@@ -217,14 +198,29 @@ void socket_setBinding(Socket* socket, in_addr_t boundAddress, in_port_t port) {
 		g_free(socket->boundString);
 	}
 
-	gchar* ipString = address_ipToNewString(boundAddress);
+	gchar* ipString = address_ipToNewString(ip);
 	GString* stringBuffer = g_string_new(ipString);
 	g_free(ipString);
 	g_string_append_printf(stringBuffer, ":%u (descriptor %i)", ntohs(port), socket->super.super.handle);
 	socket->boundString = g_string_free(stringBuffer, FALSE);
 
-	socket->associationKey = PROTOCOL_DEMUX_KEY(socket->protocol, port);
+	/* children of server sockets must not have the same key as the parent
+	 * otherwise when the child is closed, the parent's interface association
+	 * will be removed. in fact, they dont need a key because their parent
+	 * will handle incoming packets and will hand them off as necessary */
+	if(isInternal) {
+		socket->associationKey = 0;
+	} else {
+		socket->associationKey = PROTOCOL_DEMUX_KEY(socket->protocol, port);
+	}
+
+	/* the socket is now bound */
 	socket->flags |= SF_BOUND;
+}
+
+gboolean socket_isBound(Socket* socket) {
+	MAGIC_ASSERT(socket);
+	return (socket->flags & SF_BOUND) ? TRUE : FALSE;
 }
 
 gint socket_getAssociationKey(Socket* socket) {
