@@ -273,7 +273,7 @@ static void _host_associateInterface(Host* host, Socket* socket,
 	MAGIC_ASSERT(host);
 
 	/* connect up socket layer */
-	socket_setBinding(socket, bindAddress, bindPort);
+	socket_setSocketName(socket, bindAddress, bindPort, FALSE);
 
 	/* now associate the interfaces corresponding to bindAddress with socket */
 	if(bindAddress == htonl(INADDR_ANY)) {
@@ -293,7 +293,8 @@ static void _host_associateInterface(Host* host, Socket* socket,
 }
 
 static void _host_disassociateInterface(Host* host, Socket* socket) {
-	in_addr_t bindAddress = socket_getBinding(socket);
+	in_addr_t bindAddress;
+	socket_getSocketName(socket, &bindAddress, NULL);
 
 	if(bindAddress == htonl(INADDR_ANY)) {
 		/* need to dissociate all interfaces */
@@ -565,7 +566,7 @@ gint host_bindToInterface(Host* host, gint handle, in_addr_t bindAddress, in_por
 	Socket* socket = (Socket*) descriptor;
 
 	/* make sure socket is not bound */
-	if(socket_getBinding(socket)) {
+	if(socket_isBound(socket)) {
 		warning("socket already bound to requested address");
 		return EINVAL;
 	}
@@ -637,7 +638,7 @@ gint host_connectToPeer(Host* host, gint handle, in_addr_t peerIP,
 		}
 	}
 
-	if(!socket_getBinding(socket)) {
+	if(!socket_isBound(socket)) {
 		/* do an implicit bind to a random port.
 		 * use default interface unless the remote peer is on loopback */
 		in_addr_t defaultIP = networkinterface_getIPAddress(host->defaultInterface);
@@ -730,7 +731,8 @@ gint host_getPeerName(Host* host, gint handle, in_addr_t* ip, in_port_t* port) {
 		return ENOTCONN;
 	}
 
-	return socket_getPeerName((Socket*)descriptor, ip, port);
+	gboolean hasPeer = socket_getPeerName((Socket*)descriptor, ip, port);
+	return hasPeer ? 0 : ENOTCONN;
 }
 
 gint host_getSocketName(Host* host, gint handle, in_addr_t* ip, in_port_t* port) {
@@ -754,7 +756,8 @@ gint host_getSocketName(Host* host, gint handle, in_addr_t* ip, in_port_t* port)
 		return ENOTSOCK;
 	}
 
-	return socket_getSocketName((Socket*)descriptor, ip, port);
+	gboolean isBound = socket_getSocketName((Socket*)descriptor, ip, port);
+	return isBound ? 0 : ENOTCONN;
 }
 
 gint host_sendUserData(Host* host, gint handle, gconstpointer buffer, gsize nBytes,
@@ -806,7 +809,7 @@ gint host_sendUserData(Host* host, gint handle, gconstpointer buffer, gsize nByt
 		}
 
 		/* if this socket is not bound, do an implicit bind to a random port */
-		if(!socket_getBinding(socket)) {
+		if(!socket_isBound(socket)) {
 			in_addr_t bindAddress = ip == htonl(INADDR_LOOPBACK) ? htonl(INADDR_LOOPBACK) :
 					networkinterface_getIPAddress(host->defaultInterface);
 			in_port_t bindPort = _host_getRandomFreePort(host, bindAddress, type);

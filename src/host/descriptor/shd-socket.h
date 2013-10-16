@@ -67,11 +67,6 @@ struct _Socket {
 void socket_init(Socket* socket, SocketFunctionTable* vtable, DescriptorType type, gint handle,
 		guint receiveBufferSize, guint sendBufferSize);
 
-in_addr_t socket_getBinding(Socket* socket);
-void socket_setBinding(Socket* socket, in_addr_t boundAddress, in_port_t port);
-gboolean socket_isBound(Socket* socket);
-gint socket_getAssociationKey(Socket* socket);
-
 gboolean socket_pushInPacket(Socket* socket, Packet* packet);
 Packet* socket_pullOutPacket(Socket* socket);
 Packet* socket_peekNextPacket(const Socket* socket);
@@ -91,10 +86,12 @@ gsize socket_getOutputBufferSpace(Socket* socket);
 gboolean socket_addToOutputBuffer(Socket* socket, Packet* packet);
 Packet* socket_removeFromOutputBuffer(Socket* socket);
 
-gint socket_getPeerName(Socket* socket, in_addr_t* ip, in_port_t* port);
+gboolean socket_isBound(Socket* socket);
+gint socket_getAssociationKey(Socket* socket);
+gboolean socket_getPeerName(Socket* socket, in_addr_t* ip, in_port_t* port);
 void socket_setPeerName(Socket* socket, in_addr_t ip, in_port_t port);
-gint socket_getSocketName(Socket* socket, in_addr_t* ip, in_port_t* port);
-void socket_setSocketName(Socket* socket, in_addr_t ip, in_port_t port);
+gboolean socket_getSocketName(Socket* socket, in_addr_t* ip, in_port_t* port);
+void socket_setSocketName(Socket* socket, in_addr_t ip, in_port_t port, gboolean isInternal);
 
 enum ProtocolType socket_getProtocol(Socket* socket);
 

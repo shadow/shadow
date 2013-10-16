@@ -179,8 +179,10 @@ static TCPChild* _tcpchild_new(TCP* tcp, TCP* parent, in_addr_t peerIP, in_port_
 
 	/* the child is bound to the parent server's address, because all packets
 	 * coming from the child should appear to be coming from the server itself */
-	socket_setSocketName(&(child->tcp->super), socket_getBinding(&(parent->super)),
-			parent->super.boundPort);
+	in_addr_t parentAddress;
+	in_port_t parentPort;
+	socket_getSocketName(&(parent->super), &parentAddress, &parentPort);
+	socket_setSocketName(&(child->tcp->super), parentAddress, parentPort, TRUE);
 
 	return child;
 }
@@ -224,18 +226,18 @@ static in_addr_t tcp_getIP(TCP* tcp) {
 	in_addr_t ip = 0;
 	if(tcp->server) {
 		if(socket_isBound(&(tcp->super))) {
-			ip = socket_getBinding(&(tcp->super));
+			socket_getSocketName(&(tcp->super), &ip, NULL);
 		} else {
 			ip = tcp->server->lastIP;
 		}
 	} else if(tcp->child) {
 		if(socket_isBound(&(tcp->child->parent->super))) {
-			ip = socket_getBinding(&(tcp->child->parent->super));
+			socket_getSocketName(&(tcp->child->parent->super), &ip, NULL);
 		} else {
 			ip = tcp->child->parent->server->lastIP;
 		}
 	} else {
-		ip = socket_getBinding(&(tcp->super));
+		socket_getSocketName(&(tcp->super), &ip, NULL);
 	}
 	return ip;
 }
