@@ -16,7 +16,11 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 
 	c->context = g_option_context_new(required_parameters);
 	g_option_context_set_summary(c->context, "Shadow - run real applications over simulated networks");
-	g_option_context_set_description(c->context, "Shadow description");
+	g_option_context_set_description(c->context,
+		"Shadow is a unique discrete-event network simulator that runs real "
+		"applications like Tor, and distributed systems of thousands of nodes "
+		"on a single machine. Shadow combines the accuracy of emulation with the "
+		"efficiency and control of simulation, achieving the best of both approaches.");
 
 	/* set defaults */
 	c->nWorkerThreads = 0;
