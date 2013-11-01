@@ -3,11 +3,16 @@
 import sys, csv, numpy
 import networkx as nx
 
+BW_FILENAME="aggregate_mean_netspeeds.csv"
+PLOSS_FILENAME="aggregate_mean_netquality.csv"
+MAP_FILENAME="full_tor_map.xml"
+OUTPUT_FILENAME="topology.graphml.xml"
+
 def main():
     # KiB/s
-    bwup, bwdown = get_bandwidth("aggregate_mean_netspeeds.csv")
+    bwup, bwdown = get_bandwidth(BW_FILENAME)
     # fraction between 0 and 1
-    loss = get_packet_loss("aggregate_mean_netquality.csv")
+    loss = get_packet_loss(PLOSS_FILENAME)
     meanloss = numpy.mean(loss.values())
     keys = sorted(bwup.keys())
     for k in keys:
@@ -20,7 +25,7 @@ def main():
     geo = getGeoEntries()
 
     # now get the graph and mod it as needed for shadow
-    Gin = nx.read_graphml("full_tor_map.xml")
+    Gin = nx.read_graphml(MAP_FILENAME)
 
     G = nx.DiGraph()
     G.graph['bandwidthup'] = bupstr
@@ -63,7 +68,7 @@ def main():
     G.add_edge("dummynode", dummy_connect_id, latencies="10000.0")
     G.add_edge(dummy_connect_id, "dummynode", latencies="10000.0")
 
-    nx.write_graphml(G, "topology.graphml.xml")
+    nx.write_graphml(G, OUTPUT_FILENAME)
 
 def get_id_string(n):
     t = get_node_type_string(n)
@@ -76,7 +81,7 @@ def get_node_type_string(n):
 
 def get_packet_loss(filename):
     loss = {}
-    with open('aggregate_mean_netquality.csv', 'rb') as f:
+    with open(filename, 'rb') as f:
         r = csv.reader(f) # country, region, jitter, packetloss, latency
         for row in r:
             country, region, jitter, packetloss, latency = row[0], row[1], float(row[2]), float(row[3]), float(row[4])
@@ -88,7 +93,7 @@ def get_packet_loss(filename):
 
 def get_bandwidth(filename):
     bwdown, bwup = {}, {}
-    with open('aggregate_mean_netspeeds.csv', 'rb') as f:
+    with open(filename, 'rb') as f:
         r = csv.reader(f) # country, region, bwdown, bwup
         for row in r:
             country, region = row[0], row[1]
@@ -100,27 +105,11 @@ def get_bandwidth(filename):
             if code not in bwup: bwup[code] = up
     return bwdown, bwup
 
-def ip2long(ip):
-    """
-    Convert a IPv4 address into a 32-bit integer.
-    
-    @param ip: quad-dotted IPv4 address
-    @type ip: str
-    @return: network byte order 32-bit integer
-    @rtype: int
-    """
-    ip_array = ip.split('.')
-    ip_long = long(ip_array[0]) * 16777216 + long(ip_array[1]) * 65536 + long(ip_array[2]) * 256 + long(ip_array[3])
-    return ip_long
-    
 def getClusterCode(geoentries, ip):
-    # use geoip entries to find our cluster code for IP
-    ipnum = ip2long(ip)
-    #print "{0} {1}".format(ip, ipnum)
-    # theres probably a faster way of doing this, but this is python and i dont care
+    ip_array = ip.split('.')
+    ipnum = long(ip_array[0]) * 16777216 + long(ip_array[1]) * 65536 + long(ip_array[2]) * 256 + long(ip_array[3])
     for entry in geoentries:
         if ipnum >= entry.lownum and ipnum <= entry.highnum: 
-#            if entry.countrycode == "US": return "USMN" # we have no USUS code (USMN gets USCENTRAL)
             return "{0}".format(entry.countrycode)
     return "US"
 
