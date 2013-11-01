@@ -17,8 +17,10 @@ def main():
     bdownstr = ','.join(["{0}={1}".format(k, bwdown[k]) for k in keys])
     plossstr = ','.join(["{0}={1}".format(k, loss[k]) for k in keys])
 
+    geo = getGeoEntries()
+
     # now get the graph and mod it as needed for shadow
-    Gin = nx.read_graphml("inet-test.graphml.xml")
+    Gin = nx.read_graphml("full_tor_map.xml")
 
     G = nx.DiGraph()
     G.graph['bandwidthup'] = bupstr
@@ -29,18 +31,32 @@ def main():
 
     for id in Gin.nodes():
         n = Gin.node[id]
-        if 'nodetype' not in n: continue
+        if len(n) == 0 or 'nodetype' not in n: continue
 
-        nodetypestr = 'server' if 'dest' in n['nodetype'] else n['nodetype']
-        geocodesstr = n['countries'] if 'countries' in n else 'US'
+        nodetypestr = get_node_type_string(n)
+        geocodesstr = 'US'
+        if 'countries' in n: geocodesstr = n['countries']
+        elif 'country' in n: geocodesstr = n['country']
+        elif 'relay' in nodetypestr: geocodesstr = getClusterCode(geo, n['relay_ip'])
         asnstr = n['asn'].split()[0][2:] if 'asn' in n else '0'
+        idstr = get_id_string(n)
 
-        G.add_node(get_id_string(id), nodetype=nodetypestr, geocodes=geocodesstr, asn=asnstr) 
+#        if 'relay' in nodetypestr:
+#            G.add_node(idstr, nodetype=nodetypestr, geocodes=geocodesstr, asn=asnstr, relay_ip=n['relay_ip'], relay_fingerprint=n['fp'], relay_nickname=n['nick'])
+#        else:
+        G.add_node(idstr, nodetype=nodetypestr, geocodes=geocodesstr, asn=asnstr)
 
     for (srcid,dstid) in Gin.edges():
         e = Gin.edge[srcid][dstid]
-        l = e['latency']
-        G.add_edge(get_id_string(srcid), get_id_string(dstid), latencies=l)
+        srcn = Gin.node[srcid]
+        dstn = Gin.node[dstid]
+        if len(srcn) == 0 or 'nodetype' not in n: continue
+        if len(dstn) == 0 or 'nodetype' not in n: continue
+        srcidstr = get_id_string(srcn)
+        dstidstr = get_id_string(dstn)
+        if srcidstr in G.node and dstidstr in G.node:
+            l = e['latency']
+            G.add_edge(srcidstr, dstidstr, latencies=l)
 
     # make sure the dummy node is connected
     dummy_connect_id = G.nodes()[0]
@@ -49,8 +65,14 @@ def main():
 
     nx.write_graphml(G, "topology.graphml.xml")
 
-def get_id_string(id):
-    return '.'.join(id.split('_')[1:]) if 'dest' in id else str(id)
+def get_id_string(n):
+    t = get_node_type_string(n)
+    if 'server' in t: return '.'.join(n['nodeid'].split('_')[1:])
+    elif 'relay' in t: return n['relay_ip']
+    else: return str(n['nodeid'])
+
+def get_node_type_string(n):
+    return 'server' if 'dest' in n['nodetype'] else n['nodetype']
 
 def get_packet_loss(filename):
     loss = {}
@@ -78,6 +100,40 @@ def get_bandwidth(filename):
             if code not in bwup: bwup[code] = up
     return bwdown, bwup
 
+def ip2long(ip):
+    """
+    Convert a IPv4 address into a 32-bit integer.
+    
+    @param ip: quad-dotted IPv4 address
+    @type ip: str
+    @return: network byte order 32-bit integer
+    @rtype: int
+    """
+    ip_array = ip.split('.')
+    ip_long = long(ip_array[0]) * 16777216 + long(ip_array[1]) * 65536 + long(ip_array[2]) * 256 + long(ip_array[3])
+    return ip_long
+    
+def getClusterCode(geoentries, ip):
+    # use geoip entries to find our cluster code for IP
+    ipnum = ip2long(ip)
+    #print "{0} {1}".format(ip, ipnum)
+    # theres probably a faster way of doing this, but this is python and i dont care
+    for entry in geoentries:
+        if ipnum >= entry.lownum and ipnum <= entry.highnum: 
+#            if entry.countrycode == "US": return "USMN" # we have no USUS code (USMN gets USCENTRAL)
+            return "{0}".format(entry.countrycode)
+    return "US"
+
+def getGeoEntries():
+    entries = []
+    with open("geoip", "rb") as f:
+        for line in f:
+            if line[0] == "#": continue
+            parts = line.strip().split(',')
+            entry = GeoIPEntry(parts[0], parts[1], parts[2])
+            entries.append(entry)
+    return entries
+
 def get_code(country, region):
     if ('US' in country and 'US' not in region) or ('CA' in country and 'CA' not in region):
         return "{0}{1}".format(country, region)
@@ -104,5 +160,11 @@ def make_test_graph():
     G.add_edge("137.150.145.240", "2", latencies="2.0,2.1,2.2,2.2,2.2,2.3,2.6,2.8,3.0,3.5")
 
     nx.write_graphml(G, "test.graphml.xml")
+
+class GeoIPEntry():
+    def __init__(self, lownum, highnum, countrycode):
+        self.lownum = int(lownum)
+        self.highnum = int(highnum)
+        self.countrycode = countrycode
 
 if __name__ == '__main__': sys.exit(main())
