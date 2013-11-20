@@ -49,24 +49,25 @@ def main():
         elif 'pop' in n['nodetype']:
             popid = str(n['nodeid'])
             gc = n['countries'] if 'countries' in n else 'US'
-            #asn = n['asn'].split()[0][2:]
-            G.add_node(popid, nodetype='pop', geocodes=gc)
+            asnum = n['asn'].split()[0][2:]
+            G.add_node(popid, nodetype='pop', geocodes=gc, asn=asnum)
 
         elif 'relay' in n['nodetype']:
             ip = n['relay_ip']
             fingerprint = n['id']
             #nickname = n['nick']
-            #asn = n['asn'].split()[0][2:]
+            asnum = n['asn'].split()[0][2:]
             #pop = n['pop']
             #poiip = n['ip']
             gc = get_geo_code(geo, ip)
-            G.add_node(ip, nodetype='relay', geocodes=gc)
+            G.add_node(ip, nodetype='relay', geocodes=gc, asn=asnum)
             fp_to_ip[fingerprint] = ip
 
         elif 'dest' in n['nodetype']:
             ip = '.'.join(n['nodeid'].split('_')[1:])
+            asnum = n['asn'].split()[0][2:]
             gc = n['country']
-            G.add_node(ip, nodetype='server', geocodes=gc)
+            G.add_node(ip, nodetype='server', geocodes=gc, asn=asnum)
 
     for (srcid, dstid) in Gin.edges():
         e = Gin.edge[srcid][dstid]
