@@ -85,7 +85,7 @@ static void _networkinterface_pcapInit(NetworkInterface *interface) {
 
 static gint _networkinterface_compareSocket(const Socket* sa, const Socket* sb, gpointer userData) {
 	Packet* pa = socket_peekNextPacket(sa);
-	Packet* pb = socket_peekNextPacket(sa);
+	Packet* pb = socket_peekNextPacket(sb);
 	return packet_getPriority(pa) > packet_getPriority(pb) ? +1 : -1;
 }
 
