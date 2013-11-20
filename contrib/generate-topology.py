@@ -25,6 +25,9 @@ def main():
 
     # now get the graph and mod it as needed for shadow
     Gin = nx.read_graphml(MAP_FILENAME)
+    assert nx.is_connected(Gin)
+    assert nx.number_connected_components(Gin) == 1
+    print "G in appears OK"
 
     G = nx.Graph()
     G.graph['bandwidthup'] = bupstr
@@ -34,6 +37,7 @@ def main():
     G.add_node("dummynode", bandwidthup=bupstr, bandwidthdown=bdownstr, packetloss=plossstr)
 
     empty = set()
+    fp_to_ip = {}
 
     for id in Gin.nodes():
         n = Gin.node[id]
@@ -50,13 +54,14 @@ def main():
 
         elif 'relay' in n['nodetype']:
             ip = n['relay_ip']
-            #fingerprint = n['fp']
+            fingerprint = n['id']
             #nickname = n['nick']
             #asn = n['asn'].split()[0][2:]
             #pop = n['pop']
             #poiip = n['ip']
             gc = get_geo_code(geo, ip)
             G.add_node(ip, nodetype='relay', geocodes=gc)
+            fp_to_ip[fingerprint] = ip
 
         elif 'dest' in n['nodetype']:
             ip = '.'.join(n['nodeid'].split('_')[1:])
@@ -65,8 +70,14 @@ def main():
 
     for (srcid, dstid) in Gin.edges():
         e = Gin.edge[srcid][dstid]
-        s = '.'.join(n['nodeid'].split('_')[1:]) if 'dest' in srcid else srcid
-        d = '.'.join(n['nodeid'].split('_')[1:]) if 'dest' in dstid else dstid
+        s = srcid
+        if 'dest' in s: s = '.'.join(s.split('_')[1:])
+        elif s in fp_to_ip: s = fp_to_ip[s]
+
+        d = dstid
+        if 'dest' in d: d = '.'.join(d.split('_')[1:])
+        elif d in fp_to_ip: d = fp_to_ip[d]
+
         if s in G.node and d in G.node: G.add_edge(s, d, latencies=e['latency'])
         else: print "skipped edge: {0} -- {1}".format(s, d)
 
@@ -76,12 +87,14 @@ def main():
     G.add_edge(dummy_connect_id, "dummynode", latencies="10000.0")
 
     # undirected graphs
-    assert is_connected(G)
-    assert number_connected_components(G) == 1
+    assert nx.is_connected(G)
+    assert nx.number_connected_components(G) == 1
 
     # directed graphs
-    #assert is_strongly_connected(G)
-    #assert number_strongly_connected_components(G) == 1
+    #assert nx.is_strongly_connected(G)
+    #assert nx.number_strongly_connected_components(G) == 1
+
+    print "G out is connected with 1 component"
 
     nx.write_graphml(G, OUTPUT_FILENAME)
 
