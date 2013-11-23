@@ -7,7 +7,7 @@ BW_FILENAME="aggregate_mean_netspeeds.csv"
 PLOSS_FILENAME="aggregate_mean_netquality.csv"
 MAP_FILENAME="full_tor_map.xml"
 GEO_FILENAME="geoip"
-OUTPUT_FILENAME="topology.graphml.xml"
+OUTPUT_FILENAME="topology.full.graphml.xml"
 
 def main():
     bwup, bwdown = get_bandwidth() # KiB/s

@@ -2,7 +2,7 @@
 
 import networkx as nx
 
-G = nx.read_graphml("topology.graphml.xml")
+G = nx.read_graphml("topology.full.graphml.xml")
 
 print "read graph ok"
 
