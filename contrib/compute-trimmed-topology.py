@@ -3,81 +3,70 @@
 import time, sys
 import networkx as nx
 from random import sample
-from multiprocessing import Process, JoinableQueue
+from multiprocessing import Process, Queue, cpu_count
 from threading import Thread
 
-def manager(taskq, resultq, finaldistq, logq, pois):
+INPUT_GRAPH="topology.test.graphml.xml"
+OUTPUT_GRAPH="topology.trimmed.graphml.xml"
+CLIENT_SAMPLE_SIZE=10000
+
+def worker(taskq, resultq, G):
+    for srcid in iter(taskq.get, 'STOP'):
+        dists = nx.single_source_dijkstra_path_length(G, srcid)
+        resultq.put((srcid, dists))
+
+def distribute(num_processes, G, pois):
+    taskq, resultq = Queue(), Queue()
+
+    # each task is to do a single source shortest path for a node
+    for i in pois:
+        taskq.put(i)
+
+    # start the worker processes
+    for i in range(num_processes):
+        Process(target=worker, args=(taskq, resultq, G)).start()
+
+    # we will collect the distances from the workers
     d = {}
     npois = len(pois)
     start = time.time()
     count = 0
-
-    while not taskq.empty():
+    while count < npois:
         result = resultq.get()
         srcid, dists = result[0], result[1]
         d[srcid] = dists
         count += 1
         est = (((time.time() - start) / count) * (npois - count)) / 3600.0
         msg = "\rfinished {0}/{1}, estimated hours remaining: {2}".format(count, npois, est)
-        logq.put(msg)
-        #sys.stdout.write(msg)
-        #sys.stdout.flush()
-
-    finaldistq.put(d)
-
-def worker(taskq, resultq, G):
-    while not taskq.empty():
-        srcid = taskq.get()
-        dists = nx.single_source_dijkstra_path_length(G, srcid)
-        resultq.put((srcid, dists))
-        taskq.task_done()
-
-def distribute(num_processes, G, pois):
-    taskq = JoinableQueue()
-    resultq = JoinableQueue()
-    finaldistq = JoinableQueue()
-    logq = JoinableQueue()
-
-    for i in pois: taskq.put(i)
-
-    m = Process(target=manager, args=(taskq, resultq, finaldistq, logq, pois))
-
-    workers = []
-    for i in range(num_processes):
-        p = Process(target=worker, args=(taskq, resultq, G))
-        p.start()
-        workers.append(p)
-
-    while True:
-        msg = logq.get()
         sys.stdout.write(msg)
         sys.stdout.flush()
-        if taskq.empty(): break
 
-    taskq.join()
-    for p in workers: p.join()
-
-    d = finaldistq.get()
-    m.join()
+    # tell workesr to stop
+    for i in range(num_processes):
+        taskq.put('STOP')
 
     return d
 
 def main():
-    if len(sys.argv) != 2: print "usage: {0} num_processes".format(sys.argv[0]); exit()
-    num_processes = int(sys.argv[1])
+    num_processes = cpu_count()
+    if len(sys.argv) > 1:
+        num_processes = int(sys.argv[1])
 
     # get the original graph
     print "reading graph..."
 
-    G = nx.read_graphml("topology.full.graphml.xml")
+    G = nx.read_graphml(INPUT_GRAPH)
 
     # extract the node geocodes and the set of nodes with pop-type as client poi candidates
     print "extracting candidate clients..."
 
-    relays, servers, clients, pops = set(), set(), set(), set()
+    relays, servers, clients, pops, others = set(), set(), set(), set(), set()
     codes = dict()
     nodes = G.nodes()
     for nid in nodes:
+        if nid == 'dummynode':
+            others.add(nid)
+            continue
         n = G.node[nid]
         if 'nodetype' in n:
             if n['nodetype'] == 'pop':
@@ -91,7 +80,7 @@ def main():
     # sample the pops and make sure we have at least one from each geocode
     print "selecting clients..."
 
-    for nid in sample(pops, 10000):
+    for nid in sample(pops, CLIENT_SAMPLE_SIZE):
         clients.add(nid)
         n = G.node[nid]
         if 'geocodes' in n:
@@ -117,7 +106,7 @@ def main():
     print "removed old edges and nodes..."
 
     G.remove_edges_from(G.edges())
-    G.remove_nodes_from(list(pops))
+    G.remove_nodes_from(set(nodes).difference(pois.union(others)))
 
     print "added new edges..."
 
@@ -125,9 +114,17 @@ def main():
         for dstid in pois:
             G.add_edge(srcid, dstid, latencies=d[srcid][dstid])
 
+    # handle the stupid dummy node
+    for srcid in others:
+        for dstid in pois:
+            G.add_edge(srcid, dstid, latencies=10000)
+
+    assert nx.is_connected(G)
+    assert nx.number_connected_components(G) == 1
+
     print "write graph..."
 
-    nx.write_graphml(G, "topology.trimmed.graphml.xml")
+    nx.write_graphml(G, OUTPUT_GRAPH)
 
 if __name__ == '__main__': main()
 
