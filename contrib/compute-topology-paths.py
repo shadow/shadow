@@ -53,8 +53,10 @@ def run_distributed(num_processes, G, pois, Gnew):
 #        srcid, dists = result[0], result[1]
 #        d[srcid] = dists
         count += 1
-        est = (((time.time() - start) / count) * (npois - count)) / 3600.0
-        msg = "\rfinished {0}/{1}, {3} waiting, estimated hours remaining: {2}".format(count, npois, est, doneq.qsize())
+        nwait = doneq.qsize()
+        ndone = count + nwait
+        est = (((time.time() - start) / ndone) * (npois - ndone)) / 3600.0
+        msg = "\rfinished {0}/{1} ({3} waiting), estimated hours remaining: {2}".format(ndone, npois, est, nwait)
         sys.stdout.write(msg)
         sys.stdout.flush()
 
