@@ -129,7 +129,7 @@ def main():
     pois = clients.union(servers.union(relays))
     Gnew = G.copy()
     Gnew.remove_edges_from(G.edges())
-    Gnew.remove_nodes_from(pops)
+    Gnew.remove_nodes_from(set(nodes).difference(pois.union(others)))
 
     print "getting dijkstra shortest path lengths..."
 
