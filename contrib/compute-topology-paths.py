@@ -6,7 +6,7 @@ from random import sample
 from multiprocessing import Process, Queue, cpu_count
 from threading import Thread, Lock
 
-INPUT_GRAPH="topology.full.graphml.xml"
+INPUT_GRAPH="topology.pruned.graphml.xml"
 OUTPUT_GRAPH="topology.complete.graphml.xml"
 CLIENT_SAMPLE_SIZE=10000
 
