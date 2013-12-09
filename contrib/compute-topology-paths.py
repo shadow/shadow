@@ -7,31 +7,31 @@ from multiprocessing import Process, Queue, cpu_count
 from threading import Thread, Lock
 
 INPUT_GRAPH="topology.full.graphml.xml"
-OUTPUT_GRAPH="topology.trimmed.graphml.xml"
+OUTPUT_GRAPH="topology.complete.graphml.xml"
 CLIENT_SAMPLE_SIZE=10000
 
 def worker(taskq, resultq, G, pois):
     for srcid in iter(taskq.get, 'STOP'):
         dists = nx.single_source_dijkstra_path_length(G, srcid)
-        wantd = {}
-        for d in dists: 
-            if d in pois: wantd[d] = dists[d]
-        resultq.put((srcid, wantd))
+        d = {}
+        for dstid in dists: 
+            if dstid in pois: d[dstid] = dists[dstid]
+        resultq.put((srcid, d))
 
-def thread(resultq, d, dlock, doneq):
+def thread(resultq, Gnew, glock, doneq):
     for r in iter(resultq.get, 'STOP'):
-        dlock.acquire()
-        d[r[0]] = r[1]
-        dlock.release()
+        srcid, d = r[0], r[1]
+        glock.acquire()
+        for dstid in d: Gnew.add_edge(srcid, dstid, latencies=d[dstid])
+        glock.release()
         doneq.put(True)
 
-def distribute(num_processes, G, pois):
+def run_distributed(num_processes, G, pois, Gnew):
     # each task is to do a single source shortest path for a node
     taskq = Queue()
     for i in pois: taskq.put(i)
 
-    d = {}
-    dlock = Lock()
+    glock = Lock()
 
     # start the worker processes
     workers = []
@@ -39,7 +39,7 @@ def distribute(num_processes, G, pois):
     for i in range(num_processes):
         resultq = Queue()
         p = Process(target=worker, args=(taskq, resultq, G, pois))
-        t = Thread(target=thread, args=(resultq, d, dlock, doneq))
+        t = Thread(target=thread, args=(resultq, Gnew, glock, doneq))
         t.setDaemon(True)
         workers.append([p, t, resultq])
     for w in workers: w[0].start();w[1].start()
@@ -64,8 +64,15 @@ def distribute(num_processes, G, pois):
         w[2].put('STOP')
 #        w[0].join()
 #        w[1].join()
-    
-    return d
+
+    return Gnew
+
+def run_single(G, pois, Gnew):
+    d = nx.all_pairs_dijkstra_path_length(G)
+    for srcid in pois:
+        for dstid in pois:
+            Gnew.add_edge(srcid, dstid, latencies=d[srcid][dstid])
+    return Gnew
 
 def main():
     num_processes = cpu_count()
@@ -117,22 +124,21 @@ def main():
         w = (float(l[4])+float(l[5]))/2.0 if len(l) == 10 else float(l[0])
         e['weight'] = w
 
-    print "get dijkstra shortest path lengths..."
+    print "creating destination graph, removing old edges and nodes..."
 
     pois = clients.union(servers.union(relays))
-    d = distribute(num_processes, G, pois)
+    Gnew = G.copy()
+    Gnew.remove_edges_from(G.edges())
+    Gnew.remove_nodes_from(pops)
+
+    print "getting dijkstra shortest path lengths..."
+
+    Gnew = run_distributed(num_processes, G, pois, Gnew)
+    #Gnew = run_single(G, pois, Gnew)
 
     print ""
-    print "removed old edges and nodes..."
 
-    G.remove_edges_from(G.edges())
-    G.remove_nodes_from(set(nodes).difference(pois.union(others)))
-
-    print "added new edges..."
-
-    for srcid in pois:
-        for dstid in pois:
-            G.add_edge(srcid, dstid, latencies=d[srcid][dstid])
+    print "checking graph..."
 
     # handle the stupid dummy node
     for srcid in others:
@@ -142,9 +148,11 @@ def main():
     assert nx.is_connected(G)
     assert nx.number_connected_components(G) == 1
 
-    print "write graph..."
+    print "writing graph..."
 
     nx.write_graphml(G, OUTPUT_GRAPH)
+
+    print "done!"
 
 if __name__ == '__main__': main()
 
