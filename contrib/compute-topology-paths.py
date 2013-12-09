@@ -143,14 +143,14 @@ def main():
     # handle the stupid dummy node
     for srcid in others:
         for dstid in pois:
-            G.add_edge(srcid, dstid, latencies=10000)
+            Gnew.add_edge(srcid, dstid, latencies=10000)
 
-    assert nx.is_connected(G)
-    assert nx.number_connected_components(G) == 1
+    assert nx.is_connected(Gnew)
+    assert nx.number_connected_components(Gnew) == 1
 
     print "writing graph..."
 
-    nx.write_graphml(G, OUTPUT_GRAPH)
+    nx.write_graphml(Gnew, OUTPUT_GRAPH)
 
     print "done!"
 
