@@ -1,0 +1,25 @@
+use the scripts in shadow/contrib to modify the maps:
+  1. full_tor_map.xml --generate-topology.py--> topology.full.graphml.xml
+  2. topology.full.graphml.xml --prune-topology-relays.py--> topology.pruned.graphml.xml
+  3. topology.pruned.graphml.xml --compute-topology-paths.py--> topology.complete.graphml.xml
+  4. topology.complete.graphml.xml --collapse-topology.py--> topology.graphml.xml
+
+files:
+  -full_tor_map.xml:
+   undirected connected map from chris wacek
+  -topology.full.graphml.xml:
+   undrected connected map with unnecessary attributes stripped out, in a format that shadow understands (not complete, so shadow must run shortest path on this map)
+  -topology.pruned.graphml.xml:
+   the full topology with the relays that are not used in a given simulation pruned out, so that we dont have to compute so many shortest paths. however, shadow still must compute the shortest paths.
+  -topology.complete.graphml.xml:
+   undirected, connected, complete graph with shortest paths pre-computed
+  -topology.graphml.xml
+   collapsed version of the complete graph, where nodes are clustered by country code instead of pop/poi. shortest paths are not necessary since the graph is complete.
+  -topology.plab.graphml.xml:
+   the shadow topology created from the old planet lab dataset
+   its a complete graph so shortest path is not necessary inside of shadow
+
+TODO:
+  -some scripts require data from netindex - document this
+  -make_test_graph.py is outdated
+  -convert-topology.py is outdated
