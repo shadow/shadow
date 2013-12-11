@@ -7,7 +7,7 @@ INPUT_GRAPH="topology.complete.graphml.xml"
 OUTPUT_GRAPH="topology.graphml.xml"
 
 def copy_edge_props(srce, dste):
-    for attr in ['latency', 'jitter', 'packetloss']:
+    for attr in srce:
         if attr not in dste: dste[attr] = []
         dste[attr].append(float(srce[attr]))
 
@@ -37,7 +37,7 @@ def main():
     for attr in G.graph: Gnew.graph[attr] = G.graph[attr]
     for (srcid, dstid) in Gnew.edges():
         e = Gnew.edge[srcid][dstid]
-        for attr in ['latency', 'jitter', 'packetloss']: e[attr] = "{0}".format(float(sum(attr)) / float(len(e[attr])))
+        for attr in e: e[attr] = "{0}".format(float(sum(e[attr])) / float(len(e[attr])))
 
     print "checking graph..."
     assert nx.is_connected(Gnew)
