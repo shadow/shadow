@@ -17,10 +17,6 @@ def main():
     for k in keys:
         if k not in loss: loss[k] = meanloss
 
-    bupstr = ','.join(["{0}={1}".format(k, bwup[k]) for k in keys])
-    bdownstr = ','.join(["{0}={1}".format(k, bwdown[k]) for k in keys])
-    plossstr = ','.join(["{0}={1}".format(k, loss[k]) for k in keys])
-
     geo = get_geo()
 
     # now get the graph and mod it as needed for shadow
@@ -30,27 +26,32 @@ def main():
     print "G in appears OK"
 
     G = nx.Graph()
-    G.graph['bandwidthup'] = bupstr
-    G.graph['bandwidthdown'] = bdownstr
-    G.graph['packetloss'] = plossstr
-    # hack until we use a version of igraph that supports graph attributes
-    G.add_node("dummynode", bandwidthup=bupstr, bandwidthdown=bdownstr, packetloss=plossstr)
 
-    empty = set()
     fp_to_ip = {}
+    id_to_id = {}
 
+    popcounter, poicounter = 0, 0
     for id in Gin.nodes():
         n = Gin.node[id]
 
-        if 'nodetype' not in n:
-            empty.add(id)
-            continue
+        if 'nodetype' not in n: continue
 
         elif 'pop' in n['nodetype']:
-            popid = str(n['nodeid'])
-            gc = n['countries'] if 'countries' in n else 'US'
+            gc = 'A1'
+            if 'countries' in n: gc = n['countries']
+            elif 'country' in n: gc = n['country']
+            else: print "unknown country code for pop {0}, using {1}".format(id, gc)
             asnum = n['asn'].split()[0][2:]
-            G.add_node(popid, nodetype='pop', geocodes=gc, asn=asnum)
+            popcounter += 1
+            newid = "pop-{0}".format(popcounter)
+            id_to_id[id] = newid
+            G.add_node(newid, type='pop', geocode=gc, asn=asnum)
+
+            if gc in bwup:
+                poicounter += 1
+                clientid = "poi-{0}".format(poicounter)
+                G.add_node(clientid, type='client', ip="0.0.0.0", geocode=gc, asn=asnum, bandwidthup=str(bwup[gc]), bandwidthdown=str(bwdown[gc]), packetloss=str(loss[gc]))
+                G.add_edge(clientid, newid, latency='5.0', jitter='0.0', packetloss='0.0')
 
         elif 'relay' in n['nodetype']:
             ip = n['relay_ip']
@@ -60,32 +61,32 @@ def main():
             #pop = n['pop']
             #poiip = n['ip']
             gc = get_geo_code(geo, ip)
-            G.add_node(ip, nodetype='relay', geocodes=gc, asn=asnum)
-            fp_to_ip[fingerprint] = ip
+            #gc = n['country']
+            if gc in bwup:
+                poicounter += 1
+                newid = "poi-{0}".format(poicounter)
+                id_to_id[id] = newid
+                G.add_node(newid, type='relay', ip=ip, geocode=gc, asn=asnum, bandwidthup=str(bwup[gc]), bandwidthdown=str(bwdown[gc]), packetloss=str(loss[gc]))
 
         elif 'dest' in n['nodetype']:
             ip = '.'.join(n['nodeid'].split('_')[1:])
             asnum = n['asn'].split()[0][2:]
-            gc = n['country']
-            G.add_node(ip, nodetype='server', geocodes=gc, asn=asnum)
+            gc = get_geo_code(geo, ip)
+            #gc = n['country']
+            if gc in bwup:
+                poicounter += 1
+                newid = "poi-{0}".format(poicounter)
+                id_to_id[id] = newid
+                G.add_node(newid, type='server', ip=ip, geocode=gc, asn=asnum, bandwidthup=str(bwup[gc]), bandwidthdown=str(bwdown[gc]), packetloss=str(loss[gc]))
 
     for (srcid, dstid) in Gin.edges():
-        e = Gin.edge[srcid][dstid]
-        s = srcid
-        if 'dest' in s: s = '.'.join(s.split('_')[1:])
-        elif s in fp_to_ip: s = fp_to_ip[s]
-
-        d = dstid
-        if 'dest' in d: d = '.'.join(d.split('_')[1:])
-        elif d in fp_to_ip: d = fp_to_ip[d]
-
-        if s in G.node and d in G.node: G.add_edge(s, d, latencies=e['latency'])
-        else: print "skipped edge: {0} -- {1}".format(s, d)
-
-    # connect the dummy node that stores our bandwidth information
-    dummy_connect_id = G.nodes()[0]
-    G.add_edge("dummynode", dummy_connect_id, latencies="10000.0")
-    G.add_edge(dummy_connect_id, "dummynode", latencies="10000.0")
+        if srcid in id_to_id and dstid in id_to_id:
+            e = Gin.edge[srcid][dstid]
+            l = [float(i) for i in e['latency'].split(',')]
+            meanl = numpy.mean(l)
+            jit = (l[7] - l[2]) / 2.0
+            G.add_edge(id_to_id[srcid], id_to_id[dstid], latency=str(meanl), jitter=str(jit), packetloss="0.0")
+        else: print "skipped edge: {0} -- {1}".format(srcid, dstid)
 
     # undirected graphs
     assert nx.is_connected(G)

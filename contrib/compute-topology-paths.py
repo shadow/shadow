@@ -12,17 +12,34 @@ CLIENT_SAMPLE_SIZE=10000
 
 def worker(taskq, resultq, G, pois):
     for srcid in iter(taskq.get, 'STOP'):
-        dists = nx.single_source_dijkstra_path_length(G, srcid)
+#        dists = nx.single_source_dijkstra_path_length(G, srcid)
+#        d = {}
+#        for dstid in dists: 
+#            if dstid in pois: d[dstid] = dists[dstid]
+
+        path = nx.single_source_dijkstra_path(G, srcid)
         d = {}
-        for dstid in dists: 
-            if dstid in pois: d[dstid] = dists[dstid]
+        for dstid in path:
+            if dstid not in pois: continue
+            l, j = [], []
+            p = path[dstid]
+            if len(p) == 1:
+                l.append(0.0)
+                j.append(0.0)
+            else:
+                for i in xrange(len(p)-1):
+                    e = G.edge[p[i]][p[i+1]]
+                    l.append(float(e['latency']))
+                    j.append(float(e['jitter']))
+            d[dstid] = {'latency':str(sum(l)), 'jitter':str(sum(j)/float(len(j)))}
+
         resultq.put((srcid, d))
 
 def thread(resultq, Gnew, glock, doneq):
     for r in iter(resultq.get, 'STOP'):
         srcid, d = r[0], r[1]
         glock.acquire()
-        for dstid in d: Gnew.add_edge(srcid, dstid, latencies=d[dstid])
+        for dstid in d: Gnew.add_edge(srcid, dstid, latency=d[dstid]['latency'], jitter=d[dstid]['jitter'], packetloss='0.0')
         glock.release()
         doneq.put(True)
 
@@ -73,7 +90,7 @@ def run_single(G, pois, Gnew):
     d = nx.all_pairs_dijkstra_path_length(G)
     for srcid in pois:
         for dstid in pois:
-            Gnew.add_edge(srcid, dstid, latencies=d[srcid][dstid])
+            Gnew.add_edge(srcid, dstid, latency=str(d[srcid][dstid]), jitter='0.0', packetloss='0.0')
     return Gnew
 
 def main():
@@ -87,65 +104,52 @@ def main():
     G = nx.read_graphml(INPUT_GRAPH)
 
     # extract the node geocodes and the set of nodes with pop-type as client poi candidates
-    print "extracting candidate clients..."
+    print "extracting pois..."
 
-    relays, servers, clients, pops, others = set(), set(), set(), set(), set()
-    codes = dict()
+    relays, servers, clients, pops = set(), set(), set(), set()
     nodes = G.nodes()
     for nid in nodes:
-        if nid == 'dummynode':
-            others.add(nid)
-            continue
         n = G.node[nid]
-        if 'nodetype' in n:
-            if n['nodetype'] == 'pop':
-                pops.add(nid)
-                if 'geocodes' in n:
-                    code = n['geocodes'].split(',')[0]
-                    if code not in codes: codes[code] = nid
-            elif n['nodetype'] == 'relay': relays.add(nid)
-            elif n['nodetype'] == 'server': servers.add(nid)
+        if 'type' in n:
+            if n['type'] == 'pop': pops.add(nid)
+            elif n['type'] == 'relay': relays.add(nid)
+            elif n['type'] == 'server': servers.add(nid)
+            elif n['type'] == 'client': clients.add(nid)
 
     # sample the pops and make sure we have at least one from each geocode
     print "selecting clients..."
 
-    for nid in sample(pops, CLIENT_SAMPLE_SIZE):
-        clients.add(nid)
+    codes = {}
+    for nid in clients:
+        c = G.node[nid]['geocode']
+        codes[c] = nid
+
+    clients = set(sample(clients, CLIENT_SAMPLE_SIZE))
+    for nid in clients:
         n = G.node[nid]
-        if 'geocodes' in n:
-            code = n['geocodes'].split(',')[0]
-            if code in codes: del(codes[code])
+        c = n['geocode']
+        if c in codes: del(codes[c])
     for nid in codes.values(): clients.add(nid)
 
-    # choose the median latency to act as the edge weight for all edges
-    print "get weights..."
-
-    for (srcid, dstid) in G.edges():
-        e = G.edge[srcid][dstid]
-        l = e['latencies'].split(',')
-        w = (float(l[4])+float(l[5]))/2.0 if len(l) == 10 else float(l[0])
-        e['weight'] = w
-
-    print "creating destination graph, removing old edges and nodes..."
+    print "creating destination graph..."
 
     pois = clients.union(servers.union(relays))
-    Gnew = G.copy()
-    Gnew.remove_edges_from(G.edges())
-    Gnew.remove_nodes_from(set(nodes).difference(pois.union(others)))
+    Gnew = nx.Graph()
+    for id in pois:
+        Gnew.add_node(id)
+        for attr in G.node[id]:
+            Gnew.node[id][attr] = G.node[id][attr]
 
     print "getting dijkstra shortest path lengths..."
+
+    for (s, d) in G.edges():
+        G.edge[s][d]['weight'] = float(G.edge[s][d]['latency'])
 
     Gnew = run_distributed(num_processes, G, pois, Gnew)
     #Gnew = run_single(G, pois, Gnew)
 
     print ""
-
     print "checking graph..."
-
-    # handle the stupid dummy node
-    for srcid in others:
-        for dstid in pois:
-            Gnew.add_edge(srcid, dstid, latencies=10000)
 
     assert nx.is_connected(Gnew)
     assert nx.number_connected_components(Gnew) == 1

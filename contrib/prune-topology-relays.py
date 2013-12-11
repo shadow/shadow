@@ -16,9 +16,10 @@ def main():
     print "getting relays..."
     relays =  dict()
     for nid in G.nodes():
-        if nid == 'dummynode': continue
         n = G.node[nid]
-        if 'nodetype' in n and n['nodetype'] == 'relay': relays[nid] = ip2long(nid)
+        if 'type' in n and n['type'] == 'relay':
+            ip = n['ip']
+            relays[ip] = ip2long(ip)
 
     print "graph has {0} relays".format(len(relays))
     print "matching relays from consensus at {0}...".format(consensus_filename)
@@ -38,8 +39,11 @@ def main():
     print ""
     print "{0} relays match in graph".format(len(keep))
 
-    for nid in relays:
-        if nid not in keep: G.remove_node(nid)
+    for nid in G.nodes():
+        n = G.node[nid]
+        if 'type' in n and n['type'] == 'relay':
+            ip = n['ip']
+            if ip in relays and ip not in keep: G.remove_node(nid)
 
     print "checking graph..."
 
