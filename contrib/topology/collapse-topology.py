@@ -23,15 +23,23 @@ def main():
 
     print "collapsing graph..."
     Gnew = nx.Graph()
+    geoid = {}
+    poicounter = 0
     for (srcid, dstid) in G.edges():
         e = G.edge[srcid][dstid]
         srcn, dstn = G.node[srcid], G.node[dstid]
         if 'geocode' in srcn and 'geocode' in dstn:
             srcg, dstg = srcn['geocode'], dstn['geocode']
-            Gnew.add_edge(srcg, dstg)
-            copy_edge_props(e, Gnew.edge[srcg][dstg])
-            copy_node_props(srcn, Gnew.node[srcg])
-            copy_node_props(dstn, Gnew.node[dstg])
+            if srcg not in geoid:
+                poicounter += 1
+                geoid[srcg] = "poi-{0}".format(poicounter)
+            if dstg not in geoid:
+                poicounter += 1
+                geoid[dstg] = "poi-{0}".format(poicounter)
+            Gnew.add_edge(geoid[srcg], geoid[dstg])
+            copy_edge_props(e, Gnew.edge[geoid[srcg]][geoid[dstg]])
+            copy_node_props(srcn, Gnew.node[geoid[srcg]])
+            copy_node_props(dstn, Gnew.node[geoid[dstg]])
 
     print "adjusting properties..."
     for attr in G.graph: Gnew.graph[attr] = G.graph[attr]
