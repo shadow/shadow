@@ -1,8 +1,6 @@
 #!/usr/bin/python
 
-import sys, csv
-import networkx as nx
-from numpy import mean, median
+import csv, networkx as nx
 
 INPUT_GRAPH="topology.graphml.xml"
 OUTPUT_CSV="pairwise_latencies.csv"
@@ -15,13 +13,14 @@ def main():
     nodes = sorted(G.nodes())
     with open(OUTPUT_CSV, 'wb') as f:
         w = csv.writer(f)
-        w.writerow([''] + nodes)
+        header = [''] + [G.node[nid]['geocode'] for nid in nodes]
+        w.writerow(header)
         for nid1 in nodes:
-            row = [nid1]
+            row = [G.node[nid1]['geocode']]
             for nid2 in nodes:
-                lstr = G.edge[nid1][nid2]['latency']
-                l = [float(i) for i in lstr.split(',')]
-                row.append(str(median(l)))
+                row.append(G.edge[nid1][nid2]['latency'])
             w.writerow(row)
+
+    print "done!"
 
 if __name__ == '__main__': main()
