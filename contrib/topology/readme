@@ -4,7 +4,13 @@ use the scripts in shadow/contrib to modify the maps:
   3. topology.pruned.graphml.xml --compute-topology-paths.py--> topology.complete.graphml.xml
   4. topology.complete.graphml.xml --collapse-topology.py--> topology.graphml.xml
 
+  topology.xml --convert-topology.py--> topology.plab.graphml.xml
+
 files:
+  -topology.xml
+   the old xml topology format before moving to igraph. netindex, and our planetlab latency measurements are the basis of this topology.
+  -topology.plab.graphml.xml
+   this is simply the same data as topology.xml, but converted to the new graphml topology file format
   -full_tor_map.xml:
    undirected connected map from chris wacek
   -topology.full.graphml.xml:
@@ -22,4 +28,4 @@ files:
 TODO:
   -some scripts require data from netindex - document this
   -make_test_graph.py is outdated
-  -convert-topology.py is outdated
+
