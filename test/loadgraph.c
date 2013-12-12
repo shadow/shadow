@@ -28,9 +28,12 @@ int main(int argc, char* argv[]) {
 
   if(r != IGRAPH_SUCCESS) {
 	printf("error loading graph file at %s\n", fileName);
-	return -3;
+	r = -3;
   } else {
 	printf("sucessfully loaded graph file at %s\n", fileName);
-	return 0;
+	r = 0;
   }
+
+  igraph_destroy(&graph);
+  return r;
 }
