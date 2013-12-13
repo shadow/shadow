@@ -10,7 +10,7 @@ GEO_FILENAME="geoip"
 OUTPUT_FILENAME="topology.full.graphml.xml"
 
 def main():
-    bwup, bwdown = get_bandwidth() # KiB/s
+    bwdown, bwup = get_bandwidth() # KiB/s
     loss = get_packet_loss() # fraction between 0 and 1
     meanloss = numpy.mean(loss.values())
     keys = sorted(bwup.keys())
