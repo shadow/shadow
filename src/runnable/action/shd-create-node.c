@@ -13,7 +13,8 @@ struct _CreateNodesAction {
 	Action super;
 	GQuark id;
 	GString* requestedIP;
-	GString* requestedCluster;
+	GString* requestedGeocode;
+	GString* requestedType;
 	guint64 bandwidthdown;
 	guint64 bandwidthup;
 	guint64 quantity;
@@ -47,7 +48,7 @@ RunnableFunctionTable createnodes_functions = {
 	MAGIC_VALUE
 };
 
-CreateNodesAction* createnodes_new(GString* name, GString* ip, GString* cluster,
+CreateNodesAction* createnodes_new(GString* name, GString* ip, GString* geocode, GString* type,
 		guint64 bandwidthdown, guint64 bandwidthup, guint64 quantity, guint64 cpuFrequency,
 		guint64 heartbeatIntervalSeconds, GString* heartbeatLogLevelString, GString* heartbeatLogInfoString,
 		GString* logLevelString, GString* logPcapString, GString* pcapDirString,
@@ -71,8 +72,11 @@ CreateNodesAction* createnodes_new(GString* name, GString* ip, GString* cluster,
 	if(ip && address_stringToIP(ip->str) != address_stringToIP("127.0.0.1")) {
 		action->requestedIP = g_string_new(ip->str);
 	}
-	if(cluster) {
-		action->requestedCluster = g_string_new(cluster->str);
+	if(geocode) {
+		action->requestedGeocode = g_string_new(geocode->str);
+	}
+	if(type) {
+		action->requestedType = g_string_new(type->str);
 	}
 	if(heartbeatLogLevelString) {
 		action->heartbeatLogLevelString = g_string_new(heartbeatLogLevelString->str);
@@ -211,7 +215,8 @@ void createnodes_run(CreateNodesAction* action) {
 
 		Host* host = host_new(id, hostnameBuffer->str,
 				action->requestedIP ? action->requestedIP->str : NULL,
-				action->requestedCluster ? action->requestedCluster->str : NULL,
+				action->requestedGeocode ? action->requestedGeocode->str : NULL,
+				action->requestedType ? action->requestedType->str : NULL,
 				action->bandwidthdown, action->bandwidthup,
 				cpuFrequency, cpuThreshold, cpuPrecision, nodeSeed,
 				heartbeatInterval, heartbeatLogLevel, heartbeatLogInfo,
@@ -250,11 +255,29 @@ void createnodes_run(CreateNodesAction* action) {
 void createnodes_free(CreateNodesAction* action) {
 	MAGIC_ASSERT(action);
 
-	if(action->heartbeatLogLevelString) {
-		g_string_free(action->heartbeatLogLevelString, TRUE);
+	if(action->requestedIP) {
+		g_string_free(action->requestedIP, TRUE);
+	}
+	if(action->requestedGeocode) {
+		g_string_free(action->requestedGeocode, TRUE);
+	}
+	if(action->requestedType) {
+		g_string_free(action->requestedType, TRUE);
 	}
 	if(action->logLevelString) {
 		g_string_free(action->logLevelString, TRUE);
+	}
+	if(action->heartbeatLogLevelString) {
+		g_string_free(action->heartbeatLogLevelString, TRUE);
+	}
+	if(action->heartbeatLogInfoString) {
+		g_string_free(action->heartbeatLogInfoString, TRUE);
+	}
+	if(action->logPcapString) {
+		g_string_free(action->logPcapString, TRUE);
+	}
+	if(action->pcapDirString) {
+		g_string_free(action->pcapDirString, TRUE);
 	}
 
 	GList* item = action->applications;

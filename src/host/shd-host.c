@@ -53,7 +53,7 @@ struct _Host {
 	MAGIC_DECLARE;
 };
 
-Host* host_new(GQuark id, gchar* hostname, gchar* ipHint, gchar* clusterHint,
+Host* host_new(GQuark id, gchar* hostname, gchar* ipHint, gchar* geocodeHint, gchar* typeHint,
 		guint64 requestedBWDownKiBps, guint64 requestedBWUpKiBps,
 		guint cpuFrequency, gint cpuThreshold, gint cpuPrecision, guint nodeSeed,
 		SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel, gchar* heartbeatLogInfo,
@@ -74,7 +74,8 @@ Host* host_new(GQuark id, gchar* hostname, gchar* ipHint, gchar* clusterHint,
 
 	/* connect to topology and get the default bandwidth */
 	guint64 bwDownKiBps = 0, bwUpKiBps = 0;
-	topology_connect(worker_getTopology(), ethernetAddress, host->random, ipHint, clusterHint, NULL, &bwDownKiBps, &bwUpKiBps);
+	topology_attach(worker_getTopology(), ethernetAddress, host->random,
+			ipHint, geocodeHint, typeHint, &bwDownKiBps, &bwUpKiBps);
 
 	/* prefer assigned bandwidth if available */
 	if(requestedBWDownKiBps) {
@@ -134,7 +135,7 @@ void host_free(Host* host, gpointer userData) {
 
 	g_queue_free(host->applications);
 
-	topology_disconnect(worker_getTopology(), networkinterface_getAddress(host->defaultInterface));
+	topology_detach(worker_getTopology(), networkinterface_getAddress(host->defaultInterface));
 
 	g_hash_table_destroy(host->interfaces);
 	g_hash_table_destroy(host->descriptors);

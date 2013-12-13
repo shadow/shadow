@@ -22,9 +22,10 @@ struct _Topology {
 	 * this is protected by the graph lock */
 	igraph_vector_t* edgeWeights;
 
-	/* keep track of how long we spend computing shortest paths,
+	/* keep track of how many, and how long we spend computing shortest paths,
 	 * protected by the graph lock */
 	gdouble shortestPathTotalTime;
+	guint shortestPathCount;
 
 	/* END global igraph lock - igraph is not thread-safe!*/
 	/******/
@@ -50,12 +51,21 @@ struct _Topology {
 	MAGIC_DECLARE;
 };
 
-typedef struct _ConnectAssist ConnectAssist;
-struct _ConnectAssist {
-	GQueue* candidates;
+typedef struct _AttachHelper AttachHelper;
+struct _AttachHelper {
+	GQueue* candidatesAll;
+	guint numCandidatesAllIPs;
+	GQueue* candidatesType;
+	guint numCandidatesTypeIPs;
+	GQueue* candidatesCode;
+	guint numCandidatesCodeIPs;
+	GQueue* candidatesTypeCode;
+	guint numCandidatesTypeCodeIPs;
 	gchar* typeHint;
 	gchar* geocodeHint;
 	gchar* ipHint;
+	in_addr_t requestedIP;
+	gboolean foundExactIPMatch;
 };
 
 typedef void (*EdgeNotifyFunc)(Topology* top, igraph_integer_t edgeIndex, gpointer userData);
@@ -363,7 +373,8 @@ static void _topology_clearCache(Topology* top) {
 	}
 	g_rw_lock_writer_unlock(&(top->pathCacheLock));
 
-	message("path cache cleared, spent %f seconds computing shortest paths", top->shortestPathTotalTime);
+	message("path cache cleared, spent %f seconds computing %u shortest paths",
+			top->shortestPathTotalTime, top->shortestPathCount);
 }
 
 static Path* _topology_getPathFromCache(Topology* top, Address* source, Address* destination) {
@@ -486,6 +497,7 @@ static Path* _topology_computePath(Topology* top, Address* srcAddress, Address* 
 	GTimer* pathTimer = g_timer_new();
 
 	/* run dijkstra's shortest path algorithm */
+	// FIXME do single-source all-dest version here
 #ifndef IGRAPH_VERSION
 	result = igraph_get_shortest_paths_dijkstra(&top->graph, &resultPaths,
 			srcVertexIndex, dstVertexSet, top->edgeWeights, IGRAPH_OUT);
@@ -498,6 +510,7 @@ static Path* _topology_computePath(Topology* top, Address* srcAddress, Address* 
 	gdouble elapsedSeconds = g_timer_elapsed(pathTimer, NULL);
 	g_timer_destroy(pathTimer);
 	top->shortestPathTotalTime += elapsedSeconds;
+	top->shortestPathCount++;
 
 	if(result != IGRAPH_SUCCESS) {
 		g_mutex_unlock(&top->graphLock);
@@ -638,87 +651,203 @@ gboolean topology_isRoutable(Topology* top, Address* srcAddress, Address* dstAdd
 	return topology_getLatency(top, srcAddress, dstAddress) > -1;
 }
 
-static in_addr_t _topology_getLongestPrefixMatch(GList* ipSet, in_addr_t ip) {
-	utility_assert(ipSet);
-
-	in_addr_t bestMatch = 0;
-	in_addr_t bestIP = 0;
-
-	GList* nextIPItem = ipSet;
-	while(nextIPItem) {
-		in_addr_t nextIP = (in_addr_t) GPOINTER_TO_UINT(nextIPItem->data);
-		in_addr_t match = (nextIP & ip);
-		if(match > bestMatch) {
-			bestMatch = match;
-			bestIP = nextIP;
-		}
-		nextIPItem = nextIPItem->next;
-	}
-
-	return bestIP;
-}
-
-static void _topology_connectHelperHook(Topology* top, igraph_integer_t vertexIndex, ConnectAssist* assist) {
+static void _topology_findAttachmentVertexHelperHook(Topology* top, igraph_integer_t vertexIndex, AttachHelper* ah) {
 	MAGIC_ASSERT(top);
-	utility_assert(assist);
+	utility_assert(ah);
 
-	/* make sure we hold the graph lock when iterating with this helper! */
+	/* @warning: make sure we hold the graph lock when iterating with this helper
+	 * @todo: this could be made much more efficient */
 
 	const gchar* idStr = VAS(&top->graph, "id", vertexIndex);
 
 	if(g_strstr_len(idStr, (gssize)-1, "poi")) {
-		const gchar* typeStr = VAS(&top->graph, "type", vertexIndex);
+		/* first check the IP address */
 		const gchar* ipStr = VAS(&top->graph, "ip", vertexIndex);
+		in_addr_t vertexIP = address_stringToIP(ipStr);
+
+		gboolean vertexHasUsableIP = FALSE;
+		if(vertexIP != INADDR_NONE && vertexIP != INADDR_ANY) {
+			vertexHasUsableIP = TRUE;
+		}
+
+		/* check for exact IP address match */
+		if(ah->ipHint && ah->requestedIP != INADDR_NONE && ah->requestedIP != INADDR_ANY) {
+			if(vertexIP == ah->requestedIP) {
+				if(!ah->foundExactIPMatch) {
+					/* first time we found a match, clear all queues to make sure we only
+					 * select from the matching IP vertices */
+					g_queue_clear(ah->candidatesAll);
+					g_queue_clear(ah->candidatesType);
+					g_queue_clear(ah->candidatesCode);
+					g_queue_clear(ah->candidatesTypeCode);
+				}
+				ah->foundExactIPMatch = TRUE;
+				g_queue_push_tail(ah->candidatesAll, GINT_TO_POINTER(vertexIndex));
+				if(vertexHasUsableIP) {
+					ah->numCandidatesAllIPs++;
+				}
+			}
+		}
+
+		/* if it matches the requested IP exactly, we ignore other the filters */
+		if(ah->foundExactIPMatch) {
+			return;
+		}
+
+		const gchar* typeStr = VAS(&top->graph, "type", vertexIndex);
 		const gchar* geocodeStr = VAS(&top->graph, "geocode", vertexIndex);
 
-		/* XXX FIXME fix this to properly filter! */
-		g_queue_push_tail(assist->candidates, GINT_TO_POINTER(vertexIndex));
+		gboolean typeMatches = ah->typeHint && !g_ascii_strcasecmp(typeStr, ah->typeHint);
+		gboolean codeMatches = ah->geocodeHint && !g_ascii_strcasecmp(geocodeStr, ah->geocodeHint);
+
+		g_queue_push_tail(ah->candidatesAll, GINT_TO_POINTER(vertexIndex));
+		if(vertexHasUsableIP) {
+			ah->numCandidatesAllIPs++;
+		}
+		if(typeMatches && ah->candidatesType) {
+			g_queue_push_tail(ah->candidatesType, GINT_TO_POINTER(vertexIndex));
+			if(vertexHasUsableIP) {
+				ah->numCandidatesTypeIPs++;
+			}
+		}
+		if(codeMatches && ah->candidatesCode) {
+			g_queue_push_tail(ah->candidatesCode, GINT_TO_POINTER(vertexIndex));
+			if(vertexHasUsableIP) {
+				ah->numCandidatesCodeIPs++;
+			}
+		}
+		if(typeMatches && codeMatches && ah->candidatesTypeCode) {
+			g_queue_push_tail(ah->candidatesTypeCode, GINT_TO_POINTER(vertexIndex));
+			if(vertexHasUsableIP) {
+				ah->numCandidatesTypeCodeIPs++;
+			}
+		}
 	}
 }
 
-void topology_connect(Topology* top, Address* address, Random* randomSourcePool,
-		gchar* ipHint, gchar* clusterHint, gchar* typeHint, guint64* bwDownOut, guint64* bwUpOut) {
+static igraph_integer_t* _topology_getLongestPrefixMatch(Topology* top, GQueue* vertexSet, in_addr_t ip) {
 	MAGIC_ASSERT(top);
-	utility_assert(address);
+	utility_assert(vertexSet);
 
-	in_addr_t nodeIP = address_toNetworkIP(address);
+	/* @warning: this empties the candidate queue */
+
+	in_addr_t bestMatch = 0;
+	in_addr_t bestIP = 0;
+	igraph_integer_t* bestVertexIndexPtr = GINT_TO_POINTER(-1);
+
+	while(!g_queue_is_empty(vertexSet)) {
+		igraph_integer_t* vertexIndexPtr = g_queue_pop_head(vertexSet);
+		igraph_integer_t vertexIndex = (igraph_integer_t) GPOINTER_TO_INT(vertexIndexPtr);
+		g_mutex_lock(&top->graphLock);
+		const gchar* ipStr = VAS(&top->graph, "ip", vertexIndex);
+		g_mutex_unlock(&top->graphLock);
+		in_addr_t vertexIP = address_stringToIP(ipStr);
+
+		in_addr_t match = (vertexIP & ip);
+		if(match > bestMatch) {
+			bestMatch = match;
+			bestIP = vertexIP;
+			bestVertexIndexPtr = vertexIndexPtr;
+		}
+	}
+
+	return bestVertexIndexPtr;
+}
+
+static igraph_integer_t _topology_findAttachmentVertex(Topology* top, Random* randomSourcePool,
+		in_addr_t nodeIP, gchar* ipHint, gchar* geocodeHint, gchar* typeHint) {
+	MAGIC_ASSERT(top);
+
 	igraph_integer_t vertexIndex = (igraph_integer_t) -1;
 	igraph_integer_t* vertexIndexPtr = GINT_TO_POINTER(-1);
 
-	ConnectAssist* assist = g_new0(ConnectAssist, 1);
-	assist->candidates = g_queue_new();
-	assist->geocodeHint = clusterHint;
-	assist->ipHint = ipHint;
-	assist->typeHint = typeHint;
+	AttachHelper* ah = g_new0(AttachHelper, 1);
+	ah->geocodeHint = geocodeHint;
+	ah->ipHint = ipHint;
+	ah->typeHint = typeHint;
+	ah->requestedIP = ipHint ? address_stringToIP(ipHint) : INADDR_NONE;
+	ah->candidatesAll = g_queue_new();
+	ah->candidatesCode = g_queue_new();
+	ah->candidatesType = g_queue_new();
+	ah->candidatesTypeCode = g_queue_new();
 
+	/* go through the vertices to see which ones match our hint filters */
 	g_mutex_lock(&top->graphLock);
-	_topology_iterateAllVertices(top, (VertexNotifyFunc) _topology_connectHelperHook, assist);
+	_topology_iterateAllVertices(top, (VertexNotifyFunc) _topology_findAttachmentVertexHelperHook, ah);
 	g_mutex_unlock(&top->graphLock);
 
-	guint numCandidates = g_queue_get_length(assist->candidates);
+	/* the logic here is to try and find the most specific match following the hints.
+	 * we always use exact IP hint matches, and otherwise use it to select the best possible
+	 * match from the final set of candidates. the type and geocode hints are used to filter
+	 * all vertices down to a smaller set. if that smaller set is empty, then we fall back to the
+	 * type-only filtered set. if the type-only set is empty, we fall back to the geocode-only
+	 * filtered set. if that is empty, we stick with the complete vertex set.
+	 */
+	GQueue* candidates = NULL;
+	gboolean useLongestPrefixMatching = FALSE;
+
+	if(g_queue_get_length(ah->candidatesTypeCode) > 0) {
+		candidates = ah->candidatesTypeCode;
+		useLongestPrefixMatching = (ipHint && ah->numCandidatesTypeCodeIPs > 0);
+	} else if(g_queue_get_length(ah->candidatesType) > 0) {
+		candidates = ah->candidatesType;
+		useLongestPrefixMatching = (ipHint && ah->numCandidatesTypeIPs > 0);
+	} else if(g_queue_get_length(ah->candidatesCode) > 0) {
+		candidates = ah->candidatesCode;
+		useLongestPrefixMatching = (ipHint && ah->numCandidatesCodeIPs > 0);
+	} else {
+		candidates = ah->candidatesAll;
+		useLongestPrefixMatching = (ipHint && ah->numCandidatesAllIPs > 0);
+	}
+
+	guint numCandidates = g_queue_get_length(candidates);
 	utility_assert(numCandidates > 0);
 
-	/* if more than one candidate, grab a random one */
-	if(numCandidates > 1) {
+	/* if our candidate list has vertices with non-zero IPs, use longest prefix matching
+	 * to select the closest one to the requested IP; otherwise, grab a random candidate */
+	if(useLongestPrefixMatching && !ah->foundExactIPMatch) {
+		vertexIndexPtr = _topology_getLongestPrefixMatch(top, candidates, ah->requestedIP);
+	} else {
 		gdouble randomDouble = random_nextDouble(randomSourcePool);
 		gint indexRange = numCandidates - 1;
 		gint chosenIndex = (gint) round((gdouble)(indexRange * randomDouble));
 		while(chosenIndex >= 0) {
-			vertexIndexPtr = g_queue_pop_head(assist->candidates);
+			vertexIndexPtr = g_queue_pop_head(candidates);
 			chosenIndex--;
 		}
-	} else {
-		vertexIndexPtr = g_queue_pop_head(assist->candidates);
 	}
 
-	g_queue_free(assist->candidates);
-	g_free(assist);
-	assist = NULL;
-
-	/* make sure the vertex is legitimate */
+	/* make sure the vertex we found is legitimate */
 	utility_assert(vertexIndexPtr != GINT_TO_POINTER(-1));
 	vertexIndex = (igraph_integer_t) GPOINTER_TO_INT(vertexIndexPtr);
 	utility_assert(vertexIndex > (igraph_integer_t) -1);
+
+	/* clean up */
+	if(ah->candidatesAll) {
+		g_queue_free(ah->candidatesAll);
+	}
+	if(ah->candidatesCode) {
+		g_queue_free(ah->candidatesCode);
+	}
+	if(ah->candidatesType) {
+		g_queue_free(ah->candidatesType);
+	}
+	if(ah->candidatesTypeCode) {
+		g_queue_free(ah->candidatesTypeCode);
+	}
+	g_free(ah);
+
+	return vertexIndex;
+}
+
+void topology_attach(Topology* top, Address* address, Random* randomSourcePool,
+		gchar* ipHint, gchar* geocodeHint, gchar* typeHint, guint64* bwDownOut, guint64* bwUpOut) {
+	MAGIC_ASSERT(top);
+	utility_assert(address);
+
+	in_addr_t nodeIP = address_toNetworkIP(address);
+	igraph_integer_t vertexIndex = _topology_findAttachmentVertex(top, randomSourcePool, nodeIP, ipHint,
+			geocodeHint, typeHint);
 
 	/* attach it, i.e. store the mapping so we can route later */
 	g_rw_lock_writer_lock(&(top->virtualIPLock));
@@ -742,11 +871,12 @@ void topology_connect(Topology* top, Address* address, Random* randomSourcePool,
 
 	g_mutex_unlock(&top->graphLock);
 
-	info("connected address '%s' to point of interest '%s' (ip=%s, geocode=%s, type=%s)",
-			address_toHostIPString(address), idStr, ipStr, geocodeStr, typeStr);
+	info("connected address '%s' to point of interest '%s' (ip=%s, geocode=%s, type=%s) "
+			"using hints (ip=%s, geocode=%s, type=%s)", address_toHostIPString(address), idStr,
+			ipStr, geocodeStr, typeStr, ipHint, geocodeHint, typeHint);
 }
 
-void topology_disconnect(Topology* top, Address* address) {
+void topology_detach(Topology* top, Address* address) {
 	MAGIC_ASSERT(top);
 	in_addr_t ip = address_toNetworkIP(address);
 

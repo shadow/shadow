@@ -243,7 +243,8 @@ static GError* _parser_handlePluginAttributes(Parser* parser, const gchar** attr
 static GError* _parser_handleNodeAttributes(Parser* parser, const gchar** attributeNames, const gchar** attributeValues) {
 	GString* id = NULL;
 	GString* ip = NULL;
-	GString* cluster = NULL;
+	GString* geocode = NULL;
+	GString* type = NULL;
 	GString* loglevel = NULL;
 	GString* heartbeatloglevel = NULL;
 	GString* heartbeatloginfo = NULL;
@@ -258,7 +259,7 @@ static GError* _parser_handleNodeAttributes(Parser* parser, const gchar** attrib
 	gboolean autotuneReceiveBuffer = TRUE;
 	gboolean autotuneSendBuffer = TRUE;
 	guint64 interfaceReceiveBufferLength = 0;
-	/* if there is no quantity value, default should be 1 (allows a value of 0 to be explicity set) */
+	/* if there is no quantity value, default should be 1 (allows a value of 0 to be explicitly set) */
 	guint64 quantity = 1;
 	gboolean quantityIsSet = FALSE;
 
@@ -276,10 +277,12 @@ static GError* _parser_handleNodeAttributes(Parser* parser, const gchar** attrib
 
 		if(!id && !g_ascii_strcasecmp(name, "id")) {
 			id = g_string_new(value);
-		} else if (!ip && !g_ascii_strcasecmp(name, "ip")) {
+		} else if (!ip && !g_ascii_strcasecmp(name, "iphint")) {
 			ip = g_string_new(value);
-		} else if (!cluster && !g_ascii_strcasecmp(name, "cluster")) {
-			cluster = g_string_new(value);
+		} else if (!geocode && !g_ascii_strcasecmp(name, "geocodehint")) {
+			geocode = g_string_new(value);
+		} else if (!type && !g_ascii_strcasecmp(name, "typehint")) {
+			type = g_string_new(value);
 		} else if (!loglevel && !g_ascii_strcasecmp(name, "loglevel")) {
 			loglevel = g_string_new(value);
 		} else if (!heartbeatloglevel && !g_ascii_strcasecmp(name, "heartbeatloglevel")) {
@@ -324,7 +327,7 @@ static GError* _parser_handleNodeAttributes(Parser* parser, const gchar** attrib
 
 	if(!error) {
 		/* no error, create the action */
-		Action* a = (Action*) createnodes_new(id, ip, cluster,
+		Action* a = (Action*) createnodes_new(id, ip, geocode, type,
 				bandwidthdown, bandwidthup, quantity, cpufrequency,
 				heartbeatfrequency, heartbeatloglevel, heartbeatloginfo, loglevel, logpcap, pcapdir,
 				socketReceiveBufferSize, socketSendBufferSize, interfaceReceiveBufferLength);
@@ -343,14 +346,20 @@ static GError* _parser_handleNodeAttributes(Parser* parser, const gchar** attrib
 	if(ip) {
 		g_string_free(ip, TRUE);
 	}
-	if(cluster) {
-		g_string_free(cluster, TRUE);
+	if(geocode) {
+		g_string_free(geocode, TRUE);
+	}
+	if(type) {
+		g_string_free(type, TRUE);
 	}
 	if(loglevel) {
 		g_string_free(loglevel, TRUE);
 	}
 	if(heartbeatloglevel) {
 		g_string_free(heartbeatloglevel, TRUE);
+	}
+	if(heartbeatloginfo) {
+		g_string_free(heartbeatloginfo, TRUE);
 	}
 	if(logpcap) {
 		g_string_free(logpcap, TRUE);

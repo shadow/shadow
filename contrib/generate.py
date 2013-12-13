@@ -302,8 +302,9 @@ def generate(args):
         name = "server{0}".format(i)
         e = etree.SubElement(root, "node")
         e.set("id", name)
-        e.set("ip", serverip)
-        e.set("cluster", servercode)
+        e.set("iphint", serverip)
+        e.set("geocodehint", servercode)
+        e.set("typehint", "server")
         e.set("bandwidthup", "102400") # in KiB
         e.set("bandwidthdown", "102400") # in KiB
         e.set("quantity", "1")
@@ -643,8 +644,11 @@ def addRelayToXML(root, starttime, torargs, fileargs, torrentargs, name, downloa
     # node
     e = etree.SubElement(root, "node")
     e.set("id", name)
-    if ip is not None and ip != "127.0.0.1": e.set("ip", ip)
-    if code is not None: e.set("cluster", code)
+    if ip is not None and ip != "127.0.0.1": e.set("iphint", ip)
+    if code is not None: e.set("geocodehint", code)
+    
+    if 'relay' in name or '4uthority' in name: e.set("typehint", "relay")
+    elif 'client' in name: e.set("typehint", "client")
     
     # bandwidth is optional in XML, will be assigned based on cluster if not given
     if download > 0: e.set("bandwidthdown", "{0}".format(download)) # in KiB

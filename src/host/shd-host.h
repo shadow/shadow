@@ -13,7 +13,7 @@
 
 typedef struct _Host Host;
 
-Host* host_new(GQuark id, gchar* hostname, gchar* requestedIP, gchar* requestedCluster,
+Host* host_new(GQuark id, gchar* hostname, gchar* requestedIP, gchar* geocodeHint, gchar* typeHint,
 		guint64 requestedBWDownKiBps, guint64 requestedBWUpKiBps,
 		guint cpuFrequency, gint cpuThreshold, gint cpuPrecision, guint nodeSeed,
 		SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel, gchar* heartbeatLogInfo,
