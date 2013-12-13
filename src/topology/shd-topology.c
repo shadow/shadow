@@ -336,7 +336,7 @@ static gboolean _topology_extractEdgeWeights(Topology* top) {
 	}
 
 	/* now we have fresh memory */
-	gint result = igraph_vector_init(top->edgeWeights, 0);
+	gint result = igraph_vector_init(top->edgeWeights, (glong) top->edgeCount);
 	if(result != IGRAPH_SUCCESS) {
 		g_mutex_unlock(&top->graphLock);
 		critical("igraph_vector_init return non-success code %i", result);
@@ -682,8 +682,8 @@ void topology_connect(Topology* top, Address* address, Random* randomSourcePool,
 	utility_assert(address);
 
 	in_addr_t nodeIP = address_toNetworkIP(address);
-	igraph_integer_t vertexIndex = (igraph_integer_t) 0;
-	igraph_integer_t* vertexIndexPtr = NULL;
+	igraph_integer_t vertexIndex = (igraph_integer_t) -1;
+	igraph_integer_t* vertexIndexPtr = GINT_TO_POINTER(-1);
 
 	ConnectAssist* assist = g_new0(ConnectAssist, 1);
 	assist->candidates = g_queue_new();
@@ -701,10 +701,11 @@ void topology_connect(Topology* top, Address* address, Random* randomSourcePool,
 	/* if more than one candidate, grab a random one */
 	if(numCandidates > 1) {
 		gdouble randomDouble = random_nextDouble(randomSourcePool);
-		guint count = (guint) round((gdouble)(numCandidates * randomDouble));
-		while(count > 0) {
+		gint indexRange = numCandidates - 1;
+		gint chosenIndex = (gint) round((gdouble)(indexRange * randomDouble));
+		while(chosenIndex >= 0) {
 			vertexIndexPtr = g_queue_pop_head(assist->candidates);
-			count--;
+			chosenIndex--;
 		}
 	} else {
 		vertexIndexPtr = g_queue_pop_head(assist->candidates);
@@ -715,8 +716,8 @@ void topology_connect(Topology* top, Address* address, Random* randomSourcePool,
 	assist = NULL;
 
 	/* make sure the vertex is legitimate */
-	utility_assert(vertexIndexPtr);
-	vertexIndex = *vertexIndexPtr;
+	utility_assert(vertexIndexPtr != GINT_TO_POINTER(-1));
+	vertexIndex = (igraph_integer_t) GPOINTER_TO_INT(vertexIndexPtr);
 	utility_assert(vertexIndex > (igraph_integer_t) -1);
 
 	/* attach it, i.e. store the mapping so we can route later */
@@ -741,7 +742,7 @@ void topology_connect(Topology* top, Address* address, Random* randomSourcePool,
 
 	g_mutex_unlock(&top->graphLock);
 
-	info("connected address '%s' to point of interest '%s' (%s, %s, %s)",
+	info("connected address '%s' to point of interest '%s' (ip=%s, geocode=%s, type=%s)",
 			address_toHostIPString(address), idStr, ipStr, geocodeStr, typeStr);
 }
 
