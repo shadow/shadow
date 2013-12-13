@@ -74,7 +74,7 @@ Host* host_new(GQuark id, gchar* hostname, gchar* ipHint, gchar* clusterHint,
 
 	/* connect to topology and get the default bandwidth */
 	guint64 bwDownKiBps = 0, bwUpKiBps = 0;
-	topology_connect(worker_getTopology(), ethernetAddress, host->random, ipHint, clusterHint, &bwDownKiBps, &bwUpKiBps);
+	topology_connect(worker_getTopology(), ethernetAddress, host->random, ipHint, clusterHint, NULL, &bwDownKiBps, &bwUpKiBps);
 
 	/* prefer assigned bandwidth if available */
 	if(requestedBWDownKiBps) {

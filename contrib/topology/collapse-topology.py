@@ -15,7 +15,7 @@ def copy_node_props(srcn, dstn):
     if 'type' not in dstn:
         for attr in srcn: dstn[attr] = srcn[attr]
         dstn['type'] = 'cluster'
-        dstn['asn'] = '0'
+        dstn['asn'] = int(0)
 
 def main():
     print "reading graph..."
@@ -45,7 +45,7 @@ def main():
     for attr in G.graph: Gnew.graph[attr] = G.graph[attr]
     for (srcid, dstid) in Gnew.edges():
         e = Gnew.edge[srcid][dstid]
-        for attr in e: e[attr] = "{0}".format(float(sum(e[attr])) / float(len(e[attr])))
+        for attr in e: e[attr] = float(sum(e[attr])) / float(len(e[attr]))
 
     print "checking graph..."
     assert nx.is_connected(Gnew)

@@ -6,11 +6,6 @@
 
 #include "shadow.h"
 
-typedef enum _ClusterAttribute ClusterAttribute;
-enum _ClusterAttribute {
-	CA_PACKETLOSS, CA_BANDWIDTHUP, CA_BANDWIDTHDOWN,
-};
-
 struct _Topology {
 	/* the file path of the graphml file */
 	GString* graphPath;
@@ -25,7 +20,7 @@ struct _Topology {
 
 	/* the edge weights currently used when computing shortest paths.
 	 * this is protected by the graph lock */
-	igraph_vector_t* currentEdgeWeights;
+	igraph_vector_t* edgeWeights;
 
 	/* keep track of how long we spend computing shortest paths,
 	 * protected by the graph lock */
@@ -34,17 +29,11 @@ struct _Topology {
 	/* END global igraph lock - igraph is not thread-safe!*/
 	/******/
 
-	/* each connected virtual host is assigned to a PoI. we store the mapping
-	 * so we can correctly lookup the assigned edge when computing latency. */
-	GHashTable* poiIPToVertexIndex; /* read-only after initialization! */
-
-	GHashTable* virtualIPToPoIIP;
-	GHashTable* virtualIPToCluster;
+	/* each connected virtual host is assigned to a PoI vertex. we store the mapping to the
+	 * vertex index so we can correctly lookup the assigned edge when computing latency.
+	 * virtualIP->vertexIndex (stored as pointer) */
+	GHashTable* virtualIP;
 	GRWLock virtualIPLock;
-
-	/* stores the mapping between geocode (state/prov/country) and its cluster properties.
-	 * this is useful when placing hosts without an IP in the topology */
-	GHashTable* geocodeToCluster; /* read-only after initialization! */
 
 	/* cached latencies to avoid excessive shortest path lookups
 	 * store a cache table for every connected address
@@ -58,17 +47,19 @@ struct _Topology {
 	igraph_integer_t edgeCount;
 	igraph_bool_t isConnected;
 
-	/* FIXME hack for broken graph attributes */
-	const gchar* plossStr;
-	const gchar* bwupStr;
-	const gchar* bwdownStr;
-	/* end hack */
-
 	MAGIC_DECLARE;
 };
 
-typedef void (*EdgeNotifyFunc)(Topology* top, igraph_integer_t edgeIndex);
-typedef void (*VertexNotifyFunc)(Topology* top, igraph_integer_t vertexIndex);
+typedef struct _ConnectAssist ConnectAssist;
+struct _ConnectAssist {
+	GQueue* candidates;
+	gchar* typeHint;
+	gchar* geocodeHint;
+	gchar* ipHint;
+};
+
+typedef void (*EdgeNotifyFunc)(Topology* top, igraph_integer_t edgeIndex, gpointer userData);
+typedef void (*VertexNotifyFunc)(Topology* top, igraph_integer_t vertexIndex, gpointer userData);
 
 static gboolean _topology_loadGraph(Topology* top) {
 	MAGIC_ASSERT(top);
@@ -163,49 +154,41 @@ static gboolean _topology_checkGraphProperties(Topology* top) {
 		debug("found edge attribute '%s'", name);
 	}
 
-	/* make sure we can get our required graph attributes */
-	/* FIXME re-enable this after graph attribute hack is removed
-	const gchar* plossStr = GAS(&top->graph, "packetloss");
-	debug("found graph attribute packetloss=%s", plossStr);
-	const gchar* bwupStr = GAS(&top->graph, "bandwidthup");
-	debug("found graph attribute bandwidthup=%s", bwupStr);
-	const gchar* bwdownStr = GAS(&top->graph, "bandwidthdown");
-	debug("found graph attribute bandwidthdown=%s", bwdownStr);
-	*/
-
 	info("successfully verified graph attributes");
 
 	return TRUE;
 }
 
-static void _topology_checkGraphVerticesHelperHook(Topology* top, igraph_integer_t vertexIndex) {
+static void _topology_checkGraphVerticesHelperHook(Topology* top, igraph_integer_t vertexIndex, gpointer userData) {
 	MAGIC_ASSERT(top);
 
 	/* get vertex attributes: S for string and N for numeric */
 	const gchar* idStr = VAS(&top->graph, "id", vertexIndex);
-	const gchar* nodeTypeStr = VAS(&top->graph, "nodetype", vertexIndex);
-	const gchar* geocodesStr = VAS(&top->graph, "geocodes", vertexIndex);
-	gdouble asNumber = VAN(&top->graph, "asn", vertexIndex);
+	const gchar* typeStr = VAS(&top->graph, "type", vertexIndex);
 
-	debug("found vertex %li (%s), nodetype=%s geocodes=%s asn=%i",
-			(glong)vertexIndex, idStr, nodeTypeStr, geocodesStr, asNumber);
+	if(g_strstr_len(idStr, (gssize)-1, "poi")) {
+		const gchar* ipStr = VAS(&top->graph, "ip", vertexIndex);
+		const gchar* geocodeStr = VAS(&top->graph, "geocode", vertexIndex);
+		igraph_real_t bwup = VAN(&top->graph, "bandwidthup", vertexIndex);
+		igraph_real_t bwdown = VAN(&top->graph, "bandwidthdown", vertexIndex);
+		igraph_real_t ploss = VAN(&top->graph, "packetloss", vertexIndex);
+
+		debug("found vertex %li (%s), type=%s ip=%s geocode=%s "
+				"bandwidthup=%f bandwidthdown=%f packetloss=%f",
+				(glong)vertexIndex, idStr, typeStr, geocodeStr, bwup, bwdown, ploss);
+	} else {
+		debug("found vertex %li (%s), type=%s",
+				(glong)vertexIndex, idStr, typeStr);
+	}
 }
 
-static igraph_integer_t _topology_iterateAllVertices(Topology* top, VertexNotifyFunc hook) {
+static igraph_integer_t _topology_iterateAllVertices(Topology* top, VertexNotifyFunc hook, gpointer userData) {
 	MAGIC_ASSERT(top);
 	utility_assert(hook);
 
-	/* initialize our vertex set to select from all vertices in the graph */
-	igraph_vs_t allVertices;
-	gint result = igraph_vs_all(&allVertices);
-	if(result != IGRAPH_SUCCESS) {
-		critical("igraph_vs_all return non-success code %i", result);
-		return -1;
-	}
-
 	/* we will iterate through the vertices */
 	igraph_vit_t vertexIterator;
-	result = igraph_vit_create(&top->graph, allVertices, &vertexIterator);
+	gint result = igraph_vit_create(&top->graph, igraph_vss_all(), &vertexIterator);
 	if(result != IGRAPH_SUCCESS) {
 		critical("igraph_vit_create return non-success code %i", result);
 		return -1;
@@ -216,26 +199,8 @@ static igraph_integer_t _topology_iterateAllVertices(Topology* top, VertexNotify
 	while (!IGRAPH_VIT_END(vertexIterator)) {
 		long int vertexIndex = IGRAPH_VIT_GET(vertexIterator);
 
-		/* FIXME hack for broken graph attributes */
-		const gchar* idStr = VAS(&top->graph, "id", vertexIndex);
-		if(!g_ascii_strcasecmp(idStr, "dummynode")) {
-			if(!top->plossStr) {
-				top->plossStr = VAS(&top->graph, "packetloss", vertexIndex);
-			}
-			if(!top->bwupStr) {
-				top->bwupStr = VAS(&top->graph, "bandwidthup", vertexIndex);
-			}
-			if(!top->bwdownStr) {
-				top->bwdownStr = VAS(&top->graph, "bandwidthdown", vertexIndex);
-			}
-			vertexCount++;
-			IGRAPH_VIT_NEXT(vertexIterator);
-			continue;
-		}
-		/* end hack */
-
 		/* call the hook function for each edge */
-		hook(top, (igraph_integer_t) vertexIndex);
+		hook(top, (igraph_integer_t) vertexIndex, userData);
 
 		vertexCount++;
 		IGRAPH_VIT_NEXT(vertexIterator);
@@ -243,7 +208,6 @@ static igraph_integer_t _topology_iterateAllVertices(Topology* top, VertexNotify
 
 	/* clean up */
 	igraph_vit_destroy(&vertexIterator);
-	igraph_vs_destroy(&allVertices);
 
 	return vertexCount;
 }
@@ -253,7 +217,7 @@ static gboolean _topology_checkGraphVertices(Topology* top) {
 
 	info("checking graph vertices...");
 
-	igraph_integer_t vertexCount = _topology_iterateAllVertices(top, _topology_checkGraphVerticesHelperHook);
+	igraph_integer_t vertexCount = _topology_iterateAllVertices(top, _topology_checkGraphVerticesHelperHook, NULL);
 	if(vertexCount < 0) {
 		/* there was some kind of error */
 		return FALSE;
@@ -261,7 +225,7 @@ static gboolean _topology_checkGraphVertices(Topology* top) {
 
 	top->vertexCount = igraph_vcount(&top->graph);
 	if(top->vertexCount != vertexCount) {
-		warning("igraph_vcount does not match iterator count");
+		warning("igraph_vcount %f does not match iterator count %f", top->vertexCount, vertexCount);
 	}
 
 	info("%u graph vertices ok", (guint) top->vertexCount);
@@ -269,7 +233,7 @@ static gboolean _topology_checkGraphVertices(Topology* top) {
 	return TRUE;
 }
 
-static void _topology_checkGraphEdgesHelperHook(Topology* top, igraph_integer_t edgeIndex) {
+static void _topology_checkGraphEdgesHelperHook(Topology* top, igraph_integer_t edgeIndex, gpointer userData) {
 	MAGIC_ASSERT(top);
 
 	igraph_integer_t fromVertexIndex, toVertexIndex;
@@ -283,27 +247,22 @@ static void _topology_checkGraphEdgesHelperHook(Topology* top, igraph_integer_t 
 	const gchar* toIDStr = VAS(&top->graph, "id", toVertexIndex);
 
 	/* get edge attributes: S for string and N for numeric */
-	const gchar* latenciesStr = EAS(&top->graph, "latencies", edgeIndex);
+	igraph_real_t latency = EAN(&top->graph, "latency", edgeIndex);
+	igraph_real_t jitter = EAN(&top->graph, "jitter", edgeIndex);
+	igraph_real_t ploss = EAN(&top->graph, "packetloss", edgeIndex);
 
-	debug("found edge %li from vertex %li (%s) to vertex %li (%s) latencies=%s",
-			(glong)edgeIndex, (glong)fromVertexIndex, fromIDStr, (glong)toVertexIndex, toIDStr, latenciesStr);
+	debug("found edge %li from vertex %li (%s) to vertex %li (%s) latency=%s jitter=%s packetloss=%s",
+			(glong)edgeIndex, (glong)fromVertexIndex, fromIDStr, (glong)toVertexIndex, toIDStr,
+			latency, jitter, ploss);
 }
 
-static igraph_integer_t _topology_iterateAllEdges(Topology* top, EdgeNotifyFunc hook) {
+static igraph_integer_t _topology_iterateAllEdges(Topology* top, EdgeNotifyFunc hook, gpointer userData) {
 	MAGIC_ASSERT(top);
 	utility_assert(hook);
 
-	/* our selector will consider all edges, ordered by the igraph edge indices */
-	igraph_es_t allEdges;
-	gint result = igraph_es_all(&allEdges, IGRAPH_EDGEORDER_ID);
-	if(result != IGRAPH_SUCCESS) {
-		critical("igraph_es_all return non-success code %i", result);
-		return -1;
-	}
-
 	/* we will iterate through the edges */
 	igraph_eit_t edgeIterator;
-	result = igraph_eit_create(&top->graph, allEdges, &edgeIterator);
+	gint result = igraph_eit_create(&top->graph, igraph_ess_all(IGRAPH_EDGEORDER_ID), &edgeIterator);
 	if(result != IGRAPH_SUCCESS) {
 		critical("igraph_eit_create return non-success code %i", result);
 		return -1;
@@ -315,14 +274,13 @@ static igraph_integer_t _topology_iterateAllEdges(Topology* top, EdgeNotifyFunc 
 		long int edgeIndex = IGRAPH_EIT_GET(edgeIterator);
 
 		/* call the hook function for each edge */
-		hook(top, (igraph_integer_t) edgeIndex);
+		hook(top, (igraph_integer_t) edgeIndex, userData);
 
 		edgeCount++;
 		IGRAPH_EIT_NEXT(edgeIterator);
 	}
 
 	igraph_eit_destroy(&edgeIterator);
-	igraph_es_destroy(&allEdges);
 
 	return edgeCount;
 }
@@ -332,7 +290,7 @@ static gboolean _topology_checkGraphEdges(Topology* top) {
 
 	info("checking graph edges...");
 
-	igraph_integer_t edgeCount = _topology_iterateAllEdges(top, _topology_checkGraphEdgesHelperHook);
+	igraph_integer_t edgeCount = _topology_iterateAllEdges(top, _topology_checkGraphEdgesHelperHook, NULL);
 	if(edgeCount < 0) {
 		/* there was some kind of error */
 		return FALSE;
@@ -340,7 +298,7 @@ static gboolean _topology_checkGraphEdges(Topology* top) {
 
 	top->edgeCount = igraph_ecount(&top->graph);
 	if(top->edgeCount != edgeCount) {
-		warning("igraph_vcount does not match iterator count");
+		warning("igraph_vcount %f does not match iterator count %f", top->edgeCount, edgeCount);
 	}
 
 	info("%u graph edges ok", (guint) top->edgeCount);
@@ -364,174 +322,36 @@ static gboolean _topology_checkGraph(Topology* top) {
 	return TRUE;
 }
 
-/* locked for writes to currentEdgeWeights */
-static void _topology_updateEdgeWeightsHelperHook(Topology* top, igraph_integer_t edgeIndex) {
-	/* get the array of latencies for this edge */
-	const gchar* latenciesStr = EAS(&top->graph, "latencies", edgeIndex);
-	gchar** latencyParts = g_strsplit(latenciesStr, ",", 0);
-
-	/* get length of the latency array */
-	gint length = 0;
-	while(latencyParts[length] != NULL) {
-		length++;
-	}
-
-	/* select a random index from the latency list */
-	gdouble randomDouble = worker_nextRandomDouble();
-	gint randomIndex = (gint)(length * randomDouble) - 1;
-	if(randomIndex < 0) {
-		randomIndex = 0;
-	}
-
-	/* set the selected latency as the current weight for this edge */
-	igraph_real_t latency = (igraph_real_t) atof(latencyParts[randomIndex]);
-	/* we can just push back because we are iterating by IGRAPH_EDGEORDER_ID */
-	igraph_vector_push_back(top->currentEdgeWeights, latency);
-
-	g_strfreev(latencyParts);
-}
-
-static gboolean _topology_updateEdgeWeights(Topology* top) {
+static gboolean _topology_extractEdgeWeights(Topology* top) {
 	MAGIC_ASSERT(top);
 
 	g_mutex_lock(&top->graphLock);
 
 	/* create new or clear existing edge weights */
-	if(!top->currentEdgeWeights) {
-		top->currentEdgeWeights = g_new0(igraph_vector_t, 1);
+	if(!top->edgeWeights) {
+		top->edgeWeights = g_new0(igraph_vector_t, 1);
 	} else {
-		igraph_vector_destroy(top->currentEdgeWeights);
-		memset(top->currentEdgeWeights, 0, sizeof(igraph_vector_t));
+		igraph_vector_destroy(top->edgeWeights);
+		memset(top->edgeWeights, 0, sizeof(igraph_vector_t));
 	}
 
 	/* now we have fresh memory */
-	gint result = igraph_vector_init(top->currentEdgeWeights, 0);
+	gint result = igraph_vector_init(top->edgeWeights, 0);
 	if(result != IGRAPH_SUCCESS) {
+		g_mutex_unlock(&top->graphLock);
 		critical("igraph_vector_init return non-success code %i", result);
 		return FALSE;
 	}
 
-	igraph_integer_t edgeCount = _topology_iterateAllEdges(top, _topology_updateEdgeWeightsHelperHook);
-
+	/* use the 'latency' edge attribute as the edge weight */
+	result = EANV(&top->graph, "latency", top->edgeWeights);
 	g_mutex_unlock(&top->graphLock);
-
-	if(edgeCount < 0) {
-		/* there was some kind of error */
+	if(result != IGRAPH_SUCCESS) {
+		critical("igraph_cattribute_EANV return non-success code %i", result);
 		return FALSE;
 	}
-
-	/* instead of iterating, we could do the following if we had a single latency edge attribute
-	igraph_vector_t edge_weights;
-	igraph_vector_init(&edge_weights, 0);
-	igraph_es_t all_edges;
-	igraph_es_all(&all_edges, IGRAPH_EDGEORDER_ID);
-	igraph_cattribute_EANV(&top->graph, "latency", all_edges, &edge_weights);
-	*/
 
 	return TRUE;
-}
-
-static void _topology_extractPointsOfInterestHelperHook(Topology* top, igraph_integer_t vertexIndex) {
-	MAGIC_ASSERT(top);
-
-	/* get vertex attributes: S for string and N for numeric */
-	const gchar* idStr = VAS(&top->graph, "id", vertexIndex);
-	const gchar* nodeTypeStr = VAS(&top->graph, "nodetype", vertexIndex);
-	const gchar* geocodesStr = VAS(&top->graph, "geocodes", vertexIndex);
-
-	if(!g_ascii_strcasecmp(nodeTypeStr, "relay") || !g_ascii_strcasecmp(nodeTypeStr, "server")) {
-		/* this is a point of interest (poi) not a point of presence (pop) */
-		in_addr_t networkIP = address_stringToIP(idStr);
-		if(networkIP == INADDR_NONE) {
-			error("graph topology error: points of interest (nodes that are not 'pop's) should have IP address as ID");
-			return;
-		}
-
-		/* this is a PoI where virtual hosts will sit */
-		g_hash_table_replace(top->poiIPToVertexIndex, GUINT_TO_POINTER(networkIP), GINT_TO_POINTER(vertexIndex));
-
-		/* add it to the list of vertices by its geoclusters, for assigning hosts randomly later */
-		gchar** geocodeParts = g_strsplit(geocodesStr, ",", 0);
-		for(gint i = 0; geocodeParts[i] != NULL; i++) {
-			Cluster* cluster = g_hash_table_lookup(top->geocodeToCluster, geocodeParts[i]);
-			if(cluster) {
-				cluster_addPoI(cluster, networkIP);
-			}
-		}
-		g_strfreev(geocodeParts);
-	}
-}
-
-static gboolean _topology_extractPointsOfInterest(Topology* top) {
-	MAGIC_ASSERT(top);
-
-	igraph_integer_t edgeCount = _topology_iterateAllVertices(top, _topology_extractPointsOfInterestHelperHook);
-	if(edgeCount < 0) {
-		/* there was some kind of error */
-		return FALSE;
-	} else {
-		return TRUE;
-	}
-}
-
-static void _topology_extractClustersHelper(Topology* top, const gchar* clusterStr, ClusterAttribute type) {
-	gchar** listParts = g_strsplit(clusterStr, ",", 0);
-	for(gint i = 0; listParts[i] != NULL; i++) {
-		gchar** parts = g_strsplit(listParts[i], "=", 0);
-
-		gchar* geocode = parts[0];
-		gchar* value = parts[1];
-		utility_assert(geocode && value);
-
-		Cluster* cluster = g_hash_table_lookup(top->geocodeToCluster, geocode);
-		if(!cluster) {
-			gchar* newgeocode = g_strdup(geocode);
-			cluster = cluster_new(newgeocode);
-			g_hash_table_replace(top->geocodeToCluster, newgeocode, cluster);
-		}
-
-		if(type == CA_PACKETLOSS) {
-			cluster_setPacketLoss(cluster, (gdouble) atof(value));
-		} else if (type == CA_BANDWIDTHUP) {
-			cluster_setBandwidthUp(cluster, (guint) atoi(value));
-		} else if (type == CA_BANDWIDTHDOWN) {
-			cluster_setBandwidthDown(cluster, (guint) atoi(value));
-		}
-
-		g_strfreev(parts);
-	}
-	g_strfreev(listParts);
-}
-
-static void _topology_extractClusters(Topology* top) {
-	MAGIC_ASSERT(top);
-
-	/* FIXME re-enable after graph attribute hack is removed
-	const gchar* plossStr = GAS(&top->graph, "packetloss");
-	const gchar* bwupStr = GAS(&top->graph, "bandwidthup");
-	const gchar* bwdownStr = GAS(&top->graph, "bandwidthdown");
-	*/
-	const gchar* plossStr = top->plossStr;
-	const gchar* bwupStr = top->bwupStr;
-	const gchar* bwdownStr = top->bwdownStr;
-
-	_topology_extractClustersHelper(top, plossStr, CA_PACKETLOSS);
-	_topology_extractClustersHelper(top, bwupStr, CA_BANDWIDTHUP);
-	_topology_extractClustersHelper(top, bwdownStr, CA_BANDWIDTHDOWN);
-
-	info("found %u geocode clusters", g_hash_table_size(top->geocodeToCluster));
-}
-
-static gboolean _topology_setupGraph(Topology* top) {
-	MAGIC_ASSERT(top);
-
-	_topology_extractClusters(top);
-
-	if(!_topology_extractPointsOfInterest(top) || !_topology_updateEdgeWeights(top)) {
-		return FALSE;
-	} else {
-		return TRUE;
-	}
 }
 
 static void _topology_clearCache(Topology* top) {
@@ -570,8 +390,7 @@ static Path* _topology_getPathFromCache(Topology* top, Address* source, Address*
 	return path;
 }
 
-static void _topology_storePathInCache(Topology* top, Address* source, Address* destination,
-		igraph_real_t latency, igraph_real_t reliability) {
+static void _topology_storePathInCache(Topology* top, Address* source, Address* destination, Path* path) {
 	MAGIC_ASSERT(top);
 
 	ShadowID srcID = address_getID(source);
@@ -592,7 +411,6 @@ static void _topology_storePathInCache(Topology* top, Address* source, Address* 
 		g_hash_table_replace(top->pathCache, GUINT_TO_POINTER(srcID), sourceCache);
 	}
 
-	Path* path = path_new((gdouble) latency, (gdouble) reliability);
 	g_hash_table_replace(sourceCache, GUINT_TO_POINTER(dstID), path);
 
 	g_rw_lock_writer_unlock(&(top->pathCacheLock));
@@ -601,18 +419,15 @@ static void _topology_storePathInCache(Topology* top, Address* source, Address* 
 static igraph_integer_t _topology_getConnectedVertexIndex(Topology* top, Address* address) {
 	MAGIC_ASSERT(top);
 
+	/* find the vertex where this virtual ip was attached */
+	gpointer vertexIndexPtr = NULL;
 	in_addr_t ip = address_toNetworkIP(address);
 
-	/* convert the virtual ip to a PoI ip */
 	g_rw_lock_reader_lock(&(top->virtualIPLock));
-	gpointer poiIPPtr = g_hash_table_lookup(top->virtualIPToPoIIP, GUINT_TO_POINTER(ip));
+	gboolean found = g_hash_table_lookup_extended(top->virtualIP, GUINT_TO_POINTER(ip), NULL, &vertexIndexPtr);
 	g_rw_lock_reader_unlock(&(top->virtualIPLock));
 
-	/* now get the PoI vertex index from the pop IP */
-	gpointer vertexIndexPtr = NULL;
-	gboolean found = g_hash_table_lookup_extended(top->poiIPToVertexIndex, poiIPPtr, NULL, &vertexIndexPtr);
-
-	if(!poiIPPtr || !found) {
+	if(!found) {
 		warning("address %s is not connected to the topology", address_toHostIPString(address));
 		return (igraph_integer_t) -1;
 	}
@@ -620,22 +435,16 @@ static igraph_integer_t _topology_getConnectedVertexIndex(Topology* top, Address
 	return (igraph_integer_t) GPOINTER_TO_INT(vertexIndexPtr);
 }
 
-/* unfortunately, igraph is not thread safe, so this function must be locked */
-static gboolean _topology_computePath(Topology* top, Address* srcAddress, Address* dstAddress) {
+/* !! note: igraph is not thread safe, so graphLock must be held while calling this function */
+static Path* _topology_computePath(Topology* top, Address* srcAddress, Address* dstAddress) {
 	MAGIC_ASSERT(top);
 
 	igraph_integer_t srcVertexIndex = _topology_getConnectedVertexIndex(top, srcAddress);
 	igraph_integer_t dstVertexIndex = _topology_getConnectedVertexIndex(top, dstAddress);
 	if(srcVertexIndex < 0 || dstVertexIndex < 0) {
 		/* not connected to a vertex */
-		return FALSE;
+		return NULL;
 	}
-
-	const gchar* srcIDStr = VAS(&top->graph, "id", srcVertexIndex);
-	const gchar* dstIDStr = VAS(&top->graph, "id", dstVertexIndex);
-
-	debug("computing shortest path between vertex %li (%s) and vertex %li (%s)",
-			(glong)srcVertexIndex, srcIDStr, (glong)dstVertexIndex, dstIDStr);
 
 	/* setup the destination as a vertex selector with one possible vertex */
 	igraph_vs_t dstVertexSet;
@@ -665,21 +474,33 @@ static gboolean _topology_computePath(Topology* top, Address* srcAddress, Addres
 	igraph_vector_ptr_set(&resultPaths, 0, &resultPathVertices);
 	utility_assert(&resultPathVertices == igraph_vector_ptr_e(&resultPaths, 0));
 
+	g_mutex_lock(&top->graphLock);
+
+	const gchar* srcIDStr = VAS(&top->graph, "id", srcVertexIndex);
+	const gchar* dstIDStr = VAS(&top->graph, "id", dstVertexIndex);
+
+	debug("computing shortest path between vertex %li (%s) and vertex %li (%s)",
+			(glong)srcVertexIndex, srcIDStr, (glong)dstVertexIndex, dstIDStr);
+
+	/* time the dijkstra algorithm */
 	GTimer* pathTimer = g_timer_new();
+
 	/* run dijkstra's shortest path algorithm */
 #ifndef IGRAPH_VERSION
 	result = igraph_get_shortest_paths_dijkstra(&top->graph, &resultPaths,
-			srcVertexIndex, dstVertexSet, top->currentEdgeWeights, IGRAPH_OUT);
+			srcVertexIndex, dstVertexSet, top->edgeWeights, IGRAPH_OUT);
 #else
 	result = igraph_get_shortest_paths_dijkstra(&top->graph, &resultPaths, NULL,
-			srcVertexIndex, dstVertexSet, top->currentEdgeWeights, IGRAPH_OUT);
+			srcVertexIndex, dstVertexSet, top->edgeWeights, IGRAPH_OUT);
 #endif
-	gdouble elapsedSeconds = g_timer_elapsed(pathTimer, NULL);
 
+	/* track the time spent running the algorithm */
+	gdouble elapsedSeconds = g_timer_elapsed(pathTimer, NULL);
 	g_timer_destroy(pathTimer);
 	top->shortestPathTotalTime += elapsedSeconds;
 
 	if(result != IGRAPH_SUCCESS) {
+		g_mutex_unlock(&top->graphLock);
 		critical("igraph_get_shortest_paths_dijkstra return non-success code %i", result);
 		return FALSE;
 	}
@@ -701,21 +522,10 @@ static gboolean _topology_computePath(Topology* top, Address* srcAddress, Addres
 	igraph_integer_t edgeIndex = 0, fromVertexIndex = 0, toVertexIndex = 0;
 
 	/* reliability for the src and dst vertices */
-	in_addr_t srcNodeIP = address_toNetworkIP(srcAddress);
-	in_addr_t dstNodeIP = address_toNetworkIP(dstAddress);
+	totalReliability *= (1.0f - VAN(&top->graph, "packetloss", srcVertexIndex));
+	totalReliability *= (1.0f - VAN(&top->graph, "packetloss", dstVertexIndex));
 
-	g_rw_lock_reader_lock(&(top->virtualIPLock));
-	Cluster* srcCluster = g_hash_table_lookup(top->virtualIPToCluster, GUINT_TO_POINTER(srcNodeIP));
-	Cluster* dstCluster = g_hash_table_lookup(top->virtualIPToCluster, GUINT_TO_POINTER(dstNodeIP));
-	g_rw_lock_reader_unlock(&(top->virtualIPLock));
-
-	if(srcCluster) {
-		totalReliability *= (1.0 - cluster_getPacketLoss(srcCluster));
-	}
-	if(dstCluster) {
-		totalReliability *= (1.0 - cluster_getPacketLoss(dstCluster));
-	}
-
+	/* now get latency and reliability from each edge in the path */
 	glong nVertices = igraph_vector_size(&resultPathVertices);
 
 	/* the first vertex is our starting point
@@ -739,16 +549,16 @@ static gboolean _topology_computePath(Topology* top, Address* srcAddress, Addres
 			result = igraph_get_eid(&top->graph, &edgeIndex, fromVertexIndex, toVertexIndex, (igraph_bool_t)TRUE, (igraph_bool_t)TRUE);
 	#endif
 			if(result != IGRAPH_SUCCESS) {
+				g_mutex_unlock(&top->graphLock);
 				warning("igraph_get_eid return non-success code %i", result);
 				return FALSE;
 			}
 
-			/* add edge latency */
-			edgeLatency = VECTOR(*(top->currentEdgeWeights))[(gint)edgeIndex];
+			//edgeLatency = VECTOR(*(top->currentEdgeWeights))[(gint)edgeIndex];
+			edgeLatency = EAN(&top->graph, "latency", edgeIndex);
 			totalLatency += edgeLatency;
 
-			// TODO add actual edge reliability
-			edgeReliability = 1.0;
+			edgeReliability = 1.0f - EAN(&top->graph, "packetloss", edgeIndex);
 			totalReliability *= edgeReliability;
 
 			/* accumulate path information */
@@ -760,6 +570,8 @@ static gboolean _topology_computePath(Topology* top, Address* srcAddress, Addres
 		}
 	}
 
+	g_mutex_unlock(&top->graphLock);
+
 	debug("shortest path %s-->%s is %f ms with %f loss, path: %s", srcIDStr, dstIDStr,
 			totalLatency, 1-totalReliability, pathString->str);
 
@@ -768,11 +580,8 @@ static gboolean _topology_computePath(Topology* top, Address* srcAddress, Addres
 	igraph_vector_clear(&resultPathVertices);
 	igraph_vector_ptr_destroy(&resultPaths);
 
-	/* cache the latency and reliability we just computed */
-	_topology_storePathInCache(top, srcAddress, dstAddress, totalLatency, totalReliability);
-
 	/* success */
-	return TRUE;
+	return path_new((gdouble) totalLatency, (gdouble) totalReliability);
 }
 
 static gboolean _topology_getPathEntry(Topology* top, Address* srcAddress, Address* dstAddress,
@@ -783,11 +592,11 @@ static gboolean _topology_getPathEntry(Topology* top, Address* srcAddress, Addre
 	Path* path = _topology_getPathFromCache(top, srcAddress, dstAddress);
 	if(!path) {
 		/* cache miss, compute the path using shortest latency path from src to dst */
-		g_mutex_lock(&top->graphLock);
-		gboolean isSuccess = _topology_computePath(top, srcAddress, dstAddress);
-		g_mutex_unlock(&top->graphLock);
-		utility_assert(isSuccess);
-		path = _topology_getPathFromCache(top, srcAddress, dstAddress);
+		path = _topology_computePath(top, srcAddress, dstAddress);
+		if(path) {
+			/* cache the latency and reliability we just computed */
+			_topology_storePathInCache(top, srcAddress, dstAddress, path);
+		}
 	}
 
 	if(path) {
@@ -849,145 +658,91 @@ static in_addr_t _topology_getLongestPrefixMatch(GList* ipSet, in_addr_t ip) {
 	return bestIP;
 }
 
+static void _topology_connectHelperHook(Topology* top, igraph_integer_t vertexIndex, ConnectAssist* assist) {
+	MAGIC_ASSERT(top);
+	utility_assert(assist);
+
+	/* make sure we hold the graph lock when iterating with this helper! */
+
+	const gchar* idStr = VAS(&top->graph, "id", vertexIndex);
+
+	if(g_strstr_len(idStr, (gssize)-1, "poi")) {
+		const gchar* typeStr = VAS(&top->graph, "type", vertexIndex);
+		const gchar* ipStr = VAS(&top->graph, "ip", vertexIndex);
+		const gchar* geocodeStr = VAS(&top->graph, "geocode", vertexIndex);
+
+		/* XXX FIXME fix this to properly filter! */
+		g_queue_push_tail(assist->candidates, GINT_TO_POINTER(vertexIndex));
+	}
+}
+
 void topology_connect(Topology* top, Address* address, Random* randomSourcePool,
-		gchar* ipHint, gchar* clusterHint, guint64* bwDownOut, guint64* bwUpOut) {
+		gchar* ipHint, gchar* clusterHint, gchar* typeHint, guint64* bwDownOut, guint64* bwUpOut) {
 	MAGIC_ASSERT(top);
 	utility_assert(address);
 
-	// XXX we can connect to non-PoI pops too, as they have a larger list of countries!
-
 	in_addr_t nodeIP = address_toNetworkIP(address);
-	in_addr_t poiIP = 0;
-	Cluster* cluster = NULL;
+	igraph_integer_t vertexIndex = (igraph_integer_t) 0;
+	igraph_integer_t* vertexIndexPtr = NULL;
 
-	/* we need to attach a host's network interface to the topology so that it can route.
-	 * the address of the interface is required, but the remaining params are optional.
-	 *
-	 * there are several ways to attach; we use this logic:
-	 *  1. if the ipHint (from shadow.config.xml) is given and
-	 *   1a. it specifies an existing PoI in the topology, we attach there
-	 *   1b. it does not specify an existing PoI, then we check the clusterHint, and
-	 *    1ba. if it exists and contains PoIs, we attach to the longest prefix matched PoI
-	 *         from the existing cluster
-	 *    1bb. if it exists but does not contain PoIs, we attach to the longest prefix matched
-	 *         PoI from the list of all PoIs, but use the cluster bandwidth and loss attributes
-	 *    1bc. if NULL or it does not exist, we attach to the global longest prefix matched PoI
-	 *  2. if ipHint is NULL, we check the clusterHint, and
-	 *   2a. if it exists and contains PoIs, we select one at random
-	 *   2b. if it exists but does not contain PoIs, we choose a random PoI, but use the cluster
-	 *       bandwidth attributes
-	 *   2c. if NULL or it does not exist, we choose a random PoI and its cluster
-	 */
+	ConnectAssist* assist = g_new0(ConnectAssist, 1);
+	assist->candidates = g_queue_new();
+	assist->geocodeHint = clusterHint;
+	assist->ipHint = ipHint;
+	assist->typeHint = typeHint;
 
-//	if(ipHint) { XXX
-	if(FALSE) {
-		gboolean poiVertexIndexFound = FALSE;
-		gpointer poiVertexIndexPtr = NULL;
+	g_mutex_lock(&top->graphLock);
+	_topology_iterateAllVertices(top, (VertexNotifyFunc) _topology_connectHelperHook, assist);
+	g_mutex_unlock(&top->graphLock);
 
-		in_addr_t ip = address_stringToIP(ipHint);
-		if(ip != INADDR_NONE) {
-			poiVertexIndexFound = g_hash_table_lookup_extended(top->poiIPToVertexIndex,
-					GUINT_TO_POINTER(ip), NULL, &poiVertexIndexPtr);
-		}
+	guint numCandidates = g_queue_get_length(assist->candidates);
+	utility_assert(numCandidates > 0);
 
-		if(poiVertexIndexFound) {
-			/* ip matches a poi, case 1a */
-			poiIP = ip;
-
-			if(clusterHint) {
-				cluster = g_hash_table_lookup(top->geocodeToCluster, clusterHint);
-			}
-
-			if(!cluster) {
-
-			}
-		} else {
-			/* no poi found, case 1b */
-			if(clusterHint) {
-				cluster = g_hash_table_lookup(top->geocodeToCluster, clusterHint);
-			}
-
-			if(cluster) {
-				if(cluster_getPoICount(cluster) > 0) {
-					/* our cluster has pois, case 1ba */
-				} else {
-					/* cluster has no pois, case 1bb */
-
-				}
-			} else {
-				/* no poi or cluster, case 1bc */
-			}
+	/* if more than one candidate, grab a random one */
+	if(numCandidates > 1) {
+		gdouble randomDouble = random_nextDouble(randomSourcePool);
+		guint count = (guint) round((gdouble)(numCandidates * randomDouble));
+		while(count > 0) {
+			vertexIndexPtr = g_queue_pop_head(assist->candidates);
+			count--;
 		}
 	} else {
-		/* no ipHint, case 2 */
-		if(clusterHint) {
-			cluster = g_hash_table_lookup(top->geocodeToCluster, clusterHint);
-			if(cluster && cluster_getPoICount(cluster) > 0) {
-				/* case 2a */
-				poiIP = cluster_getRandomPoI(cluster, randomSourcePool);
-			}
-		}
-
-		if(!poiIP) {
-			/* case 2b, choose a random PoI */
-			guint tableSize = g_hash_table_size(top->poiIPToVertexIndex);
-			if(tableSize < 1) {
-				error("the topology contains no points of interest to which we can assign hosts");
-			}
-
-			GList* keyList = g_hash_table_get_keys(top->poiIPToVertexIndex);
-			guint keyIndexRange = tableSize - 1;
-
-			gdouble randomDouble = random_nextDouble(randomSourcePool);
-			guint randomIndex = (guint) round((gdouble)(keyIndexRange * randomDouble));
-			gpointer randomKeyPtr = g_list_nth_data(keyList, randomIndex);
-
-			/* sanity checks */
-			utility_assert(randomKeyPtr);
-			gpointer randomVertexIndexPtr = NULL;
-			gboolean vertexIndexIsFound = g_hash_table_lookup_extended(top->poiIPToVertexIndex, randomKeyPtr, NULL, &randomVertexIndexPtr);
-			utility_assert(vertexIndexIsFound);
-
-			g_list_free(keyList);
-
-			poiIP = (in_addr_t) GPOINTER_TO_UINT(randomKeyPtr);
-
-			if(!cluster) {
-				/* case 2c, choose the random PoIs cluster too */
-				igraph_integer_t randomVertexIndex = (igraph_integer_t) GPOINTER_TO_INT(randomVertexIndexPtr);
-				const gchar* geocodesStr = VAS(&top->graph, "geocodes", randomVertexIndex);
-				cluster = g_hash_table_lookup(top->geocodeToCluster, geocodesStr);
-			}
-		}
+		vertexIndexPtr = g_queue_pop_head(assist->candidates);
 	}
 
-	/* make sure we found somewhere to attach it */
-	if(!poiIP || !cluster) {
-		gchar* addressStr = address_toHostIPString(address);
-		error("unable to assign host address %s to a PoI/Cluster using ipHint %s and clusterHint %s",
-				addressStr, ipHint ? ipHint : "(null)", clusterHint ? clusterHint : "(null)");
-	}
-	utility_assert(poiIP && cluster);
+	g_queue_free(assist->candidates);
+	g_free(assist);
+	assist = NULL;
+
+	/* make sure the vertex is legitimate */
+	utility_assert(vertexIndexPtr);
+	vertexIndex = *vertexIndexPtr;
+	utility_assert(vertexIndex > (igraph_integer_t) -1);
 
 	/* attach it, i.e. store the mapping so we can route later */
-	cluster_ref(cluster);
 	g_rw_lock_writer_lock(&(top->virtualIPLock));
-	g_hash_table_replace(top->virtualIPToPoIIP, GUINT_TO_POINTER(nodeIP), GUINT_TO_POINTER(poiIP));
-	g_hash_table_replace(top->virtualIPToCluster, GUINT_TO_POINTER(nodeIP), cluster);
+	g_hash_table_replace(top->virtualIP, GUINT_TO_POINTER(nodeIP), GINT_TO_POINTER(vertexIndex));
 	g_rw_lock_writer_unlock(&(top->virtualIPLock));
+
+	g_mutex_lock(&top->graphLock);
 
 	/* give them the default cluster bandwidths if they asked */
 	if(bwUpOut) {
-		*bwUpOut = cluster_getBandwidthUp(cluster);
+		*bwUpOut = (guint64) VAN(&top->graph, "bandwidthup", vertexIndex);
 	}
 	if(bwDownOut) {
-		*bwDownOut = cluster_getBandwidthDown(cluster);
+		*bwDownOut = (guint64) VAN(&top->graph, "bandwidthdown", vertexIndex);
 	}
 
-	gchar* poiIPStr = address_ipToNewString(poiIP);
-	info("connected address '%s' to PoI '%s' and cluster '%s'",
-			address_toHostIPString(address), poiIPStr, cluster_getGeoCode(cluster));
-	g_free(poiIPStr);
+	const gchar* idStr = VAS(&top->graph, "id", vertexIndex);
+	const gchar* typeStr = VAS(&top->graph, "type", vertexIndex);
+	const gchar* ipStr = VAS(&top->graph, "ip", vertexIndex);
+	const gchar* geocodeStr = VAS(&top->graph, "geocode", vertexIndex);
+
+	g_mutex_unlock(&top->graphLock);
+
+	info("connected address '%s' to point of interest '%s' (%s, %s, %s)",
+			address_toHostIPString(address), idStr, ipStr, geocodeStr, typeStr);
 }
 
 void topology_disconnect(Topology* top, Address* address) {
@@ -995,42 +750,40 @@ void topology_disconnect(Topology* top, Address* address) {
 	in_addr_t ip = address_toNetworkIP(address);
 
 	g_rw_lock_writer_lock(&(top->virtualIPLock));
-	g_hash_table_remove(top->virtualIPToPoIIP, GUINT_TO_POINTER(ip));
+	g_hash_table_remove(top->virtualIP, GUINT_TO_POINTER(ip));
 	g_rw_lock_writer_unlock(&(top->virtualIPLock));
 }
 
 void topology_free(Topology* top) {
 	MAGIC_ASSERT(top);
 
+	/* clear the virtual ip table */
+	g_rw_lock_writer_lock(&(top->virtualIPLock));
+	if(top->virtualIP) {
+		g_hash_table_destroy(top->virtualIP);
+		top->virtualIP = NULL;
+	}
+	g_rw_lock_writer_unlock(&(top->virtualIPLock));
+	g_rw_lock_clear(&(top->virtualIPLock));
+
+	/* this functions grabs and releases the pathCache write lock */
+	_topology_clearCache(top);
+	g_rw_lock_clear(&(top->pathCacheLock));
+
+	/* clear the graph */
 	g_mutex_lock(&top->graphLock);
 
 	if(top->graphPath) {
 		g_string_free(top->graphPath, TRUE);
 	}
 
-	g_rw_lock_writer_lock(&(top->virtualIPLock));
-
-	/* this functions grabs and releases the pathCache write lock */
-	_topology_clearCache(top);
-	g_rw_lock_clear(&(top->pathCacheLock));
-
-	if(top->currentEdgeWeights) {
-		igraph_vector_destroy(top->currentEdgeWeights);
-		g_free(top->currentEdgeWeights);
+	if(top->edgeWeights) {
+		igraph_vector_destroy(top->edgeWeights);
+		g_free(top->edgeWeights);
 	}
-	top->currentEdgeWeights = NULL;
+	top->edgeWeights = NULL;
 
-	g_hash_table_destroy(top->virtualIPToPoIIP);
-	top->virtualIPToPoIIP = NULL;
-	g_hash_table_destroy(top->virtualIPToCluster);
-	top->virtualIPToCluster = NULL;
-	g_hash_table_destroy(top->poiIPToVertexIndex);
-	top->poiIPToVertexIndex = NULL;
-	g_hash_table_destroy(top->geocodeToCluster);
-	top->geocodeToCluster = NULL;
-
-	g_rw_lock_writer_unlock(&(top->virtualIPLock));
-	g_rw_lock_clear(&(top->virtualIPLock));
+	igraph_destroy(&top->graph);
 
 	g_mutex_unlock(&top->graphLock);
 	g_mutex_clear(&(top->graphLock));
@@ -1045,23 +798,19 @@ Topology* topology_new(gchar* graphPath) {
 	MAGIC_INIT(top);
 
 	top->graphPath = g_string_new(graphPath);
-	top->poiIPToVertexIndex = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, NULL);
-	top->virtualIPToPoIIP = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, NULL);
-	top->geocodeToCluster = g_hash_table_new_full(g_str_hash, g_str_equal,
-			g_free, (GDestroyNotify) cluster_unref);
-	top->virtualIPToCluster = g_hash_table_new_full(g_direct_hash, g_direct_equal,
-			NULL, (GDestroyNotify) cluster_unref);
+	top->virtualIP = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, NULL);
+
+	g_mutex_init(&(top->graphLock));
+	g_rw_lock_init(&(top->virtualIPLock));
+	g_rw_lock_init(&(top->pathCacheLock));
 
 	/* first read in the graph and make sure its formed correctly,
 	 * then setup our edge weights for shortest path */
-	if(!_topology_loadGraph(top) || !_topology_checkGraph(top) || !_topology_setupGraph(top)) {
+	if(!_topology_loadGraph(top) || !_topology_checkGraph(top) ||
+			!_topology_extractEdgeWeights(top)) {
 		topology_free(top);
 		return NULL;
 	}
-
-	g_rw_lock_init(&(top->virtualIPLock));
-	g_rw_lock_init(&(top->pathCacheLock));
-	g_mutex_init(&(top->graphLock));
 
 	return top;
 }

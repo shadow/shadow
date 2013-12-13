@@ -77,7 +77,6 @@ set(shadow_srcs
     runnable/shd-runnable.c
 
     topology/shd-address.c
-    topology/shd-cluster.c
     topology/shd-dns.c
     topology/shd-path.c
     topology/shd-topology.c

@@ -15,7 +15,7 @@ Topology* topology_new(gchar* graphPath);
 void topology_free(Topology* top);
 
 void topology_connect(Topology* top, Address* address, Random* randomSourcePool,
-		gchar* ipHint, gchar* clusterHint, guint64* bwDownOut, guint64* bwUpOut);
+		gchar* ipHint, gchar* clusterHint, gchar* typeHint, guint64* bwDownOut, guint64* bwUpOut);
 void topology_disconnect(Topology* top, Address* address);
 gboolean topology_isRoutable(Topology* top, Address* srcAddress, Address* dstAddress);
 gdouble topology_getLatency(Topology* top, Address* srcAddress, Address* dstAddress);

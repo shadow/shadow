@@ -34,12 +34,12 @@ def main():
         c = getcode(n.get("id"))
         poicounter += 1
         d[c] = "poi-{0}".format(poicounter)
-        G.add_node(d[c], type="cluster", ip="0.0.0.0", geocode=c, asn="0", bandwidthup="{0}".format(int(n.get("bandwidthup"))), bandwidthdown="{0}".format(int(n.get("bandwidthdown"))), packetloss="{0}".format(float(n.get("packetloss"))))
+        G.add_node(d[c], type="cluster", ip="0.0.0.0", geocode=c, asn=int(0), bandwidthup=int(n.get("bandwidthup")), bandwidthdown=int(n.get("bandwidthdown")), packetloss=float(n.get("packetloss")))
 
     for l in root.iterchildren("link"):
         codes = l.get("clusters").split()
         csrc, cdst = getcode(codes[0]), getcode(codes[1])
-        G.add_edge(d[csrc], d[cdst], latency="{0}".format(float(l.get("latency"))), jitter="{0}".format(float(l.get("jitter"))), packetloss="0.0")
+        G.add_edge(d[csrc], d[cdst], latency=float(l.get("latency")), jitter=float(l.get("jitter")), packetloss=float(0.0))
 
     nx.write_graphml(G, OUTPUT_FILENAME)
 

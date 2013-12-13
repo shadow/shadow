@@ -45,13 +45,13 @@ def main():
             popcounter += 1
             newid = "pop-{0}".format(popcounter)
             id_to_id[id] = newid
-            G.add_node(newid, type='pop', geocode=gc, asn=asnum)
+            G.add_node(newid, type='pop', geocode=gc, asn=int(asnum))
 
             if gc in bwup:
                 poicounter += 1
                 clientid = "poi-{0}".format(poicounter)
-                G.add_node(clientid, type='client', ip="0.0.0.0", geocode=gc, asn=asnum, bandwidthup=str(bwup[gc]), bandwidthdown=str(bwdown[gc]), packetloss=str(loss[gc]))
-                G.add_edge(clientid, newid, latency='5.0', jitter='0.0', packetloss='0.0')
+                G.add_node(clientid, type='client', ip="0.0.0.0", geocode=gc, asn=int(asnum), bandwidthup=int(bwup[gc]), bandwidthdown=int(bwdown[gc]), packetloss=float(loss[gc]))
+                G.add_edge(clientid, newid, latency=float(5.0), jitter=float(0.0), packetloss=float(0.0))
 
         elif 'relay' in n['nodetype']:
             ip = n['relay_ip']
@@ -66,7 +66,7 @@ def main():
                 poicounter += 1
                 newid = "poi-{0}".format(poicounter)
                 id_to_id[id] = newid
-                G.add_node(newid, type='relay', ip=ip, geocode=gc, asn=asnum, bandwidthup=str(bwup[gc]), bandwidthdown=str(bwdown[gc]), packetloss=str(loss[gc]))
+                G.add_node(newid, type='relay', ip=ip, geocode=gc, asn=int(asnum), bandwidthup=int(bwup[gc]), bandwidthdown=int(bwdown[gc]), packetloss=float(loss[gc]))
 
         elif 'dest' in n['nodetype']:
             ip = '.'.join(n['nodeid'].split('_')[1:])
@@ -77,7 +77,7 @@ def main():
                 poicounter += 1
                 newid = "poi-{0}".format(poicounter)
                 id_to_id[id] = newid
-                G.add_node(newid, type='server', ip=ip, geocode=gc, asn=asnum, bandwidthup=str(bwup[gc]), bandwidthdown=str(bwdown[gc]), packetloss=str(loss[gc]))
+                G.add_node(newid, type='server', ip=ip, geocode=gc, asn=int(asnum), bandwidthup=int(bwup[gc]), bandwidthdown=int(bwdown[gc]), packetloss=float(loss[gc]))
 
     for (srcid, dstid) in Gin.edges():
         if srcid in id_to_id and dstid in id_to_id:
@@ -85,7 +85,7 @@ def main():
             l = [float(i) for i in e['latency'].split(',')]
             meanl = numpy.mean(l)
             jit = (l[7] - l[2]) / 2.0
-            G.add_edge(id_to_id[srcid], id_to_id[dstid], latency=str(meanl), jitter=str(jit), packetloss="0.0")
+            G.add_edge(id_to_id[srcid], id_to_id[dstid], latency=float(meanl), jitter=float(jit), packetloss=float(0.0))
         else: print "skipped edge: {0} -- {1}".format(srcid, dstid)
 
     # undirected graphs
@@ -150,6 +150,7 @@ def get_geo():
             entries.append(entry)
     return entries
 
+# this is no longer up to date
 def make_test_graph():
     G = nx.DiGraph()
 

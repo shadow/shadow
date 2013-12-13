@@ -31,7 +31,7 @@ def worker(taskq, resultq, G, pois):
                     e = G.edge[p[i]][p[i+1]]
                     l.append(float(e['latency']))
                     j.append(float(e['jitter']))
-            d[dstid] = {'latency':str(sum(l)), 'jitter':str(sum(j)/float(len(j)))}
+            d[dstid] = {'latency':float(sum(l)), 'jitter':float(sum(j)/float(len(j)))}
 
         resultq.put((srcid, d))
 
@@ -39,7 +39,7 @@ def thread(resultq, Gnew, glock, doneq):
     for r in iter(resultq.get, 'STOP'):
         srcid, d = r[0], r[1]
         glock.acquire()
-        for dstid in d: Gnew.add_edge(srcid, dstid, latency=d[dstid]['latency'], jitter=d[dstid]['jitter'], packetloss='0.0')
+        for dstid in d: Gnew.add_edge(srcid, dstid, latency=float(d[dstid]['latency']), jitter=float(d[dstid]['jitter']), packetloss=float(0.0))
         glock.release()
         doneq.put(True)
 
@@ -90,7 +90,7 @@ def run_single(G, pois, Gnew):
     d = nx.all_pairs_dijkstra_path_length(G)
     for srcid in pois:
         for dstid in pois:
-            Gnew.add_edge(srcid, dstid, latency=str(d[srcid][dstid]), jitter='0.0', packetloss='0.0')
+            Gnew.add_edge(srcid, dstid, latency=float(d[srcid][dstid]), jitter=float(0.0), packetloss=float(0.0))
     return Gnew
 
 def main():
