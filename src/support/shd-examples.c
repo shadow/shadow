@@ -12,7 +12,7 @@ GString* example_getFileExampleContents() {
 		"<shadow>"
 		"<topology path=\"~/.shadow/share/topology.graphml.xml\" />"
 		"<plugin id=\"filex\" path=\"libshadow-plugin-filetransfer.so\" />"
-		"<node id=\"server\" cluster=\"USDC\" bandwidthup=\"10240\" bandwidthdown=\"5120\" >"
+		"<node id=\"server\" geocodehint=\"US\" bandwidthup=\"10240\" bandwidthdown=\"5120\" >"
 		"	<application plugin=\"filex\" time=\"10\" arguments=\"server 8080 /bin/\" />"
 		"</node >"
 		"<node id=\"client\" quantity=\"1000\" >"

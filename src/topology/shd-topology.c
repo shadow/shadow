@@ -185,7 +185,7 @@ static void _topology_checkGraphVerticesHelperHook(Topology* top, igraph_integer
 
 		debug("found vertex %li (%s), type=%s ip=%s geocode=%s "
 				"bandwidthup=%f bandwidthdown=%f packetloss=%f",
-				(glong)vertexIndex, idStr, typeStr, geocodeStr, bwup, bwdown, ploss);
+				(glong)vertexIndex, idStr, typeStr, ipStr, geocodeStr, bwup, bwdown, ploss);
 	} else {
 		debug("found vertex %li (%s), type=%s",
 				(glong)vertexIndex, idStr, typeStr);
@@ -261,7 +261,7 @@ static void _topology_checkGraphEdgesHelperHook(Topology* top, igraph_integer_t 
 	igraph_real_t jitter = EAN(&top->graph, "jitter", edgeIndex);
 	igraph_real_t ploss = EAN(&top->graph, "packetloss", edgeIndex);
 
-	debug("found edge %li from vertex %li (%s) to vertex %li (%s) latency=%s jitter=%s packetloss=%s",
+	debug("found edge %li from vertex %li (%s) to vertex %li (%s) latency=%f jitter=%f packetloss=%f",
 			(glong)edgeIndex, (glong)fromVertexIndex, fromIDStr, (glong)toVertexIndex, toIDStr,
 			latency, jitter, ploss);
 }
@@ -541,13 +541,6 @@ static gboolean _topology_computeSourcePaths(Topology* top, igraph_integer_t src
 		return FALSE;
 	}
 
-	igraph_vector_t dstVertexIndexSet;
-	gint result = igraph_vector_init(&dstVertexIndexSet, 0);
-	if(result != IGRAPH_SUCCESS) {
-		critical("igraph_vector_init return non-success code %i", result);
-		return FALSE;
-	}
-
 	/* we are going to compute shortest path from the source to all attached destinations
 	 * (including dstAddress) in order to cut down on the the number of dijkstra runs we do */
 	g_rw_lock_reader_lock(&(top->virtualIPLock));
@@ -556,13 +549,14 @@ static gboolean _topology_computeSourcePaths(Topology* top, igraph_integer_t src
 
 	/* normally we should hold the lock while modifying the list, but since the virtualIPLock
 	 * hash table stores vertex indices in pointers, this should be OK. */
-	guint numTargets = 0;
-	GList* target = attachedTargets;
-	while(target != NULL) {
-		igraph_integer_t vertexIndex = (igraph_integer_t) GPOINTER_TO_INT(target->data);
-		igraph_vector_set(&dstVertexIndexSet, numTargets, (igraph_real_t) vertexIndex);
-		numTargets++;
-		target = target->next;
+	guint numTargets = g_list_length(attachedTargets);
+
+	/* initialize vector to hold intended destinations */
+	igraph_vector_t dstVertexIndexSet;
+	gint result = igraph_vector_init(&dstVertexIndexSet, (long int) numTargets);
+	if(result != IGRAPH_SUCCESS) {
+		critical("igraph_vector_init return non-success code %i", result);
+		return FALSE;
 	}
 
 	/* initialize our result vector where the resulting paths will be stored */
@@ -573,8 +567,15 @@ static gboolean _topology_computeSourcePaths(Topology* top, igraph_integer_t src
 		return FALSE;
 	}
 
-	/* initialize all of our result elements, which will hold the path vertices for each target */
+	GList* target = attachedTargets;
 	for(gint position = 0; position < numTargets; position++) {
+		/* set each vertex index as a destination for dijkstra */
+		utility_assert(target != NULL);
+		igraph_integer_t vertexIndex = (igraph_integer_t) GPOINTER_TO_INT(target->data);
+		igraph_vector_set(&dstVertexIndexSet, position, (igraph_real_t) vertexIndex);
+		target = target->next;
+
+		/* initialize a vector to hold the result path vertices for this target */
 		igraph_vector_t* resultPathVertices = g_new0(igraph_vector_t, 1);
 
 		/* initialize with 0 entries, since we dont know how long the paths with be */
