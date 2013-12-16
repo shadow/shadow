@@ -47,6 +47,7 @@ struct _Topology {
 	igraph_integer_t vertexCount;
 	igraph_integer_t edgeCount;
 	igraph_bool_t isConnected;
+	igraph_bool_t isDirected;
 
 	MAGIC_DECLARE;
 };
@@ -125,7 +126,10 @@ static gboolean _topology_checkGraphProperties(Topology* top) {
 		return FALSE;
 	}
 
-	info("graph is %s with %u %s",
+	top->isDirected = igraph_is_directed(&top->graph);
+
+	info("topology graph is %s and %s with %u %s",
+			top->isDirected ? "directed" : "undirected",
 			top->isConnected ? "strongly connected" : "disconnected",
 			(guint)top->clusterCount, top->clusterCount == 1 ? "cluster" : "clusters");
 
@@ -449,7 +453,11 @@ static gboolean _topology_computeSourcePathsHelper(Topology* top, igraph_integer
 		igraph_vector_t* resultPathVertices) {
 	MAGIC_ASSERT(top);
 
-	/* there are multiple chances to drop a packet here:
+	/* each position represents a single destination.
+	 * this resultPathVertices vector holds the links that form the shortest path to this destination.
+	 * the destination vertex is the last vertex in the vector.
+	 *
+	 * there are multiple chances to drop a packet here:
 	 * psrc : loss rate from source vertex
 	 * plink ... : loss rate on the links between source-vertex and destination-vertex
 	 * pdst : loss rate from destination vertex
@@ -500,7 +508,8 @@ static gboolean _topology_computeSourcePathsHelper(Topology* top, igraph_integer
 #endif
 			if(result != IGRAPH_SUCCESS) {
 				g_mutex_unlock(&top->graphLock);
-				warning("igraph_get_eid return non-success code %i", result);
+				critical("igraph_get_eid return non-success code %i for edge between "
+						"vertex %i and %i", result, (gint) fromVertexIndex, (gint) toVertexIndex);
 				return FALSE;
 			}
 
@@ -522,7 +531,8 @@ static gboolean _topology_computeSourcePathsHelper(Topology* top, igraph_integer
 
 	g_mutex_unlock(&top->graphLock);
 
-	debug("shortest path %s-->%s is %f ms with %f loss, path: %s", srcIDStr, dstIDStr,
+	//TODO debug level
+	info("shortest path %s-->%s is %f ms with %f loss, path: %s", srcIDStr, dstIDStr,
 			totalLatency, 1-totalReliability, pathString->str);
 
 	g_string_free(pathString, TRUE);
@@ -538,6 +548,7 @@ static gboolean _topology_computeSourcePaths(Topology* top, igraph_integer_t src
 
 	if(srcVertexIndex < 0) {
 		/* not connected to a vertex */
+		error("_topology_computeSourcePaths invalid source vertex %i", (gint)srcVertexIndex);
 		return FALSE;
 	}
 
@@ -625,6 +636,7 @@ static gboolean _topology_computeSourcePaths(Topology* top, igraph_integer_t src
 
 	/* go through the result paths for all targets */
 	for(gint position = 0; position < numTargets; position++) {
+		/* handle the path to the destination at this position */
 		igraph_vector_t* resultPathVertices = igraph_vector_ptr_e(&resultPaths, position);
 
 		gboolean success = _topology_computeSourcePathsHelper(top, srcVertexIndex, resultPathVertices);
@@ -648,11 +660,26 @@ static gboolean _topology_getPathEntry(Topology* top, Address* srcAddress, Addre
 		gdouble* latency, gdouble* reliability) {
 	MAGIC_ASSERT(top);
 
-	/* check for a cache hit */
+	/* get connected points */
 	igraph_integer_t srcVertexIndex = _topology_getConnectedVertexIndex(top, srcAddress);
+	if(srcVertexIndex < 0) {
+		critical("invalid vertex %i, source address %s is not connected to topology",
+				(gint)srcVertexIndex, address_toString(srcAddress));
+		return FALSE;
+	}
 	igraph_integer_t dstVertexIndex = _topology_getConnectedVertexIndex(top, dstAddress);
+	if(dstVertexIndex < 0) {
+		critical("invalid vertex %i, destination address %s is not connected to topology",
+				(gint)dstVertexIndex, address_toString(dstAddress));
+		return FALSE;
+	}
 
+	/* check for a cache hit */
 	Path* path = _topology_getPathFromCache(top, srcVertexIndex, dstVertexIndex);
+	if(!path && !top->isDirected) {
+		path = _topology_getPathFromCache(top, dstVertexIndex, srcVertexIndex);
+	}
+
 	if(!path) {
 		/* cache miss, compute all source shortest latency paths */
 		gboolean success = _topology_computeSourcePaths(top, srcVertexIndex);
@@ -661,18 +688,21 @@ static gboolean _topology_getPathEntry(Topology* top, Address* srcAddress, Addre
 		}
 	}
 
-	if(path) {
-		if(latency) {
-			*latency = path_getLatency(path);
-		}
-		if(reliability) {
-			*reliability = path_getReliability(path);
-		}
-		return TRUE;
-	} else {
+	if(!path) {
 		/* some error computing or caching path */
+		error("unable to compute or find cached path between node %s at vertex %i "
+				"and node %s at vertex %i", (gint)srcVertexIndex, address_toString(srcAddress),
+				(gint)dstVertexIndex, address_toString(dstAddress));
 		return FALSE;
 	}
+
+	if(latency) {
+		*latency = path_getLatency(path);
+	}
+	if(reliability) {
+		*reliability = path_getReliability(path);
+	}
+	return TRUE;
 }
 
 gdouble topology_getLatency(Topology* top, Address* srcAddress, Address* dstAddress) {

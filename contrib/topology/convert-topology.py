@@ -26,7 +26,7 @@ def main():
 #        print element.tag
 #    exit()
 
-    G = nx.DiGraph()
+    G = nx.Graph()
     poicounter = 0
     d = {}
 
@@ -39,7 +39,16 @@ def main():
     for l in root.iterchildren("link"):
         codes = l.get("clusters").split()
         csrc, cdst = getcode(codes[0]), getcode(codes[1])
-        G.add_edge(d[csrc], d[cdst], latency=float(l.get("latency")), jitter=float(l.get("jitter")), packetloss=float(0.0))
+        if csrc not in G.edge or cdst not in G.edge[csrc]:
+            G.add_edge(d[csrc], d[cdst], latency=float(l.get("latency")), jitter=float(l.get("jitter")), packetloss=float(0.0))
+
+    # undirected graphs
+    assert nx.is_connected(G)
+    assert nx.number_connected_components(G) == 1
+
+    # directed graphs
+    #assert nx.is_strongly_connected(G)
+    #assert nx.number_strongly_connected_components(G) == 1
 
     nx.write_graphml(G, OUTPUT_FILENAME)
 

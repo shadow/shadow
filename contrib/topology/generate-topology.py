@@ -60,8 +60,12 @@ def main():
             asnum = n['asn'].split()[0][2:]
             #pop = n['pop']
             #poiip = n['ip']
-            gc = get_geo_code(geo, ip)
-            #gc = n['country']
+
+            gc = 'A1'
+            if 'country' in n and n['country'] != 'EU': gc = n['country']
+            elif 'countries' in n and n['countries'] != 'EU': gc = n['countries']
+            else: gc = get_geo_code(geo, ip)
+
             if gc in bwup:
                 poicounter += 1
                 newid = "poi-{0}".format(poicounter)

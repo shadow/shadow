@@ -102,7 +102,9 @@ static GString* _utility_formatBacktrace() {
 void utility_handleError(const gchar* file, gint line, const gchar* function, const gchar* message) {
 	GString* errorString = _utility_formatError(file, line, function, message);
 	GString* backtraceString = _utility_formatBacktrace();
-	g_print("%s%s**ABORTING**\n", errorString->str, backtraceString->str);
+	if(!isatty(fileno(stdout))) {
+		g_print("%s%s**ABORTING**\n", errorString->str, backtraceString->str);
+	}
 	g_printerr("%s%s**ABORTING**\n", errorString->str, backtraceString->str);
 	g_string_free(errorString, TRUE);
 	g_string_free(backtraceString, TRUE);
