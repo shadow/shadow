@@ -222,10 +222,10 @@ typedef struct {
 
 typedef struct {
 	struct {
-		char buf[10240];
-		unsigned long pos;
-		unsigned long nallocs;
-		unsigned long ndeallocs;
+		char buf[102400];
+		size_t pos;
+		size_t nallocs;
+		size_t ndeallocs;
 	} dummy;
 	PreloadFuncs real;
 	PreloadFuncs shadow;
@@ -236,31 +236,29 @@ typedef struct {
 static FuncDirector director;
 
 /* track if we are in a recursive loop to avoid infinite recursion.
- * threads MUST access this via &isRecursive to ensure it has its own copy
- * http://gcc.gnu.org/onlinedocs/gcc-4.3.6/gcc/Thread_002dLocal.html*/
+ * threads MUST access this via &isRecursive to ensure each has its own copy
+ * http://gcc.gnu.org/onlinedocs/gcc-4.3.6/gcc/Thread_002dLocal.html */
 static __thread unsigned long isRecursive = 0;
 
 static void* dummy_malloc(size_t size) {
     if (director.dummy.pos + size >= sizeof(director.dummy.buf)) {
     	exit(EXIT_FAILURE);
     }
-    void *retptr = director.dummy.buf + director.dummy.pos;
+    void* mem = &(director.dummy.buf[director.dummy.pos]);
     director.dummy.pos += size;
-    ++director.dummy.nallocs;
-    return retptr;
+    director.dummy.nallocs++;
+    return mem;
 }
 
 static void* dummy_calloc(size_t nmemb, size_t size) {
-    void *ptr = dummy_malloc(nmemb * size);
-    unsigned int i = 0;
-    for (; i < nmemb * size; ++i) {
-        *((char*)(ptr + i)) = '\0';
-    }
-    return ptr;
+	size_t total_bytes = nmemb * size;
+    void* mem = dummy_malloc(total_bytes);
+    memset(mem, 0, total_bytes);
+    return mem;
 }
 
 static void dummy_free(void *ptr) {
-	++director.dummy.ndeallocs;
+	director.dummy.ndeallocs++;
 	if(director.dummy.ndeallocs == director.dummy.nallocs){
 		director.dummy.pos = 0;
 	}
@@ -340,7 +338,13 @@ void* calloc(size_t nmemb, size_t size) {
         ENSURE(shadow, "intercept_", calloc);
         return director.shadow.calloc(nmemb, size);
     } else {
-        ENSURE(real, "", calloc);
+    	/* the dlsym lookup for calloc may call calloc again, causing infinite recursion */
+    	if(!director.real.calloc) {
+    		/* make sure to use dummy_calloc when looking up calloc */
+			director.real.calloc = dummy_calloc;
+			/* this will set director.real.calloc to the correct calloc */
+			ENSURE(real, "", calloc);
+    	}
         return director.real.calloc(nmemb, size);
     }
 }
