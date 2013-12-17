@@ -4,7 +4,7 @@ This page discusses how to prepare your machine to begin running Shadow experime
 Shadow relies on the following tools and libraries to function properly. Versions and plug-in-specific dependencies are noted in parenthesis where applicable
 
 **Required**:
-* clang, llvm (3.2)
+* clang, llvm (= 3.2)
 * glib (>= 2.32.0)
 * cmake (>= 2.8.8)
 * make
