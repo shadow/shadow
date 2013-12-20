@@ -489,6 +489,35 @@ static gboolean _topology_computeSourcePathsHelper(Topology* top, igraph_integer
 		totalLatency = 1.0;
 		dstVertexIndex = srcVertexIndex;
 		dstIDStr = srcIDStr;
+	} else if(nVertices == 1) {
+	  /* get destination properties */
+	  dstVertexIndex = (igraph_integer_t) igraph_vector_tail(resultPathVertices);
+	  dstIDStr = VAS(&top->graph, "id", dstVertexIndex);
+	  totalReliability *= (1.0f - VAN(&top->graph, "packetloss", dstVertexIndex));
+
+	  igraph_integer_t edgeIndex = 0;
+
+#ifndef IGRAPH_VERSION
+	  result = igraph_get_eid(&top->graph, &edgeIndex, srcVertexIndex, dstVertexIndex, (igraph_bool_t)TRUE);
+#else
+	  result = igraph_get_eid(&top->graph, &edgeIndex, srcVertexIndex, dstVertexIndex, (igraph_bool_t)TRUE, (igraph_bool_t)TRUE);
+#endif
+	  if(result != IGRAPH_SUCCESS) {
+		g_mutex_unlock(&top->graphLock);
+		critical("igraph_get_eid return non-success code %i for edge between "
+				 "%s (%i) and %s (%i)", result, srcIDStr, (gint) srcVertexIndex, dstIDStr, (gint) dstVertexIndex);
+		return FALSE;
+	  }
+
+	  /* get edge properties from graph */
+	  igraph_real_t edgeLatency = EAN(&top->graph, "latency", edgeIndex);
+	  totalLatency += edgeLatency;
+	  igraph_real_t edgeReliability = 1.0f - EAN(&top->graph, "packetloss", edgeIndex);
+	  totalReliability *= edgeReliability;
+
+	  /* accumulate path information */
+	  g_string_append_printf(pathString, "--[%f,%f]-->%s", edgeLatency, edgeReliability, dstIDStr);
+
 	} else {
 		/* get destination properties */
 		dstVertexIndex = (igraph_integer_t) igraph_vector_tail(resultPathVertices);
@@ -497,11 +526,14 @@ static gboolean _topology_computeSourcePathsHelper(Topology* top, igraph_integer
 
 		/* now get latency and reliability from each edge in the path */
 		igraph_integer_t fromVertexIndex = srcVertexIndex, toVertexIndex = 0,  edgeIndex = 0;
+		const gchar* fromIDStr = srcIDStr;
 
 		/* iterate the edges in the path */
-		for (gint i = 0; i < nVertices; i++) {
+		for (gint i = 1; i < nVertices; i++) {
 			/* get the edge */
 			toVertexIndex = igraph_vector_e(resultPathVertices, i);
+			const gchar* toIDStr = VAS(&top->graph, "id", toVertexIndex);
+
 #ifndef IGRAPH_VERSION
 			result = igraph_get_eid(&top->graph, &edgeIndex, fromVertexIndex, toVertexIndex, (igraph_bool_t)TRUE);
 #else
@@ -510,7 +542,7 @@ static gboolean _topology_computeSourcePathsHelper(Topology* top, igraph_integer
 			if(result != IGRAPH_SUCCESS) {
 				g_mutex_unlock(&top->graphLock);
 				critical("igraph_get_eid return non-success code %i for edge between "
-						"vertex %i and %i", result, (gint) fromVertexIndex, (gint) toVertexIndex);
+						 "%s (%i) and %s (%i)", result, fromIDStr, (gint) fromVertexIndex, toIDStr, (gint) toVertexIndex);
 				return FALSE;
 			}
 
@@ -521,11 +553,11 @@ static gboolean _topology_computeSourcePathsHelper(Topology* top, igraph_integer
 			totalReliability *= edgeReliability;
 
 			/* accumulate path information */
-			const gchar* toIDStr = VAS(&top->graph, "id", toVertexIndex);
 			g_string_append_printf(pathString, "--[%f,%f]-->%s", edgeLatency, edgeReliability, toIDStr);
 
 			/* update for next edge */
 			fromVertexIndex = toVertexIndex;
+			fromIDStr = toIDStr;
 		}
 	}
 
