@@ -489,47 +489,30 @@ static gboolean _topology_computeSourcePathsHelper(Topology* top, igraph_integer
 		totalLatency = 1.0;
 		dstVertexIndex = srcVertexIndex;
 		dstIDStr = srcIDStr;
-	} else if(nVertices == 1) {
-	  /* get destination properties */
-	  dstVertexIndex = (igraph_integer_t) igraph_vector_tail(resultPathVertices);
-	  dstIDStr = VAS(&top->graph, "id", dstVertexIndex);
-	  totalReliability *= (1.0f - VAN(&top->graph, "packetloss", dstVertexIndex));
-
-	  igraph_integer_t edgeIndex = 0;
-
-#ifndef IGRAPH_VERSION
-	  result = igraph_get_eid(&top->graph, &edgeIndex, srcVertexIndex, dstVertexIndex, (igraph_bool_t)TRUE);
-#else
-	  result = igraph_get_eid(&top->graph, &edgeIndex, srcVertexIndex, dstVertexIndex, (igraph_bool_t)TRUE, (igraph_bool_t)TRUE);
-#endif
-	  if(result != IGRAPH_SUCCESS) {
-		g_mutex_unlock(&top->graphLock);
-		critical("igraph_get_eid return non-success code %i for edge between "
-				 "%s (%i) and %s (%i)", result, srcIDStr, (gint) srcVertexIndex, dstIDStr, (gint) dstVertexIndex);
-		return FALSE;
-	  }
-
-	  /* get edge properties from graph */
-	  igraph_real_t edgeLatency = EAN(&top->graph, "latency", edgeIndex);
-	  totalLatency += edgeLatency;
-	  igraph_real_t edgeReliability = 1.0f - EAN(&top->graph, "packetloss", edgeIndex);
-	  totalReliability *= edgeReliability;
-
-	  /* accumulate path information */
-	  g_string_append_printf(pathString, "--[%f,%f]-->%s", edgeLatency, edgeReliability, dstIDStr);
-
 	} else {
 		/* get destination properties */
 		dstVertexIndex = (igraph_integer_t) igraph_vector_tail(resultPathVertices);
 		dstIDStr = VAS(&top->graph, "id", dstVertexIndex);
-		totalReliability *= (1.0f - VAN(&top->graph, "packetloss", dstVertexIndex));
 
-		/* now get latency and reliability from each edge in the path */
+		/* only include dst loss if there is no path between src and dst vertices */
+		if((srcVertexIndex != dstVertexIndex) || (srcVertexIndex == dstVertexIndex && nVertices > 2)) {
+			totalReliability *= (1.0f - VAN(&top->graph, "packetloss", dstVertexIndex));
+		}
+
+		/* the source is in the first position only if we have more than one vertex */
+		if(nVertices > 1) {
+			utility_assert(srcVertexIndex == igraph_vector_e(resultPathVertices, 0));
+		}
+
+		/* if we have only one vertex, its the destination at position 0; otherwise, the source is
+		 * at position 0 and the part of the path after the source starts at position 1 */
+		gint startingPosition = nVertices == 1 ? 0 : 1;
+
 		igraph_integer_t fromVertexIndex = srcVertexIndex, toVertexIndex = 0,  edgeIndex = 0;
 		const gchar* fromIDStr = srcIDStr;
 
-		/* iterate the edges in the path */
-		for (gint i = 1; i < nVertices; i++) {
+		/* now iterate to get latency and reliability from each edge in the path */
+		for (gint i = startingPosition; i < nVertices; i++) {
 			/* get the edge */
 			toVertexIndex = igraph_vector_e(resultPathVertices, i);
 			const gchar* toIDStr = VAS(&top->graph, "id", toVertexIndex);
@@ -563,10 +546,16 @@ static gboolean _topology_computeSourcePathsHelper(Topology* top, igraph_integer
 
 	g_mutex_unlock(&top->graphLock);
 
-	//TODO debug level
-	info("shortest path %s-->%s (%i-->%i) is %f ms with %f loss, path: %s", srcIDStr, dstIDStr,
+	debug("shortest path %s-->%s (%i-->%i) is %f ms with %f loss, path: %s", srcIDStr, dstIDStr,
 			(gint) srcVertexIndex, (gint) dstVertexIndex,
 			totalLatency, 1-totalReliability, pathString->str);
+
+	if(totalLatency == (igraph_real_t) 0) {
+		totalLatency = (igraph_real_t) 1;
+		warning("overriding 0 latency to 1 on: shortest path %s-->%s (%i-->%i) is %f ms with %f loss, path: %s",
+				srcIDStr, dstIDStr, (gint) srcVertexIndex, (gint) dstVertexIndex,
+				totalLatency, 1-totalReliability, pathString->str);
+	}
 
 	g_string_free(pathString, TRUE);
 
@@ -581,6 +570,14 @@ static gboolean _topology_computeSourcePaths(Topology* top, igraph_integer_t src
 	MAGIC_ASSERT(top);
 	utility_assert(srcVertexIndex >= 0);
 	utility_assert(dstVertexIndex >= 0);
+
+	g_mutex_lock(&top->graphLock);
+	const gchar* srcIDStr = VAS(&top->graph, "id", srcVertexIndex);
+	const gchar* dstIDStr = VAS(&top->graph, "id", dstVertexIndex);
+	g_mutex_unlock(&top->graphLock);
+
+	info("requested path between source vertex %li (%s) and destination vertex %li (%s)",
+			(glong)srcVertexIndex, srcIDStr, (glong)dstVertexIndex, dstIDStr);
 
 	/* we are going to compute shortest path from the source to all attached destinations
 	 * (including dstAddress) in order to cut down on the the number of dijkstra runs we do */
@@ -645,45 +642,10 @@ static gboolean _topology_computeSourcePaths(Topology* top, igraph_integer_t src
 	utility_assert(numTargets == igraph_vector_ptr_size(&resultPaths));
 	utility_assert(foundDstVertexIndex == TRUE);
 
-//	/* convert vector to a vertex selector */
-//	igraph_vs_t dstVertexSelector;
-//	result = igraph_vs_vector(&dstVertexSelector, &dstVertexIndexSet);
-//	if(result != IGRAPH_SUCCESS) {
-//		critical("igraph_vs_vector return non-success code %i", result);
-//		return FALSE;
-//	}
-//
-//	igraph_integer_t vsLength = 0;
-//	result = igraph_vs_size(&top->graph, &dstVertexSelector, &vsLength);
-//	if(result != IGRAPH_SUCCESS) {
-//		critical("igraph_vs_size return non-success code %i", result);
-//		return FALSE;
-//	}
-//	utility_assert(vsLength == numTargets);
-//
-//	igraph_vit_t dstSetIterator;
-//	result = igraph_vit_create(&top->graph, dstVertexSelector, &dstSetIterator);
-//	if(result != IGRAPH_SUCCESS) {
-//		critical("igraph_vit_create return non-success code %i", result);
-//		return FALSE;
-//	}
-//
-//	gboolean foundDstVS = FALSE;
-//	while(!IGRAPH_VIT_END(dstSetIterator)) {
-//		igraph_integer_t vertexIndex = IGRAPH_VIT_GET(dstSetIterator);
-//		if(vertexIndex == dstVertexIndex) {
-//			foundDstVS = TRUE;
-//		}
-//		IGRAPH_VIT_NEXT(dstSetIterator);
-//	}
-//	utility_assert(foundDstVS == TRUE);
+	info("computing shortest paths from source vertex %li (%s) to all connected destinations",
+			(glong)srcVertexIndex, srcIDStr);
 
 	g_mutex_lock(&top->graphLock);
-
-	const gchar* srcIDStr = VAS(&top->graph, "id", srcVertexIndex);
-	const gchar* dstIDStr = VAS(&top->graph, "id", dstVertexIndex);
-	info("computing shortest paths from source vertex %li (%s), to include destination vertex %li (%s)",
-			(glong)srcVertexIndex, srcIDStr, (glong)dstVertexIndex, dstIDStr);
 
 	/* time the dijkstra algorithm */
 	GTimer* pathTimer = g_timer_new();
@@ -696,13 +658,6 @@ static gboolean _topology_computeSourcePaths(Topology* top, igraph_integer_t src
 	result = igraph_get_shortest_paths_dijkstra(&top->graph, &resultPaths, NULL,
 			srcVertexIndex, igraph_vss_vector(&dstVertexIndexSet), top->edgeWeights, IGRAPH_OUT);
 #endif
-//#ifndef IGRAPH_VERSION
-//	result = igraph_get_shortest_paths_dijkstra(&top->graph, &resultPaths,
-//			srcVertexIndex, dstVertexSelector, top->edgeWeights, IGRAPH_OUT);
-//#else
-//	result = igraph_get_shortest_paths_dijkstra(&top->graph, &resultPaths, NULL,
-//			srcVertexIndex, dstVertexSelector, top->edgeWeights, IGRAPH_OUT);
-//#endif
 
 	/* track the time spent running the algorithm */
 	gdouble elapsedSeconds = g_timer_elapsed(pathTimer, NULL);
@@ -747,8 +702,6 @@ static gboolean _topology_computeSourcePaths(Topology* top, igraph_integer_t src
 	/* clean up */
 	igraph_vector_ptr_destroy(&resultPaths);
 	igraph_vector_destroy(&dstVertexIndexSet);
-//	igraph_vit_destroy(&dstSetIterator);
-//	igraph_vs_destroy(&dstVertexSelector);
 
 	/* success */
 	return allSuccess;

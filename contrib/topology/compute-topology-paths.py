@@ -24,7 +24,7 @@ def worker(taskq, resultq, G, pois):
             l, j = [], []
             p = path[dstid]
             if len(p) == 1:
-                l.append(0.0)
+                l.append(5.0)
                 j.append(0.0)
             else:
                 for i in xrange(len(p)-1):
