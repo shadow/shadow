@@ -5,6 +5,7 @@
  */
 
 #include <stdio.h>
+#include <time.h>
 #include <igraph.h>
 
 int main(int argc, char* argv[]) {
@@ -23,17 +24,36 @@ int main(int argc, char* argv[]) {
   }
 
   igraph_t graph;
+  time_t start = time(NULL);
   int r = igraph_read_graph_graphml(&graph, graphFile, 0);
+  time_t end = time(NULL);
   fclose(graphFile);
 
   if(r != IGRAPH_SUCCESS) {
 	printf("error loading graph file at %s\n", fileName);
 	r = -3;
   } else {
-	printf("sucessfully loaded graph file at %s\n", fileName);
+	printf("successfully loaded graph file at %s in %li seconds\n", fileName, (long int)(end-start));
 	r = 0;
   }
 
+  igraph_integer_t largestCliqueSize = 0;
+  start = time(NULL);
+  r = igraph_clique_number(&graph, &largestCliqueSize);
+  end = time(NULL);
+
+  if(r != IGRAPH_SUCCESS) {
+	printf("error computing igraph_clique_number\n");
+	r = -4;
+  } else {
+	printf("igraph_clique_number = %i in %li seconds\n", (int) largestCliqueSize, (long int)(end-start));
+	r = 0;
+  }
+
+  start = time(NULL);
   igraph_destroy(&graph);
+  end = time(NULL);
+  printf("igraph_destroy finished in %li seconds\n0", (long int)end-start);
+
   return r;
 }

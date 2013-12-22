@@ -48,6 +48,7 @@ struct _Topology {
 	igraph_integer_t edgeCount;
 	igraph_bool_t isConnected;
 	igraph_bool_t isDirected;
+	igraph_bool_t isComplete;
 
 	MAGIC_DECLARE;
 };
@@ -84,7 +85,7 @@ static gboolean _topology_loadGraph(Topology* top) {
 		return FALSE;
 	}
 
-	info("reading graphml topology graph at '%s'", top->graphPath->str);
+	message("reading graphml topology graph at '%s'...", top->graphPath->str);
 
 	gint result = igraph_read_graph_graphml(&top->graph, graphFile, 0);
 	fclose(graphFile);
@@ -93,7 +94,7 @@ static gboolean _topology_loadGraph(Topology* top) {
 		return FALSE;
 	}
 
-	info("successfully read graphml topology graph at '%s'", top->graphPath->str);
+	message("successfully read graphml topology graph at '%s'", top->graphPath->str);
 
 	return TRUE;
 }
@@ -102,7 +103,7 @@ static gboolean _topology_checkGraphProperties(Topology* top) {
 	MAGIC_ASSERT(top);
 	gint result = 0;
 
-	info("checking graph properties...");
+	message("checking graph properties...");
 
 	/* IGRAPH_WEAK means the undirected version of the graph is connected
 	 * IGRAPH_STRONG means a vertex can reach all others via a directed path
@@ -128,12 +129,25 @@ static gboolean _topology_checkGraphProperties(Topology* top) {
 
 	top->isDirected = igraph_is_directed(&top->graph);
 
-	info("topology graph is %s and %s with %u %s",
+	/* the topology is complete if the largest clique includes all vertices */
+	igraph_integer_t largestCliqueSize = 0;
+	result = igraph_clique_number(&top->graph, &largestCliqueSize);
+	if(result != IGRAPH_SUCCESS) {
+		critical("igraph_clique_number return non-success code %i", result);
+		return FALSE;
+	}
+
+	if(largestCliqueSize == igraph_vcount(&top->graph)) {
+		top->isComplete = (igraph_bool_t)TRUE;
+	}
+
+	message("topology graph is %s, %s, and %s with %u %s",
+			top->isComplete ? "complete" : "incomplete",
 			top->isDirected ? "directed" : "undirected",
 			top->isConnected ? "strongly connected" : "disconnected",
 			(guint)top->clusterCount, top->clusterCount == 1 ? "cluster" : "clusters");
 
-	info("checking graph attributes...");
+	message("checking graph attributes...");
 
 	/* now check list of all attributes */
 	igraph_strvector_t gnames, vnames, enames;
@@ -168,7 +182,7 @@ static gboolean _topology_checkGraphProperties(Topology* top) {
 		debug("found edge attribute '%s'", name);
 	}
 
-	info("successfully verified graph attributes");
+	message("successfully verified graph attributes");
 
 	return TRUE;
 }
@@ -229,7 +243,7 @@ static igraph_integer_t _topology_iterateAllVertices(Topology* top, VertexNotify
 static gboolean _topology_checkGraphVertices(Topology* top) {
 	MAGIC_ASSERT(top);
 
-	info("checking graph vertices...");
+	message("checking graph vertices...");
 
 	igraph_integer_t vertexCount = _topology_iterateAllVertices(top, _topology_checkGraphVerticesHelperHook, NULL);
 	if(vertexCount < 0) {
@@ -242,7 +256,7 @@ static gboolean _topology_checkGraphVertices(Topology* top) {
 		warning("igraph_vcount %f does not match iterator count %f", top->vertexCount, vertexCount);
 	}
 
-	info("%u graph vertices ok", (guint) top->vertexCount);
+	message("%u graph vertices ok", (guint) top->vertexCount);
 
 	return TRUE;
 }
@@ -302,7 +316,7 @@ static igraph_integer_t _topology_iterateAllEdges(Topology* top, EdgeNotifyFunc 
 static gboolean _topology_checkGraphEdges(Topology* top) {
 	MAGIC_ASSERT(top);
 
-	info("checking graph edges...");
+	message("checking graph edges...");
 
 	igraph_integer_t edgeCount = _topology_iterateAllEdges(top, _topology_checkGraphEdgesHelperHook, NULL);
 	if(edgeCount < 0) {
@@ -315,7 +329,7 @@ static gboolean _topology_checkGraphEdges(Topology* top) {
 		warning("igraph_vcount %f does not match iterator count %f", top->edgeCount, edgeCount);
 	}
 
-	info("%u graph edges ok", (guint) top->edgeCount);
+	message("%u graph edges ok", (guint) top->edgeCount);
 
 	return TRUE;
 }
@@ -449,6 +463,34 @@ static igraph_integer_t _topology_getConnectedVertexIndex(Topology* top, Address
 	return (igraph_integer_t) GPOINTER_TO_INT(vertexIndexPtr);
 }
 
+/* @warning top->graphLock must be held when calling this function!! */
+static gint _topology_getEdgeHelper(Topology* top, igraph_integer_t fromVertexIndex,
+		igraph_integer_t toVertexIndex, igraph_real_t* edgeLatencyOut, igraph_real_t* edgeReliabilityOut) {
+	MAGIC_ASSERT(top);
+
+	igraph_integer_t edgeIndex = 0;
+
+#ifndef IGRAPH_VERSION
+	gint result = igraph_get_eid(&top->graph, &edgeIndex, fromVertexIndex, toVertexIndex, (igraph_bool_t)TRUE);
+#else
+	gint result = igraph_get_eid(&top->graph, &edgeIndex, fromVertexIndex, toVertexIndex, (igraph_bool_t)TRUE, (igraph_bool_t)TRUE);
+#endif
+
+	if(result != IGRAPH_SUCCESS) {
+		return result;
+	}
+
+	/* get edge properties from graph */
+	if(edgeLatencyOut) {
+		*edgeLatencyOut = EAN(&top->graph, "latency", edgeIndex);
+	}
+	if(edgeReliabilityOut) {
+		*edgeReliabilityOut = 1.0f - EAN(&top->graph, "packetloss", edgeIndex);
+	}
+
+	return IGRAPH_SUCCESS;
+}
+
 static gboolean _topology_computeSourcePathsHelper(Topology* top, igraph_integer_t srcVertexIndex,
 		igraph_vector_t* resultPathVertices) {
 	MAGIC_ASSERT(top);
@@ -517,11 +559,9 @@ static gboolean _topology_computeSourcePathsHelper(Topology* top, igraph_integer
 			toVertexIndex = igraph_vector_e(resultPathVertices, i);
 			const gchar* toIDStr = VAS(&top->graph, "id", toVertexIndex);
 
-#ifndef IGRAPH_VERSION
-			result = igraph_get_eid(&top->graph, &edgeIndex, fromVertexIndex, toVertexIndex, (igraph_bool_t)TRUE);
-#else
-			result = igraph_get_eid(&top->graph, &edgeIndex, fromVertexIndex, toVertexIndex, (igraph_bool_t)TRUE, (igraph_bool_t)TRUE);
-#endif
+			igraph_real_t edgeLatency = 0, edgeReliability = 0;
+
+			result = _topology_getEdgeHelper(top, fromVertexIndex, toVertexIndex, &edgeLatency, &edgeReliability);
 			if(result != IGRAPH_SUCCESS) {
 				g_mutex_unlock(&top->graphLock);
 				critical("igraph_get_eid return non-success code %i for edge between "
@@ -529,10 +569,8 @@ static gboolean _topology_computeSourcePathsHelper(Topology* top, igraph_integer
 				return FALSE;
 			}
 
-			/* get edge properties from graph */
-			igraph_real_t edgeLatency = EAN(&top->graph, "latency", edgeIndex);
+			/* accumulate path attributes */
 			totalLatency += edgeLatency;
-			igraph_real_t edgeReliability = 1.0f - EAN(&top->graph, "packetloss", edgeIndex);
 			totalReliability *= edgeReliability;
 
 			/* accumulate path information */
@@ -707,6 +745,47 @@ static gboolean _topology_computeSourcePaths(Topology* top, igraph_integer_t src
 	return allSuccess;
 }
 
+static gboolean _topology_lookupPath(Topology* top, igraph_integer_t srcVertexIndex,
+		igraph_integer_t dstVertexIndex) {
+	MAGIC_ASSERT(top);
+
+	/* for complete graphs, we lookup the edge and use it as the path instead
+	 * of running the shortest path algorithm.
+	 *
+	 * see the comment in _topology_computeSourcePathsHelper
+	 */
+
+	igraph_real_t totalLatency = 0.0, totalReliability = 1.0;
+	igraph_real_t edgeLatency = 0.0, edgeReliability = 1.0;
+
+	g_mutex_lock(&top->graphLock);
+
+	const gchar* srcIDStr = VAS(&top->graph, "id", srcVertexIndex);
+	const gchar* dstIDStr = VAS(&top->graph, "id", dstVertexIndex);
+
+	totalReliability *= (1.0f - VAN(&top->graph, "packetloss", srcVertexIndex));
+	totalReliability *= (1.0f - VAN(&top->graph, "packetloss", dstVertexIndex));
+
+	gint result = _topology_getEdgeHelper(top, srcVertexIndex, dstVertexIndex, &edgeLatency, &edgeReliability);
+	if(result != IGRAPH_SUCCESS) {
+		g_mutex_unlock(&top->graphLock);
+		critical("igraph_get_eid return non-success code %i for edge between "
+				 "%s (%i) and %s (%i)", result, srcIDStr, (gint) srcVertexIndex, dstIDStr, (gint) dstVertexIndex);
+		return FALSE;
+	}
+
+	g_mutex_unlock(&top->graphLock);
+
+	totalLatency += edgeLatency;
+	totalReliability *= edgeReliability;
+
+	/* cache the latency and reliability we just computed */
+	_topology_storePathInCache(top, srcVertexIndex, dstVertexIndex, totalLatency, totalReliability);
+
+	return TRUE;
+}
+
+
 static gboolean _topology_getPathEntry(Topology* top, Address* srcAddress, Address* dstAddress,
 		gdouble* latency, gdouble* reliability) {
 	MAGIC_ASSERT(top);
@@ -732,21 +811,30 @@ static gboolean _topology_getPathEntry(Topology* top, Address* srcAddress, Addre
 	}
 
 	if(!path) {
-		/* cache miss, compute all source shortest latency paths */
-		gboolean success = _topology_computeSourcePaths(top, srcVertexIndex, dstVertexIndex);
+		/* cache miss, lets find the path */
+		gboolean success = FALSE;
+
+		if(top->isComplete) {
+			/* use the edge between src and dst as the path */
+			success = _topology_lookupPath(top, srcVertexIndex, dstVertexIndex);
+		} else {
+			/* use shortest path over the network graph */
+			success = _topology_computeSourcePaths(top, srcVertexIndex, dstVertexIndex);
+		}
+
 		if(success) {
 		    path = _topology_getPathFromCache(top, srcVertexIndex, dstVertexIndex);
 		}
 	}
 
 	if(!path) {
-		/* some error computing or caching path */
+		/* some error finding the path */
 		g_mutex_lock(&top->graphLock);
 		const gchar* srcIDStr = VAS(&top->graph, "id", srcVertexIndex);
 		const gchar* dstIDStr = VAS(&top->graph, "id", dstVertexIndex);
 		g_mutex_unlock(&top->graphLock);
 
-		error("unable to compute or find cached path between node %s at %s (vertex %i) "
+		error("unable to find path between node %s at %s (vertex %i) "
 				"and node %s at %s (vertex %i)",
 				address_toString(srcAddress), srcIDStr, (gint)srcVertexIndex,
 				address_toString(dstAddress), dstIDStr, (gint)dstVertexIndex);
