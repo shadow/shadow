@@ -37,6 +37,8 @@ int main(int argc, char* argv[]) {
 	r = 0;
   }
 
+  printf("graph has %li vertices and %li edges\n", (long int)igraph_vcount(&graph), (long int)igraph_ecount(&graph));
+
   igraph_integer_t largestCliqueSize = 0;
   start = time(NULL);
   r = igraph_clique_number(&graph, &largestCliqueSize);
@@ -53,7 +55,7 @@ int main(int argc, char* argv[]) {
   start = time(NULL);
   igraph_destroy(&graph);
   end = time(NULL);
-  printf("igraph_destroy finished in %li seconds\n0", (long int)end-start);
+  printf("igraph_destroy finished in %li seconds\n", (long int)end-start);
 
   return r;
 }
