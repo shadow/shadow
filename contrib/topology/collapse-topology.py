@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
-import sys
 import networkx as nx
+from numpy import median
 
 INPUT_GRAPH="topology.complete.graphml.xml"
 OUTPUT_GRAPH="topology.graphml.xml"
@@ -45,7 +45,7 @@ def main():
     for attr in G.graph: Gnew.graph[attr] = G.graph[attr]
     for (srcid, dstid) in Gnew.edges():
         e = Gnew.edge[srcid][dstid]
-        for attr in e: e[attr] = float(sum(e[attr])) / float(len(e[attr]))
+        for attr in e: e[attr] = float(median(e[attr]))
 
     print "checking graph..."
     assert nx.is_connected(Gnew)
