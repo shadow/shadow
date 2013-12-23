@@ -12,10 +12,10 @@ OUTPUT_FILENAME="topology.full.graphml.xml"
 def main():
     bwdown, bwup = get_bandwidth() # KiB/s
     loss = get_packet_loss() # fraction between 0 and 1
-    meanloss = numpy.mean(loss.values())
+    medloss = numpy.median(loss.values()) # resist outliers
     keys = sorted(bwup.keys())
     for k in keys:
-        if k not in loss: loss[k] = meanloss
+        if k not in loss: loss[k] = medloss
 
     geo = get_geo()
 
@@ -104,14 +104,20 @@ def main():
 
     nx.write_graphml(G, OUTPUT_FILENAME)
 
+def convert_packet_loss(loss):
+    pl = loss / 100.0 # percent to fraction
+    rel = 1.0 - pl # reliability
+    rel = numpy.sqrt(rel) # reliability up to core, sqrt b/c this will be mult by itself (srcrel*dstrel) when src and dst are in the same vertex
+    pl = 1.0 - rel
+    assert pl > 0.0 and pl < 1.0
+    return pl
+
 def get_packet_loss():
     loss = {}
     with open(PLOSS_FILENAME, 'rb') as f:
         r = csv.reader(f) # country, region, jitter, packetloss, latency
         for row in r:
-            country, region, jitter, packetloss, latency = row[0], row[1], float(row[2]), float(row[3]), float(row[4])
-            packetloss /= 100.0 # percent to fraction
-            assert packetloss > 0.0 and packetloss < 1.0
+            country, region, jitter, packetloss, latency = row[0], row[1], float(row[2]), convert_packet_loss(float(row[3])), float(row[4])
             code = get_code(country, region)
             if code not in loss: loss[code] = packetloss
     return loss
