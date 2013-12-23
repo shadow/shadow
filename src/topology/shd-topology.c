@@ -279,6 +279,13 @@ static void _topology_checkGraphEdgesHelperHook(Topology* top, igraph_integer_t 
 	igraph_real_t jitter = EAN(&top->graph, "jitter", edgeIndex);
 	igraph_real_t ploss = EAN(&top->graph, "packetloss", edgeIndex);
 
+	if(latency <= 0) {
+		error("invalid latency %f on edge %li from vertex %li (%s) to vertex %li (%s)",
+			latency, (glong)edgeIndex, (glong)fromVertexIndex, fromIDStr, (glong)toVertexIndex, toIDStr);
+	}
+
+	utility_assert(latency > 0);
+
 	debug("found edge %li from vertex %li (%s) to vertex %li (%s) latency=%f jitter=%f packetloss=%f",
 			(glong)edgeIndex, (glong)fromVertexIndex, fromIDStr, (glong)toVertexIndex, toIDStr,
 			latency, jitter, ploss);

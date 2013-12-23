@@ -294,8 +294,10 @@ static void _tcp_autotune(TCP* tcp) {
 	GQuark destinationID = (GQuark)address_getID(dstAddress);
 
 	/* get latency in milliseconds */
-	guint32 send_latency = (guint32) ceil(worker_getLatency(sourceID, destinationID));
-	guint32 receive_latency = (guint32) ceil(worker_getLatency(destinationID, sourceID));
+	gdouble srcLatency = worker_getLatency(sourceID, destinationID);
+	gdouble dstLatency = worker_getLatency(destinationID, sourceID);
+	guint32 send_latency = (guint32) ceil(srcLatency);
+	guint32 receive_latency = (guint32) ceil(dstLatency);
 	if(send_latency == 0 || receive_latency == 0) {
 	  error("autotuning needs nonzero latency, source=%"G_GUINT32_FORMAT" dest=%"G_GUINT32_FORMAT" send=%"G_GUINT32_FORMAT" recv=%"G_GUINT32_FORMAT,
 			  sourceID, destinationID, send_latency, receive_latency);
