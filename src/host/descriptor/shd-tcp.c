@@ -87,6 +87,8 @@ struct _TCP {
 		guint32 window;
 		/* used to make sure we get all data when other end closes */
 		guint32 end;
+		/* last timestamp received in timestamp value field */
+		SimulationTime lastTimestamp;
 	} receive;
 
 	/* sequence numbers we track for outgoing packets */
@@ -117,6 +119,12 @@ struct _TCP {
 		guint32 lastSequence;
 		/* send ack number used from last window update */
 		guint32 lastAcknowledgement;
+		/* calculate RTT from header timestamps (srrt) */
+		gint rttSmoothed;
+		/* variance of the calculated RTT (rttvar) */
+		gint rttVariance;
+		/* retransmission timeout value (rto) */
+		gint retransmitTimeout;
 	} congestion;
 
 	/* TODO: these should probably be stamped when the network interface sends
@@ -504,6 +512,36 @@ static void _tcp_updateCongestionWindow(TCP* tcp, guint nPacketsAcked) {
 	}
 }
 
+static void _tcp_updateRTTEstimate(TCP* tcp, SimulationTime timestamp) {
+	MAGIC_ASSERT(tcp);
+
+	SimulationTime now = worker_getCurrentTime();
+	gint rtt = (now - timestamp) / SIMTIME_ONE_MILLISECOND;
+
+	if(!rtt) {
+		rtt	= 1;
+	}
+
+	/* RFC 2988 */
+	if(!tcp->congestion.rttSmoothed) {
+		tcp->congestion.rttSmoothed = rtt;
+		tcp->congestion.rttVariance = rtt / 2;
+	} else {
+		/* RTTVAR = (1 - beta) * RTTVAR + beta * |SRTT - R|   (beta = 1/4) */
+		tcp->congestion.rttVariance = (3 * tcp->congestion.rttVariance / 4) +
+				(ABS(tcp->congestion.rttSmoothed - rtt) / 4);
+		/* SRTT = (1 - alpha) * SRTT + alpha * R   (alpha = 1/8) */
+		tcp->congestion.rttSmoothed = (7 * tcp->congestion.rttSmoothed / 8) + (rtt / 8);
+	}
+
+	/* RTO = SRTT + 4 * RTTVAR  (max=60s) */
+	tcp->congestion.retransmitTimeout =
+			MIN(tcp->congestion.rttSmoothed + 4 * tcp->congestion.rttVariance, 60000);
+
+    debug("srtt=%d rttvar=%d rto=%d", tcp->congestion.rttSmoothed,
+    		tcp->congestion.rttVariance, tcp->congestion.retransmitTimeout);
+}
+
 static Packet* _tcp_createPacket(TCP* tcp, enum ProtocolTCPFlags flags, gconstpointer payload, gsize payloadLength) {
 	MAGIC_ASSERT(tcp);
 
@@ -535,10 +573,17 @@ static Packet* _tcp_createPacket(TCP* tcp, enum ProtocolTCPFlags flags, gconstpo
 	 * (except FIN, so we close after sending everything) */
 	guint sequence = ((payloadLength > 0) || (flags & PTCP_FIN)) ? tcp->send.next : 0;
 
+	/* set the timestamps in the TCP packet header */
+	SimulationTime timestampValue = worker_getCurrentTime();
+	SimulationTime timestampEcho = 0;
+	if(flags & PTCP_ACK) {
+		timestampEcho = tcp->receive.lastTimestamp;
+	}
+
 	/* create the TCP packet */
 	Packet* packet = packet_new(payload, payloadLength);
 	packet_setTCP(packet, flags, sourceIP, sourcePort, destinationIP, destinationPort,
-			sequence, tcp->receive.next, tcp->receive.window);
+			sequence, tcp->receive.next, tcp->receive.window, timestampValue, timestampEcho);
 
 	/* update sequence number */
 	if(sequence > 0) {
@@ -625,11 +670,10 @@ static void _tcp_flush(TCP* tcp) {
 		}
 
 		guint length = packet_getPayloadLength(packet);
+		PacketTCPHeader header;
+		packet_getTCPHeader(packet, &header);
 
 		if(length > 0) {
-			PacketTCPHeader header;
-			packet_getTCPHeader(packet, &header);
-
 			/* we cant send it if our window is too small */
 			gboolean fitsInWindow = (header.sequence < (tcp->send.unacked + tcp->send.window)) ? TRUE : FALSE;
 
@@ -651,8 +695,15 @@ static void _tcp_flush(TCP* tcp) {
 		/* packet is sendable, we removed it from out buffer */
 		tcp->throttledOutputLength -= length;
 
+		/* set the timestamps in the TCP packet header */
+		SimulationTime timestampValue = worker_getCurrentTime();
+		SimulationTime timestampEcho = 0;
+		if(header.flags & PTCP_ACK) {
+			timestampEcho = tcp->receive.lastTimestamp;
+		}
+
 		/* update TCP header to our current advertised window and acknowledgement */
-		packet_updateTCP(packet, tcp->receive.next, tcp->receive.window);
+		packet_updateTCP(packet, tcp->receive.next, tcp->receive.window, timestampValue, timestampEcho);
 
 		/* keep track of the last things we sent them */
 		tcp->send.lastAcknowledgement = tcp->receive.next;
@@ -1210,6 +1261,14 @@ gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 	 * dont update if nPacketsAcked is 0, as that denotes a congestion event */
 	if(nPacketsAcked > 0) {
 		_tcp_updateCongestionWindow(tcp, nPacketsAcked);
+	}
+
+	/* update the last time stamp value (RFC 1323) */
+	if(tcp->send.lastAcknowledgement == header.sequence + 1) {
+		tcp->receive.lastTimestamp = header.timestampValue;
+	}
+	if(header.timestampEcho) {
+		_tcp_updateRTTEstimate(tcp, header.timestampEcho);
 	}
 
 	/* now flush as many packets as we can to socket */
