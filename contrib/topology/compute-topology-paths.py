@@ -23,7 +23,7 @@ def worker(taskq, resultq, G, pois):
             if dstid not in pois: continue
             l, j = [], []
             p = path[dstid]
-            if len(p) == 1:
+            if len(p) <= 1:
                 l.append(5.0)
                 j.append(0.0)
             else:
@@ -84,14 +84,32 @@ def run_distributed(num_processes, G, pois, Gnew):
 #        w[0].join()
 #        w[1].join()
 
-    return Gnew
+    return ensure_nonzero_latency(Gnew)
 
 def run_single(G, pois, Gnew):
     d = nx.all_pairs_dijkstra_path_length(G)
     for srcid in pois:
         for dstid in pois:
             Gnew.add_edge(srcid, dstid, latency=float(d[srcid][dstid]), jitter=float(0.0), packetloss=float(0.0))
-    return Gnew
+    return ensure_nonzero_latency(Gnew)
+
+def ensure_nonzero_latency(G):
+    lintra, linter, zeros = [], [], []
+
+    for (s, d) in G.edges():
+        l = G.edge[s][d]['latency']
+        if l <= 0.0: zeros.append((s,d))
+        elif s == d: lintra.append(l)
+        else: linter.append(l)
+
+    lintramean = float(sum(lintra))/float(len(lintra))
+    lintermean = float(sum(linter))/float(len(linter))
+
+    for (s, d) in zeros:
+        if s == d: G.edge[s][d]['latency'] = lintramean
+        else: G.edge[s][d]['latency'] = lintermean
+
+    return G
 
 def main():
     num_processes = cpu_count()

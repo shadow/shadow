@@ -46,6 +46,7 @@ def main():
     for (srcid, dstid) in Gnew.edges():
         e = Gnew.edge[srcid][dstid]
         for attr in e: e[attr] = float(median(e[attr]))
+        if e['latency'] <= 0.0: print "warning: found 0 latency between {0} and {1}, please run edit-attributes.py on the resulting graph file".format(srcid, dstid)
 
     print "checking graph..."
     assert nx.is_connected(Gnew)
