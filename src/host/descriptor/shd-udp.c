@@ -33,20 +33,15 @@ gint udp_connectToPeer(UDP* udp, in_addr_t ip, in_port_t port, sa_family_t famil
 	return 0;
 }
 
-/* return TRUE if the packet should be retransmitted */
-gboolean udp_processPacket(UDP* udp, Packet* packet) {
+void udp_processPacket(UDP* udp, Packet* packet) {
 	MAGIC_ASSERT(udp);
 
 	/* UDP packet contains data for user and can be buffered immediately */
 	if(packet_getPayloadLength(packet) > 0) {
-		return socket_addToInputBuffer((Socket*)udp, packet);
+		if(!socket_addToInputBuffer((Socket*)udp, packet)) {
+			packet_addDeliveryStatus(packet, PDS_RCV_SOCKET_DROPPED);
+		}
 	}
-	return FALSE;
-}
-
-void udp_droppedPacket(UDP* udp, Packet* packet) {
-	MAGIC_ASSERT(udp);
-	/* udp doesnt care about reliability */
 }
 
 /*
@@ -94,6 +89,7 @@ gssize udp_sendUserData(UDP* udp, gconstpointer buffer, gsize nBytes, in_addr_t 
 		/* create the UDP packet */
 		Packet* packet = packet_new(buffer + offset, copyLength);
 		packet_setUDP(packet, PUDP_NONE, sourceIP, sourcePort, destinationIP, destinationPort);
+		packet_addDeliveryStatus(packet, PDS_SND_CREATED);
 
 		/* buffer it in the transport layer, to be sent out when possible */
 		gboolean success = socket_addToOutputBuffer((Socket*) udp, packet);
@@ -135,6 +131,7 @@ gssize udp_receiveUserData(UDP* udp, gpointer buffer, gsize nBytes, in_addr_t* i
 	guint bytesCopied = packet_copyPayload(packet, 0, buffer, copyLength);
 
 	utility_assert(bytesCopied == copyLength);
+	packet_addDeliveryStatus(packet, PDS_RCV_SOCKET_DELIVERED);
 
 	/* fill in address info */
 	if(ip) {
@@ -179,7 +176,6 @@ SocketFunctionTable udp_functions = {
 	(TransportSendFunc) udp_sendUserData,
 	(TransportReceiveFunc) udp_receiveUserData,
 	(SocketProcessFunc) udp_processPacket,
-	(SocketDroppedPacketFunc) udp_droppedPacket,
 	(SocketIsFamilySupportedFunc) udp_isFamilySupported,
 	(SocketConnectToPeerFunc) udp_connectToPeer,
 	MAGIC_VALUE

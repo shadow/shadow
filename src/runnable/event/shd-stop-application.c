@@ -33,7 +33,11 @@ StopApplicationEvent* stopapplication_new(Application* application) {
 void stopapplication_run(StopApplicationEvent* event, Host* node) {
 	MAGIC_ASSERT(event);
 
+	debug("event started");
+
 	host_stopApplication(node, event->application);
+
+	debug("event finished");
 }
 
 void stopapplication_free(StopApplicationEvent* event) {

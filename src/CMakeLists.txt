@@ -69,10 +69,10 @@ set(shadow_srcs
     runnable/event/shd-interface-sent.c
     runnable/event/shd-notify-plugin.c
     runnable/event/shd-packet-arrived.c
-    runnable/event/shd-packet-dropped.c
     runnable/event/shd-start-application.c
     runnable/event/shd-stop-application.c
     runnable/event/shd-tcp-close-timer-expired.c
+    runnable/event/shd-tcp-retransmit-timer-expired.c
     runnable/shd-listener.c
     runnable/shd-runnable.c
 

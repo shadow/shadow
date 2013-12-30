@@ -46,11 +46,11 @@
  */
 
 #include "engine/shd-main.h"
-#include "utility/shd-utility.h"
 
 /* configuration, base runnables, and input parsing */
 #include "support/shd-examples.h"
 #include "support/shd-configuration.h"
+#include "utility/shd-utility.h"
 #include "runnable/shd-listener.h"
 #include "host/shd-protocol.h"
 #include "host/descriptor/shd-descriptor.h"
@@ -97,10 +97,10 @@
 #include "runnable/event/shd-interface-received.h"
 #include "runnable/event/shd-interface-sent.h"
 #include "runnable/event/shd-packet-arrived.h"
-#include "runnable/event/shd-packet-dropped.h"
 #include "runnable/event/shd-start-application.h"
 #include "runnable/event/shd-stop-application.h"
 #include "runnable/event/shd-tcp-close-timer-expired.h"
+#include "runnable/event/shd-tcp-retransmit-timer-expired.h"
 #include "runnable/action/shd-create-node.h"
 #include "runnable/action/shd-generate-cdf.h"
 #include "runnable/action/shd-kill-engine.h"

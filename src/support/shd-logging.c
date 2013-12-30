@@ -46,34 +46,6 @@ static gchar* _logging_getNewLogLevelString(GLogLevelFlags log_level) {
 	return g_strdup(levels);
 }
 
-static gboolean _logging_messageIsFiltered(const gchar *msgLogDomain, GLogLevelFlags msgLogLevel) {
-
-	if(worker_isAlive()) {
-		/* check the local node log level first */
-		gboolean isNodeLevelSet = FALSE;
-		Host* currentHost = worker_getCurrentHost();
-		if(currentHost) {
-			GLogLevelFlags nodeLevel = host_getLogLevel(currentHost);
-			if(nodeLevel) {
-				isNodeLevelSet = TRUE;
-				if(msgLogLevel > nodeLevel) {
-					return TRUE;
-				}
-			}
-		}
-
-		/* only check the global config if the node didnt have a local setting */
-		if(!isNodeLevelSet) {
-			Configuration* c = worker_getConfig();
-			if(c && (msgLogLevel > configuration_getLogLevel(c))) {
-				return TRUE;
-			}
-		}
-	}
-
-	return FALSE;
-}
-
 /* this func is called whenever g_logv is called, not just in our log code */
 void logging_handleLog(const gchar *log_domain, GLogLevelFlags log_level, const gchar *message, gpointer user_data) {
 	/* GLogLevelFlags* configuredLogLevel = user_data; */
@@ -81,7 +53,7 @@ void logging_handleLog(const gchar *log_domain, GLogLevelFlags log_level, const 
 	const gchar* messageStr = message ? message : "n/a";
 
 	/* check again if the message should be filtered */
-	if(_logging_messageIsFiltered(logDomainStr, log_level)) {
+	if(worker_isFiltered(log_level)) {
 		return;
 	}
 
@@ -95,7 +67,7 @@ void logging_handleLog(const gchar *log_domain, GLogLevelFlags log_level, const 
 		seconds = elapsed % 60;
 	}
 
-	g_print("%lu:%lu:%lu:%06lu %s\n", hours, minutes, seconds, microseconds, messageStr);
+	g_print("%02lu:%02lu:%02lu:%06lu %s\n", hours, minutes, seconds, microseconds, messageStr);
 
 	if(log_level & G_LOG_LEVEL_ERROR) {
 		/* error level logs always abort, but glibs messages are not that useful.
@@ -110,7 +82,7 @@ void logging_logv(const gchar *msgLogDomain, GLogLevelFlags msgLogLevel,
 
 	/* see if we can avoid some work because the message is filtered anyway */
 	const gchar* logDomainStr = msgLogDomain ? msgLogDomain : "shadow";
-	if(_logging_messageIsFiltered(logDomainStr, msgLogLevel)) {
+	if(worker_isFiltered(msgLogLevel)) {
 		return;
 	}
 
@@ -135,7 +107,8 @@ void logging_logv(const gchar *msgLogDomain, GLogLevelFlags msgLogLevel,
 		seconds = remainder / SIMTIME_ONE_SECOND;
 		remainder %= SIMTIME_ONE_SECOND;
 
-		g_string_printf(clockStringBuffer, "%"G_GUINT64_FORMAT":%"G_GUINT64_FORMAT":%"G_GUINT64_FORMAT":%09"G_GUINT64_FORMAT"", hours, minutes, seconds, remainder);
+		g_string_printf(clockStringBuffer, "%02"G_GUINT64_FORMAT":%02"G_GUINT64_FORMAT":%02"G_GUINT64_FORMAT":%09"G_GUINT64_FORMAT"",
+				hours, minutes, seconds, remainder);
 	} else {
 		g_string_printf(clockStringBuffer, "n/a");
 	}

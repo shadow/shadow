@@ -31,7 +31,6 @@ Plugin* worker_getPlugin(GQuark pluginID, GString* pluginPath);
 gpointer worker_runParallel(WorkLoad* workload);
 gpointer worker_runSerial(WorkLoad* workload);
 void worker_scheduleEvent(Event* event, SimulationTime nano_delay, GQuark receiver_node_id);
-void worker_scheduleRetransmit(Packet* packet);
 void worker_schedulePacket(Packet* packet);
 gboolean worker_isAlive();
 gboolean worker_isInShadowContext();
@@ -58,5 +57,6 @@ const gchar* worker_getPluginPath(GQuark pluginID);
 void worker_setTopology(Topology* topology);
 GTimer* worker_getRunTimer();
 void worker_setCurrentTime(SimulationTime time);
+gboolean worker_isFiltered(GLogLevelFlags level);
 
 #endif /* SHD_WORKER_H_ */

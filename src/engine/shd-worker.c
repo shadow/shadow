@@ -328,60 +328,41 @@ void worker_scheduleEvent(Event* event, SimulationTime nano_delay, GQuark receiv
 	}
 }
 
-void worker_scheduleRetransmit(Packet* packet) {
-	/* source should retransmit. use latency to approximate RTT for 'retransmit timer' */
-	in_addr_t srcIP = packet_getSourceIP(packet);
-	in_addr_t dstIP = packet_getDestinationIP(packet);
-
-	Address* srcAddress = dns_resolveIPToAddress(worker_getDNS(), (guint32) srcIP);
-	Address* dstAddress = dns_resolveIPToAddress(worker_getDNS(), (guint32) dstIP);
-
-	PacketDroppedEvent* event = packetdropped_new(packet);
-
-	SimulationTime delay = 0;
-	if(address_isLocal(srcAddress) || address_isLocal(dstAddress)) {
-		utility_assert(address_isLocal(srcAddress));
-		utility_assert(address_isLocal(dstAddress));
-		delay = 1;
-	} else {
-		gdouble latency = topology_getLatency(worker_getTopology(), srcAddress, dstAddress);
-		delay = (SimulationTime) floor(latency * SIMTIME_ONE_MILLISECOND);
+void worker_schedulePacket(Packet* packet) {
+	/* get our thread-private worker */
+	Worker* worker = _worker_getPrivate();
+	if(slave_isKilled(worker->slave)) {
+		/* the simulation is over, don't bother */
+		return;
 	}
 
-	worker_scheduleEvent((Event*)event, delay, (GQuark) address_getID(srcAddress));
-}
-
-void worker_schedulePacket(Packet* packet) {
 	in_addr_t srcIP = packet_getSourceIP(packet);
 	in_addr_t dstIP = packet_getDestinationIP(packet);
 
 	Address* srcAddress = dns_resolveIPToAddress(worker_getDNS(), (guint32) srcIP);
 	Address* dstAddress = dns_resolveIPToAddress(worker_getDNS(), (guint32) dstIP);
 
-    /* XXX FIXME this needs to be fixed! */
 	if(!srcAddress || !dstAddress) {
-	    critical("unable to schedule packet because of null addresses, ignoring");
+	    error("unable to schedule packet because of null addresses");
 		return;
     }
 
-	/* first thing to check is if network reliability forces us to 'drop'
-	 * the packet. if so, get out of dodge doing as little as possible. */
+	/* check if network reliability forces us to 'drop' the packet */
 	gdouble reliability = topology_getReliability(worker_getTopology(), srcAddress, dstAddress);
 	Random* random = host_getRandom(worker_getCurrentHost());
 	gdouble chance = random_nextDouble(random);
 
-	if(chance > reliability){
-		/* sender side is scheduling packets, but we are simulating
-		 * the packet being dropped between sender and receiver, so
-		 * it will need to be retransmitted */
-		worker_scheduleRetransmit(packet);
-	} else {
-		/* packet will make it through, find latency */
+	if(chance <= reliability){
+		/* the sender's packet will make it through, find latency */
 		gdouble latency = topology_getLatency(worker_getTopology(), srcAddress, dstAddress);
-		SimulationTime delay = (SimulationTime) floor(latency * SIMTIME_ONE_MILLISECOND);
+		SimulationTime delay = (SimulationTime) ceil(latency * SIMTIME_ONE_MILLISECOND);
 
 		PacketArrivedEvent* event = packetarrived_new(packet);
 		worker_scheduleEvent((Event*)event, delay, (GQuark)address_getID(dstAddress));
+
+		packet_addDeliveryStatus(packet, PDS_INET_SENT);
+	} else {
+		packet_addDeliveryStatus(packet, PDS_INET_DROPPED);
 	}
 }
 
@@ -519,4 +500,33 @@ GTimer* worker_getRunTimer() {
 void worker_setCurrentTime(SimulationTime time) {
 	Worker* worker = _worker_getPrivate();
 	worker->clock_now = time;
+}
+
+gboolean worker_isFiltered(GLogLevelFlags level) {
+	Worker* worker = worker_isAlive() ? _worker_getPrivate() : NULL;
+
+	if(worker) {
+		/* check the local node log level first */
+		gboolean isNodeLevelSet = FALSE;
+		Host* currentHost = worker_getCurrentHost();
+		if(worker->cached_node) {
+			GLogLevelFlags nodeLevel = host_getLogLevel(currentHost);
+			if(nodeLevel) {
+				isNodeLevelSet = TRUE;
+				if(level > nodeLevel) {
+					return TRUE;
+				}
+			}
+		}
+
+		/* only check the global config if the node didnt have a local setting */
+		if(!isNodeLevelSet) {
+			Configuration* c = slave_getConfig(worker->slave);
+			if(c && (level > configuration_getLogLevel(c))) {
+				return TRUE;
+			}
+		}
+	}
+
+	return FALSE;
 }

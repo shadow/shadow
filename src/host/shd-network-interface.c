@@ -318,7 +318,7 @@ static void _networkinterface_pcapWritePacket(NetworkInterface *interface, Packe
 	guint32 sequence = tcpHeader.sequence;
 	guint32 acknowledgement = 0;
 	if(tcpHeader.flags & PTCP_ACK) {
-		acknowledgement = htonl(tcpHeader.acknowledgement);
+		acknowledgement = htonl(tcpHeader.acknowledgment);
 	}
 	guint8 headerLength = 0x80;
 	guint8 tcpFlags = 0;
@@ -348,21 +348,6 @@ static void _networkinterface_pcapWritePacket(NetworkInterface *interface, Packe
 	g_free(payload);
 }
 
-static void _networkinterface_dropInboundPacket(NetworkInterface* interface, Packet* packet) {
-	MAGIC_ASSERT(interface);
-
-	/* drop incoming packet that traversed the network link from source */
-
-	if(networkinterface_getIPAddress(interface) == packet_getSourceIP(packet)) {
-		/* packet is on our own interface, so event destination is our node */
-		PacketDroppedEvent* event = packetdropped_new(packet);
-		worker_scheduleEvent((Event*)event, 1, 0);
-	} else {
-		/* let the worker schedule the event with appropriate delays */
-		worker_scheduleRetransmit(packet);
-	}
-}
-
 static void _networkinterface_scheduleNextReceive(NetworkInterface* interface) {
 	/* the next packets need to be received and processed */
 	SimulationTime batchTime = worker_getConfig()->interfaceBatchTime;
@@ -374,33 +359,33 @@ static void _networkinterface_scheduleNextReceive(NetworkInterface* interface) {
 		Packet* packet = g_queue_pop_head(interface->inBuffer);
 		utility_assert(packet);
 
+		/* successfully received */
+		packet_addDeliveryStatus(packet, PDS_RCV_INTERFACE_RECEIVED);
+		_networkinterface_pcapWritePacket(interface, packet);
+
 		/* free up buffer space */
 		guint length = packet_getPayloadLength(packet) + packet_getHeaderSize(packet);
 		interface->inBufferLength -= length;
+
+		/* calculate how long it took to 'receive' this packet */
+		interface->receiveNanosecondsConsumed += (length * interface->timePerByteDown);
 
 		/* hand it off to the correct socket layer */
 		gint key = packet_getDestinationAssociationKey(packet);
 		Socket* socket = g_hash_table_lookup(interface->boundSockets, GINT_TO_POINTER(key));
 
-		gchar* packetString = packet_getString(packet);
-		debug("packet in: %s", packetString);
-		g_free(packetString);
-
-		_networkinterface_pcapWritePacket(interface, packet);
-
 		/* if the socket closed, just drop the packet */
 		gint socketHandle = -1;
 		if(socket) {
 			socketHandle = *descriptor_getHandleReference((Descriptor*)socket);
-			gboolean needsRetransmit = socket_pushInPacket(socket, packet);
-			if(needsRetransmit) {
-				/* socket can not handle it now, so drop it */
-				_networkinterface_dropInboundPacket(interface, packet);
-			}
+			socket_pushInPacket(socket, packet);
+		} else {
+			packet_addDeliveryStatus(packet, PDS_RCV_INTERFACE_DROPPED);
 		}
 
-		/* successfully received, calculate how long it took to 'receive' this packet */
-		interface->receiveNanosecondsConsumed += (length * interface->timePerByteDown);
+		packet_unref(packet);
+
+		/* count our bandwidth usage by interface, and by socket handle if possible */
 		tracker_addInputBytes(host_getTracker(worker_getCurrentHost()),(guint64)length, socketHandle);
 	}
 
@@ -429,8 +414,10 @@ void networkinterface_packetArrived(NetworkInterface* interface, Packet* packet)
 
 	if(length <= space) {
 		/* we have space to buffer it */
+		packet_ref(packet);
 		g_queue_push_tail(interface->inBuffer, packet);
 		interface->inBufferLength += length;
+		packet_addDeliveryStatus(packet, PDS_RCV_INTERFACE_BUFFERED);
 
 		/* we need a trigger if we are not currently receiving */
 		if(!(interface->flags & NIF_RECEIVING)) {
@@ -438,7 +425,7 @@ void networkinterface_packetArrived(NetworkInterface* interface, Packet* packet)
 		}
 	} else {
 		/* buffers are full, drop packet */
-		_networkinterface_dropInboundPacket(interface, packet);
+		packet_addDeliveryStatus(packet, PDS_RCV_INTERFACE_DROPPED);
 	}
 }
 
@@ -462,28 +449,6 @@ void networkinterface_received(NetworkInterface* interface) {
 
 	/* now try to receive the next ones */
 	_networkinterface_scheduleNextReceive(interface);
-}
-
-void networkinterface_packetDropped(NetworkInterface* interface, Packet* packet) {
-	MAGIC_ASSERT(interface);
-
-	/*
-	 * someone dropped a packet belonging to our interface
-	 * hand it off to the correct socket layer
-	 */
-	gint key = packet_getSourceAssociationKey(packet);
-	Socket* socket = g_hash_table_lookup(interface->boundSockets, GINT_TO_POINTER(key));
-
-	/* just ignore if the socket closed in the meantime */
-	if(socket) {
-		socket_droppedPacket(socket, packet);
-	} else {
-		in_addr_t ip = packet_getSourceIP(packet);
-		gchar* ipString = address_ipToNewString(ip);
-		debug("interface dropping packet from %s:%u, no socket registered at %i",
-				ipString, packet_getSourcePort(packet), key);
-		g_free(ipString);
-	}
 }
 
 /* round robin queuing discipline ($ man tc)*/
@@ -558,6 +523,8 @@ static void _networkinterface_scheduleNextSend(NetworkInterface* interface) {
 			break;
 		}
 
+		packet_addDeliveryStatus(packet, PDS_SND_INTERFACE_SENT);
+
 		/* now actually send the packet somewhere */
 		if(networkinterface_getIPAddress(interface) == packet_getDestinationIP(packet)) {
 			/* packet will arrive on our own interface */
@@ -569,16 +536,15 @@ static void _networkinterface_scheduleNextSend(NetworkInterface* interface) {
 			worker_schedulePacket(packet);
 		}
 
-		gchar* packetString = packet_getString(packet);
-		debug("packet out: %s", packetString);
-		g_free(packetString);
-
 		/* successfully sent, calculate how long it took to 'send' this packet */
 		guint length = packet_getPayloadLength(packet) + packet_getHeaderSize(packet);
 
 		interface->sendNanosecondsConsumed += (length * interface->timePerByteUp);
 		tracker_addOutputBytes(host_getTracker(worker_getCurrentHost()),(guint64)length, socketHandle);
 		_networkinterface_pcapWritePacket(interface, packet);
+
+		/* sending side is done with its ref */
+		packet_unref(packet);
 	}
 
 	/*
