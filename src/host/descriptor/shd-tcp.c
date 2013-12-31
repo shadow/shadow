@@ -144,6 +144,8 @@ struct _TCP {
 		PriorityQueue* scheduledTimerExpirations;
 		/* our updated expiration time, to determine if previous events are still valid */
 		SimulationTime desiredTimerExpiration;
+		/* number of times we backed off due to congestion */
+		guint backoffCount;
 	} retransmit;
 
 	/* tcp autotuning for the send and recv buffers */
@@ -485,6 +487,7 @@ static void _tcp_setState(TCP* tcp, enum TCPState state) {
 			}
 			break;
 		}
+		case TCPS_LASTACK:
 		case TCPS_TIMEWAIT: {
 			/* schedule a close timer self-event to finish out the closing process */
 			TCPCloseTimerExpiredEvent* event = tcpclosetimerexpired_new(tcp);
@@ -664,19 +667,12 @@ static Packet* _tcp_createPacket(TCP* tcp, enum ProtocolTCPFlags flags, gconstpo
 
 	/* control packets have no sequence number
 	 * (except FIN, so we close after sending everything) */
-	guint sequence = ((payloadLength > 0) || (flags & PTCP_FIN)) ? tcp->send.next : 0;
+	gboolean isFinNotAck = ((flags & PTCP_FIN) && !(flags & PTCP_ACK));
+	guint sequence = payloadLength > 0 || isFinNotAck ? tcp->send.next : 0;
 
-	/* set the timestamps in the TCP packet header */
-	SimulationTime timestampValue = worker_getCurrentTime();
-	SimulationTime timestampEcho = 0;
-	if(flags & PTCP_ACK) {
-		timestampEcho = tcp->receive.lastTimestamp;
-	}
-
-	/* create the TCP packet */
+	/* create the TCP packet. the ack, window, and timestamps will be set in _tcp_flush */
 	Packet* packet = packet_new(payload, payloadLength);
-	packet_setTCP(packet, flags, sourceIP, sourcePort, destinationIP, destinationPort,
-			sequence, tcp->receive.next, tcp->receive.window, timestampValue, timestampEcho);
+	packet_setTCP(packet, flags, sourceIP, sourcePort, destinationIP, destinationPort, sequence);
 	packet_addDeliveryStatus(packet, PDS_SND_CREATED);
 
 	/* update sequence number */
@@ -835,7 +831,7 @@ static void _tcp_stopRetransmitTimer(TCP* tcp) {
 static void _tcp_setRetransmitTimeout(TCP* tcp, gint newTimeout) {
 	MAGIC_ASSERT(tcp);
 	tcp->retransmit.timeout = newTimeout;
-	tcp->retransmit.timeout = MIN(tcp->retransmit.timeout, 3000); // FIXME XXX this should be 60000
+	tcp->retransmit.timeout = MIN(tcp->retransmit.timeout, 60000);
 	tcp->retransmit.timeout = MAX(tcp->retransmit.timeout, 1000);
 }
 
@@ -850,10 +846,6 @@ static void _tcp_updateRTTEstimate(TCP* tcp, SimulationTime timestamp) {
 	}
 
 	/* RFC 6298 (http://tools.ietf.org/html/rfc6298) */
-	// TODO only do one sample per RTT?
-	// dont update if the packet was retransmitted, because we may receive the original packet
-	// after it was retransmitted and the timestamps were updated (b/c we do not copy the packet)
-
 	if(!tcp->congestion.rttSmoothed) {
 		/* first RTT measurement */
 		tcp->congestion.rttSmoothed = rtt;
@@ -917,7 +909,7 @@ static void _tcp_flush(TCP* tcp) {
 		priorityqueue_pop(tcp->throttledOutput);
 		tcp->throttledOutputLength -= length;
 
-		if(!(header.flags & PTCP_FIN) && (header.sequence > 0 || (header.flags & PTCP_SYN))) {
+		if((header.sequence > 0 || (header.flags & PTCP_SYN))) {
 			/* store in retransmission buffer */
 			_tcp_addRetransmit(tcp, packet);
 
@@ -927,15 +919,10 @@ static void _tcp_flush(TCP* tcp) {
 			}
 		}
 
-		/* set the timestamps in the TCP packet header */
-		SimulationTime timestampValue = now;
-		SimulationTime timestampEcho = 0;
-		if(header.flags & PTCP_ACK) {
-			timestampEcho = tcp->receive.lastTimestamp;
-		}
-
 		/* update TCP header to our current advertised window and acknowledgement */
-		packet_updateTCP(packet, tcp->receive.next, tcp->receive.window, timestampValue, timestampEcho);
+		gboolean isFinAck = ((header.flags & PTCP_FIN) && (header.flags & PTCP_ACK));
+		guint ack = isFinAck ? tcp->receive.next + 1 : tcp->receive.next;
+		packet_updateTCP(packet, ack, tcp->receive.window, now, tcp->receive.lastTimestamp);
 
 		/* keep track of the last things we sent them */
 		tcp->send.lastAcknowledgment = tcp->receive.next;
@@ -1014,7 +1001,9 @@ void tcp_retransmitTimerExpired(TCP* tcp) {
 	debug("%s a scheduled retransmit timer expired", tcp->super.boundString);
 
 	/* if we are closed, we don't care */
-	if(tcp->state == TCPS_CLOSED || tcp->state == TCPS_TIMEWAIT) {
+	if(tcp->state == TCPS_CLOSED) {
+		_tcp_stopRetransmitTimer(tcp);
+		_tcp_clearRetransmit(tcp, (guint)-1);
 		return;
 	}
 
@@ -1038,6 +1027,7 @@ void tcp_retransmitTimerExpired(TCP* tcp) {
 	/* rfc 6298, section 5.4-5.7 (http://tools.ietf.org/html/rfc6298)
 	 * if we get here, this is a valid timer expiration and we need to do a retransmission
 	 * do exponential backoff */
+	tcp->retransmit.backoffCount++;
 	_tcp_setRetransmitTimeout(tcp, tcp->retransmit.timeout * 2);
 	_tcp_setRetransmitTimer(tcp, now);
 
@@ -1046,12 +1036,7 @@ void tcp_retransmitTimerExpired(TCP* tcp) {
 
 	/* resend the next unacked packet */
 	Packet* packet = _tcp_removeRetransmit(tcp);
-	if(!packet) {
-		/* we dont have a data packet to retransmit. rfc 6298 does not specify an
-		 * algorithm for retransmitting ACK packets without data, but this is needed
-		 * to prevent deadlocks between the sender and receiver. */
-		packet = _tcp_createPacket(tcp, PTCP_ACK, NULL, 0);
-	}
+	utility_assert(packet);
 
 	packet_addDeliveryStatus(packet, PDS_SND_TCP_RETRANSMITTED);
 
@@ -1492,6 +1477,16 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
 			_tcp_clearRetransmit(tcp, header.acknowledgment);
 		}
 
+		if(nPacketsAcked > 0 && tcp->retransmit.backoffCount > 0) {
+			/* if we had congestion, reset our state (rfc 6298, section 5) */
+			if(tcp->retransmit.backoffCount > 2) {
+				tcp->congestion.rttSmoothed = 0;
+				tcp->congestion.rttVariance = 0;
+				_tcp_setRetransmitTimeout(tcp, 1);
+			}
+			tcp->retransmit.backoffCount = 0;
+		}
+
 		/* update retransmit state (rfc 6298, section 5.2-5.3) */
 		if(priorityqueue_isEmpty(tcp->retransmit.queue)) {
 			/* all outstanding data has been acked */
@@ -1605,10 +1600,8 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
 	}
 
 	/* update the last time stamp value (RFC 1323) */
-	if(header.timestampValue && tcp->send.lastAcknowledgment == header.sequence + 1) {
-		tcp->receive.lastTimestamp = header.timestampValue;
-	}
-	if(header.timestampEcho) {
+	tcp->receive.lastTimestamp = header.timestampValue;
+	if(header.timestampEcho && tcp->retransmit.backoffCount == 0) {
 		_tcp_updateRTTEstimate(tcp, header.timestampEcho);
 	}
 
@@ -1630,6 +1623,9 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
 		_tcp_bufferPacketOut(tcp, response);
 		_tcp_flush(tcp);
 	}
+
+	/* clear it so we dont send outdated timestamp echos */
+	tcp->receive.lastTimestamp = 0;
 }
 
 static void _tcp_endOfFileSignalled(TCP* tcp) {

@@ -173,9 +173,7 @@ void packet_setUDP(Packet* packet, enum ProtocolUDPFlags flags,
 
 void packet_setTCP(Packet* packet, enum ProtocolTCPFlags flags,
 		in_addr_t sourceIP, in_port_t sourcePort,
-		in_addr_t destinationIP, in_port_t destinationPort,
-		guint sequence, guint acknowledgement, guint window,
-		SimulationTime timestampValue, SimulationTime timestampEcho) {
+		in_addr_t destinationIP, in_port_t destinationPort, guint sequence) {
 	_packet_lock(packet);
 	utility_assert(!(packet->header) && packet->protocol == PNONE);
 	utility_assert(sourceIP && sourcePort && destinationIP && destinationPort);
@@ -188,10 +186,6 @@ void packet_setTCP(Packet* packet, enum ProtocolTCPFlags flags,
 	header->destinationIP = destinationIP;
 	header->destinationPort = destinationPort;
 	header->sequence = sequence;
-	header->acknowledgment = acknowledgement;
-	header->window = window;
-	header->timestampValue = timestampValue;
-	header->timestampEcho = timestampEcho;
 
 	packet->header = header;
 	packet->protocol = PTCP;
@@ -494,17 +488,17 @@ static gchar* _packet_getString(Packet* packet) {
 
 			if(!(header->flags & PTCP_NONE)) {
 				g_string_append_printf(packetString, " header=");
-				if(header->flags & PTCP_SYN) {
-					g_string_append_printf(packetString, "SYN");
-				}
-				if(header->flags & PTCP_ACK) {
-					g_string_append_printf(packetString, "ACK");
-				}
 				if(header->flags & PTCP_RST) {
 					g_string_append_printf(packetString, "RST");
 				}
+				if(header->flags & PTCP_SYN) {
+					g_string_append_printf(packetString, "SYN");
+				}
 				if(header->flags & PTCP_FIN) {
 					g_string_append_printf(packetString, "FIN");
+				}
+				if(header->flags & PTCP_ACK) {
+					g_string_append_printf(packetString, "ACK");
 				}
 			}
 
