@@ -1808,12 +1808,13 @@ gssize tcp_receiveUserData(TCP* tcp, gpointer buffer, gsize nBytes, in_addr_t* i
 	/* if we have advertised a 0 window because the application wasn't reading,
 	 * we now have to update the window and let the sender know */
 	_tcp_updateReceiveWindow(tcp);
-	if(tcp->send.lastWindow == 0 && tcp->receive.window > 0) {
+	if(tcp->receive.window > tcp->send.lastWindow) {
 		/* our receive window just opened, make sure the sender knows it can
 		 * send more. otherwise we get into a deadlock situation! */
 		info("%s <-> %s: receive window opened, advertising the new "
 				"receive window %"G_GUINT32_FORMAT" as an ACK control packet",
 				tcp->super.boundString, tcp->super.peerString, tcp->receive.window);
+		// XXX we may be in trouble if this packet gets dropped
 		Packet* windowUpdate = _tcp_createPacket(tcp, PTCP_ACK, NULL, 0);
 		_tcp_bufferPacketOut(tcp, windowUpdate);
 		_tcp_flush(tcp);
