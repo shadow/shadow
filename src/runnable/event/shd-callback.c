@@ -41,7 +41,11 @@ CallbackEvent* callback_new(CallbackFunc callback, gpointer data, gpointer callb
 void callback_run(CallbackEvent* event, Host* node) {
 	MAGIC_ASSERT(event);
 
+	debug("event started");
+
 	event->callback(event->data, event->callbackArgument);
+
+	debug("event finished");
 }
 
 void callback_free(CallbackEvent* event) {

@@ -41,6 +41,9 @@ struct _Packet {
 	 */
 	gdouble priority;
 
+	PacketDeliveryStatusFlags allStatus;
+	GQueue* orderedStatus;
+
 	MAGIC_DECLARE;
 };
 
@@ -60,6 +63,8 @@ Packet* packet_new(gconstpointer payload, gsize payloadLength) {
 		packet->priority = host_getNextPacketPriority(worker_getCurrentHost());
 	}
 
+	packet->orderedStatus = g_queue_new();
+
 	return packet;
 }
 
@@ -72,6 +77,9 @@ static void _packet_free(Packet* packet) {
 	}
 	if(packet->payload) {
 		g_free(packet->payload);
+	}
+	if(packet->orderedStatus) {
+		g_queue_free(packet->orderedStatus);
 	}
 
 	MAGIC_CLEAR(packet);
@@ -101,6 +109,7 @@ void packet_unref(Packet* packet) {
 	utility_assert(packet->referenceCount >= 0);
 	if(packet->referenceCount == 0) {
 		_packet_unlock(packet);
+		packet_addDeliveryStatus(packet, PDS_DESTROYED);
 		_packet_free(packet);
 	} else {
 		_packet_unlock(packet);
@@ -164,9 +173,7 @@ void packet_setUDP(Packet* packet, enum ProtocolUDPFlags flags,
 
 void packet_setTCP(Packet* packet, enum ProtocolTCPFlags flags,
 		in_addr_t sourceIP, in_port_t sourcePort,
-		in_addr_t destinationIP, in_port_t destinationPort,
-		guint sequence, guint acknowledgement, guint window,
-		SimulationTime timestampValue, SimulationTime timestampEcho) {
+		in_addr_t destinationIP, in_port_t destinationPort, guint sequence) {
 	_packet_lock(packet);
 	utility_assert(!(packet->header) && packet->protocol == PNONE);
 	utility_assert(sourceIP && sourcePort && destinationIP && destinationPort);
@@ -179,10 +186,6 @@ void packet_setTCP(Packet* packet, enum ProtocolTCPFlags flags,
 	header->destinationIP = destinationIP;
 	header->destinationPort = destinationPort;
 	header->sequence = sequence;
-	header->acknowledgement = acknowledgement;
-	header->window = window;
-	header->timestampValue = timestampValue;
-	header->timestampEcho = timestampEcho;
 
 	packet->header = header;
 	packet->protocol = PTCP;
@@ -196,7 +199,7 @@ void packet_updateTCP(Packet* packet, guint acknowledgement, guint window,
 
 	PacketTCPHeader* header = (PacketTCPHeader*) packet->header;
 
-	header->acknowledgement = acknowledgement;
+	header->acknowledgment = acknowledgement;
 	header->window = window;
 	header->timestampValue = timestampValue;
 	header->timestampEcho = timestampEcho;
@@ -417,15 +420,40 @@ void packet_getTCPHeader(Packet* packet, PacketTCPHeader* header) {
 	_packet_unlock(packet);
 }
 
-gchar* packet_getString(Packet* packet) {
-	_packet_lock(packet);
+static const gchar* _packet_deliveryStatusToAscii(PacketDeliveryStatusFlags status) {
+	switch (status) {
+		case PDS_NONE: return "NONE";
+		case PDS_SND_CREATED: return "SND_CREATED";
+		case PDS_SND_TCP_ENQUEUE_THROTTLED: return "SND_TCP_ENQUEUE_THROTTLED";
+		case PDS_SND_TCP_ENQUEUE_RETRANSMIT: return "SND_TCP_ENQUEUE_RETRANSMIT";
+		case PDS_SND_TCP_DEQUEUE_RETRANSMIT: return "SND_TCP_DEQUEUE_RETRANSMIT";
+		case PDS_SND_TCP_RETRANSMITTED: return "SND_TCP_RETRANSMITTED";
+		case PDS_SND_SOCKET_BUFFERED: return "SND_SOCKET_BUFFERED";
+		case PDS_SND_INTERFACE_SENT: return "SND_INTERFACE_SENT";
+		case PDS_INET_SENT: return "INET_SENT";
+		case PDS_INET_DROPPED: return "INET_DROPPED";
+		case PDS_RCV_INTERFACE_BUFFERED: return "RCV_INTERFACE_BUFFERED";
+		case PDS_RCV_INTERFACE_RECEIVED: return "RCV_INTERFACE_RECEIVED";
+		case PDS_RCV_INTERFACE_DROPPED: return "RCV_INTERFACE_DROPPED";
+		case PDS_RCV_SOCKET_PROCESSED: return "RCV_SOCKET_PROCESSED";
+		case PDS_RCV_SOCKET_DROPPED: return "RCV_SOCKET_DROPPED";
+		case PDS_RCV_TCP_ENQUEUE_UNORDERED: return "RCV_TCP_ENQUEUE_UNORDERED";
+		case PDS_RCV_SOCKET_BUFFERED: return "RCV_SOCKET_BUFFERED";
+		case PDS_RCV_SOCKET_DELIVERED: return "RCV_SOCKET_DELIVERED";
+		case PDS_DESTROYED: return "PDS_DESTROYED";
+		default: return "UKNOWN";
+	}
+}
 
-	GString* packetBuffer = g_string_new("");
+static gchar* _packet_getString(Packet* packet) {
+	GString* packetString = g_string_new("");
+
+//	_packet_lock(packet);
 
 	switch (packet->protocol) {
 		case PLOCAL: {
 			PacketLocalHeader* header = packet->header;
-			g_string_append_printf(packetBuffer, "%i -> %i bytes %u",
+			g_string_append_printf(packetString, "%i -> %i bytes=%u",
 					header->sourceDescriptorHandle, header->destinationDescriptorHandle,
 					packet->payloadLength);
 			break;
@@ -436,9 +464,9 @@ gchar* packet_getString(Packet* packet) {
 			gchar* sourceIPString = address_ipToNewString(header->sourceIP);
 			gchar* destinationIPString = address_ipToNewString(header->destinationIP);
 
-			g_string_append_printf(packetBuffer, "%s:%u -> ",
+			g_string_append_printf(packetString, "%s:%u -> ",
 					sourceIPString, ntohs(header->sourcePort));
-			g_string_append_printf(packetBuffer, "%s:%u bytes %u",
+			g_string_append_printf(packetString, "%s:%u bytes=%u",
 					destinationIPString, ntohs( header->destinationPort),
 					packet->payloadLength);
 
@@ -452,11 +480,27 @@ gchar* packet_getString(Packet* packet) {
 			gchar* sourceIPString = address_ipToNewString(header->sourceIP);
 			gchar* destinationIPString = address_ipToNewString(header->destinationIP);
 
-			g_string_append_printf(packetBuffer, "%s:%u -> ",
+			g_string_append_printf(packetString, "%s:%u -> ",
 					sourceIPString, ntohs(header->sourcePort));
-			g_string_append_printf(packetBuffer, "%s:%u packet# %u ack# %u window %u bytes %u",
+			g_string_append_printf(packetString, "%s:%u seq=%u ack=%u window=%u bytes=%u",
 					destinationIPString, ntohs(header->destinationPort),
-					header->sequence, header->acknowledgement, header->window, packet->payloadLength);
+					header->sequence, header->acknowledgment, header->window, packet->payloadLength);
+
+			if(!(header->flags & PTCP_NONE)) {
+				g_string_append_printf(packetString, " header=");
+				if(header->flags & PTCP_RST) {
+					g_string_append_printf(packetString, "RST");
+				}
+				if(header->flags & PTCP_SYN) {
+					g_string_append_printf(packetString, "SYN");
+				}
+				if(header->flags & PTCP_FIN) {
+					g_string_append_printf(packetString, "FIN");
+				}
+				if(header->flags & PTCP_ACK) {
+					g_string_append_printf(packetString, "ACK");
+				}
+			}
 
 			g_free(sourceIPString);
 			g_free(destinationIPString);
@@ -469,6 +513,41 @@ gchar* packet_getString(Packet* packet) {
 		}
 	}
 
+	g_string_append_printf(packetString, " status=");
+
+	guint statusLength = g_queue_get_length(packet->orderedStatus);
+	for(int i = 0; i < statusLength; i++) {
+		gpointer statusPtr = g_queue_pop_head(packet->orderedStatus);
+		PacketDeliveryStatusFlags status = (PacketDeliveryStatusFlags) GPOINTER_TO_UINT(statusPtr);
+
+		if(i < statusLength - 1) {
+			g_string_append_printf(packetString, "%s,", _packet_deliveryStatusToAscii(status));
+		} else {
+			g_string_append_printf(packetString, "%s", _packet_deliveryStatusToAscii(status));
+		}
+
+		g_queue_push_tail(packet->orderedStatus, statusPtr);
+	}
+
+//	_packet_unlock(packet);
+	return g_string_free(packetString, FALSE);
+}
+
+void packet_addDeliveryStatus(Packet* packet, PacketDeliveryStatusFlags status) {
+	gboolean skipDebug = worker_isFiltered(G_LOG_LEVEL_DEBUG);
+	gchar* packetStr = NULL;
+
+	_packet_lock(packet);
+	packet->allStatus |= status;
+
+	if(!skipDebug) {
+		g_queue_push_tail(packet->orderedStatus, GUINT_TO_POINTER(status));
+		packetStr = _packet_getString(packet);
+	}
+
 	_packet_unlock(packet);
-	return g_string_free(packetBuffer, FALSE);
+
+	if(!skipDebug) {
+		debug("[%s] %s", _packet_deliveryStatusToAscii(status), packetStr);
+	}
 }

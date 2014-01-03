@@ -31,7 +31,12 @@ HeartbeatEvent* heartbeat_new(Tracker* tracker) {
 
 void heartbeat_run(HeartbeatEvent* event, Host* node) {
 	MAGIC_ASSERT(event);
+
+	debug("event started");
+
 	tracker_heartbeat(event->tracker);
+
+	debug("event finished");
 }
 
 void heartbeat_free(HeartbeatEvent* event) {

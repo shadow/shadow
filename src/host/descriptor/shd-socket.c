@@ -111,15 +111,10 @@ gint socket_connectToPeer(Socket* socket, in_addr_t ip, in_port_t port, sa_famil
 	return socket->vtable->connectToPeer(socket, ip, port, family);
 }
 
-void socket_droppedPacket(Socket* socket, Packet* packet) {
+void socket_pushInPacket(Socket* socket, Packet* packet) {
 	MAGIC_ASSERT(socket);
 	MAGIC_ASSERT(socket->vtable);
-	socket->vtable->dropped(socket, packet);
-}
-
-gboolean socket_pushInPacket(Socket* socket, Packet* packet) {
-	MAGIC_ASSERT(socket);
-	MAGIC_ASSERT(socket->vtable);
+	packet_addDeliveryStatus(packet, PDS_RCV_SOCKET_PROCESSED);
 	return socket->vtable->process(socket, packet);
 }
 
@@ -296,7 +291,9 @@ gboolean socket_addToInputBuffer(Socket* socket, Packet* packet) {
 
 	/* add to our queue */
 	g_queue_push_tail(socket->inputBuffer, packet);
+	packet_ref(packet);
 	socket->inputBufferLength += length;
+	packet_addDeliveryStatus(packet, PDS_RCV_SOCKET_BUFFERED);
 
 	/* update the tracker input buffer stats */
 	Tracker* tracker = host_getTracker(worker_getCurrentHost());
@@ -352,6 +349,7 @@ gboolean socket_addToOutputBuffer(Socket* socket, Packet* packet) {
 	/* add to our queue */
 	g_queue_push_tail(socket->outputBuffer, packet);
 	socket->outputBufferLength += length;
+	packet_addDeliveryStatus(packet, PDS_SND_SOCKET_BUFFERED);
 
 	/* update the tracker input buffer stats */
 	Tracker* tracker = host_getTracker(worker_getCurrentHost());
