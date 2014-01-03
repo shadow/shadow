@@ -44,6 +44,10 @@ set(shadow_srcs
     host/descriptor/shd-epoll.c
     host/descriptor/shd-socket.c
     host/descriptor/shd-tcp.c
+    host/descriptor/shd-tcp-aimd.c
+    host/descriptor/shd-tcp-congestion.c
+    host/descriptor/shd-tcp-cubic.c
+    host/descriptor/shd-tcp-reno.c
     host/descriptor/shd-transport.c
     host/descriptor/shd-udp.c
     host/shd-application.c

@@ -243,7 +243,8 @@ struct _Configuration {
 	gboolean autotuneSocketSendBuffer;
 	gchar* interfaceQueuingDiscipline;
 	SimulationTime interfaceBatchTime;
-	gint latencySampleInterval;
+	gchar* tcpCongestionControl;
+	gint tcpSlowStartThreshold;
 
 	GOptionGroup* pluginsOptionGroup;
 	gboolean runFileExample;
@@ -311,13 +312,6 @@ GLogLevelFlags configuration_getHeartbeatLogLevel(Configuration* config);
  * @return the command line heartbeat interval converted to SimulationTime
  */
 SimulationTime configuration_getHearbeatInterval(Configuration* config);
-
-/**
- * Get the configured latency sample interval.
- * @param config a #Configuration object created with configuration_new()
- * @return the command line latency sample interval converted to SimulationTime
- */
-SimulationTime configuration_getLatencySampleInterval(Configuration* config);
 
 /**
  * Get the string form that represents the queuing discipline the network

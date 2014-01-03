@@ -90,13 +90,17 @@ struct _TCP {
 		/* last timestamp received in timestamp value field */
 		SimulationTime lastTimestamp;
 		/* the last ACK sequence number we received from the other end */
-		guint32 lastSequence;
+		guint32 dupSequence;
 		/* the number of packets in a row we got containing lastSequence */
-		guint lastSequenceCount;
+		guint dupSequenceCount;
 		/* the last ACK acknowledgment number we received from the other end */
-		guint32 lastAcknowledgment;
+		guint32 dupAcknowledgment;
 		/* the number of packets in a row we got containing lastAcknowledgment */
-		guint lastAcknowledgmentCount;
+		guint dupAcknowledgmentCount;
+		/* the last advertisements to us */
+		guint32 lastWindow;
+		guint32 lastSequence;
+		guint32 lastAcknowledgment;
 	} receive;
 
 	/* sequence numbers we track for outgoing packets */
@@ -115,24 +119,6 @@ struct _TCP {
 		guint32 lastWindow;
 	} send;
 
-	/* congestion control, sequence numbers used for AIMD and slow start */
-	gboolean isSlowStart;
-	struct {
-		/* our current calculated congestion window */
-		guint32 window;
-		guint32 threshold;
-		/* their last advertised window */
-		guint32 lastWindow;
-		/* send sequence number used for last window update */
-		guint32 lastSequence;
-		/* send ack number used from last window update */
-		guint32 lastAcknowledgment;
-		/* calculate RTT from header timestamps (srrt) */
-		gint rttSmoothed;
-		/* variance of the calculated RTT (rttvar) */
-		gint rttVariance;
-	} congestion;
-
 	struct {
 		/* TCP provides reliable transport, keep track of packets until they are acked */
 		PriorityQueue* queue;
@@ -149,12 +135,15 @@ struct _TCP {
 	} retransmit;
 
 	/* tcp autotuning for the send and recv buffers */
-	gboolean doAutotuning;
 	struct {
+		gboolean isEnabled;
 		gint32 bytesCopied;
 		SimulationTime lastAdjustment;
 		guint32 space;
 	} autotune;
+
+	/* congestion object for implementing different types of congestion control (aimd, reno, cubic) */
+	TCPCongestion* congestion;
 
 	/* TODO: these should probably be stamped when the network interface sends
 	 * instead of when the tcp layer sends down to the socket layer */
@@ -365,7 +354,6 @@ static void _tcp_setBufferSizes(TCP* tcp) {
 	}
 
 	guint32 rtt_milliseconds = (guint32)_tcp_calculateRTT(tcp);
-	tcp->info.rtt = rtt_milliseconds;
 
 	Address* srcAddress = dns_resolveIPToAddress(worker_getDNS(), sourceIP);
 	Address* dstAddress = dns_resolveIPToAddress(worker_getDNS(), destinationIP);
@@ -446,7 +434,7 @@ static void _tcp_setState(TCP* tcp, enum TCPState state) {
 		}
 		case TCPS_ESTABLISHED: {
 			tcp->flags |= TCPF_WAS_ESTABLISHED;
-			if(tcp->state != tcp->stateLast && !tcp->doAutotuning) {
+			if(tcp->state != tcp->stateLast && !tcp->autotune.isEnabled) {
 				_tcp_setBufferSizes(tcp);
 			}
 			descriptor_adjustStatus((Descriptor*)tcp, DS_ACTIVE|DS_WRITABLE, TRUE);
@@ -512,9 +500,9 @@ static void _tcp_autotuneReceiveBuffer(TCP* tcp, guint bytesCopied) {
     }
 
     SimulationTime time = now - tcp->autotune.lastAdjustment;
-    SimulationTime threshold = tcp->congestion.rttSmoothed * SIMTIME_ONE_MILLISECOND;
+    SimulationTime threshold = tcp->congestion->rttSmoothed * SIMTIME_ONE_MILLISECOND;
 
-    if(tcp->congestion.rttSmoothed == 0 || (time < threshold)) {
+    if(tcp->congestion->rttSmoothed == 0 || (time < threshold)) {
         return;
     }
 
@@ -552,7 +540,7 @@ static void _tcp_autotuneSendBuffer(TCP* tcp) {
      * or sample from a distribution. */
 
     gint sndmem = 2404;
-    gint demanded = tcp->congestion.window;
+    gint demanded = tcp->congestion->window;
     sndmem *= (2 * demanded);
 
     gsize currentSize = socket_getOutputBufferSize(&tcp->super);
@@ -590,52 +578,7 @@ static void _tcp_updateSendWindow(TCP* tcp) {
 	MAGIC_ASSERT(tcp);
 
 	/* send window is minimum of congestion window and the last advertised window */
-	tcp->send.window = MIN(tcp->congestion.window, tcp->congestion.lastWindow);
-}
-
-/* nPacketsAcked == 0 means a congestion event (packet was dropped) */
-static void _tcp_updateCongestionWindow(TCP* tcp, guint nPacketsAcked) {
-	MAGIC_ASSERT(tcp);
-
-	if(nPacketsAcked > 0) {
-		if(tcp->isSlowStart) {
-			/* threshold not set => no timeout yet => slow start phase 1
-			 *  i.e. multiplicative increase until retransmit event (which sets threshold)
-			 * threshold set => timeout => slow start phase 2
-			 *  i.e. multiplicative increase until threshold */
-			tcp->congestion.window += ((guint32)nPacketsAcked);
-			if(tcp->congestion.threshold != 0 && tcp->congestion.window >= tcp->congestion.threshold) {
-				tcp->isSlowStart = FALSE;
-			}
-		} else {
-			/* slow start is over
-			 * simple additive increase part of AIMD */
-			gdouble n = ((gdouble) nPacketsAcked);
-			gdouble increment = n * n / ((gdouble) tcp->congestion.window);
-			tcp->congestion.window += (guint32)(ceil(increment));
-		}
-	} else {
-		/* a packet was "dropped" - this is basically a negative ack.
-		 * TCP-Reno-like fast retransmit, i.e. multiplicative decrease. */
-		tcp->congestion.window = (guint32) ceil((gdouble)tcp->congestion.window / (gdouble)2);
-
-		if(tcp->isSlowStart && tcp->congestion.threshold == 0) {
-			tcp->congestion.threshold = tcp->congestion.window;
-		}
-	}
-
-	/* unlike the send and receive/advertised windows, our cong window should never be 0
-	 *
-	 * from https://tools.ietf.org/html/rfc5681 [page 6]:
-	 *
-	 * "Implementation Note: Since integer arithmetic is usually used in TCP
-   	 *  implementations, the formula given in equation (3) can fail to
-   	 *  increase cwnd when the congestion window is larger than SMSS*SMSS.
-   	 *  If the above formula yields 0, the result SHOULD be rounded up to 1 byte."
-	 */
-	if(tcp->congestion.window == 0) {
-		tcp->congestion.window = 1;
-	}
+	tcp->send.window = MIN(tcp->congestion->window, tcp->receive.lastWindow);
 }
 
 static Packet* _tcp_createPacket(TCP* tcp, enum ProtocolTCPFlags flags, gconstpointer payload, gsize payloadLength) {
@@ -846,24 +789,24 @@ static void _tcp_updateRTTEstimate(TCP* tcp, SimulationTime timestamp) {
 	}
 
 	/* RFC 6298 (http://tools.ietf.org/html/rfc6298) */
-	if(!tcp->congestion.rttSmoothed) {
+	if(!tcp->congestion->rttSmoothed) {
 		/* first RTT measurement */
-		tcp->congestion.rttSmoothed = rtt;
-		tcp->congestion.rttVariance = rtt / 2;
+		tcp->congestion->rttSmoothed = rtt;
+		tcp->congestion->rttVariance = rtt / 2;
 	} else {
 		/* RTTVAR = (1 - beta) * RTTVAR + beta * |SRTT - R|   (beta = 1/4) */
-		tcp->congestion.rttVariance = (3 * tcp->congestion.rttVariance / 4) +
-				(ABS(tcp->congestion.rttSmoothed - rtt) / 4);
+		tcp->congestion->rttVariance = (3 * tcp->congestion->rttVariance / 4) +
+				(ABS(tcp->congestion->rttSmoothed - rtt) / 4);
 		/* SRTT = (1 - alpha) * SRTT + alpha * R   (alpha = 1/8) */
-		tcp->congestion.rttSmoothed = (7 * tcp->congestion.rttSmoothed / 8) + (rtt / 8);
+		tcp->congestion->rttSmoothed = (7 * tcp->congestion->rttSmoothed / 8) + (rtt / 8);
 	}
 
 	/* RTO = SRTT + 4 * RTTVAR  (min=1s, max=60s) */
-	gint newRTO = tcp->congestion.rttSmoothed + (4 * tcp->congestion.rttVariance);
+	gint newRTO = tcp->congestion->rttSmoothed + (4 * tcp->congestion->rttVariance);
 	_tcp_setRetransmitTimeout(tcp, newRTO);
 
-    debug("srtt=%d rttvar=%d rto=%d", tcp->congestion.rttSmoothed,
-    		tcp->congestion.rttVariance, tcp->retransmit.timeout);
+    debug("srtt=%d rttvar=%d rto=%d", tcp->congestion->rttSmoothed,
+    		tcp->congestion->rttVariance, tcp->retransmit.timeout);
 }
 
 static void _tcp_flush(TCP* tcp) {
@@ -989,6 +932,22 @@ static void _tcp_flush(TCP* tcp) {
 	}
 }
 
+static void _tcp_doFastRetransmit(TCP* tcp) {
+	MAGIC_ASSERT(tcp);
+
+	/* https://tools.ietf.org/html/rfc2581#section-3.2 */
+	Packet* packet = _tcp_removeRetransmit(tcp);
+	if(packet) {
+		// TODO this doesnt update the congestion window, because no functions
+		// currently exist in the congestion modules for fast recovery updates
+		_tcp_setRetransmitTimer(tcp, worker_getCurrentTime());
+		packet_addDeliveryStatus(packet, PDS_SND_TCP_RETRANSMITTED);
+		_tcp_bufferPacketOut(tcp, packet);
+		_tcp_flush(tcp);
+		tcp->info.retransmitCount++;
+	}
+}
+
 void tcp_retransmitTimerExpired(TCP* tcp) {
 	MAGIC_ASSERT(tcp);
 
@@ -1032,7 +991,7 @@ void tcp_retransmitTimerExpired(TCP* tcp) {
 	_tcp_setRetransmitTimer(tcp, now);
 
 	/* some type of drop, or congestion may have occurred; do congestion control */
-	_tcp_updateCongestionWindow(tcp, 0); /* 0 means congestion event */
+	tcpCongestion_packetLoss(tcp->congestion);
 
 	/* resend the next unacked packet */
 	Packet* packet = _tcp_removeRetransmit(tcp);
@@ -1128,15 +1087,15 @@ void tcp_getInfo(TCP* tcp, struct tcp_info *tcpinfo) {
 	/* Metrics. */
 	tcpinfo->tcpi_pmtu = (u_int32_t)(CONFIG_MTU);
 //	tcpinfo->tcpi_rcv_ssthresh;
-	tcpinfo->tcpi_rtt = tcp->info.rtt;
-//	tcpinfo->tcpi_rttvar;
-	tcpinfo->tcpi_snd_ssthresh = tcp->congestion.threshold;
-	tcpinfo->tcpi_snd_cwnd = tcp->congestion.window;
+	tcpinfo->tcpi_rtt = tcp->congestion->rttSmoothed;
+	tcpinfo->tcpi_rttvar = tcp->congestion->rttVariance;
+	tcpinfo->tcpi_snd_ssthresh = tcp->congestion->threshold;
+	tcpinfo->tcpi_snd_cwnd = tcp->congestion->window;
 	tcpinfo->tcpi_advmss = (u_int32_t)(CONFIG_MTU - CONFIG_HEADER_SIZE_TCPIPETH);
 //	tcpinfo->tcpi_reordering;
 
 	tcpinfo->tcpi_rcv_rtt = tcp->info.rtt;
-	tcpinfo->tcpi_rcv_space = tcp->congestion.lastWindow;
+	tcpinfo->tcpi_rcv_space = tcp->receive.lastWindow;
 
 //	tcpinfo->tcpi_total_retrans;
 }
@@ -1462,29 +1421,41 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
 	/* check if we can update some TCP control info */
 	if(header.flags & PTCP_ACK) {
 		wasProcessed = TRUE;
+		guint32 prevSeq = tcp->receive.lastSequence;
+		guint32 prevAck = tcp->receive.lastAcknowledgment;
+		guint32 prevWin = tcp->receive.lastWindow;
 
-		if((header.acknowledgment > tcp->send.unacked) && (header.acknowledgment <= tcp->send.next)) {
+		/* the ack is in our send window */
+		gboolean isValidAck = (header.acknowledgment > tcp->send.unacked) &&
+				(header.acknowledgment <= tcp->send.next);
+		/* same ack and window opened, or new ack and window changed */
+		gboolean isValidWindow = ((header.acknowledgment == tcp->receive.lastAcknowledgment) &&
+				(header.window > prevWin)) || ((header.acknowledgment > tcp->receive.lastAcknowledgment) &&
+						(header.window != prevWin));
+
+		if(isValidAck) {
+			/* update their advertisements */
+			tcp->receive.lastAcknowledgment = (guint32) header.acknowledgment;
+
 			/* some data we sent got acknowledged */
 			nPacketsAcked = header.acknowledgment - tcp->send.unacked;
 			tcp->send.unacked = header.acknowledgment;
 
-			/* update congestion window and keep track of when it was updated */
-			tcp->congestion.lastWindow = (guint32) header.window;
-			tcp->congestion.lastSequence = (guint32) header.sequence;
-			tcp->congestion.lastAcknowledgment = (guint32) header.acknowledgment;
-
 			/* the packets just acked are 'released' from retransmit queue */
 			_tcp_clearRetransmit(tcp, header.acknowledgment);
-		}
 
-		if(nPacketsAcked > 0 && tcp->retransmit.backoffCount > 0) {
 			/* if we had congestion, reset our state (rfc 6298, section 5) */
 			if(tcp->retransmit.backoffCount > 2) {
-				tcp->congestion.rttSmoothed = 0;
-				tcp->congestion.rttVariance = 0;
+				tcp->congestion->rttSmoothed = 0;
+				tcp->congestion->rttVariance = 0;
 				_tcp_setRetransmitTimeout(tcp, 1);
 			}
 			tcp->retransmit.backoffCount = 0;
+		}
+
+		if(isValidWindow) {
+			/* accept the window update */
+			tcp->receive.lastWindow = (guint32) header.window;
 		}
 
 		/* update retransmit state (rfc 6298, section 5.2-5.3) */
@@ -1498,50 +1469,51 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
 
 		/* this is an ACK. check for duplicates, only if
 		 * they dont acknowledge new data and they dont change the window. */
-		if(nPacketsAcked > 0 || tcp->congestion.lastWindow != (guint32) header.window) {
-			tcp->receive.lastSequence = 0;
-			tcp->receive.lastSequenceCount = 0;
-			tcp->receive.lastAcknowledgment = 0;
-			tcp->receive.lastAcknowledgmentCount = 0;
-		} else {
+		if(!isValidAck && !isValidWindow) {
 			/* our previous packets may have been dropped due to congestion, and not
-			 * retransmitted if they did not contain data. duplicates could be:
-			 * 1. they keep sending us something that we already received */
-			if(header.sequence > 0 && (guint32)header.sequence == tcp->receive.lastSequence) {
-				tcp->receive.lastSequenceCount++;
+			 * retransmitted if they did not contain data. */
+
+			/* 1. check for sequence number duplicates */
+			if(header.sequence > 0 && (guint32)header.sequence == tcp->receive.dupSequence) {
+				tcp->receive.dupSequenceCount++;
 			} else {
-				tcp->receive.lastSequenceCount = 0;
-			}
-			/* 2. they keep asking for something we already sent */
-			if(header.acknowledgment > 1 && (guint32)header.acknowledgment == tcp->receive.lastAcknowledgment) {
-				tcp->receive.lastAcknowledgmentCount++;
-			} else {
-				tcp->receive.lastAcknowledgmentCount = 0;
+				tcp->receive.dupSequenceCount = 0;
 			}
 
-			/* update the last values we received */
-			tcp->receive.lastSequence = (guint32)header.sequence;
-			tcp->receive.lastAcknowledgment = (guint32)header.acknowledgment;
+			/* update the last value we received */
+			tcp->receive.dupSequence = (guint32)header.sequence;
 
-			/* check for congestion event. this checks if case 1 or 2 happens 3 times. */
-			if((tcp->receive.lastSequence < tcp->send.lastAcknowledgment && tcp->receive.lastSequenceCount) ||
-					(tcp->receive.lastAcknowledgment < tcp->send.next && tcp->receive.lastAcknowledgmentCount)) {
+			/* if they keep sending us something that we already received, then one of our acks
+			 * may have been lost */
+			if(tcp->receive.dupSequence < tcp->send.lastAcknowledgment &&
+					tcp->receive.dupSequenceCount > 0) {
 				/* they are missing our last ACK number, send another */
 				responseFlags |= PTCP_ACK;
-				// TODO replace above with this fast retransmit, ie, an early timer expiration
-				// this will send the last data packet ack, or an ack if there is no data
-//				tcp->retransmit.desiredTimerExpiration = now;
-//				tcp_retransmitTimerExpired(tcp);
-				// TODO make sure we dont send an ack above and another one below
 			}
-		}
 
-		/* if this is a dup ack, take the new advertised window if it opened */
-		if(tcp->congestion.lastAcknowledgment == (guint32) header.acknowledgment &&
-				tcp->congestion.lastWindow < (guint32) header.window &&
-				header.sequence == 0) {
-			/* other end is telling us that its window opened and we can send more */
-			tcp->congestion.lastWindow = (guint32) header.window;
+			/* 2. check for acknowledgment number duplicates */
+			if(header.acknowledgment > 1 && (guint32)header.acknowledgment == tcp->receive.dupAcknowledgment) {
+				tcp->receive.dupAcknowledgmentCount++;
+			} else {
+				tcp->receive.dupAcknowledgmentCount = 0;
+			}
+
+			/* update the last value we received */
+			tcp->receive.dupAcknowledgment = (guint32)header.acknowledgment;
+
+			/* if they keep asking for something we already sent, then some data has been lost */
+			if(tcp->receive.dupAcknowledgment < tcp->send.next &&
+					tcp->receive.dupAcknowledgmentCount >= 3) {
+				 if(tcp->congestion->fastRetransmit) {
+					 _tcp_doFastRetransmit(tcp);
+				 }
+			}
+		} else {
+			/* valid ack update - reset duplicate counters */
+			tcp->receive.dupSequence = 0;
+			tcp->receive.dupSequenceCount = 0;
+			tcp->receive.dupAcknowledgment = 0;
+			tcp->receive.dupAcknowledgmentCount = 0;
 		}
 
 		tcp->info.lastAckReceived = now;
@@ -1549,6 +1521,11 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
 
 	/* check if the packet carries user data for us */
 	if(packetLength > 0) {
+		 /* check to see if sequence is next in segment, otherwise send fast dup ACK */
+		if(tcp->congestion->fastRetransmit && header.sequence > tcp->receive.next) {
+			responseFlags |= PTCP_ACK;
+		}
+
 		/* it has data, check if its in the correct range */
 		if(header.sequence >= (tcp->receive.next + tcp->receive.window)) {
 			/* its too far ahead to accept now, but they should re-send it */
@@ -1589,9 +1566,11 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
 	/* update congestion window only if we received new acks.
 	 * dont update if nPacketsAcked is 0, as that denotes a congestion event */
 	if(nPacketsAcked > 0) {
-		_tcp_updateCongestionWindow(tcp, nPacketsAcked);
+		// TODO Second argument is supposed to be packets in flight, but this is
+		// only needed for new Reno congestion control.
+		tcpCongestion_avoidance(tcp->congestion, 0, nPacketsAcked, tcp->send.unacked);
 
-		if(tcp->doAutotuning) {
+		if(tcp->autotune.isEnabled) {
 			Host* host = worker_getCurrentHost();
 			if(host_autotuneSendBuffer(host)) {
 				_tcp_autotuneSendBuffer(tcp);
@@ -1798,7 +1777,7 @@ gssize tcp_receiveUserData(TCP* tcp, gpointer buffer, gsize nBytes, in_addr_t* i
 	}
 
 	/* update the receive buffer size based on new packets received */
-	if(tcp->doAutotuning) {
+	if(tcp->autotune.isEnabled) {
 		Host* host = worker_getCurrentHost();
 		if(host_autotuneReceiveBuffer(host)) {
 			_tcp_autotuneReceiveBuffer(tcp, totalCopied);
@@ -1847,6 +1826,8 @@ void tcp_free(TCP* tcp) {
 	if(tcp->server) {
 		_tcpserver_free(tcp->server);
 	}
+
+	tcpCongestion_free(tcp->congestion);
 
 	MAGIC_CLEAR(tcp);
 	g_free(tcp);
@@ -1919,19 +1900,42 @@ TCP* tcp_new(gint handle, guint receiveBufferSize, guint sendBufferSize) {
 
 	socket_init(&(tcp->super), &tcp_functions, DT_TCPSOCKET, handle, receiveBufferSize, sendBufferSize);
 
-	guint32 initial_window = worker_getConfig()->initialTCPWindow;
+	Configuration* config = worker_getConfig();
+	guint32 initial_window = config->initialTCPWindow;
 
-	tcp->congestion.window = initial_window;
-	tcp->congestion.lastWindow = initial_window;
+	TCPCongestionType congestionType = tcpCongestion_getType(config->tcpCongestionControl);
+	if(congestionType == TCP_CC_UNKNOWN) {
+		warning("unable to find congestion control algorithm '%s', defaulting to AIMD", config->tcpCongestionControl);
+		congestionType = TCP_CC_AIMD;
+	}
+
+	switch(congestionType) {
+        case TCP_CC_AIMD:
+            tcp->congestion = (TCPCongestion*)aimd_new(initial_window, config->tcpSlowStartThreshold);
+            break;
+
+        case TCP_CC_RENO:
+            tcp->congestion = (TCPCongestion*)reno_new(initial_window, config->tcpSlowStartThreshold);
+            break;
+
+        case TCP_CC_CUBIC:
+            tcp->congestion = (TCPCongestion*)cubic_new(initial_window, config->tcpSlowStartThreshold);
+            break;
+
+        case TCP_CC_UNKNOWN:
+        default:
+            error("Failed to initialize TCP congestion control for %s", config->tcpCongestionControl);
+            break;
+    }
+
 	tcp->send.window = initial_window;
 	tcp->send.lastWindow = initial_window;
 	tcp->receive.window = initial_window;
+	tcp->receive.lastWindow = initial_window;
 
 	/* 0 is saved for representing control packets */
 	guint32 initialSequenceNumber = 1;
 
-	tcp->congestion.lastSequence = initialSequenceNumber;
-	tcp->congestion.lastAcknowledgment = initialSequenceNumber;
 	tcp->send.unacked = initialSequenceNumber;
 	tcp->send.next = initialSequenceNumber;
 	tcp->send.end = initialSequenceNumber;
@@ -1939,9 +1943,9 @@ TCP* tcp_new(gint handle, guint receiveBufferSize, guint sendBufferSize) {
 	tcp->receive.end = initialSequenceNumber;
 	tcp->receive.next = initialSequenceNumber;
 	tcp->receive.start = initialSequenceNumber;
+	tcp->receive.lastAcknowledgment = initialSequenceNumber;
 
-	tcp->isSlowStart = TRUE;
-	tcp->doAutotuning = TRUE;
+	tcp->autotune.isEnabled = TRUE;
 
 	tcp->throttledOutput =
 			priorityqueue_new((GCompareDataFunc)packet_compareTCPSequence, NULL, (GDestroyNotify)packet_unref);

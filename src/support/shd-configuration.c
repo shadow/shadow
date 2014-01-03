@@ -37,7 +37,6 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	c->cpuThreshold = 1000;
 	c->cpuPrecision = 200;
 	c->heartbeatInterval = 60;
-	c->latencySampleInterval = 1;
 
 	/* set options to change defaults for the main group */
 	c->mainOptionGroup = g_option_group_new("main", "Application Options", "Various application related options", NULL, NULL);
@@ -48,6 +47,7 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	  { "heartbeat-frequency", 'h', 0, G_OPTION_ARG_INT, &(c->heartbeatInterval), "Log node statistics every N seconds [60]", "N" },
 	  { "seed", 's', 0, G_OPTION_ARG_INT, &(c->randomSeed), "Initialize randomness for each thread using seed N [1]", "N" },
 	  { "workers", 'w', 0, G_OPTION_ARG_INT, &(c->nWorkerThreads), "Use N worker threads [0]", "N" },
+	  { "runahead", 0, 0, G_OPTION_ARG_INT, &(c->minRunAhead), "Minimum allowed TIME workers may run ahead when sending events between nodes, in milliseconds [10]", "TIME" },
 	  { "version", 'v', 0, G_OPTION_ARG_NONE, &(c->printSoftwareVersion), "Print software version and exit", NULL },
 	  { NULL },
 	};
@@ -69,11 +69,11 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	  { "interface-batch", 0, 0, G_OPTION_ARG_INT, &(c->interfaceBatchTime), "Batch TIME for network interface sends and receives, in milliseconds [10]", "TIME" },
 	  { "interface-buffer", 0, 0, G_OPTION_ARG_INT, &(c->interfaceBufferSize), "Size of the network interface receive buffer, in bytes [1024000]", "N" },
 	  { "interface-qdisc", 0, 0, G_OPTION_ARG_STRING, &(c->interfaceQueuingDiscipline), "The interface queuing discipline QDISC used to select the next sendable socket ('fifo' or 'rr') ['fifo']", "QDISC" },
-	  { "runahead", 0, 0, G_OPTION_ARG_INT, &(c->minRunAhead), "Minimum allowed TIME workers may run ahead when sending events between nodes, in milliseconds [10]", "TIME" },
-	  { "tcp-windows", 0, 0, G_OPTION_ARG_INT, &(c->initialTCPWindow), "Initialize the TCP send, receive, and congestion windows to N packets [10]", "N" },
 	  { "socket-recv-buffer", 0, 0, G_OPTION_ARG_INT, &(c->initialSocketReceiveBufferSize), sockrecv->str, "N" },
 	  { "socket-send-buffer", 0, 0, G_OPTION_ARG_INT, &(c->initialSocketSendBufferSize), socksend->str, "N" },
-	  { "latency-sample-interval", 0, 0, G_OPTION_ARG_INT, &(c->latencySampleInterval), "Interval to sample latency values for links, in seconds [1]", "N" },
+	  { "tcp-windows", 0, 0, G_OPTION_ARG_INT, &(c->initialTCPWindow), "Initialize the TCP send, receive, and congestion windows to N packets [10]", "N" },
+	  { "tcp-congestion-control", 0, 0, G_OPTION_ARG_STRING, &(c->tcpCongestionControl), "Congestion control algorithm to use for TCP ('aimd', 'reno', 'cubic') ['aimd']", "TCPCC" },
+	  { "tcp-ssthresh", 0, 0, G_OPTION_ARG_INT, &(c->tcpSlowStartThreshold), "Set TCP ssthresh value instead of discovering it via packet loss or hystart [0]", "N" },
 	  { NULL },
 	};
 
@@ -151,6 +151,9 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 		c->initialSocketSendBufferSize = CONFIG_SEND_BUFFER_SIZE;
 		c->autotuneSocketSendBuffer = TRUE;
 	}
+	if(c->tcpCongestionControl == NULL) {
+		c->tcpCongestionControl = g_strdup("aimd");
+	}
 
 	c->inputXMLFilenames = g_queue_new();
 	for(gint i = 1; i < argc; i++) {
@@ -220,11 +223,6 @@ GLogLevelFlags configuration_getHeartbeatLogLevel(Configuration* config) {
 SimulationTime configuration_getHearbeatInterval(Configuration* config) {
 	MAGIC_ASSERT(config);
 	return config->heartbeatInterval * SIMTIME_ONE_SECOND;
-}
-
-SimulationTime configuration_getLatencySampleInterval(Configuration* config) {
-	MAGIC_ASSERT(config);
-	return config->latencySampleInterval * SIMTIME_ONE_SECOND;
 }
 
 gchar* configuration_getQueuingDiscipline(Configuration* config) {
