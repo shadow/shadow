@@ -87,6 +87,8 @@ struct _TCP {
 		guint32 window;
 		/* used to make sure we get all data when other end closes */
 		guint32 end;
+		/* last timestamp received in timestamp value field */
+		SimulationTime lastTimestamp;
 	} receive;
 
 	/* sequence numbers we track for outgoing packets */
@@ -117,7 +119,21 @@ struct _TCP {
 		guint32 lastSequence;
 		/* send ack number used from last window update */
 		guint32 lastAcknowledgement;
+		/* calculate RTT from header timestamps (srrt) */
+		gint rttSmoothed;
+		/* variance of the calculated RTT (rttvar) */
+		gint rttVariance;
+		/* retransmission timeout value (rto) */
+		gint retransmitTimeout;
 	} congestion;
+
+	/* tcp autotuning for the send and recv buffers */
+	gboolean doAutotuning;
+	struct {
+		gint32 bytesCopied;
+		SimulationTime lastAdjustment;
+		guint32 space;
+	} autotune;
 
 	/* TODO: these should probably be stamped when the network interface sends
 	 * instead of when the tcp layer sends down to the socket layer */
@@ -250,7 +266,7 @@ static in_addr_t tcp_getPeerIP(TCP* tcp) {
 	return ip;
 }
 
-static void _tcp_autotune(TCP* tcp) {
+static void _tcp_setBufferSizes(TCP* tcp) {
 	MAGIC_ASSERT(tcp);
 
 	if(!CONFIG_TCPAUTOTUNE) {
@@ -260,7 +276,8 @@ static void _tcp_autotune(TCP* tcp) {
 	/* our buffers need to be large enough to send and receive
 	 * a full delay*bandwidth worth of bytes to keep the pipe full.
 	 * but not too large that we'll just buffer everything. autotuning
-	 * is meant to tune it to an optimal rate.
+	 * is meant to tune it to an optimal rate. here, we approximate that
+	 * by getting the true latencies instead of detecting them.
 	 */
 
 	in_addr_t sourceIP = tcp_getIP(tcp);
@@ -299,7 +316,8 @@ static void _tcp_autotune(TCP* tcp) {
 	guint32 send_latency = (guint32) ceil(srcLatency);
 	guint32 receive_latency = (guint32) ceil(dstLatency);
 	if(send_latency == 0 || receive_latency == 0) {
-	  error("autotuning needs nonzero latency, source=%"G_GUINT32_FORMAT" dest=%"G_GUINT32_FORMAT" send=%"G_GUINT32_FORMAT" recv=%"G_GUINT32_FORMAT,
+	  error("need nonzero latency to set buffer sizes, "
+			  "source=%"G_GUINT32_FORMAT" dest=%"G_GUINT32_FORMAT" send=%"G_GUINT32_FORMAT" recv=%"G_GUINT32_FORMAT,
 			  sourceID, destinationID, send_latency, receive_latency);
 	}
 	utility_assert(send_latency > 0 && receive_latency > 0);
@@ -353,7 +371,7 @@ static void _tcp_autotune(TCP* tcp) {
 		socket_setOutputBufferSize(&(tcp->super), (gsize) sendbuf_size);
 	}
 
-	info("network buffer sizes: send %"G_GSIZE_FORMAT" receive %"G_GSIZE_FORMAT,
+	info("set network buffer sizes: send %"G_GSIZE_FORMAT" receive %"G_GSIZE_FORMAT,
 			socket_getOutputBufferSize(&(tcp->super)), socket_getInputBufferSize(&(tcp->super)));
 }
 
@@ -380,8 +398,8 @@ static void _tcp_setState(TCP* tcp, enum TCPState state) {
 		}
 		case TCPS_ESTABLISHED: {
 			tcp->flags |= TCPF_WAS_ESTABLISHED;
-			if(tcp->state != tcp->stateLast) {
-				_tcp_autotune(tcp);
+			if(tcp->state != tcp->stateLast && !tcp->doAutotuning) {
+				_tcp_setBufferSizes(tcp);
 			}
 			descriptor_adjustStatus((Descriptor*)tcp, DS_ACTIVE|DS_WRITABLE, TRUE);
 			break;
@@ -430,6 +448,73 @@ static void _tcp_setState(TCP* tcp, enum TCPState state) {
 		default:
 			break;
 	}
+}
+
+static void _tcp_autotuneReceiveBuffer(TCP* tcp, guint bytesCopied) {
+    MAGIC_ASSERT(tcp);
+
+    SimulationTime now = worker_getCurrentTime();
+
+    tcp->autotune.bytesCopied += bytesCopied;
+
+    if(tcp->autotune.lastAdjustment == 0) {
+        tcp->autotune.lastAdjustment = now;
+        return;
+    }
+
+    SimulationTime time = now - tcp->autotune.lastAdjustment;
+    SimulationTime threshold = tcp->congestion.rttSmoothed * SIMTIME_ONE_MILLISECOND;
+
+    if(tcp->congestion.rttSmoothed == 0 || (time < threshold)) {
+        return;
+    }
+
+    guint space = 2 * tcp->autotune.bytesCopied;
+    space = MAX(space, tcp->autotune.space);
+
+    gsize currentSize = socket_getInputBufferSize(&tcp->super);
+    if(((gsize)space) > currentSize) {
+        tcp->autotune.space = (guint32)space;
+
+        gsize newSize = (gsize) MIN(space, (guint)CONFIG_TCP_RMEM_MAX);
+        if(newSize > currentSize) {
+			socket_setInputBufferSize(&tcp->super, newSize);
+			debug("[autotune] input buffer size adjusted from %"G_GSIZE_FORMAT" to %"G_GSIZE_FORMAT,
+					currentSize, newSize);
+        }
+    }
+
+    tcp->autotune.lastAdjustment = now;
+    tcp->autotune.bytesCopied = 0;
+}
+
+static void _tcp_autotuneSendBuffer(TCP* tcp) {
+    MAGIC_ASSERT(tcp);
+
+    /* Linux Kernel 3.11.6:
+     *     int sndmem = SKB_TRUESIZE(max_t(u32, tp->rx_opt.mss_clamp, tp->mss_cache) + MAX_TCP_HEADER);
+     *     int demanded = max_t(unsigned int, tp->snd_cwnd, tp->reordering + 1);
+     *     sndmem *= 2 * demanded;
+     *
+     * We don't have any of the values to calculate the initial sndmem value which attempts to calculate
+     * the maximum size that an MSS may be.  However, by looking at the send buffer length and cwnd values
+     * of an actual download, around 66% of values were exactly 2404, while the remaining 33% were
+     * 2200 <= sndmem < 2404.  For now hard code as 2404 and maybe later figure out how to calculate it
+     * or sample from a distribution. */
+
+    gint sndmem = 2404;
+    gint demanded = tcp->congestion.window;
+    sndmem *= (2 * demanded);
+
+    gsize currentSize = socket_getOutputBufferSize(&tcp->super);
+    if(sndmem > currentSize) {
+        gsize newSize = (gsize) MIN(sndmem, (gint)CONFIG_TCP_WMEM_MAX);
+        if(newSize > currentSize) {
+			socket_setOutputBufferSize(&tcp->super, newSize);
+			debug("[autotune] output buffer size adjusted from %"G_GSIZE_FORMAT" to %"G_GSIZE_FORMAT,
+					currentSize, newSize);
+        }
+    }
 }
 
 static void _tcp_updateReceiveWindow(TCP* tcp) {
@@ -504,6 +589,36 @@ static void _tcp_updateCongestionWindow(TCP* tcp, guint nPacketsAcked) {
 	}
 }
 
+static void _tcp_updateRTTEstimate(TCP* tcp, SimulationTime timestamp) {
+	MAGIC_ASSERT(tcp);
+
+	SimulationTime now = worker_getCurrentTime();
+	gint rtt = (now - timestamp) / SIMTIME_ONE_MILLISECOND;
+
+	if(!rtt) {
+		rtt	= 1;
+	}
+
+	/* RFC 2988 */
+	if(!tcp->congestion.rttSmoothed) {
+		tcp->congestion.rttSmoothed = rtt;
+		tcp->congestion.rttVariance = rtt / 2;
+	} else {
+		/* RTTVAR = (1 - beta) * RTTVAR + beta * |SRTT - R|   (beta = 1/4) */
+		tcp->congestion.rttVariance = (3 * tcp->congestion.rttVariance / 4) +
+				(ABS(tcp->congestion.rttSmoothed - rtt) / 4);
+		/* SRTT = (1 - alpha) * SRTT + alpha * R   (alpha = 1/8) */
+		tcp->congestion.rttSmoothed = (7 * tcp->congestion.rttSmoothed / 8) + (rtt / 8);
+	}
+
+	/* RTO = SRTT + 4 * RTTVAR  (max=60s) */
+	tcp->congestion.retransmitTimeout =
+			MIN(tcp->congestion.rttSmoothed + 4 * tcp->congestion.rttVariance, 60000);
+
+    debug("srtt=%d rttvar=%d rto=%d", tcp->congestion.rttSmoothed,
+    		tcp->congestion.rttVariance, tcp->congestion.retransmitTimeout);
+}
+
 static Packet* _tcp_createPacket(TCP* tcp, enum ProtocolTCPFlags flags, gconstpointer payload, gsize payloadLength) {
 	MAGIC_ASSERT(tcp);
 
@@ -535,10 +650,17 @@ static Packet* _tcp_createPacket(TCP* tcp, enum ProtocolTCPFlags flags, gconstpo
 	 * (except FIN, so we close after sending everything) */
 	guint sequence = ((payloadLength > 0) || (flags & PTCP_FIN)) ? tcp->send.next : 0;
 
+	/* set the timestamps in the TCP packet header */
+	SimulationTime timestampValue = worker_getCurrentTime();
+	SimulationTime timestampEcho = 0;
+	if(flags & PTCP_ACK) {
+		timestampEcho = tcp->receive.lastTimestamp;
+	}
+
 	/* create the TCP packet */
 	Packet* packet = packet_new(payload, payloadLength);
 	packet_setTCP(packet, flags, sourceIP, sourcePort, destinationIP, destinationPort,
-			sequence, tcp->receive.next, tcp->receive.window);
+			sequence, tcp->receive.next, tcp->receive.window, timestampValue, timestampEcho);
 
 	/* update sequence number */
 	if(sequence > 0) {
@@ -625,11 +747,10 @@ static void _tcp_flush(TCP* tcp) {
 		}
 
 		guint length = packet_getPayloadLength(packet);
+		PacketTCPHeader header;
+		packet_getTCPHeader(packet, &header);
 
 		if(length > 0) {
-			PacketTCPHeader header;
-			packet_getTCPHeader(packet, &header);
-
 			/* we cant send it if our window is too small */
 			gboolean fitsInWindow = (header.sequence < (tcp->send.unacked + tcp->send.window)) ? TRUE : FALSE;
 
@@ -651,8 +772,15 @@ static void _tcp_flush(TCP* tcp) {
 		/* packet is sendable, we removed it from out buffer */
 		tcp->throttledOutputLength -= length;
 
+		/* set the timestamps in the TCP packet header */
+		SimulationTime timestampValue = worker_getCurrentTime();
+		SimulationTime timestampEcho = 0;
+		if(header.flags & PTCP_ACK) {
+			timestampEcho = tcp->receive.lastTimestamp;
+		}
+
 		/* update TCP header to our current advertised window and acknowledgement */
-		packet_updateTCP(packet, tcp->receive.next, tcp->receive.window);
+		packet_updateTCP(packet, tcp->receive.next, tcp->receive.window, timestampValue, timestampEcho);
 
 		/* keep track of the last things we sent them */
 		tcp->send.lastAcknowledgement = tcp->receive.next;
@@ -1210,6 +1338,21 @@ gboolean tcp_processPacket(TCP* tcp, Packet* packet) {
 	 * dont update if nPacketsAcked is 0, as that denotes a congestion event */
 	if(nPacketsAcked > 0) {
 		_tcp_updateCongestionWindow(tcp, nPacketsAcked);
+
+		if(tcp->doAutotuning) {
+			Host* host = worker_getCurrentHost();
+			if(host_autotuneSendBuffer(host)) {
+				_tcp_autotuneSendBuffer(tcp);
+			}
+		}
+	}
+
+	/* update the last time stamp value (RFC 1323) */
+	if(tcp->send.lastAcknowledgement == header.sequence + 1) {
+		tcp->receive.lastTimestamp = header.timestampValue;
+	}
+	if(header.timestampEcho) {
+		_tcp_updateRTTEstimate(tcp, header.timestampEcho);
 	}
 
 	/* now flush as many packets as we can to socket */
@@ -1431,6 +1574,14 @@ gssize tcp_receiveUserData(TCP* tcp, gpointer buffer, gsize nBytes, in_addr_t* i
 		}
 	}
 
+	/* update the receive buffer size based on new packets received */
+	if(tcp->doAutotuning) {
+		Host* host = worker_getCurrentHost();
+		if(host_autotuneReceiveBuffer(host)) {
+			_tcp_autotuneReceiveBuffer(tcp, totalCopied);
+		}
+	}
+
 	/* if we have advertised a 0 window because the application wasn't reading,
 	 * we now have to update the window and let the sender know */
 	_tcp_updateReceiveWindow(tcp);
@@ -1574,6 +1725,7 @@ TCP* tcp_new(gint handle, guint receiveBufferSize, guint sendBufferSize) {
 	tcp->receive.start = initialSequenceNumber;
 
 	tcp->isSlowStart = TRUE;
+	tcp->doAutotuning = TRUE;
 
 	tcp->throttledOutput = g_queue_new();
 	tcp->unorderedInput = g_queue_new();

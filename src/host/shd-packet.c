@@ -165,7 +165,8 @@ void packet_setUDP(Packet* packet, enum ProtocolUDPFlags flags,
 void packet_setTCP(Packet* packet, enum ProtocolTCPFlags flags,
 		in_addr_t sourceIP, in_port_t sourcePort,
 		in_addr_t destinationIP, in_port_t destinationPort,
-		guint sequence, guint acknowledgement, guint window) {
+		guint sequence, guint acknowledgement, guint window,
+		SimulationTime timestampValue, SimulationTime timestampEcho) {
 	_packet_lock(packet);
 	utility_assert(!(packet->header) && packet->protocol == PNONE);
 	utility_assert(sourceIP && sourcePort && destinationIP && destinationPort);
@@ -180,13 +181,16 @@ void packet_setTCP(Packet* packet, enum ProtocolTCPFlags flags,
 	header->sequence = sequence;
 	header->acknowledgement = acknowledgement;
 	header->window = window;
+	header->timestampValue = timestampValue;
+	header->timestampEcho = timestampEcho;
 
 	packet->header = header;
 	packet->protocol = PTCP;
 	_packet_unlock(packet);
 }
 
-void packet_updateTCP(Packet* packet, guint acknowledgement, guint window) {
+void packet_updateTCP(Packet* packet, guint acknowledgement, guint window,
+		SimulationTime timestampValue, SimulationTime timestampEcho) {
 	_packet_lock(packet);
 	utility_assert(packet->header && (packet->protocol == PTCP));
 
@@ -194,6 +198,8 @@ void packet_updateTCP(Packet* packet, guint acknowledgement, guint window) {
 
 	header->acknowledgement = acknowledgement;
 	header->window = window;
+	header->timestampValue = timestampValue;
+	header->timestampEcho = timestampEcho;
 
 	_packet_unlock(packet);
 }

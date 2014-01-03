@@ -133,6 +133,19 @@ typedef guint ShadowID;
 #define CONFIG_TCPAUTOTUNE TRUE
 
 /**
+ * Minimum, default, and maximum values for TCP send and receive buffers
+ * Normally specified in:
+ *      /proc/sys/net/ipv4/tcp_rmem
+ *      /proc/sys/net/ipv4/tcp_wmem
+ */
+#define CONFIG_TCP_WMEM_MIN 4096
+#define CONFIG_TCP_WMEM_DEFAULT 16384
+#define CONFIG_TCP_WMEM_MAX 4194304
+#define CONFIG_TCP_RMEM_MIN 4096
+#define CONFIG_TCP_RMEM_DEFAULT 87380
+#define CONFIG_TCP_RMEM_MAX 6291456
+
+/**
  * Minimum size of the send buffer per socket when TCP-autotuning is used.
  * This value was computed from "man tcp"
  *
