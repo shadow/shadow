@@ -117,20 +117,21 @@ void packet_unref(Packet* packet) {
 }
 
 gint packet_compareTCPSequence(Packet* packet1, Packet* packet2, gpointer user_data) {
-	if(packet1 == packet2){
-		MAGIC_ASSERT(packet1);
-		MAGIC_ASSERT(packet2);
-		return 0;
-	}
+	/* packet1 for one worker might be packet2 for another, dont lock both
+	 * at once or a deadlock will occur */
+	guint sequence1 = 0, sequence2 = 0;
+
 	_packet_lock(packet1);
-	_packet_lock(packet2);
-
-	utility_assert(packet1->protocol == PTCP && packet2->protocol == PTCP);
-	gint result = ((PacketTCPHeader*)(packet1->header))->sequence < ((PacketTCPHeader*)(packet2->header))->sequence ? -1 : 1;
-
-	_packet_unlock(packet2);
+	utility_assert(packet1->protocol == PTCP);
+	sequence1 = ((PacketTCPHeader*)(packet1->header))->sequence;
 	_packet_unlock(packet1);
-	return result;
+
+	_packet_lock(packet2);
+	utility_assert(packet2->protocol == PTCP);
+	sequence2 = ((PacketTCPHeader*)(packet2->header))->sequence;
+	_packet_unlock(packet2);
+
+	return sequence1 < sequence2 ? -1 : sequence1 > sequence2 ? 1 : 0;
 }
 
 void packet_setLocal(Packet* packet, enum ProtocolLocalFlags flags,
