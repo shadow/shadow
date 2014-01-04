@@ -21,8 +21,12 @@ struct _Parser {
 	CreateNodesAction* currentNodeAction;
 	gint nChildApplications;
 
-	GQueue* actions;
+	GMarkupParser topologySubParser;
+	GString* topologyPath;
+	GString* topologyText;
 	gboolean foundTopology;
+
+	GQueue* actions;
 	MAGIC_DECLARE;
 };
 
@@ -106,9 +110,13 @@ static GError* _parser_handleCDFAttributes(Parser* parser, const gchar** attribu
 }
 
 static GError* _parser_handleTopologyAttributes(Parser* parser, const gchar** attributeNames, const gchar** attributeValues) {
-	GString* path = NULL;
+	if(parser->foundTopology) {
+		return NULL;
+	}
 
 	GError* error = NULL;
+	GString* path = NULL;
+	GString* graph = NULL;
 
 	const gchar **nameCursor = attributeNames;
 	const gchar **valueCursor = attributeValues;
@@ -132,10 +140,6 @@ static GError* _parser_handleTopologyAttributes(Parser* parser, const gchar** at
 	}
 
 	/* validate the values */
-	if(!error && !path) {
-		error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
-				"element 'topology' requires attributes 'path'");
-	}
 	if(path) {
 		/* make sure the path is absolute */
 		if(!g_path_is_absolute(path->str)) {
@@ -154,16 +158,10 @@ static GError* _parser_handleTopologyAttributes(Parser* parser, const gchar** at
 		}
 	}
 
-	if(!error) {
-		/* no error, create the action */
-		Action* a = (Action*) loadtopology_new(path);
-		action_setPriority(a, -1);
-		_parser_addAction(parser, a);
-		parser->foundTopology = TRUE;
-	}
-
-	/* clean up */
-	if(path) {
+	if(!error && path) {
+		parser->topologyPath = path;
+	} else if(path) {
+		/* clean up */
 		g_string_free(path, TRUE);
 	}
 
@@ -511,6 +509,37 @@ static void _parser_handleNodeChildEndElement(GMarkupParseContext* context,
 	}
 }
 
+static void _parser_handleTopologyText(GMarkupParseContext *context,
+		const gchar* text, gsize textLength, gpointer userData, GError** error) {
+	Parser* parser = (Parser*) userData;
+
+	if(parser->foundTopology) {
+		return;
+	}
+
+	/* note: the text is not null-terminated! */
+
+	if(!parser->topologyText && textLength > 0) {
+		GString* textBuffer = g_string_new_len(text, (gssize)textLength);
+		gchar* strippedText = g_strstrip(textBuffer->str);
+
+		/* look for text wrapped in <![CDATA[TEXT]]>
+		 * note - we could also use a processing instruction by wrapping it in <?embedded TEXT ?>,
+		 * but processing instructions can not be nested
+		 * http://www.w3.org/TR/REC-xml/#sec-pi */
+		if(strippedText && g_str_has_prefix(strippedText, "<![CDATA[") &&
+				g_str_has_suffix(strippedText, "]]>")) {
+			gchar* cdata = &strippedText[9];
+			gssize cdataLength = (gssize) (textLength - 12);
+
+			parser->topologyText = g_string_new_len(cdata, cdataLength);
+			parser->foundTopology = TRUE;
+		}
+
+		g_string_free(textBuffer, TRUE);
+	}
+}
+
 static void _parser_handleRootStartElement(GMarkupParseContext* context,
 		const gchar* elementName, const gchar** attributeNames,
 		const gchar** attributeValues, gpointer userData, GError** error) {
@@ -533,6 +562,7 @@ static void _parser_handleRootStartElement(GMarkupParseContext* context,
 		*error = _parser_handleKillAttributes(parser, attributeNames, attributeValues);
 	} else if (!g_ascii_strcasecmp(elementName, "topology")) {
 		*error = _parser_handleTopologyAttributes(parser, attributeNames, attributeValues);
+		g_markup_parse_context_push(context, &(parser->topologySubParser), parser);
 	} else if (!g_ascii_strcasecmp(elementName, "shadow")) {
 		/* do nothing, this is a root element */
 	} else {
@@ -564,6 +594,26 @@ static void _parser_handleRootEndElement(GMarkupParseContext* context,
 			/* this is in the actions queue and will get free'd later */
 			parser->currentNodeAction = NULL;
 		}
+	} else if(!g_ascii_strcasecmp(elementName, "topology")) {
+		if (!parser->topologyPath && !parser->topologyText) {
+			*error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_EMPTY,
+					"element 'topology' requires either attribute 'path' which specifies a path "
+					"to a graphml file, or internal graphml text");
+		} else {
+			parser->foundTopology = TRUE;
+
+			Action* a = (Action*) loadtopology_new(parser->topologyPath, parser->topologyText);
+			action_setPriority(a, -1);
+			_parser_addAction(parser, a);
+
+			if(parser->topologyPath) {
+				g_string_free(parser->topologyPath, TRUE);
+			}
+			if(parser->topologyText) {
+				g_string_free(parser->topologyText, TRUE);
+			}
+		}
+		g_markup_parse_context_pop(context);
 	} else if(!g_ascii_strcasecmp(elementName, "shadow")) {
 		if (!parser->foundTopology) {
 			*error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_EMPTY,
@@ -572,8 +622,7 @@ static void _parser_handleRootEndElement(GMarkupParseContext* context,
 	} else {
 		if(!(!g_ascii_strcasecmp(elementName, "plugin") ||
 				!g_ascii_strcasecmp(elementName, "cdf") ||
-				!g_ascii_strcasecmp(elementName, "kill") ||
-				!g_ascii_strcasecmp(elementName, "topology"))) {
+				!g_ascii_strcasecmp(elementName, "kill"))) {
 			*error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ELEMENT,
 							"unknown 'root' child ending element '%s'", elementName);
 		}
@@ -599,6 +648,8 @@ Parser* parser_new() {
 	/* sub parsers, without their own context */
 	parser->nodeSubParser.start_element = &_parser_handleNodeChildStartElement;
 	parser->nodeSubParser.end_element = &_parser_handleNodeChildEndElement;
+	parser->topologySubParser.text = &_parser_handleTopologyText;
+	parser->topologySubParser.passthrough = &_parser_handleTopologyText;
 
 	return parser;
 }

@@ -7,9 +7,6 @@
 #include "shadow.h"
 
 struct _Topology {
-	/* the file path of the graphml file */
-	GString* graphPath;
-
 	/******/
 	/* START global igraph lock - igraph is not thread-safe!*/
 	GMutex graphLock;
@@ -73,19 +70,19 @@ struct _AttachHelper {
 typedef void (*EdgeNotifyFunc)(Topology* top, igraph_integer_t edgeIndex, gpointer userData);
 typedef void (*VertexNotifyFunc)(Topology* top, igraph_integer_t vertexIndex, gpointer userData);
 
-static gboolean _topology_loadGraph(Topology* top) {
+static gboolean _topology_loadGraph(Topology* top, const gchar* graphPath) {
 	MAGIC_ASSERT(top);
 	/* initialize the built-in C attribute handler */
 	igraph_attribute_table_t* oldHandler = igraph_i_set_attribute_table(&igraph_cattribute_table);
 
 	/* get the file */
-	FILE* graphFile = fopen(top->graphPath->str, "r");
+	FILE* graphFile = fopen(graphPath, "r");
 	if(!graphFile) {
-		critical("fopen returned NULL, problem opening graph file path '%s'", top->graphPath->str);
+		critical("fopen returned NULL, problem opening graph file path '%s'", graphPath);
 		return FALSE;
 	}
 
-	message("reading graphml topology graph at '%s'...", top->graphPath->str);
+	message("reading graphml topology graph at '%s'...", graphPath);
 
 	gint result = igraph_read_graph_graphml(&top->graph, graphFile, 0);
 	fclose(graphFile);
@@ -94,7 +91,7 @@ static gboolean _topology_loadGraph(Topology* top) {
 		return FALSE;
 	}
 
-	message("successfully read graphml topology graph at '%s'", top->graphPath->str);
+	message("successfully read graphml topology graph at '%s'", graphPath);
 
 	return TRUE;
 }
@@ -123,7 +120,7 @@ static gboolean _topology_checkGraphProperties(Topology* top) {
 
 	/* it must be connected */
 	if(!top->isConnected || top->clusterCount > 1) {
-		critical("topology must be but is not strongly connected", top->graphPath->str);
+		critical("topology must be but is not strongly connected");
 		return FALSE;
 	}
 
@@ -347,9 +344,9 @@ static gboolean _topology_checkGraph(Topology* top) {
 		return FALSE;
 	}
 
-	message("successfully parsed graphml at '%s' and validated topology: "
+	message("successfully parsed graphml and validated topology: "
 			"graph is %s with %u %s, %u %s, and %u %s",
-			top->graphPath->str, top->isConnected ? "strongly connected" : "disconnected",
+			top->isConnected ? "strongly connected" : "disconnected",
 			(guint)top->clusterCount, top->clusterCount == 1 ? "cluster" : "clusters",
 			(guint)top->vertexCount, top->vertexCount == 1 ? "vertex" : "vertices",
 			(guint)top->edgeCount, top->edgeCount == 1 ? "edge" : "edges");
@@ -1135,10 +1132,6 @@ void topology_free(Topology* top) {
 	/* clear the graph */
 	g_mutex_lock(&top->graphLock);
 
-	if(top->graphPath) {
-		g_string_free(top->graphPath, TRUE);
-	}
-
 	if(top->edgeWeights) {
 		igraph_vector_destroy(top->edgeWeights);
 		g_free(top->edgeWeights);
@@ -1154,12 +1147,11 @@ void topology_free(Topology* top) {
 	g_free(top);
 }
 
-Topology* topology_new(gchar* graphPath) {
+Topology* topology_new(const gchar* graphPath) {
 	utility_assert(graphPath);
 	Topology* top = g_new0(Topology, 1);
 	MAGIC_INIT(top);
 
-	top->graphPath = g_string_new(graphPath);
 	top->virtualIP = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, NULL);
 
 	g_mutex_init(&(top->graphLock));
@@ -1168,7 +1160,7 @@ Topology* topology_new(gchar* graphPath) {
 
 	/* first read in the graph and make sure its formed correctly,
 	 * then setup our edge weights for shortest path */
-	if(!_topology_loadGraph(top) || !_topology_checkGraph(top) ||
+	if(!_topology_loadGraph(top, graphPath) || !_topology_checkGraph(top) ||
 			!_topology_extractEdgeWeights(top)) {
 		topology_free(top);
 		return NULL;
