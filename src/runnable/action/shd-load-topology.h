@@ -11,7 +11,7 @@
 
 typedef struct _LoadTopologyAction LoadTopologyAction;
 
-LoadTopologyAction* loadtopology_new(GString* path);
+LoadTopologyAction* loadtopology_new(GString* path, GString* text);
 void loadtopology_run(LoadTopologyAction* action);
 void loadtopology_free(LoadTopologyAction* action);
 

@@ -11,7 +11,7 @@
 
 typedef struct _Topology Topology;
 
-Topology* topology_new(gchar* graphPath);
+Topology* topology_new(const gchar* graphPath);
 void topology_free(Topology* top);
 
 void topology_attach(Topology* top, Address* address, Random* randomSourcePool,
