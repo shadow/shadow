@@ -5,6 +5,7 @@
  */
 
 #include <unistd.h>
+#include <glib/gstdio.h>
 
 #include "shadow.h"
 #include "shd-action-internal.h"
