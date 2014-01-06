@@ -25,6 +25,7 @@ void reno_congestionAvoidance(Reno* reno, gint inFlight, gint packetsAcked, gint
         congestion->window += ((guint32)packetsAcked);
         if(congestion->threshold != 0 && congestion->window >= congestion->threshold) {
             reno->isSlowStart = FALSE;
+            reno->window = congestion->window;
         }
     } else {
         /* slow start is over
