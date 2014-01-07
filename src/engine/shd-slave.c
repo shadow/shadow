@@ -279,7 +279,17 @@ void slave_setKilled(Slave* slave, gboolean isKilled) {
 
 SimulationTime slave_getMinTimeJump(Slave* slave) {
 	MAGIC_ASSERT(slave);
-	return master_getMinTimeJump(slave->master);
+	_slave_lock(slave);
+	SimulationTime jump = master_getMinTimeJump(slave->master);
+	_slave_unlock(slave);
+	return jump;
+}
+
+void slave_updateMinTimeJump(Slave* slave, gdouble minPathLatency) {
+	MAGIC_ASSERT(slave);
+	_slave_lock(slave);
+	master_updateMinTimeJump(slave->master, minPathLatency);
+	_slave_unlock(slave);
 }
 
 guint slave_getWorkerCount(Slave* slave) {
@@ -404,11 +414,12 @@ void slave_runParallel(Slave* slave) {
 		 * since looping through all the nodes to find the minimum event is
 		 * potentially expensive, we use a heuristic of only trying to jump ahead
 		 * if the last interval had only a few events in it. */
+		SimulationTime minNextEventTime = SIMTIME_INVALID;
 		if(slave->numEventsCurrentInterval < 10) {
 			/* we had no events in that interval, lets try to fast forward */
-			SimulationTime minNextEventTime = SIMTIME_INVALID;
-
 			item = g_list_first(nodeList);
+
+			/* fast forward to the next event, the new window start will be the next event time */
 			while(item) {
 				Host* node = item->data;
 				EventQueue* eventq = host_getEvents(node);
@@ -420,29 +431,22 @@ void slave_runParallel(Slave* slave) {
 				item = g_list_next(item);
 			}
 
-			/* fast forward to the next event */
-			master_setExecuteWindowStart(slave->master, minNextEventTime);
+			if(minNextEventTime == SIMTIME_INVALID) {
+				minNextEventTime = master_getExecuteWindowEnd(slave->master);
+			}
 		} else {
-			/* we still have events, lets just step one interval */
-			master_setExecuteWindowStart(slave->master, master_getExecuteWindowEnd(slave->master));
+			/* we still have events, lets just step one interval,
+			 * consider the next event as the previous window end */
+			minNextEventTime = master_getExecuteWindowEnd(slave->master);
 		}
 
-		/* make sure we dont run over the end */
-		SimulationTime newEnd = master_getExecuteWindowStart(slave->master) + master_getMinTimeJump(slave->master);
-		master_setExecuteWindowEnd(slave->master, newEnd);
-		if(master_getExecuteWindowEnd(slave->master) > master_getEndTime(slave->master)) {
-			master_setExecuteWindowEnd(slave->master, master_getEndTime(slave->master));
-		}
+		/* notify master that we finished this round, and what our next event is */
+		master_slaveFinishedCurrentWindow(slave->master, minNextEventTime);
 
 		/* reset for next round */
 		countdownlatch_reset(slave->processingLatch);
 		slave->numEventsCurrentInterval = 0;
 		slave->numNodesWithEventsCurrentInterval = 0;
-
-		/* if we are done, make sure the workers know about it */
-		if(master_getExecuteWindowStart(slave->master) >= master_getEndTime(slave->master)) {
-			master_setKilled(slave->master, TRUE);
-		}
 
 		/* release the workers for the next round, or to exit */
 		countdownlatch_countDownAwait(slave->barrierLatch);

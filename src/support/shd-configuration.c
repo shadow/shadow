@@ -24,7 +24,7 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 
 	/* set defaults */
 	c->nWorkerThreads = 0;
-	c->minRunAhead = 10;
+	c->minRunAhead = 0;
 	c->printSoftwareVersion = 0;
 	c->initialTCPWindow = 10;
 	c->initialSocketReceiveBufferSize = 0;
@@ -47,7 +47,7 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	  { "heartbeat-frequency", 'h', 0, G_OPTION_ARG_INT, &(c->heartbeatInterval), "Log node statistics every N seconds [60]", "N" },
 	  { "seed", 's', 0, G_OPTION_ARG_INT, &(c->randomSeed), "Initialize randomness for each thread using seed N [1]", "N" },
 	  { "workers", 'w', 0, G_OPTION_ARG_INT, &(c->nWorkerThreads), "Use N worker threads [0]", "N" },
-	  { "runahead", 0, 0, G_OPTION_ARG_INT, &(c->minRunAhead), "Minimum allowed TIME workers may run ahead when sending events between nodes, in milliseconds [10]", "TIME" },
+	  { "runahead", 'r', 0, G_OPTION_ARG_INT, &(c->minRunAhead), "If set, overrides the automatically calculated minimum TIME workers may run ahead when sending events between nodes, in milliseconds [0]", "TIME" },
 	  { "version", 'v', 0, G_OPTION_ARG_NONE, &(c->printSoftwareVersion), "Print software version and exit", NULL },
 	  { NULL },
 	};

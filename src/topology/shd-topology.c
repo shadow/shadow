@@ -37,6 +37,7 @@ struct _Topology {
 	 * store a cache table for every connected address
 	 * fromAddress->toAddress->Path* */
 	GHashTable* pathCache;
+	gdouble minimumPathLatency;
 	GRWLock pathCacheLock;
 
 	/* graph properties of the imported graph */
@@ -426,7 +427,10 @@ static void _topology_storePathInCache(Topology* top, igraph_integer_t srcVertex
 		igraph_integer_t dstVertexIndex, igraph_real_t totalLatency, igraph_real_t totalReliability) {
 	MAGIC_ASSERT(top);
 
-	Path* path = path_new((gdouble) totalLatency, (gdouble) totalReliability);
+	gdouble latencyMS = (gdouble) totalLatency;
+	gboolean wasUpdated = FALSE;
+
+	Path* path = path_new(latencyMS, (gdouble) totalReliability);
 
 	g_rw_lock_writer_lock(&(top->pathCacheLock));
 
@@ -443,9 +447,21 @@ static void _topology_storePathInCache(Topology* top, igraph_integer_t srcVertex
 		g_hash_table_replace(top->pathCache, GINT_TO_POINTER(srcVertexIndex), sourceCache);
 	}
 
+	/* now cache this sources path to the destination */
 	g_hash_table_replace(sourceCache, GINT_TO_POINTER(dstVertexIndex), path);
 
+	/* track the minimum network latency in the entire graph */
+	if(top->minimumPathLatency == 0 || latencyMS < top->minimumPathLatency) {
+		top->minimumPathLatency = latencyMS;
+		wasUpdated = TRUE;
+	}
+
 	g_rw_lock_writer_unlock(&(top->pathCacheLock));
+
+	/* make sure the worker knows the new min latency */
+	if(wasUpdated) {
+		worker_updateMinTimeJump(top->minimumPathLatency);
+	}
 }
 
 static igraph_integer_t _topology_getConnectedVertexIndex(Topology* top, Address* address) {

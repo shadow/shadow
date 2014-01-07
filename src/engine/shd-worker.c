@@ -303,25 +303,27 @@ void worker_scheduleEvent(Event* event, SimulationTime nano_delay, GQuark receiv
 	/* engine is not killed, assert accurate worker clock */
 	utility_assert(worker->clock_now != SIMTIME_INVALID);
 
-	/* non-local events must be properly delayed */
-	SimulationTime jump = slave_getMinTimeJump(worker->slave);
-	if(!host_isEqual(receiver, sender)) {
-		SimulationTime minTime = worker->clock_now + jump;
-
-		/* warn and adjust time if needed */
-		SimulationTime eventTime = shadowevent_getTime(event);
-		if(eventTime < minTime) {
-			debug("Inter-node event time %"G_GUINT64_FORMAT" changed to %"G_GUINT64_FORMAT" due to minimum delay %"G_GUINT64_FORMAT,
-					eventTime, minTime, jump);
-			shadowevent_setTime(event, minTime);
-		}
-	}
-
 	/* figure out where to push the event */
 	if(worker->serialEventQueue) {
 		/* single-threaded, push to global serial queue */
 		eventqueue_push(worker->serialEventQueue, event);
 	} else {
+		/* non-local events must be properly delayed so the event wont show up at another worker
+		 * before the next scheduling interval. this is only a problem if the sender and
+		 * receivers have been assigned to different workers. */
+		if(!host_isEqual(receiver, sender)) {
+			SimulationTime jump = slave_getMinTimeJump(worker->slave);
+			SimulationTime minTime = worker->clock_now + jump;
+
+			/* warn and adjust time if needed */
+			SimulationTime eventTime = shadowevent_getTime(event);
+			if(eventTime < minTime) {
+				info("Inter-node event time %"G_GUINT64_FORMAT" changed to %"G_GUINT64_FORMAT" due to minimum delay %"G_GUINT64_FORMAT,
+						eventTime, minTime, jump);
+				shadowevent_setTime(event, minTime);
+			}
+		}
+
 		/* multi-threaded, push event to receiver node */
 		EventQueue* eventq = host_getEvents(receiver);
 		eventqueue_push(eventq, event);
@@ -495,6 +497,11 @@ void worker_setTopology(Topology* topology) {
 GTimer* worker_getRunTimer() {
 	Worker* worker = _worker_getPrivate();
 	return slave_getRunTimer(worker->slave);
+}
+
+void worker_updateMinTimeJump(gdouble minPathLatency) {
+	Worker* worker = _worker_getPrivate();
+	slave_updateMinTimeJump(worker->slave, minPathLatency);
 }
 
 void worker_setCurrentTime(SimulationTime time) {

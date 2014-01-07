@@ -16,15 +16,15 @@ void master_free(Master* engine);
 void master_run(Master* master);
 
 SimulationTime master_getMinTimeJump(Master* master);
+void master_updateMinTimeJump(Master* master, gdouble minPathLatency);
 SimulationTime master_getExecutionBarrier(Master* master);
 GTimer* master_getRunTimer(Master* master);
 void master_setKillTime(Master* master, SimulationTime endTime);
 gboolean master_isKilled(Master* master);
 void master_setKilled(Master* master, gboolean isKilled);
 SimulationTime master_getExecuteWindowEnd(Master* master);
-void master_setExecuteWindowEnd(Master* master, SimulationTime end);
 SimulationTime master_getExecuteWindowStart(Master* master);
-void master_setExecuteWindowStart(Master* master, SimulationTime start);
 SimulationTime master_getEndTime(Master* master);
+void master_slaveFinishedCurrentWindow(Master* master, SimulationTime minNextEventTime);
 
 #endif /* SHD_ENGINE_H_ */

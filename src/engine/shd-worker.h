@@ -56,6 +56,7 @@ void worker_storePluginPath(GQuark pluginID, const gchar* pluginPath);
 const gchar* worker_getPluginPath(GQuark pluginID);
 void worker_setTopology(Topology* topology);
 GTimer* worker_getRunTimer();
+void worker_updateMinTimeJump(gdouble minPathLatency);
 void worker_setCurrentTime(SimulationTime time);
 gboolean worker_isFiltered(GLogLevelFlags level);
 

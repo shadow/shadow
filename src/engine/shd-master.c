@@ -20,7 +20,10 @@ struct _Master {
 	Random* random;
 
 	/* minimum allowed time jump when sending events between nodes */
-	SimulationTime minTimeJump;
+	SimulationTime minJumpTimeConfig;
+	SimulationTime minJumpTime;
+	SimulationTime nextMinJumpTime;
+
 	/* start of current window of execution */
 	SimulationTime executeWindowStart;
 	/* end of current window of execution (start + min_time_jump) */
@@ -61,7 +64,7 @@ Master* master_new(Configuration* config) {
 	master->random = random_new(config->randomSeed);
 	master->runTimer = g_timer_new();
 
-	master->minTimeJump = config->minRunAhead * SIMTIME_ONE_MILLISECOND;
+	master->minJumpTimeConfig = ((SimulationTime)config->minRunAhead) * SIMTIME_ONE_MILLISECOND;
 
     /* these are only avail in glib >= 2.30
      * setup signal handlers for gracefully handling shutdowns */
@@ -89,6 +92,35 @@ void master_free(Master* master) {
 
 	MAGIC_CLEAR(master);
 	g_free(master);
+}
+
+SimulationTime master_getMinTimeJump(Master* master) {
+	MAGIC_ASSERT(master);
+	if(master->minJumpTimeConfig > 0) {
+		/* it was overridden by a command line option, use that */
+		return master->minJumpTimeConfig;
+	} else if(master->minJumpTime > 0) {
+		/* use minimum network latency of our topology */
+		return master->minJumpTime;
+	} else {
+		/* if unknown, default to 10 milliseconds */
+		return 10 * SIMTIME_ONE_MILLISECOND;
+	}
+}
+
+void master_updateMinTimeJump(Master* master, gdouble minPathLatency) {
+	MAGIC_ASSERT(master);
+	if(master->nextMinJumpTime == 0 || minPathLatency < master->nextMinJumpTime) {
+		gint oldJumpMS = (gint)(master->nextMinJumpTime/SIMTIME_ONE_MILLISECOND);
+		gint newJumpMS = (gint) minPathLatency;
+		master->nextMinJumpTime = ((SimulationTime)minPathLatency) * SIMTIME_ONE_MILLISECOND;
+		info("updated topology minimum time jump from %i to %i milliseconds", oldJumpMS, newJumpMS);
+	}
+}
+
+SimulationTime master_getExecutionBarrier(Master* master) {
+	MAGIC_ASSERT(master);
+	return master->executeWindowEnd;
 }
 
 void master_run(Master* master) {
@@ -159,7 +191,9 @@ void master_run(Master* master) {
 	if(nWorkers > 0) {
 		/* multi threaded, manage the other workers */
 		master->executeWindowStart = 0;
-		master->executeWindowEnd = master->minTimeJump;
+		SimulationTime jump = master_getMinTimeJump(master);
+		master->executeWindowEnd = jump;
+		master->nextMinJumpTime = jump;
 		slave_runParallel(slave);
 	} else {
 		/* single threaded, we are the only worker */
@@ -171,16 +205,6 @@ void master_run(Master* master) {
 	debug("engine finished, cleaning up...");
 
 	slave_free(slave);
-}
-
-SimulationTime master_getMinTimeJump(Master* master) {
-	MAGIC_ASSERT(master);
-	return master->minTimeJump;
-}
-
-SimulationTime master_getExecutionBarrier(Master* master) {
-	MAGIC_ASSERT(master);
-	return master->executeWindowEnd;
 }
 
 GTimer* master_getRunTimer(Master* master) {
@@ -208,23 +232,43 @@ SimulationTime master_getExecuteWindowEnd(Master* master) {
 	return master->executeWindowEnd;
 }
 
-void master_setExecuteWindowEnd(Master* master, SimulationTime end) {
-	MAGIC_ASSERT(master);
-	master->executeWindowEnd = end;
-}
-
 SimulationTime master_getExecuteWindowStart(Master* master) {
 	MAGIC_ASSERT(master);
 	return master->executeWindowStart;
 }
 
-void master_setExecuteWindowStart(Master* master, SimulationTime start) {
-	MAGIC_ASSERT(master);
-	master->executeWindowStart = start;
-}
-
 SimulationTime master_getEndTime(Master* master) {
 	MAGIC_ASSERT(master);
 	return master->endTime;
+}
+
+void master_slaveFinishedCurrentWindow(Master* master, SimulationTime minNextEventTime) {
+	MAGIC_ASSERT(master);
+	utility_assert(minNextEventTime != SIMTIME_INVALID);
+
+	/* TODO: once we get multiple slaves, we have to block them here
+	 * until they have all notified us that they are finished */
+
+	/* update our detected min jump time */
+	master->minJumpTime = master->nextMinJumpTime;
+
+	/* update the next interval window based on next event times */
+	SimulationTime newStart = minNextEventTime;
+	SimulationTime newEnd = minNextEventTime + master_getMinTimeJump(master);
+
+	/* update the new window end as one interval past the new window start,
+	 * making sure we dont run over the experiment end time */
+	if(newEnd > master->endTime) {
+		newEnd = master->endTime;
+	}
+
+	/* if we are done, make sure the workers know about it */
+	if(newStart >= newEnd) {
+		master_setKilled(master, TRUE);
+	}
+
+	/* finally, set the new values */
+	master->executeWindowStart = newStart;
+	master->executeWindowEnd = newEnd;
 }
 
