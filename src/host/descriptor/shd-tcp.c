@@ -774,8 +774,10 @@ static void _tcp_stopRetransmitTimer(TCP* tcp) {
 static void _tcp_setRetransmitTimeout(TCP* tcp, gint newTimeout) {
 	MAGIC_ASSERT(tcp);
 	tcp->retransmit.timeout = newTimeout;
-	tcp->retransmit.timeout = MIN(tcp->retransmit.timeout, 60000);
-	tcp->retransmit.timeout = MAX(tcp->retransmit.timeout, 1000);
+
+	/* ensure correct range, TCP_RTO_MIN=200ms and TCP_RTO_MAX=120000ms from net/tcp.h */
+	tcp->retransmit.timeout = MIN(tcp->retransmit.timeout, 120000);
+	tcp->retransmit.timeout = MAX(tcp->retransmit.timeout, 200);
 }
 
 static void _tcp_updateRTTEstimate(TCP* tcp, SimulationTime timestamp) {
@@ -1966,7 +1968,8 @@ TCP* tcp_new(gint handle, guint receiveBufferSize, guint sendBufferSize) {
 	tcp->retransmit.scheduledTimerExpirations =
 			priorityqueue_new((GCompareDataFunc)utility_simulationTimeCompare, NULL, g_free);
 
-	_tcp_setRetransmitTimeout(tcp, 1);
+	/* TCP_TIMEOUT_INIT=1000ms from net/tcp.h */
+	_tcp_setRetransmitTimeout(tcp, 1000);
 
 	return tcp;
 }
