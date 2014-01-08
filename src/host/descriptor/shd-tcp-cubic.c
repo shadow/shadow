@@ -35,8 +35,9 @@ struct _Cubic {
         gint32 lowThreshold;
         gint32 nSampling;
         gint32 samplingCount;
-        SimulationTime roundStart;
-        SimulationTime lastTime;
+        gint32 roundStart;
+        gint32 lastReset;
+        gint32 lastTime;
         gint32 lastRTT;
         gint32 currRTT;
         gint32 delayMin;
@@ -48,11 +49,13 @@ struct _Cubic {
 
 static void _cubic_hystartReset(Cubic* cubic, gint ack) {
     MAGIC_ASSERT(cubic);
+    TCPCongestion* congestion = (TCPCongestion*)cubic;
 
-    SimulationTime now = worker_getCurrentTime();
+    SimulationTime now = worker_getCurrentTime() / SIMTIME_ONE_MILLISECOND;
     cubic->hystart.roundStart = now;
+    cubic->hystart.lastReset = now;
     cubic->hystart.lastTime = now;
-    cubic->hystart.lastRTT = cubic->hystart.currRTT;
+    cubic->hystart.lastRTT = congestion->rttSmoothed;
     cubic->hystart.currRTT = 0;
     cubic->hystart.samplingCount = cubic->hystart.nSampling;
     cubic->hystart.endSequence = ack;
@@ -75,7 +78,7 @@ static void _cubic_hystartUpdate(Cubic* cubic) {
         cubic->hystart.delayMin = delayMin;
     }
 
-    debug("[HYSTART] window=%f thresh=%d found=%d rtt=%d delayMin=%d",
+    debug("[HYSTART] window=%d thresh=%d found=%d rtt=%d delayMin=%d",
             congestion->window, congestion->threshold, cubic->hystart.found, rtt, delayMin);
 
     if(!cubic->hystart.found && congestion->window <= congestion->threshold) {
@@ -132,7 +135,7 @@ static void _cubic_update(Cubic* cubic) {
     }
 
 
-    if(now - cubic->lastTime < HZ / 32 * 100) {
+    if(now - cubic->lastTime < 32 * 100 / HZ) {
         return;
     }
 
@@ -199,10 +202,10 @@ void cubic_congestionAvoidance(Cubic* cubic, gint inFlight, gint packetsAcked, g
 	MAGIC_ASSERT(cubic);
     TCPCongestion* congestion = (TCPCongestion*)cubic;
 
-    debug("[CUBIC] window=%d thresh=%d", congestion->window, congestion->threshold);
-
-    if(ack >= cubic->hystart.endSequence) {
-        _cubic_hystartReset(cubic, ack);
+    gint32 now = worker_getCurrentTime() / SIMTIME_ONE_MILLISECOND;
+    //if(ack >= cubic->hystart.endSequence) {
+    if(now - cubic->hystart.lastReset >= congestion->rttSmoothed) {
+        _cubic_hystartReset(cubic, inFlight);
     }
     _cubic_hystartUpdate(cubic);
 
@@ -271,5 +274,10 @@ Cubic* cubic_new(gint window, gint threshold) {
     cubic->rttScale = cubic->scalingFactor * 10;
     cubic->cubeFactor = (gint64)(1ull << (10+3*HZ)) / (gint64)cubic->rttScale;
 
+    cubic->hystart.found = FALSE;
+    cubic->hystart.lowThreshold = 16;
+    cubic->hystart.nSampling = 8;
+    cubic->hystart.samplingCount = 8;
+    
     return cubic;
 }

@@ -837,7 +837,7 @@ static void _tcp_flush(TCP* tcp) {
 			gboolean fitsInWindow = (header.sequence < (tcp->send.unacked + tcp->send.window)) ? TRUE : FALSE;
 
 			/* we cant send it if we dont have enough space */
-			gboolean fitsInBuffer = (length <= socket_getOutputBufferSpace(&(tcp->super))) ? TRUE : FALSE;
+            gboolean fitsInBuffer = (length <= socket_getOutputBufferSpace(&(tcp->super))) ? TRUE : FALSE;
 
 			if(!fitsInBuffer || !fitsInWindow) {
 				/* we cant send the packet yet */
@@ -862,7 +862,7 @@ static void _tcp_flush(TCP* tcp) {
 			}
 		}
 
-		/* update TCP header to our current advertised window and acknowledgement */
+		/* update TCP header to our current advertised window and acknowledgment */
 		gboolean isFinAck = ((header.flags & PTCP_FIN) && (header.flags & PTCP_ACK));
 		guint ack = isFinAck ? tcp->receive.next + 1 : tcp->receive.next;
 		packet_updateTCP(packet, ack, tcp->receive.window, now, tcp->receive.lastTimestamp);
@@ -934,6 +934,8 @@ static void _tcp_flush(TCP* tcp) {
 
 static void _tcp_doFastRetransmit(TCP* tcp) {
 	MAGIC_ASSERT(tcp);
+
+    tcpCongestion_packetLoss(tcp->congestion);
 
 	/* https://tools.ietf.org/html/rfc2581#section-3.2 */
 	Packet* packet = _tcp_removeRetransmit(tcp);
@@ -1097,7 +1099,7 @@ void tcp_getInfo(TCP* tcp, struct tcp_info *tcpinfo) {
 	tcpinfo->tcpi_rcv_rtt = tcp->info.rtt;
 	tcpinfo->tcpi_rcv_space = tcp->receive.lastWindow;
 
-//	tcpinfo->tcpi_total_retrans;
+	tcpinfo->tcpi_total_retrans = tcp->info.retransmitCount;
 }
 
 
@@ -1182,6 +1184,10 @@ gint tcp_acceptServerPeer(TCP* tcp, in_addr_t* ip, in_port_t* port, gint* accept
 	if(port) {
 		*port = child->tcp->super.peerPort;
 	}
+
+	Tracker* tracker = host_getTracker(worker_getCurrentHost());
+	Descriptor* descriptor = (Descriptor *)socket;
+	tracker_updateSocketPeer(tracker, *acceptedHandle, *ip, ntohs(*port));
 
 	return 0;
 }
@@ -1503,12 +1509,12 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
 
 			/* if they keep asking for something we already sent, then some data has been lost */
 			if(tcp->receive.dupAcknowledgment < tcp->send.next &&
-					tcp->receive.dupAcknowledgmentCount >= 3) {
+					tcp->receive.dupAcknowledgmentCount == 3) {
 				 if(tcp->congestion->fastRetransmit) {
 					 _tcp_doFastRetransmit(tcp);
 				 }
 			}
-		} else {
+		} else if(isValidAck) {
 			/* valid ack update - reset duplicate counters */
 			tcp->receive.dupSequence = 0;
 			tcp->receive.dupSequenceCount = 0;
@@ -1566,9 +1572,13 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
 	/* update congestion window only if we received new acks.
 	 * dont update if nPacketsAcked is 0, as that denotes a congestion event */
 	if(nPacketsAcked > 0) {
-		// TODO Second argument is supposed to be packets in flight, but this is
-		// only needed for new Reno congestion control.
-		tcpCongestion_avoidance(tcp->congestion, 0, nPacketsAcked, tcp->send.unacked);
+        // TODO Second argument is supposed to be packets in flight, but this is
+        // only needed for new Reno congestion control.
+        tcpCongestion_avoidance(tcp->congestion, tcp->send.next, nPacketsAcked, tcp->send.unacked);
+
+        debug("[CUBIC] cwnd=%d ssthresh=%d rtt=%d sndbufsize=%d sndbuflen=%d rcvbufsize=%d rcbuflen=%d retrans=%d", tcp->congestion->window, tcp->congestion->threshold, tcp->congestion->rttSmoothed,
+                tcp->super.outputBufferLength, tcp->super.outputBufferSize, tcp->super.inputBufferLength, tcp->super.inputBufferSize, tcp->info.retransmitCount);
+               
 
 		if(tcp->autotune.isEnabled) {
 			Host* host = worker_getCurrentHost();
