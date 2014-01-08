@@ -96,25 +96,29 @@ void master_free(Master* master) {
 
 SimulationTime master_getMinTimeJump(Master* master) {
 	MAGIC_ASSERT(master);
-	if(master->minJumpTimeConfig > 0) {
-		/* it was overridden by a command line option, use that */
-		return master->minJumpTimeConfig;
-	} else if(master->minJumpTime > 0) {
-		/* use minimum network latency of our topology */
-		return master->minJumpTime;
-	} else {
-		/* if unknown, default to 10 milliseconds */
-		return 10 * SIMTIME_ONE_MILLISECOND;
+
+	/* use minimum network latency of our topology
+	 * if not yet computed, default to 10 milliseconds */
+	SimulationTime minJumpTime = master->minJumpTime > 0 ? master->minJumpTime : 10 * SIMTIME_ONE_MILLISECOND;
+
+	/* if the command line option was given, use that as lower bound */
+	if(master->minJumpTimeConfig > 0 && minJumpTime < master->minJumpTimeConfig) {
+		minJumpTime = master->minJumpTimeConfig;
 	}
+
+	return minJumpTime;
 }
 
 void master_updateMinTimeJump(Master* master, gdouble minPathLatency) {
 	MAGIC_ASSERT(master);
 	if(master->nextMinJumpTime == 0 || minPathLatency < master->nextMinJumpTime) {
-		gint oldJumpMS = (gint)(master->nextMinJumpTime/SIMTIME_ONE_MILLISECOND);
-		gint newJumpMS = (gint) minPathLatency;
+		utility_assert(minPathLatency > 0.0f);
+		SimulationTime oldJumpMS = master->nextMinJumpTime;
 		master->nextMinJumpTime = ((SimulationTime)minPathLatency) * SIMTIME_ONE_MILLISECOND;
-		info("updated topology minimum time jump from %i to %i milliseconds", oldJumpMS, newJumpMS);
+		info("updated topology minimum time jump from %"G_GUINT64_FORMAT" to %"G_GUINT64_FORMAT" nanoseconds; "
+			 "the minimum config override is %s (%"G_GUINT64_FORMAT" nanoseconds)",
+				oldJumpMS, master->nextMinJumpTime, master->minJumpTimeConfig > 0 ? "set" : "not set",
+				master->minJumpTimeConfig);
 	}
 }
 
