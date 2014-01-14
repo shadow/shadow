@@ -72,6 +72,14 @@ static void _packet_free(Packet* packet) {
 	MAGIC_ASSERT(packet);
 
 	g_mutex_clear(&(packet->lock));
+
+    if(packet->protocol == PTCP) {
+        PacketTCPHeader* header = (PacketTCPHeader*)packet->header;
+        if(header->selectiveACKs) {
+            g_list_free(header->selectiveACKs);
+        }
+    }
+
 	if(packet->header) {
 		g_free(packet->header);
 	}
@@ -193,14 +201,19 @@ void packet_setTCP(Packet* packet, enum ProtocolTCPFlags flags,
 	_packet_unlock(packet);
 }
 
-void packet_updateTCP(Packet* packet, guint acknowledgement, guint window,
-		SimulationTime timestampValue, SimulationTime timestampEcho) {
+void packet_updateTCP(Packet* packet, guint acknowledgement, GList* selectiveACKs,
+        guint window, SimulationTime timestampValue, SimulationTime timestampEcho) {
 	_packet_lock(packet);
 	utility_assert(packet->header && (packet->protocol == PTCP));
 
 	PacketTCPHeader* header = (PacketTCPHeader*) packet->header;
 
 	header->acknowledgment = acknowledgement;
+    header->selectiveACKs = NULL;
+    if(selectiveACKs && g_list_length(selectiveACKs) > 0) {
+        header->flags |= PTCP_SACK;
+        header->selectiveACKs = g_list_copy(selectiveACKs);
+    }
 	header->window = window;
 	header->timestampValue = timestampValue;
 	header->timestampEcho = timestampEcho;
@@ -483,9 +496,36 @@ static gchar* _packet_getString(Packet* packet) {
 
 			g_string_append_printf(packetString, "%s:%u -> ",
 					sourceIPString, ntohs(header->sourcePort));
-			g_string_append_printf(packetString, "%s:%u seq=%u ack=%u window=%u bytes=%u",
+            // TODO print out sack as well (do it in ranges, will be shorter)
+			g_string_append_printf(packetString, "%s:%u seq=%u ack=%u sack=", 
 					destinationIPString, ntohs(header->destinationPort),
-					header->sequence, header->acknowledgment, header->window, packet->payloadLength);
+					header->sequence, header->acknowledgment);
+
+            gint first = -1;
+            gint last = -1;
+            for(GList *iter = header->selectiveACKs; iter; iter = g_list_next(iter)) {
+                gint seq = GPOINTER_TO_INT(iter->data);
+                if(first == -1) {
+                    first = seq;
+                } else if(last == -1 || seq == last + 1) {
+                    last = seq;
+                } else {
+                    g_string_append_printf(packetString, "%d-%d ", first, last);
+                    first = seq;
+                    last = -1;
+                }
+            }
+
+            if(first != -1) {
+                g_string_append_printf(packetString, "%d", first);
+                if(last != -1) {
+                    g_string_append_printf(packetString,"-%d", last);
+                }
+            } else {
+                g_string_append_printf(packetString, "NA");
+            }
+
+            g_string_append_printf(packetString, " window=%u bytes=%u", header->window, packet->payloadLength);
 
 			if(!(header->flags & PTCP_NONE)) {
 				g_string_append_printf(packetString, " header=");
@@ -513,7 +553,7 @@ static gchar* _packet_getString(Packet* packet) {
 			break;
 		}
 	}
-
+    
 	g_string_append_printf(packetString, " status=");
 
 	guint statusLength = g_queue_get_length(packet->orderedStatus);
@@ -549,6 +589,6 @@ void packet_addDeliveryStatus(Packet* packet, PacketDeliveryStatusFlags status) 
 	_packet_unlock(packet);
 
 	if(!skipDebug) {
-		debug("[%s] %s", _packet_deliveryStatusToAscii(status), packetStr);
+		message("[%s] %s", _packet_deliveryStatusToAscii(status), packetStr);
 	}
 }

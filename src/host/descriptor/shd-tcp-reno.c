@@ -18,6 +18,7 @@ void reno_congestionAvoidance(Reno* reno, gint inFlight, gint packetsAcked, gint
     TCPCongestion* congestion = (TCPCongestion*)reno;
 
     if(reno->isSlowStart) {
+        congestion->state = TCP_CCS_SLOWSTART;
         /* threshold not set => no timeout yet => slow start phase 1
          *  i.e. multiplicative increase until retransmit event (which sets threshold)
          * threshold set => timeout => slow start phase 2
@@ -28,6 +29,7 @@ void reno_congestionAvoidance(Reno* reno, gint inFlight, gint packetsAcked, gint
             reno->window = congestion->window;
         }
     } else {
+        congestion->state = TCP_CCS_AVOIDANCE;
         /* slow start is over
          * simple additive increase part of Reno */
         gdouble n = ((gdouble) packetsAcked);
@@ -86,7 +88,7 @@ Reno* reno_new(gint window, gint threshold) {
 
     reno->window = window;
     reno->isSlowStart = TRUE;
-    reno->super.fastRetransmit = FALSE;
+    reno->super.fastRetransmit = TCP_FR_RENO;
 
     return reno;
 }

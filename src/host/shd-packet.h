@@ -43,6 +43,7 @@ struct _PacketTCPHeader {
 	in_port_t destinationPort;
 	guint sequence;
 	guint acknowledgment;
+    GList* selectiveACKs;
 	guint window;
 	SimulationTime timestampValue;
 	SimulationTime timestampEcho;
@@ -62,8 +63,8 @@ void packet_setTCP(Packet* packet, enum ProtocolTCPFlags flags,
 		in_addr_t sourceIP, in_port_t sourcePort,
 		in_addr_t destinationIP, in_port_t destinationPort, guint sequence);
 
-void packet_updateTCP(Packet* packet, guint acknowledgement, guint window,
-		SimulationTime timestampValue, SimulationTime timestampEcho);
+void packet_updateTCP(Packet* packet, guint acknowledgement, GList* selectiveACKs,
+        guint window, SimulationTime timestampValue, SimulationTime timestampEcho);
 
 guint packet_getPayloadLength(Packet* packet);
 gdouble packet_getPriority(Packet* packet);
