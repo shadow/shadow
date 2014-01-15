@@ -1753,18 +1753,22 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
                 /* find the first gap in SACKs and remove everything before it */
                 GList *iter = g_list_first(tcp->send.selectiveACKs);
                 GList *next = g_list_next(iter);
-                while(next) {
-                    gint currSequence = GPOINTER_TO_INT(iter->data);
-                    gint nextSequence = GPOINTER_TO_INT(next->data);
-                    /* check for a gap in sequences */
-                    if(currSequence + 1 < nextSequence) {
-                        break;
-                    }
-                    iter = next;
-                    next = g_list_next(iter);
-                }
 
-                _tcp_removeSacks(&tcp->send.selectiveACKs, GPOINTER_TO_INT(iter->data));
+                gint firstSequence = GPOINTER_TO_INT(iter->data);
+                if(firstSequence <= header.sequence + 1) {
+                    while(next) {
+                        gint currSequence = GPOINTER_TO_INT(iter->data);
+                        gint nextSequence = GPOINTER_TO_INT(next->data);
+                        /* check for a gap in sequences */
+                        if(currSequence + 1 < nextSequence && currSequence > header.sequence) {
+                            break;
+                        }
+                        iter = next;
+                        next = g_list_next(iter);
+                    }
+
+                    _tcp_removeSacks(&tcp->send.selectiveACKs, GPOINTER_TO_INT(iter->data));
+                }
             }
 
 			DescriptorStatus s = descriptor_getStatus((Descriptor*) tcp);
