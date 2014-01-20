@@ -145,9 +145,6 @@ static void _scoreboard_splitBlock(ScoreBoard* scoreboard, ScoreBoardBlock* bloc
         newBlock = _scoreboard_addBlock(scoreboard, sequence + 1, end, status);
         newBlock->nextSend = block->nextSend;
     }
-
-    //_scoreboard_addBlock(scoreboard, sequence, block->end, block->status);
-    //block->end = sequence - 1;
 }
 
 gint _scoreboard_compareSack(gconstpointer s1, gconstpointer s2) {
@@ -181,23 +178,10 @@ gboolean scoreboard_update(ScoreBoard* scoreboard, GList* selectiveACKs, gint un
         selectiveACKs = g_list_sort(selectiveACKs, (GCompareFunc)_scoreboard_compareSack);
         scoreboard->fack = MAX(scoreboard->fack, GPOINTER_TO_INT(g_list_last(selectiveACKs)->data));
 
-        GString* msg = g_string_new("sack:");
-        for(GList* iter = selectiveACKs; iter; iter = g_list_next(iter)) {
-            gint sequence = GPOINTER_TO_INT(iter->data);
-            g_string_append_printf(msg," %d", sequence);
-        }
-        g_string_free(msg, TRUE);
-
-        msg = g_string_new("blocks:");
-        for(GList* iter = scoreboard->blocks; iter; iter = g_list_next(iter)) {
-            ScoreBoardBlock* block = (ScoreBoardBlock*)iter->data;
-            g_string_append_printf(msg," [%d,%d] (%d)", block->start, block->end, block->status);
-        }
-        g_string_free(msg, TRUE);
-
         gint firstSeq = unacked;
         gint lastSeq = GPOINTER_TO_INT(g_list_last(selectiveACKs)->data);
 
+        /* go through all sequence that might be sacked and update scoreboard */
         for(gint seq = firstSeq; seq <= lastSeq; seq++) {
             gboolean sacked = (gboolean)g_list_find(selectiveACKs, GINT_TO_POINTER(seq));
 
@@ -262,7 +246,6 @@ gboolean scoreboard_update(ScoreBoard* scoreboard, GList* selectiveACKs, gint un
     }
 
     /* go through all the blocks and check if any of the INFLIGHT ones need to be retransmitted */
-    GString* msg = g_string_new("[SCOREBOARD]");
     for(blockIter = scoreboard->blocks; blockIter; blockIter = g_list_next(blockIter)) {
         ScoreBoardBlock* block = (ScoreBoardBlock*)blockIter->data;
 
@@ -300,12 +283,7 @@ gboolean scoreboard_update(ScoreBoard* scoreboard, GList* selectiveACKs, gint un
                 break;
         }
 
-        g_string_append_printf(msg," [%d,%d] (%d)", block->start, block->end, block->status);
-
     }
-
-    g_string_append_printf(msg, "  fack=%d fackout=%d", scoreboard->fack, scoreboard->fackOut);
-    g_string_free(msg, TRUE);
 
     return dataLoss;
 }

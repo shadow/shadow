@@ -840,11 +840,6 @@ static void _tcp_retransmitPacket(TCP* tcp, gint sequence) {
     packet_addDeliveryStatus(packet, PDS_SND_TCP_RETRANSMITTED);
     _tcp_bufferPacketOut(tcp, packet);
 
-    //if(_tcp_getBufferSpaceOut(tcp) > 0) {
-    //    descriptor_adjustStatus((Descriptor*)tcp, DS_WRITABLE, TRUE);
-    //}
-
-    //_tcp_flush(tcp);
     tcp->info.retransmitCount++;
 }
 
@@ -1143,7 +1138,6 @@ void tcp_retransmitTimerExpired(TCP* tcp) {
 		return;
 	}
 
-	//if(tcp->retransmit.queueLength == 0) {
 	if(g_hash_table_size(tcp->retransmit.queue) == 0) {
 		_tcp_stopRetransmitTimer(tcp);
 		return;
@@ -1703,7 +1697,7 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
             }
         }
 
-        if(header.acknowledgment < tcp->send.next && !tcp->receive.dupAcknowledgmentCount == 3) {
+        if(header.acknowledgment < tcp->send.next && tcp->receive.dupAcknowledgmentCount == 3) {
             scoreboard_markLoss(tcp->retransmit.scoreboard, header.acknowledgment, tcp->send.highestSequence);
         }
 
@@ -1725,46 +1719,6 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
         if(isDubiousAck) {
             _tcp_fastRetransmitAlert(tcp, dataLoss);
         }
-
-        /* update congestion window based on current state */
-        /*switch(tcp->congestion->state) {
-            case TCP_CCS_SLOWSTART:
-            case TCP_CCS_AVOIDANCE:
-                tcpCongestion_avoidance(tcp->congestion, tcp->send.next, nPacketsAcked, tcp->send.unacked);
-
-                congestionlog(tcp->congestion, "[CONG-AVOID] cwnd=%d ssthresh=%d rtt=%d sndbufsize=%d sndbuflen=%d rcvbufsize=%d rcbuflen=%d retrans=%d ploss=%f", 
-                        tcp->congestion->window, tcp->congestion->threshold, tcp->congestion->rttSmoothed, 
-                        tcp->super.outputBufferLength, tcp->super.outputBufferSize, tcp->super.inputBufferLength, tcp->super.inputBufferSize, 
-                        tcp->info.retransmitCount, (float)tcp->info.retransmitCount / tcp->send.packetsSent);
-                break;
-
-            case TCP_CCS_FASTRETRANSMIT:
-                if(tcp->congestion->fastRetransmit == TCP_FR_RENO) {
-                   _tcp_renoFastRetransmit(tcp);
-                } else if(tcp->congestion->fastRetransmit == TCP_FR_SACK) {
-                    _tcp_sackFastRetransmit(tcp);
-                }
-
-                congestionlog(tcp->congestion, "[CONG-RETRANSMIT] cwnd=%d ssthresh=%d rtt=%d sndbufsize=%d sndbuflen=%d rcvbufsize=%d rcbuflen=%d retrans=%d ploss=%f", 
-                        tcp->congestion->window, tcp->congestion->threshold, tcp->congestion->rttSmoothed, 
-                        tcp->super.outputBufferLength, tcp->super.outputBufferSize, tcp->super.inputBufferLength, tcp->super.inputBufferSize, 
-                        tcp->info.retransmitCount, (float)tcp->info.retransmitCount / tcp->send.packetsSent);
-
-                break;
-
-            case TCP_CCS_FASTRECOVERY:
-                if(tcp->congestion->fastRetransmit == TCP_FR_RENO) {
-                    _tcp_renoFastRecovery(tcp, header.acknowledgment);
-                } else if(tcp->congestion->fastRetransmit == TCP_FR_SACK) {
-                    _tcp_sackFastRecovery(tcp, header.acknowledgment);
-                }
-
-                congestionlog(tcp->congestion, "[CONG-RECOVERY] cwnd=%d ssthresh=%d rtt=%d sndbufsize=%d sndbuflen=%d rcvbufsize=%d rcbuflen=%d retrans=%d ploss=%f", 
-                        tcp->congestion->window, tcp->congestion->threshold, tcp->congestion->rttSmoothed, 
-                        tcp->super.outputBufferLength, tcp->super.outputBufferSize, tcp->super.inputBufferLength, tcp->super.inputBufferSize, 
-                        tcp->info.retransmitCount, (float)tcp->info.retransmitCount / tcp->send.packetsSent);
-                break;
-        }*/
 
 		tcp->info.lastAckReceived = now;
 	}
@@ -2240,7 +2194,6 @@ TCP* tcp_new(gint handle, guint receiveBufferSize, guint sendBufferSize) {
 	tcp->receive.lastAcknowledgment = initialSequenceNumber;
 
 	tcp->autotune.isEnabled = TRUE;
-    tcp->congestion->logLevel = G_LOG_LEVEL_INFO;
 
 	tcp->throttledOutput =
 			priorityqueue_new((GCompareDataFunc)packet_compareTCPSequence, NULL, (GDestroyNotify)packet_unref);
@@ -2248,7 +2201,6 @@ TCP* tcp_new(gint handle, guint receiveBufferSize, guint sendBufferSize) {
 			priorityqueue_new((GCompareDataFunc)packet_compareTCPSequence, NULL, (GDestroyNotify)packet_unref);
 	tcp->retransmit.queue =
             g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, (GDestroyNotify)packet_unref);
-			//priorityqueue_new((GCompareDataFunc)packet_compareTCPSequence, NULL, (GDestroyNotify)packet_unref);
     tcp->retransmit.scoreboard = scoreboard_new();
 	tcp->retransmit.scheduledTimerExpirations =
 			priorityqueue_new((GCompareDataFunc)utility_simulationTimeCompare, NULL, g_free);
