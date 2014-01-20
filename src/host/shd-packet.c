@@ -44,6 +44,8 @@ struct _Packet {
 	PacketDeliveryStatusFlags allStatus;
 	GQueue* orderedStatus;
 
+    SimulationTime dropNotificationDelay;
+
 	MAGIC_DECLARE;
 };
 
@@ -459,10 +461,10 @@ static const gchar* _packet_deliveryStatusToAscii(PacketDeliveryStatusFlags stat
 	}
 }
 
-static gchar* _packet_getString(Packet* packet) {
+gchar* _packet_getString(Packet* packet) {
 	GString* packetString = g_string_new("");
 
-//	_packet_lock(packet);
+	_packet_lock(packet);
 
 	switch (packet->protocol) {
 		case PLOCAL: {
@@ -496,34 +498,42 @@ static gchar* _packet_getString(Packet* packet) {
 
 			g_string_append_printf(packetString, "%s:%u -> ",
 					sourceIPString, ntohs(header->sourcePort));
-            // TODO print out sack as well (do it in ranges, will be shorter)
 			g_string_append_printf(packetString, "%s:%u seq=%u ack=%u sack=", 
 					destinationIPString, ntohs(header->destinationPort),
 					header->sequence, header->acknowledgment);
 
-            gint first = -1;
-            gint last = -1;
-            for(GList *iter = header->selectiveACKs; iter; iter = g_list_next(iter)) {
-                gint seq = GPOINTER_TO_INT(iter->data);
-                if(first == -1) {
-                    first = seq;
-                } else if(last == -1 || seq == last + 1) {
-                    last = seq;
-                } else {
-                    g_string_append_printf(packetString, "%d-%d ", first, last);
-                    first = seq;
-                    last = -1;
-                }
-            }
-
-            if(first != -1) {
-                g_string_append_printf(packetString, "%d", first);
-                if(last != -1) {
-                    g_string_append_printf(packetString,"-%d", last);
+            if(header->selectiveACKs) {
+                for(GList* iter = header->selectiveACKs; iter; iter = g_list_next(iter)) {
+                    gint seq = GPOINTER_TO_INT(iter->data);
+                    g_string_append_printf(packetString," %d", seq);
                 }
             } else {
-                g_string_append_printf(packetString, "NA");
+                    g_string_append_printf(packetString,"NA");
             }
+
+            //gint first = -1;
+            //gint last = -1;
+            //for(GList *iter = header->selectiveACKs; iter; iter = g_list_next(iter)) {
+            //    gint seq = GPOINTER_TO_INT(iter->data);
+            //    if(first == -1) {
+            //        first = seq;
+            //    } else if(last == -1 || seq == last + 1) {
+            //        last = seq;
+            //    } else {
+            //        g_string_append_printf(packetString, "%d-%d ", first, last);
+            //        first = seq;
+            //        last = -1;
+            //    }
+            //}
+
+            //if(first != -1) {
+            //    g_string_append_printf(packetString, "%d", first);
+            //    if(last != -1) {
+            //        g_string_append_printf(packetString,"-%d", last);
+            //    }
+            //} else {
+            //    g_string_append_printf(packetString, "NA");
+            //}
 
             g_string_append_printf(packetString, " window=%u bytes=%u", header->window, packet->payloadLength);
 
@@ -570,7 +580,7 @@ static gchar* _packet_getString(Packet* packet) {
 		g_queue_push_tail(packet->orderedStatus, statusPtr);
 	}
 
-//	_packet_unlock(packet);
+	_packet_unlock(packet);
 	return g_string_free(packetString, FALSE);
 }
 
@@ -591,4 +601,18 @@ void packet_addDeliveryStatus(Packet* packet, PacketDeliveryStatusFlags status) 
 	if(!skipDebug) {
 		message("[%s] %s", _packet_deliveryStatusToAscii(status), packetStr);
 	}
+}
+
+void packet_setDropNotificationDelay(Packet* packet, SimulationTime delay) {
+    MAGIC_ASSERT(packet);
+    _packet_lock(packet);
+    packet->dropNotificationDelay = delay;
+    _packet_unlock(packet);
+}
+SimulationTime packet_getDropNotificationDelay(Packet* packet) {
+    MAGIC_ASSERT(packet);
+    _packet_lock(packet);
+    SimulationTime delay = packet->dropNotificationDelay;
+    _packet_unlock(packet);
+    return delay;
 }

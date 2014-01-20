@@ -118,6 +118,12 @@ void socket_pushInPacket(Socket* socket, Packet* packet) {
 	return socket->vtable->process(socket, packet);
 }
 
+void socket_dropPacket(Socket* socket, Packet* packet) {
+    MAGIC_ASSERT(socket);
+    MAGIC_ASSERT(socket->vtable);
+    return socket->vtable->dropPacket(socket, packet);
+}
+
 /* functions implemented by socket */
 
 Packet* socket_pullOutPacket(Socket* socket) {

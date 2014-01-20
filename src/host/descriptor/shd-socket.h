@@ -13,6 +13,7 @@ typedef struct _SocketFunctionTable SocketFunctionTable;
 typedef gboolean (*SocketIsFamilySupportedFunc)(Socket* socket, sa_family_t family);
 typedef gint (*SocketConnectToPeerFunc)(Socket* socket, in_addr_t ip, in_port_t port, sa_family_t family);
 typedef void (*SocketProcessFunc)(Socket* socket, Packet* packet);
+typedef void (*SocketDropFunc)(Socket* socket, Packet* packet);
 
 struct _SocketFunctionTable {
 	DescriptorFunc close;
@@ -22,6 +23,7 @@ struct _SocketFunctionTable {
 	SocketProcessFunc process;
 	SocketIsFamilySupportedFunc isFamilySupported;
 	SocketConnectToPeerFunc connectToPeer;
+    SocketDropFunc dropPacket;
 	MAGIC_DECLARE;
 };
 
@@ -66,6 +68,7 @@ void socket_init(Socket* socket, SocketFunctionTable* vtable, DescriptorType typ
 		guint receiveBufferSize, guint sendBufferSize);
 
 void socket_pushInPacket(Socket* socket, Packet* packet);
+void socket_dropPacket(Socket* socket, Packet* packet);
 Packet* socket_pullOutPacket(Socket* socket);
 Packet* socket_peekNextPacket(const Socket* socket);
 

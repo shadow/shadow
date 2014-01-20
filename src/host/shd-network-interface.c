@@ -429,6 +429,21 @@ void networkinterface_packetArrived(NetworkInterface* interface, Packet* packet)
 	}
 }
 
+void networkinterface_packetDropped(NetworkInterface* interface, Packet* packet) {
+    MAGIC_ASSERT(interface);
+
+    /* hand it off to the correct socket layer */
+    gint key = packet_getSourceAssociationKey(packet);
+    Socket* socket = g_hash_table_lookup(interface->boundSockets, GINT_TO_POINTER(key));
+
+    /* if the socket closed, just drop the packet */
+    gint socketHandle = -1;
+    if(socket) {
+        socketHandle = *descriptor_getHandleReference((Descriptor*)socket);
+        socket_dropPacket(socket, packet);
+    }
+}
+
 void networkinterface_received(NetworkInterface* interface) {
 	MAGIC_ASSERT(interface);
 

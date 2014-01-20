@@ -354,7 +354,7 @@ void worker_schedulePacket(Packet* packet) {
 	Random* random = host_getRandom(worker_getCurrentHost());
 	gdouble chance = random_nextDouble(random);
 
-	if(chance <= reliability){
+	if(chance <= reliability || packet_getPayloadLength(packet) == 0) {
 		/* the sender's packet will make it through, find latency */
 		gdouble latency = topology_getLatency(worker_getTopology(), srcAddress, dstAddress);
 		SimulationTime delay = (SimulationTime) ceil(latency * SIMTIME_ONE_MILLISECOND);
@@ -364,7 +364,12 @@ void worker_schedulePacket(Packet* packet) {
 
 		packet_addDeliveryStatus(packet, PDS_INET_SENT);
 	} else {
-		packet_addDeliveryStatus(packet, PDS_INET_DROPPED);
+        SimulationTime dropDelay = packet_getDropNotificationDelay(packet);
+        if(dropDelay) {
+            PacketDroppedEvent* event = packetdropped_new(packet);
+            worker_scheduleEvent((Event*)event, dropDelay, (GQuark)address_getID(srcAddress));
+        }
+        packet_addDeliveryStatus(packet, PDS_INET_DROPPED);
 	}
 }
 

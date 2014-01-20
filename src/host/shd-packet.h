@@ -81,4 +81,8 @@ gint packet_getSourceAssociationKey(Packet* packet);
 
 void packet_addDeliveryStatus(Packet* packet, PacketDeliveryStatusFlags status);
 
+void packet_setDropNotificationDelay(Packet* packet, SimulationTime delay);
+SimulationTime packet_getDropNotificationDelay(Packet* packet);
+
+
 #endif /* SHD_PACKET_H_ */
