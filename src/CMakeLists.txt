@@ -48,6 +48,7 @@ set(shadow_srcs
     host/descriptor/shd-tcp-congestion.c
     host/descriptor/shd-tcp-cubic.c
     host/descriptor/shd-tcp-reno.c
+    host/descriptor/shd-tcp-scoreboard.c
     host/descriptor/shd-transport.c
     host/descriptor/shd-udp.c
     host/shd-application.c
@@ -73,6 +74,7 @@ set(shadow_srcs
     runnable/event/shd-interface-sent.c
     runnable/event/shd-notify-plugin.c
     runnable/event/shd-packet-arrived.c
+    runnable/event/shd-packet-dropped.c
     runnable/event/shd-start-application.c
     runnable/event/shd-stop-application.c
     runnable/event/shd-tcp-close-timer-expired.c

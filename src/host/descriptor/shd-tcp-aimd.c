@@ -80,7 +80,7 @@ AIMD* aimd_new(gint window, gint threshold) {
     tcpCongestion_init(&(aimd->super), &aimdFunctions, TCP_CC_AIMD, window, threshold);
 
     aimd->isSlowStart = TRUE;
-    aimd->super.fastRetransmit = FALSE;
+    aimd->super.fastRetransmit = TCP_FR_NONE;
 
     return aimd;
 }

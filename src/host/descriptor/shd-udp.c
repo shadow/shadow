@@ -44,6 +44,12 @@ void udp_processPacket(UDP* udp, Packet* packet) {
 	}
 }
 
+void udp_dropPacket(UDP* udp, Packet* packet) {
+    MAGIC_ASSERT(udp);
+
+    /* do nothing */
+}
+
 /*
  * this function builds a UDP packet and sends to the virtual node given by the
  * ip and port parameters. this function assumes that the socket is already
@@ -178,6 +184,7 @@ SocketFunctionTable udp_functions = {
 	(SocketProcessFunc) udp_processPacket,
 	(SocketIsFamilySupportedFunc) udp_isFamilySupported,
 	(SocketConnectToPeerFunc) udp_connectToPeer,
+    (SocketDropFunc) udp_dropPacket,
 	MAGIC_VALUE
 };
 

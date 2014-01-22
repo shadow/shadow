@@ -21,10 +21,11 @@ enum ProtocolUDPFlags {
 
 enum ProtocolTCPFlags {
 	PTCP_NONE = 0,
-	PTCP_RST = 1 << 1,
-	PTCP_SYN = 1 << 2,
-	PTCP_ACK = 1 << 3,
-	PTCP_FIN = 1 << 4,
+	PTCP_RST =  1 << 1,
+	PTCP_SYN =  1 << 2,
+	PTCP_ACK =  1 << 3,
+    PTCP_SACK = 1 << 4,
+	PTCP_FIN =  1 << 5,
 };
 
 /**

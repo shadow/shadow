@@ -9,9 +9,22 @@
 
 #include "shadow.h"
 
+#define congestionlog(congestion,...) 		logging_log(G_LOG_DOMAIN, congestion->logLevel, __FUNCTION__, __VA_ARGS__)
+
 typedef enum _TCPCongestionType TCPCongestionType;
 enum _TCPCongestionType {
     TCP_CC_UNKNOWN, TCP_CC_AIMD, TCP_CC_RENO, TCP_CC_CUBIC,
+};
+
+typedef enum _TCPFastRetransmitType TCPFastRetransmitType;
+enum _TCPFastRetransmitType {
+    TCP_FR_NONE, TCP_FR_RENO, TCP_FR_SACK,
+};
+
+typedef enum _TCPCongestionState TCPCongestionState;
+enum _TCPCongestionState {
+    TCP_CCS_SLOWSTART, TCP_CCS_AVOIDANCE, 
+    TCP_CCS_FASTRETRANSMIT, TCP_CCS_FASTRECOVERY,
 };
 
 typedef struct _TCPCongestion TCPCongestion;
@@ -31,6 +44,7 @@ struct _TCPCongestionFunctionTable {
 struct _TCPCongestion {
     TCPCongestionFunctionTable* funcTable;
     TCPCongestionType type;
+    TCPCongestionState state;
     /* congestion window (cwnd) */
     gint window;
     /* slow start threshold for window (ssthresh) */
@@ -39,8 +53,10 @@ struct _TCPCongestion {
     gint rttSmoothed;
     /* variance of the calculated RTT (rttvar) */
     gint rttVariance;
-    /* whether or not we're performing fast retransmit */
-    gboolean fastRetransmit;
+    /* type of fast retransmit being performed (default=None) */
+    TCPFastRetransmitType fastRetransmit;
+    /* logging level for congestion control messages */
+    GLogLevelFlags logLevel; 
     MAGIC_DECLARE;
 };
 

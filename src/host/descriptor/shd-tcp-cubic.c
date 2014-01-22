@@ -210,8 +210,10 @@ void cubic_congestionAvoidance(Cubic* cubic, gint inFlight, gint packetsAcked, g
     _cubic_hystartUpdate(cubic);
 
     if(congestion->window <= congestion->threshold) {
+        congestion->state = TCP_CCS_SLOWSTART;
         congestion->window++;
     } else {
+        congestion->state = TCP_CCS_AVOIDANCE;
         _cubic_update(cubic);
 
         if(cubic->windowCount > cubic->count) {
@@ -235,6 +237,9 @@ void cubic_packetLoss(Cubic* cubic) {
     }
     //congestion->window *= (1 - congestion->beta);
     congestion->window = (congestion->window * cubic->beta) / BETA_SCALE;
+    if(congestion->window == 0) {
+        congestion->window = 1;
+    }
     congestion->threshold = congestion->window;
 
 }
@@ -263,7 +268,7 @@ Cubic* cubic_new(gint window, gint threshold) {
     tcpCongestion_init(&(cubic->super), &CubicFunctions, TCP_CC_CUBIC, window, threshold);
 
     TCPCongestion* congestion = (TCPCongestion*)cubic;
-    congestion->fastRetransmit = TRUE;
+    congestion->fastRetransmit = TCP_FR_SACK;
 
     /* cubic parameters */
     cubic->beta = 819;
