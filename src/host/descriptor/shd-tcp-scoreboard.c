@@ -123,27 +123,28 @@ static void _scoreboard_mergeBlock(ScoreBoard* scoreboard, ScoreBoardBlock* bloc
 }
 
 
-static void _scoreboard_splitBlock(ScoreBoard* scoreboard, ScoreBoardBlock* block, gint sequence) {
+static void _scoreboard_splitBlock(ScoreBoard* scoreboard, ScoreBoardBlock* block,
+		gint sequence, BlockStatus status) {
     MAGIC_ASSERT(scoreboard);
 
-    gint start = block->start;
-    gint end = block->end;
-    BlockStatus status = block->status;
+    gint oldStart = block->start;
+    gint oldEnd = block->end;
+    BlockStatus oldStatus = block->status;
 
     /* create single block */
     block->start = sequence;
     block->end = sequence;
-    block->status = BLOCK_STATUS_SACKED;
+    block->status = status;
 
     /* create new blocks */
     ScoreBoardBlock* newBlock;
-    if(sequence - 1 >= start) {
-        newBlock = _scoreboard_addBlock(scoreboard, start, sequence - 1, status);
+    if(sequence - 1 >= oldStart) {
+        newBlock = _scoreboard_addBlock(scoreboard, oldStart, sequence - 1, oldStatus);
         newBlock->nextSend = block->nextSend;
     }
 
-    if(sequence + 1 <= end) {
-        newBlock = _scoreboard_addBlock(scoreboard, sequence + 1, end, status);
+    if(sequence + 1 <= oldEnd) {
+        newBlock = _scoreboard_addBlock(scoreboard, sequence + 1, oldEnd, oldStatus);
         newBlock->nextSend = block->nextSend;
     }
 }
@@ -207,26 +208,7 @@ gboolean scoreboard_update(ScoreBoard* scoreboard, GList* selectiveACKs, gint un
             } else {
                 /* check if we need to split the block */
                 if(sacked && block->status != BLOCK_STATUS_SACKED) {
-                    gint start = block->start;
-                    gint end = block->end;
-                    BlockStatus status = block->status;
-
-                    /* create single block */
-                    block->start = seq;
-                    block->end = seq;
-                    block->status = BLOCK_STATUS_SACKED;
-
-                    /* create new blocks */
-                    ScoreBoardBlock* newBlock;
-                    if(seq - 1 >= start) {
-                        newBlock = _scoreboard_addBlock(scoreboard, start, seq - 1, status);
-                        newBlock->nextSend = block->nextSend;
-                    }
-
-                    if(seq + 1 <= end) {
-                        newBlock = _scoreboard_addBlock(scoreboard, seq + 1, end, status);
-                        newBlock->nextSend = block->nextSend;
-                    }
+                	_scoreboard_splitBlock(scoreboard, block, seq, BLOCK_STATUS_SACKED);
                 }
             }
         }
@@ -240,9 +222,9 @@ gboolean scoreboard_update(ScoreBoard* scoreboard, GList* selectiveACKs, gint un
 
             if(block1->status == BLOCK_STATUS_SACKED && block2->status == BLOCK_STATUS_SACKED) {
                 block1->end = block2->end;
-                scoreboard->blocks = g_list_delete_link(scoreboard->blocks, g_list_next(blockIter));
+                scoreboard->blocks = g_list_delete_link(scoreboard->blocks, next);
             } else {
-                blockIter = g_list_next(blockIter);
+                blockIter = next;
             }
         }
     }
@@ -343,7 +325,7 @@ void scoreboard_markRetransmitted(ScoreBoard* scoreboard, gint sequence, gint ne
 
     /* check if we need to split the block */
     if(block->end > block->start) {
-        _scoreboard_splitBlock(scoreboard, block, block->start + 1);
+        _scoreboard_splitBlock(scoreboard, block, block->start + 1, BLOCK_STATUS_SACKED);
     }
 
     block->status = BLOCK_STATUS_RETRANSMITTED;
@@ -376,21 +358,7 @@ void scoreboard_packetDropped(ScoreBoard* scoreboard, gint sequence) {
         return;
     }
 
-    gint start = block->start;
-    gint end = block->start;
-    BlockStatus status = block->status;
-
-    block->start = sequence;
-    block->end = sequence;
-    block->status = BLOCK_STATUS_LOST;
-
-    if(start <= sequence - 1) {
-        _scoreboard_addBlock(scoreboard, start, sequence - 1, status);
-    }
-
-    if(end >= sequence + 1) {
-        _scoreboard_addBlock(scoreboard, sequence + 1, end, status);
-    }
+    _scoreboard_splitBlock(scoreboard, block, sequence, BLOCK_STATUS_LOST);
 
     scoreboard->fackOut++;
 
