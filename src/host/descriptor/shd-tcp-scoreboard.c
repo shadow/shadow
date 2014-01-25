@@ -416,7 +416,7 @@ void scoreboard_markLoss(ScoreBoard* scoreboard, gint unacked, gint nextSend) {
         iter = next;
     }
 
-    if(!scoreboard->blocks || g_list_length(scoreboard->blocks) == 0) {
+    if((!scoreboard->blocks || g_list_length(scoreboard->blocks) == 0) && (nextSend > unacked)) {
         _scoreboard_addBlock(scoreboard, unacked, nextSend - 1, BLOCK_STATUS_LOST);
         scoreboard->fackOut += (nextSend - unacked);
     }
