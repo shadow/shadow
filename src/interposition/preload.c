@@ -1021,9 +1021,17 @@ void AES_ctr128_decrypt(const unsigned char *in, unsigned char *out, const void 
 /*
  * There is a corner case on certain machines that causes padding-related errors
  * when the EVP_Cipher is set to use aesni_cbc_hmac_sha1_cipher. Our memmove
- * implementation does not handle padding, so we disable it by default.
+ * implementation does not handle padding.
+ *
+ * We attempt to disable the use of aesni_cbc_hmac_sha1_cipher with the environment
+ * variable OPENSSL_ia32cap=~0x200000200000000, and by default intercept EVP_Cipher
+ * in order to skip the encryption.
+ *
+ * If that doesn't work, the user can request that we let the application perform
+ * the encryption by defining SHADOW_ENABLE_EVPCIPHER, which means we will not
+ * intercept EVP_Cipher and instead let OpenSSL do its thing.
  */
-#ifndef SHADOW_DISABLE_EVPCIPHER
+#ifndef SHADOW_ENABLE_EVPCIPHER
 /*
  * EVP_CIPHER_CTX *ctx
  * The ctx parameter has been voided to avoid requiring Openssl headers
