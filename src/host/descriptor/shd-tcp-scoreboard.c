@@ -1,6 +1,6 @@
 /*
  * The Shadow Simulator
- * Copyright (c) 2010-2011, Rob Jansen
+ * Copyright (c) 2013-2014, John Geddes
  * See LICENSE for licensing information
  */
 
@@ -59,6 +59,7 @@ gint _scoreboard_compareBlock(gconstpointer b1, gconstpointer b2) {
 
 static ScoreBoardBlock* _scoreboard_addBlock(ScoreBoard* scoreboard, gint start, gint end, BlockStatus status) {
     MAGIC_ASSERT(scoreboard);
+    utility_assert(start <= end);
 
     ScoreBoardBlock* block = g_new0(ScoreBoardBlock, 1);
     block->start = start;
@@ -69,7 +70,7 @@ static ScoreBoardBlock* _scoreboard_addBlock(ScoreBoard* scoreboard, gint start,
     return block;
 }
 
-void _scoreboard_dump(ScoreBoard* scoreboard) {
+static void _scoreboard_dump(ScoreBoard* scoreboard) {
     MAGIC_ASSERT(scoreboard);
 
     GString* msg = g_string_new("[SCOREBOARD] ");
@@ -233,8 +234,9 @@ gboolean scoreboard_update(ScoreBoard* scoreboard, GList* selectiveACKs, gint un
         /* go through and merge blocks that overlap with same status */
         blockIter = g_list_first(scoreboard->blocks);
         while(g_list_next(blockIter)) {
+        	GList* next = g_list_next(blockIter);
             ScoreBoardBlock* block1 = (ScoreBoardBlock*)blockIter->data;
-            ScoreBoardBlock* block2 = (ScoreBoardBlock*)g_list_next(blockIter)->data;
+            ScoreBoardBlock* block2 = (ScoreBoardBlock*)next->data;
 
             if(block1->status == BLOCK_STATUS_SACKED && block2->status == BLOCK_STATUS_SACKED) {
                 block1->end = block2->end;

@@ -1,6 +1,7 @@
 /*
  * The Shadow Simulator
  * Copyright (c) 2010-2011, Rob Jansen
+ * Copyright (c) 2013-2014, John Geddes
  * See LICENSE for licensing information
  */
 
@@ -1690,7 +1691,7 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
 		}
 
         gboolean dataLoss = FALSE;
-        if(header.flags & PTCP_SACK || (isValidAck && !scoreboard_isEmpty(tcp->retransmit.scoreboard))) {
+        if((header.flags & PTCP_SACK) || (isValidAck && !scoreboard_isEmpty(tcp->retransmit.scoreboard))) {
             dataLoss = scoreboard_update(tcp->retransmit.scoreboard, header.selectiveACKs, tcp->send.unacked);
             if(dataLoss && tcp->congestion->state != TCP_CCS_FASTRECOVERY) {
                 tcp->congestion->state = TCP_CCS_FASTRETRANSMIT;

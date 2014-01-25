@@ -1,6 +1,6 @@
 /*
  * The Shadow Simulator
- * Copyright (c) 2010-2011, Rob Jansen
+ * Copyright (c) 2013-2014, John Geddes
  * See LICENSE for licensing information
  */
 
