@@ -72,7 +72,7 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	  { "socket-recv-buffer", 0, 0, G_OPTION_ARG_INT, &(c->initialSocketReceiveBufferSize), sockrecv->str, "N" },
 	  { "socket-send-buffer", 0, 0, G_OPTION_ARG_INT, &(c->initialSocketSendBufferSize), socksend->str, "N" },
 	  { "tcp-windows", 0, 0, G_OPTION_ARG_INT, &(c->initialTCPWindow), "Initialize the TCP send, receive, and congestion windows to N packets [10]", "N" },
-	  { "tcp-congestion-control", 0, 0, G_OPTION_ARG_STRING, &(c->tcpCongestionControl), "Congestion control algorithm to use for TCP ('aimd', 'reno', 'cubic') ['aimd']", "TCPCC" },
+	  { "tcp-congestion-control", 0, 0, G_OPTION_ARG_STRING, &(c->tcpCongestionControl), "Congestion control algorithm to use for TCP ('aimd', 'reno', 'cubic') ['cubic']", "TCPCC" },
 	  { "tcp-ssthresh", 0, 0, G_OPTION_ARG_INT, &(c->tcpSlowStartThreshold), "Set TCP ssthresh value instead of discovering it via packet loss or hystart [0]", "N" },
 	  { NULL },
 	};
@@ -152,7 +152,7 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 		c->autotuneSocketSendBuffer = TRUE;
 	}
 	if(c->tcpCongestionControl == NULL) {
-		c->tcpCongestionControl = g_strdup("aimd");
+		c->tcpCongestionControl = g_strdup("cubic");
 	}
 
 	c->inputXMLFilenames = g_queue_new();

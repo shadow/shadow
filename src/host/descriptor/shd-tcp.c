@@ -1072,7 +1072,7 @@ static void _tcp_sackFastRetransmit(TCP* tcp) {
     _tcp_retransmitPacket(tcp, tcp->send.unacked);
 
     /* (4) set pipe to estimate of outstanding packets "in the pipe" */
-    tcp->retransmit.pipe = flightSize - g_list_length(tcp->receive.lastSelectiveACKs);
+    tcp->retransmit.pipe = flightSize - ((gint32)g_list_length(tcp->receive.lastSelectiveACKs));
 
     /* (5) retransmit first dropped packet if possible */
     _tcp_sackTryRetransmit(tcp);
@@ -1089,8 +1089,8 @@ static void _tcp_sackFastRecovery(TCP* tcp, gint32 acknowledgment) {
         tcp->congestion->state = TCP_CCS_AVOIDANCE;
     } else {
         /* update the pipe value and try and retransmit any possible packets */
-        gint32 flightSize = tcp->send.highestSequence - tcp->receive.lastAcknowledgment;
-        tcp->retransmit.pipe = flightSize - g_list_length(tcp->receive.lastSelectiveACKs);
+        gint32 flightSize = (gint32)(tcp->send.highestSequence - tcp->receive.lastAcknowledgment);
+        tcp->retransmit.pipe = flightSize - ((gint32)g_list_length(tcp->receive.lastSelectiveACKs));
 
         _tcp_sackTryRetransmit(tcp);
     }
@@ -1837,7 +1837,6 @@ void tcp_dropPacket(TCP* tcp, Packet* packet) {
 	/* fetch the TCP info from the packet */
 	PacketTCPHeader header;
 	packet_getTCPHeader(packet, &header);
-	guint packetLength = packet_getPayloadLength(packet);
 
 	/* if we run a server, the packet could be for an existing child */
 	tcp = _tcp_getSourceTCP(tcp, header.destinationIP, header.destinationPort);
@@ -2076,6 +2075,7 @@ void tcp_free(TCP* tcp) {
 	}
 
 	tcpCongestion_free(tcp->congestion);
+	scoreboard_free(tcp->retransmit.scoreboard);
 
 	MAGIC_CLEAR(tcp);
 	g_free(tcp);
@@ -2154,8 +2154,8 @@ TCP* tcp_new(gint handle, guint receiveBufferSize, guint sendBufferSize) {
 
 	TCPCongestionType congestionType = tcpCongestion_getType(config->tcpCongestionControl);
 	if(congestionType == TCP_CC_UNKNOWN) {
-		warning("unable to find congestion control algorithm '%s', defaulting to AIMD", config->tcpCongestionControl);
-		congestionType = TCP_CC_AIMD;
+		warning("unable to find congestion control algorithm '%s', defaulting to CUBIC", config->tcpCongestionControl);
+		congestionType = TCP_CC_CUBIC;
 	}
 
 	switch(congestionType) {

@@ -279,8 +279,17 @@ void scoreboard_clear(ScoreBoard* scoreboard) {
     scoreboard->fackOut = 0;
     scoreboard->sackOut = 0;
     scoreboard->nextToRetransmit = NULL;
-    g_list_free_full(scoreboard->blocks, g_free);
-    scoreboard->blocks = NULL;
+    if(scoreboard->blocks) {
+		g_list_free_full(scoreboard->blocks, g_free);
+		scoreboard->blocks = NULL;
+    }
+}
+
+void scoreboard_free(ScoreBoard* scoreboard) {
+	MAGIC_ASSERT(scoreboard);
+	scoreboard_clear(scoreboard);
+	MAGIC_CLEAR(scoreboard);
+	g_free(scoreboard);
 }
 
 gint scoreboard_getNextRetransmit(ScoreBoard* scoreboard) {

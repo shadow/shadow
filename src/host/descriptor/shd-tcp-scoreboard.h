@@ -12,6 +12,8 @@
 typedef struct _ScoreBoard ScoreBoard;
 
 ScoreBoard* scoreboard_new();
+void scoreboard_free(ScoreBoard* scoreboard);
+
 gboolean scoreboard_update(ScoreBoard* scoreboard, GList* selectiveACKs, gint unacked);
 void scoreboard_clear(ScoreBoard* scoreboard);
 gint scoreboard_getNextRetransmit(ScoreBoard* scoreboard);

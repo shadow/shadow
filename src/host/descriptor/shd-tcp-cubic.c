@@ -267,8 +267,7 @@ Cubic* cubic_new(gint window, gint threshold) {
 
     tcpCongestion_init(&(cubic->super), &CubicFunctions, TCP_CC_CUBIC, window, threshold);
 
-    TCPCongestion* congestion = (TCPCongestion*)cubic;
-    congestion->fastRetransmit = TCP_FR_SACK;
+    cubic->super.fastRetransmit = TCP_FR_SACK;
 
     /* cubic parameters */
     cubic->beta = 819;
