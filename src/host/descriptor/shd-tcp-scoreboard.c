@@ -113,13 +113,15 @@ static void _scoreboard_updateBlock(ScoreBoard* scoreboard, gint start, gint end
     block->end = end;
 }
 
-static void _scoreboard_mergeBlock(ScoreBoard* scoreboard, ScoreBoardBlock* block) {
+static void _scoreboard_mergeBlockWithNext(ScoreBoard* scoreboard, ScoreBoardBlock* block) {
     MAGIC_ASSERT(scoreboard);
 
     GList* link = g_list_find(scoreboard->blocks, block);
-    ScoreBoardBlock* nextBlock = (ScoreBoardBlock*)link->data;
+    GList* nextLink = g_list_next(link);
+    ScoreBoardBlock* nextBlock = (ScoreBoardBlock*)nextLink->data;
     block->end = nextBlock->end;
-    scoreboard->blocks = g_list_delete_link(scoreboard->blocks, link);
+    scoreboard->blocks = g_list_delete_link(scoreboard->blocks, nextLink);
+    g_free(nextBlock);
 }
 
 
@@ -173,6 +175,7 @@ gboolean scoreboard_update(ScoreBoard* scoreboard, GList* selectiveACKs, gint un
 
         /* remove block and free it */
         scoreboard->blocks = g_list_delete_link(scoreboard->blocks, blockIter);
+        g_free(block);
         blockIter = next;
     }
 
@@ -221,8 +224,7 @@ gboolean scoreboard_update(ScoreBoard* scoreboard, GList* selectiveACKs, gint un
             ScoreBoardBlock* block2 = (ScoreBoardBlock*)next->data;
 
             if(block1->status == BLOCK_STATUS_SACKED && block2->status == BLOCK_STATUS_SACKED) {
-                block1->end = block2->end;
-                scoreboard->blocks = g_list_delete_link(scoreboard->blocks, next);
+                _scoreboard_mergeBlockWithNext(scoreboard, block1);
             } else {
                 blockIter = next;
             }
@@ -399,7 +401,7 @@ void scoreboard_markLoss(ScoreBoard* scoreboard, gint unacked, gint nextSend) {
             block->status = BLOCK_STATUS_LOST;
 
             if(lastLostBlock) {
-                _scoreboard_mergeBlock(scoreboard, lastLostBlock);
+                _scoreboard_mergeBlockWithNext(scoreboard, lastLostBlock);
                 block = lastLostBlock;
             } else if(!scoreboard->nextToRetransmit) {
                 scoreboard->nextToRetransmit = block;
