@@ -21,6 +21,7 @@ struct _ScoreBoardBlock {
     gint nextSend;
     BlockStatus status;
     gint retransmitId;
+    MAGIC_DECLARE;
 };
 
 struct _ScoreBoard {
@@ -42,6 +43,27 @@ struct _ScoreBoard {
     MAGIC_DECLARE;
 };
 
+static ScoreBoardBlock* _scoreboardblock_new(gint start, gint end, BlockStatus status) {
+    utility_assert(start <= end);
+	ScoreBoardBlock* block = g_new0(ScoreBoardBlock, 1);
+	MAGIC_INIT(block);
+    block->start = start;
+    block->end = end;
+    block->status = status;
+    return block;
+}
+
+static void _scoreboardblock_free(ScoreBoardBlock* block) {
+	MAGIC_ASSERT(block);
+	MAGIC_CLEAR(block);
+	g_free(block);
+}
+
+static gint _scoreboardblock_compare(ScoreBoardBlock* b1, ScoreBoardBlock* b2) {
+	MAGIC_ASSERT(b1);
+	MAGIC_ASSERT(b2);
+    return (b1->start < b2->start ? -1 : b1->start > b2->start ? 1 : 0);
+}
 
 ScoreBoard* scoreboard_new() {
 	ScoreBoard* scoreboard = g_new0(ScoreBoard, 1);
@@ -50,22 +72,11 @@ ScoreBoard* scoreboard_new() {
     return scoreboard;
 }
 
-gint _scoreboard_compareBlock(gconstpointer b1, gconstpointer b2) {
-    ScoreBoardBlock* block1 = (ScoreBoardBlock*)b1;
-    ScoreBoardBlock* block2 = (ScoreBoardBlock*)b2;
-    
-    return (block1->start < block2->start ? -1 : block1->start > block2->start ? 1 : 0);
-}
-
 static ScoreBoardBlock* _scoreboard_addBlock(ScoreBoard* scoreboard, gint start, gint end, BlockStatus status) {
     MAGIC_ASSERT(scoreboard);
-    utility_assert(start <= end);
 
-    ScoreBoardBlock* block = g_new0(ScoreBoardBlock, 1);
-    block->start = start;
-    block->end = end;
-    block->status = status;
-    scoreboard->blocks = g_list_insert_sorted(scoreboard->blocks, block, (GCompareFunc)_scoreboard_compareBlock);
+    ScoreBoardBlock* block = _scoreboardblock_new(start, end, status);
+    scoreboard->blocks = g_list_insert_sorted(scoreboard->blocks, block, (GCompareFunc)_scoreboardblock_compare);
 
     return block;
 }
@@ -118,12 +129,19 @@ static void _scoreboard_mergeBlockWithNext(ScoreBoard* scoreboard, ScoreBoardBlo
 
     GList* link = g_list_find(scoreboard->blocks, block);
     GList* nextLink = g_list_next(link);
-    ScoreBoardBlock* nextBlock = (ScoreBoardBlock*)nextLink->data;
-    block->end = nextBlock->end;
-    scoreboard->blocks = g_list_delete_link(scoreboard->blocks, nextLink);
-    g_free(nextBlock);
-}
+    if(nextLink) {
+		ScoreBoardBlock* nextBlock = (ScoreBoardBlock*)nextLink->data;
+		utility_assert(nextBlock);
 
+		/* make sure there are no holes */
+		utility_assert((((block->end - block->start) + 1) + ((nextBlock->end - nextBlock->start) + 1)) ==
+				((nextBlock->end - block->start) + 1));
+
+		block->end = nextBlock->end;
+		scoreboard->blocks = g_list_delete_link(scoreboard->blocks, nextLink);
+		g_free(nextBlock);
+    }
+}
 
 static void _scoreboard_splitBlock(ScoreBoard* scoreboard, ScoreBoardBlock* block,
 		gint sequence, BlockStatus status) {
@@ -157,27 +175,95 @@ gint _scoreboard_compareSack(gconstpointer s1, gconstpointer s2) {
     return sack1 < sack2 ? -1 : sack1 > sack2 ? 1 : 0;
 }
 
+static void _scoreboard_removeAckedBlocks(ScoreBoard* scoreboard, gint lowestUnackedPacket) {
+    GList* link = g_list_first(scoreboard->blocks);
+    while(link) {
+        ScoreBoardBlock* block = (ScoreBoardBlock*)link->data;
+        MAGIC_ASSERT(block);
+
+        /* if block is unACKed, break out of loop */
+        if(block->start >= lowestUnackedPacket) {
+            return;
+        } else if(block->end >= lowestUnackedPacket) {
+        	block->start = lowestUnackedPacket;
+        	return;
+        }
+
+        utility_assert(block->start < lowestUnackedPacket && block->end < lowestUnackedPacket);
+
+        /* remove block and free it */
+        GList* nextLink = g_list_next(link);
+        scoreboard->blocks = g_list_delete_link(scoreboard->blocks, link);
+        _scoreboardblock_free(block);
+        link = nextLink;
+    }
+}
+
+static void _scoreboard_setStatus(ScoreBoard* scoreboard, gint sequence, BlockStatus status) {
+	MAGIC_ASSERT(scoreboard);
+
+	/* first check if we have an existing block for this sequence */
+    ScoreBoardBlock* existingBlock = NULL;
+
+    GList* link = g_list_first(scoreboard->blocks);
+    while(link) {
+    	ScoreBoardBlock* block = (ScoreBoardBlock*)link->data;
+    	MAGIC_ASSERT(block);
+
+    	if(block->start <= sequence && sequence <= block->end) {
+    		existingBlock = block;
+    		break;
+    	}
+
+    	link = g_list_next(link);
+    }
+
+    /* if block exists, correctly update status; otherwise create a new one.
+     * don't worry about consecutive blocks with the same status, those will
+     * be merged later */
+    if(existingBlock) {
+    	if(existingBlock->status != status) {
+    		_scoreboard_splitBlock(scoreboard, existingBlock, sequence, status);
+    	}
+    } else {
+    	/* we need a new block for this status */
+    	_scoreboard_addBlock(scoreboard, sequence, sequence, status);
+    }
+}
+
+static void _scoreboard_mergeAllDuplicateBlocks(ScoreBoard* scoreboard) {
+	MAGIC_ASSERT(scoreboard);
+
+	if(scoreboard->blocks) {
+		GList* link =  g_list_first(scoreboard->blocks);
+		if(link) {
+			GList* nextLink = g_list_next(link);
+			while(nextLink) {
+				ScoreBoardBlock* block = (ScoreBoardBlock*)link->data;
+				MAGIC_ASSERT(block);
+				ScoreBoardBlock* nextBlock = (ScoreBoardBlock*)nextLink->data;
+				MAGIC_ASSERT(nextBlock);
+
+				if((block->end + 1) >= nextBlock->start && block->status == nextBlock->status) {
+					utility_assert(block->end <= nextBlock->end);
+					_scoreboard_mergeBlockWithNext(scoreboard, block);
+					nextLink = link;
+				}
+
+				link = nextLink;
+				nextLink = g_list_next(link);
+			}
+		}
+	}
+}
+
 gboolean scoreboard_update(ScoreBoard* scoreboard, GList* selectiveACKs, gint unacked) {
     MAGIC_ASSERT(scoreboard);
 
     gboolean dataLoss = FALSE;
 
     /* remove any blocks that have been fully ACKed */
-    GList* blockIter = scoreboard->blocks;
-    while(blockIter) {
-        GList* next = g_list_next(blockIter);
-        ScoreBoardBlock* block = (ScoreBoardBlock*)blockIter->data;
-
-        /* if block is unACKed, break out of loop */
-        if(block->start >= unacked) {
-            break;
-        }
-
-        /* remove block and free it */
-        scoreboard->blocks = g_list_delete_link(scoreboard->blocks, blockIter);
-        g_free(block);
-        blockIter = next;
-    }
+    _scoreboard_removeAckedBlocks(scoreboard, unacked);
 
     if(selectiveACKs) {
         selectiveACKs = g_list_sort(selectiveACKs, (GCompareFunc)_scoreboard_compareSack);
@@ -189,51 +275,20 @@ gboolean scoreboard_update(ScoreBoard* scoreboard, GList* selectiveACKs, gint un
         /* go through all sequence that might be sacked and update scoreboard */
         for(gint seq = firstSeq; seq <= lastSeq; seq++) {
             gboolean sacked = (gboolean)g_list_find(selectiveACKs, GINT_TO_POINTER(seq));
+			BlockStatus status = (sacked ? BLOCK_STATUS_SACKED : BLOCK_STATUS_INFLIGHT);
 
-            ScoreBoardBlock* block = NULL;
-            GList* blockIter = g_list_first(scoreboard->blocks);
-            while(blockIter) {
-                block = (ScoreBoardBlock*)blockIter->data;
-                
-                if(sacked && block->status == BLOCK_STATUS_SACKED && block->end == seq - 1) {
-                    block->end = seq;
-                } else if(block->start <= seq && seq <= block->end) {
-                    break;
-                }
-
-                block = NULL;
-                blockIter = g_list_next(blockIter);
-            }
-
-            if(!block) {
-                BlockStatus status = (sacked ? BLOCK_STATUS_SACKED : BLOCK_STATUS_INFLIGHT);
-                _scoreboard_addBlock(scoreboard, seq, seq, status);
-            } else {
-                /* check if we need to split the block */
-                if(sacked && block->status != BLOCK_STATUS_SACKED) {
-                	_scoreboard_splitBlock(scoreboard, block, seq, BLOCK_STATUS_SACKED);
-                }
-            }
+			/* make sure this sequence status is correct in the scoreboard */
+			_scoreboard_setStatus(scoreboard, seq, status);
         }
 
         /* go through and merge blocks that overlap with same status */
-        blockIter = g_list_first(scoreboard->blocks);
-        while(g_list_next(blockIter)) {
-        	GList* next = g_list_next(blockIter);
-            ScoreBoardBlock* block1 = (ScoreBoardBlock*)blockIter->data;
-            ScoreBoardBlock* block2 = (ScoreBoardBlock*)next->data;
-
-            if(block1->status == BLOCK_STATUS_SACKED && block2->status == BLOCK_STATUS_SACKED) {
-                _scoreboard_mergeBlockWithNext(scoreboard, block1);
-            } else {
-                blockIter = next;
-            }
-        }
+        _scoreboard_mergeAllDuplicateBlocks(scoreboard);
     }
 
     /* go through all the blocks and check if any of the INFLIGHT ones need to be retransmitted */
-    for(blockIter = scoreboard->blocks; blockIter; blockIter = g_list_next(blockIter)) {
-        ScoreBoardBlock* block = (ScoreBoardBlock*)blockIter->data;
+    for(GList* link = scoreboard->blocks; link; link = g_list_next(link)) {
+        ScoreBoardBlock* block = (ScoreBoardBlock*)link->data;
+        MAGIC_ASSERT(block);
 
         switch(block->status) {
             case BLOCK_STATUS_INFLIGHT:
@@ -282,7 +337,7 @@ void scoreboard_clear(ScoreBoard* scoreboard) {
     scoreboard->sackOut = 0;
     scoreboard->nextToRetransmit = NULL;
     if(scoreboard->blocks) {
-		g_list_free_full(scoreboard->blocks, g_free);
+		g_list_free_full(scoreboard->blocks, (GDestroyNotify)_scoreboardblock_free);
 		scoreboard->blocks = NULL;
     }
 }
@@ -388,39 +443,43 @@ void scoreboard_markLoss(ScoreBoard* scoreboard, gint unacked, gint nextSend) {
 
     scoreboard->nextToRetransmit = NULL;
 
-    ScoreBoardBlock* lastLostBlock = NULL;
-    GList *iter = scoreboard->blocks;
-    while(iter) {
-        GList* next = g_list_next(iter);
+    GList* link = g_list_first(scoreboard->blocks);
+    while(link) {
+        ScoreBoardBlock* block = (ScoreBoardBlock*)link->data;
+        MAGIC_ASSERT(block);
 
-        ScoreBoardBlock* block = (ScoreBoardBlock*)iter->data;
         if(block->status != BLOCK_STATUS_SACKED) {
             if(block->status != BLOCK_STATUS_LOST) {
-                scoreboard->fackOut += block->end - block->start + 1;
+                scoreboard->fackOut += ((block->end - block->start) + 1);
             }
             block->status = BLOCK_STATUS_LOST;
-
-            if(lastLostBlock) {
-                _scoreboard_mergeBlockWithNext(scoreboard, lastLostBlock);
-                block = lastLostBlock;
-            } else if(!scoreboard->nextToRetransmit) {
-                scoreboard->nextToRetransmit = block;
-            }
-            lastLostBlock = (ScoreBoardBlock*)iter->data;
-        } else {
-            lastLostBlock = NULL;
         }
 
-        if(!next && block->end + 1 < nextSend) {
+        link = g_list_next(link);
+
+        if(!link && block->end + 1 < nextSend) {
             _scoreboard_addBlock(scoreboard, block->end + 1, nextSend - 1, BLOCK_STATUS_INFLIGHT);
         }
-
-        iter = next;
     }
 
-    if((!scoreboard->blocks || g_list_length(scoreboard->blocks) == 0) && (nextSend > unacked)) {
+    if(scoreboard_isEmpty(scoreboard) && (nextSend > unacked)) {
         _scoreboard_addBlock(scoreboard, unacked, nextSend - 1, BLOCK_STATUS_LOST);
         scoreboard->fackOut += (nextSend - unacked);
+    }
+
+    _scoreboard_mergeAllDuplicateBlocks(scoreboard);
+
+    link = g_list_first(scoreboard->blocks);
+    while(link) {
+    	ScoreBoardBlock* block = (ScoreBoardBlock*)link->data;
+		MAGIC_ASSERT(block);
+
+		if(block->status == BLOCK_STATUS_LOST) {
+			scoreboard->nextToRetransmit = block;
+			break;
+		}
+
+		link = g_list_next(link);
     }
 
     scoreboard->retransmitId = 0;
