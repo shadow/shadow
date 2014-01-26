@@ -139,7 +139,7 @@ static void _scoreboard_mergeBlockWithNext(ScoreBoard* scoreboard, ScoreBoardBlo
 
 		block->end = nextBlock->end;
 		scoreboard->blocks = g_list_delete_link(scoreboard->blocks, nextLink);
-		g_free(nextBlock);
+		_scoreboardblock_free(nextBlock);
     }
 }
 
