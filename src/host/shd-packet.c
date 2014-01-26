@@ -464,7 +464,7 @@ static const gchar* _packet_deliveryStatusToAscii(PacketDeliveryStatusFlags stat
 static gchar* _packet_getString(Packet* packet) {
 	GString* packetString = g_string_new("");
 
-	_packet_lock(packet);
+	//_packet_lock(packet);
 
 	switch (packet->protocol) {
 		case PLOCAL: {
@@ -580,7 +580,7 @@ static gchar* _packet_getString(Packet* packet) {
 		g_queue_push_tail(packet->orderedStatus, statusPtr);
 	}
 
-	_packet_unlock(packet);
+	//_packet_unlock(packet);
 	return g_string_free(packetString, FALSE);
 }
 
