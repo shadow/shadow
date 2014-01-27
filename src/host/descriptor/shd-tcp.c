@@ -1690,15 +1690,19 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
 		}
 
         gboolean dataLoss = FALSE;
-        if((header.flags & PTCP_SACK) || (isValidAck && !scoreboard_isEmpty(tcp->retransmit.scoreboard))) {
-            dataLoss = scoreboard_update(tcp->retransmit.scoreboard, header.selectiveACKs, tcp->send.unacked);
-            if(dataLoss && tcp->congestion->state != TCP_CCS_FASTRECOVERY) {
-                tcp->congestion->state = TCP_CCS_FASTRETRANSMIT;
-            }
-        }
+        // TODO fix the scoreboard so we can use SACK info to detect packet loss
+        //if((header.flags & PTCP_SACK) || (isValidAck && !scoreboard_isEmpty(tcp->retransmit.scoreboard))) {
+        //    dataLoss = scoreboard_update(tcp->retransmit.scoreboard, header.selectiveACKs, tcp->send.unacked);
+        //    if(dataLoss && tcp->congestion->state != TCP_CCS_FASTRECOVERY) {
+        //        tcp->congestion->state = TCP_CCS_FASTRETRANSMIT;
+        //    }
+        //}
 
+        // TODO this should be markLoss, but since we're not keeping the scoreboard update just add
+        // separate block for packet to be returned by getNextRetrans() function in flush
         if(header.acknowledgment < tcp->send.next && tcp->receive.dupAcknowledgmentCount == 3) {
-            scoreboard_markLoss(tcp->retransmit.scoreboard, header.acknowledgment, tcp->send.highestSequence);
+            //scoreboard_markLoss(tcp->retransmit.scoreboard, header.acknowledgment, tcp->send.highestSequence);
+            scoreboard_packetDropped(tcp->retransmit.scoreboard, header.acknowledgment);
         }
 
         gboolean isDubiousAck = !isValidAck || (header.flags & PTCP_SACK) || 
