@@ -855,11 +855,10 @@ static void _tcp_flush(TCP* tcp) {
 	SimulationTime now = worker_getCurrentTime();
 
     /* find all packets to retransmit and add them throttled output */
-    gint retransmitSequence = scoreboard_getNextRetransmit(tcp->retransmit.scoreboard);
+    gint retransmitSequence = scoreboard_getNextRetransmit(tcp->retransmit.scoreboard, tcp->send.highestSequence);
     while(retransmitSequence != -1) {
         _tcp_retransmitPacket(tcp, retransmitSequence);
-        scoreboard_markRetransmitted(tcp->retransmit.scoreboard, retransmitSequence, tcp->send.highestSequence);
-        retransmitSequence = scoreboard_getNextRetransmit(tcp->retransmit.scoreboard);
+        retransmitSequence = scoreboard_getNextRetransmit(tcp->retransmit.scoreboard, tcp->send.highestSequence);
     }
 
 	/* flush packets that can now be sent to socket */

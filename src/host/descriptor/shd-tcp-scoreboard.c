@@ -27,8 +27,6 @@ struct _ScoreBoardBlock {
 struct _ScoreBoard {
     /* list of blocks in the scoreboard */
     GList* blocks;
-    /* link to the next block we want to retransmit */
-    ScoreBoardBlock* nextToRetransmit;
 
     /* the furthest SACKed sequence number */
     gint fack;
@@ -199,11 +197,8 @@ static void _scoreboard_removeAckedBlocks(ScoreBoard* scoreboard, gint lowestUna
     }
 }
 
-static void _scoreboard_setStatus(ScoreBoard* scoreboard, gint sequence, BlockStatus status) {
+static ScoreBoardBlock* _scoreboard_getBlockFromSequence(ScoreBoard* scoreboard, gint sequence) {
 	MAGIC_ASSERT(scoreboard);
-
-	/* first check if we have an existing block for this sequence */
-    ScoreBoardBlock* existingBlock = NULL;
 
     GList* link = g_list_first(scoreboard->blocks);
     while(link) {
@@ -211,19 +206,27 @@ static void _scoreboard_setStatus(ScoreBoard* scoreboard, gint sequence, BlockSt
     	MAGIC_ASSERT(block);
 
     	if(block->start <= sequence && sequence <= block->end) {
-    		existingBlock = block;
-    		break;
+    		return block;
     	}
 
     	link = g_list_next(link);
     }
 
+    return NULL;
+}
+
+static void _scoreboard_setStatus(ScoreBoard* scoreboard, gint sequence, BlockStatus status) {
+	MAGIC_ASSERT(scoreboard);
+
+	/* first check if we have an existing block for this sequence */
+    ScoreBoardBlock* block = _scoreboard_getBlockFromSequence(scoreboard, sequence);
+
     /* if block exists, correctly update status; otherwise create a new one.
      * don't worry about consecutive blocks with the same status, those will
      * be merged later */
-    if(existingBlock) {
-    	if(existingBlock->status != status) {
-    		_scoreboard_splitBlock(scoreboard, existingBlock, sequence, status);
+    if(block) {
+    	if(block->status != status) {
+    		_scoreboard_splitBlock(scoreboard, block, sequence, status);
     	}
     } else {
     	/* we need a new block for this status */
@@ -295,10 +298,7 @@ gboolean scoreboard_update(ScoreBoard* scoreboard, GList* selectiveACKs, gint un
                 /* checks for 3 duplicate ACKs */
                 if(block->start <= scoreboard->fack - 4) {
                     block->status = BLOCK_STATUS_LOST;
-                    if(!scoreboard->nextToRetransmit) {
-                        scoreboard->nextToRetransmit = block;
-                    }
-                    scoreboard->fackOut += block->end - block->start + 1;
+                    scoreboard->fackOut += ((block->end - block->start) + 1);
                     dataLoss = TRUE;
                 }
                 break;
@@ -306,24 +306,17 @@ gboolean scoreboard_update(ScoreBoard* scoreboard, GList* selectiveACKs, gint un
             case BLOCK_STATUS_RETRANSMITTED:
                 if(block->nextSend <= scoreboard->fack) {
                     block->status = BLOCK_STATUS_LOST;
-                    if(!scoreboard->nextToRetransmit) {
-                        scoreboard->nextToRetransmit = block;
-                    }
-                    scoreboard->fackOut += 1;
+                    scoreboard->fackOut += ((block->end - block->start) + 1);
                     dataLoss = TRUE;
                 }
                 break;
 
             case BLOCK_STATUS_LOST:
-                if(!scoreboard->nextToRetransmit) {
-                    scoreboard->nextToRetransmit = block;
-                }
                 break;
 
             case BLOCK_STATUS_SACKED:
                 break;
         }
-
     }
 
     return dataLoss;
@@ -335,7 +328,6 @@ void scoreboard_clear(ScoreBoard* scoreboard) {
     scoreboard->fack = 0;
     scoreboard->fackOut = 0;
     scoreboard->sackOut = 0;
-    scoreboard->nextToRetransmit = NULL;
     if(scoreboard->blocks) {
 		g_list_free_full(scoreboard->blocks, (GDestroyNotify)_scoreboardblock_free);
 		scoreboard->blocks = NULL;
@@ -349,99 +341,70 @@ void scoreboard_free(ScoreBoard* scoreboard) {
 	g_free(scoreboard);
 }
 
-gint scoreboard_getNextRetransmit(ScoreBoard* scoreboard) {
-    MAGIC_ASSERT(scoreboard);
-    
-    gint retransmitSequence = -1;
+static ScoreBoardBlock* _scoreboard_getNextLostBlock(ScoreBoard* scoreboard) {
+	MAGIC_ASSERT(scoreboard);
 
-    GList* iter = g_list_find(scoreboard->blocks, scoreboard->nextToRetransmit);
-    while(iter) {
-        ScoreBoardBlock* block = (ScoreBoardBlock*)iter->data;
-        if(block->status == BLOCK_STATUS_LOST) {
-            retransmitSequence = block->start;
-            break;
-        }
-        iter = g_list_next(iter);
+    GList* link = g_list_first(scoreboard->blocks);
+    while(link) {
+    	ScoreBoardBlock* block = (ScoreBoardBlock*)link->data;
+		MAGIC_ASSERT(block);
+
+		if(block->status == BLOCK_STATUS_LOST) {
+			return block;
+		}
+
+		link = g_list_next(link);
     }
 
-    if(!iter) {
-        scoreboard->nextToRetransmit = NULL;
-    } else {
-        scoreboard->nextToRetransmit = (ScoreBoardBlock*)iter->data;
-    }
-
-    return retransmitSequence;
+    return NULL;
 }
 
-void scoreboard_markRetransmitted(ScoreBoard* scoreboard, gint sequence, gint nextSend) {
+gint scoreboard_getNextRetransmit(ScoreBoard* scoreboard, gint nextSend) {
     MAGIC_ASSERT(scoreboard);
 
-    ScoreBoardBlock* block = scoreboard->nextToRetransmit;
-    if(sequence < block->start || sequence > block->end) {
-        error("Trying to mark retransmission for %d from block [%d,%d]", sequence,
-                block->start, block->end);
-        return;
-    }
+    /* look for the first lost sequence number so we can retransmit it */
+    ScoreBoardBlock* block = _scoreboard_getNextLostBlock(scoreboard);
 
-    scoreboard->fackOut--;
-    if(scoreboard->fackOut < 0) {
-        error("fack out is negative at %d with sequence %d and next send %d", scoreboard->fackOut, sequence, nextSend);
-        return;
-    }
+    if(block) {
+    	/* separate the first sequence from the rest of the block and set it to RETRANSMITTED */
+        _scoreboard_splitBlock(scoreboard, block, block->start, BLOCK_STATUS_RETRANSMITTED);
 
-    /* check if we need to split the block */
-    if(block->end > block->start) {
-        _scoreboard_splitBlock(scoreboard, block, block->start + 1, BLOCK_STATUS_SACKED);
-    }
+        block->retransmitId = scoreboard->retransmitId;
+        block->nextSend = nextSend;
+		scoreboard->retransmitId++;
+		scoreboard->lastRetransmitSeq = block->start;
 
-    block->status = BLOCK_STATUS_RETRANSMITTED;
-    block->retransmitId = scoreboard->retransmitId;
-    block->nextSend = nextSend;
-    scoreboard->retransmitId++;
-    scoreboard->lastRetransmitSeq = sequence;
+		/* status changed from LOST to RETRANSMITTED */
+		scoreboard->fackOut--;
+		if(scoreboard->fackOut < 0) {
+			error("fack out is negative at %d with sequence %d and next send %d",
+					scoreboard->fackOut, block->start, nextSend);
+		}
+
+    	return block->start;
+    } else {
+    	return -1;
+    }
 }
 
 void scoreboard_packetDropped(ScoreBoard* scoreboard, gint sequence) {
     MAGIC_ASSERT(scoreboard);
 
-    GList* iter = scoreboard->blocks;
-    while(iter) {
-        ScoreBoardBlock* block = (ScoreBoardBlock*)iter->data;
-        if(block->start <= sequence && sequence <= block->end) {
-            break;
-        }
-        iter = g_list_next(iter);
-    }
-
-    ScoreBoardBlock* block = NULL;
-    if(iter) {
-        block = (ScoreBoardBlock*)iter->data;
+    ScoreBoardBlock* block = _scoreboard_getBlockFromSequence(scoreboard, sequence);
+    if(block) {
+		if(block->status != BLOCK_STATUS_INFLIGHT) {
+			return;
+		}
+		_scoreboard_splitBlock(scoreboard, block, sequence, BLOCK_STATUS_LOST);
     } else {
-        block = _scoreboard_addBlock(scoreboard, sequence, sequence, BLOCK_STATUS_INFLIGHT);
+        block = _scoreboard_addBlock(scoreboard, sequence, sequence, BLOCK_STATUS_LOST);
     }
-
-    if(block->status != BLOCK_STATUS_INFLIGHT) {
-        return;
-    }
-
-    _scoreboard_splitBlock(scoreboard, block, sequence, BLOCK_STATUS_LOST);
 
     scoreboard->fackOut++;
-
-    iter = scoreboard->blocks;
-    while(iter && !scoreboard->nextToRetransmit) {
-        ScoreBoardBlock* block = (ScoreBoardBlock*)iter->data;
-        if(block->status == BLOCK_STATUS_LOST) {
-            scoreboard->nextToRetransmit = block;
-        }
-        iter = g_list_next(iter);
-    }
 }
 
 void scoreboard_markLoss(ScoreBoard* scoreboard, gint unacked, gint nextSend) {
     MAGIC_ASSERT(scoreboard);
-
-    scoreboard->nextToRetransmit = NULL;
 
     GList* link = g_list_first(scoreboard->blocks);
     while(link) {
@@ -468,19 +431,6 @@ void scoreboard_markLoss(ScoreBoard* scoreboard, gint unacked, gint nextSend) {
     }
 
     _scoreboard_mergeAllDuplicateBlocks(scoreboard);
-
-    link = g_list_first(scoreboard->blocks);
-    while(link) {
-    	ScoreBoardBlock* block = (ScoreBoardBlock*)link->data;
-		MAGIC_ASSERT(block);
-
-		if(block->status == BLOCK_STATUS_LOST) {
-			scoreboard->nextToRetransmit = block;
-			break;
-		}
-
-		link = g_list_next(link);
-    }
 
     scoreboard->retransmitId = 0;
     scoreboard->ackedRetransmitId = -1;
