@@ -344,7 +344,7 @@ void scoreboard_free(ScoreBoard* scoreboard) {
 static ScoreBoardBlock* _scoreboard_getNextLostBlock(ScoreBoard* scoreboard) {
 	MAGIC_ASSERT(scoreboard);
 
-    _scoreboard_dump(scoreboard);
+    //_scoreboard_dump(scoreboard);
 
     GList* link = g_list_first(scoreboard->blocks);
     while(link) {
