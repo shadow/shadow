@@ -21,5 +21,6 @@ void scoreboard_markLoss(ScoreBoard* scoreboard, gint unacked, gint sendNext);
 gboolean scoreboard_isEmpty(ScoreBoard* scoreboard);
 
 void scoreboard_packetDropped(ScoreBoard* scoreboard, gint sequence);
+void scoreboard_removeAckedBlocks(ScoreBoard* scoreboard, gint lowestUnackedPacket);
 
 #endif /* SHD_TCP_SCOREBOARD_H_ */

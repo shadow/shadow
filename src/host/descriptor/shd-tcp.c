@@ -1697,6 +1697,11 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
         //        tcp->congestion->state = TCP_CCS_FASTRETRANSMIT;
         //    }
         //}
+        
+        if(isValidAck) {
+            scoreboard_removeAckedBlocks(tcp->retransmit.scoreboard, tcp->send.unacked);
+        }
+
 
         // TODO this should be markLoss, but since we're not keeping the scoreboard update just add
         // separate block for packet to be returned by getNextRetrans() function in flush

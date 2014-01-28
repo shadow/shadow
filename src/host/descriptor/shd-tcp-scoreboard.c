@@ -173,7 +173,7 @@ gint _scoreboard_compareSack(gconstpointer s1, gconstpointer s2) {
     return sack1 < sack2 ? -1 : sack1 > sack2 ? 1 : 0;
 }
 
-static void _scoreboard_removeAckedBlocks(ScoreBoard* scoreboard, gint lowestUnackedPacket) {
+void scoreboard_removeAckedBlocks(ScoreBoard* scoreboard, gint lowestUnackedPacket) {
     GList* link = g_list_first(scoreboard->blocks);
     while(link) {
         ScoreBoardBlock* block = (ScoreBoardBlock*)link->data;
@@ -266,7 +266,7 @@ gboolean scoreboard_update(ScoreBoard* scoreboard, GList* selectiveACKs, gint un
     gboolean dataLoss = FALSE;
 
     /* remove any blocks that have been fully ACKed */
-    _scoreboard_removeAckedBlocks(scoreboard, unacked);
+    scoreboard_removeAckedBlocks(scoreboard, unacked);
 
     if(selectiveACKs) {
         selectiveACKs = g_list_sort(selectiveACKs, (GCompareFunc)_scoreboard_compareSack);
@@ -343,6 +343,8 @@ void scoreboard_free(ScoreBoard* scoreboard) {
 
 static ScoreBoardBlock* _scoreboard_getNextLostBlock(ScoreBoard* scoreboard) {
 	MAGIC_ASSERT(scoreboard);
+
+    _scoreboard_dump(scoreboard);
 
     GList* link = g_list_first(scoreboard->blocks);
     while(link) {
