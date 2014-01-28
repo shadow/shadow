@@ -1,13 +1,13 @@
 /*
  * The Shadow Simulator
- * Copyright (c) 2010-2011, Rob Jansen
+ * Copyright (c) 2013-2014, John Geddes
  * See LICENSE for licensing information
  */
 
 #include "shadow.h"
 
 #define BETA_SCALE 1024
-#define HZ 10
+#define HZ 1000
 
 struct _Cubic {
     TCPCongestion super;
@@ -135,7 +135,7 @@ static void _cubic_update(Cubic* cubic) {
     }
 
 
-    if(now - cubic->lastTime < 32 * 100 / HZ) {
+    if(now - cubic->lastTime < 4) {
         return;
     }
 
@@ -267,8 +267,7 @@ Cubic* cubic_new(gint window, gint threshold) {
 
     tcpCongestion_init(&(cubic->super), &CubicFunctions, TCP_CC_CUBIC, window, threshold);
 
-    TCPCongestion* congestion = (TCPCongestion*)cubic;
-    congestion->fastRetransmit = TCP_FR_SACK;
+    cubic->super.fastRetransmit = TCP_FR_SACK;
 
     /* cubic parameters */
     cubic->beta = 819;
@@ -277,7 +276,7 @@ Cubic* cubic_new(gint window, gint threshold) {
     /* constants used in calculations */
     cubic->betaScale = 8 * (BETA_SCALE + cubic->beta) / 3 / (BETA_SCALE - cubic->beta);
     cubic->rttScale = cubic->scalingFactor * 10;
-    cubic->cubeFactor = (gint64)(1ull << (10+3*HZ)) / (gint64)cubic->rttScale;
+    cubic->cubeFactor = (gint64)(1ull << (10+3*10)) / (gint64)cubic->rttScale;
 
     cubic->hystart.found = FALSE;
     cubic->hystart.lowThreshold = 16;

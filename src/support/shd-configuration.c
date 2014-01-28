@@ -34,7 +34,7 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	c->interfaceBufferSize = 1024000;
 	c->interfaceBatchTime = 10;
 	c->randomSeed = 1;
-	c->cpuThreshold = 1000;
+	c->cpuThreshold = -1;
 	c->cpuPrecision = 200;
 	c->heartbeatInterval = 60;
 
@@ -64,7 +64,7 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	c->networkOptionGroup = g_option_group_new("network", "System Options", "Various system and network related options", NULL, NULL);
 	const GOptionEntry networkEntries[] =
 	{
-	  { "cpu-threshold", 0, 0, G_OPTION_ARG_INT, &(c->cpuThreshold), "TIME delay threshold after which the CPU becomes blocked, in microseconds (negative value to disable CPU delays) [1000]", "TIME" },
+	  { "cpu-threshold", 0, 0, G_OPTION_ARG_INT, &(c->cpuThreshold), "TIME delay threshold after which the CPU becomes blocked, in microseconds (negative value to disable CPU delays) (experimental!) [-1]", "TIME" },
 	  { "cpu-precision", 0, 0, G_OPTION_ARG_INT, &(c->cpuPrecision), "round measured CPU delays to the nearest TIME, in microseconds (negative value to disable fuzzy CPU delays) [200]", "TIME" },
 	  { "interface-batch", 0, 0, G_OPTION_ARG_INT, &(c->interfaceBatchTime), "Batch TIME for network interface sends and receives, in milliseconds [10]", "TIME" },
 	  { "interface-buffer", 0, 0, G_OPTION_ARG_INT, &(c->interfaceBufferSize), "Size of the network interface receive buffer, in bytes [1024000]", "N" },
@@ -72,7 +72,7 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	  { "socket-recv-buffer", 0, 0, G_OPTION_ARG_INT, &(c->initialSocketReceiveBufferSize), sockrecv->str, "N" },
 	  { "socket-send-buffer", 0, 0, G_OPTION_ARG_INT, &(c->initialSocketSendBufferSize), socksend->str, "N" },
 	  { "tcp-windows", 0, 0, G_OPTION_ARG_INT, &(c->initialTCPWindow), "Initialize the TCP send, receive, and congestion windows to N packets [10]", "N" },
-	  { "tcp-congestion-control", 0, 0, G_OPTION_ARG_STRING, &(c->tcpCongestionControl), "Congestion control algorithm to use for TCP ('aimd', 'reno', 'cubic') ['aimd']", "TCPCC" },
+	  { "tcp-congestion-control", 0, 0, G_OPTION_ARG_STRING, &(c->tcpCongestionControl), "Congestion control algorithm to use for TCP ('aimd', 'reno', 'cubic') ['cubic']", "TCPCC" },
 	  { "tcp-ssthresh", 0, 0, G_OPTION_ARG_INT, &(c->tcpSlowStartThreshold), "Set TCP ssthresh value instead of discovering it via packet loss or hystart [0]", "N" },
 	  { NULL },
 	};
@@ -152,7 +152,7 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 		c->autotuneSocketSendBuffer = TRUE;
 	}
 	if(c->tcpCongestionControl == NULL) {
-		c->tcpCongestionControl = g_strdup("aimd");
+		c->tcpCongestionControl = g_strdup("cubic");
 	}
 
 	c->inputXMLFilenames = g_queue_new();

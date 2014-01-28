@@ -1,6 +1,6 @@
 /*
  * The Shadow Simulator
- * Copyright (c) 2010-2011, Rob Jansen
+ * Copyright (c) 2013-2014, John Geddes
  * See LICENSE for licensing information
  */
 
@@ -12,13 +12,15 @@
 typedef struct _ScoreBoard ScoreBoard;
 
 ScoreBoard* scoreboard_new();
-gboolean scoreboard_update(ScoreBoard* scoreboard, GList* selectiveACKs, gint unacked);
+void scoreboard_free(ScoreBoard* scoreboard);
 void scoreboard_clear(ScoreBoard* scoreboard);
-gint scoreboard_getNextRetransmit(ScoreBoard* scoreboard);
-void scoreboard_markRetransmitted(ScoreBoard* scoreboard, gint sequence, gint sendNext);
+
+gboolean scoreboard_update(ScoreBoard* scoreboard, GList* selectiveACKs, gint unacked);
+gint scoreboard_getNextRetransmit(ScoreBoard* scoreboard, gint nextSend);
 void scoreboard_markLoss(ScoreBoard* scoreboard, gint unacked, gint sendNext);
 gboolean scoreboard_isEmpty(ScoreBoard* scoreboard);
 
 void scoreboard_packetDropped(ScoreBoard* scoreboard, gint sequence);
+void scoreboard_removeAckedBlocks(ScoreBoard* scoreboard, gint lowestUnackedPacket);
 
 #endif /* SHD_TCP_SCOREBOARD_H_ */
