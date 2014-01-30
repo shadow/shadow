@@ -1324,6 +1324,9 @@ gint tcp_acceptServerPeer(TCP* tcp, in_addr_t* ip, in_port_t* port, gint* accept
 
 	/* if there are no pending connection ready to accept, dont block waiting */
 	if(g_queue_get_length(tcp->server->pending) <= 0) {
+		/* listen sockets should have no data, and should not be readable if no pending conns */
+		utility_assert(socket_getInputBufferLength(&tcp->super) == 0);
+		descriptor_adjustStatus(&(tcp->super.super.super), DS_READABLE, FALSE);
 		return EWOULDBLOCK;
 	}
 
@@ -1594,6 +1597,14 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
 			return;
 			break;
 		}
+	}
+
+	/* listening sockets are not connected and do not exchange data */
+	if(tcp->state == TCPS_LISTEN) {
+		if(!wasProcessed) {
+			packet_addDeliveryStatus(packet, PDS_RCV_SOCKET_DROPPED);
+		}
+		return;
 	}
 
 	SimulationTime now = worker_getCurrentTime();
