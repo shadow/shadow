@@ -1778,7 +1778,7 @@ def plot(args):
             # show fractions of pie with autopct='%1.2f%%'
             patches = pylab.pie(fractions, explode=[0.1]*len(fractions), autopct=None, shadow=True)
 
-            leg = pylab.legend(patches, labels, loc=(-0.3, -0.05), labelspacing=0.8)
+            leg = pylab.legend((patches[0]), labels, loc=(-0.3, -0.05), labelspacing=0.8)
             pylab.setp(leg.get_texts(), fontsize='6')
 
             if stitle is not None: pylab.suptitle(stitle, fontsize=stitlesize)
