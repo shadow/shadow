@@ -855,10 +855,11 @@ static void _tcp_flush(TCP* tcp) {
 	SimulationTime now = worker_getCurrentTime();
 
     /* find all packets to retransmit and add them throttled output */
-    gint retransmitSequence = scoreboard_getNextRetransmit(tcp->retransmit.scoreboard, tcp->send.highestSequence);
+    gint retransmitSequence = scoreboard_getNextRetransmit(tcp->retransmit.scoreboard);
     while(retransmitSequence != -1) {
         _tcp_retransmitPacket(tcp, retransmitSequence);
-        retransmitSequence = scoreboard_getNextRetransmit(tcp->retransmit.scoreboard, tcp->send.highestSequence);
+        scoreboard_markRetransmitted(tcp->retransmit.scoreboard, retransmitSequence, tcp->send.highestSequence);
+        retransmitSequence = scoreboard_getNextRetransmit(tcp->retransmit.scoreboard);
     }
 
 	/* flush packets that can now be sent to socket */
@@ -1163,6 +1164,9 @@ void tcp_retransmitTimerExpired(TCP* tcp) {
 	/* some type of drop, or congestion may have occurred; do congestion control */
 	tcpCongestion_packetLoss(tcp->congestion);
 
+    /* update the scoreboard by marking this as lost */
+    scoreboard_markLoss(tcp->retransmit.scoreboard, tcp->receive.lastAcknowledgment, tcp->send.highestSequence);
+
     congestionlog(tcp->congestion, "[CONG-LOSS] cwnd=%d ssthresh=%d rtt=%d sndbufsize=%d sndbuflen=%d rcvbufsize=%d rcbuflen=%d retrans=%d ploss=%f", 
             tcp->congestion->window, tcp->congestion->threshold, tcp->congestion->rttSmoothed, 
             tcp->super.outputBufferLength, tcp->super.outputBufferSize, tcp->super.inputBufferLength, tcp->super.inputBufferSize, 
@@ -1176,7 +1180,7 @@ void tcp_retransmitTimerExpired(TCP* tcp) {
         sequence = 0;
     }
 
-	debug("%s valid timer expiration (congestion event) occurred on packet %d", tcp->super.boundString, sequence);
+	message("%s valid timer expiration (congestion event) occurred on packet %d", tcp->super.boundString, sequence);
 
 	_tcp_retransmitPacket(tcp, sequence);
     _tcp_flush(tcp);
@@ -1324,9 +1328,6 @@ gint tcp_acceptServerPeer(TCP* tcp, in_addr_t* ip, in_port_t* port, gint* accept
 
 	/* if there are no pending connection ready to accept, dont block waiting */
 	if(g_queue_get_length(tcp->server->pending) <= 0) {
-		/* listen sockets should have no data, and should not be readable if no pending conns */
-		utility_assert(socket_getInputBufferLength(&tcp->super) == 0);
-		descriptor_adjustStatus(&(tcp->super.super.super), DS_READABLE, FALSE);
 		return EWOULDBLOCK;
 	}
 
@@ -1599,14 +1600,6 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
 		}
 	}
 
-	/* listening sockets are not connected and do not exchange data */
-	if(tcp->state == TCPS_LISTEN) {
-		if(!wasProcessed) {
-			packet_addDeliveryStatus(packet, PDS_RCV_SOCKET_DROPPED);
-		}
-		return;
-	}
-
 	SimulationTime now = worker_getCurrentTime();
 	gint nPacketsAcked = 0;
 
@@ -1701,25 +1694,16 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
 		}
 
         gboolean dataLoss = FALSE;
-        // TODO fix the scoreboard so we can use SACK info to detect packet loss
-        //if((header.flags & PTCP_SACK) || (isValidAck && !scoreboard_isEmpty(tcp->retransmit.scoreboard))) {
-        //    dataLoss = scoreboard_update(tcp->retransmit.scoreboard, header.selectiveACKs, tcp->send.unacked);
-        //    if(dataLoss && tcp->congestion->state != TCP_CCS_FASTRECOVERY) {
-        //        tcp->congestion->state = TCP_CCS_FASTRETRANSMIT;
-        //    }
-        //}
-        
-        if(isValidAck) {
-            scoreboard_removeAckedBlocks(tcp->retransmit.scoreboard, tcp->send.unacked);
+        if((header.flags & PTCP_SACK) || (isValidAck && !scoreboard_isEmpty(tcp->retransmit.scoreboard))) {
+            dataLoss = scoreboard_update(tcp->retransmit.scoreboard, header.selectiveACKs, tcp->send.unacked);
+            if(dataLoss && tcp->congestion->state != TCP_CCS_FASTRECOVERY) {
+                tcp->congestion->state = TCP_CCS_FASTRETRANSMIT;
+            }
         }
 
-
-        // TODO this should be markLoss, but since we're not keeping the scoreboard update just add
-        // separate block for packet to be returned by getNextRetrans() function in flush
-        if(header.acknowledgment < tcp->send.next && tcp->receive.dupAcknowledgmentCount == 3) {
-            //scoreboard_markLoss(tcp->retransmit.scoreboard, header.acknowledgment, tcp->send.highestSequence);
-            scoreboard_packetDropped(tcp->retransmit.scoreboard, header.acknowledgment);
-        }
+        /*if(header.acknowledgment < tcp->send.next && tcp->receive.dupAcknowledgmentCount == 3) {
+            scoreboard_markLoss(tcp->retransmit.scoreboard, header.acknowledgment, tcp->send.highestSequence);
+        }*/
 
         gboolean isDubiousAck = !isValidAck || (header.flags & PTCP_SACK) || 
             (tcp->congestion->state != TCP_CCS_SLOWSTART && tcp->congestion->state != TCP_CCS_AVOIDANCE);

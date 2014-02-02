@@ -13,14 +13,14 @@ typedef struct _ScoreBoard ScoreBoard;
 
 ScoreBoard* scoreboard_new();
 void scoreboard_free(ScoreBoard* scoreboard);
-void scoreboard_clear(ScoreBoard* scoreboard);
 
 gboolean scoreboard_update(ScoreBoard* scoreboard, GList* selectiveACKs, gint unacked);
-gint scoreboard_getNextRetransmit(ScoreBoard* scoreboard, gint nextSend);
+void scoreboard_clear(ScoreBoard* scoreboard);
+gint scoreboard_getNextRetransmit(ScoreBoard* scoreboard);
+void scoreboard_markRetransmitted(ScoreBoard* scoreboard, gint sequence, gint sendNext);
 void scoreboard_markLoss(ScoreBoard* scoreboard, gint unacked, gint sendNext);
 gboolean scoreboard_isEmpty(ScoreBoard* scoreboard);
 
 void scoreboard_packetDropped(ScoreBoard* scoreboard, gint sequence);
-void scoreboard_removeAckedBlocks(ScoreBoard* scoreboard, gint lowestUnackedPacket);
 
 #endif /* SHD_TCP_SCOREBOARD_H_ */
