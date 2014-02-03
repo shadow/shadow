@@ -472,7 +472,7 @@ def main():
     
     # requried positional arg
     parser_parse.add_argument('logpath', 
-        help="path to a Shadow log file", 
+        help="path to a Shadow log file, or '-' for stdin", 
         metavar="LOGFILE",
         action="store",
         default=LOGPATH)
@@ -555,7 +555,7 @@ def main():
     args.func(args)
 
 def parse(args):
-    logpath = os.path.abspath(os.path.expanduser(args.logpath))
+    logfile = sys.stdin if args.logpath == '-' else open(os.path.abspath(os.path.expanduser(args.logpath)), 'r')
     outputpath = os.path.abspath(os.path.expanduser(args.outputpath))
     cutoff = int(args.cutoff)
 
@@ -568,8 +568,8 @@ def parse(args):
     clients, relays = {}, {}
 
     # parse the log file
-    print "Parsing '{0}'".format(logpath)
-    with open(logpath, 'r') as f:
+    print "Parsing '{0}'".format("stdin" if args.logpath == '-' else args.logpath)
+    with logfile as f:
         lastt = 0
 
         for line in f:
