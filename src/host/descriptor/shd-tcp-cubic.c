@@ -7,12 +7,14 @@
 #include "shadow.h"
 
 #define BETA_SCALE 1024
-#define HZ 1000
+#define HZ 1024
+#define BICTCP_HZ 10
 
 struct _Cubic {
     TCPCongestion super;
     gint32 maxWindow;
     gint32 lastMaxWindow;
+    gint32 lossWindow;
     SimulationTime epochStart;
     SimulationTime lastTime;
     gint32 originPoint;
@@ -130,12 +132,7 @@ static void _cubic_update(Cubic* cubic) {
 
     cubic->ackCount += 1;
 
-    if(!cubic->lastMaxWindow) {
-        cubic->lastMaxWindow = congestion->window * 1.25;
-    }
-
-
-    if(now - cubic->lastTime < 4) {
+    if(now - cubic->lastTime <= HZ / 32) {
         return;
     }
 
@@ -177,6 +174,13 @@ static void _cubic_update(Cubic* cubic) {
         cubic->count = congestion->window * 100;
     }
 
+    if(cubic->delayMin > 0) {
+        gint minCount = (congestion->window * 1000 * 8) / (10 * 16 * cubic->delayMin);
+        if(cubic->count < minCount && t >= cubic->k) {
+            cubic->count = minCount;
+        }
+    }
+
     /* cubic_tcp_friendliness() */
     gint32 delta = (congestion->window * cubic->betaScale) >> 3;
     while (cubic->ackCount > delta) {		/* update tcp window */
@@ -190,6 +194,11 @@ static void _cubic_update(Cubic* cubic) {
         if(cubic->count > maxCount) {
             cubic->count = maxCount;
         }
+    }
+
+    cubic->count /= 2;
+    if(cubic->count == 0) {
+        cubic->count = 1;
     }
 
     debug("[CUBIC] t=%d  lastMax=%d  tcpEst=%d  K=%d  count=%d  windowCount=%d  offset=%d  oDelta=%d  target=%d  window=%d ",
@@ -242,6 +251,7 @@ void cubic_packetLoss(Cubic* cubic) {
     }
     congestion->threshold = congestion->window;
 
+    cubic->lossWindow = congestion->window;
 }
 
 static void _cubic_free(Cubic* cubic) {
@@ -276,7 +286,7 @@ Cubic* cubic_new(gint window, gint threshold) {
     /* constants used in calculations */
     cubic->betaScale = 8 * (BETA_SCALE + cubic->beta) / 3 / (BETA_SCALE - cubic->beta);
     cubic->rttScale = cubic->scalingFactor * 10;
-    cubic->cubeFactor = (gint64)(1ull << (10+3*10)) / (gint64)cubic->rttScale;
+    cubic->cubeFactor = (gint64)(1ull << (10+3*BICTCP_HZ)) / (gint64)cubic->rttScale;
 
     cubic->hystart.found = FALSE;
     cubic->hystart.lowThreshold = 16;

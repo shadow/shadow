@@ -365,7 +365,12 @@ void worker_schedulePacket(Packet* packet) {
 		packet_addDeliveryStatus(packet, PDS_INET_SENT);
 	} else {
         SimulationTime dropDelay = packet_getDropNotificationDelay(packet);
-        if(dropDelay) {
+	    chance = random_nextDouble(random);
+        /* during simulations with NS I consistently saw packet timers expiring only causing around
+         * 10% of packet drops.  this makes sure we're not too aggressive in our universal knowledge
+         * of packets being dropped, and in some instances will make sure packets can expire
+         * with the timer expiration */
+        if(dropDelay && chance >= 0.1) {
             PacketDroppedEvent* event = packetdropped_new(packet);
             worker_scheduleEvent((Event*)event, dropDelay, (GQuark)address_getID(srcAddress));
         }
