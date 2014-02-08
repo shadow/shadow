@@ -48,6 +48,12 @@ if((${TOR_VERSION_A} EQUAL 0 AND ${TOR_VERSION_B} EQUAL 2 AND ${TOR_VERSION_C} E
     add_definitions(-DSCALLION_LOGVWITHSUFFIX)
     message(STATUS "Added definition SCALLION_LOGVWITHSUFFIX")
 endif()
+# version >= 0.2.5.2
+if((${TOR_VERSION_A} EQUAL 0 AND ${TOR_VERSION_B} EQUAL 2 AND ${TOR_VERSION_C} EQUAL 5 AND ${TOR_VERSION_D} GREATER 1) OR 
+    (${TOR_VERSION_A} GREATER -1 AND ${TOR_VERSION_B} GREATER 1 AND ${TOR_VERSION_C} GREATER 5))
+    add_definitions(-DSCALLION_NOV2DIR)
+    message(STATUS "Added definition SCALLION_NOV2DIR")
+endif()
 
 ## get tor source files, but ignore some of them
 aux_source_directory(${CURRENT_TOR_DIR}/src/common torcommon_sources)
