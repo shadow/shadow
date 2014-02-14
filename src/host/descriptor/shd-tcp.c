@@ -1180,7 +1180,7 @@ void tcp_retransmitTimerExpired(TCP* tcp) {
         sequence = 0;
     }
 
-	message("%s valid timer expiration (congestion event) occurred on packet %d", tcp->super.boundString, sequence);
+	debug("%s valid timer expiration (congestion event) occurred on packet %d", tcp->super.boundString, sequence);
 
 	_tcp_retransmitPacket(tcp, sequence);
     _tcp_flush(tcp);
