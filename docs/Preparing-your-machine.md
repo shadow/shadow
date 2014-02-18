@@ -98,6 +98,8 @@ If you prefer to install **openssl** and **libevent** manually instead of using 
 
 ## system configs and limits
 
+### number of open files
+
 There is a default linux system limit on the number of open files. If each node 
 in your Shadow plug-in opens many file or socket descriptors (if you have many nodes, this is very likely to happen), you'll likely want to increase the limit so you application doesn't start getting errors when calling `open()` or `socket()`.
 
@@ -129,3 +131,34 @@ man ulimit -n
 cat /proc/sys/fs/file-max
 cat /proc/sys/fs/inode-max
 ```
+
+### number of maps
+
+There is a system limit on the number of `mmap()` mappings per process. The limit can be queried in these ways:
+
+```bash
+sysctl vm.max_map_count
+cat /proc/sys/vm/max_map_count
+```
+
+You can check the number of maps currently used in a process with pid=PID like this:
+
+```bash
+cat /proc/PID/maps | wc -l
+```
+
+Most users will not have to modify these settings. However, if an application running in Shadow makes extensive use of `mmap()`, you may need to increase the limit. You can do that at run time with:
+
+```bash
+sudo sysctl -w vm.max_map_count=262144
+```
+
+If you also want to change it at run time AND make it persistent, you can use:
+
+```bash
+sudo echo "vm.max_map_count = 262144" >> /etc/sysctl.conf
+sudo sysctl -p
+```
+
+For more information:
+https://www.kernel.org/doc/Documentation/sysctl/vm.txt
