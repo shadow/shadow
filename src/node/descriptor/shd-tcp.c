@@ -581,6 +581,9 @@ static void _tcp_removeRetransmit(TCP* tcp, guint sequence) {
 		if(length) {
 			tcp->retransmissionLength -= length;
 			g_hash_table_remove(tcp->retransmission, key);
+			if(_tcp_getBufferSpaceOut(tcp) > 0) {
+				descriptor_adjustStatus((Descriptor*)tcp, DS_WRITABLE, TRUE);
+			}
 		}
 	}
 }
