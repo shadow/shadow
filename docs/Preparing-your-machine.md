@@ -46,7 +46,7 @@ cp -R clang-3.2.src llvm-3.2.src/tools/clang
 cd llvm-3.2.src
 mkdir build
 cd build
-cmake -DCMAKE_INSTALL_PREFIX=/home/username/.local ../.
+cmake -DCMAKE_INSTALL_PREFIX=/home/$USER/.local ../.
 make -jN
 make install
 ```
