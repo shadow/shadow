@@ -714,6 +714,9 @@ static void _tcp_clearRetransmit(TCP* tcp, guint sequence) {
             tcp->retransmit.queueLength -= packet_getPayloadLength(ackedPacket);
             packet_addDeliveryStatus(ackedPacket, PDS_SND_TCP_DEQUEUE_RETRANSMIT);
             g_hash_table_iter_remove(&iter);
+            if(_tcp_getBufferSpaceOut(tcp) > 0) {
+                    descriptor_adjustStatus((Descriptor*)tcp, DS_WRITABLE, TRUE);
+            }
         }
     }
 }
@@ -835,6 +838,10 @@ static void _tcp_retransmitPacket(TCP* tcp, gint sequence) {
     tcp->retransmit.queueLength -= packet_getPayloadLength(packet);
     tcp->retransmit.lastSeqRetransmitted = sequence;
     packet_addDeliveryStatus(packet, PDS_SND_TCP_DEQUEUE_RETRANSMIT);
+
+    if(_tcp_getBufferSpaceOut(tcp) > 0) {
+        descriptor_adjustStatus((Descriptor*)tcp, DS_WRITABLE, TRUE);
+    }
 
     /* reset retransmit timer and buffer packet out */
     _tcp_setRetransmitTimer(tcp, worker_getCurrentTime());

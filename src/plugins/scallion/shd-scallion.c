@@ -212,9 +212,11 @@ gint scalliontor_start(ScallionTor* stor, gint argc, gchar *argv[]) {
 		log_warn(LD_DIR,
 			 "Couldn't load all cached v3 certificates. Starting anyway.");
 	}
+#ifndef SCALLION_NOV2DIR
 	if (router_reload_v2_networkstatus()) {
 		return -1;
 	}
+#endif
 	if (router_reload_consensus_networkstatus()) {
 		return -1;
 	}
