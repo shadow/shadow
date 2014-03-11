@@ -39,55 +39,49 @@ static in_addr_t _scallion_HostnameCallback(const gchar* hostname) {
 static void _scallion_new(gint argc, gchar* argv[]) {
 	scallion.shadowlibFuncs->log(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__, "scallion_new called");
 
-	gchar* usage = "Scallion USAGE: (\"dirauth\"|\"relay\"|\"exitrelay\"|\"client\") consensusbandwidth readbandwidthrate writebandwidthrate torrc_path datadir_base_path geoip_path\n";
+	gchar* usage = "Scallion USAGE: (\"dirauth\"|\"bridgeauth\"|\"relay\"|\"exitrelay\"|\"bridge\"|\"client\"|\"bridgeclient\") consensusWeightKiB ...\n";
 
-	if(argc != 8) {
+	if(argc < 3) {
 		scallion.shadowlibFuncs->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, usage);
 		return;
 	}
 	
 	/* parse our arguments, program name is argv[0] */
-	gchar* tortype = argv[1];
-	gchar* bandwidth = argv[2];
-	gchar* bwrate = argv[3];
-	gchar* bwburst = argv[4];
-	gchar* torrc_path = argv[5];
-	gchar* datadir_base_path = argv[6];
-	gchar* geoip_path = argv[7];
+	gchar* type = argv[1];
+	gint weight = atoi(argv[2]);
 
 	enum vtor_nodetype ntype;
 
-	if(g_ascii_strncasecmp(tortype, "dirauth", strlen("dirauth")) == 0) {
+	if(g_ascii_strncasecmp(type, "dirauth", strlen("dirauth")) == 0) {
 		ntype = VTOR_DIRAUTH;
-	} else if(g_ascii_strncasecmp(tortype, "relay", strlen("relay")) == 0) {
+	} else if(g_ascii_strncasecmp(type, "hsauth", strlen("hsauth")) == 0) {
+		ntype = VTOR_HSAUTH;
+	} else if(g_ascii_strncasecmp(type, "bridgeauth", strlen("bridgeauth")) == 0) {
+		ntype = VTOR_BRIDGEAUTH;
+	} else if(g_ascii_strncasecmp(type, "relay", strlen("relay")) == 0) {
 		ntype = VTOR_RELAY;
-	} else if(g_ascii_strncasecmp(tortype, "exitrelay", strlen("exitrelay")) == 0) {
+	} else if(g_ascii_strncasecmp(type, "exitrelay", strlen("exitrelay")) == 0) {
 		ntype = VTOR_EXITRELAY;
-	} else if(g_ascii_strncasecmp(tortype, "client", strlen("client")) == 0) {
+	} else if(g_ascii_strncasecmp(type, "bridge", strlen("bridge")) == 0) {
+		ntype = VTOR_BRIDGE;
+	} else if(g_ascii_strncasecmp(type, "client", strlen("client")) == 0) {
 		ntype = VTOR_CLIENT;
+	} else if(g_ascii_strncasecmp(type, "bridgeclient", strlen("bridgeclient")) == 0) {
+		ntype = VTOR_BRIDGECLIENT;
 	} else {
-		scallion.shadowlibFuncs->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, "Unrecognized torrent type: %s", usage);
+		scallion.shadowlibFuncs->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, "Unrecognized relay type: %s", usage);
 		return;
 	}
 
-	/* get the hostname */
+	/* get the hostname, IP, and IP string */
 	if(gethostname(scallion.hostname, 128) < 0) {
 		scallion.shadowlibFuncs->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, "error getting hostname");
 		return;
 	}
-
-	/* get IP address through SNRI */
 	scallion.ip = _scallion_HostnameCallback(scallion.hostname);
-
-	/* also save IP as string */
 	inet_ntop(AF_INET, &scallion.ip, scallion.ipstring, sizeof(scallion.ipstring));
 
-	/* setup actual data directory for this node */
-	int size = g_snprintf(NULL, 0, "%s/%s", datadir_base_path, scallion.hostname) + 1;
-	char datadir_path[size];
-	g_sprintf(datadir_path, "%s/%s", datadir_base_path, scallion.hostname);
-
-	scallion.stor = scalliontor_new(scallion.shadowlibFuncs, scallion.hostname, ntype, bandwidth, bwrate, bwburst, torrc_path, datadir_path, geoip_path);
+	scallion.stor = scalliontor_new(scallion.shadowlibFuncs, scallion.hostname, ntype, weight, argc-3, &argv[3]);
 }
 
 static void _scallion_free() {

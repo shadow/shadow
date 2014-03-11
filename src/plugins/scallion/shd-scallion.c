@@ -212,9 +212,11 @@ gint scalliontor_start(ScallionTor* stor, gint argc, gchar *argv[]) {
 		log_warn(LD_DIR,
 			 "Couldn't load all cached v3 certificates. Starting anyway.");
 	}
+#ifndef SCALLION_NOV2DIR
 	if (router_reload_v2_networkstatus()) {
 		return -1;
 	}
+#endif
 	if (router_reload_consensus_networkstatus()) {
 		return -1;
 	}
@@ -277,94 +279,59 @@ gint scalliontor_start(ScallionTor* stor, gint argc, gchar *argv[]) {
 	return 0;
 }
 
-static GString* _scalliontor_getHomePath(gchar* path) {
-	GString* sbuffer = g_string_new("");
-	if(g_ascii_strncasecmp(path, "~", 1) == 0) {
-		/* replace ~ with home directory */
-		const gchar* home = g_get_home_dir();
-		g_string_append_printf(sbuffer, "%s%s", home, path+1);
-	} else {
-		g_string_append_printf(sbuffer, "%s", path);
+static gchar* _scalliontor_getFormatedArg(gchar* argString, const gchar* home, const gchar* hostname) {
+	gchar* found = NULL;
+	GString* sbuffer = g_string_new(argString);
+
+	/* replace all ~ with the home directory */
+	while((found = g_strstr_len(sbuffer->str, sbuffer->len, "~"))) {
+		gssize position = (gssize) (found - sbuffer->str);
+		sbuffer = g_string_erase(sbuffer, position, (gssize) 1);
+		sbuffer = g_string_insert(sbuffer, position, home);
 	}
-	return sbuffer;
+
+	/* replace all ${NODEID} with the hostname */
+	while((found = g_strstr_len(sbuffer->str, sbuffer->len, "${NODEID}"))) {
+		gssize position = (gssize) (found - sbuffer->str);
+		sbuffer = g_string_erase(sbuffer, position, (gssize) 9);
+		sbuffer = g_string_insert(sbuffer, position, hostname);
+	}
+
+	return g_string_free(sbuffer, FALSE);
 }
 
-ScallionTor* scalliontor_new(ShadowFunctionTable* shadowlibFuncs, char* hostname, enum vtor_nodetype type,
-		char* bandwidth, char* bwrate, char* bwburst, char* torrc_path, char* datadir_path, char* geoip_path) {
+ScallionTor* scalliontor_new(ShadowFunctionTable* shadowlibFuncs, gchar* hostname,
+		enum vtor_nodetype type, gint consensusWeight, gint torargc, gchar* torargv[]) {
 	ScallionTor* stor = g_new0(ScallionTor, 1);
 	stor->shadowlibFuncs = shadowlibFuncs;
 
 	stor->type = type;
-	stor->bandwidth = (unsigned int) atoi(bandwidth);
+	stor->bandwidth = (unsigned int) (consensusWeight * 1000);
 
-	/* make sure the paths are absolute */
-	GString* torrcBuffer = _scalliontor_getHomePath(torrc_path);
-	GString* datadirBuffer = _scalliontor_getHomePath(datadir_path);
-	GString* geoipBuffer = _scalliontor_getHomePath(geoip_path);
+	/* get formatted argument vector by expanding '~' and '${NODEID}' */
+	gchar* formattedArgs[torargc+1];
+	/* tor ignores the first arg */
+	formattedArgs[0] = g_strdup("tor");
 
-	/* default args */
-	char *config[26];
-	config[0] = "tor";
-	config[1] = "--quiet";
-	config[2] = "--Address";
-	config[3] = hostname;
-	config[4] = "-f";
-	config[5] = torrcBuffer->str;
-	config[6] = "--DataDirectory";
-	config[7] = datadirBuffer->str;
-	config[8] = "--GeoIPFile";
-	config[9] = geoipBuffer->str;
-	config[10] = "--BandwidthRate";
-	config[11] = bwrate;
-	config[12] = "--BandwidthBurst";
-	config[13] = bwburst;
-
-	gchar* nickname = g_strdup(hostname);
-	while(1) {
-		gchar* dot = g_strstr_len((const gchar*)nickname, -1, ".");
-		if(dot != NULL) {
-			*dot = 'x';
-		} else {
-			break;
-		}
+	/* create the new strings */
+	const gchar* homeDirectory = g_get_home_dir();
+	for(gint i = 0; i < torargc; i++) {
+		formattedArgs[i+1] = _scalliontor_getFormatedArg(torargv[i], homeDirectory, hostname);
 	}
 
-	config[14] = "--Nickname";
-	config[15] = nickname;
-
-	config[16] = "--ControlPort";
-    config[17] = "9051";
-    config[18] = "--ControlListenAddress";
-    config[19] = "127.0.0.1";
-    config[20] = "--ControlListenAddress";
-    config[21] = hostname;
-    config[22] = "HashedControlPassword";
-    config[23] = "16:25662F13DA7881D46091AB96726A8E5245CBF98BA6961A5B8C9CEEBB25";
-
-	int num_args = 24;
-	/* additional args */
-	if(stor->type == VTOR_DIRAUTH) {
-		num_args += 2;
-		if(snprintf(stor->v3bw_name, 255, "%s/dirauth.v3bw", datadir_path) >= 255) {
-			stor->shadowlibFuncs->log(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__,
-					"data directory path is too long and was truncated to '%s'\n", stor->v3bw_name);
-		}
-		config[24] = "--V3BandwidthsFile";
-		config[25] = stor->v3bw_name;
-	}
-
+	/* initialize tor */
 	scallion.stor = stor;
-	scalliontor_start(stor, num_args, config);
+	scalliontor_start(stor, torargc+1, formattedArgs);
 
 	if(stor->type == VTOR_DIRAUTH) {
 		/* run torflow now, it will schedule itself as needed */
 		scalliontor_init_v3bw(stor);
 	}
 
-	g_string_free(torrcBuffer, TRUE);
-	g_string_free(datadirBuffer, TRUE);
-	g_string_free(geoipBuffer, TRUE);
-	g_free(nickname);
+	/* free the new strings */
+	for(gint i = 0; i < torargc+1; i++) {
+		g_free(formattedArgs[i]);
+	}
 
 	return stor;
 }

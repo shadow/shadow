@@ -12,7 +12,7 @@
 typedef struct _HeartbeatEvent HeartbeatEvent;
 
 HeartbeatEvent* heartbeat_new(Tracker* tracker);
-void heartbeat_run(HeartbeatEvent* event, Node* node);
+void heartbeat_run(HeartbeatEvent* event, Host* node);
 void heartbeat_free(HeartbeatEvent* event);
 
 #endif /* SHD_HEARTBEAT_H_ */

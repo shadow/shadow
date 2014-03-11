@@ -29,13 +29,13 @@ NotifyPluginEvent* notifyplugin_new(gint epollHandle) {
 	return event;
 }
 
-void notifyplugin_run(NotifyPluginEvent* event, Node* node) {
+void notifyplugin_run(NotifyPluginEvent* event, Host* node) {
 	MAGIC_ASSERT(event);
 
 	debug("event started");
 
 	/* check in with epoll to make sure we should carry out the notification */
-	Epoll* epoll = (Epoll*) node_lookupDescriptor(node, event->epollHandle);
+	Epoll* epoll = (Epoll*) host_lookupDescriptor(node, event->epollHandle);
 	epoll_tryNotify(epoll);
 
 	debug("event finished");

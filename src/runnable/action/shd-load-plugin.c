@@ -21,7 +21,7 @@ RunnableFunctionTable loadplugin_functions = {
 };
 
 LoadPluginAction* loadplugin_new(GString* name, GString* path) {
-	g_assert(name && path);
+	utility_assert(name && path);
 	LoadPluginAction* action = g_new0(LoadPluginAction, 1);
 	MAGIC_INIT(action);
 
@@ -42,19 +42,14 @@ void loadplugin_run(LoadPluginAction* action) {
 	 * event will be run by a worker. For now, we just track the original
 	 * filename of the plug-in library, so the worker can copy it later.
 	 */
-	Worker* worker = worker_getPrivate();
-
-	/* the hash table now owns the GString */
-	GQuark* id = g_new0(GQuark, 1);
-	*id = action->id;
-	engine_put(worker->cached_engine, PLUGINPATHS, id, action->path->str);
+	worker_storePluginPath(action->id, action->path->str);
 }
 
 void loadplugin_free(LoadPluginAction* action) {
 	MAGIC_ASSERT(action);
 
 	if(action->path) {
-		g_string_free(action->path, FALSE);
+		g_string_free(action->path, TRUE);
 	}
 
 	MAGIC_CLEAR(action);

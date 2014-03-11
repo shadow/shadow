@@ -12,7 +12,9 @@
 struct _CreateNodesAction {
 	Action super;
 	GQuark id;
-	GQuark networkID;
+	GString* requestedIP;
+	GString* requestedGeocode;
+	GString* requestedType;
 	guint64 bandwidthdown;
 	guint64 bandwidthup;
 	guint64 quantity;
@@ -46,13 +48,13 @@ RunnableFunctionTable createnodes_functions = {
 	MAGIC_VALUE
 };
 
-CreateNodesAction* createnodes_new(GString* name, GString* cluster,
+CreateNodesAction* createnodes_new(GString* name, GString* ip, GString* geocode, GString* type,
 		guint64 bandwidthdown, guint64 bandwidthup, guint64 quantity, guint64 cpuFrequency,
 		guint64 heartbeatIntervalSeconds, GString* heartbeatLogLevelString, GString* heartbeatLogInfoString,
 		GString* logLevelString, GString* logPcapString, GString* pcapDirString,
 		guint64 socketReceiveBufferSize, guint64 socketSendBufferSize, guint64 interfaceReceiveBufferLength)
 {
-	g_assert(name);
+	utility_assert(name);
 	CreateNodesAction* action = g_new0(CreateNodesAction, 1);
 	MAGIC_INIT(action);
 
@@ -60,12 +62,22 @@ CreateNodesAction* createnodes_new(GString* name, GString* cluster,
 
 	action->id = g_quark_from_string((const gchar*) name->str);
 
-	action->networkID = cluster ? g_quark_from_string((const gchar*) cluster->str) : 0;
 	action->bandwidthdown = bandwidthdown;
 	action->bandwidthup = bandwidthup;
 	action->quantity = quantity ? quantity : 1;
 	action->cpuFrequency = (guint)cpuFrequency;
 	action->heartbeatIntervalSeconds = heartbeatIntervalSeconds;
+
+	/* ignore 127.0.0.1 ip address settings - that is reserved for internal use */
+	if(ip && address_stringToIP(ip->str) != address_stringToIP("127.0.0.1")) {
+		action->requestedIP = g_string_new(ip->str);
+	}
+	if(geocode) {
+		action->requestedGeocode = g_string_new(geocode->str);
+	}
+	if(type) {
+		action->requestedType = g_string_new(type->str);
+	}
 	if(heartbeatLogLevelString) {
 		action->heartbeatLogLevelString = g_string_new(heartbeatLogLevelString->str);
 	}
@@ -97,7 +109,7 @@ CreateNodesAction* createnodes_new(GString* name, GString* cluster,
 void createnodes_addApplication(CreateNodesAction* action, GString* pluginName,
 		GString* arguments, guint64 starttime, guint64 stoptime)
 {
-	g_assert(pluginName && arguments);
+	utility_assert(pluginName && arguments);
 	MAGIC_ASSERT(action);
 
 	NodeApplication* nodeApp = g_new0(NodeApplication, 1);
@@ -113,8 +125,7 @@ void createnodes_addApplication(CreateNodesAction* action, GString* pluginName,
 void createnodes_run(CreateNodesAction* action) {
 	MAGIC_ASSERT(action);
 
-	Worker* worker = worker_getPrivate();
-	Configuration* config = engine_getConfig(worker->cached_engine);
+	Configuration* config = worker_getConfig();
 
 	const gchar* hostname = g_quark_to_string(action->id);
 	guint hostnameCounter = 0;
@@ -125,18 +136,10 @@ void createnodes_run(CreateNodesAction* action) {
 		return;
 	}
 
-	/* if they didnt specify a network, assign to a random network */
-	Network* assignedNetwork = NULL;
-	if(action->networkID) {
-		/* they assigned a network, find it */
-		assignedNetwork = internetwork_getNetwork(worker_getInternet(), action->networkID);
-		g_assert(assignedNetwork);
-	}
-
 	/* if they didnt specify a CPU frequency, use the frequency of the box we are running on */
 	guint cpuFrequency = action->cpuFrequency;
 	if(!cpuFrequency) {
-		cpuFrequency = engine_getRawCPUFrequency(worker->cached_engine);
+		cpuFrequency = worker_getRawCPUFrequency();
 		if(!cpuFrequency) {
 			cpuFrequency = 2500000; /* 2.5 GHz */
 			debug("both configured and raw cpu frequencies unavailable, using 2500000 KHz");
@@ -180,34 +183,24 @@ void createnodes_run(CreateNodesAction* action) {
 
 	gchar* qdisc = configuration_getQueuingDiscipline(config);
 
-	guint64 sockRecv = action->socketReceiveBufferSize; /* bytes */
-	gboolean autotuneRecv = FALSE;
-	if(!sockRecv) {
-		sockRecv = worker_getConfig()->initialSocketReceiveBufferSize;
-		autotuneRecv = worker_getConfig()->autotuneSocketReceiveBuffer;
+	guint64 receiveBufferSize = action->socketReceiveBufferSize; /* bytes */
+	gboolean autotuneReceiveBuffer = FALSE;
+	if(!receiveBufferSize) {
+		receiveBufferSize = worker_getConfig()->initialSocketReceiveBufferSize;
+		autotuneReceiveBuffer = worker_getConfig()->autotuneSocketReceiveBuffer;
 	}
-	guint64 sockSend = action->socketSendBufferSize; /* bytes */
-	gboolean autotuneSend = FALSE;
-	if(!sockSend) {
-		sockSend = worker_getConfig()->initialSocketSendBufferSize;
-		autotuneSend = worker_getConfig()->autotuneSocketSendBuffer;
+	guint64 sendBufferSize = action->socketSendBufferSize; /* bytes */
+	gboolean autotuneSendBuffer = FALSE;
+	if(!sendBufferSize) {
+		sendBufferSize = worker_getConfig()->initialSocketSendBufferSize;
+		autotuneSendBuffer = worker_getConfig()->autotuneSocketSendBuffer;
 	}
-	guint64 ifaceRecv = action->interfaceReceiveBufferLength; /* N packets */
-	if(!ifaceRecv) {
-		ifaceRecv = worker_getConfig()->interfaceBufferSize;
+	guint64 interfaceReceiveLength = action->interfaceReceiveBufferLength; /* N packets */
+	if(!interfaceReceiveLength) {
+		interfaceReceiveLength = worker_getConfig()->interfaceBufferSize;
 	}
 
 	for(gint i = 0; i < action->quantity; i++) {
-		/* get a random network if they didnt assign one */
-		gdouble randomDouble = engine_nextRandomDouble(worker->cached_engine);
-		Network* network = assignedNetwork ? assignedNetwork :
-				internetwork_getRandomNetwork(worker_getInternet(), randomDouble);
-		g_assert(network);
-
-		/* use network bandwidth unless an override was given */
-		guint64 bwUpKiBps = action->bandwidthup ? action->bandwidthup : network_getBandwidthUp(network);
-		guint64 bwDownKiBps = action->bandwidthdown ? action->bandwidthdown : network_getBandwidthDown(network);
-
 		/* hostname */
 		GString* hostnameBuffer = g_string_new(hostname);
 		if(action->quantity > 1) {
@@ -218,44 +211,73 @@ void createnodes_run(CreateNodesAction* action) {
 		GQuark id = g_quark_from_string((const gchar*) hostnameBuffer->str);
 
 		/* the node is part of the internet */
-		guint nodeSeed = (guint) engine_nextRandomInt(worker->cached_engine);
-		Node* node = internetwork_createNode(worker_getInternet(), id, network,
-						hostnameBuffer, bwDownKiBps, bwUpKiBps, cpuFrequency, cpuThreshold, cpuPrecision,
-						nodeSeed, heartbeatInterval, heartbeatLogLevel, heartbeatLogInfo, logLevel, logPcap, pcapDir,
-						qdisc, sockRecv, autotuneRecv, sockSend, autotuneSend, ifaceRecv);
+		guint nodeSeed = (guint) worker_nextRandomInt();
+
+		Host* host = host_new(id, hostnameBuffer->str,
+				action->requestedIP ? action->requestedIP->str : NULL,
+				action->requestedGeocode ? action->requestedGeocode->str : NULL,
+				action->requestedType ? action->requestedType->str : NULL,
+				action->bandwidthdown, action->bandwidthup,
+				cpuFrequency, cpuThreshold, cpuPrecision, nodeSeed,
+				heartbeatInterval, heartbeatLogLevel, heartbeatLogInfo,
+				logLevel, logPcap, pcapDir, qdisc,
+				receiveBufferSize, autotuneReceiveBuffer, sendBufferSize, autotuneSendBuffer,
+				interfaceReceiveLength);
+
+		/* save the node somewhere */
+		worker_addHost(host, (guint) id);
+
 		g_string_free(hostnameBuffer, TRUE);
 
 		/* loop through and create, add, and boot all applications */
 		GList* item = action->applications;
 		while (item && item->data) {
 			NodeApplication* app = (NodeApplication*) item->data;
-			gchar* pluginPath = engine_get(worker->cached_engine, PLUGINPATHS, app->pluginID);
+			const gchar* pluginPath = worker_getPluginPath(app->pluginID);
 
 			/* make sure our bootstrap events are set properly */
-			worker->clock_now = 0;
-			node_addApplication(node, app->pluginID, pluginPath,
+			worker_setCurrentTime(0);
+			host_addApplication(host, app->pluginID, pluginPath,
 					app->starttime, app->stoptime, app->arguments->str);
-			worker->clock_now = SIMTIME_INVALID;
+			worker_setCurrentTime(SIMTIME_INVALID);
 
 			item = g_list_next(item);
 		}
 
 		/* make sure our bootstrap events are set properly */
-		worker->clock_now = 0;
-		HeartbeatEvent* heartbeat = heartbeat_new(node_getTracker(node));
+		worker_setCurrentTime(0);
+		HeartbeatEvent* heartbeat = heartbeat_new(host_getTracker(host));
 		worker_scheduleEvent((Event*)heartbeat, heartbeatInterval, id);
-		worker->clock_now = SIMTIME_INVALID;
+		worker_setCurrentTime(SIMTIME_INVALID);
 	}
 }
 
 void createnodes_free(CreateNodesAction* action) {
 	MAGIC_ASSERT(action);
 
-	if(action->heartbeatLogLevelString) {
-		g_string_free(action->heartbeatLogLevelString, TRUE);
+	if(action->requestedIP) {
+		g_string_free(action->requestedIP, TRUE);
+	}
+	if(action->requestedGeocode) {
+		g_string_free(action->requestedGeocode, TRUE);
+	}
+	if(action->requestedType) {
+		g_string_free(action->requestedType, TRUE);
 	}
 	if(action->logLevelString) {
 		g_string_free(action->logLevelString, TRUE);
+	}
+	if(action->heartbeatLogLevelString) {
+		g_string_free(action->heartbeatLogLevelString, TRUE);
+	}
+	if(action->heartbeatLogInfoString) {
+		g_string_free(action->heartbeatLogInfoString, TRUE);
+	}
+	if(action->logPcapString) {
+		g_string_free(action->logPcapString, TRUE);
+	}
+	if(action->pcapDirString) {
+		g_string_free(action->pcapDirString, TRUE);
 	}
 
 	GList* item = action->applications;

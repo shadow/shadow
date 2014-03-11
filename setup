@@ -14,11 +14,11 @@ from datetime import datetime
 BUILD_PREFIX="./build"
 INSTALL_PREFIX=os.path.expanduser("~/.shadow")
 
-TOR_DEFAULT_VERSION="0.2.3.25"
+TOR_DEFAULT_VERSION="0.2.4.19"
 TOR_URL="https://archive.torproject.org/tor-package-archive/tor-{0}.tar.gz".format(TOR_DEFAULT_VERSION)
 TOR_URL_SIG="https://archive.torproject.org/tor-package-archive/tor-{0}.tar.gz.asc".format(TOR_DEFAULT_VERSION)
 
-OPENSSL_DEFAULT_VERSION="openssl-1.0.1c"
+OPENSSL_DEFAULT_VERSION="openssl-1.0.1e"
 OPENSSL_URL="https://www.openssl.org/source/{0}.tar.gz".format(OPENSSL_DEFAULT_VERSION)
 OPENSSL_URL_SIG="https://www.openssl.org/source/{0}.tar.gz.asc".format(OPENSSL_DEFAULT_VERSION)
 
@@ -151,16 +151,6 @@ def main():
         action="store_true", dest="export_libraries",
         default=False)
         
-    parser_build.add_argument('--disable-plugin-browser',
-        help="do not build the built-in browser plug-in (HTML browser)", 
-        action="store_true", dest="disable_browser",
-        default=False)
-    
-    parser_build.add_argument('--disable-plugin-echo', 
-        help="do not build the built-in echo plug-in (ping pong)", 
-        action="store_true", dest="disable_echo",
-        default=False)
-    
     parser_build.add_argument('--disable-plugin-filetransfer',
         help="do not build the built-in filetransfer plug-in (HTTP client and server)", 
         action="store_true", dest="disable_filetransfer",
@@ -170,20 +160,15 @@ def main():
         help="do not build the built-in scallion plug-in (Tor)", 
         action="store_true", dest="disable_scallion",
         default=False)
-    
-    parser_build.add_argument('--disable-plugin-torrent', 
-        help="do not build the built-in torrent plug-in (P2P file transfers)", 
-        action="store_true", dest="disable_torrent",
-        default=False)
-    
-    parser_build.add_argument('--disable-plugin-ping', 
-        help="do not build the built-in ping plug-in (pings over Tor circuits)", 
-        action="store_true", dest="disable_ping",
-        default=False)
         
-    parser_build.add_argument('--disable-evp-cipher', 
-        help="do not preload EVP_Cipher and use actual EVP cipher functions (experimental!)", 
-        action="store_true", dest="disable_evpcipher",
+    parser_build.add_argument('--disable-plugin-torctl',
+        help="do not build the built-in torctl plug-in (Tor controller)", 
+        action="store_true", dest="disable_torctl",
+        default=False)
+    
+    parser_build.add_argument('--enable-evp-cipher-encryption', 
+        help="do not intercept EVP_Cipher, so that we allow EVP_Cipher encryption to be performed as normal during simulation", 
+        action="store_true", dest="enable_evpcipher",
         default=False)
     
     # configure install subcommand
@@ -294,13 +279,10 @@ def build(args):
     if args.do_test: cmake_cmd += " -DSHADOW_TEST=ON"
     if args.do_profile: cmake_cmd += " -DSHADOW_PROFILE=ON"
     if args.export_libraries: cmake_cmd += " -DSHADOW_EXPORT=ON"
-    if args.disable_evpcipher: cmake_cmd += " -DSHADOW_DISABLE_EVPCIPHER=ON"
-    if args.disable_browser: cmake_cmd += " -DBUILD_BROWSER=OFF"
-    if args.disable_echo: cmake_cmd += " -DBUILD_ECHO=OFF"
+    if args.enable_evpcipher: cmake_cmd += " -DSHADOW_ENABLE_EVPCIPHER=ON"
     if args.disable_filetransfer: cmake_cmd += " -DBUILD_FILETRANSFER=OFF"
     if args.disable_scallion: cmake_cmd += " -DBUILD_SCALLION=OFF"
-    if args.disable_torrent: cmake_cmd += " -DBUILD_TORRENT=OFF"
-    if args.disable_ping: cmake_cmd += " -DBUILD_PING=OFF"
+    if args.disable_torctl: cmake_cmd += " -DBUILD_TORCTL=OFF"
 
     # we will run from build directory
     calledDirectory = os.getcwd()

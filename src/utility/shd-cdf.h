@@ -16,21 +16,11 @@
 #include <glib.h>
 
 typedef struct _CumulativeDistributionEntry CumulativeDistributionEntry;
-struct _CumulativeDistributionEntry {
-	gdouble fraction;
-	gdouble value;
-	MAGIC_DECLARE;
-};
 
 /**
  * An opaque structure representing a Cumulative Distribution.
  */
 typedef struct _CumulativeDistribution CumulativeDistribution;
-struct _CumulativeDistribution {
-	GQuark id;
-	GList* entries;
-	MAGIC_DECLARE;
-};
 
 /**
  * Create a new CumulativeDistribution with data from the given filename. The
@@ -47,6 +37,8 @@ CumulativeDistribution* cdf_new(GQuark id, const gchar* filename);
  */
 CumulativeDistribution* cdf_generate(GQuark id, guint base_center, guint base_width, guint tail_width);
 
+CumulativeDistribution* cdf_newFromQueue(GQueue* doubleValues);
+
 /**
  *
  */
@@ -56,5 +48,7 @@ void cdf_free(gpointer data);
 gdouble cdf_getValue(CumulativeDistribution* cdf, gdouble percentile);
 gdouble cdf_getMinimumValue(CumulativeDistribution* cdf);
 gdouble cdf_getMaximumValue(CumulativeDistribution* cdf);
+
+GQuark* cdf_getIDReference(CumulativeDistribution* cdf);
 
 #endif /* SHD_CDF_H_ */

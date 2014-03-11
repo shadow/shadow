@@ -472,7 +472,7 @@ def main():
     
     # requried positional arg
     parser_parse.add_argument('logpath', 
-        help="path to a Shadow log file", 
+        help="path to a Shadow log file, or '-' for stdin", 
         metavar="LOGFILE",
         action="store",
         default=LOGPATH)
@@ -555,7 +555,7 @@ def main():
     args.func(args)
 
 def parse(args):
-    logpath = os.path.abspath(os.path.expanduser(args.logpath))
+    logfile = sys.stdin if args.logpath == '-' else open(os.path.abspath(os.path.expanduser(args.logpath)), 'r')
     outputpath = os.path.abspath(os.path.expanduser(args.outputpath))
     cutoff = int(args.cutoff)
 
@@ -568,8 +568,8 @@ def parse(args):
     clients, relays = {}, {}
 
     # parse the log file
-    print "Parsing '{0}'".format(logpath)
-    with open(logpath, 'r') as f:
+    print "Parsing '{0}'".format("stdin" if args.logpath == '-' else args.logpath)
+    with logfile as f:
         lastt = 0
 
         for line in f:
@@ -1778,7 +1778,7 @@ def plot(args):
             # show fractions of pie with autopct='%1.2f%%'
             patches = pylab.pie(fractions, explode=[0.1]*len(fractions), autopct=None, shadow=True)
 
-            leg = pylab.legend(patches, labels, loc=(-0.3, -0.05), labelspacing=0.8)
+            leg = pylab.legend((patches[0]), labels, loc=(-0.3, -0.05), labelspacing=0.8)
             pylab.setp(leg.get_texts(), fontsize='6')
 
             if stitle is not None: pylab.suptitle(stitle, fontsize=stitlesize)

@@ -12,7 +12,7 @@
 typedef struct _PacketArrivedEvent PacketArrivedEvent;
 
 PacketArrivedEvent* packetarrived_new(Packet* packet);
-void packetarrived_run(PacketArrivedEvent* event, Node* node);
+void packetarrived_run(PacketArrivedEvent* event, Host* node);
 void packetarrived_free(PacketArrivedEvent* event);
 
 #endif /* SHD_PACKET_ARRIVED_H_ */

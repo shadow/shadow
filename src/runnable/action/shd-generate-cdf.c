@@ -25,7 +25,7 @@ RunnableFunctionTable generatecdf_functions = {
 GenerateCDFAction* generatecdf_new(GString* name, guint64 center, guint64 width,
 		guint64 tail)
 {
-	g_assert(name);
+	utility_assert(name);
 	GenerateCDFAction* action = g_new0(GenerateCDFAction, 1);
 	MAGIC_INIT(action);
 
@@ -42,13 +42,8 @@ GenerateCDFAction* generatecdf_new(GString* name, guint64 center, guint64 width,
 void generatecdf_run(GenerateCDFAction* action) {
 	MAGIC_ASSERT(action);
 
-	CumulativeDistribution* cdf = cdf_generate(action->id, action->center, action->width, action->tail);
-	if(cdf) {
-		Worker* worker = worker_getPrivate();
-		engine_put(worker->cached_engine, CDFS, &(cdf->id), cdf);
-	} else {
-		critical("generating cdf '%s' failed", g_quark_to_string(action->id));
-	}
+//	CumulativeDistribution* cdf = cdf_generate(action->id, action->center, action->width, action->tail);
+	warning("cdf '%s' not supported", g_quark_to_string(action->id));
 }
 
 void generatecdf_free(GenerateCDFAction* action) {

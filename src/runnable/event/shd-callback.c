@@ -24,7 +24,7 @@ EventFunctionTable callback_functions = {
 
 CallbackEvent* callback_new(CallbackFunc callback, gpointer data, gpointer callbackArgument) {
 	/* better have a non-null callback if we are going to execute it */
-	g_assert(callback);
+	utility_assert(callback);
 
 	CallbackEvent* event = g_new0(CallbackEvent, 1);
 	MAGIC_INIT(event);
@@ -38,10 +38,14 @@ CallbackEvent* callback_new(CallbackFunc callback, gpointer data, gpointer callb
 	return event;
 }
 
-void callback_run(CallbackEvent* event, Node* node) {
+void callback_run(CallbackEvent* event, Host* node) {
 	MAGIC_ASSERT(event);
 
+	debug("event started");
+
 	event->callback(event->data, event->callbackArgument);
+
+	debug("event finished");
 }
 
 void callback_free(CallbackEvent* event) {

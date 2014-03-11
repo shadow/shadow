@@ -30,7 +30,7 @@ InterfaceSentEvent* interfacesent_new(NetworkInterface* interface) {
 	return event;
 }
 
-void interfacesent_run(InterfaceSentEvent* event, Node* node) {
+void interfacesent_run(InterfaceSentEvent* event, Host* node) {
 	MAGIC_ASSERT(event);
 
 	debug("event started");

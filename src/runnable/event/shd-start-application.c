@@ -30,10 +30,14 @@ StartApplicationEvent* startapplication_new(Application* application) {
 	return event;
 }
 
-void startapplication_run(StartApplicationEvent* event, Node* node) {
+void startapplication_run(StartApplicationEvent* event, Host* node) {
 	MAGIC_ASSERT(event);
 
-	node_startApplication(node, event->application);
+	debug("event started");
+
+	host_startApplication(node, event->application);
+
+	debug("event finished");
 }
 
 void startapplication_free(StartApplicationEvent* event) {

@@ -8,6 +8,18 @@
 
 #include "shadow.h"
 
+struct _CumulativeDistributionEntry {
+	gdouble fraction;
+	gdouble value;
+	MAGIC_DECLARE;
+};
+
+struct _CumulativeDistribution {
+	GQuark id;
+	GList* entries;
+	MAGIC_DECLARE;
+};
+
 static CumulativeDistributionEntry* cdfentry_create() {
 	CumulativeDistributionEntry* entry = g_new0(CumulativeDistributionEntry, 1);
 	MAGIC_INIT(entry);
@@ -73,6 +85,39 @@ CumulativeDistribution* cdf_new(GQuark id, const gchar* filename) {
 	} else {
 		return NULL;
 	}
+}
+
+static void _cdf_addEntry(gdouble* data, GList** list) {
+	utility_assert(data && list && *list);
+	CumulativeDistributionEntry* entry = cdfentry_create();
+	entry->value = *data;
+	entry->fraction = 0.0;
+	*list = g_list_insert_sorted(*list, entry, cdfentry_compare);
+}
+
+CumulativeDistribution* cdf_newFromQueue(GQueue* doubleValues) {
+	utility_assert(doubleValues);
+	CumulativeDistribution* cdf = g_new0(CumulativeDistribution, 1);
+	MAGIC_INIT(cdf);
+
+	gdouble qLength = (gdouble)g_queue_get_length(doubleValues);
+
+	/* start with an empty list of CDF entries */
+	GList* list = NULL;
+	g_queue_foreach(doubleValues, (GFunc) _cdf_addEntry, &list);
+	cdf->entries = list;
+
+	gdouble increment = 1.0f / qLength;
+	gdouble cumFrac = increment;
+	while(list) {
+		CumulativeDistributionEntry* entry = list->data;
+		entry->fraction = cumFrac;
+		cumFrac += increment;
+		utility_assert(cumFrac <= 1);
+		list = list->next;
+	}
+
+	return cdf;
 }
 
 /**
@@ -168,7 +213,7 @@ void cdf_free(gpointer data) {
 
 gdouble cdf_getValue(CumulativeDistribution* cdf, gdouble percentile) {
 	MAGIC_ASSERT(cdf);
-	g_assert(percentile >= 0.0 && percentile <= 1.0);
+	utility_assert(percentile >= 0.0 && percentile <= 1.0);
 
 	/* start from the back of the list if the percentile is high enough */
 	gboolean reverse = percentile > 0.5 ? TRUE : FALSE;
@@ -190,4 +235,9 @@ gdouble cdf_getValue(CumulativeDistribution* cdf, gdouble percentile) {
 
 	/* TODO didnt find it... is this an error? */
 	return (gdouble) 0;
+}
+
+GQuark* cdf_getIDReference(CumulativeDistribution* cdf) {
+	MAGIC_ASSERT(cdf);
+	return &cdf->id;
 }

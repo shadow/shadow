@@ -21,7 +21,7 @@ RunnableFunctionTable loadcdf_functions = {
 };
 
 LoadCDFAction* loadcdf_new(GString* name, GString* path) {
-	g_assert(name && path);
+	utility_assert(name && path);
 	LoadCDFAction* action = g_new0(LoadCDFAction, 1);
 	MAGIC_INIT(action);
 
@@ -36,13 +36,8 @@ LoadCDFAction* loadcdf_new(GString* name, GString* path) {
 void loadcdf_run(LoadCDFAction* action) {
 	MAGIC_ASSERT(action);
 
-	CumulativeDistribution* cdf = cdf_new(action->id, action->path->str);
-	if(cdf) {
-		Worker* worker = worker_getPrivate();
-		engine_put(worker->cached_engine, CDFS, &(cdf->id), cdf);
-	} else {
-		critical("loading cdf '%s' from '%s' failed", g_quark_to_string(action->id), action->path->str);
-	}
+//	CumulativeDistribution* cdf = cdf_new(action->id, action->path->str);
+	warning("cdf '%s' from '%s' not supported", g_quark_to_string(action->id), action->path->str);
 }
 
 void loadcdf_free(LoadCDFAction* action) {

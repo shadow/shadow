@@ -21,6 +21,7 @@ typedef struct _Address Address;
  * Create a new Address structure with the given IP and Hostname. The hostname
  * is copied and stored internally, so the caller retains its ownership.
  *
+ * @param mac the mac address to associate with this Address structure
  * @param ip the IP address to associate with this Address structure,
  * in network order
  * @param name the name to associate with this Address structure
@@ -28,16 +29,12 @@ typedef struct _Address Address;
  *
  * @see address_free()
  */
-Address* address_new(guint32 ip, const gchar* name);
+Address* address_new(GQuark hostID, guint mac, guint32 ip, const gchar* name, gboolean isLocal);
 
-/**
- * Frees the associated structures associated with the given address
- * @param address a valid, non-NULL Address structure previously created
- * with address_new()
- *
- * @see address_new()
- */
-void address_free(Address* address);
+ShadowID address_getID(Address* address);
+void address_ref(Address* address);
+void address_unref(Address* address);
+gboolean address_isLocal(Address* address);
 
 /**
  * Checks if the given addresses are equal. This function is NULL safe, so
@@ -90,5 +87,9 @@ gchar* address_toHostName(Address* address);
  * Turns the IPv4 address into a newly allocated string that should be freed by the caller.
  */
 gchar* address_ipToNewString(in_addr_t ip);
+
+in_addr_t address_stringToIP(const gchar* ipString);
+
+gchar* address_toString(Address* address);
 
 #endif /* SHD_ADDRESS_H_ */

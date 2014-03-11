@@ -14,7 +14,7 @@ RunnableFunctionTable event_functions = {
 };
 
 void shadowevent_init(Event* event, EventFunctionTable* vtable) {
-	g_assert(event && vtable);
+	utility_assert(event && vtable);
 
 	runnable_init(&(event->super), &event_functions);
 
@@ -28,10 +28,10 @@ gboolean shadowevent_run(Event* event) {
 	MAGIC_ASSERT(event);
 	MAGIC_ASSERT(event->vtable);
 
-	Node* node = event->node;
+	Host* node = event->node;
 
 	/* check if we are allowed to execute or have to wait for cpu delays */
-	CPU* cpu = node_getCPU(node);
+	CPU* cpu = host_getCPU(node);
 	cpu_updateTime(cpu, event->time);
 
 	if(cpu_isBlocked(cpu)) {
@@ -39,7 +39,7 @@ gboolean shadowevent_run(Event* event) {
 		debug("event blocked on CPU, rescheduled for %"G_GUINT64_FORMAT" nanoseconds from now", cpuDelay);
 
 		/* track the event delay time */
-		tracker_addVirtualProcessingDelay(node_getTracker(node), cpuDelay);
+		tracker_addVirtualProcessingDelay(host_getTracker(node), cpuDelay);
 
 		/* this event is delayed due to cpu, so reschedule it to ourselves */
 		worker_scheduleEvent(event, cpuDelay, 0);

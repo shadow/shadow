@@ -22,18 +22,18 @@ struct _CallbackData {
  */
 
 int shadowlib_register(PluginNewInstanceFunc new, PluginNotifyFunc free, PluginNotifyFunc notify) {
-	Worker* worker = worker_getPrivate();
-	plugin_setShadowContext(worker->cached_plugin, TRUE);
+	Plugin* currentPlugin = worker_getCurrentPlugin();
+	plugin_setShadowContext(currentPlugin, TRUE);
 
-	plugin_registerResidentState(worker->cached_plugin, new, free, notify);
+	plugin_registerResidentState(currentPlugin, new, free, notify);
 
-	plugin_setShadowContext(worker->cached_plugin, FALSE);
+	plugin_setShadowContext(currentPlugin, FALSE);
 	return TRUE;
 }
 
 void shadowlib_log(ShadowLogLevel level, const char* functionName, const char* format, ...) {
-	Worker* worker = worker_getPrivate();
-	plugin_setShadowContext(worker->cached_plugin, TRUE);
+	Plugin* currentPlugin = worker_getCurrentPlugin();
+	plugin_setShadowContext(currentPlugin, TRUE);
 
 	GLogLevelFlags glevel = 0;
 	switch(level) {
@@ -63,12 +63,12 @@ void shadowlib_log(ShadowLogLevel level, const char* functionName, const char* f
 	va_list variableArguments;
 	va_start(variableArguments, format);
 
-	const gchar* domain = g_quark_to_string(*plugin_getID(worker->cached_plugin));
+	const gchar* domain = g_quark_to_string(*plugin_getID(currentPlugin));
 	logging_logv(domain, glevel, functionName, format, variableArguments);
 
 	va_end(variableArguments);
 
-	plugin_setShadowContext(worker->cached_plugin, FALSE);
+	plugin_setShadowContext(currentPlugin, FALSE);
 }
 
 static void _shadowlib_executeCallbackInPluginContext(gpointer data, gpointer argument) {
@@ -77,36 +77,38 @@ static void _shadowlib_executeCallbackInPluginContext(gpointer data, gpointer ar
 }
 
 void shadowlib_createCallback(ShadowPluginCallbackFunc callback, void* data, uint millisecondsDelay) {
-	Worker* worker = worker_getPrivate();
-	plugin_setShadowContext(worker->cached_plugin, TRUE);
+	Plugin* currentPlugin = worker_getCurrentPlugin();
+	plugin_setShadowContext(currentPlugin, TRUE);
 
-	application_callback(worker->cached_application,
+	application_callback(worker_getCurrentApplication(),
 			_shadowlib_executeCallbackInPluginContext, data, callback, millisecondsDelay);
 
-	plugin_setShadowContext(worker->cached_plugin, FALSE);
+	plugin_setShadowContext(currentPlugin, FALSE);
 }
 
 int shadowlib_getBandwidth(in_addr_t ip, uint* bwdown, uint* bwup) {
-	if(!bwdown || !bwup) {
-		return FALSE;
+	if(!bwdown && !bwup) {
+		return TRUE;
 	}
 
 	gboolean success = FALSE;
 
-	Worker* worker = worker_getPrivate();
-	plugin_setShadowContext(worker->cached_plugin, TRUE);
+	Plugin* currentPlugin = worker_getCurrentPlugin();
+	plugin_setShadowContext(currentPlugin, TRUE);
 
-	Node* n = internetwork_getNode(worker_getInternet(), (GQuark)ip);
-	if(n) {
-		NetworkInterface* interface = node_lookupInterface(n, ip);
-		if(interface) {
-			*bwdown = (guint)networkinterface_getSpeedDownKiBps(interface);
-			*bwup = (guint)networkinterface_getSpeedUpKiBps(interface);
-			success = TRUE;
+	Address* hostAddress = dns_resolveIPToAddress(worker_getDNS(), (guint32)ip);
+	if(hostAddress) {
+		GQuark id = (GQuark) address_getID(hostAddress);
+		if(bwdown) {
+			*bwdown = worker_getNodeBandwidthDown(id, ip);
 		}
+		if(bwup) {
+			*bwup = worker_getNodeBandwidthUp(id, ip);
+		}
+		success = TRUE;
 	}
 
-	plugin_setShadowContext(worker->cached_plugin, FALSE);
+	plugin_setShadowContext(currentPlugin, FALSE);
 
 	return success;
 }
@@ -114,13 +116,12 @@ int shadowlib_getBandwidth(in_addr_t ip, uint* bwdown, uint* bwup) {
 extern const void* intercept_RAND_get_rand_method(void);
 int shadowlib_cryptoSetup(int numLocks, void** shadowLockFunc, void** shadowIdFunc, const void** shadowRandomMethod) {
 	g_assert(shadowLockFunc && shadowIdFunc && shadowRandomMethod);
-	Worker* worker = worker_getPrivate();
 
 	*shadowLockFunc = &system_cryptoLockingFunc;
 	*shadowIdFunc = &system_cryptoIdFunc;
 	*shadowRandomMethod = intercept_RAND_get_rand_method();
 
-	return engine_cryptoSetup(worker->cached_engine, numLocks);
+	return worker_cryptoSetup(numLocks);
 }
 
 /* we send this FunctionTable to each plug-in so it has pointers to our functions.
