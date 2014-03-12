@@ -89,7 +89,7 @@ For more details, add `--help` to each of those commands.
 
 ### Manual Install
 
-If you prefer to install **openssl** and **libevent** manually, so something like the following.
+You may skip this section if you used the automatic installation method. If you prefer to install **openssl** and **libevent** manually, do something like the following.
 
 **openssl**
 
@@ -109,28 +109,28 @@ make install
 
 ### Important Notes
 
-+ The two most useful build options
-  + `-g` or `--debug` to build Shadow with debugging symbols
-  + `--tor-prefix` to build Scallion with your local custom Tor distribution (instead of downloading one from torproject.org). 
++ The two most useful build options are:  
+ + `-g` or `--debug` to build Shadow with debugging symbols
+ + `--tor-prefix` to build Scallion with your local custom Tor distribution (instead of downloading one from torproject.org).
 
 + If you installed any dependencies somewhere other than `~/.shadow`, you should use the following flags during the build process:
-  + `--include`
-  + `--library`
-  + `--openssl-prefix`
-  + `--libevent-prefix`
+ + `--include`
+ + `--library`
+ + `--openssl-prefix`
+ + `--libevent-prefix`
 
 + If you want to install Shadow somewhere besides `~/.shadow`, you should use the `--prefix` flag.
 
 + It will probably be useful to add `~/.shadow/bin` (or `your/prefix/bin`) to your `PATH` following installation.
 
-**Other notes:**  
+**Other Notes:**  
 + All build output is generated out-of-source, by default to the `./build` directory.
 + The `setup` script is a wrapper to `cmake` and `make`. Using `cmake` and `make` directly is also possible, but strongly discouraged. 
 + When you install Shadow you are installing the Shadow binary (`shadow-bin`) and an additional python wrapper script (`shadow`) that assists in running the Shadow binary, as well as various built-in plug-ins. You can avoid building plug-ins using the '--disable-plugin-*' setup script options.
 
-## system configs and limits
+## System Configs and Limits
 
-### number of open files
+### Number of Open Files
 
 There is a default linux system limit on the number of open files. If each node 
 in your Shadow plug-in opens many file or socket descriptors (if you have many nodes, this is very likely to happen), you'll likely want to increase the limit so you application doesn't start getting errors when calling `open()` or `socket()`.
@@ -164,7 +164,7 @@ cat /proc/sys/fs/file-max
 cat /proc/sys/fs/inode-max
 ```
 
-### number of maps
+### Number of Maps
 
 There is a system limit on the number of `mmap()` mappings per process. The limit can be queried in these ways:
 
