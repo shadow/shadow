@@ -30,24 +30,26 @@ The _topology_ element must hold either a collection of vertices and edges that 
 
 ### The _node_ element
 ```xml
-<node id="STRING" cluster="STRING" quantity="INTEGER" bandwidthdown="INTEGER" bandwidthup="INTEGER" interfacebuffer="INTEGER" socketrecvbuffer="INTEGER" socketsendbuffer="INTEGER" loglevel="STRING" heartbeatloglevel="STRING" heartbeatfrequency="INTEGER" cpufrequency="INTEGER" logpcap="STRING" pcapdir="STRING">
+<node id="STRING" iphint="STRING" geocodehint="STRING" typehint="STRING" quantity="INTEGER" bandwidthdown="INTEGER" bandwidthup="INTEGER" interfacebuffer="INTEGER" socketrecvbuffer="INTEGER" socketsendbuffer="INTEGER" loglevel="STRING" heartbeatloglevel="STRING" heartbeatloginfo="STRING" heartbeatfrequency="INTEGER" cpufrequency="INTEGER" logpcap="STRING" pcapdir="STRING">
   <application ... />
   ...
 </node>
 ```
 **Required attributes**: _id_  
-**Optional attributes**: _cluster_, _quantity_, _bandwidthdown_, _bandwidthup_, _interfacebuffer_, _socketrecvbuffer_, _socketsendbuffer_, _loglevel_, _heartbeatloglevel_, _heartbeatfrequency_, _cpufrequency_, _logpcap_, _pcapdir_  
+**Optional attributes**: _iphint_, _geocodehint_, _typehint_, _quantity_, _bandwidthdown_, _bandwidthup_, _interfacebuffer_, _socketrecvbuffer_, _socketsendbuffer_, _loglevel_, _heartbeatloglevel_, _heartbeatloginfo_, _heartbeatfrequency_, _cpufrequency_, _logpcap_, _pcapdir_  
 **Required child element**: \<application\>  
 
 The _node_ element represents a node or virtual host in the simulation. The _id_ attribute identifies this _node_ and must be a string that is unique among all _id_ attributes for any element in the XML file. _id_ will also be used as the network hostname of this _node_.
 
-The _cluster_ attribute optionally specifies to which network vertex this _node_ should be assigned. If not given, a random vertex will be chosen internally. The _quantity_ attribute specifies the number of hosts of this type to start. If _quantity_ is greater than 1, each host's hostname will be prefixed with a counter. For example, a _node_ with an _id_ of `host` and _quantity_=2 would produce nodes with hostnames `1.host` and `2.host`.
+The _iphint_, _geocodehint_, and _typehint_ attributes provide hints to Shadow's name and routing system on where to attach this host to the topology. These hints will be matched based on the values of the _ip_, _geocode_, and _type_ of the vertices as specified in the topology file.
+
+The _quantity_ attribute specifies the number of hosts of this type to start. If _quantity_ is greater than 1, each host's hostname will be prefixed with a counter. For example, a _node_ with an _id_ of `host` and _quantity_=2 would produce nodes with hostnames `1.host` and `2.host`.
 
 _bandwidthdown_ and _bandwidthup_ optionally specify the downstream and upstream bandwidth capacities for this _node_, and override any default bandwidth values set in the _cluster_ element corresponding to the _cluster_ attribute. If not given, the default bandwidth values from the assigned _cluster_ element are used.
 
 _interfacebuffer_ controls the size of the interface receive buffer that accepts packets from the network. _socketrecvbuffer_ and _socketsendbuffer_ control the initial size of the socket buffers that hold packets to and from the application. Note that these sizes may be adjusted by auto-tuning, in order fill the channel capacity as defined by the bandwidth-delay product between two nodes. These values can instead be set globally for all nodes with the Shadow command line options `--interface-buffer`, `--socket-recv-buffer`, and `--socket-send-buffer` (see `shadow --help-network` for more info).
 
-_loglevel_ and _heartbeatloglovel_ are node-specific overrides for the simulator default log levels (the defaults are adjustable with shadow arguments `--log-level` and `--heartbeat-log-level`). Valid strings include 'error', 'critical', 'warning', 'message', 'info', and 'debug'. _heartbeatfrequency_ is a node-specific override for the default number of seconds between which heartbeat messages are logged (the default is adjustable with shadow argument `--heartbeat-frequency`). Each heartbeat message contains useful statistics about the _node_.
+_loglevel_ and _heartbeatloglevel_ are node-specific overrides for the simulator default log levels (the defaults are adjustable with shadow arguments `--log-level` and `--heartbeat-log-level`). Valid strings include 'error', 'critical', 'warning', 'message', 'info', and 'debug'. _heartbeatloginfo_ is a node-specific override for the type of information that will get logged for this node during the heartbeat. Valid values are 'node', 'socket', and 'ram'. _heartbeatfrequency_ is a node-specific override for the default number of seconds between which heartbeat messages are logged (the default is adjustable with shadow argument `--heartbeat-frequency`). Each heartbeat message contains useful statistics about the _node_.
 
 _cpufrequency_ is the speed of this _node's_ virtual CPU in kilohertz. Along with the CPU processing requirements of the plug-in application, this determines how often events for this _node_ are delayed during simulation.
 
