@@ -120,4 +120,3 @@ python ~/shadow/contrib/generate.py --nauths 1 --nrelays 20 --nclients 200 --nse
 ```
 
 If everything went smoothly, `scallion` can be run from inside the 'mytor' directory as usual.
-```
