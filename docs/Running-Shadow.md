@@ -51,21 +51,16 @@ Lets take a look at another `filetransfer` example:
 
 ```bash
 cd resource/examples/filetransfer/
-shadow topology.xml hosts.xml
+shadow shadow.config.xml
 ```
 
-Shadow requires at least one XML file, and accepts additional files. Shadow parses these files to create the internal representation of the network, plug-ins, and hosts. You should examine these files and understand how they are used. For example, you might try changing the quantity of clients in `hosts.xml`, or the bandwidth of the clusters or the latency of the links in `topology.xml` to see how download times are affected.
+Shadow requires at least one XML file, and accepts additional files. Shadow parses these files to create the internal representation of the network, plug-ins, and hosts. You should examine these files and understand how they are used. For example, you might try changing the quantity of clients, or the bandwidth of the network vertices or the latency of the network edges to see how download times are affected.
 
-Although you may want to configure your own network characteristics, Shadow already includes an extensive **pre-built topology file** installed to `~/.shadow/share/topology.xml` (or `your/prefix/share`). It contains a **cluster** for every country (and US state / Canadian Province) in the world, and **links** between each pair of those clusters. The topology characteristics were generated from real network metrics gathered from [iPlane](http://iplane.cs.washington.edu/) and large-scale PlanetLab experiments. For more information, check out the [peer-reviewed publication on network modeling](http://www-users.cs.umn.edu/~jansen/papers/tormodel-cset2012.pdf).
+Although you may want to configure your own network characteristics, Shadow already includes an extensive **pre-built topology file** installed to `~/.shadow/share/topology.graphml.xml` (or `your/prefix/share`). It contains **vertices** and **edges** based on real network metrics gathered from [CAIDA](http://www.caida.org/). For more information, check out some [recent](http://www-users.cs.umn.edu/~jansen/papers/tormodel-cset2012.pdf) [work](https://security.cs.georgetown.edu/~msherr/papers/tor-relaystudy.pdf) on Tor network modeling.
 
-Using the included topology file means we are only left with configuring the hosts:
+You may modify `shadow.config.xml` to use the path to `~/.shadow/share/topology.graphml.xml` instead of embedding a topology as is done in `resource/examples/filetransfer/shadow.config.xml`.
 
-```bash
-cd resource/examples/filetransfer/
-shadow ~/.shadow/share/topology.xml hosts.xml
-```
-
-The format of all the attributes and acceptable values is described on the [[Topology format]] page.
+The format of all the attributes and acceptable values for the topology is described on the [[Topology format]] page.
 
 ### scallion
 
@@ -77,7 +72,7 @@ Tor requires other configuration files and keys to function. A very small exampl
 cd resource/examples/scallion/
 tar xaf minimal.tar.xz
 cd minimal
-scallion -i hosts.xml
+scallion -i shadow.config.xml
 ```
 
 Scallion notes:
@@ -93,7 +88,7 @@ The above toy example is not realistic for research purposes. More realistic net
 cd resource/examples/scallion/
 tar xaf tiny-m1.large.tar.xz
 cd tiny-m1.large
-scallion -i hosts.xml -w 2
+scallion -i shadow.config.xml -w 2
 ```
 
-Note that these experiments will take on the order of 30 minutes to several hours, and consume ~4 to ~64 GiB of RAM, depending which size you run (tiny, small, medium, large). See [[Using the scallion plug-in]] for more information and for details on generating your own Scallion `hosts.xml` file, and [[Analyzing results]] for help parsing the output.
+Note that these experiments will take on the order of 30 minutes to several hours, and consume ~4 to ~64 GiB of RAM, depending which size you run (tiny, small, medium, large). See [[Using the scallion plug-in]] for more information and for details on generating your own Scallion `shadow.config.xml` file, and [[Analyzing results]] for help parsing the output.
