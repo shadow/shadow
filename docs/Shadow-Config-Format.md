@@ -1,5 +1,13 @@
 Shadow uses a standard XML format to accept configuration options from users, and uses [GLib's XML parser](https://developer.gnome.org/glib/stable/glib-Simple-XML-Subset-Parser.html) to parse the simple structure. The following are valid elements and their attributes for a shadow configuration file (`shadow.config.xml`):
 
+### The _kill_ element
+```xml
+<kill time="INTEGER" />
+```
+**Required attribute**: _time_  
+
+The _time_ attribute represents the number of virtual seconds to simulate, after which the experiment will be killed and resources released.
+
 ### The _plugin_ element
 ```xml
 <plugin id="STRING" path="STRING" />
@@ -10,28 +18,14 @@ The _plugin_ element represents a library plug-in that Shadow should dynamically
 
 The _path_ attribute holds the system path to the plug-in `*.so` library. If _path_ begins with `~/`, the path will be considered relative to the current user's home directory.
 
-### The _kill_ element
+### The _topology_ element
 ```xml
-<kill time="INTEGER" />
+<topology path="STRING" />
 ```
-**Required attribute**: _time_  
+**Required attributes**:  
+**Optional attributes**: _path_
 
-The _time_ attribute represents the number of virtual seconds to simulate, after which the experiment will be killed and resources released.
-
-### The _link_ element
-```xml
-<link clusters="STRING STRING" latency="INTEGER" jitter="INTEGER" packetloss="FLOAT" />
-```
-**Required attributes**: _clusters_, _latency_  
-**Optional attributes**: _id_, _jitter_, _packetloss_
-
-The _link_ element represents an edge in the network topology, and is used to connect two _clusters_. The _id_ attribute identifies this _link_ and must be a string that is unique among all _id_ attributes for any element in the XML file.
-
-The _clusters_ attribute is a string that specifies the _ids_ of the two clusters the link is connecting, separated by a space. So, to connect `<cluster id="c1" ...` and `<cluster id="c2" ...`, you would set `clusters="c1 c2"`. 
-
-The packet delay across this _link_ in is specified with the _latency_ attribute, and the average variation in packet delay is specified with the _jitter_ attribute. Both _latency_ and _jitter_ are specified in milliseconds. 
-
-The _packetloss_ attribute is optional and represents the percentage chance that any given packet traveling through this link will be lost (independent of _cluster_ _packetloss_ rates, i.e., there are 3 end-to-end chances to drop a packet).
+The _topology_ element must hold either a collection of vertices and edges that represent a network topology as the TEXT in a `<![CDATA[TEXT]]>` style element, or a _path_ to a file holding such data. The TEXT data should be in graphml format, and hold an undirected, complete, connected graph with certain attributes specified on the vertices and links. For more information on how to structure this data, see [[Topology Format]].
 
 ### The _node_ element
 ```xml
