@@ -55,7 +55,7 @@ make install
 ## obtaining Shadow
 
 For best results, release versions are recommended and can be obtained in various ways:
-* by visiting https://shadow.cs.umn.edu/download/
+* by visiting https://shadow.github.io/
 * by visiting https://github.com/shadow/shadow/tags
 * by using git:
 
