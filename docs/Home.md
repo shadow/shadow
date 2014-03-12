@@ -6,7 +6,7 @@ The wiki contains important information about installing and using Shadow, and a
   + Setup instructions are current for the [latest release](https://github.com/shadow/shadow/tree/release)
   + Please [let us know](https://wwws.cs.umn.edu/mm-cs/listinfo/shadow-dev) if you notice something out of date, or fix it yourself if you can
 
-## Getting Started
+## Tutorial
 
 1. Shadow Setup
    + [[Preparing your machine]]  
@@ -23,16 +23,14 @@ the log file, parsing and plotting results
 
 1. [[Frequently asked questions]]  
 
-## Advanced Hacking
+## Other Information
 
 1. [[Developer Notes]]
 
 1. [[XML Topology Format|Topology Format]]
 
-1. Documentation for the built-in plug-ins
-   + [[Using filetransfer|Using the filetransfer plug-in]]
-   + [[Using browser|Using the browser plug-in]]
-   + [[Using torrent|Using the torrent plug-in]]
-   + [[Using scallion|Using the scallion plug-in]]
+1. [[Using filetransfer|Using the filetransfer plug-in]]
+
+1. [[Using scallion|Using the scallion plug-in]]
 
 1. [[Writing your own plug-in for Shadow|Writing Custom Plug-ins]]
