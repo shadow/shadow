@@ -56,7 +56,7 @@ shadow shadow.config.xml
 
 Shadow requires at least one XML file, and accepts additional files. Shadow parses these files to create the internal representation of the network, plug-ins, and hosts. You should examine these files and understand how they are used. For example, you might try changing the quantity of clients, or the bandwidth of the network vertices or the latency of the network edges to see how download times are affected.
 
-Although you may want to configure your own network characteristics, Shadow already includes an extensive **pre-built topology file** installed to `~/.shadow/share/topology.graphml.xml` (or `your/prefix/share`). It contains **vertices** and **edges** based on real network metrics gathered from [CAIDA](http://www.caida.org/). For more information, check out some [recent](http://www-users.cs.umn.edu/~jansen/papers/tormodel-cset2012.pdf) [work](https://security.cs.georgetown.edu/~msherr/papers/tor-relaystudy.pdf) on Tor network modeling.
+Although you may want to configure your own network characteristics, Shadow already includes an extensive **pre-built topology file** installed to `~/.shadow/share/topology.graphml.xml` (or `your/prefix/share`). It contains **vertices** and **edges** as specified in the [[Topology Format]].
 
 You may modify `shadow.config.xml` to use the path to `~/.shadow/share/topology.graphml.xml` instead of embedding a topology as is done in `resource/examples/filetransfer/shadow.config.xml`.
 
