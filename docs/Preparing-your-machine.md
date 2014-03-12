@@ -1,5 +1,6 @@
 This page discusses how to prepare your machine to begin running Shadow experiments.
-## installing dependencies
+
+## Installing Dependencies
 
 Shadow relies on the following tools and libraries to function properly. Versions and plug-in-specific dependencies are noted in parenthesis where applicable
 
@@ -24,10 +25,13 @@ Shadow relies on the following tools and libraries to function properly. Version
 * pdftk
 
 To install these using the Fedora package manager, try something like:
+
 ```bash
 sudo yum install -y gcc xz make automake autoconf cmake glib2 glib2-devel python htop screen dstat numpy scipy python-matplotlib pdftk libxml2-devel libxslt-devel
 ```
+
 On Ubuntu, try:
+
 ```bash
 sudo apt-get -y install gcc xz-utils make automake autoconf cmake libglib2.0 libglib2.0-dev dstat pdftk python2.7 python-matplotlib python-numpy python-scipy htop screen libxml2-dev libxslt-dev
 ```
@@ -45,14 +49,14 @@ cp -R clang-3.2.src llvm-3.2.src/tools/clang
 cd llvm-3.2.src
 mkdir build
 cd build
-cmake -DCMAKE_INSTALL_PREFIX=/home/$USER/.local ../.
+cmake -DCMAKE_INSTALL_PREFIX=/home/${USER}/.local ../.
 make -jN
 make install
 ```
 
 **NOTE**: if you also have a system version of Clang/LLVM installed, make sure to note its location as it may cause conflicts as you build Shadow later.
 
-## obtaining Shadow
+## Obtaining Shadow
 
 For best results, release versions are recommended and can be obtained in various ways:
 * by visiting https://shadow.github.io/download
@@ -67,9 +71,11 @@ git checkout release
 
 The master branch contains the latest unstable development changes.
 
-## building and installing Shadow and its plug-ins
+## Building and Installing Shadow and its Plug-ins
 
 You've downloaded Shadow and changed to its **top-level directory**. Next, you'll want to take care of some manual dependencies required to build Tor as a Shadow plug-in during a full build. We'll need to install **openssl** and **libevent** after downloading and building them with custom configuration options.
+
+### Automatic Install
 
 Luckily, Shadow contains a script to do this for you, and will help you configure, build, and install Shadow. The default and recommended setup is to install to `~/.shadow` as follows:
 
@@ -81,12 +87,39 @@ Luckily, Shadow contains a script to do this for you, and will help you configur
 
 For more details, add `--help` to each of those commands.
 
-If you prefer to install **openssl** and **libevent** manually instead of using `./setup dependencies`, you'll need to configure openssl with something like `./config --prefix=/home/rob/.shadow shared threads enable-ec_nistp_64_gcc_128 -fPIC` and libevent with something like `./configure --prefix=/home/rob/.shadow --enable-shared CFLAGS="-fPIC -I/home/rob/.shadow" LDFLAGS="-L/home/rob/.shadow"`.
+### Manual Install
 
-**Important notes:**  
-+ The two most useful build options are `-g` or `--debug` to build Shadow with debugging symbols, and `--tor-prefix` to build Scallion with your local custom Tor distribution (instead of downloading one from torproject.org). 
+If you prefer to install **openssl** and **libevent** manually, so something like the following.
 
-+ If you installed any dependencies somewhere other than `~/.shadow`, you should use the `--include`, `--library`, `--openssl-prefix` and `--libevent-prefix` flags, and if you want to install Shadow somewhere besides `~/.shadow`, you should use the `--prefix` flag.
+**openssl**
+
+```
+./config --prefix=/home/${USER}/.shadow shared threads enable-ec_nistp_64_gcc_128 -fPIC
+make
+make install
+```
+
+**libevent**
+
+```
+./configure --prefix=/home/${USER}/.shadow --enable-shared CFLAGS="-fPIC -I/home/${USER}/.shadow" LDFLAGS="-L/home/${USER}/.shadow"
+make
+make install
+```
+
+### Important Notes
+
++ The two most useful build options
+  + `-g` or `--debug` to build Shadow with debugging symbols
+  + `--tor-prefix` to build Scallion with your local custom Tor distribution (instead of downloading one from torproject.org). 
+
++ If you installed any dependencies somewhere other than `~/.shadow`, you should use the following flags during the build process:
+  + `--include`
+  + `--library`
+  + `--openssl-prefix`
+  + `--libevent-prefix`
+
++ If you want to install Shadow somewhere besides `~/.shadow`, you should use the `--prefix` flag.
 
 + It will probably be useful to add `~/.shadow/bin` (or `your/prefix/bin`) to your `PATH` following installation.
 
