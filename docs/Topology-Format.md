@@ -1,17 +1,9 @@
 ## Topology Description
 
-The topology files included in Shadow were generated from a variety of data sources, including [iPlane](http://iplane.cs.washington.edu/), [Net Index](http://www.netindex.com/), and our own PlanetLab traces. The format is general enough so that it is easy to swap out specific measurements of latency, jitter, packetloss, etc, if desired. See [our Tor modeling paper](http://www-users.cs.umn.edu/~jansen/papers/tormodel-cset2012.pdf) for all the details.
+The topology files included in Shadow were generated from a variety of data sources, including [Net Index](http://www.netindex.com/), and [CAIDA](). The data is represented in a standard graphml format so that it is easy to swap out specific measurements of latency, jitter, packetloss, etc, if desired. See [our Tor modeling paper](http://www-users.cs.umn.edu/~jansen/papers/tormodel-cset2012.pdf) for more details.
 
-For the _cluster_ elements, the format of the _id_ attributes is as follows: For US and CA, the cluster ID is the two letter country code followed by the two letter state/territory code (e.g. USMN or CAON). For other countries, the two letter country code is given twice (e.g. DEDE). This gives a unique ID for each cluster. Cluster packetloss rates, and bandwidth down and up are taken from Net Index data.
+_TODO_: describe PoIs, PoPs, the various hints and how they are used in the topology, the method for assigning hosts to network vertices, routing, etc.
 
-Links are directed, connecting the given clusters. Link latency and packetloss are assigned by querying the iPlane interface as well as our own PlanetLab measurements, as the median of all measurements between the given clusters. Jitter was computed as the average difference of the first and third quartiles from the median, i.e.:
-
-```python
-q1, latency, q3 = getQuartiles()
-jitter = ((latency-q1) + (q3-latency)) / 2.0
-if jitter >= latency: jitter = min(latency-q1, q3-latency)
-assert jitter < latency
-```
 ## Topology Format
 
 The following are valid elements and their attributes:
