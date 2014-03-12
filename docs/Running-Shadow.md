@@ -15,38 +15,9 @@ shadow --usage
 shadow --help
 ```
 
-## testing the water
+## performing some basic functional tests
 
 Shadow provides a virtual system and network that are used by plug-in applications. Fortunately, Shadow already contains several application plug-ins so you can get started without writing your own. Basic functionalities are tested using some static configurations of these plug-ins that are included in `shadow-bin`. Let's start by running those and make sure thing are working as they should.
-
-### echo
-
-The first example is the `echo` plug-in. This is essentially a small ping-pong test that ensures messages may be sent and received to and from nodes accross the simulated network. It tests every implemented communication mechanism, including:
-
-+ pipes
-+ socketpairs
-+ reliable UDP channels
-+ reliable UDP channels over loopback
-+ reliable TCP channels
-+ reliable TCP channels over loopback
-+ unreliable TCP channels (includes packet dropping)
-+ unreliable TCP channels over loopback (includes packet dropping)
-
-Run the test like this:
-
-```bash
-shadow --echo
-```
-
-A message should be printed for each of these channels, stating either `consistent echo received` or `inconsistent echo received`. When things are working properly, the result of the following command should be **8**:
-
-```bash
-shadow --echo | grep " consistent echo received" | wc -l
-```
-
-## slowly wading in
-
-The next step is to run experiments that fully utilize the virtual network. 
 
 ### file transfer
 
@@ -70,35 +41,11 @@ We can also look at the fileserver statistics:
 grep "fileserver stats" filetest.log
 ```
 
-### torrent
-
-**NOTE: the torrent plug-in currently [contains bugs](https://github.com/shadow/shadow/issues/125) and is not expected to work correctly. If you run into problems, please skip this section.**
-
-The `torrent` plug-in built-in example configures a BitTorrent-like P2P swarm to share an 8 MiB file between all of 10 clients. A torrent 'authority' represents a tracker and assists clients in joining the swarm, and the file is shared in 16 KiB chunks. This example will also take a few minutes, and redirecting output is advised:
-
-```bash
-shadow --torrent > torrenttest.log
-```
-
-Useful statistics here are contained in messages labeled with `client-block-complete`, which is printed for each node upon the completion of each 16 KiB block, and `client-complete`, which is printed when the transfer finishes. An 8 MiB file should contain 512 blocks, so for all 10 clients there should be **5120** blocks total:
-
-```bash
-grep "client-block-complete" torrenttest.log | wc -l
-```
-
-And all **10** clients should have completed:
-
-```bash
-grep "client-complete" torrenttest.log | wc -l
-```
-
-## treading water
-
-Great, all of the built-in tests seem to be working. We now need to know more about the configuration process, as this is a major part of running Shadow experiments.
-
-Shadow requires **XML input files** to configure an experiment. These files are used to describe the structure of the network topology, the network hosts that should be started, and application configuration options for each host. Although static configurations were used for the above examples, customizable examples are also included.
+We now need to know more about the configuration process, as this is a major part of running Shadow experiments.
 
 ### file transfer, round 2
+
+Shadow requires **XML input files** to configure an experiment. These files are used to describe the structure of the network topology, the network hosts that should be started, and application configuration options for each host. Although static configurations were used for the above examples, customizable examples are also included.
 
 Lets take a look at another `filetransfer` example:
 
@@ -119,10 +66,6 @@ shadow ~/.shadow/share/topology.xml hosts.xml
 ```
 
 The format of all the attributes and acceptable values is described on the [[Topology format]] page.
-
-## diving into the deep end
-
-We now hopefully understand what makes Shadow grrr. Now its time for more complicated experiments.
 
 ### scallion
 
