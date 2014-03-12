@@ -27,10 +27,12 @@ the log file, parsing and plotting results
 
 1. [[Developer Notes]]
 
-1. [[XML Topology Format|Topology Format]]
+1. [[Shadow Configuration File|Shadow Config Format]]
 
-1. [[Using filetransfer|Using the filetransfer plug-in]]
+1. [[Shadow Network Topology|Topology Format]]
 
-1. [[Using scallion|Using the scallion plug-in]]
+1. [[Using filetransfer plug-in|Using the filetransfer plug-in]]
+
+1. [[Using scallion plug-in|Using the scallion plug-in]]
 
 1. [[Writing your own plug-in for Shadow|Writing Custom Plug-ins]]
