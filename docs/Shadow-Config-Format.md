@@ -23,7 +23,7 @@ The _path_ attribute holds the system path to the plug-in `*.so` library. If _pa
 <topology path="STRING" />
 ```
 **Required attributes**:  
-**Optional attributes**: _path_
+**Optional attributes**: _path_  
 **Optional child element**: `<![CDATA[TEXT]]>`
 
 The _topology_ element must hold either a collection of vertices and edges that represent a network topology as the TEXT in a `<![CDATA[TEXT]]>` style element, or a _path_ to a file holding such data. The TEXT data should be in graphml format, and hold an undirected, complete, connected graph with certain attributes specified on the vertices and links. For more information on how to structure this data, see the [[Topology Format]].
