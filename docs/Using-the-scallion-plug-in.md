@@ -1,4 +1,4 @@
-The scallion plug-in is used to experiment with the [Tor anonymity network](https://www.torproject.org/). The plug-in is a wrapper around [Tor's source code](https://gitweb.torproject.org/tor.git), and is most useful in conjunction with [[the browser plug-in|Using the browser plug-in]], [[the filetransfer plug-in|Using the filetransfer plug-in]], and [[the torrent plug-in|Using the torrent plug-in]] to transfer data across the anonymity network and measure performance characteristics.
+The scallion plug-in is used to experiment with the [Tor anonymity network](https://www.torproject.org/). The plug-in is a wrapper around [Tor's source code](https://gitweb.torproject.org/tor.git), and is most useful in conjunction with [[the filetransfer plug-in|Using the filetransfer plug-in]] to transfer data across the anonymity network and measure performance characteristics.
 
 The `resource/examples/scallion/` directory of the source distribution contains sample network configurations that work with Scallion, to get started with Tor experimentation.
 
@@ -51,7 +51,7 @@ The maximum memory requirements of our included sample network configurations ar
 ## Argument Usage
 
 ```xml
-<application [...] arguments="arg1 arg2 arg3 [...]" />
+<application [...] arguments="arg1 arg2 [...]" />
 ```
 
 The _arguments_ attribute of the _application_ XML element specifies application arguments for configuring a node's instance of the plug-in. Each argument is separated by a space.
@@ -59,80 +59,19 @@ The _arguments_ attribute of the _application_ XML element specifies application
 Usage, by arg number:
    1. the scallion plug-in mode can be one of:
       + _dirauth_, for a Tor directory authority
-      + _relay_, for a Tor non-exit relay
-      + _exitrelay_, for a Tor exit relay
-      + _client_, for a filetransfer HTTP client over a local Tor SOCKS proxy server
+      + _hsauth_, for a Tor hidden service authority
+      + _bridgeauth_, for a Tor bridge authority
+      + _relay_, for a Tor relay that rejects exit traffic
+      + _exitrelay_, for a Tor relay that allows exit traffic
+      + _client_, for a Tor client connecting over a local Tor SOCKS proxy server
+      + _bridge_, for a Tor client that also acts as a bridge
+      + _bridgeclient_, for a Tor client that connects through a Tor bridge
    1. _weight_, the bandwidth _weight_ that should appear in the Tor consensus for this relay, in KiB
-   1. _rate_, the global _rate limit_ for this Tor in bytes, passed as Tor's `--BandwidthRate` option
-   1. _burst_, the global _burst limit_ for this Tor in bytes, passed as Tor's `--BandwidthBurst` option
-   1. _torrc_, the path to the _torrc file_ for this Tor, passed as Tor's `-f` option
-   1. _datadir_, the path to the _base data directory_ for this Tor, passed as Tor's `--DataDirectory` option
-   1. _geoip_, the path to the _geoip file_ for this Tor, passed as Tor's `--GeoIPFile` option
+   1. _[...]_, other options as specified in [the Tor config manual](https://www.torproject.org/docs/tor-manual-dev.html.en)
 
 ## Example
 
-Here is an example XML file that contains each type of Tor node possible to configure:
-
-```xml
-<!-- our network -->
-
-<cluster id="vnet" bandwidthdown="1024" bandwidthup="768" />
-<link clusters="vnet vnet" latency="60" jitter="20" packetloss="0.0" />
-
-<!-- the plug-ins we will be using -->
-
-<plugin id="filex" path="~/.shadow/plugins/libshadow-plugin-filetransfer.so" />
-<plugin id="torrent" path="~/.shadow/plugins/libshadow-plugin-torrent.so" />
-<plugin id="scallion" path="~/.shadow/plugins/libshadow-plugin-scallion.so" />
-
-<!-- the length of our experiment in seconds -->
-
-<kill time="1800" />
-
-<!-- our services -->
-
-<node id="fileserver" bandwidthdown="102400" bandwidthup="102400" >
-  <application plugin="filex" starttime="1" arguments="server 80 ~/.shadow/share/" />
-</node>
-<node id="webserver" bandwidthdown="102400" bandwidthup="102400" />
-  <application plugin="filex" starttime="1" arguments="server 80 ../browser-example/" />
-</node>
-<node id="torrentauth" bandwidthdown="102400" bandwidthup="102400" >
-  <application plugin="torrent" starttime="1" arguments="authority 5000"/>
-</node>
-
-<!-- our Tor network infrastructure -->
-
-<node id="4uthority" >
-  <application plugin="scallion" starttime="1" arguments="dirauth 1024 1024000 1024000 ./authority.torrc ./data/authoritydata ~/.shadow/share/geoip" />
-</node>
-<node id="exit" quantity="2" >
-  <application plugin="scallion" starttime="60" arguments="exitrelay 1024 1024000 1024000 ./exit.torrc ./data/exitdata ~/.shadow/share/geoip" />
-</node>
-<node id="relay" quantity="2" >
-  <application plugin="scallion" starttime="60" arguments="relay 1024 1024000 1024000 ./relay.torrc ./data/relaydata ~/.shadow/share/geoip" />
-</node>
-
-<!-- our Tor clients -->
-
-<node id="fileclient" />
-  <application plugin="scallion" starttime="600" arguments="client 1024 1024000 1024000 ./client.torrc ./data/clientdata ~/.shadow/share/geoip" />
-  <application plugin="filex" starttime="900" arguments="client single fileserver 80 localhost 9000 10 /1MiB.urnd" />
-</node>
-<node id="browserclient" />
-  <application plugin="scallion" starttime="600" arguments="browser 1024 1024000 1024000 ./client.torrc ./data/clientdata ~/.shadow/share/geoip" />
-  <application plugin="filex" starttime="900" arguments="webserver 80 localhost 9000 6 /index.htm" />
-</node>
-<node id="torrentnode" quantity="3" />
-  <application plugin="scallion" starttime="600" arguments="torrent 1024 1024000 1024000 ./client.torrc ./data/clientdata ~/.shadow/share/geoip" />
-  <application plugin="filex" starttime="900" arguments="torrent node torrentauth 5000 localhost 9000 6000 1MB" />
-</node>
-```
-
-From the `resource/examples/scallion/` directory, save this file as `mytor.xml` and run it like:
-```bash
-scallion -i mytor.xml
-```
+An example XML file that contains each type of Tor node possible to configure can be found in the `resource/examples/scallion/minimal` directory.
 
 ## Generating your own Tor Network
 
