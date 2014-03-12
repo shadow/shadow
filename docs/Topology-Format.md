@@ -14,7 +14,7 @@ All vertices must have the following attributes: _id_ and _type_. _type_ is curr
 
 In addition, all _point of interest (poi)_ vertices must have the following attributes: _ip_, _geocode_, _bandwidthup_, _bandwidthdown_, _packetloss_
 
-_Points of Interest_ are special vertices that represent a collection of Internet routers that are very close to each other in terms of network distance. These vertices also represent end-points in the network where virtual hosts may be attached. Shadow does this attachment using the typehint, iphint, and geocodehint as specified in the [[Shadow config]].
+_Points of Interest_ are special vertices that represent a collection of Internet routers that are very close to each other in terms of network distance. These vertices also represent end-points in the network where virtual hosts may be attached. Shadow does this attachment using the typehint, iphint, and geocodehint as specified in the [[Shadow config format]].
 
 ### Edges
 
