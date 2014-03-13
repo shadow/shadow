@@ -264,8 +264,10 @@ def build(args):
     
     # clear cmake cache
     if args.do_force_rebuild and os.path.exists(builddir+"/shadow"): shutil.rmtree(builddir+"/shadow")
-    elif not args.disable_scallion and args.tor_prefix != None and os.path.exists(builddir+"/shadow/src/plugins/scallion"): shutil.rmtree(builddir+"/shadow/src/plugins/scallion")
-
+    elif not args.disable_scallion:
+        if args.tor_prefix != None and os.path.exists(builddir+"/shadow/src/plugins/scallion"): shutil.rmtree(builddir+"/shadow/src/plugins/scallion")
+        if args.tor_version != TOR_DEFAULT_VERSION and os.path.exists(builddir+"/tor"): shutil.rmtree(builddir+"/tor")
+    
     # create directories
     if not os.path.exists(builddir+"/shadow"): os.makedirs(builddir+"/shadow")
     if not os.path.exists(installdir): os.makedirs(installdir)
