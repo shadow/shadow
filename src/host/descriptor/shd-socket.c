@@ -36,11 +36,12 @@ void socket_free(gpointer data) {
 void socket_close(Socket* socket) {
 	MAGIC_ASSERT(socket);
 	MAGIC_ASSERT(socket->vtable);
-	socket->vtable->close((Descriptor*)socket);
 
 	Tracker* tracker = host_getTracker(worker_getCurrentHost());
 	Descriptor* descriptor = (Descriptor *)socket;
 	tracker_removeSocket(tracker, descriptor->handle);
+
+	socket->vtable->close((Descriptor*)socket);
 }
 
 gssize socket_sendUserData(Socket* socket, gconstpointer buffer, gsize nBytes,
