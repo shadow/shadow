@@ -200,25 +200,27 @@ static void _torctl_activate(TorCTL* torctl, uint32_t events) {
 		while((bytes = recv(torctl->sd, recvbuf, 100000, 0)) > 0) {
 			recvbuf[bytes] = '\0';
 
-			gboolean isLastLineIncomplete = FALSE;
-			if(bytes < 2 || recvbuf[bytes-2] != '\r' || recvbuf[bytes-1] != '\n') {
-				isLastLineIncomplete = TRUE;
-			}
+			gboolean isLastLineComplete = g_str_has_suffix(recvbuf, "\r\n");
 
 			gchar** lines = g_strsplit(recvbuf, "\r\n", 0);
-			gchar* line = NULL;
-			for(gint i = 0; (line = lines[i]) != NULL; i++) {
-				if(!torctl->receiveLineBuffer) {
-					torctl->receiveLineBuffer = g_string_new(line);
-				} else {
-					g_string_append_printf(torctl->receiveLineBuffer, "%s", line);
+			guint numLines = g_strv_length(lines);
+			for(gint i = 0; i < numLines; i++) {
+				g_assert(lines[i] != NULL);
+
+				/* lines ending in '\r\n\r\n' result in an empty string token we should ignore */
+				if(!g_ascii_strcasecmp(lines[i], "")) {
+					continue;
 				}
 
-				if(!g_ascii_strcasecmp(line, "") ||
-						(isLastLineIncomplete && lines[i+1] == NULL)) {
-					/* this is '', or the last line, and its not all here yet */
-					continue;
-				} else {
+				/* grab the data for the next line */
+				if(!torctl->receiveLineBuffer) {
+					torctl->receiveLineBuffer = g_string_new(NULL);
+				}
+				g_string_append_printf(torctl->receiveLineBuffer, "%s", lines[i]);
+				g_assert(torctl->receiveLineBuffer->str);
+
+				/* only process full lines */
+				if(i < (numLines-1) || isLastLineComplete) {
 					/* we have a full line in our buffer */
 					_torctl_processLine(torctl, torctl->receiveLineBuffer);
 					g_string_free(torctl->receiveLineBuffer, TRUE);
