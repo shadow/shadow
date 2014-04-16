@@ -31,7 +31,7 @@ typedef struct _TCPCongestion TCPCongestion;
 typedef struct _TCPCongestionFunctionTable TCPCongestionFunctionTable;
 
 typedef void (*TCPCongestionAvoidanceFunc)(TCPCongestion* congestion, gint inFlight, gint packetsAcked, gint ack);
-typedef void (*TCPCongestionPacketLossFunc)(TCPCongestion* congestion);
+typedef guint (*TCPCongestionPacketLossFunc)(TCPCongestion* congestion);
 typedef void (*TCPCongestionFreeFunc)(TCPCongestion* congsetion);
 
 struct _TCPCongestionFunctionTable {
@@ -62,7 +62,7 @@ struct _TCPCongestion {
 
 void tcpCongestion_init(TCPCongestion* congestion, TCPCongestionFunctionTable* funcTable,TCPCongestionType type,  gint window, gint threshold);
 void tcpCongestion_avoidance(TCPCongestion* congestion, gint inFlight, gint packetsAcked, gint ack);
-void tcpCongestion_packetLoss(TCPCongestion* congestion);
+guint tcpCongestion_packetLoss(TCPCongestion* congestion);
 void tcpCongestion_free(TCPCongestion* congestion);
 
 TCPCongestionType tcpCongestion_getType(gchar* type);

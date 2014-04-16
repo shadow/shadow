@@ -20,6 +20,8 @@ struct _ScoreBoardBlock {
     gint sequence;
     /* sequence of the next packet to be sent */
     gint nextSend;
+    /* retransmission id if the packet has been retransmitted */
+    gint retransmissionId;
     /* status of the block */
     BlockStatus status;
 
@@ -34,6 +36,14 @@ struct _ScoreBoard {
     gint fack;
     /* number of packets in the scoreboard which are lost */
     gint fackOut;
+    /* retransmission ID counter */
+    gint retransmissionId;
+    /* the retrans ID of the last (S)ACKed packet */
+    gint ackedRetransmissionId;
+    /* the last acknowledgment received */
+    gint lastAcknowledgment;
+    /* number of duplicate ACKs received */
+    gint duplicateACKCount;
 
     MAGIC_DECLARE;
 };
@@ -100,13 +110,14 @@ static gchar* _scoreboard_statusString(BlockStatus status) {
 static void _scoreboard_dump(ScoreBoard* scoreboard) {
     MAGIC_ASSERT(scoreboard);
 
-    GString* msg = g_string_new("[SCOREBOARD] ");
+    GString* msg = g_string_new("");
+    g_string_append_printf(msg, "[SCOREBOARD] fack=%d ackRtx=%d |", scoreboard->fack, scoreboard->ackedRetransmissionId);
+
     for(GList* link = scoreboard->blocks; link; link = g_list_next(link)) {
         ScoreBoardBlock* block = (ScoreBoardBlock*)link->data;
-        g_string_append_printf(msg,"%d (%s) ", block->sequence, _scoreboard_statusString(block->status));
+        g_string_append_printf(msg, " %d (st=%s nxt=%d rtx=%d)", block->sequence, _scoreboard_statusString(block->status), block->nextSend, block->retransmissionId);
     }
 
-    g_string_append_printf(msg, " fack=%d fackout=%d", scoreboard->fack, scoreboard->fackOut);
     message("%s", msg->str);
     g_string_free(msg, TRUE);
 }
@@ -139,10 +150,10 @@ static void _scoreboard_removeAcked(ScoreBoard* scoreboard, gint unacked) {
     }
 }
 
-gboolean scoreboard_update(ScoreBoard* scoreboard, GList* selectiveACKs, gint unacked) {
+TCPProcessFlags scoreboard_update(ScoreBoard* scoreboard, GList* selectiveACKs, gint unacked) {
     MAGIC_ASSERT(scoreboard);
 
-    gboolean dataLoss = FALSE;
+    TCPProcessFlags flag = TCP_PF_NONE;
 
     _scoreboard_removeAcked(scoreboard, unacked);
 
@@ -161,11 +172,23 @@ gboolean scoreboard_update(ScoreBoard* scoreboard, GList* selectiveACKs, gint un
             ScoreBoardBlock* block = _scoreboard_findBlock(scoreboard, seq);
             if(!block) {
                 _scoreboard_addBlock(scoreboard, seq, status);
+                flag |= TCP_PF_DATA_SACKED;
             } else if(status == BLOCK_STATUS_SACKED) {
+                if(block->status == BLOCK_STATUS_RETRANSMITTED) {
+                    scoreboard->ackedRetransmissionId = block->retransmissionId;
+                }
                 block->status = status;
             }
         }
     }
+
+    /* update duplicate ACK count */
+    if(scoreboard->lastAcknowledgment == unacked) {
+        scoreboard->duplicateACKCount += 1;
+    } else {
+        scoreboard->duplicateACKCount = 0;
+    }
+    scoreboard->lastAcknowledgment = unacked;
 
     /* go through all the blocks and check if any of the INFLIGHT ones need to be retransmitted */
     for(GList* link = scoreboard->blocks; link; link = g_list_next(link)) {
@@ -174,18 +197,20 @@ gboolean scoreboard_update(ScoreBoard* scoreboard, GList* selectiveACKs, gint un
         switch(block->status) {
             case BLOCK_STATUS_INFLIGHT:
                 /* checks for 3 duplicate ACKs */
-                if(block->sequence <= scoreboard->fack - 4) {
+                if(block->sequence <= scoreboard->fack - 4 || 
+                   (block->sequence == scoreboard->lastAcknowledgment && scoreboard->duplicateACKCount == 3)) {
                     block->status = BLOCK_STATUS_LOST;
                     scoreboard->fackOut += 1;
-                    dataLoss = TRUE;
+                    flag |= TCP_PF_DATA_LOST;
                 }
                 break;
 
             case BLOCK_STATUS_RETRANSMITTED:
-                if(block->nextSend <= scoreboard->fack) {
+                if((block->nextSend <= scoreboard->fack) ||
+                   (block->retransmissionId + 4 < scoreboard->ackedRetransmissionId)) {
                     block->status = BLOCK_STATUS_LOST;
                     scoreboard->fackOut += 1;
-                    dataLoss = TRUE;
+                    flag |= TCP_PF_DATA_LOST;
                 }
                 break;
 
@@ -198,12 +223,16 @@ gboolean scoreboard_update(ScoreBoard* scoreboard, GList* selectiveACKs, gint un
 
     }
 
-    return dataLoss;
+    //_scoreboard_dump(scoreboard);
+
+    return flag;
 }
 
 void scoreboard_clear(ScoreBoard* scoreboard) {
     MAGIC_ASSERT(scoreboard);
 
+    scoreboard->retransmissionId = 0;
+    scoreboard->ackedRetransmissionId = -1;
     scoreboard->fack = 0;
     scoreboard->fackOut = 0;
     if(scoreboard->blocks) {
@@ -248,6 +277,8 @@ void scoreboard_markRetransmitted(ScoreBoard* scoreboard, gint sequence, gint ne
 
     block->status = BLOCK_STATUS_RETRANSMITTED;
     block->nextSend = nextSend;
+    block->retransmissionId = scoreboard->retransmissionId;
+    scoreboard->retransmissionId++;
 }
 
 void scoreboard_packetDropped(ScoreBoard* scoreboard, gint sequence) {
@@ -301,4 +332,7 @@ void scoreboard_markLoss(ScoreBoard* scoreboard, gint unacked, gint nextSend) {
             scoreboard->fackOut += 1;
         }
     }
+
+    scoreboard->retransmissionId = 0;
+    scoreboard->ackedRetransmissionId = -1;
 }

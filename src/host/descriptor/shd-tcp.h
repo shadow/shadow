@@ -11,6 +11,15 @@
 
 typedef struct _TCP TCP;
 
+typedef enum TCPProcessFlags TCPProcessFlags;
+enum TCPProcessFlags {
+    TCP_PF_NONE = 0,
+    TCP_PF_PROCESSED = 1 << 0,
+    TCP_PF_DATA_ACKED = 1 << 1,
+    TCP_PF_DATA_SACKED = 1 << 2,
+    TCP_PF_DATA_LOST = 1 << 3,
+};
+
 TCP* tcp_new(gint handle, guint receiveBufferSize, guint sendBufferSize);
 gint tcp_getConnectError(TCP* tcp);
 void tcp_getInfo(TCP* tcp, struct tcp_info *tcpinfo);

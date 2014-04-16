@@ -37,10 +37,10 @@ void tcpCongestion_avoidance(TCPCongestion* congestion, gint inFlight, gint pack
     congestion->funcTable->avoidance(congestion, inFlight, packetsAcked, ack);
 }
 
-void tcpCongestion_packetLoss(TCPCongestion* congestion) {
+guint tcpCongestion_packetLoss(TCPCongestion* congestion) {
     MAGIC_ASSERT(congestion);
     MAGIC_ASSERT(congestion->funcTable);
-    congestion->funcTable->packetLoss(congestion);
+    return congestion->funcTable->packetLoss(congestion);
 }
 
 void tcpCongestion_free(TCPCongestion* congestion) {

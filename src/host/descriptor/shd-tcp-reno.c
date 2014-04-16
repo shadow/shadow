@@ -39,7 +39,7 @@ void reno_congestionAvoidance(Reno* reno, gint inFlight, gint packetsAcked, gint
     }
 }
 
-void reno_packetLoss(Reno* reno) {
+guint reno_packetLoss(Reno* reno) {
 	MAGIC_ASSERT(reno);
     TCPCongestion* congestion = (TCPCongestion*)reno;
 
@@ -63,8 +63,7 @@ void reno_packetLoss(Reno* reno) {
 	if(reno->window == 0) {
 		reno->window = 1;
 	}
-
-    congestion->window = reno->window;
+    return reno->window;
 }
 
 static void _reno_free(Reno* reno) {

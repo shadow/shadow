@@ -35,7 +35,7 @@ void aimd_congestionAvoidance(AIMD* aimd, gint inFlight, gint packetsAcked, gint
     }
 }
 
-void aimd_packetLoss(AIMD* aimd) {
+guint aimd_packetLoss(AIMD* aimd) {
 	MAGIC_ASSERT(aimd);
     TCPCongestion* congestion = (TCPCongestion*)aimd;
 
@@ -56,9 +56,8 @@ void aimd_packetLoss(AIMD* aimd) {
    	 *  increase window when the congestion window is larger than SMSS*SMSS.
    	 *  If the above formula yields 0, the result SHOULD be rounded up to 1 byte."
 	 */
-	if(congestion->window == 0) {
-		congestion->window = 1;
-	}
+
+    return MAX(congestion->window, 1);
 }
 
 static void _aimd_free(AIMD* aimd) {
