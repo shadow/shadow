@@ -518,6 +518,10 @@ enter:
 		} else if (cpuw->req.task == CPUWORKER_TASK_SHUTDOWN) {
 			log_info(LD_OR, "Clean shutdown: exiting");
 			goto end;
+		} else {
+			cpuw->state = CPUW_V2_READ;
+			cpuw->offset = 0;
+			goto enter;
 		}
 
 		cpuw->state = CPUW_V2_WRITE;
@@ -551,7 +555,7 @@ enter:
 		cpuw->state = CPUW_V2_READ;
 		cpuw->offset = 0;
 		memwipe(&cpuw->req, 0, sizeof(cpuw->req));
-		memwipe(&cpuw->rpl, 0, sizeof(cpuw->req));
+		memwipe(&cpuw->rpl, 0, sizeof(cpuw->rpl));
 		goto enter;
 	}
 	}
@@ -562,7 +566,7 @@ ret:
 end:
 	if (cpuw != NULL) {
 		memwipe(&cpuw->req, 0, sizeof(cpuw->req));
-		memwipe(&cpuw->rpl, 0, sizeof(cpuw->req));
+		memwipe(&cpuw->rpl, 0, sizeof(cpuw->rpl));
 		release_server_onion_keys(&cpuw->onion_keys);
 		tor_close_socket(cpuw->fd);
 		event_del(&(cpuw->read_event));
