@@ -42,18 +42,18 @@ static gssize channel_linkedWrite(Channel* channel, gconstpointer buffer, gsize 
 	gsize available = channel->bufferSize - channel->bufferLength;
 	if(available == 0) {
 		/* we have no space */
-		return -1;
+		return (gssize)-1;
 	}
 
 	/* accept some data from the other end of the pipe */
-	guint copyLength = (guint) MIN(nBytes, available);
-	bytequeue_push(channel->buffer, buffer, copyLength);
-	channel->bufferLength += copyLength;
+	gsize copyLength = MIN(nBytes, available);
+	gsize numCopied = bytequeue_push(channel->buffer, buffer, copyLength);
+	channel->bufferLength += numCopied;
 
 	/* we just got some data in our buffer */
 	descriptor_adjustStatus((Descriptor*)channel, DS_READABLE, TRUE);
 
-	return copyLength;
+	return (gssize)numCopied;
 }
 
 static Channel* channel_getLinkedChannel(Channel* channel) {
@@ -66,7 +66,7 @@ static gssize channel_sendUserData(Channel* channel, gconstpointer buffer, gsize
 	/* the read end of a unidirectional pipe can not write! */
 	utility_assert(channel->type != CT_READONLY);
 
-	gint result = 0;
+	gssize result = 0;
 
 	Channel* linkedChannel = channel_getLinkedChannel(channel);
 	if(linkedChannel) {
@@ -74,7 +74,7 @@ static gssize channel_sendUserData(Channel* channel, gconstpointer buffer, gsize
 	}
 
 	/* our end cant write anymore if they returned error */
-	if(result <= 0) {
+	if(result <= (gssize)0) {
 		descriptor_adjustStatus((Descriptor*)channel, DS_WRITABLE, FALSE);
 	}
 
@@ -91,24 +91,24 @@ static gssize channel_receiveUserData(Channel* channel, gpointer buffer, gsize n
 		/* we have no data */
 		if(!channel_getLinkedChannel(channel)) {
 			/* the other end closed (EOF) */
-			return 0;
+			return (gssize)0;
 		} else {
 			/* blocking on read */
-			return -1;
+			return (gssize)-1;
 		}
 	}
 
 	/* accept some data from the other end of the pipe */
-	guint copyLength = (guint) MIN(nBytes, available);
-	bytequeue_pop(channel->buffer, buffer, copyLength);
-	channel->bufferLength -= copyLength;
+	gsize copyLength = MIN(nBytes, available);
+	gsize numCopied = bytequeue_pop(channel->buffer, buffer, copyLength);
+	channel->bufferLength -= numCopied;
 
 	/* we are no longer readable if we have nothing left */
 	if(channel->bufferLength <= 0) {
 		descriptor_adjustStatus((Descriptor*)channel, DS_READABLE, FALSE);
 	}
 
-	return copyLength;
+	return (gssize)numCopied;
 }
 
 TransportFunctionTable channel_functions = {
