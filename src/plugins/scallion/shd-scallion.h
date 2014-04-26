@@ -122,7 +122,7 @@ enum vtor_nodetype {
 enum cpuwstate {
 	CPUW_NONE,
 	CPUW_READTYPE, CPUW_READTAG, CPUW_READCHALLENGE, CPUW_PROCESS, CPUW_WRITERESPONSE,
-	CPUW_V2_READ, CPUW_V2_PROCESS, CPUW_V2_WRITE,
+	CPUW_V2_READ, CPUW_V2_PROCESS, CPUW_V2_WRITE, CPUW_V2_RESET,
 };
 
 /** The tag specifies which circuit this onionskin was from. */
@@ -194,14 +194,26 @@ typedef struct cpuworker_reply_t {
   uint8_t rend_auth_material[DIGEST_LEN];
 } cpuworker_reply_t;
 
+#define SCALLION_CPUWORKER_MAGIC1 0x0f5d4576
+#define SCALLION_CPUWORKER_MAGIC2 0xdc251bf9
+#define SCALLION_CPUWORKER_MAGIC3 0xe9ed3bcf
+
+#define SCALLION_CPUWORKER_ASSERT(cpuw) g_assert(cpuw);\
+		g_assert(cpuw->magic1==SCALLION_CPUWORKER_MAGIC1);\
+		g_assert(cpuw->magic2==SCALLION_CPUWORKER_MAGIC2);\
+		g_assert(cpuw->magic3==SCALLION_CPUWORKER_MAGIC3)
+
 typedef struct vtor_cpuworker_s {
+	uint32_t magic1;
+	cpuworker_request_t req;
+	uint32_t magic2;
+	cpuworker_reply_t rpl;
+	uint32_t magic3;
+	size_t num_partial_bytes;
+	enum cpuwstate state;
 	int fd;
 	server_onion_keys_t onion_keys;
-	cpuworker_request_t req;
-	cpuworker_reply_t rpl;
 	struct event read_event;
-	uint offset;
-	enum cpuwstate state;
 } vtor_cpuworker_t, *vtor_cpuworker_tp;
 #else
 /** How many bytes are sent from the cpuworker back to tor? */

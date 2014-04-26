@@ -62,6 +62,14 @@ list(REMOVE_ITEM torcommon_sources
     ${CURRENT_TOR_DIR}/src/common/strlcat.c
     ${CURRENT_TOR_DIR}/src/common/strlcpy.c
 )
+aux_source_directory(${CURRENT_TOR_DIR}/src/ext torext_sources)
+list(REMOVE_ITEM torext_sources 
+    ${CURRENT_TOR_DIR}/src/ext/OpenBSD_malloc_Linux.c
+    ${CURRENT_TOR_DIR}/src/ext/strlcat.c
+    ${CURRENT_TOR_DIR}/src/ext/strlcpy.c
+    ${CURRENT_TOR_DIR}/src/ext/tinytest.c
+    ${CURRENT_TOR_DIR}/src/ext/tinytest_demo.c
+)
 aux_source_directory(${CURRENT_TOR_DIR}/src/ext/curve25519_donna torextcurve_sources)
 if(${CMAKE_HOST_SYSTEM_PROCESSOR} STREQUAL "x86_64")
     list(REMOVE_ITEM torextcurve_sources
@@ -96,7 +104,7 @@ add_cflags("-w")
 
 ## create and install a shared library that can plug into shadow
 add_bitcode(shadow-plugin-scallion-bitcode 
-    shd-scallion-plugin.c shd-scallion.c ${toror_sources} ${torcommon_sources} ${torextcurve_sources})
+    shd-scallion-plugin.c shd-scallion.c ${toror_sources} ${torcommon_sources} ${torext_sources} ${torextcurve_sources})
 add_plugin(shadow-plugin-scallion shadow-plugin-scallion-bitcode)
 
 target_link_libraries(shadow-plugin-scallion

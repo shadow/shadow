@@ -381,9 +381,7 @@ void scalliontor_loopexit(ScallionTor* stor) {
 }
 
 /* return -1 to kill, 0 for EAGAIN, bytes read/written for success */
-static int scalliontor_checkIOResult(vtor_cpuworker_tp cpuw, int ioResult) {
-	g_assert(cpuw);
-
+static int scalliontor_checkIOResult(int fd, int ioResult) {
 	if(ioResult < 0) {
 		if(errno == EAGAIN) {
 			/* dont block! and dont fail! */
@@ -394,7 +392,7 @@ static int scalliontor_checkIOResult(vtor_cpuworker_tp cpuw, int ioResult) {
 					 "CPU worker exiting because of error on connection to Tor "
 					 "process.");
 			log_info(LD_OR,"(Error on %d was %s)",
-					cpuw->fd, tor_socket_strerror(tor_socket_errno(cpuw->fd)));
+					fd, tor_socket_strerror(tor_socket_errno(fd)));
 			return -1;
 		}
 	} else if (ioResult == 0) {
@@ -410,55 +408,70 @@ static int scalliontor_checkIOResult(vtor_cpuworker_tp cpuw, int ioResult) {
 #ifdef SCALLION_USEV2CPUWORKER
 void scalliontor_readCPUWorkerCallback(int sockd, short ev_types, void * arg) {
 	vtor_cpuworker_tp cpuw = arg;
-	g_assert(cpuw);
 
+enter:
+	SCALLION_CPUWORKER_ASSERT(cpuw);
 	if(cpuw->state == CPUW_NONE) {
 		cpuw->state = CPUW_V2_READ;
 	}
 
-	int ioResult = 0;
-	int action = 0;
-
-enter:
 	switch (cpuw->state) {
 	case CPUW_V2_READ: {
-		ioResult = 0;
-		action = 1;
-		int bytesNeeded = sizeof(cpuw->req);
+		size_t req_size = sizeof(cpuworker_request_t);
+		char recvbuf[req_size];
 
-		/* look for request */
-		while(action > 0 && cpuw->offset < bytesNeeded) {
-			ioResult = recv(cpuw->fd, &(cpuw->req)+cpuw->offset, bytesNeeded-cpuw->offset, 0);
+		/* read until we have a full request */
+		while(cpuw->num_partial_bytes < req_size) {
+			memset(recvbuf, 0, req_size);
+			size_t bytes_needed = req_size - cpuw->num_partial_bytes;
 
-			action = scalliontor_checkIOResult(cpuw, ioResult);
-			if(action == -1) goto end; // error, kill ourself
-			else if(action == 0) goto ret; // EAGAIN
+			int ioResult = recv(cpuw->fd, recvbuf, bytes_needed, 0);
+//			int ioResult = recv(cpuw->fd, (&(cpuw->req))+cpuw->offset, bytesNeeded-cpuw->offset, 0);
 
-			/* read some bytes */
-			cpuw->offset += action;
+			ioResult = scalliontor_checkIOResult(cpuw->fd, ioResult);
+			if(ioResult < 0) goto end; // error, kill ourself
+			else if(ioResult == 0) goto ret; // EAGAIN
+			else g_assert(ioResult > 0); // yay
+
+			/* we read some bytes */
+			size_t bytes_read = (size_t)ioResult;
+			g_assert(bytes_read <= bytes_needed);
+
+			/* copy these bytes into our request buffer */
+			gpointer req_loc = (gpointer) &(cpuw->req);
+			gpointer req_w_loc = &req_loc[cpuw->num_partial_bytes];
+
+			SCALLION_CPUWORKER_ASSERT(cpuw);
+			memcpy(req_w_loc, recvbuf, bytes_read);
+			SCALLION_CPUWORKER_ASSERT(cpuw);
+
+			cpuw->num_partial_bytes += bytes_read;
+			g_assert(cpuw->num_partial_bytes <= req_size);
 		}
 
 		/* we got what we needed, assert this */
-		if (cpuw->offset != bytesNeeded) {
+		if(cpuw->num_partial_bytes == req_size) {
+			/* got full request, process it */
+			cpuw->state = CPUW_V2_PROCESS;
+			cpuw->num_partial_bytes = 0;
+			goto enter;
+		} else {
 		  log_err(LD_BUG,"read tag failed. Exiting.");
 		  goto end;
 		}
-
-		/* got request, process it */
-		cpuw->state = CPUW_V2_PROCESS;
-		cpuw->offset = 0;
-		goto enter;
 	}
 
 	case CPUW_V2_PROCESS: {
 		tor_assert(cpuw->req.magic == CPUWORKER_REQUEST_MAGIC);
 
-		memset(&cpuw->rpl, 0, sizeof(cpuw->rpl));
+		SCALLION_CPUWORKER_ASSERT(cpuw);
+		memset(&(cpuw->rpl), 0, sizeof(cpuworker_reply_t));
+		SCALLION_CPUWORKER_ASSERT(cpuw);
 
 		if (cpuw->req.task == CPUWORKER_TASK_ONION) {
 			const create_cell_t *cc = &cpuw->req.create_cell;
 			created_cell_t *cell_out = &cpuw->rpl.created_cell;
-			int n;
+			int n = 0;
 #ifdef SCALLION_USEV2CPUWORKERTIMING
 			struct timeval tv_start, tv_end;
 			cpuw->rpl.timed = cpuw->req.timed;
@@ -474,7 +487,7 @@ enter:
 			if (n < 0) {
 				/* failure */
 				log_debug(LD_OR, "onion_skin_server_handshake failed.");
-				memset(&cpuw->rpl, 0, sizeof(cpuw->rpl));
+				memset(&cpuw->rpl, 0, sizeof(cpuworker_reply_t));
 				memcpy(cpuw->rpl.tag, cpuw->req.tag, TAG_LEN);
 				cpuw->rpl.success = 0;
 			} else {
@@ -502,10 +515,9 @@ enter:
 #ifdef SCALLION_USEV2CPUWORKERTIMING
 			if (cpuw->req.timed) {
 			  struct timeval tv_diff;
-			  int64_t usec;
 			  tor_gettimeofday(&tv_end);
 			  timersub(&tv_end, &tv_start, &tv_diff);
-			  usec = ((int64_t)tv_diff.tv_sec)*1000000 + tv_diff.tv_usec;
+			  int64_t usec = (int64_t)(((int64_t)tv_diff.tv_sec)*1000000 + tv_diff.tv_usec);
 /** If any onionskin takes longer than this, we clip them to this
 * time. (microseconds) */
 #define MAX_BELIEVABLE_ONIONSKIN_DELAY (2*1000*1000)
@@ -515,43 +527,70 @@ enter:
 				cpuw->rpl.n_usec = (uint32_t) usec;
 			  }
 #endif
+			/* write response after processing request */
+			SCALLION_CPUWORKER_ASSERT(cpuw);
+			cpuw->state = CPUW_V2_WRITE;
 		} else if (cpuw->req.task == CPUWORKER_TASK_SHUTDOWN) {
 			log_info(LD_OR, "Clean shutdown: exiting");
+			cpuw->state = CPUW_NONE;
 			goto end;
+		} else {
+			/* dont know the task, just ignore it and start over reading the next */
+			cpuw->state = CPUW_V2_RESET;
 		}
 
-		cpuw->state = CPUW_V2_WRITE;
 		goto enter;
 	}
 
 	case CPUW_V2_WRITE: {
-		ioResult = 0;
-		action = 1;
-		int bytesNeeded = sizeof(cpuw->rpl);
+		size_t rpl_size = sizeof(cpuworker_reply_t);
+		char sendbuf[rpl_size];
+		memset(sendbuf, 0, rpl_size);
 
-		while(action > 0 && cpuw->offset < bytesNeeded) {
-			ioResult = send(cpuw->fd, &cpuw->rpl+cpuw->offset, bytesNeeded-cpuw->offset, 0);
+		/* copy reply into send buffer */
+		SCALLION_CPUWORKER_ASSERT(cpuw);
+		memcpy(sendbuf, (gpointer) &(cpuw->rpl), rpl_size);
+		SCALLION_CPUWORKER_ASSERT(cpuw);
 
-			action = scalliontor_checkIOResult(cpuw, ioResult);
-			if(action == -1) goto end;
-			else if(action == 0) goto ret;
+		/* write until we wrote it all */
+		while(cpuw->num_partial_bytes < rpl_size) {
+			size_t bytes_needed = rpl_size - cpuw->num_partial_bytes;
+			gpointer rpl_loc = (gpointer) sendbuf;
+			gpointer rpl_r_loc = &rpl_loc[cpuw->num_partial_bytes];
 
-			/* wrote some bytes */
-			cpuw->offset += action;
+			int ioResult = send(cpuw->fd, rpl_r_loc, bytes_needed, 0);
+
+			ioResult = scalliontor_checkIOResult(cpuw->fd, ioResult);
+			if(ioResult < 0) goto end; // error, kill ourself
+			else if(ioResult == 0) goto ret; // EAGAIN
+			else g_assert(ioResult > 0); // yay
+
+			/* we wrote some bytes */
+			size_t bytes_written = (size_t)ioResult;
+			g_assert(bytes_written <= bytes_needed);
+
+			cpuw->num_partial_bytes += bytes_written;
+			g_assert(cpuw->num_partial_bytes <= rpl_size);
 		}
 
-		/* we wrote what we needed, assert this */
-		if (cpuw->offset != bytesNeeded) {
+		/* we sent what we needed, assert this */
+		if(cpuw->num_partial_bytes == rpl_size) {
+			/* sent full reply, start over */
+			log_debug(LD_OR, "finished writing response.");
+			cpuw->state = CPUW_V2_RESET;
+			cpuw->num_partial_bytes = 0;
+			goto enter;
+		} else {
 			log_err(LD_BUG,"writing response buf failed. Exiting.");
 			goto end;
 		}
+	}
 
-		log_debug(LD_OR,"finished writing response.");
-
+	case CPUW_V2_RESET: {
+		memwipe(&cpuw->req, 0, sizeof(cpuworker_request_t));
+		memwipe(&cpuw->rpl, 0, sizeof(cpuworker_reply_t));
 		cpuw->state = CPUW_V2_READ;
-		cpuw->offset = 0;
-		memwipe(&cpuw->req, 0, sizeof(cpuw->req));
-		memwipe(&cpuw->rpl, 0, sizeof(cpuw->req));
+		cpuw->num_partial_bytes = 0;
 		goto enter;
 	}
 	}
@@ -562,10 +601,11 @@ ret:
 end:
 	if (cpuw != NULL) {
 		memwipe(&cpuw->req, 0, sizeof(cpuw->req));
-		memwipe(&cpuw->rpl, 0, sizeof(cpuw->req));
+		memwipe(&cpuw->rpl, 0, sizeof(cpuw->rpl));
 		release_server_onion_keys(&cpuw->onion_keys);
 		tor_close_socket(cpuw->fd);
 		event_del(&(cpuw->read_event));
+		memset(cpuw, 0, sizeof(vtor_cpuworker_t));
 		free(cpuw);
 	}
 }
@@ -758,6 +798,9 @@ void scalliontor_newCPUWorker(ScallionTor* stor, int fd) {
 
 	cpuw->fd = fd;
 	cpuw->state = CPUW_NONE;
+	cpuw->magic1 = SCALLION_CPUWORKER_MAGIC1;
+	cpuw->magic2 = SCALLION_CPUWORKER_MAGIC2;
+	cpuw->magic3 = SCALLION_CPUWORKER_MAGIC3;
 
 #ifdef SCALLION_USEV2CPUWORKER
 	setup_server_onion_keys(&(cpuw->onion_keys));
