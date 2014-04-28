@@ -9,7 +9,7 @@ The maximum memory requirements of our included sample network configurations ar
 <table>
   <caption>Scallion Network Node Breakdown by Type, and Memory Requirements</caption>
   <tr>
-    <th>Node Type</th><th>Tiny</th><th>Small</th><th>Medium</th><th>Large *</th>
+    <th><u>Node Type</u></th><th><u>Tiny</u></th><th><u>Small</u></th><th><u>Medium</u></th><th><u>Large</u> *</th>
   </tr>
   <tr>
     <td>Web Clients</td><td>190</td><td>475</td><td>950</td><td>2400</td>
@@ -27,7 +27,7 @@ The maximum memory requirements of our included sample network configurations ar
     <td>TorPerf 5MiB</td><td>5</td><td>10</td><td>20</td><td>75</td>
   </tr>
   <tr>
-    <td>Web Servers</td><td>20</td><td>50</td><td>100</td><td>500</td>
+    <td><b>Total Clients</b></td><td><b>0</b></td><td><b>0</b></td><td><b>0</b></td><td><b>0</b></td>
   </tr>
   <tr>
     <td>Non-exit Relays</td><td>11</td><td>29</td><td>59</td><td>224</td>
@@ -37,6 +37,12 @@ The maximum memory requirements of our included sample network configurations ar
   </tr>
   <tr>
     <td>Directory Authorities</td><td>1</td><td>1</td><td>1</td><td>1</td>
+  </tr>
+  <tr>
+    <td><b>Total Relays</b></td><td><b>0</b></td><td><b>0</b></td><td><b>0</b></td><td><b>0</b></td>
+  </tr>
+  <tr>
+    <td>Web Servers</td><td>20</td><td>50</td><td>100</td><td>500</td>
   </tr>
   <tr>
     <th>RAM Required (GiB)</th><td>&lt; 4</td><td>&lt; 16</td><td>&lt; 32</td><td>&lt; 64</td>
