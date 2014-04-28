@@ -461,7 +461,7 @@ static const gchar* _packet_deliveryStatusToAscii(PacketDeliveryStatusFlags stat
 	}
 }
 
-gchar* _packet_getString(Packet* packet) {
+static gchar* _packet_getString(Packet* packet) {
 	GString* packetString = g_string_new("");
 
 	//_packet_lock(packet);
