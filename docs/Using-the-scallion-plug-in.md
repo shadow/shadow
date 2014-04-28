@@ -45,7 +45,7 @@ The maximum memory requirements of our included sample network configurations ar
     <td>Directory Authorities</td><td>1</td><td>2</td><td>3</td><td>4</td>
   </tr>
   <tr>
-    <td><b>Total Relays</b></td><td><b>49</b></td><td><b>52</b></td><td><b>104</b></td><td><b>262</b></td>
+    <td><b>Total Relays</b></td><td><b>49</b></td><td><b>99</b></td><td><b>198</b></td><td><b>499</b></td>
   </tr>
   <tr>
     <td>Web Servers</td><td>20</td><td>50</td><td>100</td><td>500</td>
