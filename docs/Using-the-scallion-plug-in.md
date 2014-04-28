@@ -12,40 +12,46 @@ The maximum memory requirements of our included sample network configurations ar
     <th><u>Node Type</u></th><th><u>Tiny</u></th><th><u>Small</u></th><th><u>Medium</u></th><th><u>Large</u> *</th>
   </tr>
   <tr>
-    <td>Web Clients</td><td>190</td><td>475</td><td>950</td><td>2400</td>
+    <td>Web Clients</td><td>135</td><td>270</td><td>540</td><td>1350</td>
   </tr>
   <tr>
-    <td>Bulk Clients</td><td>10</td><td>25</td><td>50</td><td>180</td>
+    <td>Bulk Clients</td><td>15</td><td>30</td><td>60</td><td>150</td>
   </tr>
   <tr>
-    <td>TorPerf 50KiB</td><td>5</td><td>10</td><td>20</td><td>75</td>
+    <td>TorPerf 50KiB</td><td>10</td><td>25</td><td>50</td><td>100</td>
   </tr>
   <tr>
-    <td>TorPerf 1MiB</td><td>5</td><td>10</td><td>20</td><td>75</td>
+    <td>TorPerf 1MiB</td><td>10</td><td>25</td><td>50</td><td>100</td>
   </tr>
   <tr>
-    <td>TorPerf 5MiB</td><td>5</td><td>10</td><td>20</td><td>75</td>
+    <td>TorPerf 5MiB</td><td>10</td><td>25</td><td>50</td><td>100</td>
   </tr>
   <tr>
-    <td><b>Total Clients</b></td><td><b>0</b></td><td><b>0</b></td><td><b>0</b></td><td><b>0</b></td>
+    <td><b>Total Clients</b></td><td><b>180</b></td><td><b>375</b></td><td><b>750</b></td><td><b>1800</b></td>
   </tr>
   <tr>
-    <td>Non-exit Relays</td><td>11</td><td>29</td><td>59</td><td>224</td>
+    <td>Guard Relays</td><td>11</td><td>22</td><td>45</td><td>116</td>
   </tr>
   <tr>
-    <td>Exit Relays</td><td>8</td><td>20</td><td>40</td><td>150</td>
+    <td>Exit Relays</td><td>7</td><td>15</td><td>30</td><td>76</td>
   </tr>
   <tr>
-    <td>Directory Authorities</td><td>1</td><td>1</td><td>1</td><td>1</td>
+    <td>Guard+Exit Relays</td><td>4</td><td>8</td><td>16</td><td>41</td>
   </tr>
   <tr>
-    <td><b>Total Relays</b></td><td><b>0</b></td><td><b>0</b></td><td><b>0</b></td><td><b>0</b></td>
+    <td>Middle Relays</td><td>26</td><td>52</td><td>104</td><td>262</td>
+  </tr>
+  <tr>
+    <td>Directory Authorities</td><td>1</td><td>2</td><td>3</td><td>4</td>
+  </tr>
+  <tr>
+    <td><b>Total Relays</b></td><td><b>49</b></td><td><b>52</b></td><td><b>104</b></td><td><b>262</b></td>
   </tr>
   <tr>
     <td>Web Servers</td><td>20</td><td>50</td><td>100</td><td>500</td>
   </tr>
   <tr>
-    <th>RAM Required (GiB)</th><td>&lt; 4</td><td>&lt; 16</td><td>&lt; 32</td><td>&lt; 64</td>
+    <th>RAM Required (GiB)</th><td>&lt; 4</td><td>&lt; 12</td><td>&lt; 24</td><td>&lt; 64</td>
   </tr>
   <tr>
     <th>EC2 Instance</th><td>m1.large</td><td>m1.xlarge <i>or</i><br /> m2.xlarge</td><td>m2.2xlarge</td><td>m2.4xlarge</td>
