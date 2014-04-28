@@ -80,14 +80,7 @@ static void _cubic_hystartUpdate(Cubic* cubic) {
         cubic->hystart.delayMin = delayMin;
     }
 
-    debug("[HYSTART] window=%d thresh=%d found=%d rtt=%d delayMin=%d",
-            congestion->window, congestion->threshold, cubic->hystart.found, rtt, delayMin);
-
     if(!cubic->hystart.found && congestion->window <= congestion->threshold) {
-        debug("[HYSTART] now=%d lastTime=%d roundStart=%d samplingCount=%d currRTT=%d lastRTT=%d",
-                now, cubic->hystart.lastTime, cubic->hystart.roundStart,
-                cubic->hystart.samplingCount, cubic->hystart.currRTT, cubic->hystart.lastRTT);
-
         if(now - cubic->hystart.lastTime <= 2) {
             cubic->hystart.lastTime = now;
             if(now - cubic->hystart.roundStart >= delayMin / 2) {
@@ -110,7 +103,6 @@ static void _cubic_hystartUpdate(Cubic* cubic) {
 
         if(cubic->hystart.found && congestion->window >= cubic->hystart.lowThreshold) {
             congestion->threshold = congestion->window;
-            debug("[HYSTART] setting threshold to %d", congestion->threshold);
         }
     }
 }
@@ -141,7 +133,6 @@ static void _cubic_update(Cubic* cubic) {
     if(!cubic->epochStart) {
         cubic->epochStart = now;
         if(congestion->window < cubic->lastMaxWindow) {
-            //cubic->k = cbrt((cubic->lastMaxWindow - congestion->window) / cubic->scalingFactor);
             cubic->k = cbrt(cubic->cubeFactor * (cubic->lastMaxWindow - congestion->window));
             cubic->originPoint = cubic->lastMaxWindow;
         } else {
@@ -200,11 +191,6 @@ static void _cubic_update(Cubic* cubic) {
     if(cubic->count == 0) {
         cubic->count = 1;
     }
-
-    debug("[CUBIC] t=%d  lastMax=%d  tcpEst=%d  K=%d  count=%d  windowCount=%d  offset=%d  oDelta=%d  target=%d  window=%d ",
-            t, cubic->lastMaxWindow, cubic->tcpWindowEst,
-            cubic->k, cubic->count, cubic->windowCount, offset,
-            originDelta, target, congestion->window);
 }
 
 void cubic_congestionAvoidance(Cubic* cubic, gint inFlight, gint packetsAcked, gint ack) {
@@ -212,7 +198,6 @@ void cubic_congestionAvoidance(Cubic* cubic, gint inFlight, gint packetsAcked, g
     TCPCongestion* congestion = (TCPCongestion*)cubic;
 
     gint32 now = worker_getCurrentTime() / SIMTIME_ONE_MILLISECOND;
-    //if(ack >= cubic->hystart.endSequence) {
     if(now - cubic->hystart.lastReset >= congestion->rttSmoothed) {
         _cubic_hystartReset(cubic, inFlight);
     }
@@ -234,7 +219,7 @@ void cubic_congestionAvoidance(Cubic* cubic, gint inFlight, gint packetsAcked, g
     }
 }
 
-void cubic_packetLoss(Cubic* cubic) {
+guint cubic_packetLoss(Cubic* cubic) {
 	MAGIC_ASSERT(cubic);
     TCPCongestion* congestion = (TCPCongestion*)cubic;
 
@@ -244,14 +229,10 @@ void cubic_packetLoss(Cubic* cubic) {
     } else {
         cubic->lastMaxWindow = congestion->window;
     }
-    //congestion->window *= (1 - congestion->beta);
-    congestion->window = (congestion->window * cubic->beta) / BETA_SCALE;
-    if(congestion->window == 0) {
-        congestion->window = 1;
-    }
-    congestion->threshold = congestion->window;
 
     cubic->lossWindow = congestion->window;
+
+    return MAX((congestion->window * cubic->beta) / BETA_SCALE, 2);
 }
 
 static void _cubic_free(Cubic* cubic) {

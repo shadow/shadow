@@ -461,7 +461,7 @@ static const gchar* _packet_deliveryStatusToAscii(PacketDeliveryStatusFlags stat
 	}
 }
 
-static gchar* _packet_getString(Packet* packet) {
+gchar* _packet_getString(Packet* packet) {
 	GString* packetString = g_string_new("");
 
 	//_packet_lock(packet);
@@ -502,38 +502,30 @@ static gchar* _packet_getString(Packet* packet) {
 					destinationIPString, ntohs(header->destinationPort),
 					header->sequence, header->acknowledgment);
 
-            if(header->selectiveACKs) {
-                for(GList* iter = header->selectiveACKs; iter; iter = g_list_next(iter)) {
-                    gint seq = GPOINTER_TO_INT(iter->data);
-                    g_string_append_printf(packetString," %d", seq);
+            // Instead of printing out entire list of SACK, print out ranges to save space
+            gint firstSack = -1;
+            gint lastSack = -1;
+            for(GList *iter = header->selectiveACKs; iter; iter = g_list_next(iter)) {
+                gint seq = GPOINTER_TO_INT(iter->data);
+                if(firstSack == -1) {
+                    firstSack = seq;
+                } else if(lastSack == -1 || seq == lastSack + 1) {
+                    lastSack = seq;
+                } else {
+                    g_string_append_printf(packetString, "%d-%d ", firstSack, lastSack);
+                    firstSack = seq;
+                    lastSack = -1;
                 }
-            } else {
-                    g_string_append_printf(packetString,"NA");
             }
 
-            //gint first = -1;
-            //gint last = -1;
-            //for(GList *iter = header->selectiveACKs; iter; iter = g_list_next(iter)) {
-            //    gint seq = GPOINTER_TO_INT(iter->data);
-            //    if(first == -1) {
-            //        first = seq;
-            //    } else if(last == -1 || seq == last + 1) {
-            //        last = seq;
-            //    } else {
-            //        g_string_append_printf(packetString, "%d-%d ", first, last);
-            //        first = seq;
-            //        last = -1;
-            //    }
-            //}
-
-            //if(first != -1) {
-            //    g_string_append_printf(packetString, "%d", first);
-            //    if(last != -1) {
-            //        g_string_append_printf(packetString,"-%d", last);
-            //    }
-            //} else {
-            //    g_string_append_printf(packetString, "NA");
-            //}
+            if(firstSack != -1) {
+                g_string_append_printf(packetString, "%d", firstSack);
+                if(lastSack != -1) {
+                    g_string_append_printf(packetString,"-%d", lastSack);
+                }
+            } else {
+                g_string_append_printf(packetString, "NA");
+            }
 
             g_string_append_printf(packetString, " window=%u bytes=%u", header->window, packet->payloadLength);
 
