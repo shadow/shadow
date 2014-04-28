@@ -34,6 +34,7 @@ void heartbeat_run(HeartbeatEvent* event, Host* node) {
 
 	debug("event started");
 
+	worker_heartbeat();
 	tracker_heartbeat(event->tracker);
 
 	debug("event finished");

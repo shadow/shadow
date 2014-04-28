@@ -34,6 +34,7 @@ gint slave_nextRandomInt(Slave* slave);
 gdouble slave_nextRandomDouble(Slave* slave);
 GTimer* slave_getRunTimer(Slave* slave);
 void slave_updateMinTimeJump(Slave* slave, gdouble minPathLatency);
+void slave_heartbeat(Slave* slave, SimulationTime simClockNow);
 gint slave_generateWorkerID(Slave* slave);
 void slave_storePluginPath(Slave* slave, GQuark pluginID, const gchar* pluginPath);
 const gchar* slave_getPluginPath(Slave* slave, GQuark pluginID);

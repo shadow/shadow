@@ -514,6 +514,11 @@ void worker_updateMinTimeJump(gdouble minPathLatency) {
 	slave_updateMinTimeJump(worker->slave, minPathLatency);
 }
 
+void worker_heartbeat() {
+	Worker* worker = _worker_getPrivate();
+	slave_heartbeat(worker->slave, worker->clock_now);
+}
+
 void worker_setCurrentTime(SimulationTime time) {
 	Worker* worker = _worker_getPrivate();
 	worker->clock_now = time;

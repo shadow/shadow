@@ -5,6 +5,9 @@
 
 #include "shadow.h"
 
+#include <sys/time.h>
+#include <sys/resource.h>
+
 struct _Slave {
 	Master* master;
 
@@ -50,6 +53,9 @@ struct _Slave {
 
 	/* We will not enter plugin context when set. Used when destroying threads */
 	gboolean forceShadowContext;
+
+	/* the last time we logged heartbeat information */
+	SimulationTime simClockLastHeartbeat;
 
 	MAGIC_DECLARE;
 };
@@ -301,6 +307,38 @@ guint slave_getWorkerCount(Slave* slave) {
 SimulationTime slave_getExecutionBarrier(Slave* slave) {
 	MAGIC_ASSERT(slave);
 	return master_getExecutionBarrier(slave->master);
+}
+
+void slave_heartbeat(Slave* slave, SimulationTime simClockNow) {
+	MAGIC_ASSERT(slave);
+
+	gboolean shouldLogResourceUsage = FALSE;
+
+	/* do as little as possible while holding the lock */
+	_slave_lock(slave);
+	/* XXX: this should be done asynchronously */
+	if(simClockNow > slave->simClockLastHeartbeat) {
+		shouldLogResourceUsage = TRUE;
+		slave->simClockLastHeartbeat = simClockNow;
+	}
+	_slave_unlock(slave);
+
+	if(shouldLogResourceUsage) {
+		struct rusage resources;
+		if(!getrusage(RUSAGE_SELF, &resources)) {
+			/* success, convert the values */
+			gdouble maxMemory = ((gdouble)resources.ru_maxrss)/((gdouble)1048576.0f); // Kib->GiB
+			gdouble userTimeMinutes = ((gdouble)resources.ru_utime.tv_sec)/((gdouble)60.0f);
+			gdouble systemTimeMinutes = ((gdouble)resources.ru_stime.tv_sec)/((gdouble)60.0f);
+
+			/* log the usage results */
+			message("process resource usage reported by getrusage(): "
+					"ru_maxrss=%03f GiB, ru_utime=%03f minutes, ru_stime=%03f minutes, ru_nvcsw=%li, ru_nivcsw=%li",
+					maxMemory, userTimeMinutes, systemTimeMinutes, resources.ru_nvcsw, resources.ru_nivcsw);
+		} else {
+			warning("unable to print process resources usage: error in getrusage: %i", errno);
+		}
+	}
 }
 
 void slave_cryptoLockingFunc(Slave* slave, gint mode, gint n) {

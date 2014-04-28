@@ -59,5 +59,6 @@ GTimer* worker_getRunTimer();
 void worker_updateMinTimeJump(gdouble minPathLatency);
 void worker_setCurrentTime(SimulationTime time);
 gboolean worker_isFiltered(GLogLevelFlags level);
+void worker_heartbeat();
 
 #endif /* SHD_WORKER_H_ */
