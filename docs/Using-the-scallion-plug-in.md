@@ -27,8 +27,9 @@ The maximum memory requirements of our included sample network configurations ar
     <td>TorPerf 5MiB</td><td>10</td><td>25</td><td>50</td><td>100</td>
   </tr>
   <tr>
-    <td><b>Total Clients</b></td><td><b>180</b></td><td><b>375</b></td><td><b>750</b></td><td><b>1800</b></td>
+    <th>Total Clients</th><th>180</th><th>375</th><th>750</th><th>1800</th>
   </tr>
+ <hr>
   <tr>
     <td>Guard Relays</td><td>11</td><td>22</td><td>45</td><td>116</td>
   </tr>
@@ -45,13 +46,13 @@ The maximum memory requirements of our included sample network configurations ar
     <td>Directory Authorities</td><td>1</td><td>2</td><td>3</td><td>4</td>
   </tr>
   <tr>
-    <td><b>Total Relays</b></td><td><b>49</b></td><td><b>99</b></td><td><b>198</b></td><td><b>499</b></td>
+    <th>Total Relays</th><th>49</th><th>99</th><th>198</th><th>499</th>
   </tr>
   <tr>
-    <td>Web Servers</td><td>20</td><td>50</td><td>100</td><td>500</td>
+    <th>Web Servers</th><th>20</th><th>50</th><th>100</th><th>500</th>
   </tr>
   <tr>
-    <th>RAM Required (GiB)</th><td>&lt; 4</td><td>&lt; 12</td><td>&lt; 24</td><td>&lt; 64</td>
+    <th>RAM Required (GiB)</th><td>&lt; 4</td><td>&lt; 12</td><td>&lt; 24</td><td>&lt; 60</td>
   </tr>
   <tr>
     <th>EC2 Instance</th><td>m1.large</td><td>m1.xlarge <i>or</i><br /> m2.xlarge</td><td>m2.2xlarge</td><td>m2.4xlarge</td>
