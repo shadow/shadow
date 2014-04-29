@@ -29,7 +29,6 @@ The maximum memory requirements of our included sample network configurations ar
   <tr>
     <th>Total Clients</th><th>180</th><th>375</th><th>750</th><th>1800</th>
   </tr>
- <hr>
   <tr>
     <td>Guard Relays</td><td>11</td><td>22</td><td>45</td><td>116</td>
   </tr>
