@@ -25,14 +25,19 @@ static gboolean _dns_isIPInRange(const in_addr_t netIP, const gchar* cidrStr) {
 	gint cidrBits = atoi(cidrParts[1]);
 	utility_assert(cidrBits >= 0 && cidrBits <= 32);
 
-	/* first create the mask in network order */
+	/* first create the mask in host order */
 	in_addr_t netmask = 0;
-	for(gint i = 0; i < cidrBits; i++) {
-		/* move right one so LSB is 0 */
+	for(gint i = 0; i < 32; i++) {
+		/* move one so LSB is 0 */
 		netmask = netmask << 1;
-		/* flip the LSB */
-		netmask++;
+		if(cidrBits > i) {
+			/* flip the LSB */
+			netmask++;
+		}
 	}
+
+	/* flip to network order */
+	netmask = htonl(netmask);
 
 	/* get the subnet ip in network order */
 	in_addr_t subnetIP = address_stringToIP(cidrIPStr);
