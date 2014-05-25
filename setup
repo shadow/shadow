@@ -214,7 +214,7 @@ def dependencies(args):
     configure = "./config --prefix={0} shared threads {1} -fPIC".format(args.prefix, ecopt)
 
     log("now attempting to build openssl with '{0}'".format(configure))
-    if automake(configure, "make", "make install") != 0: 
+    if automake(configure, "make", "make install_sw") != 0: 
         log("ERROR!: problems building {0}".format(openssl_tarball))
         return -1
         
