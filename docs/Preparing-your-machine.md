@@ -28,13 +28,13 @@ Shadow relies on the following tools and libraries to function properly. Version
 To install these using the Fedora package manager, try something like:
 
 ```bash
-sudo yum install -y gcc xz make automake autoconf cmake glib2 glib2-devel igraph igraph-devel python htop screen dstat numpy scipy python-matplotlib pdftk libxml2-devel libxslt-devel
+sudo yum install -y gcc xz make automake autoconf cmake glib2 glib2-devel igraph igraph-devel python htop screen dstat numpy scipy python-matplotlib pdftk libxml2-devel libxslt-devel git wget gcc-c++
 ```
 
 On Ubuntu, try:
 
 ```bash
-sudo apt-get -y install gcc xz-utils make automake autoconf cmake libglib2.0 libglib2.0-dev libigraph0 libigraph0-dev dstat pdftk python2.7 python-matplotlib python-numpy python-scipy htop screen libxml2-dev libxslt-dev
+sudo apt-get -y install gcc xz-utils make automake autoconf cmake libglib2.0 libglib2.0-dev libigraph0 libigraph0-dev dstat pdftk python2.7 python-matplotlib python-numpy python-scipy htop screen libxml2-dev libxslt-dev git
 ```
 
 You'll also need to manually build and install **clang/llvm** from source because for some reason the OS packages do not include the shared CMake module files Shadow requires. (Bug reports have been filed for [Fedora](https://bugzilla.redhat.com/show_bug.cgi?id=914713) and [Debian](http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=701153))  
