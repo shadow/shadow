@@ -14,12 +14,8 @@ message(STATUS "LLVMHoistGlobalsPATH = ${LLVMHoistGlobalsPATH}")
 
 if(NOT BUILD_FILETRANSFER STREQUAL OFF)
     add_subdirectory(filetransfer)
-endif(NOT BUILD_FILETRANSFER STREQUAL OFF)
+endif()
 
-if(NOT BUILD_TORCTL STREQUAL OFF)
-    add_subdirectory(torctl)
-endif(NOT BUILD_TORCTL STREQUAL OFF)
-
-if(NOT BUILD_SCALLION STREQUAL OFF)
-    add_subdirectory(scallion)
-endif(NOT BUILD_SCALLION STREQUAL OFF)
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/shadow-plugin-tor)
+    add_subdirectory(shadow-plugin-tor)
+endif()
