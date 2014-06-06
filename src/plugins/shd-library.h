@@ -74,7 +74,7 @@ typedef void (*ShadowPluginCallbackFunc)(void* data);
  *  @param free - Pointer to a function to call when freeing a node instance.
  *  @param notify - Pointer to a function to call when descriptors are ready.
  */
-typedef int (*ShadowRegisterFunc)(PluginNewInstanceFunc new, PluginNotifyFunc free, PluginNotifyFunc notify);
+typedef int (*ShadowRegisterFunc)(PluginNewInstanceFunc new_, PluginNotifyFunc free, PluginNotifyFunc notify);
 typedef void (*ShadowLogFunc)(ShadowLogLevel level, const char* functionName, const char* format, ...);
 typedef void (*ShadowCreateCallbackFunc)(ShadowPluginCallbackFunc callback, void* data, uint millisecondsDelay);
 typedef int (*ShadowGetBandwidthFloorFunc)(in_addr_t ip, uint* bwdown, uint* bwup);
