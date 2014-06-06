@@ -9,7 +9,6 @@
 void descriptor_init(Descriptor* descriptor, DescriptorType type,
 		DescriptorFunctionTable* funcTable, gint handle) {
 	utility_assert(descriptor && funcTable);
-	utility_assert(handle >= MIN_DESCRIPTOR);
 
 	MAGIC_INIT(descriptor);
 	MAGIC_INIT(funcTable);

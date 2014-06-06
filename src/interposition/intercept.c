@@ -318,8 +318,16 @@ ssize_t intercept_write(gint fd, const gpointer buf, gint n) {
 	return system_write(fd, buf, n);
 }
 
+int intercept_open(const char *pathname, int flags) {
+	return system_open(pathname, flags);
+}
+
 gint intercept_close(gint fd) {
 	return system_close(fd);
+}
+
+FILE* intercept_fdopen(int fd, const char *mode) {
+	return system_fdopen(fd, mode);
 }
 
 gint intercept_fcntl(int fd, int cmd, ...) {

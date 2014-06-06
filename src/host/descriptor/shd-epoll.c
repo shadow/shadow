@@ -149,7 +149,6 @@ DescriptorFunctionTable epollFunctions = {
 };
 
 Epoll* epoll_new(gint handle) {
-	utility_assert(handle >= MIN_DESCRIPTOR);
 	Epoll* epoll = g_new0(Epoll, 1);
 	MAGIC_INIT(epoll);
 

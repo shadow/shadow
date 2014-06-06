@@ -13,9 +13,11 @@
 #include <string.h>
 #include <fcntl.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <malloc.h>
 #include <sys/ioctl.h>
 #include <linux/sockios.h>
+#include <unistd.h>
 
 #include "shadow.h"
 
@@ -277,11 +279,11 @@ gint system_socketPair(gint domain, gint type, gint protocol, gint fds[2]) {
 
 static gint _system_addressHelper(gint fd, const struct sockaddr* addr, socklen_t* len,
 		enum SystemCallType type) {
-	Host* node = _system_switchInShadowContext();
+	Host* host = _system_switchInShadowContext();
 	gint result = 0;
 
 	/* check if this is a virtual socket */
-	if(fd < MIN_DESCRIPTOR){
+	if(!host_isShadowDescriptorHandle(host, fd)){
 		warning("intercepted a non-virtual descriptor");
 		result = EBADF;
 	} else if(addr == NULL) { /* check for proper addr */
@@ -300,20 +302,20 @@ static gint _system_addressHelper(gint fd, const struct sockaddr* addr, socklen_
 
 		switch(type) {
 			case SCT_BIND: {
-				result = host_bindToInterface(node, fd, ip, port);
+				result = host_bindToInterface(host, fd, ip, port);
 				break;
 			}
 
 			case SCT_CONNECT: {
-				result = host_connectToPeer(node, fd, ip, port, family);
+				result = host_connectToPeer(host, fd, ip, port, family);
 				break;
 			}
 
 			case SCT_GETPEERNAME:
 			case SCT_GETSOCKNAME: {
 				result = type == SCT_GETPEERNAME ?
-						host_getPeerName(node, fd, &(saddr->sin_addr.s_addr), &(saddr->sin_port)) :
-						host_getSocketName(node, fd, &(saddr->sin_addr.s_addr), &(saddr->sin_port));
+						host_getPeerName(host, fd, &(saddr->sin_addr.s_addr), &(saddr->sin_port)) :
+						host_getSocketName(host, fd, &(saddr->sin_addr.s_addr), &(saddr->sin_port));
 
 				if(result == 0) {
 					saddr->sin_family = AF_INET;
@@ -331,7 +333,7 @@ static gint _system_addressHelper(gint fd, const struct sockaddr* addr, socklen_
 		}
 	}
 
-	_system_switchOutShadowContext(node);
+	_system_switchOutShadowContext(host);
 
 	/* check if there was an error */
 	if(result != 0) {
@@ -348,7 +350,7 @@ gint system_accept(gint fd, struct sockaddr* addr, socklen_t* len) {
 	gint result = 0;
 
 	/* check if this is a virtual socket */
-	if(fd < MIN_DESCRIPTOR){
+	if(!host_isShadowDescriptorHandle(node, fd)){
 		warning("intercepted a non-virtual descriptor");
 		result = EBADF;
 	}
@@ -411,9 +413,21 @@ gssize system_sendTo(gint fd, const gpointer buf, gsize n, gint flags,
 		const struct sockaddr* addr, socklen_t len) {
 	/* TODO flags are ignored */
 	/* check if this is a socket */
-	if(fd < MIN_DESCRIPTOR){
-		errno = EBADF;
-		return -1;
+	Host* node = _system_switchInShadowContext();
+
+	if(!host_isShadowDescriptorHandle(node, fd)){
+		gint err = 0, ret = 0;
+		/* check if we have a mapped os fd */
+		gint osfd = host_getOSDescriptorHandle(node, fd);
+		if(osfd > 0) {
+			ret = sendto(fd, buf, n, flags, addr, len);
+		} else {
+			err = EBADF;
+			ret = -1;
+		}
+		_system_switchOutShadowContext(node);
+		errno = err;
+		return ret;
 	}
 
 	in_addr_t ip = 0;
@@ -426,7 +440,6 @@ gssize system_sendTo(gint fd, const gpointer buf, gsize n, gint flags,
 		port = si->sin_port;
 	}
 
-	Host* node = _system_switchInShadowContext();
 	gsize bytes = 0;
 	gint result = host_sendUserData(node, fd, buf, n, ip, port, &bytes);
 	_system_switchOutShadowContext(node);
@@ -459,15 +472,26 @@ gssize system_recvFrom(gint fd, gpointer buf, size_t n, gint flags,
 		struct sockaddr* addr, socklen_t* len) {
 	/* TODO flags are ignored */
 	/* check if this is a socket */
-	if(fd < MIN_DESCRIPTOR){
-		errno = EBADF;
-		return -1;
+	Host* node = _system_switchInShadowContext();
+
+	if(!host_isShadowDescriptorHandle(node, fd)){
+		gint err = 0, ret = 0;
+		/* check if we have a mapped os fd */
+		gint osfd = host_getOSDescriptorHandle(node, fd);
+		if(osfd > 0) {
+			ret = recvfrom(fd, buf, n, flags, addr, len);
+		} else {
+			err = EBADF;
+			ret = -1;
+		}
+		_system_switchOutShadowContext(node);
+		errno = err;
+		return ret;
 	}
 
 	in_addr_t ip = 0;
 	in_port_t port = 0;
 
-	Host* node = _system_switchInShadowContext();
 	gsize bytes = 0;
 	gint result = host_receiveUserData(node, fd, buf, n, &ip, &port, &bytes);
 	_system_switchOutShadowContext(node);
@@ -686,12 +710,13 @@ gint system_setSockOpt(gint fd, gint level, gint optname, const gpointer optval,
 
 gint system_listen(gint fd, gint backlog) {
 	/* check if this is a socket */
-	if(fd < MIN_DESCRIPTOR){
+	Host* node = _system_switchInShadowContext();
+	if(!host_isShadowDescriptorHandle(node, fd)){
+		_system_switchOutShadowContext(node);
 		errno = EBADF;
 		return -1;
 	}
 
-	Host* node = _system_switchInShadowContext();
 	gint result = host_listenForPeer(node, fd, backlog);
 	_system_switchOutShadowContext(node);
 
@@ -758,25 +783,71 @@ gint system_pipe2(gint pipefds[2], gint flags) {
 	return 0;
 }
 
-gint system_close(gint fd) {
-	/* check if this is a socket */
-	if(fd < MIN_DESCRIPTOR){
-		errno = EBADF;
-		return -1;
+gint system_open(const gchar* pathname, gint flags) {
+	Host* host = _system_switchInShadowContext();
+
+	gint handle = open(pathname, flags);
+	if(handle > 0) {
+		handle = host_addOSDescriptorHandle(host, handle);
 	}
 
+	_system_switchOutShadowContext(host);
+	return handle;
+}
+
+gint system_close(gint fd) {
+	/* check if this is a socket */
 	Host* node = _system_switchInShadowContext();
+
+	if(!host_isShadowDescriptorHandle(node, fd)){
+		gint err = 0, ret = 0;
+		/* check if we have a mapped os fd */
+		gint osfd = host_getOSDescriptorHandle(node, fd);
+		if(osfd > 0) {
+			ret = close(osfd);
+			host_removeOSDescriptorHandle(node, fd);
+		} else {
+			err = EBADF;
+			ret = -1;
+		}
+		_system_switchOutShadowContext(node);
+		errno = err;
+		return ret;
+	}
+
 	gint r = host_closeUser(node, fd);
 	_system_switchOutShadowContext(node);
 	return r;
 }
 
+FILE* system_fdopen(gint fd, const gchar *mode) {
+	Host* node = _system_switchInShadowContext();
+	warning("fdopen not implemented");
+	_system_switchOutShadowContext(node);
+	errno = ENOSYS;
+	return NULL;
+}
+
 gint system_fcntl(int fd, int cmd, va_list farg) {
 	/* check if this is a socket */
-	if(fd < MIN_DESCRIPTOR){
-		errno = EBADF;
-		return -1;
+	Host* node = _system_switchInShadowContext();
+
+	if(!host_isShadowDescriptorHandle(node, fd)){
+		gint err = 0, ret = 0;
+		/* check if we have a mapped os fd */
+		gint osfd = host_getOSDescriptorHandle(node, fd);
+		if(osfd > 0) {
+			ret = fcntl(osfd, cmd, farg);
+		} else {
+			err = EBADF;
+			ret = -1;
+		}
+		_system_switchOutShadowContext(node);
+		errno = err;
+		return ret;
 	}
+
+	_system_switchOutShadowContext(node);
 
 	/* normally, the type of farg depends on the cmd */
 
@@ -785,15 +856,26 @@ gint system_fcntl(int fd, int cmd, va_list farg) {
 
 gint system_ioctl(int fd, unsigned long int request, va_list farg) {
 	/* check if this is a socket */
-	if(fd < MIN_DESCRIPTOR){
-		errno = EBADF;
-		return -1;
+	Host* node = _system_switchInShadowContext();
+
+	if(!host_isShadowDescriptorHandle(node, fd)){
+		gint err = 0, ret = 0;
+		/* check if we have a mapped os fd */
+		gint osfd = host_getOSDescriptorHandle(node, fd);
+		if(osfd > 0) {
+			ret = ioctl(fd, request, farg);
+		} else {
+			err = EBADF;
+			ret = -1;
+		}
+		_system_switchOutShadowContext(node);
+		errno = err;
+		return ret;
 	}
 
 	gint result = 0;
 
 	/* normally, the type of farg depends on the request */
-	Host* node = _system_switchInShadowContext();
 	Descriptor* descriptor = host_lookupDescriptor(node, fd);
 
 	if(descriptor) {

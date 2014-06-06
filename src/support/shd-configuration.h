@@ -108,16 +108,9 @@ typedef guint ShadowID;
 #endif
 
 /**
- * We intercept read, write, and close calls since they may be done on our
- * virtual descriptors. However, applications may also want to read/write/close
- * a regular file. We differentiate these by handing out high descriptors.
- * Any descriptor below this cutoff can be considered a real file.
- *
- * It is important to set this high enough so in large simulations the system
- * file descriptor counter doesn't collide with our sockets. So this should be
- * set at least over the ulimit -n value.
+ * The minimum file descriptor shadow returns to the plugin.
  */
-#define MIN_DESCRIPTOR 1000000
+#define MIN_DESCRIPTOR 10
 
 /**
  * The start of our random port range in host order, used if application doesn't

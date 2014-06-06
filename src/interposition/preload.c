@@ -85,7 +85,9 @@ typedef int (*PipeFunc)(int [2]);
 typedef int (*Pipe2Func)(int [2], int);
 typedef size_t (*ReadFunc)(int, void*, int);
 typedef size_t (*WriteFunc)(int, const void*, int);
+typedef int (*OpenFunc)(const char*, int);
 typedef int (*CloseFunc)(int);
+typedef FILE* (*FDOpenFunc)(int, const char*);
 typedef int (*FcntlFunc)(int, int, ...);
 typedef int (*IoctlFunc)(int, int, ...);
 
@@ -175,7 +177,9 @@ typedef struct {
 	Pipe2Func pipe2;
 	ReadFunc read;
 	WriteFunc write;
+	OpenFunc open;
 	CloseFunc close;
+	FDOpenFunc fdopen;
 	FcntlFunc fcntl;
 	IoctlFunc ioctl;
 
@@ -497,7 +501,7 @@ int socketpair(int domain, int type, int protocol, int fds[2]) {
 }
 
 int bind(int fd, __CONST_SOCKADDR_ARG addr, socklen_t len)  {
-    if(fd >= MIN_DESCRIPTOR && shouldRedirect()) {
+    if(shouldRedirect()) {
         ENSURE(shadow, "intercept_", bind);
         return director.shadow.bind(fd, addr, len);
     } else {
@@ -507,7 +511,7 @@ int bind(int fd, __CONST_SOCKADDR_ARG addr, socklen_t len)  {
 }
 
 int getsockname(int fd, __SOCKADDR_ARG addr, socklen_t *__restrict len)  {
-    if(fd >= MIN_DESCRIPTOR && shouldRedirect()) {
+    if(shouldRedirect()) {
         ENSURE(shadow, "intercept_", getsockname);
         return director.shadow.getsockname(fd, addr, len);
     } else {
@@ -517,7 +521,7 @@ int getsockname(int fd, __SOCKADDR_ARG addr, socklen_t *__restrict len)  {
 }
 
 int connect(int fd, __CONST_SOCKADDR_ARG addr, socklen_t len)  {
-    if(fd >= MIN_DESCRIPTOR && shouldRedirect()) {
+    if(shouldRedirect()) {
         ENSURE(shadow, "intercept_", connect);
         return director.shadow.connect(fd, addr, len);
     } else {
@@ -527,7 +531,7 @@ int connect(int fd, __CONST_SOCKADDR_ARG addr, socklen_t len)  {
 }
 
 int getpeername(int fd, __SOCKADDR_ARG addr, socklen_t *__restrict len)  {
-    if(fd >= MIN_DESCRIPTOR && shouldRedirect()) {
+    if(shouldRedirect()) {
         ENSURE(shadow, "intercept_", getpeername);
         return director.shadow.getpeername(fd, addr, len);
     } else {
@@ -537,7 +541,7 @@ int getpeername(int fd, __SOCKADDR_ARG addr, socklen_t *__restrict len)  {
 }
 
 ssize_t send(int fd, __const void *buf, size_t n, int flags) {
-    if(fd >= MIN_DESCRIPTOR && shouldRedirect()) {
+    if(shouldRedirect()) {
         ENSURE(shadow, "intercept_", send);
         return director.shadow.send(fd, buf, n, flags);
     } else {
@@ -547,7 +551,7 @@ ssize_t send(int fd, __const void *buf, size_t n, int flags) {
 }
 
 ssize_t sendto(int fd, const void *buf, size_t n, int flags, __CONST_SOCKADDR_ARG addr, socklen_t addr_len)  {
-    if(fd >= MIN_DESCRIPTOR && shouldRedirect()) {
+    if(shouldRedirect()) {
         ENSURE(shadow, "intercept_", sendto);
         return director.shadow.sendto(fd, buf, n, flags, addr, addr_len);
     } else {
@@ -557,7 +561,7 @@ ssize_t sendto(int fd, const void *buf, size_t n, int flags, __CONST_SOCKADDR_AR
 }
 
 ssize_t sendmsg(int fd, __const struct msghdr *message, int flags) {
-    if(fd >= MIN_DESCRIPTOR && shouldRedirect()) {
+    if(shouldRedirect()) {
         ENSURE(shadow, "intercept_", sendmsg);
         return director.shadow.sendmsg(fd, message, flags);
     } else {
@@ -567,7 +571,7 @@ ssize_t sendmsg(int fd, __const struct msghdr *message, int flags) {
 }
 
 ssize_t recv(int fd, void *buf, size_t n, int flags) {
-    if(fd >= MIN_DESCRIPTOR && shouldRedirect()) {
+    if(shouldRedirect()) {
         ENSURE(shadow, "intercept_", recv);
         return director.shadow.recv(fd, buf, n, flags);
     } else {
@@ -577,7 +581,7 @@ ssize_t recv(int fd, void *buf, size_t n, int flags) {
 }
 
 ssize_t recvfrom(int fd, void *buf, size_t n, int flags, __SOCKADDR_ARG addr, socklen_t *restrict addr_len)  {
-    if(fd >= MIN_DESCRIPTOR && shouldRedirect()) {
+    if(shouldRedirect()) {
         ENSURE(shadow, "intercept_", recvfrom);
         return director.shadow.recvfrom(fd, buf, n, flags, addr, addr_len);
     } else {
@@ -587,7 +591,7 @@ ssize_t recvfrom(int fd, void *buf, size_t n, int flags, __SOCKADDR_ARG addr, so
 }
 
 ssize_t recvmsg(int fd, struct msghdr *message, int flags) {
-    if(fd >= MIN_DESCRIPTOR && shouldRedirect()) {
+    if(shouldRedirect()) {
         ENSURE(shadow, "intercept_", recvmsg);
         return director.shadow.recvmsg(fd, message, flags);
     } else {
@@ -597,7 +601,7 @@ ssize_t recvmsg(int fd, struct msghdr *message, int flags) {
 }
 
 int getsockopt(int fd, int level, int optname, void *__restrict optval, socklen_t *__restrict optlen) {
-    if(fd >= MIN_DESCRIPTOR && shouldRedirect()) {
+    if(shouldRedirect()) {
         ENSURE(shadow, "intercept_", getsockopt);
         return director.shadow.getsockopt(fd, level, optname, optval, optlen);
     } else {
@@ -607,7 +611,7 @@ int getsockopt(int fd, int level, int optname, void *__restrict optval, socklen_
 }
 
 int setsockopt(int fd, int level, int optname, __const void *optval, socklen_t optlen) {
-    if(fd >= MIN_DESCRIPTOR && shouldRedirect()) {
+    if(shouldRedirect()) {
         ENSURE(shadow, "intercept_", setsockopt);
         return director.shadow.setsockopt(fd, level, optname, optval, optlen);
     } else {
@@ -617,7 +621,7 @@ int setsockopt(int fd, int level, int optname, __const void *optval, socklen_t o
 }
 
 int listen(int fd, int n) {
-    if(fd >= MIN_DESCRIPTOR && shouldRedirect()) {
+    if(shouldRedirect()) {
         ENSURE(shadow, "intercept_", listen);
         return director.shadow.listen(fd, n);
     } else {
@@ -627,7 +631,7 @@ int listen(int fd, int n) {
 }
 
 int accept(int fd, __SOCKADDR_ARG addr, socklen_t *__restrict addr_len)  {
-    if(fd >= MIN_DESCRIPTOR && shouldRedirect()) {
+    if(shouldRedirect()) {
         ENSURE(shadow, "intercept_", accept);
         return director.shadow.accept(fd, addr, addr_len);
     } else {
@@ -637,7 +641,7 @@ int accept(int fd, __SOCKADDR_ARG addr, socklen_t *__restrict addr_len)  {
 }
 
 int accept4(int fd, __SOCKADDR_ARG addr, socklen_t *__restrict addr_len, int flags)  {
-    if(fd >= MIN_DESCRIPTOR && shouldRedirect()) {
+    if(shouldRedirect()) {
         ENSURE(shadow, "intercept_", accept4);
         return director.shadow.accept4(fd, addr, addr_len, flags);
     } else {
@@ -647,7 +651,7 @@ int accept4(int fd, __SOCKADDR_ARG addr, socklen_t *__restrict addr_len, int fla
 }
 
 int shutdown(int fd, int how) {
-    if(fd >= MIN_DESCRIPTOR && shouldRedirect()) {
+    if(shouldRedirect()) {
         ENSURE(shadow, "intercept_", shutdown);
         return director.shadow.shutdown(fd, how);
     } else {
@@ -657,7 +661,7 @@ int shutdown(int fd, int how) {
 }
 
 ssize_t read(int fd, void *buff, int numbytes) {
-    if(fd >= MIN_DESCRIPTOR && shouldRedirect()) {
+    if(shouldRedirect()) {
         ENSURE(shadow, "intercept_", read);
         return director.shadow.read(fd, buff, numbytes);
     } else {
@@ -667,7 +671,7 @@ ssize_t read(int fd, void *buff, int numbytes) {
 }
 
 ssize_t write(int fd, const void *buff, int n) {
-    if(fd >= MIN_DESCRIPTOR && shouldRedirect()) {
+    if(shouldRedirect()) {
         ENSURE(shadow, "intercept_", write);
         return director.shadow.write(fd, buff, n);
     } else {
@@ -676,8 +680,18 @@ ssize_t write(int fd, const void *buff, int n) {
     }
 }
 
+int open(const char *pathname, int flags) {
+//    if(shouldRedirect()) {
+//        ENSURE(shadow, "intercept_", open);
+//        return director.shadow.open(pathname, flags);
+//    } else {
+        ENSURE(real, "", open);
+        return director.real.open(pathname, flags);
+//    }
+}
+
 int close(int fd) {
-    if(fd >= MIN_DESCRIPTOR && shouldRedirect()) {
+    if(shouldRedirect()) {
         ENSURE(shadow, "intercept_", close);
         return director.shadow.close(fd);
     } else {
@@ -686,11 +700,21 @@ int close(int fd) {
     }
 }
 
+FILE *fdopen(int fd, const char *mode) {
+    if(shouldRedirect()) {
+        ENSURE(shadow, "intercept_", fdopen);
+        return director.shadow.fdopen(fd, mode);
+    } else {
+        ENSURE(real, "", fdopen);
+        return director.real.fdopen(fd, mode);
+    }
+}
+
 int fcntl(int fd, int cmd, ...) {
 	va_list farg;
 	va_start(farg, cmd);
 	int result = 0;
-	if(fd >= MIN_DESCRIPTOR && shouldRedirect()) {
+	if(shouldRedirect()) {
 		ENSURE(shadow, "intercept_", fcntl);
 		result = director.shadow.fcntl(fd, cmd, va_arg(farg, void*));
 	} else {
@@ -705,7 +729,7 @@ int ioctl(int fd, unsigned long int request, ...) {
 	va_list farg;
 	va_start(farg, request);
 	int result = 0;
-	if(fd >= MIN_DESCRIPTOR && shouldRedirect()) {
+	if(shouldRedirect()) {
 		ENSURE(shadow, "intercept_", ioctl);
 		result = director.shadow.ioctl(fd, request, va_arg(farg, void*));
 	} else {

@@ -36,13 +36,22 @@ struct _Host {
 	/* Directory to save PCAP files to if packets are being captured */
 	gchar* pcapDir;
 
+	/* virtual descriptor numbers */
+	GQueue* availableDescriptors;
+	gint descriptorHandleCounter;
+
 	/* all file, socket, and epoll descriptors we know about and track */
 	GHashTable* descriptors;
-	gint descriptorHandleCounter;
 	guint64 receiveBufferSize;
 	guint64 sendBufferSize;
 	gboolean autotuneReceiveBuffer;
 	gboolean autotuneSendBuffer;
+
+	/* map from the descriptor handle we returned to the plug-in, and
+	 * descriptor handle that the OS gave us for files, etc.
+	 * We do this so that we can give out low descriptor numbers even though the OS
+	 * may give out those same low numbers when files are opened. */
+	GHashTable* osDescriptorMap;
 
 	/* track the order in which the application sent us application data */
 	gdouble packetPriorityCounter;
@@ -102,13 +111,17 @@ Host* host_new(GQuark id, gchar* hostname, gchar* ipHint, gchar* geocodeHint, gc
 	g_mutex_init(&(host->lock));
 	host->events = eventqueue_new();
 
+	host->availableDescriptors = g_queue_new();
+	host->descriptorHandleCounter = MIN_DESCRIPTOR;
+
 	/* virtual descriptor management */
 	host->descriptors = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, descriptor_unref);
-	host->descriptorHandleCounter = MIN_DESCRIPTOR;
 	host->receiveBufferSize = receiveBufferSize;
 	host->sendBufferSize = sendBufferSize;
 	host->autotuneReceiveBuffer = autotuneReceiveBuffer;
 	host->autotuneSendBuffer = autotuneSendBuffer;
+
+	host->osDescriptorMap = g_hash_table_new(g_direct_hash, g_direct_equal);
 
 	/* applications this node will run */
 	host->applications = g_queue_new();
@@ -139,12 +152,15 @@ void host_free(Host* host, gpointer userData) {
 
 	g_hash_table_destroy(host->interfaces);
 	g_hash_table_destroy(host->descriptors);
+	g_hash_table_destroy(host->osDescriptorMap);
 
 	g_free(host->name);
 
 	eventqueue_free(host->events);
 	cpu_free(host->cpu);
 	tracker_free(host->tracker);
+
+	g_queue_free(host->availableDescriptors);
 
 	g_mutex_clear(&(host->lock));
 
@@ -341,6 +357,53 @@ static void _host_unmonitorDescriptor(Host* host, gint handle) {
 	}
 }
 
+static gint _host_compareDescriptors(gconstpointer a, gconstpointer b, gpointer userData) {
+	gint aint = GPOINTER_TO_INT(a);
+	gint bint = GPOINTER_TO_INT(b);
+	return aint < bint ? -1 : aint == bint ? 0 : 1;
+}
+
+static gint _host_getNextDescriptorHandle(Host* host) {
+	MAGIC_ASSERT(host);
+	if(g_queue_get_length(host->availableDescriptors) > 0) {
+		return GPOINTER_TO_INT(g_queue_pop_head(host->availableDescriptors));
+	}
+	return (host->descriptorHandleCounter)++;
+}
+
+gboolean host_isShadowDescriptorHandle(Host* host, gint handle) {
+	MAGIC_ASSERT(host);
+	return host_lookupDescriptor(host, handle) == NULL ? FALSE : TRUE;
+}
+
+gint host_getOSDescriptorHandle(Host* host, gint shadowHandle) {
+	MAGIC_ASSERT(host);
+	/* find os handle that we mapped, if one exists */
+	gpointer osHandleP = g_hash_table_lookup(host->osDescriptorMap, GINT_TO_POINTER(shadowHandle));
+	/* will either return 0 if DNE, or some positive value */
+	return GPOINTER_TO_INT(osHandleP);
+}
+
+gint host_addOSDescriptorHandle(Host* host, gint osHandle) {
+	MAGIC_ASSERT(host);
+
+	/* reserve a new virtual descriptor number to emulate the given osHandle,
+	 * so that the plugin will not be given duplicate shadow/os numbers. */
+	gint shadowHandle = _host_getNextDescriptorHandle(host);
+
+	g_hash_table_replace(host->osDescriptorMap, GINT_TO_POINTER(shadowHandle), GINT_TO_POINTER(osHandle));
+
+	return shadowHandle;
+}
+
+void host_removeOSDescriptorHandle(Host* host, gint shadowHandle) {
+	MAGIC_ASSERT(host);
+	gboolean didExist = g_hash_table_remove(host->osDescriptorMap, GINT_TO_POINTER(shadowHandle));
+	if(didExist) {
+		g_queue_insert_sorted(host->availableDescriptors, GINT_TO_POINTER(shadowHandle), _host_compareDescriptors, NULL);
+	}
+}
+
 gint host_createDescriptor(Host* host, DescriptorType type) {
 	MAGIC_ASSERT(host);
 
@@ -349,25 +412,25 @@ gint host_createDescriptor(Host* host, DescriptorType type) {
 
 	switch(type) {
 		case DT_EPOLL: {
-			descriptor = (Descriptor*) epoll_new((host->descriptorHandleCounter)++);
+			descriptor = (Descriptor*) epoll_new(_host_getNextDescriptorHandle(host));
 			break;
 		}
 
 		case DT_TCPSOCKET: {
-			descriptor = (Descriptor*) tcp_new((host->descriptorHandleCounter)++,
+			descriptor = (Descriptor*) tcp_new(_host_getNextDescriptorHandle(host),
 					host->receiveBufferSize, host->sendBufferSize);
 			break;
 		}
 
 		case DT_UDPSOCKET: {
-			descriptor = (Descriptor*) udp_new((host->descriptorHandleCounter)++,
+			descriptor = (Descriptor*) udp_new(_host_getNextDescriptorHandle(host),
 					host->receiveBufferSize, host->sendBufferSize);
 			break;
 		}
 
 		case DT_SOCKETPAIR: {
-			gint handle = (host->descriptorHandleCounter)++;
-			gint linkedHandle = (host->descriptorHandleCounter)++;
+			gint handle = _host_getNextDescriptorHandle(host);
+			gint linkedHandle = _host_getNextDescriptorHandle(host);
 
 			/* each channel is readable and writable */
 			descriptor = (Descriptor*) channel_new(handle, linkedHandle, CT_NONE);
@@ -378,8 +441,8 @@ gint host_createDescriptor(Host* host, DescriptorType type) {
 		}
 
 		case DT_PIPE: {
-			gint handle = (host->descriptorHandleCounter)++;
-			gint linkedHandle = (host->descriptorHandleCounter)++;
+			gint handle = _host_getNextDescriptorHandle(host);
+			gint linkedHandle = _host_getNextDescriptorHandle(host);
 
 			/* one side is readonly, the other is writeonly */
 			descriptor = (Descriptor*) channel_new(handle, linkedHandle, CT_READONLY);
@@ -428,8 +491,10 @@ gint host_epollControl(Host* host, gint epollDescriptor, gint operation,
 	Epoll* epoll = (Epoll*) descriptor;
 
 	/* if this is for a system file, forward to system call */
-	if(fileDescriptor < MIN_DESCRIPTOR) {
-		return epoll_controlOS(epoll, operation, fileDescriptor, event);
+	if(!host_isShadowDescriptorHandle(host, fileDescriptor)) {
+		gint osfd = host_getOSDescriptorHandle(host, fileDescriptor);
+		osfd = osfd > 0 ? osfd : fileDescriptor;
+		return epoll_controlOS(epoll, operation, osfd, event);
 	}
 
 	/* EBADF  fd is not a valid shadow file descriptor. */

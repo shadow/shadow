@@ -48,7 +48,9 @@ gint system_listen(gint fd, gint backlog);
 gint system_shutdown(gint fd, gint how);
 gssize system_read(gint fd, gpointer buf, gint n);
 gssize system_write(gint fd, const gpointer buf, gint n);
+gint system_open(const gchar* pathname, gint flags);
 gint system_close(gint fd);
+FILE* system_fdopen(gint fd, const gchar *mode);
 gint system_fcntl(int fd, int cmd, va_list farg);
 gint system_ioctl(int fd, unsigned long int request, va_list farg);
 
