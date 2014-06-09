@@ -53,10 +53,11 @@ gint host_closeUser(Host* host, gint handle);
 Descriptor* host_lookupDescriptor(Host* host, gint handle);
 NetworkInterface* host_lookupInterface(Host* host, in_addr_t handle);
 
-gboolean host_isShadowDescriptorHandle(Host* host, gint handle);
-gint host_getOSDescriptorHandle(Host* host, gint shadowHandle);
-gint host_addOSDescriptorHandle(Host* host, gint osHandle);
-void host_removeOSDescriptorHandle(Host* host, gint shadowHandle);
+gboolean host_isShadowDescriptor(Host* host, gint handle);
+gint host_createShadowHandle(Host* host, gint osHandle);
+gint host_getOSHandle(Host* host, gint shadowHandle);
+gint host_getShadowHandle(Host* host, gint osHandle);
+void host_destroyShadowHandle(Host* host, gint shadowHandle);
 
 gint host_epollControl(Host* host, gint epollDescriptor, gint operation,
 		gint fileDescriptor, struct epoll_event* event);

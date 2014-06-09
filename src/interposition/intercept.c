@@ -11,6 +11,9 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "shadow.h"
 
@@ -310,46 +313,74 @@ int intercept_pipe2(int pipefd[2], int flags) {
 	return system_pipe2(pipefd, flags);
 }
 
-ssize_t intercept_read(gint fd, gpointer buf, gint n) {
+ssize_t intercept_read(gint fd, gpointer buf, gsize n) {
 	return system_read(fd, buf, n);
 }
 
-ssize_t intercept_write(gint fd, const gpointer buf, gint n) {
+ssize_t intercept_write(gint fd, const gpointer buf, gsize n) {
 	return system_write(fd, buf, n);
-}
-
-int intercept_open(const char *pathname, int flags, mode_t mode) {
-	return system_open(pathname, flags, mode);
 }
 
 gint intercept_close(gint fd) {
 	return system_close(fd);
 }
 
-FILE* intercept_fdopen(int fd, const char *mode) {
-	return system_fdopen(fd, mode);
-}
-
 gint intercept_fcntl(int fd, int cmd, ...) {
-	va_list farg;
-	va_start(farg, cmd);
-	gint result = system_fcntl(fd, cmd, farg);
-	va_end(farg);
-	return result;
+    va_list farg;
+    va_start(farg, cmd);
+    gint result = system_fcntl(fd, cmd, farg);
+    va_end(farg);
+    return result;
 }
 
 gint intercept_ioctl(int fd, unsigned long int request, ...) {
-	va_list farg;
-	va_start(farg, request);
-	gint result = system_ioctl(fd, request, farg);
-	va_end(farg);
+    va_list farg;
+    va_start(farg, request);
+    gint result = system_ioctl(fd, request, farg);
+    va_end(farg);
 
-	if(result != 0) {
-		errno = result;
-		return -1;
-	} else {
-		return 0;
-	}
+    if(result != 0) {
+        errno = result;
+        return -1;
+    } else {
+        return 0;
+    }
+}
+
+/**
+ * files
+ */
+
+int intercept_fileno(FILE *stream) {
+    return system_fileno(stream);
+}
+
+int intercept_open(const char *pathname, int flags, mode_t mode) {
+	return system_open(pathname, flags, mode);
+}
+
+int intercept_creat(const char *pathname, mode_t mode) {
+    return system_creat(pathname, mode);
+}
+
+FILE *intercept_fopen(const char *path, const char *mode) {
+    return system_fopen(path, mode);
+}
+
+FILE* intercept_fdopen(int fd, const char *mode) {
+    return system_fdopen(fd, mode);
+}
+
+int intercept_fclose(FILE *fp) {
+    return system_fclose(fp);
+}
+
+int intercept___fxstat (int ver, int fd, struct stat *buf) {
+    return system___fxstat(ver, fd, buf);
+}
+
+int intercept_fstatfs (int fd, struct statfs *buf) {
+    return system_fstatfs(fd, buf);
 }
 
 /**

@@ -51,7 +51,8 @@ struct _Host {
 	 * descriptor handle that the OS gave us for files, etc.
 	 * We do this so that we can give out low descriptor numbers even though the OS
 	 * may give out those same low numbers when files are opened. */
-	GHashTable* osDescriptorMap;
+	GHashTable* shadowToOSHandleMap;
+	GHashTable* osToShadowHandleMap;
 
 	/* track the order in which the application sent us application data */
 	gdouble packetPriorityCounter;
@@ -121,7 +122,8 @@ Host* host_new(GQuark id, gchar* hostname, gchar* ipHint, gchar* geocodeHint, gc
 	host->autotuneReceiveBuffer = autotuneReceiveBuffer;
 	host->autotuneSendBuffer = autotuneSendBuffer;
 
-	host->osDescriptorMap = g_hash_table_new(g_direct_hash, g_direct_equal);
+	host->shadowToOSHandleMap = g_hash_table_new(g_direct_hash, g_direct_equal);
+    host->osToShadowHandleMap = g_hash_table_new(g_direct_hash, g_direct_equal);
 
 	/* applications this node will run */
 	host->applications = g_queue_new();
@@ -152,7 +154,8 @@ void host_free(Host* host, gpointer userData) {
 
 	g_hash_table_destroy(host->interfaces);
 	g_hash_table_destroy(host->descriptors);
-	g_hash_table_destroy(host->osDescriptorMap);
+	g_hash_table_destroy(host->shadowToOSHandleMap);
+    g_hash_table_destroy(host->osToShadowHandleMap);
 
 	g_free(host->name);
 
@@ -371,35 +374,46 @@ static gint _host_getNextDescriptorHandle(Host* host) {
 	return (host->descriptorHandleCounter)++;
 }
 
-gboolean host_isShadowDescriptorHandle(Host* host, gint handle) {
+gboolean host_isShadowDescriptor(Host* host, gint handle) {
 	MAGIC_ASSERT(host);
 	return host_lookupDescriptor(host, handle) == NULL ? FALSE : TRUE;
 }
 
-gint host_getOSDescriptorHandle(Host* host, gint shadowHandle) {
-	MAGIC_ASSERT(host);
-	/* find os handle that we mapped, if one exists */
-	gpointer osHandleP = g_hash_table_lookup(host->osDescriptorMap, GINT_TO_POINTER(shadowHandle));
-	/* will either return 0 if DNE, or some positive value */
-	return GPOINTER_TO_INT(osHandleP);
-}
-
-gint host_addOSDescriptorHandle(Host* host, gint osHandle) {
+gint host_createShadowHandle(Host* host, gint osHandle) {
 	MAGIC_ASSERT(host);
 
 	/* reserve a new virtual descriptor number to emulate the given osHandle,
 	 * so that the plugin will not be given duplicate shadow/os numbers. */
 	gint shadowHandle = _host_getNextDescriptorHandle(host);
 
-	g_hash_table_replace(host->osDescriptorMap, GINT_TO_POINTER(shadowHandle), GINT_TO_POINTER(osHandle));
+	g_hash_table_replace(host->shadowToOSHandleMap, GINT_TO_POINTER(shadowHandle), GINT_TO_POINTER(osHandle));
+    g_hash_table_replace(host->osToShadowHandleMap, GINT_TO_POINTER(osHandle), GINT_TO_POINTER(shadowHandle));
 
 	return shadowHandle;
 }
 
-void host_removeOSDescriptorHandle(Host* host, gint shadowHandle) {
+gint host_getShadowHandle(Host* host, gint osHandle) {
+    MAGIC_ASSERT(host);
+    /* find shadow handle that we mapped, if one exists */
+    gpointer shadowHandle = g_hash_table_lookup(host->osToShadowHandleMap, GINT_TO_POINTER(osHandle));
+    /* will either return 0 if DNE, or some positive value */
+    return GPOINTER_TO_INT(shadowHandle);
+}
+
+gint host_getOSHandle(Host* host, gint shadowHandle) {
 	MAGIC_ASSERT(host);
-	gboolean didExist = g_hash_table_remove(host->osDescriptorMap, GINT_TO_POINTER(shadowHandle));
+	/* find os handle that we mapped, if one exists */
+	gpointer osHandleP = g_hash_table_lookup(host->shadowToOSHandleMap, GINT_TO_POINTER(shadowHandle));
+	/* will either return 0 if DNE, or some positive value */
+	return GPOINTER_TO_INT(osHandleP);
+}
+
+void host_destroyShadowHandle(Host* host, gint shadowHandle) {
+	MAGIC_ASSERT(host);
+	gint osHandle = host_getOSHandle(host, shadowHandle);
+	gboolean didExist = g_hash_table_remove(host->shadowToOSHandleMap, GINT_TO_POINTER(shadowHandle));
 	if(didExist) {
+        g_hash_table_remove(host->osToShadowHandleMap, GINT_TO_POINTER(osHandle));
 		g_queue_insert_sorted(host->availableDescriptors, GINT_TO_POINTER(shadowHandle), _host_compareDescriptors, NULL);
 	}
 }
@@ -491,8 +505,8 @@ gint host_epollControl(Host* host, gint epollDescriptor, gint operation,
 	Epoll* epoll = (Epoll*) descriptor;
 
 	/* if this is for a system file, forward to system call */
-	if(!host_isShadowDescriptorHandle(host, fileDescriptor)) {
-		gint osfd = host_getOSDescriptorHandle(host, fileDescriptor);
+	if(!host_isShadowDescriptor(host, fileDescriptor)) {
+		gint osfd = host_getOSHandle(host, fileDescriptor);
 		osfd = osfd > 0 ? osfd : fileDescriptor;
 		return epoll_controlOS(epoll, operation, osfd, event);
 	}

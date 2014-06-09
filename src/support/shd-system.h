@@ -14,6 +14,10 @@
 #include <sys/time.h>
 #include <netdb.h>
 #include <string.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/statfs.h>
+#include <unistd.h>
 
 gint system_epollCreate(gint size);
 gint system_epollCreate1(gint flags);
@@ -46,13 +50,20 @@ gint system_setSockOpt(gint fd, gint level, gint optname, const gpointer optval,
 		socklen_t optlen);
 gint system_listen(gint fd, gint backlog);
 gint system_shutdown(gint fd, gint how);
-gssize system_read(gint fd, gpointer buf, gint n);
-gssize system_write(gint fd, const gpointer buf, gint n);
-gint system_open(const gchar* pathname, gint flags, mode_t mode);
-gint system_close(gint fd);
-FILE* system_fdopen(gint fd, const gchar *mode);
+gssize system_read(gint fd, gpointer buf, gsize n);
+gssize system_write(gint fd, const gpointer buf, gsize n);
 gint system_fcntl(int fd, int cmd, va_list farg);
 gint system_ioctl(int fd, unsigned long int request, va_list farg);
+gint system_close(gint fd);
+
+gint system_fileno(FILE *osfile);
+gint system_open(const gchar* pathname, gint flags, mode_t mode);
+gint system_creat(const gchar *pathname, mode_t mode);
+FILE* system_fopen(const gchar *path, const gchar *mode);
+FILE* system_fdopen(gint fd, const gchar *mode);
+gint system_fclose(FILE *fp);
+gint system___fxstat (gint ver, gint fd, struct stat *buf);
+gint system_fstatfs (gint fd, struct statfs *buf);
 
 gint system_pipe(gint pipefds[2]);
 gint system_pipe2(gint pipefds[2], gint flags);

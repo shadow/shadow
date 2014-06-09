@@ -17,6 +17,9 @@
 #include <stdarg.h>
 #include <features.h>
 #include <sys/ioctl.h>
+#include <sys/stat.h>
+#include <sys/statfs.h>
+#include <unistd.h>
 
 #include "shadow.h"
 
@@ -83,13 +86,22 @@ typedef int (*Accept4Func)(int, __SOCKADDR_ARG, socklen_t*, int);
 typedef int (*ShutdownFunc)(int, int);
 typedef int (*PipeFunc)(int [2]);
 typedef int (*Pipe2Func)(int [2], int);
-typedef size_t (*ReadFunc)(int, void*, int);
-typedef size_t (*WriteFunc)(int, const void*, int);
-typedef int (*OpenFunc)(const char*, int, mode_t);
+typedef size_t (*ReadFunc)(int, void*, size_t);
+typedef size_t (*WriteFunc)(int, const void*, size_t);
 typedef int (*CloseFunc)(int);
-typedef FILE* (*FDOpenFunc)(int, const char*);
 typedef int (*FcntlFunc)(int, int, ...);
 typedef int (*IoctlFunc)(int, int, ...);
+
+/* file specific */
+
+typedef int (*FileNoFunc)(FILE *);
+typedef int (*OpenFunc)(const char*, int, mode_t);
+typedef int (*CreatFunc)(const char*, mode_t);
+typedef FILE* (*FOpenFunc)(const char *, const char *);
+typedef FILE* (*FDOpenFunc)(int, const char*);
+typedef int (*FCloseFunc)(FILE *);
+typedef int (*FXStat)(int, int, struct stat*);
+typedef int (*FStatFSFunc)(int, struct statfs*);
 
 /* time family */
 
@@ -177,11 +189,18 @@ typedef struct {
 	Pipe2Func pipe2;
 	ReadFunc read;
 	WriteFunc write;
-	OpenFunc open;
 	CloseFunc close;
-	FDOpenFunc fdopen;
 	FcntlFunc fcntl;
 	IoctlFunc ioctl;
+
+	FileNoFunc fileno;
+	OpenFunc open;
+	CreatFunc creat;
+	FOpenFunc fopen;
+	FDOpenFunc fdopen;
+	FCloseFunc fclose;
+	FXStat __fxstat;
+	FStatFSFunc fstatfs;
 
 	TimeFunc time;
 	ClockGettimeFunc clock_gettime;
@@ -660,7 +679,7 @@ int shutdown(int fd, int how) {
     }
 }
 
-ssize_t read(int fd, void *buff, int numbytes) {
+ssize_t read(int fd, void *buff, size_t numbytes) {
     if(shouldRedirect()) {
         ENSURE(shadow, "intercept_", read);
         return director.shadow.read(fd, buff, numbytes);
@@ -670,23 +689,13 @@ ssize_t read(int fd, void *buff, int numbytes) {
     }
 }
 
-ssize_t write(int fd, const void *buff, int n) {
+ssize_t write(int fd, const void *buff, size_t n) {
     if(shouldRedirect()) {
         ENSURE(shadow, "intercept_", write);
         return director.shadow.write(fd, buff, n);
     } else {
         ENSURE(real, "", write);
         return director.real.write(fd, buff, n);
-    }
-}
-
-int open(const char *pathname, int flags, mode_t mode) {
-    if(shouldRedirect()) {
-        ENSURE(shadow, "intercept_", open);
-        return director.shadow.open(pathname, flags, mode);
-    } else {
-        ENSURE(real, "", open);
-        return director.real.open(pathname, flags, mode);
     }
 }
 
@@ -700,44 +709,34 @@ int close(int fd) {
     }
 }
 
-FILE *fdopen(int fd, const char *mode) {
-    if(shouldRedirect()) {
-        ENSURE(shadow, "intercept_", fdopen);
-        return director.shadow.fdopen(fd, mode);
-    } else {
-        ENSURE(real, "", fdopen);
-        return director.real.fdopen(fd, mode);
-    }
-}
-
 int fcntl(int fd, int cmd, ...) {
-	va_list farg;
-	va_start(farg, cmd);
-	int result = 0;
-	if(shouldRedirect()) {
-		ENSURE(shadow, "intercept_", fcntl);
-		result = director.shadow.fcntl(fd, cmd, va_arg(farg, void*));
-	} else {
-		ENSURE(real, "", fcntl);
-		result = director.real.fcntl(fd, cmd, va_arg(farg, void*));
-	}
-	va_end(farg);
-	return result;
+    va_list farg;
+    va_start(farg, cmd);
+    int result = 0;
+    if(shouldRedirect()) {
+        ENSURE(shadow, "intercept_", fcntl);
+        result = director.shadow.fcntl(fd, cmd, va_arg(farg, void*));
+    } else {
+        ENSURE(real, "", fcntl);
+        result = director.real.fcntl(fd, cmd, va_arg(farg, void*));
+    }
+    va_end(farg);
+    return result;
 }
 
 int ioctl(int fd, unsigned long int request, ...) {
-	va_list farg;
-	va_start(farg, request);
-	int result = 0;
-	if(shouldRedirect()) {
-		ENSURE(shadow, "intercept_", ioctl);
-		result = director.shadow.ioctl(fd, request, va_arg(farg, void*));
-	} else {
-		ENSURE(real, "", ioctl);
-		result = director.real.ioctl(fd, request, va_arg(farg, void*));
-	}
-	va_end(farg);
-	return result;
+    va_list farg;
+    va_start(farg, request);
+    int result = 0;
+    if(shouldRedirect()) {
+        ENSURE(shadow, "intercept_", ioctl);
+        result = director.shadow.ioctl(fd, request, va_arg(farg, void*));
+    } else {
+        ENSURE(real, "", ioctl);
+        result = director.real.ioctl(fd, request, va_arg(farg, void*));
+    }
+    va_end(farg);
+    return result;
 }
 
 
@@ -760,6 +759,136 @@ int pipe2(int pipefd[2], int flags) {
         return director.real.pipe2(pipefd, flags);
     }
 }
+
+/* file specific */
+
+int fileno(FILE *stream) {
+    if(shouldRedirect()) {
+        ENSURE(shadow, "intercept_", fileno);
+        return director.shadow.fileno(stream);
+    } else {
+        ENSURE(real, "", fileno);
+        return director.real.fileno(stream);
+    }
+}
+
+int open(const char *pathname, int flags, mode_t mode) {
+    if(shouldRedirect()) {
+        ENSURE(shadow, "intercept_", open);
+        return director.shadow.open(pathname, flags, mode);
+    } else {
+        ENSURE(real, "", open);
+        return director.real.open(pathname, flags, mode);
+    }
+}
+
+int creat(const char *pathname, mode_t mode) {
+    if(shouldRedirect()) {
+        ENSURE(shadow, "intercept_", creat);
+        return director.shadow.creat(pathname, mode);
+    } else {
+        ENSURE(real, "", creat);
+        return director.real.creat(pathname, mode);
+    }
+}
+
+FILE *fopen(const char *path, const char *mode) {
+    if(shouldRedirect()) {
+        ENSURE(shadow, "intercept_", fopen);
+        return director.shadow.fopen(path, mode);
+    } else {
+        ENSURE(real, "", fopen);
+        return director.real.fopen(path, mode);
+    }
+}
+
+FILE *fdopen(int fd, const char *mode) {
+    if(shouldRedirect()) {
+        ENSURE(shadow, "intercept_", fdopen);
+        return director.shadow.fdopen(fd, mode);
+    } else {
+        ENSURE(real, "", fdopen);
+        return director.real.fdopen(fd, mode);
+    }
+}
+
+int fclose(FILE *fp) {
+    if(shouldRedirect()) {
+        ENSURE(shadow, "intercept_", fclose);
+        return director.shadow.fclose(fp);
+    } else {
+        ENSURE(real, "", fclose);
+        return director.real.fclose(fp);
+    }
+}
+
+//TODO
+//
+//int dup(int oldfd);
+//
+//int dup2(int oldfd, int newfd);
+//
+//int dup3(int oldfd, int newfd, int flags);
+
+/* fstat redirects to this */
+int __fxstat (int ver, int fd, struct stat *buf) {
+    if (shouldRedirect()) {
+        ENSURE(shadow, "intercept_", __fxstat);
+        return director.shadow.__fxstat(ver, fd, buf);
+    } else {
+        ENSURE(real, "", __fxstat);
+        return director.real.__fxstat(ver, fd, buf);
+    }
+}
+
+int fstatfs (int fd, struct statfs *buf) {
+    if (shouldRedirect()) {
+        ENSURE(shadow, "intercept_", fstatfs);
+        return director.shadow.fstatfs(fd, buf);
+    } else {
+        ENSURE(real, "", fstatfs);
+        return director.real.fstatfs(fd, buf);
+    }
+}
+
+//TODO
+//int fstatvfs(int fd, struct statvfs *buf);
+//
+//int fsync(int fd);
+//
+//int fdatasync(int fd);
+//
+//int syncfs(int fd);
+//
+//int ftruncate(int fd, off_t length);
+//
+//int fallocate(int fd, int mode, off_t offset, off_t len);
+//
+//int fexecve(int fd, char *const argv[], char *const envp[]);
+//
+//long fpathconf(int fd, int name);
+//
+//int fchdir(int fd);
+//
+//int fchown(int fd, uid_t owner, gid_t group);
+//
+//int fchmod(int fd, mode_t mode);
+//
+//int posix_fadvise(int fd, off_t offset, off_t len, int advice);
+//
+//int posix_fallocate(int fd, off_t offset, off_t len);
+//
+//int lockf(int fd, int cmd, off_t len);
+//
+//int openat(int dirfd, const char *pathname, int flags, mode_t mode);
+//
+//int faccessat(int dirfd, const char *pathname, int mode, int flags);
+//
+//int unlinkat(int dirfd, const char *pathname, int flags);
+//
+//int fchmodat(int dirfd, const char *pathname, mode_t mode, int flags);
+//
+//int fchownat(int dirfd, const char *pathname, uid_t owner, gid_t group, int flags);
 
 /* time family */
 
