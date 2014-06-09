@@ -85,7 +85,7 @@ typedef int (*PipeFunc)(int [2]);
 typedef int (*Pipe2Func)(int [2], int);
 typedef size_t (*ReadFunc)(int, void*, int);
 typedef size_t (*WriteFunc)(int, const void*, int);
-typedef int (*OpenFunc)(const char*, int);
+typedef int (*OpenFunc)(const char*, int, mode_t);
 typedef int (*CloseFunc)(int);
 typedef FILE* (*FDOpenFunc)(int, const char*);
 typedef int (*FcntlFunc)(int, int, ...);
@@ -680,14 +680,14 @@ ssize_t write(int fd, const void *buff, int n) {
     }
 }
 
-int open(const char *pathname, int flags) {
-//    if(shouldRedirect()) {
-//        ENSURE(shadow, "intercept_", open);
-//        return director.shadow.open(pathname, flags);
-//    } else {
+int open(const char *pathname, int flags, mode_t mode) {
+    if(shouldRedirect()) {
+        ENSURE(shadow, "intercept_", open);
+        return director.shadow.open(pathname, flags, mode);
+    } else {
         ENSURE(real, "", open);
-        return director.real.open(pathname, flags);
-//    }
+        return director.real.open(pathname, flags, mode);
+    }
 }
 
 int close(int fd) {

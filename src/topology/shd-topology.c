@@ -79,7 +79,8 @@ static gboolean _topology_loadGraph(Topology* top, const gchar* graphPath) {
 	/* get the file */
 	FILE* graphFile = fopen(graphPath, "r");
 	if(!graphFile) {
-		critical("fopen returned NULL, problem opening graph file path '%s'", graphPath);
+		critical("fopen returned NULL while attempting to open graph file path '%s', error %i: %s",
+				graphPath, errno, strerror(errno));
 		return FALSE;
 	}
 

@@ -783,10 +783,10 @@ gint system_pipe2(gint pipefds[2], gint flags) {
 	return 0;
 }
 
-gint system_open(const gchar* pathname, gint flags) {
+gint system_open(const gchar* pathname, gint flags, mode_t mode) {
 	Host* host = _system_switchInShadowContext();
 
-	gint handle = open(pathname, flags);
+	gint handle = open(pathname, flags, mode);
 	if(handle > 0) {
 		handle = host_addOSDescriptorHandle(host, handle);
 	}
