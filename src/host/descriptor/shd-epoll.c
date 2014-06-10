@@ -54,8 +54,12 @@ struct _EpollWatch {
 typedef enum _EpollFlags EpollFlags;
 enum _EpollFlags {
 	EF_NONE = 0,
-	/* a callback is currently scheduled to notify user (used to avoid duplicate notifications) */
+	/* a callback is currently scheduled to notify user
+	 * (used to avoid duplicate notifications) */
 	EF_SCHEDULED = 1 << 0,
+	/* the plugin closed the epoll descriptor, we should close as
+	 * soon as the notify is no longer scheduled */
+	EF_CLOSED = 1 << 1,
 };
 
 struct _Epoll {
@@ -139,7 +143,15 @@ static void _epoll_free(Epoll* epoll) {
 
 static void _epoll_close(Epoll* epoll) {
 	MAGIC_ASSERT(epoll);
-	host_closeDescriptor(worker_getCurrentHost(), epoll->super.handle);
+
+	/* mark the descriptor as closed */
+	epoll->flags |= EF_CLOSED;
+
+	/* only close it if there is no pending epoll notify event */
+	gboolean isScheduled = (epoll->flags & EF_SCHEDULED) ? TRUE : FALSE;
+	if(!isScheduled) {
+        host_closeDescriptor(worker_getCurrentHost(), epoll->super.handle);
+	}
 }
 
 DescriptorFunctionTable epollFunctions = {
@@ -486,6 +498,13 @@ void epoll_tryNotify(Epoll* epoll) {
 
 	/* event is being executed from the scheduler, so its no longer scheduled */
 	epoll->flags &= ~EF_SCHEDULED;
+
+	/* if it was closed in the meantime, do the actual close now */
+    gboolean isClosed = (epoll->flags & EF_CLOSED) ? TRUE : FALSE;
+    if(isClosed) {
+        host_closeDescriptor(worker_getCurrentHost(), epoll->super.handle);
+        return;
+    }
 
 	/* we should notify the plugin only if we still have some events to report
 	 * XXX: what if our watches are empty, but the OS desc has events? */

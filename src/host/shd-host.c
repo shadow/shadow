@@ -530,8 +530,14 @@ gint host_epollControl(Host* host, gint epollDescriptor, gint operation,
 	/* if this is for a system file, forward to system call */
 	if(!host_isShadowDescriptor(host, fileDescriptor)) {
 		gint osfd = host_getOSHandle(host, fileDescriptor);
-		osfd = osfd > 0 ? osfd : fileDescriptor;
-		return epoll_controlOS(epoll, operation, osfd, event);
+		osfd = osfd >= 0 ? osfd : fileDescriptor;
+
+		gint oldEventFD = event->data.fd;
+		event->data.fd = osfd;
+		gint result = epoll_controlOS(epoll, operation, osfd, event);
+		event->data.fd = oldEventFD;
+
+		return result;
 	}
 
 	/* EBADF  fd is not a valid shadow file descriptor. */
