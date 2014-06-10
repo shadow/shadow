@@ -36,9 +36,9 @@ gint system_bind(gint fd, const struct sockaddr* addr, socklen_t len);
 gint system_connect(gint fd, const struct sockaddr* addr, socklen_t len);
 gint system_getPeerName(gint fd, struct sockaddr* addr, socklen_t* len);
 gint system_getSockName(gint fd, struct sockaddr* addr, socklen_t* len);
-gssize system_send(gint fd, const gpointer buf, gsize n, gint flags);
+gssize system_send(gint fd, gconstpointer buf, gsize n, gint flags);
 gssize system_recv(gint fd, gpointer buf, gsize n, gint flags);
-gssize system_sendTo(gint fd, const gpointer buf, gsize n, gint flags,
+gssize system_sendTo(gint fd, gconstpointer buf, gsize n, gint flags,
 		const struct sockaddr* addr, socklen_t len);
 gssize system_recvFrom(gint fd, gpointer buf, size_t n, gint flags,
 		struct sockaddr* addr, socklen_t* len);
@@ -46,12 +46,12 @@ gssize system_sendMsg(gint fd, const struct msghdr* message, gint flags);
 gssize system_recvMsg(gint fd, struct msghdr* message, gint flags);
 gint system_getSockOpt(gint fd, gint level, gint optname, gpointer optval,
 		socklen_t* optlen);
-gint system_setSockOpt(gint fd, gint level, gint optname, const gpointer optval,
+gint system_setSockOpt(gint fd, gint level, gint optname, gconstpointer optval,
 		socklen_t optlen);
 gint system_listen(gint fd, gint backlog);
 gint system_shutdown(gint fd, gint how);
 gssize system_read(gint fd, gpointer buf, gsize n);
-gssize system_write(gint fd, const gpointer buf, gsize n);
+gssize system_write(gint fd, gconstpointer buf, gsize n);
 gint system_fcntl(int fd, int cmd, va_list farg);
 gint system_ioctl(int fd, unsigned long int request, va_list farg);
 gint system_close(gint fd);
@@ -64,6 +64,9 @@ FILE* system_fdopen(gint fd, const gchar *mode);
 gint system_fclose(FILE *fp);
 gint system___fxstat (gint ver, gint fd, struct stat *buf);
 gint system_fstatfs (gint fd, struct statfs *buf);
+off_t system_lseek(int fd, off_t offset, int whence);
+gpointer system_mmap(gpointer addr, gsize length, gint prot, gint flags,
+                  gint fd, off_t offset);
 
 gint system_pipe(gint pipefds[2]);
 gint system_pipe2(gint pipefds[2], gint flags);

@@ -382,6 +382,11 @@ gboolean host_isShadowDescriptor(Host* host, gint handle) {
 gint host_createShadowHandle(Host* host, gint osHandle) {
 	MAGIC_ASSERT(host);
 
+	/* stdin, stdout, stderr */
+	if(osHandle >=0 && osHandle <= 2) {
+	    return osHandle;
+	}
+
 	/* reserve a new virtual descriptor number to emulate the given osHandle,
 	 * so that the plugin will not be given duplicate shadow/os numbers. */
 	gint shadowHandle = _host_getNextDescriptorHandle(host);
@@ -394,22 +399,40 @@ gint host_createShadowHandle(Host* host, gint osHandle) {
 
 gint host_getShadowHandle(Host* host, gint osHandle) {
     MAGIC_ASSERT(host);
+
+    /* stdin, stdout, stderr */
+    if(osHandle >=0 && osHandle <= 2) {
+        return osHandle;
+    }
+
     /* find shadow handle that we mapped, if one exists */
-    gpointer shadowHandle = g_hash_table_lookup(host->osToShadowHandleMap, GINT_TO_POINTER(osHandle));
-    /* will either return 0 if DNE, or some positive value */
-    return GPOINTER_TO_INT(shadowHandle);
+    gpointer shadowHandleP = g_hash_table_lookup(host->osToShadowHandleMap, GINT_TO_POINTER(osHandle));
+
+    return shadowHandleP ? GPOINTER_TO_INT(shadowHandleP) : -1;
 }
 
 gint host_getOSHandle(Host* host, gint shadowHandle) {
 	MAGIC_ASSERT(host);
+
+    /* stdin, stdout, stderr */
+    if(shadowHandle >=0 && shadowHandle <= 2) {
+        return shadowHandle;
+    }
+
 	/* find os handle that we mapped, if one exists */
 	gpointer osHandleP = g_hash_table_lookup(host->shadowToOSHandleMap, GINT_TO_POINTER(shadowHandle));
-	/* will either return 0 if DNE, or some positive value */
-	return GPOINTER_TO_INT(osHandleP);
+
+	return osHandleP ? GPOINTER_TO_INT(osHandleP) : -1;
 }
 
 void host_destroyShadowHandle(Host* host, gint shadowHandle) {
 	MAGIC_ASSERT(host);
+
+    /* stdin, stdout, stderr */
+    if(shadowHandle >=0 && shadowHandle <= 2) {
+        return;
+    }
+
 	gint osHandle = host_getOSHandle(host, shadowHandle);
 	gboolean didExist = g_hash_table_remove(host->shadowToOSHandleMap, GINT_TO_POINTER(shadowHandle));
 	if(didExist) {

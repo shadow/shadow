@@ -4,7 +4,6 @@
  * See LICENSE for licensing information
  */
 
-#include <glib.h>
 #include <sys/socket.h>
 #include <sys/epoll.h>
 #include <time.h>
@@ -29,7 +28,7 @@ int intercept_worker_isInShadowContext() {
  * const AES_KEY *key
  * The key parameter has been voided to avoid requiring Openssl headers
  */
-void intercept_AES_encrypt(const guchar *in, guchar *out, const void *key) {
+void intercept_AES_encrypt(const unsigned char *in, unsigned char *out, const void *key) {
 	return;
 }
 
@@ -37,7 +36,7 @@ void intercept_AES_encrypt(const guchar *in, guchar *out, const void *key) {
  * const AES_KEY *key
  * The key parameter has been voided to avoid requiring Openssl headers
  */
-void intercept_AES_decrypt(const guchar *in, guchar *out, const void *key) {
+void intercept_AES_decrypt(const unsigned char *in, unsigned char *out, const void *key) {
 	return;
 }
 
@@ -45,7 +44,7 @@ void intercept_AES_decrypt(const guchar *in, guchar *out, const void *key) {
  * const AES_KEY *key
  * The key parameter has been voided to avoid requiring Openssl headers
  */
-void intercept_AES_ctr128_encrypt(const guchar *in, guchar *out, const void *key) {
+void intercept_AES_ctr128_encrypt(const unsigned char *in, unsigned char *out, const void *key) {
 	return;
 }
 
@@ -53,7 +52,7 @@ void intercept_AES_ctr128_encrypt(const guchar *in, guchar *out, const void *key
  * const AES_KEY *key
  * The key parameter has been voided to avoid requiring Openssl headers
  */
-void intercept_AES_ctr128_decrypt(const guchar *in, guchar *out, const void *key) {
+void intercept_AES_ctr128_decrypt(const unsigned char *in, unsigned char *out, const void *key) {
 	return;
 }
 
@@ -61,7 +60,7 @@ void intercept_AES_ctr128_decrypt(const guchar *in, guchar *out, const void *key
  * EVP_CIPHER_CTX *ctx
  * The ctx parameter has been voided to avoid requiring Openssl headers
  */
-gint intercept_EVP_Cipher(void *ctx, guchar *out, const guchar *in, guint inl) {
+int intercept_EVP_Cipher(void *ctx, unsigned char *out, const unsigned char *in, unsigned int inl) {
 	memmove(out, in, (size_t)inl);
 	return 1;
 }
@@ -75,8 +74,8 @@ void intercept_RAND_add(const void *buf, int num, double entropy) {
 }
 
 int intercept_RAND_poll() {
-	guint32 buf = 1;
-	system_addEntropy((gpointer)&buf, 4);
+	uint32_t buf = 1;
+	system_addEntropy((void*)&buf, 4);
 	return 1;
 }
 
@@ -168,19 +167,19 @@ time_t intercept_time(time_t* t) {
 	return system_time(t);
 }
 
-gint intercept_clock_gettime(clockid_t clk_id, struct timespec *tp) {
+int intercept_clock_gettime(clockid_t clk_id, struct timespec *tp) {
 	return system_clockGetTime(clk_id, tp);
 }
 
-gint intercept_gettimeofday(struct timeval *tv, void *tz) {
+int intercept_gettimeofday(struct timeval *tv, void *tz) {
 	return system_getTimeOfDay(tv);
 }
 
-gint intercept_gethostname(gchar *name, size_t len) {
+int intercept_gethostname(char *name, size_t len) {
 	return system_getHostName(name, len);
 }
 
-gint intercept_getaddrinfo(gchar *node, const gchar *service,
+int intercept_getaddrinfo(char *node, const char *service,
 		const struct addrinfo *hgints, struct addrinfo **res) {
 	return system_getAddrInfo(node, service, hgints, res);
 }
@@ -196,33 +195,33 @@ int intercept_getnameinfo(const struct sockaddr *sa, socklen_t salen,
 
 
 
-struct hostent* intercept_gethostbyname(const gchar* name) {
+struct hostent* intercept_gethostbyname(const char* name) {
 	return system_getHostByName(name);
 }
 
-int intercept_gethostbyname_r(const gchar *name,
-               struct hostent *ret, gchar *buf, gsize buflen,
-               struct hostent **result, gint *h_errnop) {
+int intercept_gethostbyname_r(const char *name,
+               struct hostent *ret, char *buf, size_t buflen,
+               struct hostent **result, int *h_errnop) {
 	return system_getHostByName_r(name, ret, buf, buflen, result, h_errnop);
 }
 
-struct hostent* intercept_gethostbyname2(const gchar* name, gint af) {
+struct hostent* intercept_gethostbyname2(const char* name, int af) {
 	return system_getHostByName2(name, af);
 }
 
-int intercept_gethostbyname2_r(const gchar *name, gint af,
-               struct hostent *ret, gchar *buf, gsize buflen,
-               struct hostent **result, gint *h_errnop) {
+int intercept_gethostbyname2_r(const char *name, int af,
+               struct hostent *ret, char *buf, size_t buflen,
+               struct hostent **result, int *h_errnop) {
 	return system_getHostByName2_r(name, af, ret, buf, buflen, result, h_errnop);
 }
 
-struct hostent* intercept_gethostbyaddr(const void* addr, socklen_t len, gint type) {
+struct hostent* intercept_gethostbyaddr(const void* addr, socklen_t len, int type) {
 	return system_getHostByAddr(addr, len, type);
 }
 
-int intercept_gethostbyaddr_r(const void *addr, socklen_t len, gint type,
-               struct hostent *ret, gchar *buf, gsize buflen,
-               struct hostent **result, gint *h_errnop) {
+int intercept_gethostbyaddr_r(const void *addr, socklen_t len, int type,
+               struct hostent *ret, char *buf, size_t buflen,
+               struct hostent **result, int *h_errnop) {
 	return system_getHostByAddr_r(addr, len, type, ret, buf, buflen, result, h_errnop);
 }
 
@@ -230,78 +229,78 @@ int intercept_gethostbyaddr_r(const void *addr, socklen_t len, gint type,
  * System socket and IO
  */
 
-gint intercept_socket(gint domain, gint type, gint protocol) {
+int intercept_socket(int domain, int type, int protocol) {
 	return system_socket(domain, type, protocol);
 }
 
-gint intercept_socketpair(gint domain, gint type, gint protocol, gint fds[2]) {
+int intercept_socketpair(int domain, int type, int protocol, int fds[2]) {
 	return system_socketPair(domain, type, protocol, fds);
 }
 
-gint intercept_bind(gint fd, const struct sockaddr* addr, socklen_t len) {
+int intercept_bind(int fd, const struct sockaddr* addr, socklen_t len) {
 	return system_bind(fd, addr, len);
 }
 
-gint intercept_getsockname(gint fd, struct sockaddr* addr, socklen_t* len) {
+int intercept_getsockname(int fd, struct sockaddr* addr, socklen_t* len) {
 	return system_getSockName(fd, addr, len);
 }
 
-gint intercept_connect(gint fd, const struct sockaddr* addr, socklen_t len) {
+int intercept_connect(int fd, const struct sockaddr* addr, socklen_t len) {
 	return system_connect(fd, addr, len);
 }
 
-gint intercept_getpeername(gint fd, struct sockaddr* addr, socklen_t* len) {
+int intercept_getpeername(int fd, struct sockaddr* addr, socklen_t* len) {
 	return system_getPeerName(fd, addr, len);
 }
 
-ssize_t intercept_send(gint fd, const gpointer buf, size_t n, gint flags) {
+ssize_t intercept_send(int fd, const void* buf, size_t n, int flags) {
 	return system_send(fd, buf, n, flags);
 }
 
-ssize_t intercept_recv(gint fd, gpointer buf, size_t n, gint flags) {
+ssize_t intercept_recv(int fd, void* buf, size_t n, int flags) {
 	return system_recv(fd, buf, n, flags);
 }
 
-ssize_t intercept_sendto(gint fd, const gpointer buf, size_t n, gint flags,
+ssize_t intercept_sendto(int fd, const void* buf, size_t n, int flags,
 		const struct sockaddr* addr, socklen_t addr_len) {
 	return system_sendTo(fd, buf, n, flags, addr, addr_len);
 }
 
-ssize_t intercept_recvfrom(gint fd, gpointer buf, size_t n, gint flags,
+ssize_t intercept_recvfrom(int fd, void* buf, size_t n, int flags,
 		struct sockaddr* addr, socklen_t* addr_len) {
 	return system_recvFrom(fd, buf, n, flags, addr, addr_len);
 }
 
-ssize_t intercept_sendmsg(gint fd, const struct msghdr* message, gint flags) {
+ssize_t intercept_sendmsg(int fd, const struct msghdr* message, int flags) {
 	return system_sendMsg(fd, message, flags);
 }
 
-ssize_t intercept_recvmsg(gint fd, struct msghdr* message, gint flags) {
+ssize_t intercept_recvmsg(int fd, struct msghdr* message, int flags) {
 	return system_recvMsg(fd, message, flags);
 }
 
-gint intercept_getsockopt(gint fd, gint level, gint optname, gpointer optval,
+int intercept_getsockopt(int fd, int level, int optname, void* optval,
 		socklen_t* optlen) {
 	return system_getSockOpt(fd, level, optname, optval, optlen);
 }
 
-gint intercept_setsockopt(gint fd, gint level, gint optname, const gpointer optval,
+int intercept_setsockopt(int fd, int level, int optname, const void* optval,
 		socklen_t optlen) {
 	return system_setSockOpt(fd, level, optname, optval, optlen);
 }
 
-gint intercept_listen(gint fd, gint backlog) {
+int intercept_listen(int fd, int backlog) {
 	return system_listen(fd, backlog);
 }
 
-gint intercept_accept(gint fd, struct sockaddr* addr, socklen_t* addr_len) {
+int intercept_accept(int fd, struct sockaddr* addr, socklen_t* addr_len) {
 	return system_accept(fd, addr, addr_len);
 }
 
-gint intercept_accept4(gint fd, struct sockaddr* addr, socklen_t* addr_len, gint flags) {
+int intercept_accept4(int fd, struct sockaddr* addr, socklen_t* addr_len, int flags) {
    return system_accept4(fd, addr, addr_len, flags);
 }
-gint intercept_shutdown(gint fd, gint how) {
+int intercept_shutdown(int fd, int how) {
 	return system_shutdown(fd, how);
 }
 
@@ -313,30 +312,30 @@ int intercept_pipe2(int pipefd[2], int flags) {
 	return system_pipe2(pipefd, flags);
 }
 
-ssize_t intercept_read(gint fd, gpointer buf, gsize n) {
+ssize_t intercept_read(int fd, void* buf, size_t n) {
 	return system_read(fd, buf, n);
 }
 
-ssize_t intercept_write(gint fd, const gpointer buf, gsize n) {
+ssize_t intercept_write(int fd, const void* buf, size_t n) {
 	return system_write(fd, buf, n);
 }
 
-gint intercept_close(gint fd) {
+int intercept_close(int fd) {
 	return system_close(fd);
 }
 
-gint intercept_fcntl(int fd, int cmd, ...) {
+int intercept_fcntl(int fd, int cmd, ...) {
     va_list farg;
     va_start(farg, cmd);
-    gint result = system_fcntl(fd, cmd, farg);
+    int result = system_fcntl(fd, cmd, farg);
     va_end(farg);
     return result;
 }
 
-gint intercept_ioctl(int fd, unsigned long int request, ...) {
+int intercept_ioctl(int fd, unsigned long int request, ...) {
     va_list farg;
     va_start(farg, request);
-    gint result = system_ioctl(fd, request, farg);
+    int result = system_ioctl(fd, request, farg);
     va_end(farg);
 
     if(result != 0) {
@@ -383,29 +382,33 @@ int intercept_fstatfs (int fd, struct statfs *buf) {
     return system_fstatfs(fd, buf);
 }
 
+off_t lseek(int fd, off_t offset, int whence) {
+    return system_lseek(fd, offset, whence);
+}
+
 /**
  * System epoll
  */
 
-gint intercept_epoll_create(gint size) {
+int intercept_epoll_create(int size) {
 	return system_epollCreate(size);
 }
 
-gint intercept_epoll_create1(int flags) {
+int intercept_epoll_create1(int flags) {
 	return system_epollCreate1(flags);
 }
 
-gint intercept_epoll_ctl(gint epfd, gint op, gint fd, struct epoll_event *event) {
+int intercept_epoll_ctl(int epfd, int op, int fd, struct epoll_event *event) {
 	return system_epollCtl(epfd, op, fd, event);
 }
 
-gint intercept_epoll_wait(gint epfd, struct epoll_event *events,
-		gint maxevents, gint timeout) {
+int intercept_epoll_wait(int epfd, struct epoll_event *events,
+		int maxevents, int timeout) {
 	return system_epollWait(epfd, events, maxevents, timeout);
 }
 
-gint intercept_epoll_pwait(gint epfd, struct epoll_event *events,
-			gint maxevents, gint timeout, const sigset_t *ss) {
+int intercept_epoll_pwait(int epfd, struct epoll_event *events,
+			int maxevents, int timeout, const sigset_t *ss) {
 	return system_epollPWait(epfd, events, maxevents, timeout, ss);
 }
 
@@ -413,41 +416,46 @@ gint intercept_epoll_pwait(gint epfd, struct epoll_event *events,
  * memory management
  */
 
-gpointer intercept_malloc(gsize size) {
+void* intercept_malloc(size_t size) {
 	return system_malloc(size);
 }
 
-gpointer intercept_calloc(gsize nmemb, gsize size) {
+void* intercept_calloc(size_t nmemb, size_t size) {
     return system_calloc(nmemb, size);
 }
 
-gpointer intercept_realloc(gpointer ptr, gsize size) {
+void* intercept_realloc(void* ptr, size_t size) {
     return system_realloc(ptr, size);
 }
 
-void intercept_free(gpointer ptr) {
+void intercept_free(void* ptr) {
 	return system_free(ptr);
 }
 
-gint intercept_posix_memalign(gpointer* memptr, gsize alignment, gsize size) {
+int intercept_posix_memalign(void** memptr, size_t alignment, size_t size) {
     return system_posix_memalign(memptr, alignment, size);
 }
 
-gpointer intercept_memalign(gsize blocksize, gsize bytes) {
+void* intercept_memalign(size_t blocksize, size_t bytes) {
     return system_memalign(blocksize, bytes);
 }
 
 /* aligned_alloc doesnt exist in glibc in the current LTS version of ubuntu */
 #if 0
-gpointer intercept_aligned_alloc(gsize alignment, gsize size) {
+void* intercept_aligned_alloc(size_t alignment, size_t size) {
 	return system_aligned_alloc(alignment, size);
 }
 #endif
 
-gpointer intercept_valloc(gsize size) {
+void* intercept_valloc(size_t size) {
     return system_valloc(size);
 }
 
-gpointer intercept_pvalloc(gsize size) {
+void* intercept_pvalloc(size_t size) {
 	return system_pvalloc(size);
+}
+
+void* intercept_mmap(void *addr, size_t length, int prot, int flags,
+                  int fd, off_t offset) {
+    return system_mmap(addr, length, prot, flags, fd, offset);
 }

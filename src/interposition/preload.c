@@ -20,6 +20,7 @@
 #include <sys/stat.h>
 #include <sys/statfs.h>
 #include <unistd.h>
+#include <sys/mman.h>
 
 #include "shadow.h"
 
@@ -55,6 +56,7 @@ typedef void* (*AlignedAllocFunc)(size_t, size_t);
 typedef void* (*VallocFunc)(size_t);
 typedef void* (*PvallocFunc)(size_t);
 typedef void (*FreeFunc)(void*);
+typedef void* (*MMapFunc)(void *, size_t, int, int, int, off_t);
 
 /* event family */
 
@@ -102,6 +104,7 @@ typedef FILE* (*FDOpenFunc)(int, const char*);
 typedef int (*FCloseFunc)(FILE *);
 typedef int (*FXStat)(int, int, struct stat*);
 typedef int (*FStatFSFunc)(int, struct statfs*);
+typedef off_t (*LSeekFunc)(int, off_t, int);
 
 /* time family */
 
@@ -160,6 +163,7 @@ typedef struct {
 	VallocFunc valloc;
 	PvallocFunc pvalloc;
 	FreeFunc free;
+	MMapFunc mmap;
 
 	EpollCreateFunc epoll_create;
 	EpollCreate1Func epoll_create1;
@@ -201,6 +205,7 @@ typedef struct {
 	FCloseFunc fclose;
 	FXStat __fxstat;
 	FStatFSFunc fstatfs;
+	LSeekFunc lseek;
 
 	TimeFunc time;
 	ClockGettimeFunc clock_gettime;
@@ -442,6 +447,18 @@ void* pvalloc(size_t size) {
     } else {
         ENSURE(real, "", pvalloc);
         return director.real.pvalloc(size);
+    }
+}
+
+/* for fd translation */
+void* mmap(void *addr, size_t length, int prot, int flags,
+                  int fd, off_t offset) {
+    if(shouldRedirect()) {
+        ENSURE(shadow, "intercept_", mmap);
+        return director.shadow.mmap(addr, length, prot, flags, fd, offset);
+    } else {
+        ENSURE(real, "", mmap);
+        return director.real.mmap(addr, length, prot, flags, fd, offset);
     }
 }
 
@@ -851,6 +868,16 @@ int fstatfs (int fd, struct statfs *buf) {
     }
 }
 
+off_t lseek(int fd, off_t offset, int whence) {
+    if (shouldRedirect()) {
+        ENSURE(shadow, "intercept_", lseek);
+        return director.shadow.lseek(fd, offset, whence);
+    } else {
+        ENSURE(real, "", lseek);
+        return director.real.lseek(fd, offset, whence);
+    }
+}
+
 //TODO
 //int fstatvfs(int fd, struct statvfs *buf);
 //
@@ -921,6 +948,7 @@ int gettimeofday(struct timeval* tv, __timezone_ptr_t tz) {
         return director.real.gettimeofday(tv, tz);
     }
 }
+
 
 /* name/address family */
 

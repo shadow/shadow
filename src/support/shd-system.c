@@ -21,6 +21,7 @@
 #include <sys/stat.h>
 #include <sys/statfs.h>
 #include <unistd.h>
+#include <sys/mman.h>
 
 #include "shadow.h"
 
@@ -412,7 +413,7 @@ gint system_getSockName(gint fd, struct sockaddr* addr, socklen_t* len) {
 	return _system_addressHelper(fd, addr, len, SCT_GETSOCKNAME);
 }
 
-static gssize _system_sendHelper(Host* host, gint fd, const gpointer buf, gsize n, gint flags,
+static gssize _system_sendHelper(Host* host, gint fd, gconstpointer buf, gsize n, gint flags,
         const struct sockaddr* addr, socklen_t len) {
     /* this function MUST be called after switching in shadow context */
 	/* TODO flags are ignored */
@@ -442,7 +443,7 @@ static gssize _system_sendHelper(Host* host, gint fd, const gpointer buf, gsize 
     return (gssize) bytes;
 }
 
-gssize system_sendTo(gint fd, const gpointer buf, gsize n, gint flags,
+gssize system_sendTo(gint fd, gconstpointer buf, gsize n, gint flags,
 		const struct sockaddr* addr, socklen_t len) {
 	Host* host = _system_switchInShadowContext();
 	gssize result = _system_sendHelper(host, fd, buf, n, flags, addr, len);
@@ -450,7 +451,7 @@ gssize system_sendTo(gint fd, const gpointer buf, gsize n, gint flags,
 	return result;
 }
 
-gssize system_send(gint fd, const gpointer buf, gsize n, gint flags) {
+gssize system_send(gint fd, gconstpointer buf, gsize n, gint flags) {
     Host* host = _system_switchInShadowContext();
     gssize result = _system_sendHelper(host, fd, buf, n, flags, NULL, 0);
     _system_switchOutShadowContext(host);
@@ -466,7 +467,7 @@ gssize system_sendMsg(gint fd, const struct msghdr* message, gint flags) {
 	return -1;
 }
 
-gssize system_write(gint fd, const gpointer buf, gsize n) {
+gssize system_write(gint fd, gconstpointer buf, gsize n) {
 	gssize ret = 0;
 	Host* host = _system_switchInShadowContext();
 
@@ -664,7 +665,7 @@ gint system_getSockOpt(gint fd, gint level, gint optname, gpointer optval,
 	return result;
 }
 
-gint system_setSockOpt(gint fd, gint level, gint optname, const gpointer optval,
+gint system_setSockOpt(gint fd, gint level, gint optname, gconstpointer optval,
 		socklen_t optlen) {
 	if(!optval) {
 		errno = EFAULT;
@@ -935,7 +936,7 @@ gint system_open(const gchar* pathname, gint flags, mode_t mode) {
     Host* host = _system_switchInShadowContext();
 
     gint osfd = open(pathname, flags, mode);
-    gint shadowfd = osfd > 0 ? host_createShadowHandle(host, osfd) : osfd;
+    gint shadowfd = osfd >= 0 ? host_createShadowHandle(host, osfd) : osfd;
 
     _system_switchOutShadowContext(host);
     return shadowfd;
@@ -945,7 +946,7 @@ gint system_creat(const gchar *pathname, mode_t mode) {
     Host* host = _system_switchInShadowContext();
 
     gint osfd = creat(pathname, mode);
-    gint shadowfd = osfd > 0 ? host_createShadowHandle(host, osfd) : osfd;
+    gint shadowfd = osfd >= 0 ? host_createShadowHandle(host, osfd) : osfd;
 
     _system_switchOutShadowContext(host);
     return shadowfd;
@@ -957,7 +958,7 @@ FILE* system_fopen(const gchar *path, const gchar *mode) {
     FILE* osfile = fopen(path, mode);
     if(osfile) {
         gint osfd = fileno(osfile);
-        gint shadowfd = osfd > 0 ? host_createShadowHandle(host, osfd) : osfd;
+        gint shadowfd = osfd >= 0 ? host_createShadowHandle(host, osfd) : osfd;
     }
 
     _system_switchOutShadowContext(host);
@@ -970,7 +971,7 @@ FILE* system_fdopen(gint fd, const gchar *mode) {
     if (!host_isShadowDescriptor(host, fd)) {
         /* check if we have a mapped os fd */
         gint osfd = host_getOSHandle(host, fd);
-        if (osfd > 0) {
+        if (osfd >= 0) {
             FILE* osfile = fdopen(osfd, mode);
             _system_switchOutShadowContext(host);
             return osfile;
@@ -1002,7 +1003,7 @@ gint system___fxstat (gint ver, gint fd, struct stat *buf) {
     if (!host_isShadowDescriptor(host, fd)) {
         /* check if we have a mapped os fd */
         gint osfd = host_getOSHandle(host, fd);
-        if (osfd > 0) {
+        if (osfd >= 0) {
             gint ret = fstat(osfd, buf);
             _system_switchOutShadowContext(host);
             return ret;
@@ -1021,7 +1022,7 @@ gint system_fstatfs (gint fd, struct statfs *buf) {
     if (!host_isShadowDescriptor(host, fd)) {
         /* check if we have a mapped os fd */
         gint osfd = host_getOSHandle(host, fd);
-        if (osfd > 0) {
+        if (osfd >= 0) {
             gint ret = fstatfs(osfd, buf);
             _system_switchOutShadowContext(host);
             return ret;
@@ -1032,6 +1033,54 @@ gint system_fstatfs (gint fd, struct statfs *buf) {
 
     errno = EBADF;
     return -1;
+}
+
+off_t system_lseek(int fd, off_t offset, int whence) {
+    Host* host = _system_switchInShadowContext();
+
+    if (!host_isShadowDescriptor(host, fd)) {
+        /* check if we have a mapped os fd */
+        gint osfd = host_getOSHandle(host, fd);
+        if (osfd >= 0) {
+            off_t ret = lseek(osfd, offset, whence);
+            _system_switchOutShadowContext(host);
+            return ret;
+        }
+    }
+
+    _system_switchOutShadowContext(host);
+
+    errno = EBADF;
+    return (off_t)-1;
+}
+
+
+gpointer system_mmap(gpointer addr, gsize length, gint prot, gint flags,
+                  gint fd, off_t offset) {
+    Host* host = _system_switchInShadowContext();
+
+    /* anonymous mappings ignore file descriptor */
+    if(flags & MAP_ANONYMOUS) {
+        gpointer ret = mmap(addr, length, prot, flags, -1, offset);
+        _system_switchOutShadowContext(host);
+        return ret;
+    }
+
+    if (!host_isShadowDescriptor(host, fd)) {
+        /* check if we have a mapped os fd */
+        gint osfd = host_getOSHandle(host, fd);
+        if (osfd >= 0) {
+            gpointer ret = mmap(addr, length, prot, flags, osfd, offset);
+            _system_switchOutShadowContext(host);
+            return ret;
+        }
+    }
+
+    _system_switchOutShadowContext(host);
+
+    errno = EBADF;
+
+    return MAP_FAILED;
 }
 
 /**
@@ -1406,6 +1455,7 @@ gpointer system_pvalloc(gsize size) {
 	_system_switchOutShadowContext(node);
 	return ptr;
 }
+
 
 /* needed for multi-threaded openssl
  * @see '$man CRYPTO_lock'
