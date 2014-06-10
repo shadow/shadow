@@ -412,50 +412,49 @@ gint system_getSockName(gint fd, struct sockaddr* addr, socklen_t* len) {
 	return _system_addressHelper(fd, addr, len, SCT_GETSOCKNAME);
 }
 
+static gssize _system_sendHelper(Host* host, gint fd, const gpointer buf, gsize n, gint flags,
+        const struct sockaddr* addr, socklen_t len) {
+    /* this function MUST be called after switching in shadow context */
+	/* TODO flags are ignored */
+	/* make sure this is a socket */
+    if(!host_isShadowDescriptor(host, fd)){
+        errno = EBADF;
+        return -1;
+    }
+
+    in_addr_t ip = 0;
+    in_port_t port = 0;
+
+    /* check if they specified an address to send to */
+    if(addr != NULL && len >= sizeof(struct sockaddr_in)) {
+        struct sockaddr_in* si = (struct sockaddr_in*) addr;
+        ip = si->sin_addr.s_addr;
+        port = si->sin_port;
+    }
+
+    gsize bytes = 0;
+    gint result = host_sendUserData(host, fd, buf, n, ip, port, &bytes);
+
+    if(result != 0) {
+        errno = result;
+        return -1;
+    }
+    return (gssize) bytes;
+}
+
 gssize system_sendTo(gint fd, const gpointer buf, gsize n, gint flags,
 		const struct sockaddr* addr, socklen_t len) {
-	/* TODO flags are ignored */
-	/* check if this is a socket */
-	Host* node = _system_switchInShadowContext();
-
-	if(!host_isShadowDescriptor(node, fd)){
-		gint err = 0, ret = 0;
-		/* check if we have a mapped os fd */
-		gint osfd = host_getOSHandle(node, fd);
-		if(osfd > 0) {
-			ret = sendto(fd, buf, n, flags, addr, len);
-		} else {
-			err = EBADF;
-			ret = -1;
-		}
-		_system_switchOutShadowContext(node);
-		errno = err;
-		return ret;
-	}
-
-	in_addr_t ip = 0;
-	in_port_t port = 0;
-
-	/* check if they specified an address to send to */
-	if(addr != NULL && len >= sizeof(struct sockaddr_in)) {
-		struct sockaddr_in* si = (struct sockaddr_in*) addr;
-		ip = si->sin_addr.s_addr;
-		port = si->sin_port;
-	}
-
-	gsize bytes = 0;
-	gint result = host_sendUserData(node, fd, buf, n, ip, port, &bytes);
-	_system_switchOutShadowContext(node);
-
-	if(result != 0) {
-		errno = result;
-		return -1;
-	}
-	return (gssize) bytes;
+	Host* host = _system_switchInShadowContext();
+	gssize result = _system_sendHelper(host, fd, buf, n, flags, addr, len);
+	_system_switchOutShadowContext(host);
+	return result;
 }
 
 gssize system_send(gint fd, const gpointer buf, gsize n, gint flags) {
-	return system_sendTo(fd, buf, n, flags, NULL, 0);
+    Host* host = _system_switchInShadowContext();
+    gssize result = _system_sendHelper(host, fd, buf, n, flags, NULL, 0);
+    _system_switchOutShadowContext(host);
+    return result;
 }
 
 gssize system_sendMsg(gint fd, const struct msghdr* message, gint flags) {
@@ -468,56 +467,71 @@ gssize system_sendMsg(gint fd, const struct msghdr* message, gint flags) {
 }
 
 gssize system_write(gint fd, const gpointer buf, gsize n) {
-	return system_sendTo(fd, buf, n, 0, NULL, 0);
+	gssize ret = 0;
+	Host* host = _system_switchInShadowContext();
+
+	if(host_isShadowDescriptor(host, fd)){
+	    ret = _system_sendHelper(host, fd, buf, n, 0, NULL, 0);
+	} else {
+        gint osfd = host_getOSHandle(host, fd);
+        if(osfd > 0) {
+            ret = write(osfd, buf, n);
+        } else {
+            errno = EBADF;
+            ret = -1;
+        }
+	}
+
+	_system_switchOutShadowContext(host);
+	return ret;
+}
+
+static gssize _system_recvHelper(Host* host, gint fd, gpointer buf, size_t n, gint flags,
+        struct sockaddr* addr, socklen_t* len) {
+    /* this function MUST be called after switching in shadow context */
+    /* TODO flags are ignored */
+    /* make sure this is a socket */
+    if(!host_isShadowDescriptor(host, fd)){
+        errno = EBADF;
+        return -1;
+    }
+
+    in_addr_t ip = 0;
+    in_port_t port = 0;
+
+    gsize bytes = 0;
+    gint result = host_receiveUserData(host, fd, buf, n, &ip, &port, &bytes);
+
+    if(result != 0) {
+        errno = result;
+        return -1;
+    }
+
+    /* check if they wanted to know where we got the data from */
+    if(addr != NULL && len != NULL && *len >= sizeof(struct sockaddr_in)) {
+        struct sockaddr_in* si = (struct sockaddr_in*) addr;
+        si->sin_addr.s_addr = ip;
+        si->sin_port = port;
+        si->sin_family = AF_INET;
+        *len = sizeof(struct sockaddr_in);
+    }
+
+    return (gssize) bytes;
 }
 
 gssize system_recvFrom(gint fd, gpointer buf, size_t n, gint flags,
 		struct sockaddr* addr, socklen_t* len) {
-	/* TODO flags are ignored */
-	/* check if this is a socket */
-	Host* node = _system_switchInShadowContext();
-
-	if(!host_isShadowDescriptor(node, fd)){
-		gint err = 0, ret = 0;
-		/* check if we have a mapped os fd */
-		gint osfd = host_getOSHandle(node, fd);
-		if(osfd > 0) {
-			ret = recvfrom(fd, buf, n, flags, addr, len);
-		} else {
-			err = EBADF;
-			ret = -1;
-		}
-		_system_switchOutShadowContext(node);
-		errno = err;
-		return ret;
-	}
-
-	in_addr_t ip = 0;
-	in_port_t port = 0;
-
-	gsize bytes = 0;
-	gint result = host_receiveUserData(node, fd, buf, n, &ip, &port, &bytes);
-	_system_switchOutShadowContext(node);
-
-	if(result != 0) {
-		errno = result;
-		return -1;
-	}
-
-	/* check if they wanted to know where we got the data from */
-	if(addr != NULL && len != NULL && *len >= sizeof(struct sockaddr_in)) {
-		struct sockaddr_in* si = (struct sockaddr_in*) addr;
-		si->sin_addr.s_addr = ip;
-		si->sin_port = port;
-		si->sin_family = AF_INET;
-		*len = sizeof(struct sockaddr_in);
-	}
-
-	return (gssize) bytes;
+    Host* host = _system_switchInShadowContext();
+    gssize result = _system_recvHelper(host, fd, buf, n, flags, addr, len);
+    _system_switchOutShadowContext(host);
+    return result;
 }
 
 gssize system_recv(gint fd, gpointer buf, gsize n, gint flags) {
-	return system_recvFrom(fd, buf, n, flags, NULL, 0);
+    Host* host = _system_switchInShadowContext();
+    gssize result = _system_recvHelper(host, fd, buf, n, flags, NULL, 0);
+    _system_switchOutShadowContext(host);
+    return result;
 }
 
 gssize system_recvMsg(gint fd, struct msghdr* message, gint flags) {
@@ -530,7 +544,23 @@ gssize system_recvMsg(gint fd, struct msghdr* message, gint flags) {
 }
 
 gssize system_read(gint fd, gpointer buf, gsize n) {
-	return system_recvFrom(fd, buf, n, 0, NULL, 0);
+    gssize ret = 0;
+    Host* host = _system_switchInShadowContext();
+
+    if(host_isShadowDescriptor(host, fd)){
+        ret = _system_recvHelper(host, fd, buf, n, 0, NULL, 0);
+    } else {
+        gint osfd = host_getOSHandle(host, fd);
+        if(osfd > 0) {
+            ret = read(osfd, buf, n);
+        } else {
+            errno = EBADF;
+            ret = -1;
+        }
+    }
+
+    _system_switchOutShadowContext(host);
+    return ret;
 }
 
 gint system_getSockOpt(gint fd, gint level, gint optname, gpointer optval,
@@ -925,8 +955,10 @@ FILE* system_fopen(const gchar *path, const gchar *mode) {
     Host* host = _system_switchInShadowContext();
 
     FILE* osfile = fopen(path, mode);
-    gint osfd = fileno(osfile);
-    gint shadowfd = osfd > 0 ? host_createShadowHandle(host, osfd) : osfd;
+    if(osfile) {
+        gint osfd = fileno(osfile);
+        gint shadowfd = osfd > 0 ? host_createShadowHandle(host, osfd) : osfd;
+    }
 
     _system_switchOutShadowContext(host);
     return osfile;
