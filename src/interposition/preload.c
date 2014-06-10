@@ -102,6 +102,9 @@ typedef int (*CreatFunc)(const char*, mode_t);
 typedef FILE* (*FOpenFunc)(const char *, const char *);
 typedef FILE* (*FDOpenFunc)(int, const char*);
 typedef int (*FCloseFunc)(FILE *);
+typedef int (*DupFunc)(int);
+typedef int (*Dup2Func)(int, int);
+typedef int (*Dup3Func)(int, int, int);
 typedef int (*FXStat)(int, int, struct stat*);
 typedef int (*FStatFSFunc)(int, struct statfs*);
 typedef off_t (*LSeekFunc)(int, off_t, int);
@@ -202,6 +205,9 @@ typedef struct {
 	CreatFunc creat;
 	FOpenFunc fopen;
 	FDOpenFunc fdopen;
+	DupFunc dup;
+	Dup2Func dup2;
+	Dup3Func dup3;
 	FCloseFunc fclose;
 	FXStat __fxstat;
 	FStatFSFunc fstatfs;
@@ -829,6 +835,36 @@ FILE *fdopen(int fd, const char *mode) {
     }
 }
 
+int dup(int oldfd) {
+    if(shouldRedirect()) {
+        ENSURE(shadow, "intercept_", dup);
+        return director.shadow.dup(oldfd);
+    } else {
+        ENSURE(real, "", dup);
+        return director.real.dup(oldfd);
+    }
+}
+
+int dup2(int oldfd, int newfd) {
+    if(shouldRedirect()) {
+        ENSURE(shadow, "intercept_", dup2);
+        return director.shadow.dup2(oldfd, newfd);
+    } else {
+        ENSURE(real, "", dup2);
+        return director.real.dup2(oldfd, newfd);
+    }
+}
+
+int dup3(int oldfd, int newfd, int flags) {
+    if(shouldRedirect()) {
+        ENSURE(shadow, "intercept_", dup3);
+        return director.shadow.dup3(oldfd, newfd, flags);
+    } else {
+        ENSURE(real, "", dup3);
+        return director.real.dup3(oldfd, newfd, flags);
+    }
+}
+
 int fclose(FILE *fp) {
     if(shouldRedirect()) {
         ENSURE(shadow, "intercept_", fclose);
@@ -838,14 +874,6 @@ int fclose(FILE *fp) {
         return director.real.fclose(fp);
     }
 }
-
-//TODO
-//
-//int dup(int oldfd);
-//
-//int dup2(int oldfd, int newfd);
-//
-//int dup3(int oldfd, int newfd, int flags);
 
 /* fstat redirects to this */
 int __fxstat (int ver, int fd, struct stat *buf) {

@@ -4,6 +4,10 @@
  * See LICENSE for licensing information
  */
 
+#define _GNU_SOURCE
+#include <fcntl.h>
+#include <unistd.h>
+
 #include <glib.h>
 #include <time.h>
 #include <stddef.h>
@@ -11,7 +15,6 @@
 #include <sys/time.h>
 #include <netdb.h>
 #include <string.h>
-#include <fcntl.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <malloc.h>
@@ -20,7 +23,6 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/statfs.h>
-#include <unistd.h>
 #include <sys/mman.h>
 
 #include "shadow.h"
@@ -936,7 +938,7 @@ gint system_open(const gchar* pathname, gint flags, mode_t mode) {
     Host* host = _system_switchInShadowContext();
 
     gint osfd = open(pathname, flags, mode);
-    gint shadowfd = osfd >= 0 ? host_createShadowHandle(host, osfd) : osfd;
+    gint shadowfd = osfd >= 3 ? host_createShadowHandle(host, osfd) : osfd;
 
     _system_switchOutShadowContext(host);
     return shadowfd;
@@ -946,7 +948,7 @@ gint system_creat(const gchar *pathname, mode_t mode) {
     Host* host = _system_switchInShadowContext();
 
     gint osfd = creat(pathname, mode);
-    gint shadowfd = osfd >= 0 ? host_createShadowHandle(host, osfd) : osfd;
+    gint shadowfd = osfd >= 3 ? host_createShadowHandle(host, osfd) : osfd;
 
     _system_switchOutShadowContext(host);
     return shadowfd;
@@ -958,7 +960,7 @@ FILE* system_fopen(const gchar *path, const gchar *mode) {
     FILE* osfile = fopen(path, mode);
     if(osfile) {
         gint osfd = fileno(osfile);
-        gint shadowfd = osfd >= 0 ? host_createShadowHandle(host, osfd) : osfd;
+        gint shadowfd = osfd >= 3 ? host_createShadowHandle(host, osfd) : osfd;
     }
 
     _system_switchOutShadowContext(host);
@@ -968,7 +970,9 @@ FILE* system_fopen(const gchar *path, const gchar *mode) {
 FILE* system_fdopen(gint fd, const gchar *mode) {
     Host* host = _system_switchInShadowContext();
 
-    if (!host_isShadowDescriptor(host, fd)) {
+    if (host_isShadowDescriptor(host, fd)) {
+        warning("fdopen not implemented for Shadow descriptor types");
+    } else {
         /* check if we have a mapped os fd */
         gint osfd = host_getOSHandle(host, fd);
         if (osfd >= 0) {
@@ -982,6 +986,93 @@ FILE* system_fdopen(gint fd, const gchar *mode) {
 
     errno = EBADF;
     return NULL;
+}
+
+gint system_dup(gint oldfd) {
+    Host* host = _system_switchInShadowContext();
+
+    if (host_isShadowDescriptor(host, oldfd)) {
+        warning("dup not implemented for Shadow descriptor types");
+    } else {
+        /* check if we have a mapped os fd */
+        gint osfdOld = host_getOSHandle(host, oldfd);
+        if (osfdOld >= 0) {
+            gint osfd = dup(osfdOld);
+            gint shadowfd = osfd >= 3 ? host_createShadowHandle(host, osfd) : osfd;
+            _system_switchOutShadowContext(host);
+            return osfd;
+        }
+    }
+
+    _system_switchOutShadowContext(host);
+
+    errno = EBADF;
+    return -1;
+}
+
+gint system_dup2(gint oldfd, gint newfd) {
+    Host* host = _system_switchInShadowContext();
+
+    if (host_isShadowDescriptor(host, oldfd) || host_isShadowDescriptor(host, newfd)) {
+        warning("dup2 not implemented for Shadow descriptor types");
+    } else {
+        /* check if we have mapped os fds */
+        gint osfdOld = host_getOSHandle(host, oldfd);
+        gint osfdNew = host_getOSHandle(host, newfd);
+
+        /* if the newfd is not mapped, then we need to map it later */
+        gboolean isMapped = osfdNew >= 3 ? TRUE : FALSE;
+        osfdNew = osfdNew == -1 ? newfd : osfdNew;
+
+        if (osfdOld >= 0) {
+            gint osfd = dup2(osfdOld, osfdNew);
+
+            gint shadowfd = !isMapped && osfd >= 3 ? host_createShadowHandle(host, osfd) : osfd;
+
+            _system_switchOutShadowContext(host);
+            return shadowfd;
+        }
+    }
+
+    _system_switchOutShadowContext(host);
+
+    errno = EBADF;
+    return -1;
+}
+
+gint system_dup3(gint oldfd, gint newfd, gint flags) {
+    if(oldfd == newfd) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    Host* host = _system_switchInShadowContext();
+
+    if (host_isShadowDescriptor(host, oldfd) || host_isShadowDescriptor(host, newfd)) {
+        warning("dup3 not implemented for Shadow descriptor types");
+    } else {
+        /* check if we have mapped os fds */
+        gint osfdOld = host_getOSHandle(host, oldfd);
+        gint osfdNew = host_getOSHandle(host, newfd);
+
+        /* if the newfd is not mapped, then we need to map it later */
+        gboolean isMapped = osfdNew >= 3 ? TRUE : FALSE;
+        osfdNew = osfdNew == -1 ? newfd : osfdNew;
+
+        if (osfdOld >= 0) {
+            gint osfd = dup3(osfdOld, osfdNew, flags);
+
+            gint shadowfd = !isMapped && osfd >= 3 ? host_createShadowHandle(host, osfd) : osfd;
+
+            _system_switchOutShadowContext(host);
+            return shadowfd;
+        }
+    }
+
+    _system_switchOutShadowContext(host);
+
+    errno = EBADF;
+    return -1;
 }
 
 gint system_fclose(FILE *fp) {
@@ -1000,7 +1091,9 @@ gint system_fclose(FILE *fp) {
 gint system___fxstat (gint ver, gint fd, struct stat *buf) {
     Host* host = _system_switchInShadowContext();
 
-    if (!host_isShadowDescriptor(host, fd)) {
+    if (host_isShadowDescriptor(host, fd)) {
+        warning("fstat not implemented for Shadow descriptor types");
+    } else {
         /* check if we have a mapped os fd */
         gint osfd = host_getOSHandle(host, fd);
         if (osfd >= 0) {
@@ -1019,7 +1112,9 @@ gint system___fxstat (gint ver, gint fd, struct stat *buf) {
 gint system_fstatfs (gint fd, struct statfs *buf) {
     Host* host = _system_switchInShadowContext();
 
-    if (!host_isShadowDescriptor(host, fd)) {
+    if (host_isShadowDescriptor(host, fd)) {
+        warning("fstatfs not implemented for Shadow descriptor types");
+    } else {
         /* check if we have a mapped os fd */
         gint osfd = host_getOSHandle(host, fd);
         if (osfd >= 0) {
@@ -1038,7 +1133,9 @@ gint system_fstatfs (gint fd, struct statfs *buf) {
 off_t system_lseek(int fd, off_t offset, int whence) {
     Host* host = _system_switchInShadowContext();
 
-    if (!host_isShadowDescriptor(host, fd)) {
+    if (host_isShadowDescriptor(host, fd)) {
+        warning("lseek not implemented for Shadow descriptor types");
+    } else {
         /* check if we have a mapped os fd */
         gint osfd = host_getOSHandle(host, fd);
         if (osfd >= 0) {
@@ -1054,7 +1151,6 @@ off_t system_lseek(int fd, off_t offset, int whence) {
     return (off_t)-1;
 }
 
-
 gpointer system_mmap(gpointer addr, gsize length, gint prot, gint flags,
                   gint fd, off_t offset) {
     Host* host = _system_switchInShadowContext();
@@ -1066,7 +1162,9 @@ gpointer system_mmap(gpointer addr, gsize length, gint prot, gint flags,
         return ret;
     }
 
-    if (!host_isShadowDescriptor(host, fd)) {
+    if (host_isShadowDescriptor(host, fd)) {
+        warning("mmap not implemented for Shadow descriptor types");
+    } else {
         /* check if we have a mapped os fd */
         gint osfd = host_getOSHandle(host, fd);
         if (osfd >= 0) {
@@ -1082,6 +1180,7 @@ gpointer system_mmap(gpointer addr, gsize length, gint prot, gint flags,
 
     return MAP_FAILED;
 }
+
 
 /**
  * system util interface

@@ -370,6 +370,18 @@ FILE* intercept_fdopen(int fd, const char *mode) {
     return system_fdopen(fd, mode);
 }
 
+int intercept_dup(int oldfd) {
+    return system_dup(oldfd);
+}
+
+int intercept_dup2(int oldfd, int newfd) {
+    return system_dup2(oldfd, newfd);
+}
+
+int intercept_dup3(int oldfd, int newfd, int flags) {
+    return system_dup3(oldfd, newfd, flags);
+}
+
 int intercept_fclose(FILE *fp) {
     return system_fclose(fp);
 }
@@ -382,7 +394,7 @@ int intercept_fstatfs (int fd, struct statfs *buf) {
     return system_fstatfs(fd, buf);
 }
 
-off_t lseek(int fd, off_t offset, int whence) {
+off_t intercept_lseek(int fd, off_t offset, int whence) {
     return system_lseek(fd, offset, whence);
 }
 
