@@ -1576,23 +1576,3 @@ gpointer system_pvalloc(gsize size) {
 	_system_switchOutShadowContext(node);
 	return ptr;
 }
-
-
-/* needed for multi-threaded openssl
- * @see '$man CRYPTO_lock'
- */
-void system_cryptoLockingFunc(int mode, int n, const char *file, int line) {
-	Host* node = _system_switchInShadowContext();
-	worker_cryptoLockingFunc(mode, n);
-	_system_switchOutShadowContext(node);
-}
-
-/* needed for multi-threaded openssl
- * @see '$man CRYPTO_lock'
- */
-unsigned long system_cryptoIdFunc() {
-	Host* node = _system_switchInShadowContext();
-	unsigned long result = ((unsigned long) worker_getThreadID());
-	_system_switchOutShadowContext(node);
-	return result;
-}

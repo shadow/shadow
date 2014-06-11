@@ -49,8 +49,6 @@ guint32 worker_getNodeBandwidthUp(GQuark nodeID, in_addr_t ip);
 guint32 worker_getNodeBandwidthDown(GQuark nodeID, in_addr_t ip);
 gdouble worker_getLatency(GQuark sourceNodeID, GQuark destinationNodeID);
 void worker_addHost(Host* host, guint hostID);
-void worker_cryptoLockingFunc(gint mode, gint n);
-gboolean worker_cryptoSetup(gint numLocks);
 gint worker_getThreadID();
 void worker_storePluginPath(GQuark pluginID, const gchar* pluginPath);
 const gchar* worker_getPluginPath(GQuark pluginID);

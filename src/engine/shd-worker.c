@@ -466,16 +466,6 @@ void worker_addHost(Host* host, guint hostID) {
 	slave_addHost(worker->slave, host, hostID);
 }
 
-void worker_cryptoLockingFunc(gint mode, gint n) {
-	Worker* worker = _worker_getPrivate();
-	slave_cryptoLockingFunc(worker->slave, mode, n);
-}
-
-gboolean worker_cryptoSetup(gint numLocks) {
-	Worker* worker = _worker_getPrivate();
-	return slave_cryptoSetup(worker->slave, numLocks);
-}
-
 gint worker_getThreadID() {
 	Worker* worker = _worker_getPrivate();
 	return worker->thread_id;

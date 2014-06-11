@@ -78,7 +78,6 @@ typedef int (*ShadowRegisterFunc)(PluginNewInstanceFunc new_, PluginNotifyFunc f
 typedef void (*ShadowLogFunc)(ShadowLogLevel level, const char* functionName, const char* format, ...);
 typedef void (*ShadowCreateCallbackFunc)(ShadowPluginCallbackFunc callback, void* data, uint millisecondsDelay);
 typedef int (*ShadowGetBandwidthFloorFunc)(in_addr_t ip, uint* bwdown, uint* bwup);
-typedef int (*ShadowCryptoSetupFunc)(int numLocks, void** shadowLockFunc, void** shadowIdFunc, const void** shadowRandomMethod);
 
 typedef struct _ShadowFunctionTable ShadowFunctionTable;
 extern ShadowFunctionTable shadowlibFunctionTable;
@@ -93,7 +92,6 @@ struct _ShadowFunctionTable {
 	ShadowLogFunc log;
 	ShadowCreateCallbackFunc createCallback;
 	ShadowGetBandwidthFloorFunc getBandwidth;
-	ShadowCryptoSetupFunc cryptoSetup;
 };
 
 /* Plug-ins must implement this function to communicate with Shadow.

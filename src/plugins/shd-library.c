@@ -113,17 +113,6 @@ int shadowlib_getBandwidth(in_addr_t ip, uint* bwdown, uint* bwup) {
 	return success;
 }
 
-extern const void* intercept_RAND_get_rand_method(void);
-int shadowlib_cryptoSetup(int numLocks, void** shadowLockFunc, void** shadowIdFunc, const void** shadowRandomMethod) {
-	g_assert(shadowLockFunc && shadowIdFunc && shadowRandomMethod);
-
-	*shadowLockFunc = &system_cryptoLockingFunc;
-	*shadowIdFunc = &system_cryptoIdFunc;
-	*shadowRandomMethod = intercept_RAND_get_rand_method();
-
-	return worker_cryptoSetup(numLocks);
-}
-
 /* we send this FunctionTable to each plug-in so it has pointers to our functions.
  * we use this to export shadow functionality to plug-ins. */
 ShadowFunctionTable shadowlibFunctionTable = {
@@ -131,5 +120,4 @@ ShadowFunctionTable shadowlibFunctionTable = {
 	&shadowlib_log,
 	&shadowlib_createCallback,
 	&shadowlib_getBandwidth,
-	&shadowlib_cryptoSetup,
 };

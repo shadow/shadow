@@ -33,10 +33,6 @@ struct _Slave {
 	CountDownLatch* processingLatch;
 	CountDownLatch* barrierLatch;
 
-	/* openssl needs us to manage locking */
-	GMutex* cryptoThreadLocks;
-	gint numCryptoThreadLocks;
-
 	/* the number of worker threads not counting main thread.
 	 * this is the number of threads we need to spawn. */
 	guint nWorkers;
@@ -132,10 +128,6 @@ void slave_free(Slave* slave) {
 	}
 
 	g_hash_table_destroy(slave->pluginPaths);
-
-	for(int i = 0; i < slave->numCryptoThreadLocks; i++) {
-		g_mutex_clear(&(slave->cryptoThreadLocks[i]));
-	}
 
 	g_mutex_clear(&(slave->lock));
 	g_mutex_clear(&(slave->pluginInitLock));
@@ -339,49 +331,6 @@ void slave_heartbeat(Slave* slave, SimulationTime simClockNow) {
 			warning("unable to print process resources usage: error in getrusage: %i", errno);
 		}
 	}
-}
-
-void slave_cryptoLockingFunc(Slave* slave, gint mode, gint n) {
-/* from /usr/include/openssl/crypto.h */
-#define CRYPTO_LOCK		1
-#define CRYPTO_UNLOCK	2
-#define CRYPTO_READ		4
-#define CRYPTO_WRITE	8
-
-	MAGIC_ASSERT(slave);
-	utility_assert(slave->cryptoThreadLocks);
-
-	/* TODO may want to replace this with GRWLock when moving to GLib >= 2.32 */
-	GMutex* lock = &(slave->cryptoThreadLocks[n]);
-	utility_assert(lock);
-
-	if(mode & CRYPTO_LOCK) {
-		g_mutex_lock(lock);
-	} else {
-		g_mutex_unlock(lock);
-	}
-}
-
-gboolean slave_cryptoSetup(Slave* slave, gint numLocks) {
-	MAGIC_ASSERT(slave);
-
-	if(numLocks) {
-		_slave_lock(slave);
-
-		if(slave->cryptoThreadLocks) {
-			utility_assert(numLocks <= slave->numCryptoThreadLocks);
-		} else {
-			slave->numCryptoThreadLocks = numLocks;
-			slave->cryptoThreadLocks = g_new0(GMutex, numLocks);
-			for(int i = 0; i < slave->numCryptoThreadLocks; i++) {
-				g_mutex_init(&(slave->cryptoThreadLocks[i]));
-			}
-		}
-
-		_slave_unlock(slave);
-	}
-
-	return TRUE;
 }
 
 void slave_notifyProcessed(Slave* slave, guint numberEventsProcessed, guint numberNodesWithEvents) {

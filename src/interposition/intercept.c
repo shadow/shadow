@@ -21,113 +21,8 @@ int intercept_worker_isInShadowContext() {
 }
 
 /**
- * Crypto
+ * randomness
  */
-
-/*
- * const AES_KEY *key
- * The key parameter has been voided to avoid requiring Openssl headers
- */
-void intercept_AES_encrypt(const unsigned char *in, unsigned char *out, const void *key) {
-	return;
-}
-
-/*
- * const AES_KEY *key
- * The key parameter has been voided to avoid requiring Openssl headers
- */
-void intercept_AES_decrypt(const unsigned char *in, unsigned char *out, const void *key) {
-	return;
-}
-
-/*
- * const AES_KEY *key
- * The key parameter has been voided to avoid requiring Openssl headers
- */
-void intercept_AES_ctr128_encrypt(const unsigned char *in, unsigned char *out, const void *key) {
-	return;
-}
-
-/*
- * const AES_KEY *key
- * The key parameter has been voided to avoid requiring Openssl headers
- */
-void intercept_AES_ctr128_decrypt(const unsigned char *in, unsigned char *out, const void *key) {
-	return;
-}
-
-/*
- * EVP_CIPHER_CTX *ctx
- * The ctx parameter has been voided to avoid requiring Openssl headers
- */
-int intercept_EVP_Cipher(void *ctx, unsigned char *out, const unsigned char *in, unsigned int inl) {
-	memmove(out, in, (size_t)inl);
-	return 1;
-}
-
-void intercept_RAND_seed(const void *buf, int num) {
-	system_addEntropy(buf, num);
-}
-
-void intercept_RAND_add(const void *buf, int num, double entropy) {
-	system_addEntropy(buf, num);
-}
-
-int intercept_RAND_poll() {
-	uint32_t buf = 1;
-	system_addEntropy((void*)&buf, 4);
-	return 1;
-}
-
-int intercept_RAND_bytes(unsigned char *buf, int num) {
-	return system_randomBytes(buf, num);
-}
-
-int intercept_RAND_pseudo_bytes(unsigned char *buf, int num) {
-	return system_randomBytes(buf, num);
-}
-
-void intercept_RAND_cleanup() {}
-
-int intercept_RAND_status() {
-	return 1;
-}
-
-static const struct {
-	void* seed;
-	void* bytes;
-	void* cleanup;
-	void* add;
-	void* pseudorand;
-	void* status;
-} intercept_customRandMethod = {
-	intercept_RAND_seed,
-	intercept_RAND_bytes,
-	intercept_RAND_cleanup,
-	intercept_RAND_add,
-	intercept_RAND_pseudo_bytes,
-	intercept_RAND_status
-};
-
-const void* intercept_RAND_get_rand_method(void) {
-	return (const void *)(&intercept_customRandMethod);
-}
-
-static void _intercept_cryptoLockingFunc(int mode, int n, const char *file, int line) {
-	return system_cryptoLockingFunc(mode, n, file, line);
-}
-
-void* intercept_CRYPTO_get_locking_callback() {
-	return (void *)(&_intercept_cryptoLockingFunc);
-}
-
-static unsigned int _intercept_cryptoIdFunc() {
-	return system_cryptoIdFunc();
-}
-
-void* intercept_CRYPTO_get_id_callback() {
-	return (void *)(&_intercept_cryptoIdFunc);
-}
 
 int intercept_rand() {
 	return system_getRandom();
@@ -192,8 +87,6 @@ int intercept_getnameinfo(const struct sockaddr *sa, socklen_t salen,
 		char *host, size_t hostlen, char *serv, size_t servlen, int flags) {
 	return system_getnameinfo(sa, salen, host, hostlen, serv, servlen, flags);
 }
-
-
 
 struct hostent* intercept_gethostbyname(const char* name) {
 	return system_getHostByName(name);
