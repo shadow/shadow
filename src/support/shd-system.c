@@ -24,6 +24,7 @@
 #include <sys/stat.h>
 #include <sys/statfs.h>
 #include <sys/mman.h>
+#include <sys/file.h>
 
 #include "shadow.h"
 
@@ -1130,7 +1131,7 @@ gint system_fstatfs (gint fd, struct statfs *buf) {
     return -1;
 }
 
-off_t system_lseek(int fd, off_t offset, int whence) {
+off_t system_lseek(gint fd, off_t offset, gint whence) {
     Host* host = _system_switchInShadowContext();
 
     if (host_isShadowDescriptor(host, fd)) {
@@ -1140,6 +1141,27 @@ off_t system_lseek(int fd, off_t offset, int whence) {
         gint osfd = host_getOSHandle(host, fd);
         if (osfd >= 0) {
             off_t ret = lseek(osfd, offset, whence);
+            _system_switchOutShadowContext(host);
+            return ret;
+        }
+    }
+
+    _system_switchOutShadowContext(host);
+
+    errno = EBADF;
+    return (off_t)-1;
+}
+
+gint system_flock(gint fd, gint operation) {
+    Host* host = _system_switchInShadowContext();
+
+    if (host_isShadowDescriptor(host, fd)) {
+        warning("flock not implemented for Shadow descriptor types");
+    } else {
+        /* check if we have a mapped os fd */
+        gint osfd = host_getOSHandle(host, fd);
+        if (osfd >= 0) {
+            gint ret = flock(osfd, operation);
             _system_switchOutShadowContext(host);
             return ret;
         }

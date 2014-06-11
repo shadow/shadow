@@ -67,7 +67,8 @@ gint system_dup3(gint oldfd, gint newfd, gint flags);
 gint system_fclose(FILE *fp);
 gint system___fxstat (gint ver, gint fd, struct stat *buf);
 gint system_fstatfs (gint fd, struct statfs *buf);
-off_t system_lseek(int fd, off_t offset, int whence);
+off_t system_lseek(gint fd, off_t offset, gint whence);
+gint system_flock(gint fd, gint operation);
 gpointer system_mmap(gpointer addr, gsize length, gint prot, gint flags,
                   gint fd, off_t offset);
 

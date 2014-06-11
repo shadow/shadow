@@ -398,6 +398,10 @@ off_t intercept_lseek(int fd, off_t offset, int whence) {
     return system_lseek(fd, offset, whence);
 }
 
+int intercept_flock(int fd, int operation) {
+    return system_flock(fd, operation);
+}
+
 /**
  * System epoll
  */

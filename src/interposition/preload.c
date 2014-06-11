@@ -108,6 +108,7 @@ typedef int (*Dup3Func)(int, int, int);
 typedef int (*FXStat)(int, int, struct stat*);
 typedef int (*FStatFSFunc)(int, struct statfs*);
 typedef off_t (*LSeekFunc)(int, off_t, int);
+typedef int (*FLockFunc)(int, int);
 
 /* time family */
 
@@ -212,6 +213,7 @@ typedef struct {
 	FXStat __fxstat;
 	FStatFSFunc fstatfs;
 	LSeekFunc lseek;
+	FLockFunc flock;
 
 	TimeFunc time;
 	ClockGettimeFunc clock_gettime;
@@ -903,6 +905,16 @@ off_t lseek(int fd, off_t offset, int whence) {
     } else {
         ENSURE(real, "", lseek);
         return director.real.lseek(fd, offset, whence);
+    }
+}
+
+int flock(int fd, int operation) {
+    if (shouldRedirect()) {
+        ENSURE(shadow, "intercept_", flock);
+        return director.shadow.flock(fd, operation);
+    } else {
+        ENSURE(real, "", flock);
+        return director.real.flock(fd, operation);
     }
 }
 
