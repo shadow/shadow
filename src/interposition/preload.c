@@ -98,6 +98,7 @@ typedef int (*IoctlFunc)(int, int, ...);
 
 typedef int (*FileNoFunc)(FILE *);
 typedef int (*OpenFunc)(const char*, int, mode_t);
+typedef int (*Open64Func)(const char*, int, mode_t);
 typedef int (*CreatFunc)(const char*, mode_t);
 typedef FILE* (*FOpenFunc)(const char *, const char *);
 typedef FILE* (*FDOpenFunc)(int, const char*);
@@ -203,6 +204,7 @@ typedef struct {
 
 	FileNoFunc fileno;
 	OpenFunc open;
+	Open64Func open64;
 	CreatFunc creat;
 	FOpenFunc fopen;
 	FDOpenFunc fdopen;
@@ -804,6 +806,16 @@ int open(const char *pathname, int flags, mode_t mode) {
     } else {
         ENSURE(real, "", open);
         return director.real.open(pathname, flags, mode);
+    }
+}
+
+int open64(const char *pathname, int flags, mode_t mode) {
+    if(shouldRedirect()) {
+        ENSURE(shadow, "intercept_", open);
+        return director.shadow.open(pathname, flags, mode);
+    } else {
+        ENSURE(real, "", open64);
+        return director.real.open64(pathname, flags, mode);
     }
 }
 

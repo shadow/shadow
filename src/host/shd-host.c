@@ -345,6 +345,12 @@ static gint _host_monitorDescriptor(Host* host, Descriptor* descriptor) {
 	return *handle;
 }
 
+static gint _host_compareDescriptors(gconstpointer a, gconstpointer b, gpointer userData) {
+  gint aint = GPOINTER_TO_INT(a);
+  gint bint = GPOINTER_TO_INT(b);
+  return aint < bint ? -1 : aint == bint ? 0 : 1;
+}
+
 static void _host_unmonitorDescriptor(Host* host, gint handle) {
 	MAGIC_ASSERT(host);
 
@@ -357,13 +363,8 @@ static void _host_unmonitorDescriptor(Host* host, gint handle) {
 		}
 
 		g_hash_table_remove(host->descriptors, (gconstpointer) &handle);
+		g_queue_insert_sorted(host->availableDescriptors, GINT_TO_POINTER(handle), _host_compareDescriptors, NULL);
 	}
-}
-
-static gint _host_compareDescriptors(gconstpointer a, gconstpointer b, gpointer userData) {
-	gint aint = GPOINTER_TO_INT(a);
-	gint bint = GPOINTER_TO_INT(b);
-	return aint < bint ? -1 : aint == bint ? 0 : 1;
 }
 
 static gint _host_getNextDescriptorHandle(Host* host) {

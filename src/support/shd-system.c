@@ -478,7 +478,7 @@ gssize system_write(gint fd, gconstpointer buf, gsize n) {
 	    ret = _system_sendHelper(host, fd, buf, n, 0, NULL, 0);
 	} else {
         gint osfd = host_getOSHandle(host, fd);
-        if(osfd > 0) {
+        if(osfd >= 0) {
             ret = write(osfd, buf, n);
         } else {
             errno = EBADF;
@@ -555,7 +555,7 @@ gssize system_read(gint fd, gpointer buf, gsize n) {
         ret = _system_recvHelper(host, fd, buf, n, 0, NULL, 0);
     } else {
         gint osfd = host_getOSHandle(host, fd);
-        if(osfd > 0) {
+        if(osfd >= 0) {
             ret = read(osfd, buf, n);
         } else {
             errno = EBADF;
@@ -828,7 +828,7 @@ gint system_close(gint fd) {
 		gint err = 0, ret = 0;
 		/* check if we have a mapped os fd */
 		gint osfd = host_getOSHandle(node, fd);
-		if(osfd > 0) {
+		if(osfd >= 0) {
 			ret = close(osfd);
 			host_destroyShadowHandle(node, fd);
 		} else {
@@ -853,7 +853,7 @@ gint system_fcntl(int fd, int cmd, va_list farg) {
         gint err = 0, ret = 0;
         /* check if we have a mapped os fd */
         gint osfd = host_getOSHandle(node, fd);
-        if(osfd > 0) {
+        if(osfd >= 0) {
             ret = fcntl(osfd, cmd, farg);
         } else {
             err = EBADF;
@@ -879,7 +879,7 @@ gint system_ioctl(int fd, unsigned long int request, va_list farg) {
         gint err = 0, ret = 0;
         /* check if we have a mapped os fd */
         gint osfd = host_getOSHandle(node, fd);
-        if(osfd > 0) {
+        if(osfd >= 0) {
             ret = ioctl(fd, request, farg);
         } else {
             err = EBADF;
