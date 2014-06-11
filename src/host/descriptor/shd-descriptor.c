@@ -46,7 +46,9 @@ void descriptor_unref(gpointer data) {
 	(descriptor->referenceCount)--;
 	utility_assert(descriptor->referenceCount >= 0);
 	if(descriptor->referenceCount == 0) {
+	    gint handle = descriptor->handle;
 		_descriptor_free(descriptor);
+		host_returnHandleHack(handle);
 	}
 }
 

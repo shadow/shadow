@@ -476,6 +476,8 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray,
 
 	*nEvents = eventArrayIndex;
 
+    debug("epoll descriptor %i collected %i events", epoll->super.handle, eventArrayIndex);
+
 	return 0;
 }
 

@@ -345,12 +345,6 @@ static gint _host_monitorDescriptor(Host* host, Descriptor* descriptor) {
 	return *handle;
 }
 
-static gint _host_compareDescriptors(gconstpointer a, gconstpointer b, gpointer userData) {
-  gint aint = GPOINTER_TO_INT(a);
-  gint bint = GPOINTER_TO_INT(b);
-  return aint < bint ? -1 : aint == bint ? 0 : 1;
-}
-
 static void _host_unmonitorDescriptor(Host* host, gint handle) {
 	MAGIC_ASSERT(host);
 
@@ -363,8 +357,13 @@ static void _host_unmonitorDescriptor(Host* host, gint handle) {
 		}
 
 		g_hash_table_remove(host->descriptors, (gconstpointer) &handle);
-		g_queue_insert_sorted(host->availableDescriptors, GINT_TO_POINTER(handle), _host_compareDescriptors, NULL);
 	}
+}
+
+static gint _host_compareDescriptors(gconstpointer a, gconstpointer b, gpointer userData) {
+  gint aint = GPOINTER_TO_INT(a);
+  gint bint = GPOINTER_TO_INT(b);
+  return aint < bint ? -1 : aint == bint ? 0 : 1;
 }
 
 static gint _host_getNextDescriptorHandle(Host* host) {
@@ -373,6 +372,21 @@ static gint _host_getNextDescriptorHandle(Host* host) {
 		return GPOINTER_TO_INT(g_queue_pop_head(host->availableDescriptors));
 	}
 	return (host->descriptorHandleCounter)++;
+}
+
+static void _host_returnPreviousDescriptorHandle(Host* host, gint handle) {
+    MAGIC_ASSERT(host);
+    if(handle >= 3) {
+        g_queue_insert_sorted(host->availableDescriptors, GINT_TO_POINTER(handle), _host_compareDescriptors, NULL);
+    }
+}
+
+void host_returnHandleHack(gint handle) {
+    /* TODO replace this with something more graceful? */
+    Host* host = worker_getCurrentHost();
+    if(host) {
+        _host_returnPreviousDescriptorHandle(host, handle);
+    }
 }
 
 gboolean host_isShadowDescriptor(Host* host, gint handle) {
@@ -438,7 +452,7 @@ void host_destroyShadowHandle(Host* host, gint shadowHandle) {
 	gboolean didExist = g_hash_table_remove(host->shadowToOSHandleMap, GINT_TO_POINTER(shadowHandle));
 	if(didExist) {
         g_hash_table_remove(host->osToShadowHandleMap, GINT_TO_POINTER(osHandle));
-		g_queue_insert_sorted(host->availableDescriptors, GINT_TO_POINTER(shadowHandle), _host_compareDescriptors, NULL);
+        _host_returnPreviousDescriptorHandle(host, shadowHandle);
 	}
 }
 
@@ -579,7 +593,17 @@ gint host_epollGetEvents(Host* host, gint handle,
 	}
 
 	Epoll* epoll = (Epoll*) descriptor;
-	return epoll_getEvents(epoll, eventArray, eventArrayLength, nEvents);
+	gint ret = epoll_getEvents(epoll, eventArray, eventArrayLength, nEvents);
+
+	for(gint i = 0; i < *nEvents; i++) {
+	    if(!host_isShadowDescriptor(host, eventArray[i].data.fd)) {
+	        /* the fd is a file that the OS handled for us, translate to shadow fd */
+	        eventArray[i].data.fd = host_getShadowHandle(host, eventArray[i].data.fd);
+	        utility_assert(eventArray[i].data.fd >= 0);
+	    }
+	}
+
+	return ret;
 }
 
 static gboolean _host_doesInterfaceExist(Host* host, in_addr_t interfaceIP) {

@@ -1379,3 +1379,14 @@ const void *RAND_get_rand_method() {
 		return director.real.RAND_get_rand_method();
 	}
 }
+
+const void* RAND_SSLeay() {
+    /* return the same thing as RAND_get_rand_method */
+    if(shouldRedirect()) {
+        ENSURE(shadow, "intercept_", RAND_get_rand_method);
+        return director.shadow.RAND_get_rand_method();
+    } else {
+        ENSURE(real, "", RAND_get_rand_method);
+        return director.real.RAND_get_rand_method();
+    }
+}
