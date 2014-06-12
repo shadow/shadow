@@ -1427,41 +1427,6 @@ int system_getHostByAddr_r(const void *addr, socklen_t len, gint type,
 	return -1;
 }
 
-void system_addEntropy(gconstpointer buffer, gint numBytes) {
-//	Node* node = _system_switchInShadowContext();
-//
-//	/* the application is trying to add some entropy to OpenSSL, but we want
-//	 * to make sure our experiments are repeatable, so just add bytes from our
-//	 * own source.
-//	 */
-//	Random* random = worker_getPrivate()->random;
-//	while(numBytes > 0) {
-//		gint r = random_nextRandom(random);
-//		RAND_seed((gconstpointer)&r, 4);
-//		numBytes -= 4;
-//	}
-//
-//	_system_switchOutShadowContext(node);
-}
-
-gint system_randomBytes(guchar* buf, gint numBytes) {
-	Host* node = _system_switchInShadowContext();
-
-	Random* random = host_getRandom(node);
-	gint bytesWritten = 0;
-
-	while(numBytes > bytesWritten) {
-		gint r = random_nextInt(random);
-		gint copyLength = MIN(numBytes-bytesWritten, 4);
-		g_memmove(buf+bytesWritten, &r, copyLength);
-		bytesWritten += copyLength;
-	}
-
-	_system_switchOutShadowContext(node);
-
-	return 1;
-}
-
 gint system_getRandom() {
 	Host* node = _system_switchInShadowContext();
 	gint r = random_nextInt(host_getRandom(node));

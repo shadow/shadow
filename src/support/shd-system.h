@@ -50,21 +50,27 @@ gint system_setSockOpt(gint fd, gint level, gint optname, gconstpointer optval,
 		socklen_t optlen);
 gint system_listen(gint fd, gint backlog);
 gint system_shutdown(gint fd, gint how);
+
+gint system_pipe(gint pipefds[2]);
+gint system_pipe2(gint pipefds[2], gint flags);
+
+gint system_open(const gchar* pathname, gint flags, mode_t mode);
+gint system_close(gint fd);
 gssize system_read(gint fd, gpointer buf, gsize n);
 gssize system_write(gint fd, gconstpointer buf, gsize n);
 gint system_fcntl(int fd, int cmd, va_list farg);
 gint system_ioctl(int fd, unsigned long int request, va_list farg);
-gint system_close(gint fd);
-
 gint system_fileno(FILE *osfile);
-gint system_open(const gchar* pathname, gint flags, mode_t mode);
+
 gint system_creat(const gchar *pathname, mode_t mode);
 FILE* system_fopen(const gchar *path, const gchar *mode);
+gint system_fclose(FILE *fp);
 FILE* system_fdopen(gint fd, const gchar *mode);
+
 gint system_dup(gint oldfd);
 gint system_dup2(gint oldfd, gint newfd);
 gint system_dup3(gint oldfd, gint newfd, gint flags);
-gint system_fclose(FILE *fp);
+
 gint system___fxstat (gint ver, gint fd, struct stat *buf);
 gint system_fstatfs (gint fd, struct statfs *buf);
 off_t system_lseek(gint fd, off_t offset, gint whence);
@@ -72,8 +78,6 @@ gint system_flock(gint fd, gint operation);
 gpointer system_mmap(gpointer addr, gsize length, gint prot, gint flags,
                   gint fd, off_t offset);
 
-gint system_pipe(gint pipefds[2]);
-gint system_pipe2(gint pipefds[2], gint flags);
 time_t system_time(time_t* t);
 gint system_clockGetTime(clockid_t clk_id, struct timespec *tp);
 gint system_getTimeOfDay(struct timeval *tv);
@@ -96,11 +100,7 @@ int system_getHostByAddr_r(const void *addr, socklen_t len, gint type,
                struct hostent *ret, gchar *buf, gsize buflen,
                struct hostent **result, gint *h_errnop);
 
-void system_addEntropy(gconstpointer buffer, gint numBytes);
-gint system_randomBytes(guchar* buf, gint numBytes);
 gint system_getRandom();
-void system_cryptoLockingFunc(int mode, int n, const char *file, int line);
-unsigned long system_cryptoIdFunc();
 
 gpointer system_malloc(gsize size);
 gpointer system_calloc(gsize nmemb, gsize size);
