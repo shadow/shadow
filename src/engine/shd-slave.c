@@ -197,16 +197,6 @@ const gchar* slave_getPluginPath(Slave* slave, GQuark pluginID) {
 	return g_hash_table_lookup(slave->pluginPaths, &pluginID);
 }
 
-void slave_lockPluginInit(Slave* slave) {
-	MAGIC_ASSERT(slave);
-	g_mutex_lock(&(slave->pluginInitLock));
-}
-
-void slave_unlockPluginInit(Slave* slave) {
-	MAGIC_ASSERT(slave);
-	g_mutex_unlock(&(slave->pluginInitLock));
-}
-
 DNS* slave_getDNS(Slave* slave) {
 	MAGIC_ASSERT(slave);
 	return slave->dns;

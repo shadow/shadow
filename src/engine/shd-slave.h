@@ -38,8 +38,6 @@ void slave_heartbeat(Slave* slave, SimulationTime simClockNow);
 gint slave_generateWorkerID(Slave* slave);
 void slave_storePluginPath(Slave* slave, GQuark pluginID, const gchar* pluginPath);
 const gchar* slave_getPluginPath(Slave* slave, GQuark pluginID);
-void slave_lockPluginInit(Slave* slave);
-void slave_unlockPluginInit(Slave* slave);
 DNS* slave_getDNS(Slave* slave);
 Topology* slave_getTopology(Slave* slave);
 void slave_setTopology(Slave* slave, Topology* topology);

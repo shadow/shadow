@@ -43,8 +43,6 @@ SimulationTime worker_getCurrentTime();
 guint worker_getRawCPUFrequency();
 gdouble worker_nextRandomDouble();
 gint worker_nextRandomInt();
-void worker_lockPluginInit();
-void worker_unlockPluginInit();
 guint32 worker_getNodeBandwidthUp(GQuark nodeID, in_addr_t ip);
 guint32 worker_getNodeBandwidthDown(GQuark nodeID, in_addr_t ip);
 gdouble worker_getLatency(GQuark sourceNodeID, GQuark destinationNodeID);

@@ -436,16 +436,6 @@ gint worker_nextRandomInt() {
 	return slave_nextRandomInt(worker->slave);
 }
 
-void worker_lockPluginInit() {
-	Worker* worker = _worker_getPrivate();
-	slave_lockPluginInit(worker->slave);
-}
-
-void worker_unlockPluginInit() {
-	Worker* worker = _worker_getPrivate();
-	slave_unlockPluginInit(worker->slave);
-}
-
 guint32 worker_getNodeBandwidthUp(GQuark nodeID, in_addr_t ip) {
 	Worker* worker = _worker_getPrivate();
 	return slave_getNodeBandwidthUp(worker->slave, nodeID, ip);
