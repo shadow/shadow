@@ -13,9 +13,9 @@ static Master* shadowMaster;
 
 #define INTERPOSELIBSTR "libshadow-interpose.so"
 
-static gboolean _main_checkPreloadEnvironment() {
+static gboolean _main_checkPreloadEnvironment(gchar** envlist) {
     /* we better have preloaded libshadow_preload.so */
-    const gchar* ldPreloadValue = g_getenv("LD_PRELOAD");
+    const gchar* ldPreloadValue = g_environ_getenv(envlist, "LD_PRELOAD");
     if(!ldPreloadValue) {
         /* LD_PRELOAD contains nothing */
         return FALSE;
@@ -73,7 +73,7 @@ static gboolean _main_appendPathIfValid(GString* preloadBuffer, const gchar* pat
     }
 }
 
-static gchar** _main_getSpawnEnviroment(const gchar* preloadHint, gboolean valgrind, gboolean envHasShadowInterpose) {
+static gchar** _main_getSpawnEnviroment(const gchar* preloadHint, gboolean valgrind) {
     gchar** envlist = g_get_environ();
 
     /* get whatever might be currently in the env */
@@ -88,8 +88,12 @@ static gchar** _main_getSpawnEnviroment(const gchar* preloadHint, gboolean valgr
         g_strfreev(tokens);
     }
 
-    /* if we didnt find shadow interpose, lets add one if we can find it in rpath */
-    if(!envHasShadowInterpose) {
+    if(preloadBuffer->str) {
+        envlist = g_environ_setenv(envlist, "LD_PRELOAD", preloadBuffer->str, 1);
+    }
+
+    /* if we still have not found shadow interpose, lets add one if we can find it in rpath */
+    if(!_main_checkPreloadEnvironment(envlist)) {
         gchar* rpathStr = _main_getRPath();
         gchar** tokens = g_strsplit(rpathStr, ":", 0);
 
@@ -184,7 +188,9 @@ gint shadow_main(gint argc, gchar* argv[]) {
 	}
 
 	/* check environment for LD_PRELOAD */
-	gboolean preloadSuccess = _main_checkPreloadEnvironment();
+	gchar** envlist = g_get_environ();
+	gboolean preloadSuccess = _main_checkPreloadEnvironment(envlist);
+	g_strfreev(envlist);
 	gboolean respawned = g_getenv("SHADOW_SPAWNED") != NULL ? TRUE : FALSE;
 
 	if(respawned) {
@@ -199,7 +205,7 @@ gint shadow_main(gint argc, gchar* argv[]) {
         /* if preload is not set, or the user added a preload library,
          * or we are going to run valgrind, we need to respawn */
         if(config->preloads || config->runValgrind || !preloadSuccess) {
-            gchar** envlist = _main_getSpawnEnviroment(config->preloads, config->runValgrind, preloadSuccess);
+            gchar** envlist = _main_getSpawnEnviroment(config->preloads, config->runValgrind);
             gchar* cmds = g_strjoinv(" ", argv);
             gchar** cmdv = g_strsplit(cmds, " ", 0);
             GError* error = NULL;
