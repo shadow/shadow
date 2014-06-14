@@ -186,10 +186,10 @@ EventQueue* host_getEvents(Host* host) {
 	return host->events;
 }
 
-void host_addApplication(Host* host, GQuark pluginID, const gchar* pluginPath,
+void host_addApplication(Host* host, GQuark pluginID,
 		SimulationTime startTime, SimulationTime stopTime, gchar* arguments) {
 	MAGIC_ASSERT(host);
-	Application* application = application_new(pluginID, pluginPath, startTime, stopTime, arguments);
+	Process* application = process_new(pluginID, startTime, stopTime, arguments);
 	g_queue_push_tail(host->applications, application);
 
 	StartApplicationEvent* event = startapplication_new(application);
@@ -201,20 +201,20 @@ void host_addApplication(Host* host, GQuark pluginID, const gchar* pluginPath,
 	}
 }
 
-void host_startApplication(Host* host, Application* application) {
+void host_startApplication(Host* host, Process* application) {
 	MAGIC_ASSERT(host);
-	application_start(application);
+	process_start(application);
 }
 
-void host_stopApplication(Host* host, Application* application) {
+void host_stopApplication(Host* host, Process* application) {
 	MAGIC_ASSERT(host);
-	application_stop(application);
+	process_stop(application);
 }
 
 void host_freeAllApplications(Host* host) {
 	MAGIC_ASSERT(host);
 	while(!g_queue_is_empty(host->applications)) {
-		application_free(g_queue_pop_head(host->applications));
+		process_free(g_queue_pop_head(host->applications));
 	}
 }
 

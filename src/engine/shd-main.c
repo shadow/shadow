@@ -39,8 +39,8 @@ gint shadow_main(gint argc, gchar* argv[]) {
 
 	/* we better have preloaded libshadow_preload.so */
 	const gchar* ldPreloadValue = g_getenv("LD_PRELOAD");
-	if(!ldPreloadValue || !g_strstr_len(ldPreloadValue, -1, "libshadow-preload.so")) {
-		g_printerr("** Environment Check Failed: LD_PRELOAD does not contain libshadow-preload.so\n");
+	if(!ldPreloadValue || !g_strstr_len(ldPreloadValue, -1, "libshadow-interpose.so")) {
+		g_printerr("** Environment Check Failed: LD_PRELOAD does not contain libshadow-interpose.so\n");
 		return -1;
 	}
 

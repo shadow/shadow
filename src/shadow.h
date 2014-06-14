@@ -70,8 +70,8 @@
 #include "utility/shd-random.h"
 
 #include "support/shd-event-queue.h"
-#include "plugins/shd-library.h"
-#include "support/shd-plugin.h"
+#include "plugin/shd-library.h"
+#include "interpose/shd-program.h"
 
 #include "topology/shd-address.h"
 #include "topology/shd-dns.h"
@@ -88,10 +88,10 @@
 #include "host/descriptor/shd-tcp-cubic.h"
 #include "host/descriptor/shd-tcp-scoreboard.h"
 #include "host/descriptor/shd-udp.h"
-#include "host/shd-application.h"
+#include "host/shd-thread.h"
+#include "host/shd-process.h"
 #include "host/shd-network-interface.h"
 #include "host/shd-tracker.h"
-#include "support/shd-system.h"
 #include "host/shd-host.h"
 
 #include "topology/shd-topology.h"

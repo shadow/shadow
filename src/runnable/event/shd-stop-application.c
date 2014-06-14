@@ -9,7 +9,7 @@
 
 struct _StopApplicationEvent {
 	Event super;
-	Application* application;
+	Process* application;
 	MAGIC_DECLARE;
 };
 
@@ -19,7 +19,7 @@ EventFunctionTable stopapplication_functions = {
 	MAGIC_VALUE
 };
 
-StopApplicationEvent* stopapplication_new(Application* application) {
+StopApplicationEvent* stopapplication_new(Process* application) {
 	StopApplicationEvent* event = g_new0(StopApplicationEvent, 1);
 	MAGIC_INIT(event);
 

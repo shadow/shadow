@@ -75,7 +75,7 @@ struct _Epoll {
 	GQueue* reporting;
 
 	SimulationTime lastWaitTime;
-	Application* ownerApplication;
+	Process* ownerApplication;
 	gint osEpollDescriptor;
 
 	MAGIC_DECLARE;
@@ -257,7 +257,7 @@ static void _epoll_trySchedule(Epoll* epoll) {
 	if(!g_queue_is_empty(epoll->reporting)) {
 		/* avoid duplicating events in the shadow event queue for our epoll */
 		gboolean isScheduled = (epoll->flags & EF_SCHEDULED) ? TRUE : FALSE;
-		if(!isScheduled && application_isRunning(epoll->ownerApplication)) {
+		if(!isScheduled && process_isRunning(epoll->ownerApplication)) {
 			/* schedule a notification event for our node */
 			NotifyPluginEvent* event = notifyplugin_new(epoll->super.handle);
 			SimulationTime delay = 1;
@@ -512,7 +512,7 @@ void epoll_tryNotify(Epoll* epoll) {
 	 * XXX: what if our watches are empty, but the OS desc has events? */
 	if(!g_queue_is_empty(epoll->reporting)) {
 		/* notify application to collect the reportable events */
-		application_notify(epoll->ownerApplication);
+		process_notify(epoll->ownerApplication);
 
 		/* we just notified the application of the events, so reset the change status
 		 * and only report the event again if necessary */

@@ -27,7 +27,7 @@ struct _Slave {
 	/* virtual hosts */
 	GHashTable* hosts;
 
-	GHashTable* pluginPaths;
+	GHashTable* programs;
 
 	/* if multi-threaded, we use worker thread */
 	CountDownLatch* processingLatch;
@@ -99,7 +99,7 @@ Slave* slave_new(Master* master, Configuration* config, guint randomSeed) {
 	}
 
 	slave->hosts = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, NULL);
-	slave->pluginPaths = g_hash_table_new_full(g_int_hash, g_int_equal, g_free, g_free);
+	slave->programs = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, (GDestroyNotify)program_free);
 
 	slave->dns = dns_new();
 
@@ -127,7 +127,7 @@ void slave_free(Slave* slave) {
 		dns_free(slave->dns);
 	}
 
-	g_hash_table_destroy(slave->pluginPaths);
+	g_hash_table_destroy(slave->programs);
 
 	g_mutex_clear(&(slave->lock));
 	g_mutex_clear(&(slave->pluginInitLock));
@@ -184,17 +184,14 @@ gint slave_generateWorkerID(Slave* slave) {
 	return id;
 }
 
-void slave_storePluginPath(Slave* slave, GQuark pluginID, const gchar* pluginPath) {
-	MAGIC_ASSERT(slave);
-	GQuark* key = g_new0(GQuark, 1);
-	*key = pluginID;
-	gchar* value = g_strdup(pluginPath);
-	g_hash_table_insert(slave->pluginPaths, key, value);
+void slave_storeProgram(Slave* slave, Program* prog) {
+    MAGIC_ASSERT(slave);
+    g_hash_table_insert(slave->programs, program_getID(prog), prog);
 }
 
-const gchar* slave_getPluginPath(Slave* slave, GQuark pluginID) {
-	MAGIC_ASSERT(slave);
-	return g_hash_table_lookup(slave->pluginPaths, &pluginID);
+Program* slave_getProgram(Slave* slave, GQuark pluginID) {
+    MAGIC_ASSERT(slave);
+	return g_hash_table_lookup(slave->programs, &pluginID);
 }
 
 DNS* slave_getDNS(Slave* slave) {

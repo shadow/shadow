@@ -21,12 +21,12 @@ struct _Worker {
 
 	Random* random;
 
-	Plugin* cached_plugin;
-	Application* cached_application;
+	Program* cached_plugin;
+	Process* cached_application;
 	Host* cached_node;
 	Event* cached_event;
 
-	GHashTable* plugins;
+	GHashTable* privatePrograms;
 
 	MAGIC_DECLARE;
 };
@@ -34,11 +34,21 @@ struct _Worker {
 /* holds a thread-private key that each thread references to get a private
  * instance of a worker object */
 static GPrivate workerKey = G_PRIVATE_INIT((GDestroyNotify)worker_free);
-static GPrivate preloadKey = G_PRIVATE_INIT(g_free);
+
+static Worker* _worker_getPrivate() {
+    /* get current thread's private worker object */
+    Worker* worker = g_private_get(&workerKey);
+    MAGIC_ASSERT(worker);
+    return worker;
+}
+
+gboolean worker_isAlive() {
+    return g_private_get(&workerKey) != NULL;
+}
 
 Worker* worker_new(Slave* slave) {
 	/* make sure this isnt called twice on the same thread! */
-	utility_assert(!g_private_get(&workerKey));
+	utility_assert(!worker_isAlive());
 
 	Worker* worker = g_new0(Worker, 1);
 	MAGIC_INIT(worker);
@@ -50,7 +60,7 @@ Worker* worker_new(Slave* slave) {
 	worker->clock_barrier = SIMTIME_INVALID;
 
 	/* each worker needs a private copy of each plug-in library */
-	worker->plugins = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, plugin_free);
+	worker->privatePrograms = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, (GDestroyNotify)program_free);
 
 	if(slave_getWorkerCount(slave) <= 1) {
 		/* this will cause events to get pushed to this queue instead of host queues */
@@ -58,9 +68,6 @@ Worker* worker_new(Slave* slave) {
 	}
 
 	g_private_replace(&workerKey, worker);
-	gboolean* preloadIsReady = g_new(gboolean, 1);
-	*preloadIsReady = TRUE;
-	g_private_replace(&preloadKey, preloadIsReady);
 
 	return worker;
 }
@@ -69,7 +76,7 @@ void worker_free(Worker* worker) {
 	MAGIC_ASSERT(worker);
 
 	/* calls the destroy functions we specified in g_hash_table_new_full */
-	g_hash_table_destroy(worker->plugins);
+	g_hash_table_destroy(worker->privatePrograms);
 
 	if(worker->serialEventQueue) {
 		eventqueue_free(worker->serialEventQueue);
@@ -78,13 +85,6 @@ void worker_free(Worker* worker) {
 	MAGIC_CLEAR(worker);
 	g_private_set(&workerKey, NULL);
 	g_free(worker);
-}
-
-static Worker* _worker_getPrivate() {
-	/* get current thread's private worker object */
-	Worker* worker = g_private_get(&workerKey);
-	MAGIC_ASSERT(worker);
-	return worker;
 }
 
 DNS* worker_getDNS() {
@@ -107,24 +107,23 @@ void worker_setKillTime(SimulationTime endTime) {
 	slave_setKillTime(worker->slave, endTime);
 }
 
-Plugin* worker_getPlugin(GQuark pluginID, GString* pluginPath) {
-	utility_assert(pluginPath);
-
+Program* worker_getPrivateProgram(GQuark pluginID) {
 	/* worker has a private plug-in for each plugin ID */
 	Worker* worker = _worker_getPrivate();
-	Plugin* plugin = g_hash_table_lookup(worker->plugins, &pluginID);
-	if(!plugin) {
+	Program* privateProg = g_hash_table_lookup(worker->privatePrograms, &pluginID);
+	if(!privateProg) {
 		/* plug-in has yet to be loaded by this worker. do that now. this call
 		 * will copy the plug-in library to the temporary directory, and open
 		 * that so each thread can execute in its own memory space.
 		 */
-		plugin = plugin_new(pluginID, pluginPath);
-		g_hash_table_replace(worker->plugins, plugin_getID(plugin), plugin);
+	    Program* prog = slave_getProgram(worker->slave, pluginID);
+	    privateProg = program_getTemporaryCopy(prog);
+		g_hash_table_replace(worker->privatePrograms, program_getID(privateProg), privateProg);
 	}
 
-	debug("worker %i using plug-in at %p", worker->thread_id, plugin);
+	debug("worker %i using plug-in at %p", worker->thread_id, privateProg);
 
-	return plugin;
+	return privateProg;
 }
 
 static guint _worker_processNode(Worker* worker, Host* node, SimulationTime barrier) {
@@ -370,10 +369,6 @@ void worker_schedulePacket(Packet* packet) {
 	}
 }
 
-gboolean worker_isAlive() {
-	return g_private_get(&workerKey) != NULL;
-}
-
 gboolean worker_isInShadowContext() {
 	/* this must return TRUE while destroying the thread pool to avoid
 	 * calling worker_getPrivate (which messes with threads) while trying to
@@ -383,7 +378,7 @@ gboolean worker_isInShadowContext() {
 	if(g_private_get(&workerKey)) {
 		Worker* worker = _worker_getPrivate();
 		if(worker->cached_plugin) {
-			return plugin_isShadowContext(worker->cached_plugin);
+			return program_isShadowContext(worker->cached_plugin);
 		}
 	}
 //	}
@@ -396,22 +391,22 @@ Host* worker_getCurrentHost() {
 	return worker->cached_node;
 }
 
-Application* worker_getCurrentApplication() {
+Process* worker_getCurrentApplication() {
 	Worker* worker = _worker_getPrivate();
 	return worker->cached_application;
 }
 
-void worker_setCurrentApplication(Application* application) {
+void worker_setCurrentApplication(Process* application) {
 	Worker* worker = _worker_getPrivate();
 	worker->cached_application = application;
 }
 
-Plugin* worker_getCurrentPlugin() {
+Program* worker_getCurrentPlugin() {
 	Worker* worker = _worker_getPrivate();
 	return worker->cached_plugin;
 }
 
-void worker_setCurrentPlugin(Plugin* plugin) {
+void worker_setCurrentPlugin(Program* plugin) {
 	Worker* worker = _worker_getPrivate();
 	worker->cached_plugin = plugin;
 }
@@ -461,14 +456,14 @@ gint worker_getThreadID() {
 	return worker->thread_id;
 }
 
-void worker_storePluginPath(GQuark pluginID, const gchar* pluginPath) {
+void worker_storeProgram(Program* prog) {
 	Worker* worker = _worker_getPrivate();
-	slave_storePluginPath(worker->slave, pluginID, pluginPath);
+	slave_storeProgram(worker->slave, prog);
 }
 
-const gchar* worker_getPluginPath(GQuark pluginID) {
-	Worker* worker = _worker_getPrivate();
-	return slave_getPluginPath(worker->slave, pluginID);
+Program* worker_getProgram(GQuark pluginID) {
+    Worker* worker = _worker_getPrivate();
+    return slave_getProgram(worker->slave, pluginID);
 }
 
 void worker_setTopology(Topology* topology) {

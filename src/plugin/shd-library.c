@@ -13,7 +13,7 @@
 typedef struct _CallbackData CallbackData;
 struct _CallbackData {
 	gpointer applicationData;
-	Application* application;
+	Process* application;
 };
 
 /**
@@ -22,18 +22,18 @@ struct _CallbackData {
  */
 
 int shadowlib_register(PluginNewInstanceFunc new, PluginNotifyFunc free, PluginNotifyFunc notify) {
-	Plugin* currentPlugin = worker_getCurrentPlugin();
-	plugin_setShadowContext(currentPlugin, TRUE);
+	Program* currentPlugin = worker_getCurrentPlugin();
+	program_setShadowContext(currentPlugin, TRUE);
 
-	plugin_registerResidentState(currentPlugin, new, free, notify);
+	program_registerResidentState(currentPlugin, new, free, notify);
 
-	plugin_setShadowContext(currentPlugin, FALSE);
+	program_setShadowContext(currentPlugin, FALSE);
 	return TRUE;
 }
 
 void shadowlib_log(ShadowLogLevel level, const char* functionName, const char* format, ...) {
-	Plugin* currentPlugin = worker_getCurrentPlugin();
-	plugin_setShadowContext(currentPlugin, TRUE);
+	Program* currentPlugin = worker_getCurrentPlugin();
+	program_setShadowContext(currentPlugin, TRUE);
 
 	GLogLevelFlags glevel = 0;
 	switch(level) {
@@ -63,12 +63,12 @@ void shadowlib_log(ShadowLogLevel level, const char* functionName, const char* f
 	va_list variableArguments;
 	va_start(variableArguments, format);
 
-	const gchar* domain = g_quark_to_string(*plugin_getID(currentPlugin));
+	const gchar* domain = g_quark_to_string(*program_getID(currentPlugin));
 	logging_logv(domain, glevel, functionName, format, variableArguments);
 
 	va_end(variableArguments);
 
-	plugin_setShadowContext(currentPlugin, FALSE);
+	program_setShadowContext(currentPlugin, FALSE);
 }
 
 static void _shadowlib_executeCallbackInPluginContext(gpointer data, gpointer argument) {
@@ -77,13 +77,13 @@ static void _shadowlib_executeCallbackInPluginContext(gpointer data, gpointer ar
 }
 
 void shadowlib_createCallback(ShadowPluginCallbackFunc callback, void* data, uint millisecondsDelay) {
-	Plugin* currentPlugin = worker_getCurrentPlugin();
-	plugin_setShadowContext(currentPlugin, TRUE);
+	Program* currentPlugin = worker_getCurrentPlugin();
+	program_setShadowContext(currentPlugin, TRUE);
 
-	application_callback(worker_getCurrentApplication(),
+	process_callback(worker_getCurrentApplication(),
 			_shadowlib_executeCallbackInPluginContext, data, callback, millisecondsDelay);
 
-	plugin_setShadowContext(currentPlugin, FALSE);
+	program_setShadowContext(currentPlugin, FALSE);
 }
 
 int shadowlib_getBandwidth(in_addr_t ip, uint* bwdown, uint* bwup) {
@@ -93,8 +93,8 @@ int shadowlib_getBandwidth(in_addr_t ip, uint* bwdown, uint* bwup) {
 
 	gboolean success = FALSE;
 
-	Plugin* currentPlugin = worker_getCurrentPlugin();
-	plugin_setShadowContext(currentPlugin, TRUE);
+	Program* currentPlugin = worker_getCurrentPlugin();
+	program_setShadowContext(currentPlugin, TRUE);
 
 	Address* hostAddress = dns_resolveIPToAddress(worker_getDNS(), (guint32)ip);
 	if(hostAddress) {
@@ -108,7 +108,7 @@ int shadowlib_getBandwidth(in_addr_t ip, uint* bwdown, uint* bwup) {
 		success = TRUE;
 	}
 
-	plugin_setShadowContext(currentPlugin, FALSE);
+	program_setShadowContext(currentPlugin, FALSE);
 
 	return success;
 }

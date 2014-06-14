@@ -19,10 +19,10 @@ add_definitions(-D_SVID_SOURCE -D_XOPEN_SOURCE=600 -D_ISOC11_SOURCE) #-D_GNU_SOU
 add_cflags(-fPIC)
 
 ## build the required libraries for intercepting system and library calls
-add_subdirectory(interposition)
+add_subdirectory(interpose)
 
 ## build the built-in plug-in libraries
-add_subdirectory(plugins)
+add_subdirectory(plugin)
 
 ## sources for our main shadow program
 set(shadow_srcs
@@ -36,8 +36,8 @@ set(shadow_srcs
     support/shd-event-queue.c
     support/shd-logging.c
     support/shd-parser.c
-    support/shd-plugin.c
-    support/shd-system.c
+    
+    interpose/shd-program.c
     
     host/descriptor/shd-channel.c
     host/descriptor/shd-descriptor.c
@@ -51,14 +51,15 @@ set(shadow_srcs
     host/descriptor/shd-tcp-scoreboard.c
     host/descriptor/shd-transport.c
     host/descriptor/shd-udp.c
-    host/shd-application.c
+    host/shd-process.c
+    host/shd-thread.c
     host/shd-cpu.c
     host/shd-host.c
     host/shd-network-interface.c
     host/shd-packet.c
     host/shd-tracker.c
     
-    plugins/shd-library.c
+    plugin/shd-library.c
     
     runnable/action/shd-action.c
     runnable/action/shd-create-node.c
@@ -100,8 +101,8 @@ set(shadow_srcs
 
 ## specify the main shadow executable, build, link, and install
 add_executable(shadow-bin ${shadow_srcs})
-add_dependencies(shadow-bin shadow-intercept shadow-preload)
-target_link_libraries(shadow-bin shadow-intercept ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES} ${IGRAPH_LIBRARIES} ${GLIB_LIBRARIES})
+add_dependencies(shadow-bin shadow-interpose)
+target_link_libraries(shadow-bin shadow-interpose ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES} ${IGRAPH_LIBRARIES} ${GLIB_LIBRARIES})
 install(TARGETS shadow-bin DESTINATION bin)
 
 ## shadow needs to find libshadow-intercept and custom libs after install
