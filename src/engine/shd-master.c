@@ -138,12 +138,17 @@ void master_run(Master* master) {
 	GLogLevelFlags configuredLogLevel = configuration_getLogLevel(master->config);
 	g_log_set_default_handler(logging_handleLog, &(configuredLogLevel));
 
+	/* start off with some status messages */
+    message(SHADOW_VERSION_STRING);
+    message(SHADOW_INFO_STRING);
     GDateTime* dt_now = g_date_time_new_now_local();
     gchar* dt_format = g_date_time_format(dt_now, "%F %H:%M:%S");
-    message("Shadow v%s initialized at %s using GLib v%u.%u.%u",
-        SHADOW_VERSION, dt_format, (guint)GLIB_MAJOR_VERSION, (guint)GLIB_MINOR_VERSION, (guint)GLIB_MICRO_VERSION);
+    message("Shadow initialized at %s using GLib v%u.%u.%u",
+        dt_format, (guint)GLIB_MAJOR_VERSION, (guint)GLIB_MINOR_VERSION, (guint)GLIB_MICRO_VERSION);
     g_date_time_unref(dt_now);
     g_free(dt_format);
+    message("LD_PRELOAD=%s", g_getenv("LD_PRELOAD"));
+    message("SHADOW_SPAWNED=%s", g_getenv("SHADOW_SPAWNED"));
 
 	/* store parsed actions from each user-configured simulation script  */
 	GQueue* actions = g_queue_new();

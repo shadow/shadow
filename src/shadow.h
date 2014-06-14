@@ -13,6 +13,8 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdarg.h>
+#include <string.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
@@ -22,6 +24,9 @@
 #include <math.h>
 
 #include "shd-config.h"
+
+#define SHADOW_VERSION_STRING "Shadow v"SHADOW_VERSION
+#define SHADOW_INFO_STRING "For more information, visit http://shadow.github.io or https://github.com/shadow"
 
 /**
  * @mainpage Shadow Documentation

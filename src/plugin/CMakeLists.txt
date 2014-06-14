@@ -1,5 +1,5 @@
 ## the plug-ins need to include shd-library.h
-include_directories(${CMAKE_SOURCE_DIR}/src/interpose)
+include_directories(${CMAKE_SOURCE_DIR}/src/plugin)
 install(FILES shd-library.h DESTINATION include/)
 install(FILES ${CMAKE_SOURCE_DIR}/src/utility/shd-cdf.h DESTINATION include/)
 
