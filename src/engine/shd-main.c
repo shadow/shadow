@@ -151,9 +151,6 @@ static gboolean _main_spawnShadowWithValgrind(gchar** argv, gchar** envlist, GEr
 }
 
 gint shadow_main(gint argc, gchar* argv[]) {
-    gchar* cmds = g_strjoinv(" ", argv);
-    gchar** cmdv = g_strsplit(cmds, " ", 0);
-
     /* check the compiled GLib version */
     if (!GLIB_CHECK_VERSION(2, 32, 0)) {
 	    g_printerr("** GLib version 2.32.0 or above is required but Shadow was compiled against version %u.%u.%u\n",
@@ -170,11 +167,13 @@ gint shadow_main(gint argc, gchar* argv[]) {
         mismatch);
 	    return -1;
     }
-	g_printerr("%s\n%s\n", SHADOW_VERSION_STRING, SHADOW_INFO_STRING);
-	g_printerr("%s\n", cmds);
 
 	/* setup configuration - this fails and aborts if invalid */
-	Configuration* config = configuration_new(argc, argv);
+    gchar* cmds = g_strjoinv(" ", argv);
+    gchar** cmdv = g_strsplit(cmds, " ", 0);
+	Configuration* config = configuration_new(argc, cmdv);
+    g_free(cmds);
+    g_strfreev(cmdv);
 	if(!config) {
 		/* incorrect options given */
 		return -1;
@@ -193,8 +192,6 @@ gint shadow_main(gint argc, gchar* argv[]) {
          * then the user will need to provide the correct path */
 	    if(!preloadSuccess) {
             g_printerr("** Environment Check Failed: LD_PRELOAD does not contain an absolute path to "INTERPOSELIBSTR"\n");
-            g_free(cmds);
-            g_strfreev(cmdv);
             return -1;
 	    }
 	    /* NOTE: we ignore valgrind and preload options during the respawn */
@@ -203,14 +200,17 @@ gint shadow_main(gint argc, gchar* argv[]) {
          * or we are going to run valgrind, we need to respawn */
         if(config->preloads || config->runValgrind || !preloadSuccess) {
             gchar** envlist = _main_getSpawnEnviroment(config->preloads, config->runValgrind, preloadSuccess);
+            gchar* cmds = g_strjoinv(" ", argv);
+            gchar** cmdv = g_strsplit(cmds, " ", 0);
             GError* error = NULL;
+
             gboolean spawnSuccess = config->runValgrind ?
                     _main_spawnShadowWithValgrind(cmdv, envlist, &error) :
                     _main_spawnShadow(cmdv, envlist, &error);
-            g_strfreev(envlist);
 
             g_free(cmds);
             g_strfreev(cmdv);
+            g_strfreev(envlist);
 
             if(!spawnSuccess) {
                 g_printerr("** Error %i while re-spawning shadow process: %s\n", error->code, error->message);
@@ -221,9 +221,6 @@ gint shadow_main(gint argc, gchar* argv[]) {
             return 0;
         }
 	}
-
-	g_free(cmds);
-    g_strfreev(cmdv);
 
 	utility_assert(preloadSuccess);
 

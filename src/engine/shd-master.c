@@ -147,6 +147,7 @@ void master_run(Master* master) {
         dt_format, (guint)GLIB_MAJOR_VERSION, (guint)GLIB_MINOR_VERSION, (guint)GLIB_MICRO_VERSION);
     g_date_time_unref(dt_now);
     g_free(dt_format);
+    message("args=%s", master->config->argstr);
     message("LD_PRELOAD=%s", g_getenv("LD_PRELOAD"));
     message("SHADOW_SPAWNED=%s", g_getenv("SHADOW_SPAWNED"));
 

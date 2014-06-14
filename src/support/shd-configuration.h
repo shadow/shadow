@@ -215,6 +215,8 @@ typedef struct _Configuration Configuration;
 struct _Configuration {
 	GOptionContext *context;
 
+	gchar* argstr;
+
 	GOptionGroup* mainOptionGroup;
 	gchar* logLevelInput;
 	gint nWorkerThreads;

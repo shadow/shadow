@@ -11,6 +11,8 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	Configuration* c = g_new0(Configuration, 1);
 	MAGIC_INIT(c);
 
+	c->argstr = g_strjoinv(" ", argv);
+
 	const gchar* required_parameters = "input.xml ...";
 	gint nRequiredXMLFiles = 1;
 
@@ -176,6 +178,12 @@ void configuration_free(Configuration* config) {
 	g_free(config->heartbeatLogLevelInput);
 	g_free(config->heartbeatLogInfo);
 	g_free(config->interfaceQueuingDiscipline);
+	if(config->argstr) {
+	    g_free(config->argstr);
+	}
+	if(config->preloads) {
+	    g_free(config->preloads);
+	}
 
 	/* groups are freed with the context */
 	g_option_context_free(config->context);
