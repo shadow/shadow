@@ -34,7 +34,7 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	c->heartbeatInterval = 60;
 
 	/* set options to change defaults for the main group */
-	c->mainOptionGroup = g_option_group_new("main", "Application Options", "Various application related options", NULL, NULL);
+	c->mainOptionGroup = g_option_group_new("main", "Main Options", "Primary simulator options", NULL, NULL);
 	const GOptionEntry mainEntries[] = {
 	  { "heartbeat-frequency", 'h', 0, G_OPTION_ARG_INT, &(c->heartbeatInterval), "Log node statistics every N seconds [60]", "N" },
 	  { "heartbeat-log-level", 'j', 0, G_OPTION_ARG_STRING, &(c->heartbeatLogLevelInput), "Log LEVEL at which to print node statistics ['message']", "LEVEL" },
@@ -58,7 +58,7 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	GString* socksend = g_string_new("");
 	g_string_printf(socksend, "Initialize the socket send buffer to N bytes [%i]", (gint)CONFIG_SEND_BUFFER_SIZE);
 
-	c->networkOptionGroup = g_option_group_new("network", "System Options", "Various system and network related options", NULL, NULL);
+	c->networkOptionGroup = g_option_group_new("sys", "System Options", "Simulated system/network behavior", NULL, NULL);
 	const GOptionEntry networkEntries[] =
 	{
 	  { "cpu-precision", 0, 0, G_OPTION_ARG_INT, &(c->cpuPrecision), "round measured CPU delays to the nearest TIME, in microseconds (negative value to disable fuzzy CPU delays) [200]", "TIME" },
@@ -78,7 +78,7 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	g_option_context_add_group(c->context, c->networkOptionGroup);
 
 	/* now fill in the default plug-in examples option group */
-	c->pluginsOptionGroup = g_option_group_new("plug-ins", "Plug-in Examples", "Run example simulations with built-in plug-ins", NULL, NULL);
+	c->pluginsOptionGroup = g_option_group_new("sim", "Simulation Examples", "Built-in simulation examples", NULL, NULL);
 	const GOptionEntry pluginEntries[] =
 	{
 	  { "file", 0, 0, G_OPTION_ARG_NONE, &(c->runFileExample), "Run basic HTTP file transfer simulation", NULL },
