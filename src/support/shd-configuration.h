@@ -227,6 +227,7 @@ struct _Configuration {
 	gchar* heartbeatLogInfo;
 	gchar* preloads;
 	gboolean runValgrind;
+	gboolean debug;
 
 	GOptionGroup* networkOptionGroup;
 	gint cpuThreshold;

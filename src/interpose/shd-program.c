@@ -100,6 +100,27 @@ static gboolean _program_copyFile(gchar* fromPath, gchar* toPath) {
 	return TRUE;
 }
 
+static void _program_executeInit(Program* prog) {
+    MAGIC_ASSERT(prog);
+
+    /* notify the plugin of our callable functions by calling the init function,
+     * this is a special version of executing because we still dont know about
+     * the plug-in libraries state. */
+    prog->isExecuting = TRUE;
+    worker_setCurrentPlugin(prog);
+    program_setShadowContext(prog, FALSE);
+
+    prog->init(&shadowlibFunctionTable);
+
+    program_setShadowContext(prog, TRUE);
+    prog->isExecuting = FALSE;
+    worker_setCurrentPlugin(NULL);
+
+    if(!(prog->isRegisterred)) {
+        error("The plug-in '%s' must call shadowlib_register()", prog->path->str);
+    }
+}
+
 Program* program_new(const gchar* name, const gchar* path) {
 	utility_assert(path);
 
@@ -187,6 +208,8 @@ Program* program_new(const gchar* name, const gchar* path) {
 		error("unable to find the required merged globals struct symbol '%s' in plug-in '%s'",
 				PLUGINGLOBALSSIZESYMBOL, path);
 	}
+
+	_program_executeInit(prog);
 
 	return prog;
 }
@@ -307,27 +330,6 @@ static void _plugin_stopExecuting(Program* prog, ProgramState state) {
 	/* destination, source, size */
 	g_memmove(state, prog->residentState, prog->residentStateSize);
 	worker_setCurrentPlugin(NULL);
-}
-
-void program_executeInit(Program* prog) {
-    MAGIC_ASSERT(prog);
-
-    /* notify the plugin of our callable functions by calling the init function,
-     * this is a special version of executing because we still dont know about
-     * the plug-in libraries state. */
-    prog->isExecuting = TRUE;
-    worker_setCurrentPlugin(prog);
-    program_setShadowContext(prog, FALSE);
-
-    prog->init(&shadowlibFunctionTable);
-
-    program_setShadowContext(prog, TRUE);
-    prog->isExecuting = FALSE;
-    worker_setCurrentPlugin(NULL);
-
-    if(!(prog->isRegisterred)) {
-        error("The plug-in '%s' must call shadowlib_register()", prog->path->str);
-    }
 }
 
 void program_executeNew(Program* prog, ProgramState state, gint argcParam, gchar* argvParam[]) {

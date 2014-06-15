@@ -25,7 +25,6 @@ void program_setShadowContext(Program* prog, gboolean isShadowContext);
 gboolean program_isShadowContext(Program* prog);
 
 void program_registerResidentState(Program* prog, PluginNewInstanceFunc new, PluginNotifyFunc free, PluginNotifyFunc notify);
-void program_executeInit(Program* prog);
 void program_executeNew(Program* prog, ProgramState state, gint argcParam, gchar* argvParam[]);
 void program_executeFree(Program* prog, ProgramState state);
 void program_executeNotify(Program* prog, ProgramState state);

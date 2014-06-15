@@ -36,6 +36,7 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	/* set options to change defaults for the main group */
 	c->mainOptionGroup = g_option_group_new("main", "Main Options", "Primary simulator options", NULL, NULL);
 	const GOptionEntry mainEntries[] = {
+      { "debug", 'd', 0, G_OPTION_ARG_NONE, &(c->debug), "Pause at startup for debugger attachment", NULL },
 	  { "heartbeat-frequency", 'h', 0, G_OPTION_ARG_INT, &(c->heartbeatInterval), "Log node statistics every N seconds [60]", "N" },
 	  { "heartbeat-log-level", 'j', 0, G_OPTION_ARG_STRING, &(c->heartbeatLogLevelInput), "Log LEVEL at which to print node statistics ['message']", "LEVEL" },
 	  { "heartbeat-log-info", 'i', 0, G_OPTION_ARG_STRING, &(c->heartbeatLogInfo), "Comma separated list of information contained in heartbeat ('node','socket','ram') ['node']", "LIST"},

@@ -151,6 +151,11 @@ void master_run(Master* master) {
     message("LD_PRELOAD=%s", g_getenv("LD_PRELOAD"));
     message("SHADOW_SPAWNED=%s", g_getenv("SHADOW_SPAWNED"));
 
+    if(master->config->debug) {
+        message("Pausing for 5 seconds to enable debugger attachment");
+        sleep(5);
+    }
+
 	/* store parsed actions from each user-configured simulation script  */
 	GQueue* actions = g_queue_new();
 	Parser* xmlParser = parser_new();
