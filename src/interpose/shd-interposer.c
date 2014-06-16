@@ -51,8 +51,6 @@
 	} \
 }
 
-typedef int (*WorkerIsInShadowContextFunc)();
-
 /* memory allocation family */
 
 typedef void* (*MallocFunc)(size_t);
@@ -320,11 +318,11 @@ static inline int shouldForwardToLibC() {
 	int useLibC = 1;
 	/* recursive calls always go to libc */
 	if(!__sync_fetch_and_add(&isRecursive, 1)) {
-	    Program* p = worker_isAlive() ? worker_getCurrentPlugin() : NULL;
+	    Thread* thread = worker_isAlive() ? worker_getActiveThread() : NULL;
 		/* check if the shadow intercept library is loaded yet, but dont fail if its not */
-		if(p) {
+		if(thread) {
 			/* ask shadow if this call is a plug-in that should be intercepted */
-		    useLibC = program_isShadowContext(p) ? 1 : 0;
+		    useLibC = thread_shouldInterpose(thread) ? 1 : 0;
 		} else {
 			/* intercept library is not yet loaded, don't redirect */
 		    useLibC = 1;
@@ -339,17 +337,17 @@ enum SystemCallType {
 };
 
 static Host* _interposer_switchInShadowContext() {
-    Program* plugin = worker_getCurrentPlugin();
-    if(plugin) {
-        program_setShadowContext(plugin, TRUE);
+    Thread* thread = worker_getActiveThread();
+    if(thread) {
+        thread_beginControl(thread);
     }
     return worker_getCurrentHost();
 }
 
 static void _interposer_switchOutShadowContext(Host* node) {
-    Program* plugin = worker_getCurrentPlugin();
-    if(plugin) {
-        program_setShadowContext(plugin, FALSE);
+    Thread* thread = worker_getActiveThread();
+    if(thread) {
+        thread_endControl(thread);
     }
 }
 

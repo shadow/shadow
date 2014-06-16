@@ -13,7 +13,7 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 
 	c->argstr = g_strjoinv(" ", argv);
 
-	const gchar* required_parameters = "input.xml ...";
+	const gchar* required_parameters = "shadow.config.xml";
 	gint nRequiredXMLFiles = 1;
 
 	c->context = g_option_context_new(required_parameters);

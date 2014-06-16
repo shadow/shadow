@@ -11,11 +11,11 @@
 
 struct _Program {
 	GQuark id;
+
 	GString* name;
 	GString* path;
-	gboolean isTemporary;
 	GModule* handle;
-	GTimer* delayTimer;
+	gboolean isTemporary;
 
 	ShadowPluginInitializeFunc init;
 
@@ -36,17 +36,7 @@ struct _Program {
 	 * intercept. isShadowContext distinguishes this.
 	 */
 	gboolean isExecuting;
-	/*
-	 * Distinguishes which context we are in. Whenever the flow of execution
-	 * passes into the plug-in, this is FALSE, and whenever it comes back to
-	 * shadow, this is TRUE. This is used to determine if we should actually
-	 * be intercepting functions or not, since we dont want to intercept them
-	 * if they provide shadow with needed functionality.
-	 *
-	 * We must be careful to set this correctly at every boundry (shadowlib,
-	 * interceptions, etc)
-	 */
-	gboolean isShadowContext;
+
 	MAGIC_DECLARE;
 };
 
@@ -100,27 +90,6 @@ static gboolean _program_copyFile(gchar* fromPath, gchar* toPath) {
 	return TRUE;
 }
 
-static void _program_executeInit(Program* prog) {
-    MAGIC_ASSERT(prog);
-
-    /* notify the plugin of our callable functions by calling the init function,
-     * this is a special version of executing because we still dont know about
-     * the plug-in libraries state. */
-    prog->isExecuting = TRUE;
-    worker_setCurrentPlugin(prog);
-    program_setShadowContext(prog, FALSE);
-
-    prog->init(&shadowlibFunctionTable);
-
-    program_setShadowContext(prog, TRUE);
-    prog->isExecuting = FALSE;
-    worker_setCurrentPlugin(NULL);
-
-    if(!(prog->isRegisterred)) {
-        error("The plug-in '%s' must call shadowlib_register()", prog->path->str);
-    }
-}
-
 Program* program_new(const gchar* name, const gchar* path) {
 	utility_assert(path);
 
@@ -130,10 +99,6 @@ Program* program_new(const gchar* name, const gchar* path) {
 	prog->id = g_quark_from_string((const gchar*) name);;
 	prog->name = g_string_new(name);
 	prog->path = g_string_new(path);
-
-	/* timer for CPU delay measurements */
-	prog->delayTimer = g_timer_new();
-
 
 	/*
 	 * now get the plugin handle from the library at filename.
@@ -209,8 +174,6 @@ Program* program_new(const gchar* name, const gchar* path) {
 				PLUGINGLOBALSSIZESYMBOL, path);
 	}
 
-	_program_executeInit(prog);
-
 	return prog;
 }
 
@@ -265,99 +228,74 @@ Program* program_getTemporaryCopy(Program* prog) {
     return progCopy;
 }
 
-void program_setShadowContext(Program* prog, gboolean isShadowContext) {
-	MAGIC_ASSERT(prog);
-	prog->isShadowContext = isShadowContext;
-}
-
 void program_registerResidentState(Program* prog, PluginNewInstanceFunc new, PluginNotifyFunc free, PluginNotifyFunc notify) {
-	MAGIC_ASSERT(prog);
-	if(prog->isRegisterred) {
-		warning("ignoring duplicate state registration");
-		return;
-	}
+    MAGIC_ASSERT(prog);
+    if(prog->isRegisterred) {
+        warning("ignoring duplicate state registration");
+        return;
+    }
 
-	utility_assert(new && free && notify);
+    utility_assert(new && free && notify);
 
-	/* store the pointers to the callbacks the plugin wants us to call */
-	prog->new = new;
-	prog->free = free;
-	prog->notify = notify;
+    /* store the pointers to the callbacks the plugin wants us to call */
+    prog->new = new;
+    prog->free = free;
+    prog->notify = notify;
 
-	/* also store a copy of the defaults as they exist now */
-	debug("copying resident plugin memory contents at %p-%p (%"G_GSIZE_FORMAT" bytes) as default start state",
-			prog->residentState, prog->residentState+prog->residentStateSize, prog->residentStateSize);
-	prog->defaultState = g_slice_copy(prog->residentStateSize, prog->residentState);
-	debug("stored default state at %p", prog->defaultState);
+    /* also store a copy of the defaults as they exist now */
+    debug("copying resident plugin memory contents at %p-%p (%"G_GSIZE_FORMAT" bytes) as default start state",
+            prog->residentState, prog->residentState+prog->residentStateSize, prog->residentStateSize);
+    prog->defaultState = g_slice_copy(prog->residentStateSize, prog->residentState);
+    debug("stored default state at %p", prog->defaultState);
 
-	/* dont change our resident state or defaults */
-	prog->isRegisterred = TRUE;
+    /* dont change our resident state or defaults */
+    prog->isRegisterred = TRUE;
 }
 
-static void _plugin_startExecuting(Program* prog, ProgramState state) {
-	MAGIC_ASSERT(prog);
-	utility_assert(!prog->isExecuting);
+void program_swapInState(Program* prog, ProgramState state) {
+    MAGIC_ASSERT(prog);
+    utility_assert(!prog->isExecuting);
 
-	/* context switch from shadow to plug-in library
-	 *
-	 * TODO: we can be smarter here - save a pointer to the last plugin that
-	 * was loaded... if the physical memory locations still has our state,
-	 * there is no need to copy it in again. similarly for stopExecuting()
-	 */
-	/* destination, source, size */
-	g_memmove(prog->residentState, state, prog->residentStateSize);
+    /* context switch from shadow to plug-in library
+     *
+     * TODO: we can be smarter here - save a pointer to the last plugin that
+     * was loaded... if the physical memory locations still has our state,
+     * there is no need to copy it in again. similarly for stopExecuting()
+     */
+    /* destination, source, size */
+    g_memmove(prog->residentState, state, prog->residentStateSize);
 
-	prog->isExecuting = TRUE;
-	worker_setCurrentPlugin(prog);
-	g_timer_start(prog->delayTimer);
-	program_setShadowContext(prog, FALSE);
+    prog->isExecuting = TRUE;
 }
 
-static void _plugin_stopExecuting(Program* prog, ProgramState state) {
-	MAGIC_ASSERT(prog);
+void program_swapOutState(Program* prog, ProgramState state) {
+    MAGIC_ASSERT(prog);
+    utility_assert(prog->isExecuting);
 
-	/* context switch back to shadow from plug-in library */
-	program_setShadowContext(prog, TRUE);
-	prog->isExecuting = FALSE;
-	/* no need to call stop */
-	gdouble elapsed = g_timer_elapsed(prog->delayTimer, NULL);
+    prog->isExecuting = FALSE;
 
-	Host* currentHost = worker_getCurrentHost();
-	SimulationTime delay = (SimulationTime) (elapsed * SIMTIME_ONE_SECOND);
-	cpu_addDelay(host_getCPU(currentHost), delay);
-	tracker_addProcessingTime(host_getTracker(currentHost), delay);
-
-	/* destination, source, size */
-	g_memmove(state, prog->residentState, prog->residentStateSize);
-	worker_setCurrentPlugin(NULL);
+    /* destination, source, size */
+    g_memmove(state, prog->residentState, prog->residentStateSize);
 }
 
-void program_executeNew(Program* prog, ProgramState state, gint argcParam, gchar* argvParam[]) {
-	MAGIC_ASSERT(prog);
-	_plugin_startExecuting(prog, state);
-	prog->new(argcParam, argvParam);
-	_plugin_stopExecuting(prog, state);
+ShadowPluginInitializeFunc program_getInitFunc(Program* prog) {
+    MAGIC_ASSERT(prog);
+    return prog->init;
 }
 
-void program_executeFree(Program* prog, ProgramState state) {
-	MAGIC_ASSERT(prog);
-	_plugin_startExecuting(prog, state);
-	prog->free();
-	_plugin_stopExecuting(prog, state);
+PluginNewInstanceFunc program_getNewFunc(Program* prog) {
+    MAGIC_ASSERT(prog);
+    return prog->new;
 }
 
-void program_executeNotify(Program* prog, ProgramState state) {
-	MAGIC_ASSERT(prog);
-	_plugin_startExecuting(prog, state);
-	prog->notify();
-	_plugin_stopExecuting(prog, state);
+PluginNotifyFunc program_getFreeFunc(Program* prog) {
+    MAGIC_ASSERT(prog);
+    return prog->free;
 }
 
-void program_executeGeneric(Program* prog, ProgramState state, CallbackFunc callback, gpointer data, gpointer callbackArgument) {
-	MAGIC_ASSERT(prog);
-	_plugin_startExecuting(prog, state);
-	callback(data, callbackArgument);
-	_plugin_stopExecuting(prog, state);
+PluginNotifyFunc program_getNotifyFunc(Program* prog) {
+    MAGIC_ASSERT(prog);
+    return prog->notify;
 }
 
 ProgramState program_newDefaultState(Program* prog) {
@@ -375,7 +313,12 @@ GQuark* program_getID(Program* prog) {
 	return &(prog->id);
 }
 
-gboolean program_isShadowContext(Program* prog) {
-	MAGIC_ASSERT(prog);
-	return prog->isShadowContext;
+gboolean program_isRegistered(Program* prog) {
+    MAGIC_ASSERT(prog);
+    return prog->isRegisterred;
+}
+
+const gchar* program_getName(Program* prog) {
+    MAGIC_ASSERT(prog);
+    return prog->name->str;
 }

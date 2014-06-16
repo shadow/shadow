@@ -79,14 +79,12 @@ typedef void (*ShadowLogFunc)(ShadowLogLevel level, const char* functionName, co
 typedef void (*ShadowCreateCallbackFunc)(ShadowPluginCallbackFunc callback, void* data, uint millisecondsDelay);
 typedef int (*ShadowGetBandwidthFloorFunc)(in_addr_t ip, uint* bwdown, uint* bwup);
 
-typedef struct _ShadowFunctionTable ShadowFunctionTable;
-extern ShadowFunctionTable shadowlibFunctionTable;
-
 /**
  * A collection of functions exported to a plug-in. Each pointer in this table
  * may be dereferenced to call a function in Shadow. Plug-ins may use these
  * functions to hook into Shadow's logging and event systems.
  */
+typedef struct _ShadowFunctionTable ShadowFunctionTable;
 struct _ShadowFunctionTable {
 	ShadowRegisterFunc registerPlugin;
 	ShadowLogFunc log;

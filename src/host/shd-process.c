@@ -85,7 +85,7 @@ static gint _process_getArguments(Process* proc, gchar** argvOut[]) {
 
 gboolean process_isRunning(Process* proc) {
 	MAGIC_ASSERT(proc);
-	return proc->state ? TRUE : FALSE;
+	return proc->state != NULL ? TRUE : FALSE;
 }
 
 void process_start(Process* proc) {
@@ -95,22 +95,33 @@ void process_start(Process* proc) {
 	if(!process_isRunning(proc)) {
 		/* need to get thread-private program from current worker */
         proc->prog = worker_getPrivateProgram(proc->programID);
+		proc->mainThread = thread_new(proc, proc->prog);
 
-        /* get arguments from the configured software */
+		/* make sure the plugin registered before getting our program state */
+        if(!program_isRegistered(proc->prog)) {
+//            program_swapInState(proc->prog, proc->state);
+            thread_executeInit(proc->mainThread, program_getInitFunc(proc->prog));
+//            program_swapOutState(proc->prog, proc->state);
+
+            if(!program_isRegistered(proc->prog)) {
+                error("The plug-in '%s' must call shadowlib_register()", program_getName(proc->prog));
+            }
+        }
+
+		/* create our default state as we run in our assigned worker */
+		proc->state = program_newDefaultState(proc->prog);
+
+		/* get arguments from the configured software */
 		gchar** argv;
 		gint argc = _process_getArguments(proc, &argv);
 
 		/* we will need to free each argument, copy argc in case they change it */
 		gint n = argc;
 
-		proc->mainThread = thread_new();
-		worker_setCurrentApplication(proc);
-
-		/* create our default state as we run in our assigned worker */
-		proc->state = program_newDefaultState(proc->prog);
-		program_executeNew(proc->prog, proc->state, argc, argv);
-
-		worker_setCurrentApplication(NULL);
+		/* now we will execute in the plugin */
+        program_swapInState(proc->prog, proc->state);
+        thread_executeNew(proc->mainThread, program_getNewFunc(proc->prog), argc, argv);
+        program_swapOutState(proc->prog, proc->state);
 
 		/* free the arguments */
 		for(gint i = 0; i < n; i++) {
@@ -125,25 +136,27 @@ void process_stop(Process* proc) {
 
 	/* we only have state if we are running */
 	if(process_isRunning(proc)) {
-		/* tell the plug-in module (user code) to free its data */
-		program_executeFree(proc->prog, proc->state);
+        program_swapInState(proc->prog, proc->state);
+        thread_execute(proc->mainThread, program_getFreeFunc(proc->prog));
+        program_swapOutState(proc->prog, proc->state);
 
 		/* free our copy of plug-in resources, and other application state */
 		program_freeState(proc->prog, proc->state);
 		proc->state = NULL;
 
 		thread_free(proc->mainThread);
+		proc->mainThread = NULL;
 	}
 }
 
-void process_notify(Process* proc) {
+void process_notify(Process* proc, Thread* thread) {
 	MAGIC_ASSERT(proc);
 
 	/* only notify if we are running */
 	if(process_isRunning(proc)) {
-		worker_setCurrentApplication(proc);
-		program_executeNotify(proc->prog, proc->state);
-		worker_setCurrentApplication(NULL);
+		program_swapInState(proc->prog, proc->state);
+		thread_execute(thread, program_getNotifyFunc(proc->prog));
+		program_swapOutState(proc->prog, proc->state);
 	}
 }
 
@@ -152,9 +165,9 @@ static void _process_callbackTimerExpired(Process* proc, ProcessCallbackData* da
 	utility_assert(data);
 
 	if(process_isRunning(proc)) {
-		worker_setCurrentApplication(proc);
-		program_executeGeneric(proc->prog, proc->state, data->callback, data->data, data->argument);
-		worker_setCurrentApplication(NULL);
+        program_swapInState(proc->prog, proc->state);
+		thread_executeCallback(proc->mainThread, data->callback, data->data, data->argument);
+        program_swapOutState(proc->prog, proc->state);
 	}
 
 	g_free(data);

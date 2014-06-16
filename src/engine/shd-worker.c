@@ -21,6 +21,7 @@ struct _Worker {
 
 	Random* random;
 
+	Thread* activeThread;
 	Program* cached_plugin;
 	Process* cached_application;
 	Host* cached_node;
@@ -369,46 +370,19 @@ void worker_schedulePacket(Packet* packet) {
 	}
 }
 
-gboolean worker_isInShadowContext() {
-	/* this must return TRUE while destroying the thread pool to avoid
-	 * calling worker_getPrivate (which messes with threads) while trying to
-	 * shutdown the threads.
-	 */
-//	if(shadowMaster && !(slave_isForced(shadowMaster))) {
-	if(g_private_get(&workerKey)) {
-		Worker* worker = _worker_getPrivate();
-		if(worker->cached_plugin) {
-			return program_isShadowContext(worker->cached_plugin);
-		}
-	}
-//	}
-	/* if there is no engine or cached plugin, we are definitely in Shadow context */
-	return TRUE;
-}
-
 Host* worker_getCurrentHost() {
 	Worker* worker = _worker_getPrivate();
 	return worker->cached_node;
 }
 
-Process* worker_getCurrentApplication() {
-	Worker* worker = _worker_getPrivate();
-	return worker->cached_application;
+Thread* worker_getActiveThread() {
+    Worker* worker = _worker_getPrivate();
+    return worker->activeThread;
 }
 
-void worker_setCurrentApplication(Process* application) {
-	Worker* worker = _worker_getPrivate();
-	worker->cached_application = application;
-}
-
-Program* worker_getCurrentPlugin() {
-	Worker* worker = _worker_getPrivate();
-	return worker->cached_plugin;
-}
-
-void worker_setCurrentPlugin(Program* plugin) {
-	Worker* worker = _worker_getPrivate();
-	worker->cached_plugin = plugin;
+void worker_setActiveThread(Thread* thread) {
+    Worker* worker = _worker_getPrivate();
+    worker->activeThread = thread;
 }
 
 SimulationTime worker_getCurrentTime() {
