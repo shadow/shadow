@@ -13,6 +13,8 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdarg.h>
+#include <string.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
@@ -22,6 +24,12 @@
 #include <math.h>
 
 #include "shd-config.h"
+
+#define SHADOW_VERSION_STRING "Shadow v"SHADOW_VERSION
+#define SHADOW_INFO_STRING "For more information, visit https://shadow.github.io or https://github.com/shadow"
+
+// TODO put into a shd-types.h file
+typedef struct _Process Process;
 
 /**
  * @mainpage Shadow Documentation
@@ -70,8 +78,8 @@
 #include "utility/shd-random.h"
 
 #include "support/shd-event-queue.h"
-#include "plugins/shd-library.h"
-#include "support/shd-plugin.h"
+#include "plugin/shd-library.h"
+#include "interpose/shd-program.h"
 
 #include "topology/shd-address.h"
 #include "topology/shd-dns.h"
@@ -88,10 +96,10 @@
 #include "host/descriptor/shd-tcp-cubic.h"
 #include "host/descriptor/shd-tcp-scoreboard.h"
 #include "host/descriptor/shd-udp.h"
-#include "host/shd-application.h"
+#include "host/shd-thread.h"
+#include "host/shd-process.h"
 #include "host/shd-network-interface.h"
 #include "host/shd-tracker.h"
-#include "support/shd-system.h"
 #include "host/shd-host.h"
 
 #include "topology/shd-topology.h"

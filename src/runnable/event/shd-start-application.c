@@ -9,7 +9,7 @@
 
 struct _StartApplicationEvent {
 	Event super;
-	Application* application;
+	Process* application;
 	MAGIC_DECLARE;
 };
 
@@ -19,7 +19,7 @@ EventFunctionTable startapplication_functions = {
 	MAGIC_VALUE
 };
 
-StartApplicationEvent* startapplication_new(Application* application) {
+StartApplicationEvent* startapplication_new(Process* application) {
 	StartApplicationEvent* event = g_new0(StartApplicationEvent, 1);
 	MAGIC_INIT(event);
 

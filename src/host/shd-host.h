@@ -28,10 +28,10 @@ void host_unlock(Host* host);
 
 EventQueue* host_getEvents(Host* host);
 
-void host_addApplication(Host* host, GQuark pluginID, const gchar* pluginPath,
+void host_addApplication(Host* host, GQuark pluginID,
 		SimulationTime startTime, SimulationTime stopTime, gchar* arguments);
-void host_startApplication(Host* host, Application* application);
-void host_stopApplication(Host* host, Application* application);
+void host_startApplication(Host* host, Process* application);
+void host_stopApplication(Host* host, Process* application);
 void host_freeAllApplications(Host* host);
 
 gint host_compare(gconstpointer a, gconstpointer b, gpointer user_data);

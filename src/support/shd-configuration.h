@@ -215,6 +215,8 @@ typedef struct _Configuration Configuration;
 struct _Configuration {
 	GOptionContext *context;
 
+	gchar* argstr;
+
 	GOptionGroup* mainOptionGroup;
 	gchar* logLevelInput;
 	gint nWorkerThreads;
@@ -223,6 +225,9 @@ struct _Configuration {
 	guint heartbeatInterval;
 	gchar* heartbeatLogLevelInput;
 	gchar* heartbeatLogInfo;
+	gchar* preloads;
+	gboolean runValgrind;
+	gboolean debug;
 
 	GOptionGroup* networkOptionGroup;
 	gint cpuThreshold;

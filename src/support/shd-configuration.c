@@ -11,7 +11,9 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	Configuration* c = g_new0(Configuration, 1);
 	MAGIC_INIT(c);
 
-	const gchar* required_parameters = "input.xml ...";
+	c->argstr = g_strjoinv(" ", argv);
+
+	const gchar* required_parameters = "shadow.config.xml";
 	gint nRequiredXMLFiles = 1;
 
 	c->context = g_option_context_new(required_parameters);
@@ -23,14 +25,7 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 		"efficiency and control of simulation, achieving the best of both approaches.");
 
 	/* set defaults */
-	c->nWorkerThreads = 0;
-	c->minRunAhead = 0;
-	c->printSoftwareVersion = 0;
 	c->initialTCPWindow = 10;
-	c->initialSocketReceiveBufferSize = 0;
-	c->initialSocketSendBufferSize = 0;
-	c->autotuneSocketReceiveBuffer = FALSE;
-	c->autotuneSocketSendBuffer = FALSE;
 	c->interfaceBufferSize = 1024000;
 	c->interfaceBatchTime = 10;
 	c->randomSeed = 1;
@@ -39,15 +34,18 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	c->heartbeatInterval = 60;
 
 	/* set options to change defaults for the main group */
-	c->mainOptionGroup = g_option_group_new("main", "Application Options", "Various application related options", NULL, NULL);
+	c->mainOptionGroup = g_option_group_new("main", "Main Options", "Primary simulator options", NULL, NULL);
 	const GOptionEntry mainEntries[] = {
-	  { "log-level", 'l', 0, G_OPTION_ARG_STRING, &(c->logLevelInput), "Log LEVEL above which to filter messages ('error' < 'critical' < 'warning' < 'message' < 'info' < 'debug') ['message']", "LEVEL" },
-	  { "heartbeat-log-level", 'g', 0, G_OPTION_ARG_STRING, &(c->heartbeatLogLevelInput), "Log LEVEL at which to print node statistics ['message']", "LEVEL" },
-	  { "heartbeat-log-info", 'i', 0, G_OPTION_ARG_STRING, &(c->heartbeatLogInfo), "Comma separated list of information contained in heartbeat ('node','socket','ram') ['node']", "LIST"},
+      { "debug", 'd', 0, G_OPTION_ARG_NONE, &(c->debug), "Pause at startup for debugger attachment", NULL },
 	  { "heartbeat-frequency", 'h', 0, G_OPTION_ARG_INT, &(c->heartbeatInterval), "Log node statistics every N seconds [60]", "N" },
-	  { "seed", 's', 0, G_OPTION_ARG_INT, &(c->randomSeed), "Initialize randomness for each thread using seed N [1]", "N" },
-	  { "workers", 'w', 0, G_OPTION_ARG_INT, &(c->nWorkerThreads), "Use N worker threads [0]", "N" },
+	  { "heartbeat-log-level", 'j', 0, G_OPTION_ARG_STRING, &(c->heartbeatLogLevelInput), "Log LEVEL at which to print node statistics ['message']", "LEVEL" },
+	  { "heartbeat-log-info", 'i', 0, G_OPTION_ARG_STRING, &(c->heartbeatLogInfo), "Comma separated list of information contained in heartbeat ('node','socket','ram') ['node']", "LIST"},
+	  { "log-level", 'l', 0, G_OPTION_ARG_STRING, &(c->logLevelInput), "Log LEVEL above which to filter messages ('error' < 'critical' < 'warning' < 'message' < 'info' < 'debug') ['message']", "LEVEL" },
+	  { "preload", 'p', 0, G_OPTION_ARG_STRING, &(c->preloads), "LD_PRELOAD environment VALUE to use for function interposition (/path/to/lib:...) [None]", "VALUE" },
 	  { "runahead", 'r', 0, G_OPTION_ARG_INT, &(c->minRunAhead), "If set, overrides the automatically calculated minimum TIME workers may run ahead when sending events between nodes, in milliseconds [0]", "TIME" },
+	  { "seed", 's', 0, G_OPTION_ARG_INT, &(c->randomSeed), "Initialize randomness for each thread using seed N [1]", "N" },
+	  { "workers", 'w', 0, G_OPTION_ARG_INT, &(c->nWorkerThreads), "Run concurrently with N worker threads [0]", "N" },
+	  { "valgrind", 'x', 0, G_OPTION_ARG_NONE, &(c->runValgrind), "Run through valgrind for debugging", NULL },
 	  { "version", 'v', 0, G_OPTION_ARG_NONE, &(c->printSoftwareVersion), "Print software version and exit", NULL },
 	  { NULL },
 	};
@@ -61,19 +59,19 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	GString* socksend = g_string_new("");
 	g_string_printf(socksend, "Initialize the socket send buffer to N bytes [%i]", (gint)CONFIG_SEND_BUFFER_SIZE);
 
-	c->networkOptionGroup = g_option_group_new("network", "System Options", "Various system and network related options", NULL, NULL);
+	c->networkOptionGroup = g_option_group_new("sys", "System Options", "Simulated system/network behavior", NULL, NULL);
 	const GOptionEntry networkEntries[] =
 	{
-	  { "cpu-threshold", 0, 0, G_OPTION_ARG_INT, &(c->cpuThreshold), "TIME delay threshold after which the CPU becomes blocked, in microseconds (negative value to disable CPU delays) (experimental!) [-1]", "TIME" },
 	  { "cpu-precision", 0, 0, G_OPTION_ARG_INT, &(c->cpuPrecision), "round measured CPU delays to the nearest TIME, in microseconds (negative value to disable fuzzy CPU delays) [200]", "TIME" },
+	  { "cpu-threshold", 0, 0, G_OPTION_ARG_INT, &(c->cpuThreshold), "TIME delay threshold after which the CPU becomes blocked, in microseconds (negative value to disable CPU delays) (experimental!) [-1]", "TIME" },
 	  { "interface-batch", 0, 0, G_OPTION_ARG_INT, &(c->interfaceBatchTime), "Batch TIME for network interface sends and receives, in milliseconds [10]", "TIME" },
 	  { "interface-buffer", 0, 0, G_OPTION_ARG_INT, &(c->interfaceBufferSize), "Size of the network interface receive buffer, in bytes [1024000]", "N" },
 	  { "interface-qdisc", 0, 0, G_OPTION_ARG_STRING, &(c->interfaceQueuingDiscipline), "The interface queuing discipline QDISC used to select the next sendable socket ('fifo' or 'rr') ['fifo']", "QDISC" },
 	  { "socket-recv-buffer", 0, 0, G_OPTION_ARG_INT, &(c->initialSocketReceiveBufferSize), sockrecv->str, "N" },
 	  { "socket-send-buffer", 0, 0, G_OPTION_ARG_INT, &(c->initialSocketSendBufferSize), socksend->str, "N" },
-	  { "tcp-windows", 0, 0, G_OPTION_ARG_INT, &(c->initialTCPWindow), "Initialize the TCP send, receive, and congestion windows to N packets [10]", "N" },
 	  { "tcp-congestion-control", 0, 0, G_OPTION_ARG_STRING, &(c->tcpCongestionControl), "Congestion control algorithm to use for TCP ('aimd', 'reno', 'cubic') ['cubic']", "TCPCC" },
 	  { "tcp-ssthresh", 0, 0, G_OPTION_ARG_INT, &(c->tcpSlowStartThreshold), "Set TCP ssthresh value instead of discovering it via packet loss or hystart [0]", "N" },
+	  { "tcp-windows", 0, 0, G_OPTION_ARG_INT, &(c->initialTCPWindow), "Initialize the TCP send, receive, and congestion windows to N packets [10]", "N" },
 	  { NULL },
 	};
 
@@ -81,7 +79,7 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	g_option_context_add_group(c->context, c->networkOptionGroup);
 
 	/* now fill in the default plug-in examples option group */
-	c->pluginsOptionGroup = g_option_group_new("plug-ins", "Plug-in Examples", "Run example simulations with built-in plug-ins", NULL, NULL);
+	c->pluginsOptionGroup = g_option_group_new("sim", "Simulation Examples", "Built-in simulation examples", NULL, NULL);
 	const GOptionEntry pluginEntries[] =
 	{
 	  { "file", 0, 0, G_OPTION_ARG_NONE, &(c->runFileExample), "Run basic HTTP file transfer simulation", NULL },
@@ -181,6 +179,12 @@ void configuration_free(Configuration* config) {
 	g_free(config->heartbeatLogLevelInput);
 	g_free(config->heartbeatLogInfo);
 	g_free(config->interfaceQueuingDiscipline);
+	if(config->argstr) {
+	    g_free(config->argstr);
+	}
+	if(config->preloads) {
+	    g_free(config->preloads);
+	}
 
 	/* groups are freed with the context */
 	g_option_context_free(config->context);

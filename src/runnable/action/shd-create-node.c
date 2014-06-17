@@ -233,11 +233,10 @@ void createnodes_run(CreateNodesAction* action) {
 		GList* item = action->applications;
 		while (item && item->data) {
 			NodeApplication* app = (NodeApplication*) item->data;
-			const gchar* pluginPath = worker_getPluginPath(app->pluginID);
 
 			/* make sure our bootstrap events are set properly */
 			worker_setCurrentTime(0);
-			host_addApplication(host, app->pluginID, pluginPath,
+			host_addApplication(host, app->pluginID,
 					app->starttime, app->stoptime, app->arguments->str);
 			worker_setCurrentTime(SIMTIME_INVALID);
 

@@ -27,15 +27,11 @@ struct _Slave {
 	/* virtual hosts */
 	GHashTable* hosts;
 
-	GHashTable* pluginPaths;
+	GHashTable* programs;
 
 	/* if multi-threaded, we use worker thread */
 	CountDownLatch* processingLatch;
 	CountDownLatch* barrierLatch;
-
-	/* openssl needs us to manage locking */
-	GMutex* cryptoThreadLocks;
-	gint numCryptoThreadLocks;
 
 	/* the number of worker threads not counting main thread.
 	 * this is the number of threads we need to spawn. */
@@ -103,7 +99,7 @@ Slave* slave_new(Master* master, Configuration* config, guint randomSeed) {
 	}
 
 	slave->hosts = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, NULL);
-	slave->pluginPaths = g_hash_table_new_full(g_int_hash, g_int_equal, g_free, g_free);
+	slave->programs = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, (GDestroyNotify)program_free);
 
 	slave->dns = dns_new();
 
@@ -131,11 +127,7 @@ void slave_free(Slave* slave) {
 		dns_free(slave->dns);
 	}
 
-	g_hash_table_destroy(slave->pluginPaths);
-
-	for(int i = 0; i < slave->numCryptoThreadLocks; i++) {
-		g_mutex_clear(&(slave->cryptoThreadLocks[i]));
-	}
+	g_hash_table_destroy(slave->programs);
 
 	g_mutex_clear(&(slave->lock));
 	g_mutex_clear(&(slave->pluginInitLock));
@@ -192,27 +184,14 @@ gint slave_generateWorkerID(Slave* slave) {
 	return id;
 }
 
-void slave_storePluginPath(Slave* slave, GQuark pluginID, const gchar* pluginPath) {
-	MAGIC_ASSERT(slave);
-	GQuark* key = g_new0(GQuark, 1);
-	*key = pluginID;
-	gchar* value = g_strdup(pluginPath);
-	g_hash_table_insert(slave->pluginPaths, key, value);
+void slave_storeProgram(Slave* slave, Program* prog) {
+    MAGIC_ASSERT(slave);
+    g_hash_table_insert(slave->programs, program_getID(prog), prog);
 }
 
-const gchar* slave_getPluginPath(Slave* slave, GQuark pluginID) {
-	MAGIC_ASSERT(slave);
-	return g_hash_table_lookup(slave->pluginPaths, &pluginID);
-}
-
-void slave_lockPluginInit(Slave* slave) {
-	MAGIC_ASSERT(slave);
-	g_mutex_lock(&(slave->pluginInitLock));
-}
-
-void slave_unlockPluginInit(Slave* slave) {
-	MAGIC_ASSERT(slave);
-	g_mutex_unlock(&(slave->pluginInitLock));
+Program* slave_getProgram(Slave* slave, GQuark pluginID) {
+    MAGIC_ASSERT(slave);
+	return g_hash_table_lookup(slave->programs, &pluginID);
 }
 
 DNS* slave_getDNS(Slave* slave) {
@@ -339,49 +318,6 @@ void slave_heartbeat(Slave* slave, SimulationTime simClockNow) {
 			warning("unable to print process resources usage: error in getrusage: %i", errno);
 		}
 	}
-}
-
-void slave_cryptoLockingFunc(Slave* slave, gint mode, gint n) {
-/* from /usr/include/openssl/crypto.h */
-#define CRYPTO_LOCK		1
-#define CRYPTO_UNLOCK	2
-#define CRYPTO_READ		4
-#define CRYPTO_WRITE	8
-
-	MAGIC_ASSERT(slave);
-	utility_assert(slave->cryptoThreadLocks);
-
-	/* TODO may want to replace this with GRWLock when moving to GLib >= 2.32 */
-	GMutex* lock = &(slave->cryptoThreadLocks[n]);
-	utility_assert(lock);
-
-	if(mode & CRYPTO_LOCK) {
-		g_mutex_lock(lock);
-	} else {
-		g_mutex_unlock(lock);
-	}
-}
-
-gboolean slave_cryptoSetup(Slave* slave, gint numLocks) {
-	MAGIC_ASSERT(slave);
-
-	if(numLocks) {
-		_slave_lock(slave);
-
-		if(slave->cryptoThreadLocks) {
-			utility_assert(numLocks <= slave->numCryptoThreadLocks);
-		} else {
-			slave->numCryptoThreadLocks = numLocks;
-			slave->cryptoThreadLocks = g_new0(GMutex, numLocks);
-			for(int i = 0; i < slave->numCryptoThreadLocks; i++) {
-				g_mutex_init(&(slave->cryptoThreadLocks[i]));
-			}
-		}
-
-		_slave_unlock(slave);
-	}
-
-	return TRUE;
 }
 
 void slave_notifyProcessed(Slave* slave, guint numberEventsProcessed, guint numberNodesWithEvents) {

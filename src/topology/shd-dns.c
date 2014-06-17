@@ -154,7 +154,7 @@ Address* dns_resolveIPToAddress(DNS* dns, guint32 ip) {
 	return result;
 }
 
-Address* dns_resolveNameToAddress(DNS* dns, gchar* name) {
+Address* dns_resolveNameToAddress(DNS* dns, const gchar* name) {
 	MAGIC_ASSERT(dns);
 	Address* result = g_hash_table_lookup(dns->addressByName, name);
 	if(!result) {
@@ -164,7 +164,7 @@ Address* dns_resolveNameToAddress(DNS* dns, gchar* name) {
 }
 
 //TODO remove this func
-guint32 dns_resolveNameToIP(DNS* dns, gchar* name) {
+guint32 dns_resolveNameToIP(DNS* dns, const gchar* name) {
 	MAGIC_ASSERT(dns);
 	Address* address = dns_resolveNameToAddress(dns, name);
 	if(address) {
