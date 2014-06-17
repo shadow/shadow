@@ -162,6 +162,9 @@ Thread* thread_new(Process* parentProc, Program* prog) {
     Thread* thread = g_new0(Thread, 1);
 	MAGIC_INIT(thread);
 
+	thread->parentProcess = parentProc;
+	thread->program = prog;
+
 	/* timer for CPU delay measurements */
     thread->delayTimer = g_timer_new();
 

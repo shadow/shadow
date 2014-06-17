@@ -6,6 +6,7 @@
 
 /* these are only avail in glib >= 2.30, needed for signals */
 #include <glib-unix.h>
+#include <signal.h>
 
 #include "shadow.h"
 
@@ -152,8 +153,8 @@ void master_run(Master* master) {
     message("SHADOW_SPAWNED=%s", g_getenv("SHADOW_SPAWNED"));
 
     if(master->config->debug) {
-        message("Pausing for 5 seconds to enable debugger attachment");
-        sleep(5);
+        message("Pausing with SIGTSTP to enable debugger attachment (pid %i)", (gint)getpid());
+        raise(SIGTSTP);
     }
 
 	/* store parsed actions from each user-configured simulation script  */

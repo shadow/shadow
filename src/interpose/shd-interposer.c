@@ -322,7 +322,7 @@ static inline int shouldForwardToLibC() {
 		/* check if the shadow intercept library is loaded yet, but dont fail if its not */
 		if(thread) {
 			/* ask shadow if this call is a plug-in that should be intercepted */
-		    useLibC = thread_shouldInterpose(thread) ? 1 : 0;
+		    useLibC = thread_shouldInterpose(thread) ? 0 : 1;
 		} else {
 			/* intercept library is not yet loaded, don't redirect */
 		    useLibC = 1;
