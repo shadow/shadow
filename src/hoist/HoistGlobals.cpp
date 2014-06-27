@@ -29,6 +29,19 @@
 using namespace llvm;
 using std::string;
 
+static std::vector<Function*> parseGlobalCtors(GlobalVariable *GV) {
+	if (GV->getInitializer()->isNullValue())
+		return std::vector<Function *>();
+	ConstantArray *CA = cast<ConstantArray>(GV->getInitializer());
+	std::vector<Function *> Result;
+	Result.reserve(CA->getNumOperands());
+	for (User::op_iterator i = CA->op_begin(), e = CA->op_end(); i != e; ++i) {
+		ConstantStruct *CS = cast<ConstantStruct>(*i);
+		Result.push_back(dyn_cast<Function>(CS->getOperand(1)));
+	}
+	return Result;
+}
+
 namespace {
 class HoistGlobalsPass: public ModulePass {
 
@@ -44,6 +57,30 @@ public:
 
 	bool runOnModule(Module &M) {
 		bool modified = false;
+
+		{
+#ifdef DEBUG
+			errs() << "Injecting llvm.global_ctors into __shadow_plugin_init__";
+#endif
+			Function *initFunc = M.getFunction("__shadow_plugin_init__");
+			Function::BasicBlockListType &blocks = initFunc->getBasicBlockList();
+			GlobalVariable *GV = M.getGlobalVariable("llvm.global_ctors");
+			if (GV != NULL) {
+				std::vector<Function*> ctors = parseGlobalCtors(GV);
+				// Create a new basic block that calls all the global_ctors
+				BasicBlock *block = BasicBlock::Create(M.getContext(), "call_global_ctors");
+				for (std::vector<Function*>::iterator i = ctors.begin(), e = ctors.end(); i != e; ++i) {
+					ArrayRef<Value*> args;
+					CallInst *ins = CallInst::Create(*i, args, "", block);
+				}
+				BranchInst *ret = BranchInst::Create(&blocks.front(), block);
+				blocks.push_front(block);
+			}
+#ifdef DEBUG
+			errs() << "\n";
+#endif
+		}
+
 
 		// lists to store our globals, their types, and their initial values
 		SmallVector<GlobalVariable*, 16> Globals;
