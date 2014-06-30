@@ -116,6 +116,9 @@ typedef int (*FXStat)(int, int, struct stat*);
 typedef int (*FStatFSFunc)(int, struct statfs*);
 typedef off_t (*LSeekFunc)(int, off_t, int);
 typedef int (*FLockFunc)(int, int);
+typedef int (*FSyncFunc)(int);
+typedef int (*FTruncateFunc)(int, int);
+typedef int (*PosixFAllocateFunc)(int, int, int);
 
 /* time family */
 
@@ -204,6 +207,10 @@ typedef struct {
 	FStatFSFunc fstatfs;
 	LSeekFunc lseek;
 	FLockFunc flock;
+	FSyncFunc fsync;
+	FTruncateFunc ftruncate;
+	PosixFAllocateFunc posix_fallocate;
+
 
 	TimeFunc time;
 	ClockGettimeFunc clock_gettime;
@@ -1934,16 +1941,90 @@ int flock(int fd, int operation) {
     return (off_t)-1;
 }
 
+int fsync(int fd) {
+    if (shouldForwardToLibC()) {
+        ENSURE(libc, "", fsync);
+        return director.libc.fsync(fd);
+    }
+
+    Host* host = _interposer_switchInShadowContext();
+
+    if (host_isShadowDescriptor(host, fd)) {
+        warning("fsync not implemented for Shadow descriptor types");
+    } else {
+        /* check if we have a mapped os fd */
+        gint osfd = host_getOSHandle(host, fd);
+        if (osfd >= 0) {
+            gint ret = fsync(osfd);
+            _interposer_switchOutShadowContext(host);
+            return ret;
+        }
+    }
+
+    _interposer_switchOutShadowContext(host);
+
+    errno = EBADF;
+    return -1;
+}
+
+int ftruncate(int fd, off_t length) {
+    if (shouldForwardToLibC()) {
+        ENSURE(libc, "", ftruncate);
+        return director.libc.ftruncate(fd, length);
+    }
+
+    Host* host = _interposer_switchInShadowContext();
+
+    if (host_isShadowDescriptor(host, fd)) {
+        warning("ftruncate not implemented for Shadow descriptor types");
+    } else {
+        /* check if we have a mapped os fd */
+	gint osfd = host_getOSHandle(host, fd);
+        if (osfd >= 0) {
+	    gint ret = ftruncate(osfd, length);
+            _interposer_switchOutShadowContext(host);
+            return ret;
+        }
+    }
+
+    _interposer_switchOutShadowContext(host);
+
+    errno = EBADF;
+    return -1;
+}
+
+int posix_fallocate(int fd, off_t offset, off_t len) {
+    if (shouldForwardToLibC()) {
+        ENSURE(libc, "", posix_fallocate);
+        return director.libc.posix_fallocate(fd, offset, len);
+    }
+
+    Host* host = _interposer_switchInShadowContext();
+
+    if (host_isShadowDescriptor(host, fd)) {
+        warning("posix_fallocate not implemented for Shadow descriptor types");
+    } else {
+        /* check if we have a mapped os fd */
+	gint osfd = host_getOSHandle(host, fd);
+        if (osfd >= 0) {
+	    gint ret = posix_fallocate(osfd, offset, len);
+            _interposer_switchOutShadowContext(host);
+            return ret;
+        }
+    }
+
+    _interposer_switchOutShadowContext(host);
+
+    errno = EBADF;
+    return -1;
+}
+
 //TODO
 //int fstatvfs(int fd, struct statvfs *buf);
-//
-//int fsync(int fd);
 //
 //int fdatasync(int fd);
 //
 //int syncfs(int fd);
-//
-//int ftruncate(int fd, off_t length);
 //
 //int fallocate(int fd, int mode, off_t offset, off_t len);
 //
@@ -1958,8 +2039,6 @@ int flock(int fd, int operation) {
 //int fchmod(int fd, mode_t mode);
 //
 //int posix_fadvise(int fd, off_t offset, off_t len, int advice);
-//
-//int posix_fallocate(int fd, off_t offset, off_t len);
 //
 //int lockf(int fd, int cmd, off_t len);
 //
