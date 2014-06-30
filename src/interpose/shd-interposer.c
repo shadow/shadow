@@ -490,7 +490,7 @@ static gint _interposer_fcntlHelper(int fd, int cmd, va_list farg) {
         /* check if we have a mapped os fd */
         gint osfd = host_getOSHandle(node, fd);
         if(osfd >= 0) {
-            ret = fcntl(osfd, cmd, farg);
+	    ret = fcntl(osfd, cmd, va_arg(farg, void*));
         } else {
             err = EBADF;
             ret = -1;
