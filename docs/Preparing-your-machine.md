@@ -53,9 +53,12 @@ cd build
 cmake -DCMAKE_INSTALL_PREFIX=/home/${USER}/.local ../.
 make -jN
 make install
+export PATH=${PATH}:/home/${USER}/.local/bin
 ```
 
-**NOTE**: if you also have a system version of Clang/LLVM installed, make sure to note its location as it may cause conflicts as you build Shadow later.
+**NOTES**:  
+  + you should add `/home/${USER}/.local/bin` to your shell setup for the PATH environment variable (e.g., in `~/.bashrc` or `~/.bash_profile`)
+  + if you also have a system version of Clang/LLVM installed, make sure to note its location as it may cause conflicts as you build Shadow later.
 
 ## Obtaining Shadow
 
@@ -84,6 +87,7 @@ Luckily, Shadow contains a script to do this for you, and will help you configur
 ./setup dependencies
 ./setup build
 ./setup install
+export PATH=${PATH}:/home/${USER}/.shadow/bin
 ```
 
 For more details, add `--help` to each of those commands.
@@ -97,7 +101,7 @@ You may skip this section if you used the automatic installation method. If you 
 ```
 ./config --prefix=/home/${USER}/.shadow shared threads enable-ec_nistp_64_gcc_128 -fPIC
 make
-make install
+make install_sw
 ```
 
 **libevent**
@@ -110,6 +114,8 @@ make install
 
 ### Important Notes
 
++ You should add `/home/${USER}/.shadow/bin` to your shell setup for the PATH environment variable (e.g., in `~/.bashrc` or `~/.bash_profile`)
+
 + The two most useful build options are:  
  + `-g` or `--debug` to build Shadow with debugging symbols
  + `--tor-prefix` to build Scallion with your local custom Tor distribution (instead of downloading one from torproject.org).
@@ -121,8 +127,6 @@ make install
  + `--libevent-prefix`
 
 + If you want to install Shadow somewhere besides `~/.shadow`, you should use the `--prefix` flag.
-
-+ It will probably be useful to add `~/.shadow/bin` (or `your/prefix/bin`) to your `PATH` following installation.
 
 ### Other Notes
 
