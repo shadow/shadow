@@ -3,7 +3,11 @@
  * See LICENSE for licensing information
  */
 
+#define __STDC_LIMIT_MACROS
+#define __STDC_CONSTANT_MACROS
+
 #include "llvm/Pass.h"
+#if __clang_major__ == 3 && __clang_minor__ <= 2
 #include "llvm/Function.h"
 #include "llvm/Module.h"
 #include "llvm/LLVMContext.h"
@@ -13,6 +17,17 @@
 #include "llvm/GlobalValue.h"
 #include "llvm/DataLayout.h"
 #include "llvm/BasicBlock.h"
+#else
+#include "llvm/IR/Function.h"
+#include "llvm/IR/Module.h"
+#include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/Instructions.h"
+#include "llvm/IR/Constants.h"
+#include "llvm/IR/GlobalVariable.h"
+#include "llvm/IR/GlobalValue.h"
+#include "llvm/IR/DataLayout.h"
+#include "llvm/IR/BasicBlock.h"
+#endif
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Support/CallSite.h"
 #include "llvm/Support/CFG.h"
