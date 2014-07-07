@@ -99,6 +99,7 @@ typedef size_t (*WriteFunc)(int, const void*, size_t);
 typedef int (*CloseFunc)(int);
 typedef int (*FcntlFunc)(int, int, ...);
 typedef int (*IoctlFunc)(int, int, ...);
+typedef int (*EventfdFunc)(unsigned int, int);
 
 /* file specific */
 
@@ -192,6 +193,7 @@ typedef struct {
 	CloseFunc close;
 	FcntlFunc fcntl;
 	IoctlFunc ioctl;
+        EventfdFunc eventfd;
 
 	FileNoFunc fileno;
 	OpenFunc open;
@@ -1599,6 +1601,24 @@ int pipe(int pipefds[2]) {
 
     return pipe2(pipefds, O_NONBLOCK);
 }
+
+int eventfd(unsigned int initval, int flags) {
+    int result = 0;
+    if(shouldForwardToLibC()) {
+        ENSURE(libc, "", eventfd);
+        result = director.libc.eventfd(initval, flags);
+    } else {
+        Host* host = _interposer_switchInShadowContext();
+
+        gint osfd = eventfd(initval, flags);
+        gint shadowfd = osfd >= 3 ? host_createShadowHandle(host, osfd) : osfd;
+
+        _interposer_switchOutShadowContext(host);
+        result = shadowfd;
+    }
+    return result;
+}
+
 
 /* file specific */
 
