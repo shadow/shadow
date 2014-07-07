@@ -1,4 +1,4 @@
-#!/usr/bin/env python2.7
+#!/usr/bin/env python
 
 '''
 /*
@@ -26,20 +26,6 @@ def main():
     subparsers_main = parser_main.add_subparsers(
         help='run a subcommand (for help use <subcommand> --help)')
         
-    # configure dependencies subcommand
-    parser_dep = subparsers_main.add_parser('dependencies',
-        help="configure and build Shadow's custom dependencies", 
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser_dep.set_defaults(func=dependencies, 
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    
-    # add dependencies options
-    parser_dep.add_argument('-p', '--prefix', 
-        help="configure PATH as dependency root installation directory", 
-        metavar="PATH",
-        action="store", dest="prefix",
-        default=INSTALL_PREFIX)
-        
     # configure build subcommand
     parser_build = subparsers_main.add_parser('build',
         help='configure and build Shadow', 
@@ -58,13 +44,13 @@ def main():
         help="append PATH to the list of paths searched for headers. useful if dependencies are installed to non-standard locations, or when compiling custom libraries.",
         metavar="PATH",
         action="append", dest="extra_includes",
-        default=[INSTALL_PREFIX+ "/include", os.path.expanduser("~/.local/include"), os.path.expanduser("~/.local/share/llvm/cmake")])
+        default=[INSTALL_PREFIX+ "/include"])
     
     parser_build.add_argument('-l', '--library', 
         help="append PATH to the list of paths searched for libraries. useful if dependencies are installed to non-standard locations, or when compiling custom libraries.",
         metavar="PATH",
         action="append", dest="extra_libraries",
-        default=[INSTALL_PREFIX+ "/lib", os.path.expanduser("~/.local/lib")])
+        default=[INSTALL_PREFIX+ "/lib"])
     
     parser_build.add_argument('-g', '--debug',
         help="build in extra memory checks and debugging symbols when running Shadow",
@@ -120,20 +106,6 @@ def main():
     
     logging.info("returning code '{0}'".format(r))
 
-def dependencies(args):
-    if args.prefix is not None: args.prefix = getfullpath(args.prefix)
-    filepath=getfullpath(__file__)
-    rootdir=filepath[:filepath.rfind("/")]
-    builddir=getfullpath(BUILD_PREFIX)
-    
-    ## we will start in build directory
-    if not os.path.exists(builddir): os.makedirs(builddir)
-    
-    ## TODO: do we want to install Clang/LLVM?
-    logging.info("No dependencies are currently supported")
-       
-    return 0
-
 def build(args):
     # get absolute paths
     if args.prefix is not None: args.prefix = getfullpath(args.prefix)
@@ -183,10 +155,10 @@ def build(args):
     # look for the clang/clang++ compilers
     clangccpath = which("clang")
     if clangccpath is None: 
-        logging.error("can't find 'clang' compiler in your PATH! Is it installed? (Do you want the 'dependencies' subcommand?)")
+        logging.error("can't find 'clang' compiler in your PATH! Is it installed?")
     clangcxxpath = which("clang++")
     if clangcxxpath is None: 
-        logging.error("can't find 'clang++' compiler in your PATH! Is it installed? (Do you want the 'dependencies' subcommand?)")
+        logging.error("can't find 'clang++' compiler in your PATH! Is it installed?")
     if clangccpath is None or clangcxxpath is None: return -1
     
     # set clang/llvm as compiler

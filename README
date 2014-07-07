@@ -5,26 +5,25 @@ applications like Tor, and distributed systems of thousands of nodes
 on a single machine. Shadow combines the accuracy of emulation with the 
 efficiency and control of simulation, achieving the best of both approaches.
 
-Also included are core plug-ins and topologies for transferring files
-between clients and servers, and over a private Tor anonymity network.
+Also included are Internet topologies and a core plug-in for generating
+traffic between nodes and through SOCKS proxies.
 
 Quick Setup (installs everything in ~/.shadow):
-    $ ./setup dependencies
-    $ ./setup build
+    $ ./setup build -fg
     $ ./setup install
 
-Homepage:
-    http://shadow.github.io
-    
-Download New Releases:
-    http://shadow.github.io/download
-
-Project Development:
-    https://github.com/shadow
-
-Setup Instructions, User Documentation, FAQs:
+In-depth Setup Instructions and Tutorials:
     https://github.com/shadow/shadow/wiki
 
 Bug Reports:
     https://github.com/shadow/shadow/issues
+
+Shadow Plug-ins and Project Development:
+    https://github.com/shadow
+        
+Homepage:
+    https://shadow.github.io
+    
+Download New Releases:
+    https://shadow.github.io/download
 
