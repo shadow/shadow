@@ -53,6 +53,17 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	g_option_group_add_entries(c->mainOptionGroup, mainEntries);
 	g_option_context_set_main_group(c->context, c->mainOptionGroup);
 
+    /* now fill in the default plug-in examples option group */
+    c->pluginsOptionGroup = g_option_group_new("sim", "Simulation Examples", "Built-in simulation examples", NULL, NULL);
+    const GOptionEntry pluginEntries[] =
+    {
+      { "file", 0, 0, G_OPTION_ARG_NONE, &(c->runFileExample), "Run basic HTTP file transfer simulation", NULL },
+      { NULL },
+    };
+
+    g_option_group_add_entries(c->pluginsOptionGroup, pluginEntries);
+    g_option_context_add_group(c->context, c->pluginsOptionGroup);
+
 	/* now fill in the network option group */
 	GString* sockrecv = g_string_new("");
 	g_string_printf(sockrecv, "Initialize the socket receive buffer to N bytes [%i]", (gint)CONFIG_RECV_BUFFER_SIZE);
@@ -77,17 +88,6 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 
 	g_option_group_add_entries(c->networkOptionGroup, networkEntries);
 	g_option_context_add_group(c->context, c->networkOptionGroup);
-
-	/* now fill in the default plug-in examples option group */
-	c->pluginsOptionGroup = g_option_group_new("sim", "Simulation Examples", "Built-in simulation examples", NULL, NULL);
-	const GOptionEntry pluginEntries[] =
-	{
-	  { "file", 0, 0, G_OPTION_ARG_NONE, &(c->runFileExample), "Run basic HTTP file transfer simulation", NULL },
-	  { NULL },
-	};
-
-	g_option_group_add_entries(c->pluginsOptionGroup, pluginEntries);
-	g_option_context_add_group(c->context, c->pluginsOptionGroup);
 
 	/* parse args */
 	GError *error = NULL;
