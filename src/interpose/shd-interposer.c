@@ -2181,7 +2181,7 @@ const struct addrinfo *hints, struct addrinfo **res) {
          * and try that first, o/w convert to the in_addr_t and do a second lookup. */
         in_addr_t address = (in_addr_t) dns_resolveNameToIP(worker_getDNS(), name);
 
-        if(address == 0) {
+        if(address == INADDR_NONE) {
             /* name was not in hostname format. convert to IP format and try again */
             struct in_addr inaddr;
             gint r = inet_pton(AF_INET, name, &inaddr);
