@@ -99,6 +99,7 @@ typedef size_t (*WriteFunc)(int, const void*, size_t);
 typedef int (*CloseFunc)(int);
 typedef int (*FcntlFunc)(int, int, ...);
 typedef int (*IoctlFunc)(int, int, ...);
+typedef int (*EventfdFunc)(unsigned int, int);
 
 /* file specific */
 
@@ -192,6 +193,7 @@ typedef struct {
 	CloseFunc close;
 	FcntlFunc fcntl;
 	IoctlFunc ioctl;
+        EventfdFunc eventfd;
 
 	FileNoFunc fileno;
 	OpenFunc open;
@@ -1600,6 +1602,24 @@ int pipe(int pipefds[2]) {
     return pipe2(pipefds, O_NONBLOCK);
 }
 
+int eventfd(unsigned int initval, int flags) {
+    int result = 0;
+    if(shouldForwardToLibC()) {
+        ENSURE(libc, "", eventfd);
+        result = director.libc.eventfd(initval, flags);
+    } else {
+        Host* host = _interposer_switchInShadowContext();
+
+        gint osfd = eventfd(initval, flags);
+        gint shadowfd = osfd >= 3 ? host_createShadowHandle(host, osfd) : osfd;
+
+        _interposer_switchOutShadowContext(host);
+        result = shadowfd;
+    }
+    return result;
+}
+
+
 /* file specific */
 
 int fileno(FILE *stream) {
@@ -2161,7 +2181,7 @@ const struct addrinfo *hints, struct addrinfo **res) {
          * and try that first, o/w convert to the in_addr_t and do a second lookup. */
         in_addr_t address = (in_addr_t) dns_resolveNameToIP(worker_getDNS(), name);
 
-        if(address == 0) {
+        if(address == INADDR_NONE) {
             /* name was not in hostname format. convert to IP format and try again */
             struct in_addr inaddr;
             gint r = inet_pton(AF_INET, name, &inaddr);

@@ -155,7 +155,7 @@ void host_free(Host* host, gpointer userData) {
 	g_hash_table_destroy(host->interfaces);
 	g_hash_table_destroy(host->descriptors);
 	g_hash_table_destroy(host->shadowToOSHandleMap);
-    g_hash_table_destroy(host->osToShadowHandleMap);
+	g_hash_table_destroy(host->osToShadowHandleMap);
 
 	g_free(host->name);
 
