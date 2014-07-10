@@ -119,6 +119,7 @@ make install
 + The two most useful build options are:  
  + `-g` or `--debug` to build Shadow with debugging symbols
  + `--tor-prefix` to build Scallion with your local custom Tor distribution (instead of downloading one from torproject.org).
+ + if you want to use valgrind and don't want it to report spurious openssl errors, add this to the end of the openssl configure line: `-g -pg -DPURIFY -Bsymbolic`
 
 + If you installed any dependencies somewhere other than `~/.shadow`, you should use the following flags during the build process:
  + `--include`
