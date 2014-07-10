@@ -254,7 +254,7 @@ static gboolean _epollwatch_needsNotify(EpollWatch* watch) {
 
 static void _epoll_trySchedule(Epoll* epoll) {
 	/* schedule a shadow notification event if we have events to report */
-	if(!g_queue_is_empty(epoll->reporting)) {
+	if(!(epoll->flags & EF_CLOSED) && !g_queue_is_empty(epoll->reporting)) {
 		/* avoid duplicating events in the shadow event queue for our epoll */
 		gboolean isScheduled = (epoll->flags & EF_SCHEDULED) ? TRUE : FALSE;
 		if(!isScheduled && process_isRunning(thread_getParentProcess(epoll->ownerThread))) {
@@ -508,10 +508,13 @@ void epoll_tryNotify(Epoll* epoll) {
         return;
     }
 
+    /* make sure this doesn't get destroyed if closed while notifying */
+    descriptor_ref(&epoll->super);
+
 	/* we should notify the plugin only if we still have some events to report
 	 * XXX: what if our watches are empty, but the OS desc has events? */
 	if(!g_queue_is_empty(epoll->reporting)) {
-		/* notify application to collect the reportable events */
+	    /* notify application to collect the reportable events */
 		process_notify(thread_getParentProcess(epoll->ownerThread), epoll->ownerThread);
 
 		/* we just notified the application of the events, so reset the change status
@@ -535,4 +538,6 @@ void epoll_tryNotify(Epoll* epoll) {
 
 	/* check if we need to be notified again */
 	_epoll_trySchedule(epoll);
+
+	descriptor_unref(&epoll->super);
 }
