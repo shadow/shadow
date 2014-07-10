@@ -14,10 +14,11 @@ typedef struct _Thread Thread;
 Thread* thread_new(Process* parentProc, Program* prog);
 void thread_free(Thread* thread);
 
-void thread_execute(Thread* thread, PluginNotifyFunc func);
-void thread_executeNew(Thread* thread, PluginNewInstanceFunc new, gint argcParam, gchar* argvParam[]);
 void thread_executeInit(Thread* thread, ShadowPluginInitializeFunc init);
-void thread_executeCallback(Thread* thread, CallbackFunc callback, gpointer data, gpointer callbackArgument);
+void thread_executeNew(Thread* thread, PluginNewInstanceFunc new, gint argcParam, gchar* argvParam[]);
+void thread_execute(Thread* thread, PluginNotifyFunc func);
+void thread_executeExitCallback(Thread* thread, void (*callback)(int , void *), gpointer argument);
+void thread_executeCallback2(Thread* thread, CallbackFunc callback, gpointer data, gpointer callbackArgument);
 
 gboolean thread_shouldInterpose(Thread* thread);
 void thread_beginControl(Thread* thread);

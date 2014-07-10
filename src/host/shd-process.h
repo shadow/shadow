@@ -20,4 +20,7 @@ void process_notify(Process* proc, Thread* thread);
 void process_callback(Process* proc, CallbackFunc userCallback,
 		gpointer userData, gpointer userArgument, guint millisecondsDelay);
 
+gboolean process_addAtExitCallback(Process* proc, gpointer userCallback, gpointer userArgument,
+        gboolean shouldPassArgument);
+
 #endif /* SHD_APPLICATION_H_ */

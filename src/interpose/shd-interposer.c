@@ -150,6 +150,12 @@ typedef int (*RandomRFunc)(struct random_data*, int32_t*);
 typedef void (*SrandomFunc)(unsigned int);
 typedef int (*SrandomRFunc)(unsigned int, struct random_data*);
 
+/* exit family */
+
+typedef int (*on_exit_fp)(void (*function)(int , void *), void *arg);
+typedef int (*atexit_fp)(void (*func)(void));
+typedef int (*__cxa_atexit_fp)(void (*func) (void *), void * arg, void * dso_handle);
+
 typedef struct {
 	MallocFunc malloc;
 	CallocFunc calloc;
@@ -236,6 +242,10 @@ typedef struct {
 	RandomRFunc random_r;
 	SrandomFunc srandom;
 	SrandomRFunc srandom_r;
+
+	on_exit_fp on_exit;
+	atexit_fp atexit;
+	__cxa_atexit_fp __cxa_atexit;
 } PreloadFuncs;
 
 typedef struct {
@@ -2444,4 +2454,71 @@ int srandom_r(unsigned int seed, struct random_data *buf) {
     }
 
     return 0;
+}
+
+/* exit family */
+
+int on_exit(void (*function)(int , void *), void *arg) {
+    if(shouldForwardToLibC()) {
+        ENSURE(libc, "", on_exit);
+        return director.libc.on_exit(function, arg);
+    }
+
+    Host* host = _interposer_switchInShadowContext();
+
+    gboolean success = FALSE;
+    Thread* thread = worker_getActiveThread();
+    if(thread) {
+        Process* proc = thread_getParentProcess(thread);
+        success = process_addAtExitCallback(proc, function, arg, TRUE);
+    }
+
+    _interposer_switchOutShadowContext(host);
+
+    return success == TRUE ? 0 : -1;
+}
+
+int atexit(void (*func)(void)) {
+    if(shouldForwardToLibC()) {
+        ENSURE(libc, "", atexit);
+        return director.libc.atexit(func);
+    }
+
+    Host* host = _interposer_switchInShadowContext();
+
+    gboolean success = FALSE;
+    Thread* thread = worker_getActiveThread();
+    if(thread) {
+        Process* proc = thread_getParentProcess(thread);
+        success = process_addAtExitCallback(proc, func, NULL, FALSE);
+    }
+
+    _interposer_switchOutShadowContext(host);
+
+    return success == TRUE ? 0 : -1;
+}
+
+int __cxa_atexit(void (*func) (void *), void * arg, void * dso_handle) {
+    if(shouldForwardToLibC()) {
+        ENSURE(libc, "", __cxa_atexit);
+        return director.libc.__cxa_atexit(func, arg, dso_handle);
+    }
+
+    Host* host = _interposer_switchInShadowContext();
+
+    gboolean success = FALSE;
+    if(dso_handle) {
+        /* this should be called when the plugin is unloaded */
+        // TODO
+    } else {
+        Thread* thread = worker_getActiveThread();
+        if(thread) {
+            Process* proc = thread_getParentProcess(thread);
+            success = process_addAtExitCallback(proc, func, arg, TRUE);
+        }
+    }
+
+    _interposer_switchOutShadowContext(host);
+
+    return success == TRUE ? 0 : -1;
 }

@@ -15,6 +15,8 @@ struct _Process {
 
 	SimulationTime startTime;
 	GString* arguments;
+
+	GQueue* atExitFunctions;
 	MAGIC_DECLARE;
 };
 
@@ -25,6 +27,13 @@ struct _ProcessCallbackData {
 	gpointer argument;
 };
 
+typedef struct _ProcessExitCallbackData ProcessExitCallbackData;
+struct _ProcessExitCallbackData {
+    gpointer callback;
+    gpointer argument;
+    gboolean passArgument;
+};
+
 Process* process_new(GQuark programID, SimulationTime startTime, SimulationTime stopTime, gchar* arguments) {
 	Process* proc = g_new0(Process, 1);
 	MAGIC_INIT(proc);
@@ -32,6 +41,8 @@ Process* process_new(GQuark programID, SimulationTime startTime, SimulationTime 
 	proc->programID = programID;
 	proc->startTime = startTime;
 	proc->arguments = g_string_new(arguments);
+
+	proc->atExitFunctions = g_queue_new();
 
 	return proc;
 }
@@ -42,6 +53,8 @@ void process_free(Process* proc) {
 	process_stop(proc);
 
 	g_string_free(proc->arguments, TRUE);
+
+	g_queue_free_full(proc->atExitFunctions, g_free);
 
 	MAGIC_CLEAR(proc);
 	g_free(proc);
@@ -137,7 +150,19 @@ void process_stop(Process* proc) {
 	/* we only have state if we are running */
 	if(process_isRunning(proc)) {
         program_swapInState(proc->prog, proc->state);
+
         thread_execute(proc->mainThread, program_getFreeFunc(proc->prog));
+
+        while(g_queue_get_length(proc->atExitFunctions) > 0) {
+            ProcessExitCallbackData* exitCallback = g_queue_pop_head(proc->atExitFunctions);
+            if(exitCallback->passArgument) {
+                thread_executeExitCallback(proc->mainThread, exitCallback->callback, exitCallback->argument);
+            } else {
+                thread_execute(proc->mainThread, (PluginNotifyFunc)exitCallback->callback);
+            }
+            g_free(exitCallback);
+        }
+
         program_swapOutState(proc->prog, proc->state);
 
 		/* free our copy of plug-in resources, and other application state */
@@ -166,7 +191,7 @@ static void _process_callbackTimerExpired(Process* proc, ProcessCallbackData* da
 
 	if(process_isRunning(proc)) {
         program_swapInState(proc->prog, proc->state);
-		thread_executeCallback(proc->mainThread, data->callback, data->data, data->argument);
+		thread_executeCallback2(proc->mainThread, data->callback, data->data, data->argument);
         program_swapOutState(proc->prog, proc->state);
 	}
 
@@ -193,4 +218,22 @@ void process_callback(Process* proc, CallbackFunc userCallback,
 
 	/* callback to our own node */
 	worker_scheduleEvent((Event*)event, nanos, 0);
+}
+
+gboolean process_addAtExitCallback(Process* proc, gpointer userCallback, gpointer userArgument,
+        gboolean shouldPassArgument) {
+    MAGIC_ASSERT(proc);
+    if(!process_isRunning(proc)) {
+        return FALSE;
+    }
+
+    if(userCallback) {
+        ProcessExitCallbackData* exitCallback = g_new0(ProcessExitCallbackData, 1);
+        exitCallback->callback = userCallback;
+        exitCallback->argument = userArgument;
+        exitCallback->passArgument = shouldPassArgument;
+        g_queue_push_head(proc->atExitFunctions, exitCallback);
+    }
+
+    return TRUE;
 }

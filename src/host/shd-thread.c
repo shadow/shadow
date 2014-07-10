@@ -240,7 +240,7 @@ void thread_executeInit(Thread* thread, ShadowPluginInitializeFunc init) {
     _thread_handleTimerResult(thread, elapsed);
 }
 
-void thread_executeCallback(Thread* thread, CallbackFunc callback, gpointer data, gpointer callbackArgument) {
+void thread_executeCallback2(Thread* thread, CallbackFunc callback, gpointer data, gpointer callbackArgument) {
     MAGIC_ASSERT(thread);
     utility_assert(callback);
 
@@ -249,6 +249,22 @@ void thread_executeCallback(Thread* thread, CallbackFunc callback, gpointer data
     worker_setActiveThread(thread);
     thread->activeContext = TCTX_PLUGIN;
     callback(data, callbackArgument);
+    thread->activeContext = TCTX_SHADOW;
+    worker_setActiveThread(NULL);
+
+    gdouble elapsed = g_timer_elapsed(thread->delayTimer, NULL);
+    _thread_handleTimerResult(thread, elapsed);
+}
+
+void thread_executeExitCallback(Thread* thread, void (*callback)(int , void *), gpointer argument) {
+    MAGIC_ASSERT(thread);
+    utility_assert(callback);
+
+    g_timer_start(thread->delayTimer);
+
+    worker_setActiveThread(thread);
+    thread->activeContext = TCTX_PLUGIN;
+    callback(0, argument);
     thread->activeContext = TCTX_SHADOW;
     worker_setActiveThread(NULL);
 
