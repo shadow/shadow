@@ -9,8 +9,14 @@
 ## Check for the files
 
 find_path (LLVM_DIR LLVM-Config.cmake
-  PATHS /usr/local/share/llvm/cmake /usr/share/llvm/cmake /usr/share/llvm-3.4/cmake /usr/share/llvm-3.3/cmake /usr/share/llvm-3.2/cmake
+  PATHS ${CMAKE_EXTRA_INCLUDES} PATH_SUFFIXES cmake NO_DEFAULT_PATH
   )
+
+if(NOT LLVM_DIR)
+  find_path (LLVM_DIR LLVM-Config.cmake
+    PATHS /usr/local/share/llvm /usr/share/llvm /usr/share/llvm-3.5 /usr/share/llvm-3.4 /usr/share/llvm-3.3 /usr/share/llvm-3.2 PATH_SUFFIXES cmake
+  )
+endif()
 
 ## -----------------------------------------------------------------------------
 ## Actions taken when all components have been found
