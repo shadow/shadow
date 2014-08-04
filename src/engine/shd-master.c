@@ -154,7 +154,7 @@ void master_run(Master* master) {
 
     if(master->config->debug) {
         message("Pausing with SIGTSTP to enable debugger attachment (pid %i)", (gint)getpid());
-		g_printerr("** Pausing with SIGTSTP to enable debugger attachment (pid %i)", (gint)getpid());
+		g_printerr("** Pausing with SIGTSTP to enable debugger attachment (pid %i)\n", (gint)getpid());
         raise(SIGTSTP);
     }
 
