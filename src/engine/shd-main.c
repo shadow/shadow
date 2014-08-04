@@ -230,6 +230,10 @@ gint shadow_main(gint argc, gchar* argv[]) {
 
 	utility_assert(preloadSuccess);
 
+	/* tell the preaload lib we are ready for action */
+	extern void interposer_setShadowIsLoaded();
+	interposer_setShadowIsLoaded();
+
 	/* allocate and initialize our main simulation driver */
 	shadowMaster = master_new(config);
 	if(shadowMaster) {
