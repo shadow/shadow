@@ -256,6 +256,7 @@ typedef struct {
 		size_t ndeallocs;
 	} dummy;
 	PreloadFuncs libc;
+	gboolean shadowIsLoaded;
 } FuncDirector;
 
 /* global storage for function pointers that we look up lazily */
@@ -288,6 +289,10 @@ static void dummy_free(void *ptr) {
 	if(director.dummy.ndeallocs == director.dummy.nallocs){
 		director.dummy.pos = 0;
 	}
+}
+
+void interposer_setShadowIsLoaded() {
+    director.shadowIsLoaded = TRUE;
 }
 
 static void _interposer_globalInitialize() {
@@ -337,7 +342,7 @@ static inline int shouldForwardToLibC() {
 	int useLibC = 1;
 	/* recursive calls always go to libc */
 	if(!__sync_fetch_and_add(&isRecursive, 1)) {
-	    Thread* thread = worker_isAlive() ? worker_getActiveThread() : NULL;
+	    Thread* thread = director.shadowIsLoaded && worker_isAlive() ? worker_getActiveThread() : NULL;
 		/* check if the shadow intercept library is loaded yet, but dont fail if its not */
 		if(thread) {
 			/* ask shadow if this call is a plug-in that should be intercepted */
