@@ -28,6 +28,7 @@
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/BasicBlock.h"
 #endif
+#include "llvm/ADT/ArrayRef.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Support/CallSite.h"
 #include "llvm/Support/CFG.h"
@@ -57,6 +58,23 @@ static std::vector<Function*> parseGlobalCtors(GlobalVariable *GV) {
 	return Result;
 }
 
+static void replaceAllUsesWithKeepDebugInfo(GlobalVariable* From, Constant* To) {
+    assert(!From->isConstant());
+    while(From->getNumUses() > 0) {
+        User* u = From->use_back();
+
+        // this cant be done on a constant, and we asserted that from is not a constant
+        u->replaceUsesOfWith(From, To);
+
+        // metadata (gdb debug info) does not count as a use, so we have to update this manually
+        if(Instruction *ins = dyn_cast < Instruction > (u)) {
+            MDNode *N = ins->getMetadata(LLVMContext::MD_dbg);
+            // replace any debug info that references From to instead reference To
+            // ??
+        }
+    }
+}
+
 namespace {
 class HoistGlobalsPass: public ModulePass {
 
@@ -71,8 +89,6 @@ public:
 	HoistGlobalsPass() : ModulePass(ID) {}
 
 	bool runOnModule(Module &M) {
-		bool modified = false;
-
 		{
 #ifdef DEBUG
 			errs() << "Injecting llvm.global_ctors into __shadow_plugin_init__";
@@ -113,18 +129,11 @@ public:
 				if (GV->isConstant())
 					continue;
 
-				// We found a global variable, keep track of it
-				modified = true;
-
 				GlobalTypes.push_back(cast<PointerType>(GV->getType())->getElementType());
 				GlobalInitializers.push_back(GV->getInitializer());
 				Globals.push_back(GV);
 			}
 		}
-
-		// There is nothing to do if we have no globals
-		if (!modified)
-			return false;
 
 		// Now we need a new structure to store all of the globals we found
 		// its type is a combination of the types of all of its elements
@@ -167,41 +176,25 @@ public:
 		// replace all accesses to the original variables with pointer indirection
 		// this replaces uses with pointers into the global struct
 		uint64_t Field = 0;
-		for (GlobalVariable **i = Globals.begin(), **e = Globals.end(); i != e; ++i) {
-			GlobalVariable *GV = *i;
+		for (GlobalVariable **gv = Globals.begin(), **e = Globals.end(); gv != e; ++gv) {
+			GlobalVariable *GV = *gv;
 			assert(GV);
 
 			SmallVector<Value*, 2> GEPIndexes;
 			GEPIndexes.push_back(ConstantInt::get(Int32Ty, 0));
 			GEPIndexes.push_back(ConstantInt::get(Int32Ty, Field++));
-//			ArrayRef<Value*>* a = new ArrayRef<Value*>(GEPIndexes);
+			Constant *GEP = ConstantExpr::getGetElementPtr(HoistedStruct, GEPIndexes, true);
 
 			// we have to do this manually so we can preserve debug info
-			Constant *GEP = ConstantExpr::getGetElementPtr(HoistedStruct, GEPIndexes, true);
-			GV->replaceAllUsesWith(GEP);
-
-//			for (Value::use_iterator ui = GV->use_begin(); ui != GV->use_end(); ++ui) {
-//				if(Instruction *ins = dyn_cast < Instruction > (*ui)) {
-//					if(User *u = dyn_cast < User > (*ui)) {
-//						GetElementPtrInst *GEP = GetElementPtrInst::CreateInBounds(HoistedStruct, *a, "", ins);
-//						u->replaceUsesOfWith(GV, GEP);
-//					}
-//				}
-//			    // replace user with new user
-//				// copy metadata, change storage location reference
-//				// create load instruction to load the GEP before existing user
-//				if(Instruction *ins = dyn_cast < Instruction > (*ui)) {
-//					MDNode *N = ins->getMetadata(LLVMContext::MD_dbg);
-//					GetElementPtrInst *GEP = GetElementPtrInst::CreateInBounds(HoistedStruct, *a, "", ins);
-//					ins->eraseFromParent();
-//					LoadInst *loadGEP = new LoadInst(GEP, "");
-//					BasicBlock::iterator ii(ins);
-//					ReplaceInstWithInst(ins->getParent()->getInstList(), ii, loadGEP);
-//				}
-//			}
+//			GV->replaceAllUsesWith(GEP);
+			replaceAllUsesWithKeepDebugInfo(GV, GEP);
 
 #ifdef DEBUG
-			errs() << GV->getName() << ", ";
+			if(gv+1 == e) {
+			    errs() << GV->getName();
+			} else {
+                errs() << GV->getName() << ", ";
+			}
 #endif
 
 			assert(GV->use_empty());
