@@ -54,6 +54,9 @@ struct _Host {
 	GHashTable* shadowToOSHandleMap;
 	GHashTable* osToShadowHandleMap;
 
+	/* map path to ports for unix sockets */
+	GHashTable* unixPathToPortMap;
+
 	/* track the order in which the application sent us application data */
 	gdouble packetPriorityCounter;
 
@@ -124,6 +127,7 @@ Host* host_new(GQuark id, gchar* hostname, gchar* ipHint, gchar* geocodeHint, gc
 
 	host->shadowToOSHandleMap = g_hash_table_new(g_direct_hash, g_direct_equal);
     host->osToShadowHandleMap = g_hash_table_new(g_direct_hash, g_direct_equal);
+    host->unixPathToPortMap = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
 
 	/* applications this node will run */
 	host->applications = g_queue_new();
@@ -156,6 +160,7 @@ void host_free(Host* host, gpointer userData) {
 	g_hash_table_destroy(host->descriptors);
 	g_hash_table_destroy(host->shadowToOSHandleMap);
 	g_hash_table_destroy(host->osToShadowHandleMap);
+	g_hash_table_destroy(host->unixPathToPortMap);
 
 	g_free(host->name);
 
@@ -671,8 +676,25 @@ static in_port_t _host_getRandomFreePort(Host* host, in_addr_t interfaceIP,
 	return randomNetworkPort;
 }
 
-gint host_bindToInterface(Host* host, gint handle, in_addr_t bindAddress, in_port_t bindPort) {
+gint host_bindToInterface(Host* host, gint handle, const struct sockaddr* address) {
 	MAGIC_ASSERT(host);
+
+	in_addr_t bindAddress = 0;
+	in_port_t bindPort = 0;
+
+	if(address->sa_family == AF_INET) {
+	    struct sockaddr_in* saddr = (struct sockaddr_in*) address;
+	    bindAddress = saddr->sin_addr.s_addr;
+	    bindPort = saddr->sin_port;
+	} else if (address->sa_family == AF_UNIX) {
+	    struct sockaddr_un* saddr = (struct sockaddr_un*) address;
+	    /* cant bind twice to the same unix path */
+	    if(g_hash_table_lookup(host->unixPathToPortMap, saddr->sun_path)) {
+	        return EADDRINUSE;
+	    }
+        bindAddress = htonl(INADDR_LOOPBACK);
+        bindPort = 0; /* choose a random free port below */
+	}
 
 	Descriptor* descriptor = host_lookupDescriptor(host, handle);
 	if(descriptor == NULL) {
@@ -719,12 +741,42 @@ gint host_bindToInterface(Host* host, gint handle, in_addr_t bindAddress, in_por
 	/* bind port and set associations */
 	_host_associateInterface(host, socket, bindAddress, bindPort);
 
+	if (address->sa_family == AF_UNIX) {
+        struct sockaddr_un* saddr = (struct sockaddr_un*) address;
+        gchar* sockpath = g_strndup(saddr->sun_path, 108); /* UNIX_PATH_MAX=108 */
+        socket_setUnixPath(socket, sockpath, TRUE);
+        g_hash_table_replace(host->unixPathToPortMap, sockpath, GUINT_TO_POINTER(bindPort));
+    }
+
 	return 0;
 }
 
-gint host_connectToPeer(Host* host, gint handle, in_addr_t peerIP,
-		in_port_t peerPort, sa_family_t family) {
+gint host_connectToPeer(Host* host, gint handle, const struct sockaddr* address) {
 	MAGIC_ASSERT(host);
+
+	sa_family_t family = 0;
+	in_addr_t peerIP = 0;
+	in_port_t peerPort = 0;
+
+    if(address->sa_family == AF_INET) {
+        struct sockaddr_in* saddr = (struct sockaddr_in*) address;
+
+        family = saddr->sin_family;
+        peerIP = saddr->sin_addr.s_addr;
+        peerPort = saddr->sin_port;
+
+    } else if (address->sa_family == AF_UNIX) {
+        struct sockaddr_un* saddr = (struct sockaddr_un*) address;
+
+        family = saddr->sun_family;
+        gchar* sockpath = saddr->sun_path;
+
+        peerIP = htonl(INADDR_LOOPBACK);
+        gpointer val = g_hash_table_lookup(host->unixPathToPortMap, sockpath);
+        if(val) {
+            peerPort = (in_port_t)GPOINTER_TO_UINT(val);
+        }
+    }
 
 	in_addr_t loIP = htonl(INADDR_LOOPBACK);
 
@@ -771,6 +823,11 @@ gint host_connectToPeer(Host* host, gint handle, in_addr_t peerIP,
 			return error;
 		}
 	}
+
+	if (address->sa_family == AF_UNIX) {
+        struct sockaddr_un* saddr = (struct sockaddr_un*) address;
+        socket_setUnixPath(socket, saddr->sun_path, FALSE);
+    }
 
 	if(!socket_isBound(socket)) {
 		/* do an implicit bind to a random port.
@@ -845,7 +902,7 @@ gint host_acceptNewPeer(Host* host, gint handle, in_addr_t* ip, in_port_t* port,
 	return tcp_acceptServerPeer((TCP*)descriptor, ip, port, acceptedHandle);
 }
 
-gint host_getPeerName(Host* host, gint handle, in_addr_t* ip, in_port_t* port) {
+gint host_getPeerName(Host* host, gint handle, const struct sockaddr* address, socklen_t* len) {
 	MAGIC_ASSERT(host);
 
 	Descriptor* descriptor = host_lookupDescriptor(host, handle);
@@ -865,11 +922,35 @@ gint host_getPeerName(Host* host, gint handle, in_addr_t* ip, in_port_t* port) {
 		return ENOTCONN;
 	}
 
-	gboolean hasPeer = socket_getPeerName((Socket*)descriptor, ip, port);
-	return hasPeer ? 0 : ENOTCONN;
+	Socket* sock = (Socket*)descriptor;
+	in_addr_t ip = 0;
+	in_port_t port = 0;
+
+	gboolean hasPeer = socket_getPeerName(sock, &ip, &port);
+	if(hasPeer) {
+	    if(socket_isUnix(sock)) {
+            struct sockaddr_un* saddr = (struct sockaddr_un*) address;
+            saddr->sun_family = AF_UNIX;
+            gchar* unixPath = socket_getUnixPath(sock);
+            if(unixPath) {
+                g_snprintf(saddr->sun_path, 107, "%s\\0", unixPath);
+                *len = offsetof(struct sockaddr_un, sun_path) + strlen(saddr->sun_path) + 1;
+            } else {
+                *len = sizeof(sa_family_t);
+            }
+	    } else {
+            struct sockaddr_in* saddr = (struct sockaddr_in*) address;
+            saddr->sin_family = AF_INET;
+            saddr->sin_addr.s_addr = ip;
+            saddr->sin_port = port;
+	    }
+        return 0;
+	} else {
+	    return ENOTCONN;
+	}
 }
 
-gint host_getSocketName(Host* host, gint handle, in_addr_t* ip, in_port_t* port) {
+gint host_getSocketName(Host* host, gint handle, const struct sockaddr* address, socklen_t* len) {
 	MAGIC_ASSERT(host);
 
 	Descriptor* descriptor = host_lookupDescriptor(host, handle);
@@ -890,8 +971,33 @@ gint host_getSocketName(Host* host, gint handle, in_addr_t* ip, in_port_t* port)
 		return ENOTSOCK;
 	}
 
-	gboolean isBound = socket_getSocketName((Socket*)descriptor, ip, port);
-	return isBound ? 0 : ENOTCONN;
+    Socket* sock = (Socket*)descriptor;
+    in_addr_t ip = 0;
+    in_port_t port = 0;
+
+	gboolean isBound = socket_getSocketName((Socket*)descriptor, &ip, &port);
+
+    if(isBound) {
+        if(socket_isUnix(sock)) {
+            struct sockaddr_un* saddr = (struct sockaddr_un*) address;
+            saddr->sun_family = AF_UNIX;
+            gchar* unixPath = socket_getUnixPath(sock);
+            if(unixPath) {
+                g_snprintf(saddr->sun_path, 107, "%s\\0", unixPath);
+                *len = offsetof(struct sockaddr_un, sun_path) + strlen(saddr->sun_path) + 1;
+            } else {
+                *len = sizeof(sa_family_t);
+            }
+        } else {
+            struct sockaddr_in* saddr = (struct sockaddr_in*) address;
+            saddr->sin_family = AF_INET;
+            saddr->sin_addr.s_addr = ip;
+            saddr->sin_port = port;
+        }
+        return 0;
+    } else {
+        return ENOTCONN;
+    }
 }
 
 gint host_sendUserData(Host* host, gint handle, gconstpointer buffer, gsize nBytes,

@@ -1070,7 +1070,7 @@ void tcp_retransmitTimerExpired(TCP* tcp) {
 
 gboolean tcp_isFamilySupported(TCP* tcp, sa_family_t family) {
 	MAGIC_ASSERT(tcp);
-	return family == AF_INET ? TRUE : FALSE;
+	return family == AF_INET || family == AF_UNIX ? TRUE : FALSE;
 }
 
 gint tcp_getConnectError(TCP* tcp) {

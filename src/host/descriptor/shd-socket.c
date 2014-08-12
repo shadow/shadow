@@ -18,6 +18,9 @@ void socket_free(gpointer data) {
 	if(socket->boundString) {
 		g_free(socket->boundString);
 	}
+	if(socket->unixPath) {
+	    g_free(socket->unixPath);
+	}
 
 	while(g_queue_get_length(socket->inputBuffer) > 0) {
 		packet_unref(g_queue_pop_head(socket->inputBuffer));
@@ -403,4 +406,26 @@ Packet* socket_removeFromOutputBuffer(Socket* socket) {
 	}
 
 	return packet;
+}
+
+gboolean socket_isUnix(Socket* socket) {
+    return (socket->flags & SF_UNIX) ? TRUE : FALSE;
+}
+
+void socket_setUnix(Socket* socket, gboolean isUnixSocket) {
+    MAGIC_ASSERT(socket);
+    socket->flags = isUnixSocket ? (socket->flags | SF_UNIX) : (socket->flags & ~SF_UNIX);
+}
+
+void socket_setUnixPath(Socket* socket, const gchar* path, gboolean isBound) {
+    MAGIC_ASSERT(socket);
+    if(isBound) {
+        socket->flags |= SF_UNIX_BOUND;
+    }
+    socket->unixPath = g_strdup(path);
+}
+
+gchar* socket_getUnixPath(Socket* socket) {
+    MAGIC_ASSERT(socket);
+    return socket->unixPath;
 }
