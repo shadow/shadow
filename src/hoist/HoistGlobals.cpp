@@ -59,6 +59,8 @@ static std::vector<Function*> parseGlobalCtors(GlobalVariable *GV) {
 }
 
 static void replaceAllUsesWithKeepDebugInfo(GlobalVariable* From, Constant* To) {
+    From->replaceAllUsesWith(To);
+    return;
     assert(!From->isConstant());
     while(From->getNumUses() > 0) {
         User* u = From->use_back();
