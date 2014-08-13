@@ -14,7 +14,7 @@ struct _UDP {
 
 gboolean udp_isFamilySupported(UDP* udp, sa_family_t family) {
 	MAGIC_ASSERT(udp);
-	return (family == AF_INET || family == AF_UNSPEC) ? TRUE : FALSE;
+	return (family == AF_INET || family == AF_UNSPEC || family == AF_UNIX) ? TRUE : FALSE;
 }
 
 gint udp_connectToPeer(UDP* udp, in_addr_t ip, in_port_t port, sa_family_t family) {

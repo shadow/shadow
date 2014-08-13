@@ -30,6 +30,8 @@ struct _SocketFunctionTable {
 enum SocketFlags {
 	SF_NONE = 0,
 	SF_BOUND = 1 << 0,
+	SF_UNIX = 1 << 1,
+	SF_UNIX_BOUND = 1 << 2,
 };
 
 struct _Socket {
@@ -46,6 +48,8 @@ struct _Socket {
 	in_addr_t boundAddress;
 	in_port_t boundPort;
 	gchar* boundString;
+
+	gchar* unixPath;
 
 	gint associationKey;
 
@@ -97,5 +101,10 @@ enum ProtocolType socket_getProtocol(Socket* socket);
 
 gboolean socket_isFamilySupported(Socket* socket, sa_family_t family);
 gint socket_connectToPeer(Socket* socket, in_addr_t ip, in_port_t port, sa_family_t family);
+
+gboolean socket_isUnix(Socket* socket);
+void socket_setUnix(Socket* socket, gboolean isUnixSocket);
+void socket_setUnixPath(Socket* socket, const gchar* path, gboolean isBound);
+gchar* socket_getUnixPath(Socket* socket);
 
 #endif /* SHD_SOCKET_H_ */

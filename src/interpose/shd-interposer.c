@@ -386,40 +386,30 @@ static gint _interposer_addressHelper(gint fd, const struct sockaddr* addr, sock
         result = EBADF;
     } else if(addr == NULL) { /* check for proper addr */
         result = EFAULT;
-    } else if(len == NULL || *len < sizeof(struct sockaddr_in)) {
+    } else if(len == NULL ||
+            (addr->sa_family == AF_INET && *len < sizeof(struct sockaddr_in)) ||
+            (addr->sa_family == AF_UNIX && *len < sizeof(struct sockaddr_un))) {
         result = EINVAL;
     }
 
     if(result == 0) {
-        struct sockaddr_in* saddr = (struct sockaddr_in*) addr;
-        in_addr_t ip = saddr->sin_addr.s_addr;
-        in_port_t port = saddr->sin_port;
-        sa_family_t family = saddr->sin_family;
-
         /* direct to node for further checks */
-
         switch(type) {
             case SCT_BIND: {
-                result = host_bindToInterface(host, fd, ip, port);
+                result = host_bindToInterface(host, fd, addr);
                 break;
             }
 
             case SCT_CONNECT: {
-                result = host_connectToPeer(host, fd, ip, port, family);
+                result = host_connectToPeer(host, fd, addr);
                 break;
             }
 
             case SCT_GETPEERNAME:
             case SCT_GETSOCKNAME: {
                 result = type == SCT_GETPEERNAME ?
-                        host_getPeerName(host, fd, &(saddr->sin_addr.s_addr), &(saddr->sin_port)) :
-                        host_getSocketName(host, fd, &(saddr->sin_addr.s_addr), &(saddr->sin_port));
-
-                if(result == 0) {
-                    saddr->sin_family = AF_INET;
-                    *len = sizeof(struct sockaddr_in);
-                }
-
+                        host_getPeerName(host, fd, addr, len) :
+                        host_getSocketName(host, fd, addr, len);
                 break;
             }
 
@@ -988,8 +978,8 @@ int socket(int domain, int type, int protocol) {
         warning("unsupported socket type \"%i\", we only support SOCK_STREAM and SOCK_DGRAM", type);
         errno = EPROTONOSUPPORT;
         result = -1;
-    } else if(domain != AF_INET) {
-        warning("trying to create socket with domain \"%i\", we only support PF_INET", domain);
+    } else if(domain != AF_INET && domain != AF_UNIX) {
+        warning("trying to create socket with domain \"%i\", we only support AF_INET and AF_UNIX", domain);
         errno = EAFNOSUPPORT;
         result = -1;
     }
@@ -998,6 +988,10 @@ int socket(int domain, int type, int protocol) {
         /* we are all set to create the socket */
         DescriptorType dtype = type == SOCK_STREAM ? DT_TCPSOCKET : DT_UDPSOCKET;
         result = host_createDescriptor(node, dtype);
+        if(domain == AF_UNIX) {
+            Socket* s = (Socket*)host_lookupDescriptor(node, result);
+            socket_setUnix(s, TRUE);
+        }
     }
 
     _interposer_switchOutShadowContext(node);
