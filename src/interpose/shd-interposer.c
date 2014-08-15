@@ -386,7 +386,7 @@ static gint _interposer_addressHelper(gint fd, const struct sockaddr* addr, sock
         result = EBADF;
     } else if(addr == NULL) { /* check for proper addr */
         result = EFAULT;
-    } else if(len == NULL || *len < 0) {
+    } else if(len == NULL) {
         result = EINVAL;
     }
 
