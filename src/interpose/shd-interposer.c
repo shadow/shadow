@@ -498,17 +498,16 @@ static gint _interposer_fcntlHelper(int fd, int cmd, va_list farg) {
     Host* node = _interposer_switchInShadowContext();
 
     if(!host_isShadowDescriptor(node, fd)){
-        gint err = 0, ret = 0;
+        gint ret = 0;
         /* check if we have a mapped os fd */
         gint osfd = host_getOSHandle(node, fd);
         if(osfd >= 0) {
-	    ret = fcntl(osfd, cmd, va_arg(farg, void*));
+            ret = fcntl(osfd, cmd, va_arg(farg, void*));
         } else {
-            err = EBADF;
+            errno = EBADF;
             ret = -1;
         }
         _interposer_switchOutShadowContext(node);
-        errno = err;
         return ret;
     }
 
@@ -532,17 +531,16 @@ static gint _interposer_ioctlHelper(int fd, unsigned long int request, va_list f
     Host* node = _interposer_switchInShadowContext();
 
     if(!host_isShadowDescriptor(node, fd)){
-        gint err = 0, ret = 0;
+        gint ret = 0;
         /* check if we have a mapped os fd */
         gint osfd = host_getOSHandle(node, fd);
         if(osfd >= 0) {
             ret = ioctl(fd, request, farg);
         } else {
-            err = EBADF;
+            errno = EBADF;
             ret = -1;
         }
         _interposer_switchOutShadowContext(node);
-        errno = err;
         return ret;
     }
 
@@ -582,13 +580,7 @@ static int _interposer_ioctl(int fd, unsigned long int request, ...) {
     va_start(farg, request);
     int result = _interposer_ioctlHelper(fd, request, farg);
     va_end(farg);
-
-    if(result != 0) {
-        errno = result;
-        return -1;
-    } else {
-        return 0;
-    }
+    return result;
 }
 
 /****************************************************************************
@@ -1505,18 +1497,17 @@ int close(int fd) {
     Host* node = _interposer_switchInShadowContext();
 
     if(!host_isShadowDescriptor(node, fd)){
-        gint err = 0, ret = 0;
+        gint ret = 0;
         /* check if we have a mapped os fd */
         gint osfd = host_getOSHandle(node, fd);
         if(osfd >= 0) {
             ret = close(osfd);
             host_destroyShadowHandle(node, fd);
         } else {
-            err = EBADF;
+            errno = EBADF;
             ret = -1;
         }
         _interposer_switchOutShadowContext(node);
-        errno = err;
         return ret;
     }
 
@@ -2006,9 +1997,9 @@ int ftruncate(int fd, off_t length) {
         warning("ftruncate not implemented for Shadow descriptor types");
     } else {
         /* check if we have a mapped os fd */
-	gint osfd = host_getOSHandle(host, fd);
+        gint osfd = host_getOSHandle(host, fd);
         if (osfd >= 0) {
-	    gint ret = ftruncate(osfd, length);
+            gint ret = ftruncate(osfd, length);
             _interposer_switchOutShadowContext(host);
             return ret;
         }
@@ -2032,9 +2023,9 @@ int posix_fallocate(int fd, off_t offset, off_t len) {
         warning("posix_fallocate not implemented for Shadow descriptor types");
     } else {
         /* check if we have a mapped os fd */
-	gint osfd = host_getOSHandle(host, fd);
+        gint osfd = host_getOSHandle(host, fd);
         if (osfd >= 0) {
-	    gint ret = posix_fallocate(osfd, offset, len);
+            gint ret = posix_fallocate(osfd, offset, len);
             _interposer_switchOutShadowContext(host);
             return ret;
         }
@@ -2150,24 +2141,19 @@ int gethostname(char* name, size_t len) {
 //  const gchar* hostname = internetwork_resolveID(worker_getPrivate()->cached_engine->internet, (GQuark)ip);
 
     if(name != NULL && node != NULL) {
-
         /* resolve my address to a hostname */
         const gchar* sysname = host_getName(node);
 
         if(sysname != NULL && len > strlen(sysname)) {
             if(strncpy(name, sysname, len) != NULL) {
-                result = 0;
-                goto done;
+                _interposer_switchOutShadowContext(node);
+                return 0;
             }
         }
     }
+
     errno = EFAULT;
-    result = -1;
-
-    done:
-
-    _interposer_switchOutShadowContext(node);
-    return result;
+    return -1;
 }
 
 int getaddrinfo(const char *name, const char *service,
