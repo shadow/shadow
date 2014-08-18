@@ -23,6 +23,7 @@
 #include <sys/stat.h>
 #include <sys/statfs.h>
 #include <sys/time.h>
+#include <sys/timerfd.h>
 #include <sys/types.h>
 #include <sys/file.h>
 #include <linux/sockios.h>
@@ -101,6 +102,12 @@ typedef int (*FcntlFunc)(int, int, ...);
 typedef int (*IoctlFunc)(int, int, ...);
 typedef int (*EventfdFunc)(unsigned int, int);
 
+/* timers */
+
+typedef int (*timerfd_create_func)(int, int);
+typedef int (*timerfd_settime_func)(int, int, const struct itimerspec*, struct itimerspec*);
+typedef int (*timerfd_gettime_func)(int, struct itimerspec*);
+
 /* file specific */
 
 typedef int (*FileNoFunc)(FILE *);
@@ -173,6 +180,10 @@ typedef struct {
 	EpollCtlFunc epoll_ctl;
 	EpollWaitFunc epoll_wait;
 	EpollPWaitFunc epoll_pwait;
+
+	timerfd_create_func timerfd_create;
+	timerfd_settime_func timerfd_settime;
+	timerfd_gettime_func timerfd_gettime;
 
 	SocketFunc socket;
 	SocketpairFunc socketpair;
@@ -1447,7 +1458,12 @@ ssize_t read(int fd, void *buff, size_t numbytes) {
     Host* host = _interposer_switchInShadowContext();
 
     if(host_isShadowDescriptor(host, fd)){
-        ret = _interposer_recvHelper(host, fd, buff, numbytes, 0, NULL, 0);
+    	Descriptor* desc = host_lookupDescriptor(host, fd);
+    	if(descriptor_getType(desc) == DT_TIMER) {
+    		ret = timer_read((Timer*) desc, buff, numbytes);
+    	} else {
+			ret = _interposer_recvHelper(host, fd, buff, numbytes, 0, NULL, 0);
+    	}
     } else {
         gint osfd = host_getOSHandle(host, fd);
         if(osfd >= 0) {
@@ -1615,6 +1631,73 @@ int eventfd(unsigned int initval, int flags) {
         result = shadowfd;
     }
     return result;
+}
+
+int timerfd_create(int clockid, int flags) {
+    if(shouldForwardToLibC()) {
+        ENSURE(libc, "", timerfd_create);
+        return director.libc.timerfd_create(clockid, flags);
+    }
+
+    Host* host = _interposer_switchInShadowContext();
+
+    gint result = host_createDescriptor(host, DT_TIMER);
+
+    _interposer_switchOutShadowContext(host);
+
+    return result;
+}
+
+int timerfd_settime(int fd, int flags,
+                           const struct itimerspec *new_value,
+                           struct itimerspec *old_value) {
+    if(shouldForwardToLibC()) {
+        ENSURE(libc, "", timerfd_settime);
+        return director.libc.timerfd_settime(fd, flags, new_value, old_value);
+    }
+
+    gint ret = 0;
+
+    Host* host = _interposer_switchInShadowContext();
+
+    Descriptor* desc = host_lookupDescriptor(host, fd);
+    if(!desc) {
+    	errno = EBADF;
+    	ret = -1;
+    } else if(descriptor_getType(desc) != DT_TIMER) {
+    	errno = EINVAL;
+    	ret = -1;
+    } else {
+    	ret = timer_setTime((Timer*)desc, flags, new_value, old_value);
+    }
+
+    _interposer_switchOutShadowContext(host);
+    return ret;
+}
+
+int timerfd_gettime(int fd, struct itimerspec *curr_value) {
+    if(shouldForwardToLibC()) {
+        ENSURE(libc, "", timerfd_gettime);
+        return director.libc.timerfd_gettime(fd, curr_value);
+    }
+
+    gint ret = 0;
+
+    Host* host = _interposer_switchInShadowContext();
+
+    Descriptor* desc = host_lookupDescriptor(host, fd);
+    if(!desc) {
+    	errno = EBADF;
+    	ret = -1;
+    } else if(descriptor_getType(desc) != DT_TIMER) {
+    	errno = EINVAL;
+    	ret = -1;
+    } else {
+    	ret = timer_getTime((Timer*)desc, curr_value);
+    }
+
+    _interposer_switchOutShadowContext(host);
+    return ret;
 }
 
 

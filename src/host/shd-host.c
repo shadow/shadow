@@ -509,6 +509,12 @@ gint host_createDescriptor(Host* host, DescriptorType type) {
 			break;
 		}
 
+		case DT_TIMER: {
+			gint handle = _host_getNextDescriptorHandle(host);
+			descriptor = (Descriptor*) timer_new(handle, CLOCK_MONOTONIC, TFD_NONBLOCK);
+			break;
+		}
+
 		default: {
 			warning("unknown descriptor type: %i", (gint)type);
 			return EINVAL;
