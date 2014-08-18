@@ -51,6 +51,7 @@ struct _Descriptor {
 	DescriptorStatus status;
 	GSList* readyListeners;
 	gint referenceCount;
+	gint flags;
 	MAGIC_DECLARE;
 };
 
@@ -69,5 +70,8 @@ DescriptorStatus descriptor_getStatus(Descriptor* descriptor);
 
 void descriptor_addStatusListener(Descriptor* descriptor, Listener* listener);
 void descriptor_removeStatusListener(Descriptor* descriptor, Listener* listener);
+
+gint descriptor_getFlags(Descriptor* descriptor);
+void descriptor_setFlags(Descriptor* descriptor, gint flags);
 
 #endif /* SHD_DESCRIPTOR_H_ */

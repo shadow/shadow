@@ -151,3 +151,13 @@ void descriptor_removeStatusListener(Descriptor* descriptor, Listener* listener)
 	MAGIC_ASSERT(descriptor);
 	descriptor->readyListeners = g_slist_remove(descriptor->readyListeners, listener);
 }
+
+gint descriptor_getFlags(Descriptor* descriptor) {
+	MAGIC_ASSERT(descriptor);
+	return descriptor->flags;
+}
+
+void descriptor_setFlags(Descriptor* descriptor, gint flags) {
+	MAGIC_ASSERT(descriptor);
+	descriptor->flags = flags;
+}
