@@ -11,7 +11,7 @@
 
 typedef enum _DescriptorType DescriptorType;
 enum _DescriptorType {
-	DT_TCPSOCKET, DT_UDPSOCKET, DT_PIPE, DT_SOCKETPAIR, DT_EPOLL
+	DT_TCPSOCKET, DT_UDPSOCKET, DT_PIPE, DT_SOCKETPAIR, DT_EPOLL, DT_TIMER
 };
 
 typedef enum _DescriptorStatus DescriptorStatus;

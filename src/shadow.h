@@ -21,6 +21,7 @@
 #include <netinet/tcp.h>
 #include <arpa/inet.h>
 #include <sys/epoll.h>
+#include <sys/timerfd.h>
 #include <errno.h>
 #include <math.h>
 
@@ -87,6 +88,7 @@ typedef struct _Process Process;
 #include "topology/shd-path.h"
 
 #include "host/descriptor/shd-epoll.h"
+#include "host/descriptor/shd-timer.h"
 #include "host/descriptor/shd-transport.h"
 #include "host/descriptor/shd-channel.h"
 #include "host/descriptor/shd-socket.h"
