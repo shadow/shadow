@@ -1655,6 +1655,12 @@ int timerfd_create(int clockid, int flags) {
     Host* host = _interposer_switchInShadowContext();
 
     gint result = host_createDescriptor(host, DT_TIMER);
+    if(result > 0) {
+        Descriptor* desc = host_lookupDescriptor(host, result);
+        if(desc) {
+	    descriptor_setFlags(desc, flags);
+	}
+    }
 
     _interposer_switchOutShadowContext(host);
 
