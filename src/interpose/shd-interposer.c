@@ -397,7 +397,8 @@ static gint _interposer_addressHelper(gint fd, const struct sockaddr* addr, sock
         result = EBADF;
     } else if(addr == NULL) { /* check for proper addr */
         result = EFAULT;
-    } else if(len == NULL) {
+    } else if(len == NULL ||
+	      (addr->sa_family == AF_INET && *len < sizeof(struct sockaddr_in))) {
         result = EINVAL;
     }
 
@@ -522,11 +523,23 @@ static gint _interposer_fcntlHelper(int fd, int cmd, va_list farg) {
         return ret;
     }
 
-    _interposer_switchOutShadowContext(node);
-
     /* normally, the type of farg depends on the cmd */
+    Descriptor* descriptor = host_lookupDescriptor(node, fd);
 
-    return 0;
+    gint result = 0;
+    if(descriptor) {
+	    if (cmd == F_GETFL) {
+		    result = descriptor_getFlags(descriptor);
+	    } else if (cmd == F_SETFL) {
+		    descriptor_setFlags(descriptor, va_arg(farg, int));
+	    }
+    } else {
+	    errno = EBADF;
+	    result = -1;
+    }
+
+    _interposer_switchOutShadowContext(node);
+    return result;
 }
 
 static int _interposer_fcntl(int fd, int cmd, ...) {

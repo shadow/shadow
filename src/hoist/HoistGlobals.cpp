@@ -95,7 +95,7 @@ public:
 #ifdef DEBUG
 			errs() << "Injecting llvm.global_ctors into __shadow_plugin_init__";
 #endif
-			Function *initFunc = M.getFunction("__shadow_plugin_init__");
+			Function *initFunc = M.getFunction("_plugin_ctors");
 			Function::BasicBlockListType &blocks = initFunc->getBasicBlockList();
 			GlobalVariable *GV = M.getGlobalVariable("llvm.global_ctors");
 			if (GV != NULL) {
@@ -106,7 +106,8 @@ public:
 					ArrayRef<Value*> args;
 					CallInst *ins = CallInst::Create(*i, args, "", block);
 				}
-				BranchInst *ret = BranchInst::Create(&blocks.front(), block);
+				//BranchInst *ret = BranchInst::Create(&blocks.front(), block);
+				ReturnInst::Create(M.getContext(), block);
 				blocks.push_front(block);
 			}
 #ifdef DEBUG
