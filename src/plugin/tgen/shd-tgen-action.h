@@ -5,6 +5,14 @@
 #ifndef SHD_TGEN_ACTION_H_
 #define SHD_TGEN_ACTION_H_
 
+typedef enum _TGenActionType {
+    TGEN_ACTION_START,
+    TGEN_ACTION_END,
+    TGEN_ACTION_PAUSE,
+    TGEN_ACTION_TRANSFER,
+    TGEN_ACTION_SYNCHR0NIZE,
+} TGenActionType;
+
 typedef struct _TGenAction TGenAction;
 
 TGenAction* tgenaction_newStartAction(const gchar* timeStr, const gchar* serverPortStr,

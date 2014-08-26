@@ -115,6 +115,7 @@ static GError* _tgengraph_parseStartVertex(TGenGraph* g, const gchar* idStr,
 		return g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT,
 				"only one start vertex is allowed in the action graph");
 	}
+	// XXX TODO make sure start vertices do not contain self-loops
 
 	GError* error = NULL;
 	TGenAction* a = tgenaction_newStartAction(timeStr, serverPortStr, peersStr, socksProxyStr, &error);

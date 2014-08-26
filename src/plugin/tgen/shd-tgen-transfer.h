@@ -5,16 +5,14 @@
 #ifndef SHD_TGEN_TRANSFER_H_
 #define SHD_TGEN_TRANSFER_H_
 
-typedef enum _TGenTransferType TGenTransferType;
-enum _TGenTransferType {
+typedef enum _TGenTransferType {
 	TGEN_TYPE_NONE, TGEN_TYPE_GET, TGEN_TYPE_PUT,
-};
+} TGenTransferType;
 
-typedef enum _TGenTransferProtocol TGenTransferProtocol;
-enum _TGenTransferProtocol {
+typedef enum _TGenTransferProtocol {
 	TGEN_PROTOCOL_NONE, TGEN_PROTOCOL_TCP, TGEN_PROTOCOL_UDP,
 	TGEN_PROTOCOL_PIPE, TGEN_PROTOCOL_SOCKETPAIR,
-};
+} TGenTransferProtocol;
 
 typedef struct _TGenTransfer TGenTransfer;
 
