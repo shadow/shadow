@@ -23,7 +23,7 @@ struct _SocketFunctionTable {
 	SocketProcessFunc process;
 	SocketIsFamilySupportedFunc isFamilySupported;
 	SocketConnectToPeerFunc connectToPeer;
-    SocketDropFunc dropPacket;
+	SocketDropFunc dropPacket;
 	MAGIC_DECLARE;
 };
 
