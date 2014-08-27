@@ -123,6 +123,7 @@ typedef int (*Dup3Func)(int, int, int);
 typedef int (*FXStat)(int, int, struct stat*);
 typedef int (*FStatFSFunc)(int, struct statfs*);
 typedef off_t (*LSeekFunc)(int, off_t, int);
+typedef size_t (*PReadFunc)(int, void*, size_t, off_t);
 typedef int (*FLockFunc)(int, int);
 typedef int (*FSyncFunc)(int);
 typedef int (*FTruncateFunc)(int, int);
@@ -225,6 +226,7 @@ typedef struct {
 	FXStat __fxstat;
 	FStatFSFunc fstatfs;
 	LSeekFunc lseek;
+	PReadFunc pread;
 	FLockFunc flock;
 	FSyncFunc fsync;
 	FTruncateFunc ftruncate;
@@ -1481,6 +1483,33 @@ ssize_t read(int fd, void *buff, size_t numbytes) {
         gint osfd = host_getOSHandle(host, fd);
         if(osfd >= 0) {
             ret = read(osfd, buff, numbytes);
+        } else {
+            errno = EBADF;
+            ret = -1;
+        }
+    }
+
+    _interposer_switchOutShadowContext(host);
+    return ret;
+}
+#include <assert.h>
+ssize_t pread(int fd, void *buff, size_t numbytes, off_t offset) {
+    if(shouldForwardToLibC()) {
+        ENSURE(libc, "", pread);
+        return director.libc.pread(fd, buff, numbytes, offset);
+    }
+
+    gssize ret = 0;
+    Host* host = _interposer_switchInShadowContext();
+
+    if(host_isShadowDescriptor(host, fd)){
+	assert(0);
+	errno = EBADF;
+	ret = -1;
+    } else {
+        gint osfd = host_getOSHandle(host, fd);
+        if(osfd >= 0) {
+            ret = pread(osfd, buff, numbytes, offset);
         } else {
             errno = EBADF;
             ret = -1;
