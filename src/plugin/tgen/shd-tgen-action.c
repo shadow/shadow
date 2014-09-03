@@ -503,19 +503,72 @@ gpointer tgenaction_getKey(TGenAction* action) {
     return action->key;
 }
 
+TGenActionType tgenaction_getType(TGenAction* action) {
+    TGEN_ASSERT(action);
+    return action->type;
+}
+
 guint64 tgenaction_getServerPort(TGenAction* action) {
     TGEN_ASSERT(action);
     g_assert(action->data && action->type == TGEN_ACTION_START);
     return ((TGenActionStartData*)action->data)->serverport;
 }
 
-TGenActionType tgenaction_getType(TGenAction* action) {
+TGenPeer tgenaction_getSocksProxy(TGenAction* action) {
     TGEN_ASSERT(action);
-    return action->type;
+    g_assert(action->data && action->type == TGEN_ACTION_START);
+    return ((TGenActionStartData*)action->data)->socksproxy;
 }
 
 guint64 tgenaction_getPauseTimeMillis(TGenAction* action) {
     TGEN_ASSERT(action);
     g_assert(action->data && action->type == TGEN_ACTION_PAUSE);
     return 1000 * ((TGenActionPauseData*)action->data)->time;
+}
+
+void tgenaction_getTransferParameters(TGenAction* action, TGenTransferType* typeOut,
+        TGenTransferProtocol* protocolOut, guint64* sizeOut) {
+    TGEN_ASSERT(action);
+    g_assert(action->data && action->type == TGEN_ACTION_TRANSFER);
+
+    if(typeOut) {
+        *typeOut = ((TGenActionTransferData*)action->data)->type;
+    }
+    if(protocolOut) {
+        *protocolOut = ((TGenActionTransferData*)action->data)->protocol;
+    }
+    if(sizeOut) {
+        *sizeOut = ((TGenActionTransferData*)action->data)->size;
+    }
+}
+
+TGenPool* tgenaction_getPeers(TGenAction* action) {
+    TGEN_ASSERT(action);
+    g_assert(action->data);
+
+    if(action->type == TGEN_ACTION_TRANSFER) {
+        return ((TGenActionTransferData*)action->data)->peers;
+    } else if(action->type == TGEN_ACTION_START) {
+        return ((TGenActionStartData*)action->data)->peers;
+    } else {
+        return NULL;
+    }
+}
+
+guint64 tgenaction_getEndTimeMillis(TGenAction* action) {
+    TGEN_ASSERT(action);
+    g_assert(action->data && action->type == TGEN_ACTION_END);
+    return 1000 * ((TGenActionEndData*)action->data)->time;
+}
+
+guint64 tgenaction_getEndCount(TGenAction* action) {
+    TGEN_ASSERT(action);
+    g_assert(action->data && action->type == TGEN_ACTION_END);
+    return ((TGenActionEndData*)action->data)->count;
+}
+
+guint64 tgenaction_getEndSize(TGenAction* action) {
+    TGEN_ASSERT(action);
+    g_assert(action->data && action->type == TGEN_ACTION_END);
+    return ((TGenActionEndData*)action->data)->size;
 }

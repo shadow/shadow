@@ -13,8 +13,15 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <errno.h>
+#include <string.h>
 
 #include <shd-library.h>
+
+typedef struct _TGenPeer TGenPeer;
+struct _TGenPeer {
+    in_addr_t address;
+    in_port_t port;
+};
 
 #include "shd-tgen-pool.h"
 #include "shd-tgen-transfer.h"
@@ -37,12 +44,6 @@ extern ShadowLogFunc tgenLogFunc;
 #define tgen_message(...) 	if(tgenLogFunc){tgenLogFunc(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, __VA_ARGS__);}
 #define tgen_info(...) 		if(tgenLogFunc){tgenLogFunc(SHADOW_LOG_LEVEL_INFO, __FUNCTION__, __VA_ARGS__);}
 #define tgen_debug(...) 	if(tgenLogFunc){tgenLogFunc(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__, __VA_ARGS__);}
-
-typedef struct _TGenPeer TGenPeer;
-struct _TGenPeer {
-	in_addr_t address;
-	in_port_t port;
-};
 
 /* opaque struct containing trafficgenerator data */
 typedef struct _TGen TGen;

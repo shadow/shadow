@@ -17,26 +17,112 @@ struct _TGenTransfer {
 	guint64 nBytesUploaded;
 
 	gboolean isActive;
-	in_addr_t peerIP;
-	in_port_t peerPort;
+	TGenPeer peer;
+	TGenPeer proxy;
 
 	guint magic;
 };
 
+static gint _tgentransfer_createEpoll() {
+    gint epollD = epoll_create(1);
+
+    if (epollD < 0) {
+        tgen_critical("error creating epoll: epoll_create() returned %i and errno is %i", epollD, errno);
+        close(epollD);
+        return 0;
+    }
+
+    return epollD;
+}
+
+static gint _tgentransfer_createConnectedTCPSocket(in_addr_t peerIP, in_port_t peerPort) {
+    /* create the socket and get a socket descriptor */
+    gint socketD = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
+
+    if (socketD < 0) {
+        tgen_critical("error creating socket: socket() returned %i and errno is %i", socketD, errno);
+        return 0;
+    }
+
+    struct sockaddr_in server;
+    memset(&server, 0, sizeof(server));
+    server.sin_family = AF_INET;
+    server.sin_addr.s_addr = peerIP;
+    server.sin_port = peerPort;
+
+    gint result = connect(socketD, (struct sockaddr *) &server, sizeof(server));
+
+    /* nonblocking sockets means inprogress is ok */
+    if (result < 0 && errno != EINPROGRESS) {
+        tgen_critical("error connecting socket: connect() returned %i and errno is %i", result, errno);
+        close(socketD);
+        return 0;
+    }
+
+    return socketD;
+}
+
 TGenTransfer* tgentransfer_newReactive(gint socketD, in_addr_t peerIP, in_port_t peerPort) {
+    /* create event listening facilities */
+    gint epollD = _tgentransfer_createEpoll();
+    if(epollD <= 0) {
+        tgen_warning("error in _tgentransfer_createEpoll: unable to create epoll");
+        return NULL;
+    }
+
+    /* start watching socket for incoming TGEN commands */
+    struct epoll_event ev;
+    ev.events = EPOLLIN;
+    ev.data.fd = socketD;
+    if (0 != epoll_ctl(epollD, EPOLL_CTL_ADD, socketD, &ev)) {
+        tgen_warning("error in epoll_ctl: unable to watch socket %i with epoll %i", socketD, epollD);
+        return NULL;
+    }
+
     TGenTransfer* transfer = g_new0(TGenTransfer, 1);
     transfer->magic = TGEN_MAGIC;
 
+    transfer->epollD = epollD;
     transfer->tcpD = socketD;
-    // todo create epolld, add tcpD to epolld
-    transfer->peerIP = peerIP;
-    transfer->peerPort = peerPort;
+    transfer->peer.address = peerIP;
+    transfer->peer.port = peerPort;
 
     return transfer;
 }
 
-TGenTransfer* tgentransfer_newActive(gint socketD, TGenTransferType type,
-        TGenTransferProtocol protocol, guint64 size, TGenPool* peerPool) {
+TGenTransfer* tgentransfer_newActive(TGenTransferType type, TGenTransferProtocol protocol,
+        guint64 size, TGenPool* peerPool, TGenPeer proxy) {
+    /* create event listening facilities */
+    gint epollD = _tgentransfer_createEpoll();
+    if(epollD <= 0) {
+        tgen_warning("error in _tgentransfer_createEpoll: unable to create epoll");
+        return NULL;
+    }
+
+    /* select a random peer */
+    TGenPeer* peer = tgenpool_getRandom(peerPool);
+    g_assert(peer);
+
+    /* we connect through a proxy if given, otherwise directly to the peer */
+    TGenPeer target = proxy.address > 0 && proxy.port > 0 ? proxy : *peer;
+
+    /* create new base client TCP socket */
+    gint socketD = _tgentransfer_createConnectedTCPSocket(target.address, target.port);
+    if(socketD <= 0) {
+        tgen_warning("error in _tgentransfer_createTCPSocket: unable to create tcp socket");
+        return NULL;
+    }
+
+    /* start watching socket so we can start sending transfer commands */
+    struct epoll_event ev;
+    ev.events = EPOLLOUT;
+    ev.data.fd = socketD;
+    if (0 != epoll_ctl(epollD, EPOLL_CTL_ADD, socketD, &ev)) {
+        tgen_warning("error in epoll_ctl: unable to watch socket %i with epoll %i", socketD, epollD);
+        return NULL;
+    }
+
+    /* store the state */
 	TGenTransfer* transfer = g_new0(TGenTransfer, 1);
 	transfer->magic = TGEN_MAGIC;
 
@@ -45,9 +131,12 @@ TGenTransfer* tgentransfer_newActive(gint socketD, TGenTransferType type,
 	transfer->size = size;
 	transfer->peerPool = peerPool;
 
-	// todo create epolld, add tcpD to epolld
-	transfer->tcpD = socketD;
+    transfer->epollD = epollD;
+    transfer->tcpD = socketD;
 	transfer->isActive = TRUE;
+
+	transfer->peer = *peer;
+	transfer->proxy = proxy;
 
 	return transfer;
 }
@@ -63,36 +152,70 @@ void tgentransfer_free(TGenTransfer* transfer) {
 	g_free(transfer);
 }
 
-static void tgentransfer_onReadable(TGenTransfer* transfer) {
+static void _tgentransfer_onActiveReadable(TGenTransfer* transfer) {
     TGEN_ASSERT(transfer);
+    //TODO
 }
 
-static void tgentransfer_onWritable(TGenTransfer* transfer) {
+static void _tgentransfer_onActiveWritable(TGenTransfer* transfer) {
     TGEN_ASSERT(transfer);
+    //TODO
 }
 
-void tgentransfer_activate(TGenTransfer* transfer) {
+static void _tgentransfer_onReactiveReadable(TGenTransfer* transfer) {
+    TGEN_ASSERT(transfer);
+    //TODO
+}
+
+static void _tgentransfer_onReactiveWritable(TGenTransfer* transfer) {
+    TGEN_ASSERT(transfer);
+    //TODO
+}
+
+TGenTransferStatus tgentransfer_activate(TGenTransfer* transfer) {
     TGEN_ASSERT(transfer);
 
-    /* collect the event from our epoll descriptor */
-    /* collect the events that are ready */
+    TGenTransferStatus status;
+    memset(&status, 0, sizeof(TGenTransferStatus));
+
+    /* storage for collecting events from our epoll descriptor */
     struct epoll_event epevs[10];
-    gint nfds = epoll_wait(transfer->epollD, epevs, 10, 0);
-    if (nfds == -1) {
-        tgen_critical("error in transfer epoll_wait");
-    }
 
-    /* activate correct component for every socket thats ready.
-     * either our listening server socket has activity, or one of
-     * our transfer sockets. */
-    for (gint i = 0; i < nfds; i++) {
-        gint desc = epevs[i].data.fd;
-        if(desc == transfer->tcpD) {
+    /* collect all events that are ready */
+    gint nfds = 1;
+    while(nfds > 0) {
+        nfds = epoll_wait(transfer->epollD, epevs, 10, 0);
+        if (nfds == -1) {
+            tgen_critical("error in transfer epoll_wait");
+        }
 
-        } else if(desc == transfer->udpD) {
+        /* activate correct component for every socket thats ready.
+         * either our listening server socket has activity, or one of
+         * our transfer sockets. */
+        for (gint i = 0; i < nfds; i++) {
+            gint desc = epevs[i].data.fd;
+            gboolean in = (epevs[i].events & EPOLLIN) ? TRUE : FALSE;
+            gboolean out = (epevs[i].events & EPOLLOUT) ? TRUE : FALSE;
 
+            if(in && desc == transfer->tcpD) {
+                if(transfer->isActive) {
+                    _tgentransfer_onActiveReadable(transfer);
+                } else {
+                    _tgentransfer_onReactiveReadable(transfer);
+                }
+            }
+
+            if(out && desc == transfer->tcpD) {
+                if(transfer->isActive) {
+                    _tgentransfer_onActiveWritable(transfer);
+                } else {
+                    _tgentransfer_onReactiveWritable(transfer);
+                }
+            }
         }
     }
+
+    return status;
 }
 
 gboolean tgentransfer_isComplete(TGenTransfer* transfer) {
@@ -102,8 +225,10 @@ gboolean tgentransfer_isComplete(TGenTransfer* transfer) {
 
 gint tgentransfer_getEpollDescriptor(TGenTransfer* transfer) {
     TGEN_ASSERT(transfer);
+    return transfer->epollD;
 }
 
 guint64 tgentransfer_getSize(TGenTransfer* transfer) {
     TGEN_ASSERT(transfer);
+    return transfer->size;
 }
