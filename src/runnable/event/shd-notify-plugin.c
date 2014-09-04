@@ -36,7 +36,9 @@ void notifyplugin_run(NotifyPluginEvent* event, Host* node) {
 
 	/* check in with epoll to make sure we should carry out the notification */
 	Epoll* epoll = (Epoll*) host_lookupDescriptor(node, event->epollHandle);
-	epoll_tryNotify(epoll);
+	if(epoll) {
+        epoll_tryNotify(epoll);
+	}
 
 	debug("event finished");
 }
