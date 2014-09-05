@@ -224,6 +224,11 @@ gboolean networkinterface_isAssociated(NetworkInterface* interface, gint key) {
 	}
 }
 
+gboolean networkinterface_hasFreePorts(NetworkInterface* interface) {
+    MAGIC_ASSERT(interface);
+    return g_hash_table_size(interface->boundSockets) < (UINT16_MAX - MIN_RANDOM_PORT) ? TRUE : FALSE;
+}
+
 void networkinterface_associate(NetworkInterface* interface, Socket* socket) {
 	MAGIC_ASSERT(interface);
 
