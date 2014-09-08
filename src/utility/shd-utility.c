@@ -37,14 +37,14 @@ gboolean utility_int16Equal(gconstpointer value1, gconstpointer value2) {
 gint utility_doubleCompare(const gdouble* value1, const gdouble* value2, gpointer userData) {
 	utility_assert(value1 && value2);
 	/* return neg if first before second, pos if second before first, 0 if equal */
-	return value1 == value2 ? 0 : value1 < value2 ? -1 : +1;
+	return (*value1) == (*value2) ? 0 : (*value1) < (*value2) ? -1 : +1;
 }
 
 gint utility_simulationTimeCompare(const SimulationTime* value1, const SimulationTime* value2,
 		gpointer userData) {
 	utility_assert(value1 && value2);
 	/* return neg if first before second, pos if second before first, 0 if equal */
-	return value1 == value2 ? 0 : value1 < value2 ? -1 : +1;
+	return (*value1) == (*value2) ? 0 : (*value1) < (*value2) ? -1 : +1;
 }
 
 gchar* utility_getHomePath(const gchar* path) {
