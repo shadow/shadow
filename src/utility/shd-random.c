@@ -35,3 +35,20 @@ gdouble random_nextDouble(Random* random) {
 	utility_assert(random);
 	return (gdouble)(((gdouble)rand_r(&(random->seedState))) / ((gdouble)RAND_MAX));
 }
+
+void random_nextNBytes(Random* random, guchar* buffer, gint nbytes) {
+    utility_assert(random);
+
+    gint randInt;
+    for(gint i = 0; i < nbytes; i++) {
+        /* each random integer gives us 4 bytes, so only generate a new
+         * one for every 4 bytes we copy over */
+        gint offset = i % 4;
+        if(offset == 0) {
+            randInt = random_nextInt(random);
+        }
+
+        /* get the correct byte from the random integer by bit shifting */
+        buffer[i] = (randInt >> (offset * 8)) & 0xFF;
+    }
+}

@@ -54,6 +54,9 @@ struct _Host {
 	GHashTable* shadowToOSHandleMap;
 	GHashTable* osToShadowHandleMap;
 
+    /* list of all /dev/random shadow handles that have been created */
+    GList* randomShadowHandles;
+
 	/* map path to ports for unix sockets */
 	GHashTable* unixPathToPortMap;
 
@@ -399,7 +402,7 @@ gboolean host_isShadowDescriptor(Host* host, gint handle) {
 	return host_lookupDescriptor(host, handle) == NULL ? FALSE : TRUE;
 }
 
-gint host_createShadowHandle(Host* host, gint osHandle) {
+gint host_createShadowHandle(Host* host, gint osHandle, gchar* pathname) {
 	MAGIC_ASSERT(host);
 
 	/* stdin, stdout, stderr */
@@ -407,12 +410,18 @@ gint host_createShadowHandle(Host* host, gint osHandle) {
 	    return osHandle;
 	}
 
-	/* reserve a new virtual descriptor number to emulate the given osHandle,
-	 * so that the plugin will not be given duplicate shadow/os numbers. */
-	gint shadowHandle = _host_getNextDescriptorHandle(host);
+    gint shadowHandle = _host_getNextDescriptorHandle(host);
 
 	g_hash_table_replace(host->shadowToOSHandleMap, GINT_TO_POINTER(shadowHandle), GINT_TO_POINTER(osHandle));
     g_hash_table_replace(host->osToShadowHandleMap, GINT_TO_POINTER(osHandle), GINT_TO_POINTER(shadowHandle));
+
+    /* if the pathname exists and is a /dev/random type device,
+     * assign is the specific descriptor to handle in read functions */
+    if(pathname && (!g_ascii_strcasecmp(pathname, "/dev/random") ||
+                    !g_ascii_strcasecmp(pathname, "/dev/urandom") ||
+                    !g_ascii_strcasecmp(pathname, "/dev/srandom"))) {
+        host->randomShadowHandles = g_list_prepend(host->randomShadowHandles, GINT_TO_POINTER(shadowHandle));
+    }
 
 	return shadowHandle;
 }
@@ -445,6 +454,12 @@ gint host_getOSHandle(Host* host, gint shadowHandle) {
 	return osHandleP ? GPOINTER_TO_INT(osHandleP) : -1;
 }
 
+gboolean host_isRandomHandle(Host* host, gint handle) {
+    MAGIC_ASSERT(host);
+    return g_list_find(host->randomShadowHandles, GINT_TO_POINTER(handle)) == NULL ? FALSE : TRUE;
+}
+
+
 void host_destroyShadowHandle(Host* host, gint shadowHandle) {
 	MAGIC_ASSERT(host);
 
@@ -459,6 +474,8 @@ void host_destroyShadowHandle(Host* host, gint shadowHandle) {
         g_hash_table_remove(host->osToShadowHandleMap, GINT_TO_POINTER(osHandle));
         _host_returnPreviousDescriptorHandle(host, shadowHandle);
 	}
+
+    host->randomShadowHandles = g_list_remove(host->randomShadowHandles, GINT_TO_POINTER(shadowHandle));
 }
 
 gint host_createDescriptor(Host* host, DescriptorType type) {
