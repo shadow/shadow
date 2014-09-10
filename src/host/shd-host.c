@@ -410,6 +410,8 @@ gint host_createShadowHandle(Host* host, gint osHandle, gchar* pathname) {
 	    return osHandle;
 	}
 
+	/* reserve a new virtual descriptor number to emulate the given osHandle,
+	 * so that the plugin will not be given duplicate shadow/os numbers. */
 	gint shadowHandle = _host_getNextDescriptorHandle(host);
 
 	g_hash_table_replace(host->shadowToOSHandleMap, GINT_TO_POINTER(shadowHandle), GINT_TO_POINTER(osHandle));
