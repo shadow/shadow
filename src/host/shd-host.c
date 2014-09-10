@@ -54,8 +54,8 @@ struct _Host {
 	GHashTable* shadowToOSHandleMap;
 	GHashTable* osToShadowHandleMap;
 
-    /* list of all /dev/random shadow handles that have been created */
-    GList* randomShadowHandles;
+	/* list of all /dev/random shadow handles that have been created */
+	GList* randomShadowHandles;
 
 	/* map path to ports for unix sockets */
 	GHashTable* unixPathToPortMap;
@@ -410,7 +410,7 @@ gint host_createShadowHandle(Host* host, gint osHandle, gchar* pathname) {
 	    return osHandle;
 	}
 
-    gint shadowHandle = _host_getNextDescriptorHandle(host);
+	gint shadowHandle = _host_getNextDescriptorHandle(host);
 
 	g_hash_table_replace(host->shadowToOSHandleMap, GINT_TO_POINTER(shadowHandle), GINT_TO_POINTER(osHandle));
     g_hash_table_replace(host->osToShadowHandleMap, GINT_TO_POINTER(osHandle), GINT_TO_POINTER(shadowHandle));
@@ -455,8 +455,8 @@ gint host_getOSHandle(Host* host, gint shadowHandle) {
 }
 
 gboolean host_isRandomHandle(Host* host, gint handle) {
-    MAGIC_ASSERT(host);
-    return g_list_find(host->randomShadowHandles, GINT_TO_POINTER(handle)) == NULL ? FALSE : TRUE;
+	MAGIC_ASSERT(host);
+	return g_list_find(host->randomShadowHandles, GINT_TO_POINTER(handle)) == NULL ? FALSE : TRUE;
 }
 
 
@@ -475,7 +475,7 @@ void host_destroyShadowHandle(Host* host, gint shadowHandle) {
         _host_returnPreviousDescriptorHandle(host, shadowHandle);
 	}
 
-    host->randomShadowHandles = g_list_remove(host->randomShadowHandles, GINT_TO_POINTER(shadowHandle));
+	host->randomShadowHandles = g_list_remove(host->randomShadowHandles, GINT_TO_POINTER(shadowHandle));
 }
 
 gint host_createDescriptor(Host* host, DescriptorType type) {

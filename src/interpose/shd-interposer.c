@@ -1480,8 +1480,8 @@ ssize_t read(int fd, void *buff, size_t numbytes) {
 			ret = _interposer_recvHelper(host, fd, buff, numbytes, 0, NULL, 0);
     	}
     } else if(host_isRandomHandle(host, fd)) {
-        Random* random = host_getRandom(host);
-        random_nextNBytes(random, (guchar*)buff, numbytes);
+		Random* random = host_getRandom(host);
+		random_nextNBytes(random, (guchar*)buff, numbytes);
     } else {
         gint osfd = host_getOSHandle(host, fd);
         if(osfd >= 0) {
