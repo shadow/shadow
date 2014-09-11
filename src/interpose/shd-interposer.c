@@ -1670,7 +1670,7 @@ int eventfd(unsigned int initval, int flags) {
         Host* host = _interposer_switchInShadowContext();
 
         gint osfd = eventfd(initval, flags);
-        gint shadowfd = osfd >= 3 ? host_createShadowHandle(host, osfd, NULL) : osfd;
+        gint shadowfd = osfd >= 3 ? host_createShadowHandle(host, osfd) : osfd;
 
         _interposer_switchOutShadowContext(host);
         result = shadowfd;
@@ -1689,9 +1689,9 @@ int timerfd_create(int clockid, int flags) {
     gint result = host_createDescriptor(host, DT_TIMER);
     if(result > 0) {
         Descriptor* desc = host_lookupDescriptor(host, result);
-        if(desc) {
-	    descriptor_setFlags(desc, flags);
-	}
+		if(desc) {
+			descriptor_setFlags(desc, flags);
+		}
     }
 
     _interposer_switchOutShadowContext(host);
@@ -1782,7 +1782,11 @@ int open(const char *pathname, int flags, ...) {
         Host* host = _interposer_switchInShadowContext();
 
         gint osfd = open(pathname, flags, va_arg(farg, mode_t));
-        gint shadowfd = osfd >= 3 ? host_createShadowHandle(host, osfd, (gchar*)pathname) : osfd;
+        gint shadowfd = osfd >= 3 ? host_createShadowHandle(host, osfd) : osfd;
+
+		if(utility_isRandomPath((gchar*)pathname)) {
+			host_setRandomHandle(host, shadowfd);
+		}
 
         _interposer_switchOutShadowContext(host);
         result = shadowfd;
@@ -1818,7 +1822,7 @@ int creat(const char *pathname, mode_t mode) {
     Host* host = _interposer_switchInShadowContext();
 
     gint osfd = creat(pathname, mode);
-    gint shadowfd = osfd >= 3 ? host_createShadowHandle(host, osfd, (gchar*)pathname) : osfd;
+    gint shadowfd = osfd >= 3 ? host_createShadowHandle(host, osfd) : osfd;
 
     _interposer_switchOutShadowContext(host);
     return shadowfd;
@@ -1835,7 +1839,11 @@ FILE *fopen(const char *path, const char *mode) {
     FILE* osfile = fopen(path, mode);
     if(osfile) {
         gint osfd = fileno(osfile);
-        gint shadowfd = osfd >= 3 ? host_createShadowHandle(host, osfd, (gchar*)path) : osfd;
+        gint shadowfd = osfd >= 3 ? host_createShadowHandle(host, osfd) : osfd;
+
+		if(utility_isRandomPath((gchar*)path)) {
+			host_setRandomHandle(host, shadowfd);
+		}
     }
 
     _interposer_switchOutShadowContext(host);
@@ -1883,7 +1891,7 @@ int dup(int oldfd) {
         gint osfdOld = host_getOSHandle(host, oldfd);
         if (osfdOld >= 0) {
             gint osfd = dup(osfdOld);
-            gint shadowfd = osfd >= 3 ? host_createShadowHandle(host, osfd, NULL) : osfd;
+            gint shadowfd = osfd >= 3 ? host_createShadowHandle(host, osfd) : osfd;
             _interposer_switchOutShadowContext(host);
             return osfd;
         }
@@ -1917,7 +1925,7 @@ int dup2(int oldfd, int newfd) {
         if (osfdOld >= 0) {
             gint osfd = dup2(osfdOld, osfdNew);
 
-            gint shadowfd = !isMapped && osfd >= 3 ? host_createShadowHandle(host, osfd, NULL) : osfd;
+            gint shadowfd = !isMapped && osfd >= 3 ? host_createShadowHandle(host, osfd) : osfd;
 
             _interposer_switchOutShadowContext(host);
             return shadowfd;
@@ -1957,7 +1965,7 @@ int dup3(int oldfd, int newfd, int flags) {
         if (osfdOld >= 0) {
             gint osfd = dup3(osfdOld, osfdNew, flags);
 
-            gint shadowfd = !isMapped && osfd >= 3 ? host_createShadowHandle(host, osfd, NULL) : osfd;
+            gint shadowfd = !isMapped && osfd >= 3 ? host_createShadowHandle(host, osfd) : osfd;
 
             _interposer_switchOutShadowContext(host);
             return shadowfd;
