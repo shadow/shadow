@@ -42,7 +42,7 @@ void random_nextNBytes(Random* random, guchar* buffer, gint nbytes) {
     while(offset < nbytes) {
         gint randInt = random_nextInt(random);
         gint n = MIN((nbytes - offset), sizeof(gint));
-        memmove(&randInt, &buffer[offset], n);
+        memmove(&buffer[offset], &randInt, n);
         offset += n;
     }
 }
