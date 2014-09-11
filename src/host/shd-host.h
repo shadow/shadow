@@ -58,6 +58,8 @@ gboolean host_isShadowDescriptor(Host* host, gint handle);
 gint host_createShadowHandle(Host* host, gint osHandle);
 gint host_getOSHandle(Host* host, gint shadowHandle);
 gint host_getShadowHandle(Host* host, gint osHandle);
+void host_setRandomHandle(Host* host, gint handle);
+gboolean host_isRandomHandle(Host* host, gint handle);
 void host_destroyShadowHandle(Host* host, gint shadowHandle);
 
 gint host_epollControl(Host* host, gint epollDescriptor, gint operation,

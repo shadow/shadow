@@ -39,4 +39,12 @@ gint random_nextInt(Random* random);
  */
 gdouble random_nextDouble(Random* random);
 
+/**
+ * Gets the next nbytes in the range [0, RAND_MAX] from the random source.
+ * @param random the random source
+ * @param buffer the buffer to copy the random bytes to
+ * @param nbytes number of bytes to copy to the buffer
+ */
+void random_nextNBytes(Random* random, guchar* buffer, gint nbytes);
+
 #endif /* SHD_RANDOM_H_ */

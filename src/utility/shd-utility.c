@@ -117,3 +117,13 @@ void utility_handleError(const gchar* file, gint line, const gchar* function, co
 	g_string_free(backtraceString, TRUE);
 	abort();
 }
+
+gboolean utility_isRandomPath(const gchar* path) {
+    if(path) {
+        return !g_ascii_strcasecmp(path, "/dev/random") ||
+           !g_ascii_strcasecmp(path, "/dev/urandom") ||
+           !g_ascii_strcasecmp(path, "/dev/srandom");
+    } else {
+        return FALSE;
+    }
+}
