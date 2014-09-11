@@ -37,9 +37,9 @@ gdouble random_nextDouble(Random* random) {
 }
 
 void random_nextNBytes(Random* random, guchar* buffer, gint nbytes) {
-	utility_assert(random);
+    utility_assert(random);
     gint offset = 0;
-	while(offset < nbytes) {
+    while(offset < nbytes) {
         gint randInt = random_nextInt(random);
         gint n = MIN((nbytes - offset), sizeof(gint));
         memmove(&randInt, &buffer[offset], n);
