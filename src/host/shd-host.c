@@ -54,6 +54,9 @@ struct _Host {
 	GHashTable* shadowToOSHandleMap;
 	GHashTable* osToShadowHandleMap;
 
+	/* list of all /dev/random shadow handles that have been created */
+	GHashTable* randomShadowHandleMap;
+
 	/* map path to ports for unix sockets */
 	GHashTable* unixPathToPortMap;
 
@@ -127,6 +130,7 @@ Host* host_new(GQuark id, gchar* hostname, gchar* ipHint, gchar* geocodeHint, gc
 
 	host->shadowToOSHandleMap = g_hash_table_new(g_direct_hash, g_direct_equal);
     host->osToShadowHandleMap = g_hash_table_new(g_direct_hash, g_direct_equal);
+    host->randomShadowHandleMap = g_hash_table_new(g_direct_hash, g_direct_equal);
     host->unixPathToPortMap = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
 
 	/* applications this node will run */
@@ -445,6 +449,17 @@ gint host_getOSHandle(Host* host, gint shadowHandle) {
 	return osHandleP ? GPOINTER_TO_INT(osHandleP) : -1;
 }
 
+void host_setRandomHandle(Host* host, gint handle) {
+	MAGIC_ASSERT(host);
+	g_hash_table_insert(host->randomShadowHandleMap, GINT_TO_POINTER(handle), GINT_TO_POINTER(handle));
+}
+
+gboolean host_isRandomHandle(Host* host, gint handle) {
+	MAGIC_ASSERT(host);
+	return g_hash_table_contains(host->randomShadowHandleMap, GINT_TO_POINTER(handle));
+}
+
+
 void host_destroyShadowHandle(Host* host, gint shadowHandle) {
 	MAGIC_ASSERT(host);
 
@@ -459,6 +474,8 @@ void host_destroyShadowHandle(Host* host, gint shadowHandle) {
         g_hash_table_remove(host->osToShadowHandleMap, GINT_TO_POINTER(osHandle));
         _host_returnPreviousDescriptorHandle(host, shadowHandle);
 	}
+
+	g_hash_table_remove(host->randomShadowHandleMap, GINT_TO_POINTER(shadowHandle));
 }
 
 gint host_createDescriptor(Host* host, DescriptorType type) {

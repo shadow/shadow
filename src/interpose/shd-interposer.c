@@ -1479,6 +1479,9 @@ ssize_t read(int fd, void *buff, size_t numbytes) {
     	} else {
 			ret = _interposer_recvHelper(host, fd, buff, numbytes, 0, NULL, 0);
     	}
+    } else if(host_isRandomHandle(host, fd)) {
+		Random* random = host_getRandom(host);
+		random_nextNBytes(random, (guchar*)buff, numbytes);
     } else {
         gint osfd = host_getOSHandle(host, fd);
         if(osfd >= 0) {
@@ -1686,9 +1689,9 @@ int timerfd_create(int clockid, int flags) {
     gint result = host_createDescriptor(host, DT_TIMER);
     if(result > 0) {
         Descriptor* desc = host_lookupDescriptor(host, result);
-        if(desc) {
-	    descriptor_setFlags(desc, flags);
-	}
+		if(desc) {
+			descriptor_setFlags(desc, flags);
+		}
     }
 
     _interposer_switchOutShadowContext(host);
@@ -1781,6 +1784,10 @@ int open(const char *pathname, int flags, ...) {
         gint osfd = open(pathname, flags, va_arg(farg, mode_t));
         gint shadowfd = osfd >= 3 ? host_createShadowHandle(host, osfd) : osfd;
 
+		if(utility_isRandomPath((gchar*)pathname)) {
+			host_setRandomHandle(host, shadowfd);
+		}
+
         _interposer_switchOutShadowContext(host);
         result = shadowfd;
     }
@@ -1833,6 +1840,10 @@ FILE *fopen(const char *path, const char *mode) {
     if(osfile) {
         gint osfd = fileno(osfile);
         gint shadowfd = osfd >= 3 ? host_createShadowHandle(host, osfd) : osfd;
+
+		if(utility_isRandomPath((gchar*)path)) {
+			host_setRandomHandle(host, shadowfd);
+		}
     }
 
     _interposer_switchOutShadowContext(host);

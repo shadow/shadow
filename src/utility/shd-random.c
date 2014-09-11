@@ -35,3 +35,14 @@ gdouble random_nextDouble(Random* random) {
 	utility_assert(random);
 	return (gdouble)(((gdouble)rand_r(&(random->seedState))) / ((gdouble)RAND_MAX));
 }
+
+void random_nextNBytes(Random* random, guchar* buffer, gint nbytes) {
+	utility_assert(random);
+    gint offset = 0;
+	while(offset < nbytes) {
+        gint randInt = random_nextInt(random);
+        gint n = MIN((nbytes - offset), sizeof(gint));
+        memmove(&randInt, &buffer[offset], n);
+        offset += n;
+    }
+}
