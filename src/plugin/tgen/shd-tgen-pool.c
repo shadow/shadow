@@ -58,8 +58,8 @@ void tgenpool_add(TGenPool* pool, gpointer item) {
     g_tree_insert(pool->items, key, item);
 }
 
-gpointer tgenpool_getRandom(TGenPool* pool) {
+gconstpointer tgenpool_getRandom(TGenPool* pool) {
     TGEN_ASSERT(pool);
     const gint position = (gint) (rand() % g_tree_nnodes(pool->items));
-    return g_tree_lookup(pool->items, &position);
+    return (gconstpointer)g_tree_lookup(pool->items, &position);
 }

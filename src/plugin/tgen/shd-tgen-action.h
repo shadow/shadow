@@ -33,6 +33,7 @@ gpointer tgenaction_getKey(TGenAction* action);
 TGenActionType tgenaction_getType(TGenAction* action);
 guint64 tgenaction_getServerPort(TGenAction* action);
 TGenPeer tgenaction_getSocksProxy(TGenAction* action);
+guint64 tgenaction_getStartTimeMillis(TGenAction* action);
 guint64 tgenaction_getPauseTimeMillis(TGenAction* action);
 void tgenaction_getTransferParameters(TGenAction* action, TGenTransferType* typeOut,
         TGenTransferProtocol* protocolOut, guint64* sizeOut);

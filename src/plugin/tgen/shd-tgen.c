@@ -56,8 +56,18 @@ ShadowLogFunc tgenLogFunc;
 /* forward declaration */
 static void _tgen_continueNextActions(TGen* tgen, TGenAction* action);
 
-static void _tgen_start(TGen* tgen) {
+static guint64 _tgen_getCurrentTimeMillis() {
+    struct timespec tp;
+    memset(&tp, 0, sizeof(struct timespec));
+    clock_gettime(CLOCK_MONOTONIC, &tp);
+    guint64 nowMillis = (((guint64)tp.tv_sec) * 1000) + (((guint64)tp.tv_nsec) / 1000000);
+    return nowMillis;
+}
+
+static void _tgen_bootstrap(TGen* tgen) {
     TGEN_ASSERT(tgen);
+
+    tgen_info("bootstrapping started");
 
     TGenAction* startAction = tgengraph_getStartAction(tgen->actionGraph);
 
@@ -210,11 +220,7 @@ static void _tgen_checkEndConditions(TGen* tgen, TGenAction* action) {
     } else if(tgen->totalTransfersCompleted >= tgenaction_getEndCount(action)) {
         tgen->hasEnded = TRUE;
     } else {
-        struct timespec tp;
-        memset(&tp, 0, sizeof(struct timespec));
-        clock_gettime(CLOCK_MONOTONIC, &tp);
-        guint64 nowMillis = (((guint64)tp.tv_sec) * 1000) + (((guint64)tp.tv_nsec) / 1000000);
-
+        guint64 nowMillis = _tgen_getCurrentTimeMillis();
         if(nowMillis >= tgenaction_getEndTimeMillis(action)) {
             tgen->hasEnded = TRUE;
         }
@@ -266,6 +272,14 @@ static void _tgen_continueNextActions(TGen* tgen, TGenAction* action) {
     }
 
     g_queue_free(nextActions);
+}
+
+static void _tgen_start(TGen* tgen) {
+    TGEN_ASSERT(tgen);
+
+    tgen_info("continuing from root start action");
+
+    _tgen_continueNextActions(tgen, tgen->startAction);
 }
 
 static void _tgen_acceptTransfer(TGen* tgen) {
@@ -433,10 +447,20 @@ TGen* tgen_new(gint argc, gchar* argv[], ShadowLogFunc logf,
 
     tgen_debug("set log function to %p, callback function to %p", logf, callf);
 
-    _tgen_start(tgen);
+    /* setup our epoll descriptor and our server-side listener */
+    _tgen_bootstrap(tgen);
 
+    /* the client-side transfers start as specified in the action */
     if (tgen->startAction) {
-        _tgen_continueNextActions(tgen, tgen->startAction);
+        guint64 startMillis = tgenaction_getStartTimeMillis(tgen->startAction);
+        guint64 nowMillis = _tgen_getCurrentTimeMillis();
+
+        if(startMillis > nowMillis) {
+            tgen->createCallback((ShadowPluginCallbackFunc)_tgen_start,
+                    tgen, (guint) (startMillis - nowMillis));
+        } else {
+            _tgen_start(tgen);
+        }
     }
 
     return tgen;

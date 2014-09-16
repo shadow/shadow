@@ -472,34 +472,19 @@ GQueue* tgengraph_getNextActions(TGenGraph* g, TGenAction* action) {
 		return FALSE;
 	}
 
-	/* initialize our result vector ptr to hold the vector of our 1 source */
-	igraph_vector_ptr_t hoodVector;
-	result = igraph_vector_ptr_init(&hoodVector, (long int) 1);
-	if(result != IGRAPH_SUCCESS) {
-		tgen_critical("igraph_vector_ptr_init return non-success code %i", result);
-		igraph_vector_destroy(resultNeighborVertices);
-		g_free(resultNeighborVertices);
-		return NULL;
-	}
-
-	/* assign our single vertex vector to the result vector */
-	igraph_vector_ptr_set(&hoodVector, (long int) 0, resultNeighborVertices);
-	g_assert(resultNeighborVertices == igraph_vector_ptr_e(&hoodVector, (long int) 0));
-
 	/* now get all outgoing 1-hop neighbors of the given action */
-	result = igraph_neighborhood(g->graph, &hoodVector, igraph_vss_1(srcVertexIndex),
-			(igraph_integer_t) 1, IGRAPH_OUT);
+	result = igraph_neighbors(g->graph, resultNeighborVertices, srcVertexIndex, IGRAPH_OUT);
 	if(result != IGRAPH_SUCCESS) {
-		tgen_critical("igraph_neighborhood return non-success code %i", result);
-		igraph_vector_ptr_destroy(&hoodVector);
+		tgen_critical("igraph_neighbors return non-success code %i", result);
 		igraph_vector_destroy(resultNeighborVertices);
 		g_free(resultNeighborVertices);
 		return NULL;
 	}
 
 	/* handle the results */
-	g_assert(resultNeighborVertices == igraph_vector_ptr_e(&hoodVector, (long int) 0));
 	glong nVertices = igraph_vector_size(resultNeighborVertices);
+	tgen_debug("found %li neighbors to vertex %i", nVertices, (gint)srcVertexIndex);
+
 	GQueue* nextActions = g_queue_new();
 
 	for (gint i = 0; i < nVertices; i++) {
@@ -511,7 +496,6 @@ GQueue* tgengraph_getNextActions(TGenGraph* g, TGenAction* action) {
 	}
 
 	/* cleanup */
-	igraph_vector_ptr_destroy(&hoodVector);
 	igraph_vector_destroy(resultNeighborVertices);
 	g_free(resultNeighborVertices);
 

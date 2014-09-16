@@ -2,6 +2,8 @@
  * See LICENSE for licensing information
  */
 
+#include <arpa/inet.h>
+
 #include "shd-tgen.h"
 
 struct _TGenTransfer {
@@ -19,6 +21,8 @@ struct _TGenTransfer {
 	gboolean isActive;
 	TGenPeer peer;
 	TGenPeer proxy;
+
+	gchar* string;
 
 	guint magic;
 };
@@ -62,6 +66,62 @@ static gint _tgentransfer_createConnectedTCPSocket(in_addr_t peerIP, in_port_t p
     return socketD;
 }
 
+static gchar* _tgentransfer_toString(TGenTransfer* transfer) {
+    gint sockd = 0;
+    gchar* protocol = NULL;
+    switch(transfer->protocol) {
+        case TGEN_PROTOCOL_TCP: {
+            protocol = "TCP";
+            sockd = transfer->tcpD;
+            break;
+        }
+        case TGEN_PROTOCOL_UDP: {
+            protocol = "UDP";
+            sockd = transfer->udpD;
+            break;
+        }
+        case TGEN_PROTOCOL_PIPE: {
+            protocol = "PIPE";
+            break;
+        }
+        case TGEN_PROTOCOL_SOCKETPAIR: {
+            protocol = "PAIR";
+            break;
+        }
+        case TGEN_TYPE_NONE:
+        default: {
+            break;
+        }
+    }
+
+    gchar* type = NULL;
+    switch(transfer->type) {
+        case TGEN_TYPE_GET: {
+            type = "GET";
+            break;
+        }
+        case TGEN_TYPE_PUT: {
+            type = "PUT";
+            break;
+        }
+        case TGEN_TYPE_NONE:
+        default: {
+            break;
+        }
+    }
+
+    gchar* ipStringMemBuffer = g_malloc0(INET6_ADDRSTRLEN + 1);
+    const gchar* ipString = inet_ntop(AF_INET, &(transfer->peer.address),
+            ipStringMemBuffer, INET6_ADDRSTRLEN);
+
+    GString* stringBuffer = g_string_new(NULL);
+    g_string_printf(stringBuffer, "[%s-%i-%s-%lu-%s:%u]", protocol, sockd,
+            type, transfer->size, ipString, transfer->peer.port);
+
+    g_free(ipStringMemBuffer);
+    return g_string_free(stringBuffer, FALSE);
+}
+
 TGenTransfer* tgentransfer_newReactive(gint socketD, in_addr_t peerIP, in_port_t peerPort) {
     /* create event listening facilities */
     gint epollD = _tgentransfer_createEpoll();
@@ -87,6 +147,8 @@ TGenTransfer* tgentransfer_newReactive(gint socketD, in_addr_t peerIP, in_port_t
     transfer->peer.address = peerIP;
     transfer->peer.port = peerPort;
 
+    transfer->string = _tgentransfer_toString(transfer);
+
     return transfer;
 }
 
@@ -100,7 +162,7 @@ TGenTransfer* tgentransfer_newActive(TGenTransferType type, TGenTransferProtocol
     }
 
     /* select a random peer */
-    TGenPeer* peer = tgenpool_getRandom(peerPool);
+    const TGenPeer* peer = tgenpool_getRandom(peerPool);
     g_assert(peer);
 
     /* we connect through a proxy if given, otherwise directly to the peer */
@@ -129,6 +191,8 @@ TGenTransfer* tgentransfer_newActive(TGenTransferType type, TGenTransferProtocol
 	transfer->type = type;
 	transfer->protocol = protocol;
 	transfer->size = size;
+
+	tgenpool_ref(peerPool);
 	transfer->peerPool = peerPool;
 
     transfer->epollD = epollD;
@@ -137,6 +201,8 @@ TGenTransfer* tgentransfer_newActive(TGenTransferType type, TGenTransferProtocol
 
 	transfer->peer = *peer;
 	transfer->proxy = proxy;
+
+	transfer->string = _tgentransfer_toString(transfer);
 
 	return transfer;
 }
@@ -148,6 +214,10 @@ void tgentransfer_free(TGenTransfer* transfer) {
 		tgenpool_unref(transfer->peerPool);
 	}
 
+	if(transfer->string) {
+	    g_free(transfer->string);
+	}
+
 	transfer->magic = 0;
 	g_free(transfer);
 }
@@ -155,21 +225,34 @@ void tgentransfer_free(TGenTransfer* transfer) {
 static void _tgentransfer_onActiveReadable(TGenTransfer* transfer) {
     TGEN_ASSERT(transfer);
     //TODO
+    tgen_debug("active transfer %s is readable", transfer->string);
 }
 
 static void _tgentransfer_onActiveWritable(TGenTransfer* transfer) {
     TGEN_ASSERT(transfer);
     //TODO
+    tgen_debug("active transfer %s is writable", transfer->string);
+
+    struct epoll_event ev;
+    ev.events = EPOLLIN;
+    ev.data.fd = transfer->tcpD;
+    if (0 != epoll_ctl(transfer->epollD, EPOLL_CTL_MOD, transfer->tcpD, &ev)) {
+        tgen_warning("error in epoll_ctl: unable to watch socket %i with epoll %i",
+                transfer->tcpD, transfer->epollD);
+        return;
+    }
 }
 
 static void _tgentransfer_onReactiveReadable(TGenTransfer* transfer) {
     TGEN_ASSERT(transfer);
     //TODO
+    tgen_debug("reactive transfer %s is readable", transfer->string);
 }
 
 static void _tgentransfer_onReactiveWritable(TGenTransfer* transfer) {
     TGEN_ASSERT(transfer);
     //TODO
+    tgen_debug("reactive transfer %s is writable", transfer->string);
 }
 
 TGenTransferStatus tgentransfer_activate(TGenTransfer* transfer) {

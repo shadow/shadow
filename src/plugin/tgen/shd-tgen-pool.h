@@ -12,6 +12,6 @@ void tgenpool_ref(TGenPool* pool);
 void tgenpool_unref(TGenPool* pool);
 
 void tgenpool_add(TGenPool* pool, gpointer item);
-gpointer tgenpool_getRandom(TGenPool* pool);
+gconstpointer tgenpool_getRandom(TGenPool* pool);
 
 #endif /* SHD_TGEN_POOL_H_ */

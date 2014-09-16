@@ -520,6 +520,12 @@ TGenPeer tgenaction_getSocksProxy(TGenAction* action) {
     return ((TGenActionStartData*)action->data)->socksproxy;
 }
 
+guint64 tgenaction_getStartTimeMillis(TGenAction* action) {
+    TGEN_ASSERT(action);
+    g_assert(action->data && action->type == TGEN_ACTION_START);
+    return 1000 * ((TGenActionStartData*)action->data)->time;
+}
+
 guint64 tgenaction_getPauseTimeMillis(TGenAction* action) {
     TGEN_ASSERT(action);
     g_assert(action->data && action->type == TGEN_ACTION_PAUSE);
