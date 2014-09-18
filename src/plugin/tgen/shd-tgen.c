@@ -18,20 +18,17 @@ struct _TGen {
 
     /* the starting action parsed from the action graph */
     TGenAction* startAction;
-    /* table that holds the currently active transfer actions, indexed
-     * by the descriptor of the underlying transfer object */
-    GHashTable* activeTransferActions;
     /* TRUE iff a condition in any endAction event has been reached */
     gboolean hasEnded;
 
     /* our main top-level epoll descriptor used to listen for events
      * on serverD and one descriptor (epoll or other) for each transfer */
     gint epollD;
-    /* the main server that listens for new incomming connections */
+    /* the main server that listens for new incoming connections */
     gint serverD;
-    /* table that holds the transfer objects, each transfer is indexed
-     * by the descriptor returned by that transfer */
-    GHashTable* transfers;
+    /* table that holds the transport objects, each transport is indexed
+     * by the descriptor returned by that transport */
+    GHashTable* transports;
 
     /* pointer to memory that facilitates the use of the epoll api */
     struct epoll_event* ee;
@@ -44,10 +41,10 @@ struct _TGen {
     guint magic;
 };
 
-typedef struct _TGenPauseItem {
+typedef struct _TGenCallbackItem {
     TGen* tgen;
     TGenAction* action;
-} TGenPauseItem;
+} TGenCallbackItem;
 
 /* store a global pointer to the log func, so we can log in any
  * of our tgen modules without a pointer to the tgen struct */
@@ -142,68 +139,194 @@ static void _tgen_bootstrap(TGen* tgen) {
     tgen_message("bootstrapping complete: server listening at %s:%u", ipStringBuffer, listener.sin_port);
 }
 
-static gboolean _tgen_openTransfer(TGen* tgen, TGenTransfer* transfer) {
-    gint watchD = tgentransfer_getEpollDescriptor(transfer);
+static gboolean _tgen_openTransport(TGen* tgen, TGenTransport* transport) {
+    gint watchD = tgentransport_getEpollDescriptor(transport);
     tgen->ee->events = EPOLLIN;
     tgen->ee->data.fd = watchD;
     if(0 == epoll_ctl(tgen->epollD, EPOLL_CTL_ADD, watchD, tgen->ee)) {
-        g_hash_table_replace(tgen->transfers, GINT_TO_POINTER(watchD), transfer);
+        g_hash_table_replace(tgen->transports, GINT_TO_POINTER(watchD), transport);
         return TRUE;
     } else {
         return FALSE;
     }
 }
 
-static gboolean _tgen_closeTransfer(TGen* tgen, TGenTransfer* transfer) {
-    gint watchD = tgentransfer_getEpollDescriptor(transfer);
+static gboolean _tgen_closeTransport(TGen* tgen, TGenTransport* transport) {
+    gint watchD = tgentransport_getEpollDescriptor(transport);
     if(0 == epoll_ctl(tgen->epollD, EPOLL_CTL_DEL, watchD, NULL)) {
-        g_hash_table_remove(tgen->transfers, GINT_TO_POINTER(watchD));
+        g_hash_table_remove(tgen->transports, GINT_TO_POINTER(watchD));
         return TRUE;
     } else {
         return FALSE;
     }
+}
+
+static void _tgen_transferCompleteCallback(TGenCallbackItem* item) {
+    // TODO what if tgen or action was destroyed in the meantime?
+    /* this only happens for transfers that our side initiated.
+     * continue traversing the graph as instructed */
+    _tgen_continueNextActions(item->tgen, item->action);
+    g_free(item);
+
+//    if(tgentransfer_isComplete(transfer)) {
+//        /* this transfer finished, clean it up */
+//        tgen->totalTransfersCompleted++;
+//        _tgen_closeTransfer(tgen, transfer);
+//        tgentransfer_free(transfer);
+//
+//        /* if we are the client side of this transfer, initiate the next
+//         * action from the action graph as appropriate */
+//        TGenAction* transferAction = g_hash_table_lookup(tgen->activeTransferActions,
+//                            GINT_TO_POINTER(desc));
+//        if(transferAction) {
+//            g_hash_table_remove(tgen->activeTransferActions, GINT_TO_POINTER(desc));
+//            _tgen_continueNextActions(tgen, transferAction);
+//        }
+//    }
+}
+
+static gint _tgen_createConnectedTCPSocket(in_addr_t peerIP, in_port_t peerPort) {
+    /* create the socket and get a socket descriptor */
+    gint socketD = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
+
+    if (socketD < 0) {
+        tgen_critical("error creating socket: socket() returned %i and errno is %i", socketD, errno);
+        return 0;
+    }
+
+    struct sockaddr_in server;
+    memset(&server, 0, sizeof(server));
+    server.sin_family = AF_INET;
+    server.sin_addr.s_addr = peerIP;
+    server.sin_port = peerPort;
+
+    gint result = connect(socketD, (struct sockaddr *) &server, sizeof(server));
+
+    /* nonblocking sockets means inprogress is ok */
+    if (result < 0 && errno != EINPROGRESS) {
+        tgen_critical("error connecting socket: connect() returned %i and errno is %i", result, errno);
+        close(socketD);
+        return 0;
+    }
+
+    return socketD;
 }
 
 static void _tgen_initiateTransfer(TGen* tgen, TGenAction* action) {
     TGenTransferType type;
-    TGenTransferProtocol protocol;
+    TGenTransportProtocol protocol;
     guint64 size;
     tgenaction_getTransferParameters(action, &type, &protocol, &size);
 
-    /* the peer list of the transfer takes priority over the general start peer list */
+    /* the peer list of the transfer takes priority over the general start peer list
+     * we must have a list of peers to transfer to one of them */
     TGenPool* peers = tgenaction_getPeers(action);
     if (!peers) {
         peers = tgenaction_getPeers(tgen->startAction);
     }
-    /* we must have a list of peers to proceed to transfer to one of them */
     g_assert(peers);
 
-    TGenPeer proxy = tgenaction_getSocksProxy(tgen->startAction);
+    /* select a random peer */
+    const TGenPeer* peerPointer = tgenpool_getRandom(peers);
+    g_assert(peerPointer);
+    const TGenPeer peer = *peerPointer;
 
-    /* create the new transfer socket, etc */
-    TGenTransfer* transfer = tgentransfer_newActive(type, protocol, size, peers, proxy);
-    if(transfer) {
-        /* track the transfer */
-        _tgen_openTransfer(tgen, transfer);
+    const TGenPeer proxy = tgenaction_getSocksProxy(tgen->startAction);
 
-        /* track the action so we know where to continue in the graph when its done */
-        gint watchD = tgentransfer_getEpollDescriptor(transfer);
-        g_hash_table_replace(tgen->activeTransferActions, GINT_TO_POINTER(watchD), action);
+    in_addr_t ip = proxy.address > 0 ? proxy.address : peer.address;
+    in_addr_t port = proxy.port > 0 ? proxy.port : peer.port;
+
+    /* create the new transport socket, etc */
+    // TODO only create a new socket and transport if we dont already have one to this peer
+    gint socketD = _tgen_createConnectedTCPSocket(ip, port);
+    TGenTransport* transport = NULL;
+    if (socketD > 0) {
+        transport = tgentransport_new(socketD, proxy, peer);
+    }
+
+    if(transport) {
+        /* track the transport */
+        gboolean success = _tgen_openTransport(tgen, transport);
+        if(success) {
+            tgen_info("created new transport socket %i")
+
+            /* set a callback so we know how to continue when the transfer is done */
+            GHookFunc cb = (GHookFunc) _tgen_transferCompleteCallback;
+            TGenCallbackItem* item = g_new0(TGenCallbackItem, 1);
+            item->tgen = tgen;
+            item->action = action;
+            tgentransport_addTransfer(transport, type, size, cb, item);
+        } else {
+            gint watchD = tgentransport_getEpollDescriptor(transport);
+            tgen_critical("unable to accept new transport: problem watching "
+                    "descriptor %i for events: epoll_ctl() errno %i", watchD, errno);
+            close(socketD);
+            tgentransport_unref(transport);
+        }
     } else {
         /* something failed during transfer initialization, move to the next action */
         tgen_warning("skipping failed transfer action");
+        if(socketD > 0) {
+            close(socketD);
+        }
         _tgen_continueNextActions(tgen, action);
     }
 }
 
-static void _tgen_pauseCallback(TGenPauseItem* item) {
+static void _tgen_acceptTransport(TGen* tgen) {
+    /* we have a new transfer request coming in on our listening socket
+     * accept the socket and create the new transfer. */
+    struct sockaddr_in peerAddress;
+    memset(&peerAddress, 0, sizeof(struct sockaddr_in));
+
+    socklen_t addressLength = (socklen_t)sizeof(struct sockaddr_in);
+
+    gint socketD = accept(tgen->serverD, (struct sockaddr*)&peerAddress, &addressLength);
+    if (socketD < 0) {
+        tgen_critical("error accepting socketD: accept() returned %i and errno is %i", socketD, errno);
+        return;
+    } else if(tgen->hasEnded) {
+        close(socketD);
+        return;
+    }
+
+    /* this transfer was initiated by the other end.
+     * type, and size info will be sent to us later. */
+    TGenPeer peer;
+    peer.address = peerAddress.sin_addr.s_addr;
+    peer.port = peerAddress.sin_port;
+    TGenPeer proxy;
+    proxy.address = 0;
+    proxy.port = 0;
+
+    TGenTransport* transport = tgentransport_new(socketD, proxy, peer);
+    if(transport) {
+        /* track the transport */
+        gboolean success = _tgen_openTransport(tgen, transport);
+        if(success) {
+            tgen_info("accepted new transport socket %i")
+        } else {
+            gint watchD = tgentransport_getEpollDescriptor(transport);
+            tgen_critical("unable to accept new transport: problem watching "
+                    "descriptor %i for events: epoll_ctl() errno %i", watchD, errno);
+            close(socketD);
+            tgentransport_unref(transport);
+        }
+    } else {
+        /* something failed during transfer initialization, move to the next action */
+        tgen_warning("skipping failed incoming transport");
+    }
+}
+
+static void _tgen_pauseCallback(TGenCallbackItem* item) {
+    // TODO what if tgen or action was destroyed in the meantime?
     _tgen_continueNextActions(item->tgen, item->action);
     g_free(item);
 }
 
 static void _tgen_initiatePause(TGen* tgen, TGenAction* action) {
     ShadowPluginCallbackFunc cb = (ShadowPluginCallbackFunc)_tgen_pauseCallback;
-    TGenPauseItem* item = g_new0(TGenPauseItem, 1);
+    TGenCallbackItem* item = g_new0(TGenCallbackItem, 1);
     item->tgen = tgen;
     item->action = action;
     tgen->createCallback(cb, item, (uint)tgenaction_getPauseTimeMillis(action));
@@ -282,39 +405,6 @@ static void _tgen_start(TGen* tgen) {
     _tgen_continueNextActions(tgen, tgen->startAction);
 }
 
-static void _tgen_acceptTransfer(TGen* tgen) {
-    /* we have a new transfer request coming in on our listening socket
-     * accept the socket and create the new transfer. */
-    struct sockaddr_in peerAddress;
-    memset(&peerAddress, 0, sizeof(struct sockaddr_in));
-
-    socklen_t addressLength = (socklen_t)sizeof(struct sockaddr_in);
-    gint socketD = accept(tgen->serverD, (struct sockaddr*)&peerAddress, &addressLength);
-
-    if(tgen->hasEnded) {
-        close(socketD);
-        return;
-    }
-
-    if(socketD > 0) {
-        /* this transfer was initiated by the other end.
-         * type, protocol, and size info will be sent to us later. */
-        TGenTransfer* transfer = tgentransfer_newReactive(socketD,
-                peerAddress.sin_addr.s_addr, peerAddress.sin_port);
-
-        /* start watching whichever descriptor the transfer wants */
-        gboolean success = _tgen_openTransfer(tgen, transfer);
-        if(!success) {
-            gint watchD = tgentransfer_getEpollDescriptor(transfer);
-            tgen_critical("unable to accept new reactive transfer: problem watching "
-                    "descriptor %i for events: epoll_ctl() errno %i",
-                    watchD, errno);
-            close(socketD);
-            tgentransfer_free(transfer);
-        }
-    }
-}
-
 void tgen_activate(TGen* tgen) {
     TGEN_ASSERT(tgen);
 
@@ -340,48 +430,32 @@ void tgen_activate(TGen* tgen) {
             g_assert(epevs[i].events == EPOLLIN);
 
             /* handle the read event on our listener socket */
-            _tgen_acceptTransfer(tgen);
+            _tgen_acceptTransport(tgen);
         } else {
-            TGenTransfer* transfer = g_hash_table_lookup(tgen->transfers,
+            TGenTransport* transport = g_hash_table_lookup(tgen->transports,
                     GINT_TO_POINTER(desc));
-            if (!transfer) {
-                tgen_warning("can't find transfer for descriptor '%i', closing", desc);
-                _tgen_closeTransfer(tgen, transfer);
+            if (!transport) {
+                tgen_warning("can't find transport for descriptor '%i', closing", desc);
+                _tgen_closeTransport(tgen, transport);
                 continue;
             }
 
-            /* transfer epoll descriptor should only ever be readable */
+            /* transport epoll descriptor should only ever be readable */
             if(!(epevs[i].events & EPOLLIN)) {
-                tgen_warning("child transfer with descriptor '%i' is active without EPOLLIN, closing", desc);
-                _tgen_closeTransfer(tgen, transfer);
-                tgentransfer_free(transfer);
+                tgen_warning("child transport with descriptor '%i' is active without EPOLLIN, closing", desc);
+                _tgen_closeTransport(tgen, transport);
+                tgentransport_unref(transport);
                 continue;
             }
 
-            TGenTransferStatus current = tgentransfer_activate(transfer);
+            TGenTransferStatus current = tgentransport_activate(transport);
             tgen->totalBytesRead += current.bytesRead;
             tgen->totalBytesWritten += current.bytesWritten;
-
-            if(tgentransfer_isComplete(transfer)) {
-                /* this transfer finished, clean it up */
-                tgen->totalTransfersCompleted++;
-                _tgen_closeTransfer(tgen, transfer);
-                tgentransfer_free(transfer);
-
-                /* if we are the client side of this transfer, initiate the next
-                 * action from the action graph as appropriate */
-                TGenAction* transferAction = g_hash_table_lookup(tgen->activeTransferActions,
-                                    GINT_TO_POINTER(desc));
-                if(transferAction) {
-                    g_hash_table_remove(tgen->activeTransferActions, GINT_TO_POINTER(desc));
-                    _tgen_continueNextActions(tgen, transferAction);
-                }
-            }
         }
     }
 
     if(tgen->hasEnded) {
-        if(g_hash_table_size(tgen->transfers) <= 0) {
+        if(g_hash_table_size(tgen->transports) <= 0) {
             tgen_free(tgen);
         }
     }
@@ -392,11 +466,8 @@ void tgen_free(TGen* tgen) {
     if (tgen->ee) {
         g_free(tgen->ee);
     }
-    if(tgen->activeTransferActions) {
-        g_hash_table_destroy(tgen->activeTransferActions);
-    }
-    if (tgen->transfers) {
-        g_hash_table_destroy(tgen->transfers);
+    if (tgen->transports) {
+        g_hash_table_destroy(tgen->transports);
     }
     if (tgen->serverD) {
         close(tgen->serverD);
@@ -440,9 +511,8 @@ TGen* tgen_new(gint argc, gchar* argv[], ShadowLogFunc logf,
     tgen->log = logf;
     tgen->createCallback = callf;
     tgen->actionGraph = graph;
-    tgen->activeTransferActions = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, NULL);
-    tgen->transfers = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL,
-            (GDestroyNotify) tgentransfer_free);
+    tgen->transports = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL,
+            (GDestroyNotify) tgentransport_unref);
     tgen->ee = g_new0(struct epoll_event, 1);
 
     tgen_debug("set log function to %p, callback function to %p", logf, callf);

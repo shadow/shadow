@@ -26,7 +26,7 @@ typedef struct _TGenActionPauseData {
 
 typedef struct _TGenActionTransferData {
     TGenTransferType type;
-    TGenTransferProtocol protocol;
+    TGenTransportProtocol protocol;
     guint64 size;
     TGenPool* peers;
 } TGenActionTransferData;
@@ -431,7 +431,7 @@ TGenAction* tgenaction_newTransferAction(const gchar* typeStr,
     }
 
     /* protocol is required */
-    TGenTransferProtocol protocol = TGEN_PROTOCOL_NONE;
+    TGenTransportProtocol protocol = TGEN_PROTOCOL_NONE;
     if (!g_ascii_strncasecmp(protocolStr, "\0", (gsize) 1)) {
         *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
                 "transfer action missing required attribute 'protocol'");
@@ -514,7 +514,7 @@ guint64 tgenaction_getServerPort(TGenAction* action) {
     return ((TGenActionStartData*)action->data)->serverport;
 }
 
-TGenPeer tgenaction_getSocksProxy(TGenAction* action) {
+const TGenPeer tgenaction_getSocksProxy(TGenAction* action) {
     TGEN_ASSERT(action);
     g_assert(action->data && action->type == TGEN_ACTION_START);
     return ((TGenActionStartData*)action->data)->socksproxy;
@@ -533,7 +533,7 @@ guint64 tgenaction_getPauseTimeMillis(TGenAction* action) {
 }
 
 void tgenaction_getTransferParameters(TGenAction* action, TGenTransferType* typeOut,
-        TGenTransferProtocol* protocolOut, guint64* sizeOut) {
+        TGenTransportProtocol* protocolOut, guint64* sizeOut) {
     TGEN_ASSERT(action);
     g_assert(action->data && action->type == TGEN_ACTION_TRANSFER);
 

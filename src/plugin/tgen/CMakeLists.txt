@@ -5,6 +5,7 @@ set(tgen_sources
     shd-tgen-graph.c
     shd-tgen-pool.c
     shd-tgen-transfer.c
+    shd-tgen-transport.c
 )
 
 find_package(RT REQUIRED)

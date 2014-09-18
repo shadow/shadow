@@ -25,6 +25,7 @@ struct _TGenPeer {
 
 #include "shd-tgen-pool.h"
 #include "shd-tgen-transfer.h"
+#include "shd-tgen-transport.h"
 #include "shd-tgen-action.h"
 #include "shd-tgen-graph.h"
 
