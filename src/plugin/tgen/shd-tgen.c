@@ -43,6 +43,7 @@ struct _TGen {
 
 typedef struct _TGenCallbackItem {
     TGen* tgen;
+    TGenTransport* transport;
     TGenAction* action;
 } TGenCallbackItem;
 
@@ -163,6 +164,9 @@ static gboolean _tgen_closeTransport(TGen* tgen, TGenTransport* transport) {
 
 static void _tgen_transferCompleteCallback(TGenCallbackItem* item) {
     // TODO what if tgen or action was destroyed in the meantime?
+
+    tgentransport_unref(item->transport);
+
     /* this only happens for transfers that our side initiated.
      * continue traversing the graph as instructed */
     _tgen_continueNextActions(item->tgen, item->action);
@@ -237,7 +241,7 @@ static void _tgen_initiateTransfer(TGen* tgen, TGenAction* action) {
     in_addr_t port = proxy.port > 0 ? proxy.port : peer.port;
 
     /* create the new transport socket, etc */
-    // TODO only create a new socket and transport if we dont already have one to this peer
+    // TODO only create a new socket and transport if we dont already have one to this peer?
     gint socketD = _tgen_createConnectedTCPSocket(ip, port);
     TGenTransport* transport = NULL;
     if (socketD > 0) {
@@ -254,8 +258,10 @@ static void _tgen_initiateTransfer(TGen* tgen, TGenAction* action) {
             GHookFunc cb = (GHookFunc) _tgen_transferCompleteCallback;
             TGenCallbackItem* item = g_new0(TGenCallbackItem, 1);
             item->tgen = tgen;
+            item->transport = transport;
             item->action = action;
-            tgentransport_addTransfer(transport, type, size, cb, item);
+            TGenTransferCommand command = {type, size};
+            tgentransport_setCommand(transport, command, cb, item);
         } else {
             gint watchD = tgentransport_getEpollDescriptor(transport);
             tgen_critical("unable to accept new transport: problem watching "

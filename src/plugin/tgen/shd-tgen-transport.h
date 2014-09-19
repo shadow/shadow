@@ -18,8 +18,8 @@ TGenTransport* tgentransport_new(gint socketD, const TGenPeer proxy, const TGenP
 void tgentransport_ref(TGenTransport* transport);
 void tgentransport_unref(TGenTransport* transport);
 
-void tgentransport_addTransfer(TGenTransport* transport, TGenTransferType type, guint64 size,
-        GHookFunc transferCompleteCallback, gpointer callbackData);
+void tgentransport_setCommand(TGenTransport* transport, TGenTransferCommand command,
+        GHookFunc onCommandComplete, gpointer hookData);
 
 TGenTransferStatus tgentransport_activate(TGenTransport* transport);
 gint tgentransport_getEpollDescriptor(TGenTransport* transport);

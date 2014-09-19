@@ -13,16 +13,23 @@ struct _TGenTransport {
     gint epollD;
     gint tcpD;
 
+    struct epoll_event epollE;
+
     TGenPeer peer;
     TGenPeer proxy;
-
-    gint transferIDCounter;
-    GHashTable* transfers;
-
     gchar* string;
+
+    TGenTransfer* activeTransfer;
+    GHookFunc onTransferComplete;
+    gpointer hookData;
 
     guint magic;
 };
+
+typedef struct _TGenTransportCallbackItem {
+    TGenTransport* transport;
+    TGenTransfer* transfer;
+} TGenTransportCallbackItem;
 
 static gchar* _tgentransport_toString(TGenTransport* transport) {
     gchar* ipStringMemBuffer = g_malloc0(INET6_ADDRSTRLEN + 1);
@@ -68,11 +75,12 @@ TGenTransport* tgentransport_new(gint socketD, const TGenPeer proxy, const TGenP
     transport->protocol = TGEN_PROTOCOL_TCP;
     transport->peer = peer;
     transport->proxy = proxy;
-
-    transport->transfers = g_hash_table_new_full(g_int_hash, g_int_equal, NULL,
-                (GDestroyNotify) tgentransfer_unref);
+    transport->epollE.events = ev.events;
+    transport->epollE.data.fd = socketD;
 
     transport->string = _tgentransport_toString(transport);
+
+    // TODO handle socks connection if proxy exists
 
     return transport;
 }
@@ -80,11 +88,13 @@ TGenTransport* tgentransport_new(gint socketD, const TGenPeer proxy, const TGenP
 static void _tgentransport_free(TGenTransport* transport) {
     TGEN_ASSERT(transport);
 
+    if(transport->tcpD > 0) {
+        close(transport->tcpD);
+        transport->tcpD = 0;
+    }
+
     if(transport->string) {
         g_free(transport->string);
-    }
-    if (transport->transfers) {
-        g_hash_table_destroy(transport->transfers);
     }
 
     transport->magic = 0;
@@ -104,41 +114,69 @@ void tgentransport_unref(TGenTransport* transport) {
     }
 }
 
-static void _tgentransport_onReadable(TGenTransport* transport) {
+void tgentransport_setCommand(TGenTransport* transport, TGenTransferCommand command,
+        GHookFunc onCommandComplete, gpointer hookData) {
     TGEN_ASSERT(transport);
-    //TODO
-    tgen_debug("transport %s is readable", transport->string);
+    g_assert(!transport->activeTransfer);
 
-//    if(tgentransfer_isComplete(transfer)) {
-//        /* this transfer finished, clean it up */
-//        tgen->totalTransfersCompleted++;
-//        _tgen_closeTransfer(tgen, transfer);
-//        tgentransfer_free(transfer);
-//
-//        /* if we are the client side of this transfer, initiate the next
-//         * action from the action graph as appropriate */
-//        TGenAction* transferAction = g_hash_table_lookup(tgen->activeTransferActions,
-//                            GINT_TO_POINTER(desc));
-//        if(transferAction) {
-//            g_hash_table_remove(tgen->activeTransferActions, GINT_TO_POINTER(desc));
-//            _tgen_continueNextActions(tgen, transferAction);
-//        }
-//    }
+    transport->activeTransfer = tgentransfer_new(&command);
+    transport->onTransferComplete = onCommandComplete;
+    transport->hookData = hookData;
+
+    /* make sure we are waiting to write */
+    if(!(transport->epollE.events & EPOLLOUT)) {
+        transport->epollE.events |= EPOLLOUT;
+        gint result = epoll_ctl(transport->epollD, EPOLL_CTL_MOD, transport->tcpD, &transport->epollE);
+        if (result != 0) {
+            tgen_warning("error in epoll_ctl: unable to change events on socket %i with epoll %i",
+                    transport->tcpD, transport->epollD);
+        }
+    }
 }
 
-static void _tgentransport_onWritable(TGenTransport* transport) {
+static void tgentransport_cleanupActiveTransfer(TGenTransport* transport) {
     TGEN_ASSERT(transport);
-    //TODO
+
+    tgentransfer_unref(transport->activeTransfer);
+    transport->activeTransfer = NULL;
+}
+
+static gboolean _tgentransport_onReadable(TGenTransport* transport) {
+    TGEN_ASSERT(transport);
+
+    tgen_debug("transport %s is readable", transport->string);
+
+    if(!transport->activeTransfer) {
+        /* create a new transfer, no command until we read it from the socket */
+        transport->activeTransfer = tgentransfer_new(NULL);
+    }
+
+    gboolean keepReading = tgentransfer_onReadable(transport->activeTransfer, transport->tcpD);
+
+    if(tgentransfer_isComplete(transport->activeTransfer)) {
+        tgentransport_cleanupActiveTransfer(transport);
+    }
+
+    return keepReading;
+}
+
+static gboolean _tgentransport_onWritable(TGenTransport* transport) {
+    TGEN_ASSERT(transport);
+
     tgen_debug("transport %s is writable", transport->string);
 
-    struct epoll_event ev;
-    ev.events = EPOLLIN;
-    ev.data.fd = transport->tcpD;
-    if (0 != epoll_ctl(transport->epollD, EPOLL_CTL_MOD, transport->tcpD, &ev)) {
-        tgen_warning("error in epoll_ctl: unable to watch socket %i with epoll %i",
-                transport->tcpD, transport->epollD);
-        return;
+    /* if we have no transfer, we don't care about writing */
+    gboolean keepWriting = FALSE;
+
+    if(transport->activeTransfer) {
+        keepWriting = tgentransfer_onWritable(transport->activeTransfer, transport->tcpD);
+
+        if(tgentransfer_isComplete(transport->activeTransfer)) {
+            tgentransport_cleanupActiveTransfer(transport);
+        }
     }
+
+    return keepWriting;
 }
 
 TGenTransferStatus tgentransport_activate(TGenTransport* transport) {
@@ -166,27 +204,35 @@ TGenTransferStatus tgentransport_activate(TGenTransport* transport) {
             gboolean in = (epevs[i].events & EPOLLIN) ? TRUE : FALSE;
             gboolean out = (epevs[i].events & EPOLLOUT) ? TRUE : FALSE;
 
+            gboolean changed = FALSE;
+
             if(in && desc == transport->tcpD) {
-                _tgentransport_onReadable(transport);
+                gboolean keepReading = _tgentransport_onReadable(transport);
+                if(!keepReading) {
+                    transport->epollE.events &= ~EPOLLIN;
+                    changed = TRUE;
+                }
             }
 
             if(out && desc == transport->tcpD) {
-                _tgentransport_onWritable(transport);
+                gboolean keepWriting = _tgentransport_onWritable(transport);
+                if(!keepWriting) {
+                   transport->epollE.events &= ~EPOLLOUT;
+                   changed = TRUE;
+               }
+            }
+
+            if(changed) {
+                gint result = epoll_ctl(transport->epollD, EPOLL_CTL_MOD, transport->tcpD, &transport->epollE);
+                if(result != 0) {
+                    tgen_warning("error in epoll_ctl: unable to change events on socket %i with epoll %i",
+                            transport->tcpD, transport->epollD);
+                }
             }
         }
     }
 
     return status;
-}
-
-void tgentransport_addTransfer(TGenTransport* transport, TGenTransferType type, guint64 size,
-        GHookFunc transferCompleteCallback, gpointer callbackData) {
-    TGEN_ASSERT(transport);
-
-    // TODO how to bootstrap the transfer
-    gint transferID = transport->transferIDCounter++;
-    TGenTransfer* transfer = tgentransfer_new(transferID, type, size);
-    g_hash_table_replace(transport->transfers, GINT_TO_POINTER(transferID), transfer);
 }
 
 gint tgentransport_getEpollDescriptor(TGenTransport* transport) {
