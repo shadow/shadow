@@ -7,14 +7,13 @@
 #include "shd-tgen.h"
 
 typedef enum _TGenTransferState {
-    TGEN_XFER_COMMAND, TGEN_XFER_PAYLOAD, TGEN_XFER_CHECKSUM, TGEN_XFER_DONE
+    TGEN_XFER_COMMAND, TGEN_XFER_PAYLOAD, TGEN_XFER_CHECKSUM, TGEN_XFER_DONE, TGEN_XFER_ERROR
 } TGenTransferState;
 
 struct _TGenTransfer {
     TGenTransferState state;
     TGenTransferCommand command;
     gboolean isCommander;
-    gboolean hasError;
 
     gint refcount;
 
@@ -64,6 +63,7 @@ static const gchar* _tgentransfer_stateToString(TGenTransferState state) {
         case TGEN_XFER_DONE: {
             return "DONE";
         }
+        case TGEN_XFER_ERROR:
         default: {
             return "ERROR";
         }
@@ -153,17 +153,17 @@ static gboolean _tgentransfer_getLine(TGenTransfer* transfer, gint socketD) {
         bytes = read(socketD, &c, 1);
 
         if(bytes < 0 && errno != EAGAIN) {
-            transfer->hasError = TRUE;
-            tgen_warning("transfer %s error %i while reading from socket %i", transfer->string, errno, socketD);
+            _tgentransfer_changeState(transfer, TGEN_XFER_ERROR);
+            tgen_critical("transfer %s error %i while reading from socket %i", transfer->string, errno, socketD);
         } else if(bytes == 0) {
-            transfer->hasError = TRUE;
-            tgen_warning("transfer %s failed socket %i closed", transfer->string, socketD);
+            _tgentransfer_changeState(transfer, TGEN_XFER_ERROR);
+            tgen_critical("transfer %s failed socket %i closed", transfer->string, socketD);
         } else if(bytes == 1) {
-            g_string_append_c(transfer->readBuffer, c);
             transfer->totalBytesDownloaded += 1;
             if(c == '\n') {
                 return TRUE;
             }
+            g_string_append_c(transfer->readBuffer, c);
         }
     }
 
@@ -175,12 +175,38 @@ static void _tgentransfer_readCommand(TGenTransfer* transfer, gint socketD) {
 
     if(_tgentransfer_getLine(transfer, socketD)) {
         /* we have read the entire command from the other end */
-        // TODO get type and size from line and put into transfer->command
+        gboolean hasError = FALSE;
 
+        gchar** parts = g_strsplit(transfer->readBuffer->str, " ", 0);
+        if(parts[0] == NULL || parts[1] == NULL) {
+            tgen_critical("error parsing command '%s'", transfer->readBuffer->str);
+            hasError = TRUE;
+        } else {
+            if(!g_ascii_strncasecmp(parts[0], "GET", 3)) {
+                transfer->command.type = TGEN_TYPE_GET;
+            } else if(!g_ascii_strncasecmp(parts[0], "PUT", 3)) {
+                transfer->command.type = TGEN_TYPE_PUT;
+            } else {
+                tgen_critical("error parsing command type '%s'", parts[0]);
+                hasError = TRUE;
+            }
+
+            transfer->command.size = g_ascii_strtoull(parts[1], NULL, 10);
+            if(transfer->command.size == 0) {
+                tgen_critical("error parsing command size '%s'", parts[1]);
+                hasError = TRUE;
+            }
+        }
+
+        g_strfreev(parts);
         g_string_free(transfer->readBuffer, TRUE);
 
-        /* payload phase is next */
-        _tgentransfer_changeState(transfer, TGEN_XFER_PAYLOAD);
+        /* payload phase is next unless there was an error parsing */
+        if(hasError) {
+            _tgentransfer_changeState(transfer, TGEN_XFER_ERROR);
+        } else {
+            _tgentransfer_changeState(transfer, TGEN_XFER_PAYLOAD);
+        }
     } else {
         /* unable to receive entire command, wait for next chance to read */
     }
@@ -200,11 +226,11 @@ static void _tgentransfer_readPayload(TGenTransfer* transfer, gint socketD) {
             gssize bytes = read(socketD, buffer, length);
 
             if(bytes < 0 && errno != EAGAIN) {
-                transfer->hasError = TRUE;
-                tgen_warning("transfer %s error %i while reading from socket %i", transfer->string, errno, socketD);
+                _tgentransfer_changeState(transfer, TGEN_XFER_ERROR);
+                tgen_critical("transfer %s error %i while reading from socket %i", transfer->string, errno, socketD);
             } else if(bytes == 0) {
-                transfer->hasError = TRUE;
-                tgen_warning("transfer %s failed socket %i closed", transfer->string, socketD);
+                _tgentransfer_changeState(transfer, TGEN_XFER_ERROR);
+                tgen_critical("transfer %s failed socket %i closed", transfer->string, socketD);
             } else if(bytes > 0) {
                 transfer->payloadBytesDownloaded += (guint64)bytes;
                 g_checksum_update(transfer->payloadChecksum, buffer, bytes);
@@ -223,9 +249,19 @@ static void _tgentransfer_readChecksum(TGenTransfer* transfer, gint socketD) {
 
     if(_tgentransfer_getLine(transfer, socketD)) {
         /* we have read the entire checksum from the other end */
-        // TODO check that the checksums match
+        gssize sha1Length = g_checksum_type_get_length(G_CHECKSUM_SHA1);
+        g_assert(sha1Length >= 0);
+        gchar* sum = g_strdup(g_checksum_get_string(transfer->payloadChecksum));
+
+        /* check that the sums match */
+        if(!g_ascii_strncasecmp(transfer->readBuffer->str, sum, (gsize)sha1Length)) {
+            tgen_message("checksums passed %s %s", transfer->readBuffer->str, sum);
+        } else {
+            tgen_message("checksums failed %s %s", transfer->readBuffer->str, sum);
+        }
 
         g_string_free(transfer->readBuffer, TRUE);
+        g_free(sum);
 
         /* transfer is done */
         _tgentransfer_changeState(transfer, TGEN_XFER_DONE);
@@ -283,11 +319,11 @@ static gsize _tgentransfer_flushOut(TGenTransfer* transfer, gint socketD) {
     gssize bytes = write(socketD, position, length);
 
     if(bytes < 0 && errno != EAGAIN) {
-        transfer->hasError = TRUE;
-        tgen_warning("transfer %s error %i while writing to socket %i", transfer->string, errno, socketD);
+        _tgentransfer_changeState(transfer, TGEN_XFER_ERROR);
+        tgen_critical("transfer %s error %i while writing to socket %i", transfer->string, errno, socketD);
     } else if(bytes == 0) {
-        transfer->hasError = TRUE;
-        tgen_warning("transfer %s failed socket %i closed", transfer->string, socketD);
+        _tgentransfer_changeState(transfer, TGEN_XFER_ERROR);
+        tgen_critical("transfer %s failed socket %i closed", transfer->string, socketD);
     } else if(bytes > 0) {
         transfer->writeBufferOffset += bytes;
         if(transfer->writeBufferOffset >= (transfer->writeBuffer->len - 1)) {
