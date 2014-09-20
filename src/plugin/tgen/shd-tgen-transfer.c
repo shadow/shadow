@@ -50,6 +50,26 @@ static const gchar* _tgentransfer_commandTypeToString(TGenTransfer* transfer) {
     }
 }
 
+static const gchar* _tgentransfer_stateToString(TGenTransferState state) {
+    switch(state) {
+        case TGEN_XFER_COMMAND: {
+            return "COMMAND";
+        }
+        case TGEN_XFER_PAYLOAD: {
+            return "PAYLOAD";
+        }
+        case TGEN_XFER_CHECKSUM: {
+            return "CHECKSUM";
+        }
+        case TGEN_XFER_DONE: {
+            return "DONE";
+        }
+        default: {
+            return "ERROR";
+        }
+    }
+}
+
 static gchar* _tgentransfer_toString(TGenTransfer* transfer) {
     GString* stringBuffer = g_string_new(NULL);
     g_string_printf(stringBuffer, "[%s-%lu]", _tgentransfer_commandTypeToString(transfer), transfer->command.size);
@@ -64,7 +84,6 @@ TGenTransfer* tgentransfer_new(TGenTransferCommand* command) {
     if(command) {
         transfer->command = *command;
         transfer->isCommander = TRUE;
-        transfer->state = TGEN_XFER_COMMAND;
     }
 
     transfer->payloadChecksum = g_checksum_new(G_CHECKSUM_SHA1);
@@ -112,6 +131,13 @@ gboolean tgentransfer_unref(TGenTransfer* transfer) {
     }
 }
 
+static void _tgentransfer_changeState(TGenTransfer* transfer, TGenTransferState state) {
+    TGEN_ASSERT(transfer);
+    tgen_info("transfer %s moving from state %s to state %s",
+            _tgentransfer_stateToString(transfer->state), _tgentransfer_stateToString(state));
+    transfer->state = state;
+}
+
 static gboolean _tgentransfer_getLine(TGenTransfer* transfer, gint socketD) {
     TGEN_ASSERT(transfer);
 
@@ -154,7 +180,7 @@ static void _tgentransfer_readCommand(TGenTransfer* transfer, gint socketD) {
         g_string_free(transfer->readBuffer, TRUE);
 
         /* payload phase is next */
-        transfer->state = TGEN_XFER_PAYLOAD;
+        _tgentransfer_changeState(transfer, TGEN_XFER_PAYLOAD);
     } else {
         /* unable to receive entire command, wait for next chance to read */
     }
@@ -186,7 +212,7 @@ static void _tgentransfer_readPayload(TGenTransfer* transfer, gint socketD) {
             }
         } else {
             /* payload done, send the checksum next */
-            transfer->state = TGEN_XFER_CHECKSUM;
+            _tgentransfer_changeState(transfer, TGEN_XFER_CHECKSUM);
         }
         break;
     }
@@ -202,7 +228,7 @@ static void _tgentransfer_readChecksum(TGenTransfer* transfer, gint socketD) {
         g_string_free(transfer->readBuffer, TRUE);
 
         /* transfer is done */
-        transfer->state = TGEN_XFER_DONE;
+        _tgentransfer_changeState(transfer, TGEN_XFER_DONE);
     } else {
         /* unable to receive entire checksum, wait for next chance to read */
     }
@@ -290,7 +316,7 @@ static void _tgentransfer_writeCommand(TGenTransfer* transfer, gint socketD) {
 
     if(!transfer->writeBuffer) {
         /* entire command was sent, move to payload phase */
-        transfer->state = TGEN_XFER_PAYLOAD;
+        _tgentransfer_changeState(transfer, TGEN_XFER_PAYLOAD);
     } else {
         /* unable to send entire command, wait for next chance to write */
     }
@@ -314,7 +340,7 @@ static void _tgentransfer_writePayload(TGenTransfer* transfer, gint socketD) {
             transfer->payloadBytesUploaded += (guint64)_tgentransfer_flushOut(transfer, socketD);
         } else {
             /* payload done, send the checksum next */
-            transfer->state = TGEN_XFER_CHECKSUM;
+            _tgentransfer_changeState(transfer, TGEN_XFER_CHECKSUM);
             break;
         }
     }
@@ -334,7 +360,7 @@ static void _tgentransfer_writeChecksum(TGenTransfer* transfer, gint socketD) {
 
     if(!transfer->writeBuffer) {
         /* entire checksum was sent, we are now done */
-        transfer->state = TGEN_XFER_DONE;
+        _tgentransfer_changeState(transfer, TGEN_XFER_DONE);
     } else {
         /* unable to send entire checksum, wait for next chance to write */
     }
