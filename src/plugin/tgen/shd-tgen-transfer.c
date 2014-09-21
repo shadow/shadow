@@ -154,10 +154,12 @@ static gboolean _tgentransfer_getLine(TGenTransfer* transfer, gint socketD) {
 
         if(bytes < 0 && errno != EAGAIN) {
             _tgentransfer_changeState(transfer, TGEN_XFER_ERROR);
-            tgen_critical("transfer %s error %i while reading from socket %i", transfer->string, errno, socketD);
+            tgen_critical("read(): transfer %s socket %i error %i: %s",
+                    transfer->string, socketD, errno, g_strerror(errno));
         } else if(bytes == 0) {
             _tgentransfer_changeState(transfer, TGEN_XFER_ERROR);
-            tgen_critical("transfer %s failed socket %i closed", transfer->string, socketD);
+            tgen_critical("read(): transfer %s socket %i closed unexpectedly",
+                        transfer->string, socketD);
         } else if(bytes == 1) {
             transfer->totalBytesDownloaded += 1;
             if(c == '\n') {
@@ -227,10 +229,12 @@ static void _tgentransfer_readPayload(TGenTransfer* transfer, gint socketD) {
 
             if(bytes < 0 && errno != EAGAIN) {
                 _tgentransfer_changeState(transfer, TGEN_XFER_ERROR);
-                tgen_critical("transfer %s error %i while reading from socket %i", transfer->string, errno, socketD);
+                tgen_critical("read(): transfer %s socket %i error %i: %s",
+                        transfer->string, socketD, errno, g_strerror(errno));
             } else if(bytes == 0) {
                 _tgentransfer_changeState(transfer, TGEN_XFER_ERROR);
-                tgen_critical("transfer %s failed socket %i closed", transfer->string, socketD);
+                tgen_critical("read(): transfer %s socket %i closed unexpectedly",
+                                transfer->string, socketD);
             } else if(bytes > 0) {
                 transfer->payloadBytesDownloaded += (guint64)bytes;
                 g_checksum_update(transfer->payloadChecksum, buffer, bytes);
@@ -320,10 +324,12 @@ static gsize _tgentransfer_flushOut(TGenTransfer* transfer, gint socketD) {
 
     if(bytes < 0 && errno != EAGAIN) {
         _tgentransfer_changeState(transfer, TGEN_XFER_ERROR);
-        tgen_critical("transfer %s error %i while writing to socket %i", transfer->string, errno, socketD);
+        tgen_critical("write(): transfer %s socket %i error %i: %s",
+                transfer->string, socketD, errno, g_strerror(errno));
     } else if(bytes == 0) {
         _tgentransfer_changeState(transfer, TGEN_XFER_ERROR);
-        tgen_critical("transfer %s failed socket %i closed", transfer->string, socketD);
+        tgen_critical("write(): transfer %s socket %i closed unexpectedly",
+                transfer->string, socketD);
     } else if(bytes > 0) {
         transfer->writeBufferOffset += bytes;
         if(transfer->writeBufferOffset >= (transfer->writeBuffer->len - 1)) {

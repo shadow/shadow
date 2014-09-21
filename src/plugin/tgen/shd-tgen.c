@@ -88,7 +88,8 @@ static void _tgen_bootstrap(TGen* tgen) {
     gint result = bind(tgen->serverD, (struct sockaddr *) &listener,
             sizeof(listener));
     if (result < 0) {
-        tgen_critical("problem bootstrapping: bind() returned %i", result)
+        tgen_critical("bind(): socket %i returned %i error %i: %s",
+                tgen->serverD, result, errno, g_strerror(errno));
         close(tgen->serverD);
         tgen->serverD = 0;
         return;
@@ -97,7 +98,8 @@ static void _tgen_bootstrap(TGen* tgen) {
     /* set as server listening socket */
     result = listen(tgen->serverD, SOMAXCONN);
     if (result < 0) {
-        tgen_critical("problem bootstrapping: listen() returned %i", result)
+        tgen_critical("listen(): socket %i returned %i error %i: %s",
+                tgen->serverD, result, errno, g_strerror(errno));
         close(tgen->serverD);
         tgen->serverD = 0;
         return;
@@ -107,7 +109,8 @@ static void _tgen_bootstrap(TGen* tgen) {
     if (!tgen->epollD) {
         tgen->epollD = epoll_create(1);
         if (tgen->epollD < 0) {
-            tgen_critical("problem bootstrapping: epoll_create() returned %i", tgen->epollD)
+            tgen_critical("epoll_create(): returned %i error %i: %s",
+                        tgen->epollD, errno, g_strerror(errno));
             close(tgen->epollD);
             tgen->epollD = 0;
             close(tgen->serverD);
@@ -121,7 +124,8 @@ static void _tgen_bootstrap(TGen* tgen) {
     tgen->ee->data.fd = tgen->serverD;
     result = epoll_ctl(tgen->epollD, EPOLL_CTL_ADD, tgen->serverD, tgen->ee);
     if (result != 0) {
-        tgen_critical("problem bootstrapping: epoll_ctl() errno %i", errno);
+        tgen_critical("epoll_ctl(): epoll %i socket %i returned %i error %i: %s",
+                tgen->epollD, tgen->serverD, result, errno, g_strerror(errno));
         close(tgen->epollD);
         tgen->epollD = 0;
         close(tgen->serverD);
@@ -134,30 +138,35 @@ static void _tgen_bootstrap(TGen* tgen) {
 
     gchar ipStringBuffer[INET_ADDRSTRLEN + 1];
     memset(ipStringBuffer, 0, INET_ADDRSTRLEN + 1);
-    inet_ntop(AF_INET, &listener.sin_addr.s_addr, ipStringBuffer,
-            INET_ADDRSTRLEN);
+    inet_ntop(AF_INET, &listener.sin_addr.s_addr, ipStringBuffer, INET_ADDRSTRLEN);
 
-    tgen_message("bootstrapping complete: server listening at %s:%u", ipStringBuffer, listener.sin_port);
+    tgen_message("bootstrapped server listening at %s:%u", ipStringBuffer, listener.sin_port);
 }
 
 static gboolean _tgen_openTransport(TGen* tgen, TGenTransport* transport) {
     gint watchD = tgentransport_getEpollDescriptor(transport);
     tgen->ee->events = EPOLLIN;
     tgen->ee->data.fd = watchD;
-    if(0 == epoll_ctl(tgen->epollD, EPOLL_CTL_ADD, watchD, tgen->ee)) {
+    gint result = epoll_ctl(tgen->epollD, EPOLL_CTL_ADD, watchD, tgen->ee);
+    if(result == 0) {
         g_hash_table_replace(tgen->transports, GINT_TO_POINTER(watchD), transport);
         return TRUE;
     } else {
+        tgen_critical("epoll_ctl(): epoll %i socket %i returned %i error %i: %s",
+                    tgen->epollD, watchD, result, errno, g_strerror(errno));
         return FALSE;
     }
 }
 
 static gboolean _tgen_closeTransport(TGen* tgen, TGenTransport* transport) {
     gint watchD = tgentransport_getEpollDescriptor(transport);
-    if(0 == epoll_ctl(tgen->epollD, EPOLL_CTL_DEL, watchD, NULL)) {
+    gint result = epoll_ctl(tgen->epollD, EPOLL_CTL_DEL, watchD, NULL);
+    if(result == 0) {
         g_hash_table_remove(tgen->transports, GINT_TO_POINTER(watchD));
         return TRUE;
     } else {
+        tgen_critical("epoll_ctl(): epoll %i socket %i returned %i error %i: %s",
+                    tgen->epollD, watchD, result, errno, g_strerror(errno));
         return FALSE;
     }
 }
@@ -194,7 +203,8 @@ static gint _tgen_createConnectedTCPSocket(in_addr_t peerIP, in_port_t peerPort)
     gint socketD = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
 
     if (socketD < 0) {
-        tgen_critical("error creating socket: socket() returned %i and errno is %i", socketD, errno);
+        tgen_critical("socket(): returned %i error %i: %s",
+                socketD, errno, g_strerror(errno));
         return 0;
     }
 
@@ -208,7 +218,8 @@ static gint _tgen_createConnectedTCPSocket(in_addr_t peerIP, in_port_t peerPort)
 
     /* nonblocking sockets means inprogress is ok */
     if (result < 0 && errno != EINPROGRESS) {
-        tgen_critical("error connecting socket: connect() returned %i and errno is %i", result, errno);
+        tgen_critical("connect(): socket %i returned %i error %i: %s",
+                        socketD, result, errno, g_strerror(errno));
         close(socketD);
         return 0;
     }
@@ -264,8 +275,8 @@ static void _tgen_initiateTransfer(TGen* tgen, TGenAction* action) {
             tgentransport_setCommand(transport, command, cb, item);
         } else {
             gint watchD = tgentransport_getEpollDescriptor(transport);
-            tgen_critical("unable to accept new transport: problem watching "
-                    "descriptor %i for events: epoll_ctl() errno %i", watchD, errno);
+            tgen_warning("unable to accept new transport: epoll %i unable to watch "
+                          "descriptor %i for events", watchD, socketD);
             close(socketD);
             tgentransport_unref(transport);
         }
@@ -289,7 +300,8 @@ static void _tgen_acceptTransport(TGen* tgen) {
 
     gint socketD = accept(tgen->serverD, (struct sockaddr*)&peerAddress, &addressLength);
     if (socketD < 0) {
-        tgen_critical("error accepting socketD: accept() returned %i and errno is %i", socketD, errno);
+        tgen_critical("accept(): socket %i returned %i error %i: %s",
+                tgen->serverD, socketD, errno, g_strerror(errno));
         return;
     } else if(tgen->hasEnded) {
         close(socketD);
@@ -313,8 +325,8 @@ static void _tgen_acceptTransport(TGen* tgen) {
             tgen_info("accepted new transport socket %i")
         } else {
             gint watchD = tgentransport_getEpollDescriptor(transport);
-            tgen_critical("unable to accept new transport: problem watching "
-                    "descriptor %i for events: epoll_ctl() errno %i", watchD, errno);
+            tgen_warning("unable to accept new transport: epoll %i unable to watch "
+                          "descriptor %i for events", watchD, socketD);
             close(socketD);
             tgentransport_unref(transport);
         }
@@ -422,7 +434,8 @@ void tgen_activate(TGen* tgen) {
     struct epoll_event epevs[10];
     gint nfds = epoll_wait(tgen->epollD, epevs, 10, 0);
     if (nfds == -1) {
-        tgen_critical("error in client epoll_wait");
+        tgen_warning("epoll_wait(): epoll %i returned %i error %i: %s",
+                tgen->epollD, nfds, errno, g_strerror(errno));
     }
 
     /* activate correct component for every socket thats ready.

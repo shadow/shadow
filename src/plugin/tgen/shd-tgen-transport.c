@@ -52,7 +52,8 @@ TGenTransport* tgentransport_new(gint socketD, const TGenPeer proxy, const TGenP
     gint epollD = epoll_create(1);
 
     if (epollD < 0) {
-        tgen_critical("error creating epoll: epoll_create() returned %i and errno is %i", epollD, errno);
+        tgen_critical("epoll_create(): returned %i error %i: %s",
+                epollD, errno, g_strerror(errno));
         close(epollD);
         return NULL;
     }
@@ -61,8 +62,10 @@ TGenTransport* tgentransport_new(gint socketD, const TGenPeer proxy, const TGenP
     struct epoll_event ev;
     ev.events = EPOLLIN;
     ev.data.fd = socketD;
-    if (0 != epoll_ctl(epollD, EPOLL_CTL_ADD, socketD, &ev)) {
-        tgen_warning("error in epoll_ctl: unable to watch socket %i with epoll %i", socketD, epollD);
+    gint result = epoll_ctl(epollD, EPOLL_CTL_ADD, socketD, &ev);
+    if (result != 0) {
+        tgen_critical("epoll_ctl(): epoll %i socket %i returned %i error %i: %s",
+                epollD, socketD, result, errno, g_strerror(errno));
         return NULL;
     }
 
@@ -128,8 +131,8 @@ void tgentransport_setCommand(TGenTransport* transport, TGenTransferCommand comm
         transport->epollE.events |= EPOLLOUT;
         gint result = epoll_ctl(transport->epollD, EPOLL_CTL_MOD, transport->tcpD, &transport->epollE);
         if (result != 0) {
-            tgen_warning("error in epoll_ctl: unable to change events on socket %i with epoll %i",
-                    transport->tcpD, transport->epollD);
+            tgen_critical("epoll_ctl(): epoll %i socket %i returned %i error %i: %s",
+                    transport->epollD, transport->tcpD, result, errno, g_strerror(errno));
         }
     }
 }
@@ -193,7 +196,8 @@ TGenTransferStatus tgentransport_activate(TGenTransport* transport) {
     while(nfds > 0) {
         nfds = epoll_wait(transport->epollD, epevs, 10, 0);
         if (nfds == -1) {
-            tgen_critical("error in transport epoll_wait");
+            tgen_critical("epoll_wait(): epoll %i returned %i error %i: %s",
+                    transport->epollD, nfds, errno, g_strerror(errno));
         }
 
         /* activate correct component for every socket thats ready.
@@ -225,8 +229,10 @@ TGenTransferStatus tgentransport_activate(TGenTransport* transport) {
             if(changed) {
                 gint result = epoll_ctl(transport->epollD, EPOLL_CTL_MOD, transport->tcpD, &transport->epollE);
                 if(result != 0) {
-                    tgen_warning("error in epoll_ctl: unable to change events on socket %i with epoll %i",
-                            transport->tcpD, transport->epollD);
+                    tgen_critical("epoll_ctl(): epoll %i socket %i returned %i error %i: %s",
+                            transport->epollD, transport->tcpD, result, errno, g_strerror(errno));
+                    tgen_warning("epoll %i unable to change events on socket %i",
+                            transport->epollD, transport->tcpD);
                 }
             }
         }
