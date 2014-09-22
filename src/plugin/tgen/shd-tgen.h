@@ -9,6 +9,7 @@
 #include <sys/epoll.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <arpa/inet.h>
 #include <netdb.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -17,13 +18,8 @@
 
 #include <shd-library.h>
 
-typedef struct _TGenPeer TGenPeer;
-struct _TGenPeer {
-    in_addr_t address;
-    in_port_t port;
-};
-
 #include "shd-tgen-pool.h"
+#include "shd-tgen-peer.h"
 #include "shd-tgen-transfer.h"
 #include "shd-tgen-transport.h"
 #include "shd-tgen-action.h"

@@ -79,14 +79,13 @@ static void _tgendriver_bootstrap(TGenDriver* driver) {
 
     /* setup the listener address information */
     struct sockaddr_in listener;
-    memset(&listener, 0, sizeof(listener));
+    memset(&listener, 0, sizeof(struct sockaddr_in));
     listener.sin_family = AF_INET;
-    listener.sin_addr.s_addr = INADDR_ANY;
+    listener.sin_addr.s_addr = htonl(INADDR_ANY);
     listener.sin_port = (in_port_t) tgenaction_getServerPort(startAction);
 
     /* bind the socket to the server port */
-    gint result = bind(driver->serverD, (struct sockaddr *) &listener,
-            sizeof(listener));
+    gint result = bind(driver->serverD, (struct sockaddr *) &listener, sizeof(listener));
     if (result < 0) {
         tgen_critical("bind(): socket %i returned %i error %i: %s",
                 driver->serverD, result, errno, g_strerror(errno));
@@ -140,7 +139,7 @@ static void _tgendriver_bootstrap(TGenDriver* driver) {
     memset(ipStringBuffer, 0, INET_ADDRSTRLEN + 1);
     inet_ntop(AF_INET, &listener.sin_addr.s_addr, ipStringBuffer, INET_ADDRSTRLEN);
 
-    tgen_message("bootstrapped server listening at %s:%u", ipStringBuffer, listener.sin_port);
+    tgen_message("bootstrapped server listening at %s:%u", ipStringBuffer, ntohs(listener.sin_port));
 }
 
 static gboolean _tgendriver_openTransport(TGenDriver* driver, TGenTransport* transport) {
@@ -198,7 +197,7 @@ static void _tgendriver_transferCompleteCallback(TGenCallbackItem* item) {
 //    }
 }
 
-static gint _tgendriver_createConnectedTCPSocket(in_addr_t peerIP, in_port_t peerPort) {
+static gint _tgendriver_createConnectedTCPSocket(TGenPeer* peer) {
     /* create the socket and get a socket descriptor */
     gint socketD = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
 
@@ -211,8 +210,8 @@ static gint _tgendriver_createConnectedTCPSocket(in_addr_t peerIP, in_port_t pee
     struct sockaddr_in server;
     memset(&server, 0, sizeof(server));
     server.sin_family = AF_INET;
-    server.sin_addr.s_addr = peerIP;
-    server.sin_port = peerPort;
+    server.sin_addr.s_addr = tgenpeer_getNetworkIP(peer);
+    server.sin_port = tgenpeer_getNetworkPort(peer);
 
     gint result = connect(socketD, (struct sockaddr *) &server, sizeof(server));
 
@@ -242,18 +241,14 @@ static void _tgendriver_initiateTransfer(TGenDriver* driver, TGenAction* action)
     g_assert(peers);
 
     /* select a random peer */
-    const TGenPeer* peerPointer = tgenpool_getRandom(peers);
-    g_assert(peerPointer);
-    const TGenPeer peer = *peerPointer;
+    TGenPeer* peer = tgenpool_getRandom(peers);
+    g_assert(peer);
 
-    const TGenPeer proxy = tgenaction_getSocksProxy(driver->startAction);
-
-    in_addr_t ip = proxy.address > 0 ? proxy.address : peer.address;
-    in_addr_t port = proxy.port > 0 ? proxy.port : peer.port;
+    TGenPeer* proxy = tgenaction_getSocksProxy(driver->startAction);
 
     /* create the new transport socket, etc */
     // TODO only create a new socket and transport if we dont already have one to this peer?
-    gint socketD = _tgendriver_createConnectedTCPSocket(ip, port);
+    gint socketD = _tgendriver_createConnectedTCPSocket(proxy ? proxy : peer);
     TGenTransport* transport = NULL;
     if (socketD > 0) {
         transport = tgentransport_new(socketD, proxy, peer);
@@ -310,14 +305,10 @@ static void _tgendriver_acceptTransport(TGenDriver* driver) {
 
     /* this transfer was initiated by the other end.
      * type, and size info will be sent to us later. */
-    TGenPeer peer;
-    peer.address = peerAddress.sin_addr.s_addr;
-    peer.port = peerAddress.sin_port;
-    TGenPeer proxy;
-    proxy.address = 0;
-    proxy.port = 0;
+    TGenPeer* peer = tgenpeer_new(peerAddress.sin_addr.s_addr, peerAddress.sin_port);
+    TGenTransport* transport = tgentransport_new(socketD, NULL, peer);
+    tgenpeer_unref(peer);
 
-    TGenTransport* transport = tgentransport_new(socketD, proxy, peer);
     if(transport) {
         /* track the transport */
         gboolean success = _tgendriver_openTransport(driver, transport);

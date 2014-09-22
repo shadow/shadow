@@ -14,7 +14,7 @@ typedef enum _TGenTransportProtocol {
 
 typedef struct _TGenTransport TGenTransport;
 
-TGenTransport* tgentransport_new(gint socketD, const TGenPeer proxy, const TGenPeer peer);
+TGenTransport* tgentransport_new(gint socketD, TGenPeer* proxy, TGenPeer* peer);
 void tgentransport_ref(TGenTransport* transport);
 void tgentransport_unref(TGenTransport* transport);
 

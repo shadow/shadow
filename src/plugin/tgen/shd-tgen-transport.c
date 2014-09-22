@@ -15,8 +15,8 @@ struct _TGenTransport {
 
     struct epoll_event epollE;
 
-    TGenPeer peer;
-    TGenPeer proxy;
+    TGenPeer* peer;
+    TGenPeer* proxy;
     gchar* string;
 
     TGenTransfer* activeTransfer;
@@ -32,19 +32,24 @@ typedef struct _TGenTransportCallbackItem {
 } TGenTransportCallbackItem;
 
 static gchar* _tgentransport_toString(TGenTransport* transport) {
-    gchar* ipStringMemBuffer = g_malloc0(INET6_ADDRSTRLEN + 1);
-    const gchar* ipString = inet_ntop(AF_INET, &(transport->peer.address),
-            ipStringMemBuffer, INET6_ADDRSTRLEN);
+    TGEN_ASSERT(transport);
 
     GString* stringBuffer = g_string_new(NULL);
-    g_string_printf(stringBuffer, "[TCP-%i-%s:%u]", transport->tcpD,
-            ipString, transport->peer.port);
 
-    g_free(ipStringMemBuffer);
+    if(transport->proxy && transport->peer) {
+        g_string_printf(stringBuffer, "[TCP-%i-%s-%s]", transport->tcpD,
+                tgenpeer_toString(transport->proxy), tgenpeer_toString(transport->peer));
+    } else if(transport->peer) {
+        g_string_printf(stringBuffer, "[TCP-%i-%s]", transport->tcpD,
+                tgenpeer_toString(transport->peer));
+    } else {
+        g_string_printf(stringBuffer, "[TCP-%i]", transport->tcpD);
+    }
+
     return g_string_free(stringBuffer, FALSE);
 }
 
-TGenTransport* tgentransport_new(gint socketD, const TGenPeer proxy, const TGenPeer peer) {
+TGenTransport* tgentransport_new(gint socketD, TGenPeer* proxy, TGenPeer* peer) {
     if (socketD <= 0) {
         return NULL;
     }
@@ -76,8 +81,14 @@ TGenTransport* tgentransport_new(gint socketD, const TGenPeer proxy, const TGenP
     transport->epollD = epollD;
     transport->tcpD = socketD;
     transport->protocol = TGEN_PROTOCOL_TCP;
-    transport->peer = peer;
-    transport->proxy = proxy;
+    if(peer) {
+        transport->peer = peer;
+        tgenpeer_ref(peer);
+    }
+    if(proxy) {
+        transport->proxy = proxy;
+        tgenpeer_ref(proxy);
+    }
     transport->epollE.events = ev.events;
     transport->epollE.data.fd = socketD;
 

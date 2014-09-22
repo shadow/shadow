@@ -3,6 +3,7 @@ set(tgen_sources
     shd-tgen-driver.c
     shd-tgen-action.c
     shd-tgen-graph.c
+    shd-tgen-peer.c
     shd-tgen-pool.c
     shd-tgen-transfer.c
     shd-tgen-transport.c

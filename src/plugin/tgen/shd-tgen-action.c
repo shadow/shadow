@@ -9,8 +9,8 @@
 
 typedef struct _TGenActionStartData {
     guint64 time;
-    guint64 serverport;
-    TGenPeer socksproxy;
+    guint16 serverport;
+    TGenPeer* socksproxy;
     TGenPool* peers;
 } TGenActionStartData;
 
@@ -61,7 +61,7 @@ static in_addr_t _tgengraph_toAddress(const gchar* hostname) {
 }
 
 static GError* _tgengraph_handlePeer(const gchar* attributeName,
-        const gchar* peerStr, TGenPeer* peer) {
+        const gchar* peerStr, TGenPeer** peerOut) {
     g_assert(attributeName && peerStr);
 
     GError* error = NULL;
@@ -90,7 +90,7 @@ static GError* _tgengraph_handlePeer(const gchar* attributeName,
     g_strfreev(tokens);
 
     /* validate values */
-    if (address == INADDR_ANY || address == INADDR_NONE) {
+    if (address == htonl(INADDR_ANY) || address == htonl(INADDR_NONE)) {
         error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT,
                 "invalid peer '%s' for host part of attribute '%s', "
                 "expected 'localhost', '127.0.0.1', or valid node hostname",
@@ -102,19 +102,17 @@ static GError* _tgengraph_handlePeer(const gchar* attributeName,
                  "expected 16 bit unsigned integer", peerStr,
                 attributeName);
     } else {
-        port = (in_port_t) portNum;
+        port = (in_port_t) htons((guint16) portNum);
     }
 
     if (!error) {
-        gchar* ipStringBuffer = g_malloc0(INET6_ADDRSTRLEN + 1);
-        const gchar* ipString = inet_ntop(AF_INET, &address, ipStringBuffer,
-                INET6_ADDRSTRLEN);
-        tgen_debug("parsed address '%s' and port '%u' from string '%s'", ipString, port, peerStr);
-        g_free(ipStringBuffer);
+        TGenPeer* peer = tgenpeer_new(address, port);
+        tgen_debug("parsed peer '%s' from string '%s'", tgenpeer_toString(peer), peerStr);
 
-        if (peer) {
-            peer->address = address;
-            peer->port = port;
+        if (peerOut) {
+            *peerOut = peer;
+        } else {
+            tgenpeer_unref(peer);
         }
     }
 
@@ -132,11 +130,11 @@ static GError* _tgengraph_handlePeers(const gchar* attributeName,
 
     /* handle each peer */
     for (int i = 0; tokens[i] != NULL; i++) {
-        TGenPeer* peer = g_new0(TGenPeer, 1);
+        TGenPeer* peer = NULL;
 
-        error = _tgengraph_handlePeer(attributeName, tokens[i], peer);
+        error = _tgengraph_handlePeer(attributeName, tokens[i], &peer);
 
-        if (!error && peer->port > 0 && peerPool) {
+        if (!error && peerPool && peer) {
             tgenpool_add(peerPool, peer);
         } else {
             /* didn't add the peer */
@@ -308,10 +306,9 @@ TGenAction* tgenaction_newStartAction(const gchar* timeStr,
     }
 
     /* a socks proxy address is optional */
-    TGenPeer socksproxy;
+    TGenPeer* socksproxy = NULL;
     if (g_ascii_strncasecmp(socksProxyStr, "\0", (gsize) 1)) {
-        *error = _tgengraph_handlePeer("socksproxy", socksProxyStr,
-                &socksproxy);
+        *error = _tgengraph_handlePeer("socksproxy", socksProxyStr, &socksproxy);
         if (*error) {
             return NULL;
         }
@@ -334,7 +331,8 @@ TGenAction* tgenaction_newStartAction(const gchar* timeStr,
     TGenActionStartData* data = g_new0(TGenActionStartData, 1);
 
     data->time = g_ascii_strtoull(timeStr, NULL, 10);
-    data->serverport = g_ascii_strtoull(serverPortStr, NULL, 10);
+    guint64 longport = g_ascii_strtoull(serverPortStr, NULL, 10);
+    data->serverport = htons((guint16)longport);
     data->peers = peerPool;
     data->socksproxy = socksproxy;
 
@@ -508,13 +506,13 @@ TGenActionType tgenaction_getType(TGenAction* action) {
     return action->type;
 }
 
-guint64 tgenaction_getServerPort(TGenAction* action) {
+guint16 tgenaction_getServerPort(TGenAction* action) {
     TGEN_ASSERT(action);
     g_assert(action->data && action->type == TGEN_ACTION_START);
     return ((TGenActionStartData*)action->data)->serverport;
 }
 
-const TGenPeer tgenaction_getSocksProxy(TGenAction* action) {
+TGenPeer* tgenaction_getSocksProxy(TGenAction* action) {
     TGEN_ASSERT(action);
     g_assert(action->data && action->type == TGEN_ACTION_START);
     return ((TGenActionStartData*)action->data)->socksproxy;
