@@ -8,7 +8,7 @@
 #include <shd-library.h>
 #include "shd-tgen.h"
 
-static void _tgen_log(ShadowLogLevel level, const gchar* functionName, const gchar* format, ...) {
+static void _tgendriver_log(ShadowLogLevel level, const gchar* functionName, const gchar* format, ...) {
 	va_list vargs;
 	va_start(vargs, format);
 
@@ -20,7 +20,7 @@ static void _tgen_log(ShadowLogLevel level, const gchar* functionName, const gch
 	va_end(vargs);
 }
 
-static void _tgen_createCallback(ShadowPluginCallbackFunc callback,
+static void _tgendriver_createCallback(ShadowPluginCallbackFunc callback,
 		gpointer data, guint millisecondsDelay) {
 	/* TODO: this should actually happen asynchronously */
 	sleep(millisecondsDelay / 1000);
@@ -29,13 +29,13 @@ static void _tgen_createCallback(ShadowPluginCallbackFunc callback,
 
 gint main(gint argc, gchar *argv[]) {
 	/* create the new state according to user inputs */
-	TGen* tgen = tgen_new(argc, argv, &_tgen_log, &_tgen_createCallback);
+	TGenDriver* tgen = tgendriver_new(argc, argv, &_tgendriver_log, &_tgendriver_createCallback);
 	if(!tgen) {
 		tgen_critical("Error initializing new TrafficGen instance");
 		return -1;
-	} else if(!tgen_hasStarted(tgen)) {
+	} else if(!tgendriver_hasStarted(tgen)) {
 		tgen_critical("Error starting TrafficGen instance");
-		tgen_free(tgen);
+		tgendriver_free(tgen);
 		return -1;
 	}
 
@@ -50,7 +50,7 @@ gint main(gint argc, gchar *argv[]) {
 	/* register the tgen epoll descriptor so we can watch its events */
 	struct epoll_event mainevent;
 	mainevent.events = EPOLLIN|EPOLLOUT;
-	mainevent.data.fd = tgen_getEpollDescriptor(tgen);
+	mainevent.data.fd = tgendriver_getEpollDescriptor(tgen);
 	if(!mainevent.data.fd) {
 		tgen_critical("Error retrieving tgen epolld");
 		close(mainepolld);
@@ -75,11 +75,11 @@ gint main(gint argc, gchar *argv[]) {
 		/* activate if something is ready */
 		tgen_debug("processing event");
 		if(nReadyFDs > 0) {
-			tgen_activate(tgen);
+			tgendriver_activate(tgen);
 		}
 
 		/* break out if trafficgen is done */
-		if(tgen_hasEnded(tgen)) {
+		if(tgendriver_hasEnded(tgen)) {
 			break;
 		}
 	}
@@ -87,14 +87,14 @@ gint main(gint argc, gchar *argv[]) {
 	tgen_message("finished main loop, cleaning up");
 
 	/* de-register the tgen epoll descriptor */
-	mainevent.data.fd = tgen_getEpollDescriptor(tgen);
+	mainevent.data.fd = tgendriver_getEpollDescriptor(tgen);
 	if(mainevent.data.fd) {
 		epoll_ctl(mainepolld, EPOLL_CTL_DEL, mainevent.data.fd, &mainevent);
 	}
 
 	/* cleanup and close */
 	close(mainepolld);
-	tgen_free(tgen);
+	tgendriver_free(tgen);
 
 	tgen_message("exiting cleanly");
 

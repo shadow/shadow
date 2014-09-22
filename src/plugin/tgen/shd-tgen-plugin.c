@@ -7,24 +7,24 @@
 #include "shd-tgen.h"
 
 /* the state used by this plug-in */
-TGen* tgen;
+TGenDriver* tgen;
 ShadowLogFunc shadowLog;
 ShadowCreateCallbackFunc shadowCreateCallback;
 
 /* create a new node using this plug-in */
-static void _tgen_new(gint argc, gchar* argv[]) {
+static void _tgendriver_new(gint argc, gchar* argv[]) {
 	/* create the new instance */
-	tgen = tgen_new(argc, argv, shadowLog, shadowCreateCallback);
+	tgen = tgendriver_new(argc, argv, shadowLog, shadowCreateCallback);
 }
 
 /* free node state */
-static void _tgen_free() {
-	tgen_free(tgen);
+static void _tgendriver_free() {
+	tgendriver_free(tgen);
 }
 
 /* check active sockets for readability/writability */
-static void _tgen_activate() {
-	tgen_activate(tgen);
+static void _tgendriver_activate() {
+	tgendriver_activate(tgen);
 }
 
 /* shadow calls this function for a one-time initialization, and exposes its interface */
@@ -34,5 +34,5 @@ void __shadow_plugin_init__(ShadowFunctionTable* shadowlibFuncs) {
 	shadowCreateCallback = shadowlibFuncs->createCallback;
 
 	/* tell shadow which of our functions it can use to call back to our plugin*/
-	shadowlibFuncs->registerPlugin(&_tgen_new, &_tgen_free, &_tgen_activate);
+	shadowlibFuncs->registerPlugin(&_tgendriver_new, &_tgendriver_free, &_tgendriver_activate);
 }

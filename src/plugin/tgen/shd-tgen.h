@@ -28,6 +28,7 @@ struct _TGenPeer {
 #include "shd-tgen-transport.h"
 #include "shd-tgen-action.h"
 #include "shd-tgen-graph.h"
+#include "shd-tgen-driver.h"
 
 #if 1 /* #ifdef DEBUG */
 #define TGEN_MAGIC 0xABBABAAB
@@ -45,15 +46,5 @@ extern ShadowLogFunc tgenLogFunc;
 #define tgen_message(...) 	if(tgenLogFunc){tgenLogFunc(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, __VA_ARGS__);}
 #define tgen_info(...) 		if(tgenLogFunc){tgenLogFunc(SHADOW_LOG_LEVEL_INFO, __FUNCTION__, __VA_ARGS__);}
 #define tgen_debug(...) 	if(tgenLogFunc){tgenLogFunc(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__, __VA_ARGS__);}
-
-/* opaque struct containing trafficgenerator data */
-typedef struct _TGen TGen;
-
-TGen* tgen_new(gint argc, gchar* argv[], ShadowLogFunc logf, ShadowCreateCallbackFunc callf);
-void tgen_free(TGen* tgen);
-void tgen_activate(TGen* tgen);
-gboolean tgen_hasStarted(TGen* tgen);
-gboolean tgen_hasEnded(TGen* tgen);
-gint tgen_getEpollDescriptor(TGen* tgen);
 
 #endif /* SHD_TGEN_H_ */

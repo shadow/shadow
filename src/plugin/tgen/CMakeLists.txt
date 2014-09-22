@@ -1,6 +1,6 @@
 ## tgen: an all-purpose traffic generation plug-in for Shadow
 set(tgen_sources
-    shd-tgen.c
+    shd-tgen-driver.c
     shd-tgen-action.c
     shd-tgen-graph.c
     shd-tgen-pool.c
