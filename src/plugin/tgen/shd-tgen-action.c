@@ -137,8 +137,10 @@ static GError* _tgengraph_handlePeers(const gchar* attributeName,
         if (!error && peerPool && peer) {
             tgenpool_add(peerPool, peer);
         } else {
-            /* didn't add the peer */
-            g_free(peer);
+            if(peer) {
+                /* didn't add the peer */
+                tgenpeer_unref(peer);
+            }
             if (error) {
                 /* some validation error */
                 break;
@@ -315,7 +317,7 @@ TGenAction* tgenaction_newStartAction(const gchar* timeStr,
     }
 
     /* validate the peer pool */
-    TGenPool* peerPool = tgenpool_new();
+    TGenPool* peerPool = tgenpool_new((GDestroyNotify)tgenpeer_unref);
     *error = _tgengraph_handlePeers("peers", peersStr, peerPool);
     if (*error) {
         tgenpool_unref(peerPool);
@@ -464,7 +466,7 @@ TGenAction* tgenaction_newTransferAction(const gchar* typeStr,
     /* peers are optional */
     TGenPool* peerPool = NULL;
     if (g_ascii_strncasecmp(peersStr, "\0", (gsize) 1)) {
-        peerPool = tgenpool_new();
+        peerPool = tgenpool_new((GDestroyNotify)tgenpeer_unref);
         *error = _tgengraph_handlePeers("peers", peersStr, peerPool);
         if (*error) {
             tgenpool_unref(peerPool);

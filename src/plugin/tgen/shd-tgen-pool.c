@@ -19,11 +19,11 @@ static gint _tgenpool_intCompare(gconstpointer a, gconstpointer b,
     return *ai > *bi ? +1 : *ai == *bi ? 0 : -1;
 }
 
-TGenPool* tgenpool_new() {
+TGenPool* tgenpool_new(GDestroyNotify valueDestroyFunc) {
     TGenPool* pool = g_new0(TGenPool, 1);
     pool->magic = TGEN_MAGIC;
 
-    pool->items = g_tree_new_full(_tgenpool_intCompare, NULL, g_free, g_free);
+    pool->items = g_tree_new_full(_tgenpool_intCompare, NULL, g_free, valueDestroyFunc);
     pool->refcount = 1;
 
     return pool;

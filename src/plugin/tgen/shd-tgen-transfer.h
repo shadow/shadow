@@ -29,5 +29,6 @@ gboolean tgentransfer_onReadable(TGenTransfer* transfer, gint socketD);
 gboolean tgentransfer_onWritable(TGenTransfer* transfer, gint socketD);
 
 gboolean tgentransfer_isComplete(TGenTransfer* transfer);
+gboolean tgentransfer_wantsWriteResponse(TGenTransfer* transfer);
 
 #endif /* SHD_TGEN_TRANSFER_H_ */

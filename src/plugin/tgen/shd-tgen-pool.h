@@ -5,9 +5,11 @@
 #ifndef SHD_TGEN_POOL_H_
 #define SHD_TGEN_POOL_H_
 
+#include <glib.h>
+
 typedef struct _TGenPool TGenPool;
 
-TGenPool* tgenpool_new();
+TGenPool* tgenpool_new(GDestroyNotify valueDestroyFunc);
 void tgenpool_ref(TGenPool* pool);
 void tgenpool_unref(TGenPool* pool);
 

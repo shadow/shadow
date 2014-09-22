@@ -171,30 +171,21 @@ static gboolean _tgendriver_closeTransport(TGenDriver* driver, TGenTransport* tr
 }
 
 static void _tgendriver_transferCompleteCallback(TGenCallbackItem* item) {
-    // TODO what if tgen or action was destroyed in the meantime?
+    // TODO what if tgen or action was destroyed in the meantime? need refcounts on those
 
+    /* our transfer finished, close the socket */
+    _tgendriver_closeTransport(item->driver, item->transport);
+
+    /* unref since the item object no longer holds the reference */
     tgentransport_unref(item->transport);
+    item->transport = NULL;
 
     /* this only happens for transfers that our side initiated.
      * continue traversing the graph as instructed */
     _tgendriver_continueNextActions(item->driver, item->action);
-    g_free(item);
 
-//    if(tgentransfer_isComplete(transfer)) {
-//        /* this transfer finished, clean it up */
-//        tgen->totalTransfersCompleted++;
-//        _tgendriver_closeTransfer(tgen, transfer);
-//        tgentransfer_free(transfer);
-//
-//        /* if we are the client side of this transfer, initiate the next
-//         * action from the action graph as appropriate */
-//        TGenAction* transferAction = g_hash_table_lookup(tgen->activeTransferActions,
-//                            GINT_TO_POINTER(desc));
-//        if(transferAction) {
-//            g_hash_table_remove(tgen->activeTransferActions, GINT_TO_POINTER(desc));
-//            _tgendriver_continueNextActions(tgen, transferAction);
-//        }
-//    }
+    /* cleanup */
+    g_free(item);
 }
 
 static gint _tgendriver_createConnectedTCPSocket(TGenPeer* peer) {
@@ -258,7 +249,7 @@ static void _tgendriver_initiateTransfer(TGenDriver* driver, TGenAction* action)
         /* track the transport */
         gboolean success = _tgendriver_openTransport(driver, transport);
         if(success) {
-            tgen_info("created new transport socket %i")
+            tgen_info("created new transport socket %i", socketD)
 
             /* set a callback so we know how to continue when the transfer is done */
             GHookFunc cb = (GHookFunc) _tgendriver_transferCompleteCallback;
@@ -313,7 +304,7 @@ static void _tgendriver_acceptTransport(TGenDriver* driver) {
         /* track the transport */
         gboolean success = _tgendriver_openTransport(driver, transport);
         if(success) {
-            tgen_info("accepted new transport socket %i")
+            tgen_info("accepted new transport socket %i", socketD)
         } else {
             gint watchD = tgentransport_getEpollDescriptor(transport);
             tgen_warning("unable to accept new transport: epoll %i unable to watch "

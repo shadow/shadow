@@ -7,13 +7,11 @@
 #include "shd-tgen.h"
 
 struct _TGenTransport {
-    TGenTransportProtocol protocol;
-    gint refcount;
-
-    gint epollD;
-    gint tcpD;
-
     struct epoll_event epollE;
+    gint epollD;
+
+    TGenTransportProtocol protocol;
+    gint tcpD;
 
     TGenPeer* peer;
     TGenPeer* proxy;
@@ -23,6 +21,7 @@ struct _TGenTransport {
     GHookFunc onTransferComplete;
     gpointer hookData;
 
+    gint refcount;
     guint magic;
 };
 
@@ -111,6 +110,14 @@ static void _tgentransport_free(TGenTransport* transport) {
         g_free(transport->string);
     }
 
+    if(transport->peer) {
+        tgenpeer_unref(transport->peer);
+    }
+
+    if(transport->proxy) {
+        tgenpeer_unref(transport->proxy);
+    }
+
     transport->magic = 0;
     g_free(transport);
 }
@@ -148,13 +155,6 @@ void tgentransport_setCommand(TGenTransport* transport, TGenTransferCommand comm
     }
 }
 
-static void tgentransport_cleanupActiveTransfer(TGenTransport* transport) {
-    TGEN_ASSERT(transport);
-
-    tgentransfer_unref(transport->activeTransfer);
-    transport->activeTransfer = NULL;
-}
-
 static gboolean _tgentransport_onReadable(TGenTransport* transport) {
     TGEN_ASSERT(transport);
 
@@ -166,11 +166,6 @@ static gboolean _tgentransport_onReadable(TGenTransport* transport) {
     }
 
     gboolean keepReading = tgentransfer_onReadable(transport->activeTransfer, transport->tcpD);
-
-    if(tgentransfer_isComplete(transport->activeTransfer)) {
-        tgentransport_cleanupActiveTransfer(transport);
-    }
-
     return keepReading;
 }
 
@@ -184,17 +179,17 @@ static gboolean _tgentransport_onWritable(TGenTransport* transport) {
 
     if(transport->activeTransfer) {
         keepWriting = tgentransfer_onWritable(transport->activeTransfer, transport->tcpD);
-
-        if(tgentransfer_isComplete(transport->activeTransfer)) {
-            tgentransport_cleanupActiveTransfer(transport);
-        }
     }
-
     return keepWriting;
 }
 
 TGenTransferStatus tgentransport_activate(TGenTransport* transport) {
     TGEN_ASSERT(transport);
+
+    /* we need to make sure the transport doesn't get destroyed by the
+     * driver after the transfer finishes but while still in use.
+     * so we surround this function with ref/unref calls. */
+    tgentransport_ref(transport);
 
     TGenTransferStatus status;
     memset(&status, 0, sizeof(TGenTransferStatus));
@@ -237,6 +232,14 @@ TGenTransferStatus tgentransport_activate(TGenTransport* transport) {
                }
             }
 
+            if(transport->activeTransfer &&
+                    tgentransfer_wantsWriteResponse(transport->activeTransfer)) {
+                /* the transfer was reading the command and now needs
+                 * to swap to writing the response */
+                transport->epollE.events |= EPOLLOUT;
+                changed = TRUE;
+            }
+
             if(changed) {
                 gint result = epoll_ctl(transport->epollD, EPOLL_CTL_MOD, transport->tcpD, &transport->epollE);
                 if(result != 0) {
@@ -246,9 +249,19 @@ TGenTransferStatus tgentransport_activate(TGenTransport* transport) {
                             transport->epollD, transport->tcpD);
                 }
             }
+
+            if(transport->activeTransfer && tgentransfer_isComplete(transport->activeTransfer)) {
+                /* the transfer finished */
+//                tgentransfer_unref(transport->activeTransfer);
+//                transport->activeTransfer = NULL;
+//                transport->onTransferComplete(transport->hookData);
+//                transport->onTransferComplete = NULL;
+//                transport->hookData = NULL;
+            }
         }
     }
 
+    tgentransport_unref(transport);
     return status;
 }
 

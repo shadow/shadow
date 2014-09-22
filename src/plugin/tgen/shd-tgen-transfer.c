@@ -15,8 +15,6 @@ struct _TGenTransfer {
     TGenTransferCommand command;
     gboolean isCommander;
 
-    gint refcount;
-
     guint64 payloadBytesDownloaded;
 	guint64 totalBytesDownloaded;
     guint64 payloadBytesUploaded;
@@ -31,10 +29,11 @@ struct _TGenTransfer {
 
 	gchar* string;
 
+    gint refcount;
 	guint magic;
 };
 
-static const gchar* _tgentransfer_commandTypeToString(TGenTransfer* transfer) {
+static const gchar* _tgentransfer_typeToString(TGenTransfer* transfer) {
     switch(transfer->command.type) {
         case TGEN_TYPE_GET: {
             return "GET";
@@ -72,7 +71,7 @@ static const gchar* _tgentransfer_stateToString(TGenTransferState state) {
 
 static gchar* _tgentransfer_toString(TGenTransfer* transfer) {
     GString* stringBuffer = g_string_new(NULL);
-    g_string_printf(stringBuffer, "[%s-%lu]", _tgentransfer_commandTypeToString(transfer), transfer->command.size);
+    g_string_printf(stringBuffer, "[%s-%lu]", _tgentransfer_typeToString(transfer), transfer->command.size);
     return g_string_free(stringBuffer, FALSE);
 }
 
@@ -86,7 +85,7 @@ TGenTransfer* tgentransfer_new(TGenTransferCommand* command) {
         transfer->isCommander = TRUE;
     }
 
-    transfer->payloadChecksum = g_checksum_new(G_CHECKSUM_SHA1);
+    transfer->payloadChecksum = g_checksum_new(G_CHECKSUM_MD5);
     transfer->string = _tgentransfer_toString(transfer);
 
     return transfer;
@@ -133,7 +132,7 @@ gboolean tgentransfer_unref(TGenTransfer* transfer) {
 
 static void _tgentransfer_changeState(TGenTransfer* transfer, TGenTransferState state) {
     TGEN_ASSERT(transfer);
-    tgen_info("transfer %s moving from state %s to state %s",
+    tgen_info("transfer %s moving from state %s to state %s", transfer->string,
             _tgentransfer_stateToString(transfer->state), _tgentransfer_stateToString(state));
     transfer->state = state;
 }
@@ -184,10 +183,11 @@ static void _tgentransfer_readCommand(TGenTransfer* transfer, gint socketD) {
             tgen_critical("error parsing command '%s'", transfer->readBuffer->str);
             hasError = TRUE;
         } else {
+            /* if they are trying to GET, then we need to PUT to them */
             if(!g_ascii_strncasecmp(parts[0], "GET", 3)) {
-                transfer->command.type = TGEN_TYPE_GET;
-            } else if(!g_ascii_strncasecmp(parts[0], "PUT", 3)) {
                 transfer->command.type = TGEN_TYPE_PUT;
+            } else if(!g_ascii_strncasecmp(parts[0], "PUT", 3)) {
+                transfer->command.type = TGEN_TYPE_GET;
             } else {
                 tgen_critical("error parsing command type '%s'", parts[0]);
                 hasError = TRUE;
@@ -207,6 +207,10 @@ static void _tgentransfer_readCommand(TGenTransfer* transfer, gint socketD) {
         if(hasError) {
             _tgentransfer_changeState(transfer, TGEN_XFER_ERROR);
         } else {
+            if(transfer->string) {
+                g_free(transfer->string);
+                transfer->string = _tgentransfer_toString(transfer);
+            }
             _tgentransfer_changeState(transfer, TGEN_XFER_PAYLOAD);
         }
     } else {
@@ -252,23 +256,28 @@ static void _tgentransfer_readChecksum(TGenTransfer* transfer, gint socketD) {
     TGEN_ASSERT(transfer);
 
     if(_tgentransfer_getLine(transfer, socketD)) {
-        /* we have read the entire checksum from the other end */
-        gssize sha1Length = g_checksum_type_get_length(G_CHECKSUM_SHA1);
-        g_assert(sha1Length >= 0);
-        gchar* sum = g_strdup(g_checksum_get_string(transfer->payloadChecksum));
-
-        /* check that the sums match */
-        if(!g_ascii_strncasecmp(transfer->readBuffer->str, sum, (gsize)sha1Length)) {
-            tgen_message("checksums passed %s %s", transfer->readBuffer->str, sum);
-        } else {
-            tgen_message("checksums failed %s %s", transfer->readBuffer->str, sum);
-        }
-
-        g_string_free(transfer->readBuffer, TRUE);
-        g_free(sum);
-
         /* transfer is done */
         _tgentransfer_changeState(transfer, TGEN_XFER_DONE);
+
+        /* we have read the entire checksum from the other end */
+        gssize sha1Length = g_checksum_type_get_length(G_CHECKSUM_MD5);
+        g_assert(sha1Length >= 0);
+        gchar* computedSum = g_strdup(g_checksum_get_string(transfer->payloadChecksum));
+
+        gchar** parts = g_strsplit(transfer->readBuffer->str, " ", 0);
+        const gchar* receivedSum = parts[1];
+        g_assert(receivedSum);
+
+        /* check that the sums match */
+        if(!g_ascii_strncasecmp(computedSum, receivedSum, (gsize)sha1Length)) {
+            tgen_message("MD5 checksums passed: computed=%s received=%s", computedSum, receivedSum);
+        } else {
+            tgen_message("MD5 checksums failed: computed=%s received=%s", computedSum, receivedSum);
+        }
+
+        g_strfreev(parts);
+        g_string_free(transfer->readBuffer, TRUE);
+        g_free(computedSum);
     } else {
         /* unable to receive entire checksum, wait for next chance to read */
     }
@@ -293,7 +302,8 @@ gboolean tgentransfer_onReadable(TGenTransfer* transfer, gint socketD) {
         _tgentransfer_readChecksum(transfer, socketD);
     }
 
-    if(transfer->readBuffer) {
+    if(transfer->readBuffer ||
+            (transfer->command.type == TGEN_TYPE_GET && transfer->state != TGEN_XFER_DONE)) {
         /* we have more to read */
         return TRUE;
     } else {
@@ -351,7 +361,7 @@ static void _tgentransfer_writeCommand(TGenTransfer* transfer, gint socketD) {
     if(!transfer->writeBuffer) {
         transfer->writeBuffer = g_string_new(NULL);
         g_string_printf(transfer->writeBuffer, "%s %lu\n",
-            _tgentransfer_commandTypeToString(transfer), transfer->command.size);
+            _tgentransfer_typeToString(transfer), transfer->command.size);
     }
 
     _tgentransfer_flushOut(transfer, socketD);
@@ -394,7 +404,7 @@ static void _tgentransfer_writeChecksum(TGenTransfer* transfer, gint socketD) {
     /* buffer the checksum if we have not done that yet */
     if(!transfer->writeBuffer) {
         transfer->writeBuffer = g_string_new(NULL);
-        g_string_printf(transfer->writeBuffer, "SHA1 %s\n",
+        g_string_printf(transfer->writeBuffer, "MD5 %s\n",
                 g_checksum_get_string(transfer->payloadChecksum));
     }
 
@@ -427,7 +437,8 @@ gboolean tgentransfer_onWritable(TGenTransfer* transfer, gint socketD) {
         _tgentransfer_writeChecksum(transfer, socketD);
     }
 
-    if(transfer->writeBuffer) {
+    if(transfer->writeBuffer ||
+            (transfer->command.type == TGEN_TYPE_PUT && transfer->state != TGEN_XFER_DONE)) {
         /* we have more to write */
         return TRUE;
     } else {
@@ -439,4 +450,15 @@ gboolean tgentransfer_onWritable(TGenTransfer* transfer, gint socketD) {
 gboolean tgentransfer_isComplete(TGenTransfer* transfer) {
     TGEN_ASSERT(transfer);
     return transfer->state == TGEN_XFER_DONE;
+}
+
+gboolean tgentransfer_wantsWriteResponse(TGenTransfer* transfer) {
+    TGEN_ASSERT(transfer);
+    if(!transfer->isCommander && transfer->command.type == TGEN_TYPE_PUT &&
+            transfer->state == TGEN_XFER_PAYLOAD) {
+        /* we were reading the command and now we need to write payload */
+        return TRUE;
+    } else {
+        return FALSE;
+    }
 }

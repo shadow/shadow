@@ -5,8 +5,6 @@
 #include "shd-tgen.h"
 
 struct _TGenPeer {
-    gint refcount;
-
     in_addr_t netIP;
     in_port_t netPort;
     gchar* hostIPStr;
@@ -14,12 +12,14 @@ struct _TGenPeer {
 
     gchar* string;
 
+    gint refcount;
     guint magic;
 };
 
 TGenPeer* tgenpeer_new(in_addr_t networkIP, in_port_t networkPort) {
     TGenPeer* peer = g_new0(TGenPeer, 1);
     peer->magic = TGEN_MAGIC;
+    peer->refcount = 1;
 
     peer->netIP = networkIP;
     peer->netPort = networkPort;
@@ -111,7 +111,7 @@ const gchar* tgenpeer_toString(TGenPeer* peer) {
 
     if(!peer->string) {
         GString* stringBuffer = g_string_new(NULL);
-        g_string_printf(stringBuffer, "|%s|%s:%u|", peer->hostNameStr, peer->hostIPStr,
+        g_string_printf(stringBuffer, "%s:%s:%u", peer->hostNameStr, peer->hostIPStr,
                 ntohs(peer->netPort));
         peer->string = g_string_free(stringBuffer, FALSE);
     }
