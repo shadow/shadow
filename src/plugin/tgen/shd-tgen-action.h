@@ -25,7 +25,9 @@ TGenAction* tgenaction_newPauseAction(const gchar* timeStr, GError** error);
 TGenAction* tgenaction_newSynchronizeAction(GError** error);
 TGenAction* tgenaction_newTransferAction(const gchar* typeStr, const gchar* protocolStr,
 		const gchar* sizeStr, const gchar* peersStr, GError** error);
-void tgenaction_free(TGenAction* action);
+
+void tgenaction_ref(TGenAction* action);
+void tgenaction_unref(TGenAction* action);
 
 void tgenaction_setKey(TGenAction* action, gpointer key);
 gpointer tgenaction_getKey(TGenAction* action);

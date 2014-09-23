@@ -159,8 +159,8 @@ void tgentransport_setCommand(TGenTransport* transport, TGenTransferCommand comm
     }
 }
 
-static void _tgentransport_activateHelper(TGenTransport* transport, gint desc, gboolean in, gboolean out) {
-    TGenTransferEventFlags flags = TGEN_EVENT_NONE;
+static TGenTransferStatus _tgentransport_activateHelper(TGenTransport* transport, gint desc, gboolean in, gboolean out) {
+    TGenTransferEvent flags = TGEN_EVENT_NONE;
 
     /* check if we need read flag */
     if(in && desc == transport->tcpD) {
@@ -185,17 +185,17 @@ static void _tgentransport_activateHelper(TGenTransport* transport, gint desc, g
     }
 
     /* activate the transfer */
-    TGenTransferEventFlags status = TGEN_EVENT_NONE;
+    TGenTransferStatus status;
     if(flags) {
         status = tgentransfer_onSocketEvent(transport->activeTransfer, transport->tcpD, flags);
     }
 
     /* now check if we should update our epoll events */
     guint32 newEvents = 0;
-    if(status & TGEN_EVENT_READ) {
+    if(status.events & TGEN_EVENT_READ) {
         newEvents |= EPOLLIN;
     }
-    if(status & TGEN_EVENT_WRITE) {
+    if(status.events & TGEN_EVENT_WRITE) {
         newEvents |= EPOLLOUT;
     }
 
@@ -211,13 +211,15 @@ static void _tgentransport_activateHelper(TGenTransport* transport, gint desc, g
     }
 
     /* check if the transfer finished */
-    if(status & TGEN_EVENT_DONE) {
+    if(status.events & TGEN_EVENT_DONE) {
         tgentransfer_unref(transport->activeTransfer);
         transport->activeTransfer = NULL;
         transport->onTransferComplete(transport->hookData);
         transport->onTransferComplete = NULL;
         transport->hookData = NULL;
     }
+
+    return status;
 }
 
 TGenTransferStatus tgentransport_activate(TGenTransport* transport) {
@@ -250,7 +252,11 @@ TGenTransferStatus tgentransport_activate(TGenTransport* transport) {
             gint desc = epevs[i].data.fd;
             gboolean in = (epevs[i].events & EPOLLIN) ? TRUE : FALSE;
             gboolean out = (epevs[i].events & EPOLLOUT) ? TRUE : FALSE;
-            _tgentransport_activateHelper(transport, desc, in, out);
+
+            TGenTransferStatus current = _tgentransport_activateHelper(transport, desc, in, out);
+
+            status.bytesRead += current.bytesRead;
+            status.bytesWritten += current.bytesWritten;
         }
     }
 

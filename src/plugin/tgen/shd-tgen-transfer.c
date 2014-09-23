@@ -12,16 +12,11 @@ typedef enum _TGenTransferState {
 
 struct _TGenTransfer {
     TGenTransferState state;
-    TGenTransferEventFlags events;
+    TGenTransferEvent events;
 
     TGenTransferCommand command;
     gboolean isCommander;
     gchar* commanderName;
-
-    gsize payloadBytesDownloaded;
-	gsize totalBytesDownloaded;
-    gsize payloadBytesUploaded;
-	gsize totalBytesUploaded;
 
 	GString* readBuffer;
 	gint readBufferOffset;
@@ -31,6 +26,24 @@ struct _TGenTransfer {
 	GChecksum* payloadChecksum;
 
 	gchar* string;
+
+	/* track bytes for read/write progress reporting */
+	struct {
+	    gsize payloadRead;
+	    gsize payloadWrite;
+	    gsize totalRead;
+	    gsize totalWrite;
+	} bytes;
+
+	/* track timings for time reporting */
+	struct {
+        gint64 start;
+        gint64 command;
+        gint64 firstPayloadByte;
+        gint64 lastPayloadByte;
+        gint64 end;
+        gint64 lastProgressReport;
+	} time;
 
     gint refcount;
 	guint magic;
@@ -84,6 +97,8 @@ TGenTransfer* tgentransfer_new(gchar* commanderName, TGenTransferCommand* comman
     TGenTransfer* transfer = g_new0(TGenTransfer, 1);
     transfer->magic = TGEN_MAGIC;
     transfer->refcount = 1;
+
+    transfer->time.start = g_get_monotonic_time();
 
     transfer->events = TGEN_EVENT_READ;
     if(command) {
@@ -171,7 +186,7 @@ static gboolean _tgentransfer_getLine(TGenTransfer* transfer, gint socketD) {
             tgen_critical("read(): transfer %s socket %i closed unexpectedly",
                         transfer->string, socketD);
         } else if(bytes == 1) {
-            transfer->totalBytesDownloaded += 1;
+            transfer->bytes.totalRead += 1;
             if(c == '\n') {
                 tgen_debug("finished receiving line: '%s'", transfer->readBuffer->str);
                 return TRUE;
@@ -189,6 +204,7 @@ static void _tgentransfer_readCommand(TGenTransfer* transfer, gint socketD) {
     if(_tgentransfer_getLine(transfer, socketD)) {
         /* we have read the entire command from the other end */
         gboolean hasError = FALSE;
+        transfer->time.command = g_get_monotonic_time();
 
         gchar* line = g_string_free(transfer->readBuffer, FALSE);
         transfer->readBuffer = NULL;
@@ -254,7 +270,7 @@ static void _tgentransfer_readPayload(TGenTransfer* transfer, gint socketD) {
 
     /* keep reading until blocked */
     while(TRUE) {
-        gsize length = MIN(65536, (transfer->command.size - transfer->payloadBytesDownloaded));
+        gsize length = MIN(65536, (transfer->command.size - transfer->bytes.payloadRead));
 
         if(length > 0) {
             /* we need to read more payload */
@@ -269,14 +285,19 @@ static void _tgentransfer_readPayload(TGenTransfer* transfer, gint socketD) {
                 tgen_critical("read(): transfer %s socket %i closed unexpectedly",
                                 transfer->string, socketD);
             } else if(bytes > 0) {
-                transfer->payloadBytesDownloaded += bytes;
-                transfer->totalBytesDownloaded += bytes;
+                if(transfer->bytes.payloadRead == 0) {
+                    transfer->time.firstPayloadByte = g_get_monotonic_time();
+                }
+
+                transfer->bytes.payloadRead += bytes;
+                transfer->bytes.totalRead += bytes;
                 g_checksum_update(transfer->payloadChecksum, buffer, bytes);
                 continue;
             }
         } else {
             /* payload done, send the checksum next */
             _tgentransfer_changeState(transfer, TGEN_XFER_CHECKSUM);
+            transfer->time.lastPayloadByte = g_get_monotonic_time();
         }
         break;
     }
@@ -288,6 +309,7 @@ static void _tgentransfer_readChecksum(TGenTransfer* transfer, gint socketD) {
     if(_tgentransfer_getLine(transfer, socketD)) {
         /* transfer is done */
         _tgentransfer_changeState(transfer, TGEN_XFER_DONE);
+        transfer->time.end = g_get_monotonic_time();
         /* no more reads or writes */
         transfer->events = TGEN_EVENT_DONE;
 
@@ -305,7 +327,8 @@ static void _tgentransfer_readChecksum(TGenTransfer* transfer, gint socketD) {
 
         /* check that the sums match */
         if(!g_ascii_strncasecmp(computedSum, receivedSum, (gsize)sha1Length)) {
-            tgen_message("MD5 checksums passed: computed=%s received=%s", computedSum, receivedSum);
+            tgen_message("transfer %s socket %i MD5 checksums passed: computed=%s received=%s",
+                    transfer->string, socketD, computedSum, receivedSum);
         } else {
             tgen_message("MD5 checksums failed: computed=%s received=%s", computedSum, receivedSum);
         }
@@ -322,7 +345,7 @@ static void _tgentransfer_onReadable(TGenTransfer* transfer, gint socketD) {
     TGEN_ASSERT(transfer);
 
     tgen_debug("active transfer %s is readable", transfer->string);
-    gsize startBytes = transfer->totalBytesDownloaded;
+    gsize startBytes = transfer->bytes.totalRead;
 
     /* first check if we need to read a command from the other end */
     if(!transfer->isCommander && transfer->state == TGEN_XFER_COMMAND) {
@@ -347,7 +370,7 @@ static void _tgentransfer_onReadable(TGenTransfer* transfer, gint socketD) {
         transfer->events &= ~TGEN_EVENT_READ;
     }
 
-    gsize endBytes = transfer->totalBytesDownloaded;
+    gsize endBytes = transfer->bytes.totalRead;
     tgen_debug("active transfer %s read %"G_GSIZE_FORMAT" more bytes",
             transfer->string, endBytes - startBytes);
 }
@@ -387,7 +410,7 @@ static gsize _tgentransfer_flushOut(TGenTransfer* transfer, gint socketD) {
             g_string_free(transfer->writeBuffer, TRUE);
             transfer->writeBuffer = NULL;
         }
-        transfer->totalBytesUploaded += bytes;
+        transfer->bytes.totalWrite += bytes;
         return (gsize) bytes;
     }
 
@@ -410,6 +433,7 @@ static void _tgentransfer_writeCommand(TGenTransfer* transfer, gint socketD) {
     if(!transfer->writeBuffer) {
         /* entire command was sent, move to payload phase */
         _tgentransfer_changeState(transfer, TGEN_XFER_PAYLOAD);
+        transfer->time.command = g_get_monotonic_time();
     } else {
         /* unable to send entire command, wait for next chance to write */
     }
@@ -418,22 +442,31 @@ static void _tgentransfer_writeCommand(TGenTransfer* transfer, gint socketD) {
 static void _tgentransfer_writePayload(TGenTransfer* transfer, gint socketD) {
     TGEN_ASSERT(transfer);
 
+    gboolean firstByte = transfer->bytes.payloadWrite == 0 ? TRUE : FALSE;
+
     /* try to flush any leftover bytes */
-    transfer->payloadBytesUploaded += _tgentransfer_flushOut(transfer, socketD);
+    transfer->bytes.payloadWrite += _tgentransfer_flushOut(transfer, socketD);
 
     /* keep writing until blocked */
     while(!transfer->writeBuffer) {
-        gsize length = MIN(16384, (transfer->command.size - transfer->payloadBytesUploaded));
+        gsize length = MIN(16384, (transfer->command.size - transfer->bytes.payloadWrite));
 
         if(length > 0) {
             /* we need to send more payload */
             transfer->writeBuffer = _tgentransfer_getRandomString(length);
             g_checksum_update(transfer->payloadChecksum, (guchar*)transfer->writeBuffer->str,
                     (gssize)transfer->writeBuffer->len);
-            transfer->payloadBytesUploaded += _tgentransfer_flushOut(transfer, socketD);
+
+            transfer->bytes.payloadWrite += _tgentransfer_flushOut(transfer, socketD);
+
+            if(firstByte && transfer->bytes.payloadWrite > 0) {
+                firstByte = FALSE;
+                transfer->time.firstPayloadByte = g_get_monotonic_time();
+            }
         } else {
             /* payload done, send the checksum next */
             _tgentransfer_changeState(transfer, TGEN_XFER_CHECKSUM);
+            transfer->time.lastPayloadByte = g_get_monotonic_time();
             break;
         }
     }
@@ -454,6 +487,7 @@ static void _tgentransfer_writeChecksum(TGenTransfer* transfer, gint socketD) {
     if(!transfer->writeBuffer) {
         /* entire checksum was sent, we are now done */
         _tgentransfer_changeState(transfer, TGEN_XFER_DONE);
+        transfer->time.end = g_get_monotonic_time();
     } else {
         /* unable to send entire checksum, wait for next chance to write */
     }
@@ -463,7 +497,7 @@ static void _tgentransfer_onWritable(TGenTransfer* transfer, gint socketD) {
     TGEN_ASSERT(transfer);
 
     tgen_debug("active transfer %s is writable", transfer->string);
-    gsize startBytes = transfer->totalBytesUploaded;
+    gsize startBytes = transfer->bytes.totalWrite;
 
     /* first check if we need to send a command to the other end */
     if(transfer->isCommander && transfer->state == TGEN_XFER_COMMAND) {
@@ -488,13 +522,39 @@ static void _tgentransfer_onWritable(TGenTransfer* transfer, gint socketD) {
         transfer->events &= ~TGEN_EVENT_WRITE;
     }
 
-    gsize endBytes = transfer->totalBytesUploaded;
+    gsize endBytes = transfer->bytes.totalWrite;
     tgen_debug("active transfer %s wrote %"G_GSIZE_FORMAT" more bytes",
                 transfer->string, endBytes - startBytes);
 }
 
-TGenTransferEventFlags tgentransfer_onSocketEvent(TGenTransfer* transfer, gint socketD, TGenTransferEventFlags flags) {
+static void _tgentransfer_progressReport(TGenTransfer* transfer) {
     TGEN_ASSERT(transfer);
+
+    gsize payload = transfer->command.type == TGEN_TYPE_GET ?
+            transfer->bytes.payloadRead : transfer->bytes.payloadWrite;
+    const gchar* payloadVerb = transfer->command.type == TGEN_TYPE_GET ? "read" : "write";
+    gdouble progress = (gdouble)payload / (gdouble)transfer->command.size * 100.0f;
+
+    tgen_info("transfer %s status "
+            "total-bytes-read=%"G_GSIZE_FORMAT" total-bytes-write=%"G_GSIZE_FORMAT" "
+            "payload-bytes-%s=%"G_GSIZE_FORMAT"/%"G_GSIZE_FORMAT" (%.2f\%)",
+            transfer->string,
+            transfer->bytes.totalRead, transfer->bytes.totalWrite,
+            payloadVerb, payload, transfer->command.size, progress);
+
+    transfer->time.lastProgressReport = g_get_monotonic_time();
+}
+
+static void _tgentransfer_finalReport(TGenTransfer* transfer) {
+    TGEN_ASSERT(transfer);
+    // TODO
+}
+
+TGenTransferStatus tgentransfer_onSocketEvent(TGenTransfer* transfer, gint socketD, TGenTransferEvent flags) {
+    TGEN_ASSERT(transfer);
+
+    gsize readBytesBefore = transfer->bytes.payloadRead;
+    gsize writeBytesBefore = transfer->bytes.payloadWrite;
 
     if(flags & TGEN_EVENT_READ) {
         _tgentransfer_onReadable(transfer, socketD);
@@ -504,5 +564,19 @@ TGenTransferEventFlags tgentransfer_onSocketEvent(TGenTransfer* transfer, gint s
         _tgentransfer_onWritable(transfer, socketD);
     }
 
-    return transfer->events;
+    TGenTransferStatus status;
+    status.events = transfer->events;
+    status.bytesRead = transfer->bytes.payloadRead - readBytesBefore;
+    status.bytesWritten = transfer->bytes.payloadWrite - writeBytesBefore;
+
+    gboolean timerExpired = g_get_monotonic_time() - transfer->time.lastProgressReport > 1000000;
+    if(timerExpired && (status.bytesRead > 0 || status.bytesWritten > 0)) {
+        _tgentransfer_progressReport(transfer);
+    }
+
+    if(transfer->state & TGEN_XFER_DONE) {
+        _tgentransfer_finalReport(transfer);
+    }
+
+    return status;
 }

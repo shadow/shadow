@@ -37,9 +37,10 @@ struct _TGenDriver {
 
     /* traffic statistics */
     guint totalTransfersCompleted;
-    guint64 totalBytesRead;
-    guint64 totalBytesWritten;
+    gsize totalBytesRead;
+    gsize totalBytesWritten;
 
+    guint refcount;
     guint magic;
 };
 
@@ -173,19 +174,18 @@ static gboolean _tgendriver_closeTransport(TGenDriver* driver, TGenTransport* tr
 }
 
 static void _tgendriver_transferCompleteCallback(TGenCallbackItem* item) {
-    // TODO what if tgen or action was destroyed in the meantime? need refcounts on those
-
     /* our transfer finished, close the socket */
+    item->driver->totalTransfersCompleted++;
     _tgendriver_closeTransport(item->driver, item->transport);
-
-    /* unref since the item object no longer holds the reference */
-    tgentransport_unref(item->transport);
-    item->transport = NULL;
 
     /* this only happens for transfers that our side initiated.
      * continue traversing the graph as instructed */
     _tgendriver_continueNextActions(item->driver, item->action);
 
+    /* unref since the item object no longer holds the references */
+    tgentransport_unref(item->transport);
+    tgenaction_unref(item->action);
+    tgendriver_unref(item->driver);
     /* cleanup */
     g_free(item);
 }
@@ -257,10 +257,12 @@ static void _tgendriver_initiateTransfer(TGenDriver* driver, TGenAction* action)
             GHookFunc cb = (GHookFunc) _tgendriver_transferCompleteCallback;
 
             TGenCallbackItem* item = g_new0(TGenCallbackItem, 1);
+            tgendriver_ref(driver);
             item->driver = driver;
+            tgenaction_ref(action);
             item->action = action;
-            item->transport = transport;
             tgentransport_ref(transport);
+            item->transport = transport;
 
             TGenTransferCommand command = {++(driver->transferIDCounter), type, size};
             tgentransport_setCommand(transport, command, cb, item);
@@ -324,32 +326,44 @@ static void _tgendriver_acceptTransport(TGenDriver* driver) {
 }
 
 static void _tgendriver_pauseCallback(TGenCallbackItem* item) {
-    // TODO what if tgen or action was destroyed in the meantime?
+    /* continue next actions if possible */
     _tgendriver_continueNextActions(item->driver, item->action);
+
+    /* cleanup */
+    tgenaction_unref(item->action);
+    tgendriver_unref(item->driver);
     g_free(item);
 }
 
 static void _tgendriver_initiatePause(TGenDriver* driver, TGenAction* action) {
     ShadowPluginCallbackFunc cb = (ShadowPluginCallbackFunc)_tgendriver_pauseCallback;
     TGenCallbackItem* item = g_new0(TGenCallbackItem, 1);
+    tgendriver_ref(driver);
     item->driver = driver;
+    tgenaction_ref(action);
     item->action = action;
     driver->createCallback(cb, item, (uint)tgenaction_getPauseTimeMillis(action));
 }
 
 static void _tgendriver_handleSynchronize(TGenDriver* driver, TGenAction* action) {
-    //todo - actually implement synchronize feature
+    // FIXME - actually implement synchronize feature - NOOP for now
     _tgendriver_continueNextActions(driver, action);
 }
 
 static void _tgendriver_checkEndConditions(TGenDriver* driver, TGenAction* action) {
-    if(driver->totalBytesRead + driver->totalBytesWritten >= tgenaction_getEndSize(action)) {
+    guint64 size = tgenaction_getEndSize(action);
+    guint64 count = tgenaction_getEndCount(action);
+    guint64 time = tgenaction_getEndTimeMillis(action);
+
+    gsize totalBytes = driver->totalBytesRead + driver->totalBytesWritten;
+
+    if(size > 0 && totalBytes >= (gsize)size) {
         driver->hasEnded = TRUE;
-    } else if(driver->totalTransfersCompleted >= tgenaction_getEndCount(action)) {
+    } else if(count > 0 && driver->totalTransfersCompleted >= count) {
         driver->hasEnded = TRUE;
-    } else {
+    } else if(time > 0) {
         guint64 nowMillis = _tgendriver_getCurrentTimeMillis();
-        if(nowMillis >= tgenaction_getEndTimeMillis(action)) {
+        if(nowMillis >= time) {
             driver->hasEnded = TRUE;
         }
     }
@@ -372,6 +386,7 @@ static void _tgendriver_processAction(TGenDriver* driver, TGenAction* action) {
         }
         case TGEN_ACTION_END: {
             _tgendriver_checkEndConditions(driver, action);
+            _tgendriver_continueNextActions(driver, action);
             break;
         }
         case TGEN_ACTION_PAUSE: {
@@ -460,15 +475,13 @@ void tgendriver_activate(TGenDriver* driver) {
         }
     }
 
-    if(driver->hasEnded) {
-        if(g_hash_table_size(driver->transports) <= 0) {
-            tgendriver_free(driver);
-        }
-    }
+    tgen_debug("total transfers=%u bytesread=%"G_GSIZE_FORMAT" byteswrite=%"G_GSIZE_FORMAT,
+            driver->totalTransfersCompleted, driver->totalBytesRead, driver->totalBytesWritten);
 }
 
-void tgendriver_free(TGenDriver* driver) {
+static void _tgendriver_free(TGenDriver* driver) {
     TGEN_ASSERT(driver);
+    g_assert(driver->refcount <= 0);
     if (driver->ee) {
         g_free(driver->ee);
     }
@@ -486,6 +499,18 @@ void tgendriver_free(TGenDriver* driver) {
     }
     driver->magic = 0;
     g_free(driver);
+}
+
+void tgendriver_ref(TGenDriver* driver) {
+    TGEN_ASSERT(driver);
+    driver->refcount++;
+}
+
+void tgendriver_unref(TGenDriver* driver) {
+    TGEN_ASSERT(driver);
+    if(--driver->refcount <= 0) {
+        _tgendriver_free(driver);
+    }
 }
 
 TGenDriver* tgendriver_new(gint argc, gchar* argv[], ShadowLogFunc logf,
@@ -513,6 +538,7 @@ TGenDriver* tgendriver_new(gint argc, gchar* argv[], ShadowLogFunc logf,
     /* create the main driver object */
     TGenDriver* driver = g_new0(TGenDriver, 1);
     driver->magic = TGEN_MAGIC;
+    driver->refcount = 1;
 
     driver->log = logf;
     driver->createCallback = callf;

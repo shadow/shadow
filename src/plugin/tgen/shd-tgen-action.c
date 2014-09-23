@@ -36,6 +36,7 @@ struct _TGenAction {
     gpointer key;
     gboolean hasKey;
     gpointer data;
+    guint refcount;
     guint magic;
 };
 
@@ -260,8 +261,9 @@ static GError* _tgengraph_handleBoolean(const gchar* attributeName,
     return error;
 }
 
-void tgenaction_free(TGenAction* action) {
+static void _tgenaction_free(TGenAction* action) {
     TGEN_ASSERT(action);
+    g_assert(action->refcount <= 0);
 
     if(action->type == TGEN_ACTION_START) {
         TGenActionStartData* data = (TGenActionStartData*) action->data;
@@ -281,6 +283,18 @@ void tgenaction_free(TGenAction* action) {
 
     action->magic = 0;
     g_free(action);
+}
+
+void tgenaction_ref(TGenAction* action) {
+    TGEN_ASSERT(action);
+    action->refcount++;
+}
+
+void tgenaction_unref(TGenAction* action) {
+    TGEN_ASSERT(action);
+    if(--action->refcount <= 0) {
+        _tgenaction_free(action);
+    }
 }
 
 TGenAction* tgenaction_newStartAction(const gchar* timeStr,
@@ -327,6 +341,7 @@ TGenAction* tgenaction_newStartAction(const gchar* timeStr,
     /* if we get here, we have what we need and validated it */
     TGenAction* action = g_new0(TGenAction, 1);
     action->magic = TGEN_MAGIC;
+    action->refcount = 1;
 
     action->type = TGEN_ACTION_START;
 
@@ -359,6 +374,7 @@ TGenAction* tgenaction_newEndAction(const gchar* timeStr, const gchar* countStr,
 
     TGenAction* action = g_new0(TGenAction, 1);
     action->magic = TGEN_MAGIC;
+    action->refcount = 1;
 
     action->type = TGEN_ACTION_END;
 
@@ -388,6 +404,7 @@ TGenAction* tgenaction_newPauseAction(const gchar* timeStr, GError** error) {
 
     TGenAction* action = g_new0(TGenAction, 1);
     action->magic = TGEN_MAGIC;
+    action->refcount = 1;
 
     action->type = TGEN_ACTION_PAUSE;
 
@@ -402,6 +419,7 @@ TGenAction* tgenaction_newPauseAction(const gchar* timeStr, GError** error) {
 TGenAction* tgenaction_newSynchronizeAction(GError** error) {
     TGenAction* action = g_new0(TGenAction, 1);
     action->magic = TGEN_MAGIC;
+    action->refcount = 1;
 
     action->type = TGEN_ACTION_SYNCHR0NIZE;
 
@@ -476,6 +494,7 @@ TGenAction* tgenaction_newTransferAction(const gchar* typeStr,
 
     TGenAction* action = g_new0(TGenAction, 1);
     action->magic = TGEN_MAGIC;
+    action->refcount = 1;
 
     action->type = TGEN_ACTION_TRANSFER;
 

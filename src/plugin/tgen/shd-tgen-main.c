@@ -35,7 +35,7 @@ gint main(gint argc, gchar *argv[]) {
 		return -1;
 	} else if(!tgendriver_hasStarted(tgen)) {
 		tgen_critical("Error starting TrafficGen instance");
-		tgendriver_free(tgen);
+		tgendriver_unref(tgen);
 		return -1;
 	}
 
@@ -94,7 +94,7 @@ gint main(gint argc, gchar *argv[]) {
 
 	/* cleanup and close */
 	close(mainepolld);
-	tgendriver_free(tgen);
+	tgendriver_unref(tgen);
 
 	tgen_message("exiting cleanly");
 

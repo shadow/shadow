@@ -19,7 +19,7 @@ static void _tgendriver_new(gint argc, gchar* argv[]) {
 
 /* free node state */
 static void _tgendriver_free() {
-	tgendriver_free(tgen);
+	tgendriver_unref(tgen);
 }
 
 /* check active sockets for readability/writability */

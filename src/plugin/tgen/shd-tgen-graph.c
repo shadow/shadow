@@ -398,7 +398,7 @@ TGenGraph* tgengraph_new(gchar* path) {
 	TGenGraph* g = g_new0(TGenGraph, 1);
 	g->magic = TGEN_MAGIC;
 
-	g->actions = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, (GDestroyNotify)tgenaction_free);
+	g->actions = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, (GDestroyNotify)tgenaction_unref);
 
 	// TODO - if not path, write a temp file that contains a default test
 	// graph that tests all possible protocols, etc, and use that as path instead of NULL
