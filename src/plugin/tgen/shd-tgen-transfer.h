@@ -14,21 +14,25 @@ typedef struct _TGenTransferStatus {
     guint64 bytesWritten;
 } TGenTransferStatus;
 
+typedef enum _TGenTransferEventFlags {
+    TGEN_EVENT_NONE = 0,
+    TGEN_EVENT_READ = 1 << 0,
+    TGEN_EVENT_WRITE = 1 << 1,
+    TGEN_EVENT_DONE = 1 << 2,
+} TGenTransferEventFlags;
+
 typedef struct _TGenTransferCommand {
+    gsize id;
     TGenTransferType type;
-    guint64 size;
+    gsize size;
 } TGenTransferCommand;
 
 typedef struct _TGenTransfer TGenTransfer;
 
-TGenTransfer* tgentransfer_new(TGenTransferCommand* command);
+TGenTransfer* tgentransfer_new(gchar* commanderName, TGenTransferCommand* command);
 void tgentransfer_ref(TGenTransfer* transfer);
-gboolean tgentransfer_unref(TGenTransfer* transfer);
+void tgentransfer_unref(TGenTransfer* transfer);
 
-gboolean tgentransfer_onReadable(TGenTransfer* transfer, gint socketD);
-gboolean tgentransfer_onWritable(TGenTransfer* transfer, gint socketD);
-
-gboolean tgentransfer_isComplete(TGenTransfer* transfer);
-gboolean tgentransfer_wantsWriteResponse(TGenTransfer* transfer);
+TGenTransferEventFlags tgentransfer_onSocketEvent(TGenTransfer* transfer, gint socketD, TGenTransferEventFlags flags);
 
 #endif /* SHD_TGEN_TRANSFER_H_ */

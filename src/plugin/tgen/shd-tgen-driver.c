@@ -33,6 +33,8 @@ struct _TGenDriver {
     /* pointer to memory that facilitates the use of the epoll api */
     struct epoll_event* ee;
 
+    gsize transferIDCounter;
+
     /* traffic statistics */
     guint totalTransfersCompleted;
     guint64 totalBytesRead;
@@ -257,7 +259,7 @@ static void _tgendriver_initiateTransfer(TGenDriver* driver, TGenAction* action)
             item->driver = driver;
             item->transport = transport;
             item->action = action;
-            TGenTransferCommand command = {type, size};
+            TGenTransferCommand command = {++(driver->transferIDCounter), type, size};
             tgentransport_setCommand(transport, command, cb, item);
         } else {
             gint watchD = tgentransport_getEpollDescriptor(transport);

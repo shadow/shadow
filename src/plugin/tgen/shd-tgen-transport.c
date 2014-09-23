@@ -140,7 +140,11 @@ void tgentransport_setCommand(TGenTransport* transport, TGenTransferCommand comm
     TGEN_ASSERT(transport);
     g_assert(!transport->activeTransfer);
 
-    transport->activeTransfer = tgentransfer_new(&command);
+    gchar nameBuffer[256];
+    memset(nameBuffer, 0, 256);
+    gchar* name = (0 == gethostname(nameBuffer, 255)) ? &nameBuffer[0] : NULL;
+
+    transport->activeTransfer = tgentransfer_new(name, &command);
     transport->onTransferComplete = onCommandComplete;
     transport->hookData = hookData;
 
@@ -155,32 +159,65 @@ void tgentransport_setCommand(TGenTransport* transport, TGenTransferCommand comm
     }
 }
 
-static gboolean _tgentransport_onReadable(TGenTransport* transport) {
-    TGEN_ASSERT(transport);
+static void _tgentransport_activateHelper(TGenTransport* transport, gint desc, gboolean in, gboolean out) {
+    TGenTransferEventFlags flags = TGEN_EVENT_NONE;
 
-    tgen_debug("transport %s is readable", transport->string);
+    /* check if we need read flag */
+    if(in && desc == transport->tcpD) {
+        tgen_debug("transport %s is readable", transport->string);
 
-    if(!transport->activeTransfer) {
-        /* create a new transfer, no command until we read it from the socket */
-        transport->activeTransfer = tgentransfer_new(NULL);
+        /* create a new transfer if we need to read command from the socket */
+        if(!transport->activeTransfer) {
+            transport->activeTransfer = tgentransfer_new(NULL, NULL);
+        }
+
+        flags |= TGEN_EVENT_READ;
     }
 
-    gboolean keepReading = tgentransfer_onReadable(transport->activeTransfer, transport->tcpD);
-    return keepReading;
-}
+    /* check if we need write flag */
+    if(out && desc == transport->tcpD) {
+        tgen_debug("transport %s is writable", transport->string);
 
-static gboolean _tgentransport_onWritable(TGenTransport* transport) {
-    TGEN_ASSERT(transport);
-
-    tgen_debug("transport %s is writable", transport->string);
-
-    /* if we have no transfer, we don't care about writing */
-    gboolean keepWriting = FALSE;
-
-    if(transport->activeTransfer) {
-        keepWriting = tgentransfer_onWritable(transport->activeTransfer, transport->tcpD);
+        /* if we have no transfer, we don't care about writing */
+        if(transport->activeTransfer) {
+            flags |= TGEN_EVENT_WRITE;
+        }
     }
-    return keepWriting;
+
+    /* activate the transfer */
+    TGenTransferEventFlags status = TGEN_EVENT_NONE;
+    if(flags) {
+        status = tgentransfer_onSocketEvent(transport->activeTransfer, transport->tcpD, flags);
+    }
+
+    /* now check if we should update our epoll events */
+    guint32 newEvents = 0;
+    if(status & TGEN_EVENT_READ) {
+        newEvents |= EPOLLIN;
+    }
+    if(status & TGEN_EVENT_WRITE) {
+        newEvents |= EPOLLOUT;
+    }
+
+    if(newEvents != transport->epollE.events) {
+        transport->epollE.events = newEvents;
+        gint result = epoll_ctl(transport->epollD, EPOLL_CTL_MOD, transport->tcpD, &transport->epollE);
+        if(result != 0) {
+            tgen_critical("epoll_ctl(): epoll %i socket %i returned %i error %i: %s",
+                    transport->epollD, transport->tcpD, result, errno, g_strerror(errno));
+            tgen_warning("epoll %i unable to change events on socket %i",
+                    transport->epollD, transport->tcpD);
+        }
+    }
+
+    /* check if the transfer finished */
+    if(status & TGEN_EVENT_DONE) {
+//        tgentransfer_unref(transport->activeTransfer);
+//        transport->activeTransfer = NULL;
+//        transport->onTransferComplete(transport->hookData);
+//        transport->onTransferComplete = NULL;
+//        transport->hookData = NULL;
+    }
 }
 
 TGenTransferStatus tgentransport_activate(TGenTransport* transport) {
@@ -213,51 +250,7 @@ TGenTransferStatus tgentransport_activate(TGenTransport* transport) {
             gint desc = epevs[i].data.fd;
             gboolean in = (epevs[i].events & EPOLLIN) ? TRUE : FALSE;
             gboolean out = (epevs[i].events & EPOLLOUT) ? TRUE : FALSE;
-
-            gboolean changed = FALSE;
-
-            if(in && desc == transport->tcpD) {
-                gboolean keepReading = _tgentransport_onReadable(transport);
-                if(!keepReading) {
-                    transport->epollE.events &= ~EPOLLIN;
-                    changed = TRUE;
-                }
-            }
-
-            if(out && desc == transport->tcpD) {
-                gboolean keepWriting = _tgentransport_onWritable(transport);
-                if(!keepWriting) {
-                   transport->epollE.events &= ~EPOLLOUT;
-                   changed = TRUE;
-               }
-            }
-
-            if(transport->activeTransfer &&
-                    tgentransfer_wantsWriteResponse(transport->activeTransfer)) {
-                /* the transfer was reading the command and now needs
-                 * to swap to writing the response */
-                transport->epollE.events |= EPOLLOUT;
-                changed = TRUE;
-            }
-
-            if(changed) {
-                gint result = epoll_ctl(transport->epollD, EPOLL_CTL_MOD, transport->tcpD, &transport->epollE);
-                if(result != 0) {
-                    tgen_critical("epoll_ctl(): epoll %i socket %i returned %i error %i: %s",
-                            transport->epollD, transport->tcpD, result, errno, g_strerror(errno));
-                    tgen_warning("epoll %i unable to change events on socket %i",
-                            transport->epollD, transport->tcpD);
-                }
-            }
-
-            if(transport->activeTransfer && tgentransfer_isComplete(transport->activeTransfer)) {
-                /* the transfer finished */
-//                tgentransfer_unref(transport->activeTransfer);
-//                transport->activeTransfer = NULL;
-//                transport->onTransferComplete(transport->hookData);
-//                transport->onTransferComplete = NULL;
-//                transport->hookData = NULL;
-            }
+            _tgentransport_activateHelper(transport, desc, in, out);
         }
     }
 
