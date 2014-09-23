@@ -39,7 +39,7 @@ gdouble random_nextDouble(Random* random) {
 gint random_nextNBytes(Random* random, guchar* buffer, gint nbytes) {
 	utility_assert(random);
     gint offset = 0;
-    while(offset < nbytes) {
+	while(offset < nbytes) {
         gint randInt = random_nextInt(random);
         gint n = MIN((nbytes - offset), sizeof(gint));
         memmove(&buffer[offset], &randInt, n);
@@ -47,5 +47,4 @@ gint random_nextNBytes(Random* random, guchar* buffer, gint nbytes) {
     }
 
 	return nbytes;
-
 }
