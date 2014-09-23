@@ -44,7 +44,8 @@ gdouble random_nextDouble(Random* random);
  * @param random the random source
  * @param buffer the buffer to copy the random bytes to
  * @param nbytes number of bytes to copy to the buffer
+ * @returns the number of bytes read into the buffer
  */
-void random_nextNBytes(Random* random, guchar* buffer, gint nbytes);
+gint random_nextNBytes(Random* random, guchar* buffer, gint nbytes);
 
 #endif /* SHD_RANDOM_H_ */
