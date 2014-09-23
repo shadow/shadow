@@ -1482,6 +1482,7 @@ ssize_t read(int fd, void *buff, size_t numbytes) {
     } else if(host_isRandomHandle(host, fd)) {
 		Random* random = host_getRandom(host);
 		random_nextNBytes(random, (guchar*)buff, numbytes);
+		ret = (ssize_t) numbytes;
     } else {
         gint osfd = host_getOSHandle(host, fd);
         if(osfd >= 0) {
