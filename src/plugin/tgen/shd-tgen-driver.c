@@ -255,10 +255,13 @@ static void _tgendriver_initiateTransfer(TGenDriver* driver, TGenAction* action)
 
             /* set a callback so we know how to continue when the transfer is done */
             GHookFunc cb = (GHookFunc) _tgendriver_transferCompleteCallback;
+
             TGenCallbackItem* item = g_new0(TGenCallbackItem, 1);
             item->driver = driver;
-            item->transport = transport;
             item->action = action;
+            item->transport = transport;
+            tgentransport_ref(transport);
+
             TGenTransferCommand command = {++(driver->transferIDCounter), type, size};
             tgentransport_setCommand(transport, command, cb, item);
         } else {

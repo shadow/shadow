@@ -212,11 +212,11 @@ static void _tgentransport_activateHelper(TGenTransport* transport, gint desc, g
 
     /* check if the transfer finished */
     if(status & TGEN_EVENT_DONE) {
-//        tgentransfer_unref(transport->activeTransfer);
-//        transport->activeTransfer = NULL;
-//        transport->onTransferComplete(transport->hookData);
-//        transport->onTransferComplete = NULL;
-//        transport->hookData = NULL;
+        tgentransfer_unref(transport->activeTransfer);
+        transport->activeTransfer = NULL;
+        transport->onTransferComplete(transport->hookData);
+        transport->onTransferComplete = NULL;
+        transport->hookData = NULL;
     }
 }
 

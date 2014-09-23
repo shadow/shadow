@@ -190,7 +190,10 @@ static void _tgentransfer_readCommand(TGenTransfer* transfer, gint socketD) {
         /* we have read the entire command from the other end */
         gboolean hasError = FALSE;
 
-        gchar** parts = g_strsplit(transfer->readBuffer->str, " ", 0);
+        gchar* line = g_string_free(transfer->readBuffer, FALSE);
+        transfer->readBuffer = NULL;
+
+        gchar** parts = g_strsplit(line, " ", 0);
         if(parts[0] == NULL || parts[1] == NULL || parts[2] == NULL || parts[3] == NULL) {
             tgen_critical("error parsing command '%s'", transfer->readBuffer->str);
             hasError = TRUE;
@@ -226,7 +229,7 @@ static void _tgentransfer_readCommand(TGenTransfer* transfer, gint socketD) {
         }
 
         g_strfreev(parts);
-        g_string_free(transfer->readBuffer, TRUE);
+        g_free(line);
 
         /* payload phase is next unless there was an error parsing */
         if(hasError) {
@@ -293,7 +296,10 @@ static void _tgentransfer_readChecksum(TGenTransfer* transfer, gint socketD) {
         g_assert(sha1Length >= 0);
         gchar* computedSum = g_strdup(g_checksum_get_string(transfer->payloadChecksum));
 
-        gchar** parts = g_strsplit(transfer->readBuffer->str, " ", 0);
+        gchar* line = g_string_free(transfer->readBuffer, FALSE);
+        transfer->readBuffer = NULL;
+
+        gchar** parts = g_strsplit(line, " ", 0);
         const gchar* receivedSum = parts[1];
         g_assert(receivedSum);
 
@@ -305,7 +311,7 @@ static void _tgentransfer_readChecksum(TGenTransfer* transfer, gint socketD) {
         }
 
         g_strfreev(parts);
-        g_string_free(transfer->readBuffer, TRUE);
+        g_free(line);
         g_free(computedSum);
     } else {
         /* unable to receive entire checksum, wait for next chance to read */
