@@ -595,6 +595,13 @@ void packet_addDeliveryStatus(Packet* packet, PacketDeliveryStatusFlags status) 
 	}
 }
 
+PacketDeliveryStatusFlags packet_getDeliveryStatus(Packet* packet) {
+    _packet_lock(packet);
+    PacketDeliveryStatusFlags flags = packet->allStatus;
+    _packet_unlock(packet);
+    return flags;
+}
+
 void packet_setDropNotificationDelay(Packet* packet, SimulationTime delay) {
     MAGIC_ASSERT(packet);
     _packet_lock(packet);

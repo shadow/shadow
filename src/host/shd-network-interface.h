@@ -12,7 +12,7 @@
 typedef struct _NetworkInterface NetworkInterface;
 
 NetworkInterface* networkinterface_new(Address* address, guint64 bwDownKiBps, guint64 bwUpKiBps,
-		gboolean logPcap, gchar* pcapDir, gchar* qdisc, guint64 interfaceReceiveLength);
+        gboolean logPcap, gchar* pcapDir, gchar* qdisc, guint64 interfaceReceiveLength);
 void networkinterface_free(NetworkInterface* interface);
 
 Address* networkinterface_getAddress(NetworkInterface* interface);

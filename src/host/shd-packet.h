@@ -80,6 +80,7 @@ gint packet_getDestinationAssociationKey(Packet* packet);
 gint packet_getSourceAssociationKey(Packet* packet);
 
 void packet_addDeliveryStatus(Packet* packet, PacketDeliveryStatusFlags status);
+PacketDeliveryStatusFlags packet_getDeliveryStatus(Packet* packet);
 
 void packet_setDropNotificationDelay(Packet* packet, SimulationTime delay);
 SimulationTime packet_getDropNotificationDelay(Packet* packet);

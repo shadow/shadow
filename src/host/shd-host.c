@@ -143,7 +143,6 @@ Host* host_new(GQuark id, gchar* hostname, gchar* ipHint, gchar* geocodeHint, gc
 	host->pcapDir = pcapDir;
 
 	message("Created Host '%s', ip %s, "
-
 			"%"G_GUINT64_FORMAT" bwUpKiBps, %"G_GUINT64_FORMAT" bwDownKiBps, %"G_GUINT64_FORMAT" initSockSendBufSize, %"G_GUINT64_FORMAT" initSockRecvBufSize, "
 			"%u cpuFrequency, %i cpuThreshold, %i cpuPrecision, %u seed",
 			g_quark_to_string(host->id), networkinterface_getIPName(host->defaultInterface),
