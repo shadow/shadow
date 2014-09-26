@@ -99,6 +99,32 @@ static TGenAction* _tgengraph_getAction(TGenGraph* g, igraph_integer_t vertexInd
 	return g_hash_table_lookup(g->actions, GINT_TO_POINTER(vertexIndex));
 }
 
+static gboolean _tgengraph_hasSelfLoop(TGenGraph* g, igraph_integer_t vertexIndex) {
+    TGEN_ASSERT(g);
+    gboolean isLoop = FALSE;
+
+    igraph_vector_t* resultNeighborVertices = g_new0(igraph_vector_t, 1);
+    gint result = igraph_vector_init(resultNeighborVertices, 0);
+
+    if(result == IGRAPH_SUCCESS) {
+        result = igraph_neighbors(g->graph, resultNeighborVertices, vertexIndex, IGRAPH_OUT);
+        if(result == IGRAPH_SUCCESS) {
+            glong nVertices = igraph_vector_size(resultNeighborVertices);
+            for (gint i = 0; i < nVertices; i++) {
+                igraph_integer_t dstVertexIndex = igraph_vector_e(resultNeighborVertices, i);
+                if(vertexIndex == dstVertexIndex) {
+                    isLoop = TRUE;
+                    break;
+                }
+            }
+        }
+    }
+
+    igraph_vector_destroy(resultNeighborVertices);
+    g_free(resultNeighborVertices);
+    return isLoop;
+}
+
 static GError* _tgengraph_parseStartVertex(TGenGraph* g, const gchar* idStr,
 		igraph_integer_t vertexIndex) {
 	TGEN_ASSERT(g);
@@ -115,7 +141,11 @@ static GError* _tgengraph_parseStartVertex(TGenGraph* g, const gchar* idStr,
 		return g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT,
 				"only one start vertex is allowed in the action graph");
 	}
-	// XXX TODO make sure start vertices do not contain self-loops
+
+	if(_tgengraph_hasSelfLoop(g, vertexIndex)) {
+	    return g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT,
+                "start vertex must not contain a self-loop");
+	}
 
 	GError* error = NULL;
 	TGenAction* a = tgenaction_newStartAction(timeStr, serverPortStr, peersStr, socksProxyStr, &error);
@@ -465,7 +495,7 @@ GQueue* tgengraph_getNextActions(TGenGraph* g, TGenAction* action) {
 	igraph_vector_t* resultNeighborVertices = g_new0(igraph_vector_t, 1);
 
 	/* initialize with 0 entries, since we dont know how many neighbors we have */
-	int result = igraph_vector_init(resultNeighborVertices, 0);
+	gint result = igraph_vector_init(resultNeighborVertices, 0);
 	if(result != IGRAPH_SUCCESS) {
 		tgen_critical("igraph_vector_init return non-success code %i", result);
 		g_free(resultNeighborVertices);

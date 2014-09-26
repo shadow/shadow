@@ -19,12 +19,16 @@ static void _tgendriver_new(gint argc, gchar* argv[]) {
 
 /* free node state */
 static void _tgendriver_free() {
-	tgendriver_unref(tgen);
+    if(tgen) {
+        tgendriver_unref(tgen);
+    }
 }
 
 /* check active sockets for readability/writability */
 static void _tgendriver_activate() {
-	tgendriver_activate(tgen);
+    if(tgen) {
+        tgendriver_activate(tgen);
+    }
 }
 
 /* shadow calls this function for a one-time initialization, and exposes its interface */

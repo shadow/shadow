@@ -527,11 +527,9 @@ TGenDriver* tgendriver_new(gint argc, gchar* argv[], ShadowLogFunc logf,
     TGenGraph* graph = tgengraph_new(argv[1]);
 
     if (graph) {
-        tgen_message(
-                "traffic generator config file '%s' passed validation", argv[1]);
+        tgen_message("traffic generator config file '%s' passed validation", argv[1]);
     } else {
-        tgen_warning(
-                "traffic generator config file '%s' failed validation", argv[1]);
+        tgen_error("traffic generator config file '%s' failed validation", argv[1]);
         return NULL;
     }
 
