@@ -4,6 +4,7 @@
 
 #include <string.h>
 #include <arpa/inet.h>
+#include <glib/gstdio.h>
 
 #include "shd-tgen.h"
 
@@ -513,6 +514,27 @@ void tgendriver_unref(TGenDriver* driver) {
     }
 }
 
+//static gchar* _tgendriver_makeTempFile() {
+//    gchar nameBuffer[256];
+//    memset(nameBuffer, 0, 256);
+//    gethostname(nameBuffer, 255);
+//
+//    GString* templateBuffer = g_string_new("XXXXXX-shadow-tgen-");
+//    g_string_append_printf(templateBuffer, "%s.xml", nameBuffer);
+//
+//    gchar* temporaryFilename = NULL;
+//    gint openedFile = g_file_open_tmp(templateBuffer->str, &temporaryFilename, NULL);
+//
+//    g_string_free(templateBuffer, TRUE);
+//
+//    if(openedFile > 0) {
+//        close(openedFile);
+//        return g_strdup(temporaryFilename);
+//    } else {
+//        return NULL;
+//    }
+//}
+
 TGenDriver* tgendriver_new(gint argc, gchar* argv[], ShadowLogFunc logf,
         ShadowCreateCallbackFunc callf) {
     tgenLogFunc = logf;
@@ -523,8 +545,24 @@ TGenDriver* tgendriver_new(gint argc, gchar* argv[], ShadowLogFunc logf,
         return NULL;
     }
 
-    /* parse the graphml config file */
     TGenGraph* graph = tgengraph_new(argv[1]);
+
+//    if(argv[1] && g_str_has_prefix(argv[1], "<?xml")) {
+//        /* argv contains the xml contents of the xml file */
+//        gchar* tempPath = _tgendriver_makeTempFile();
+//        GError* error = NULL;
+//        gboolean success = g_file_set_contents(tempPath, argv[1], -1, &error);
+//        if(success) {
+//            graph = tgengraph_new(tempPath);
+//        } else {
+//            tgen_warning("error (%i) while generating temporary xml file: %s", error->code, error->message);
+//        }
+//        g_unlink(tempPath);
+//        g_free(tempPath);
+//    } else {
+//        /* argv contains the apth of a graphml config file */
+//        graph = tgengraph_new(argv[1]);
+//    }
 
     if (graph) {
         tgen_message("traffic generator config file '%s' passed validation", argv[1]);
@@ -562,6 +600,8 @@ TGenDriver* tgendriver_new(gint argc, gchar* argv[], ShadowLogFunc logf,
             _tgendriver_start(driver);
         }
     }
+
+    // TODO add heartbeat every 1 second
 
     return driver;
 }

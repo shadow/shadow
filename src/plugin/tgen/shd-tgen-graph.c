@@ -7,7 +7,6 @@
 #include "shd-tgen.h"
 
 struct _TGenGraph {
-	gchar* path;
 	igraph_t* graph;
 
 	/* graph properties */
@@ -410,9 +409,6 @@ static igraph_t* _tgengraph_loadNewGraph(const gchar* path) {
 void tgengraph_free(TGenGraph* g) {
 	TGEN_ASSERT(g);
 
-	if(g->path) {
-		g_free(g->path);
-	}
 	if(g->actions) {
 		g_hash_table_destroy(g->actions);
 	}
@@ -425,26 +421,29 @@ void tgengraph_free(TGenGraph* g) {
 }
 
 TGenGraph* tgengraph_new(gchar* path) {
+    if(!path || !g_file_test(path, G_FILE_TEST_IS_REGULAR|G_FILE_TEST_EXISTS)) {
+        tgen_critical("path '%s' to tgen config graph is not valid or does not exist", path);
+        return NULL;
+    }
+
 	TGenGraph* g = g_new0(TGenGraph, 1);
 	g->magic = TGEN_MAGIC;
 
 	g->actions = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, (GDestroyNotify)tgenaction_unref);
 
-	// TODO - if not path, write a temp file that contains a default test
-	// graph that tests all possible protocols, etc, and use that as path instead of NULL
-	// or better yet build one on the fly using the igraph api
-	g->path = path ? _tgengraph_getHomePath(path) : NULL;
+	gchar* graphPath = path ? _tgengraph_getHomePath(path) : NULL;
+	gboolean exists = g_file_test(path, G_FILE_TEST_IS_REGULAR|G_FILE_TEST_EXISTS);
 
 	GError* error = NULL;
 
-	if(g->path) {
+	if(graphPath) {
 		/* use the built-in C attribute handler */
 		igraph_attribute_table_t* oldHandler = igraph_i_set_attribute_table(&igraph_cattribute_table);
 
-		g->graph = _tgengraph_loadNewGraph(g->path);
+		g->graph = _tgengraph_loadNewGraph(graphPath);
 		if(!g->graph) {
 			error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_PARSE,
-									"unable to read graph at path '%s'", g->path);
+									"unable to read graph at path '%s'", graphPath);
 		}
 
 		if(!error) {
