@@ -33,7 +33,7 @@
 
     <plugin id="tgen" path="libshadow-plugin-tgen.so" />
 
-    <node id="webserver" quantity="2">
+    <node id="server" quantity="2">
         <application plugin="tgen" time="1" arguments="tgen.server.graphml.xml" />
     </node>
     

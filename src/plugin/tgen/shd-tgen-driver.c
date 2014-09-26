@@ -37,6 +37,9 @@ struct _TGenDriver {
     gsize transferIDCounter;
 
     /* traffic statistics */
+    guint heartbeatTransfersCompleted;
+    gsize heartbeatBytesRead;
+    gsize heartbeatBytesWritten;
     guint totalTransfersCompleted;
     gsize totalBytesRead;
     gsize totalBytesWritten;
@@ -176,6 +179,7 @@ static gboolean _tgendriver_closeTransport(TGenDriver* driver, TGenTransport* tr
 
 static void _tgendriver_transferCompleteCallback(TGenCallbackItem* item) {
     /* our transfer finished, close the socket */
+    item->driver->heartbeatTransfersCompleted++;
     item->driver->totalTransfersCompleted++;
     _tgendriver_closeTransport(item->driver, item->transport);
 
@@ -471,12 +475,14 @@ void tgendriver_activate(TGenDriver* driver) {
             }
 
             TGenTransferStatus current = tgentransport_activate(transport);
+            driver->heartbeatBytesRead += current.bytesRead;
+            driver->heartbeatBytesWritten += current.bytesWritten;
             driver->totalBytesRead += current.bytesRead;
             driver->totalBytesWritten += current.bytesWritten;
         }
     }
 
-    tgen_debug("total transfers=%u bytesread=%"G_GSIZE_FORMAT" byteswrite=%"G_GSIZE_FORMAT,
+    tgen_debug("total transfers-completed=%u bytes-read=%"G_GSIZE_FORMAT" bytes-write=%"G_GSIZE_FORMAT,
             driver->totalTransfersCompleted, driver->totalBytesRead, driver->totalBytesWritten);
 }
 
@@ -511,6 +517,27 @@ void tgendriver_unref(TGenDriver* driver) {
     TGEN_ASSERT(driver);
     if(--driver->refcount <= 0) {
         _tgendriver_free(driver);
+    }
+}
+
+static void _tgendriver_hearbeatCallback(TGenDriver* driver) {
+    TGEN_ASSERT(driver);
+
+    tgen_message("[driver-heartbeat] transfers-completed=%u bytes-read=%"G_GSIZE_FORMAT" "
+            "bytes-write=%"G_GSIZE_FORMAT, driver->heartbeatTransfersCompleted,
+            driver->heartbeatBytesRead, driver->heartbeatBytesWritten);
+
+    driver->heartbeatTransfersCompleted = 0;
+    driver->heartbeatBytesRead = 0;
+    driver->heartbeatBytesWritten = 0;
+
+    if(driver->hasEnded && g_hash_table_size(driver->transports) <= 0) {
+        /* we are the only ref left, allow driver to be freed */
+        tgendriver_unref(driver);
+    } else {
+        /* other refs exist so we are still running */
+        ShadowPluginCallbackFunc cb = (ShadowPluginCallbackFunc)_tgendriver_hearbeatCallback;
+        driver->createCallback(cb, driver, (uint)1000);
     }
 }
 
@@ -601,7 +628,9 @@ TGenDriver* tgendriver_new(gint argc, gchar* argv[], ShadowLogFunc logf,
         }
     }
 
-    // TODO add heartbeat every 1 second
+    /* add another ref and start the heartbeat event loop */
+    tgendriver_ref(driver);
+    _tgendriver_hearbeatCallback(driver);
 
     return driver;
 }

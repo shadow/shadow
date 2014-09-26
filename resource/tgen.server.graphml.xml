@@ -8,7 +8,7 @@
       <data key="d1">8888</data>
       <data key="d0">10</data>
       <data key="d2"></data>
-      <data key="d3">webserver1:8888</data>
+      <data key="d3">server1:8888</data>
     </node>
   </graph>
 </graphml>

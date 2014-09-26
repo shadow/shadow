@@ -9,14 +9,14 @@
   <key attr.name="time" attr.type="string" for="node" id="d0" />
   <graph edgedefault="directed">
     <node id="start">
-      <data key="d3">webserver1:8888,webserver2:8888</data>
+      <data key="d3">server1:8888,server2:8888</data>
       <data key="d5">8888</data>
       <data key="d0">90</data>
     </node>
     <node id="transfer1">
       <data key="d6">tcp</data>
       <data key="d7">get</data>
-      <data key="d3">webserver1:8888</data>
+      <data key="d3">server1:8888</data>
       <data key="d2">1 MiB</data>
     </node>
     <node id="transfer2">
