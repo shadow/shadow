@@ -19,21 +19,16 @@ struct _TGenDriver {
 
     /* the starting action parsed from the action graph */
     TGenAction* startAction;
+
     /* TRUE iff a condition in any endAction event has been reached */
     gboolean hasEnded;
 
-    /* our main top-level epoll descriptor used to listen for events
-     * on serverD and one descriptor (epoll or other) for each transfer */
-    gint epollD;
-    /* the main server that listens for new incoming connections */
-    gint serverD;
-    /* table that holds the transport objects, each transport is indexed
-     * by the descriptor returned by that transport */
-    GHashTable* transports;
+    /* our I/O event manager. this holds refs to all of the transfers
+     * and notifies them of I/O events on the underlying transports */
+    TGenIO* io;
 
-    /* pointer to memory that facilitates the use of the epoll api */
-    struct epoll_event* ee;
-
+    /* server to handle socket creation */
+    TGenServer* server;
     gsize transferIDCounter;
 
     /* traffic statistics */
@@ -69,166 +64,94 @@ static guint64 _tgendriver_getCurrentTimeMillis() {
     return nowMillis;
 }
 
-static void _tgendriver_bootstrap(TGenDriver* driver) {
+static void _tgendriver_onTransferComplete(TGenDriver* driver, TGenAction* action, TGenTransfer* transfer) {
     TGEN_ASSERT(driver);
 
-    tgen_info("bootstrapping started");
-
-    TGenAction* startAction = tgengraph_getStartAction(driver->actionGraph);
-
-    /* we run our protocol over a single server socket/port */
-    driver->serverD = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
-    if (driver->serverD <= 0) {
-        tgen_critical("problem bootstrapping: socket() returned %i", driver->serverD)
-        driver->serverD = 0;
-        return;
-    }
-
-    /* setup the listener address information */
-    struct sockaddr_in listener;
-    memset(&listener, 0, sizeof(struct sockaddr_in));
-    listener.sin_family = AF_INET;
-    listener.sin_addr.s_addr = htonl(INADDR_ANY);
-    listener.sin_port = (in_port_t) tgenaction_getServerPort(startAction);
-
-    /* bind the socket to the server port */
-    gint result = bind(driver->serverD, (struct sockaddr *) &listener, sizeof(listener));
-    if (result < 0) {
-        tgen_critical("bind(): socket %i returned %i error %i: %s",
-                driver->serverD, result, errno, g_strerror(errno));
-        close(driver->serverD);
-        driver->serverD = 0;
-        return;
-    }
-
-    /* set as server listening socket */
-    result = listen(driver->serverD, SOMAXCONN);
-    if (result < 0) {
-        tgen_critical("listen(): socket %i returned %i error %i: %s",
-                driver->serverD, result, errno, g_strerror(errno));
-        close(driver->serverD);
-        driver->serverD = 0;
-        return;
-    }
-
-    /* create an epoll descriptor so we can manage events */
-    if (!driver->epollD) {
-        driver->epollD = epoll_create(1);
-        if (driver->epollD < 0) {
-            tgen_critical("epoll_create(): returned %i error %i: %s",
-                        driver->epollD, errno, g_strerror(errno));
-            close(driver->epollD);
-            driver->epollD = 0;
-            close(driver->serverD);
-            driver->serverD = 0;
-            return;
-        }
-    }
-
-    /* start watching our server socket */
-    driver->ee->events = EPOLLIN;
-    driver->ee->data.fd = driver->serverD;
-    result = epoll_ctl(driver->epollD, EPOLL_CTL_ADD, driver->serverD, driver->ee);
-    if (result != 0) {
-        tgen_critical("epoll_ctl(): epoll %i socket %i returned %i error %i: %s",
-                driver->epollD, driver->serverD, result, errno, g_strerror(errno));
-        close(driver->epollD);
-        driver->epollD = 0;
-        close(driver->serverD);
-        driver->serverD = 0;
-        return;
-    }
-
-    /* if we got here, everything worked correctly! */
-    driver->startAction = startAction;
-
-    gchar ipStringBuffer[INET_ADDRSTRLEN + 1];
-    memset(ipStringBuffer, 0, INET_ADDRSTRLEN + 1);
-    inet_ntop(AF_INET, &listener.sin_addr.s_addr, ipStringBuffer, INET_ADDRSTRLEN);
-
-    tgen_message("bootstrapped server listening at %s:%u", ipStringBuffer, ntohs(listener.sin_port));
-}
-
-static gboolean _tgendriver_openTransport(TGenDriver* driver, TGenTransport* transport) {
-    gint watchD = tgentransport_getEpollDescriptor(transport);
-    driver->ee->events = EPOLLIN;
-    driver->ee->data.fd = watchD;
-    gint result = epoll_ctl(driver->epollD, EPOLL_CTL_ADD, watchD, driver->ee);
-    if(result == 0) {
-        g_hash_table_replace(driver->transports, GINT_TO_POINTER(watchD), transport);
-        return TRUE;
-    } else {
-        tgen_critical("epoll_ctl(): epoll %i socket %i returned %i error %i: %s",
-                    driver->epollD, watchD, result, errno, g_strerror(errno));
-        return FALSE;
-    }
-}
-
-static gboolean _tgendriver_closeTransport(TGenDriver* driver, TGenTransport* transport) {
-    gint watchD = tgentransport_getEpollDescriptor(transport);
-    gint result = epoll_ctl(driver->epollD, EPOLL_CTL_DEL, watchD, NULL);
-    if(result == 0) {
-        g_hash_table_remove(driver->transports, GINT_TO_POINTER(watchD));
-        return TRUE;
-    } else {
-        tgen_critical("epoll_ctl(): epoll %i socket %i returned %i error %i: %s",
-                    driver->epollD, watchD, result, errno, g_strerror(errno));
-        return FALSE;
-    }
-}
-
-static void _tgendriver_transferCompleteCallback(TGenCallbackItem* item) {
     /* our transfer finished, close the socket */
-    item->driver->heartbeatTransfersCompleted++;
-    item->driver->totalTransfersCompleted++;
-    _tgendriver_closeTransport(item->driver, item->transport);
+    driver->heartbeatTransfersCompleted++;
+    driver->totalTransfersCompleted++;
 
     /* this only happens for transfers that our side initiated.
      * continue traversing the graph as instructed */
-    _tgendriver_continueNextActions(item->driver, item->action);
+    if(action) {
+        _tgendriver_continueNextActions(driver, action);
+    }
 
     /* unref since the item object no longer holds the references */
-    tgentransport_unref(item->transport);
-    tgenaction_unref(item->action);
-    tgendriver_unref(item->driver);
-    /* cleanup */
-    g_free(item);
+    // FIXME mem
+//    if(transfer) {
+//        tgentransfer_unref(transfer);
+//    }
+//    if(action) {
+//        tgenaction_unref(action);
+//    }
+//    tgendriver_unref(driver);
 }
 
-static gint _tgendriver_createConnectedTCPSocket(TGenPeer* peer) {
-    /* create the socket and get a socket descriptor */
-    gint socketD = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
+static void _tgendriver_onBytesTransferred(TGenDriver* driver, gsize bytesRead, gsize bytesWritten) {
+    TGEN_ASSERT(driver);
 
-    if (socketD < 0) {
-        tgen_critical("socket(): returned %i error %i: %s",
-                socketD, errno, g_strerror(errno));
-        return 0;
-    }
+    driver->totalBytesRead += bytesRead;
+    driver->heartbeatBytesRead += bytesRead;
+    driver->totalBytesWritten += bytesWritten;
+    driver->heartbeatBytesWritten += bytesWritten;
+}
 
-    struct sockaddr_in server;
-    memset(&server, 0, sizeof(server));
-    server.sin_family = AF_INET;
-    server.sin_addr.s_addr = tgenpeer_getNetworkIP(peer);
-    server.sin_port = tgenpeer_getNetworkPort(peer);
+static void _tgendriver_onNewPeer(TGenDriver* driver, gint socketD, TGenPeer* peer) {
+    TGEN_ASSERT(driver);
 
-    gint result = connect(socketD, (struct sockaddr *) &server, sizeof(server));
-
-    /* nonblocking sockets means inprogress is ok */
-    if (result < 0 && errno != EINPROGRESS) {
-        tgen_critical("connect(): socket %i returned %i error %i: %s",
-                        socketD, result, errno, g_strerror(errno));
+    /* we have a new peer connecting to our listening socket */
+    if(driver->hasEnded) {
         close(socketD);
-        return 0;
+        return;
     }
 
-    return socketD;
+    /* this connect was initiated by the other end.
+     * transfer information will be sent to us later. */
+    TGenTransport* transport = tgentransport_newPassive(socketD, peer,
+            (TGenTransport_onBytesFunc) _tgendriver_onBytesTransferred, driver);
+
+    if(!transport) {
+        tgen_warning("failed to initialize transport for incoming peer, skipping");
+        return;
+    }
+
+    /* a new transfer will be coming in on this transport */
+    gsize id = ++(driver->transferIDCounter);
+    TGenTransfer* transfer = tgentransfer_new(id, TGEN_TYPE_NONE, 0, driver->io, transport,
+            (TGenTransfer_onCompleteFunc)_tgendriver_onTransferComplete, driver, NULL);
+
+    if(!transfer) {
+        tgen_warning("failed to initialize transfer for incoming peer, skipping");
+        return;
+    }
+}
+
+static void _tgendriver_onHearbeat(TGenDriver* driver) {
+    TGEN_ASSERT(driver);
+
+    tgen_message("[driver-heartbeat] transfers-completed=%u bytes-read=%"G_GSIZE_FORMAT" "
+            "bytes-write=%"G_GSIZE_FORMAT, driver->heartbeatTransfersCompleted,
+            driver->heartbeatBytesRead, driver->heartbeatBytesWritten);
+
+    driver->heartbeatTransfersCompleted = 0;
+    driver->heartbeatBytesRead = 0;
+    driver->heartbeatBytesWritten = 0;
+
+    if(driver->hasEnded && tgenio_getSize(driver->io) <= 1) {
+        /* the server is the only one running */
+        //TODO close server to unref driver?
+        /* we are the only ref left, allow driver to be freed */
+        tgendriver_unref(driver);
+    } else {
+        /* other refs exist so we are still running */
+        ShadowPluginCallbackFunc cb = (ShadowPluginCallbackFunc)_tgendriver_onHearbeat;
+        driver->createCallback(cb, driver, (uint)1000);
+    }
 }
 
 static void _tgendriver_initiateTransfer(TGenDriver* driver, TGenAction* action) {
-    TGenTransferType type;
-    TGenTransportProtocol protocol;
-    guint64 size;
-    tgenaction_getTransferParameters(action, &type, &protocol, &size);
+    TGEN_ASSERT(driver);
 
     /* the peer list of the transfer takes priority over the general start peer list
      * we must have a list of peers to transfer to one of them */
@@ -236,97 +159,31 @@ static void _tgendriver_initiateTransfer(TGenDriver* driver, TGenAction* action)
     if (!peers) {
         peers = tgenaction_getPeers(driver->startAction);
     }
-    g_assert(peers);
-
-    /* select a random peer */
     TGenPeer* peer = tgenpool_getRandom(peers);
-    g_assert(peer);
-
     TGenPeer* proxy = tgenaction_getSocksProxy(driver->startAction);
 
-    /* create the new transport socket, etc */
-    // TODO only create a new socket and transport if we dont already have one to this peer?
-    gint socketD = _tgendriver_createConnectedTCPSocket(proxy ? proxy : peer);
-    TGenTransport* transport = NULL;
-    if (socketD > 0) {
-        transport = tgentransport_new(socketD, proxy, peer);
-    }
+    TGenTransport* transport = tgentransport_newActive(proxy, peer,
+            (TGenTransport_onBytesFunc) _tgendriver_onBytesTransferred, driver);
 
-    if(transport) {
-        /* track the transport */
-        gboolean success = _tgendriver_openTransport(driver, transport);
-        if(success) {
-            tgen_info("created new transport socket %i", socketD)
-
-            /* set a callback so we know how to continue when the transfer is done */
-            GHookFunc cb = (GHookFunc) _tgendriver_transferCompleteCallback;
-
-            TGenCallbackItem* item = g_new0(TGenCallbackItem, 1);
-            tgendriver_ref(driver);
-            item->driver = driver;
-            tgenaction_ref(action);
-            item->action = action;
-            tgentransport_ref(transport);
-            item->transport = transport;
-
-            TGenTransferCommand command = {++(driver->transferIDCounter), type, size};
-            tgentransport_setCommand(transport, command, cb, item);
-        } else {
-            gint watchD = tgentransport_getEpollDescriptor(transport);
-            tgen_warning("unable to accept new transport: epoll %i unable to watch "
-                          "descriptor %i for events", watchD, socketD);
-            close(socketD);
-            tgentransport_unref(transport);
-        }
-    } else {
-        /* something failed during transfer initialization, move to the next action */
-        tgen_warning("skipping failed transfer action");
-        if(socketD > 0) {
-            close(socketD);
-        }
+    if(!transport) {
+        tgen_warning("failed to initialize transport for transfer action, skipping");
         _tgendriver_continueNextActions(driver, action);
-    }
-}
-
-static void _tgendriver_acceptTransport(TGenDriver* driver) {
-    /* we have a new transfer request coming in on our listening socket
-     * accept the socket and create the new transfer. */
-    struct sockaddr_in peerAddress;
-    memset(&peerAddress, 0, sizeof(struct sockaddr_in));
-
-    socklen_t addressLength = (socklen_t)sizeof(struct sockaddr_in);
-
-    gint socketD = accept(driver->serverD, (struct sockaddr*)&peerAddress, &addressLength);
-    if (socketD < 0) {
-        tgen_critical("accept(): socket %i returned %i error %i: %s",
-                driver->serverD, socketD, errno, g_strerror(errno));
-        return;
-    } else if(driver->hasEnded) {
-        close(socketD);
         return;
     }
 
-    /* this transfer was initiated by the other end.
-     * type, and size info will be sent to us later. */
-    TGenPeer* peer = tgenpeer_new(peerAddress.sin_addr.s_addr, peerAddress.sin_port);
-    TGenTransport* transport = tgentransport_new(socketD, NULL, peer);
-    tgenpeer_unref(peer);
+    gsize size = 0;
+    TGenTransferType type = 0;
+    tgenaction_getTransferParameters(action, &type, NULL, &size);
+    gsize id = ++(driver->transferIDCounter);
 
-    if(transport) {
-        /* track the transport */
-        gboolean success = _tgendriver_openTransport(driver, transport);
-        if(success) {
-            tgen_info("accepted new transport socket %i", socketD)
-        } else {
-            gint watchD = tgentransport_getEpollDescriptor(transport);
-            tgen_warning("unable to accept new transport: epoll %i unable to watch "
-                          "descriptor %i for events", watchD, socketD);
-            close(socketD);
-            tgentransport_unref(transport);
-        }
-    } else {
-        /* something failed during transfer initialization, move to the next action */
-        tgen_warning("skipping failed incoming transport");
+    /* a new transfer will be coming in on this transport */
+    TGenTransfer* transfer = tgentransfer_new(id, type, size, driver->io, transport,
+            (TGenTransfer_onCompleteFunc)_tgendriver_onTransferComplete, driver, action);
+
+    if(!transfer) {
+        tgen_warning("failed to initialize transfer for transfer action, skipping");
+        _tgendriver_continueNextActions(driver, action);
+        return;
     }
 }
 
@@ -437,71 +294,19 @@ void tgendriver_activate(TGenDriver* driver) {
         return;
     }
 
-    /* collect the events that are ready */
-    struct epoll_event epevs[10];
-    gint nfds = epoll_wait(driver->epollD, epevs, 10, 0);
-    if (nfds == -1) {
-        tgen_warning("epoll_wait(): epoll %i returned %i error %i: %s",
-                driver->epollD, nfds, errno, g_strerror(errno));
-    }
-
-    /* activate correct component for every socket thats ready.
-     * either our listening server socket has activity, or one of
-     * our transfer sockets. */
-    for (gint i = 0; i < nfds; i++) {
-        gint desc = epevs[i].data.fd;
-        if (desc == driver->serverD) {
-            /* listener socket should only be readable to indicate
-             * it needs to accept a new socket */
-            g_assert(epevs[i].events == EPOLLIN);
-
-            /* handle the read event on our listener socket */
-            _tgendriver_acceptTransport(driver);
-        } else {
-            TGenTransport* transport = g_hash_table_lookup(driver->transports,
-                    GINT_TO_POINTER(desc));
-            if (!transport) {
-                tgen_warning("can't find transport for descriptor '%i', closing", desc);
-                _tgendriver_closeTransport(driver, transport);
-                continue;
-            }
-
-            /* transport epoll descriptor should only ever be readable */
-            if(!(epevs[i].events & EPOLLIN)) {
-                tgen_warning("child transport with descriptor '%i' is active without EPOLLIN, closing", desc);
-                _tgendriver_closeTransport(driver, transport);
-                tgentransport_unref(transport);
-                continue;
-            }
-
-            TGenTransferStatus current = tgentransport_activate(transport);
-            driver->heartbeatBytesRead += current.bytesRead;
-            driver->heartbeatBytesWritten += current.bytesWritten;
-            driver->totalBytesRead += current.bytesRead;
-            driver->totalBytesWritten += current.bytesWritten;
-        }
-    }
-
-    tgen_debug("total transfers-completed=%u bytes-read=%"G_GSIZE_FORMAT" bytes-write=%"G_GSIZE_FORMAT,
-            driver->totalTransfersCompleted, driver->totalBytesRead, driver->totalBytesWritten);
+    tgenio_loopOnce(driver->io);
 }
 
 static void _tgendriver_free(TGenDriver* driver) {
     TGEN_ASSERT(driver);
     g_assert(driver->refcount <= 0);
-    if (driver->ee) {
-        g_free(driver->ee);
+    if(driver->server) {
+        tgenserver_unref(driver->server);
     }
-    if (driver->transports) {
-        g_hash_table_destroy(driver->transports);
+    if(driver->io) {
+        tgenio_unref(driver->io);
     }
-    if (driver->serverD) {
-        close(driver->serverD);
-    }
-    if (driver->epollD) {
-        close(driver->epollD);
-    }
-    if (driver->actionGraph) {
+    if(driver->actionGraph) {
         tgengraph_free(driver->actionGraph);
     }
     driver->magic = 0;
@@ -517,27 +322,6 @@ void tgendriver_unref(TGenDriver* driver) {
     TGEN_ASSERT(driver);
     if(--driver->refcount <= 0) {
         _tgendriver_free(driver);
-    }
-}
-
-static void _tgendriver_hearbeatCallback(TGenDriver* driver) {
-    TGEN_ASSERT(driver);
-
-    tgen_message("[driver-heartbeat] transfers-completed=%u bytes-read=%"G_GSIZE_FORMAT" "
-            "bytes-write=%"G_GSIZE_FORMAT, driver->heartbeatTransfersCompleted,
-            driver->heartbeatBytesRead, driver->heartbeatBytesWritten);
-
-    driver->heartbeatTransfersCompleted = 0;
-    driver->heartbeatBytesRead = 0;
-    driver->heartbeatBytesWritten = 0;
-
-    if(driver->hasEnded && g_hash_table_size(driver->transports) <= 0) {
-        /* we are the only ref left, allow driver to be freed */
-        tgendriver_unref(driver);
-    } else {
-        /* other refs exist so we are still running */
-        ShadowPluginCallbackFunc cb = (ShadowPluginCallbackFunc)_tgendriver_hearbeatCallback;
-        driver->createCallback(cb, driver, (uint)1000);
     }
 }
 
@@ -605,39 +389,39 @@ TGenDriver* tgendriver_new(gint argc, gchar* argv[], ShadowLogFunc logf,
 
     driver->log = logf;
     driver->createCallback = callf;
-    driver->actionGraph = graph;
-    driver->transports = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL,
-            (GDestroyNotify) tgentransport_unref);
-    driver->ee = g_new0(struct epoll_event, 1);
-
     tgen_debug("set log function to %p, callback function to %p", logf, callf);
 
-    /* setup our epoll descriptor and our server-side listener */
-    _tgendriver_bootstrap(driver);
+    driver->io = tgenio_new();
 
-    /* the client-side transfers start as specified in the action */
-    if (driver->startAction) {
-        guint64 startMillis = tgenaction_getStartTimeMillis(driver->startAction);
-        guint64 nowMillis = _tgendriver_getCurrentTimeMillis();
+    driver->actionGraph = graph;
+    driver->startAction = tgengraph_getStartAction(graph);
 
-        if(startMillis > nowMillis) {
-            driver->createCallback((ShadowPluginCallbackFunc)_tgendriver_start,
-                    driver, (guint) (startMillis - nowMillis));
-        } else {
-            _tgendriver_start(driver);
-        }
+    tgendriver_ref(driver);
+    in_port_t serverPort = (in_port_t)tgenaction_getServerPort(driver->startAction);
+    driver->server = tgenserver_new(driver->io, serverPort,
+            (TGenServer_onNewPeerFunc)_tgendriver_onNewPeer, driver);
+
+    /* the client-side (master) transfers start as specified in the action */
+    guint64 startMillis = tgenaction_getStartTimeMillis(driver->startAction);
+    guint64 nowMillis = _tgendriver_getCurrentTimeMillis();
+
+    if(startMillis > nowMillis) {
+        driver->createCallback((ShadowPluginCallbackFunc)_tgendriver_start,
+                driver, (guint) (startMillis - nowMillis));
+    } else {
+        _tgendriver_start(driver);
     }
 
     /* add another ref and start the heartbeat event loop */
     tgendriver_ref(driver);
-    _tgendriver_hearbeatCallback(driver);
+    _tgendriver_onHearbeat(driver);
 
     return driver;
 }
 
 gint tgendriver_getEpollDescriptor(TGenDriver* driver) {
     TGEN_ASSERT(driver);
-    return driver->epollD;
+    return tgenio_getEpollDescriptor(driver->io);
 }
 
 gboolean tgendriver_hasStarted(TGenDriver* driver) {

@@ -18,10 +18,12 @@
 
 #include <shd-library.h>
 
+#include "shd-tgen-io.h"
 #include "shd-tgen-pool.h"
 #include "shd-tgen-peer.h"
-#include "shd-tgen-transfer.h"
+#include "shd-tgen-server.h"
 #include "shd-tgen-transport.h"
+#include "shd-tgen-transfer.h"
 #include "shd-tgen-action.h"
 #include "shd-tgen-graph.h"
 #include "shd-tgen-driver.h"

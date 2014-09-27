@@ -7,79 +7,29 @@
 #include "shd-tgen.h"
 
 struct _TGenTransport {
-    struct epoll_event epollE;
-    gint epollD;
-
     TGenTransportProtocol protocol;
-    gint tcpD;
+    gint socketD;
+
+    TGenTransport_onBytesFunc notify;
+    gpointer notifyData;
 
     TGenPeer* peer;
     TGenPeer* proxy;
     gchar* string;
 
-    TGenTransfer* activeTransfer;
-    GHookFunc onTransferComplete;
-    gpointer hookData;
-
     gint refcount;
     guint magic;
 };
 
-typedef struct _TGenTransportCallbackItem {
-    TGenTransport* transport;
-    TGenTransfer* transfer;
-} TGenTransportCallbackItem;
-
-static gchar* _tgentransport_toString(TGenTransport* transport) {
-    TGEN_ASSERT(transport);
-
-    GString* stringBuffer = g_string_new(NULL);
-
-    if(transport->proxy && transport->peer) {
-        g_string_printf(stringBuffer, "[TCP-%i-%s-%s]", transport->tcpD,
-                tgenpeer_toString(transport->proxy), tgenpeer_toString(transport->peer));
-    } else if(transport->peer) {
-        g_string_printf(stringBuffer, "[TCP-%i-%s]", transport->tcpD,
-                tgenpeer_toString(transport->peer));
-    } else {
-        g_string_printf(stringBuffer, "[TCP-%i]", transport->tcpD);
-    }
-
-    return g_string_free(stringBuffer, FALSE);
-}
-
-TGenTransport* tgentransport_new(gint socketD, TGenPeer* proxy, TGenPeer* peer) {
-    if (socketD <= 0) {
-        return NULL;
-    }
-
-    gint epollD = epoll_create(1);
-
-    if (epollD < 0) {
-        tgen_critical("epoll_create(): returned %i error %i: %s",
-                epollD, errno, g_strerror(errno));
-        close(epollD);
-        return NULL;
-    }
-
-    /* start watching socket for incoming TGEN commands */
-    struct epoll_event ev;
-    ev.events = EPOLLIN;
-    ev.data.fd = socketD;
-    gint result = epoll_ctl(epollD, EPOLL_CTL_ADD, socketD, &ev);
-    if (result != 0) {
-        tgen_critical("epoll_ctl(): epoll %i socket %i returned %i error %i: %s",
-                epollD, socketD, result, errno, g_strerror(errno));
-        return NULL;
-    }
-
+static TGenTransport* _tgentransport_newHelper(gint socketD, TGenPeer* proxy, TGenPeer* peer,
+        TGenTransport_onBytesFunc notify, gpointer notifyData) {
     TGenTransport* transport = g_new0(TGenTransport, 1);
     transport->magic = TGEN_MAGIC;
     transport->refcount = 1;
 
-    transport->epollD = epollD;
-    transport->tcpD = socketD;
+    transport->socketD = socketD;
     transport->protocol = TGEN_PROTOCOL_TCP;
+
     if(peer) {
         transport->peer = peer;
         tgenpeer_ref(peer);
@@ -88,22 +38,56 @@ TGenTransport* tgentransport_new(gint socketD, TGenPeer* proxy, TGenPeer* peer) 
         transport->proxy = proxy;
         tgenpeer_ref(proxy);
     }
-    transport->epollE.events = ev.events;
-    transport->epollE.data.fd = socketD;
 
-    transport->string = _tgentransport_toString(transport);
+    transport->notify = notify;
+    transport->notifyData = notifyData;
+
+    return transport;
+}
+
+TGenTransport* tgentransport_newActive(TGenPeer* proxy, TGenPeer* peer,
+        TGenTransport_onBytesFunc notify, gpointer notifyData) {
+    /* create the socket and get a socket descriptor */
+    gint socketD = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
+
+    if (socketD < 0) {
+        tgen_critical("socket(): returned %i error %i: %s",
+                socketD, errno, g_strerror(errno));
+        return NULL;
+    }
+
+    /* connect to the given peer */
+    struct sockaddr_in master;
+    memset(&master, 0, sizeof(master));
+    master.sin_family = AF_INET;
+    master.sin_addr.s_addr = tgenpeer_getNetworkIP(peer);
+    master.sin_port = tgenpeer_getNetworkPort(peer);
+
+    gint result = connect(socketD, (struct sockaddr *) &master, sizeof(master));
+
+    /* nonblocking sockets means inprogress is ok */
+    if (result < 0 && errno != EINPROGRESS) {
+        tgen_critical("connect(): socket %i returned %i error %i: %s",
+                socketD, result, errno, g_strerror(errno));
+        close(socketD);
+        return NULL;
+    }
 
     // TODO handle socks connection if proxy exists
 
-    return transport;
+    return _tgentransport_newHelper(socketD, proxy, peer, notify, notifyData);
+}
+
+TGenTransport* tgentransport_newPassive(gint socketD, TGenPeer* peer,
+        TGenTransport_onBytesFunc notify, gpointer notifyData) {
+    return _tgentransport_newHelper(socketD, NULL, peer, notify, notifyData);
 }
 
 static void _tgentransport_free(TGenTransport* transport) {
     TGEN_ASSERT(transport);
 
-    if(transport->tcpD > 0) {
-        close(transport->tcpD);
-        transport->tcpD = 0;
+    if(transport->socketD > 0) {
+        close(transport->socketD);
     }
 
     if(transport->string) {
@@ -135,136 +119,53 @@ void tgentransport_unref(TGenTransport* transport) {
     }
 }
 
-void tgentransport_setCommand(TGenTransport* transport, TGenTransferCommand command,
-        GHookFunc onCommandComplete, gpointer hookData) {
-    TGEN_ASSERT(transport);
-    g_assert(!transport->activeTransfer);
-
-    gchar nameBuffer[256];
-    memset(nameBuffer, 0, 256);
-    gchar* name = (0 == gethostname(nameBuffer, 255)) ? &nameBuffer[0] : NULL;
-
-    transport->activeTransfer = tgentransfer_new(name, &command);
-    transport->onTransferComplete = onCommandComplete;
-    transport->hookData = hookData;
-
-    /* make sure we are waiting to write */
-    if(!(transport->epollE.events & EPOLLOUT)) {
-        transport->epollE.events |= EPOLLOUT;
-        gint result = epoll_ctl(transport->epollD, EPOLL_CTL_MOD, transport->tcpD, &transport->epollE);
-        if (result != 0) {
-            tgen_critical("epoll_ctl(): epoll %i socket %i returned %i error %i: %s",
-                    transport->epollD, transport->tcpD, result, errno, g_strerror(errno));
-        }
-    }
-}
-
-static TGenTransferStatus _tgentransport_activateHelper(TGenTransport* transport, gint desc, gboolean in, gboolean out) {
-    TGenTransferEvent flags = TGEN_EVENT_NONE;
-
-    /* check if we need read flag */
-    if(in && desc == transport->tcpD) {
-        tgen_debug("transport %s is readable", transport->string);
-
-        /* create a new transfer if we need to read command from the socket */
-        if(!transport->activeTransfer) {
-            transport->activeTransfer = tgentransfer_new(NULL, NULL);
-        }
-
-        flags |= TGEN_EVENT_READ;
-    }
-
-    /* check if we need write flag */
-    if(out && desc == transport->tcpD) {
-        tgen_debug("transport %s is writable", transport->string);
-
-        /* if we have no transfer, we don't care about writing */
-        if(transport->activeTransfer) {
-            flags |= TGEN_EVENT_WRITE;
-        }
-    }
-
-    /* activate the transfer */
-    TGenTransferStatus status;
-    if(flags) {
-        status = tgentransfer_onSocketEvent(transport->activeTransfer, transport->tcpD, flags);
-    }
-
-    /* now check if we should update our epoll events */
-    guint32 newEvents = 0;
-    if(status.events & TGEN_EVENT_READ) {
-        newEvents |= EPOLLIN;
-    }
-    if(status.events & TGEN_EVENT_WRITE) {
-        newEvents |= EPOLLOUT;
-    }
-
-    if(newEvents != transport->epollE.events) {
-        transport->epollE.events = newEvents;
-        gint result = epoll_ctl(transport->epollD, EPOLL_CTL_MOD, transport->tcpD, &transport->epollE);
-        if(result != 0) {
-            tgen_critical("epoll_ctl(): epoll %i socket %i returned %i error %i: %s",
-                    transport->epollD, transport->tcpD, result, errno, g_strerror(errno));
-            tgen_warning("epoll %i unable to change events on socket %i",
-                    transport->epollD, transport->tcpD);
-        }
-    }
-
-    /* check if the transfer finished */
-    if(status.events & TGEN_EVENT_DONE) {
-        tgentransfer_unref(transport->activeTransfer);
-        transport->activeTransfer = NULL;
-        transport->onTransferComplete(transport->hookData);
-        transport->onTransferComplete = NULL;
-        transport->hookData = NULL;
-    }
-
-    return status;
-}
-
-TGenTransferStatus tgentransport_activate(TGenTransport* transport) {
+gssize tgentransport_write(TGenTransport* transport, gpointer buffer, gsize length) {
     TGEN_ASSERT(transport);
 
-    /* we need to make sure the transport doesn't get destroyed by the
-     * driver after the transfer finishes but while still in use.
-     * so we surround this function with ref/unref calls. */
-    tgentransport_ref(transport);
+    gssize bytes = write(transport->socketD, buffer, length);
 
-    TGenTransferStatus status;
-    memset(&status, 0, sizeof(TGenTransferStatus));
-
-    /* storage for collecting events from our epoll descriptor */
-    struct epoll_event epevs[10];
-
-    /* collect all events that are ready */
-    gint nfds = 1;
-    while(nfds > 0) {
-        nfds = epoll_wait(transport->epollD, epevs, 10, 0);
-        if (nfds == -1) {
-            tgen_critical("epoll_wait(): epoll %i returned %i error %i: %s",
-                    transport->epollD, nfds, errno, g_strerror(errno));
-        }
-
-        /* activate correct component for every socket thats ready.
-         * either our listening server socket has activity, or one of
-         * our transfer sockets. */
-        for (gint i = 0; i < nfds; i++) {
-            gint desc = epevs[i].data.fd;
-            gboolean in = (epevs[i].events & EPOLLIN) ? TRUE : FALSE;
-            gboolean out = (epevs[i].events & EPOLLOUT) ? TRUE : FALSE;
-
-            TGenTransferStatus current = _tgentransport_activateHelper(transport, desc, in, out);
-
-            status.bytesRead += current.bytesRead;
-            status.bytesWritten += current.bytesWritten;
-        }
+    if(bytes > 0) {
+        transport->notify(transport->notifyData, 0, bytes);
     }
 
-    tgentransport_unref(transport);
-    return status;
+    return bytes;
 }
 
-gint tgentransport_getEpollDescriptor(TGenTransport* transport) {
+gssize tgentransport_read(TGenTransport* transport, gpointer buffer, gsize length) {
     TGEN_ASSERT(transport);
-    return transport->epollD;
+
+    gssize bytes = read(transport->socketD, buffer, length);
+
+    if(bytes > 0) {
+        transport->notify(transport->notifyData, bytes, 0);
+    }
+
+    return bytes;
+}
+
+gint transport_getDescriptor(TGenTransport* transport) {
+    TGEN_ASSERT(transport);
+    return transport->socketD;
+}
+
+const gchar* tgentransport_toString(TGenTransport* transport) {
+    TGEN_ASSERT(transport);
+
+    if(!transport->string) {
+        GString* buffer = g_string_new(NULL);
+
+        if(transport->proxy && transport->peer) {
+            g_string_printf(buffer, "(TCP-%i-%s-%s)", transport->socketD,
+                    tgenpeer_toString(transport->proxy), tgenpeer_toString(transport->peer));
+        } else if(transport->peer) {
+            g_string_printf(buffer, "(TCP-%i-%s)", transport->socketD,
+                    tgenpeer_toString(transport->peer));
+        } else {
+            g_string_printf(buffer, "(TCP-%i)", transport->socketD);
+        }
+
+        transport->string = g_string_free(buffer, FALSE);
+    }
+
+    return transport->string;
 }

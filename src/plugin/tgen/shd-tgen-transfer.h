@@ -9,31 +9,14 @@ typedef enum _TGenTransferType {
 	TGEN_TYPE_NONE, TGEN_TYPE_GET, TGEN_TYPE_PUT,
 } TGenTransferType;
 
-typedef enum _TGenTransferEvent {
-    TGEN_EVENT_NONE = 0,
-    TGEN_EVENT_READ = 1 << 0,
-    TGEN_EVENT_WRITE = 1 << 1,
-    TGEN_EVENT_DONE = 1 << 2,
-} TGenTransferEvent;
-
-typedef struct _TGenTransferStatus {
-    TGenTransferEvent events;
-    gsize bytesRead;
-    gsize bytesWritten;
-} TGenTransferStatus;
-
-typedef struct _TGenTransferCommand {
-    gsize id;
-    TGenTransferType type;
-    gsize size;
-} TGenTransferCommand;
-
 typedef struct _TGenTransfer TGenTransfer;
 
-TGenTransfer* tgentransfer_new(gchar* commanderName, TGenTransferCommand* command);
+typedef void (*TGenTransfer_onCompleteFunc)(gpointer data1, gpointer data2, TGenTransfer* transfer);
+
+TGenTransfer* tgentransfer_new(gsize id, TGenTransferType type, gsize size,
+        TGenIO* io, TGenTransport* transport,
+        TGenTransfer_onCompleteFunc notify, gpointer notifyData1, gpointer notifyData2);
 void tgentransfer_ref(TGenTransfer* transfer);
 void tgentransfer_unref(TGenTransfer* transfer);
-
-TGenTransferStatus tgentransfer_onSocketEvent(TGenTransfer* transfer, gint socketD, TGenTransferEvent flags);
 
 #endif /* SHD_TGEN_TRANSFER_H_ */
