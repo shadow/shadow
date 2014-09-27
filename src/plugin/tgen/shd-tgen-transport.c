@@ -74,6 +74,57 @@ TGenTransport* tgentransport_newActive(TGenPeer* proxy, TGenPeer* peer,
     }
 
     // TODO handle socks connection if proxy exists
+    /*
+    --------------------------------
+    1 socks init client --> server
+    \x05 (version 5)
+    \x01 (1 supported auth method)
+    \x00 (method is "no auth")
+    --------------------------------
+
+    2 socks choice client <-- server
+    \x05 (version 5)
+    \x00 (auth method choice - \xFF means none supported)
+    --------------------------------
+
+    3 socks request client --> server
+    \x05 (version 5)
+    \x01 (tcp stream)
+    \x00 (reserved)
+
+    the client asks the server to connect to a remote
+
+    3a ip address client --> server
+    \x01 (ipv4)
+    in_addr_t (4 bytes)
+    in_port_t (2 bytes)
+
+    3b hostname client --> server
+    \x03 (domain name)
+    \xXX (1 byte name len)
+    (name)
+    in_port_t (2 bytes)
+    --------------------------------
+
+    4 socks response client <-- server
+    \x05 (version 5)
+    \x00 (request granted)
+    \x00 (reserved)
+
+    the server can tell us that we need to reconnect elsewhere
+
+    4a ip address client <-- server
+    \x01 (ipv4)
+    in_addr_t (4 bytes)
+    in_port_t (2 bytes)
+
+    4b hostname client <-- server
+    \x03 (domain name)
+    \xXX (1 byte name len)
+    (name)
+    in_port_t (2 bytes)
+    --------------------------------
+     */
 
     return _tgentransport_newHelper(socketD, proxy, peer, notify, notifyData);
 }

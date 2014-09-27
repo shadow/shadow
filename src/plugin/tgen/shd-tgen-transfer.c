@@ -7,7 +7,9 @@
 #include "shd-tgen.h"
 
 typedef enum _TGenTransferState {
-    TGEN_XFER_COMMAND, TGEN_XFER_PAYLOAD, TGEN_XFER_CHECKSUM, TGEN_XFER_DONE, TGEN_XFER_ERROR
+    TGEN_XFER_COMMAND, TGEN_XFER_RESPONSE,
+    TGEN_XFER_PAYLOAD, TGEN_XFER_CHECKSUM,
+    TGEN_XFER_DONE, TGEN_XFER_ERROR
 } TGenTransferState;
 
 struct _TGenTransfer {
@@ -21,7 +23,9 @@ struct _TGenTransfer {
     TGenTransferType type;
     gsize size;
     gboolean isCommander;
-    gchar* commanderName;
+    gchar* name;
+    gsize remoteID;
+    gchar* remoteName;
 
     /* socket communication layer and buffers */
     TGenTransport* transport;
@@ -45,11 +49,13 @@ struct _TGenTransfer {
 	struct {
         gint64 start;
         gint64 command;
+        gint64 response;
         gint64 firstPayloadByte;
         gint64 lastPayloadByte;
         gint64 checksum;
         gint64 lastBytesStatusReport;
         gint64 lastTimeStatusReport;
+        gint64 lastTimeErrorReport;
 	} time;
 
 	/* notification and parameters for when this transfer finishes */
@@ -82,6 +88,9 @@ static const gchar* _tgentransfer_stateToString(TGenTransferState state) {
         case TGEN_XFER_COMMAND: {
             return "COMMAND";
         }
+        case TGEN_XFER_RESPONSE: {
+            return "RESPONSE";
+        }
         case TGEN_XFER_PAYLOAD: {
             return "PAYLOAD";
         }
@@ -101,19 +110,25 @@ static const gchar* _tgentransfer_stateToString(TGenTransferState state) {
 static const gchar* _tgentransfer_toString(TGenTransfer* transfer) {
     TGEN_ASSERT(transfer);
 
-    // TODO fix the string - the remote side should have a name and transfer id?
-
     if(!transfer->string) {
         GString* stringBuffer = g_string_new(NULL);
 
-        g_string_printf(stringBuffer, "(%s-%"G_GSIZE_FORMAT"-%s-%"G_GSIZE_FORMAT")",
-                transfer->commanderName, transfer->id,
-                _tgentransfer_typeToString(transfer), transfer->size);
+        g_string_printf(stringBuffer, "(%"G_GSIZE_FORMAT"-%s-%s-%"G_GSIZE_FORMAT"-%s-%"G_GSIZE_FORMAT")",
+                transfer->id, transfer->name, _tgentransfer_typeToString(transfer),
+                transfer->size, transfer->remoteName, transfer->remoteID);
 
         transfer->string = g_string_free(stringBuffer, FALSE);
     }
 
     return transfer->string;
+}
+
+static void _tgentransfer_resetString(TGenTransfer* transfer) {
+    TGEN_ASSERT(transfer);
+    if(transfer->string) {
+        g_free(transfer->string);
+        transfer->string = NULL;
+    }
 }
 
 static void _tgentransfer_changeState(TGenTransfer* transfer, TGenTransferState state) {
@@ -175,13 +190,11 @@ static void _tgentransfer_readCommand(TGenTransfer* transfer) {
             tgen_critical("error parsing command '%s'", transfer->readBuffer->str);
             hasError = TRUE;
         } else {
-            if(transfer->commanderName) {
-                g_free(transfer->commanderName);
-            }
-            transfer->commanderName = g_strdup(parts[0]);
+            g_assert(!transfer->remoteName);
+            transfer->remoteName = g_strdup(parts[0]);
 
-            gsize id = (gsize)g_ascii_strtoull(parts[1], NULL, 10);
-            if(id == 0) {
+            transfer->remoteID = (gsize)g_ascii_strtoull(parts[1], NULL, 10);
+            if(transfer->remoteID == 0) {
                 tgen_critical("error parsing command ID '%s'", parts[1]);
                 hasError = TRUE;
             }
@@ -213,10 +226,49 @@ static void _tgentransfer_readCommand(TGenTransfer* transfer) {
             _tgentransfer_changeState(transfer, TGEN_XFER_ERROR);
         } else {
             /* we need to update our string with the new command info */
-            if(transfer->string) {
-                g_free(transfer->string);
-                transfer->string = NULL;
+            _tgentransfer_resetString(transfer);
+            _tgentransfer_changeState(transfer, TGEN_XFER_RESPONSE);
+        }
+    } else {
+        /* unable to receive entire command, wait for next chance to read */
+    }
+}
+
+static void _tgentransfer_readResponse(TGenTransfer* transfer) {
+    TGEN_ASSERT(transfer);
+
+    if(_tgentransfer_getLine(transfer)) {
+        /* we have read the entire command from the other end */
+        gboolean hasError = FALSE;
+        transfer->time.response = g_get_monotonic_time();
+
+        gchar* line = g_string_free(transfer->readBuffer, FALSE);
+        transfer->readBuffer = NULL;
+
+        gchar** parts = g_strsplit(line, " ", 0);
+        if(parts[0] == NULL || parts[1] == NULL) {
+            tgen_critical("error parsing command '%s'", transfer->readBuffer->str);
+            hasError = TRUE;
+        } else {
+            g_assert(!transfer->remoteName);
+            transfer->remoteName = g_strdup(parts[0]);
+
+            transfer->remoteID = (gsize)g_ascii_strtoull(parts[1], NULL, 10);
+            if(transfer->remoteID == 0) {
+                tgen_critical("error parsing command ID '%s'", parts[1]);
+                hasError = TRUE;
             }
+        }
+
+        g_strfreev(parts);
+        g_free(line);
+
+        /* payload phase is next unless there was an error parsing */
+        if(hasError) {
+            _tgentransfer_changeState(transfer, TGEN_XFER_ERROR);
+        } else {
+            /* we need to update our string with the new command info */
+            _tgentransfer_resetString(transfer);
             _tgentransfer_changeState(transfer, TGEN_XFER_PAYLOAD);
         }
     } else {
@@ -315,6 +367,10 @@ static void _tgentransfer_onReadable(TGenTransfer* transfer) {
         _tgentransfer_readCommand(transfer);
     }
 
+    if(transfer->isCommander && transfer->state == TGEN_XFER_RESPONSE) {
+        _tgentransfer_readResponse(transfer);
+    }
+
     /* check if we are responsible for reading payload bytes */
     if(transfer->type == TGEN_TYPE_GET && transfer->state == TGEN_XFER_PAYLOAD) {
         _tgentransfer_readPayload(transfer);
@@ -388,8 +444,28 @@ static void _tgentransfer_writeCommand(TGenTransfer* transfer) {
     if(!transfer->writeBuffer) {
         transfer->writeBuffer = g_string_new(NULL);
         g_string_printf(transfer->writeBuffer, "%s %"G_GSIZE_FORMAT" %s %"G_GSIZE_FORMAT"\n",
-            transfer->commanderName, transfer->id,
-            _tgentransfer_typeToString(transfer), transfer->size);
+            transfer->name, transfer->id, _tgentransfer_typeToString(transfer), transfer->size);
+    }
+
+    _tgentransfer_flushOut(transfer);
+
+    if(!transfer->writeBuffer) {
+        /* entire command was sent, move to payload phase */
+        _tgentransfer_changeState(transfer, TGEN_XFER_RESPONSE);
+        transfer->time.command = g_get_monotonic_time();
+    } else {
+        /* unable to send entire command, wait for next chance to write */
+    }
+}
+
+static void _tgentransfer_writeResponse(TGenTransfer* transfer) {
+    TGEN_ASSERT(transfer);
+
+    /* buffer the command if we have not done that yet */
+    if(!transfer->writeBuffer) {
+        transfer->writeBuffer = g_string_new(NULL);
+        g_string_printf(transfer->writeBuffer, "%s %"G_GSIZE_FORMAT"\n",
+                transfer->name, transfer->id);
     }
 
     _tgentransfer_flushOut(transfer);
@@ -397,7 +473,7 @@ static void _tgentransfer_writeCommand(TGenTransfer* transfer) {
     if(!transfer->writeBuffer) {
         /* entire command was sent, move to payload phase */
         _tgentransfer_changeState(transfer, TGEN_XFER_PAYLOAD);
-        transfer->time.command = g_get_monotonic_time();
+        transfer->time.response = g_get_monotonic_time();
     } else {
         /* unable to send entire command, wait for next chance to write */
     }
@@ -451,8 +527,8 @@ static void _tgentransfer_writeChecksum(TGenTransfer* transfer) {
     if(!transfer->writeBuffer) {
         /* entire checksum was sent, we are now done */
         _tgentransfer_changeState(transfer, TGEN_XFER_DONE);
+        transfer->events |= TGEN_EVENT_DONE;
         transfer->time.checksum = g_get_monotonic_time();
-        // TODO set TGEN_EVENT_DONE here? why does it close the client side transfer?
     } else {
         /* unable to send entire checksum, wait for next chance to write */
     }
@@ -467,6 +543,10 @@ static void _tgentransfer_onWritable(TGenTransfer* transfer) {
     /* first check if we need to send a command to the other end */
     if(transfer->isCommander && transfer->state == TGEN_XFER_COMMAND) {
         _tgentransfer_writeCommand(transfer);
+    }
+
+    if(!transfer->isCommander && transfer->state == TGEN_XFER_RESPONSE) {
+        _tgentransfer_writeResponse(transfer);
     }
 
     /* check if we are responsible for writing payload bytes */
@@ -508,8 +588,6 @@ static gchar* _tgentransfer_getBytesStatusReport(TGenTransfer* transfer) {
             transfer->bytes.totalRead, transfer->bytes.totalWrite,
             payloadVerb, payload, transfer->size, progress);
 
-    transfer->time.lastBytesStatusReport = g_get_monotonic_time();
-
     return g_string_free(buffer, FALSE);
 }
 
@@ -520,14 +598,14 @@ static gchar* _tgentransfer_getTimeStatusReport(TGenTransfer* transfer) {
 
     /* print the times in milliseconds */
     g_string_printf(buffer,
-            "msecs-to-command=%"G_GINT64_FORMAT" msecs-to-first-byte=%"G_GINT64_FORMAT" "
-            "msecs-to-last-byte=%"G_GINT64_FORMAT" msecs-to-checksum=%"G_GINT64_FORMAT,
+            "msecs-to-command=%"G_GINT64_FORMAT" msecs-to-response=%"G_GINT64_FORMAT" "
+            "msecs-to-first-byte=%"G_GINT64_FORMAT" msecs-to-last-byte=%"G_GINT64_FORMAT" "
+            "msecs-to-checksum=%"G_GINT64_FORMAT,
             (transfer->time.command - transfer->time.start) / 1000,
+            (transfer->time.response - transfer->time.start) / 1000,
             (transfer->time.firstPayloadByte - transfer->time.start) / 1000,
             (transfer->time.lastPayloadByte - transfer->time.start) / 1000,
             (transfer->time.checksum - transfer->time.start) / 1000);
-
-    transfer->time.lastTimeStatusReport = g_get_monotonic_time();
 
     return g_string_free(buffer, FALSE);
 }
@@ -536,13 +614,17 @@ static void _tgentransfer_log(TGenTransfer* transfer, gboolean wasActive) {
     TGEN_ASSERT(transfer);
 
     if(transfer->state != TGEN_XFER_DONE && wasActive) {
-        gboolean timerExpired = g_get_monotonic_time() - transfer->time.lastBytesStatusReport > 1000000;
+        gint64 now = g_get_monotonic_time();
+        gboolean timerExpired = now - transfer->time.lastBytesStatusReport > 1000000;
 
         if(timerExpired) {
             gchar* bytesMessage = _tgentransfer_getBytesStatusReport(transfer);
+
             tgen_info("[transfer-status] transport %s transfer %s %s",
                     tgentransport_toString(transfer->transport),
                     _tgentransfer_toString(transfer), bytesMessage);
+
+            transfer->time.lastBytesStatusReport = now;
             g_free(bytesMessage);
         }
     }
@@ -550,11 +632,29 @@ static void _tgentransfer_log(TGenTransfer* transfer, gboolean wasActive) {
     if(transfer->state == TGEN_XFER_DONE && transfer->time.lastTimeStatusReport == 0) {
         gchar* bytesMessage = _tgentransfer_getBytesStatusReport(transfer);
         gchar* timeMessage = _tgentransfer_getTimeStatusReport(transfer);
+
         tgen_message("[transfer-complete] transport %s transfer %s %s %s",
                 tgentransport_toString(transfer->transport),
                 _tgentransfer_toString(transfer), bytesMessage, timeMessage);
+
+        gint64 now = g_get_monotonic_time();
+        transfer->time.lastBytesStatusReport = now;
+        transfer->time.lastTimeStatusReport = now;
         g_free(bytesMessage);
         g_free(timeMessage);
+    }
+
+    if(transfer->state == TGEN_XFER_ERROR && transfer->time.lastTimeErrorReport == 0) {
+        gchar* bytesMessage = _tgentransfer_getBytesStatusReport(transfer);
+
+        tgen_message("[transfer-error] transport %s transfer %s %s %s",
+                tgentransport_toString(transfer->transport),
+                _tgentransfer_toString(transfer), bytesMessage);
+
+        gint64 now = g_get_monotonic_time();
+        transfer->time.lastBytesStatusReport = now;
+        transfer->time.lastTimeErrorReport = now;
+        g_free(bytesMessage);
     }
 }
 
@@ -582,7 +682,7 @@ static TGenEvent _tgentransfer_onEvent(TGenTransfer* transfer, gint descriptor, 
      * notifyComplete destroys the transfer object */
     TGenEvent eventsOut = transfer->events;
 
-    if(transfer->state == TGEN_XFER_DONE) {
+    if(transfer->events & TGEN_EVENT_DONE) {
         transfer->notifyComplete(transfer->notifyData1, transfer->notifyData2, transfer);
     }
 
@@ -604,14 +704,15 @@ TGenTransfer* tgentransfer_new(gsize id, TGenTransferType type, gsize size,
 
     transfer->events = TGEN_EVENT_READ;
     transfer->id = id;
+    gchar nameBuffer[256];
+    memset(nameBuffer, 0, 256);
+    transfer->name = (0 == gethostname(nameBuffer, 255)) ? g_strdup(nameBuffer) : NULL;
+
     if(type != TGEN_TYPE_NONE) {
         transfer->isCommander = TRUE;
         transfer->type = type;
         transfer->size = size;
-
-        gchar nameBuffer[256];
-        memset(nameBuffer, 0, 256);
-        transfer->commanderName = (0 == gethostname(nameBuffer, 255)) ? g_strdup(nameBuffer) : NULL;
+        transfer->events |= TGEN_EVENT_WRITE;
     }
 
     transfer->transport = transport;
@@ -630,8 +731,12 @@ static void _tgentransfer_free(TGenTransfer* transfer) {
         g_free(transfer->string);
     }
 
-    if(transfer->commanderName) {
-        g_free(transfer->commanderName);
+    if(transfer->name) {
+        g_free(transfer->name);
+    }
+
+    if(transfer->remoteName) {
+        g_free(transfer->remoteName);
     }
 
     if(transfer->readBuffer) {
