@@ -32,6 +32,7 @@ struct _Timer {
 static void _timer_close(Timer* timer) {
 	MAGIC_ASSERT(timer);
 	timer->isClosed = TRUE;
+	descriptor_adjustStatus(&(timer->super), DS_ACTIVE, FALSE);
 	host_closeDescriptor(worker_getCurrentHost(), timer->super.handle);
 }
 
@@ -67,6 +68,7 @@ Timer* timer_new(gint handle, gint clockid, gint flags) {
 	MAGIC_INIT(timer);
 
 	descriptor_init(&(timer->super), DT_TIMER, &_timerFunctions, handle);
+	descriptor_adjustStatus(&(timer->super), DS_ACTIVE, TRUE);
 
 	return timer;
 }
