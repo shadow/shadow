@@ -88,9 +88,9 @@ def main():
         action="store_true", dest="export_libraries",
         default=False)
         
-    parser_build.add_argument('--disable-plugin-filetransfer',
-        help="do not build the built-in filetransfer plug-in (HTTP client and server)", 
-        action="store_true", dest="disable_filetransfer",
+    parser_build.add_argument('--disable-plugin-tgen',
+        help="do not build the built-in traffic generator plug-in (tgen)", 
+        action="store_true", dest="disable_tgen",
         default=False)
     
     # configure install subcommand
@@ -132,7 +132,7 @@ def build(args):
     if args.do_test: cmake_cmd += " -DSHADOW_TEST=ON"
     if args.do_profile: cmake_cmd += " -DSHADOW_PROFILE=ON"
     if args.export_libraries: cmake_cmd += " -DSHADOW_EXPORT=ON"
-    if args.disable_filetransfer: cmake_cmd += " -DBUILD_FILETRANSFER=OFF"
+    if args.disable_tgen: cmake_cmd += " -DBUILD_TGEN=OFF"
 
     # we will run from build directory
     calledDirectory = os.getcwd()

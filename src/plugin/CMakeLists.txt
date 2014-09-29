@@ -12,8 +12,7 @@ include(LLVMTools)
 get_property(LLVMHoistGlobalsPATH TARGET LLVMHoistGlobals PROPERTY LOCATION)
 message(STATUS "LLVMHoistGlobalsPATH = ${LLVMHoistGlobalsPATH}")
 
-if(NOT BUILD_FILETRANSFER STREQUAL OFF)
-    add_subdirectory(filetransfer)
+if(NOT BUILD_TGEN STREQUAL OFF)
     add_subdirectory(tgen)
 endif()
 
