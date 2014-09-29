@@ -59,9 +59,11 @@ struct _TGenTransfer {
 	} time;
 
 	/* notification and parameters for when this transfer finishes */
-	TGenTransfer_onCompleteFunc notifyComplete;
-	gpointer notifyData1;
-	gpointer notifyData2;
+	TGenTransfer_notifyCompleteFunc notify;
+	gpointer data1;
+	gpointer data2;
+	GDestroyNotify destructData1;
+	GDestroyNotify destructData2;
 
 	/* memory housekeeping */
     gint refcount;
@@ -658,7 +660,7 @@ static void _tgentransfer_log(TGenTransfer* transfer, gboolean wasActive) {
     }
 }
 
-static TGenEvent _tgentransfer_onEvent(TGenTransfer* transfer, gint descriptor, TGenEvent events) {
+TGenEvent tgentransfer_onEvent(TGenTransfer* transfer, gint descriptor, TGenEvent events) {
     TGEN_ASSERT(transfer);
 
     gsize readBytesBefore = transfer->bytes.payloadRead;
@@ -678,32 +680,31 @@ static TGenEvent _tgentransfer_onEvent(TGenTransfer* transfer, gint descriptor, 
             transfer->bytes.payloadWrite > writeBytesBefore) ? TRUE : FALSE;
     _tgentransfer_log(transfer, wasActive);
 
-    /* store the events we want to return on the stack in case
-     * notifyComplete destroys the transfer object */
-    TGenEvent eventsOut = transfer->events;
-
-    if(transfer->events & TGEN_EVENT_DONE) {
-        transfer->notifyComplete(transfer->notifyData1, transfer->notifyData2, transfer);
+    if((transfer->events & TGEN_EVENT_DONE) && transfer->notify) {
+        transfer->notify(transfer->data1, transfer->data2, transfer);
     }
 
-    return eventsOut;
+    return transfer->events;
 }
 
-TGenTransfer* tgentransfer_new(gsize id, TGenTransferType type, gsize size,
-        TGenIO* io, TGenTransport* transport,
-        TGenTransfer_onCompleteFunc notify, gpointer notifyData1, gpointer notifyData2) {
+TGenTransfer* tgentransfer_new(gsize id, TGenTransferType type, gsize size, TGenTransport* transport,
+        TGenTransfer_notifyCompleteFunc notify, gpointer data1, gpointer data2,
+        GDestroyNotify destructData1, GDestroyNotify destructData2) {
     TGenTransfer* transfer = g_new0(TGenTransfer, 1);
     transfer->magic = TGEN_MAGIC;
     transfer->refcount = 1;
 
-    transfer->notifyComplete = notify;
-    transfer->notifyData1 = notifyData1;
-    transfer->notifyData2 = notifyData2;
+    transfer->notify = notify;
+    transfer->data1 = data1;
+    transfer->data2 = data2;
+    transfer->destructData1 = destructData1;
+    transfer->destructData2 = destructData2;
 
     transfer->time.start = g_get_monotonic_time();
 
     transfer->events = TGEN_EVENT_READ;
     transfer->id = id;
+
     gchar nameBuffer[256];
     memset(nameBuffer, 0, 256);
     transfer->name = (0 == gethostname(nameBuffer, 255)) ? g_strdup(nameBuffer) : NULL;
@@ -715,11 +716,10 @@ TGenTransfer* tgentransfer_new(gsize id, TGenTransferType type, gsize size,
         transfer->events |= TGEN_EVENT_WRITE;
     }
 
-    transfer->transport = transport;
     transfer->payloadChecksum = g_checksum_new(G_CHECKSUM_MD5);
 
-    tgenio_register(io, transport_getDescriptor(transport),
-            (TGenIO_onEventFunc)_tgentransfer_onEvent, transfer);
+    tgentransport_ref(transport);
+    transfer->transport = transport;
 
     return transfer;
 }
@@ -749,6 +749,18 @@ static void _tgentransfer_free(TGenTransfer* transfer) {
 
     if(transfer->payloadChecksum) {
         g_checksum_free(transfer->payloadChecksum);
+    }
+
+    if(transfer->destructData1 && transfer->data1) {
+        transfer->destructData1(transfer->data1);
+    }
+
+    if(transfer->destructData2 && transfer->data2) {
+        transfer->destructData2(transfer->data2);
+    }
+
+    if(transfer->transport) {
+        tgentransport_unref(transfer->transport);
     }
 
     transfer->magic = 0;

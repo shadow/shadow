@@ -15,15 +15,16 @@ typedef enum _TGenEvent {
     TGEN_EVENT_DONE = 1 << 2,
 } TGenEvent;
 
-typedef struct _TGenIO TGenIO;
+typedef TGenEvent (*TGenIO_notifyEventFunc)(gpointer data, gint descriptor, TGenEvent events);
 
-typedef TGenEvent (*TGenIO_onEventFunc)(gpointer data, gint descriptor, TGenEvent events);
+typedef struct _TGenIO TGenIO;
 
 TGenIO* tgenio_new();
 void tgenio_ref(TGenIO* io);
 void tgenio_unref(TGenIO* io);
 
-gboolean tgenio_register(TGenIO* io, gint descriptor, TGenIO_onEventFunc notify, gpointer notifyData);
+gboolean tgenio_register(TGenIO* io, gint descriptor, TGenIO_notifyEventFunc notify, gpointer data,
+        GDestroyNotify destructData);
 void tgenio_loopOnce(TGenIO* io);
 
 gint tgenio_getEpollDescriptor(TGenIO* io);

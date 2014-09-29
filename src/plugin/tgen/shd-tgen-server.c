@@ -6,8 +6,9 @@
 #include "shd-tgen.h"
 
 struct _TGenServer {
-    TGenServer_onNewPeerFunc notify;
-    gpointer notifyData;
+    TGenServer_notifyNewPeerFunc notify;
+    gpointer data;
+    GDestroyNotify destructData;
 
     gint socketD;
 
@@ -24,17 +25,20 @@ static void _tgenserver_acceptPeer(TGenServer* server) {
     socklen_t addressLength = (socklen_t)sizeof(struct sockaddr_in);
 
     gint peerSocketD = accept(server->socketD, (struct sockaddr*)&peerAddress, &addressLength);
+
     if(peerSocketD >= 0) {
-        TGenPeer* peer = tgenpeer_new(peerAddress.sin_addr.s_addr, peerAddress.sin_port);
-        server->notify(server->notifyData, peerSocketD, peer);
-        tgenpeer_unref(peer);
+        if(server->notify) {
+            TGenPeer* peer = tgenpeer_new(peerAddress.sin_addr.s_addr, peerAddress.sin_port);
+            server->notify(server->data, peerSocketD, peer);
+            tgenpeer_unref(peer);
+        }
     } else {
         tgen_critical("accept(): socket %i returned %i error %i: %s",
                 server->socketD, peerSocketD, errno, g_strerror(errno));
     }
 }
 
-static TGenEvent _tgenserver_onEvent(TGenServer* server, gint descriptor, TGenEvent events) {
+TGenEvent tgenserver_onEvent(TGenServer* server, gint descriptor, TGenEvent events) {
     TGEN_ASSERT(server);
 
     g_assert((events & TGEN_EVENT_READ) && descriptor == server->socketD);
@@ -44,7 +48,8 @@ static TGenEvent _tgenserver_onEvent(TGenServer* server, gint descriptor, TGenEv
     return TGEN_EVENT_READ;
 }
 
-TGenServer* tgenserver_new(TGenIO* io, in_port_t serverPort, TGenServer_onNewPeerFunc notify, gpointer notifyData) {
+TGenServer* tgenserver_new(in_port_t serverPort, TGenServer_notifyNewPeerFunc notify,
+        gpointer data, GDestroyNotify destructData) {
     /* we run our protocol over a single server socket/port */
     gint socketD = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
     if (socketD <= 0) {
@@ -89,12 +94,10 @@ TGenServer* tgenserver_new(TGenIO* io, in_port_t serverPort, TGenServer_onNewPee
     server->refcount = 1;
 
     server->notify = notify;
-    server->notifyData = notifyData;
+    server->data = data;
+    server->destructData = destructData;
 
     server->socketD = socketD;
-
-    /* make sure to manage events */
-    tgenio_register(io, socketD, (TGenIO_onEventFunc) _tgenserver_onEvent, server);
 
     return server;
 }
@@ -105,6 +108,10 @@ static void _tgenserver_free(TGenServer* server) {
 
     if(server->socketD > 0) {
         close(server->socketD);
+    }
+
+    if(server->destructData && server->data) {
+        server->destructData(server->data);
     }
 
     server->magic = 0;
@@ -121,4 +128,9 @@ void tgenserver_unref(TGenServer* server) {
     if(--(server->refcount) <= 0) {
         _tgenserver_free(server);
     }
+}
+
+gint tgenserver_getDescriptor(TGenServer* server) {
+    TGEN_ASSERT(server);
+    return server->socketD;
 }

@@ -16,9 +16,29 @@ struct _TGenIO {
 
 typedef struct _TGenIOChild {
     gint descriptor;
-    TGenIO_onEventFunc notify;
-    gpointer notifyData;
+    TGenIO_notifyEventFunc notify;
+    gpointer data;
+    GDestroyNotify destructData;
 } TGenIOChild;
+
+static TGenIOChild* _tgeniochild_new(gint descriptor, TGenIO_notifyEventFunc notify, gpointer data,
+        GDestroyNotify destructData) {
+    TGenIOChild* child = g_new0(TGenIOChild, 1);
+    child->descriptor = descriptor;
+    child->notify = notify;
+    child->data = data;
+    child->destructData = destructData;
+    return child;
+}
+
+static void _tgeniochild_free(TGenIOChild* child) {
+    g_assert(child);
+    if(child->destructData && child->data) {
+        child->destructData(child->data);
+    }
+    memset(child, 0, sizeof(TGenIOChild));
+    g_free(child);
+}
 
 TGenIO* tgenio_new() {
     /* create an epoll descriptor so we can manage events */
@@ -33,7 +53,7 @@ TGenIO* tgenio_new() {
     io->magic = TGEN_MAGIC;
     io->refcount = 1;
 
-    io->children = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, g_free);
+    io->children = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, (GDestroyNotify)_tgeniochild_free);
 
     io->epollD = epollD;
 
@@ -76,7 +96,8 @@ static void _tgenio_deregister(TGenIO* io, gint descriptor) {
     g_hash_table_remove(io->children, &descriptor);
 }
 
-gboolean tgenio_register(TGenIO* io, gint descriptor, TGenIO_onEventFunc notify, gpointer notifyData) {
+gboolean tgenio_register(TGenIO* io, gint descriptor, TGenIO_notifyEventFunc notify, gpointer data,
+        GDestroyNotify destructData) {
     TGEN_ASSERT(io);
 
     if(g_hash_table_lookup(io->children, &descriptor)) {
@@ -97,10 +118,7 @@ gboolean tgenio_register(TGenIO* io, gint descriptor, TGenIO_onEventFunc notify,
         return FALSE;
     }
 
-    TGenIOChild* child = g_new0(TGenIOChild, 1);
-    child->descriptor = descriptor;
-    child->notify = notify;
-    child->notifyData = notifyData;
+    TGenIOChild* child = _tgeniochild_new(descriptor, notify, data, destructData);
     g_hash_table_replace(io->children, &child->descriptor, child);
 
     return TRUE;
@@ -125,7 +143,7 @@ static void _tgenio_helper(TGenIO* io, TGenIOChild* child, gboolean in, gboolean
     }
 
     /* activate the transfer */
-    TGenEvent outEvents = child->notify(child->notifyData, child->descriptor, inEvents);
+    TGenEvent outEvents = child->notify(child->data, child->descriptor, inEvents);
 
     /* now check if we should update our epoll events */
     if(outEvents & TGEN_EVENT_DONE) {

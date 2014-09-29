@@ -21,14 +21,13 @@ struct _TGenDriver {
     TGenAction* startAction;
 
     /* TRUE iff a condition in any endAction event has been reached */
-    gboolean hasEnded;
+    gboolean clientHasEnded;
 
     /* our I/O event manager. this holds refs to all of the transfers
      * and notifies them of I/O events on the underlying transports */
     TGenIO* io;
 
-    /* server to handle socket creation */
-    TGenServer* server;
+    /* each transfer has a unique id */
     gsize transferIDCounter;
 
     /* traffic statistics */
@@ -76,16 +75,6 @@ static void _tgendriver_onTransferComplete(TGenDriver* driver, TGenAction* actio
     if(action) {
         _tgendriver_continueNextActions(driver, action);
     }
-
-    /* unref since the item object no longer holds the references */
-    // FIXME mem
-//    if(transfer) {
-//        tgentransfer_unref(transfer);
-//    }
-//    if(action) {
-//        tgenaction_unref(action);
-//    }
-//    tgendriver_unref(driver);
 }
 
 static void _tgendriver_onBytesTransferred(TGenDriver* driver, gsize bytesRead, gsize bytesWritten) {
@@ -95,36 +84,6 @@ static void _tgendriver_onBytesTransferred(TGenDriver* driver, gsize bytesRead, 
     driver->heartbeatBytesRead += bytesRead;
     driver->totalBytesWritten += bytesWritten;
     driver->heartbeatBytesWritten += bytesWritten;
-}
-
-static void _tgendriver_onNewPeer(TGenDriver* driver, gint socketD, TGenPeer* peer) {
-    TGEN_ASSERT(driver);
-
-    /* we have a new peer connecting to our listening socket */
-    if(driver->hasEnded) {
-        close(socketD);
-        return;
-    }
-
-    /* this connect was initiated by the other end.
-     * transfer information will be sent to us later. */
-    TGenTransport* transport = tgentransport_newPassive(socketD, peer,
-            (TGenTransport_onBytesFunc) _tgendriver_onBytesTransferred, driver);
-
-    if(!transport) {
-        tgen_warning("failed to initialize transport for incoming peer, skipping");
-        return;
-    }
-
-    /* a new transfer will be coming in on this transport */
-    gsize id = ++(driver->transferIDCounter);
-    TGenTransfer* transfer = tgentransfer_new(id, TGEN_TYPE_NONE, 0, driver->io, transport,
-            (TGenTransfer_onCompleteFunc)_tgendriver_onTransferComplete, driver, NULL);
-
-    if(!transfer) {
-        tgen_warning("failed to initialize transfer for incoming peer, skipping");
-        return;
-    }
 }
 
 static void _tgendriver_onHearbeat(TGenDriver* driver) {
@@ -138,16 +97,51 @@ static void _tgendriver_onHearbeat(TGenDriver* driver) {
     driver->heartbeatBytesRead = 0;
     driver->heartbeatBytesWritten = 0;
 
-    if(driver->hasEnded && tgenio_getSize(driver->io) <= 1) {
-        /* the server is the only one running */
-        //TODO close server to unref driver?
-        /* we are the only ref left, allow driver to be freed */
-        tgendriver_unref(driver);
-    } else {
-        /* other refs exist so we are still running */
-        ShadowPluginCallbackFunc cb = (ShadowPluginCallbackFunc)_tgendriver_onHearbeat;
-        driver->createCallback(cb, driver, (uint)1000);
+    /* even if the client ended, we keep serving requests.
+     * we are still running and the heartbeat loop still owns a driver ref */
+    ShadowPluginCallbackFunc cb = (ShadowPluginCallbackFunc)_tgendriver_onHearbeat;
+    driver->createCallback(cb, driver, (uint)1000);
+}
+
+static void _tgendriver_onNewPeer(TGenDriver* driver, gint socketD, TGenPeer* peer) {
+    TGEN_ASSERT(driver);
+
+    /* we have a new peer connecting to our listening socket */
+    if(driver->clientHasEnded) {
+        close(socketD);
+        return;
     }
+
+    /* this connect was initiated by the other end.
+     * transfer information will be sent to us later. */
+    TGenTransport* transport = tgentransport_newPassive(socketD, peer,
+            (TGenTransport_notifyBytesFunc) _tgendriver_onBytesTransferred, driver,
+            (GDestroyNotify)tgendriver_unref);
+
+    if(!transport) {
+        tgen_warning("failed to initialize transport for incoming peer, skipping");
+        return;
+    }
+
+    /* a new transfer will be coming in on this transport */
+    gsize id = ++(driver->transferIDCounter);
+    TGenTransfer* transfer = tgentransfer_new(id, TGEN_TYPE_NONE, 0, transport,
+            (TGenTransfer_notifyCompleteFunc)_tgendriver_onTransferComplete, driver, NULL,
+            (GDestroyNotify)tgendriver_unref, NULL);
+
+    if(!transfer) {
+        tgentransport_unref(transport);
+        tgen_warning("failed to initialize transfer for incoming peer, skipping");
+        return;
+    }
+
+    /* now let the IO handler manage the transfer. our transfer pointer reference
+     * will be held by the IO object */
+    tgenio_register(driver->io, tgentransport_getDescriptor(transport),
+            (TGenIO_notifyEventFunc)tgentransfer_onEvent, transfer, (GDestroyNotify)tgentransfer_unref);
+
+    /* release our transport pointer reference, the transfer should hold one */
+    tgentransport_unref(transport);
 }
 
 static void _tgendriver_initiateTransfer(TGenDriver* driver, TGenAction* action) {
@@ -163,7 +157,8 @@ static void _tgendriver_initiateTransfer(TGenDriver* driver, TGenAction* action)
     TGenPeer* proxy = tgenaction_getSocksProxy(driver->startAction);
 
     TGenTransport* transport = tgentransport_newActive(proxy, peer,
-            (TGenTransport_onBytesFunc) _tgendriver_onBytesTransferred, driver);
+            (TGenTransport_notifyBytesFunc) _tgendriver_onBytesTransferred, driver,
+            (GDestroyNotify)tgendriver_unref);
 
     if(!transport) {
         tgen_warning("failed to initialize transport for transfer action, skipping");
@@ -176,15 +171,26 @@ static void _tgendriver_initiateTransfer(TGenDriver* driver, TGenAction* action)
     tgenaction_getTransferParameters(action, &type, NULL, &size);
     gsize id = ++(driver->transferIDCounter);
 
-    /* a new transfer will be coming in on this transport */
-    TGenTransfer* transfer = tgentransfer_new(id, type, size, driver->io, transport,
-            (TGenTransfer_onCompleteFunc)_tgendriver_onTransferComplete, driver, action);
+    /* a new transfer will be coming in on this transport. the transfer
+     * takes control of the transport pointer reference. */
+    TGenTransfer* transfer = tgentransfer_new(id, type, size, transport,
+            (TGenTransfer_notifyCompleteFunc)_tgendriver_onTransferComplete, driver, action,
+            (GDestroyNotify)tgendriver_unref, (GDestroyNotify)tgenaction_unref);
 
     if(!transfer) {
+        tgentransport_unref(transport);
         tgen_warning("failed to initialize transfer for transfer action, skipping");
         _tgendriver_continueNextActions(driver, action);
         return;
     }
+
+    /* now let the IO handler manage the transfer. our transfer pointer reference
+     * will be held by the IO object */
+    tgenio_register(driver->io, tgentransport_getDescriptor(transport),
+            (TGenIO_notifyEventFunc)tgentransfer_onEvent, transfer, (GDestroyNotify)tgentransfer_unref);
+
+    /* release our transport pointer reference, the transfer should hold one */
+    tgentransport_unref(transport);
 }
 
 static void _tgendriver_pauseCallback(TGenCallbackItem* item) {
@@ -220,13 +226,13 @@ static void _tgendriver_checkEndConditions(TGenDriver* driver, TGenAction* actio
     gsize totalBytes = driver->totalBytesRead + driver->totalBytesWritten;
 
     if(size > 0 && totalBytes >= (gsize)size) {
-        driver->hasEnded = TRUE;
+        driver->clientHasEnded = TRUE;
     } else if(count > 0 && driver->totalTransfersCompleted >= count) {
-        driver->hasEnded = TRUE;
+        driver->clientHasEnded = TRUE;
     } else if(time > 0) {
         guint64 nowMillis = _tgendriver_getCurrentTimeMillis();
         if(nowMillis >= time) {
-            driver->hasEnded = TRUE;
+            driver->clientHasEnded = TRUE;
         }
     }
 }
@@ -265,7 +271,7 @@ static void _tgendriver_processAction(TGenDriver* driver, TGenAction* action) {
 static void _tgendriver_continueNextActions(TGenDriver* driver, TGenAction* action) {
     TGEN_ASSERT(driver);
 
-    if(driver->hasEnded) {
+    if(driver->clientHasEnded) {
         return;
     }
 
@@ -300,15 +306,14 @@ void tgendriver_activate(TGenDriver* driver) {
 static void _tgendriver_free(TGenDriver* driver) {
     TGEN_ASSERT(driver);
     g_assert(driver->refcount <= 0);
-    if(driver->server) {
-        tgenserver_unref(driver->server);
-    }
+
     if(driver->io) {
         tgenio_unref(driver->io);
     }
     if(driver->actionGraph) {
         tgengraph_free(driver->actionGraph);
     }
+
     driver->magic = 0;
     g_free(driver);
 }
@@ -396,10 +401,18 @@ TGenDriver* tgendriver_new(gint argc, gchar* argv[], ShadowLogFunc logf,
     driver->actionGraph = graph;
     driver->startAction = tgengraph_getStartAction(graph);
 
+    /* create the server that will listen for incoming connections.
+     * ref++ the driver because it will be stored as a param in the server */
     tgendriver_ref(driver);
     in_port_t serverPort = (in_port_t)tgenaction_getServerPort(driver->startAction);
-    driver->server = tgenserver_new(driver->io, serverPort,
-            (TGenServer_onNewPeerFunc)_tgendriver_onNewPeer, driver);
+    TGenServer* server = tgenserver_new(serverPort,
+            (TGenServer_notifyNewPeerFunc)_tgendriver_onNewPeer, driver,
+            (GDestroyNotify)tgendriver_unref);
+
+    /* now let the IO handler manage the server. transfer our server pointer reference
+     * because it will be stored as a param in the IO object */
+    tgenio_register(driver->io, tgenserver_getDescriptor(server),
+            (TGenIO_notifyEventFunc)tgenserver_onEvent, server, (GDestroyNotify) tgenserver_unref);
 
     /* the client-side (master) transfers start as specified in the action */
     guint64 startMillis = tgenaction_getStartTimeMillis(driver->startAction);
@@ -412,7 +425,7 @@ TGenDriver* tgendriver_new(gint argc, gchar* argv[], ShadowLogFunc logf,
         _tgendriver_start(driver);
     }
 
-    /* add another ref and start the heartbeat event loop */
+    /* start the heartbeat and ref++ the driver for the heartbeat loop */
     tgendriver_ref(driver);
     _tgendriver_onHearbeat(driver);
 
@@ -431,5 +444,5 @@ gboolean tgendriver_hasStarted(TGenDriver* driver) {
 
 gboolean tgendriver_hasEnded(TGenDriver* driver) {
     TGEN_ASSERT(driver);
-    return driver->hasEnded;
+    return driver->clientHasEnded;
 }

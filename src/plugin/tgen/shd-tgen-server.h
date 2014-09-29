@@ -8,10 +8,14 @@
 
 typedef struct _TGenServer TGenServer;
 
-typedef void (*TGenServer_onNewPeerFunc)(gpointer data, gint socketD, TGenPeer* peer);
+typedef void (*TGenServer_notifyNewPeerFunc)(gpointer data, gint socketD, TGenPeer* peer);
 
-TGenServer* tgenserver_new(TGenIO* io, in_port_t serverPort, TGenServer_onNewPeerFunc notify, gpointer notifyData);
+TGenServer* tgenserver_new(in_port_t serverPort, TGenServer_notifyNewPeerFunc notify,
+        gpointer data, GDestroyNotify destructData);
 void tgenserver_ref(TGenServer* server);
 void tgenserver_unref(TGenServer* server);
+
+TGenEvent tgenserver_onEvent(TGenServer* server, gint descriptor, TGenEvent events);
+gint tgenserver_getDescriptor(TGenServer* server);
 
 #endif /* SHD_TGEN_SERVER_H_ */

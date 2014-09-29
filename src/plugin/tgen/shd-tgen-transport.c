@@ -10,8 +10,9 @@ struct _TGenTransport {
     TGenTransportProtocol protocol;
     gint socketD;
 
-    TGenTransport_onBytesFunc notify;
-    gpointer notifyData;
+    TGenTransport_notifyBytesFunc notify;
+    gpointer data;
+    GDestroyNotify destructData;
 
     TGenPeer* peer;
     TGenPeer* proxy;
@@ -22,7 +23,7 @@ struct _TGenTransport {
 };
 
 static TGenTransport* _tgentransport_newHelper(gint socketD, TGenPeer* proxy, TGenPeer* peer,
-        TGenTransport_onBytesFunc notify, gpointer notifyData) {
+        TGenTransport_notifyBytesFunc notify, gpointer data, GDestroyNotify destructData) {
     TGenTransport* transport = g_new0(TGenTransport, 1);
     transport->magic = TGEN_MAGIC;
     transport->refcount = 1;
@@ -40,13 +41,14 @@ static TGenTransport* _tgentransport_newHelper(gint socketD, TGenPeer* proxy, TG
     }
 
     transport->notify = notify;
-    transport->notifyData = notifyData;
+    transport->data = data;
+    transport->destructData = destructData;
 
     return transport;
 }
 
 TGenTransport* tgentransport_newActive(TGenPeer* proxy, TGenPeer* peer,
-        TGenTransport_onBytesFunc notify, gpointer notifyData) {
+        TGenTransport_notifyBytesFunc notify, gpointer data, GDestroyNotify destructData) {
     /* create the socket and get a socket descriptor */
     gint socketD = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
 
@@ -101,7 +103,7 @@ TGenTransport* tgentransport_newActive(TGenPeer* proxy, TGenPeer* peer,
 
     3b hostname client --> server
     \x03 (domain name)
-    \xXX (1 byte name len)
+    \x__ (1 byte name len)
     (name)
     in_port_t (2 bytes)
     --------------------------------
@@ -120,18 +122,18 @@ TGenTransport* tgentransport_newActive(TGenPeer* proxy, TGenPeer* peer,
 
     4b hostname client <-- server
     \x03 (domain name)
-    \xXX (1 byte name len)
+    \x__ (1 byte name len)
     (name)
     in_port_t (2 bytes)
     --------------------------------
      */
 
-    return _tgentransport_newHelper(socketD, proxy, peer, notify, notifyData);
+    return _tgentransport_newHelper(socketD, proxy, peer, notify, data, destructData);
 }
 
 TGenTransport* tgentransport_newPassive(gint socketD, TGenPeer* peer,
-        TGenTransport_onBytesFunc notify, gpointer notifyData) {
-    return _tgentransport_newHelper(socketD, NULL, peer, notify, notifyData);
+        TGenTransport_notifyBytesFunc notify, gpointer data, GDestroyNotify destructData) {
+    return _tgentransport_newHelper(socketD, NULL, peer, notify, data, destructData);
 }
 
 static void _tgentransport_free(TGenTransport* transport) {
@@ -151,6 +153,10 @@ static void _tgentransport_free(TGenTransport* transport) {
 
     if(transport->proxy) {
         tgenpeer_unref(transport->proxy);
+    }
+
+    if(transport->destructData && transport->data) {
+        transport->destructData(transport->data);
     }
 
     transport->magic = 0;
@@ -175,8 +181,8 @@ gssize tgentransport_write(TGenTransport* transport, gpointer buffer, gsize leng
 
     gssize bytes = write(transport->socketD, buffer, length);
 
-    if(bytes > 0) {
-        transport->notify(transport->notifyData, 0, bytes);
+    if(bytes > 0 && transport->notify) {
+        transport->notify(transport->data, 0, bytes);
     }
 
     return bytes;
@@ -187,14 +193,14 @@ gssize tgentransport_read(TGenTransport* transport, gpointer buffer, gsize lengt
 
     gssize bytes = read(transport->socketD, buffer, length);
 
-    if(bytes > 0) {
-        transport->notify(transport->notifyData, bytes, 0);
+    if(bytes > 0 && transport->notify) {
+        transport->notify(transport->data, bytes, 0);
     }
 
     return bytes;
 }
 
-gint transport_getDescriptor(TGenTransport* transport) {
+gint tgentransport_getDescriptor(TGenTransport* transport) {
     TGEN_ASSERT(transport);
     return transport->socketD;
 }

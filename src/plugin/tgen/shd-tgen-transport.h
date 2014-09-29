@@ -14,12 +14,12 @@ typedef enum _TGenTransportProtocol {
 
 typedef struct _TGenTransport TGenTransport;
 
-typedef void (*TGenTransport_onBytesFunc)(gpointer data, gsize bytesRead, gsize bytesWritten);
+typedef void (*TGenTransport_notifyBytesFunc)(gpointer data, gsize bytesRead, gsize bytesWritten);
 
 TGenTransport* tgentransport_newActive(TGenPeer* proxy, TGenPeer* peer,
-        TGenTransport_onBytesFunc notify, gpointer notifyData);
+        TGenTransport_notifyBytesFunc notify, gpointer data, GDestroyNotify destructData);
 TGenTransport* tgentransport_newPassive(gint socketD, TGenPeer* peer,
-        TGenTransport_onBytesFunc notify, gpointer notifyData);
+        TGenTransport_notifyBytesFunc notify, gpointer data, GDestroyNotify destructData);
 
 void tgentransport_ref(TGenTransport* transport);
 void tgentransport_unref(TGenTransport* transport);
@@ -27,7 +27,7 @@ void tgentransport_unref(TGenTransport* transport);
 gssize tgentransport_write(TGenTransport* transport, gpointer buffer, gsize length);
 gssize tgentransport_read(TGenTransport* transport, gpointer buffer, gsize length);
 
-gint transport_getDescriptor(TGenTransport* transport);
+gint tgentransport_getDescriptor(TGenTransport* transport);
 const gchar* tgentransport_toString(TGenTransport* transport);
 
 #endif /* SHD_TGEN_TRANSPORT_H_ */

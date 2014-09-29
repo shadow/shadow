@@ -34,11 +34,11 @@
     <plugin id="tgen" path="libshadow-plugin-tgen.so" />
 
     <node id="server" quantity="2">
-        <application plugin="tgen" time="1" arguments="tgen.server.graphml.xml" />
+        <application plugin="tgen" starttime="1" arguments="tgen.server.graphml.xml" />
     </node>
     
     <node id="client">
-        <application plugin="tgen" time="1" arguments="tgen.client.graphml.xml" />
+        <application plugin="tgen" starttime="1" arguments="tgen.client.graphml.xml" />
     </node>
 
     <kill time="3600" />

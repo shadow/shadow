@@ -19,42 +19,13 @@
       <data key="d3">server1:8888</data>
       <data key="d2">1 MiB</data>
     </node>
-    <node id="transfer2">
-      <data key="d6">tcp</data>
-      <data key="d7">get</data>
-      <data key="d2">100 KiB</data>
-    </node>
-    <node id="transfer3">
-      <data key="d6">tcp</data>
-      <data key="d7">get</data>
-      <data key="d2">100 KiB</data>
-    </node>
-    <node id="transfer4">
-      <data key="d6">tcp</data>
-      <data key="d7">get</data>
-      <data key="d2">100 KiB</data>
-    </node>
-    <node id="transfer5">
-      <data key="d6">tcp</data>
-      <data key="d7">get</data>
-      <data key="d2">100 KiB</data>
-    </node>
     <node id="end">
-      <data key="d1">1000</data>
+      <data key="d1">1</data>
       <data key="d2">100 MiB</data>
       <data key="d0">3600</data>
     </node>
-    <node id="synchronize" />
     <edge source="start" target="transfer1" />
-    <edge source="transfer1" target="transfer2" />
-    <edge source="transfer1" target="transfer3" />
-    <edge source="transfer1" target="transfer4" />
-    <edge source="transfer1" target="transfer5" />
-    <edge source="transfer2" target="synchronize" />
-    <edge source="transfer3" target="synchronize" />
-    <edge source="transfer4" target="synchronize" />
-    <edge source="transfer5" target="synchronize" />
-    <edge source="synchronize" target="end" />
+    <edge source="transfer1" target="end" />
     <edge source="end" target="start" />
   </graph>
 </graphml>
