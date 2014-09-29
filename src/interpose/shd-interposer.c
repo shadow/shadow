@@ -123,6 +123,7 @@ typedef int (*Dup3Func)(int, int, int);
 typedef int (*FXStat)(int, int, struct stat*);
 typedef int (*FStatFSFunc)(int, struct statfs*);
 typedef off_t (*LSeekFunc)(int, off_t, int);
+typedef size_t (*PReadFunc)(int, void*, size_t, off_t);
 typedef int (*FLockFunc)(int, int);
 typedef int (*FSyncFunc)(int);
 typedef int (*FTruncateFunc)(int, int);
@@ -225,6 +226,7 @@ typedef struct {
 	FXStat __fxstat;
 	FStatFSFunc fstatfs;
 	LSeekFunc lseek;
+	PReadFunc pread;
 	FLockFunc flock;
 	FSyncFunc fsync;
 	FTruncateFunc ftruncate;
@@ -1477,10 +1479,41 @@ ssize_t read(int fd, void *buff, size_t numbytes) {
     	} else {
 			ret = _interposer_recvHelper(host, fd, buff, numbytes, 0, NULL, 0);
     	}
+    } else if(host_isRandomHandle(host, fd)) {
+		Random* random = host_getRandom(host);
+		random_nextNBytes(random, (guchar*)buff, numbytes);
+		ret = (ssize_t) numbytes;
     } else {
         gint osfd = host_getOSHandle(host, fd);
         if(osfd >= 0) {
             ret = read(osfd, buff, numbytes);
+        } else {
+            errno = EBADF;
+            ret = -1;
+        }
+    }
+
+    _interposer_switchOutShadowContext(host);
+    return ret;
+}
+#include <assert.h>
+ssize_t pread(int fd, void *buff, size_t numbytes, off_t offset) {
+    if(shouldForwardToLibC()) {
+        ENSURE(libc, "", pread);
+        return director.libc.pread(fd, buff, numbytes, offset);
+    }
+
+    gssize ret = 0;
+    Host* host = _interposer_switchInShadowContext();
+
+    if(host_isShadowDescriptor(host, fd)){
+	assert(0);
+	errno = EBADF;
+	ret = -1;
+    } else {
+        gint osfd = host_getOSHandle(host, fd);
+        if(osfd >= 0) {
+            ret = pread(osfd, buff, numbytes, offset);
         } else {
             errno = EBADF;
             ret = -1;
@@ -1657,9 +1690,9 @@ int timerfd_create(int clockid, int flags) {
     gint result = host_createDescriptor(host, DT_TIMER);
     if(result > 0) {
         Descriptor* desc = host_lookupDescriptor(host, result);
-        if(desc) {
-	    descriptor_setFlags(desc, flags);
-	}
+		if(desc) {
+			descriptor_setFlags(desc, flags);
+		}
     }
 
     _interposer_switchOutShadowContext(host);
@@ -1752,6 +1785,10 @@ int open(const char *pathname, int flags, ...) {
         gint osfd = open(pathname, flags, va_arg(farg, mode_t));
         gint shadowfd = osfd >= 3 ? host_createShadowHandle(host, osfd) : osfd;
 
+		if(utility_isRandomPath((gchar*)pathname)) {
+			host_setRandomHandle(host, shadowfd);
+		}
+
         _interposer_switchOutShadowContext(host);
         result = shadowfd;
     }
@@ -1804,6 +1841,10 @@ FILE *fopen(const char *path, const char *mode) {
     if(osfile) {
         gint osfd = fileno(osfile);
         gint shadowfd = osfd >= 3 ? host_createShadowHandle(host, osfd) : osfd;
+
+		if(utility_isRandomPath((gchar*)path)) {
+			host_setRandomHandle(host, shadowfd);
+		}
     }
 
     _interposer_switchOutShadowContext(host);

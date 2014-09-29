@@ -54,6 +54,9 @@ struct _Host {
 	GHashTable* shadowToOSHandleMap;
 	GHashTable* osToShadowHandleMap;
 
+	/* list of all /dev/random shadow handles that have been created */
+	GHashTable* randomShadowHandleMap;
+
 	/* map path to ports for unix sockets */
 	GHashTable* unixPathToPortMap;
 
@@ -127,6 +130,7 @@ Host* host_new(GQuark id, gchar* hostname, gchar* ipHint, gchar* geocodeHint, gc
 
 	host->shadowToOSHandleMap = g_hash_table_new(g_direct_hash, g_direct_equal);
     host->osToShadowHandleMap = g_hash_table_new(g_direct_hash, g_direct_equal);
+    host->randomShadowHandleMap = g_hash_table_new(g_direct_hash, g_direct_equal);
     host->unixPathToPortMap = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
 
 	/* applications this node will run */
@@ -139,7 +143,6 @@ Host* host_new(GQuark id, gchar* hostname, gchar* ipHint, gchar* geocodeHint, gc
 	host->pcapDir = pcapDir;
 
 	message("Created Host '%s', ip %s, "
-
 			"%"G_GUINT64_FORMAT" bwUpKiBps, %"G_GUINT64_FORMAT" bwDownKiBps, %"G_GUINT64_FORMAT" initSockSendBufSize, %"G_GUINT64_FORMAT" initSockRecvBufSize, "
 			"%u cpuFrequency, %i cpuThreshold, %i cpuPrecision, %u seed",
 			g_quark_to_string(host->id), networkinterface_getIPName(host->defaultInterface),
@@ -445,6 +448,17 @@ gint host_getOSHandle(Host* host, gint shadowHandle) {
 	return osHandleP ? GPOINTER_TO_INT(osHandleP) : -1;
 }
 
+void host_setRandomHandle(Host* host, gint handle) {
+	MAGIC_ASSERT(host);
+	g_hash_table_insert(host->randomShadowHandleMap, GINT_TO_POINTER(handle), GINT_TO_POINTER(handle));
+}
+
+gboolean host_isRandomHandle(Host* host, gint handle) {
+	MAGIC_ASSERT(host);
+	return g_hash_table_contains(host->randomShadowHandleMap, GINT_TO_POINTER(handle));
+}
+
+
 void host_destroyShadowHandle(Host* host, gint shadowHandle) {
 	MAGIC_ASSERT(host);
 
@@ -459,6 +473,8 @@ void host_destroyShadowHandle(Host* host, gint shadowHandle) {
         g_hash_table_remove(host->osToShadowHandleMap, GINT_TO_POINTER(osHandle));
         _host_returnPreviousDescriptorHandle(host, shadowHandle);
 	}
+
+	g_hash_table_remove(host->randomShadowHandleMap, GINT_TO_POINTER(shadowHandle));
 }
 
 gint host_createDescriptor(Host* host, DescriptorType type) {
@@ -664,22 +680,24 @@ static gboolean _host_isInterfaceAvailable(Host* host, in_addr_t interfaceIP,
 }
 
 
-static in_port_t _host_getRandomFreePort(Host* host, in_addr_t interfaceIP,
-		DescriptorType type) {
-	MAGIC_ASSERT(host);
+static in_port_t _host_getRandomFreePort(Host* host, in_addr_t interfaceIP, DescriptorType type) {
+    MAGIC_ASSERT(host);
 
-	in_port_t randomNetworkPort = 0;
-	gboolean available = FALSE;
+    NetworkInterface* interface = host_lookupInterface(host, interfaceIP);
+    in_port_t randomNetworkPort = 0;
 
-	while(!available) {
-		gdouble randomFraction = random_nextDouble(host->random);
-		in_port_t randomHostPort = (in_port_t) (randomFraction * (UINT16_MAX - MIN_RANDOM_PORT)) + MIN_RANDOM_PORT;
-		utility_assert(randomHostPort >= MIN_RANDOM_PORT);
-		randomNetworkPort = htons(randomHostPort);
-		available = _host_isInterfaceAvailable(host, interfaceIP, type, randomNetworkPort);
-	}
+    if (interface && networkinterface_hasFreePorts(interface)) {
+        gboolean freePortFound = FALSE;
+        while (!freePortFound) {
+            gdouble randomFraction = random_nextDouble(host->random);
+            in_port_t randomHostPort = (in_port_t) (randomFraction * (UINT16_MAX - MIN_RANDOM_PORT)) + MIN_RANDOM_PORT;
+            utility_assert(randomHostPort >= MIN_RANDOM_PORT);
+            randomNetworkPort = htons(randomHostPort);
+            freePortFound = _host_isInterfaceAvailable(host, interfaceIP, type, randomNetworkPort);
+        }
+    }
 
-	return randomNetworkPort;
+    return randomNetworkPort;
 }
 
 gint host_bindToInterface(Host* host, gint handle, const struct sockaddr* address) {
@@ -737,6 +755,9 @@ gint host_bindToInterface(Host* host, gint handle, const struct sockaddr* addres
 	if(bindPort == 0) {
 		/* we know it will be available */
 		bindPort = _host_getRandomFreePort(host, bindAddress, type);
+		if(!bindPort) {
+		    return EADDRNOTAVAIL;
+		}
 	} else {
 		/* make sure their port is available at that address for this protocol. */
 		if(!_host_isInterfaceAvailable(host, bindAddress, type, bindPort)) {
@@ -842,6 +863,9 @@ gint host_connectToPeer(Host* host, gint handle, const struct sockaddr* address)
 
 		in_addr_t bindAddress = loIP == peerIP ? loIP : defaultIP;
 		in_port_t bindPort = _host_getRandomFreePort(host, bindAddress, type);
+        if(!bindPort) {
+            return EADDRNOTAVAIL;
+        }
 
 		_host_associateInterface(host, socket, bindAddress, bindPort);
 	}
@@ -877,6 +901,9 @@ gint host_listenForPeer(Host* host, gint handle, gint backlog) {
 		/* implicit bind */
 		in_addr_t bindAddress = htonl(INADDR_ANY);
 		in_port_t bindPort = _host_getRandomFreePort(host, bindAddress, type);
+        if(!bindPort) {
+            return EADDRNOTAVAIL;
+        }
 
 		_host_associateInterface(host, socket, bindAddress, bindPort);
 	}
@@ -1059,6 +1086,9 @@ gint host_sendUserData(Host* host, gint handle, gconstpointer buffer, gsize nByt
 			in_addr_t bindAddress = ip == htonl(INADDR_LOOPBACK) ? htonl(INADDR_LOOPBACK) :
 					networkinterface_getIPAddress(host->defaultInterface);
 			in_port_t bindPort = _host_getRandomFreePort(host, bindAddress, type);
+	        if(!bindPort) {
+	            return EADDRNOTAVAIL;
+	        }
 
 			/* bind port and set associations */
 			_host_associateInterface(host, socket, bindAddress, bindPort);

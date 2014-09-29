@@ -36,6 +36,7 @@ set(shadow_srcs
     support/shd-event-queue.c
     support/shd-logging.c
     support/shd-parser.c
+    support/shd-pcap-writer.c
     
     interpose/shd-program.c
     

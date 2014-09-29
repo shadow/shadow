@@ -139,15 +139,21 @@ static void _timer_setCurrentTime(Timer* timer, const struct timespec* config, g
 	MAGIC_ASSERT(timer);
 	utility_assert(config);
 
-	if(flags == TFD_TIMER_ABSTIME) {
-		/* config time specifies an absolute time */
-		/* XXX what happens if the time they gave us is in the past? the man
-		 * page does not specify if this is an error or not.
-		 * TODO check this in linux and update this comment. */
+    SimulationTime now = worker_getCurrentTime();
+
+    if(flags == TFD_TIMER_ABSTIME) {
+		/* config time specifies an absolute time. */
 		timer->nextExpireTime = _timer_timespecToSimTime(config);
+
+		/* the man page does not specify what happens if the time
+         * they gave us is in the past. on linux, the result is an
+         * immediate timer expiration. */
+		if(timer->nextExpireTime < now) {
+		    timer->nextExpireTime = now;
+		}
 	} else {
 		/* config time is relative to current time */
-		timer->nextExpireTime = worker_getCurrentTime() + _timer_timespecToSimTime(config);
+		timer->nextExpireTime = now + _timer_timespecToSimTime(config);
 	}
 }
 
@@ -185,21 +191,22 @@ static void _timer_expire(Timer* timer, gpointer data) {
 		return;
 	}
 
-	/* XXX what happens if a one-time (non-periodic) timer already expired
-	 * before they started listening for the event with epoll? when they start
-	 * listening via epoll, is the event reported immediately, or is the
-	 * one-time expiration lost?
-	 * TODO check the behavior on linux, make sure shadow does it correctly,
-	 * and update this comment.
+	/* if a one-time (non-periodic) timer already expired before they
+	 * started listening for the event with epoll, the event is reported
+	 * immediately on the next epoll_wait call. this behavior was
+	 * verified on linux.
 	 */
 	timer->expireCountSinceLastSet++;
 	descriptor_adjustStatus(&(timer->super), DS_READABLE, TRUE);
 
 	if(timer->expireInterval > 0) {
 		timer->nextExpireTime += timer->expireInterval;
-		if(timer->nextExpireTime > worker_getCurrentTime()) {
+		if(timer->nextExpireTime >= worker_getCurrentTime()) {
 			_timer_scheduleNewExpireEvent(timer);
 		}
+	} else {
+	    /* the timer is now disarmed */
+	    _timer_disarm(timer);
 	}
 }
 
@@ -213,7 +220,7 @@ static void _timer_arm(Timer* timer, const struct itimerspec *config, gint flags
 		_timer_setCurrentInterval(timer, &(config->it_interval));
 	}
 
-	if(timer->nextExpireTime > worker_getCurrentTime()) {
+	if(timer->nextExpireTime >= worker_getCurrentTime()) {
 		_timer_scheduleNewExpireEvent(timer);
 	}
 }
@@ -254,16 +261,16 @@ gint timer_setTime(Timer* timer, gint flags,
 
 	/* now set the new times as requested */
 	if(new_value->it_value.tv_sec > 0 || new_value->it_value.tv_nsec > 0) {
-		/* XXX the man page does not specify what to do if it_value says
+		/* the man page does not specify what to do if it_value says
 		 * to disarm the timer, but it_interval is a valid interval.
-		 * for now we assume that intervals are only set when it_value actually
-		 * requests that we arm the timer, and ignored otherwise.
-		 * TODO check that this is correct in linux and update this comment. */
+		 * we verified on linux that intervals are only set when it_value
+		 * actually requests that we arm the timer, and ignored otherwise. */
 		_timer_arm(timer, new_value, flags);
 	}
 
-	/* settings were modified, reset expire count */
+	/* settings were modified, reset expire count and readability */
 	timer->expireCountSinceLastSet = 0;
+	descriptor_adjustStatus(&(timer->super), DS_READABLE, FALSE);
 
 	return 0;
 }

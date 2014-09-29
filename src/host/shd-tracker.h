@@ -14,8 +14,8 @@ void tracker_free(Tracker* tracker);
 
 void tracker_addProcessingTime(Tracker* tracker, SimulationTime processingTime);
 void tracker_addVirtualProcessingDelay(Tracker* tracker, SimulationTime delay);
-void tracker_addInputBytes(Tracker* tracker, gsize inputBytes, gint handle);
-void tracker_addOutputBytes(Tracker* tracker, gsize outputBytes, gint handle);
+void tracker_addInputBytes(Tracker* tracker, Packet* packet, gint handle);
+void tracker_addOutputBytes(Tracker* tracker, Packet* packet, gint handle);
 void tracker_addAllocatedBytes(Tracker* tracker, gpointer location, gsize allocatedBytes);
 void tracker_removeAllocatedBytes(Tracker* tracker, gpointer location);
 void tracker_addSocket(Tracker* tracker, gint handle, enum ProtocolType type, gsize inputBufferSize, gsize outputBufferSize);
