@@ -7,6 +7,7 @@ set(tgen_sources
     shd-tgen-peer.c
     shd-tgen-pool.c
     shd-tgen-server.c
+    shd-tgen-timer.c
     shd-tgen-transfer.c
     shd-tgen-transport.c
 )

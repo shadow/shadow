@@ -28,6 +28,5 @@ gboolean tgenio_register(TGenIO* io, gint descriptor, TGenIO_notifyEventFunc not
 void tgenio_loopOnce(TGenIO* io);
 
 gint tgenio_getEpollDescriptor(TGenIO* io);
-guint tgenio_getSize(TGenIO* io);
 
 #endif /* SHD_TGEN_IO_H_ */

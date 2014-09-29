@@ -20,22 +20,11 @@ static void _tgendriver_log(ShadowLogLevel level, const gchar* functionName, con
 	va_end(vargs);
 }
 
-static void _tgendriver_createCallback(ShadowPluginCallbackFunc callback,
-		gpointer data, guint millisecondsDelay) {
-	/* TODO: this should actually happen asynchronously */
-	sleep(millisecondsDelay / 1000);
-	callback(data);
-}
-
 gint main(gint argc, gchar *argv[]) {
 	/* create the new state according to user inputs */
-	TGenDriver* tgen = tgendriver_new(argc, argv, &_tgendriver_log, &_tgendriver_createCallback);
+	TGenDriver* tgen = tgendriver_new(argc, argv, &_tgendriver_log);
 	if(!tgen) {
 		tgen_critical("Error initializing new TrafficGen instance");
-		return -1;
-	} else if(!tgendriver_hasStarted(tgen)) {
-		tgen_critical("Error starting TrafficGen instance");
-		tgendriver_unref(tgen);
 		return -1;
 	}
 

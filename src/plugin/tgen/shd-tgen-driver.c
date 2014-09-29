@@ -11,8 +11,6 @@
 struct _TGenDriver {
     /* pointer to a logging function */
     ShadowLogFunc log;
-    /* pointer to a function that issues a callback after timer expiration */
-    ShadowCreateCallbackFunc createCallback;
 
     /* our graphml dependency graph */
     TGenGraph* actionGraph;
@@ -38,15 +36,9 @@ struct _TGenDriver {
     gsize totalBytesRead;
     gsize totalBytesWritten;
 
-    guint refcount;
+    gint refcount;
     guint magic;
 };
-
-typedef struct _TGenCallbackItem {
-    TGenDriver* driver;
-    TGenTransport* transport;
-    TGenAction* action;
-} TGenCallbackItem;
 
 /* store a global pointer to the log func, so we can log in any
  * of our tgen modules without a pointer to the tgen struct */
@@ -86,7 +78,7 @@ static void _tgendriver_onBytesTransferred(TGenDriver* driver, gsize bytesRead, 
     driver->heartbeatBytesWritten += bytesWritten;
 }
 
-static void _tgendriver_onHearbeat(TGenDriver* driver) {
+static gboolean _tgendriver_onHeartbeat(TGenDriver* driver, gpointer nullData) {
     TGEN_ASSERT(driver);
 
     tgen_message("[driver-heartbeat] transfers-completed=%u bytes-read=%"G_GSIZE_FORMAT" "
@@ -98,9 +90,27 @@ static void _tgendriver_onHearbeat(TGenDriver* driver) {
     driver->heartbeatBytesWritten = 0;
 
     /* even if the client ended, we keep serving requests.
-     * we are still running and the heartbeat loop still owns a driver ref */
-    ShadowPluginCallbackFunc cb = (ShadowPluginCallbackFunc)_tgendriver_onHearbeat;
-    driver->createCallback(cb, driver, (uint)1000);
+     * we are still running and the heartbeat timer still owns a driver ref.
+     * do not cancel the timer */
+    return FALSE;
+}
+
+static gboolean _tgendriver_onStartClientTimerExpired(TGenDriver* driver, gpointer nullData) {
+    TGEN_ASSERT(driver);
+
+    tgen_info("starting client from root start action");
+    _tgendriver_continueNextActions(driver, driver->startAction);
+
+    return TRUE;
+}
+
+static gboolean _tgendriver_onPauseTimerExpired(TGenDriver* driver, TGenAction* action) {
+    TGEN_ASSERT(driver);
+
+    /* continue next actions if possible */
+    _tgendriver_continueNextActions(driver, action);
+    /* timer was a one time event, so it can be canceled */
+    return TRUE;
 }
 
 static void _tgendriver_onNewPeer(TGenDriver* driver, gint socketD, TGenPeer* peer) {
@@ -123,6 +133,9 @@ static void _tgendriver_onNewPeer(TGenDriver* driver, gint socketD, TGenPeer* pe
         return;
     }
 
+    /* ref++ the driver for the transport notify func */
+    tgendriver_ref(driver);
+
     /* a new transfer will be coming in on this transport */
     gsize id = ++(driver->transferIDCounter);
     TGenTransfer* transfer = tgentransfer_new(id, TGEN_TYPE_NONE, 0, transport,
@@ -131,9 +144,13 @@ static void _tgendriver_onNewPeer(TGenDriver* driver, gint socketD, TGenPeer* pe
 
     if(!transfer) {
         tgentransport_unref(transport);
+        tgendriver_unref(driver);
         tgen_warning("failed to initialize transfer for incoming peer, skipping");
         return;
     }
+
+    /* ref++ the driver for the transfer notify func */
+    tgendriver_ref(driver);
 
     /* now let the IO handler manage the transfer. our transfer pointer reference
      * will be held by the IO object */
@@ -166,6 +183,9 @@ static void _tgendriver_initiateTransfer(TGenDriver* driver, TGenAction* action)
         return;
     }
 
+    /* ref++ the driver for the transport notify func */
+    tgendriver_ref(driver);
+
     gsize size = 0;
     TGenTransferType type = 0;
     tgenaction_getTransferParameters(action, &type, NULL, &size);
@@ -179,10 +199,15 @@ static void _tgendriver_initiateTransfer(TGenDriver* driver, TGenAction* action)
 
     if(!transfer) {
         tgentransport_unref(transport);
+        tgendriver_unref(driver);
         tgen_warning("failed to initialize transfer for transfer action, skipping");
         _tgendriver_continueNextActions(driver, action);
         return;
     }
+
+    /* ref++ the driver and action for the transfer notify func */
+    tgendriver_ref(driver);
+    tgenaction_ref(action);
 
     /* now let the IO handler manage the transfer. our transfer pointer reference
      * will be held by the IO object */
@@ -193,32 +218,40 @@ static void _tgendriver_initiateTransfer(TGenDriver* driver, TGenAction* action)
     tgentransport_unref(transport);
 }
 
-static void _tgendriver_pauseCallback(TGenCallbackItem* item) {
-    /* continue next actions if possible */
-    _tgendriver_continueNextActions(item->driver, item->action);
-
-    /* cleanup */
-    tgenaction_unref(item->action);
-    tgendriver_unref(item->driver);
-    g_free(item);
-}
-
 static void _tgendriver_initiatePause(TGenDriver* driver, TGenAction* action) {
-    ShadowPluginCallbackFunc cb = (ShadowPluginCallbackFunc)_tgendriver_pauseCallback;
-    TGenCallbackItem* item = g_new0(TGenCallbackItem, 1);
+    TGEN_ASSERT(driver);
+
+    /* create a timer to handle the pause action */
+    TGenTimer* pauseTimer = tgentimer_new(tgenaction_getPauseTimeMillis(action), FALSE,
+            (TGenTimer_notifyExpiredFunc)_tgendriver_onPauseTimerExpired, driver, action,
+            (GDestroyNotify)tgendriver_unref, (GDestroyNotify)tgenaction_unref);
+
+    if(!pauseTimer) {
+        tgen_warning("failed to initialize timer for pause action, skipping");
+        _tgendriver_continueNextActions(driver, action);
+        return;
+    }
+
+    /* ref++ the driver and action for the pause timer */
     tgendriver_ref(driver);
-    item->driver = driver;
     tgenaction_ref(action);
-    item->action = action;
-    driver->createCallback(cb, item, (uint)tgenaction_getPauseTimeMillis(action));
+
+    /* let the IO module handle timer reads, transfer the timer pointer reference */
+    tgenio_register(driver->io, tgentimer_getDescriptor(pauseTimer),
+            (TGenIO_notifyEventFunc)tgentimer_onEvent, pauseTimer,
+            (GDestroyNotify)tgentimer_unref);
 }
 
 static void _tgendriver_handleSynchronize(TGenDriver* driver, TGenAction* action) {
+    TGEN_ASSERT(driver);
+
     // FIXME - actually implement synchronize feature - NOOP for now
     _tgendriver_continueNextActions(driver, action);
 }
 
 static void _tgendriver_checkEndConditions(TGenDriver* driver, TGenAction* action) {
+    TGEN_ASSERT(driver);
+
     guint64 size = tgenaction_getEndSize(action);
     guint64 count = tgenaction_getEndCount(action);
     guint64 time = tgenaction_getEndTimeMillis(action);
@@ -238,6 +271,8 @@ static void _tgendriver_checkEndConditions(TGenDriver* driver, TGenAction* actio
 }
 
 static void _tgendriver_processAction(TGenDriver* driver, TGenAction* action) {
+    TGEN_ASSERT(driver);
+
     switch(tgenaction_getType(action)) {
         case TGEN_ACTION_START: {
             /* slide through to the next actions */
@@ -285,14 +320,6 @@ static void _tgendriver_continueNextActions(TGenDriver* driver, TGenAction* acti
     g_queue_free(nextActions);
 }
 
-static void _tgendriver_start(TGenDriver* driver) {
-    TGEN_ASSERT(driver);
-
-    tgen_info("continuing from root start action");
-
-    _tgendriver_continueNextActions(driver, driver->startAction);
-}
-
 void tgendriver_activate(TGenDriver* driver) {
     TGEN_ASSERT(driver);
 
@@ -300,12 +327,15 @@ void tgendriver_activate(TGenDriver* driver) {
         return;
     }
 
+    tgen_debug("activating tgenio loop");
     tgenio_loopOnce(driver->io);
 }
 
 static void _tgendriver_free(TGenDriver* driver) {
     TGEN_ASSERT(driver);
     g_assert(driver->refcount <= 0);
+
+    tgen_info("freeing driver state");
 
     if(driver->io) {
         tgenio_unref(driver->io);
@@ -351,8 +381,82 @@ void tgendriver_unref(TGenDriver* driver) {
 //    }
 //}
 
-TGenDriver* tgendriver_new(gint argc, gchar* argv[], ShadowLogFunc logf,
-        ShadowCreateCallbackFunc callf) {
+static gboolean _tgendriver_startServerHelper(TGenDriver* driver) {
+    TGEN_ASSERT(driver);
+
+    /* create the server that will listen for incoming connections */
+    in_port_t serverPort = (in_port_t)tgenaction_getServerPort(driver->startAction);
+
+    TGenServer* server = tgenserver_new(serverPort,
+            (TGenServer_notifyNewPeerFunc)_tgendriver_onNewPeer, driver,
+            (GDestroyNotify)tgendriver_unref);
+
+    if(server) {
+        /* the server is holding a ref to driver */
+        tgendriver_ref(driver);
+
+        /* now let the IO handler manage the server. transfer our server pointer reference
+         * because it will be stored as a param in the IO object */
+        gint socketD = tgenserver_getDescriptor(server);
+        tgenio_register(driver->io, socketD, (TGenIO_notifyEventFunc)tgenserver_onEvent,
+                server, (GDestroyNotify) tgenserver_unref);
+
+        tgen_info("started server using descriptor %i", socketD);
+        return TRUE;
+    } else {
+        return FALSE;
+    }
+}
+
+static gboolean _tgendriver_setStartClientTimerHelper(TGenDriver* driver, guint64 timerTime) {
+    TGEN_ASSERT(driver);
+
+    /* client will start in the future */
+    TGenTimer* startTimer = tgentimer_new(timerTime, FALSE,
+            (TGenTimer_notifyExpiredFunc)_tgendriver_onStartClientTimerExpired, driver, NULL,
+            (GDestroyNotify)tgendriver_unref, NULL);
+
+    if(startTimer) {
+        /* ref++ the driver since the timer is now holding a reference */
+        tgendriver_ref(driver);
+
+        /* let the IO module handle timer reads, transfer the timer pointer reference */
+        gint timerD = tgentimer_getDescriptor(startTimer);
+        tgenio_register(driver->io, timerD, (TGenIO_notifyEventFunc)tgentimer_onEvent,
+                startTimer, (GDestroyNotify)tgentimer_unref);
+
+        tgen_info("set startClient timer using descriptor %i", timerD);
+        return TRUE;
+    } else {
+        return FALSE;
+    }
+}
+
+static gboolean _tgendriver_setHeartbeatTimerHelper(TGenDriver* driver) {
+    TGEN_ASSERT(driver);
+
+    /* start the heartbeat as a persistent timer event */
+    TGenTimer* heartbeatTimer = tgentimer_new((guint64) 1000, TRUE,
+            (TGenTimer_notifyExpiredFunc)_tgendriver_onHeartbeat, driver, NULL,
+            (GDestroyNotify)tgendriver_unref, NULL);
+
+    if(heartbeatTimer) {
+        /* ref++ the driver since the timer is now holding a reference */
+        tgendriver_ref(driver);
+
+        /* let the IO module handle timer reads, transfer the timer pointer reference */
+        gint timerD = tgentimer_getDescriptor(heartbeatTimer);
+        tgenio_register(driver->io, timerD, (TGenIO_notifyEventFunc)tgentimer_onEvent,
+                heartbeatTimer, (GDestroyNotify)tgentimer_unref);
+
+        tgen_info("set heartbeat timer using descriptor %i", timerD);
+        return TRUE;
+    } else {
+        return FALSE;
+    }
+}
+
+TGenDriver* tgendriver_new(gint argc, gchar* argv[], ShadowLogFunc logf) {
     tgenLogFunc = logf;
 
     /* argv[0] is program name, argv[1] should be config file */
@@ -393,41 +497,45 @@ TGenDriver* tgendriver_new(gint argc, gchar* argv[], ShadowLogFunc logf,
     driver->refcount = 1;
 
     driver->log = logf;
-    driver->createCallback = callf;
-    tgen_debug("set log function to %p, callback function to %p", logf, callf);
+    tgen_debug("set log function to %p", logf);
 
     driver->io = tgenio_new();
 
     driver->actionGraph = graph;
     driver->startAction = tgengraph_getStartAction(graph);
 
-    /* create the server that will listen for incoming connections.
-     * ref++ the driver because it will be stored as a param in the server */
-    tgendriver_ref(driver);
-    in_port_t serverPort = (in_port_t)tgenaction_getServerPort(driver->startAction);
-    TGenServer* server = tgenserver_new(serverPort,
-            (TGenServer_notifyNewPeerFunc)_tgendriver_onNewPeer, driver,
-            (GDestroyNotify)tgendriver_unref);
+    /* start a heartbeat status message every second */
+    if(!_tgendriver_setHeartbeatTimerHelper(driver)) {
+        tgenio_unref(driver->io);
+        driver->io = NULL;
+        tgendriver_unref(driver);
+        return NULL;
+    }
 
-    /* now let the IO handler manage the server. transfer our server pointer reference
-     * because it will be stored as a param in the IO object */
-    tgenio_register(driver->io, tgenserver_getDescriptor(server),
-            (TGenIO_notifyEventFunc)tgenserver_onEvent, server, (GDestroyNotify) tgenserver_unref);
+    /* start a server to listen for incoming connections */
+    if(!_tgendriver_startServerHelper(driver)) {
+        tgenio_unref(driver->io);
+        driver->io = NULL;
+        tgendriver_unref(driver);
+        return NULL;
+    }
 
-    /* the client-side (master) transfers start as specified in the action */
+    /* the client-side transfers start as specified in the action */
     guint64 startMillis = tgenaction_getStartTimeMillis(driver->startAction);
     guint64 nowMillis = _tgendriver_getCurrentTimeMillis();
 
-    if(startMillis > nowMillis) {
-        driver->createCallback((ShadowPluginCallbackFunc)_tgendriver_start,
-                driver, (guint) (startMillis - nowMillis));
+    if(startMillis <= nowMillis) {
+        /* our client should start immediately */
+        _tgendriver_onStartClientTimerExpired(driver, NULL);
     } else {
-        _tgendriver_start(driver);
+        /* start our client after a timeout */
+        if(!_tgendriver_setStartClientTimerHelper(driver, (guint64) (startMillis - nowMillis))) {
+            tgenio_unref(driver->io);
+            driver->io = NULL;
+            tgendriver_unref(driver);
+            return NULL;
+        }
     }
-
-    /* start the heartbeat and ref++ the driver for the heartbeat loop */
-    tgendriver_ref(driver);
-    _tgendriver_onHearbeat(driver);
 
     return driver;
 }
@@ -437,12 +545,24 @@ gint tgendriver_getEpollDescriptor(TGenDriver* driver) {
     return tgenio_getEpollDescriptor(driver->io);
 }
 
-gboolean tgendriver_hasStarted(TGenDriver* driver) {
-    TGEN_ASSERT(driver);
-    return driver->startAction != NULL;
-}
-
 gboolean tgendriver_hasEnded(TGenDriver* driver) {
     TGEN_ASSERT(driver);
     return driver->clientHasEnded;
+}
+
+void tgendriver_shutdown(TGenDriver* driver) {
+    TGEN_ASSERT(driver);
+
+    tgen_info("shutting down IO now, refcount=%u", driver->refcount);
+
+    /* we have to close our IO module first, since it holds several refs */
+    tgenio_unref(driver->io);
+
+    /* make sure its not freed twice */
+    driver->io = NULL;
+
+    tgen_info("shutting down driver now, refcount=%u", driver->refcount);
+
+    /* hopefully this frees the driver */
+    tgendriver_unref(driver);
 }

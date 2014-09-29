@@ -36,7 +36,7 @@ struct _TGenAction {
     gpointer key;
     gboolean hasKey;
     gpointer data;
-    guint refcount;
+    gint refcount;
     guint magic;
 };
 

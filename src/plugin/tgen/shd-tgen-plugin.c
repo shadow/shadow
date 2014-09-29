@@ -9,18 +9,17 @@
 /* the state used by this plug-in */
 TGenDriver* tgen;
 ShadowLogFunc shadowLog;
-ShadowCreateCallbackFunc shadowCreateCallback;
 
 /* create a new node using this plug-in */
 static void _tgendriver_new(gint argc, gchar* argv[]) {
 	/* create the new instance */
-	tgen = tgendriver_new(argc, argv, shadowLog, shadowCreateCallback);
+	tgen = tgendriver_new(argc, argv, shadowLog);
 }
 
 /* free node state */
 static void _tgendriver_free() {
     if(tgen) {
-        tgendriver_unref(tgen);
+        tgendriver_shutdown(tgen);
     }
 }
 
@@ -35,7 +34,6 @@ static void _tgendriver_activate() {
 void __shadow_plugin_init__(ShadowFunctionTable* shadowlibFuncs) {
 	/* save shadow's interface functions we will use later */
 	shadowLog = shadowlibFuncs->log;
-	shadowCreateCallback = shadowlibFuncs->createCallback;
 
 	/* tell shadow which of our functions it can use to call back to our plugin*/
 	shadowlibFuncs->registerPlugin(&_tgendriver_new, &_tgendriver_free, &_tgendriver_activate);

@@ -202,7 +202,3 @@ gint tgenio_getEpollDescriptor(TGenIO* io) {
     TGEN_ASSERT(io);
     return io->epollD;
 }
-
-guint tgenio_getSize(TGenIO* io) {
-    return g_hash_table_size(io->children);
-}
