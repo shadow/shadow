@@ -911,9 +911,7 @@ static void _tcp_flush(TCP* tcp) {
 		}
 
 		/* update TCP header to our current advertised window and acknowledgment */
-		gboolean isFinAck = ((header.flags & PTCP_FIN) && (header.flags & PTCP_ACK));
-		guint ack = isFinAck ? tcp->receive.next + 1 : tcp->receive.next;
-		packet_updateTCP(packet, ack, tcp->send.selectiveACKs, tcp->receive.window, now, tcp->receive.lastTimestamp);
+		packet_updateTCP(packet, tcp->receive.next, tcp->send.selectiveACKs, tcp->receive.window, now, tcp->receive.lastTimestamp);
 
 		/* keep track of the last things we sent them */
 		tcp->send.lastAcknowledgment = tcp->receive.next;
