@@ -530,16 +530,13 @@ TGenDriver* tgendriver_new(gint argc, gchar* argv[], ShadowLogFunc logf) {
         return NULL;
     }
 
-    /* the client-side transfers start as specified in the action */
-    guint64 startMillis = tgenaction_getStartTimeMillis(driver->startAction);
-    guint64 nowMillis = _tgendriver_getCurrentTimeMillis();
+    /* the client-side transfers start as specified in the action.
+     * this is a delay in milliseconds from now to start the client */
+    guint64 delayMillis = tgenaction_getStartTimeMillis(driver->startAction);
 
-    if(startMillis <= nowMillis) {
-        /* our client should start immediately */
-        _tgendriver_onStartClientTimerExpired(driver, NULL);
-    } else {
+    if(delayMillis > 0) {
         /* start our client after a timeout */
-        if(!_tgendriver_setStartClientTimerHelper(driver, (guint64) (startMillis - nowMillis))) {
+        if(!_tgendriver_setStartClientTimerHelper(driver, delayMillis)) {
             tgenio_unref(driver->io);
             driver->io = NULL;
             tgendriver_unref(driver);
@@ -557,7 +554,7 @@ gint tgendriver_getEpollDescriptor(TGenDriver* driver) {
 
 gboolean tgendriver_hasEnded(TGenDriver* driver) {
     TGEN_ASSERT(driver);
-    return driver->serverHasEnded;
+    return driver->clientHasEnded;
 }
 
 void tgendriver_shutdown(TGenDriver* driver) {
