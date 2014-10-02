@@ -20,7 +20,7 @@
       <data key="d2">1 MiB</data>
     </node>
     <node id="end">
-      <data key="d1">1</data>
+      <data key="d1">100</data>
       <data key="d2">100 MiB</data>
       <data key="d0">3600</data>
     </node>

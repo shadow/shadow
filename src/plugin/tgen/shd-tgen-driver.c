@@ -17,9 +17,12 @@ struct _TGenDriver {
 
     /* the starting action parsed from the action graph */
     TGenAction* startAction;
+    gint64 startTimeMicros;
 
     /* TRUE iff a condition in any endAction event has been reached */
     gboolean clientHasEnded;
+    /* the server only ends if an end time is specified */
+    gboolean serverHasEnded;
 
     /* our I/O event manager. this holds refs to all of the transfers
      * and notifies them of I/O events on the underlying transports */
@@ -29,10 +32,10 @@ struct _TGenDriver {
     gsize transferIDCounter;
 
     /* traffic statistics */
-    guint heartbeatTransfersCompleted;
+    guint64 heartbeatTransfersCompleted;
     gsize heartbeatBytesRead;
     gsize heartbeatBytesWritten;
-    guint totalTransfersCompleted;
+    guint64 totalTransfersCompleted;
     gsize totalBytesRead;
     gsize totalBytesWritten;
 
@@ -47,12 +50,8 @@ ShadowLogFunc tgenLogFunc;
 /* forward declaration */
 static void _tgendriver_continueNextActions(TGenDriver* driver, TGenAction* action);
 
-static guint64 _tgendriver_getCurrentTimeMillis() {
-    struct timespec tp;
-    memset(&tp, 0, sizeof(struct timespec));
-    clock_gettime(CLOCK_MONOTONIC, &tp);
-    guint64 nowMillis = (((guint64)tp.tv_sec) * 1000) + (((guint64)tp.tv_nsec) / 1000000);
-    return nowMillis;
+static gint64 _tgendriver_getCurrentTimeMillis() {
+    return g_get_monotonic_time()/1000;
 }
 
 static void _tgendriver_onTransferComplete(TGenDriver* driver, TGenAction* action, TGenTransfer* transfer) {
@@ -97,6 +96,8 @@ static gboolean _tgendriver_onHeartbeat(TGenDriver* driver, gpointer nullData) {
 
 static gboolean _tgendriver_onStartClientTimerExpired(TGenDriver* driver, gpointer nullData) {
     TGEN_ASSERT(driver);
+
+    driver->startTimeMicros = g_get_monotonic_time();
 
     tgen_info("starting client from root start action");
     _tgendriver_continueNextActions(driver, driver->startAction);
@@ -257,17 +258,26 @@ static void _tgendriver_checkEndConditions(TGenDriver* driver, TGenAction* actio
     guint64 time = tgenaction_getEndTimeMillis(action);
 
     gsize totalBytes = driver->totalBytesRead + driver->totalBytesWritten;
+    gint64 nowMillis = _tgendriver_getCurrentTimeMillis();
+    gint64 timeLimit = (driver->startTimeMicros/1000) + (gint64)time;
 
     if(size > 0 && totalBytes >= (gsize)size) {
         driver->clientHasEnded = TRUE;
     } else if(count > 0 && driver->totalTransfersCompleted >= count) {
         driver->clientHasEnded = TRUE;
     } else if(time > 0) {
-        guint64 nowMillis = _tgendriver_getCurrentTimeMillis();
-        if(nowMillis >= time) {
+        if(nowMillis >= timeLimit) {
             driver->clientHasEnded = TRUE;
+            driver->serverHasEnded = TRUE;
         }
     }
+
+    tgen_debug("checked end conditions: hasEnded=%i "
+            "bytes=%"G_GUINT64_FORMAT" limit=%"G_GUINT64_FORMAT" "
+            "count=%"G_GUINT64_FORMAT" limit=%"G_GUINT64_FORMAT" "
+            "time=%"G_GUINT64_FORMAT" limit=%"G_GUINT64_FORMAT,
+            driver->clientHasEnded, totalBytes, size, driver->totalTransfersCompleted, count,
+            nowMillis, timeLimit);
 }
 
 static void _tgendriver_processAction(TGenDriver* driver, TGenAction* action) {
@@ -547,7 +557,7 @@ gint tgendriver_getEpollDescriptor(TGenDriver* driver) {
 
 gboolean tgendriver_hasEnded(TGenDriver* driver) {
     TGEN_ASSERT(driver);
-    return driver->clientHasEnded;
+    return driver->serverHasEnded;
 }
 
 void tgendriver_shutdown(TGenDriver* driver) {

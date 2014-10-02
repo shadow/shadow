@@ -616,19 +616,14 @@ static void _tgentransfer_log(TGenTransfer* transfer, gboolean wasActive) {
     TGEN_ASSERT(transfer);
 
     if(transfer->state != TGEN_XFER_DONE && wasActive) {
-        gint64 now = g_get_monotonic_time();
-        gboolean timerExpired = now - transfer->time.lastBytesStatusReport > 1000000;
+        gchar* bytesMessage = _tgentransfer_getBytesStatusReport(transfer);
 
-        if(timerExpired) {
-            gchar* bytesMessage = _tgentransfer_getBytesStatusReport(transfer);
+        tgen_info("[transfer-status] transport %s transfer %s %s",
+                tgentransport_toString(transfer->transport),
+                _tgentransfer_toString(transfer), bytesMessage);
 
-            tgen_info("[transfer-status] transport %s transfer %s %s",
-                    tgentransport_toString(transfer->transport),
-                    _tgentransfer_toString(transfer), bytesMessage);
-
-            transfer->time.lastBytesStatusReport = now;
-            g_free(bytesMessage);
-        }
+        transfer->time.lastBytesStatusReport = g_get_monotonic_time();;
+        g_free(bytesMessage);
     }
 
     if(transfer->state == TGEN_XFER_DONE && transfer->time.lastTimeStatusReport == 0) {
@@ -681,7 +676,14 @@ TGenEvent tgentransfer_onEvent(TGenTransfer* transfer, gint descriptor, TGenEven
     _tgentransfer_log(transfer, wasActive);
 
     if((transfer->events & TGEN_EVENT_DONE) && transfer->notify) {
+        /* execute the callback to notify that we are complete */
         transfer->notify(transfer->data1, transfer->data2, transfer);
+        /* make sure we only do teh notification once */
+        transfer->notify = NULL;
+    }
+
+    if(transfer->state == TGEN_XFER_ERROR) {
+        transfer->events |= TGEN_EVENT_DONE;
     }
 
     return transfer->events;

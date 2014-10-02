@@ -12,8 +12,13 @@ static void _tgendriver_log(ShadowLogLevel level, const gchar* functionName, con
 	va_list vargs;
 	va_start(vargs, format);
 
+	gint64 totalMicros = g_get_monotonic_time();
+	gint64 seconds = totalMicros / 1000000;
+	gint64 micros = totalMicros % 1000000;
+
 	GString* newformat = g_string_new(NULL);
-	g_string_append_printf(newformat, "[%s] %s", functionName, format);
+	g_string_append_printf(newformat, "%"G_GINT64_FORMAT".%06"G_GINT64_FORMAT" [%s] %s",
+	        seconds, micros, functionName, format);
 	g_logv(G_LOG_DOMAIN, (GLogLevelFlags)level, newformat->str, vargs);
 	g_string_free(newformat, TRUE);
 
