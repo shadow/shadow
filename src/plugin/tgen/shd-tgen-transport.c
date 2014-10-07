@@ -64,12 +64,19 @@ TGenTransport* tgentransport_newActive(TGenPeer* proxy, TGenPeer* peer,
         return NULL;
     }
 
-    /* connect to the given peer */
+    /* connect to another host */
     struct sockaddr_in master;
     memset(&master, 0, sizeof(master));
     master.sin_family = AF_INET;
-    master.sin_addr.s_addr = proxy ? tgenpeer_getNetworkIP(proxy) : tgenpeer_getNetworkIP(peer);
-    master.sin_port = proxy ? tgenpeer_getNetworkPort(proxy) : tgenpeer_getNetworkPort(peer);
+
+    /* if there is a proxy, we connect there; otherwise connect to the peer */
+    TGenPeer* connectee = proxy ? proxy : peer;
+
+    /* its safe to do lookups on whoever we are directly connecting to. */
+    tgenpeer_performLookups(connectee);
+
+    master.sin_addr.s_addr = tgenpeer_getNetworkIP(connectee);
+    master.sin_port = tgenpeer_getNetworkPort(connectee);
 
     gint result = connect(socketD, (struct sockaddr *) &master, sizeof(master));
 
@@ -248,17 +255,45 @@ static TGenEvent _tgentransport_sendSocksRequest(TGenTransport* transport) {
     in_port_t (2 bytes)
     */
 
-    gchar buffer[16];
-    memset(buffer, 0, 16);
+    /* prefer name mode if we have it, and let the proxy lookup IP as needed */
+    const gchar* name = tgenpeer_getName(transport->peer);
+    if(name) {
+        /* case 3b - domain name */
+        glong nameLength = g_utf8_strlen(name, -1);
+        guint8 guint8max = -1;
+        if(nameLength > guint8max) {
+            nameLength = (glong)guint8max;
+            tgen_warning("truncated name '%s' in socks request from %i to %u bytes",
+                    name, nameLength, (guint)guint8max);
+        }
 
-    g_memmove(&buffer[0], "\x05\x01\x00\x01", 4);
-    in_addr_t ip = tgenpeer_getNetworkIP(transport->peer);
-    g_memmove(&buffer[4], &ip, 4);
-    in_addr_t port = tgenpeer_getNetworkPort(transport->peer);
-    g_memmove(&buffer[8], &port, 2);
+        in_addr_t port = tgenpeer_getNetworkPort(transport->peer);
 
-    gssize bytesSent = tgentransport_write(transport, buffer, 10);
-    g_assert(bytesSent == 10);
+        gchar buffer[nameLength+8];
+        memset(buffer, 0, nameLength+8);
+
+        g_memmove(&buffer[0], "\x05\x01\x00\x03", 4);
+        g_memmove(&buffer[4], &nameLength, 1);
+        g_memmove(&buffer[5], name, nameLength);
+        g_memmove(&buffer[5+nameLength], &port, 2);
+
+        gssize bytesSent = tgentransport_write(transport, buffer, nameLength+7);
+        g_assert(bytesSent == nameLength+8);
+    } else {
+        /* case 3a - IPv4 */
+        in_addr_t ip = tgenpeer_getNetworkIP(transport->peer);
+        in_addr_t port = tgenpeer_getNetworkPort(transport->peer);
+
+        gchar buffer[16];
+        memset(buffer, 0, 16);
+
+        g_memmove(&buffer[0], "\x05\x01\x00\x01", 4);
+        g_memmove(&buffer[4], &ip, 4);
+        g_memmove(&buffer[8], &port, 2);
+
+        gssize bytesSent = tgentransport_write(transport, buffer, 10);
+        g_assert(bytesSent == 10);
+    }
 
     tgen_debug("requested connection to %s through socks proxy %s",
             tgenpeer_toString(transport->peer), tgenpeer_toString(transport->proxy));
@@ -294,27 +329,49 @@ static TGenEvent _tgentransport_receiveSocksResponse(TGenTransport* transport) {
     g_assert(bytesReceived >= 4);
 
     if(buffer[0] == 0x05 && buffer[1] == 0x00 && buffer[3] == 0x01) {
-        /* IPV4 mode - get address server told us */
+        /* case 4a - IPV4 mode - get address server told us */
         g_assert(bytesReceived == 10);
 
         /* check if they want us to connect elsewhere */
-        in_addr_t socksBindAddress;
-        in_port_t socksBindPort;
+        in_addr_t socksBindAddress = 0;
+        in_port_t socksBindPort = 0;
         g_memmove(&socksBindAddress, &buffer[4], 4);
         g_memmove(&socksBindPort, &buffer[8], 2);
 
         /* reconnect not supported */
-        g_assert(socksBindAddress == 0 && socksBindPort == 0);
+        if(socksBindAddress == 0 && socksBindPort == 0) {
+            tgen_info("connection to %s through socks proxy %s successful",
+                    tgenpeer_toString(transport->peer), tgenpeer_toString(transport->proxy));
 
-        tgen_info("connection to %s through socks proxy %s successful",
-                tgenpeer_toString(transport->peer), tgenpeer_toString(transport->proxy));
+            transport->proxyState = PROXY_SUCCESS;
+            return TGEN_EVENT_DONE;
+        }
+    } else if (buffer[0] == 0x05 && buffer[1] == 0x00 && buffer[3] == 0x03) {
+        /* case 4b - domain name mode */
+        guint8 nameLength = 0;
+        g_memmove(&nameLength, &buffer[4], 1);
 
-        transport->proxyState = PROXY_SUCCESS;
-        return TGEN_EVENT_DONE;
-    } else {
-        transport->proxyState = PROXY_ERROR;
-        return TGEN_EVENT_NONE;
+        g_assert(bytesReceived == nameLength+7);
+
+        gchar namebuf[nameLength+1];
+        memset(namebuf, 0, nameLength);
+        in_port_t socksBindPort = 0;
+
+        g_memmove(namebuf, &buffer[5], nameLength);
+        g_memmove(&socksBindPort, &buffer[5+nameLength], 2);
+
+        /* reconnect not supported */
+        if(!g_ascii_strncasecmp(namebuf, "\0", (gsize) 1) && socksBindPort == 0) {
+            tgen_info("connection to %s through socks proxy %s successful",
+                    tgenpeer_toString(transport->peer), tgenpeer_toString(transport->proxy));
+
+            transport->proxyState = PROXY_SUCCESS;
+            return TGEN_EVENT_DONE;
+        }
     }
+
+    transport->proxyState = PROXY_ERROR;
+    return TGEN_EVENT_NONE;
 }
 
 TGenEvent tgentransport_onEvent(TGenTransport* transport, TGenEvent events) {
@@ -360,8 +417,8 @@ TGenEvent tgentransport_onEvent(TGenTransport* transport, TGenEvent events) {
         return TGEN_EVENT_DONE;
     }
 
-    default:
-    case PROXY_ERROR: {
+    case PROXY_ERROR:
+    default: {
         return TGEN_EVENT_NONE;
     }
     }

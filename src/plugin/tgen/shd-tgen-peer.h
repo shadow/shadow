@@ -9,9 +9,12 @@
 
 typedef struct _TGenPeer TGenPeer;
 
-TGenPeer* tgenpeer_new(in_addr_t networkIP, in_port_t networkPort);
+TGenPeer* tgenpeer_newFromName(const gchar* name, in_port_t networkPort);
+TGenPeer* tgenpeer_newFromIP(in_addr_t networkIP, in_port_t networkPort);
 void tgenpeer_ref(TGenPeer* peer);
 void tgenpeer_unref(TGenPeer* peer);
+
+void tgenpeer_performLookups(TGenPeer* peer);
 
 in_addr_t tgenpeer_getNetworkIP(TGenPeer* peer);
 in_port_t tgenpeer_getNetworkPort(TGenPeer* peer);

@@ -483,6 +483,7 @@ TGenDriver* tgendriver_new(gint argc, gchar* argv[], ShadowLogFunc logf) {
 
     TGenGraph* graph = tgengraph_new(argv[1]);
 
+    // TODO embedding a tgen graphml inside the shadow.config.xml file not yet supported
 //    if(argv[1] && g_str_has_prefix(argv[1], "<?xml")) {
 //        /* argv contains the xml contents of the xml file */
 //        gchar* tempPath = _tgendriver_makeTempFile();

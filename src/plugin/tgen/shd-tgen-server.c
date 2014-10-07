@@ -28,7 +28,11 @@ static void _tgenserver_acceptPeer(TGenServer* server) {
 
     if(peerSocketD >= 0) {
         if(server->notify) {
-            TGenPeer* peer = tgenpeer_new(peerAddress.sin_addr.s_addr, peerAddress.sin_port);
+            TGenPeer* peer = tgenpeer_newFromIP(peerAddress.sin_addr.s_addr, peerAddress.sin_port);
+
+            /* someone is connecting to us, its ok to perform network lookups */
+            tgenpeer_performLookups(peer);
+
             server->notify(server->data, peerSocketD, peer);
             tgenpeer_unref(peer);
         }

@@ -40,28 +40,7 @@ struct _TGenAction {
     guint magic;
 };
 
-static in_addr_t _tgengraph_toAddress(const gchar* hostname) {
-    in_addr_t address = INADDR_NONE;
-
-    /* get the address in network order */
-    if (!g_ascii_strncasecmp(hostname, "localhost", 9)) {
-        address = htonl(INADDR_LOOPBACK);
-    } else if (!g_ascii_strncasecmp(hostname, "0.0.0.0", 7)) {
-        address = htonl(INADDR_ANY);
-    } else {
-        struct addrinfo* info;
-        if (!getaddrinfo((gchar*) hostname, NULL, NULL, &info)) {
-            address = ((struct sockaddr_in*) (info->ai_addr))->sin_addr.s_addr;
-            freeaddrinfo(info);
-        } else {
-            tgen_warning("error in getaddrinfo for host '%s'", hostname);
-        }
-    }
-
-    return address;
-}
-
-static GError* _tgengraph_handlePeer(const gchar* attributeName,
+static GError* _tgenaction_handlePeer(const gchar* attributeName,
         const gchar* peerStr, TGenPeer** peerOut) {
     g_assert(attributeName && peerStr);
 
@@ -85,18 +64,20 @@ static GError* _tgengraph_handlePeer(const gchar* attributeName,
         return NULL;
     }
 
-    in_addr_t address = _tgengraph_toAddress(tokens[0]);
+    gchar* name = tokens[0];
     in_port_t port = 0;
     guint64 portNum = g_ascii_strtoull(tokens[1], NULL, 10);
     g_strfreev(tokens);
 
     /* validate values */
-    if (address == htonl(INADDR_ANY) || address == htonl(INADDR_NONE)) {
-        error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT,
-                "invalid peer '%s' for host part of attribute '%s', "
-                "expected 'localhost', '127.0.0.1', or valid node hostname",
-                peerStr, attributeName);
-    }
+    // removed to avoid lookups that could leak the intended destination
+//    in_addr_t address = _tgengraph_toAddress(tokens[0]);
+//    if (address == htonl(INADDR_ANY) || address == htonl(INADDR_NONE)) {
+//        error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT,
+//                "invalid peer '%s' for host part of attribute '%s', "
+//                "expected 'localhost', '127.0.0.1', or valid node hostname",
+//                peerStr, attributeName);
+//    }
     if (portNum > UINT16_MAX) {
         error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT,
                 "invalid peer '%s' for port part of attribute '%s', "
@@ -107,7 +88,7 @@ static GError* _tgengraph_handlePeer(const gchar* attributeName,
     }
 
     if (!error) {
-        TGenPeer* peer = tgenpeer_new(address, port);
+        TGenPeer* peer = tgenpeer_newFromName(name, port);
         tgen_debug("parsed peer '%s' from string '%s'", tgenpeer_toString(peer), peerStr);
 
         if (peerOut) {
@@ -120,7 +101,7 @@ static GError* _tgengraph_handlePeer(const gchar* attributeName,
     return error;
 }
 
-static GError* _tgengraph_handlePeers(const gchar* attributeName,
+static GError* _tgenaction_handlePeers(const gchar* attributeName,
         const gchar* peersStr, TGenPool* peerPool) {
     g_assert(attributeName && peersStr);
 
@@ -133,7 +114,7 @@ static GError* _tgengraph_handlePeers(const gchar* attributeName,
     for (int i = 0; tokens[i] != NULL; i++) {
         TGenPeer* peer = NULL;
 
-        error = _tgengraph_handlePeer(attributeName, tokens[i], &peer);
+        error = _tgenaction_handlePeer(attributeName, tokens[i], &peer);
 
         if (!error && peerPool && peer) {
             tgenpool_add(peerPool, peer);
@@ -154,7 +135,7 @@ static GError* _tgengraph_handlePeers(const gchar* attributeName,
     return error;
 }
 
-static GError* _tgengraph_handleBytes(const gchar* attributeName,
+static GError* _tgenaction_handleBytes(const gchar* attributeName,
         const gchar* byteStr, guint64* bytesOut) {
     g_assert(attributeName && byteStr);
 
@@ -225,7 +206,7 @@ static GError* _tgengraph_handleBytes(const gchar* attributeName,
     return error;
 }
 
-static GError* _tgengraph_handleIntegerList(const gchar* attributeName, const gchar* timeStr,
+static GError* _tgenaction_handleIntegerList(const gchar* attributeName, const gchar* timeStr,
         TGenPool* pauseTimesOut) {
     g_assert(attributeName && timeStr && pauseTimesOut);
 
@@ -253,7 +234,7 @@ static GError* _tgengraph_handleIntegerList(const gchar* attributeName, const gc
     return error;
 }
 
-static GError* _tgengraph_handleBoolean(const gchar* attributeName,
+static GError* _tgenaction_handleBoolean(const gchar* attributeName,
         const gchar* booleanStr, gboolean* booleanOut, gboolean* isFoundOut) {
     g_assert(attributeName && booleanStr);
 
@@ -352,7 +333,7 @@ TGenAction* tgenaction_newStartAction(const gchar* timeStr,
     /* a socks proxy address is optional */
     TGenPeer* socksproxy = NULL;
     if (g_ascii_strncasecmp(socksProxyStr, "\0", (gsize) 1)) {
-        *error = _tgengraph_handlePeer("socksproxy", socksProxyStr, &socksproxy);
+        *error = _tgenaction_handlePeer("socksproxy", socksProxyStr, &socksproxy);
         if (*error) {
             return NULL;
         }
@@ -360,7 +341,7 @@ TGenAction* tgenaction_newStartAction(const gchar* timeStr,
 
     /* validate the peer pool */
     TGenPool* peerPool = tgenpool_new((GDestroyNotify)tgenpeer_unref);
-    *error = _tgengraph_handlePeers("peers", peersStr, peerPool);
+    *error = _tgenaction_handlePeers("peers", peersStr, peerPool);
     if (*error) {
         tgenpool_unref(peerPool);
         return NULL;
@@ -394,7 +375,7 @@ TGenAction* tgenaction_newEndAction(const gchar* timeStr, const gchar* countStr,
 
     guint64 size = 0;
     if (g_ascii_strncasecmp(sizeStr, "\0", (gsize) 1)) {
-        *error = _tgengraph_handleBytes("size", sizeStr, &size);
+        *error = _tgenaction_handleBytes("size", sizeStr, &size);
         if (*error) {
             return NULL;
         }
@@ -431,7 +412,7 @@ TGenAction* tgenaction_newPauseAction(const gchar* timeStr, GError** error) {
     }
 
     TGenPool* pauseTimes = tgenpool_new(g_free);
-    *error = _tgengraph_handleIntegerList("time", timeStr, pauseTimes);
+    *error = _tgenaction_handleIntegerList("time", timeStr, pauseTimes);
     if (*error) {
         tgenpool_unref(pauseTimes);
         return NULL;
@@ -511,7 +492,7 @@ TGenAction* tgenaction_newTransferAction(const gchar* typeStr,
         return NULL;
     }
     guint64 size = 0;
-    *error = _tgengraph_handleBytes("size", sizeStr, &size);
+    *error = _tgenaction_handleBytes("size", sizeStr, &size);
     if (*error) {
         return NULL;
     }
@@ -520,7 +501,7 @@ TGenAction* tgenaction_newTransferAction(const gchar* typeStr,
     TGenPool* peerPool = NULL;
     if (g_ascii_strncasecmp(peersStr, "\0", (gsize) 1)) {
         peerPool = tgenpool_new((GDestroyNotify)tgenpeer_unref);
-        *error = _tgengraph_handlePeers("peers", peersStr, peerPool);
+        *error = _tgenaction_handlePeers("peers", peersStr, peerPool);
         if (*error) {
             tgenpool_unref(peerPool);
             return NULL;
