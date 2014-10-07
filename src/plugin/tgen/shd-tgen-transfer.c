@@ -201,15 +201,16 @@ static void _tgentransfer_readCommand(TGenTransfer* transfer) {
                 hasError = TRUE;
             }
 
-            /* if they are trying to GET, then we need to PUT to them */
             if(!g_ascii_strncasecmp(parts[2], "GET", 3)) {
+                /* they are trying to GET, then we need to PUT to them */
                 transfer->type = TGEN_TYPE_PUT;
                 /* we read command, but now need to write payload */
                 transfer->events |= TGEN_EVENT_WRITE;
-            } else if(!g_ascii_strncasecmp(parts[0], "PUT", 3)) {
+            } else if(!g_ascii_strncasecmp(parts[2], "PUT", 3)) {
+                /* they want to PUT, so we will GET from them */
                 transfer->type = TGEN_TYPE_GET;
             } else {
-                tgen_critical("error parsing command type '%s'", parts[0]);
+                tgen_critical("error parsing command type '%s'", parts[2]);
                 hasError = TRUE;
             }
 
@@ -230,6 +231,7 @@ static void _tgentransfer_readCommand(TGenTransfer* transfer) {
             /* we need to update our string with the new command info */
             _tgentransfer_resetString(transfer);
             _tgentransfer_changeState(transfer, TGEN_XFER_RESPONSE);
+            transfer->events |= TGEN_EVENT_WRITE;
         }
     } else {
         /* unable to receive entire command, wait for next chance to read */
@@ -272,6 +274,9 @@ static void _tgentransfer_readResponse(TGenTransfer* transfer) {
             /* we need to update our string with the new command info */
             _tgentransfer_resetString(transfer);
             _tgentransfer_changeState(transfer, TGEN_XFER_PAYLOAD);
+            if(transfer->state == TGEN_TYPE_PUT) {
+                transfer->events |= TGEN_EVENT_WRITE;
+            }
         }
     } else {
         /* unable to receive entire command, wait for next chance to read */
@@ -455,6 +460,7 @@ static void _tgentransfer_writeCommand(TGenTransfer* transfer) {
         /* entire command was sent, move to payload phase */
         _tgentransfer_changeState(transfer, TGEN_XFER_RESPONSE);
         transfer->time.command = g_get_monotonic_time();
+        transfer->events |= TGEN_EVENT_READ;
     } else {
         /* unable to send entire command, wait for next chance to write */
     }
@@ -561,7 +567,7 @@ static void _tgentransfer_onWritable(TGenTransfer* transfer) {
     }
 
     if(transfer->writeBuffer ||
-            (transfer->type == TGEN_TYPE_PUT && transfer->state != TGEN_XFER_DONE)) {
+            (transfer->type == TGEN_TYPE_PUT && transfer->state == TGEN_XFER_PAYLOAD)) {
         /* we have more to write */
         transfer->events |= TGEN_EVENT_WRITE;
     } else {
@@ -658,6 +664,7 @@ static void _tgentransfer_log(TGenTransfer* transfer, gboolean wasActive) {
 TGenEvent tgentransfer_onEvent(TGenTransfer* transfer, gint descriptor, TGenEvent events) {
     TGEN_ASSERT(transfer);
 
+    /* check if the transport layer wants to do some IO, and redirect if needed */
     if(transfer->transport && tgentransport_wantsEvents(transfer->transport)) {
         TGenEvent retEvents = tgentransport_onEvent(transfer->transport, events);
         if(retEvents == TGEN_EVENT_NONE) {
@@ -674,14 +681,14 @@ TGenEvent tgentransfer_onEvent(TGenTransfer* transfer, gint descriptor, TGenEven
         }
     }
 
+    /* transport layer is happy, our turn to start the transfer */
     gsize readBytesBefore = transfer->bytes.payloadRead;
     gsize writeBytesBefore = transfer->bytes.payloadWrite;
 
-    /* process the incoming events */
+    /* process the events */
     if(events & TGEN_EVENT_READ) {
         _tgentransfer_onReadable(transfer);
     }
-
     if(events & TGEN_EVENT_WRITE) {
         _tgentransfer_onWritable(transfer);
     }
