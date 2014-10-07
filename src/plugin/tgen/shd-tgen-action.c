@@ -67,7 +67,6 @@ static GError* _tgenaction_handlePeer(const gchar* attributeName,
     gchar* name = tokens[0];
     in_port_t port = 0;
     guint64 portNum = g_ascii_strtoull(tokens[1], NULL, 10);
-    g_strfreev(tokens);
 
     /* validate values */
     // removed to avoid lookups that could leak the intended destination
@@ -97,6 +96,8 @@ static GError* _tgenaction_handlePeer(const gchar* attributeName,
             tgenpeer_unref(peer);
         }
     }
+
+    g_strfreev(tokens);
 
     return error;
 }

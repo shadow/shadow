@@ -135,9 +135,9 @@ static TGenPeer* _tgenpeer_new(const gchar* name, in_addr_t networkIP, in_port_t
 
     if(name) {
         /* the name could be a hostname, or a dots-and-decimal ip string */
-        if (!g_ascii_strncasecmp(name, "localhost", 9)) {
+        if (!g_ascii_strcasecmp(name, "localhost")) {
             peer->netIP = htonl(INADDR_LOOPBACK);
-        } else if (!g_ascii_strncasecmp(name, "0.0.0.0", 7)) {
+        } else if (!g_ascii_strcasecmp(name, "0.0.0.0")) {
             peer->netIP = htonl(INADDR_ANY);
         } else {
             /* check for dots-and-decimal format */
