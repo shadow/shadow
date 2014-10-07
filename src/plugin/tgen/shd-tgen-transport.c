@@ -6,6 +6,10 @@
 
 #include "shd-tgen.h"
 
+typedef enum {
+    PROXY_INIT, PROXY_CHOICE, PROXY_REQUEST, PROXY_RESPONSE, PROXY_SUCCESS, PROXY_ERROR
+} ProxyState;
+
 struct _TGenTransport {
     TGenTransportProtocol protocol;
     gint socketD;
@@ -15,8 +19,10 @@ struct _TGenTransport {
     GDestroyNotify destructData;
 
     TGenPeer* peer;
-    TGenPeer* proxy;
     gchar* string;
+
+    TGenPeer* proxy;
+    ProxyState proxyState;
 
     gint refcount;
     guint magic;
@@ -62,8 +68,8 @@ TGenTransport* tgentransport_newActive(TGenPeer* proxy, TGenPeer* peer,
     struct sockaddr_in master;
     memset(&master, 0, sizeof(master));
     master.sin_family = AF_INET;
-    master.sin_addr.s_addr = tgenpeer_getNetworkIP(peer);
-    master.sin_port = tgenpeer_getNetworkPort(peer);
+    master.sin_addr.s_addr = proxy ? tgenpeer_getNetworkIP(proxy) : tgenpeer_getNetworkIP(peer);
+    master.sin_port = proxy ? tgenpeer_getNetworkPort(proxy) : tgenpeer_getNetworkPort(peer);
 
     gint result = connect(socketD, (struct sockaddr *) &master, sizeof(master));
 
@@ -74,59 +80,6 @@ TGenTransport* tgentransport_newActive(TGenPeer* proxy, TGenPeer* peer,
         close(socketD);
         return NULL;
     }
-
-    // TODO handle socks connection if proxy exists
-    /*
-    --------------------------------
-    1 socks init client --> server
-    \x05 (version 5)
-    \x01 (1 supported auth method)
-    \x00 (method is "no auth")
-    --------------------------------
-
-    2 socks choice client <-- server
-    \x05 (version 5)
-    \x00 (auth method choice - \xFF means none supported)
-    --------------------------------
-
-    3 socks request client --> server
-    \x05 (version 5)
-    \x01 (tcp stream)
-    \x00 (reserved)
-
-    the client asks the server to connect to a remote
-
-    3a ip address client --> server
-    \x01 (ipv4)
-    in_addr_t (4 bytes)
-    in_port_t (2 bytes)
-
-    3b hostname client --> server
-    \x03 (domain name)
-    \x__ (1 byte name len)
-    (name)
-    in_port_t (2 bytes)
-    --------------------------------
-
-    4 socks response client <-- server
-    \x05 (version 5)
-    \x00 (request granted)
-    \x00 (reserved)
-
-    the server can tell us that we need to reconnect elsewhere
-
-    4a ip address client <-- server
-    \x01 (ipv4)
-    in_addr_t (4 bytes)
-    in_port_t (2 bytes)
-
-    4b hostname client <-- server
-    \x03 (domain name)
-    \x__ (1 byte name len)
-    (name)
-    in_port_t (2 bytes)
-    --------------------------------
-     */
 
     return _tgentransport_newHelper(socketD, proxy, peer, notify, data, destructData);
 }
@@ -225,4 +178,191 @@ const gchar* tgentransport_toString(TGenTransport* transport) {
     }
 
     return transport->string;
+}
+
+gboolean tgentransport_wantsEvents(TGenTransport* transport) {
+    TGEN_ASSERT(transport);
+    if(transport->proxy && transport->proxyState != PROXY_SUCCESS
+            && transport->proxyState != PROXY_ERROR) {
+        return TRUE;
+    }
+    return FALSE;
+}
+
+static TGenEvent _tgentransport_sendSocksInit(TGenTransport* transport) {
+    /*
+    1 socks init client --> server
+    \x05 (version 5)
+    \x01 (1 supported auth method)
+    \x00 (method is "no auth")
+    */
+    gssize bytesSent = tgentransport_write(transport, "\x05\x01\x00", 3);
+    g_assert(bytesSent == 3);
+
+    tgen_debug("sent socks init to proxy %s", tgenpeer_toString(transport->proxy));
+
+    transport->proxyState = PROXY_CHOICE;
+    return TGEN_EVENT_READ;
+}
+
+static TGenEvent _tgentransport_receiveSocksChoice(TGenTransport* transport) {
+    /*
+    2 socks choice client <-- server
+    \x05 (version 5)
+    \x00 (auth method choice - \xFF means none supported)
+    */
+    gchar buffer[8];
+    memset(buffer, 0, 8);
+    gssize bytesReceived = tgentransport_read(transport, buffer, 2);
+    g_assert(bytesReceived == 2);
+
+    if(buffer[0] == 0x05 && buffer[1] == 0x00) {
+        tgen_debug("received good socks choice from proxy %s", tgenpeer_toString(transport->proxy));
+
+        transport->proxyState = PROXY_REQUEST;
+        return TGEN_EVENT_WRITE;
+    } else {
+        transport->proxyState = PROXY_ERROR;
+        return TGEN_EVENT_NONE;
+    }
+}
+
+static TGenEvent _tgentransport_sendSocksRequest(TGenTransport* transport) {
+    /*
+    3 socks request client --> server
+    \x05 (version 5)
+    \x01 (tcp stream)
+    \x00 (reserved)
+
+    the client asks the server to connect to a remote
+
+    3a ip address client --> server
+    \x01 (ipv4)
+    in_addr_t (4 bytes)
+    in_port_t (2 bytes)
+
+    3b hostname client --> server
+    \x03 (domain name)
+    \x__ (1 byte name len)
+    (name)
+    in_port_t (2 bytes)
+    */
+
+    gchar buffer[16];
+    memset(buffer, 0, 16);
+
+    g_memmove(&buffer[0], "\x05\x01\x00\x01", 4);
+    in_addr_t ip = tgenpeer_getNetworkIP(transport->peer);
+    g_memmove(&buffer[4], &ip, 4);
+    in_addr_t port = tgenpeer_getNetworkPort(transport->peer);
+    g_memmove(&buffer[8], &port, 2);
+
+    gssize bytesSent = tgentransport_write(transport, buffer, 10);
+    g_assert(bytesSent == 10);
+
+    tgen_debug("requested connection to %s through socks proxy %s",
+            tgenpeer_toString(transport->peer), tgenpeer_toString(transport->proxy));
+
+    transport->proxyState = PROXY_RESPONSE;
+    return TGEN_EVENT_READ;
+}
+
+static TGenEvent _tgentransport_receiveSocksResponse(TGenTransport* transport) {
+    /*
+    4 socks response client <-- server
+    \x05 (version 5)
+    \x00 (request granted)
+    \x00 (reserved)
+
+    the server can tell us that we need to reconnect elsewhere
+
+    4a ip address client <-- server
+    \x01 (ipv4)
+    in_addr_t (4 bytes)
+    in_port_t (2 bytes)
+
+    4b hostname client <-- server
+    \x03 (domain name)
+    \x__ (1 byte name len)
+    (name)
+    in_port_t (2 bytes)
+     */
+
+    gchar buffer[256];
+    memset(buffer, 0, 256);
+    gssize bytesReceived = tgentransport_read(transport, buffer, 256);
+    g_assert(bytesReceived >= 4);
+
+    if(buffer[0] == 0x05 && buffer[1] == 0x00 && buffer[3] == 0x01) {
+        /* IPV4 mode - get address server told us */
+        g_assert(bytesReceived == 10);
+
+        /* check if they want us to connect elsewhere */
+        in_addr_t socksBindAddress;
+        in_port_t socksBindPort;
+        g_memmove(&socksBindAddress, &buffer[4], 4);
+        g_memmove(&socksBindPort, &buffer[8], 2);
+
+        /* reconnect not supported */
+        g_assert(socksBindAddress == 0 && socksBindPort == 0);
+
+        tgen_info("connection to %s through socks proxy %s successful",
+                tgenpeer_toString(transport->peer), tgenpeer_toString(transport->proxy));
+
+        transport->proxyState = PROXY_SUCCESS;
+        return TGEN_EVENT_DONE;
+    } else {
+        transport->proxyState = PROXY_ERROR;
+        return TGEN_EVENT_NONE;
+    }
+}
+
+TGenEvent tgentransport_onEvent(TGenTransport* transport, TGenEvent events) {
+    TGEN_ASSERT(transport);
+    if(!tgentransport_wantsEvents(transport)) {
+        return TGEN_EVENT_NONE;
+    }
+
+    switch(transport->proxyState) {
+    case PROXY_INIT: {
+        if(!(events & TGEN_EVENT_WRITE)) {
+            return TGEN_EVENT_WRITE;
+        } else {
+            return _tgentransport_sendSocksInit(transport);
+        }
+    }
+
+    case PROXY_CHOICE: {
+        if(!(events & TGEN_EVENT_READ)) {
+            return TGEN_EVENT_READ;
+        } else {
+            return _tgentransport_receiveSocksChoice(transport);
+        }
+    }
+
+    case PROXY_REQUEST: {
+        if(!(events & TGEN_EVENT_WRITE)) {
+            return TGEN_EVENT_WRITE;
+        } else {
+            return _tgentransport_sendSocksRequest(transport);
+        }
+    }
+
+    case PROXY_RESPONSE: {
+        if(!(events & TGEN_EVENT_READ)) {
+            return TGEN_EVENT_READ;
+        } else {
+            return _tgentransport_receiveSocksResponse(transport);
+        }
+    }
+
+    case PROXY_SUCCESS: {
+        return TGEN_EVENT_DONE;
+    }
+
+    default:
+    case PROXY_ERROR: {
+        return TGEN_EVENT_NONE;
+    }
+    }
 }

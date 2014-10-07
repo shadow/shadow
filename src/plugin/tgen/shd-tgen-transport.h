@@ -30,4 +30,7 @@ gssize tgentransport_read(TGenTransport* transport, gpointer buffer, gsize lengt
 gint tgentransport_getDescriptor(TGenTransport* transport);
 const gchar* tgentransport_toString(TGenTransport* transport);
 
+gboolean tgentransport_wantsEvents(TGenTransport* transport);
+TGenEvent tgentransport_onEvent(TGenTransport* transport, TGenEvent events);
+
 #endif /* SHD_TGEN_TRANSPORT_H_ */

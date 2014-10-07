@@ -658,6 +658,22 @@ static void _tgentransfer_log(TGenTransfer* transfer, gboolean wasActive) {
 TGenEvent tgentransfer_onEvent(TGenTransfer* transfer, gint descriptor, TGenEvent events) {
     TGEN_ASSERT(transfer);
 
+    if(transfer->transport && tgentransport_wantsEvents(transfer->transport)) {
+        TGenEvent retEvents = tgentransport_onEvent(transfer->transport, events);
+        if(retEvents == TGEN_EVENT_NONE) {
+            /* proxy failed */
+            tgen_critical("proxy connection failed, transfer cannot begin");
+            transfer->state = TGEN_XFER_ERROR;
+            return TGEN_EVENT_DONE;
+        } else if(retEvents & TGEN_EVENT_DONE) {
+            /* proxy is connected and ready, now its our turn */
+            return TGEN_EVENT_READ|TGEN_EVENT_WRITE;
+        } else {
+            /* proxy in progress */
+            return retEvents;
+        }
+    }
+
     gsize readBytesBefore = transfer->bytes.payloadRead;
     gsize writeBytesBefore = transfer->bytes.payloadWrite;
 

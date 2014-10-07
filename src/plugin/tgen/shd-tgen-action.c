@@ -21,7 +21,7 @@ typedef struct _TGenActionEndData {
 } TGenActionEndData;
 
 typedef struct _TGenActionPauseData {
-    guint64 time;
+    TGenPool* pauseTimes;
 } TGenActionPauseData;
 
 typedef struct _TGenActionTransferData {
@@ -225,6 +225,34 @@ static GError* _tgengraph_handleBytes(const gchar* attributeName,
     return error;
 }
 
+static GError* _tgengraph_handleIntegerList(const gchar* attributeName, const gchar* timeStr,
+        TGenPool* pauseTimesOut) {
+    g_assert(attributeName && timeStr && pauseTimesOut);
+
+    GError* error = NULL;
+
+    /* split into peers */
+    gchar** tokens = g_strsplit(timeStr, (const gchar*) ",", 0);
+
+    /* handle each peer */
+    for (gint i = 0; tokens[i] != NULL; i++) {
+        if (!g_ascii_strncasecmp(tokens[i], "\0", (gsize) 1)) {
+            error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT,
+                    "invalid content in string %s for attribute '%s', "
+                    "expected list of integers", timeStr, attributeName);
+            break;
+        }
+
+        guint64* pauseTime = g_new0(guint64, 1);
+        *pauseTime = g_ascii_strtoull(tokens[i], NULL, 10);
+        tgenpool_add(pauseTimesOut, pauseTime);
+    }
+
+    g_strfreev(tokens);
+
+    return error;
+}
+
 static GError* _tgengraph_handleBoolean(const gchar* attributeName,
         const gchar* booleanStr, gboolean* booleanOut, gboolean* isFoundOut) {
     g_assert(attributeName && booleanStr);
@@ -402,6 +430,13 @@ TGenAction* tgenaction_newPauseAction(const gchar* timeStr, GError** error) {
         return NULL;
     }
 
+    TGenPool* pauseTimes = tgenpool_new(g_free);
+    *error = _tgengraph_handleIntegerList("time", timeStr, pauseTimes);
+    if (*error) {
+        tgenpool_unref(pauseTimes);
+        return NULL;
+    }
+
     TGenAction* action = g_new0(TGenAction, 1);
     action->magic = TGEN_MAGIC;
     action->refcount = 1;
@@ -409,7 +444,7 @@ TGenAction* tgenaction_newPauseAction(const gchar* timeStr, GError** error) {
     action->type = TGEN_ACTION_PAUSE;
 
     TGenActionPauseData* data = g_new0(TGenActionPauseData, 1);
-    data->time = g_ascii_strtoull(timeStr, NULL, 10);;
+    data->pauseTimes = pauseTimes;
 
     action->data = data;
 
@@ -548,7 +583,8 @@ guint64 tgenaction_getStartTimeMillis(TGenAction* action) {
 guint64 tgenaction_getPauseTimeMillis(TGenAction* action) {
     TGEN_ASSERT(action);
     g_assert(action->data && action->type == TGEN_ACTION_PAUSE);
-    return 1000 * ((TGenActionPauseData*)action->data)->time;
+    guint64* time = tgenpool_getRandom(((TGenActionPauseData*)action->data)->pauseTimes);
+    return *time * 1000;
 }
 
 void tgenaction_getTransferParameters(TGenAction* action, TGenTransferType* typeOut,

@@ -108,6 +108,8 @@ static gboolean _tgendriver_onStartClientTimerExpired(TGenDriver* driver, gpoint
 static gboolean _tgendriver_onPauseTimerExpired(TGenDriver* driver, TGenAction* action) {
     TGEN_ASSERT(driver);
 
+    tgen_info("pause timer expired");
+
     /* continue next actions if possible */
     _tgendriver_continueNextActions(driver, action);
     /* timer was a one time event, so it can be canceled */
@@ -222,8 +224,10 @@ static void _tgendriver_initiateTransfer(TGenDriver* driver, TGenAction* action)
 static void _tgendriver_initiatePause(TGenDriver* driver, TGenAction* action) {
     TGEN_ASSERT(driver);
 
+    guint64 millisecondsPause = tgenaction_getPauseTimeMillis(action);
+
     /* create a timer to handle the pause action */
-    TGenTimer* pauseTimer = tgentimer_new(tgenaction_getPauseTimeMillis(action), FALSE,
+    TGenTimer* pauseTimer = tgentimer_new(millisecondsPause, FALSE,
             (TGenTimer_notifyExpiredFunc)_tgendriver_onPauseTimerExpired, driver, action,
             (GDestroyNotify)tgendriver_unref, (GDestroyNotify)tgenaction_unref);
 
@@ -232,6 +236,8 @@ static void _tgendriver_initiatePause(TGenDriver* driver, TGenAction* action) {
         _tgendriver_continueNextActions(driver, action);
         return;
     }
+
+    tgen_info("set pause timer for %"G_GUINT64_FORMAT" milliseconds", millisecondsPause);
 
     /* ref++ the driver and action for the pause timer */
     tgendriver_ref(driver);
