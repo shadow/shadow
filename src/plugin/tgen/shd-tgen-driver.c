@@ -173,6 +173,12 @@ static void _tgendriver_initiateTransfer(TGenDriver* driver, TGenAction* action)
     if (!peers) {
         peers = tgenaction_getPeers(driver->startAction);
     }
+
+    if(!peers) {
+        tgen_error("missing peers for transfer action; note that peers must be specified in "
+                "either the start action, or in *every* transfer action");
+    }
+
     TGenPeer* peer = tgenpool_getRandom(peers);
     TGenPeer* proxy = tgenaction_getSocksProxy(driver->startAction);
 

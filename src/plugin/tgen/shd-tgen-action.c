@@ -312,39 +312,37 @@ TGenAction* tgenaction_newStartAction(const gchar* timeStr,
     g_assert(error);
 
     /* the time is required */
-    if (!g_ascii_strncasecmp(timeStr, "\0", (gsize) 1)) {
+    if (!timeStr || !g_ascii_strncasecmp(timeStr, "\0", (gsize) 1)) {
         *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
                 "start action missing required attribute 'time'");
         return NULL;
     }
     /* a serverport is required */
-    if (!g_ascii_strncasecmp(serverPortStr, "\0", (gsize) 1)) {
+    if (! serverPortStr || !g_ascii_strncasecmp(serverPortStr, "\0", (gsize) 1)) {
         *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
                 "start action missing required attribute 'serverport'");
-        return NULL;
-    }
-    /* a list of peers is required */
-    if (!g_ascii_strncasecmp(peersStr, "\0", (gsize) 1)) {
-        *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
-                "start action missing required attribute 'peers'");
         return NULL;
     }
 
     /* a socks proxy address is optional */
     TGenPeer* socksproxy = NULL;
-    if (g_ascii_strncasecmp(socksProxyStr, "\0", (gsize) 1)) {
+    if (socksProxyStr && g_ascii_strncasecmp(socksProxyStr, "\0", (gsize) 1)) {
         *error = _tgenaction_handlePeer("socksproxy", socksProxyStr, &socksproxy);
         if (*error) {
             return NULL;
         }
     }
 
-    /* validate the peer pool */
-    TGenPool* peerPool = tgenpool_new((GDestroyNotify)tgenpeer_unref);
-    *error = _tgenaction_handlePeers("peers", peersStr, peerPool);
-    if (*error) {
-        tgenpool_unref(peerPool);
-        return NULL;
+    /* a list of peers is optional */
+    TGenPool* peerPool = NULL;
+    if (peersStr && g_ascii_strncasecmp(peersStr, "\0", (gsize) 1)) {
+        /* validate the peer pool */
+        peerPool = tgenpool_new((GDestroyNotify)tgenpeer_unref);
+        *error = _tgenaction_handlePeers("peers", peersStr, peerPool);
+        if (*error) {
+            tgenpool_unref(peerPool);
+            return NULL;
+        }
     }
 
     /* if we get here, we have what we need and validated it */
@@ -374,7 +372,7 @@ TGenAction* tgenaction_newEndAction(const gchar* timeStr, const gchar* countStr,
     /* time, count, and size are termination conditions, and all are optional */
 
     guint64 size = 0;
-    if (g_ascii_strncasecmp(sizeStr, "\0", (gsize) 1)) {
+    if (sizeStr && g_ascii_strncasecmp(sizeStr, "\0", (gsize) 1)) {
         *error = _tgenaction_handleBytes("size", sizeStr, &size);
         if (*error) {
             return NULL;
@@ -389,10 +387,10 @@ TGenAction* tgenaction_newEndAction(const gchar* timeStr, const gchar* countStr,
 
     TGenActionEndData* data = g_new0(TGenActionEndData, 1);
     data->size = size;
-    if (g_ascii_strncasecmp(timeStr, "\0", (gsize) 1)) {
+    if (timeStr && g_ascii_strncasecmp(timeStr, "\0", (gsize) 1)) {
         data->time = g_ascii_strtoull(timeStr, NULL, 10);
     }
-    if (g_ascii_strncasecmp(countStr, "\0", (gsize) 1)) {
+    if (countStr && g_ascii_strncasecmp(countStr, "\0", (gsize) 1)) {
         data->count = g_ascii_strtoull(countStr, NULL, 10);
     }
 
@@ -405,7 +403,7 @@ TGenAction* tgenaction_newPauseAction(const gchar* timeStr, GError** error) {
     g_assert(error);
 
     /* the time is required */
-    if (!g_ascii_strncasecmp(timeStr, "\0", (gsize) 1)) {
+    if (!timeStr || !g_ascii_strncasecmp(timeStr, "\0", (gsize) 1)) {
         *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
                 "pause action missing required attribute 'time'");
         return NULL;
@@ -449,7 +447,7 @@ TGenAction* tgenaction_newTransferAction(const gchar* typeStr,
 
     /* type is required */
     TGenTransferType type = TGEN_TYPE_NONE;
-    if (!g_ascii_strncasecmp(typeStr, "\0", (gsize) 1)) {
+    if (!typeStr || !g_ascii_strncasecmp(typeStr, "\0", (gsize) 1)) {
         *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
                 "transfer action missing required attribute 'type'");
         return NULL;
@@ -466,7 +464,7 @@ TGenAction* tgenaction_newTransferAction(const gchar* typeStr,
 
     /* protocol is required */
     TGenTransportProtocol protocol = TGEN_PROTOCOL_NONE;
-    if (!g_ascii_strncasecmp(protocolStr, "\0", (gsize) 1)) {
+    if (!protocolStr || !g_ascii_strncasecmp(protocolStr, "\0", (gsize) 1)) {
         *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
                 "transfer action missing required attribute 'protocol'");
         return NULL;
@@ -486,7 +484,7 @@ TGenAction* tgenaction_newTransferAction(const gchar* typeStr,
     }
 
     /* size is required */
-    if (!g_ascii_strncasecmp(sizeStr, "\0", (gsize) 1)) {
+    if (!sizeStr || !g_ascii_strncasecmp(sizeStr, "\0", (gsize) 1)) {
         *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
                 "transfer action missing required attribute 'size'");
         return NULL;
@@ -499,7 +497,7 @@ TGenAction* tgenaction_newTransferAction(const gchar* typeStr,
 
     /* peers are optional */
     TGenPool* peerPool = NULL;
-    if (g_ascii_strncasecmp(peersStr, "\0", (gsize) 1)) {
+    if (peersStr && g_ascii_strncasecmp(peersStr, "\0", (gsize) 1)) {
         peerPool = tgenpool_new((GDestroyNotify)tgenpeer_unref);
         *error = _tgenaction_handlePeers("peers", peersStr, peerPool);
         if (*error) {

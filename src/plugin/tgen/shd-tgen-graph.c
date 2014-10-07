@@ -6,8 +6,24 @@
 
 #include "shd-tgen.h"
 
+typedef enum {
+    TGEN_A_NONE = 0,
+    TGEN_VA_ID = 1 << 1,
+    TGEN_VA_TIME = 1 << 2,
+    TGEN_VA_SERVERPORT = 1 << 3,
+    TGEN_VA_PEERS = 1 << 4,
+    TGEN_VA_SOCKSPROXY = 1 << 5,
+    TGEN_VA_COUNT = 1 << 6,
+    TGEN_VA_SIZE = 1 << 7,
+    TGEN_VA_TYPE = 1 << 8,
+    TGEN_VA_PROTOCOL = 1 << 9,
+} AttributeFlags;
+
 struct _TGenGraph {
 	igraph_t* graph;
+
+	/* known attributes that we found in the graph header */
+	AttributeFlags knownAttributes;
 
 	/* graph properties */
 	igraph_integer_t clusterCount;
@@ -21,6 +37,9 @@ struct _TGenGraph {
 
 	gboolean hasStartAction;
 	igraph_integer_t startActionVertexIndex;
+
+	gboolean startHasPeers;
+	gboolean transferMissingPeers;
 
 	guint magic;
 };
@@ -53,6 +72,7 @@ static GError* _tgengraph_parseGraphEdges(TGenGraph* g) {
 
 	/* count the edges as we iterate */
 	igraph_integer_t edgeCount = 0;
+	GError* error = NULL;
 
 	while (!IGRAPH_EIT_END(edgeIterator)) {
 		long int edgeIndex = IGRAPH_EIT_GET(edgeIterator);
@@ -61,12 +81,26 @@ static GError* _tgengraph_parseGraphEdges(TGenGraph* g) {
 
 		gint result = igraph_edge(g->graph, edgeIndex, &fromVertexIndex, &toVertexIndex);
 		if(result != IGRAPH_SUCCESS) {
-			return g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_PARSE,
+		    error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_PARSE,
 					"igraph_edge return non-success code %i", result);
+		    break;
 		}
 
-		const gchar* fromIDStr = VAS(g->graph, "id", fromVertexIndex);
-		const gchar* toIDStr = VAS(g->graph, "id", toVertexIndex);
+		const gchar* fromIDStr = (g->knownAttributes&TGEN_VA_ID) ?
+		        VAS(g->graph, "id", fromVertexIndex) : NULL;
+        if(!fromIDStr) {
+            error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
+                    "found vertex %li with missing 'id' attribute", (glong)fromVertexIndex);
+            break;
+        }
+
+		const gchar* toIDStr = (g->knownAttributes&TGEN_VA_ID) ?
+		        VAS(g->graph, "id", toVertexIndex) : NULL;
+        if(!toIDStr) {
+            error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
+                    "found vertex %li with missing 'id' attribute", (glong)toVertexIndex);
+            break;
+        }
 
 		tgen_debug("found edge %li from vertex %li (%s) to vertex %li (%s)",
 				(glong)edgeIndex, (glong)fromVertexIndex, fromIDStr, (glong)toVertexIndex, toIDStr);
@@ -77,14 +111,16 @@ static GError* _tgengraph_parseGraphEdges(TGenGraph* g) {
 
 	igraph_eit_destroy(&edgeIterator);
 
-	g->edgeCount = igraph_ecount(g->graph);
-	if(g->edgeCount != edgeCount) {
-		tgen_warning("igraph_vcount %f does not match iterator count %f", g->edgeCount, edgeCount);
+	if(!error) {
+        g->edgeCount = igraph_ecount(g->graph);
+        if(g->edgeCount != edgeCount) {
+            tgen_warning("igraph_vcount %f does not match iterator count %f", g->edgeCount, edgeCount);
+        }
+
+        tgen_info("%u graph edges ok", (guint) g->edgeCount);
 	}
 
-	tgen_info("%u graph edges ok", (guint) g->edgeCount);
-
-	return NULL;
+	return error;
 }
 
 static void _tgengraph_storeAction(TGenGraph* g, TGenAction* a, igraph_integer_t vertexIndex) {
@@ -128,10 +164,14 @@ static GError* _tgengraph_parseStartVertex(TGenGraph* g, const gchar* idStr,
 		igraph_integer_t vertexIndex) {
 	TGEN_ASSERT(g);
 
-	const gchar* timeStr = VAS(g->graph, "time", vertexIndex);
-	const gchar* serverPortStr = VAS(g->graph, "serverport", vertexIndex);
-	const gchar* peersStr = VAS(g->graph, "peers", vertexIndex);
-	const gchar* socksProxyStr = VAS(g->graph, "socksproxy", vertexIndex);
+	const gchar* timeStr = (g->knownAttributes&TGEN_VA_TIME) ?
+	        VAS(g->graph, "time", vertexIndex) : NULL;
+	const gchar* serverPortStr = (g->knownAttributes&TGEN_VA_SERVERPORT) ?
+	        VAS(g->graph, "serverport", vertexIndex) : NULL;
+	const gchar* peersStr = (g->knownAttributes&TGEN_VA_PEERS) ?
+	        VAS(g->graph, "peers", vertexIndex) : NULL;
+	const gchar* socksProxyStr = (g->knownAttributes&TGEN_VA_SOCKSPROXY) ?
+	        VAS(g->graph, "socksproxy", vertexIndex) : NULL;
 
 	tgen_debug("validating action '%s' at vertex %li, time=%s serverport=%s socksproxy=%s peers=%s",
 			idStr, (glong)vertexIndex, timeStr, serverPortStr, socksProxyStr, peersStr);
@@ -154,6 +194,9 @@ static GError* _tgengraph_parseStartVertex(TGenGraph* g, const gchar* idStr,
 		g_assert(!g->hasStartAction);
 		g->startActionVertexIndex = vertexIndex;
 		g->hasStartAction = TRUE;
+		if(tgenaction_getPeers(a)) {
+		    g->startHasPeers = TRUE;
+		}
 	}
 
 	return error;
@@ -164,9 +207,12 @@ static GError* _tgengraph_parseEndVertex(TGenGraph* g, const gchar* idStr,
 	TGEN_ASSERT(g);
 
 	/* the following termination conditions are optional */
-	const gchar* timeStr = VAS(g->graph, "time", vertexIndex);
-	const gchar* countStr = VAS(g->graph, "count", vertexIndex);
-	const gchar* sizeStr = VAS(g->graph, "size", vertexIndex);
+	const gchar* timeStr = (g->knownAttributes&TGEN_VA_TIME) ?
+	        VAS(g->graph, "time", vertexIndex) : NULL;
+	const gchar* countStr = (g->knownAttributes&TGEN_VA_COUNT) ?
+	        VAS(g->graph, "count", vertexIndex) : NULL;
+	const gchar* sizeStr = (g->knownAttributes&TGEN_VA_SIZE) ?
+	        VAS(g->graph, "size", vertexIndex) : NULL;
 
 	tgen_debug("found vertex %li (%s), time=%s count=%s size=%s",
 			(glong)vertexIndex, idStr, timeStr, countStr, sizeStr);
@@ -185,7 +231,8 @@ static GError* _tgengraph_parsePauseVertex(TGenGraph* g, const gchar* idStr,
 		igraph_integer_t vertexIndex) {
 	TGEN_ASSERT(g);
 
-	const gchar* timeStr = VAS(g->graph, "time", vertexIndex);
+	const gchar* timeStr = (g->knownAttributes&TGEN_VA_TIME) ?
+	        VAS(g->graph, "time", vertexIndex) : NULL;
 
 	tgen_debug("found vertex %li (%s), time=%s", (glong)vertexIndex, idStr, timeStr);
 
@@ -219,10 +266,14 @@ static GError* _tgengraph_parseTransferVertex(TGenGraph* g, const gchar* idStr,
 		igraph_integer_t vertexIndex) {
 	TGEN_ASSERT(g);
 
-	const gchar* typeStr = VAS(g->graph, "type", vertexIndex);
-	const gchar* protocolStr = VAS(g->graph, "protocol", vertexIndex);
-	const gchar* sizeStr = VAS(g->graph, "size", vertexIndex);
-	const gchar* peersStr = VAS(g->graph, "peers", vertexIndex);
+	const gchar* typeStr = (g->knownAttributes&TGEN_VA_TYPE) ?
+	        VAS(g->graph, "type", vertexIndex) : NULL;
+	const gchar* protocolStr = (g->knownAttributes&TGEN_VA_PROTOCOL) ?
+	        VAS(g->graph, "protocol", vertexIndex) : NULL;
+	const gchar* sizeStr = (g->knownAttributes&TGEN_VA_SIZE) ?
+	        VAS(g->graph, "size", vertexIndex) : NULL;
+	const gchar* peersStr = (g->knownAttributes&TGEN_VA_PEERS) ?
+	        VAS(g->graph, "peers", vertexIndex) : NULL;
 
 	tgen_debug("found vertex %li (%s), type=%s protocol=%s size=%s peers=%s",
 			(glong)vertexIndex, idStr, typeStr, protocolStr, sizeStr, peersStr);
@@ -232,6 +283,9 @@ static GError* _tgengraph_parseTransferVertex(TGenGraph* g, const gchar* idStr,
 
 	if(a) {
 		_tgengraph_storeAction(g, a, vertexIndex);
+		if(!tgenaction_getPeers(a)) {
+		    g->transferMissingPeers = TRUE;
+		}
 	}
 
 	return error;
@@ -259,7 +313,14 @@ static GError* _tgengraph_parseGraphVertices(TGenGraph* g) {
 		igraph_integer_t vertexIndex = (igraph_integer_t)IGRAPH_VIT_GET(vertexIterator);
 
 		/* get vertex attributes: S for string and N for numeric */
-		const gchar* idStr = VAS(g->graph, "id", vertexIndex);
+		const gchar* idStr = (g->knownAttributes&TGEN_VA_ID) ?
+		        VAS(g->graph, "id", vertexIndex) : NULL;
+
+		if(!idStr) {
+		    error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
+                    "found vertex %li with missing action 'id' attribute", (glong)vertexIndex);
+		    break;
+		}
 
 		if(g_strstr_len(idStr, (gssize)-1, "start")) {
 			error = _tgengraph_parseStartVertex(g, idStr, vertexIndex);
@@ -288,6 +349,11 @@ static GError* _tgengraph_parseGraphVertices(TGenGraph* g) {
 	/* clean up */
 	igraph_vit_destroy(&vertexIterator);
 
+	if(!g->startHasPeers && g->transferMissingPeers) {
+	    error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT,
+                    "peers required in either the 'start' action, or *every* 'transfer' action");
+	}
+
 	if(!error) {
 		g->vertexCount = igraph_vcount(g->graph);
 		if(g->vertexCount != vertexCount) {
@@ -298,6 +364,31 @@ static GError* _tgengraph_parseGraphVertices(TGenGraph* g) {
 	}
 
 	return error;
+}
+
+static AttributeFlags _tgengraph_vertexAttributeToFlag(const gchar* stringAttribute) {
+    if(stringAttribute) {
+        if(!g_ascii_strcasecmp(stringAttribute, "id")) {
+            return TGEN_VA_ID;
+        } else if(!g_ascii_strcasecmp(stringAttribute, "time")) {
+            return TGEN_VA_TIME;
+        } else if(!g_ascii_strcasecmp(stringAttribute, "serverport")) {
+            return TGEN_VA_SERVERPORT;
+        } else if(!g_ascii_strcasecmp(stringAttribute, "peers")) {
+            return TGEN_VA_PEERS;
+        } else if(!g_ascii_strcasecmp(stringAttribute, "socksproxy")) {
+            return TGEN_VA_SOCKSPROXY;
+        } else if(!g_ascii_strcasecmp(stringAttribute, "count")) {
+            return TGEN_VA_COUNT;
+        } else if(!g_ascii_strcasecmp(stringAttribute, "size")) {
+            return TGEN_VA_SIZE;
+        } else if(!g_ascii_strcasecmp(stringAttribute, "type")) {
+            return TGEN_VA_TYPE;
+        } else if(!g_ascii_strcasecmp(stringAttribute, "protocol")) {
+            return TGEN_VA_PROTOCOL;
+        }
+    }
+    return TGEN_A_NONE;
 }
 
 static GError* _tgengraph_parseGraphProperties(TGenGraph* g) {
@@ -363,16 +454,20 @@ static GError* _tgengraph_parseGraphProperties(TGenGraph* g) {
 	for(i = 0; i < igraph_strvector_size(&gnames); i++) {
 		gchar* name = NULL;
 		igraph_strvector_get(&gnames, (glong) i, &name);
+
 		tgen_debug("found graph attribute '%s'", name);
 	}
 	for(i = 0; i < igraph_strvector_size(&vnames); i++) {
 		gchar* name = NULL;
 		igraph_strvector_get(&vnames, (glong) i, &name);
+
 		tgen_debug("found vertex attribute '%s'", name);
+		g->knownAttributes |= _tgengraph_vertexAttributeToFlag(name);
 	}
 	for(i = 0; i < igraph_strvector_size(&enames); i++) {
 		gchar* name = NULL;
 		igraph_strvector_get(&enames, (glong) i, &name);
+
 		tgen_debug("found edge attribute '%s'", name);
 	}
 
