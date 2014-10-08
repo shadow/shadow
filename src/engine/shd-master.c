@@ -164,7 +164,7 @@ void master_run(Master* master) {
 
 	/* parse built-in examples, or input files */
 	gboolean success = TRUE;
-	if(master->config->runFileExample) {
+	if(FALSE){//master->config->runTGenExample) {
 		GString* file = example_getFileExampleContents();
 		success = parser_parseContents(xmlParser, file->str, file->len, actions);
 		g_string_free(file, TRUE);

@@ -245,7 +245,7 @@ struct _Configuration {
 	gint tcpSlowStartThreshold;
 
 	GOptionGroup* pluginsOptionGroup;
-	gboolean runFileExample;
+	gboolean runTGenExample;
 
 	GQueue* inputXMLFilenames;
 

@@ -57,7 +57,7 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
     c->pluginsOptionGroup = g_option_group_new("sim", "Simulation Examples", "Built-in simulation examples", NULL, NULL);
     const GOptionEntry pluginEntries[] =
     {
-      { "file", 0, 0, G_OPTION_ARG_NONE, &(c->runFileExample), "Run basic HTTP file transfer simulation", NULL },
+      { "tgen", 0, 0, G_OPTION_ARG_NONE, &(c->runTGenExample), "PLACEHOLDER - Run basic data transfer simulation", NULL },
       { NULL },
     };
 
@@ -103,7 +103,7 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
 	/* make sure we have the required arguments. program name is first arg.
 	 * printing the software version requires no other args. running a
 	 * plug-in example also requires no other args. */
-	if(!(c->printSoftwareVersion) && !(c->runFileExample) && (argc < nRequiredXMLFiles + 1)) {
+	if(!(c->printSoftwareVersion) && !(c->runTGenExample) && (argc < nRequiredXMLFiles + 1)) {
 		g_printerr("** Please provide the required parameters **\n");
 		gchar* helpString = g_option_context_get_help(c->context, TRUE, NULL);
 		g_printerr("%s", helpString);
