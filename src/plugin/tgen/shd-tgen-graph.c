@@ -31,7 +31,6 @@ struct _TGenGraph {
 	igraph_integer_t edgeCount;
 	igraph_bool_t isConnected;
 	igraph_bool_t isDirected;
-	igraph_bool_t isComplete;
 
 	GHashTable* actions;
 
@@ -419,18 +418,6 @@ static GError* _tgengraph_parseGraphProperties(TGenGraph* g) {
 	}
 
 	g->isDirected = igraph_is_directed(g->graph);
-
-	/* the topology is complete if the largest clique includes all vertices */
-	igraph_integer_t largestCliqueSize = 0;
-	result = igraph_clique_number(g->graph, &largestCliqueSize);
-	if(result != IGRAPH_SUCCESS) {
-		return g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_PARSE,
-				"igraph_clique_number return non-success code %i", result);
-	}
-
-	if(largestCliqueSize == igraph_vcount(g->graph)) {
-		g->isComplete = (igraph_bool_t)TRUE;
-	}
 
 	tgen_debug("checking graph attributes...");
 
