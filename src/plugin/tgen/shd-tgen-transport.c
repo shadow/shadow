@@ -278,7 +278,7 @@ static TGenEvent _tgentransport_sendSocksRequest(TGenTransport* transport) {
         g_memmove(&buffer[5+nameLength], &port, 2);
 
         gssize bytesSent = tgentransport_write(transport, buffer, nameLength+7);
-        g_assert(bytesSent == nameLength+8);
+        g_assert(bytesSent == nameLength+7);
     } else {
         /* case 3a - IPv4 */
         in_addr_t ip = tgenpeer_getNetworkIP(transport->peer);
