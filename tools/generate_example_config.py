@@ -41,7 +41,7 @@ def generate_shadow():
 
 def generate_tgen_server():
     G = nx.DiGraph()
-    G.add_node("start", serverport="8888", time="0")
+    G.add_node("start", serverport="8888")
     nx.write_graphml(G, "tgen.server.graphml.xml")
 
 def generate_tgen_client():

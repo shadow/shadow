@@ -312,17 +312,17 @@ TGenAction* tgenaction_newStartAction(const gchar* timeStr,
         const gchar* socksProxyStr, GError** error) {
     g_assert(error);
 
-    /* the time is required */
-    if (!timeStr || !g_ascii_strncasecmp(timeStr, "\0", (gsize) 1)) {
-        *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
-                "start action missing required attribute 'time'");
-        return NULL;
-    }
     /* a serverport is required */
-    if (! serverPortStr || !g_ascii_strncasecmp(serverPortStr, "\0", (gsize) 1)) {
+    if (!serverPortStr || !g_ascii_strncasecmp(serverPortStr, "\0", (gsize) 1)) {
         *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
                 "start action missing required attribute 'serverport'");
         return NULL;
+    }
+
+    /* a time delay from application startup is optional */
+    guint64 timedelay = 0;
+    if (timeStr && g_ascii_strncasecmp(timeStr, "\0", (gsize) 1)) {
+        timedelay = g_ascii_strtoull(timeStr, NULL, 10);
     }
 
     /* a socks proxy address is optional */
@@ -355,7 +355,7 @@ TGenAction* tgenaction_newStartAction(const gchar* timeStr,
 
     TGenActionStartData* data = g_new0(TGenActionStartData, 1);
 
-    data->time = g_ascii_strtoull(timeStr, NULL, 10);
+    data->time = timedelay;
     guint64 longport = g_ascii_strtoull(serverPortStr, NULL, 10);
     data->serverport = htons((guint16)longport);
     data->peers = peerPool;
