@@ -224,11 +224,13 @@ static TGenEvent _tgentransport_receiveSocksChoice(TGenTransport* transport) {
     g_assert(bytesReceived == 2);
 
     if(buffer[0] == 0x05 && buffer[1] == 0x00) {
-        tgen_debug("received good socks choice from proxy %s", tgenpeer_toString(transport->proxy));
+        tgen_debug("socks choice supported by proxy %s", tgenpeer_toString(transport->proxy));
 
         transport->proxyState = PROXY_REQUEST;
         return TGEN_EVENT_WRITE;
     } else {
+        tgen_debug("socks choice unsupported by proxy %s", tgenpeer_toString(transport->proxy));
+
         transport->proxyState = PROXY_ERROR;
         return TGEN_EVENT_NONE;
     }
@@ -328,47 +330,69 @@ static TGenEvent _tgentransport_receiveSocksResponse(TGenTransport* transport) {
     gssize bytesReceived = tgentransport_read(transport, buffer, 256);
     g_assert(bytesReceived >= 4);
 
-    if(buffer[0] == 0x05 && buffer[1] == 0x00 && buffer[3] == 0x01) {
-        /* case 4a - IPV4 mode - get address server told us */
-        g_assert(bytesReceived == 10);
+    if(buffer[0] == 0x05 && buffer[1] == 0x00) {
+        if(buffer[3] == 0x01) {
+            /* case 4a - IPV4 mode - get address server told us */
+            g_assert(bytesReceived == 10);
 
-        /* check if they want us to connect elsewhere */
-        in_addr_t socksBindAddress = 0;
-        in_port_t socksBindPort = 0;
-        g_memmove(&socksBindAddress, &buffer[4], 4);
-        g_memmove(&socksBindPort, &buffer[8], 2);
+            /* check if they want us to connect elsewhere */
+            in_addr_t socksBindAddress = 0;
+            in_port_t socksBindPort = 0;
+            g_memmove(&socksBindAddress, &buffer[4], 4);
+            g_memmove(&socksBindPort, &buffer[8], 2);
 
-        /* reconnect not supported */
-        if(socksBindAddress == 0 && socksBindPort == 0) {
-            tgen_info("connection to %s through socks proxy %s successful",
-                    tgenpeer_toString(transport->peer), tgenpeer_toString(transport->proxy));
+            /* reconnect not supported */
+            if(socksBindAddress == 0 && socksBindPort == 0) {
+                tgen_info("connection to %s through socks proxy %s successful",
+                        tgenpeer_toString(transport->peer), tgenpeer_toString(transport->proxy));
 
-            transport->proxyState = PROXY_SUCCESS;
-            return TGEN_EVENT_DONE;
+                transport->proxyState = PROXY_SUCCESS;
+                return TGEN_EVENT_DONE;
+            } else {
+                tgen_warning("connection to %s through socks proxy %s failed: "
+                        "proxy requested unsupported reconnection to %i:u",
+                        tgenpeer_toString(transport->peer), tgenpeer_toString(transport->proxy),
+                        (gint)socksBindAddress, (guint)ntohs(socksBindPort));
+            }
+        } else if (buffer[3] == 0x03) {
+            /* case 4b - domain name mode */
+            guint8 nameLength = 0;
+            g_memmove(&nameLength, &buffer[4], 1);
+
+            g_assert(bytesReceived == nameLength+7);
+
+            gchar namebuf[nameLength+1];
+            memset(namebuf, 0, nameLength);
+            in_port_t socksBindPort = 0;
+
+            g_memmove(namebuf, &buffer[5], nameLength);
+            g_memmove(&socksBindPort, &buffer[5+nameLength], 2);
+
+            /* reconnect not supported */
+            if(!g_ascii_strncasecmp(namebuf, "\0", (gsize) 1) && socksBindPort == 0) {
+                tgen_info("connection to %s through socks proxy %s successful",
+                        tgenpeer_toString(transport->peer), tgenpeer_toString(transport->proxy));
+
+                transport->proxyState = PROXY_SUCCESS;
+                return TGEN_EVENT_DONE;
+            } else {
+                tgen_warning("connection to %s through socks proxy %s failed: "
+                        "proxy requested unsupported reconnection to %s:u",
+                        tgenpeer_toString(transport->peer), tgenpeer_toString(transport->proxy),
+                        namebuf, (guint)ntohs(socksBindPort));
+            }
+        } else {
+            tgen_warning("connection to %s through socks proxy %s failed: unsupported address type %i",
+                    tgenpeer_toString(transport->peer), tgenpeer_toString(transport->proxy),
+                    (gint)buffer[3]);
         }
-    } else if (buffer[0] == 0x05 && buffer[1] == 0x00 && buffer[3] == 0x03) {
-        /* case 4b - domain name mode */
-        guint8 nameLength = 0;
-        g_memmove(&nameLength, &buffer[4], 1);
-
-        g_assert(bytesReceived == nameLength+7);
-
-        gchar namebuf[nameLength+1];
-        memset(namebuf, 0, nameLength);
-        in_port_t socksBindPort = 0;
-
-        g_memmove(namebuf, &buffer[5], nameLength);
-        g_memmove(&socksBindPort, &buffer[5+nameLength], 2);
-
-        /* reconnect not supported */
-        if(!g_ascii_strncasecmp(namebuf, "\0", (gsize) 1) && socksBindPort == 0) {
-            tgen_info("connection to %s through socks proxy %s successful",
-                    tgenpeer_toString(transport->peer), tgenpeer_toString(transport->proxy));
-
-            transport->proxyState = PROXY_SUCCESS;
-            return TGEN_EVENT_DONE;
-        }
+    } else {
+        tgen_warning("connection to %s through socks proxy %s failed: unsupported %s %i",
+                tgenpeer_toString(transport->peer), tgenpeer_toString(transport->proxy),
+                (buffer[0] != 0x05) ? "version" : "status",
+                (buffer[0] != 0x05) ? (gint)buffer[0] : (gint)buffer[1]);
     }
+
 
     transport->proxyState = PROXY_ERROR;
     return TGEN_EVENT_NONE;
