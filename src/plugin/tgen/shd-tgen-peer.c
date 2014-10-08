@@ -112,7 +112,7 @@ void tgenpeer_performLookups(TGenPeer* peer) {
             if(peer->hostIPStr) {
                 g_free(peer->hostIPStr);
             }
-            peer->hostIPStr = _tgenpeer_ipToIPStr((in_addr_t)ntohl(peer->netIP));
+            peer->hostIPStr = _tgenpeer_ipToIPStr(peer->netIP);
             changed = TRUE;
         }
     }
@@ -157,7 +157,10 @@ static TGenPeer* _tgenpeer_new(const gchar* name, in_addr_t networkIP, in_port_t
     }
 
     if(peer->netIP) {
-        peer->hostIPStr = _tgenpeer_ipToIPStr((in_addr_t)ntohl(networkIP));
+        peer->hostIPStr = _tgenpeer_ipToIPStr(peer->netIP);
+        if(peer->netIP == htonl(INADDR_LOOPBACK) && !peer->hostNameStr) {
+            peer->hostNameStr = g_strdup("localhost");
+        }
     }
 
     return peer;
