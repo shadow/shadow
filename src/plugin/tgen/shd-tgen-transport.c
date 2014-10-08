@@ -259,7 +259,7 @@ static TGenEvent _tgentransport_sendSocksRequest(TGenTransport* transport) {
 
     /* prefer name mode if we have it, and let the proxy lookup IP as needed */
     const gchar* name = tgenpeer_getName(transport->peer);
-    if(name) {
+    if(name && g_str_has_suffix(name, ".onion")) { // FIXME remove suffix matching to have proxy do lookup for us
         /* case 3b - domain name */
         glong nameLength = g_utf8_strlen(name, -1);
         guint8 guint8max = -1;
@@ -282,6 +282,7 @@ static TGenEvent _tgentransport_sendSocksRequest(TGenTransport* transport) {
         gssize bytesSent = tgentransport_write(transport, buffer, nameLength+7);
         g_assert(bytesSent == nameLength+7);
     } else {
+        tgenpeer_performLookups(transport->peer); // FIXME remove this to have proxy do lookup for us
         /* case 3a - IPv4 */
         in_addr_t ip = tgenpeer_getNetworkIP(transport->peer);
         in_addr_t port = tgenpeer_getNetworkPort(transport->peer);
