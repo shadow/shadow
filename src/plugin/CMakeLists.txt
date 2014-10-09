@@ -1,7 +1,6 @@
 ## the plug-ins need to include shd-library.h
 include_directories(${CMAKE_SOURCE_DIR}/src/plugin)
 install(FILES shd-library.h DESTINATION include/)
-install(FILES ${CMAKE_SOURCE_DIR}/src/utility/shd-cdf.h DESTINATION include/)
 
 ## plug-ins need to disable fortification to ensure syscalls are intercepted
 add_definitions(-D_GNU_SOURCE)

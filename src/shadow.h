@@ -73,7 +73,6 @@ typedef struct _Process Process;
 #include "support/shd-pcap-writer.h"
 
 /* utilities with limited dependencies */
-#include "utility/shd-cdf.h"
 #include "utility/shd-byte-queue.h"
 #include "utility/shd-priority-queue.h"
 #include "utility/shd-async-priority-queue.h"
@@ -120,9 +119,7 @@ typedef struct _Process Process;
 #include "runnable/event/shd-tcp-close-timer-expired.h"
 #include "runnable/event/shd-tcp-retransmit-timer-expired.h"
 #include "runnable/action/shd-create-node.h"
-#include "runnable/action/shd-generate-cdf.h"
 #include "runnable/action/shd-kill-engine.h"
-#include "runnable/action/shd-load-cdf.h"
 #include "runnable/action/shd-load-plugin.h"
 #include "runnable/action/shd-load-topology.h"
 

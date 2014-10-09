@@ -65,9 +65,7 @@ set(shadow_srcs
     
     runnable/action/shd-action.c
     runnable/action/shd-create-node.c
-    runnable/action/shd-generate-cdf.c
     runnable/action/shd-kill-engine.c
-    runnable/action/shd-load-cdf.c
     runnable/action/shd-load-plugin.c
     runnable/action/shd-load-topology.c
     runnable/event/shd-callback.c
@@ -92,7 +90,6 @@ set(shadow_srcs
         
     utility/shd-async-priority-queue.c
     utility/shd-byte-queue.c
-    utility/shd-cdf.c
     utility/shd-count-down-latch.c
     utility/shd-priority-queue.c
     utility/shd-random.c

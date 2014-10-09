@@ -35,80 +35,6 @@ static void _parser_addAction(Parser* parser, Action* action) {
 	g_queue_insert_sorted(parser->actions, action, action_compare, NULL);
 }
 
-static GError* _parser_handleCDFAttributes(Parser* parser, const gchar** attributeNames, const gchar** attributeValues) {
-	GString* id = NULL;
-	GString* path = NULL;
-	guint64 center = 0;
-	guint64 width = 0;
-	guint64 tail = 0;
-
-	GError* error = NULL;
-
-	const gchar **nameCursor = attributeNames;
-	const gchar **valueCursor = attributeValues;
-
-	/* check the attributes */
-	while (!error && *nameCursor) {
-		const gchar* name = *nameCursor;
-		const gchar* value = *valueCursor;
-
-		debug("found attribute '%s=%s'", name, value);
-
-		if(!id && !g_ascii_strcasecmp(name, "id")) {
-			id = g_string_new(value);
-		} else if (!path && !g_ascii_strcasecmp(name, "path")) {
-			path = g_string_new(utility_getHomePath(value));
-		} else if (!center && !g_ascii_strcasecmp(name, "center")) {
-			center = g_ascii_strtoull(value, NULL, 10);
-		} else if (!width && !g_ascii_strcasecmp(name, "width")) {
-			width  = g_ascii_strtoull(value, NULL, 10);
-		} else if (!tail && !g_ascii_strcasecmp(name, "tail")) {
-			tail = g_ascii_strtoull(value, NULL, 10);
-		} else {
-			error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ATTRIBUTE,
-							"unknown 'cdf' attribute '%s'", name);
-		}
-
-		nameCursor++;
-		valueCursor++;
-	}
-
-	/* validate the values */
-	if(!error && (!id || (!path && !center))) {
-		error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
-				"element 'cdf' requires attributes 'id' and either 'path' or 'center'");
-	}
-	if(path && (!g_file_test(path->str, G_FILE_TEST_EXISTS) || !g_file_test(path->str, G_FILE_TEST_IS_REGULAR))) {
-		error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT,
-				"attribute 'path': '%s' is not a valid path to an existing regular file", path->str);
-	}
-
-	if(!error) {
-		/* no error, either load or generate a cdf
-		 * if a path is given, we ignore the other attributes
-		 */
-		if(path) {
-			Action* a = (Action*) loadcdf_new(id, path);
-			action_setPriority(a, 1);
-			_parser_addAction(parser, a);
-		} else {
-			Action* a = (Action*) generatecdf_new(id, center, width, tail);
-			action_setPriority(a, 1);
-			_parser_addAction(parser, a);
-		}
-	}
-
-	/* clean up */
-	if(path) {
-		g_string_free(path, TRUE);
-	}
-	if(id) {
-		g_string_free(id, TRUE);
-	}
-
-	return error;
-}
-
 static GError* _parser_handleTopologyAttributes(Parser* parser, const gchar** attributeNames, const gchar** attributeValues) {
 	if(parser->foundTopology) {
 		return NULL;
@@ -550,9 +476,7 @@ static void _parser_handleRootStartElement(GMarkupParseContext* context,
 	debug("found start element '%s'", elementName);
 
 	/* check for root-level elements */
-	if (!g_ascii_strcasecmp(elementName, "cdf")) {
-		*error = _parser_handleCDFAttributes(parser, attributeNames, attributeValues);
-	} else if (!g_ascii_strcasecmp(elementName, "plugin")) {
+	if (!g_ascii_strcasecmp(elementName, "plugin")) {
 		*error = _parser_handlePluginAttributes(parser, attributeNames, attributeValues);
 	} else if (!g_ascii_strcasecmp(elementName, "node")) {
 		*error = _parser_handleNodeAttributes(parser, attributeNames, attributeValues);
@@ -621,7 +545,6 @@ static void _parser_handleRootEndElement(GMarkupParseContext* context,
 		}
 	} else {
 		if(!(!g_ascii_strcasecmp(elementName, "plugin") ||
-				!g_ascii_strcasecmp(elementName, "cdf") ||
 				!g_ascii_strcasecmp(elementName, "kill"))) {
 			*error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ELEMENT,
 							"unknown 'root' child ending element '%s'", elementName);
