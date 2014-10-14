@@ -12,6 +12,7 @@ python parse-shadow.py --help
 pylab.rcParams.update({
     'backend': 'PDF',
     'font.size': 16,
+    'figure.max_num_figures' : 50,
     'figure.figsize': (6,4.5),
     'figure.dpi': 100.0,
     'figure.subplot.left': 0.15,
@@ -93,200 +94,381 @@ def main():
     shdata, ftdata, tordata = get_data(args.experiments, args.lineformats)
 
     page = PdfPages("{0}shadowtor.pdf".format(args.prefix+'.' if args.prefix is not None else ''))
-    plot_shadow(shdata, page, "recv")
-    plot_shadow(shdata, page, "send")
+    plot_shadow(shdata, page, direction="recv")
+    plot_shadow(shdata, page, direction="send")
     plot_filetransfer_firstbyte(ftdata, page)
     plot_filetransfer_lastbyte(ftdata, page)
     plot_filetransfer_downloads(ftdata, page)
-    plot_tor(tordata, page)
+    plot_tor(tordata, page, direction="bytes_read")
+    plot_tor(tordata, page, direction="bytes_written")
     page.close()
 
-def plot_shadow(datasource, page, direction):
-    total_mafig, total_aggcdffig, total_percdffig = pylab.figure(), pylab.figure(), pylab.figure()
-    data_mafig, data_aggcdffig, data_percdffig = pylab.figure(), pylab.figure(), pylab.figure()
-    control_mafig, control_aggcdffig, control_percdffig = pylab.figure(), pylab.figure(), pylab.figure()
-    retrans_mafig, retrans_aggcdffig, retrans_percdffig = pylab.figure(), pylab.figure(), pylab.figure()
+def plot_shadow(datasource, page, direction="send"):
+    total_all_mafig, total_all_cdffig, total_each_cdffig = pylab.figure(), pylab.figure(), pylab.figure()
+    data_all_mafig, data_all_cdffig, data_each_cdffig = pylab.figure(), pylab.figure(), pylab.figure()
+    control_all_mafig, control_all_cdffig, control_each_cdffig = pylab.figure(), pylab.figure(), pylab.figure()
+    retrans_all_mafig, retrans_all_cdffig, retrans_each_cdffig = pylab.figure(), pylab.figure(), pylab.figure()
+    fracdata_all_mafig, fracdata_all_cdffig, fracdata_each_cdffig = pylab.figure(), pylab.figure(), pylab.figure()
+    fraccontrol_all_mafig, fraccontrol_all_cdffig, fraccontrol_each_cdffig = pylab.figure(), pylab.figure(), pylab.figure()
+    fracretrans_all_mafig, fracretrans_all_cdffig, fracretrans_each_cdffig = pylab.figure(), pylab.figure(), pylab.figure()
 
     for (d, label, lineformat) in datasource:
-        total, data, control, retrans = {}, {}, {}, {}
-        totalper, datafper, controlfper, retransfper = [], [], [], []
+        total_all, data_all, control_all, retrans_all = {}, {}, {}, {}
+        total_each, data_each, control_each, retrans_each = [], [], [], []
+        fracdata_all, fraccontrol_all, fracretrans_all = {}, {}, {}
+        fracdata_each, fraccontrol_each, fracretrans_each = [], [], []
+
         for node in d:
-            for t in d[node][direction]['bytes_total']:
-                if t not in total: total[t] = 0
-                if t not in data: data[t] = 0
-                if t not in control: control[t] = 0
-                if t not in retrans: retrans[t] = 0
+            for tstr in d[node][direction]['bytes_total']:
+                totalmib = d[node][direction]['bytes_total'][tstr]/1048576.0
+                datamib = d[node][direction]['bytes_data'][tstr]/1048576.0
+                controlmib = d[node][direction]['bytes_control'][tstr]/1048576.0
+                retransmib = d[node][direction]['bytes_retrans'][tstr]/1048576.0
 
-                total[t] += d[node][direction]['bytes_total'][t]/1048576.0
-                data[t] += d[node][direction]['bytes_data'][t]/1048576.0
-                control[t] += d[node][direction]['bytes_control'][t]/1048576.0
-                retrans[t] += d[node][direction]['bytes_retrans'][t]/1048576.0
+                t = int(tstr)
+                for datadict in [total_all, data_all, control_all, retrans_all]:
+                    if t not in datadict: datadict[t] = 0.0
 
-                v = float(d[node][direction]['bytes_total'][t]/1048576.0)
-                totalper.append(v)
-                datafper.append(v if v == 0.0 else d[node][direction]['bytes_data'][t]/v)
-                controlfper.append(v if v == 0.0 else d[node][direction]['bytes_control'][t]/v)
-                retransfper.append(v if v == 0.0 else d[node][direction]['bytes_retrans'][t]/v)
+                total_all[t] += totalmib
+                data_all[t] += datamib
+                control_all[t] += controlmib
+                retrans_all[t] += retransmib
 
-        pylab.figure(total_mafig.number)
-        x = sorted(total.keys())
-        y = [total[t] for t in x]
+                total_each.append(totalmib)
+                data_each.append(datamib)
+                control_each.append(controlmib)
+                retrans_each.append(retransmib)
+
+                datafrac = 0.0 if totalmib == 0.0 else datamib/totalmib
+                controlfrac = 0.0 if totalmib == 0.0 else controlmib/totalmib
+                retransfrac = 0.0 if totalmib == 0.0 else retransmib/totalmib
+
+                fracdata_each.append(datafrac)
+                fraccontrol_each.append(controlfrac)
+                fracretrans_each.append(retransfrac)
+
+        for t in total_all:
+            if total_all[t] == 0.0: fracdata_all[t], fraccontrol_all[t], fracretrans_all[t] = 0.0, 0.0, 0.0
+            else: fracdata_all[t], fraccontrol_all[t], fracretrans_all[t] = data_all[t]/total_all[t], control_all[t]/total_all[t], retrans_all[t]/total_all[t]
+
+        ## TOTAL
+        pylab.figure(total_all_mafig.number)
+        x = sorted(total_all.keys())
+        y = [total_all[t] for t in x]
         y_ma = movingaverage(y, 60)
-        #pylab.scatter(x, y, s=0.1)
+        pylab.scatter(x, y, s=0.1)
         pylab.plot(x, y_ma, lineformat, label=label)
         
-        pylab.figure(total_aggcdffig.number)
+        pylab.figure(total_all_cdffig.number)
         x, y = getcdf(y)
         pylab.plot(x, y, lineformat, label=label)
 
-        pylab.figure(total_percdffig.number)
-        x, y = getcdf(totalper)
+        pylab.figure(total_each_cdffig.number)
+        x, y = getcdf(total_each)
         pylab.plot(x, y, lineformat, label=label)
 
-        pylab.figure(data_mafig.number)
-        x = sorted(data.keys())
-        y = [data[t] for t in x]
+        ## PAYLOAD+PAYLOADHEADER
+        pylab.figure(data_all_mafig.number)
+        x = sorted(data_all.keys())
+        y = [data_all[t] for t in x]
         y_ma = movingaverage(y, 60)
-        #pylab.scatter(x, y, s=0.1)
+        pylab.scatter(x, y, s=0.1)
         pylab.plot(x, y_ma, lineformat, label=label)
         
-        pylab.figure(data_aggcdffig.number)
+        pylab.figure(data_all_cdffig.number)
         x, y = getcdf(y)
         pylab.plot(x, y, lineformat, label=label)
 
-        pylab.figure(data_percdffig.number)
-        x, y = getcdf(datafper)
+        pylab.figure(data_each_cdffig.number)
+        x, y = getcdf(data_each)
         pylab.plot(x, y, lineformat, label=label)
 
-        pylab.figure(control_mafig.number)
-        x = sorted(control.keys())
-        y = [control[t] for t in x]
+        pylab.figure(fracdata_all_mafig.number)
+        x = sorted(fracdata_all.keys())
+        y = [fracdata_all[t] for t in x]
         y_ma = movingaverage(y, 60)
-        #pylab.scatter(x, y, s=0.1)
+        pylab.scatter(x, y, s=0.1)
         pylab.plot(x, y_ma, lineformat, label=label)
         
-        pylab.figure(control_aggcdffig.number)
+        pylab.figure(fracdata_all_cdffig.number)
         x, y = getcdf(y)
         pylab.plot(x, y, lineformat, label=label)
 
-        pylab.figure(control_percdffig.number)
-        x, y = getcdf(controlfper)
+        pylab.figure(fracdata_each_cdffig.number)
+        x, y = getcdf(fracdata_each)
         pylab.plot(x, y, lineformat, label=label)
 
-        pylab.figure(retrans_mafig.number)
-        x = sorted(retrans.keys())
-        y = [retrans[t] for t in x]
+        ## CONTROLHEADER
+        pylab.figure(control_all_mafig.number)
+        x = sorted(control_all.keys())
+        y = [control_all[t] for t in x]
         y_ma = movingaverage(y, 60)
-        #pylab.scatter(x, y, s=0.1)
+        pylab.scatter(x, y, s=0.1)
         pylab.plot(x, y_ma, lineformat, label=label)
         
-        pylab.figure(retrans_aggcdffig.number)
+        pylab.figure(control_all_cdffig.number)
         x, y = getcdf(y)
         pylab.plot(x, y, lineformat, label=label)
 
-        pylab.figure(retrans_percdffig.number)
-        x, y = getcdf(retransfper)
+        pylab.figure(control_each_cdffig.number)
+        x, y = getcdf(control_each)
         pylab.plot(x, y, lineformat, label=label)
 
-    pylab.figure(total_mafig.number)
+        pylab.figure(fraccontrol_all_mafig.number)
+        x = sorted(fraccontrol_all.keys())
+        y = [fraccontrol_all[t] for t in x]
+        y_ma = movingaverage(y, 60)
+        pylab.scatter(x, y, s=0.1)
+        pylab.plot(x, y_ma, lineformat, label=label)
+        
+        pylab.figure(fraccontrol_all_cdffig.number)
+        x, y = getcdf(y)
+        pylab.plot(x, y, lineformat, label=label)
+
+        pylab.figure(fraccontrol_each_cdffig.number)
+        x, y = getcdf(fracdata_each)
+        pylab.plot(x, y, lineformat, label=label)
+
+        ## RETRANSMIT
+        pylab.figure(retrans_all_mafig.number)
+        x = sorted(retrans_all.keys())
+        y = [retrans_all[t] for t in x]
+        y_ma = movingaverage(y, 60)
+        pylab.scatter(x, y, s=0.1)
+        pylab.plot(x, y_ma, lineformat, label=label)
+        
+        pylab.figure(retrans_all_cdffig.number)
+        x, y = getcdf(y)
+        pylab.plot(x, y, lineformat, label=label)
+
+        pylab.figure(retrans_each_cdffig.number)
+        x, y = getcdf(retrans_each)
+        pylab.plot(x, y, lineformat, label=label)
+
+        pylab.figure(fracretrans_all_mafig.number)
+        x = sorted(fracretrans_all.keys())
+        y = [fracretrans_all[t] for t in x]
+        y_ma = movingaverage(y, 60)
+        pylab.scatter(x, y, s=0.1)
+        pylab.plot(x, y_ma, lineformat, label=label)
+        
+        pylab.figure(fracretrans_all_cdffig.number)
+        x, y = getcdf(y)
+        pylab.plot(x, y, lineformat, label=label)
+
+        pylab.figure(fracretrans_each_cdffig.number)
+        x, y = getcdf(fracretrans_each)
+        pylab.plot(x, y, lineformat, label=label)
+
+    pylab.figure(total_all_mafig.number)
     pylab.xlabel("Tick (s)")
     pylab.ylabel("Throughput (MiB/s)")
-    pylab.title("60 second moving average {0} throughput, all nodes".format(direction))
+    pylab.xlim(xmin=0.0)
+    pylab.ylim(ymin=0.0)
+    pylab.title("60 second moving average throughput, {0}, all nodes".format(direction))
     pylab.legend(loc="lower right")
     page.savefig()
     pylab.close()
+    del(total_all_mafig)
 
-    pylab.figure(total_aggcdffig.number)
+    pylab.figure(total_all_cdffig.number)
     pylab.xlabel("Throughput (MiB/s)")
     pylab.ylabel("Cumulative Fraction")
-    pylab.title("per second {0} throughput, all nodes".format(direction))
+    pylab.title("1 second throughput, {0}, all nodes".format(direction))
     pylab.legend(loc="lower right")
     page.savefig()
     pylab.close()
+    del(total_all_cdffig)
 
-    pylab.figure(total_percdffig.number)
+    pylab.figure(total_each_cdffig.number)
     #pylab.xscale('log')
     pylab.xlabel("Throughput (MiB/s)")
     pylab.ylabel("Cumulative Fraction")
-    pylab.title("per second {0} throughput, per node".format(direction))
+    pylab.title("1 second throughput, {0}, each node".format(direction))
     pylab.legend(loc="lower right")
     page.savefig()
     pylab.close()
+    del(total_each_cdffig)
 
-    pylab.figure(data_mafig.number)
+    pylab.figure(data_all_mafig.number)
     pylab.xlabel("Tick (s)")
     pylab.ylabel("Goodput (MiB/s)")
-    pylab.title("60 second moving average {0} goodput, all nodes".format(direction))
+    pylab.xlim(xmin=0.0)
+    pylab.ylim(ymin=0.0)
+    pylab.title("60 second moving average goodput, {0}, all nodes".format(direction))
     pylab.legend(loc="lower right")
     page.savefig()
     pylab.close()
+    del(data_all_mafig)
 
-    pylab.figure(data_aggcdffig.number)
+    pylab.figure(data_all_cdffig.number)
     pylab.xlabel("Goodput (MiB/s)")
     pylab.ylabel("Cumulative Fraction")
-    pylab.title("per second {0} goodput, all nodes".format(direction))
+    pylab.title("1 second goodput, {0}, all nodes".format(direction))
     pylab.legend(loc="lower right")
     page.savefig()
     pylab.close()
+    del(data_all_cdffig)
 
-    pylab.figure(data_percdffig.number)
+    pylab.figure(data_each_cdffig.number)
+    #pylab.xscale('log')
+    pylab.xlabel("Goodput")
+    pylab.ylabel("Cumulative Fraction")
+    pylab.title("1 second goodput, {0}, each node".format(direction))
+    pylab.legend(loc="lower right")
+    page.savefig()
+    pylab.close()
+    del(data_each_cdffig)
+
+    pylab.figure(fracdata_all_mafig.number)
+    pylab.xlabel("Tick (s)")
+    pylab.ylabel("Goodput / Throughput")
+    pylab.xlim(xmin=0.0)
+    pylab.ylim(ymin=0.0)
+    pylab.title("60 second moving average fractional goodput, {0}, all nodes".format(direction))
+    pylab.legend(loc="lower right")
+    page.savefig()
+    pylab.close()
+    del(fracdata_all_mafig)
+
+    pylab.figure(fracdata_all_cdffig.number)
+    pylab.xlabel("Goodput / Throughput")
+    pylab.ylabel("Cumulative Fraction")
+    pylab.title("1 second fractional goodput, {0}, all nodes".format(direction))
+    pylab.legend(loc="lower right")
+    page.savefig()
+    pylab.close()
+    del(fracdata_all_cdffig)
+
+    pylab.figure(fracdata_each_cdffig.number)
     #pylab.xscale('log')
     pylab.xlabel("Goodput / Throughput")
     pylab.ylabel("Cumulative Fraction")
-    pylab.title("per second fractional {0} goodput, per node".format(direction))
+    pylab.title("1 second fractional goodput, {0}, each node".format(direction))
     pylab.legend(loc="lower right")
     page.savefig()
     pylab.close()
+    del(fracdata_each_cdffig)
 
-    pylab.figure(control_mafig.number)
+    pylab.figure(control_all_mafig.number)
     pylab.xlabel("Tick (s)")
     pylab.ylabel("Control Overhead (MiB/s)")
-    pylab.title("60 second moving average {0} control overhead, all nodes".format(direction))
+    pylab.xlim(xmin=0.0)
+    pylab.ylim(ymin=0.0)
+    pylab.title("60 second moving average control overhead, {0}, all nodes".format(direction))
     pylab.legend(loc="lower right")
     page.savefig()
     pylab.close()
+    del(control_all_mafig)
 
-    pylab.figure(control_aggcdffig.number)
+    pylab.figure(control_all_cdffig.number)
     pylab.xlabel("Control Overhead (MiB/s)")
     pylab.ylabel("Cumulative Fraction")
-    pylab.title("per second {0} control overhead, all nodes".format(direction))
+    pylab.title("1 second control overhead, {0}, all nodes".format(direction))
     pylab.legend(loc="lower right")
     page.savefig()
     pylab.close()
+    del(control_all_cdffig)
 
-    pylab.figure(control_percdffig.number)
+    pylab.figure(control_each_cdffig.number)
+    #pylab.xscale('log')
+    pylab.xlabel("Control Overhead")
+    pylab.ylabel("Cumulative Fraction")
+    pylab.title("1 second control overhead, {0}, each node".format(direction))
+    pylab.legend(loc="lower right")
+    page.savefig()
+    pylab.close()
+    del(control_each_cdffig)
+
+    pylab.figure(fraccontrol_all_mafig.number)
+    pylab.xlabel("Tick (s)")
+    pylab.ylabel("Control Overhead / Throughput")
+    pylab.xlim(xmin=0.0)
+    pylab.ylim(ymin=0.0)
+    pylab.title("60 second moving average fractional control overhead, {0}, all nodes".format(direction))
+    pylab.legend(loc="lower right")
+    page.savefig()
+    pylab.close()
+    del(fraccontrol_all_mafig)
+
+    pylab.figure(fraccontrol_all_cdffig.number)
+    pylab.xlabel("Control Overhead / Throughput")
+    pylab.ylabel("Cumulative Fraction")
+    pylab.title("1 second fractional control overhead, {0}, all nodes".format(direction))
+    pylab.legend(loc="lower right")
+    page.savefig()
+    pylab.close()
+    del(fraccontrol_all_cdffig)
+
+    pylab.figure(fraccontrol_each_cdffig.number)
     #pylab.xscale('log')
     pylab.xlabel("Control Overhead / Throughput")
     pylab.ylabel("Cumulative Fraction")
-    pylab.title("per second fractional {0} control overhead, per node".format(direction))
+    pylab.title("1 second fractional control overhead, {0}, each node".format(direction))
     pylab.legend(loc="lower right")
     page.savefig()
     pylab.close()
+    del(fraccontrol_each_cdffig)
 
-    pylab.figure(retrans_mafig.number)
+    pylab.figure(retrans_all_mafig.number)
     pylab.xlabel("Tick (s)")
     pylab.ylabel("Retransmission Overhead (MiB/s)")
-    pylab.title("60 second moving average {0} retrans overhead, all nodes".format(direction))
+    pylab.xlim(xmin=0.0)
+    pylab.ylim(ymin=0.0)
+    pylab.title("60 second moving average retrans overhead, {0}, all nodes".format(direction))
     pylab.legend(loc="lower right")
     page.savefig()
     pylab.close()
+    del(retrans_all_mafig)
 
-    pylab.figure(retrans_aggcdffig.number)
+    pylab.figure(retrans_all_cdffig.number)
     pylab.xlabel("Retransmission Overhead (MiB/s)")
     pylab.ylabel("Cumulative Fraction")
-    pylab.title("per second {0} retrans overhead, all nodes".format(direction))
+    pylab.title("1 second retrans overhead, {0}, all nodes".format(direction))
     pylab.legend(loc="lower right")
     page.savefig()
     pylab.close()
+    del(retrans_all_cdffig)
 
-    pylab.figure(retrans_percdffig.number)
+    pylab.figure(retrans_each_cdffig.number)
+    #pylab.xscale('log')
+    pylab.xlabel("Retransmission Overhead")
+    pylab.ylabel("Cumulative Fraction")
+    pylab.title("1 second retrans overhead, {0}, each node".format(direction))
+    pylab.legend(loc="lower right")
+    page.savefig()
+    pylab.close()
+    del(retrans_each_cdffig)
+
+    pylab.figure(fracretrans_all_mafig.number)
+    pylab.xlabel("Tick (s)")
+    pylab.ylabel("Retransmission Overhead / Throughput")
+    pylab.xlim(xmin=0.0)
+    pylab.ylim(ymin=0.0)
+    pylab.title("60 second moving average fractional retrans overhead, {0}, all nodes".format(direction))
+    pylab.legend(loc="lower right")
+    page.savefig()
+    pylab.close()
+    del(fracretrans_all_mafig)
+
+    pylab.figure(fracretrans_all_cdffig.number)
+    pylab.xlabel("Retransmission Overhead / Throughput")
+    pylab.ylabel("Cumulative Fraction")
+    pylab.title("1 second fractional retrans overhead, {0}, all nodes".format(direction))
+    pylab.legend(loc="lower right")
+    page.savefig()
+    pylab.close()
+    del(fracretrans_all_cdffig)
+
+    pylab.figure(fracretrans_each_cdffig.number)
     #pylab.xscale('log')
     pylab.xlabel("Retransmission Overhead / Throughput")
     pylab.ylabel("Cumulative Fraction")
-    pylab.title("per second fractional {0} retrans overhead, per node".format(direction))
+    pylab.title("1 second fractional retrans overhead, {0}, each node".format(direction))
     pylab.legend(loc="lower right")
     page.savefig()
     pylab.close()
+    del(fracretrans_each_cdffig)
 
 def plot_filetransfer_firstbyte(data, page):
     pylab.figure()
@@ -358,19 +540,20 @@ def plot_filetransfer_downloads(data, page):
         page.savefig()
         pylab.close()
 
-def plot_tor(data, page):
+def plot_tor(data, page, direction="bytes_written"):
     mafig = pylab.figure()
-    aggcdffig = pylab.figure()
-    percdffig = pylab.figure()
+    allcdffig = pylab.figure()
+    eachcdffig = pylab.figure()
 
     for (d, label, lineformat) in data:
         tput = {}
         pertput = []
         for node in d:
             if 'relay' not in node and 'thority' not in node: continue
-            for t in d[node]["bytes_written"]:
+            for tstr in d[node][direction]:
+                mib = d[node][direction][tstr]/1048576.0
+                t = int(tstr)
                 if t not in tput: tput[t] = 0
-                mib = d[node]["bytes_written"][t]/1048576.0
                 tput[t] += mib
                 pertput.append(mib)
 
@@ -378,41 +561,46 @@ def plot_tor(data, page):
         x = sorted(tput.keys())
         y = [tput[t] for t in x]
         y_ma = movingaverage(y, 60)
-        #pylab.scatter(x, y, s=0.1)
+        pylab.scatter(x, y, s=0.1)
         pylab.plot(x, y_ma, lineformat, label=label)
         
-        pylab.figure(aggcdffig.number)
+        pylab.figure(allcdffig.number)
         x, y = getcdf(y)
         pylab.plot(x, y, lineformat, label=label)
 
-        pylab.figure(percdffig.number)
+        pylab.figure(eachcdffig.number)
         x, y = getcdf(pertput)
         pylab.plot(x, y, lineformat, label=label)
 
     pylab.figure(mafig.number)
     pylab.xlabel("Tick (s)")
     pylab.ylabel("Throughput (MiB/s)")
-    pylab.title("60 second moving average throughput, all relays")
+    pylab.xlim(xmin=0.0)
+    pylab.ylim(ymin=0.0)
+    pylab.title("60 second moving average throughput, {0}, all relays".format("write" if direction == "bytes_written" else "read"))
     pylab.legend(loc="lower right")
     page.savefig()
     pylab.close()
+    del(mafig)
 
-    pylab.figure(aggcdffig.number)
+    pylab.figure(allcdffig.number)
     pylab.xlabel("Throughput (MiB/s)")
     pylab.ylabel("Cumulative Fraction")
-    pylab.title("per second throughput, all relays")
+    pylab.title("1 second throughput, {0}, all relays".format("write" if direction == "bytes_written" else "read"))
     pylab.legend(loc="lower right")
     page.savefig()
     pylab.close()
+    del(allcdffig)
 
-    pylab.figure(percdffig.number)
+    pylab.figure(eachcdffig.number)
     #pylab.xscale('log')
     pylab.xlabel("Throughput (MiB/s)")
     pylab.ylabel("Cumulative Fraction")
-    pylab.title("per second throughput, per relay")
+    pylab.title("1 second throughput, {0}, each relay".format("write" if direction == "bytes_written" else "read"))
     pylab.legend(loc="lower right")
     page.savefig()
     pylab.close()
+    del(eachcdffig)
 
 def get_data(experiments, lineformats):
     shdata, ftdata, tordata = [], [], []
