@@ -39,11 +39,11 @@
 
 extern ShadowLogFunc tgenLogFunc;
 
-#define tgen_error(...) 	if(tgenLogFunc){tgenLogFunc(SHADOW_LOG_LEVEL_ERROR, __FUNCTION__, __VA_ARGS__);}
-#define tgen_critical(...) 	if(tgenLogFunc){tgenLogFunc(SHADOW_LOG_LEVEL_CRITICAL, __FUNCTION__, __VA_ARGS__);}
-#define tgen_warning(...) 	if(tgenLogFunc){tgenLogFunc(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, __VA_ARGS__);}
-#define tgen_message(...) 	if(tgenLogFunc){tgenLogFunc(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, __VA_ARGS__);}
-#define tgen_info(...) 		if(tgenLogFunc){tgenLogFunc(SHADOW_LOG_LEVEL_INFO, __FUNCTION__, __VA_ARGS__);}
-#define tgen_debug(...) 	if(tgenLogFunc){tgenLogFunc(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__, __VA_ARGS__);}
+#define tgen_error(...)     if(tgenLogFunc){tgenLogFunc(SHADOW_LOG_LEVEL_ERROR, __FUNCTION__, __VA_ARGS__);}
+#define tgen_critical(...)  if(tgenLogFunc){tgenLogFunc(SHADOW_LOG_LEVEL_CRITICAL, __FUNCTION__, __VA_ARGS__);}
+#define tgen_warning(...)   if(tgenLogFunc){tgenLogFunc(SHADOW_LOG_LEVEL_WARNING, __FUNCTION__, __VA_ARGS__);}
+#define tgen_message(...)   if(tgenLogFunc){tgenLogFunc(SHADOW_LOG_LEVEL_MESSAGE, __FUNCTION__, __VA_ARGS__);}
+#define tgen_info(...)      if(tgenLogFunc){tgenLogFunc(SHADOW_LOG_LEVEL_INFO, __FUNCTION__, __VA_ARGS__);}
+#define tgen_debug(...)     if(tgenLogFunc){tgenLogFunc(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__, __VA_ARGS__);}
 
 #endif /* SHD_TGEN_H_ */

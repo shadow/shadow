@@ -213,43 +213,43 @@ typedef guint ShadowID;
 typedef struct _Configuration Configuration;
 
 struct _Configuration {
-	GOptionContext *context;
+    GOptionContext *context;
 
-	gchar* argstr;
+    gchar* argstr;
 
-	GOptionGroup* mainOptionGroup;
-	gchar* logLevelInput;
-	gint nWorkerThreads;
-	guint randomSeed;
-	gboolean printSoftwareVersion;
-	guint heartbeatInterval;
-	gchar* heartbeatLogLevelInput;
-	gchar* heartbeatLogInfo;
-	gchar* preloads;
-	gboolean runValgrind;
-	gboolean debug;
+    GOptionGroup* mainOptionGroup;
+    gchar* logLevelInput;
+    gint nWorkerThreads;
+    guint randomSeed;
+    gboolean printSoftwareVersion;
+    guint heartbeatInterval;
+    gchar* heartbeatLogLevelInput;
+    gchar* heartbeatLogInfo;
+    gchar* preloads;
+    gboolean runValgrind;
+    gboolean debug;
 
-	GOptionGroup* networkOptionGroup;
-	gint cpuThreshold;
-	gint cpuPrecision;
-	gint minRunAhead;
-	gint initialTCPWindow;
-	gint interfaceBufferSize;
-	gint initialSocketReceiveBufferSize;
-	gint initialSocketSendBufferSize;
-	gboolean autotuneSocketReceiveBuffer;
-	gboolean autotuneSocketSendBuffer;
-	gchar* interfaceQueuingDiscipline;
-	SimulationTime interfaceBatchTime;
-	gchar* tcpCongestionControl;
-	gint tcpSlowStartThreshold;
+    GOptionGroup* networkOptionGroup;
+    gint cpuThreshold;
+    gint cpuPrecision;
+    gint minRunAhead;
+    gint initialTCPWindow;
+    gint interfaceBufferSize;
+    gint initialSocketReceiveBufferSize;
+    gint initialSocketSendBufferSize;
+    gboolean autotuneSocketReceiveBuffer;
+    gboolean autotuneSocketSendBuffer;
+    gchar* interfaceQueuingDiscipline;
+    SimulationTime interfaceBatchTime;
+    gchar* tcpCongestionControl;
+    gint tcpSlowStartThreshold;
 
-	GOptionGroup* pluginsOptionGroup;
-	gboolean runTGenExample;
+    GOptionGroup* pluginsOptionGroup;
+    gboolean runTGenExample;
 
-	GQueue* inputXMLFilenames;
+    GQueue* inputXMLFilenames;
 
-	MAGIC_DECLARE;
+    MAGIC_DECLARE;
 };
 
 /**

@@ -22,38 +22,38 @@
 #include "shadow.h"
 
 RunnableFunctionTable spina_functions = {
-	(RunnableRunFunc) spina_run,
-	(RunnableFreeFunc) spina_free,
-	MAGIC_VALUE
+    (RunnableRunFunc) spina_run,
+    (RunnableFreeFunc) spina_free,
+    MAGIC_VALUE
 };
 
 SpinAction* spina_new(guint seconds) {
-	SpinAction* action = g_new0(SpinAction, 1);
-	MAGIC_INIT(action);
+    SpinAction* action = g_new0(SpinAction, 1);
+    MAGIC_INIT(action);
 
-	action_init(&(action->super), &spina_functions);
-	action->spin_seconds = seconds;
+    action_init(&(action->super), &spina_functions);
+    action->spin_seconds = seconds;
 
-	return action;
+    return action;
 }
 
 void spina_free(SpinAction* action) {
-	MAGIC_ASSERT(action);
-	MAGIC_CLEAR(action);
-	g_free(action);
+    MAGIC_ASSERT(action);
+    MAGIC_CLEAR(action);
+    g_free(action);
 }
 
 void spina_run(SpinAction* action) {
-	MAGIC_ASSERT(action);
+    MAGIC_ASSERT(action);
 
-	debug("running spin action for %u seconds", action->spin_seconds);
+    debug("running spin action for %u seconds", action->spin_seconds);
 
-	guint64 i = 100000000 * action->spin_seconds;
-	while(i--) {
-		continue;
-	}
+    guint64 i = 100000000 * action->spin_seconds;
+    while(i--) {
+        continue;
+    }
 
-//	SpinAction* sa = spina_new(action->spin_seconds);
-//	SimulationTime t = action->spin_seconds * SIMTIME_ONE_SECOND;
-//	worker_scheduleEvent((Event*)sa, t);
+//  SpinAction* sa = spina_new(action->spin_seconds);
+//  SimulationTime t = action->spin_seconds * SIMTIME_ONE_SECOND;
+//  worker_scheduleEvent((Event*)sa, t);
 }

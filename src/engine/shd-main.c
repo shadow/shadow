@@ -157,51 +157,51 @@ static gboolean _main_spawnShadowWithValgrind(gchar** argv, gchar** envlist, GEr
 gint shadow_main(gint argc, gchar* argv[]) {
     /* check the compiled GLib version */
     if (!GLIB_CHECK_VERSION(2, 32, 0)) {
-	    g_printerr("** GLib version 2.32.0 or above is required but Shadow was compiled against version %u.%u.%u\n",
-		    (guint)GLIB_MAJOR_VERSION, (guint)GLIB_MINOR_VERSION, (guint)GLIB_MICRO_VERSION);
-	    return -1;
+        g_printerr("** GLib version 2.32.0 or above is required but Shadow was compiled against version %u.%u.%u\n",
+            (guint)GLIB_MAJOR_VERSION, (guint)GLIB_MINOR_VERSION, (guint)GLIB_MICRO_VERSION);
+        return -1;
     }
 
     /* check the that run-time GLib matches the compiled version */
     const gchar* mismatch = glib_check_version(GLIB_MAJOR_VERSION, GLIB_MINOR_VERSION, GLIB_MICRO_VERSION);
     if(mismatch) {
-	    g_printerr("** The version of the run-time GLib library (%u.%u.%u) is not compatible with the version against which Shadow was compiled (%u.%u.%u). GLib message: '%s'\n",
+        g_printerr("** The version of the run-time GLib library (%u.%u.%u) is not compatible with the version against which Shadow was compiled (%u.%u.%u). GLib message: '%s'\n",
         glib_major_version, glib_minor_version, glib_micro_version,
         (guint)GLIB_MAJOR_VERSION, (guint)GLIB_MINOR_VERSION, (guint)GLIB_MICRO_VERSION,
         mismatch);
-	    return -1;
+        return -1;
     }
 
-	/* setup configuration - this fails and aborts if invalid */
+    /* setup configuration - this fails and aborts if invalid */
     gchar* cmds = g_strjoinv(" ", argv);
     gchar** cmdv = g_strsplit(cmds, " ", 0);
-	Configuration* config = configuration_new(argc, cmdv);
+    Configuration* config = configuration_new(argc, cmdv);
     g_free(cmds);
     g_strfreev(cmdv);
-	if(!config) {
-		/* incorrect options given */
-		return -1;
-	} else if(config->printSoftwareVersion) {
-		g_printerr("%s\n%s\n", SHADOW_VERSION_STRING, SHADOW_INFO_STRING);
-		configuration_free(config);
-		return 0;
-	}
+    if(!config) {
+        /* incorrect options given */
+        return -1;
+    } else if(config->printSoftwareVersion) {
+        g_printerr("%s\n%s\n", SHADOW_VERSION_STRING, SHADOW_INFO_STRING);
+        configuration_free(config);
+        return 0;
+    }
 
-	/* check environment for LD_PRELOAD */
-	gchar** envlist = g_get_environ();
-	gboolean preloadSuccess = _main_checkPreloadEnvironment(envlist);
-	g_strfreev(envlist);
-	gboolean respawned = g_getenv("SHADOW_SPAWNED") != NULL ? TRUE : FALSE;
+    /* check environment for LD_PRELOAD */
+    gchar** envlist = g_get_environ();
+    gboolean preloadSuccess = _main_checkPreloadEnvironment(envlist);
+    g_strfreev(envlist);
+    gboolean respawned = g_getenv("SHADOW_SPAWNED") != NULL ? TRUE : FALSE;
 
-	if(respawned) {
+    if(respawned) {
         /* if shadow already respawned once and LD_PRELOAD still isnt correct,
          * then the user will need to provide the correct path */
-	    if(!preloadSuccess) {
+        if(!preloadSuccess) {
             g_printerr("** Environment Check Failed: LD_PRELOAD does not contain an absolute path to "INTERPOSELIBSTR"\n");
             return -1;
-	    }
-	    /* NOTE: we ignore valgrind and preload options during the respawn */
-	} else {
+        }
+        /* NOTE: we ignore valgrind and preload options during the respawn */
+    } else {
         /* if preload is not set, or the user added a preload library,
          * or we are going to run valgrind, we need to respawn */
         if(config->preloads || config->runValgrind || !preloadSuccess) {
@@ -226,25 +226,25 @@ gint shadow_main(gint argc, gchar* argv[]) {
             /* child was run */
             return 0;
         }
-	}
+    }
 
-	utility_assert(preloadSuccess);
+    utility_assert(preloadSuccess);
 
-	/* tell the preaload lib we are ready for action */
-	extern void interposer_setShadowIsLoaded();
-	interposer_setShadowIsLoaded();
+    /* tell the preaload lib we are ready for action */
+    extern void interposer_setShadowIsLoaded();
+    interposer_setShadowIsLoaded();
 
-	/* allocate and initialize our main simulation driver */
-	shadowMaster = master_new(config);
-	if(shadowMaster) {
-		/* run the simulation */
-		master_run(shadowMaster);
-		/* cleanup */
-		master_free(shadowMaster);
-		shadowMaster = NULL;
-	}
+    /* allocate and initialize our main simulation driver */
+    shadowMaster = master_new(config);
+    if(shadowMaster) {
+        /* run the simulation */
+        master_run(shadowMaster);
+        /* cleanup */
+        master_free(shadowMaster);
+        shadowMaster = NULL;
+    }
 
-	configuration_free(config);
+    configuration_free(config);
 
-	return 0;
+    return 0;
 }

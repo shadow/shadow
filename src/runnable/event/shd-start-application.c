@@ -8,40 +8,40 @@
 #include "shd-event-internal.h"
 
 struct _StartApplicationEvent {
-	Event super;
-	Process* application;
-	MAGIC_DECLARE;
+    Event super;
+    Process* application;
+    MAGIC_DECLARE;
 };
 
 EventFunctionTable startapplication_functions = {
-	(EventRunFunc) startapplication_run,
-	(EventFreeFunc) startapplication_free,
-	MAGIC_VALUE
+    (EventRunFunc) startapplication_run,
+    (EventFreeFunc) startapplication_free,
+    MAGIC_VALUE
 };
 
 StartApplicationEvent* startapplication_new(Process* application) {
-	StartApplicationEvent* event = g_new0(StartApplicationEvent, 1);
-	MAGIC_INIT(event);
+    StartApplicationEvent* event = g_new0(StartApplicationEvent, 1);
+    MAGIC_INIT(event);
 
-	shadowevent_init((Event*) event, &startapplication_functions);
+    shadowevent_init((Event*) event, &startapplication_functions);
 
-	event->application = application;
+    event->application = application;
 
-	return event;
+    return event;
 }
 
 void startapplication_run(StartApplicationEvent* event, Host* node) {
-	MAGIC_ASSERT(event);
+    MAGIC_ASSERT(event);
 
-	debug("event started");
+    debug("event started");
 
-	host_startApplication(node, event->application);
+    host_startApplication(node, event->application);
 
-	debug("event finished");
+    debug("event finished");
 }
 
 void startapplication_free(StartApplicationEvent* event) {
-	MAGIC_ASSERT(event);
-	MAGIC_CLEAR(event);
-	g_free(event);
+    MAGIC_ASSERT(event);
+    MAGIC_CLEAR(event);
+    g_free(event);
 }

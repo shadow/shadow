@@ -8,46 +8,46 @@
 #include "shd-event-internal.h"
 
 struct _PacketArrivedEvent {
-	Event super;
-	Packet* packet;
-	MAGIC_DECLARE;
+    Event super;
+    Packet* packet;
+    MAGIC_DECLARE;
 };
 
 EventFunctionTable packetarrived_functions = {
-	(EventRunFunc) packetarrived_run,
-	(EventFreeFunc) packetarrived_free,
-	MAGIC_VALUE
+    (EventRunFunc) packetarrived_run,
+    (EventFreeFunc) packetarrived_free,
+    MAGIC_VALUE
 };
 
 PacketArrivedEvent* packetarrived_new(Packet* packet) {
-	PacketArrivedEvent* event = g_new0(PacketArrivedEvent, 1);
-	MAGIC_INIT(event);
+    PacketArrivedEvent* event = g_new0(PacketArrivedEvent, 1);
+    MAGIC_INIT(event);
 
-	shadowevent_init(&(event->super), &packetarrived_functions);
+    shadowevent_init(&(event->super), &packetarrived_functions);
 
-	packet_ref(packet);
-	event->packet = packet;
+    packet_ref(packet);
+    event->packet = packet;
 
-	return event;
+    return event;
 }
 
 void packetarrived_run(PacketArrivedEvent* event, Host* node) {
-	MAGIC_ASSERT(event);
+    MAGIC_ASSERT(event);
 
-	debug("event started");
+    debug("event started");
 
-	in_addr_t ip = packet_getDestinationIP(event->packet);
-	NetworkInterface* interface = host_lookupInterface(node, ip);
-	networkinterface_packetArrived(interface, event->packet);
+    in_addr_t ip = packet_getDestinationIP(event->packet);
+    NetworkInterface* interface = host_lookupInterface(node, ip);
+    networkinterface_packetArrived(interface, event->packet);
 
-	debug("event finished");
+    debug("event finished");
 }
 
 void packetarrived_free(PacketArrivedEvent* event) {
-	MAGIC_ASSERT(event);
+    MAGIC_ASSERT(event);
 
-	packet_unref(event->packet);
+    packet_unref(event->packet);
 
-	MAGIC_CLEAR(event);
-	g_free(event);
+    MAGIC_CLEAR(event);
+    g_free(event);
 }

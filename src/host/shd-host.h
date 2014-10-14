@@ -14,13 +14,13 @@
 typedef struct _Host Host;
 
 Host* host_new(GQuark id, gchar* hostname, gchar* requestedIP, gchar* geocodeHint, gchar* typeHint,
-		guint64 requestedBWDownKiBps, guint64 requestedBWUpKiBps,
-		guint cpuFrequency, gint cpuThreshold, gint cpuPrecision, guint nodeSeed,
-		SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel, gchar* heartbeatLogInfo,
-		GLogLevelFlags logLevel, gboolean logPcap, gchar* pcapDir, gchar* qdisc,
-		guint64 receiveBufferSize, gboolean autotuneReceiveBuffer,
-		guint64 sendBufferSize, gboolean autotuneSendBuffer,
-		guint64 interfaceReceiveLength);
+        guint64 requestedBWDownKiBps, guint64 requestedBWUpKiBps,
+        guint cpuFrequency, gint cpuThreshold, gint cpuPrecision, guint nodeSeed,
+        SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel, gchar* heartbeatLogInfo,
+        GLogLevelFlags logLevel, gboolean logPcap, gchar* pcapDir, gchar* qdisc,
+        guint64 receiveBufferSize, gboolean autotuneReceiveBuffer,
+        guint64 sendBufferSize, gboolean autotuneSendBuffer,
+        guint64 interfaceReceiveLength);
 void host_free(Host* host, gpointer userData);
 
 void host_lock(Host* host);
@@ -29,7 +29,7 @@ void host_unlock(Host* host);
 EventQueue* host_getEvents(Host* host);
 
 void host_addApplication(Host* host, GQuark pluginID,
-		SimulationTime startTime, SimulationTime stopTime, gchar* arguments);
+        SimulationTime startTime, SimulationTime stopTime, gchar* arguments);
 void host_startApplication(Host* host, Process* application);
 void host_stopApplication(Host* host, Process* application);
 void host_freeAllApplications(Host* host);
@@ -63,9 +63,9 @@ gboolean host_isRandomHandle(Host* host, gint handle);
 void host_destroyShadowHandle(Host* host, gint shadowHandle);
 
 gint host_epollControl(Host* host, gint epollDescriptor, gint operation,
-		gint fileDescriptor, struct epoll_event* event);
+        gint fileDescriptor, struct epoll_event* event);
 gint host_epollGetEvents(Host* host, gint handle, struct epoll_event* eventArray,
-		gint eventArrayLength, gint* nEvents);
+        gint eventArrayLength, gint* nEvents);
 
 gint host_bindToInterface(Host* host, gint handle, const struct sockaddr* address);
 gint host_connectToPeer(Host* host, gint handle, const struct sockaddr* address);

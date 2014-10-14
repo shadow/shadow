@@ -11,21 +11,21 @@
 
 typedef enum _DescriptorType DescriptorType;
 enum _DescriptorType {
-	DT_TCPSOCKET, DT_UDPSOCKET, DT_PIPE, DT_SOCKETPAIR, DT_EPOLL, DT_TIMER
+    DT_TCPSOCKET, DT_UDPSOCKET, DT_PIPE, DT_SOCKETPAIR, DT_EPOLL, DT_TIMER
 };
 
 typedef enum _DescriptorStatus DescriptorStatus;
 enum _DescriptorStatus {
-	DS_NONE = 0,
-	/* ok to notify user as far as we know, socket is ready.
-	 * o/w never notify user (b/c they e.g. closed the socket or did not accept yet) */
-	DS_ACTIVE = 1 << 0,
-	/* can be read, i.e. there is data waiting for user */
-	DS_READABLE = 1 << 1,
-	/* can be written, i.e. there is available buffer space */
-	DS_WRITABLE = 1 << 2,
-	/* user already called close */
-	DS_CLOSED = 1 << 3,
+    DS_NONE = 0,
+    /* ok to notify user as far as we know, socket is ready.
+     * o/w never notify user (b/c they e.g. closed the socket or did not accept yet) */
+    DS_ACTIVE = 1 << 0,
+    /* can be read, i.e. there is data waiting for user */
+    DS_READABLE = 1 << 1,
+    /* can be written, i.e. there is available buffer space */
+    DS_WRITABLE = 1 << 2,
+    /* user already called close */
+    DS_CLOSED = 1 << 3,
 };
 
 typedef struct _Descriptor Descriptor;
@@ -39,24 +39,24 @@ typedef void (*DescriptorFunc)(Descriptor* descriptor);
  * callable functions.
  */
 struct _DescriptorFunctionTable {
-	DescriptorFunc close;
-	DescriptorFunc free;
-	MAGIC_DECLARE;
+    DescriptorFunc close;
+    DescriptorFunc free;
+    MAGIC_DECLARE;
 };
 
 struct _Descriptor {
-	DescriptorFunctionTable* funcTable;
-	gint handle;
-	DescriptorType type;
-	DescriptorStatus status;
-	GSList* readyListeners;
-	gint referenceCount;
-	gint flags;
-	MAGIC_DECLARE;
+    DescriptorFunctionTable* funcTable;
+    gint handle;
+    DescriptorType type;
+    DescriptorStatus status;
+    GSList* readyListeners;
+    gint referenceCount;
+    gint flags;
+    MAGIC_DECLARE;
 };
 
 void descriptor_init(Descriptor* descriptor, DescriptorType type,
-		DescriptorFunctionTable* funcTable, gint handle);
+        DescriptorFunctionTable* funcTable, gint handle);
 void descriptor_ref(gpointer data);
 void descriptor_unref(gpointer data);
 void descriptor_close(Descriptor* descriptor);

@@ -34,22 +34,22 @@
 #include "shadow.h"
 
 #define SETSYM_OR_FAIL(funcptr, funcstr) { \
-	dlerror(); \
-	funcptr = dlsym(RTLD_NEXT, funcstr); \
-	char* errorMessage = dlerror(); \
-	if(errorMessage != NULL) { \
-		fprintf(stderr, "dlsym(%s): dlerror(): %s\n", funcstr, errorMessage); \
-		exit(EXIT_FAILURE); \
-	} else if(funcptr == NULL) { \
-		fprintf(stderr, "dlsym(%s): returned NULL pointer\n", funcstr); \
-		exit(EXIT_FAILURE); \
-	} \
+    dlerror(); \
+    funcptr = dlsym(RTLD_NEXT, funcstr); \
+    char* errorMessage = dlerror(); \
+    if(errorMessage != NULL) { \
+        fprintf(stderr, "dlsym(%s): dlerror(): %s\n", funcstr, errorMessage); \
+        exit(EXIT_FAILURE); \
+    } else if(funcptr == NULL) { \
+        fprintf(stderr, "dlsym(%s): returned NULL pointer\n", funcstr); \
+        exit(EXIT_FAILURE); \
+    } \
 }
 
 #define ENSURE(type, prefix, func) { \
-	if(!director.type.func) { \
-		SETSYM_OR_FAIL(director.type.func, prefix #func); \
-	} \
+    if(!director.type.func) { \
+        SETSYM_OR_FAIL(director.type.func, prefix #func); \
+    } \
 }
 
 /* memory allocation family */
@@ -165,111 +165,111 @@ typedef int (*atexit_fp)(void (*func)(void));
 typedef int (*__cxa_atexit_fp)(void (*func) (void *), void * arg, void * dso_handle);
 
 typedef struct {
-	MallocFunc malloc;
-	CallocFunc calloc;
-	ReallocFunc realloc;
-	PosixMemalignFunc posix_memalign;
-	MemalignFunc memalign;
-	AlignedAllocFunc aligned_alloc;
-	VallocFunc valloc;
-	PvallocFunc pvalloc;
-	FreeFunc free;
-	MMapFunc mmap;
+    MallocFunc malloc;
+    CallocFunc calloc;
+    ReallocFunc realloc;
+    PosixMemalignFunc posix_memalign;
+    MemalignFunc memalign;
+    AlignedAllocFunc aligned_alloc;
+    VallocFunc valloc;
+    PvallocFunc pvalloc;
+    FreeFunc free;
+    MMapFunc mmap;
 
-	EpollCreateFunc epoll_create;
-	EpollCreate1Func epoll_create1;
-	EpollCtlFunc epoll_ctl;
-	EpollWaitFunc epoll_wait;
-	EpollPWaitFunc epoll_pwait;
+    EpollCreateFunc epoll_create;
+    EpollCreate1Func epoll_create1;
+    EpollCtlFunc epoll_ctl;
+    EpollWaitFunc epoll_wait;
+    EpollPWaitFunc epoll_pwait;
 
-	timerfd_create_func timerfd_create;
-	timerfd_settime_func timerfd_settime;
-	timerfd_gettime_func timerfd_gettime;
+    timerfd_create_func timerfd_create;
+    timerfd_settime_func timerfd_settime;
+    timerfd_gettime_func timerfd_gettime;
 
-	SocketFunc socket;
-	SocketpairFunc socketpair;
-	BindFunc bind;
-	GetsocknameFunc getsockname;
-	ConnectFunc connect;
-	GetpeernameFunc getpeername;
-	SendFunc send;
-	SendtoFunc sendto;
-	SendmsgFunc sendmsg;
-	RecvFunc recv;
-	RecvfromFunc recvfrom;
-	RecvmsgFunc recvmsg;
-	GetsockoptFunc getsockopt;
-	SetsockoptFunc setsockopt;
-	ListenFunc listen;
-	AcceptFunc accept;
-	Accept4Func accept4;
-	ShutdownFunc shutdown;
-	PipeFunc pipe;
-	Pipe2Func pipe2;
-	ReadFunc read;
-	WriteFunc write;
-	CloseFunc close;
-	FcntlFunc fcntl;
-	IoctlFunc ioctl;
+    SocketFunc socket;
+    SocketpairFunc socketpair;
+    BindFunc bind;
+    GetsocknameFunc getsockname;
+    ConnectFunc connect;
+    GetpeernameFunc getpeername;
+    SendFunc send;
+    SendtoFunc sendto;
+    SendmsgFunc sendmsg;
+    RecvFunc recv;
+    RecvfromFunc recvfrom;
+    RecvmsgFunc recvmsg;
+    GetsockoptFunc getsockopt;
+    SetsockoptFunc setsockopt;
+    ListenFunc listen;
+    AcceptFunc accept;
+    Accept4Func accept4;
+    ShutdownFunc shutdown;
+    PipeFunc pipe;
+    Pipe2Func pipe2;
+    ReadFunc read;
+    WriteFunc write;
+    CloseFunc close;
+    FcntlFunc fcntl;
+    IoctlFunc ioctl;
         EventfdFunc eventfd;
 
-	FileNoFunc fileno;
-	OpenFunc open;
-	Open64Func open64;
-	CreatFunc creat;
-	FOpenFunc fopen;
-	FDOpenFunc fdopen;
-	DupFunc dup;
-	Dup2Func dup2;
-	Dup3Func dup3;
-	FCloseFunc fclose;
-	FXStat __fxstat;
-	FStatFSFunc fstatfs;
-	LSeekFunc lseek;
-	PReadFunc pread;
-	FLockFunc flock;
-	FSyncFunc fsync;
-	FTruncateFunc ftruncate;
-	PosixFAllocateFunc posix_fallocate;
+    FileNoFunc fileno;
+    OpenFunc open;
+    Open64Func open64;
+    CreatFunc creat;
+    FOpenFunc fopen;
+    FDOpenFunc fdopen;
+    DupFunc dup;
+    Dup2Func dup2;
+    Dup3Func dup3;
+    FCloseFunc fclose;
+    FXStat __fxstat;
+    FStatFSFunc fstatfs;
+    LSeekFunc lseek;
+    PReadFunc pread;
+    FLockFunc flock;
+    FSyncFunc fsync;
+    FTruncateFunc ftruncate;
+    PosixFAllocateFunc posix_fallocate;
 
 
-	TimeFunc time;
-	ClockGettimeFunc clock_gettime;
-	GettimeofdayFunc gettimeofday;
+    TimeFunc time;
+    ClockGettimeFunc clock_gettime;
+    GettimeofdayFunc gettimeofday;
 
-	GethostnameFunc gethostname;
-	GetaddrinfoFunc getaddrinfo;
-	FreeaddrinfoFunc freeaddrinfo;
-	GetnameinfoFunc getnameinfo;
-	GethostbynameFunc gethostbyname;
-	GethostbynameRFunc gethostbyname_r;
-	Gethostbyname2Func gethostbyname2;
-	Gethostbyname2RFunc gethostbyname2_r;
-	GethostbyaddrFunc gethostbyaddr;
-	GethostbyaddrRFunc gethostbyaddr_r;
+    GethostnameFunc gethostname;
+    GetaddrinfoFunc getaddrinfo;
+    FreeaddrinfoFunc freeaddrinfo;
+    GetnameinfoFunc getnameinfo;
+    GethostbynameFunc gethostbyname;
+    GethostbynameRFunc gethostbyname_r;
+    Gethostbyname2Func gethostbyname2;
+    Gethostbyname2RFunc gethostbyname2_r;
+    GethostbyaddrFunc gethostbyaddr;
+    GethostbyaddrRFunc gethostbyaddr_r;
 
-	RandFunc rand;
-	RandRFunc rand_r;
-	SrandFunc srand;
-	RandomFunc random;
-	RandomRFunc random_r;
-	SrandomFunc srandom;
-	SrandomRFunc srandom_r;
+    RandFunc rand;
+    RandRFunc rand_r;
+    SrandFunc srand;
+    RandomFunc random;
+    RandomRFunc random_r;
+    SrandomFunc srandom;
+    SrandomRFunc srandom_r;
 
-	on_exit_fp on_exit;
-	atexit_fp atexit;
-	__cxa_atexit_fp __cxa_atexit;
+    on_exit_fp on_exit;
+    atexit_fp atexit;
+    __cxa_atexit_fp __cxa_atexit;
 } PreloadFuncs;
 
 typedef struct {
-	struct {
-		char buf[102400];
-		size_t pos;
-		size_t nallocs;
-		size_t ndeallocs;
-	} dummy;
-	PreloadFuncs libc;
-	gboolean shadowIsLoaded;
+    struct {
+        char buf[102400];
+        size_t pos;
+        size_t nallocs;
+        size_t ndeallocs;
+    } dummy;
+    PreloadFuncs libc;
+    gboolean shadowIsLoaded;
 } FuncDirector;
 
 /* global storage for function pointers that we look up lazily */
@@ -282,7 +282,7 @@ static __thread unsigned long isRecursive = 0;
 
 static void* dummy_malloc(size_t size) {
     if (director.dummy.pos + size >= sizeof(director.dummy.buf)) {
-    	exit(EXIT_FAILURE);
+        exit(EXIT_FAILURE);
     }
     void* mem = &(director.dummy.buf[director.dummy.pos]);
     director.dummy.pos += size;
@@ -291,17 +291,17 @@ static void* dummy_malloc(size_t size) {
 }
 
 static void* dummy_calloc(size_t nmemb, size_t size) {
-	size_t total_bytes = nmemb * size;
+    size_t total_bytes = nmemb * size;
     void* mem = dummy_malloc(total_bytes);
     memset(mem, 0, total_bytes);
     return mem;
 }
 
 static void dummy_free(void *ptr) {
-	director.dummy.ndeallocs++;
-	if(director.dummy.ndeallocs == director.dummy.nallocs){
-		director.dummy.pos = 0;
-	}
+    director.dummy.ndeallocs++;
+    if(director.dummy.ndeallocs == director.dummy.nallocs){
+        director.dummy.pos = 0;
+    }
 }
 
 void interposer_setShadowIsLoaded() {
@@ -309,28 +309,28 @@ void interposer_setShadowIsLoaded() {
 }
 
 static void _interposer_globalInitialize() {
-	/* ensure we never intercept during initialization */
-	__sync_fetch_and_add(&isRecursive, 1);
+    /* ensure we never intercept during initialization */
+    __sync_fetch_and_add(&isRecursive, 1);
 
-	memset(&director, 0, sizeof(FuncDirector));
+    memset(&director, 0, sizeof(FuncDirector));
 
-	/* use dummy malloc during initial dlsym calls to avoid recursive stack segfaults */
-	director.libc.malloc = dummy_malloc;
-	director.libc.calloc = dummy_calloc;
-	director.libc.free = dummy_free;
+    /* use dummy malloc during initial dlsym calls to avoid recursive stack segfaults */
+    director.libc.malloc = dummy_malloc;
+    director.libc.calloc = dummy_calloc;
+    director.libc.free = dummy_free;
 
-	MallocFunc tempMalloc;
-	CallocFunc tempCalloc;
-	FreeFunc tempFree;
+    MallocFunc tempMalloc;
+    CallocFunc tempCalloc;
+    FreeFunc tempFree;
 
-	SETSYM_OR_FAIL(tempMalloc, "malloc");
-	SETSYM_OR_FAIL(tempCalloc, "calloc");
-	SETSYM_OR_FAIL(tempFree, "free");
+    SETSYM_OR_FAIL(tempMalloc, "malloc");
+    SETSYM_OR_FAIL(tempCalloc, "calloc");
+    SETSYM_OR_FAIL(tempFree, "free");
 
-	/* stop using the dummy malloc funcs now */
-	director.libc.malloc = tempMalloc;
-	director.libc.calloc = tempCalloc;
-	director.libc.free = tempFree;
+    /* stop using the dummy malloc funcs now */
+    director.libc.malloc = tempMalloc;
+    director.libc.calloc = tempCalloc;
+    director.libc.free = tempFree;
 
     __sync_fetch_and_sub(&isRecursive, 1);
 }
@@ -352,21 +352,21 @@ void __attribute__((constructor)) construct() {
  ****************************************************************************/
 
 static inline int shouldForwardToLibC() {
-	int useLibC = 1;
-	/* recursive calls always go to libc */
-	if(!__sync_fetch_and_add(&isRecursive, 1)) {
-	    Thread* thread = director.shadowIsLoaded && worker_isAlive() ? worker_getActiveThread() : NULL;
-		/* check if the shadow intercept library is loaded yet, but dont fail if its not */
-		if(thread) {
-			/* ask shadow if this call is a plug-in that should be intercepted */
-		    useLibC = thread_shouldInterpose(thread) ? 0 : 1;
-		} else {
-			/* intercept library is not yet loaded, don't redirect */
-		    useLibC = 1;
-		}
-	}
-	__sync_fetch_and_sub(&isRecursive, 1);
-	return useLibC;
+    int useLibC = 1;
+    /* recursive calls always go to libc */
+    if(!__sync_fetch_and_add(&isRecursive, 1)) {
+        Thread* thread = director.shadowIsLoaded && worker_isAlive() ? worker_getActiveThread() : NULL;
+        /* check if the shadow intercept library is loaded yet, but dont fail if its not */
+        if(thread) {
+            /* ask shadow if this call is a plug-in that should be intercepted */
+            useLibC = thread_shouldInterpose(thread) ? 0 : 1;
+        } else {
+            /* intercept library is not yet loaded, don't redirect */
+            useLibC = 1;
+        }
+    }
+    __sync_fetch_and_sub(&isRecursive, 1);
+    return useLibC;
 }
 
 enum SystemCallType {
@@ -400,7 +400,7 @@ static gint _interposer_addressHelper(gint fd, const struct sockaddr* addr, sock
     } else if(addr == NULL) { /* check for proper addr */
         result = EFAULT;
     } else if(len == NULL ||
-	      (addr->sa_family == AF_INET && *len < sizeof(struct sockaddr_in))) {
+          (addr->sa_family == AF_INET && *len < sizeof(struct sockaddr_in))) {
         result = EINVAL;
     }
 
@@ -530,14 +530,14 @@ static gint _interposer_fcntlHelper(int fd, int cmd, va_list farg) {
 
     gint result = 0;
     if(descriptor) {
-	    if (cmd == F_GETFL) {
-		    result = descriptor_getFlags(descriptor);
-	    } else if (cmd == F_SETFL) {
-		    descriptor_setFlags(descriptor, va_arg(farg, int));
-	    }
+        if (cmd == F_GETFL) {
+            result = descriptor_getFlags(descriptor);
+        } else if (cmd == F_SETFL) {
+            descriptor_setFlags(descriptor, va_arg(farg, int));
+        }
     } else {
-	    errno = EBADF;
-	    result = -1;
+        errno = EBADF;
+        result = -1;
     }
 
     _interposer_switchOutShadowContext(node);
@@ -634,13 +634,13 @@ void* malloc(size_t size) {
 
 void* calloc(size_t nmemb, size_t size) {
     if(shouldForwardToLibC()) {
-    	/* the dlsym lookup for calloc may call calloc again, causing infinite recursion */
-    	if(!director.libc.calloc) {
-    		/* make sure to use dummy_calloc when looking up calloc */
-			director.libc.calloc = dummy_calloc;
-			/* this will set director.real.calloc to the correct calloc */
-			ENSURE(libc, "", calloc);
-    	}
+        /* the dlsym lookup for calloc may call calloc again, causing infinite recursion */
+        if(!director.libc.calloc) {
+            /* make sure to use dummy_calloc when looking up calloc */
+            director.libc.calloc = dummy_calloc;
+            /* this will set director.real.calloc to the correct calloc */
+            ENSURE(libc, "", calloc);
+        }
         return director.libc.calloc(nmemb, size);
     }
 
@@ -1473,16 +1473,16 @@ ssize_t read(int fd, void *buff, size_t numbytes) {
     Host* host = _interposer_switchInShadowContext();
 
     if(host_isShadowDescriptor(host, fd)){
-    	Descriptor* desc = host_lookupDescriptor(host, fd);
-    	if(descriptor_getType(desc) == DT_TIMER) {
-    		ret = timer_read((Timer*) desc, buff, numbytes);
-    	} else {
-			ret = _interposer_recvHelper(host, fd, buff, numbytes, 0, NULL, 0);
-    	}
+        Descriptor* desc = host_lookupDescriptor(host, fd);
+        if(descriptor_getType(desc) == DT_TIMER) {
+            ret = timer_read((Timer*) desc, buff, numbytes);
+        } else {
+            ret = _interposer_recvHelper(host, fd, buff, numbytes, 0, NULL, 0);
+        }
     } else if(host_isRandomHandle(host, fd)) {
-		Random* random = host_getRandom(host);
-		random_nextNBytes(random, (guchar*)buff, numbytes);
-		ret = (ssize_t) numbytes;
+        Random* random = host_getRandom(host);
+        random_nextNBytes(random, (guchar*)buff, numbytes);
+        ret = (ssize_t) numbytes;
     } else {
         gint osfd = host_getOSHandle(host, fd);
         if(osfd >= 0) {
@@ -1507,9 +1507,9 @@ ssize_t pread(int fd, void *buff, size_t numbytes, off_t offset) {
     Host* host = _interposer_switchInShadowContext();
 
     if(host_isShadowDescriptor(host, fd)){
-	assert(0);
-	errno = EBADF;
-	ret = -1;
+    assert(0);
+    errno = EBADF;
+    ret = -1;
     } else {
         gint osfd = host_getOSHandle(host, fd);
         if(osfd >= 0) {
@@ -1690,9 +1690,9 @@ int timerfd_create(int clockid, int flags) {
     gint result = host_createDescriptor(host, DT_TIMER);
     if(result > 0) {
         Descriptor* desc = host_lookupDescriptor(host, result);
-		if(desc) {
-			descriptor_setFlags(desc, flags);
-		}
+        if(desc) {
+            descriptor_setFlags(desc, flags);
+        }
     }
 
     _interposer_switchOutShadowContext(host);
@@ -1714,13 +1714,13 @@ int timerfd_settime(int fd, int flags,
 
     Descriptor* desc = host_lookupDescriptor(host, fd);
     if(!desc) {
-    	errno = EBADF;
-    	ret = -1;
+        errno = EBADF;
+        ret = -1;
     } else if(descriptor_getType(desc) != DT_TIMER) {
-    	errno = EINVAL;
-    	ret = -1;
+        errno = EINVAL;
+        ret = -1;
     } else {
-    	ret = timer_setTime((Timer*)desc, flags, new_value, old_value);
+        ret = timer_setTime((Timer*)desc, flags, new_value, old_value);
     }
 
     _interposer_switchOutShadowContext(host);
@@ -1739,13 +1739,13 @@ int timerfd_gettime(int fd, struct itimerspec *curr_value) {
 
     Descriptor* desc = host_lookupDescriptor(host, fd);
     if(!desc) {
-    	errno = EBADF;
-    	ret = -1;
+        errno = EBADF;
+        ret = -1;
     } else if(descriptor_getType(desc) != DT_TIMER) {
-    	errno = EINVAL;
-    	ret = -1;
+        errno = EINVAL;
+        ret = -1;
     } else {
-    	ret = timer_getTime((Timer*)desc, curr_value);
+        ret = timer_getTime((Timer*)desc, curr_value);
     }
 
     _interposer_switchOutShadowContext(host);
@@ -1785,9 +1785,9 @@ int open(const char *pathname, int flags, ...) {
         gint osfd = open(pathname, flags, va_arg(farg, mode_t));
         gint shadowfd = osfd >= 3 ? host_createShadowHandle(host, osfd) : osfd;
 
-		if(utility_isRandomPath((gchar*)pathname)) {
-			host_setRandomHandle(host, shadowfd);
-		}
+        if(utility_isRandomPath((gchar*)pathname)) {
+            host_setRandomHandle(host, shadowfd);
+        }
 
         _interposer_switchOutShadowContext(host);
         result = shadowfd;
@@ -1842,9 +1842,9 @@ FILE *fopen(const char *path, const char *mode) {
         gint osfd = fileno(osfile);
         gint shadowfd = osfd >= 3 ? host_createShadowHandle(host, osfd) : osfd;
 
-		if(utility_isRandomPath((gchar*)path)) {
-			host_setRandomHandle(host, shadowfd);
-		}
+        if(utility_isRandomPath((gchar*)path)) {
+            host_setRandomHandle(host, shadowfd);
+        }
     }
 
     _interposer_switchOutShadowContext(host);
@@ -2393,18 +2393,18 @@ void freeaddrinfo(struct addrinfo *res) {
 }
 
 int getnameinfo(const struct sockaddr* sa, socklen_t salen,
-		char * host, socklen_t hostlen, char *serv, socklen_t servlen,
-		/* glibc-headers changed type of the flags, and then changed back */
+        char * host, socklen_t hostlen, char *serv, socklen_t servlen,
+        /* glibc-headers changed type of the flags, and then changed back */
 #if (__GLIBC__ > 2 || (__GLIBC__ == 2 && (__GLIBC_MINOR__ < 2 || __GLIBC_MINOR__ > 13)))
-		int flags) {
+        int flags) {
 #else
-		unsigned int flags) {
+        unsigned int flags) {
 #endif
 
-	if(shouldForwardToLibC()) {
-		ENSURE(libc, "", getnameinfo);
-		return director.libc.getnameinfo(sa, salen, host, hostlen, serv, servlen, (int)flags);
-	}
+    if(shouldForwardToLibC()) {
+        ENSURE(libc, "", getnameinfo);
+        return director.libc.getnameinfo(sa, salen, host, hostlen, serv, servlen, (int)flags);
+    }
 
     /* FIXME this is not fully implemented */
     if(!sa) {
@@ -2465,7 +2465,7 @@ struct hostent* gethostbyname2(const gchar* name, gint af) {
 }
 
 int gethostbyname2_r(const gchar *name, gint af, struct hostent *ret,
-		gchar *buf, gsize buflen, struct hostent **result, gint *h_errnop) {
+        gchar *buf, gsize buflen, struct hostent **result, gint *h_errnop) {
     if(shouldForwardToLibC()) {
         ENSURE(libc, "", gethostbyname2_r);
         return director.libc.gethostbyname2_r(name, af, ret, buf, buflen, result, h_errnop);

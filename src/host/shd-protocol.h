@@ -8,24 +8,24 @@
 #define SHD_PROTOCOL_H_
 
 enum ProtocolType {
-	PNONE, PLOCAL, PTCP, PUDP
+    PNONE, PLOCAL, PTCP, PUDP
 };
 
 enum ProtocolLocalFlags {
-	PLOCAL_NONE = 0,
+    PLOCAL_NONE = 0,
 };
 
 enum ProtocolUDPFlags {
-	PUDP_NONE = 0,
+    PUDP_NONE = 0,
 };
 
 enum ProtocolTCPFlags {
-	PTCP_NONE = 0,
-	PTCP_RST =  1 << 1,
-	PTCP_SYN =  1 << 2,
-	PTCP_ACK =  1 << 3,
+    PTCP_NONE = 0,
+    PTCP_RST =  1 << 1,
+    PTCP_SYN =  1 << 2,
+    PTCP_ACK =  1 << 3,
     PTCP_SACK = 1 << 4,
-	PTCP_FIN =  1 << 5,
+    PTCP_FIN =  1 << 5,
 };
 
 /**

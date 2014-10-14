@@ -8,43 +8,43 @@
 #include "shd-event-internal.h"
 
 struct _NotifyPluginEvent {
-	Event super;
-	gint epollHandle;
-	MAGIC_DECLARE;
+    Event super;
+    gint epollHandle;
+    MAGIC_DECLARE;
 };
 
 EventFunctionTable notifyplugin_functions = {
-	(EventRunFunc) notifyplugin_run,
-	(EventFreeFunc) notifyplugin_free,
-	MAGIC_VALUE
+    (EventRunFunc) notifyplugin_run,
+    (EventFreeFunc) notifyplugin_free,
+    MAGIC_VALUE
 };
 
 NotifyPluginEvent* notifyplugin_new(gint epollHandle) {
-	NotifyPluginEvent* event = g_new0(NotifyPluginEvent, 1);
-	MAGIC_INIT(event);
+    NotifyPluginEvent* event = g_new0(NotifyPluginEvent, 1);
+    MAGIC_INIT(event);
 
-	shadowevent_init(&(event->super), &notifyplugin_functions);
-	event->epollHandle = epollHandle;
+    shadowevent_init(&(event->super), &notifyplugin_functions);
+    event->epollHandle = epollHandle;
 
-	return event;
+    return event;
 }
 
 void notifyplugin_run(NotifyPluginEvent* event, Host* node) {
-	MAGIC_ASSERT(event);
+    MAGIC_ASSERT(event);
 
-	debug("event started");
+    debug("event started");
 
-	/* check in with epoll to make sure we should carry out the notification */
-	Epoll* epoll = (Epoll*) host_lookupDescriptor(node, event->epollHandle);
-	if(epoll) {
+    /* check in with epoll to make sure we should carry out the notification */
+    Epoll* epoll = (Epoll*) host_lookupDescriptor(node, event->epollHandle);
+    if(epoll) {
         epoll_tryNotify(epoll);
-	}
+    }
 
-	debug("event finished");
+    debug("event finished");
 }
 
 void notifyplugin_free(NotifyPluginEvent* event) {
-	MAGIC_ASSERT(event);
-	MAGIC_CLEAR(event);
-	g_free(event);
+    MAGIC_ASSERT(event);
+    MAGIC_CLEAR(event);
+    g_free(event);
 }

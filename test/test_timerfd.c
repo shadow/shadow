@@ -44,7 +44,7 @@ void test_past_timer() {
   read(tfd, &num_expires, sizeof(uint64_t));
   printf("timer expired %lu times\n", num_expires);
   if(num_expires > 0) {
-	printf("using TFD_TIMER_ABSTIME and a timer set in the past means it immediately expires\n");
+    printf("using TFD_TIMER_ABSTIME and a timer set in the past means it immediately expires\n");
   }
 
   close(efd);

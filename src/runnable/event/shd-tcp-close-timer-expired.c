@@ -8,43 +8,43 @@
 #include "shd-event-internal.h"
 
 struct _TCPCloseTimerExpiredEvent {
-	Event super;
-	TCP* tcp;
-	MAGIC_DECLARE;
+    Event super;
+    TCP* tcp;
+    MAGIC_DECLARE;
 };
 
 EventFunctionTable tcpclosetimerexpired_functions = {
-	(EventRunFunc) tcpclosetimerexpired_run,
-	(EventFreeFunc) tcpclosetimerexpired_free,
-	MAGIC_VALUE
+    (EventRunFunc) tcpclosetimerexpired_run,
+    (EventFreeFunc) tcpclosetimerexpired_free,
+    MAGIC_VALUE
 };
 
 TCPCloseTimerExpiredEvent* tcpclosetimerexpired_new(TCP* tcp) {
-	TCPCloseTimerExpiredEvent* event = g_new0(TCPCloseTimerExpiredEvent, 1);
-	MAGIC_INIT(event);
+    TCPCloseTimerExpiredEvent* event = g_new0(TCPCloseTimerExpiredEvent, 1);
+    MAGIC_INIT(event);
 
-	shadowevent_init(&(event->super), &tcpclosetimerexpired_functions);
-	event->tcp = tcp;
-	descriptor_ref(tcp);
+    shadowevent_init(&(event->super), &tcpclosetimerexpired_functions);
+    event->tcp = tcp;
+    descriptor_ref(tcp);
 
-	return event;
+    return event;
 }
 
 void tcpclosetimerexpired_run(TCPCloseTimerExpiredEvent* event, Host* node) {
-	MAGIC_ASSERT(event);
+    MAGIC_ASSERT(event);
 
-	debug("event started");
+    debug("event started");
 
-	tcp_closeTimerExpired(event->tcp);
+    tcp_closeTimerExpired(event->tcp);
 
-	debug("event finished");
+    debug("event finished");
 }
 
 void tcpclosetimerexpired_free(TCPCloseTimerExpiredEvent* event) {
-	MAGIC_ASSERT(event);
+    MAGIC_ASSERT(event);
 
-	descriptor_unref(event->tcp);
+    descriptor_unref(event->tcp);
 
-	MAGIC_CLEAR(event);
-	g_free(event);
+    MAGIC_CLEAR(event);
+    g_free(event);
 }

@@ -50,15 +50,15 @@ struct _ScoreBoard {
 
 
 ScoreBoard* scoreboard_new() {
-	ScoreBoard* scoreboard = g_new0(ScoreBoard, 1);
-	MAGIC_INIT(scoreboard);
+    ScoreBoard* scoreboard = g_new0(ScoreBoard, 1);
+    MAGIC_INIT(scoreboard);
 
     return scoreboard;
 }
 
 ScoreBoardBlock* scoreboardblock_new(gint sequence, BlockStatus status) {
-	ScoreBoardBlock* block = g_new0(ScoreBoardBlock, 1);
-	MAGIC_INIT(block);
+    ScoreBoardBlock* block = g_new0(ScoreBoardBlock, 1);
+    MAGIC_INIT(block);
     block->sequence = sequence;
     block->status = status;
 
@@ -236,16 +236,16 @@ void scoreboard_clear(ScoreBoard* scoreboard) {
     scoreboard->fack = 0;
     scoreboard->fackOut = 0;
     if(scoreboard->blocks) {
-		g_list_free_full(scoreboard->blocks, g_free);
-		scoreboard->blocks = NULL;
+        g_list_free_full(scoreboard->blocks, g_free);
+        scoreboard->blocks = NULL;
     }
 }
 
 void scoreboard_free(ScoreBoard* scoreboard) {
-	MAGIC_ASSERT(scoreboard);
-	scoreboard_clear(scoreboard);
-	MAGIC_CLEAR(scoreboard);
-	g_free(scoreboard);
+    MAGIC_ASSERT(scoreboard);
+    scoreboard_clear(scoreboard);
+    MAGIC_CLEAR(scoreboard);
+    g_free(scoreboard);
 }
 
 gint scoreboard_getNextRetransmit(ScoreBoard* scoreboard) {

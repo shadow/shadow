@@ -16,9 +16,9 @@ struct _TGenTransfer {
     /* transfer progress and context information */
     TGenTransferState state;
     TGenEvent events;
-	gchar* string;
+    gchar* string;
 
-	/* command information */
+    /* command information */
     gsize id;
     TGenTransferType type;
     gsize size;
@@ -29,24 +29,24 @@ struct _TGenTransfer {
 
     /* socket communication layer and buffers */
     TGenTransport* transport;
-	GString* readBuffer;
-	gint readBufferOffset;
-	GString* writeBuffer;
-	gint writeBufferOffset;
+    GString* readBuffer;
+    gint readBufferOffset;
+    GString* writeBuffer;
+    gint writeBufferOffset;
 
-	/* a checksum to store bytes received and test transfer integrity */
-	GChecksum* payloadChecksum;
+    /* a checksum to store bytes received and test transfer integrity */
+    GChecksum* payloadChecksum;
 
-	/* track bytes for read/write progress reporting */
-	struct {
-	    gsize payloadRead;
-	    gsize payloadWrite;
-	    gsize totalRead;
-	    gsize totalWrite;
-	} bytes;
+    /* track bytes for read/write progress reporting */
+    struct {
+        gsize payloadRead;
+        gsize payloadWrite;
+        gsize totalRead;
+        gsize totalWrite;
+    } bytes;
 
-	/* track timings for time reporting */
-	struct {
+    /* track timings for time reporting */
+    struct {
         gint64 start;
         gint64 command;
         gint64 response;
@@ -56,18 +56,18 @@ struct _TGenTransfer {
         gint64 lastBytesStatusReport;
         gint64 lastTimeStatusReport;
         gint64 lastTimeErrorReport;
-	} time;
+    } time;
 
-	/* notification and parameters for when this transfer finishes */
-	TGenTransfer_notifyCompleteFunc notify;
-	gpointer data1;
-	gpointer data2;
-	GDestroyNotify destructData1;
-	GDestroyNotify destructData2;
+    /* notification and parameters for when this transfer finishes */
+    TGenTransfer_notifyCompleteFunc notify;
+    gpointer data1;
+    gpointer data2;
+    GDestroyNotify destructData1;
+    GDestroyNotify destructData2;
 
-	/* memory housekeeping */
+    /* memory housekeeping */
     gint refcount;
-	guint magic;
+    guint magic;
 };
 
 static const gchar* _tgentransfer_typeToString(TGenTransfer* transfer) {

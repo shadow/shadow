@@ -13,12 +13,12 @@ typedef struct _Worker Worker;
 
 typedef struct _WorkLoad WorkLoad;
 struct _WorkLoad {
-	/* the simulation master */
-	Master* master;
-	/* the slave that owns this worker */
-	Slave* slave;
-	/* the virtual hosts assigned to this worker */
-	GList* hosts;
+    /* the simulation master */
+    Master* master;
+    /* the slave that owns this worker */
+    Slave* slave;
+    /* the virtual hosts assigned to this worker */
+    GList* hosts;
 };
 
 Worker* worker_new(Slave* slave);

@@ -86,10 +86,10 @@ typedef int (*ShadowGetBandwidthFloorFunc)(in_addr_t ip, uint* bwdown, uint* bwu
  */
 typedef struct _ShadowFunctionTable ShadowFunctionTable;
 struct _ShadowFunctionTable {
-	ShadowRegisterFunc registerPlugin;
-	ShadowLogFunc log;
-	ShadowCreateCallbackFunc createCallback;
-	ShadowGetBandwidthFloorFunc getBandwidth;
+    ShadowRegisterFunc registerPlugin;
+    ShadowLogFunc log;
+    ShadowCreateCallbackFunc createCallback;
+    ShadowGetBandwidthFloorFunc getBandwidth;
 };
 
 /* Plug-ins must implement this function to communicate with Shadow.

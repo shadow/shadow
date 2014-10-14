@@ -13,40 +13,40 @@ typedef struct _Packet Packet;
 
 typedef enum _PacketDeliveryStatusFlags PacketDeliveryStatusFlags;
 enum _PacketDeliveryStatusFlags {
-	PDS_NONE = 0,
-	PDS_SND_CREATED = 1 << 1,
-	PDS_SND_TCP_ENQUEUE_THROTTLED = 1 << 2,
-	PDS_SND_TCP_ENQUEUE_RETRANSMIT = 1 << 3,
-	PDS_SND_TCP_DEQUEUE_RETRANSMIT = 1 << 4,
-	PDS_SND_TCP_RETRANSMITTED = 1 << 5,
-	PDS_SND_SOCKET_BUFFERED = 1 << 6,
-	PDS_SND_INTERFACE_SENT = 1 << 7,
-	PDS_INET_SENT = 1 << 8,
-	PDS_INET_DROPPED = 1 << 9,
-	PDS_RCV_INTERFACE_BUFFERED = 1 << 10,
-	PDS_RCV_INTERFACE_RECEIVED = 1 << 11,
-	PDS_RCV_INTERFACE_DROPPED = 1 << 12,
-	PDS_RCV_SOCKET_PROCESSED = 1 << 13,
-	PDS_RCV_SOCKET_DROPPED = 1 << 14,
-	PDS_RCV_TCP_ENQUEUE_UNORDERED = 1 << 15,
-	PDS_RCV_SOCKET_BUFFERED = 1 << 16,
-	PDS_RCV_SOCKET_DELIVERED = 1 << 17,
-	PDS_DESTROYED = 1 << 18,
+    PDS_NONE = 0,
+    PDS_SND_CREATED = 1 << 1,
+    PDS_SND_TCP_ENQUEUE_THROTTLED = 1 << 2,
+    PDS_SND_TCP_ENQUEUE_RETRANSMIT = 1 << 3,
+    PDS_SND_TCP_DEQUEUE_RETRANSMIT = 1 << 4,
+    PDS_SND_TCP_RETRANSMITTED = 1 << 5,
+    PDS_SND_SOCKET_BUFFERED = 1 << 6,
+    PDS_SND_INTERFACE_SENT = 1 << 7,
+    PDS_INET_SENT = 1 << 8,
+    PDS_INET_DROPPED = 1 << 9,
+    PDS_RCV_INTERFACE_BUFFERED = 1 << 10,
+    PDS_RCV_INTERFACE_RECEIVED = 1 << 11,
+    PDS_RCV_INTERFACE_DROPPED = 1 << 12,
+    PDS_RCV_SOCKET_PROCESSED = 1 << 13,
+    PDS_RCV_SOCKET_DROPPED = 1 << 14,
+    PDS_RCV_TCP_ENQUEUE_UNORDERED = 1 << 15,
+    PDS_RCV_SOCKET_BUFFERED = 1 << 16,
+    PDS_RCV_SOCKET_DELIVERED = 1 << 17,
+    PDS_DESTROYED = 1 << 18,
 };
 
 typedef struct _PacketTCPHeader PacketTCPHeader;
 struct _PacketTCPHeader {
-	enum ProtocolTCPFlags flags;
-	in_addr_t sourceIP;
-	in_port_t sourcePort;
-	in_addr_t destinationIP;
-	in_port_t destinationPort;
-	guint sequence;
-	guint acknowledgment;
+    enum ProtocolTCPFlags flags;
+    in_addr_t sourceIP;
+    in_port_t sourcePort;
+    in_addr_t destinationIP;
+    in_port_t destinationPort;
+    guint sequence;
+    guint acknowledgment;
     GList* selectiveACKs;
-	guint window;
-	SimulationTime timestampValue;
-	SimulationTime timestampEcho;
+    guint window;
+    SimulationTime timestampValue;
+    SimulationTime timestampEcho;
 };
 
 Packet* packet_new(gconstpointer payload, gsize payloadLength);
@@ -55,13 +55,13 @@ void packet_ref(Packet* packet);
 void packet_unref(Packet* packet);
 
 void packet_setLocal(Packet* packet, enum ProtocolLocalFlags flags,
-		gint sourceDescriptorHandle, gint destinationDescriptorHandle, in_port_t port);
+        gint sourceDescriptorHandle, gint destinationDescriptorHandle, in_port_t port);
 void packet_setUDP(Packet* packet, enum ProtocolUDPFlags flags,
-		in_addr_t sourceIP, in_port_t sourcePort,
-		in_addr_t destinationIP, in_port_t destinationPort);
+        in_addr_t sourceIP, in_port_t sourcePort,
+        in_addr_t destinationIP, in_port_t destinationPort);
 void packet_setTCP(Packet* packet, enum ProtocolTCPFlags flags,
-		in_addr_t sourceIP, in_port_t sourcePort,
-		in_addr_t destinationIP, in_port_t destinationPort, guint sequence);
+        in_addr_t sourceIP, in_port_t sourcePort,
+        in_addr_t destinationIP, in_port_t destinationPort, guint sequence);
 
 void packet_updateTCP(Packet* packet, guint acknowledgement, GList* selectiveACKs,
         guint window, SimulationTime timestampValue, SimulationTime timestampEcho);

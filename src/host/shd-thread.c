@@ -31,7 +31,7 @@ struct _Thread {
      */
     gboolean isShadowContext;
 
-	MAGIC_DECLARE;
+    MAGIC_DECLARE;
 };
 
 typedef struct _CallbackData CallbackData;
@@ -160,26 +160,26 @@ ShadowFunctionTable interfaceFunctionTable = {
 
 Thread* thread_new(Process* parentProc, Program* prog) {
     Thread* thread = g_new0(Thread, 1);
-	MAGIC_INIT(thread);
+    MAGIC_INIT(thread);
 
-	thread->parentProcess = parentProc;
-	thread->program = prog;
+    thread->parentProcess = parentProc;
+    thread->program = prog;
 
-	/* timer for CPU delay measurements */
+    /* timer for CPU delay measurements */
     thread->delayTimer = g_timer_new();
 
-	thread->activeContext = TCTX_SHADOW;
+    thread->activeContext = TCTX_SHADOW;
 
-	return thread;
+    return thread;
 }
 
 void thread_free(Thread* thread) {
-	MAGIC_ASSERT(thread);
+    MAGIC_ASSERT(thread);
 
-	g_timer_destroy(thread->delayTimer);
+    g_timer_destroy(thread->delayTimer);
 
-	MAGIC_CLEAR(thread);
-	g_free(thread);
+    MAGIC_CLEAR(thread);
+    g_free(thread);
 }
 
 static void _thread_handleTimerResult(Thread* thread, gdouble elapsedTimeSec) {

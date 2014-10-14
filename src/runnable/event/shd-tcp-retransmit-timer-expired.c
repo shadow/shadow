@@ -8,43 +8,43 @@
 #include "shd-event-internal.h"
 
 struct _TCPRetransmitTimerExpiredEvent {
-	Event super;
-	TCP* tcp;
-	MAGIC_DECLARE;
+    Event super;
+    TCP* tcp;
+    MAGIC_DECLARE;
 };
 
 EventFunctionTable tcpretransmittimerexpired_functions = {
-	(EventRunFunc) tcpretransmittimerexpired_run,
-	(EventFreeFunc) tcpretransmittimerexpired_free,
-	MAGIC_VALUE
+    (EventRunFunc) tcpretransmittimerexpired_run,
+    (EventFreeFunc) tcpretransmittimerexpired_free,
+    MAGIC_VALUE
 };
 
 TCPRetransmitTimerExpiredEvent* tcpretransmittimerexpired_new(TCP* tcp) {
-	TCPRetransmitTimerExpiredEvent* event = g_new0(TCPRetransmitTimerExpiredEvent, 1);
-	MAGIC_INIT(event);
+    TCPRetransmitTimerExpiredEvent* event = g_new0(TCPRetransmitTimerExpiredEvent, 1);
+    MAGIC_INIT(event);
 
-	shadowevent_init(&(event->super), &tcpretransmittimerexpired_functions);
-	descriptor_ref(tcp);
-	event->tcp = tcp;
+    shadowevent_init(&(event->super), &tcpretransmittimerexpired_functions);
+    descriptor_ref(tcp);
+    event->tcp = tcp;
 
-	return event;
+    return event;
 }
 
 void tcpretransmittimerexpired_run(TCPRetransmitTimerExpiredEvent* event, Host* node) {
-	MAGIC_ASSERT(event);
+    MAGIC_ASSERT(event);
 
-	debug("event started");
+    debug("event started");
 
-	tcp_retransmitTimerExpired(event->tcp);
+    tcp_retransmitTimerExpired(event->tcp);
 
-	debug("event finished");
+    debug("event finished");
 }
 
 void tcpretransmittimerexpired_free(TCPRetransmitTimerExpiredEvent* event) {
-	MAGIC_ASSERT(event);
+    MAGIC_ASSERT(event);
 
-	descriptor_unref(event->tcp);
+    descriptor_unref(event->tcp);
 
-	MAGIC_CLEAR(event);
-	g_free(event);
+    MAGIC_CLEAR(event);
+    g_free(event);
 }

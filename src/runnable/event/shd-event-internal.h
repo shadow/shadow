@@ -14,14 +14,14 @@
  * to be extended by most other events.
  */
 struct _Event {
-	Runnable super;
-	EventFunctionTable* vtable;
-	SimulationTime time;
-	SimulationTime sequence;
-	gpointer node; /* XXX: type is "Node*" */
+    Runnable super;
+    EventFunctionTable* vtable;
+    SimulationTime time;
+    SimulationTime sequence;
+    gpointer node; /* XXX: type is "Node*" */
 
-	GQuark ownerID;
-	MAGIC_DECLARE;
+    GQuark ownerID;
+    MAGIC_DECLARE;
 };
 
 /*
@@ -29,9 +29,9 @@ struct _Event {
  * callable functions.
  */
 struct _EventFunctionTable {
-	EventRunFunc run;
-	EventFreeFunc free;
-	MAGIC_DECLARE;
+    EventRunFunc run;
+    EventFreeFunc free;
+    MAGIC_DECLARE;
 };
 
 #endif /* SHD_EVENT_INTERNAL_H_ */

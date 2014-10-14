@@ -18,13 +18,13 @@ typedef enum _TGenActionType {
 typedef struct _TGenAction TGenAction;
 
 TGenAction* tgenaction_newStartAction(const gchar* timeStr, const gchar* serverPortStr,
-		const gchar* peersStr, const gchar* socksProxyStr, GError** error);
+        const gchar* peersStr, const gchar* socksProxyStr, GError** error);
 TGenAction* tgenaction_newEndAction(const gchar* timeStr, const gchar* countStr,
-		const gchar* sizeStr, GError** error);
+        const gchar* sizeStr, GError** error);
 TGenAction* tgenaction_newPauseAction(const gchar* timeStr, GError** error);
 TGenAction* tgenaction_newSynchronizeAction(GError** error);
 TGenAction* tgenaction_newTransferAction(const gchar* typeStr, const gchar* protocolStr,
-		const gchar* sizeStr, const gchar* peersStr, GError** error);
+        const gchar* sizeStr, const gchar* peersStr, GError** error);
 
 void tgenaction_ref(TGenAction* action);
 void tgenaction_unref(TGenAction* action);
