@@ -639,11 +639,13 @@ def cf(d): return pylab.arange(1.0,float(len(d))+1.0)/float(len(d))
 
 ## helper - return step-based CDF x and y values
 ## only show to the 99th percentile by default
-def getcdf(data, shownpercentile=0.99):
+def getcdf(data, shownpercentile=0.99, maxpoints=100000.0):
     data.sort()
     frac = cf(data)
+    k = len(data)/maxpoints
     x, y, lasty = [], [], 0.0
     for i in xrange(int(round(len(data)*shownpercentile))):
+        if i % k > 1.0: continue
         assert not numpy.isnan(data[i])
         x.append(data[i])
         y.append(lasty)
