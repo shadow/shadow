@@ -94,13 +94,19 @@ def main():
     shdata, ftdata, tordata = get_data(args.experiments, args.lineformats)
 
     page = PdfPages("{0}shadowtor.pdf".format(args.prefix+'.' if args.prefix is not None else ''))
-    plot_shadow(shdata, page, direction="recv")
-    plot_shadow(shdata, page, direction="send")
-    plot_filetransfer_firstbyte(ftdata, page)
-    plot_filetransfer_lastbyte(ftdata, page)
-    plot_filetransfer_downloads(ftdata, page)
-    plot_tor(tordata, page, direction="bytes_read")
-    plot_tor(tordata, page, direction="bytes_written")
+    if len(shdata) > 0:
+        plot_shadow(shdata, page, direction="recv")
+        plot_shadow(shdata, page, direction="send")
+    if len(ftdata) > 0:
+        plot_filetransfer_firstbyte(ftdata, page)
+        plot_filetransfer_lastbyte_all(ftdata, page)
+        plot_filetransfer_lastbyte_median(ftdata, page)
+        plot_filetransfer_lastbyte_mean(ftdata, page)
+        plot_filetransfer_lastbyte_max(ftdata, page)
+        plot_filetransfer_downloads(ftdata, page)
+    if len(tordata) > 0:
+        plot_tor(tordata, page, direction="bytes_read")
+        plot_tor(tordata, page, direction="bytes_written")
     page.close()
 
 def plot_shadow(datasource, page, direction="send"):
@@ -489,27 +495,106 @@ def plot_filetransfer_firstbyte(data, page):
     page.savefig()
     pylab.close()
 
-def plot_filetransfer_lastbyte(data, page):
+def plot_filetransfer_lastbyte_all(data, page):
     figs = {}
     
     for (d, label, lineformat) in data:
         lb = {}
         for client in d:
-            for bytes in d[client]:
+            for b in d[client]:
+                bytes = int(b)
                 if bytes not in figs: figs[bytes] = pylab.figure()
                 if bytes not in lb: lb[bytes] = []
-                client_lb_list = d[client][bytes]["lastbyte"]
+                client_lb_list = d[client][b]["lastbyte"]
                 for sec in client_lb_list: lb[bytes].append(sec)
         for bytes in lb:
             x, y = getcdf(lb[bytes])
             pylab.figure(figs[bytes].number)
             pylab.plot(x, y, lineformat, label=label)
 
-    for bytes in figs:
+    for bytes in sorted(figs.keys()):
         pylab.figure(figs[bytes].number)
         pylab.xlabel("Download Time (s)")
         pylab.ylabel("Cumulative Fraction")
-        pylab.title("time to download {0} bytes, all clients".format(bytes))
+        pylab.title("time to download {0} bytes, all downloads".format(bytes))
+        pylab.legend(loc="lower right")
+        page.savefig()
+        pylab.close()
+
+def plot_filetransfer_lastbyte_median(data, page):
+    figs = {}
+    
+    for (d, label, lineformat) in data:
+        lb = {}
+        for client in d:
+            for b in d[client]:
+                bytes = int(b)
+                if bytes not in figs: figs[bytes] = pylab.figure()
+                if bytes not in lb: lb[bytes] = []
+                client_lb_list = d[client][b]["lastbyte"]
+                lb[bytes].append(numpy.median(client_lb_list))
+        for bytes in lb:
+            x, y = getcdf(lb[bytes])
+            pylab.figure(figs[bytes].number)
+            pylab.plot(x, y, lineformat, label=label)
+
+    for bytes in sorted(figs.keys()):
+        pylab.figure(figs[bytes].number)
+        pylab.xlabel("Download Time (s)")
+        pylab.ylabel("Cumulative Fraction")
+        pylab.title("median time to download {0} bytes, all clients".format(bytes))
+        pylab.legend(loc="lower right")
+        page.savefig()
+        pylab.close()
+
+def plot_filetransfer_lastbyte_mean(data, page):
+    figs = {}
+    
+    for (d, label, lineformat) in data:
+        lb = {}
+        for client in d:
+            for b in d[client]:
+                bytes = int(b)
+                if bytes not in figs: figs[bytes] = pylab.figure()
+                if bytes not in lb: lb[bytes] = []
+                client_lb_list = d[client][b]["lastbyte"]
+                lb[bytes].append(numpy.mean(client_lb_list))
+        for bytes in lb:
+            x, y = getcdf(lb[bytes])
+            pylab.figure(figs[bytes].number)
+            pylab.plot(x, y, lineformat, label=label)
+
+    for bytes in sorted(figs.keys()):
+        pylab.figure(figs[bytes].number)
+        pylab.xlabel("Download Time (s)")
+        pylab.ylabel("Cumulative Fraction")
+        pylab.title("mean time to download {0} bytes, all clients".format(bytes))
+        pylab.legend(loc="lower right")
+        page.savefig()
+        pylab.close()
+
+def plot_filetransfer_lastbyte_max(data, page):
+    figs = {}
+    
+    for (d, label, lineformat) in data:
+        lb = {}
+        for client in d:
+            for b in d[client]:
+                bytes = int(b)
+                if bytes not in figs: figs[bytes] = pylab.figure()
+                if bytes not in lb: lb[bytes] = []
+                client_lb_list = d[client][b]["lastbyte"]
+                lb[bytes].append(numpy.max(client_lb_list))
+        for bytes in lb:
+            x, y = getcdf(lb[bytes])
+            pylab.figure(figs[bytes].number)
+            pylab.plot(x, y, lineformat, label=label)
+
+    for bytes in sorted(figs.keys()):
+        pylab.figure(figs[bytes].number)
+        pylab.xlabel("Download Time (s)")
+        pylab.ylabel("Cumulative Fraction")
+        pylab.title("max time to download {0} bytes, all clients".format(bytes))
         pylab.legend(loc="lower right")
         page.savefig()
         pylab.close()
@@ -609,6 +694,7 @@ def get_data(experiments, lineformats):
     lfcycle = cycle(lflist)
     for (path, label) in experiments:
         log = os.path.abspath(os.path.expanduser("{0}/shadow.packets.json.xz".format(path)))
+        if not os.path.exists(log): continue
         xzcatp = subprocess.Popen(["xzcat", log], stdout=subprocess.PIPE)
         data = json.load(xzcatp.stdout)
         shdata.append((data, label, lfcycle.next()))
@@ -616,6 +702,7 @@ def get_data(experiments, lineformats):
     lfcycle = cycle(lflist)
     for (path, label) in experiments:
         log = os.path.abspath(os.path.expanduser("{0}/filetransfer.downloads.json.xz".format(path)))
+        if not os.path.exists(log): continue
         xzcatp = subprocess.Popen(["xzcat", log], stdout=subprocess.PIPE)
         data = json.load(xzcatp.stdout)
         ftdata.append((data, label, lfcycle.next()))
@@ -623,6 +710,7 @@ def get_data(experiments, lineformats):
     lfcycle = cycle(lflist)
     for (path, label) in experiments:
         log = os.path.abspath(os.path.expanduser("{0}/tor.throughput.json.xz".format(path)))
+        if not os.path.exists(log): continue
         xzcatp = subprocess.Popen(["xzcat", log], stdout=subprocess.PIPE)
         data = json.load(xzcatp.stdout)
         tordata.append((data, label, lfcycle.next()))
