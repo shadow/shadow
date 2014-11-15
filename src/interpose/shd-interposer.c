@@ -686,6 +686,15 @@ void* realloc(void *ptr, size_t size) {
 
 void free(void *ptr) {
     if(shouldForwardToLibC()) {
+		/* check if the ptr is in the dummy buf, and free it using the dummy free func */
+		void* dummyBufStart = &(director.dummy.buf[0]);
+		void* dummyBufEnd = dummyBufStart + sizeof(director.dummy.buf);
+
+		if(ptr >= dummyBufStart && ptr <= dummyBufEnd) {
+			dummy_free(ptr);
+			return;
+		}
+
         ENSURE(libc, "", free);
         director.libc.free(ptr);
         return;
