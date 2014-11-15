@@ -686,6 +686,15 @@ void* realloc(void *ptr, size_t size) {
 
 void free(void *ptr) {
     if(shouldForwardToLibC()) {
+        /* check if the ptr is in the dummy buf, and free it using the dummy free func */
+        void* dummyBufStart = &(directory.dummy.buf[0]);
+        void* dummyBufEnd = dummyBufStart + sizeof(directory.dummy.buf);
+
+        if(ptr >= dummyBufStart && ptr <= dummyBufEnd) {
+            dummy_free(ptr);
+            return;
+        }
+
         ENSURE(libc, "", free);
         director.libc.free(ptr);
         return;
@@ -1481,8 +1490,7 @@ ssize_t read(int fd, void *buff, size_t numbytes) {
     	}
     } else if(host_isRandomHandle(host, fd)) {
 		Random* random = host_getRandom(host);
-		random_nextNBytes(random, (guchar*)buff, numbytes);
-		ret = (ssize_t) numbytes;
+		ret = random_nextNBytes(random, (guchar*)buff, numbytes);
     } else {
         gint osfd = host_getOSHandle(host, fd);
         if(osfd >= 0) {
