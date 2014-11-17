@@ -710,12 +710,22 @@ static gboolean _topology_computeSourcePaths(Topology* top, igraph_integer_t src
     GTimer* pathTimer = g_timer_new();
 
     /* run dijkstra's shortest path algorithm */
-#ifndef IGRAPH_VERSION
-    result = igraph_get_shortest_paths_dijkstra(&top->graph, &resultPaths,
-            srcVertexIndex, igraph_vss_vector(&dstVertexIndexSet), top->edgeWeights, IGRAPH_OUT);
+#if defined (IGRAPH_VERSION_MAJOR) && defined (IGRAPH_VERSION_MINOR) && defined (IGRAPH_VERSION_PATCH)
+#if ((IGRAPH_VERSION_MAJOR == 0 && IGRAPH_VERSION_MINOR >= 7) || IGRAPH_VERSION_MAJOR > 0)
+    result = igraph_get_shortest_paths_dijkstra(&top->graph, &resultPaths, NULL,
+            srcVertexIndex, igraph_vss_vector(&dstVertexIndexSet), top->edgeWeights, IGRAPH_OUT, NULL, NULL);
 #else
     result = igraph_get_shortest_paths_dijkstra(&top->graph, &resultPaths, NULL,
+                srcVertexIndex, igraph_vss_vector(&dstVertexIndexSet), top->edgeWeights, IGRAPH_OUT);
+#endif
+#else
+#if defined (IGRAPH_VERSION)
+    result = igraph_get_shortest_paths_dijkstra(&top->graph, &resultPaths, NULL,
+                srcVertexIndex, igraph_vss_vector(&dstVertexIndexSet), top->edgeWeights, IGRAPH_OUT);
+#else
+    result = igraph_get_shortest_paths_dijkstra(&top->graph, &resultPaths,
             srcVertexIndex, igraph_vss_vector(&dstVertexIndexSet), top->edgeWeights, IGRAPH_OUT);
+#endif
 #endif
 
     /* track the time spent running the algorithm */
