@@ -18,6 +18,7 @@
 
 #include <shd-library.h>
 
+#include "shd-tgen-global-lock.h"
 #include "shd-tgen-io.h"
 #include "shd-tgen-timer.h"
 #include "shd-tgen-pool.h"

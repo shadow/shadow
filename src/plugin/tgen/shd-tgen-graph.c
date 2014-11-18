@@ -519,6 +519,7 @@ TGenGraph* tgengraph_new(gchar* path) {
     GError* error = NULL;
 
     if(graphPath) {
+        tgen_lock();
         /* use the built-in C attribute handler */
         igraph_attribute_table_t* oldHandler = igraph_i_set_attribute_table(&igraph_cattribute_table);
 
@@ -540,6 +541,7 @@ TGenGraph* tgengraph_new(gchar* path) {
 
         /* replace the old handler */
         igraph_i_set_attribute_table(oldHandler);
+        tgen_unlock();
     }
 
     if(error) {
