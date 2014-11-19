@@ -424,12 +424,12 @@ static GError* _tgengraph_parseGraphProperties(TGenGraph* g) {
     /* now check list of all attributes */
     igraph_strvector_t gnames, vnames, enames;
     igraph_vector_t gtypes, vtypes, etypes;
-    igraph_strvector_init(&gnames, 1);
-    igraph_vector_init(&gtypes, 1);
-    igraph_strvector_init(&vnames, igraph_vcount(g->graph));
-    igraph_vector_init(&vtypes, igraph_vcount(g->graph));
-    igraph_strvector_init(&enames, igraph_ecount(g->graph));
-    igraph_vector_init(&etypes, igraph_ecount(g->graph));
+    igraph_strvector_init(&gnames, 25);
+    igraph_vector_init(&gtypes, 25);
+    igraph_strvector_init(&vnames, 25);
+    igraph_vector_init(&vtypes, 25);
+    igraph_strvector_init(&enames, 25);
+    igraph_vector_init(&etypes, 25);
 
     result = igraph_cattribute_list(g->graph, &gnames, &gtypes, &vnames, &vtypes, &enames, &etypes);
     if(result != IGRAPH_SUCCESS) {
@@ -457,6 +457,13 @@ static GError* _tgengraph_parseGraphProperties(TGenGraph* g) {
 
         tgen_debug("found edge attribute '%s'", name);
     }
+
+    igraph_strvector_destroy(&gnames);
+    igraph_vector_destroy(&gtypes);
+    igraph_strvector_destroy(&vnames);
+    igraph_vector_destroy(&vtypes);
+    igraph_strvector_destroy(&enames);
+    igraph_vector_destroy(&etypes);
 
     tgen_info("successfully verified graph properties and attributes");
 
@@ -538,6 +545,8 @@ TGenGraph* tgengraph_new(gchar* path) {
         if(!error) {
             error = _tgengraph_parseGraphEdges(g);
         }
+
+        g_free(graphPath);
 
         /* replace the old handler */
         igraph_i_set_attribute_table(oldHandler);
