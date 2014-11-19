@@ -142,6 +142,9 @@ Host* host_new(GQuark id, gchar* hostname, gchar* ipHint, gchar* geocodeHint, gc
     host->logPcap = logPcap;
     host->pcapDir = pcapDir;
 
+    address_unref(loopbackAddress);
+    address_unref(ethernetAddress);
+
     message("Created Host '%s', ip %s, "
             "%"G_GUINT64_FORMAT" bwUpKiBps, %"G_GUINT64_FORMAT" bwDownKiBps, %"G_GUINT64_FORMAT" initSockSendBufSize, %"G_GUINT64_FORMAT" initSockRecvBufSize, "
             "%u cpuFrequency, %i cpuThreshold, %i cpuPrecision, %u seed",
@@ -163,6 +166,7 @@ void host_free(Host* host, gpointer userData) {
     g_hash_table_destroy(host->descriptors);
     g_hash_table_destroy(host->shadowToOSHandleMap);
     g_hash_table_destroy(host->osToShadowHandleMap);
+    g_hash_table_destroy(host->randomShadowHandleMap);
     g_hash_table_destroy(host->unixPathToPortMap);
 
     g_free(host->name);
@@ -172,6 +176,7 @@ void host_free(Host* host, gpointer userData) {
     tracker_free(host->tracker);
 
     g_queue_free(host->availableDescriptors);
+    random_free(host->random);
 
     g_mutex_clear(&(host->lock));
 

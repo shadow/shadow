@@ -283,6 +283,7 @@ void createnodes_free(CreateNodesAction* action) {
     while (item && item->data) {
         NodeApplication* nodeApp = (NodeApplication*) item->data;
         g_string_free(nodeApp->arguments, TRUE);
+        g_free(nodeApp);
         item = g_list_next(item);
     }
     g_list_free(action->applications);

@@ -151,12 +151,12 @@ static gboolean _topology_checkGraphProperties(Topology* top) {
     /* now check list of all attributes */
     igraph_strvector_t gnames, vnames, enames;
     igraph_vector_t gtypes, vtypes, etypes;
-    igraph_strvector_init(&gnames, 1);
-    igraph_vector_init(&gtypes, 1);
-    igraph_strvector_init(&vnames, igraph_vcount(&top->graph));
-    igraph_vector_init(&vtypes, igraph_vcount(&top->graph));
-    igraph_strvector_init(&enames, igraph_ecount(&top->graph));
-    igraph_vector_init(&etypes, igraph_ecount(&top->graph));
+    igraph_strvector_init(&gnames, 25);
+    igraph_vector_init(&gtypes, 25);
+    igraph_strvector_init(&vnames, 25);
+    igraph_vector_init(&vtypes, 25);
+    igraph_strvector_init(&enames, 25);
+    igraph_vector_init(&etypes, 25);
 
     result = igraph_cattribute_list(&top->graph, &gnames, &gtypes, &vnames, &vtypes, &enames, &etypes);
     if(result != IGRAPH_SUCCESS) {
@@ -180,6 +180,13 @@ static gboolean _topology_checkGraphProperties(Topology* top) {
         igraph_strvector_get(&enames, (glong) i, &name);
         debug("found edge attribute '%s'", name);
     }
+
+    igraph_strvector_destroy(&gnames);
+    igraph_vector_destroy(&gtypes);
+    igraph_strvector_destroy(&vnames);
+    igraph_vector_destroy(&vtypes);
+    igraph_strvector_destroy(&enames);
+    igraph_vector_destroy(&etypes);
 
     message("successfully verified graph attributes");
 
