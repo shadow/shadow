@@ -650,7 +650,7 @@ static void _tgentransfer_log(TGenTransfer* transfer, gboolean wasActive) {
     if(transfer->state == TGEN_XFER_ERROR && transfer->time.lastTimeErrorReport == 0) {
         gchar* bytesMessage = _tgentransfer_getBytesStatusReport(transfer);
 
-        tgen_message("[transfer-error] transport %s transfer %s %s %s",
+        tgen_message("[transfer-error] transport %s transfer %s %s",
                 tgentransport_toString(transfer->transport),
                 _tgentransfer_toString(transfer), bytesMessage);
 
