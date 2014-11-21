@@ -42,8 +42,6 @@ Process* process_new(GQuark programID, SimulationTime startTime, SimulationTime 
     proc->startTime = startTime;
     proc->arguments = g_string_new(arguments);
 
-    proc->atExitFunctions = g_queue_new();
-
     return proc;
 }
 
@@ -54,7 +52,9 @@ void process_free(Process* proc) {
 
     g_string_free(proc->arguments, TRUE);
 
-    g_queue_free_full(proc->atExitFunctions, g_free);
+    if(proc->atExitFunctions) {
+        g_queue_free_full(proc->atExitFunctions, g_free);
+    }
 
     MAGIC_CLEAR(proc);
     g_free(proc);
@@ -153,7 +153,7 @@ void process_stop(Process* proc) {
 
         thread_execute(proc->mainThread, program_getFreeFunc(proc->prog));
 
-        while(g_queue_get_length(proc->atExitFunctions) > 0) {
+        while(proc->atExitFunctions && g_queue_get_length(proc->atExitFunctions) > 0) {
             ProcessExitCallbackData* exitCallback = g_queue_pop_head(proc->atExitFunctions);
             if(exitCallback->passArgument) {
                 thread_executeExitCallback(proc->mainThread, exitCallback->callback, exitCallback->argument);
@@ -232,6 +232,11 @@ gboolean process_addAtExitCallback(Process* proc, gpointer userCallback, gpointe
         exitCallback->callback = userCallback;
         exitCallback->argument = userArgument;
         exitCallback->passArgument = shouldPassArgument;
+
+        if(!proc->atExitFunctions) {
+            proc->atExitFunctions = g_queue_new();
+        }
+
         g_queue_push_head(proc->atExitFunctions, exitCallback);
     }
 

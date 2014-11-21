@@ -24,5 +24,6 @@ gboolean thread_shouldInterpose(Thread* thread);
 void thread_beginControl(Thread* thread);
 void thread_endControl(Thread* thread);
 Process* thread_getParentProcess(Thread* thread);
+Program* thread_getProgram(Thread* thread);
 
 #endif /* SHD_THREAD_H_ */

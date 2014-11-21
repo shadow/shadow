@@ -2644,7 +2644,7 @@ int __cxa_atexit(void (*func) (void *), void * arg, void * dso_handle) {
     gboolean success = FALSE;
     if(dso_handle) {
         /* this should be called when the plugin is unloaded */
-        // TODO
+        warning("atexit at library close is not currently supported");
     } else {
         Thread* thread = worker_getActiveThread();
         if(thread) {

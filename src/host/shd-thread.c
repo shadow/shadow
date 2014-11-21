@@ -291,3 +291,8 @@ Process* thread_getParentProcess(Thread* thread) {
     MAGIC_ASSERT(thread);
     return thread->parentProcess;
 }
+
+Program* thread_getProgram(Thread* thread) {
+    MAGIC_ASSERT(thread);
+    return thread->program;
+}
