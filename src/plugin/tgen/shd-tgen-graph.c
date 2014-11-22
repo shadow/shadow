@@ -21,6 +21,7 @@ typedef enum {
 
 struct _TGenGraph {
     igraph_t* graph;
+    gchar* graphPath;
 
     /* known attributes that we found in the graph header */
     AttributeFlags knownAttributes;
@@ -505,6 +506,9 @@ void tgengraph_free(TGenGraph* g) {
         igraph_destroy(g->graph);
         g_free(g->graph);
     }
+    if(g->graphPath) {
+        g_free(g->graphPath);
+    }
 
     g_free(g);
 }
@@ -519,21 +523,25 @@ TGenGraph* tgengraph_new(gchar* path) {
     g->magic = TGEN_MAGIC;
 
     g->actions = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, (GDestroyNotify)tgenaction_unref);
-
-    gchar* graphPath = path ? _tgengraph_getHomePath(path) : NULL;
-    gboolean exists = g_file_test(path, G_FILE_TEST_IS_REGULAR|G_FILE_TEST_EXISTS);
+    g->graphPath = path ? _tgengraph_getHomePath(path) : NULL;
 
     GError* error = NULL;
 
-    if(graphPath) {
+    gboolean exists = g_file_test(g->graphPath, G_FILE_TEST_IS_REGULAR|G_FILE_TEST_EXISTS);
+    if(!exists) {
+        error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_PARSE,
+                                    "graph file does not exist at path '%s'", g->graphPath);
+    }
+
+    if(!error && g->graphPath) {
         tgen_lock();
         /* use the built-in C attribute handler */
         igraph_attribute_table_t* oldHandler = igraph_i_set_attribute_table(&igraph_cattribute_table);
 
-        g->graph = _tgengraph_loadNewGraph(graphPath);
+        g->graph = _tgengraph_loadNewGraph(g->graphPath);
         if(!g->graph) {
             error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_PARSE,
-                                    "unable to read graph at path '%s'", graphPath);
+                                    "unable to read graph at path '%s'", g->graphPath);
         }
 
         if(!error) {
@@ -545,8 +553,6 @@ TGenGraph* tgengraph_new(gchar* path) {
         if(!error) {
             error = _tgengraph_parseGraphEdges(g);
         }
-
-        g_free(graphPath);
 
         /* replace the old handler */
         igraph_i_set_attribute_table(oldHandler);
@@ -560,8 +566,8 @@ TGenGraph* tgengraph_new(gchar* path) {
         return NULL;
     }
 
-    tgen_message("successfully loaded graphml and validated actions: "
-            "graph is %s with %u %s, %u %s, and %u %s",
+    tgen_message("successfully loaded graphml file '%s' and validated actions: "
+            "graph is %s with %u %s, %u %s, and %u %s", g->graphPath,
             g->isConnected ? "weakly connected" : "disconnected",
             (guint)g->clusterCount, g->clusterCount == 1 ? "cluster" : "clusters",
             (guint)g->vertexCount, g->vertexCount == 1 ? "vertex" : "vertices",
@@ -622,4 +628,14 @@ GQueue* tgengraph_getNextActions(TGenGraph* g, TGenAction* action) {
     g_free(resultNeighborVertices);
 
     return nextActions;
+}
+
+gboolean tgengraph_hasEdges(TGenGraph* g) {
+    TGEN_ASSERT(g);
+    return (g->edgeCount > 0) ? TRUE : FALSE;
+}
+
+const gchar* tgengraph_getGraphPath(TGenGraph* g) {
+    TGEN_ASSERT(g);
+    return g->graphPath;
 }

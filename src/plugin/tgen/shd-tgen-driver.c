@@ -99,7 +99,8 @@ static gboolean _tgendriver_onStartClientTimerExpired(TGenDriver* driver, gpoint
 
     driver->startTimeMicros = g_get_monotonic_time();
 
-    tgen_info("starting client from root start action");
+    tgen_message("starting client using action graph '%s'",
+            tgengraph_getGraphPath(driver->actionGraph));
     _tgendriver_continueNextActions(driver, driver->startAction);
 
     return TRUE;
@@ -508,7 +509,7 @@ TGenDriver* tgendriver_new(gint argc, gchar* argv[], ShadowLogFunc logf) {
 //    }
 
     if (graph) {
-        tgen_message("traffic generator config file '%s' passed validation", argv[1]);
+        tgen_info("traffic generator config file '%s' passed validation", argv[1]);
     } else {
         tgen_error("traffic generator config file '%s' failed validation", argv[1]);
         return NULL;
@@ -543,11 +544,12 @@ TGenDriver* tgendriver_new(gint argc, gchar* argv[], ShadowLogFunc logf) {
         return NULL;
     }
 
-    /* the client-side transfers start as specified in the action.
-     * this is a delay in milliseconds from now to start the client */
-    guint64 delayMillis = tgenaction_getStartTimeMillis(driver->startAction);
+    /* only run the client if we have (non-start) actions we need to process */
+    if(tgengraph_hasEdges(driver->actionGraph)) {
+        /* the client-side transfers start as specified in the action.
+         * this is a delay in milliseconds from now to start the client */
+        guint64 delayMillis = tgenaction_getStartTimeMillis(driver->startAction);
 
-    if(delayMillis > 0) {
         /* start our client after a timeout */
         if(!_tgendriver_setStartClientTimerHelper(driver, delayMillis)) {
             tgenio_unref(driver->io);

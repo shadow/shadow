@@ -87,6 +87,12 @@ TGenTimer* tgentimer_new(guint64 milliseconds, gboolean isPersistent,
     guint64 seconds = milliseconds / 1000;
     guint64 nanoseconds = (milliseconds % 1000) * 1000000;
 
+    /* a timer with 0 delay will cause timerfd to disarm, so we use a 1 nano
+     * delay instead, in order to execute the event as close to now as possible */
+    if(seconds == 0 && nanoseconds == 0) {
+        nanoseconds = 1;
+    }
+
     /* set the initial expiration */
     arm.it_value.tv_sec = seconds;
     arm.it_value.tv_nsec = nanoseconds;
