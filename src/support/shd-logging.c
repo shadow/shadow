@@ -120,7 +120,7 @@ void logging_logv(const gchar *msgLogDomain, GLogLevelFlags msgLogLevel,
      * dont free this since we dont own the ip address string */
     GString* nodeStringBuffer = g_string_new("");
     if(currentHost) {
-        g_string_printf(nodeStringBuffer, "%s-%s", host_getName(currentHost), host_getDefaultIPName(currentHost));
+        g_string_printf(nodeStringBuffer, "%s~%s", host_getName(currentHost), host_getDefaultIPName(currentHost));
     } else {
         g_string_printf(nodeStringBuffer, "n/a");
     }
