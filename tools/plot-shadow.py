@@ -702,6 +702,7 @@ def get_data(experiments, lineformats):
     lfcycle = cycle(lflist)
     for (path, label) in experiments:
         log = os.path.abspath(os.path.expanduser("{0}/filetransfer.downloads.json.xz".format(path)))
+        if not os.path.exists(log): log = os.path.abspath(os.path.expanduser("{0}/tgen.transfers.json.xz".format(path)))
         if not os.path.exists(log): continue
         xzcatp = subprocess.Popen(["xzcat", log], stdout=subprocess.PIPE)
         data = json.load(xzcatp.stdout)
