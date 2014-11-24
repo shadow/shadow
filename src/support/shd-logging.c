@@ -67,7 +67,7 @@ void logging_handleLog(const gchar *log_domain, GLogLevelFlags log_level, const 
         seconds = elapsed % 60;
     }
 
-    g_print("%02lu:%02lu:%02lu:%06lu %s\n", hours, minutes, seconds, microseconds, messageStr);
+    g_print("%02lu:%02lu:%02lu.%06lu %s\n", hours, minutes, seconds, microseconds, messageStr);
 
     if(log_level & G_LOG_LEVEL_ERROR) {
         /* error level logs always abort, but glibs messages are not that useful.
@@ -107,7 +107,7 @@ void logging_logv(const gchar *msgLogDomain, GLogLevelFlags msgLogLevel,
         seconds = remainder / SIMTIME_ONE_SECOND;
         remainder %= SIMTIME_ONE_SECOND;
 
-        g_string_printf(clockStringBuffer, "%02"G_GUINT64_FORMAT":%02"G_GUINT64_FORMAT":%02"G_GUINT64_FORMAT":%09"G_GUINT64_FORMAT"",
+        g_string_printf(clockStringBuffer, "%02"G_GUINT64_FORMAT":%02"G_GUINT64_FORMAT":%02"G_GUINT64_FORMAT".%09"G_GUINT64_FORMAT"",
                 hours, minutes, seconds, remainder);
     } else {
         g_string_printf(clockStringBuffer, "n/a");

@@ -369,8 +369,8 @@ def dump(args, data, filename, compress=True):
 # helper - parse shadow timestamps
 def parsetimestamp(stamp):
     parts = stamp.split(":")
-    h, m, s, ns = int(parts[0]), int(parts[1]), int(parts[2]), int(parts[3])
-    seconds = float(h*3600.0) + float(m*60.0) + float(s) + float(ns/1000000000.0)
+    h, m, s = int(parts[0]), int(parts[1]), float(parts[2])
+    seconds = h*3600.0 + m*60.0 + s
     return seconds
 
 if __name__ == '__main__': sys.exit(main())
