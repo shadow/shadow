@@ -41,10 +41,10 @@ MAXFILTERQLEN=100 # number of line batch items
 PROCBATCHLEN=1000 # number of split-lines per put() from filter worker
 MAXPROCQLEN=10 # number of split-line batch items per processor worker
 
-SHADOWJSON="shadow.packets.json"
-TORJSON="tor.throughput.json"
-FILETRANSFERJSON="filetransfer.downloads.json"
-TGENJSON="tgen.transfers.json"
+SHADOWJSON="stats.shadow.json"
+TORJSON="stats.tor.json"
+FILETRANSFERJSON="stats.filetransfer.json"
+TGENJSON="stats.tgen.json"
 
 def main():
     parser = argparse.ArgumentParser(
@@ -262,7 +262,7 @@ def shadow_helper(d, parts):
     if len(parts) < 9 or '[node]' != parts[7]: return
 
     virtualts = parsetimestamp(parts[2])
-    nodename = parts[4].lstrip('[').rstrip(']') # eg: [webclient2-11.0.5.99]
+    name = parts[4].lstrip('[').rstrip(']') # eg: [webclient2-11.0.5.99]
 
     mods = parts[8].split(';')
     #nodestats = mods[0].split(',')
@@ -275,65 +275,73 @@ def shadow_helper(d, parts):
     labels = ['bytes_total', 'bytes_data', 'bytes_control', 'bytes_retrans']
 
     second = int(virtualts)
-    if nodename not in d:
-        d[nodename] = {'recv':{}, 'send':{}}
+    if 'nodes' not in d: d['nodes'] = {}
+    if name not in d['nodes']:
+        d['nodes'][name] = {'recv':{}, 'send':{}}
         for label in labels:
-            d[nodename]['recv'][label] = {}
-            d[nodename]['send'][label] = {}
+            d['nodes'][name]['recv'][label] = {}
+            d['nodes'][name]['send'][label] = {}
     for label in labels:
-        if second not in d[nodename]['recv'][label]: d[nodename]['recv'][label][second] = 0
-        if second not in d[nodename]['send'][label]: d[nodename]['send'][label][second] = 0
+        if second not in d['nodes'][name]['recv'][label]: d['nodes'][name]['recv'][label][second] = 0
+        if second not in d['nodes'][name]['send'][label]: d['nodes'][name]['send'][label][second] = 0
 
-    #d[nodename]['recv']['count_total'][second] += int(remotein[0])
-    #d[nodename]['recv']['count_data'][second] += int(remotein[4])
-    #d[nodename]['recv']['count_control'][second] += int(remotein[6])
-    #d[nodename]['recv']['count_retrans'][second] += int(remotein[8])
-    d[nodename]['recv']['bytes_total'][second] += int(remotein[1])
-    d[nodename]['recv']['bytes_data'][second] += int(remotein[2]) + int(remotein[5])
-    d[nodename]['recv']['bytes_control'][second] += int(remotein[7])
-    d[nodename]['recv']['bytes_retrans'][second] += int(remotein[9]) + int(remotein[10])
+    #d['nodes'][name]['recv']['count_total'][second] += int(remotein[0])
+    #d['nodes'][name]['recv']['count_data'][second] += int(remotein[4])
+    #d['nodes'][name]['recv']['count_control'][second] += int(remotein[6])
+    #d['nodes'][name]['recv']['count_retrans'][second] += int(remotein[8])
+    d['nodes'][name]['recv']['bytes_total'][second] += int(remotein[1])
+    d['nodes'][name]['recv']['bytes_data'][second] += int(remotein[2]) + int(remotein[5])
+    d['nodes'][name]['recv']['bytes_control'][second] += int(remotein[7])
+    d['nodes'][name]['recv']['bytes_retrans'][second] += int(remotein[9]) + int(remotein[10])
 
-    #d[nodename]['send']['count_total'][second] += int(remoteout[0])
-    #d[nodename]['send']['count_data'][second] += int(remoteout[4])
-    #d[nodename]['send']['count_control'][second] += int(remoteout[6])
-    #d[nodename]['send']['count_retrans'][second] += int(remoteout[8])
-    d[nodename]['send']['bytes_total'][second] += int(remoteout[1])
-    d[nodename]['send']['bytes_data'][second] += int(remoteout[2]) + int(remoteout[5])
-    d[nodename]['send']['bytes_control'][second] += int(remoteout[7])
-    d[nodename]['send']['bytes_retrans'][second] += int(remoteout[9]) + int(remoteout[10])
+    #d['nodes'][name]['send']['count_total'][second] += int(remoteout[0])
+    #d['nodes'][name]['send']['count_data'][second] += int(remoteout[4])
+    #d['nodes'][name]['send']['count_control'][second] += int(remoteout[6])
+    #d['nodes'][name]['send']['count_retrans'][second] += int(remoteout[8])
+    d['nodes'][name]['send']['bytes_total'][second] += int(remoteout[1])
+    d['nodes'][name]['send']['bytes_data'][second] += int(remoteout[2]) + int(remoteout[5])
+    d['nodes'][name]['send']['bytes_control'][second] += int(remoteout[7])
+    d['nodes'][name]['send']['bytes_retrans'][second] += int(remoteout[9]) + int(remoteout[10])
 
 def tor_helper(d, parts):
     if 'BW' != parts[9]: return
 
     virtualts = parsetimestamp(parts[2])
-    nodename = parts[4].lstrip('[').rstrip(']') # eg: [4uthority1-82.94.251.203]
+    name = parts[4].lstrip('[').rstrip(']') # eg: [4uthority1-82.94.251.203]
 
     bwr = int(parts[10])
     bww = int(parts[11])
     second = int(virtualts)
 
-    if nodename not in d: d[nodename] = {'bytes_read':{}, 'bytes_written':{}}
-    if second not in d[nodename]['bytes_read']: d[nodename]['bytes_read'][second] = 0
-    if second not in d[nodename]['bytes_written']: d[nodename]['bytes_written'][second] = 0
+    if 'nodes' not in d: d['nodes'] = {}
+    if name not in d['nodes']: d['nodes'][name] = {'bytes_read':{}, 'bytes_written':{}}
+    if second not in d['nodes'][name]['bytes_read']: d['nodes'][name]['bytes_read'][second] = 0
+    if second not in d['nodes'][name]['bytes_written']: d['nodes'][name]['bytes_written'][second] = 0
 
-    d[nodename]['bytes_read'][second] += bwr
-    d[nodename]['bytes_written'][second] += bww
+    d['nodes'][name]['bytes_read'][second] += bwr
+    d['nodes'][name]['bytes_written'][second] += bww
 
 def filetransfer_helper(d, parts):
-    nodename = parts[4].lstrip('[').rstrip(']') # eg: [webclient2-11.0.5.99]
+    name = parts[4].lstrip('[').rstrip(']') # eg: [webclient2-11.0.5.99]
 
     fbtime = float(parts[11])
     bytes = int(parts[16])
     lbtime = float(parts[19])
 
-    if nodename not in d: d[nodename] = {}
-    if bytes not in d[nodename]: d[nodename][bytes] = {'firstbyte':[], 'lastbyte':[]}
+    if 'nodes' not in d: d['nodes'] = {}
+    if name not in d['nodes']: d['nodes'][name] = {}
+    if bytes not in d['nodes'][name]: d['nodes'][name][bytes] = {'firstbyte':[], 'lastbyte':[]}
 
-    d[nodename][bytes]['firstbyte'].append(fbtime)
-    d[nodename][bytes]['lastbyte'].append(lbtime)
+    d['nodes'][name][bytes]['firstbyte'].append(fbtime)
+    d['nodes'][name][bytes]['lastbyte'].append(lbtime)
 
 def tgen_helper(d, parts):
-    nodename = parts[4].lstrip('[').rstrip(']')
+    realts = parsetimestamp(parts[0])
+    virtualts = parsetimestamp(parts[2])
+    name = parts[4].lstrip('[').rstrip(']')
+
+    if 'times' not in d: d['times'] = {}
+    if int(virtualts) not in d['times']: d['times'][int(virtualts)] = realts
 
     ioparts = parts[13].split('=')
     iodirection = ioparts[0]
@@ -346,11 +354,12 @@ def tgen_helper(d, parts):
     lbtime = int(parts[18].split('=')[1])/1000.0
     chktime = int(parts[19].split('=')[1])/1000.0
 
-    if nodename not in d: d[nodename] = {}
-    if bytes not in d[nodename]: d[nodename][bytes] = {'firstbyte':[], 'lastbyte':[]}
+    if 'nodes' not in d: d['nodes'] = {}
+    if name not in d['nodes']: d['nodes'][name] = {}
+    if bytes not in d['nodes'][name]: d['nodes'][name][bytes] = {'firstbyte':[], 'lastbyte':[]}
 
-    d[nodename][bytes]['firstbyte'].append(fbtime-cmdtime)
-    d[nodename][bytes]['lastbyte'].append(lbtime-cmdtime)
+    d['nodes'][name][bytes]['firstbyte'].append(fbtime-cmdtime)
+    d['nodes'][name][bytes]['lastbyte'].append(lbtime-cmdtime)
 
 def dump(args, data, filename, compress=True):
     if not os.path.exists(args.prefix): os.makedirs(args.prefix)

@@ -693,28 +693,28 @@ def get_data(experiments, lineformats):
 
     lfcycle = cycle(lflist)
     for (path, label) in experiments:
-        log = os.path.abspath(os.path.expanduser("{0}/shadow.packets.json.xz".format(path)))
+        log = os.path.abspath(os.path.expanduser("{0}/stats.shadow.json.xz".format(path)))
         if not os.path.exists(log): continue
         xzcatp = subprocess.Popen(["xzcat", log], stdout=subprocess.PIPE)
         data = json.load(xzcatp.stdout)
-        shdata.append((data, label, lfcycle.next()))
+        shdata.append((data['nodes'], label, lfcycle.next()))
 
     lfcycle = cycle(lflist)
     for (path, label) in experiments:
-        log = os.path.abspath(os.path.expanduser("{0}/filetransfer.downloads.json.xz".format(path)))
-        if not os.path.exists(log): log = os.path.abspath(os.path.expanduser("{0}/tgen.transfers.json.xz".format(path)))
+        log = os.path.abspath(os.path.expanduser("{0}/stats.filetransfer.json.xz".format(path)))
+        if not os.path.exists(log): log = os.path.abspath(os.path.expanduser("{0}/stats.tgen.json.xz".format(path)))
         if not os.path.exists(log): continue
         xzcatp = subprocess.Popen(["xzcat", log], stdout=subprocess.PIPE)
         data = json.load(xzcatp.stdout)
-        ftdata.append((data, label, lfcycle.next()))
+        ftdata.append((data['nodes'], label, lfcycle.next()))
 
     lfcycle = cycle(lflist)
     for (path, label) in experiments:
-        log = os.path.abspath(os.path.expanduser("{0}/tor.throughput.json.xz".format(path)))
+        log = os.path.abspath(os.path.expanduser("{0}/stats.tor.json.xz".format(path)))
         if not os.path.exists(log): continue
         xzcatp = subprocess.Popen(["xzcat", log], stdout=subprocess.PIPE)
         data = json.load(xzcatp.stdout)
-        tordata.append((data, label, lfcycle.next()))
+        tordata.append((data['nodes'], label, lfcycle.next()))
 
     return shdata, ftdata, tordata
 
