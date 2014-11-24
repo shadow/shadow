@@ -1,0 +1,20 @@
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
+  <key attr.name="size" attr.type="string" for="node" id="d4" />
+  <key attr.name="type" attr.type="string" for="node" id="d3" />
+  <key attr.name="protocol" attr.type="string" for="node" id="d2" />
+  <key attr.name="serverport" attr.type="string" for="node" id="d1" />
+  <key attr.name="peers" attr.type="string" for="node" id="d0" />
+  <graph edgedefault="directed">
+    <node id="start">
+      <data key="d0">server1:80,server2:80,server3:80,server4:80,server5:80</data>
+      <data key="d1">8888</data>
+    </node>
+    <node id="transfer">
+      <data key="d2">tcp</data>
+      <data key="d3">get</data>
+      <data key="d4">5 MiB</data>
+    </node>
+    <edge source="start" target="transfer" />
+    <edge source="transfer" target="start" />
+  </graph>
+</graphml>
