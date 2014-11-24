@@ -399,8 +399,7 @@ static gint _interposer_addressHelper(gint fd, const struct sockaddr* addr, sock
         result = EBADF;
     } else if(addr == NULL) { /* check for proper addr */
         result = EFAULT;
-    } else if(len == NULL ||
-          (addr->sa_family == AF_INET && *len < sizeof(struct sockaddr_in))) {
+    } else if(len == NULL) {
         result = EINVAL;
     }
 
@@ -1083,6 +1082,11 @@ int bind(int fd, const struct sockaddr* addr, socklen_t len)  {
         return director.libc.bind(fd, addr, len);
     }
 
+    if((addr->sa_family == AF_INET && len < sizeof(struct sockaddr_in)) ||
+            (addr->sa_family == AF_UNIX && len < sizeof(struct sockaddr_un))) {
+        return EINVAL;
+    }
+
     return _interposer_addressHelper(fd, addr, &len, SCT_BIND);
 }
 
@@ -1099,6 +1103,11 @@ int connect(int fd, const struct sockaddr* addr, socklen_t len)  {
     if(shouldForwardToLibC()) {
         ENSURE(libc, "", connect);
         return director.libc.connect(fd, addr, len);
+    }
+
+    if((addr->sa_family == AF_INET && len < sizeof(struct sockaddr_in)) ||
+            (addr->sa_family == AF_UNIX && len < sizeof(struct sockaddr_un))) {
+        return EINVAL;
     }
 
     return _interposer_addressHelper(fd, addr, &len, SCT_CONNECT);
