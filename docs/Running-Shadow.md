@@ -61,34 +61,3 @@ Although you may want to configure your own network characteristics, Shadow alre
 You may modify `shadow.config.xml` to use the path to `~/.shadow/share/topology.graphml.xml` instead of embedding a topology as is done in `resource/examples/filetransfer/shadow.config.xml`.
 
 The format of all the attributes and acceptable values for the topology is described on the [[Topology format]] page.
-
-### scallion
-
-`scallion` is a plug-in that runs the [Tor anonymity software](https://www.torproject.org/), allowing us to configure a private Tor networks on our machine and transfer data through it. Scallion requires an additional library in `LD_PRELOAD` and also requires setting some extra environment variables. Because of these complexities, a python helper script called `scallion` is also installed in `~/.shadow/bin` (or `your/prefix/bin`). This script is a wrapper for the `shadow` wrapper script.
-
-Tor requires other configuration files and keys to function. A very small example can be run as follows:
-
-```bash
-cd resource/examples/scallion/
-tar xaf minimal.tar.xz
-cd minimal
-scallion -i shadow.config.xml
-```
-
-Scallion notes:
-+ Each Tor node type may be configured in the `*torrc` files
-+ The `scallion` script automatically redirects all output from Tor into `./data`
-+ The `./data` directory contains the private data directories from each Tor instance running in the experiment
-+ All Shadow and Tor logging for every node is redirected to the `./data/scallion.log` file
-+ If `dstat` is installed, its output is redirected to `./data/dstat.log`
-
-The above toy example is not realistic for research purposes. More realistic network configurations can be found in the other compressed files in `resource/examples/scallion/`. To run one of these experiments with 2 worker threads enabled:
-
-```bash
-cd resource/examples/scallion/
-tar xaf tiny-m1.large.tar.xz
-cd tiny-m1.large
-scallion -i shadow.config.xml -w 2
-```
-
-Note that these experiments will take on the order of 30 minutes to several hours, and consume ~4 to ~64 GiB of RAM, depending which size you run (tiny, small, medium, large). See [[Using the scallion plug-in]] for more information and for details on generating your own Scallion `shadow.config.xml` file, and [[Analyzing results]] for help parsing the output.
