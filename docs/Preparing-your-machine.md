@@ -28,13 +28,13 @@ Shadow relies on the following tools and libraries to function properly. Version
 To install these using the Fedora package manager, try something like:
 
 ```bash
-sudo yum install -y gcc xz make automake autoconf cmake glib2 glib2-devel igraph igraph-devel python htop screen dstat numpy scipy python-matplotlib pdftk libxml2-devel libxslt-devel git wget gcc-c++
+sudo yum install -y xz make cmake glib2 glib2-devel igraph igraph-devel python htop screen dstat numpy scipy python-matplotlib pdftk libxml2-devel libxslt-devel git wget gcc-c++
 ```
 
 On Ubuntu, try:
 
 ```bash
-sudo apt-get -y install gcc xz-utils make automake autoconf cmake libglib2.0 libglib2.0-dev libigraph0 libigraph0-dev dstat pdftk python2.7 python-matplotlib python-numpy python-scipy htop screen libxml2-dev libxslt-dev git
+sudo apt-get -y install xz-utils make cmake libglib2.0 libglib2.0-dev libigraph0 libigraph0-dev dstat pdftk python2.7 python-matplotlib python-numpy python-scipy htop screen libxml2-dev libxslt-dev git
 ```
 
 You'll also need to manually build and install **clang/llvm** from source because for some reason the OS packages do not include the shared CMake module files Shadow requires. (Bug reports have been filed for [Fedora](https://bugzilla.redhat.com/show_bug.cgi?id=914713) and [Debian](http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=701153))  
@@ -60,56 +60,14 @@ export PATH=${PATH}:/home/${USER}/.local/bin
   + you should add `/home/${USER}/.local/bin` to your shell setup for the PATH environment variable (e.g., in `~/.bashrc` or `~/.bash_profile`)
   + if you also have a system version of Clang/LLVM installed, make sure to note its location as it may cause conflicts as you build Shadow later.
 
-## Obtaining Shadow
-
-For best results, release versions are recommended and can be obtained in various ways:
-* by visiting https://shadow.github.io/download
-* by visiting https://github.com/shadow/shadow/tags
-* by using git:
+## Shadow Setup
 
 ```bash
-git clone https://github.com/shadow/shadow.git
+git clone https://github.com/shadow/shadow.git -b release
 cd shadow
-git checkout release
-```
-
-The master branch contains the latest unstable development changes.
-
-## Building and Installing Shadow and its Plug-ins
-
-You've downloaded Shadow and changed to its **top-level directory**. Next, you'll want to take care of some manual dependencies required to build Tor as a Shadow plug-in during a full build. We'll need to install **openssl** and **libevent** after downloading and building them with custom configuration options.
-
-### Automatic Install
-
-Luckily, Shadow contains a script to do this for you, and will help you configure, build, and install Shadow. The default and recommended setup is to install to `~/.shadow` as follows:
-
-```bash
-./setup dependencies
 ./setup build
 ./setup install
 export PATH=${PATH}:/home/${USER}/.shadow/bin
-```
-
-For more details, add `--help` to each of those commands.
-
-### Manual Install
-
-You may skip this section if you used the automatic installation method. If you prefer to install **openssl** and **libevent** manually, do something like the following.
-
-**openssl**
-
-```
-./config --prefix=/home/${USER}/.shadow shared threads enable-ec_nistp_64_gcc_128 -fPIC
-make
-make install_sw
-```
-
-**libevent**
-
-```
-./configure --prefix=/home/${USER}/.shadow --enable-shared CFLAGS="-fPIC -I/home/${USER}/.shadow" LDFLAGS="-L/home/${USER}/.shadow"
-make
-make install
 ```
 
 ### Important Notes
