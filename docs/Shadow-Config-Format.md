@@ -68,28 +68,3 @@ Nodes must have at least one child \<application\> (see below), and may have mor
 The _application_ element represents an application the node will run. The _plugin_ attribute should be set to the _id_ of the _plugin_ element that represents the plug-in that should be used to launch this application at _starttime_ virtual seconds from the beginning of the simulation. The application will be stopped at _stoptime_ virtual seconds if given.
 
 The _arguments_ attribute should be set to a string holding the required plug-in arguments. This string will be passed to the plug-in in an `argv`-style array, similar to how arguments are passed to the main function in a `C` program. Please see the plug-in documentation for usage and format of the argument string.
-
-### The _cdf_ element
-```xml
-<cdf id="STRING" path="STRING" center="INTEGER" width="INTEGER" tail="INTEGER" />
-```
-**Required attributes**: _id_, _path_ or _center_  
-**Optional attributes**: _width_, _tail_
-
-**NOTE**: this element is currently unused.
-
-The _cdf_ element instructs Shadow to either generate an empirical Cumulative Distribution Function, or load the representation of one from a file. The _id_ attribute identifies this _cdf_ and must be a string that is unique among all _id_ attributes for any element in the XML file.
-
-If no _path_ is given, it will generate a CDF using _center_ - _width_ as the 10th percentile, _center_ as the 80th percentile, _center_ + _width_ as the 90th percentile, and _center_ + _width_ + _tail_ as the 95th percentile.
-
-If _path_ is given, it should specify the location of a file from which Shadow should extract a CDF. If _path_ begins with `~/`, the path will be considered relative to the current user's home directory. The file should be in the following format:
-
-```text
-1000.000 0.2000000000
-2000.000 0.4000000000
-3000.000 0.6000000000
-4000.000 0.8000000000
-5000.000 1.0000000000
-```
-
-Where the first column represents the value, and the second represents the percentile.
