@@ -15,6 +15,16 @@ shadow --usage
 shadow --help
 ```
 
+## plug-ins in shadow
+
+Generic applications may be run in Shadow. The most important required features of the application code to enable this are:
+ + completely non-blocking I/O and non-blocking system calls
+ + polling I/O events using the `epoll` interface (see `$ man epoll`)  
+   _NOTE_: [libevent](http://libevent.org/) is also supported through its use of `epoll`.
+ + no process forking or thread creation, or a mode that allows the application to run in a single thread
+
+The [shadow-plugin-extras repository](https://github.com/shadow/shadow-plugin-extras) contains a useful basic "hello world" example that illustrates how a program running outside of Shadow may also be run inside of Shadow. The example provides useful comments and a general structure that will be useful to understand when writing your own plug-ins.
+
 ## performing some basic functional tests
 
 Shadow provides a virtual system and network that are used by plug-in applications. Fortunately, Shadow already contains several application plug-ins so you can get started without writing your own. Basic functionalities are tested using some static configurations of these plug-ins that are included in `shadow-bin`. Let's start by running those and make sure thing are working as they should.
