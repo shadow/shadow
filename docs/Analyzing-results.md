@@ -96,37 +96,3 @@ python contrib/analyze.py plot --title "Shadow TCP Window Test" --prefix "window
 ```
 
 See any of the graphs in `./graphs`, or if you have `pdftk` installed, you can simply view the `window-combined.pdf` file.
-
-### scallion
-
-Suppose we want to test the performance difference between 2 of Tor's schedulers. We could do the following to setup our experiments:
-
-```bash
-cd resource
-tar xaf tiny-m1.large.tar.xz
-mv tiny-m1.large vanilla
-tar xaf tiny-m1.large.tar.xz
-mv tiny-m1.large priority
-```
-
-At this point you should add the string `CircuitPriorityHalflife 30` to the end of each of the torrc files located in the `priority` directory. This will enable the scheduler that prioritizes circuits based on exponentially-weighted moving average circuit throughputs.
-
-Now you can run both experiments and plot the results:  (**NOTE**: _each experiment may take up to an hour to run, so be patient_)
-
-```bash
-cd vanilla
-scallion -y
-cd ../priority
-scallion -y
-cd ../
-```
-
-Since the `scallion` script redirects log messages to `data/scallion.log`, the following commands can be used to parse and plot those results:
-
-```bash
-python ../../contrib/analyze.py parse --output vanilla-results vanilla/data/scallion.log
-python ../../contrib/analyze.py parse --output priority-results priority/data/scallion.log
-python ../../contrib/analyze.py plot --title "Shadow Scheduler Test" --prefix "scheduler" --data vanilla-results/ "vanilla" --data priority-results/ "priority"
-```
-
-See any of the graphs in `./graphs`, or if you have `pdftk` installed, you can simply view the `scheduler-combined.pdf` file.
