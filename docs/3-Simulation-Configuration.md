@@ -1,6 +1,6 @@
 ## Shadow Application Configuration
 
-Shadow uses a standard XML format to accept configuration options from users, and uses [GLib's XML parser](https://developer.gnome.org/glib/stable/glib-Simple-XML-Subset-Parser.html) to parse the simple structure. Examples of a Shadow configuration file, `shadow.config.xml`, are distributed with the release. The following describes valid XML elements and attributes that Shadow will accept and process.
+Shadow uses a standard XML format to accept configuration options from users, and uses [GLib's XML parser](https://developer.gnome.org/glib/stable/glib-Simple-XML-Subset-Parser.html) to parse the simple structure. Examples of a Shadow configuration file, `shadow.config.xml`, are distributed with the release. The following describes valid XML elements and attributes that Shadow will accept from a `shadow.config.xml` file; these can be used to custimize a simulation.
 
 ### The _kill_ element
 ```xml
