@@ -83,7 +83,7 @@ All vertices must have the following explicit attributes (in addition to the def
 
 In addition, all _point of interest_ (poi) vertices must have the following attributes: _ip_, _geocode_, _bandwidthup_, _bandwidthdown_, _packetloss_. The _asn_ attribute is optional.
 
-_Points of Interest_ are special vertices that represent a collection of Internet routers that are very close to each other in terms of network distance. These vertices also represent end-points in the network where virtual hosts may be attached. Shadow does this attachment using the _typehint_, _iphint_, and _geocodehint_ attributes to the _node_ element as specified in the [[Shadow config format]]. Hosts are always attached to the closest match to the best known location following the hinted restrictions.
+_Points of Interest_ are special vertices that represent a collection of Internet routers that are very close to each other in terms of network distance. These vertices also represent end-points in the network where virtual hosts may be attached. Shadow does this attachment using the _typehint_, _iphint_, and _geocodehint_ attributes to the _node_ element as specified in a [Shadow config file](#Shadow-Application-Configuration). Hosts are always attached to the closest match to the best known location following the hinted restrictions.
 
 ### Edges
 
