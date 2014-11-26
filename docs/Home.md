@@ -7,4 +7,4 @@ The wiki contains important information about installing and using Shadow. For d
 [[1 Installation and Setup]]  
 [[2 Simulation Execution and Analysis]]  
 [[3 Simulation Configuration]]  
-[[4 FAQs and Other Information]]  
+[[4 Notes and FAQs]]  
