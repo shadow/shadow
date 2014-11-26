@@ -88,7 +88,7 @@ Yes. You'll need to build Shadow with the `--tor-prefix` option set to the path 
 1. #### My OS does not include the correct Clang/LLVM CMake modules. How do I build Clang/LLVM from source?  
 Older versions of the **clang/llvm** OS packages do not include the shared CMake module files Shadow requires. (Bug reports have been filed for [Fedora](https://bugzilla.redhat.com/show_bug.cgi?id=914713) and [Debian](http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=701153)). You can get these by building Clang/LLVM from source as follows.  
   
-```bash
+```bash  
 wget http://www.llvm.org/releases/3.2/llvm-3.2.src.tar.gz
 wget http://www.llvm.org/releases/3.2/clang-3.2.src.tar.gz
 tar xaf llvm-3.2.src.tar.gz
@@ -101,6 +101,6 @@ cmake -DCMAKE_INSTALL_PREFIX=/home/${USER}/.local ../.
 make -jN # Replace 'N' with the number of threads for a parallel build
 make install
 export PATH=${PATH}:/home/${USER}/.local/bin
-```
+```  
   
 You should then add `/home/${USER}/.local/bin` to your shell setup for the PATH environment variable (e.g., in `~/.bashrc` or `~/.bash_profile`).  
