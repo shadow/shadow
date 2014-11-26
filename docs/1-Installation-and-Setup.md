@@ -3,7 +3,7 @@
 Shadow relies on the following tools and libraries to function properly. Versions and plug-in-specific dependencies are noted in parenthesis where applicable
 
 **Required**:
-* clang, llvm (= 3.2)
+* clang, llvm (>= 3.2)
 * glib (>= 2.32.0)
 * igraph (>= 0.5.4)
 * cmake (>= 2.8.8)
@@ -35,29 +35,6 @@ On Ubuntu, try:
 ```bash
 sudo apt-get -y install xz-utils make cmake libglib2.0 libglib2.0-dev libigraph0 libigraph0-dev dstat pdftk python2.7 python-matplotlib python-numpy python-scipy htop screen libxml2-dev libxslt-dev git
 ```
-
-You'll also need to manually build and install **clang/llvm** from source because for some reason the OS packages do not include the shared CMake module files Shadow requires. (Bug reports have been filed for [Fedora](https://bugzilla.redhat.com/show_bug.cgi?id=914713) and [Debian](http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=701153))  
-
-Replace 'N' with the number of threads for a parallel build:
-
-```bash
-wget http://www.llvm.org/releases/3.2/llvm-3.2.src.tar.gz
-wget http://www.llvm.org/releases/3.2/clang-3.2.src.tar.gz
-tar xaf llvm-3.2.src.tar.gz
-tar xaf clang-3.2.src.tar.gz
-cp -R clang-3.2.src llvm-3.2.src/tools/clang
-cd llvm-3.2.src
-mkdir build
-cd build
-cmake -DCMAKE_INSTALL_PREFIX=/home/${USER}/.local ../.
-make -jN
-make install
-export PATH=${PATH}:/home/${USER}/.local/bin
-```
-
-**NOTES**:  
-  + you should add `/home/${USER}/.local/bin` to your shell setup for the PATH environment variable (e.g., in `~/.bashrc` or `~/.bash_profile`)
-  + if you also have a system version of Clang/LLVM installed, make sure to note its location as it may cause conflicts as you build Shadow later.
 
 ## Shadow Setup
 
