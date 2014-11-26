@@ -1,3 +1,5 @@
+## Shadow Application Configuration
+
 Shadow uses a standard XML format to accept configuration options from users, and uses [GLib's XML parser](https://developer.gnome.org/glib/stable/glib-Simple-XML-Subset-Parser.html) to parse the simple structure. The following are valid elements and their attributes for a shadow configuration file (`shadow.config.xml`):
 
 ### The _kill_ element
@@ -69,15 +71,11 @@ The _application_ element represents an application the node will run. The _plug
 
 The _arguments_ attribute should be set to a string holding the required plug-in arguments. This string will be passed to the plug-in in an `argv`-style array, similar to how arguments are passed to the main function in a `C` program. Please see the plug-in documentation for usage and format of the argument string.
 
-# Topology
+## Network Topology Configuration
 
-## Topology Description
+Shadow uses a graphml format to represent a network topology. The python module [networkx](http://networkx.github.io/) can be used to manipulate such a format. Shadow is distributed with some graphml topology files that were generated using data from a variety of sources, including [Net Index](http://www.netindex.com/), and [CAIDA](http://www.caida.org/). Because the topology is represented in a standard graphml format, it is easy to swap out specific measurements of latency, jitter, packetloss, etc, if desired.
 
-The topology files included in Shadow were generated from a variety of data sources, including [Net Index](http://www.netindex.com/), and [CAIDA](http://www.caida.org/). The data is represented in a standard graphml format so that it is easy to swap out specific measurements of latency, jitter, packetloss, etc, if desired. For more information, check out some [recent](http://www-users.cs.umn.edu/~jansen/papers/tormodel-cset2012.pdf) [work](https://security.cs.georgetown.edu/~msherr/papers/tor-relaystudy.pdf) on Tor network modeling.
-
-## Topology Format
-
-Shadow uses a graphml format to represent a network topology. The python module [networkx](http://networkx.github.io/) can be used to manipulate such a format.
+For more information on modeling topologies, check out [some](http://www.robgjansen.com/publications/tormodel-cset2012.pdf) [recent](https://security.cs.georgetown.edu/~msherr/papers/tor-relaystudy.pdf) [work](http://www.robgjansen.com/publications/kist-sec2014.pdf) on Tor network modeling.
 
 ### Vertices
 
