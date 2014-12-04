@@ -433,8 +433,8 @@ void slave_runParallel(Slave* slave) {
     GSList* threadItem = workerThreads;
     while(threadItem) {
         GThread* t = threadItem->data;
+        /* the join will consume the reference, so unref is not needed */
         g_thread_join(t);
-        g_thread_unref(t);
         threadItem = g_slist_next(threadItem);
     }
     g_slist_free(workerThreads);
