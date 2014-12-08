@@ -1,12 +1,10 @@
 ## Installing Dependencies
 
-Shadow relies on the following tools and libraries to function properly. Versions and plug-in-specific dependencies are noted in parenthesis where applicable
-
 **Required**:
-* clang, llvm (>= 3.2)
-* glib (>= 2.32.0)
-* igraph (>= 0.5.4)
-* cmake (>= 2.8.8)
+* clang, llvm (version >= 3.2)
+* glib (version >= 2.32.0)
+* igraph (version >= 0.5.4)
+* cmake (version >= 2.8.8)
 * make
 * xz-utils
 
