@@ -37,31 +37,25 @@ git clone https://github.com/shadow/shadow.git -b release
 cd shadow
 ./setup build
 ./setup install
-export PATH=${PATH}:/home/${USER}/.shadow/bin
 ```
 
-### Important Notes
+You should add `/home/${USER}/.shadow/bin` to your shell setup for the PATH environment variable (e.g., in `~/.bashrc` or `~/.bash_profile`).
 
-+ You should add `/home/${USER}/.shadow/bin` to your shell setup for the PATH environment variable (e.g., in `~/.bashrc` or `~/.bash_profile`)
+```bash
+echo "" >> ~/.bashrc
+echo "export PATH=${PATH}:/home/${USER}/.shadow/bin" >> ~/.bashrc
+echo "" >> ~/.bashrc
+bash
+```
 
-+ The two most useful build options are:  
+## Setup Notes
+
++ The most useful build options are:  
  + `-g` or `--debug` to build Shadow with debugging symbols
- + `--tor-prefix` to build Scallion with your local custom Tor distribution (instead of downloading one from torproject.org).
- + if you want to use valgrind and don't want it to report spurious openssl errors, add this to the end of the openssl configure line: `-g -pg -DPURIFY -Bsymbolic`
-
-+ If you installed any dependencies somewhere other than `~/.shadow`, you should use the following flags during the build process:
- + `--include`
- + `--library`
- + `--openssl-prefix`
- + `--libevent-prefix`
-
-+ If you want to install Shadow somewhere besides `~/.shadow`, you should use the `--prefix` flag.
-
-### Other Notes
-
+ + `--include` and `--library` if you installed any dependencies somewhere other than `~/.shadow`
+ + `--prefix` if you want to install Shadow somewhere besides `~/.shadow`
 + All build output is generated out-of-source, by default to the `./build` directory.
 + The `setup` script is a wrapper to `cmake` and `make`. Using `cmake` and `make` directly is also possible, but strongly discouraged. 
-+ When you install Shadow you are installing the Shadow binary (`shadow-bin`) and an additional python wrapper script (`shadow`) that assists in running the Shadow binary, as well as various built-in plug-ins. You can avoid building plug-ins using the '--disable-plugin-*' setup script options.
 
 ## System Configs and Limits
 
@@ -146,3 +140,11 @@ Amazon’s [Elastic Compute Cloud (EC2)](http://aws.amazon.com/ec2/) infrastruct
 ssh -i your-key.pem ubuntu@your-public-dns.amazonaws.com
 ```
 1. Once logged in, view `~/README` and `~/shadow-git-clone/README` for more information
+
+# TODO
+
+ + `--tor-prefix` to build Scallion with your local custom Tor distribution (instead of downloading one from torproject.org).
+ + if you want to use valgrind and don't want it to report spurious openssl errors, add this to the end of the openssl configure line: `-g -pg -DPURIFY -Bsymbolic`
+
+ + `--openssl-prefix`
+ + `--libevent-prefix`
