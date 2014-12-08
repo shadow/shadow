@@ -8,26 +8,23 @@ Shadow relies on the following tools and libraries to function properly. Version
 * igraph (>= 0.5.4)
 * cmake (>= 2.8.8)
 * make
-* python (= 2.7)
 * xz-utils
-* gcc (scallion plug-in only)
-* automake (scallion plug-in only)
-* autoconf (scallion plug-in only)
-* zlib (scallion plug-in only)
 
 **Recommended**:
-* htop
-* screen
-* dstat
+* python
 * numpy
 * scipy
 * matplotlib
-* pdftk
+* networkx
+* lxml
+* htop, screen, dstat
 
 To install these using the Fedora package manager, try something like:
 
 ```bash
-sudo yum install -y xz make cmake glib2 glib2-devel igraph igraph-devel python htop screen dstat numpy scipy python-matplotlib pdftk libxml2-devel libxslt-devel git wget gcc-c++
+sudo yum install -y clang clang-devel llvm llvm-devel glib2 glib2-devel igraph igraph-devel cmake make xz
+sudo yum install -y python numpy scipy python-matplotlib python-networkx python-lxml
+sudo yum install -y htop screen dstat
 ```
 
 On Ubuntu, try:
