@@ -17,20 +17,19 @@ Shadow relies on the following tools and libraries to function properly. Version
 * matplotlib
 * networkx
 * lxml
-* htop, screen, dstat
 
-To install these using the Fedora package manager, try something like:
+**Fedora (YUM):**
 
 ```bash
 sudo yum install -y clang clang-devel llvm llvm-devel glib2 glib2-devel igraph igraph-devel cmake make xz
 sudo yum install -y python numpy scipy python-matplotlib python-networkx python-lxml
-sudo yum install -y htop screen dstat
 ```
 
-On Ubuntu, try:
+**Ubuntu (APT):**
 
 ```bash
-sudo apt-get -y install xz-utils make cmake libglib2.0 libglib2.0-dev libigraph0 libigraph0-dev dstat pdftk python2.7 python-matplotlib python-numpy python-scipy htop screen libxml2-dev libxslt-dev git
+sudo apt-get install -y clang llvm llvm-dev libglib2.0 libglib2.0-dev libigraph0 libigraph0-dev cmake make xz-utils
+sudo apt-get install -y python python-matplotlib python-numpy python-scipy python-networkx python-lxml
 ```
 
 ## Shadow Setup
