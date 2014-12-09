@@ -1,3 +1,7 @@
+Shadow can either be run in a [[traditional computing][#Shadow in Traditional Computing]] environment, or in the [[EC2 cloud][#Shadow in the Cloud]] with a pre-configured machine instance.
+
+# Shadow in Traditional Computing
+
 ## Installing Dependencies
 
 **Required**:
