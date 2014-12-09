@@ -16,14 +16,14 @@
 * networkx
 * lxml
 
-**Fedora (YUM):**
+**YUM (Fedora):**
 
 ```bash
 sudo yum install -y clang clang-devel llvm llvm-devel glib2 glib2-devel igraph igraph-devel cmake make xz
 sudo yum install -y python numpy scipy python-matplotlib python-networkx python-lxml
 ```
 
-**Ubuntu (APT):**
+**APT (Ubuntu):**
 
 ```bash
 sudo apt-get install -y clang llvm llvm-dev libglib2.0 libglib2.0-dev libigraph0 libigraph0-dev cmake make xz-utils
