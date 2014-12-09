@@ -142,11 +142,3 @@ Amazon’s [Elastic Compute Cloud (EC2)](http://aws.amazon.com/ec2/) infrastruct
 ssh -i your-key.pem ubuntu@your-public-dns.amazonaws.com
 ```
 1. Once logged in, view `~/README` and `~/shadow-git-clone/README` for more information
-
-# TODO
-
- + `--tor-prefix` to build Scallion with your local custom Tor distribution (instead of downloading one from torproject.org).
- + if you want to use valgrind and don't want it to report spurious openssl errors, add this to the end of the openssl configure line: `-g -pg -DPURIFY -Bsymbolic`
-
- + `--openssl-prefix`
- + `--libevent-prefix`
