@@ -1,6 +1,6 @@
-Shadow can either be run in a [traditional computing](#Shadow in Traditional Computing) environment, or in the [EC2 cloud](#Shadow in the Cloud) with a pre-configured machine instance.
+Shadow can either be run in a [traditional computing](#Shadow-with-Traditional-Computing) environment, or in the [EC2 cloud](#Shadow-with-Cloud-Computing) with a pre-configured machine instance.
 
-# Shadow in Traditional Computing
+# Shadow with Traditional Computing
 
 ## Installing Dependencies
 
@@ -130,7 +130,7 @@ sudo sysctl -p
 For more information:
 https://www.kernel.org/doc/Documentation/sysctl/vm.txt
 
-# Shadow in the Cloud
+# Shadow with Cloud Computing
 
 Amazon’s [Elastic Compute Cloud (EC2)](http://aws.amazon.com/ec2/) infrastructure provides a simple and relatively [cost-efficient](http://aws.amazon.com/ec2/#pricing) way to run large-scale Shadow experiments without the need to buy expensive hardware or manage complex configurations. You can get started running Shadow experiments on EC2 in minutes using our pre-configured public EC2 AMI, which has already been set up to run Shadow.
 
