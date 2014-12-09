@@ -27,9 +27,6 @@
 
 #include "shd-config.h"
 
-#define SHADOW_VERSION_STRING "Shadow v"SHADOW_VERSION
-#define SHADOW_INFO_STRING "For more information, visit https://shadow.github.io or https://github.com/shadow"
-
 // TODO put into a shd-types.h file
 typedef struct _Process Process;
 

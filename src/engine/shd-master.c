@@ -85,7 +85,7 @@ void master_free(Master* master) {
 
     GDateTime* dt_now = g_date_time_new_now_local();
     gchar* dt_format = g_date_time_format(dt_now, "%F %H:%M:%S");
-    message("Shadow v%s shut down cleanly at %s", SHADOW_VERSION, dt_format);
+    message("%s shut down cleanly at %s", SHADOW_VERSION_STRING, dt_format);
     g_date_time_unref(dt_now);
     g_free(dt_format);
 
