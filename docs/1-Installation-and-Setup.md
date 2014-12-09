@@ -81,13 +81,16 @@ That tells you:
 
 You will want to raise the limits by modifying `/etc/security/limits.conf` and rebooting.
 For example, to handle all our network configurations on EC2, I use:
-```
+
+```txt
 * soft nofile 25000
 * hard nofile 25000
 ```
+
 You can watch `/proc/sys/fs/file-nr` and reduce the limit to something less than 25000 according to your usage, if you'd like.
 
 For more information:
+
 ```bash
 man proc
 man ulimit -n
