@@ -1,4 +1,4 @@
-The Shadow Simulator <shadow-support@cs.umn.edu>
+# The Shadow Simulator
 
 Shadow is a unique discrete-event network simulator that runs real 
 applications like Tor and Bitcoin, and distributed systems of thousands of
@@ -8,22 +8,26 @@ efficiency and control of simulation, achieving the best of both approaches.
 Also included are simple Internet topologies and a core plug-in for generating
 traffic between nodes and through SOCKS proxies.
 
-Quick Setup (installs everything in ~/.shadow):
-    $ ./setup build --clean --debug
-    $ ./setup install
+Quick Setup (installs everything in `~/.shadow`):
+```
+$ ./setup build --clean --debug
+$ ./setup install
+```
 
 Setup and Usage Instructions:
-    https://github.com/shadow/shadow/wiki
+  + https://github.com/shadow/shadow/wiki
 
 Bug Reports:
-    https://github.com/shadow/shadow/issues
+  + https://github.com/shadow/shadow/issues
+
+Email Support:
+  + <shadow-support@cs.umn.edu>
 
 Shadow Plug-ins and Project Development:
-    https://github.com/shadow
+  + https://github.com/shadow
         
 Homepage:
-    https://shadow.github.io
+  + https://shadow.github.io
     
 Download New Releases:
-    https://shadow.github.io/download
-
+  + https://shadow.github.io/download
