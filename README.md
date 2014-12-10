@@ -31,3 +31,7 @@ Homepage:
     
 Download New Releases:
   + https://shadow.github.io/download
+
+# Contributing
+
+Contributions can be made by submitting pull requests via GitHub.
