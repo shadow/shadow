@@ -25,11 +25,11 @@ target_link_libraries(shadow-tgen-global-lock ${GLIB_LIBRARIES})
 install(TARGETS shadow-tgen-global-lock DESTINATION lib)
 
 ## executable that can run outside of shadow
-add_executable(shadow-tgen shd-tgen-main.c ${tgen_sources})
-add_dependencies(shadow-tgen shadow-tgen-global-lock)
-target_link_libraries(shadow-tgen shadow-tgen-global-lock ${RT_LIBRARIES} ${M_LIBRARIES} ${IGRAPH_LIBRARIES} ${GLIB_LIBRARIES})
-install(TARGETS shadow-tgen DESTINATION bin)
-set_target_properties(shadow-tgen PROPERTIES INSTALL_RPATH ${CMAKE_INSTALL_PREFIX}/lib INSTALL_RPATH_USE_LINK_PATH TRUE LINK_FLAGS "-Wl,--no-as-needed")
+add_executable(tgen shd-tgen-main.c ${tgen_sources})
+add_dependencies(tgen shadow-tgen-global-lock)
+target_link_libraries(tgen shadow-tgen-global-lock ${RT_LIBRARIES} ${M_LIBRARIES} ${IGRAPH_LIBRARIES} ${GLIB_LIBRARIES})
+install(TARGETS tgen DESTINATION bin)
+set_target_properties(tgen PROPERTIES INSTALL_RPATH ${CMAKE_INSTALL_PREFIX}/lib INSTALL_RPATH_USE_LINK_PATH TRUE LINK_FLAGS "-Wl,--no-as-needed")
 
 ## build bitcode
 add_bitcode(shadow-plugin-tgen-bitcode shd-tgen-plugin.c ${tgen_sources})
