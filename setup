@@ -51,6 +51,11 @@ def main():
         metavar="PATH",
         action="append", dest="extra_libraries",
         default=[INSTALL_PREFIX+ "/lib"])
+
+    parser_build.add_argument('-c', '--clean',
+        help="force a full rebuild of Shadow by removing build cache",
+        action="store_true", dest="do_force_rebuild",
+        default=False)
     
     parser_build.add_argument('-g', '--debug',
         help="build in extra memory checks and debugging symbols when running Shadow",
@@ -60,11 +65,6 @@ def main():
     parser_build.add_argument('-v', '--verbose',
         help="print verbose output from the compiler",
         action="store_true", dest="do_verbose",
-        default=False)
-
-    parser_build.add_argument('-f', '--force',
-        help="force a full rebuild of Shadow by removing build cache",
-        action="store_true", dest="do_force_rebuild",
         default=False)
         
     parser_build.add_argument('-j', '--jobs',
