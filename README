@@ -12,7 +12,7 @@ Quick Setup (installs everything in ~/.shadow):
     $ ./setup build --clean --debug
     $ ./setup install
 
-In-depth Setup Instructions and Tutorials:
+Setup and Usage Instructions:
     https://github.com/shadow/shadow/wiki
 
 Bug Reports:
