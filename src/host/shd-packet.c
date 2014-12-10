@@ -56,10 +56,11 @@ Packet* packet_new(gconstpointer payload, gsize payloadLength) {
     g_mutex_init(&(packet->lock));
     packet->referenceCount = 1;
 
-    packet->payloadLength = payloadLength;
-    if(payloadLength > 0) {
-        /* if length is 0, this returns NULL */
-        packet->payload = g_memdup(payload, payloadLength);
+    if(payload != NULL && payloadLength > 0) {
+        packet->payload = g_malloc0(payloadLength);
+        g_memmove(packet->payload, payload, payloadLength);
+        packet->payloadLength = payloadLength;
+        utility_assert(packet->payload);
 
         /* application data needs a priority ordering for FIFO onto the wire */
         packet->priority = host_getNextPacketPriority(worker_getCurrentHost());
@@ -210,12 +211,19 @@ void packet_updateTCP(Packet* packet, guint acknowledgement, GList* selectiveACK
 
     PacketTCPHeader* header = (PacketTCPHeader*) packet->header;
 
-    header->acknowledgment = acknowledgement;
-    header->selectiveACKs = NULL;
     if(selectiveACKs && g_list_length(selectiveACKs) > 0) {
+        /* free the old ack list if it exists */
+        if(header->selectiveACKs != NULL) {
+            g_list_free(header->selectiveACKs);
+            header->selectiveACKs = NULL;
+        }
+
+        /* set the new sacks */
         header->flags |= PTCP_SACK;
         header->selectiveACKs = g_list_copy(selectiveACKs);
     }
+
+    header->acknowledgment = acknowledgement;
     header->window = window;
     header->timestampValue = timestampValue;
     header->timestampEcho = timestampEcho;
