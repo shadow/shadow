@@ -55,7 +55,6 @@ enum TCPReceiveState {
 typedef struct _TCPChild TCPChild;
 struct _TCPChild {
     enum TCPChildState state;
-    TCP* tcp;
     guint key; /* hash(peerIP, peerPort) */
     TCP* parent;
     MAGIC_DECLARE;
@@ -202,20 +201,18 @@ static TCPChild* _tcpchild_new(TCP* tcp, TCP* parent, in_addr_t peerIP, in_port_
     /* my parent can find me by my key */
     child->key = utility_ipPortHash(peerIP, peerPort);
 
-    descriptor_ref(tcp);
-    child->tcp = tcp;
     descriptor_ref(parent);
     child->parent = parent;
 
     child->state = TCPCS_INCOMPLETE;
-    socket_setPeerName(&(child->tcp->super), peerIP, peerPort);
+    socket_setPeerName(&(tcp->super), peerIP, peerPort);
 
     /* the child is bound to the parent server's address, because all packets
      * coming from the child should appear to be coming from the server itself */
     in_addr_t parentAddress;
     in_port_t parentPort;
     socket_getSocketName(&(parent->super), &parentAddress, &parentPort);
-    socket_setSocketName(&(child->tcp->super), parentAddress, parentPort, TRUE);
+    socket_setSocketName(&(tcp->super), parentAddress, parentPort, TRUE);
 
     return child;
 }
@@ -223,9 +220,6 @@ static TCPChild* _tcpchild_new(TCP* tcp, TCP* parent, in_addr_t peerIP, in_port_
 static void _tcpchild_free(TCPChild* child) {
     MAGIC_ASSERT(child);
 
-    /* make sure our tcp doesnt try to free the child again */
-    child->tcp->child = NULL;
-    descriptor_unref(child->tcp);
     descriptor_unref(child->parent);
 
     MAGIC_CLEAR(child);
@@ -236,7 +230,7 @@ static TCPServer* _tcpserver_new(gint backlog) {
     TCPServer* server = g_new0(TCPServer, 1);
     MAGIC_INIT(server);
 
-    server->children = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, (GDestroyNotify) _tcpchild_free);
+    server->children = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, (GDestroyNotify) descriptor_unref);
     server->pending = g_queue_new();
     server->pendingMaxLength = backlog;
 
@@ -1215,22 +1209,25 @@ gint tcp_acceptServerPeer(TCP* tcp, in_addr_t* ip, in_port_t* port, gint* accept
     }
 
     /* double check the pending child before its accepted */
-    TCPChild* child = g_queue_pop_head(tcp->server->pending);
-    if(!child || (child->tcp && child->tcp->error == TCPE_CONNECTION_RESET)) {
+    TCP* tcpChild = g_queue_pop_head(tcp->server->pending);
+    if(!tcpChild) {
         return ECONNABORTED;
     }
 
-    MAGIC_ASSERT(child);
-    utility_assert(child->tcp);
+    MAGIC_ASSERT(tcpChild);
+    if(tcpChild->error == TCPE_CONNECTION_RESET) {
+        return ECONNABORTED;
+    }
 
     /* better have a peer if we are established */
-    utility_assert(child->tcp->super.peerIP && child->tcp->super.peerPort);
+    utility_assert(tcpChild->super.peerIP && tcpChild->super.peerPort);
 
     /* child now gets "accepted" */
-    child->state = TCPCS_ACCEPTED;
+    MAGIC_ASSERT(tcpChild->child);
+    tcpChild->child->state = TCPCS_ACCEPTED;
 
     /* update child descriptor status */
-    descriptor_adjustStatus(&(child->tcp->super.super.super), DS_ACTIVE|DS_WRITABLE, TRUE);
+    descriptor_adjustStatus(&(tcpChild->super.super.super), DS_ACTIVE|DS_WRITABLE, TRUE);
 
     /* update server descriptor status */
     if(g_queue_get_length(tcp->server->pending) > 0) {
@@ -1239,12 +1236,12 @@ gint tcp_acceptServerPeer(TCP* tcp, in_addr_t* ip, in_port_t* port, gint* accept
         descriptor_adjustStatus(&(tcp->super.super.super), DS_READABLE, FALSE);
     }
 
-    *acceptedHandle = child->tcp->super.super.super.handle;
+    *acceptedHandle = tcpChild->super.super.super.handle;
     if(ip) {
-        *ip = child->tcp->super.peerIP;
+        *ip = tcpChild->super.peerIP;
     }
     if(port) {
-        *port = child->tcp->super.peerPort;
+        *port = tcpChild->super.peerPort;
     }
 
     Tracker* tracker = host_getTracker(worker_getCurrentHost());
@@ -1263,10 +1260,10 @@ static TCP* _tcp_getSourceTCP(TCP* tcp, in_addr_t ip, in_port_t port) {
 
         /* children are multiplexed based on remote ip and port */
         guint childKey = utility_ipPortHash(ip, port);
-        TCPChild* child = g_hash_table_lookup(tcp->server->children, &childKey);
+        TCP* tcpChild = g_hash_table_lookup(tcp->server->children, &childKey);
 
-        if(child) {
-            return child->tcp;
+        if(tcpChild) {
+            return tcpChild;
         }
     }
 
@@ -1478,7 +1475,8 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
 
                 multiplexed->child = _tcpchild_new(multiplexed, tcp, header.sourceIP, header.sourcePort);
                 utility_assert(g_hash_table_lookup(tcp->server->children, &(multiplexed->child->key)) == NULL);
-                g_hash_table_replace(tcp->server->children, &(multiplexed->child->key), multiplexed->child);
+                descriptor_ref(multiplexed);
+                g_hash_table_replace(tcp->server->children, &(multiplexed->child->key), multiplexed);
 
                 multiplexed->receive.start = header.sequence;
                 multiplexed->receive.next = multiplexed->receive.start + 1;
@@ -1534,7 +1532,7 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
                 /* if this is a child, mark it accordingly */
                 if(tcp->child) {
                     tcp->child->state = TCPCS_PENDING;
-                    g_queue_push_tail(tcp->child->parent->server->pending, tcp->child);
+                    g_queue_push_tail(tcp->child->parent->server->pending, tcp);
                     /* user should accept new child from parent */
                     descriptor_adjustStatus(&(tcp->child->parent->super.super.super), DS_READABLE, TRUE);
                 }
