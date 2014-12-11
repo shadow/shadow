@@ -243,10 +243,20 @@ static void _tcpserver_free(TCPServer* server) {
     /* no need to destroy children in this queue */
     g_queue_free(server->pending);
     /* this will unref all children */
-    g_hash_table_destroy(server->children);
+    if(server->children) {
+        g_hash_table_destroy(server->children);
+    }
 
     MAGIC_CLEAR(server);
     g_free(server);
+}
+
+void tcp_clearAllChildrenIfServer(TCP* tcp) {
+    MAGIC_ASSERT(tcp);
+    if(tcp->server) {
+        g_hash_table_destroy(tcp->server->children);
+        tcp->server->children = NULL;
+    }
 }
 
 static in_addr_t tcp_getIP(TCP* tcp) {
@@ -464,13 +474,13 @@ static void _tcp_setState(TCP* tcp, enum TCPState state) {
             if(!tcp->server || g_hash_table_size(tcp->server->children) <= 0) {
                 if(tcp->child && tcp->child->parent) {
                     TCP* parent = tcp->child->parent;
+                    utility_assert(parent->server);
 
                     /* tell my server to stop accepting packets for me
                      * this will destroy the child and NULL out tcp->child */
-                    g_hash_table_remove(tcp->child->parent->server->children, (gconstpointer)&(tcp->child->key));
+                    g_hash_table_remove(parent->server->children, &(tcp->child->key));
 
                     /* if i was the server's last child and its waiting to close, close it */
-                    utility_assert(parent->server);
                     if((parent->state == TCPS_CLOSED) && (g_hash_table_size(parent->server->children) <= 0)) {
                         /* this will unbind from the network interface and free socket */
                         host_closeDescriptor(worker_getCurrentHost(), parent->super.super.super.handle);

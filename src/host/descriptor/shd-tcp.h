@@ -28,4 +28,6 @@ gint tcp_acceptServerPeer(TCP* tcp, in_addr_t* ip, in_port_t* port, gint* accept
 void tcp_closeTimerExpired(TCP* tcp);
 void tcp_retransmitTimerExpired(TCP* tcp);
 
+void tcp_clearAllChildrenIfServer(TCP* tcp);
+
 #endif /* SHD_TCP_H_ */

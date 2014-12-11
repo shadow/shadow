@@ -32,7 +32,7 @@ struct _Host {
 
     /* flag on whether or not packets are being captured */
     gchar logPcap;
-    
+
     /* Directory to save PCAP files to if packets are being captured */
     gchar* pcapDir;
 
@@ -163,6 +163,19 @@ void host_free(Host* host, gpointer userData) {
     topology_detach(worker_getTopology(), networkinterface_getAddress(host->defaultInterface));
 
     g_hash_table_destroy(host->interfaces);
+
+    /* tcp servers and their children holds refs to each other. make sure they
+     * all get freed by removing the refs in one direction */
+    GHashTableIter iter;
+    gpointer key, value;
+    g_hash_table_iter_init(&iter, host->descriptors);
+    while(g_hash_table_iter_next(&iter, &key, &value)) {
+        Descriptor* desc = value;
+        if(desc && desc->type == DT_TCPSOCKET) {
+            tcp_clearAllChildrenIfServer((TCP*)desc);
+        }
+    }
+
     g_hash_table_destroy(host->descriptors);
     g_hash_table_destroy(host->shadowToOSHandleMap);
     g_hash_table_destroy(host->osToShadowHandleMap);
