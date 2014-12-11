@@ -8,3 +8,8 @@ The wiki contains important information about installing and using the Shadow di
 [[2 Simulation Execution and Analysis]]  
 [[3 Simulation Customization]]  
 [[4 Notes and FAQs]]  
+
+## Plug-in Wikis:
+
+  + shadow-plugin-tor: https://github.com/shadow/shadow-plugin-tor/wiki
+  + shadow-plugin-bitcoin: https://github.com/shadow/shadow-plugin-bitcoin/wiki
