@@ -11,5 +11,5 @@ The wiki contains important information about installing and using the Shadow di
 
 ## Plug-in Wikis:
 
-shadow-plugin-tor: https://github.com/shadow/shadow-plugin-tor/wiki  
-shadow-plugin-bitcoin: https://github.com/shadow/shadow-plugin-bitcoin/wiki  
+Tor: https://github.com/shadow/shadow-plugin-tor/wiki  
+Bitcoin: https://github.com/shadow/shadow-plugin-bitcoin/wiki  
