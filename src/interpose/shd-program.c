@@ -195,7 +195,12 @@ void program_free(Program* prog) {
     if(prog->isTemporary) {
         g_unlink(prog->path->str);
     }
-    g_string_free(prog->path, TRUE);
+    if(prog->path) {
+        g_string_free(prog->path, TRUE);
+    }
+    if(prog->name) {
+        g_string_free(prog->name, TRUE);
+    }
 
     if(prog->defaultState) {
         program_freeState(prog, prog->defaultState);
