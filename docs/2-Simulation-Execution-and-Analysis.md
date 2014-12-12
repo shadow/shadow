@@ -91,7 +91,6 @@ one of `error` < `critical` < `warning` < `message` < `info` < `debug`, in that 
 the name of the node as specified in the _id_ tag of the _node_ element in the XML file
 + _ip_:  
 the IP address of the node as specified in the _ip_ tag of the _node_ element in the XML file, or a random IP address if one is not specified  
-**NOTE**: _all IP addresses are random until [this feature](https://github.com/shadow/shadow/issues/39) is completed_
 + _function-name_:  
 the name of the function logging the message
 + _MESSAGE_:  
@@ -104,8 +103,7 @@ By default, Shadow only prints plug-in and core messages at or below the `messag
 Shadow logs heartbeat messages that contain useful system information for each virtual node in the experiment, in messages containing the string `shadow-heartbeat`:
 
 + CPU _value_ %:  
-the percentage of time spent executing code _inside_ the plug-in over the previous interval  
-**NOTE**: _this value will be 0 if using `--cpu-threshold=-1`_
+the percentage of time spent executing code _inside_ the plug-in over the previous interval
 + MEM _value_ KiB:  
 the total memory currently consumed by the node's plug-in, in Kibibytes
 + interval _value_ seconds:  
