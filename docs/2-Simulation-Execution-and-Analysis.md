@@ -20,7 +20,7 @@ Generic applications may be run in Shadow. The most important required features 
    _NOTE_: [libevent](http://libevent.org/) is also supported through its use of `epoll`.
  + no process forking or thread creation, or a mode that allows the application to run in a single thread
 
-Included with Shadow is a traffic generator plug-in that is capable of modeling generic behaviors represented using an action-dependency graph and the standard graphml xml format.
+Included with Shadow is a traffic generator plug-in that is capable of modeling generic behaviors represented using an action-dependency graph and the standard graphml xml format. More information about customizing behaviors is [also on the wiki]().
 
 Existing plug-ins for Shadow also include [shadow-plugin-tor](https://github.com/shadow/shadow-plugin-tor) for running Tor anonymity networks and [shadow-plugin-bitcoin](https://github.com/shadow/shadow-plugin-bitcoin) for running Bitcoin cryptocurrency networks. Other useful plug-ins exist in the [shadow-plugin-extras repository](https://github.com/shadow/shadow-plugin-extras), including an HTML-compliant web browser and server combo.
 
@@ -28,9 +28,9 @@ To write your own plug-in, start by inspecting the [hello plug-in from the extra
 
 ## Basic functional tests
 
-Shadow provides a virtual system and network that are used by plug-in applications. Fortunately, Shadow already contains a traffic generator application plug-in so you can get started without writing your own. 
+Shadow provides a virtual system and network that are used by plug-in applications. Fortunately, Shadow already contains a traffic generator application ("tgen") so you can get started without writing your own. 
 
-The following example runs 10 clients that each download 10 files from a set of 5 servers over a simple network topology using Shadow's traffic generator plug-in. The example could take a few minutes, and you probably want to redirect the output to a log file:
+The following example runs tgen with 10 clients that each download 10 files from a set of 5 servers over a simple network topology. The example could take a few minutes, and you probably want to redirect the output to a log file:
 
 ```bash
 cd shadow/resource/examples
