@@ -9,7 +9,6 @@ When installing Shadow, the main executable was placed in `/bin` in your install
 The `shadow` binary is capable of appending custom **function interposition** libraries to the `LD_PRELOAD`  environment variable to make it possible to intercept real operating system functions and manage them in the simulation environment. The `shadow` binary also assists with running `valgrind`, mostly for debugging and development purposes. For more information:
 
 ```bash
-shadow --usage
 shadow --help
 ```
 
