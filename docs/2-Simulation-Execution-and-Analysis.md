@@ -25,42 +25,31 @@ The [shadow-plugin-extras repository](https://github.com/shadow/shadow-plugin-ex
 
 ## Basic functional tests
 
-Shadow provides a virtual system and network that are used by plug-in applications. Fortunately, Shadow already contains a traffic generator application plug-in so you can get started without writing your own. The following example runs 10 clients that each download 10 files from a set of 5 servers over a simple toy network topology, using Shadow's traffic generator plug-in. The simulation could take up to a minute, and you probably want to redirect the output to a log file:
+Shadow provides a virtual system and network that are used by plug-in applications. Fortunately, Shadow already contains a traffic generator application plug-in so you can get started without writing your own. 
+
+The following example runs 10 clients that each download 10 files from a set of 5 servers over a simple network topology using Shadow's traffic generator plug-in. The example could take a few minutes, and you probably want to redirect the output to a log file:
 
 ```bash
 cd shadow/resource/examples
-shadow shadow.config.xml > tgen.log
+shadow shadow.config.xml > shadow.log
 ```
-
-### tgen
-
-The `filetransfer` plug-in built-in example will set up 1 file server that will serve `/bin/ls` to 1000 clients 10 times each (for a total of 10,000 transfers). This example will take a few minutes, and you probably want to redirect the output to a log file:
+Once it finishes, you can browse through shadow.log to get a feel for Shadow's logging style and format. For now, we are most interested in lines containing `transfer-complete`, since those represent completed downloads and contain useful timing statistics. The clients should have completed a total of **100** transfers:
 
 ```bash
-shadow --file > filetest.log
+grep -e "transfer-complete" -e "GET" shadow.log | wc -l
 ```
 
-Now you can browse through tgen.log to get a feel for Shadow's logging style and format. More information on logging and analyzing results can be found on [[the analysis page|Analyzing results]].
-
-For now, we are most interested in lines containing `fg-download-complete`, since those represent completed downloads and contain useful timing statistics. Overall, we hope all **10,000** downloads completed:
+We can also look at the transfers from the servers' perspective:
 
 ```bash
-grep "fg-download-complete" filetest.log | wc -l
-```
-
-We can also look at the fileserver statistics:
-
-```bash
-grep "fileserver stats" filetest.log
+grep -e "transfer-complete" -e "PUT" shadow.log | wc -l
 ```
 
 We now need to know more about the configuration process, as this is a major part of running Shadow experiments.
 
-### file transfer, round 2
+## Configuration
 
-The network, node, and application configuration is specified in the `shadow.config.xml` file; the client behavior models (traffic generator configurations) are specified in the `tgen.*.graphml.xml` files.
-
-Shadow requires **XML input files** to configure an experiment. These files are used to describe the structure of the network topology, the network hosts that should be started, and application configuration options for each host. Although static configurations were used for the above examples, customizable examples are also included.
+Shadow requires **XML input files** to configure an experiment. These files are used to describe the structure of the network topology, the network hosts that should be started, and application configuration options for each host. The network, node, and application configuration is specified in the `shadow.config.xml` file; the client behavior models (traffic generator configurations) are specified in the `tgen.*.graphml.xml` files.
 
 Lets take a look at another `filetransfer` example:
 
