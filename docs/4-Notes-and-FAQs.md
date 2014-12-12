@@ -33,6 +33,9 @@ You should then add `/home/${USER}/.local/bin` to your shell setup for the PATH 
 1. #### Why don't the consensus values from a v3bw file for the torflowauthority show up in the directory authority's `cached-consenus` file?  
 Tor currently requires 3 directory authorities to be configured in order to accept values from a v3bw file; otherwise the directory authorities use relays' advertised bandwidth when creating the consensus and the v3bw file entries are ignored.
 
+1. #### How can I build Shadow directly using cmake instead of the setup script?  
+_TODO_
+
 ## Other Notes
 
 ### Debugging
