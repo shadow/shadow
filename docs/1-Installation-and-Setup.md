@@ -58,12 +58,12 @@ shadow --help
 
 ## Setup Notes
 
-+ The `setup` script is a wrapper to `cmake` and `make`. Using `cmake` and `make` directly is also possible, but strongly discouraged.
 + All build output is generated out-of-source, by default to the `./build` directory.
 + Use `./setup build --help` to see all build options; the most useful build options are:  
  + `-g` or `--debug` to build Shadow with debugging symbols
  + `--include` and `--library` if you installed any dependencies somewhere other than `~/.shadow`
  + `--prefix` if you want to install Shadow somewhere besides `~/.shadow`
++ The `setup` script is a wrapper to `cmake` and `make`. Using `cmake` and `make` directly is also possible, but strongly discouraged.
 
 ## System Configs and Limits
 
