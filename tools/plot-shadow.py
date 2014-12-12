@@ -93,7 +93,7 @@ def main():
     args = parser.parse_args()
     shdata, ftdata, tordata = get_data(args.experiments, args.lineformats)
 
-    page = PdfPages("{0}shadowtor.pdf".format(args.prefix+'.' if args.prefix is not None else ''))
+    page = PdfPages("{0}shadow.results.pdf".format(args.prefix+'.' if args.prefix is not None else ''))
     if len(shdata) > 0:
         plot_shadow(shdata, page, direction="recv")
         plot_shadow(shdata, page, direction="send")
