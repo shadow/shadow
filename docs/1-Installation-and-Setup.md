@@ -67,7 +67,7 @@ shadow --help
 
 ## System Configs and Limits
 
-Some Linux system configuration changes are needed to run large-scale Shadow simulations.
+Some Linux system configuration changes are needed to run large-scale Shadow simulations (more than about 1000 nodes).
 
 ### Number of Open Files
 
