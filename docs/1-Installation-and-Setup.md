@@ -5,26 +5,25 @@ Shadow can either be run in a [traditional computing](#Shadow-with-Traditional-C
 ## Installing Dependencies
 
 **Required**:
-* clang, llvm (version >= 3.2)
-* glib (version >= 2.32.0)
-* igraph (version >= 0.5.4)
-* cmake (version >= 2.8.8)
-* make
-* xz-utils
+  + clang, llvm (version >= 3.2)
+  + glib (version >= 2.32.0)
+  + igraph (version >= 0.5.4)
+  + cmake (version >= 2.8.8)
+  + make
+  + xz-utils
 
-**Recommended**:
-* python
-* numpy
-* scipy
-* matplotlib
-* networkx
-* lxml
+**Recommended Python Modules** (for helper/analysis scripts):
+  + python, numpy, scipy, matplotlib, networkx, lxml
+
+**Recommended System Tools**:
+  + git, dstat, screen, htop
 
 **YUM (Fedora):**
 
 ```bash
 sudo yum install -y clang clang-devel llvm llvm-devel glib2 glib2-devel igraph igraph-devel cmake make xz
 sudo yum install -y python numpy scipy python-matplotlib python-networkx python-lxml
+sudo yum install -y git dstat screen htop
 ```
 
 **APT (Ubuntu):**
@@ -32,6 +31,7 @@ sudo yum install -y python numpy scipy python-matplotlib python-networkx python-
 ```bash
 sudo apt-get install -y clang llvm llvm-dev libglib2.0 libglib2.0-dev libigraph0 libigraph0-dev cmake make xz-utils
 sudo apt-get install -y python python-matplotlib python-numpy python-scipy python-networkx python-lxml
+sudo apt-get install -y git dstat screen htop
 ```
 
 ## Shadow Setup
