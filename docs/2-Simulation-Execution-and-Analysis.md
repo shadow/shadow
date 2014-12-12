@@ -20,7 +20,7 @@ Generic applications may be run in Shadow. The most important required features 
    _NOTE_: [libevent](http://libevent.org/) is also supported through its use of `epoll`.
  + no process forking or thread creation, or a mode that allows the application to run in a single thread
 
-Included with Shadow is a traffic generator plug-in that is capable of modeling generic behaviors represented using an action-dependency graph and the standard graphml xml format. This powerful plug-in means different behavior models can be implemented by simply writing a python script to generate new graphml files rather than modifying simulator code or writing new plug-ins. More information about customizing behaviors is [also on the wiki]().
+Included with Shadow is a traffic generator plug-in that is capable of modeling generic behaviors represented using an action-dependency graph and the standard graphml xml format. This powerful plug-in means different behavior models can be implemented by simply writing a python script to generate new graphml files rather than modifying simulator code or writing new plug-ins. More information about customizing behaviors is [also on the wiki](3-Simulation-Customization#Traffic-generator-configuration).
 
 Existing plug-ins for Shadow also include [shadow-plugin-tor](https://github.com/shadow/shadow-plugin-tor) for running Tor anonymity networks and [shadow-plugin-bitcoin](https://github.com/shadow/shadow-plugin-bitcoin) for running Bitcoin cryptocurrency networks. Other useful plug-ins exist in the [shadow-plugin-extras repository](https://github.com/shadow/shadow-plugin-extras), including an HTML-supported web browser and server combo.
 
@@ -67,7 +67,7 @@ Shadow requires an XML file. Shadow parses the file and create the internal repr
 
 Shadow includes a **pre-built topology file** installed to `~/.shadow/share/topology.graphml.xml` (or `your/prefix/share`). You may modify `shadow.config.xml` to use the path to `~/.shadow/share/topology.graphml.xml` instead of embedding a topology as is done in `resource/examples/shadow.config.xml`.
 
-You may want to customize the topology **vertices** and **edges** to include your own network characteristics. The format of all of the attributes and acceptable values for the topology is described on the [[Topology format]] page.
+You may want to customize the topology **vertices** and **edges** to include your own network characteristics. The format of all of the attributes and acceptable values for the topology is described on the [network configuration](3-Simulation-Customization#Network-configuration) page.
 
 ## The log file
 
