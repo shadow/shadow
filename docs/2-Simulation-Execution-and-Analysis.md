@@ -33,7 +33,7 @@ Shadow provides a virtual system and network that are used by plug-in applicatio
 The following example runs tgen with 10 clients that each download 10 files from a set of 5 servers over a simple network topology. The example could take a few minutes, and you probably want to redirect the output to a log file:
 
 ```bash
-cd shadow/resource/examples
+cd resource/examples
 shadow shadow.config.xml > shadow.log
 ```
 Once it finishes, you can browse through shadow.log to get a feel for Shadow's logging style and format. For now, we are most interested in lines containing `transfer-complete`, since those represent completed downloads and contain useful timing statistics. The clients should have completed a total of **100** transfers:
@@ -59,13 +59,13 @@ Shadow requires **XML input files** to configure an experiment. These files are 
 Lets take a look at another `tgen` example:
 
 ```bash
-cd shadow/resource/examples
+cd resource/examples
 shadow shadow.config.xml > shadow.log
 ```
 
 Shadow requires an XML file. Shadow parses the file and create the internal representation of the network, loads the plug-ins, and generates the virtual hosts. You should examine these files and understand how they are used. For example, you might try changing the quantity of clients, or the bandwidth of the network vertices or the latency of the network edges to see how download times are affected.
 
-Shadow includes a **pre-built topology file** installed to `~/.shadow/share/topology.graphml.xml` (or `your/prefix/share`). You may modify `shadow.config.xml` to use the path to `~/.shadow/share/topology.graphml.xml` instead of embedding a topology as is done in `shadow/resource/examples/shadow.config.xml`.
+Shadow includes a **pre-built topology file** installed to `~/.shadow/share/topology.graphml.xml` (or `your/prefix/share`). You may modify `shadow.config.xml` to use the path to `~/.shadow/share/topology.graphml.xml` instead of embedding a topology as is done in `resource/examples/shadow.config.xml`.
 
 You may want to customize the topology **vertices** and **edges** to include your own network characteristics. The format of all of the attributes and acceptable values for the topology is described on the [[Topology format]] page.
 
@@ -84,7 +84,7 @@ the ID of the worker thread that generated the message
 + _virtual-time_:  
 the simulated time since the start of the experiment, represented as `hours:minutes:seconds:nanoseconds`
 + _logdomain_:  
-either `shadow` or the name of one of the plug-ins as specified in the _id_ tag of the _plugin_ element in the XML file (e.g., `scallion`, `filetransfer`, `echoplugin`, `torrent`, `browser`)
+either `shadow` or the name of one of the plug-ins as specified in the _id_ tag of the _plugin_ element in the XML file (e.g., `tgen`, `tor`, `bitcoin`)
 + _loglevel_:  
 one of `error` < `critical` < `warning` < `message` < `info` < `debug`, in that order
 + _hostname_:  
@@ -127,35 +127,34 @@ Shadow includes a python script `tools/parse-shadow.py` that can parse a log fil
 
 ```bash
 python parse-shadow.py --help
+python plot-shadow.py --help
 python parse-shadow.py --prefix results shadow.log
 python plot-shadow.py --data results "example-plots"
 ```
 
-**NOTE**: _the analyze.py script requires some python modules, most notably the `pylab` module_
+Then open the PDF file that was created. Note that these scripts may require some additional python modules.
 
-## examples
+## Example experiment
 
-Here are some quick examples of how to use the `analyze.py` script.
-
-### filetransfer
 Consider a set of experiments where we would like to analyze the effect of changing the size of our nodes' network interface receive buffer. We run the following 2 experiments:
 
 ```bash
-shadow --tcp-windows=1 --file > window1.log
-shadow --tcp-windows=1000 --file > window1000.log
+cd resource/examples/
+shadow --tcp-windows=1 shadow.config.xml > window1.log
+shadow --tcp-windows=1000 shadow.config.xml > window1000.log
 ```
 
-To parse these log files, we use the `contrib/analyze.py` script as follows:
+To parse these log files, we use the `parse-shadow.py` script as follows:
 
 ```bash
-python contrib/analyze.py parse --cutoff=0 --output=window1 window1.log
-python contrib/analyze.py parse --cutoff=0 --output=window1000 window1000.log
+python ../../tools/parse-shadow.py --prefix=window1 window1.log
+python contrib/analyze.py parse --prefix=window1000 window1000.log
 ```
 
-Each of the directories `window1/` and `window1000/` now contain data statistics files extracted from the log files. We can now combine and visualize these results by plotting them with pylab:
+Each of the directories `window1/` and `window1000/` now contain data statistics files extracted from the log files. We can now combine and visualize these results with the `parse-shadow.py` script:
 
 ```bash
-python contrib/analyze.py plot --title "Shadow TCP Window Test" --prefix "window" --data window1/ "1 packet" --data window1000/ "1000 packets"
+python ../../tools/plot-shadow.py --prefix "window" --data window1/ "1 packet" --data window1000/ "1000 packets"
 ```
 
-See any of the graphs in `./graphs`, or if you have `pdftk` installed, you can simply view the `window-combined.pdf` file.
+Then open the PDF file that was created.
