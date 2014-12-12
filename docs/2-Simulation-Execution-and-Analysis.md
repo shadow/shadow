@@ -65,16 +65,16 @@ shadow shadow.config.xml > shadow.log
 
 Shadow requires an XML file. Shadow parses the file and create the internal representation of the network, loads the plug-ins, and generates the virtual hosts. You should examine these files and understand how they are used. For example, you might try changing the quantity of clients, or the bandwidth of the network vertices or the latency of the network edges to see how download times are affected.
 
-Shadow includes a **pre-built topology file** installed to `~/.shadow/share/topology.graphml.xml` (or `your/prefix/share`). It contains **vertices** and **edges** as specified in the [[Topology Format]]. You may modify `shadow.config.xml` to use the path to `~/.shadow/share/topology.graphml.xml` instead of embedding a topology as is done in `shadow/resource/examples/shadow.config.xml`.
+Shadow includes a **pre-built topology file** installed to `~/.shadow/share/topology.graphml.xml` (or `your/prefix/share`). You may modify `shadow.config.xml` to use the path to `~/.shadow/share/topology.graphml.xml` instead of embedding a topology as is done in `shadow/resource/examples/shadow.config.xml`.
 
-You may want to customize your own network characteristics. The format of all of the attributes and acceptable values for the topology is described on the [[Topology format]] page.
+You may want to customize the topology **vertices** and **edges** to include your own network characteristics. The format of all of the attributes and acceptable values for the topology is described on the [[Topology format]] page.
 
 ## The log file
 
 Shadow produces log messages in the following format:
 
 ```text
-real-time [thread-id] virtual-time [logdomain-loglevel] [hostname-ip] [function-name] MESSAGE
+real-time [thread-id] virtual-time [logdomain-loglevel] [hostname~ip] [function-name] MESSAGE
 ```
 
 + _real-time_:  
