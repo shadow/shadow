@@ -20,7 +20,7 @@ Generic applications may be run in Shadow. The most important required features 
    _NOTE_: [libevent](http://libevent.org/) is also supported through its use of `epoll`.
  + no process forking or thread creation, or a mode that allows the application to run in a single thread
 
-Included with Shadow is a traffic generator plug-in that is capable of modeling generic behaviors represented using an action-dependency graph and the standard graphml xml format. More information about customizing behaviors is [also on the wiki]().
+Included with Shadow is a traffic generator plug-in that is capable of modeling generic behaviors represented using an action-dependency graph and the standard graphml xml format. This powerful plug-in means different behavior models can be implemented by simply writing a python script to generate new graphml files rather than modifying simulator code or writing new plug-ins. More information about customizing behaviors is [also on the wiki]().
 
 Existing plug-ins for Shadow also include [shadow-plugin-tor](https://github.com/shadow/shadow-plugin-tor) for running Tor anonymity networks and [shadow-plugin-bitcoin](https://github.com/shadow/shadow-plugin-bitcoin) for running Bitcoin cryptocurrency networks. Other useful plug-ins exist in the [shadow-plugin-extras repository](https://github.com/shadow/shadow-plugin-extras), including an HTML-supported web browser and server combo.
 
@@ -39,13 +39,15 @@ shadow shadow.config.xml > shadow.log
 Once it finishes, you can browse through shadow.log to get a feel for Shadow's logging style and format. For now, we are most interested in lines containing `transfer-complete`, since those represent completed downloads and contain useful timing statistics. The clients should have completed a total of **100** transfers:
 
 ```bash
-cat shadow.log | grep "transfer-complete" | grep "GET" | wc -l
+cat shadow.log | grep "transfer-complete" | grep "GET" > clients.log
+cat clients.log | wc -l
 ```
 
 We can also look at the transfers from the servers' perspective:
 
 ```bash
-cat shadow.log | grep "transfer-complete" | grep "PUT" | wc -l
+cat shadow.log | grep "transfer-complete" | grep "PUT" > servers.log
+cat servers.log | wc -l
 ```
 
 We now need to know more about the configuration process, as this is a major part of running Shadow experiments.
@@ -54,26 +56,20 @@ We now need to know more about the configuration process, as this is a major par
 
 Shadow requires **XML input files** to configure an experiment. These files are used to describe the structure of the network topology, the network hosts that should be started, and application configuration options for each host. The network, node, and application configuration is specified in the `shadow.config.xml` file; the client behavior models (traffic generator configurations) are specified in the `tgen.*.graphml.xml` files.
 
-Lets take a look at another `filetransfer` example:
+Lets take a look at another `tgen` example:
 
 ```bash
-cd resource/examples/filetransfer/
-shadow shadow.config.xml
+cd shadow/resource/examples
+shadow shadow.config.xml > shadow.log
 ```
 
-Shadow requires at least one XML file, and accepts additional files. Shadow parses these files to create the internal representation of the network, plug-ins, and hosts. You should examine these files and understand how they are used. For example, you might try changing the quantity of clients, or the bandwidth of the network vertices or the latency of the network edges to see how download times are affected.
+Shadow requires an XML file. Shadow parses the file and create the internal representation of the network, loads the plug-ins, and generates the virtual hosts. You should examine these files and understand how they are used. For example, you might try changing the quantity of clients, or the bandwidth of the network vertices or the latency of the network edges to see how download times are affected.
 
-Although you may want to configure your own network characteristics, Shadow already includes an extensive **pre-built topology file** installed to `~/.shadow/share/topology.graphml.xml` (or `your/prefix/share`). It contains **vertices** and **edges** as specified in the [[Topology Format]].
+Shadow includes a **pre-built topology file** installed to `~/.shadow/share/topology.graphml.xml` (or `your/prefix/share`). It contains **vertices** and **edges** as specified in the [[Topology Format]]. You may modify `shadow.config.xml` to use the path to `~/.shadow/share/topology.graphml.xml` instead of embedding a topology as is done in `shadow/resource/examples/shadow.config.xml`.
 
-You may modify `shadow.config.xml` to use the path to `~/.shadow/share/topology.graphml.xml` instead of embedding a topology as is done in `resource/examples/filetransfer/shadow.config.xml`.
+You may want to customize your own network characteristics. The format of all of the attributes and acceptable values for the topology is described on the [[Topology format]] page.
 
-The format of all the attributes and acceptable values for the topology is described on the [[Topology format]] page.
-
-# analyze
-
-This section discusses the format of Shadow's log files, and how to analyze the results contained therein.
-
-## the log file
+## The log file
 
 Shadow produces log messages in the following format:
 
@@ -102,11 +98,10 @@ the name of the function logging the message
 the actual message to be logged
 
 By default, Shadow only prints plug-in and core messages at or below the `message` log level. This behavior can be changed using the Shadow option `-l` or `--log-level`.  
-**NOTE**: _in addition to Shadow's log level, Scallion experiments should also change Tor's log level in the *torrc files if lower level Tor messages are desired_
 
-## gathering statistics
+## Gathering statistics
 
-Shadow includes a heartbeat message that contains some useful system information for each virtual node in the experiment. This information is contained in messages containing the string `shadow-heartbeat` and includes:
+Shadow logs heartbeat messages that contain useful system information for each virtual node in the experiment, in messages containing the string `shadow-heartbeat`:
 
 + CPU _value_ %:  
 the percentage of time spent executing code _inside_ the plug-in over the previous interval  
@@ -124,21 +119,18 @@ the amount of network data received in the last interval, in Bytes
 + Tx _value_ B:  
 the amount of network data sent in the last interval, in Bytes
 
-These heartbeats are logged at the `message` level every `60` seconds by default.  The heartbeat log level can be changed with the option `-g` or `--stat-log-level` and the heartbeat interval set with the option `-h` or `--stat-interval`.
+These heartbeats are logged at the `message` level every `60` seconds by default. The heartbeat log level can be changed with the option `-g` or `--stat-log-level` and the heartbeat interval set with the option `-h` or `--stat-interval`.
 
-Each plug-in also generally prints useful statistics, such as file download size and timing information. See the plug-in usage pages for an explanation of what each provides.
+Each plug-in also generally logs useful statistics, such as file download size and timing information. This information can be parsed from the Shadow log file.
 
-## parsing and plotting results
+## Parsing and plotting results
 
-Shadow includes a python script `contrib/analyze.py` that can parse a log file and extract these important statistics. This script can also plot the results using python's pylab module.
+Shadow includes a python script `tools/parse-shadow.py` that can parse a log file and extract some important statistics, including network throughput over time, client download statistics, and client load statistics (some of these are gathered from plug-in log messages). The data from the files produced by the script can then be visualized using the `tools/plot-shadow.py` script.
 
-The script is meant to be generic enough to parse any Shadow output and extract whatever information it knows about. This includes network throughput over time, client download statistics, and client load statistics (some of these are gathered from plug-in log messages).
-
-For more information:
 ```bash
-python contrib/analyze.py --help
-python contrib/analyze.py parse --help
-python contrib/analyze.py plot --help
+python parse-shadow.py --help
+python parse-shadow.py --prefix results shadow.log
+python plot-shadow.py --data results "example-plots"
 ```
 
 **NOTE**: _the analyze.py script requires some python modules, most notably the `pylab` module_
