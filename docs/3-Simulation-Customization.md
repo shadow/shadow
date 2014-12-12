@@ -140,6 +140,6 @@ _TODO_
 
 _TODO_
 
-### Generating new generator behaviors
+### Customizing generator behaviors
 
 _TODO_
