@@ -1,21 +1,19 @@
 So you've got Shadow installed and your machine configured. Its time to see what Shadow can do!
 
-## logistical crash course
+## Logistics
 
-Before getting started, there are a couple of important points to be aware of. When installing Shadow, the following two main executables were placed in `/bin` in your install prefix (`~/.shadow/bin` by default). As a reminder, it would be helpful if this location was included in your environment `PATH`.
+When installing Shadow, the main executable was placed in `/bin` in your install prefix (`~/.shadow/bin` by default). As a reminder, it would be helpful if this location was included in your environment `PATH`.
 
-`shadow-bin` is the main Shadow binary. It contains most of the simulator's code, including events and the event engine, the network stack, and the routing topology configuration.
+`shadow` is the main Shadow binary executable. It contains most of the simulator's code, including events and the event engine, the network stack, and the routing topology configuration.
 
-`shadow` is a python wrapper to `shadow-bin` and is used to set some environmental variables that are required to run the simulator. In particular, it sets `LD_PRELOAD` to our custom _function interposition_ library that makes it possible to intercept real operating system functions and manage them in the simulation environment. The `shadow` script also assists with running `valgrind`, mostly for debugging and development purposes.
-
-For our purposes, we need only concern ourselves with the `shadow` script, as all unknown arguments are passed to `shadow-bin`. For more information:
+The `shadow` binary is capable of appending custom _function interposition_ libraries to the `LD_PRELOAD`  environment variable to make it possible to intercept real operating system functions and manage them in the simulation environment. The `shadow` binary also assists with running `valgrind`, mostly for debugging and development purposes. For more information:
 
 ```bash
 shadow --usage
 shadow --help
 ```
 
-## plug-ins in shadow
+## Shadow plug-ins
 
 Generic applications may be run in Shadow. The most important required features of the application code to enable this are:
  + completely non-blocking I/O and non-blocking system calls
@@ -25,11 +23,11 @@ Generic applications may be run in Shadow. The most important required features 
 
 The [shadow-plugin-extras repository](https://github.com/shadow/shadow-plugin-extras) contains a useful basic "hello world" example that illustrates how a program running outside of Shadow may also be run inside of Shadow. The example provides useful comments and a general structure that will be useful to understand when writing your own plug-ins.
 
-## performing some basic functional tests
+## Basic functional tests
 
-Shadow provides a virtual system and network that are used by plug-in applications. Fortunately, Shadow already contains several application plug-ins so you can get started without writing your own. Basic functionalities are tested using some static configurations of these plug-ins that are included in `shadow-bin`. Let's start by running those and make sure thing are working as they should.
+Shadow provides a virtual system and network that are used by plug-in applications. Fortunately, Shadow already contains a traffic generator application plug-in so you can get started without writing your own. Let's start by running a basic test and make sure things are working as they should.
 
-### file transfer
+### tgen
 
 The `filetransfer` plug-in built-in example will set up 1 file server that will serve `/bin/ls` to 1000 clients 10 times each (for a total of 10,000 transfers). This example will take a few minutes, and you probably want to redirect the output to a log file:
 
