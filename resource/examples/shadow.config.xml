@@ -28,15 +28,15 @@
   </graph>
 </graphml>
 ]]></topology>
-  <kill time="600"/>
+  <kill time="1200"/>
   <plugin id="tgen" path="~/.shadow/plugins/libshadow-plugin-tgen.so"/>
   <node id="server" quantity="5">
     <application plugin="tgen" starttime="1" arguments="tgen.server.graphml.xml"/>
   </node>
-  <node id="webclient">
+  <node id="webclient" quantity="5">
     <application plugin="tgen" starttime="2" arguments="tgen.webclient.graphml.xml"/>
   </node>
-  <node id="bulkclient">
+  <node id="bulkclient" quantity="5">
     <application plugin="tgen" starttime="2" arguments="tgen.bulkclient.graphml.xml"/>
   </node>
 </shadow>
