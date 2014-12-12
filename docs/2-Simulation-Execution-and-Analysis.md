@@ -36,13 +36,13 @@ shadow shadow.config.xml > shadow.log
 Once it finishes, you can browse through shadow.log to get a feel for Shadow's logging style and format. For now, we are most interested in lines containing `transfer-complete`, since those represent completed downloads and contain useful timing statistics. The clients should have completed a total of **100** transfers:
 
 ```bash
-grep -e "transfer-complete" -e "GET" shadow.log | wc -l
+cat shadow.log | grep "transfer-complete" | grep "GET" | wc -l
 ```
 
 We can also look at the transfers from the servers' perspective:
 
 ```bash
-grep -e "transfer-complete" -e "PUT" shadow.log | wc -l
+cat shadow.log | grep "transfer-complete" | grep "PUT" | wc -l
 ```
 
 We now need to know more about the configuration process, as this is a major part of running Shadow experiments.
