@@ -142,7 +142,7 @@ https://www.kernel.org/doc/Documentation/sysctl/vm.txt
 Amazon’s [Elastic Compute Cloud (EC2)](http://aws.amazon.com/ec2/) infrastructure provides a simple and relatively [cost-efficient](http://aws.amazon.com/ec2/#pricing) way to run large-scale Shadow experiments without the need to buy expensive hardware or manage complex configurations. You can get started running Shadow experiments on EC2 in minutes using our pre-configured public EC2 AMI, which has already been set up to run Shadow.
 
 1. Sign up for [Amazon EC2 access](https://aws-portal.amazon.com/gp/aws/developer/registration)
-1. Launch an instance using our pre-installed and configured [Shadow-cloud AMI (ami-0f70c366)](https://console.aws.amazon.com/ec2/home?region=us-east-1#launchAmi=ami-0f70c366) based on Ubuntu-12.04 LTS
+1. Launch an instance using our pre-installed and configured [Shadow-cloud AMI (ami-0f70c366)](https://console.aws.amazon.com/ec2/home?region=us-east-1#launchAmi=ami-0f70c366) based on Ubuntu LTS releases
 1. Follow the New Instance Wizard
    + the **instance type** you’ll need depends on what size Shadow network you’ll want to simulate (see [the shadow-plugin-tor wiki](https://github.com/shadow/shadow-plugin-tor) for scalability estimates)
    + create and download a new **keypair** if you don’t already have one, since you’ll need it for SSH access
