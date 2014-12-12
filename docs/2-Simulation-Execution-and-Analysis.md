@@ -20,7 +20,11 @@ Generic applications may be run in Shadow. The most important required features 
    _NOTE_: [libevent](http://libevent.org/) is also supported through its use of `epoll`.
  + no process forking or thread creation, or a mode that allows the application to run in a single thread
 
-The [shadow-plugin-extras repository](https://github.com/shadow/shadow-plugin-extras) contains a useful basic "hello world" example that illustrates how a program running outside of Shadow may also be run inside of Shadow. The example provides useful comments and a general structure that will be useful to understand when writing your own plug-ins.
+Included with Shadow is a traffic generator plug-in that is capable of modeling generic behaviors represented using an action-dependency graph and the standard graphml xml format.
+
+Existing plug-ins for Shadow also include [shadow-plugin-tor](https://github.com/shadow/shadow-plugin-tor) for running Tor anonymity networks and [shadow-plugin-bitcoin](https://github.com/shadow/shadow-plugin-bitcoin) for running Bitcoin cryptocurrency networks. Other useful plug-ins exist in the [shadow-plugin-extras repository](https://github.com/shadow/shadow-plugin-extras), including an HTML-compliant web browser and server combo.
+
+To write your own plug-in, start by inspecting the [hello plug-in from the extras repository](https://github.com/shadow/shadow-plugin-extras/tree/master/hello): it contains a useful basic "hello world" example that illustrates how a program running outside of Shadow may also be run inside of Shadow. The example provides useful comments and a general structure that will be useful to understand when writing your own plug-ins.
 
 ## Basic functional tests
 
