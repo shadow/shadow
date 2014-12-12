@@ -83,7 +83,7 @@ That tells you:
 You will want to raise the limits by modifying `/etc/security/limits.conf` and rebooting.
 For example, to handle all our network configurations on EC2, I use:
 
-```txt
+```
 * soft nofile 25000
 * hard nofile 25000
 ```
