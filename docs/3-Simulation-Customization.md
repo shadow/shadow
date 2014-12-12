@@ -1,4 +1,4 @@
-## Shadow Application Configuration
+## Shadow configuration
 
 Shadow uses a standard XML format to accept configuration options from users, and uses [GLib's XML parser](https://developer.gnome.org/glib/stable/glib-Simple-XML-Subset-Parser.html) to parse the simple structure. Examples of a Shadow configuration file, `shadow.config.xml`, are distributed with the release. The following describes valid XML elements and attributes that Shadow will accept from a `shadow.config.xml` file and that can be used to customize a simulation.
 
@@ -71,7 +71,7 @@ The _application_ element represents an application the node will run. The _plug
 
 The _arguments_ attribute should be set to a string holding the required plug-in arguments. This string will be passed to the plug-in in an `argv`-style array, similar to how arguments are passed to the main function in a `C` program. Please see the plug-in documentation for usage and format of the argument string.
 
-## Network Topology Configuration
+## Network configuration
 
 Shadow uses a graphml format to represent a network topology. The python module [networkx](http://networkx.github.io/) can be used to manipulate such a format. Shadow is distributed with some graphml topology files that were generated using data from a variety of sources, including [Net Index](http://www.netindex.com/), and [CAIDA](http://www.caida.org/). Because the topology is represented in a standard graphml format, it is easy to swap out specific measurements of latency, jitter, packetloss, etc, if desired.
 
@@ -127,3 +127,19 @@ The following is an example of a properly-formed graphml file for Shadow:
   </graph>
 </graphml>
 ```
+
+### Generating new topologies
+
+_TODO_
+
+## Traffic generator configuration
+
+_TODO_
+
+### Action-dependency graph format
+
+_TODO_
+
+### Generating new generator behaviors
+
+_TODO_
