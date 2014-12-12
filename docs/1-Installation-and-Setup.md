@@ -49,6 +49,13 @@ You should add `/home/${USER}/.shadow/bin` to your shell setup for the PATH envi
 echo "export PATH=${PATH}:/home/${USER}/.shadow/bin" >> ~/.bashrc && bash
 ```
 
+Check that Shadow is installed and runs:
+
+```bash
+shadow --version
+shadow --help
+```
+
 ## Setup Notes
 
 + The `setup` script is a wrapper to `cmake` and `make`. Using `cmake` and `make` directly is also possible, but strongly discouraged.
