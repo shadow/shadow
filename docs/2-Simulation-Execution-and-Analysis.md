@@ -25,7 +25,12 @@ The [shadow-plugin-extras repository](https://github.com/shadow/shadow-plugin-ex
 
 ## Basic functional tests
 
-Shadow provides a virtual system and network that are used by plug-in applications. Fortunately, Shadow already contains a traffic generator application plug-in so you can get started without writing your own. Let's start by running a basic test and make sure things are working as they should.
+Shadow provides a virtual system and network that are used by plug-in applications. Fortunately, Shadow already contains a traffic generator application plug-in so you can get started without writing your own. The following example runs 10 clients that each download 10 files from a set of 5 servers over a simple toy network topology, using Shadow's traffic generator plug-in. The simulation could take up to a minute, and you probably want to redirect the output to a log file:
+
+```bash
+cd shadow/resource/examples
+shadow shadow.config.xml > tgen.log
+```
 
 ### tgen
 
@@ -35,7 +40,7 @@ The `filetransfer` plug-in built-in example will set up 1 file server that will 
 shadow --file > filetest.log
 ```
 
-Now you can browse through filetest.log to get a feel for Shadow's logging style and format. More information on logging and analyzing results can be found on [[the analysis page|Analyzing results]].
+Now you can browse through tgen.log to get a feel for Shadow's logging style and format. More information on logging and analyzing results can be found on [[the analysis page|Analyzing results]].
 
 For now, we are most interested in lines containing `fg-download-complete`, since those represent completed downloads and contain useful timing statistics. Overall, we hope all **10,000** downloads completed:
 
@@ -52,6 +57,8 @@ grep "fileserver stats" filetest.log
 We now need to know more about the configuration process, as this is a major part of running Shadow experiments.
 
 ### file transfer, round 2
+
+The network, node, and application configuration is specified in the `shadow.config.xml` file; the client behavior models (traffic generator configurations) are specified in the `tgen.*.graphml.xml` files.
 
 Shadow requires **XML input files** to configure an experiment. These files are used to describe the structure of the network topology, the network hosts that should be started, and application configuration options for each host. Although static configurations were used for the above examples, customizable examples are also included.
 
