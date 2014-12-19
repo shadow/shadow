@@ -146,56 +146,47 @@ The following are valid **actions** and **parameters** (all parameters are curre
 
 The **start action is required** for all tgen graph files, and **only one start action is allowed**.
 
-**Required attributes:**
+**attributes:**
 
-  + _serverport_: the local port that will be opened to listen for other tgen connections
-
-**Optional attributes:**
-
-  + _time_: the number of seconds that the tgen node should delay before starting a walk through the action graph
-  + _socksproxy_: a peer (`ip:port`, e.g., `127.0.0.1:9051`) to use as a proxy server through which all connections to other tgen peers will be made
-
-**Special attributes:**
-
-  + _peers_: a list of peers (`ip1:port1,ip2:port21`, e.g., `192.168.1.100:8888,192.168.1.101:8888`) to use for transfers that do not explicitly specify a peer. The _peers_ attribute is optional, only if all transfers specify a _peers_ attribute.
+  + _serverport_ <required>: the local port that will be opened to listen for other tgen connections
+  + _time_ <optional>: the number of seconds that the tgen node should delay before starting a walk through the action graph
+  + _socksproxy_ <optional>: a peer (`ip:port`, e.g., `127.0.0.1:9051`) to use as a proxy server through which all connections to other tgen peers will be made
+  + _peers_ <special>: a list of peers (`ip1:port1,ip2:port21`, e.g., `192.168.1.100:8888,192.168.1.101:8888`) to use for transfers that do not explicitly specify a peer. The _peers_ attribute is optional, only if all transfers specify a _peers_ attribute.
 
 #### transfer
 
 Transfer actions are optional.
 
-**Required attributes:**
+**attributes:**
 
-  + _type_: type of transfer: "get" to download or "put" to upload
-  + _protocol_: protocol to use for this transfer (only "tcp" is supported)
-  + _size_: amount of data to transfer (e.g., "5", or "5 suffix" where suffix is case in-sensitive and one of: kb, mb, gb, tb, kib, mib, gib, tib)
-
-**Special attributes:**
-
-  + _peers_: a list of peers (`ip1:port1,ip2:port21`, e.g., `192.168.1.100:8888,192.168.1.101:8888`) to use for this transfer. The _peers_ attribute is optional, only if a _peers_ attribute is specified in the start action. A peer will be selected at random from this list, or at random from the start action list if this attribute is not specified for a transfer.
+  + _type_ <required>: type of transfer: "get" to download or "put" to upload
+  + _protocol_ <required>: protocol to use for this transfer (only "tcp" is supported)
+  + _size_ <required>: amount of data to transfer (e.g., "5", or "5 suffix" where suffix is case in-sensitive and one of: kb, mb, gb, tb, kib, mib, gib, tib)
+  + _peers_ <special>: a list of peers (`ip1:port1,ip2:port21`, e.g., `192.168.1.100:8888,192.168.1.101:8888`) to use for this transfer. The _peers_ attribute is optional, only if a _peers_ attribute is specified in the start action. A peer will be selected at random from this list, or at random from the start action list if this attribute is not specified for a transfer.
 
 #### synchronize
 
 Synchronize actions are optional. The synchronize action will pause a walk until the vertex has been visited by all incoming edges. At that point, a walk will continue from this action to each outgoing edge.
 
-**NOTE: this action is not currently implemented**
+**NOTE: the synchronize action is not currently implemented**
 
 #### pause
 
 Pause actions are optional.
 
-**Required attributes:**
+**attributes:**
 
-  + _time_: the number of seconds that the tgen node should pause before resuming the walk through the action graph.
+  + _time_ <required>: the number of seconds that the tgen node should pause before resuming the walk through the action graph.
 
 #### end
 
 End actions are optional. The parameters represent termination conditions: if any of the conditions are met upon arriving at an end action vertex, the tgen node will stop and shutdown.
 
-**Optional attributes:**
+**attributes:**
 
-  + _time_: the number of seconds since the node started
-  + _count_: the number of transfer completed by this node
-  + _size_:  the total amount of data transferred (read+write) by this node
+  + _time_ <optional>: the number of seconds since the node started
+  + _count_ <optional>: the number of transfer completed by this node
+  + _size_ <optional>:  the total amount of data transferred (read+write) by this node
 
 ### Customizing generator behaviors
 
