@@ -13,15 +13,22 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdarg.h>
+#include <string.h>
+#include <sys/un.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <arpa/inet.h>
 #include <sys/epoll.h>
+#include <sys/timerfd.h>
 #include <errno.h>
 #include <math.h>
 
 #include "shd-config.h"
+
+// TODO put into a shd-types.h file
+typedef struct _Process Process;
 
 /**
  * @mainpage Shadow Documentation
@@ -60,9 +67,9 @@
 #include "support/shd-parser.h"
 #include "host/shd-packet.h"
 #include "host/shd-cpu.h"
+#include "support/shd-pcap-writer.h"
 
 /* utilities with limited dependencies */
-#include "utility/shd-cdf.h"
 #include "utility/shd-byte-queue.h"
 #include "utility/shd-priority-queue.h"
 #include "utility/shd-async-priority-queue.h"
@@ -70,14 +77,15 @@
 #include "utility/shd-random.h"
 
 #include "support/shd-event-queue.h"
-#include "plugins/shd-library.h"
-#include "support/shd-plugin.h"
+#include "plugin/shd-library.h"
+#include "interpose/shd-program.h"
 
 #include "topology/shd-address.h"
 #include "topology/shd-dns.h"
 #include "topology/shd-path.h"
 
 #include "host/descriptor/shd-epoll.h"
+#include "host/descriptor/shd-timer.h"
 #include "host/descriptor/shd-transport.h"
 #include "host/descriptor/shd-channel.h"
 #include "host/descriptor/shd-socket.h"
@@ -88,10 +96,10 @@
 #include "host/descriptor/shd-tcp-cubic.h"
 #include "host/descriptor/shd-tcp-scoreboard.h"
 #include "host/descriptor/shd-udp.h"
-#include "host/shd-application.h"
+#include "host/shd-thread.h"
+#include "host/shd-process.h"
 #include "host/shd-network-interface.h"
 #include "host/shd-tracker.h"
-#include "support/shd-system.h"
 #include "host/shd-host.h"
 
 #include "topology/shd-topology.h"
@@ -108,9 +116,7 @@
 #include "runnable/event/shd-tcp-close-timer-expired.h"
 #include "runnable/event/shd-tcp-retransmit-timer-expired.h"
 #include "runnable/action/shd-create-node.h"
-#include "runnable/action/shd-generate-cdf.h"
 #include "runnable/action/shd-kill-engine.h"
-#include "runnable/action/shd-load-cdf.h"
 #include "runnable/action/shd-load-plugin.h"
 #include "runnable/action/shd-load-topology.h"
 

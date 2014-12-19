@@ -108,16 +108,9 @@ typedef guint ShadowID;
 #endif
 
 /**
- * We intercept read, write, and close calls since they may be done on our
- * virtual descriptors. However, applications may also want to read/write/close
- * a regular file. We differentiate these by handing out high descriptors.
- * Any descriptor below this cutoff can be considered a real file.
- *
- * It is important to set this high enough so in large simulations the system
- * file descriptor counter doesn't collide with our sockets. So this should be
- * set at least over the ulimit -n value.
+ * The minimum file descriptor shadow returns to the plugin.
  */
-#define MIN_DESCRIPTOR 1000000
+#define MIN_DESCRIPTOR 10
 
 /**
  * The start of our random port range in host order, used if application doesn't
@@ -220,38 +213,43 @@ typedef guint ShadowID;
 typedef struct _Configuration Configuration;
 
 struct _Configuration {
-	GOptionContext *context;
+    GOptionContext *context;
 
-	GOptionGroup* mainOptionGroup;
-	gchar* logLevelInput;
-	gint nWorkerThreads;
-	guint randomSeed;
-	gboolean printSoftwareVersion;
-	guint heartbeatInterval;
-	gchar* heartbeatLogLevelInput;
-	gchar* heartbeatLogInfo;
+    gchar* argstr;
 
-	GOptionGroup* networkOptionGroup;
-	gint cpuThreshold;
-	gint cpuPrecision;
-	gint minRunAhead;
-	gint initialTCPWindow;
-	gint interfaceBufferSize;
-	gint initialSocketReceiveBufferSize;
-	gint initialSocketSendBufferSize;
-	gboolean autotuneSocketReceiveBuffer;
-	gboolean autotuneSocketSendBuffer;
-	gchar* interfaceQueuingDiscipline;
-	SimulationTime interfaceBatchTime;
-	gchar* tcpCongestionControl;
-	gint tcpSlowStartThreshold;
+    GOptionGroup* mainOptionGroup;
+    gchar* logLevelInput;
+    gint nWorkerThreads;
+    guint randomSeed;
+    gboolean printSoftwareVersion;
+    guint heartbeatInterval;
+    gchar* heartbeatLogLevelInput;
+    gchar* heartbeatLogInfo;
+    gchar* preloads;
+    gboolean runValgrind;
+    gboolean debug;
 
-	GOptionGroup* pluginsOptionGroup;
-	gboolean runFileExample;
+    GOptionGroup* networkOptionGroup;
+    gint cpuThreshold;
+    gint cpuPrecision;
+    gint minRunAhead;
+    gint initialTCPWindow;
+    gint interfaceBufferSize;
+    gint initialSocketReceiveBufferSize;
+    gint initialSocketSendBufferSize;
+    gboolean autotuneSocketReceiveBuffer;
+    gboolean autotuneSocketSendBuffer;
+    gchar* interfaceQueuingDiscipline;
+    SimulationTime interfaceBatchTime;
+    gchar* tcpCongestionControl;
+    gint tcpSlowStartThreshold;
 
-	GQueue* inputXMLFilenames;
+    GOptionGroup* pluginsOptionGroup;
+    gboolean runTGenExample;
 
-	MAGIC_DECLARE;
+    GQueue* inputXMLFilenames;
+
+    MAGIC_DECLARE;
 };
 
 /**

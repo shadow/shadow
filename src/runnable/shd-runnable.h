@@ -21,9 +21,9 @@ typedef void (*RunnableFreeFunc)(Runnable* r);
  * callable functions.
  */
 struct _RunnableFunctionTable {
-	RunnableRunFunc run;
-	RunnableFreeFunc free;
-	MAGIC_DECLARE;
+    RunnableRunFunc run;
+    RunnableFreeFunc free;
+    MAGIC_DECLARE;
 };
 
 /**
@@ -31,8 +31,8 @@ struct _RunnableFunctionTable {
  * the first element in the substructure, and adding custom members below it.
  */
 struct _Runnable {
-	RunnableFunctionTable* vtable;
-	MAGIC_DECLARE;
+    RunnableFunctionTable* vtable;
+    MAGIC_DECLARE;
 };
 
 /**

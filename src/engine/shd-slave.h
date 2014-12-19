@@ -36,10 +36,6 @@ GTimer* slave_getRunTimer(Slave* slave);
 void slave_updateMinTimeJump(Slave* slave, gdouble minPathLatency);
 void slave_heartbeat(Slave* slave, SimulationTime simClockNow);
 gint slave_generateWorkerID(Slave* slave);
-void slave_storePluginPath(Slave* slave, GQuark pluginID, const gchar* pluginPath);
-const gchar* slave_getPluginPath(Slave* slave, GQuark pluginID);
-void slave_lockPluginInit(Slave* slave);
-void slave_unlockPluginInit(Slave* slave);
 DNS* slave_getDNS(Slave* slave);
 Topology* slave_getTopology(Slave* slave);
 void slave_setTopology(Slave* slave, Topology* topology);
@@ -55,10 +51,10 @@ void slave_setKilled(Slave* slave, gboolean isKilled);
 SimulationTime slave_getMinTimeJump(Slave* slave);
 guint slave_getWorkerCount(Slave* slave);
 SimulationTime slave_getExecutionBarrier(Slave* slave);
-void slave_cryptoLockingFunc(Slave* slave, gint mode, gint n);
-gboolean slave_cryptoSetup(Slave* slave, gint numLocks);
 void slave_notifyProcessed(Slave* slave, guint numberEventsProcessed, guint numberNodesWithEvents);
 void slave_runParallel(Slave* slave);
 void slave_runSerial(Slave* slave);
+void slave_storeProgram(Slave* slave, Program* prog);
+Program* slave_getProgram(Slave* slave, GQuark pluginID);
 
 #endif /* SHD_SLAVE_H_ */

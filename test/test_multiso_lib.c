@@ -3,10 +3,10 @@
 int global = 1;
 
 void test_function(void) {
-	global++;
+    global++;
 
-	printf("Global: %d\n", global);
+    printf("Global: %d\n", global);
 
-	return;
+    return;
 }
 

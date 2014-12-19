@@ -10,8 +10,8 @@
 
 int main(int argc, char* argv[]) {
   if(argc != 2) {
-	printf("USAGE: %s path/to/file.graphml.xml\n", argv[0]);
-	return -1;
+    printf("USAGE: %s path/to/file.graphml.xml\n", argv[0]);
+    return -1;
   }
 
   char* fileName = argv[1];
@@ -19,8 +19,8 @@ int main(int argc, char* argv[]) {
   igraph_attribute_table_t* oldHandler = igraph_i_set_attribute_table(&igraph_cattribute_table);
   FILE* graphFile = fopen(fileName, "r");
   if(!graphFile) {
-	printf("error opening graph file at %s\n", fileName);
-	return -2;
+    printf("error opening graph file at %s\n", fileName);
+    return -2;
   }
 
   igraph_t graph;
@@ -30,11 +30,11 @@ int main(int argc, char* argv[]) {
   fclose(graphFile);
 
   if(r != IGRAPH_SUCCESS) {
-	printf("error loading graph file at %s\n", fileName);
-	r = -3;
+    printf("error loading graph file at %s\n", fileName);
+    r = -3;
   } else {
-	printf("successfully loaded graph file at %s in %li seconds\n", fileName, (long int)(end-start));
-	r = 0;
+    printf("successfully loaded graph file at %s in %li seconds\n", fileName, (long int)(end-start));
+    r = 0;
   }
 
   printf("graph has %li vertices and %li edges\n", (long int)igraph_vcount(&graph), (long int)igraph_ecount(&graph));
@@ -45,11 +45,11 @@ int main(int argc, char* argv[]) {
   end = time(NULL);
 
   if(r != IGRAPH_SUCCESS) {
-	printf("error computing igraph_clique_number\n");
-	r = -4;
+    printf("error computing igraph_clique_number\n");
+    r = -4;
   } else {
-	printf("igraph_clique_number = %i in %li seconds\n", (int) largestCliqueSize, (long int)(end-start));
-	r = 0;
+    printf("igraph_clique_number = %i in %li seconds\n", (int) largestCliqueSize, (long int)(end-start));
+    r = 0;
   }
 
   start = time(NULL);

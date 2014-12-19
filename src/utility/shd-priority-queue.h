@@ -10,7 +10,7 @@
 typedef struct _PriorityQueue PriorityQueue;
 
 PriorityQueue* priorityqueue_new(GCompareDataFunc compareFunc,
-		gpointer compareData, GDestroyNotify freeFunc);
+        gpointer compareData, GDestroyNotify freeFunc);
 void priorityqueue_clear(PriorityQueue *q);
 void priorityqueue_free(PriorityQueue *q);
 

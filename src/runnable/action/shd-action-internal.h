@@ -10,9 +10,9 @@
 #include "shadow.h"
 
 struct _Action {
-	Runnable super;
-	gint priority;
-	MAGIC_DECLARE;
+    Runnable super;
+    gint priority;
+    MAGIC_DECLARE;
 };
 
 #endif /* SHD_ACTION_INTERNAL_H_ */

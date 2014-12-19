@@ -10,7 +10,7 @@
 #include "shadow.h"
 
 enum ChannelType {
-	CT_NONE, CT_READONLY, CT_WRITEONLY,
+    CT_NONE, CT_READONLY, CT_WRITEONLY,
 };
 
 typedef struct _Channel Channel;

@@ -16,7 +16,7 @@
 
 typedef struct _StartApplicationEvent StartApplicationEvent;
 
-StartApplicationEvent* startapplication_new(Application* application);
+StartApplicationEvent* startapplication_new(Process* application);
 void startapplication_run(StartApplicationEvent* event, Host* node);
 void startapplication_free(StartApplicationEvent* event);
 

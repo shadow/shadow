@@ -66,6 +66,7 @@ foreach(srcfile ${ARGN})
     add_custom_command(OUTPUT ${outfile}.bc
       COMMAND ${src_bc_compiler} -emit-llvm ${srcdefs} ${srcflags} ${srcincludes}
         -c ${infile} -o ${outfile}.bc
+      DEPENDS ${infile}
       COMMENT "Building LLVM bitcode ${outfile}.bc"
       VERBATIM
     )
@@ -142,9 +143,30 @@ find_program(LLVM_BC_LINK llvm-link)
 find_program(LLVM_BC_ANALYZER llvm-bcanalyzer)
 find_program(LLVM_BC_OPT opt)
 
-if(NOT (LLVM_BC_C_COMPILER AND LLVM_BC_CXX_COMPILER AND LLVM_BC_AR AND
-        LLVM_BC_RANLIB AND LLVM_BC_LINK AND LLVM_BC_ANALYZER))
+if (NOT (LLVM_BC_C_COMPILER AND LLVM_BC_CXX_COMPILER AND LLVM_BC_AR AND
+        LLVM_BC_RANLIB AND LLVM_BC_LINK AND LLVM_BC_ANALYZER AND LLVM_BC_OPT))
   message(SEND_ERROR "Some of following tools have not been found:")
+  if (NOT LLVM_BC_C_COMPILER)
+     message(SEND_ERROR "LLVM_BC_C_COMPILER") 
+  endif()
+  if (NOT LLVM_BC_CXX_COMPILER) 
+     message(SEND_ERROR "LLVM_BC_CXX_COMPILER")
+  endif()
+  if (NOT LLVM_BC_AR) 
+     message(SEND_ERROR "LLVM_BC_AR") 
+  endif()
+  if (NOT LLVM_BC_RANLIB) 
+     message(SEND_ERROR "LLVM_BC_RANLIB") 
+  endif()
+  if (NOT LLVM_BC_LINK) 
+     message(SEND_ERROR "LLVM_BC_LINK") 
+  endif()
+  if (NOT LLVM_BC_ANALYZER) 
+     message(SEND_ERROR "LLVM_BC_ANALYZER") 
+  endif()
+  if (NOT LLVM_BC_OPT) 
+     message(SEND_ERROR "LLVM_BC_OPT") 
+  endif()
 endif()
 
 CheckEmitLlvmFlag()

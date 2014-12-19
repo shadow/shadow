@@ -14,7 +14,7 @@ struct _Reno {
 };
 
 void reno_congestionAvoidance(Reno* reno, gint inFlight, gint packetsAcked, gint ack) {
-	MAGIC_ASSERT(reno);
+    MAGIC_ASSERT(reno);
     TCPCongestion* congestion = (TCPCongestion*)reno;
 
     if(reno->isSlowStart) {
@@ -40,7 +40,7 @@ void reno_congestionAvoidance(Reno* reno, gint inFlight, gint packetsAcked, gint
 }
 
 guint reno_packetLoss(Reno* reno) {
-	MAGIC_ASSERT(reno);
+    MAGIC_ASSERT(reno);
     TCPCongestion* congestion = (TCPCongestion*)reno;
 
     /* a packet was "dropped" - this is basically a negative ack.
@@ -51,25 +51,25 @@ guint reno_packetLoss(Reno* reno) {
         congestion->threshold = reno->window;
     }
 
-	/* unlike the send and receive/advertised windows, our cong window should never be 0
-	 *
-	 * from https://tools.ietf.org/html/rfc5681 [page 6]:
-	 *
-	 * "Implementation Note: Since integer arithmetic is usually used in TCP
-   	 *  implementations, the formula given in equation (3) can fail to
-   	 *  increase window when the congestion window is larger than SMSS*SMSS.
-   	 *  If the above formula yields 0, the result SHOULD be rounded up to 1 byte."
-	 */
-	if(reno->window == 0) {
-		reno->window = 1;
-	}
+    /* unlike the send and receive/advertised windows, our cong window should never be 0
+     *
+     * from https://tools.ietf.org/html/rfc5681 [page 6]:
+     *
+     * "Implementation Note: Since integer arithmetic is usually used in TCP
+     *  implementations, the formula given in equation (3) can fail to
+     *  increase window when the congestion window is larger than SMSS*SMSS.
+     *  If the above formula yields 0, the result SHOULD be rounded up to 1 byte."
+     */
+    if(reno->window == 0) {
+        reno->window = 1;
+    }
     return reno->window;
 }
 
 static void _reno_free(Reno* reno) {
-	MAGIC_ASSERT(reno);
-	MAGIC_CLEAR(reno);
-	g_free(reno);
+    MAGIC_ASSERT(reno);
+    MAGIC_CLEAR(reno);
+    g_free(reno);
 }
 
 TCPCongestionFunctionTable renoFunctions = {

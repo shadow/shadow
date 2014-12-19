@@ -174,7 +174,7 @@ static void _cubic_update(Cubic* cubic) {
 
     /* cubic_tcp_friendliness() */
     gint32 delta = (congestion->window * cubic->betaScale) >> 3;
-    while (cubic->ackCount > delta) {		/* update tcp window */
+    while (cubic->ackCount > delta) {       /* update tcp window */
         cubic->ackCount -= delta;
         cubic->tcpWindowEst++;
     }
@@ -194,7 +194,7 @@ static void _cubic_update(Cubic* cubic) {
 }
 
 void cubic_congestionAvoidance(Cubic* cubic, gint inFlight, gint packetsAcked, gint ack) {
-	MAGIC_ASSERT(cubic);
+    MAGIC_ASSERT(cubic);
     TCPCongestion* congestion = (TCPCongestion*)cubic;
 
     gint32 now = worker_getCurrentTime() / SIMTIME_ONE_MILLISECOND;
@@ -220,7 +220,7 @@ void cubic_congestionAvoidance(Cubic* cubic, gint inFlight, gint packetsAcked, g
 }
 
 guint cubic_packetLoss(Cubic* cubic) {
-	MAGIC_ASSERT(cubic);
+    MAGIC_ASSERT(cubic);
     TCPCongestion* congestion = (TCPCongestion*)cubic;
 
     cubic->epochStart = 0;
@@ -236,9 +236,9 @@ guint cubic_packetLoss(Cubic* cubic) {
 }
 
 static void _cubic_free(Cubic* cubic) {
-	MAGIC_ASSERT(cubic);
-	MAGIC_CLEAR(cubic);
-	g_free(cubic);
+    MAGIC_ASSERT(cubic);
+    MAGIC_CLEAR(cubic);
+    g_free(cubic);
 }
 
 TCPCongestionFunctionTable CubicFunctions = {

@@ -10,7 +10,7 @@
 typedef struct _AsyncPriorityQueue AsyncPriorityQueue;
 
 AsyncPriorityQueue* asyncpriorityqueue_new(GCompareDataFunc compareFunc,
-		gpointer compareData, GDestroyNotify freeFunc);
+        gpointer compareData, GDestroyNotify freeFunc);
 void asyncpriorityqueue_clear(AsyncPriorityQueue *q);
 void asyncpriorityqueue_free(AsyncPriorityQueue *q);
 

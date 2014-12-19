@@ -14,7 +14,7 @@ struct _AIMD {
 };
 
 void aimd_congestionAvoidance(AIMD* aimd, gint inFlight, gint packetsAcked, gint ack) {
-	MAGIC_ASSERT(aimd);
+    MAGIC_ASSERT(aimd);
     TCPCongestion* congestion = (TCPCongestion*)aimd;
 
     if(aimd->isSlowStart) {
@@ -36,7 +36,7 @@ void aimd_congestionAvoidance(AIMD* aimd, gint inFlight, gint packetsAcked, gint
 }
 
 guint aimd_packetLoss(AIMD* aimd) {
-	MAGIC_ASSERT(aimd);
+    MAGIC_ASSERT(aimd);
     TCPCongestion* congestion = (TCPCongestion*)aimd;
 
     /* a packet was "dropped" - this is basically a negative ack.
@@ -47,23 +47,23 @@ guint aimd_packetLoss(AIMD* aimd) {
         congestion->threshold = congestion->window;
     }
 
-	/* unlike the send and receive/advertised windows, our cong window should never be 0
-	 *
-	 * from https://tools.ietf.org/html/rfc5681 [page 6]:
-	 *
-	 * "Implementation Note: Since integer arithmetic is usually used in TCP
-   	 *  implementations, the formula given in equation (3) can fail to
-   	 *  increase window when the congestion window is larger than SMSS*SMSS.
-   	 *  If the above formula yields 0, the result SHOULD be rounded up to 1 byte."
-	 */
+    /* unlike the send and receive/advertised windows, our cong window should never be 0
+     *
+     * from https://tools.ietf.org/html/rfc5681 [page 6]:
+     *
+     * "Implementation Note: Since integer arithmetic is usually used in TCP
+     *  implementations, the formula given in equation (3) can fail to
+     *  increase window when the congestion window is larger than SMSS*SMSS.
+     *  If the above formula yields 0, the result SHOULD be rounded up to 1 byte."
+     */
 
     return MAX(congestion->window, 1);
 }
 
 static void _aimd_free(AIMD* aimd) {
-	MAGIC_ASSERT(aimd);
-	MAGIC_CLEAR(aimd);
-	g_free(aimd);
+    MAGIC_ASSERT(aimd);
+    MAGIC_CLEAR(aimd);
+    g_free(aimd);
 }
 
 TCPCongestionFunctionTable aimdFunctions = {

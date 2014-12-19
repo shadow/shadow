@@ -16,56 +16,60 @@ typedef void (*SocketProcessFunc)(Socket* socket, Packet* packet);
 typedef void (*SocketDropFunc)(Socket* socket, Packet* packet);
 
 struct _SocketFunctionTable {
-	DescriptorFunc close;
-	DescriptorFunc free;
-	TransportSendFunc send;
-	TransportReceiveFunc receive;
-	SocketProcessFunc process;
-	SocketIsFamilySupportedFunc isFamilySupported;
-	SocketConnectToPeerFunc connectToPeer;
+    DescriptorFunc close;
+    DescriptorFunc free;
+    TransportSendFunc send;
+    TransportReceiveFunc receive;
+    SocketProcessFunc process;
+    SocketIsFamilySupportedFunc isFamilySupported;
+    SocketConnectToPeerFunc connectToPeer;
     SocketDropFunc dropPacket;
-	MAGIC_DECLARE;
+    MAGIC_DECLARE;
 };
 
 enum SocketFlags {
-	SF_NONE = 0,
-	SF_BOUND = 1 << 0,
+    SF_NONE = 0,
+    SF_BOUND = 1 << 0,
+    SF_UNIX = 1 << 1,
+    SF_UNIX_BOUND = 1 << 2,
 };
 
 struct _Socket {
-	Transport super;
-	SocketFunctionTable* vtable;
+    Transport super;
+    SocketFunctionTable* vtable;
 
-	enum SocketFlags flags;
-	enum ProtocolType protocol;
+    enum SocketFlags flags;
+    enum ProtocolType protocol;
 
-	in_addr_t peerIP;
-	in_addr_t peerPort;
-	gchar* peerString;
+    in_addr_t peerIP;
+    in_addr_t peerPort;
+    gchar* peerString;
 
-	in_addr_t boundAddress;
-	in_port_t boundPort;
-	gchar* boundString;
+    in_addr_t boundAddress;
+    in_port_t boundPort;
+    gchar* boundString;
 
-	gint associationKey;
+    gchar* unixPath;
 
-	/* buffering packets readable by user */
-	GQueue* inputBuffer;
-	gsize inputBufferSize;
-	gsize inputBufferSizePending;
-	gsize inputBufferLength;
+    gint associationKey;
 
-	/* buffering packets ready to send */
-	GQueue* outputBuffer;
-	gsize outputBufferSize;
-	gsize outputBufferSizePending;
-	gsize outputBufferLength;
+    /* buffering packets readable by user */
+    GQueue* inputBuffer;
+    gsize inputBufferSize;
+    gsize inputBufferSizePending;
+    gsize inputBufferLength;
 
-	MAGIC_DECLARE;
+    /* buffering packets ready to send */
+    GQueue* outputBuffer;
+    gsize outputBufferSize;
+    gsize outputBufferSizePending;
+    gsize outputBufferLength;
+
+    MAGIC_DECLARE;
 };
 
 void socket_init(Socket* socket, SocketFunctionTable* vtable, DescriptorType type, gint handle,
-		guint receiveBufferSize, guint sendBufferSize);
+        guint receiveBufferSize, guint sendBufferSize);
 
 void socket_pushInPacket(Socket* socket, Packet* packet);
 void socket_dropPacket(Socket* socket, Packet* packet);
@@ -97,5 +101,10 @@ enum ProtocolType socket_getProtocol(Socket* socket);
 
 gboolean socket_isFamilySupported(Socket* socket, sa_family_t family);
 gint socket_connectToPeer(Socket* socket, in_addr_t ip, in_port_t port, sa_family_t family);
+
+gboolean socket_isUnix(Socket* socket);
+void socket_setUnix(Socket* socket, gboolean isUnixSocket);
+void socket_setUnixPath(Socket* socket, const gchar* path, gboolean isBound);
+gchar* socket_getUnixPath(Socket* socket);
 
 #endif /* SHD_SOCKET_H_ */

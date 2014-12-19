@@ -27,10 +27,10 @@
 typedef struct _SpinAction SpinAction;
 
 struct _SpinAction {
-	Action super;
-	guint spin_seconds;
+    Action super;
+    guint spin_seconds;
 
-	MAGIC_DECLARE;
+    MAGIC_DECLARE;
 };
 
 SpinAction* spina_new(guint seconds);

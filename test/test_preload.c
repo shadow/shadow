@@ -9,13 +9,13 @@
 #include <dlfcn.h>
 
 int main(void) {
-	time_t t;
+    time_t t;
 
-	t = time(NULL);
-	printf("first time() called = %i\n", (int)t);
+    t = time(NULL);
+    printf("first time() called = %i\n", (int)t);
 
-	t = time(NULL);
-	printf("second time() called = %i\n", (int)t);
+    t = time(NULL);
+    printf("second time() called = %i\n", (int)t);
 
-	return EXIT_SUCCESS;
+    return EXIT_SUCCESS;
 }

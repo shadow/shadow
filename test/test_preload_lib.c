@@ -6,7 +6,7 @@
 #include <time.h>
 #include <dlfcn.h>
 
-# define RTLD_NEXT	((void *) -1l)
+# define RTLD_NEXT  ((void *) -1l)
 
 // define a function pointer that takes a time_t* and returns a time_t, just like the real time function
 typedef time_t (*time_fnctptr)(time_t*);
@@ -26,7 +26,7 @@ time_t time (time_t *result){
         // clear old error vals
         dlerror();
         // search for symbol
-    	_time = (time_fnctptr) dlsym(RTLD_NEXT, "time");
+        _time = (time_fnctptr) dlsym(RTLD_NEXT, "time");
         // check for error
         if( dlerror() != NULL )
         {
@@ -37,9 +37,9 @@ time_t time (time_t *result){
 
     //Custom application logic - conditionally call libc time()
     if(flag){
-    	return _time(NULL);
+        return _time(NULL);
     } else {
-    	flag = 1;
-		return (time_t) -666666;
+        flag = 1;
+        return (time_t) -666666;
     }
 }

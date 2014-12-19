@@ -22,41 +22,41 @@
 #include "shadow.h"
 
 EventFunctionTable spine_functions = {
-	(EventRunFunc) spine_run,
-	(EventFreeFunc) spine_free,
-	MAGIC_VALUE
+    (EventRunFunc) spine_run,
+    (EventFreeFunc) spine_free,
+    MAGIC_VALUE
 };
 
 SpinEvent* spine_new(guint seconds) {
-	SpinEvent* event = g_new0(SpinEvent, 1);
-	MAGIC_INIT(event);
+    SpinEvent* event = g_new0(SpinEvent, 1);
+    MAGIC_INIT(event);
 
-	shadowevent_init(&(event->super), &spine_functions);
-	event->spin_seconds = seconds;
+    shadowevent_init(&(event->super), &spine_functions);
+    event->spin_seconds = seconds;
 
-	return event;
+    return event;
 }
 
 void spine_run(SpinEvent* event, Host* node) {
-	MAGIC_ASSERT(event);
-	MAGIC_ASSERT(node);
+    MAGIC_ASSERT(event);
+    MAGIC_ASSERT(node);
 
-	debug("executing spin event for %u seconds", event->spin_seconds);
+    debug("executing spin event for %u seconds", event->spin_seconds);
 
-	guint64 i = 1000000 * event->spin_seconds;
-	while(i--) {
-		continue;
-	}
+    guint64 i = 1000000 * event->spin_seconds;
+    while(i--) {
+        continue;
+    }
 
-	SpinEvent* se = spine_new(event->spin_seconds);
-	SimulationTime t = 1;
-	worker_scheduleEvent((Event*)se, t, node->id);
-	SpinEvent* se2 = spine_new(event->spin_seconds);
-	worker_scheduleEvent((Event*)se2, t, 0);
+    SpinEvent* se = spine_new(event->spin_seconds);
+    SimulationTime t = 1;
+    worker_scheduleEvent((Event*)se, t, node->id);
+    SpinEvent* se2 = spine_new(event->spin_seconds);
+    worker_scheduleEvent((Event*)se2, t, 0);
 }
 
 void spine_free(SpinEvent* event) {
-	MAGIC_ASSERT(event);
-	MAGIC_CLEAR(event);
-	g_free(event);
+    MAGIC_ASSERT(event);
+    MAGIC_CLEAR(event);
+    g_free(event);
 }

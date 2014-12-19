@@ -21,7 +21,7 @@
  *
  * @see logging_log()
  */
-#define error(...) 		logging_log(G_LOG_DOMAIN, G_LOG_LEVEL_ERROR, __FUNCTION__, __VA_ARGS__)
+#define error(...)      logging_log(G_LOG_DOMAIN, G_LOG_LEVEL_ERROR, __FUNCTION__, __VA_ARGS__)
 
 /**
  * A convenience macro for logging a message at the critical level in the
@@ -29,7 +29,7 @@
  *
  * @see logging_log()
  */
-#define critical(...) 	logging_log(G_LOG_DOMAIN, G_LOG_LEVEL_CRITICAL, __FUNCTION__, __VA_ARGS__)
+#define critical(...)   logging_log(G_LOG_DOMAIN, G_LOG_LEVEL_CRITICAL, __FUNCTION__, __VA_ARGS__)
 
 /**
  * A convenience macro for logging a message at the warning level in the
@@ -37,7 +37,7 @@
  *
  * @see logging_log()
  */
-#define warning(...) 	logging_log(G_LOG_DOMAIN, G_LOG_LEVEL_WARNING, __FUNCTION__, __VA_ARGS__)
+#define warning(...)    logging_log(G_LOG_DOMAIN, G_LOG_LEVEL_WARNING, __FUNCTION__, __VA_ARGS__)
 
 /**
  * A convenience macro for logging a message at the message level in the
@@ -45,7 +45,7 @@
  *
  * @see logging_log()
  */
-#define message(...) 	logging_log(G_LOG_DOMAIN, G_LOG_LEVEL_MESSAGE, __FUNCTION__, __VA_ARGS__)
+#define message(...)    logging_log(G_LOG_DOMAIN, G_LOG_LEVEL_MESSAGE, __FUNCTION__, __VA_ARGS__)
 
 /**
  * A convenience macro for logging a message at the info level in the
@@ -53,7 +53,7 @@
  *
  * @see logging_log()
  */
-#define info(...) 		logging_log(G_LOG_DOMAIN, G_LOG_LEVEL_INFO, __FUNCTION__, __VA_ARGS__)
+#define info(...)       logging_log(G_LOG_DOMAIN, G_LOG_LEVEL_INFO, __FUNCTION__, __VA_ARGS__)
 
 /**
  * A convenience macro for logging a message at the debug level in the
@@ -61,7 +61,7 @@
  *
  * @see logging_log()
  */
-#define debug(...) 		logging_log(G_LOG_DOMAIN, G_LOG_LEVEL_DEBUG, __FUNCTION__, __VA_ARGS__)
+#define debug(...)      logging_log(G_LOG_DOMAIN, G_LOG_LEVEL_DEBUG, __FUNCTION__, __VA_ARGS__)
 
 /**
  * A log handler compatible with the GLib logging subsystem.

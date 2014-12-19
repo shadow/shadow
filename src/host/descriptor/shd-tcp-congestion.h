@@ -9,7 +9,7 @@
 
 #include "shadow.h"
 
-#define congestionlog(congestion,...) 		logging_log(G_LOG_DOMAIN, congestion->logLevel, __FUNCTION__, __VA_ARGS__)
+#define congestionlog(congestion,...)       logging_log(G_LOG_DOMAIN, congestion->logLevel, __FUNCTION__, __VA_ARGS__)
 
 typedef enum _TCPCongestionType TCPCongestionType;
 enum _TCPCongestionType {

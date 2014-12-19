@@ -8,40 +8,40 @@
 #include "shd-event-internal.h"
 
 struct _InterfaceReceivedEvent {
-	Event super;
-	NetworkInterface* interface;
-	MAGIC_DECLARE;
+    Event super;
+    NetworkInterface* interface;
+    MAGIC_DECLARE;
 };
 
 EventFunctionTable interfacereceived_functions = {
-	(EventRunFunc) interfacereceived_run,
-	(EventFreeFunc) interfacereceived_free,
-	MAGIC_VALUE
+    (EventRunFunc) interfacereceived_run,
+    (EventFreeFunc) interfacereceived_free,
+    MAGIC_VALUE
 };
 
 InterfaceReceivedEvent* interfacereceived_new(NetworkInterface* interface) {
-	InterfaceReceivedEvent* event = g_new0(InterfaceReceivedEvent, 1);
-	MAGIC_INIT(event);
+    InterfaceReceivedEvent* event = g_new0(InterfaceReceivedEvent, 1);
+    MAGIC_INIT(event);
 
-	shadowevent_init(&(event->super), &interfacereceived_functions);
+    shadowevent_init(&(event->super), &interfacereceived_functions);
 
-	event->interface = interface;
+    event->interface = interface;
 
-	return event;
+    return event;
 }
 
 void interfacereceived_run(InterfaceReceivedEvent* event, Host* node) {
-	MAGIC_ASSERT(event);
+    MAGIC_ASSERT(event);
 
-	debug("event started");
+    debug("event started");
 
-	networkinterface_received(event->interface);
+    networkinterface_received(event->interface);
 
-	debug("event finished");
+    debug("event finished");
 }
 
 void interfacereceived_free(InterfaceReceivedEvent* event) {
-	MAGIC_ASSERT(event);
-	MAGIC_CLEAR(event);
-	g_free(event);
+    MAGIC_ASSERT(event);
+    MAGIC_CLEAR(event);
+    g_free(event);
 }
