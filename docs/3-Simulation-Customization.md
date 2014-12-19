@@ -134,12 +134,113 @@ _TODO_
 
 ## Traffic generator configuration
 
-_TODO_
+This section covers the traffic generator, `tgen`, which is distributed and built as part of Shadow (tgen is capable of running outside of Shadow as well). Tgen is a C application that models traffic behaviors using an action-dependency graph represented using the standard `graphml.xml` format. Each tgen node takes a graphml-formatted file as a parameter, and then begins transferring data to/from other nodes by following a path through the action graph. 
 
 ### Action-dependency graph format
 
-_TODO_
+Graph vertices represent **actions**, and graph edges represent **dependencies**. Each vertex may contain vertex attributes which specify action **parameters**. Tgen will walk the directed graph path starting at a start vertex, and execute each action along that path. The actions control the behavior at each stage. Edges direct tgen from one action to the next, while edge attributes are ignored.
+
+The following are valid **actions** and **parameters** (all parameters are currently stored as strings in graphml):
+
+#### start
+
+The **start action is required** for all tgen graph files, and **only one start action is allowed**.
+
+**Required attributes:**
+
+  + _serverport_: the local port that will be opened to listen for other tgen connections
+
+**Optional attributes:**
+
+  + _time_: the number of seconds that the tgen node should delay before starting a walk through the action graph
+  + _socksproxy_: a peer (`ip:port`, e.g., `127.0.0.1:9051`) to use as a proxy server through which all connections to other tgen peers will be made
+
+**Special attributes:**
+
+  + _peers_: a list of peers (`ip1:port1,ip2:port21`, e.g., `192.168.1.100:8888,192.168.1.101:8888`) to use for transfers that do not explicitly specify a peer. The _peers_ attribute is optional, only if all transfers specify a _peers_ attribute.
+
+#### transfer
+
+Transfer actions are optional.
+
+**Required attributes:**
+
+  + _type_: type of transfer: "get" to download or "put" to upload
+  + _protocol_: protocol to use for this transfer (only "tcp" is supported)
+  + _size_: amount of data to transfer (e.g., "5", or "5 suffix" where suffix is case in-sensitive and one of: kb, mb, gb, tb, kib, mib, gib, tib)
+
+**Special attributes:**
+
+  + _peers_: a list of peers (`ip1:port1,ip2:port21`, e.g., `192.168.1.100:8888,192.168.1.101:8888`) to use for this transfer. The _peers_ attribute is optional, only if a _peers_ attribute is specified in the start action. A peer will be selected at random from this list, or at random from the start action list if this attribute is not specified for a transfer.
+
+#### synchronize
+
+Synchronize actions are optional. The synchronize action will pause a walk until the vertex has been visited by all incoming edges. At that point, a walk will continue from this action to each outgoing edge.
+
+**NOTE: this action is not currently implemented**
+
+#### pause
+
+Pause actions are optional.
+
+**Required attributes:**
+
+  + _time_: the number of seconds that the tgen node should pause before resuming the walk through the action graph.
+
+#### end
+
+End actions are optional. The parameters represent termination conditions: if any of the conditions are met upon arriving at an end action vertex, the tgen node will stop and shutdown.
+
+**Optional attributes:**
+
+  + _time_: the number of seconds since the node started
+  + _count_: the number of transfer completed by this node
+  + _size_:  the total amount of data transferred (read+write) by this node
 
 ### Customizing generator behaviors
 
-_TODO_
+Given the above actions and parameters, simply python scripts can be used to generate behavior models using the networkx python module.
+
+This script would generate a tgen configuration file for a client that:
+
+  + downloads a single 320 KiB file from a server in the server pool;
+  + pauses for a time selected uniformly at random between 1 and 60 seconds;
+  + repeats.
+
+```python
+import networkx as nx
+
+servers="server1:8888,server2:8888"
+
+G = nx.DiGraph()
+
+G.add_node("start", serverport="8888", peers=servers)
+G.add_node("transfer", type="get", protocol="tcp", size="320 KiB")
+G.add_node("pause", time="1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60")
+
+G.add_edge("start", "transfer")
+G.add_edge("transfer", "pause")
+G.add_edge("pause", "start")
+
+nx.write_graphml(G, "tgen.web.graphml.xml")
+```
+
+And this script would generate a bulk client that repeatedly downloads a single 5 MiB file from a server in the server pool.
+
+```python
+import networkx as nx
+
+servers="server1:8888,server2:8888"
+
+G = nx.DiGraph()
+
+G.add_node("start", serverport="8888", peers=servers)
+G.add_node("transfer", type="get", protocol="tcp", size="5 MiB")
+
+G.add_edge("start", "transfer")
+G.add_edge("transfer", "start")
+
+nx.write_graphml(G, "tgen.bulk.graphml.xml")
+```
+
+The scripts are simple, but capable of generating complex behavior profiles.
