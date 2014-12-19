@@ -1,6 +1,10 @@
 ## (c) 2010-2012 Shadow, Rob Jansen jansen@cs.umn.edu
 
+## set build parameters
 project(Shadow C)
+set(SHADOW_VERSION_MAJOR 1)
+set(SHADOW_VERSION_MINOR 9)
+set(SHADOW_VERSION_BUILD 2)
 
 ## ensure cmake version
 cmake_minimum_required(VERSION 2.8.8 FATAL_ERROR)
@@ -14,11 +18,6 @@ endif((NOT UNIX) OR (NOT (CMAKE_SYSTEM_NAME STREQUAL "Linux")))
 if(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
     message(FATAL_ERROR "Shadow requires an out-of-source build. Please create a separate build directory and run 'cmake path/to/shadow [options]' there.")
 endif(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
-
-## set paths and build parameters
-set(SHADOW_VERSION_MAJOR 1)
-set(SHADOW_VERSION_MINOR 9)
-set(SHADOW_VERSION_BUILD 2)
 
 ## construct info/version strings
 set(SHADOW_INFO_STRING_CONF "For more information, visit https://shadow.github.io or https://github.com/shadow")
