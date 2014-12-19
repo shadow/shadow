@@ -34,7 +34,11 @@ You should then add `/home/${USER}/.local/bin` to your shell setup for the PATH 
 Tor currently requires 3 directory authorities to be configured in order to accept values from a v3bw file; otherwise the directory authorities use relays' advertised bandwidth when creating the consensus and the v3bw file entries are ignored.
 
 1. #### How can I build Shadow directly using cmake instead of the setup script?  
-_TODO_
+```bash
+mkdir -p build/shadow; cd build/shadow
+CC=`which clang` CXX=`which clang++` cmake ../..
+make && make install
+```
 
 ## Other Notes
 
