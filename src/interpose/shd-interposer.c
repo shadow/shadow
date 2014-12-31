@@ -54,53 +54,53 @@
 
 /* memory allocation family */
 
-typedef void* (*MallocFunc)(size_t);
-typedef void* (*CallocFunc)(size_t, size_t);
-typedef void* (*ReallocFunc)(void*, size_t);
-typedef int (*PosixMemalignFunc)(void**, size_t, size_t);
-typedef void* (*MemalignFunc)(size_t, size_t);
-typedef void* (*AlignedAllocFunc)(size_t, size_t);
-typedef void* (*VallocFunc)(size_t);
-typedef void* (*PvallocFunc)(size_t);
-typedef void (*FreeFunc)(void*);
-typedef void* (*MMapFunc)(void *, size_t, int, int, int, off_t);
+typedef void* (*malloc_func)(size_t);
+typedef void* (*calloc_func)(size_t, size_t);
+typedef void* (*realloc_func)(void*, size_t);
+typedef int (*posix_memalign_func)(void**, size_t, size_t);
+typedef void* (*memalign_func)(size_t, size_t);
+typedef void* (*aligned_alloc_func)(size_t, size_t);
+typedef void* (*valloc_func)(size_t);
+typedef void* (*pvalloc_func)(size_t);
+typedef void (*free_func)(void*);
+typedef void* (*mmap_func)(void *, size_t, int, int, int, off_t);
 
 /* event family */
 
-typedef int (*EpollCreateFunc)(int);
-typedef int (*EpollCreate1Func)(int);
-typedef int (*EpollCtlFunc)(int, int, int, struct epoll_event*);
-typedef int (*EpollWaitFunc)(int, struct epoll_event*, int, int);
-typedef int (*EpollPWaitFunc)(int, struct epoll_event*, int, int, const sigset_t*);
+typedef int (*epoll_create_func)(int);
+typedef int (*epoll_create1_func)(int);
+typedef int (*epoll_ctl_func)(int, int, int, struct epoll_event*);
+typedef int (*epoll_wait_func)(int, struct epoll_event*, int, int);
+typedef int (*epoll_pwait_func)(int, struct epoll_event*, int, int, const sigset_t*);
 
 /* socket/io family */
 
-typedef int (*SocketFunc)(int, int, int);
-typedef int (*SocketpairFunc)(int, int, int, int[]);
-typedef int (*BindFunc)(int, __CONST_SOCKADDR_ARG, socklen_t);
-typedef int (*GetsocknameFunc)(int, __SOCKADDR_ARG, socklen_t*);
-typedef int (*ConnectFunc)(int, __CONST_SOCKADDR_ARG, socklen_t);
-typedef int (*GetpeernameFunc)(int, __SOCKADDR_ARG, socklen_t*);
-typedef size_t (*SendFunc)(int, const void*, size_t, int);
-typedef size_t (*SendtoFunc)(int, const void*, size_t, int, __CONST_SOCKADDR_ARG, socklen_t);
-typedef size_t (*SendmsgFunc)(int, const struct msghdr*, int);
-typedef size_t (*RecvFunc)(int, void*, size_t, int);
-typedef size_t (*RecvfromFunc)(int, void*, size_t, int, __SOCKADDR_ARG, socklen_t*);
-typedef size_t (*RecvmsgFunc)(int, struct msghdr*, int);
-typedef int (*GetsockoptFunc)(int, int, int, void*, socklen_t*);
-typedef int (*SetsockoptFunc)(int, int, int, const void*, socklen_t);
-typedef int (*ListenFunc)(int, int);
-typedef int (*AcceptFunc)(int, __SOCKADDR_ARG, socklen_t*);
-typedef int (*Accept4Func)(int, __SOCKADDR_ARG, socklen_t*, int);
-typedef int (*ShutdownFunc)(int, int);
-typedef int (*PipeFunc)(int [2]);
-typedef int (*Pipe2Func)(int [2], int);
-typedef size_t (*ReadFunc)(int, void*, size_t);
-typedef size_t (*WriteFunc)(int, const void*, size_t);
-typedef int (*CloseFunc)(int);
-typedef int (*FcntlFunc)(int, int, ...);
-typedef int (*IoctlFunc)(int, int, ...);
-typedef int (*EventfdFunc)(unsigned int, int);
+typedef int (*socket_func)(int, int, int);
+typedef int (*socketpair_func)(int, int, int, int[]);
+typedef int (*bind_func)(int, __CONST_SOCKADDR_ARG, socklen_t);
+typedef int (*getsockname_func)(int, __SOCKADDR_ARG, socklen_t*);
+typedef int (*connect_func)(int, __CONST_SOCKADDR_ARG, socklen_t);
+typedef int (*getpeername_func)(int, __SOCKADDR_ARG, socklen_t*);
+typedef size_t (*send_func)(int, const void*, size_t, int);
+typedef size_t (*sendto_func)(int, const void*, size_t, int, __CONST_SOCKADDR_ARG, socklen_t);
+typedef size_t (*sendmsg_func)(int, const struct msghdr*, int);
+typedef size_t (*recv_func)(int, void*, size_t, int);
+typedef size_t (*recvfrom_func)(int, void*, size_t, int, __SOCKADDR_ARG, socklen_t*);
+typedef size_t (*recvmsg_func)(int, struct msghdr*, int);
+typedef int (*getsockopt_func)(int, int, int, void*, socklen_t*);
+typedef int (*setsockopt_func)(int, int, int, const void*, socklen_t);
+typedef int (*listen_func)(int, int);
+typedef int (*accept_func)(int, __SOCKADDR_ARG, socklen_t*);
+typedef int (*accept4_func)(int, __SOCKADDR_ARG, socklen_t*, int);
+typedef int (*shutdown_func)(int, int);
+typedef int (*pipe_func)(int [2]);
+typedef int (*pipe2_func)(int [2], int);
+typedef size_t (*read_func)(int, void*, size_t);
+typedef size_t (*write_func)(int, const void*, size_t);
+typedef int (*close_func)(int);
+typedef int (*fcntl_func)(int, int, ...);
+typedef int (*ioctl_func)(int, int, ...);
+typedef int (*eventfd_func)(unsigned int, int);
 
 /* timers */
 
@@ -110,155 +110,155 @@ typedef int (*timerfd_gettime_func)(int, struct itimerspec*);
 
 /* file specific */
 
-typedef int (*FileNoFunc)(FILE *);
-typedef int (*OpenFunc)(const char*, int, mode_t);
-typedef int (*Open64Func)(const char*, int, mode_t);
-typedef int (*CreatFunc)(const char*, mode_t);
-typedef FILE* (*FOpenFunc)(const char *, const char *);
-typedef FILE* (*FDOpenFunc)(int, const char*);
-typedef int (*FCloseFunc)(FILE *);
-typedef int (*DupFunc)(int);
-typedef int (*Dup2Func)(int, int);
-typedef int (*Dup3Func)(int, int, int);
-typedef int (*FXStat)(int, int, struct stat*);
-typedef int (*FStatFSFunc)(int, struct statfs*);
-typedef off_t (*LSeekFunc)(int, off_t, int);
-typedef size_t (*PReadFunc)(int, void*, size_t, off_t);
-typedef int (*FLockFunc)(int, int);
-typedef int (*FSyncFunc)(int);
-typedef int (*FTruncateFunc)(int, int);
-typedef int (*PosixFAllocateFunc)(int, int, int);
+typedef int (*fileno_func)(FILE *);
+typedef int (*open_func)(const char*, int, mode_t);
+typedef int (*open64_func)(const char*, int, mode_t);
+typedef int (*creat_func)(const char*, mode_t);
+typedef FILE* (*fopen_func)(const char *, const char *);
+typedef FILE* (*fdopen_func)(int, const char*);
+typedef int (*fclose_func)(FILE *);
+typedef int (*dup_func)(int);
+typedef int (*dup2_func)(int, int);
+typedef int (*dup3_func)(int, int, int);
+typedef int (*__fxstat_func)(int, int, struct stat*);
+typedef int (*fstatfs_func)(int, struct statfs*);
+typedef off_t (*lseek_func)(int, off_t, int);
+typedef size_t (*pread_func)(int, void*, size_t, off_t);
+typedef int (*flock_func)(int, int);
+typedef int (*fsync_func)(int);
+typedef int (*ftruncate_func)(int, int);
+typedef int (*posix_fallocate_func)(int, int, int);
 
 /* time family */
 
-typedef time_t (*TimeFunc)(time_t*);
-typedef int (*ClockGettimeFunc)(clockid_t, struct timespec *);
-typedef int (*GettimeofdayFunc)(struct timeval*, __timezone_ptr_t);
+typedef time_t (*time_func)(time_t*);
+typedef int (*clock_gettime_func)(clockid_t, struct timespec *);
+typedef int (*gettimeofday_func)(struct timeval*, __timezone_ptr_t);
 
 /* name/address family */
 
-typedef int (*GethostnameFunc)(char*, size_t);
-typedef int (*GetaddrinfoFunc)(const char*, const char*, const struct addrinfo*, struct addrinfo**);
-typedef int (*FreeaddrinfoFunc)(struct addrinfo*);
-typedef int (*GetnameinfoFunc)(const struct sockaddr *, socklen_t, char *, size_t, char *, size_t, int);
-typedef struct hostent* (*GethostbynameFunc)(const char*);
-typedef int (*GethostbynameRFunc)(const char*, struct hostent*, char*, size_t, struct hostent**, int*);
-typedef struct hostent* (*Gethostbyname2Func)(const char*, int);
-typedef int (*Gethostbyname2RFunc)(const char*, int, struct hostent *, char *, size_t, struct hostent**, int*);
-typedef struct hostent* (*GethostbyaddrFunc)(const void*, socklen_t, int);
-typedef int (*GethostbyaddrRFunc)(const void*, socklen_t, int, struct hostent*, char*, size_t, struct hostent **, int*);
+typedef int (*gethostname_func)(char*, size_t);
+typedef int (*getaddrinfo_func)(const char*, const char*, const struct addrinfo*, struct addrinfo**);
+typedef int (*freeaddrinfo_func)(struct addrinfo*);
+typedef int (*getnameinfo_func)(const struct sockaddr *, socklen_t, char *, size_t, char *, size_t, int);
+typedef struct hostent* (*gethostbyname_func)(const char*);
+typedef int (*gethostbyname_r_func)(const char*, struct hostent*, char*, size_t, struct hostent**, int*);
+typedef struct hostent* (*gethostbyname2_func)(const char*, int);
+typedef int (*gethostbyname2_r_func)(const char*, int, struct hostent *, char *, size_t, struct hostent**, int*);
+typedef struct hostent* (*gethostbyaddr_func)(const void*, socklen_t, int);
+typedef int (*gethostbyaddr_r_func)(const void*, socklen_t, int, struct hostent*, char*, size_t, struct hostent **, int*);
 
 /* random family */
 
-typedef int (*RandFunc)();
-typedef int (*RandRFunc)(unsigned int*);
-typedef void (*SrandFunc)(unsigned int);
-typedef long int (*RandomFunc)(void);
-typedef int (*RandomRFunc)(struct random_data*, int32_t*);
-typedef void (*SrandomFunc)(unsigned int);
-typedef int (*SrandomRFunc)(unsigned int, struct random_data*);
+typedef int (*rand_func)();
+typedef int (*rand_r_func)(unsigned int*);
+typedef void (*srand_func)(unsigned int);
+typedef long int (*random_func)(void);
+typedef int (*random_r_func)(struct random_data*, int32_t*);
+typedef void (*srandom_func)(unsigned int);
+typedef int (*srandom_r_func)(unsigned int, struct random_data*);
 
 /* exit family */
 
-typedef int (*on_exit_fp)(void (*function)(int , void *), void *arg);
-typedef int (*atexit_fp)(void (*func)(void));
-typedef int (*__cxa_atexit_fp)(void (*func) (void *), void * arg, void * dso_handle);
+typedef int (*on_exit_func)(void (*function)(int , void *), void *arg);
+typedef int (*atexit_func)(void (*func)(void));
+typedef int (*__cxa_atexit_func)(void (*func) (void *), void * arg, void * dso_handle);
 
 typedef struct {
-    MallocFunc malloc;
-    CallocFunc calloc;
-    ReallocFunc realloc;
-    PosixMemalignFunc posix_memalign;
-    MemalignFunc memalign;
-    AlignedAllocFunc aligned_alloc;
-    VallocFunc valloc;
-    PvallocFunc pvalloc;
-    FreeFunc free;
-    MMapFunc mmap;
+    malloc_func malloc;
+    calloc_func calloc;
+    realloc_func realloc;
+    posix_memalign_func posix_memalign;
+    memalign_func memalign;
+    aligned_alloc_func aligned_alloc;
+    valloc_func valloc;
+    pvalloc_func pvalloc;
+    free_func free;
+    mmap_func mmap;
 
-    EpollCreateFunc epoll_create;
-    EpollCreate1Func epoll_create1;
-    EpollCtlFunc epoll_ctl;
-    EpollWaitFunc epoll_wait;
-    EpollPWaitFunc epoll_pwait;
+    epoll_create_func epoll_create;
+    epoll_create1_func epoll_create1;
+    epoll_ctl_func epoll_ctl;
+    epoll_wait_func epoll_wait;
+    epoll_pwait_func epoll_pwait;
 
     timerfd_create_func timerfd_create;
     timerfd_settime_func timerfd_settime;
     timerfd_gettime_func timerfd_gettime;
 
-    SocketFunc socket;
-    SocketpairFunc socketpair;
-    BindFunc bind;
-    GetsocknameFunc getsockname;
-    ConnectFunc connect;
-    GetpeernameFunc getpeername;
-    SendFunc send;
-    SendtoFunc sendto;
-    SendmsgFunc sendmsg;
-    RecvFunc recv;
-    RecvfromFunc recvfrom;
-    RecvmsgFunc recvmsg;
-    GetsockoptFunc getsockopt;
-    SetsockoptFunc setsockopt;
-    ListenFunc listen;
-    AcceptFunc accept;
-    Accept4Func accept4;
-    ShutdownFunc shutdown;
-    PipeFunc pipe;
-    Pipe2Func pipe2;
-    ReadFunc read;
-    WriteFunc write;
-    CloseFunc close;
-    FcntlFunc fcntl;
-    IoctlFunc ioctl;
-        EventfdFunc eventfd;
+    socket_func socket;
+    socketpair_func socketpair;
+    bind_func bind;
+    getsockname_func getsockname;
+    connect_func connect;
+    getpeername_func getpeername;
+    send_func send;
+    sendto_func sendto;
+    sendmsg_func sendmsg;
+    recv_func recv;
+    recvfrom_func recvfrom;
+    recvmsg_func recvmsg;
+    getsockopt_func getsockopt;
+    setsockopt_func setsockopt;
+    listen_func listen;
+    accept_func accept;
+    accept4_func accept4;
+    shutdown_func shutdown;
+    pipe_func pipe;
+    pipe2_func pipe2;
+    read_func read;
+    write_func write;
+    close_func close;
+    fcntl_func fcntl;
+    ioctl_func ioctl;
+    eventfd_func eventfd;
 
-    FileNoFunc fileno;
-    OpenFunc open;
-    Open64Func open64;
-    CreatFunc creat;
-    FOpenFunc fopen;
-    FDOpenFunc fdopen;
-    DupFunc dup;
-    Dup2Func dup2;
-    Dup3Func dup3;
-    FCloseFunc fclose;
-    FXStat __fxstat;
-    FStatFSFunc fstatfs;
-    LSeekFunc lseek;
-    PReadFunc pread;
-    FLockFunc flock;
-    FSyncFunc fsync;
-    FTruncateFunc ftruncate;
-    PosixFAllocateFunc posix_fallocate;
+    fileno_func fileno;
+    open_func open;
+    open64_func open64;
+    creat_func creat;
+    fopen_func fopen;
+    fdopen_func fdopen;
+    dup_func dup;
+    dup2_func dup2;
+    dup3_func dup3;
+    fclose_func fclose;
+    __fxstat_func __fxstat;
+    fstatfs_func fstatfs;
+    lseek_func lseek;
+    pread_func pread;
+    flock_func flock;
+    fsync_func fsync;
+    ftruncate_func ftruncate;
+    posix_fallocate_func posix_fallocate;
 
 
-    TimeFunc time;
-    ClockGettimeFunc clock_gettime;
-    GettimeofdayFunc gettimeofday;
+    time_func time;
+    clock_gettime_func clock_gettime;
+    gettimeofday_func gettimeofday;
 
-    GethostnameFunc gethostname;
-    GetaddrinfoFunc getaddrinfo;
-    FreeaddrinfoFunc freeaddrinfo;
-    GetnameinfoFunc getnameinfo;
-    GethostbynameFunc gethostbyname;
-    GethostbynameRFunc gethostbyname_r;
-    Gethostbyname2Func gethostbyname2;
-    Gethostbyname2RFunc gethostbyname2_r;
-    GethostbyaddrFunc gethostbyaddr;
-    GethostbyaddrRFunc gethostbyaddr_r;
+    gethostname_func gethostname;
+    getaddrinfo_func getaddrinfo;
+    freeaddrinfo_func freeaddrinfo;
+    getnameinfo_func getnameinfo;
+    gethostbyname_func gethostbyname;
+    gethostbyname_r_func gethostbyname_r;
+    gethostbyname2_func gethostbyname2;
+    gethostbyname2_r_func gethostbyname2_r;
+    gethostbyaddr_func gethostbyaddr;
+    gethostbyaddr_r_func gethostbyaddr_r;
 
-    RandFunc rand;
-    RandRFunc rand_r;
-    SrandFunc srand;
-    RandomFunc random;
-    RandomRFunc random_r;
-    SrandomFunc srandom;
-    SrandomRFunc srandom_r;
+    rand_func rand;
+    rand_r_func rand_r;
+    srand_func srand;
+    random_func random;
+    random_r_func random_r;
+    srandom_func srandom;
+    srandom_r_func srandom_r;
 
-    on_exit_fp on_exit;
-    atexit_fp atexit;
-    __cxa_atexit_fp __cxa_atexit;
+    on_exit_func on_exit;
+    atexit_func atexit;
+    __cxa_atexit_func __cxa_atexit;
 } PreloadFuncs;
 
 typedef struct {
@@ -319,9 +319,9 @@ static void _interposer_globalInitialize() {
     director.libc.calloc = dummy_calloc;
     director.libc.free = dummy_free;
 
-    MallocFunc tempMalloc;
-    CallocFunc tempCalloc;
-    FreeFunc tempFree;
+    malloc_func tempMalloc;
+    calloc_func tempCalloc;
+    free_func tempFree;
 
     SETSYM_OR_FAIL(tempMalloc, "malloc");
     SETSYM_OR_FAIL(tempCalloc, "calloc");
