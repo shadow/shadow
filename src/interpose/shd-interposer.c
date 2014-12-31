@@ -33,7 +33,11 @@
 
 #include "shadow.h"
 
+#define SETSYM(funcptr, funcstr) {funcptr = dlsym(RTLD_NEXT, funcstr);}
+
 #define SETSYM_OR_FAIL(funcptr, funcstr) { \
+    dlerror(); \
+    SETSYM(funcptr, funcstr);\
     dlerror(); \
     funcptr = dlsym(RTLD_NEXT, funcstr); \
     char* errorMessage = dlerror(); \
@@ -331,6 +335,93 @@ static void _interposer_globalInitialize() {
     director.libc.malloc = tempMalloc;
     director.libc.calloc = tempCalloc;
     director.libc.free = tempFree;
+
+    /* lookup the remaining functions */
+    SETSYM_OR_FAIL(director.libc.realloc, "realloc");
+    SETSYM_OR_FAIL(director.libc.posix_memalign, "posix_memalign");
+    SETSYM_OR_FAIL(director.libc.memalign, "memalign");
+    SETSYM_OR_FAIL(director.libc.aligned_alloc, "aligned_alloc");
+    SETSYM_OR_FAIL(director.libc.valloc, "valloc");
+    SETSYM_OR_FAIL(director.libc.pvalloc, "pvalloc");
+    SETSYM_OR_FAIL(director.libc.mmap, "mmap");
+    SETSYM_OR_FAIL(director.libc.epoll_create, "epoll_create");
+    SETSYM_OR_FAIL(director.libc.epoll_create1, "epoll_create1");
+    SETSYM_OR_FAIL(director.libc.epoll_ctl, "epoll_ctl");
+    SETSYM_OR_FAIL(director.libc.epoll_wait, "epoll_wait");
+    SETSYM_OR_FAIL(director.libc.epoll_pwait, "epoll_pwait");
+    SETSYM_OR_FAIL(director.libc.timerfd_create, "timerfd_create");
+    SETSYM_OR_FAIL(director.libc.timerfd_settime, "timerfd_settime");
+    SETSYM_OR_FAIL(director.libc.timerfd_gettime, "timerfd_gettime");
+    SETSYM_OR_FAIL(director.libc.socket, "socket");
+    SETSYM_OR_FAIL(director.libc.socketpair, "socketpair");
+    SETSYM_OR_FAIL(director.libc.bind, "bind");
+    SETSYM_OR_FAIL(director.libc.getsockname, "getsockname");
+    SETSYM_OR_FAIL(director.libc.connect, "connect");
+    SETSYM_OR_FAIL(director.libc.getpeername, "getpeername");
+    SETSYM_OR_FAIL(director.libc.send, "send");
+    SETSYM_OR_FAIL(director.libc.sendto, "sendto");
+    SETSYM_OR_FAIL(director.libc.sendmsg, "sendmsg");
+    SETSYM_OR_FAIL(director.libc.recv, "recv");
+    SETSYM_OR_FAIL(director.libc.recvfrom, "recvfrom");
+    SETSYM_OR_FAIL(director.libc.recvmsg, "recvmsg");
+    SETSYM_OR_FAIL(director.libc.getsockopt, "getsockopt");
+    SETSYM_OR_FAIL(director.libc.setsockopt, "setsockopt");
+    SETSYM_OR_FAIL(director.libc.listen, "listen");
+    SETSYM_OR_FAIL(director.libc.accept, "accept");
+    SETSYM_OR_FAIL(director.libc.accept4, "accept4");
+    SETSYM_OR_FAIL(director.libc.shutdown, "shutdown");
+    SETSYM_OR_FAIL(director.libc.pipe, "pipe");
+    SETSYM_OR_FAIL(director.libc.pipe2, "pipe2");
+    SETSYM_OR_FAIL(director.libc.read, "read");
+    SETSYM_OR_FAIL(director.libc.write, "write");
+    SETSYM_OR_FAIL(director.libc.close, "close");
+    SETSYM_OR_FAIL(director.libc.fcntl, "fcntl");
+    SETSYM_OR_FAIL(director.libc.ioctl, "ioctl");
+    SETSYM_OR_FAIL(director.libc.eventfd, "eventfd");
+    SETSYM_OR_FAIL(director.libc.fileno, "fileno");
+    SETSYM_OR_FAIL(director.libc.open, "open");
+    SETSYM_OR_FAIL(director.libc.open64, "open64");
+    SETSYM_OR_FAIL(director.libc.creat, "creat");
+    SETSYM_OR_FAIL(director.libc.fopen, "fopen");
+    SETSYM_OR_FAIL(director.libc.fdopen, "fdopen");
+    SETSYM_OR_FAIL(director.libc.dup, "dup");
+    SETSYM_OR_FAIL(director.libc.dup2, "dup2");
+    SETSYM_OR_FAIL(director.libc.dup3, "dup3");
+    SETSYM_OR_FAIL(director.libc.fclose, "fclose");
+    SETSYM_OR_FAIL(director.libc.__fxstat, "__fxstat");
+    SETSYM_OR_FAIL(director.libc.fstatfs, "fstatfs");
+    SETSYM_OR_FAIL(director.libc.lseek, "lseek");
+    SETSYM_OR_FAIL(director.libc.pread, "pread");
+    SETSYM_OR_FAIL(director.libc.flock, "flock");
+    SETSYM_OR_FAIL(director.libc.fsync, "fsync");
+    SETSYM_OR_FAIL(director.libc.ftruncate, "ftruncate");
+    SETSYM_OR_FAIL(director.libc.posix_fallocate, "posix_fallocate");
+    SETSYM_OR_FAIL(director.libc.time, "time");
+    SETSYM_OR_FAIL(director.libc.clock_gettime, "clock_gettime");
+    SETSYM_OR_FAIL(director.libc.gettimeofday, "gettimeofday");
+    SETSYM_OR_FAIL(director.libc.gethostname, "gethostname");
+    SETSYM_OR_FAIL(director.libc.getaddrinfo, "getaddrinfo");
+    SETSYM_OR_FAIL(director.libc.freeaddrinfo, "freeaddrinfo");
+    SETSYM_OR_FAIL(director.libc.getnameinfo, "getnameinfo");
+    SETSYM_OR_FAIL(director.libc.gethostbyname, "gethostbyname");
+    SETSYM_OR_FAIL(director.libc.gethostbyname_r, "gethostbyname_r");
+    SETSYM_OR_FAIL(director.libc.gethostbyname2, "gethostbyname2");
+    SETSYM_OR_FAIL(director.libc.gethostbyname2_r, "gethostbyname2_r");
+    SETSYM_OR_FAIL(director.libc.gethostbyaddr, "gethostbyaddr");
+    SETSYM_OR_FAIL(director.libc.gethostbyaddr_r, "gethostbyaddr_r");
+    SETSYM_OR_FAIL(director.libc.rand, "rand");
+    SETSYM_OR_FAIL(director.libc.rand_r, "rand_r");
+    SETSYM_OR_FAIL(director.libc.srand, "srand");
+    SETSYM_OR_FAIL(director.libc.random, "random");
+    SETSYM_OR_FAIL(director.libc.random_r, "random_r");
+    SETSYM_OR_FAIL(director.libc.srandom, "srandom");
+    SETSYM_OR_FAIL(director.libc.srandom_r, "srandom_r");
+    SETSYM_OR_FAIL(director.libc.on_exit, "on_exit");
+    SETSYM_OR_FAIL(director.libc.__cxa_atexit, "__cxa_atexit");
+
+    /* attempt lookup but don't fail as its valid not to exist */
+    SETSYM(director.libc.atexit, "atexit");
+    SETSYM(director.libc.aligned_alloc, "aligned_alloc");
 
     __sync_fetch_and_sub(&isRecursive, 1);
 }
