@@ -340,7 +340,6 @@ static void _interposer_globalInitialize() {
     SETSYM_OR_FAIL(director.libc.realloc, "realloc");
     SETSYM_OR_FAIL(director.libc.posix_memalign, "posix_memalign");
     SETSYM_OR_FAIL(director.libc.memalign, "memalign");
-    SETSYM_OR_FAIL(director.libc.aligned_alloc, "aligned_alloc");
     SETSYM_OR_FAIL(director.libc.valloc, "valloc");
     SETSYM_OR_FAIL(director.libc.pvalloc, "pvalloc");
     SETSYM_OR_FAIL(director.libc.mmap, "mmap");
@@ -829,9 +828,9 @@ void* memalign(size_t blocksize, size_t bytes) {
 }
 
 /* aligned_alloc doesnt exist in glibc in the current LTS version of ubuntu */
-#if 0
 void* aligned_alloc(size_t alignment, size_t size) {
     if(shouldForwardToLibC()) {
+        /* if they called it, it better exist... */
         ENSURE(libc, "", aligned_alloc);
         return director.libc.aligned_alloc(alignment, size);
     }
@@ -844,7 +843,6 @@ void* aligned_alloc(size_t alignment, size_t size) {
     _interposer_switchOutShadowContext(node);
     return ptr;
 }
-#endif
 
 void* valloc(size_t size) {
     if(shouldForwardToLibC()) {
