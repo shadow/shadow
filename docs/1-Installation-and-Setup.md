@@ -30,7 +30,7 @@ sudo yum install -y git dstat screen htop
 **APT (Ubuntu):**
 
 ```bash
-sudo apt-get install -y gcc gcc-c++ clang llvm llvm-dev libglib2.0 libglib2.0-dev libigraph0 libigraph0-dev cmake make xz-utils
+sudo apt-get install -y gcc g++ clang llvm llvm-dev libglib2.0 libglib2.0-dev libigraph0 libigraph0-dev cmake make xz-utils
 sudo apt-get install -y python python-matplotlib python-numpy python-scipy python-networkx python-lxml
 sudo apt-get install -y git dstat screen htop
 ```
