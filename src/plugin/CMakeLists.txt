@@ -8,8 +8,12 @@ add_cflags("-fno-inline -fno-strict-aliasing -U_FORTIFY_SOURCE")
 
 ## now use LLVM to build each plug-in that was not disabled in setup.py
 include(LLVMTools)
+
 get_property(LLVMHoistGlobalsPATH TARGET LLVMHoistGlobals PROPERTY LOCATION)
 message(STATUS "LLVMHoistGlobalsPATH = ${LLVMHoistGlobalsPATH}")
+if((NOT DEFINED LLVMHoistGlobalsPATH) OR ( "${LLVMHoistGlobalsPATH}" STREQUAL ""))
+    message(FATAL_ERROR "LLVMHoistGlobalsPATH is empty: was there an error building src/hoist/HoistGlobals.cpp?")
+endif()
 
 if(NOT BUILD_TGEN STREQUAL OFF)
     add_subdirectory(tgen)
