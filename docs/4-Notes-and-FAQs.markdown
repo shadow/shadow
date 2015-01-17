@@ -23,12 +23,12 @@ cp -R clang-3.2.src llvm-3.2.src/tools/clang
 cd llvm-3.2.src
 mkdir build
 cd build
-cmake -DCMAKE_INSTALL_PREFIX=/home/${USER}/.local ../.
+cmake -DCMAKE_INSTALL_PREFIX=/home/${USER}/.shadow ../.
 make -jN # Replace 'N' with the number of threads for a parallel build
 make install
-export PATH=${PATH}:/home/${USER}/.local/bin
+export PATH=${PATH}:/home/${USER}/.shadow/bin
 ```  
-You should then add `/home/${USER}/.local/bin` to your shell setup for the PATH environment variable (e.g., in `~/.bashrc` or `~/.bash_profile`).  
+You should then add `/home/${USER}/.shadow/bin` to your shell setup for the PATH environment variable (e.g., in `~/.bashrc` or `~/.bash_profile`).  
 
 1. #### Why don't the consensus values from a v3bw file for the torflowauthority show up in the directory authority's `cached-consenus` file?  
 Tor currently requires 3 directory authorities to be configured in order to accept values from a v3bw file; otherwise the directory authorities use relays' advertised bandwidth when creating the consensus and the v3bw file entries are ignored.
