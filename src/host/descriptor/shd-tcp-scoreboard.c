@@ -129,7 +129,7 @@ gint _scoreboard_compareSack(gconstpointer s1, gconstpointer s2) {
     return sack1 < sack2 ? -1 : sack1 > sack2 ? 1 : 0;
 }
 
-static void _scoreboard_removeAcked(ScoreBoard* scoreboard, gint unacked) {
+static void _scoreboard_removeAcked(ScoreBoard* scoreboard, gint32 unacked) {
     MAGIC_ASSERT(scoreboard);
 
     /* remove any blocks that have been fully ACKed */
@@ -139,7 +139,7 @@ static void _scoreboard_removeAcked(ScoreBoard* scoreboard, gint unacked) {
         ScoreBoardBlock* block = (ScoreBoardBlock*)link->data;
 
         /* if block is unACKed, break out of loop */
-        if(block->sequence >= unacked) {
+        if(block->sequence >= ((gint)unacked)) {
             return;
         }
 
@@ -150,8 +150,9 @@ static void _scoreboard_removeAcked(ScoreBoard* scoreboard, gint unacked) {
     }
 }
 
-TCPProcessFlags scoreboard_update(ScoreBoard* scoreboard, GList* selectiveACKs, gint unacked) {
+TCPProcessFlags scoreboard_update(ScoreBoard* scoreboard, GList* selectiveACKs, gint32 unacked, gint32 next) {
     MAGIC_ASSERT(scoreboard);
+    utility_assert(unacked <= next);
 
     TCPProcessFlags flag = TCP_PF_NONE;
 
@@ -159,10 +160,13 @@ TCPProcessFlags scoreboard_update(ScoreBoard* scoreboard, GList* selectiveACKs, 
 
     if(selectiveACKs) {
         selectiveACKs = g_list_sort(selectiveACKs, (GCompareFunc)_scoreboard_compareSack);
-        scoreboard->fack = MAX(scoreboard->fack, GPOINTER_TO_INT(g_list_last(selectiveACKs)->data));
 
-        gint firstSeq = unacked;
-        gint lastSeq = GPOINTER_TO_INT(g_list_last(selectiveACKs)->data);
+        gint firstSeq = (gint)MAX(unacked, GPOINTER_TO_INT(g_list_first(selectiveACKs)->data));
+        gint lastSeq = 0;
+        if(next > 0) {
+            lastSeq = (gint)MIN((next-1), GPOINTER_TO_INT(g_list_last(selectiveACKs)->data));
+        }
+        scoreboard->fack = MAX(scoreboard->fack, lastSeq);
 
         /* go through all sequence that might be sacked and update scoreboard */
         for(gint seq = firstSeq; seq <= lastSeq; seq++) {

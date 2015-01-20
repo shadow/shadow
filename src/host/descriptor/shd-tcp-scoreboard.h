@@ -14,7 +14,7 @@ typedef struct _ScoreBoard ScoreBoard;
 ScoreBoard* scoreboard_new();
 void scoreboard_free(ScoreBoard* scoreboard);
 
-TCPProcessFlags scoreboard_update(ScoreBoard* scoreboard, GList* selectiveACKs, gint unacked);
+TCPProcessFlags scoreboard_update(ScoreBoard* scoreboard, GList* selectiveACKs, gint32 unacked, gint32 next);
 void scoreboard_clear(ScoreBoard* scoreboard);
 gint scoreboard_getNextRetransmit(ScoreBoard* scoreboard);
 void scoreboard_markRetransmitted(ScoreBoard* scoreboard, gint sequence, gint sendNext);

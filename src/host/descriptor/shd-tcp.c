@@ -1663,7 +1663,7 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
     }
 
     /* update the scoreboard and see if any packets have been lost */
-    flags |= scoreboard_update(tcp->retransmit.scoreboard, header.selectiveACKs, tcp->send.unacked);
+    flags |= scoreboard_update(tcp->retransmit.scoreboard, header.selectiveACKs, tcp->send.unacked, tcp->send.next);
 
     /* update the last time stamp value (RFC 1323) */
     tcp->receive.lastTimestamp = header.timestampValue;
