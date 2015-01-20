@@ -26,6 +26,7 @@
 #include <sys/timerfd.h>
 #include <sys/types.h>
 #include <sys/file.h>
+#include <sys/uio.h>
 #include <linux/sockios.h>
 #include <features.h>
 
@@ -101,6 +102,8 @@ typedef int (*pipe_func)(int [2]);
 typedef int (*pipe2_func)(int [2], int);
 typedef size_t (*read_func)(int, void*, size_t);
 typedef size_t (*write_func)(int, const void*, size_t);
+typedef ssize_t (*readv_func)(int, const struct iovec*, int);
+typedef ssize_t (*writev_func)(int, const struct iovec*, int);
 typedef int (*close_func)(int);
 typedef int (*fcntl_func)(int, int, ...);
 typedef int (*ioctl_func)(int, int, ...);
@@ -212,6 +215,8 @@ typedef struct {
     pipe2_func pipe2;
     read_func read;
     write_func write;
+    readv_func readv;
+    writev_func writev;
     close_func close;
     fcntl_func fcntl;
     ioctl_func ioctl;
@@ -235,7 +240,6 @@ typedef struct {
     fsync_func fsync;
     ftruncate_func ftruncate;
     posix_fallocate_func posix_fallocate;
-
 
     time_func time;
     clock_gettime_func clock_gettime;
@@ -373,6 +377,8 @@ static void _interposer_globalInitialize() {
     SETSYM_OR_FAIL(director.libc.pipe2, "pipe2");
     SETSYM_OR_FAIL(director.libc.read, "read");
     SETSYM_OR_FAIL(director.libc.write, "write");
+    SETSYM_OR_FAIL(director.libc.readv, "readv");
+    SETSYM_OR_FAIL(director.libc.writev, "writev");
     SETSYM_OR_FAIL(director.libc.close, "close");
     SETSYM_OR_FAIL(director.libc.fcntl, "fcntl");
     SETSYM_OR_FAIL(director.libc.ioctl, "ioctl");
@@ -1603,6 +1609,113 @@ ssize_t read(int fd, void *buff, size_t numbytes) {
     _interposer_switchOutShadowContext(host);
     return ret;
 }
+
+ssize_t write(int fd, const void *buff, size_t n) {
+    if(shouldForwardToLibC()) {
+        ENSURE(libc, "", write);
+        return director.libc.write(fd, buff, n);
+    }
+
+    gssize ret = 0;
+    Host* host = _interposer_switchInShadowContext();
+
+    if(host_isShadowDescriptor(host, fd)){
+        ret = _interposer_sendHelper(host, fd, buff, n, 0, NULL, 0);
+    } else {
+        gint osfd = host_getOSHandle(host, fd);
+        if(osfd >= 0) {
+            ret = write(osfd, buff, n);
+        } else {
+            errno = EBADF;
+            ret = -1;
+        }
+    }
+
+    _interposer_switchOutShadowContext(host);
+    return ret;
+}
+
+ssize_t readv(int fd, const struct iovec *iov, int iovcnt) {
+    if(shouldForwardToLibC()) {
+        ENSURE(libc, "", readv);
+        return director.libc.readv(fd, iov, iovcnt);
+    }
+
+    if(iovcnt < 0 || iovcnt > IOV_MAX) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    /* figure out how much they want to read total */
+    int i = 0;
+    size_t totalIOLength = 0;
+    for(i = 0; i < iovcnt; i++) {
+        totalIOLength += iov[i].iov_len;
+    }
+
+    if(totalIOLength == 0) {
+        return 0;
+    }
+
+    /* get a temporary buffer and read to it */
+    void* tempBuffer = g_malloc0(totalIOLength);
+    ssize_t totalBytesRead = read(fd, tempBuffer, totalIOLength);
+
+    if(totalBytesRead > 0) {
+        /* place all of the bytes we read in the iov buffers */
+        size_t bytesCopied = 0;
+        for(i = 0; i < iovcnt; i++) {
+            size_t bytesRemaining = (size_t) (totalBytesRead - bytesCopied);
+            size_t bytesToCopy = MIN(bytesRemaining, iov[i].iov_len);
+            g_memmove(iov[i].iov_base, &tempBuffer[bytesCopied], bytesToCopy);
+            bytesCopied += bytesToCopy;
+        }
+    }
+
+    g_free(tempBuffer);
+    return totalBytesRead;
+}
+
+ssize_t writev(int fd, const struct iovec *iov, int iovcnt) {
+    if(shouldForwardToLibC()) {
+        ENSURE(libc, "", writev);
+        return director.libc.writev(fd, iov, iovcnt);
+    }
+
+    if(iovcnt < 0 || iovcnt > IOV_MAX) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    /* figure out how much they want to write total */
+    int i = 0;
+    size_t totalIOLength = 0;
+    for(i = 0; i < iovcnt; i++) {
+        totalIOLength += iov[i].iov_len;
+    }
+
+    if(totalIOLength == 0) {
+        return 0;
+    }
+
+    /* get a temporary buffer and write to it */
+    void* tempBuffer = g_malloc0(totalIOLength);
+    size_t bytesCopied = 0;
+    for(i = 0; i < iovcnt; i++) {
+        g_memmove(&tempBuffer[bytesCopied], iov[i].iov_base, iov[i].iov_len);
+        bytesCopied += iov[i].iov_len;
+    }
+
+    ssize_t totalBytesWritten = 0;
+    if(bytesCopied > 0) {
+        /* try to write all of the bytes we got from the iov buffers */
+        totalBytesWritten = write(fd, tempBuffer, bytesCopied);
+    }
+
+    g_free(tempBuffer);
+    return totalBytesWritten;
+}
+
 #include <assert.h>
 ssize_t pread(int fd, void *buff, size_t numbytes, off_t offset) {
     if(shouldForwardToLibC()) {
@@ -1621,31 +1734,6 @@ ssize_t pread(int fd, void *buff, size_t numbytes, off_t offset) {
         gint osfd = host_getOSHandle(host, fd);
         if(osfd >= 0) {
             ret = pread(osfd, buff, numbytes, offset);
-        } else {
-            errno = EBADF;
-            ret = -1;
-        }
-    }
-
-    _interposer_switchOutShadowContext(host);
-    return ret;
-}
-
-ssize_t write(int fd, const void *buff, size_t n) {
-    if(shouldForwardToLibC()) {
-        ENSURE(libc, "", write);
-        return director.libc.write(fd, buff, n);
-    }
-
-    gssize ret = 0;
-    Host* host = _interposer_switchInShadowContext();
-
-    if(host_isShadowDescriptor(host, fd)){
-        ret = _interposer_sendHelper(host, fd, buff, n, 0, NULL, 0);
-    } else {
-        gint osfd = host_getOSHandle(host, fd);
-        if(osfd >= 0) {
-            ret = write(osfd, buff, n);
         } else {
             errno = EBADF;
             ret = -1;
