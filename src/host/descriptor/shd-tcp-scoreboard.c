@@ -132,22 +132,28 @@ gint _scoreboard_compareSack(gconstpointer s1, gconstpointer s2) {
 static void _scoreboard_removeAcked(ScoreBoard* scoreboard, gint32 unacked) {
     MAGIC_ASSERT(scoreboard);
 
-    /* remove any blocks that have been fully ACKed */
-    GList* link = scoreboard->blocks;
-    while(link) {
-        GList* next = g_list_next(link);
-        ScoreBoardBlock* block = (ScoreBoardBlock*)link->data;
+    /* reconstruct the blocks list to avoid editing the list in-place */
+    GList* blocks = scoreboard->blocks;
+    scoreboard->blocks = NULL;
 
-        /* if block is unACKed, break out of loop */
-        if(block->sequence >= ((gint)unacked)) {
-            return;
+    /* keep all blocks that have not been fully ACKed */
+    GList* nextLink = blocks;
+    while(nextLink) {
+        ScoreBoardBlock* nextBlock = (ScoreBoardBlock*)(nextLink->data);
+
+        if(nextBlock->sequence < ((gint)unacked)) {
+            /* the block has been acked, destroy it */
+            g_free(nextBlock);
+        } else {
+            /* the block has not yet been acked, keep it */
+            scoreboard->blocks = g_list_append(scoreboard->blocks, nextBlock);
         }
 
-        /* remove block and free it */
-        scoreboard->blocks = g_list_delete_link(scoreboard->blocks, link);
-        g_free(block);
-        link = next;
+        nextLink = g_list_next(nextLink);
     }
+
+    /* clean up the old blocks list */
+    g_list_free(blocks);
 }
 
 TCPProcessFlags scoreboard_update(ScoreBoard* scoreboard, GList* selectiveACKs, gint32 unacked, gint32 next) {

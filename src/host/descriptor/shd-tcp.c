@@ -1280,18 +1280,22 @@ static TCP* _tcp_getSourceTCP(TCP* tcp, in_addr_t ip, in_port_t port) {
     return tcp;
 }
 
-static void _tcp_removeSacks(GList** selectiveACKs, gint sequence) {
-    GList *iter = *selectiveACKs;
-    while(iter) {
-        GList *next = g_list_next(iter);
-        gint sackSequence = GPOINTER_TO_INT(iter->data);
+static GList* _tcp_removeSacks(GList* selectiveACKs, gint sequence) {
+    GList *unacked = NULL;
+    if(selectiveACKs) {
+        GList *iter = selectiveACKs;
+        while(iter) {
+            gint sackSequence = GPOINTER_TO_INT(iter->data);
 
-        if(sackSequence <= sequence) {
-            *selectiveACKs = g_list_delete_link(*selectiveACKs, iter);
+            if(sackSequence > sequence) {
+                unacked = g_list_append(unacked, iter->data);
+            }
+
+            iter = g_list_next(iter);
         }
-
-        iter = next;
+        g_list_free(selectiveACKs);
     }
+    return unacked;
 }
 
 TCPProcessFlags _tcp_dataProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *header) {
@@ -1338,7 +1342,7 @@ TCPProcessFlags _tcp_dataProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *h
                     next = g_list_next(iter);
                 }
 
-                _tcp_removeSacks(&tcp->send.selectiveACKs, GPOINTER_TO_INT(iter->data));
+                tcp->send.selectiveACKs = _tcp_removeSacks(tcp->send.selectiveACKs, GPOINTER_TO_INT(iter->data));
             }
         }
 
