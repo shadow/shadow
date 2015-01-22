@@ -14,7 +14,7 @@ find_path (LLVM_DIR LLVM-Config.cmake
 
 if(NOT LLVM_DIR)
   find_path (LLVM_DIR LLVM-Config.cmake
-    PATHS /usr/local/share/llvm /usr/share/llvm /usr/share/llvm-3.5 /usr/share/llvm-3.4 /usr/share/llvm-3.3 /usr/share/llvm-3.2 PATH_SUFFIXES cmake
+    PATHS $ENV{HOME}/.shadow/share/llvm /usr/local/share/llvm /usr/share/llvm /usr/share/llvm-3.5 /usr/share/llvm-3.4 /usr/share/llvm-3.3 /usr/share/llvm-3.2 PATH_SUFFIXES cmake
   )
 endif()
 
