@@ -7,7 +7,7 @@
 #define __STDC_CONSTANT_MACROS
 
 #include "llvm/Pass.h"
-#if __clang_major__ == 3 && __clang_minor__ <= 2
+#if ((__clang_major__ < 3) || (__clang_major__ == 3 && __clang_minor__ < 3))
 #include "llvm/Function.h"
 #include "llvm/Module.h"
 #include "llvm/LLVMContext.h"
@@ -30,17 +30,23 @@
 #endif
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
+#if ((__clang_major__ < 3) || (__clang_major__ == 3 && __clang_minor__ < 5))
 #include "llvm/Support/CallSite.h"
 #include "llvm/Support/CFG.h"
 #include "llvm/Support/DebugLoc.h"
+#include "llvm/Analysis/Verifier.h"
+#else
+#include "llvm/IR/CallSite.h"
+#include "llvm/IR/CFG.h"
+#include "llvm/IR/DebugLoc.h"
+#include "llvm/IR/Verifier.h"
+#endif
 
 #ifdef DEBUG
 #include "llvm/Support/raw_ostream.h"
 #endif
 
 #include <string>
-
-#include "llvm/Analysis/Verifier.h"
 
 using namespace llvm;
 using std::string;
@@ -61,20 +67,20 @@ static std::vector<Function*> parseGlobalCtors(GlobalVariable *GV) {
 static void replaceAllUsesWithKeepDebugInfo(GlobalVariable* From, Constant* To) {
     From->replaceAllUsesWith(To);
     return;
-    assert(!From->isConstant());
-    while(From->getNumUses() > 0) {
-        User* u = From->use_back();
+    //assert(!From->isConstant());
+    //while(From->getNumUses() > 0) {
+	    //User* u = From->use_back();
 
         // this cant be done on a constant, and we asserted that from is not a constant
-        u->replaceUsesOfWith(From, To);
+        //u->replaceUsesOfWith(From, To);
 
         // metadata (gdb debug info) does not count as a use, so we have to update this manually
-        if(Instruction *ins = dyn_cast < Instruction > (u)) {
-            MDNode *N = ins->getMetadata(LLVMContext::MD_dbg);
+        //if(Instruction *ins = dyn_cast < Instruction > (u)) {
+		    //MDNode *N = ins->getMetadata(LLVMContext::MD_dbg);
             // replace any debug info that references From to instead reference To
             // ??
-        }
-    }
+        //}
+    //}
 }
 
 namespace {
