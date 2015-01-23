@@ -52,6 +52,7 @@ typedef struct _Process Process;
  * place base classes with few dependencies first.
  */
 
+#include "plugin/shadow-plugin-interface.h"
 #include "engine/shd-main.h"
 
 /* configuration, base runnables, and input parsing */
@@ -77,8 +78,6 @@ typedef struct _Process Process;
 #include "utility/shd-random.h"
 
 #include "support/shd-event-queue.h"
-#include "plugin/shd-library.h"
-#include "interpose/shd-program.h"
 
 #include "topology/shd-address.h"
 #include "topology/shd-dns.h"
@@ -96,6 +95,7 @@ typedef struct _Process Process;
 #include "host/descriptor/shd-tcp-cubic.h"
 #include "host/descriptor/shd-tcp-scoreboard.h"
 #include "host/descriptor/shd-udp.h"
+#include "host/shd-program.h"
 #include "host/shd-thread.h"
 #include "host/shd-process.h"
 #include "host/shd-network-interface.h"

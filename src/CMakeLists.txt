@@ -11,18 +11,12 @@ include_directories(${RT_INCLUDES} ${DL_INCLUDES} ${M_INCLUDES} ${IGRAPH_INCLUDE
 ## make sure shadow.h is in the include path
 include_directories(${CMAKE_SOURCE_DIR}/src/)
 
-## build the LLVM plugin that we'll use to get plugin state automatically
-add_subdirectory(hoist)
+## build plug-in libraries and other components
+add_subdirectory(plugin)
 
 ## compile defs and flags
 #add_definitions(-D_SVID_SOURCE -D_XOPEN_SOURCE=600 -D_ISOC11_SOURCE) #-D_GNU_SOURCE
 add_cflags(-fPIC)
-
-## build the required libraries for intercepting system and library calls
-add_subdirectory(interpose)
-
-## build the built-in plug-in libraries
-add_subdirectory(plugin)
 
 ## sources for our main shadow program
 set(shadow_srcs
@@ -31,15 +25,6 @@ set(shadow_srcs
     engine/shd-slave.c
     engine/shd-worker.c
 
-    support/shd-configuration.c
-    support/shd-examples.c
-    support/shd-event-queue.c
-    support/shd-logging.c
-    support/shd-parser.c
-    support/shd-pcap-writer.c
-    
-    interpose/shd-program.c
-    
     host/descriptor/shd-channel.c
     host/descriptor/shd-descriptor.c
     host/descriptor/shd-epoll.c
@@ -54,15 +39,14 @@ set(shadow_srcs
     host/descriptor/shd-transport.c
     host/descriptor/shd-udp.c
     host/shd-process.c
+    host/shd-program.c
     host/shd-thread.c
     host/shd-cpu.c
     host/shd-host.c
     host/shd-network-interface.c
     host/shd-packet.c
     host/shd-tracker.c
-    
-    plugin/shd-library.c
-    
+
     runnable/action/shd-action.c
     runnable/action/shd-create-node.c
     runnable/action/shd-kill-engine.c
@@ -83,18 +67,25 @@ set(shadow_srcs
     runnable/shd-listener.c
     runnable/shd-runnable.c
 
+    support/shd-configuration.c
+    support/shd-examples.c
+    support/shd-event-queue.c
+    support/shd-logging.c
+    support/shd-parser.c
+    support/shd-pcap-writer.c
+
     topology/shd-address.c
     topology/shd-dns.c
     topology/shd-path.c
     topology/shd-topology.c
-        
+
     utility/shd-async-priority-queue.c
     utility/shd-byte-queue.c
     utility/shd-count-down-latch.c
     utility/shd-priority-queue.c
     utility/shd-random.c
     utility/shd-utility.c
-    
+
     main.c
 )
 

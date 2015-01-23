@@ -3,7 +3,9 @@
  * See LICENSE for licensing information
  */
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include <fcntl.h>
 
 #include <time.h>
