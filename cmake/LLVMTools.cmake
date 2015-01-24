@@ -111,9 +111,18 @@ add_custom_command(OUTPUT ${target}.bc
 )
 set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_MAKE_CLEAN_FILES ${target}.bc)
 
+## double check for correct path
+if((NOT DEFINED LLVMHoistGlobalsPATH) OR ( "${LLVMHoistGlobalsPATH}" STREQUAL ""))
+    message(FATAL_ERROR "LLVMHoistGlobalsPATH is empty: have you added the path to LLVMHoistGlobals.so to the include path?")
+endif()
+## cant use the following check, because the .so doesnt exist yet when cmake scans this file
+#if(NOT EXISTS "${LLVMHoistGlobalsPATH}")
+#    message(FATAL_ERROR "LLVMHoistGlobals.so does not exist at ${LLVMHoistGlobalsPATH}")
+#endif()
+
 add_custom_command(OUTPUT ${target}.hoisted.bc
     COMMAND ${LLVM_BC_OPT} -load=${LLVMHoistGlobalsPATH} -hoist-globals ${target}.bc -o ${target}.hoisted.bc
-    DEPENDS ${target}.bc LLVMHoistGlobals
+    DEPENDS ${target}.bc LLVMHoistGlobals ${LLVMHoistGlobalsPATH}
     COMMENT "Hoisting globals from ${target}.bc to ${target}.hoisted.bc"
 )
 set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_MAKE_CLEAN_FILES ${target}.hoisted.bc)

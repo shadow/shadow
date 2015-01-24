@@ -1,4 +1,30 @@
 ## tgen: an all-purpose traffic generation plug-in for Shadow
+project(shadow-plugin-tgen)
+
+## skip checks if built in shadow source dir
+if(NOT TARGET LLVMHoistGlobals)
+    message(FATAL_ERROR "shadow-plugin-tgen must currently be built in shadow source tree")
+
+    ## fill in LLVM variables since we did not inherit from shadow cmake file
+    include(LLVMTools)
+    add_custom_target(LLVMHoistGlobals)
+    set(LLVMHoistGlobalsPATH "${SHADOW_ROOT}/lib/LLVMHoistGlobals.so")
+
+    ## make sure our LLVM plugin exists
+    if(EXISTS "${LLVMHoistGlobalsPATH}")
+        message(STATUS "LLVMHoistGlobalsPATH = ${LLVMHoistGlobalsPATH}")
+    else()
+        message(FATAL_ERROR "LLVMHoistGlobalsPATH path does not exist: '${LLVMHoistGlobalsPATH}'")
+    endif()
+endif()
+
+## plug-ins need to disable fortification to ensure syscalls are intercepted
+add_definitions(-D_GNU_SOURCE)
+add_cflags("-fno-inline -fno-strict-aliasing -U_FORTIFY_SOURCE")
+
+## CFLAGS status update
+message(STATUS "CMAKE_C_FLAGS = ${CMAKE_C_FLAGS}")
+
 set(tgen_sources
     shd-tgen-action.c
     shd-tgen-driver.c
