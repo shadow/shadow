@@ -86,17 +86,13 @@ static void replaceAllUsesWithKeepDebugInfo(GlobalVariable* From, Constant* To) 
 namespace {
 class HoistGlobalsPass: public ModulePass {
 
-private:
-	// require DataLayout so we can get variable sizes
-	void getAnalysisUsage(AnalysisUsage &AU) const {
-		AU.addRequired<DataLayout>();
-	}
-
 public:
 	static char ID;
 	HoistGlobalsPass() : ModulePass(ID) {}
 
 	bool runOnModule(Module &M) {
+	    DataLayout* DL = new DataLayout(&M);
+
 		{
 #ifdef DEBUG
 			errs() << "Injecting llvm.global_ctors into __shadow_plugin_init__";
@@ -172,7 +168,7 @@ public:
 		// and we need the size of the struct so we know how much to copy in
 		// and out for each node
 
-		uint64_t rawsize = getAnalysis<DataLayout>().getTypeStoreSize(HoistedStructType);
+		uint64_t rawsize = DL->getTypeAllocSize(HoistedStructType);
 		Constant *HoistedStructSize = ConstantInt::get(Int32Ty, rawsize, false);
 		GlobalVariable *HoistedSize = new GlobalVariable(M, Int32Ty, true,
 				GlobalValue::ExternalLinkage, HoistedStructSize,
