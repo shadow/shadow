@@ -1,3 +1,6 @@
+add_cflags(-Wno-unknown-attributes)
+add_cflags(-Wno-unused-command-line-argument)
+
 ## build the required libraries for intercepting system and library calls.
 ## create the interpose library, to be set as LD_PRELOAD to intercept functions.
 ## the functions we intercept MUST be in a shared library for dlsym searching.

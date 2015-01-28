@@ -17,6 +17,8 @@ add_subdirectory(plugin)
 ## compile defs and flags
 #add_definitions(-D_SVID_SOURCE -D_XOPEN_SOURCE=600 -D_ISOC11_SOURCE) #-D_GNU_SOURCE
 add_cflags(-fPIC)
+add_cflags(-Wno-unknown-attributes)
+add_cflags(-Wno-unused-command-line-argument)
 
 ## sources for our main shadow program
 set(shadow_srcs
