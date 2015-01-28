@@ -117,7 +117,6 @@ void packet_unref(Packet* packet) {
     _packet_lock(packet);
 
     (packet->referenceCount)--;
-    utility_assert(packet->referenceCount >= 0);
     if(packet->referenceCount == 0) {
         _packet_unlock(packet);
         packet_addDeliveryStatus(packet, PDS_DESTROYED);
