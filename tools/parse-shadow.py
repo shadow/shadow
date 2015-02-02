@@ -126,7 +126,7 @@ def single_parse(args):
             # dont include bootstrapping period
             if parsetimestamp(parts[2]) < args.skiptime: continue
             # check for our log line types
-            if args.doshadow and 'shadow-heartbeat' in parts[6]: shadow_helper(sdata, parts)
+            if 'slave_heartbeat' in parts[5] or (args.doshadow and 'shadow-heartbeat' in parts[6]): shadow_helper(sdata, parts)
             elif args.dotor and 'torctl-log' in parts[6]: tor_helper(tdata, parts)
             elif args.dofiletransfer and 'fg-download-complete' in parts[6]: filetransfer_helper(fdata, parts)
             elif args.dotgen and 'transfer-complete' in parts[6]: tgen_helper(tgendata, parts)
@@ -199,7 +199,7 @@ def filterworker_main(args, filterQ, shadowQ, torQ, filetransferQ, tgenQ):
                 # dont include bootstrapping period
                 if parsetimestamp(parts[2]) < args.skiptime: raise
                 # check for our log line types
-                if args.doshadow and 'shadow-heartbeat' in parts[6]: shadowbatch.append(parts)
+                if 'slave_heartbeat' in parts[5] or (args.doshadow and 'shadow-heartbeat' in parts[6]): shadowbatch.append(parts)
                 elif args.dotor and 'torctl-log' in parts[6]: torbatch.append(parts)
                 elif args.dofiletransfer and 'fg-download-complete' in parts[6]: filetransferbatch.append(parts)
                 elif args.dotgen and 'transfer-complete' in parts[6]: tgenbatch.append(parts)
@@ -259,9 +259,21 @@ where counters are:
 total-packets,total-bytes,payload-bytes,header-bytes,payload-packets,payload-header-bytes,control-packets,control-header-bytes,retrans-packets,retrans-header-bytes,retrans-payload-bytes
 '''
 def shadow_helper(d, parts):
-    if len(parts) < 9 or '[node]' != parts[7]: return
+    if len(parts) < 9: return
 
     virtualts = parsetimestamp(parts[2])
+    second = int(virtualts)
+
+    if 'slave_heartbeat' in parts[5]:
+        realts = parsetimestamp(parts[0])
+        maxrss = float(parts[12].split('=')[1]) if 'maxrss' in parts[12] else -1.0
+
+        if 'ticks' not in d: d['ticks'] = {}
+        if second not in d['ticks']: d['ticks'][second] = {'time_seconds':realts, 'maxrss_gib':maxrss}
+        return
+
+    # now this must be a shadow-heartbeat message
+    if '[node]' != parts[7]: return
     name = parts[4].lstrip('[').rstrip(']') # eg: [webclient2-11.0.5.99]
 
     mods = parts[8].split(';')
@@ -274,7 +286,6 @@ def shadow_helper(d, parts):
     #labels = ['count_total', 'count_data', 'count_control', 'count_retrans', 'bytes_total', 'bytes_data', 'bytes_control', 'bytes_retrans']
     labels = ['bytes_total', 'bytes_data', 'bytes_control', 'bytes_retrans']
 
-    second = int(virtualts)
     if 'nodes' not in d: d['nodes'] = {}
     if name not in d['nodes']:
         d['nodes'][name] = {'recv':{}, 'send':{}}
@@ -336,12 +347,7 @@ def filetransfer_helper(d, parts):
     d['nodes'][name][bytes]['lastbyte'].append(lbtime)
 
 def tgen_helper(d, parts):
-    realts = parsetimestamp(parts[0])
-    virtualts = parsetimestamp(parts[2])
     name = parts[4].lstrip('[').rstrip(']')
-
-    if 'times' not in d: d['times'] = {}
-    if int(virtualts) not in d['times']: d['times'][int(virtualts)] = realts
 
     ioparts = parts[13].split('=')
     iodirection = ioparts[0]

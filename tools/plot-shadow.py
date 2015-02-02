@@ -95,8 +95,10 @@ def main():
 
     page = PdfPages("{0}shadow.results.pdf".format(args.prefix+'.' if args.prefix is not None else ''))
     if len(shdata) > 0:
-        plot_shadow(shdata, page, direction="recv")
-        plot_shadow(shdata, page, direction="send")
+        plot_shadow_time(shdata, page)
+        plot_shadow_ram(shdata, page)
+        plot_shadow_packets(shdata, page, direction="recv")
+        plot_shadow_packets(shdata, page, direction="send")
     if len(ftdata) > 0:
         plot_filetransfer_firstbyte(ftdata, page)
         plot_filetransfer_lastbyte_all(ftdata, page)
@@ -109,7 +111,46 @@ def main():
         plot_tor(tordata, page, direction="bytes_written")
     page.close()
 
-def plot_shadow(datasource, page, direction="send"):
+def plot_shadow_time(datasource, page):
+    pylab.figure()
+    
+    for (d, label, lineformat) in datasource:
+        data = {}
+        for k in d['ticks'].keys(): data[int(k)] = float(d['ticks'][k]['time_seconds'])/3600.0
+        x = sorted(data.keys())
+        y = [data[k] for k in x]
+        pylab.plot(x, y, lineformat, label=label)
+
+    pylab.xlabel("Tick (s)")
+    pylab.ylabel("Real Time (h)")
+    pylab.title("simulation run time")
+    pylab.legend(loc="upper left")
+    page.savefig()
+    pylab.close()
+
+def plot_shadow_ram(datasource, page):
+    pylab.figure()
+    
+    for (d, label, lineformat) in datasource:
+        data = {}
+        for k in d['ticks'].keys(): data[int(k)] = float(d['ticks'][k]['maxrss_gib'])
+        x = sorted(data.keys())
+        y = [data[k] for k in x]
+        pylab.plot(x, y, lineformat, label=label)
+
+    pylab.xlabel("Tick (s)")
+    pylab.ylabel("Maximum Resident Set Size (GiB)")
+    pylab.title("simulation memory usage")
+    pylab.legend(loc="upper left")
+    page.savefig()
+    pylab.close()
+
+def plot_shadow_packets(datasource, page, direction="send"):
+    do_proceed = False
+    for (d, label, lineformat) in datasource:
+        if 'nodes' in d: do_proceed = True
+    if not do_proceed: return
+
     total_all_mafig, total_all_cdffig, total_each_cdffig = pylab.figure(), pylab.figure(), pylab.figure()
     data_all_mafig, data_all_cdffig, data_each_cdffig = pylab.figure(), pylab.figure(), pylab.figure()
     control_all_mafig, control_all_cdffig, control_each_cdffig = pylab.figure(), pylab.figure(), pylab.figure()
@@ -119,6 +160,8 @@ def plot_shadow(datasource, page, direction="send"):
     fracretrans_all_mafig, fracretrans_all_cdffig, fracretrans_each_cdffig = pylab.figure(), pylab.figure(), pylab.figure()
 
     for (d, label, lineformat) in datasource:
+        if 'nodes' not in d: continue
+        d = d['nodes']
         total_all, data_all, control_all, retrans_all = {}, {}, {}, {}
         total_each, data_each, control_each, retrans_each = [], [], [], []
         fracdata_all, fraccontrol_all, fracretrans_all = {}, {}, {}
@@ -542,7 +585,7 @@ def plot_filetransfer_lastbyte_median(data, page):
         pylab.figure(figs[bytes].number)
         pylab.xlabel("Download Time (s)")
         pylab.ylabel("Cumulative Fraction")
-        pylab.title("median time to download {0} bytes, all clients".format(bytes))
+        pylab.title("median time to download {0} bytes, each client".format(bytes))
         pylab.legend(loc="lower right")
         page.savefig()
         pylab.close()
@@ -568,7 +611,7 @@ def plot_filetransfer_lastbyte_mean(data, page):
         pylab.figure(figs[bytes].number)
         pylab.xlabel("Download Time (s)")
         pylab.ylabel("Cumulative Fraction")
-        pylab.title("mean time to download {0} bytes, all clients".format(bytes))
+        pylab.title("mean time to download {0} bytes, each client".format(bytes))
         pylab.legend(loc="lower right")
         page.savefig()
         pylab.close()
@@ -594,7 +637,7 @@ def plot_filetransfer_lastbyte_max(data, page):
         pylab.figure(figs[bytes].number)
         pylab.xlabel("Download Time (s)")
         pylab.ylabel("Cumulative Fraction")
-        pylab.title("max time to download {0} bytes, all clients".format(bytes))
+        pylab.title("max time to download {0} bytes, each client".format(bytes))
         pylab.legend(loc="lower right")
         page.savefig()
         pylab.close()
@@ -620,7 +663,7 @@ def plot_filetransfer_downloads(data, page):
         pylab.figure(figs[bytes].number)
         pylab.xlabel("Downloads Completed (\#)")
         pylab.ylabel("Cumulative Fraction")
-        pylab.title("number of {0} byte downloads completed, per client".format(bytes))
+        pylab.title("number of {0} byte downloads completed, each client".format(bytes))
         pylab.legend(loc="lower right")
         page.savefig()
         pylab.close()
@@ -697,7 +740,7 @@ def get_data(experiments, lineformats):
         if not os.path.exists(log): continue
         xzcatp = subprocess.Popen(["xzcat", log], stdout=subprocess.PIPE)
         data = json.load(xzcatp.stdout)
-        shdata.append((data['nodes'], label, lfcycle.next()))
+        shdata.append((data, label, lfcycle.next()))
 
     lfcycle = cycle(lflist)
     for (path, label) in experiments:
