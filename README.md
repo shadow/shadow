@@ -29,9 +29,6 @@ Shadow Plug-ins and Project Development:
 Homepage:
   + https://shadow.github.io
     
-Download New Releases:
-  + https://shadow.github.io/download
-
 # Contributing
 
 Contributions can be made by submitting pull requests via GitHub.
