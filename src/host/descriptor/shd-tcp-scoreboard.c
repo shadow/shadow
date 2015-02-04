@@ -30,7 +30,7 @@ struct _ScoreBoardBlock {
 
 struct _ScoreBoard {
     /* list of blocks in the scoreboard */
-    GList* blocks;
+    GQueue* blocksQ;
 
     /* the furthest SACKed sequence number */
     gint fack;
@@ -48,15 +48,7 @@ struct _ScoreBoard {
     MAGIC_DECLARE;
 };
 
-
-ScoreBoard* scoreboard_new() {
-    ScoreBoard* scoreboard = g_new0(ScoreBoard, 1);
-    MAGIC_INIT(scoreboard);
-
-    return scoreboard;
-}
-
-ScoreBoardBlock* scoreboardblock_new(gint sequence, BlockStatus status) {
+static ScoreBoardBlock* _scoreboardblock_new(gint sequence, BlockStatus status) {
     ScoreBoardBlock* block = g_new0(ScoreBoardBlock, 1);
     MAGIC_INIT(block);
     block->sequence = sequence;
@@ -65,17 +57,59 @@ ScoreBoardBlock* scoreboardblock_new(gint sequence, BlockStatus status) {
     return block;
 }
 
-gint _scoreboard_compareBlock(gconstpointer b1, gconstpointer b2) {
-    ScoreBoardBlock* block1 = (ScoreBoardBlock*)b1;
-    ScoreBoardBlock* block2 = (ScoreBoardBlock*)b2;
+static gint _scoreboardblock_compareStatus(ScoreBoardBlock* block1, ScoreBoardBlock* block2) {
+    return (block1->status < block2->status ? -1 : block1->status > block2->status ? 1 : 0);
+}
+
+static gint _scoreboardblock_compareSequence(ScoreBoardBlock* block1, ScoreBoardBlock* block2) {
     return (block1->sequence < block2->sequence ? -1 : block1->sequence > block2->sequence ? 1 : 0);
+}
+
+static gint _scoreboardblock_compareSequenceData(ScoreBoardBlock* block1, ScoreBoardBlock* block2, gpointer userData) {
+    return _scoreboardblock_compareSequence(block1, block2);
+}
+
+static void _scoreboardblock_free(ScoreBoardBlock* block) {
+    MAGIC_ASSERT(block);
+    MAGIC_CLEAR(block);
+    g_free(block);
+}
+
+ScoreBoard* scoreboard_new() {
+    ScoreBoard* scoreboard = g_new0(ScoreBoard, 1);
+    MAGIC_INIT(scoreboard);
+
+    return scoreboard;
+}
+
+void scoreboard_clear(ScoreBoard* scoreboard) {
+    MAGIC_ASSERT(scoreboard);
+
+    scoreboard->retransmissionId = 0;
+    scoreboard->ackedRetransmissionId = -1;
+    scoreboard->fack = 0;
+    scoreboard->fackOut = 0;
+
+    /* reset the blocks queue */
+    if(scoreboard->blocksQ) {
+        g_queue_free_full(scoreboard->blocksQ, (GDestroyNotify)_scoreboardblock_free);
+        scoreboard->blocksQ = g_queue_new();
+    }
+}
+
+void scoreboard_free(ScoreBoard* scoreboard) {
+    MAGIC_ASSERT(scoreboard);
+    scoreboard_clear(scoreboard);
+    g_queue_free(scoreboard->blocksQ);
+    MAGIC_CLEAR(scoreboard);
+    g_free(scoreboard);
 }
 
 static ScoreBoardBlock* _scoreboard_addBlock(ScoreBoard* scoreboard, gint sequence, BlockStatus status) {
     MAGIC_ASSERT(scoreboard);
 
-    ScoreBoardBlock* block = scoreboardblock_new(sequence, status);
-    scoreboard->blocks = g_list_insert_sorted(scoreboard->blocks, block, (GCompareFunc)_scoreboard_compareBlock);
+    ScoreBoardBlock* block = _scoreboardblock_new(sequence, status);
+    g_queue_insert_sorted(scoreboard->blocksQ, block, (GCompareDataFunc) _scoreboardblock_compareSequenceData, NULL);
 
     return block;
 }
@@ -83,17 +117,14 @@ static ScoreBoardBlock* _scoreboard_addBlock(ScoreBoard* scoreboard, gint sequen
 static ScoreBoardBlock* _scoreboard_findBlock(ScoreBoard* scoreboard, gint sequence) {
     MAGIC_ASSERT(scoreboard);
 
-    for(GList* link = scoreboard->blocks; link; link = g_list_next(link)) {
-        ScoreBoardBlock* block = (ScoreBoardBlock*)link->data;
-        if(block->sequence == sequence) {
-            return block;
-        }
-    }
+    ScoreBoardBlock b;
+    b.sequence = sequence;
+    GList* link = g_queue_find_custom(scoreboard->blocksQ, &b, (GCompareFunc)_scoreboardblock_compareSequence);
 
-    return NULL;
+    return link ? (ScoreBoardBlock*)link->data : NULL;
 }
 
-static gchar* _scoreboard_statusString(BlockStatus status) {
+static gchar* _scoreboard_getStatusString(BlockStatus status) {
     switch(status) {
         case BLOCK_STATUS_INFLIGHT:
             return "INFLIGHT";
@@ -107,23 +138,22 @@ static gchar* _scoreboard_statusString(BlockStatus status) {
     return "UNKNOWN";
 }
 
+static void _scoreboardblock_appendString(ScoreBoardBlock* block, GString* msg) {
+    g_string_append_printf(msg, " %d (st=%s nxt=%d rtx=%d)", block->sequence, _scoreboard_getStatusString(block->status), block->nextSend, block->retransmissionId);
+}
+
 static void _scoreboard_dump(ScoreBoard* scoreboard) {
     MAGIC_ASSERT(scoreboard);
 
     GString* msg = g_string_new("");
     g_string_append_printf(msg, "[SCOREBOARD] fack=%d ackRtx=%d |", scoreboard->fack, scoreboard->ackedRetransmissionId);
-
-    for(GList* link = scoreboard->blocks; link; link = g_list_next(link)) {
-        ScoreBoardBlock* block = (ScoreBoardBlock*)link->data;
-        g_string_append_printf(msg, " %d (st=%s nxt=%d rtx=%d)", block->sequence, _scoreboard_statusString(block->status), block->nextSend, block->retransmissionId);
-    }
+    g_queue_foreach(scoreboard->blocksQ, (GFunc)_scoreboardblock_appendString, msg);
 
     message("%s", msg->str);
     g_string_free(msg, TRUE);
 }
 
-
-gint _scoreboard_compareSack(gconstpointer s1, gconstpointer s2) {
+static gint _scoreboard_compareSack(gconstpointer s1, gconstpointer s2) {
     gint sack1 = GPOINTER_TO_INT(s1);
     gint sack2 = GPOINTER_TO_INT(s2);
     return sack1 < sack2 ? -1 : sack1 > sack2 ? 1 : 0;
@@ -132,28 +162,24 @@ gint _scoreboard_compareSack(gconstpointer s1, gconstpointer s2) {
 static void _scoreboard_removeAcked(ScoreBoard* scoreboard, gint32 unacked) {
     MAGIC_ASSERT(scoreboard);
 
-    /* reconstruct the blocks list to avoid editing the list in-place */
-    GList* blocks = scoreboard->blocks;
-    scoreboard->blocks = NULL;
+    /* reconstruct the blocks queue to avoid editing it in-place */
+    GQueue* updatedBlocksQ = g_queue_new();
 
     /* keep all blocks that have not been fully ACKed */
-    GList* nextLink = blocks;
-    while(nextLink) {
-        ScoreBoardBlock* nextBlock = (ScoreBoardBlock*)(nextLink->data);
-
-        if(nextBlock->sequence < ((gint)unacked)) {
+    while(!g_queue_is_empty(scoreboard->blocksQ)) {
+        ScoreBoardBlock* block = g_queue_pop_head(scoreboard->blocksQ);
+        if(block->sequence < ((gint)unacked)) {
             /* the block has been acked, destroy it */
-            g_free(nextBlock);
+            _scoreboardblock_free(block);
         } else {
             /* the block has not yet been acked, keep it */
-            scoreboard->blocks = g_list_append(scoreboard->blocks, nextBlock);
+            g_queue_push_tail(updatedBlocksQ, block);
         }
-
-        nextLink = g_list_next(nextLink);
     }
 
-    /* clean up the old blocks list */
-    g_list_free(blocks);
+    /* clean up the old blocks queue */
+    g_queue_free(scoreboard->blocksQ);
+    scoreboard->blocksQ = updatedBlocksQ;
 }
 
 TCPProcessFlags scoreboard_update(ScoreBoard* scoreboard, GList* selectiveACKs, gint32 unacked, gint32 next) {
@@ -201,8 +227,9 @@ TCPProcessFlags scoreboard_update(ScoreBoard* scoreboard, GList* selectiveACKs, 
     scoreboard->lastAcknowledgment = unacked;
 
     /* go through all the blocks and check if any of the INFLIGHT ones need to be retransmitted */
-    for(GList* link = scoreboard->blocks; link; link = g_list_next(link)) {
-        ScoreBoardBlock* block = (ScoreBoardBlock*)link->data;
+    for(guint i = 0; i < g_queue_get_length(scoreboard->blocksQ); i++) {
+        ScoreBoardBlock* block = (ScoreBoardBlock*)g_queue_peek_nth(scoreboard->blocksQ, i);
+        if(!block) continue;
 
         switch(block->status) {
             case BLOCK_STATUS_INFLIGHT:
@@ -238,37 +265,14 @@ TCPProcessFlags scoreboard_update(ScoreBoard* scoreboard, GList* selectiveACKs, 
     return flag;
 }
 
-void scoreboard_clear(ScoreBoard* scoreboard) {
-    MAGIC_ASSERT(scoreboard);
-
-    scoreboard->retransmissionId = 0;
-    scoreboard->ackedRetransmissionId = -1;
-    scoreboard->fack = 0;
-    scoreboard->fackOut = 0;
-    if(scoreboard->blocks) {
-        g_list_free_full(scoreboard->blocks, g_free);
-        scoreboard->blocks = NULL;
-    }
-}
-
-void scoreboard_free(ScoreBoard* scoreboard) {
-    MAGIC_ASSERT(scoreboard);
-    scoreboard_clear(scoreboard);
-    MAGIC_CLEAR(scoreboard);
-    g_free(scoreboard);
-}
-
 gint scoreboard_getNextRetransmit(ScoreBoard* scoreboard) {
     MAGIC_ASSERT(scoreboard);
- 
-    for(GList* link = scoreboard->blocks; link; link = g_list_next(link)) {
-        ScoreBoardBlock* block = (ScoreBoardBlock*)link->data;
-        if(block->status == BLOCK_STATUS_LOST) {
-            return block->sequence;
-        }
-    }
 
-    return -1; 
+    ScoreBoardBlock b;
+    b.status = BLOCK_STATUS_LOST;
+    GList* link = g_queue_find_custom(scoreboard->blocksQ, &b, (GCompareFunc)_scoreboardblock_compareStatus);
+
+    return link ? ((ScoreBoardBlock*)(link->data))->sequence : -1;
 }
 
 void scoreboard_markRetransmitted(ScoreBoard* scoreboard, gint sequence, gint nextSend) {
@@ -308,30 +312,26 @@ void scoreboard_packetDropped(ScoreBoard* scoreboard, gint sequence) {
     scoreboard->fackOut++;
 }
 
-gboolean scoreboard_isEmpty(ScoreBoard* scoreboard) {
+static void _scoreboard_markLossHelper(ScoreBoardBlock* block, ScoreBoard* scoreboard) {
     MAGIC_ASSERT(scoreboard);
-    return (!scoreboard->blocks || g_list_length(scoreboard->blocks) == 0);
+    MAGIC_ASSERT(block);
+    if(block->status != BLOCK_STATUS_SACKED) {
+        if(block->status != BLOCK_STATUS_LOST) {
+            scoreboard->fackOut += 1;
+        }
+        block->status = BLOCK_STATUS_LOST;
+    }
 }
 
 void scoreboard_markLoss(ScoreBoard* scoreboard, gint unacked, gint nextSend) {
     MAGIC_ASSERT(scoreboard);
 
-    for(GList* link = scoreboard->blocks; link; link = g_list_next(link)) {
-        ScoreBoardBlock* block = (ScoreBoardBlock*)link->data;
-
-        if(block->status != BLOCK_STATUS_SACKED) {
-            if(block->status != BLOCK_STATUS_LOST) {
-                scoreboard->fackOut += 1;
-            }
-            block->status = BLOCK_STATUS_LOST;
-        }
-    }
+    g_queue_foreach(scoreboard->blocksQ, (GFunc)_scoreboard_markLossHelper, scoreboard);
 
     gint start = unacked;
     BlockStatus status = BLOCK_STATUS_LOST;
-    if(!scoreboard_isEmpty(scoreboard)) {
-        GList* last = g_list_last(scoreboard->blocks);
-        ScoreBoardBlock* block = (ScoreBoardBlock*)last->data;
+    if(!g_queue_is_empty(scoreboard->blocksQ)) {
+        ScoreBoardBlock* block = g_queue_peek_tail(scoreboard->blocksQ);
         start = block->sequence + 1;
         status = BLOCK_STATUS_INFLIGHT;
     }
