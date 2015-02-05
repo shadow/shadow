@@ -2496,59 +2496,84 @@ int gethostname(char* name, size_t len) {
     return -1;
 }
 
-int getaddrinfo(const char *name, const char *service,
+int getaddrinfo(const char *node, const char *service,
 const struct addrinfo *hints, struct addrinfo **res) {
     if(shouldForwardToLibC()) {
         ENSURE(libc, "", getaddrinfo);
-        return director.libc.getaddrinfo(name, service, hints, res);
+        return director.libc.getaddrinfo(node, service, hints, res);
     }
 
-    Host* node = _interposer_switchInShadowContext();
+    if(node == NULL && service == NULL) {
+        errno = EINVAL;
+        return EAI_NONAME;
+    }
+
+    Host* host = _interposer_switchInShadowContext();
 
     gint result = 0;
-
     *res = NULL;
-    if(name != NULL && node != NULL) {
 
-        /* node may be a number-and-dots address, or a hostname. lets hope for hostname
-         * and try that first, o/w convert to the in_addr_t and do a second lookup. */
-        in_addr_t address = (in_addr_t) dns_resolveNameToIP(worker_getDNS(), name);
+    in_addr_t ip = INADDR_NONE;
+    in_port_t port = 0;
 
-        if(address == INADDR_NONE) {
-            /* name was not in hostname format. convert to IP format and try again */
-            struct in_addr inaddr;
-            gint r = inet_pton(AF_INET, name, &inaddr);
+    if(node == NULL) {
+        if(hints && (hints->ai_flags & AI_PASSIVE)) {
+            ip = htonl(INADDR_ANY);
+        } else {
+            ip = htonl(INADDR_LOOPBACK);
+        }
+    } else {
+        Address* address = NULL;
 
-            if(r == 1) {
-                /* successful conversion to IP format, now find the real hostname */
-                GQuark convertedIP = (GQuark) inaddr.s_addr;
-                const gchar* hostname = dns_resolveIPToName(worker_getDNS(), convertedIP);
+        /* node may be a number-and-dots address, or a hostname. lets find out which. */
+        ip = address_stringToIP(node);
 
-                if(hostname != NULL) {
-                    /* got it, so convertedIP is a valid IP */
-                    address = (in_addr_t) convertedIP;
-                } else {
-                    /* name not mapped by resolver... */
-                    result = EAI_FAIL;
-                    goto done;
-                }
-            } else if(r == 0) {
-                /* not in correct form... hmmm, too bad i guess */
-                result = EAI_NONAME;
-                goto done;
-            } else {
-                /* error occured */
-                result = EAI_SYSTEM;
-                goto done;
+        if(ip == INADDR_NONE) {
+            /* if AI_NUMERICHOST, don't do hostname lookup */
+            if(!hints || (hints && !(hints->ai_flags & AI_NUMERICHOST))) {
+                /* the node string is not a dots-and-decimals string, try it as a hostname */
+                address = dns_resolveNameToAddress(worker_getDNS(), node);
+            }
+        } else {
+            /* we got an ip from the string, so lookup by the ip */
+            address = dns_resolveIPToAddress(worker_getDNS(), ip);
+        }
+
+        if(address) {
+            /* found it */
+            ip = address_toNetworkIP(address);
+        } else {
+            /* at this point it is an error */
+            ip = INADDR_NONE;
+            errno = EINVAL;
+            result = EAI_NONAME;
+        }
+    }
+
+    if(service) {
+        /* get the service name if possible */
+        if(!hints || (hints && !(hints->ai_flags & AI_NUMERICSERV))) {
+            /* XXX this is not thread safe! */
+            struct servent* serviceEntry = getservbyname(service, NULL);
+            if(serviceEntry) {
+                port = (in_port_t) serviceEntry->s_port;
             }
         }
 
+        /* if not found, try converting string directly to port */
+        if(port == 0) {
+            port = (in_port_t)strtol(service, NULL, 10);
+        }
+    }
+
+    if(ip != INADDR_NONE) {
         /* should have address now */
         struct sockaddr_in* sa = g_malloc(sizeof(struct sockaddr_in));
         /* application will expect it in network order */
         // sa->sin_addr.s_addr = (in_addr_t) htonl((guint32)(*addr));
-        sa->sin_addr.s_addr = address;
+        sa->sin_addr.s_addr = ip;
         sa->sin_family = AF_INET; /* libcurl expects this to be set */
+        sa->sin_port = port;
 
         struct addrinfo* ai_out = g_malloc(sizeof(struct addrinfo));
         ai_out->ai_addr = (struct sockaddr*) sa;
@@ -2562,14 +2587,9 @@ const struct addrinfo *hints, struct addrinfo **res) {
 
         *res = ai_out;
         result = 0;
-        goto done;
     }
 
-    errno = EINVAL;
-    result = EAI_SYSTEM;
-
-    done:
-    _interposer_switchOutShadowContext(node);
+    _interposer_switchOutShadowContext(host);
     return result;
 }
 
