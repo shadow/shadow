@@ -62,7 +62,7 @@ shadow --help
 + All build output is generated out-of-source, by default to the `./build` directory.
 + Use `./setup build --help` to see all build options; the most useful build options are:  
  + `-g` or `--debug` to build Shadow with debugging symbols
- + `--include` and `--library` if you installed any dependencies somewhere other than `~/.shadow`
+ + `--include` and `--library` if you installed any dependencies in non-standard locations or somewhere other than `~/.shadow`. For example,  if you build llvm in `/opt/llvm`, then you need something like `./setup build --include=/opt/llvm-3.2/share/llvm/cmake --include=/opt/llvm-3.2/include`.
  + `--prefix` if you want to install Shadow somewhere besides `~/.shadow`
 + The `setup` script is a wrapper to `cmake` and `make`. Using `cmake` and `make` directly is also possible, but strongly discouraged.
 
