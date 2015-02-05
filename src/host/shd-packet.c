@@ -435,10 +435,34 @@ gint packet_getSourceAssociationKey(Packet* packet) {
 }
 
 void packet_getTCPHeader(Packet* packet, PacketTCPHeader* header) {
+    if(!header) {
+        return;
+    }
+
     _packet_lock(packet);
 
     utility_assert(packet->protocol == PTCP);
-    *header = *((PacketTCPHeader*)packet->header);
+
+    PacketTCPHeader* packetHeader = (PacketTCPHeader*)packet->header;
+
+    /* copy all local non-malloc'd header state */
+    header->flags = packetHeader->flags;
+    header->sourceIP = packetHeader->sourceIP;
+    header->sourcePort = packetHeader->sourcePort;
+    header->destinationIP = packetHeader->destinationIP;
+    header->destinationPort = packetHeader->destinationPort;
+    header->sequence = packetHeader->sequence;
+    header->acknowledgment = packetHeader->acknowledgment;
+    header->window = packetHeader->window;
+    header->timestampValue = packetHeader->timestampValue;
+    header->timestampEcho = packetHeader->timestampEcho;
+
+    /* make sure to do a deep copy of all pointers to avoid concurrency issues */
+    header->selectiveACKs = NULL;
+    if(packetHeader->selectiveACKs) {
+        /* g_list_copy is shallow, but we store integers in the data pointers, so its OK here */
+        header->selectiveACKs = g_list_copy(packetHeader->selectiveACKs);
+    }
 
     _packet_unlock(packet);
 }
