@@ -4,6 +4,7 @@ The wiki contains important information about installing and using the Shadow di
 
 ## Contents:
 
+[[0 Design Overview]]
 [[1 Installation and Setup]]  
 [[2 Simulation Execution and Analysis]]  
 [[3 Simulation Customization]]  
