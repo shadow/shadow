@@ -117,7 +117,7 @@ the amount of network data received in the last interval, in Bytes
 + Tx _value_ B:  
 the amount of network data sent in the last interval, in Bytes
 
-These heartbeats are logged at the `message` level every `60` seconds by default. The heartbeat log level can be changed with the option `-g` or `--stat-log-level` and the heartbeat interval set with the option `-h` or `--stat-interval`.
+These heartbeats are logged at the `message` level every `1` second by default. The heartbeat log level can be changed with the option `-g` or `--stat-log-level` and the heartbeat interval set with the option `-h` or `--stat-interval`.
 
 Each plug-in also generally logs useful statistics, such as file download size and timing information. This information can be parsed from the Shadow log file.
 
@@ -136,7 +136,7 @@ Then open the PDF file that was created. Note that these scripts may require som
 
 ## Example experiment
 
-Consider a set of experiments where we would like to analyze the effect of changing the size of our nodes' network interface receive buffer. We run the following 2 experiments:
+Consider a set of experiments where we would like to analyze the effect of changing the size of our nodes' initial TCP window. We run the following 2 experiments:
 
 ```bash
 cd resource/examples/
@@ -151,7 +151,7 @@ python ../../tools/parse-shadow.py --prefix=window1 window1.log
 python contrib/analyze.py parse --prefix=window1000 window1000.log
 ```
 
-Each of the directories `window1/` and `window1000/` now contain data statistics files extracted from the log files. We can now combine and visualize these results with the `parse-shadow.py` script:
+Each of the directories `window1/` and `window1000/` now contain data statistics files extracted from the log files. We can now combine and visualize these results with the `plot-shadow.py` script:
 
 ```bash
 python ../../tools/plot-shadow.py --prefix "window" --data window1/ "1 packet" --data window1000/ "1000 packets"
