@@ -19,6 +19,7 @@ add_subdirectory(plugin)
 add_cflags(-fPIC)
 add_cflags(-Wno-unknown-attributes)
 add_cflags(-Wno-unused-command-line-argument)
+add_cflags(-Wno-unknown-warning-option)
 
 ## sources for our main shadow program
 set(shadow_srcs
