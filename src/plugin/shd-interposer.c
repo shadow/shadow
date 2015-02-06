@@ -130,7 +130,9 @@ typedef int (*dup_func)(int);
 typedef int (*dup2_func)(int, int);
 typedef int (*dup3_func)(int, int, int);
 typedef int (*__fxstat_func)(int, int, struct stat*);
+typedef int (*__fxstat64_func)(int, int, struct stat64*);
 typedef int (*fstatfs_func)(int, struct statfs*);
+typedef int (*fstatfs64_func)(int, struct statfs64*);
 typedef off_t (*lseek_func)(int, off_t, int);
 typedef size_t (*pread_func)(int, void*, size_t, off_t);
 typedef int (*flock_func)(int, int);
@@ -235,7 +237,9 @@ typedef struct {
     dup3_func dup3;
     fclose_func fclose;
     __fxstat_func __fxstat;
+    __fxstat64_func __fxstat64;
     fstatfs_func fstatfs;
+    fstatfs64_func fstatfs64;
     lseek_func lseek;
     pread_func pread;
     flock_func flock;
@@ -396,6 +400,7 @@ static void _interposer_globalInitialize() {
     SETSYM_OR_FAIL(director.libc.dup3, "dup3");
     SETSYM_OR_FAIL(director.libc.fclose, "fclose");
     SETSYM_OR_FAIL(director.libc.__fxstat, "__fxstat");
+    SETSYM_OR_FAIL(director.libc.__fxstat64, "__fxstat64");
     SETSYM_OR_FAIL(director.libc.fstatfs, "fstatfs");
     SETSYM_OR_FAIL(director.libc.lseek, "lseek");
     SETSYM_OR_FAIL(director.libc.pread, "pread");
@@ -2221,6 +2226,33 @@ int __fxstat (int ver, int fd, struct stat *buf) {
     return -1;
 }
 
+/* fstat64 redirects to this */
+int __fxstat64 (int ver, int fd, struct stat64 *buf) {
+    if (shouldForwardToLibC()) {
+        ENSURE(libc, "", __fxstat64);
+        return director.libc.__fxstat64(ver, fd, buf);
+    }
+
+    Host* host = _interposer_switchInShadowContext();
+
+    if (host_isShadowDescriptor(host, fd)) {
+        warning("fstat64 not implemented for Shadow descriptor types");
+    } else {
+        /* check if we have a mapped os fd */
+        gint osfd = host_getOSHandle(host, fd);
+        if (osfd >= 0) {
+            gint ret = fstat64(osfd, buf);
+            _interposer_switchOutShadowContext(host);
+            return ret;
+        }
+    }
+
+    _interposer_switchOutShadowContext(host);
+
+    errno = EBADF;
+    return -1;
+}
+
 int fstatfs (int fd, struct statfs *buf) {
     if (shouldForwardToLibC()) {
         ENSURE(libc, "", fstatfs);
@@ -2236,6 +2268,32 @@ int fstatfs (int fd, struct statfs *buf) {
         gint osfd = host_getOSHandle(host, fd);
         if (osfd >= 0) {
             gint ret = fstatfs(osfd, buf);
+            _interposer_switchOutShadowContext(host);
+            return ret;
+        }
+    }
+
+    _interposer_switchOutShadowContext(host);
+
+    errno = EBADF;
+    return -1;
+}
+
+int fstatfs64 (int fd, struct statfs64 *buf) {
+    if (shouldForwardToLibC()) {
+        ENSURE(libc, "", fstatfs64);
+        return director.libc.fstatfs64(fd, buf);
+    }
+
+    Host* host = _interposer_switchInShadowContext();
+
+    if (host_isShadowDescriptor(host, fd)) {
+        warning("fstatfs64 not implemented for Shadow descriptor types");
+    } else {
+        /* check if we have a mapped os fd */
+        gint osfd = host_getOSHandle(host, fd);
+        if (osfd >= 0) {
+            gint ret = fstatfs64(osfd, buf);
             _interposer_switchOutShadowContext(host);
             return ret;
         }
