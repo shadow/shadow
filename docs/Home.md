@@ -1,6 +1,6 @@
 ## Welcome to the Shadow Wiki! 
 
-The wiki contains important information about installing and using the Shadow discrete event network simulator. Please [let us know](https://wwws.cs.umn.edu/mm-cs/listinfo/shadow-support) if you notice something out of date, or fix it yourself if you can.
+This wiki contains important information about installing and using the Shadow discrete event network simulator. Please [let us know](https://wwws.cs.umn.edu/mm-cs/listinfo/shadow-support) if you notice something out of date, or fix it yourself if you can.
 
 ## Contents:
 
