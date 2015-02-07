@@ -1,4 +1,4 @@
-Shadow can either be run in a [traditional computing](#Shadow-with-Traditional-Computing) environment, or in the [EC2 cloud](#Shadow-with-Cloud-Computing) with a pre-configured machine instance.
+Shadow can either be run in a [traditional computing](#shadow-with-traditional-computing) environment, or in the [EC2 cloud](#shadow-with-cloud-computing) with a pre-configured machine instance.
 
 # Shadow with Traditional Computing
 
