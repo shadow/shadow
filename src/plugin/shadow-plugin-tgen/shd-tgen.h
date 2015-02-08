@@ -16,7 +16,7 @@
 #include <errno.h>
 #include <string.h>
 
-#include <shd-library.h>
+#include <shadow-plugin-interface.h>
 
 #include "shd-tgen-global-lock.h"
 #include "shd-tgen-io.h"
