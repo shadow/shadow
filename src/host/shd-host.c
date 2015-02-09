@@ -339,6 +339,10 @@ static void _host_associateInterface(Host* host, Socket* socket,
 }
 
 static void _host_disassociateInterface(Host* host, Socket* socket) {
+    if(!socket || !socket_isBound(socket)) {
+        return;
+    }
+
     in_addr_t bindAddress;
     socket_getSocketName(socket, &bindAddress, NULL);
 
