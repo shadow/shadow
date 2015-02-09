@@ -79,6 +79,8 @@ ScoreBoard* scoreboard_new() {
     ScoreBoard* scoreboard = g_new0(ScoreBoard, 1);
     MAGIC_INIT(scoreboard);
 
+    scoreboard->blocksQ = g_queue_new();
+
     return scoreboard;
 }
 
