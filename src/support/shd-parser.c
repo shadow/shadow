@@ -27,6 +27,9 @@ struct _Parser {
     gboolean foundTopology;
 
     GQueue* actions;
+
+    GHashTable* pluginIDStrings;
+    GHashTable* pluginIDRefStrings;
     MAGIC_DECLARE;
 };
 
@@ -151,6 +154,11 @@ static GError* _parser_handlePluginAttributes(Parser* parser, const gchar** attr
         Action* a = (Action*) loadplugin_new(id, path);
         action_setPriority(a, 0);
         _parser_addAction(parser, a);
+
+        if(!g_hash_table_lookup(parser->pluginIDStrings, id->str)) {
+            gchar* s = g_strdup(id->str);
+            g_hash_table_replace(parser->pluginIDStrings, s, s);
+        }
     }
 
     /* clean up */
@@ -389,6 +397,11 @@ static GError* _parser_handleApplicationAttributes(Parser* parser, const gchar**
         createnodes_addApplication(parser->currentNodeAction, plugin, arguments, starttime, stoptime);
 
         (parser->nChildApplications)++;
+
+        if(!g_hash_table_lookup(parser->pluginIDRefStrings, plugin->str)) {
+            gchar* s = g_strdup(plugin->str);
+            g_hash_table_replace(parser->pluginIDRefStrings, s, s);
+        }
     }
 
     /* clean up */
@@ -552,11 +565,34 @@ static void _parser_handleRootEndElement(GMarkupParseContext* context,
     }
 }
 
+static gboolean _parser_verifyPluginIDsExist(Parser* parser, GError** error) {
+    MAGIC_ASSERT(parser);
+    utility_assert(error);
+
+    GHashTableIter iter;
+    gpointer key, value;
+    g_hash_table_iter_init(&iter, parser->pluginIDRefStrings);
+
+    while(g_hash_table_iter_next(&iter, &key, &value)) {
+        gchar* s = value;
+        if(!g_hash_table_lookup(parser->pluginIDStrings, s)) {
+            *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT,
+                    "plug-in id '%s' was referenced in an application element without being defined in a plugin element", s);;
+            return FALSE;
+        }
+    }
+
+    return TRUE;
+}
+
 /* public interface */
 
 Parser* parser_new() {
     Parser* parser = g_new0(Parser, 1);
     MAGIC_INIT(parser);
+
+    parser->pluginIDStrings = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
+    parser->pluginIDRefStrings = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
 
     /* we handle the start_element and end_element callbacks, but ignore
      * text, passthrough (comments), and errors
@@ -585,6 +621,10 @@ gboolean parser_parseContents(Parser* parser, gchar* contents, gsize length, GQu
     GError *error = NULL;
     gboolean success = g_markup_parse_context_parse(parser->context, contents, (gssize) length, &error);
     parser->actions = NULL;
+
+    if(success) {
+        success = _parser_verifyPluginIDsExist(parser, &error);
+    }
 
     /* check for success in parsing and validating the XML */
     if(success && !error) {
@@ -632,6 +672,8 @@ void parser_free(Parser* parser) {
     MAGIC_ASSERT(parser);
 
     /* cleanup */
+    g_hash_table_destroy(parser->pluginIDStrings);
+    g_hash_table_destroy(parser->pluginIDRefStrings);
     g_markup_parse_context_free(parser->context);
 
     MAGIC_CLEAR(parser);
