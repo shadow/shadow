@@ -52,12 +52,21 @@ make && make install
 #### How can I stop Shadow from forking?
 
 In order to run Shadow, the `LD_PRELOAD` environmental variable must be set to the location of `libshadow-interpose.so`. If this is not done, recent versions of Shadow will attempt to do this on behalf of the user, and then fork itself once the environment is set up properly. To avoid the fork, simply run shadow like:
+
 ```bash
 LD_PRELOAD=/home/rob/.shadow/lib/libshadow-interpose.so shadow ...
-# or
-export LD_PRELOAD=/home/rob/.shadow/lib/libshadow-interpose.so
-shadow ...
 ```
+
+When running the shadow-plugin-tor minimal example, do something like this:
+
+```bash
+cd shadow-plugin-tor/resource/minimal
+rm -rf data
+cp -R initdata data
+LD_PRELOAD=/home/rob/.shadow/lib/libshadow-preload.so:/home/rob/.shadow/libshadow-preload-tor.so EVENT_NOSELECT=1 EVENT_NOPOLL=1 EVENT_NOKQUEUE=1 EVENT_NODEVPOLL=1 EVENT_NOEVPORT=1 EVENT_NOWIN32=1 OPENSSL_ia32cap=~0x200000200000000 shadow shadow.config.xml
+```
+
+You may choose to export the env variables in your bash session (e.g., `export LD_PRELOAD=...`) to avoid declaring them every time.
 
 ## Other Notes
 
