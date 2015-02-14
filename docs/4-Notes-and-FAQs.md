@@ -63,7 +63,7 @@ When running the shadow-plugin-tor minimal example, do something like this:
 cd shadow-plugin-tor/resource/minimal
 rm -rf data
 cp -R initdata data
-LD_PRELOAD=/home/rob/.shadow/lib/libshadow-preload.so:/home/rob/.shadow/libshadow-preload-tor.so EVENT_NOSELECT=1 EVENT_NOPOLL=1 EVENT_NOKQUEUE=1 EVENT_NODEVPOLL=1 EVENT_NOEVPORT=1 EVENT_NOWIN32=1 OPENSSL_ia32cap=~0x200000200000000 shadow shadow.config.xml
+LD_PRELOAD=/home/rob/.shadow/lib/libshadow-interpose.so:/home/rob/.shadow/libshadow-preload-tor.so EVENT_NOSELECT=1 EVENT_NOPOLL=1 EVENT_NOKQUEUE=1 EVENT_NODEVPOLL=1 EVENT_NOEVPORT=1 EVENT_NOWIN32=1 OPENSSL_ia32cap=~0x200000200000000 shadow shadow.config.xml
 ```
 
 You may choose to export the env variables in your bash session (e.g., `export LD_PRELOAD=...`) to avoid declaring them every time.
