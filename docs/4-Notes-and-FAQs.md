@@ -112,6 +112,8 @@ gdb shadow
 > run
 ```
 
+#### How to trace Shadow using Valgrind
+
 If you want to be able to run Shadow through valgrind and the application you 
 are running in Shadow uses OpenSSL (i.e. the Scallion plug-in), you should configure OpenSSL with the 
 additional option: `-DPURIFY`. This fixes OpenSSL so it doesn't break valgrind.
