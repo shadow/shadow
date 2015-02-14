@@ -1,19 +1,25 @@
 ## Frequently Asked Questions
 
-+ #### Shadow is running at 100% CPU. Is that normal?  
+#### Shadow is running at 100% CPU. Is that normal?
+
 Yes. In single-thread mode, Shadow runs at 100% CPU because its continuously processing simulation events as fast as possible. All other things constant, an experiment will finish quicker with a faster CPU. Due to node dependencies, thread CPU utilization will be less than 100% in multi-thread mode.
 
-+ #### Is Shadow multi-threaded?  
+#### Is Shadow multi-threaded?
+
 Yes. Shadow can run with _N_ worker threads by specifying `-w N` or `--workers=N` on the command line. Note that virtual nodes depend on network packets that can potentially arrive from other virtual nodes. Therefore, each worker can only advance according to the propagation delay to avoid dependency violations.
 
-+ #### Is it possible to achieve deterministic experiments, so that every time I run Shadow with the same configuration file, I get the same results?  
+#### Is it possible to achieve deterministic experiments, so that every time I run Shadow with the same configuration file, I get the same results?
+
 Yes. You need to use the "--cpu-threshold=-1" flag when running Shadow to disable the CPU model, as it introduces non-determinism into the experiment in exchange for more realistic CPU behaviors. (See also: `shadow --help-all`)
 
-+ #### Can I use Shadow/Scallion with my custom Tor modifications?  
+#### Can I use Shadow/Scallion with my custom Tor modifications?
+
 Yes. You'll need to build Shadow with the `--tor-prefix` option set to the path of your Tor source directory. Then, every time you make Tor modifications, you need to rebuild and reinstall Shadow and Scallion, again using the `--tor-prefix` option.
 
-+ #### My OS does not include the correct Clang/LLVM CMake modules. How do I build Clang/LLVM from source?  
-Older versions of the **clang/llvm** OS packages do not include the shared CMake module files Shadow requires. (Bug reports have been filed for ~~[Fedora](https://bugzilla.redhat.com/show_bug.cgi?id=914713)~~ and ~~[Debian](http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=701153)~~). You can get these by building Clang/LLVM from source as follows.  
+#### My OS does not include the correct Clang/LLVM CMake modules. How do I build Clang/LLVM from source?
+
+Older versions of the **clang/llvm** OS packages do not include the shared CMake module files Shadow requires. ug reports have been filed for ~~[Fedora](https://bugzilla.redhat.com/show_bug.cgi?id=914713)~~ and ~~[Debian](http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=701153)~~). You can get these by building Clang/LLVM from source as follows.
+
 ```bash
 wget http://www.llvm.org/releases/3.2/llvm-3.2.src.tar.gz
 wget http://www.llvm.org/releases/3.2/clang-3.2.src.tar.gz
@@ -27,17 +33,30 @@ cmake -DCMAKE_INSTALL_PREFIX=/home/${USER}/.shadow ../.
 make -jN # Replace 'N' with the number of threads for a parallel build
 make install
 export PATH=${PATH}:/home/${USER}/.shadow/bin
-```  
-You should then add `/home/${USER}/.shadow/bin` to your shell setup for the PATH environment variable (e.g., in `~/.bashrc` or `~/.bash_profile`).  
+```
 
-+ #### Why don't the consensus values from a v3bw file for the torflowauthority show up in the directory authority's `cached-consenus` file?  
+You should then add `/home/${USER}/.shadow/bin` to your shell setup for the PATH environment variable (e.g., in `~/.bashrc` or `~/.bash_profile`).
+
+#### Why don't the consensus values from a v3bw file for the torflowauthority show up in the directory authority's `cached-consenus` file?
+
 Tor currently requires 3 directory authorities to be configured in order to accept values from a v3bw file; otherwise the directory authorities use relays' advertised bandwidth when creating the consensus and the v3bw file entries are ignored.
 
-+ #### How can I build Shadow directly using cmake instead of the setup script?  
+#### How can I build Shadow directly using cmake instead of the setup script?
+
 ```bash
 mkdir -p build/shadow; cd build/shadow
 CC=`which clang` CXX=`which clang++` cmake ../..
 make && make install
+```
+
+#### How can I stop Shadow from forking?
+
+In order to run Shadow, the `LD_PRELOAD` environmental variable must be set to the location of `libshadow-interpose.so`. If this is not done, recent versions of Shadow will attempt to do this on behalf of the user, and then fork itself once the environment is set up properly. To avoid the fork, simply run shadow like:
+```bash
+LD_PRELOAD=/home/rob/.shadow/lib/libshadow-interpose.so shadow ...
+# or
+export LD_PRELOAD=/home/rob/.shadow/lib/libshadow-interpose.so
+shadow ...
 ```
 
 ## Other Notes
