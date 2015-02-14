@@ -57,7 +57,7 @@ In order to run Shadow, the `LD_PRELOAD` environmental variable must be set to t
 LD_PRELOAD=/home/rob/.shadow/lib/libshadow-interpose.so shadow ...
 ```
 
-When running the shadow-plugin-tor minimal example, do something like this:
+Similarly, when running `shadow-plugin-tor`, the `shadow-tor` command also sets up some required variables for the user. When running the `shadow-plugin-tor` minimal example, stop Shadow from forking with something like this:
 
 ```bash
 cd shadow-plugin-tor/resource/minimal
