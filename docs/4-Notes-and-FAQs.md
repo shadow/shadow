@@ -154,3 +154,7 @@ git archive --prefix=shadow-v1.10.0/ --format=tar v1.10.0 | gzip > shadow-v1.10.
 gpg -a -b shadow-v1.10.0.tar.gz
 gpg --verify shadow-v1.10.0.tar.gz.asc
 ```
+
+#### Is Shadow the right tool for my research question?
+
+Shadow is a network simulator/emulator hybrid. It runs real applications, but it simulates network and system functions thereby emulating the kernel to the application. The suitability of Shadow to your problem depends upon what exactly you are trying to measure. If you are interested in analyzing changes in application behavior, e.g. application layer queuing, failure modes, or design changes, and how those changes affect the operation of the system and  network performance, then Shadow seems like a very good choice (especially if you want to minimize work on your end). If your research relies on, e.g., the accuracy of specific kernel features or kernel parameter settings, or dynamic changes in Internet routing, then Shadow may not be the right choice as it does not precisely model these behaviors. Shadow is also not the best at measuring cryptographic overhead, so if that is desired then it should probably be done more directly as a separate research component.
