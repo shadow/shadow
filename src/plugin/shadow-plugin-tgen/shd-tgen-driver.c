@@ -196,14 +196,14 @@ static void _tgendriver_initiateTransfer(TGenDriver* driver, TGenAction* action)
     /* ref++ the driver for the transport notify func */
     tgendriver_ref(driver);
 
-    gsize size = 0;
+    guint64 size = 0;
     TGenTransferType type = 0;
     tgenaction_getTransferParameters(action, &type, NULL, &size);
     gsize id = ++(driver->transferIDCounter);
 
     /* a new transfer will be coming in on this transport. the transfer
      * takes control of the transport pointer reference. */
-    TGenTransfer* transfer = tgentransfer_new(id, type, size, transport,
+    TGenTransfer* transfer = tgentransfer_new(id, type, (gsize)size, transport,
             (TGenTransfer_notifyCompleteFunc)_tgendriver_onTransferComplete, driver, action,
             (GDestroyNotify)tgendriver_unref, (GDestroyNotify)tgenaction_unref);
 
