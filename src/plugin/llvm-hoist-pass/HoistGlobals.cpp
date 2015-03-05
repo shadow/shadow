@@ -51,6 +51,8 @@
 using namespace llvm;
 using std::string;
 
+#define HOIST_LOG_PREFIX "hoist-globals: "
+
 static std::vector<Function*> parseGlobalCtors(GlobalVariable *GV) {
 	if (GV->getInitializer()->isNullValue())
 		return std::vector<Function *>();
@@ -95,9 +97,31 @@ public:
 
 		{
 #ifdef DEBUG
-			errs() << "Injecting llvm.global_ctors into __shadow_plugin_init__";
+            errs() << HOIST_LOG_PREFIX << "HoistGlobals is running as an LLVM module pass plugin\n";
+#endif
+
+	        // _plugin_ctors needs to exist in order to call all of the
+	        // constructors that need to get called at plugin load time
+#ifdef DEBUG
+			errs() << HOIST_LOG_PREFIX << "Searching for constructor initializer function '_plugin_ctors'\n";
 #endif
 			Function *initFunc = M.getFunction("_plugin_ctors");
+			if(initFunc) {
+#ifdef DEBUG
+            errs() << HOIST_LOG_PREFIX << "Found '_plugin_ctors'!\n";
+#endif
+			} else {
+#ifdef DEBUG
+            errs() << HOIST_LOG_PREFIX << "Did not find '_plugin_ctors', injecting it now\n";
+#endif
+                FunctionType *FT = FunctionType::get(Type::getVoidTy(getGlobalContext()), false);
+                Constant* tmpfunc = M.getOrInsertFunction("_plugin_ctors", FT);
+                initFunc = cast<Function>(tmpfunc);
+                assert(initFunc);
+			}
+#ifdef DEBUG
+            errs() << HOIST_LOG_PREFIX << "Injecting global constructors 'llvm.global_ctors' into '_plugin_ctors': ";
+#endif
 			Function::BasicBlockListType &blocks = initFunc->getBasicBlockList();
 			GlobalVariable *GV = M.getGlobalVariable("llvm.global_ctors");
 			if (GV != NULL) {
@@ -106,17 +130,29 @@ public:
 				BasicBlock *block = BasicBlock::Create(M.getContext(), "call_global_ctors");
 				for (std::vector<Function*>::iterator i = ctors.begin(), e = ctors.end(); i != e; ++i) {
 					ArrayRef<Value*> args;
-					CallInst *ins = CallInst::Create(*i, args, "", block);
+					Value* ctorv = *i;
+#ifdef DEBUG
+            if(i+1 == e) {
+                errs() << ctorv->getName();
+            } else {
+                errs() << ctorv->getName() << ", ";
+            }
+#endif
+
+					CallInst *ins = CallInst::Create(ctorv, args, "", block);
 				}
 				//BranchInst *ret = BranchInst::Create(&blocks.front(), block);
 				ReturnInst::Create(M.getContext(), block);
 				blocks.push_front(block);
 			}
 #ifdef DEBUG
-			errs() << "\n";
+            errs() << "\n";
 #endif
 		}
 
+#ifdef DEBUG
+            errs() << HOIST_LOG_PREFIX << "Iterating existing global variables\n";
+#endif
 
 		// lists to store our globals, their types, and their initial values
 		SmallVector<GlobalVariable*, 16> Globals;
@@ -139,6 +175,10 @@ public:
 				Globals.push_back(GV);
 			}
 		}
+
+#ifdef DEBUG
+            errs() << HOIST_LOG_PREFIX << "Injecting new storage objects\n";
+#endif
 
 		// Now we need a new structure to store all of the globals we found
 		// its type is a combination of the types of all of its elements
@@ -175,7 +215,7 @@ public:
 				"__hoisted_globals_size", 0, GlobalVariable::NotThreadLocal, 0);
 
 #ifdef DEBUG
-		errs() << "Hoisting globals: ";
+		errs() << HOIST_LOG_PREFIX << "Hoisting globals: ";
 #endif
 
 		// replace all accesses to the original variables with pointer indirection
@@ -227,6 +267,9 @@ public:
 
 #ifndef NDEBUG
 		verifyModule(M);
+#endif
+#ifdef DEBUG
+            errs() << HOIST_LOG_PREFIX << "HoistGlobals plugin pass is complete\n";
 #endif
 		return true;
 	}
