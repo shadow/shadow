@@ -16,6 +16,10 @@ add_subdirectory(plugin)
 
 ## compile defs and flags
 #add_definitions(-D_SVID_SOURCE -D_XOPEN_SOURCE=600 -D_ISOC11_SOURCE) #-D_GNU_SOURCE
+## set the igraph version guesses
+add_definitions(-DIGRAPH_VERSION_MAJOR_GUESS=${IGRAPH_VERSION_MAJOR_GUESS})
+add_definitions(-DIGRAPH_VERSION_MINOR_GUESS=${IGRAPH_VERSION_MINOR_GUESS})
+add_definitions(-DIGRAPH_VERSION_PATCH_GUESS=${IGRAPH_VERSION_PATCH_GUESS})
 add_cflags(-fPIC)
 add_cflags(-Wno-unknown-attributes)
 add_cflags(-Wno-unused-command-line-argument)

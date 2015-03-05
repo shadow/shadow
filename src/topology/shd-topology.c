@@ -727,8 +727,13 @@ static gboolean _topology_computeSourcePaths(Topology* top, igraph_integer_t src
 #endif
 #else
 #if defined (IGRAPH_VERSION)
+#if defined (IGRAPH_VERSION_MAJOR_GUESS) && defined (IGRAPH_VERSION_MINOR_GUESS) && ((IGRAPH_VERSION_MAJOR_GUESS == 0 && IGRAPH_VERSION_MINOR_GUESS >= 7) || IGRAPH_VERSION_MAJOR_GUESS > 0)
+    result = igraph_get_shortest_paths_dijkstra(&top->graph, &resultPaths, NULL,
+                srcVertexIndex, igraph_vss_vector(&dstVertexIndexSet), top->edgeWeights, IGRAPH_OUT, NULL, NULL);
+#else
     result = igraph_get_shortest_paths_dijkstra(&top->graph, &resultPaths, NULL,
                 srcVertexIndex, igraph_vss_vector(&dstVertexIndexSet), top->edgeWeights, IGRAPH_OUT);
+#endif
 #else
     result = igraph_get_shortest_paths_dijkstra(&top->graph, &resultPaths,
             srcVertexIndex, igraph_vss_vector(&dstVertexIndexSet), top->edgeWeights, IGRAPH_OUT);
