@@ -119,13 +119,13 @@ void socket_pushInPacket(Socket* socket, Packet* packet) {
     MAGIC_ASSERT(socket);
     MAGIC_ASSERT(socket->vtable);
     packet_addDeliveryStatus(packet, PDS_RCV_SOCKET_PROCESSED);
-    return socket->vtable->process(socket, packet);
+    socket->vtable->process(socket, packet);
 }
 
 void socket_dropPacket(Socket* socket, Packet* packet) {
     MAGIC_ASSERT(socket);
     MAGIC_ASSERT(socket->vtable);
-    return socket->vtable->dropPacket(socket, packet);
+    socket->vtable->dropPacket(socket, packet);
 }
 
 /* functions implemented by socket */
