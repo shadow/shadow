@@ -142,7 +142,7 @@ gssize tgentransport_write(TGenTransport* transport, gpointer buffer, gsize leng
     gssize bytes = write(transport->socketD, buffer, length);
 
     if(bytes > 0 && transport->notify) {
-        transport->notify(transport->data, 0, bytes);
+        transport->notify(transport->data, 0, (gsize)bytes);
     }
 
     return bytes;
@@ -154,7 +154,7 @@ gssize tgentransport_read(TGenTransport* transport, gpointer buffer, gsize lengt
     gssize bytes = read(transport->socketD, buffer, length);
 
     if(bytes > 0 && transport->notify) {
-        transport->notify(transport->data, bytes, 0);
+        transport->notify(transport->data, (gsize)bytes, 0);
     }
 
     return bytes;
