@@ -88,6 +88,8 @@ static gboolean _tgendriver_onHeartbeat(TGenDriver* driver, gpointer nullData) {
     driver->heartbeatBytesRead = 0;
     driver->heartbeatBytesWritten = 0;
 
+    tgenio_checkTimeouts(driver->io);
+
     /* even if the client ended, we keep serving requests.
      * we are still running and the heartbeat timer still owns a driver ref.
      * do not cancel the timer */
@@ -159,7 +161,9 @@ static void _tgendriver_onNewPeer(TGenDriver* driver, gint socketD, TGenPeer* pe
     /* now let the IO handler manage the transfer. our transfer pointer reference
      * will be held by the IO object */
     tgenio_register(driver->io, tgentransport_getDescriptor(transport),
-            (TGenIO_notifyEventFunc)tgentransfer_onEvent, transfer, (GDestroyNotify)tgentransfer_unref);
+            (TGenIO_notifyEventFunc)tgentransfer_onEvent,
+            (TGenIO_notifyCheckTimeoutFunc) tgentransfer_onCheckTimeout,
+            transfer, (GDestroyNotify)tgentransfer_unref);
 
     /* release our transport pointer reference, the transfer should hold one */
     tgentransport_unref(transport);
@@ -222,7 +226,9 @@ static void _tgendriver_initiateTransfer(TGenDriver* driver, TGenAction* action)
     /* now let the IO handler manage the transfer. our transfer pointer reference
      * will be held by the IO object */
     tgenio_register(driver->io, tgentransport_getDescriptor(transport),
-            (TGenIO_notifyEventFunc)tgentransfer_onEvent, transfer, (GDestroyNotify)tgentransfer_unref);
+            (TGenIO_notifyEventFunc)tgentransfer_onEvent,
+            (TGenIO_notifyCheckTimeoutFunc) tgentransfer_onCheckTimeout,
+            transfer, (GDestroyNotify)tgentransfer_unref);
 
     /* release our transport pointer reference, the transfer should hold one */
     tgentransport_unref(transport);
@@ -252,7 +258,7 @@ static void _tgendriver_initiatePause(TGenDriver* driver, TGenAction* action) {
 
     /* let the IO module handle timer reads, transfer the timer pointer reference */
     tgenio_register(driver->io, tgentimer_getDescriptor(pauseTimer),
-            (TGenIO_notifyEventFunc)tgentimer_onEvent, pauseTimer,
+            (TGenIO_notifyEventFunc)tgentimer_onEvent, NULL, pauseTimer,
             (GDestroyNotify)tgentimer_unref);
 }
 
@@ -421,7 +427,7 @@ static gboolean _tgendriver_startServerHelper(TGenDriver* driver) {
         /* now let the IO handler manage the server. transfer our server pointer reference
          * because it will be stored as a param in the IO object */
         gint socketD = tgenserver_getDescriptor(server);
-        tgenio_register(driver->io, socketD, (TGenIO_notifyEventFunc)tgenserver_onEvent,
+        tgenio_register(driver->io, socketD, (TGenIO_notifyEventFunc)tgenserver_onEvent, NULL,
                 server, (GDestroyNotify) tgenserver_unref);
 
         tgen_info("started server using descriptor %i", socketD);
@@ -445,7 +451,7 @@ static gboolean _tgendriver_setStartClientTimerHelper(TGenDriver* driver, guint6
 
         /* let the IO module handle timer reads, transfer the timer pointer reference */
         gint timerD = tgentimer_getDescriptor(startTimer);
-        tgenio_register(driver->io, timerD, (TGenIO_notifyEventFunc)tgentimer_onEvent,
+        tgenio_register(driver->io, timerD, (TGenIO_notifyEventFunc)tgentimer_onEvent, NULL,
                 startTimer, (GDestroyNotify)tgentimer_unref);
 
         tgen_info("set startClient timer using descriptor %i", timerD);
@@ -469,7 +475,7 @@ static gboolean _tgendriver_setHeartbeatTimerHelper(TGenDriver* driver) {
 
         /* let the IO module handle timer reads, transfer the timer pointer reference */
         gint timerD = tgentimer_getDescriptor(heartbeatTimer);
-        tgenio_register(driver->io, timerD, (TGenIO_notifyEventFunc)tgentimer_onEvent,
+        tgenio_register(driver->io, timerD, (TGenIO_notifyEventFunc)tgentimer_onEvent, NULL,
                 heartbeatTimer, (GDestroyNotify)tgentimer_unref);
 
         tgen_info("set heartbeat timer using descriptor %i", timerD);

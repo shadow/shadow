@@ -20,5 +20,6 @@ void tgentransfer_ref(TGenTransfer* transfer);
 void tgentransfer_unref(TGenTransfer* transfer);
 
 TGenEvent tgentransfer_onEvent(TGenTransfer* transfer, gint descriptor, TGenEvent events);
+gboolean tgentransfer_onCheckTimeout(TGenTransfer* transfer, gint descriptor);
 
 #endif /* SHD_TGEN_TRANSFER_H_ */

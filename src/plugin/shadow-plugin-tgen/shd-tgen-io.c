@@ -17,15 +17,17 @@ struct _TGenIO {
 typedef struct _TGenIOChild {
     gint descriptor;
     TGenIO_notifyEventFunc notify;
+    TGenIO_notifyCheckTimeoutFunc checkTimeout;
     gpointer data;
     GDestroyNotify destructData;
 } TGenIOChild;
 
-static TGenIOChild* _tgeniochild_new(gint descriptor, TGenIO_notifyEventFunc notify, gpointer data,
-        GDestroyNotify destructData) {
+static TGenIOChild* _tgeniochild_new(gint descriptor, TGenIO_notifyEventFunc notify,
+        TGenIO_notifyCheckTimeoutFunc checkTimeout, gpointer data, GDestroyNotify destructData) {
     TGenIOChild* child = g_new0(TGenIOChild, 1);
     child->descriptor = descriptor;
     child->notify = notify;
+    child->checkTimeout = checkTimeout;
     child->data = data;
     child->destructData = destructData;
     return child;
@@ -96,8 +98,8 @@ static void _tgenio_deregister(TGenIO* io, gint descriptor) {
     g_hash_table_remove(io->children, &descriptor);
 }
 
-gboolean tgenio_register(TGenIO* io, gint descriptor, TGenIO_notifyEventFunc notify, gpointer data,
-        GDestroyNotify destructData) {
+gboolean tgenio_register(TGenIO* io, gint descriptor, TGenIO_notifyEventFunc notify,
+        TGenIO_notifyCheckTimeoutFunc checkTimeout, gpointer data, GDestroyNotify destructData) {
     TGEN_ASSERT(io);
 
     if(g_hash_table_lookup(io->children, &descriptor)) {
@@ -118,7 +120,7 @@ gboolean tgenio_register(TGenIO* io, gint descriptor, TGenIO_notifyEventFunc not
         return FALSE;
     }
 
-    TGenIOChild* child = _tgeniochild_new(descriptor, notify, data, destructData);
+    TGenIOChild* child = _tgeniochild_new(descriptor, notify, checkTimeout, data, destructData);
     g_hash_table_replace(io->children, &child->descriptor, child);
 
     return TRUE;
@@ -195,6 +197,43 @@ void tgenio_loopOnce(TGenIO* io) {
         gboolean out = (epevs[i].events & EPOLLOUT) ? TRUE : FALSE;
         TGenIOChild* child = g_hash_table_lookup(io->children, &epevs[i].data.fd);
         _tgenio_helper(io, child, in, out);
+    }
+}
+
+void tgenio_checkTimeouts(TGenIO* io) {
+    TGEN_ASSERT(io);
+
+    /* TODO this was a quick polling approach to checking for timeouts, which
+     * could be more efficient if replaced with an asynchronous notify design. */
+    GList* timeoutDescriptors = NULL;
+
+    /* get an iterator for our children */
+    GHashTableIter iter;
+    gpointer key, value;
+    g_hash_table_iter_init(&iter, io->children);
+
+    /* iterate through our children and check for timeouts */
+    while(g_hash_table_iter_next(&iter, &key, &value)) {
+        TGenIOChild* child = value;
+        if(child && child->checkTimeout) {
+            /* this calls  tgentransfer_onEvent to check and handle if a timeout is present */
+            gboolean hasTimeout = child->checkTimeout(child->data, child->descriptor);
+            if(hasTimeout) {
+                /* we cannot de-register here, i.e. modify the hash table during iteration */
+                timeoutDescriptors = g_list_append(timeoutDescriptors, GINT_TO_POINTER(child->descriptor));
+            }
+        }
+    }
+
+    GList* item = g_list_first(timeoutDescriptors);
+    while(item) {
+        gint descriptor = GPOINTER_TO_INT(item->data);
+        _tgenio_deregister(io, descriptor);
+        item = g_list_next(item);
+    }
+
+    if(timeoutDescriptors != NULL) {
+        g_list_free(timeoutDescriptors);
     }
 }
 

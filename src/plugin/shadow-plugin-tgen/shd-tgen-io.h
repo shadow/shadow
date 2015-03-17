@@ -16,6 +16,7 @@ typedef enum _TGenEvent {
 } TGenEvent;
 
 typedef TGenEvent (*TGenIO_notifyEventFunc)(gpointer data, gint descriptor, TGenEvent events);
+typedef gboolean (*TGenIO_notifyCheckTimeoutFunc)(gpointer data, gint descriptor);
 
 typedef struct _TGenIO TGenIO;
 
@@ -23,9 +24,10 @@ TGenIO* tgenio_new();
 void tgenio_ref(TGenIO* io);
 void tgenio_unref(TGenIO* io);
 
-gboolean tgenio_register(TGenIO* io, gint descriptor, TGenIO_notifyEventFunc notify, gpointer data,
-        GDestroyNotify destructData);
+gboolean tgenio_register(TGenIO* io, gint descriptor, TGenIO_notifyEventFunc notify,
+        TGenIO_notifyCheckTimeoutFunc checkTimeout, gpointer data, GDestroyNotify destructData);
 void tgenio_loopOnce(TGenIO* io);
+void tgenio_checkTimeouts(TGenIO* io);
 
 gint tgenio_getEpollDescriptor(TGenIO* io);
 
