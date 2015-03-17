@@ -129,7 +129,7 @@ def single_parse(args):
             if 'slave_heartbeat' in parts[5] or (args.doshadow and 'shadow-heartbeat' in parts[6]): shadow_helper(sdata, parts)
             elif args.dotor and 'torctl-log' in parts[6]: tor_helper(tdata, parts)
             elif args.dofiletransfer and 'fg-download-complete' in parts[6]: filetransfer_helper(fdata, parts)
-            elif args.dotgen and 'transfer-complete' in parts[6]: tgen_helper(tgendata, parts)
+            elif args.dotgen and ('transfer-complete' in parts[6] or 'transfer-error' in parts[6]): tgen_helper(tgendata, parts)
         except: continue
     if 'xzproc' in args: args.xzproc.wait()
     if len(sdata) > 0: dump(args, sdata, SHADOWJSON)
@@ -202,7 +202,7 @@ def filterworker_main(args, filterQ, shadowQ, torQ, filetransferQ, tgenQ):
                 if 'slave_heartbeat' in parts[5] or (args.doshadow and 'shadow-heartbeat' in parts[6]): shadowbatch.append(parts)
                 elif args.dotor and 'torctl-log' in parts[6]: torbatch.append(parts)
                 elif args.dofiletransfer and 'fg-download-complete' in parts[6]: filetransferbatch.append(parts)
-                elif args.dotgen and 'transfer-complete' in parts[6]: tgenbatch.append(parts)
+                elif args.dotgen and ('transfer-complete' in parts[6] or 'transfer-error' in parts[6]): tgenbatch.append(parts)
             except: pass
             # send out full batches
             if len(shadowbatch) >= PROCBATCHLEN:
@@ -354,18 +354,25 @@ def tgen_helper(d, parts):
     if 'read' not in iodirection: return
 
     bytes = int(ioparts[1].split('/')[0])
-    cmdtime = int(parts[15].split('=')[1])/1000.0
-    rsptime = int(parts[16].split('=')[1])/1000.0
-    fbtime = int(parts[17].split('=')[1])/1000.0
-    lbtime = int(parts[18].split('=')[1])/1000.0
-    chktime = int(parts[19].split('=')[1])/1000.0
 
     if 'nodes' not in d: d['nodes'] = {}
     if name not in d['nodes']: d['nodes'][name] = {}
-    if bytes not in d['nodes'][name]: d['nodes'][name][bytes] = {'firstbyte':[], 'lastbyte':[]}
+    if bytes not in d['nodes'][name]: d['nodes'][name][bytes] = {'firstbyte':[], 'lastbyte':[], 'errors':{}}
 
-    d['nodes'][name][bytes]['firstbyte'].append(fbtime-cmdtime)
-    d['nodes'][name][bytes]['lastbyte'].append(lbtime-cmdtime)
+    if 'transfer-complete' in parts[6]:
+        cmdtime = int(parts[15].split('=')[1])/1000.0
+        rsptime = int(parts[16].split('=')[1])/1000.0
+        fbtime = int(parts[17].split('=')[1])/1000.0
+        lbtime = int(parts[18].split('=')[1])/1000.0
+        chktime = int(parts[19].split('=')[1])/1000.0
+
+        d['nodes'][name][bytes]['firstbyte'].append(fbtime-cmdtime)
+        d['nodes'][name][bytes]['lastbyte'].append(lbtime-cmdtime)
+
+    elif 'transfer-error' in parts[6]:
+        code = parts[10].strip('()').split('-')[7].split('=')[1]
+        if code not in d['nodes'][name][bytes]['errors']: d['nodes'][name][bytes]['errors'][code] = 0
+        d['nodes'][name][bytes]['errors'][code] += 1
 
 def dump(args, data, filename, compress=True):
     if not os.path.exists(args.prefix): os.makedirs(args.prefix)

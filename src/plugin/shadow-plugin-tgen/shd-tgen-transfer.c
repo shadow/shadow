@@ -146,7 +146,7 @@ static const gchar* _tgentransfer_toString(TGenTransfer* transfer) {
     if(!transfer->string) {
         GString* stringBuffer = g_string_new(NULL);
 
-        g_string_printf(stringBuffer, "(%"G_GSIZE_FORMAT"-%s-%s-%"G_GSIZE_FORMAT"-%s-%"G_GSIZE_FORMAT")(state=%s,error=%s)",
+        g_string_printf(stringBuffer, "(%"G_GSIZE_FORMAT"-%s-%s-%"G_GSIZE_FORMAT"-%s-%"G_GSIZE_FORMAT"-state=%s-error=%s)",
                 transfer->id, transfer->name, _tgentransfer_typeToString(transfer),
                 transfer->size, transfer->remoteName, transfer->remoteID,
                 _tgentransfer_stateToString(transfer->state), _tgentransfer_errorToString(transfer->error));
