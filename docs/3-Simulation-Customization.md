@@ -151,7 +151,7 @@ the number of seconds that the tgen node should delay before starting a walk thr
   + _socksproxy_ (optional):  
 a peer (`ip:port`, e.g., `127.0.0.1:9051`) to use as a proxy server through which all connections to other tgen peers will be made
   + _timeout_ (optional):  
-the default time in seconds after which we give up on stalled transfers, used for all incoming server-side transfers and all client transfers that do not explicitly specify a _timeout_ attribute.
+the default time in seconds after which we give up on stalled transfers, used for all incoming server-side transfers and all client transfers that do not explicitly specify a _timeout_ attribute. If this is not set or set to 0 and not overridden by the transfer, then an internally defined timeout is used instead (currently 60 seconds).
   + _peers_ (special):  
 a list of peers (`ip1:port1,ip2:port21`, e.g., `192.168.1.100:8888,192.168.1.101:8888`) to use for transfers that do not explicitly specify a peer. The _peers_ attribute is optional, only if all transfers specify a _peers_ attribute.
 
@@ -164,7 +164,7 @@ protocol to use for this transfer (only "tcp" is supported)
   + _size_ (required):  
 amount of data to transfer (e.g., "5", or "5 suffix" where suffix is case in-sensitive and one of: kb, mb, gb, tb, kib, mib, gib, tib)
   + _timeout_ (optional):  
-the time in seconds after which consider this a stalled transfer and give up on it. If specified, this overrides the default _timeout_ attribute of the **start** element for this specific transfer.
+the time in seconds after which consider this a stalled transfer and give up on it. If specified, this overrides the default _timeout_ attribute of the **start** element for this specific transfer. If this is set to 0, then an internally defined timeout is used instead (currently 60 seconds).
   + _peers_ (special):  
 a list of peers (`ip1:port1,ip2:port21`, e.g., `192.168.1.100:8888,192.168.1.101:8888`) to use for this transfer. The _peers_ attribute is optional, only if a _peers_ attribute is specified in the start action. A peer will be selected at random from this list, or at random from the start action list if this attribute is not specified for a transfer.
 
