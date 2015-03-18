@@ -163,6 +163,8 @@ type of transfer: "get" to download or "put" to upload
 protocol to use for this transfer (only "tcp" is supported)
   + _size_ (required):  
 amount of data to transfer (e.g., "5", or "5 suffix" where suffix is case in-sensitive and one of: kb, mb, gb, tb, kib, mib, gib, tib)
+  + _timeout_ (optional):  
+the time in seconds after which consider this a stalled transfer and give up on it. If specified, this overrides the default _timeout_ attribute of the **start** element for this specific transfer.
   + _peers_ (special):  
 a list of peers (`ip1:port1,ip2:port21`, e.g., `192.168.1.100:8888,192.168.1.101:8888`) to use for this transfer. The _peers_ attribute is optional, only if a _peers_ attribute is specified in the start action. A peer will be selected at random from this list, or at random from the start action list if this attribute is not specified for a transfer.
 
