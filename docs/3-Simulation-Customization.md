@@ -150,6 +150,8 @@ the local port that will be opened to listen for other tgen connections
 the number of seconds that the tgen node should delay before starting a walk through the action graph
   + _socksproxy_ (optional):  
 a peer (`ip:port`, e.g., `127.0.0.1:9051`) to use as a proxy server through which all connections to other tgen peers will be made
+  + _timeout_ (optional):  
+the default time in seconds after which we give up on stalled transfers, used for all incoming server-side transfers and all client transfers that do not explicitly specify a _timeout_ attribute.
   + _peers_ (special):  
 a list of peers (`ip1:port1,ip2:port21`, e.g., `192.168.1.100:8888,192.168.1.101:8888`) to use for transfers that do not explicitly specify a peer. The _peers_ attribute is optional, only if all transfers specify a _peers_ attribute.
 
