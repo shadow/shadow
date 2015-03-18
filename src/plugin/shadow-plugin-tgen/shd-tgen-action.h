@@ -17,14 +17,14 @@ typedef enum _TGenActionType {
 
 typedef struct _TGenAction TGenAction;
 
-TGenAction* tgenaction_newStartAction(const gchar* timeStr, const gchar* serverPortStr,
-        const gchar* peersStr, const gchar* socksProxyStr, GError** error);
+TGenAction* tgenaction_newStartAction(const gchar* timeStr, const gchar* timeoutStr,
+        const gchar* serverPortStr, const gchar* peersStr, const gchar* socksProxyStr, GError** error);
 TGenAction* tgenaction_newEndAction(const gchar* timeStr, const gchar* countStr,
         const gchar* sizeStr, GError** error);
 TGenAction* tgenaction_newPauseAction(const gchar* timeStr, GError** error);
 TGenAction* tgenaction_newSynchronizeAction(GError** error);
 TGenAction* tgenaction_newTransferAction(const gchar* typeStr, const gchar* protocolStr,
-        const gchar* sizeStr, const gchar* peersStr, GError** error);
+        const gchar* sizeStr, const gchar* peersStr, const gchar* timeoutStr, GError** error);
 
 void tgenaction_ref(TGenAction* action);
 void tgenaction_unref(TGenAction* action);
@@ -37,8 +37,9 @@ guint16 tgenaction_getServerPort(TGenAction* action);
 TGenPeer* tgenaction_getSocksProxy(TGenAction* action);
 guint64 tgenaction_getStartTimeMillis(TGenAction* action);
 guint64 tgenaction_getPauseTimeMillis(TGenAction* action);
+guint64 tgenaction_getDefaultTimeoutMillis(TGenAction* action);
 void tgenaction_getTransferParameters(TGenAction* action, TGenTransferType* typeOut,
-        TGenTransportProtocol* protocolOut, guint64* sizeOut);
+        TGenTransportProtocol* protocolOut, guint64* sizeOut, guint64* timeoutOut);
 TGenPool* tgenaction_getPeers(TGenAction* action);
 guint64 tgenaction_getEndTimeMillis(TGenAction* action);
 guint64 tgenaction_getEndCount(TGenAction* action);

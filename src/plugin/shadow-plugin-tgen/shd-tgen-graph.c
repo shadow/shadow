@@ -17,6 +17,7 @@ typedef enum {
     TGEN_VA_SIZE = 1 << 7,
     TGEN_VA_TYPE = 1 << 8,
     TGEN_VA_PROTOCOL = 1 << 9,
+    TGEN_VA_TIMEOUT = 1 << 10,
 } AttributeFlags;
 
 struct _TGenGraph {
@@ -166,6 +167,8 @@ static GError* _tgengraph_parseStartVertex(TGenGraph* g, const gchar* idStr,
 
     const gchar* timeStr = (g->knownAttributes&TGEN_VA_TIME) ?
             VAS(g->graph, "time", vertexIndex) : NULL;
+    const gchar* timeoutStr = (g->knownAttributes&TGEN_VA_TIMEOUT) ?
+            VAS(g->graph, "timeout", vertexIndex) : NULL;
     const gchar* serverPortStr = (g->knownAttributes&TGEN_VA_SERVERPORT) ?
             VAS(g->graph, "serverport", vertexIndex) : NULL;
     const gchar* peersStr = (g->knownAttributes&TGEN_VA_PEERS) ?
@@ -173,8 +176,8 @@ static GError* _tgengraph_parseStartVertex(TGenGraph* g, const gchar* idStr,
     const gchar* socksProxyStr = (g->knownAttributes&TGEN_VA_SOCKSPROXY) ?
             VAS(g->graph, "socksproxy", vertexIndex) : NULL;
 
-    tgen_debug("validating action '%s' at vertex %li, time=%s serverport=%s socksproxy=%s peers=%s",
-            idStr, (glong)vertexIndex, timeStr, serverPortStr, socksProxyStr, peersStr);
+    tgen_debug("validating action '%s' at vertex %li, time=%s timeout=%s serverport=%s socksproxy=%s peers=%s",
+            idStr, (glong)vertexIndex, timeStr, timeoutStr, serverPortStr, socksProxyStr, peersStr);
 
     if(g->hasStartAction) {
         return g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT,
@@ -187,7 +190,7 @@ static GError* _tgengraph_parseStartVertex(TGenGraph* g, const gchar* idStr,
     }
 
     GError* error = NULL;
-    TGenAction* a = tgenaction_newStartAction(timeStr, serverPortStr, peersStr, socksProxyStr, &error);
+    TGenAction* a = tgenaction_newStartAction(timeStr, timeoutStr, serverPortStr, peersStr, socksProxyStr, &error);
 
     if(a) {
         _tgengraph_storeAction(g, a, vertexIndex);
@@ -274,12 +277,14 @@ static GError* _tgengraph_parseTransferVertex(TGenGraph* g, const gchar* idStr,
             VAS(g->graph, "size", vertexIndex) : NULL;
     const gchar* peersStr = (g->knownAttributes&TGEN_VA_PEERS) ?
             VAS(g->graph, "peers", vertexIndex) : NULL;
+    const gchar* timeoutStr = (g->knownAttributes&TGEN_VA_TIMEOUT) ?
+            VAS(g->graph, "timeout", vertexIndex) : NULL;
 
-    tgen_debug("found vertex %li (%s), type=%s protocol=%s size=%s peers=%s",
-            (glong)vertexIndex, idStr, typeStr, protocolStr, sizeStr, peersStr);
+    tgen_debug("found vertex %li (%s), type=%s protocol=%s size=%s peers=%s timeout=%s",
+            (glong)vertexIndex, idStr, typeStr, protocolStr, sizeStr, peersStr, timeoutStr);
 
     GError* error = NULL;
-    TGenAction* a = tgenaction_newTransferAction(typeStr, protocolStr, sizeStr, peersStr, &error);
+    TGenAction* a = tgenaction_newTransferAction(typeStr, protocolStr, sizeStr, peersStr, timeoutStr, &error);
 
     if(a) {
         _tgengraph_storeAction(g, a, vertexIndex);
@@ -386,6 +391,8 @@ static AttributeFlags _tgengraph_vertexAttributeToFlag(const gchar* stringAttrib
             return TGEN_VA_TYPE;
         } else if(!g_ascii_strcasecmp(stringAttribute, "protocol")) {
             return TGEN_VA_PROTOCOL;
+        } else if(!g_ascii_strcasecmp(stringAttribute, "timeout")) {
+            return TGEN_VA_TIMEOUT;
         }
     }
     return TGEN_A_NONE;

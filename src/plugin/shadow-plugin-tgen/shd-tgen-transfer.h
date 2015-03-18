@@ -13,9 +13,9 @@ typedef struct _TGenTransfer TGenTransfer;
 
 typedef void (*TGenTransfer_notifyCompleteFunc)(gpointer data1, gpointer data2, TGenTransfer* transfer);
 
-TGenTransfer* tgentransfer_new(gsize id, TGenTransferType type, gsize size, TGenTransport* transport,
-        TGenTransfer_notifyCompleteFunc notify, gpointer data1, gpointer data2,
-        GDestroyNotify data1Destructor, GDestroyNotify data2Destructor);
+TGenTransfer* tgentransfer_new(gsize id, TGenTransferType type, gsize size, guint64 timeout,
+        TGenTransport* transport, TGenTransfer_notifyCompleteFunc notify,
+        gpointer data1, gpointer data2, GDestroyNotify destructData1, GDestroyNotify destructData2);
 void tgentransfer_ref(TGenTransfer* transfer);
 void tgentransfer_unref(TGenTransfer* transfer);
 

@@ -26,6 +26,7 @@ struct _TGenTransfer {
     TGenTransferError error;
     TGenEvent events;
     gchar* string;
+    gint64 timeoutUSecs;
 
     /* command information */
     gsize id;
@@ -787,7 +788,7 @@ gboolean tgentransfer_onCheckTimeout(TGenTransfer* transfer, gint descriptor) {
     /* the io module is checking to see if we are in a timeout state. if we are, then
      * the transfer will be cancel will be de-registered and destroyed. */
     if((transfer->time.lastProgress > 0) &&
-            (g_get_monotonic_time() >= transfer->time.lastProgress + DEFAULT_XFER_TIMEOUT_USEC)) {
+            (g_get_monotonic_time() >= transfer->time.lastProgress + transfer->timeoutUSecs)) {
         /* log this transfer as a timeout. make sure to
          * set done after logging so it does not get logged as complete */
         _tgentransfer_changeState(transfer, TGEN_XFER_ERROR);
@@ -800,9 +801,9 @@ gboolean tgentransfer_onCheckTimeout(TGenTransfer* transfer, gint descriptor) {
     }
 }
 
-TGenTransfer* tgentransfer_new(gsize id, TGenTransferType type, gsize size, TGenTransport* transport,
-        TGenTransfer_notifyCompleteFunc notify, gpointer data1, gpointer data2,
-        GDestroyNotify destructData1, GDestroyNotify destructData2) {
+TGenTransfer* tgentransfer_new(gsize id, TGenTransferType type, gsize size, guint64 timeout,
+        TGenTransport* transport, TGenTransfer_notifyCompleteFunc notify,
+        gpointer data1, gpointer data2, GDestroyNotify destructData1, GDestroyNotify destructData2) {
     TGenTransfer* transfer = g_new0(TGenTransfer, 1);
     transfer->magic = TGEN_MAGIC;
     transfer->refcount = 1;
@@ -817,6 +818,9 @@ TGenTransfer* tgentransfer_new(gsize id, TGenTransferType type, gsize size, TGen
 
     transfer->events = TGEN_EVENT_READ;
     transfer->id = id;
+
+    /* the timeout after which we abandon this transfer */
+    transfer->timeoutUSecs = (gint64)(timeout > 0 ? (timeout * 1000) : DEFAULT_XFER_TIMEOUT_USEC);
 
     gchar nameBuffer[256];
     memset(nameBuffer, 0, 256);

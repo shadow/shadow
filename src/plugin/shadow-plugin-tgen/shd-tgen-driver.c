@@ -142,9 +142,12 @@ static void _tgendriver_onNewPeer(TGenDriver* driver, gint socketD, TGenPeer* pe
     /* ref++ the driver for the transport notify func */
     tgendriver_ref(driver);
 
+    /* default timeout after which we give up on transfer */
+    guint64 defaultTimeout = tgenaction_getDefaultTimeoutMillis(driver->startAction);
+
     /* a new transfer will be coming in on this transport */
     gsize id = ++(driver->transferIDCounter);
-    TGenTransfer* transfer = tgentransfer_new(id, TGEN_TYPE_NONE, 0, transport,
+    TGenTransfer* transfer = tgentransfer_new(id, TGEN_TYPE_NONE, 0, defaultTimeout, transport,
             (TGenTransfer_notifyCompleteFunc)_tgendriver_onTransferComplete, driver, NULL,
             (GDestroyNotify)tgendriver_unref, NULL);
 
@@ -197,17 +200,21 @@ static void _tgendriver_initiateTransfer(TGenDriver* driver, TGenAction* action)
         return;
     }
 
+    /* default timeout after which we give up on transfer */
+    guint64 timeout = tgenaction_getDefaultTimeoutMillis(driver->startAction);
+
     /* ref++ the driver for the transport notify func */
     tgendriver_ref(driver);
 
     guint64 size = 0;
     TGenTransferType type = 0;
-    tgenaction_getTransferParameters(action, &type, NULL, &size);
+    /* this will only update timeout if there was a non-default timeout set for this transfer */
+    tgenaction_getTransferParameters(action, &type, NULL, &size, &timeout);
     gsize id = ++(driver->transferIDCounter);
 
     /* a new transfer will be coming in on this transport. the transfer
      * takes control of the transport pointer reference. */
-    TGenTransfer* transfer = tgentransfer_new(id, type, (gsize)size, transport,
+    TGenTransfer* transfer = tgentransfer_new(id, type, (gsize)size, timeout, transport,
             (TGenTransfer_notifyCompleteFunc)_tgendriver_onTransferComplete, driver, action,
             (GDestroyNotify)tgendriver_unref, (GDestroyNotify)tgenaction_unref);
 
