@@ -170,9 +170,9 @@ def plot_shadow_packets(datasource, page, direction="send"):
         for node in d:
             for tstr in d[node][direction]['bytes_total']:
                 totalmib = d[node][direction]['bytes_total'][tstr]/1048576.0
-                datamib = d[node][direction]['bytes_data'][tstr]/1048576.0
-                controlmib = d[node][direction]['bytes_control'][tstr]/1048576.0
-                retransmib = d[node][direction]['bytes_retrans'][tstr]/1048576.0
+                datamib = d[node][direction]['bytes_data_payload'][tstr]/1048576.0
+                controlmib = (d[node][direction]['bytes_control_header'][tstr]+d[node][direction]['bytes_control_header_retrans'][tstr]+d[node][direction]['bytes_data_header'][tstr]+d[node][direction]['bytes_data_header_retrans'][tstr])/1048576.0
+                retransmib = (d[node][direction]['bytes_control_header_retrans'][tstr]+d[node][direction]['bytes_data_header_retrans'][tstr]+d[node][direction]['bytes_data_payload_retrans'][tstr])/1048576.0
 
                 t = int(tstr)
                 for datadict in [total_all, data_all, control_all, retrans_all]:
@@ -205,7 +205,7 @@ def plot_shadow_packets(datasource, page, direction="send"):
         x = sorted(total_all.keys())
         y = [total_all[t] for t in x]
         y_ma = movingaverage(y, 60)
-        pylab.scatter(x, y, s=0.1)
+        pylab.scatter(x, y, s=0.1, edgecolor=lineformat[0])
         pylab.plot(x, y_ma, lineformat, label=label)
         
         pylab.figure(total_all_cdffig.number)
@@ -216,12 +216,12 @@ def plot_shadow_packets(datasource, page, direction="send"):
         x, y = getcdf(total_each)
         pylab.plot(x, y, lineformat, label=label)
 
-        ## PAYLOAD+PAYLOADHEADER
+        ## PAYLOAD (not retrans)
         pylab.figure(data_all_mafig.number)
         x = sorted(data_all.keys())
         y = [data_all[t] for t in x]
         y_ma = movingaverage(y, 60)
-        pylab.scatter(x, y, s=0.1)
+        pylab.scatter(x, y, s=0.1, edgecolor=lineformat[0])
         pylab.plot(x, y_ma, lineformat, label=label)
         
         pylab.figure(data_all_cdffig.number)
@@ -236,7 +236,7 @@ def plot_shadow_packets(datasource, page, direction="send"):
         x = sorted(fracdata_all.keys())
         y = [fracdata_all[t] for t in x]
         y_ma = movingaverage(y, 60)
-        pylab.scatter(x, y, s=0.1)
+        pylab.scatter(x, y, s=0.1, edgecolor=lineformat[0])
         pylab.plot(x, y_ma, lineformat, label=label)
         
         pylab.figure(fracdata_all_cdffig.number)
@@ -247,12 +247,12 @@ def plot_shadow_packets(datasource, page, direction="send"):
         x, y = getcdf(fracdata_each)
         pylab.plot(x, y, lineformat, label=label)
 
-        ## CONTROLHEADER
+        ## CONTROL and DATA HEADERS (including retrans)
         pylab.figure(control_all_mafig.number)
         x = sorted(control_all.keys())
         y = [control_all[t] for t in x]
         y_ma = movingaverage(y, 60)
-        pylab.scatter(x, y, s=0.1)
+        pylab.scatter(x, y, s=0.1, edgecolor=lineformat[0])
         pylab.plot(x, y_ma, lineformat, label=label)
         
         pylab.figure(control_all_cdffig.number)
@@ -267,7 +267,7 @@ def plot_shadow_packets(datasource, page, direction="send"):
         x = sorted(fraccontrol_all.keys())
         y = [fraccontrol_all[t] for t in x]
         y_ma = movingaverage(y, 60)
-        pylab.scatter(x, y, s=0.1)
+        pylab.scatter(x, y, s=0.1, edgecolor=lineformat[0])
         pylab.plot(x, y_ma, lineformat, label=label)
         
         pylab.figure(fraccontrol_all_cdffig.number)
@@ -278,12 +278,12 @@ def plot_shadow_packets(datasource, page, direction="send"):
         x, y = getcdf(fracdata_each)
         pylab.plot(x, y, lineformat, label=label)
 
-        ## RETRANSMIT
+        ## RETRANSMIT HEADER AND PAYLOAD
         pylab.figure(retrans_all_mafig.number)
         x = sorted(retrans_all.keys())
         y = [retrans_all[t] for t in x]
         y_ma = movingaverage(y, 60)
-        pylab.scatter(x, y, s=0.1)
+        pylab.scatter(x, y, s=0.1, edgecolor=lineformat[0])
         pylab.plot(x, y_ma, lineformat, label=label)
         
         pylab.figure(retrans_all_cdffig.number)
@@ -298,7 +298,7 @@ def plot_shadow_packets(datasource, page, direction="send"):
         x = sorted(fracretrans_all.keys())
         y = [fracretrans_all[t] for t in x]
         y_ma = movingaverage(y, 60)
-        pylab.scatter(x, y, s=0.1)
+        pylab.scatter(x, y, s=0.1, edgecolor=lineformat[0])
         pylab.plot(x, y_ma, lineformat, label=label)
         
         pylab.figure(fracretrans_all_cdffig.number)

@@ -14,19 +14,23 @@ enum _TrackerFlags {
     TRACKER_FLAGS_RAM = 1<<2,
 };
 
-typedef struct {
-    gsize controlHeader;
-    gsize payloadHeader;
-    gsize payload;
-    gsize retransmitHeader;
-    gsize retransmitPayload;
-} ByteCounter;
-
+/* a packet is a 'data' packet if it has a payload attached, and a 'control' packet otherwise.
+ * each packet is either a 'normal' packet or a 'retransmitted' packet. */
 typedef struct {
     gsize control;
-    gsize payload;
-    gsize retransmit;
+    gsize controlRetransmit;
+    gsize data;
+    gsize dataRetransmit;
 } PacketCounter;
+
+typedef struct {
+    gsize controlHeader;
+    gsize controlHeaderRetransmit;
+    gsize dataHeader;
+    gsize dataHeaderRetransmit;
+    gsize dataPayload;
+    gsize dataPayloadRetransmit;
+} ByteCounter;
 
 typedef struct {
     ByteCounter bytes;
@@ -232,18 +236,29 @@ static void _tracker_updateCounters(Counters* c, gsize header, gsize payload,
     }
 
     if(payload > 0) {
-        c->packets.payload++;
-        c->bytes.payloadHeader += header;
-        c->bytes.payload += payload;
+        /* this is a 'data' packet */
+        if(status & PDS_SND_TCP_RETRANSMITTED) {
+            /* this is a retransmitted 'data' packet */
+            c->packets.dataRetransmit++;
+            c->bytes.dataHeaderRetransmit += header;
+            c->bytes.dataPayloadRetransmit += payload;
+        } else {
+            /* this is a first-transmitted 'data' packet */
+            c->packets.data++;
+            c->bytes.dataHeader += header;
+            c->bytes.dataPayload += payload;
+        }
     } else {
-        c->packets.control++;
-        c->bytes.controlHeader += header;
-    }
-
-    if(status & PDS_SND_TCP_RETRANSMITTED) {
-        c->packets.retransmit++;
-        c->bytes.retransmitHeader += header;
-        c->bytes.retransmitPayload += payload;
+        /* this is a 'control' packet */
+        if(status & PDS_SND_TCP_RETRANSMITTED) {
+            /* this is a retransmitted 'control' packet */
+            c->packets.controlRetransmit++;
+            c->bytes.controlHeaderRetransmit += header;
+        } else {
+            /* this is a first-transmitted 'control' packet */
+            c->packets.control++;
+            c->bytes.controlHeader += header;
+        }
     }
 }
 
@@ -414,22 +429,38 @@ void tracker_removeSocket(Tracker* tracker, gint handle) {
     }
 }
 
-static gchar* _tracker_getCounterString(Counters* c) {
-    g_assert(c);
+static gsize _tracker_sumBytes(ByteCounter* bytes) {
+    utility_assert(bytes);
+    return bytes->controlHeader + bytes->controlHeaderRetransmit +
+            bytes->dataHeader + bytes->dataHeaderRetransmit +
+            bytes->dataPayload + bytes->dataPayloadRetransmit;
+}
 
-    gsize totalPackets = c->packets.control + c->packets.payload;
-    gsize totalHeaderBytes = c->bytes.controlHeader + c->bytes.payloadHeader;
-    gsize totalBytes = totalHeaderBytes + c->bytes.payload;
+static const gchar* _tracker_getCounterHeaderString() {
+    return "packets-total,bytes-total,"
+            "packets-control,bytes-control-header,"
+            "packets-control-retrans,bytes-control-header-retrans,"
+            "packets-data,bytes-data-header,bytes-data-payload,"
+            "packets-data-retrans,bytes-data-header-retrans,bytes-data-payload-retrans";
+}
+
+static gchar* _tracker_getCounterString(Counters* c) {
+    utility_assert(c);
+
+    gsize totalPackets = c->packets.control + c->packets.controlRetransmit +
+            c->packets.data + c->packets.dataRetransmit;
+    gsize totalBytes = _tracker_sumBytes(&c->bytes);
 
     GString* buffer = g_string_new(NULL);
     g_string_printf(buffer,
             "%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT","
             "%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT","
-            "%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT,
-            totalPackets, totalBytes, c->bytes.payload, totalHeaderBytes,
-            c->packets.payload, c->bytes.payloadHeader,
+            "%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT,
+            totalPackets, totalBytes,
             c->packets.control, c->bytes.controlHeader,
-            c->packets.retransmit, c->bytes.retransmitHeader, c->bytes.retransmitPayload);
+            c->packets.controlRetransmit, c->bytes.controlHeaderRetransmit,
+            c->packets.data, c->bytes.dataHeader, c->bytes.dataPayload,
+            c->packets.dataRetransmit, c->bytes.dataHeaderRetransmit, c->bytes.dataPayloadRetransmit);
     return g_string_free(buffer, FALSE);
 }
 
@@ -443,25 +474,18 @@ static void _tracker_logNode(Tracker* tracker, GLogLevelFlags level, SimulationT
         avgdelayms = (gdouble) (delayms / ((gdouble) tracker->numDelayedLastInterval));
     }
 
-    gsize totalRecvBytes = tracker->remote.inCounters.bytes.controlHeader +
-            tracker->remote.inCounters.bytes.payloadHeader +
-            tracker->remote.inCounters.bytes.payload;
-
-    gsize totalSendBytes = tracker->remote.outCounters.bytes.controlHeader +
-            tracker->remote.outCounters.bytes.payloadHeader +
-            tracker->remote.outCounters.bytes.payload;
-
     if(!tracker->didLogNodeHeader) {
         tracker->didLogNodeHeader = TRUE;
         logging_log(G_LOG_DOMAIN, level, __FUNCTION__, "[shadow-heartbeat] [node-header] "
                 "interval-seconds,recv-bytes,send-bytes,cpu-percent,delayed-count,avgdelay-milliseconds;"
                 "inbound-localhost-counters;outbound-localhost-counters;"
                 "inbound-remote-counters;outbound-remote-counters "
-                "where counters are: total-packets,total-bytes,payload-bytes,header-bytes,"
-                "payload-packets,payload-header-bytes,control-packets,control-header-bytes,"
-                "retrans-packets,retrans-header-bytes,retrans-payload-bytes"
+                "where counters are: %s", _tracker_getCounterHeaderString()
         );
     }
+
+    gsize totalRecvBytes = _tracker_sumBytes(&tracker->remote.inCounters.bytes);
+    gsize totalSendBytes = _tracker_sumBytes(&tracker->remote.outCounters.bytes);
 
     gchar* inLocal = _tracker_getCounterString(&tracker->local.inCounters);
     gchar* outLocal = _tracker_getCounterString(&tracker->local.outCounters);
@@ -487,7 +511,11 @@ static void _tracker_logSocket(Tracker* tracker, GLogLevelFlags level, Simulatio
     if(!tracker->didLogSocketHeader) {
         tracker->didLogSocketHeader = TRUE;
         logging_log(G_LOG_DOMAIN, level, __FUNCTION__,
-                "[shadow-heartbeat] [socket-header] descriptor-number,protocol-string,hostname:port-peer,inbuflen-bytes,inbufsize-bytes,outbuflen-bytes,outbufsize-bytes,recv-bytes,send-bytes;...");
+                "[shadow-heartbeat] [socket-header] descriptor-number,protocol-string,hostname:port-peer;"
+                "inbuflen-bytes,inbufsize-bytes,outbuflen-bytes,outbufsize-bytes;recv-bytes,send-bytes;"
+                "inbound-localhost-counters;outbound-localhost-counters;"
+                "inbound-remote-counters;outbound-remote-counters|..." // for each socket
+                "where counters are: %s", _tracker_getCounterHeaderString());
     }
 
     /* construct the log message from all sockets we have in the hash table */
@@ -508,29 +536,39 @@ static void _tracker_logSocket(Tracker* tracker, GLogLevelFlags level, Simulatio
             continue;
         }
 
-        gsize totalRecvBytes = ss->local.inCounters.bytes.controlHeader +
-                ss->local.inCounters.bytes.payloadHeader +
-                ss->local.inCounters.bytes.payload +
-                ss->remote.inCounters.bytes.controlHeader +
-                ss->remote.inCounters.bytes.payloadHeader +
-                ss->remote.inCounters.bytes.payload;
+        gsize totalRecvBytes = _tracker_sumBytes(&ss->local.inCounters.bytes) +
+                _tracker_sumBytes(&ss->remote.inCounters.bytes);
+        gsize totalSendBytes = _tracker_sumBytes(&ss->local.outCounters.bytes) +
+                _tracker_sumBytes(&ss->remote.outCounters.bytes);
 
-        gsize totalSendBytes = ss->local.outCounters.bytes.controlHeader +
-                ss->local.outCounters.bytes.payloadHeader +
-                ss->local.outCounters.bytes.payload +
-                ss->remote.outCounters.bytes.controlHeader +
-                ss->remote.outCounters.bytes.payloadHeader +
-                ss->remote.outCounters.bytes.payload;
+        gchar* inLocal = _tracker_getCounterString(&ss->local.inCounters);
+        gchar* outLocal = _tracker_getCounterString(&ss->local.outCounters);
+        gchar* inRemote = _tracker_getCounterString(&ss->remote.inCounters);
+        gchar* outRemote = _tracker_getCounterString(&ss->remote.outCounters);
+
+        /* print the node separator between node logs */
+        if(socketLogCount > 0) {
+            g_string_append_printf(msg, "|");
+        }
 
         socketLogCount++;
-        g_string_append_printf(msg, "%d,%s,%s:%u,%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT";",
+        g_string_append_printf(msg, "%d,%s,%s:%u;"
+                "%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT";"
+                "%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT";"
+                "%s;%s;%s;%s",
                 ss->handle, /*inet_ntoa((struct in_addr){socket->peerIP})*/
                 ss->type == PTCP ? "TCP" : ss->type == PUDP ? "UDP" :
                     ss->type == PLOCAL ? "LOCAL" : "UNKNOWN",
                 ss->peerHostname, ss->peerPort,
                 ss->inputBufferLength, ss->inputBufferSize,
                 ss->outputBufferLength, ss->outputBufferSize,
-                totalRecvBytes, totalSendBytes);
+                totalRecvBytes, totalSendBytes,
+                inLocal, outLocal, inRemote, outRemote);
+
+        g_free(inLocal);
+        g_free(outLocal);
+        g_free(inRemote);
+        g_free(outRemote);
 
         /* check if we should remove the socket after iterating */
         if(ss->removeAfterNextLog) {
@@ -568,20 +606,6 @@ static void _tracker_logRAM(Tracker* tracker, GLogLevelFlags level, SimulationTi
         tracker->allocatedBytesTotal, numptrs, tracker->numFailedFrees);
 }
 
-static void _tracker_clearCounters(Counters* counter) {
-    if(!counter) {
-        return;
-    }
-    counter->bytes.controlHeader = 0;
-    counter->bytes.payloadHeader = 0;
-    counter->bytes.payload = 0;
-    counter->bytes.retransmitHeader = 0;
-    counter->bytes.retransmitPayload = 0;
-    counter->packets.control = 0;
-    counter->packets.payload = 0;
-    counter->packets.retransmit = 0;
-}
-
 void tracker_heartbeat(Tracker* tracker) {
     MAGIC_ASSERT(tracker);
 
@@ -614,20 +638,17 @@ void tracker_heartbeat(Tracker* tracker) {
     tracker->allocatedBytesLastInterval = 0;
     tracker->deallocatedBytesLastInterval = 0;
 
-    _tracker_clearCounters(&tracker->local.inCounters);
-    _tracker_clearCounters(&tracker->local.outCounters);
-    _tracker_clearCounters(&tracker->remote.inCounters);
-    _tracker_clearCounters(&tracker->remote.outCounters);
+    /* clear the counters */
+    memset(&tracker->local, 0, sizeof(IFaceCounters));
+    memset(&tracker->remote, 0, sizeof(IFaceCounters));
 
     SocketStats* ss = NULL;
     GHashTableIter socketIterator;
     g_hash_table_iter_init(&socketIterator, tracker->socketStats);
     while (g_hash_table_iter_next(&socketIterator, NULL, (gpointer*)&ss)) {
         if(ss) {
-            _tracker_clearCounters(&ss->local.inCounters);
-            _tracker_clearCounters(&ss->local.outCounters);
-            _tracker_clearCounters(&ss->remote.inCounters);
-            _tracker_clearCounters(&ss->remote.outCounters);
+            memset(&ss->local, 0, sizeof(IFaceCounters));
+            memset(&ss->remote, 0, sizeof(IFaceCounters));
         }
     }
 

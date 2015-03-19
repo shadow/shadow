@@ -284,7 +284,7 @@ def shadow_helper(d, parts):
     remoteout = mods[4].split(',')
 
     #labels = ['count_total', 'count_data', 'count_control', 'count_retrans', 'bytes_total', 'bytes_data', 'bytes_control', 'bytes_retrans']
-    labels = ['bytes_total', 'bytes_data', 'bytes_control', 'bytes_retrans']
+    labels = ['bytes_total', 'bytes_control_header', 'bytes_control_header_retrans', 'bytes_data_header', 'bytes_data_payload', 'bytes_data_header_retrans', 'bytes_data_payload_retrans']
 
     if 'nodes' not in d: d['nodes'] = {}
     if name not in d['nodes']:
@@ -296,23 +296,34 @@ def shadow_helper(d, parts):
         if second not in d['nodes'][name]['recv'][label]: d['nodes'][name]['recv'][label][second] = 0
         if second not in d['nodes'][name]['send'][label]: d['nodes'][name]['send'][label][second] = 0
 
-    #d['nodes'][name]['recv']['count_total'][second] += int(remotein[0])
-    #d['nodes'][name]['recv']['count_data'][second] += int(remotein[4])
-    #d['nodes'][name]['recv']['count_control'][second] += int(remotein[6])
-    #d['nodes'][name]['recv']['count_retrans'][second] += int(remotein[8])
-    d['nodes'][name]['recv']['bytes_total'][second] += int(remotein[1])
-    d['nodes'][name]['recv']['bytes_data'][second] += int(remotein[2]) + int(remotein[5])
-    d['nodes'][name]['recv']['bytes_control'][second] += int(remotein[7])
-    d['nodes'][name]['recv']['bytes_retrans'][second] += int(remotein[9]) + int(remotein[10])
+    '''
+    a packet is a data packet if it contains a payload, and a control packet otherwise.
+    each packet potentially has a header and a payload, and each packet is either
+    a first transmission or a re-transmission.
 
-    #d['nodes'][name]['send']['count_total'][second] += int(remoteout[0])
-    #d['nodes'][name]['send']['count_data'][second] += int(remoteout[4])
-    #d['nodes'][name]['send']['count_control'][second] += int(remoteout[6])
-    #d['nodes'][name]['send']['count_retrans'][second] += int(remoteout[8])
+    shadow prints the following in its heartbeat messages for the bytes counters:
+    packets-total,bytes-total,
+    packets-control,bytes-control-header,
+    packets-control-retrans,bytes-control-header-retrans,
+    packets-data,bytes-data-header,bytes-data-payload,
+    packets-data-retrans,bytes-data-header-retrans,bytes-data-payload-retrans
+    '''
+    # packet counts are also available, but we are ignoring them
+    d['nodes'][name]['recv']['bytes_total'][second] += int(remotein[1])
+    d['nodes'][name]['recv']['bytes_control_header'][second] += int(remotein[3])
+    d['nodes'][name]['recv']['bytes_control_header_retrans'][second] += int(remotein[5])
+    d['nodes'][name]['recv']['bytes_data_header'][second] += int(remotein[7])
+    d['nodes'][name]['recv']['bytes_data_payload'][second] += int(remotein[8])
+    d['nodes'][name]['recv']['bytes_data_header_retrans'][second] += int(remotein[10])
+    d['nodes'][name]['recv']['bytes_data_payload_retrans'][second] += int(remotein[11])
+
     d['nodes'][name]['send']['bytes_total'][second] += int(remoteout[1])
-    d['nodes'][name]['send']['bytes_data'][second] += int(remoteout[2]) + int(remoteout[5])
-    d['nodes'][name]['send']['bytes_control'][second] += int(remoteout[7])
-    d['nodes'][name]['send']['bytes_retrans'][second] += int(remoteout[9]) + int(remoteout[10])
+    d['nodes'][name]['send']['bytes_control_header'][second] += int(remoteout[3])
+    d['nodes'][name]['send']['bytes_control_header_retrans'][second] += int(remoteout[5])
+    d['nodes'][name]['send']['bytes_data_header'][second] += int(remoteout[7])
+    d['nodes'][name]['send']['bytes_data_payload'][second] += int(remoteout[8])
+    d['nodes'][name]['send']['bytes_data_header_retrans'][second] += int(remoteout[10])
+    d['nodes'][name]['send']['bytes_data_payload_retrans'][second] += int(remoteout[11])
 
 def tor_helper(d, parts):
     if 'BW' != parts[9]: return
