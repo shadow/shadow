@@ -73,6 +73,7 @@ in_addr_t packet_getDestinationIP(Packet* packet);
 in_addr_t packet_getSourceIP(Packet* packet);
 in_port_t packet_getSourcePort(Packet* packet);
 guint packet_copyPayload(Packet* packet, gsize payloadOffset, gpointer buffer, gsize bufferLength);
+GList* packet_copyTCPSelectiveACKs(Packet* packet);
 void packet_getTCPHeader(Packet* packet, PacketTCPHeader* header);
 gint packet_compareTCPSequence(Packet* packet1, Packet* packet2, gpointer user_data);
 

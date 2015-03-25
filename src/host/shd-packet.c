@@ -434,6 +434,24 @@ gint packet_getSourceAssociationKey(Packet* packet) {
     return key;
 }
 
+GList* packet_copyTCPSelectiveACKs(Packet* packet) {
+    _packet_lock(packet);
+    utility_assert(packet->protocol == PTCP);
+
+    PacketTCPHeader* packetHeader = (PacketTCPHeader*)packet->header;
+
+    /* make sure to do a deep copy of all pointers to avoid concurrency issues */
+    GList* selectiveACKsCopy = NULL;
+    if(packetHeader->selectiveACKs) {
+        /* g_list_copy is shallow, but we store integers in the data pointers, so its OK here */
+        selectiveACKsCopy = g_list_copy(packetHeader->selectiveACKs);
+    }
+
+    _packet_unlock(packet);
+
+    return selectiveACKsCopy;
+}
+
 void packet_getTCPHeader(Packet* packet, PacketTCPHeader* header) {
     if(!header) {
         return;
@@ -457,12 +475,8 @@ void packet_getTCPHeader(Packet* packet, PacketTCPHeader* header) {
     header->timestampValue = packetHeader->timestampValue;
     header->timestampEcho = packetHeader->timestampEcho;
 
-    /* make sure to do a deep copy of all pointers to avoid concurrency issues */
+    /* don't copy the selective acks list here; use packet_copyTCPSelectiveACKs for that */
     header->selectiveACKs = NULL;
-    if(packetHeader->selectiveACKs) {
-        /* g_list_copy is shallow, but we store integers in the data pointers, so its OK here */
-        header->selectiveACKs = g_list_copy(packetHeader->selectiveACKs);
-    }
 
     _packet_unlock(packet);
 }
