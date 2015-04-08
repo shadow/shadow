@@ -770,7 +770,8 @@ TGenEvent tgentransfer_onEvent(TGenTransfer* transfer, gint descriptor, TGenEven
 
     if((transfer->events & TGEN_EVENT_DONE) && transfer->notify) {
         /* execute the callback to notify that we are complete */
-        transfer->notify(transfer->data1, transfer->data2, transfer);
+        gboolean wasSuccess = transfer->error == TGEN_XFER_ERR_NONE ? TRUE : FALSE;
+        transfer->notify(transfer->data1, transfer->data2, wasSuccess);
         /* make sure we only do the notification once */
         transfer->notify = NULL;
     }
@@ -789,14 +790,23 @@ gboolean tgentransfer_onCheckTimeout(TGenTransfer* transfer, gint descriptor) {
      * the transfer will be cancel will be de-registered and destroyed. */
     if((transfer->time.lastProgress > 0) &&
             (g_get_monotonic_time() >= transfer->time.lastProgress + transfer->timeoutUSecs)) {
-        /* log this transfer as a timeout. make sure to
-         * set done after logging so it does not get logged as complete */
+        /* log this transfer as a timeout */
         _tgentransfer_changeState(transfer, TGEN_XFER_ERROR);
         _tgentransfer_changeError(transfer, TGEN_XFER_ERR_TIMEOUT);
         transfer->events |= TGEN_EVENT_DONE;
         _tgentransfer_log(transfer, FALSE);
+
+        /* we have to call notify so the next transfer can start */
+        if(transfer->notify) {
+            /* execute the callback to notify that we failed with a timeout error */
+            transfer->notify(transfer->data1, transfer->data2, FALSE);
+            /* make sure we only do the notification once */
+            transfer->notify = NULL;
+        }
+        /* this transfer will be destroyed by the io module */
         return TRUE;
     } else {
+        /* this transfer is still in progress */
         return FALSE;
     }
 }

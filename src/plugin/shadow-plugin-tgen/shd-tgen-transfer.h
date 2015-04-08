@@ -11,7 +11,7 @@ typedef enum _TGenTransferType {
 
 typedef struct _TGenTransfer TGenTransfer;
 
-typedef void (*TGenTransfer_notifyCompleteFunc)(gpointer data1, gpointer data2, TGenTransfer* transfer);
+typedef void (*TGenTransfer_notifyCompleteFunc)(gpointer data1, gpointer data2, gboolean wasSuccess);
 
 TGenTransfer* tgentransfer_new(gsize id, TGenTransferType type, gsize size, guint64 timeout,
         TGenTransport* transport, TGenTransfer_notifyCompleteFunc notify,

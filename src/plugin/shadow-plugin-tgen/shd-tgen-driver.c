@@ -33,9 +33,11 @@ struct _TGenDriver {
 
     /* traffic statistics */
     guint64 heartbeatTransfersCompleted;
+    guint64 heartbeatTransferErrors;
     gsize heartbeatBytesRead;
     gsize heartbeatBytesWritten;
     guint64 totalTransfersCompleted;
+    guint64 totalTransferErrors;
     gsize totalBytesRead;
     gsize totalBytesWritten;
 
@@ -54,12 +56,17 @@ static gint64 _tgendriver_getCurrentTimeMillis() {
     return g_get_monotonic_time()/1000;
 }
 
-static void _tgendriver_onTransferComplete(TGenDriver* driver, TGenAction* action, TGenTransfer* transfer) {
+static void _tgendriver_onTransferComplete(TGenDriver* driver, TGenAction* action, gboolean wasSuccess) {
     TGEN_ASSERT(driver);
 
     /* our transfer finished, close the socket */
-    driver->heartbeatTransfersCompleted++;
-    driver->totalTransfersCompleted++;
+    if(wasSuccess) {
+        driver->heartbeatTransfersCompleted++;
+        driver->totalTransfersCompleted++;
+    } else {
+        driver->heartbeatTransferErrors++;
+        driver->totalTransferErrors++;
+    }
 
     /* this only happens for transfers that our side initiated.
      * continue traversing the graph as instructed */
@@ -80,9 +87,10 @@ static void _tgendriver_onBytesTransferred(TGenDriver* driver, gsize bytesRead, 
 static gboolean _tgendriver_onHeartbeat(TGenDriver* driver, gpointer nullData) {
     TGEN_ASSERT(driver);
 
-    tgen_message("[driver-heartbeat] transfers-completed=%u bytes-read=%"G_GSIZE_FORMAT" "
-            "bytes-write=%"G_GSIZE_FORMAT, driver->heartbeatTransfersCompleted,
-            driver->heartbeatBytesRead, driver->heartbeatBytesWritten);
+    tgen_message("[driver-heartbeat] transfers-completed=%"G_GUINT64_FORMAT" bytes-read=%"G_GSIZE_FORMAT" "
+            "bytes-write=%"G_GSIZE_FORMAT" transfer-errors="G_GUINT64_FORMAT,
+            driver->heartbeatTransfersCompleted, driver->heartbeatBytesRead,
+            driver->heartbeatBytesWritten, driver->heartbeatTransferErrors);
 
     driver->heartbeatTransfersCompleted = 0;
     driver->heartbeatBytesRead = 0;

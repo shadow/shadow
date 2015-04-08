@@ -205,35 +205,23 @@ void tgenio_checkTimeouts(TGenIO* io) {
 
     /* TODO this was a quick polling approach to checking for timeouts, which
      * could be more efficient if replaced with an asynchronous notify design. */
-    GList* timeoutDescriptors = NULL;
+    GList* items = g_hash_table_get_values(io->children);
+    GList* item = g_list_first(items);
 
-    /* get an iterator for our children */
-    GHashTableIter iter;
-    gpointer key, value;
-    g_hash_table_iter_init(&iter, io->children);
-
-    /* iterate through our children and check for timeouts */
-    while(g_hash_table_iter_next(&iter, &key, &value)) {
-        TGenIOChild* child = value;
+    while(item) {
+        TGenIOChild* child = item->data;
         if(child && child->checkTimeout) {
-            /* this calls  tgentransfer_onEvent to check and handle if a timeout is present */
+            /* this calls  tgentransfer_onCheckTimeout to check and handle if a timeout is present */
             gboolean hasTimeout = child->checkTimeout(child->data, child->descriptor);
             if(hasTimeout) {
-                /* we cannot de-register here, i.e. modify the hash table during iteration */
-                timeoutDescriptors = g_list_append(timeoutDescriptors, GINT_TO_POINTER(child->descriptor));
+                _tgenio_deregister(io, child->descriptor);
             }
         }
-    }
-
-    GList* item = g_list_first(timeoutDescriptors);
-    while(item) {
-        gint descriptor = GPOINTER_TO_INT(item->data);
-        _tgenio_deregister(io, descriptor);
         item = g_list_next(item);
     }
 
-    if(timeoutDescriptors != NULL) {
-        g_list_free(timeoutDescriptors);
+    if(items != NULL) {
+        g_list_free(items);
     }
 }
 
