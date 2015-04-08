@@ -367,8 +367,7 @@ def tgen_helper(d, parts):
     bytes = int(ioparts[1].split('/')[0])
 
     if 'nodes' not in d: d['nodes'] = {}
-    if name not in d['nodes']: d['nodes'][name] = {}
-    if bytes not in d['nodes'][name]: d['nodes'][name][bytes] = {'firstbyte':[], 'lastbyte':[], 'errors':{}}
+    if name not in d['nodes']: d['nodes'][name] = {'firstbyte':{}, 'lastbyte':{}, 'errors':{}}
 
     if 'transfer-complete' in parts[6]:
         cmdtime = int(parts[15].split('=')[1])/1000.0
@@ -377,13 +376,17 @@ def tgen_helper(d, parts):
         lbtime = int(parts[18].split('=')[1])/1000.0
         chktime = int(parts[19].split('=')[1])/1000.0
 
-        d['nodes'][name][bytes]['firstbyte'].append(fbtime-cmdtime)
-        d['nodes'][name][bytes]['lastbyte'].append(lbtime-cmdtime)
+        if bytes not in d['nodes'][name]['firstbyte']: d['nodes'][name]['firstbyte'][bytes] = []
+        d['nodes'][name]['firstbyte'][bytes].append(fbtime-cmdtime)
+
+        if bytes not in d['nodes'][name]['lastbyte']: d['nodes'][name]['lastbyte'][bytes] = []
+        d['nodes'][name]['lastbyte'][bytes].append(lbtime-cmdtime)
 
     elif 'transfer-error' in parts[6]:
         code = parts[10].strip('()').split('-')[7].split('=')[1]
-        if code not in d['nodes'][name][bytes]['errors']: d['nodes'][name][bytes]['errors'][code] = 0
-        d['nodes'][name][bytes]['errors'][code] += 1
+
+        if code not in d['nodes'][name]['errors']: d['nodes'][name]['errors'][code] = []
+        d['nodes'][name]['errors'][code].append(bytes)
 
 def dump(args, data, filename, compress=True):
     if not os.path.exists(args.prefix): os.makedirs(args.prefix)

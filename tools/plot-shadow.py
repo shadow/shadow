@@ -91,7 +91,7 @@ def main():
         default=LINEFORMATS)
 
     args = parser.parse_args()
-    shdata, ftdata, tordata = get_data(args.experiments, args.lineformats)
+    shdata, ftdata, tgendata, tordata = get_data(args.experiments, args.lineformats)
 
     page = PdfPages("{0}shadow.results.pdf".format(args.prefix+'.' if args.prefix is not None else ''))
     if len(shdata) > 0:
@@ -106,6 +106,17 @@ def main():
         plot_filetransfer_lastbyte_mean(ftdata, page)
         plot_filetransfer_lastbyte_max(ftdata, page)
         plot_filetransfer_downloads(ftdata, page)
+    if len(tgendata) > 0:
+        plot_tgen_firstbyte(tgendata, page)
+        plot_tgen_lastbyte_all(tgendata, page)
+        plot_tgen_lastbyte_median(tgendata, page)
+        plot_tgen_lastbyte_mean(tgendata, page)
+        plot_tgen_lastbyte_max(tgendata, page)
+        plot_tgen_downloads(tgendata, page)
+        plot_tgen_errors(tgendata, page)
+        plot_tgen_errsizes_all(tgendata, page)
+        plot_tgen_errsizes_median(tgendata, page)
+        plot_tgen_errsizes_mean(tgendata, page)
     if len(tordata) > 0:
         plot_tor(tordata, page, direction="bytes_read")
         plot_tor(tordata, page, direction="bytes_written")
@@ -668,6 +679,269 @@ def plot_filetransfer_downloads(data, page):
         page.savefig()
         pylab.close()
 
+def plot_tgen_firstbyte(data, page):
+    f = None
+    
+    for (d, label, lineformat) in data:
+        fb = []
+        for client in d:
+            if "firstbyte" in d[client]:
+                for b in d[client]["firstbyte"]:
+                    if f is None: f = pylab.figure()
+                    client_fb_list = d[client]["firstbyte"][b]
+                    for sec in client_fb_list: fb.append(sec)
+        if f is not None and len(fb) > 0:
+            x, y = getcdf(fb)
+            pylab.plot(x, y, lineformat, label=label)
+
+    if f is not None:
+        pylab.xlabel("Download Time (s)")
+        pylab.ylabel("Cumulative Fraction")
+        pylab.title("time to download first byte, all clients")
+        pylab.legend(loc="lower right")
+        page.savefig()
+        pylab.close()
+
+def plot_tgen_lastbyte_all(data, page):
+    figs = {}
+    
+    for (d, label, lineformat) in data:
+        lb = {}
+        for client in d:
+            if "lastbyte" in d[client]:
+                for b in d[client]["lastbyte"]:
+                    bytes = int(b)
+                    if bytes not in figs: figs[bytes] = pylab.figure()
+                    if bytes not in lb: lb[bytes] = []
+                    client_lb_list = d[client]["lastbyte"][b]
+                    for sec in client_lb_list: lb[bytes].append(sec)
+        for bytes in lb:
+            x, y = getcdf(lb[bytes])
+            pylab.figure(figs[bytes].number)
+            pylab.plot(x, y, lineformat, label=label)
+
+    for bytes in sorted(figs.keys()):
+        pylab.figure(figs[bytes].number)
+        pylab.xlabel("Download Time (s)")
+        pylab.ylabel("Cumulative Fraction")
+        pylab.title("time to download {0} bytes, all downloads".format(bytes))
+        pylab.legend(loc="lower right")
+        page.savefig()
+        pylab.close()
+
+def plot_tgen_lastbyte_median(data, page):
+    figs = {}
+    
+    for (d, label, lineformat) in data:
+        lb = {}
+        for client in d:
+            if "lastbyte" in d[client]:
+                for b in d[client]["lastbyte"]:
+                    bytes = int(b)
+                    if bytes not in figs: figs[bytes] = pylab.figure()
+                    if bytes not in lb: lb[bytes] = []
+                    client_lb_list = d[client]["lastbyte"][b]
+                    lb[bytes].append(numpy.median(client_lb_list))
+        for bytes in lb:
+            x, y = getcdf(lb[bytes])
+            pylab.figure(figs[bytes].number)
+            pylab.plot(x, y, lineformat, label=label)
+
+    for bytes in sorted(figs.keys()):
+        pylab.figure(figs[bytes].number)
+        pylab.xlabel("Download Time (s)")
+        pylab.ylabel("Cumulative Fraction")
+        pylab.title("median time to download {0} bytes, each client".format(bytes))
+        pylab.legend(loc="lower right")
+        page.savefig()
+        pylab.close()
+
+def plot_tgen_lastbyte_mean(data, page):
+    figs = {}
+    
+    for (d, label, lineformat) in data:
+        lb = {}
+        for client in d:
+            if "lastbyte" in d[client]:
+                for b in d[client]["lastbyte"]:
+                    bytes = int(b)
+                    if bytes not in figs: figs[bytes] = pylab.figure()
+                    if bytes not in lb: lb[bytes] = []
+                    client_lb_list = d[client]["lastbyte"][b]
+                    lb[bytes].append(numpy.mean(client_lb_list))
+        for bytes in lb:
+            x, y = getcdf(lb[bytes])
+            pylab.figure(figs[bytes].number)
+            pylab.plot(x, y, lineformat, label=label)
+
+    for bytes in sorted(figs.keys()):
+        pylab.figure(figs[bytes].number)
+        pylab.xlabel("Download Time (s)")
+        pylab.ylabel("Cumulative Fraction")
+        pylab.title("mean time to download {0} bytes, each client".format(bytes))
+        pylab.legend(loc="lower right")
+        page.savefig()
+        pylab.close()
+
+def plot_tgen_lastbyte_max(data, page):
+    figs = {}
+    
+    for (d, label, lineformat) in data:
+        lb = {}
+        for client in d:
+            if "lastbyte" in d[client]:
+                for b in d[client]["lastbyte"]:
+                    bytes = int(b)
+                    if bytes not in figs: figs[bytes] = pylab.figure()
+                    if bytes not in lb: lb[bytes] = []
+                    client_lb_list = d[client]["lastbyte"][b]
+                    lb[bytes].append(numpy.max(client_lb_list))
+        for bytes in lb:
+            x, y = getcdf(lb[bytes])
+            pylab.figure(figs[bytes].number)
+            pylab.plot(x, y, lineformat, label=label)
+
+    for bytes in sorted(figs.keys()):
+        pylab.figure(figs[bytes].number)
+        pylab.xlabel("Download Time (s)")
+        pylab.ylabel("Cumulative Fraction")
+        pylab.title("max time to download {0} bytes, each client".format(bytes))
+        pylab.legend(loc="lower right")
+        page.savefig()
+        pylab.close()
+
+def plot_tgen_downloads(data, page):
+    figs = {}
+    
+    for (d, label, lineformat) in data:
+        dls = {}
+        for client in d:
+            if "lastbyte" in d[client]:
+                for b in d[client]["lastbyte"]:
+                    bytes = int(b)
+                    if bytes not in figs: figs[bytes] = pylab.figure()
+                    if bytes not in dls: dls[bytes] = {}
+                    if client not in dls[bytes]: dls[bytes][client] = 0
+                    client_lb_list = d[client]["lastbyte"][b]
+                    for sec in client_lb_list: dls[bytes][client] += 1
+        for bytes in dls:
+            x, y = getcdf(dls[bytes].values(), shownpercentile=1.0)
+            pylab.figure(figs[bytes].number)
+            pylab.plot(x, y, lineformat, label=label)
+
+    for bytes in sorted(figs.keys()):
+        pylab.figure(figs[bytes].number)
+        pylab.xlabel("Downloads Completed (\#)")
+        pylab.ylabel("Cumulative Fraction")
+        pylab.title("number of {0} byte downloads completed, each client".format(bytes))
+        pylab.legend(loc="lower right")
+        page.savefig()
+        pylab.close()
+
+def plot_tgen_errors(data, page):
+    figs = {}
+    
+    for (d, label, lineformat) in data:
+        dls = {}
+        for client in d:
+            if "errors" in d[client]:
+                for code in d[client]["errors"]:
+                    if code not in figs: figs[code] = pylab.figure()
+                    if code not in dls: dls[code] = {}
+                    if client not in dls[code]: dls[code][client] = 0
+                    client_err_list = d[client]["errors"][code]
+                    for b in client_err_list: dls[code][client] += 1
+        for code in dls:
+            x, y = getcdf(dls[code].values(), shownpercentile=1.0)
+            pylab.plot(x, y, lineformat, label=label)
+
+    for code in sorted(figs.keys()):
+        pylab.figure(figs[code].number)
+        pylab.xlabel("Download Errors (\#)")
+        pylab.ylabel("Cumulative Fraction")
+        pylab.title("number of transfer {0} errors, each client".format(code))
+        pylab.legend(loc="lower right")
+        page.savefig()
+        pylab.close()
+
+def plot_tgen_errsizes_all(data, page):
+    figs = {}
+    
+    for (d, label, lineformat) in data:
+        err = {}
+        for client in d:
+            if "errors" in d[client]:
+                for code in d[client]["errors"]:
+                    if code not in figs: figs[code] = pylab.figure()
+                    if code not in err: err[code] = []
+                    client_err_list = d[client]["errors"][code]
+                    for b in client_err_list: err[code].append(int(b)/1024.0)
+        for code in err:
+            x, y = getcdf(err[code])
+            pylab.figure(figs[code].number)
+            pylab.plot(x, y, lineformat, label=label)
+
+    for code in sorted(figs.keys()):
+        pylab.figure(figs[code].number)
+        pylab.xlabel("Data Transferred (KiB)")
+        pylab.ylabel("Cumulative Fraction")
+        pylab.title("bytes transferred before {0} error, all downloads".format(code))
+        pylab.legend(loc="lower right")
+        page.savefig()
+        pylab.close()
+
+def plot_tgen_errsizes_median(data, page):
+    figs = {}
+    
+    for (d, label, lineformat) in data:
+        err = {}
+        for client in d:
+            if "errors" in d[client]:
+                for code in d[client]["errors"]:
+                    if code not in figs: figs[code] = pylab.figure()
+                    if code not in err: err[code] = []
+                    client_err_list = d[client]["errors"][code]
+                    err[code].append(numpy.median(client_err_list)/1024.0)
+        for code in err:
+            x, y = getcdf(err[code])
+            pylab.figure(figs[code].number)
+            pylab.plot(x, y, lineformat, label=label)
+
+    for code in sorted(figs.keys()):
+        pylab.figure(figs[code].number)
+        pylab.xlabel("Data Transferred (KiB)")
+        pylab.ylabel("Cumulative Fraction")
+        pylab.title("median bytes transferred before {0} error, each client".format(code))
+        pylab.legend(loc="lower right")
+        page.savefig()
+        pylab.close()
+
+def plot_tgen_errsizes_mean(data, page):
+    figs = {}
+    
+    for (d, label, lineformat) in data:
+        err = {}
+        for client in d:
+            if "errors" in d[client]:
+                for code in d[client]["errors"]:
+                    if code not in figs: figs[code] = pylab.figure()
+                    if code not in err: err[code] = []
+                    client_err_list = d[client]["errors"][code]
+                    err[code].append(numpy.mean(client_err_list)/1024.0)
+        for code in err:
+            x, y = getcdf(err[code])
+            pylab.figure(figs[code].number)
+            pylab.plot(x, y, lineformat, label=label)
+
+    for code in sorted(figs.keys()):
+        pylab.figure(figs[code].number)
+        pylab.xlabel("Data Transferred (KiB)")
+        pylab.ylabel("Cumulative Fraction")
+        pylab.title("mean bytes transferred before {0} error, each client".format(code))
+        pylab.legend(loc="lower right")
+        page.savefig()
+        pylab.close()
+
 def plot_tor(data, page, direction="bytes_written"):
     mafig = pylab.figure()
     allcdffig = pylab.figure()
@@ -731,7 +1005,7 @@ def plot_tor(data, page, direction="bytes_written"):
     del(eachcdffig)
 
 def get_data(experiments, lineformats):
-    shdata, ftdata, tordata = [], [], []
+    shdata, ftdata, tgendata, tordata = [], [], [], []
     lflist = lineformats.strip().split(",")
 
     lfcycle = cycle(lflist)
@@ -745,11 +1019,18 @@ def get_data(experiments, lineformats):
     lfcycle = cycle(lflist)
     for (path, label) in experiments:
         log = os.path.abspath(os.path.expanduser("{0}/stats.filetransfer.json.xz".format(path)))
-        if not os.path.exists(log): log = os.path.abspath(os.path.expanduser("{0}/stats.tgen.json.xz".format(path)))
         if not os.path.exists(log): continue
         xzcatp = subprocess.Popen(["xzcat", log], stdout=subprocess.PIPE)
         data = json.load(xzcatp.stdout)
         ftdata.append((data['nodes'], label, lfcycle.next()))
+
+    lfcycle = cycle(lflist)
+    for (path, label) in experiments:
+        log = os.path.abspath(os.path.expanduser("{0}/stats.tgen.json.xz".format(path)))
+        if not os.path.exists(log): continue
+        xzcatp = subprocess.Popen(["xzcat", log], stdout=subprocess.PIPE)
+        data = json.load(xzcatp.stdout)
+        tgendata.append((data['nodes'], label, lfcycle.next()))
 
     lfcycle = cycle(lflist)
     for (path, label) in experiments:
@@ -759,7 +1040,7 @@ def get_data(experiments, lineformats):
         data = json.load(xzcatp.stdout)
         tordata.append((data['nodes'], label, lfcycle.next()))
 
-    return shdata, ftdata, tordata
+    return shdata, ftdata, tgendata, tordata
 
 # helper - compute the window_size moving average over the data in interval
 def movingaverage(interval, window_size):
