@@ -12,7 +12,7 @@ static void _tgendriver_log(ShadowLogLevel level, const gchar* functionName, con
     va_list vargs;
     va_start(vargs, format);
 
-    gint64 totalMicros = g_get_monotonic_time();
+    gint64 totalMicros = g_get_real_time();
     gint64 seconds = totalMicros / 1000000;
     gint64 micros = totalMicros % 1000000;
 
