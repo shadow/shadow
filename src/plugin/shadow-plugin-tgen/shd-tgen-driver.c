@@ -88,7 +88,7 @@ static gboolean _tgendriver_onHeartbeat(TGenDriver* driver, gpointer nullData) {
     TGEN_ASSERT(driver);
 
     tgen_message("[driver-heartbeat] transfers-completed=%"G_GUINT64_FORMAT" bytes-read=%"G_GSIZE_FORMAT" "
-            "bytes-write=%"G_GSIZE_FORMAT" transfer-errors="G_GUINT64_FORMAT,
+            "bytes-write=%"G_GSIZE_FORMAT" transfer-errors=%"G_GUINT64_FORMAT,
             driver->heartbeatTransfersCompleted, driver->heartbeatBytesRead,
             driver->heartbeatBytesWritten, driver->heartbeatTransferErrors);
 
