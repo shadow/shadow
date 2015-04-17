@@ -93,6 +93,7 @@ static gboolean _tgendriver_onHeartbeat(TGenDriver* driver, gpointer nullData) {
             driver->heartbeatBytesWritten, driver->heartbeatTransferErrors);
 
     driver->heartbeatTransfersCompleted = 0;
+    driver->heartbeatTransferErrors = 0;
     driver->heartbeatBytesRead = 0;
     driver->heartbeatBytesWritten = 0;
 
