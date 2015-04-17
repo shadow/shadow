@@ -718,7 +718,7 @@ static void _tgentransfer_log(TGenTransfer* transfer, gboolean wasActive) {
         if(wasActive) {
             gchar* bytesMessage = _tgentransfer_getBytesStatusReport(transfer);
 
-            tgen_info("[transfer-status] transport %s transfer %s state %s error %s %s",
+            tgen_info("[transfer-status] transport %s transfer %s %s",
                     tgentransport_toString(transfer->transport),
                     _tgentransfer_toString(transfer), bytesMessage);
 
