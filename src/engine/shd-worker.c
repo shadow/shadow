@@ -382,7 +382,14 @@ Thread* worker_getActiveThread() {
 
 void worker_setActiveThread(Thread* thread) {
     Worker* worker = _worker_getPrivate();
-    worker->activeThread = thread;
+    if(worker->activeThread) {
+        thread_unref(worker->activeThread);
+        worker->activeThread = NULL;
+    }
+    if(thread) {
+        thread_ref(thread);
+        worker->activeThread = thread;
+    }
 }
 
 SimulationTime worker_getCurrentTime() {

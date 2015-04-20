@@ -31,6 +31,9 @@ struct _Thread {
      */
     gboolean isShadowContext;
 
+    gboolean isRunning;
+    gint referenceCount;
+
     MAGIC_DECLARE;
 };
 
@@ -169,17 +172,33 @@ Thread* thread_new(Process* parentProc, Program* prog) {
     thread->delayTimer = g_timer_new();
 
     thread->activeContext = TCTX_SHADOW;
+    thread->referenceCount = 1;
+    thread->isRunning = TRUE;
 
     return thread;
 }
 
-void thread_free(Thread* thread) {
+static void _thread_free(Thread* thread) {
     MAGIC_ASSERT(thread);
 
     g_timer_destroy(thread->delayTimer);
 
     MAGIC_CLEAR(thread);
     g_free(thread);
+}
+
+void thread_ref(Thread* thread) {
+    MAGIC_ASSERT(thread);
+    (thread->referenceCount)++;
+}
+
+void thread_unref(Thread* thread) {
+    MAGIC_ASSERT(thread);
+    (thread->referenceCount)--;
+    utility_assert(thread->referenceCount >= 0);
+    if(thread->referenceCount == 0) {
+        _thread_free(thread);
+    }
 }
 
 static void _thread_handleTimerResult(Thread* thread, gdouble elapsedTimeSec) {
@@ -189,9 +208,20 @@ static void _thread_handleTimerResult(Thread* thread, gdouble elapsedTimeSec) {
     tracker_addProcessingTime(host_getTracker(currentHost), delay);
 }
 
+gboolean thread_isRunning(Thread* thread) {
+    MAGIC_ASSERT(thread);
+    return thread->isRunning;
+}
+
+void thread_stop(Thread* thread) {
+    MAGIC_ASSERT(thread);
+    thread->isRunning = FALSE;
+}
+
 void thread_execute(Thread* thread, PluginNotifyFunc func) {
     MAGIC_ASSERT(thread);
     utility_assert(func);
+    utility_assert(thread_isRunning(thread));
 
     g_timer_start(thread->delayTimer);
 
@@ -209,6 +239,7 @@ void thread_execute(Thread* thread, PluginNotifyFunc func) {
 void thread_executeNew(Thread* thread, PluginNewInstanceFunc new, gint argcParam, gchar* argvParam[]) {
     MAGIC_ASSERT(thread);
     utility_assert(new);
+    utility_assert(thread_isRunning(thread));
 
     g_timer_start(thread->delayTimer);
 
@@ -226,6 +257,7 @@ void thread_executeNew(Thread* thread, PluginNewInstanceFunc new, gint argcParam
 void thread_executeInit(Thread* thread, ShadowPluginInitializeFunc init) {
     MAGIC_ASSERT(thread);
     utility_assert(init);
+    utility_assert(thread_isRunning(thread));
 
     g_timer_start(thread->delayTimer);
 
@@ -243,6 +275,7 @@ void thread_executeInit(Thread* thread, ShadowPluginInitializeFunc init) {
 void thread_executeCallback2(Thread* thread, CallbackFunc callback, gpointer data, gpointer callbackArgument) {
     MAGIC_ASSERT(thread);
     utility_assert(callback);
+    utility_assert(thread_isRunning(thread));
 
     g_timer_start(thread->delayTimer);
 
@@ -259,6 +292,7 @@ void thread_executeCallback2(Thread* thread, CallbackFunc callback, gpointer dat
 void thread_executeExitCallback(Thread* thread, void (*callback)(int , void *), gpointer argument) {
     MAGIC_ASSERT(thread);
     utility_assert(callback);
+    utility_assert(thread_isRunning(thread));
 
     g_timer_start(thread->delayTimer);
 
@@ -274,25 +308,30 @@ void thread_executeExitCallback(Thread* thread, void (*callback)(int , void *), 
 
 gboolean thread_shouldInterpose(Thread* thread) {
     MAGIC_ASSERT(thread);
+    utility_assert(thread_isRunning(thread));
     return thread->activeContext == TCTX_PLUGIN ? TRUE : FALSE;
 }
 
 void thread_beginControl(Thread* thread) {
     MAGIC_ASSERT(thread);
+    utility_assert(thread_isRunning(thread));
     thread->activeContext = TCTX_SHADOW;
 }
 
 void thread_endControl(Thread* thread) {
     MAGIC_ASSERT(thread);
+    utility_assert(thread_isRunning(thread));
     thread->activeContext = TCTX_PLUGIN;
 }
 
 Process* thread_getParentProcess(Thread* thread) {
     MAGIC_ASSERT(thread);
+    utility_assert(thread_isRunning(thread));
     return thread->parentProcess;
 }
 
 Program* thread_getProgram(Thread* thread) {
     MAGIC_ASSERT(thread);
+    utility_assert(thread_isRunning(thread));
     return thread->program;
 }

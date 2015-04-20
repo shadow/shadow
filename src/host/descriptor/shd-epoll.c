@@ -137,6 +137,9 @@ static void _epoll_free(Epoll* epoll) {
 
     close(epoll->osEpollDescriptor);
 
+    utility_assert(epoll->ownerThread);
+    thread_unref(epoll->ownerThread);
+
     MAGIC_CLEAR(epoll);
     g_free(epoll);
 }
@@ -182,6 +185,7 @@ Epoll* epoll_new(gint handle) {
     epoll_new should be called as a result of an application syscall */
     epoll->ownerThread = worker_getActiveThread();
     utility_assert(epoll->ownerThread);
+    thread_ref(epoll->ownerThread);
 
     /* the epoll descriptor itself is always able to be epolled */
     descriptor_adjustStatus(&(epoll->super), DS_ACTIVE, TRUE);
@@ -503,7 +507,7 @@ void epoll_tryNotify(Epoll* epoll) {
 
     /* if it was closed in the meantime, do the actual close now */
     gboolean isClosed = (epoll->flags & EF_CLOSED) ? TRUE : FALSE;
-    if(isClosed) {
+    if(isClosed || !thread_isRunning(epoll->ownerThread)) {
         host_closeDescriptor(worker_getCurrentHost(), epoll->super.handle);
         return;
     }

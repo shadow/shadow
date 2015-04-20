@@ -169,7 +169,8 @@ void process_stop(Process* proc) {
         program_freeState(proc->prog, proc->state);
         proc->state = NULL;
 
-        thread_free(proc->mainThread);
+        thread_stop(proc->mainThread);
+        thread_unref(proc->mainThread);
         proc->mainThread = NULL;
     }
 }

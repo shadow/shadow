@@ -12,7 +12,11 @@
 typedef struct _Thread Thread;
 
 Thread* thread_new(Process* parentProc, Program* prog);
-void thread_free(Thread* thread);
+void thread_ref(Thread* thread);
+void thread_unref(Thread* thread);
+
+gboolean thread_isRunning(Thread* thread);
+void thread_stop(Thread* thread);
 
 void thread_executeInit(Thread* thread, ShadowPluginInitializeFunc init);
 void thread_executeNew(Thread* thread, PluginNewInstanceFunc new, gint argcParam, gchar* argvParam[]);
