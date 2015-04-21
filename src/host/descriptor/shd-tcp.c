@@ -253,7 +253,7 @@ static void _tcpserver_free(TCPServer* server) {
 
 void tcp_clearAllChildrenIfServer(TCP* tcp) {
     MAGIC_ASSERT(tcp);
-    if(tcp->server) {
+    if(tcp->server && tcp->server->children) {
         g_hash_table_destroy(tcp->server->children);
         tcp->server->children = NULL;
     }

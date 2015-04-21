@@ -158,6 +158,8 @@ Host* host_new(GQuark id, gchar* hostname, gchar* ipHint, gchar* geocodeHint, gc
 void host_free(Host* host, gpointer userData) {
     MAGIC_ASSERT(host);
 
+    info("freeing host %s", host->name);
+
     g_queue_free(host->applications);
 
     topology_detach(worker_getTopology(), networkinterface_getAddress(host->defaultInterface));
@@ -239,9 +241,11 @@ void host_stopApplication(Host* host, Process* application) {
 
 void host_freeAllApplications(Host* host) {
     MAGIC_ASSERT(host);
+    debug("start freeing applications for host '%s'", host->name);
     while(!g_queue_is_empty(host->applications)) {
         process_free(g_queue_pop_head(host->applications));
     }
+    debug("done freeing application for host '%s'", host->name);
 }
 
 gint host_compare(gconstpointer a, gconstpointer b, gpointer user_data) {

@@ -106,6 +106,8 @@ void process_start(Process* proc) {
 
     /* dont do anything if we are already running */
     if(!process_isRunning(proc)) {
+        info("starting '%s' process", g_quark_to_string(proc->programID));
+
         /* need to get thread-private program from current worker */
         proc->prog = worker_getPrivateProgram(proc->programID);
         proc->mainThread = thread_new(proc, proc->prog);
@@ -149,9 +151,12 @@ void process_stop(Process* proc) {
 
     /* we only have state if we are running */
     if(process_isRunning(proc)) {
+        info("stopping '%s' process", g_quark_to_string(proc->programID));
         program_swapInState(proc->prog, proc->state);
 
         thread_execute(proc->mainThread, program_getFreeFunc(proc->prog));
+
+        debug("calling atexit for '%s' process", g_quark_to_string(proc->programID));
 
         while(proc->atExitFunctions && g_queue_get_length(proc->atExitFunctions) > 0) {
             ProcessExitCallbackData* exitCallback = g_queue_pop_head(proc->atExitFunctions);
