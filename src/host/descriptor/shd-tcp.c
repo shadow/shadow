@@ -1426,6 +1426,20 @@ TCPProcessFlags _tcp_ackProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *he
     return flags;
 }
 
+static void _tcp_logCongestionInfo(TCP* tcp) {
+    gsize outSize = socket_getOutputBufferSize(&tcp->super);
+    gsize outLength = socket_getOutputBufferLength(&tcp->super);
+    gsize inSize = socket_getInputBufferSize(&tcp->super);
+    gsize inLength = socket_getInputBufferLength(&tcp->super);
+    double ploss = (double) (tcp->info.retransmitCount / tcp->send.packetsSent);
+
+    congestionlog(tcp->congestion, "[CONG-AVOID] cwnd=%d ssthresh=%d rtt=%d "
+            "sndbufsize=%"G_GSIZE_FORMAT" sndbuflen=%"G_GSIZE_FORMAT" rcvbufsize=%"G_GSIZE_FORMAT" rcbuflen=%"G_GSIZE_FORMAT" "
+            "retrans=%"G_GSIZE_FORMAT" ploss=%f",
+            tcp->congestion->window, tcp->congestion->threshold, tcp->congestion->rttSmoothed,
+            outSize, outLength, inSize, inLength, tcp->info.retransmitCount, ploss);
+}
+
 /* return TRUE if the packet should be retransmitted */
 void tcp_processPacket(TCP* tcp, Packet* packet) {
     MAGIC_ASSERT(tcp);
@@ -1682,21 +1696,13 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
     if(isAckDubious) {
         if((flags & TCP_PF_DATA_ACKED) && mayRaiseWindow) {
             tcpCongestion_avoidance(tcp->congestion, tcp->send.next, nPacketsAcked, tcp->send.unacked);
-
-            congestionlog(tcp->congestion, "[CONG-AVOID] cwnd=%d ssthresh=%d rtt=%d sndbufsize=%d sndbuflen=%d rcvbufsize=%d rcbuflen=%d retrans=%d ploss=%f", 
-                    tcp->congestion->window, tcp->congestion->threshold, tcp->congestion->rttSmoothed, 
-                    tcp->super.outputBufferLength, tcp->super.outputBufferSize, tcp->super.inputBufferLength, tcp->super.inputBufferSize, 
-                    tcp->info.retransmitCount, (float)tcp->info.retransmitCount / tcp->send.packetsSent);
+            _tcp_logCongestionInfo(tcp);
         }
 
         _tcp_fastRetransmitAlert(tcp, flags);
     } else if(flags & TCP_PF_DATA_ACKED) {
         tcpCongestion_avoidance(tcp->congestion, tcp->send.next, nPacketsAcked, tcp->send.unacked);
-
-        congestionlog(tcp->congestion, "[CONG-AVOID] cwnd=%d ssthresh=%d rtt=%d sndbufsize=%d sndbuflen=%d rcvbufsize=%d rcbuflen=%d retrans=%d ploss=%f", 
-                tcp->congestion->window, tcp->congestion->threshold, tcp->congestion->rttSmoothed, 
-                tcp->super.outputBufferLength, tcp->super.outputBufferSize, tcp->super.inputBufferLength, tcp->super.inputBufferSize, 
-                tcp->info.retransmitCount, (float)tcp->info.retransmitCount / tcp->send.packetsSent);
+        _tcp_logCongestionInfo(tcp);
     }
 
     /* now flush as many packets as we can to socket */
