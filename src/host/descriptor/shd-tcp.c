@@ -149,9 +149,9 @@ struct _TCP {
     /* tcp autotuning for the send and recv buffers */
     struct {
         gboolean isEnabled;
-        gint32 bytesCopied;
+        gsize bytesCopied;
         SimulationTime lastAdjustment;
-        guint32 space;
+        gsize space;
     } autotune;
 
     /* congestion object for implementing different types of congestion control (aimd, reno, cubic) */
@@ -509,7 +509,7 @@ static void _tcp_autotuneReceiveBuffer(TCP* tcp, guint bytesCopied) {
 
     SimulationTime now = worker_getCurrentTime();
 
-    tcp->autotune.bytesCopied += bytesCopied;
+    tcp->autotune.bytesCopied += (gsize)bytesCopied;
 
     if(tcp->autotune.lastAdjustment == 0) {
         tcp->autotune.lastAdjustment = now;
@@ -517,20 +517,20 @@ static void _tcp_autotuneReceiveBuffer(TCP* tcp, guint bytesCopied) {
     }
 
     SimulationTime time = now - tcp->autotune.lastAdjustment;
-    SimulationTime threshold = tcp->congestion->rttSmoothed * SIMTIME_ONE_MILLISECOND;
+    SimulationTime threshold = ((SimulationTime)tcp->congestion->rttSmoothed) * ((SimulationTime)SIMTIME_ONE_MILLISECOND);
 
     if(tcp->congestion->rttSmoothed == 0 || (time < threshold)) {
         return;
     }
 
-    guint space = 2 * tcp->autotune.bytesCopied;
+    gsize space = 2 * tcp->autotune.bytesCopied;
     space = MAX(space, tcp->autotune.space);
 
     gsize currentSize = socket_getInputBufferSize(&tcp->super);
-    if(((gsize)space) > currentSize) {
-        tcp->autotune.space = (guint32)space;
+    if(space > currentSize) {
+        tcp->autotune.space = space;
 
-        gsize newSize = (gsize) MIN(space, (guint)CONFIG_TCP_RMEM_MAX);
+        gsize newSize = (gsize) MIN(space, (gsize)CONFIG_TCP_RMEM_MAX);
         if(newSize > currentSize) {
             socket_setInputBufferSize(&tcp->super, newSize);
             debug("[autotune] input buffer size adjusted from %"G_GSIZE_FORMAT" to %"G_GSIZE_FORMAT,
@@ -556,18 +556,15 @@ static void _tcp_autotuneSendBuffer(TCP* tcp) {
      * 2200 <= sndmem < 2404.  For now hard code as 2404 and maybe later figure out how to calculate it
      * or sample from a distribution. */
 
-    gint sndmem = 2404;
-    gint demanded = tcp->congestion->window;
-    sndmem *= (2 * demanded);
+    gsize sndmem = 2404;
+    gsize demanded = (gsize)tcp->congestion->window;
+    gsize newSize = (gsize) MIN((gsize)(sndmem * 2 * demanded), (gsize)CONFIG_TCP_WMEM_MAX);
 
     gsize currentSize = socket_getOutputBufferSize(&tcp->super);
-    if(sndmem > currentSize) {
-        gsize newSize = (gsize) MIN(sndmem, (gint)CONFIG_TCP_WMEM_MAX);
-        if(newSize > currentSize) {
-            socket_setOutputBufferSize(&tcp->super, newSize);
-            debug("[autotune] output buffer size adjusted from %"G_GSIZE_FORMAT" to %"G_GSIZE_FORMAT,
-                    currentSize, newSize);
-        }
+    if(newSize > currentSize) {
+        socket_setOutputBufferSize(&tcp->super, newSize);
+        debug("[autotune] output buffer size adjusted from %"G_GSIZE_FORMAT" to %"G_GSIZE_FORMAT,
+                currentSize, newSize);
     }
 }
 
