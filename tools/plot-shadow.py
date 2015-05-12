@@ -852,7 +852,8 @@ def plot_tgen_errors(data, page):
                     client_err_list = d[client]["errors"][code]
                     for b in client_err_list: dls[code][client] += 1
         for code in dls:
-            x, y = getcdf(dls[code].values(), shownpercentile=1.0)
+            x, y = getcdf([dls[code][client] for client in dls[code]], shownpercentile=1.0)
+            pylab.figure(figs[code].number)
             pylab.plot(x, y, lineformat, label=label)
 
     for code in sorted(figs.keys()):
