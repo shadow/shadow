@@ -8,24 +8,57 @@
 #include <shd-library.h>
 #include "shd-tgen.h"
 
+static const gchar* _tgendriver_logLevelToString(GLogLevelFlags logLevel) {
+    switch (logLevel) {
+        case G_LOG_LEVEL_ERROR:
+            return "error";
+        case G_LOG_LEVEL_CRITICAL:
+            return "critical";
+        case G_LOG_LEVEL_WARNING:
+            return "warning";
+        case G_LOG_LEVEL_MESSAGE:
+            return "message";
+        case G_LOG_LEVEL_INFO:
+            return "info";
+        case G_LOG_LEVEL_DEBUG:
+            return "debug";
+        default:
+            return "default";
+    }
+}
+
+static void _tgendriver_logHandler(const gchar *logDomain, GLogLevelFlags logLevel,
+        const gchar *message, GLogLevelFlags* userData) {
+    GLogLevelFlags filter = *userData;
+    if(logLevel <= filter) {
+        g_print("%s\n", message);
+    }
+}
+
 static void _tgendriver_log(ShadowLogLevel level, const gchar* functionName, const gchar* format, ...) {
     va_list vargs;
     va_start(vargs, format);
 
-    gint64 totalMicros = g_get_real_time();
-    gint64 seconds = totalMicros / 1000000;
-    gint64 micros = totalMicros % 1000000;
-
+    GDateTime* dt = g_date_time_new_now_local();
     GString* newformat = g_string_new(NULL);
-    g_string_append_printf(newformat, "%"G_GINT64_FORMAT".%06"G_GINT64_FORMAT" [%s] %s",
-            seconds, micros, functionName, format);
+
+    g_string_append_printf(newformat, "%04i-%02i-%02i %02i:%02i:%02i %"G_GINT64_FORMAT".%06i [%s] [%s] %s",
+            g_date_time_get_year(dt), g_date_time_get_month(dt), g_date_time_get_day_of_month(dt),
+            g_date_time_get_hour(dt), g_date_time_get_minute(dt), g_date_time_get_second(dt),
+            g_date_time_to_unix(dt), g_date_time_get_microsecond(dt),
+            _tgendriver_logLevelToString((GLogLevelFlags)level), functionName, format);
     g_logv(G_LOG_DOMAIN, (GLogLevelFlags)level, newformat->str, vargs);
+
     g_string_free(newformat, TRUE);
+    g_date_time_unref(dt);
 
     va_end(vargs);
 }
 
 gint main(gint argc, gchar *argv[]) {
+    GLogLevelFlags filter = G_LOG_LEVEL_MESSAGE;
+    g_log_set_default_handler((GLogFunc)_tgendriver_logHandler, &filter);
+
     /* create the new state according to user inputs */
     TGenDriver* tgen = tgendriver_new(argc, argv, &_tgendriver_log);
     if(!tgen) {
@@ -60,7 +93,7 @@ gint main(gint argc, gchar *argv[]) {
     while(TRUE) {
         /* wait for some events */
         tgen_debug("waiting for events");
-        nReadyFDs = epoll_wait(mainepolld, tgenevents, 100, 0);
+        nReadyFDs = epoll_wait(mainepolld, tgenevents, 100, -1);
         if(nReadyFDs == -1) {
             tgen_critical("error in client epoll_wait");
             return -1;

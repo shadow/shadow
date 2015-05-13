@@ -6,44 +6,23 @@
 
 #include "shadow.h"
 
-static gchar* _logging_getNewLogLevelString(GLogLevelFlags log_level) {
-    gchar* levels;
+static const gchar* _logging_getNewLogLevelString(GLogLevelFlags log_level) {
     switch (log_level) {
-        case G_LOG_LEVEL_ERROR: {
-            levels = "error";
-            break;
-        }
-        case G_LOG_LEVEL_CRITICAL: {
-            levels = "critical";
-            break;
-        }
-
-        case G_LOG_LEVEL_WARNING: {
-            levels = "warning";
-            break;
-        }
-
-        case G_LOG_LEVEL_MESSAGE: {
-            levels = "message";
-            break;
-        }
-
-        case G_LOG_LEVEL_INFO: {
-            levels = "info";
-            break;
-        }
-
-        case G_LOG_LEVEL_DEBUG: {
-            levels = "debug";
-            break;
-        }
-
-        default: {
-            levels = "default";
-            break;
-        }
+        case G_LOG_LEVEL_ERROR:
+            return "error";
+        case G_LOG_LEVEL_CRITICAL:
+            return "critical";
+        case G_LOG_LEVEL_WARNING:
+            return "warning";
+        case G_LOG_LEVEL_MESSAGE:
+            return "message";
+        case G_LOG_LEVEL_INFO:
+            return "info";
+        case G_LOG_LEVEL_DEBUG:
+            return "debug";
+        default:
+            return "default";
     }
-    return g_strdup(levels);
 }
 
 /* this func is called whenever g_logv is called, not just in our log code */
@@ -88,7 +67,7 @@ void logging_logv(const gchar *msgLogDomain, GLogLevelFlags msgLogLevel,
 
     const gchar* logFunctionStr = functionName ? functionName : "n/a";
     const gchar* formatStr = format ? format : "n/a";
-    gchar* logLevelStr = _logging_getNewLogLevelString(msgLogLevel);
+    const gchar* logLevelStr = _logging_getNewLogLevelString(msgLogLevel);
 
     SimulationTime currentTime = worker_isAlive() ? worker_getCurrentTime() : SIMTIME_INVALID;
     Host* currentHost = worker_isAlive() ? worker_getCurrentHost() : NULL;
@@ -139,7 +118,6 @@ void logging_logv(const gchar *msgLogDomain, GLogLevelFlags msgLogLevel,
     g_free(newLogFormat);
     g_free(clockString);
     g_free(nodeString);
-    g_free(logLevelStr);
 }
 
 void logging_log(const gchar *log_domain, GLogLevelFlags log_level, const gchar* functionName, const gchar *format, ...) {
