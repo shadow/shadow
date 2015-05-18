@@ -5,7 +5,7 @@
 #include <glib.h>
 #include <unistd.h>
 
-#include <shd-library.h>
+#include <shadow-plugin-interface.h>
 #include "shd-tgen.h"
 
 static const gchar* _tgendriver_logLevelToString(GLogLevelFlags logLevel) {
