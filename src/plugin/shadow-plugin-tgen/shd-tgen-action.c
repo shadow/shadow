@@ -10,6 +10,7 @@
 typedef struct _TGenActionStartData {
     guint64 time;
     guint64 timeout;
+    guint64 stallout;
     guint16 serverport;
     TGenPeer* socksproxy;
     TGenPool* peers;
@@ -31,6 +32,8 @@ typedef struct _TGenActionTransferData {
     guint64 size;
     guint64 timeout;
     gboolean timeoutIsSet;
+    guint64 stallout;
+    gboolean stalloutIsSet;
     TGenPool* peers;
 } TGenActionTransferData;
 
@@ -311,7 +314,7 @@ void tgenaction_unref(TGenAction* action) {
 }
 
 TGenAction* tgenaction_newStartAction(const gchar* timeStr, const gchar* timeoutStr,
-        const gchar* serverPortStr, const gchar* peersStr,
+        const gchar* stalloutStr, const gchar* serverPortStr, const gchar* peersStr,
         const gchar* socksProxyStr, GError** error) {
     g_assert(error);
 
@@ -332,6 +335,11 @@ TGenAction* tgenaction_newStartAction(const gchar* timeStr, const gchar* timeout
     guint64 defaultTimeout = 0;
     if (timeoutStr && g_ascii_strncasecmp(timeoutStr, "\0", (gsize) 1)) {
         defaultTimeout = g_ascii_strtoull(timeoutStr, NULL, 10);
+    }
+
+    guint64 defaultStallout = 0;
+    if (stalloutStr && g_ascii_strncasecmp(stalloutStr, "\0", (gsize) 1)) {
+        defaultStallout = g_ascii_strtoull(stalloutStr, NULL, 10);
     }
 
     /* a socks proxy address is optional */
@@ -366,6 +374,7 @@ TGenAction* tgenaction_newStartAction(const gchar* timeStr, const gchar* timeout
 
     data->time = timedelay;
     data->timeout = defaultTimeout;
+    data->stallout = defaultStallout;
     guint64 longport = g_ascii_strtoull(serverPortStr, NULL, 10);
     data->serverport = htons((guint16)longport);
     data->peers = peerPool;
@@ -452,7 +461,7 @@ TGenAction* tgenaction_newSynchronizeAction(GError** error) {
 }
 
 TGenAction* tgenaction_newTransferAction(const gchar* typeStr, const gchar* protocolStr,
-        const gchar* sizeStr, const gchar* peersStr, const gchar* timeoutStr, GError** error) {
+        const gchar* sizeStr, const gchar* peersStr, const gchar* timeoutStr, const gchar* stalloutStr, GError** error) {
     g_assert(error);
 
     /* type is required */
@@ -524,6 +533,13 @@ TGenAction* tgenaction_newTransferAction(const gchar* typeStr, const gchar* prot
         timeoutIsSet = TRUE;
     }
 
+    guint64 stallout = 0;
+    gboolean stalloutIsSet = FALSE;
+    if (stalloutStr && g_ascii_strncasecmp(stalloutStr, "\0", (gsize) 1)) {
+        stallout = g_ascii_strtoull(stalloutStr, NULL, 10);
+        stalloutIsSet = TRUE;
+    }
+
     TGenAction* action = g_new0(TGenAction, 1);
     action->magic = TGEN_MAGIC;
     action->refcount = 1;
@@ -537,6 +553,8 @@ TGenAction* tgenaction_newTransferAction(const gchar* typeStr, const gchar* prot
     data->peers = peerPool;
     data->timeout = timeout;
     data->timeoutIsSet = timeoutIsSet;
+    data->stallout = stallout;
+    data->stalloutIsSet = stalloutIsSet;
 
     action->data = data;
 
@@ -585,6 +603,12 @@ guint64 tgenaction_getDefaultTimeoutMillis(TGenAction* action) {
     return 1000 * ((TGenActionStartData*)action->data)->timeout;
 }
 
+guint64 tgenaction_getDefaultStalloutMillis(TGenAction* action) {
+    TGEN_ASSERT(action);
+    g_assert(action->data && action->type == TGEN_ACTION_START);
+    return 1000 * ((TGenActionStartData*)action->data)->stallout;
+}
+
 guint64 tgenaction_getPauseTimeMillis(TGenAction* action) {
     TGEN_ASSERT(action);
     g_assert(action->data && action->type == TGEN_ACTION_PAUSE);
@@ -593,7 +617,7 @@ guint64 tgenaction_getPauseTimeMillis(TGenAction* action) {
 }
 
 void tgenaction_getTransferParameters(TGenAction* action, TGenTransferType* typeOut,
-        TGenTransportProtocol* protocolOut, guint64* sizeOut, guint64* timeoutOut) {
+        TGenTransportProtocol* protocolOut, guint64* sizeOut, guint64* timeoutOut, guint64* stalloutOut) {
     TGEN_ASSERT(action);
     g_assert(action->data && action->type == TGEN_ACTION_TRANSFER);
 
@@ -611,6 +635,13 @@ void tgenaction_getTransferParameters(TGenAction* action, TGenTransferType* type
         if(data->timeoutIsSet) {
             /* seconds to milliseconds */
             *timeoutOut = data->timeout * 1000;
+        }
+    }
+    if(stalloutOut) {
+        TGenActionTransferData* data = (TGenActionTransferData*)action->data;
+        if(data->stalloutIsSet) {
+            /* seconds to milliseconds */
+            *stalloutOut = data->stallout * 1000;
         }
     }
 }

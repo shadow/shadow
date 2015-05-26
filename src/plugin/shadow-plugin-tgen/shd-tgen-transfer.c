@@ -8,6 +8,7 @@
 
 /* 60 seconds default timeout */
 #define DEFAULT_XFER_TIMEOUT_USEC 60000000
+#define DEFAULT_XFER_STALLOUT_USEC 15000000
 
 typedef enum _TGenTransferState {
     TGEN_XFER_COMMAND, TGEN_XFER_RESPONSE,
@@ -27,6 +28,7 @@ struct _TGenTransfer {
     TGenEvent events;
     gchar* string;
     gint64 timeoutUSecs;
+    gint64 stalloutUSecs;
 
     /* command information */
     gsize id;
@@ -804,8 +806,10 @@ gboolean tgentransfer_onCheckTimeout(TGenTransfer* transfer, gint descriptor) {
 
     /* the io module is checking to see if we are in a timeout state. if we are, then
      * the transfer will be cancel will be de-registered and destroyed. */
-    if((transfer->time.lastProgress > 0) &&
-            (g_get_monotonic_time() >= transfer->time.lastProgress + transfer->timeoutUSecs)) {
+    gboolean transferStalled = ((transfer->time.lastProgress > 0) &&
+            (g_get_monotonic_time() >= transfer->time.lastProgress + transfer->stalloutUSecs)) ? TRUE : FALSE;
+    gboolean transferTookTooLong = (g_get_monotonic_time() >= (transfer->time.start + transfer->timeoutUSecs)) ? TRUE : FALSE;
+    if(transferStalled || transferTookTooLong) {
         /* log this transfer as a timeout */
         _tgentransfer_changeState(transfer, TGEN_XFER_ERROR);
         _tgentransfer_changeError(transfer, TGEN_XFER_ERR_TIMEOUT);
@@ -827,7 +831,7 @@ gboolean tgentransfer_onCheckTimeout(TGenTransfer* transfer, gint descriptor) {
     }
 }
 
-TGenTransfer* tgentransfer_new(gsize id, TGenTransferType type, gsize size, guint64 timeout,
+TGenTransfer* tgentransfer_new(gsize id, TGenTransferType type, gsize size, guint64 timeout, guint64 stallout,
         TGenTransport* transport, TGenTransfer_notifyCompleteFunc notify,
         gpointer data1, gpointer data2, GDestroyNotify destructData1, GDestroyNotify destructData2) {
     TGenTransfer* transfer = g_new0(TGenTransfer, 1);
@@ -847,6 +851,7 @@ TGenTransfer* tgentransfer_new(gsize id, TGenTransferType type, gsize size, guin
 
     /* the timeout after which we abandon this transfer */
     transfer->timeoutUSecs = (gint64)(timeout > 0 ? (timeout * 1000) : DEFAULT_XFER_TIMEOUT_USEC);
+    transfer->stalloutUSecs = (gint64)(stallout > 0 ? (stallout * 1000) : DEFAULT_XFER_STALLOUT_USEC);
 
     gchar nameBuffer[256];
     memset(nameBuffer, 0, 256);

@@ -13,7 +13,7 @@ typedef struct _TGenTransfer TGenTransfer;
 
 typedef void (*TGenTransfer_notifyCompleteFunc)(gpointer data1, gpointer data2, gboolean wasSuccess);
 
-TGenTransfer* tgentransfer_new(gsize id, TGenTransferType type, gsize size, guint64 timeout,
+TGenTransfer* tgentransfer_new(gsize id, TGenTransferType type, gsize size, guint64 timeout, guint64 stallout,
         TGenTransport* transport, TGenTransfer_notifyCompleteFunc notify,
         gpointer data1, gpointer data2, GDestroyNotify destructData1, GDestroyNotify destructData2);
 void tgentransfer_ref(TGenTransfer* transfer);
