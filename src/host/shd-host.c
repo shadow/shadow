@@ -7,9 +7,6 @@
 #include "shadow.h"
 
 struct _Host {
-    /* holds this node's events */
-    EventQueue* events;
-
     /* general node lock. nothing that belongs to the node should be touched
      * unless holding this lock. everything following this falls under the lock.
      */
@@ -116,7 +113,6 @@ Host* host_new(GQuark id, gchar* hostname, gchar* ipHint, gchar* geocodeHint, gc
 
     /* thread-level event communication with other nodes */
     g_mutex_init(&(host->lock));
-    host->events = eventqueue_new();
 
     host->availableDescriptors = g_queue_new();
     host->descriptorHandleCounter = MIN_DESCRIPTOR;
@@ -155,7 +151,7 @@ Host* host_new(GQuark id, gchar* hostname, gchar* ipHint, gchar* geocodeHint, gc
     return host;
 }
 
-void host_free(Host* host, gpointer userData) {
+void host_free(Host* host) {
     MAGIC_ASSERT(host);
 
     info("freeing host %s", host->name);
@@ -186,7 +182,6 @@ void host_free(Host* host, gpointer userData) {
 
     g_free(host->name);
 
-    eventqueue_free(host->events);
     cpu_free(host->cpu);
     tracker_free(host->tracker);
 
@@ -209,9 +204,9 @@ void host_unlock(Host* host) {
     g_mutex_unlock(&(host->lock));
 }
 
-EventQueue* host_getEvents(Host* host) {
+GQuark host_getID(Host* host) {
     MAGIC_ASSERT(host);
-    return host->events;
+    return host->id;
 }
 
 void host_addApplication(Host* host, GQuark pluginID,

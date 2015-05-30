@@ -225,7 +225,7 @@ void createnodes_run(CreateNodesAction* action) {
                 interfaceReceiveLength);
 
         /* save the node somewhere */
-        worker_addHost(host, (guint) id);
+        worker_addHost(host);
 
         g_string_free(hostnameBuffer, TRUE);
 

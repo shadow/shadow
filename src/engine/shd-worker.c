@@ -8,33 +8,48 @@
 
 /* thread-level storage structure */
 struct _Worker {
-    gint thread_id;
+    /* our thread and an id that is unique among all threads */
+    GThread* thread;
+    guint threadID;
 
+    /* pointer to the object that communicates with the master process */
     Slave* slave;
+    /* pointer to the per-slave parallel scheduler object that feeds events to all workers */
+    Scheduler* scheduler;
 
-    /* if single threaded, use this global event priority queue */
-    EventQueue* serialEventQueue;
-
-    SimulationTime clock_now;
-    SimulationTime clock_last;
-    SimulationTime clock_barrier;
-
+    /* the random source used for all hosts run by this worker
+     * the source is seeded by the master random source. */
     Random* random;
 
-    Thread* activeThread;
-    Program* cached_plugin;
-    Process* cached_application;
-    Host* cached_node;
-    Event* cached_event;
-
+    /* all plugin programs that have been loaded by this worker */
     GHashTable* privatePrograms;
+
+    /* timing information tracked by this worker */
+    struct {
+        SimulationTime now;
+        SimulationTime last;
+        SimulationTime barrier;
+    } clock;
+
+    /* cached storage of active objects for the event that
+     * is currently being processed by the worker */
+    struct {
+        Event* event;
+        Host* host;
+        Program* program;
+        Process* process;
+        Thread* thread;
+    } active;
 
     MAGIC_DECLARE;
 };
 
+static Worker* _worker_new(Slave*, guint);
+static void _worker_free(Worker*);
+
 /* holds a thread-private key that each thread references to get a private
  * instance of a worker object */
-static GPrivate workerKey = G_PRIVATE_INIT((GDestroyNotify)worker_free);
+static GPrivate workerKey = G_PRIVATE_INIT((GDestroyNotify)_worker_free);
 
 static Worker* _worker_getPrivate() {
     /* get current thread's private worker object */
@@ -47,7 +62,7 @@ gboolean worker_isAlive() {
     return g_private_get(&workerKey) != NULL;
 }
 
-Worker* worker_new(Slave* slave) {
+static Worker* _worker_new(Slave* slave, guint threadID) {
     /* make sure this isnt called twice on the same thread! */
     utility_assert(!worker_isAlive());
 
@@ -55,33 +70,25 @@ Worker* worker_new(Slave* slave) {
     MAGIC_INIT(worker);
 
     worker->slave = slave;
-    worker->thread_id = slave_generateWorkerID(slave);
-    worker->clock_now = SIMTIME_INVALID;
-    worker->clock_last = SIMTIME_INVALID;
-    worker->clock_barrier = SIMTIME_INVALID;
+    worker->thread = g_thread_self();
+    worker->threadID = threadID;
+    worker->clock.now = SIMTIME_INVALID;
+    worker->clock.last = SIMTIME_INVALID;
+    worker->clock.barrier = SIMTIME_INVALID;
 
     /* each worker needs a private copy of each plug-in library */
     worker->privatePrograms = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, (GDestroyNotify)program_free);
-
-    if(slave_getWorkerCount(slave) <= 1) {
-        /* this will cause events to get pushed to this queue instead of host queues */
-        worker->serialEventQueue = eventqueue_new();
-    }
 
     g_private_replace(&workerKey, worker);
 
     return worker;
 }
 
-void worker_free(Worker* worker) {
+static void _worker_free(Worker* worker) {
     MAGIC_ASSERT(worker);
 
     /* calls the destroy functions we specified in g_hash_table_new_full */
     g_hash_table_destroy(worker->privatePrograms);
-
-    if(worker->serialEventQueue) {
-        eventqueue_free(worker->serialEventQueue);
-    }
 
     MAGIC_CLEAR(worker);
     g_private_set(&workerKey, NULL);
@@ -122,218 +129,116 @@ Program* worker_getPrivateProgram(GQuark pluginID) {
         g_hash_table_replace(worker->privatePrograms, program_getID(privateProg), privateProg);
     }
 
-    debug("worker %i using plug-in at %p", worker->thread_id, privateProg);
+    debug("worker %u using plug-in at %p", worker->threadID, privateProg);
 
     return privateProg;
 }
 
-static guint _worker_processNode(Worker* worker, Host* node, SimulationTime barrier) {
+static void _worker_processEvent(Worker* worker, Event* event) {
+    utility_assert(event);
+
     /* update cache, reset clocks */
-    worker->cached_node = node;
-    worker->clock_last = SIMTIME_INVALID;
-    worker->clock_now = SIMTIME_INVALID;
-    worker->clock_barrier = barrier;
+    worker->active.event = event;
+    worker->active.host = shadowevent_getNode(event);
+    worker->clock.now = shadowevent_getTime(event);
 
     /* lock the node */
-    host_lock(worker->cached_node);
+    host_lock(worker->active.host);
 
-    EventQueue* eventq = host_getEvents(worker->cached_node);
-    Event* nextEvent = eventqueue_peek(eventq);
+//    /* make sure we don't jump backward in time */
+//    // FIXME I think this logic should go in popEvent and be host-specific
+//    worker->clock.now = shadowevent_getTime(worker->active.event);
+//    if(worker->clock.last != SIMTIME_INVALID) {
+//        utility_assert(worker->clock.now >= worker->clock.last);
+//    }
 
-    /* process all events in the nodes local queue */
-    guint nEventsProcessed = 0;
-    while(nextEvent && (shadowevent_getTime(nextEvent) < worker->clock_barrier))
-    {
-        worker->cached_event = eventqueue_pop(eventq);
+    /* do the local task */
+    gboolean isComplete = shadowevent_run(worker->active.event);
 
-        /* make sure we don't jump backward in time */
-        worker->clock_now = shadowevent_getTime(worker->cached_event);
-        if(worker->clock_last != SIMTIME_INVALID) {
-            utility_assert(worker->clock_now >= worker->clock_last);
-        }
+    /* update times */
+    worker->clock.last = worker->clock.now;
+    worker->clock.now = SIMTIME_INVALID;
 
-        /* do the local task */
-        gboolean complete = shadowevent_run(worker->cached_event);
-
-        /* update times */
-        worker->clock_last = worker->clock_now;
-        worker->clock_now = SIMTIME_INVALID;
-
-        /* finished event can now be destroyed */
-        if(complete) {
-            shadowevent_free(worker->cached_event);
-            nEventsProcessed++;
-        }
-
-        /* get the next event, or NULL will tell us to break */
-        nextEvent = eventqueue_peek(eventq);
+    /* finished event can now be destroyed */
+    if(isComplete) {
+        shadowevent_free(worker->active.event);
     }
 
     /* unlock, clear cache */
-    host_unlock(worker->cached_node);
-    worker->cached_node = NULL;
-    worker->cached_event = NULL;
-
-    return nEventsProcessed;
+    host_unlock(worker->active.host);
+    worker->active.host = NULL;
+    worker->active.event = NULL;
 }
 
-gpointer worker_runParallel(WorkLoad* workload) {
-    utility_assert(workload);
-    /* get current thread's private worker object */
-    Worker* worker = worker_new(workload->slave);
+/* this is the entry point for worker threads when running in parallel mode,
+ * and otherwise is the main event loop when running in serial mode */
+gpointer worker_run(WorkerRunData* data) {
+    utility_assert(data && data->userData && data->scheduler);
 
-    /* continuously run all events for this worker's assigned nodes.
-     * the simulation is done when the engine is killed. */
-    while(!slave_isKilled(worker->slave)) {
-        SimulationTime barrier = slave_getExecutionBarrier(worker->slave);
-        guint nEventsProcessed = 0;
-        guint nNodesWithEvents = 0;
+    /* create the worker object for this worker thread */
+    Worker* worker = _worker_new((Slave*)data->userData, data->threadID);
+    utility_assert(worker_isAlive());
 
-        GList* item = workload->hosts;
-        while(item) {
-            Host* node = item->data;
-            guint n = _worker_processNode(worker, node, barrier);
-            nEventsProcessed += n;
-            if(n > 0) {
-                nNodesWithEvents++;
-            }
-            item = g_list_next(item);
-        }
+    worker->scheduler = data->scheduler;
+    scheduler_ref(worker->scheduler);
 
-        slave_notifyProcessed(worker->slave, nEventsProcessed, nNodesWithEvents);
+    /* wait until the slave is done with initialization */
+    scheduler_awaitStart(worker->scheduler);
+
+    /* ask the slave for the next event, blocking until one is available that
+     * we are allowed to run. when this returns NULL, we should stop. */
+    Event* event = NULL;
+    while((event = scheduler_pop(worker->scheduler)) != NULL) {
+        _worker_processEvent(worker, event);
     }
 
-    /* free all applications before freeing any of the nodes since freeing
-     * applications may cause close() to get called on sockets which needs
-     * other node information.
-     */
-    GList* hosts = workload->hosts;
-    while(hosts) {
-        worker->cached_node = hosts->data;
-        host_freeAllApplications(worker->cached_node);
-        worker->cached_node = NULL;
-        hosts = hosts->next;
-    }
+    /* this will free the host data that we have been managing */
+    scheduler_awaitFinish(worker->scheduler);
 
-    g_list_foreach(workload->hosts, (GFunc) host_free, NULL);
+    scheduler_unref(worker->scheduler);
 
-    g_thread_exit(NULL);
+    _worker_free(worker);
+    g_free(data);
+
+    /* calling g_thread_exit(NULL) is equivalent to returning NULL for spawned threads
+     * returning NULL means we don't have to worry about calling g_thread_exit on the main thread */
     return NULL;
 }
 
-gpointer worker_runSerial(WorkLoad* workload) {
-    utility_assert(workload);
-    Worker* worker = _worker_getPrivate();
-
-    Event* nextEvent = eventqueue_peek(worker->serialEventQueue);
-    if(nextEvent) {
-        worker->clock_now = SIMTIME_INVALID;
-        worker->clock_last = 0;
-
-        /* process all events in the priority queue */
-        while(nextEvent &&
-            (shadowevent_getTime(nextEvent) < slave_getExecuteWindowEnd(worker->slave)) &&
-            (shadowevent_getTime(nextEvent) < slave_getEndTime(worker->slave)))
-        {
-            /* get next event */
-            nextEvent = eventqueue_pop(worker->serialEventQueue);
-            worker->cached_event = nextEvent;
-            worker->cached_node = shadowevent_getNode(nextEvent);
-
-            /* ensure priority */
-            worker->clock_now = shadowevent_getTime(worker->cached_event);
-//          engine->clock = worker->clock_now;
-            utility_assert(worker->clock_now >= worker->clock_last);
-
-            gboolean complete = shadowevent_run(worker->cached_event);
-            if(complete) {
-                shadowevent_free(worker->cached_event);
-            }
-            worker->cached_event = NULL;
-            worker->cached_node = NULL;
-            worker->clock_last = worker->clock_now;
-            worker->clock_now = SIMTIME_INVALID;
-
-            nextEvent = eventqueue_peek(worker->serialEventQueue);
-        }
-    }
-
-    slave_setKilled(worker->slave, TRUE);
-
-    /* in single thread mode, we must free the nodes */
-    GList* hosts = workload->hosts;
-    while(hosts) {
-        worker->cached_node = hosts->data;
-        host_freeAllApplications(worker->cached_node);
-        worker->cached_node = NULL;
-        hosts = hosts->next;
-    }
-
-    g_list_foreach(workload->hosts, (GFunc) host_free, NULL);
-
-    return NULL;
-}
-
-void worker_scheduleEvent(Event* event, SimulationTime nano_delay, GQuark receiver_node_id) {
+void worker_scheduleEvent(Event* event, SimulationTime nanoDelay, GQuark receiverHostID) {
     /* TODO create accessors, or better yet refactor the work to event class */
     utility_assert(event);
 
     /* get our thread-private worker */
     Worker* worker = _worker_getPrivate();
 
-    /* when the event will execute */
-    shadowevent_setTime(event, worker->clock_now + nano_delay);
-
-    /* parties involved. sender may be NULL, receiver may not! */
-    Host* sender = worker->cached_node;
-
-    /* we MAY NOT OWN the receiver, so do not write to it! */
-    Host* receiver = receiver_node_id == 0 ? sender : _slave_getHost(worker->slave, receiver_node_id);
-    utility_assert(receiver);
-
-    /* the NodeEvent needs a pointer to the correct node */
-    shadowevent_setNode(event, receiver);
-
-    /* if we are not going to execute any more events, free it and return */
-    if(slave_isKilled(worker->slave)) {
+    if(!slave_schedulerIsRunning(worker->slave)) {
+        /* we are not going to execute any more events, free it and return */
         shadowevent_free(event);
         return;
-    }
-
-    /* engine is not killed, assert accurate worker clock */
-    utility_assert(worker->clock_now != SIMTIME_INVALID);
-
-    /* figure out where to push the event */
-    if(worker->serialEventQueue) {
-        /* single-threaded, push to global serial queue */
-        eventqueue_push(worker->serialEventQueue, event);
     } else {
-        /* non-local events must be properly delayed so the event wont show up at another worker
-         * before the next scheduling interval. this is only a problem if the sender and
-         * receivers have been assigned to different workers. */
-        if(!host_isEqual(receiver, sender)) {
-            SimulationTime jump = slave_getMinTimeJump(worker->slave);
-            SimulationTime minTime = worker->clock_now + jump;
-
-            /* warn and adjust time if needed */
-            SimulationTime eventTime = shadowevent_getTime(event);
-            if(eventTime < minTime) {
-                info("Inter-node event time %"G_GUINT64_FORMAT" changed to %"G_GUINT64_FORMAT" due to minimum delay %"G_GUINT64_FORMAT,
-                        eventTime, minTime, jump);
-                shadowevent_setTime(event, minTime);
-            }
-        }
-
-        /* multi-threaded, push event to receiver node */
-        EventQueue* eventq = host_getEvents(receiver);
-        eventqueue_push(eventq, event);
+        /* engine is alive and well, assert accurate worker clock */
+        utility_assert(worker->clock.now != SIMTIME_INVALID);
     }
+
+    /* parties involved. sender may be NULL, receiver may not! */
+    GQuark senderHostID = worker->active.host == NULL ? 0 : host_getID(worker->active.host);
+    if(receiverHostID == 0) {
+        receiverHostID = senderHostID;
+    }
+    utility_assert(receiverHostID > 0);
+
+    /* update the event with the time that it should execute */
+    shadowevent_setTime(event, worker->clock.now + nanoDelay);
+
+    /* finally, schedule it */
+    scheduler_push(worker->scheduler, event, senderHostID, receiverHostID);
 }
 
 void worker_schedulePacket(Packet* packet) {
     /* get our thread-private worker */
     Worker* worker = _worker_getPrivate();
-    if(slave_isKilled(worker->slave)) {
+    if(!slave_schedulerIsRunning(worker->slave)) {
         /* the simulation is over, don't bother */
         return;
     }
@@ -372,29 +277,49 @@ void worker_schedulePacket(Packet* packet) {
 
 Host* worker_getCurrentHost() {
     Worker* worker = _worker_getPrivate();
-    return worker->cached_node;
+    return worker->active.host;
+}
+
+void worker_freeHosts(GList* hosts) {
+    Worker* worker = _worker_getPrivate();
+    GList* item = hosts;
+    while(item) {
+        Host* host = item->data;
+        worker->active.host = host;
+        host_freeAllApplications(host);
+        worker->active.host = NULL;
+        item = g_list_next(item);
+    }
+    item = hosts;
+    while(item) {
+        Host* host = item->data;
+        worker->active.host = host;
+        host_free(host);
+        worker->active.host = NULL;
+        item = g_list_next(item);
+    }
 }
 
 Thread* worker_getActiveThread() {
     Worker* worker = _worker_getPrivate();
-    return worker->activeThread;
+    return worker->active.thread;
 }
 
 void worker_setActiveThread(Thread* thread) {
     Worker* worker = _worker_getPrivate();
-    if(worker->activeThread) {
-        thread_unref(worker->activeThread);
-        worker->activeThread = NULL;
+    if(worker->active.thread) {
+        thread_unref(worker->active.thread);
+        worker->active.thread = NULL;
     }
     if(thread) {
         thread_ref(thread);
-        worker->activeThread = thread;
+        worker->active.thread = thread;
     }
 }
 
 SimulationTime worker_getCurrentTime() {
     Worker* worker = _worker_getPrivate();
-    return worker->clock_now;
+    return worker->clock.now;
 }
 
 guint worker_getRawCPUFrequency() {
@@ -427,14 +352,14 @@ gdouble worker_getLatency(GQuark sourceNodeID, GQuark destinationNodeID) {
     return slave_getLatency(worker->slave, sourceNodeID, destinationNodeID);
 }
 
-void worker_addHost(Host* host, guint hostID) {
+void worker_addHost(Host* host) {
     Worker* worker = _worker_getPrivate();
-    slave_addHost(worker->slave, host, hostID);
+    scheduler_addHost(worker->scheduler, host);
 }
 
 gint worker_getThreadID() {
     Worker* worker = _worker_getPrivate();
-    return worker->thread_id;
+    return worker->threadID;
 }
 
 void worker_storeProgram(Program* prog) {
@@ -464,12 +389,12 @@ void worker_updateMinTimeJump(gdouble minPathLatency) {
 
 void worker_heartbeat() {
     Worker* worker = _worker_getPrivate();
-    slave_heartbeat(worker->slave, worker->clock_now);
+    slave_heartbeat(worker->slave, worker->clock.now);
 }
 
 void worker_setCurrentTime(SimulationTime time) {
     Worker* worker = _worker_getPrivate();
-    worker->clock_now = time;
+    worker->clock.now = time;
 }
 
 gboolean worker_isFiltered(GLogLevelFlags level) {
@@ -479,7 +404,7 @@ gboolean worker_isFiltered(GLogLevelFlags level) {
         /* check the local node log level first */
         gboolean isNodeLevelSet = FALSE;
         Host* currentHost = worker_getCurrentHost();
-        if(worker->cached_node) {
+        if(worker->active.host) {
             GLogLevelFlags nodeLevel = host_getLogLevel(currentHost);
             if(nodeLevel) {
                 isNodeLevelSet = TRUE;

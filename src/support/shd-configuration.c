@@ -38,12 +38,13 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
     const GOptionEntry mainEntries[] = {
       { "debug", 'd', 0, G_OPTION_ARG_NONE, &(c->debug), "Pause at startup for debugger attachment", NULL },
       { "heartbeat-frequency", 'h', 0, G_OPTION_ARG_INT, &(c->heartbeatInterval), "Log node statistics every N seconds [1]", "N" },
-      { "heartbeat-log-level", 'j', 0, G_OPTION_ARG_STRING, &(c->heartbeatLogLevelInput), "Log LEVEL at which to print node statistics ['message']", "LEVEL" },
       { "heartbeat-log-info", 'i', 0, G_OPTION_ARG_STRING, &(c->heartbeatLogInfo), "Comma separated list of information contained in heartbeat ('node','socket','ram') ['node']", "LIST"},
+      { "heartbeat-log-level", 'j', 0, G_OPTION_ARG_STRING, &(c->heartbeatLogLevelInput), "Log LEVEL at which to print node statistics ['message']", "LEVEL" },
       { "log-level", 'l', 0, G_OPTION_ARG_STRING, &(c->logLevelInput), "Log LEVEL above which to filter messages ('error' < 'critical' < 'warning' < 'message' < 'info' < 'debug') ['message']", "LEVEL" },
       { "preload", 'p', 0, G_OPTION_ARG_STRING, &(c->preloads), "LD_PRELOAD environment VALUE to use for function interposition (/path/to/lib:...) [None]", "VALUE" },
       { "runahead", 'r', 0, G_OPTION_ARG_INT, &(c->minRunAhead), "If set, overrides the automatically calculated minimum TIME workers may run ahead when sending events between nodes, in milliseconds [0]", "TIME" },
       { "seed", 's', 0, G_OPTION_ARG_INT, &(c->randomSeed), "Initialize randomness for each thread using seed N [1]", "N" },
+      { "scheduler-policy", 't', 0, G_OPTION_ARG_STRING, &(c->eventSchedulingPolicy), "The event scheduler's policy for thread synchronization ('thread', 'host', 'threadXthread', 'threadXhost') ['host']", "SPOL" },
       { "workers", 'w', 0, G_OPTION_ARG_INT, &(c->nWorkerThreads), "Run concurrently with N worker threads [0]", "N" },
       { "valgrind", 'x', 0, G_OPTION_ARG_NONE, &(c->runValgrind), "Run through valgrind for debugging", NULL },
       { "version", 'v', 0, G_OPTION_ARG_NONE, &(c->printSoftwareVersion), "Print software version and exit", NULL },
@@ -141,6 +142,9 @@ Configuration* configuration_new(gint argc, gchar* argv[]) {
     if(c->interfaceQueuingDiscipline == NULL) {
         c->interfaceQueuingDiscipline = g_strdup("fifo");
     }
+    if(c->eventSchedulingPolicy == NULL) {
+        c->eventSchedulingPolicy = g_strdup("host");
+    }
     if(!c->initialSocketReceiveBufferSize) {
         c->initialSocketReceiveBufferSize = CONFIG_RECV_BUFFER_SIZE;
         c->autotuneSocketReceiveBuffer = TRUE;
@@ -179,6 +183,7 @@ void configuration_free(Configuration* config) {
     g_free(config->heartbeatLogLevelInput);
     g_free(config->heartbeatLogInfo);
     g_free(config->interfaceQueuingDiscipline);
+    g_free(config->eventSchedulingPolicy);
     if(config->argstr) {
         g_free(config->argstr);
     }
@@ -234,7 +239,12 @@ gchar* configuration_getQueuingDiscipline(Configuration* config) {
     return config->interfaceQueuingDiscipline;
 }
 
-gint configuration_getNWorkerThreads(Configuration* config) {
+gchar* configuration_getEventSchedulerPolicy(Configuration* config) {
     MAGIC_ASSERT(config);
-    return config->nWorkerThreads;
+    return config->eventSchedulingPolicy;
+}
+
+guint configuration_getNWorkerThreads(Configuration* config) {
+    MAGIC_ASSERT(config);
+    return config->nWorkerThreads > 0 ? (guint)config->nWorkerThreads : 0;
 }

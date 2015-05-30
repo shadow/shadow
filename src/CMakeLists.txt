@@ -27,6 +27,12 @@ add_cflags(-Wno-unknown-warning-option)
 
 ## sources for our main shadow program
 set(shadow_srcs
+    engine/scheduler/shd-scheduler.c
+    engine/scheduler/shd-scheduler-policy-global-single.c
+    engine/scheduler/shd-scheduler-policy-host-single.c
+    engine/scheduler/shd-scheduler-policy-thread-perhost.c
+    engine/scheduler/shd-scheduler-policy-thread-perthread.c
+    engine/scheduler/shd-scheduler-policy-thread-single.c
     engine/shd-main.c
     engine/shd-master.c
     engine/shd-slave.c
@@ -76,7 +82,6 @@ set(shadow_srcs
 
     support/shd-configuration.c
     support/shd-examples.c
-    support/shd-event-queue.c
     support/shd-logging.c
     support/shd-parser.c
     support/shd-pcap-writer.c

@@ -32,6 +32,12 @@ typedef guint ShadowID;
 #define SIMTIME_INVALID G_MAXUINT64
 
 /**
+ * Maximum and minimum valid values.
+ */
+#define SIMTIME_MAX (G_MAXUINT64-1)
+#define SIMTIME_MIN 0
+
+/**
  * Represents one nanosecond in simulation time.
  */
 #define SIMTIME_ONE_NANOSECOND G_GUINT64_CONSTANT(1)
@@ -240,6 +246,7 @@ struct _Configuration {
     gboolean autotuneSocketReceiveBuffer;
     gboolean autotuneSocketSendBuffer;
     gchar* interfaceQueuingDiscipline;
+    gchar* eventSchedulingPolicy;
     SimulationTime interfaceBatchTime;
     gchar* tcpCongestionControl;
     gint tcpSlowStartThreshold;
@@ -319,7 +326,9 @@ SimulationTime configuration_getHearbeatInterval(Configuration* config);
  */
 gchar* configuration_getQueuingDiscipline(Configuration* config);
 
-gint configuration_getNWorkerThreads(Configuration* config);
+gchar* configuration_getEventSchedulerPolicy(Configuration* config);
+
+guint configuration_getNWorkerThreads(Configuration* config);
 
 /** @} */
 

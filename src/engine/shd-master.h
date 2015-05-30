@@ -11,20 +11,15 @@
 
 typedef struct _Master Master;
 
-Master* master_new(Configuration* config);
-void master_free(Master* engine);
-void master_run(Master* master);
+Master* master_new(Configuration*);
+void master_free(Master*);
+void master_run(Master*);
 
-SimulationTime master_getMinTimeJump(Master* master);
-void master_updateMinTimeJump(Master* master, gdouble minPathLatency);
-SimulationTime master_getExecutionBarrier(Master* master);
-GTimer* master_getRunTimer(Master* master);
-void master_setKillTime(Master* master, SimulationTime endTime);
-gboolean master_isKilled(Master* master);
-void master_setKilled(Master* master, gboolean isKilled);
-SimulationTime master_getExecuteWindowEnd(Master* master);
-SimulationTime master_getExecuteWindowStart(Master* master);
-SimulationTime master_getEndTime(Master* master);
-void master_slaveFinishedCurrentWindow(Master* master, SimulationTime minNextEventTime);
+void master_updateMinTimeJump(Master*, gdouble);
+GTimer* master_getRunTimer(Master*);
+SimulationTime master_getEndTime(Master*);
+void master_setEndTime(Master*, SimulationTime);
+
+gboolean master_slaveFinishedCurrentRound(Master*, SimulationTime, SimulationTime*, SimulationTime*);
 
 #endif /* SHD_ENGINE_H_ */

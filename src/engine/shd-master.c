@@ -35,6 +35,8 @@ struct _Master {
     /* TRUE if the engine is no longer running events and is in cleanup mode */
     gboolean killed;
 
+    Slave* slave;
+
     MAGIC_DECLARE;
 };
 
@@ -80,8 +82,12 @@ Master* master_new(Configuration* config) {
 void master_free(Master* master) {
     MAGIC_ASSERT(master);
 
+    debug("engine finished, cleaning up...");
+
     /* engine is now killed */
     master->killed = TRUE;
+
+    slave_free(master->slave);
 
     GDateTime* dt_now = g_date_time_new_now_local();
     gchar* dt_format = g_date_time_format(dt_now, "%F %H:%M:%S");
@@ -95,7 +101,7 @@ void master_free(Master* master) {
     g_free(master);
 }
 
-SimulationTime master_getMinTimeJump(Master* master) {
+static SimulationTime _master_getMinTimeJump(Master* master) {
     MAGIC_ASSERT(master);
 
     /* use minimum network latency of our topology
@@ -123,16 +129,8 @@ void master_updateMinTimeJump(Master* master, gdouble minPathLatency) {
     }
 }
 
-SimulationTime master_getExecutionBarrier(Master* master) {
-    MAGIC_ASSERT(master);
-    return master->executeWindowEnd;
-}
-
 void master_run(Master* master) {
     MAGIC_ASSERT(master);
-
-    guint slaveSeed = (guint)random_nextInt(master->random);
-    Slave* slave = slave_new(master, master->config, slaveSeed);
 
     /* hook in our logging system. stack variable used to avoid errors
      * during cleanup below. */
@@ -186,42 +184,29 @@ void master_run(Master* master) {
         error("error parsing Shadow XML input!");
     }
 
-    /*
-     * loop through actions that were created from parsing. this will create
-     * all the nodes, networks, applications, etc., and add an application
-     * start event for each node to bootstrap the simulation. Note that the
-     * plug-in libraries themselves are not loaded until a worker needs it,
-     * since each worker will need its own private version.
-     */
-    while(g_queue_get_length(actions) > 0) {
-        Action* a = g_queue_pop_head(actions);
-        runnable_run(a);
-        runnable_free(a);
-    }
-    g_queue_free(actions);
-
-    /* start running */
-    gint nWorkers = configuration_getNWorkerThreads(master->config);
-    debug("starting %i-threaded engine (main + %i workers)", (nWorkers + 1), nWorkers);
-
     /* simulation mode depends on configured number of workers */
+    guint nWorkers = configuration_getNWorkerThreads(master->config);
     if(nWorkers > 0) {
         /* multi threaded, manage the other workers */
         master->executeWindowStart = 0;
-        SimulationTime jump = master_getMinTimeJump(master);
+        SimulationTime jump = _master_getMinTimeJump(master);
         master->executeWindowEnd = jump;
         master->nextMinJumpTime = jump;
-        slave_runParallel(slave);
     } else {
         /* single threaded, we are the only worker */
         master->executeWindowStart = 0;
         master->executeWindowEnd = G_MAXUINT64;
-        slave_runSerial(slave);
     }
 
-    debug("engine finished, cleaning up...");
+    /* create the slave so that events created by the actions have a place to get queued.
+     * the master will be responsible for distributing the actions to the slaves so that
+     * they all have a consistent view of the simulation, topology, etc.
+     * For now we only have one slave so send it everything. */
+    guint slaveSeed = (guint)random_nextInt(master->random);
+    master->slave = slave_new(master, master->config, slaveSeed, actions);
 
-    slave_free(slave);
+    /* start running each slave */
+    slave_run(master->slave);
 }
 
 GTimer* master_getRunTimer(Master* master) {
@@ -229,39 +214,20 @@ GTimer* master_getRunTimer(Master* master) {
     return master->runTimer;
 }
 
-void master_setKillTime(Master* master, SimulationTime endTime) {
-    MAGIC_ASSERT(master);
-    master->endTime = endTime;
-}
-
-gboolean master_isKilled(Master* master) {
-    MAGIC_ASSERT(master);
-    return master->killed;
-}
-
-void master_setKilled(Master* master, gboolean isKilled) {
-    MAGIC_ASSERT(master);
-    master->killed = isKilled;
-}
-
-SimulationTime master_getExecuteWindowEnd(Master* master) {
-    MAGIC_ASSERT(master);
-    return master->executeWindowEnd;
-}
-
-SimulationTime master_getExecuteWindowStart(Master* master) {
-    MAGIC_ASSERT(master);
-    return master->executeWindowStart;
-}
-
 SimulationTime master_getEndTime(Master* master) {
     MAGIC_ASSERT(master);
     return master->endTime;
 }
 
-void master_slaveFinishedCurrentWindow(Master* master, SimulationTime minNextEventTime) {
+void master_setEndTime(Master* master, SimulationTime endTime) {
     MAGIC_ASSERT(master);
-    utility_assert(minNextEventTime != SIMTIME_INVALID);
+    master->endTime = endTime;
+}
+
+gboolean master_slaveFinishedCurrentRound(Master* master, SimulationTime minNextEventTime,
+        SimulationTime* executeWindowStart, SimulationTime* executeWindowEnd) {
+    MAGIC_ASSERT(master);
+    utility_assert(executeWindowStart && executeWindowEnd);
 
     /* TODO: once we get multiple slaves, we have to block them here
      * until they have all notified us that they are finished */
@@ -271,7 +237,7 @@ void master_slaveFinishedCurrentWindow(Master* master, SimulationTime minNextEve
 
     /* update the next interval window based on next event times */
     SimulationTime newStart = minNextEventTime;
-    SimulationTime newEnd = minNextEventTime + master_getMinTimeJump(master);
+    SimulationTime newEnd = minNextEventTime + _master_getMinTimeJump(master);
 
     /* update the new window end as one interval past the new window start,
      * making sure we dont run over the experiment end time */
@@ -281,11 +247,17 @@ void master_slaveFinishedCurrentWindow(Master* master, SimulationTime minNextEve
 
     /* if we are done, make sure the workers know about it */
     if(newStart >= newEnd) {
-        master_setKilled(master, TRUE);
+        master->killed = TRUE;
     }
 
     /* finally, set the new values */
     master->executeWindowStart = newStart;
     master->executeWindowEnd = newEnd;
+
+    *executeWindowStart = master->executeWindowStart;
+    *executeWindowEnd = master->executeWindowEnd;
+
+    /* return TRUE if we should keep running */
+    return master->killed ? FALSE : TRUE;
 }
 

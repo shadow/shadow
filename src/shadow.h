@@ -77,8 +77,6 @@ typedef struct _Process Process;
 #include "utility/shd-count-down-latch.h"
 #include "utility/shd-random.h"
 
-#include "support/shd-event-queue.h"
-
 #include "topology/shd-address.h"
 #include "topology/shd-dns.h"
 #include "topology/shd-path.h"
@@ -120,7 +118,10 @@ typedef struct _Process Process;
 #include "runnable/action/shd-load-plugin.h"
 #include "runnable/action/shd-load-topology.h"
 
+
 #include "support/shd-logging.h"
+#include "engine/scheduler/shd-scheduler-policy.h"
+#include "engine/scheduler/shd-scheduler.h"
 #include "engine/shd-master.h"
 #include "engine/shd-slave.h"
 #include "engine/shd-worker.h"

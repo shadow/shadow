@@ -25,16 +25,40 @@ static const gchar* _logging_getNewLogLevelString(GLogLevelFlags log_level) {
     }
 }
 
-/* this func is called whenever g_logv is called, not just in our log code */
-void logging_handleLog(const gchar *log_domain, GLogLevelFlags log_level, const gchar *message, gpointer user_data) {
-    /* GLogLevelFlags* configuredLogLevel = user_data; */
-    const gchar* logDomainStr = log_domain ? log_domain : "shadow";
-    const gchar* messageStr = message ? message : "n/a";
+static GLogLevelFlags defaultLogLevel = 0;
+
+static gboolean _logging_doFilter(GLogLevelFlags logLevel, gpointer userData) {
+    /* check if we have set the default log level yet */
+    if(userData && defaultLogLevel == 0) {
+        /* save the CLI log-level option as default */
+        GLogLevelFlags* configuredLogLevel = userData;
+        defaultLogLevel = *configuredLogLevel;
+    }
 
     /* check again if the message should be filtered */
-    if(worker_isFiltered(log_level)) {
+    if(worker_isAlive()) {
+        /* ask the worker, so we can apply logic for host-specific log levels */
+        if(worker_isFiltered(logLevel)) {
+            return TRUE;
+        }
+    } else {
+        /* there is no worker yet, just use the CLI log-level option as default */
+        if(defaultLogLevel != 0 && logLevel > defaultLogLevel) {
+            return TRUE;
+        }
+    }
+
+    return FALSE;
+}
+
+/* this func is called whenever g_logv is called, not just in our log code */
+void logging_handleLog(const gchar *log_domain, GLogLevelFlags log_level, const gchar *message, gpointer user_data) {
+    if(_logging_doFilter(log_level, user_data)) {
         return;
     }
+
+    const gchar* logDomainStr = log_domain ? log_domain : "shadow";
+    const gchar* messageStr = message ? message : "n/a";
 
     gulong hours = 0, minutes = 0, seconds = 0, microseconds = 0;
     gulong elapsed = 0;
@@ -57,14 +81,12 @@ void logging_handleLog(const gchar *log_domain, GLogLevelFlags log_level, const 
 
 void logging_logv(const gchar *msgLogDomain, GLogLevelFlags msgLogLevel,
         const gchar* functionName, const gchar *format, va_list vargs) {
-    /* this is called by worker threads, so we have access to worker */
-
     /* see if we can avoid some work because the message is filtered anyway */
-    const gchar* logDomainStr = msgLogDomain ? msgLogDomain : "shadow";
-    if(worker_isFiltered(msgLogLevel)) {
+    if(_logging_doFilter(msgLogLevel, NULL)) {
         return;
     }
 
+    const gchar* logDomainStr = msgLogDomain ? msgLogDomain : "shadow";
     const gchar* logFunctionStr = functionName ? functionName : "n/a";
     const gchar* formatStr = format ? format : "n/a";
     const gchar* logLevelStr = _logging_getNewLogLevelString(msgLogLevel);

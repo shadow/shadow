@@ -12,40 +12,27 @@ struct _Slave {
     Master* master;
 
     /* the worker object associated with the main thread of execution */
-    Worker* mainThreadWorker;
+//    Worker* mainWorker;
 
     /* simulation configuration options */
     Configuration* config;
 
     /* slave random source, init from master random, used to init host randoms */
     Random* random;
+    gint rawFrequencyKHz;
 
     /* network connectivity */
     Topology* topology;
     DNS* dns;
 
-    /* virtual hosts */
-    GHashTable* hosts;
+    /* the parallel event/host/thread scheduler */
+    Scheduler* scheduler;
 
+    /* the program code that is run by virtual processes */
     GHashTable* programs;
-
-    /* if multi-threaded, we use worker thread */
-    CountDownLatch* processingLatch;
-    CountDownLatch* barrierLatch;
-
-    /* the number of worker threads not counting main thread.
-     * this is the number of threads we need to spawn. */
-    guint nWorkers;
-
-    /* id generation counters, must be protected for thread safety */
-    volatile gint workerIDCounter;
 
     GMutex lock;
     GMutex pluginInitLock;
-
-    gint rawFrequencyKHz;
-    guint numEventsCurrentInterval;
-    guint numNodesWithEventsCurrentInterval;
 
     /* We will not enter plugin context when set. Used when destroying threads */
     gboolean forceShadowContext;
@@ -66,23 +53,29 @@ static void _slave_unlock(Slave* slave) {
     g_mutex_unlock(&(slave->lock));
 }
 
-// TODO make this static
-Host* _slave_getHost(Slave* slave, GQuark hostID) {
+static Host* _slave_getHost(Slave* slave, GQuark hostID) {
     MAGIC_ASSERT(slave);
-    return (Host*) g_hash_table_lookup(slave->hosts, GUINT_TO_POINTER((guint)hostID));
+    return scheduler_getHost(slave->scheduler, hostID);
 }
 
-void slave_addHost(Slave* slave, Host* host, guint hostID) {
-    MAGIC_ASSERT(slave);
-    g_hash_table_replace(slave->hosts, GUINT_TO_POINTER(hostID), host);
+/* XXX this really belongs in the configuration file */
+static SchedulerPolicyType _slave_getEventSchedulerPolicy(Slave* slave) {
+    const gchar* policy = configuration_getEventSchedulerPolicy(slave->config);
+    if (g_ascii_strcasecmp(policy, "host") == 0) {
+        return SP_PARALLEL_HOST_SINGLE;
+    } else if (g_ascii_strcasecmp(policy, "thread") == 0) {
+        return SP_PARALLEL_THREAD_SINGLE;
+    } else if (g_ascii_strcasecmp(policy, "threadXthread") == 0) {
+        return SP_PARALLEL_THREAD_PERTHREAD;
+    } else if (g_ascii_strcasecmp(policy, "threadXhost") == 0) {
+        return SP_PARALLEL_THREAD_PERHOST;
+    } else {
+        error("unknown event scheduler policy '%s'; valid values are 'thread', 'host', 'threadXthread', or 'threadXhost'", policy);
+        return SP_SERIAL_GLOBAL;
+    }
 }
 
-static GList* _slave_getAllHosts(Slave* slave) {
-    MAGIC_ASSERT(slave);
-    return g_hash_table_get_values(slave->hosts);
-}
-
-Slave* slave_new(Master* master, Configuration* config, guint randomSeed) {
+Slave* slave_new(Master* master, Configuration* config, guint randomSeed, GQueue* initActions) {
     Slave* slave = g_new0(Slave, 1);
     MAGIC_INIT(slave);
 
@@ -98,13 +91,18 @@ Slave* slave_new(Master* master, Configuration* config, guint randomSeed) {
         info("unable to read '%s' for copying", CONFIG_CPU_MAX_FREQ_FILE);
     }
 
-    slave->hosts = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, NULL);
+    /* we will store the plug-in programs that are loaded */
     slave->programs = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, (GDestroyNotify)program_free);
 
+    /* initialize DNS subsystem for this slave */
     slave->dns = dns_new();
 
-    slave->nWorkers = (guint) configuration_getNWorkerThreads(config);
-    slave->mainThreadWorker = worker_new(slave);
+    /* the main scheduler may utilize multiple threads */
+
+    guint nWorkers = configuration_getNWorkerThreads(config);
+    SchedulerPolicyType policy = _slave_getEventSchedulerPolicy(slave);
+    guint schedulerSeed = (guint)slave_nextRandomInt(slave);
+    slave->scheduler = scheduler_new(policy, nWorkers, slave, initActions, schedulerSeed);
 
     return slave;
 }
@@ -112,14 +110,12 @@ Slave* slave_new(Master* master, Configuration* config, guint randomSeed) {
 void slave_free(Slave* slave) {
     MAGIC_ASSERT(slave);
 
-    /* this launches delete on all the plugins and should be called before
-     * the engine is marked "killed" and workers are destroyed.
-     */
-    g_hash_table_destroy(slave->hosts);
-
     /* we will never execute inside the plugin again */
     slave->forceShadowContext = TRUE;
 
+    if(slave->scheduler) {
+        scheduler_unref(slave->scheduler);
+    }
     if(slave->topology) {
         topology_free(slave->topology);
     }
@@ -132,11 +128,8 @@ void slave_free(Slave* slave) {
     g_mutex_clear(&(slave->lock));
     g_mutex_clear(&(slave->pluginInitLock));
 
-    /* join and free spawned worker threads */
-//TODO
-
     /* free main worker */
-    worker_free(slave->mainThreadWorker);
+//    worker_free(slave->mainWorker);
 
     MAGIC_CLEAR(slave);
     g_free(slave);
@@ -173,15 +166,6 @@ gdouble slave_nextRandomDouble(Slave* slave) {
 
 GTimer* slave_getRunTimer(Slave* slave) {
     return master_getRunTimer(slave->master);
-}
-
-gint slave_generateWorkerID(Slave* slave) {
-    MAGIC_ASSERT(slave);
-    _slave_lock(slave);
-    gint id = slave->workerIDCounter;
-    (slave->workerIDCounter)++;
-    _slave_unlock(slave);
-    return id;
 }
 
 void slave_storeProgram(Slave* slave, Program* prog) {
@@ -237,55 +221,24 @@ Configuration* slave_getConfig(Slave* slave) {
     return slave->config;
 }
 
-SimulationTime slave_getExecuteWindowEnd(Slave* slave) {
-    MAGIC_ASSERT(slave);
-    return master_getExecuteWindowEnd(slave->master);
-}
-
-SimulationTime slave_getEndTime(Slave* slave) {
-    MAGIC_ASSERT(slave);
-    return master_getEndTime(slave->master);
-}
-
-gboolean slave_isKilled(Slave* slave) {
-    MAGIC_ASSERT(slave);
-    return master_isKilled(slave->master);
-}
-
 void slave_setKillTime(Slave* slave, SimulationTime endTime) {
     MAGIC_ASSERT(slave);
-    master_setKillTime(slave->master, endTime);
+    master_setEndTime(slave->master, endTime);
+    scheduler_setEndTime(slave->scheduler, endTime);
 }
 
-void slave_setKilled(Slave* slave, gboolean isKilled) {
+gboolean slave_schedulerIsRunning(Slave* slave) {
     MAGIC_ASSERT(slave);
-    master_setKilled(slave->master, isKilled);
-}
-
-SimulationTime slave_getMinTimeJump(Slave* slave) {
-    MAGIC_ASSERT(slave);
-    _slave_lock(slave);
-    SimulationTime jump = master_getMinTimeJump(slave->master);
-    _slave_unlock(slave);
-    return jump;
+    return scheduler_isRunning(slave->scheduler);
 }
 
 void slave_updateMinTimeJump(Slave* slave, gdouble minPathLatency) {
     MAGIC_ASSERT(slave);
     _slave_lock(slave);
+    /* this update will get applied at the next round update, so all threads
+     * running now still have a valid round window */
     master_updateMinTimeJump(slave->master, minPathLatency);
     _slave_unlock(slave);
-}
-
-guint slave_getWorkerCount(Slave* slave) {
-    MAGIC_ASSERT(slave);
-    /* configured number of worker threads, + 1 for main thread */
-    return slave->nWorkers + 1;
-}
-
-SimulationTime slave_getExecutionBarrier(Slave* slave) {
-    MAGIC_ASSERT(slave);
-    return master_getExecutionBarrier(slave->master);
 }
 
 void slave_heartbeat(Slave* slave, SimulationTime simClockNow) {
@@ -320,146 +273,45 @@ void slave_heartbeat(Slave* slave, SimulationTime simClockNow) {
     }
 }
 
-void slave_notifyProcessed(Slave* slave, guint numberEventsProcessed, guint numberNodesWithEvents) {
+void slave_run(Slave* slave) {
     MAGIC_ASSERT(slave);
-    _slave_lock(slave);
-    slave->numEventsCurrentInterval += numberEventsProcessed;
-    slave->numNodesWithEventsCurrentInterval += numberNodesWithEvents;
-    _slave_unlock(slave);
-    countdownlatch_countDownAwait(slave->processingLatch);
-    countdownlatch_countDownAwait(slave->barrierLatch);
-}
+    if(scheduler_getPolicy(slave->scheduler) == SP_SERIAL_GLOBAL) {
+        scheduler_start(slave->scheduler);
 
-void slave_runParallel(Slave* slave) {
-    MAGIC_ASSERT(slave);
+        /* the main slave thread becomes the only worker and runs everything */
+        WorkerRunData* data = g_new0(WorkerRunData, 1);
+        data->threadID = 0;
+        data->scheduler = slave->scheduler;
+        data->userData = slave;
+        worker_run(data);
 
-    GList* nodeList = _slave_getAllHosts(slave);
-
-    /* assign nodes to the worker threads so they get processed */
-    WorkLoad workArray[slave->nWorkers];
-    memset(workArray, 0, slave->nWorkers * sizeof(WorkLoad));
-    gint counter = 0;
-
-    GList* item = g_list_first(nodeList);
-    while(item) {
-        Host* node = item->data;
-
-        gint i = counter % slave->nWorkers;
-        workArray[i].hosts = g_list_append(workArray[i].hosts, node);
-
-        counter++;
-        item = g_list_next(item);
-    }
-
-    /* we will track when workers finish processing their nodes */
-    slave->processingLatch = countdownlatch_new(slave->nWorkers + 1);
-    /* after the workers finish processing, wait for barrier update */
-    slave->barrierLatch = countdownlatch_new(slave->nWorkers + 1);
-
-    /* start up the workers */
-    GSList* workerThreads = NULL;
-    for(gint i = 0; i < slave->nWorkers; i++) {
-        GString* name = g_string_new(NULL);
-        g_string_printf(name, "worker-%i", (i+1));
-
-        workArray[i].slave = slave;
-        workArray[i].master = slave->master;
-
-        GThread* t = g_thread_new(name->str, (GThreadFunc)worker_runParallel, &(workArray[i]));
-        workerThreads = g_slist_append(workerThreads, t);
-
-        g_string_free(name, TRUE);
-    }
-
-    message("started %i worker threads", slave->nWorkers);
-
-    /* process all events in the priority queue */
-    while(master_getExecuteWindowStart(slave->master) < master_getEndTime(slave->master))
-    {
-        /* wait for the workers to finish processing nodes before we touch them */
-        countdownlatch_countDownAwait(slave->processingLatch);
-
-        /* we are in control now, the workers are waiting at barrierLatch */
-        info("execution window [%"G_GUINT64_FORMAT"--%"G_GUINT64_FORMAT"] ran %u events from %u active nodes",
-                master_getExecuteWindowStart(slave->master), master_getExecuteWindowEnd(slave->master),
-                slave->numEventsCurrentInterval, slave->numNodesWithEventsCurrentInterval);
-
-        /* check if we should take 1 step ahead or fast-forward our execute window.
-         * since looping through all the nodes to find the minimum event is
-         * potentially expensive, we use a heuristic of only trying to jump ahead
-         * if the last interval had only a few events in it. */
+        scheduler_finish(slave->scheduler);
+    } else {
+        /* we are the main thread, we manage the execution window updates while the workers run events */
+        SimulationTime windowStart = 0, windowEnd = 1;
         SimulationTime minNextEventTime = SIMTIME_INVALID;
-        if(slave->numEventsCurrentInterval < 10) {
-            /* we had no events in that interval, lets try to fast forward */
-            item = g_list_first(nodeList);
+        gboolean keepRunning = TRUE;
 
-            /* fast forward to the next event, the new window start will be the next event time */
-            while(item) {
-                Host* node = item->data;
-                EventQueue* eventq = host_getEvents(node);
-                Event* nextEvent = eventqueue_peek(eventq);
-                SimulationTime nextEventTime = shadowevent_getTime(nextEvent);
-                if(nextEvent && (nextEventTime < minNextEventTime)) {
-                    minNextEventTime = nextEventTime;
-                }
-                item = g_list_next(item);
-            }
+        scheduler_start(slave->scheduler);
 
-            if(minNextEventTime == SIMTIME_INVALID) {
-                minNextEventTime = master_getExecuteWindowEnd(slave->master);
-            }
-        } else {
-            /* we still have events, lets just step one interval,
-             * consider the next event as the previous window end */
-            minNextEventTime = master_getExecuteWindowEnd(slave->master);
+        while(keepRunning) {
+            /* release the workers and run next round */
+            scheduler_continueNextRound(slave->scheduler, windowStart, windowEnd);
+
+            /* we could eventually do some idle processing here if needed */
+
+            /* wait for the workers to finish processing nodes before we update the execution window */
+            minNextEventTime = scheduler_awaitNextRound(slave->scheduler);
+
+            /* we are in control now, the workers are waiting for the next round */
+            info("finished execution window [%"G_GUINT64_FORMAT"--%"G_GUINT64_FORMAT"] next event at %"G_GUINT64_FORMAT,
+                    windowStart, windowEnd, minNextEventTime);
+
+            /* notify master that we finished this round, and the time of our next event
+             * in order to fast-forward our execute window if possible */
+            keepRunning = master_slaveFinishedCurrentRound(slave->master, minNextEventTime, &windowStart, &windowEnd);
         }
 
-        /* notify master that we finished this round, and what our next event is */
-        master_slaveFinishedCurrentWindow(slave->master, minNextEventTime);
-
-        /* reset for next round */
-        countdownlatch_reset(slave->processingLatch);
-        slave->numEventsCurrentInterval = 0;
-        slave->numNodesWithEventsCurrentInterval = 0;
-
-        /* release the workers for the next round, or to exit */
-        countdownlatch_countDownAwait(slave->barrierLatch);
-        countdownlatch_reset(slave->barrierLatch);
+        scheduler_finish(slave->scheduler);
     }
-
-    message("waiting for %i worker threads to finish", slave->nWorkers);
-
-    /* wait for the threads to finish their cleanup */
-    GSList* threadItem = workerThreads;
-    while(threadItem) {
-        GThread* t = threadItem->data;
-        /* the join will consume the reference, so unref is not needed */
-        g_thread_join(t);
-        threadItem = g_slist_next(threadItem);
-    }
-    g_slist_free(workerThreads);
-
-    message("%i worker threads finished", slave->nWorkers);
-
-    for(gint i = 0; i < slave->nWorkers; i++) {
-        WorkLoad w = workArray[i];
-        g_list_free(w.hosts);
-    }
-
-    countdownlatch_free(slave->processingLatch);
-    countdownlatch_free(slave->barrierLatch);
-
-    /* frees the list struct we own, but not the nodes it holds (those were
-     * taken care of by the workers) */
-    g_list_free(nodeList);
-}
-
-void slave_runSerial(Slave* slave) {
-    MAGIC_ASSERT(slave);
-    WorkLoad w;
-    w.master = slave->master;
-    w.slave = slave;
-    w.hosts = _slave_getAllHosts(slave);
-    worker_runSerial(&w);
-    g_list_free(w.hosts);
 }

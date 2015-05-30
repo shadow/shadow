@@ -9,26 +9,20 @@
 
 #include "shadow.h"
 
-typedef struct _Worker Worker;
-
-typedef struct _WorkLoad WorkLoad;
-struct _WorkLoad {
-    /* the simulation master */
-    Master* master;
-    /* the slave that owns this worker */
-    Slave* slave;
-    /* the virtual hosts assigned to this worker */
-    GList* hosts;
+typedef struct _WorkerRunData WorkerRunData;
+struct _WorkerRunData {
+    guint threadID;
+    Scheduler* scheduler;
+    gpointer userData;
 };
 
-Worker* worker_new(Slave* slave);
-void worker_free(Worker* worker);
+typedef struct _Worker Worker;
+
 DNS* worker_getDNS();
 Topology* worker_getTopology();
 Configuration* worker_getConfig();
 void worker_setKillTime(SimulationTime endTime);
-gpointer worker_runParallel(WorkLoad* workload);
-gpointer worker_runSerial(WorkLoad* workload);
+gpointer worker_run(WorkerRunData*);
 void worker_scheduleEvent(Event* event, SimulationTime nano_delay, GQuark receiver_node_id);
 void worker_schedulePacket(Packet* packet);
 gboolean worker_isAlive();
@@ -42,7 +36,7 @@ gint worker_nextRandomInt();
 guint32 worker_getNodeBandwidthUp(GQuark nodeID, in_addr_t ip);
 guint32 worker_getNodeBandwidthDown(GQuark nodeID, in_addr_t ip);
 gdouble worker_getLatency(GQuark sourceNodeID, GQuark destinationNodeID);
-void worker_addHost(Host* host, guint hostID);
+void worker_addHost(Host* host);
 gint worker_getThreadID();
 void worker_setTopology(Topology* topology);
 GTimer* worker_getRunTimer();
@@ -50,6 +44,8 @@ void worker_updateMinTimeJump(gdouble minPathLatency);
 void worker_setCurrentTime(SimulationTime time);
 gboolean worker_isFiltered(GLogLevelFlags level);
 void worker_heartbeat();
+
+void worker_freeHosts(GList*);
 
 void worker_storeProgram(Program* prog);
 Program* worker_getProgram(GQuark pluginID);
