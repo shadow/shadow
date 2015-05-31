@@ -10,9 +10,13 @@ add_library(shadow-interpose SHARED shd-interposer.c)
 target_link_libraries(shadow-interpose dl)
 install(TARGETS shadow-interpose DESTINATION lib)
 
+## remove this hack after moving interpose into thread.c
+find_package(GLIB REQUIRED)
+include_directories(${CMAKE_SOURCE_DIR}/src/main)
+include_directories(${GLIB_INCLUDES})
 ## the plug-ins need to include the interface header
 include_directories(${CMAKE_SOURCE_DIR}/src/plugin)
-install(FILES shd-library.h shadow-plugin-interface.h DESTINATION include/)
+install(FILES shadow-plugin-interface.h DESTINATION include/)
 
 ## LLVM will be used to build each plug-in that was not disabled in setup.py
 ## our custom pass will enable us to extract and swap plugin state automatically

@@ -52,7 +52,7 @@ typedef struct _Process Process;
  * place base classes with few dependencies first.
  */
 
-#include "plugin/shadow-plugin-interface.h"
+#include "../plugin/shadow-plugin-interface.h"
 #include "engine/shd-main.h"
 
 /* configuration, base runnables, and input parsing */
