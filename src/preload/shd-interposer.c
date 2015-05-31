@@ -283,7 +283,7 @@ typedef struct {
         size_t ndeallocs;
     } dummy;
     PreloadFuncs libc;
-    gboolean shadowIsLoaded;
+    int shadowIsLoaded;
 } FuncDirector;
 
 /* global storage for function pointers that we look up lazily */
@@ -491,10 +491,10 @@ static void _interposer_switchOutShadowContext(Host* node) {
     }
 }
 
-static gint _interposer_addressHelper(gint fd, const struct sockaddr* addr, socklen_t* len,
+static int _interposer_addressHelper(int fd, const struct sockaddr* addr, socklen_t* len,
         enum SystemCallType type) {
     Host* host = _interposer_switchInShadowContext();
-    gint result = 0;
+    int result = 0;
 
     /* check if this is a virtual socket */
     if(!host_isShadowDescriptor(host, fd)){
@@ -546,7 +546,7 @@ static gint _interposer_addressHelper(gint fd, const struct sockaddr* addr, sock
     return 0;
 }
 
-static gssize _interposer_sendHelper(Host* host, gint fd, gconstpointer buf, gsize n, gint flags,
+static gssize _interposer_sendHelper(Host* host, int fd, gconstpointer buf, gsize n, int flags,
         const struct sockaddr* addr, socklen_t len) {
     /* this function MUST be called after switching in shadow context */
     /* TODO flags are ignored */
@@ -567,7 +567,7 @@ static gssize _interposer_sendHelper(Host* host, gint fd, gconstpointer buf, gsi
     }
 
     gsize bytes = 0;
-    gint result = host_sendUserData(host, fd, buf, n, ip, port, &bytes);
+    int result = host_sendUserData(host, fd, buf, n, ip, port, &bytes);
 
     if(result != 0) {
         errno = result;
@@ -576,7 +576,7 @@ static gssize _interposer_sendHelper(Host* host, gint fd, gconstpointer buf, gsi
     return (gssize) bytes;
 }
 
-static gssize _interposer_recvHelper(Host* host, gint fd, gpointer buf, size_t n, gint flags,
+static gssize _interposer_recvHelper(Host* host, int fd, gpointer buf, size_t n, int flags,
         struct sockaddr* addr, socklen_t* len) {
     /* this function MUST be called after switching in shadow context */
     /* TODO flags are ignored */
@@ -590,7 +590,7 @@ static gssize _interposer_recvHelper(Host* host, gint fd, gpointer buf, size_t n
     in_port_t port = 0;
 
     gsize bytes = 0;
-    gint result = host_receiveUserData(host, fd, buf, n, &ip, &port, &bytes);
+    int result = host_receiveUserData(host, fd, buf, n, &ip, &port, &bytes);
 
     if(result != 0) {
         errno = result;
@@ -609,14 +609,14 @@ static gssize _interposer_recvHelper(Host* host, gint fd, gpointer buf, size_t n
     return (gssize) bytes;
 }
 
-static gint _interposer_fcntlHelper(int fd, int cmd, va_list farg) {
+static int _interposer_fcntlHelper(int fd, int cmd, va_list farg) {
     /* check if this is a socket */
     Host* node = _interposer_switchInShadowContext();
 
     if(!host_isShadowDescriptor(node, fd)){
-        gint ret = 0;
+        int ret = 0;
         /* check if we have a mapped os fd */
-        gint osfd = host_getOSHandle(node, fd);
+        int osfd = host_getOSHandle(node, fd);
         if(osfd >= 0) {
             ret = fcntl(osfd, cmd, va_arg(farg, void*));
         } else {
@@ -630,7 +630,7 @@ static gint _interposer_fcntlHelper(int fd, int cmd, va_list farg) {
     /* normally, the type of farg depends on the cmd */
     Descriptor* descriptor = host_lookupDescriptor(node, fd);
 
-    gint result = 0;
+    int result = 0;
     if(descriptor) {
         if (cmd == F_GETFL) {
             result = descriptor_getFlags(descriptor);
@@ -654,14 +654,14 @@ static int _interposer_fcntl(int fd, int cmd, ...) {
     return result;
 }
 
-static gint _interposer_ioctlHelper(int fd, unsigned long int request, va_list farg) {
+static int _interposer_ioctlHelper(int fd, unsigned long int request, va_list farg) {
     /* check if this is a socket */
     Host* node = _interposer_switchInShadowContext();
 
     if(!host_isShadowDescriptor(node, fd)){
-        gint ret = 0;
+        int ret = 0;
         /* check if we have a mapped os fd */
-        gint osfd = host_getOSHandle(node, fd);
+        int osfd = host_getOSHandle(node, fd);
         if(osfd >= 0) {
             ret = ioctl(fd, request, farg);
         } else {
@@ -672,7 +672,7 @@ static gint _interposer_ioctlHelper(int fd, unsigned long int request, va_list f
         return ret;
     }
 
-    gint result = 0;
+    int result = 0;
 
     /* normally, the type of farg depends on the request */
     Descriptor* descriptor = host_lookupDescriptor(node, fd);
@@ -817,7 +817,7 @@ int posix_memalign(void** memptr, size_t alignment, size_t size) {
     }
 
     Host* node = _interposer_switchInShadowContext();
-    gint ret = posix_memalign(memptr, alignment, size);
+    int ret = posix_memalign(memptr, alignment, size);
     if(ret == 0 && size) {
         tracker_addAllocatedBytes(host_getTracker(node), *memptr, size);
     }
@@ -908,7 +908,7 @@ void* mmap(void *addr, size_t length, int prot, int flags,
         warning("mmap not implemented for Shadow descriptor types");
     } else {
         /* check if we have a mapped os fd */
-        gint osfd = host_getOSHandle(host, fd);
+        int osfd = host_getOSHandle(host, fd);
         if (osfd >= 0) {
             gpointer ret = mmap(addr, length, prot, flags, osfd, offset);
             _interposer_switchOutShadowContext(host);
@@ -940,7 +940,7 @@ int epoll_create(int size) {
 
     /* switch into shadow and create the new descriptor */
     Host* node = _interposer_switchInShadowContext();
-    gint handle = host_createDescriptor(node, DT_EPOLL);
+    int handle = host_createDescriptor(node, DT_EPOLL);
     _interposer_switchOutShadowContext(node);
 
     return handle;
@@ -983,7 +983,7 @@ int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event) {
 
     /* switch into shadow and do the operation */
     Host* node = _interposer_switchInShadowContext();
-    gint result = host_epollControl(node, epfd, op, fd, event);
+    int result = host_epollControl(node, epfd, op, fd, event);
     _interposer_switchOutShadowContext(node);
 
     /*
@@ -1026,8 +1026,8 @@ int epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout)
         warning("Shadow does not block, so the '%i' millisecond timeout will be ignored", timeout);
     }
 
-    gint nEvents = 0;
-    gint result = host_epollGetEvents(node, epfd, events, maxevents, &nEvents);
+    int nEvents = 0;
+    int result = host_epollGetEvents(node, epfd, events, maxevents, &nEvents);
     _interposer_switchOutShadowContext(node);
 
     /* check if there was an error */
@@ -1080,7 +1080,7 @@ int socket(int domain, int type, int protocol) {
 
     /* we only support non-blocking sockets, and require
      * SOCK_NONBLOCK to be set immediately */
-    gboolean isBlocking = FALSE;
+    int isBlocking = FALSE;
 
     /* clear non-blocking flags if set to get true type */
     if(type & SOCK_NONBLOCK) {
@@ -1092,7 +1092,7 @@ int socket(int domain, int type, int protocol) {
         isBlocking = FALSE;
     }
 
-    gint result = 0;
+    int result = 0;
     Host* node = _interposer_switchInShadowContext();
 
     /* check inputs for what we support */
@@ -1137,10 +1137,10 @@ int socketpair(int domain, int type, int protocol, int fds[2]) {
     }
 
     /* only support non-blocking sockets */
-    gboolean isBlocking = FALSE;
+    int isBlocking = FALSE;
 
     /* clear non-blocking flags if set to get true type */
-    gint realType = type;
+    int realType = type;
     if(realType & SOCK_NONBLOCK) {
         realType = realType & ~SOCK_NONBLOCK;
         isBlocking = FALSE;
@@ -1155,7 +1155,7 @@ int socketpair(int domain, int type, int protocol, int fds[2]) {
         return -1;
     }
 
-    gint result = 0;
+    int result = 0;
     Host* node = _interposer_switchInShadowContext();
 
     if(isBlocking) {
@@ -1165,10 +1165,10 @@ int socketpair(int domain, int type, int protocol, int fds[2]) {
     }
 
     if(result == 0) {
-        gint handle = host_createDescriptor(node, DT_SOCKETPAIR);
+        int handle = host_createDescriptor(node, DT_SOCKETPAIR);
 
         Channel* channel = (Channel*) host_lookupDescriptor(node, handle);
-        gint linkedHandle = channel_getLinkedHandle(channel);
+        int linkedHandle = channel_getLinkedHandle(channel);
 
         fds[0] = handle;
         fds[1] = linkedHandle;
@@ -1314,7 +1314,7 @@ int getsockopt(int fd, int level, int optname, void* optval, socklen_t* optlen) 
     Host* node = _interposer_switchInShadowContext();
     Descriptor* descriptor = host_lookupDescriptor(node, fd);
 
-    gint result = 0;
+    int result = 0;
 
     /* TODO: implement socket options */
     if(descriptor) {
@@ -1419,7 +1419,7 @@ int setsockopt(int fd, int level, int optname, const void *optval, socklen_t opt
     Host* node = _interposer_switchInShadowContext();
     Descriptor* descriptor = host_lookupDescriptor(node, fd);
 
-    gint result = 0;
+    int result = 0;
 
     /* TODO: implement socket options */
     if(descriptor) {
@@ -1436,7 +1436,7 @@ int setsockopt(int fd, int level, int optname, const void *optval, socklen_t opt
                         errno = ENOPROTOOPT;
                         result = -1;
                     } else {
-                        gint v = *((gint*) optval);
+                        int v = *((gint*) optval);
                         socket_setOutputBufferSize((Socket*)descriptor, (gsize)v*2);
                     }
                     break;
@@ -1452,7 +1452,7 @@ int setsockopt(int fd, int level, int optname, const void *optval, socklen_t opt
                         errno = ENOPROTOOPT;
                         result = -1;
                     } else {
-                        gint v = *((gint*) optval);
+                        int v = *((gint*) optval);
                         socket_setInputBufferSize((Socket*)descriptor, (gsize)v*2);
                     }
                     break;
@@ -1500,7 +1500,7 @@ int listen(int fd, int n) {
         return -1;
     }
 
-    gint result = host_listenForPeer(node, fd, n);
+    int result = host_listenForPeer(node, fd, n);
     _interposer_switchOutShadowContext(node);
 
     /* check if there was an error */
@@ -1519,7 +1519,7 @@ int accept(int fd, struct sockaddr* addr, socklen_t* addr_len)  {
     }
 
     Host* node = _interposer_switchInShadowContext();
-    gint result = 0;
+    int result = 0;
 
     /* check if this is a virtual socket */
     if(!host_isShadowDescriptor(node, fd)){
@@ -1529,7 +1529,7 @@ int accept(int fd, struct sockaddr* addr, socklen_t* addr_len)  {
 
     in_addr_t ip = 0;
     in_port_t port = 0;
-    gint handle = 0;
+    int handle = 0;
 
     if(result == 0) {
         /* direct to node for further checks */
@@ -1604,7 +1604,7 @@ ssize_t read(int fd, void *buff, size_t numbytes) {
         random_nextNBytes(random, (guchar*)buff, numbytes);
         ret = (ssize_t) numbytes;
     } else {
-        gint osfd = host_getOSHandle(host, fd);
+        int osfd = host_getOSHandle(host, fd);
         if(osfd >= 0) {
             ret = read(osfd, buff, numbytes);
         } else {
@@ -1629,7 +1629,7 @@ ssize_t write(int fd, const void *buff, size_t n) {
     if(host_isShadowDescriptor(host, fd)){
         ret = _interposer_sendHelper(host, fd, buff, n, 0, NULL, 0);
     } else {
-        gint osfd = host_getOSHandle(host, fd);
+        int osfd = host_getOSHandle(host, fd);
         if(osfd >= 0) {
             ret = write(osfd, buff, n);
         } else {
@@ -1738,7 +1738,7 @@ ssize_t pread(int fd, void *buff, size_t numbytes, off_t offset) {
     errno = EBADF;
     ret = -1;
     } else {
-        gint osfd = host_getOSHandle(host, fd);
+        int osfd = host_getOSHandle(host, fd);
         if(osfd >= 0) {
             ret = pread(osfd, buff, numbytes, offset);
         } else {
@@ -1761,9 +1761,9 @@ int close(int fd) {
     Host* node = _interposer_switchInShadowContext();
 
     if(!host_isShadowDescriptor(node, fd)){
-        gint ret = 0;
+        int ret = 0;
         /* check if we have a mapped os fd */
-        gint osfd = host_getOSHandle(node, fd);
+        int osfd = host_getOSHandle(node, fd);
         if(osfd >= 0) {
             ret = close(osfd);
             host_destroyShadowHandle(node, fd);
@@ -1775,7 +1775,7 @@ int close(int fd) {
         return ret;
     }
 
-    gint r = host_closeUser(node, fd);
+    int r = host_closeUser(node, fd);
     _interposer_switchOutShadowContext(node);
     return r;
 }
@@ -1816,7 +1816,7 @@ int pipe2(int pipefds[2], int flags) {
 
     /* we only support non-blocking sockets, and require
      * SOCK_NONBLOCK to be set immediately */
-    gboolean isBlocking = TRUE;
+    int isBlocking = TRUE;
 
     /* clear non-blocking flags if set to get true type */
     if(flags & O_NONBLOCK) {
@@ -1829,17 +1829,17 @@ int pipe2(int pipefds[2], int flags) {
     }
 
     Host* node = _interposer_switchInShadowContext();
-    gint result = 0;
+    int result = 0;
 
     /* check inputs for what we support */
     if(isBlocking) {
         warning("we only support non-blocking pipes: please bitwise OR 'O_NONBLOCK' with flags");
         result = EINVAL;
     } else {
-        gint handle = host_createDescriptor(node, DT_PIPE);
+        int handle = host_createDescriptor(node, DT_PIPE);
 
         Channel* channel = (Channel*) host_lookupDescriptor(node, handle);
-        gint linkedHandle = channel_getLinkedHandle(channel);
+        int linkedHandle = channel_getLinkedHandle(channel);
 
         pipefds[0] = handle; /* reader */
         pipefds[1] = linkedHandle; /* writer */
@@ -1872,8 +1872,8 @@ int eventfd(unsigned int initval, int flags) {
     } else {
         Host* host = _interposer_switchInShadowContext();
 
-        gint osfd = eventfd(initval, flags);
-        gint shadowfd = osfd >= 3 ? host_createShadowHandle(host, osfd) : osfd;
+        int osfd = eventfd(initval, flags);
+        int shadowfd = osfd >= 3 ? host_createShadowHandle(host, osfd) : osfd;
 
         _interposer_switchOutShadowContext(host);
         result = shadowfd;
@@ -1889,7 +1889,7 @@ int timerfd_create(int clockid, int flags) {
 
     Host* host = _interposer_switchInShadowContext();
 
-    gint result = host_createDescriptor(host, DT_TIMER);
+    int result = host_createDescriptor(host, DT_TIMER);
     if(result > 0) {
         Descriptor* desc = host_lookupDescriptor(host, result);
         if(desc) {
@@ -1910,7 +1910,7 @@ int timerfd_settime(int fd, int flags,
         return director.libc.timerfd_settime(fd, flags, new_value, old_value);
     }
 
-    gint ret = 0;
+    int ret = 0;
 
     Host* host = _interposer_switchInShadowContext();
 
@@ -1935,7 +1935,7 @@ int timerfd_gettime(int fd, struct itimerspec *curr_value) {
         return director.libc.timerfd_gettime(fd, curr_value);
     }
 
-    gint ret = 0;
+    int ret = 0;
 
     Host* host = _interposer_switchInShadowContext();
 
@@ -1965,8 +1965,8 @@ int fileno(FILE *stream) {
 
     Host* host = _interposer_switchInShadowContext();
 
-    gint osfd = fileno(stream);
-    gint shadowfd = host_getShadowHandle(host, osfd);
+    int osfd = fileno(stream);
+    int shadowfd = host_getShadowHandle(host, osfd);
 
     _interposer_switchOutShadowContext(host);
     return shadowfd;
@@ -1984,8 +1984,8 @@ int open(const char *pathname, int flags, ...) {
     } else {
         Host* host = _interposer_switchInShadowContext();
 
-        gint osfd = open(pathname, flags, va_arg(farg, mode_t));
-        gint shadowfd = osfd >= 3 ? host_createShadowHandle(host, osfd) : osfd;
+        int osfd = open(pathname, flags, va_arg(farg, mode_t));
+        int shadowfd = osfd >= 3 ? host_createShadowHandle(host, osfd) : osfd;
 
         if(utility_isRandomPath((gchar*)pathname)) {
             host_setRandomHandle(host, shadowfd);
@@ -2024,8 +2024,8 @@ int creat(const char *pathname, mode_t mode) {
 
     Host* host = _interposer_switchInShadowContext();
 
-    gint osfd = creat(pathname, mode);
-    gint shadowfd = osfd >= 3 ? host_createShadowHandle(host, osfd) : osfd;
+    int osfd = creat(pathname, mode);
+    int shadowfd = osfd >= 3 ? host_createShadowHandle(host, osfd) : osfd;
 
     _interposer_switchOutShadowContext(host);
     return shadowfd;
@@ -2041,8 +2041,8 @@ FILE *fopen(const char *path, const char *mode) {
 
     FILE* osfile = fopen(path, mode);
     if(osfile) {
-        gint osfd = fileno(osfile);
-        gint shadowfd = osfd >= 3 ? host_createShadowHandle(host, osfd) : osfd;
+        int osfd = fileno(osfile);
+        int shadowfd = osfd >= 3 ? host_createShadowHandle(host, osfd) : osfd;
 
         if(utility_isRandomPath((gchar*)path)) {
             host_setRandomHandle(host, shadowfd);
@@ -2065,7 +2065,7 @@ FILE *fdopen(int fd, const char *mode) {
         warning("fdopen not implemented for Shadow descriptor types");
     } else {
         /* check if we have a mapped os fd */
-        gint osfd = host_getOSHandle(host, fd);
+        int osfd = host_getOSHandle(host, fd);
         if (osfd >= 0) {
             FILE* osfile = fdopen(osfd, mode);
             _interposer_switchOutShadowContext(host);
@@ -2091,10 +2091,10 @@ int dup(int oldfd) {
         warning("dup not implemented for Shadow descriptor types");
     } else {
         /* check if we have a mapped os fd */
-        gint osfdOld = host_getOSHandle(host, oldfd);
+        int osfdOld = host_getOSHandle(host, oldfd);
         if (osfdOld >= 0) {
-            gint osfd = dup(osfdOld);
-            gint shadowfd = osfd >= 3 ? host_createShadowHandle(host, osfd) : osfd;
+            int osfd = dup(osfdOld);
+            int shadowfd = osfd >= 3 ? host_createShadowHandle(host, osfd) : osfd;
             _interposer_switchOutShadowContext(host);
             return osfd;
         }
@@ -2118,17 +2118,17 @@ int dup2(int oldfd, int newfd) {
         warning("dup2 not implemented for Shadow descriptor types");
     } else {
         /* check if we have mapped os fds */
-        gint osfdOld = host_getOSHandle(host, oldfd);
-        gint osfdNew = host_getOSHandle(host, newfd);
+        int osfdOld = host_getOSHandle(host, oldfd);
+        int osfdNew = host_getOSHandle(host, newfd);
 
         /* if the newfd is not mapped, then we need to map it later */
-        gboolean isMapped = osfdNew >= 3 ? TRUE : FALSE;
+        int isMapped = osfdNew >= 3 ? TRUE : FALSE;
         osfdNew = osfdNew == -1 ? newfd : osfdNew;
 
         if (osfdOld >= 0) {
-            gint osfd = dup2(osfdOld, osfdNew);
+            int osfd = dup2(osfdOld, osfdNew);
 
-            gint shadowfd = !isMapped && osfd >= 3 ? host_createShadowHandle(host, osfd) : osfd;
+            int shadowfd = !isMapped && osfd >= 3 ? host_createShadowHandle(host, osfd) : osfd;
 
             _interposer_switchOutShadowContext(host);
             return shadowfd;
@@ -2158,17 +2158,17 @@ int dup3(int oldfd, int newfd, int flags) {
         warning("dup3 not implemented for Shadow descriptor types");
     } else {
         /* check if we have mapped os fds */
-        gint osfdOld = host_getOSHandle(host, oldfd);
-        gint osfdNew = host_getOSHandle(host, newfd);
+        int osfdOld = host_getOSHandle(host, oldfd);
+        int osfdNew = host_getOSHandle(host, newfd);
 
         /* if the newfd is not mapped, then we need to map it later */
-        gboolean isMapped = osfdNew >= 3 ? TRUE : FALSE;
+        int isMapped = osfdNew >= 3 ? TRUE : FALSE;
         osfdNew = osfdNew == -1 ? newfd : osfdNew;
 
         if (osfdOld >= 0) {
-            gint osfd = dup3(osfdOld, osfdNew, flags);
+            int osfd = dup3(osfdOld, osfdNew, flags);
 
-            gint shadowfd = !isMapped && osfd >= 3 ? host_createShadowHandle(host, osfd) : osfd;
+            int shadowfd = !isMapped && osfd >= 3 ? host_createShadowHandle(host, osfd) : osfd;
 
             _interposer_switchOutShadowContext(host);
             return shadowfd;
@@ -2189,10 +2189,10 @@ int fclose(FILE *fp) {
 
     Host* host = _interposer_switchInShadowContext();
 
-    gint osfd = fileno(fp);
-    gint shadowHandle = host_getShadowHandle(host, osfd);
+    int osfd = fileno(fp);
+    int shadowHandle = host_getShadowHandle(host, osfd);
 
-    gint ret = fclose(fp);
+    int ret = fclose(fp);
     host_destroyShadowHandle(host, shadowHandle);
 
     _interposer_switchOutShadowContext(host);
@@ -2212,9 +2212,9 @@ int __fxstat (int ver, int fd, struct stat *buf) {
         warning("fstat not implemented for Shadow descriptor types");
     } else {
         /* check if we have a mapped os fd */
-        gint osfd = host_getOSHandle(host, fd);
+        int osfd = host_getOSHandle(host, fd);
         if (osfd >= 0) {
-            gint ret = fstat(osfd, buf);
+            int ret = fstat(osfd, buf);
             _interposer_switchOutShadowContext(host);
             return ret;
         }
@@ -2239,9 +2239,9 @@ int __fxstat64 (int ver, int fd, struct stat64 *buf) {
         warning("fstat64 not implemented for Shadow descriptor types");
     } else {
         /* check if we have a mapped os fd */
-        gint osfd = host_getOSHandle(host, fd);
+        int osfd = host_getOSHandle(host, fd);
         if (osfd >= 0) {
-            gint ret = fstat64(osfd, buf);
+            int ret = fstat64(osfd, buf);
             _interposer_switchOutShadowContext(host);
             return ret;
         }
@@ -2265,9 +2265,9 @@ int fstatfs (int fd, struct statfs *buf) {
         warning("fstatfs not implemented for Shadow descriptor types");
     } else {
         /* check if we have a mapped os fd */
-        gint osfd = host_getOSHandle(host, fd);
+        int osfd = host_getOSHandle(host, fd);
         if (osfd >= 0) {
-            gint ret = fstatfs(osfd, buf);
+            int ret = fstatfs(osfd, buf);
             _interposer_switchOutShadowContext(host);
             return ret;
         }
@@ -2291,9 +2291,9 @@ int fstatfs64 (int fd, struct statfs64 *buf) {
         warning("fstatfs64 not implemented for Shadow descriptor types");
     } else {
         /* check if we have a mapped os fd */
-        gint osfd = host_getOSHandle(host, fd);
+        int osfd = host_getOSHandle(host, fd);
         if (osfd >= 0) {
-            gint ret = fstatfs64(osfd, buf);
+            int ret = fstatfs64(osfd, buf);
             _interposer_switchOutShadowContext(host);
             return ret;
         }
@@ -2317,7 +2317,7 @@ off_t lseek(int fd, off_t offset, int whence) {
         warning("lseek not implemented for Shadow descriptor types");
     } else {
         /* check if we have a mapped os fd */
-        gint osfd = host_getOSHandle(host, fd);
+        int osfd = host_getOSHandle(host, fd);
         if (osfd >= 0) {
             off_t ret = lseek(osfd, offset, whence);
             _interposer_switchOutShadowContext(host);
@@ -2343,9 +2343,9 @@ int flock(int fd, int operation) {
         warning("flock not implemented for Shadow descriptor types");
     } else {
         /* check if we have a mapped os fd */
-        gint osfd = host_getOSHandle(host, fd);
+        int osfd = host_getOSHandle(host, fd);
         if (osfd >= 0) {
-            gint ret = flock(osfd, operation);
+            int ret = flock(osfd, operation);
             _interposer_switchOutShadowContext(host);
             return ret;
         }
@@ -2369,9 +2369,9 @@ int fsync(int fd) {
         warning("fsync not implemented for Shadow descriptor types");
     } else {
         /* check if we have a mapped os fd */
-        gint osfd = host_getOSHandle(host, fd);
+        int osfd = host_getOSHandle(host, fd);
         if (osfd >= 0) {
-            gint ret = fsync(osfd);
+            int ret = fsync(osfd);
             _interposer_switchOutShadowContext(host);
             return ret;
         }
@@ -2395,9 +2395,9 @@ int ftruncate(int fd, off_t length) {
         warning("ftruncate not implemented for Shadow descriptor types");
     } else {
         /* check if we have a mapped os fd */
-        gint osfd = host_getOSHandle(host, fd);
+        int osfd = host_getOSHandle(host, fd);
         if (osfd >= 0) {
-            gint ret = ftruncate(osfd, length);
+            int ret = ftruncate(osfd, length);
             _interposer_switchOutShadowContext(host);
             return ret;
         }
@@ -2421,9 +2421,9 @@ int posix_fallocate(int fd, off_t offset, off_t len) {
         warning("posix_fallocate not implemented for Shadow descriptor types");
     } else {
         /* check if we have a mapped os fd */
-        gint osfd = host_getOSHandle(host, fd);
+        int osfd = host_getOSHandle(host, fd);
         if (osfd >= 0) {
-            gint ret = posix_fallocate(osfd, offset, len);
+            int ret = posix_fallocate(osfd, offset, len);
             _interposer_switchOutShadowContext(host);
             return ret;
         }
@@ -2533,7 +2533,7 @@ int gethostname(char* name, size_t len) {
     }
 
     Host* node = _interposer_switchInShadowContext();
-    gint result = 0;
+    int result = 0;
 
 //  in_addr_t ip = node_getDefaultIP(node);
 //  const gchar* hostname = internetwork_resolveID(worker_getPrivate()->cached_engine->internet, (GQuark)ip);
@@ -2568,7 +2568,7 @@ const struct addrinfo *hints, struct addrinfo **res) {
 
     Host* host = _interposer_switchInShadowContext();
 
-    gint result = 0;
+    int result = 0;
     *res = NULL;
 
     in_addr_t ip = INADDR_NONE;
@@ -2686,7 +2686,7 @@ int getnameinfo(const struct sockaddr* sa, socklen_t salen,
         return EAI_FAIL;
     }
 
-    gint retval = 0;
+    int retval = 0;
     Host* node = _interposer_switchInShadowContext();
 
     GQuark convertedIP = (GQuark) (((struct sockaddr_in*)sa)->sin_addr.s_addr);
@@ -2715,7 +2715,7 @@ struct hostent* gethostbyname(const gchar* name) {
 }
 
 int gethostbyname_r(const gchar *name, struct hostent *ret, gchar *buf,
-gsize buflen, struct hostent **result, gint *h_errnop) {
+gsize buflen, struct hostent **result, int *h_errnop) {
     if(shouldForwardToLibC()) {
         ENSURE(libc, "", gethostbyname_r);
         return director.libc.gethostbyname_r(name, ret, buf, buflen, result, h_errnop);
@@ -2727,7 +2727,7 @@ gsize buflen, struct hostent **result, gint *h_errnop) {
     return -1;
 }
 
-struct hostent* gethostbyname2(const gchar* name, gint af) {
+struct hostent* gethostbyname2(const gchar* name, int af) {
     if(shouldForwardToLibC()) {
         ENSURE(libc, "", gethostbyname2);
         return director.libc.gethostbyname2(name, af);
@@ -2739,8 +2739,8 @@ struct hostent* gethostbyname2(const gchar* name, gint af) {
     return NULL;
 }
 
-int gethostbyname2_r(const gchar *name, gint af, struct hostent *ret,
-        gchar *buf, gsize buflen, struct hostent **result, gint *h_errnop) {
+int gethostbyname2_r(const gchar *name, int af, struct hostent *ret,
+        gchar *buf, gsize buflen, struct hostent **result, int *h_errnop) {
     if(shouldForwardToLibC()) {
         ENSURE(libc, "", gethostbyname2_r);
         return director.libc.gethostbyname2_r(name, af, ret, buf, buflen, result, h_errnop);
@@ -2752,7 +2752,7 @@ int gethostbyname2_r(const gchar *name, gint af, struct hostent *ret,
     return -1;
 }
 
-struct hostent* gethostbyaddr(const void* addr, socklen_t len, gint type) {
+struct hostent* gethostbyaddr(const void* addr, socklen_t len, int type) {
     if(shouldForwardToLibC()) {
         ENSURE(libc, "", gethostbyaddr);
         return director.libc.gethostbyaddr(addr, len, type);
@@ -2764,9 +2764,9 @@ struct hostent* gethostbyaddr(const void* addr, socklen_t len, gint type) {
     return NULL;
 }
 
-int gethostbyaddr_r(const void *addr, socklen_t len, gint type,
+int gethostbyaddr_r(const void *addr, socklen_t len, int type,
 struct hostent *ret, char *buf, gsize buflen, struct hostent **result,
-gint *h_errnop) {
+int *h_errnop) {
     if(shouldForwardToLibC()) {
         ENSURE(libc, "", gethostbyaddr_r);
         return director.libc.gethostbyaddr_r(addr, len, type, ret, buf, buflen, result, h_errnop);
@@ -2787,7 +2787,7 @@ int rand() {
     }
 
     Host* node = _interposer_switchInShadowContext();
-    gint r = random_nextInt(host_getRandom(node));
+    int r = random_nextInt(host_getRandom(node));
     _interposer_switchOutShadowContext(node);
     return r;
 }
@@ -2799,7 +2799,7 @@ int rand_r(unsigned int *seedp) {
     }
 
     Host* node = _interposer_switchInShadowContext();
-    gint r = random_nextInt(host_getRandom(node));
+    int r = random_nextInt(host_getRandom(node));
     _interposer_switchOutShadowContext(node);
     return r;
 }
@@ -2821,7 +2821,7 @@ long int random() {
     }
 
     Host* node = _interposer_switchInShadowContext();
-    gint r = random_nextInt(host_getRandom(node));
+    int r = random_nextInt(host_getRandom(node));
     _interposer_switchOutShadowContext(node);
     return (long int)r;
 }
@@ -2867,7 +2867,7 @@ int on_exit(void (*function)(int , void *), void *arg) {
 
     Host* host = _interposer_switchInShadowContext();
 
-    gboolean success = FALSE;
+    int success = FALSE;
     Thread* thread = worker_getActiveThread();
     if(thread) {
         Process* proc = thread_getParentProcess(thread);
@@ -2887,7 +2887,7 @@ int atexit(void (*func)(void)) {
 
     Host* host = _interposer_switchInShadowContext();
 
-    gboolean success = FALSE;
+    int success = FALSE;
     Thread* thread = worker_getActiveThread();
     if(thread) {
         Process* proc = thread_getParentProcess(thread);
@@ -2907,7 +2907,7 @@ int __cxa_atexit(void (*func) (void *), void * arg, void * dso_handle) {
 
     Host* host = _interposer_switchInShadowContext();
 
-    gboolean success = FALSE;
+    int success = FALSE;
     if(dso_handle) {
         /* this should be called when the plugin is unloaded */
         warning("atexit at library close is not currently supported");

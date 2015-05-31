@@ -2,18 +2,6 @@ add_cflags(-Wno-unknown-attributes)
 add_cflags(-Wno-unused-command-line-argument)
 add_cflags(-Wno-unknown-warning-option)
 
-## build the required libraries for intercepting system and library calls.
-## create the interpose library, to be set as LD_PRELOAD to intercept functions.
-## the functions we intercept MUST be in a shared library for dlsym searching.
-## we redirect them to our internal shadow versions, or to libc.
-add_library(shadow-interpose SHARED shd-interposer.c)
-target_link_libraries(shadow-interpose dl)
-install(TARGETS shadow-interpose DESTINATION lib)
-
-## remove this hack after moving interpose into thread.c
-find_package(GLIB REQUIRED)
-include_directories(${CMAKE_SOURCE_DIR}/src/main)
-include_directories(${GLIB_INCLUDES})
 ## the plug-ins need to include the interface header
 include_directories(${CMAKE_SOURCE_DIR}/src/plugin)
 install(FILES shadow-plugin-interface.h DESTINATION include/)
