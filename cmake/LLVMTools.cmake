@@ -67,6 +67,7 @@ foreach(srcfile ${ARGN})
       COMMAND ${src_bc_compiler} -emit-llvm ${srcdefs} ${srcflags} ${srcincludes}
         -c ${infile} -o ${outfile}.bc
       DEPENDS ${infile}
+      IMPLICIT_DEPENDS CXX ${infile}
       COMMENT "Building LLVM bitcode ${outfile}.bc"
       VERBATIM
     )
