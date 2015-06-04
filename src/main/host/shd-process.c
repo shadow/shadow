@@ -22,7 +22,7 @@ struct _Process {
 
 typedef struct _ProcessCallbackData ProcessCallbackData;
 struct _ProcessCallbackData {
-    CallbackFunc callback;
+    TaskFunc callback;
     gpointer data;
     gpointer argument;
 };
@@ -204,7 +204,7 @@ static void _process_callbackTimerExpired(Process* proc, ProcessCallbackData* da
     g_free(data);
 }
 
-void process_callback(Process* proc, CallbackFunc userCallback,
+void process_callback(Process* proc, TaskFunc userCallback,
         gpointer userData, gpointer userArgument, guint millisecondsDelay) {
     MAGIC_ASSERT(proc);
     utility_assert(process_isRunning(proc));
@@ -219,11 +219,10 @@ void process_callback(Process* proc, CallbackFunc userCallback,
     data->data = userData;
     data->argument = userArgument;
 
-    CallbackEvent* event = callback_new((CallbackFunc)_process_callbackTimerExpired, proc, data);
-    SimulationTime nanos = SIMTIME_ONE_MILLISECOND * millisecondsDelay;
-
-    /* callback to our own node */
-    worker_scheduleEvent((Event*)event, nanos, 0);
+    Task* task = task_new((TaskFunc)_process_callbackTimerExpired, proc, data);
+    SimulationTime delay = SIMTIME_ONE_MILLISECOND * millisecondsDelay;
+    worker_scheduleTask(task, delay);
+    task_unref(task);
 }
 
 gboolean process_addAtExitCallback(Process* proc, gpointer userCallback, gpointer userArgument,

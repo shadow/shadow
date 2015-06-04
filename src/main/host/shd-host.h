@@ -22,14 +22,14 @@ Host* host_new(GQuark id, gchar* hostname, gchar* requestedIP, gchar* geocodeHin
         guint64 sendBufferSize, gboolean autotuneSendBuffer,
         guint64 interfaceReceiveLength);
 void host_free(Host* host);
+void host_ref(Host* host);
+void host_unref(Host* host);
 
 void host_lock(Host* host);
 void host_unlock(Host* host);
 
 void host_addApplication(Host* host, GQuark pluginID,
         SimulationTime startTime, SimulationTime stopTime, gchar* arguments);
-void host_startApplication(Host* host, Process* application);
-void host_stopApplication(Host* host, Process* application);
 void host_freeAllApplications(Host* host);
 
 gint host_compare(gconstpointer a, gconstpointer b, gpointer user_data);

@@ -17,7 +17,7 @@ void process_stop(Process* proc);
 gboolean process_isRunning(Process* proc);
 
 void process_notify(Process* proc, Thread* thread);
-void process_callback(Process* proc, CallbackFunc userCallback,
+void process_callback(Process* proc, TaskFunc userCallback,
         gpointer userData, gpointer userArgument, guint millisecondsDelay);
 
 gboolean process_addAtExitCallback(Process* proc, gpointer userCallback, gpointer userArgument,

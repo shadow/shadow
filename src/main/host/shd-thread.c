@@ -116,7 +116,7 @@ static void _thread_interface_createCallback(ShadowPluginCallbackFunc callback, 
     thread->activeContext = TCTX_SHADOW;
 
     process_callback(thread->parentProcess,
-            (CallbackFunc)_thread_executeCallbackInPluginContext, data, callback, millisecondsDelay);
+            (TaskFunc)_thread_executeCallbackInPluginContext, data, callback, millisecondsDelay);
 
     thread->activeContext = TCTX_PLUGIN;
 }
@@ -272,7 +272,7 @@ void thread_executeInit(Thread* thread, ShadowPluginInitializeFunc init) {
     _thread_handleTimerResult(thread, elapsed);
 }
 
-void thread_executeCallback2(Thread* thread, CallbackFunc callback, gpointer data, gpointer callbackArgument) {
+void thread_executeCallback2(Thread* thread, TaskFunc callback, gpointer data, gpointer callbackArgument) {
     MAGIC_ASSERT(thread);
     utility_assert(callback);
     utility_assert(thread_isRunning(thread));

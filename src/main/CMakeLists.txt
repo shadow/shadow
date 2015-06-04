@@ -30,6 +30,9 @@ set(shadow_srcs
     engine/scheduler/shd-scheduler-policy-thread-perhost.c
     engine/scheduler/shd-scheduler-policy-thread-perthread.c
     engine/scheduler/shd-scheduler-policy-thread-single.c
+    engine/work/shd-event.c
+    engine/work/shd-message.c
+    engine/work/shd-task.c
     engine/shd-main.c
     engine/shd-master.c
     engine/shd-slave.c
@@ -62,19 +65,6 @@ set(shadow_srcs
     runnable/action/shd-kill-engine.c
     runnable/action/shd-load-plugin.c
     runnable/action/shd-load-topology.c
-    runnable/event/shd-callback.c
-    runnable/event/shd-event.c
-    runnable/event/shd-heartbeat.c
-    runnable/event/shd-interface-received.c
-    runnable/event/shd-interface-sent.c
-    runnable/event/shd-notify-plugin.c
-    runnable/event/shd-packet-arrived.c
-    runnable/event/shd-packet-dropped.c
-    runnable/event/shd-start-application.c
-    runnable/event/shd-stop-application.c
-    runnable/event/shd-tcp-close-timer-expired.c
-    runnable/event/shd-tcp-retransmit-timer-expired.c
-    runnable/shd-listener.c
     runnable/shd-runnable.c
 
     support/shd-configuration.c

@@ -255,9 +255,9 @@ void scheduler_unref(Scheduler* scheduler) {
 void scheduler_push(Scheduler* scheduler, Event* event, GQuark senderHostID, GQuark receiverHostID) {
     MAGIC_ASSERT(scheduler);
 
-    SimulationTime eventTime = shadowevent_getTime(event);
+    SimulationTime eventTime = event_getTime(event);
     if(eventTime > scheduler->endTime) {
-        shadowevent_free(event);
+        event_unref(event);
         return;
     }
 
@@ -268,7 +268,8 @@ void scheduler_push(Scheduler* scheduler, Event* event, GQuark senderHostID, GQu
     utility_assert(receiver);
 
     /* update the Event with a pointer to the correct host */
-    shadowevent_setNode(event, receiver);
+    // XXX should have been done by worker ?
+//    shadowevent_setNode(event, receiver);
 
     /* push to a queue based on the policy */
     scheduler->policy->push(scheduler->policy, event, sender, receiver, scheduler->currentRound.endTime);

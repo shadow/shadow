@@ -209,29 +209,31 @@ GQuark host_getID(Host* host) {
     return host->id;
 }
 
+static void _host_runStartProcessTask(Host* host, Process* proc) {
+    MAGIC_ASSERT(host);
+    process_start(proc);
+}
+
+static void _host_runStopProcessTask(Host* host, Process* proc) {
+    MAGIC_ASSERT(host);
+    process_stop(proc);
+}
+
 void host_addApplication(Host* host, GQuark pluginID,
         SimulationTime startTime, SimulationTime stopTime, gchar* arguments) {
     MAGIC_ASSERT(host);
-    Process* application = process_new(pluginID, startTime, stopTime, arguments);
-    g_queue_push_tail(host->applications, application);
+    Process* proc = process_new(pluginID, startTime, stopTime, arguments);
+    g_queue_push_tail(host->applications, proc);
 
-    StartApplicationEvent* event = startapplication_new(application);
-    worker_scheduleEvent((Event*)event, startTime, host->id);
+    Task* startTask = task_new((TaskFunc)_host_runStartProcessTask, host, proc);
+    worker_scheduleTask(startTask, startTime);
+    task_unref(startTask);
 
     if(stopTime > startTime) {
-        StopApplicationEvent* event = stopapplication_new(application);
-        worker_scheduleEvent((Event*)event, stopTime, host->id);
+        Task* stopTask = task_new((TaskFunc)_host_runStopProcessTask, host, proc);
+        worker_scheduleTask(stopTask, stopTime);
+        task_unref(stopTask);
     }
-}
-
-void host_startApplication(Host* host, Process* application) {
-    MAGIC_ASSERT(host);
-    process_start(application);
-}
-
-void host_stopApplication(Host* host, Process* application) {
-    MAGIC_ASSERT(host);
-    process_stop(application);
 }
 
 void host_freeAllApplications(Host* host) {

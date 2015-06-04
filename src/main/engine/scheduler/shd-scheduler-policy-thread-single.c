@@ -26,7 +26,7 @@ struct _ThreadSinglePolicyData {
 static ThreadSingleThreadData* _threadsinglethreaddata_new() {
     ThreadSingleThreadData* tdata = g_new0(ThreadSingleThreadData, 1);
     g_mutex_init(&(tdata->lock));
-    tdata->pq = priorityqueue_new((GCompareDataFunc)shadowevent_compare, NULL, (GDestroyNotify)shadowevent_free);
+    tdata->pq = priorityqueue_new((GCompareDataFunc)event_compare, NULL, (GDestroyNotify)event_unref);
     return tdata;
 }
 
@@ -75,10 +75,10 @@ static void _schedulerpolicythreadsingle_push(SchedulerPolicy* policy, Event* ev
     GThread* srcThread = g_hash_table_lookup(data->hostToThreadMap, srcHost);
     GThread* dstThread = g_hash_table_lookup(data->hostToThreadMap, dstHost);
 
-    SimulationTime eventTime = shadowevent_getTime(event);
+    SimulationTime eventTime = event_getTime(event);
 
     if(srcThread != dstThread && eventTime < barrier) {
-        shadowevent_setTime(event, barrier);
+        event_setTime(event, barrier);
         info("Inter-host event time %"G_GUINT64_FORMAT" changed to %"G_GUINT64_FORMAT" "
                 "to ensure event causality", eventTime, barrier);
     }
@@ -89,7 +89,7 @@ static void _schedulerpolicythreadsingle_push(SchedulerPolicy* policy, Event* ev
 
     /* 'deliver' the event there */
     g_mutex_lock(&(tdata->lock));
-    shadowevent_setSequence(event, ++(tdata->pushSequenceCounter));
+    event_setSequence(event, ++(tdata->pushSequenceCounter));
     priorityqueue_push(tdata->pq, event);
     tdata->nPushed++;
     g_mutex_unlock(&(tdata->lock));
@@ -110,7 +110,7 @@ static Event* _schedulerpolicythreadsingle_pop(SchedulerPolicy* policy, Simulati
     g_mutex_lock(&(tdata->lock));
 
     Event* nextEvent = priorityqueue_peek(tdata->pq);
-    SimulationTime eventTime = (nextEvent != NULL) ? shadowevent_getTime(nextEvent) : SIMTIME_INVALID;
+    SimulationTime eventTime = (nextEvent != NULL) ? event_getTime(nextEvent) : SIMTIME_INVALID;
 
     if(nextEvent && eventTime < barrier) {
         utility_assert(eventTime >= tdata->lastEventTime);
@@ -139,7 +139,7 @@ static SimulationTime _schedulerpolicythreadsingle_getNextTime(SchedulerPolicy* 
         Event* event = priorityqueue_peek(tdata->pq);
         g_mutex_unlock(&(tdata->lock));
         if(event != NULL) {
-            nextTime = MIN(nextTime, shadowevent_getTime(event));
+            nextTime = MIN(nextTime, event_getTime(event));
         }
     }
 

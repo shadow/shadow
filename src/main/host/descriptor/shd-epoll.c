@@ -43,7 +43,7 @@ struct _EpollWatch {
     /* the shadow descriptor we are watching for events */
     Descriptor* descriptor;
     /* the listener that will notify us when the descriptor status changes */
-    Listener* listener;
+    Task* listener;
     /* holds the actual event info */
     struct epoll_event event;
     /* current status of the underlying shadow descriptor */
@@ -90,7 +90,7 @@ static EpollWatch* _epollwatch_new(Epoll* epoll, Descriptor* descriptor, struct 
      * (which is freed below in _epollwatch_free) */
     descriptor_ref(descriptor);
 
-    watch->listener = listener_new((CallbackFunc)epoll_descriptorStatusChanged, epoll, descriptor);
+    watch->listener = task_new((TaskFunc)epoll_descriptorStatusChanged, epoll, descriptor);
     watch->descriptor = descriptor;
     watch->event = *event;
 
@@ -103,7 +103,7 @@ static void _epollwatch_free(EpollWatch* watch) {
     MAGIC_ASSERT(watch);
 
     descriptor_removeStatusListener(watch->descriptor, watch->listener);
-    listener_free(watch->listener);
+    task_unref(watch->listener);
     descriptor_unref(watch->descriptor);
 
     MAGIC_CLEAR(watch);
@@ -256,6 +256,16 @@ static gboolean _epollwatch_needsNotify(EpollWatch* watch) {
     }
 }
 
+static void _epoll_runNotifyTask(Epoll* epoll, gpointer userData) {
+    /* do a clean lookup in case the epoll closed between the point where it
+     * was scheduled and now */
+    gint handle = GPOINTER_TO_INT(userData);
+    Epoll* activeEpoll = (Epoll*) host_lookupDescriptor(worker_getActiveHost(), handle);
+    if(activeEpoll) {
+        epoll_tryNotify(activeEpoll);
+    }
+}
+
 static void _epoll_trySchedule(Epoll* epoll) {
     /* schedule a shadow notification event if we have events to report */
     if(!(epoll->flags & EF_CLOSED) && !g_queue_is_empty(epoll->reporting)) {
@@ -263,9 +273,9 @@ static void _epoll_trySchedule(Epoll* epoll) {
         gboolean isScheduled = (epoll->flags & EF_SCHEDULED) ? TRUE : FALSE;
         if(!isScheduled && process_isRunning(thread_getParentProcess(epoll->ownerThread))) {
             /* schedule a notification event for our node */
-            NotifyPluginEvent* event = notifyplugin_new(epoll->super.handle);
-            SimulationTime delay = 1;
-            worker_scheduleEvent((Event*)event, delay, 0);
+            Task* notifyTask = task_new((TaskFunc)_epoll_runNotifyTask, epoll, GINT_TO_POINTER(epoll->super.handle));
+            worker_scheduleTask(notifyTask, 1);
+            task_unref(notifyTask);
 
             epoll->flags |= EF_SCHEDULED;
         }

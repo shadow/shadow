@@ -35,7 +35,7 @@ struct _ThreadPerThreadPolicyData {
 static ThreadPerThreadQueueData* _threadperthreadqueuedata_new() {
     ThreadPerThreadQueueData* qdata = g_new0(ThreadPerThreadQueueData, 1);
 
-    qdata->pq = priorityqueue_new((GCompareDataFunc)shadowevent_compare, NULL, (GDestroyNotify)shadowevent_free);
+    qdata->pq = priorityqueue_new((GCompareDataFunc)event_compare, NULL, (GDestroyNotify)event_unref);
 
     return qdata;
 }
@@ -100,10 +100,10 @@ static void _schedulerpolicythreadperthread_push(SchedulerPolicy* policy, Event*
     GThread* srcThread = g_hash_table_lookup(data->hostToThreadMap, srcHost);
     GThread* dstThread = g_hash_table_lookup(data->hostToThreadMap, dstHost);
 
-    SimulationTime eventTime = shadowevent_getTime(event);
+    SimulationTime eventTime = event_getTime(event);
 
     if(srcThread != dstThread && eventTime < barrier) {
-        shadowevent_setTime(event, barrier);
+        event_setTime(event, barrier);
         info("Inter-host event time %"G_GUINT64_FORMAT" changed to %"G_GUINT64_FORMAT" "
                 "to ensure event causality", eventTime, barrier);
     }
@@ -114,7 +114,7 @@ static void _schedulerpolicythreadperthread_push(SchedulerPolicy* policy, Event*
 
     GThread* self = g_thread_self();
     if(dstThread == self) {
-        shadowevent_setSequence(event, ++(tdata->qdata->pushSequenceCounter));
+        event_setSequence(event, ++(tdata->qdata->pushSequenceCounter));
         priorityqueue_push(tdata->qdata->pq, event);
         tdata->qdata->nPushed++;
     } else {
@@ -126,7 +126,7 @@ static void _schedulerpolicythreadperthread_push(SchedulerPolicy* policy, Event*
         /* now make sure we have a mailbox for the source and create one if needed */
         PriorityQueue* futureEvents = g_hash_table_lookup(tdata->threadToPQueueMap, srcThread);
         if(!futureEvents) {
-            futureEvents = priorityqueue_new((GCompareDataFunc)shadowevent_compare, NULL, (GDestroyNotify)shadowevent_free);
+            futureEvents = priorityqueue_new((GCompareDataFunc)event_compare, NULL, (GDestroyNotify)event_unref);
             g_hash_table_replace(tdata->threadToPQueueMap, srcThread, futureEvents);
         }
 
@@ -152,7 +152,7 @@ static Event* _schedulerpolicythreadperthread_pop(SchedulerPolicy* policy, Simul
     }
 
     Event* nextEvent = priorityqueue_peek(tdata->qdata->pq);
-    SimulationTime eventTime = (nextEvent != NULL) ? shadowevent_getTime(nextEvent) : SIMTIME_INVALID;
+    SimulationTime eventTime = (nextEvent != NULL) ? event_getTime(nextEvent) : SIMTIME_INVALID;
 
     if(nextEvent && eventTime < barrier) {
         utility_assert(eventTime >= tdata->qdata->lastEventTime);
@@ -182,7 +182,7 @@ static SimulationTime _schedulerpolicythreadperthread_getNextTime(SchedulerPolic
 
             while(!priorityqueue_isEmpty(futureEvents)) {
                 Event* event = priorityqueue_pop(futureEvents);
-                shadowevent_setSequence(event, ++(tdata->qdata->pushSequenceCounter));
+                event_setSequence(event, ++(tdata->qdata->pushSequenceCounter));
                 priorityqueue_push(tdata->qdata->pq, event);
                 tdata->qdata->nPushed++;
             }
@@ -193,7 +193,7 @@ static SimulationTime _schedulerpolicythreadperthread_getNextTime(SchedulerPolic
         /* now get the min time */
         Event* nextEvent = priorityqueue_peek(tdata->qdata->pq);
         if(nextEvent != NULL) {
-            nextTime = MIN(nextTime, shadowevent_getTime(nextEvent));
+            nextTime = MIN(nextTime, event_getTime(nextEvent));
         }
     }
 

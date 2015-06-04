@@ -202,6 +202,10 @@ void networkinterface_disassociate(NetworkInterface* interface, Socket* socket) 
     g_hash_table_remove(interface->boundSockets, GINT_TO_POINTER(key));
 }
 
+static void _networkinterface_runReceievedTask(NetworkInterface* interface, gpointer userData) {
+    networkinterface_received(interface);
+}
+
 static void _networkinterface_scheduleNextReceive(NetworkInterface* interface) {
     /* the next packets need to be received and processed */
     SimulationTime batchTime = worker_getConfig()->interfaceBatchTime;
@@ -254,9 +258,9 @@ static void _networkinterface_scheduleNextReceive(NetworkInterface* interface) {
         /* we are 'receiving' the packets */
         interface->flags |= NIF_RECEIVING;
         /* call back when the packets are 'received' */
-        InterfaceReceivedEvent* event = interfacereceived_new(interface);
-        /* event destination is our node */
-        worker_scheduleEvent((Event*)event, receiveTime, 0);
+        Task* receivedTask = task_new((TaskFunc)_networkinterface_runReceievedTask, interface, NULL);
+        worker_scheduleTask(receivedTask, receiveTime);
+        task_unref(receivedTask);
     }
 }
 
@@ -285,6 +289,7 @@ void networkinterface_packetArrived(NetworkInterface* interface, Packet* packet)
     }
 }
 
+// XXX FIXME DEAD CODE
 void networkinterface_packetDropped(NetworkInterface* interface, Packet* packet) {
     MAGIC_ASSERT(interface);
 
@@ -368,6 +373,11 @@ static Packet* _networkinterface_selectFirstInFirstOut(NetworkInterface* interfa
     return packet;
 }
 
+static void _networkinterface_runSentTask(NetworkInterface* interface, gpointer userData) {
+    networkinterface_sent(interface);
+}
+
+
 static void _networkinterface_scheduleNextSend(NetworkInterface* interface) {
     /* the next packet needs to be sent according to bandwidth limitations.
      * we need to spend time sending it before sending the next. */
@@ -399,12 +409,12 @@ static void _networkinterface_scheduleNextSend(NetworkInterface* interface) {
         /* now actually send the packet somewhere */
         if(networkinterface_getIPAddress(interface) == packet_getDestinationIP(packet)) {
             /* packet will arrive on our own interface */
-            PacketArrivedEvent* event = packetarrived_new(packet);
-            /* event destination is our node */
-            worker_scheduleEvent((Event*)event, 1, 0);
+            Task* packetTask = task_new((TaskFunc)networkinterface_packetArrived, interface, packet);
+            worker_scheduleTask(packetTask, 1);
+            task_unref(packetTask);
         } else {
-            /* let the worker schedule with appropriate delays */
-            worker_schedulePacket(packet);
+            /* let the worker send to remote with appropriate delays */
+            worker_sendPacket(packet);
         }
 
         /* successfully sent, calculate how long it took to 'send' this packet */
@@ -429,9 +439,9 @@ static void _networkinterface_scheduleNextSend(NetworkInterface* interface) {
         /* we are 'sending' the packets */
         interface->flags |= NIF_SENDING;
         /* call back when the packets are 'sent' */
-        InterfaceSentEvent* event = interfacesent_new(interface);
-        /* event destination is our node */
-        worker_scheduleEvent((Event*)event, sendTime, 0);
+        Task* sentTask = task_new((TaskFunc)_networkinterface_runSentTask, interface, NULL);
+        worker_scheduleTask(sentTask, sendTime);
+        task_unref(sentTask);
     }
 }
 

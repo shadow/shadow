@@ -229,25 +229,31 @@ void createnodes_run(CreateNodesAction* action) {
 
         g_string_free(hostnameBuffer, TRUE);
 
+        /* make sure our bootstrap events are set properly */
+        worker_setActiveHost(host);
+        worker_setCurrentTime(0);
+
         /* loop through and create, add, and boot all applications */
         GList* item = action->applications;
         while (item && item->data) {
             NodeApplication* app = (NodeApplication*) item->data;
 
-            /* make sure our bootstrap events are set properly */
-            worker_setCurrentTime(0);
             host_addApplication(host, app->pluginID,
                     app->starttime, app->stoptime, app->arguments->str);
-            worker_setCurrentTime(SIMTIME_INVALID);
 
             item = g_list_next(item);
         }
 
-        /* make sure our bootstrap events are set properly */
-        worker_setCurrentTime(0);
-        HeartbeatEvent* heartbeat = heartbeat_new(host_getTracker(host));
-        worker_scheduleEvent((Event*)heartbeat, heartbeatInterval, id);
+        Task* heartbeatTask = task_new((TaskFunc)tracker_heartbeat, host_getTracker(host), NULL);
+        worker_scheduleTask(heartbeatTask, heartbeatInterval);
+        task_unref(heartbeatTask);
+
         worker_setCurrentTime(SIMTIME_INVALID);
+        worker_setActiveHost(NULL);
+
+        // FIXME the heartbeat event runs this - still need to add workerHearbeat:
+//        worker_heartbeat();
+//        tracker_heartbeat(event->tracker);
     }
 }
 

@@ -428,6 +428,9 @@ static void _tcp_setBufferSizes(TCP* tcp) {
             socket_getOutputBufferSize(&(tcp->super)), socket_getInputBufferSize(&(tcp->super)));
 }
 
+// XXX declaration
+static void _tcp_runCloseTimerExpiredTask(TCP* tcp, gpointer userData);
+
 static void _tcp_setState(TCP* tcp, enum TCPState state) {
     MAGIC_ASSERT(tcp);
 
@@ -495,13 +498,22 @@ static void _tcp_setState(TCP* tcp, enum TCPState state) {
         case TCPS_LASTACK:
         case TCPS_TIMEWAIT: {
             /* schedule a close timer self-event to finish out the closing process */
-            TCPCloseTimerExpiredEvent* event = tcpclosetimerexpired_new(tcp);
-            worker_scheduleEvent((Event*)event, CONFIG_TCPCLOSETIMER_DELAY, 0);
+            Task* closeTask = task_new((TaskFunc)_tcp_runCloseTimerExpiredTask, tcp, NULL);
+            descriptor_ref(&tcp->super.super.super);
+            worker_scheduleTask(closeTask, CONFIG_TCPCLOSETIMER_DELAY);
+            task_unref(closeTask);
             break;
         }
         default:
             break;
     }
+}
+
+static void _tcp_runCloseTimerExpiredTask(TCP* tcp, gpointer userData) {
+    MAGIC_ASSERT(tcp);
+    _tcp_setState(tcp, TCPS_CLOSED);
+    /* unref because the task is complete and will no longer hold a pointer to the tcp */
+    descriptor_unref(&tcp->super.super.super);
 }
 
 static void _tcp_autotuneReceiveBuffer(TCP* tcp, guint bytesCopied) {
@@ -720,6 +732,9 @@ static void _tcp_clearRetransmit(TCP* tcp, guint sequence) {
     }
 }
 
+// XXX forward declaration
+static void _tcp_runRetransmitTimerExpiredTask(TCP* tcp, gpointer userData);
+
 static void _tcp_scheduleRetransmitTimer(TCP* tcp, SimulationTime now, SimulationTime delay) {
     MAGIC_ASSERT(tcp);
 
@@ -728,14 +743,10 @@ static void _tcp_scheduleRetransmitTimer(TCP* tcp, SimulationTime now, Simulatio
     gboolean success = priorityqueue_push(tcp->retransmit.scheduledTimerExpirations, expireTimePtr);
 
     if(success) {
-        TCPRetransmitTimerExpiredEvent* event = tcpretransmittimerexpired_new(tcp);
-
-        /* this is a local event for our own host */
-        Host* host = worker_getCurrentHost();
-        Address* address = host_getDefaultAddress(host);
-        GQuark id = (GQuark) address_getID(address);
-
-        worker_scheduleEvent((Event*)event, delay, id);
+        Task* retexpTask = task_new((TaskFunc)_tcp_runRetransmitTimerExpiredTask, tcp, NULL);
+        descriptor_ref(&tcp->super.super.super);
+        worker_scheduleTask(retexpTask, delay);
+        task_unref(retexpTask);
 
         debug("%s retransmit timer scheduled for %"G_GUINT64_FORMAT" ns",
                 tcp->super.boundString, *expireTimePtr);
@@ -1005,7 +1016,7 @@ static void _tcp_fastRetransmitAlert(TCP* tcp, TCPProcessFlags flags) {
     }
 }
 
-void tcp_retransmitTimerExpired(TCP* tcp) {
+static void _tcp_runRetransmitTimerExpiredTask(TCP* tcp, gpointer userData) {
     MAGIC_ASSERT(tcp);
 
     /* a timer expired, update our timer tracking state */
@@ -1065,6 +1076,9 @@ void tcp_retransmitTimerExpired(TCP* tcp) {
 
     _tcp_retransmitPacket(tcp, sequence);
     _tcp_flush(tcp);
+
+    /* unref because the task is complete and will no longer hold a pointer to the tcp */
+    descriptor_unref(&tcp->super.super.super);
 }
 
 gboolean tcp_isFamilySupported(TCP* tcp, sa_family_t family) {
@@ -2021,11 +2035,6 @@ void tcp_close(TCP* tcp) {
     /* dont have to worry about space since this has no payload */
     _tcp_bufferPacketOut(tcp, packet);
     _tcp_flush(tcp);
-}
-
-void tcp_closeTimerExpired(TCP* tcp) {
-    MAGIC_ASSERT(tcp);
-    _tcp_setState(tcp, TCPS_CLOSED);
 }
 
 /* we implement the socket interface, this describes our function suite */

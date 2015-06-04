@@ -34,11 +34,10 @@ struct _Worker {
     /* cached storage of active objects for the event that
      * is currently being processed by the worker */
     struct {
-        Event* event;
         Host* host;
-        Program* program;
         Process* process;
         Thread* thread;
+        Program* program;
     } active;
 
     MAGIC_DECLARE;
@@ -134,42 +133,6 @@ Program* worker_getPrivateProgram(GQuark pluginID) {
     return privateProg;
 }
 
-static void _worker_processEvent(Worker* worker, Event* event) {
-    utility_assert(event);
-
-    /* update cache, reset clocks */
-    worker->active.event = event;
-    worker->active.host = shadowevent_getNode(event);
-    worker->clock.now = shadowevent_getTime(event);
-
-    /* lock the node */
-    host_lock(worker->active.host);
-
-//    /* make sure we don't jump backward in time */
-//    // FIXME I think this logic should go in popEvent and be host-specific
-//    worker->clock.now = shadowevent_getTime(worker->active.event);
-//    if(worker->clock.last != SIMTIME_INVALID) {
-//        utility_assert(worker->clock.now >= worker->clock.last);
-//    }
-
-    /* do the local task */
-    gboolean isComplete = shadowevent_run(worker->active.event);
-
-    /* update times */
-    worker->clock.last = worker->clock.now;
-    worker->clock.now = SIMTIME_INVALID;
-
-    /* finished event can now be destroyed */
-    if(isComplete) {
-        shadowevent_free(worker->active.event);
-    }
-
-    /* unlock, clear cache */
-    host_unlock(worker->active.host);
-    worker->active.host = NULL;
-    worker->active.event = NULL;
-}
-
 /* this is the entry point for worker threads when running in parallel mode,
  * and otherwise is the main event loop when running in serial mode */
 gpointer worker_run(WorkerRunData* data) {
@@ -189,7 +152,16 @@ gpointer worker_run(WorkerRunData* data) {
      * we are allowed to run. when this returns NULL, we should stop. */
     Event* event = NULL;
     while((event = scheduler_pop(worker->scheduler)) != NULL) {
-        _worker_processEvent(worker, event);
+        /* update cache, reset clocks */
+        worker->clock.now = event_getTime(event);
+
+        /* process the local event */
+        event_execute(event);
+        event_unref(event);
+
+        /* update times */
+        worker->clock.last = worker->clock.now;
+        worker->clock.now = SIMTIME_INVALID;
     }
 
     /* this will free the host data that we have been managing */
@@ -205,37 +177,31 @@ gpointer worker_run(WorkerRunData* data) {
     return NULL;
 }
 
-void worker_scheduleEvent(Event* event, SimulationTime nanoDelay, GQuark receiverHostID) {
-    /* TODO create accessors, or better yet refactor the work to event class */
-    utility_assert(event);
+void worker_scheduleTask(Task* task, SimulationTime nanoDelay) {
+    utility_assert(task);
 
-    /* get our thread-private worker */
     Worker* worker = _worker_getPrivate();
 
-    if(!slave_schedulerIsRunning(worker->slave)) {
-        /* we are not going to execute any more events, free it and return */
-        shadowevent_free(event);
-        return;
-    } else {
-        /* engine is alive and well, assert accurate worker clock */
+    if(slave_schedulerIsRunning(worker->slave)) {
         utility_assert(worker->clock.now != SIMTIME_INVALID);
+        utility_assert(worker->active.host != NULL);
+        Event* event = event_new(task, worker->clock.now + nanoDelay);
+        GQuark hostID = host_getID(worker->active.host);
+        scheduler_push(worker->scheduler, event, hostID, hostID);
     }
-
-    /* parties involved. sender may be NULL, receiver may not! */
-    GQuark senderHostID = worker->active.host == NULL ? 0 : host_getID(worker->active.host);
-    if(receiverHostID == 0) {
-        receiverHostID = senderHostID;
-    }
-    utility_assert(receiverHostID > 0);
-
-    /* update the event with the time that it should execute */
-    shadowevent_setTime(event, worker->clock.now + nanoDelay);
-
-    /* finally, schedule it */
-    scheduler_push(worker->scheduler, event, senderHostID, receiverHostID);
 }
 
-void worker_schedulePacket(Packet* packet) {
+static void _worker_runDeliverPacketTask(Packet* packet, gpointer userData) {
+    in_addr_t ip = packet_getDestinationIP(packet);
+    NetworkInterface* interface = host_lookupInterface(_worker_getPrivate()->active.host, ip);
+    utility_assert(interface != NULL);
+    networkinterface_packetArrived(interface, packet);
+    packet_unref(packet);
+}
+
+void worker_sendPacket(Packet* packet) {
+    utility_assert(packet != NULL);
+
     /* get our thread-private worker */
     Worker* worker = _worker_getPrivate();
     if(!slave_schedulerIsRunning(worker->slave)) {
@@ -265,9 +231,26 @@ void worker_schedulePacket(Packet* packet) {
         /* the sender's packet will make it through, find latency */
         gdouble latency = topology_getLatency(worker_getTopology(), srcAddress, dstAddress);
         SimulationTime delay = (SimulationTime) ceil(latency * SIMTIME_ONE_MILLISECOND);
+        SimulationTime deliverTime = worker->clock.now + delay;
 
-        PacketArrivedEvent* event = packetarrived_new(packet);
-        worker_scheduleEvent((Event*)event, delay, (GQuark)address_getID(dstAddress));
+        /* TODO this should change for sending to remote slave
+         * this is the only place where tasks are sent between separate hosts */
+
+        Host* srcHost = worker->active.host;
+        GQuark srcID = srcHost == NULL ? 0 : host_getID(srcHost);
+        GQuark dstID = (GQuark)address_getID(dstAddress);
+        Host* dstHost = scheduler_getHost(worker->scheduler, dstID);
+        utility_assert(dstHost);
+
+        Task* packetTask = task_new((TaskFunc)_worker_runDeliverPacketTask, packet, NULL);
+        packet_ref(packet);
+        /* this is a hack to make sure the dst host is active while creating the event */
+        worker->active.host = dstHost;
+        Event* packetEvent = event_new(packetTask, deliverTime);
+        worker->active.host = srcHost;
+        task_unref(packetTask);
+
+        scheduler_push(worker->scheduler, packetEvent, srcID, dstID);
 
         packet_addDeliveryStatus(packet, PDS_INET_SENT);
     } else {
@@ -315,6 +298,16 @@ void worker_setActiveThread(Thread* thread) {
         thread_ref(thread);
         worker->active.thread = thread;
     }
+}
+
+Host* worker_getActiveHost() {
+    Worker* worker = _worker_getPrivate();
+    return worker->active.host;
+}
+
+void worker_setActiveHost(Host* host) {
+    Worker* worker = _worker_getPrivate();
+    worker->active.host = host;
 }
 
 SimulationTime worker_getCurrentTime() {

@@ -76,8 +76,8 @@ gint* descriptor_getHandleReference(Descriptor* descriptor) {
 }
 
 static void _descriptor_notifyListener(gpointer data, gpointer user_data) {
-    Listener* listener = data;
-    listener_notify(listener);
+    Task* listener = data;
+    task_execute(listener);
 }
 
 void descriptor_adjustStatus(Descriptor* descriptor, DescriptorStatus status, gboolean doSetBits){
@@ -142,12 +142,12 @@ DescriptorStatus descriptor_getStatus(Descriptor* descriptor) {
     return status;
 }
 
-void descriptor_addStatusListener(Descriptor* descriptor, Listener* listener) {
+void descriptor_addStatusListener(Descriptor* descriptor, Task* listener) {
     MAGIC_ASSERT(descriptor);
     descriptor->readyListeners = g_slist_prepend(descriptor->readyListeners, listener);
 }
 
-void descriptor_removeStatusListener(Descriptor* descriptor, Listener* listener) {
+void descriptor_removeStatusListener(Descriptor* descriptor, Task* listener) {
     MAGIC_ASSERT(descriptor);
     descriptor->readyListeners = g_slist_remove(descriptor->readyListeners, listener);
 }

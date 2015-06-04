@@ -23,6 +23,6 @@ void tracker_updateSocketPeer(Tracker* tracker, gint handle, in_addr_t peerIP, i
 void tracker_updateSocketInputBuffer(Tracker* tracker, gint handle, gsize inputBufferLength, gsize inputBufferSize);
 void tracker_updateSocketOutputBuffer(Tracker* tracker, gint handle, gsize outputBufferLength, gsize outputBufferSize);
 void tracker_removeSocket(Tracker* tracker, gint handle);
-void tracker_heartbeat(Tracker* tracker);
+void tracker_heartbeat(Tracker* tracker, gpointer userData);
 
 #endif /* SHD_TRACKER_H_ */

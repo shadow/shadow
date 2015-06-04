@@ -606,7 +606,7 @@ static void _tracker_logRAM(Tracker* tracker, GLogLevelFlags level, SimulationTi
         tracker->allocatedBytesTotal, numptrs, tracker->numFailedFrees);
 }
 
-void tracker_heartbeat(Tracker* tracker) {
+void tracker_heartbeat(Tracker* tracker, gpointer userData) {
     MAGIC_ASSERT(tracker);
 
     TrackerFlags flags = _tracker_getFlags(tracker);
@@ -654,6 +654,7 @@ void tracker_heartbeat(Tracker* tracker) {
 
     /* schedule the next heartbeat */
     tracker->lastHeartbeat = worker_getCurrentTime();
-    HeartbeatEvent* heartbeat = heartbeat_new(tracker);
-    worker_scheduleEvent((Event*)heartbeat, interval, 0);
+    Task* heartbeatTask = task_new((TaskFunc)tracker_heartbeat, tracker, NULL);
+    worker_scheduleTask(heartbeatTask, interval);
+    task_unref(heartbeatTask);
 }

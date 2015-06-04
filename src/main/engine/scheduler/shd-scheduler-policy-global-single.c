@@ -33,7 +33,7 @@ static void _schedulerpolicyglobalsingle_push(SchedulerPolicy* policy, Event* ev
     MAGIC_ASSERT(policy);
     GlobalSinglePolicyData* data = policy->data;
 
-    shadowevent_setSequence(event, ++(data->pushSequenceCounter));
+    event_setSequence(event, ++(data->pushSequenceCounter));
     priorityqueue_push(data->pq, event);
 }
 
@@ -46,7 +46,7 @@ static Event* _schedulerpolicyglobalsingle_pop(SchedulerPolicy* policy, Simulati
         return NULL;
     }
 
-    SimulationTime eventTime = shadowevent_getTime(nextEvent);
+    SimulationTime eventTime = event_getTime(nextEvent);
     if(eventTime >= barrier) {
         return NULL;
     }
@@ -61,7 +61,7 @@ static SimulationTime _schedulerpolicyglobalsingle_getNextTime(SchedulerPolicy* 
     MAGIC_ASSERT(policy);
     GlobalSinglePolicyData* data = policy->data;
     Event* nextEvent = priorityqueue_peek(data->pq);
-    return (nextEvent != NULL) ? shadowevent_getTime(nextEvent) : SIMTIME_MAX;
+    return (nextEvent != NULL) ? event_getTime(nextEvent) : SIMTIME_MAX;
 }
 
 static void _schedulerpolicyglobalsingle_free(SchedulerPolicy* policy) {
@@ -77,7 +77,7 @@ static void _schedulerpolicyglobalsingle_free(SchedulerPolicy* policy) {
 
 SchedulerPolicy* schedulerpolicyglobalsingle_new() {
     GlobalSinglePolicyData* data = g_new0(GlobalSinglePolicyData, 1);
-    data->pq = priorityqueue_new((GCompareDataFunc)shadowevent_compare, NULL, (GDestroyNotify)shadowevent_free);
+    data->pq = priorityqueue_new((GCompareDataFunc)event_compare, NULL, (GDestroyNotify)event_unref);
 
     SchedulerPolicy* policy = g_new0(SchedulerPolicy, 1);
     MAGIC_INIT(policy);

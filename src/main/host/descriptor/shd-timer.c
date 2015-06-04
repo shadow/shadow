@@ -173,10 +173,11 @@ static void _timer_scheduleNewExpireEvent(Timer* timer) {
 
     /* callback to our own node */
     gpointer next = GUINT_TO_POINTER(timer->nextExpireID);
-    CallbackEvent* event = callback_new((CallbackFunc)_timer_expire, timer, next);
+    Task* task = task_new((TaskFunc)_timer_expire, timer, next);
 
-    SimulationTime nanos = timer->nextExpireTime - worker_getCurrentTime();
-    worker_scheduleEvent((Event*)event, nanos, 0);
+    SimulationTime delay = timer->nextExpireTime - worker_getCurrentTime();
+    worker_scheduleTask(task, delay);
+    task_unref(task);
 
     timer->nextExpireID++;
     timer->numEventsScheduled++;
