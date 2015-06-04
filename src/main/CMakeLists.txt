@@ -67,16 +67,16 @@ set(shadow_srcs
     runnable/action/shd-load-topology.c
     runnable/shd-runnable.c
 
-    support/shd-configuration.c
-    support/shd-examples.c
-    support/shd-logging.c
-    support/shd-parser.c
-    support/shd-pcap-writer.c
+    engine/support/shd-configuration.c
+    engine/support/shd-examples.c
+    engine/support/shd-logging.c
+    engine/support/shd-parser.c
+    engine/support/shd-pcap-writer.c
 
-    topology/shd-address.c
-    topology/shd-dns.c
-    topology/shd-path.c
-    topology/shd-topology.c
+    routing/shd-address.c
+    routing/shd-dns.c
+    routing/shd-path.c
+    routing/shd-topology.c
 
     utility/shd-async-priority-queue.c
     utility/shd-byte-queue.c

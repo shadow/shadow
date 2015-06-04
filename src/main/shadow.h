@@ -56,8 +56,8 @@ typedef struct _Process Process;
 #include "engine/shd-main.h"
 
 /* configuration, base runnables, and input parsing */
-#include "support/shd-examples.h"
-#include "support/shd-configuration.h"
+#include "engine/support/shd-examples.h"
+#include "engine/support/shd-configuration.h"
 #include "utility/shd-utility.h"
 #include "engine/work/shd-task.h"
 #include "engine/work/shd-event.h"
@@ -66,10 +66,10 @@ typedef struct _Process Process;
 #include "host/descriptor/shd-descriptor.h"
 #include "runnable/shd-runnable.h"
 #include "runnable/action/shd-action.h"
-#include "support/shd-parser.h"
+#include "engine/support/shd-parser.h"
 #include "host/shd-packet.h"
 #include "host/shd-cpu.h"
-#include "support/shd-pcap-writer.h"
+#include "engine/support/shd-pcap-writer.h"
 
 /* utilities with limited dependencies */
 #include "utility/shd-byte-queue.h"
@@ -78,9 +78,9 @@ typedef struct _Process Process;
 #include "utility/shd-count-down-latch.h"
 #include "utility/shd-random.h"
 
-#include "topology/shd-address.h"
-#include "topology/shd-dns.h"
-#include "topology/shd-path.h"
+#include "routing/shd-address.h"
+#include "routing/shd-dns.h"
+#include "routing/shd-path.h"
 
 #include "host/descriptor/shd-epoll.h"
 #include "host/descriptor/shd-timer.h"
@@ -101,14 +101,14 @@ typedef struct _Process Process;
 #include "host/shd-tracker.h"
 #include "host/shd-host.h"
 
-#include "topology/shd-topology.h"
+#include "routing/shd-topology.h"
 
 #include "runnable/action/shd-create-node.h"
 #include "runnable/action/shd-kill-engine.h"
 #include "runnable/action/shd-load-plugin.h"
 #include "runnable/action/shd-load-topology.h"
 
-#include "support/shd-logging.h"
+#include "engine/support/shd-logging.h"
 #include "engine/scheduler/shd-scheduler-policy.h"
 #include "engine/scheduler/shd-scheduler.h"
 #include "engine/shd-master.h"
