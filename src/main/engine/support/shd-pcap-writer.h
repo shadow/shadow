@@ -23,12 +23,29 @@
 #define SHD_PCAP_WRITER_H_
 
 #include <glib.h>
-#include "shadow.h"
 
 typedef struct _PCapWriter PCapWriter;
 
+typedef struct _PCapPacket PCapPacket;
+struct _PCapPacket {
+    in_addr_t srcIP;
+    in_addr_t dstIP;
+    in_port_t srcPort;
+    in_port_t dstPort;
+    gboolean rstFlag;
+    gboolean synFlag;
+    gboolean ackFlag;
+    gboolean finFlag;
+    guint32 seq;
+    guint32 ack;
+    guint32 win;
+    guint headerSize;
+    guint payloadLength;
+    gpointer payload;
+};
+
 PCapWriter* pcapwriter_new(gchar* pcapDirectory, gchar* pcapFilename);
 void pcapwriter_free(PCapWriter* pcap);
-void pcapwriter_writePacket(PCapWriter* pcap, Packet* packet);
+void pcapwriter_writePacket(PCapWriter* pcap, PCapPacket* packet);
 
 #endif /* SHD_PCAP_WRITER_H_ */

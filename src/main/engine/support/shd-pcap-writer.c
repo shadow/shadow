@@ -35,7 +35,7 @@ static void _pcapwriter_writeHeader(PCapWriter* pcap) {
     fwrite(&network, 1, sizeof(network), pcap->pcapFile);
 }
 
-void pcapwriter_writePacket(PCapWriter* pcap, Packet* packet) {
+void pcapwriter_writePacket(PCapWriter* pcap, PCapPacket* packet) {
     if(!pcap || !pcap->pcapFile || !packet) {
         return;
     }
@@ -51,16 +51,10 @@ void pcapwriter_writePacket(PCapWriter* pcap, Packet* packet) {
     ts_usec = (now % SIMTIME_ONE_SECOND) / SIMTIME_ONE_MICROSECOND;
 
     /* get the header and payload lengths */
-    guint headerSize = packet_getHeaderSize(packet);
-    guint payloadLength = packet_getPayloadLength(packet);
+    guint headerSize = packet->headerSize;
+    guint payloadLength = packet->payloadLength;
     incl_len = headerSize + payloadLength;
     orig_len = headerSize + payloadLength;
-
-    /* get the TCP header and the payload */
-    PacketTCPHeader tcpHeader;
-    guchar *payload = g_new0(guchar, payloadLength);
-    packet_getTCPHeader(packet, &tcpHeader);
-    packet_copyPayload(packet, 0, payload, payloadLength);
 
     /* write the PCAP packet header to the pcap file */
     fwrite(&ts_sec, sizeof(ts_sec), 1, pcap->pcapFile);
@@ -86,8 +80,8 @@ void pcapwriter_writePacket(PCapWriter* pcap, Packet* packet) {
     guint8 timeToLive = 64;
     guint8 protocol = 6;  /* TCP */
     guint16 headerChecksum = 0x0000;
-    guint32 sourceIP = tcpHeader.sourceIP;
-    guint32 destinationIP = tcpHeader.destinationIP;
+    guint32 sourceIP = packet->srcIP;
+    guint32 destinationIP = packet->dstIP;
 
     fwrite(&versionAndHeaderLength, 1, sizeof(versionAndHeaderLength), pcap->pcapFile);
     fwrite(&fields, 1, sizeof(fields), pcap->pcapFile);
@@ -102,20 +96,20 @@ void pcapwriter_writePacket(PCapWriter* pcap, Packet* packet) {
 
 
     /* write the TCP header */
-    guint16 sourcePort = tcpHeader.sourcePort;
-    guint16 destinationPort = tcpHeader.destinationPort;
-    guint32 sequence = tcpHeader.sequence;
+    guint16 sourcePort = packet->srcPort;
+    guint16 destinationPort = packet->dstPort;
+    guint32 sequence = packet->seq;
     guint32 acknowledgement = 0;
-    if(tcpHeader.flags & PTCP_ACK) {
-        acknowledgement = htonl(tcpHeader.acknowledgment);
+    if(packet->ackFlag) {
+        acknowledgement = htonl(packet->ack);
     }
     guint8 headerLength = 0x80;
     guint8 tcpFlags = 0;
-    if(tcpHeader.flags & PTCP_RST) tcpFlags |= 0x04;
-    if(tcpHeader.flags & PTCP_SYN) tcpFlags |= 0x02;
-    if(tcpHeader.flags & PTCP_ACK) tcpFlags |= 0x10;
-    if(tcpHeader.flags & PTCP_FIN) tcpFlags |= 0x01;
-    guint16 window = tcpHeader.window;
+    if(packet->rstFlag) tcpFlags |= 0x04;
+    if(packet->synFlag) tcpFlags |= 0x02;
+    if(packet->ackFlag) tcpFlags |= 0x10;
+    if(packet->finFlag) tcpFlags |= 0x01;
+    guint16 window = (guint16)packet->win;
     guint16 tcpChecksum = 0x0000;
     guint8 options[14] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 
@@ -130,11 +124,9 @@ void pcapwriter_writePacket(PCapWriter* pcap, Packet* packet) {
     fwrite(options, 1, sizeof(options), pcap->pcapFile);
 
     /* write payload data */
-    if(payloadLength > 0) {
-        fwrite(payload, 1, payloadLength, pcap->pcapFile);
+    if(payloadLength > 0 && packet->payload) {
+        fwrite(packet->payload, 1, payloadLength, pcap->pcapFile);
     }
-
-    g_free(payload);
 }
 
 PCapWriter* pcapwriter_new(gchar* pcapDirectory, gchar* pcapFilename) {

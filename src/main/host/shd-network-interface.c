@@ -202,6 +202,45 @@ void networkinterface_disassociate(NetworkInterface* interface, Socket* socket) 
     g_hash_table_remove(interface->boundSockets, GINT_TO_POINTER(key));
 }
 
+static void _networkinterface_capturePacket(NetworkInterface* interface, Packet* packet) {
+    PCapPacket* pcapPacket = g_new0(PCapPacket, 1);
+
+    pcapPacket->headerSize = packet_getHeaderSize(packet);
+    pcapPacket->payloadLength = packet_getPayloadLength(packet);
+
+    if(pcapPacket->payloadLength > 0) {
+        pcapPacket->payload = g_new0(guchar, pcapPacket->payloadLength);
+        packet_copyPayload(packet, 0, pcapPacket->payload, pcapPacket->payloadLength);
+    }
+
+    PacketTCPHeader tcpHeader;
+    packet_getTCPHeader(packet, &tcpHeader);
+
+    pcapPacket->srcIP = tcpHeader.sourceIP;
+    pcapPacket->dstIP = tcpHeader.destinationIP;
+    pcapPacket->srcPort = tcpHeader.sourcePort;
+    pcapPacket->dstPort = tcpHeader.destinationPort;
+
+    if(tcpHeader.flags & PTCP_RST) pcapPacket->rstFlag = TRUE;
+    if(tcpHeader.flags & PTCP_SYN) pcapPacket->synFlag = TRUE;
+    if(tcpHeader.flags & PTCP_ACK) pcapPacket->ackFlag = TRUE;
+    if(tcpHeader.flags & PTCP_FIN) pcapPacket->finFlag = TRUE;
+
+    pcapPacket->seq = (guint32)tcpHeader.sequence;
+    pcapPacket->win = (guint32)tcpHeader.window;
+    if(tcpHeader.flags & PTCP_ACK) {
+        pcapPacket->ack = (guint32)htonl(tcpHeader.acknowledgment);
+    }
+
+    pcapwriter_writePacket(interface->pcap, pcapPacket);
+
+    if(pcapPacket->payloadLength > 0) {
+        g_free(pcapPacket->payload);
+    }
+
+    g_free(pcapPacket);
+}
+
 static void _networkinterface_runReceievedTask(NetworkInterface* interface, gpointer userData) {
     networkinterface_received(interface);
 }
@@ -243,7 +282,7 @@ static void _networkinterface_scheduleNextReceive(NetworkInterface* interface) {
         /* count our bandwidth usage by interface, and by socket handle if possible */
         tracker_addInputBytes(host_getTracker(worker_getCurrentHost()), packet, socketHandle);
         if(interface->pcap) {
-            pcapwriter_writePacket(interface->pcap, packet);
+            _networkinterface_capturePacket(interface, packet);
         }
 
         packet_unref(packet);
@@ -423,7 +462,7 @@ static void _networkinterface_scheduleNextSend(NetworkInterface* interface) {
 
         tracker_addOutputBytes(host_getTracker(worker_getCurrentHost()), packet, socketHandle);
         if(interface->pcap) {
-            pcapwriter_writePacket(interface->pcap, packet);
+            _networkinterface_capturePacket(interface, packet);
         }
 
         /* sending side is done with its ref */
