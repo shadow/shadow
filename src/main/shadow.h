@@ -69,7 +69,7 @@ typedef struct _Process Process;
 #include "engine/support/shd-parser.h"
 #include "host/shd-packet.h"
 #include "host/shd-cpu.h"
-#include "engine/support/shd-pcap-writer.h"
+#include "utility/shd-pcap-writer.h"
 
 /* utilities with limited dependencies */
 #include "utility/shd-byte-queue.h"

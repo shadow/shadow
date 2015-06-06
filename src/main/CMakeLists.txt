@@ -71,7 +71,6 @@ set(shadow_srcs
     engine/support/shd-examples.c
     engine/support/shd-logging.c
     engine/support/shd-parser.c
-    engine/support/shd-pcap-writer.c
 
     routing/shd-address.c
     routing/shd-dns.c
@@ -81,6 +80,7 @@ set(shadow_srcs
     utility/shd-async-priority-queue.c
     utility/shd-byte-queue.c
     utility/shd-count-down-latch.c
+    utility/shd-pcap-writer.c
     utility/shd-priority-queue.c
     utility/shd-random.c
     utility/shd-utility.c
