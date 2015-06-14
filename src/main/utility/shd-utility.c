@@ -8,6 +8,7 @@
 #include <execinfo.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <glib/gstdio.h>
 
 guint utility_ipPortHash(in_addr_t ip, in_port_t port) {
     GString* buffer = g_string_new(NULL);
@@ -126,4 +127,45 @@ gboolean utility_isRandomPath(const gchar* path) {
     } else {
         return FALSE;
     }
+}
+
+GString* utility_getFileContents(const gchar* fileName) {
+    utility_assert(fileName);
+
+    gchar* content;
+    gsize length;
+    GError *error = NULL;
+
+    /* get the xml file */
+    debug("attempting to get contents of file '%s'", fileName);
+    gboolean success = g_file_get_contents(fileName, &content, &length, &error);
+    debug("finished getting contents of file '%s'", fileName);
+
+    /* check for success */
+    if (!success) {
+        error("g_file_get_contents: %s", error->message);
+        g_error_free(error);
+        return NULL;
+    }
+
+    GString* fileBuffer = g_string_new(content);
+    g_free(content);
+    return fileBuffer;
+}
+
+gchar* utility_getNewTemporaryFilename(const gchar* templateStr) {
+    /* try to open a templated file, checking for errors */
+    gchar* temporaryFilename = NULL;
+    GError* error = NULL;
+
+    gint openedFile = g_file_open_tmp(templateStr, &temporaryFilename, &error);
+    if(openedFile < 0) {
+        error("unable to open temporary file for cdata topology: %s", error->message);
+        return NULL;
+    }
+
+    /* cleanup */
+    close(openedFile);
+    g_unlink(temporaryFilename);
+    return temporaryFilename;
 }

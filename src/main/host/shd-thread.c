@@ -133,7 +133,7 @@ static int _thread_interface_getBandwidth(in_addr_t ip, uint* bwdown, uint* bwup
 
     thread->activeContext = TCTX_SHADOW;
 
-    Address* hostAddress = dns_resolveIPToAddress(worker_getDNS(), (guint32)ip);
+    Address* hostAddress = worker_resolveIPToAddress(ip);
     if(hostAddress) {
         GQuark id = (GQuark) address_getID(hostAddress);
         if(bwdown) {

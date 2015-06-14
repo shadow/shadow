@@ -6,19 +6,16 @@
 
 #include "shadow.h"
 
-enum NetworkInterfaceFlags {
+typedef enum _NetworkInterfaceFlags NetworkInterfaceFlags;
+enum _NetworkInterfaceFlags {
     NIF_NONE = 0,
     NIF_SENDING = 1 << 0,
     NIF_RECEIVING = 1 << 1,
 };
 
-enum NetworkInterfaceQDisc {
-    NIQ_NONE=0, NIQ_FIFO=1, NIQ_RR=2,
-};
-
 struct _NetworkInterface {
-    enum NetworkInterfaceFlags flags;
-    enum NetworkInterfaceQDisc qdisc;
+    NetworkInterfaceFlags flags;
+    QDiscMode qdisc;
 
     Address* address;
 
@@ -57,7 +54,7 @@ static gint _networkinterface_compareSocket(const Socket* sa, const Socket* sb, 
 }
 
 NetworkInterface* networkinterface_new(Address* address, guint64 bwDownKiBps, guint64 bwUpKiBps,
-        gboolean logPcap, gchar* pcapDir, gchar* qdisc, guint64 interfaceReceiveLength) {
+        gboolean logPcap, gchar* pcapDir, QDiscMode qdisc, guint64 interfaceReceiveLength) {
     NetworkInterface* interface = g_new0(NetworkInterface, 1);
     MAGIC_INIT(interface);
 
@@ -84,11 +81,7 @@ NetworkInterface* networkinterface_new(Address* address, guint64 bwDownKiBps, gu
     interface->fifoQueue = priorityqueue_new((GCompareDataFunc)_networkinterface_compareSocket, NULL, descriptor_unref);
 
     /* parse queuing discipline */
-    if (qdisc && !g_ascii_strcasecmp(qdisc, "rr")) {
-        interface->qdisc = NIQ_RR;
-    } else {
-        interface->qdisc = NIQ_FIFO;
-    }
+    interface->qdisc = (qdisc == QDISC_MODE_NONE) ? QDISC_MODE_FIFO : qdisc;
 
     if(logPcap) {
         GString* filename = g_string_new(NULL);
@@ -101,7 +94,7 @@ NetworkInterface* networkinterface_new(Address* address, guint64 bwDownKiBps, gu
 
     info("bringing up network interface '%s' at '%s', %"G_GUINT64_FORMAT" KiB/s up and %"G_GUINT64_FORMAT" KiB/s down using queuing discipline %s",
             address_toHostName(interface->address), address_toHostIPString(interface->address), bwUpKiBps, bwDownKiBps,
-            interface->qdisc == NIQ_RR ? "rr" : "fifo");
+            interface->qdisc == QDISC_MODE_RR ? "rr" : "fifo");
 
     return interface;
 }
@@ -247,7 +240,7 @@ static void _networkinterface_runReceievedTask(NetworkInterface* interface, gpoi
 
 static void _networkinterface_scheduleNextReceive(NetworkInterface* interface) {
     /* the next packets need to be received and processed */
-    SimulationTime batchTime = worker_getConfig()->interfaceBatchTime;
+    SimulationTime batchTime = options_getInterfaceBatchTime(worker_getOptions());
 
     /* receive packets in batches */
     while(!g_queue_is_empty(interface->inBuffer) &&
@@ -420,7 +413,7 @@ static void _networkinterface_runSentTask(NetworkInterface* interface, gpointer 
 static void _networkinterface_scheduleNextSend(NetworkInterface* interface) {
     /* the next packet needs to be sent according to bandwidth limitations.
      * we need to spend time sending it before sending the next. */
-    SimulationTime batchTime = worker_getConfig()->interfaceBatchTime;
+    SimulationTime batchTime = options_getInterfaceBatchTime(worker_getOptions());
 
     /* loop until we find a socket that has something to send */
     while(interface->sendNanosecondsConsumed <= batchTime) {
@@ -429,11 +422,11 @@ static void _networkinterface_scheduleNextSend(NetworkInterface* interface) {
         /* choose which packet to send next based on our queuing discipline */
         Packet* packet;
         switch(interface->qdisc) {
-            case NIQ_RR: {
+            case QDISC_MODE_RR: {
                 packet = _networkinterface_selectRoundRobin(interface, &socketHandle);
                 break;
             }
-            case NIQ_FIFO:
+            case QDISC_MODE_FIFO:
             default: {
                 packet = _networkinterface_selectFirstInFirstOut(interface, &socketHandle);
                 break;
@@ -489,14 +482,14 @@ void networkinterface_wantsSend(NetworkInterface* interface, Socket* socket) {
 
     /* track the new socket for sending if not already tracking */
     switch(interface->qdisc) {
-        case NIQ_RR: {
+        case QDISC_MODE_RR: {
             if(!g_queue_find(interface->rrQueue, socket)) {
                 descriptor_ref(socket);
                 g_queue_push_tail(interface->rrQueue, socket);
             }
             break;
         }
-        case NIQ_FIFO:
+        case QDISC_MODE_FIFO:
         default: {
             if(!priorityqueue_find(interface->fifoQueue, socket)) {
                 descriptor_ref(socket);

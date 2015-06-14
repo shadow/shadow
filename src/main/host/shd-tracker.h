@@ -9,7 +9,7 @@
 
 typedef struct _Tracker Tracker;
 
-Tracker* tracker_new(SimulationTime interval, GLogLevelFlags loglevel, gchar* flagString);
+Tracker* tracker_new(SimulationTime interval, GLogLevelFlags loglevel, LogInfoFlags loginfo);
 void tracker_free(Tracker* tracker);
 
 void tracker_addProcessingTime(Tracker* tracker, SimulationTime processingTime);

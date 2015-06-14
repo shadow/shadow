@@ -27,7 +27,8 @@ gint utility_simulationTimeCompare(const SimulationTime* value1, const Simulatio
 gchar* utility_getHomePath(const gchar* path);
 guint utility_getRawCPUFrequency(const gchar* freqFilename);
 gboolean utility_isRandomPath(const gchar* path);
-
+GString* utility_getFileContents(const gchar* fileName);
+gchar* utility_getNewTemporaryFilename(const gchar* templateStr);
 void utility_handleError(const gchar* file, gint line, const gchar* funtcion, const gchar* message);
 
 #endif /* SHD_UTILITY_H_ */

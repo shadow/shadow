@@ -85,7 +85,8 @@ static gboolean _dns_isRestricted(DNS* dns, in_addr_t netIP) {
 }
 
 static gboolean _dns_isIPUnique(DNS* dns, in_addr_t ip) {
-    return dns_resolveIPToName(dns, (guint32) ip) == NULL;
+    gboolean exists = g_hash_table_lookup_extended(dns->addressByIP, GUINT_TO_POINTER(ip), NULL, NULL);
+    return exists ? FALSE : TRUE;
 }
 
 static in_addr_t _dns_generateIP(DNS* dns) {
@@ -143,7 +144,7 @@ void dns_deregister(DNS* dns, Address* address) {
     }
 }
 
-Address* dns_resolveIPToAddress(DNS* dns, guint32 ip) {
+Address* dns_resolveIPToAddress(DNS* dns, in_addr_t ip) {
     MAGIC_ASSERT(dns);
     Address* result = g_hash_table_lookup(dns->addressByIP, GUINT_TO_POINTER(ip));
     if(!result) {
@@ -161,28 +162,6 @@ Address* dns_resolveNameToAddress(DNS* dns, const gchar* name) {
         warning("unable to find address from name '%s'", name);
     }
     return result;
-}
-
-//TODO remove this func
-guint32 dns_resolveNameToIP(DNS* dns, const gchar* name) {
-    MAGIC_ASSERT(dns);
-    Address* address = dns_resolveNameToAddress(dns, name);
-    if(address) {
-        return address_toNetworkIP(address);
-    } else {
-        return INADDR_NONE;
-    }
-}
-
-//TODO remove this func
-const gchar* dns_resolveIPToName(DNS* dns, guint32 ip) {
-    MAGIC_ASSERT(dns);
-    Address* address = dns_resolveIPToAddress(dns, ip);
-    if(address) {
-        return address_toHostName(address);
-    } else {
-        return NULL;
-    }
 }
 
 DNS* dns_new() {

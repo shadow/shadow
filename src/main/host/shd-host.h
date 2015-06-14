@@ -13,20 +13,42 @@
 
 typedef struct _Host Host;
 
-Host* host_new(GQuark id, gchar* hostname, gchar* requestedIP, gchar* geocodeHint, gchar* typeHint,
-        guint64 requestedBWDownKiBps, guint64 requestedBWUpKiBps,
-        guint cpuFrequency, gint cpuThreshold, gint cpuPrecision, guint nodeSeed,
-        SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel, gchar* heartbeatLogInfo,
-        GLogLevelFlags logLevel, gboolean logPcap, gchar* pcapDir, gchar* qdisc,
-        guint64 receiveBufferSize, gboolean autotuneReceiveBuffer,
-        guint64 sendBufferSize, gboolean autotuneSendBuffer,
-        guint64 interfaceReceiveLength);
+typedef struct _HostParameters HostParameters;
+struct _HostParameters {
+    GQuark id;
+    guint nodeSeed;
+    gchar* hostname;
+    gchar* ipHint;
+    gchar* geocodeHint;
+    gchar* typeHint;
+    guint64 requestedBWDownKiBps;
+    guint64 requestedBWUpKiBps;
+    guint64 cpuFrequency;
+    guint64 cpuThreshold;
+    guint64 cpuPrecision;
+    SimulationTime heartbeatInterval;
+    GLogLevelFlags heartbeatLogLevel;
+    LogInfoFlags heartbeatLogInfo;
+    GLogLevelFlags logLevel;
+    gboolean logPcap;
+    gchar* pcapDir;
+    QDiscMode qdisc;
+    guint64 recvBufSize;
+    gboolean autotuneRecvBuf;
+    guint64 sendBufSize;
+    gboolean autotuneSendBuf;
+    guint64 interfaceBufSize;
+};
+
+Host* host_new(HostParameters* params);
 void host_free(Host* host);
 void host_ref(Host* host);
 void host_unref(Host* host);
 
 void host_lock(Host* host);
 void host_unlock(Host* host);
+
+void host_boot(Host* host);
 
 void host_addApplication(Host* host, GQuark pluginID,
         SimulationTime startTime, SimulationTime stopTime, gchar* arguments);
@@ -77,6 +99,5 @@ gint host_getSocketName(Host* host, gint handle, const struct sockaddr* address,
 
 Tracker* host_getTracker(Host* host);
 GLogLevelFlags host_getLogLevel(Host* host);
-gchar host_isLoggingPcap(Host *host);
 
 #endif /* SHD_HOST_H_ */

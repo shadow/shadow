@@ -65,6 +65,6 @@ void tcpCongestion_avoidance(TCPCongestion* congestion, gint inFlight, gint pack
 guint tcpCongestion_packetLoss(TCPCongestion* congestion);
 void tcpCongestion_free(TCPCongestion* congestion);
 
-TCPCongestionType tcpCongestion_getType(gchar* type);
+TCPCongestionType tcpCongestion_getType(const gchar* type);
 
 #endif

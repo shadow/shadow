@@ -8,30 +8,20 @@
 
 struct _Host {
     /* general node lock. nothing that belongs to the node should be touched
-     * unless holding this lock. everything following this falls under the lock.
-     */
+     * unless holding this lock. everything following this falls under the lock. */
     GMutex lock;
 
-    GQuark id;
-    gchar* name;
+    HostParameters params;
+
     GHashTable* interfaces;
     NetworkInterface* defaultInterface;
     CPU* cpu;
 
-    /* the applications this node is running */
-    GQueue* applications;
+    /* the virtual processes this host is running */
+    GQueue* processes;
 
     /* a statistics tracker for in/out bytes, CPU, memory, etc. */
     Tracker* tracker;
-
-    /* this node's loglevel */
-    GLogLevelFlags logLevel;
-
-    /* flag on whether or not packets are being captured */
-    gchar logPcap;
-
-    /* Directory to save PCAP files to if packets are being captured */
-    gchar* pcapDir;
 
     /* virtual descriptor numbers */
     GQueue* availableDescriptors;
@@ -39,10 +29,6 @@ struct _Host {
 
     /* all file, socket, and epoll descriptors we know about and track */
     GHashTable* descriptors;
-    guint64 receiveBufferSize;
-    guint64 sendBufferSize;
-    gboolean autotuneReceiveBuffer;
-    gboolean autotuneSendBuffer;
 
     /* map from the descriptor handle we returned to the plug-in, and
      * descriptor handle that the OS gave us for files, etc.
@@ -66,87 +52,41 @@ struct _Host {
     MAGIC_DECLARE;
 };
 
-Host* host_new(GQuark id, gchar* hostname, gchar* ipHint, gchar* geocodeHint, gchar* typeHint,
-        guint64 requestedBWDownKiBps, guint64 requestedBWUpKiBps,
-        guint cpuFrequency, gint cpuThreshold, gint cpuPrecision, guint nodeSeed,
-        SimulationTime heartbeatInterval, GLogLevelFlags heartbeatLogLevel, gchar* heartbeatLogInfo,
-        GLogLevelFlags logLevel, gboolean logPcap, gchar* pcapDir, gchar* qdisc,
-        guint64 receiveBufferSize, gboolean autotuneReceiveBuffer,
-        guint64 sendBufferSize, gboolean autotuneSendBuffer,
-        guint64 interfaceReceiveLength) {
+Host* host_new(HostParameters* params) {
+    utility_assert(params);
+
     Host* host = g_new0(Host, 1);
     MAGIC_INIT(host);
 
-    host->id = id;
-    host->name = g_strdup(hostname);
-    host->random = random_new(nodeSeed);
+    /* first copy the entire struct of params */
+    host->params = *params;
 
-    /* get unique virtual address identifiers for each network interface */
-    Address* loopbackAddress = dns_register(worker_getDNS(), host->id, host->name, "127.0.0.1");
-    Address* ethernetAddress = dns_register(worker_getDNS(), host->id, host->name, ipHint);
-
-    /* connect to topology and get the default bandwidth */
-    guint64 bwDownKiBps = 0, bwUpKiBps = 0;
-    topology_attach(worker_getTopology(), ethernetAddress, host->random,
-            ipHint, geocodeHint, typeHint, &bwDownKiBps, &bwUpKiBps);
-
-    /* prefer assigned bandwidth if available */
-    if(requestedBWDownKiBps) {
-        bwDownKiBps = requestedBWDownKiBps;
-    }
-    if(requestedBWUpKiBps) {
-        bwUpKiBps = requestedBWUpKiBps;
-    }
-
-    /* virtual addresses and interfaces for managing network I/O */
-    NetworkInterface* loopback = networkinterface_new(loopbackAddress, G_MAXUINT32, G_MAXUINT32,
-            logPcap, pcapDir, qdisc, interfaceReceiveLength);
-    NetworkInterface* ethernet = networkinterface_new(ethernetAddress, bwDownKiBps, bwUpKiBps,
-            logPcap, pcapDir, qdisc, interfaceReceiveLength);
-
-    host->interfaces = g_hash_table_new_full(g_direct_hash, g_direct_equal,
-            NULL, (GDestroyNotify) networkinterface_free);
-    g_hash_table_replace(host->interfaces, GUINT_TO_POINTER((guint)networkinterface_getIPAddress(ethernet)), ethernet);
-    g_hash_table_replace(host->interfaces, GUINT_TO_POINTER((guint)htonl(INADDR_LOOPBACK)), loopback);
-
-    host->defaultInterface = ethernet;
+    /* now dup the strings so we own them */
+    if(params->hostname) host->params.hostname = g_strdup(params->hostname);
+    if(params->ipHint) host->params.ipHint = g_strdup(params->ipHint);
+    if(params->geocodeHint) host->params.geocodeHint = g_strdup(params->geocodeHint);
+    if(params->typeHint) host->params.typeHint = g_strdup(params->typeHint);
+    if(params->pcapDir) host->params.pcapDir = g_strdup(params->pcapDir);
 
     /* thread-level event communication with other nodes */
     g_mutex_init(&(host->lock));
 
+    host->interfaces = g_hash_table_new_full(g_direct_hash, g_direct_equal,
+            NULL, (GDestroyNotify) networkinterface_free);
     host->availableDescriptors = g_queue_new();
     host->descriptorHandleCounter = MIN_DESCRIPTOR;
 
     /* virtual descriptor management */
     host->descriptors = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, descriptor_unref);
-    host->receiveBufferSize = receiveBufferSize;
-    host->sendBufferSize = sendBufferSize;
-    host->autotuneReceiveBuffer = autotuneReceiveBuffer;
-    host->autotuneSendBuffer = autotuneSendBuffer;
-
     host->shadowToOSHandleMap = g_hash_table_new(g_direct_hash, g_direct_equal);
     host->osToShadowHandleMap = g_hash_table_new(g_direct_hash, g_direct_equal);
     host->randomShadowHandleMap = g_hash_table_new(g_direct_hash, g_direct_equal);
     host->unixPathToPortMap = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
 
     /* applications this node will run */
-    host->applications = g_queue_new();
+    host->processes = g_queue_new();
 
-    host->cpu = cpu_new(cpuFrequency, cpuThreshold, cpuPrecision);
-    host->tracker = tracker_new(heartbeatInterval, heartbeatLogLevel, heartbeatLogInfo);
-    host->logLevel = logLevel;
-    host->logPcap = logPcap;
-    host->pcapDir = pcapDir;
-
-    address_unref(loopbackAddress);
-    address_unref(ethernetAddress);
-
-    message("Created Host '%s', ip %s, "
-            "%"G_GUINT64_FORMAT" bwUpKiBps, %"G_GUINT64_FORMAT" bwDownKiBps, %"G_GUINT64_FORMAT" initSockSendBufSize, %"G_GUINT64_FORMAT" initSockRecvBufSize, "
-            "%u cpuFrequency, %i cpuThreshold, %i cpuPrecision, %u seed",
-            g_quark_to_string(host->id), networkinterface_getIPName(host->defaultInterface),
-            bwUpKiBps, bwDownKiBps, sendBufferSize, receiveBufferSize,
-            cpuFrequency, cpuThreshold, cpuPrecision, nodeSeed);
+    message("Created host id '%u' name '%s'", (guint)host->params.id, g_quark_to_string(host->params.id));
 
     return host;
 }
@@ -154,9 +94,9 @@ Host* host_new(GQuark id, gchar* hostname, gchar* ipHint, gchar* geocodeHint, gc
 void host_free(Host* host) {
     MAGIC_ASSERT(host);
 
-    info("freeing host %s", host->name);
+    info("freeing host %s", host->params.hostname);
 
-    g_queue_free(host->applications);
+    g_queue_free(host->processes);
 
     topology_detach(worker_getTopology(), networkinterface_getAddress(host->defaultInterface));
 
@@ -180,13 +120,17 @@ void host_free(Host* host) {
     g_hash_table_destroy(host->randomShadowHandleMap);
     g_hash_table_destroy(host->unixPathToPortMap);
 
-    g_free(host->name);
-
     cpu_free(host->cpu);
     tracker_free(host->tracker);
 
     g_queue_free(host->availableDescriptors);
     random_free(host->random);
+
+    if(host->params.hostname) g_free(host->params.hostname);
+    if(host->params.ipHint) g_free(host->params.ipHint);
+    if(host->params.geocodeHint) g_free(host->params.geocodeHint);
+    if(host->params.typeHint) g_free(host->params.typeHint);
+    if(host->params.pcapDir) g_free(host->params.pcapDir);
 
     g_mutex_clear(&(host->lock));
 
@@ -206,43 +150,77 @@ void host_unlock(Host* host) {
 
 GQuark host_getID(Host* host) {
     MAGIC_ASSERT(host);
-    return host->id;
+    return host->params.id;
 }
 
-static void _host_runStartProcessTask(Host* host, Process* proc) {
+void host_boot(Host* host) {
     MAGIC_ASSERT(host);
-    process_start(proc);
-}
 
-static void _host_runStopProcessTask(Host* host, Process* proc) {
-    MAGIC_ASSERT(host);
-    process_stop(proc);
+    host->random = random_new(host->params.nodeSeed);
+    host->cpu = cpu_new(host->params.cpuFrequency, host->params.cpuThreshold, host->params.cpuPrecision);
+
+    /* get unique virtual address identifiers for each network interface */
+    Address* loopbackAddress = dns_register(worker_getDNS(), host->params.id, host->params.hostname, "127.0.0.1");
+    Address* ethernetAddress = dns_register(worker_getDNS(), host->params.id, host->params.hostname, host->params.ipHint);
+
+    /* connect to topology and get the default bandwidth */
+    guint64 bwDownKiBps = 0, bwUpKiBps = 0;
+    topology_attach(worker_getTopology(), ethernetAddress, host->random,
+            host->params.ipHint, host->params.geocodeHint, host->params.typeHint, &bwDownKiBps, &bwUpKiBps);
+
+    /* prefer assigned bandwidth if available */
+    if(host->params.requestedBWDownKiBps) {
+        bwDownKiBps = host->params.requestedBWDownKiBps;
+    }
+    if(host->params.requestedBWUpKiBps) {
+        bwUpKiBps = host->params.requestedBWUpKiBps;
+    }
+
+    /* virtual addresses and interfaces for managing network I/O */
+    NetworkInterface* loopback = networkinterface_new(loopbackAddress, G_MAXUINT32, G_MAXUINT32,
+            host->params.logPcap, host->params.pcapDir, host->params.qdisc, host->params.interfaceBufSize);
+    NetworkInterface* ethernet = networkinterface_new(ethernetAddress, bwDownKiBps, bwUpKiBps,
+            host->params.logPcap, host->params.pcapDir, host->params.qdisc, host->params.interfaceBufSize);
+
+    g_hash_table_replace(host->interfaces, GUINT_TO_POINTER((guint)networkinterface_getIPAddress(ethernet)), ethernet);
+    g_hash_table_replace(host->interfaces, GUINT_TO_POINTER((guint)htonl(INADDR_LOOPBACK)), loopback);
+
+    host->defaultInterface = ethernet;
+
+    address_unref(loopbackAddress);
+    address_unref(ethernetAddress);
+
+    /* must be done after the default IP exists so tracker_heartbeat works */
+    host->tracker = tracker_new(host->params.heartbeatInterval, host->params.heartbeatLogLevel, host->params.heartbeatLogInfo);
+
+    /* scheduling the starting and stopping of our virtual processes */
+    g_queue_foreach(host->processes, (GFunc)process_boot, NULL);
+
+    message("Booted host id '%u' name '%s' with seed %u, ip %s, "
+                "%"G_GUINT64_FORMAT" bwUpKiBps, %"G_GUINT64_FORMAT" bwDownKiBps, "
+                "%"G_GUINT64_FORMAT" initSockSendBufSize, %"G_GUINT64_FORMAT" initSockRecvBufSize, "
+                "%"G_GUINT64_FORMAT" cpuFrequency, %"G_GUINT64_FORMAT" cpuThreshold, "
+                "%"G_GUINT64_FORMAT" cpuPrecision",
+                (guint)host->params.id, g_quark_to_string(host->params.id), host->params.nodeSeed,
+                networkinterface_getIPName(host->defaultInterface),
+                bwUpKiBps, bwDownKiBps, host->params.sendBufSize, host->params.recvBufSize,
+                host->params.cpuFrequency, host->params.cpuThreshold, host->params.cpuPrecision);
 }
 
 void host_addApplication(Host* host, GQuark pluginID,
         SimulationTime startTime, SimulationTime stopTime, gchar* arguments) {
     MAGIC_ASSERT(host);
     Process* proc = process_new(pluginID, startTime, stopTime, arguments);
-    g_queue_push_tail(host->applications, proc);
-
-    Task* startTask = task_new((TaskFunc)_host_runStartProcessTask, host, proc);
-    worker_scheduleTask(startTask, startTime);
-    task_unref(startTask);
-
-    if(stopTime > startTime) {
-        Task* stopTask = task_new((TaskFunc)_host_runStopProcessTask, host, proc);
-        worker_scheduleTask(stopTask, stopTime);
-        task_unref(stopTask);
-    }
+    g_queue_push_tail(host->processes, proc);
 }
 
 void host_freeAllApplications(Host* host) {
     MAGIC_ASSERT(host);
-    debug("start freeing applications for host '%s'", host->name);
-    while(!g_queue_is_empty(host->applications)) {
-        process_free(g_queue_pop_head(host->applications));
+    debug("start freeing applications for host '%s'", host->params.hostname);
+    while(!g_queue_is_empty(host->processes)) {
+        process_free(g_queue_pop_head(host->processes));
     }
-    debug("done freeing application for host '%s'", host->name);
+    debug("done freeing application for host '%s'", host->params.hostname);
 }
 
 gint host_compare(gconstpointer a, gconstpointer b, gpointer user_data) {
@@ -250,7 +228,7 @@ gint host_compare(gconstpointer a, gconstpointer b, gpointer user_data) {
     const Host* nb = b;
     MAGIC_ASSERT(na);
     MAGIC_ASSERT(nb);
-    return na->id > nb->id ? +1 : na->id == nb->id ? 0 : -1;
+    return na->params.id > nb->params.id ? +1 : na->params.id == nb->params.id ? 0 : -1;
 }
 
 gboolean host_isEqual(Host* a, Host* b) {
@@ -270,7 +248,7 @@ CPU* host_getCPU(Host* host) {
 
 gchar* host_getName(Host* host) {
     MAGIC_ASSERT(host);
-    return host->name;
+    return host->params.hostname;
 }
 
 Address* host_getDefaultAddress(Host* host) {
@@ -297,12 +275,12 @@ Random* host_getRandom(Host* host) {
 
 gboolean host_autotuneReceiveBuffer(Host* host) {
     MAGIC_ASSERT(host);
-    return host->autotuneReceiveBuffer;
+    return host->params.autotuneRecvBuf;
 }
 
 gboolean host_autotuneSendBuffer(Host* host) {
     MAGIC_ASSERT(host);
-    return host->autotuneSendBuffer;
+    return host->params.autotuneSendBuf;
 }
 
 Descriptor* host_lookupDescriptor(Host* host, gint handle) {
@@ -514,13 +492,13 @@ gint host_createDescriptor(Host* host, DescriptorType type) {
 
         case DT_TCPSOCKET: {
             descriptor = (Descriptor*) tcp_new(_host_getNextDescriptorHandle(host),
-                    host->receiveBufferSize, host->sendBufferSize);
+                    host->params.recvBufSize, host->params.sendBufSize);
             break;
         }
 
         case DT_UDPSOCKET: {
             descriptor = (Descriptor*) udp_new(_host_getNextDescriptorHandle(host),
-                    host->receiveBufferSize, host->sendBufferSize);
+                    host->params.recvBufSize, host->params.sendBufSize);
             break;
         }
 
@@ -833,7 +811,7 @@ gint host_connectToPeer(Host* host, gint handle, const struct sockaddr* address)
     /* make sure we will be able to route this later */
     if(peerIP != loIP) {
         Address* myAddress = networkinterface_getAddress(host->defaultInterface);
-        Address* peerAddress = dns_resolveIPToAddress(worker_getDNS(), peerIP);
+        Address* peerAddress = worker_resolveIPToAddress(peerIP);
         if(!peerAddress || !topology_isRoutable(worker_getTopology(), myAddress, peerAddress)) {
             /* can't route it - there is no node with this address */
             gchar* peerAddressString = address_ipToNewString(peerIP);
@@ -1220,12 +1198,7 @@ Tracker* host_getTracker(Host* host) {
 
 GLogLevelFlags host_getLogLevel(Host* host) {
     MAGIC_ASSERT(host);
-    return host->logLevel;
-}
-
-gchar host_isLoggingPcap(Host *host) {
-    MAGIC_ASSERT(host);
-    return host->logPcap;
+    return host->params.logLevel;
 }
 
 gdouble host_getNextPacketPriority(Host* host) {

@@ -99,19 +99,26 @@ DNS* worker_getDNS() {
     return slave_getDNS(worker->slave);
 }
 
+Address* worker_resolveIPToAddress(in_addr_t ip) {
+    Worker* worker = _worker_getPrivate();
+    DNS* dns = slave_getDNS(worker->slave);
+    return dns_resolveIPToAddress(dns, ip);
+}
+
+Address* worker_resolveNameToAddress(const gchar* name) {
+    Worker* worker = _worker_getPrivate();
+    DNS* dns = slave_getDNS(worker->slave);
+    return dns_resolveNameToAddress(dns, name);
+}
+
 Topology* worker_getTopology() {
     Worker* worker = _worker_getPrivate();
     return slave_getTopology(worker->slave);
 }
 
-Configuration* worker_getConfig() {
+Options* worker_getOptions() {
     Worker* worker = _worker_getPrivate();
-    return slave_getConfig(worker->slave);
-}
-
-void worker_setKillTime(SimulationTime endTime) {
-    Worker* worker = _worker_getPrivate();
-    slave_setKillTime(worker->slave, endTime);
+    return slave_getOptions(worker->slave);
 }
 
 Program* worker_getPrivateProgram(GQuark pluginID) {
@@ -212,8 +219,8 @@ void worker_sendPacket(Packet* packet) {
     in_addr_t srcIP = packet_getSourceIP(packet);
     in_addr_t dstIP = packet_getDestinationIP(packet);
 
-    Address* srcAddress = dns_resolveIPToAddress(worker_getDNS(), (guint32) srcIP);
-    Address* dstAddress = dns_resolveIPToAddress(worker_getDNS(), (guint32) dstIP);
+    Address* srcAddress = worker_resolveIPToAddress(srcIP);
+    Address* dstAddress = worker_resolveIPToAddress(dstIP);
 
     if(!srcAddress || !dstAddress) {
         error("unable to schedule packet because of null addresses");
@@ -261,6 +268,20 @@ void worker_sendPacket(Packet* packet) {
 Host* worker_getCurrentHost() {
     Worker* worker = _worker_getPrivate();
     return worker->active.host;
+}
+
+void worker_bootHosts(GList* hosts) {
+    Worker* worker = _worker_getPrivate();
+    GList* item = hosts;
+    while(item) {
+        Host* host = item->data;
+        worker->active.host = host;
+        worker->clock.now = 0;
+        host_boot(host);
+        worker->clock.now = SIMTIME_INVALID;
+        worker->active.host = NULL;
+        item = g_list_next(item);
+    }
 }
 
 void worker_freeHosts(GList* hosts) {
@@ -345,29 +366,14 @@ gdouble worker_getLatency(GQuark sourceNodeID, GQuark destinationNodeID) {
     return slave_getLatency(worker->slave, sourceNodeID, destinationNodeID);
 }
 
-void worker_addHost(Host* host) {
-    Worker* worker = _worker_getPrivate();
-    scheduler_addHost(worker->scheduler, host);
-}
-
 gint worker_getThreadID() {
     Worker* worker = _worker_getPrivate();
     return worker->threadID;
 }
 
-void worker_storeProgram(Program* prog) {
-    Worker* worker = _worker_getPrivate();
-    slave_storeProgram(worker->slave, prog);
-}
-
 Program* worker_getProgram(GQuark pluginID) {
     Worker* worker = _worker_getPrivate();
     return slave_getProgram(worker->slave, pluginID);
-}
-
-void worker_setTopology(Topology* topology) {
-    Worker* worker = _worker_getPrivate();
-    return slave_setTopology(worker->slave, topology);
 }
 
 GTimer* worker_getRunTimer() {
@@ -378,11 +384,6 @@ GTimer* worker_getRunTimer() {
 void worker_updateMinTimeJump(gdouble minPathLatency) {
     Worker* worker = _worker_getPrivate();
     slave_updateMinTimeJump(worker->slave, minPathLatency);
-}
-
-void worker_heartbeat() {
-    Worker* worker = _worker_getPrivate();
-    slave_heartbeat(worker->slave, worker->clock.now);
 }
 
 void worker_setCurrentTime(SimulationTime time) {
@@ -409,8 +410,8 @@ gboolean worker_isFiltered(GLogLevelFlags level) {
 
         /* only check the global config if the node didnt have a local setting */
         if(!isNodeLevelSet) {
-            Configuration* c = slave_getConfig(worker->slave);
-            if(c && (level > configuration_getLogLevel(c))) {
+            Options* c = slave_getOptions(worker->slave);
+            if(c && (level > options_getLogLevel(c))) {
                 return TRUE;
             }
         }

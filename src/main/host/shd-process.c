@@ -14,6 +14,7 @@ struct _Process {
     Thread* mainThread;
 
     SimulationTime startTime;
+    SimulationTime stopTime;
     GString* arguments;
 
     GQueue* atExitFunctions;
@@ -33,32 +34,6 @@ struct _ProcessExitCallbackData {
     gpointer argument;
     gboolean passArgument;
 };
-
-Process* process_new(GQuark programID, SimulationTime startTime, SimulationTime stopTime, gchar* arguments) {
-    Process* proc = g_new0(Process, 1);
-    MAGIC_INIT(proc);
-
-    proc->programID = programID;
-    proc->startTime = startTime;
-    proc->arguments = g_string_new(arguments);
-
-    return proc;
-}
-
-void process_free(Process* proc) {
-    MAGIC_ASSERT(proc);
-
-    process_stop(proc);
-
-    g_string_free(proc->arguments, TRUE);
-
-    if(proc->atExitFunctions) {
-        g_queue_free_full(proc->atExitFunctions, g_free);
-    }
-
-    MAGIC_CLEAR(proc);
-    g_free(proc);
-}
 
 static gint _process_getArguments(Process* proc, gchar** argvOut[]) {
     gchar* threadBuffer;
@@ -101,7 +76,7 @@ gboolean process_isRunning(Process* proc) {
     return proc->state != NULL ? TRUE : FALSE;
 }
 
-void process_start(Process* proc) {
+static void _process_start(Process* proc, gpointer nullUserData) {
     MAGIC_ASSERT(proc);
 
     /* dont do anything if we are already running */
@@ -146,7 +121,7 @@ void process_start(Process* proc) {
     }
 }
 
-void process_stop(Process* proc) {
+static void _process_stop(Process* proc, gpointer nullUserData) {
     MAGIC_ASSERT(proc);
 
     /* we only have state if we are running */
@@ -177,6 +152,45 @@ void process_stop(Process* proc) {
         thread_stop(proc->mainThread);
         thread_unref(proc->mainThread);
         proc->mainThread = NULL;
+    }
+}
+
+Process* process_new(GQuark programID, SimulationTime startTime, SimulationTime stopTime, gchar* arguments) {
+    Process* proc = g_new0(Process, 1);
+    MAGIC_INIT(proc);
+
+    proc->programID = programID;
+    proc->startTime = startTime;
+    proc->stopTime = stopTime;
+    proc->arguments = g_string_new(arguments);
+
+    return proc;
+}
+
+void process_free(Process* proc) {
+    MAGIC_ASSERT(proc);
+
+    _process_stop(proc, NULL);
+
+    g_string_free(proc->arguments, TRUE);
+
+    if(proc->atExitFunctions) {
+        g_queue_free_full(proc->atExitFunctions, g_free);
+    }
+
+    MAGIC_CLEAR(proc);
+    g_free(proc);
+}
+
+void process_boot(Process* proc, gpointer userData) {
+    Task* startTask = task_new((TaskFunc)_process_start, proc, NULL);
+    worker_scheduleTask(startTask, proc->startTime);
+    task_unref(startTask);
+
+    if(proc->stopTime > proc->startTime) {
+        Task* stopTask = task_new((TaskFunc)_process_stop, proc, NULL);
+        worker_scheduleTask(stopTask, proc->stopTime);
+        task_unref(stopTask);
     }
 }
 

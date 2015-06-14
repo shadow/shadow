@@ -20,8 +20,7 @@ typedef struct _Worker Worker;
 
 DNS* worker_getDNS();
 Topology* worker_getTopology();
-Configuration* worker_getConfig();
-void worker_setKillTime(SimulationTime endTime);
+Options* worker_getOptions();
 gpointer worker_run(WorkerRunData*);
 void worker_scheduleTask(Task* task, SimulationTime nanoDelay);
 void worker_sendPacket(Packet* packet);
@@ -38,19 +37,19 @@ gint worker_nextRandomInt();
 guint32 worker_getNodeBandwidthUp(GQuark nodeID, in_addr_t ip);
 guint32 worker_getNodeBandwidthDown(GQuark nodeID, in_addr_t ip);
 gdouble worker_getLatency(GQuark sourceNodeID, GQuark destinationNodeID);
-void worker_addHost(Host* host);
 gint worker_getThreadID();
-void worker_setTopology(Topology* topology);
 GTimer* worker_getRunTimer();
 void worker_updateMinTimeJump(gdouble minPathLatency);
 void worker_setCurrentTime(SimulationTime time);
 gboolean worker_isFiltered(GLogLevelFlags level);
-void worker_heartbeat();
 
-void worker_freeHosts(GList*);
+void worker_bootHosts(GList* hosts);
+void worker_freeHosts(GList* hosts);
 
-void worker_storeProgram(Program* prog);
 Program* worker_getProgram(GQuark pluginID);
 Program* worker_getPrivateProgram(GQuark pluginID);
+
+Address* worker_resolveIPToAddress(in_addr_t ip);
+Address* worker_resolveNameToAddress(const gchar* name);
 
 #endif /* SHD_WORKER_H_ */

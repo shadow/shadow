@@ -6,245 +6,769 @@
 
 #include "shadow.h"
 
-Configuration* configuration_new(gint argc, gchar* argv[]) {
-    /* get memory */
-    Configuration* c = g_new0(Configuration, 1);
-    MAGIC_INIT(c);
+/* an internal module to help parse the XML file */
+typedef struct _Parser Parser;
+struct _Parser {
+    GMarkupParseContext* context;
 
-    c->argstr = g_strjoinv(" ", argv);
+    GMarkupParser xmlRootParser;
+    GMarkupParser xmlNodeParser;
+    GMarkupParser xmlTopologyParser;
 
-    const gchar* required_parameters = "shadow.config.xml";
-    gint nRequiredXMLFiles = 1;
+    /* help verify that application element plugins match plugin element ids */
+    GHashTable* pluginIDStrings;
+    GHashTable* pluginIDRefStrings;
 
-    c->context = g_option_context_new(required_parameters);
-    g_option_context_set_summary(c->context, "Shadow - run real applications over simulated networks");
-    g_option_context_set_description(c->context,
-        "Shadow is a unique discrete-event network simulator that runs real "
-        "applications like Tor, and distributed systems of thousands of nodes "
-        "on a single machine. Shadow combines the accuracy of emulation with the "
-        "efficiency and control of simulation, achieving the best of both approaches.");
+    /* our final parsed config state */
+    ConfigurationKillElement* kill;
+    ConfigurationTopologyElement* topology;
+    GList* plugins; // ConfigurationPluginElement
+    GList* nodes; // ConfigurationNodeElement
+    MAGIC_DECLARE;
+};
 
-    /* set defaults */
-    c->initialTCPWindow = 10;
-    c->interfaceBufferSize = 1024000;
-    c->interfaceBatchTime = 10;
-    c->randomSeed = 1;
-    c->cpuThreshold = -1;
-    c->cpuPrecision = 200;
-    c->heartbeatInterval = 1;
+struct _Configuration {
+    /* the parser we use to parse the shadow xml file */
+    Parser* parser;
+    /* a pointer to the cli options */
+    Options* options;
+    MAGIC_DECLARE;
+};
 
-    /* set options to change defaults for the main group */
-    c->mainOptionGroup = g_option_group_new("main", "Main Options", "Primary simulator options", NULL, NULL);
-    const GOptionEntry mainEntries[] = {
-      { "debug", 'd', 0, G_OPTION_ARG_NONE, &(c->debug), "Pause at startup for debugger attachment", NULL },
-      { "heartbeat-frequency", 'h', 0, G_OPTION_ARG_INT, &(c->heartbeatInterval), "Log node statistics every N seconds [1]", "N" },
-      { "heartbeat-log-info", 'i', 0, G_OPTION_ARG_STRING, &(c->heartbeatLogInfo), "Comma separated list of information contained in heartbeat ('node','socket','ram') ['node']", "LIST"},
-      { "heartbeat-log-level", 'j', 0, G_OPTION_ARG_STRING, &(c->heartbeatLogLevelInput), "Log LEVEL at which to print node statistics ['message']", "LEVEL" },
-      { "log-level", 'l', 0, G_OPTION_ARG_STRING, &(c->logLevelInput), "Log LEVEL above which to filter messages ('error' < 'critical' < 'warning' < 'message' < 'info' < 'debug') ['message']", "LEVEL" },
-      { "preload", 'p', 0, G_OPTION_ARG_STRING, &(c->preloads), "LD_PRELOAD environment VALUE to use for function interposition (/path/to/lib:...) [None]", "VALUE" },
-      { "runahead", 'r', 0, G_OPTION_ARG_INT, &(c->minRunAhead), "If set, overrides the automatically calculated minimum TIME workers may run ahead when sending events between nodes, in milliseconds [0]", "TIME" },
-      { "seed", 's', 0, G_OPTION_ARG_INT, &(c->randomSeed), "Initialize randomness for each thread using seed N [1]", "N" },
-      { "scheduler-policy", 't', 0, G_OPTION_ARG_STRING, &(c->eventSchedulingPolicy), "The event scheduler's policy for thread synchronization ('thread', 'host', 'threadXthread', 'threadXhost') ['host']", "SPOL" },
-      { "workers", 'w', 0, G_OPTION_ARG_INT, &(c->nWorkerThreads), "Run concurrently with N worker threads [0]", "N" },
-      { "valgrind", 'x', 0, G_OPTION_ARG_NONE, &(c->runValgrind), "Run through valgrind for debugging", NULL },
-      { "version", 'v', 0, G_OPTION_ARG_NONE, &(c->printSoftwareVersion), "Print software version and exit", NULL },
-      { NULL },
-    };
+static void _parser_freeTopologyElement(ConfigurationTopologyElement* topology) {
+    utility_assert(topology != NULL);
 
-    g_option_group_add_entries(c->mainOptionGroup, mainEntries);
-    g_option_context_set_main_group(c->context, c->mainOptionGroup);
+    if(topology->path.isSet) {
+        utility_assert(topology->path.string != NULL);
+        g_string_free(topology->path.string, TRUE);
+    }
+    if(topology->cdata.isSet) {
+        utility_assert(topology->cdata.string != NULL);
+        g_string_free(topology->cdata.string, TRUE);
+    }
 
-    /* now fill in the default plug-in examples option group */
-    c->pluginsOptionGroup = g_option_group_new("sim", "Simulation Examples", "Built-in simulation examples", NULL, NULL);
-    const GOptionEntry pluginEntries[] =
-    {
-      { "tgen", 0, 0, G_OPTION_ARG_NONE, &(c->runTGenExample), "PLACEHOLDER - Run basic data transfer simulation", NULL },
-      { NULL },
-    };
+    g_free(topology);
+}
 
-    g_option_group_add_entries(c->pluginsOptionGroup, pluginEntries);
-    g_option_context_add_group(c->context, c->pluginsOptionGroup);
+static void _parser_freePluginElement(ConfigurationPluginElement* plugin) {
+    utility_assert(plugin != NULL);
 
-    /* now fill in the network option group */
-    GString* sockrecv = g_string_new("");
-    g_string_printf(sockrecv, "Initialize the socket receive buffer to N bytes [%i]", (gint)CONFIG_RECV_BUFFER_SIZE);
-    GString* socksend = g_string_new("");
-    g_string_printf(socksend, "Initialize the socket send buffer to N bytes [%i]", (gint)CONFIG_SEND_BUFFER_SIZE);
+    if(plugin->path.isSet) {
+        utility_assert(plugin->path.string != NULL);
+        g_string_free(plugin->path.string, TRUE);
+    }
+    if(plugin->id.isSet) {
+        utility_assert(plugin->id.string != NULL);
+        g_string_free(plugin->id.string, TRUE);
+    }
 
-    c->networkOptionGroup = g_option_group_new("sys", "System Options", "Simulated system/network behavior", NULL, NULL);
-    const GOptionEntry networkEntries[] =
-    {
-      { "cpu-precision", 0, 0, G_OPTION_ARG_INT, &(c->cpuPrecision), "round measured CPU delays to the nearest TIME, in microseconds (negative value to disable fuzzy CPU delays) [200]", "TIME" },
-      { "cpu-threshold", 0, 0, G_OPTION_ARG_INT, &(c->cpuThreshold), "TIME delay threshold after which the CPU becomes blocked, in microseconds (negative value to disable CPU delays) (experimental!) [-1]", "TIME" },
-      { "interface-batch", 0, 0, G_OPTION_ARG_INT, &(c->interfaceBatchTime), "Batch TIME for network interface sends and receives, in milliseconds [10]", "TIME" },
-      { "interface-buffer", 0, 0, G_OPTION_ARG_INT, &(c->interfaceBufferSize), "Size of the network interface receive buffer, in bytes [1024000]", "N" },
-      { "interface-qdisc", 0, 0, G_OPTION_ARG_STRING, &(c->interfaceQueuingDiscipline), "The interface queuing discipline QDISC used to select the next sendable socket ('fifo' or 'rr') ['fifo']", "QDISC" },
-      { "socket-recv-buffer", 0, 0, G_OPTION_ARG_INT, &(c->initialSocketReceiveBufferSize), sockrecv->str, "N" },
-      { "socket-send-buffer", 0, 0, G_OPTION_ARG_INT, &(c->initialSocketSendBufferSize), socksend->str, "N" },
-      { "tcp-congestion-control", 0, 0, G_OPTION_ARG_STRING, &(c->tcpCongestionControl), "Congestion control algorithm to use for TCP ('aimd', 'reno', 'cubic') ['cubic']", "TCPCC" },
-      { "tcp-ssthresh", 0, 0, G_OPTION_ARG_INT, &(c->tcpSlowStartThreshold), "Set TCP ssthresh value instead of discovering it via packet loss or hystart [0]", "N" },
-      { "tcp-windows", 0, 0, G_OPTION_ARG_INT, &(c->initialTCPWindow), "Initialize the TCP send, receive, and congestion windows to N packets [10]", "N" },
-      { NULL },
-    };
+    g_free(plugin);
+}
 
-    g_option_group_add_entries(c->networkOptionGroup, networkEntries);
-    g_option_context_add_group(c->context, c->networkOptionGroup);
+static void _parser_freeApplicationElement(ConfigurationApplicationElement* process) {
+    utility_assert(process != NULL);
 
-    /* parse args */
+    if(process->plugin.isSet) {
+        utility_assert(process->plugin.string != NULL);
+        g_string_free(process->plugin.string, TRUE);
+    }
+    if(process->arguments.isSet) {
+        utility_assert(process->arguments.string != NULL);
+        g_string_free(process->arguments.string, TRUE);
+    }
+
+    g_free(process);
+}
+
+static void _parser_freeNodeElement(ConfigurationNodeElement* node) {
+    utility_assert(node != NULL);
+
+    if(node->id.isSet) {
+        utility_assert(node->id.string != NULL);
+        g_string_free(node->id.string, TRUE);
+    }
+    if(node->ipHint.isSet) {
+        utility_assert(node->ipHint.string != NULL);
+        g_string_free(node->ipHint.string, TRUE);
+    }
+    if(node->geocodeHint.isSet) {
+        utility_assert(node->geocodeHint.string != NULL);
+        g_string_free(node->geocodeHint.string, TRUE);
+    }
+    if(node->typeHint.isSet) {
+        utility_assert(node->typeHint.string != NULL);
+        g_string_free(node->typeHint.string, TRUE);
+    }
+    if(node->loglevel.isSet) {
+        utility_assert(node->loglevel.string != NULL);
+        g_string_free(node->loglevel.string, TRUE);
+    }
+    if(node->heartbeatloglevel.isSet) {
+        utility_assert(node->heartbeatloglevel.string != NULL);
+        g_string_free(node->heartbeatloglevel.string, TRUE);
+    }
+    if(node->heartbeatloginfo.isSet) {
+        utility_assert(node->heartbeatloginfo.string != NULL);
+        g_string_free(node->heartbeatloginfo.string, TRUE);
+    }
+    if(node->logpcap.isSet) {
+        utility_assert(node->logpcap.string != NULL);
+        g_string_free(node->logpcap.string, TRUE);
+    }
+    if(node->pcapdir.isSet) {
+        utility_assert(node->pcapdir.string != NULL);
+        g_string_free(node->pcapdir.string, TRUE);
+    }
+    if(node->applications) {
+        g_list_free_full(node->applications, (GDestroyNotify)_parser_freeApplicationElement);
+    }
+
+    g_free(node);
+}
+
+static void _parser_freeKillElement(ConfigurationKillElement* kill) {
+    utility_assert(kill != NULL);
+    g_free(kill);
+}
+
+static gboolean _parser_hasTopology(Parser* parser) {
+    if(parser->topology && (parser->topology->path.isSet || parser->topology->cdata.isSet)) {
+        return TRUE;
+    } else {
+        return FALSE;
+    }
+}
+
+static GError* _parser_handleTopologyAttributes(Parser* parser, const gchar** attributeNames, const gchar** attributeValues) {
+    if(_parser_hasTopology(parser)) {
+        return NULL;
+    }
+
+    GError* error = NULL;
+    ConfigurationTopologyElement* topology = g_new0(ConfigurationTopologyElement, 1);
+
+    const gchar **nameCursor = attributeNames;
+    const gchar **valueCursor = attributeValues;
+
+    /* check the attributes */
+    while (!error && *nameCursor) {
+        const gchar* name = *nameCursor;
+        const gchar* value = *valueCursor;
+
+        debug("found attribute '%s=%s'", name, value);
+
+        if (!topology->path.isSet && !g_ascii_strcasecmp(name, "path")) {
+            topology->path.string = g_string_new(utility_getHomePath(value));
+            topology->path.isSet = TRUE;
+        } else {
+            error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ATTRIBUTE,
+                            "unknown 'topology' attribute '%s'", name);
+        }
+
+        nameCursor++;
+        valueCursor++;
+    }
+
+    /* validate the values */
+    if(topology->path.isSet) {
+        /* make sure the path is absolute */
+        if(!g_path_is_absolute(topology->path.string->str)) {
+            /* ok, we look in ~/.shadow/share */
+            const gchar* home = g_get_home_dir();
+            gchar* oldstr = g_string_free(topology->path.string, FALSE);
+            gchar* newstr = g_build_path("/", home, ".shadow", "share", oldstr, NULL);
+            g_free(oldstr);
+            topology->path.string = g_string_new(newstr);
+            g_free(newstr);
+        }
+
+        if(!g_file_test(topology->path.string->str, G_FILE_TEST_EXISTS) ||
+                !g_file_test(topology->path.string->str, G_FILE_TEST_IS_REGULAR)) {
+            error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT,
+                    "attribute 'topology': '%s' is not a valid path to an existing regular file",
+                    topology->path.string->str);
+        }
+    }
+
+    if(!error && topology->path.isSet) {
+        utility_assert(topology->path.string != NULL);
+        utility_assert(parser->topology == NULL);
+        parser->topology = topology;
+    } else {
+        _parser_freeTopologyElement(topology);
+    }
+
+    return error;
+}
+
+static void _parser_handleTopologyText(GMarkupParseContext *context,
+        const gchar* text, gsize textLength, gpointer userData, GError** error) {
+    Parser* parser = (Parser*) userData;
+
+    if(_parser_hasTopology(parser)) {
+        return;
+    }
+
+    ConfigurationTopologyElement* topology = g_new0(ConfigurationTopologyElement, 1);
+
+    /* note: the text is not null-terminated! */
+
+    if(textLength > 0) {
+        GString* textBuffer = g_string_new_len(text, (gssize)textLength);
+        gchar* strippedText = g_strstrip(textBuffer->str);
+
+        /* look for text wrapped in <![CDATA[TEXT]]>
+         * note - we could also use a processing instruction by wrapping it in <?embedded TEXT ?>,
+         * but processing instructions can not be nested
+         * http://www.w3.org/TR/REC-xml/#sec-pi */
+        if(strippedText && g_str_has_prefix(strippedText, "<![CDATA[") &&
+                g_str_has_suffix(strippedText, "]]>")) {
+            gchar* cdata = &strippedText[9];
+            gssize cdataLength = (gssize) (textLength - 12);
+
+            topology->cdata.string = g_string_new_len(cdata, cdataLength);
+            topology->cdata.isSet = TRUE;
+        }
+
+        g_string_free(textBuffer, TRUE);
+    }
+
+    if(topology->cdata.isSet) {
+        utility_assert(topology->cdata.string != NULL);
+        utility_assert(parser->topology == NULL);
+        parser->topology = topology;
+    } else {
+        _parser_freeTopologyElement(topology);
+    }
+}
+
+static GError* _parser_handlePluginAttributes(Parser* parser, const gchar** attributeNames, const gchar** attributeValues) {
+    ConfigurationPluginElement* plugin = g_new0(ConfigurationPluginElement, 1);
+    GError* error = NULL;
+
+    const gchar **nameCursor = attributeNames;
+    const gchar **valueCursor = attributeValues;
+
+    /* check the attributes */
+    while (!error && *nameCursor) {
+        const gchar* name = *nameCursor;
+        const gchar* value = *valueCursor;
+
+        debug("found attribute '%s=%s'", name, value);
+
+        if(!plugin->id.isSet && !g_ascii_strcasecmp(name, "id")) {
+            plugin->id.string = g_string_new(value);
+            plugin->id.isSet = TRUE;
+        } else if (!plugin->path.isSet && !g_ascii_strcasecmp(name, "path")) {
+            plugin->path.string = g_string_new(utility_getHomePath(value));
+            plugin->path.isSet = TRUE;
+        } else {
+            error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ATTRIBUTE,
+                            "unknown 'plugin' attribute '%s'", name);
+        }
+
+        nameCursor++;
+        valueCursor++;
+    }
+
+    /* validate the values */
+    if(!error && (!plugin->id.isSet || !plugin->path.isSet)) {
+        error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
+                "element 'plugin' requires attributes 'id' 'path'");
+    }
+    if(plugin->path.isSet) {
+        utility_assert(plugin->path.string != NULL);
+
+        /* make sure the path is absolute */
+        if(!g_path_is_absolute(plugin->path.string->str)) {
+            /* ok, we look in ~/.shadow/plugins */
+            const gchar* home = g_get_home_dir();
+            gchar* oldstr = g_string_free(plugin->path.string, FALSE);
+            gchar* newstr = g_build_path("/", home, ".shadow", "plugins", oldstr, NULL);
+            g_free(oldstr);
+            plugin->path.string = g_string_new(newstr);
+            g_free(newstr);
+        }
+
+        if(!g_file_test(plugin->path.string->str, G_FILE_TEST_EXISTS) ||
+                !g_file_test(plugin->path.string->str, G_FILE_TEST_IS_REGULAR)) {
+            error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT,
+                    "attribute 'path': '%s' is not a valid path to an existing regular file",
+                    plugin->path.string->str);
+        }
+    }
+
+    if(error) {
+        /* clean up */
+        _parser_freePluginElement(plugin);
+    } else {
+        /* no error, store the resulting config */
+        parser->plugins = g_list_append(parser->plugins, plugin);
+
+        /* make sure all references to plugins from application elements point to
+         * an existing registered plugin element. */
+        if(!g_hash_table_lookup(parser->pluginIDStrings, plugin->id.string->str)) {
+            gchar* s = g_strdup(plugin->id.string->str);
+            g_hash_table_replace(parser->pluginIDStrings, s, s);
+        }
+    }
+
+    return error;
+}
+
+static GError* _parser_handleNodeAttributes(Parser* parser, const gchar** attributeNames, const gchar** attributeValues) {
+    ConfigurationNodeElement* node = g_new0(ConfigurationNodeElement, 1);
+    GError* error = NULL;
+
+    const gchar **nameCursor = attributeNames;
+    const gchar **valueCursor = attributeValues;
+
+    /* check the attributes */
+    while (!error && *nameCursor) {
+        const gchar* name = *nameCursor;
+        const gchar* value = *valueCursor;
+
+        debug("found attribute '%s=%s'", name, value);
+
+        if(!node->id.isSet && !g_ascii_strcasecmp(name, "id")) {
+            node->id.string = g_string_new(value);
+            node->id.isSet = TRUE;
+        } else if (!node->ipHint.isSet && !g_ascii_strcasecmp(name, "iphint")) {
+            node->ipHint.string = g_string_new(value);
+            node->ipHint.isSet = TRUE;
+        } else if (!node->geocodeHint.isSet && !g_ascii_strcasecmp(name, "geocodehint")) {
+            node->geocodeHint.string = g_string_new(value);
+            node->geocodeHint.isSet = TRUE;
+        } else if (!node->typeHint.isSet && !g_ascii_strcasecmp(name, "typehint")) {
+            node->typeHint.string = g_string_new(value);
+            node->typeHint.isSet = TRUE;
+        } else if (!node->loglevel.isSet && !g_ascii_strcasecmp(name, "loglevel")) {
+            node->loglevel.string = g_string_new(value);
+            node->loglevel.isSet = TRUE;
+        } else if (!node->heartbeatloglevel.isSet && !g_ascii_strcasecmp(name, "heartbeatloglevel")) {
+            node->heartbeatloglevel.string = g_string_new(value);
+            node->heartbeatloglevel.isSet = TRUE;
+        } else if (!node->heartbeatloginfo.isSet && !g_ascii_strcasecmp(name, "heartbeatloginfo")) {
+            node->heartbeatloginfo.string = g_string_new(value);
+            node->heartbeatloginfo.isSet = TRUE;
+        } else if (!node->logpcap.isSet && !g_ascii_strcasecmp(name, "logpcap")) {
+            node->logpcap.string = g_string_new(value);
+            node->logpcap.isSet = TRUE;
+        } else if (!node->pcapdir.isSet && !g_ascii_strcasecmp(name, "pcapdir")) {
+            node->pcapdir.string = g_string_new(value);
+            node->pcapdir.isSet = TRUE;
+        } else if (!node->quantity.isSet && !g_ascii_strcasecmp(name, "quantity")) {
+            node->quantity.integer = g_ascii_strtoull(value, NULL, 10);
+            node->quantity.isSet = TRUE;
+        } else if (!node->bandwidthdown.isSet && !g_ascii_strcasecmp(name, "bandwidthdown")) {
+            node->bandwidthdown.integer  = g_ascii_strtoull(value, NULL, 10);
+            node->bandwidthdown.isSet = TRUE;
+        } else if (!node->bandwidthup.isSet && !g_ascii_strcasecmp(name, "bandwidthup")) {
+            node->bandwidthup.integer = g_ascii_strtoull(value, NULL, 10);
+            node->bandwidthup.isSet = TRUE;
+        } else if (!node->heartbeatfrequency.isSet && !g_ascii_strcasecmp(name, "heartbeatfrequency")) {
+            node->heartbeatfrequency.integer = g_ascii_strtoull(value, NULL, 10);
+            node->heartbeatfrequency.isSet = TRUE;
+        } else if (!node->cpufrequency.isSet && !g_ascii_strcasecmp(name, "cpufrequency")) {
+            node->cpufrequency.integer = g_ascii_strtoull(value, NULL, 10);
+            node->cpufrequency.isSet = TRUE;
+        } else if (!node->socketrecvbuffer.isSet && !g_ascii_strcasecmp(name, "socketrecvbuffer")) {
+            /* socketReceiveBufferSize */
+            node->socketrecvbuffer.integer = g_ascii_strtoull(value, NULL, 10);
+            node->socketrecvbuffer.isSet = TRUE;
+        } else if (!node->socketsendbuffer.isSet && !g_ascii_strcasecmp(name, "socketsendbuffer")) {
+            /* socketSendBufferSize */
+            node->socketsendbuffer.integer = g_ascii_strtoull(value, NULL, 10);
+            node->socketsendbuffer.isSet = TRUE;
+        } else if (!node->interfacebuffer.isSet && !g_ascii_strcasecmp(name, "interfacebuffer")) {
+            /* interfaceReceiveBufferLength */
+            node->interfacebuffer.integer = g_ascii_strtoull(value, NULL, 10);
+            node->interfacebuffer.isSet = TRUE;
+        } else {
+            error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ATTRIBUTE,
+                            "unknown 'node' attribute '%s'", name);
+        }
+
+        nameCursor++;
+        valueCursor++;
+    }
+
+    /* validate the values */
+    if(!error && !node->id.isSet) {
+        error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
+                "element 'node' requires attributes 'id'");
+    }
+
+    if(error) {
+        /* clean up */
+        _parser_freeNodeElement(node);
+    } else {
+        /* no error, store the config */
+        parser->nodes = g_list_append(parser->nodes, node);
+    }
+
+    return error;
+}
+
+static GError* _parser_handleKillAttributes(Parser* parser, const gchar** attributeNames, const gchar** attributeValues) {
+    ConfigurationKillElement* kill = g_new0(ConfigurationKillElement, 1);
+    GError* error = NULL;
+
+    const gchar **nameCursor = attributeNames;
+    const gchar **valueCursor = attributeValues;
+
+    /* check the attributes */
+    while (!error && *nameCursor) {
+        const gchar* name = *nameCursor;
+        const gchar* value = *valueCursor;
+
+        debug("found attribute '%s=%s'", name, value);
+
+        if (!kill->time.isSet && !g_ascii_strcasecmp(name, "time")) {
+            kill->time.integer = g_ascii_strtoull(value, NULL, 10);
+            kill->time.isSet = TRUE;
+        } else {
+            error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ATTRIBUTE,
+                            "unknown 'kill' attribute '%s'", name);
+        }
+
+        nameCursor++;
+        valueCursor++;
+    }
+
+    /* validate the values */
+    if(!error && !kill->time.isSet) {
+        error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
+                "element 'kill' requires attributes 'time'");
+    }
+
+    if(error) {
+        _parser_freeKillElement(kill);
+    } else {
+        /* no error, store the config */
+        utility_assert(parser->kill == NULL);
+        parser->kill = kill;
+    }
+
+    /* nothing to clean up */
+
+    return error;
+}
+
+static GError* _parser_handleApplicationAttributes(Parser* parser, const gchar** attributeNames, const gchar** attributeValues) {
+    ConfigurationApplicationElement* process = g_new0(ConfigurationApplicationElement, 1);
+    GError* error = NULL;
+
+    const gchar **nameCursor = attributeNames;
+    const gchar **valueCursor = attributeValues;
+
+    /* check the attributes */
+    while (!error && *nameCursor) {
+        const gchar* name = *nameCursor;
+        const gchar* value = *valueCursor;
+
+        debug("found attribute '%s=%s'", name, value);
+
+        if(!process->plugin.isSet && !g_ascii_strcasecmp(name, "plugin")) {
+            process->plugin.string = g_string_new(value);
+            process->plugin.isSet = TRUE;
+        } else if (!process->arguments.isSet && !g_ascii_strcasecmp(name, "arguments")) {
+            process->arguments.string = g_string_new(value);
+            process->arguments.isSet = TRUE;
+        } else if (!process->starttime.isSet && (!g_ascii_strcasecmp(name, "starttime") ||
+                !g_ascii_strcasecmp(name, "time"))) { /* TODO deprecate 'time' */
+            process->starttime.integer = g_ascii_strtoull(value, NULL, 10);
+            process->starttime.isSet = TRUE;
+        } else if (!process->stoptime.isSet && !g_ascii_strcasecmp(name, "stoptime")) {
+            process->stoptime.integer = g_ascii_strtoull(value, NULL, 10);
+            process->stoptime.isSet = TRUE;
+        } else {
+            error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ATTRIBUTE,
+                            "unknown 'application' attribute '%s'", name);
+        }
+
+        nameCursor++;
+        valueCursor++;
+    }
+
+    /* validate the values */
+    if(!error && (!process->plugin.isSet || !process->arguments.isSet || !process->starttime.isSet)) {
+        error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
+                "element 'application' requires attributes 'plugin' 'arguments' 'starttime'");
+    }
+
+    if(error) {
+        /* clean up */
+        _parser_freeApplicationElement(process);
+    } else {
+        /* no error, application configs get added to the most recent node */
+        GList* nodeItem = g_list_last(parser->nodes);
+        utility_assert(nodeItem != NULL);
+        ConfigurationNodeElement* node = nodeItem->data;
+        utility_assert(node != NULL);
+
+        node->applications = g_list_append(node->applications, process);
+
+        if(!g_hash_table_lookup(parser->pluginIDRefStrings, process->plugin.string->str)) {
+            gchar* s = g_strdup(process->plugin.string->str);
+            g_hash_table_replace(parser->pluginIDRefStrings, s, s);
+        }
+    }
+
+    return error;
+}
+
+static void _parser_handleNodeChildStartElement(GMarkupParseContext* context,
+        const gchar* elementName, const gchar** attributeNames,
+        const gchar** attributeValues, gpointer userData, GError** error) {
+    Parser* parser = (Parser*) userData;
+    MAGIC_ASSERT(parser);
+    utility_assert(context && error);
+
+    debug("found 'node' child starting element '%s'", elementName);
+
+    /* check for cluster child-level elements */
+    if (!g_ascii_strcasecmp(elementName, "application")) {
+        *error = _parser_handleApplicationAttributes(parser, attributeNames, attributeValues);
+    } else {
+        *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ELEMENT,
+                "unknown 'node' child starting element '%s'", elementName);
+    }
+}
+
+static void _parser_handleNodeChildEndElement(GMarkupParseContext* context,
+        const gchar* elementName, gpointer userData, GError** error) {
+    Parser* parser = (Parser*) userData;
+    MAGIC_ASSERT(parser);
+    utility_assert(context && error);
+
+    debug("found 'node' child ending element '%s'", elementName);
+
+    /* check for cluster child-level elements */
+    if (!(!g_ascii_strcasecmp(elementName, "application"))) {
+        *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ELEMENT,
+                "unknown 'node' child ending element '%s'", elementName);
+    }
+}
+
+static void _parser_handleRootStartElement(GMarkupParseContext* context,
+        const gchar* elementName, const gchar** attributeNames,
+        const gchar** attributeValues, gpointer userData, GError** error) {
+    Parser* parser = (Parser*) userData;
+    MAGIC_ASSERT(parser);
+    utility_assert(context && error);
+
+    debug("found start element '%s'", elementName);
+
+    /* check for root-level elements */
+    if (!g_ascii_strcasecmp(elementName, "plugin")) {
+        *error = _parser_handlePluginAttributes(parser, attributeNames, attributeValues);
+    } else if (!g_ascii_strcasecmp(elementName, "node")) {
+        *error = _parser_handleNodeAttributes(parser, attributeNames, attributeValues);
+        /* handle internal elements in a sub parser */
+        g_markup_parse_context_push(context, &(parser->xmlNodeParser), parser);
+    } else if (!g_ascii_strcasecmp(elementName, "kill")) {
+        *error = _parser_handleKillAttributes(parser, attributeNames, attributeValues);
+    } else if (!g_ascii_strcasecmp(elementName, "topology")) {
+        *error = _parser_handleTopologyAttributes(parser, attributeNames, attributeValues);
+        g_markup_parse_context_push(context, &(parser->xmlTopologyParser), parser);
+    } else if (!g_ascii_strcasecmp(elementName, "shadow")) {
+        /* do nothing, this is a root element */
+    } else {
+        *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ELEMENT,
+                "unknown 'root' child starting element '%s'", elementName);
+    }
+}
+
+static void _parser_handleRootEndElement(GMarkupParseContext* context,
+        const gchar* elementName, gpointer userData, GError** error) {
+    Parser* parser = (Parser*) userData;
+    MAGIC_ASSERT(parser);
+    utility_assert(context && error);
+
+    debug("found end element '%s'", elementName);
+
+    /* check for root-level elements */
+    if (!g_ascii_strcasecmp(elementName, "node")) {
+        /* validate children */
+        GList* nodeItem = g_list_last(parser->nodes);
+        utility_assert(nodeItem != NULL);
+        ConfigurationNodeElement* node = nodeItem->data;
+        utility_assert(node != NULL);
+        if (g_list_length(node->applications) <= 0) {
+            *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_EMPTY,
+                    "element 'node' requires at least 1 child 'application'");
+        }
+        g_markup_parse_context_pop(context);
+    } else if(!g_ascii_strcasecmp(elementName, "topology")) {
+        if (!_parser_hasTopology(parser)) {
+            *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_EMPTY,
+                    "element 'topology' requires either attribute 'path' which specifies a path "
+                    "to a graphml file, or internal graphml text");
+        }
+        g_markup_parse_context_pop(context);
+    } else if(!g_ascii_strcasecmp(elementName, "shadow")) {
+        if (!_parser_hasTopology(parser)) {
+            *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_EMPTY,
+                    "element 'shadow' requires at least 1 child 'topology'");
+        }
+    } else {
+        if(!(!g_ascii_strcasecmp(elementName, "plugin") ||
+                !g_ascii_strcasecmp(elementName, "kill"))) {
+            *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ELEMENT,
+                            "unknown 'root' child ending element '%s'", elementName);
+        }
+    }
+}
+
+static gboolean _parser_verifyPluginIDsExist(Parser* parser, GError** error) {
+    MAGIC_ASSERT(parser);
+    utility_assert(error);
+
+    GHashTableIter iter;
+    gpointer key, value;
+    g_hash_table_iter_init(&iter, parser->pluginIDRefStrings);
+
+    while(g_hash_table_iter_next(&iter, &key, &value)) {
+        gchar* s = value;
+        if(!g_hash_table_lookup(parser->pluginIDStrings, s)) {
+            *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT,
+                    "plug-in id '%s' was referenced in an application element without being defined in a plugin element", s);;
+            return FALSE;
+        }
+    }
+
+    return TRUE;
+}
+
+static Parser* _parser_new() {
+    Parser* parser = g_new0(Parser, 1);
+    MAGIC_INIT(parser);
+
+    parser->pluginIDStrings = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
+    parser->pluginIDRefStrings = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
+
+    /* we handle the start_element and end_element callbacks, but ignore
+     * text, passthrough (comments), and errors
+     * handle both hosts and topology files.
+     */
+
+    /* main root parser */
+    parser->xmlRootParser.start_element = &_parser_handleRootStartElement;
+    parser->xmlRootParser.end_element = &_parser_handleRootEndElement;
+    parser->context = g_markup_parse_context_new(&(parser->xmlRootParser), 0, parser, NULL);
+
+    /* sub parsers, without their own context */
+    parser->xmlNodeParser.start_element = &_parser_handleNodeChildStartElement;
+    parser->xmlNodeParser.end_element = &_parser_handleNodeChildEndElement;
+    parser->xmlTopologyParser.text = &_parser_handleTopologyText;
+    parser->xmlTopologyParser.passthrough = &_parser_handleTopologyText;
+
+    return parser;
+}
+
+static gboolean _parser_parseContents(Parser* parser, gchar* contents, gsize length) {
+
+    /* parse the contents, collecting actions. we store a pointer
+     * to it in parser so we have access while parsing elements. */
     GError *error = NULL;
-    if (!g_option_context_parse(c->context, &argc, &argv, &error)) {
-        g_printerr("** %s **\n", error->message);
-        gchar* helpString = g_option_context_get_help(c->context, TRUE, NULL);
-        g_printerr("%s", helpString);
-        g_free(helpString);
-        configuration_free(c);
+    gboolean success = g_markup_parse_context_parse(parser->context, contents, (gssize) length, &error);
+
+    if(success) {
+        success = _parser_verifyPluginIDsExist(parser, &error);
+    }
+
+    /* check for success in parsing and validating the XML */
+    if(success && !error) {
+        return TRUE;
+    } else {
+        /* some kind of error occurred, check the parser */
+        utility_assert(error);
+        error("g_markup_parse_context_parse: Shadow XML parsing error %i: %s",
+                error->code, error->message);
+        g_error_free(error);
+
+        return FALSE;
+    }
+}
+
+static void _parser_free(Parser* parser) {
+    MAGIC_ASSERT(parser);
+
+    /* cleanup */
+    if(parser->topology) {
+        _parser_freeTopologyElement(parser->topology);
+    }
+    if(parser->kill) {
+        _parser_freeKillElement(parser->kill);
+    }
+    if(parser->nodes) {
+        g_list_free_full(parser->nodes, (GDestroyNotify)_parser_freeNodeElement);
+    }
+    if(parser->plugins) {
+        g_list_free_full(parser->plugins, (GDestroyNotify)_parser_freePluginElement);
+    }
+    g_hash_table_destroy(parser->pluginIDStrings);
+    g_hash_table_destroy(parser->pluginIDRefStrings);
+    g_markup_parse_context_free(parser->context);
+
+    MAGIC_CLEAR(parser);
+    g_free(parser);
+}
+
+Configuration* configuration_new(Options* options, const GString* file) {
+    utility_assert(options && file);
+
+    Parser* parser = _parser_new();
+    gboolean success = _parser_parseContents(parser, file->str, file->len);
+
+    if(success) {
+        Configuration* config = g_new0(Configuration, 1);
+        MAGIC_INIT(config);
+
+        config->parser = parser;
+        config->options = options;
+
+        return config;
+    } else {
+        _parser_free(parser);
         return NULL;
     }
-
-    /* make sure we have the required arguments. program name is first arg.
-     * printing the software version requires no other args. running a
-     * plug-in example also requires no other args. */
-    if(!(c->printSoftwareVersion) && !(c->runTGenExample) && (argc < nRequiredXMLFiles + 1)) {
-        g_printerr("** Please provide the required parameters **\n");
-        gchar* helpString = g_option_context_get_help(c->context, TRUE, NULL);
-        g_printerr("%s", helpString);
-        g_free(helpString);
-        configuration_free(c);
-        return NULL;
-    }
-
-    if(c->nWorkerThreads < 0) {
-        c->nWorkerThreads = 0;
-    }
-    if(c->logLevelInput == NULL) {
-        c->logLevelInput = g_strdup("message");
-    }
-    if(c->heartbeatLogLevelInput == NULL) {
-        c->heartbeatLogLevelInput = g_strdup("message");
-    }
-    if(c->heartbeatLogInfo == NULL) {
-        c->heartbeatLogInfo = g_strdup("node");
-    }
-    if(c->heartbeatInterval < 1) {
-        c->heartbeatInterval = 1;
-    }
-    if(c->initialTCPWindow < 1) {
-        c->initialTCPWindow = 1;
-    }
-    if(c->interfaceBufferSize < CONFIG_MTU) {
-        c->interfaceBufferSize = CONFIG_MTU;
-    }
-    c->interfaceBatchTime *= SIMTIME_ONE_MILLISECOND;
-    if(c->interfaceBatchTime == 0) {
-        /* we require at least 1 nanosecond b/c of time granularity */
-        c->interfaceBatchTime = 1;
-    }
-    if(c->interfaceQueuingDiscipline == NULL) {
-        c->interfaceQueuingDiscipline = g_strdup("fifo");
-    }
-    if(c->eventSchedulingPolicy == NULL) {
-        c->eventSchedulingPolicy = g_strdup("host");
-    }
-    if(!c->initialSocketReceiveBufferSize) {
-        c->initialSocketReceiveBufferSize = CONFIG_RECV_BUFFER_SIZE;
-        c->autotuneSocketReceiveBuffer = TRUE;
-    }
-    if(!c->initialSocketSendBufferSize) {
-        c->initialSocketSendBufferSize = CONFIG_SEND_BUFFER_SIZE;
-        c->autotuneSocketSendBuffer = TRUE;
-    }
-    if(c->tcpCongestionControl == NULL) {
-        c->tcpCongestionControl = g_strdup("cubic");
-    }
-
-    c->inputXMLFilenames = g_queue_new();
-    for(gint i = 1; i < argc; i++) {
-        GString* filename = g_string_new(argv[i]);
-        g_queue_push_tail(c->inputXMLFilenames, filename);
-    }
-
-    if(socksend) {
-        g_string_free(socksend, TRUE);
-    }
-    if(sockrecv) {
-        g_string_free(sockrecv, TRUE);
-    }
-
-    return c;
 }
 
 void configuration_free(Configuration* config) {
     MAGIC_ASSERT(config);
 
-    if(config->inputXMLFilenames) {
-        g_queue_free(config->inputXMLFilenames);
+    if(config->parser) {
+        _parser_free(config->parser);
     }
-    g_free(config->logLevelInput);
-    g_free(config->heartbeatLogLevelInput);
-    g_free(config->heartbeatLogInfo);
-    g_free(config->interfaceQueuingDiscipline);
-    g_free(config->eventSchedulingPolicy);
-    if(config->argstr) {
-        g_free(config->argstr);
-    }
-    if(config->preloads) {
-        g_free(config->preloads);
-    }
-
-    /* groups are freed with the context */
-    g_option_context_free(config->context);
+    /* we do not own the options object */
+    config->options = NULL;
 
     MAGIC_CLEAR(config);
     g_free(config);
 }
 
-GLogLevelFlags configuration_getLevel(Configuration* config, const gchar* input) {
+ConfigurationKillElement* configuration_getKillElement(Configuration* config) {
     MAGIC_ASSERT(config);
-    if (g_ascii_strcasecmp(input, "error") == 0) {
-        return G_LOG_LEVEL_ERROR;
-    } else if (g_ascii_strcasecmp(input, "critical") == 0) {
-        return G_LOG_LEVEL_CRITICAL;
-    } else if (g_ascii_strcasecmp(input, "warning") == 0) {
-        return G_LOG_LEVEL_WARNING;
-    } else if (g_ascii_strcasecmp(input, "message") == 0) {
-        return G_LOG_LEVEL_MESSAGE;
-    } else if (g_ascii_strcasecmp(input, "info") == 0) {
-        return G_LOG_LEVEL_INFO;
-    } else if (g_ascii_strcasecmp(input, "debug") == 0) {
-        return G_LOG_LEVEL_DEBUG;
-    } else {
-        return G_LOG_LEVEL_MESSAGE;
-    }
+    utility_assert(config->parser && config->parser->kill);
+    return config->parser->kill;
 }
 
-GLogLevelFlags configuration_getLogLevel(Configuration* config) {
+ConfigurationTopologyElement* configuration_getTopologyElement(Configuration* config) {
     MAGIC_ASSERT(config);
-    const gchar* l = (const gchar*) config->logLevelInput;
-    return configuration_getLevel(config, l);
+    utility_assert(config->parser && config->parser->topology);
+    return config->parser->topology;
 }
 
-GLogLevelFlags configuration_getHeartbeatLogLevel(Configuration* config) {
+GList* configuration_getPluginElements(Configuration* config) {
     MAGIC_ASSERT(config);
-    const gchar* l = (const gchar*) config->heartbeatLogLevelInput;
-    return configuration_getLevel(config, l);
+    utility_assert(config->parser && config->parser->plugins);
+    return config->parser->plugins;
 }
 
-SimulationTime configuration_getHearbeatInterval(Configuration* config) {
+GList* configuration_getNodeElements(Configuration* config) {
     MAGIC_ASSERT(config);
-    return config->heartbeatInterval * SIMTIME_ONE_SECOND;
-}
-
-gchar* configuration_getQueuingDiscipline(Configuration* config) {
-    MAGIC_ASSERT(config);
-    return config->interfaceQueuingDiscipline;
-}
-
-gchar* configuration_getEventSchedulerPolicy(Configuration* config) {
-    MAGIC_ASSERT(config);
-    return config->eventSchedulingPolicy;
-}
-
-guint configuration_getNWorkerThreads(Configuration* config) {
-    MAGIC_ASSERT(config);
-    return config->nWorkerThreads > 0 ? (guint)config->nWorkerThreads : 0;
+    utility_assert(config->parser && config->parser->nodes);
+    return config->parser->nodes;
 }

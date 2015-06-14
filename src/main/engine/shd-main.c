@@ -175,15 +175,15 @@ gint shadow_main(gint argc, gchar* argv[]) {
     /* setup configuration - this fails and aborts if invalid */
     gchar* cmds = g_strjoinv(" ", argv);
     gchar** cmdv = g_strsplit(cmds, " ", 0);
-    Configuration* config = configuration_new(argc, cmdv);
+    Options* options = options_new(argc, cmdv);
     g_free(cmds);
     g_strfreev(cmdv);
-    if(!config) {
+    if(!options) {
         /* incorrect options given */
         return -1;
-    } else if(config->printSoftwareVersion) {
+    } else if(options_doRunPrintVersion(options)) {
         g_printerr("%s\n%s\n", SHADOW_VERSION_STRING, SHADOW_INFO_STRING);
-        configuration_free(config);
+        options_free(options);
         return 0;
     }
 
@@ -204,13 +204,16 @@ gint shadow_main(gint argc, gchar* argv[]) {
     } else {
         /* if preload is not set, or the user added a preload library,
          * or we are going to run valgrind, we need to respawn */
-        if(config->preloads || config->runValgrind || !preloadSuccess) {
-            gchar** envlist = _main_getSpawnEnviroment(config->preloads, config->runValgrind);
+        gboolean runValgrind = options_doRunValgrind(options);
+        const gchar* preloadStr = options_getPreloadString(options);
+
+        if(preloadStr || runValgrind || !preloadSuccess) {
+            gchar** envlist = _main_getSpawnEnviroment(preloadStr, runValgrind);
             gchar* cmds = g_strjoinv(" ", argv);
             gchar** cmdv = g_strsplit(cmds, " ", 0);
             GError* error = NULL;
 
-            gboolean spawnSuccess = config->runValgrind ?
+            gboolean spawnSuccess = runValgrind ?
                     _main_spawnShadowWithValgrind(cmdv, envlist, &error) :
                     _main_spawnShadow(cmdv, envlist, &error);
 
@@ -235,7 +238,7 @@ gint shadow_main(gint argc, gchar* argv[]) {
     interposer_setShadowIsLoaded();
 
     /* allocate and initialize our main simulation driver */
-    shadowMaster = master_new(config);
+    shadowMaster = master_new(options);
     if(shadowMaster) {
         /* run the simulation */
         master_run(shadowMaster);
@@ -244,7 +247,7 @@ gint shadow_main(gint argc, gchar* argv[]) {
         shadowMaster = NULL;
     }
 
-    configuration_free(config);
+    options_free(options);
 
     return 0;
 }

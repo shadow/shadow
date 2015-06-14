@@ -24,28 +24,30 @@
 
 typedef struct _Slave Slave;
 
-Slave* slave_new(Master* master, Configuration* config, guint randomSeed, GQueue* initActions);
+Slave* slave_new(Master* master, Options* options, SimulationTime endTime, guint randomSeed);
 void slave_free(Slave* slave);
 gboolean slave_isForced(Slave* slave);
 guint slave_getRawCPUFrequency(Slave* slave);
 gint slave_nextRandomInt(Slave* slave);
 gdouble slave_nextRandomDouble(Slave* slave);
 GTimer* slave_getRunTimer(Slave* slave);
-void slave_heartbeat(Slave* slave, SimulationTime simClockNow);
 DNS* slave_getDNS(Slave* slave);
 Topology* slave_getTopology(Slave* slave);
-void slave_setTopology(Slave* slave, Topology* topology);
 guint32 slave_getNodeBandwidthUp(Slave* slave, GQuark nodeID, in_addr_t ip);
 guint32 slave_getNodeBandwidthDown(Slave* slave, GQuark nodeID, in_addr_t ip);
 gdouble slave_getLatency(Slave* slave, GQuark sourceNodeID, GQuark destinationNodeID);
-Configuration* slave_getConfig(Slave* slave);
-void slave_storeProgram(Slave* slave, Program* prog);
+Options* slave_getOptions(Slave* slave);
 Program* slave_getProgram(Slave* slave, GQuark pluginID);
 
-void slave_setKillTime(Slave* slave, SimulationTime endTime);
 void slave_updateMinTimeJump(Slave* slave, gdouble minPathLatency);
 
 void slave_run(Slave*);
 gboolean slave_schedulerIsRunning(Slave* slave);
+
+/* info received from master to set up the simulation */
+void slave_addNewProgram(Slave* slave, const gchar* name, const gchar* path);
+void slave_addNewVirtualHost(Slave* slave, HostParameters* params);
+void slave_addNewVirtualProcess(Slave* slave, gchar* hostName, gchar* pluginName,
+        SimulationTime startTime, SimulationTime stopTime, gchar* arguments);
 
 #endif /* SHD_SLAVE_H_ */

@@ -305,8 +305,8 @@ static guint _tcp_calculateRTT(TCP* tcp) {
     guint rtt = 1;
 
     if(sourceIP != destinationIP) {
-        Address* srcAddress = dns_resolveIPToAddress(worker_getDNS(), sourceIP);
-        Address* dstAddress = dns_resolveIPToAddress(worker_getDNS(), destinationIP);
+        Address* srcAddress = worker_resolveIPToAddress(sourceIP);
+        Address* dstAddress = worker_resolveIPToAddress(destinationIP);
 
         GQuark sourceID = (GQuark)address_getID(srcAddress);
         GQuark destinationID = (GQuark)address_getID(dstAddress);
@@ -372,8 +372,8 @@ static void _tcp_setBufferSizes(TCP* tcp) {
 
     guint32 rtt_milliseconds = (guint32)_tcp_calculateRTT(tcp);
 
-    Address* srcAddress = dns_resolveIPToAddress(worker_getDNS(), sourceIP);
-    Address* dstAddress = dns_resolveIPToAddress(worker_getDNS(), destinationIP);
+    Address* srcAddress = worker_resolveIPToAddress(sourceIP);
+    Address* dstAddress = worker_resolveIPToAddress(destinationIP);
 
     GQuark sourceID = (GQuark)address_getID(srcAddress);
     GQuark destinationID = (GQuark)address_getID(dstAddress);
@@ -2056,31 +2056,33 @@ TCP* tcp_new(gint handle, guint receiveBufferSize, guint sendBufferSize) {
 
     socket_init(&(tcp->super), &tcp_functions, DT_TCPSOCKET, handle, receiveBufferSize, sendBufferSize);
 
-    Configuration* config = worker_getConfig();
-    guint32 initial_window = config->initialTCPWindow;
+    Options* options = worker_getOptions();
+    guint32 initial_window = options_getTCPWindow(options);
+    const gchar* tcpCC = options_getTCPCongestionControl(options);
+    gint tcpSSThresh = options_getTCPSlowStartThreshold(options);
 
-    TCPCongestionType congestionType = tcpCongestion_getType(config->tcpCongestionControl);
+    TCPCongestionType congestionType = tcpCongestion_getType(tcpCC);
     if(congestionType == TCP_CC_UNKNOWN) {
-        warning("unable to find congestion control algorithm '%s', defaulting to CUBIC", config->tcpCongestionControl);
+        warning("unable to find congestion control algorithm '%s', defaulting to CUBIC", tcpCC);
         congestionType = TCP_CC_CUBIC;
     }
 
     switch(congestionType) {
         case TCP_CC_AIMD:
-            tcp->congestion = (TCPCongestion*)aimd_new(initial_window, config->tcpSlowStartThreshold);
+            tcp->congestion = (TCPCongestion*)aimd_new(initial_window, tcpSSThresh);
             break;
 
         case TCP_CC_RENO:
-            tcp->congestion = (TCPCongestion*)reno_new(initial_window, config->tcpSlowStartThreshold);
+            tcp->congestion = (TCPCongestion*)reno_new(initial_window, tcpSSThresh);
             break;
 
         case TCP_CC_CUBIC:
-            tcp->congestion = (TCPCongestion*)cubic_new(initial_window, config->tcpSlowStartThreshold);
+            tcp->congestion = (TCPCongestion*)cubic_new(initial_window, tcpSSThresh);
             break;
 
         case TCP_CC_UNKNOWN:
         default:
-            error("Failed to initialize TCP congestion control for %s", config->tcpCongestionControl);
+            error("Failed to initialize TCP congestion control for %s", tcpCC);
             break;
     }
 

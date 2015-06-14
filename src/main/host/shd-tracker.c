@@ -6,14 +6,6 @@
 
 #include "shadow.h"
 
-typedef enum _TrackerFlags TrackerFlags;
-enum _TrackerFlags {
-    TRACKER_FLAGS_NONE = 0,
-    TRACKER_FLAGS_NODE = 1<<0,
-    TRACKER_FLAGS_SOCKET = 1<<1,
-    TRACKER_FLAGS_RAM = 1<<2,
-};
-
 /* a packet is a 'data' packet if it has a payload attached, and a 'control' packet otherwise.
  * each packet is either a 'normal' packet or a 'retransmitted' packet. */
 typedef struct {
@@ -46,10 +38,7 @@ struct _Tracker {
     /* our personal settings as configured in the shadow xml config file */
     SimulationTime interval;
     GLogLevelFlags loglevel;
-    TrackerFlags privateFlags;
-
-    /* simulation global flags, only to be used if we have no personal flags set */
-    TrackerFlags globalFlags;
+    LogInfoFlags loginfo;
 
     gboolean didLogNodeHeader;
     gboolean didLogRAMHeader;
@@ -123,71 +112,19 @@ static void _socketstats_free(SocketStats* ss) {
     }
 }
 
-static TrackerFlags _tracker_parseFlagString(gchar* flagString) {
-    TrackerFlags flags = TRACKER_FLAGS_NONE;
-    if(flagString) {
-        /* info string can either be comma or space separated */
-        gchar** parts = g_strsplit_set(flagString, " ,", -1);
-        for(gint idx = 0; parts[idx]; idx++) {
-            if(!g_ascii_strcasecmp(parts[idx], "node")) {
-                flags |= TRACKER_FLAGS_NODE;
-            } else if(!g_ascii_strcasecmp(parts[idx], "socket")) {
-                flags |= TRACKER_FLAGS_SOCKET;
-            } else if(!g_ascii_strcasecmp(parts[idx], "ram")) {
-                flags |= TRACKER_FLAGS_RAM;
-            } else {
-                warning("Did not recognize log info '%s', possible choices are 'node','socket','ram'.", parts[idx]);
-            }
-        }
-        g_strfreev(parts);
-    }
-
-    return flags;
-}
-
-static TrackerFlags _tracker_parseGlobalFlags() {
-    TrackerFlags flags = TRACKER_FLAGS_NONE;
-    Configuration* c = worker_getConfig();
-    flags = _tracker_parseFlagString(c->heartbeatLogInfo);
-    return flags;
-}
-
-static GLogLevelFlags _tracker_getLogLevel(Tracker* tracker) {
-    /* prefer our level over the global config */
-    GLogLevelFlags level = tracker->loglevel;
-    if(!level) {
-        Configuration* c = worker_getConfig();
-        level = configuration_getHeartbeatLogLevel(c);
-    }
-    return level;
-}
-
-static SimulationTime _tracker_getLogInterval(Tracker* tracker) {
-    /* prefer our interval over the global config */
-    SimulationTime interval = tracker->interval;
-    if(!interval) {
-        Configuration* c = worker_getConfig();
-        interval = configuration_getHearbeatInterval(c);
-    }
-    return interval;
-}
-
-static TrackerFlags _tracker_getFlags(Tracker* tracker) {
-    /* prefer our log info over the global config */
-    return tracker->privateFlags ? tracker->privateFlags : tracker->globalFlags;
-}
-
-Tracker* tracker_new(SimulationTime interval, GLogLevelFlags loglevel, gchar* flagString) {
+Tracker* tracker_new(SimulationTime interval, GLogLevelFlags loglevel, LogInfoFlags loginfo) {
     Tracker* tracker = g_new0(Tracker, 1);
     MAGIC_INIT(tracker);
 
     tracker->interval = interval;
     tracker->loglevel = loglevel;
-    tracker->privateFlags = _tracker_parseFlagString(flagString);
-    tracker->globalFlags = _tracker_parseGlobalFlags();
+    tracker->loginfo = loginfo;
 
     tracker->allocatedLocations = g_hash_table_new(g_direct_hash, g_direct_equal);
     tracker->socketStats = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, (GDestroyNotify)_socketstats_free);
+
+    /* send an alive message, and start periodic heartbeats */
+    tracker_heartbeat(tracker, NULL);
 
     return tracker;
 }
@@ -212,7 +149,7 @@ void tracker_free(Tracker* tracker) {
 void tracker_addProcessingTime(Tracker* tracker, SimulationTime processingTime) {
     MAGIC_ASSERT(tracker);
 
-    if(_tracker_getFlags(tracker) & TRACKER_FLAGS_NODE) {
+    if(tracker->loginfo & LOG_INFO_FLAGS_NODE) {
         tracker->processingTimeTotal += processingTime;
         tracker->processingTimeLastInterval += processingTime;
     }
@@ -221,7 +158,7 @@ void tracker_addProcessingTime(Tracker* tracker, SimulationTime processingTime) 
 void tracker_addVirtualProcessingDelay(Tracker* tracker, SimulationTime delay) {
     MAGIC_ASSERT(tracker);
 
-    if(_tracker_getFlags(tracker) & TRACKER_FLAGS_NODE) {
+    if(tracker->loginfo & LOG_INFO_FLAGS_NODE) {
         (tracker->numDelayedTotal)++;
         tracker->delayTimeTotal += delay;
         (tracker->numDelayedLastInterval)++;
@@ -265,8 +202,7 @@ static void _tracker_updateCounters(Counters* c, gsize header, gsize payload,
 void tracker_addInputBytes(Tracker* tracker, Packet* packet, gint handle) {
     MAGIC_ASSERT(tracker);
 
-    TrackerFlags flags = _tracker_getFlags(tracker);
-    if(!(flags & TRACKER_FLAGS_NODE) && !(flags & TRACKER_FLAGS_SOCKET)) {
+    if(!(tracker->loginfo & LOG_INFO_FLAGS_NODE) && !(tracker->loginfo & LOG_INFO_FLAGS_SOCKET)) {
         return;
     }
 
@@ -275,7 +211,7 @@ void tracker_addInputBytes(Tracker* tracker, Packet* packet, gint handle) {
     gsize payload = (gsize)packet_getPayloadLength(packet);
     PacketDeliveryStatusFlags status = packet_getDeliveryStatus(packet);
 
-    if(flags & TRACKER_FLAGS_NODE) {
+    if(tracker->loginfo & LOG_INFO_FLAGS_NODE) {
         if(isLocal) {
             _tracker_updateCounters(&tracker->local.inCounters, header, payload, status);
         } else {
@@ -283,7 +219,7 @@ void tracker_addInputBytes(Tracker* tracker, Packet* packet, gint handle) {
         }
     }
 
-    if(flags & TRACKER_FLAGS_SOCKET) {
+    if(tracker->loginfo & LOG_INFO_FLAGS_SOCKET) {
         SocketStats* ss = g_hash_table_lookup(tracker->socketStats, &handle);
         if(ss) {
             if(isLocal) {
@@ -298,8 +234,7 @@ void tracker_addInputBytes(Tracker* tracker, Packet* packet, gint handle) {
 void tracker_addOutputBytes(Tracker* tracker, Packet* packet, gint handle) {
     MAGIC_ASSERT(tracker);
 
-    TrackerFlags flags = _tracker_getFlags(tracker);
-    if(!(flags & TRACKER_FLAGS_NODE) && !(flags & TRACKER_FLAGS_SOCKET)) {
+    if(!(tracker->loginfo & LOG_INFO_FLAGS_NODE) && !(tracker->loginfo & LOG_INFO_FLAGS_SOCKET)) {
         return;
     }
 
@@ -308,7 +243,7 @@ void tracker_addOutputBytes(Tracker* tracker, Packet* packet, gint handle) {
     gsize payload = (gsize)packet_getPayloadLength(packet);
     PacketDeliveryStatusFlags status = packet_getDeliveryStatus(packet);
 
-    if(flags & TRACKER_FLAGS_NODE) {
+    if(tracker->loginfo & LOG_INFO_FLAGS_NODE) {
         if(isLocal) {
             _tracker_updateCounters(&tracker->local.outCounters, header, payload, status);
         } else {
@@ -316,7 +251,7 @@ void tracker_addOutputBytes(Tracker* tracker, Packet* packet, gint handle) {
         }
     }
 
-    if(flags & TRACKER_FLAGS_SOCKET) {
+    if(tracker->loginfo & LOG_INFO_FLAGS_SOCKET) {
         SocketStats* ss = g_hash_table_lookup(tracker->socketStats, &handle);
         if(ss) {
             if(isLocal) {
@@ -331,7 +266,7 @@ void tracker_addOutputBytes(Tracker* tracker, Packet* packet, gint handle) {
 void tracker_addAllocatedBytes(Tracker* tracker, gpointer location, gsize allocatedBytes) {
     MAGIC_ASSERT(tracker);
 
-    if(_tracker_getFlags(tracker) & TRACKER_FLAGS_RAM) {
+    if(tracker->loginfo & LOG_INFO_FLAGS_RAM) {
         tracker->allocatedBytesTotal += allocatedBytes;
         tracker->allocatedBytesLastInterval += allocatedBytes;
         g_hash_table_insert(tracker->allocatedLocations, location, GSIZE_TO_POINTER(allocatedBytes));
@@ -341,7 +276,7 @@ void tracker_addAllocatedBytes(Tracker* tracker, gpointer location, gsize alloca
 void tracker_removeAllocatedBytes(Tracker* tracker, gpointer location) {
     MAGIC_ASSERT(tracker);
 
-    if(_tracker_getFlags(tracker) & TRACKER_FLAGS_RAM) {
+    if(tracker->loginfo & LOG_INFO_FLAGS_RAM) {
         gpointer value = NULL;
         gboolean exists = g_hash_table_lookup_extended(tracker->allocatedLocations, location, NULL, &value);
         if(exists) {
@@ -358,7 +293,7 @@ void tracker_removeAllocatedBytes(Tracker* tracker, gpointer location) {
 void tracker_addSocket(Tracker* tracker, gint handle, enum ProtocolType type, gsize inputBufferSize, gsize outputBufferSize) {
     MAGIC_ASSERT(tracker);
 
-    if(_tracker_getFlags(tracker) & TRACKER_FLAGS_SOCKET) {
+    if(tracker->loginfo & LOG_INFO_FLAGS_SOCKET) {
         SocketStats* ss = _socketstats_new(handle, type, inputBufferSize, outputBufferSize);
         g_hash_table_insert(tracker->socketStats, &(ss->handle), ss);
     }
@@ -367,7 +302,7 @@ void tracker_addSocket(Tracker* tracker, gint handle, enum ProtocolType type, gs
 void tracker_updateSocketPeer(Tracker* tracker, gint handle, in_addr_t peerIP, in_port_t peerPort) {
     MAGIC_ASSERT(tracker);
 
-    if(_tracker_getFlags(tracker) & TRACKER_FLAGS_SOCKET) {
+    if(tracker->loginfo & LOG_INFO_FLAGS_SOCKET) {
         SocketStats* socket = g_hash_table_lookup(tracker->socketStats, &handle);
         if(socket) {
             socket->peerIP = peerIP;
@@ -380,7 +315,9 @@ void tracker_updateSocketPeer(Tracker* tracker, gint handle, in_addr_t peerIP, i
             } else if (peerIP == htonl(INADDR_ANY)) {
                 g_string_printf(hostnameBuffer, "0.0.0.0");
             } else {
-                g_string_printf(hostnameBuffer, "%s", dns_resolveIPToName(worker_getDNS(), peerIP));
+                Address* address = worker_resolveIPToAddress( peerIP);
+                const gchar* hostname = address ? address_toHostName(address) : NULL;
+                g_string_printf(hostnameBuffer, "%s", hostname);
             }
 
             /* free the old string if we already have one */
@@ -396,7 +333,7 @@ void tracker_updateSocketPeer(Tracker* tracker, gint handle, in_addr_t peerIP, i
 void tracker_updateSocketInputBuffer(Tracker* tracker, gint handle, gsize inputBufferLength, gsize inputBufferSize) {
     MAGIC_ASSERT(tracker);
 
-    if(_tracker_getFlags(tracker) & TRACKER_FLAGS_SOCKET) {
+    if(tracker->loginfo & LOG_INFO_FLAGS_SOCKET) {
         SocketStats* ss = g_hash_table_lookup(tracker->socketStats, &handle);
         if(ss) {
             ss->inputBufferLength = inputBufferLength;
@@ -408,7 +345,7 @@ void tracker_updateSocketInputBuffer(Tracker* tracker, gint handle, gsize inputB
 void tracker_updateSocketOutputBuffer(Tracker* tracker, gint handle, gsize outputBufferLength, gsize outputBufferSize) {
     MAGIC_ASSERT(tracker);
 
-    if(_tracker_getFlags(tracker) & TRACKER_FLAGS_SOCKET) {
+    if(tracker->loginfo & LOG_INFO_FLAGS_SOCKET) {
         SocketStats* ss = g_hash_table_lookup(tracker->socketStats, &handle);
         if(ss) {
             ss->outputBufferLength = outputBufferLength;
@@ -420,7 +357,7 @@ void tracker_updateSocketOutputBuffer(Tracker* tracker, gint handle, gsize outpu
 void tracker_removeSocket(Tracker* tracker, gint handle) {
     MAGIC_ASSERT(tracker);
 
-    if(_tracker_getFlags(tracker) & TRACKER_FLAGS_SOCKET) {
+    if(tracker->loginfo & LOG_INFO_FLAGS_SOCKET) {
         SocketStats* ss = g_hash_table_lookup(tracker->socketStats, &handle);
         if(ss) {
             /* remove after we log the stats we have */
@@ -609,27 +546,20 @@ static void _tracker_logRAM(Tracker* tracker, GLogLevelFlags level, SimulationTi
 void tracker_heartbeat(Tracker* tracker, gpointer userData) {
     MAGIC_ASSERT(tracker);
 
-    TrackerFlags flags = _tracker_getFlags(tracker);
-    GLogLevelFlags level = _tracker_getLogLevel(tracker);
-    SimulationTime interval = _tracker_getLogInterval(tracker);
-
     /* check to see if node info is being logged */
-    if(flags & TRACKER_FLAGS_NODE) {
-        _tracker_logNode(tracker, level, interval);
+    if(tracker->loginfo & LOG_INFO_FLAGS_NODE) {
+        _tracker_logNode(tracker, tracker->loglevel, tracker->interval);
     }
 
     /* check to see if socket buffer info is being logged */
-    if(flags & TRACKER_FLAGS_SOCKET) {
-        _tracker_logSocket(tracker, level, interval);
+    if(tracker->loginfo & LOG_INFO_FLAGS_SOCKET) {
+        _tracker_logSocket(tracker, tracker->loglevel, tracker->interval);
     }
 
     /* check to see if ram info is being logged */
-    if(flags & TRACKER_FLAGS_RAM) {
-        _tracker_logRAM(tracker, level, interval);
+    if(tracker->loginfo & LOG_INFO_FLAGS_RAM) {
+        _tracker_logRAM(tracker, tracker->loglevel, tracker->interval);
     }
-
-    /* make sure we have the latest global configured flags */
-    tracker->globalFlags = _tracker_parseGlobalFlags();
 
     /* clear interval stats */
     tracker->processingTimeLastInterval = 0;
@@ -655,6 +585,6 @@ void tracker_heartbeat(Tracker* tracker, gpointer userData) {
     /* schedule the next heartbeat */
     tracker->lastHeartbeat = worker_getCurrentTime();
     Task* heartbeatTask = task_new((TaskFunc)tracker_heartbeat, tracker, NULL);
-    worker_scheduleTask(heartbeatTask, interval);
+    worker_scheduleTask(heartbeatTask, tracker->interval);
     task_unref(heartbeatTask);
 }

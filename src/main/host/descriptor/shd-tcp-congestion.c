@@ -6,7 +6,7 @@
 
 #include "shadow.h"
 
-TCPCongestionType tcpCongestion_getType(gchar* type) {
+TCPCongestionType tcpCongestion_getType(const gchar* type) {
     if(!g_ascii_strcasecmp(type, "aimd")) {
         return TCP_CC_AIMD;
     } else if(!g_ascii_strcasecmp(type, "reno")) {

@@ -2590,11 +2590,11 @@ const struct addrinfo *hints, struct addrinfo **res) {
             /* if AI_NUMERICHOST, don't do hostname lookup */
             if(!hints || (hints && !(hints->ai_flags & AI_NUMERICHOST))) {
                 /* the node string is not a dots-and-decimals string, try it as a hostname */
-                address = dns_resolveNameToAddress(worker_getDNS(), node);
+                address = worker_resolveNameToAddress(node);
             }
         } else {
             /* we got an ip from the string, so lookup by the ip */
-            address = dns_resolveIPToAddress(worker_getDNS(), ip);
+            address = worker_resolveIPToAddress(ip);
         }
 
         if(address) {
@@ -2690,7 +2690,8 @@ int getnameinfo(const struct sockaddr* sa, socklen_t salen,
     Host* node = _interposer_switchInShadowContext();
 
     GQuark convertedIP = (GQuark) (((struct sockaddr_in*)sa)->sin_addr.s_addr);
-    const gchar* hostname = dns_resolveIPToName(worker_getDNS(), convertedIP);
+    Address* address = worker_resolveIPToAddress(convertedIP);
+    const gchar* hostname = address ? address_toHostName(address) : NULL;
 
     if(hostname) {
         g_utf8_strncpy(host, hostname, hostlen);

@@ -12,8 +12,7 @@
 Process* process_new(GQuark pluginID, SimulationTime startTime, SimulationTime stopTime, gchar* arguments);
 void process_free(Process* proc);
 
-void process_start(Process* proc);
-void process_stop(Process* proc);
+void process_boot(Process* proc, gpointer userData);
 gboolean process_isRunning(Process* proc);
 
 void process_notify(Process* proc, Thread* thread);

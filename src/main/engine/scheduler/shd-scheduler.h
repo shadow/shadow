@@ -11,7 +11,8 @@
 
 typedef struct _Scheduler Scheduler;
 
-Scheduler* scheduler_new(SchedulerPolicyType, guint, gpointer, GQueue*, guint);
+Scheduler* scheduler_new(SchedulerPolicyType policyType, guint nWorkers, gpointer threadUserData,
+        guint schedulerSeed, SimulationTime endTime);
 void scheduler_ref(Scheduler*);
 void scheduler_unref(Scheduler*);
 
@@ -28,7 +29,6 @@ Event* scheduler_pop(Scheduler*);
 void scheduler_addHost(Scheduler*, Host*);
 Host* scheduler_getHost(Scheduler*, GQuark);
 SchedulerPolicyType scheduler_getPolicy(Scheduler*);
-void scheduler_setEndTime(Scheduler*, SimulationTime);
 gboolean scheduler_isRunning(Scheduler* scheduler);
 
 #endif /* SHD_SCHEDULER_H_ */

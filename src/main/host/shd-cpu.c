@@ -13,8 +13,8 @@
 #include "shadow.h"
 
 struct _CPU {
-    guint frequencyKHz;
-    guint rawFrequencyKHz;
+    guint64 frequencyKHz;
+    guint64 rawFrequencyKHz;
     gdouble frequencyRatio;
     SimulationTime threshold;
     SimulationTime precision;
@@ -23,7 +23,7 @@ struct _CPU {
     MAGIC_DECLARE;
 };
 
-CPU* cpu_new(guint frequencyKHz, gint threshold, gint precision) {
+CPU* cpu_new(guint64 frequencyKHz, guint64 threshold, guint64 precision) {
     utility_assert(frequencyKHz > 0);
     CPU* cpu = g_new0(CPU, 1);
     MAGIC_INIT(cpu);

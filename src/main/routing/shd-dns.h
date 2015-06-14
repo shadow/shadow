@@ -17,9 +17,7 @@ void dns_free(DNS* dns);
 Address* dns_register(DNS* dns, GQuark id, gchar* name, gchar* requestedIP);
 void dns_deregister(DNS* dns, Address* address);
 
-Address* dns_resolveIPToAddress(DNS* dns, guint32 ip);
+Address* dns_resolveIPToAddress(DNS* dns, in_addr_t ip);
 Address* dns_resolveNameToAddress(DNS* dns, const gchar* name);
-guint32 dns_resolveNameToIP(DNS* dns, const gchar* name);
-const gchar* dns_resolveIPToName(DNS* dns, guint32 ip);
 
 #endif /* SHD_DNS_H_ */

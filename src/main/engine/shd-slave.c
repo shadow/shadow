@@ -14,16 +14,12 @@ struct _Slave {
     /* the worker object associated with the main thread of execution */
 //    Worker* mainWorker;
 
-    /* simulation configuration options */
-    Configuration* config;
+    /* simulation cli options */
+    Options* options;
 
     /* slave random source, init from master random, used to init host randoms */
     Random* random;
     gint rawFrequencyKHz;
-
-    /* network connectivity */
-    Topology* topology;
-    DNS* dns;
 
     /* the parallel event/host/thread scheduler */
     Scheduler* scheduler;
@@ -60,22 +56,22 @@ static Host* _slave_getHost(Slave* slave, GQuark hostID) {
 
 /* XXX this really belongs in the configuration file */
 static SchedulerPolicyType _slave_getEventSchedulerPolicy(Slave* slave) {
-    const gchar* policy = configuration_getEventSchedulerPolicy(slave->config);
-    if (g_ascii_strcasecmp(policy, "host") == 0) {
+    const gchar* policyStr = options_getEventSchedulerPolicy(slave->options);
+    if (g_ascii_strcasecmp(policyStr, "host") == 0) {
         return SP_PARALLEL_HOST_SINGLE;
-    } else if (g_ascii_strcasecmp(policy, "thread") == 0) {
+    } else if (g_ascii_strcasecmp(policyStr, "thread") == 0) {
         return SP_PARALLEL_THREAD_SINGLE;
-    } else if (g_ascii_strcasecmp(policy, "threadXthread") == 0) {
+    } else if (g_ascii_strcasecmp(policyStr, "threadXthread") == 0) {
         return SP_PARALLEL_THREAD_PERTHREAD;
-    } else if (g_ascii_strcasecmp(policy, "threadXhost") == 0) {
+    } else if (g_ascii_strcasecmp(policyStr, "threadXhost") == 0) {
         return SP_PARALLEL_THREAD_PERHOST;
     } else {
-        error("unknown event scheduler policy '%s'; valid values are 'thread', 'host', 'threadXthread', or 'threadXhost'", policy);
+        error("unknown event scheduler policy '%s'; valid values are 'thread', 'host', 'threadXthread', or 'threadXhost'", policyStr);
         return SP_SERIAL_GLOBAL;
     }
 }
 
-Slave* slave_new(Master* master, Configuration* config, guint randomSeed, GQueue* initActions) {
+Slave* slave_new(Master* master, Options* options, SimulationTime endTime, guint randomSeed) {
     Slave* slave = g_new0(Slave, 1);
     MAGIC_INIT(slave);
 
@@ -83,7 +79,7 @@ Slave* slave_new(Master* master, Configuration* config, guint randomSeed, GQueue
     g_mutex_init(&(slave->pluginInitLock));
 
     slave->master = master;
-    slave->config = config;
+    slave->options = options;
     slave->random = random_new(randomSeed);
 
     slave->rawFrequencyKHz = utility_getRawCPUFrequency(CONFIG_CPU_MAX_FREQ_FILE);
@@ -94,15 +90,12 @@ Slave* slave_new(Master* master, Configuration* config, guint randomSeed, GQueue
     /* we will store the plug-in programs that are loaded */
     slave->programs = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, (GDestroyNotify)program_free);
 
-    /* initialize DNS subsystem for this slave */
-    slave->dns = dns_new();
-
     /* the main scheduler may utilize multiple threads */
 
-    guint nWorkers = configuration_getNWorkerThreads(config);
+    guint nWorkers = options_getNWorkerThreads(options);
     SchedulerPolicyType policy = _slave_getEventSchedulerPolicy(slave);
     guint schedulerSeed = (guint)slave_nextRandomInt(slave);
-    slave->scheduler = scheduler_new(policy, nWorkers, slave, initActions, schedulerSeed);
+    slave->scheduler = scheduler_new(policy, nWorkers, slave, schedulerSeed, endTime);
 
     return slave;
 }
@@ -115,12 +108,6 @@ void slave_free(Slave* slave) {
 
     if(slave->scheduler) {
         scheduler_unref(slave->scheduler);
-    }
-    if(slave->topology) {
-        topology_free(slave->topology);
-    }
-    if(slave->dns) {
-        dns_free(slave->dns);
     }
 
     g_hash_table_destroy(slave->programs);
@@ -168,9 +155,40 @@ GTimer* slave_getRunTimer(Slave* slave) {
     return master_getRunTimer(slave->master);
 }
 
-void slave_storeProgram(Slave* slave, Program* prog) {
+void slave_addNewProgram(Slave* slave, const gchar* name, const gchar* path) {
     MAGIC_ASSERT(slave);
+
+    /* we need a copy of the library for every thread because each of
+     * them needs a separate instance of all the plug-in state so it doesn't
+     * overlap. We'll do this lazily while booting up applications, since that
+     * event will be run by a worker. For now, we just track the default
+     * original plug-in library, so the worker can copy it later.
+     */
+    Program* prog = program_new(name, path);
     g_hash_table_insert(slave->programs, program_getID(prog), prog);
+}
+
+void slave_addNewVirtualHost(Slave* slave, HostParameters* params) {
+    MAGIC_ASSERT(slave);
+
+    /* quarks are unique per process, so do the conversion here */
+    params->id = g_quark_from_string(params->hostname);
+    params->nodeSeed = (guint) slave_nextRandomInt(slave);
+
+    Host* host = host_new(params);
+    scheduler_addHost(slave->scheduler, host);
+}
+
+void slave_addNewVirtualProcess(Slave* slave, gchar* hostName, gchar* pluginName,
+        SimulationTime startTime, SimulationTime stopTime, gchar* arguments) {
+    MAGIC_ASSERT(slave);
+
+    /* quarks are unique per process, so do the conversion here */
+    GQuark hostID = g_quark_from_string(hostName);
+    GQuark pluginID = g_quark_from_string(pluginName);
+
+    Host* host = scheduler_getHost(slave->scheduler, hostID);
+    host_addApplication(host, pluginID, startTime, stopTime, arguments);
 }
 
 Program* slave_getProgram(Slave* slave, GQuark pluginID) {
@@ -180,17 +198,12 @@ Program* slave_getProgram(Slave* slave, GQuark pluginID) {
 
 DNS* slave_getDNS(Slave* slave) {
     MAGIC_ASSERT(slave);
-    return slave->dns;
+    return master_getDNS(slave->master);
 }
 
 Topology* slave_getTopology(Slave* slave) {
     MAGIC_ASSERT(slave);
-    return slave->topology;
-}
-
-void slave_setTopology(Slave* slave, Topology* topology) {
-    MAGIC_ASSERT(slave);
-    slave->topology = topology;
+    return master_getTopology(slave->master);
 }
 
 guint32 slave_getNodeBandwidthUp(Slave* slave, GQuark nodeID, in_addr_t ip) {
@@ -213,18 +226,12 @@ gdouble slave_getLatency(Slave* slave, GQuark sourceNodeID, GQuark destinationNo
     Host* destinationNode = _slave_getHost(slave, destinationNodeID);
     Address* sourceAddress = host_getDefaultAddress(sourceNode);
     Address* destinationAddress = host_getDefaultAddress(destinationNode);
-    return topology_getLatency(slave->topology, sourceAddress, destinationAddress);
+    return master_getLatency(slave->master, sourceAddress, destinationAddress);
 }
 
-Configuration* slave_getConfig(Slave* slave) {
+Options* slave_getOptions(Slave* slave) {
     MAGIC_ASSERT(slave);
-    return slave->config;
-}
-
-void slave_setKillTime(Slave* slave, SimulationTime endTime) {
-    MAGIC_ASSERT(slave);
-    master_setEndTime(slave->master, endTime);
-    scheduler_setEndTime(slave->scheduler, endTime);
+    return slave->options;
 }
 
 gboolean slave_schedulerIsRunning(Slave* slave) {
@@ -241,21 +248,12 @@ void slave_updateMinTimeJump(Slave* slave, gdouble minPathLatency) {
     _slave_unlock(slave);
 }
 
-void slave_heartbeat(Slave* slave, SimulationTime simClockNow) {
+static void _slave_heartbeat(Slave* slave, SimulationTime simClockNow) {
     MAGIC_ASSERT(slave);
 
-    gboolean shouldLogResourceUsage = FALSE;
-
-    /* do as little as possible while holding the lock */
-    _slave_lock(slave);
-    /* XXX: this should be done asynchronously */
-    if(simClockNow > slave->simClockLastHeartbeat) {
-        shouldLogResourceUsage = TRUE;
+    if(simClockNow > (slave->simClockLastHeartbeat + options_getHeartbeatInterval(slave->options))) {
         slave->simClockLastHeartbeat = simClockNow;
-    }
-    _slave_unlock(slave);
 
-    if(shouldLogResourceUsage) {
         struct rusage resources;
         if(!getrusage(RUSAGE_SELF, &resources)) {
             /* success, convert the values */
@@ -299,6 +297,8 @@ void slave_run(Slave* slave) {
             scheduler_continueNextRound(slave->scheduler, windowStart, windowEnd);
 
             /* we could eventually do some idle processing here if needed */
+            /* XXX the heartbeat does not run in single process mode */
+            _slave_heartbeat(slave, windowStart);
 
             /* wait for the workers to finish processing nodes before we update the execution window */
             minNextEventTime = scheduler_awaitNextRound(slave->scheduler);

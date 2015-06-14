@@ -60,17 +60,10 @@ set(shadow_srcs
     host/shd-packet.c
     host/shd-tracker.c
 
-    runnable/action/shd-action.c
-    runnable/action/shd-create-node.c
-    runnable/action/shd-kill-engine.c
-    runnable/action/shd-load-plugin.c
-    runnable/action/shd-load-topology.c
-    runnable/shd-runnable.c
-
-    engine/support/shd-configuration.c
+    engine/support/shd-options.c
     engine/support/shd-examples.c
     engine/support/shd-logging.c
-    engine/support/shd-parser.c
+    engine/support/shd-configuration.c
 
     routing/shd-address.c
     routing/shd-dns.c

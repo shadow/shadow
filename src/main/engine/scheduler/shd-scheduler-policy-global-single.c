@@ -20,7 +20,7 @@ static void _schedulerpolicyglobalsingle_addHost(SchedulerPolicy* policy, Host* 
     MAGIC_ASSERT(policy);
     /* we dont need to store any special mappings because we only have a single pqueue */
     GlobalSinglePolicyData* data = policy->data;
-    data->assignedHosts = g_list_prepend(data->assignedHosts, host);
+    data->assignedHosts = g_list_append(data->assignedHosts, host);
 }
 
 static GList* _schedulerpolicyglobalsingle_getHosts(SchedulerPolicy* policy) {

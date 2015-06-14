@@ -52,21 +52,20 @@ typedef struct _Process Process;
  * place base classes with few dependencies first.
  */
 
+#include "engine/support/shd-definitions.h"
 #include "../plugin/shadow-plugin-interface.h"
 #include "engine/shd-main.h"
 
 /* configuration, base runnables, and input parsing */
 #include "engine/support/shd-examples.h"
-#include "engine/support/shd-configuration.h"
+#include "engine/support/shd-options.h"
 #include "utility/shd-utility.h"
 #include "engine/work/shd-task.h"
 #include "engine/work/shd-event.h"
 #include "engine/work/shd-message.h"
 #include "host/shd-protocol.h"
 #include "host/descriptor/shd-descriptor.h"
-#include "runnable/shd-runnable.h"
-#include "runnable/action/shd-action.h"
-#include "engine/support/shd-parser.h"
+#include "engine/support/shd-configuration.h"
 #include "host/shd-packet.h"
 #include "host/shd-cpu.h"
 #include "utility/shd-pcap-writer.h"
@@ -102,11 +101,6 @@ typedef struct _Process Process;
 #include "host/shd-host.h"
 
 #include "routing/shd-topology.h"
-
-#include "runnable/action/shd-create-node.h"
-#include "runnable/action/shd-kill-engine.h"
-#include "runnable/action/shd-load-plugin.h"
-#include "runnable/action/shd-load-topology.h"
 
 #include "engine/support/shd-logging.h"
 #include "engine/scheduler/shd-scheduler-policy.h"

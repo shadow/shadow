@@ -77,7 +77,7 @@ static void _schedulerpolicythreadperhost_addHost(SchedulerPolicy* policy, Host*
         tdata = _threadperhostthreaddata_new();
         g_hash_table_replace(data->threadToThreadDataMap, assignedThread, tdata);
     }
-    tdata->assignedHosts = g_list_prepend(tdata->assignedHosts, host);
+    tdata->assignedHosts = g_list_append(tdata->assignedHosts, host);
 
     /* finally, store the host-to-thread mapping */
     g_hash_table_replace(data->hostToThreadMap, host, assignedThread);

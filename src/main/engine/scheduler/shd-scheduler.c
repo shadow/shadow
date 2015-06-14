@@ -29,9 +29,6 @@ struct _Scheduler {
     SchedulerPolicy* policy;
     SchedulerPolicyType policyType;
 
-    /* a queue to hold actions that initialize the simulation */
-    GQueue* initActions;
-
     /* we store the hosts here */
     GHashTable* hostIDToHostMap;
 
@@ -82,7 +79,19 @@ static void _scheduler_rebalanceHosts(Scheduler* scheduler) {
     }
 }
 
-static void _scheduler_freeHosts(Scheduler* scheduler) {
+static void _scheduler_startHosts(Scheduler* scheduler) {
+    if(scheduler->policy->getAssignedHosts) {
+        GList* myHosts = scheduler->policy->getAssignedHosts(scheduler->policy);
+        if(myHosts) {
+            guint nHosts = g_list_length(myHosts);
+            message("starting to boot %u hosts", nHosts);
+            worker_bootHosts(myHosts);
+            message("%u hosts are booted", nHosts);
+        }
+    }
+}
+
+static void _scheduler_stopHosts(Scheduler* scheduler) {
     /* free all applications before freeing any of the hosts since freeing
      * applications may cause close() to get called on sockets which needs
      * other host information. this may cause issues if the hosts are gone.
@@ -107,7 +116,8 @@ static void _scheduler_freeHosts(Scheduler* scheduler) {
     }
 }
 
-Scheduler* scheduler_new(SchedulerPolicyType policyType, guint nWorkers, gpointer threadUserData, GQueue* initActions, guint schedulerSeed) {
+Scheduler* scheduler_new(SchedulerPolicyType policyType, guint nWorkers, gpointer threadUserData,
+        guint schedulerSeed, SimulationTime endTime) {
     Scheduler* scheduler = g_new0(Scheduler, 1);
     MAGIC_INIT(scheduler);
 
@@ -120,8 +130,7 @@ Scheduler* scheduler_new(SchedulerPolicyType policyType, guint nWorkers, gpointe
     scheduler->collectInfoBarrier = countdownlatch_new(nWorkers+1);
     scheduler->prepareRoundBarrier = countdownlatch_new(nWorkers+1);
 
-    scheduler->initActions = initActions;
-    scheduler->endTime = SIMTIME_MAX; // will be updated from one of the initActions
+    scheduler->endTime = endTime;
     scheduler->currentRound.endTime = scheduler->endTime;// default to one single round
     scheduler->currentRound.minNextEventTime = SIMTIME_MAX;
 
@@ -350,61 +359,28 @@ SchedulerPolicyType scheduler_getPolicy(Scheduler* scheduler) {
     return scheduler->policyType;
 }
 
-void scheduler_setEndTime(Scheduler* scheduler, SimulationTime endTime) {
-    MAGIC_ASSERT(scheduler);
-    g_mutex_lock(&scheduler->globalLock);
-    scheduler->endTime = endTime;
-    g_mutex_unlock(&scheduler->globalLock);
-}
-
 gboolean scheduler_isRunning(Scheduler* scheduler) {
     return scheduler->isRunning;
-}
-
-static void _scheduler_runInitActions(Scheduler* scheduler) {
-    /* this should only be done once globally */
-    if(scheduler->initActions != NULL) {
-        /* loop through actions that were created from parsing. this will create
-         * all the nodes, networks, applications, etc., and add an application
-         * start event for each node to bootstrap the simulation. Note that the
-         * plug-in libraries themselves are not loaded until a worker needs it,
-         * since each worker will need its own private version. */
-        while(scheduler->initActions && g_queue_get_length(scheduler->initActions) > 0) {
-            Action* a = g_queue_pop_head(scheduler->initActions);
-            runnable_run(a);
-            runnable_free(a);
-        }
-        g_queue_free(scheduler->initActions);
-        scheduler->initActions = NULL;
-    }
 }
 
 void scheduler_awaitStart(Scheduler* scheduler) {
     /* wait until all threads are waiting to start */
     countdownlatch_countDownAwait(scheduler->startBarrier);
 
-    /* lock so only one thread executes the initialization
-     * the thread will need to have a valid queue when pushing events,
-     * so it should probably be a worker thread. thats why its done here
-     * instead of below by the main thread. */
-    static GOnce initializeOnce = G_ONCE_INIT;
-    g_once(&initializeOnce, (GThreadFunc)_scheduler_runInitActions, scheduler);
+    /* each thread will boot their own hosts */
+    _scheduler_startHosts(scheduler);
 
     /* everyone is waiting for the next round to be ready */
     countdownlatch_countDownAwait(scheduler->prepareRoundBarrier);
 }
 
-static void _scheduler_runCleanup(Scheduler* scheduler) {
+void scheduler_awaitFinish(Scheduler* scheduler) {
+    /* each thread will run cleanup on their own hosts */
     g_mutex_lock(&scheduler->globalLock);
     scheduler->isRunning = FALSE;
     g_mutex_unlock(&scheduler->globalLock);
 
-    _scheduler_freeHosts(scheduler);
-}
-
-void scheduler_awaitFinish(Scheduler* scheduler) {
-    /* each thread will run cleanup on their own hosts */
-    _scheduler_runCleanup(scheduler);
+    _scheduler_stopHosts(scheduler);
 
     /* wait until all threads are waiting to finish */
     countdownlatch_countDownAwait(scheduler->finishBarrier);
