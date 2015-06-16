@@ -11,7 +11,7 @@
 /* A basic event connected to a local virtual host. */
 typedef struct _Event Event;
 
-Event* event_new(Task* task, SimulationTime time);
+Event* event_new_(Task* task, SimulationTime time);
 void event_ref(Event* event);
 void event_unref(Event* event);
 

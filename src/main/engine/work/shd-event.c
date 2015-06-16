@@ -14,7 +14,7 @@ struct _Event {
     MAGIC_DECLARE;
 };
 
-Event* event_new(Task* task, SimulationTime time) {
+Event* event_new_(Task* task, SimulationTime time) {
     utility_assert(task != NULL);
     Event* event = g_new0(Event, 1);
     MAGIC_INIT(event);

@@ -442,6 +442,7 @@ static void _networkinterface_scheduleNextSend(NetworkInterface* interface) {
         if(networkinterface_getIPAddress(interface) == packet_getDestinationIP(packet)) {
             /* packet will arrive on our own interface */
             Task* packetTask = task_new((TaskFunc)networkinterface_packetArrived, interface, packet);
+            packet_ref(packet);
             worker_scheduleTask(packetTask, 1);
             task_unref(packetTask);
         } else {

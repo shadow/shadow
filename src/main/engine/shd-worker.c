@@ -192,7 +192,7 @@ void worker_scheduleTask(Task* task, SimulationTime nanoDelay) {
     if(slave_schedulerIsRunning(worker->slave)) {
         utility_assert(worker->clock.now != SIMTIME_INVALID);
         utility_assert(worker->active.host != NULL);
-        Event* event = event_new(task, worker->clock.now + nanoDelay);
+        Event* event = event_new_(task, worker->clock.now + nanoDelay);
         GQuark hostID = host_getID(worker->active.host);
         scheduler_push(worker->scheduler, event, hostID, hostID);
     }
@@ -253,7 +253,7 @@ void worker_sendPacket(Packet* packet) {
         packet_ref(packet);
         /* this is a hack to make sure the dst host is active while creating the event */
         worker->active.host = dstHost;
-        Event* packetEvent = event_new(packetTask, deliverTime);
+        Event* packetEvent = event_new_(packetTask, deliverTime);
         worker->active.host = srcHost;
         task_unref(packetTask);
 
