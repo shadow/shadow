@@ -27,7 +27,6 @@ void networkinterface_disassociate(NetworkInterface* interface, Socket* transpor
 gboolean networkinterface_hasFreePorts(NetworkInterface* interface);
 
 void networkinterface_packetArrived(NetworkInterface* interface, Packet* packet);
-void networkinterface_packetDropped(NetworkInterface* interface, Packet* packet);
 void networkinterface_received(NetworkInterface* interface);
 void networkinterface_wantsSend(NetworkInterface* interface, Socket* transport);
 void networkinterface_sent(NetworkInterface* interface);
