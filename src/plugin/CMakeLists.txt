@@ -16,6 +16,8 @@ add_subdirectory(llvm-hoist-pass)
 get_property(LLVMHoistGlobalsPATH TARGET LLVMHoistGlobals PROPERTY LOCATION)
 
 ## build the plug-ins
+add_subdirectory(shadow-plugin-test)
+
 if(NOT BUILD_TGEN STREQUAL OFF)
     add_subdirectory(shadow-plugin-tgen)
 endif()

@@ -145,9 +145,10 @@ static void _master_loadConfiguration(Master* master) {
 
     /* parse built-in examples, or input files */
     GString* file = NULL;
-    if(FALSE){//master->options->runTGenExample) {
+    // add options_doRunTGenExample() option
+    if(options_doRunTestExample(master->options)) {
         /* parse a built-in example */
-        file = example_getFileExampleContents();
+        file = example_getTestContents();
     } else {
         /* parse Shadow XML config file */
         const GString* fileName = options_getInputXMLFilename(master->options);

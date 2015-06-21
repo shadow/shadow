@@ -41,6 +41,7 @@ struct _Options {
 
     GOptionGroup* pluginsOptionGroup;
     gboolean runTGenExample;
+    gboolean runTestExample;
 
     GString* inputXMLFilename;
 
@@ -99,6 +100,7 @@ Options* options_new(gint argc, gchar* argv[]) {
     options->pluginsOptionGroup = g_option_group_new("sim", "Simulation Examples", "Built-in simulation examples", NULL, NULL);
     const GOptionEntry pluginEntries[] =
     {
+      { "test", 0, 0, G_OPTION_ARG_NONE, &(options->runTestExample), "Run basic benchmark tests", NULL },
       { "tgen", 0, 0, G_OPTION_ARG_NONE, &(options->runTGenExample), "PLACEHOLDER - Run basic data transfer simulation", NULL },
       { NULL },
     };
@@ -146,7 +148,7 @@ Options* options_new(gint argc, gchar* argv[]) {
      * printing the software version requires no other args. running a
      * plug-in example also requires no other args. */
     if(!(options->printSoftwareVersion) && !(options->runTGenExample) &&
-            (argc != nRequiredXMLFiles + 1)) {
+            !(options->runTestExample) && (argc != nRequiredXMLFiles + 1)) {
         g_printerr("** Please provide the required parameters **\n");
         gchar* helpString = g_option_context_get_help(options->context, TRUE, NULL);
         g_printerr("%s", helpString);
@@ -349,6 +351,11 @@ gboolean options_doRunDebug(Options* options) {
 gboolean options_doRunTGenExample(Options* options) {
     MAGIC_ASSERT(options);
     return options->runTGenExample;
+}
+
+gboolean options_doRunTestExample(Options* options) {
+    MAGIC_ASSERT(options);
+    return options->runTestExample;
 }
 
 const gchar* options_getPreloadString(Options* options) {

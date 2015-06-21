@@ -7,7 +7,7 @@
 #include "shadow.h"
 
 
-GString* example_getFileExampleContents() {
+GString* example_getTestContents() {
     /* serve and download /bin/ls 10 times for each of 1000 clients */
     return g_string_new("\
         <shadow>\
@@ -27,26 +27,23 @@ GString* example_getFileExampleContents() {
             <node id=\"poi-1\">\
               <data key=\"d0\">0.0</data>\
               <data key=\"d1\">0.0.0.0</data>\
-              <data key=\"d2\">US</data>\
-              <data key=\"d3\">17038</data>\
-              <data key=\"d4\">2251</data>\
+              <data key=\"d2\">XX</data>\
+              <data key=\"d3\">10240</data>\
+              <data key=\"d4\">10240</data>\
               <data key=\"d5\">net</data>\
               <data key=\"d6\">0</data>\
             </node>\
             <edge source=\"poi-1\" target=\"poi-1\">\
               <data key=\"d7\">50.0</data>\
               <data key=\"d8\">0.0</data>\
-              <data key=\"d9\">0.05</data>\
+              <data key=\"d9\">0.0</data>\
             </edge>\
           </graph>\
         </graphml>]]>\
         </topology>\
-        <plugin id=\"filex\" path=\"libshadow-plugin-filetransfer.so\" />\
-        <node id=\"server\" geocodehint=\"US\" bandwidthup=\"10240\" bandwidthdown=\"5120\" >\
-            <application plugin=\"filex\" time=\"10\" arguments=\"server 8080 /bin/\" />\
-        </node >\
-        <node id=\"client\" quantity=\"1000\" >\
-            <application plugin=\"filex\" time=\"20\" arguments=\"client single server 8080 none 0 10 /ls\" />\
+        <plugin id=\"test\" path=\"libshadow-plugin-test.so\" />\
+        <node id=\"node\" quantity=\"1000\" >\
+            <application plugin=\"test\" time=\"1\" arguments=\"node 1000\" />\
         </node >\
         <kill time=\"300\" />\
         </shadow>");

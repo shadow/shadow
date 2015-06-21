@@ -113,6 +113,7 @@ gboolean options_doRunPrintVersion(Options* options);
 gboolean options_doRunValgrind(Options* options);
 gboolean options_doRunDebug(Options* options);
 gboolean options_doRunTGenExample(Options* options);
+gboolean options_doRunTestExample(Options* options);
 
 gint options_getCPUThreshold(Options* options);
 gint options_getCPUPrecision(Options* options);
