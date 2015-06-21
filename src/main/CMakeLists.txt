@@ -24,19 +24,23 @@ add_cflags(-Wno-unknown-warning-option)
 
 ## sources for our main shadow program
 set(shadow_srcs
-    engine/scheduler/shd-scheduler.c
-    engine/scheduler/shd-scheduler-policy-global-single.c
-    engine/scheduler/shd-scheduler-policy-host-single.c
-    engine/scheduler/shd-scheduler-policy-thread-perhost.c
-    engine/scheduler/shd-scheduler-policy-thread-perthread.c
-    engine/scheduler/shd-scheduler-policy-thread-single.c
-    engine/work/shd-event.c
-    engine/work/shd-message.c
-    engine/work/shd-task.c
-    engine/shd-main.c
-    engine/shd-master.c
-    engine/shd-slave.c
-    engine/shd-worker.c
+    core/scheduler/shd-scheduler.c
+    core/scheduler/shd-scheduler-policy-global-single.c
+    core/scheduler/shd-scheduler-policy-host-single.c
+    core/scheduler/shd-scheduler-policy-thread-perhost.c
+    core/scheduler/shd-scheduler-policy-thread-perthread.c
+    core/scheduler/shd-scheduler-policy-thread-single.c
+    core/support/shd-options.c
+    core/support/shd-examples.c
+    core/support/shd-logging.c
+    core/support/shd-configuration.c
+    core/work/shd-event.c
+    core/work/shd-message.c
+    core/work/shd-task.c
+    core/shd-main.c
+    core/shd-master.c
+    core/shd-slave.c
+    core/shd-worker.c
 
     host/descriptor/shd-channel.c
     host/descriptor/shd-descriptor.c
@@ -59,11 +63,6 @@ set(shadow_srcs
     host/shd-network-interface.c
     host/shd-packet.c
     host/shd-tracker.c
-
-    engine/support/shd-options.c
-    engine/support/shd-examples.c
-    engine/support/shd-logging.c
-    engine/support/shd-configuration.c
 
     routing/shd-address.c
     routing/shd-dns.c

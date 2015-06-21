@@ -52,20 +52,20 @@ typedef struct _Process Process;
  * place base classes with few dependencies first.
  */
 
-#include "engine/support/shd-definitions.h"
+#include "core/support/shd-definitions.h"
 #include "../plugin/shadow-plugin-interface.h"
-#include "engine/shd-main.h"
+#include "core/shd-main.h"
 
 /* configuration, base runnables, and input parsing */
-#include "engine/support/shd-examples.h"
-#include "engine/support/shd-options.h"
+#include "core/support/shd-examples.h"
+#include "core/support/shd-options.h"
 #include "utility/shd-utility.h"
-#include "engine/work/shd-task.h"
-#include "engine/work/shd-event.h"
-#include "engine/work/shd-message.h"
+#include "core/work/shd-task.h"
+#include "core/work/shd-event.h"
+#include "core/work/shd-message.h"
 #include "host/shd-protocol.h"
 #include "host/descriptor/shd-descriptor.h"
-#include "engine/support/shd-configuration.h"
+#include "core/support/shd-configuration.h"
 #include "host/shd-packet.h"
 #include "host/shd-cpu.h"
 #include "utility/shd-pcap-writer.h"
@@ -102,11 +102,11 @@ typedef struct _Process Process;
 
 #include "routing/shd-topology.h"
 
-#include "engine/support/shd-logging.h"
-#include "engine/scheduler/shd-scheduler-policy.h"
-#include "engine/scheduler/shd-scheduler.h"
-#include "engine/shd-master.h"
-#include "engine/shd-slave.h"
-#include "engine/shd-worker.h"
+#include "core/support/shd-logging.h"
+#include "core/scheduler/shd-scheduler-policy.h"
+#include "core/scheduler/shd-scheduler.h"
+#include "core/shd-master.h"
+#include "core/shd-slave.h"
+#include "core/shd-worker.h"
 
 #endif /* SHADOW_H_ */

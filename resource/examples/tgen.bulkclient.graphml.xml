@@ -1,4 +1,5 @@
 <graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
+  <key attr.name="timeout" attr.type="string" for="node" id="d6" />
   <key attr.name="count" attr.type="string" for="node" id="d5" />
   <key attr.name="size" attr.type="string" for="node" id="d4" />
   <key attr.name="type" attr.type="string" for="node" id="d3" />
@@ -11,9 +12,10 @@
       <data key="d1">8888</data>
     </node>
     <node id="transfer">
+	  <data key="d6">3</data>
       <data key="d2">tcp</data>
       <data key="d3">get</data>
-      <data key="d4">1 MiB</data>
+      <data key="d4">100 MiB</data>
     </node>
     <node id="end">
       <data key="d5">10</data>
