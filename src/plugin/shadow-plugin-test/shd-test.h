@@ -33,6 +33,8 @@
 #define test_info(...)      if(test && test->logf){test->logf(SHADOW_LOG_LEVEL_INFO, __FUNCTION__, __VA_ARGS__);}
 #define test_debug(...)     if(test && test->logf){test->logf(SHADOW_LOG_LEVEL_DEBUG, __FUNCTION__, __VA_ARGS__);}
 
+#define TEST_LISTEN_PORT 8998
+
 typedef struct _Test Test;
 
 Test* test_new(gint argc, gchar* argv[], ShadowLogFunc logf, ShadowCreateCallbackFunc callf);

@@ -28,13 +28,13 @@ GString* example_getTestContents() {
               <data key=\"d0\">0.0</data>\
               <data key=\"d1\">0.0.0.0</data>\
               <data key=\"d2\">XX</data>\
-              <data key=\"d3\">10240</data>\
-              <data key=\"d4\">10240</data>\
+              <data key=\"d3\">1024000</data>\
+              <data key=\"d4\">1024000</data>\
               <data key=\"d5\">net</data>\
               <data key=\"d6\">0</data>\
             </node>\
             <edge source=\"poi-1\" target=\"poi-1\">\
-              <data key=\"d7\">50.0</data>\
+              <data key=\"d7\">1.0</data>\
               <data key=\"d8\">0.0</data>\
               <data key=\"d9\">0.0</data>\
             </edge>\
@@ -43,7 +43,7 @@ GString* example_getTestContents() {
         </topology>\
         <plugin id=\"test\" path=\"libshadow-plugin-test.so\" />\
         <node id=\"node\" quantity=\"1000\" >\
-            <application plugin=\"test\" time=\"1\" arguments=\"node 1000\" />\
+            <application plugin=\"test\" time=\"1\" arguments=\"basename=node quantity=1000 msgload=100\" />\
         </node >\
         <kill time=\"300\" />\
         </shadow>");
