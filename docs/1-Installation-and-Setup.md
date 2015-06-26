@@ -76,21 +76,38 @@ Some Linux system configuration changes are needed to run large-scale Shadow sim
 There is a default linux system limit on the number of open files. If each node 
 in your Shadow plug-in opens many file or socket descriptors (if you have many nodes, this is very likely to happen), you'll likely want to increase the limit so you application doesn't start getting errors when calling `open()` or `socket()`.
 
-You can check the maximum number of open file descriptors allowed in your _current session_:
+#### System-wide Limits
+
+Check the _system wide_ limits with:
+
 ```bash
-ulimit -n
-```
-And you can check the _system wide_ limits with:
-```bash
+sysctl fs.file-max
 cat /proc/sys/fs/file-nr
 ```
-That tells you:
+
+The latter command shows you:
  1. the system-wide number of open file handles
  1. the system-wide number of free handles
  1. and the system-wide limit on the maximum number of open files for all processes
 
-You will want to raise the limits by modifying `/etc/security/limits.conf` and rebooting.
-For example, to handle all our network configurations on EC2, I use:
+Change the limit, persistent across reboots, and apply now:
+
+```bash
+sysctl -w fs.file-max=5000000
+echo "fs.file-max = 5000000" >> /etc/sysctl.conf
+sysctl -p
+```
+
+#### User Limits
+
+You will want to almost certainly want to raise the user file limit by modifying `/etc/security/limits.conf`. After modifying, you need to either log out and back in or reboot for the changes to take affect.
+
+Check the maximum number of open file descriptors allowed in your _current session_:
+```bash
+ulimit -n
+```
+
+Update the user limit. For example, to handle all of our network configurations on EC2, I use:
 
 ```
 * soft nofile 25000
@@ -110,7 +127,11 @@ cat /proc/sys/fs/inode-max
 
 ### Number of Maps
 
-There is a system limit on the number of `mmap()` mappings per process. The limit can be queried in these ways:
+There is a system limit on the number of `mmap()` mappings per process. Most users will not have to modify these settings. However, if an application running in Shadow makes extensive use of `mmap()`, you may need to increase the limit.
+
+#### Process Limit
+
+The process limit can be queried in these ways:
 
 ```bash
 sysctl vm.max_map_count
@@ -123,15 +144,10 @@ You can check the number of maps currently used in a process with pid=PID like t
 cat /proc/PID/maps | wc -l
 ```
 
-Most users will not have to modify these settings. However, if an application running in Shadow makes extensive use of `mmap()`, you may need to increase the limit. You can do that at run time with:
+Set a new limit, make it persistent, apply it now:
 
 ```bash
 sudo sysctl -w vm.max_map_count=262144
-```
-
-If you also want to change it at run time AND make it persistent, you can use:
-
-```bash
 sudo echo "vm.max_map_count = 262144" >> /etc/sysctl.conf
 sudo sysctl -p
 ```
