@@ -2614,13 +2614,15 @@ const struct addrinfo *hints, struct addrinfo **res) {
             /* XXX this is not thread safe! */
             struct servent* serviceEntry = getservbyname(service, NULL);
             if(serviceEntry) {
+                /* this is in network order */
                 port = (in_port_t) serviceEntry->s_port;
             }
         }
 
         /* if not found, try converting string directly to port */
         if(port == 0) {
-            port = (in_port_t)strtol(service, NULL, 10);
+            /* make sure we have network order */
+            port = (in_port_t)htons((uint16_t)strtol(service, NULL, 10));
         }
     }
 

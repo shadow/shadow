@@ -237,13 +237,23 @@ gint socket_getAssociationKey(Socket* socket) {
 gsize socket_getInputBufferSpace(Socket* socket) {
     MAGIC_ASSERT(socket);
     utility_assert(socket->inputBufferSize >= socket->inputBufferLength);
-    return (socket->inputBufferSize - socket->inputBufferLength);
+    gsize bufferSize = socket_getInputBufferSize(socket);
+    if(bufferSize < socket->inputBufferLength) {
+        return 0;
+    } else {
+        return bufferSize - socket->inputBufferLength;
+    }
 }
 
 gsize socket_getOutputBufferSpace(Socket* socket) {
     MAGIC_ASSERT(socket);
     utility_assert(socket->outputBufferSize >= socket->outputBufferLength);
-    return (socket->outputBufferSize - socket->outputBufferLength);
+    gsize bufferSize = socket_getOutputBufferSize(socket);
+    if(bufferSize < socket->outputBufferLength) {
+        return 0;
+    } else {
+        return bufferSize - socket->outputBufferLength;
+    }
 }
 
 gsize socket_getInputBufferLength(Socket* socket) {
@@ -258,12 +268,12 @@ gsize socket_getOutputBufferLength(Socket* socket) {
 
 gsize socket_getInputBufferSize(Socket* socket) {
     MAGIC_ASSERT(socket);
-    return socket->inputBufferSize;
+    return socket->inputBufferSizePending > 0 ? socket->inputBufferSizePending : socket->inputBufferSize;
 }
 
 gsize socket_getOutputBufferSize(Socket* socket) {
     MAGIC_ASSERT(socket);
-    return socket->outputBufferSize;
+    return socket->outputBufferSizePending > 0 ? socket->outputBufferSizePending : socket->outputBufferSize;
 }
 
 void socket_setInputBufferSize(Socket* socket, gsize newSize) {

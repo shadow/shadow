@@ -2035,6 +2035,9 @@ void tcp_close(TCP* tcp) {
     /* dont have to worry about space since this has no payload */
     _tcp_bufferPacketOut(tcp, packet);
     _tcp_flush(tcp);
+
+    /* the user closed the connection, so should never interact with the socket again */
+    descriptor_adjustStatus((Descriptor*)tcp, DS_ACTIVE, FALSE);
 }
 
 /* we implement the socket interface, this describes our function suite */
