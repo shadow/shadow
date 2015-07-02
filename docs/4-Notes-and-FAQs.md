@@ -47,6 +47,18 @@ CC=`which clang` CXX=`which clang++` cmake ../..
 make && make install
 ```
 
+#### How can I build the traffic generator (TGen) for use outside of Shadow, e.g. over the Internet?
+
+The traffic generator currently exists in the Shadow simulator repository, but we can build tgen as an external tool and skip building both the full simulator and the plug-in part of tgen:
+
+```bash
+git clone https://github.com/shadow/shadow.git
+cd shadow/src/plugin/shadow-plugin-tgen
+mkdir build
+cd build
+cmake .. -DSKIP_SHADOW=ON -DCMAKE_MODULE_PATH=`pwd`/../../../../cmake/
+make
+```
 #### How can I stop Shadow from forking?
 
 In order to run Shadow, the `LD_PRELOAD` environmental variable must be set to the location of `libshadow-interpose.so`. If this is not done, recent versions of Shadow will attempt to do this on behalf of the user, and then fork itself once the environment is set up properly. To avoid the fork, simply run shadow like:
