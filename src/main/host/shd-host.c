@@ -14,7 +14,7 @@ struct _Host {
     HostParameters params;
 
     GHashTable* interfaces;
-    NetworkInterface* defaultInterface;
+    Address* defaultAddress;
     CPU* cpu;
 
     /* the virtual processes this host is running */
@@ -98,7 +98,8 @@ void host_free(Host* host) {
 
     g_queue_free(host->processes);
 
-    topology_detach(worker_getTopology(), networkinterface_getAddress(host->defaultInterface));
+    topology_detach(worker_getTopology(), host->defaultAddress);
+    address_ref(host->defaultAddress);
 
     g_hash_table_destroy(host->interfaces);
 
@@ -162,6 +163,8 @@ void host_boot(Host* host) {
     /* get unique virtual address identifiers for each network interface */
     Address* loopbackAddress = dns_register(worker_getDNS(), host->params.id, host->params.hostname, "127.0.0.1");
     Address* ethernetAddress = dns_register(worker_getDNS(), host->params.id, host->params.hostname, host->params.ipHint);
+    host->defaultAddress = ethernetAddress;
+    address_ref(host->defaultAddress);
 
     /* connect to topology and get the default bandwidth */
     guint64 bwDownKiBps = 0, bwUpKiBps = 0;
@@ -182,10 +185,8 @@ void host_boot(Host* host) {
     NetworkInterface* ethernet = networkinterface_new(ethernetAddress, bwDownKiBps, bwUpKiBps,
             host->params.logPcap, host->params.pcapDir, host->params.qdisc, host->params.interfaceBufSize);
 
-    g_hash_table_replace(host->interfaces, GUINT_TO_POINTER((guint)networkinterface_getIPAddress(ethernet)), ethernet);
+    g_hash_table_replace(host->interfaces, GUINT_TO_POINTER((guint)address_toNetworkIP(ethernetAddress)), ethernet);
     g_hash_table_replace(host->interfaces, GUINT_TO_POINTER((guint)htonl(INADDR_LOOPBACK)), loopback);
-
-    host->defaultInterface = ethernet;
 
     address_unref(loopbackAddress);
     address_unref(ethernetAddress);
@@ -201,8 +202,8 @@ void host_boot(Host* host) {
                 "%"G_GUINT64_FORMAT" initSockSendBufSize, %"G_GUINT64_FORMAT" initSockRecvBufSize, "
                 "%"G_GUINT64_FORMAT" cpuFrequency, %"G_GUINT64_FORMAT" cpuThreshold, "
                 "%"G_GUINT64_FORMAT" cpuPrecision",
-                (guint)host->params.id, g_quark_to_string(host->params.id), host->params.nodeSeed,
-                networkinterface_getIPName(host->defaultInterface),
+                (guint)host->params.id, host->params.hostname, host->params.nodeSeed,
+                address_toHostIPString(host->defaultAddress),
                 bwUpKiBps, bwDownKiBps, host->params.sendBufSize, host->params.recvBufSize,
                 host->params.cpuFrequency, host->params.cpuThreshold, host->params.cpuPrecision);
 }
@@ -253,20 +254,19 @@ gchar* host_getName(Host* host) {
 
 Address* host_getDefaultAddress(Host* host) {
     MAGIC_ASSERT(host);
-    return networkinterface_getAddress(host->defaultInterface);
+    return host->defaultAddress;
 }
 
-// TODO replace this with address object functions
 in_addr_t host_getDefaultIP(Host* host) {
     MAGIC_ASSERT(host);
-    return networkinterface_getIPAddress(host->defaultInterface);
+    return address_toNetworkIP(host->defaultAddress);
 }
 
-// TODO replace this with address object functions
 gchar* host_getDefaultIPName(Host* host) {
     MAGIC_ASSERT(host);
-    return networkinterface_getIPName(host->defaultInterface);
+    return address_toHostIPString(host->defaultAddress);
 }
+
 
 Random* host_getRandom(Host* host) {
     MAGIC_ASSERT(host);
@@ -637,8 +637,15 @@ gint host_epollGetEvents(Host* host, gint handle,
 static gboolean _host_doesInterfaceExist(Host* host, in_addr_t interfaceIP) {
     MAGIC_ASSERT(host);
 
-    if(interfaceIP == htonl(INADDR_ANY) && host->defaultInterface) {
-        return TRUE;
+    if(interfaceIP == htonl(INADDR_ANY)) {
+        in_addr_t defaultIP = address_toNetworkIP(host->defaultAddress);
+        gpointer key = GUINT_TO_POINTER((guint)defaultIP);
+        NetworkInterface* defaultInterface = g_hash_table_lookup(host->interfaces, key);
+        if(defaultInterface != NULL) {
+            return TRUE;
+        } else {
+            return FALSE;
+        }
     }
 
     NetworkInterface* interface = host_lookupInterface(host, interfaceIP);
@@ -810,7 +817,7 @@ gint host_connectToPeer(Host* host, gint handle, const struct sockaddr* address)
 
     /* make sure we will be able to route this later */
     if(peerIP != loIP) {
-        Address* myAddress = networkinterface_getAddress(host->defaultInterface);
+        Address* myAddress = host->defaultAddress;
         Address* peerAddress = worker_resolveIPToAddress(peerIP);
         if(!peerAddress || !topology_isRoutable(worker_getTopology(), myAddress, peerAddress)) {
             /* can't route it - there is no node with this address */
@@ -860,7 +867,7 @@ gint host_connectToPeer(Host* host, gint handle, const struct sockaddr* address)
     if(!socket_isBound(socket)) {
         /* do an implicit bind to a random port.
          * use default interface unless the remote peer is on loopback */
-        in_addr_t defaultIP = networkinterface_getIPAddress(host->defaultInterface);
+        in_addr_t defaultIP = address_toNetworkIP(host->defaultAddress);
 
         in_addr_t bindAddress = loIP == peerIP ? loIP : defaultIP;
         in_port_t bindPort = _host_getRandomFreePort(host, bindAddress, type);
@@ -1085,7 +1092,7 @@ gint host_sendUserData(Host* host, gint handle, gconstpointer buffer, gsize nByt
         /* if this socket is not bound, do an implicit bind to a random port */
         if(!socket_isBound(socket)) {
             in_addr_t bindAddress = ip == htonl(INADDR_LOOPBACK) ? htonl(INADDR_LOOPBACK) :
-                    networkinterface_getIPAddress(host->defaultInterface);
+                    address_toNetworkIP(host->defaultAddress);
             in_port_t bindPort = _host_getRandomFreePort(host, bindAddress, type);
             if(!bindPort) {
                 return EADDRNOTAVAIL;

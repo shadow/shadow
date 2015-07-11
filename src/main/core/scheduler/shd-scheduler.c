@@ -275,10 +275,7 @@ void scheduler_push(Scheduler* scheduler, Event* event, GQuark senderHostID, GQu
     Host* sender = scheduler_getHost(scheduler, senderHostID);
     Host* receiver = scheduler_getHost(scheduler, receiverHostID);
     utility_assert(receiver);
-
-    /* update the Event with a pointer to the correct host */
-    // XXX should have been done by worker ?
-//    shadowevent_setNode(event, receiver);
+    utility_assert(receiver == event_getHost(event));
 
     /* push to a queue based on the policy */
     scheduler->policy->push(scheduler->policy, event, sender, receiver, scheduler->currentRound.endTime);

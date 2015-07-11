@@ -16,8 +16,6 @@ NetworkInterface* networkinterface_new(Address* address, guint64 bwDownKiBps, gu
 void networkinterface_free(NetworkInterface* interface);
 
 Address* networkinterface_getAddress(NetworkInterface* interface);
-in_addr_t networkinterface_getIPAddress(NetworkInterface* interface);
-gchar* networkinterface_getIPName(NetworkInterface* interface);
 guint32 networkinterface_getSpeedUpKiBps(NetworkInterface* interface);
 guint32 networkinterface_getSpeedDownKiBps(NetworkInterface* interface);
 

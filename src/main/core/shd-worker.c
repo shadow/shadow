@@ -192,7 +192,7 @@ void worker_scheduleTask(Task* task, SimulationTime nanoDelay) {
     if(slave_schedulerIsRunning(worker->slave)) {
         utility_assert(worker->clock.now != SIMTIME_INVALID);
         utility_assert(worker->active.host != NULL);
-        Event* event = event_new_(task, worker->clock.now + nanoDelay);
+        Event* event = event_new_(task, worker->clock.now + nanoDelay, worker->active.host);
         GQuark hostID = host_getID(worker->active.host);
         scheduler_push(worker->scheduler, event, hostID, hostID);
     }
@@ -240,7 +240,7 @@ void worker_sendPacket(Packet* packet) {
         SimulationTime delay = (SimulationTime) ceil(latency * SIMTIME_ONE_MILLISECOND);
         SimulationTime deliverTime = worker->clock.now + delay;
 
-        /* TODO this should change for sending to remote slave
+        /* TODO this should change for sending to remote slave (on a different machine)
          * this is the only place where tasks are sent between separate hosts */
 
         Host* srcHost = worker->active.host;
@@ -251,10 +251,7 @@ void worker_sendPacket(Packet* packet) {
 
         Task* packetTask = task_new((TaskFunc)_worker_runDeliverPacketTask, packet, NULL);
         packet_ref(packet);
-        /* this is a hack to make sure the dst host is active while creating the event */
-        worker->active.host = dstHost;
-        Event* packetEvent = event_new_(packetTask, deliverTime);
-        worker->active.host = srcHost;
+        Event* packetEvent = event_new_(packetTask, deliverTime, dstHost);
         task_unref(packetTask);
 
         scheduler_push(worker->scheduler, packetEvent, srcID, dstID);

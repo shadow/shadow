@@ -136,18 +136,6 @@ Address* networkinterface_getAddress(NetworkInterface* interface) {
     return interface->address;
 }
 
-// TODO remove this in favor of address func above
-in_addr_t networkinterface_getIPAddress(NetworkInterface* interface) {
-    MAGIC_ASSERT(interface);
-    return address_toNetworkIP(interface->address);
-}
-
-// TODO remove this in favor of address func above
-gchar* networkinterface_getIPName(NetworkInterface* interface) {
-    MAGIC_ASSERT(interface);
-    return address_toHostIPString(interface->address);
-}
-
 guint32 networkinterface_getSpeedUpKiBps(NetworkInterface* interface) {
     MAGIC_ASSERT(interface);
     return interface->bwUpKiBps;
@@ -423,7 +411,7 @@ static void _networkinterface_scheduleNextSend(NetworkInterface* interface) {
         packet_addDeliveryStatus(packet, PDS_SND_INTERFACE_SENT);
 
         /* now actually send the packet somewhere */
-        if(networkinterface_getIPAddress(interface) == packet_getDestinationIP(packet)) {
+        if(address_toNetworkIP(interface->address) == packet_getDestinationIP(packet)) {
             /* packet will arrive on our own interface */
             Task* packetTask = task_new((TaskFunc)networkinterface_packetArrived, interface, packet);
             packet_ref(packet);

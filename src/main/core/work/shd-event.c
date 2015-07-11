@@ -14,12 +14,12 @@ struct _Event {
     MAGIC_DECLARE;
 };
 
-Event* event_new_(Task* task, SimulationTime time) {
+Event* event_new_(Task* task, SimulationTime time, gpointer host) {
     utility_assert(task != NULL);
     Event* event = g_new0(Event, 1);
     MAGIC_INIT(event);
 
-    event->host = worker_getCurrentHost();
+    event->host = (Host*)host;
     event->task = task;
     task_ref(event->task);
     event->time = time;
@@ -78,6 +78,11 @@ void event_execute(Event* event) {
 SimulationTime event_getTime(Event* event) {
     MAGIC_ASSERT(event);
     return event->time;
+}
+
+gpointer event_getHost(Event* event) {
+    MAGIC_ASSERT(event);
+    return event->host;
 }
 
 void event_setTime(Event* event, SimulationTime time) {

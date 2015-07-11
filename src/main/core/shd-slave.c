@@ -171,7 +171,7 @@ void slave_addNewProgram(Slave* slave, const gchar* name, const gchar* path) {
 void slave_addNewVirtualHost(Slave* slave, HostParameters* params) {
     MAGIC_ASSERT(slave);
 
-    /* quarks are unique per process, so do the conversion here */
+    /* quarks are unique per slave process, so do the conversion here */
     params->id = g_quark_from_string(params->hostname);
     params->nodeSeed = (guint) slave_nextRandomInt(slave);
 
@@ -297,7 +297,7 @@ void slave_run(Slave* slave) {
             scheduler_continueNextRound(slave->scheduler, windowStart, windowEnd);
 
             /* we could eventually do some idle processing here if needed */
-            /* XXX the heartbeat does not run in single process mode */
+            /* XXX the heartbeat should run in single process mode too */
             _slave_heartbeat(slave, windowStart);
 
             /* wait for the workers to finish processing nodes before we update the execution window */

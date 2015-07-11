@@ -11,13 +11,14 @@
 /* A basic event connected to a local virtual host. */
 typedef struct _Event Event;
 
-Event* event_new_(Task* task, SimulationTime time);
+Event* event_new_(Task* task, SimulationTime time, gpointer host);
 void event_ref(Event* event);
 void event_unref(Event* event);
 
 void event_execute(Event* event);
 gint event_compare(const Event* a, const Event* b, gpointer userData);
 
+gpointer event_getHost(Event* event);
 SimulationTime event_getTime(Event* event);
 void event_setTime(Event* event, SimulationTime time);
 void event_setSequence(Event* event, guint64 sequence);

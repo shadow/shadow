@@ -43,7 +43,7 @@ GString* example_getTestContents() {
         </topology>\
         <plugin id=\"test\" path=\"libshadow-plugin-test.so\" />\
         <node id=\"node\" quantity=\"1000\" >\
-            <application plugin=\"test\" time=\"1\" arguments=\"basename=node quantity=1000 msgload=100\" />\
+            <application plugin=\"test\" starttime=\"1\" arguments=\"basename=node quantity=1000 msgload=100\" />\
         </node >\
         <kill time=\"300\" />\
         </shadow>");

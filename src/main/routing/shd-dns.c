@@ -7,6 +7,8 @@
 #include "shadow.h"
 
 struct _DNS {
+    GMutex lock;
+
     in_addr_t ipAddressCounter;
     guint macAddressCounter;
 
@@ -105,6 +107,8 @@ Address* dns_register(DNS* dns, GQuark id, gchar* name, gchar* requestedIP) {
     MAGIC_ASSERT(dns);
     utility_assert(name);
 
+    g_mutex_lock(&dns->lock);
+
     in_addr_t ip = 0;
     guint mac = ++dns->macAddressCounter;
     gboolean isLocal = FALSE;
@@ -132,15 +136,19 @@ Address* dns_register(DNS* dns, GQuark id, gchar* name, gchar* requestedIP) {
         address_ref(address);
     }
 
+    g_mutex_unlock(&dns->lock);
+
     return address;
 }
 
 void dns_deregister(DNS* dns, Address* address) {
     MAGIC_ASSERT(dns);
     if(!address_isLocal(address)) {
+        g_mutex_lock(&dns->lock);
         /* these remove functions will call address_unref as necessary */
         g_hash_table_remove(dns->addressByIP, GUINT_TO_POINTER(address_toNetworkIP(address)));
         g_hash_table_remove(dns->addressByName, address_toHostName(address));
+        g_mutex_unlock(&dns->lock);
     }
 }
 
@@ -168,6 +176,8 @@ DNS* dns_new() {
     DNS* dns = g_new0(DNS, 1);
     MAGIC_INIT(dns);
 
+    g_mutex_init(&(dns->lock));
+
     dns->addressByIP = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, (GDestroyNotify) address_unref);
     dns->addressByName = g_hash_table_new_full(g_str_hash, g_str_equal, NULL, (GDestroyNotify) address_unref);
 
@@ -182,6 +192,8 @@ void dns_free(DNS* dns) {
 
     g_hash_table_destroy(dns->addressByIP);
     g_hash_table_destroy(dns->addressByName);
+
+    g_mutex_clear(&(dns->lock));
 
     MAGIC_CLEAR(dns);
     g_free(dns);

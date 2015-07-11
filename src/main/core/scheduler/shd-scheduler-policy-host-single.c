@@ -92,15 +92,16 @@ static void _schedulerpolicyhostsingle_push(SchedulerPolicy* policy, Event* even
     MAGIC_ASSERT(policy);
     HostSinglePolicyData* data = policy->data;
 
-    /* non-local events must be properly delayed so the event wont show up at another worker
-     * before the next scheduling interval. this is only a problem if the sender and
-     * receivers have been assigned to different worker threads. */
-    GThread* srcThread = g_hash_table_lookup(data->hostToThreadMap, srcHost);
-    GThread* dstThread = g_hash_table_lookup(data->hostToThreadMap, dstHost);
-
+    /* non-local events must be properly delayed so the event wont show up at another host
+     * before the next scheduling interval. if the thread scheduler guaranteed to always run
+     * the minimum time event accross all of its assigned hosts, then we would only need to
+     * do the time adjustment if the srcThread and dstThread are not identical. however,
+     * the logic of this policy allows a thread to run all events from a given host before
+     * moving on to the next host, so we must adjust the time whenever the srcHost and
+     * dstHost are not the same. */
     SimulationTime eventTime = event_getTime(event);
 
-    if(srcThread != dstThread && eventTime < barrier) {
+    if(srcHost != dstHost && eventTime < barrier) {
         event_setTime(event, barrier);
         info("Inter-host event time %"G_GUINT64_FORMAT" changed to %"G_GUINT64_FORMAT" "
                 "to ensure event causality", eventTime, barrier);
@@ -145,7 +146,7 @@ static Event* _schedulerpolicyhostsingle_pop(SchedulerPolicy* policy, Simulation
         Event* nextEvent = priorityqueue_peek(qdata->pq);
         SimulationTime eventTime = (nextEvent != NULL) ? event_getTime(nextEvent) : SIMTIME_INVALID;
 
-        if(nextEvent && eventTime < barrier) {
+        if(nextEvent != NULL && eventTime < barrier) {
             utility_assert(eventTime >= qdata->lastEventTime);
             qdata->lastEventTime = eventTime;
             nextEvent = priorityqueue_pop(qdata->pq);
@@ -189,6 +190,7 @@ static SimulationTime _schedulerpolicyhostsingle_getNextTime(SchedulerPolicy* po
             item = g_list_next(item);
         }
     }
+    info("next event at time %"G_GUINT64_FORMAT, nextTime);
 
     return nextTime;
 }

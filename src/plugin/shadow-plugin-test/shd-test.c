@@ -123,7 +123,7 @@ static in_addr_t _test_lookupIP(Test* test, const gchar* hostname) {
     if (result == 0) {
         ip = ((struct sockaddr_in*) (info->ai_addr))->sin_addr.s_addr;
     } else {
-        test_warning("getaddrinfo(): returned %i host '%s' errno %i: %s",
+        test_critical("getaddrinfo(): returned %i host '%s' errno %i: %s",
                 result, hostname, errno, g_strerror(errno));
     }
 
@@ -141,31 +141,37 @@ static void _test_sendNewMessage(Test* test) {
     GString* chosenNodeBuffer = g_string_new(NULL);
     g_string_append_printf(chosenNodeBuffer, "%s%"G_GUINT64_FORMAT, test->basename->str, index);
 
-    /* create a new socket */
-    gint socketd = socket(AF_INET, (SOCK_DGRAM | SOCK_NONBLOCK), 0);
+    in_addr_t chosenNodeIP = _test_lookupIP(test, chosenNodeBuffer->str);
+    if(chosenNodeIP != htonl(INADDR_NONE)) {
+        /* create a new socket */
+        gint socketd = socket(AF_INET, (SOCK_DGRAM | SOCK_NONBLOCK), 0);
 
-    /* get node address for this message */
-    struct sockaddr_in node;
-    memset(&node, 0, sizeof(struct sockaddr_in));
-    node.sin_family = AF_INET;
-    node.sin_addr.s_addr = _test_lookupIP(test, chosenNodeBuffer->str);
-    node.sin_port = htons(TEST_LISTEN_PORT);
-    socklen_t len = sizeof(struct sockaddr_in);
+        /* get node address for this message */
+        struct sockaddr_in node;
+        memset(&node, 0, sizeof(struct sockaddr_in));
+        node.sin_family = AF_INET;
+        node.sin_addr.s_addr = chosenNodeIP;
+        node.sin_port = htons(TEST_LISTEN_PORT);
+        socklen_t len = sizeof(struct sockaddr_in);
 
-    /* send a 1 byte message to that node */
-    gint8 msg = 64;
-    ssize_t b = sendto(socketd, &msg, 1, 0, (struct sockaddr*) (&node), len);
-    if(b > 0) {
-        test->nmsgs++;
-        test_info("host '%s' sent '%i' byte%s to host '%s'",
-                        test->basename->str, (gint)b, b == 1 ? "" : "s", chosenNodeBuffer->str);
-    } else if(b < 0) {
-        test_warning("sendto(): returned %i host '%s' errno %i: %s",
-                        (gint)b, test->basename->str, errno, g_strerror(errno));
+        /* send a 1 byte message to that node */
+        gint8 msg = 64;
+        ssize_t b = sendto(socketd, &msg, 1, 0, (struct sockaddr*) (&node), len);
+        if(b > 0) {
+            test->nmsgs++;
+            test_info("host '%s' sent '%i' byte%s to host '%s'",
+                            test->basename->str, (gint)b, b == 1 ? "" : "s", chosenNodeBuffer->str);
+        } else if(b < 0) {
+            test_warning("sendto(): returned %i host '%s' errno %i: %s",
+                            (gint)b, test->basename->str, errno, g_strerror(errno));
+        }
+
+        /* close socket */
+        close(socketd);
+    } else {
+        test_warning("could not find address for node '%s', no message was sent", chosenNodeBuffer->str);
     }
 
-    /* close socket */
-    close(socketd);
     g_string_free(chosenNodeBuffer, TRUE);
 }
 
