@@ -33,6 +33,8 @@
 #include <features.h>
 
 #include <malloc.h>
+#include <pthread.h>
+#include <pthmt.h>
 
 #include "shadow.h"
 
@@ -175,6 +177,132 @@ typedef int (*on_exit_func)(void (*function)(int , void *), void *arg);
 typedef int (*atexit_func)(void (*func)(void));
 typedef int (*__cxa_atexit_func)(void (*func) (void *), void * arg, void * dso_handle);
 
+/* pthread thread attribute */
+
+typedef int (*pthread_attr_init_func)(pthread_attr_t *);
+typedef int (*pthread_attr_destroy_func)(pthread_attr_t *);
+typedef int (*pthread_attr_setinheritsched_func)(pthread_attr_t *, int);
+typedef int (*pthread_attr_getinheritsched_func)(const pthread_attr_t *, int *);
+typedef int (*pthread_attr_setschedparam_func)(pthread_attr_t *, const struct sched_param *);
+typedef int (*pthread_attr_getschedparam_func)(const pthread_attr_t *, struct sched_param *);
+typedef int (*pthread_attr_setschedpolicy_func)(pthread_attr_t *, int);
+typedef int (*pthread_attr_getschedpolicy_func)(const pthread_attr_t *, int *);
+typedef int (*pthread_attr_setscope_func)(pthread_attr_t *, int);
+typedef int (*pthread_attr_getscope_func)(const pthread_attr_t *, int *);
+typedef int (*pthread_attr_setstacksize_func)(pthread_attr_t *, size_t);
+typedef int (*pthread_attr_getstacksize_func)(const pthread_attr_t *, size_t *);
+typedef int (*pthread_attr_setstackaddr_func)(pthread_attr_t *, void *);
+typedef int (*pthread_attr_getstackaddr_func)(const pthread_attr_t *, void **);
+typedef int (*pthread_attr_setdetachstate_func)(pthread_attr_t *, int);
+typedef int (*pthread_attr_getdetachstate_func)(const pthread_attr_t *, int *);
+typedef int (*pthread_attr_setguardsize_func)(pthread_attr_t *, int);
+typedef int (*pthread_attr_getguardsize_func)(const pthread_attr_t *, int *);
+typedef int (*pthread_attr_setname_np_func)(pthread_attr_t *, char *);
+typedef int (*pthread_attr_getname_np_func)(const pthread_attr_t *, char **);
+typedef int (*pthread_attr_setprio_np_func)(pthread_attr_t *, int);
+typedef int (*pthread_attr_getprio_np_func)(const pthread_attr_t *, int *);
+
+/* pthread thread */
+
+typedef int (*pthread_create_func)(pthread_t *, const pthread_attr_t *, void *(*)(void *), void *);
+typedef int (*pthread_detach_func)(pthread_t);
+typedef pthread_t (*pthread_self_func)(void);
+typedef int (*pthread_equal_func)(pthread_t, pthread_t);
+typedef int (*pthread_yield_func)(void);
+typedef void (*pthread_exit_func)(void *);
+typedef int (*pthread_join_func)(pthread_t, void **);
+typedef int (*pthread_once_func)(pthread_once_t *, void (*)(void));
+typedef int (*pthread_sigmask_func)(int, const sigset_t *, sigset_t *);
+typedef int (*pthread_kill_func)(pthread_t, int);
+typedef int (*pthread_abort_func)(pthread_t);
+
+/* pthread concurrency */
+
+typedef int (*pthread_getconcurrency_func)(void);
+typedef int (*pthread_setconcurrency_func)(int);
+
+/* pthread context */
+
+typedef int (*pthread_key_create_func)(pthread_key_t *, void (*)(void *));
+typedef int (*pthread_key_delete_func)(pthread_key_t);
+typedef int (*pthread_setspecific_func)(pthread_key_t, const void *);
+typedef void * (*pthread_getspecific_func)(pthread_key_t);
+
+/* pthread cancel */
+
+typedef int (*pthread_cancel_func)(pthread_t);
+typedef void (*pthread_testcancel_func)(void);
+typedef int (*pthread_setcancelstate_func)(int, int *);
+typedef int (*pthread_setcanceltype_func)(int, int *);
+
+/* pthread scheduler */
+
+typedef int (*pthread_setschedparam_func)(pthread_t, int, const struct sched_param *);
+typedef int (*pthread_getschedparam_func)(pthread_t, int *, struct sched_param *);
+
+/* pthread cleanup */
+
+typedef void (*pthread_cleanup_push_func)(void (*)(void *), void *);
+typedef void (*pthread_cleanup_pop_func)(int);
+typedef int (*pthread_atfork_func)(void (*)(void), void (*)(void), void (*)(void));
+
+/* pthread mutex attribute */
+
+typedef int (*pthread_mutexattr_init_func)(pthread_mutexattr_t *);
+typedef int (*pthread_mutexattr_destroy_func)(pthread_mutexattr_t *);
+typedef int (*pthread_mutexattr_setprioceiling_func)(pthread_mutexattr_t *, int);
+typedef int (*pthread_mutexattr_getprioceiling_func)(pthread_mutexattr_t *, int *);
+typedef int (*pthread_mutexattr_setprotocol_func)(pthread_mutexattr_t *, int);
+typedef int (*pthread_mutexattr_getprotocol_func)(pthread_mutexattr_t *, int *);
+typedef int (*pthread_mutexattr_setpshared_func)(pthread_mutexattr_t *, int);
+typedef int (*pthread_mutexattr_getpshared_func)(pthread_mutexattr_t *, int *);
+typedef int (*pthread_mutexattr_settype_func)(pthread_mutexattr_t *, int);
+typedef int (*pthread_mutexattr_gettype_func)(pthread_mutexattr_t *, int *);
+
+/* pthread mutex */
+
+typedef int (*pthread_mutex_init_func)(pthread_mutex_t *, const pthread_mutexattr_t *);
+typedef int (*pthread_mutex_destroy_func)(pthread_mutex_t *);
+typedef int (*pthread_mutex_setprioceiling_func)(pthread_mutex_t *, int, int *);
+typedef int (*pthread_mutex_getprioceiling_func)(pthread_mutex_t *, int *);
+typedef int (*pthread_mutex_lock_func)(pthread_mutex_t *);
+typedef int (*pthread_mutex_trylock_func)(pthread_mutex_t *);
+typedef int (*pthread_mutex_unlock_func)(pthread_mutex_t *);
+
+/* pthread rwlock attribute */
+
+typedef int (*pthread_rwlockattr_init_func)(pthread_rwlockattr_t *);
+typedef int (*pthread_rwlockattr_destroy_func)(pthread_rwlockattr_t *);
+typedef int (*pthread_rwlockattr_setpshared_func)(pthread_rwlockattr_t *, int);
+typedef int (*pthread_rwlockattr_getpshared_func)(const pthread_rwlockattr_t *, int *);
+
+/* pthread rwlock */
+
+typedef int (*pthread_rwlock_init_func)(pthread_rwlock_t *, const pthread_rwlockattr_t *);
+typedef int (*pthread_rwlock_destroy_func)(pthread_rwlock_t *);
+typedef int (*pthread_rwlock_rdlock_func)(pthread_rwlock_t *);
+typedef int (*pthread_rwlock_tryrdlock_func)(pthread_rwlock_t *);
+typedef int (*pthread_rwlock_wrlock_func)(pthread_rwlock_t *);
+typedef int (*pthread_rwlock_trywrlock_func)(pthread_rwlock_t *);
+typedef int (*pthread_rwlock_unlock_func)(pthread_rwlock_t *);
+
+/* pthread condition attribute */
+
+typedef int (*pthread_condattr_init_func)(pthread_condattr_t *);
+typedef int (*pthread_condattr_destroy_func)(pthread_condattr_t *);
+typedef int (*pthread_condattr_setpshared_func)(pthread_condattr_t *, int);
+typedef int (*pthread_condattr_getpshared_func)(pthread_condattr_t *, int *);
+
+/* pthread condition */
+
+typedef int (*pthread_cond_init_func)(pthread_cond_t *, const pthread_condattr_t *);
+typedef int (*pthread_cond_destroy_func)(pthread_cond_t *);
+typedef int (*pthread_cond_broadcast_func)(pthread_cond_t *);
+typedef int (*pthread_cond_signal_func)(pthread_cond_t *);
+typedef int (*pthread_cond_wait_func)(pthread_cond_t *, pthread_mutex_t *);
+typedef int (*pthread_cond_timedwait_func)(pthread_cond_t *, pthread_mutex_t *, const struct timespec *);
+
+
 typedef struct {
     malloc_func malloc;
     calloc_func calloc;
@@ -273,6 +401,105 @@ typedef struct {
     on_exit_func on_exit;
     atexit_func atexit;
     __cxa_atexit_func __cxa_atexit;
+
+    pthread_attr_init_func pthread_attr_init;
+    pthread_attr_destroy_func pthread_attr_destroy;
+    pthread_attr_setinheritsched_func pthread_attr_setinheritsched;
+    pthread_attr_getinheritsched_func pthread_attr_getinheritsched;
+    pthread_attr_setschedparam_func pthread_attr_setschedparam;
+    pthread_attr_getschedparam_func pthread_attr_getschedparam;
+    pthread_attr_setschedpolicy_func pthread_attr_setschedpolicy;
+    pthread_attr_getschedpolicy_func pthread_attr_getschedpolicy;
+    pthread_attr_setscope_func pthread_attr_setscope;
+    pthread_attr_getscope_func pthread_attr_getscope;
+    pthread_attr_setstacksize_func pthread_attr_setstacksize;
+    pthread_attr_getstacksize_func pthread_attr_getstacksize;
+    pthread_attr_setstackaddr_func pthread_attr_setstackaddr;
+    pthread_attr_getstackaddr_func pthread_attr_getstackaddr;
+    pthread_attr_setdetachstate_func pthread_attr_setdetachstate;
+    pthread_attr_getdetachstate_func pthread_attr_getdetachstate;
+    pthread_attr_setguardsize_func pthread_attr_setguardsize;
+    pthread_attr_getguardsize_func pthread_attr_getguardsize;
+    pthread_attr_setname_np_func pthread_attr_setname_np;
+    pthread_attr_getname_np_func pthread_attr_getname_np;
+    pthread_attr_setprio_np_func pthread_attr_setprio_np;
+    pthread_attr_getprio_np_func pthread_attr_getprio_np;
+
+    pthread_create_func pthread_create;
+    pthread_detach_func pthread_detach;
+    pthread_self_func pthread_self;
+    pthread_equal_func pthread_equal;
+    pthread_yield_func pthread_yield;
+    pthread_exit_func pthread_exit;
+    pthread_join_func pthread_join;
+    pthread_once_func pthread_once;
+    pthread_sigmask_func pthread_sigmask;
+    pthread_kill_func pthread_kill;
+    pthread_abort_func pthread_abort;
+
+    pthread_getconcurrency_func pthread_getconcurrency;
+    pthread_setconcurrency_func pthread_setconcurrency;
+
+    pthread_key_create_func pthread_key_create;
+    pthread_key_delete_func pthread_key_delete;
+    pthread_setspecific_func pthread_setspecific;
+    pthread_getspecific_func pthread_getspecific;
+
+    pthread_cancel_func pthread_cancel;
+    pthread_testcancel_func pthread_testcancel;
+    pthread_setcancelstate_func pthread_setcancelstate;
+    pthread_setcanceltype_func pthread_setcanceltype;
+
+    pthread_setschedparam_func pthread_setschedparam;
+    pthread_getschedparam_func pthread_getschedparam;
+
+    pthread_cleanup_push_func pthread_cleanup_push;
+    pthread_cleanup_pop_func pthread_cleanup_pop;
+    pthread_atfork_func pthread_atfork;
+
+    pthread_mutexattr_init_func pthread_mutexattr_init;
+    pthread_mutexattr_destroy_func pthread_mutexattr_destroy;
+    pthread_mutexattr_setprioceiling_func pthread_mutexattr_setprioceiling;
+    pthread_mutexattr_getprioceiling_func pthread_mutexattr_getprioceiling;
+    pthread_mutexattr_setprotocol_func pthread_mutexattr_setprotocol;
+    pthread_mutexattr_getprotocol_func pthread_mutexattr_getprotocol;
+    pthread_mutexattr_setpshared_func pthread_mutexattr_setpshared;
+    pthread_mutexattr_getpshared_func pthread_mutexattr_getpshared;
+    pthread_mutexattr_settype_func pthread_mutexattr_settype;
+    pthread_mutexattr_gettype_func pthread_mutexattr_gettype;
+
+    pthread_mutex_init_func pthread_mutex_init;
+    pthread_mutex_destroy_func pthread_mutex_destroy;
+    pthread_mutex_setprioceiling_func pthread_mutex_setprioceiling;
+    pthread_mutex_getprioceiling_func pthread_mutex_getprioceiling;
+    pthread_mutex_lock_func pthread_mutex_lock;
+    pthread_mutex_trylock_func pthread_mutex_trylock;
+    pthread_mutex_unlock_func pthread_mutex_unlock;
+
+    pthread_rwlockattr_init_func pthread_rwlockattr_init;
+    pthread_rwlockattr_destroy_func pthread_rwlockattr_destroy;
+    pthread_rwlockattr_setpshared_func pthread_rwlockattr_setpshared;
+    pthread_rwlockattr_getpshared_func pthread_rwlockattr_getpshared;
+
+    pthread_rwlock_init_func pthread_rwlock_init;
+    pthread_rwlock_destroy_func pthread_rwlock_destroy;
+    pthread_rwlock_rdlock_func pthread_rwlock_rdlock;
+    pthread_rwlock_tryrdlock_func pthread_rwlock_tryrdlock;
+    pthread_rwlock_wrlock_func pthread_rwlock_wrlock;
+    pthread_rwlock_trywrlock_func pthread_rwlock_trywrlock;
+    pthread_rwlock_unlock_func pthread_rwlock_unlock;
+
+    pthread_condattr_init_func pthread_condattr_init;
+    pthread_condattr_destroy_func pthread_condattr_destroy;
+    pthread_condattr_setpshared_func pthread_condattr_setpshared;
+    pthread_condattr_getpshared_func pthread_condattr_getpshared;
+
+    pthread_cond_init_func pthread_cond_init;
+    pthread_cond_destroy_func pthread_cond_destroy;
+    pthread_cond_broadcast_func pthread_cond_broadcast;
+    pthread_cond_signal_func pthread_cond_signal;
+    pthread_cond_wait_func pthread_cond_wait;
+    pthread_cond_timedwait_func pthread_cond_timedwait;
 } PreloadFuncs;
 
 typedef struct {
@@ -431,9 +658,99 @@ static void _interposer_globalInitialize() {
     SETSYM_OR_FAIL(director.libc.on_exit, "on_exit");
     SETSYM_OR_FAIL(director.libc.__cxa_atexit, "__cxa_atexit");
 
+    /* pthread */
+    SETSYM_OR_FAIL(director.libc.pthread_attr_init, "pthread_attr_init");
+    SETSYM_OR_FAIL(director.libc.pthread_attr_destroy, "pthread_attr_destroy");
+    SETSYM_OR_FAIL(director.libc.pthread_attr_setinheritsched, "pthread_attr_setinheritsched");
+    SETSYM_OR_FAIL(director.libc.pthread_attr_getinheritsched, "pthread_attr_getinheritsched");
+    SETSYM_OR_FAIL(director.libc.pthread_attr_setschedparam, "pthread_attr_setschedparam");
+    SETSYM_OR_FAIL(director.libc.pthread_attr_getschedparam, "pthread_attr_getschedparam");
+    SETSYM_OR_FAIL(director.libc.pthread_attr_setschedpolicy, "pthread_attr_setschedpolicy");
+    SETSYM_OR_FAIL(director.libc.pthread_attr_getschedpolicy, "pthread_attr_getschedpolicy");
+    SETSYM_OR_FAIL(director.libc.pthread_attr_setscope, "pthread_attr_setscope");
+    SETSYM_OR_FAIL(director.libc.pthread_attr_getscope, "pthread_attr_getscope");
+    SETSYM_OR_FAIL(director.libc.pthread_attr_setstacksize, "pthread_attr_setstacksize");
+    SETSYM_OR_FAIL(director.libc.pthread_attr_getstacksize, "pthread_attr_getstacksize");
+    SETSYM_OR_FAIL(director.libc.pthread_attr_setstackaddr, "pthread_attr_setstackaddr");
+    SETSYM_OR_FAIL(director.libc.pthread_attr_getstackaddr, "pthread_attr_getstackaddr");
+    SETSYM_OR_FAIL(director.libc.pthread_attr_setdetachstate, "pthread_attr_setdetachstate");
+    SETSYM_OR_FAIL(director.libc.pthread_attr_getdetachstate, "pthread_attr_getdetachstate");
+    SETSYM_OR_FAIL(director.libc.pthread_attr_setguardsize, "pthread_attr_setguardsize");
+    SETSYM_OR_FAIL(director.libc.pthread_attr_getguardsize, "pthread_attr_getguardsize");
+    SETSYM_OR_FAIL(director.libc.pthread_create, "pthread_create");
+    SETSYM_OR_FAIL(director.libc.pthread_detach, "pthread_detach");
+    SETSYM_OR_FAIL(director.libc.pthread_self, "pthread_self");
+    SETSYM_OR_FAIL(director.libc.pthread_equal, "pthread_equal");
+    SETSYM_OR_FAIL(director.libc.pthread_yield, "pthread_yield");
+    SETSYM_OR_FAIL(director.libc.pthread_exit, "pthread_exit");
+    SETSYM_OR_FAIL(director.libc.pthread_join, "pthread_join");
+    SETSYM_OR_FAIL(director.libc.pthread_once, "pthread_once");
+    SETSYM_OR_FAIL(director.libc.pthread_sigmask, "pthread_sigmask");
+    SETSYM_OR_FAIL(director.libc.pthread_kill, "pthread_kill");
+    SETSYM_OR_FAIL(director.libc.pthread_getconcurrency, "pthread_getconcurrency");
+    SETSYM_OR_FAIL(director.libc.pthread_setconcurrency, "pthread_setconcurrency");
+    SETSYM_OR_FAIL(director.libc.pthread_key_create, "pthread_key_create");
+    SETSYM_OR_FAIL(director.libc.pthread_key_delete, "pthread_key_delete");
+    SETSYM_OR_FAIL(director.libc.pthread_setspecific, "pthread_setspecific");
+    SETSYM_OR_FAIL(director.libc.pthread_getspecific, "pthread_getspecific");
+    SETSYM_OR_FAIL(director.libc.pthread_cancel, "pthread_cancel");
+    SETSYM_OR_FAIL(director.libc.pthread_testcancel, "pthread_testcancel");
+    SETSYM_OR_FAIL(director.libc.pthread_setcancelstate, "pthread_setcancelstate");
+    SETSYM_OR_FAIL(director.libc.pthread_setcanceltype, "pthread_setcanceltype");
+    SETSYM_OR_FAIL(director.libc.pthread_setschedparam, "pthread_setschedparam");
+    SETSYM_OR_FAIL(director.libc.pthread_getschedparam, "pthread_getschedparam");
+    SETSYM_OR_FAIL(director.libc.pthread_atfork, "pthread_atfork");
+    SETSYM_OR_FAIL(director.libc.pthread_mutexattr_init, "pthread_mutexattr_init");
+    SETSYM_OR_FAIL(director.libc.pthread_mutexattr_destroy, "pthread_mutexattr_destroy");
+    SETSYM_OR_FAIL(director.libc.pthread_mutexattr_setprioceiling, "pthread_mutexattr_setprioceiling");
+    SETSYM_OR_FAIL(director.libc.pthread_mutexattr_getprioceiling, "pthread_mutexattr_getprioceiling");
+    SETSYM_OR_FAIL(director.libc.pthread_mutexattr_setprotocol, "pthread_mutexattr_setprotocol");
+    SETSYM_OR_FAIL(director.libc.pthread_mutexattr_getprotocol, "pthread_mutexattr_getprotocol");
+    SETSYM_OR_FAIL(director.libc.pthread_mutexattr_setpshared, "pthread_mutexattr_setpshared");
+    SETSYM_OR_FAIL(director.libc.pthread_mutexattr_getpshared, "pthread_mutexattr_getpshared");
+    SETSYM_OR_FAIL(director.libc.pthread_mutexattr_settype, "pthread_mutexattr_settype");
+    SETSYM_OR_FAIL(director.libc.pthread_mutexattr_gettype, "pthread_mutexattr_gettype");
+    SETSYM_OR_FAIL(director.libc.pthread_mutex_init, "pthread_mutex_init");
+    SETSYM_OR_FAIL(director.libc.pthread_mutex_destroy, "pthread_mutex_destroy");
+    SETSYM_OR_FAIL(director.libc.pthread_mutex_setprioceiling, "pthread_mutex_setprioceiling");
+    SETSYM_OR_FAIL(director.libc.pthread_mutex_getprioceiling, "pthread_mutex_getprioceiling");
+    SETSYM_OR_FAIL(director.libc.pthread_mutex_lock, "pthread_mutex_lock");
+    SETSYM_OR_FAIL(director.libc.pthread_mutex_trylock, "pthread_mutex_trylock");
+    SETSYM_OR_FAIL(director.libc.pthread_mutex_unlock, "pthread_mutex_unlock");
+    SETSYM_OR_FAIL(director.libc.pthread_rwlockattr_init, "pthread_rwlockattr_init");
+    SETSYM_OR_FAIL(director.libc.pthread_rwlockattr_destroy, "pthread_rwlockattr_destroy");
+    SETSYM_OR_FAIL(director.libc.pthread_rwlockattr_setpshared, "pthread_rwlockattr_setpshared");
+    SETSYM_OR_FAIL(director.libc.pthread_rwlockattr_getpshared, "pthread_rwlockattr_getpshared");
+    SETSYM_OR_FAIL(director.libc.pthread_rwlock_init, "pthread_rwlock_init");
+    SETSYM_OR_FAIL(director.libc.pthread_rwlock_destroy, "pthread_rwlock_destroy");
+    SETSYM_OR_FAIL(director.libc.pthread_rwlock_rdlock, "pthread_rwlock_rdlock");
+    SETSYM_OR_FAIL(director.libc.pthread_rwlock_tryrdlock, "pthread_rwlock_tryrdlock");
+    SETSYM_OR_FAIL(director.libc.pthread_rwlock_wrlock, "pthread_rwlock_wrlock");
+    SETSYM_OR_FAIL(director.libc.pthread_rwlock_trywrlock, "pthread_rwlock_trywrlock");
+    SETSYM_OR_FAIL(director.libc.pthread_rwlock_unlock, "pthread_rwlock_unlock");
+    SETSYM_OR_FAIL(director.libc.pthread_condattr_init, "pthread_condattr_init");
+    SETSYM_OR_FAIL(director.libc.pthread_condattr_destroy, "pthread_condattr_destroy");
+    SETSYM_OR_FAIL(director.libc.pthread_condattr_setpshared, "pthread_condattr_setpshared");
+    SETSYM_OR_FAIL(director.libc.pthread_condattr_getpshared, "pthread_condattr_getpshared");
+    SETSYM_OR_FAIL(director.libc.pthread_cond_init, "pthread_cond_init");
+    SETSYM_OR_FAIL(director.libc.pthread_cond_destroy, "pthread_cond_destroy");
+    SETSYM_OR_FAIL(director.libc.pthread_cond_broadcast, "pthread_cond_broadcast");
+    SETSYM_OR_FAIL(director.libc.pthread_cond_signal, "pthread_cond_signal");
+    SETSYM_OR_FAIL(director.libc.pthread_cond_wait, "pthread_cond_wait");
+    SETSYM_OR_FAIL(director.libc.pthread_cond_timedwait, "pthread_cond_timedwait");
+
+
     /* attempt lookup but don't fail as its valid not to exist */
     SETSYM(director.libc.atexit, "atexit");
     SETSYM(director.libc.aligned_alloc, "aligned_alloc");
+
+    SETSYM(director.libc.pthread_attr_setname_np, "pthread_attr_setname_np");
+    SETSYM(director.libc.pthread_attr_getname_np, "pthread_attr_getname_np");
+    SETSYM(director.libc.pthread_attr_setprio_np, "pthread_attr_setprio_np");
+    SETSYM(director.libc.pthread_attr_getprio_np, "pthread_attr_getprio_np");
+    SETSYM(director.libc.pthread_abort, "pthread_abort");
+    SETSYM(director.libc.pthread_cleanup_push, "pthread_cleanup_push");
+    SETSYM(director.libc.pthread_cleanup_pop, "pthread_cleanup_pop");
 
     __sync_fetch_and_sub(&isRecursive, 1);
 }
@@ -2925,3 +3242,1056 @@ int __cxa_atexit(void (*func) (void *), void * arg, void * dso_handle) {
 
     return success == TRUE ? 0 : -1;
 }
+
+/* pthread attributes */
+
+int pthread_attr_init(pthread_attr_t *attr) {
+//    pth_attr_t na;
+//
+//    pthread_initialize();
+//    if (attr == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    if ((na = pth_attr_new()) == NULL)
+//        return errno;
+//    (*attr) = (pthread_attr_t) na;
+//    return OK;
+}
+
+//int pthread_attr_destroy(pthread_attr_t *attr) {
+//    pth_attr_t na;
+//
+//    if (attr == NULL || *attr == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    na = (pth_attr_t) (*attr);
+//    pth_attr_destroy(na);
+//    *attr = NULL;
+//    return OK;
+//}
+//
+//int pthread_attr_setinheritsched(pthread_attr_t *attr, int inheritsched) {
+//    if (attr == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    /* not supported */
+//    return pth_error(ENOSYS, ENOSYS);
+//}
+//
+//int pthread_attr_getinheritsched(const pthread_attr_t *attr, int *inheritsched) {
+//    if (attr == NULL || inheritsched == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    /* not supported */
+//    return pth_error(ENOSYS, ENOSYS);
+//}
+//
+//int pthread_attr_setschedparam(pthread_attr_t *attr,
+//        const struct sched_param *schedparam) {
+//    if (attr == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    /* not supported */
+//    return pth_error(ENOSYS, ENOSYS);
+//}
+//
+//int pthread_attr_getschedparam(const pthread_attr_t *attr,
+//        struct sched_param *schedparam) {
+//    if (attr == NULL || schedparam == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    /* not supported */
+//    return pth_error(ENOSYS, ENOSYS);
+//}
+//
+//int pthread_attr_setschedpolicy(pthread_attr_t *attr, int schedpolicy) {
+//    if (attr == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    /* not supported */
+//    return pth_error(ENOSYS, ENOSYS);
+//}
+//
+//int pthread_attr_getschedpolicy(const pthread_attr_t *attr, int *schedpolicy) {
+//    if (attr == NULL || schedpolicy == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    /* not supported */
+//    return pth_error(ENOSYS, ENOSYS);
+//}
+//
+//int pthread_attr_setscope(pthread_attr_t *attr, int scope) {
+//    if (attr == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    /* not supported */
+//    return pth_error(ENOSYS, ENOSYS);
+//}
+//
+//int pthread_attr_getscope(const pthread_attr_t *attr, int *scope) {
+//    if (attr == NULL || scope == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    /* not supported */
+//    return pth_error(ENOSYS, ENOSYS);
+//}
+//
+//int pthread_attr_setstacksize(pthread_attr_t *attr, size_t stacksize) {
+//    if (attr == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    if (!pth_attr_set((pth_attr_t) (*attr), PTH_ATTR_STACK_SIZE,
+//            (unsigned int) stacksize))
+//        return errno;
+//    return OK;
+//}
+//
+//int pthread_attr_getstacksize(const pthread_attr_t *attr, size_t *stacksize) {
+//    if (attr == NULL || stacksize == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    if (!pth_attr_get((pth_attr_t) (*attr), PTH_ATTR_STACK_SIZE,
+//            (unsigned int *) stacksize))
+//        return errno;
+//    return OK;
+//}
+//
+//int pthread_attr_setstackaddr(pthread_attr_t *attr, void *stackaddr) {
+//    if (attr == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    if (!pth_attr_set((pth_attr_t) (*attr), PTH_ATTR_STACK_ADDR,
+//            (char *) stackaddr))
+//        return errno;
+//    return OK;
+//}
+//
+//int pthread_attr_getstackaddr(const pthread_attr_t *attr, void **stackaddr) {
+//    if (attr == NULL || stackaddr == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    if (!pth_attr_get((pth_attr_t) (*attr), PTH_ATTR_STACK_ADDR,
+//            (char **) stackaddr))
+//        return errno;
+//    return OK;
+//}
+//
+//int pthread_attr_setdetachstate(pthread_attr_t *attr, int detachstate) {
+//    int s;
+//
+//    if (attr == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    if (detachstate == PTHREAD_CREATE_DETACHED)
+//        s = FALSE;
+//    else if (detachstate == PTHREAD_CREATE_JOINABLE)
+//        s = TRUE;
+//    else
+//        return pth_error(EINVAL, EINVAL);
+//    if (!pth_attr_set((pth_attr_t) (*attr), PTH_ATTR_JOINABLE, s))
+//        return errno;
+//    return OK;
+//}
+//
+//int pthread_attr_getdetachstate(const pthread_attr_t *attr, int *detachstate) {
+//    int s;
+//
+//    if (attr == NULL || detachstate == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    if (!pth_attr_get((pth_attr_t) (*attr), PTH_ATTR_JOINABLE, &s))
+//        return errno;
+//    if (s == TRUE)
+//        *detachstate = PTHREAD_CREATE_JOINABLE;
+//    else
+//        *detachstate = PTHREAD_CREATE_DETACHED;
+//    return OK;
+//}
+//
+//int pthread_attr_setguardsize(pthread_attr_t *attr, int stacksize) {
+//    if (attr == NULL || stacksize < 0)
+//        return pth_error(EINVAL, EINVAL);
+//    /* not supported */
+//    return pth_error(ENOSYS, ENOSYS);
+//}
+//
+//int pthread_attr_getguardsize(const pthread_attr_t *attr, int *stacksize) {
+//    if (attr == NULL || stacksize == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    /* not supported */
+//    return pth_error(ENOSYS, ENOSYS);
+//}
+//
+//int pthread_attr_setname_np(pthread_attr_t *attr, char *name) {
+//    if (attr == NULL || name == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    if (!pth_attr_set((pth_attr_t) (*attr), PTH_ATTR_NAME, name))
+//        return errno;
+//    return OK;
+//}
+//
+//int pthread_attr_getname_np(const pthread_attr_t *attr, char **name) {
+//    if (attr == NULL || name == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    if (!pth_attr_get((pth_attr_t) (*attr), PTH_ATTR_NAME, name))
+//        return errno;
+//    return OK;
+//}
+//
+//int pthread_attr_setprio_np(pthread_attr_t *attr, int prio) {
+//    if (attr == NULL || (prio < PTH_PRIO_MIN || prio > PTH_PRIO_MAX))
+//        return pth_error(EINVAL, EINVAL);
+//    if (!pth_attr_set((pth_attr_t) (*attr), PTH_ATTR_PRIO, prio))
+//        return errno;
+//    return OK;
+//}
+//
+//int pthread_attr_getprio_np(const pthread_attr_t *attr, int *prio) {
+//    if (attr == NULL || prio == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    if (!pth_attr_get((pth_attr_t) (*attr), PTH_ATTR_PRIO, prio))
+//        return errno;
+//    return OK;
+//}
+//
+///* pthread threads */
+//
+//int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
+//        void *(*start_routine)(void *), void *arg) {
+//    pth_attr_t na;
+//
+//    pthread_initialize();
+//    if (thread == NULL || start_routine == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    if (pth_ctrl(PTH_CTRL_GETTHREADS) >= PTHREAD_THREADS_MAX)
+//        return pth_error(EAGAIN, EAGAIN);
+//    if (attr != NULL)
+//        na = (pth_attr_t) (*attr);
+//    else
+//        na = PTH_ATTR_DEFAULT;
+//    *thread = (pthread_t) pth_spawn(na, start_routine, arg);
+//    if (*thread == NULL)
+//        return pth_error(EAGAIN, EAGAIN);
+//    return OK;
+//}
+//
+//int pthread_detach(pthread_t thread) {
+//    pth_attr_t na;
+//
+//    if (thread == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    if ((na = pth_attr_of((pth_t) thread)) == NULL)
+//        return errno;
+//    if (!pth_attr_set(na, PTH_ATTR_JOINABLE, FALSE))
+//        return errno;
+//    pth_attr_destroy(na);
+//    return OK;
+//}
+//
+//int __pthread_detach(pthread_t thread) {
+//    return pthread_detach(thread);
+//}
+//
+//pthread_t pthread_self(void) {
+//    pthread_initialize();
+//    return (pthread_t) pth_self();
+//}
+//
+//int pthread_equal(pthread_t t1, pthread_t t2) {
+//    return (t1 == t2);
+//}
+//
+//int pthread_yield(void) {
+//    pthread_initialize();
+//    pth_yield(NULL);
+//    return OK;
+//}
+//
+//int pthread_yield_np(void) {
+//    return pthread_yield();
+//}
+//
+//void pthread_exit(void *value_ptr) {
+//    pthread_initialize();
+//    pth_exit(value_ptr);
+//    return;
+//}
+//
+//int pthread_join(pthread_t thread, void **value_ptr) {
+//    pthread_initialize();
+//    if (!pth_join((pth_t) thread, value_ptr))
+//        return errno;
+//    if (value_ptr != NULL)
+//        if (*value_ptr == PTH_CANCELED)
+//            *value_ptr = PTHREAD_CANCELED;
+//    return OK;
+//}
+//
+//int pthread_once(pthread_once_t *once_control, void (*init_routine)(void)) {
+//    pthread_initialize();
+//    if (once_control == NULL || init_routine == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    if (*once_control != 1)
+//        init_routine();
+//    *once_control = 1;
+//    return OK;
+//}
+//
+//int pthread_sigmask(int how, const sigset_t *set, sigset_t *oset) {
+//    pthread_initialize();
+//    return pth_sigmask(how, set, oset);
+//}
+//
+//int pthread_kill(pthread_t thread, int sig) {
+//    if (!pth_raise((pth_t) thread, sig))
+//        return errno;
+//    return OK;
+//}
+//
+//int pthread_abort(pthread_t thread) {
+//    if (!pth_abort((pth_t) thread))
+//        return errno;
+//    return OK;
+//}
+//
+///*
+//**  CONCURRENCY ROUTINES
+//**
+//**  We just have to provide the interface, because SUSv2 says:
+//**  "The pthread_setconcurrency() function allows an application to
+//**  inform the threads implementation of its desired concurrency
+//**  level, new_level. The actual level of concurrency provided by the
+//**  implementation as a result of this function call is unspecified."
+//*/
+//
+//static int pthread_concurrency = 0;
+//
+//int pthread_getconcurrency(void)
+//{
+//    return pthread_concurrency;
+//}
+//
+//int pthread_setconcurrency(int new_level)
+//{
+//    if (new_level < 0)
+//        return pth_error(EINVAL, EINVAL);
+//    pthread_concurrency = new_level;
+//    return OK;
+//}
+//
+///* pthread context */
+//
+//int pthread_key_create(pthread_key_t *key, void (*destructor)(void *))
+//{
+//    pthread_initialize();
+//    if (!pth_key_create((pth_key_t *)key, destructor))
+//        return errno;
+//    return OK;
+//}
+//
+//int pthread_key_delete(pthread_key_t key)
+//{
+//    if (!pth_key_delete((pth_key_t)key))
+//        return errno;
+//    return OK;
+//}
+//
+//int pthread_setspecific(pthread_key_t key, const void *value)
+//{
+//    if (!pth_key_setdata((pth_key_t)key, value))
+//        return errno;
+//    return OK;
+//}
+//
+//void *pthread_getspecific(pthread_key_t key)
+//{
+//    return pth_key_getdata((pth_key_t)key);
+//}
+//
+///* pthread cancel */
+//
+//int pthread_cancel(pthread_t thread)
+//{
+//    if (!pth_cancel((pth_t)thread))
+//        return errno;
+//    return OK;
+//}
+//
+//void pthread_testcancel(void)
+//{
+//    pth_cancel_point();
+//    return;
+//}
+//
+//int pthread_setcancelstate(int state, int *oldstate)
+//{
+//    int s, os;
+//
+//    if (oldstate != NULL) {
+//        pth_cancel_state(0, &os);
+//        if (os & PTH_CANCEL_ENABLE)
+//            *oldstate = PTHREAD_CANCEL_ENABLE;
+//        else
+//            *oldstate = PTHREAD_CANCEL_DISABLE;
+//    }
+//    if (state != 0) {
+//        pth_cancel_state(0, &s);
+//        if (state == PTHREAD_CANCEL_ENABLE) {
+//            s |= PTH_CANCEL_ENABLE;
+//            s &= ~(PTH_CANCEL_DISABLE);
+//        }
+//        else {
+//            s |= PTH_CANCEL_DISABLE;
+//            s &= ~(PTH_CANCEL_ENABLE);
+//        }
+//        pth_cancel_state(s, NULL);
+//    }
+//    return OK;
+//}
+//
+//int pthread_setcanceltype(int type, int *oldtype)
+//{
+//    int t, ot;
+//
+//    if (oldtype != NULL) {
+//        pth_cancel_state(0, &ot);
+//        if (ot & PTH_CANCEL_DEFERRED)
+//            *oldtype = PTHREAD_CANCEL_DEFERRED;
+//        else
+//            *oldtype = PTHREAD_CANCEL_ASYNCHRONOUS;
+//    }
+//    if (type != 0) {
+//        pth_cancel_state(0, &t);
+//        if (type == PTHREAD_CANCEL_DEFERRED) {
+//            t |= PTH_CANCEL_DEFERRED;
+//            t &= ~(PTH_CANCEL_ASYNCHRONOUS);
+//        }
+//        else {
+//            t |= PTH_CANCEL_ASYNCHRONOUS;
+//            t &= ~(PTH_CANCEL_DEFERRED);
+//        }
+//        pth_cancel_state(t, NULL);
+//    }
+//    return OK;
+//}
+//
+///* pthread scheduler */
+//
+//int pthread_setschedparam(pthread_t pthread, int policy, const struct sched_param *param)
+//{
+//    /* not supported */
+//    return pth_error(ENOSYS, ENOSYS);
+//}
+//
+//int pthread_getschedparam(pthread_t pthread, int *policy, struct sched_param *param)
+//{
+//    /* not supported */
+//    return pth_error(ENOSYS, ENOSYS);
+//}
+//
+///* pthread cleanup */
+//
+//void pthread_cleanup_push(void (*routine)(void *), void *arg)
+//{
+//    pthread_initialize();
+//    pth_cleanup_push(routine, arg);
+//    return;
+//}
+//
+//void pthread_cleanup_pop(int execute)
+//{
+//    pth_cleanup_pop(execute);
+//    return;
+//}
+//
+///*
+//**  AT-FORK SUPPORT
+//*/
+//
+//struct pthread_atfork_st {
+//    void (*prepare)(void);
+//    void (*parent)(void);
+//    void (*child)(void);
+//};
+//static struct pthread_atfork_st pthread_atfork_info[PTH_ATFORK_MAX];
+//static int pthread_atfork_idx = 0;
+//
+//static void pthread_atfork_cb_prepare(void *_info)
+//{
+//    struct pthread_atfork_st *info = (struct pthread_atfork_st *)_info;
+//    info->prepare();
+//    return;
+//}
+//static void pthread_atfork_cb_parent(void *_info)
+//{
+//    struct pthread_atfork_st *info = (struct pthread_atfork_st *)_info;
+//    info->parent();
+//    return;
+//}
+//static void pthread_atfork_cb_child(void *_info)
+//{
+//    struct pthread_atfork_st *info = (struct pthread_atfork_st *)_info;
+//    info->child();
+//    return;
+//}
+//
+//int pthread_atfork(void (*prepare)(void), void (*parent)(void), void (*child)(void))
+//{
+//    struct pthread_atfork_st *info;
+//
+//    if (pthread_atfork_idx > PTH_ATFORK_MAX-1)
+//        return pth_error(ENOMEM, ENOMEM);
+//    info = &pthread_atfork_info[pthread_atfork_idx++];
+//    info->prepare = prepare;
+//    info->parent  = parent;
+//    info->child   = child;
+//    if (!pth_atfork_push(pthread_atfork_cb_prepare,
+//                         pthread_atfork_cb_parent,
+//                         pthread_atfork_cb_child, info))
+//        return errno;
+//    return OK;
+//}
+//
+///* pthread mutex attributes */
+//
+//int pthread_mutexattr_init(pthread_mutexattr_t *attr)
+//{
+//    pthread_initialize();
+//    if (attr == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    /* nothing to do for us */
+//    return OK;
+//}
+//
+//int pthread_mutexattr_destroy(pthread_mutexattr_t *attr)
+//{
+//    if (attr == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    /* nothing to do for us */
+//    return OK;
+//}
+//
+//int pthread_mutexattr_setprioceiling(pthread_mutexattr_t *attr, int prioceiling)
+//{
+//    if (attr == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    /* not supported */
+//    return pth_error(ENOSYS, ENOSYS);
+//}
+//
+//int pthread_mutexattr_getprioceiling(pthread_mutexattr_t *attr, int *prioceiling)
+//{
+//    if (attr == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    /* not supported */
+//    return pth_error(ENOSYS, ENOSYS);
+//}
+//
+//int pthread_mutexattr_setprotocol(pthread_mutexattr_t *attr, int protocol)
+//{
+//    if (attr == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    /* not supported */
+//    return pth_error(ENOSYS, ENOSYS);
+//}
+//
+//int pthread_mutexattr_getprotocol(pthread_mutexattr_t *attr, int *protocol)
+//{
+//    if (attr == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    /* not supported */
+//    return pth_error(ENOSYS, ENOSYS);
+//}
+//
+//int pthread_mutexattr_setpshared(pthread_mutexattr_t *attr, int pshared)
+//{
+//    if (attr == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    /* not supported */
+//    return pth_error(ENOSYS, ENOSYS);
+//}
+//
+//int pthread_mutexattr_getpshared(pthread_mutexattr_t *attr, int *pshared)
+//{
+//    if (attr == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    /* not supported */
+//    return pth_error(ENOSYS, ENOSYS);
+//}
+//
+//int pthread_mutexattr_settype(pthread_mutexattr_t *attr, int type)
+//{
+//    if (attr == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    /* not supported */
+//    return pth_error(ENOSYS, ENOSYS);
+//}
+//
+//int pthread_mutexattr_gettype(pthread_mutexattr_t *attr, int *type)
+//{
+//    if (attr == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    /* not supported */
+//    return pth_error(ENOSYS, ENOSYS);
+//}
+//
+///* pthread mutex */
+//
+//int pthread_mutex_init(pthread_mutex_t *mutex, const pthread_mutexattr_t *attr)
+//{
+//    pth_mutex_t *m;
+//
+//    pthread_initialize();
+//    if (mutex == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    if ((m = (pth_mutex_t *)malloc(sizeof(pth_mutex_t))) == NULL)
+//        return errno;
+//    if (!pth_mutex_init(m))
+//        return errno;
+//    (*mutex) = (pthread_mutex_t)m;
+//    return OK;
+//}
+//
+//int pthread_mutex_destroy(pthread_mutex_t *mutex)
+//{
+//    if (mutex == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    free(*mutex);
+//    *mutex = NULL;
+//    return OK;
+//}
+//
+//int pthread_mutex_setprioceiling(pthread_mutex_t *mutex, int prioceiling, int *old_ceiling)
+//{
+//    if (mutex == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    if (*mutex == PTHREAD_MUTEX_INITIALIZER)
+//        if (pthread_mutex_init(mutex, NULL) != OK)
+//            return errno;
+//    /* not supported */
+//    return pth_error(ENOSYS, ENOSYS);
+//}
+//
+//int pthread_mutex_getprioceiling(pthread_mutex_t *mutex, int *prioceiling)
+//{
+//    if (mutex == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    if (*mutex == PTHREAD_MUTEX_INITIALIZER)
+//        if (pthread_mutex_init(mutex, NULL) != OK)
+//            return errno;
+//    /* not supported */
+//    return pth_error(ENOSYS, ENOSYS);
+//}
+//
+//int pthread_mutex_lock(pthread_mutex_t *mutex)
+//{
+//    if (mutex == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    if (*mutex == PTHREAD_MUTEX_INITIALIZER)
+//        if (pthread_mutex_init(mutex, NULL) != OK)
+//            return errno;
+//    if (!pth_mutex_acquire((pth_mutex_t *)(*mutex), FALSE, NULL))
+//        return errno;
+//    return OK;
+//}
+//
+//int pthread_mutex_trylock(pthread_mutex_t *mutex)
+//{
+//    if (mutex == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    if (*mutex == PTHREAD_MUTEX_INITIALIZER)
+//        if (pthread_mutex_init(mutex, NULL) != OK)
+//            return errno;
+//    if (!pth_mutex_acquire((pth_mutex_t *)(*mutex), TRUE, NULL))
+//        return errno;
+//    return OK;
+//}
+//
+//int pthread_mutex_unlock(pthread_mutex_t *mutex)
+//{
+//    if (mutex == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    if (*mutex == PTHREAD_MUTEX_INITIALIZER)
+//        if (pthread_mutex_init(mutex, NULL) != OK)
+//            return errno;
+//    if (!pth_mutex_release((pth_mutex_t *)(*mutex)))
+//        return errno;
+//    return OK;
+//}
+//
+///* pthread lock attributes */
+//
+//int pthread_rwlockattr_init(pthread_rwlockattr_t *attr)
+//{
+//    pthread_initialize();
+//    if (attr == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    /* nothing to do for us */
+//    return OK;
+//}
+//
+//int pthread_rwlockattr_destroy(pthread_rwlockattr_t *attr)
+//{
+//    if (attr == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    /* nothing to do for us */
+//    return OK;
+//}
+//
+//int pthread_rwlockattr_setpshared(pthread_rwlockattr_t *attr, int pshared)
+//{
+//    if (attr == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    /* not supported */
+//    return pth_error(ENOSYS, ENOSYS);
+//}
+//
+//int pthread_rwlockattr_getpshared(const pthread_rwlockattr_t *attr, int *pshared)
+//{
+//    if (attr == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    /* not supported */
+//    return pth_error(ENOSYS, ENOSYS);
+//}
+//
+///* pthread locks */
+//
+//int pthread_rwlock_init(pthread_rwlock_t *rwlock, const pthread_rwlockattr_t *attr)
+//{
+//    pth_rwlock_t *rw;
+//
+//    pthread_initialize();
+//    if (rwlock == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    if ((rw = (pth_rwlock_t *)malloc(sizeof(pth_rwlock_t))) == NULL)
+//        return errno;
+//    if (!pth_rwlock_init(rw))
+//        return errno;
+//    (*rwlock) = (pthread_rwlock_t)rw;
+//    return OK;
+//}
+//
+//int pthread_rwlock_destroy(pthread_rwlock_t *rwlock)
+//{
+//    if (rwlock == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    free(*rwlock);
+//    *rwlock = NULL;
+//    return OK;
+//}
+//
+//int pthread_rwlock_rdlock(pthread_rwlock_t *rwlock)
+//{
+//    if (rwlock == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    if (*rwlock == PTHREAD_RWLOCK_INITIALIZER)
+//        if (pthread_rwlock_init(rwlock, NULL) != OK)
+//            return errno;
+//    if (!pth_rwlock_acquire((pth_rwlock_t *)(*rwlock), PTH_RWLOCK_RD, FALSE, NULL))
+//        return errno;
+//    return OK;
+//}
+//
+//int pthread_rwlock_tryrdlock(pthread_rwlock_t *rwlock)
+//{
+//    if (rwlock == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    if (*rwlock == PTHREAD_RWLOCK_INITIALIZER)
+//        if (pthread_rwlock_init(rwlock, NULL) != OK)
+//            return errno;
+//    if (!pth_rwlock_acquire((pth_rwlock_t *)(*rwlock), PTH_RWLOCK_RD, TRUE, NULL))
+//        return errno;
+//    return OK;
+//}
+//
+//int pthread_rwlock_wrlock(pthread_rwlock_t *rwlock)
+//{
+//    if (rwlock == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    if (*rwlock == PTHREAD_RWLOCK_INITIALIZER)
+//        if (pthread_rwlock_init(rwlock, NULL) != OK)
+//            return errno;
+//    if (!pth_rwlock_acquire((pth_rwlock_t *)(*rwlock), PTH_RWLOCK_RW, FALSE, NULL))
+//        return errno;
+//    return OK;
+//}
+//
+//int pthread_rwlock_trywrlock(pthread_rwlock_t *rwlock)
+//{
+//    if (rwlock == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    if (*rwlock == PTHREAD_RWLOCK_INITIALIZER)
+//        if (pthread_rwlock_init(rwlock, NULL) != OK)
+//            return errno;
+//    if (!pth_rwlock_acquire((pth_rwlock_t *)(*rwlock), PTH_RWLOCK_RW, TRUE, NULL))
+//        return errno;
+//    return OK;
+//}
+//
+//int pthread_rwlock_unlock(pthread_rwlock_t *rwlock)
+//{
+//    if (rwlock == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    if (*rwlock == PTHREAD_RWLOCK_INITIALIZER)
+//        if (pthread_rwlock_init(rwlock, NULL) != OK)
+//            return errno;
+//    if (!pth_rwlock_release((pth_rwlock_t *)(*rwlock)))
+//        return errno;
+//    return OK;
+//}
+//
+///* pthread condition attributes */
+//
+//int pthread_condattr_init(pthread_condattr_t *attr)
+//{
+//    pthread_initialize();
+//    if (attr == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    /* nothing to do for us */
+//    return OK;
+//}
+//
+//int pthread_condattr_destroy(pthread_condattr_t *attr)
+//{
+//    if (attr == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    /* nothing to do for us */
+//    return OK;
+//}
+//
+//int pthread_condattr_setpshared(pthread_condattr_t *attr, int pshared)
+//{
+//    if (attr == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    /* not supported */
+//    return pth_error(ENOSYS, ENOSYS);
+//}
+//
+//int pthread_condattr_getpshared(pthread_condattr_t *attr, int *pshared)
+//{
+//    if (attr == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    /* not supported */
+//    return pth_error(ENOSYS, ENOSYS);
+//}
+//
+///* pthread conditions */
+//
+//int pthread_cond_init(pthread_cond_t *cond, const pthread_condattr_t *attr)
+//{
+//    pth_cond_t *cn;
+//
+//    pthread_initialize();
+//    if (cond == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    if ((cn = (pth_cond_t *)malloc(sizeof(pth_cond_t))) == NULL)
+//        return errno;
+//    if (!pth_cond_init(cn))
+//        return errno;
+//    (*cond) = (pthread_cond_t)cn;
+//    return OK;
+//}
+//
+//int pthread_cond_destroy(pthread_cond_t *cond)
+//{
+//    if (cond == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    free(*cond);
+//    *cond = NULL;
+//    return OK;
+//}
+//
+//int pthread_cond_broadcast(pthread_cond_t *cond)
+//{
+//    if (cond == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    if (*cond == PTHREAD_COND_INITIALIZER)
+//        if (pthread_cond_init(cond, NULL) != OK)
+//            return errno;
+//    if (!pth_cond_notify((pth_cond_t *)(*cond), TRUE))
+//        return errno;
+//    return OK;
+//}
+//
+//int pthread_cond_signal(pthread_cond_t *cond)
+//{
+//    if (cond == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    if (*cond == PTHREAD_COND_INITIALIZER)
+//        if (pthread_cond_init(cond, NULL) != OK)
+//            return errno;
+//    if (!pth_cond_notify((pth_cond_t *)(*cond), FALSE))
+//        return errno;
+//    return OK;
+//}
+//
+//int pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex)
+//{
+//    if (cond == NULL || mutex == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//    if (*cond == PTHREAD_COND_INITIALIZER)
+//        if (pthread_cond_init(cond, NULL) != OK)
+//            return errno;
+//    if (*mutex == PTHREAD_MUTEX_INITIALIZER)
+//        if (pthread_mutex_init(mutex, NULL) != OK)
+//            return errno;
+//    if (!pth_cond_await((pth_cond_t *)(*cond), (pth_mutex_t *)(*mutex), NULL))
+//        return errno;
+//    return OK;
+//}
+//
+//int pthread_cond_timedwait(pthread_cond_t *cond, pthread_mutex_t *mutex,
+//                           const struct timespec *abstime)
+//{
+//    pth_event_t ev;
+//    static pth_key_t ev_key = PTH_KEY_INIT;
+//
+//    if (cond == NULL || mutex == NULL || abstime == NULL)
+//        return pth_error(EINVAL, EINVAL);
+//#ifdef __amigaos__
+//    if (abstime->ts_sec < 0 || abstime->ts_nsec < 0 || abstime->ts_nsec >= 1000000000)
+//#else
+//    if (abstime->tv_sec < 0 || abstime->tv_nsec < 0 || abstime->tv_nsec >= 1000000000)
+//#endif
+//        return pth_error(EINVAL, EINVAL);
+//    if (*cond == PTHREAD_COND_INITIALIZER)
+//        if (pthread_cond_init(cond, NULL) != OK)
+//            return errno;
+//    if (*mutex == PTHREAD_MUTEX_INITIALIZER)
+//        if (pthread_mutex_init(mutex, NULL) != OK)
+//            return errno;
+//    ev = pth_event(PTH_EVENT_TIME|PTH_MODE_STATIC, &ev_key,
+//#ifdef __amigaos__
+//                   pth_time(abstime->ts_sec, (abstime->ts_nsec)/1000)
+//#else
+//                   pth_time(abstime->tv_sec, (abstime->tv_nsec)/1000)
+//#endif
+//    );
+//    if (!pth_cond_await((pth_cond_t *)(*cond), (pth_mutex_t *)(*mutex), ev))
+//        return errno;
+//    if (pth_event_status(ev) == PTH_STATUS_OCCURRED)
+//        return ETIMEDOUT;
+//    return OK;
+//}
+//
+//
+//
+//
+//
+//
+//
+//
+///*
+//**  THREAD-SAFE REPLACEMENT FUNCTIONS
+//*/
+//
+//pid_t __pthread_fork(void)
+//{
+//    pthread_initialize();
+//    return pth_fork();
+//}
+//
+//unsigned int __pthread_sleep(unsigned int sec)
+//{
+//    pthread_initialize();
+//    return pth_sleep(sec);
+//}
+//
+//int __pthread_system(const char *cmd)
+//{
+//    pthread_initialize();
+//    return pth_system(cmd);
+//}
+//
+//int __pthread_nanosleep(const struct timespec *rqtp, struct timespec *rmtp)
+//{
+//    pthread_initialize();
+//    return pth_nanosleep(rqtp, rmtp);
+//}
+//
+//int __pthread_usleep(unsigned int sec)
+//{
+//    pthread_initialize();
+//    return pth_usleep(sec);
+//}
+//
+//int __pthread_sigwait(const sigset_t *set, int *sig)
+//{
+//    pthread_initialize();
+//    return pth_sigwait(set, sig);
+//}
+//
+//pid_t __pthread_waitpid(pid_t pid, int *status, int options)
+//{
+//    pthread_initialize();
+//    return pth_waitpid(pid, status, options);
+//}
+//
+//int __pthread_connect(int s, struct sockaddr *addr, socklen_t addrlen)
+//{
+//    pthread_initialize();
+//    return pth_connect(s, addr, addrlen);
+//}
+//
+//int __pthread_accept(int s, struct sockaddr *addr, socklen_t *addrlen)
+//{
+//    pthread_initialize();
+//    return pth_accept(s, addr, addrlen);
+//}
+//
+//int __pthread_select(int nfds, fd_set *readfds, fd_set *writefds,
+//                    fd_set *exceptfds, struct timeval *timeout)
+//{
+//    pthread_initialize();
+//    return pth_select(nfds, readfds, writefds, exceptfds, timeout);
+//}
+//
+//int __pthread_poll(struct pollfd *pfd, nfds_t nfd, int timeout)
+//{
+//    pthread_initialize();
+//    return pth_poll(pfd, nfd, timeout);
+//}
+//
+//ssize_t __pthread_read(int fd, void *buf, size_t nbytes)
+//{
+//    pthread_initialize();
+//    return pth_read(fd, buf, nbytes);
+//}
+//
+//ssize_t __pthread_write(int fd, const void *buf, size_t nbytes)
+//{
+//    pthread_initialize();
+//    return pth_write(fd, buf, nbytes);
+//}
+//
+//ssize_t __pthread_readv(int fd, const struct iovec *piovec, int iocnt)
+//{
+//    pthread_initialize();
+//    return pth_readv(fd, piovec, iocnt);
+//}
+//
+//ssize_t __pthread_writev(int fd, const struct iovec *piovec, int iocnt)
+//{
+//    pthread_initialize();
+//    return pth_writev(fd, piovec, iocnt);
+//}
+//
+//ssize_t __pthread_recv(int fd, void *buf, size_t nbytes, int flags)
+//{
+//    pthread_initialize();
+//    return pth_recv(fd, buf, nbytes, flags);
+//}
+//
+//ssize_t __pthread_send(int fd, const void *buf, size_t nbytes, int flags)
+//{
+//    pthread_initialize();
+//    return pth_send(fd, buf, nbytes, flags);
+//}
+//
+//ssize_t __pthread_recvfrom(int fd, void *buf, size_t nbytes, int flags, struct sockaddr *from, socklen_t *fromlen)
+//{
+//    pthread_initialize();
+//    return pth_recvfrom(fd, buf, nbytes, flags, from, fromlen);
+//}
+//
+//ssize_t __pthread_sendto(int fd, const void *buf, size_t nbytes, int flags, const struct sockaddr *to, socklen_t tolen)
+//{
+//    pthread_initialize();
+//    return pth_sendto(fd, buf, nbytes, flags, to, tolen);
+//}
+//
+//ssize_t __pthread_pread(int fd, void *buf, size_t nbytes, off_t offset)
+//{
+//    pthread_initialize();
+//    return pth_pread(fd, buf, nbytes, offset);
+//}
+//
+//ssize_t __pthread_pwrite(int fd, const void *buf, size_t nbytes, off_t offset)
+//{
+//    pthread_initialize();
+//    return pth_pwrite(fd, buf, nbytes, offset);
+//}

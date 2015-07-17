@@ -4,6 +4,8 @@
  * See LICENSE for licensing information
  */
 
+#include <pthmt.h>
+
 #include "shadow.h"
 
 typedef enum _ThreadContext ThreadContext;
@@ -12,6 +14,8 @@ enum _ThreadContext {
 };
 
 struct _Thread {
+    pth_gctx_t* pthmtGlobalContext;
+
     ThreadContext activeContext;
 
     Process* parentProcess;
@@ -159,7 +163,9 @@ ShadowFunctionTable interfaceFunctionTable = {
     &_thread_interface_getBandwidth,
 };
 
-/**************************************************************/
+/**************************************************************
+ * internal functions for shadow-specific code to call
+ **************************************************************/
 
 Thread* thread_new(Process* parentProc, Program* prog) {
     Thread* thread = g_new0(Thread, 1);
@@ -175,6 +181,8 @@ Thread* thread_new(Process* parentProc, Program* prog) {
     thread->referenceCount = 1;
     thread->isRunning = TRUE;
 
+    thread->pthmtGlobalContext = pth_gctx_new();
+
     return thread;
 }
 
@@ -182,6 +190,10 @@ static void _thread_free(Thread* thread) {
     MAGIC_ASSERT(thread);
 
     g_timer_destroy(thread->delayTimer);
+
+    if(thread->pthmtGlobalContext) {
+        pth_gctx_free(thread->pthmtGlobalContext);
+    }
 
     MAGIC_CLEAR(thread);
     g_free(thread);
