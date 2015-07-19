@@ -12,7 +12,6 @@ install(TARGETS shadow-interpose DESTINATION lib)
 
 ## the plug-ins need to include the interface header
 include_directories(${CMAKE_SOURCE_DIR}/src/plugin)
-install(FILES shd-library.h shadow-plugin-interface.h DESTINATION include/)
 
 ## LLVM will be used to build each plug-in that was not disabled in setup.py
 ## our custom pass will enable us to extract and swap plugin state automatically

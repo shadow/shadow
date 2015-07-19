@@ -243,7 +243,7 @@ void host_freeAllApplications(Host* host) {
     MAGIC_ASSERT(host);
     debug("start freeing applications for host '%s'", host->name);
     while(!g_queue_is_empty(host->applications)) {
-        process_free(g_queue_pop_head(host->applications));
+        process_unref(g_queue_pop_head(host->applications));
     }
     debug("done freeing application for host '%s'", host->name);
 }

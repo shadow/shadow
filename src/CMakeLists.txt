@@ -48,7 +48,6 @@ set(shadow_srcs
     host/descriptor/shd-udp.c
     host/shd-process.c
     host/shd-program.c
-    host/shd-thread.c
     host/shd-cpu.c
     host/shd-host.c
     host/shd-network-interface.c

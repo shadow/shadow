@@ -5,10 +5,9 @@
 #include <glib.h>
 #include <unistd.h>
 
-#include <shadow-plugin-interface.h>
 #include "shd-tgen.h"
 
-static const gchar* _tgendriver_logLevelToString(GLogLevelFlags logLevel) {
+static const gchar* _tgenmain_logLevelToString(GLogLevelFlags logLevel) {
     switch (logLevel) {
         case G_LOG_LEVEL_ERROR:
             return "error";
@@ -27,7 +26,7 @@ static const gchar* _tgendriver_logLevelToString(GLogLevelFlags logLevel) {
     }
 }
 
-static void _tgendriver_logHandler(const gchar *logDomain, GLogLevelFlags logLevel,
+static void _tgenmain_logHandler(const gchar *logDomain, GLogLevelFlags logLevel,
         const gchar *message, GLogLevelFlags* userData) {
     GLogLevelFlags filter = *userData;
     if(logLevel <= filter) {
@@ -35,7 +34,7 @@ static void _tgendriver_logHandler(const gchar *logDomain, GLogLevelFlags logLev
     }
 }
 
-static void _tgendriver_log(ShadowLogLevel level, const gchar* functionName, const gchar* format, ...) {
+static void _tgenmain_log(GLogLevelFlags level, const gchar* functionName, const gchar* format, ...) {
     va_list vargs;
     va_start(vargs, format);
 
@@ -46,8 +45,8 @@ static void _tgendriver_log(ShadowLogLevel level, const gchar* functionName, con
             g_date_time_get_year(dt), g_date_time_get_month(dt), g_date_time_get_day_of_month(dt),
             g_date_time_get_hour(dt), g_date_time_get_minute(dt), g_date_time_get_second(dt),
             g_date_time_to_unix(dt), g_date_time_get_microsecond(dt),
-            _tgendriver_logLevelToString((GLogLevelFlags)level), functionName, format);
-    g_logv(G_LOG_DOMAIN, (GLogLevelFlags)level, newformat->str, vargs);
+            _tgenmain_logLevelToString(level), functionName, format);
+    g_logv(G_LOG_DOMAIN, level, newformat->str, vargs);
 
     g_string_free(newformat, TRUE);
     g_date_time_unref(dt);
@@ -55,15 +54,25 @@ static void _tgendriver_log(ShadowLogLevel level, const gchar* functionName, con
     va_end(vargs);
 }
 
+static void _tgenmain_cleanup(gint status, gpointer arg) {
+    if(arg) {
+        TGenDriver* tgen = (TGenDriver*) arg;
+        tgendriver_unref(tgen);
+    }
+    tgen_message("exiting cleanly");
+}
+
 gint main(gint argc, gchar *argv[]) {
     GLogLevelFlags filter = G_LOG_LEVEL_MESSAGE;
-    g_log_set_default_handler((GLogFunc)_tgendriver_logHandler, &filter);
+    g_log_set_default_handler((GLogFunc)_tgenmain_logHandler, &filter);
 
     /* create the new state according to user inputs */
-    TGenDriver* tgen = tgendriver_new(argc, argv, &_tgendriver_log);
+    TGenDriver* tgen = tgendriver_new(argc, argv, &_tgenmain_log);
     if(!tgen) {
         tgen_critical("Error initializing new TrafficGen instance");
         return -1;
+    } else {
+        on_exit(_tgenmain_cleanup, tgen);
     }
 
     /* now we need to watch all the epoll descriptors in our main loop */
@@ -119,11 +128,10 @@ gint main(gint argc, gchar *argv[]) {
         epoll_ctl(mainepolld, EPOLL_CTL_DEL, mainevent.data.fd, &mainevent);
     }
 
-    /* cleanup and close */
+    /* close */
     close(mainepolld);
-    tgendriver_unref(tgen);
 
-    tgen_message("exiting cleanly");
+    tgen_message("returning 0 from main");
 
     return 0;
 }

@@ -775,11 +775,11 @@ static inline int shouldForwardToLibC() {
     int useLibC = 1;
     /* recursive calls always go to libc */
     if(!__sync_fetch_and_add(&isRecursive, 1)) {
-        Thread* thread = director.shadowIsLoaded && worker_isAlive() ? worker_getActiveThread() : NULL;
+        Process* proc = director.shadowIsLoaded && worker_isAlive() ? worker_getActiveProcess() : NULL;
         /* check if the shadow intercept library is loaded yet, but dont fail if its not */
-        if(thread) {
+        if(proc) {
             /* ask shadow if this call is a plug-in that should be intercepted */
-            useLibC = thread_shouldInterpose(thread) ? 0 : 1;
+            useLibC = process_shouldInterpose(proc) ? 0 : 1;
         } else {
             /* intercept library is not yet loaded, don't redirect */
             useLibC = 1;
@@ -794,17 +794,17 @@ enum SystemCallType {
 };
 
 static Host* _interposer_switchInShadowContext() {
-    Thread* thread = worker_getActiveThread();
-    if(thread) {
-        thread_beginControl(thread);
+    Process* proc = worker_getActiveProcess();
+    if(proc) {
+        process_beginControl(proc);
     }
     return worker_getCurrentHost();
 }
 
 static void _interposer_switchOutShadowContext(Host* node) {
-    Thread* thread = worker_getActiveThread();
-    if(thread) {
-        thread_endControl(thread);
+    Process* proc = worker_getActiveProcess();
+    if(proc) {
+        process_endControl(proc);
     }
 }
 
@@ -3187,9 +3187,8 @@ int on_exit(void (*function)(int , void *), void *arg) {
     Host* host = _interposer_switchInShadowContext();
 
     gboolean success = FALSE;
-    Thread* thread = worker_getActiveThread();
-    if(thread) {
-        Process* proc = thread_getParentProcess(thread);
+    Process* proc = worker_getActiveProcess();
+    if(proc) {
         success = process_addAtExitCallback(proc, function, arg, TRUE);
     }
 
@@ -3207,9 +3206,8 @@ int atexit(void (*func)(void)) {
     Host* host = _interposer_switchInShadowContext();
 
     gboolean success = FALSE;
-    Thread* thread = worker_getActiveThread();
-    if(thread) {
-        Process* proc = thread_getParentProcess(thread);
+    Process* proc = worker_getActiveProcess();
+    if(proc) {
         success = process_addAtExitCallback(proc, func, NULL, FALSE);
     }
 
@@ -3231,9 +3229,8 @@ int __cxa_atexit(void (*func) (void *), void * arg, void * dso_handle) {
         /* this should be called when the plugin is unloaded */
         warning("atexit at library close is not currently supported");
     } else {
-        Thread* thread = worker_getActiveThread();
-        if(thread) {
-            Process* proc = thread_getParentProcess(thread);
+        Process* proc = worker_getActiveProcess();
+        if(proc) {
             success = process_addAtExitCallback(proc, func, arg, TRUE);
         }
     }

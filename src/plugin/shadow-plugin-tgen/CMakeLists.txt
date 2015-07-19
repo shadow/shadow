@@ -82,7 +82,7 @@ install(TARGETS shadow-tgen-global-lock DESTINATION lib)
 #install(TARGETS tgen DESTINATION bin)
 
 ## build bitcode
-add_bitcode(shadow-plugin-tgen-bitcode shd-tgen-plugin.c ${tgen_sources})
+add_bitcode(shadow-plugin-tgen-bitcode ${tgen_sources})
 
 ## create and install the shared library that plugs into shadow
 add_plugin(shadow-plugin-tgen shadow-plugin-tgen-bitcode)
