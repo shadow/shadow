@@ -281,8 +281,14 @@ static void _tgendriver_initiatePause(TGenDriver* driver, TGenAction* action) {
 static void _tgendriver_handleSynchronize(TGenDriver* driver, TGenAction* action) {
     TGEN_ASSERT(driver);
 
-    // FIXME - actually implement synchronize feature - NOOP for now
-    _tgendriver_continueNextActions(driver, action);
+    glong totalIncoming = tgenaction_getTotalIncoming(action);
+    glong completedIncoming = tgenaction_getCompletedIncoming(action);
+
+    completedIncoming = completedIncoming+1;
+    tgenaction_setCompletedIncoming(action, completedIncoming);
+
+    if(completedIncoming == totalIncoming)
+        _tgendriver_continueNextActions(driver, action);
 }
 
 static void _tgendriver_checkEndConditions(TGenDriver* driver, TGenAction* action) {

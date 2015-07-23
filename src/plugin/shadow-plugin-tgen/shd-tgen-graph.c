@@ -255,8 +255,35 @@ static GError* _tgengraph_parseSynchronizeVertex(TGenGraph* g, const gchar* idSt
 
     tgen_debug("found vertex %li (%s)", (glong)vertexIndex, idStr);
 
+    /* Count up the total incoming edges */
+
+    /* initialize a vector to hold the result neighbor vertices for this action */
+    igraph_vector_t* resultNeighborVertices = g_new0(igraph_vector_t, 1);
+
+    /* initialize with 0 entries, since we dont know how many neighbors we have */
+    gint result = igraph_vector_init(resultNeighborVertices, 0);
+    if(result != IGRAPH_SUCCESS) {
+        tgen_critical("igraph_vector_init return non-success code %i", result);
+        g_free(resultNeighborVertices);
+        return FALSE;
+    }
+
+    /* now get all incoming 1-hop neighbors of the given action */
+    result = igraph_neighbors(g->graph, resultNeighborVertices, vertexIndex, IGRAPH_IN);
+    if(result != IGRAPH_SUCCESS) {
+        tgen_critical("igraph_neighbors return non-success code %i", result);
+        igraph_vector_destroy(resultNeighborVertices);
+        g_free(resultNeighborVertices);
+        return NULL;
+    }
+
+    /* handle the results */
+    glong totalIncoming = igraph_vector_size(resultNeighborVertices);
+    tgen_debug("found %li neighbors to vertex %i", totalIncoming, (gint)vertexIndex);
+
+
     GError* error = NULL;
-    TGenAction* a = tgenaction_newSynchronizeAction(&error);
+    TGenAction* a = tgenaction_newSynchronizeAction(totalIncoming, &error);
 
     if(a) {
         _tgengraph_storeAction(g, a, vertexIndex);
