@@ -34,10 +34,10 @@ typedef struct _TGenActionTransferData {
     TGenPool* peers;
 } TGenActionTransferData;
 
-typedef struct _TGenActionSynchronize {
-    gint totalIncoming;
-    gint completedIncoming;
-} TGenActionSynchronize;
+typedef struct _TGenActionSynchronizeData {
+    glong totalIncoming;
+    glong completedIncoming;
+} TGenActionSynchronizeData;
 
 struct _TGenAction {
     TGenActionType type;
@@ -453,7 +453,7 @@ TGenAction* tgenaction_newSynchronizeAction(glong totalIncoming, GError** error)
 
     action->type = TGEN_ACTION_SYNCHR0NIZE;
 
-    TGenActionSynchronize* data = g_new0(TGenActionSynchronize, 1);
+    TGenActionSynchronizeData* data = g_new0(TGenActionSynchronizeData, 1);
     data->totalIncoming = totalIncoming;
     data->completedIncoming = 0;
 
@@ -660,17 +660,17 @@ guint64 tgenaction_getEndSize(TGenAction* action) {
 glong tgenaction_getTotalIncoming(TGenAction* action){
     TGEN_ASSERT(action);
     g_assert(action->data && action->type == TGEN_ACTION_SYNCHR0NIZE);
-    return ((TGenActionSynchronize*)action->data)->totalIncoming;
+    return ((TGenActionSynchronizeData*)action->data)->totalIncoming;
 }
 
 glong tgenaction_getCompletedIncoming(TGenAction* action){
     TGEN_ASSERT(action);
     g_assert(action->data && action->type == TGEN_ACTION_SYNCHR0NIZE);
-    return ((TGenActionSynchronize*)action->data)->completedIncoming;
+    return ((TGenActionSynchronizeData*)action->data)->completedIncoming;
 }
 
 void tgenaction_setCompletedIncoming(TGenAction* action, glong completedIncoming){
     TGEN_ASSERT(action);
     g_assert(action->data && action->type == TGEN_ACTION_SYNCHR0NIZE);
-    ((TGenActionSynchronize*)action->data)->completedIncoming = completedIncoming;
+    ((TGenActionSynchronizeData*)action->data)->completedIncoming = completedIncoming;
 }
