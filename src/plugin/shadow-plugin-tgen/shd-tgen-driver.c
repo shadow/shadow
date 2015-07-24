@@ -51,6 +51,7 @@ ShadowLogFunc tgenLogFunc;
 
 /* forward declaration */
 static void _tgendriver_continueNextActions(TGenDriver* driver, TGenAction* action);
+static void _tgendriver_processAction(TGenDriver* driver, TGenAction* action);
 
 static gint64 _tgendriver_getCurrentTimeMillis() {
     return g_get_monotonic_time()/1000;
@@ -292,6 +293,25 @@ static void _tgendriver_handleSynchronize(TGenDriver* driver, TGenAction* action
     }
 }
 
+static void _tgendriver_handleChoose(TGenDriver* driver, TGenAction* action) {
+    TGEN_ASSERT(driver);
+
+    /* Get a queue of outgoing edges */
+    GQueue* nextActions = tgengraph_getNextActions(driver->actionGraph, action);
+    g_assert(nextActions);
+    guint numOutgoing = g_queue_get_length(nextActions);
+
+    /* Randomly select an outgoing edge */
+    guint randomIndex = g_random_double() * numOutgoing;
+    TGenAction* nextAction = g_queue_peek_nth(nextActions, randomIndex);
+
+    /* Clean up */
+    g_queue_free(nextActions);
+
+    /* Send out random action */
+    _tgendriver_processAction(driver, nextAction);
+}
+
 static void _tgendriver_checkEndConditions(TGenDriver* driver, TGenAction* action) {
     TGEN_ASSERT(driver);
 
@@ -348,6 +368,10 @@ static void _tgendriver_processAction(TGenDriver* driver, TGenAction* action) {
             _tgendriver_initiatePause(driver, action);
             break;
         }
+        case TGEN_ACTION_CHOOSE: {
+            _tgendriver_handleChoose(driver, action);
+            break;
+         }
         default: {
             tgen_warning("unrecognized action type");
             break;

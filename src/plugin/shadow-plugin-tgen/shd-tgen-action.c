@@ -39,6 +39,9 @@ typedef struct _TGenActionSynchronizeData {
     glong completedIncoming;
 } TGenActionSynchronizeData;
 
+typedef struct _TGenActionChoosedata {
+} TGenActionChooseData;
+
 struct _TGenAction {
     TGenActionType type;
     gpointer key;
@@ -456,6 +459,20 @@ TGenAction* tgenaction_newSynchronizeAction(glong totalIncoming, GError** error)
     TGenActionSynchronizeData* data = g_new0(TGenActionSynchronizeData, 1);
     data->totalIncoming = totalIncoming;
     data->completedIncoming = 0;
+
+    action->data = data;
+
+    return action;
+}
+
+TGenAction* tgenaction_newChooseAction(GError** error) {
+    TGenAction* action = g_new0(TGenAction, 1);
+    action->magic = TGEN_MAGIC;
+    action->refcount = 1;
+
+    action->type = TGEN_ACTION_CHOOSE;
+
+    TGenActionChooseData* data = g_new0(TGenActionChooseData, 1);
 
     action->data = data;
 
