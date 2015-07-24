@@ -287,8 +287,9 @@ static void _tgendriver_handleSynchronize(TGenDriver* driver, TGenAction* action
     completedIncoming = completedIncoming+1;
     tgenaction_setCompletedIncoming(action, completedIncoming);
 
-    if(completedIncoming == totalIncoming)
+    if(completedIncoming == totalIncoming) {
         _tgendriver_continueNextActions(driver, action);
+    }
 }
 
 static void _tgendriver_checkEndConditions(TGenDriver* driver, TGenAction* action) {

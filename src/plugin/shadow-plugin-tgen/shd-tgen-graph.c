@@ -281,6 +281,9 @@ static GError* _tgengraph_parseSynchronizeVertex(TGenGraph* g, const gchar* idSt
     glong totalIncoming = igraph_vector_size(resultNeighborVertices);
     tgen_debug("found %li neighbors to vertex %i", totalIncoming, (gint)vertexIndex);
 
+    /* cleanup */
+    igraph_vector_destroy(resultNeighborVertices);
+    g_free(resultNeighborVertices);
 
     GError* error = NULL;
     TGenAction* a = tgenaction_newSynchronizeAction(totalIncoming, &error);
