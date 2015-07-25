@@ -25,6 +25,7 @@ add_cflags(-fPIC)
 add_cflags(-Wno-unknown-attributes)
 add_cflags(-Wno-unused-command-line-argument)
 add_cflags(-Wno-unknown-warning-option)
+add_cflags(-Wno-visibility)
 
 ## sources for our main shadow program
 set(shadow_srcs
@@ -98,8 +99,8 @@ set(shadow_srcs
 
 ## specify the main shadow executable, build, link, and install
 add_executable(shadow ${shadow_srcs})
-add_dependencies(shadow shadow-interpose pthmt)
-target_link_libraries(shadow shadow-interpose pthmt ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES} ${IGRAPH_LIBRARIES} ${GLIB_LIBRARIES} ${PTHMT_LIBRARIES})
+add_dependencies(shadow shadow-interpose)
+target_link_libraries(shadow shadow-interpose ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES} ${IGRAPH_LIBRARIES} ${GLIB_LIBRARIES} ${PTHMT_LIBRARIES})
 install(TARGETS shadow DESTINATION bin)
 
 ## shadow needs to find libshadow-intercept and custom libs after install

@@ -217,7 +217,7 @@ EventQueue* host_getEvents(Host* host) {
 void host_addApplication(Host* host, GQuark pluginID,
         SimulationTime startTime, SimulationTime stopTime, gchar* arguments) {
     MAGIC_ASSERT(host);
-    Process* application = process_new(pluginID, startTime, stopTime, arguments);
+    Process* application = process_new(host, pluginID, startTime, stopTime, arguments);
     g_queue_push_tail(host->applications, application);
 
     StartApplicationEvent* event = startapplication_new(application);
