@@ -692,26 +692,26 @@ gint host_select(Host* host, fd_set* readable, fd_set* writeable, fd_set* errone
     GHashTableIter iter;
     gpointer key, value;
     g_hash_table_iter_init(&iter, host->shadowToOSHandleMap);
-    while(g_hash_table_iter_next(&iter, &key, &value)) {
+    while (g_hash_table_iter_next(&iter, &key, &value)) {
         gint shadowHandle = GPOINTER_TO_INT(key);
         gint osHandle = GPOINTER_TO_INT(value);
 
-        if(FD_ISSET(shadowHandle, readable)) {
+        if (FD_ISSET(shadowHandle, readable)) {
             FD_ZERO(&osFDSet);
             FD_SET(osHandle, &osFDSet);
-            select(osHandle, &osFDSet, NULL, NULL, &zeroTimeout);
-            if(FD_ISSET(osHandle, &osFDSet)) {
+            select(osHandle+1, &osFDSet, NULL, NULL, &zeroTimeout);
+            if (FD_ISSET(osHandle, &osFDSet)) {
                 g_queue_push_head(readyDescsRead, GINT_TO_POINTER(shadowHandle));
             }
         }
-        if(FD_ISSET(shadowHandle, writeable)) {
-              FD_ZERO(&osFDSet);
-              FD_SET(osHandle, &osFDSet);
-              select(osHandle, &osFDSet, NULL, NULL, &zeroTimeout);
-              if(FD_ISSET(osHandle, &osFDSet)) {
-                  g_queue_push_head(readyDescsWrite, GINT_TO_POINTER(shadowHandle));
-              }
-          }
+        if (FD_ISSET(shadowHandle, writeable)) {
+            FD_ZERO(&osFDSet);
+            FD_SET(osHandle, &osFDSet);
+            select(osHandle, &osFDSet, NULL, NULL, &zeroTimeout);
+            if (FD_ISSET(osHandle+1, &osFDSet)) {
+                g_queue_push_head(readyDescsWrite, GINT_TO_POINTER(shadowHandle));
+            }
+        }
     }
 
     /* now prepare and return the response */

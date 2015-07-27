@@ -1120,9 +1120,7 @@ int process_emu_epoll_ctl(Process* proc, int epfd, int op, int fd, struct epoll_
 }
 
 int process_emu_epoll_wait(Process* proc, int epfd, struct epoll_event *events, int maxevents, int timeout) {
-    /*
-     * EINVAL if maxevents is less than or equal to zero.
-     */
+    /* EINVAL if maxevents is less than or equal to zero. */
     if(maxevents <= 0) {
         errno = EINVAL;
         return -1;
@@ -1130,39 +1128,51 @@ int process_emu_epoll_wait(Process* proc, int epfd, struct epoll_event *events, 
 
     /* switch to shadow context and try to get events if we have any */
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-
-    /*
-     * initial checks: we can't block, so timeout must be 0. anything else will
-     * cause a warning. if they seriously want to block by passing in -1, then
-     * return interrupt below only if we have no events.
-     *
-     * @note log while in shadow context to get proc->host info in the log
-     */
-    if(timeout != 0) {
-        warning("Shadow does not block, so the '%i' millisecond timeout will be ignored", timeout);
-    }
-
     gint nEvents = 0;
+    gint ret = 0;
     gint result = host_epollGetEvents(proc->host, epfd, events, maxevents, &nEvents);
-    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
 
-    /* check if there was an error */
     if(result != 0) {
+        /* there was an error from shadow */
         errno = result;
-        return -1;
+        ret = -1;
+    } else if(timeout != 0 && nEvents <= 0) {
+        /* they are trying to block but we have no events yet, lets ask pth to handle blocking */
+        fd_set selRead;
+        FD_ZERO(&selRead);
+        FD_SET(epfd, &selRead);
+        _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
+        if(timeout < 0) {
+            /* block indefinitely */
+            pth_select(epfd+1, &selRead, NULL, NULL, NULL);
+        } else {
+            /* block with the given millisecond timeout */
+            struct timeval selTimeout;
+            selTimeout.tv_sec = (__time_t)(timeout / 1000);
+            selTimeout.tv_usec = (__suseconds_t)((timeout % 1000) * 1000);
+            pth_select(epfd+1, &selRead, NULL, NULL, &selTimeout);
+        }
+        _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+        if(FD_ISSET(epfd, &selRead)) {
+            /* we are now readable after waiting in select */
+            result = host_epollGetEvents(proc->host, epfd, events, maxevents, &nEvents);
+            if(result != 0) {
+                /* there was an error from shadow */
+                errno = result;
+                ret = -1;
+            } else {
+                ret = nEvents;
+            }
+        } else {
+            /* select had a timeout and nothing became ready */
+            ret = nEvents = 0;
+        }
+    } else {
+        ret = nEvents;
     }
 
-    /*
-     * if we dont have any events and they are trying to block, tell them their
-     * timeout was interrupted.
-     */
-    if(timeout != 0 && nEvents <= 0) {
-        errno = EINTR;
-        return -1;
-    }
-
-    /* the event count. zero is fine since they weren't expecting a timer. */
-    return nEvents;
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    return ret;
 }
 
 int process_emu_epoll_pwait(Process* proc, int epfd, struct epoll_event *events, int maxevents, int timeout, const sigset_t *ss) {
