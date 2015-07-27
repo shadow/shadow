@@ -659,6 +659,83 @@ gint host_epollGetEvents(Host* host, gint handle,
     return ret;
 }
 
+gint host_select(Host* host, fd_set* readable, fd_set* writeable, fd_set* erroneous) {
+    MAGIC_ASSERT(host);
+
+    GQueue* readyDescsRead = g_queue_new();
+    GQueue* readyDescsWrite = g_queue_new();
+
+    /* first look at shadow internal descriptors */
+    GList* descs = g_hash_table_get_values(host->descriptors);
+    GList* item = g_list_first(descs);
+    while(item) {
+        Descriptor* desc = item->data;
+        if(desc) {
+            DescriptorStatus status = descriptor_getStatus(desc);
+            if(FD_ISSET(desc->handle, readable) && (status & DS_ACTIVE) && (status & DS_READABLE)) {
+                g_queue_push_head(readyDescsRead, GINT_TO_POINTER(desc->handle));
+            }
+            if(FD_ISSET(desc->handle, writeable) && (status & DS_ACTIVE) && (status & DS_WRITABLE)) {
+                g_queue_push_head(readyDescsWrite, GINT_TO_POINTER(desc->handle));
+            }
+        }
+        item = g_list_next(item);
+    }
+    g_list_free(descs);
+    item = descs = NULL;
+
+    /* now check on OS descriptors */
+    struct timeval zeroTimeout;
+    zeroTimeout.tv_sec = 0;
+    zeroTimeout.tv_usec = 0;
+    fd_set osFDSet;
+    GHashTableIter iter;
+    gpointer key, value;
+    g_hash_table_iter_init(&iter, host->shadowToOSHandleMap);
+    while(g_hash_table_iter_next(&iter, &key, &value)) {
+        gint shadowHandle = GPOINTER_TO_INT(key);
+        gint osHandle = GPOINTER_TO_INT(value);
+
+        if(FD_ISSET(shadowHandle, readable)) {
+            FD_ZERO(&osFDSet);
+            FD_SET(osHandle, &osFDSet);
+            select(osHandle, &osFDSet, NULL, NULL, &zeroTimeout);
+            if(FD_ISSET(osHandle, &osFDSet)) {
+                g_queue_push_head(readyDescsRead, GINT_TO_POINTER(shadowHandle));
+            }
+        }
+        if(FD_ISSET(shadowHandle, writeable)) {
+              FD_ZERO(&osFDSet);
+              FD_SET(osHandle, &osFDSet);
+              select(osHandle, &osFDSet, NULL, NULL, &zeroTimeout);
+              if(FD_ISSET(osHandle, &osFDSet)) {
+                  g_queue_push_head(readyDescsWrite, GINT_TO_POINTER(shadowHandle));
+              }
+          }
+    }
+
+    /* now prepare and return the response */
+    FD_ZERO(readable);
+    FD_ZERO(writeable);
+    FD_ZERO(erroneous);
+    gint nReady = 0;
+
+    while(!g_queue_is_empty(readyDescsRead)) {
+        gint handle = GPOINTER_TO_INT(g_queue_pop_head(readyDescsRead));
+        FD_SET(handle, readable);
+        nReady++;
+    }
+    g_queue_free(readyDescsRead);
+    while(!g_queue_is_empty(readyDescsWrite)) {
+        gint handle = GPOINTER_TO_INT(g_queue_pop_head(readyDescsWrite));
+        FD_SET(handle, writeable);
+        nReady++;
+    }
+    g_queue_free(readyDescsWrite);
+
+    return nReady;
+}
+
 static gboolean _host_doesInterfaceExist(Host* host, in_addr_t interfaceIP) {
     MAGIC_ASSERT(host);
 

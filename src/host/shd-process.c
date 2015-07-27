@@ -747,6 +747,8 @@ static gint _process_emu_addressHelper(Process* proc, gint fd, const struct sock
 static gssize _process_emu_sendHelper(Process* proc, gint fd, gconstpointer buf, gsize n, gint flags,
         const struct sockaddr* addr, socklen_t len) {
     /* this function MUST be called after switching in shadow context */
+    utility_assert(proc->activeContext == PCTX_SHADOW);
+
     /* TODO flags are ignored */
     /* make sure this is a socket */
     if(!host_isShadowDescriptor(proc->host, fd)){
@@ -777,6 +779,8 @@ static gssize _process_emu_sendHelper(Process* proc, gint fd, gconstpointer buf,
 static gssize _process_emu_recvHelper(Process* proc, gint fd, gpointer buf, size_t n, gint flags,
         struct sockaddr* addr, socklen_t* len) {
     /* this function MUST be called after switching in shadow context */
+    utility_assert(proc->activeContext == PCTX_SHADOW);
+
     /* TODO flags are ignored */
     /* make sure this is a socket */
     if(!host_isShadowDescriptor(proc->host, fd)){
@@ -891,6 +895,26 @@ static gint _process_emu_ioctlHelper(Process* proc, int fd, unsigned long int re
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return result;
+}
+
+static int _process_emu_selectHelper(Process* proc, int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, const struct timespec *timeout) {
+    /* this function MUST be called after switching in shadow context */
+    utility_assert(proc->activeContext == PCTX_SHADOW);
+    gint ret = 0;
+
+    if (nfds < 0 || nfds > FD_SETSIZE) {
+        errno = EINVAL;
+        ret = -1;
+    } else if(nfds == 0 && readfds == NULL && writefds == NULL && exceptfds == NULL) {
+        _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
+        utility_assert(proc->tstate == pth_gctx_get());
+        pth_nanosleep(timeout, NULL);
+        _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+    } else {
+        ret = host_select(proc->host, readfds, writefds, exceptfds);
+    }
+
+    return ret;
 }
 
 /* memory allocation family */
@@ -2000,9 +2024,26 @@ int process_emu_select(Process* proc, int nfds, fd_set *readfds, fd_set *writefd
         ret = pth_select(nfds, readfds, writefds, exceptfds, timeout);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     } else {
-        warning("select() not currently implemented by shadow");
-        errno = ENOSYS;
-        ret = -1;
+        struct timespec tmp;
+        tmp.tv_sec = timeout->tv_sec;
+        tmp.tv_nsec = (__syscall_slong_t)(timeout->tv_usec * 1000);
+        ret = _process_emu_selectHelper(proc, nfds, readfds, writefds, exceptfds, &tmp);
+    }
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    return ret;
+}
+
+int process_emu_pselect(Process* proc, int nfds, fd_set *readfds, fd_set *writefds,
+                    fd_set *exceptfds, const struct timespec *timeout, const sigset_t *sigmask) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+    int ret = 0;
+    if(prevCTX == PCTX_PLUGIN) {
+        _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
+        utility_assert(proc->tstate == pth_gctx_get());
+        ret = pth_pselect(nfds, readfds, writefds, exceptfds, timeout, sigmask);
+        _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+    } else {
+        ret = _process_emu_selectHelper(proc, nfds, readfds, writefds, exceptfds, timeout);
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
