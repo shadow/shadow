@@ -583,7 +583,7 @@ typedef struct {
         size_t ndeallocs;
     } dummy;
     PreloadFuncs next;
-    gboolean shadowIsLoaded;
+    int shadowIsLoaded;
 } FuncDirector;
 
 /* global storage for function pointers that we look up lazily */
@@ -619,7 +619,7 @@ static void dummy_free(void *ptr) {
 }
 
 void interposer_setShadowIsLoaded() {
-    director.shadowIsLoaded = TRUE;
+    director.shadowIsLoaded = 1;
 }
 
 static void _interposer_globalInitialize() {
@@ -779,11 +779,9 @@ static void _interposer_globalInitialize() {
     SETSYM_OR_FAIL(director.next.pthread_attr_getguardsize, "pthread_attr_getguardsize");
     SETSYM_OR_FAIL(director.next.pthread_create, "pthread_create");
     SETSYM_OR_FAIL(director.next.pthread_detach, "pthread_detach");
-    SETSYM_OR_FAIL(director.next.__pthread_detach, "__pthread_detach");
     SETSYM_OR_FAIL(director.next.pthread_self, "pthread_self");
     SETSYM_OR_FAIL(director.next.pthread_equal, "pthread_equal");
     SETSYM_OR_FAIL(director.next.pthread_yield, "pthread_yield");
-    SETSYM_OR_FAIL(director.next.pthread_yield_np, "pthread_yield_np");
     SETSYM_OR_FAIL(director.next.pthread_exit, "pthread_exit");
     SETSYM_OR_FAIL(director.next.pthread_join, "pthread_join");
     SETSYM_OR_FAIL(director.next.pthread_once, "pthread_once");
@@ -851,6 +849,8 @@ static void _interposer_globalInitialize() {
     SETSYM(director.next.pthread_attr_setprio_np, "pthread_attr_setprio_np");
     SETSYM(director.next.pthread_attr_getprio_np, "pthread_attr_getprio_np");
     SETSYM(director.next.pthread_abort, "pthread_abort");
+    SETSYM(director.next.__pthread_detach, "__pthread_detach");
+    SETSYM(director.next.pthread_yield_np, "pthread_yield_np");
     SETSYM(director.next.pthread_cleanup_push, "pthread_cleanup_push");
     SETSYM(director.next.pthread_cleanup_pop, "pthread_cleanup_pop");
 
@@ -1134,12 +1134,12 @@ INTERPOSE(int gethostname(char* a, size_t b), gethostname, a, b);
 INTERPOSE(int getaddrinfo(const char *a, const char *b, const struct addrinfo *c, struct addrinfo **d), getaddrinfo, a, b, c, d);
 INTERPOSE_NORET(void freeaddrinfo(struct addrinfo *a), freeaddrinfo, a);
 
-INTERPOSE(struct hostent* gethostbyname(const gchar* a), gethostbyname, a);
-INTERPOSE(int gethostbyname_r(const gchar *a, struct hostent *b, gchar *c, gsize d, struct hostent **e, gint *f), gethostbyname_r, a, b, c, d, e, f);
-INTERPOSE(struct hostent* gethostbyname2(const gchar* a, gint b), gethostbyname2, a, b);
-INTERPOSE(int gethostbyname2_r(const gchar *a, gint b, struct hostent *c, gchar *d, gsize e, struct hostent **f, gint *g), gethostbyname2_r, a, b, c, d, e, f, g);
-INTERPOSE(struct hostent* gethostbyaddr(const void* a, socklen_t b, gint c), gethostbyaddr, a, b, c);
-INTERPOSE(int gethostbyaddr_r(const void *a, socklen_t b, gint c, struct hostent *d, char *e, gsize f, struct hostent **g, gint *h), gethostbyaddr_r, a, b, c, d, e, f, g, h);
+INTERPOSE(struct hostent* gethostbyname(const char* a), gethostbyname, a);
+INTERPOSE(int gethostbyname_r(const char *a, struct hostent *b, char *c, size_t d, struct hostent **e, int *f), gethostbyname_r, a, b, c, d, e, f);
+INTERPOSE(struct hostent* gethostbyname2(const char* a, int b), gethostbyname2, a, b);
+INTERPOSE(int gethostbyname2_r(const char *a, int b, struct hostent *c, char *d, size_t e, struct hostent **f, int *g), gethostbyname2_r, a, b, c, d, e, f, g);
+INTERPOSE(struct hostent* gethostbyaddr(const void* a, socklen_t b, int c), gethostbyaddr, a, b, c);
+INTERPOSE(int gethostbyaddr_r(const void *a, socklen_t b, int c, struct hostent *d, char *e, size_t f, struct hostent **g, int *h), gethostbyaddr_r, a, b, c, d, e, f, g, h);
 
 /* random family */
 
