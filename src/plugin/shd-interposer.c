@@ -1205,10 +1205,13 @@ INTERPOSE(int pthread_setconcurrency(int a), pthread_setconcurrency, a);
 
 /* pthread context */
 
-INTERPOSE(int pthread_key_create(pthread_key_t *a, void (*b)(void *)), pthread_key_create, a, b);
-INTERPOSE(int pthread_key_delete(pthread_key_t a), pthread_key_delete, a);
-INTERPOSE(int pthread_setspecific(pthread_key_t a, const void *b), pthread_setspecific, a, b);
-INTERPOSE(void* pthread_getspecific(pthread_key_t a), pthread_getspecific, a);
+/* intercepting these functions causes glib errors, because keys that were created from
+ * internal shadow functions then get used in the plugin and get forwarded to pth, which
+ * of course does not have the same registered keys. */
+//INTERPOSE(int pthread_key_create(pthread_key_t *a, void (*b)(void *)), pthread_key_create, a, b);
+//INTERPOSE(int pthread_key_delete(pthread_key_t a), pthread_key_delete, a);
+//INTERPOSE(int pthread_setspecific(pthread_key_t a, const void *b), pthread_setspecific, a, b);
+//INTERPOSE(void* pthread_getspecific(pthread_key_t a), pthread_getspecific, a);
 
 /* pthread cancel */
 

@@ -385,7 +385,7 @@ static void _process_executeCleanup(Process* proc) {
         pth_t auxThread = g_queue_pop_head(proc->auxiliaryProgramThreads);
         if(auxThread) {
             proc->activeContext = PCTX_PTH;
-            pth_abort(auxThread);
+            gint success = pth_abort(auxThread);
             ProcessContext prevContext = proc->activeContext;
             proc->activeContext = PCTX_SHADOW;
             utility_assert(prevContext == PCTX_PTH);
@@ -530,6 +530,9 @@ void process_start(Process* proc) {
     /* create our default state as we run in our assigned worker */
     proc->pstate = program_newDefaultState(proc->prog);
 
+    GString* mainThreadNameBuf = g_string_new(NULL);
+    g_string_printf(mainThreadNameBuf, "shadow(%s)", g_quark_to_string(proc->programID));
+
     /* ref for the spawn below */
     process_ref(proc);
 
@@ -547,6 +550,7 @@ void process_start(Process* proc) {
 
     /* spawn the thread and yield to give it a chance to run */
     proc->mainProgramThread = pth_spawn(PTH_ATTR_DEFAULT, (PthSpawnFunc)_process_executeMain, proc);
+    pth_attr_set(pth_attr_of(pth_self()), PTH_ATTR_NAME, mainThreadNameBuf->str);
     pth_yield(proc->mainProgramThread);
 
     /* revert pth global context */
@@ -556,6 +560,7 @@ void process_start(Process* proc) {
     proc->activeContext = PCTX_SHADOW;
     program_swapOutState(proc->prog, proc->pstate);
     worker_setActiveProcess(NULL);
+    g_string_free(mainThreadNameBuf, TRUE);
 }
 
 void process_continue(Process* proc) {
@@ -585,8 +590,9 @@ void process_continue(Process* proc) {
         pth_yield(NULL);
     }
 
-    /* total number of all pth threads this scheduler has */
-    gint nThreads = pth_ctrl(PTH_CTRL_GETTHREADS);
+    /* total number of alive pth threads this scheduler has */
+    gint nThreads = pth_ctrl(PTH_CTRL_GETTHREADS_NEW|PTH_CTRL_GETTHREADS_READY|PTH_CTRL_GETTHREADS_RUNNING|\
+            PTH_CTRL_GETTHREADS_WAITING|PTH_CTRL_GETTHREADS_SUSPENDED);
 
     /* if the main thread closed, this process is done */
     if(!proc->mainProgramThread) {
@@ -604,8 +610,8 @@ void process_continue(Process* proc) {
     worker_setActiveProcess(NULL);
 
     if(!proc->mainProgramThread) {
-        /* pth should have had no remaining threads */
-        utility_assert(nThreads == 0);
+        /* pth should have had no remaining alive threads except the one shadow was running in */
+        utility_assert(nThreads == 1);
 
         /* free our copy of plug-in resources, and other application state */
         program_freeState(proc->prog, proc->pstate);
@@ -3511,11 +3517,13 @@ int process_emu_pthread_create(Process* proc, pthread_t *thread, const pthread_a
                 na = (pth_attr_t) (*attr);
             else
                 na = PTH_ATTR_DEFAULT;
-            *thread = (pthread_t) pth_spawn(na, start_routine, arg);
+            pth_t auxThread = pth_spawn(na, start_routine, arg);
+            *thread = (pthread_t) auxThread;
             if(*thread == NULL) {
                 ret = EAGAIN;
                 errno = EAGAIN;
             } else {
+                g_queue_push_head(proc->auxiliaryProgramThreads, auxThread);
                 ret = 0;
             }
         }
