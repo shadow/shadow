@@ -302,7 +302,7 @@ static void _tgendriver_handleChoose(TGenDriver* driver, TGenAction* action) {
     guint numOutgoing = g_queue_get_length(nextActions);
 
     /* Randomly select an outgoing edge */
-    guint randomIndex = g_random_double() * numOutgoing;
+    guint randomIndex = g_random_double() * (numOutgoing-1);
     TGenAction* nextAction = g_queue_peek_nth(nextActions, randomIndex);
 
     /* Clean up */
