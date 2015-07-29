@@ -326,6 +326,21 @@ static GError* _tgengraph_parseTransferVertex(TGenGraph* g, const gchar* idStr,
     return error;
 }
 
+static GError* _tgengraph_parseChooseVertex(TGenGraph* g, const gchar* idStr,
+        igraph_integer_t vertexIndex) {
+    TGEN_ASSERT(g);
+
+    tgen_debug("found vertex %li (%s)", (glong)vertexIndex, idStr);
+
+    GError* error = NULL;
+    TGenAction* a = tgenaction_newChooseAction(&error);
+
+    if(a) {
+        _tgengraph_storeAction(g, a, vertexIndex);
+    }
+
+    return error;
+}
 static GError* _tgengraph_parseGraphVertices(TGenGraph* g) {
     TGEN_ASSERT(g);
 
@@ -367,6 +382,8 @@ static GError* _tgengraph_parseGraphVertices(TGenGraph* g) {
             error = _tgengraph_parseSynchronizeVertex(g, idStr, vertexIndex);
         } else if(g_strstr_len(idStr, (gssize)-1, "transfer")) {
             error = _tgengraph_parseTransferVertex(g, idStr, vertexIndex);
+        } else if(g_strstr_len(idStr, (gssize)-1, "choose")) {
+            error = _tgengraph_parseChooseVertex(g, idStr, vertexIndex);
         } else {
             error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ELEMENT,
                     "found vertex %li (%s) with an unknown action id '%s'",

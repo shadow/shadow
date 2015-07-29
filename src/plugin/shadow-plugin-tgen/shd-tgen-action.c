@@ -462,6 +462,16 @@ TGenAction* tgenaction_newSynchronizeAction(glong totalIncoming, GError** error)
     return action;
 }
 
+TGenAction* tgenaction_newChooseAction(GError** error) {
+    TGenAction* action = g_new0(TGenAction, 1);
+    action->magic = TGEN_MAGIC;
+    action->refcount = 1;
+
+    action->type = TGEN_ACTION_CHOOSE;
+
+    return action;
+}
+
 TGenAction* tgenaction_newTransferAction(const gchar* typeStr, const gchar* protocolStr,
         const gchar* sizeStr, const gchar* peersStr, const gchar* timeoutStr, GError** error) {
     g_assert(error);
