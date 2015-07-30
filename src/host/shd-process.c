@@ -148,6 +148,12 @@ struct sched_param;
 #endif
 #endif
 
+#ifndef O_DIRECT
+#define O_DIRECT 040000
+#endif
+
+#define PROC_PTH_STACK_SIZE 256*1024
+
 #include "shadow.h"
 
 typedef void (*PluginExitCallbackFunc)();
@@ -195,9 +201,15 @@ struct _Process {
     ProgramState pstate;
     /* the portable thread state this process uses when executing the program */
     pth_gctx_t tstate;
-    /* shadow runs in pths main thread; this handle is for the thread used to run the program */
-    pth_t mainProgramThread;
-    GQueue* auxiliaryProgramThreads;
+
+    /* shadow runs in pths 'main' thread */
+    pth_t shadowThread;
+    /* the shadow thread spawns a child to run the program main function */
+    pth_t programMainThread;
+    /* any other threads created by the program are auxiliary threads */
+    GQueue* programAuxiliaryThreads;
+    /* keep track of number of aux threads, for naming */
+    guint programAuxiliaryThreadCounter;
 
     /*
      * Distinguishes which context we are in. Whenever the flow of execution
@@ -331,11 +343,7 @@ static gint _process_getArguments(Process* proc, gchar** argvOut[]) {
 static void _process_executeAtFork(ProcessAtForkCallbackData* data) {
     if(data) {
         Process* proc = data->proc;
-        if(proc) {
-            ProcessContext prevContext = proc->activeContext;
-            proc->activeContext = PCTX_SHADOW;
-            utility_assert(prevContext == PCTX_PTH);
-        }
+        _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
 
         /* sanity checks */
         MAGIC_ASSERT(proc);
@@ -343,7 +351,7 @@ static void _process_executeAtFork(ProcessAtForkCallbackData* data) {
         utility_assert(worker_getActiveProcess() == proc);
 
         if(data->prepare || data->parent || data->child) {
-            proc->activeContext = PCTX_PLUGIN;
+            _process_changeContext(proc, PCTX_SHADOW, PCTX_PLUGIN);
 
             if(data->prepare)
                 data->prepare();
@@ -352,25 +360,19 @@ static void _process_executeAtFork(ProcessAtForkCallbackData* data) {
             else if(data->child)
                 data->child();
 
-            ProcessContext prevContext = proc->activeContext;
-            proc->activeContext = PCTX_SHADOW;
-            utility_assert(prevContext == PCTX_PLUGIN);
+            _process_changeContext(proc, PCTX_PLUGIN, PCTX_SHADOW);
         }
 
         process_unref(data->proc);
         g_free(data);
-        proc->activeContext = PCTX_PTH;
+        _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
     }
 }
 
 static void _process_executeCleanup(Process* proc) {
     /* we just came from pth_spawn - the first thing we should do is update our context
      * back to shadow to make sure any potential shadow sys calls get handled correctly */
-    if(proc) {
-        ProcessContext prevContext = proc->activeContext;
-        proc->activeContext = PCTX_SHADOW;
-        utility_assert(prevContext == PCTX_PTH);
-    }
+    _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
 
     /* sanity checks */
     MAGIC_ASSERT(proc);
@@ -378,20 +380,18 @@ static void _process_executeCleanup(Process* proc) {
     utility_assert(worker_getActiveProcess() == proc);
 
     debug("aborting %i auxiliary threads for '%s' process",
-            g_queue_get_length(proc->auxiliaryProgramThreads), g_quark_to_string(proc->programID));
+            g_queue_get_length(proc->programAuxiliaryThreads), g_quark_to_string(proc->programID));
 
     /* closing the main thread causes all other threads to get terminated */
-    while(g_queue_get_length(proc->auxiliaryProgramThreads) > 0) {
-        pth_t auxThread = g_queue_pop_head(proc->auxiliaryProgramThreads);
+    while(g_queue_get_length(proc->programAuxiliaryThreads) > 0) {
+        pth_t auxThread = g_queue_pop_head(proc->programAuxiliaryThreads);
         if(auxThread) {
-            proc->activeContext = PCTX_PTH;
+            _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
             gint success = pth_abort(auxThread);
-            ProcessContext prevContext = proc->activeContext;
-            proc->activeContext = PCTX_SHADOW;
-            utility_assert(prevContext == PCTX_PTH);
+            _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
         }
     }
-    g_queue_free(proc->auxiliaryProgramThreads);
+    g_queue_free(proc->programAuxiliaryThreads);
 
     debug("calling atexit funcs for '%s' process", g_quark_to_string(proc->programID));
 
@@ -401,16 +401,14 @@ static void _process_executeCleanup(Process* proc) {
         /* time the program execution */
         g_timer_start(proc->cpuDelayTimer);
 
-        proc->activeContext = PCTX_PLUGIN;
-
+        /* call the plugin's cleanup callback */
+        _process_changeContext(proc, PCTX_SHADOW, PCTX_PLUGIN);
         if(atexitData->passArgument) {
             ((PluginExitCallbackArgumentsFunc)atexitData->callback)(0, atexitData->argument);
         } else {
             ((PluginExitCallbackFunc)atexitData->callback)();
         }
-        ProcessContext prevContext = proc->activeContext;
-        proc->activeContext = PCTX_SHADOW;
-        utility_assert(prevContext == PCTX_PLUGIN);
+        _process_changeContext(proc, PCTX_PLUGIN, PCTX_SHADOW);
 
         /* no need to call stop */
         gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);
@@ -420,23 +418,19 @@ static void _process_executeCleanup(Process* proc) {
     }
 
     /* the main thread is done and will be joined by pth */
-    proc->mainProgramThread = NULL;
+    proc->programMainThread = NULL;
 
     /* unref for the cleanup func */
     process_unref(proc);
 
     /* we return to pth control */
-    proc->activeContext = PCTX_PTH;
+    _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
 }
 
 static void* _process_executeMain(Process* proc) {
     /* we just came from pth_spawn - the first thing we should do is update our context
      * back to shadow to make sure any potential shadow sys calls get handled correctly */
-    if(proc) {
-        ProcessContext prevContext = proc->activeContext;
-        proc->activeContext = PCTX_SHADOW;
-        utility_assert(prevContext == PCTX_PTH);
-    }
+    _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
 
     /* sanity checks */
     MAGIC_ASSERT(proc);
@@ -447,12 +441,12 @@ static void* _process_executeMain(Process* proc) {
     process_ref(proc);
 
     /* let's go back to pth momentarily and push the cleanup function for the main thread */
-    proc->activeContext = PCTX_PTH;
+    _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
     pth_cleanup_push((PthCleanupFunc)_process_executeCleanup, proc);
-    proc->activeContext = PCTX_SHADOW;
+    _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
 
     /* get arguments from the program we will run */
-    PluginMainFunc main = program_getMainFunc(proc->prog);
+    PluginMainFunc mainFunc = program_getMainFunc(proc->prog);
     gchar** argv;
     gint argc = _process_getArguments(proc, &argv);
 
@@ -460,15 +454,13 @@ static void* _process_executeMain(Process* proc) {
     g_timer_start(proc->cpuDelayTimer);
 
     /* now we are entering the plugin program via a pth thread */
-    proc->activeContext = PCTX_PLUGIN;
+    _process_changeContext(proc, PCTX_SHADOW, PCTX_PLUGIN);
 
     /* call the program's main function, pth will handle blocking as the program runs */
-    main(argc, argv);
+    mainFunc(argc, argv);
 
     /* the program's main function has returned or exited, this process has completed */
-    ProcessContext prevContext = proc->activeContext;
-    proc->activeContext = PCTX_SHADOW;
-    utility_assert(prevContext == PCTX_PLUGIN);
+    _process_changeContext(proc, PCTX_PLUGIN, PCTX_SHADOW);
 
     /* no need to call stop */
     gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);
@@ -484,7 +476,7 @@ static void* _process_executeMain(Process* proc) {
     process_unref(proc);
 
     /* when we return, pth will call the exit functions queued for the main thread */
-    proc->activeContext = PCTX_PTH;
+    _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
     return NULL;
 }
 
@@ -521,8 +513,14 @@ void process_start(Process* proc) {
 
     info("starting '%s' process", g_quark_to_string(proc->programID));
 
-    utility_assert(proc->auxiliaryProgramThreads == NULL);
-    proc->auxiliaryProgramThreads = g_queue_new();
+    /* create the thread names while still in shadow context, format is host.process.<id> */
+    GString* shadowThreadNameBuf = g_string_new(NULL);
+    g_string_printf(shadowThreadNameBuf, "%s.%s.shadow", host_getName(proc->host), g_quark_to_string(proc->programID));
+    GString* programMainThreadNameBuf = g_string_new(NULL);
+    g_string_printf(programMainThreadNameBuf, "%s.%s.main", host_getName(proc->host), g_quark_to_string(proc->programID));
+
+    utility_assert(proc->programAuxiliaryThreads == NULL);
+    proc->programAuxiliaryThreads = g_queue_new();
 
     /* need to get thread-private program from current worker */
     proc->prog = worker_getPrivateProgram(proc->programID);
@@ -530,16 +528,13 @@ void process_start(Process* proc) {
     /* create our default state as we run in our assigned worker */
     proc->pstate = program_newDefaultState(proc->prog);
 
-    GString* mainThreadNameBuf = g_string_new(NULL);
-    g_string_printf(mainThreadNameBuf, "shadow(%s)", g_quark_to_string(proc->programID));
-
     /* ref for the spawn below */
     process_ref(proc);
 
     /* now we will execute in the pth/plugin context, so we need to load the state */
     worker_setActiveProcess(proc);
     program_swapInState(proc->prog, proc->pstate);
-    proc->activeContext = PCTX_PTH;
+    _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
 
     /* create a new global context for this process */
     proc->tstate = pth_gctx_new();
@@ -548,19 +543,39 @@ void process_start(Process* proc) {
     pth_gctx_t prevPthGlobalContext = pth_gctx_get();
     pth_gctx_set(proc->tstate);
 
-    /* spawn the thread and yield to give it a chance to run */
-    proc->mainProgramThread = pth_spawn(PTH_ATTR_DEFAULT, (PthSpawnFunc)_process_executeMain, proc);
-    pth_attr_set(pth_attr_of(pth_self()), PTH_ATTR_NAME, mainThreadNameBuf->str);
-    pth_yield(proc->mainProgramThread);
+    /* pth_gctx_new implicitly created a 'main' thread, which shadow now runs in */
+    proc->shadowThread = pth_self();
+
+    /* set some defaults for out special shadow thread: not joinable, and set the
+     * min (worst) priority so that all other threads will run before coming back to shadow
+     * (the main thread is special in pth, and has a stack size of 0 internally ) */
+    pth_attr_t shadowThreadAttr = pth_attr_of(proc->shadowThread);
+    pth_attr_set(shadowThreadAttr, PTH_ATTR_NAME, shadowThreadNameBuf->str);
+    pth_attr_set(shadowThreadAttr, PTH_ATTR_JOINABLE, FALSE);
+    pth_attr_set(shadowThreadAttr, PTH_ATTR_PRIO, PTH_PRIO_MIN);
+    pth_attr_destroy(shadowThreadAttr);
+
+    /* spawn the program main thread: joinable by default, bigger stack */
+    pth_attr_t programMainThreadAttr = pth_attr_new();
+    pth_attr_set(programMainThreadAttr, PTH_ATTR_NAME, programMainThreadNameBuf->str);
+    pth_attr_set(programMainThreadAttr, PTH_ATTR_STACK_SIZE, PROC_PTH_STACK_SIZE);
+    proc->programMainThread = pth_spawn(programMainThreadAttr, (PthSpawnFunc)_process_executeMain, proc);
+    pth_attr_destroy(programMainThreadAttr);
+
+    /* now give the main program thread a chance to run */
+    pth_yield(proc->programMainThread);
 
     /* revert pth global context */
     pth_gctx_set(prevPthGlobalContext);
 
     /* the main function finished or blocked somewhere and we are back in shadow land */
-    proc->activeContext = PCTX_SHADOW;
+    _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     program_swapOutState(proc->prog, proc->pstate);
     worker_setActiveProcess(NULL);
-    g_string_free(mainThreadNameBuf, TRUE);
+
+    /* cleanup */
+    g_string_free(shadowThreadNameBuf, TRUE);
+    g_string_free(programMainThreadNameBuf, TRUE);
 }
 
 void process_continue(Process* proc) {
@@ -575,27 +590,23 @@ void process_continue(Process* proc) {
      * we will execute in the pth/plugin context, so we need to load the state */
     worker_setActiveProcess(proc);
     program_swapInState(proc->prog, proc->pstate);
-    proc->activeContext = PCTX_PTH;
+    _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
 
     /* we are in pth land, load in the pth state for this process */
     pth_gctx_t prevPthGlobalContext = pth_gctx_get();
     pth_gctx_set(proc->tstate);
 
-    /* make sure the scheduler updates itself */
-    pth_yield(NULL); // XXX do we need this ??
-
-    /* keep processing until all threads block */
-    while(pth_ctrl(PTH_CTRL_GETTHREADS_READY | PTH_CTRL_GETTHREADS_NEW)) {
-        pth_attr_set(pth_attr_of(pth_self()), PTH_ATTR_PRIO, PTH_PRIO_MIN);
+    /* make sure pth scheduler updates, and process all program threads until they block */
+    do {
         pth_yield(NULL);
-    }
+    } while(pth_ctrl(PTH_CTRL_GETTHREADS_READY | PTH_CTRL_GETTHREADS_NEW));
 
     /* total number of alive pth threads this scheduler has */
-    gint nThreads = pth_ctrl(PTH_CTRL_GETTHREADS_NEW|PTH_CTRL_GETTHREADS_READY|PTH_CTRL_GETTHREADS_RUNNING|\
-            PTH_CTRL_GETTHREADS_WAITING|PTH_CTRL_GETTHREADS_SUSPENDED);
+    gint nThreads = pth_ctrl(PTH_CTRL_GETTHREADS_NEW|PTH_CTRL_GETTHREADS_READY|\
+            PTH_CTRL_GETTHREADS_RUNNING|PTH_CTRL_GETTHREADS_WAITING|PTH_CTRL_GETTHREADS_SUSPENDED);
 
     /* if the main thread closed, this process is done */
-    if(!proc->mainProgramThread) {
+    if(!proc->programMainThread) {
         /* now we are done with all pth state */
         pth_gctx_free(proc->tstate);
         proc->tstate = NULL;
@@ -605,17 +616,18 @@ void process_continue(Process* proc) {
     pth_gctx_set(prevPthGlobalContext);
 
     /* the pth threads finished or blocked somewhere and we are back in shadow land */
-    proc->activeContext = PCTX_SHADOW;
+    _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     program_swapOutState(proc->prog, proc->pstate);
     worker_setActiveProcess(NULL);
 
-    if(!proc->mainProgramThread) {
+    if(!proc->programMainThread) {
         /* pth should have had no remaining alive threads except the one shadow was running in */
         utility_assert(nThreads == 1);
 
         /* free our copy of plug-in resources, and other application state */
         program_freeState(proc->prog, proc->pstate);
         proc->pstate = NULL;
+        utility_assert(!process_isRunning(proc));
     }
 }
 
@@ -631,15 +643,15 @@ void process_stop(Process* proc) {
 
     worker_setActiveProcess(proc);
     program_swapInState(proc->prog, proc->pstate);
-    proc->activeContext = PCTX_PTH;
+    _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
 
     /* we are in pth land, load in the pth state for this process */
     pth_gctx_t prevPthGlobalContext = pth_gctx_get();
     pth_gctx_set(proc->tstate);
 
     /* this should stop the thread and call the main thread cleanup function */
-    pth_abort(proc->mainProgramThread);
-    proc->mainProgramThread = NULL;
+    pth_abort(proc->programMainThread);
+    proc->programMainThread = NULL;
 
     /* now we are done with all pth state */
     pth_gctx_free(proc->tstate);
@@ -649,7 +661,7 @@ void process_stop(Process* proc) {
     pth_gctx_set(prevPthGlobalContext);
 
     /* the pth threads finished or blocked somewhere and we are back in shadow land */
-    proc->activeContext = PCTX_SHADOW;
+    _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     program_swapOutState(proc->prog, proc->pstate);
     worker_setActiveProcess(NULL);
 
@@ -917,6 +929,38 @@ static int _process_emu_selectHelper(Process* proc, int nfds, fd_set *readfds, f
     return ret;
 }
 
+static int _process_emu_epollCreateHelper(Process* proc, int size, int flags) {
+    /* size should be > 0, but can otherwise be completely ignored */
+    if(size < 1) {
+        errno = EINVAL;
+        return -1;
+    }
+    /* the only possible flag is EPOLL_CLOEXEC, which means we should set
+     * FD_CLOEXEC on the new file descriptor. just ignore for now. */
+    if(flags != 0 && flags != EPOLL_CLOEXEC) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    /* switch into shadow and create the new descriptor */
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+
+    gint handle = host_createDescriptor(proc->host, DT_EPOLL);
+
+    if((flags & EPOLL_CLOEXEC) && (handle > 0)) {
+        Descriptor* desc = host_lookupDescriptor(proc->host, handle);
+        if(desc) {
+            gint options = descriptor_getFlags(desc);
+            options |= O_CLOEXEC;
+            descriptor_setFlags(desc, options);
+        }
+    }
+
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+
+    return handle;
+}
+
 /* memory allocation family */
 
 void* process_emu_malloc(Process* proc, size_t size) {
@@ -1063,32 +1107,11 @@ void* process_emu_mmap(Process* proc, void *addr, size_t length, int prot, int f
 /* event family */
 
 int process_emu_epoll_create(Process* proc, int size) {
-    /* size should be > 0, but can otherwise be completely ignored */
-    if(size < 1) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    /* switch into shadow and create the new descriptor */
-    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-    gint handle = host_createDescriptor(proc->host, DT_EPOLL);
-    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
-
-    return handle;
+    return _process_emu_epollCreateHelper(proc, size, 0);
 }
 
 int process_emu_epoll_create1(Process* proc, int flags) {
-    /*
-     * the only possible flag is EPOLL_CLOEXEC, which means we should set
-     * FD_CLOEXEC on the new file descriptor. just ignore for now.
-     */
-    if(flags != 0 && flags != EPOLL_CLOEXEC) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    /* forward on to our regular create method */
-    return epoll_create(1);
+    return _process_emu_epollCreateHelper(proc, 1, flags);
 }
 
 int process_emu_epoll_ctl(Process* proc, int epfd, int op, int fd, struct epoll_event *event) {
@@ -1194,29 +1217,24 @@ int process_emu_epoll_pwait(Process* proc, int epfd, struct epoll_event *events,
 /* socket/io family */
 
 int process_emu_socket(Process* proc, int domain, int type, int protocol) {
-    /* we only support non-blocking sockets, and require
-     * SOCK_NONBLOCK to be set immediately */
-    gboolean isBlocking = FALSE;
+    gboolean isNonBlockSet = FALSE;
+    gboolean isCloseOnExecuteSet = FALSE;
 
     /* clear non-blocking flags if set to get true type */
     if(type & SOCK_NONBLOCK) {
         type = type & ~SOCK_NONBLOCK;
-        isBlocking = FALSE;
+        isNonBlockSet = TRUE;
     }
     if(type & SOCK_CLOEXEC) {
         type = type & ~SOCK_CLOEXEC;
-        isBlocking = FALSE;
+        isCloseOnExecuteSet = TRUE;
     }
 
     gint result = 0;
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
 
     /* check inputs for what we support */
-    if(isBlocking) {
-        warning("we only support non-blocking sockets: please bitwise OR 'SOCK_NONBLOCK' with type flags");
-        errno = EPROTONOSUPPORT;
-        result = -1;
-    } else if (type != SOCK_STREAM && type != SOCK_DGRAM) {
+    if (type != SOCK_STREAM && type != SOCK_DGRAM) {
         warning("unsupported socket type \"%i\", we only support SOCK_STREAM and SOCK_DGRAM", type);
         errno = EPROTONOSUPPORT;
         result = -1;
@@ -1230,10 +1248,19 @@ int process_emu_socket(Process* proc, int domain, int type, int protocol) {
         /* we are all set to create the socket */
         DescriptorType dtype = type == SOCK_STREAM ? DT_TCPSOCKET : DT_UDPSOCKET;
         result = host_createDescriptor(proc->host, dtype);
+        Descriptor* desc = host_lookupDescriptor(proc->host, result);
+
+        gint options = descriptor_getFlags(desc);
         if(domain == AF_UNIX) {
-            Socket* s = (Socket*)host_lookupDescriptor(proc->host, result);
-            socket_setUnix(s, TRUE);
+            socket_setUnix(((Socket*)desc), TRUE);
         }
+        if(isNonBlockSet) {
+            options |= O_NONBLOCK;
+        }
+        if(isCloseOnExecuteSet) {
+            options |= O_CLOEXEC;
+        }
+        descriptor_setFlags(desc, options);
     }
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -1247,42 +1274,54 @@ int process_emu_socketpair(Process* proc, int domain, int type, int protocol, in
         return -1;
     }
 
-    /* only support non-blocking sockets */
-    gboolean isBlocking = FALSE;
+    gboolean isNonBlockSet = FALSE;
+    gboolean isCloseOnExecuteSet = FALSE;
 
     /* clear non-blocking flags if set to get true type */
-    gint realType = type;
-    if(realType & SOCK_NONBLOCK) {
-        realType = realType & ~SOCK_NONBLOCK;
-        isBlocking = FALSE;
+    if(type & SOCK_NONBLOCK) {
+        type = type & ~SOCK_NONBLOCK;
+        isNonBlockSet = TRUE;
     }
-    if(realType & SOCK_CLOEXEC) {
-        realType = realType & ~SOCK_CLOEXEC;
-        isBlocking = FALSE;
+    if(type & SOCK_CLOEXEC) {
+        type = type & ~SOCK_CLOEXEC;
+        isCloseOnExecuteSet = TRUE;
     }
 
-    if(realType != SOCK_STREAM) {
+    if(type != SOCK_STREAM) {
         errno = EPROTONOSUPPORT;
         return -1;
     }
 
     gint result = 0;
+    gint options = 0;
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-
-    if(isBlocking) {
-        warning("we only support non-blocking sockets: please bitwise OR 'SOCK_NONBLOCK' with type flags");
-        errno = EPROTONOSUPPORT;
-        result = -1;
-    }
 
     if(result == 0) {
         gint handle = host_createDescriptor(proc->host, DT_SOCKETPAIR);
-
-        Channel* channel = (Channel*) host_lookupDescriptor(proc->host, handle);
-        gint linkedHandle = channel_getLinkedHandle(channel);
-
         fds[0] = handle;
+        Descriptor* desc = host_lookupDescriptor(proc->host, handle);
+
+        options = descriptor_getFlags(desc);
+        if(isNonBlockSet) {
+            options |= O_NONBLOCK;
+        }
+        if(isCloseOnExecuteSet) {
+            options |= O_CLOEXEC;
+        }
+        descriptor_setFlags(desc, options);
+
+        gint linkedHandle = channel_getLinkedHandle((Channel*) desc);
         fds[1] = linkedHandle;
+        Descriptor* linkedDesc = host_lookupDescriptor(proc->host, linkedHandle);
+
+        options = descriptor_getFlags(linkedDesc);
+        if(isNonBlockSet) {
+            options |= O_NONBLOCK;
+        }
+        if(isCloseOnExecuteSet) {
+            options |= O_CLOEXEC;
+        }
+        descriptor_setFlags(linkedDesc, options);
     }
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -1926,35 +1965,42 @@ int process_emu_ioctl(Process* proc, int fd, unsigned long int request, ...) {
 }
 
 int process_emu_pipe2(Process* proc, int pipefds[2], int flags) {
-    /* we only support non-blocking sockets, and require
-     * SOCK_NONBLOCK to be set immediately */
-    gboolean isBlocking = TRUE;
-
-    /* clear non-blocking flags if set to get true type */
-    if(flags & O_NONBLOCK) {
-        flags = flags & ~O_NONBLOCK;
-        isBlocking = FALSE;
-    }
-    if(flags & O_CLOEXEC) {
-        flags = flags & ~O_CLOEXEC;
-        isBlocking = FALSE;
-    }
-
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     gint result = 0;
 
     /* check inputs for what we support */
-    if(isBlocking) {
-        warning("we only support non-blocking pipes: please bitwise OR 'O_NONBLOCK' with flags");
-        result = EINVAL;
-    } else {
-        gint handle = host_createDescriptor(proc->host, DT_PIPE);
+    if(flags & O_DIRECT) {
+        warning("we don't support pipes in 'O_DIRECT' mode, ignoring");
+    }
 
-        Channel* channel = (Channel*) host_lookupDescriptor(proc->host, handle);
-        gint linkedHandle = channel_getLinkedHandle(channel);
+    gint handle = host_createDescriptor(proc->host, DT_PIPE);
+    pipefds[0] = handle; /* reader */
+    Descriptor* desc = host_lookupDescriptor(proc->host, handle);
 
-        pipefds[0] = handle; /* reader */
-        pipefds[1] = linkedHandle; /* writer */
+    if(desc) {
+        gint options = descriptor_getFlags(desc);
+        if(flags & O_NONBLOCK) {
+            options |= O_NONBLOCK;
+        }
+        if(flags & O_CLOEXEC) {
+            options |= O_CLOEXEC;
+        }
+        descriptor_setFlags(desc, options);
+    }
+
+    gint linkedHandle = channel_getLinkedHandle((Channel*)desc);
+    pipefds[1] = linkedHandle; /* writer */
+    Descriptor* linkedDesc = host_lookupDescriptor(proc->host, linkedHandle);
+
+    if(linkedDesc) {
+        gint options = descriptor_getFlags(linkedDesc);
+        if(flags & O_NONBLOCK) {
+            options |= O_NONBLOCK;
+        }
+        if(flags & O_CLOEXEC) {
+            options |= O_CLOEXEC;
+        }
+        descriptor_setFlags(linkedDesc, options);
     }
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -2165,7 +2211,14 @@ int process_emu_timerfd_create(Process* proc, int clockid, int flags) {
     if(result > 0) {
         Descriptor* desc = host_lookupDescriptor(proc->host, result);
         if(desc) {
-            descriptor_setFlags(desc, flags);
+            gint options = descriptor_getFlags(desc);
+            if(flags & TFD_NONBLOCK) {
+                options |= O_NONBLOCK;
+            }
+            if(flags & TFD_CLOEXEC) {
+                options |= O_CLOEXEC;
+            }
+            descriptor_setFlags(desc, options);
         }
     }
 
@@ -3556,7 +3609,6 @@ int process_emu_pthread_create(Process* proc, pthread_t *thread, const pthread_a
         _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
         utility_assert(proc->tstate == pth_gctx_get());
 
-        pth_attr_t na = NULL;
         if (thread == NULL || start_routine == NULL) {
             ret = EINVAL;
             errno = EINVAL;
@@ -3564,17 +3616,39 @@ int process_emu_pthread_create(Process* proc, pthread_t *thread, const pthread_a
             ret = EAGAIN;
             errno = EAGAIN;
         } else {
-            if (attr != NULL)
-                na = (pth_attr_t) (*attr);
-            else
-                na = PTH_ATTR_DEFAULT;
-            pth_t auxThread = pth_spawn(na, start_routine, arg);
+            pth_t auxThread = NULL;
+
+            if (attr != NULL) {
+                pth_attr_t customAttr = (pth_attr_t) (*attr);
+                auxThread = pth_spawn(customAttr, start_routine, arg);
+            } else {
+                /* default for new auxiliary threads */
+                _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+                GString* programAuxThreadNameBuf = g_string_new(NULL);
+                g_string_printf(programAuxThreadNameBuf, "%s.%s.aux%i", host_getName(proc->host),
+                        g_quark_to_string(proc->programID), proc->programAuxiliaryThreadCounter++);
+                _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
+
+                pth_attr_t defaultAttr = pth_attr_new();
+                pth_attr_set(defaultAttr, PTH_ATTR_NAME, programAuxThreadNameBuf->str);
+                pth_attr_set(defaultAttr, PTH_ATTR_STACK_SIZE, PROC_PTH_STACK_SIZE);
+                pth_attr_set(defaultAttr, PTH_ATTR_JOINABLE, TRUE);
+
+                auxThread = pth_spawn(defaultAttr, start_routine, arg);
+
+                /* cleanup */
+                pth_attr_destroy(defaultAttr);
+                _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+                g_string_free(programAuxThreadNameBuf, TRUE);
+                _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
+            }
+
             *thread = (pthread_t) auxThread;
             if(*thread == NULL) {
                 ret = EAGAIN;
                 errno = EAGAIN;
             } else {
-                g_queue_push_head(proc->auxiliaryProgramThreads, auxThread);
+                g_queue_push_head(proc->programAuxiliaryThreads, auxThread);
                 ret = 0;
             }
         }

@@ -60,9 +60,9 @@ Timer* timer_new(gint handle, gint clockid, gint flags) {
         return NULL;
     }
 
-    if(!(flags&TFD_NONBLOCK)) {
-        warning("Shadow does not support blocking timers, using TFD_NONBLOCK flag implicitly");
-    }
+//    if(!(flags&TFD_NONBLOCK)) {
+//        warning("Shadow does not support blocking timers, using TFD_NONBLOCK flag implicitly");
+//    }
 
     Timer* timer = g_new0(Timer, 1);
     MAGIC_INIT(timer);
