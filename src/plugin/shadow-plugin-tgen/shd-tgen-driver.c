@@ -342,12 +342,10 @@ static void _tgendriver_handleChoose(TGenDriver* driver, TGenAction* action) {
 
     /* If the choose edge has weights, use them. Otherwise, go randomly */
     if(tgenaction_getHasWeights(action) == FALSE){
-        printf("\n\nCalling Random\n\n");
         _tgendriver_chooseRandomNextAction(driver, action);
     }
 
     else{
-        printf("\n\nCalling Weights\n\n");
         _tgendriver_chooseWeightsNextAction(driver, action);
     }
 }
