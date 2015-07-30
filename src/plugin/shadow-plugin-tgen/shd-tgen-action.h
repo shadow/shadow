@@ -26,7 +26,7 @@ TGenAction* tgenaction_newPauseAction(const gchar* timeStr, GError** error);
 TGenAction* tgenaction_newSynchronizeAction(glong totalIncoming, GError** error);
 TGenAction* tgenaction_newTransferAction(const gchar* typeStr, const gchar* protocolStr,
         const gchar* sizeStr, const gchar* peersStr, const gchar* timeoutStr, GError** error);
-TGenAction* tgenaction_newChooseAction(GError** error);
+TGenAction* tgenaction_newChooseAction(GError** error, gboolean hasWeights, gdouble totalWeight);
 
 void tgenaction_ref(TGenAction* action);
 void tgenaction_unref(TGenAction* action);
@@ -50,5 +50,8 @@ guint64 tgenaction_getEndSize(TGenAction* action);
 glong tgenaction_getTotalIncoming(TGenAction* action);
 glong tgenaction_getCompletedIncoming(TGenAction* action);
 void tgenaction_setCompletedIncoming(TGenAction* action, glong completedIncoming);
+
+gboolean tgenaction_getHasWeights(TGenAction* action);
+gdouble tgenaction_getTotalWeight(TGenAction* action);
 
 #endif /* SHD_TGEN_ACTION_H_ */
