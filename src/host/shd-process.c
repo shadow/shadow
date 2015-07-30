@@ -926,13 +926,89 @@ static int _process_emu_selectHelper(Process* proc, int nfds, fd_set *readfds, f
     if (nfds < 0 || nfds > FD_SETSIZE) {
         errno = EINVAL;
         ret = -1;
-    } else if(nfds == 0 && readfds == NULL && writefds == NULL && exceptfds == NULL) {
+    } else if(nfds == 0 && readfds == NULL && writefds == NULL && exceptfds == NULL && timeout != NULL) {
+        /* only wait for the timeout, no file descriptor events */
         _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
         utility_assert(proc->tstate == pth_gctx_get());
         pth_nanosleep(timeout, NULL);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     } else {
-        ret = host_select(proc->host, readfds, writefds, exceptfds);
+        fd_set* tmpReadFDs = NULL;
+        if(readfds) {
+            tmpReadFDs = g_new0(fd_set, 1);
+            FD_ZERO(tmpReadFDs);
+            g_memmove(tmpReadFDs, readfds, sizeof(fd_set));
+        }
+        fd_set* tmpWriteFDs = NULL;
+        if(writefds) {
+            tmpWriteFDs = g_new0(fd_set, 1);
+            FD_ZERO(tmpWriteFDs);
+            g_memmove(tmpWriteFDs, writefds, sizeof(fd_set));
+        }
+        fd_set* tmpExceptFDs = NULL;
+        if(exceptfds) {
+            tmpExceptFDs = g_new0(fd_set, 1);
+            FD_ZERO(tmpExceptFDs);
+            g_memmove(tmpExceptFDs, exceptfds, sizeof(fd_set));
+        }
+
+        ret = host_select(proc->host, tmpReadFDs, tmpWriteFDs, tmpExceptFDs);
+
+        if(ret == 0) {
+            /* we have no events */
+            struct timespec forever;
+            forever.tv_sec = (__time_t)INT_MAX;
+            forever.tv_nsec = 999999999;
+            const struct timespec* sleepTime = NULL;
+
+            if(timeout == NULL) {
+                /* block indefinitely (until pth wakes us up again) */
+                sleepTime = &forever;
+            } else if(timeout->tv_sec > 0 || timeout->tv_nsec > 0) {
+                /* return after timeout fires */
+                sleepTime = timeout;
+            } else {
+                /* timeout != NULL && timeout->tv_sec == 0 && timeout->tv_nsec == 0 */
+                /* return immediately */
+                sleepTime = NULL;
+            }
+
+            if(sleepTime) {
+                _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
+                utility_assert(proc->tstate == pth_gctx_get());
+                pth_nanosleep(sleepTime, NULL);
+                _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+
+                /* ask shadow again */
+                if(tmpReadFDs) {
+                    FD_ZERO(tmpReadFDs);
+                    g_memmove(tmpReadFDs, readfds, sizeof(fd_set));
+                }
+                if(tmpWriteFDs) {
+                    FD_ZERO(tmpWriteFDs);
+                    g_memmove(tmpWriteFDs, writefds, sizeof(fd_set));
+                }
+                if(tmpExceptFDs) {
+                    FD_ZERO(tmpExceptFDs);
+                    g_memmove(tmpExceptFDs, exceptfds, sizeof(fd_set));
+                }
+
+                ret = host_select(proc->host, tmpReadFDs, tmpWriteFDs, tmpExceptFDs);
+            }
+        }
+
+        if(tmpReadFDs) {
+            g_memmove(readfds, tmpReadFDs, sizeof(fd_set));
+            g_free(tmpReadFDs);
+        }
+        if(tmpWriteFDs) {
+            g_memmove(writefds, tmpWriteFDs, sizeof(fd_set));
+            g_free(tmpWriteFDs);
+        }
+        if(tmpExceptFDs) {
+            g_memmove(exceptfds, tmpExceptFDs, sizeof(fd_set));
+            g_free(tmpExceptFDs);
+        }
     }
 
     return ret;
@@ -1220,7 +1296,7 @@ int process_emu_epoll_pwait(Process* proc, int epfd, struct epoll_event *events,
         warning("epollpwait using a signalset is not yet supported");
         _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     }
-    return epoll_wait(epfd, events, maxevents, timeout);
+    return process_emu_epoll_wait(proc, epfd, events, maxevents, timeout);
 }
 
 /* socket/io family */
