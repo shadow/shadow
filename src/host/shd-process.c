@@ -152,7 +152,7 @@ struct sched_param;
 #define O_DIRECT 040000
 #endif
 
-#define PROC_PTH_STACK_SIZE 256*1024
+#define PROC_PTH_STACK_SIZE 128*1024
 
 #include "shadow.h"
 
@@ -511,7 +511,7 @@ void process_start(Process* proc) {
         return;
     }
 
-    info("starting '%s' process", g_quark_to_string(proc->programID));
+    info("starting '%s' process and pth threading system", g_quark_to_string(proc->programID));
 
     /* create the thread names while still in shadow context, format is host.process.<id> */
     GString* shadowThreadNameBuf = g_string_new(NULL);
@@ -573,6 +573,9 @@ void process_start(Process* proc) {
     program_swapOutState(proc->prog, proc->pstate);
     worker_setActiveProcess(NULL);
 
+    info("'%s' process initialization is complete, main thread %s running",
+            g_quark_to_string(proc->programID), process_isRunning(proc) ? "is" : "is not");
+
     /* cleanup */
     g_string_free(shadowThreadNameBuf, TRUE);
     g_string_free(programMainThreadNameBuf, TRUE);
@@ -585,6 +588,8 @@ void process_continue(Process* proc) {
     if(!process_isRunning(proc)) {
         return;
     }
+
+    info("continuing execution of '%s' process and threads", g_quark_to_string(proc->programID));
 
     /* there is some i/o or event available, let pth handle it
      * we will execute in the pth/plugin context, so we need to load the state */
@@ -620,7 +625,9 @@ void process_continue(Process* proc) {
     program_swapOutState(proc->prog, proc->pstate);
     worker_setActiveProcess(NULL);
 
-    if(!proc->programMainThread) {
+    if(proc->programMainThread) {
+        info("'%s' is running, but threads are blocked waiting for events", g_quark_to_string(proc->programID));
+    } else {
         /* pth should have had no remaining alive threads except the one shadow was running in */
         utility_assert(nThreads == 1);
 
@@ -628,6 +635,8 @@ void process_continue(Process* proc) {
         program_freeState(proc->prog, proc->pstate);
         proc->pstate = NULL;
         utility_assert(!process_isRunning(proc));
+
+        info("'%s' has completed or is otherwise no longer running", g_quark_to_string(proc->programID));
     }
 }
 

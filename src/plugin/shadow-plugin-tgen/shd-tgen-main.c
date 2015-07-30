@@ -7,6 +7,8 @@
 
 #include "shd-tgen.h"
 
+#define TGEN_LOG_DOMAIN "tgen"
+
 static const gchar* _tgenmain_logLevelToString(GLogLevelFlags logLevel) {
     switch (logLevel) {
         case G_LOG_LEVEL_ERROR:
@@ -46,7 +48,7 @@ static void _tgenmain_log(GLogLevelFlags level, const gchar* functionName, const
             g_date_time_get_hour(dt), g_date_time_get_minute(dt), g_date_time_get_second(dt),
             g_date_time_to_unix(dt), g_date_time_get_microsecond(dt),
             _tgenmain_logLevelToString(level), functionName, format);
-    g_logv(G_LOG_DOMAIN, level, newformat->str, vargs);
+    g_logv(TGEN_LOG_DOMAIN, level, newformat->str, vargs);
 
     g_string_free(newformat, TRUE);
     g_date_time_unref(dt);
@@ -62,9 +64,10 @@ static void _tgenmain_cleanup(gint status, gpointer arg) {
     tgen_message("exiting cleanly");
 }
 
-gint main(gint argc, gchar *argv[]) {
+static gint _tgenmain_run(gint argc, gchar *argv[]) {
     GLogLevelFlags filter = G_LOG_LEVEL_MESSAGE;
-    g_log_set_default_handler((GLogFunc)_tgenmain_logHandler, &filter);
+    g_log_set_handler(TGEN_LOG_DOMAIN, G_LOG_LEVEL_MASK | G_LOG_FLAG_FATAL | G_LOG_FLAG_RECURSION,
+            (GLogFunc)_tgenmain_logHandler, &filter);
 
     /* create the new state according to user inputs */
     TGenDriver* tgen = tgendriver_new(argc, argv, &_tgenmain_log);
@@ -134,4 +137,8 @@ gint main(gint argc, gchar *argv[]) {
     tgen_message("returning 0 from main");
 
     return 0;
+}
+
+gint main(gint argc, gchar *argv[]) {
+    return _tgenmain_run(argc, argv);
 }
