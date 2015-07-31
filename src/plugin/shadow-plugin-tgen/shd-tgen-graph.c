@@ -785,7 +785,7 @@ GQueue* tgengraph_getNextActions(TGenGraph* g, TGenAction* action) {
     return nextActions;
 }
 
-gdouble* tgengraph_getEdgeWeight(TGenGraph* g, TGenAction* srcAction, TGenAction* dstAction) {
+gdouble tgengraph_getEdgeWeight(TGenGraph* g, TGenAction* srcAction, TGenAction* dstAction) {
     TGEN_ASSERT(g);
 
     /* given choose action, get the weights of the edges connected to it */
@@ -796,7 +796,6 @@ gdouble* tgengraph_getEdgeWeight(TGenGraph* g, TGenAction* srcAction, TGenAction
 
     igraph_integer_t edgeIndex;
     gint result = igraph_get_eid(g->graph, &edgeIndex, srcVertexIndex, dstVertexIndex, IGRAPH_DIRECTED, TRUE);
-    igraph_bool_t a;
 
     if(result != IGRAPH_SUCCESS) {
         tgen_critical("igraph_get_eid return non-success code %i", result);
@@ -805,7 +804,7 @@ gdouble* tgengraph_getEdgeWeight(TGenGraph* g, TGenAction* srcAction, TGenAction
 
     gdouble* weight = _tgengraph_getWeight(g, edgeIndex);
 
-    return weight;
+    return *weight;
 }
 
 gboolean tgengraph_hasEdges(TGenGraph* g) {
