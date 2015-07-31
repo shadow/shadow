@@ -302,7 +302,7 @@ static void _tgendriver_chooseRandomNextAction(TGenDriver* driver, TGenAction* a
     guint numOutgoing = g_queue_get_length(nextActions);
 
     /* Randomly select an outgoing edge */
-    guint randomIndex = g_random_double() * numOutgoing;
+    guint randomIndex = g_random_int_range(0, numOutgoing);
     TGenAction* nextAction = g_queue_peek_nth(nextActions, randomIndex);
 
     /* Clean up */
@@ -316,7 +316,7 @@ static void _tgendriver_chooseWeightsNextAction(TGenDriver* driver, TGenAction* 
     TGEN_ASSERT(driver);
 
     /* Pick a random value among all of the weights */
-    gdouble randomWeight = g_random_double() * tgenaction_getTotalWeight(action);
+    gdouble randomWeight = g_random_double_range(0, tgenaction_getTotalWeight(action));
 
     GQueue* nextActions = tgengraph_getNextActions(driver->actionGraph, action);
     g_assert(nextActions);
