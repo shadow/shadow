@@ -153,6 +153,7 @@ typedef int (*open_func)(const char*, int, mode_t);
 typedef int (*open64_func)(const char*, int, mode_t);
 typedef int (*creat_func)(const char*, mode_t);
 typedef FILE* (*fopen_func)(const char *, const char *);
+typedef FILE* (*fopen64_func)(const char *, const char *);
 typedef FILE* (*fdopen_func)(int, const char*);
 typedef int (*fclose_func)(FILE *);
 typedef int (*dup_func)(int);
@@ -415,6 +416,7 @@ typedef struct {
     open64_func open64;
     creat_func creat;
     fopen_func fopen;
+    fopen64_func fopen64;
     fdopen_func fdopen;
     dup_func dup;
     dup2_func dup2;
@@ -706,6 +708,7 @@ static void _interposer_globalInitialize() {
     SETSYM_OR_FAIL(director.next.open64, "open64");
     SETSYM_OR_FAIL(director.next.creat, "creat");
     SETSYM_OR_FAIL(director.next.fopen, "fopen");
+    SETSYM_OR_FAIL(director.next.fopen64, "fopen64");
     SETSYM_OR_FAIL(director.next.fdopen, "fdopen");
     SETSYM_OR_FAIL(director.next.dup, "dup");
     SETSYM_OR_FAIL(director.next.dup2, "dup2");
@@ -1088,6 +1091,7 @@ INTERPOSE(int timerfd_gettime(int a, struct itimerspec *b), timerfd_gettime, a, 
 INTERPOSE(int fileno(FILE *a), fileno, a);
 INTERPOSE(int creat(const char *a, mode_t b), creat, a, b);
 INTERPOSE(FILE *fopen(const char *a, const char *b), fopen, a, b);
+INTERPOSE(FILE *fopen64(const char *a, const char *b), fopen64, a, b);
 INTERPOSE(FILE *fdopen(int a, const char *b), fdopen, a, b);
 INTERPOSE(int dup(int a), dup, a);
 INTERPOSE(int dup2(int a, int b), dup2, a, b);

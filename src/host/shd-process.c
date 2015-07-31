@@ -2423,6 +2423,10 @@ FILE *process_emu_fopen(Process* proc, const char *path, const char *mode) {
     return osfile;
 }
 
+FILE *process_emu_fopen64(Process* proc, const char *path, const char *mode) {
+    return process_emu_fopen(proc, path, mode);
+}
+
 FILE *process_emu_fdopen(Process* proc, int fd, const char *mode) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
 

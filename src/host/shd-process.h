@@ -99,6 +99,7 @@ int process_emu_open(Process* proc, const char *pathname, int flags, ...);
 int process_emu_open64(Process* proc, const char *pathname, int flags, ...);
 int process_emu_creat(Process* proc, const char *pathname, mode_t mode);
 FILE *process_emu_fopen(Process* proc, const char *path, const char *mode);
+FILE *process_emu_fopen64(Process* proc, const char *path, const char *mode);
 FILE *process_emu_fdopen(Process* proc, int fd, const char *mode);
 int process_emu_dup(Process* proc, int oldfd);
 int process_emu_dup2(Process* proc, int oldfd, int newfd);
