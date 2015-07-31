@@ -321,17 +321,19 @@ static void _tgendriver_chooseWeightsNextAction(TGenDriver* driver, TGenAction* 
     GQueue* nextActions = tgengraph_getNextActions(driver->actionGraph, action);
     g_assert(nextActions);
 
-    TGenAction* nextAction;
+    TGenAction* nextAction = g_queue_peek_head(nextActions);
 
-    double totalWeight = 0.0;
+    gdouble totalWeight = 0.0;
     /* Keep adding values from weights until we've met randomWeight */
     while(totalWeight < randomWeight) {
         nextAction = g_queue_pop_head(nextActions);
-        gdouble* thisWeight = tgengraph_getEdgeWeight(driver->actionGraph, action, nextAction);
-        totalWeight += *thisWeight;
+        gdouble thisWeight = tgengraph_getEdgeWeight(driver->actionGraph, action, nextAction);
+        totalWeight += thisWeight;
     }
 
-    _tgendriver_processAction(driver, nextAction);
+    if(nextAction) {
+        _tgendriver_processAction(driver, nextAction);
+    }
 
     /* clean up */
     g_queue_free(nextActions);
