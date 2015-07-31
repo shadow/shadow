@@ -804,7 +804,7 @@ gdouble tgengraph_getEdgeWeight(TGenGraph* g, TGenAction* srcAction, TGenAction*
 
     gdouble* weight = _tgengraph_getWeight(g, edgeIndex);
 
-    return *weight;
+    return (weight != NULL) ? *weight : 0.0;
 }
 
 gboolean tgengraph_hasEdges(TGenGraph* g) {
