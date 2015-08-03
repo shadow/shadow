@@ -3202,7 +3202,6 @@ int process_emu___cxa_atexit(Process* proc, void (*func) (void *), void * arg, v
 
 /* pthread attributes */
 
-#define pth_error()
 int process_emu_pthread_attr_init(Process* proc, pthread_attr_t *attr) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     int ret = 0;
@@ -3397,7 +3396,7 @@ int process_emu_pthread_attr_setstacksize(Process* proc, pthread_attr_t *attr, s
 
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     } else {
-        warning("pthread_attr_init() is handled by pth but not implemented by shadow");
+        warning("pthread_attr_setstacksize() is handled by pth but not implemented by shadow");
         errno = ENOSYS;
         ret = -1;
     }
@@ -3423,7 +3422,7 @@ int process_emu_pthread_attr_getstacksize(Process* proc, const pthread_attr_t *a
 
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     } else {
-        warning("pthread_attr_init() is handled by pth but not implemented by shadow");
+        warning("pthread_attr_getstacksize() is handled by pth but not implemented by shadow");
         errno = ENOSYS;
         ret = -1;
     }
@@ -3449,7 +3448,7 @@ int process_emu_pthread_attr_setstackaddr(Process* proc, pthread_attr_t *attr, v
 
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     } else {
-        warning("pthread_attr_init() is handled by pth but not implemented by shadow");
+        warning("pthread_attr_setstackaddr() is handled by pth but not implemented by shadow");
         errno = ENOSYS;
         ret = -1;
     }
@@ -3475,7 +3474,7 @@ int process_emu_pthread_attr_getstackaddr(Process* proc, const pthread_attr_t *a
 
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     } else {
-        warning("pthread_attr_init() is handled by pth but not implemented by shadow");
+        warning("pthread_attr_getstackaddr() is handled by pth but not implemented by shadow");
         errno = ENOSYS;
         ret = -1;
     }
@@ -3512,7 +3511,7 @@ int process_emu_pthread_attr_setdetachstate(Process* proc, pthread_attr_t *attr,
 
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     } else {
-        warning("pthread_attr_init() is handled by pth but not implemented by shadow");
+        warning("pthread_attr_setdetachstate() is handled by pth but not implemented by shadow");
         errno = ENOSYS;
         ret = -1;
     }
@@ -3546,7 +3545,7 @@ int process_emu_pthread_attr_getdetachstate(Process* proc, const pthread_attr_t 
 
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     } else {
-        warning("pthread_attr_init() is handled by pth but not implemented by shadow");
+        warning("pthread_attr_getdetachstate() is handled by pth but not implemented by shadow");
         errno = ENOSYS;
         ret = -1;
     }
