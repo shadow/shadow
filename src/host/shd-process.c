@@ -4,51 +4,6 @@
  * See LICENSE for licensing information
  */
 
-/*
- * Prevent system includes from implicitly including
- * possibly existing vendor Pthread headers
- */
-#define PTHREAD
-#define PTHREAD_H
-#define _PTHREAD_T
-#define _PTHREAD_H
-#define _PTHREAD_H_
-#define PTHREAD_INCLUDED
-#define _PTHREAD_INCLUDED
-#define SYS_PTHREAD_H
-#define _SYS_PTHREAD_H
-#define _SYS_PTHREAD_H_
-#define SYS_PTHREAD_INCLUDED
-#define _SYS_PTHREAD_INCLUDED
-#define BITS_PTHREADTYPES_H
-#define _BITS_PTHREADTYPES_H
-#define _BITS_PTHREADTYPES_H_
-#define _BITS_SIGTHREAD_H
-
-typedef int __vendor_pthread_t;
-//typedef int __vendor_pthread_attr_t;
-typedef int __vendor_pthread_key_t;
-typedef int __vendor_pthread_once_t;
-typedef int __vendor_pthread_mutex_t;
-typedef int __vendor_pthread_mutexattr_t;
-typedef int __vendor_pthread_cond_t;
-typedef int __vendor_pthread_condattr_t;
-typedef int __vendor_pthread_rwlock_t;
-typedef int __vendor_pthread_rwlockattr_t;
-typedef int __vendor_sched_param;
-
-#define pthread_t              __vendor_pthread_t
-#define pthread_attr_t         __vendor_pthread_attr_t
-#define pthread_key_t          __vendor_pthread_key_t
-#define pthread_once_t         __vendor_pthread_once_t
-#define pthread_mutex_t        __vendor_pthread_mutex_t
-#define pthread_mutexattr_t    __vendor_pthread_mutexattr_t
-#define pthread_cond_t         __vendor_pthread_cond_t
-#define pthread_condattr_t     __vendor_pthread_condattr_t
-#define pthread_rwlock_t       __vendor_pthread_rwlock_t
-#define pthread_rwlockattr_t   __vendor_pthread_rwlockattr_t
-#define sched_param            __vendor_sched_param
-
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif
@@ -87,52 +42,6 @@ typedef int __vendor_sched_param;
 
 #include <pthread.h>
 #include <pthmt.h>
-
-#undef  PTHREAD_CREATE_DETACHED
-#define PTHREAD_CREATE_DETACHED 0x01
-#undef  PTHREAD_CREATE_JOINABLE
-#define PTHREAD_CREATE_JOINABLE 0x02
-#undef  PTHREAD_SCOPE_SYSTEM
-#define PTHREAD_SCOPE_SYSTEM 0x03
-#undef  PTHREAD_SCOPE_PROCESS
-#define PTHREAD_SCOPE_PROCESS 0x04
-#undef  PTHREAD_INHERIT_SCHED
-#define PTHREAD_INHERIT_SCHED 0x05
-#undef  PTHREAD_EXPLICIT_SCHED
-#define PTHREAD_EXPLICIT_SCHED 0x06
-#undef  PTHREAD_CANCEL_ENABLE
-#define PTHREAD_CANCEL_ENABLE 0x01
-#undef  PTHREAD_CANCEL_DISABLE
-#define PTHREAD_CANCEL_DISABLE 0x02
-#undef  PTHREAD_CANCEL_ASYNCHRONOUS
-#define PTHREAD_CANCEL_ASYNCHRONOUS 0x01
-#undef  PTHREAD_CANCEL_DEFERRED
-#define PTHREAD_CANCEL_DEFERRED 0x02
-#undef  PTHREAD_CANCELED
-#define PTHREAD_CANCELED ((void *)-1)
-
-#undef pthread_t
-typedef struct pthread_st *pthread_t;
-#undef pthread_attr_t
-typedef struct pthread_attr_st *pthread_attr_t;
-#undef pthread_key_t
-typedef int pthread_key_t;
-#undef pthread_once_t
-typedef int pthread_once_t;
-#undef pthread_mutex_t
-typedef struct pthread_mutex_st *pthread_mutex_t;
-#undef pthread_mutexattr_t
-typedef int pthread_mutexattr_t;
-#undef pthread_cond_t
-typedef struct pthread_cond_st *pthread_cond_t;
-#undef pthread_condattr_t
-typedef int pthread_condattr_t;
-#undef pthread_rwlock_t
-typedef struct pthread_rwlock_st *pthread_rwlock_t;
-#undef pthread_rwlockattr_t
-typedef int pthread_rwlockattr_t;
-#undef sched_param
-struct sched_param;
 
 #if defined(FD_SETSIZE)
 #if FD_SETSIZE > 1024
@@ -181,6 +90,13 @@ struct _ProcessAtForkCallbackData {
     void (*prepare)(void);
     void (*parent)(void);
     void (*child)(void);
+};
+
+typedef struct _ProcessChildData ProcessChildData;
+struct _ProcessChildData {
+    Process* proc;
+    PthSpawnFunc run;
+    void* arg;
 };
 
 typedef enum _SystemCallType SystemCallType;
@@ -367,6 +283,46 @@ static void _process_executeAtFork(ProcessAtForkCallbackData* data) {
         g_free(data);
         _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
     }
+}
+
+static void* _process_executeChild(ProcessChildData* data) {
+    Process* proc = data->proc;
+
+    /* we just came from pth_spawn - the first thing we should do is update our context
+     * back to shadow to make sure any potential shadow sys calls get handled correctly */
+    _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+
+    /* sanity checks */
+    MAGIC_ASSERT(proc);
+    utility_assert(process_isRunning(proc));
+    utility_assert(worker_getActiveProcess() == proc);
+
+    /* time how long we execute the program */
+    g_timer_start(proc->cpuDelayTimer);
+
+    /* now we are entering the plugin program via a pth thread */
+    _process_changeContext(proc, PCTX_SHADOW, PCTX_PLUGIN);
+
+    /* call the thread start routine, pth will handle blocking as the thread runs */
+    gpointer ret = data->run(data->arg);
+
+    /* this thread has completed */
+    _process_changeContext(proc, PCTX_PLUGIN, PCTX_SHADOW);
+
+    /* no need to call stop */
+    gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);
+    _process_handleTimerResult(proc, elapsed);
+
+    /* when we return, pth will call the exit functions queued for the main thread */
+    _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
+
+    /* unref for the data object */
+    process_unref(proc);
+
+    /* free it */
+    g_free(data);
+
+    return ret;
 }
 
 static void _process_executeCleanup(Process* proc) {
@@ -3216,7 +3172,7 @@ int process_emu_pthread_attr_init(Process* proc, pthread_attr_t *attr) {
         } else if ((na = pth_attr_new()) == NULL) {
             ret = errno;
         } else {
-            (*attr) = (pthread_attr_t) na;
+            memmove(attr, &na, sizeof(void*));
             ret = 0;
         }
 
@@ -3237,13 +3193,19 @@ int process_emu_pthread_attr_destroy(Process* proc, pthread_attr_t *attr) {
         _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
         utility_assert(proc->tstate == pth_gctx_get());
 
-        if (attr == NULL || *attr == NULL) {
+        if (attr == NULL) {
             ret = EINVAL;
             errno = EINVAL;
         } else {
-            pth_attr_t na = (pth_attr_t) (*attr);
-            pth_attr_destroy(na);
-            *attr = NULL;
+            pth_attr_t na = NULL;
+            memmove(&na, attr, sizeof(void*));
+            if(na == NULL) {
+                ret = EINVAL;
+                errno = EINVAL;
+            } else {
+                pth_attr_destroy(na);
+                memset(attr, 0, sizeof(void*));
+            }
         }
 
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
@@ -3388,10 +3350,19 @@ int process_emu_pthread_attr_setstacksize(Process* proc, pthread_attr_t *attr, s
         if(attr == NULL) {
             ret = EINVAL;
             errno = EINVAL;
-        } else if(!pth_attr_set((pth_attr_t) (*attr), PTH_ATTR_STACK_SIZE, (unsigned int) stacksize)) {
-            ret = errno;
         } else {
-            ret = 0;
+            pth_attr_t na = NULL;
+            memmove(&na, attr, sizeof(void*));
+            if(na == NULL) {
+                ret = EINVAL;
+                errno = EINVAL;
+            } else {
+                if(!pth_attr_set(na, PTH_ATTR_STACK_SIZE, (unsigned int) stacksize)) {
+                    ret = errno;
+                } else {
+                    ret = 0;
+                }
+            }
         }
 
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
@@ -3414,10 +3385,19 @@ int process_emu_pthread_attr_getstacksize(Process* proc, const pthread_attr_t *a
         if (attr == NULL || stacksize == NULL) {
             ret = EINVAL;
             errno = EINVAL;
-        } else if (!pth_attr_get((pth_attr_t) (*attr), PTH_ATTR_STACK_SIZE, (unsigned int *) stacksize)) {
-            ret = errno;
         } else {
-            ret = 0;
+            pth_attr_t na = NULL;
+            memmove(&na, attr, sizeof(void*));
+            if(na == NULL) {
+                ret = EINVAL;
+                errno = EINVAL;
+            } else {
+                if (!pth_attr_get(na, PTH_ATTR_STACK_SIZE, (unsigned int *) stacksize)) {
+                    ret = errno;
+                } else {
+                    ret = 0;
+                }
+            }
         }
 
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
@@ -3440,10 +3420,19 @@ int process_emu_pthread_attr_setstackaddr(Process* proc, pthread_attr_t *attr, v
         if (attr == NULL) {
             ret = EINVAL;
             errno = EINVAL;
-        } else if(!pth_attr_set((pth_attr_t) (*attr), PTH_ATTR_STACK_ADDR, (char *) stackaddr)) {
-            ret = errno;
         } else {
-            ret = 0;
+            pth_attr_t na = NULL;
+            memmove(&na, attr, sizeof(void*));
+            if(na == NULL) {
+                ret = EINVAL;
+                errno = EINVAL;
+            } else {
+                if(!pth_attr_set(na, PTH_ATTR_STACK_ADDR, (char *) stackaddr)) {
+                    ret = errno;
+                } else {
+                    ret = 0;
+                }
+            }
         }
 
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
@@ -3466,10 +3455,19 @@ int process_emu_pthread_attr_getstackaddr(Process* proc, const pthread_attr_t *a
         if (attr == NULL || stackaddr == NULL) {
             ret = EINVAL;
             errno = EINVAL;
-        } else if(!pth_attr_get((pth_attr_t) (*attr), PTH_ATTR_STACK_ADDR, (char **) stackaddr)) {
-            ret = errno;
         } else {
-            ret = 0;
+            pth_attr_t na = NULL;
+            memmove(&na, attr, sizeof(void*));
+            if(na == NULL) {
+                ret = EINVAL;
+                errno = EINVAL;
+            } else {
+                if(!pth_attr_get(na, PTH_ATTR_STACK_ADDR, (char **) stackaddr)) {
+                    ret = errno;
+                } else {
+                    ret = 0;
+                }
+            }
         }
 
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
@@ -3492,21 +3490,30 @@ int process_emu_pthread_attr_setdetachstate(Process* proc, pthread_attr_t *attr,
         if(attr == NULL) {
             ret = EINVAL;
             errno = EINVAL;
-        } else if(detachstate == PTHREAD_CREATE_DETACHED) {
-            if (!pth_attr_set((pth_attr_t) (*attr), PTH_ATTR_JOINABLE, FALSE)) {
-                ret = errno;
-            } else {
-                ret = 0;
-            }
-        } else if(detachstate == PTHREAD_CREATE_JOINABLE) {
-            if (!pth_attr_set((pth_attr_t) (*attr), PTH_ATTR_JOINABLE, TRUE)) {
-                ret = errno;
-            } else {
-                ret = 0;
-            }
         } else {
-            ret = EINVAL;
-            errno = EINVAL;
+            pth_attr_t na = NULL;
+            memmove(&na, attr, sizeof(void*));
+            if(na == NULL) {
+                ret = EINVAL;
+                errno = EINVAL;
+            } else {
+                if (detachstate == PTHREAD_CREATE_DETACHED) {
+                    if (!pth_attr_set(na, PTH_ATTR_JOINABLE, FALSE)) {
+                        ret = errno;
+                    } else {
+                        ret = 0;
+                    }
+                } else if (detachstate == PTHREAD_CREATE_JOINABLE) {
+                    if (!pth_attr_set(na, PTH_ATTR_JOINABLE, TRUE)) {
+                        ret = errno;
+                    } else {
+                        ret = 0;
+                    }
+                } else {
+                    ret = EINVAL;
+                    errno = EINVAL;
+                }
+            }
         }
 
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
@@ -3531,14 +3538,21 @@ int process_emu_pthread_attr_getdetachstate(Process* proc, const pthread_attr_t 
             errno = EINVAL;
         } else {
             int s = 0;
-            if (!pth_attr_get((pth_attr_t) (*attr), PTH_ATTR_JOINABLE, &s)) {
-                ret = errno;
+            pth_attr_t na = NULL;
+            memmove(&na, attr, sizeof(void*));
+            if(na == NULL) {
+                ret = EINVAL;
+                errno = EINVAL;
             } else {
-                ret = 0;
-                if (s == TRUE) {
-                    *detachstate = PTHREAD_CREATE_JOINABLE;
+                if (!pth_attr_get(na, PTH_ATTR_JOINABLE, &s)) {
+                    ret = errno;
                 } else {
-                    *detachstate = PTHREAD_CREATE_DETACHED;
+                    ret = 0;
+                    if (s == TRUE) {
+                        *detachstate = PTHREAD_CREATE_JOINABLE;
+                    } else {
+                        *detachstate = PTHREAD_CREATE_DETACHED;
+                    }
                 }
             }
         }
@@ -3593,10 +3607,19 @@ int process_emu_pthread_attr_setname_np(Process* proc, pthread_attr_t *attr, cha
         if(attr == NULL || name == NULL) {
             ret = EINVAL;
             errno = EINVAL;
-        } else if(!pth_attr_set((pth_attr_t) (*attr), PTH_ATTR_NAME, name)) {
-            ret = errno;
         } else {
-            ret = 0;
+            pth_attr_t na = NULL;
+            memmove(&na, attr, sizeof(void*));
+            if(na == NULL) {
+                ret = EINVAL;
+                errno = EINVAL;
+            } else {
+                if (!pth_attr_set(na, PTH_ATTR_NAME, name)) {
+                    ret = errno;
+                } else {
+                    ret = 0;
+                }
+            }
         }
 
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
@@ -3619,10 +3642,19 @@ int process_emu_pthread_attr_getname_np(Process* proc, const pthread_attr_t *att
         if(attr == NULL || name == NULL) {
             ret = EINVAL;
             errno = EINVAL;
-        } else if(!pth_attr_get((pth_attr_t) (*attr), PTH_ATTR_NAME, name)) {
-            ret = errno;
         } else {
-            ret = 0;
+            pth_attr_t na = NULL;
+            memmove(&na, attr, sizeof(void*));
+            if(na == NULL) {
+                ret = EINVAL;
+                errno = EINVAL;
+            } else {
+                if(!pth_attr_get(na, PTH_ATTR_NAME, name)) {
+                    ret = errno;
+                } else {
+                    ret = 0;
+                }
+            }
         }
 
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
@@ -3645,10 +3677,19 @@ int process_emu_pthread_attr_setprio_np(Process* proc, pthread_attr_t *attr, int
         if (attr == NULL || (prio < PTH_PRIO_MIN || prio > PTH_PRIO_MAX)) {
             ret = EINVAL;
             errno = EINVAL;
-        } else if (!pth_attr_set((pth_attr_t) (*attr), PTH_ATTR_PRIO, prio)) {
-            ret = errno;
         } else {
-            ret = 0;
+            pth_attr_t na = NULL;
+            memmove(&na, attr, sizeof(void*));
+            if(na == NULL) {
+                ret = EINVAL;
+                errno = EINVAL;
+            } else {
+                if (!pth_attr_set(na, PTH_ATTR_PRIO, prio)) {
+                    ret = errno;
+                } else {
+                    ret = 0;
+                }
+            }
         }
 
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
@@ -3671,10 +3712,19 @@ int process_emu_pthread_attr_getprio_np(Process* proc, const pthread_attr_t *att
         if (attr == NULL || prio == NULL) {
             ret = EINVAL;
             errno = EINVAL;
-        } else if (!pth_attr_get((pth_attr_t) (*attr), PTH_ATTR_PRIO, prio)) {
-            ret = errno;
         } else {
-            ret = 0;
+            pth_attr_t na = NULL;
+            memmove(&na, attr, sizeof(void*));
+            if(na == NULL) {
+                ret = EINVAL;
+                errno = EINVAL;
+            } else {
+                if (!pth_attr_get(na, PTH_ATTR_PRIO, prio)) {
+                    ret = errno;
+                } else {
+                    ret = 0;
+                }
+            }
         }
 
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
@@ -3705,10 +3755,16 @@ int process_emu_pthread_create(Process* proc, pthread_t *thread, const pthread_a
             errno = EAGAIN;
         } else {
             pth_t auxThread = NULL;
+            process_ref(proc);
+            ProcessChildData* data = g_new0(ProcessChildData, 1);
+            data->proc = proc;
+            data->run = start_routine;
+            data->arg = arg;
 
             if (attr != NULL) {
-                pth_attr_t customAttr = (pth_attr_t) (*attr);
-                auxThread = pth_spawn(customAttr, start_routine, arg);
+                pth_attr_t customAttr = NULL;
+                memmove(&customAttr, attr, sizeof(void*));
+                auxThread = pth_spawn(customAttr, (PthSpawnFunc) _process_executeChild, data);
             } else {
                 /* default for new auxiliary threads */
                 _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
@@ -3722,7 +3778,7 @@ int process_emu_pthread_create(Process* proc, pthread_t *thread, const pthread_a
                 pth_attr_set(defaultAttr, PTH_ATTR_STACK_SIZE, PROC_PTH_STACK_SIZE);
                 pth_attr_set(defaultAttr, PTH_ATTR_JOINABLE, TRUE);
 
-                auxThread = pth_spawn(defaultAttr, start_routine, arg);
+                auxThread = pth_spawn(defaultAttr, (PthSpawnFunc) _process_executeChild, data);
 
                 /* cleanup */
                 pth_attr_destroy(defaultAttr);
@@ -3731,11 +3787,13 @@ int process_emu_pthread_create(Process* proc, pthread_t *thread, const pthread_a
                 _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
             }
 
-            *thread = (pthread_t) auxThread;
-            if(*thread == NULL) {
+            if(auxThread == NULL) {
+                g_free(data);
+                process_unref(proc);
                 ret = EAGAIN;
                 errno = EAGAIN;
             } else {
+                memmove(thread, &auxThread, sizeof(void*));
                 g_queue_push_head(proc->programAuxiliaryThreads, auxThread);
                 ret = 0;
             }
@@ -3755,23 +3813,25 @@ int process_emu_pthread_detach(Process* proc, pthread_t thread) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     int ret = 0;
     if(prevCTX == PCTX_PLUGIN) {
-        _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
-        utility_assert(proc->tstate == pth_gctx_get());
-
-        pth_attr_t na = NULL;
-        if (thread == NULL) {
+        pth_t pt = NULL;
+        memmove(&pt, &thread, sizeof(void*));
+        if(pt == NULL) {
             ret = EINVAL;
             errno = EINVAL;
-        } else if((na = pth_attr_of((pth_t) thread)) == NULL) {
-            ret = errno;
-        } else if(!pth_attr_set(na, PTH_ATTR_JOINABLE, FALSE)) {
-            ret = errno;
         } else {
-            pth_attr_destroy(na);
-            ret = 0;
+            _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
+            utility_assert(proc->tstate == pth_gctx_get());
+            pth_attr_t na = NULL;
+            if((na = pth_attr_of(pt)) == NULL) {
+                ret = errno;
+            } else if(!pth_attr_set(na, PTH_ATTR_JOINABLE, FALSE)) {
+                ret = errno;
+            } else {
+                pth_attr_destroy(na);
+                ret = 0;
+            }
+            _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
         }
-
-        _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     } else {
         warning("pthread_detach() is handled by pth but not implemented by shadow");
         errno = ENOSYS;
@@ -3787,18 +3847,19 @@ int process_emu___pthread_detach(Process* proc, pthread_t thread) {
 
 pthread_t process_emu_pthread_self(Process* proc) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-    pthread_t ret = NULL;
+    pthread_t ret;
+    memset(&ret, 0, sizeof(void*));
     if(prevCTX == PCTX_PLUGIN) {
         _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
         utility_assert(proc->tstate == pth_gctx_get());
 
-        ret = (pthread_t) pth_self();
+        pth_t pt = pth_self();
+        memmove(&ret, &pt, sizeof(void*));
 
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     } else {
         warning("pthread_self() is handled by pth but not implemented by shadow");
         errno = ENOSYS;
-        ret = NULL;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
@@ -3852,19 +3913,25 @@ int process_emu_pthread_join(Process* proc, pthread_t thread, void **value_ptr) 
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     int ret = 0;
     if(prevCTX == PCTX_PLUGIN) {
-        _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
-        utility_assert(proc->tstate == pth_gctx_get());
-
-        if (!pth_join((pth_t) thread, value_ptr)) {
-            ret = errno;
+        pth_t pt = NULL;
+        memmove(&pt, &thread, sizeof(void*));
+        if(pt == NULL) {
+            ret = EINVAL;
+            errno = EINVAL;
         } else {
-            if (value_ptr != NULL && *value_ptr == PTH_CANCELED) {
-                *value_ptr = PTHREAD_CANCELED;
-            }
-            ret = 0;
-        }
+            _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
+            utility_assert(proc->tstate == pth_gctx_get());
 
-        _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+                if (!pth_join(pt, value_ptr)) {
+                    ret = errno;
+                } else {
+                    if (value_ptr != NULL && *value_ptr == PTH_CANCELED) {
+                        *value_ptr = PTHREAD_CANCELED;
+                    }
+                    ret = 0;
+                }
+            _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+        }
     } else {
         warning("pthread_join() is handled by pth but not implemented by shadow");
         errno = ENOSYS;
@@ -3927,16 +3994,23 @@ int process_emu_pthread_kill(Process* proc, pthread_t thread, int sig) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     int ret = 0;
     if(prevCTX == PCTX_PLUGIN) {
-        _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
-        utility_assert(proc->tstate == pth_gctx_get());
-
-        if (!pth_raise((pth_t) thread, sig)) {
-            ret = errno;
+        pth_t pt = NULL;
+        memmove(&pt, &thread, sizeof(void*));
+        if(pt == NULL) {
+            ret = EINVAL;
+            errno = EINVAL;
         } else {
-            ret = 0;
-        }
+            _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
+            utility_assert(proc->tstate == pth_gctx_get());
 
-        _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+            if (!pth_raise(pt, sig)) {
+                ret = errno;
+            } else {
+                ret = 0;
+            }
+
+            _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+        }
     } else {
         warning("pthread_kill() is handled by pth but not implemented by shadow");
         errno = ENOSYS;
@@ -3950,16 +4024,23 @@ int process_emu_pthread_abort(Process* proc, pthread_t thread) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     int ret = 0;
     if(prevCTX == PCTX_PLUGIN) {
-        _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
-        utility_assert(proc->tstate == pth_gctx_get());
-
-        if (!pth_abort((pth_t) thread)) {
-            ret = errno;
+        pth_t pt = NULL;
+        memmove(&pt, &thread, sizeof(void*));
+        if(pt == NULL) {
+            ret = EINVAL;
+            errno = EINVAL;
         } else {
-            ret = 0;
-        }
+            _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
+            utility_assert(proc->tstate == pth_gctx_get());
 
-        _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+            if (!pth_abort(pt)) {
+                ret = errno;
+            } else {
+                ret = 0;
+            }
+
+            _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+        }
     } else {
         warning("pthread_abort() is handled by pth but not implemented by shadow");
         errno = ENOSYS;
@@ -4090,16 +4171,23 @@ int process_emu_pthread_cancel(Process* proc, pthread_t thread) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     int ret = 0;
     if(prevCTX == PCTX_PLUGIN) {
-        _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
-        utility_assert(proc->tstate == pth_gctx_get());
-
-        if (!pth_cancel((pth_t)thread)) {
-            ret = errno;
+        pth_t pt = NULL;
+        memmove(&pt, &thread, sizeof(void*));
+        if(pt == NULL) {
+            ret = EINVAL;
+            errno = EINVAL;
         } else {
-            ret = 0;
-        }
+            _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
+            utility_assert(proc->tstate == pth_gctx_get());
 
-        _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+            if (!pth_cancel(pt)) {
+                ret = errno;
+            } else {
+                ret = 0;
+            }
+
+            _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+        }
     } else {
         warning("pthread_cancel() is handled by pth but not implemented by shadow");
         errno = ENOSYS;
@@ -4466,17 +4554,17 @@ int process_emu_pthread_mutex_init(Process* proc, pthread_mutex_t *mutex, const 
         _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
         utility_assert(proc->tstate == pth_gctx_get());
 
-        pth_mutex_t *m;
         if (mutex == NULL) {
             errno = EINVAL;
             ret = EINVAL;
-        } else if ((m = (pth_mutex_t *)malloc(sizeof(pth_mutex_t))) == NULL) {
-            ret = errno;
-        } else if (!pth_mutex_init(m)) {
-            ret = errno;
         } else {
-            (*mutex) = (pthread_mutex_t)m;
-            ret = 0;
+            pth_mutex_t* pm = g_malloc(sizeof(pth_mutex_t));
+            if (!pth_mutex_init(pm)) {
+                ret = errno;
+            } else {
+                memmove(mutex, &pm, sizeof(void*));
+                ret = 0;
+            }
         }
 
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
@@ -4500,9 +4588,16 @@ int process_emu_pthread_mutex_destroy(Process* proc, pthread_mutex_t *mutex) {
             errno = EINVAL;
             ret = EINVAL;
         } else {
-            free(*mutex);
-            *mutex = NULL;
-            ret = 0;
+            pth_mutex_t* pm = NULL;
+            memmove(&pm, mutex, sizeof(void*));
+            if(pm == NULL) {
+                errno = EINVAL;
+                ret = EINVAL;
+            } else {
+                free(pm);
+                memset(mutex, 0, sizeof(void*));
+                ret = 0;
+            }
         }
 
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
@@ -4557,15 +4652,19 @@ int process_emu_pthread_mutex_lock(Process* proc, pthread_mutex_t *mutex) {
             errno = EINVAL;
             ret = EINVAL;
         } else {
+            pth_mutex_t* pm = NULL;
+            memmove(&pm, mutex, sizeof(void*));
+
             int init_result = 0;
-            if(*mutex == (pthread_mutex_t)(NULL)) {
+            if(pm == NULL) {
                 _process_changeContext(proc, PCTX_PTH, prevCTX);
                 init_result = process_emu_pthread_mutex_init(proc, mutex, NULL);
                 _process_changeContext(proc, prevCTX, PCTX_PTH);
             }
+            memmove(&pm, mutex, sizeof(void*));
             if(init_result != 0) {
                 ret = errno;
-            } else if(!pth_mutex_acquire((pth_mutex_t *)(*mutex), FALSE, NULL)) {
+            } else if(!pth_mutex_acquire(pm, FALSE, NULL)) {
                 ret = errno;
             } else {
                 ret = 0;
@@ -4593,15 +4692,19 @@ int process_emu_pthread_mutex_trylock(Process* proc, pthread_mutex_t *mutex) {
             errno = EINVAL;
             ret = EINVAL;
         } else {
+            pth_mutex_t* pm = NULL;
+            memmove(&pm, mutex, sizeof(void*));
+
             int init_result = 0;
-            if(*mutex == (pthread_mutex_t)(NULL)) {
+            if(pm == NULL) {
                 _process_changeContext(proc, PCTX_PTH, prevCTX);
                 init_result = process_emu_pthread_mutex_init(proc, mutex, NULL);
                 _process_changeContext(proc, prevCTX, PCTX_PTH);
             }
+            memmove(&pm, mutex, sizeof(void*));
             if(init_result != 0) {
                 ret = errno;
-            } else if(!pth_mutex_acquire((pth_mutex_t *)(*mutex), TRUE, NULL)) {
+            } else if(!pth_mutex_acquire(pm, TRUE, NULL)) {
                 ret = errno;
             } else {
                 ret = 0;
@@ -4629,15 +4732,19 @@ int process_emu_pthread_mutex_unlock(Process* proc, pthread_mutex_t *mutex) {
             errno = EINVAL;
             ret = EINVAL;
         } else {
+            pth_mutex_t* pm = NULL;
+            memmove(&pm, mutex, sizeof(void*));
+
             int init_result = 0;
-            if(*mutex == (pthread_mutex_t)(NULL)) {
+            if(pm == NULL) {
                 _process_changeContext(proc, PCTX_PTH, prevCTX);
                 init_result = process_emu_pthread_mutex_init(proc, mutex, NULL);
                 _process_changeContext(proc, prevCTX, PCTX_PTH);
             }
+            memmove(&pm, mutex, sizeof(void*));
             if(init_result != 0) {
                 ret = errno;
-            } else if(!pth_mutex_release((pth_mutex_t *)(*mutex))) {
+            } else if(!pth_mutex_release(pm)) {
                 ret = errno;
             } else {
                 ret = 0;
@@ -4725,7 +4832,7 @@ int process_emu_pthread_rwlock_init(Process* proc, pthread_rwlock_t *rwlock, con
             } else if (!pth_rwlock_init(rw)) {
                 ret = errno;
             } else {
-                (*rwlock) = (pthread_rwlock_t)rw;
+                memmove(rwlock, &rw, sizeof(void*));
                 ret = 0;
             }
         }
@@ -4751,9 +4858,16 @@ int process_emu_pthread_rwlock_destroy(Process* proc, pthread_rwlock_t *rwlock) 
             errno = EINVAL;
             ret = EINVAL;
         } else {
-            free(*rwlock);
-            *rwlock = NULL;
-            ret = 0;
+            pth_rwlock_t* prw = NULL;
+            memmove(&prw, rwlock, sizeof(void*));
+            if(prw == NULL) {
+                errno = EINVAL;
+                ret = EINVAL;
+            } else {
+                free(prw);
+                memset(rwlock, 0, sizeof(void*));
+                ret = 0;
+            }
         }
 
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
@@ -4777,15 +4891,18 @@ int process_emu_pthread_rwlock_rdlock(Process* proc, pthread_rwlock_t *rwlock) {
             errno = EINVAL;
             ret = EINVAL;
         } else {
+            pth_rwlock_t* prw = NULL;
+            memmove(&prw, rwlock, sizeof(void*));
             int init_result = 0;
-            if(*rwlock == (pthread_rwlock_t)(NULL)) {
+            if(prw == NULL) {
                 _process_changeContext(proc, PCTX_PTH, prevCTX);
                 init_result = process_emu_pthread_rwlock_init(proc, rwlock, NULL);
                 _process_changeContext(proc, prevCTX, PCTX_PTH);
             }
+            memmove(&prw, rwlock, sizeof(void*));
             if(init_result != 0) {
                 ret = errno;
-            } else if(!pth_rwlock_acquire((pth_rwlock_t *)(*rwlock), PTH_RWLOCK_RD, FALSE, NULL)) {
+            } else if(!pth_rwlock_acquire(prw, PTH_RWLOCK_RD, FALSE, NULL)) {
                 ret = errno;
             } else {
                 ret = 0;
@@ -4813,15 +4930,18 @@ int process_emu_pthread_rwlock_tryrdlock(Process* proc, pthread_rwlock_t *rwlock
             errno = EINVAL;
             ret = EINVAL;
         } else {
+            pth_rwlock_t* prw = NULL;
+            memmove(&prw, rwlock, sizeof(void*));
             int init_result = 0;
-            if(*rwlock == (pthread_rwlock_t)(NULL)) {
+            if(prw == NULL) {
                 _process_changeContext(proc, PCTX_PTH, prevCTX);
                 init_result = process_emu_pthread_rwlock_init(proc, rwlock, NULL);
                 _process_changeContext(proc, prevCTX, PCTX_PTH);
             }
+            memmove(&prw, rwlock, sizeof(void*));
             if(init_result != 0) {
                 ret = errno;
-            } else if(!pth_rwlock_acquire((pth_rwlock_t *)(*rwlock), PTH_RWLOCK_RD, TRUE, NULL)) {
+            } else if(!pth_rwlock_acquire(prw, PTH_RWLOCK_RD, TRUE, NULL)) {
                 ret = errno;
             } else {
                 ret = 0;
@@ -4849,15 +4969,18 @@ int process_emu_pthread_rwlock_wrlock(Process* proc, pthread_rwlock_t *rwlock) {
             errno = EINVAL;
             ret = EINVAL;
         } else {
+            pth_rwlock_t* prw = NULL;
+            memmove(&prw, rwlock, sizeof(void*));
             int init_result = 0;
-            if(*rwlock == (pthread_rwlock_t)(NULL)) {
+            if(prw == NULL) {
                 _process_changeContext(proc, PCTX_PTH, prevCTX);
                 init_result = process_emu_pthread_rwlock_init(proc, rwlock, NULL);
                 _process_changeContext(proc, prevCTX, PCTX_PTH);
             }
+            memmove(&prw, rwlock, sizeof(void*));
             if(init_result != 0) {
                 ret = errno;
-            } else if(!pth_rwlock_acquire((pth_rwlock_t *)(*rwlock), PTH_RWLOCK_RW, FALSE, NULL)) {
+            } else if(!pth_rwlock_acquire(prw, PTH_RWLOCK_RW, FALSE, NULL)) {
                 ret = errno;
             } else {
                 ret = 0;
@@ -4885,15 +5008,18 @@ int process_emu_pthread_rwlock_trywrlock(Process* proc, pthread_rwlock_t *rwlock
             errno = EINVAL;
             ret = EINVAL;
         } else {
+            pth_rwlock_t* prw = NULL;
+            memmove(&prw, rwlock, sizeof(void*));
             int init_result = 0;
-            if(*rwlock == (pthread_rwlock_t)(NULL)) {
+            if(prw == NULL) {
                 _process_changeContext(proc, PCTX_PTH, prevCTX);
                 init_result = process_emu_pthread_rwlock_init(proc, rwlock, NULL);
                 _process_changeContext(proc, prevCTX, PCTX_PTH);
             }
+            memmove(&prw, rwlock, sizeof(void*));
             if(init_result != 0) {
                 ret = errno;
-            } else if(!pth_rwlock_acquire((pth_rwlock_t *)(*rwlock), PTH_RWLOCK_RW, TRUE, NULL)) {
+            } else if(!pth_rwlock_acquire(prw, PTH_RWLOCK_RW, TRUE, NULL)) {
                 ret = errno;
             } else {
                 ret = 0;
@@ -4922,14 +5048,17 @@ int process_emu_pthread_rwlock_unlock(Process* proc, pthread_rwlock_t *rwlock) {
             ret = EINVAL;
         } else {
             int init_result = 0;
-            if(*rwlock == (pthread_rwlock_t)(NULL)) {
+            pth_rwlock_t* prw = NULL;
+            memmove(&prw, rwlock, sizeof(void*));
+            if(prw == NULL) {
                 _process_changeContext(proc, PCTX_PTH, prevCTX);
                 init_result = process_emu_pthread_rwlock_init(proc, rwlock, NULL);
                 _process_changeContext(proc, prevCTX, PCTX_PTH);
             }
+            memmove(&prw, rwlock, sizeof(void*));
             if(init_result != 0) {
                 ret = errno;
-            } else if(!pth_rwlock_release((pth_rwlock_t *)(*rwlock))) {
+            } else if(!pth_rwlock_release(prw)) {
                 ret = errno;
             } else {
                 ret = 0;
@@ -5007,17 +5136,17 @@ int process_emu_pthread_cond_init(Process* proc, pthread_cond_t *cond, const pth
         _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
         utility_assert(proc->tstate == pth_gctx_get());
 
-        pth_cond_t *cn;
         if (cond == NULL) {
             errno = EINVAL;
             ret = EINVAL;
-        } else if ((cn = (pth_cond_t *)malloc(sizeof(pth_cond_t))) == NULL) {
-            ret = errno;
-        } else if (!pth_cond_init(cn)) {
-            ret = errno;
         } else {
-            (*cond) = (pthread_cond_t)cn;
-            ret = 0;
+            pth_cond_t *pcn = g_malloc(sizeof(pth_cond_t));
+            if (!pth_cond_init(pcn)) {
+                ret = errno;
+            } else {
+                memmove(cond, &pcn, sizeof(void*));
+                ret = 0;
+            }
         }
 
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
@@ -5041,9 +5170,16 @@ int process_emu_pthread_cond_destroy(Process* proc, pthread_cond_t *cond) {
             errno = EINVAL;
             ret = EINVAL;
         } else {
-            free(*cond);
-            *cond = NULL;
-            ret = 0;
+            pth_cond_t* pcn = NULL;
+            memmove(&pcn, cond, sizeof(void*));
+            if(pcn == NULL) {
+                errno = EINVAL;
+                ret = EINVAL;
+            } else {
+                free(pcn);
+                memset(cond, 0, sizeof(void*));
+                ret = 0;
+            }
         }
 
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
@@ -5068,14 +5204,17 @@ int process_emu_pthread_cond_broadcast(Process* proc, pthread_cond_t *cond) {
             ret = EINVAL;
         } else {
             int init_result = 0;
-            if(*cond == (pthread_cond_t)(NULL)) {
+            pth_cond_t* pcn = NULL;
+            memmove(&pcn, cond, sizeof(void*));
+            if(pcn == NULL) {
                 _process_changeContext(proc, PCTX_PTH, prevCTX);
                 init_result = process_emu_pthread_cond_init(proc, cond, NULL);
                 _process_changeContext(proc, prevCTX, PCTX_PTH);
             }
+            memmove(&pcn, cond, sizeof(void*));
             if(init_result != 0) {
                 ret = errno;
-            } else if(!pth_cond_notify((pth_cond_t *)(*cond), TRUE)) {
+            } else if(!pth_cond_notify(pcn, TRUE)) {
                 ret = errno;
             } else {
                 ret = 0;
@@ -5104,14 +5243,17 @@ int process_emu_pthread_cond_signal(Process* proc, pthread_cond_t *cond) {
             ret = EINVAL;
         } else {
             int init_result = 0;
-            if(*cond == (pthread_cond_t)(NULL)) {
+            pth_cond_t* pcn = NULL;
+            memmove(&pcn, cond, sizeof(void*));
+            if(pcn == NULL) {
                 _process_changeContext(proc, PCTX_PTH, prevCTX);
                 init_result = process_emu_pthread_cond_init(proc, cond, NULL);
                 _process_changeContext(proc, prevCTX, PCTX_PTH);
             }
+            memmove(&pcn, cond, sizeof(void*));
             if(init_result != 0) {
                 ret = errno;
-            } else if(!pth_cond_notify((pth_cond_t *)(*cond), FALSE)) {
+            } else if(!pth_cond_notify(pcn, FALSE)) {
                 ret = errno;
             } else {
                 ret = 0;
@@ -5140,23 +5282,29 @@ int process_emu_pthread_cond_wait(Process* proc, pthread_cond_t *cond, pthread_m
             ret = EINVAL;
         } else {
             int init_result = 0;
-            if(*cond == (pthread_cond_t)(NULL)) {
+            pth_cond_t* pcn = NULL;
+            memmove(&pcn, cond, sizeof(void*));
+            if(pcn == NULL) {
                 _process_changeContext(proc, PCTX_PTH, prevCTX);
                 init_result = process_emu_pthread_cond_init(proc, cond, NULL);
                 _process_changeContext(proc, prevCTX, PCTX_PTH);
             }
+            memmove(&pcn, cond, sizeof(void*));
             if(init_result != 0) {
                 ret = errno;
             } else {
                 init_result = 0;
-                if(*mutex == (pthread_mutex_t)(NULL)) {
+                pth_mutex_t* pm = NULL;
+                memmove(&pm, mutex, sizeof(void*));
+                if(pm == NULL) {
                     _process_changeContext(proc, PCTX_PTH, prevCTX);
                     init_result = process_emu_pthread_mutex_init(proc, mutex, NULL);
                     _process_changeContext(proc, prevCTX, PCTX_PTH);
                 }
+                memmove(&pm, mutex, sizeof(void*));
                 if(init_result != 0) {
                     ret = errno;
-                } else if(!pth_cond_await((pth_cond_t *)(*cond), (pth_mutex_t *)(*mutex), NULL)) {
+                } else if(!pth_cond_await(pcn, pm, NULL)) {
                     ret = errno;
                 } else {
                     ret = 0;
@@ -5187,28 +5335,34 @@ int process_emu_pthread_cond_timedwait(Process* proc, pthread_cond_t *cond, pthr
             ret = EINVAL;
         } else {
             int init_result = 0;
-            if(*cond == (pthread_cond_t)(NULL)) {
+            pth_cond_t* pcn = NULL;
+            memmove(&pcn, cond, sizeof(void*));
+            if(pcn == NULL) {
                 _process_changeContext(proc, PCTX_PTH, prevCTX);
                 init_result = process_emu_pthread_cond_init(proc, cond, NULL);
                 _process_changeContext(proc, prevCTX, PCTX_PTH);
             }
+            memmove(&pcn, cond, sizeof(void*));
             if(init_result != 0) {
                 ret = errno;
             } else {
                 pth_event_t ev;
                 static pth_key_t ev_key = PTH_KEY_INIT;
                 init_result = 0;
-                if(*mutex == (pthread_mutex_t)(NULL)) {
+                pth_mutex_t* pm = NULL;
+                memmove(&pm, mutex, sizeof(void*));
+                if(pm == NULL) {
                     _process_changeContext(proc, PCTX_PTH, prevCTX);
                     init_result = process_emu_pthread_mutex_init(proc, mutex, NULL);
                     _process_changeContext(proc, prevCTX, PCTX_PTH);
                 }
+                memmove(&pm, mutex, sizeof(void*));
                 if(init_result != 0) {
                     ret = errno;
                 } else {
                     pth_time_t t = pth_time(abstime->tv_sec, (abstime->tv_nsec)/1000);
                     ev = pth_event(PTH_EVENT_TIME|PTH_MODE_STATIC, &ev_key, t);
-                    if (!pth_cond_await((pth_cond_t *)(*cond), (pth_mutex_t *)(*mutex), ev)) {
+                    if (!pth_cond_await(pcn, pm, ev)) {
                         ret = errno;
                     } else if (pth_event_status(ev) == PTH_STATUS_OCCURRED) {
                         ret = ETIMEDOUT;
