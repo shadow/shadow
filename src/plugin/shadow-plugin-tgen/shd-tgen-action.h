@@ -22,7 +22,7 @@ TGenAction* tgenaction_newStartAction(const gchar* timeStr, const gchar* timeout
 TGenAction* tgenaction_newEndAction(const gchar* timeStr, const gchar* countStr,
         const gchar* sizeStr, GError** error);
 TGenAction* tgenaction_newPauseAction(const gchar* timeStr, GError** error);
-TGenAction* tgenaction_newSynchronizeAction(GError** error);
+TGenAction* tgenaction_newSynchronizeAction(glong totalIncoming, GError** error);
 TGenAction* tgenaction_newTransferAction(const gchar* typeStr, const gchar* protocolStr,
         const gchar* sizeStr, const gchar* peersStr, const gchar* timeoutStr, const gchar* stalloutStr, GError** error);
 
@@ -45,5 +45,9 @@ TGenPool* tgenaction_getPeers(TGenAction* action);
 guint64 tgenaction_getEndTimeMillis(TGenAction* action);
 guint64 tgenaction_getEndCount(TGenAction* action);
 guint64 tgenaction_getEndSize(TGenAction* action);
+
+glong tgenaction_getTotalIncoming(TGenAction* action);
+glong tgenaction_getCompletedIncoming(TGenAction* action);
+void tgenaction_setCompletedIncoming(TGenAction* action, glong completedIncoming);
 
 #endif /* SHD_TGEN_ACTION_H_ */
