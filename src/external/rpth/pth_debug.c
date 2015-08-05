@@ -55,7 +55,7 @@
 intern void pth_debug(const char *file, int line, int argc, const char *fmt, ...)
 {
     va_list ap;
-    static char str[1024];
+    char str[1024];
     size_t n;
 
     pth_shield {
@@ -82,15 +82,15 @@ intern void pth_dumpstate(FILE *fp)
 {
     fprintf(fp, "+----------------------------------------------------------------------\n");
     fprintf(fp, "| Pth Version: %s\n", PTH_VERSION_STR);
-    fprintf(fp, "| Load Average: %.2f\n", pth_loadval);
-    pth_dumpqueue(fp, "NEW", &pth_NQ);
-    pth_dumpqueue(fp, "READY", &pth_RQ);
+    fprintf(fp, "| Load Average: %.2f\n", pth_gctx_get()->pth_loadval);
+    pth_dumpqueue(fp, "NEW", &pth_gctx_get()->pth_NQ);
+    pth_dumpqueue(fp, "READY", &pth_gctx_get()->pth_RQ);
     fprintf(fp, "| Thread Queue RUNNING:\n");
     fprintf(fp, "|   1. thread 0x%lx (\"%s\")\n",
-            (unsigned long)pth_current, pth_current->name);
-    pth_dumpqueue(fp, "WAITING", &pth_WQ);
-    pth_dumpqueue(fp, "SUSPENDED", &pth_SQ);
-    pth_dumpqueue(fp, "DEAD", &pth_DQ);
+            (unsigned long)pth_gctx_get()->pth_current, pth_gctx_get()->pth_current->name);
+    pth_dumpqueue(fp, "WAITING", &pth_gctx_get()->pth_WQ);
+    pth_dumpqueue(fp, "SUSPENDED", &pth_gctx_get()->pth_SQ);
+    pth_dumpqueue(fp, "DEAD", &pth_gctx_get()->pth_DQ);
     fprintf(fp, "+----------------------------------------------------------------------\n");
     return;
 }

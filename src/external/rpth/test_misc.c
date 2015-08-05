@@ -29,7 +29,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#include "pth.h"
+#include "rpth.h"
 
 pth_mutex_t mutex = PTH_MUTEX_INIT;
 

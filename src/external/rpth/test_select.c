@@ -33,7 +33,7 @@
 #include <sys/time.h>
 #include <unistd.h>
 
-#include "pth.h"
+#include "rpth.h"
 
 /* a useless ticker thread */
 static void *ticker(void *_arg)

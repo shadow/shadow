@@ -31,20 +31,20 @@
 void pth_cancel_state(int newstate, int *oldstate)
 {
     if (oldstate != NULL)
-        *oldstate = pth_current->cancelstate;
+        *oldstate = pth_gctx_get()->pth_current->cancelstate;
     if (newstate != 0)
-        pth_current->cancelstate = newstate;
+        pth_gctx_get()->pth_current->cancelstate = newstate;
     return;
 }
 
 /* enter a cancellation point */
 void pth_cancel_point(void)
 {
-    if (   pth_current->cancelreq == TRUE
-        && pth_current->cancelstate & PTH_CANCEL_ENABLE) {
+    if (   pth_gctx_get()->pth_current->cancelreq == TRUE
+        && pth_gctx_get()->pth_current->cancelstate & PTH_CANCEL_ENABLE) {
         /* avoid looping if cleanup handlers contain cancellation points */
-        pth_current->cancelreq = FALSE;
-        pth_debug2("pth_cancel_point: terminating cancelled thread \"%s\"", pth_current->name);
+        pth_gctx_get()->pth_current->cancelreq = FALSE;
+        pth_debug2("pth_cancel_point: terminating cancelled thread \"%s\"", pth_gctx_get()->pth_current->name);
         pth_exit(PTH_CANCELED);
     }
     return;
@@ -59,7 +59,7 @@ int pth_cancel(pth_t thread)
         return pth_error(FALSE, EINVAL);
 
     /* the current thread cannot be cancelled */
-    if (thread == pth_current)
+    if (thread == pth_gctx_get()->pth_current)
         return pth_error(FALSE, EINVAL);
 
     /* the thread has to be at least still alive */
@@ -75,9 +75,9 @@ int pth_cancel(pth_t thread)
 
         /* remove thread from its queue */
         switch (thread->state) {
-            case PTH_STATE_NEW:     q = &pth_NQ; break;
-            case PTH_STATE_READY:   q = &pth_RQ; break;
-            case PTH_STATE_WAITING: q = &pth_WQ; break;
+            case PTH_STATE_NEW:     q = &pth_gctx_get()->pth_NQ; break;
+            case PTH_STATE_READY:   q = &pth_gctx_get()->pth_RQ; break;
+            case PTH_STATE_WAITING: q = &pth_gctx_get()->pth_WQ; break;
             default:                q = NULL;
         }
         if (q == NULL)
@@ -98,7 +98,7 @@ int pth_cancel(pth_t thread)
             pth_debug2("pth_cancel: moving cancelled thread \"%s\" to dead queue", thread->name);
             thread->join_arg = PTH_CANCELED;
             thread->state = PTH_STATE_DEAD;
-            pth_pqueue_insert(&pth_DQ, PTH_PRIO_STD, thread);
+            pth_pqueue_insert(&pth_gctx_get()->pth_DQ, PTH_PRIO_STD, thread);
         }
     }
     return TRUE;
@@ -111,7 +111,7 @@ int pth_abort(pth_t thread)
         return pth_error(FALSE, EINVAL);
 
     /* the current thread cannot be aborted */
-    if (thread == pth_current)
+    if (thread == pth_gctx_get()->pth_current)
         return pth_error(FALSE, EINVAL);
 
     if (thread->state == PTH_STATE_DEAD && thread->joinable) {

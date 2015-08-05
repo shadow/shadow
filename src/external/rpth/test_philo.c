@@ -38,7 +38,7 @@
 #include <signal.h>
 #include <sys/types.h>
 
-#include "pth.h"
+#include "rpth.h"
 
 #include "test_common.h"
 

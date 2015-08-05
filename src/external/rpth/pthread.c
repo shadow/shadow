@@ -59,12 +59,10 @@ static void pthread_shutdown(void)
     return;
 }
 
-static int pthread_initialized = FALSE;
-
 #define pthread_initialize() \
     do { \
-        if (pthread_initialized == FALSE) { \
-            pthread_initialized = TRUE; \
+        if (pth_gctx_get()->pthread_initialized == FALSE) { \
+            pth_gctx_get()->pthread_initialized = TRUE; \
             pth_init(); \
             atexit(pthread_shutdown); \
         } \

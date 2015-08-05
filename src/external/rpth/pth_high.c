@@ -42,7 +42,6 @@ int pth_nanosleep(const struct timespec *rqtp, struct timespec *rmtp)
     pth_time_t offset;
     pth_time_t now;
     pth_event_t ev;
-    static pth_key_t ev_key = PTH_KEY_INIT;
 
     /* consistency checks for POSIX conformance */
     if (rqtp == NULL)
@@ -60,7 +59,7 @@ int pth_nanosleep(const struct timespec *rqtp, struct timespec *rmtp)
     pth_time_add(&until, &offset);
 
     /* and let thread sleep until this time is elapsed */
-    if ((ev = pth_event(PTH_EVENT_TIME|PTH_MODE_STATIC, &ev_key, until)) == NULL)
+    if ((ev = pth_event(PTH_EVENT_TIME|PTH_MODE_STATIC, &pth_gctx_get()->ev_key_nanosleep, until)) == NULL)
         return pth_error(-1, errno);
     pth_wait(ev);
 
@@ -81,7 +80,6 @@ int pth_usleep(unsigned int usec)
     pth_time_t until;
     pth_time_t offset;
     pth_event_t ev;
-    static pth_key_t ev_key = PTH_KEY_INIT;
 
     /* short-circuit */
     if (usec == 0)
@@ -93,7 +91,7 @@ int pth_usleep(unsigned int usec)
     pth_time_add(&until, &offset);
 
     /* and let thread sleep until this time is elapsed */
-    if ((ev = pth_event(PTH_EVENT_TIME|PTH_MODE_STATIC, &ev_key, until)) == NULL)
+    if ((ev = pth_event(PTH_EVENT_TIME|PTH_MODE_STATIC, &pth_gctx_get()->ev_key_usleep, until)) == NULL)
         return pth_error(-1, errno);
     pth_wait(ev);
 
@@ -106,7 +104,6 @@ unsigned int pth_sleep(unsigned int sec)
     pth_time_t until;
     pth_time_t offset;
     pth_event_t ev;
-    static pth_key_t ev_key = PTH_KEY_INIT;
 
     /* consistency check */
     if (sec == 0)
@@ -118,7 +115,7 @@ unsigned int pth_sleep(unsigned int sec)
     pth_time_add(&until, &offset);
 
     /* and let thread sleep until this time is elapsed */
-    if ((ev = pth_event(PTH_EVENT_TIME|PTH_MODE_STATIC, &ev_key, until)) == NULL)
+    if ((ev = pth_event(PTH_EVENT_TIME|PTH_MODE_STATIC, &pth_gctx_get()->ev_key_sleep, until)) == NULL)
         return sec;
     pth_wait(ev);
 
@@ -132,7 +129,7 @@ int pth_sigmask(int how, const sigset_t *set, sigset_t *oset)
 
     /* change the explicitly remembered signal mask copy for the scheduler */
     if (set != NULL)
-        pth_sc(sigprocmask)(how, &(pth_current->mctx.sigs), NULL);
+        pth_sc(sigprocmask)(how, &(pth_gctx_get()->pth_current->mctx.sigs), NULL);
 
     /* change the real (per-thread saved/restored) signal mask */
     rv = pth_sc(sigprocmask)(how, set, oset);
@@ -150,7 +147,6 @@ int pth_sigwait(const sigset_t *set, int *sigp)
 int pth_sigwait_ev(const sigset_t *set, int *sigp, pth_event_t ev_extra)
 {
     pth_event_t ev;
-    static pth_key_t ev_key = PTH_KEY_INIT;
     sigset_t pending;
     int sig;
 
@@ -169,7 +165,7 @@ int pth_sigwait_ev(const sigset_t *set, int *sigp, pth_event_t ev_extra)
     }
 
     /* create event and wait on it */
-    if ((ev = pth_event(PTH_EVENT_SIGS|PTH_MODE_STATIC, &ev_key, set, sigp)) == NULL)
+    if ((ev = pth_event(PTH_EVENT_SIGS|PTH_MODE_STATIC, &pth_gctx_get()->ev_key_sigwait_ev, set, sigp)) == NULL)
         return pth_error(errno, errno);
     if (ev_extra != NULL)
         pth_event_concat(ev, ev_extra, NULL);
@@ -188,10 +184,9 @@ int pth_sigwait_ev(const sigset_t *set, int *sigp, pth_event_t ev_extra)
 pid_t pth_waitpid(pid_t wpid, int *status, int options)
 {
     pth_event_t ev;
-    static pth_key_t ev_key = PTH_KEY_INIT;
     pid_t pid;
 
-    pth_debug2("pth_waitpid: called from thread \"%s\"", pth_current->name);
+    pth_debug2("pth_waitpid: called from thread \"%s\"", pth_gctx_get()->pth_current->name);
 
     for (;;) {
         /* do a non-blocking poll for the pid */
@@ -203,11 +198,11 @@ pid_t pth_waitpid(pid_t wpid, int *status, int options)
             break;
 
         /* else wait a little bit */
-        ev = pth_event(PTH_EVENT_TIME|PTH_MODE_STATIC, &ev_key, pth_timeout(0,250000));
+        ev = pth_event(PTH_EVENT_TIME|PTH_MODE_STATIC, &pth_gctx_get()->ev_key_waitpid, pth_timeout(0,250000));
         pth_wait(ev);
     }
 
-    pth_debug2("pth_waitpid: leave to thread \"%s\"", pth_current->name);
+    pth_debug2("pth_waitpid: leave to thread \"%s\"", pth_gctx_get()->pth_current->name);
     return pid;
 }
 
@@ -287,19 +282,14 @@ int pth_select(int nfds, fd_set *rfds, fd_set *wfds,
 int pth_select_ev(int nfd, fd_set *rfds, fd_set *wfds,
                   fd_set *efds, struct timeval *timeout, pth_event_t ev_extra)
 {
-    struct timeval delay;
     pth_event_t ev;
     pth_event_t ev_select;
     pth_event_t ev_timeout;
-    static pth_key_t ev_key_select  = PTH_KEY_INIT;
-    static pth_key_t ev_key_timeout = PTH_KEY_INIT;
-    fd_set rspare, wspare, espare;
-    fd_set *rtmp, *wtmp, *etmp;
     int selected;
     int rc;
 
     pth_implicit_init();
-    pth_debug2("pth_select_ev: called from thread \"%s\"", pth_current->name);
+    pth_debug2("pth_select_ev: called from thread \"%s\"", pth_gctx_get()->pth_current->name);
 
     /* POSIX.1-2001/SUSv3 compliance */
     if (nfd < 0 || nfd > FD_SETSIZE)
@@ -315,24 +305,18 @@ int pth_select_ev(int nfd, fd_set *rfds, fd_set *wfds,
 
     /* first deal with the special situation of a plain microsecond delay */
     if (nfd == 0 && rfds == NULL && wfds == NULL && efds == NULL && timeout != NULL) {
-        if (timeout->tv_sec == 0 && timeout->tv_usec <= 10000 /* 1/100 second */) {
-            /* very small delays are acceptable to be performed directly */
-            while (   pth_sc(select)(0, NULL, NULL, NULL, timeout) < 0
-                   && errno == EINTR) ;
+        /* go through the scheduler */
+        ev = pth_event(PTH_EVENT_TIME|PTH_MODE_STATIC, &pth_gctx_get()->ev_key_select_ev_timeout,
+                       pth_timeout(timeout->tv_sec, timeout->tv_usec));
+        if (ev_extra != NULL)
+            pth_event_concat(ev, ev_extra, NULL);
+        pth_wait(ev);
+        if (ev_extra != NULL) {
+            pth_event_isolate(ev);
+            if (pth_event_status(ev) != PTH_STATUS_OCCURRED)
+                return pth_error(-1, EINTR);
         }
-        else {
-            /* larger delays have to go through the scheduler */
-            ev = pth_event(PTH_EVENT_TIME|PTH_MODE_STATIC, &ev_key_timeout,
-                           pth_timeout(timeout->tv_sec, timeout->tv_usec));
-            if (ev_extra != NULL)
-                pth_event_concat(ev, ev_extra, NULL);
-            pth_wait(ev);
-            if (ev_extra != NULL) {
-                pth_event_isolate(ev);
-                if (pth_event_status(ev) != PTH_STATUS_OCCURRED)
-                    return pth_error(-1, EINTR);
-            }
-        }
+
         /* POSIX.1-2001/SUSv3 compliance */
         if (rfds != NULL) FD_ZERO(rfds);
         if (wfds != NULL) FD_ZERO(wfds);
@@ -340,56 +324,14 @@ int pth_select_ev(int nfd, fd_set *rfds, fd_set *wfds,
         return 0;
     }
 
-    /* now directly poll filedescriptor sets to avoid unnecessary
-       (and resource consuming because of context switches, etc) event
-       handling through the scheduler. We've to be carefully here, because not
-       all platforms guaranty us that the sets are unmodified if an error
-       or timeout occurred. */
-    delay.tv_sec  = 0;
-    delay.tv_usec = 0;
-    rtmp = NULL;
-    if (rfds != NULL) {
-        memcpy(&rspare, rfds, sizeof(fd_set));
-        rtmp = &rspare;
-    }
-    wtmp = NULL;
-    if (wfds != NULL) {
-        memcpy(&wspare, wfds, sizeof(fd_set));
-        wtmp = &wspare;
-    }
-    etmp = NULL;
-    if (efds != NULL) {
-        memcpy(&espare, efds, sizeof(fd_set));
-        etmp = &espare;
-    }
-    while ((rc = pth_sc(select)(nfd, rtmp, wtmp, etmp, &delay)) < 0
-           && errno == EINTR)
-        ;
-    if (rc < 0)
-        /* pass-through immediate error */
-        return pth_error(-1, errno);
-    else if (   rc > 0
-             || (   rc == 0
-                 && timeout != NULL
-                 && pth_time_cmp(timeout, PTH_TIME_ZERO) == 0)) {
-        /* pass-through immediate success */
-        if (rfds != NULL)
-            memcpy(rfds, &rspare, sizeof(fd_set));
-        if (wfds != NULL)
-            memcpy(wfds, &wspare, sizeof(fd_set));
-        if (efds != NULL)
-            memcpy(efds, &espare, sizeof(fd_set));
-        return rc;
-    }
-
     /* suspend current thread until one filedescriptor
        is ready or the timeout occurred */
     rc = -1;
     ev = ev_select = pth_event(PTH_EVENT_SELECT|PTH_MODE_STATIC,
-                               &ev_key_select, &rc, nfd, rfds, wfds, efds);
+                               &pth_gctx_get()->ev_key_select_ev_select, &rc, nfd, rfds, wfds, efds);
     ev_timeout = NULL;
     if (timeout != NULL) {
-        ev_timeout = pth_event(PTH_EVENT_TIME|PTH_MODE_STATIC, &ev_key_timeout,
+        ev_timeout = pth_event(PTH_EVENT_TIME|PTH_MODE_STATIC, &pth_gctx_get()->ev_key_select_ev_timeout,
                                pth_timeout(timeout->tv_sec, timeout->tv_usec));
         pth_event_concat(ev, ev_timeout, NULL);
     }
@@ -472,7 +414,7 @@ int pth_poll_ev(struct pollfd *pfd, nfds_t nfd, int timeout, pth_event_t ev_extr
     char data[64];
 
     pth_implicit_init();
-    pth_debug2("pth_poll_ev: called from thread \"%s\"", pth_current->name);
+    pth_debug2("pth_poll_ev: called from thread \"%s\"", pth_gctx_get()->pth_current->name);
 
     /* argument sanity checks */
     if (pfd == NULL)
@@ -587,6 +529,128 @@ int pth_poll_ev(struct pollfd *pfd, nfds_t nfd, int timeout, pth_event_t ev_extr
     return n;
 }
 
+int pth_ppoll(struct pollfd *fds, nfds_t nfds, const struct timespec *ts, const sigset_t *mask)
+{
+    sigset_t omask;
+    int timeout;
+    int rv;
+
+    /* convert timeout */
+    timeout = (ts == NULL) ? (-1) : (((ts->tv_sec * 1000) + (ts->tv_nsec / 1000000)));
+
+    /* optionally set signal mask */
+    if (mask != NULL)
+        if (pth_sc(sigprocmask)(SIG_SETMASK, mask, &omask) < 0)
+            return pth_error(-1, errno);
+
+    rv = pth_poll(fds, nfds, timeout);
+
+    /* optionally set signal mask */
+    if (mask != NULL)
+        pth_shield { pth_sc(sigprocmask)(SIG_SETMASK, &omask, NULL); }
+
+    return rv;
+}
+
+int pth_epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout) {
+    return pth_epoll_wait_ev(epfd, events, maxevents, timeout, NULL);
+}
+
+int pth_epoll_wait_ev(int epfd, struct epoll_event *events, int maxevents, int timeout, pth_event_t ev_extra) {
+    pth_event_t ev_epoll;
+    pth_event_t ev_timeout;
+    int rc;
+
+    pth_implicit_init();
+    pth_debug2("pth_epoll_wait_ev: enter from thread \"%s\"", pth_gctx_get()->pth_current->name);
+
+    /* POSIX compliance */
+    if(maxevents <= 0)
+        return pth_error(-1, EINVAL);
+    if (!pth_util_fd_valid(epfd))
+        return pth_error(-1, EBADF);
+
+    int epfd_tmp = pth_sc(epoll_create)(1);
+    if(epfd_tmp < 0)
+        return pth_error(-1, EINVAL);
+
+    struct epoll_event epev;
+    memset(&epev, 0, sizeof(struct epoll_event));
+    epev.events = EPOLLIN;
+    epev.data.fd = epfd;
+
+    rc = pth_sc(epoll_ctl)(epfd_tmp, EPOLL_CTL_ADD, epfd, &epev);
+    if(rc < 0) {
+        pth_sc(close)(epfd_tmp);
+        return pth_error(-1, errno);
+    }
+
+    /* suspend current thread until one filedescriptor in events is ready,
+     * (in which case our outer epfd_tmp will be readable)
+       or the timeout occurred */
+    ev_epoll = pth_event(PTH_EVENT_FD|PTH_UNTIL_FD_READABLE|PTH_MODE_STATIC,
+                                                &pth_gctx_get()->ev_key_epoll_wait_ev, epfd_tmp);
+
+    ev_timeout = NULL;
+    if (timeout != 0) {
+        if(timeout == -1)
+            timeout = 1000*60*60*24;
+        /* timeout is in milliseconds */
+        long sec = (long)(timeout / 1000);
+        long usec = (long)((timeout % 1000) * 1000);
+        ev_timeout = pth_event(PTH_EVENT_TIME|PTH_MODE_STATIC, &pth_gctx_get()->ev_key_select_ev_timeout,
+                               pth_timeout(sec, usec));
+        pth_event_concat(ev_epoll, ev_timeout, NULL);
+    }
+    if (ev_extra != NULL)
+        pth_event_concat(ev_epoll, ev_extra, NULL);
+
+    pth_wait(ev_epoll);
+
+    /* we are ready, stop waiting for timeout */
+    if (ev_extra != NULL)
+        pth_event_isolate(ev_extra);
+    if (timeout != 0)
+        pth_event_isolate(ev_timeout);
+
+    rc = pth_sc(epoll_ctl)(epfd_tmp, EPOLL_CTL_DEL, epfd, NULL);
+    rc = pth_sc(close)(epfd_tmp);
+
+    /* return code semantics */
+    if (pth_event_status(ev_epoll) == PTH_STATUS_FAILED)
+        return pth_error(-1, EBADF);
+
+    rc = -1;
+    if (pth_event_status(ev_epoll) == PTH_STATUS_OCCURRED ||
+            (timeout != 0 && pth_event_status(ev_timeout) == PTH_STATUS_OCCURRED)) {
+
+        rc = pth_sc(epoll_wait)(epfd, events, maxevents, 0);
+    } else if(ev_extra != NULL) {
+        return pth_error(-1, EINTR);
+    }
+
+    pth_debug2("pth_epoll_wait_ev: leave to thread \"%s\"", pth_gctx_get()->pth_current->name);
+    return rc;
+}
+
+int pth_epoll_pwait(int epfd, struct epoll_event *events, int maxevents, int timeout, const sigset_t *mask) {
+    sigset_t omask;
+    int rv;
+
+    /* optionally set signal mask */
+    if (mask != NULL)
+        if (pth_sc(sigprocmask)(SIG_SETMASK, mask, &omask) < 0)
+            return pth_error(-1, errno);
+
+    rv = pth_epoll_wait(epfd, events, maxevents, timeout);
+
+    /* optionally set signal mask */
+    if (mask != NULL)
+        pth_shield { pth_sc(sigprocmask)(SIG_SETMASK, &omask, NULL); }
+
+    return rv;
+}
+
 /* Pth variant of connect(2) */
 int pth_connect(int s, const struct sockaddr *addr, socklen_t addrlen)
 {
@@ -597,13 +661,12 @@ int pth_connect(int s, const struct sockaddr *addr, socklen_t addrlen)
 int pth_connect_ev(int s, const struct sockaddr *addr, socklen_t addrlen, pth_event_t ev_extra)
 {
     pth_event_t ev;
-    static pth_key_t ev_key = PTH_KEY_INIT;
     int rv, err;
     socklen_t errlen;
     int fdmode;
 
     pth_implicit_init();
-    pth_debug2("pth_connect_ev: enter from thread \"%s\"", pth_current->name);
+    pth_debug2("pth_connect_ev: enter from thread \"%s\"", pth_gctx_get()->pth_current->name);
 
     /* POSIX compliance */
     if (!pth_util_fd_valid(s))
@@ -623,7 +686,7 @@ int pth_connect_ev(int s, const struct sockaddr *addr, socklen_t addrlen, pth_ev
 
     /* if it is still on progress wait until socket is really writeable */
     if (rv == -1 && errno == EINPROGRESS && fdmode != PTH_FDMODE_NONBLOCK) {
-        if ((ev = pth_event(PTH_EVENT_FD|PTH_UNTIL_FD_WRITEABLE|PTH_MODE_STATIC, &ev_key, s)) == NULL)
+        if ((ev = pth_event(PTH_EVENT_FD|PTH_UNTIL_FD_WRITEABLE|PTH_MODE_STATIC, &pth_gctx_get()->ev_key_connect_ev, s)) == NULL)
             return pth_error(-1, errno);
         if (ev_extra != NULL)
             pth_event_concat(ev, ev_extra, NULL);
@@ -641,7 +704,7 @@ int pth_connect_ev(int s, const struct sockaddr *addr, socklen_t addrlen, pth_ev
         return pth_error(rv, err);
     }
 
-    pth_debug2("pth_connect_ev: leave to thread \"%s\"", pth_current->name);
+    pth_debug2("pth_connect_ev: leave to thread \"%s\"", pth_gctx_get()->pth_current->name);
     return rv;
 }
 
@@ -655,12 +718,11 @@ int pth_accept(int s, struct sockaddr *addr, socklen_t *addrlen)
 int pth_accept_ev(int s, struct sockaddr *addr, socklen_t *addrlen, pth_event_t ev_extra)
 {
     pth_event_t ev;
-    static pth_key_t ev_key = PTH_KEY_INIT;
     int fdmode;
     int rv;
 
     pth_implicit_init();
-    pth_debug2("pth_accept_ev: enter from thread \"%s\"", pth_current->name);
+    pth_debug2("pth_accept_ev: enter from thread \"%s\"", pth_gctx_get()->pth_current->name);
 
     /* POSIX compliance */
     if (!pth_util_fd_valid(s))
@@ -677,7 +739,7 @@ int pth_accept_ev(int s, struct sockaddr *addr, socklen_t *addrlen, pth_event_t 
            && fdmode != PTH_FDMODE_NONBLOCK) {
         /* do lazy event allocation */
         if (ev == NULL) {
-            if ((ev = pth_event(PTH_EVENT_FD|PTH_UNTIL_FD_READABLE|PTH_MODE_STATIC, &ev_key, s)) == NULL)
+            if ((ev = pth_event(PTH_EVENT_FD|PTH_UNTIL_FD_READABLE|PTH_MODE_STATIC, &pth_gctx_get()->ev_key_accept_ev, s)) == NULL)
                 return pth_error(-1, errno);
             if (ev_extra != NULL)
                 pth_event_concat(ev, ev_extra, NULL);
@@ -701,7 +763,7 @@ int pth_accept_ev(int s, struct sockaddr *addr, socklen_t *addrlen, pth_event_t 
             pth_fdmode(rv, fdmode);
     }
 
-    pth_debug2("pth_accept_ev: leave to thread \"%s\"", pth_current->name);
+    pth_debug2("pth_accept_ev: leave to thread \"%s\"", pth_gctx_get()->pth_current->name);
     return rv;
 }
 
@@ -714,15 +776,12 @@ ssize_t pth_read(int fd, void *buf, size_t nbytes)
 /* Pth variant of read(2) with extra event(s) */
 ssize_t pth_read_ev(int fd, void *buf, size_t nbytes, pth_event_t ev_extra)
 {
-    struct timeval delay;
     pth_event_t ev;
-    static pth_key_t ev_key = PTH_KEY_INIT;
-    fd_set fds;
     int fdmode;
     int n;
 
     pth_implicit_init();
-    pth_debug2("pth_read_ev: enter from thread \"%s\"", pth_current->name);
+    pth_debug2("pth_read_ev: enter from thread \"%s\"", pth_gctx_get()->pth_current->name);
 
     /* POSIX compliance */
     if (nbytes == 0)
@@ -736,43 +795,27 @@ ssize_t pth_read_ev(int fd, void *buf, size_t nbytes, pth_event_t ev_extra)
 
     /* poll filedescriptor if not already in non-blocking operation */
     if (fdmode == PTH_FDMODE_BLOCK) {
-
-        /* now directly poll filedescriptor for readability
-           to avoid unneccessary (and resource consuming because of context
-           switches, etc) event handling through the scheduler */
-        FD_ZERO(&fds);
-        FD_SET(fd, &fds);
-        delay.tv_sec  = 0;
-        delay.tv_usec = 0;
-        while ((n = pth_sc(select)(fd+1, &fds, NULL, NULL, &delay)) < 0
-               && errno == EINTR) ;
-        if (n < 0 && (errno == EINVAL || errno == EBADF))
-            return pth_error(-1, errno);
-
-        /* if filedescriptor is still not readable,
-           let thread sleep until it is or the extra event occurs */
-        if (n == 0) {
-            ev = pth_event(PTH_EVENT_FD|PTH_UNTIL_FD_READABLE|PTH_MODE_STATIC, &ev_key, fd);
-            if (ev_extra != NULL)
-                pth_event_concat(ev, ev_extra, NULL);
-            n = pth_wait(ev);
-            if (ev_extra != NULL) {
-                pth_event_isolate(ev);
-                if (pth_event_status(ev) != PTH_STATUS_OCCURRED)
-                    return pth_error(-1, EINTR);
-            }
+        /* let thread sleep until fd is readable or the extra event occurs */
+        ev = pth_event(PTH_EVENT_FD|PTH_UNTIL_FD_READABLE|PTH_MODE_STATIC, &pth_gctx_get()->ev_key_read_ev, fd);
+        if (ev_extra != NULL)
+            pth_event_concat(ev, ev_extra, NULL);
+        n = pth_wait(ev);
+        if (ev_extra != NULL) {
+            pth_event_isolate(ev);
+            if (pth_event_status(ev) != PTH_STATUS_OCCURRED)
+                return pth_error(-1, EINTR);
         }
     }
 
-    /* Now perform the actual read. We're now guarrantied to not block,
+    /* Now perform the actual read. We're now guaranteed to not block,
        either because we were already in non-blocking mode or we determined
        above by polling that the next read(2) call will not block.  But keep
-       in mind, that only 1 next read(2) call is guarrantied to not block
+       in mind, that only 1 next read(2) call is guaranteed to not block
        (except for the EINTR situation). */
     while ((n = pth_sc(read)(fd, buf, nbytes)) < 0
            && errno == EINTR) ;
 
-    pth_debug2("pth_read_ev: leave to thread \"%s\"", pth_current->name);
+    pth_debug2("pth_read_ev: leave to thread \"%s\"", pth_gctx_get()->pth_current->name);
     return n;
 }
 
@@ -785,17 +828,13 @@ ssize_t pth_write(int fd, const void *buf, size_t nbytes)
 /* Pth variant of write(2) with extra event(s) */
 ssize_t pth_write_ev(int fd, const void *buf, size_t nbytes, pth_event_t ev_extra)
 {
-    struct timeval delay;
     pth_event_t ev;
-    static pth_key_t ev_key = PTH_KEY_INIT;
-    fd_set fds;
     int fdmode;
     ssize_t rv;
     ssize_t s;
-    int n;
 
     pth_implicit_init();
-    pth_debug2("pth_write_ev: enter from thread \"%s\"", pth_current->name);
+    pth_debug2("pth_write_ev: enter from thread \"%s\"", pth_gctx_get()->pth_current->name);
 
     /* POSIX compliance */
     if (nbytes == 0)
@@ -809,34 +848,18 @@ ssize_t pth_write_ev(int fd, const void *buf, size_t nbytes, pth_event_t ev_extr
 
     /* poll filedescriptor if not already in non-blocking operation */
     if (fdmode != PTH_FDMODE_NONBLOCK) {
-
-        /* now directly poll filedescriptor for writeability
-           to avoid unneccessary (and resource consuming because of context
-           switches, etc) event handling through the scheduler */
-        FD_ZERO(&fds);
-        FD_SET(fd, &fds);
-        delay.tv_sec  = 0;
-        delay.tv_usec = 0;
-        while ((n = pth_sc(select)(fd+1, NULL, &fds, NULL, &delay)) < 0
-               && errno == EINTR) ;
-        if (n < 0 && (errno == EINVAL || errno == EBADF))
-            return pth_error(-1, errno);
-
         rv = 0;
         for (;;) {
-            /* if filedescriptor is still not writeable,
-               let thread sleep until it is or event occurs */
-            if (n < 1) {
-                ev = pth_event(PTH_EVENT_FD|PTH_UNTIL_FD_WRITEABLE|PTH_MODE_STATIC, &ev_key, fd);
-                if (ev_extra != NULL)
-                    pth_event_concat(ev, ev_extra, NULL);
-                pth_wait(ev);
-                if (ev_extra != NULL) {
-                    pth_event_isolate(ev);
-                    if (pth_event_status(ev) != PTH_STATUS_OCCURRED) {
-                        pth_fdmode(fd, fdmode);
-                        return pth_error(-1, EINTR);
-                    }
+            /* let thread sleep until fd is writable or event occurs */
+            ev = pth_event(PTH_EVENT_FD|PTH_UNTIL_FD_WRITEABLE|PTH_MODE_STATIC, &pth_gctx_get()->ev_key_write_ev, fd);
+            if (ev_extra != NULL)
+                pth_event_concat(ev, ev_extra, NULL);
+            pth_wait(ev);
+            if (ev_extra != NULL) {
+                pth_event_isolate(ev);
+                if (pth_event_status(ev) != PTH_STATUS_OCCURRED) {
+                    pth_fdmode(fd, fdmode);
+                    return pth_error(-1, EINTR);
                 }
             }
 
@@ -852,7 +875,6 @@ ssize_t pth_write_ev(int fd, const void *buf, size_t nbytes, pth_event_t ev_extr
             if (s > 0 && s < (ssize_t)nbytes) {
                 nbytes -= s;
                 buf = (void *)((char *)buf + s);
-                n = 0;
                 continue;
             }
 
@@ -873,7 +895,7 @@ ssize_t pth_write_ev(int fd, const void *buf, size_t nbytes, pth_event_t ev_extr
     /* restore filedescriptor mode */
     pth_shield { pth_fdmode(fd, fdmode); }
 
-    pth_debug2("pth_write_ev: leave to thread \"%s\"", pth_current->name);
+    pth_debug2("pth_write_ev: leave to thread \"%s\"", pth_gctx_get()->pth_current->name);
     return rv;
 }
 
@@ -886,15 +908,12 @@ ssize_t pth_readv(int fd, const struct iovec *iov, int iovcnt)
 /* Pth variant of readv(2) with extra event(s) */
 ssize_t pth_readv_ev(int fd, const struct iovec *iov, int iovcnt, pth_event_t ev_extra)
 {
-    struct timeval delay;
     pth_event_t ev;
-    static pth_key_t ev_key = PTH_KEY_INIT;
-    fd_set fds;
     int fdmode;
     int n;
 
     pth_implicit_init();
-    pth_debug2("pth_readv_ev: enter from thread \"%s\"", pth_current->name);
+    pth_debug2("pth_readv_ev: enter from thread \"%s\"", pth_gctx_get()->pth_current->name);
 
     /* POSIX compliance */
     if (iovcnt <= 0 || iovcnt > UIO_MAXIOV)
@@ -908,36 +927,22 @@ ssize_t pth_readv_ev(int fd, const struct iovec *iov, int iovcnt, pth_event_t ev
 
     /* poll filedescriptor if not already in non-blocking operation */
     if (fdmode == PTH_FDMODE_BLOCK) {
-
-        /* first directly poll filedescriptor for readability
-           to avoid unneccessary (and resource consuming because of context
-           switches, etc) event handling through the scheduler */
-        FD_ZERO(&fds);
-        FD_SET(fd, &fds);
-        delay.tv_sec  = 0;
-        delay.tv_usec = 0;
-        while ((n = pth_sc(select)(fd+1, &fds, NULL, NULL, &delay)) < 0
-               && errno == EINTR) ;
-
-        /* if filedescriptor is still not readable,
-           let thread sleep until it is or event occurs */
-        if (n < 1) {
-            ev = pth_event(PTH_EVENT_FD|PTH_UNTIL_FD_READABLE|PTH_MODE_STATIC, &ev_key, fd);
-            if (ev_extra != NULL)
-                pth_event_concat(ev, ev_extra, NULL);
-            n = pth_wait(ev);
-            if (ev_extra != NULL) {
-                pth_event_isolate(ev);
-                if (pth_event_status(ev) != PTH_STATUS_OCCURRED)
-                    return pth_error(-1, EINTR);
-            }
+        /* let thread sleep until fd is readable or event occurs */
+        ev = pth_event(PTH_EVENT_FD|PTH_UNTIL_FD_READABLE|PTH_MODE_STATIC, &pth_gctx_get()->ev_key_readv_ev, fd);
+        if (ev_extra != NULL)
+            pth_event_concat(ev, ev_extra, NULL);
+        n = pth_wait(ev);
+        if (ev_extra != NULL) {
+            pth_event_isolate(ev);
+            if (pth_event_status(ev) != PTH_STATUS_OCCURRED)
+                return pth_error(-1, EINTR);
         }
     }
 
-    /* Now perform the actual read. We're now guarrantied to not block,
+    /* Now perform the actual read. We're now guaranteed to not block,
        either because we were already in non-blocking mode or we determined
        above by polling that the next read(2) call will not block.  But keep
-       in mind, that only 1 next read(2) call is guarrantied to not block
+       in mind, that only 1 next read(2) call is guaranteed to not block
        (except for the EINTR situation). */
 #if PTH_FAKE_RWV
     while ((n = pth_readv_faked(fd, iov, iovcnt)) < 0
@@ -947,7 +952,7 @@ ssize_t pth_readv_ev(int fd, const struct iovec *iov, int iovcnt, pth_event_t ev
            && errno == EINTR) ;
 #endif
 
-    pth_debug2("pth_readv_ev: leave to thread \"%s\"", pth_current->name);
+    pth_debug2("pth_readv_ev: leave to thread \"%s\"", pth_gctx_get()->pth_current->name);
     return n;
 }
 
@@ -972,7 +977,7 @@ intern ssize_t pth_readv_faked(int fd, const struct iovec *iov, int iovcnt)
     if ((buffer = (char *)malloc(bytes)) == NULL)
         return (ssize_t)(-1);
 
-    /* read data into temporary buffer (caller guarrantied us to not block) */
+    /* read data into temporary buffer (caller guaranteed us to not block) */
     rv = pth_sc(read)(fd, buffer, bytes);
 
     /* scatter read data into callers vector */
@@ -1004,23 +1009,19 @@ ssize_t pth_writev(int fd, const struct iovec *iov, int iovcnt)
 /* Pth variant of writev(2) with extra event(s) */
 ssize_t pth_writev_ev(int fd, const struct iovec *iov, int iovcnt, pth_event_t ev_extra)
 {
-    struct timeval delay;
     pth_event_t ev;
-    static pth_key_t ev_key = PTH_KEY_INIT;
-    fd_set fds;
     int fdmode;
     struct iovec *liov;
     int liovcnt;
     size_t nbytes;
     ssize_t rv;
     ssize_t s;
-    int n;
     struct iovec tiov_stack[32];
     struct iovec *tiov;
     int tiovcnt;
 
     pth_implicit_init();
-    pth_debug2("pth_writev_ev: enter from thread \"%s\"", pth_current->name);
+    pth_debug2("pth_writev_ev: enter from thread \"%s\"", pth_gctx_get()->pth_current->name);
 
     /* POSIX compliance */
     if (iovcnt <= 0 || iovcnt > UIO_MAXIOV)
@@ -1054,32 +1055,19 @@ ssize_t pth_writev_ev(int fd, const struct iovec *iov, int iovcnt, pth_event_t e
         liovcnt = 0;
         pth_writev_iov_advance(iov, iovcnt, 0, &liov, &liovcnt, tiov, tiovcnt);
 
-        /* first directly poll filedescriptor for writeability
-           to avoid unneccessary (and resource consuming because of context
-           switches, etc) event handling through the scheduler */
-        FD_ZERO(&fds);
-        FD_SET(fd, &fds);
-        delay.tv_sec  = 0;
-        delay.tv_usec = 0;
-        while ((n = pth_sc(select)(fd+1, NULL, &fds, NULL, &delay)) < 0
-               && errno == EINTR) ;
-
         for (;;) {
-            /* if filedescriptor is still not writeable,
-               let thread sleep until it is or event occurs */
-            if (n < 1) {
-                ev = pth_event(PTH_EVENT_FD|PTH_UNTIL_FD_WRITEABLE|PTH_MODE_STATIC, &ev_key, fd);
-                if (ev_extra != NULL)
-                    pth_event_concat(ev, ev_extra, NULL);
-                pth_wait(ev);
-                if (ev_extra != NULL) {
-                    pth_event_isolate(ev);
-                    if (pth_event_status(ev) != PTH_STATUS_OCCURRED) {
-                        pth_fdmode(fd, fdmode);
-                        if (iovcnt > sizeof(tiov_stack))
-                            free(tiov);
-                        return pth_error(-1, EINTR);
-                    }
+            /* let thread sleep until fd is writeable or event occurs */
+            ev = pth_event(PTH_EVENT_FD|PTH_UNTIL_FD_WRITEABLE|PTH_MODE_STATIC, &pth_gctx_get()->ev_key_writev_ev, fd);
+            if (ev_extra != NULL)
+                pth_event_concat(ev, ev_extra, NULL);
+            pth_wait(ev);
+            if (ev_extra != NULL) {
+                pth_event_isolate(ev);
+                if (pth_event_status(ev) != PTH_STATUS_OCCURRED) {
+                    pth_fdmode(fd, fdmode);
+                    if (iovcnt > sizeof(tiov_stack))
+                        free(tiov);
+                    return pth_error(-1, EINTR);
                 }
             }
 
@@ -1100,7 +1088,6 @@ ssize_t pth_writev_ev(int fd, const struct iovec *iov, int iovcnt, pth_event_t e
             if (s > 0 && s < (ssize_t)nbytes) {
                 nbytes -= s;
                 pth_writev_iov_advance(iov, iovcnt, s, &liov, &liovcnt, tiov, tiovcnt);
-                n = 0;
                 continue;
             }
 
@@ -1130,7 +1117,7 @@ ssize_t pth_writev_ev(int fd, const struct iovec *iov, int iovcnt, pth_event_t e
     /* restore filedescriptor mode */
     pth_shield { pth_fdmode(fd, fdmode); }
 
-    pth_debug2("pth_writev_ev: leave to thread \"%s\"", pth_current->name);
+    pth_debug2("pth_writev_ev: leave to thread \"%s\"", pth_gctx_get()->pth_current->name);
     return rv;
 }
 
@@ -1219,7 +1206,7 @@ intern ssize_t pth_writev_faked(int fd, const struct iovec *iov, int iovcnt)
              break;
     }
 
-    /* write continuous chunck of data (caller guarrantied us to not block) */
+    /* write continuous chunck of data (caller guaranteed us to not block) */
     rv = pth_sc(write)(fd, buffer, bytes);
 
     /* remove the temporary buffer */
@@ -1231,22 +1218,21 @@ intern ssize_t pth_writev_faked(int fd, const struct iovec *iov, int iovcnt)
 /* Pth variant of POSIX pread(3) */
 ssize_t pth_pread(int fd, void *buf, size_t nbytes, off_t offset)
 {
-    static pth_mutex_t mutex = PTH_MUTEX_INIT;
     off_t old_offset;
     ssize_t rc;
 
     /* protect us: pth_read can yield! */
-    if (!pth_mutex_acquire(&mutex, FALSE, NULL))
+    if (!pth_mutex_acquire(&pth_gctx_get()->mutex_pread, FALSE, NULL))
         return (-1);
 
     /* remember current offset */
     if ((old_offset = lseek(fd, 0, SEEK_CUR)) == (off_t)(-1)) {
-        pth_mutex_release(&mutex);
+        pth_mutex_release(&pth_gctx_get()->mutex_pread);
         return (-1);
     }
     /* seek to requested offset */
     if (lseek(fd, offset, SEEK_SET) == (off_t)(-1)) {
-        pth_mutex_release(&mutex);
+        pth_mutex_release(&pth_gctx_get()->mutex_pread);
         return (-1);
     }
 
@@ -1257,29 +1243,28 @@ ssize_t pth_pread(int fd, void *buf, size_t nbytes, off_t offset)
     pth_shield { lseek(fd, old_offset, SEEK_SET); }
 
     /* unprotect and return result of read */
-    pth_mutex_release(&mutex);
+    pth_mutex_release(&pth_gctx_get()->mutex_pread);
     return rc;
 }
 
 /* Pth variant of POSIX pwrite(3) */
 ssize_t pth_pwrite(int fd, const void *buf, size_t nbytes, off_t offset)
 {
-    static pth_mutex_t mutex = PTH_MUTEX_INIT;
     off_t old_offset;
     ssize_t rc;
 
     /* protect us: pth_write can yield! */
-    if (!pth_mutex_acquire(&mutex, FALSE, NULL))
+    if (!pth_mutex_acquire(&pth_gctx_get()->mutex_pwrite, FALSE, NULL))
         return (-1);
 
     /* remember current offset */
     if ((old_offset = lseek(fd, 0, SEEK_CUR)) == (off_t)(-1)) {
-        pth_mutex_release(&mutex);
+        pth_mutex_release(&pth_gctx_get()->mutex_pwrite);
         return (-1);
     }
     /* seek to requested offset */
     if (lseek(fd, offset, SEEK_SET) == (off_t)(-1)) {
-        pth_mutex_release(&mutex);
+        pth_mutex_release(&pth_gctx_get()->mutex_pwrite);
         return (-1);
     }
 
@@ -1290,7 +1275,7 @@ ssize_t pth_pwrite(int fd, const void *buf, size_t nbytes, off_t offset)
     pth_shield { lseek(fd, old_offset, SEEK_SET); }
 
     /* unprotect and return result of write */
-    pth_mutex_release(&mutex);
+    pth_mutex_release(&pth_gctx_get()->mutex_pwrite);
     return rc;
 }
 
@@ -1315,15 +1300,12 @@ ssize_t pth_recvfrom(int s, void *buf, size_t len, int flags, struct sockaddr *f
 /* Pth variant of SUSv2 recvfrom(2) with extra event(s) */
 ssize_t pth_recvfrom_ev(int fd, void *buf, size_t nbytes, int flags, struct sockaddr *from, socklen_t *fromlen, pth_event_t ev_extra)
 {
-    struct timeval delay;
     pth_event_t ev;
-    static pth_key_t ev_key = PTH_KEY_INIT;
-    fd_set fds;
     int fdmode;
     int n;
 
     pth_implicit_init();
-    pth_debug2("pth_recvfrom_ev: enter from thread \"%s\"", pth_current->name);
+    pth_debug2("pth_recvfrom_ev: enter from thread \"%s\"", pth_gctx_get()->pth_current->name);
 
     /* POSIX compliance */
     if (nbytes == 0)
@@ -1337,45 +1319,30 @@ ssize_t pth_recvfrom_ev(int fd, void *buf, size_t nbytes, int flags, struct sock
 
     /* poll filedescriptor if not already in non-blocking operation */
     if (fdmode == PTH_FDMODE_BLOCK) {
-
-        /* now directly poll filedescriptor for readability
-           to avoid unneccessary (and resource consuming because of context
-           switches, etc) event handling through the scheduler */
         if (!pth_util_fd_valid(fd))
             return pth_error(-1, EBADF);
-        FD_ZERO(&fds);
-        FD_SET(fd, &fds);
-        delay.tv_sec  = 0;
-        delay.tv_usec = 0;
-        while ((n = pth_sc(select)(fd+1, &fds, NULL, NULL, &delay)) < 0
-               && errno == EINTR) ;
-        if (n < 0 && (errno == EINVAL || errno == EBADF))
-            return pth_error(-1, errno);
 
-        /* if filedescriptor is still not readable,
-           let thread sleep until it is or the extra event occurs */
-        if (n == 0) {
-            ev = pth_event(PTH_EVENT_FD|PTH_UNTIL_FD_READABLE|PTH_MODE_STATIC, &ev_key, fd);
-            if (ev_extra != NULL)
-                pth_event_concat(ev, ev_extra, NULL);
-            n = pth_wait(ev);
-            if (ev_extra != NULL) {
-                pth_event_isolate(ev);
-                if (pth_event_status(ev) != PTH_STATUS_OCCURRED)
-                    return pth_error(-1, EINTR);
-            }
+        /* let thread sleep until fd is readable or the extra event occurs */
+        ev = pth_event(PTH_EVENT_FD|PTH_UNTIL_FD_READABLE|PTH_MODE_STATIC, &pth_gctx_get()->ev_key_recvfrom_ev, fd);
+        if (ev_extra != NULL)
+            pth_event_concat(ev, ev_extra, NULL);
+        n = pth_wait(ev);
+        if (ev_extra != NULL) {
+            pth_event_isolate(ev);
+            if (pth_event_status(ev) != PTH_STATUS_OCCURRED)
+                return pth_error(-1, EINTR);
         }
     }
 
-    /* now perform the actual read. We're now guarrantied to not block,
+    /* now perform the actual read. We're now guaranteed to not block,
        either because we were already in non-blocking mode or we determined
        above by polling that the next recvfrom(2) call will not block.  But keep
-       in mind, that only 1 next recvfrom(2) call is guarrantied to not block
+       in mind, that only 1 next recvfrom(2) call is guaranteed to not block
        (except for the EINTR situation). */
     while ((n = pth_sc(recvfrom)(fd, buf, nbytes, flags, from, fromlen)) < 0
            && errno == EINTR) ;
 
-    pth_debug2("pth_recvfrom_ev: leave to thread \"%s\"", pth_current->name);
+    pth_debug2("pth_recvfrom_ev: leave to thread \"%s\"", pth_gctx_get()->pth_current->name);
     return n;
 }
 
@@ -1400,17 +1367,13 @@ ssize_t pth_sendto(int s, const void *buf, size_t len, int flags, const struct s
 /* Pth variant of SUSv2 sendto(2) with extra event(s) */
 ssize_t pth_sendto_ev(int fd, const void *buf, size_t nbytes, int flags, const struct sockaddr *to, socklen_t tolen, pth_event_t ev_extra)
 {
-    struct timeval delay;
     pth_event_t ev;
-    static pth_key_t ev_key = PTH_KEY_INIT;
-    fd_set fds;
     int fdmode;
     ssize_t rv;
     ssize_t s;
-    int n;
 
     pth_implicit_init();
-    pth_debug2("pth_sendto_ev: enter from thread \"%s\"", pth_current->name);
+    pth_debug2("pth_sendto_ev: enter from thread \"%s\"", pth_gctx_get()->pth_current->name);
 
     /* POSIX compliance */
     if (nbytes == 0)
@@ -1424,38 +1387,23 @@ ssize_t pth_sendto_ev(int fd, const void *buf, size_t nbytes, int flags, const s
 
     /* poll filedescriptor if not already in non-blocking operation */
     if (fdmode != PTH_FDMODE_NONBLOCK) {
-
-        /* now directly poll filedescriptor for writeability
-           to avoid unneccessary (and resource consuming because of context
-           switches, etc) event handling through the scheduler */
         if (!pth_util_fd_valid(fd)) {
             pth_fdmode(fd, fdmode);
             return pth_error(-1, EBADF);
         }
-        FD_ZERO(&fds);
-        FD_SET(fd, &fds);
-        delay.tv_sec  = 0;
-        delay.tv_usec = 0;
-        while ((n = pth_sc(select)(fd+1, NULL, &fds, NULL, &delay)) < 0
-               && errno == EINTR) ;
-        if (n < 0 && (errno == EINVAL || errno == EBADF))
-            return pth_error(-1, errno);
 
         rv = 0;
         for (;;) {
-            /* if filedescriptor is still not writeable,
-               let thread sleep until it is or event occurs */
-            if (n == 0) {
-                ev = pth_event(PTH_EVENT_FD|PTH_UNTIL_FD_WRITEABLE|PTH_MODE_STATIC, &ev_key, fd);
-                if (ev_extra != NULL)
-                    pth_event_concat(ev, ev_extra, NULL);
-                pth_wait(ev);
-                if (ev_extra != NULL) {
-                    pth_event_isolate(ev);
-                    if (pth_event_status(ev) != PTH_STATUS_OCCURRED) {
-                        pth_fdmode(fd, fdmode);
-                        return pth_error(-1, EINTR);
-                    }
+            /* let thread sleep until fd is writeable or event occurs */
+            ev = pth_event(PTH_EVENT_FD|PTH_UNTIL_FD_WRITEABLE|PTH_MODE_STATIC, &pth_gctx_get()->ev_key_sendto_ev, fd);
+            if (ev_extra != NULL)
+                pth_event_concat(ev, ev_extra, NULL);
+            pth_wait(ev);
+            if (ev_extra != NULL) {
+                pth_event_isolate(ev);
+                if (pth_event_status(ev) != PTH_STATUS_OCCURRED) {
+                    pth_fdmode(fd, fdmode);
+                    return pth_error(-1, EINTR);
                 }
             }
 
@@ -1471,7 +1419,6 @@ ssize_t pth_sendto_ev(int fd, const void *buf, size_t nbytes, int flags, const s
             if (s > 0 && s < (ssize_t)nbytes) {
                 nbytes -= s;
                 buf = (void *)((char *)buf + s);
-                n = 0;
                 continue;
             }
 
@@ -1492,7 +1439,7 @@ ssize_t pth_sendto_ev(int fd, const void *buf, size_t nbytes, int flags, const s
     /* restore filedescriptor mode */
     pth_shield { pth_fdmode(fd, fdmode); }
 
-    pth_debug2("pth_sendto_ev: leave to thread \"%s\"", pth_current->name);
+    pth_debug2("pth_sendto_ev: leave to thread \"%s\"", pth_gctx_get()->pth_current->name);
     return rv;
 }
 

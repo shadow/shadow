@@ -2192,7 +2192,7 @@ After this the source tree of C<foo> should look similar to this:
  -rw-rw-r--  1 rse  users   24274 Aug 18 13:31 config.sub
  -rwxrwxr-x  1 rse  users  155141 Nov  3 12:36 configure
  -rw-rw-r--  1 rse  users  162021 Nov  3 12:36 pth.c
- -rw-rw-r--  1 rse  users   18687 Nov  2 15:19 pth.h.in
+ -rw-rw-r--  1 rse  users   18687 Nov  2 15:19 rpth.h.in
  -rw-rw-r--  1 rse  users    5251 Oct 31 12:46 pth_acdef.h.in
  -rw-rw-r--  1 rse  users    2120 Nov  1 11:27 pth_acmac.h.in
  -rw-rw-r--  1 rse  users    2323 Nov  1 11:27 pth_p.h.in

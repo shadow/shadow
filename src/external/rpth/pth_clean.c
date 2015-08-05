@@ -49,8 +49,8 @@ int pth_cleanup_push(void (*func)(void *), void *arg)
         return pth_error(FALSE, ENOMEM);
     cleanup->func = func;
     cleanup->arg  = arg;
-    cleanup->next = pth_current->cleanups;
-    pth_current->cleanups = cleanup;
+    cleanup->next = pth_gctx_get()->pth_current->cleanups;
+    pth_gctx_get()->pth_current->cleanups = cleanup;
     return TRUE;
 }
 
@@ -60,8 +60,8 @@ int pth_cleanup_pop(int execute)
     int rc;
 
     rc = FALSE;
-    if ((cleanup = pth_current->cleanups) != NULL) {
-        pth_current->cleanups = cleanup->next;
+    if ((cleanup = pth_gctx_get()->pth_current->cleanups) != NULL) {
+        pth_gctx_get()->pth_current->cleanups = cleanup->next;
         if (execute)
             cleanup->func(cleanup->arg);
         free(cleanup);

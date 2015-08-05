@@ -51,7 +51,7 @@
 
 /* public API headers */
 #define _PTH_PRIVATE
-#include "pth.h"
+#include "rpth.h"
 #undef _PTH_PRIVATE
 
 /* autoconf defines and macros */
@@ -120,7 +120,7 @@ struct timespec {
 
 /* compiler happyness: avoid ``empty compilation unit'' problem */
 #define COMPILER_HAPPYNESS(name) \
-    int __##name##_unit = 0;
+    const int __##name##_unit = 0;
 
 /* generated contents */
 BEGIN_DECLARATION

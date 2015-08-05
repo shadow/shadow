@@ -135,19 +135,20 @@ dnl # check for standard headers
 AC_HEADER_STDC
 AC_HAVE_HEADERS(dnl
    stdio.h stdlib.h stdarg.h string.h signal.h unistd.h setjmp.h fcntl.h dnl
-   errno.h sys/types.h sys/time.h sys/wait.h sys/stat.h sys/socket.h)
+   errno.h sys/types.h sys/time.h sys/wait.h sys/stat.h sys/socket.h sys/epoll.h sys/timerfd.h)
 AC_CHECK_FUNCS(dnl
-   gettimeofday select sigaction sigprocmask sigpending sigsuspend)
+   gettimeofday select sigaction sigprocmask sigpending sigsuspend dnl
+   epoll_wait epoll_ctl epoll_create timerfd_create timerfd_gettime timerfd_settime)
 AC_BEGIN_DECISION([mandatory system headers and functions])
 AC_IFALLYES(dnl
    header:stdio.h header:stdlib.h header:stdarg.h header:string.h dnl
    header:signal.h header:unistd.h header:setjmp.h header:fcntl.h header:errno.h dnl
-   header:sys/types.h header:sys/time.h header:sys/wait.h header:sys/stat.h header:sys/socket.h dnl
+   header:sys/types.h header:sys/time.h header:sys/wait.h header:sys/stat.h header:sys/socket.h header:sys/epoll.h dnl
    func:gettimeofday func:select func:sigaction func:sigprocmask dnl
-   func:sigpending func:sigsuspend,
+   func:sigpending func:sigsuspend dnl
+   func:epoll_wait func:epoll_ctl func:epoll_create func:timerfd_create func:timerfd_gettime func:timerfd_settime,
    AC_DECIDE(fine, [all fine]))
 AC_END_DECISION
-
 
 dnl ##
 dnl ##  OPTIONAL PLATFORM ENVIRONMENT
@@ -650,7 +651,7 @@ Makefile dnl
 pthread-config dnl
 pthread.h dnl
 pth-config dnl
-pth.h dnl
+rpth.h dnl
 pth_acmac.h dnl
 ,dnl
 chmod +rx pthread-config

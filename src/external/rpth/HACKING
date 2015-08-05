@@ -106,7 +106,7 @@
 
   pth_acdef.h.in ........ Autoconf header with definitions (generated)
   pth_acmac.h.in ........ Autoconf header with macros
-  pth.h.in .............. Public header file source
+  rpth.h.in ............. Public header file source
   pth_p.h.in ............ Private header file source
 
   pth_attr.c ............ Pth module source: attribute objects

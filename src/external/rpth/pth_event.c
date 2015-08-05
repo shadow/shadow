@@ -391,7 +391,7 @@ int pth_wait(pth_event_t ev_ring)
     /* at least a waiting ring is required */
     if (ev_ring == NULL)
         return pth_error(-1, EINVAL);
-    pth_debug2("pth_wait: enter from thread \"%s\"", pth_current->name);
+    pth_debug2("pth_wait: enter from thread \"%s\"", pth_gctx_get()->pth_current->name);
 
     /* mark all events in waiting ring as still pending */
     ev = ev_ring;
@@ -402,18 +402,18 @@ int pth_wait(pth_event_t ev_ring)
     } while (ev != ev_ring);
 
     /* link event ring to current thread */
-    pth_current->events = ev_ring;
+    pth_gctx_get()->pth_current->events = ev_ring;
 
     /* move thread into waiting state
        and transfer control to scheduler */
-    pth_current->state = PTH_STATE_WAITING;
+    pth_gctx_get()->pth_current->state = PTH_STATE_WAITING;
     pth_yield(NULL);
 
     /* check for cancellation */
     pth_cancel_point();
 
     /* unlink event ring from current thread */
-    pth_current->events = NULL;
+    pth_gctx_get()->pth_current->events = NULL;
 
     /* count number of actually occurred (or failed) events */
     ev = ev_ring;
@@ -427,7 +427,7 @@ int pth_wait(pth_event_t ev_ring)
     } while (ev != ev_ring);
 
     /* leave to current thread with number of occurred events */
-    pth_debug2("pth_wait: leave to thread \"%s\"", pth_current->name);
+    pth_debug2("pth_wait: leave to thread \"%s\"", pth_gctx_get()->pth_current->name);
     return nonpending;
 }
 

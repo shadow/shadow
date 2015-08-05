@@ -44,10 +44,9 @@ int pth_mutex_init(pth_mutex_t *mutex)
 
 int pth_mutex_acquire(pth_mutex_t *mutex, int tryonly, pth_event_t ev_extra)
 {
-    static pth_key_t ev_key = PTH_KEY_INIT;
     pth_event_t ev;
 
-    pth_debug2("pth_mutex_acquire: called from thread \"%s\"", pth_current->name);
+    pth_debug2("pth_mutex_acquire: called from thread \"%s\"", pth_gctx_get()->pth_current->name);
 
     /* consistency checks */
     if (mutex == NULL)
@@ -58,15 +57,15 @@ int pth_mutex_acquire(pth_mutex_t *mutex, int tryonly, pth_event_t ev_extra)
     /* still not locked, so simply acquire mutex? */
     if (!(mutex->mx_state & PTH_MUTEX_LOCKED)) {
         mutex->mx_state |= PTH_MUTEX_LOCKED;
-        mutex->mx_owner = pth_current;
+        mutex->mx_owner = pth_gctx_get()->pth_current;
         mutex->mx_count = 1;
-        pth_ring_append(&(pth_current->mutexring), &(mutex->mx_node));
+        pth_ring_append(&(pth_gctx_get()->pth_current->mutexring), &(mutex->mx_node));
         pth_debug1("pth_mutex_acquire: immediately locking mutex");
         return TRUE;
     }
 
     /* already locked by caller? */
-    if (mutex->mx_count >= 1 && mutex->mx_owner == pth_current) {
+    if (mutex->mx_count >= 1 && mutex->mx_owner == pth_gctx_get()->pth_current) {
         /* recursive lock */
         mutex->mx_count++;
         pth_debug1("pth_mutex_acquire: recursive locking");
@@ -80,7 +79,7 @@ int pth_mutex_acquire(pth_mutex_t *mutex, int tryonly, pth_event_t ev_extra)
     /* else wait for mutex to become unlocked.. */
     pth_debug1("pth_mutex_acquire: wait until mutex is unlocked");
     for (;;) {
-        ev = pth_event(PTH_EVENT_MUTEX|PTH_MODE_STATIC, &ev_key, mutex);
+        ev = pth_event(PTH_EVENT_MUTEX|PTH_MODE_STATIC, &pth_gctx_get()->ev_key_mutex, mutex);
         if (ev_extra != NULL)
             pth_event_concat(ev, ev_extra, NULL);
         pth_wait(ev);
@@ -96,9 +95,9 @@ int pth_mutex_acquire(pth_mutex_t *mutex, int tryonly, pth_event_t ev_extra)
     /* now it's again unlocked, so acquire mutex */
     pth_debug1("pth_mutex_acquire: locking mutex");
     mutex->mx_state |= PTH_MUTEX_LOCKED;
-    mutex->mx_owner = pth_current;
+    mutex->mx_owner = pth_gctx_get()->pth_current;
     mutex->mx_count = 1;
-    pth_ring_append(&(pth_current->mutexring), &(mutex->mx_node));
+    pth_ring_append(&(pth_gctx_get()->pth_current->mutexring), &(mutex->mx_node));
     return TRUE;
 }
 
@@ -111,7 +110,7 @@ int pth_mutex_release(pth_mutex_t *mutex)
         return pth_error(FALSE, EDEADLK);
     if (!(mutex->mx_state & PTH_MUTEX_LOCKED))
         return pth_error(FALSE, EDEADLK);
-    if (mutex->mx_owner != pth_current)
+    if (mutex->mx_owner != pth_gctx_get()->pth_current)
         return pth_error(FALSE, EACCES);
 
     /* decrement recursion counter and release mutex */
@@ -120,7 +119,7 @@ int pth_mutex_release(pth_mutex_t *mutex)
         mutex->mx_state &= ~(PTH_MUTEX_LOCKED);
         mutex->mx_owner = NULL;
         mutex->mx_count = 0;
-        pth_ring_delete(&(pth_current->mutexring), &(mutex->mx_node));
+        pth_ring_delete(&(pth_gctx_get()->pth_current->mutexring), &(mutex->mx_node));
     }
     return TRUE;
 }
@@ -251,7 +250,6 @@ static void pth_cond_cleanup_handler(void *_cleanvec)
 
 int pth_cond_await(pth_cond_t *cond, pth_mutex_t *mutex, pth_event_t ev_extra)
 {
-    static pth_key_t ev_key = PTH_KEY_INIT;
     void *cleanvec[2];
     pth_event_t ev;
 
@@ -277,7 +275,7 @@ int pth_cond_await(pth_cond_t *cond, pth_mutex_t *mutex, pth_event_t ev_extra)
     pth_mutex_release(mutex);
 
     /* wait until the condition is signaled */
-    ev = pth_event(PTH_EVENT_COND|PTH_MODE_STATIC, &ev_key, cond);
+    ev = pth_event(PTH_EVENT_COND|PTH_MODE_STATIC, &pth_gctx_get()->ev_key_mutex, cond);
     if (ev_extra != NULL)
         pth_event_concat(ev, ev_extra, NULL);
     cleanvec[0] = mutex;

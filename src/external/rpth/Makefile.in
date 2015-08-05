@@ -85,7 +85,7 @@ PTH_STACK_GROWTH = @PTH_STACK_GROWTH@
 
 TARGET_ALL  = @TARGET_ALL@
 TARGET_PREQ = pth_p.h
-TARGET_LIBS = libpth.la @LIBPTHREAD_LA@
+TARGET_LIBS = librpth.la @LIBPTHREAD_LA@
 TARGET_MANS = $(S)pth-config.1 $(S)pth.3 @PTHREAD_CONFIG_1@ @PTHREAD_3@
 TARGET_TEST = test_std test_mp test_misc test_philo test_sig \
               test_select test_httpd test_sfio test_uctx @TEST_PTHREAD@
@@ -101,8 +101,8 @@ LOBJS = pth_debug.lo pth_ring.lo pth_pqueue.lo pth_time.lo pth_errno.lo pth_mctx
 #   (order is important and has to follow dependencies in pth_p.h)
 HSRCS = $(S)pth_compat.c $(S)pth_debug.c $(S)pth_syscall.c $(S)pth_errno.c $(S)pth_ring.c $(S)pth_mctx.c \
         $(S)pth_uctx.c $(S)pth_clean.c $(S)pth_time.c $(S)pth_tcb.c $(S)pth_util.c $(S)pth_pqueue.c $(S)pth_event.c \
-        $(S)pth_sched.c $(S)pth_data.c $(S)pth_msg.c $(S)pth_cancel.c $(S)pth_sync.c $(S)pth_attr.c $(S)pth_lib.c \
-        $(S)pth_fork.c $(S)pth_high.c $(S)pth_ext.c $(S)pth_string.c $(S)pthread.c
+        $(S)pth_sched.c $(S)pth_data.c $(S)pth_msg.c $(S)pth_cancel.c $(S)pth_sync.c $(S)pth_attr.c $(S)pth_fork.c \
+        $(S)pth_lib.c $(S)pth_high.c $(S)pth_ext.c $(S)pth_string.c $(S)pthread.c
 
 ##
 ##  ____ UTILITY DEFINITIONS _________________________________________
@@ -167,8 +167,8 @@ pth_p.h: $(S)pth_p.h.in
 	$(SHTOOL) scpp -o pth_p.h -t $(S)pth_p.h.in -Dcpp -Cintern -M '==#==' $(HSRCS)
 
 #   build the static and possibly shared libraries
-libpth.la: $(LOBJS)
-	$(LIBTOOL) --mode=link --quiet $(CC) -o libpth.la $(LOBJS) \
+librpth.la: $(LOBJS)
+	$(LIBTOOL) --mode=link --quiet $(CC) -o librpth.la $(LOBJS) \
 	-rpath $(libdir) -version-info `$(SHTOOL) version -lc -dlibtool $(_VERSION_FILE)`
 libpthread.la: pthread.lo $(LOBJS)
 	$(LIBTOOL) --mode=link --quiet $(CC) -o libpthread.la pthread.lo $(LOBJS) \
@@ -193,24 +193,24 @@ $(S)pthread.3: $(S)pthread.pod $(_VERSION_FILE)
 	$(_MANPAGE)
 
 #   build test program
-test_std: test_std.o test_common.o libpth.la
-	$(LIBTOOL) --mode=link --quiet $(CC) $(LDFLAGS) -o test_std test_std.o test_common.o libpth.la $(LIBS)
-test_httpd: test_httpd.o test_common.o libpth.la
-	$(LIBTOOL) --mode=link --quiet $(CC) $(LDFLAGS) -o test_httpd test_httpd.o test_common.o libpth.la $(LIBS)
-test_misc: test_misc.o test_common.o libpth.la
-	$(LIBTOOL) --mode=link --quiet $(CC) $(LDFLAGS) -o test_misc test_misc.o test_common.o libpth.la $(LIBS)
-test_mp: test_mp.o test_common.o libpth.la
-	$(LIBTOOL) --mode=link --quiet $(CC) $(LDFLAGS) -o test_mp test_mp.o test_common.o libpth.la $(LIBS)
-test_philo: test_philo.o test_common.o libpth.la
-	$(LIBTOOL) --mode=link --quiet $(CC) $(LDFLAGS) -o test_philo test_philo.o test_common.o libpth.la $(LIBS)
-test_sig: test_sig.o test_common.o libpth.la
-	$(LIBTOOL) --mode=link --quiet $(CC) $(LDFLAGS) -o test_sig test_sig.o test_common.o libpth.la $(LIBS)
-test_select: test_select.o test_common.o libpth.la
-	$(LIBTOOL) --mode=link --quiet $(CC) $(LDFLAGS) -o test_select test_select.o test_common.o libpth.la $(LIBS)
-test_sfio: test_sfio.o test_common.o libpth.la
-	$(LIBTOOL) --mode=link --quiet $(CC) $(LDFLAGS) -o test_sfio test_sfio.o test_common.o libpth.la $(LIBS)
-test_uctx: test_uctx.o test_common.o libpth.la
-	$(LIBTOOL) --mode=link --quiet $(CC) $(LDFLAGS) -o test_uctx test_uctx.o test_common.o libpth.la $(LIBS)
+test_std: test_std.o test_common.o librpth.la
+	$(LIBTOOL) --mode=link --quiet $(CC) $(LDFLAGS) -o test_std test_std.o test_common.o librpth.la $(LIBS)
+test_httpd: test_httpd.o test_common.o librpth.la
+	$(LIBTOOL) --mode=link --quiet $(CC) $(LDFLAGS) -o test_httpd test_httpd.o test_common.o librpth.la $(LIBS)
+test_misc: test_misc.o test_common.o librpth.la
+	$(LIBTOOL) --mode=link --quiet $(CC) $(LDFLAGS) -o test_misc test_misc.o test_common.o librpth.la $(LIBS)
+test_mp: test_mp.o test_common.o librpth.la
+	$(LIBTOOL) --mode=link --quiet $(CC) $(LDFLAGS) -o test_mp test_mp.o test_common.o librpth.la $(LIBS)
+test_philo: test_philo.o test_common.o librpth.la
+	$(LIBTOOL) --mode=link --quiet $(CC) $(LDFLAGS) -o test_philo test_philo.o test_common.o librpth.la $(LIBS)
+test_sig: test_sig.o test_common.o librpth.la
+	$(LIBTOOL) --mode=link --quiet $(CC) $(LDFLAGS) -o test_sig test_sig.o test_common.o librpth.la $(LIBS)
+test_select: test_select.o test_common.o librpth.la
+	$(LIBTOOL) --mode=link --quiet $(CC) $(LDFLAGS) -o test_select test_select.o test_common.o librpth.la $(LIBS)
+test_sfio: test_sfio.o test_common.o librpth.la
+	$(LIBTOOL) --mode=link --quiet $(CC) $(LDFLAGS) -o test_sfio test_sfio.o test_common.o librpth.la $(LIBS)
+test_uctx: test_uctx.o test_common.o librpth.la
+	$(LIBTOOL) --mode=link --quiet $(CC) $(LDFLAGS) -o test_uctx test_uctx.o test_common.o librpth.la $(LIBS)
 test_pthread: test_pthread.o test_common.o libpthread.la
 	$(LIBTOOL) --mode=link --quiet $(CC) $(LDFLAGS) -o test_pthread test_pthread.o test_common.o libpthread.la $(LIBS)
 
@@ -232,9 +232,9 @@ install-pth:
 	$(SHTOOL) install -c -m 644 $(S)pth-config.1 $(DESTDIR)$(mandir)/man1/pth-config.1
 	$(SHTOOL) install -c -m 644 $(S)pth.3 $(DESTDIR)$(mandir)/man3/pth.3
 	$(SHTOOL) install -c -m 644 $(S)pth.m4 $(DESTDIR)$(datadir)/aclocal/pth.m4
-	$(SHTOOL) install -c -m 644 pth.h $(DESTDIR)$(includedir)/pth.h
+	$(SHTOOL) install -c -m 644 rpth.h $(DESTDIR)$(includedir)/rpth.h
 	@umask 022; $(LIBTOOL) --mode=install \
-	$(SHTOOL) install -c libpth.la $(DESTDIR)$(libdir)/libpth.la
+	$(SHTOOL) install -c librpth.la $(DESTDIR)$(libdir)/librpth.la
 install-pthread:
 	$(SHTOOL) install -c -m 755 pthread-config $(DESTDIR)$(bindir)/pthread-config
 	$(SHTOOL) install -c -m 644 $(S)pthread-config.1 $(DESTDIR)$(mandir)/man1/pthread-config.1
@@ -259,8 +259,8 @@ uninstall-pth:
 	$(RM) $(DESTDIR)$(mandir)/man1/pth-config.1
 	$(RM) $(DESTDIR)$(mandir)/man3/pth.3
 	$(RM) $(DESTDIR)$(datadir)/aclocal/pth.m4
-	$(RM) $(DESTDIR)$(includedir)/pth.h
-	@$(LIBTOOL) --mode=uninstall $(RM) $(DESTDIR)$(libdir)/libpth.la
+	$(RM) $(DESTDIR)$(includedir)/rpth.h
+	@$(LIBTOOL) --mode=uninstall $(RM) $(DESTDIR)$(libdir)/librpth.la
 uninstall-dirs:
 	-$(RMDIR) $(DESTDIR)$(datadir)/aclocal >/dev/null 2>&1 || $(TRUE)
 	-$(RMDIR) $(DESTDIR)$(datadir) >/dev/null 2>&1 || $(TRUE)
@@ -294,7 +294,7 @@ clean:
 #   clean the source tree for re-configuring and re-building
 distclean: clean
 	$(RM) Makefile
-	$(RM) pth-config pth_acdef.h pth_acmac.h pth.h
+	$(RM) pth-config pth_acdef.h pth_acmac.h rpth.h
 	$(RM) pthread-config pthread.h
 	$(RM) config.log config.cache config.status
 	$(RM) libtool
@@ -426,39 +426,39 @@ TAGS:
 $(LOBJS): Makefile
 
 # DO NOT REMOVE
-pth_attr.lo: pth_attr.c pth_p.h pth_vers.c pth.h pth_acdef.h pth_acmac.h
-pth_cancel.lo: pth_cancel.c pth_p.h pth_vers.c pth.h pth_acdef.h pth_acmac.h
-pth_clean.lo: pth_clean.c pth_p.h pth_vers.c pth.h pth_acdef.h pth_acmac.h
-pth_compat.lo: pth_compat.c pth_p.h pth_vers.c pth.h pth_acdef.h pth_acmac.h
-pth_data.lo: pth_data.c pth_p.h pth_vers.c pth.h pth_acdef.h pth_acmac.h
-pth_debug.lo: pth_debug.c pth_p.h pth_vers.c pth.h pth_acdef.h pth_acmac.h
-pth_errno.lo: pth_errno.c pth_p.h pth_vers.c pth.h pth_acdef.h pth_acmac.h
-pth_event.lo: pth_event.c pth_p.h pth_vers.c pth.h pth_acdef.h pth_acmac.h
-pth_ext.lo: pth_ext.c pth_p.h pth_vers.c pth.h pth_acdef.h pth_acmac.h
-pth_fork.lo: pth_fork.c pth_p.h pth_vers.c pth.h pth_acdef.h pth_acmac.h
-pth_high.lo: pth_high.c pth_p.h pth_vers.c pth.h pth_acdef.h pth_acmac.h
-pth_lib.lo: pth_lib.c pth_p.h pth_vers.c pth.h pth_acdef.h pth_acmac.h
-pth_mctx.lo: pth_mctx.c pth_p.h pth_vers.c pth.h pth_acdef.h pth_acmac.h
-pth_msg.lo: pth_msg.c pth_p.h pth_vers.c pth.h pth_acdef.h pth_acmac.h
-pth_pqueue.lo: pth_pqueue.c pth_p.h pth_vers.c pth.h pth_acdef.h pth_acmac.h
-pth_ring.lo: pth_ring.c pth_p.h pth_vers.c pth.h pth_acdef.h pth_acmac.h
-pth_sched.lo: pth_sched.c pth_p.h pth_vers.c pth.h pth_acdef.h pth_acmac.h
-pth_string.lo: pth_string.c pth_p.h pth_vers.c pth.h pth_acdef.h pth_acmac.h
-pth_sync.lo: pth_sync.c pth_p.h pth_vers.c pth.h pth_acdef.h pth_acmac.h
-pth_syscall.lo: pth_syscall.c pth_p.h pth_vers.c pth.h pth_acdef.h pth_acmac.h
-pth_tcb.lo: pth_tcb.c pth_p.h pth_vers.c pth.h pth_acdef.h pth_acmac.h
-pth_time.lo: pth_time.c pth_p.h pth_vers.c pth.h pth_acdef.h pth_acmac.h
-pth_util.lo: pth_util.c pth_p.h pth_vers.c pth.h pth_acdef.h pth_acmac.h
+pth_attr.lo: pth_attr.c pth_p.h pth_vers.c rpth.h pth_acdef.h pth_acmac.h
+pth_cancel.lo: pth_cancel.c pth_p.h pth_vers.c rpth.h pth_acdef.h pth_acmac.h
+pth_clean.lo: pth_clean.c pth_p.h pth_vers.c rpth.h pth_acdef.h pth_acmac.h
+pth_compat.lo: pth_compat.c pth_p.h pth_vers.c rpth.h pth_acdef.h pth_acmac.h
+pth_data.lo: pth_data.c pth_p.h pth_vers.c rpth.h pth_acdef.h pth_acmac.h
+pth_debug.lo: pth_debug.c pth_p.h pth_vers.c rpth.h pth_acdef.h pth_acmac.h
+pth_errno.lo: pth_errno.c pth_p.h pth_vers.c rpth.h pth_acdef.h pth_acmac.h
+pth_event.lo: pth_event.c pth_p.h pth_vers.c rpth.h pth_acdef.h pth_acmac.h
+pth_ext.lo: pth_ext.c pth_p.h pth_vers.c rpth.h pth_acdef.h pth_acmac.h
+pth_fork.lo: pth_fork.c pth_p.h pth_vers.c rpth.h pth_acdef.h pth_acmac.h
+pth_high.lo: pth_high.c pth_p.h pth_vers.c rpth.h pth_acdef.h pth_acmac.h
+pth_lib.lo: pth_lib.c pth_p.h pth_vers.c rpth.h pth_acdef.h pth_acmac.h
+pth_mctx.lo: pth_mctx.c pth_p.h pth_vers.c rpth.h pth_acdef.h pth_acmac.h
+pth_msg.lo: pth_msg.c pth_p.h pth_vers.c rpth.h pth_acdef.h pth_acmac.h
+pth_pqueue.lo: pth_pqueue.c pth_p.h pth_vers.c rpth.h pth_acdef.h pth_acmac.h
+pth_ring.lo: pth_ring.c pth_p.h pth_vers.c rpth.h pth_acdef.h pth_acmac.h
+pth_sched.lo: pth_sched.c pth_p.h pth_vers.c rpth.h pth_acdef.h pth_acmac.h
+pth_string.lo: pth_string.c pth_p.h pth_vers.c rpth.h pth_acdef.h pth_acmac.h
+pth_sync.lo: pth_sync.c pth_p.h pth_vers.c rpth.h pth_acdef.h pth_acmac.h
+pth_syscall.lo: pth_syscall.c pth_p.h pth_vers.c rpth.h pth_acdef.h pth_acmac.h
+pth_tcb.lo: pth_tcb.c pth_p.h pth_vers.c rpth.h pth_acdef.h pth_acmac.h
+pth_time.lo: pth_time.c pth_p.h pth_vers.c rpth.h pth_acdef.h pth_acmac.h
+pth_util.lo: pth_util.c pth_p.h pth_vers.c rpth.h pth_acdef.h pth_acmac.h
 pth_vers.lo: pth_vers.c pth_vers.c
-pthread.o: pthread.c pthread.h pth_p.h pth_vers.c pth.h pth_acdef.h pth_acmac.h
-test_common.o: test_common.c pth.h test_common.h
-test_httpd.o: test_httpd.c pth.h test_common.h
-test_misc.o: test_misc.c pth.h
-test_mp.o: test_mp.c pth.h test_common.h
-test_philo.o: test_philo.c pth.h test_common.h
+pthread.o: pthread.c pthread.h pth_p.h pth_vers.c rpth.h pth_acdef.h pth_acmac.h
+test_common.o: test_common.c rpth.h test_common.h
+test_httpd.o: test_httpd.c rpth.h test_common.h
+test_misc.o: test_misc.c rpth.h
+test_mp.o: test_mp.c rpth.h test_common.h
+test_philo.o: test_philo.c rpth.h test_common.h
 test_pthread.o: test_pthread.c pthread.h
-test_select.o: test_select.c pth.h
-test_sfio.o: test_sfio.c pth.h
-test_uctx.o: test_uctx.c pth.h
-test_sig.o: test_sig.c pth.h
-test_std.o: test_std.c pth.h
+test_select.o: test_select.c rpth.h
+test_sfio.o: test_sfio.c rpth.h
+test_uctx.o: test_uctx.c rpth.h
+test_sig.o: test_sig.c rpth.h
+test_std.o: test_std.c rpth.h

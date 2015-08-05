@@ -33,7 +33,7 @@
 #include <errno.h>
 #include <unistd.h>
 
-#include "pth.h"
+#include "rpth.h"
 
 #define FAILED_IF(expr) \
      if (expr) { \

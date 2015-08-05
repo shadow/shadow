@@ -30,6 +30,8 @@
                                 -- Poul-Henning Kamp <phk@FreeBSD.org> */
 #include "pth_p.h"
 
+#if cpp
+
 /* user-space context structure */
 struct pth_uctx_st {
     int         uc_stack_own; /* whether stack were allocated by us */
@@ -38,6 +40,17 @@ struct pth_uctx_st {
     int         uc_mctx_set;  /* whether uc_mctx is set */
     pth_mctx_t  uc_mctx;      /* saved underlying machine context */
 };
+
+/* trampoline context */
+typedef struct {
+    pth_mctx_t *mctx_parent;
+    pth_uctx_t  uctx_this;
+    pth_uctx_t  uctx_after;
+    void      (*start_func)(void *);
+    void       *start_arg;
+} pth_uctx_trampoline_t;
+
+#endif /* cpp */
 
 /* create user-space context structure */
 int
@@ -67,27 +80,17 @@ pth_uctx_create(
     return TRUE;
 }
 
-/* trampoline context */
-typedef struct {
-    pth_mctx_t *mctx_parent;
-    pth_uctx_t  uctx_this;
-    pth_uctx_t  uctx_after;
-    void      (*start_func)(void *);
-    void       *start_arg;
-} pth_uctx_trampoline_t;
-pth_uctx_trampoline_t pth_uctx_trampoline_ctx;
-
 /* trampoline function for pth_uctx_make() */
 static void pth_uctx_trampoline(void)
 {
     volatile pth_uctx_trampoline_t ctx;
 
     /* move context information from global to local storage */
-    ctx.mctx_parent = pth_uctx_trampoline_ctx.mctx_parent;
-    ctx.uctx_this   = pth_uctx_trampoline_ctx.uctx_this;
-    ctx.uctx_after  = pth_uctx_trampoline_ctx.uctx_after;
-    ctx.start_func  = pth_uctx_trampoline_ctx.start_func;
-    ctx.start_arg   = pth_uctx_trampoline_ctx.start_arg;
+    ctx.mctx_parent = pth_gctx_get()->pth_uctx_trampoline_ctx.mctx_parent;
+    ctx.uctx_this   = pth_gctx_get()->pth_uctx_trampoline_ctx.uctx_this;
+    ctx.uctx_after  = pth_gctx_get()->pth_uctx_trampoline_ctx.uctx_after;
+    ctx.start_func  = pth_gctx_get()->pth_uctx_trampoline_ctx.start_func;
+    ctx.start_arg   = pth_gctx_get()->pth_uctx_trampoline_ctx.start_arg;
 
     /* switch back to parent */
     pth_mctx_switch(&(ctx.uctx_this->uc_mctx), ctx.mctx_parent);
@@ -139,11 +142,11 @@ pth_uctx_make(
         return pth_error(FALSE, errno);
 
     /* move context information into global storage for the trampoline jump */
-    pth_uctx_trampoline_ctx.mctx_parent = &mctx_parent;
-    pth_uctx_trampoline_ctx.uctx_this   = uctx;
-    pth_uctx_trampoline_ctx.uctx_after  = uctx_after;
-    pth_uctx_trampoline_ctx.start_func  = start_func;
-    pth_uctx_trampoline_ctx.start_arg   = start_arg;
+    pth_gctx_get()->pth_uctx_trampoline_ctx.mctx_parent = &mctx_parent;
+    pth_gctx_get()->pth_uctx_trampoline_ctx.uctx_this   = uctx;
+    pth_gctx_get()->pth_uctx_trampoline_ctx.uctx_after  = uctx_after;
+    pth_gctx_get()->pth_uctx_trampoline_ctx.start_func  = start_func;
+    pth_gctx_get()->pth_uctx_trampoline_ctx.start_arg   = start_arg;
 
     /* optionally establish temporary signal mask */
     if (sigmask != NULL)

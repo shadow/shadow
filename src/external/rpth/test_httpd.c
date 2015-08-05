@@ -39,7 +39,7 @@
 #include <netdb.h>
 #include <unistd.h>
 
-#include "pth.h"
+#include "rpth.h"
 
 #include "test_common.h"
 

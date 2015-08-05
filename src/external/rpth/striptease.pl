@@ -67,7 +67,7 @@ close(FP);
     COPYING
     README
     config.guess config.sub
-    pth.h.in
+    rpth.h.in
     pth_p.h.in
     pth_acdef.h.in pth_acmac.h.in
     pth_vers.c

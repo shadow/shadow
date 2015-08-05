@@ -30,7 +30,7 @@
 #include <stdio.h>
 #include <time.h>
 
-#include "pth.h"
+#include "rpth.h"
 
 volatile pth_uctx_t uctx[10];
 

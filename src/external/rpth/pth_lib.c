@@ -29,6 +29,73 @@
                                             -- Unknown                */
 #include "pth_p.h"
 
+#if cpp
+
+struct pth_gctx_st {
+    int pth_initialized;
+    int pthread_initialized;
+    int pth_errno_storage;
+    int pth_errno_flag;
+
+    pth_uctx_trampoline_t pth_uctx_trampoline_ctx;
+
+    pth_t        pth_main;       /* the main thread                       */
+    pth_t        pth_sched;      /* the permanent scheduler thread        */
+    pth_t        pth_current;    /* the currently running thread          */
+    pth_pqueue_t pth_NQ;         /* queue of new threads                  */
+    pth_pqueue_t pth_RQ;         /* queue of threads ready to run         */
+    pth_pqueue_t pth_WQ;         /* queue of threads waiting for an event */
+    pth_pqueue_t pth_SQ;         /* queue of suspended threads            */
+    pth_pqueue_t pth_DQ;         /* queue of terminated threads           */
+    int          pth_favournew;  /* favour new threads on startup         */
+    float        pth_loadval;    /* average scheduler load value          */
+
+    int          pth_sigpipe[2]; /* internal signal occurrence pipe       */
+    sigset_t     pth_sigpending; /* mask of pending signals               */
+    sigset_t     pth_sigblock;   /* mask of signals we block in scheduler */
+    sigset_t     pth_sigcatch;   /* mask of signals we have to catch      */
+    sigset_t     pth_sigraised;  /* mask of raised signals                */
+
+    pth_time_t   pth_loadticknext;
+    pth_time_t   pth_loadtickgap;
+
+    struct pth_keytab_st pth_keytab[PTH_KEY_MAX];
+    pth_key_t ev_key_join;
+    pth_key_t ev_key_nap;
+    pth_key_t ev_key_mutex;
+    pth_key_t ev_key_cond;
+    pth_key_t ev_key_nanosleep;
+    pth_key_t ev_key_usleep;
+    pth_key_t ev_key_sleep;
+    pth_key_t ev_key_sigwait_ev;
+    pth_key_t ev_key_waitpid;
+    pth_key_t ev_key_select_ev_timeout;
+    pth_key_t ev_key_select_ev_select;
+    pth_key_t ev_key_connect_ev;
+    pth_key_t ev_key_accept_ev;
+    pth_key_t ev_key_read_ev;
+    pth_key_t ev_key_write_ev;
+    pth_key_t ev_key_readv_ev;
+    pth_key_t ev_key_writev_ev;
+    pth_key_t ev_key_recvfrom_ev;
+    pth_key_t ev_key_sendto_ev;
+    pth_key_t ev_key_epoll_wait_ev;
+
+    pth_ring_t pth_msgport;
+
+    pth_mutex_t mutex_pread;
+    pth_mutex_t mutex_pwrite;
+
+    struct pth_atfork_st pth_atfork_list[PTH_ATFORK_MAX];
+    int pth_atfork_idx;
+};
+
+#endif /* cpp */
+
+/* forward declarations */
+static int pth_init_helper(void);
+static int pth_kill_helper(void);
+
 /* return the hexadecimal Pth library version number */
 long pth_version(void)
 {
@@ -36,12 +103,19 @@ long pth_version(void)
 }
 
 /* implicit initialization support */
-intern int pth_initialized = FALSE;
+intern __thread pth_gctx_t pth_current_gctx = NULL;
+
+const pth_mutex_t __mutex_initializer = PTH_MUTEX_INIT;
+const pth_ring_t __ring_initializer = PTH_RING_INIT;
+const pth_time_t __loadlick_initializer = PTH_TIME(1,0);
+
 #if cpp
+
 #define pth_implicit_init() \
-    if (!pth_initialized) \
+    if (!pth_current_gctx) \
         pth_init();
-#endif
+
+#endif /* cpp */
 
 #ifdef PTH_EX
 /* exception handling callback functions */
@@ -55,17 +129,68 @@ static void pth_ex_terminate(ex_t *ex)
 }
 #endif
 
+pth_gctx_t pth_gctx_new(void)
+{
+    pth_gctx_t gctx = calloc(sizeof(struct pth_gctx_st), 1);
+
+    gctx->pth_loadtickgap = __loadlick_initializer;
+    gctx->pth_msgport = __ring_initializer;
+    gctx->mutex_pread = __mutex_initializer;
+    gctx->mutex_pwrite = __mutex_initializer;
+    gctx->pth_atfork_idx = 0;
+
+    gctx->ev_key_join = PTH_KEY_INIT;
+    gctx->ev_key_nap = PTH_KEY_INIT;
+    gctx->ev_key_mutex = PTH_KEY_INIT;
+    gctx->ev_key_cond = PTH_KEY_INIT;
+    gctx->ev_key_nanosleep = PTH_KEY_INIT;
+    gctx->ev_key_usleep = PTH_KEY_INIT;
+    gctx->ev_key_sleep = PTH_KEY_INIT;
+    gctx->ev_key_sigwait_ev = PTH_KEY_INIT;
+    gctx->ev_key_waitpid = PTH_KEY_INIT;
+    gctx->ev_key_select_ev_timeout = PTH_KEY_INIT;
+    gctx->ev_key_select_ev_select = PTH_KEY_INIT;
+    gctx->ev_key_connect_ev = PTH_KEY_INIT;
+    gctx->ev_key_accept_ev = PTH_KEY_INIT;
+    gctx->ev_key_read_ev = PTH_KEY_INIT;
+    gctx->ev_key_write_ev = PTH_KEY_INIT;
+    gctx->ev_key_readv_ev = PTH_KEY_INIT;
+    gctx->ev_key_writev_ev = PTH_KEY_INIT;
+    gctx->ev_key_recvfrom_ev = PTH_KEY_INIT;
+    gctx->ev_key_sendto_ev = PTH_KEY_INIT;
+    gctx->ev_key_epoll_wait_ev = PTH_KEY_INIT;
+
+    pth_gctx_t gctx_tmp = pth_gctx_get();
+    pth_gctx_set(gctx);
+    pth_init_helper();
+    pth_gctx_set(gctx_tmp);
+
+    return gctx;
+}
+
+void pth_gctx_free(pth_gctx_t gctx)
+{
+    if(!gctx) return;
+    pth_gctx_set(gctx);
+    pth_kill_helper();
+    free(gctx);
+}
+
+void pth_gctx_set(pth_gctx_t gctx)
+{
+    pth_current_gctx = gctx;
+}
+
+pth_gctx_t pth_gctx_get(void)
+{
+    return pth_current_gctx;
+}
+
 /* initialize the package */
-int pth_init(void)
+
+static int pth_init_helper(void)
 {
     pth_attr_t t_attr;
-
-    /* support for implicit initialization calls
-       and to prevent multiple explict initialization, too */
-    if (pth_initialized)
-        return pth_error(FALSE, EPERM);
-    else
-        pth_initialized = TRUE;
 
     pth_debug1("pth_init: enter");
 
@@ -92,8 +217,8 @@ int pth_init(void)
     pth_attr_set(t_attr, PTH_ATTR_CANCEL_STATE, PTH_CANCEL_DISABLE);
     pth_attr_set(t_attr, PTH_ATTR_STACK_SIZE,   64*1024);
     pth_attr_set(t_attr, PTH_ATTR_STACK_ADDR,   NULL);
-    pth_sched = pth_spawn(t_attr, pth_scheduler, NULL);
-    if (pth_sched == NULL) {
+    pth_gctx_get()->pth_sched = pth_spawn(t_attr, pth_scheduler, NULL);
+    if (pth_gctx_get()->pth_sched == NULL) {
         pth_shield {
             pth_attr_destroy(t_attr);
             pth_scheduler_kill();
@@ -109,8 +234,8 @@ int pth_init(void)
     pth_attr_set(t_attr, PTH_ATTR_CANCEL_STATE, PTH_CANCEL_ENABLE|PTH_CANCEL_DEFERRED);
     pth_attr_set(t_attr, PTH_ATTR_STACK_SIZE,   0 /* special */);
     pth_attr_set(t_attr, PTH_ATTR_STACK_ADDR,   NULL);
-    pth_main = pth_spawn(t_attr, (void *(*)(void *))(-1), NULL);
-    if (pth_main == NULL) {
+    pth_gctx_get()->pth_main = pth_spawn(t_attr, (void *(*)(void *))(-1), NULL);
+    if (pth_gctx_get()->pth_main == NULL) {
         pth_shield {
             pth_attr_destroy(t_attr);
             pth_scheduler_kill();
@@ -127,34 +252,59 @@ int pth_init(void)
      * the pth_current variable here to allow the pth_spawn_trampoline
      * function to find the scheduler.
      */
-    pth_current = pth_sched;
-    pth_mctx_switch(&pth_main->mctx, &pth_sched->mctx);
+    pth_gctx_get()->pth_current = pth_gctx_get()->pth_sched;
+    pth_mctx_switch(&pth_gctx_get()->pth_main->mctx, &pth_gctx_get()->pth_sched->mctx);
 
     /* came back, so let's go home... */
     pth_debug1("pth_init: leave");
+    pth_gctx_get()->pth_initialized = TRUE;
     return TRUE;
 }
 
-/* kill the package internals */
-int pth_kill(void)
+int pth_init(void)
 {
-    if (!pth_initialized)
-        return pth_error(FALSE, EINVAL);
-    if (pth_current != pth_main)
+    /* support for implicit initialization calls
+       and to prevent multiple explict initialization, too */
+    if (pth_gctx_get() && pth_gctx_get()->pth_initialized)
         return pth_error(FALSE, EPERM);
+    else if(pth_gctx_get())
+        pth_init_helper();
+    else
+        pth_gctx_set(pth_gctx_new());
+
+    if (pth_gctx_get() && pth_gctx_get()->pth_initialized)
+        return TRUE;
+    else
+        return FALSE;
+}
+
+static int pth_kill_helper(void)
+{
     pth_debug1("pth_kill: enter");
-    pth_thread_cleanup(pth_main);
+    pth_thread_cleanup(pth_gctx_get()->pth_main);
     pth_scheduler_kill();
-    pth_initialized = FALSE;
-    pth_tcb_free(pth_sched);
-    pth_tcb_free(pth_main);
+    pth_gctx_get()->pth_initialized = FALSE;
+    pth_tcb_free(pth_gctx_get()->pth_sched);
+    pth_tcb_free(pth_gctx_get()->pth_main);
     pth_syscall_kill();
 #ifdef PTH_EX
     __ex_ctx       = __ex_ctx_default;
     __ex_terminate = __ex_terminate_default;
 #endif
     pth_debug1("pth_kill: leave");
+    pth_gctx_set(NULL);
     return TRUE;
+}
+
+/* kill the package internals */
+int pth_kill(void)
+{
+    if (!pth_gctx_get() || !pth_gctx_get()->pth_initialized)
+        return pth_error(FALSE, EINVAL);
+    if (pth_gctx_get()->pth_current != pth_gctx_get()->pth_main)
+        return pth_error(FALSE, EPERM);
+    else
+        return pth_kill_helper();
 }
 
 /* scheduler control/query */
@@ -167,21 +317,21 @@ long pth_ctrl(unsigned long query, ...)
     va_start(ap, query);
     if (query & PTH_CTRL_GETTHREADS) {
         if (query & PTH_CTRL_GETTHREADS_NEW)
-            rc += pth_pqueue_elements(&pth_NQ);
+            rc += pth_pqueue_elements(&pth_gctx_get()->pth_NQ);
         if (query & PTH_CTRL_GETTHREADS_READY)
-            rc += pth_pqueue_elements(&pth_RQ);
+            rc += pth_pqueue_elements(&pth_gctx_get()->pth_RQ);
         if (query & PTH_CTRL_GETTHREADS_RUNNING)
             rc += 1; /* pth_current only */
         if (query & PTH_CTRL_GETTHREADS_WAITING)
-            rc += pth_pqueue_elements(&pth_WQ);
+            rc += pth_pqueue_elements(&pth_gctx_get()->pth_WQ);
         if (query & PTH_CTRL_GETTHREADS_SUSPENDED)
-            rc += pth_pqueue_elements(&pth_SQ);
+            rc += pth_pqueue_elements(&pth_gctx_get()->pth_SQ);
         if (query & PTH_CTRL_GETTHREADS_DEAD)
-            rc += pth_pqueue_elements(&pth_DQ);
+            rc += pth_pqueue_elements(&pth_gctx_get()->pth_DQ);
     }
     else if (query & PTH_CTRL_GETAVLOAD) {
         float *pload = va_arg(ap, float *);
-        *pload = pth_loadval;
+        *pload = pth_gctx_get()->pth_loadval;
     }
     else if (query & PTH_CTRL_GETPRIO) {
         pth_t t = va_arg(ap, pth_t);
@@ -197,7 +347,7 @@ long pth_ctrl(unsigned long query, ...)
     }
     else if (query & PTH_CTRL_FAVOURNEW) {
         int favournew = va_arg(ap, int);
-        pth_favournew = (favournew ? 1 : 0);
+        pth_gctx_get()->pth_favournew = (favournew ? 1 : 0);
     }
     else
         rc = -1;
@@ -213,7 +363,7 @@ static void pth_spawn_trampoline(void)
     void *data;
 
     /* just jump into the start routine */
-    data = (*pth_current->start_func)(pth_current->start_arg);
+    data = (*pth_gctx_get()->pth_current->start_func)(pth_gctx_get()->pth_current->start_arg);
 
     /* and do an implicit exit of the thread with the result value */
     pth_exit(data);
@@ -253,15 +403,15 @@ pth_t pth_spawn(pth_attr_t attr, void *(*func)(void *), void *arg)
         t->dispatches  = attr->a_dispatches;
         pth_util_cpystrn(t->name, attr->a_name, PTH_TCB_NAMELEN);
     }
-    else if (pth_current != NULL) {
+    else if (pth_gctx_get()->pth_current != NULL) {
         /* overtake some fields from the parent thread */
-        t->prio        = pth_current->prio;
-        t->joinable    = pth_current->joinable;
-        t->cancelstate = pth_current->cancelstate;
+        t->prio        = pth_gctx_get()->pth_current->prio;
+        t->joinable    = pth_gctx_get()->pth_current->joinable;
+        t->cancelstate = pth_gctx_get()->pth_current->cancelstate;
         t->dispatches  = 0;
         pth_snprintf(t->name, PTH_TCB_NAMELEN, "%s.child@%d=0x%lx",
-                     pth_current->name, (unsigned int)time(NULL),
-                     (unsigned long)pth_current);
+                pth_gctx_get()->pth_current->name, (unsigned int)time(NULL),
+                     (unsigned long)pth_gctx_get()->pth_current);
     }
     else {
         /* defaults */
@@ -322,7 +472,7 @@ pth_t pth_spawn(pth_attr_t attr, void *(*func)(void *), void *arg)
        the scheduler will pick it up for dispatching */
     if (func != pth_scheduler) {
         t->state = PTH_STATE_NEW;
-        pth_pqueue_insert(&pth_NQ, t->prio, t);
+        pth_pqueue_insert(&pth_gctx_get()->pth_NQ, t->prio, t);
     }
 
     pth_debug1("pth_spawn: leave");
@@ -335,7 +485,7 @@ pth_t pth_spawn(pth_attr_t attr, void *(*func)(void *), void *arg)
 /* returns the current thread */
 pth_t pth_self(void)
 {
-    return pth_current;
+    return pth_gctx_get()->pth_current;
 }
 
 /* raise a signal for a thread */
@@ -343,7 +493,7 @@ int pth_raise(pth_t t, int sig)
 {
     struct sigaction sa;
 
-    if (t == NULL || t == pth_current || (sig < 0 || sig > PTH_NSIG))
+    if (t == NULL || t == pth_gctx_get()->pth_current || (sig < 0 || sig > PTH_NSIG))
         return pth_error(FALSE, EINVAL);
     if (sig == 0)
         /* just test whether thread exists */
@@ -366,11 +516,11 @@ int pth_raise(pth_t t, int sig)
 /* check whether a thread exists */
 intern int pth_thread_exists(pth_t t)
 {
-    if (!pth_pqueue_contains(&pth_NQ, t))
-        if (!pth_pqueue_contains(&pth_RQ, t))
-            if (!pth_pqueue_contains(&pth_WQ, t))
-                if (!pth_pqueue_contains(&pth_SQ, t))
-                    if (!pth_pqueue_contains(&pth_DQ, t))
+    if (!pth_pqueue_contains(&pth_gctx_get()->pth_NQ, t))
+        if (!pth_pqueue_contains(&pth_gctx_get()->pth_RQ, t))
+            if (!pth_pqueue_contains(&pth_gctx_get()->pth_WQ, t))
+                if (!pth_pqueue_contains(&pth_gctx_get()->pth_SQ, t))
+                    if (!pth_pqueue_contains(&pth_gctx_get()->pth_DQ, t))
                         return pth_error(FALSE, ESRCH); /* not found */
     return TRUE;
 }
@@ -409,10 +559,10 @@ static int pth_exit_cb(void *arg)
        test function inside the scheduler) that the whole process can
        terminate now. */
     rc = 0;
-    rc += pth_pqueue_elements(&pth_NQ);
-    rc += pth_pqueue_elements(&pth_RQ);
-    rc += pth_pqueue_elements(&pth_WQ);
-    rc += pth_pqueue_elements(&pth_SQ);
+    rc += pth_pqueue_elements(&pth_gctx_get()->pth_NQ);
+    rc += pth_pqueue_elements(&pth_gctx_get()->pth_RQ);
+    rc += pth_pqueue_elements(&pth_gctx_get()->pth_WQ);
+    rc += pth_pqueue_elements(&pth_gctx_get()->pth_SQ);
 
     if (rc == 1 /* just our main thread */)
         return TRUE;
@@ -423,12 +573,12 @@ void pth_exit(void *value)
 {
     pth_event_t ev;
 
-    pth_debug2("pth_exit: marking thread \"%s\" as dead", pth_current->name);
+    pth_debug2("pth_exit: marking thread \"%s\" as dead", pth_gctx_get()->pth_current->name);
 
     /* the main thread is special, because its termination
        would terminate the whole process, so we have to delay 
        its termination until it is really the last thread */
-    if (pth_current == pth_main) {
+    if (pth_gctx_get()->pth_current == pth_gctx_get()->pth_main) {
         if (!pth_exit_cb(NULL)) {
             ev = pth_event(PTH_EVENT_FUNC, pth_exit_cb);
             pth_wait(ev);
@@ -437,19 +587,19 @@ void pth_exit(void *value)
     }
 
     /* execute cleanups */
-    pth_thread_cleanup(pth_current);
+    pth_thread_cleanup(pth_gctx_get()->pth_current);
 
-    if (pth_current != pth_main) {
+    if (pth_gctx_get()->pth_current != pth_gctx_get()->pth_main) {
         /*
          * Now mark the current thread as dead, explicitly switch into the
          * scheduler and let it reap the current thread structure; we can't
          * free it here, or we'd be running on a stack which malloc() regards
          * as free memory, which would be a somewhat perilous situation.
          */
-        pth_current->join_arg = value;
-        pth_current->state = PTH_STATE_DEAD;
-        pth_debug2("pth_exit: switching from thread \"%s\" to scheduler", pth_current->name);
-        pth_mctx_switch(&pth_current->mctx, &pth_sched->mctx);
+        pth_gctx_get()->pth_current->join_arg = value;
+        pth_gctx_get()->pth_current->state = PTH_STATE_DEAD;
+        pth_debug2("pth_exit: switching from thread \"%s\" to scheduler", pth_gctx_get()->pth_current->name);
+        pth_mctx_switch(&pth_gctx_get()->pth_current->mctx, &pth_gctx_get()->pth_sched->mctx);
     }
     else {
         /*
@@ -468,28 +618,27 @@ void pth_exit(void *value)
 int pth_join(pth_t tid, void **value)
 {
     pth_event_t ev;
-    static pth_key_t ev_key = PTH_KEY_INIT;
 
     pth_debug2("pth_join: joining thread \"%s\"", tid == NULL ? "-ANY-" : tid->name);
-    if (tid == pth_current)
+    if (tid == pth_gctx_get()->pth_current)
         return pth_error(FALSE, EDEADLK);
     if (tid != NULL && !tid->joinable)
         return pth_error(FALSE, EINVAL);
     if (pth_ctrl(PTH_CTRL_GETTHREADS) == 1)
         return pth_error(FALSE, EDEADLK);
     if (tid == NULL)
-        tid = pth_pqueue_head(&pth_DQ);
+        tid = pth_pqueue_head(&pth_gctx_get()->pth_DQ);
     if (tid == NULL || (tid != NULL && tid->state != PTH_STATE_DEAD)) {
-        ev = pth_event(PTH_EVENT_TID|PTH_UNTIL_TID_DEAD|PTH_MODE_STATIC, &ev_key, tid);
+        ev = pth_event(PTH_EVENT_TID|PTH_UNTIL_TID_DEAD|PTH_MODE_STATIC, &pth_gctx_get()->ev_key_join, tid);
         pth_wait(ev);
     }
     if (tid == NULL)
-        tid = pth_pqueue_head(&pth_DQ);
+        tid = pth_pqueue_head(&pth_gctx_get()->pth_DQ);
     if (tid == NULL || (tid != NULL && tid->state != PTH_STATE_DEAD))
         return pth_error(FALSE, EIO);
     if (value != NULL)
         *value = tid->join_arg;
-    pth_pqueue_delete(&pth_DQ, tid);
+    pth_pqueue_delete(&pth_gctx_get()->pth_DQ, tid);
     pth_tcb_free(tid);
     return TRUE;
 }
@@ -499,13 +648,13 @@ int pth_yield(pth_t to)
 {
     pth_pqueue_t *q = NULL;
 
-    pth_debug2("pth_yield: enter from thread \"%s\"", pth_current->name);
+    pth_debug2("pth_yield: enter from thread \"%s\"", pth_gctx_get()->pth_current->name);
 
     /* a given thread has to be new or ready or we ignore the request */
     if (to != NULL) {
         switch (to->state) {
-            case PTH_STATE_NEW:    q = &pth_NQ; break;
-            case PTH_STATE_READY:  q = &pth_RQ; break;
+            case PTH_STATE_NEW:    q = &pth_gctx_get()->pth_NQ; break;
+            case PTH_STATE_READY:  q = &pth_gctx_get()->pth_RQ; break;
             default:               q = NULL;
         }
         if (q == NULL || !pth_pqueue_contains(q, to))
@@ -522,10 +671,10 @@ int pth_yield(pth_t to)
                    "in favour of thread \"%s\"", to->name);
     else
         pth_debug1("pth_yield: give up control to scheduler");
-    pth_mctx_switch(&pth_current->mctx, &pth_sched->mctx);
+    pth_mctx_switch(&pth_gctx_get()->pth_current->mctx, &pth_gctx_get()->pth_sched->mctx);
     pth_debug1("pth_yield: got back control from scheduler");
 
-    pth_debug2("pth_yield: leave to thread \"%s\"", pth_current->name);
+    pth_debug2("pth_yield: leave to thread \"%s\"", pth_gctx_get()->pth_current->name);
     return TRUE;
 }
 
@@ -536,12 +685,12 @@ int pth_suspend(pth_t t)
 
     if (t == NULL)
         return pth_error(FALSE, EINVAL);
-    if (t == pth_sched || t == pth_current)
+    if (t == pth_gctx_get()->pth_sched || t == pth_gctx_get()->pth_current)
         return pth_error(FALSE, EPERM);
     switch (t->state) {
-        case PTH_STATE_NEW:     q = &pth_NQ; break;
-        case PTH_STATE_READY:   q = &pth_RQ; break;
-        case PTH_STATE_WAITING: q = &pth_WQ; break;
+        case PTH_STATE_NEW:     q = &pth_gctx_get()->pth_NQ; break;
+        case PTH_STATE_READY:   q = &pth_gctx_get()->pth_RQ; break;
+        case PTH_STATE_WAITING: q = &pth_gctx_get()->pth_WQ; break;
         default:                q = NULL;
     }
     if (q == NULL)
@@ -549,7 +698,7 @@ int pth_suspend(pth_t t)
     if (!pth_pqueue_contains(q, t))
         return pth_error(FALSE, ESRCH);
     pth_pqueue_delete(q, t);
-    pth_pqueue_insert(&pth_SQ, PTH_PRIO_STD, t);
+    pth_pqueue_insert(&pth_gctx_get()->pth_SQ, PTH_PRIO_STD, t);
     pth_debug2("pth_suspend: suspend thread \"%s\"\n", t->name);
     return TRUE;
 }
@@ -561,15 +710,15 @@ int pth_resume(pth_t t)
 
     if (t == NULL)
         return pth_error(FALSE, EINVAL);
-    if (t == pth_sched || t == pth_current)
+    if (t == pth_gctx_get()->pth_sched || t == pth_gctx_get()->pth_current)
         return pth_error(FALSE, EPERM);
-    if (!pth_pqueue_contains(&pth_SQ, t))
+    if (!pth_pqueue_contains(&pth_gctx_get()->pth_SQ, t))
         return pth_error(FALSE, EPERM);
-    pth_pqueue_delete(&pth_SQ, t);
+    pth_pqueue_delete(&pth_gctx_get()->pth_SQ, t);
     switch (t->state) {
-        case PTH_STATE_NEW:     q = &pth_NQ; break;
-        case PTH_STATE_READY:   q = &pth_RQ; break;
-        case PTH_STATE_WAITING: q = &pth_WQ; break;
+        case PTH_STATE_NEW:     q = &pth_gctx_get()->pth_NQ; break;
+        case PTH_STATE_READY:   q = &pth_gctx_get()->pth_RQ; break;
+        case PTH_STATE_WAITING: q = &pth_gctx_get()->pth_WQ; break;
         default:                q = NULL;
     }
     pth_pqueue_insert(q, PTH_PRIO_STD, t);
@@ -606,13 +755,12 @@ int pth_nap(pth_time_t naptime)
 {
     pth_time_t until;
     pth_event_t ev;
-    static pth_key_t ev_key = PTH_KEY_INIT;
 
     if (pth_time_cmp(&naptime, PTH_TIME_ZERO) == 0)
         return pth_error(FALSE, EINVAL);
     pth_time_set(&until, PTH_TIME_NOW);
     pth_time_add(&until, &naptime);
-    ev = pth_event(PTH_EVENT_TIME|PTH_MODE_STATIC, &ev_key, until);
+    ev = pth_event(PTH_EVENT_TIME|PTH_MODE_STATIC, &pth_gctx_get()->ev_key_nap, until);
     pth_wait(ev);
     return TRUE;
 }

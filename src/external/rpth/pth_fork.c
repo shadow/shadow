@@ -29,6 +29,8 @@
                                             -- Calvin          */
 #include "pth_p.h"
 
+#if cpp
+
 struct pth_atfork_st {
     void (*prepare)(void *);
     void (*parent)(void *);
@@ -36,27 +38,26 @@ struct pth_atfork_st {
     void *arg;
 };
 
-static struct pth_atfork_st pth_atfork_list[PTH_ATFORK_MAX];
-static int pth_atfork_idx = 0;
+#endif /* cpp */
 
 int pth_atfork_push(void (*prepare)(void *), void (*parent)(void *),
                     void (*child)(void *), void *arg)
 {
-    if (pth_atfork_idx > PTH_ATFORK_MAX-1)
+    if (pth_gctx_get()->pth_atfork_idx > PTH_ATFORK_MAX-1)
         return pth_error(FALSE, ENOMEM);
-    pth_atfork_list[pth_atfork_idx].prepare = prepare;
-    pth_atfork_list[pth_atfork_idx].parent  = parent;
-    pth_atfork_list[pth_atfork_idx].child   = child;
-    pth_atfork_list[pth_atfork_idx].arg     = arg;
-    pth_atfork_idx++;
+    pth_gctx_get()->pth_atfork_list[pth_gctx_get()->pth_atfork_idx].prepare = prepare;
+    pth_gctx_get()->pth_atfork_list[pth_gctx_get()->pth_atfork_idx].parent  = parent;
+    pth_gctx_get()->pth_atfork_list[pth_gctx_get()->pth_atfork_idx].child   = child;
+    pth_gctx_get()->pth_atfork_list[pth_gctx_get()->pth_atfork_idx].arg     = arg;
+    pth_gctx_get()->pth_atfork_idx++;
     return TRUE;
 }
 
 int pth_atfork_pop(void)
 {
-    if (pth_atfork_idx <= 0)
+    if (pth_gctx_get()->pth_atfork_idx <= 0)
         return FALSE;
-    pth_atfork_idx--;
+    pth_gctx_get()->pth_atfork_idx--;
     return TRUE;
 }
 
@@ -66,9 +67,9 @@ pid_t pth_fork(void)
     int i;
 
     /* run preparation handlers in LIFO order */
-    for (i = pth_atfork_idx-1; i >= 0; i--)
-        if (pth_atfork_list[i].prepare != NULL)
-            pth_atfork_list[i].prepare(pth_atfork_list[i].arg);
+    for (i = pth_gctx_get()->pth_atfork_idx-1; i >= 0; i--)
+        if (pth_gctx_get()->pth_atfork_list[i].prepare != NULL)
+            pth_gctx_get()->pth_atfork_list[i].prepare(pth_gctx_get()->pth_atfork_list[i].arg);
 
     /* fork the process */
     if ((pid = pth_sc(fork)()) == -1)
@@ -79,9 +80,9 @@ pid_t pth_fork(void)
         /* Parent: */
 
         /* run parent handlers in FIFO order */
-        for (i = 0; i <= pth_atfork_idx-1; i++)
-            if (pth_atfork_list[i].parent != NULL)
-                pth_atfork_list[i].parent(pth_atfork_list[i].arg);
+        for (i = 0; i <= pth_gctx_get()->pth_atfork_idx-1; i++)
+            if (pth_gctx_get()->pth_atfork_list[i].parent != NULL)
+                pth_gctx_get()->pth_atfork_list[i].parent(pth_gctx_get()->pth_atfork_list[i].arg);
     }
     else {
         /* Child: */
@@ -90,9 +91,9 @@ pid_t pth_fork(void)
         pth_scheduler_drop();
 
         /* run child handlers in FIFO order */
-        for (i = 0; i <= pth_atfork_idx-1; i++)
-            if (pth_atfork_list[i].child != NULL)
-                pth_atfork_list[i].child(pth_atfork_list[i].arg);
+        for (i = 0; i <= pth_gctx_get()->pth_atfork_idx-1; i++)
+            if (pth_gctx_get()->pth_atfork_list[i].child != NULL)
+                pth_gctx_get()->pth_atfork_list[i].child(pth_gctx_get()->pth_atfork_list[i].arg);
     }
     return pid;
 }

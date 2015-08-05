@@ -62,8 +62,8 @@
 #include "pth_p.h"
 
 /* some exported variables for object layer checks */
-int pth_syscall_soft = PTH_SYSCALL_SOFT;
-int pth_syscall_hard = PTH_SYSCALL_HARD;
+const int pth_syscall_soft = PTH_SYSCALL_SOFT;
+const int pth_syscall_hard = PTH_SYSCALL_HARD;
 
 #if cpp
 #if PTH_SYSCALL_HARD
@@ -492,7 +492,7 @@ intern int pth_sc_select(int nfds, fd_set *readfds, fd_set *writefds,
 #elif defined(HAVE_SYSCALL) && defined(SYS_select)
     else return (int)syscall(SYS_select, nfds, readfds, writefds, exceptfds, timeout);
 #else
-    else PTH_SYSCALL_ERROR(-1, ENOSYS, "accept");
+    else PTH_SYSCALL_ERROR(-1, ENOSYS, "select");
 #endif
 }
 

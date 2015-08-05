@@ -39,8 +39,6 @@ struct pth_msgport_st {
 
 #endif /* cpp */
 
-static pth_ring_t pth_msgport = PTH_RING_INIT;
-
 /* create a new message port */
 pth_msgport_t pth_msgport_create(const char *name)
 {
@@ -54,11 +52,11 @@ pth_msgport_t pth_msgport_create(const char *name)
 
     /* initialize structure */
     mp->mp_name  = name;
-    mp->mp_tid   = pth_current;
+    mp->mp_tid   = pth_gctx_get()->pth_current;
     pth_ring_init(&mp->mp_queue);
 
     /* insert into list of existing message ports */
-    pth_ring_append(&pth_msgport, &mp->mp_node);
+    pth_ring_append(&pth_gctx_get()->pth_msgport, &mp->mp_node);
 
     return mp;
 }
@@ -77,7 +75,7 @@ void pth_msgport_destroy(pth_msgport_t mp)
         pth_msgport_reply(m);
 
     /* remove from list of existing message ports */
-    pth_ring_delete(&pth_msgport, &mp->mp_node);
+    pth_ring_delete(&pth_gctx_get()->pth_msgport, &mp->mp_node);
 
     /* deallocate message port structure */
     free(mp);
@@ -95,12 +93,12 @@ pth_msgport_t pth_msgport_find(const char *name)
         return pth_error((pth_msgport_t)NULL, EINVAL);
 
     /* iterate over message ports */
-    mp = mpf = (pth_msgport_t)pth_ring_first(&pth_msgport);
+    mp = mpf = (pth_msgport_t)pth_ring_first(&pth_gctx_get()->pth_msgport);
     while (mp != NULL) {
         if (mp->mp_name != NULL)
             if (strcmp(mp->mp_name, name) == 0)
                 break;
-        mp = (pth_msgport_t)pth_ring_next(&pth_msgport, (pth_ringnode_t *)mp);
+        mp = (pth_msgport_t)pth_ring_next(&pth_gctx_get()->pth_msgport, (pth_ringnode_t *)mp);
         if (mp == mpf) {
             mp = NULL;
             break;

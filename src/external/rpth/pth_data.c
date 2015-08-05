@@ -27,21 +27,23 @@
                                        --- Hans von Ohain */
 #include "pth_p.h"
 
+#if cpp
+
 struct pth_keytab_st {
     int used;
     void (*destructor)(void *);
 };
 
-static struct pth_keytab_st pth_keytab[PTH_KEY_MAX];
+#endif /* cpp */
 
 int pth_key_create(pth_key_t *key, void (*func)(void *))
 {
     if (key == NULL)
         return pth_error(FALSE, EINVAL);
     for ((*key) = 0; (*key) < PTH_KEY_MAX; (*key)++) {
-        if (pth_keytab[(*key)].used == FALSE) {
-            pth_keytab[(*key)].used = TRUE;
-            pth_keytab[(*key)].destructor = func;
+        if (pth_gctx_get()->pth_keytab[(*key)].used == FALSE) {
+            pth_gctx_get()->pth_keytab[(*key)].used = TRUE;
+            pth_gctx_get()->pth_keytab[(*key)].destructor = func;
             return TRUE;
         }
     }
@@ -52,9 +54,9 @@ int pth_key_delete(pth_key_t key)
 {
     if (key < 0 || key >= PTH_KEY_MAX)
         return pth_error(FALSE, EINVAL);
-    if (!pth_keytab[key].used)
+    if (!pth_gctx_get()->pth_keytab[key].used)
         return pth_error(FALSE, ENOENT);
-    pth_keytab[key].used = FALSE;
+    pth_gctx_get()->pth_keytab[key].used = FALSE;
     return TRUE;
 }
 
@@ -62,22 +64,22 @@ int pth_key_setdata(pth_key_t key, const void *value)
 {
     if (key < 0 || key >= PTH_KEY_MAX)
         return pth_error(FALSE, EINVAL);
-    if (!pth_keytab[key].used)
+    if (!pth_gctx_get()->pth_keytab[key].used)
         return pth_error(FALSE, ENOENT);
-    if (pth_current->data_value == NULL) {
-        pth_current->data_value = (const void **)calloc(1, sizeof(void *)*PTH_KEY_MAX);
-        if (pth_current->data_value == NULL)
+    if (pth_gctx_get()->pth_current->data_value == NULL) {
+        pth_gctx_get()->pth_current->data_value = (const void **)calloc(1, sizeof(void *)*PTH_KEY_MAX);
+        if (pth_gctx_get()->pth_current->data_value == NULL)
             return pth_error(FALSE, ENOMEM);
     }
-    if (pth_current->data_value[key] == NULL) {
+    if (pth_gctx_get()->pth_current->data_value[key] == NULL) {
         if (value != NULL)
-            pth_current->data_count++;
+            pth_gctx_get()->pth_current->data_count++;
     }
     else {
         if (value == NULL)
-            pth_current->data_count--;
+            pth_gctx_get()->pth_current->data_count--;
     }
-    pth_current->data_value[key] = value;
+    pth_gctx_get()->pth_current->data_value[key] = value;
     return TRUE;
 }
 
@@ -85,11 +87,11 @@ void *pth_key_getdata(pth_key_t key)
 {
     if (key < 0 || key >= PTH_KEY_MAX)
         return pth_error((void *)NULL, EINVAL);
-    if (!pth_keytab[key].used)
+    if (!pth_gctx_get()->pth_keytab[key].used)
         return pth_error((void *)NULL, ENOENT);
-    if (pth_current->data_value == NULL)
+    if (pth_gctx_get()->pth_current->data_value == NULL)
         return (void *)NULL;
-    return (void *)pth_current->data_value[key];
+    return (void *)pth_gctx_get()->pth_current->data_value[key];
 }
 
 intern void pth_key_destroydata(pth_t t)
@@ -109,12 +111,12 @@ intern void pth_key_destroydata(pth_t t)
             if (t->data_count > 0) {
                 destructor = NULL;
                 data = NULL;
-                if (pth_keytab[key].used) {
+                if (pth_gctx_get()->pth_keytab[key].used) {
                     if (t->data_value[key] != NULL) {
                         data = (void *)t->data_value[key];
                         t->data_value[key] = NULL;
                         t->data_count--;
-                        destructor = pth_keytab[key].destructor;
+                        destructor = pth_gctx_get()->pth_keytab[key].destructor;
                     }
                 }
                 if (destructor != NULL)

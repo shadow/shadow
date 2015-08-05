@@ -31,11 +31,11 @@
 
 /* enclose errno in a block */
 #define pth_shield \
-        for ( pth_errno_storage = errno, \
-              pth_errno_flag = TRUE; \
-              pth_errno_flag; \
-              errno = pth_errno_storage, \
-              pth_errno_flag = FALSE )
+        for ( pth_gctx_get()->pth_errno_storage = errno, \
+              pth_gctx_get()->pth_errno_flag = TRUE; \
+              pth_gctx_get()->pth_errno_flag; \
+              errno = pth_gctx_get()->pth_errno_storage, \
+              pth_gctx_get()->pth_errno_flag = FALSE )
 
 /* return plus setting an errno value */
 #if defined(PTH_DEBUG)
@@ -51,6 +51,4 @@
 
 #endif /* cpp */
 
-intern int pth_errno_storage = 0;
-intern int pth_errno_flag    = 0;
-
+COMPILER_HAPPYNESS(pth_errno)

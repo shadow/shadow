@@ -37,21 +37,21 @@
 #endif /* cpp */
 
 /* a global variable holding a zero time */
-intern pth_time_t pth_time_zero = { 0L, 0L };
+intern const pth_time_t pth_time_zero = { 0L, 0L };
 
 /* sleep for a specified amount of microseconds */
-intern void pth_time_usleep(unsigned long usec)
-{
-#ifdef HAVE_USLEEP
-    usleep((unsigned int )usec);
-#else
-    struct timeval timeout;
-    timeout.tv_sec  = usec / 1000000;
-    timeout.tv_usec = usec - (1000000 * timeout.tv_sec);
-    while (pth_sc(select)(1, NULL, NULL, NULL, &timeout) < 0 && errno == EINTR) ;
-#endif
-    return;
-}
+//intern void pth_time_usleep(unsigned long usec)
+//{
+//#ifdef HAVE_USLEEP
+//    usleep((unsigned int )usec);
+//#else
+//    struct timeval timeout;
+//    timeout.tv_sec  = usec / 1000000;
+//    timeout.tv_usec = usec - (1000000 * timeout.tv_sec);
+//    while (pth_sc(select)(1, NULL, NULL, NULL, &timeout) < 0 && errno == EINTR) ;
+//#endif
+//    return;
+//}
 
 /* calculate: t1 = t2 */
 #if cpp
@@ -95,7 +95,7 @@ pth_time_t pth_timeout(long sec, long usec)
 }
 
 /* calculate: t1 <=> t2 */
-intern int pth_time_cmp(pth_time_t *t1, pth_time_t *t2)
+intern int pth_time_cmp(const pth_time_t *t1, const pth_time_t *t2)
 {
     int rc;
 

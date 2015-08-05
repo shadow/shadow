@@ -30,7 +30,7 @@
 #include <signal.h>
 #include <unistd.h>
 
-#include "pth.h"
+#include "rpth.h"
 
 static pth_t child1;
 static pth_t child2;
