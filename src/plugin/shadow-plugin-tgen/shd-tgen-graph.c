@@ -19,6 +19,7 @@ typedef enum {
     TGEN_VA_PROTOCOL = 1 << 9,
     TGEN_VA_TIMEOUT = 1 << 10,
     TGEN_VA_STALLOUT = 1 << 11,
+    TGEN_EA_WEIGHT = 1 << 12,
 } AttributeFlags;
 
 struct _TGenGraph {
@@ -36,6 +37,7 @@ struct _TGenGraph {
     igraph_bool_t isDirected;
 
     GHashTable* actions;
+    GHashTable* weights;
 
     gboolean hasStartAction;
     igraph_integer_t startActionVertexIndex;
@@ -58,6 +60,17 @@ static gchar* _tgengraph_getHomePath(const gchar* path) {
     return g_string_free(sbuffer, FALSE);
 }
 
+static void _tgengraph_storeWeight(TGenGraph* g, gdouble weight, igraph_integer_t edgeIndex) {
+    TGEN_ASSERT(g);
+
+    //igraph_integer_t* key = g_new0(igraph_integer_t, 1);
+    //*key = edgeIndex;
+
+    gdouble* val = g_new0(gdouble, 1);
+    *val = weight;
+    g_hash_table_insert(g->weights, GINT_TO_POINTER(edgeIndex), val);
+}
+
 static GError* _tgengraph_parseGraphEdges(TGenGraph* g) {
     TGEN_ASSERT(g);
 
@@ -77,7 +90,7 @@ static GError* _tgengraph_parseGraphEdges(TGenGraph* g) {
     GError* error = NULL;
 
     while (!IGRAPH_EIT_END(edgeIterator)) {
-        long int edgeIndex = IGRAPH_EIT_GET(edgeIterator);
+        igraph_integer_t edgeIndex = IGRAPH_EIT_GET(edgeIterator);
 
         igraph_integer_t fromVertexIndex, toVertexIndex;
 
@@ -107,6 +120,15 @@ static GError* _tgengraph_parseGraphEdges(TGenGraph* g) {
         tgen_debug("found edge %li from vertex %li (%s) to vertex %li (%s)",
                 (glong)edgeIndex, (glong)fromVertexIndex, fromIDStr, (glong)toVertexIndex, toIDStr);
 
+        const gchar* weightStr = (g->knownAttributes&TGEN_EA_WEIGHT) ?
+                EAS(g->graph, "weight", edgeIndex) : NULL;
+        if(weightStr != NULL) {
+            if(g_ascii_strncasecmp(weightStr, "\0", (gsize) 1)) {
+                gdouble weight = g_ascii_strtod(weightStr, NULL);
+                _tgengraph_storeWeight(g, weight, edgeIndex);
+            }
+        }
+
         edgeCount++;
         IGRAPH_EIT_NEXT(edgeIterator);
     }
@@ -134,6 +156,11 @@ static void _tgengraph_storeAction(TGenGraph* g, TGenAction* a, igraph_integer_t
 static TGenAction* _tgengraph_getAction(TGenGraph* g, igraph_integer_t vertexIndex) {
     TGEN_ASSERT(g);
     return g_hash_table_lookup(g->actions, GINT_TO_POINTER(vertexIndex));
+}
+
+static gdouble* _tgengraph_getWeight(TGenGraph* g, igraph_integer_t edgeIndex) {
+    TGEN_ASSERT(g);
+    return g_hash_table_lookup(g->weights, GINT_TO_POINTER(edgeIndex));
 }
 
 static gboolean _tgengraph_hasSelfLoop(TGenGraph* g, igraph_integer_t vertexIndex) {
@@ -331,6 +358,80 @@ static GError* _tgengraph_parseTransferVertex(TGenGraph* g, const gchar* idStr,
     return error;
 }
 
+static GError* _tgengraph_parseChooseVertex(TGenGraph* g, const gchar* idStr,
+        igraph_integer_t vertexIndex) {
+    TGEN_ASSERT(g);
+
+    tgen_debug("found vertex %li (%s)", (glong)vertexIndex, idStr);
+
+    GError* error = NULL;
+
+    /* Assure the edges from this choose action have either all weights or no weights. Store in data */
+    igraph_es_t edgeSelector;
+    igraph_eit_t edgeIterator;
+
+    gint result = igraph_es_incident(&edgeSelector, vertexIndex, IGRAPH_OUT);
+    if(result != IGRAPH_SUCCESS) {
+        return g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_PARSE, 
+                "igraph_es_incident return non-success code %i", result);
+    }
+
+    result = igraph_eit_create(g->graph, edgeSelector, &edgeIterator);
+    if(result != IGRAPH_SUCCESS) {
+        return g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_PARSE, 
+                "igraph_eit_create return non-success code %i", result);
+    }
+
+    /* Get initial case for first edge */
+    igraph_integer_t edgeIndex = IGRAPH_EIT_GET(edgeIterator);
+    gdouble* weight = _tgengraph_getWeight(g, edgeIndex);
+    gboolean lastWeight;
+    gdouble totalWeight = 0.0;
+    if(weight != NULL) {
+        lastWeight = TRUE;
+        totalWeight += *weight;
+    }
+    else {
+        lastWeight = FALSE;
+    }
+    IGRAPH_EIT_NEXT(edgeIterator);
+
+    while (!IGRAPH_EIT_END(edgeIterator)) {
+        edgeIndex = IGRAPH_EIT_GET(edgeIterator);
+        gdouble* weight = _tgengraph_getWeight(g, edgeIndex);
+        gboolean thisWeight;
+
+        if(weight != NULL) {
+            thisWeight = TRUE;
+            totalWeight += *weight;
+        }
+        else {
+            thisWeight = FALSE;
+        }
+
+        /* Assure weights is still constant */
+        if (thisWeight != lastWeight){
+            igraph_es_destroy(&edgeSelector);
+            igraph_eit_destroy(&edgeIterator);
+            return g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT,
+                    "choose action must have all weights or no weights");
+        }
+
+        lastWeight = thisWeight;
+        IGRAPH_EIT_NEXT(edgeIterator);
+    }
+    TGenAction* a = tgenaction_newChooseAction(&error, lastWeight, totalWeight);
+
+    /* clean up */
+    igraph_es_destroy(&edgeSelector);
+    igraph_eit_destroy(&edgeIterator);
+
+    if(a) {
+        _tgengraph_storeAction(g, a, vertexIndex);
+    }
+
+    return error;
+}
 static GError* _tgengraph_parseGraphVertices(TGenGraph* g) {
     TGEN_ASSERT(g);
 
@@ -372,6 +473,8 @@ static GError* _tgengraph_parseGraphVertices(TGenGraph* g) {
             error = _tgengraph_parseSynchronizeVertex(g, idStr, vertexIndex);
         } else if(g_strstr_len(idStr, (gssize)-1, "transfer")) {
             error = _tgengraph_parseTransferVertex(g, idStr, vertexIndex);
+        } else if(g_strstr_len(idStr, (gssize)-1, "choose")) {
+            error = _tgengraph_parseChooseVertex(g, idStr, vertexIndex);
         } else {
             error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ELEMENT,
                     "found vertex %li (%s) with an unknown action id '%s'",
@@ -430,6 +533,15 @@ static AttributeFlags _tgengraph_vertexAttributeToFlag(const gchar* stringAttrib
             return TGEN_VA_TIMEOUT;
         } else if(!g_ascii_strcasecmp(stringAttribute, "stallout")) {
             return TGEN_VA_STALLOUT;
+        }
+    }
+    return TGEN_A_NONE;
+}
+
+static AttributeFlags _tgengraph_edgeAttributeToFlag(const gchar* stringAttribute) {
+    if(stringAttribute) {
+        if(!g_ascii_strcasecmp(stringAttribute, "weight")) {
+            return TGEN_EA_WEIGHT;
         }
     }
     return TGEN_A_NONE;
@@ -501,6 +613,7 @@ static GError* _tgengraph_parseGraphProperties(TGenGraph* g) {
         igraph_strvector_get(&enames, (glong) i, &name);
 
         tgen_debug("found edge attribute '%s'", name);
+        g->knownAttributes |= _tgengraph_edgeAttributeToFlag(name);
     }
 
     igraph_strvector_destroy(&gnames);
@@ -546,6 +659,9 @@ void tgengraph_free(TGenGraph* g) {
     if(g->actions) {
         g_hash_table_destroy(g->actions);
     }
+    if(g->weights) {
+        g_hash_table_destroy(g->weights);
+    }
     if(g->graph) {
         igraph_destroy(g->graph);
         g_free(g->graph);
@@ -567,6 +683,7 @@ TGenGraph* tgengraph_new(gchar* path) {
     g->magic = TGEN_MAGIC;
 
     g->actions = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, (GDestroyNotify)tgenaction_unref);
+    g->weights = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, g_free);
     g->graphPath = path ? _tgengraph_getHomePath(path) : NULL;
 
     GError* error = NULL;
@@ -588,14 +705,15 @@ TGenGraph* tgengraph_new(gchar* path) {
                                     "unable to read graph at path '%s'", g->graphPath);
         }
 
+        /* parse edges first for choose, needs hash table of weights filled for error handling */
         if(!error) {
             error = _tgengraph_parseGraphProperties(g);
         }
         if(!error) {
-            error = _tgengraph_parseGraphVertices(g);
+            error = _tgengraph_parseGraphEdges(g);
         }
         if(!error) {
-            error = _tgengraph_parseGraphEdges(g);
+            error = _tgengraph_parseGraphVertices(g);
         }
 
         /* replace the old handler */
@@ -672,6 +790,28 @@ GQueue* tgengraph_getNextActions(TGenGraph* g, TGenAction* action) {
     g_free(resultNeighborVertices);
 
     return nextActions;
+}
+
+gdouble tgengraph_getEdgeWeight(TGenGraph* g, TGenAction* srcAction, TGenAction* dstAction) {
+    TGEN_ASSERT(g);
+
+    /* given choose action, get the weights of the edges connected to it */
+    gpointer srcKey = tgenaction_getKey(srcAction);
+    igraph_integer_t srcVertexIndex = (igraph_integer_t) GPOINTER_TO_INT(srcKey);
+    gpointer dstKey = tgenaction_getKey(dstAction);
+    igraph_integer_t dstVertexIndex = (igraph_integer_t) GPOINTER_TO_INT(dstKey);
+
+    igraph_integer_t edgeIndex;
+    gint result = igraph_get_eid(g->graph, &edgeIndex, srcVertexIndex, dstVertexIndex, IGRAPH_DIRECTED, TRUE);
+
+    if(result != IGRAPH_SUCCESS) {
+        tgen_critical("igraph_get_eid return non-success code %i", result);
+        return FALSE;
+    }
+
+    gdouble* weight = _tgengraph_getWeight(g, edgeIndex);
+
+    return (weight != NULL) ? *weight : 0.0;
 }
 
 gboolean tgengraph_hasEdges(TGenGraph* g) {

@@ -42,6 +42,11 @@ typedef struct _TGenActionSynchronizeData {
     glong completedIncoming;
 } TGenActionSynchronizeData;
 
+typedef struct _TGenActionChooseData {
+    gboolean hasWeights;
+    gdouble totalWeight;
+} TGenActionChooseData;
+
 struct _TGenAction {
     TGenActionType type;
     gpointer key;
@@ -471,6 +476,22 @@ TGenAction* tgenaction_newSynchronizeAction(glong totalIncoming, GError** error)
     return action;
 }
 
+TGenAction* tgenaction_newChooseAction(GError** error, gboolean hasWeights, gdouble totalWeight) {
+    TGenAction* action = g_new0(TGenAction, 1);
+    action->magic = TGEN_MAGIC;
+    action->refcount = 1;
+
+    action->type = TGEN_ACTION_CHOOSE;
+
+    TGenActionChooseData* data = g_new0(TGenActionChooseData, 1);
+    data->hasWeights = hasWeights;
+    data->totalWeight = totalWeight;
+
+    action->data = data;
+
+    return action;
+}
+
 TGenAction* tgenaction_newTransferAction(const gchar* typeStr, const gchar* protocolStr,
         const gchar* sizeStr, const gchar* peersStr, const gchar* timeoutStr, const gchar* stalloutStr, GError** error) {
     g_assert(error);
@@ -704,4 +725,15 @@ void tgenaction_setCompletedIncoming(TGenAction* action, glong completedIncoming
     TGEN_ASSERT(action);
     g_assert(action->data && action->type == TGEN_ACTION_SYNCHR0NIZE);
     ((TGenActionSynchronizeData*)action->data)->completedIncoming = completedIncoming;
+}
+
+gboolean tgenaction_getHasWeights(TGenAction* action){
+    TGEN_ASSERT(action);
+    g_assert(action->data && action->type == TGEN_ACTION_CHOOSE);
+    return ((TGenActionChooseData*)action->data)->hasWeights;
+}
+gdouble tgenaction_getTotalWeight(TGenAction* action){
+    TGEN_ASSERT(action);
+    g_assert(action->data && action->type == TGEN_ACTION_CHOOSE);
+    return ((TGenActionChooseData*)action->data)->totalWeight;
 }
