@@ -600,13 +600,7 @@ gint host_epollControl(Host* host, gint epollDescriptor, gint operation,
     if(!host_isShadowDescriptor(host, fileDescriptor)) {
         gint osfd = host_getOSHandle(host, fileDescriptor);
         osfd = osfd >= 0 ? osfd : fileDescriptor;
-
-        gint oldEventFD = event->data.fd;
-        event->data.fd = osfd;
-        gint result = epoll_controlOS(epoll, operation, osfd, event);
-        event->data.fd = oldEventFD;
-
-        return result;
+        return epoll_controlOS(epoll, operation, osfd, event);
     }
 
     /* EBADF  fd is not a valid shadow file descriptor. */
@@ -622,7 +616,6 @@ gint host_epollControl(Host* host, gint epollDescriptor, gint operation,
     }
 
     return epoll_control(epoll, operation, descriptor, event);
-
 }
 
 gint host_epollGetEvents(Host* host, gint handle,
@@ -649,13 +642,16 @@ gint host_epollGetEvents(Host* host, gint handle,
     Epoll* epoll = (Epoll*) descriptor;
     gint ret = epoll_getEvents(epoll, eventArray, eventArrayLength, nEvents);
 
-    for(gint i = 0; i < *nEvents; i++) {
-        if(!host_isShadowDescriptor(host, eventArray[i].data.fd)) {
-            /* the fd is a file that the OS handled for us, translate to shadow fd */
-            eventArray[i].data.fd = host_getShadowHandle(host, eventArray[i].data.fd);
-            utility_assert(eventArray[i].data.fd >= 0);
-        }
-    }
+    /* i think data is a user-only struct, and a union - which may not have fd set
+     * so lets just leave it alone */
+//    for(gint i = 0; i < *nEvents; i++) {
+//        if(!host_isShadowDescriptor(host, eventArray[i].data.fd)) {
+//            /* the fd is a file that the OS handled for us, translate to shadow fd */
+//            gint shadowHandle = host_getShadowHandle(host, eventArray[i].data.fd);
+//            utility_assert(shadowHandle >= 0);
+//            eventArray[i].data.fd = shadowHandle;
+//        }
+//    }
 
     return ret;
 }
@@ -766,6 +762,50 @@ gint host_select(Host* host, fd_set* readable, fd_set* writeable, fd_set* errone
 
     /* return the total number of bits that are set in all three fdsets */
     return nReady;
+}
+
+gint host_poll(Host* host, struct pollfd *pollFDs, nfds_t numPollFDs) {
+    MAGIC_ASSERT(host);
+
+    gint numReady = 0;
+
+    for(nfds_t i = 0; i < numPollFDs; i++) {
+        struct pollfd* pfd = &pollFDs[i];
+        pfd->revents = 0;
+
+        if(pfd->fd == -1) {
+            continue;
+        }
+
+        if(host_isShadowDescriptor(host, pfd->fd)){
+            /* descriptor lookup is not NULL */
+            Descriptor* descriptor = host_lookupDescriptor(host, pfd->fd);
+            DescriptorStatus status = descriptor_getStatus(descriptor);
+            if(status & DS_CLOSED) {
+                pfd->revents |= POLLNVAL;
+            }
+
+            if(pfd->events != 0) {
+                if((pfd->events & POLLIN) && (status & DS_ACTIVE) && (status & DS_READABLE)) {
+                    pfd->revents |= POLLIN;
+                }
+                if((pfd->events & POLLOUT) && (status & DS_ACTIVE) && (status & DS_WRITABLE)) {
+                    pfd->revents |= POLLOUT;
+                }
+            }
+        } else {
+            /* check if we have a mapped os fd */
+            gint osfd = host_getOSHandle(host, pfd->fd);
+            if(osfd >= 0) {
+                /* ask the OS, but dont let them block */
+                poll(pfd, (nfds_t)1, 0);
+            }
+        }
+
+        numReady += (pfd->revents == 0) ? 0 : 1;
+    }
+
+    return numReady;
 }
 
 static gboolean _host_doesInterfaceExist(Host* host, in_addr_t interfaceIP) {

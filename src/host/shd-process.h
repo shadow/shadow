@@ -319,5 +319,6 @@ pid_t process_emu_waitpid(Process* proc, pid_t pid, int *status, int options);
 int process_emu_select(Process* proc, int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struct timeval *timeout);
 int process_emu_pselect(Process* proc, int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, const struct timespec *timeout, const sigset_t *sigmask);
 int process_emu_poll(Process* proc, struct pollfd *pfd, nfds_t nfd, int timeout);
+int process_emu_ppoll(Process* proc, struct pollfd *fds, nfds_t nfds, const struct timespec *timeout_ts, const sigset_t *sigmask);
 
 #endif /* SHD_PROCESS_H_ */

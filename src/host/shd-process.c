@@ -26,6 +26,7 @@
 #include <sys/eventfd.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
+#include <sys/resource.h>
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
@@ -41,7 +42,7 @@
 #include <features.h>
 
 #include <pthread.h>
-#include <pthmt.h>
+#include <rpth.h>
 
 #if defined(FD_SETSIZE)
 #if FD_SETSIZE > 1024
@@ -141,6 +142,9 @@ struct _Process {
 
     /* timer for CPU delay measurements */
     GTimer* cpuDelayTimer;
+
+    /* rlimit of the number of open files, needed by poll */
+    gsize fdLimit;
 
     /* process boot and shutdown variables */
     SimulationTime startTime;
@@ -970,6 +974,33 @@ static int _process_emu_selectHelper(Process* proc, int nfds, fd_set *readfds, f
     return ret;
 }
 
+static int _process_emu_pollHelper(Process* proc, struct pollfd *fds, nfds_t nfds, const struct timespec *timeout_ts) {
+    gint ret = 0;
+
+    if(proc->fdLimit == 0) {
+        struct rlimit fdRLimit;
+        memset(&fdRLimit, 0, sizeof(struct rlimit));
+        if(getrlimit(RLIMIT_NOFILE, &fdRLimit) == 0) {
+            proc->fdLimit = (gsize) fdRLimit.rlim_cur;
+        }
+    }
+
+    if(((gsize)nfds) > proc->fdLimit) {
+        errno = EINVAL;
+        ret = -1;
+    } else if(timeout_ts == NULL || timeout_ts->tv_sec != 0 || timeout_ts->tv_nsec != 0) {
+        /* either we should block forever, or block until a valid timeout,
+         * neither of which shadow supports */
+        warning("poll is trying to block, but Shadow doesn't support blocking without pth");
+        errno = EINTR;
+        ret = -1;
+    } else {
+        ret = host_poll(proc->host, fds, nfds);
+    }
+
+    return ret;
+}
+
 static int _process_emu_epollCreateHelper(Process* proc, int size, int flags) {
     /* size should be > 0, but can otherwise be completely ignored */
     if(size < 1) {
@@ -1000,6 +1031,36 @@ static int _process_emu_epollCreateHelper(Process* proc, int size, int flags) {
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
 
     return handle;
+}
+
+static int _process_emu_epollWaitHelper(Process* proc, int epfd, struct epoll_event *events, int maxevents, int timeout) {
+    gint ret = 0;
+
+    /* EINVAL if maxevents is less than or equal to zero. */
+    if(maxevents <= 0) {
+        errno = EINVAL;
+        ret = -1;
+    } else if(timeout != 0) {
+        /* either we should block forever, or block until a valid timeout,
+         * neither of which shadow supports */
+        warning("epoll_wait is trying to block, but Shadow doesn't support blocking without pth");
+        errno = EINTR;
+        ret = -1;
+    } else {
+        /* switch to shadow context and try to get events if we have any */
+        gint nEvents = 0;
+        gint result = host_epollGetEvents(proc->host, epfd, events, maxevents, &nEvents);
+
+        if(result != 0) {
+            /* there was an error from shadow */
+            errno = result;
+            ret = -1;
+        } else {
+            ret = nEvents;
+        }
+    }
+
+    return ret;
 }
 
 /* memory allocation family */
@@ -1184,75 +1245,34 @@ int process_emu_epoll_ctl(Process* proc, int epfd, int op, int fd, struct epoll_
 }
 
 int process_emu_epoll_wait(Process* proc, int epfd, struct epoll_event *events, int maxevents, int timeout) {
-    /* EINVAL if maxevents is less than or equal to zero. */
-    if(maxevents <= 0) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    /* switch to shadow context and try to get events if we have any */
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-    gint nEvents = 0;
-    gint ret = 0;
-    gint result = host_epollGetEvents(proc->host, epfd, events, maxevents, &nEvents);
-
-    if(result != 0) {
-        /* there was an error from shadow */
-        errno = result;
-        ret = -1;
-    } else if(timeout != 0 && nEvents <= 0) {
-        /* they are trying to block but we have no events yet, lets ask pth to handle blocking */
-        fd_set selRead;
-        FD_ZERO(&selRead);
-        FD_SET(epfd, &selRead);
+    int ret = 0;
+    if(prevCTX == PCTX_PLUGIN) {
         _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
-        if(timeout < 0) {
-            /* block indefinitely */
-            pth_select(epfd+1, &selRead, NULL, NULL, NULL);
-        } else {
-            /* block with the given millisecond timeout */
-            struct timeval selTimeout;
-            selTimeout.tv_sec = (__time_t)(timeout / 1000);
-            selTimeout.tv_usec = (__suseconds_t)((timeout % 1000) * 1000);
-            pth_select(epfd+1, &selRead, NULL, NULL, &selTimeout);
-        }
+        utility_assert(proc->tstate == pth_gctx_get());
+        ret = pth_epoll_wait(epfd, events, maxevents, timeout);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
-        if(FD_ISSET(epfd, &selRead)) {
-            /* we are now readable after waiting in select */
-            result = host_epollGetEvents(proc->host, epfd, events, maxevents, &nEvents);
-            if(result != 0) {
-                /* there was an error from shadow */
-                errno = result;
-                ret = -1;
-            } else {
-                ret = nEvents;
-            }
-        } else {
-            /* select had a timeout and nothing became ready */
-            ret = nEvents = 0;
-        }
     } else {
-        ret = nEvents;
+        ret = _process_emu_epollWaitHelper(proc, epfd, events, maxevents, timeout);
     }
-
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
 }
 
 int process_emu_epoll_pwait(Process* proc, int epfd, struct epoll_event *events, int maxevents, int timeout, const sigset_t *ss) {
-    /*
-     * this is the same as epoll_wait, except it catches signals in the
-     * signal set. lets just assume we have no signals to worry about.
-     * forward to our regular wait method.
-     *
-     * @warning we dont handle signals
-     */
-    if(ss) {
-        ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-        warning("epollpwait using a signalset is not yet supported");
-        _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+    int ret = 0;
+    if(prevCTX == PCTX_PLUGIN) {
+        _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
+        utility_assert(proc->tstate == pth_gctx_get());
+        ret = pth_epoll_pwait(epfd, events, maxevents, timeout, ss);
+        _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+    } else {
+        /* shadow ignores the sigmask */
+        ret = _process_emu_epollWaitHelper(proc, epfd, events, maxevents, timeout);
     }
-    return process_emu_epoll_wait(proc, epfd, events, maxevents, timeout);
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    return ret;
 }
 
 /* socket/io family */
@@ -2121,10 +2141,10 @@ int process_emu_select(Process* proc, int nfds, fd_set *readfds, fd_set *writefd
         ret = pth_select(nfds, readfds, writefds, exceptfds, timeout);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     } else {
-        struct timespec tmp;
-        tmp.tv_sec = timeout->tv_sec;
-        tmp.tv_nsec = (__syscall_slong_t)(timeout->tv_usec * 1000);
-        ret = _process_emu_selectHelper(proc, nfds, readfds, writefds, exceptfds, &tmp);
+        struct timespec timeout_ts;
+        timeout_ts.tv_sec = timeout->tv_sec;
+        timeout_ts.tv_nsec = (__syscall_slong_t)(timeout->tv_usec * 1000);
+        ret = _process_emu_selectHelper(proc, nfds, readfds, writefds, exceptfds, &timeout_ts);
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
@@ -2155,9 +2175,25 @@ int process_emu_poll(Process* proc, struct pollfd *pfd, nfds_t nfd, int timeout)
         ret = pth_poll(pfd, nfd, timeout);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     } else {
-        warning("poll() not currently implemented by shadow");
-        errno = ENOSYS;
-        ret = -1;
+        struct timespec timeout_ts;
+        timeout_ts.tv_sec = timeout / 1000;
+        timeout_ts.tv_nsec = (__syscall_slong_t)((timeout % 1000) * 100000);
+        ret = _process_emu_pollHelper(proc, pfd, nfd, &timeout_ts);
+    }
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    return ret;
+}
+
+int process_emu_ppoll(Process* proc, struct pollfd *fds, nfds_t nfds, const struct timespec *timeout_ts, const sigset_t *sigmask) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+    int ret = 0;
+    if(prevCTX == PCTX_PLUGIN) {
+        _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
+        utility_assert(proc->tstate == pth_gctx_get());
+        ret = pth_ppoll(fds, nfds, timeout_ts, sigmask);
+        _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+    } else {
+        ret = _process_emu_pollHelper(proc, fds, nfds, timeout_ts);
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;

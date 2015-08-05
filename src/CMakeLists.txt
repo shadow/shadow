@@ -5,9 +5,9 @@ find_package(DL REQUIRED)
 find_package(M REQUIRED)
 find_package(IGRAPH REQUIRED)
 find_package(GLIB REQUIRED)
-find_package(PTHMT REQUIRED)
+find_package(RPTH REQUIRED)
 
-include_directories(${RT_INCLUDES} ${DL_INCLUDES} ${M_INCLUDES} ${IGRAPH_INCLUDES} ${GLIB_INCLUDES} ${PTHMT_INCLUDES})
+include_directories(${RT_INCLUDES} ${DL_INCLUDES} ${M_INCLUDES} ${IGRAPH_INCLUDES} ${GLIB_INCLUDES} ${RPTH_INCLUDES})
 
 ## make sure shadow.h is in the include path
 include_directories(${CMAKE_SOURCE_DIR}/src/)
@@ -100,7 +100,7 @@ set(shadow_srcs
 ## specify the main shadow executable, build, link, and install
 add_executable(shadow ${shadow_srcs})
 add_dependencies(shadow shadow-interpose)
-target_link_libraries(shadow shadow-interpose ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES} ${IGRAPH_LIBRARIES} ${GLIB_LIBRARIES} ${PTHMT_LIBRARIES})
+target_link_libraries(shadow shadow-interpose ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES} ${IGRAPH_LIBRARIES} ${GLIB_LIBRARIES} ${RPTH_LIBRARIES})
 install(TARGETS shadow DESTINATION bin)
 
 ## shadow needs to find libshadow-intercept and custom libs after install

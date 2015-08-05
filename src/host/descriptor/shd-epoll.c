@@ -463,6 +463,8 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray,
     if(space) {
         /* now we have to get events from the OS descriptors */
         struct epoll_event osEvents[space];
+        memset(&osEvents, 0, space*sizeof(struct epoll_event));
+
         /* since we are in shadow context, this will be forwarded to the OS epoll */
         gint nos = epoll_wait(epoll->osEpollDescriptor, osEvents, space, 0);
 
