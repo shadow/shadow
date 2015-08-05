@@ -9,9 +9,6 @@
 #include "shd-tgen.h"
 
 struct _TGenDriver {
-    /* pointer to a logging function */
-    ShadowLogFunc log;
-
     /* our graphml dependency graph */
     TGenGraph* actionGraph;
 
@@ -47,7 +44,7 @@ struct _TGenDriver {
 
 /* store a global pointer to the log func, so we can log in any
  * of our tgen modules without a pointer to the tgen struct */
-ShadowLogFunc tgenLogFunc;
+TGenLogFunc tgenLogFunc;
 
 /* forward declaration */
 static void _tgendriver_continueNextActions(TGenDriver* driver, TGenAction* action);
@@ -510,8 +507,9 @@ static gboolean _tgendriver_setHeartbeatTimerHelper(TGenDriver* driver) {
     }
 }
 
-TGenDriver* tgendriver_new(gint argc, gchar* argv[], ShadowLogFunc logf) {
+TGenDriver* tgendriver_new(gint argc, gchar* argv[], TGenLogFunc logf) {
     tgenLogFunc = logf;
+    tgen_debug("set log function to %p", logf);
 
     /* argv[0] is program name, argv[1] should be config file */
     if (argc != 2) {
@@ -550,9 +548,6 @@ TGenDriver* tgendriver_new(gint argc, gchar* argv[], ShadowLogFunc logf) {
     TGenDriver* driver = g_new0(TGenDriver, 1);
     driver->magic = TGEN_MAGIC;
     driver->refcount = 1;
-
-    driver->log = logf;
-    tgen_debug("set log function to %p", logf);
 
     driver->io = tgenio_new();
 
@@ -601,21 +596,4 @@ gint tgendriver_getEpollDescriptor(TGenDriver* driver) {
 gboolean tgendriver_hasEnded(TGenDriver* driver) {
     TGEN_ASSERT(driver);
     return driver->clientHasEnded;
-}
-
-void tgendriver_shutdown(TGenDriver* driver) {
-    TGEN_ASSERT(driver);
-
-    tgen_info("shutting down IO now, refcount=%u", driver->refcount);
-
-    /* we have to close our IO module first, since it holds several refs */
-    tgenio_unref(driver->io);
-
-    /* make sure its not freed twice */
-    driver->io = NULL;
-
-    tgen_info("shutting down driver now, refcount=%u", driver->refcount);
-
-    /* hopefully this frees the driver */
-    tgendriver_unref(driver);
 }

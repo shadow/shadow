@@ -1,6 +1,7 @@
 add_cflags(-Wno-unknown-attributes)
 add_cflags(-Wno-unused-command-line-argument)
 add_cflags(-Wno-unknown-warning-option)
+add_cflags(-Wno-invalid-noreturn)
 
 ## build the required libraries for intercepting system and library calls.
 ## create the interpose library, to be set as LD_PRELOAD to intercept functions.
@@ -12,7 +13,6 @@ install(TARGETS shadow-interpose DESTINATION lib)
 
 ## the plug-ins need to include the interface header
 include_directories(${CMAKE_SOURCE_DIR}/src/plugin)
-install(FILES shd-library.h shadow-plugin-interface.h DESTINATION include/)
 
 ## LLVM will be used to build each plug-in that was not disabled in setup.py
 ## our custom pass will enable us to extract and swap plugin state automatically

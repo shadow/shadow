@@ -129,8 +129,13 @@ add_custom_command(OUTPUT ${target}.hoisted.bc
 set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_MAKE_CLEAN_FILES ${target}.hoisted.bc)
 
 ## now we need the actual .so to be built
-add_library(${target} MODULE ${target}.hoisted.bc)
+add_executable(${target} ${target}.hoisted.bc)
 add_dependencies(${target} ${target}.hoisted.bc)
+set_target_properties(${target} PROPERTIES 
+    INSTALL_RPATH ${CMAKE_INSTALL_PREFIX}/lib 
+    INSTALL_RPATH_USE_LINK_PATH TRUE 
+    LINK_FLAGS "-pie -rdynamic -Wl,--no-as-needed"
+)
 
 ## trick cmake so it builds the bitcode into a shared library
 set_property(TARGET ${target} PROPERTY LINKER_LANGUAGE C)

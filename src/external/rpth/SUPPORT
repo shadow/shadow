@@ -1,0 +1,48 @@
+   ____  _   _
+  |  _ \| |_| |__                      ``Programming is like sex -
+  | |_) | __| '_ \                       one mistake and you have
+  |  __/| |_| | | |                      to support it for the rest
+  |_|    \__|_| |_|                      of your life.''
+
+  GNU Pth - The GNU Portable Threads
+
+  SUPPORT
+  =======
+
+  If you want to discuss multithreading issues not directly related to
+  GNU Pth, post to the USENET newsgroup comp.programming.threads. There
+  you can reach mostly all authorities of multithreading.
+
+  In case you have problems directly related to GNU Pth or you
+  need technical support for programming with GNU Pth, you can
+  send a bug report to bug-pth@gnu.org or alternatively write to
+  the GNU Pth support mailing list pth-users@gnu.org. There you
+  can currently (as of August 2000) reach about 110 Pth users from
+  around the world. Old pth-users@gnu.org postings are archived at
+  http://www.mail-archive.com/pth-users@gnu.org/.
+
+  Although the author tries hard to give the best support which is
+  possible in his remaining free time, there cannot be any guarranty
+  for help, because the author is a very busy hacker. So in your own
+  interest: If you need help in case of a hard problems, keep your
+  mail _VERY SHORT_ and _CONCISE_ and clearly mention your operating
+  system, your way you have configured and built Pth and provide a
+  way to _EASILY_ reproduce the problem. Don't die of laughter here
+  - you would be terrified if you would know how much people of the
+  authors software packages want help, but do not even mention the
+  actual problem :-(
+
+  Additionally in case of `segfaults' or other heavy problems, it is
+  important that you provide the author a stack frame backtrace (see
+  gdb's `bt' command) to allow the author to locate the problem. Without
+  this information it is usually not possible to help you in case of
+  such problems.
+
+  Please understand, that you're not the only user of Pth and that Pth
+  is not the only software package written by the author. So it is
+  always appreciated that you first investigate yourself in solving the
+  problem. If your problem then still remains, follow the above hints
+  and contact the author. But please also understand, that application
+  problems related to programming with Pth and the multithreaded
+  paradigm cannot always be treated as real `problems'.
+

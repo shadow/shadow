@@ -75,7 +75,7 @@ struct _Epoll {
     GQueue* reporting;
 
     SimulationTime lastWaitTime;
-    Thread* ownerThread;
+    Process* ownerProcess;
     gint osEpollDescriptor;
 
     MAGIC_DECLARE;
@@ -137,8 +137,8 @@ static void _epoll_free(Epoll* epoll) {
 
     close(epoll->osEpollDescriptor);
 
-    utility_assert(epoll->ownerThread);
-    thread_unref(epoll->ownerThread);
+    utility_assert(epoll->ownerProcess);
+    process_unref(epoll->ownerProcess);
 
     MAGIC_CLEAR(epoll);
     g_free(epoll);
@@ -183,9 +183,9 @@ Epoll* epoll_new(gint handle) {
 
     /* keep track of which virtual application we need to notify of events
     epoll_new should be called as a result of an application syscall */
-    epoll->ownerThread = worker_getActiveThread();
-    utility_assert(epoll->ownerThread);
-    thread_ref(epoll->ownerThread);
+    epoll->ownerProcess = worker_getActiveProcess();
+    utility_assert(epoll->ownerProcess);
+    process_ref(epoll->ownerProcess);
 
     /* the epoll descriptor itself is always able to be epolled */
     descriptor_adjustStatus(&(epoll->super), DS_ACTIVE, TRUE);
@@ -261,7 +261,7 @@ static void _epoll_trySchedule(Epoll* epoll) {
     if(!(epoll->flags & EF_CLOSED) && !g_queue_is_empty(epoll->reporting)) {
         /* avoid duplicating events in the shadow event queue for our epoll */
         gboolean isScheduled = (epoll->flags & EF_SCHEDULED) ? TRUE : FALSE;
-        if(!isScheduled && process_isRunning(thread_getParentProcess(epoll->ownerThread))) {
+        if(!isScheduled && process_isRunning(epoll->ownerProcess)) {
             /* schedule a notification event for our node */
             NotifyPluginEvent* event = notifyplugin_new(epoll->super.handle);
             SimulationTime delay = 1;
@@ -463,6 +463,8 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray,
     if(space) {
         /* now we have to get events from the OS descriptors */
         struct epoll_event osEvents[space];
+        memset(&osEvents, 0, space*sizeof(struct epoll_event));
+
         /* since we are in shadow context, this will be forwarded to the OS epoll */
         gint nos = epoll_wait(epoll->osEpollDescriptor, osEvents, space, 0);
 
@@ -507,7 +509,7 @@ void epoll_tryNotify(Epoll* epoll) {
 
     /* if it was closed in the meantime, do the actual close now */
     gboolean isClosed = (epoll->flags & EF_CLOSED) ? TRUE : FALSE;
-    if(isClosed || !thread_isRunning(epoll->ownerThread)) {
+    if(isClosed || !process_isRunning(epoll->ownerProcess)) {
         host_closeDescriptor(worker_getCurrentHost(), epoll->super.handle);
         return;
     }
@@ -519,7 +521,7 @@ void epoll_tryNotify(Epoll* epoll) {
      * XXX: what if our watches are empty, but the OS desc has events? */
     if(!g_queue_is_empty(epoll->reporting)) {
         /* notify application to collect the reportable events */
-        process_notify(thread_getParentProcess(epoll->ownerThread), epoll->ownerThread);
+        process_continue(epoll->ownerProcess);
 
         /* we just notified the application of the events, so reset the change status
          * and only report the event again if necessary */

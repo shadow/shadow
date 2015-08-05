@@ -66,6 +66,8 @@ gint host_epollControl(Host* host, gint epollDescriptor, gint operation,
         gint fileDescriptor, struct epoll_event* event);
 gint host_epollGetEvents(Host* host, gint handle, struct epoll_event* eventArray,
         gint eventArrayLength, gint* nEvents);
+gint host_select(Host* host, fd_set* readable, fd_set* writeable, fd_set* erroneous);
+gint host_poll(Host* host, struct pollfd *pollFDs, nfds_t numPollFDs);
 
 gint host_bindToInterface(Host* host, gint handle, const struct sockaddr* address);
 gint host_connectToPeer(Host* host, gint handle, const struct sockaddr* address);
