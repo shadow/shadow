@@ -1,0 +1,91 @@
+   ____  _   _
+  |  _ \| |_| |__      ``Nothing travels faster than the speed
+  | |_) | __| '_ \       of light with the possible exception of
+  |  __/| |_| | | |      bad news, which obeys its own special laws.''
+  |_|    \__|_| |_|                         -- Douglas Adams
+
+  GNU Pth - The GNU Portable Threads
+
+  NEWS
+  ====
+
+  This is a list of user-visible and/or major changes to GNU Pth.
+  For more details please have a look at the ChangeLog file.
+
+  Changes between 1.4 and 2.0 (24-Mar-2001 to 17-Feb-2003)
+
+   *) Make pth_poll(3) more compliant to POSIX.1-2001/SUSv3 poll(2).
+   *) Make pth_select(3) more compliant to POSIX.1-2001/SUSv3 select(2).
+   *) Replaced pth_event_occurred() with pth_event_status().
+   *) Add Autoconf option --with-fdsetsize=NUM for enlarging FD_SETSIZE.
+   *) Added thread attribute PTH_ATTR_DISPATCHES.
+   *) Added sub-API pth_uctx_* for user-space context switching.
+   *) Add a Pth variant of the new POSIX pselect(2) function.
+   *) Internally cleaned up the error handling macros.
+   *) Added POSIX-compliant sanity checks for bad fds.
+   *) Added pth_nanosleep() function.
+   *) Allow a NULL name for pth_msgport_create()
+   *) Completely rewrote the "hard syscall mapping". 
+   *) Added support to pth_poll(3) for POLLD{RD,WR}{NORM,BAND}.
+   *) Fixed a long-standing termination bug in pth_exit(3).
+   *) Upgraded to Autoconf 2.57, Shtool 1.6.2 and Libtool 1.4.3.
+   *) Add optional support for OSSP ex based exception handling.
+
+  Changes between 1.3 and 1.4 (19-Feb-2000 to 24-Mar-2001)
+
+   *) Support for non-standard but required <sys/select.h> header
+   *) New if-clause feature for config.param files
+   *) Added RPM specification (pth.spec) to source tree
+   *) Additional I/O functions pth_{recv,recvfrom,send,sendto}[_ev]()
+   *) Additional replacement function pth_system()
+   *) New self-contained pth_[v][a]sprintf() replacement functions
+   *) Upgrade to GNU shtool 1.5.2 and GNU libtool 1.3.5
+   *) Support for DESTDIR installation variable
+
+  Changes between 1.2 and 1.3 (31-Oct-1999 to 19-Feb-2000)
+
+   *) Better detection and support for Unix platform differences
+   *) More complete support for hard syscall wrapping
+   *) Memory debugging support via Dmalloc library and --with-dmalloc
+   *) Added a PTH_CTRL_DUMPSTATE to pth_ctrl()
+   *) Removed PTH_EVENT_PID and enhanced PTH_EVENT_FUNC
+   *) First cut for Win32/CygWin support
+   *) New `make striptease' feature for developers
+   *) New pth.m4 file for using Pth inside Autoconf based packages
+   *) New large pthread.pod manual page which contains full Pthread API
+   *) Fixed numerious memory leaks
+   *) Numerous bugfixes and cleanups
+
+  Changes between 1.1 and 1.2 (19-Aug-1999 to 31-Oct-1999)
+
+   *) Switched to GNU Lesser General Public License (LGPL) 2.1
+   *) Optimized signal mask handling to speed up dispatching
+   *) Lots of build environment enhancements and bugfixes
+   *) Support for POSIX socklen_t and nfds_t types in API
+   *) Allow the compilation even with a strict C++ compiler
+   *) Enhanced portability to support even more platforms
+   *) Added config.param facility
+   *) Enhanced `make test' facility.
+
+  Changes between 1.0 and 1.1 (03-Aug-1999 to 19-Aug-1999)
+
+   *) Fixed and enhanced POSIX semantics for replacement functions
+   *) Cleaned up source tree
+   *) Overhauled Autoconf environment
+   *) Enhanced setjmp/longjmp support
+   *) Support for SVR4/SUSv2 makecontext(2) mctx variant
+   *) Barrier synchronization objects
+   *) Sfio support via special Pth/Sfio discipline
+   *) Overhauled filedescriptor handling
+
+  Changes between 0.9 and 1.0 (Feb-1999 to 03-Aug-1999)
+
+   *) Added support for readv(2) and writev(2)
+   *) Added support for poll(2) facility
+   *) System Call Mapping (soft=#define & hard=syscall)
+   *) Cleanup support for forking (atfork)
+   *) Enhanced event handling
+   *) Added POSIX.1c pthread emulation library
+   *) New API for manipulating pth_attr_t objects
+   *) Per-thread signal delivery
+

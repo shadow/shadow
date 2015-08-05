@@ -1,0 +1,164 @@
+   ____  _   _
+  |  _ \| |_| |__
+  | |_) | __| '_ \
+  |  __/| |_| | | |                   ``Real hackers can write assembly
+  |_|    \__|_| |_|                     code in any language.''
+
+  GNU Pth - The GNU Portable Threads
+
+  HACKING
+  =======
+
+  HOW TO BE ALWAYS UP TO DATE
+  ---------------------------
+
+  Those who want to be always at the bleeding edge or even want to
+  hack on the Pth sources can browse the latest Pth source tree on
+  http://cvs.ossp.org/pkg/lib/pth/ or retrieve these sources via
+  Anonymous-CVS from the OSSP master repository.
+
+  For this you need CVS 1.10 or later. If you still don't have CVS installed,
+  grab it from http://www.cvshome.org/ and install it first. Then you can
+  check out the Pth source tree via the following steps:
+
+    | $ CVSROOT=:pserver:anonymous@cvs.ossp.org:/e/ossp/cvs
+    | $ export CVSROOT
+    | $ cvs login
+    | (Logging in to anonymous@cvs.ossp.org)
+    | CVS password:
+      [use an empty password by just pressing RETURN]
+    | $ cvs -z3 checkout pth
+    | cvs server: Updating pth
+    | U pth/.configure
+    | U pth/.cvsignore
+    | U pth/.gdbinit
+    | U pth/AUTHORS
+    | U pth/COPYING
+    | U pth/ChangeLog
+    | U pth/INSTALL
+    | U pth/Makefile.in
+    | U pth/NEWS
+    | :  :
+
+  Then start hacking on your local changes. You cannot commit it to the
+  repository, of course, because you've read-only access only. But you
+  can let the changes stay around in your checkout tree and whenever
+  changes occur in the master version (because of commits by the author)
+  you can update your version from time to time via:
+
+    | $ cd pth
+    | $ cvs -z3 update
+    | cvs server: Updating .
+    | U HACKING
+    |  :  :
+
+  If you want to contribute your changes to the author, create a
+  unified difference file as described below and send the generated
+  pth.diff file to pth-users@gnu.org (to send it to the public) or
+  bug-pth@gnu.org (to send it only to the author).
+
+    | $ cd pth
+    | $ cvs diff -u3 . >pth.diff
+
+  Read the comprehensive CVS user manual (included in the CVS
+  distrubtion as `doc/cvs.ps') for more details on how to work with CVS.
+
+  OVERVIEW OF THE SOURCE TREE
+  ---------------------------
+
+  Here is a brief overview of the source tree.
+
+  .gdbinit .............. GDB rc file for use with Pth
+  .dmallocrc ............ DMalloc rc file for use with Pth
+
+  AUTHORS ............... List of major package authors
+  COPYING ............... Copying conditions (the LGPL)
+  ChangeLog ............. The detailed list of every source change
+  HACKING ............... This document
+  HISTORY ............... List of released Pth versions
+  INSTALL ............... Installation Instructions
+  Makefile.in ........... Build procedure for a standard Make tool
+  NEWS .................. The list of major changes between version
+  PORTING ............... Instructions for porting Pth to new platforms
+  README ................ The general package introduction text
+  SUPPORT ............... Hints for user support
+  TESTS ................. Results from tests with real-world applications
+  THANKS ................ List of credits to people
+  USERS ................. List of packages utilizing Pth
+
+  acconfig.h ............ Autoconf header (the input for pth_acdef.h.in)
+  acheader.m4 ........... Autoconf macros for use with autoheader
+  aclocal.m4 ............ Autoconf macros (for configure)
+  config.guess .......... Autoconf platform guessing tool (part I)
+  config.param .......... Autoconf command line parameter collections
+  config.sub ............ Autoconf platform guessing tool (part II)
+  configure ............. Autoconf script (pre-generated from configure.ac)
+  configure.ac .......... Autoconf script source
+
+  ltconfig .............. Libtool configuration script
+  ltmain.sh ............. Libtool main template
+
+  pth-config.1 .......... Pth config script manual page (pre-generated)
+  pth-config.in ......... Pth config script input
+  pth-config.pod ........ Pth config script manual page source
+  pth.3 ................. Pth manual page (pre-generated)
+  pth.pod ............... Pth manual page source
+
+  pth_acdef.h.in ........ Autoconf header with definitions (generated)
+  pth_acmac.h.in ........ Autoconf header with macros
+  pth.h.in .............. Public header file source
+  pth_p.h.in ............ Private header file source
+
+  pth_attr.c ............ Pth module source: attribute objects
+  pth_cancel.c .......... Pth module source: cancellation
+  pth_clean.c ........... Pth module source: cleanup handler
+  pth_compat.c .......... Pth module source: platform compatibility
+  pth_data.c ............ Pth module source: thread local data
+  pth_debug.c ........... Pth module source: debugging support
+  pth_errno.c ........... Pth module source: errno handling
+  pth_event.c ........... Pth module source: event objects
+  pth_ext.c ............. Pth module source: extensional functionality
+  pth_fork.c ............ Pth module source: fork support
+  pth_high.c ............ Pth module source: high-level functions
+  pth_lib.c ............. Pth module source: standard library functions
+  pth_mctx.c ............ Pth module source: maschine context handling
+  pth_msg.c ............. Pth module source: message ports
+  pth_pqueue.c .......... Pth module source: priority queue data structure
+  pth_ring.c ............ Pth module source: ring data structure
+  pth_sched.c ........... Pth module source: scheduler
+  pth_string.c .......... Pth module source: string functions
+  pth_sync.c ............ Pth module source: synchronizations objects
+  pth_syscall.c ......... Pth module source: hard system call support
+  pth_tcb.c ............. Pth module source: thread control block
+  pth_time.c ............ Pth module source: time handling
+  pth_util.c ............ Pth module source: utility functions
+  pth_vers.c ............ Pth module source: library version (generated)
+
+  pthread-config.1 ...... Pthread API config script manual page (pre-generated)
+  pthread-config.in ..... Pthread API config script input
+  pthread-config.pod .... Pthread API config script manual page source
+  pthread.3 ............. Pthread API manual page (pre-generated)
+  pthread.pod ........... Pthread API manual page source
+  pthread.c ............. Pthread API functions
+  pthread.h.in .......... Pthread API public header source
+
+  pthread.ps ............ Pthread API overview (from SMI)
+  rse-pmt.ps ............ Article `Portable Multithreading' for pth_mctx.c
+
+  shtool ................ Shtool script
+
+  striptease.mk ......... Makefile for stripped source tree
+  striptease.pl ......... Perl Script for stripping the source tree
+
+  test_common.c ......... Test common functions
+  test_common.h ......... Test common header
+  test_httpd.c .......... Test module: Faked HTTP Daemon
+  test_misc.c ........... Test module: Miscellaneous
+  test_mp.c ............. Test module: Message Ports
+  test_philo.c .......... Test module: Five Dining Philosophers
+  test_pthread.c ........ Test module: Pthread API
+  test_select.c ......... Test module: pth_select(3) handling
+  test_sfio.c ........... Test module: AT&T Sfio support
+  test_sig.c ............ Test module: Signal handling
+  test_std.c ............ Test module: Standard Test
+

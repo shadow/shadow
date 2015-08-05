@@ -1,0 +1,141 @@
+#!/bin/sh
+##
+##  GNU Pth - The GNU Portable Threads
+##  Copyright (c) 1999-2006 Ralf S. Engelschall <rse@engelschall.com>
+##
+##  This file is part of GNU Pth, a non-preemptive thread scheduling
+##  library which can be found at http://www.gnu.org/software/pth/.
+##
+##  This library is free software; you can redistribute it and/or
+##  modify it under the terms of the GNU Lesser General Public
+##  License as published by the Free Software Foundation; either
+##  version 2.1 of the License, or (at your option) any later version.
+##
+##  This library is distributed in the hope that it will be useful,
+##  but WITHOUT ANY WARRANTY; without even the implied warranty of
+##  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+##  Lesser General Public License for more details.
+##
+##  You should have received a copy of the GNU Lesser General Public
+##  License along with this library; if not, write to the Free Software
+##  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307
+##  USA, or contact Ralf S. Engelschall <rse@engelschall.com>.
+##
+##  pth-config.in: Pth library build utility
+##
+
+DIFS=' 
+'
+
+prefix="@prefix@"
+exec_prefix="@exec_prefix@"
+
+pth_prefix="$prefix"
+pth_exec_prefix="$exec_prefix"
+pth_bindir="@bindir@"
+pth_libdir="@libdir@"
+pth_includedir="@includedir@"
+pth_mandir="@mandir@"
+pth_datadir="@datadir@"
+pth_acdir="@datadir@/aclocal"
+pth_cflags="@CFLAGS@"
+pth_ldflags="@LDFLAGS@"
+pth_libs="@LIBS@"
+pth_version="@PTH_VERSION_STR@"
+
+help=no
+version=no
+
+usage="pth-config"
+usage="$usage [--help] [--version] [--all]"
+usage="$usage [--prefix] [--exec-prefix] [--bindir] [--libdir] [--includedir] [--mandir] [--datadir] [--acdir]"
+usage="$usage [--cflags] [--ldflags] [--libs]"
+if [ $# -eq 0 ]; then
+    echo "pth-config:Error: Invalid option" 1>&2
+    echo "pth-config:Usage: $usage" 1>&2
+    exit 1
+fi
+output=''
+output_extra=''
+all=no
+prev=''
+OIFS="$IFS" IFS="$DIFS"
+for option
+do
+    if [ ".$prev" != . ]; then
+        eval "$prev=\$option"
+        prev=''
+        continue
+    fi
+    case "$option" in
+        -*=*) optarg=`echo "$option" | sed 's/[-_a-zA-Z0-9]*=//'` ;;
+           *) optarg='' ;;
+    esac
+    case "$option" in
+        --help|-h)
+            echo "Usage: $usage"
+            echo "Report bugs to bug-pth@gnu.org"
+            exit 0
+            ;;
+        --version|-v)
+            echo "GNU Pth $pth_version"
+            exit 0
+            ;;
+        --all)
+            all=yes
+            ;;
+        --prefix)
+            output="$output $pth_prefix"
+            ;;
+        --exec-prefix)
+            output="$output $pth_exec_prefix"
+            ;;
+        --bindir)
+            output="$output $pth_bindir"
+            ;;
+        --libdir)
+            output="$output $pth_libdir"
+            ;;
+        --includedir)
+            output="$output $pth_includedir"
+            ;;
+        --mandir)
+            output="$output $pth_mandir"
+            ;;
+        --datadir)
+            output="$output $pth_datadir"
+            ;;
+        --acdir)
+            output="$output $pth_acdir"
+            ;;
+        --cflags)
+            output="$output -I$pth_includedir"
+            output_extra="$output_extra $pth_cflags"
+            ;;
+        --ldflags)
+            output="$output -L$pth_libdir"
+            output_extra="$output_extra $pth_ldflags"
+            ;;
+        --libs)
+            output="$output -lpth"
+            output_extra="$output_extra $pth_libs"
+            ;;
+        * )
+            echo "pth-config:Error: Invalid option" 1>&2
+            echo "pth-config:Usage: $usage" 1>&2
+            exit 1;
+            ;;
+    esac
+done
+IFS="$OIFS"
+if [ ".$prev" != . ]; then
+    echo "pth-config:Error: missing argument to --`echo $prev | sed 's/_/-/g'`" 1>&2
+    exit 1
+fi
+if [ ".$output" != . ]; then
+    if [ ".$all" = .yes ]; then
+        output="$output $output_extra"
+    fi
+    echo $output
+fi
+
