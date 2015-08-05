@@ -5,15 +5,19 @@ find_package(DL REQUIRED)
 find_package(M REQUIRED)
 find_package(IGRAPH REQUIRED)
 find_package(GLIB REQUIRED)
-find_package(RPTH REQUIRED)
 
-include_directories(${RT_INCLUDES} ${DL_INCLUDES} ${M_INCLUDES} ${IGRAPH_INCLUDES} ${GLIB_INCLUDES} ${RPTH_INCLUDES})
+include_directories(${RT_INCLUDES} ${DL_INCLUDES} ${M_INCLUDES} ${IGRAPH_INCLUDES} ${GLIB_INCLUDES})
 
 ## make sure shadow.h is in the include path
 include_directories(${CMAKE_SOURCE_DIR}/src/)
 
 ## build plug-in libraries and other components
 add_subdirectory(plugin)
+
+## build rpth and make sure rpth.h is in the include path
+add_subdirectory(external)
+include_directories(${CMAKE_CURRENT_BINARY_DIR}/external/rpth)
+link_directories(${CMAKE_CURRENT_BINARY_DIR}/external/rpth/.libs)
 
 ## compile defs and flags
 #add_definitions(-D_SVID_SOURCE -D_XOPEN_SOURCE=600 -D_ISOC11_SOURCE) #-D_GNU_SOURCE
@@ -99,8 +103,8 @@ set(shadow_srcs
 
 ## specify the main shadow executable, build, link, and install
 add_executable(shadow ${shadow_srcs})
-add_dependencies(shadow shadow-interpose)
-target_link_libraries(shadow shadow-interpose ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES} ${IGRAPH_LIBRARIES} ${GLIB_LIBRARIES} ${RPTH_LIBRARIES})
+add_dependencies(shadow shadow-interpose rpth)
+target_link_libraries(shadow shadow-interpose -lrpth ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES} ${IGRAPH_LIBRARIES} ${GLIB_LIBRARIES})
 install(TARGETS shadow DESTINATION bin)
 
 ## shadow needs to find libshadow-intercept and custom libs after install
