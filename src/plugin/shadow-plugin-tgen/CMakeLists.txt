@@ -83,6 +83,6 @@ install(TARGETS shadow-tgen-global-lock DESTINATION lib)
 
 ## create and install the dynamic executable that can plug into shadow
 add_shadow_plugin(shadow-plugin-tgen ${tgen_sources})
-add_dependencies(shadow-plugin-tgen shadow-tgen-global-lock)
+add_dependencies(shadow-plugin-tgen LLVMHoistGlobals shadow-tgen-global-lock)
 target_link_libraries(shadow-plugin-tgen shadow-tgen-global-lock ${RT_LIBRARIES} ${M_LIBRARIES} ${IGRAPH_LIBRARIES} ${GLIB_LIBRARIES})
 install(TARGETS shadow-plugin-tgen DESTINATION plugins)
