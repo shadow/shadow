@@ -1,7 +1,7 @@
 project(llvm-hoist CXX)
 cmake_minimum_required(VERSION 2.8 FATAL_ERROR)
 
-set(CMAKE_CXX_FLAGS "-fno-rtti -std=c++11 -std=gnu++11 -Wno-unknown-attributes -Wno-unused-command-line-argument")
+set(CMAKE_CXX_FLAGS "-g -fno-rtti -std=c++11 -std=gnu++11 -Wno-unknown-attributes -Wno-unused-command-line-argument")
 
 find_package(LLVM REQUIRED)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${LLVM_DIR}")

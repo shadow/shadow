@@ -176,6 +176,23 @@ public:
 			}
 		}
 
+		// hack to make sure we have at least one global variable, so that the
+		// hoisted_globals struct gets created as required by shadow
+		if(Globals.empty()) {
+#ifdef DEBUG
+            errs() << HOIST_LOG_PREFIX << "No globals exist, injecting one now to ensure a non-empty hoisted_globals struct\n";
+#endif
+
+		    PointerType* PointerTy_0 = PointerType::get(IntegerType::get(getGlobalContext(), 8), 0);
+		    GlobalVariable* hidden_gv = new GlobalVariable(M, PointerTy_0, false, GlobalValue::CommonLinkage, 0, "__hoisted_placeholder__");
+		    ConstantPointerNull* const_ptr_2 = ConstantPointerNull::get(PointerTy_0);
+		    hidden_gv->setInitializer(const_ptr_2);
+
+            GlobalTypes.push_back(cast<PointerType>(hidden_gv->getType())->getElementType());
+            GlobalInitializers.push_back(hidden_gv->getInitializer());
+            Globals.push_back(hidden_gv);
+		}
+
 #ifdef DEBUG
             errs() << HOIST_LOG_PREFIX << "Injecting new storage objects\n";
 #endif
