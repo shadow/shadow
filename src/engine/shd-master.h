@@ -13,7 +13,7 @@ typedef struct _Master Master;
 
 Master* master_new(Configuration* config);
 void master_free(Master* engine);
-void master_run(Master* master);
+gint master_run(Master* master);
 
 SimulationTime master_getMinTimeJump(Master* master);
 void master_updateMinTimeJump(Master* master, gdouble minPathLatency);

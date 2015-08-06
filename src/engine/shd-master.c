@@ -128,7 +128,7 @@ SimulationTime master_getExecutionBarrier(Master* master) {
     return master->executeWindowEnd;
 }
 
-void master_run(Master* master) {
+gint master_run(Master* master) {
     MAGIC_ASSERT(master);
 
     guint slaveSeed = (guint)random_nextInt(master->random);
@@ -221,7 +221,7 @@ void master_run(Master* master) {
 
     debug("engine finished, cleaning up...");
 
-    slave_free(slave);
+    return slave_free(slave);
 }
 
 GTimer* master_getRunTimer(Master* master) {

@@ -56,4 +56,6 @@ Host* worker_getCurrentHost();
 Process* worker_getActiveProcess();
 void worker_setActiveProcess(Process* proc);
 
+void worker_incrementPluginError();
+
 #endif /* SHD_WORKER_H_ */

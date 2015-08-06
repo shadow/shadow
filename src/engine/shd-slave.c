@@ -53,6 +53,7 @@ struct _Slave {
     /* the last time we logged heartbeat information */
     SimulationTime simClockLastHeartbeat;
 
+    guint numPluginErrors;
     MAGIC_DECLARE;
 };
 
@@ -109,8 +110,9 @@ Slave* slave_new(Master* master, Configuration* config, guint randomSeed) {
     return slave;
 }
 
-void slave_free(Slave* slave) {
+gint slave_free(Slave* slave) {
     MAGIC_ASSERT(slave);
+    gint returnCode = (slave->numPluginErrors > 0) ? -1 : 0;
 
     /* this launches delete on all the plugins and should be called before
      * the engine is marked "killed" and workers are destroyed.
@@ -140,6 +142,8 @@ void slave_free(Slave* slave) {
 
     MAGIC_CLEAR(slave);
     g_free(slave);
+
+    return returnCode;
 }
 
 gboolean slave_isForced(Slave* slave) {
@@ -462,4 +466,9 @@ void slave_runSerial(Slave* slave) {
     w.hosts = _slave_getAllHosts(slave);
     worker_runSerial(&w);
     g_list_free(w.hosts);
+}
+
+void slave_incrementPluginError(Slave* slave) {
+    MAGIC_ASSERT(slave);
+    slave->numPluginErrors++;
 }

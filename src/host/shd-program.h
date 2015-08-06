@@ -9,7 +9,7 @@
 
 #include "shadow.h"
 
-typedef void (*PluginMainFunc)(int argc, char* argv[]);
+typedef gint (*PluginMainFunc)(int argc, char* argv[]);
 
 typedef struct _Program Program;
 typedef gpointer ProgramState;

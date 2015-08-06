@@ -499,3 +499,8 @@ gboolean worker_isFiltered(GLogLevelFlags level) {
 
     return FALSE;
 }
+
+void worker_incrementPluginError() {
+    Worker* worker = _worker_getPrivate();
+    slave_incrementPluginError(worker->slave);
+}

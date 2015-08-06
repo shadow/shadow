@@ -134,12 +134,12 @@ static gchar** _main_getSpawnEnviroment(const gchar* preloadHint, gboolean valgr
     return envlist;
 }
 
-static gboolean _main_spawnShadow(gchar** argv, gchar** envlist, GError** err) {
+static gboolean _main_spawnShadow(gchar** argv, gchar** envlist, gint* exitStatus, GError** err) {
     GSpawnFlags sf = G_SPAWN_SEARCH_PATH|G_SPAWN_CHILD_INHERITS_STDIN;
-    return g_spawn_sync(NULL, argv, envlist, sf, NULL, NULL, NULL, NULL, NULL, err);
+    return g_spawn_sync(NULL, argv, envlist, sf, NULL, NULL, NULL, NULL, exitStatus, err);
 }
 
-static gboolean _main_spawnShadowWithValgrind(gchar** argv, gchar** envlist, GError** err) {
+static gboolean _main_spawnShadowWithValgrind(gchar** argv, gchar** envlist, gint* exitStatus, GError** err) {
     gchar* args = g_strjoinv(" ", argv);
     GString* newargvBuffer = g_string_new(args);
     g_free(args);
@@ -149,7 +149,7 @@ static gboolean _main_spawnShadowWithValgrind(gchar** argv, gchar** envlist, GEr
     gchar** newargv = g_strsplit(newargvBuffer->str, " ", 0);
     g_string_free(newargvBuffer, TRUE);
 
-    gboolean success = _main_spawnShadow(newargv, envlist, err);
+    gboolean success = _main_spawnShadow(newargv, envlist, exitStatus, err);
     g_strfreev(newargv);
     return success;
 }
@@ -209,10 +209,11 @@ gint shadow_main(gint argc, gchar* argv[]) {
             gchar* cmds = g_strjoinv(" ", argv);
             gchar** cmdv = g_strsplit(cmds, " ", 0);
             GError* error = NULL;
+            gint exitStatus = 0;
 
             gboolean spawnSuccess = config->runValgrind ?
-                    _main_spawnShadowWithValgrind(cmdv, envlist, &error) :
-                    _main_spawnShadow(cmdv, envlist, &error);
+                    _main_spawnShadowWithValgrind(cmdv, envlist, &exitStatus, &error) :
+                    _main_spawnShadow(cmdv, envlist, &exitStatus, &error);
 
             g_free(cmds);
             g_strfreev(cmdv);
@@ -223,8 +224,9 @@ gint shadow_main(gint argc, gchar* argv[]) {
                 return -1;
             }
 
+            g_printerr("** got exit status %i from child\n", exitStatus);
             /* child was run */
-            return 0;
+            return (exitStatus == 0) ? 0 : -1;
         }
     }
 
@@ -235,16 +237,16 @@ gint shadow_main(gint argc, gchar* argv[]) {
     interposer_setShadowIsLoaded();
 
     /* allocate and initialize our main simulation driver */
+    gint returnCode = 0;
     shadowMaster = master_new(config);
     if(shadowMaster) {
         /* run the simulation */
-        master_run(shadowMaster);
+        returnCode = master_run(shadowMaster);
         /* cleanup */
         master_free(shadowMaster);
         shadowMaster = NULL;
     }
 
     configuration_free(config);
-
-    return 0;
+    return returnCode;
 }

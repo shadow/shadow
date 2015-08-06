@@ -187,7 +187,9 @@ Process* process_new(gpointer host, GQuark programID, SimulationTime startTime, 
     // FIXME ref the host once that is merged
     proc->programID = programID;
     proc->startTime = startTime;
-    proc->arguments = g_string_new(arguments);
+    if(arguments && (g_ascii_strncasecmp(arguments, "\0", (gsize) 1) != 0)) {
+        proc->arguments = g_string_new(arguments);
+    }
 
     proc->cpuDelayTimer = g_timer_new();
     proc->referenceCount = 1;
@@ -199,19 +201,18 @@ Process* process_new(gpointer host, GQuark programID, SimulationTime startTime, 
 static void _process_free(Process* proc) {
     MAGIC_ASSERT(proc);
 
-    process_stop(proc);
+    /* already stopped */
+//    process_stop(proc);
 
-    g_string_free(proc->arguments, TRUE);
+    if(proc->arguments) {
+        g_string_free(proc->arguments, TRUE);
+    }
 
     if(proc->atExitFunctions) {
         g_queue_free_full(proc->atExitFunctions, g_free);
     }
 
     g_timer_destroy(proc->cpuDelayTimer);
-
-    if(proc->tstate) {
-        pth_gctx_free(proc->tstate);
-    }
 
     MAGIC_CLEAR(proc);
     g_free(proc);
@@ -227,7 +228,6 @@ static void _process_handleTimerResult(Process* proc, gdouble elapsedTimeSec) {
 static gint _process_getArguments(Process* proc, gchar** argvOut[]) {
     gchar* threadBuffer;
 
-    gchar* argumentString = g_strdup(proc->arguments->str);
     GQueue *arguments = g_queue_new();
 
     /* first argument is the name of the program */
@@ -235,11 +235,15 @@ static gint _process_getArguments(Process* proc, gchar** argvOut[]) {
     g_queue_push_tail(arguments, g_strdup(pluginName));
 
     /* parse the full argument string into separate strings */
-    gchar* token = strtok_r(argumentString, " ", &threadBuffer);
-    while(token != NULL) {
-        gchar* argument = g_strdup((const gchar*) token);
-        g_queue_push_tail(arguments, argument);
-        token = strtok_r(NULL, " ", &threadBuffer);
+    if(proc->arguments && proc->arguments->len > 0 && g_ascii_strncasecmp(proc->arguments->str, "\0", (gsize) 1) != 0) {
+        gchar* argumentString = g_strdup(proc->arguments->str);
+        gchar* token = strtok_r(argumentString, " ", &threadBuffer);
+        while(token != NULL) {
+            gchar* argument = g_strdup((const gchar*) token);
+            g_queue_push_tail(arguments, argument);
+            token = strtok_r(NULL, " ", &threadBuffer);
+        }
+        g_free(argumentString);
     }
 
     /* setup for creating new plug-in, i.e. format into argc and argv */
@@ -252,7 +256,6 @@ static gint _process_getArguments(Process* proc, gchar** argvOut[]) {
     }
 
     /* cleanup */
-    g_free(argumentString);
     g_queue_free(arguments);
 
     /* transfer to the caller - they must free argv and each element of it */
@@ -410,6 +413,8 @@ static void* _process_executeMain(Process* proc) {
     gchar** argv;
     gint argc = _process_getArguments(proc, &argv);
 
+    info("calling main() for '%s' process", g_quark_to_string(proc->programID));
+
     /* time how long we execute the program */
     g_timer_start(proc->cpuDelayTimer);
 
@@ -417,7 +422,7 @@ static void* _process_executeMain(Process* proc) {
     _process_changeContext(proc, PCTX_SHADOW, PCTX_PLUGIN);
 
     /* call the program's main function, pth will handle blocking as the program runs */
-    mainFunc(argc, argv);
+    gint returnCode = mainFunc(argc, argv);
 
     /* the program's main function has returned or exited, this process has completed */
     _process_changeContext(proc, PCTX_PLUGIN, PCTX_SHADOW);
@@ -425,6 +430,12 @@ static void* _process_executeMain(Process* proc) {
     /* no need to call stop */
     gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);
     _process_handleTimerResult(proc, elapsed);
+
+    message("main() for '%s' process returned code '%i'", g_quark_to_string(proc->programID), returnCode);
+
+    if(returnCode != 0) {
+        worker_incrementPluginError();
+    }
 
     /* free the arguments */
     for(gint i = 0; i < argc; i++) {
@@ -619,8 +630,10 @@ void process_stop(Process* proc) {
     pth_gctx_set(proc->tstate);
 
     /* this should stop the thread and call the main thread cleanup function */
-    pth_abort(proc->programMainThread);
-    proc->programMainThread = NULL;
+    if(proc->programMainThread != NULL) {
+        pth_abort(proc->programMainThread);
+        proc->programMainThread = NULL;
+    }
 
     /* now we are done with all pth state */
     pth_gctx_free(proc->tstate);
