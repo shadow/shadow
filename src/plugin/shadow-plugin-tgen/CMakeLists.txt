@@ -81,11 +81,8 @@ install(TARGETS shadow-tgen-global-lock DESTINATION lib)
 #target_link_libraries(tgen shadow-tgen-global-lock ${RT_LIBRARIES} ${M_LIBRARIES} ${IGRAPH_LIBRARIES} ${GLIB_LIBRARIES})
 #install(TARGETS tgen DESTINATION bin)
 
-## build bitcode
-add_bitcode(shadow-plugin-tgen-bitcode ${tgen_sources})
-
-## create and install the shared library that plugs into shadow
-add_plugin(shadow-plugin-tgen shadow-plugin-tgen-bitcode)
+## create and install the dynamic executable that can plug into shadow
+add_shadow_plugin(shadow-plugin-tgen ${tgen_sources})
 add_dependencies(shadow-plugin-tgen shadow-tgen-global-lock)
 target_link_libraries(shadow-plugin-tgen shadow-tgen-global-lock ${RT_LIBRARIES} ${M_LIBRARIES} ${IGRAPH_LIBRARIES} ${GLIB_LIBRARIES})
 install(TARGETS shadow-plugin-tgen DESTINATION plugins)

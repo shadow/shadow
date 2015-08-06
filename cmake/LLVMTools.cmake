@@ -148,6 +148,11 @@ endforeach(bctarget)
 
 endmacro(add_plugin)
 
+macro(add_shadow_plugin target)
+    add_bitcode(${target}-bitcode ${ARGN})
+    add_plugin(${target} ${target}-bitcode)
+endmacro(add_shadow_plugin)
+
 #####
 
 find_program(LLVM_BC_C_COMPILER clang)
