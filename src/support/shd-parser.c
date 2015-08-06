@@ -33,6 +33,29 @@ struct _Parser {
     MAGIC_DECLARE;
 };
 
+static GString* _parser_findPathToFile(const gchar* relativeFilePathSuffix, const gchar* defaultShadowPath) {
+    GString* foundPath = NULL;
+
+    if(relativeFilePathSuffix){
+        /* ok, first check in current directory, then in ~/.shadow/plugins */
+        gchar* currentDirStr = g_get_current_dir();
+        gchar* currentPathStr = g_build_path("/", currentDirStr, relativeFilePathSuffix, NULL);
+        gchar* pluginsPathStr = g_build_path("/", g_get_home_dir(), ".shadow", defaultShadowPath, relativeFilePathSuffix, NULL);
+
+        if(g_file_test(currentPathStr, G_FILE_TEST_EXISTS) && g_file_test(currentPathStr, G_FILE_TEST_IS_REGULAR)) {
+            foundPath = g_string_new(currentPathStr);
+        } else if(g_file_test(pluginsPathStr, G_FILE_TEST_EXISTS) && g_file_test(pluginsPathStr, G_FILE_TEST_IS_REGULAR)) {
+            foundPath = g_string_new(pluginsPathStr);
+        }
+
+        g_free(currentDirStr);
+        g_free(currentPathStr);
+        g_free(pluginsPathStr);
+    }
+
+    return foundPath;
+}
+
 static void _parser_addAction(Parser* parser, Action* action) {
     MAGIC_ASSERT(parser);
     g_queue_insert_sorted(parser->actions, action, action_compare, NULL);
@@ -72,13 +95,12 @@ static GError* _parser_handleTopologyAttributes(Parser* parser, const gchar** at
     if(path) {
         /* make sure the path is absolute */
         if(!g_path_is_absolute(path->str)) {
-            /* ok, we look in ~/.shadow/share */
-            const gchar* home = g_get_home_dir();
-            gchar* oldstr = g_string_free(path, FALSE);
-            gchar* newstr = g_build_path("/", home, ".shadow", "share", oldstr, NULL);
-            g_free(oldstr);
-            path = g_string_new(newstr);
-            g_free(newstr);
+            /* ok, first search in current directory, then in ~/.shadow/share */
+            GString* foundPath = _parser_findPathToFile(path->str, "share");
+            if(foundPath) {
+                g_string_free(path, TRUE);
+                path = foundPath;
+            }
         }
 
         if(!g_file_test(path->str, G_FILE_TEST_EXISTS) || !g_file_test(path->str, G_FILE_TEST_IS_REGULAR)) {
@@ -134,13 +156,12 @@ static GError* _parser_handlePluginAttributes(Parser* parser, const gchar** attr
     if(path) {
         /* make sure the path is absolute */
         if(!g_path_is_absolute(path->str)) {
-            /* ok, we look in ~/.shadow/plugins */
-            const gchar* home = g_get_home_dir();
-            gchar* oldstr = g_string_free(path, FALSE);
-            gchar* newstr = g_build_path("/", home, ".shadow", "plugins", oldstr, NULL);
-            g_free(oldstr);
-            path = g_string_new(newstr);
-            g_free(newstr);
+            /* ok, first search in current directory, then in ~/.shadow/plugins */
+            GString* foundPath = _parser_findPathToFile(path->str, "plugins");
+            if(foundPath) {
+                g_string_free(path, TRUE);
+                path = foundPath;
+            }
         }
 
         if(!g_file_test(path->str, G_FILE_TEST_EXISTS) || !g_file_test(path->str, G_FILE_TEST_IS_REGULAR)) {
