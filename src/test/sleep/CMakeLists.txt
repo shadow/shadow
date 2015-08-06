@@ -11,5 +11,6 @@ add_shadow_plugin(shadow-plugin-test-sleep shd-test-sleep.c)
 ## if the test needs any libraries, link them here
 target_link_libraries(shadow-plugin-test-sleep ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES} ${GLIB_LIBRARIES})
 
-## register the test
-add_test(NAME test-sleep COMMAND shadow ${CMAKE_CURRENT_SOURCE_DIR}/sleep.test.shadow.config.xml)
+## register the tests
+add_test(NAME test-sleep COMMAND shadow-plugin-test-sleep)
+add_test(NAME test-sleep-shadow COMMAND shadow ${CMAKE_CURRENT_SOURCE_DIR}/sleep.test.shadow.config.xml)
