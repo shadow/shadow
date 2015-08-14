@@ -32,6 +32,7 @@
 #if cpp
 
 struct pth_gctx_st {
+	int pth_is_async;
     int pth_initialized;
     int pthread_initialized;
     int pth_errno_storage;
@@ -59,27 +60,15 @@ struct pth_gctx_st {
     pth_time_t   pth_loadticknext;
     pth_time_t   pth_loadtickgap;
 
+    int main_efd; // epoll fd
+
     struct pth_keytab_st pth_keytab[PTH_KEY_MAX];
     pth_key_t ev_key_join;
     pth_key_t ev_key_nap;
     pth_key_t ev_key_mutex;
     pth_key_t ev_key_cond;
-    pth_key_t ev_key_nanosleep;
-    pth_key_t ev_key_usleep;
-    pth_key_t ev_key_sleep;
     pth_key_t ev_key_sigwait_ev;
     pth_key_t ev_key_waitpid;
-    pth_key_t ev_key_select_ev_timeout;
-    pth_key_t ev_key_select_ev_select;
-    pth_key_t ev_key_connect_ev;
-    pth_key_t ev_key_accept_ev;
-    pth_key_t ev_key_read_ev;
-    pth_key_t ev_key_write_ev;
-    pth_key_t ev_key_readv_ev;
-    pth_key_t ev_key_writev_ev;
-    pth_key_t ev_key_recvfrom_ev;
-    pth_key_t ev_key_sendto_ev;
-    pth_key_t ev_key_epoll_wait_ev;
 
     pth_ring_t pth_msgport;
 
@@ -129,10 +118,11 @@ static void pth_ex_terminate(ex_t *ex)
 }
 #endif
 
-pth_gctx_t pth_gctx_new(void)
+pth_gctx_t pth_gctx_new(int may_block)
 {
     pth_gctx_t gctx = calloc(sizeof(struct pth_gctx_st), 1);
 
+    gctx->pth_is_async = may_block ? 0 : 1;
     gctx->pth_loadtickgap = __loadlick_initializer;
     gctx->pth_msgport = __ring_initializer;
     gctx->mutex_pread = __mutex_initializer;
@@ -143,22 +133,8 @@ pth_gctx_t pth_gctx_new(void)
     gctx->ev_key_nap = PTH_KEY_INIT;
     gctx->ev_key_mutex = PTH_KEY_INIT;
     gctx->ev_key_cond = PTH_KEY_INIT;
-    gctx->ev_key_nanosleep = PTH_KEY_INIT;
-    gctx->ev_key_usleep = PTH_KEY_INIT;
-    gctx->ev_key_sleep = PTH_KEY_INIT;
     gctx->ev_key_sigwait_ev = PTH_KEY_INIT;
     gctx->ev_key_waitpid = PTH_KEY_INIT;
-    gctx->ev_key_select_ev_timeout = PTH_KEY_INIT;
-    gctx->ev_key_select_ev_select = PTH_KEY_INIT;
-    gctx->ev_key_connect_ev = PTH_KEY_INIT;
-    gctx->ev_key_accept_ev = PTH_KEY_INIT;
-    gctx->ev_key_read_ev = PTH_KEY_INIT;
-    gctx->ev_key_write_ev = PTH_KEY_INIT;
-    gctx->ev_key_readv_ev = PTH_KEY_INIT;
-    gctx->ev_key_writev_ev = PTH_KEY_INIT;
-    gctx->ev_key_recvfrom_ev = PTH_KEY_INIT;
-    gctx->ev_key_sendto_ev = PTH_KEY_INIT;
-    gctx->ev_key_epoll_wait_ev = PTH_KEY_INIT;
 
     pth_gctx_t gctx_tmp = pth_gctx_get();
     pth_gctx_set(gctx);
@@ -245,6 +221,9 @@ static int pth_init_helper(void)
     }
     pth_attr_destroy(t_attr);
 
+    /* create our epoll instance, used for scheduling */
+    pth_gctx_get()->main_efd = epoll_create(1);
+
     /*
      * The first time we've to manually switch into the scheduler to start
      * threading. Because at this time the only non-scheduler thread is the
@@ -270,7 +249,7 @@ int pth_init(void)
     else if(pth_gctx_get())
         pth_init_helper();
     else
-        pth_gctx_set(pth_gctx_new());
+        pth_gctx_set(pth_gctx_new(1)); // allow blocking by default
 
     if (pth_gctx_get() && pth_gctx_get()->pth_initialized)
         return TRUE;

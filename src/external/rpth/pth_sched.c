@@ -343,13 +343,22 @@ intern void *pth_scheduler(void *dummy)
          * events occurred and move them to the ready queue. But wait only if
          * we have already no new or ready threads.
          */
-        if (   pth_pqueue_elements(&pth_gctx_get()->pth_RQ) == 0
-            && pth_pqueue_elements(&pth_gctx_get()->pth_NQ) == 0)
+        if (pth_pqueue_elements(&pth_gctx_get()->pth_RQ) == 0
+            && pth_pqueue_elements(&pth_gctx_get()->pth_NQ) == 0) {
             /* still no NEW or READY threads, so we have to wait for new work */
-            pth_sched_eventmanager(&snapshot, FALSE /* wait */);
-        else
+        	if(pth_gctx_get()->pth_is_async) {
+        		fprintf(stderr, "**Pth** SCHEDULER INTERNAL ERROR: "
+							"we are in async mode and cannot block, but no thread(s) new or ready; "
+							"please spawn a thread at minimum priority that can block as needed!\n");
+        		abort();
+        	} else {
+				pth_sched_eventmanager(&snapshot, FALSE /* wait */);
+        	}
+        }
+        else {
             /* already NEW or READY threads exists, so just poll for even more work */
             pth_sched_eventmanager(&snapshot, TRUE  /* poll */);
+        }
     }
 
     /* NOTREACHED */
@@ -468,31 +477,6 @@ intern void pth_sched_eventmanager(pth_time_t *now, int dopoll)
                                        "[I/O] event failed for thread \"%s\" fd %d", t->name, ev->ev_args.FD.fd);
                         } else {
                             nepollevs++;
-                        }
-                    }
-                }
-                /* Filedescriptor Set Select I/O */
-                else if (ev->ev_type == PTH_EVENT_SELECT) {
-                    /* filedescriptors are checked later all at once.
-                       Here we only track them in the epoll instance. */
-                    int i = 0;
-                    for (i = 0; i < ev->ev_args.SELECT.nfd; i++) {
-                        uint32_t evset = 0;
-                        if (FD_ISSET(i, ev->ev_args.SELECT.rfds))
-                            evset |= EPOLLIN;
-                        if (FD_ISSET(i, ev->ev_args.SELECT.wfds))
-                            evset |= EPOLLOUT;
-                        if (FD_ISSET(i, ev->ev_args.SELECT.efds))
-                            evset |= EPOLLERR;
-                        if(evset != 0) {
-                            int retval = _rpth_epoll_ctl_helper(epollfd, (int)EPOLL_CTL_ADD, i, ev, evset);
-                            if(retval < 0) {
-                                ev->ev_status = PTH_STATUS_FAILED;
-                                pth_debug3("pth_sched_eventmanager: "
-                                           "[I/O] event failed for thread \"%s\" fd %d", t->name, i);
-                            } else {
-                                nepollevs++;
-                            }
                         }
                     }
                 }
@@ -702,26 +686,6 @@ intern void pth_sched_eventmanager(pth_time_t *now, int dopoll)
                     ((ev->ev_goal & PTH_UNTIL_FD_WRITEABLE) && (readyev->events & EPOLLOUT)) ||
                     ((ev->ev_goal & PTH_UNTIL_FD_EXCEPTION) && (readyev->events & EPOLLERR))) {
                     ev->ev_status = PTH_STATUS_OCCURRED;
-                }
-            }
-            /* Filedescriptor Set I/O */
-            else if (ev->ev_type == PTH_EVENT_SELECT) {
-                if((readyev->events & EPOLLIN) || (readyev->events & EPOLLOUT) || (readyev->events & EPOLLERR)) {
-                    ev->ev_status = PTH_STATUS_OCCURRED;
-                    if (ev->ev_args.SELECT.n != NULL) {
-                        if(*(ev->ev_args.SELECT.n) == -1) {
-                            *(ev->ev_args.SELECT.n) = 0;
-                        }
-                        if((readyev->events & EPOLLIN)) {
-                            (*(ev->ev_args.SELECT.n))++;
-                        }
-                        if((readyev->events & EPOLLOUT)) {
-                            (*(ev->ev_args.SELECT.n))++;
-                        }
-                        if((readyev->events & EPOLLERR)) {
-                            (*(ev->ev_args.SELECT.n))++;
-                        }
-                    }
                 }
             }
             /* Signal Set */

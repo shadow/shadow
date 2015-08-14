@@ -507,8 +507,8 @@ void process_start(Process* proc) {
     program_swapInState(proc->prog, proc->pstate);
     _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
 
-    /* create a new global context for this process */
-    proc->tstate = pth_gctx_new();
+    /* create a new global context for this process, 0 means it should never block */
+    proc->tstate = pth_gctx_new(0);
 
     /* we are in pth land, load in the pth state for this process */
     pth_gctx_t prevPthGlobalContext = pth_gctx_get();

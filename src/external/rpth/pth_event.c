@@ -43,7 +43,6 @@ struct pth_event_st {
     int ev_goal;
     union {
         struct { int fd; }                                          FD;
-        struct { int *n; int nfd; fd_set *rfds, *wfds, *efds; }     SELECT;
         struct { sigset_t *sigs; int *sig; }                        SIGS;
         struct { pth_time_t tv; }                                   TIME;
         struct { pth_msgport_t mp; }                                MSG;
@@ -125,21 +124,6 @@ pth_event_t pth_event(unsigned long spec, ...)
                                     PTH_UNTIL_FD_WRITEABLE|\
                                     PTH_UNTIL_FD_EXCEPTION));
         ev->ev_args.FD.fd = fd;
-    }
-    else if (spec & PTH_EVENT_SELECT) {
-        /* filedescriptor set select event */
-        int *n = va_arg(ap, int *);
-        int nfd = va_arg(ap, int);
-        fd_set *rfds = va_arg(ap, fd_set *);
-        fd_set *wfds = va_arg(ap, fd_set *);
-        fd_set *efds = va_arg(ap, fd_set *);
-        ev->ev_type = PTH_EVENT_SELECT;
-        ev->ev_goal = (int)(spec & (PTH_UNTIL_OCCURRED));
-        ev->ev_args.SELECT.n    = n;
-        ev->ev_args.SELECT.nfd  = nfd;
-        ev->ev_args.SELECT.rfds = rfds;
-        ev->ev_args.SELECT.wfds = wfds;
-        ev->ev_args.SELECT.efds = efds;
     }
     else if (spec & PTH_EVENT_SIGS) {
         /* signal set event */
