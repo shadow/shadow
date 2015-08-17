@@ -44,12 +44,12 @@ struct pth_event_st {
     union {
         struct { int fd; }                                          FD;
         struct { sigset_t *sigs; int *sig; }                        SIGS;
-        struct { pth_time_t tv; }                                   TIME;
+        struct { pth_time_t tv; int fd; }                           TIME;
         struct { pth_msgport_t mp; }                                MSG;
         struct { pth_mutex_t *mutex; }                              MUTEX;
         struct { pth_cond_t *cond; }                                COND;
         struct { pth_t tid; }                                       TID;
-        struct { pth_event_func_t func; void *arg; pth_time_t tv; } FUNC;
+        struct { pth_event_func_t func; void *arg; pth_time_t tv; int fd;} FUNC;
     } ev_args;
 };
 
@@ -366,6 +366,106 @@ int pth_event_free(pth_event_t ev, int mode)
     return TRUE;
 }
 
+static void _pth_event_register(pth_event_t pth_ev) {
+	if(!pth_ev) {
+		return;
+	}
+
+	pth_t t = pth_gctx_get()->pth_current;
+	int thread_efd = t->epoll_fd;
+
+	struct epoll_event epoll_ev;
+	memset(&epoll_ev, 0, sizeof(struct epoll_event));
+	epoll_ev.data.ptr = pth_ev;
+
+	int target_fd = 0;
+
+	if (pth_ev->ev_type == PTH_EVENT_FD) {
+		if (pth_ev->ev_goal & PTH_UNTIL_FD_READABLE) {
+			epoll_ev.events |= EPOLLIN;
+		}
+		if (pth_ev->ev_goal & PTH_UNTIL_FD_WRITEABLE) {
+			epoll_ev.events |= EPOLLOUT;
+		}
+		if (pth_ev->ev_goal & PTH_UNTIL_FD_EXCEPTION) {
+			epoll_ev.events |= EPOLLERR;
+		}
+
+		if(epoll_ev.events != 0) {
+		    target_fd = pth_ev->ev_args.FD.fd;
+		}
+	} else if(pth_ev->ev_type == PTH_EVENT_TIME || pth_ev->ev_type == PTH_EVENT_FUNC) {
+	    pth_time_t* target_tv = NULL;
+	    target_fd = pth_sc(timerfd_create)(CLOCK_MONOTONIC, TFD_NONBLOCK);
+
+	    if(pth_ev->ev_type == PTH_EVENT_TIME) {
+            pth_ev->ev_args.TIME.fd = target_fd;
+	        target_tv = &pth_ev->ev_args.TIME.tv;
+	    } else if(pth_ev->ev_type == PTH_EVENT_FUNC) {
+	        pth_ev->ev_args.FUNC.fd = target_fd;
+            target_tv = &pth_ev->ev_args.FUNC.tv;
+	    }
+
+	    if(target_tv) {
+            /* arm the timer */
+            struct itimerspec timeout;
+            memset(&timeout, 0, sizeof(struct itimerspec));
+            timeout.it_value.tv_sec = target_tv->tv_sec;
+            timeout.it_value.tv_nsec = (1000 * target_tv->tv_usec);
+
+            int rc = pth_sc(timerfd_settime)(target_fd, TFD_TIMER_ABSTIME, &timeout, NULL);
+            if(rc != 0) {
+                pth_ev->ev_status = PTH_STATUS_FAILED;
+                pth_debug3("_pth_event_register: timerfd failed for thread \"%s\" fd %d", t->name, target_fd);
+                abort();
+            }
+
+            /* the timer is readable once it expires */
+            epoll_ev.events |= EPOLLIN;
+	    }
+	}
+
+	if(target_fd > 0) {
+        int rc = pth_sc(epoll_ctl)(thread_efd, EPOLL_CTL_ADD, target_fd, &epoll_ev);
+
+        if(rc < 0) {
+            if(errno == EEXIST) {
+                /* this didnt get added because it was already there. so try to mod it instead */
+                rc = pth_sc(epoll_ctl)(thread_efd, EPOLL_CTL_MOD, target_fd, &epoll_ev);
+            }
+            if (rc < 0) {
+                /* this didnt get added because of some other error, or the mod failed too */
+                pth_ev->ev_status = PTH_STATUS_FAILED;
+                pth_debug3("_pth_event_register: epoll failed for thread \"%s\" fd %d", t->name, target_fd);
+                abort();
+            }
+        }
+	}
+}
+
+static void _pth_event_deregister(pth_event_t pth_ev) {
+    if(!pth_ev) {
+        return;
+    }
+
+    pth_t t = pth_gctx_get()->pth_current;
+    int thread_efd = t->epoll_fd;
+    int target_fd = 0;
+
+    if (pth_ev->ev_type == PTH_EVENT_FD) {
+        target_fd = pth_ev->ev_args.FD.fd;
+    } else if(pth_ev->ev_type == PTH_EVENT_TIME) {
+        target_fd = pth_ev->ev_args.TIME.fd;
+    } else if(pth_ev->ev_type == PTH_EVENT_FUNC) {
+        target_fd = pth_ev->ev_args.FUNC.fd;
+    }
+
+    if(target_fd > 0) {
+        pth_sc(epoll_ctl)(thread_efd, EPOLL_CTL_DEL, target_fd, NULL);
+        pth_sc(close)(target_fd);
+    }
+}
+
 /* wait for one or more events */
 int pth_wait(pth_event_t ev_ring)
 {
@@ -373,31 +473,53 @@ int pth_wait(pth_event_t ev_ring)
     pth_event_t ev;
 
     /* at least a waiting ring is required */
-    if (ev_ring == NULL)
-        return pth_error(-1, EINVAL);
-    pth_debug2("pth_wait: enter from thread \"%s\"", pth_gctx_get()->pth_current->name);
+    if (ev_ring == NULL) return pth_error(-1, EINVAL);
+
+    pth_t current_thread = pth_gctx_get()->pth_current;
+    pth_debug2("pth_wait: enter from thread \"%s\"", current_thread->name);
 
     /* mark all events in waiting ring as still pending */
     ev = ev_ring;
     do {
+    	/* we are waiting for this event */
         ev->ev_status = PTH_STATUS_PENDING;
+
+        /* make sure the thread epoll instance watches this fd  */
+        _pth_event_register(ev);
+
         pth_debug2("pth_wait: waiting on event 0x%lx", (unsigned long)ev);
         ev = ev->ev_next;
     } while (ev != ev_ring);
 
     /* link event ring to current thread */
-    pth_gctx_get()->pth_current->events = ev_ring;
+    current_thread->events = ev_ring;
+
+    /* make sure global epoll watches this thread's epoll for readability */
+    struct epoll_event epoll_ev;
+    memset(&epoll_ev, 0, sizeof(struct epoll_event));
+    epoll_ev.events |= EPOLLIN;
+    epoll_ev.data.ptr = current_thread;
+    epoll_ctl(pth_gctx_get()->main_efd, EPOLL_CTL_ADD, current_thread->epoll_fd, &epoll_ev);
+
+    pth_event_t ev_epoll = pth_event(PTH_EVENT_FD|PTH_UNTIL_FD_READABLE, current_thread->epoll_fd);
+    pth_event_concat(ev_ring, ev_epoll, NULL);
 
     /* move thread into waiting state
        and transfer control to scheduler */
-    pth_gctx_get()->pth_current->state = PTH_STATE_WAITING;
+    current_thread->state = PTH_STATE_WAITING;
     pth_yield(NULL);
 
     /* check for cancellation */
     pth_cancel_point();
 
+    pth_event_isolate(ev_epoll);
+    pth_event_free(ev_epoll, PTH_FREE_THIS);
+
+    /* remove thread epoll from global epoll */
+    epoll_ctl(pth_gctx_get()->main_efd, EPOLL_CTL_DEL, current_thread->epoll_fd, NULL);
+
     /* unlink event ring from current thread */
-    pth_gctx_get()->pth_current->events = NULL;
+    current_thread->events = NULL;
 
     /* count number of actually occurred (or failed) events */
     ev = ev_ring;
@@ -407,11 +529,15 @@ int pth_wait(pth_event_t ev_ring)
             pth_debug2("pth_wait: non-pending event 0x%lx", (unsigned long)ev);
             nonpending++;
         }
+
+        /* we no longer watch this fd */
+        _pth_event_deregister(ev);
+
         ev = ev->ev_next;
     } while (ev != ev_ring);
 
     /* leave to current thread with number of occurred events */
-    pth_debug2("pth_wait: leave to thread \"%s\"", pth_gctx_get()->pth_current->name);
+    pth_debug2("pth_wait: leave to thread \"%s\"", current_thread->name);
     return nonpending;
 }
 

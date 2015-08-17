@@ -49,7 +49,8 @@ struct pth_st {
     pth_time_t     running;              /* time range the thread was already running   */
 
     /* event handling */
-    pth_event_t    events;               /* events the tread is waiting for             */
+    pth_event_t    events;               /* events the thread is waiting for            */
+    int            epoll_fd;
 
     /* per-thread signal handling */
     sigset_t       sigpending;           /* set    of pending signals                   */
@@ -130,6 +131,7 @@ intern pth_t pth_tcb_alloc(unsigned int stacksize, void *stackaddr)
 #endif
         *t->stackguard = 0xDEAD;
     }
+    t->epoll_fd = pth_sc(epoll_create)(1);
     return t;
 }
 
@@ -138,6 +140,7 @@ intern void pth_tcb_free(pth_t t)
 {
     if (t == NULL)
         return;
+    pth_sc(close)(t->epoll_fd);
     if (t->stack != NULL && !t->stackloan)
         free(t->stack);
     if (t->data_value != NULL)
