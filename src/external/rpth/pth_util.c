@@ -94,7 +94,7 @@ intern char *pth_util_cpystrn(char *dst, const char *src, size_t dst_size)
 /* check whether a file-descriptor is valid */
 intern int pth_util_fd_valid(int fd)
 {
-    if (fd < 0 || fd >= FD_SETSIZE)
+    if (fd < 0)
         return FALSE;
     if (fcntl(fd, F_GETFL) == -1 && errno == EBADF)
         return FALSE;

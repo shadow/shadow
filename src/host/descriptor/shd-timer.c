@@ -175,6 +175,9 @@ static void _timer_scheduleNewExpireEvent(Timer* timer) {
     gpointer next = GUINT_TO_POINTER(timer->nextExpireID);
     CallbackEvent* event = callback_new((CallbackFunc)_timer_expire, timer, next);
 
+    /* ref the timer storage in the callback event */
+    descriptor_ref(&timer->super);
+
     SimulationTime nanos = timer->nextExpireTime - worker_getCurrentTime();
     worker_scheduleEvent((Event*)event, nanos, 0);
 
@@ -188,28 +191,29 @@ static void _timer_expire(Timer* timer, gpointer data) {
 
     timer->numEventsScheduled--;
 
-    if(timer->isClosed || expireID < timer->minValidExpireID) {
-        /* the timer has been reset since we scheduled this expiration event */
-        return;
-    }
+    /* make sure the timer has not been reset since we scheduled this expiration event */
+    if(!timer->isClosed && expireID >= timer->minValidExpireID) {
+        /* if a one-time (non-periodic) timer already expired before they
+         * started listening for the event with epoll, the event is reported
+         * immediately on the next epoll_wait call. this behavior was
+         * verified on linux.
+         */
+        timer->expireCountSinceLastSet++;
+        descriptor_adjustStatus(&(timer->super), DS_READABLE, TRUE);
 
-    /* if a one-time (non-periodic) timer already expired before they
-     * started listening for the event with epoll, the event is reported
-     * immediately on the next epoll_wait call. this behavior was
-     * verified on linux.
-     */
-    timer->expireCountSinceLastSet++;
-    descriptor_adjustStatus(&(timer->super), DS_READABLE, TRUE);
-
-    if(timer->expireInterval > 0) {
-        timer->nextExpireTime += timer->expireInterval;
-        if(timer->nextExpireTime >= worker_getCurrentTime()) {
-            _timer_scheduleNewExpireEvent(timer);
+        if(timer->expireInterval > 0) {
+            timer->nextExpireTime += timer->expireInterval;
+            if(timer->nextExpireTime >= worker_getCurrentTime()) {
+                _timer_scheduleNewExpireEvent(timer);
+            }
+        } else {
+            /* the timer is now disarmed */
+            _timer_disarm(timer);
         }
-    } else {
-        /* the timer is now disarmed */
-        _timer_disarm(timer);
     }
+
+    /* unref the timer storage in the callback event */
+    descriptor_unref(&timer->super);
 }
 
 static void _timer_arm(Timer* timer, const struct itimerspec *config, gint flags) {

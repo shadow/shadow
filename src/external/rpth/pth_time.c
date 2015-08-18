@@ -110,7 +110,7 @@ intern int pth_time_cmp(const pth_time_t *t1, const pth_time_t *t2)
 #define pth_time_add(t1,t2) \
     (t1)->tv_sec  += (t2)->tv_sec; \
     (t1)->tv_usec += (t2)->tv_usec; \
-    if ((t1)->tv_usec > 1000000) { \
+    if ((t1)->tv_usec >= 1000000) { \
         (t1)->tv_sec  += 1; \
         (t1)->tv_usec -= 1000000; \
     }
@@ -134,7 +134,7 @@ intern void pth_time_div(pth_time_t *t1, int n)
 
     q = (t1->tv_sec / n);
     r = (((t1->tv_sec % n) * 1000000) / n) + (t1->tv_usec / n);
-    if (r > 1000000) {
+    if (r >= 1000000) {
         q += 1;
         r -= 1000000;
     }

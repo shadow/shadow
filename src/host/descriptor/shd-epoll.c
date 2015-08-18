@@ -400,7 +400,11 @@ gint epoll_controlOS(Epoll* epoll, gint operation, gint fileDescriptor,
         struct epoll_event* event) {
     MAGIC_ASSERT(epoll);
     /* ask the OS about any events on our kernel epoll descriptor */
-    return epoll_ctl(epoll->osEpollDescriptor, operation, fileDescriptor, event);
+    gint ret = epoll_ctl(epoll->osEpollDescriptor, operation, fileDescriptor, event);
+    if(ret < 0) {
+        ret = errno;
+    }
+    return ret;
 }
 
 gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray,
