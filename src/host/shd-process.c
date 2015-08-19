@@ -10,6 +10,7 @@
 #include <fcntl.h>
 
 #include <assert.h>
+#include <errno.h>
 #include <time.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -43,6 +44,7 @@
 
 #include <pthread.h>
 #include <rpth.h>
+#include <glib.h>
 
 #if defined(FD_SETSIZE)
 #if FD_SETSIZE > 1024
@@ -111,6 +113,9 @@ struct _Process {
 
     /* unique id of the program that this process should run */
     GQuark programID;
+    guint processID;
+    FILE* stdoutFile;
+    FILE* stderrFile;
 
     /* the shadow plugin executable */
     Program* prog;
@@ -179,13 +184,28 @@ static ProcessContext _process_changeContext(Process* proc, ProcessContext from,
     return prevContext;
 }
 
-Process* process_new(gpointer host, GQuark programID, SimulationTime startTime, SimulationTime stopTime, gchar* arguments) {
+Process* process_new(gpointer host, GQuark programID, guint processID, const gchar* hostDataPath,
+        SimulationTime startTime, SimulationTime stopTime, gchar* arguments) {
     Process* proc = g_new0(Process, 1);
     MAGIC_INIT(proc);
 
     proc->host = (Host*)host;
     // FIXME ref the host once that is merged
     proc->programID = programID;
+
+    proc->processID = processID;
+
+    GString* fileString = g_string_new(NULL);
+    g_string_printf(fileString, "%s-%u-stdout", g_quark_to_string(proc->programID), processID);
+    gchar* pathStr = g_build_filename(hostDataPath, fileString->str, NULL);
+    proc->stdoutFile = fopen(pathStr, "a");
+    g_free(pathStr);
+    g_string_printf(fileString, "%s-%u-stderr", g_quark_to_string(proc->programID), processID);
+    pathStr = g_build_filename(hostDataPath, fileString->str, NULL);
+    proc->stderrFile = fopen(pathStr, "a");
+    g_free(pathStr);
+    g_string_free(fileString, TRUE);
+
     proc->startTime = startTime;
     if(arguments && (g_ascii_strncasecmp(arguments, "\0", (gsize) 1) != 0)) {
         proc->arguments = g_string_new(arguments);
@@ -210,6 +230,15 @@ static void _process_free(Process* proc) {
 
     if(proc->atExitFunctions) {
         g_queue_free_full(proc->atExitFunctions, g_free);
+    }
+
+    if(proc->stdoutFile) {
+        fclose(proc->stdoutFile);
+        proc->stdoutFile = NULL;
+    }
+    if(proc->stderrFile) {
+        fclose(proc->stderrFile);
+        proc->stderrFile = NULL;
     }
 
     g_timer_destroy(proc->cpuDelayTimer);
@@ -1787,6 +1816,9 @@ ssize_t process_emu_read(Process* proc, int fd, void *buff, size_t numbytes) {
         utility_assert(proc->tstate == pth_gctx_get());
         ret = pth_read(fd, buff, numbytes);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+    } else if(prevCTX == PCTX_PLUGIN && (fd == STDOUT_FILENO || fd == STDERR_FILENO)) {
+        FILE* stdioFile = (fd == STDOUT_FILENO) ? proc->stdoutFile : proc->stderrFile;
+        ret = fread(buff, numbytes, 1, stdioFile);
     } else {
         if(host_isShadowDescriptor(proc->host, fd)){
             Descriptor* desc = host_lookupDescriptor(proc->host, fd);
@@ -1823,6 +1855,9 @@ ssize_t process_emu_write(Process* proc, int fd, const void *buff, size_t n) {
         utility_assert(proc->tstate == pth_gctx_get());
         ret = pth_write(fd, buff, n);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+    } else if(prevCTX == PCTX_PLUGIN && (fd == STDOUT_FILENO || fd == STDERR_FILENO)) {
+        FILE* stdioFile = (fd == STDOUT_FILENO) ? proc->stdoutFile : proc->stderrFile;
+        ret = fwrite(buff, n, 1, stdioFile);
     } else {
         if(host_isShadowDescriptor(proc->host, fd)){
             ret = _process_emu_sendHelper(proc, fd, buff, n, 0, NULL, 0);
@@ -1943,11 +1978,14 @@ ssize_t process_emu_pread(Process* proc, int fd, void *buff, size_t numbytes, of
     gssize ret = 0;
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
 
-    if(prevCTX == PCTX_PLUGIN) {
+    if(prevCTX == PCTX_PLUGIN && host_isShadowDescriptor(proc->host, fd)) {
         _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
         utility_assert(proc->tstate == pth_gctx_get());
         ret = pth_pread(fd, buff, numbytes, offset);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+    } else if(prevCTX == PCTX_PLUGIN && (fd == STDOUT_FILENO || fd == STDERR_FILENO)) {
+        FILE* stdioFile = (fd == STDOUT_FILENO) ? proc->stdoutFile : proc->stderrFile;
+        ret = fread(buff, numbytes, 1, stdioFile);
     } else {
         if(host_isShadowDescriptor(proc->host, fd)){
             warning("pread on shadow file descriptors is not currently supported");
@@ -1973,11 +2011,14 @@ ssize_t process_emu_pwrite(Process* proc, int fd, const void *buf, size_t nbytes
     gssize ret = 0;
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
 
-    if(prevCTX == PCTX_PLUGIN) {
+    if(prevCTX == PCTX_PLUGIN && host_isShadowDescriptor(proc->host, fd)) {
         _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
         utility_assert(proc->tstate == pth_gctx_get());
         ret = pth_pwrite(fd, buf, nbytes, offset);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+    } else if(prevCTX == PCTX_PLUGIN && (fd == STDOUT_FILENO || fd == STDERR_FILENO)) {
+        FILE* stdioFile = (fd == STDOUT_FILENO) ? proc->stdoutFile : proc->stderrFile;
+        ret = fwrite(buf, nbytes, 1, stdioFile);
     } else {
         if(host_isShadowDescriptor(proc->host, fd)){
             warning("pwrite on shadow file descriptors is not currently supported");
@@ -2006,7 +2047,11 @@ int process_emu_close(Process* proc, int fd) {
         gint ret = 0;
         /* check if we have a mapped os fd */
         gint osfd = host_getOSHandle(proc->host, fd);
-        if(osfd >= 0) {
+        if(osfd == STDOUT_FILENO) {
+            ret = fclose(proc->stdoutFile);
+        } else if (osfd == STDERR_FILENO) {
+            ret = fclose(proc->stderrFile);
+        } else if(osfd >= 0) {
             ret = close(osfd);
             host_destroyShadowHandle(proc->host, fd);
         } else {
@@ -2870,6 +2915,101 @@ int process_emu_fchownat(Process* proc, int dirfd, const char *pathname, uid_t o
     errno = ENOSYS;
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return -1;
+}
+
+size_t process_emu_fread(Process* proc, void *ptr, size_t size, size_t nmemb, FILE *stream) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+    size_t ret;
+
+    int fd = fileno(stream);
+    if(prevCTX == PCTX_PLUGIN && (fd == STDOUT_FILENO || fd == STDERR_FILENO)) {
+        FILE* stdioFile = (fd == STDOUT_FILENO) ? proc->stdoutFile : proc->stderrFile;
+        ret = fread(ptr, size, nmemb, stdioFile);
+    } else {
+        ret = fread(ptr, size, nmemb, stream);
+    }
+
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    return ret;
+}
+
+size_t process_emu_fwrite(Process* proc, const void *ptr, size_t size, size_t nmemb, FILE *stream) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+    size_t ret;
+
+    int fd = fileno(stream);
+    if(prevCTX == PCTX_PLUGIN && (fd == STDOUT_FILENO || fd == STDERR_FILENO)) {
+        FILE* stdioFile = (fd == STDOUT_FILENO) ? proc->stdoutFile : proc->stderrFile;
+        ret = fwrite(ptr, size, nmemb, stdioFile);
+    } else {
+        ret = fwrite(ptr, size, nmemb, stream);
+    }
+
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    return ret;
+}
+
+int process_emu_fputc(Process* proc, int c, FILE *stream) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+    int ret;
+
+    int fd = fileno(stream);
+    if(prevCTX == PCTX_PLUGIN && (fd == STDOUT_FILENO || fd == STDERR_FILENO)) {
+        FILE* stdioFile = (fd == STDOUT_FILENO) ? proc->stdoutFile : proc->stderrFile;
+        ret = fputc(c, stdioFile);
+    } else {
+        ret = fputc(c, stream);
+    }
+
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    return ret;
+}
+
+int process_emu_fputs(Process* proc, const char *s, FILE *stream) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+    int ret;
+
+    int fd = fileno(stream);
+    if(prevCTX == PCTX_PLUGIN && (fd == STDOUT_FILENO || fd == STDERR_FILENO)) {
+        FILE* stdioFile = (fd == STDOUT_FILENO) ? proc->stdoutFile : proc->stderrFile;
+        ret = fputs(s, stdioFile);
+    } else {
+        ret = fputs(s, stream);
+    }
+
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    return ret;
+}
+
+int process_emu_putchar(Process* proc, int c) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+    int ret;
+
+    if(prevCTX == PCTX_PLUGIN) {
+        ret = fputc(c, proc->stdoutFile);
+    } else {
+        ret = putchar(c);
+    }
+
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    return ret;
+}
+
+int process_emu_puts(Process* proc, const char *s) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+    int ret;
+
+    if(prevCTX == PCTX_PLUGIN) {
+        ret = fputs(s, proc->stdoutFile);
+        if(ret >= 0) {
+            ret = fputs("\n", proc->stdoutFile);
+        }
+    } else {
+        ret = puts(s);
+    }
+
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    return ret;
 }
 
 /* time family */

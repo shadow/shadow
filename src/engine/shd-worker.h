@@ -58,4 +58,6 @@ void worker_setActiveProcess(Process* proc);
 
 void worker_incrementPluginError();
 
+const gchar* worker_getHostsRootPath();
+
 #endif /* SHD_WORKER_H_ */

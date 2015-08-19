@@ -40,6 +40,9 @@ struct _Host {
     GQueue* availableDescriptors;
     gint descriptorHandleCounter;
 
+    /* virtual process id counter */
+    guint processIDCounter;
+
     /* all file, socket, and epoll descriptors we know about and track */
     GHashTable* descriptors;
     guint64 receiveBufferSize;
@@ -66,6 +69,7 @@ struct _Host {
     /* random stream */
     Random* random;
 
+    gchar* dataDirPath;
     MAGIC_DECLARE;
 };
 
@@ -76,7 +80,7 @@ Host* host_new(GQuark id, gchar* hostname, gchar* ipHint, gchar* geocodeHint, gc
         GLogLevelFlags logLevel, gboolean logPcap, gchar* pcapDir, gchar* qdisc,
         guint64 receiveBufferSize, gboolean autotuneReceiveBuffer,
         guint64 sendBufferSize, gboolean autotuneSendBuffer,
-        guint64 interfaceReceiveLength) {
+        guint64 interfaceReceiveLength, const gchar* rootDataPath) {
     Host* host = g_new0(Host, 1);
     MAGIC_INIT(host);
 
@@ -152,6 +156,9 @@ Host* host_new(GQuark id, gchar* hostname, gchar* ipHint, gchar* geocodeHint, gc
             bwUpKiBps, bwDownKiBps, sendBufferSize, receiveBufferSize,
             cpuFrequency, cpuThreshold, cpuPrecision, nodeSeed);
 
+    host->dataDirPath = g_build_filename(rootDataPath, host->name, NULL);
+    g_mkdir_with_parents(host->dataDirPath, 0775);
+    host->processIDCounter = 1000;
     return host;
 }
 
@@ -195,6 +202,10 @@ void host_free(Host* host, gpointer userData) {
 
     g_mutex_clear(&(host->lock));
 
+    if(host->dataDirPath) {
+        g_free(host->dataDirPath);
+    }
+
     MAGIC_CLEAR(host);
     g_free(host);
 }
@@ -217,7 +228,9 @@ EventQueue* host_getEvents(Host* host) {
 void host_addApplication(Host* host, GQuark pluginID,
         SimulationTime startTime, SimulationTime stopTime, gchar* arguments) {
     MAGIC_ASSERT(host);
-    Process* application = process_new(host, pluginID, startTime, stopTime, arguments);
+
+    guint processID = host->processIDCounter++;
+    Process* application = process_new(host, pluginID, processID, host->dataDirPath, startTime, stopTime, arguments);
     g_queue_push_tail(host->applications, application);
 
     StartApplicationEvent* event = startapplication_new(application);

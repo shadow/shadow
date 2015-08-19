@@ -504,3 +504,8 @@ void worker_incrementPluginError() {
     Worker* worker = _worker_getPrivate();
     slave_incrementPluginError(worker->slave);
 }
+
+const gchar* worker_getHostsRootPath() {
+    Worker* worker = _worker_getPrivate();
+    return slave_getHostsRootPath(worker->slave);
+}

@@ -15,7 +15,8 @@
 
 #include "shadow.h"
 
-Process* process_new(gpointer host, GQuark pluginID, SimulationTime startTime, SimulationTime stopTime, gchar* arguments);
+Process* process_new(gpointer host, GQuark programID, guint processID, const gchar* hostDataPath,
+        SimulationTime startTime, SimulationTime stopTime, gchar* arguments);
 void process_ref(Process* proc);
 void process_unref(Process* proc);
 
@@ -131,6 +132,13 @@ int process_emu_faccessat(Process* proc, int dirfd, const char *pathname, int mo
 int process_emu_unlinkat(Process* proc, int dirfd, const char *pathname, int flags);
 int process_emu_fchmodat(Process* proc, int dirfd, const char *pathname, mode_t mode, int flags);
 int process_emu_fchownat(Process* proc, int dirfd, const char *pathname, uid_t owner, gid_t group, int flags);
+
+size_t process_emu_fread(Process* proc, void *ptr, size_t size, size_t nmemb, FILE *stream);
+size_t process_emu_fwrite(Process* proc, const void *ptr, size_t size, size_t nmemb, FILE *stream);
+int process_emu_fputc(Process* proc, int c, FILE *stream);
+int process_emu_fputs(Process* proc, const char *s, FILE *stream);
+int process_emu_putchar(Process* proc, int c);
+int process_emu_puts(Process* proc, const char *s);
 
 /* time family */
 

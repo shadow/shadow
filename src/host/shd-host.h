@@ -20,7 +20,7 @@ Host* host_new(GQuark id, gchar* hostname, gchar* requestedIP, gchar* geocodeHin
         GLogLevelFlags logLevel, gboolean logPcap, gchar* pcapDir, gchar* qdisc,
         guint64 receiveBufferSize, gboolean autotuneReceiveBuffer,
         guint64 sendBufferSize, gboolean autotuneSendBuffer,
-        guint64 interfaceReceiveLength);
+        guint64 interfaceReceiveLength, const gchar* rootDataPath);
 void host_free(Host* host, gpointer userData);
 
 void host_lock(Host* host);

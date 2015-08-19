@@ -59,4 +59,6 @@ Program* slave_getProgram(Slave* slave, GQuark pluginID);
 
 void slave_incrementPluginError(Slave* slave);
 
+const gchar* slave_getHostsRootPath(Slave* slave);
+
 #endif /* SHD_SLAVE_H_ */

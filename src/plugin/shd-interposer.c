@@ -189,6 +189,13 @@ typedef int (*unlinkat_func)(int, const char*, int);
 typedef int (*fchmodat_func)(int, const char*, mode_t, int);
 typedef int (*fchownat_func)(int, const char*, uid_t, gid_t, int);
 
+typedef size_t (*fread_func)(void *, size_t, size_t, FILE *);
+typedef size_t (*fwrite_func)(const void *, size_t, size_t, FILE *);
+typedef int (*fputc_func)(int, FILE *);
+typedef int (*fputs_func)(const char *, FILE *);
+typedef int (*putchar_func)(int);
+typedef int (*puts_func)(const char *);
+
 /* time family */
 
 typedef time_t (*time_func)(time_t*);
@@ -451,6 +458,13 @@ typedef struct {
     unlinkat_func unlinkat;
     fchmodat_func fchmodat;
     fchownat_func fchownat;
+
+    fread_func fread;
+    fwrite_func fwrite;
+    fputc_func fputc;
+    fputs_func fputs;
+    putchar_func putchar;
+    puts_func puts;
 
     time_func time;
     clock_gettime_func clock_gettime;
@@ -743,6 +757,13 @@ static void _interposer_globalInitialize() {
     SETSYM_OR_FAIL(director.next.unlinkat, "unlinkat");
     SETSYM_OR_FAIL(director.next.fchmodat, "fchmodat");
     SETSYM_OR_FAIL(director.next.fchownat, "fchownat");
+
+    SETSYM_OR_FAIL(director.next.fread, "fread");
+    SETSYM_OR_FAIL(director.next.fwrite, "fwrite");
+    SETSYM_OR_FAIL(director.next.fputc, "fputc");
+    SETSYM_OR_FAIL(director.next.fputs, "fputs");
+    SETSYM_OR_FAIL(director.next.putchar, "putchar");
+    SETSYM_OR_FAIL(director.next.puts, "puts");
 
     SETSYM_OR_FAIL(director.next.time, "time");
     SETSYM_OR_FAIL(director.next.clock_gettime, "clock_gettime");
@@ -1127,6 +1148,13 @@ INTERPOSE(int faccessat(int a, const char *b, int c, int d), faccessat, a, b, c,
 INTERPOSE(int unlinkat(int a, const char *b, int c), unlinkat, a, b, c);
 INTERPOSE(int fchmodat(int a, const char *b, mode_t c, int d), fchmodat, a, b, c, d);
 INTERPOSE(int fchownat(int a, const char *b, uid_t c, gid_t d, int e), fchownat, a, b, c, d, e);
+
+INTERPOSE(size_t fread(void *a, size_t b, size_t c, FILE *d), fread, a, b, c, d);
+INTERPOSE(size_t fwrite(const void *a, size_t b, size_t c, FILE *d), fwrite, a, b, c, d);
+INTERPOSE(int fputc(int a, FILE *b), fputc, a, b);
+INTERPOSE(int fputs(const char *a, FILE *b), fputs, a, b);
+INTERPOSE(int putchar(int a), putchar, a);
+INTERPOSE(int puts(const char *a), puts, a);
 
 /* time family */
 

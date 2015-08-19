@@ -54,6 +54,11 @@ struct _Slave {
     SimulationTime simClockLastHeartbeat;
 
     guint numPluginErrors;
+
+    gchar* cwdPath;
+    gchar* dataPath;
+    gchar* hostsPath;
+
     MAGIC_DECLARE;
 };
 
@@ -107,6 +112,10 @@ Slave* slave_new(Master* master, Configuration* config, guint randomSeed) {
     slave->nWorkers = (guint) configuration_getNWorkerThreads(config);
     slave->mainThreadWorker = worker_new(slave);
 
+    slave->cwdPath = g_get_current_dir();
+    slave->dataPath = g_build_filename(slave->cwdPath, "data", NULL);
+    slave->hostsPath = g_build_filename(slave->dataPath, "hosts", NULL);
+
     return slave;
 }
 
@@ -136,6 +145,16 @@ gint slave_free(Slave* slave) {
 
     /* join and free spawned worker threads */
 //TODO
+
+    if(slave->cwdPath) {
+        g_free(slave->cwdPath);
+    }
+    if(slave->dataPath) {
+        g_free(slave->dataPath);
+    }
+    if(slave->hostsPath) {
+        g_free(slave->hostsPath);
+    }
 
     /* free main worker */
     worker_free(slave->mainThreadWorker);
@@ -471,4 +490,9 @@ void slave_runSerial(Slave* slave) {
 void slave_incrementPluginError(Slave* slave) {
     MAGIC_ASSERT(slave);
     slave->numPluginErrors++;
+}
+
+const gchar* slave_getHostsRootPath(Slave* slave) {
+    MAGIC_ASSERT(slave);
+    return slave->hostsPath;
 }
