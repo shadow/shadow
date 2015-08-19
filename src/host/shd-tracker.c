@@ -476,7 +476,8 @@ static void _tracker_logNode(Tracker* tracker, GLogLevelFlags level, SimulationT
 
     if(!tracker->didLogNodeHeader) {
         tracker->didLogNodeHeader = TRUE;
-        logging_log(G_LOG_DOMAIN, level, __FUNCTION__, "[shadow-heartbeat] [node-header] "
+        logging_log(G_LOG_DOMAIN, level, __FILE__, __FUNCTION__, __LINE__,
+                "[shadow-heartbeat] [node-header] "
                 "interval-seconds,recv-bytes,send-bytes,cpu-percent,delayed-count,avgdelay-milliseconds;"
                 "inbound-localhost-counters;outbound-localhost-counters;"
                 "inbound-remote-counters;outbound-remote-counters "
@@ -498,7 +499,7 @@ static void _tracker_logNode(Tracker* tracker, GLogLevelFlags level, SimulationT
             seconds, totalRecvBytes, totalSendBytes, cpuutil, tracker->numDelayedLastInterval, avgdelayms);
     g_string_append_printf(buffer, "%s;%s;%s;%s", inLocal, outLocal, inRemote, outRemote);
 
-    logging_log(G_LOG_DOMAIN, level, __FUNCTION__, "%s", buffer->str);
+    logging_log(G_LOG_DOMAIN, level, __FILE__, __FUNCTION__, __LINE__, "%s", buffer->str);
 
     g_free(inLocal);
     g_free(outLocal);
@@ -510,7 +511,7 @@ static void _tracker_logNode(Tracker* tracker, GLogLevelFlags level, SimulationT
 static void _tracker_logSocket(Tracker* tracker, GLogLevelFlags level, SimulationTime interval) {
     if(!tracker->didLogSocketHeader) {
         tracker->didLogSocketHeader = TRUE;
-        logging_log(G_LOG_DOMAIN, level, __FUNCTION__,
+        logging_log(G_LOG_DOMAIN, level, __FILE__, __FUNCTION__, __LINE__,
                 "[shadow-heartbeat] [socket-header] descriptor-number,protocol-string,hostname:port-peer;"
                 "inbuflen-bytes,inbufsize-bytes,outbuflen-bytes,outbufsize-bytes;recv-bytes,send-bytes;"
                 "inbound-localhost-counters;outbound-localhost-counters;"
@@ -577,7 +578,7 @@ static void _tracker_logSocket(Tracker* tracker, GLogLevelFlags level, Simulatio
     }
 
     if(socketLogCount > 0) {
-        logging_log(G_LOG_DOMAIN, level, __FUNCTION__, "%s", msg->str);
+        logging_log(G_LOG_DOMAIN, level, __FILE__, __FUNCTION__, __LINE__, "%s", msg->str);
     }
 
     /* free all the tracker instances of the sockets that were closed, now that we logged the info */
@@ -596,11 +597,11 @@ static void _tracker_logRAM(Tracker* tracker, GLogLevelFlags level, SimulationTi
 
     if(!tracker->didLogRAMHeader) {
         tracker->didLogRAMHeader = TRUE;
-        logging_log(G_LOG_DOMAIN, level, __FUNCTION__,
+        logging_log(G_LOG_DOMAIN, level, __FILE__, __FUNCTION__, __LINE__,
                 "[shadow-heartbeat] [ram-header] interval-seconds,alloc-bytes,dealloc-bytes,total-bytes,pointers-count,failfree-count");
     }
 
-    logging_log(G_LOG_DOMAIN, level, __FUNCTION__,
+    logging_log(G_LOG_DOMAIN, level, __FILE__, __FUNCTION__, __LINE__,
         "[shadow-heartbeat] [ram] %u,%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT",%u,%u",
         seconds, tracker->allocatedBytesLastInterval, tracker->deallocatedBytesLastInterval,
         tracker->allocatedBytesTotal, numptrs, tracker->numFailedFrees);

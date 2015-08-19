@@ -21,7 +21,7 @@
  *
  * @see logging_log()
  */
-#define error(...)      logging_log(G_LOG_DOMAIN, G_LOG_LEVEL_ERROR, __FUNCTION__, __VA_ARGS__)
+#define error(...)      logging_log(G_LOG_DOMAIN, G_LOG_LEVEL_ERROR, __FILE__, __FUNCTION__, __LINE__, __VA_ARGS__)
 
 /**
  * A convenience macro for logging a message at the critical level in the
@@ -29,7 +29,7 @@
  *
  * @see logging_log()
  */
-#define critical(...)   logging_log(G_LOG_DOMAIN, G_LOG_LEVEL_CRITICAL, __FUNCTION__, __VA_ARGS__)
+#define critical(...)   logging_log(G_LOG_DOMAIN, G_LOG_LEVEL_CRITICAL, __FILE__, __FUNCTION__, __LINE__, __VA_ARGS__)
 
 /**
  * A convenience macro for logging a message at the warning level in the
@@ -37,7 +37,7 @@
  *
  * @see logging_log()
  */
-#define warning(...)    logging_log(G_LOG_DOMAIN, G_LOG_LEVEL_WARNING, __FUNCTION__, __VA_ARGS__)
+#define warning(...)    logging_log(G_LOG_DOMAIN, G_LOG_LEVEL_WARNING, __FILE__, __FUNCTION__, __LINE__, __VA_ARGS__)
 
 /**
  * A convenience macro for logging a message at the message level in the
@@ -45,7 +45,7 @@
  *
  * @see logging_log()
  */
-#define message(...)    logging_log(G_LOG_DOMAIN, G_LOG_LEVEL_MESSAGE, __FUNCTION__, __VA_ARGS__)
+#define message(...)    logging_log(G_LOG_DOMAIN, G_LOG_LEVEL_MESSAGE, __FILE__, __FUNCTION__, __LINE__, __VA_ARGS__)
 
 /**
  * A convenience macro for logging a message at the info level in the
@@ -53,7 +53,7 @@
  *
  * @see logging_log()
  */
-#define info(...)       logging_log(G_LOG_DOMAIN, G_LOG_LEVEL_INFO, __FUNCTION__, __VA_ARGS__)
+#define info(...)       logging_log(G_LOG_DOMAIN, G_LOG_LEVEL_INFO, __FILE__, __FUNCTION__, __LINE__, __VA_ARGS__)
 
 /**
  * A convenience macro for logging a message at the debug level in the
@@ -61,7 +61,11 @@
  *
  * @see logging_log()
  */
-#define debug(...)      logging_log(G_LOG_DOMAIN, G_LOG_LEVEL_DEBUG, __FUNCTION__, __VA_ARGS__)
+#ifdef DEBUG
+#define debug(...)      logging_log(G_LOG_DOMAIN, G_LOG_LEVEL_DEBUG, __FILE__, __FUNCTION__, __LINE__, __VA_ARGS__)
+#else
+#define debug(...)
+#endif
 
 /**
  * A log handler compatible with the GLib logging subsystem.
@@ -99,7 +103,9 @@ void logging_handleLog(const gchar *log_domain, GLogLevelFlags log_level, const 
  *
  * @see logging_log()
  */
-void logging_logv(const gchar *msgLogDomain, GLogLevelFlags msgLogLevel, const gchar* functionName, const gchar *format, va_list vargs);
+void logging_logv(const gchar *msgLogDomain, GLogLevelFlags msgLogLevel,
+        const gchar* fileName, const gchar* functionName, const gint lineNumber,
+        const gchar *format, va_list vargs);
 
 /**
  * High level logging function for logging messages from within a node context.
@@ -115,8 +121,9 @@ void logging_logv(const gchar *msgLogDomain, GLogLevelFlags msgLogLevel, const g
  *
  * @see logging_logv()
  */
-void logging_log(const gchar *log_domain, GLogLevelFlags log_level, const gchar* functionName, const gchar *format, ...);
-
+void logging_log(const gchar *log_domain, GLogLevelFlags log_level,
+        const gchar* fileName, const gchar* functionName, const gint lineNumber,
+        const gchar *format, ...);
 /** @} */
 
 #endif /* SHD_LOGGING_H_ */

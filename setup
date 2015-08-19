@@ -71,7 +71,7 @@ def main():
         help="number of jobs to run simultaneously during the build",
         metavar="N", type=int,
         action="store", dest="njobs",
-        default=multiprocessing.cpu_count())
+        default=1)#multiprocessing.cpu_count())
         
     parser_build.add_argument('-o', '--profile',
         help="build in gprof profiling information when running Shadow",

@@ -1858,6 +1858,12 @@ ssize_t process_emu_write(Process* proc, int fd, const void *buff, size_t n) {
     } else if(prevCTX == PCTX_PLUGIN && (fd == STDOUT_FILENO || fd == STDERR_FILENO)) {
         FILE* stdioFile = (fd == STDOUT_FILENO) ? proc->stdoutFile : proc->stderrFile;
         ret = fwrite(buff, n, 1, stdioFile);
+    } else if(prevCTX == PCTX_PTH && (fd == STDOUT_FILENO || fd == STDERR_FILENO)) {
+        if(fd == STDERR_FILENO) {
+            error("%.*s", n, buff);
+        } else {
+            debug("%.*s", n, buff);
+        }
     } else {
         if(host_isShadowDescriptor(proc->host, fd)){
             ret = _process_emu_sendHelper(proc, fd, buff, n, 0, NULL, 0);

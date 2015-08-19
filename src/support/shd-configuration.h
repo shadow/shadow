@@ -61,7 +61,7 @@ typedef guint ShadowID;
  */
 #define SIMTIME_ONE_HOUR G_GUINT64_CONSTANT(3600000000000)
 
-#if 1
+#ifdef DEBUG
 /**
  * Memory magic for assertions that memory has not been freed. The idea behind
  * this approach is to declare a value in each struct using MAGIC_DECLARE,

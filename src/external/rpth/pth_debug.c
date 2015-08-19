@@ -61,7 +61,7 @@ intern void pth_debug(const char *file, int line, int argc, const char *fmt, ...
     pth_shield {
         va_start(ap, fmt);
         if (file != NULL)
-            pth_snprintf(str, sizeof(str), "%d:%s:%04d: ", (int)getpid(), file, line);
+            pth_snprintf(str, sizeof(str), "[pth_debug] %d:%s:%04d: ", (int)getpid(), file, line);
         else
             str[0] = NUL;
         n = strlen(str);
@@ -72,7 +72,7 @@ intern void pth_debug(const char *file, int line, int argc, const char *fmt, ...
         va_end(ap);
         n = strlen(str);
         str[n++] = '\n';
-        pth_sc(write)(STDERR_FILENO, str, n);
+        pth_sc(write)(STDOUT_FILENO, str, n);
     }
     return;
 }

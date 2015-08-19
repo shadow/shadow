@@ -1048,7 +1048,7 @@ void tcp_retransmitTimerExpired(TCP* tcp) {
     /* update the scoreboard by marking this as lost */
     scoreboard_markLoss(tcp->retransmit.scoreboard, tcp->receive.lastAcknowledgment, tcp->send.highestSequence);
 
-    congestionlog(tcp->congestion, "[CONG-LOSS] cwnd=%d ssthresh=%d rtt=%d sndbufsize=%d sndbuflen=%d rcvbufsize=%d rcbuflen=%d retrans=%d ploss=%f", 
+    debug("[CONG-LOSS] cwnd=%d ssthresh=%d rtt=%d sndbufsize=%d sndbuflen=%d rcvbufsize=%d rcbuflen=%d retrans=%d ploss=%f",
             tcp->congestion->window, tcp->congestion->threshold, tcp->congestion->rttSmoothed, 
             tcp->super.outputBufferLength, tcp->super.outputBufferSize, tcp->super.inputBufferLength, tcp->super.inputBufferSize, 
             tcp->info.retransmitCount, (float)tcp->info.retransmitCount / tcp->send.packetsSent);
@@ -1433,7 +1433,7 @@ static void _tcp_logCongestionInfo(TCP* tcp) {
     gsize inLength = socket_getInputBufferLength(&tcp->super);
     double ploss = (double) (tcp->info.retransmitCount / tcp->send.packetsSent);
 
-    congestionlog(tcp->congestion, "[CONG-AVOID] cwnd=%d ssthresh=%d rtt=%d "
+    debug("[CONG-AVOID] cwnd=%d ssthresh=%d rtt=%d "
             "sndbufsize=%"G_GSIZE_FORMAT" sndbuflen=%"G_GSIZE_FORMAT" rcvbufsize=%"G_GSIZE_FORMAT" rcbuflen=%"G_GSIZE_FORMAT" "
             "retrans=%"G_GSIZE_FORMAT" ploss=%f",
             tcp->congestion->window, tcp->congestion->threshold, tcp->congestion->rttSmoothed,

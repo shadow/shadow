@@ -56,7 +56,8 @@ void logging_handleLog(const gchar *log_domain, GLogLevelFlags log_level, const 
 }
 
 void logging_logv(const gchar *msgLogDomain, GLogLevelFlags msgLogLevel,
-        const gchar* functionName, const gchar *format, va_list vargs) {
+        const gchar* fileName, const gchar* functionName, const gint lineNumber,
+        const gchar *format, va_list vargs) {
     /* this is called by worker threads, so we have access to worker */
 
     /* see if we can avoid some work because the message is filtered anyway */
@@ -65,6 +66,7 @@ void logging_logv(const gchar *msgLogDomain, GLogLevelFlags msgLogLevel,
         return;
     }
 
+    gchar* logFileStr = fileName ? g_path_get_basename(fileName) : g_strdup("n/a");
     const gchar* logFunctionStr = functionName ? functionName : "n/a";
     const gchar* formatStr = format ? format : "n/a";
     const gchar* logLevelStr = _logging_getNewLogLevelString(msgLogLevel);
@@ -107,24 +109,28 @@ void logging_logv(const gchar *msgLogDomain, GLogLevelFlags msgLogLevel,
 
     /* the function name - no need to free this */
     GString* newLogFormatBuffer = g_string_new(NULL);
-    g_string_printf(newLogFormatBuffer, "[thread-%i] %s [%s-%s] [%s] [%s] %s",
-            workerThreadID, clockString, logDomainStr, logLevelStr, nodeString, logFunctionStr, formatStr);
+    g_string_printf(newLogFormatBuffer, "[thread-%i] %s [%s-%s] [%s] [%s:%i] [%s] %s",
+            workerThreadID, clockString, logDomainStr, logLevelStr, nodeString,
+            logFileStr, lineNumber, logFunctionStr, formatStr);
 
     /* get the new format out of our string buffer and log it */
     gchar* newLogFormat = g_string_free(newLogFormatBuffer, FALSE);
     g_logv(logDomainStr, msgLogLevel, newLogFormat, vargs);
 
     /* cleanup */
+    g_free(logFileStr);
     g_free(newLogFormat);
     g_free(clockString);
     g_free(nodeString);
 }
 
-void logging_log(const gchar *log_domain, GLogLevelFlags log_level, const gchar* functionName, const gchar *format, ...) {
+void logging_log(const gchar *log_domain, GLogLevelFlags log_level,
+        const gchar* fileName, const gchar* functionName, const gint lineNumber,
+        const gchar *format, ...) {
     va_list vargs;
     va_start(vargs, format);
 
-    logging_logv(log_domain, log_level, functionName, format, vargs);
+    logging_logv(log_domain, log_level, fileName, functionName, lineNumber, format, vargs);
 
     va_end(vargs);
 }
