@@ -3,12 +3,15 @@
  * See LICENSE for licensing information
  */
 
+//TODO: Implement fwrite
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <fcntl.h>
 
 static int _test_newfile() {
     FILE* file = fopen("testfile", "w");
@@ -65,6 +68,51 @@ static int _test_read() {
     memset(buf, '\0', sizeof(buf));
     if(read(filed, buf, 4) < 0) {
         fprintf(stdout, "error: read failed\n");
+        fclose(file);
+        return -1;
+    }
+
+    if(strncmp(buf, "test", 4) != 0) {
+        fprintf(stdout, "error: buf: %s\n", buf);
+        fclose(file);
+        return -1;
+    }
+
+    /* succes */
+    fclose(file);
+    return 0;
+}
+
+static int _test_fwrite() {
+    FILE* file = fopen("testfile", "r+");
+    if(file == NULL) {
+        fprintf(stdout, "error: could not open file\n");
+        return -1;
+    }
+
+    const char* msg = "test";
+    if(fwrite(msg, sizeof(char), sizeof(msg)/sizeof(char), file) <= 0) { 
+        fprintf(stdout, "error: fwrite failed\n");
+        fclose(file);
+        return -1;
+    }
+
+    /* succes */
+    fclose(file);
+    return 0;
+}
+
+static int _test_fread() {
+    FILE* file = fopen("testfile", "r");
+    if(file == NULL) {
+        fprintf(stdout, "error: could not open file\n");
+        return -1;
+    }
+
+    char buf[5];
+    memset(buf, '\0', sizeof(buf));
+    if(fread(buf, sizeof(char), 4, file) <= 0) {
+        fprintf(stdout, "error: fread failed\n");
         fclose(file);
         return -1;
     }
@@ -195,11 +243,33 @@ static int _test_fstat() {
     return 0;
 }
 
+static int _test_open_close() {
+    int filed = open("testfile", O_RDONLY);
+    if(filed < 0) {
+        fprintf(stdout, "error: could not open testfile\n");
+        return -1;
+    }
+
+    if(close(filed) < 0) {
+        fprintf(stdout, "error: close on testfile failed\n");
+        return -1;
+    }
+
+    /* success! */
+    return 0;
+}
+
 int main(int argc, char* argv[]) {
     fprintf(stdout, "########## file-io test starting ##########\n");
 
     if(_test_newfile() < 0) {
         fprintf(stdout, "########## _test_newfile() failed\n");
+        unlink("testfile");
+        return -1;
+    }
+
+    if(_test_open_close() < 0) {
+        fprintf(stdout, "########## _test_open_close() failed\n");
         unlink("testfile");
         return -1;
     }
@@ -212,6 +282,18 @@ int main(int argc, char* argv[]) {
 
     if(_test_read() < 0) {
         fprintf(stdout, "########## _test_read() failed\n");
+        unlink("testfile");
+        return -1;
+    }
+
+    if(_test_fwrite() < 0) {
+        fprintf(stdout, "########## _test_fwrite() failed\n");
+        unlink("testfile");
+        return -1;
+    }
+
+    if(_test_fread() < 0) {
+        fprintf(stdout, "########## _test_fread() failed\n");
         unlink("testfile");
         return -1;
     }

@@ -56,9 +56,9 @@ static void* _test_thread_muxtrylock(void* mx) {
 
     /* Attempt to lock the mutex */
     if (pthread_mutex_trylock(mux) == 0) {
-        /* some busy work... */
+        /* some busy work... Probably a better way TODO this */
         int i;
-        for(i=0; i<(10000/NUM_THREADS); i++){
+        for(i=0; i<(1000000/NUM_THREADS); i++){
             int junk = i*i;
         }
 
