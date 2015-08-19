@@ -230,7 +230,7 @@ void host_addApplication(Host* host, GQuark pluginID,
     MAGIC_ASSERT(host);
 
     guint processID = host->processIDCounter++;
-    Process* application = process_new(host, pluginID, processID, host->dataDirPath, startTime, stopTime, arguments);
+    Process* application = process_new(host, pluginID, processID, startTime, stopTime, arguments);
     g_queue_push_tail(host->applications, application);
 
     StartApplicationEvent* event = startapplication_new(application);
@@ -1396,4 +1396,9 @@ gchar host_isLoggingPcap(Host *host) {
 gdouble host_getNextPacketPriority(Host* host) {
     MAGIC_ASSERT(host);
     return ++(host->packetPriorityCounter);
+}
+
+const gchar* host_getDataPath(Host* host) {
+    MAGIC_ASSERT(host);
+    return host->dataDirPath;
 }

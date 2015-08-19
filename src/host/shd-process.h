@@ -15,7 +15,7 @@
 
 #include "shadow.h"
 
-Process* process_new(gpointer host, GQuark programID, guint processID, const gchar* hostDataPath,
+Process* process_new(gpointer host, GQuark programID, guint processID,
         SimulationTime startTime, SimulationTime stopTime, gchar* arguments);
 void process_ref(Process* proc);
 void process_unref(Process* proc);

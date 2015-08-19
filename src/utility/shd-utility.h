@@ -9,6 +9,7 @@
 
 #include "shadow.h"
 
+#ifdef DEBUG
 #define utility_assert(expr) \
 do { \
     if G_LIKELY (expr) { \
@@ -17,6 +18,9 @@ do { \
         utility_handleError(__FILE__, __LINE__, G_STRFUNC, #expr); \
     } \
 } while (0)
+#else
+#define utility_assert(expr)
+#endif
 
 guint utility_ipPortHash(in_addr_t ip, in_port_t port);
 guint utility_int16Hash(gconstpointer value);

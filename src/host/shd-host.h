@@ -82,4 +82,6 @@ Tracker* host_getTracker(Host* host);
 GLogLevelFlags host_getLogLevel(Host* host);
 gchar host_isLoggingPcap(Host *host);
 
+const gchar* host_getDataPath(Host* host);
+
 #endif /* SHD_HOST_H_ */

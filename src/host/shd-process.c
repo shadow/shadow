@@ -184,7 +184,7 @@ static ProcessContext _process_changeContext(Process* proc, ProcessContext from,
     return prevContext;
 }
 
-Process* process_new(gpointer host, GQuark programID, guint processID, const gchar* hostDataPath,
+Process* process_new(gpointer host, GQuark programID, guint processID,
         SimulationTime startTime, SimulationTime stopTime, gchar* arguments) {
     Process* proc = g_new0(Process, 1);
     MAGIC_INIT(proc);
@@ -192,19 +192,7 @@ Process* process_new(gpointer host, GQuark programID, guint processID, const gch
     proc->host = (Host*)host;
     // FIXME ref the host once that is merged
     proc->programID = programID;
-
     proc->processID = processID;
-
-    GString* fileString = g_string_new(NULL);
-    g_string_printf(fileString, "%s-%u-stdout", g_quark_to_string(proc->programID), processID);
-    gchar* pathStr = g_build_filename(hostDataPath, fileString->str, NULL);
-    proc->stdoutFile = fopen(pathStr, "a");
-    g_free(pathStr);
-    g_string_printf(fileString, "%s-%u-stderr", g_quark_to_string(proc->programID), processID);
-    pathStr = g_build_filename(hostDataPath, fileString->str, NULL);
-    proc->stderrFile = fopen(pathStr, "a");
-    g_free(pathStr);
-    g_string_free(fileString, TRUE);
 
     proc->startTime = startTime;
     if(arguments && (g_ascii_strncasecmp(arguments, "\0", (gsize) 1) != 0)) {
@@ -245,6 +233,34 @@ static void _process_free(Process* proc) {
 
     MAGIC_CLEAR(proc);
     g_free(proc);
+}
+
+static FILE* _process_openFile(Process* proc, const gchar* suffix) {
+    const gchar* hostDataPath = host_getDataPath(proc->host);
+    GString* fileNameString = g_string_new(NULL);
+    g_string_printf(fileNameString, "%s-%u-%s", g_quark_to_string(proc->programID), proc->processID, suffix);
+    gchar* pathStr = g_build_filename(hostDataPath, fileNameString->str, NULL);
+    FILE* f = fopen(pathStr, "a");
+    g_string_free(fileNameString, TRUE);
+    g_free(pathStr);
+    return f;
+}
+
+static FILE* _process_getIOFile(Process* proc, gint fd){
+    MAGIC_ASSERT(proc);
+    utility_assert(fd == STDOUT_FILENO || fd == STDERR_FILENO);
+
+    if(fd == STDOUT_FILENO) {
+        if(!proc->stdoutFile) {
+            proc->stdoutFile = _process_openFile(proc, "stdout");
+        }
+        return proc->stdoutFile;
+    } else {
+        if(!proc->stderrFile) {
+            proc->stderrFile = _process_openFile(proc, "stderr");
+        }
+        return proc->stderrFile;
+    }
 }
 
 static void _process_handleTimerResult(Process* proc, gdouble elapsedTimeSec) {
@@ -1817,8 +1833,7 @@ ssize_t process_emu_read(Process* proc, int fd, void *buff, size_t numbytes) {
         ret = pth_read(fd, buff, numbytes);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     } else if(prevCTX == PCTX_PLUGIN && (fd == STDOUT_FILENO || fd == STDERR_FILENO)) {
-        FILE* stdioFile = (fd == STDOUT_FILENO) ? proc->stdoutFile : proc->stderrFile;
-        ret = fread(buff, numbytes, 1, stdioFile);
+        ret = fread(buff, numbytes, 1, _process_getIOFile(proc, fd));
     } else {
         if(host_isShadowDescriptor(proc->host, fd)){
             Descriptor* desc = host_lookupDescriptor(proc->host, fd);
@@ -1856,8 +1871,7 @@ ssize_t process_emu_write(Process* proc, int fd, const void *buff, size_t n) {
         ret = pth_write(fd, buff, n);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     } else if(prevCTX == PCTX_PLUGIN && (fd == STDOUT_FILENO || fd == STDERR_FILENO)) {
-        FILE* stdioFile = (fd == STDOUT_FILENO) ? proc->stdoutFile : proc->stderrFile;
-        ret = fwrite(buff, n, 1, stdioFile);
+        ret = fwrite(buff, n, 1, _process_getIOFile(proc, fd));
     } else if(prevCTX == PCTX_PTH && (fd == STDOUT_FILENO || fd == STDERR_FILENO)) {
         if(fd == STDERR_FILENO) {
             error("%.*s", n, buff);
@@ -1990,8 +2004,7 @@ ssize_t process_emu_pread(Process* proc, int fd, void *buff, size_t numbytes, of
         ret = pth_pread(fd, buff, numbytes, offset);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     } else if(prevCTX == PCTX_PLUGIN && (fd == STDOUT_FILENO || fd == STDERR_FILENO)) {
-        FILE* stdioFile = (fd == STDOUT_FILENO) ? proc->stdoutFile : proc->stderrFile;
-        ret = fread(buff, numbytes, 1, stdioFile);
+        ret = fread(buff, numbytes, 1, _process_getIOFile(proc, fd));
     } else {
         if(host_isShadowDescriptor(proc->host, fd)){
             warning("pread on shadow file descriptors is not currently supported");
@@ -2023,8 +2036,7 @@ ssize_t process_emu_pwrite(Process* proc, int fd, const void *buf, size_t nbytes
         ret = pth_pwrite(fd, buf, nbytes, offset);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     } else if(prevCTX == PCTX_PLUGIN && (fd == STDOUT_FILENO || fd == STDERR_FILENO)) {
-        FILE* stdioFile = (fd == STDOUT_FILENO) ? proc->stdoutFile : proc->stderrFile;
-        ret = fwrite(buf, nbytes, 1, stdioFile);
+        ret = fwrite(buf, nbytes, 1, _process_getIOFile(proc, fd));
     } else {
         if(host_isShadowDescriptor(proc->host, fd)){
             warning("pwrite on shadow file descriptors is not currently supported");
@@ -2054,9 +2066,13 @@ int process_emu_close(Process* proc, int fd) {
         /* check if we have a mapped os fd */
         gint osfd = host_getOSHandle(proc->host, fd);
         if(osfd == STDOUT_FILENO) {
-            ret = fclose(proc->stdoutFile);
+            if(proc->stdoutFile) {
+                ret = fclose(proc->stdoutFile);
+            }
         } else if (osfd == STDERR_FILENO) {
-            ret = fclose(proc->stderrFile);
+            if(proc->stderrFile) {
+                ret = fclose(proc->stderrFile);
+            }
         } else if(osfd >= 0) {
             ret = close(osfd);
             host_destroyShadowHandle(proc->host, fd);
@@ -2929,8 +2945,7 @@ size_t process_emu_fread(Process* proc, void *ptr, size_t size, size_t nmemb, FI
 
     int fd = fileno(stream);
     if(prevCTX == PCTX_PLUGIN && (fd == STDOUT_FILENO || fd == STDERR_FILENO)) {
-        FILE* stdioFile = (fd == STDOUT_FILENO) ? proc->stdoutFile : proc->stderrFile;
-        ret = fread(ptr, size, nmemb, stdioFile);
+        ret = fread(ptr, size, nmemb, _process_getIOFile(proc, fd));
     } else {
         ret = fread(ptr, size, nmemb, stream);
     }
@@ -2945,8 +2960,7 @@ size_t process_emu_fwrite(Process* proc, const void *ptr, size_t size, size_t nm
 
     int fd = fileno(stream);
     if(prevCTX == PCTX_PLUGIN && (fd == STDOUT_FILENO || fd == STDERR_FILENO)) {
-        FILE* stdioFile = (fd == STDOUT_FILENO) ? proc->stdoutFile : proc->stderrFile;
-        ret = fwrite(ptr, size, nmemb, stdioFile);
+        ret = fwrite(ptr, size, nmemb, _process_getIOFile(proc, fd));
     } else {
         ret = fwrite(ptr, size, nmemb, stream);
     }
@@ -2961,8 +2975,7 @@ int process_emu_fputc(Process* proc, int c, FILE *stream) {
 
     int fd = fileno(stream);
     if(prevCTX == PCTX_PLUGIN && (fd == STDOUT_FILENO || fd == STDERR_FILENO)) {
-        FILE* stdioFile = (fd == STDOUT_FILENO) ? proc->stdoutFile : proc->stderrFile;
-        ret = fputc(c, stdioFile);
+        ret = fputc(c, _process_getIOFile(proc, fd));
     } else {
         ret = fputc(c, stream);
     }
@@ -2977,8 +2990,7 @@ int process_emu_fputs(Process* proc, const char *s, FILE *stream) {
 
     int fd = fileno(stream);
     if(prevCTX == PCTX_PLUGIN && (fd == STDOUT_FILENO || fd == STDERR_FILENO)) {
-        FILE* stdioFile = (fd == STDOUT_FILENO) ? proc->stdoutFile : proc->stderrFile;
-        ret = fputs(s, stdioFile);
+        ret = fputs(s, _process_getIOFile(proc, fd));
     } else {
         ret = fputs(s, stream);
     }
@@ -2992,7 +3004,7 @@ int process_emu_putchar(Process* proc, int c) {
     int ret;
 
     if(prevCTX == PCTX_PLUGIN) {
-        ret = fputc(c, proc->stdoutFile);
+        ret = fputc(c, _process_getIOFile(proc, STDOUT_FILENO));
     } else {
         ret = putchar(c);
     }
@@ -3006,9 +3018,9 @@ int process_emu_puts(Process* proc, const char *s) {
     int ret;
 
     if(prevCTX == PCTX_PLUGIN) {
-        ret = fputs(s, proc->stdoutFile);
+        ret = fputs(s, _process_getIOFile(proc, STDOUT_FILENO));
         if(ret >= 0) {
-            ret = fputs("\n", proc->stdoutFile);
+            ret = fputs("\n", _process_getIOFile(proc, STDOUT_FILENO));
         }
     } else {
         ret = puts(s);
