@@ -181,14 +181,13 @@ struct pth_event_st;
 
     /* event subject classes */
 #define PTH_EVENT_FD                 _BIT(1)
-#define PTH_EVENT_SELECT             _BIT(2)
-#define PTH_EVENT_SIGS               _BIT(3)
-#define PTH_EVENT_TIME               _BIT(4)
-#define PTH_EVENT_MSG                _BIT(5)
-#define PTH_EVENT_MUTEX              _BIT(6)
-#define PTH_EVENT_COND               _BIT(7)
-#define PTH_EVENT_TID                _BIT(8)
-#define PTH_EVENT_FUNC               _BIT(9)
+#define PTH_EVENT_SIGS               _BIT(2)
+#define PTH_EVENT_TIME               _BIT(3)
+#define PTH_EVENT_MSG                _BIT(4)
+#define PTH_EVENT_MUTEX              _BIT(5)
+#define PTH_EVENT_COND               _BIT(6)
+#define PTH_EVENT_TID                _BIT(7)
+#define PTH_EVENT_FUNC               _BIT(8)
 
     /* event occurange restrictions */
 #define PTH_UNTIL_OCCURRED           _BIT(11)
@@ -427,7 +426,7 @@ extern int            pth_init(void);
 extern int            pth_kill(void);
 extern long           pth_ctrl(unsigned long, ...);
 extern long           pth_version(void);
-extern pth_gctx_t     pth_gctx_new(void);
+extern pth_gctx_t     pth_gctx_new(int);
 extern void           pth_gctx_free(pth_gctx_t);
 extern void           pth_gctx_set(pth_gctx_t);
 extern pth_gctx_t     pth_gctx_get(void);

@@ -405,7 +405,7 @@ static void* _process_executeMain(Process* proc) {
 
     /* let's go back to pth momentarily and push the cleanup function for the main thread */
     _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
-    pth_cleanup_push((PthCleanupFunc)_process_executeCleanup, proc);
+    pth_cleanup_push((PthCleanupFunc)(&_process_executeCleanup), proc);
     _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
 
     /* get arguments from the program we will run */
@@ -507,8 +507,8 @@ void process_start(Process* proc) {
     program_swapInState(proc->prog, proc->pstate);
     _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
 
-    /* create a new global context for this process */
-    proc->tstate = pth_gctx_new();
+    /* create a new global context for this process, 0 means it should never block */
+    proc->tstate = pth_gctx_new(0);
 
     /* we are in pth land, load in the pth state for this process */
     pth_gctx_t prevPthGlobalContext = pth_gctx_get();
@@ -1782,7 +1782,7 @@ ssize_t process_emu_read(Process* proc, int fd, void *buff, size_t numbytes) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     gssize ret = 0;
 
-    if(prevCTX == PCTX_PLUGIN) {
+    if(prevCTX == PCTX_PLUGIN && host_isShadowDescriptor(proc->host, fd)) {
         _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
         utility_assert(proc->tstate == pth_gctx_get());
         ret = pth_read(fd, buff, numbytes);
@@ -1818,7 +1818,7 @@ ssize_t process_emu_write(Process* proc, int fd, const void *buff, size_t n) {
     gssize ret = 0;
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
 
-    if(prevCTX == PCTX_PLUGIN) {
+    if(prevCTX == PCTX_PLUGIN && host_isShadowDescriptor(proc->host, fd)) {
         _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
         utility_assert(proc->tstate == pth_gctx_get());
         ret = pth_write(fd, buff, n);
@@ -4370,7 +4370,8 @@ void process_emu_pthread_cleanup_push(Process* proc, void (*routine)(void *), vo
         _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
         utility_assert(proc->tstate == pth_gctx_get());
 
-        pth_cleanup_push(routine, arg);
+        // FIXME this was causing SEGFAULTs in Tor when the cleanup func was later run
+        //pth_cleanup_push(routine, arg);
 
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     } else {

@@ -103,6 +103,231 @@ intern void pth_scheduler_kill(void)
     return;
 }
 
+
+static void pth_sched_check_epoll_events(pth_t t) {
+    if(!t || !t->events) {
+        return;
+    }
+
+    int n_events_waiting = 0;
+    pth_event_t ev_iter = t->events;
+    do {
+        n_events_waiting++;
+    } while((ev_iter = ev_iter->ev_next) != t->events);
+
+    if(n_events_waiting <= 0) {
+        return;
+    }
+
+    struct epoll_event* events_ready = calloc(n_events_waiting, sizeof(struct epoll_event));
+    int n_events_ready = pth_sc(epoll_wait)(t->epoll_fd, events_ready, n_events_waiting, 0);
+
+    for(int i = 0; i < n_events_ready; i++) {
+        pth_event_t ev = (pth_event_t) events_ready[i].data.ptr;
+        if(!ev) {
+            continue;
+        }
+
+        /* Filedescriptor I/O */
+        if (ev->ev_type == PTH_EVENT_FD) {
+            if (((ev->ev_goal & PTH_UNTIL_FD_READABLE) && (events_ready[i].events & EPOLLIN)) ||
+                ((ev->ev_goal & PTH_UNTIL_FD_WRITEABLE) && (events_ready[i].events & EPOLLOUT)) ||
+                ((ev->ev_goal & PTH_UNTIL_FD_EXCEPTION) && (events_ready[i].events & EPOLLERR))) {
+                ev->ev_status = PTH_STATUS_OCCURRED;
+            }
+        }
+        /* Timer */
+        else if (ev->ev_type == PTH_EVENT_TIME) {
+            uint64_t n_expirations = 0;
+            ssize_t rc = pth_sc(read)(ev->ev_args.TIME.fd, &n_expirations, 8);
+            if(rc > 0 && n_expirations > 0) {
+                ev->ev_status = PTH_STATUS_OCCURRED;
+            }
+        }
+        /* Custom Event Function */
+        else if (ev->ev_type == PTH_EVENT_FUNC) {
+            uint64_t n_expirations = 0;
+            ssize_t rc = pth_sc(read)(ev->ev_args.FUNC.fd, &n_expirations, 8);
+            if(rc > 0 && n_expirations > 0) {
+                ev->ev_status = PTH_STATUS_OCCURRED;
+            }
+        }
+    }
+
+    free(events_ready);
+}
+
+static int pth_sched_check_pth_events(pth_t t) {
+    if(!t || !t->events) {
+        return 0;
+    }
+
+    int n_events_occurred = 0;
+    pth_event_t ev = t->events;
+    do {
+        if (ev->ev_status == PTH_STATUS_PENDING) {
+            /* decide if it was pending and now occurred.
+             * epoll already told us about FD, TIME, and FUNC type pth events;
+             * here we wait check on other pth event types that epoll does not watch */
+            int did_occur = FALSE;
+
+            /* Message Port Arrivals */
+            if (ev->ev_type == PTH_EVENT_MSG) {
+                if (pth_ring_elements(&(ev->ev_args.MSG.mp->mp_queue)) > 0)
+                    did_occur = TRUE;
+            }
+            /* Mutex Release */
+            else if (ev->ev_type == PTH_EVENT_MUTEX) {
+                if (!(ev->ev_args.MUTEX.mutex->mx_state & PTH_MUTEX_LOCKED))
+                    did_occur = TRUE;
+            }
+            /* Condition Variable Signal */
+            else if (ev->ev_type == PTH_EVENT_COND) {
+                if (ev->ev_args.COND.cond->cn_state & PTH_COND_SIGNALED) {
+                    if (ev->ev_args.COND.cond->cn_state & PTH_COND_BROADCAST)
+                        did_occur = TRUE;
+                    else {
+                        if (!(ev->ev_args.COND.cond->cn_state & PTH_COND_HANDLED)) {
+                            ev->ev_args.COND.cond->cn_state |= PTH_COND_HANDLED;
+                            did_occur = TRUE;
+                        }
+                    }
+                }
+            }
+            /* Thread Termination */
+            else if (ev->ev_type == PTH_EVENT_TID) {
+                if (   (   ev->ev_args.TID.tid == NULL
+                        && pth_pqueue_elements(&pth_gctx_get()->pth_DQ) > 0)
+                    || (   ev->ev_args.TID.tid != NULL
+                        && ev->ev_args.TID.tid->state == ev->ev_goal))
+                    did_occur = TRUE;
+            }
+            /* Signal Set */
+            else if (ev->ev_type == PTH_EVENT_SIGS) {
+                for (int sig = 1; sig < PTH_NSIG; sig++) {
+                    if (sigismember(ev->ev_args.SIGS.sigs, sig)) {
+                        /* thread signal handling */
+                        if (sigismember(&t->sigpending, sig)) {
+                            *(ev->ev_args.SIGS.sig) = sig;
+                            sigdelset(&t->sigpending, sig);
+                            t->sigpendcnt--;
+                            did_occur = TRUE;
+                        }
+                        /* process signal handling */
+                        if (sigismember(&pth_gctx_get()->pth_sigpending, sig)) {
+                            if (ev->ev_args.SIGS.sig != NULL)
+                                *(ev->ev_args.SIGS.sig) = sig;
+                            pth_util_sigdelete(sig);
+                            sigdelset(&pth_gctx_get()->pth_sigpending, sig);
+                            did_occur = TRUE;
+                        }
+                        else {
+                            sigdelset(&pth_gctx_get()->pth_sigblock, sig);
+                            sigaddset(&pth_gctx_get()->pth_sigcatch, sig);
+                        }
+                    }
+                }
+            }
+
+            if(did_occur) {
+                pth_debug2("pth_sched_eventmanager: event occurred for thread \"%s\"", t->name);
+                ev->ev_status = PTH_STATUS_OCCURRED;
+                n_events_occurred++;
+            }
+        } else {
+            /* it was pending and now it is ready */
+            pth_debug2("pth_sched_eventmanager: event occurred for thread \"%s\"", t->name);
+            n_events_occurred++;
+
+            /* post-processing for occurred events */
+
+            /* Condition Variable Signal */
+            if (ev->ev_type == PTH_EVENT_COND) {
+                /* clean signal */
+                if (ev->ev_args.COND.cond->cn_state & PTH_COND_SIGNALED) {
+                    ev->ev_args.COND.cond->cn_state &= ~(PTH_COND_SIGNALED);
+                    ev->ev_args.COND.cond->cn_state &= ~(PTH_COND_BROADCAST);
+                    ev->ev_args.COND.cond->cn_state &= ~(PTH_COND_HANDLED);
+                }
+            }
+            /* Custom Event Function */
+            else if (ev->ev_type == PTH_EVENT_FUNC) {
+                /* call the callback func */
+                ev->ev_args.FUNC.func(ev->ev_args.FUNC.arg);
+            }
+        }
+    } while ((ev = ev->ev_next) != t->events);
+
+    return n_events_occurred;
+}
+
+static void pth_sched_eventmanager_async(pth_time_t *now) {
+    pth_debug1("pth_sched_eventmanager: enter in async mode");
+
+    /* each thread has an epoll */
+    int n_threads_waiting = pth_pqueue_elements(&pth_gctx_get()->pth_WQ);
+    if(n_threads_waiting < 1) {
+        pth_debug1("pth_sched_eventmanager: leave in async mode, no threads waiting");
+        return;
+    }
+
+    /* check for events without blocking!! */
+    struct epoll_event* events_ready = calloc(n_threads_waiting, sizeof(struct epoll_event));
+    int n_events_ready = pth_sc(epoll_wait)(pth_gctx_get()->main_efd, events_ready, n_threads_waiting, 0);
+
+    /* mark events based on the status we got from epoll */
+    for(int i = 0; i < n_events_ready; i++) {
+        pth_t thread_ready = (pth_t) events_ready[i].data.ptr;
+        if(thread_ready && (events_ready[i].events & EPOLLIN)) {
+            pth_sched_check_epoll_events(thread_ready);
+        }
+    }
+
+    /* cleanup */
+    free(events_ready);
+    events_ready = NULL;
+
+    /* now comes the final cleanup loop where we've to do two jobs:
+     * 1 handle all pth event types for all threads
+     * 2 move threads with occurred events from the waiting queue to the ready queue */
+    pth_t t = pth_pqueue_head(&pth_gctx_get()->pth_WQ);
+    pth_t tlast = NULL;
+    while (t != NULL) {
+        /* do the late handling of the fd I/O and signal
+           events in the waiting event ring */
+        int n_events_occurred = pth_sched_check_pth_events(t);
+
+        /* cancellation support */
+        if (t->cancelreq == TRUE) {
+            pth_debug2("pth_sched_eventmanager: cancellation request pending for thread \"%s\"", t->name);
+            n_events_occurred++;
+        }
+
+        /* walk to next thread in waiting queue */
+        tlast = t;
+        t = pth_pqueue_walk(&pth_gctx_get()->pth_WQ, t, PTH_WALK_NEXT);
+
+        /*
+         * move last thread to ready queue if any events occurred for it.
+         * we insert it with a slightly increased queue priority to it a
+         * better chance to immediately get scheduled, else the last running
+         * thread might immediately get again the CPU which is usually not
+         * what we want, because we oven use pth_yield() calls to give others
+         * a chance.
+         */
+        if (n_events_occurred > 0) {
+            pth_pqueue_delete(&pth_gctx_get()->pth_WQ, tlast);
+            tlast->state = PTH_STATE_READY;
+            pth_pqueue_insert(&pth_gctx_get()->pth_RQ, tlast->prio+1, tlast);
+            pth_debug2("pth_sched_eventmanager: thread \"%s\" moved from waiting "
+                       "to ready queue", tlast->name);
+        }
+    }
+
+    pth_debug1("pth_sched_eventmanager: leaving");
+    return;
+}
+
 /*
  * Update the average scheduler load.
  *
@@ -343,20 +568,33 @@ intern void *pth_scheduler(void *dummy)
          * events occurred and move them to the ready queue. But wait only if
          * we have already no new or ready threads.
          */
-        if (   pth_pqueue_elements(&pth_gctx_get()->pth_RQ) == 0
-            && pth_pqueue_elements(&pth_gctx_get()->pth_NQ) == 0)
+        if (pth_pqueue_elements(&pth_gctx_get()->pth_RQ) == 0
+            && pth_pqueue_elements(&pth_gctx_get()->pth_NQ) == 0) {
             /* still no NEW or READY threads, so we have to wait for new work */
-            pth_sched_eventmanager(&snapshot, FALSE /* wait */);
-        else
-            /* already NEW or READY threads exists, so just poll for even more work */
-            pth_sched_eventmanager(&snapshot, TRUE  /* poll */);
+        	if(pth_gctx_get()->pth_is_async) {
+        		fprintf(stderr, "**Pth** SCHEDULER INTERNAL ERROR: "
+							"we are in async mode and cannot block, but no thread(s) new or ready; "
+							"please spawn a thread at minimum priority that can block as needed!\n");
+        		abort();
+        	} else {
+				pth_sched_eventmanager(&snapshot, FALSE /* wait */);
+        	}
+        }
+        else {
+			/* already NEW or READY threads exists, so just poll for even more work */
+        	if(pth_gctx_get()->pth_is_async) {
+        		pth_sched_eventmanager_async(&snapshot);
+        	} else {
+				pth_sched_eventmanager(&snapshot, TRUE  /* poll */);
+        	}
+        }
     }
 
     /* NOTREACHED */
     return NULL;
 }
 
-static int _rpth_epoll_ctl_helper(int epollfd, int op, int fd, void* data, uint32_t evset) {
+static int rpth_epoll_ctl_helper(int epollfd, int op, int fd, void* data, uint32_t evset) {
     struct epoll_event* epollev = calloc(1, sizeof(struct epoll_event));
     epollev->events = evset;
     epollev->data.ptr = data;
@@ -461,38 +699,13 @@ intern void pth_sched_eventmanager(pth_time_t *now, int dopoll)
                     if (ev->ev_goal & PTH_UNTIL_FD_EXCEPTION)
                         evset |= EPOLLERR;
                     if(evset != 0) {
-                        int retval = _rpth_epoll_ctl_helper(epollfd, (int)EPOLL_CTL_ADD, ev->ev_args.FD.fd, ev, evset);
+                        int retval = rpth_epoll_ctl_helper(epollfd, (int)EPOLL_CTL_ADD, ev->ev_args.FD.fd, ev, evset);
                         if(retval < 0) {
                             ev->ev_status = PTH_STATUS_FAILED;
                             pth_debug3("pth_sched_eventmanager: "
                                        "[I/O] event failed for thread \"%s\" fd %d", t->name, ev->ev_args.FD.fd);
                         } else {
                             nepollevs++;
-                        }
-                    }
-                }
-                /* Filedescriptor Set Select I/O */
-                else if (ev->ev_type == PTH_EVENT_SELECT) {
-                    /* filedescriptors are checked later all at once.
-                       Here we only track them in the epoll instance. */
-                    int i = 0;
-                    for (i = 0; i < ev->ev_args.SELECT.nfd; i++) {
-                        uint32_t evset = 0;
-                        if (FD_ISSET(i, ev->ev_args.SELECT.rfds))
-                            evset |= EPOLLIN;
-                        if (FD_ISSET(i, ev->ev_args.SELECT.wfds))
-                            evset |= EPOLLOUT;
-                        if (FD_ISSET(i, ev->ev_args.SELECT.efds))
-                            evset |= EPOLLERR;
-                        if(evset != 0) {
-                            int retval = _rpth_epoll_ctl_helper(epollfd, (int)EPOLL_CTL_ADD, i, ev, evset);
-                            if(retval < 0) {
-                                ev->ev_status = PTH_STATUS_FAILED;
-                                pth_debug3("pth_sched_eventmanager: "
-                                           "[I/O] event failed for thread \"%s\" fd %d", t->name, i);
-                            } else {
-                                nepollevs++;
-                            }
                         }
                     }
                 }
@@ -599,7 +812,7 @@ intern void pth_sched_eventmanager(pth_time_t *now, int dopoll)
 
     /* clear pipe and let select() wait for the read-part of the pipe */
     while (pth_sc(read)(pth_gctx_get()->pth_sigpipe[0], minibuf, sizeof(minibuf)) > 0) ;
-    nepollevs += _rpth_epoll_ctl_helper(epollfd, (int)EPOLL_CTL_ADD, pth_gctx_get()->pth_sigpipe[0], NULL, (uint32_t)EPOLLIN);
+    nepollevs += rpth_epoll_ctl_helper(epollfd, (int)EPOLL_CTL_ADD, pth_gctx_get()->pth_sigpipe[0], NULL, (uint32_t)EPOLLIN);
 
     struct epoll_event* readyevs = calloc(nepollevs, sizeof(struct epoll_event));
     int epoll_timeout;
@@ -641,7 +854,7 @@ intern void pth_sched_eventmanager(pth_time_t *now, int dopoll)
        WHEN THE SCHEDULER SLEEPS AT ALL, THEN HERE!! */
     n_events_ready = -1;
     if (!(dopoll && nepollevs == 0))
-        while ((n_events_ready = epoll_wait(epollfd, readyevs, nepollevs, epoll_timeout)) < 0
+        while ((n_events_ready = pth_sc(epoll_wait)(epollfd, readyevs, nepollevs, epoll_timeout)) < 0
                && errno == EINTR) ;
 
     /* restore signal mask and actions and handle signals */
@@ -702,26 +915,6 @@ intern void pth_sched_eventmanager(pth_time_t *now, int dopoll)
                     ((ev->ev_goal & PTH_UNTIL_FD_WRITEABLE) && (readyev->events & EPOLLOUT)) ||
                     ((ev->ev_goal & PTH_UNTIL_FD_EXCEPTION) && (readyev->events & EPOLLERR))) {
                     ev->ev_status = PTH_STATUS_OCCURRED;
-                }
-            }
-            /* Filedescriptor Set I/O */
-            else if (ev->ev_type == PTH_EVENT_SELECT) {
-                if((readyev->events & EPOLLIN) || (readyev->events & EPOLLOUT) || (readyev->events & EPOLLERR)) {
-                    ev->ev_status = PTH_STATUS_OCCURRED;
-                    if (ev->ev_args.SELECT.n != NULL) {
-                        if(*(ev->ev_args.SELECT.n) == -1) {
-                            *(ev->ev_args.SELECT.n) = 0;
-                        }
-                        if((readyev->events & EPOLLIN)) {
-                            (*(ev->ev_args.SELECT.n))++;
-                        }
-                        if((readyev->events & EPOLLOUT)) {
-                            (*(ev->ev_args.SELECT.n))++;
-                        }
-                        if((readyev->events & EPOLLERR)) {
-                            (*(ev->ev_args.SELECT.n))++;
-                        }
-                    }
                 }
             }
             /* Signal Set */
