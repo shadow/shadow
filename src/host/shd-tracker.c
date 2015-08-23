@@ -345,7 +345,8 @@ void tracker_removeAllocatedBytes(Tracker* tracker, gpointer location) {
         gpointer value = NULL;
         gboolean exists = g_hash_table_lookup_extended(tracker->allocatedLocations, location, NULL, &value);
         if(exists) {
-            utility_assert(g_hash_table_remove(tracker->allocatedLocations, location));
+            gboolean b = g_hash_table_remove(tracker->allocatedLocations, location);
+            utility_assert(b);
             gsize allocatedBytes = GPOINTER_TO_SIZE(value);
             tracker->allocatedBytesTotal -= allocatedBytes;
             tracker->deallocatedBytesLastInterval += allocatedBytes;

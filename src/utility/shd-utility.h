@@ -32,6 +32,9 @@ gchar* utility_getHomePath(const gchar* path);
 guint utility_getRawCPUFrequency(const gchar* freqFilename);
 gboolean utility_isRandomPath(const gchar* path);
 
+gboolean utility_removeAll(const gchar* path);
+gboolean utility_copyAll(const gchar* srcPath, const gchar* dstPath);
+
 void utility_handleError(const gchar* file, gint line, const gchar* funtcion, const gchar* message);
 
 #endif /* SHD_UTILITY_H_ */

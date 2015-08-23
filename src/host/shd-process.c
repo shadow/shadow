@@ -238,7 +238,7 @@ static void _process_free(Process* proc) {
 static FILE* _process_openFile(Process* proc, const gchar* suffix) {
     const gchar* hostDataPath = host_getDataPath(proc->host);
     GString* fileNameString = g_string_new(NULL);
-    g_string_printf(fileNameString, "%s-%u-%s", g_quark_to_string(proc->programID), proc->processID, suffix);
+    g_string_printf(fileNameString, "%s.%u.%s", g_quark_to_string(proc->programID), proc->processID, suffix);
     gchar* pathStr = g_build_filename(hostDataPath, fileNameString->str, NULL);
     FILE* f = fopen(pathStr, "a");
     g_string_free(fileNameString, TRUE);
@@ -1871,7 +1871,7 @@ ssize_t process_emu_write(Process* proc, int fd, const void *buff, size_t n) {
         ret = pth_write(fd, buff, n);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     } else if(prevCTX == PCTX_PLUGIN && (fd == STDOUT_FILENO || fd == STDERR_FILENO)) {
-        ret = fwrite(buff, n, 1, _process_getIOFile(proc, fd));
+        ret = fwrite(buff, 1, n, _process_getIOFile(proc, fd));
     } else if(prevCTX == PCTX_PTH && (fd == STDOUT_FILENO || fd == STDERR_FILENO)) {
         if(fd == STDERR_FILENO) {
             error("%.*s", n, buff);
@@ -2036,7 +2036,7 @@ ssize_t process_emu_pwrite(Process* proc, int fd, const void *buf, size_t nbytes
         ret = pth_pwrite(fd, buf, nbytes, offset);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     } else if(prevCTX == PCTX_PLUGIN && (fd == STDOUT_FILENO || fd == STDERR_FILENO)) {
-        ret = fwrite(buf, nbytes, 1, _process_getIOFile(proc, fd));
+        ret = fwrite(buf, 1, nbytes, _process_getIOFile(proc, fd));
     } else {
         if(host_isShadowDescriptor(proc->host, fd)){
             warning("pwrite on shadow file descriptors is not currently supported");

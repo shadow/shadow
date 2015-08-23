@@ -113,8 +113,20 @@ Slave* slave_new(Master* master, Configuration* config, guint randomSeed) {
     slave->mainThreadWorker = worker_new(slave);
 
     slave->cwdPath = g_get_current_dir();
-    slave->dataPath = g_build_filename(slave->cwdPath, "data", NULL);
+    slave->dataPath = g_build_filename(slave->cwdPath, "shadow.data", NULL);
     slave->hostsPath = g_build_filename(slave->dataPath, "hosts", NULL);
+
+    if(g_file_test(slave->dataPath, G_FILE_TEST_EXISTS)) {
+        gboolean success = utility_removeAll(slave->dataPath);
+        utility_assert(success);
+    }
+
+    gchar* templateDataPath = g_build_filename(slave->cwdPath, "shadow.data.template", NULL);
+    if(g_file_test(templateDataPath, G_FILE_TEST_EXISTS)) {
+        gboolean success = utility_copyAll(templateDataPath, slave->dataPath);
+        utility_assert(success);
+    }
+    g_free(templateDataPath);
 
     return slave;
 }
