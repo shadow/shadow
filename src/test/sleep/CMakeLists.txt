@@ -13,4 +13,4 @@ target_link_libraries(shadow-plugin-test-sleep ${M_LIBRARIES} ${DL_LIBRARIES} ${
 
 ## register the tests
 add_test(NAME test-sleep COMMAND shadow-plugin-test-sleep)
-add_test(NAME test-sleep-shadow COMMAND shadow ${CMAKE_CURRENT_SOURCE_DIR}/sleep.test.shadow.config.xml)
+add_test(NAME test-sleep-shadow COMMAND ${CMAKE_BINARY_DIR}/src/shadow  ${CMAKE_CURRENT_SOURCE_DIR}/sleep.test.shadow.config.xml)
