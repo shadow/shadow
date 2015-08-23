@@ -4,6 +4,7 @@
 #include <time.h>
 #include <sys/epoll.h>
 #include <sys/timerfd.h>
+#include <string.h>
 
 #define S_TO_NS 1000000000L
 
@@ -18,7 +19,7 @@ static int _test_normal(int flags) {
     timerevent.data.fd = tfd;
 
     /* associate this timer with efd */
-    if(epoll_ctl(efd, EPOLL_CTL_ADD, timerevent.data.fd, &timerevent) < 0) {
+    if(epoll_ctl(efd, EPOLL_CTL_ADD, tfd, &timerevent) < 0) {
         return -1;
     }
 
@@ -34,10 +35,10 @@ static int _test_normal(int flags) {
     struct itimerspec t;
     if(flags == TFD_TIMER_ABSTIME) {
         t.it_value = start;
-        t.it_value.tv_sec += 3;
+        t.it_value.tv_sec += 1;
     }
     else {
-        t.it_value.tv_sec = 3;
+        t.it_value.tv_sec = 1;
         t.it_value.tv_nsec = 0;
     }
     t.it_interval.tv_sec=1;
@@ -48,11 +49,13 @@ static int _test_normal(int flags) {
     }
 
     struct epoll_event event;
+    memset(&event, 0, sizeof(struct epoll_event));
 
-    /* wait for the timer to expire 3 times. 3 + 1 + 1 = 5sec */
+    /* wait for the timer to expire 3 times. 1 + 1 + 1 = 3sec */
     for(int i = 0; i < 3; i++) {
         epoll_wait(efd, &event, 1, -1);
-        read(event.data.fd, NULL, sizeof(uint64_t));
+        uint64_t expired = 0;
+        read(tfd, &expired, sizeof(uint64_t));
     }
 
     /* get the end time */
@@ -60,15 +63,16 @@ static int _test_normal(int flags) {
         return -1;
     }
 
-    /* let's make sure its within a small range (1ms) of 5 seconds */
+    /* let's make sure its within a small range (100ms) of 3 seconds */
     long diff = end.tv_nsec - start.tv_nsec;
     diff += (end.tv_sec - start.tv_sec)*S_TO_NS;
-    diff -= 5*S_TO_NS;
-    if( llabs(diff) > 1000000) {
+    diff -= 3*S_TO_NS;
+    if( llabs(diff) > 100000000) {
         fprintf(stdout, "error: timer failed. diff: %li\n", diff);
         return -1;
     }
 
+    epoll_ctl(efd, EPOLL_CTL_DEL, tfd, NULL);
     close(efd);
     close(tfd);
 
@@ -87,7 +91,7 @@ static int _test_late_timer() {
     timerevent.data.fd = tfd;
 
     /* associate this timer with efd */
-    if(epoll_ctl(efd, EPOLL_CTL_ADD, timerevent.data.fd, &timerevent) != 0) {
+    if(epoll_ctl(efd, EPOLL_CTL_ADD, tfd, &timerevent) != 0) {
         return -1;
     }
 
@@ -103,17 +107,20 @@ static int _test_late_timer() {
     }
 
     struct epoll_event event;
+    memset(&event, 0, sizeof(struct epoll_event));
     epoll_wait(efd, &event, 1, -1);
 
     uint64_t num_expires = 0;
     read(tfd, &num_expires, sizeof(uint64_t));
 
+    epoll_ctl(efd, EPOLL_CTL_DEL, tfd, NULL);
+    close(efd);
+    close(tfd);
+
     if(num_expires == 0) {
         fprintf(stdout, "error: timer did not expire when set to past");
         return -1;
     }
-    close(efd);
-    close(tfd);
 
     /* success! */
     return 0;
@@ -141,23 +148,25 @@ static int _test_expired_timer() {
     timerevent.data.fd = tfd;
 
     /* associate this timer with efd */
-    if (epoll_ctl(efd, EPOLL_CTL_ADD, timerevent.data.fd, &timerevent) != 0) {
+    if (epoll_ctl(efd, EPOLL_CTL_ADD, tfd, &timerevent) != 0) {
         return -1;
     }
 
     struct epoll_event event;
-    event.data.fd = 0;
+    memset(&event, 0, sizeof(struct epoll_event));
     epoll_wait(efd, &event, 1, 2);
 
     uint64_t num_expires = 0;
     read(tfd, &num_expires, sizeof(uint64_t));
 
-    if(num_expires == 0) {
-        fprintf(stdout, "error: timer was not expired on late read");
-    }
-
+    epoll_ctl(efd, EPOLL_CTL_DEL, tfd, NULL);
     close(efd);
     close(tfd);
+
+    if(num_expires == 0) {
+        fprintf(stdout, "error: timer was not expired on late read");
+        return -1;
+    }
 
     /* success! */
     return 0;
@@ -185,22 +194,30 @@ static int _test_disarm_timer() {
         return -1;
     }
 
-    struct epoll_event event;
-    event.data.fd = 0;
+    struct epoll_event timerevent;
+    timerevent.events = EPOLLIN;
+    timerevent.data.fd = tfd;
 
-    /* wait for the timer to expire in 3.1 sec. It shouldn't */
-    for(int i = 0; i < 3; i++) {
-        epoll_wait(efd, &event, 1, 3100);
-        read(event.data.fd, NULL, sizeof(uint64_t));
-    }
-
-    if(event.data.fd != 0) {
-        fprintf(stdout, "error: timer was not disarmed\n");
+    /* associate this timer with efd */
+    if (epoll_ctl(efd, EPOLL_CTL_ADD, tfd, &timerevent) != 0) {
         return -1;
     }
 
+    struct epoll_event event;
+    memset(&event, 0, sizeof(struct epoll_event));
+    epoll_wait(efd, &event, 1, 2);
+
+    uint64_t num_expires = 0;
+    read(tfd, &num_expires, sizeof(uint64_t));
+
+    epoll_ctl(efd, EPOLL_CTL_DEL, tfd, NULL);
     close(efd);
     close(tfd);
+
+    if(num_expires != 0) {
+        fprintf(stdout, "error: timer expired after it was disarmed");
+        return -1;
+    }
 
     /* success! */
     return 0;
@@ -226,6 +243,11 @@ int main(int argc, char* argv[]) {
 
     if(_test_expired_timer() < 0) {
         fprintf(stdout, "########## _test_expired_timer failed\n");
+        return -1;
+    }
+
+    if(_test_disarm_timer() < 0) {
+        fprintf(stdout, "########## _test_disarm_timer failed\n");
         return -1;
     }
 

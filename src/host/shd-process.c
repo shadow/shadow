@@ -3030,6 +3030,44 @@ int process_emu_puts(Process* proc, const char *s) {
     return ret;
 }
 
+int process_emu_vprintf(Process* proc, const char *format, va_list ap) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+    int ret = vfprintf(_process_getIOFile(proc, STDOUT_FILENO), format, ap);
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    return ret;
+}
+
+int process_emu_printf(Process* proc, const char *format, ...) {
+    va_list farg;
+    va_start(farg, format);
+    int result = process_emu_vprintf(proc, format, farg);
+    va_end(farg);
+    return result;
+}
+
+int process_emu_vfprintf(Process* proc, FILE *stream, const char *format, va_list ap) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+    int ret;
+
+    int fd = fileno(stream);
+    if(prevCTX == PCTX_PLUGIN && (fd == STDOUT_FILENO || fd == STDERR_FILENO)) {
+        ret = vfprintf(_process_getIOFile(proc, fd), format, ap);
+    } else {
+        ret = vfprintf(stream, format, ap);
+    }
+
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    return ret;
+}
+
+int process_emu_fprintf(Process* proc, FILE *stream, const char *format, ...) {
+    va_list farg;
+    va_start(farg, format);
+    int result = process_emu_vfprintf(proc, stream, format, farg);
+    va_end(farg);
+    return result;
+}
+
 /* time family */
 
 time_t process_emu_time(Process* proc, time_t *t)  {

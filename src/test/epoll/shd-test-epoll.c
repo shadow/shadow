@@ -13,16 +13,15 @@
 #include <errno.h>
 
 static int _test_fd_write(int fd) {
-    const char* msg = "test";
-    return write(fd , msg, sizeof(msg));
+    return write(fd, "test", 4);
 }
 
 static int _test_fd_readCmp(int fd) {
     char buf[5];
-    memset(buf, '\0', sizeof(buf));
-    read(fd, buf, sizeof(buf));
-    fprintf(stdout, "buf: %s", buf);
-    return(strncmp(buf, "test", sizeof(buf)) != 0);
+    memset(buf, '\0', 5);
+    read(fd, buf, 4);
+    fprintf(stdout, "read to buf: %s\n", buf);
+    return(strncmp(buf, "test", 4) != 0);
 }
 
 static int _test_pipe() {
@@ -39,7 +38,7 @@ static int _test_pipe() {
     pevent.data.fd = pfds[0];
 
     int efd = epoll_create(1);
-    if(epoll_ctl(efd, EPOLL_CTL_ADD, pevent.data.fd, &pevent) < 0) {
+    if(epoll_ctl(efd, EPOLL_CTL_ADD, pfds[0], &pevent) < 0) {
         fprintf(stdout, "error: epoll_ctl failed");
         return -1;
     }
@@ -53,7 +52,7 @@ static int _test_pipe() {
         return -1;
     }
     else if(ready > 0) {
-        fprintf(stdout, "error: pipe marked readble\n"); 
+        fprintf(stdout, "error: pipe empty but marked readable\n");
         close(pfds[0]);
         close(pfds[1]);
         return -1;
@@ -70,7 +69,7 @@ static int _test_pipe() {
     /* Check again, should be something to read */
     ready = epoll_wait(efd, &pevent, 1, 100);
     if (ready != 1) {
-        fprintf(stdout, "error: poll returned %i instead of 1\n", ready);
+        fprintf(stdout, "error: epoll returned %i instead of 1\n", ready);
         close(pfds[0]);
         close(pfds[1]);
         return -1;
@@ -91,9 +90,9 @@ static int _test_pipe() {
 }
 
 static int _test_creat() {
-    int fd = creat("testpoll", 0);
+    int fd = creat("testepoll.txt", 0);
     if(fd < 0) {
-        fprintf(stdout, "error: could not create testpoll\n");
+        fprintf(stdout, "error: could not create testepoll.txt\n");
         return -1;
     }
 
@@ -105,17 +104,17 @@ static int _test_creat() {
     int efd = epoll_create(1);
     if(epoll_ctl(efd, EPOLL_CTL_ADD, pevent.data.fd, &pevent) == 0) {
         fprintf(stdout, "error: epoll_ctl should have failed\n");
-        unlink("testpoll");
+        unlink("testepoll.txt");
         return -1;
     }
 
     if(errno != EPERM) {
         fprintf(stdout, "error: errno is '%i' instead of 1 (EPERM)\n",errno);
-        unlink("testpoll");
+        unlink("testepoll.txt");
         return -1;
     }
 
-    unlink("testpoll");
+    unlink("testepoll.txt");
     return 0;
 }
 

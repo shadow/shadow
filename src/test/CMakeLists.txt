@@ -13,9 +13,9 @@ get_property(LLVMHoistGlobalsPATH TARGET LLVMHoistGlobals PROPERTY LOCATION)
 
 # add the test directories
 add_subdirectory(sleep)
-add_subdirectory(timerfd-epoll)
-add_subdirectory(file-io)
-add_subdirectory(pthreads)
 add_subdirectory(poll)
 add_subdirectory(epoll)
-add_subdirectory(socket)
+add_subdirectory(timerfd-epoll)
+add_subdirectory(file-io)
+#add_subdirectory(socket)
+add_subdirectory(pthreads)

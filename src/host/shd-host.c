@@ -811,7 +811,13 @@ gint host_poll(Host* host, struct pollfd *pollFDs, nfds_t numPollFDs) {
             gint osfd = host_getOSHandle(host, pfd->fd);
             if(osfd >= 0) {
                 /* ask the OS, but dont let them block */
-                poll(pfd, (nfds_t)1, 0);
+                gint oldfd = pfd->fd;
+                pfd->fd = osfd;
+                gint rc = poll(pfd, (nfds_t)1, 0);
+                pfd->fd = oldfd;
+                if(rc < 0) {
+                    return -1;
+                }
             }
         }
 

@@ -139,6 +139,10 @@ int process_emu_fputc(Process* proc, int c, FILE *stream);
 int process_emu_fputs(Process* proc, const char *s, FILE *stream);
 int process_emu_putchar(Process* proc, int c);
 int process_emu_puts(Process* proc, const char *s);
+int process_emu_printf(Process* proc, const char *format, ...);
+int process_emu_vprintf(Process* proc, const char *format, va_list ap);
+int process_emu_fprintf(Process* proc, FILE *stream, const char *format, ...);
+int process_emu_vfprintf(Process* proc, FILE *stream, const char *format, va_list ap);
 
 /* time family */
 

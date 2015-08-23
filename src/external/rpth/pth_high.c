@@ -513,16 +513,12 @@ int pth_poll(struct pollfd *pfd, nfds_t nfd, int timeout)
     return pth_poll_ev(pfd, nfd, timeout, NULL);
 }
 
-/* Pth variant of poll(2) with extra events:
-   NOTICE: THIS HAS TO BE BASED ON pth_select(2) BECAUSE
-           INTERNALLY THE SCHEDULER IS ONLY select(2) BASED!! */
+/* Pth variant of poll(2) with extra events */
 int pth_poll_ev(struct pollfd *pfd, nfds_t nfd, int timeout, pth_event_t ev_extra)
 {
-    fd_set rfds, wfds, efds, xfds;
-    struct timeval tv, *ptv;
-    int maxfd, rc, n;
-    unsigned int i;
-    char data[64];
+    pth_event_t ev_epoll;
+    pth_event_t ev_timeout;
+    int i, rc;
 
     pth_implicit_init();
     pth_debug2("pth_poll_ev: called from thread \"%s\"", pth_gctx_get()->pth_current->name);
@@ -533,111 +529,95 @@ int pth_poll_ev(struct pollfd *pfd, nfds_t nfd, int timeout, pth_event_t ev_extr
     if (nfd > FD_SETSIZE)
         return pth_error(-1, EINVAL);
 
-    /* convert timeout number into a timeval structure */
-    ptv = &tv;
-    if (timeout == 0) {
-        /* return immediately */
-        ptv->tv_sec  = 0;
-        ptv->tv_usec = 0;
-    }
-    else if (timeout == INFTIM /* (-1) */) {
-        /* wait forever */
-        ptv = NULL;
-    }
-    else if (timeout > 0) {
-        /* return after timeout */
-        ptv->tv_sec  = (timeout / 1000);
-        ptv->tv_usec = (timeout % 1000) * 1000;
-    }
-    else
+    int epfd_tmp = pth_sc(epoll_create)(1);
+    if(epfd_tmp < 0)
         return pth_error(-1, EINVAL);
 
-    /* create fd sets and determine max fd */
-    maxfd = -1;
-    FD_ZERO(&rfds);
-    FD_ZERO(&wfds);
-    FD_ZERO(&efds);
-    FD_ZERO(&xfds);
+    /* if any are files, then we are instantly ready
+     * and epoll doesnt support files */
+    int need_wait = 1;
+    int epoll_failed = 0;
+    int epoll_ready = 1;
+
     for (i = 0; i < nfd; i++) {
-        /* convert into fd_sets but remember that BSD select(2) says
-           "the only exceptional condition detectable is out-of-band
-           data received on a socket", hence we push POLLWRBAND events
-           onto wfds instead of efds. Additionally, remember invalid
-           filedescriptors in an extra fd_set xfds. */
-        if (!pth_util_fd_valid(pfd[i].fd)) {
-            FD_SET(pfd[i].fd, &xfds);
-            continue;
-        }
+        struct epoll_event epev;
+        memset(&epev, 0, sizeof(struct epoll_event));
+
+        epev.data.fd = pfd[i].fd;
         if (pfd[i].events & (POLLIN|POLLRDNORM))
-            FD_SET(pfd[i].fd, &rfds);
+            epev.events |= EPOLLIN;
         if (pfd[i].events & (POLLOUT|POLLWRNORM|POLLWRBAND))
-            FD_SET(pfd[i].fd, &wfds);
+            epev.events |= EPOLLOUT;
         if (pfd[i].events & (POLLPRI|POLLRDBAND))
-            FD_SET(pfd[i].fd, &efds);
-        if (   pfd[i].fd >= maxfd
-            && (pfd[i].events & (POLLIN|POLLOUT|POLLPRI|
-                                 POLLRDNORM|POLLRDBAND|
-                                 POLLWRNORM|POLLWRBAND)))
-            maxfd = pfd[i].fd;
-    }
+            epev.events |= EPOLLERR;
 
-    /* examine fd sets with pth_select(3) */
-    rc = -1;
-    if (maxfd != -1) {
-        rc = pth_select_ev(maxfd+1, &rfds, &wfds, &efds, ptv, ev_extra);
-        if (rc < 0)
+        rc = pth_sc(epoll_ctl)(epfd_tmp, EPOLL_CTL_ADD, pfd[i].fd, &epev);
+        if(rc < 0 && errno == EPERM) {
+            /* there is a file in the set, it will be ready so we can poll immediately */
+            need_wait = 0;
+            break;
+        } else if(rc < 0) {
+            pth_sc(close)(epfd_tmp);
             return pth_error(-1, errno);
-        else if (rc == 0)
-            return 0;
-    }
-
-    /* POSIX.1-2001/SUSv3 compliant result establishment */
-    n = 0;
-    for (i = 0; i < nfd; i++) {
-        pfd[i].revents = 0;
-        if (FD_ISSET(pfd[i].fd, &xfds)) {
-            if (pfd[i].fd >= 0) {
-                pfd[i].revents |= POLLNVAL;
-                n++;
-            }
-            continue;
-        }
-        if (maxfd == -1)
-            continue;
-        if (FD_ISSET(pfd[i].fd, &rfds)) {
-            if (pfd[i].events & POLLIN)
-                pfd[i].revents |= POLLIN;
-            if (pfd[i].events & POLLRDNORM)
-                pfd[i].revents |= POLLRDNORM;
-            n++;
-            /* support for POLLHUP */
-            if (   recv(pfd[i].fd, data, sizeof(data), MSG_PEEK) == -1
-                && (   errno == ESHUTDOWN    || errno == ECONNRESET
-                    || errno == ECONNABORTED || errno == ENETRESET    )) {
-                pfd[i].revents &= ~(POLLIN);
-                pfd[i].revents &= ~(POLLRDNORM);
-                pfd[i].revents |= POLLHUP;
-            }
-        }
-        else if (FD_ISSET(pfd[i].fd, &wfds)) {
-            if (pfd[i].events & POLLOUT)
-                pfd[i].revents |= POLLOUT;
-            if (pfd[i].events & POLLWRNORM)
-                pfd[i].revents |= POLLWRNORM;
-            if (pfd[i].events & POLLWRBAND)
-                pfd[i].revents |= POLLWRBAND;
-            n++;
-        }
-        else if (FD_ISSET(pfd[i].fd, &efds)) {
-            if (pfd[i].events & POLLPRI)
-                pfd[i].revents |= POLLPRI;
-            if (pfd[i].events & POLLRDBAND)
-                pfd[i].revents |= POLLRDBAND;
-            n++;
         }
     }
 
-    return n;
+    if(need_wait) {
+        /* suspend current thread until one filedescriptor in events is ready,
+         * (in which case our outer epfd_tmp will be readable)
+           or the timeout occurred */
+        ev_epoll = pth_event(PTH_EVENT_FD|PTH_UNTIL_FD_READABLE, epfd_tmp);
+
+        ev_timeout = NULL;
+        if (timeout != 0) {
+            if(timeout == -1)
+                timeout = 1000*60*60*24;
+            /* timeout is in milliseconds */
+            long sec = (long)(timeout / 1000);
+            long usec = (long)((timeout % 1000) * 1000);
+            ev_timeout = pth_event(PTH_EVENT_TIME, pth_timeout(sec, usec));
+            pth_event_concat(ev_epoll, ev_timeout, NULL);
+        }
+        if (ev_extra != NULL)
+            pth_event_concat(ev_epoll, ev_extra, NULL);
+
+        pth_wait(ev_epoll);
+
+        /* we are ready, stop waiting for timeout */
+        if (ev_extra != NULL)
+            pth_event_isolate(ev_extra);
+        if (timeout != 0)
+            pth_event_isolate(ev_timeout);
+
+        for (i = 0; i < nfd; i++) {
+            rc = pth_sc(epoll_ctl)(epfd_tmp, EPOLL_CTL_DEL, pfd[i].fd, NULL);
+        }
+        rc = pth_sc(close)(epfd_tmp);
+
+        /* return code semantics */
+        epoll_failed = pth_event_status(ev_epoll) == PTH_STATUS_FAILED;
+        epoll_ready = pth_event_status(ev_epoll) == PTH_STATUS_OCCURRED ||
+                (timeout != 0 && pth_event_status(ev_timeout) == PTH_STATUS_OCCURRED);
+
+        if(ev_timeout != NULL) {
+            pth_event_free(ev_timeout, PTH_FREE_THIS);
+        }
+        if(ev_epoll != NULL) {
+            pth_event_free(ev_epoll, PTH_FREE_THIS);
+        }
+    }
+
+    pth_debug2("pth_epoll_wait_ev: leave to thread \"%s\"", pth_gctx_get()->pth_current->name);
+
+    if (epoll_failed) {
+        return pth_error(-1, EBADF);
+    } else if(epoll_ready) {
+        return pth_sc(poll)(pfd, nfd, 0);
+    } else if(ev_extra != NULL) {
+        return pth_error(-1, EINTR);
+    } else {
+        return 0;
+    }
 }
 
 int pth_ppoll(struct pollfd *fds, nfds_t nfds, const struct timespec *ts, const sigset_t *mask)

@@ -21,6 +21,7 @@
 #include <poll.h>
 #include <malloc.h>
 #include <sys/epoll.h>
+#include <sys/eventfd.h>
 #include <sys/ioctl.h>
 #include <sys/statvfs.h>
 #include <sys/mman.h>
@@ -95,6 +96,7 @@ typedef int (*epoll_create1_func)(int);
 typedef int (*epoll_ctl_func)(int, int, int, struct epoll_event*);
 typedef int (*epoll_wait_func)(int, struct epoll_event*, int, int);
 typedef int (*epoll_pwait_func)(int, struct epoll_event*, int, int, const sigset_t*);
+typedef int (*eventfd_func)(unsigned int, int);
 
 /* socket/io family */
 
@@ -125,7 +127,6 @@ typedef ssize_t (*writev_func)(int, const struct iovec*, int);
 typedef int (*close_func)(int);
 typedef int (*fcntl_func)(int, int, ...);
 typedef int (*ioctl_func)(int, int, ...);
-typedef int (*eventfd_func)(unsigned int, int);
 
 /* polling */
 
@@ -195,6 +196,10 @@ typedef int (*fputc_func)(int, FILE *);
 typedef int (*fputs_func)(const char *, FILE *);
 typedef int (*putchar_func)(int);
 typedef int (*puts_func)(const char *);
+typedef int (*printf_func)(const char *, ...);
+typedef int (*vprintf_func)(const char *, va_list);
+typedef int (*fprintf_func)(FILE *, const char *, ...);
+typedef int (*vfprintf_func)(FILE *, const char *, va_list);
 
 /* time family */
 
@@ -374,6 +379,7 @@ typedef struct {
     epoll_ctl_func epoll_ctl;
     epoll_wait_func epoll_wait;
     epoll_pwait_func epoll_pwait;
+    eventfd_func eventfd;
 
     timerfd_create_func timerfd_create;
     timerfd_settime_func timerfd_settime;
@@ -406,7 +412,6 @@ typedef struct {
     close_func close;
     fcntl_func fcntl;
     ioctl_func ioctl;
-    eventfd_func eventfd;
 
     sleep_func sleep;
     nanosleep_func nanosleep;
@@ -465,6 +470,10 @@ typedef struct {
     fputs_func fputs;
     putchar_func putchar;
     puts_func puts;
+    printf_func printf;
+    vprintf_func vprintf;
+    fprintf_func fprintf;
+    vfprintf_func vfprintf;
 
     time_func time;
     clock_gettime_func clock_gettime;
@@ -678,6 +687,7 @@ static void _interposer_globalInitialize() {
     SETSYM_OR_FAIL(director.next.epoll_ctl, "epoll_ctl");
     SETSYM_OR_FAIL(director.next.epoll_wait, "epoll_wait");
     SETSYM_OR_FAIL(director.next.epoll_pwait, "epoll_pwait");
+    SETSYM_OR_FAIL(director.next.eventfd, "eventfd");
     SETSYM_OR_FAIL(director.next.timerfd_create, "timerfd_create");
     SETSYM_OR_FAIL(director.next.timerfd_settime, "timerfd_settime");
     SETSYM_OR_FAIL(director.next.timerfd_gettime, "timerfd_gettime");
@@ -708,7 +718,6 @@ static void _interposer_globalInitialize() {
     SETSYM_OR_FAIL(director.next.close, "close");
     SETSYM_OR_FAIL(director.next.fcntl, "fcntl");
     SETSYM_OR_FAIL(director.next.ioctl, "ioctl");
-    SETSYM_OR_FAIL(director.next.eventfd, "eventfd");
     SETSYM_OR_FAIL(director.next.sleep, "sleep");
     SETSYM_OR_FAIL(director.next.nanosleep, "nanosleep");
     SETSYM_OR_FAIL(director.next.usleep, "usleep");
@@ -764,6 +773,10 @@ static void _interposer_globalInitialize() {
     SETSYM_OR_FAIL(director.next.fputs, "fputs");
     SETSYM_OR_FAIL(director.next.putchar, "putchar");
     SETSYM_OR_FAIL(director.next.puts, "puts");
+    SETSYM_OR_FAIL(director.next.printf, "printf");
+    SETSYM_OR_FAIL(director.next.vprintf, "vprintf");
+    SETSYM_OR_FAIL(director.next.fprintf, "fprintf");
+    SETSYM_OR_FAIL(director.next.vfprintf, "vfprintf");
 
     SETSYM_OR_FAIL(director.next.time, "time");
     SETSYM_OR_FAIL(director.next.clock_gettime, "clock_gettime");
@@ -1041,6 +1054,36 @@ int openat(int dirfd, const char *pathname, int flags, ...) {
     return result;
 }
 
+int printf(const char *format, ...) {
+    va_list farg;
+    va_start(farg, format);
+    int result = 0;
+    Process* proc = NULL;
+    if((proc = _doEmulate()) != NULL) {
+        result = process_emu_printf(proc, format, va_arg(farg, void*));
+    } else {
+        ENSURE(printf);
+        result = director.next.printf(format, va_arg(farg, void*));
+    }
+    va_end(farg);
+    return result;
+}
+
+int fprintf(FILE *stream, const char *format, ...) {
+    va_list farg;
+    va_start(farg, format);
+    int result = 0;
+    Process* proc = NULL;
+    if((proc = _doEmulate()) != NULL) {
+        result = process_emu_fprintf(proc, stream, format, va_arg(farg, void*));
+    } else {
+        ENSURE(fprintf);
+        result = director.next.fprintf(stream, format, va_arg(farg, void*));
+    }
+    va_end(farg);
+    return result;
+}
+
 /* memory allocation family */
 
 INTERPOSE(void* malloc(size_t a), malloc, a);
@@ -1155,6 +1198,8 @@ INTERPOSE(int fputc(int a, FILE *b), fputc, a, b);
 INTERPOSE(int fputs(const char *a, FILE *b), fputs, a, b);
 INTERPOSE(int putchar(int a), putchar, a);
 INTERPOSE(int puts(const char *a), puts, a);
+INTERPOSE(int vprintf(const char *a, va_list b), vprintf, a, b);
+INTERPOSE(int vfprintf(FILE *a, const char *b, va_list c), vfprintf, a, b, c);
 
 /* time family */
 
