@@ -2349,7 +2349,7 @@ pid_t process_emu_waitpid(Process* proc, pid_t pid, int *status, int options) {
 
 /* timers */
 
-int process_emu_eventfd(Process* proc, unsigned int initval, int flags) {
+int process_emu_eventfd(Process* proc, int initval, int flags) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     gint result = 0;
 
@@ -2434,7 +2434,7 @@ int process_emu_fileno(Process* proc, FILE *stream) {
     gint shadowfd = host_getShadowHandle(proc->host, osfd);
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
-    return shadowfd;
+    return (shadowfd >= 0) ? shadowfd : osfd;
 }
 
 int process_emu_open(Process* proc, const char *pathname, int flags, ...) {
@@ -2812,91 +2812,234 @@ int process_emu_posix_fallocate(Process* proc, int fd, off_t offset, off_t len) 
 }
 
 int process_emu_fstatvfs(Process* proc, int fd, struct statvfs *buf) {
+    int ret = 0;
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-    warning("fstatvfs not yet implemented");
-    errno = ENOSYS;
+    if (host_isShadowDescriptor(proc->host, fd)) {
+        warning("fstatvfs not implemented for Shadow descriptor types");
+        errno = ENOSYS;
+        ret = -1;
+    } else {
+        /* check if we have a mapped os fd */
+        gint osfd = host_getOSHandle(proc->host, fd);
+        if(osfd < 0) {
+            errno = EBADF;
+            ret = -1;
+        } else {
+            ret = fstatvfs(osfd, buf);
+        }
+    }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
-    return -1;
+    return ret;
 }
 
 int process_emu_fdatasync(Process* proc, int fd) {
+    int ret = 0;
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-    warning("fdatasync not yet implemented");
-    errno = ENOSYS;
+    if (host_isShadowDescriptor(proc->host, fd)) {
+        warning("fdatasync not implemented for Shadow descriptor types");
+        errno = ENOSYS;
+        ret = -1;
+    } else {
+        /* check if we have a mapped os fd */
+        gint osfd = host_getOSHandle(proc->host, fd);
+        if(osfd < 0) {
+            errno = EBADF;
+            ret = -1;
+        } else {
+            ret = fdatasync(osfd);
+        }
+    }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
-    return -1;
+    return ret;
 }
 
 int process_emu_syncfs(Process* proc, int fd) {
+    int ret = 0;
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-    warning("syncfs not yet implemented");
-    errno = ENOSYS;
+    if (host_isShadowDescriptor(proc->host, fd)) {
+        warning("syncfs not implemented for Shadow descriptor types");
+        errno = ENOSYS;
+        ret = -1;
+    } else {
+        /* check if we have a mapped os fd */
+        gint osfd = host_getOSHandle(proc->host, fd);
+        if(osfd < 0) {
+            errno = EBADF;
+            ret = -1;
+        } else {
+            ret = syncfs(osfd);
+        }
+    }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
-    return -1;
+    return ret;
 }
 
 int process_emu_fallocate(Process* proc, int fd, int mode, off_t offset, off_t len) {
+    int ret = 0;
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-    warning("fallocate not yet implemented");
-    errno = ENOSYS;
+    if (host_isShadowDescriptor(proc->host, fd)) {
+        warning("fallocate not implemented for Shadow descriptor types");
+        errno = ENOSYS;
+        ret = -1;
+    } else {
+        /* check if we have a mapped os fd */
+        gint osfd = host_getOSHandle(proc->host, fd);
+        if(osfd < 0) {
+            errno = EBADF;
+            ret = -1;
+        } else {
+            ret = fallocate(osfd, mode, offset, len);
+        }
+    }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
-    return -1;
+    return ret;
 }
 
 int process_emu_fexecve(Process* proc, int fd, char *const argv[], char *const envp[]) {
+    int ret = 0;
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-    warning("fexecve not yet implemented");
-    errno = ENOSYS;
+    if (host_isShadowDescriptor(proc->host, fd)) {
+        warning("fexecve not implemented for Shadow descriptor types");
+        errno = ENOSYS;
+        ret = -1;
+    } else {
+        /* check if we have a mapped os fd */
+        gint osfd = host_getOSHandle(proc->host, fd);
+        if(osfd < 0) {
+            errno = EBADF;
+            ret = -1;
+        } else {
+            ret = fexecve(osfd, argv, envp);
+        }
+    }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
-    return -1;
+    return ret;
 }
 
 long process_emu_fpathconf(Process* proc, int fd, int name) {
+    int ret = 0;
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-    warning("fpathconf not yet implemented");
-    errno = ENOSYS;
+    if (host_isShadowDescriptor(proc->host, fd)) {
+        warning("fpathconf not implemented for Shadow descriptor types");
+        errno = ENOSYS;
+        ret = -1;
+    } else {
+        /* check if we have a mapped os fd */
+        gint osfd = host_getOSHandle(proc->host, fd);
+        if(osfd < 0) {
+            errno = EBADF;
+            ret = -1;
+        } else {
+            ret = fpathconf(osfd, name);
+        }
+    }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
-    return -1;
+    return ret;
 }
 
 int process_emu_fchdir(Process* proc, int fd) {
+    int ret = 0;
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-    warning("fchdir not yet implemented");
-    errno = ENOSYS;
+    if (host_isShadowDescriptor(proc->host, fd)) {
+        warning("fchdir not implemented for Shadow descriptor types");
+        errno = ENOSYS;
+        ret = -1;
+    } else {
+        /* check if we have a mapped os fd */
+        gint osfd = host_getOSHandle(proc->host, fd);
+        if(osfd < 0) {
+            errno = EBADF;
+            ret = -1;
+        } else {
+            ret = fchdir(osfd);
+        }
+    }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
-    return -1;
+    return ret;
 }
 
 int process_emu_fchown(Process* proc, int fd, uid_t owner, gid_t group) {
+    int ret = 0;
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-    warning("fchown not yet implemented");
-    errno = ENOSYS;
+    if (host_isShadowDescriptor(proc->host, fd)) {
+        warning("fchown not implemented for Shadow descriptor types");
+        errno = ENOSYS;
+        ret = -1;
+    } else {
+        /* check if we have a mapped os fd */
+        gint osfd = host_getOSHandle(proc->host, fd);
+        if(osfd < 0) {
+            errno = EBADF;
+            ret = -1;
+        } else {
+            ret = fchown(osfd, owner, group);
+        }
+    }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
-    return -1;
+    return ret;
 }
 
 int process_emu_fchmod(Process* proc, int fd, mode_t mode) {
+    int ret = 0;
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-    warning("fchmod not yet implemented");
-    errno = ENOSYS;
+    if (host_isShadowDescriptor(proc->host, fd)) {
+        warning("fchmod not implemented for Shadow descriptor types");
+        errno = ENOSYS;
+        ret = -1;
+    } else {
+        /* check if we have a mapped os fd */
+        gint osfd = host_getOSHandle(proc->host, fd);
+        if(osfd < 0) {
+            errno = EBADF;
+            ret = -1;
+        } else {
+            ret = fchmod(osfd, mode);
+        }
+    }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
-    return -1;
+    return ret;
 }
 
 int process_emu_posix_fadvise(Process* proc, int fd, off_t offset, off_t len, int advice) {
+    int ret = 0;
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-    warning("posix_fadvise not yet implemented");
-    errno = ENOSYS;
+    if (host_isShadowDescriptor(proc->host, fd)) {
+        warning("posix_fadvise not implemented for Shadow descriptor types");
+        errno = ENOSYS;
+        ret = -1;
+    } else {
+        /* check if we have a mapped os fd */
+        gint osfd = host_getOSHandle(proc->host, fd);
+        if(osfd < 0) {
+            errno = EBADF;
+            ret = -1;
+        } else {
+            ret = posix_fadvise(osfd, offset, len, advice);
+        }
+    }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
-    return -1;
+    return ret;
 }
 
 int process_emu_lockf(Process* proc, int fd, int cmd, off_t len) {
+    int ret = 0;
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-    warning("lockf not yet implemented");
-    errno = ENOSYS;
+    if (host_isShadowDescriptor(proc->host, fd)) {
+        warning("lockf not implemented for Shadow descriptor types");
+        errno = ENOSYS;
+        ret = -1;
+    } else {
+        /* check if we have a mapped os fd */
+        gint osfd = host_getOSHandle(proc->host, fd);
+        if(osfd < 0) {
+            errno = EBADF;
+            ret = -1;
+        } else {
+            ret = lockf(osfd, cmd, len);
+        }
+    }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
-    return -1;
+    return ret;
 }
 
 int process_emu_openat(Process* proc, int dirfd, const char *pathname, int flags, ...) {

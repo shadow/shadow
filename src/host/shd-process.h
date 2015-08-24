@@ -88,7 +88,7 @@ int process_emu_fcntl(Process* proc, int fd, int cmd, ...);
 int process_emu_ioctl(Process* proc, int fd, unsigned long int request, ...);
 int process_emu_pipe2(Process* proc, int pipefds[2], int flags);
 int process_emu_pipe(Process* proc, int pipefds[2]);
-int process_emu_eventfd(Process* proc, unsigned int initval, int flags);
+int process_emu_eventfd(Process* proc, int initval, int flags);
 int process_emu_timerfd_create(Process* proc, int clockid, int flags);
 int process_emu_timerfd_settime(Process* proc, int fd, int flags, const struct itimerspec *new_value, struct itimerspec *old_value);
 int process_emu_timerfd_gettime(Process* proc, int fd, struct itimerspec *curr_value);

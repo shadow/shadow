@@ -96,7 +96,7 @@ typedef int (*epoll_create1_func)(int);
 typedef int (*epoll_ctl_func)(int, int, int, struct epoll_event*);
 typedef int (*epoll_wait_func)(int, struct epoll_event*, int, int);
 typedef int (*epoll_pwait_func)(int, struct epoll_event*, int, int, const sigset_t*);
-typedef int (*eventfd_func)(unsigned int, int);
+typedef int (*eventfd_func)(int, int);
 
 /* socket/io family */
 
@@ -1149,7 +1149,7 @@ INTERPOSE(int sigwait(const sigset_t *a, int *b), sigwait, a, b);
 
 /* timers */
 
-INTERPOSE(int eventfd(unsigned int a, int b), eventfd, a, b);
+INTERPOSE(int eventfd(int a, int b), eventfd, a, b);
 INTERPOSE(int timerfd_create(int a, int b), timerfd_create, a, b);
 INTERPOSE(int timerfd_settime(int a, int b, const struct itimerspec *c, struct itimerspec *d), timerfd_settime, a, b, c, d);
 INTERPOSE(int timerfd_gettime(int a, struct itimerspec *b), timerfd_gettime, a, b);
