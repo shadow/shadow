@@ -2749,24 +2749,29 @@ int process_emu_flock(Process* proc, int fd, int operation) {
 }
 
 int process_emu_fsync(Process* proc, int fd) {
+    int ret = 0;
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
 
-    if (host_isShadowDescriptor(proc->host, fd)) {
+    if(prevCTX == PCTX_PLUGIN && (fd == STDOUT_FILENO || fd == STDERR_FILENO)) {
+        FILE* f = _process_getIOFile(proc, fd);
+        ret = fsync(fileno(f));
+    } else if (host_isShadowDescriptor(proc->host, fd)) {
         warning("fsync not implemented for Shadow descriptor types");
+        errno = EBADF;
+        ret = -1;
     } else {
         /* check if we have a mapped os fd */
         gint osfd = host_getOSHandle(proc->host, fd);
         if (osfd >= 0) {
-            gint ret = fsync(osfd);
-            _process_changeContext(proc, PCTX_SHADOW, prevCTX);
-            return ret;
+            ret = fsync(osfd);
+        } else {
+            errno = EBADF;
+            ret = -1;
         }
     }
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
-
-    errno = EBADF;
-    return -1;
+    return ret;
 }
 
 int process_emu_ftruncate(Process* proc, int fd, off_t length) {
@@ -3209,6 +3214,21 @@ int process_emu_fprintf(Process* proc, FILE *stream, const char *format, ...) {
     int result = process_emu_vfprintf(proc, stream, format, farg);
     va_end(farg);
     return result;
+}
+
+int process_emu_fflush(Process* proc, FILE *stream) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+    int ret;
+
+    int fd = fileno(stream);
+    if(prevCTX == PCTX_PLUGIN && (fd == STDOUT_FILENO || fd == STDERR_FILENO)) {
+        ret = fflush(_process_getIOFile(proc, fd));
+    } else {
+        ret = fflush(stream);
+    }
+
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    return ret;
 }
 
 /* time family */

@@ -1252,8 +1252,7 @@ gint tcp_acceptServerPeer(TCP* tcp, in_addr_t* ip, in_port_t* port, gint* accept
     }
 
     Tracker* tracker = host_getTracker(worker_getCurrentHost());
-    Descriptor* descriptor = (Descriptor *)socket;
-    tracker_updateSocketPeer(tracker, *acceptedHandle, *ip, ntohs(*port));
+    tracker_updateSocketPeer(tracker, *acceptedHandle, *ip, ntohs(tcpChild->super.peerPort));
 
     return 0;
 }

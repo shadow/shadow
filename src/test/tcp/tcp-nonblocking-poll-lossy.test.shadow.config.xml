@@ -29,11 +29,11 @@
 </graphml>
 ]]></topology>
   <kill time="300"/>
-  <plugin id="testsocket" path="shadow-plugin-test-socket"/>
+  <plugin id="testtcp" path="shadow-plugin-test-tcp"/>
   <node id="lossy.tcpserver.echo" >
-    <application plugin="testsocket" time="1" arguments="tcp server" />
+    <application plugin="testtcp" time="1" arguments="nonblocking-poll server" />
   </node >
   <node id="lossy.tcpclient.echo" >
-    <application plugin="testsocket" time="2" arguments="tcp client lossy.tcpserver.echo" />
+    <application plugin="testtcp" time="2" arguments="nonblocking-poll client lossy.tcpserver.echo" />
   </node >
 </shadow>

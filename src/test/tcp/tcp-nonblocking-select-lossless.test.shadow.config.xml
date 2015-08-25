@@ -29,11 +29,11 @@
 </graphml>
 ]]></topology>
   <kill time="300"/>
-  <plugin id="testsocket" path="shadow-plugin-test-socket"/>
-  <node id="lossless.udpserver.echo" >
-    <application plugin="testsocket" time="1" arguments="udp server" />
+  <plugin id="testtcp" path="shadow-plugin-test-tcp"/>
+  <node id="lossless.tcpserver.echo" >
+    <application plugin="testtcp" time="1" arguments="nonblocking-select server" />
   </node >
-  <node id="lossless.udpclient.echo" >
-    <application plugin="testsocket" time="2" arguments="udp client lossless.udpserver.echo" />
+  <node id="lossless.tcpclient.echo" >
+    <application plugin="testtcp" time="2" arguments="nonblocking-select client lossless.tcpserver.echo" />
   </node >
 </shadow>

@@ -119,14 +119,13 @@ def build(args):
     filepath=getfullpath(__file__)
     rootdir=filepath[:filepath.rfind("/")]
     builddir=getfullpath(BUILD_PREFIX)
-    shadowdir=builddir+"/shadow"
     installdir=getfullpath(args.prefix)
     
     # clear cmake cache
-    if args.do_force_rebuild and os.path.exists(shadowdir): shutil.rmtree(shadowdir)
+    if args.do_force_rebuild and os.path.exists(builddir): shutil.rmtree(builddir)
     
     # create directories
-    if not os.path.exists(shadowdir): os.makedirs(shadowdir)
+    if not os.path.exists(builddir): os.makedirs(builddir)
     if not os.path.exists(installdir): os.makedirs(installdir)
         
     # build up args string for the cmake command
@@ -144,7 +143,7 @@ def build(args):
     calledDirectory = os.getcwd()
     
     # run build tasks
-    os.chdir(shadowdir)
+    os.chdir(builddir)
     
     # hack to make passing args to CMAKE work... doesnt seem to like the first arg
     args.extra_includes.insert(0, "./")
@@ -193,7 +192,7 @@ def build(args):
 
 def test(args):
     builddir=getfullpath(BUILD_PREFIX)
-    testdir=builddir+"/shadow/src/test"
+    testdir=builddir+"/src/test"
     if not os.path.exists(testdir): 
         logging.error("please run './setup build --test' before testing!")
         return
@@ -216,14 +215,13 @@ def test(args):
     
 def install(args):
     builddir=getfullpath(BUILD_PREFIX)
-    shadowdir=builddir+"/shadow"
-    if not os.path.exists(shadowdir): 
+    if not os.path.exists(builddir): 
         logging.error("please build before installing!")
         return
 
     # go to build dir and install from makefile
     calledDirectory = os.getcwd()
-    os.chdir(shadowdir)
+    os.chdir(builddir)
     
     # call make install, wait for it to finish
     makeCommand = "make install"

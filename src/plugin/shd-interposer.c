@@ -200,6 +200,7 @@ typedef int (*printf_func)(const char *, ...);
 typedef int (*vprintf_func)(const char *, va_list);
 typedef int (*fprintf_func)(FILE *, const char *, ...);
 typedef int (*vfprintf_func)(FILE *, const char *, va_list);
+typedef int (*fflush_func)(FILE *);
 
 /* time family */
 
@@ -474,6 +475,7 @@ typedef struct {
     vprintf_func vprintf;
     fprintf_func fprintf;
     vfprintf_func vfprintf;
+    fflush_func fflush;
 
     time_func time;
     clock_gettime_func clock_gettime;
@@ -777,6 +779,7 @@ static void _interposer_globalInitialize() {
     SETSYM_OR_FAIL(director.next.vprintf, "vprintf");
     SETSYM_OR_FAIL(director.next.fprintf, "fprintf");
     SETSYM_OR_FAIL(director.next.vfprintf, "vfprintf");
+    SETSYM_OR_FAIL(director.next.fflush, "fflush");
 
     SETSYM_OR_FAIL(director.next.time, "time");
     SETSYM_OR_FAIL(director.next.clock_gettime, "clock_gettime");
@@ -1200,6 +1203,7 @@ INTERPOSE(int putchar(int a), putchar, a);
 INTERPOSE(int puts(const char *a), puts, a);
 INTERPOSE(int vprintf(const char *a, va_list b), vprintf, a, b);
 INTERPOSE(int vfprintf(FILE *a, const char *b, va_list c), vfprintf, a, b, c);
+INTERPOSE(int fflush(FILE *a), fflush, a);
 
 /* time family */
 

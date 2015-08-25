@@ -143,6 +143,7 @@ int process_emu_printf(Process* proc, const char *format, ...);
 int process_emu_vprintf(Process* proc, const char *format, va_list ap);
 int process_emu_fprintf(Process* proc, FILE *stream, const char *format, ...);
 int process_emu_vfprintf(Process* proc, FILE *stream, const char *format, va_list ap);
+int process_emu_fflush(Process* proc, FILE *stream);
 
 /* time family */
 

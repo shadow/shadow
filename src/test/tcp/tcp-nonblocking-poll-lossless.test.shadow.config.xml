@@ -28,10 +28,12 @@
   </graph>
 </graphml>
 ]]></topology>
-  <kill time="15"/>
-  <plugin id="testtimerepoll" path="shadow-plugin-test-timerfd-epoll"/>
-  <node id="testnode" quantity="1">
-    <application plugin="testtimerepoll" starttime="1" arguments=""/>
-  </node>
+  <kill time="300"/>
+  <plugin id="testtcp" path="shadow-plugin-test-tcp"/>
+  <node id="lossless.tcpserver.echo" >
+    <application plugin="testtcp" time="1" arguments="nonblocking-poll server" />
+  </node >
+  <node id="lossless.tcpclient.echo" >
+    <application plugin="testtcp" time="2" arguments="nonblocking-poll client lossless.tcpserver.echo" />
+  </node >
 </shadow>
-

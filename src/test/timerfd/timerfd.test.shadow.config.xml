@@ -28,12 +28,10 @@
   </graph>
 </graphml>
 ]]></topology>
-  <kill time="300"/>
-  <plugin id="testsocket" path="shadow-plugin-test-socket"/>
-  <node id="lossless.tcpserver.echo" >
-    <application plugin="testsocket" time="1" arguments="tcp server" />
-  </node >
-  <node id="lossless.tcpclient.echo" >
-    <application plugin="testsocket" time="2" arguments="tcp client lossless.tcpserver.echo" />
-  </node >
+  <kill time="15"/>
+  <plugin id="testtimerfd" path="shadow-plugin-test-timerfd"/>
+  <node id="testnode" quantity="1">
+    <application plugin="testtimerfd" starttime="1" arguments=""/>
+  </node>
 </shadow>
+

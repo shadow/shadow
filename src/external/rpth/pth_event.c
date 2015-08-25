@@ -462,7 +462,11 @@ static void _pth_event_deregister(pth_event_t pth_ev) {
 
     if(target_fd > 0) {
         pth_sc(epoll_ctl)(thread_efd, EPOLL_CTL_DEL, target_fd, NULL);
-        pth_sc(close)(target_fd);
+
+        /* do we need to delete the timer we created in _pth_event_register()? */
+        if(pth_ev->ev_type == PTH_EVENT_TIME || pth_ev->ev_type == PTH_EVENT_FUNC) {
+            pth_sc(close)(target_fd);
+        }
     }
 }
 
