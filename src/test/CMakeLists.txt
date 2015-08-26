@@ -11,11 +11,14 @@ add_definitions(-fPIC -g3 -DDEBUG -D_GNU_SOURCE)
 ## ensure that the Host LLVM plugin is built first
 get_property(LLVMHoistGlobalsPATH TARGET LLVMHoistGlobals PROPERTY LOCATION)
 
-# add the test directories
+## a helper program for tests needing multiple processes
+add_executable(shadow-test-launcher shd-test-launcher.c)
+
+## add the test directories
 add_subdirectory(sleep)
+add_subdirectory(timerfd)
 add_subdirectory(poll)
 add_subdirectory(epoll)
-add_subdirectory(timerfd)
 add_subdirectory(file)
 add_subdirectory(tcp)
 add_subdirectory(pthreads)

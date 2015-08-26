@@ -19,7 +19,7 @@
 #include <sys/epoll.h>
 #include <sys/select.h>
 
-#define USAGE "USAGE: 'shd-test-tcp iomode type'; iomode=('blocking'|'nonblocking-poll'|'nonblocking-epoll'|'nonblocking-select') type=('client' server_ip|'server'|'loopback')"
+#define USAGE "USAGE: 'shd-test-tcp iomode type'; iomode=('blocking'|'nonblocking-poll'|'nonblocking-epoll'|'nonblocking-select') type=('client' server_ip|'server')"
 #define MYLOG(...) _mylog(__FILE__, __LINE__, __FUNCTION__, __VA_ARGS__)
 #define SERVER_PORT 58333
 #define BUFFERSIZE 20000
@@ -403,10 +403,6 @@ static int _run_server(iowait_func iowait) {
     return 0;
 }
 
-static int _run_loopback(iowait_func iowait) {
-    return 1;
-}
-
 int main(int argc, char *argv[]) {
     MYLOG("program started; %s", USAGE);
 
@@ -438,8 +434,6 @@ int main(int argc, char *argv[]) {
         return _run_client(wait, argv[3]);
     } else if(strncasecmp(argv[2], "server", 6) == 0) {
         return _run_server(wait);
-    } else if(strncasecmp(argv[2], "loopback", 8) == 0) {
-        return _run_loopback(wait);
     } else {
         MYLOG("error, invalid type specified; see usage");
         return -1;
