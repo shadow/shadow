@@ -24,14 +24,17 @@
 #define SERVER_PORT 58333
 #define BUFFERSIZE 20000
 
-typedef int (*iowait_func)(int fd, int isread);
+typedef enum _waittype {
+    WAIT_WRITE, WAIT_READ
+} waittype;
+typedef int (*iowait_func)(int fd, waittype t);
 
 static void _mylog(const char* fileName, const int lineNum, const char* funcName, const char* format, ...) {
     //fprintf(stdout, "[%.010lu] [%s:%i] [%s] ", (ulong)time(NULL), fileName, lineNum, funcName);
-    struct timespec t;
-    memset(&t, 0, sizeof(struct timespec));
-    clock_gettime(CLOCK_MONOTONIC, &t);
-    fprintf(stdout, "[%lu.%.09lu] ", (ulong)t.tv_sec, (ulong)t.tv_nsec);
+    struct timeval t;
+    memset(&t, 0, sizeof(struct timeval));
+    gettimeofday(&t, NULL);
+    fprintf(stdout, "[%ld.%.06ld] ", (long)t.tv_sec, (long)t.tv_usec);
 
     va_list vargs;
     va_start(vargs, format);
@@ -50,11 +53,11 @@ static void _fillcharbuf(char* buffer, int size) {
     }
 }
 
-static int _pollwait(int fd, int isread) {
+static int _wait_poll(int fd, waittype t) {
     struct pollfd p;
     memset(&p, 0, sizeof(struct pollfd));
     p.fd = fd;
-    p.events = isread ? POLLIN : POLLOUT;
+    p.events = (t == WAIT_READ) ? POLLIN : POLLOUT;
 
     MYLOG("waiting for io with poll()");
     int result = poll(&p, 1, -1);
@@ -72,7 +75,7 @@ static int _pollwait(int fd, int isread) {
     }
 }
 
-static int _epollwait(int fd, int isread) {
+static int _wait_epoll(int fd, waittype t) {
     int efd = epoll_create(1);
     MYLOG("epoll_create() returned %i", efd);
     if(efd < 0) {
@@ -82,7 +85,7 @@ static int _epollwait(int fd, int isread) {
 
     struct epoll_event e;
     memset(&e, 0, sizeof(struct epoll_event));
-    e.events = isread ? EPOLLIN : EPOLLOUT;
+    e.events = (t == WAIT_READ) ? EPOLLIN : EPOLLOUT;
 
     int result = epoll_ctl(efd, EPOLL_CTL_ADD, fd, &e);
     MYLOG("epoll_ctl() op=EPOLL_CTL_ADD returned %i", result);
@@ -116,13 +119,13 @@ static int _epollwait(int fd, int isread) {
     return 0;
 }
 
-static int _selectwait(int fd, int isread) {
+static int _wait_select(int fd, waittype t) {
     fd_set s;
     FD_ZERO(&s);
     FD_SET(fd, &s);
 
     MYLOG("waiting for io with select()");
-    int result = select(1, isread ? &s : NULL, isread ? NULL : &s, NULL, NULL);
+    int result = select(fd+1, (t == WAIT_READ) ? &s : NULL, (t == WAIT_WRITE) ? &s : NULL, NULL, NULL);
     MYLOG("select() returned %i", result);
 
     if(result < 0) {
@@ -137,43 +140,64 @@ static int _selectwait(int fd, int isread) {
     }
 }
 
-static int _run_client(iowait_func iowait, const char* servername) {
-    /* attempt to get the correct server ip address */
-    struct addrinfo* serverInfo;
-    int result = getaddrinfo(servername, NULL, NULL, &serverInfo);
-    MYLOG("getaddrinfo() returned %i", result);
-    if (result < 0) {
-        MYLOG("getaddrinfo() error was: %s", strerror(errno));
-        return -1;
+static int _do_addr(const char* name, struct sockaddr_in* addrout) {
+    memset(addrout, 0, sizeof(struct sockaddr_in));
+    addrout->sin_family = AF_INET;
+    addrout->sin_addr.s_addr = htons(INADDR_ANY);
+    addrout->sin_port = htons(SERVER_PORT);
+
+    if(name) {
+        /* attempt to get the correct server ip address */
+        struct addrinfo* info;
+        int result = getaddrinfo(name, NULL, NULL, &info);
+        MYLOG("getaddrinfo() returned %i", result);
+        if (result < 0) {
+            MYLOG("getaddrinfo() error was: %s", strerror(errno));
+            return -1;
+        }
+
+        addrout->sin_addr.s_addr = ((struct sockaddr_in*) (info->ai_addr))->sin_addr.s_addr;
+        freeaddrinfo(info);
     }
 
-    in_addr_t serverip = ((struct sockaddr_in*) (serverInfo->ai_addr))->sin_addr.s_addr;
-    freeaddrinfo(serverInfo);
+    return 0;
+}
 
-    /* create a blocking socket and get a socket descriptor */
-    int sd = socket(AF_INET, iowait ? (SOCK_STREAM|SOCK_NONBLOCK) : SOCK_STREAM, 0);
+static int _do_socket(int type, int* fdout) {
+    /* create a socket and get a socket descriptor */
+    int sd = socket(AF_INET, type, 0);
     MYLOG("socket() returned %i", sd);
     if (sd < 0) {
         MYLOG("socket() error was: %s", strerror(errno));
         return -1;
     }
 
-    /* setup the socket address for connecting to the server */
-    struct sockaddr_in serverAddr;
-    memset(&serverAddr, 0, sizeof(serverAddr));
-    serverAddr.sin_family = AF_INET;
-    serverAddr.sin_addr.s_addr = serverip;
-    serverAddr.sin_port = htons(SERVER_PORT);
+    int yes = 1;
+    int result = setsockopt(sd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int));
+    MYLOG("setsockopt() returned %i", result);
+    if(result < 0) {
+        MYLOG("setsockopt() error was: %s", strerror(errno));
+        return -1;
+    }
 
+    if(fdout) {
+        *fdout = sd;
+    }
+
+    return 0;
+}
+
+static int _do_connect(int fd, struct sockaddr_in* serveraddr, iowait_func iowait) {
     /* connect to server, blocking until the connection is ready */
     while(1) {
-        result = connect(sd, (struct sockaddr *) &serverAddr, sizeof(serverAddr));
+        int result = connect(fd, (struct sockaddr *) serveraddr, sizeof(struct sockaddr_in));
         MYLOG("connect() returned %i", result);
-        if (result < 0 && iowait && (errno == EAGAIN || errno == EWOULDBLOCK)) {
-            if(iowait(sd, 1) < 0) {
-                MYLOG("error waiting for connect(), error was: %s", strerror(errno));
+        if (result < 0 && iowait && errno == EINPROGRESS) {
+            if(iowait(fd, WAIT_WRITE) < 0) {
+                MYLOG("error waiting for connect()");
                 return -1;
             }
+            continue;
         } else if(result < 0) {
             MYLOG("connect() error was: %s", strerror(errno));
             return -1;
@@ -181,106 +205,12 @@ static int _run_client(iowait_func iowait, const char* servername) {
             break;
         }
     }
-
-    /* now prepare a message */
-    char outbuf[BUFFERSIZE];
-    memset(outbuf, 0, BUFFERSIZE);
-    _fillcharbuf(outbuf, BUFFERSIZE);
-    int offset = 0, amount = 0;
-
-    /* send the bytes to the server */
-    while((amount = BUFFERSIZE - offset) > 0) {
-        MYLOG("trying to send %i more bytes", amount);
-        ssize_t n = send(sd, &outbuf[offset], (size_t)amount, 0);
-        MYLOG("send() returned %li", (long)n);
-
-        if(n < 0 && iowait && (errno == EAGAIN || errno == EWOULDBLOCK)) {
-            if(iowait(sd, 0) < 0) {
-                MYLOG("error waiting for send(), error was: %s", strerror(errno));
-                return -1;
-            }
-        } else if(n < 0) {
-            MYLOG("send() error was: %s", strerror(errno));
-            return -1;
-        } else if(n > 0) {
-            MYLOG("sent %li more bytes", (long)n);
-            offset += (int)n;
-        } else {
-            /* n == 0, on a blocking socket... */
-            MYLOG("unable to send to server socket %i, and send didn't block for us", sd);
-            break;
-        }
-    }
-
-    MYLOG("expected %i bytes and sent %i bytes to server", BUFFERSIZE, offset);
-    if(offset < BUFFERSIZE) {
-        MYLOG("we did not send the expected number of bytes (%i)", BUFFERSIZE);
-        return -1;
-    }
-
-    /* get ready to recv the response */
-    char inbuf[BUFFERSIZE];
-    memset(inbuf, 0, BUFFERSIZE);
-    offset = 0;
-    while((amount = BUFFERSIZE - offset) > 0) {
-        MYLOG("expecting %i more bytes, waiting for data", amount);
-        ssize_t n = recv(sd, &inbuf[offset], (size_t)amount, 0);
-        MYLOG("recv() returned %li", (long)n);
-
-        if(n < 0 && iowait && (errno == EAGAIN || errno == EWOULDBLOCK)) {
-            if(iowait(sd, 1) < 0) {
-                MYLOG("error waiting for recv(), error was: %s", strerror(errno));
-                return -1;
-            }
-        } else if(n < 0) {
-            MYLOG("recv() error was: %s", strerror(errno));
-            return -1;
-        } else if(n > 0) {
-            MYLOG("got %li more bytes", (long)n);
-            offset += (int)n;
-        } else {
-            /* n == 0, we read EOF */
-            MYLOG("read EOF, server socket %i closed", sd);
-            break;
-        }
-    }
-
-    MYLOG("expected %i bytes and received %i bytes from server", BUFFERSIZE, offset);
-    if(offset < BUFFERSIZE) {
-        MYLOG("we did not receive the expected number of bytes (%i)", BUFFERSIZE);
-        return -1;
-    }
-
-    /* check that the buffers match */
-    if(memcmp(outbuf, inbuf, BUFFERSIZE)) {
-        MYLOG("inconsistent message - we did not receive the same bytes that we sent");
-        return -1;
-    } else {
-        /* success from our end */
-        MYLOG("consistent message - we received the same bytes that we sent");
-        close(sd);
-        return 0;
-    }
+    return 0;
 }
 
-static int _run_server(iowait_func iowait) {
-    /* create a blocking socket and get a socket descriptor */
-    int sd = socket(AF_INET, iowait ? (SOCK_STREAM|SOCK_NONBLOCK) : SOCK_STREAM, 0);
-    MYLOG("socket() returned %i", sd);
-    if (sd < 0) {
-        MYLOG("socket() error was: %s", strerror(errno));
-        return -1;
-    }
-
-    /* setup the socket address info, client has outgoing connection to server */
-    struct sockaddr_in bindAddr;
-    memset(&bindAddr, 0, sizeof(bindAddr));
-    bindAddr.sin_family = AF_INET;
-    bindAddr.sin_addr.s_addr = htons(INADDR_ANY);
-    bindAddr.sin_port = htons(SERVER_PORT);
-
+static int _do_serve(int fd, struct sockaddr_in* bindaddr, iowait_func iowait, int* clientsdout) {
     /* bind the socket to the server port */
-    int result = bind(sd, (struct sockaddr *) &bindAddr, sizeof(bindAddr));
+    int result = bind(fd, (struct sockaddr *) bindaddr, sizeof(struct sockaddr_in));
     MYLOG("bind() returned %i", result);
     if (result < 0) {
         MYLOG("bind() error was: %s", strerror(errno));
@@ -288,7 +218,7 @@ static int _run_server(iowait_func iowait) {
     }
 
     /* set as server socket that will listen for clients */
-    result = listen(sd, 100);
+    result = listen(fd, 100);
     MYLOG("listen() returned %i", result);
     if (result == -1) {
         MYLOG("listen() error was: %s", strerror(errno));
@@ -297,11 +227,11 @@ static int _run_server(iowait_func iowait) {
 
     /* wait for an incoming connection */
     while(1) {
-        result = accept(sd, NULL, NULL);
+        result = accept(fd, NULL, NULL);
         MYLOG("accept() returned %i", result);
         if (result < 0 && iowait && (errno == EAGAIN || errno == EWOULDBLOCK)) {
-            if(iowait(sd, 1) < 0) {
-                MYLOG("error waiting for accept(), error was: %s", strerror(errno));
+            if(iowait(fd, WAIT_READ) < 0) {
+                MYLOG("error waiting for accept()");
                 return -1;
             }
         } else if(result < 0) {
@@ -312,51 +242,24 @@ static int _run_server(iowait_func iowait) {
         }
     }
 
-    /* got one, now read the entire message */
-    char buf[BUFFERSIZE];
-    memset(buf, 0, BUFFERSIZE);
+    if(clientsdout) {
+        *clientsdout = result;
+    }
+    return 0;
+}
+
+static int _do_send(int fd, char* buf, iowait_func iowait) {
     int offset = 0, amount = 0;
-    int clientsd = result;
 
-    while((amount = BUFFERSIZE - offset) > 0) {
-        MYLOG("expecting %i more bytes, waiting for data", amount);
-        ssize_t n = recv(clientsd, &buf[offset], (size_t)amount, 0);
-        MYLOG("recv() returned %li", (long)n);
-
-        if(n < 0 && iowait && (errno == EAGAIN || errno == EWOULDBLOCK)) {
-            if(iowait(clientsd, 1) < 0) {
-                MYLOG("error waiting for recv(), error was: %s", strerror(errno));
-                return -1;
-            }
-        } else if(n < 0) {
-            MYLOG("recv() error was: %s", strerror(errno));
-            return -1;
-        } else if(n > 0) {
-            MYLOG("got %li more bytes", (long)n);
-            offset += (int)n;
-        } else {
-            /* n == 0, we read EOF */
-            MYLOG("read EOF, client socket %i closed", clientsd);
-            break;
-        }
-    }
-
-    MYLOG("expected %i bytes and received %i bytes from client", BUFFERSIZE, offset);
-    if(offset < BUFFERSIZE) {
-        MYLOG("we did not receive the expected number of bytes (%i)", BUFFERSIZE);
-        return -1;
-    }
-
-    /* now send the bytes back */
-    offset = 0;
+    /* send the bytes to the server */
     while((amount = BUFFERSIZE - offset) > 0) {
         MYLOG("trying to send %i more bytes", amount);
-        ssize_t n = send(clientsd, &buf[offset], (size_t)amount, 0);
+        ssize_t n = send(fd, &buf[offset], (size_t)amount, 0);
         MYLOG("send() returned %li", (long)n);
 
         if(n < 0 && iowait && (errno == EAGAIN || errno == EWOULDBLOCK)) {
-            if(iowait(clientsd, 0) < 0) {
-                MYLOG("error waiting for send(), error was: %s", strerror(errno));
+            if(iowait(fd, WAIT_WRITE) < 0) {
+                MYLOG("error waiting for send()");
                 return -1;
             }
         } else if(n < 0) {
@@ -367,21 +270,137 @@ static int _run_server(iowait_func iowait) {
             offset += (int)n;
         } else {
             /* n == 0, on a blocking socket... */
-            MYLOG("unable to send to client socket %i, and send didn't block for us", clientsd);
+            MYLOG("unable to send to server socket %i, and send didn't block for us", fd);
             break;
         }
     }
 
-    MYLOG("expected %i bytes and sent %i bytes to client", BUFFERSIZE, offset);
+    MYLOG("sent %i/%i bytes %s", offset, BUFFERSIZE, (offset == BUFFERSIZE) ? ":)" : ":(");
     if(offset < BUFFERSIZE) {
-        MYLOG("we did not send the expected number of bytes (%i)", BUFFERSIZE);
+        MYLOG("we did not send the expected number of bytes (%i)!", BUFFERSIZE);
+        return -1;
+    }
+
+    return 0;
+}
+
+static int _do_recv(int fd, char* buf, iowait_func iowait) {
+    int offset = 0, amount = 0;
+
+    while((amount = BUFFERSIZE - offset) > 0) {
+        MYLOG("expecting %i more bytes, waiting for data", amount);
+        ssize_t n = recv(fd, &buf[offset], (size_t)amount, 0);
+        MYLOG("recv() returned %li", (long)n);
+
+        if(n < 0 && iowait && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+            if(iowait(fd, WAIT_READ) < 0) {
+                MYLOG("error waiting for recv()");
+                return -1;
+            }
+        } else if(n < 0) {
+            MYLOG("recv() error was: %s", strerror(errno));
+            return -1;
+        } else if(n > 0) {
+            MYLOG("got %li more bytes", (long)n);
+            offset += (int)n;
+        } else {
+            /* n == 0, we read EOF */
+            MYLOG("read EOF, server socket %i closed", fd);
+            break;
+        }
+    }
+
+    MYLOG("received %i/%i bytes %s", offset, BUFFERSIZE, (offset == BUFFERSIZE) ? ":)" : ":(");
+    if(offset < BUFFERSIZE) {
+        MYLOG("we did not receive the expected number of bytes (%i)!", BUFFERSIZE);
+        return -1;
+    }
+
+    return 0;
+}
+
+static int _run_client(iowait_func iowait, const char* servername) {
+    struct sockaddr_in serveraddr;
+    if(_do_addr(servername, &serveraddr) < 0) {
+        return -1;
+    }
+
+    int serversd;
+    int type = iowait ? (SOCK_STREAM|SOCK_NONBLOCK) : SOCK_STREAM;
+    if(_do_socket(type, &serversd) < 0) {
+        return -1;
+    }
+
+    if(_do_connect(serversd, &serveraddr, iowait) < 0) {
+        return -1;
+    }
+
+    /* now prepare a message */
+    char outbuf[BUFFERSIZE];
+    memset(outbuf, 0, BUFFERSIZE);
+    _fillcharbuf(outbuf, BUFFERSIZE);
+
+    /* send to server */
+    if(_do_send(serversd, outbuf, iowait) < 0) {
+        return -1;
+    }
+
+    /* get ready to recv the response */
+    char inbuf[BUFFERSIZE];
+    memset(inbuf, 0, BUFFERSIZE);
+
+    /* recv from server */
+    if(_do_recv(serversd, inbuf, iowait) < 0) {
+        return -1;
+    }
+
+    close(serversd);
+
+    /* check that the buffers match */
+    if(memcmp(outbuf, inbuf, BUFFERSIZE)) {
+        MYLOG("inconsistent message - we did not receive the same bytes that we sent :(");
         return -1;
     } else {
         /* success from our end */
-        close(sd);
-        close(clientsd);
+        MYLOG("consistent message - we received the same bytes that we sent :)");
         return 0;
     }
+}
+
+static int _run_server(iowait_func iowait) {
+    int listensd;
+    int type = iowait ? (SOCK_STREAM|SOCK_NONBLOCK) : SOCK_STREAM;
+    if(_do_socket(type, &listensd) < 0) {
+        return -1;
+    }
+
+    /* setup the socket address info, client has outgoing connection to server */
+    struct sockaddr_in bindaddr;
+    if(_do_addr(NULL, &bindaddr) < 0) {
+        return -1;
+    }
+
+    int clientsd;
+    if(_do_serve(listensd, &bindaddr, iowait, &clientsd) < 0) {
+        return -1;
+    }
+
+    /* got one, now read the entire message */
+    char buf[BUFFERSIZE];
+    memset(buf, 0, BUFFERSIZE);
+
+    if(_do_recv(clientsd, buf, iowait) < 0) {
+        return -1;
+    }
+
+    if(_do_send(clientsd, buf, iowait) < 0) {
+        return -1;
+    }
+
+    /* success from our end */
+    close(clientsd);
+    close(listensd);
+    return 0;
 }
 
 static int _run_loopback(iowait_func iowait) {
@@ -401,11 +420,11 @@ int main(int argc, char *argv[]) {
     if(strncasecmp(argv[1], "blocking", 8) == 0) {
         wait = NULL;
     } else if(strncasecmp(argv[1], "nonblocking-poll", 16) == 0) {
-        wait = _pollwait;
+        wait = _wait_poll;
     } else if(strncasecmp(argv[1], "nonblocking-epoll", 17) == 0) {
-        wait = _epollwait;
+        wait = _wait_epoll;
     } else if(strncasecmp(argv[1], "nonblocking-select", 18) == 0) {
-        wait = _selectwait;
+        wait = _wait_select;
     } else {
         MYLOG("error, invalid iomode specified; see usage");
         return -1;
