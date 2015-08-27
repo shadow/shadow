@@ -84,8 +84,8 @@ ssize_t process_emu_writev(Process* proc, int fd, const struct iovec *iov, int i
 ssize_t process_emu_pread(Process* proc, int fd, void *buff, size_t numbytes, off_t offset);
 ssize_t process_emu_pwrite(Process* proc, int fd, const void *buf, size_t nbytes, off_t offset);
 int process_emu_close(Process* proc, int fd);
-int process_emu_fcntl(Process* proc, int fd, int cmd, ...);
-int process_emu_ioctl(Process* proc, int fd, unsigned long int request, ...);
+int process_emu_fcntl(Process* proc, int fd, int cmd, void* argp);
+int process_emu_ioctl(Process* proc, int fd, unsigned long int request, void* argp);
 int process_emu_pipe2(Process* proc, int pipefds[2], int flags);
 int process_emu_pipe(Process* proc, int pipefds[2]);
 int process_emu_eventfd(Process* proc, int initval, int flags);
@@ -96,8 +96,8 @@ int process_emu_timerfd_gettime(Process* proc, int fd, struct itimerspec *curr_v
 /* file specific */
 
 int process_emu_fileno(Process* proc, FILE *stream);
-int process_emu_open(Process* proc, const char *pathname, int flags, ...);
-int process_emu_open64(Process* proc, const char *pathname, int flags, ...);
+int process_emu_open(Process* proc, const char *pathname, int flags, mode_t mode);
+int process_emu_open64(Process* proc, const char *pathname, int flags, mode_t mode);
 int process_emu_creat(Process* proc, const char *pathname, mode_t mode);
 FILE *process_emu_fopen(Process* proc, const char *path, const char *mode);
 FILE *process_emu_fopen64(Process* proc, const char *path, const char *mode);
@@ -127,7 +127,7 @@ int process_emu_fchown(Process* proc, int fd, uid_t owner, gid_t group);
 int process_emu_fchmod(Process* proc, int fd, mode_t mode);
 int process_emu_posix_fadvise(Process* proc, int fd, off_t offset, off_t len, int advice);
 int process_emu_lockf(Process* proc, int fd, int cmd, off_t len);
-int process_emu_openat(Process* proc, int dirfd, const char *pathname, int flags, ...);
+int process_emu_openat(Process* proc, int dirfd, const char *pathname, int flags, mode_t mode);
 int process_emu_faccessat(Process* proc, int dirfd, const char *pathname, int mode, int flags);
 int process_emu_unlinkat(Process* proc, int dirfd, const char *pathname, int flags);
 int process_emu_fchmodat(Process* proc, int dirfd, const char *pathname, mode_t mode, int flags);
@@ -139,9 +139,7 @@ int process_emu_fputc(Process* proc, int c, FILE *stream);
 int process_emu_fputs(Process* proc, const char *s, FILE *stream);
 int process_emu_putchar(Process* proc, int c);
 int process_emu_puts(Process* proc, const char *s);
-int process_emu_printf(Process* proc, const char *format, ...);
 int process_emu_vprintf(Process* proc, const char *format, va_list ap);
-int process_emu_fprintf(Process* proc, FILE *stream, const char *format, ...);
 int process_emu_vfprintf(Process* proc, FILE *stream, const char *format, va_list ap);
 int process_emu_fflush(Process* proc, FILE *stream);
 

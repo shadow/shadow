@@ -184,7 +184,7 @@ typedef int (*fchown_func)(int, uid_t, gid_t);
 typedef int (*fchmod_func)(int, mode_t);
 typedef int (*posix_fadvise_func)(int, off_t, off_t, int);
 typedef int (*lockf_func)(int, int, off_t);
-typedef int (*openat_func)(int, const char*, int, ...);
+typedef int (*openat_func)(int, const char*, int, mode_t);
 typedef int (*faccessat_func)(int, const char*, int, int);
 typedef int (*unlinkat_func)(int, const char*, int);
 typedef int (*fchmodat_func)(int, const char*, mode_t, int);
@@ -206,7 +206,7 @@ typedef int (*fflush_func)(FILE *);
 
 typedef time_t (*time_func)(time_t*);
 typedef int (*clock_gettime_func)(clockid_t, struct timespec *);
-typedef int (*gettimeofday_func)(struct timeval*, __timezone_ptr_t);
+typedef int (*gettimeofday_func)(struct timeval*, struct timezone*);
 
 /* name/address family */
 
@@ -1058,32 +1058,32 @@ int openat(int dirfd, const char *pathname, int flags, ...) {
 }
 
 int printf(const char *format, ...) {
-    va_list farg;
-    va_start(farg, format);
+    va_list arglist;
+    va_start(arglist, format);
     int result = 0;
     Process* proc = NULL;
     if((proc = _doEmulate()) != NULL) {
-        result = process_emu_printf(proc, format, va_arg(farg, void*));
+        result = process_emu_vprintf(proc, format, arglist);
     } else {
-        ENSURE(printf);
-        result = director.next.printf(format, va_arg(farg, void*));
+        ENSURE(vprintf);
+        result = director.next.vprintf(format, arglist);
     }
-    va_end(farg);
+    va_end(arglist);
     return result;
 }
 
 int fprintf(FILE *stream, const char *format, ...) {
-    va_list farg;
-    va_start(farg, format);
+    va_list arglist;
+    va_start(arglist, format);
     int result = 0;
     Process* proc = NULL;
     if((proc = _doEmulate()) != NULL) {
-        result = process_emu_fprintf(proc, stream, format, va_arg(farg, void*));
+        result = process_emu_vfprintf(proc, stream, format, arglist);
     } else {
-        ENSURE(fprintf);
-        result = director.next.fprintf(stream, format, va_arg(farg, void*));
+        ENSURE(vfprintf);
+        result = director.next.vfprintf(stream, format, arglist);
     }
-    va_end(farg);
+    va_end(arglist);
     return result;
 }
 
@@ -1209,7 +1209,7 @@ INTERPOSE(int fflush(FILE *a), fflush, a);
 
 INTERPOSE(time_t time(time_t *a), time, a);
 INTERPOSE(int clock_gettime(clockid_t a, struct timespec *b), clock_gettime, a, b);
-INTERPOSE(int gettimeofday(struct timeval* a, __timezone_ptr_t b), gettimeofday, a, b);
+INTERPOSE(int gettimeofday(struct timeval* a, struct timezone* b), gettimeofday, a, b);
 
 /* name/address family */
 

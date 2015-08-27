@@ -30,11 +30,10 @@ typedef enum _waittype {
 typedef int (*iowait_func)(int fd, waittype t);
 
 static void _mylog(const char* fileName, const int lineNum, const char* funcName, const char* format, ...) {
-    //fprintf(stdout, "[%.010lu] [%s:%i] [%s] ", (ulong)time(NULL), fileName, lineNum, funcName);
     struct timeval t;
     memset(&t, 0, sizeof(struct timeval));
     gettimeofday(&t, NULL);
-    fprintf(stdout, "[%ld.%.06ld] ", (long)t.tv_sec, (long)t.tv_usec);
+    fprintf(stdout, "[%ld.%.06ld] [%s:%i] [%s] ", (long)t.tv_sec, (long)t.tv_usec, fileName, lineNum, funcName);
 
     va_list vargs;
     va_start(vargs, format);

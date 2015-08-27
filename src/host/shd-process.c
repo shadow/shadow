@@ -850,7 +850,7 @@ static gssize _process_emu_recvHelper(Process* proc, gint fd, gpointer buf, size
     return (gssize) bytes;
 }
 
-static gint _process_emu_fcntlHelper(Process* proc, int fd, int cmd, va_list farg) {
+static gint _process_emu_fcntlHelper(Process* proc, int fd, int cmd, void* argp) {
     /* check if this is a socket */
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
 
@@ -859,7 +859,7 @@ static gint _process_emu_fcntlHelper(Process* proc, int fd, int cmd, va_list far
         /* check if we have a mapped os fd */
         gint osfd = host_getOSHandle(proc->host, fd);
         if(osfd >= 0) {
-            ret = fcntl(osfd, cmd, va_arg(farg, void*));
+            ret = fcntl(osfd, cmd, argp);
         } else {
             errno = EBADF;
             ret = -1;
@@ -876,7 +876,8 @@ static gint _process_emu_fcntlHelper(Process* proc, int fd, int cmd, va_list far
         if (cmd == F_GETFL) {
             result = descriptor_getFlags(descriptor);
         } else if (cmd == F_SETFL) {
-            descriptor_setFlags(descriptor, va_arg(farg, int));
+            gint flags = (gint)argp;
+            descriptor_setFlags(descriptor, flags);
         }
     } else {
         errno = EBADF;
@@ -887,7 +888,7 @@ static gint _process_emu_fcntlHelper(Process* proc, int fd, int cmd, va_list far
     return result;
 }
 
-static gint _process_emu_ioctlHelper(Process* proc, int fd, unsigned long int request, va_list farg) {
+static gint _process_emu_ioctlHelper(Process* proc, int fd, unsigned long int request, void* argp) {
     /* check if this is a socket */
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
 
@@ -896,7 +897,7 @@ static gint _process_emu_ioctlHelper(Process* proc, int fd, unsigned long int re
         /* check if we have a mapped os fd */
         gint osfd = host_getOSHandle(proc->host, fd);
         if(osfd >= 0) {
-            ret = ioctl(fd, request, farg);
+            ret = ioctl(fd, request, argp);
         } else {
             errno = EBADF;
             ret = -1;
@@ -916,11 +917,11 @@ static gint _process_emu_ioctlHelper(Process* proc, int fd, unsigned long int re
             Socket* socket = (Socket*) descriptor;
             if(request == SIOCINQ || request == FIONREAD) {
                 gsize bufferLength = socket_getInputBufferLength(socket);
-                gint* lengthOut = va_arg(farg, int*);
+                gint* lengthOut = (gint*)argp;
                 *lengthOut = (gint)bufferLength;
             } else if (request == SIOCOUTQ || request == TIOCOUTQ) {
                 gsize bufferLength = socket_getOutputBufferLength(socket);
-                gint* lengthOut = va_arg(farg, int*);
+                gint* lengthOut = (gint*)argp;
                 *lengthOut = (gint)bufferLength;
             } else {
                 result = ENOTTY;
@@ -2089,20 +2090,12 @@ int process_emu_close(Process* proc, int fd) {
     return r;
 }
 
-int process_emu_fcntl(Process* proc, int fd, int cmd, ...) {
-    va_list farg;
-    va_start(farg, cmd);
-    int result = _process_emu_fcntlHelper(proc, fd, cmd, farg);
-    va_end(farg);
-    return result;
+int process_emu_fcntl(Process* proc, int fd, int cmd, void* argp) {
+    return _process_emu_fcntlHelper(proc, fd, cmd, argp);
 }
 
-int process_emu_ioctl(Process* proc, int fd, unsigned long int request, ...) {
-    va_list farg;
-    va_start(farg, request);
-    int result = _process_emu_ioctlHelper(proc, fd, request, farg);
-    va_end(farg);
-    return result;
+int process_emu_ioctl(Process* proc, int fd, unsigned long int request, void* argp) {
+    return _process_emu_ioctlHelper(proc, fd, request, argp);
 }
 
 int process_emu_pipe2(Process* proc, int pipefds[2], int flags) {
@@ -2437,14 +2430,11 @@ int process_emu_fileno(Process* proc, FILE *stream) {
     return (shadowfd >= 0) ? shadowfd : osfd;
 }
 
-int process_emu_open(Process* proc, const char *pathname, int flags, ...) {
-    va_list farg;
-    va_start(farg, flags);
-
+int process_emu_open(Process* proc, const char *pathname, int flags, mode_t mode) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     int result = 0;
 
-    gint osfd = open(pathname, flags, va_arg(farg, mode_t));
+    gint osfd = open(pathname, flags, mode);
     gint shadowfd = osfd >= 3 ? host_createShadowHandle(proc->host, osfd) : osfd;
 
     if(utility_isRandomPath((gchar*)pathname)) {
@@ -2454,18 +2444,11 @@ int process_emu_open(Process* proc, const char *pathname, int flags, ...) {
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     result = shadowfd;
 
-    va_end(farg);
     return result;
 }
 
-int process_emu_open64(Process* proc, const char *pathname, int flags, ...) {
-    va_list farg;
-    va_start(farg, flags);
-
-    int result = process_emu_open(proc, pathname, flags, va_arg(farg, mode_t));
-
-    va_end(farg);
-    return result;
+int process_emu_open64(Process* proc, const char *pathname, int flags, mode_t mode) {
+    return process_emu_open(proc, pathname, flags, mode);
 }
 
 int process_emu_creat(Process* proc, const char *pathname, mode_t mode) {
@@ -3047,7 +3030,7 @@ int process_emu_lockf(Process* proc, int fd, int cmd, off_t len) {
     return ret;
 }
 
-int process_emu_openat(Process* proc, int dirfd, const char *pathname, int flags, ...) {
+int process_emu_openat(Process* proc, int dirfd, const char *pathname, int flags, mode_t mode) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     warning("openat not yet implemented");
     errno = ENOSYS;
@@ -3185,14 +3168,6 @@ int process_emu_vprintf(Process* proc, const char *format, va_list ap) {
     return ret;
 }
 
-int process_emu_printf(Process* proc, const char *format, ...) {
-    va_list farg;
-    va_start(farg, format);
-    int result = process_emu_vprintf(proc, format, farg);
-    va_end(farg);
-    return result;
-}
-
 int process_emu_vfprintf(Process* proc, FILE *stream, const char *format, va_list ap) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     int ret;
@@ -3206,14 +3181,6 @@ int process_emu_vfprintf(Process* proc, FILE *stream, const char *format, va_lis
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
-}
-
-int process_emu_fprintf(Process* proc, FILE *stream, const char *format, ...) {
-    va_list farg;
-    va_start(farg, format);
-    int result = process_emu_vfprintf(proc, stream, format, farg);
-    va_end(farg);
-    return result;
 }
 
 int process_emu_fflush(Process* proc, FILE *stream) {
@@ -3259,12 +3226,15 @@ int process_emu_clock_gettime(Process* proc, clockid_t clk_id, struct timespec *
     return 0;
 }
 
-int process_emu_gettimeofday(Process* proc, struct timeval* tv, __timezone_ptr_t tz) {
+int process_emu_gettimeofday(Process* proc, struct timeval* tv, struct timezone* tz) {
     if(tv) {
         ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
         SimulationTime now = worker_getCurrentTime();
-        tv->tv_sec = now / SIMTIME_ONE_SECOND;
-        tv->tv_usec = (now % SIMTIME_ONE_SECOND) / SIMTIME_ONE_MICROSECOND;
+        SimulationTime sec = now / (SimulationTime)SIMTIME_ONE_SECOND;
+        SimulationTime usec = (now - (sec*(SimulationTime)SIMTIME_ONE_SECOND)) / (SimulationTime)SIMTIME_ONE_MICROSECOND;
+        utility_assert(usec < (SimulationTime)1000000);
+        tv->tv_sec = (time_t)sec;
+        tv->tv_usec = (suseconds_t)usec;
         _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     }
     return 0;
