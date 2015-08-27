@@ -3318,6 +3318,8 @@ int process_emu_getaddrinfo(Process* proc, const char *name, const char *service
         } else {
             ip = htonl(INADDR_LOOPBACK);
         }
+    } else if(!g_ascii_strncasecmp(name, "localhost", 9) || !g_ascii_strncasecmp(name, "127.0.0.1", 9)) {
+        ip = htonl(INADDR_LOOPBACK);
     } else {
         Address* address = NULL;
 

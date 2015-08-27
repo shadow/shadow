@@ -4,9 +4,10 @@ add_shadow_plugin(shadow-plugin-test-tcp shd-test-tcp.c)
 ## register the tests
 
 ## tcp blocking - loopback, lossless and lossy
+## these also test "localhost" instead of "127.0.0.1" in the loopback tests
 add_test(
     NAME test-tcp-blocking-loopback
-    COMMAND shadow-test-launcher shadow-plugin-test-tcp blocking server : shadow-plugin-test-tcp blocking client 127.0.0.1
+    COMMAND shadow-test-launcher shadow-plugin-test-tcp blocking server : shadow-plugin-test-tcp blocking client localhost
 )
 add_test(
     NAME test-tcp-blocking-loopback-shadow
