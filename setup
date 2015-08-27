@@ -202,7 +202,7 @@ def test(args):
     os.chdir(testdir)
     
     # test, wait for it to finish
-    testcmd = "ctest"
+    testcmd = "ctest -j1"
     
     logging.info("calling \'"+testcmd+"\'")
     retcode = subprocess.call(testcmd.strip().split())

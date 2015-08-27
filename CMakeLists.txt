@@ -82,6 +82,10 @@ else(SHADOW_DEBUG STREQUAL ON)
     #add_cflags(-O3) # causes segfault in Tor
 endif(SHADOW_DEBUG STREQUAL ON)
 
+if($ENV{VERBOSE})
+    add_definitions(-DVERBOSE)
+endif()
+
 if(SHADOW_PROFILE STREQUAL ON)
     add_definitions(-DDEBUG)
     add_cflags(-pg)
@@ -125,6 +129,10 @@ endforeach(library)
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config.h.in ${CMAKE_CURRENT_BINARY_DIR}/shd-config.h)
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/shd-config.h DESTINATION include/)
+
+if(POLICY  CMP0026)
+    cmake_policy(SET  CMP0026  OLD)
+endif()
 
 ## recurse our project tree
 add_subdirectory(${CMAKE_SOURCE_DIR}/resource/)

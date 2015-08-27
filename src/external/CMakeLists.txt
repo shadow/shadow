@@ -8,13 +8,19 @@ else()
     set(RPTH_DEBUG_SWITCH "--disable-debug")
 endif()
 
+if($ENV{VERBOSE})
+    set(RPTH_VERB_SWITCH "--verbose")
+else()
+    set(RPTH_VERB_SWITCH "--quiet")
+endif()
+
 EXTERNALPROJECT_ADD(
     "rpth"
     PREFIX rpth
     SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/rpth
     BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/rpth
-    CONFIGURE_COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/rpth/configure --quiet --prefix=${CMAKE_BINARY_DIR} --disable-shared --disable-tests ${RPTH_DEBUG_SWITCH}
-    CFLAGS=-Wno-unknown-warning-option
+    CONFIGURE_COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/rpth/configure ${RPTH_VERB_SWITCH} --prefix=${CMAKE_BINARY_DIR} --with-tags= --disable-shared --disable-tests ${RPTH_DEBUG_SWITCH}
+    CFLAGS=-Qunused-arguments
     BUILD_COMMAND make
     BUILD_IN_SOURCE 0
     INSTALL_COMMAND ""

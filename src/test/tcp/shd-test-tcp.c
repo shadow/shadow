@@ -24,6 +24,8 @@
 #define SERVER_PORT 58333
 #define BUFFERSIZE 20000
 
+int tempa = 0;
+int tempb = 1;
 typedef enum _waittype {
     WAIT_WRITE, WAIT_READ
 } waittype;

@@ -130,7 +130,7 @@ set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_MAKE_CLEAN_FILES ${target}.hoi
 
 ## now we need the actual .so to be built
 add_executable(${target} ${target}.hoisted.bc)
-add_dependencies(${target} ${target}.hoisted.bc)
+#add_dependencies(${target} ${target}.hoisted.bc)
 set_target_properties(${target} PROPERTIES 
     INSTALL_RPATH ${CMAKE_INSTALL_PREFIX}/lib 
     INSTALL_RPATH_USE_LINK_PATH TRUE 

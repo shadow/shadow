@@ -31,6 +31,7 @@ prefix="@prefix@"
 exec_prefix="@exec_prefix@"
 
 pth_prefix="$prefix"
+pth_datarootdir = "@datarootdir@"
 pth_exec_prefix="$exec_prefix"
 pth_bindir="@bindir@"
 pth_libdir="@libdir@"

@@ -44,6 +44,7 @@ libdir      = @libdir@
 includedir  = @includedir@
 mandir      = @mandir@
 datadir     = @datadir@
+datarootdir = @datarootdir@
 
 DESTDIR     =
 
