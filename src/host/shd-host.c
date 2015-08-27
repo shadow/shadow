@@ -1038,13 +1038,6 @@ gint host_connectToPeer(Host* host, gint handle, const struct sockaddr* address)
         return EAFNOSUPPORT;
     }
 
-    if(type == DT_TCPSOCKET) {
-        gint error = tcp_getConnectError((TCP*)socket);
-        if(error) {
-            return error;
-        }
-    }
-
     if (address->sa_family == AF_UNIX) {
         struct sockaddr_un* saddr = (struct sockaddr_un*) address;
         socket_setUnixPath(socket, saddr->sun_path, FALSE);

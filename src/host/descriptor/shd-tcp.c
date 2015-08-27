@@ -32,6 +32,7 @@ enum TCPFlags {
     TCPF_EOF_SIGNALED = 1 << 2,
     TCPF_RESET_SIGNALED = 1 << 3,
     TCPF_WAS_ESTABLISHED = 1 << 4,
+    TCPF_CONNECT_SIGNALED = 1 << 5,
 };
 
 enum TCPError {
@@ -1094,7 +1095,6 @@ gint tcp_getConnectError(TCP* tcp) {
          */
         return EISCONN;
     }
-
     return 0;
 }
 
@@ -1165,6 +1165,17 @@ void tcp_getInfo(TCP* tcp, struct tcp_info *tcpinfo) {
 
 gint tcp_connectToPeer(TCP* tcp, in_addr_t ip, in_port_t port, sa_family_t family) {
     MAGIC_ASSERT(tcp);
+
+    gint error = tcp_getConnectError(tcp);
+    if(error == EISCONN && !(tcp->flags & TCPF_CONNECT_SIGNALED)) {
+        /* we need to signal that connect was successful  */
+        tcp->flags |= TCPF_CONNECT_SIGNALED;
+        return 0;
+    } else if(error) {
+        return error;
+    }
+
+    /* no error, so we need to do the connect */
 
     /* create the connection state */
     socket_setPeerName(&(tcp->super), ip, port);
