@@ -297,6 +297,11 @@ int pth_select_ev(int nfd, fd_set *rfds, fd_set *wfds,
     pth_event_t ev_ring;
     pth_event_t ev_timeout;
 
+    if(timeout && timeout->tv_sec == 0 && timeout->tv_usec == 0) {
+        /* this should return immediately, so there is no need to manage blocking or timeouts */
+        return pth_sc(select)(nfd, rfds, wfds, efds, timeout);
+    }
+
     pth_implicit_init();
     pth_debug2("pth_select_ev: called from thread \"%s\"", pth_gctx_get()->pth_current->name);
 
@@ -520,6 +525,11 @@ int pth_poll_ev(struct pollfd *pfd, nfds_t nfd, int timeout, pth_event_t ev_extr
     pth_event_t ev_timeout;
     int i, rc;
 
+    if(timeout == 0) {
+        /* this should return immediately, so there is no need to manage blocking or timeouts */
+        return pth_sc(poll)(pfd, nfd, 0);
+    }
+
     pth_implicit_init();
     pth_debug2("pth_poll_ev: called from thread \"%s\"", pth_gctx_get()->pth_current->name);
 
@@ -555,6 +565,7 @@ int pth_poll_ev(struct pollfd *pfd, nfds_t nfd, int timeout, pth_event_t ev_extr
         if(rc < 0 && errno == EPERM) {
             /* there is a file in the set, it will be ready so we can poll immediately */
             need_wait = 0;
+            pth_sc(close)(epfd_tmp);
             break;
         } else if(rc < 0) {
             pth_sc(close)(epfd_tmp);
@@ -651,6 +662,11 @@ int pth_epoll_wait_ev(int epfd, struct epoll_event *events, int maxevents, int t
     pth_event_t ev_epoll;
     pth_event_t ev_timeout;
     int rc;
+
+    if(timeout == 0) {
+        /* this should return immediately, so there is no need to manage blocking or timeouts */
+        return pth_sc(epoll_wait)(epfd, events, maxevents, 0);
+    }
 
     pth_implicit_init();
     pth_debug2("pth_epoll_wait_ev: enter from thread \"%s\"", pth_gctx_get()->pth_current->name);
@@ -989,8 +1005,8 @@ ssize_t pth_write_ev(int fd, const void *buf, size_t nbytes, pth_event_t ev_extr
 
             /* check for the extra events */
             if (ev_extra != NULL && !ev_occurred) {
-    			pth_fdmode(s, fdmode);
-    			return pth_error(-1, EINTR);
+                pth_fdmode(s, fdmode);
+                return pth_error(-1, EINTR);
             }
 
             /* now perform the actual write operation */
