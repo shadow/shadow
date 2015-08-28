@@ -3,9 +3,11 @@
 INCLUDE(ExternalProject)
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-    set(RPTH_DEBUG_SWITCH "--enable-debug")
+    set(RPTH_DEBUG_SWITCH "--enable-debug=yes")
+    set(RPTH_OPT_SWITCH "--enable-optimize=no")
 else()
-    set(RPTH_DEBUG_SWITCH "--disable-debug")
+    set(RPTH_DEBUG_SWITCH "--enable-debug=no")
+    set(RPTH_OPT_SWITCH "--enable-optimize=yes")
 endif()
 
 if($ENV{VERBOSE})
@@ -19,7 +21,7 @@ EXTERNALPROJECT_ADD(
     PREFIX rpth
     SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/rpth
     BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/rpth
-    CONFIGURE_COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/rpth/configure ${RPTH_VERB_SWITCH} --prefix=${CMAKE_BINARY_DIR} --with-tags= --disable-shared --disable-tests ${RPTH_DEBUG_SWITCH}
+    CONFIGURE_COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/rpth/configure ${RPTH_VERB_SWITCH} --prefix=${CMAKE_BINARY_DIR} --with-tags= --disable-shared --disable-tests ${RPTH_DEBUG_SWITCH} ${RPTH_OPT_SWITCH}
     CFLAGS=-Qunused-arguments
     BUILD_COMMAND make
     BUILD_IN_SOURCE 0

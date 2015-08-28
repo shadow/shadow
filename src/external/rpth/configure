@@ -6206,7 +6206,16 @@ ac_compile='$CC -c $CFLAGS $CPPFLAGS conftest.$ac_ext >&5'
 ac_link='$CC -o conftest$ac_exeext $CFLAGS $CPPFLAGS $LDFLAGS conftest.$ac_ext $LIBS >&5'
 ac_compiler_gnu=$ac_cv_c_compiler_gnu
 
-
+if test ".${enable_debug}" = ".yes"; then :
+CFLAGS=`echo "$CFLAGS" | sed -e 's/-O2//g'`
+CFLAGS=`echo "$CFLAGS" | sed -e 's/-g//g'`
+CFLAGS="$CFLAGS -O0 -g"
+fi
+if test ".${enable_optimize}" = ".yes"; then :
+CFLAGS=`echo "$CFLAGS" | sed -e 's/-O2//g'`
+CFLAGS=`echo "$CFLAGS" | sed -e 's/-O0//g'`
+CFLAGS="$CFLAGS -O2"
+fi
 
 # Autoconf 2.13's AC_OBJEXT and AC_EXEEXT macros only works for C compilers!
 
