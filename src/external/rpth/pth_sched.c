@@ -502,33 +502,34 @@ intern void *pth_scheduler(void *dummy)
         /*
          * Check for stack overflow
          */
-        if (pth_gctx_get()->pth_current->stackguard != NULL) {
-            if (*pth_gctx_get()->pth_current->stackguard != 0xDEAD) {
-                pth_debug3("pth_scheduler: stack overflow detected for thread 0x%lx (\"%s\")",
-                           (unsigned long)pth_gctx_get()->pth_current, pth_gctx_get()->pth_current->name);
-                /*
-                 * if the application doesn't catch SIGSEGVs, we terminate
-                 * manually with a SIGSEGV now, but output a reasonable message.
-                 */
-                if (sigaction(SIGSEGV, NULL, &sa) == 0) {
-                    if (sa.sa_handler == SIG_DFL) {
-                        fprintf(stderr, "**Pth** STACK OVERFLOW: thread pid_t=0x%lx, name=\"%s\"\n",
-                                (unsigned long)pth_gctx_get()->pth_current, pth_gctx_get()->pth_current->name);
-                        kill(getpid(), SIGSEGV);
-                        sigfillset(&ss);
-                        sigdelset(&ss, SIGSEGV);
-                        sigsuspend(&ss);
-                        abort();
-                    }
+        long* sguard = pth_gctx_get()->pth_current->stackguard;
+        unsigned int ssize = pth_gctx_get()->pth_current->stacksize;
+        int did_overflow = ((ssize > 0 && sguard == NULL) || (sguard != NULL && *sguard != 0xDEAD)) ? 1 : 0;
+        if (did_overflow) {
+            pth_debug3("pth_scheduler: stack overflow detected for thread 0x%lx (\"%s\")",
+                       (unsigned long)pth_gctx_get()->pth_current, pth_gctx_get()->pth_current->name);
+            /*
+             * if the application doesn't catch SIGSEGVs, we terminate
+             * manually with a SIGSEGV now, but output a reasonable message.
+             */
+            if (sigaction(SIGSEGV, NULL, &sa) == 0) {
+                if (sa.sa_handler == SIG_DFL) {
+                    fprintf(stderr, "**Pth** STACK OVERFLOW: thread pid_t=0x%lx, name=\"%s\"\n",
+                            (unsigned long)pth_gctx_get()->pth_current, pth_gctx_get()->pth_current->name);
+                    kill(getpid(), SIGSEGV);
+                    sigfillset(&ss);
+                    sigdelset(&ss, SIGSEGV);
+                    sigsuspend(&ss);
+                    abort();
                 }
-                /*
-                 * else we terminate the thread only and send us a SIGSEGV
-                 * which allows the application to handle the situation...
-                 */
-                pth_gctx_get()->pth_current->join_arg = (void *)0xDEAD;
-                pth_gctx_get()->pth_current->state = PTH_STATE_DEAD;
-                kill(getpid(), SIGSEGV);
             }
+            /*
+             * else we terminate the thread only and send us a SIGSEGV
+             * which allows the application to handle the situation...
+             */
+            pth_gctx_get()->pth_current->join_arg = (void *)0xDEAD;
+            pth_gctx_get()->pth_current->state = PTH_STATE_DEAD;
+            kill(getpid(), SIGSEGV);
         }
 
         /*

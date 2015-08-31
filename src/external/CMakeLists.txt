@@ -28,9 +28,13 @@ EXTERNALPROJECT_ADD(
     INSTALL_COMMAND ""
 )
 
+# trying to make sure the external project gets rebuilt when a rpth src file changes.
+# i dont think this works yet...
+add_custom_target(rpth-src DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/rpth/pth_debug.c ${CMAKE_CURRENT_SOURCE_DIR}/rpth/pth_ring.c ${CMAKE_CURRENT_SOURCE_DIR}/rpth/pth_pqueue.c ${CMAKE_CURRENT_SOURCE_DIR}/rpth/pth_time.c ${CMAKE_CURRENT_SOURCE_DIR}/rpth/pth_errno.c ${CMAKE_CURRENT_SOURCE_DIR}/rpth/pth_mctx.c ${CMAKE_CURRENT_SOURCE_DIR}/rpth/pth_uctx.c ${CMAKE_CURRENT_SOURCE_DIR}/rpth/pth_tcb.c ${CMAKE_CURRENT_SOURCE_DIR}/rpth/pth_sched.c ${CMAKE_CURRENT_SOURCE_DIR}/rpth/pth_attr.c ${CMAKE_CURRENT_SOURCE_DIR}/rpth/pth_lib.c ${CMAKE_CURRENT_SOURCE_DIR}/rpth/pth_event.c ${CMAKE_CURRENT_SOURCE_DIR}/rpth/pth_data.c ${CMAKE_CURRENT_SOURCE_DIR}/rpth/pth_clean.c ${CMAKE_CURRENT_SOURCE_DIR}/rpth/pth_cancel.c ${CMAKE_CURRENT_SOURCE_DIR}/rpth/pth_msg.c ${CMAKE_CURRENT_SOURCE_DIR}/rpth/pth_sync.c ${CMAKE_CURRENT_SOURCE_DIR}/rpth/pth_fork.c ${CMAKE_CURRENT_SOURCE_DIR}/rpth/pth_util.c ${CMAKE_CURRENT_SOURCE_DIR}/rpth/pth_high.c ${CMAKE_CURRENT_SOURCE_DIR}/rpth/pth_syscall.c ${CMAKE_CURRENT_SOURCE_DIR}/rpth/pth_ext.c ${CMAKE_CURRENT_SOURCE_DIR}/rpth/pth_compat.c ${CMAKE_CURRENT_SOURCE_DIR}/rpth/pth_string.c)
+add_dependencies(rpth rpth-src)
+
 #ADD_LIBRARY(rpth-imp STATIC IMPORTED)
 #SET_TARGET_PROPERTIES(rpth PROPERTIES
 #    IMPORTED_LOCATION "${CMAKE_CURRENT_BINARY_DIR}/rpth/rpth${CMAKE_STATIC_LIBRARY_SUFFIX}"
 #    IMPORTED_IMPLIB "${CMAKE_CURRENT_BINARY_DIR}/rpth/librpth.la"
 #)
-#add_dependencies(rpth rpth-ext)

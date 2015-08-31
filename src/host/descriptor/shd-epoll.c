@@ -178,7 +178,7 @@ Epoll* epoll_new(gint handle) {
      */
     epoll->osEpollDescriptor = epoll_create(1000);
     if(epoll->osEpollDescriptor == -1) {
-        warning("error in epoll_create for OS events, errno=%i", errno);
+        warning("error in epoll_create for OS events, errno=%i msg:%s", errno, g_strerror(errno));
     }
 
     /* keep track of which virtual application we need to notify of events

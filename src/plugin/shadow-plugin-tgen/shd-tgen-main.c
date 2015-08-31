@@ -78,42 +78,44 @@ static gint _tgenmain_run(gint argc, gchar *argv[]) {
         on_exit(_tgenmain_cleanup, tgen);
     }
 
-    /* now we need to watch all the epoll descriptors in our main loop */
+    /* all of the tgen descriptors are watched internally */
+    gint tgenepolld = tgendriver_getEpollDescriptor(tgen);
+    if(tgenepolld < 0) {
+        tgen_critical("Error retrieving tgen epolld");
+        return -1;
+    }
+
+    /* now we need to watch all of the epoll descriptors in our main loop */
     gint mainepolld = epoll_create(1);
-    if(mainepolld == -1) {
+    if(mainepolld < 0) {
         tgen_critical("Error in main epoll_create");
-        close(mainepolld);
         return -1;
     }
 
     /* register the tgen epoll descriptor so we can watch its events */
     struct epoll_event mainevent;
+    memset(&mainevent, 0, sizeof(struct epoll_event));
     mainevent.events = EPOLLIN|EPOLLOUT;
-    mainevent.data.fd = tgendriver_getEpollDescriptor(tgen);
-    if(!mainevent.data.fd) {
-        tgen_critical("Error retrieving tgen epolld");
-        close(mainepolld);
-        return -1;
-    }
-    epoll_ctl(mainepolld, EPOLL_CTL_ADD, mainevent.data.fd, &mainevent);
+    epoll_ctl(mainepolld, EPOLL_CTL_ADD, tgenepolld, &mainevent);
 
     /* main loop - wait for events on the trafficgen epoll descriptors */
-    struct epoll_event tgenevents[100];
-    int nReadyFDs;
     tgen_message("entering main loop to watch descriptors");
-
     while(TRUE) {
-        /* wait for some events */
+        /* clear the event space */
+        memset(&mainevent, 0, sizeof(struct epoll_event));
+
+        /* wait for an event on the tgen descriptor */
         tgen_debug("waiting for events");
-        nReadyFDs = epoll_wait(mainepolld, tgenevents, 100, -1);
+        gint nReadyFDs = epoll_wait(mainepolld, &mainevent, 1, -1);
+
         if(nReadyFDs == -1) {
             tgen_critical("error in client epoll_wait");
             return -1;
         }
 
         /* activate if something is ready */
-        tgen_debug("processing event");
         if(nReadyFDs > 0) {
+            tgen_debug("processing event");
             tgendriver_activate(tgen);
         }
 
@@ -125,17 +127,13 @@ static gint _tgenmain_run(gint argc, gchar *argv[]) {
 
     tgen_message("finished main loop, cleaning up");
 
-    /* de-register the tgen epoll descriptor */
-    mainevent.data.fd = tgendriver_getEpollDescriptor(tgen);
-    if(mainevent.data.fd) {
-        epoll_ctl(mainepolld, EPOLL_CTL_DEL, mainevent.data.fd, &mainevent);
-    }
-
-    /* close */
+    /* de-register the tgen epoll descriptor and close */
+    epoll_ctl(mainepolld, EPOLL_CTL_DEL, tgenepolld, NULL);
     close(mainepolld);
 
     tgen_message("returning 0 from main");
 
+    /* _tgenmain_cleanup() should get called via on_exit */
     return 0;
 }
 

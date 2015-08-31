@@ -425,6 +425,18 @@ static void _process_executeCleanup(Process* proc) {
         g_free(atexitData);
     }
 
+    /* flush program output */
+    if(proc->stdoutFile) {
+        fflush(proc->stdoutFile);
+        fclose(proc->stdoutFile);
+        proc->stdoutFile = NULL;
+    }
+    if(proc->stderrFile) {
+        fflush(proc->stderrFile);
+        fclose(proc->stderrFile);
+        proc->stderrFile = NULL;
+    }
+
     /* the main thread is done and will be joined by pth */
     proc->programMainThread = NULL;
 
@@ -458,7 +470,7 @@ static void* _process_executeMain(Process* proc) {
     gchar** argv;
     gint argc = _process_getArguments(proc, &argv);
 
-    info("calling main() for '%s' process", g_quark_to_string(proc->programID));
+    message("calling main() for '%s' process", g_quark_to_string(proc->programID));
 
     /* time how long we execute the program */
     g_timer_start(proc->cpuDelayTimer);
@@ -476,7 +488,8 @@ static void* _process_executeMain(Process* proc) {
     gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);
     _process_handleTimerResult(proc, elapsed);
 
-    message("main() for '%s' process returned code '%i'", g_quark_to_string(proc->programID), returnCode);
+    message("main %s code '%i' for process '%s-%u'", ((returnCode==0) ? "success" : "error"),
+            returnCode, g_quark_to_string(proc->programID), proc->processID);
 
     if(returnCode != 0) {
         worker_incrementPluginError();
