@@ -642,7 +642,7 @@ void process_continue(Process* proc) {
     /* if the main thread closed, this process is done */
     if(!proc->programMainThread) {
         /* now we are done with all pth state */
-        pth_gctx_free(proc->tstate);
+//        pth_gctx_free(proc->tstate); // XXX FIXME this causes other nodes' processes to end also:(
         proc->tstate = NULL;
     }
 
