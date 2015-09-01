@@ -163,6 +163,9 @@ intern int pth_mctx_set(
     if (getcontext(&(mctx->uc)) != 0)
         return FALSE;
 
+    /* initialize empty signal set */
+    sigemptyset(&mctx->sigs);
+
     /* remove parent link */
     mctx->uc.uc_link           = NULL;
 

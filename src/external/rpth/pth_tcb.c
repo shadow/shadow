@@ -64,6 +64,7 @@ struct pth_st {
     int            stackloan;            /* stack type                                  */
     void        *(*start_func)(void *);  /* start routine                               */
     void          *start_arg;            /* start argument                              */
+    int            valgrind_id;
 
     /* thread joining */
     int            joinable;             /* whether thread is joinable                  */
@@ -100,6 +101,11 @@ intern const char *pth_state_names[] = {
 #define SIGSTKSZ 8192
 #endif
 
+#define PTH_VALGRIND 1
+#ifdef PTH_VALGRIND
+#include <valgrind/valgrind.h>
+#endif
+
 /* allocate a thread control block */
 intern pth_t pth_tcb_alloc(unsigned int stacksize, void *stackaddr)
 {
@@ -107,21 +113,31 @@ intern pth_t pth_tcb_alloc(unsigned int stacksize, void *stackaddr)
 
     if (stacksize > 0 && stacksize < SIGSTKSZ)
         stacksize = SIGSTKSZ;
-    if ((t = (pth_t)malloc(sizeof(struct pth_st))) == NULL)
+    if ((t = (pth_t)calloc(1, sizeof(struct pth_st))) == NULL)
         return NULL;
+
     t->stacksize  = stacksize;
     t->stack      = NULL;
     t->stackguard = NULL;
     t->stackloan  = (stackaddr != NULL ? TRUE : FALSE);
+    t->valgrind_id = -1;
+
     if (stacksize > 0) { /* stacksize == 0 means "main" thread */
         if (stackaddr != NULL)
             t->stack = (char *)(stackaddr);
         else {
-            if ((t->stack = (char *)malloc(stacksize)) == NULL) {
+            if ((t->stack = (char *)calloc(1, stacksize)) == NULL) {
                 pth_shield { free(t); }
                 return NULL;
             }
         }
+
+#ifdef PTH_VALGRIND
+        t->valgrind_id = VALGRIND_STACK_REGISTER(t->stack, &t->stack[stacksize]);
+        pth_debug4("pth_tcb_alloc: allocated new stack at [0x%p-0x%p] with valgrind id %i",
+                t->stack, &t->stack[stacksize], t->valgrind_id);
+#endif
+
 #if PTH_STACKGROWTH < 0
         /* guard is at lowest address (alignment is guarrantied) */
         t->stackguard = (long *)((long)t->stack); /* double cast to avoid alignment warning */
@@ -131,6 +147,7 @@ intern pth_t pth_tcb_alloc(unsigned int stacksize, void *stackaddr)
 #endif
         *t->stackguard = 0xDEAD;
     }
+
     t->epoll_fd = pth_sc(epoll_create)(1);
     return t;
 }
@@ -141,12 +158,23 @@ intern void pth_tcb_free(pth_t t)
     if (t == NULL)
         return;
     pth_sc(close)(t->epoll_fd);
-    if (t->stack != NULL && !t->stackloan)
+    if (t->stack != NULL && !t->stackloan) {
+        if(t->stacksize > 0) {
+            memset(t->stack, 0, (size_t)t->stacksize);
+        }
         free(t->stack);
+    }
     if (t->data_value != NULL)
         free(t->data_value);
     if (t->cleanups != NULL)
         pth_cleanup_popall(t, FALSE);
+#ifdef PTH_VALGRIND
+#ifdef PTH_DEBUG
+    if (t->valgrind_id >= 0)
+        VALGRIND_STACK_DEREGISTER(t->valgrind_id);
+#endif
+#endif
+    memset(t, 0, sizeof(struct pth_st));
     free(t);
     return;
 }

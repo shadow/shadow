@@ -29,8 +29,8 @@ static const gchar* _tgenmain_logLevelToString(GLogLevelFlags logLevel) {
 }
 
 static void _tgenmain_logHandler(const gchar *logDomain, GLogLevelFlags logLevel,
-        const gchar *message, GLogLevelFlags* userData) {
-    GLogLevelFlags filter = *userData;
+        const gchar *message, gpointer userData) {
+    GLogLevelFlags filter = (GLogLevelFlags)GPOINTER_TO_INT(userData);
     if(logLevel <= filter) {
         g_print("%s\n", message);
     }
@@ -65,9 +65,9 @@ static void _tgenmain_cleanup(gint status, gpointer arg) {
 }
 
 static gint _tgenmain_run(gint argc, gchar *argv[]) {
-    GLogLevelFlags filter = G_LOG_LEVEL_MESSAGE;
+    gpointer filter = GINT_TO_POINTER(G_LOG_LEVEL_MESSAGE);
     g_log_set_handler(TGEN_LOG_DOMAIN, G_LOG_LEVEL_MASK | G_LOG_FLAG_FATAL | G_LOG_FLAG_RECURSION,
-            (GLogFunc)_tgenmain_logHandler, &filter);
+            _tgenmain_logHandler, filter);
 
     /* create the new state according to user inputs */
     TGenDriver* tgen = tgendriver_new(argc, argv, &_tgenmain_log);

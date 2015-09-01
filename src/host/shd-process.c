@@ -331,9 +331,12 @@ static void _process_executeAtFork(ProcessAtForkCallbackData* data) {
             _process_changeContext(proc, PCTX_PLUGIN, PCTX_SHADOW);
         }
 
+        int count = data->proc->referenceCount;
         process_unref(data->proc);
         g_free(data);
-        _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
+        if(count > 1) {
+            _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
+        }
     }
 }
 
@@ -441,10 +444,13 @@ static void _process_executeCleanup(Process* proc) {
     proc->programMainThread = NULL;
 
     /* unref for the cleanup func */
+    int count = proc->referenceCount;
     process_unref(proc);
 
     /* we return to pth control */
-    _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
+    if(count > 1) {
+        _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
+    }
 }
 
 static void* _process_executeMain(Process* proc) {
@@ -1877,6 +1883,9 @@ ssize_t process_emu_read(Process* proc, int fd, void *buff, size_t numbytes) {
 
 ssize_t process_emu_write(Process* proc, int fd, const void *buff, size_t n) {
     gssize ret = 0;
+    if(n == 0) {
+        return ret;
+    }
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
 
     if(prevCTX == PCTX_PLUGIN && host_isShadowDescriptor(proc->host, fd)) {
@@ -1887,10 +1896,11 @@ ssize_t process_emu_write(Process* proc, int fd, const void *buff, size_t n) {
     } else if(prevCTX == PCTX_PLUGIN && (fd == STDOUT_FILENO || fd == STDERR_FILENO)) {
         ret = fwrite(buff, 1, n, _process_getIOFile(proc, fd));
     } else if(prevCTX == PCTX_PTH && (fd == STDOUT_FILENO || fd == STDERR_FILENO)) {
+        /* XXX this hack is to remove rpth's newline char since shadow will add another one */
         if(fd == STDERR_FILENO) {
-            error("%.*s", n, buff);
+            error("%.*s", n-1, buff);
         } else {
-            debug("%.*s", n, buff);
+            debug("%.*s", n-1, buff);
         }
     } else {
         if(host_isShadowDescriptor(proc->host, fd)){
