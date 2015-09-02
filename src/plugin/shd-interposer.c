@@ -207,6 +207,8 @@ typedef int (*fflush_func)(FILE *);
 typedef time_t (*time_func)(time_t*);
 typedef int (*clock_gettime_func)(clockid_t, struct timespec *);
 typedef int (*gettimeofday_func)(struct timeval*, struct timezone*);
+typedef struct tm *(*localtime_func)(const time_t *timep);
+typedef struct tm *(*localtime_r_func)(const time_t *timep, struct tm *result);
 
 /* name/address family */
 
@@ -480,6 +482,8 @@ typedef struct {
     time_func time;
     clock_gettime_func clock_gettime;
     gettimeofday_func gettimeofday;
+    localtime_func localtime;
+    localtime_r_func localtime_r;
 
     gethostname_func gethostname;
     getaddrinfo_func getaddrinfo;
@@ -784,6 +788,9 @@ static void _interposer_globalInitialize() {
     SETSYM_OR_FAIL(director.next.time, "time");
     SETSYM_OR_FAIL(director.next.clock_gettime, "clock_gettime");
     SETSYM_OR_FAIL(director.next.gettimeofday, "gettimeofday");
+    SETSYM_OR_FAIL(director.next.localtime, "localtime");
+    SETSYM_OR_FAIL(director.next.localtime_r, "localtime_r");
+
     SETSYM_OR_FAIL(director.next.gethostname, "gethostname");
     SETSYM_OR_FAIL(director.next.getaddrinfo, "getaddrinfo");
     SETSYM_OR_FAIL(director.next.freeaddrinfo, "freeaddrinfo");
@@ -1210,6 +1217,8 @@ INTERPOSE(int fflush(FILE *a), fflush, a);
 INTERPOSE(time_t time(time_t *a), time, a);
 INTERPOSE(int clock_gettime(clockid_t a, struct timespec *b), clock_gettime, a, b);
 INTERPOSE(int gettimeofday(struct timeval* a, struct timezone* b), gettimeofday, a, b);
+INTERPOSE(struct tm *localtime(const time_t *a), localtime, a);
+INTERPOSE(struct tm *localtime_r(const time_t *a, struct tm *b), localtime_r, a, b);
 
 /* name/address family */
 

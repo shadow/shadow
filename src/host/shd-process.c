@@ -159,6 +159,9 @@ struct _Process {
     /* other state for pthread interface */
     gint pthread_concurrency;
 
+    /* static buffers */
+    struct tm timeBuffer;
+
     gint referenceCount;
     MAGIC_DECLARE;
 };
@@ -2457,16 +2460,22 @@ int process_emu_open(Process* proc, const char *pathname, int flags, mode_t mode
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     int result = 0;
 
-    gint osfd = open(pathname, flags, mode);
-    gint shadowfd = osfd >= 3 ? host_createShadowHandle(proc->host, osfd) : osfd;
+    if(prevCTX == PCTX_PLUGIN && g_ascii_strncasecmp(pathname, "/etc/localtime", 14) == 0) {
+        /* return error, glib will use UTC time */
+        result = -1;
+        errno = EEXIST;
+    } else {
+        gint osfd = open(pathname, flags, mode);
+        gint shadowfd = osfd >= 3 ? host_createShadowHandle(proc->host, osfd) : osfd;
 
-    if(utility_isRandomPath((gchar*)pathname)) {
-        host_setRandomHandle(proc->host, shadowfd);
+        if(utility_isRandomPath((gchar*)pathname)) {
+            host_setRandomHandle(proc->host, shadowfd);
+        }
+
+        result = shadowfd;
     }
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
-    result = shadowfd;
-
     return result;
 }
 
@@ -2487,13 +2496,19 @@ int process_emu_creat(Process* proc, const char *pathname, mode_t mode) {
 FILE *process_emu_fopen(Process* proc, const char *path, const char *mode) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
 
-    FILE* osfile = fopen(path, mode);
-    if(osfile) {
-        gint osfd = fileno(osfile);
-        gint shadowfd = osfd >= 3 ? host_createShadowHandle(proc->host, osfd) : osfd;
+    FILE* osfile = NULL;
+    if(prevCTX == PCTX_PLUGIN && g_ascii_strncasecmp(path, "/etc/localtime", 14) == 0) {
+        /* return error, glib will use UTC time */
+        errno = EEXIST;
+    } else {
+        osfile = fopen(path, mode);
+        if(osfile) {
+            gint osfd = fileno(osfile);
+            gint shadowfd = osfd >= 3 ? host_createShadowHandle(proc->host, osfd) : osfd;
 
-        if(utility_isRandomPath((gchar*)path)) {
-            host_setRandomHandle(proc->host, shadowfd);
+            if(utility_isRandomPath((gchar*)path)) {
+                host_setRandomHandle(proc->host, shadowfd);
+            }
         }
     }
 
@@ -3261,6 +3276,15 @@ int process_emu_gettimeofday(Process* proc, struct timeval* tv, struct timezone*
         _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     }
     return 0;
+}
+
+struct tm* process_emu_localtime(Process* proc, const time_t *timep) {
+    return process_emu_localtime_r(proc, timep, &proc->timeBuffer);
+}
+
+struct tm* process_emu_localtime_r(Process* proc, const time_t *timep, struct tm *result) {
+    /* return time relative to UTC so SimTime 0 corresponds to Jan 1 1970 */
+    return gmtime_r(timep, result);
 }
 
 

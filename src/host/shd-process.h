@@ -148,6 +148,8 @@ int process_emu_fflush(Process* proc, FILE *stream);
 time_t process_emu_time(Process* proc, time_t *t);
 int process_emu_clock_gettime(Process* proc, clockid_t clk_id, struct timespec *tp);
 int process_emu_gettimeofday(Process* proc, struct timeval* tv, struct timezone *tz);
+struct tm* process_emu_localtime(Process* proc, const time_t *timep);
+struct tm* process_emu_localtime_r(Process* proc, const time_t *timep, struct tm *result);
 
 /* name/address family */
 
