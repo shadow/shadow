@@ -238,10 +238,10 @@ static void _process_free(Process* proc) {
     g_free(proc);
 }
 
-static FILE* _process_openFile(Process* proc, const gchar* suffix) {
+static FILE* _process_openFile(Process* proc, const gchar* prefix) {
     const gchar* hostDataPath = host_getDataPath(proc->host);
     GString* fileNameString = g_string_new(NULL);
-    g_string_printf(fileNameString, "%s.%u.%s", g_quark_to_string(proc->programID), proc->processID, suffix);
+    g_string_printf(fileNameString, "%s.%s.%u", prefix, g_quark_to_string(proc->programID), proc->processID);
     gchar* pathStr = g_build_filename(hostDataPath, fileNameString->str, NULL);
     FILE* f = fopen(pathStr, "a");
     g_string_free(fileNameString, TRUE);
@@ -479,7 +479,7 @@ static void* _process_executeMain(Process* proc) {
     gchar** argv;
     gint argc = _process_getArguments(proc, &argv);
 
-    message("calling main() for '%s' process", g_quark_to_string(proc->programID));
+    message("calling main() for '%s-%u' process", g_quark_to_string(proc->programID), proc->processID);
 
     /* time how long we execute the program */
     g_timer_start(proc->cpuDelayTimer);
@@ -493,16 +493,31 @@ static void* _process_executeMain(Process* proc) {
     /* the program's main function has returned or exited, this process has completed */
     _process_changeContext(proc, PCTX_PLUGIN, PCTX_SHADOW);
 
+    /* commit output to file asap */
+    if(proc->stdoutFile) {
+        fflush(proc->stdoutFile);
+    }
+    if(proc->stderrFile) {
+        fflush(proc->stderrFile);
+    }
+
     /* no need to call stop */
     gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);
     _process_handleTimerResult(proc, elapsed);
 
-    message("main %s code '%i' for process '%s-%u'", ((returnCode==0) ? "success" : "error"),
+    GString* mainResultString = g_string_new(NULL);
+    g_string_printf(mainResultString, "main %s code '%i' for process '%s-%u'",
+            ((returnCode==0) ? "success" : "error"),
             returnCode, g_quark_to_string(proc->programID), proc->processID);
 
-    if(returnCode != 0) {
+    if(returnCode == 0) {
+        message("%s", mainResultString->str);
+    } else {
+        warning("%s", mainResultString->str);
         worker_incrementPluginError();
     }
+
+    g_string_free(mainResultString, TRUE);
 
     /* free the arguments */
     for(gint i = 0; i < argc; i++) {
