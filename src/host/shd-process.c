@@ -242,7 +242,7 @@ static void _process_free(Process* proc) {
 static FILE* _process_openFile(Process* proc, const gchar* prefix) {
     const gchar* hostDataPath = host_getDataPath(proc->host);
     GString* fileNameString = g_string_new(NULL);
-    g_string_printf(fileNameString, "%s.%s.%u", prefix, g_quark_to_string(proc->programID), proc->processID);
+    g_string_printf(fileNameString, "%s-%s-%u.log", prefix, g_quark_to_string(proc->programID), proc->processID);
     gchar* pathStr = g_build_filename(hostDataPath, fileNameString->str, NULL);
     FILE* f = g_fopen(pathStr, "a");
     g_string_free(fileNameString, TRUE);
