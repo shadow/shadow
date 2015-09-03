@@ -105,6 +105,7 @@ struct _TCP {
         guint32 lastWindow;
         guint32 lastAcknowledgment;
         guint32 lastSequence;
+        gboolean windowUpdatePending;
         GList* lastSelectiveACKs;
     } receive;
 
@@ -1824,6 +1825,21 @@ gssize tcp_sendUserData(TCP* tcp, gconstpointer buffer, gsize nBytes, in_addr_t 
     return (gssize) (bytesCopied == 0 ? -1 : bytesCopied);
 }
 
+static void _tcp_sendWindowUpdate(TCP* tcp, gpointer data) {
+    MAGIC_ASSERT(tcp);
+    debug("%s <-> %s: receive window opened, advertising the new "
+            "receive window %"G_GUINT32_FORMAT" as an ACK control packet",
+            tcp->super.boundString, tcp->super.peerString, tcp->receive.window);
+
+    // XXX we may be in trouble if this packet gets dropped
+    Packet* windowUpdate = _tcp_createPacket(tcp, PTCP_ACK, NULL, 0);
+    _tcp_bufferPacketOut(tcp, windowUpdate);
+    _tcp_flush(tcp);
+
+    tcp->receive.windowUpdatePending = FALSE;
+    descriptor_unref(&tcp->super.super.super);
+}
+
 gssize tcp_receiveUserData(TCP* tcp, gpointer buffer, gsize nBytes, in_addr_t* ip, in_port_t* port) {
     MAGIC_ASSERT(tcp);
 
@@ -1942,19 +1958,14 @@ gssize tcp_receiveUserData(TCP* tcp, gpointer buffer, gsize nBytes, in_addr_t* i
     /* if we have advertised a 0 window because the application wasn't reading,
      * we now have to update the window and let the sender know */
     _tcp_updateReceiveWindow(tcp);
-    if(tcp->receive.window > tcp->send.lastWindow) {
+    if(tcp->receive.window > tcp->send.lastWindow && !tcp->receive.windowUpdatePending) {
         /* our receive window just opened, make sure the sender knows it can
-         * send more. otherwise we get into a deadlock situation! */
-        debug("%s <-> %s: receive window opened, advertising the new "
-                "receive window %"G_GUINT32_FORMAT" as an ACK control packet",
-                tcp->super.boundString, tcp->super.peerString, tcp->receive.window);
-        // XXX we may be in trouble if this packet gets dropped
-        // FIXME because of the way data gets read, we usually end up sending multiple
-        // ACKS at the same time instant, sometimes over twenty of them. we only need one to cover
-        // the highest receive window
-        Packet* windowUpdate = _tcp_createPacket(tcp, PTCP_ACK, NULL, 0);
-        _tcp_bufferPacketOut(tcp, windowUpdate);
-        _tcp_flush(tcp);
+         * send more. otherwise we get into a deadlock situation!
+         * make sure we don't send multiple events when read is called many times per instant */
+        descriptor_ref(&tcp->super.super.super);
+        CallbackEvent* event = callback_new((CallbackFunc)_tcp_sendWindowUpdate, tcp, NULL);
+        worker_scheduleEvent((Event*)event, (SimulationTime)1, 0);
+        tcp->receive.windowUpdatePending = TRUE;
     }
 
     debug("%s <-> %s: receiving %"G_GSIZE_FORMAT" user bytes", tcp->super.boundString, tcp->super.peerString, totalCopied);
