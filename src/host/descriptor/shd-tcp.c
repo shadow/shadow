@@ -1945,10 +1945,13 @@ gssize tcp_receiveUserData(TCP* tcp, gpointer buffer, gsize nBytes, in_addr_t* i
     if(tcp->receive.window > tcp->send.lastWindow) {
         /* our receive window just opened, make sure the sender knows it can
          * send more. otherwise we get into a deadlock situation! */
-        info("%s <-> %s: receive window opened, advertising the new "
+        debug("%s <-> %s: receive window opened, advertising the new "
                 "receive window %"G_GUINT32_FORMAT" as an ACK control packet",
                 tcp->super.boundString, tcp->super.peerString, tcp->receive.window);
         // XXX we may be in trouble if this packet gets dropped
+        // FIXME because of the way data gets read, we usually end up sending multiple
+        // ACKS at the same time instant, sometimes over twenty of them. we only need one to cover
+        // the highest receive window
         Packet* windowUpdate = _tcp_createPacket(tcp, PTCP_ACK, NULL, 0);
         _tcp_bufferPacketOut(tcp, windowUpdate);
         _tcp_flush(tcp);

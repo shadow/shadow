@@ -85,10 +85,12 @@ static void _tgendriver_onBytesTransferred(TGenDriver* driver, gsize bytesRead, 
 static gboolean _tgendriver_onHeartbeat(TGenDriver* driver, gpointer nullData) {
     TGEN_ASSERT(driver);
 
-    tgen_message("[driver-heartbeat] transfers-completed=%"G_GUINT64_FORMAT" bytes-read=%"G_GSIZE_FORMAT" "
-            "bytes-write=%"G_GSIZE_FORMAT" transfers-error=%"G_GUINT64_FORMAT,
-            driver->heartbeatTransfersCompleted, driver->heartbeatBytesRead,
-            driver->heartbeatBytesWritten, driver->heartbeatTransferErrors);
+    tgen_message("[driver-heartbeat] bytes-read=%"G_GSIZE_FORMAT" bytes-written=%"G_GSIZE_FORMAT
+            " current-transfers-succeeded=%"G_GUINT64_FORMAT" current-transfers-failed=%"G_GUINT64_FORMAT,
+            " total-transfers-succeeded=%"G_GUINT64_FORMAT" total-transfers-failed=%"G_GUINT64_FORMAT,
+            driver->heartbeatBytesRead, driver->heartbeatBytesWritten,
+            driver->heartbeatTransfersCompleted, driver->heartbeatTransferErrors,
+            driver->totalTransfersCompleted, driver->totalTransferErrors);
 
     driver->heartbeatTransfersCompleted = 0;
     driver->heartbeatTransferErrors = 0;

@@ -393,8 +393,9 @@ static void _process_executeCleanup(Process* proc) {
     utility_assert(process_isRunning(proc));
     utility_assert(worker_getActiveProcess() == proc);
 
-    debug("aborting %i auxiliary threads for '%s' process",
-            g_queue_get_length(proc->programAuxiliaryThreads), g_quark_to_string(proc->programID));
+    message("cleaning up '%s-%u' process: aborting %u auxiliary threads and calling %u atexit functions",
+            g_quark_to_string(proc->programID), proc->processID,
+            g_queue_get_length(proc->programAuxiliaryThreads), g_queue_get_length(proc->atExitFunctions));
 
     /* closing the main thread causes all other threads to get terminated */
     while(g_queue_get_length(proc->programAuxiliaryThreads) > 0) {
@@ -407,8 +408,7 @@ static void _process_executeCleanup(Process* proc) {
     }
     g_queue_free(proc->programAuxiliaryThreads);
 
-    debug("calling atexit funcs for '%s' process", g_quark_to_string(proc->programID));
-
+    /* calling the process atexit funcs. these shouldnt use any thread data that got deleted above */
     while(proc->atExitFunctions && g_queue_get_length(proc->atExitFunctions) > 0) {
         ProcessExitCallbackData* atexitData = g_queue_pop_head(proc->atExitFunctions);
 
@@ -564,13 +564,13 @@ void process_start(Process* proc) {
         return;
     }
 
-    info("starting '%s' process and pth threading system", g_quark_to_string(proc->programID));
+    message("starting '%s-%u' process and pth threading system", g_quark_to_string(proc->programID), proc->processID);
 
     /* create the thread names while still in shadow context, format is host.process.<id> */
     GString* shadowThreadNameBuf = g_string_new(NULL);
-    g_string_printf(shadowThreadNameBuf, "%s.%s.shadow", host_getName(proc->host), g_quark_to_string(proc->programID));
+    g_string_printf(shadowThreadNameBuf, "%s.%s.%u.shadow", host_getName(proc->host), g_quark_to_string(proc->programID), proc->processID);
     GString* programMainThreadNameBuf = g_string_new(NULL);
-    g_string_printf(programMainThreadNameBuf, "%s.%s.main", host_getName(proc->host), g_quark_to_string(proc->programID));
+    g_string_printf(programMainThreadNameBuf, "%s.%s.%u.main", host_getName(proc->host), g_quark_to_string(proc->programID), proc->processID);
 
     utility_assert(proc->programAuxiliaryThreads == NULL);
     proc->programAuxiliaryThreads = g_queue_new();
@@ -626,8 +626,8 @@ void process_start(Process* proc) {
     program_swapOutState(proc->prog, proc->pstate);
     worker_setActiveProcess(NULL);
 
-    info("'%s' process initialization is complete, main thread %s running",
-            g_quark_to_string(proc->programID), process_isRunning(proc) ? "is" : "is not");
+    message("'%s-%u' process initialization is complete, main thread %s running",
+            g_quark_to_string(proc->programID), proc->processID, process_isRunning(proc) ? "is" : "is not");
 
     /* cleanup */
     g_string_free(shadowThreadNameBuf, TRUE);
@@ -642,7 +642,7 @@ void process_continue(Process* proc) {
         return;
     }
 
-    info("continuing execution of '%s' process and threads", g_quark_to_string(proc->programID));
+    info("switching to rpth to continue '%s-%u' process/threads", g_quark_to_string(proc->programID), proc->processID);
 
     /* there is some i/o or event available, let pth handle it
      * we will execute in the pth/plugin context, so we need to load the state */
@@ -701,7 +701,7 @@ void process_stop(Process* proc) {
         return;
     }
 
-    info("terminating main thread of '%s' process", g_quark_to_string(proc->programID));
+    message("terminating main thread of '%s-%u' process", g_quark_to_string(proc->programID), proc->processID);
 
     worker_setActiveProcess(proc);
     program_swapInState(proc->prog, proc->pstate);
