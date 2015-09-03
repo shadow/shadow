@@ -224,7 +224,6 @@ gint shadow_main(gint argc, gchar* argv[]) {
                 return -1;
             }
 
-            g_printerr("** got exit status %i from child\n", exitStatus);
             /* child was run */
             return (exitStatus == 0) ? 0 : -1;
         }
@@ -248,5 +247,6 @@ gint shadow_main(gint argc, gchar* argv[]) {
     }
 
     configuration_free(config);
+    g_printerr("** shadow returning code %i (%s)\n", returnCode, (returnCode == 0) ? "success" : "error");
     return returnCode;
 }
