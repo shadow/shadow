@@ -45,6 +45,7 @@
 #include <pthread.h>
 #include <rpth.h>
 #include <glib.h>
+#include <glib/gstdio.h>
 
 #if defined(FD_SETSIZE)
 #if FD_SETSIZE > 1024
@@ -243,7 +244,7 @@ static FILE* _process_openFile(Process* proc, const gchar* prefix) {
     GString* fileNameString = g_string_new(NULL);
     g_string_printf(fileNameString, "%s.%s.%u", prefix, g_quark_to_string(proc->programID), proc->processID);
     gchar* pathStr = g_build_filename(hostDataPath, fileNameString->str, NULL);
-    FILE* f = fopen(pathStr, "a");
+    FILE* f = g_fopen(pathStr, "a");
     g_string_free(fileNameString, TRUE);
     g_free(pathStr);
     return f;
@@ -3216,7 +3217,7 @@ int process_emu_puts(Process* proc, const char *s) {
 
 int process_emu_vprintf(Process* proc, const char *format, va_list ap) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-    int ret = vfprintf(_process_getIOFile(proc, STDOUT_FILENO), format, ap);
+    int ret = g_vfprintf(_process_getIOFile(proc, STDOUT_FILENO), format, ap);
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
 }
@@ -3227,9 +3228,9 @@ int process_emu_vfprintf(Process* proc, FILE *stream, const char *format, va_lis
 
     int fd = fileno(stream);
     if(prevCTX == PCTX_PLUGIN && (fd == STDOUT_FILENO || fd == STDERR_FILENO)) {
-        ret = vfprintf(_process_getIOFile(proc, fd), format, ap);
+        ret = g_vfprintf(_process_getIOFile(proc, fd), format, ap);
     } else {
-        ret = vfprintf(stream, format, ap);
+        ret = g_vfprintf(stream, format, ap);
     }
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
