@@ -101,7 +101,8 @@ intern const char *pth_state_names[] = {
 #define SIGSTKSZ 8192
 #endif
 
-#define PTH_VALGRIND 1
+//#define PTH_VALGRIND 1
+#undef PTH_VALGRIND
 #ifdef PTH_VALGRIND
 #include <valgrind/valgrind.h>
 #endif
