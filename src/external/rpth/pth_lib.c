@@ -169,6 +169,11 @@ void pth_gctx_free(pth_gctx_t gctx)
     free(gctx);
 }
 
+int pth_gctx_get_main_epollfd(pth_gctx_t gctx) {
+    if(!gctx) return -1;
+    return gctx->main_efd;
+}
+
 /* initialize the package */
 
 static int pth_init_helper(void)

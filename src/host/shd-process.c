@@ -124,6 +124,8 @@ struct _Process {
     ProgramState pstate;
     /* the portable thread state this process uses when executing the program */
     pth_gctx_t tstate;
+    /* the main fd used to wait for notifications from shadow */
+    gint epollfd;
 
     /* shadow runs in pths 'main' thread */
     pth_t shadowThread;
@@ -600,6 +602,9 @@ void process_start(Process* proc) {
     /* pth_gctx_new implicitly created a 'main' thread, which shadow now runs in */
     proc->shadowThread = pth_self();
 
+    /* it also created a special epollfd which we will use to continue the pth scheduler */
+    proc->epollfd = pth_gctx_get_main_epollfd(proc->tstate);
+
     /* set some defaults for out special shadow thread: not joinable, and set the
      * min (worst) priority so that all other threads will run before coming back to shadow
      * (the main thread is special in pth, and has a stack size of 0 internally ) */
@@ -691,6 +696,15 @@ void process_continue(Process* proc) {
         utility_assert(!process_isRunning(proc));
 
         info("'%s-%u' has completed or is otherwise no longer running", g_quark_to_string(proc->programID), proc->processID);
+    }
+}
+
+gboolean process_wantsNotify(Process* proc, gint epollfd) {
+    MAGIC_ASSERT(proc);
+    if(process_isRunning(proc) && epollfd == proc->epollfd) {
+        return TRUE;
+    } else {
+        return FALSE;
     }
 }
 

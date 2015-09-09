@@ -430,6 +430,7 @@ extern pth_gctx_t     pth_gctx_new(int);
 extern void           pth_gctx_free(pth_gctx_t);
 extern void           pth_gctx_set(pth_gctx_t);
 extern pth_gctx_t     pth_gctx_get(void);
+extern int            pth_gctx_get_main_epollfd(pth_gctx_t);
 
     /* thread attribute functions */
 extern pth_attr_t     pth_attr_of(pth_t);

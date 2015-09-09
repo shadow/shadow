@@ -661,7 +661,6 @@ int pth_epoll_wait(int epfd, struct epoll_event *events, int maxevents, int time
 int pth_epoll_wait_ev(int epfd, struct epoll_event *events, int maxevents, int timeout, pth_event_t ev_extra) {
     pth_event_t ev_epoll;
     pth_event_t ev_timeout;
-    int rc;
 
     if(timeout == 0) {
         /* this should return immediately, so there is no need to manage blocking or timeouts */
@@ -677,25 +676,10 @@ int pth_epoll_wait_ev(int epfd, struct epoll_event *events, int maxevents, int t
     if (!pth_util_fd_valid(epfd))
         return pth_error(-1, EBADF);
 
-    int epfd_tmp = pth_sc(epoll_create)(1);
-    if(epfd_tmp < 0)
-        return pth_error(-1, EINVAL);
-
-    struct epoll_event epev;
-    memset(&epev, 0, sizeof(struct epoll_event));
-    epev.events = EPOLLIN;
-    epev.data.fd = epfd;
-
-    rc = pth_sc(epoll_ctl)(epfd_tmp, EPOLL_CTL_ADD, epfd, &epev);
-    if(rc < 0) {
-        pth_sc(close)(epfd_tmp);
-        return pth_error(-1, errno);
-    }
-
     /* suspend current thread until one filedescriptor in events is ready,
      * (in which case our outer epfd_tmp will be readable)
        or the timeout occurred */
-    ev_epoll = pth_event(PTH_EVENT_FD|PTH_UNTIL_FD_READABLE, epfd_tmp);
+    ev_epoll = pth_event(PTH_EVENT_FD|PTH_UNTIL_FD_READABLE, epfd);
 
     ev_timeout = NULL;
     if (timeout != 0) {
@@ -717,9 +701,6 @@ int pth_epoll_wait_ev(int epfd, struct epoll_event *events, int maxevents, int t
         pth_event_isolate(ev_extra);
     if (timeout != 0)
         pth_event_isolate(ev_timeout);
-
-    rc = pth_sc(epoll_ctl)(epfd_tmp, EPOLL_CTL_DEL, epfd, NULL);
-    rc = pth_sc(close)(epfd_tmp);
 
     /* return code semantics */
     int epoll_failed = pth_event_status(ev_epoll) == PTH_STATUS_FAILED;

@@ -24,6 +24,7 @@ void process_start(Process* proc);
 void process_continue(Process* proc);
 void process_stop(Process* proc);
 
+gboolean process_wantsNotify(Process* proc, gint epollfd);
 gboolean process_isRunning(Process* proc);
 gboolean process_shouldEmulate(Process* proc);
 

@@ -104,59 +104,6 @@ intern void pth_scheduler_kill(void)
 }
 
 
-static void pth_sched_check_epoll_events(pth_t t) {
-    if(!t || !t->events) {
-        return;
-    }
-
-    int n_events_waiting = 0;
-    pth_event_t ev_iter = t->events;
-    do {
-        n_events_waiting++;
-    } while((ev_iter = ev_iter->ev_next) != t->events);
-
-    if(n_events_waiting <= 0) {
-        return;
-    }
-
-    struct epoll_event* events_ready = calloc(n_events_waiting, sizeof(struct epoll_event));
-    int n_events_ready = pth_sc(epoll_wait)(t->epoll_fd, events_ready, n_events_waiting, 0);
-
-    for(int i = 0; i < n_events_ready; i++) {
-        pth_event_t ev = (pth_event_t) events_ready[i].data.ptr;
-        if(!ev) {
-            continue;
-        }
-
-        /* Filedescriptor I/O */
-        if (ev->ev_type == PTH_EVENT_FD) {
-            if (((ev->ev_goal & PTH_UNTIL_FD_READABLE) && (events_ready[i].events & EPOLLIN)) ||
-                ((ev->ev_goal & PTH_UNTIL_FD_WRITEABLE) && (events_ready[i].events & EPOLLOUT)) ||
-                ((ev->ev_goal & PTH_UNTIL_FD_EXCEPTION) && (events_ready[i].events & EPOLLERR))) {
-                ev->ev_status = PTH_STATUS_OCCURRED;
-            }
-        }
-        /* Timer */
-        else if (ev->ev_type == PTH_EVENT_TIME) {
-            uint64_t n_expirations = 0;
-            ssize_t rc = pth_sc(read)(ev->ev_args.TIME.fd, &n_expirations, 8);
-            if(rc > 0 && n_expirations > 0) {
-                ev->ev_status = PTH_STATUS_OCCURRED;
-            }
-        }
-        /* Custom Event Function */
-        else if (ev->ev_type == PTH_EVENT_FUNC) {
-            uint64_t n_expirations = 0;
-            ssize_t rc = pth_sc(read)(ev->ev_args.FUNC.fd, &n_expirations, 8);
-            if(rc > 0 && n_expirations > 0) {
-                ev->ev_status = PTH_STATUS_OCCURRED;
-            }
-        }
-    }
-
-    free(events_ready);
-}
-
 static int pth_sched_check_pth_events(pth_t t) {
     if(!t || !t->events) {
         return 0;
@@ -232,9 +179,10 @@ static int pth_sched_check_pth_events(pth_t t) {
             if(did_occur) {
                 pth_debug2("pth_sched_eventmanager: event occurred for thread \"%s\"", t->name);
                 ev->ev_status = PTH_STATUS_OCCURRED;
-                n_events_occurred++;
             }
-        } else {
+        }
+
+        if(ev->ev_status != PTH_STATUS_PENDING) {
             /* it was pending and now it is ready */
             pth_debug2("pth_sched_eventmanager: event occurred for thread \"%s\"", t->name);
             n_events_occurred++;
@@ -272,14 +220,39 @@ static void pth_sched_eventmanager_async(pth_time_t *now) {
     }
 
     /* check for events without blocking!! */
-    struct epoll_event* events_ready = calloc(n_threads_waiting, sizeof(struct epoll_event));
-    int n_events_ready = pth_sc(epoll_wait)(pth_gctx_get()->main_efd, events_ready, n_threads_waiting, 0);
+    struct epoll_event* events_ready = calloc(100, sizeof(struct epoll_event));
+    int n_events_ready = pth_sc(epoll_wait)(pth_gctx_get()->main_efd, events_ready, 100, 0);
 
     /* mark events based on the status we got from epoll */
     for(int i = 0; i < n_events_ready; i++) {
-        pth_t thread_ready = (pth_t) events_ready[i].data.ptr;
-        if(thread_ready && (events_ready[i].events & EPOLLIN)) {
-            pth_sched_check_epoll_events(thread_ready);
+        pth_event_t ev = (pth_event_t) events_ready[i].data.ptr;
+        if(!ev) {
+            continue;
+        }
+
+        /* Filedescriptor I/O */
+        if (ev->ev_type == PTH_EVENT_FD) {
+            if (((ev->ev_goal & PTH_UNTIL_FD_READABLE) && (events_ready[i].events & EPOLLIN)) ||
+                ((ev->ev_goal & PTH_UNTIL_FD_WRITEABLE) && (events_ready[i].events & EPOLLOUT)) ||
+                ((ev->ev_goal & PTH_UNTIL_FD_EXCEPTION) && (events_ready[i].events & EPOLLERR))) {
+                ev->ev_status = PTH_STATUS_OCCURRED;
+            }
+        }
+        /* Timer */
+        else if (ev->ev_type == PTH_EVENT_TIME) {
+            uint64_t n_expirations = 0;
+            ssize_t rc = pth_sc(read)(ev->ev_args.TIME.fd, &n_expirations, 8);
+            if(rc > 0 && n_expirations > 0) {
+                ev->ev_status = PTH_STATUS_OCCURRED;
+            }
+        }
+        /* Custom Event Function */
+        else if (ev->ev_type == PTH_EVENT_FUNC) {
+            uint64_t n_expirations = 0;
+            ssize_t rc = pth_sc(read)(ev->ev_args.FUNC.fd, &n_expirations, 8);
+            if(rc > 0 && n_expirations > 0) {
+                ev->ev_status = PTH_STATUS_OCCURRED;
+            }
         }
     }
 
