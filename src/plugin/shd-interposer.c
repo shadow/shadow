@@ -354,6 +354,8 @@ typedef int (*pthread_condattr_init_func)(pthread_condattr_t *);
 typedef int (*pthread_condattr_destroy_func)(pthread_condattr_t *);
 typedef int (*pthread_condattr_setpshared_func)(pthread_condattr_t *, int);
 typedef int (*pthread_condattr_getpshared_func)(const pthread_condattr_t *, int *);
+typedef int (*pthread_condattr_setclock_func)(pthread_condattr_t *, clockid_t);
+typedef int (*pthread_condattr_getclock_func)(const pthread_condattr_t *, clockid_t*);
 
 /* pthread condition */
 
@@ -601,6 +603,8 @@ typedef struct {
     pthread_condattr_destroy_func pthread_condattr_destroy;
     pthread_condattr_setpshared_func pthread_condattr_setpshared;
     pthread_condattr_getpshared_func pthread_condattr_getpshared;
+    pthread_condattr_setclock_func pthread_condattr_setclock;
+    pthread_condattr_getclock_func pthread_condattr_getclock;
 
     pthread_cond_init_func pthread_cond_init;
     pthread_cond_destroy_func pthread_cond_destroy;
@@ -885,6 +889,8 @@ static void _interposer_globalInitialize() {
     SETSYM_OR_FAIL(director.next.pthread_condattr_destroy, "pthread_condattr_destroy");
     SETSYM_OR_FAIL(director.next.pthread_condattr_setpshared, "pthread_condattr_setpshared");
     SETSYM_OR_FAIL(director.next.pthread_condattr_getpshared, "pthread_condattr_getpshared");
+    SETSYM_OR_FAIL(director.next.pthread_condattr_setclock, "pthread_condattr_setclock");
+    SETSYM_OR_FAIL(director.next.pthread_condattr_getclock, "pthread_condattr_getclock");
     SETSYM_OR_FAIL(director.next.pthread_cond_init, "pthread_cond_init");
     SETSYM_OR_FAIL(director.next.pthread_cond_destroy, "pthread_cond_destroy");
     SETSYM_OR_FAIL(director.next.pthread_cond_broadcast, "pthread_cond_broadcast");
@@ -1378,6 +1384,8 @@ INTERPOSE(int pthread_condattr_init(pthread_condattr_t *a), pthread_condattr_ini
 INTERPOSE(int pthread_condattr_destroy(pthread_condattr_t *a), pthread_condattr_destroy, a);
 INTERPOSE(int pthread_condattr_setpshared(pthread_condattr_t *a, int b), pthread_condattr_setpshared, a, b);
 INTERPOSE(int pthread_condattr_getpshared(const pthread_condattr_t *a, int *b), pthread_condattr_getpshared, a, b);
+INTERPOSE(int pthread_condattr_setclock(pthread_condattr_t *a, clockid_t b), pthread_condattr_setclock, a, b);
+INTERPOSE(int pthread_condattr_getclock(const pthread_condattr_t *a, clockid_t *b), pthread_condattr_getclock, a, b);
 
 /* pthread conditions */
 

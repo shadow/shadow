@@ -91,8 +91,21 @@ long pth_version(void)
     return PTH_VERSION;
 }
 
-/* implicit initialization support */
-intern __thread pth_gctx_t pth_current_gctx = NULL;
+/* implicit initialization support
+ * !! __pth_current_gctx MUST only be accessed via the addressof operator
+ * to ensure the address is replaced with the current thread's version.
+ * https://gcc.gnu.org/onlinedocs/gcc-4.3.6/gcc/Thread_002dLocal.html */
+intern __thread pth_gctx_t __pth_current_gctx = NULL;
+void pth_gctx_set(pth_gctx_t gctx)
+{
+    pth_gctx_t* my_thread_gctx = &__pth_current_gctx;
+    *my_thread_gctx = gctx;
+}
+pth_gctx_t pth_gctx_get(void)
+{
+    pth_gctx_t* my_thread_gctx = &__pth_current_gctx;
+    return *my_thread_gctx;
+}
 
 const pth_mutex_t __mutex_initializer = PTH_MUTEX_INIT;
 const pth_ring_t __ring_initializer = PTH_RING_INIT;
@@ -101,7 +114,7 @@ const pth_time_t __loadlick_initializer = PTH_TIME(1,0);
 #if cpp
 
 #define pth_implicit_init() \
-    if (!pth_current_gctx) \
+    if (!pth_gctx_get()) \
         pth_init();
 
 #endif /* cpp */
@@ -138,6 +151,10 @@ pth_gctx_t pth_gctx_new(int may_block)
 
     pth_gctx_t gctx_tmp = pth_gctx_get();
     pth_gctx_set(gctx);
+
+    pth_gctx_t* my_thread_gctx = &__pth_current_gctx;
+    pth_debug2("pth_gctx_new: my thread gctx is at %p", my_thread_gctx);
+
     pth_init_helper();
     pth_gctx_set(gctx_tmp);
 
@@ -150,16 +167,6 @@ void pth_gctx_free(pth_gctx_t gctx)
     pth_gctx_set(gctx);
     pth_kill_helper();
     free(gctx);
-}
-
-void pth_gctx_set(pth_gctx_t gctx)
-{
-    pth_current_gctx = gctx;
-}
-
-pth_gctx_t pth_gctx_get(void)
-{
-    return pth_current_gctx;
 }
 
 /* initialize the package */

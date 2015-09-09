@@ -311,6 +311,8 @@ int process_emu_pthread_condattr_init(Process* proc, pthread_condattr_t *attr);
 int process_emu_pthread_condattr_destroy(Process* proc, pthread_condattr_t *attr);
 int process_emu_pthread_condattr_setpshared(Process* proc, pthread_condattr_t *attr, int pshared);
 int process_emu_pthread_condattr_getpshared(Process* proc, const pthread_condattr_t *attr, int *pshared);
+int process_emu_pthread_condattr_setclock(Process* proc, pthread_condattr_t *attr, clockid_t clock_id);
+int process_emu_pthread_condattr_getclock(Process* proc, const pthread_condattr_t *attr, clockid_t* clock_id);
 
 /* pthread conditions */
 

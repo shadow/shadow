@@ -680,7 +680,7 @@ void process_continue(Process* proc) {
     worker_setActiveProcess(NULL);
 
     if(proc->programMainThread) {
-        info("'%s' is running, but threads are blocked waiting for events", g_quark_to_string(proc->programID));
+        info("'%s-%u' is running, but threads are blocked waiting for events", g_quark_to_string(proc->programID), proc->processID);
     } else {
         /* pth should have had no remaining alive threads except the one shadow was running in */
         utility_assert(nThreads == 1);
@@ -690,7 +690,7 @@ void process_continue(Process* proc) {
         proc->pstate = NULL;
         utility_assert(!process_isRunning(proc));
 
-        info("'%s' has completed or is otherwise no longer running", g_quark_to_string(proc->programID));
+        info("'%s-%u' has completed or is otherwise no longer running", g_quark_to_string(proc->programID), proc->processID);
     }
 }
 
@@ -5569,6 +5569,14 @@ int process_emu_pthread_condattr_getpshared(Process* proc, const pthread_condatt
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
+}
+
+int process_emu_pthread_condattr_setclock(Process* proc, pthread_condattr_t *attr, clockid_t clock_id) {
+    return 0;
+}
+
+int process_emu_pthread_condattr_getclock(Process* proc, const pthread_condattr_t *attr, clockid_t* clock_id) {
+    return 0;
 }
 
 /* pthread conditions */
