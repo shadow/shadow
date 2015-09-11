@@ -633,6 +633,13 @@ static FuncDirector director;
  * http://gcc.gnu.org/onlinedocs/gcc-4.3.6/gcc/Thread_002dLocal.html */
 static __thread unsigned long isRecursive = 0;
 
+/* provide a way to disable and enable interposition */
+static __thread unsigned long disableCount = 0;
+
+/* we must use the & operator to get the current thread's version */
+void interposer_enable() {__sync_fetch_and_sub(&disableCount, 1);}
+void interposer_disable() {__sync_fetch_and_add(&disableCount, 1);}
+
 static void* dummy_malloc(size_t size) {
     if (director.dummy.pos + size >= sizeof(director.dummy.buf)) {
         exit(EXIT_FAILURE);
@@ -936,7 +943,7 @@ static inline Process* _doEmulate() {
     Process* proc = NULL;
     /* recursive calls always go to libc */
     if(!__sync_fetch_and_add(&isRecursive, 1)) {
-        proc = director.shadowIsLoaded && worker_isAlive() ? worker_getActiveProcess() : NULL;
+        proc = director.shadowIsLoaded && (*(&disableCount)) <= 0 && worker_isAlive() ? worker_getActiveProcess() : NULL;
         /* check if the shadow intercept library is loaded yet, but dont fail if its not */
         if(proc) {
             /* ask shadow if this call is a plug-in that should be intercepted */
