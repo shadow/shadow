@@ -31,7 +31,7 @@ enum _EpollWatchFlags {
      * we want to delete them, to avoid the O(n) removal time of the queue. */
     EWF_WATCHING = 1 << 8,
     /* set if edge-triggered events are enabled on the underlying shadow descriptor */
-    EWF_EDGETRIGGER = 1 << 0,
+    EWF_EDGETRIGGER = 1 << 9,
     /* set if one-shot events are enabled on the underlying shadow descriptor */
     EWF_ONESHOT = 1 << 10,
     EWF_ONESHOT_REPORTED = 1 << 11,
