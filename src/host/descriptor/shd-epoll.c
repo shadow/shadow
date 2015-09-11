@@ -29,12 +29,12 @@ enum _EpollWatchFlags {
     /* true if this watch is currently valid and in the watches table. this allows
      * support of lazy deletion of watches that are in the reportable queue when
      * we want to delete them, to avoid the O(n) removal time of the queue. */
-    EWF_WATCHING = 1 << 9,
+    EWF_WATCHING = 1 << 8,
     /* set if edge-triggered events are enabled on the underlying shadow descriptor */
-    EWF_EDGETRIGGER = 1 << 10,
+    EWF_EDGETRIGGER = 1 << 0,
     /* set if one-shot events are enabled on the underlying shadow descriptor */
-    EWF_ONESHOT = 1 << 11,
-    EWF_ONESHOT_REPORTED = 1 << 12,
+    EWF_ONESHOT = 1 << 10,
+    EWF_ONESHOT_REPORTED = 1 << 11,
 };
 
 typedef struct _EpollWatch EpollWatch;
@@ -47,6 +47,7 @@ struct _EpollWatch {
     struct epoll_event event;
     /* current status of the underlying shadow descriptor */
     EpollWatchFlags flags;
+    gint referenceCount;
     MAGIC_DECLARE;
 };
 
@@ -89,11 +90,9 @@ static EpollWatch* _epollwatch_new(Epoll* epoll, Descriptor* descriptor, struct 
      * (which is freed below in _epollwatch_free) */
     descriptor_ref(descriptor);
 
-    watch->listener = listener_new((CallbackFunc)epoll_descriptorStatusChanged, epoll, descriptor);
     watch->descriptor = descriptor;
     watch->event = *event;
-
-    descriptor_addStatusListener(watch->descriptor, watch->listener);
+    watch->referenceCount = 1;
 
     return watch;
 }
@@ -101,24 +100,34 @@ static EpollWatch* _epollwatch_new(Epoll* epoll, Descriptor* descriptor, struct 
 static void _epollwatch_free(EpollWatch* watch) {
     MAGIC_ASSERT(watch);
 
-    descriptor_removeStatusListener(watch->descriptor, watch->listener);
-    listener_free(watch->listener);
+    if(watch->listener) {
+        descriptor_removeStatusListener(watch->descriptor, watch->listener);
+        listener_free(watch->listener);
+    }
     descriptor_unref(watch->descriptor);
 
     MAGIC_CLEAR(watch);
     g_free(watch);
 }
 
+static void _epollwatch_ref(EpollWatch* watch) {
+    MAGIC_ASSERT(watch);
+    (watch->referenceCount)++;
+}
+
+static void _epollwatch_unref(EpollWatch* watch) {
+    MAGIC_ASSERT(watch);
+
+    if(--(watch->referenceCount) <= 0) {
+        _epollwatch_free(watch);
+    }
+}
+
 /* should only be called from descriptor dereferencing the functionTable */
 static void _epoll_free(Epoll* epoll) {
     MAGIC_ASSERT(epoll);
 
-    GHashTableIter iter;
-    gpointer key, value;
-    g_hash_table_iter_init(&iter, epoll->watching);
-    while(g_hash_table_iter_next(&iter, &key, &value)) {
-        _epollwatch_free((EpollWatch*) value);
-    }
+    /* this unrefs all of the remaining watches */
     g_hash_table_destroy(epoll->watching);
 
     close(epoll->osEpollDescriptor);
@@ -156,7 +165,7 @@ Epoll* epoll_new(gint handle) {
     descriptor_init(&(epoll->super), DT_EPOLL, &epollFunctions, handle);
 
     /* allocate backend needed for managing events for this descriptor */
-    epoll->watching = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, NULL);
+    epoll->watching = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, (GDestroyNotify)_epollwatch_unref);
 
     /* the application may want us to watch some system files, so we need a
      * real OS epoll fd so we can offload that task.
@@ -247,10 +256,43 @@ static gboolean _epollwatch_isReady(EpollWatch* watch) {
     return isReady;
 }
 
+static gboolean _epoll_isReadyOS(Epoll* epoll) {
+    MAGIC_ASSERT(epoll);
+    gboolean isReady = FALSE;
+
+    if(epoll->osEpollDescriptor >= 3) {
+        /* the os epoll will be readable when ready */
+        struct epoll_event epoll_ev;
+        memset(&epoll_ev, 0, sizeof(struct epoll_event));
+        epoll_ev.events = EPOLLIN;
+
+        /* create a temp epoll to check if our OS epoll is ready */
+        gint readinessFD = epoll_create(1);
+        gint ret = epoll_ctl(readinessFD, EPOLL_CTL_ADD, epoll->osEpollDescriptor, &epoll_ev);
+        if(ret == 0) {
+            /* try to collect an event without blocking */
+            ret = epoll_wait(readinessFD, &epoll_ev, 1, 0);
+            if(ret > 0) {
+                /* osEpollDescriptor has an EPOLLIN event, so it has events we should collect */
+                isReady = TRUE;
+            }
+
+            /* cleanup */
+            epoll_ctl(readinessFD, EPOLL_CTL_DEL, epoll->osEpollDescriptor, NULL);
+        }
+        close(readinessFD);
+    }
+
+    return isReady;
+}
+
 static void _epoll_check(Epoll* epoll) {
     MAGIC_ASSERT(epoll);
 
-    if(epoll->flags & EF_CLOSED) {
+    /* if we are currently here because epoll called process_continue,
+     * then just skip out; after we return from process_continue, we'll
+     * do another check then (which will pass this check) */
+    if((epoll->flags & EF_CLOSED) || (epoll->flags & EF_NOTIFYING)) {
         return;
     }
 
@@ -268,6 +310,11 @@ static void _epoll_check(Epoll* epoll) {
         if(_epollwatch_isReady(watch)) {
             isReady = TRUE;
         }
+    }
+
+    /* check for events on the OS epoll instance, but only if we are otherwise not ready */
+    if(!isReady && _epoll_isReadyOS(epoll)) {
+        isReady = TRUE;
     }
 
     if(isReady) {
@@ -320,6 +367,10 @@ gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor, struct 
             watch->flags |= EWF_WATCHING;
             g_hash_table_replace(epoll->watching, descriptor_getHandleReference(descriptor), watch);
 
+            /* its added, so we need to listen */
+            watch->listener = listener_new((CallbackFunc)epoll_descriptorStatusChanged, epoll, descriptor);
+            descriptor_addStatusListener(watch->descriptor, watch->listener);
+
             /* initiate a callback if the new watched descriptor is ready */
             _epoll_check(epoll);
 
@@ -352,8 +403,14 @@ gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor, struct 
 
             MAGIC_ASSERT(watch);
             watch->flags &= ~EWF_WATCHING;
+
+            /* its deleted, so stop listening for updates */
+            descriptor_removeStatusListener(watch->descriptor, watch->listener);
+            listener_free(watch->listener);
+            watch->listener = NULL;
+
+            /* unref gets called on the watch when it is removed from this table */
             g_hash_table_remove(epoll->watching, descriptor_getHandleReference(descriptor));
-            _epollwatch_free(watch);
 
             break;
         }
@@ -510,8 +567,7 @@ void epoll_tryNotify(Epoll* epoll) {
     /* make sure this doesn't get destroyed if closed while notifying */
     descriptor_ref(&epoll->super);
 
-    /* we should notify the plugin only if we still have some events to report
-     * XXX: what if our watches are empty, but the OS desc has events? */
+    /* we should notify the plugin only if we still have some events to report */
     gboolean isReady = FALSE;
     GHashTableIter iter;
     gpointer key, value;
@@ -523,6 +579,13 @@ void epoll_tryNotify(Epoll* epoll) {
         if(_epollwatch_isReady(watch)) {
             isReady = TRUE;
         }
+    }
+
+    /* check if there is events on the OS epoll instance, but only if we would otherwise
+     * not call the process. this ensures the process can collect events for which we are
+     * using the OS as a backend, even if none of our own watches have ready events. */
+    if(!isReady && _epoll_isReadyOS(epoll)) {
+        isReady = TRUE;
     }
 
     if(isReady) {
@@ -554,5 +617,6 @@ void epoll_tryNotify(Epoll* epoll) {
         _epoll_check(epoll);
     }
 
+    /* now we can safely unref. those that are no longer tracked will be freed. */
     descriptor_unref(&epoll->super);
 }

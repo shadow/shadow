@@ -5813,7 +5813,6 @@ int process_emu_pthread_cond_timedwait(Process* proc, pthread_cond_t *cond, pthr
                 ret = errno;
             } else {
                 pth_event_t ev;
-                static pth_key_t ev_key = PTH_KEY_INIT;
                 init_result = 0;
                 pth_mutex_t* pm = NULL;
                 memmove(&pm, mutex, sizeof(void*));
@@ -5827,7 +5826,7 @@ int process_emu_pthread_cond_timedwait(Process* proc, pthread_cond_t *cond, pthr
                     ret = errno;
                 } else {
                     pth_time_t t = pth_time(abstime->tv_sec, (abstime->tv_nsec)/1000);
-                    ev = pth_event(PTH_EVENT_TIME|PTH_MODE_STATIC, &ev_key, t);
+                    ev = pth_event(PTH_EVENT_TIME, t);
                     if (!pth_cond_await(pcn, pm, ev)) {
                         ret = errno;
                     } else if (pth_event_status(ev) == PTH_STATUS_OCCURRED) {
@@ -5835,6 +5834,7 @@ int process_emu_pthread_cond_timedwait(Process* proc, pthread_cond_t *cond, pthr
                     } else {
                         ret = 0;
                     }
+                    pth_event_free(ev, PTH_FREE_THIS);
                 }
             }
         }
