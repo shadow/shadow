@@ -145,11 +145,13 @@ macro(add_plugin target)
     ## an alternative to the shared library is to build a position-independent executable as follows
     ## this can still be loaded by shadow, but the internal symbols will not be interposed by LD_PRELOAD
     #add_executable(${target} ${target}.hoisted.bc)
-    #set_target_properties(${target} PROPERTIES 
-    #    INSTALL_RPATH ${CMAKE_INSTALL_PREFIX}/lib 
-    #    INSTALL_RPATH_USE_LINK_PATH TRUE 
-    #    LINK_FLAGS "-pie -rdynamic -Wl,--no-as-needed"
-    #)
+    
+    set_target_properties(${target} PROPERTIES 
+        INSTALL_RPATH ${CMAKE_INSTALL_PREFIX}/lib 
+        INSTALL_RPATH_USE_LINK_PATH TRUE 
+        LINK_FLAGS "-rdynamic -Wl,--no-as-needed"
+        #LINK_FLAGS "-pie -rdynamic -Wl,--no-as-needed"
+    )
 
     ## trick cmake so it builds the bitcode into a shared library
     set_property(TARGET ${target} PROPERTY LINKER_LANGUAGE C)
