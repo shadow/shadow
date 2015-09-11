@@ -72,16 +72,17 @@ target_link_libraries(shadow-tgen-global-lock ${GLIB_LIBRARIES})
 install(TARGETS shadow-tgen-global-lock DESTINATION lib)
 
 ## the main tgen dynamic executable, can run inside or outside of shadow
-#add_executable(tgen ${tgen_sources})
-#set_target_properties(tgen PROPERTIES 
-#        INSTALL_RPATH ${CMAKE_INSTALL_PREFIX}/lib 
-#        INSTALL_RPATH_USE_LINK_PATH TRUE 
-#        LINK_FLAGS "-pie -rdynamic -Wl,--no-as-needed")
-#add_dependencies(tgen shadow-tgen-global-lock)
-#target_link_libraries(tgen shadow-tgen-global-lock ${RT_LIBRARIES} ${M_LIBRARIES} ${IGRAPH_LIBRARIES} ${GLIB_LIBRARIES})
-#install(TARGETS tgen DESTINATION bin)
+## this only works because none of our internal symbols need to be interposed!
+add_executable(tgen ${tgen_sources})
+set_target_properties(tgen PROPERTIES 
+        INSTALL_RPATH ${CMAKE_INSTALL_PREFIX}/lib 
+        INSTALL_RPATH_USE_LINK_PATH TRUE 
+        LINK_FLAGS "-pie -rdynamic -Wl,--no-as-needed")
+add_dependencies(tgen shadow-tgen-global-lock)
+target_link_libraries(tgen shadow-tgen-global-lock ${RT_LIBRARIES} ${M_LIBRARIES} ${IGRAPH_LIBRARIES} ${GLIB_LIBRARIES})
+install(TARGETS tgen DESTINATION bin)
 
-## create and install the dynamic executable that can plug into shadow
+## create and install the dynamic library that can plug into shadow
 add_shadow_plugin(shadow-plugin-tgen ${tgen_sources})
 add_dependencies(shadow-plugin-tgen LLVMHoistGlobals shadow-tgen-global-lock)
 target_link_libraries(shadow-plugin-tgen shadow-tgen-global-lock ${RT_LIBRARIES} ${M_LIBRARIES} ${IGRAPH_LIBRARIES} ${GLIB_LIBRARIES})
