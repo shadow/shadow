@@ -635,6 +635,13 @@ void process_start(Process* proc) {
     message("'%s-%u' process initialization is complete, main thread %s running",
             g_quark_to_string(proc->programID), proc->processID, process_isRunning(proc) ? "is" : "is not");
 
+    if(proc->stdoutFile) {
+        fflush(proc->stdoutFile);
+    }
+    if(proc->stderrFile) {
+        fflush(proc->stderrFile);
+    }
+
     /* cleanup */
     g_string_free(shadowThreadNameBuf, TRUE);
     g_string_free(programMainThreadNameBuf, TRUE);
