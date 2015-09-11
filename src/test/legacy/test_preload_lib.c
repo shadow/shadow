@@ -43,3 +43,7 @@ time_t time (time_t *result){
         return (time_t) -666666;
     }
 }
+
+void local_global_func(void) {
+    printf("interposed call to local_global_func()\n");
+}

@@ -8,6 +8,10 @@
 #include <time.h>
 #include <dlfcn.h>
 
+void local_global_func(void) {
+    printf("direct call to local_global_func()\n");
+}
+
 int main(void) {
     time_t t;
 
@@ -16,6 +20,8 @@ int main(void) {
 
     t = time(NULL);
     printf("second time() called = %i\n", (int)t);
+
+    local_global_func();
 
     return EXIT_SUCCESS;
 }
