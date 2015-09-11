@@ -36,22 +36,26 @@ static void _tgenmain_logHandler(const gchar *logDomain, GLogLevelFlags logLevel
     }
 }
 
-static void _tgenmain_log(GLogLevelFlags level, const gchar* functionName, const gchar* format, ...) {
+static void _tgenmain_log(GLogLevelFlags level, const gchar* fileName, const gint lineNum, const gchar* functionName, const gchar* format, ...) {
     va_list vargs;
     va_start(vargs, format);
+
+    gchar* fileStr = fileName ? g_path_get_basename(fileName) : g_strdup("n/a");
+    const gchar* functionStr = functionName ? functionName : "n/a";
 
     GDateTime* dt = g_date_time_new_now_local();
     GString* newformat = g_string_new(NULL);
 
-    g_string_append_printf(newformat, "%04i-%02i-%02i %02i:%02i:%02i %"G_GINT64_FORMAT".%06i [%s] [%s] %s",
+    g_string_append_printf(newformat, "%04i-%02i-%02i %02i:%02i:%02i %"G_GINT64_FORMAT".%06i [%s] [%s:%i] [%s] %s",
             g_date_time_get_year(dt), g_date_time_get_month(dt), g_date_time_get_day_of_month(dt),
             g_date_time_get_hour(dt), g_date_time_get_minute(dt), g_date_time_get_second(dt),
             g_date_time_to_unix(dt), g_date_time_get_microsecond(dt),
-            _tgenmain_logLevelToString(level), functionName, format);
+            _tgenmain_logLevelToString(level), fileStr, lineNum, functionName, format);
     g_logv(TGEN_LOG_DOMAIN, level, newformat->str, vargs);
 
     g_string_free(newformat, TRUE);
     g_date_time_unref(dt);
+    g_free(fileStr);
 
     va_end(vargs);
 }
@@ -68,6 +72,12 @@ static gint _tgenmain_run(gint argc, gchar *argv[]) {
     gpointer filter = GINT_TO_POINTER(G_LOG_LEVEL_MESSAGE);
     g_log_set_handler(TGEN_LOG_DOMAIN, G_LOG_LEVEL_MASK | G_LOG_FLAG_FATAL | G_LOG_FLAG_RECURSION,
             _tgenmain_logHandler, filter);
+
+    gchar hostname[128];
+    memset(hostname, 0, 128);
+    gethostname(hostname, 128);
+    _tgenmain_log(G_LOG_LEVEL_MESSAGE, __FILE__, __LINE__, __FUNCTION__,
+            "Initializing traffic generator on host %s", hostname);
 
     /* create the new state according to user inputs */
     TGenDriver* tgen = tgendriver_new(argc, argv, &_tgenmain_log);
