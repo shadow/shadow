@@ -140,7 +140,7 @@ macro(add_plugin target)
 
     ## now we need the actual .so to be built
     add_library(${target} SHARED ${target}.hoisted.bc)
-    add_dependencies(${target} ${target}.hoisted.bc)
+    #add_dependencies(${target} ${target}.hoisted.bc)
     
     ## an alternative to the shared library is to build a position-independent executable as follows
     ## this can still be loaded by shadow, but the internal symbols will not be interposed by LD_PRELOAD
