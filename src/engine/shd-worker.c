@@ -216,7 +216,7 @@ gpointer worker_runParallel(WorkLoad* workload) {
 
     g_list_foreach(workload->hosts, (GFunc) host_free, NULL);
 
-    g_thread_exit(NULL);
+//    g_thread_exit(NULL);
     return NULL;
 }
 
