@@ -118,15 +118,7 @@ def run(args):
 
 def process_tgen_log(filename):
     signal(SIGINT, SIG_IGN) # ignore interrupts
-
-    source, xzproc = None, None
-    if filename == '-':
-        source = sys.stdin
-    elif filename.endswith(".xz"):
-        xzproc = Popen(["xz", "--decompress", "--stdout", filename], stdout=PIPE)
-        source = xzproc.stdout
-    else:
-        source = open(filename, 'r')
+    source, xzproc = source_prepare(filename)
 
     d = {'firstbyte':{}, 'lastbyte':{}, 'errors':{}}
     name = None
@@ -161,8 +153,7 @@ def process_tgen_log(filename):
                 if code not in d['errors']: d['errors'][code] = []
                 d['errors'][code].append(bytes)
 
-    if xzproc is not None: xzproc.wait()
-    elif filename != '-': source.close()
+    source_cleanup(filename, source, xzproc)
     return [name, d, success_count, error_count]
 
 def find_file_paths(searchpath, patterns):
@@ -183,6 +174,21 @@ def type_nonnegative_integer(value):
     i = int(value)
     if i < 0: raise argparse.ArgumentTypeError("%s is an invalid non-negative int value" % value)
     return i
+
+def source_prepare(filename):
+    source, xzproc = None, None
+    if filename == '-':
+        source = sys.stdin
+    elif filename.endswith(".xz"):
+        xzproc = Popen(["xz", "--decompress", "--stdout", filename], stdout=PIPE)
+        source = xzproc.stdout
+    else:
+        source = open(filename, 'r')
+    return source, xzproc
+
+def source_cleanup(filename, source, xzproc):
+    if xzproc is not None: xzproc.wait()
+    elif filename != '-': source.close()
 
 def dump(data, prefix, filename, compress=True):
     if not os.path.exists(prefix): os.makedirs(prefix)
