@@ -1963,7 +1963,9 @@ void tcp_free(TCP* tcp) {
         MAGIC_ASSERT(tcp->child->parent->server);
 
         /* remove parents reference to child, if it exists */
-        g_hash_table_remove(tcp->child->parent->server->children, &(tcp->child->key));
+        if(tcp->child->parent->server->children) {
+            g_hash_table_remove(tcp->child->parent->server->children, &(tcp->child->key));
+        }
 
         _tcpchild_free(tcp->child);
     }
