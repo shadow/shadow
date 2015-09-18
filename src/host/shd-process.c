@@ -1489,9 +1489,10 @@ int process_emu_socketpair(Process* proc, int domain, int type, int protocol, in
         }
         descriptor_setFlags(desc, options);
 
-        gint linkedHandle = channel_getLinkedHandle((Channel*) desc);
+        Descriptor* linkedDesc = (Descriptor*)channel_getLinkedChannel((Channel*)desc);
+        utility_assert(linkedDesc);
+        gint linkedHandle = *descriptor_getHandleReference(linkedDesc);
         fds[1] = linkedHandle;
-        Descriptor* linkedDesc = host_lookupDescriptor(proc->host, linkedHandle);
 
         options = descriptor_getFlags(linkedDesc);
         if(isNonBlockSet) {
@@ -2185,9 +2186,10 @@ int process_emu_pipe2(Process* proc, int pipefds[2], int flags) {
         descriptor_setFlags(desc, options);
     }
 
-    gint linkedHandle = channel_getLinkedHandle((Channel*)desc);
+    Descriptor* linkedDesc = (Descriptor*)channel_getLinkedChannel((Channel*)desc);
+    utility_assert(linkedDesc);
+    gint linkedHandle = *descriptor_getHandleReference(linkedDesc);
     pipefds[1] = linkedHandle; /* writer */
-    Descriptor* linkedDesc = host_lookupDescriptor(proc->host, linkedHandle);
 
     if(linkedDesc) {
         gint options = descriptor_getFlags(linkedDesc);

@@ -9,9 +9,8 @@
 struct _Channel {
     Transport super;
 
-    enum ChannelType type;
-
-    gint linkedHandle;
+    ChannelType type;
+    Channel* linkedChannel;
 
     ByteQueue* buffer;
     gsize bufferSize;
@@ -22,6 +21,19 @@ struct _Channel {
 
 static void channel_close(Channel* channel) {
     MAGIC_ASSERT(channel);
+    /* tell our link that we are done */
+    if(channel->linkedChannel) {
+        if(channel == channel->linkedChannel->linkedChannel) {
+            /* the link will no longer hold a ref to us */
+            channel->linkedChannel->linkedChannel = NULL;
+            descriptor_unref(&channel->super.super);
+        }
+        /* we will no longer hold a ref to the link */
+        channel->linkedChannel = NULL;
+        descriptor_unref(&channel->linkedChannel->super.super);
+    }
+
+    /* host can stop monitoring us for changes */
     host_closeDescriptor(worker_getCurrentHost(), channel->super.super.handle);
 }
 
@@ -56,11 +68,6 @@ static gssize channel_linkedWrite(Channel* channel, gconstpointer buffer, gsize 
     return (gssize)numCopied;
 }
 
-static Channel* channel_getLinkedChannel(Channel* channel) {
-    MAGIC_ASSERT(channel);
-    return (Channel*)host_lookupDescriptor(worker_getCurrentHost(), channel->linkedHandle);
-}
-
 static gssize channel_sendUserData(Channel* channel, gconstpointer buffer, gsize nBytes, in_addr_t ip, in_port_t port) {
     MAGIC_ASSERT(channel);
     /* the read end of a unidirectional pipe can not write! */
@@ -68,9 +75,12 @@ static gssize channel_sendUserData(Channel* channel, gconstpointer buffer, gsize
 
     gssize result = 0;
 
-    Channel* linkedChannel = channel_getLinkedChannel(channel);
-    if(linkedChannel) {
-        result = channel_linkedWrite(linkedChannel, buffer, nBytes);
+    if(channel->linkedChannel) {
+        result = channel_linkedWrite(channel->linkedChannel, buffer, nBytes);
+    } else {
+        /* the other end closed or doesn't exist */
+        result = -1;
+        errno = EPIPE;
     }
 
     /* our end cant write anymore if they returned error */
@@ -89,7 +99,7 @@ static gssize channel_receiveUserData(Channel* channel, gpointer buffer, gsize n
     gsize available = channel->bufferLength;
     if(available == 0) {
         /* we have no data */
-        if(!channel_getLinkedChannel(channel)) {
+        if(!channel->linkedChannel) {
             /* the other end closed (EOF) */
             return (gssize)0;
         } else {
@@ -119,7 +129,7 @@ TransportFunctionTable channel_functions = {
     MAGIC_VALUE
 };
 
-Channel* channel_new(gint handle, gint linkedHandle, enum ChannelType type) {
+Channel* channel_new(gint handle, ChannelType type) {
     Channel* channel = g_new0(Channel, 1);
     MAGIC_INIT(channel);
 
@@ -128,7 +138,6 @@ Channel* channel_new(gint handle, gint linkedHandle, enum ChannelType type) {
     channel->type = type;
     channel->buffer = bytequeue_new(8192);
     channel->bufferSize = CONFIG_PIPE_BUFFER_SIZE;
-    channel->linkedHandle = linkedHandle;
 
     descriptor_adjustStatus((Descriptor*)channel, DS_ACTIVE, TRUE);
     if(!(type & CT_READONLY)) {
@@ -138,7 +147,18 @@ Channel* channel_new(gint handle, gint linkedHandle, enum ChannelType type) {
     return channel;
 }
 
-gint channel_getLinkedHandle(Channel* channel) {
+void channel_setLinkedChannel(Channel* channel, Channel* linkedChannel) {
     MAGIC_ASSERT(channel);
-    return channel->linkedHandle;
+    MAGIC_ASSERT(linkedChannel);
+
+    if(channel->linkedChannel) {
+        descriptor_unref(&channel->linkedChannel->super.super);
+    }
+    channel->linkedChannel = linkedChannel;
+    descriptor_ref(&linkedChannel->super.super);
+}
+
+Channel* channel_getLinkedChannel(Channel* channel) {
+    MAGIC_ASSERT(channel);
+    return channel->linkedChannel;
 }

@@ -545,9 +545,13 @@ gint host_createDescriptor(Host* host, DescriptorType type) {
             gint linkedHandle = _host_getNextDescriptorHandle(host);
 
             /* each channel is readable and writable */
-            descriptor = (Descriptor*) channel_new(handle, linkedHandle, CT_NONE);
-            Descriptor* linked = (Descriptor*) channel_new(linkedHandle, handle, CT_NONE);
-            _host_monitorDescriptor(host, linked);
+            Channel* channel = channel_new(handle, CT_NONE);
+            Channel* linked = channel_new(linkedHandle, CT_NONE);
+            channel_setLinkedChannel(channel, linked);
+            channel_setLinkedChannel(linked, channel);
+
+            _host_monitorDescriptor(host, (Descriptor*)linked);
+            descriptor = (Descriptor*) channel;
 
             break;
         }
@@ -557,9 +561,13 @@ gint host_createDescriptor(Host* host, DescriptorType type) {
             gint linkedHandle = _host_getNextDescriptorHandle(host);
 
             /* one side is readonly, the other is writeonly */
-            descriptor = (Descriptor*) channel_new(handle, linkedHandle, CT_READONLY);
-            Descriptor* linked = (Descriptor*) channel_new(linkedHandle, handle, CT_WRITEONLY);
-            _host_monitorDescriptor(host, linked);
+            Channel* channel = channel_new(handle, CT_READONLY);
+            Channel* linked = channel_new(linkedHandle, CT_WRITEONLY);
+            channel_setLinkedChannel(channel, linked);
+            channel_setLinkedChannel(linked, channel);
+
+            _host_monitorDescriptor(host, (Descriptor*)linked);
+            descriptor = (Descriptor*) channel;
 
             break;
         }
