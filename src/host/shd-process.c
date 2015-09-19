@@ -169,6 +169,9 @@ struct _Process {
     MAGIC_DECLARE;
 };
 
+/* XXX temporary hack to lock tor process init, until we can find thread errors */
+G_LOCK_DEFINE_STATIC(globalProcessInitLock);
+
 static ProcessContext _process_changeContext(Process* proc, ProcessContext from, ProcessContext to) {
     ProcessContext prevContext = PCTX_NONE;
     if(from == PCTX_SHADOW) {
@@ -587,6 +590,10 @@ void process_start(Process* proc) {
     /* ref for the spawn below */
     process_ref(proc);
 
+    /* XXX temporary tor process init hack */
+    gboolean doLock = g_strstr_len(program_getPath(proc->prog), -1, "shadow-plugin-tor") ? TRUE : FALSE;
+    if(doLock) G_LOCK(globalProcessInitLock);
+
     /* now we will execute in the pth/plugin context, so we need to load the state */
     worker_setActiveProcess(proc);
     program_swapInState(proc->prog, proc->pstate);
@@ -631,6 +638,9 @@ void process_start(Process* proc) {
     _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     program_swapOutState(proc->prog, proc->pstate);
     worker_setActiveProcess(NULL);
+
+    /* XXX temporary tor process init hack */
+    if(doLock) G_UNLOCK(globalProcessInitLock);
 
     message("'%s-%u' process initialization is complete, main thread %s running",
             g_quark_to_string(proc->programID), proc->processID, process_isRunning(proc) ? "is" : "is not");

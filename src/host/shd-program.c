@@ -297,3 +297,8 @@ const gchar* program_getName(Program* prog) {
     MAGIC_ASSERT(prog);
     return prog->name->str;
 }
+
+const gchar* program_getPath(Program* prog) {
+    MAGIC_ASSERT(prog);
+    return prog->path->str;
+}

@@ -27,5 +27,6 @@ Program* program_getTemporaryCopy(Program* prog);
 PluginMainFunc program_getMainFunc(Program* prog);
 GQuark* program_getID(Program* prog);
 const gchar* program_getName(Program* prog);
+const gchar* program_getPath(Program* prog);
 
 #endif /* SHD_PROGRAM_H_ */
