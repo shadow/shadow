@@ -232,6 +232,10 @@ const gchar* tgenpeer_getName(TGenPeer* peer) {
 }
 
 const gchar* tgenpeer_toString(TGenPeer* peer) {
+    if(!peer) {
+        return "NULL:0.0.0.0:0";
+    }
+
     TGEN_ASSERT(peer);
 
     if(!peer->string) {

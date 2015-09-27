@@ -4,6 +4,7 @@ import sys, os, argparse, re, json
 from multiprocessing import Pool, cpu_count
 from subprocess import Popen, PIPE
 from signal import signal, SIGINT, SIG_IGN
+from Canvas import Line
 
 DESCRIPTION="""
 A utility to help parse results from the tgen traffic generator.
@@ -123,6 +124,7 @@ def process_tgen_log(filename):
             name = line.strip().split()[11]
         elif re.search("transfer-complete", line) is not None or re.search("transfer-error", line) is not None:
             parts = line.strip().split()
+            if len(parts) < 26: continue
             sim_seconds = timestamp_to_seconds(parts[2])
             second = int(sim_seconds)
 
@@ -133,11 +135,11 @@ def process_tgen_log(filename):
 
             if 'transfer-complete' in parts[6]:
                 success_count += 1
-                cmdtime = int(parts[15].split('=')[1])/1000.0
-                rsptime = int(parts[16].split('=')[1])/1000.0
-                fbtime = int(parts[17].split('=')[1])/1000.0
-                lbtime = int(parts[18].split('=')[1])/1000.0
-                chktime = int(parts[19].split('=')[1])/1000.0
+                cmdtime = int(parts[21].split('=')[1])/1000.0
+                rsptime = int(parts[22].split('=')[1])/1000.0
+                fbtime = int(parts[23].split('=')[1])/1000.0
+                lbtime = int(parts[24].split('=')[1])/1000.0
+                chktime = int(parts[25].split('=')[1])/1000.0
 
                 if bytes not in d['firstbyte']: d['firstbyte'][bytes] = {}
                 if second not in d['firstbyte'][bytes]: d['firstbyte'][bytes][second] = []
@@ -197,13 +199,14 @@ def source_cleanup(filename, source, xzproc):
 def dump(data, prefix, filename, compress=True):
     if not os.path.exists(prefix): os.makedirs(prefix)
     if compress: # inline compression
-        path = "{0}/{1}.xz".format(prefix, filename)
-        xzp = Popen(["xz", "--threads=3", "-"], stdin=PIPE, stdout=PIPE)
-        ddp = Popen(["dd", "status=none", "of={0}".format(path)], stdin=xzp.stdout)
-        json.dump(data, xzp.stdin, sort_keys=True, separators=(',', ': '), indent=2)
-        xzp.stdin.close()
-        xzp.wait()
-        ddp.wait()
+        with open("/dev/null", 'a') as nullf:
+            path = "{0}/{1}.xz".format(prefix, filename)
+            xzp = Popen(["xz", "--threads=3", "-"], stdin=PIPE, stdout=PIPE)
+            ddp = Popen(["dd", "of={0}".format(path)], stdin=xzp.stdout, stdout=nullf, stderr=nullf)
+            json.dump(data, xzp.stdin, sort_keys=True, separators=(',', ': '), indent=2)
+            xzp.stdin.close()
+            xzp.wait()
+            ddp.wait()
     else: # no compression
         path = "{0}/{1}".format(prefix, filename)
         with open(path, 'w') as outf: json.dump(data, outf, sort_keys=True, separators=(',', ': '), indent=2)

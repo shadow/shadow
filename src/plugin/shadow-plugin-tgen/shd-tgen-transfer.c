@@ -201,7 +201,7 @@ static gboolean _tgentransfer_getLine(TGenTransfer* transfer) {
     while(bytes > 0) {
         bytes = tgentransport_read(transfer->transport, &c, 1);
 
-        if(bytes < 0 && errno != EAGAIN) {
+        if(bytes < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
             _tgentransfer_changeState(transfer, TGEN_XFER_ERROR);
             _tgentransfer_changeError(transfer, TGEN_XFER_ERR_READ);
             tgen_critical("read(): transport %s transfer %s error %i: %s",
@@ -347,7 +347,7 @@ static void _tgentransfer_readPayload(TGenTransfer* transfer) {
             /* we need to read more payload */
             gssize bytes = tgentransport_read(transfer->transport, buffer, length);
 
-            if(bytes < 0 && errno != EAGAIN) {
+            if(bytes < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
                 _tgentransfer_changeState(transfer, TGEN_XFER_ERROR);
                 _tgentransfer_changeError(transfer, TGEN_XFER_ERR_READ);
                 tgen_critical("read(): transport %s transfer %s error %i: %s",
@@ -477,7 +477,7 @@ static gsize _tgentransfer_flushOut(TGenTransfer* transfer) {
     gsize length = transfer->writeBuffer->len - transfer->writeBufferOffset;
     gssize bytes = tgentransport_write(transfer->transport, position, length);
 
-    if(bytes < 0 && errno != EAGAIN) {
+    if(bytes < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
         _tgentransfer_changeState(transfer, TGEN_XFER_ERROR);
         _tgentransfer_changeError(transfer, TGEN_XFER_ERR_WRITE);
         tgen_critical("write(): transport %s transfer %s error %i: %s",
@@ -664,19 +664,29 @@ static gchar* _tgentransfer_getBytesStatusReport(TGenTransfer* transfer) {
 static gchar* _tgentransfer_getTimeStatusReport(TGenTransfer* transfer) {
     TGEN_ASSERT(transfer);
 
+    gchar* proxyTimeStr = tgentransport_getTimeStatusReport(transfer->transport);
+
+    gint64 command = (transfer->time.command > 0 && transfer->time.start > 0) ?
+            (transfer->time.command - transfer->time.start) / 1000 : 0;
+    gint64 response = (transfer->time.response > 0 && transfer->time.start > 0) ?
+            (transfer->time.response - transfer->time.start) / 1000 : 0;
+    gint64 firstPayloadByte = (transfer->time.firstPayloadByte > 0 && transfer->time.start > 0) ?
+            (transfer->time.firstPayloadByte - transfer->time.start) / 1000 : 0;
+    gint64 lastPayloadByte = (transfer->time.lastPayloadByte > 0 && transfer->time.start > 0) ?
+            (transfer->time.lastPayloadByte - transfer->time.start) / 1000 : 0;
+    gint64 checksum = (transfer->time.checksum > 0 && transfer->time.start > 0) ?
+            (transfer->time.checksum - transfer->time.start) / 1000 : 0;
+
     GString* buffer = g_string_new(NULL);
 
     /* print the times in milliseconds */
     g_string_printf(buffer,
-            "msecs-to-command=%"G_GINT64_FORMAT" msecs-to-response=%"G_GINT64_FORMAT" "
+            "%s msecs-to-command=%"G_GINT64_FORMAT" msecs-to-response=%"G_GINT64_FORMAT" "
             "msecs-to-first-byte=%"G_GINT64_FORMAT" msecs-to-last-byte=%"G_GINT64_FORMAT" "
-            "msecs-to-checksum=%"G_GINT64_FORMAT,
-            (transfer->time.command - transfer->time.start) / 1000,
-            (transfer->time.response - transfer->time.start) / 1000,
-            (transfer->time.firstPayloadByte - transfer->time.start) / 1000,
-            (transfer->time.lastPayloadByte - transfer->time.start) / 1000,
-            (transfer->time.checksum - transfer->time.start) / 1000);
+            "msecs-to-checksum=%"G_GINT64_FORMAT, proxyTimeStr,
+            command, response, firstPayloadByte, lastPayloadByte, checksum);
 
+    g_free(proxyTimeStr);
     return g_string_free(buffer, FALSE);
 }
 
@@ -689,10 +699,11 @@ static void _tgentransfer_log(TGenTransfer* transfer, gboolean wasActive) {
          * only log an error once. */
         if(transfer->time.lastTimeErrorReport == 0) {
             gchar* bytesMessage = _tgentransfer_getBytesStatusReport(transfer);
+            gchar* timeMessage = _tgentransfer_getTimeStatusReport(transfer);
 
-            tgen_message("[transfer-error] transport %s transfer %s %s",
+            tgen_message("[transfer-error] transport %s transfer %s %s %s",
                     tgentransport_toString(transfer->transport),
-                    _tgentransfer_toString(transfer), bytesMessage);
+                    _tgentransfer_toString(transfer), bytesMessage, timeMessage);
 
             gint64 now = g_get_monotonic_time();
             transfer->time.lastBytesStatusReport = now;
