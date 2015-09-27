@@ -19,7 +19,8 @@ typedef enum _TGenActionType {
 typedef struct _TGenAction TGenAction;
 
 TGenAction* tgenaction_newStartAction(const gchar* timeStr, const gchar* timeoutStr,
-        const gchar* stalloutStr, const gchar* serverPortStr, const gchar* peersStr, const gchar* socksProxyStr, GError** error);
+        const gchar* stalloutStr, const gchar* loglevelStr, const gchar* serverPortStr,
+        const gchar* peersStr, const gchar* socksProxyStr, GError** error);
 TGenAction* tgenaction_newEndAction(const gchar* timeStr, const gchar* countStr,
         const gchar* sizeStr, GError** error);
 TGenAction* tgenaction_newPauseAction(const gchar* timeStr, GError** error);
@@ -41,6 +42,7 @@ guint64 tgenaction_getStartTimeMillis(TGenAction* action);
 guint64 tgenaction_getPauseTimeMillis(TGenAction* action);
 guint64 tgenaction_getDefaultTimeoutMillis(TGenAction* action);
 guint64 tgenaction_getDefaultStalloutMillis(TGenAction* action);
+GLogLevelFlags tgenaction_getLogLevel(TGenAction* action);
 void tgenaction_getTransferParameters(TGenAction* action, TGenTransferType* typeOut,
         TGenTransportProtocol* protocolOut, guint64* sizeOut, guint64* timeoutOut, guint64* stalloutOut);
 TGenPool* tgenaction_getPeers(TGenAction* action);

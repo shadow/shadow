@@ -19,7 +19,8 @@ typedef enum {
     TGEN_VA_PROTOCOL = 1 << 9,
     TGEN_VA_TIMEOUT = 1 << 10,
     TGEN_VA_STALLOUT = 1 << 11,
-    TGEN_EA_WEIGHT = 1 << 12,
+    TGEN_VA_LOGLEVEL = 1 << 12,
+    TGEN_EA_WEIGHT = 1 << 13,
 } AttributeFlags;
 
 struct _TGenGraph {
@@ -45,6 +46,7 @@ struct _TGenGraph {
     gboolean startHasPeers;
     gboolean transferMissingPeers;
 
+    gint refcount;
     guint magic;
 };
 
@@ -205,9 +207,11 @@ static GError* _tgengraph_parseStartVertex(TGenGraph* g, const gchar* idStr,
             VAS(g->graph, "peers", vertexIndex) : NULL;
     const gchar* socksProxyStr = (g->knownAttributes&TGEN_VA_SOCKSPROXY) ?
             VAS(g->graph, "socksproxy", vertexIndex) : NULL;
+    const gchar* loglevelStr = (g->knownAttributes&TGEN_VA_LOGLEVEL) ?
+                VAS(g->graph, "loglevel", vertexIndex) : NULL;
 
-    tgen_debug("validating action '%s' at vertex %li, time=%s timeout=%s stallout=%s serverport=%s socksproxy=%s peers=%s",
-            idStr, (glong)vertexIndex, timeStr, timeoutStr, stalloutStr, serverPortStr, socksProxyStr, peersStr);
+    tgen_debug("validating action '%s' at vertex %li, time=%s timeout=%s stallout=%s loglevel=%s serverport=%s socksproxy=%s peers=%s",
+            idStr, (glong)vertexIndex, timeStr, timeoutStr, stalloutStr, loglevelStr, serverPortStr, socksProxyStr, peersStr);
 
     if(g->hasStartAction) {
         return g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT,
@@ -220,7 +224,7 @@ static GError* _tgengraph_parseStartVertex(TGenGraph* g, const gchar* idStr,
     }
 
     GError* error = NULL;
-    TGenAction* a = tgenaction_newStartAction(timeStr, timeoutStr, stalloutStr, serverPortStr, peersStr, socksProxyStr, &error);
+    TGenAction* a = tgenaction_newStartAction(timeStr, timeoutStr, stalloutStr, loglevelStr, serverPortStr, peersStr, socksProxyStr, &error);
 
     if(a) {
         _tgengraph_storeAction(g, a, vertexIndex);
@@ -533,6 +537,8 @@ static AttributeFlags _tgengraph_vertexAttributeToFlag(const gchar* stringAttrib
             return TGEN_VA_TIMEOUT;
         } else if(!g_ascii_strcasecmp(stringAttribute, "stallout")) {
             return TGEN_VA_STALLOUT;
+        } else if(!g_ascii_strcasecmp(stringAttribute, "loglevel")) {
+            return TGEN_VA_LOGLEVEL;
         }
     }
     return TGEN_A_NONE;
@@ -653,8 +659,9 @@ static igraph_t* _tgengraph_loadNewGraph(const gchar* path) {
     return graph;
 }
 
-void tgengraph_free(TGenGraph* g) {
+static void _tgengraph_free(TGenGraph* g) {
     TGEN_ASSERT(g);
+    g_assert(g->refcount <= 0);
 
     if(g->actions) {
         g_hash_table_destroy(g->actions);
@@ -670,7 +677,20 @@ void tgengraph_free(TGenGraph* g) {
         g_free(g->graphPath);
     }
 
+    g->magic = 0;
     g_free(g);
+}
+
+void tgengraph_ref(TGenGraph* g) {
+    TGEN_ASSERT(g);
+    g->refcount++;
+}
+
+void tgengraph_unref(TGenGraph* g) {
+    TGEN_ASSERT(g);
+    if(--g->refcount <= 0) {
+        _tgengraph_free(g);
+    }
 }
 
 TGenGraph* tgengraph_new(gchar* path) {
@@ -681,6 +701,7 @@ TGenGraph* tgengraph_new(gchar* path) {
 
     TGenGraph* g = g_new0(TGenGraph, 1);
     g->magic = TGEN_MAGIC;
+    g->refcount = 1;
 
     g->actions = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, (GDestroyNotify)tgenaction_unref);
     g->weights = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, g_free);
@@ -724,7 +745,7 @@ TGenGraph* tgengraph_new(gchar* path) {
     if(error) {
         tgen_critical("error (%i) while loading graph: %s", error->code, error->message);
         g_error_free(error);
-        tgengraph_free(g);
+        tgengraph_unref(g);
         return NULL;
     }
 

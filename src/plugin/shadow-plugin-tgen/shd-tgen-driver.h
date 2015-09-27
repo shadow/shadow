@@ -10,7 +10,7 @@
 /* opaque struct containing trafficgenerator data */
 typedef struct _TGenDriver TGenDriver;
 
-TGenDriver* tgendriver_new(gint argc, gchar* argv[], TGenLogFunc logf);
+TGenDriver* tgendriver_new(TGenGraph* graph);
 void tgendriver_ref(TGenDriver* driver);
 void tgendriver_unref(TGenDriver* driver);
 

@@ -42,10 +42,6 @@ struct _TGenDriver {
     guint magic;
 };
 
-/* store a global pointer to the log func, so we can log in any
- * of our tgen modules without a pointer to the tgen struct */
-TGenLogFunc tgenLogFunc;
-
 /* forward declaration */
 static void _tgendriver_continueNextActions(TGenDriver* driver, TGenAction* action);
 static void _tgendriver_processAction(TGenDriver* driver, TGenAction* action);
@@ -458,7 +454,7 @@ static void _tgendriver_free(TGenDriver* driver) {
         tgenio_unref(driver->io);
     }
     if(driver->actionGraph) {
-        tgengraph_free(driver->actionGraph);
+        tgengraph_unref(driver->actionGraph);
     }
 
     driver->magic = 0;
@@ -573,43 +569,7 @@ static gboolean _tgendriver_setHeartbeatTimerHelper(TGenDriver* driver) {
     }
 }
 
-TGenDriver* tgendriver_new(gint argc, gchar* argv[], TGenLogFunc logf) {
-    tgenLogFunc = logf;
-    tgen_debug("set log function to %p", logf);
-
-    /* argv[0] is program name, argv[1] should be config file */
-    if (argc != 2) {
-        tgen_warning("USAGE: %s path/to/tgen.xml", argv[0]);
-        return NULL;
-    }
-
-    TGenGraph* graph = tgengraph_new(argv[1]);
-
-    // TODO embedding a tgen graphml inside the shadow.config.xml file not yet supported
-//    if(argv[1] && g_str_has_prefix(argv[1], "<?xml")) {
-//        /* argv contains the xml contents of the xml file */
-//        gchar* tempPath = _tgendriver_makeTempFile();
-//        GError* error = NULL;
-//        gboolean success = g_file_set_contents(tempPath, argv[1], -1, &error);
-//        if(success) {
-//            graph = tgengraph_new(tempPath);
-//        } else {
-//            tgen_warning("error (%i) while generating temporary xml file: %s", error->code, error->message);
-//        }
-//        g_unlink(tempPath);
-//        g_free(tempPath);
-//    } else {
-//        /* argv contains the apth of a graphml config file */
-//        graph = tgengraph_new(argv[1]);
-//    }
-
-    if (graph) {
-        tgen_info("traffic generator config file '%s' passed validation", argv[1]);
-    } else {
-        tgen_error("traffic generator config file '%s' failed validation", argv[1]);
-        return NULL;
-    }
-
+TGenDriver* tgendriver_new(TGenGraph* graph) {
     /* create the main driver object */
     TGenDriver* driver = g_new0(TGenDriver, 1);
     driver->magic = TGEN_MAGIC;
@@ -617,21 +577,18 @@ TGenDriver* tgendriver_new(gint argc, gchar* argv[], TGenLogFunc logf) {
 
     driver->io = tgenio_new();
 
+    tgengraph_ref(graph);
     driver->actionGraph = graph;
     driver->startAction = tgengraph_getStartAction(graph);
 
     /* start a heartbeat status message every second */
     if(!_tgendriver_setHeartbeatTimerHelper(driver)) {
-        tgenio_unref(driver->io);
-        driver->io = NULL;
         tgendriver_unref(driver);
         return NULL;
     }
 
     /* start a server to listen for incoming connections */
     if(!_tgendriver_startServerHelper(driver)) {
-        tgenio_unref(driver->io);
-        driver->io = NULL;
         tgendriver_unref(driver);
         return NULL;
     }
@@ -644,8 +601,6 @@ TGenDriver* tgendriver_new(gint argc, gchar* argv[], TGenLogFunc logf) {
 
         /* start our client after a timeout */
         if(!_tgendriver_setStartClientTimerHelper(driver, delayMillis)) {
-            tgenio_unref(driver->io);
-            driver->io = NULL;
             tgendriver_unref(driver);
             return NULL;
         }

@@ -11,6 +11,7 @@ typedef struct _TGenActionStartData {
     guint64 time;
     guint64 timeout;
     guint64 stallout;
+    GLogLevelFlags loglevel;
     guint16 serverport;
     TGenPeer* socksproxy;
     TGenPool* peers;
@@ -287,6 +288,38 @@ static GError* _tgenaction_handleBoolean(const gchar* attributeName,
     return error;
 }
 
+static GError* _tgenaction_handleLogLevel(const gchar* attributeName, const gchar* loglevelStr, GLogLevelFlags* loglevelOut){
+    g_assert(attributeName && loglevelStr);
+
+    GError* error = NULL;
+    GLogLevelFlags loglevel = 0;
+
+    if (g_ascii_strcasecmp(loglevelStr, "error") == 0) {
+        loglevel = G_LOG_LEVEL_ERROR;
+    } else if (g_ascii_strcasecmp(loglevelStr, "critical") == 0) {
+        loglevel = G_LOG_LEVEL_CRITICAL;
+    } else if (g_ascii_strcasecmp(loglevelStr, "warning") == 0) {
+        loglevel = G_LOG_LEVEL_WARNING;
+    } else if (g_ascii_strcasecmp(loglevelStr, "message") == 0) {
+        loglevel = G_LOG_LEVEL_MESSAGE;
+    } else if (g_ascii_strcasecmp(loglevelStr, "info") == 0) {
+        loglevel = G_LOG_LEVEL_INFO;
+    } else if (g_ascii_strcasecmp(loglevelStr, "debug") == 0) {
+        loglevel = G_LOG_LEVEL_DEBUG;
+    } else {
+        error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT,
+                        "invalid content in string '%s' for attribute '%s', "
+                        "expected one of: 'error', 'critical', 'warning', 'message', 'info', or 'debug'",
+                        loglevelStr, attributeName);
+    }
+
+    if(!error && loglevelOut) {
+        *loglevelOut = loglevel;
+    }
+
+    return error;
+}
+
 static void _tgenaction_free(TGenAction* action) {
     TGEN_ASSERT(action);
     g_assert(action->refcount <= 0);
@@ -324,8 +357,8 @@ void tgenaction_unref(TGenAction* action) {
 }
 
 TGenAction* tgenaction_newStartAction(const gchar* timeStr, const gchar* timeoutStr,
-        const gchar* stalloutStr, const gchar* serverPortStr, const gchar* peersStr,
-        const gchar* socksProxyStr, GError** error) {
+        const gchar* stalloutStr, const gchar* loglevelStr, const gchar* serverPortStr,
+        const gchar* peersStr, const gchar* socksProxyStr, GError** error) {
     g_assert(error);
 
     /* a serverport is required */
@@ -350,6 +383,15 @@ TGenAction* tgenaction_newStartAction(const gchar* timeStr, const gchar* timeout
     guint64 defaultStallout = 0;
     if (stalloutStr && g_ascii_strncasecmp(stalloutStr, "\0", (gsize) 1)) {
         defaultStallout = g_ascii_strtoull(stalloutStr, NULL, 10);
+    }
+
+    /* specifying a log level is optional, default is message level */
+    GLogLevelFlags loglevel = G_LOG_LEVEL_MESSAGE;
+    if(loglevelStr && g_ascii_strncasecmp(loglevelStr, "\0", (gsize) 1)) {
+        *error = _tgenaction_handleLogLevel("loglevel", loglevelStr, &loglevel);
+        if (*error) {
+            return NULL;
+        }
     }
 
     /* a socks proxy address is optional */
@@ -385,6 +427,7 @@ TGenAction* tgenaction_newStartAction(const gchar* timeStr, const gchar* timeout
     data->time = timedelay;
     data->timeout = defaultTimeout;
     data->stallout = defaultStallout;
+    data->loglevel = loglevel;
     guint64 longport = g_ascii_strtoull(serverPortStr, NULL, 10);
     data->serverport = htons((guint16)longport);
     data->peers = peerPool;
@@ -639,6 +682,12 @@ guint64 tgenaction_getDefaultStalloutMillis(TGenAction* action) {
     TGEN_ASSERT(action);
     g_assert(action->data && action->type == TGEN_ACTION_START);
     return 1000 * ((TGenActionStartData*)action->data)->stallout;
+}
+
+GLogLevelFlags tgenaction_getLogLevel(TGenAction* action) {
+    TGEN_ASSERT(action);
+    g_assert(action->data && action->type == TGEN_ACTION_START);
+    return ((TGenActionStartData*)action->data)->loglevel;
 }
 
 guint64 tgenaction_getPauseTimeMillis(TGenAction* action) {

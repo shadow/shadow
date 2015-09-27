@@ -7,7 +7,10 @@
 
 #include "shd-tgen.h"
 
-#define TGEN_LOG_DOMAIN "tgen"
+/* store a global pointer to the log func, so we can log in any
+ * of our tgen modules without a pointer to the tgen struct */
+TGenLogFunc tgenLogFunc = NULL;
+GString* tgenLogDomain = NULL;
 
 static const gchar* _tgenmain_logLevelToString(GLogLevelFlags logLevel) {
     switch (logLevel) {
@@ -51,7 +54,7 @@ static void _tgenmain_log(GLogLevelFlags level, const gchar* fileName, const gin
             g_date_time_get_hour(dt), g_date_time_get_minute(dt), g_date_time_get_second(dt),
             g_date_time_to_unix(dt), g_date_time_get_microsecond(dt),
             _tgenmain_logLevelToString(level), fileStr, lineNum, functionName, format);
-    g_logv(TGEN_LOG_DOMAIN, level, newformat->str, vargs);
+    g_logv(tgenLogDomain->str, level, newformat->str, vargs);
 
     g_string_free(newformat, TRUE);
     g_date_time_unref(dt);
@@ -69,18 +72,65 @@ static void _tgenmain_cleanup(gint status, gpointer arg) {
 }
 
 static gint _tgenmain_run(gint argc, gchar *argv[]) {
-    gpointer filter = GINT_TO_POINTER(G_LOG_LEVEL_MESSAGE);
-    g_log_set_handler(TGEN_LOG_DOMAIN, G_LOG_LEVEL_MASK | G_LOG_FLAG_FATAL | G_LOG_FLAG_RECURSION,
-            _tgenmain_logHandler, filter);
+    tgenLogFunc = _tgenmain_log;
 
+    /* construct our unique log domain */
     gchar hostname[128];
     memset(hostname, 0, 128);
     gethostname(hostname, 128);
-    _tgenmain_log(G_LOG_LEVEL_MESSAGE, __FILE__, __LINE__, __FUNCTION__,
-            "Initializing traffic generator on host %s", hostname);
+    tgenLogDomain = g_string_new(NULL);
+    g_string_printf(tgenLogDomain, "%s-tgen-%i", hostname, (gint)getpid());
+
+    /* default to message level log until we read config */
+    gpointer startupFilter = GINT_TO_POINTER(G_LOG_LEVEL_MESSAGE);
+    guint startupID = g_log_set_handler(tgenLogDomain->str, G_LOG_LEVEL_MASK|G_LOG_FLAG_FATAL|G_LOG_FLAG_RECURSION, _tgenmain_logHandler, startupFilter);
+    tgen_message("Initializing traffic generator on host %s using log domain %s", hostname, tgenLogDomain->str);
+
+    // TODO embedding a tgen graphml inside the shadow.config.xml file not yet supported
+//    if(argv[1] && g_str_has_prefix(argv[1], "<?xml")) {
+//        /* argv contains the xml contents of the xml file */
+//        gchar* tempPath = _tgendriver_makeTempFile();
+//        GError* error = NULL;
+//        gboolean success = g_file_set_contents(tempPath, argv[1], -1, &error);
+//        if(success) {
+//            graph = tgengraph_new(tempPath);
+//        } else {
+//            tgen_warning("error (%i) while generating temporary xml file: %s", error->code, error->message);
+//        }
+//        g_unlink(tempPath);
+//        g_free(tempPath);
+//    } else {
+//        /* argv contains the apth of a graphml config file */
+//        graph = tgengraph_new(argv[1]);
+//    }
+
+    /* argv[0] is program name, argv[1] should be config file */
+    if (argc != 2) {
+        tgen_warning("USAGE: %s path/to/tgen.xml", argv[0]);
+        tgen_critical("cannot continue: incorrect argument list format")
+        return -1;
+    }
+
+    /* parse the config file */
+    TGenGraph* graph = tgengraph_new(argv[1]);
+    if (!graph) {
+        tgen_critical("cannot continue: traffic generator config file '%s' failed validation", argv[1]);
+        return -1;
+    }
+
+    /* set log level, which again defaults to message if no level was configured */
+    gpointer configuredFilter = GINT_TO_POINTER(tgenaction_getLogLevel(tgengraph_getStartAction(graph)));
+    if(configuredFilter != startupFilter) {
+        g_log_remove_handler(tgenLogDomain->str, startupID);
+        g_log_set_handler(tgenLogDomain->str, G_LOG_LEVEL_MASK|G_LOG_FLAG_FATAL|G_LOG_FLAG_RECURSION, _tgenmain_logHandler, configuredFilter);
+    }
 
     /* create the new state according to user inputs */
-    TGenDriver* tgen = tgendriver_new(argc, argv, &_tgenmain_log);
+    TGenDriver* tgen = tgendriver_new(graph);
+
+    /* driver should have reffed the graph if it needed it */
+    tgengraph_unref(graph);
+
     if(!tgen) {
         tgen_critical("Error initializing new TrafficGen instance");
         return -1;
@@ -142,6 +192,7 @@ static gint _tgenmain_run(gint argc, gchar *argv[]) {
     close(mainepolld);
 
     tgen_message("returning 0 from main");
+    g_string_free(tgenLogDomain, TRUE);
 
     /* _tgenmain_cleanup() should get called via on_exit */
     return 0;

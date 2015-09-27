@@ -7,8 +7,10 @@
 
 typedef struct _TGenGraph TGenGraph;
 
-void tgengraph_free(TGenGraph* g);
 TGenGraph* tgengraph_new(gchar* path);
+void tgengraph_ref(TGenGraph* g);
+void tgengraph_unref(TGenGraph* g);
+
 TGenAction* tgengraph_getStartAction(TGenGraph* g);
 GQueue* tgengraph_getNextActions(TGenGraph* g, TGenAction* action);
 gdouble tgengraph_getEdgeWeight(TGenGraph* g, TGenAction* srcAction, TGenAction* dstAction);
