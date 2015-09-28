@@ -19,8 +19,9 @@ typedef enum {
     TGEN_VA_PROTOCOL = 1 << 9,
     TGEN_VA_TIMEOUT = 1 << 10,
     TGEN_VA_STALLOUT = 1 << 11,
-    TGEN_VA_LOGLEVEL = 1 << 12,
-    TGEN_EA_WEIGHT = 1 << 13,
+    TGEN_VA_HEARTBEAT = 1 << 12,
+    TGEN_VA_LOGLEVEL = 1 << 13,
+    TGEN_EA_WEIGHT = 1 << 14,
 } AttributeFlags;
 
 struct _TGenGraph {
@@ -201,6 +202,8 @@ static GError* _tgengraph_parseStartVertex(TGenGraph* g, const gchar* idStr,
             VAS(g->graph, "timeout", vertexIndex) : NULL;
     const gchar* stalloutStr = (g->knownAttributes&TGEN_VA_STALLOUT) ?
             VAS(g->graph, "stallout", vertexIndex) : NULL;
+    const gchar* heartbeatStr = (g->knownAttributes&TGEN_VA_HEARTBEAT) ?
+            VAS(g->graph, "heartbeat", vertexIndex) : NULL;
     const gchar* serverPortStr = (g->knownAttributes&TGEN_VA_SERVERPORT) ?
             VAS(g->graph, "serverport", vertexIndex) : NULL;
     const gchar* peersStr = (g->knownAttributes&TGEN_VA_PEERS) ?
@@ -210,8 +213,8 @@ static GError* _tgengraph_parseStartVertex(TGenGraph* g, const gchar* idStr,
     const gchar* loglevelStr = (g->knownAttributes&TGEN_VA_LOGLEVEL) ?
                 VAS(g->graph, "loglevel", vertexIndex) : NULL;
 
-    tgen_debug("validating action '%s' at vertex %li, time=%s timeout=%s stallout=%s loglevel=%s serverport=%s socksproxy=%s peers=%s",
-            idStr, (glong)vertexIndex, timeStr, timeoutStr, stalloutStr, loglevelStr, serverPortStr, socksProxyStr, peersStr);
+    tgen_debug("validating action '%s' at vertex %li, time=%s timeout=%s stallout=%s heartbeat=%s loglevel=%s serverport=%s socksproxy=%s peers=%s",
+            idStr, (glong)vertexIndex, timeStr, timeoutStr, stalloutStr, heartbeatStr, loglevelStr, serverPortStr, socksProxyStr, peersStr);
 
     if(g->hasStartAction) {
         return g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT,
@@ -224,7 +227,7 @@ static GError* _tgengraph_parseStartVertex(TGenGraph* g, const gchar* idStr,
     }
 
     GError* error = NULL;
-    TGenAction* a = tgenaction_newStartAction(timeStr, timeoutStr, stalloutStr, loglevelStr, serverPortStr, peersStr, socksProxyStr, &error);
+    TGenAction* a = tgenaction_newStartAction(timeStr, timeoutStr, stalloutStr, heartbeatStr, loglevelStr, serverPortStr, peersStr, socksProxyStr, &error);
 
     if(a) {
         _tgengraph_storeAction(g, a, vertexIndex);
@@ -537,6 +540,8 @@ static AttributeFlags _tgengraph_vertexAttributeToFlag(const gchar* stringAttrib
             return TGEN_VA_TIMEOUT;
         } else if(!g_ascii_strcasecmp(stringAttribute, "stallout")) {
             return TGEN_VA_STALLOUT;
+        } else if(!g_ascii_strcasecmp(stringAttribute, "heartbeat")) {
+            return TGEN_VA_HEARTBEAT;
         } else if(!g_ascii_strcasecmp(stringAttribute, "loglevel")) {
             return TGEN_VA_LOGLEVEL;
         }

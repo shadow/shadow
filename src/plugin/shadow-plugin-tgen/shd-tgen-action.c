@@ -8,9 +8,12 @@
 #include "shd-tgen.h"
 
 typedef struct _TGenActionStartData {
+    /* TODO change all times to use the handleTime func, as store nanos
+     * currently only the heartbeat does this. */
     guint64 time;
     guint64 timeout;
     guint64 stallout;
+    guint64 heartbeatPeriodNanos;
     GLogLevelFlags loglevel;
     guint16 serverport;
     TGenPeer* socksproxy;
@@ -224,6 +227,87 @@ static GError* _tgenaction_handleBytes(const gchar* attributeName,
     return error;
 }
 
+static GError* _tgenaction_handleTime(const gchar* attributeName, const gchar* timeStr, guint64* timeNanosOut) {
+    g_assert(attributeName && timeStr);
+
+    GError* error = NULL;
+
+    /* split into parts (format example: "10 MiB") */
+    gchar** tokens = g_strsplit(timeStr, (const gchar*) " ", 2);
+    gchar* timeToken = tokens[0];
+    gchar* suffixToken = tokens[1];
+
+    glong timeTokenLength = g_utf8_strlen(timeToken, -1);
+    for (glong i = 0; i < timeTokenLength; i++) {
+        gchar c = timeToken[i];
+        if (!g_ascii_isdigit(c)) {
+            error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT,
+                    "non-digit byte '%c' in time string '%s' for attribute '%s', "
+                    "expected format like '10', '10 seconds' or '10 s'",
+                    c, timeStr, attributeName);
+            break;
+        }
+    }
+
+    if (!error) {
+        guint64 timeUnits = g_ascii_strtoull(timeToken, NULL, 10);
+        guint64 timeNanos = 0;
+
+        if (!suffixToken) {
+            /* assume default time in seconds */
+            timeNanos = timeUnits * 1000000000;
+        } else {
+            if (!g_ascii_strcasecmp(suffixToken, "nanosecond") || !g_ascii_strcasecmp(suffixToken, "nanoseconds") ||
+                    !g_ascii_strcasecmp(suffixToken, "nsec") || !g_ascii_strcasecmp(suffixToken, "nsecs") ||
+                    !g_ascii_strcasecmp(suffixToken, "ns")) {
+                timeNanos = timeUnits;
+            } else if (!g_ascii_strcasecmp(suffixToken, "microsecond") || !g_ascii_strcasecmp(suffixToken, "microseconds") ||
+                    !g_ascii_strcasecmp(suffixToken, "usec") || !g_ascii_strcasecmp(suffixToken, "usecs") ||
+                    !g_ascii_strcasecmp(suffixToken, "us")) {
+                timeNanos = timeUnits * 1000;
+            } else if (!g_ascii_strcasecmp(suffixToken, "millisecond") || !g_ascii_strcasecmp(suffixToken, "milliseconds") ||
+                    !g_ascii_strcasecmp(suffixToken, "msec") || !g_ascii_strcasecmp(suffixToken, "msecs") ||
+                    !g_ascii_strcasecmp(suffixToken, "ms")) {
+                timeNanos = timeUnits * 1000000;
+            } else if (!g_ascii_strcasecmp(suffixToken, "second") || !g_ascii_strcasecmp(suffixToken, "seconds") ||
+                    !g_ascii_strcasecmp(suffixToken, "sec") || !g_ascii_strcasecmp(suffixToken, "secs") ||
+                    !g_ascii_strcasecmp(suffixToken, "s")) {
+                timeNanos = timeUnits * 1000000000;
+            } else if (!g_ascii_strcasecmp(suffixToken, "minute") || !g_ascii_strcasecmp(suffixToken, "minutes") ||
+                    !g_ascii_strcasecmp(suffixToken, "min") || !g_ascii_strcasecmp(suffixToken, "mins") ||
+                    !g_ascii_strcasecmp(suffixToken, "m")) {
+                timeNanos = timeUnits * 1000000000 * 60;
+            } else if (!g_ascii_strcasecmp(suffixToken, "hour") || !g_ascii_strcasecmp(suffixToken, "hours") ||
+                    !g_ascii_strcasecmp(suffixToken, "hr") || !g_ascii_strcasecmp(suffixToken, "hrs") ||
+                    !g_ascii_strcasecmp(suffixToken, "h")) {
+                timeNanos = timeUnits * 1000000000 * 60 * 60;
+            } else {
+                error = g_error_new(G_MARKUP_ERROR,
+                        G_MARKUP_ERROR_INVALID_CONTENT,
+                        "invalid time suffix '%s' in time string '%s' for attribute '%s', "
+                        "expected one of: 'nanosecond','nanoseconds','nsec','nsecs','ns', "
+                        "'microsecond', 'microseconds', 'usec', 'usecs', 'us', "
+                        "'millisecond', 'milliseconds', 'msec', 'msecs', 'ms', "
+                        "'second', 'seconds', 'sec', 'secs', 's', "
+                        "'minute', 'minutes', 'min', 'mins', 'm', "
+                        "'hour', 'hours', 'hr', 'hrs', or 'h'",
+                        suffixToken, timeStr, attributeName);
+            }
+        }
+
+        if(!error) {
+            tgen_debug("parsed %lu nanoseconds from string %s", timeNanos, timeStr);
+            if(timeNanosOut) {
+                *timeNanosOut = timeNanos;
+            }
+        }
+    }
+
+    g_strfreev(tokens);
+
+    return error;
+}
+
 static GError* _tgenaction_handleIntegerList(const gchar* attributeName, const gchar* timeStr,
         TGenPool* pauseTimesOut) {
     g_assert(attributeName && timeStr && pauseTimesOut);
@@ -357,7 +441,7 @@ void tgenaction_unref(TGenAction* action) {
 }
 
 TGenAction* tgenaction_newStartAction(const gchar* timeStr, const gchar* timeoutStr,
-        const gchar* stalloutStr, const gchar* loglevelStr, const gchar* serverPortStr,
+        const gchar* stalloutStr, const gchar* heartbeatStr, const gchar* loglevelStr, const gchar* serverPortStr,
         const gchar* peersStr, const gchar* socksProxyStr, GError** error) {
     g_assert(error);
 
@@ -383,6 +467,11 @@ TGenAction* tgenaction_newStartAction(const gchar* timeStr, const gchar* timeout
     guint64 defaultStallout = 0;
     if (stalloutStr && g_ascii_strncasecmp(stalloutStr, "\0", (gsize) 1)) {
         defaultStallout = g_ascii_strtoull(stalloutStr, NULL, 10);
+    }
+
+    guint64 heartbeatPeriodNanos = 0;
+    if (heartbeatStr && g_ascii_strncasecmp(heartbeatStr, "\0", (gsize) 1)) {
+        *error = _tgenaction_handleTime("heartbeat", heartbeatStr, &heartbeatPeriodNanos);
     }
 
     /* specifying a log level is optional, default is message level */
@@ -427,6 +516,7 @@ TGenAction* tgenaction_newStartAction(const gchar* timeStr, const gchar* timeout
     data->time = timedelay;
     data->timeout = defaultTimeout;
     data->stallout = defaultStallout;
+    data->heartbeatPeriodNanos = heartbeatPeriodNanos;
     data->loglevel = loglevel;
     guint64 longport = g_ascii_strtoull(serverPortStr, NULL, 10);
     data->serverport = htons((guint16)longport);
@@ -682,6 +772,12 @@ guint64 tgenaction_getDefaultStalloutMillis(TGenAction* action) {
     TGEN_ASSERT(action);
     g_assert(action->data && action->type == TGEN_ACTION_START);
     return 1000 * ((TGenActionStartData*)action->data)->stallout;
+}
+
+guint64 tgenaction_getHeartbeatPeriodMillis(TGenAction* action) {
+    TGEN_ASSERT(action);
+    g_assert(action->data && action->type == TGEN_ACTION_START);
+    return (guint64)(((TGenActionStartData*)action->data)->heartbeatPeriodNanos / 1000000);
 }
 
 GLogLevelFlags tgenaction_getLogLevel(TGenAction* action) {

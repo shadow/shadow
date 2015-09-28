@@ -548,8 +548,13 @@ static gboolean _tgendriver_setStartClientTimerHelper(TGenDriver* driver, guint6
 static gboolean _tgendriver_setHeartbeatTimerHelper(TGenDriver* driver) {
     TGEN_ASSERT(driver);
 
+    guint64 heartbeatPeriod = tgenaction_getHeartbeatPeriodMillis(driver->startAction);
+    if(heartbeatPeriod == 0) {
+        heartbeatPeriod = 1000;
+    }
+
     /* start the heartbeat as a persistent timer event */
-    TGenTimer* heartbeatTimer = tgentimer_new((guint64) 1000, TRUE,
+    TGenTimer* heartbeatTimer = tgentimer_new(heartbeatPeriod, TRUE,
             (TGenTimer_notifyExpiredFunc)_tgendriver_onHeartbeat, driver, NULL,
             (GDestroyNotify)tgendriver_unref, NULL);
 
