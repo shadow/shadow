@@ -9,7 +9,7 @@
 
 #include <glib.h>
 #include <gmodule.h>
-#include <igraph/igraph.h>
+#include <igraph.h>
 
 #include <stdlib.h>
 #include <stdio.h>

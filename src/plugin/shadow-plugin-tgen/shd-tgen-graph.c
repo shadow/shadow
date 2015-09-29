@@ -2,7 +2,7 @@
  * See LICENSE for licensing information
  */
 
-#include <igraph/igraph.h>
+#include <igraph.h>
 
 #include "shd-tgen.h"
 
@@ -377,7 +377,13 @@ static GError* _tgengraph_parseChooseVertex(TGenGraph* g, const gchar* idStr,
     igraph_es_t edgeSelector;
     igraph_eit_t edgeIterator;
 
+#if defined (IGRAPH_VERSION_MAJOR) && defined (IGRAPH_VERSION_MINOR) && defined (IGRAPH_VERSION_PATCH) && \
+    ((IGRAPH_VERSION_MAJOR == 0 && IGRAPH_VERSION_MINOR == 6 && IGRAPH_VERSION_PATCH >= 5) || \
+            (IGRAPH_VERSION_MAJOR == 0 && IGRAPH_VERSION_MINOR > 6) || (IGRAPH_VERSION_MAJOR > 0))
     gint result = igraph_es_incident(&edgeSelector, vertexIndex, IGRAPH_OUT);
+#else
+    gint result = igraph_es_adj(&edgeSelector, vertexIndex, IGRAPH_OUT);
+#endif
     if(result != IGRAPH_SUCCESS) {
         return g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_PARSE, 
                 "igraph_es_incident return non-success code %i", result);
