@@ -2,7 +2,7 @@
  * See LICENSE for licensing information
  */
 
-#include <igraph/igraph.h>
+#include <igraph.h>
 
 #include "shd-tgen.h"
 
