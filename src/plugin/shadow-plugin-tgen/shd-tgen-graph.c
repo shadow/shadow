@@ -350,7 +350,7 @@ static GError* _tgengraph_parseTransferVertex(TGenGraph* g, const gchar* idStr,
             VAS(g->graph, "stallout", vertexIndex) : NULL;
 
     tgen_debug("found vertex %li (%s), type=%s protocol=%s size=%s peers=%s timeout=%s stallout=%s",
-            (glong)vertexIndex, idStr, typeStr, protocolStr, sizeStr, peersStr, timeoutStr);
+            (glong)vertexIndex, idStr, typeStr, protocolStr, sizeStr, peersStr, timeoutStr, stalloutStr);
 
     GError* error = NULL;
     TGenAction* a = tgenaction_newTransferAction(typeStr, protocolStr, sizeStr, peersStr, timeoutStr, stalloutStr, &error);
