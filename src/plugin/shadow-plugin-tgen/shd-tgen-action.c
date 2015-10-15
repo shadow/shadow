@@ -10,9 +10,9 @@
 typedef struct _TGenActionStartData {
     /* TODO change all times to use the handleTime func, as store nanos
      * currently only the heartbeat does this. */
-    guint64 time;
-    guint64 timeout;
-    guint64 stallout;
+    guint64 timeNanos;
+    guint64 timeoutNanos;
+    guint64 stalloutNanos;
     guint64 heartbeatPeriodNanos;
     GLogLevelFlags loglevel;
     guint16 serverport;
@@ -21,22 +21,22 @@ typedef struct _TGenActionStartData {
 } TGenActionStartData;
 
 typedef struct _TGenActionEndData {
-    guint64 time;
+    guint64 timeNanos;
     guint64 count;
     guint64 size;
 } TGenActionEndData;
 
 typedef struct _TGenActionPauseData {
-    TGenPool* pauseTimes;
+    TGenPool* pauseTimesNanos;
 } TGenActionPauseData;
 
 typedef struct _TGenActionTransferData {
     TGenTransferType type;
     TGenTransportProtocol protocol;
     guint64 size;
-    guint64 timeout;
+    guint64 timeoutNanos;
     gboolean timeoutIsSet;
-    guint64 stallout;
+    guint64 stalloutNanos;
     gboolean stalloutIsSet;
     TGenPool* peers;
 } TGenActionTransferData;
@@ -232,7 +232,7 @@ static GError* _tgenaction_handleTime(const gchar* attributeName, const gchar* t
 
     GError* error = NULL;
 
-    /* split into parts (format example: "10 MiB") */
+    /* split into parts (format example: "10 seconds") */
     gchar** tokens = g_strsplit(timeStr, (const gchar*) " ", 2);
     gchar* timeToken = tokens[0];
     gchar* suffixToken = tokens[1];
@@ -308,7 +308,7 @@ static GError* _tgenaction_handleTime(const gchar* attributeName, const gchar* t
     return error;
 }
 
-static GError* _tgenaction_handleIntegerList(const gchar* attributeName, const gchar* timeStr,
+static GError* _tgenaction_handleTimeList(const gchar* attributeName, const gchar* timeStr,
         TGenPool* pauseTimesOut) {
     g_assert(attributeName && timeStr && pauseTimesOut);
 
@@ -326,9 +326,14 @@ static GError* _tgenaction_handleIntegerList(const gchar* attributeName, const g
             break;
         }
 
-        guint64* pauseTime = g_new0(guint64, 1);
-        *pauseTime = g_ascii_strtoull(tokens[i], NULL, 10);
-        tgenpool_add(pauseTimesOut, pauseTime);
+        guint64* pauseTimeNanos = g_new0(guint64, 1);
+        error = _tgenaction_handleTime(attributeName, tokens[i], pauseTimeNanos);
+        if(error) {
+            break;
+        } else {
+            tgenpool_add(pauseTimesOut, pauseTimeNanos);
+        }
+
     }
 
     g_strfreev(tokens);
@@ -453,25 +458,37 @@ TGenAction* tgenaction_newStartAction(const gchar* timeStr, const gchar* timeout
     }
 
     /* a time delay from application startup is optional */
-    guint64 timedelay = 0;
+    guint64 timedelayNanos = 0;
     if (timeStr && g_ascii_strncasecmp(timeStr, "\0", (gsize) 1)) {
-        timedelay = g_ascii_strtoull(timeStr, NULL, 10);
+        *error = _tgenaction_handleTime("time", timeStr, &timedelayNanos);
+        if (*error) {
+            return NULL;
+        }
     }
 
     /* a global default transfer timeout is optional */
-    guint64 defaultTimeout = 0;
+    guint64 defaultTimeoutNanos = 0;
     if (timeoutStr && g_ascii_strncasecmp(timeoutStr, "\0", (gsize) 1)) {
-        defaultTimeout = g_ascii_strtoull(timeoutStr, NULL, 10);
+        *error = _tgenaction_handleTime("timeout", timeoutStr, &defaultTimeoutNanos);
+        if (*error) {
+            return NULL;
+        }
     }
 
-    guint64 defaultStallout = 0;
+    guint64 defaultStalloutNanos = 0;
     if (stalloutStr && g_ascii_strncasecmp(stalloutStr, "\0", (gsize) 1)) {
-        defaultStallout = g_ascii_strtoull(stalloutStr, NULL, 10);
+        *error = _tgenaction_handleTime("stallout", stalloutStr, &defaultStalloutNanos);
+        if (*error) {
+            return NULL;
+        }
     }
 
     guint64 heartbeatPeriodNanos = 0;
     if (heartbeatStr && g_ascii_strncasecmp(heartbeatStr, "\0", (gsize) 1)) {
         *error = _tgenaction_handleTime("heartbeat", heartbeatStr, &heartbeatPeriodNanos);
+        if (*error) {
+            return NULL;
+        }
     }
 
     /* specifying a log level is optional, default is message level */
@@ -513,9 +530,9 @@ TGenAction* tgenaction_newStartAction(const gchar* timeStr, const gchar* timeout
 
     TGenActionStartData* data = g_new0(TGenActionStartData, 1);
 
-    data->time = timedelay;
-    data->timeout = defaultTimeout;
-    data->stallout = defaultStallout;
+    data->timeNanos = timedelayNanos;
+    data->timeoutNanos = defaultTimeoutNanos;
+    data->stalloutNanos = defaultStalloutNanos;
     data->heartbeatPeriodNanos = heartbeatPeriodNanos;
     data->loglevel = loglevel;
     guint64 longport = g_ascii_strtoull(serverPortStr, NULL, 10);
@@ -551,7 +568,10 @@ TGenAction* tgenaction_newEndAction(const gchar* timeStr, const gchar* countStr,
     TGenActionEndData* data = g_new0(TGenActionEndData, 1);
     data->size = size;
     if (timeStr && g_ascii_strncasecmp(timeStr, "\0", (gsize) 1)) {
-        data->time = g_ascii_strtoull(timeStr, NULL, 10);
+        *error = _tgenaction_handleTime("time", timeStr, &data->timeNanos);
+        if(error) {
+            return NULL;
+        }
     }
     if (countStr && g_ascii_strncasecmp(countStr, "\0", (gsize) 1)) {
         data->count = g_ascii_strtoull(countStr, NULL, 10);
@@ -572,10 +592,10 @@ TGenAction* tgenaction_newPauseAction(const gchar* timeStr, GError** error) {
         return NULL;
     }
 
-    TGenPool* pauseTimes = tgenpool_new(g_free);
-    *error = _tgenaction_handleIntegerList("time", timeStr, pauseTimes);
+    TGenPool* pauseTimesNanos = tgenpool_new(g_free);
+    *error = _tgenaction_handleTimeList("time", timeStr, pauseTimesNanos);
     if (*error) {
-        tgenpool_unref(pauseTimes);
+        tgenpool_unref(pauseTimesNanos);
         return NULL;
     }
 
@@ -586,7 +606,7 @@ TGenAction* tgenaction_newPauseAction(const gchar* timeStr, GError** error) {
     action->type = TGEN_ACTION_PAUSE;
 
     TGenActionPauseData* data = g_new0(TGenActionPauseData, 1);
-    data->pauseTimes = pauseTimes;
+    data->pauseTimesNanos = pauseTimesNanos;
 
     action->data = data;
 
@@ -691,17 +711,23 @@ TGenAction* tgenaction_newTransferAction(const gchar* typeStr, const gchar* prot
     }
 
     /* a transfer timeout is optional */
-    guint64 timeout = 0;
+    guint64 timeoutNanos = 0;
     gboolean timeoutIsSet = FALSE;
     if (timeoutStr && g_ascii_strncasecmp(timeoutStr, "\0", (gsize) 1)) {
-        timeout = g_ascii_strtoull(timeoutStr, NULL, 10);
+        *error = _tgenaction_handleTime("timeout", timeoutStr, &timeoutNanos);
+        if(error) {
+            return NULL;
+        }
         timeoutIsSet = TRUE;
     }
 
-    guint64 stallout = 0;
+    guint64 stalloutNanos = 0;
     gboolean stalloutIsSet = FALSE;
     if (stalloutStr && g_ascii_strncasecmp(stalloutStr, "\0", (gsize) 1)) {
-        stallout = g_ascii_strtoull(stalloutStr, NULL, 10);
+        *error = _tgenaction_handleTime("stallout", stalloutStr, &stalloutNanos);
+        if(error) {
+            return NULL;
+        }
         stalloutIsSet = TRUE;
     }
 
@@ -716,9 +742,9 @@ TGenAction* tgenaction_newTransferAction(const gchar* typeStr, const gchar* prot
     data->type = type;
     data->size = size;
     data->peers = peerPool;
-    data->timeout = timeout;
+    data->timeoutNanos = timeoutNanos;
     data->timeoutIsSet = timeoutIsSet;
-    data->stallout = stallout;
+    data->stalloutNanos = stalloutNanos;
     data->stalloutIsSet = stalloutIsSet;
 
     action->data = data;
@@ -759,19 +785,19 @@ TGenPeer* tgenaction_getSocksProxy(TGenAction* action) {
 guint64 tgenaction_getStartTimeMillis(TGenAction* action) {
     TGEN_ASSERT(action);
     g_assert(action->data && action->type == TGEN_ACTION_START);
-    return 1000 * ((TGenActionStartData*)action->data)->time;
+    return (guint64)(((TGenActionStartData*)action->data)->timeNanos / 1000000);
 }
 
 guint64 tgenaction_getDefaultTimeoutMillis(TGenAction* action) {
     TGEN_ASSERT(action);
     g_assert(action->data && action->type == TGEN_ACTION_START);
-    return 1000 * ((TGenActionStartData*)action->data)->timeout;
+    return (guint64)(((TGenActionStartData*)action->data)->timeoutNanos / 1000000);
 }
 
 guint64 tgenaction_getDefaultStalloutMillis(TGenAction* action) {
     TGEN_ASSERT(action);
     g_assert(action->data && action->type == TGEN_ACTION_START);
-    return 1000 * ((TGenActionStartData*)action->data)->stallout;
+    return (guint64)(((TGenActionStartData*)action->data)->stalloutNanos / 1000000);
 }
 
 guint64 tgenaction_getHeartbeatPeriodMillis(TGenAction* action) {
@@ -789,8 +815,8 @@ GLogLevelFlags tgenaction_getLogLevel(TGenAction* action) {
 guint64 tgenaction_getPauseTimeMillis(TGenAction* action) {
     TGEN_ASSERT(action);
     g_assert(action->data && action->type == TGEN_ACTION_PAUSE);
-    guint64* time = tgenpool_getRandom(((TGenActionPauseData*)action->data)->pauseTimes);
-    return *time * 1000;
+    guint64* time = tgenpool_getRandom(((TGenActionPauseData*)action->data)->pauseTimesNanos);
+    return (guint64)(*time / 1000000);
 }
 
 void tgenaction_getTransferParameters(TGenAction* action, TGenTransferType* typeOut,
@@ -810,15 +836,15 @@ void tgenaction_getTransferParameters(TGenAction* action, TGenTransferType* type
     if(timeoutOut) {
         TGenActionTransferData* data = (TGenActionTransferData*)action->data;
         if(data->timeoutIsSet) {
-            /* seconds to milliseconds */
-            *timeoutOut = data->timeout * 1000;
+            /* nanoseconds to milliseconds */
+            *timeoutOut = (guint64)(data->timeoutNanos / 1000000);
         }
     }
     if(stalloutOut) {
         TGenActionTransferData* data = (TGenActionTransferData*)action->data;
         if(data->stalloutIsSet) {
-            /* seconds to milliseconds */
-            *stalloutOut = data->stallout * 1000;
+            /* nanoseconds to milliseconds */
+            *stalloutOut = (guint64)(data->stalloutNanos / 1000000);
         }
     }
 }
@@ -839,7 +865,7 @@ TGenPool* tgenaction_getPeers(TGenAction* action) {
 guint64 tgenaction_getEndTimeMillis(TGenAction* action) {
     TGEN_ASSERT(action);
     g_assert(action->data && action->type == TGEN_ACTION_END);
-    return 1000 * ((TGenActionEndData*)action->data)->time;
+    return (guint64)(((TGenActionEndData*)action->data)->timeNanos / 1000000);
 }
 
 guint64 tgenaction_getEndCount(TGenAction* action) {
