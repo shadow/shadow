@@ -56,7 +56,7 @@ static in_addr_t _tgenpeer_lookupIP(const gchar* hostname) {
         ip = ((struct sockaddr_in*) (info->ai_addr))->sin_addr.s_addr;
     } else {
         tgen_warning("getaddrinfo(): returned %i host '%s' errno %i: %s",
-                result, hostname, errno, g_strerror(errno));
+                result, hostname, errno, gai_strerror(errno));
     }
 
     freeaddrinfo(info);
@@ -70,6 +70,7 @@ static gchar* _tgenpeer_lookupName(in_addr_t networkIP) {
     struct sockaddr_in addrbuf;
     memset(&addrbuf, 0, sizeof(struct sockaddr_in));
     addrbuf.sin_addr.s_addr = networkIP;
+    addrbuf.sin_family = AF_INET;
 
     gchar namebuf[256];
     memset(namebuf, 0, 256);
@@ -83,7 +84,7 @@ static gchar* _tgenpeer_lookupName(in_addr_t networkIP) {
     } else {
         gchar* ipStr = _tgenpeer_ipToIPStr(networkIP);
         tgen_warning("getnameinfo(): returned %i ip '%s' errno %i: %s",
-                result, ipStr, errno, g_strerror(errno));
+                result, ipStr, errno, gai_strerror(errno));
         if(ipStr) {
             g_free(ipStr);
         }
