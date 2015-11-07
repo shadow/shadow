@@ -241,8 +241,8 @@ const gchar* tgenpeer_toString(TGenPeer* peer) {
 
     if(!peer->string) {
         GString* stringBuffer = g_string_new(NULL);
-        g_string_printf(stringBuffer, "%s:%s:%u", peer->hostNameStr, peer->hostIPStr,
-                ntohs(peer->netPort));
+        g_string_printf(stringBuffer, "%s:%s:%u",peer->hostNameStr ? peer->hostNameStr : "NULL",
+                peer->hostIPStr ? peer->hostIPStr : "0.0.0.0", ntohs(peer->netPort));
         peer->string = g_string_free(stringBuffer, FALSE);
     }
 
