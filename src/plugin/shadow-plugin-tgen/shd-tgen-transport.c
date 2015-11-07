@@ -146,7 +146,7 @@ const gchar* tgentransport_toString(TGenTransport* transport) {
 
         GString* buffer = g_string_new(NULL);
 
-        g_string_printf(buffer, "(%s-%i-%s-%s-state=%s-error=%s)", protocolStr, transport->socketD,
+        g_string_printf(buffer, "%s,%i,%s,%s,state=%s,error=%s", protocolStr, transport->socketD,
                 proxyStr, peerStr, stateStr, errorStr);
 
         transport->string = g_string_free(buffer, FALSE);
