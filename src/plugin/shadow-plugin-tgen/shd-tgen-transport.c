@@ -39,7 +39,7 @@ struct _TGenTransport {
     /* the remote side of the transport */
     TGenPeer* remote;
 
-    /* track timings for time reporting */
+    /* track timings for time reporting, using g_get_monotonic_time in usec granularity */
     struct {
         gint64 start;
         gint64 socketCreate;
@@ -348,25 +348,25 @@ gchar* tgentransport_getTimeStatusReport(TGenTransport* transport) {
     TGEN_ASSERT(transport);
 
     gint64 create = (transport->time.socketCreate > 0 && transport->time.start > 0) ?
-            (transport->time.socketCreate - transport->time.start) / 1000 : 0;
+            (transport->time.socketCreate - transport->time.start) : 0;
     gint64 connect = (transport->time.socketConnect > 0 && transport->time.start > 0) ?
-            (transport->time.socketConnect - transport->time.start) / 1000 : 0;
+            (transport->time.socketConnect - transport->time.start) : 0;
     gint64 init = (transport->time.proxyInit > 0 && transport->time.start > 0) ?
-            (transport->time.proxyInit - transport->time.start) / 1000 : 0;
+            (transport->time.proxyInit - transport->time.start) : 0;
     gint64 choice = (transport->time.proxyChoice > 0 && transport->time.start > 0) ?
-            (transport->time.proxyChoice - transport->time.start) / 1000 : 0;
+            (transport->time.proxyChoice - transport->time.start) : 0;
     gint64 request = (transport->time.proxyRequest > 0 && transport->time.start > 0) ?
-            (transport->time.proxyRequest - transport->time.start) / 1000 : 0;
+            (transport->time.proxyRequest - transport->time.start) : 0;
     gint64 response = (transport->time.proxyResponse > 0 && transport->time.start > 0) ?
-            (transport->time.proxyResponse - transport->time.start) / 1000 : 0;
+            (transport->time.proxyResponse - transport->time.start) : 0;
 
     GString* buffer = g_string_new(NULL);
 
     /* print the times in milliseconds */
     g_string_printf(buffer,
-            "msecs-to-socket-create=%"G_GINT64_FORMAT" msecs-to-socket-connect=%"G_GINT64_FORMAT" "
-            "msecs-to-proxy-init=%"G_GINT64_FORMAT" msecs-to-proxy-choice=%"G_GINT64_FORMAT" "
-            "msecs-to-proxy-request=%"G_GINT64_FORMAT" msecs-to-proxy-response=%"G_GINT64_FORMAT,
+            "usecs-to-socket-create=%"G_GINT64_FORMAT" usecs-to-socket-connect=%"G_GINT64_FORMAT" "
+            "usecs-to-proxy-init=%"G_GINT64_FORMAT" usecs-to-proxy-choice=%"G_GINT64_FORMAT" "
+            "usecs-to-proxy-request=%"G_GINT64_FORMAT" usecs-to-proxy-response=%"G_GINT64_FORMAT,
             create, connect, init, choice, request, response);
 
     return g_string_free(buffer, FALSE);
