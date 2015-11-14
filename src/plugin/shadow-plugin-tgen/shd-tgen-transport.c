@@ -215,6 +215,11 @@ static TGenTransport* _tgentransport_newHelper(gint socketD, gint64 startedTime,
 
     transport->time.start = startedTime;
     transport->time.socketCreate = createdTime;
+    transport->time.socketConnect = -1;
+    transport->time.proxyInit = -1;
+    transport->time.proxyChoice = -1;
+    transport->time.proxyRequest = -1;
+    transport->time.proxyResponse = -1;
 
     return transport;
 }
@@ -347,18 +352,18 @@ gint tgentransport_getDescriptor(TGenTransport* transport) {
 gchar* tgentransport_getTimeStatusReport(TGenTransport* transport) {
     TGEN_ASSERT(transport);
 
-    gint64 create = (transport->time.socketCreate > 0 && transport->time.start > 0) ?
-            (transport->time.socketCreate - transport->time.start) : 0;
-    gint64 connect = (transport->time.socketConnect > 0 && transport->time.start > 0) ?
-            (transport->time.socketConnect - transport->time.start) : 0;
-    gint64 init = (transport->time.proxyInit > 0 && transport->time.start > 0) ?
-            (transport->time.proxyInit - transport->time.start) : 0;
-    gint64 choice = (transport->time.proxyChoice > 0 && transport->time.start > 0) ?
-            (transport->time.proxyChoice - transport->time.start) : 0;
-    gint64 request = (transport->time.proxyRequest > 0 && transport->time.start > 0) ?
-            (transport->time.proxyRequest - transport->time.start) : 0;
-    gint64 response = (transport->time.proxyResponse > 0 && transport->time.start > 0) ?
-            (transport->time.proxyResponse - transport->time.start) : 0;
+    gint64 create = (transport->time.socketCreate >= 0 && transport->time.start >= 0) ?
+            (transport->time.socketCreate - transport->time.start) : -1;
+    gint64 connect = (transport->time.socketConnect >= 0 && transport->time.start >= 0) ?
+            (transport->time.socketConnect - transport->time.start) : -1;
+    gint64 init = (transport->time.proxyInit >= 0 && transport->time.start >= 0) ?
+            (transport->time.proxyInit - transport->time.start) : -1;
+    gint64 choice = (transport->time.proxyChoice >= 0 && transport->time.start >= 0) ?
+            (transport->time.proxyChoice - transport->time.start) : -1;
+    gint64 request = (transport->time.proxyRequest >= 0 && transport->time.start >= 0) ?
+            (transport->time.proxyRequest - transport->time.start) : -1;
+    gint64 response = (transport->time.proxyResponse >= 0 && transport->time.start >= 0) ?
+            (transport->time.proxyResponse - transport->time.start) : -1;
 
     GString* buffer = g_string_new(NULL);
 

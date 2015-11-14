@@ -26,7 +26,7 @@ struct _TGenDriver {
     TGenIO* io;
 
     /* each transfer has a unique id */
-    gsize transferIDCounter;
+    gsize globalTransferCounter;
 
     /* traffic statistics */
     guint64 heartbeatTransfersCompleted;
@@ -152,8 +152,8 @@ static void _tgendriver_onNewPeer(TGenDriver* driver, gint socketD, TGenPeer* pe
     guint64 defaultStallout = tgenaction_getDefaultStalloutMillis(driver->startAction);
 
     /* a new transfer will be coming in on this transport */
-    gsize id = ++(driver->transferIDCounter);
-    TGenTransfer* transfer = tgentransfer_new(id, TGEN_TYPE_NONE, 0, defaultTimeout, defaultStallout, transport,
+    gsize count = ++(driver->globalTransferCounter);
+    TGenTransfer* transfer = tgentransfer_new(NULL, count, TGEN_TYPE_NONE, 0, defaultTimeout, defaultStallout, transport,
             (TGenTransfer_notifyCompleteFunc)_tgendriver_onTransferComplete, driver, NULL,
             (GDestroyNotify)tgendriver_unref, NULL);
 
@@ -217,11 +217,14 @@ static void _tgendriver_initiateTransfer(TGenDriver* driver, TGenAction* action)
     TGenTransferType type = 0;
     /* this will only update timeout if there was a non-default timeout set for this transfer */
     tgenaction_getTransferParameters(action, &type, NULL, &size, &timeout, &stallout);
-    gsize id = ++(driver->transferIDCounter);
+
+    /* the unique id of this vertex in the graph */
+    const gchar* idStr = tgengraph_getActionIDStr(driver->actionGraph, action);
+    gsize count = ++(driver->globalTransferCounter);
 
     /* a new transfer will be coming in on this transport. the transfer
      * takes control of the transport pointer reference. */
-    TGenTransfer* transfer = tgentransfer_new(id, type, (gsize)size, timeout, stallout, transport,
+    TGenTransfer* transfer = tgentransfer_new(idStr, count, type, (gsize)size, timeout, stallout, transport,
             (TGenTransfer_notifyCompleteFunc)_tgendriver_onTransferComplete, driver, action,
             (GDestroyNotify)tgendriver_unref, (GDestroyNotify)tgenaction_unref);
 

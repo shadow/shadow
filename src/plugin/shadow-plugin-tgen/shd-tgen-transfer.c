@@ -31,12 +31,13 @@ struct _TGenTransfer {
     gint64 stalloutUSecs;
 
     /* command information */
-    gsize id;
+    gchar* id; // the unique vertex id from the graph
+    gsize count; // global transfer count
     TGenTransferType type;
     gsize size;
     gboolean isCommander;
-    gchar* name;
-    gsize remoteID;
+    gchar* hostname;
+    gsize remoteCount;
     gchar* remoteName;
 
     /* socket communication layer and buffers */
@@ -152,9 +153,9 @@ static const gchar* _tgentransfer_toString(TGenTransfer* transfer) {
     if(!transfer->string) {
         GString* stringBuffer = g_string_new(NULL);
 
-        g_string_printf(stringBuffer, "%"G_GSIZE_FORMAT",%s,%s,%"G_GSIZE_FORMAT",%s,%"G_GSIZE_FORMAT",state=%s,error=%s",
-                transfer->id, transfer->name, _tgentransfer_typeToString(transfer),
-                transfer->size, transfer->remoteName, transfer->remoteID,
+        g_string_printf(stringBuffer, "%s,%"G_GSIZE_FORMAT",%s,%s,%"G_GSIZE_FORMAT",%s,%"G_GSIZE_FORMAT",state=%s,error=%s",
+                transfer->id, transfer->count, transfer->hostname, _tgentransfer_typeToString(transfer),
+                transfer->size, transfer->remoteName, transfer->remoteCount,
                 _tgentransfer_stateToString(transfer->state), _tgentransfer_errorToString(transfer->error));
 
         transfer->string = g_string_free(stringBuffer, FALSE);
@@ -244,28 +245,32 @@ static void _tgentransfer_readCommand(TGenTransfer* transfer) {
             g_assert(!transfer->remoteName);
             transfer->remoteName = g_strdup(parts[0]);
 
-            transfer->remoteID = (gsize)g_ascii_strtoull(parts[1], NULL, 10);
-            if(transfer->remoteID == 0) {
-                tgen_critical("error parsing command ID '%s'", parts[1]);
+            /* we are not the commander so we should not have an id yet */
+            g_assert(transfer->id == NULL);
+            transfer->id = g_strdup(parts[1]);
+
+            transfer->remoteCount = (gsize)g_ascii_strtoull(parts[2], NULL, 10);
+            if(transfer->remoteCount == 0) {
+                tgen_critical("error parsing command ID '%s'", parts[2]);
                 hasError = TRUE;
             }
 
-            if(!g_ascii_strncasecmp(parts[2], "GET", 3)) {
+            if(!g_ascii_strncasecmp(parts[3], "GET", 3)) {
                 /* they are trying to GET, then we need to PUT to them */
                 transfer->type = TGEN_TYPE_PUT;
                 /* we read command, but now need to write payload */
                 transfer->events |= TGEN_EVENT_WRITE;
-            } else if(!g_ascii_strncasecmp(parts[2], "PUT", 3)) {
+            } else if(!g_ascii_strncasecmp(parts[3], "PUT", 3)) {
                 /* they want to PUT, so we will GET from them */
                 transfer->type = TGEN_TYPE_GET;
             } else {
-                tgen_critical("error parsing command type '%s'", parts[2]);
+                tgen_critical("error parsing command type '%s'", parts[3]);
                 hasError = TRUE;
             }
 
-            transfer->size = (gsize)g_ascii_strtoull(parts[3], NULL, 10);
+            transfer->size = (gsize)g_ascii_strtoull(parts[4], NULL, 10);
             if(transfer->size == 0) {
-                tgen_critical("error parsing command size '%s'", parts[3]);
+                tgen_critical("error parsing command size '%s'", parts[4]);
                 hasError = TRUE;
             }
         }
@@ -307,8 +312,8 @@ static void _tgentransfer_readResponse(TGenTransfer* transfer) {
             g_assert(!transfer->remoteName);
             transfer->remoteName = g_strdup(parts[0]);
 
-            transfer->remoteID = (gsize)g_ascii_strtoull(parts[1], NULL, 10);
-            if(transfer->remoteID == 0) {
+            transfer->remoteCount = (gsize)g_ascii_strtoull(parts[1], NULL, 10);
+            if(transfer->remoteCount == 0) {
                 tgen_critical("error parsing command ID '%s'", parts[1]);
                 hasError = TRUE;
             }
@@ -508,8 +513,8 @@ static void _tgentransfer_writeCommand(TGenTransfer* transfer) {
     /* buffer the command if we have not done that yet */
     if(!transfer->writeBuffer) {
         transfer->writeBuffer = g_string_new(NULL);
-        g_string_printf(transfer->writeBuffer, "%s %"G_GSIZE_FORMAT" %s %"G_GSIZE_FORMAT"\n",
-            transfer->name, transfer->id, _tgentransfer_typeToString(transfer), transfer->size);
+        g_string_printf(transfer->writeBuffer, "%s %s %"G_GSIZE_FORMAT" %s %"G_GSIZE_FORMAT"\n",
+            transfer->hostname, transfer->id, transfer->count, _tgentransfer_typeToString(transfer), transfer->size);
     }
 
     _tgentransfer_flushOut(transfer);
@@ -531,7 +536,7 @@ static void _tgentransfer_writeResponse(TGenTransfer* transfer) {
     if(!transfer->writeBuffer) {
         transfer->writeBuffer = g_string_new(NULL);
         g_string_printf(transfer->writeBuffer, "%s %"G_GSIZE_FORMAT"\n",
-                transfer->name, transfer->id);
+                transfer->hostname, transfer->count);
     }
 
     _tgentransfer_flushOut(transfer);
@@ -842,7 +847,7 @@ gboolean tgentransfer_onCheckTimeout(TGenTransfer* transfer, gint descriptor) {
     }
 }
 
-TGenTransfer* tgentransfer_new(gsize id, TGenTransferType type, gsize size, guint64 timeout, guint64 stallout,
+TGenTransfer* tgentransfer_new(const gchar* idStr, gsize count, TGenTransferType type, gsize size, guint64 timeout, guint64 stallout,
         TGenTransport* transport, TGenTransfer_notifyCompleteFunc notify,
         gpointer data1, gpointer data2, GDestroyNotify destructData1, GDestroyNotify destructData2) {
     TGenTransfer* transfer = g_new0(TGenTransfer, 1);
@@ -858,7 +863,8 @@ TGenTransfer* tgentransfer_new(gsize id, TGenTransferType type, gsize size, guin
     transfer->time.start = g_get_monotonic_time();
 
     transfer->events = TGEN_EVENT_READ;
-    transfer->id = id;
+    transfer->id = g_strdup(idStr);
+    transfer->count = count;
 
     /* the timeout after which we abandon this transfer */
     transfer->timeoutUSecs = (gint64)(timeout > 0 ? (timeout * 1000) : DEFAULT_XFER_TIMEOUT_USEC);
@@ -866,7 +872,7 @@ TGenTransfer* tgentransfer_new(gsize id, TGenTransferType type, gsize size, guin
 
     gchar nameBuffer[256];
     memset(nameBuffer, 0, 256);
-    transfer->name = (0 == gethostname(nameBuffer, 255)) ? g_strdup(nameBuffer) : NULL;
+    transfer->hostname = (0 == gethostname(nameBuffer, 255)) ? g_strdup(nameBuffer) : NULL;
 
     if(type != TGEN_TYPE_NONE) {
         transfer->isCommander = TRUE;
@@ -890,8 +896,12 @@ static void _tgentransfer_free(TGenTransfer* transfer) {
         g_free(transfer->string);
     }
 
-    if(transfer->name) {
-        g_free(transfer->name);
+    if(transfer->hostname) {
+        g_free(transfer->hostname);
+    }
+
+    if(transfer->id) {
+        g_free(transfer->id);
     }
 
     if(transfer->remoteName) {

@@ -851,6 +851,15 @@ gboolean tgengraph_hasEdges(TGenGraph* g) {
     return (g->edgeCount > 0) ? TRUE : FALSE;
 }
 
+const gchar* tgengraph_getActionIDStr(TGenGraph* g, TGenAction* action) {
+    TGEN_ASSERT(g);
+
+    gpointer key = tgenaction_getKey(action);
+    igraph_integer_t vertexIndex = (igraph_integer_t) GPOINTER_TO_INT(key);
+    const gchar* idStr = VAS(g->graph, "id", vertexIndex);
+    return idStr;
+}
+
 const gchar* tgengraph_getGraphPath(TGenGraph* g) {
     TGEN_ASSERT(g);
     return g->graphPath;
