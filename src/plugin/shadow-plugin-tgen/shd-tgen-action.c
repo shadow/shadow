@@ -715,7 +715,7 @@ TGenAction* tgenaction_newTransferAction(const gchar* typeStr, const gchar* prot
     gboolean timeoutIsSet = FALSE;
     if (timeoutStr && g_ascii_strncasecmp(timeoutStr, "\0", (gsize) 1)) {
         *error = _tgenaction_handleTime("timeout", timeoutStr, &timeoutNanos);
-        if(error) {
+        if(*error) {
             return NULL;
         }
         timeoutIsSet = TRUE;
@@ -725,7 +725,7 @@ TGenAction* tgenaction_newTransferAction(const gchar* typeStr, const gchar* prot
     gboolean stalloutIsSet = FALSE;
     if (stalloutStr && g_ascii_strncasecmp(stalloutStr, "\0", (gsize) 1)) {
         *error = _tgenaction_handleTime("stallout", stalloutStr, &stalloutNanos);
-        if(error) {
+        if(*error) {
             return NULL;
         }
         stalloutIsSet = TRUE;
