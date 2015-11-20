@@ -71,7 +71,7 @@ Shadow runs real applications that run on regular UNIX-type systems. These appli
 
 ## Shadow Design Webcast
 
-See [the original Shadow webcast][youtube-shadow-design] for more information about Shadow's original design, and for an explanation of some experiments that utilize this unique architecture. Checkout [Google Scholar](https://scholar.google.com/scholar?oi=bibs&hl=en&cites=12341442653770148265) for research publications that cite Shadow.
+See [the original Shadow webcast][youtube-shadow-design] for more information about Shadow's original design, and for an explanation of some experiments that utilize this unique architecture. An explanation of recent architecture updates to support blocking system calls (read/write/send/recv/sleep) and applications that spawn threads [can be found here][cset-rpth-slides]. Checkout [Google Scholar](https://scholar.google.com/scholar?oi=bibs&hl=en&cites=12341442653770148265) for research publications that cite Shadow.
 
 <!--<iframe width="420" height="315" src="http://www.youtube-nocookie.com/embed/Tb7m8OdpD8A" frameborder="0" allowfullscreen></iframe>-->
 
@@ -82,3 +82,4 @@ See [the original Shadow webcast][youtube-shadow-design] for more information ab
 [wiki-scallion]: https://github.com/shadow/shadow-plugin-tor/wiki
 [wiki-custom-plugin]: https://github.com/shadow/shadow/wiki/2-Simulation-Execution-and-Analysis#shadow-plug-ins
 [youtube-shadow-design]: http://youtu.be/Tb7m8OdpD8A
+[cset-rpth-slides]: http://www.robgjansen.com/talks/shadowbitcoin-cset-20150810.pdf
