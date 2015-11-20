@@ -15,10 +15,9 @@ shadow --help
 ## Shadow plug-ins
 
 Generic applications may be run in Shadow. The most important required features of the application code to enable this are:
- + completely non-blocking I/O and non-blocking system calls
- + polling I/O events using the `epoll` interface (see `$ man epoll`)  
-   _NOTE_: [libevent](http://libevent.org/) is also supported through its use of `epoll`.
- + no process forking or thread creation, or a mode that allows the application to run in a single thread
+
+ + polling I/O events using one of the `epoll`, `poll`, or `select` interfaces (e.g., see `$ man epoll`)
+ + no process forking, or a mode that allows the application to run in a single process
 
 Included with Shadow is a traffic generator plug-in that is capable of modeling generic behaviors represented using an action-dependency graph and the standard graphml xml format. This powerful plug-in means different behavior models can be implemented by simply writing a python script to generate new graphml files rather than modifying simulator code or writing new plug-ins. More information about customizing behaviors is [also on the wiki](3-Simulation-Customization#Traffic-generator-configuration).
 
