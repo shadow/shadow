@@ -57,7 +57,7 @@ shadow --version
 shadow --help
 ```
 
-## Setup Notes
+### Setup Notes
 
 + All build output is generated out-of-source, by default to the `./build` directory.
 + Use `./setup build --help` to see all build options; the most useful build options are:  
