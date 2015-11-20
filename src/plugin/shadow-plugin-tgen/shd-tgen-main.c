@@ -68,7 +68,10 @@ static void _tgenmain_cleanup(gint status, gpointer arg) {
         TGenDriver* tgen = (TGenDriver*) arg;
         tgendriver_unref(tgen);
     }
-    tgen_message("exiting cleanly");
+    if(tgenLogDomain) {
+        tgen_message("exiting cleanly");
+        g_string_free(tgenLogDomain, TRUE);
+    }
 }
 
 static gint _tgenmain_run(gint argc, gchar *argv[]) {
@@ -192,7 +195,6 @@ static gint _tgenmain_run(gint argc, gchar *argv[]) {
     close(mainepolld);
 
     tgen_message("returning 0 from main");
-    g_string_free(tgenLogDomain, TRUE);
 
     /* _tgenmain_cleanup() should get called via on_exit */
     return 0;
