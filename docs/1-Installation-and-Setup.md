@@ -22,7 +22,7 @@ Shadow can either be run in a [traditional computing](#shadow-with-traditional-c
 **YUM (Fedora):**
 
 ```bash
-sudo yum install -y gcc gcc-c++ clang clang-devel llvm llvm-devel glib2 glib2-devel igraph igraph-devel cmake make xz
+sudo yum install -y gcc gcc-c++ make cmake clang clang-devel llvm llvm-devel glib2 glib2-devel igraph igraph-devel xz xz-devel
 sudo yum install -y python numpy scipy python-matplotlib python-networkx python-lxml
 sudo yum install -y git dstat screen htop
 ```
