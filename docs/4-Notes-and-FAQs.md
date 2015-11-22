@@ -1,3 +1,19 @@
+- [Shadow is running at 100% CPU. Is that normal?](#shadow-is-running-at-100-cpu-is-that-normal)
+- [Is Shadow multi-threaded?](#is-shadow-multi-threaded)
+- [Is it possible to achieve deterministic experiments, so that every time I run Shadow with the same configuration file, I get the same results?](#is-it-possible-to-achieve-deterministic-experiments-so-that-every-time-i-run-shadow-with-the-same-configuration-file-i-get-the-same-results)
+- [Can I use Shadow/Scallion with my custom Tor modifications?](#can-i-use-shadowscallion-with-my-custom-tor-modifications)
+- [My OS does not include the correct Clang/LLVM CMake modules. How do I build Clang/LLVM from source?](#my-os-does-not-include-the-correct-clangllvm-cmake-modules-how-do-i-build-clangllvm-from-source)
+- [Why don't the consensus values from a v3bw file for the torflowauthority show up in the directory authority's `cached-consenus` file?](#why-dont-the-consensus-values-from-a-v3bw-file-for-the-torflowauthority-show-up-in-the-directory-authoritys-cached-consenus-file)
+- [How can I build Shadow directly using cmake instead of the setup script?](#how-can-i-build-shadow-directly-using-cmake-instead-of-the-setup-script)
+- [How can I build the traffic generator (TGen) for use outside of Shadow, e.g. over the Internet?](#how-can-i-build-the-traffic-generator-tgen-for-use-outside-of-shadow-eg-over-the-internet)
+- [How can I stop Shadow from forking?](#how-can-i-stop-shadow-from-forking)
+- [How to debug Shadow using GDB](#how-to-debug-shadow-using-gdb)
+- [How to trace Shadow using Valgrind](#how-to-trace-shadow-using-valgrind)
+- [How to generate documentation](#how-to-generate-documentation)
+- [How new Shadow releases are tagged](#how-new-shadow-releases-are-tagged)
+- [How to create a signed archive of a release](#how-to-create-a-signed-archive-of-a-release)
+- [Is Shadow the right tool for my research question?](#is-shadow-the-right-tool-for-my-research-question)
+
 #### Shadow is running at 100% CPU. Is that normal?
 
 Yes. In single-thread mode, Shadow runs at 100% CPU because its continuously processing simulation events as fast as possible. All other things constant, an experiment will finish quicker with a faster CPU. Due to node dependencies, thread CPU utilization will be less than 100% in multi-thread mode.
