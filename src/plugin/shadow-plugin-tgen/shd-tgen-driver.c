@@ -293,65 +293,6 @@ static void _tgendriver_handleSynchronize(TGenDriver* driver, TGenAction* action
     }
 }
 
-static void _tgendriver_chooseRandomNextAction(TGenDriver* driver, TGenAction* action){
-    TGEN_ASSERT(driver);
-
-    /* Get a queue of outgoing edges */
-    GQueue* nextActions = tgengraph_getNextActions(driver->actionGraph, action);
-    g_assert(nextActions);
-    guint numOutgoing = g_queue_get_length(nextActions);
-
-    /* Randomly select an outgoing edge */
-    guint randomIndex = g_random_int_range(0, numOutgoing);
-    TGenAction* nextAction = g_queue_peek_nth(nextActions, randomIndex);
-
-    /* Clean up */
-    g_queue_free(nextActions);
-
-    /* Send out random action */
-    _tgendriver_processAction(driver, nextAction);
-}
-
-static void _tgendriver_chooseWeightsNextAction(TGenDriver* driver, TGenAction* action){
-    TGEN_ASSERT(driver);
-
-    /* Pick a random value among all of the weights */
-    gdouble randomWeight = g_random_double_range(0, tgenaction_getTotalWeight(action));
-
-    GQueue* nextActions = tgengraph_getNextActions(driver->actionGraph, action);
-    g_assert(nextActions);
-
-    TGenAction* nextAction = g_queue_peek_head(nextActions);
-
-    gdouble totalWeight = 0.0;
-    /* Keep adding values from weights until we've met randomWeight */
-    while(totalWeight < randomWeight) {
-        nextAction = g_queue_pop_head(nextActions);
-        gdouble thisWeight = tgengraph_getEdgeWeight(driver->actionGraph, action, nextAction);
-        totalWeight += thisWeight;
-    }
-
-    if(nextAction) {
-        _tgendriver_processAction(driver, nextAction);
-    }
-
-    /* clean up */
-    g_queue_free(nextActions);
-}
-
-static void _tgendriver_handleChoose(TGenDriver* driver, TGenAction* action) {
-    TGEN_ASSERT(driver);
-
-    /* If the choose edge has weights, use them. Otherwise, go randomly */
-    if(tgenaction_getHasWeights(action) == FALSE){
-        _tgendriver_chooseRandomNextAction(driver, action);
-    }
-
-    else{
-        _tgendriver_chooseWeightsNextAction(driver, action);
-    }
-}
-
 static void _tgendriver_checkEndConditions(TGenDriver* driver, TGenAction* action) {
     TGEN_ASSERT(driver);
 
@@ -408,10 +349,6 @@ static void _tgendriver_processAction(TGenDriver* driver, TGenAction* action) {
             _tgendriver_initiatePause(driver, action);
             break;
         }
-        case TGEN_ACTION_CHOOSE: {
-            _tgendriver_handleChoose(driver, action);
-            break;
-         }
         default: {
             tgen_warning("unrecognized action type");
             break;
