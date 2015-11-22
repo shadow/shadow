@@ -12,7 +12,6 @@ python parse-shadow.py --help
 pylab.rcParams.update({
     'backend': 'PDF',
     'font.size': 16,
-    'figure.max_num_figures' : 50,
     'figure.figsize': (6,4.5),
     'figure.dpi': 100.0,
     'figure.subplot.left': 0.15,
@@ -32,17 +31,22 @@ pylab.rcParams.update({
     'legend.fontsize' : 'x-small',
     'legend.fancybox' : False,
     'legend.shadow' : False,
-    'legend.ncol' : 1.0,
     'legend.borderaxespad' : 0.5,
     'legend.numpoints' : 1,
     'legend.handletextpad' : 0.5,
     'legend.handlelength' : 1.6,
     'legend.labelspacing' : .75,
     'legend.markerscale' : 1.0,
-    'ps.useafm' : True,
-    'pdf.use14corefonts' : True,
-    'text.usetex' : True,
+    # turn on the following to embedd fonts; requires latex
+    #'ps.useafm' : True,
+    #'pdf.use14corefonts' : True,
+    #'text.usetex' : True,
 })
+
+try: pylab.rcParams.update({'figure.max_num_figures':50})
+except: pylab.rcParams.update({'figure.max_open_warning':50})
+try: pylab.rcParams.update({'legend.ncol':1.0})
+except: pass
 
 LINEFORMATS="k-,r-,b-,g-,c-,m-,y-,k--,r--,b--,g--,c--,m--,y--,k:,r:,b:,g:,c:,m:,y:,k-.,r-.,b-.,g-.,c-., m-.,y-."
 
