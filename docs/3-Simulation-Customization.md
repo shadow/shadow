@@ -138,11 +138,13 @@ This section covers the traffic generator, `tgen`, which is distributed and buil
 
 ### Action-dependency graph format
 
-Graph vertices represent **actions**, and graph edges represent **dependencies**. Each vertex may contain vertex attributes which specify action **parameters**. Tgen will walk the directed graph path starting at a start vertex, and execute each action along that path. The actions control the behavior at each stage. Edges direct tgen from one action to the next, while edge attributes are ignored.
+Graph vertices represent **actions**, and graph edges represent **dependencies**. Each vertex may contain vertex attributes which specify action **parameters**. Tgen will walk the directed graph path starting at a start vertex, and execute each action along that path. The actions control the behavior at each stage.
+
+#### Actions (vertices)
 
 The following are valid **actions** and **parameters** (all parameters are currently stored as strings in graphml):
 
-**start:** The **start action is required** for all tgen graph files, and **only one start action is allowed**. Acceptable attributes are:
+**start:** The **start action is required** for all tgen graph files, and **only one start action is allowed** per tgen instance. Acceptable attributes are:
 
   + _serverport_ (required):  
 the local port that will be opened to listen for other tgen connections
@@ -168,7 +170,11 @@ the time in seconds after which consider this a stalled transfer and give up on 
   + _peers_ (special):  
 a list of peers (`ip1:port1,ip2:port21`, e.g., `192.168.1.100:8888,192.168.1.101:8888`) to use for this transfer. The _peers_ attribute is optional, only if a _peers_ attribute is specified in the start action. A peer will be selected at random from this list, or at random from the start action list if this attribute is not specified for a transfer.
 
-**synchronize:** Synchronize actions are optional. The synchronize action will pause a walk until the vertex has been visited by all incoming edges. At that point, a walk will continue from this action to each outgoing edge. **NOTE: the synchronize action is not currently implemented**
+**synchronize:** Synchronize actions are optional. The synchronize action will pause a walk until the vertex has been visited by all incoming edges.
+
+More specifically, a synchronize action is 'activated' when it is first visiting by an incoming edge, and then begins counting visitation by all other incoming edges. Once the 'activated' vertex is visited by all incoming edges, it 'deactivates' and then the walk continues by following each outgoing edge.
+
+The synchronize action acts as a 'barrier'; an example usage would be to start multiple transfers in parallel and wait for them all to finish with a 'synchronize' before starting the next action.
 
 **pause:** Pause actions are optional. Acceptable attributes are:
 
@@ -184,9 +190,19 @@ the number of transfer completed by this node
   + _size_ (optional):  
 the total amount of data transferred (read+write) by this node
 
+#### Dependencies (edges)
+
+Edges direct tgen from one action to the next. tgen will perform the above actions by starting at the start vertex and following the edges through the graph. By default, tgen will follow all outgoing edges from a vertex in parallel, thereby creating _multiple concurrent execution paths_ in the graph.
+
+Each edge may contain a 'weight' attribute with a floating point 'double' value, e.g., `weight="1.0"`. While tgen will follow all outgoing edges of a vertex for which no weight is assigned, tgen will choose and follow one and only one edge from the set of weighted outgoing edges of a vertex. A _single execution path_ can be maintained by assigning weights to all outgoing edges of a vertex.
+
+A weighted choice is used to select which weighted outgoing edge of a vertex to follow, based on the sum of weights of all weighted outgoing edges. Therefore, if all weighted outgoing edges have the same weight, the choice will essentially be a uniform random choice.
+
+Be warned that edge weights must be used carefully, especially when combined with the synchronize action. A synchronize action expects that all incoming edges will visit it, which may not be the case if weighted edges were used at some point in a path leading to the synchronize action.
+
 ### Customizing generator behaviors
 
-Given the above actions and parameters, simply python scripts can be used to generate behavior models using the networkx python module.
+Given the above actions and parameters, simple python scripts can be used to generate behavior models using the networkx python module.
 
 This script would generate a tgen configuration file for a client that:
 
