@@ -3,8 +3,8 @@
 ## set build parameters
 project(Shadow C)
 set(SHADOW_VERSION_MAJOR 1)
-set(SHADOW_VERSION_MINOR 10)
-set(SHADOW_VERSION_BUILD 2)
+set(SHADOW_VERSION_MINOR 11)
+set(SHADOW_VERSION_BUILD 0)
 
 ## ensure cmake version
 cmake_minimum_required(VERSION 2.8.8 FATAL_ERROR)
