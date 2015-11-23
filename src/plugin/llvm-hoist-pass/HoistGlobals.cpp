@@ -42,9 +42,9 @@
 #include "llvm/IR/Verifier.h"
 #endif
 
-#ifdef DEBUG
+//#ifdef VERBOSE
 #include "llvm/Support/raw_ostream.h"
-#endif
+//#endif
 
 #include <string>
 
@@ -96,22 +96,22 @@ public:
 	    DataLayout* DL = new DataLayout(&M);
 
 		{
-#ifdef DEBUG
-            errs() << HOIST_LOG_PREFIX << "HoistGlobals is running as an LLVM module pass plugin\n";
+#ifdef VERBOSE
+            errs() << HOIST_LOG_PREFIX << "HoistGlobals is running as an LLVM ModulePass plugin\n";
 #endif
 
 	        // _plugin_ctors needs to exist in order to call all of the
 	        // constructors that need to get called at plugin load time
-#ifdef DEBUG
+#ifdef VERBOSE
 			errs() << HOIST_LOG_PREFIX << "Searching for constructor initializer function '_plugin_ctors'\n";
 #endif
 			Function *initFunc = M.getFunction("_plugin_ctors");
 			if(initFunc) {
-#ifdef DEBUG
+#ifdef VERBOSE
             errs() << HOIST_LOG_PREFIX << "Found '_plugin_ctors'!\n";
 #endif
 			} else {
-#ifdef DEBUG
+#ifdef VERBOSE
             errs() << HOIST_LOG_PREFIX << "Did not find '_plugin_ctors', injecting it now\n";
 #endif
                 FunctionType *FT = FunctionType::get(Type::getVoidTy(getGlobalContext()), false);
@@ -119,7 +119,7 @@ public:
                 initFunc = cast<Function>(tmpfunc);
                 assert(initFunc);
 			}
-#ifdef DEBUG
+#ifdef VERBOSE
             errs() << HOIST_LOG_PREFIX << "Injecting global constructors 'llvm.global_ctors' into '_plugin_ctors': ";
 #endif
 			Function::BasicBlockListType &blocks = initFunc->getBasicBlockList();
@@ -131,7 +131,7 @@ public:
 				for (std::vector<Function*>::iterator i = ctors.begin(), e = ctors.end(); i != e; ++i) {
 					ArrayRef<Value*> args;
 					Value* ctorv = *i;
-#ifdef DEBUG
+#ifdef VERBOSE
             if(i+1 == e) {
                 errs() << ctorv->getName();
             } else {
@@ -145,12 +145,12 @@ public:
 				ReturnInst::Create(M.getContext(), block);
 				blocks.push_front(block);
 			}
-#ifdef DEBUG
+#ifdef VERBOSE
             errs() << "\n";
 #endif
 		}
 
-#ifdef DEBUG
+#ifdef VERBOSE
             errs() << HOIST_LOG_PREFIX << "Iterating existing global variables\n";
 #endif
 
@@ -176,7 +176,24 @@ public:
 			}
 		}
 
-#ifdef DEBUG
+		// hack to make sure we have at least one global variable, so that the
+		// hoisted_globals struct gets created as required by shadow
+		if(Globals.empty()) {
+#ifdef VERBOSE
+            errs() << HOIST_LOG_PREFIX << "No globals exist, injecting one now to ensure a non-empty hoisted_globals struct\n";
+#endif
+
+		    PointerType* PointerTy_0 = PointerType::get(IntegerType::get(getGlobalContext(), 8), 0);
+		    GlobalVariable* hidden_gv = new GlobalVariable(M, PointerTy_0, false, GlobalValue::CommonLinkage, 0, "__hoisted_placeholder__");
+		    ConstantPointerNull* const_ptr_2 = ConstantPointerNull::get(PointerTy_0);
+		    hidden_gv->setInitializer(const_ptr_2);
+
+            GlobalTypes.push_back(cast<PointerType>(hidden_gv->getType())->getElementType());
+            GlobalInitializers.push_back(hidden_gv->getInitializer());
+            Globals.push_back(hidden_gv);
+		}
+
+#ifdef VERBOSE
             errs() << HOIST_LOG_PREFIX << "Injecting new storage objects\n";
 #endif
 
@@ -214,7 +231,7 @@ public:
 				GlobalValue::ExternalLinkage, HoistedStructSize,
 				"__hoisted_globals_size", 0, GlobalVariable::NotThreadLocal, 0);
 
-#ifdef DEBUG
+#ifdef VERBOSE
 		errs() << HOIST_LOG_PREFIX << "Hoisting globals: ";
 #endif
 
@@ -234,7 +251,7 @@ public:
 //			GV->replaceAllUsesWith(GEP);
 			replaceAllUsesWithKeepDebugInfo(GV, GEP);
 
-#ifdef DEBUG
+#ifdef VERBOSE
 			if(gv+1 == e) {
 			    errs() << GV->getName();
 			} else {
@@ -246,7 +263,7 @@ public:
 			GV->eraseFromParent();
 		}
 
-#ifdef DEBUG
+#ifdef VERBOSE
 		errs() << "\n";
 #endif
 
@@ -268,9 +285,7 @@ public:
 #ifndef NDEBUG
 		verifyModule(M);
 #endif
-#ifdef DEBUG
-            errs() << HOIST_LOG_PREFIX << "HoistGlobals plugin pass is complete\n";
-#endif
+        errs() << HOIST_LOG_PREFIX << "LLVM ModulePass is complete, hoisted " << Globals.size() << " variables\n";
 		return true;
 	}
 };

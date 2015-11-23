@@ -8,31 +8,43 @@
 #include "shd-tgen.h"
 
 typedef struct _TGenActionStartData {
-    guint64 time;
-    guint64 timeout;
+    /* TODO change all times to use the handleTime func, as store nanos
+     * currently only the heartbeat does this. */
+    guint64 timeNanos;
+    guint64 timeoutNanos;
+    guint64 stalloutNanos;
+    guint64 heartbeatPeriodNanos;
+    GLogLevelFlags loglevel;
     guint16 serverport;
     TGenPeer* socksproxy;
     TGenPool* peers;
 } TGenActionStartData;
 
 typedef struct _TGenActionEndData {
-    guint64 time;
+    guint64 timeNanos;
     guint64 count;
     guint64 size;
 } TGenActionEndData;
 
 typedef struct _TGenActionPauseData {
-    TGenPool* pauseTimes;
+    TGenPool* pauseTimesNanos;
 } TGenActionPauseData;
 
 typedef struct _TGenActionTransferData {
     TGenTransferType type;
     TGenTransportProtocol protocol;
     guint64 size;
-    guint64 timeout;
+    guint64 timeoutNanos;
     gboolean timeoutIsSet;
+    guint64 stalloutNanos;
+    gboolean stalloutIsSet;
     TGenPool* peers;
 } TGenActionTransferData;
+
+typedef struct _TGenActionSynchronizeData {
+    glong totalIncoming;
+    glong completedIncoming;
+} TGenActionSynchronizeData;
 
 struct _TGenAction {
     TGenActionType type;
@@ -210,7 +222,88 @@ static GError* _tgenaction_handleBytes(const gchar* attributeName,
     return error;
 }
 
-static GError* _tgenaction_handleIntegerList(const gchar* attributeName, const gchar* timeStr,
+static GError* _tgenaction_handleTime(const gchar* attributeName, const gchar* timeStr, guint64* timeNanosOut) {
+    g_assert(attributeName && timeStr);
+
+    GError* error = NULL;
+
+    /* split into parts (format example: "10 seconds") */
+    gchar** tokens = g_strsplit(timeStr, (const gchar*) " ", 2);
+    gchar* timeToken = tokens[0];
+    gchar* suffixToken = tokens[1];
+
+    glong timeTokenLength = g_utf8_strlen(timeToken, -1);
+    for (glong i = 0; i < timeTokenLength; i++) {
+        gchar c = timeToken[i];
+        if (!g_ascii_isdigit(c)) {
+            error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT,
+                    "non-digit byte '%c' in time string '%s' for attribute '%s', "
+                    "expected format like '10', '10 seconds' or '10 s'",
+                    c, timeStr, attributeName);
+            break;
+        }
+    }
+
+    if (!error) {
+        guint64 timeUnits = g_ascii_strtoull(timeToken, NULL, 10);
+        guint64 timeNanos = 0;
+
+        if (!suffixToken) {
+            /* assume default time in seconds */
+            timeNanos = timeUnits * 1000000000;
+        } else {
+            if (!g_ascii_strcasecmp(suffixToken, "nanosecond") || !g_ascii_strcasecmp(suffixToken, "nanoseconds") ||
+                    !g_ascii_strcasecmp(suffixToken, "nsec") || !g_ascii_strcasecmp(suffixToken, "nsecs") ||
+                    !g_ascii_strcasecmp(suffixToken, "ns")) {
+                timeNanos = timeUnits;
+            } else if (!g_ascii_strcasecmp(suffixToken, "microsecond") || !g_ascii_strcasecmp(suffixToken, "microseconds") ||
+                    !g_ascii_strcasecmp(suffixToken, "usec") || !g_ascii_strcasecmp(suffixToken, "usecs") ||
+                    !g_ascii_strcasecmp(suffixToken, "us")) {
+                timeNanos = timeUnits * 1000;
+            } else if (!g_ascii_strcasecmp(suffixToken, "millisecond") || !g_ascii_strcasecmp(suffixToken, "milliseconds") ||
+                    !g_ascii_strcasecmp(suffixToken, "msec") || !g_ascii_strcasecmp(suffixToken, "msecs") ||
+                    !g_ascii_strcasecmp(suffixToken, "ms")) {
+                timeNanos = timeUnits * 1000000;
+            } else if (!g_ascii_strcasecmp(suffixToken, "second") || !g_ascii_strcasecmp(suffixToken, "seconds") ||
+                    !g_ascii_strcasecmp(suffixToken, "sec") || !g_ascii_strcasecmp(suffixToken, "secs") ||
+                    !g_ascii_strcasecmp(suffixToken, "s")) {
+                timeNanos = timeUnits * 1000000000;
+            } else if (!g_ascii_strcasecmp(suffixToken, "minute") || !g_ascii_strcasecmp(suffixToken, "minutes") ||
+                    !g_ascii_strcasecmp(suffixToken, "min") || !g_ascii_strcasecmp(suffixToken, "mins") ||
+                    !g_ascii_strcasecmp(suffixToken, "m")) {
+                timeNanos = timeUnits * 1000000000 * 60;
+            } else if (!g_ascii_strcasecmp(suffixToken, "hour") || !g_ascii_strcasecmp(suffixToken, "hours") ||
+                    !g_ascii_strcasecmp(suffixToken, "hr") || !g_ascii_strcasecmp(suffixToken, "hrs") ||
+                    !g_ascii_strcasecmp(suffixToken, "h")) {
+                timeNanos = timeUnits * 1000000000 * 60 * 60;
+            } else {
+                error = g_error_new(G_MARKUP_ERROR,
+                        G_MARKUP_ERROR_INVALID_CONTENT,
+                        "invalid time suffix '%s' in time string '%s' for attribute '%s', "
+                        "expected one of: 'nanosecond','nanoseconds','nsec','nsecs','ns', "
+                        "'microsecond', 'microseconds', 'usec', 'usecs', 'us', "
+                        "'millisecond', 'milliseconds', 'msec', 'msecs', 'ms', "
+                        "'second', 'seconds', 'sec', 'secs', 's', "
+                        "'minute', 'minutes', 'min', 'mins', 'm', "
+                        "'hour', 'hours', 'hr', 'hrs', or 'h'",
+                        suffixToken, timeStr, attributeName);
+            }
+        }
+
+        if(!error) {
+            tgen_debug("parsed %lu nanoseconds from string %s", timeNanos, timeStr);
+            if(timeNanosOut) {
+                *timeNanosOut = timeNanos;
+            }
+        }
+    }
+
+    g_strfreev(tokens);
+
+    return error;
+}
+
+static GError* _tgenaction_handleTimeList(const gchar* attributeName, const gchar* timeStr,
         TGenPool* pauseTimesOut) {
     g_assert(attributeName && timeStr && pauseTimesOut);
 
@@ -228,9 +321,14 @@ static GError* _tgenaction_handleIntegerList(const gchar* attributeName, const g
             break;
         }
 
-        guint64* pauseTime = g_new0(guint64, 1);
-        *pauseTime = g_ascii_strtoull(tokens[i], NULL, 10);
-        tgenpool_add(pauseTimesOut, pauseTime);
+        guint64* pauseTimeNanos = g_new0(guint64, 1);
+        error = _tgenaction_handleTime(attributeName, tokens[i], pauseTimeNanos);
+        if(error) {
+            break;
+        } else {
+            tgenpool_add(pauseTimesOut, pauseTimeNanos);
+        }
+
     }
 
     g_strfreev(tokens);
@@ -274,6 +372,38 @@ static GError* _tgenaction_handleBoolean(const gchar* attributeName,
     return error;
 }
 
+static GError* _tgenaction_handleLogLevel(const gchar* attributeName, const gchar* loglevelStr, GLogLevelFlags* loglevelOut){
+    g_assert(attributeName && loglevelStr);
+
+    GError* error = NULL;
+    GLogLevelFlags loglevel = 0;
+
+    if (g_ascii_strcasecmp(loglevelStr, "error") == 0) {
+        loglevel = G_LOG_LEVEL_ERROR;
+    } else if (g_ascii_strcasecmp(loglevelStr, "critical") == 0) {
+        loglevel = G_LOG_LEVEL_CRITICAL;
+    } else if (g_ascii_strcasecmp(loglevelStr, "warning") == 0) {
+        loglevel = G_LOG_LEVEL_WARNING;
+    } else if (g_ascii_strcasecmp(loglevelStr, "message") == 0) {
+        loglevel = G_LOG_LEVEL_MESSAGE;
+    } else if (g_ascii_strcasecmp(loglevelStr, "info") == 0) {
+        loglevel = G_LOG_LEVEL_INFO;
+    } else if (g_ascii_strcasecmp(loglevelStr, "debug") == 0) {
+        loglevel = G_LOG_LEVEL_DEBUG;
+    } else {
+        error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT,
+                        "invalid content in string '%s' for attribute '%s', "
+                        "expected one of: 'error', 'critical', 'warning', 'message', 'info', or 'debug'",
+                        loglevelStr, attributeName);
+    }
+
+    if(!error && loglevelOut) {
+        *loglevelOut = loglevel;
+    }
+
+    return error;
+}
+
 static void _tgenaction_free(TGenAction* action) {
     TGEN_ASSERT(action);
     g_assert(action->refcount <= 0);
@@ -311,8 +441,8 @@ void tgenaction_unref(TGenAction* action) {
 }
 
 TGenAction* tgenaction_newStartAction(const gchar* timeStr, const gchar* timeoutStr,
-        const gchar* serverPortStr, const gchar* peersStr,
-        const gchar* socksProxyStr, GError** error) {
+        const gchar* stalloutStr, const gchar* heartbeatStr, const gchar* loglevelStr, const gchar* serverPortStr,
+        const gchar* peersStr, const gchar* socksProxyStr, GError** error) {
     g_assert(error);
 
     /* a serverport is required */
@@ -323,15 +453,46 @@ TGenAction* tgenaction_newStartAction(const gchar* timeStr, const gchar* timeout
     }
 
     /* a time delay from application startup is optional */
-    guint64 timedelay = 0;
+    guint64 timedelayNanos = 0;
     if (timeStr && g_ascii_strncasecmp(timeStr, "\0", (gsize) 1)) {
-        timedelay = g_ascii_strtoull(timeStr, NULL, 10);
+        *error = _tgenaction_handleTime("time", timeStr, &timedelayNanos);
+        if (*error) {
+            return NULL;
+        }
     }
 
     /* a global default transfer timeout is optional */
-    guint64 defaultTimeout = 0;
+    guint64 defaultTimeoutNanos = 0;
     if (timeoutStr && g_ascii_strncasecmp(timeoutStr, "\0", (gsize) 1)) {
-        defaultTimeout = g_ascii_strtoull(timeoutStr, NULL, 10);
+        *error = _tgenaction_handleTime("timeout", timeoutStr, &defaultTimeoutNanos);
+        if (*error) {
+            return NULL;
+        }
+    }
+
+    guint64 defaultStalloutNanos = 0;
+    if (stalloutStr && g_ascii_strncasecmp(stalloutStr, "\0", (gsize) 1)) {
+        *error = _tgenaction_handleTime("stallout", stalloutStr, &defaultStalloutNanos);
+        if (*error) {
+            return NULL;
+        }
+    }
+
+    guint64 heartbeatPeriodNanos = 0;
+    if (heartbeatStr && g_ascii_strncasecmp(heartbeatStr, "\0", (gsize) 1)) {
+        *error = _tgenaction_handleTime("heartbeat", heartbeatStr, &heartbeatPeriodNanos);
+        if (*error) {
+            return NULL;
+        }
+    }
+
+    /* specifying a log level is optional, default is message level */
+    GLogLevelFlags loglevel = G_LOG_LEVEL_MESSAGE;
+    if(loglevelStr && g_ascii_strncasecmp(loglevelStr, "\0", (gsize) 1)) {
+        *error = _tgenaction_handleLogLevel("loglevel", loglevelStr, &loglevel);
+        if (*error) {
+            return NULL;
+        }
     }
 
     /* a socks proxy address is optional */
@@ -364,8 +525,11 @@ TGenAction* tgenaction_newStartAction(const gchar* timeStr, const gchar* timeout
 
     TGenActionStartData* data = g_new0(TGenActionStartData, 1);
 
-    data->time = timedelay;
-    data->timeout = defaultTimeout;
+    data->timeNanos = timedelayNanos;
+    data->timeoutNanos = defaultTimeoutNanos;
+    data->stalloutNanos = defaultStalloutNanos;
+    data->heartbeatPeriodNanos = heartbeatPeriodNanos;
+    data->loglevel = loglevel;
     guint64 longport = g_ascii_strtoull(serverPortStr, NULL, 10);
     data->serverport = htons((guint16)longport);
     data->peers = peerPool;
@@ -399,7 +563,10 @@ TGenAction* tgenaction_newEndAction(const gchar* timeStr, const gchar* countStr,
     TGenActionEndData* data = g_new0(TGenActionEndData, 1);
     data->size = size;
     if (timeStr && g_ascii_strncasecmp(timeStr, "\0", (gsize) 1)) {
-        data->time = g_ascii_strtoull(timeStr, NULL, 10);
+        *error = _tgenaction_handleTime("time", timeStr, &data->timeNanos);
+        if(error) {
+            return NULL;
+        }
     }
     if (countStr && g_ascii_strncasecmp(countStr, "\0", (gsize) 1)) {
         data->count = g_ascii_strtoull(countStr, NULL, 10);
@@ -420,10 +587,10 @@ TGenAction* tgenaction_newPauseAction(const gchar* timeStr, GError** error) {
         return NULL;
     }
 
-    TGenPool* pauseTimes = tgenpool_new(g_free);
-    *error = _tgenaction_handleIntegerList("time", timeStr, pauseTimes);
+    TGenPool* pauseTimesNanos = tgenpool_new(g_free);
+    *error = _tgenaction_handleTimeList("time", timeStr, pauseTimesNanos);
     if (*error) {
-        tgenpool_unref(pauseTimes);
+        tgenpool_unref(pauseTimesNanos);
         return NULL;
     }
 
@@ -434,25 +601,31 @@ TGenAction* tgenaction_newPauseAction(const gchar* timeStr, GError** error) {
     action->type = TGEN_ACTION_PAUSE;
 
     TGenActionPauseData* data = g_new0(TGenActionPauseData, 1);
-    data->pauseTimes = pauseTimes;
+    data->pauseTimesNanos = pauseTimesNanos;
 
     action->data = data;
 
     return action;
 }
 
-TGenAction* tgenaction_newSynchronizeAction(GError** error) {
+TGenAction* tgenaction_newSynchronizeAction(glong totalIncoming, GError** error) {
     TGenAction* action = g_new0(TGenAction, 1);
     action->magic = TGEN_MAGIC;
     action->refcount = 1;
 
     action->type = TGEN_ACTION_SYNCHR0NIZE;
 
+    TGenActionSynchronizeData* data = g_new0(TGenActionSynchronizeData, 1);
+    data->totalIncoming = totalIncoming;
+    data->completedIncoming = 0;
+
+    action->data = data;
+
     return action;
 }
 
 TGenAction* tgenaction_newTransferAction(const gchar* typeStr, const gchar* protocolStr,
-        const gchar* sizeStr, const gchar* peersStr, const gchar* timeoutStr, GError** error) {
+        const gchar* sizeStr, const gchar* peersStr, const gchar* timeoutStr, const gchar* stalloutStr, GError** error) {
     g_assert(error);
 
     /* type is required */
@@ -517,11 +690,24 @@ TGenAction* tgenaction_newTransferAction(const gchar* typeStr, const gchar* prot
     }
 
     /* a transfer timeout is optional */
-    guint64 timeout = 0;
+    guint64 timeoutNanos = 0;
     gboolean timeoutIsSet = FALSE;
     if (timeoutStr && g_ascii_strncasecmp(timeoutStr, "\0", (gsize) 1)) {
-        timeout = g_ascii_strtoull(timeoutStr, NULL, 10);
+        *error = _tgenaction_handleTime("timeout", timeoutStr, &timeoutNanos);
+        if(*error) {
+            return NULL;
+        }
         timeoutIsSet = TRUE;
+    }
+
+    guint64 stalloutNanos = 0;
+    gboolean stalloutIsSet = FALSE;
+    if (stalloutStr && g_ascii_strncasecmp(stalloutStr, "\0", (gsize) 1)) {
+        *error = _tgenaction_handleTime("stallout", stalloutStr, &stalloutNanos);
+        if(*error) {
+            return NULL;
+        }
+        stalloutIsSet = TRUE;
     }
 
     TGenAction* action = g_new0(TGenAction, 1);
@@ -535,8 +721,10 @@ TGenAction* tgenaction_newTransferAction(const gchar* typeStr, const gchar* prot
     data->type = type;
     data->size = size;
     data->peers = peerPool;
-    data->timeout = timeout;
+    data->timeoutNanos = timeoutNanos;
     data->timeoutIsSet = timeoutIsSet;
+    data->stalloutNanos = stalloutNanos;
+    data->stalloutIsSet = stalloutIsSet;
 
     action->data = data;
 
@@ -576,24 +764,42 @@ TGenPeer* tgenaction_getSocksProxy(TGenAction* action) {
 guint64 tgenaction_getStartTimeMillis(TGenAction* action) {
     TGEN_ASSERT(action);
     g_assert(action->data && action->type == TGEN_ACTION_START);
-    return 1000 * ((TGenActionStartData*)action->data)->time;
+    return (guint64)(((TGenActionStartData*)action->data)->timeNanos / 1000000);
 }
 
 guint64 tgenaction_getDefaultTimeoutMillis(TGenAction* action) {
     TGEN_ASSERT(action);
     g_assert(action->data && action->type == TGEN_ACTION_START);
-    return 1000 * ((TGenActionStartData*)action->data)->timeout;
+    return (guint64)(((TGenActionStartData*)action->data)->timeoutNanos / 1000000);
+}
+
+guint64 tgenaction_getDefaultStalloutMillis(TGenAction* action) {
+    TGEN_ASSERT(action);
+    g_assert(action->data && action->type == TGEN_ACTION_START);
+    return (guint64)(((TGenActionStartData*)action->data)->stalloutNanos / 1000000);
+}
+
+guint64 tgenaction_getHeartbeatPeriodMillis(TGenAction* action) {
+    TGEN_ASSERT(action);
+    g_assert(action->data && action->type == TGEN_ACTION_START);
+    return (guint64)(((TGenActionStartData*)action->data)->heartbeatPeriodNanos / 1000000);
+}
+
+GLogLevelFlags tgenaction_getLogLevel(TGenAction* action) {
+    TGEN_ASSERT(action);
+    g_assert(action->data && action->type == TGEN_ACTION_START);
+    return ((TGenActionStartData*)action->data)->loglevel;
 }
 
 guint64 tgenaction_getPauseTimeMillis(TGenAction* action) {
     TGEN_ASSERT(action);
     g_assert(action->data && action->type == TGEN_ACTION_PAUSE);
-    guint64* time = tgenpool_getRandom(((TGenActionPauseData*)action->data)->pauseTimes);
-    return *time * 1000;
+    guint64* time = tgenpool_getRandom(((TGenActionPauseData*)action->data)->pauseTimesNanos);
+    return (guint64)(*time / 1000000);
 }
 
 void tgenaction_getTransferParameters(TGenAction* action, TGenTransferType* typeOut,
-        TGenTransportProtocol* protocolOut, guint64* sizeOut, guint64* timeoutOut) {
+        TGenTransportProtocol* protocolOut, guint64* sizeOut, guint64* timeoutOut, guint64* stalloutOut) {
     TGEN_ASSERT(action);
     g_assert(action->data && action->type == TGEN_ACTION_TRANSFER);
 
@@ -609,8 +815,15 @@ void tgenaction_getTransferParameters(TGenAction* action, TGenTransferType* type
     if(timeoutOut) {
         TGenActionTransferData* data = (TGenActionTransferData*)action->data;
         if(data->timeoutIsSet) {
-            /* seconds to milliseconds */
-            *timeoutOut = data->timeout * 1000;
+            /* nanoseconds to milliseconds */
+            *timeoutOut = (guint64)(data->timeoutNanos / 1000000);
+        }
+    }
+    if(stalloutOut) {
+        TGenActionTransferData* data = (TGenActionTransferData*)action->data;
+        if(data->stalloutIsSet) {
+            /* nanoseconds to milliseconds */
+            *stalloutOut = (guint64)(data->stalloutNanos / 1000000);
         }
     }
 }
@@ -631,7 +844,7 @@ TGenPool* tgenaction_getPeers(TGenAction* action) {
 guint64 tgenaction_getEndTimeMillis(TGenAction* action) {
     TGEN_ASSERT(action);
     g_assert(action->data && action->type == TGEN_ACTION_END);
-    return 1000 * ((TGenActionEndData*)action->data)->time;
+    return (guint64)(((TGenActionEndData*)action->data)->timeNanos / 1000000);
 }
 
 guint64 tgenaction_getEndCount(TGenAction* action) {
@@ -644,4 +857,22 @@ guint64 tgenaction_getEndSize(TGenAction* action) {
     TGEN_ASSERT(action);
     g_assert(action->data && action->type == TGEN_ACTION_END);
     return ((TGenActionEndData*)action->data)->size;
+}
+
+glong tgenaction_getTotalIncoming(TGenAction* action){
+    TGEN_ASSERT(action);
+    g_assert(action->data && action->type == TGEN_ACTION_SYNCHR0NIZE);
+    return ((TGenActionSynchronizeData*)action->data)->totalIncoming;
+}
+
+glong tgenaction_getCompletedIncoming(TGenAction* action){
+    TGEN_ASSERT(action);
+    g_assert(action->data && action->type == TGEN_ACTION_SYNCHR0NIZE);
+    return ((TGenActionSynchronizeData*)action->data)->completedIncoming;
+}
+
+void tgenaction_setCompletedIncoming(TGenAction* action, glong completedIncoming){
+    TGEN_ASSERT(action);
+    g_assert(action->data && action->type == TGEN_ACTION_SYNCHR0NIZE);
+    ((TGenActionSynchronizeData*)action->data)->completedIncoming = completedIncoming;
 }

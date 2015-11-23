@@ -1,0 +1,119 @@
+
+  |  _ \| |_| |__                      ``There is enough for the need of
+  | |_) | __| '_ \                       everyone in this world, but not
+  |  __/| |_| | | |                      for the greed of everyone.'' 
+  |_|    \__|_| |_|                                  -- Mahatma Gandhi
+
+  GNU Pth - The GNU Portable Threads
+
+  THANKS
+  ======
+
+  Credit has to be given to the following people who contributed ideas,
+  bugfixes, hints, gave platform feedback, etc. (in alphabetical order):
+
+    o  Steve Alstrin               <Steve.Alstrin@NetIQ.com>
+    o  Jens Andersen               <Jens@trw.nl>
+    o  Robert Anderson             <RWA@sbcglobal.net>
+    o  J.David Anglin              <dave.anglin@nrc.ca>
+    o  Dmitry A. Antipov           <boss@wraith.rosnet.ru>
+    o  Bill Apt                    <babt@us.ibm.com>
+    o  James T. Beaupre            <beaupre@draper.com>
+    o  Felix Berger                <bflat1@gmx.net>
+    o  Paolo Bonzini               <bonzini@pc-amo3.elet.polimi.it>
+    o  Raphael Bossek              <raphael.bossek@solutions4linux.de>
+    o  Stefan Brantschen           <sbr@acm.org>
+    o  Edwin Brown                 <Edwin.Brown@sdrc.com>
+    o  Dan Buckler                 <buckler@sco.com>
+    o  Mark Burton                 <markb@ordern.com>
+    o  Archie Cobbs                <archie@packetdesign.com>
+    o  Jon Cook                    <cookj@cs.man.ac.uk>
+    o  Philippe Defert             <Philippe.Defert@cern.ch>
+    o  David Dureau                <david.dureau@cea.fr>
+    o  Lars Eilebrecht             <lars@hyperreal.org>
+    o  Rafael Ávila de Espíndola   <rafael.espindola@ic.unicamp.br>
+    o  Jason Evans                 <jasone@canonware.com>
+    o  Alex Fiori                  <alex@linuxbr.com>
+    o  Flux                        <flux@iae.nl>
+    o  Thomas Foks                 <Thomas.Foks@hub.de>
+    o  Emanuele Fornara            <efornara@hotmail.com>
+    o  Didier Fort                 <didier.fort@computer.org>
+    o  Daniel Richard G.           <straker@MIT.EDU>
+    o  Artem Gr                    <artem@bizlink.ru>
+    o  Ed Grether                  <egrether@pobox.com>
+    o  Georg C. F. Greve           <greve@gnu.org>
+    o  Bruno Haible                <bruno@clisp.org>
+    o  Eric Hanchrow               <offby1@blarg.net>
+    o  Ben Harris                  <bjh21@cam.ac.uk>
+    o  Tim Harris                  <tim_harris@snellwilcox.com>
+    o  B. Douglas Hilton           <doug.hilton@engineer.com>
+    o  Jarkko Hietaniemi           <jhi@iki.fi>
+    o  David Hill                  <david@wmol.com>
+    o  Michael Holzapfel           <michael@Harz.ime.rwth-aachen.de>
+    o  Sam Horwitz                 <horwitz@argoscomp.com>
+    o  Roman Hodek                 <Roman.Hodek@informatik.uni-erlangen.de>
+    o  Thomas Hoffmann             <hoffmann@ehmgs2.et.tu-dresden.de>
+    o  Samuel A Horwitz            <horwitz@argoscomp.com>
+    o  Barnett Hsu                 <barnett@cs.ucr.edu>
+    o  Nick Hudson                 <skrll@netbsd.org>
+    o  Andrew Hunter               <esvce@dcs.warwick.ac.uk>
+    o  Stephane Loeuillet          <stephane.loeuillet@cegetel.net>
+    o  Takashi Ishihara            <tishihara@ucdavis.edu>
+    o  Jim Jagielski               <jim@jaguNET.com>
+    o  Jeremie                     <jeremie@jabber.org>
+    o  Dmitry E. Kiselyov          <dima@gssmp.sci-nnov.ru>
+    o  Thomas Klausner             <wiz@danbala.tuwien.ac.at>
+    o  Martin Kraemer              <martin.kraemer@mch.sni.de>
+    o  Christian Kuhtz             <ck@arch.bellsouth.net>
+    o  Kriton Kyrimis              <kyrimis@cti.gr>
+    o  M. Lavasani                 <lavasani@connect.org.uk>
+    o  Chris Leishman              <chris_leishman@freeonline.com.au>
+    o  Felix von Leitner           <leitner@fefe.de>
+    o  Mostyn Lewis                <Mostyn.Lewis@West.Sun.COM>
+    o  Sherwin Levinson            <sherwin@smla.com>
+    o  Lubos Lunak                 <l.lunak@email.cz>
+    o  John A. Maier               <johnam@mail.kemper.org>
+    o  David Masterson             <David.Masterson@kla-tencor.com>
+    o  Xhemil Meco                 <xmeco@isdnet.net>
+    o  Aaron Metzger               <ametzger@varcom.com>
+    o  Igor A. Minyukoff           <iam@inser.loniis.spb.su>
+    o  Matthew Mondor              <mmondor@gobot.ca>
+    o  Dr. Andreas Mueller         <afm@othello.ch>
+    o  Graham Nash                 <gnash@ncube.com>
+    o  Eric Newton                 <ecn@smart.net>
+    o  Sami Niemi                  <saminiemi@usa.net>
+    o  Joseph Wayne Norton         <norton@alum.mit.edu>
+    o  Alexandre Oliva             <oliva@dcc.unicamp.br>
+    o  Giwon On                    <Giwon.On@KOM.tu-darmstadt.de>
+    o  Takeshi OTOFUJI             <otofuji@quartet.ipc.akita-u.ac.jp>
+    o  Kent Overstreet             <kent@hotmail.com>
+    o  Staehli Patrik              <patrik.staehli@siemens.ch>
+    o  Pete                        <pfv@grex.org>
+    o  Michael Petuschak           <mp@bolivar.carrier.kiev.ua>
+    o  Tomas Pihl                  <tomas.pihl@netinsight.net>
+    o  Rob Quinn                   <rquinn@sec.sprint.net>
+    o  Matthew Quon                <hype@sharpnet.net>
+    o  Peter Reich                 <pr@alles.prima.de>
+    o  Brandon Reynolds            <bmr@comtime.com>
+    o  Phil Richards               <Phil.Richards@vf.vodafone.co.uk>
+    o  James Robinson              <jlrobins@uncc.edu>
+    o  David Ronis                 <ronis@ronispc.chem.mcgill.ca>
+    o  Keith Rose                  <keith@avocetsys.com>
+    o  Michele Satriani            <satriani@info.uniroma2.it>
+    o  Jonathan Schilling          <jls@sco.com>
+    o  Stefan Schippers            <stefan@schippers.it>
+    o  David W. Schuler            <schuld@btv.ibm.com>
+    o  Peter Simons                <simons@cys.de>
+    o  Robert S. Tau               <rst@mit.edu>
+    o  Sebastian                   <scut@nb.in-berlin.de>
+    o  Anton Umnikov               <anton@rest.dvgu.ru>
+    o  Michael Schloh v. Bennewitz <michael.schloh@cw.com>
+    o  David Scott Urban           <urban@ast.lmco.com>
+    o  Laurent Vaucher             <laurent.vaucher@ficsgrp.com>
+    o  Martin Vernard              <vernard@cc.gatech.edu>
+    o  Vinu V                      <Vinu_V@mindtree.com>
+    o  Olaf Wasmuth                <olaf.wasmuth@europe.eds.com>
+    o  Chia-Hsing Yu               <davidyu@oio.cx>
+
+  ...and all other Pth users who gave me feedback but I've forgot...
+

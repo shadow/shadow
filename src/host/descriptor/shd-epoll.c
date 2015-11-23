@@ -26,16 +26,15 @@ enum _EpollWatchFlags {
     EWF_WRITECHANGED = 1 << 6,
     /* the underlying shadow descriptor is closed */
     EWF_CLOSED = 1 << 7,
-    /* set if this watch exists in the reportable queue */
-    EWF_REPORTING = 1 << 8,
     /* true if this watch is currently valid and in the watches table. this allows
      * support of lazy deletion of watches that are in the reportable queue when
      * we want to delete them, to avoid the O(n) removal time of the queue. */
-    EWF_WATCHING = 1 << 9,
+    EWF_WATCHING = 1 << 8,
     /* set if edge-triggered events are enabled on the underlying shadow descriptor */
-    EWF_EDGETRIGGER = 1 << 10,
+    EWF_EDGETRIGGER = 1 << 9,
     /* set if one-shot events are enabled on the underlying shadow descriptor */
-    EWF_ONESHOT = 1 << 11,
+    EWF_ONESHOT = 1 << 10,
+    EWF_ONESHOT_REPORTED = 1 << 11,
 };
 
 typedef struct _EpollWatch EpollWatch;
@@ -48,6 +47,7 @@ struct _EpollWatch {
     struct epoll_event event;
     /* current status of the underlying shadow descriptor */
     EpollWatchFlags flags;
+    gint referenceCount;
     MAGIC_DECLARE;
 };
 
@@ -57,9 +57,11 @@ enum _EpollFlags {
     /* a callback is currently scheduled to notify user
      * (used to avoid duplicate notifications) */
     EF_SCHEDULED = 1 << 0,
+    /* we are currently notifying the process of events on its watched descriptors */
+    EF_NOTIFYING = 1 << 1,
     /* the plugin closed the epoll descriptor, we should close as
      * soon as the notify is no longer scheduled */
-    EF_CLOSED = 1 << 1,
+    EF_CLOSED = 1 << 2,
 };
 
 struct _Epoll {
@@ -71,11 +73,9 @@ struct _Epoll {
 
     /* holds the wrappers for the descriptors we are watching for events */
     GHashTable* watching;
-    /* holds the watches which have events we need to report to the user */
-    GQueue* reporting;
 
     SimulationTime lastWaitTime;
-    Thread* ownerThread;
+    Process* ownerProcess;
     gint osEpollDescriptor;
 
     MAGIC_DECLARE;
@@ -90,11 +90,9 @@ static EpollWatch* _epollwatch_new(Epoll* epoll, Descriptor* descriptor, struct 
      * (which is freed below in _epollwatch_free) */
     descriptor_ref(descriptor);
 
-    watch->listener = listener_new((CallbackFunc)epoll_descriptorStatusChanged, epoll, descriptor);
     watch->descriptor = descriptor;
     watch->event = *event;
-
-    descriptor_addStatusListener(watch->descriptor, watch->listener);
+    watch->referenceCount = 1;
 
     return watch;
 }
@@ -102,43 +100,40 @@ static EpollWatch* _epollwatch_new(Epoll* epoll, Descriptor* descriptor, struct 
 static void _epollwatch_free(EpollWatch* watch) {
     MAGIC_ASSERT(watch);
 
-    descriptor_removeStatusListener(watch->descriptor, watch->listener);
-    listener_free(watch->listener);
+    if(watch->listener) {
+        descriptor_removeStatusListener(watch->descriptor, watch->listener);
+        listener_free(watch->listener);
+    }
     descriptor_unref(watch->descriptor);
 
     MAGIC_CLEAR(watch);
     g_free(watch);
 }
 
+static void _epollwatch_ref(EpollWatch* watch) {
+    MAGIC_ASSERT(watch);
+    (watch->referenceCount)++;
+}
+
+static void _epollwatch_unref(EpollWatch* watch) {
+    MAGIC_ASSERT(watch);
+
+    if(--(watch->referenceCount) <= 0) {
+        _epollwatch_free(watch);
+    }
+}
+
 /* should only be called from descriptor dereferencing the functionTable */
 static void _epoll_free(Epoll* epoll) {
     MAGIC_ASSERT(epoll);
 
-    /* this will go through all epollwatch items and remove the listeners
-     * only from those that dont already exist in the watching table */
-    while(!g_queue_is_empty(epoll->reporting)) {
-        EpollWatch* watch = g_queue_pop_head(epoll->reporting);
-        MAGIC_ASSERT(watch);
-        /* turn off reporting bit */
-        watch->flags &= ~EWF_REPORTING;
-        if(!(watch->flags & EWF_WATCHING)) {
-            _epollwatch_free(watch);
-        }
-    }
-    g_queue_free(epoll->reporting);
-
-    GHashTableIter iter;
-    gpointer key, value;
-    g_hash_table_iter_init(&iter, epoll->watching);
-    while(g_hash_table_iter_next(&iter, &key, &value)) {
-        _epollwatch_free((EpollWatch*) value);
-    }
+    /* this unrefs all of the remaining watches */
     g_hash_table_destroy(epoll->watching);
 
     close(epoll->osEpollDescriptor);
 
-    utility_assert(epoll->ownerThread);
-    thread_unref(epoll->ownerThread);
+    utility_assert(epoll->ownerProcess);
+    process_unref(epoll->ownerProcess);
 
     MAGIC_CLEAR(epoll);
     g_free(epoll);
@@ -170,22 +165,21 @@ Epoll* epoll_new(gint handle) {
     descriptor_init(&(epoll->super), DT_EPOLL, &epollFunctions, handle);
 
     /* allocate backend needed for managing events for this descriptor */
-    epoll->watching = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, NULL);
-    epoll->reporting = g_queue_new();
+    epoll->watching = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, (GDestroyNotify)_epollwatch_unref);
 
     /* the application may want us to watch some system files, so we need a
      * real OS epoll fd so we can offload that task.
      */
     epoll->osEpollDescriptor = epoll_create(1000);
     if(epoll->osEpollDescriptor == -1) {
-        warning("error in epoll_create for OS events, errno=%i", errno);
+        warning("error in epoll_create for OS events, errno=%i msg:%s", errno, g_strerror(errno));
     }
 
     /* keep track of which virtual application we need to notify of events
     epoll_new should be called as a result of an application syscall */
-    epoll->ownerThread = worker_getActiveThread();
-    utility_assert(epoll->ownerThread);
-    thread_ref(epoll->ownerThread);
+    epoll->ownerProcess = worker_getActiveProcess();
+    utility_assert(epoll->ownerProcess);
+    process_ref(epoll->ownerProcess);
 
     /* the epoll descriptor itself is always able to be epolled */
     descriptor_adjustStatus(&(epoll->super), DS_ACTIVE, TRUE);
@@ -201,7 +195,6 @@ static void _epollwatch_updateStatus(EpollWatch* watch) {
     lazyFlags |= (watch->flags & EWF_READCHANGED) ? EWF_READCHANGED : EWF_NONE;
     lazyFlags |= (watch->flags & EWF_WRITECHANGED) ? EWF_WRITECHANGED : EWF_NONE;
     lazyFlags |= (watch->flags & EWF_WATCHING) ? EWF_WATCHING : EWF_NONE;
-    lazyFlags |= (watch->flags & EWF_REPORTING) ? EWF_REPORTING : EWF_NONE;
 
     /* reset our flags */
     EpollWatchFlags oldFlags = watch->flags;
@@ -230,103 +223,136 @@ static void _epollwatch_updateStatus(EpollWatch* watch) {
     }
 }
 
-static gboolean _epollwatch_needsNotify(EpollWatch* watch) {
+static gboolean _epollwatch_isReady(EpollWatch* watch) {
     MAGIC_ASSERT(watch);
 
-    if((watch->flags & EWF_CLOSED) || !(watch->flags & EWF_ACTIVE)) {
+    /* make sure we have the latest info for this watched descriptor */
+    _epollwatch_updateStatus(watch);
+
+    /* if its closed, not active, or no parent is watching it, then we are not ready */
+    if((watch->flags & EWF_CLOSED) || !(watch->flags & EWF_ACTIVE) || !(watch->flags & EWF_WATCHING)) {
         return FALSE;
     }
 
+    gboolean isReady = FALSE;
+
+    /* edge-triggered mode is only ready if the read/write event status changed */
     if(watch->flags & EWF_EDGETRIGGER) {
-        if(((watch->flags & EWF_READABLE) &&
-                (watch->flags & EWF_WAITINGREAD) && (watch->flags & EWF_READCHANGED)) ||
-                ((watch->flags & EWF_WRITEABLE) &&
-                (watch->flags & EWF_WAITINGWRITE) && (watch->flags & EWF_WRITECHANGED))) {
-            return TRUE;
-        } else {
-            return FALSE;
+        if(((watch->flags & EWF_READABLE) && (watch->flags & EWF_WAITINGREAD) && (watch->flags & EWF_READCHANGED)) ||
+                ((watch->flags & EWF_WRITEABLE) && (watch->flags & EWF_WAITINGWRITE) && (watch->flags & EWF_WRITECHANGED))) {
+            isReady = TRUE;
         }
     } else {
         if(((watch->flags & EWF_READABLE) && (watch->flags & EWF_WAITINGREAD)) ||
                 ((watch->flags & EWF_WRITEABLE) && (watch->flags & EWF_WAITINGWRITE))) {
-            return TRUE;
-        } else {
-            return FALSE;
+            isReady =  TRUE;
         }
     }
+
+    if(isReady && (watch->flags & EWF_ONESHOT) && (watch->flags & EWF_ONESHOT_REPORTED)) {
+        isReady = FALSE;
+    }
+
+    return isReady;
 }
 
-static void _epoll_trySchedule(Epoll* epoll) {
-    /* schedule a shadow notification event if we have events to report */
-    if(!(epoll->flags & EF_CLOSED) && !g_queue_is_empty(epoll->reporting)) {
-        /* avoid duplicating events in the shadow event queue for our epoll */
-        gboolean isScheduled = (epoll->flags & EF_SCHEDULED) ? TRUE : FALSE;
-        if(!isScheduled && process_isRunning(thread_getParentProcess(epoll->ownerThread))) {
-            /* schedule a notification event for our node */
+static gboolean _epoll_isReadyOS(Epoll* epoll) {
+    MAGIC_ASSERT(epoll);
+    gboolean isReady = FALSE;
+
+    if(epoll->osEpollDescriptor >= 3) {
+        /* the os epoll will be readable when ready */
+        struct epoll_event epoll_ev;
+        memset(&epoll_ev, 0, sizeof(struct epoll_event));
+        epoll_ev.events = EPOLLIN;
+
+        /* create a temp epoll to check if our OS epoll is ready */
+        gint readinessFD = epoll_create(1);
+        gint ret = epoll_ctl(readinessFD, EPOLL_CTL_ADD, epoll->osEpollDescriptor, &epoll_ev);
+        if(ret == 0) {
+            /* try to collect an event without blocking */
+            ret = epoll_wait(readinessFD, &epoll_ev, 1, 0);
+            if(ret > 0) {
+                /* osEpollDescriptor has an EPOLLIN event, so it has events we should collect */
+                isReady = TRUE;
+            }
+
+            /* cleanup */
+            epoll_ctl(readinessFD, EPOLL_CTL_DEL, epoll->osEpollDescriptor, NULL);
+        }
+        close(readinessFD);
+    }
+
+    return isReady;
+}
+
+static void _epoll_check(Epoll* epoll) {
+    MAGIC_ASSERT(epoll);
+
+    /* if we are currently here because epoll called process_continue,
+     * then just skip out; after we return from process_continue, we'll
+     * do another check then (which will pass this check) */
+    if((epoll->flags & EF_CLOSED) || (epoll->flags & EF_NOTIFYING)) {
+        return;
+    }
+
+    /* check status to see if we need to schedule a notification */
+    gboolean isReady = FALSE;
+
+    /* check all of our children */
+    GHashTableIter iter;
+    gpointer key, value;
+    g_hash_table_iter_init(&iter, epoll->watching);
+    while(g_hash_table_iter_next(&iter, &key, &value)) {
+        EpollWatch* watch = value;
+        MAGIC_ASSERT(watch);
+
+        if(_epollwatch_isReady(watch)) {
+            isReady = TRUE;
+        }
+    }
+
+    /* check for events on the OS epoll instance, but only if we are otherwise not ready */
+    if(!isReady && _epoll_isReadyOS(epoll)) {
+        isReady = TRUE;
+    }
+
+    if(isReady) {
+        /* some children are ready, so this epoll is readable */
+        descriptor_adjustStatus(&(epoll->super), DS_READABLE, TRUE);
+
+        /* schedule a notification event for our node, if wanted and one isnt already scheduled */
+        if(!(epoll->flags & EF_SCHEDULED) && process_wantsNotify(epoll->ownerProcess, epoll->super.handle)) {
             NotifyPluginEvent* event = notifyplugin_new(epoll->super.handle);
             SimulationTime delay = 1;
             worker_scheduleEvent((Event*)event, delay, 0);
-
             epoll->flags |= EF_SCHEDULED;
         }
-    }
-}
-
-static void _epoll_check(Epoll* epoll, EpollWatch* watch) {
-    MAGIC_ASSERT(epoll);
-    MAGIC_ASSERT(watch);
-
-    /* check status to see if we need to schedule a notification */
-    _epollwatch_updateStatus(watch);
-    gboolean needsNotify = _epollwatch_needsNotify(watch);
-
-    if(needsNotify) {
-        /* we need to report an event to user */
-        if(!(watch->flags & EWF_REPORTING)) {
-            /* check if parent epoll can read our child epoll event */
-            gboolean setReadable = g_queue_is_empty(epoll->reporting);
-
-            g_queue_push_tail(epoll->reporting, watch);
-            watch->flags |= EWF_REPORTING;
-
-            if(setReadable) {
-                descriptor_adjustStatus(&(epoll->super), DS_READABLE, TRUE);
-            }
-        }
     } else {
-        /* this watch no longer needs reporting
-         * NOTE: the removal is also done lazily, so this else block
-         * is technically not needed. its up for debate if its faster to
-         * iterate the queue to remove the event now, versus swapping in
-         * the node to collect events and lazily removing this later. */
-        if(watch->flags & EWF_REPORTING) {
-            g_queue_remove(epoll->reporting, watch);
-            watch->flags &= ~EWF_REPORTING;
-
-            /* check if parent epoll can still read child epoll events */
-            if(g_queue_is_empty(epoll->reporting)) {
-                descriptor_adjustStatus(&(epoll->super), DS_READABLE, FALSE);
-            }
-        }
-
-        if((watch->flags & EWF_CLOSED) ||
-                (!(watch->flags & EWF_WATCHING) && !(watch->flags & EWF_REPORTING))) {
-            _epollwatch_free(watch);
-        }
+        descriptor_adjustStatus(&(epoll->super), DS_READABLE, FALSE);
     }
-
-    _epoll_trySchedule(epoll);
 }
 
-gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor,
-        struct epoll_event* event) {
+static const gchar* _epoll_operationToStr(gint op) {
+    switch(op) {
+    case EPOLL_CTL_ADD:
+        return "EPOLL_CTL_ADD";
+    case EPOLL_CTL_DEL:
+        return "EPOLL_CTL_DEL";
+    case EPOLL_CTL_MOD:
+        return "EPOLL_CTL_MOD";
+    default:
+        return "unknown";
+    }
+}
+
+gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor, struct epoll_event* event) {
     MAGIC_ASSERT(epoll);
 
-    debug("epoll descriptor %i, operation %i, descriptor %i",
-            epoll->super.handle, operation, descriptor->handle);
+    debug("epoll descriptor %i, operation %s, descriptor %i",
+            epoll->super.handle, _epoll_operationToStr(operation), descriptor->handle);
 
-    EpollWatch* watch = g_hash_table_lookup(epoll->watching,
-                        descriptor_getHandleReference(descriptor));
+    EpollWatch* watch = g_hash_table_lookup(epoll->watching, descriptor_getHandleReference(descriptor));
 
     switch (operation) {
         case EPOLL_CTL_ADD: {
@@ -338,12 +364,15 @@ gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor,
 
             /* start watching for status changes */
             watch = _epollwatch_new(epoll, descriptor, event);
-            g_hash_table_replace(epoll->watching,
-                    descriptor_getHandleReference(descriptor), watch);
             watch->flags |= EWF_WATCHING;
+            g_hash_table_replace(epoll->watching, descriptor_getHandleReference(descriptor), watch);
+
+            /* its added, so we need to listen */
+            watch->listener = listener_new((CallbackFunc)epoll_descriptorStatusChanged, epoll, descriptor);
+            descriptor_addStatusListener(watch->descriptor, watch->listener);
 
             /* initiate a callback if the new watched descriptor is ready */
-            _epoll_check(epoll, watch);
+            _epoll_check(epoll);
 
             break;
         }
@@ -361,7 +390,7 @@ gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor,
             watch->event = *event;
 
             /* initiate a callback if the new event type on the watched descriptor is ready */
-            _epoll_check(epoll, watch);
+            _epoll_check(epoll);
 
             break;
         }
@@ -373,16 +402,15 @@ gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor,
             }
 
             MAGIC_ASSERT(watch);
-            g_hash_table_remove(epoll->watching,
-                    descriptor_getHandleReference(descriptor));
             watch->flags &= ~EWF_WATCHING;
 
-            /* we can only delete it if its not in the reporting queue */
-            if(!(watch->flags & EWF_REPORTING)) {
-                _epollwatch_free(watch);
-            } else {
-                descriptor_removeStatusListener(watch->descriptor, watch->listener);
-            }
+            /* its deleted, so stop listening for updates */
+            descriptor_removeStatusListener(watch->descriptor, watch->listener);
+            listener_free(watch->listener);
+            watch->listener = NULL;
+
+            /* unref gets called on the watch when it is removed from this table */
+            g_hash_table_remove(epoll->watching, descriptor_getHandleReference(descriptor));
 
             break;
         }
@@ -400,11 +428,14 @@ gint epoll_controlOS(Epoll* epoll, gint operation, gint fileDescriptor,
         struct epoll_event* event) {
     MAGIC_ASSERT(epoll);
     /* ask the OS about any events on our kernel epoll descriptor */
-    return epoll_ctl(epoll->osEpollDescriptor, operation, fileDescriptor, event);
+    gint ret = epoll_ctl(epoll->osEpollDescriptor, operation, fileDescriptor, event);
+    if(ret < 0) {
+        ret = errno;
+    }
+    return ret;
 }
 
-gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray,
-        gint eventArrayLength, gint* nEvents) {
+gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray, gint eventArrayLength, gint* nEvents) {
     MAGIC_ASSERT(epoll);
     utility_assert(nEvents);
 
@@ -412,57 +443,50 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray,
 
     /* return the available events in the eventArray, making sure not to
      * overflow. the number of actual events is returned in nEvents. */
-    gint reportableLength = g_queue_get_length(epoll->reporting);
-    gint eventArrayIndex = 0;
+    gint eventIndex = 0;
 
-    for(gint i = 0; i < eventArrayLength && i < reportableLength; i++) {
-        EpollWatch* watch = g_queue_pop_head(epoll->reporting);
+    GHashTableIter iter;
+    gpointer key, value;
+    g_hash_table_iter_init(&iter, epoll->watching);
+    while(g_hash_table_iter_next(&iter, &key, &value) && (eventIndex < eventArrayLength)) {
+        EpollWatch* watch = value;
         MAGIC_ASSERT(watch);
 
-        /* lazy-delete items that we are no longer watching */
-        if(!(watch->flags & EWF_WATCHING)) {
-            watch->flags &= ~EWF_REPORTING;
-            _epollwatch_free(watch);
-            continue;
-        }
-
-        /* double check that we should still notify this event */
-        _epollwatch_updateStatus(watch);
-        if(_epollwatch_needsNotify(watch)) {
+        if(_epollwatch_isReady(watch)) {
             /* report the event */
-            eventArray[eventArrayIndex] = watch->event;
-            eventArray[eventArrayIndex].events = 0;
-            eventArray[eventArrayIndex].events |=
-                    ((watch->flags & EWF_READABLE) && (watch->flags & EWF_WAITINGREAD)) ? EPOLLIN : 0;
-            eventArray[eventArrayIndex].events |=
-                    ((watch->flags & EWF_WRITEABLE) && (watch->flags & EWF_WAITINGWRITE)) ? EPOLLOUT : 0;
-            eventArray[eventArrayIndex].events |= (watch->flags & EWF_EDGETRIGGER) ? EPOLLET : 0;
-            eventArrayIndex++;
-            utility_assert(eventArrayIndex <= eventArrayLength);
+            eventArray[eventIndex] = watch->event;
+            eventArray[eventIndex].events = 0;
+
+            if((watch->flags & EWF_READABLE) && (watch->flags & EWF_WAITINGREAD)) {
+                eventArray[eventIndex].events |= EPOLLIN;
+            }
+            if((watch->flags & EWF_WRITEABLE) && (watch->flags & EWF_WAITINGWRITE)) {
+                eventArray[eventIndex].events |= EPOLLOUT;
+            }
+            if(watch->flags & EWF_EDGETRIGGER) {
+                eventArray[eventIndex].events |= EPOLLET;
+            }
+
+            /* event was just collected, unset the change status */
+            watch->flags &= ~EWF_READCHANGED;
+            watch->flags &= ~EWF_WRITECHANGED;
+
+            eventIndex++;
+            utility_assert(eventIndex <= eventArrayLength);
 
             if(watch->flags & EWF_ONESHOT) {
                 /* they collected the event, dont report any more */
-                watch->flags &= ~EWF_REPORTING;
-            } else {
-                /* this watch persists until the descriptor status changes */
-                g_queue_push_tail(epoll->reporting, watch);
-                utility_assert(watch->flags & EWF_REPORTING);
+                watch->flags |= EWF_ONESHOT_REPORTED;
             }
-        } else {
-            watch->flags &= ~EWF_REPORTING;
         }
     }
 
-    /* if we consumed all the events that we had to report,
-     * then our parent descriptor can no longer read child epolls */
-    if(reportableLength > 0 && g_queue_is_empty(epoll->reporting)) {
-        descriptor_adjustStatus(&(epoll->super), DS_READABLE, FALSE);
-    }
-
-    gint space = eventArrayLength - eventArrayIndex;
+    gint space = eventArrayLength - eventIndex;
     if(space) {
         /* now we have to get events from the OS descriptors */
         struct epoll_event osEvents[space];
+        memset(&osEvents, 0, space*sizeof(struct epoll_event));
+
         /* since we are in shadow context, this will be forwarded to the OS epoll */
         gint nos = epoll_wait(epoll->osEpollDescriptor, osEvents, space, 0);
 
@@ -472,15 +496,19 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray,
 
         /* nos will fit into eventArray */
         for(gint j = 0; j < nos; j++) {
-            eventArray[eventArrayIndex] = osEvents[j];
-            eventArrayIndex++;
-            utility_assert(eventArrayIndex <= eventArrayLength);
+            eventArray[eventIndex] = osEvents[j];
+            eventIndex++;
+            utility_assert(eventIndex <= eventArrayLength);
         }
     }
 
-    *nEvents = eventArrayIndex;
+    *nEvents = eventIndex;
 
-    debug("epoll descriptor %i collected %i events", epoll->super.handle, eventArrayIndex);
+    debug("epoll descriptor %i collected %i events", epoll->super.handle, eventIndex);
+
+    /* if we consumed all the events that we had to report,
+     * then our parent descriptor can no longer read child epolls */
+    _epoll_check(epoll);
 
     return 0;
 }
@@ -489,15 +517,39 @@ void epoll_descriptorStatusChanged(Epoll* epoll, Descriptor* descriptor) {
     MAGIC_ASSERT(epoll);
 
     /* make sure we are actually watching the descriptor */
-    EpollWatch* watch = g_hash_table_lookup(epoll->watching,
-            descriptor_getHandleReference(descriptor));
+    EpollWatch* watch = g_hash_table_lookup(epoll->watching, descriptor_getHandleReference(descriptor));
 
     /* if we are not watching, its an error because we shouldn't be listening */
     utility_assert(watch && (watch->descriptor == descriptor));
 
+    debug("status changed in epoll %i for descriptor %i", epoll->super.handle, descriptor->handle);
+
     /* check the status and take the appropriate action */
-    _epoll_check(epoll, watch);
+    _epoll_check(epoll);
 }
+
+#ifdef DEBUG
+static gchar* _epoll_getChildrenStatus(Epoll* epoll, GString* message) {
+    GHashTableIter iter;
+    gpointer key, value;
+    g_hash_table_iter_init(&iter, epoll->watching);
+    while(g_hash_table_iter_next(&iter, &key, &value)) {
+        EpollWatch* watch = value;
+        MAGIC_ASSERT(watch);
+
+        gboolean isReady = _epollwatch_isReady(watch);
+        if(watch->descriptor) {
+            g_string_append_printf(message, " %i%s", watch->descriptor->handle, isReady ? "!" : "");
+            if(watch->descriptor->type == DT_EPOLL) {
+                g_string_append_printf(message, "{");
+                _epoll_getChildrenStatus((Epoll*)watch->descriptor, message);
+                g_string_append_printf(message, "}");
+            }
+        }
+    }
+    return message->str;
+}
+#endif
 
 void epoll_tryNotify(Epoll* epoll) {
     MAGIC_ASSERT(epoll);
@@ -507,7 +559,7 @@ void epoll_tryNotify(Epoll* epoll) {
 
     /* if it was closed in the meantime, do the actual close now */
     gboolean isClosed = (epoll->flags & EF_CLOSED) ? TRUE : FALSE;
-    if(isClosed || !thread_isRunning(epoll->ownerThread)) {
+    if(isClosed || !process_isRunning(epoll->ownerProcess)) {
         host_closeDescriptor(worker_getCurrentHost(), epoll->super.handle);
         return;
     }
@@ -515,33 +567,56 @@ void epoll_tryNotify(Epoll* epoll) {
     /* make sure this doesn't get destroyed if closed while notifying */
     descriptor_ref(&epoll->super);
 
-    /* we should notify the plugin only if we still have some events to report
-     * XXX: what if our watches are empty, but the OS desc has events? */
-    if(!g_queue_is_empty(epoll->reporting)) {
-        /* notify application to collect the reportable events */
-        process_notify(thread_getParentProcess(epoll->ownerThread), epoll->ownerThread);
+    /* we should notify the plugin only if we still have some events to report */
+    gboolean isReady = FALSE;
+    GHashTableIter iter;
+    gpointer key, value;
+    g_hash_table_iter_init(&iter, epoll->watching);
+    while(g_hash_table_iter_next(&iter, &key, &value)) {
+        EpollWatch* watch = value;
+        MAGIC_ASSERT(watch);
 
-        /* we just notified the application of the events, so reset the change status
-         * and only report the event again if necessary */
-        GQueue* newReporting = g_queue_new();
-        while(!g_queue_is_empty(epoll->reporting)) {
-            EpollWatch* watch = g_queue_pop_head(epoll->reporting);
-            watch->flags &= ~EWF_READCHANGED;
-            watch->flags &= ~EWF_WRITECHANGED;
-            if(_epollwatch_needsNotify(watch)) {
-                /* remains in the reporting queue */
-                g_queue_push_tail(newReporting, watch);
-            } else {
-                /* no longer needs reporting */
-                watch->flags &= ~EWF_REPORTING;
-            }
+        if(_epollwatch_isReady(watch)) {
+            isReady = TRUE;
         }
-        g_queue_free(epoll->reporting);
-        epoll->reporting = newReporting;
     }
 
-    /* check if we need to be notified again */
-    _epoll_trySchedule(epoll);
+    /* check if there is events on the OS epoll instance, but only if we would otherwise
+     * not call the process. this ensures the process can collect events for which we are
+     * using the OS as a backend, even if none of our own watches have ready events. */
+    if(!isReady && _epoll_isReadyOS(epoll)) {
+        isReady = TRUE;
+    }
 
+    if(isReady) {
+        /* an event should have only been scheduled for the special epollfd */
+        utility_assert(process_wantsNotify(epoll->ownerProcess, epoll->super.handle));
+
+#ifdef DEBUG
+        /* debug message for looking at the epoll tree */
+        GString* childStatusMessage = g_string_new("");
+        gchar* msg = _epoll_getChildrenStatus(epoll, childStatusMessage);
+        debug("epollfd %i BEFORE process_continue: child fd statuses:%s", epoll->super.handle, msg);
+        g_string_free(childStatusMessage, TRUE);
+#endif
+
+        /* notify application to collect the reportable events */
+        epoll->flags |= EF_NOTIFYING;
+        process_continue(epoll->ownerProcess);
+        epoll->flags &= ~EF_NOTIFYING;
+
+#ifdef DEBUG
+        /* debug message for looking at the epoll tree */
+        childStatusMessage = g_string_new("");
+        msg = _epoll_getChildrenStatus(epoll, childStatusMessage);
+        debug("epollfd %i AFTER process_continue: child fd statuses:%s", epoll->super.handle, msg);
+        g_string_free(childStatusMessage, TRUE);
+#endif
+
+        /* set up another shadow callback event if needed */
+        _epoll_check(epoll);
+    }
+
+    /* now we can safely unref. those that are no longer tracked will be freed. */
     descriptor_unref(&epoll->super);
 }

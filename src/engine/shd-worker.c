@@ -21,10 +21,9 @@ struct _Worker {
 
     Random* random;
 
-    Thread* activeThread;
     Program* cached_plugin;
-    Process* cached_application;
     Host* cached_node;
+    Process* cached_process;
     Event* cached_event;
 
     GHashTable* privatePrograms;
@@ -217,7 +216,7 @@ gpointer worker_runParallel(WorkLoad* workload) {
 
     g_list_foreach(workload->hosts, (GFunc) host_free, NULL);
 
-    g_thread_exit(NULL);
+//    g_thread_exit(NULL);
     return NULL;
 }
 
@@ -375,20 +374,20 @@ Host* worker_getCurrentHost() {
     return worker->cached_node;
 }
 
-Thread* worker_getActiveThread() {
+Process* worker_getActiveProcess() {
     Worker* worker = _worker_getPrivate();
-    return worker->activeThread;
+    return worker->cached_process;
 }
 
-void worker_setActiveThread(Thread* thread) {
+void worker_setActiveProcess(Process* proc) {
     Worker* worker = _worker_getPrivate();
-    if(worker->activeThread) {
-        thread_unref(worker->activeThread);
-        worker->activeThread = NULL;
+    if(worker->cached_process) {
+        process_unref(worker->cached_process);
+        worker->cached_process = NULL;
     }
-    if(thread) {
-        thread_ref(thread);
-        worker->activeThread = thread;
+    if(proc) {
+        process_ref(proc);
+        worker->cached_process = proc;
     }
 }
 
@@ -499,4 +498,14 @@ gboolean worker_isFiltered(GLogLevelFlags level) {
     }
 
     return FALSE;
+}
+
+void worker_incrementPluginError() {
+    Worker* worker = _worker_getPrivate();
+    slave_incrementPluginError(worker->slave);
+}
+
+const gchar* worker_getHostsRootPath() {
+    Worker* worker = _worker_getPrivate();
+    return slave_getHostsRootPath(worker->slave);
 }

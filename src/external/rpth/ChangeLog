@@ -1,0 +1,2767 @@
+   ____  _   _
+  |  _ \| |_| |__
+  | |_) | __| '_ \             ``Just because everything is different
+  |  __/| |_| | | |              doesn't mean anything has changed.''
+  |_|    \__|_| |_|                             -- Irene Peter
+
+  GNU Pth - The GNU Portable Threads
+
+  ChangeLog
+  =========
+
+  This is the list of all(!) changes to this Pth source tree. For a list
+  of just the user-visible and/or major changes please have a look at
+  the NEWS file.
+
+     ____    ___  
+    |___ \  / _ \ 
+      __) || | | |
+     / __/ | |_| |
+  __|_____(_)___/_________________________________________________________
+                  
+  Changes between 2.0.6 and 2.0.7 (22-Nov-2005 to 08-Jun-2006)
+
+   *) Upgraded build environment from GNU shtool 2.0.3 to 2.0.6
+      and from GNU libtool 1.5.20 to 1.5.22.
+      [Ralf S. Engelschall]
+
+   *) Let AC_CHECK_PTH use "pth-config --libs --all" instead of just
+      "pth-config --libs" to allow it to work under platforms like
+      Solaris where additional libraries are required.
+      [Ralf S. Engelschall]
+
+   *) Adjusted all copyright messages for new year 2006.
+      [Ralf S. Engelschall]
+
+  Changes between 2.0.5 and 2.0.6 (05-Oct-2005 to 22-Nov-2005)
+
+   *) Add a missing "break" in pth_attr.c:pth_attr_ctrl().
+      [Stefan Schippers <stefan@schippers.it>]
+
+   *) Return an error if pth_kill() is called before pth_init().
+      [Martin Kraemer <Martin.Kraemer@Fujitsu-Siemens.com>]
+
+  Changes between 2.0.4 and 2.0.5 (18-Feb-2005 to 05-Oct-2005)
+
+   *) Upgraded build environment to GNU libtool 1.5.20 and
+      GNU shtool 2.0.3
+      [Ralf S. Engelschall]
+
+  Changes between 2.0.3 and 2.0.4 (03-Dec-2004 to 18-Feb-2005)
+
+   *) Fix internal determination of maximum number in a size_t in
+      the string formatter engine.
+      [Ralf S. Engelschall]
+
+   *) Upgraded build environment to GNU libtool 1.5.14
+      [Ralf S. Engelschall]
+
+   *) Add quotes around function names for AC_DEFUN in pth.m4 to avoid
+      warnings about "underquoted definitions".
+      [Stephane Loeuillet <stephane.loeuillet@cegetel.net>]
+
+   *) Adjusted all copyright messages for new year 2005.
+      [Ralf S. Engelschall]
+
+   *) Do not insist on writing to the source directory on "make install"
+      in order to more closely follow GNU standards.
+      [Bruno Haible <bruno@clisp.org>]
+
+   *) Remove "*.bak" and "*~" files under "make distclean"
+      instead of "make clean".
+      [Bruno Haible <bruno@clisp.org>]
+
+  Changes between 2.0.2 and 2.0.3 (12-Sep-2004 to 03-Dec-2004)
+
+   *) Resurrect the old "make striptease" command by fixing the
+      configure run-time in the stripped down source tree and fixing the
+      list of source files.
+      [Ralf S. Engelschall]
+
+   *) The pth_uctx_save() and pth_uctx_restore() API functions
+      unfortunately were broken by design because they are C
+      _functions_. This leads to one more deadly nesting on the
+      run-time stack which effectively caused the pth_mctx_restore()
+      in pth_uctx_restore() to return to the end of pth_uctx_save()
+      but then the control flow unfortunately returns to the
+      pth_uctx_restore() caller instead of the pth_uctx_save() caller
+      because the call to pth_uctx_restore() had already overwritten the
+      run-time stack position where the original return address for the
+      pth_uctx_save() call was stored.
+      
+      The only workaround would be to #define pth_uctx_save() and
+      pth_uctx_restore() as C _macros_, but this then would require that
+      lots of the GNU Pth internals from pth_mctx.c would have to be
+      exported in the GNU Pth API (which in turn is not acceptable). So,
+      the only consequence is to remove the two functions again from the
+      GNU Pth API.
+      [Ralf S. Engelschall, Stefan Brantschen <sbr@acm.org>]
+
+   *) Enhance internal pth_mctx_save() if getcontext(3) is used for the
+      machine context saving by better emulating the setjmp(3) style
+      return code semantics.
+      [Ralf S. Engelschall]
+
+   *) Do not break in pth_msgport_find() if a message port
+      was created with a NULL name.
+      [Ralf S. Engelschall]
+
+   *) Better error checking in pth_key_xxx() functions.
+      [Ralf S. Engelschall]
+
+   *) Added PTH_CTRL_FAVOURNEW control which allows the user
+      to disable the favouring of new threads on scheduling
+      to get more strict priority based scheduling behavior.
+      [Ralf S. Engelschall, Vinu V <Vinu_V@mindtree.com>]
+
+   *) Upgraded build environment to GNU libtool 1.5.10
+      [Ralf S. Engelschall]
+
+  Changes between 2.0.1 and 2.0.2 (13-Jul-2004 to 12-Sep-2004)
+
+   *) Added hard syscall wrappers for send(2) and recv(2).
+      [NetBSD pkgsrc patches]
+
+   *) Internally handle errors returned from pth_event() in order
+      to pass them upstream to the caller in pth_high.c functions.
+      [Ralf S. Engelschall, NetBSD pkgsrc patches]
+
+   *) Fix syscall wrapper for sendto(2).
+      [NetBSD pkgsrc patches]
+
+   *) Use "(char *)NULL" instead of plain "NULL" in last argument to
+      execl(2) to avoid GCC 3.5's "warning: missing sentinel in function call".
+      [Ralf S. Engelschall]
+
+   *) Workaround Autoconf/m4 problems in pth.m4 by using "m4_define"
+      instead of just "define" and no using m4_undefine at all.
+      [Dr. Andreas Mueller <afm@othello.ch>]
+
+   *) Avoid side-effects by defining _XOPEN_SOURCE only temporarily
+      for inclusion of <poll.h> instead of permanently.
+      [Graham Nash <gnash@ncube.com>]
+
+   *) Workaround GCC 2.x and 3.5 (3.4 worked fine) macro parsing
+      behaviour by using a pre-declared function pointer type "typedef
+      int (*pth_event_func_t)(void *);" instead of using an inlined 
+      "int (*)(void *)".
+      [Ralf S. Engelschall, Robert Anderson <RWA@sbcglobal.net>]
+
+   *) Fixed prototype for pthread_attr_setschedparam(3) from
+      to use a "const struct sched_param *" argument.
+      [Rafael Ávila de Espíndola <rafael.espindola@ic.unicamp.br>]
+
+   *) Upgraded build environment to GNU libtool 1.5.8
+      and GNU shtool 2.0.1.
+      [Ralf S. Engelschall]
+
+  Changes between 2.0.0 and 2.0.1 (17-Feb-2003 to 13-Jul-2004)
+
+   *) Fix handling/casting of "int (*)(void *)" callback functions.
+      [Ralf S. Engelschall]
+
+   *) Resolve symbol conflict in pth_string.c between pow10/round
+      and GCC builtins.
+      [Ralf S. Engelschall]
+
+   *) Use GCC 3.3 option "-fno-strict-aliasing" (if available) under
+      Autoconf option "--enable-debug" because mainly pth_mctx.c
+      contains important and correct pointer casting constructs which
+      are not acceptable in "strict aliasing" for GCC.
+      [Ralf S. Engelschall]
+
+   *) Upgraded build environment to GNU autoconf 2.59, GNU libtool 1.5.6
+      and GNU shtool 2.0.0.
+      [Ralf S. Engelschall]
+
+   *) Fixed implementation so that --enable-pthread now correctly
+      implies --enable-syscall-soft.
+      [Steve Alstrin <Steve.Alstrin@NetIQ.com>, Ralf S. Engelschall]
+
+   *) Replace some 0 by more politically correct NULL in pth_string.c
+      [Ralf S. Engelschall]
+
+   *) Adjusted all copyright messages for new year 2004.
+      [Ralf S. Engelschall]
+
+  Changes between 2.0b2 and 2.0.0 (04-Dec-2002 to 17-Feb-2003)
+
+   *) Final source tree polishing before release.
+      [Ralf S. Engelschall]
+
+   *) Wrote summary for Pth 2.0 for the ANNOUNCE document.
+      [Ralf S. Engelschall]
+
+   *) Adjusted all copyright messages for new year 2003.
+      [Ralf S. Engelschall]
+
+  Changes between 2.0b1 and 2.0b2 (08-Nov-2002 to 04-Dec-2002)
+
+   *) Upgraded built environment to GNU Autoconf 2.57.
+      [Ralf S. Engelschall]
+
+   *) Fixed compiler warnings under Linux: require inclusion of <time.h>
+      [Joseph Wayne Norton <norton@alum.mit.edu>]
+
+   *) Fixed error handling in pth_init(3): it now correctly
+      returns an error instead of abort(3)'ing.
+      [Ralf S. Engelschall]
+
+   *) Added soft syscall mapping for nanosleep(3) and
+      usleep(3) functions also to the Pthread API. 
+      [Ralf S. Engelschall]
+
+  Changes between 2.0b0 and 2.0b1 (07-Nov-2002 to 08-Nov-2002)
+
+   *) Make pth_poll(3) more compliant to POSIX.1-2001/SUSv3 poll(2).
+      [Ralf S. Engelschall, Nick Hudson <skrll@netbsd.org>]
+
+   *) Make pth_select(3) more compliant to POSIX.1-2001/SUSv3 select(2).
+      This especially fixes the polling-only situation (timeout = (0,0)).
+      [Ralf S. Engelschall]
+
+   *) Make sure that in the even manager a polling-only select(2) call
+      uses a correctly initialized timeout parameter.
+      [Ralf S. Engelschall]
+
+   *) Added soft and hard syscall mapping for nanosleep(3) and
+      usleep(3) functions. 
+      [Ralf S. Engelschall]
+
+   *) Fix poll(2) semantics: remove POLLRDNORM from polling
+      result if POLLHUP is detected.
+      [Paolo Bonzini <bonzini@gnu.org>]
+
+   *) Updated PORTING file to include community feedback from
+      the last months.
+      [Ralf S. Engelschall]
+
+  Changes between 1.4.1 and 2.0b0 (27-Jan-2002 to 07-Nov-2002)
+
+   *) Fix dropping of scheduler thread pools and this way fix memory leak.
+      [Ralf S. Engelschall]
+
+   *) Check for PTH_FDMODE_ERROR error conditions internally, too.
+      [Ralf S. Engelschall]
+
+   *) Use the new PTH_STATUS_FAILED event status in the scheduler's
+      event-manager for filedescriptor events if the internal select(2)
+      call returned with an error. Additionally this PTH_STATUS_FAILED
+      is recognized by the high-level API functions (pth_select, etc)
+      and produce the necessary POSIX conforming return codes (usually
+      -1 and errno == EBADF).
+      [Ralf S. Engelschall, Thanh Luu <tluu@synapcity.com>]
+
+   *) The function "int pth_event_occurred(pth_event_t)" was replaced
+      with "pth_status_t pth_event_status(pth_event_t)" where pth_status_t 
+      can have values of PTH_STATUS_PENDING (replacing the old FALSE return 
+      value of pth_event_occurred), PTH_STATUS_OCCURRED (replacing
+      the old TRUE return value of pth_event_occurred), and
+      PTH_STATUS_FAILED (a new return value indicating an error in
+      processing the event). This was scheduler/event-manager errors can
+      be indicated which happended while processing the event. For
+      backward compatibility reasons, a macro pth_event_occurred() was
+      added. This will be removed soon.
+      [Ralf S. Engelschall]
+
+   *) Upgraded to latest version of the OSSP Autoconf macro
+      AC_CHECK_EXTLIB in order to fix problems with the current
+      Autoconf 2.54 environment.
+      [Ralf S. Engelschall]
+
+   *) Add Autoconf option --with-fdsetsize=NUM which allows to
+      force a particular (usually higher than the default) FD_SETSIZE
+      value for building Pth. Additionally Pth makes sure that the
+      application using Pth does not use an even larger size.
+      [Nick Hudson <skrll@netbsd.org>, Ralf S. Engelschall]
+
+   *) Added thread attribute PTH_ATTR_DISPATCHES which (in bounded
+      attribute objects) is incremented every time the context
+      is switched to the associated thread. This can be used for
+      statistical information.
+      [Ralf S. Engelschall]
+
+   *) Added a stand-alone sub-API for manual user-space context
+      switching. It is somewhat modeled after the POSIX ucontext(3)
+      facility and consists of an opaque data type pth_uctx_t and
+      the management functions pth_uctx_create(), pth_uctx_make(),
+      pth_uctx_save(), pth_uctx_restore(), pth_uctx_switch() and
+      pth_uctx_destroy(). These functions are based on the same
+      underlying machine context switching facility (pth_mctx)
+      the threads in GNU Pth are using. This facility can be used
+      to implement co-routines without a full real multithreading
+      environment or even to implement an own multithreading
+      environment.
+      [Ralf S. Engelschall]
+
+   *) Add a Pth variant of the new POSIX pselect(2) function, including
+      soft and hard syscall mapping support for it.
+      [Ralf S. Engelschall]
+
+   *) More POSIX compliance for pth_select() in case of invalid
+      timeout values and invalid filedescriptors.
+      [Ralf S. Engelschall]
+
+   *) Internally switch from "errno_shield {...}" to "pth_shield {...}"
+      and from "return_errno(..)" to "return pth_error(...)" in order to
+      make the internal error handling a little bit more consistent.
+      [Ralf S. Engelschall]
+
+   *) Cleaned and speeded up the pth_exit() processing.
+      [Ralf S. Engelschall]
+
+   *) Added POSIX-compliant sanity checks for bad filedescriptors
+      to mostly all filedescriptor-based I/O functions in pth_high.c
+      [Ralf S. Engelschall]
+
+   *) Added pth_nanosleep() function.
+      [Nick Hudson <skrll@netbsd.org>, Ralf S. Engelschall]
+
+   *) Allow a NULL name for pth_msgport_create() in order to
+      support locally scoped message ports which are not searched via
+      pth_msgport_find().
+      [Ralf S. Engelschall, Matthew Mondor <mmondor@gobot.ca>]
+
+   *) Added "hard syscall mapping" support for using 
+      SYS___sigprocmask14 instead of SYS_sigprocmask on NetBSD.
+      [Nick Hudson <skrll@netbsd.org>]
+
+   *) Changes three direct sigprocmask(2) calls with the corresponding
+      "hard syscall mapping" macro calls.
+      [Nick Hudson <skrll@netbsd.org>]
+
+   *) Add Autoconf support for GNU Hurd.
+      [B. Douglas Hilton <doug.hilton@engineer.com>]
+
+   *) Completely rewrote the "hard syscall mapping". 
+
+      Previously the internal syscall exit points were based on syscall(2)
+      only. This is problematic because it by-passes the C library glue
+      code which sometimes performs necessary assembly fiddling in order
+      to call the underlying system calls correctly. Additionally,
+      syscall(2) does not exists everywhere.
+
+      Now the internal exit points are based on a by-syscall dynamically
+      selected combination of RTLD_NEXT+dlsym(2), dlopen(2)+dlsym(2) and
+      the known syscall(2) (in this fallback order). This way the "hard
+      syscall mapping" is a lot more portable and flexible.
+      [Ralf S. Engelschall, Jonathan Schilling <jls@sco.com>]
+
+   *) Added support to pth_poll(3) for the poll(2) XPG.4 flags
+      POLLD{RD,WR}{NORM,BAND}.
+      [Jason Evans <jasone@canonware.com>, Ralf S. Engelschall]
+
+   *) Fixed a long-standing termination bug in pth_exit(3):
+      The event handler of pth_exit(3) didn't let pth_exit(3) finish if
+      there were any threads on the "dead queue" (where non-detached
+      terminated threads are put). Instead it re-entered the scheduler
+      which in turn aborted with "**Pth** SCHEDULER INTERNAL ERROR: no
+      more thread(s) available to schedule!?!?". This is now fixed by
+      not counting the "dead queue" for the determination whether the
+      process as a whole should terminate or not.
+      [Jonathan Schilling <jls@sco.com>]
+
+   *) The manual page stated that system(3) is supported in the
+      "Soft System Call Mapping", but in fact it was forgotten in the
+      implementation.
+      [Jonathan Schilling <jls@sco.com>]
+
+   *) Add #define _PTHREAD_T to pthread.h to guard under SCO UnixWare 7
+      and OpenUNIX 8.
+      [Jonathan Schilling <jls@sco.com>]
+
+   *) Upgraded to Autoconf 2.54 environment and cleaned up internal
+      Autoconf macro usage.
+      [Ralf S. Engelschall]
+
+   *) Fixed lots of English errors in the manual page.
+      [Felix Berger <bflat1@gmx.net>]
+
+   *) Add optional support for OSSP ex based exception handling. GNU
+      Pth (still) does not throw exceptions by itself, but handles the
+      per-thread exception context of OSSP ex to make exception handling
+      local to a thread.
+      [Ralf S. Engelschall]
+
+   *) Removed all generated files from CVS.
+      Use OSSP devtool stuff to re-generate files on demand.
+      Switched to Autoconf 2.52 and Libtool 1.4.2 environment.
+      [Ralf S. Engelschall]
+
+     _  _  _
+    / || || |
+    | || || |_
+    | ||__   _|
+  __|_(_) |_|_____________________________________________________________
+
+  Changes between 1.4.0 and 1.4.1 (24-Mar-2001 to 27-Jan-2002)
+
+   *) Internally make sure an invalid file-descriptor (integer not
+      between 0 and (FD_SETSIZE-1) does not lead to any segfaults or
+      other undefined behaviour. Instead an error is returned and errno
+      is set to EBADF, similar to what the OS functions do. Especially
+      pth_poll() now return with this error (instead of skipping the fd)
+      if an fd in the "struct pollfd" is invalid.
+      [Ralf S. Engelschall, Archie Cobbs <archie@packetdesign.com>]
+
+   *) Correctly support PTH_FDMODE_NONBLOCK in pth_connect and pth_accept.
+      [Archie Cobbs <archie@packetdesign.com>]
+
+   *) Fixed typos in manual page.
+      [Michael Schloh v. Bennewitz <michael.schloh@de.cw.net>,
+       Takashi Ishihara <tishihara@ucdavis.edu>]
+
+   *) For portability reasons changed definition of PTH_EXT_SFIO to 0/1
+      instead of FALSE/TRUE because some external definitions use a
+      casted value and hence make trouble on plain #if constructs.
+      [Staehli Patrik <patrik.staehli@siemens.ch>]
+
+   *) Fixed return value (number of occurred events) of pth_wait().
+      [David Dureau <david.dureau@cea.fr>]
+
+   *) Replaced thread-unsafe usage of a static struct iovec in
+      pth_writev_ev() with a thread-safe stack/heap-based solution.
+      [Ralf S. Engelschall, Mark Burton <markb@ordern.com>]
+
+   *) Replaced antiquated PTH_FLAG_NOJOIN references with the correct
+      PTH_ATTR_JOINABLE references in the manual page.
+      [Takashi Ishihara <tishihara@ucdavis.edu>]
+
+   *) Fixed a (not very subtle) bug in pth_writev_ev() that screwed up
+      output if a partial write happened.
+      [Mark Burton <markb@ordern.com>]
+
+   *) Fixed static initializers PTH_BARRIER_INIT and PTH_COND_INIT.
+      [Shawn Wagner <shawnw@speakeasy.org>]
+
+   *) Typo fixes in pth.pod
+      [<collver@linuxfreemail.com>]
+
+   *) Upgraded to GNU shtool, version 1.5.4.
+      [Ralf S. Engelschall]
+
+   *) Fixed "make striptease": pth_string.c was not included and some
+      commands which were removed at all (and this way causes syntax
+      errors) will be now correctly commented out with ":" commands.
+      [Paolo Bonzini <bonzini@pc-amo3.elet.polimi.it>]
+
+   *) Fixed pth.pod: a closing angle bracket was missing, leading to
+      incorrect POD to XXXX formatting.
+      [Ralf S. Engelschall]
+
+  Changes between 1.4a3 and 1.4.0 (29-Jul-2000 to 24-Mar-2001)
+
+   *) Added PTHREAD_PRIO_XXXX definitions to pthread.h for
+      conformance to the POSIX/SUSv2 Pthread API.
+      [Ralf S. Engelschall, Bill Apt <babt@us.ibm.com>]
+
+   *) Implemented the pthread_{set,get}concurrency() API parts of
+      POSIX/SUSv2, although internally we are (allowed to be) free to not
+      do anything based on the requested level.
+      [Ralf S. Engelschall, Bill Apt <babt@us.ibm.com>]
+
+   *) Adjusted all pthread_attr_getXXXX() functions to use a "const
+      pthread_attr_t *" as the first argument instead of "pthread_attr_t
+      *" to fully-conform to POSIX/SUSv2.
+      [Ralf S. Engelschall, Bill Apt <babt@us.ibm.com>]
+
+   *) Added ENOSYS-stubs for pthread_attr_{set,get}guardsize()
+      to the Pthread API to be more complete with POSIX/SUSv2 specs.
+      [Ralf S. Engelschall, Bill Apt <babt@us.ibm.com>]
+
+   *) Added still missing soft system call mapping to Pth and Pthread
+      APIs for functions recv(2), send(2), recvfrom(2) and sendto(2).
+      [Ralf S. Engelschall, Bill Apt <babt@us.ibm.com>]
+
+   *) Upgraded to GNU shtool 1.5.2
+      [Ralf S. Engelschall]
+
+   *) Fixed an even-manager bug which causes a thread that calls
+      pth_nap() to never woke up if the only elapsed event was a timer.
+      [Archie Cobbs <archie@packetdesign.com>]
+
+   *) Added `#define _BITS_SIGTHREAD_H' to pthread.h to avoid inclusion
+      of bits/sigthread.h (from signal.h) on Linux running glibc6 2.2.
+      [Tomas Pihl <tomas.pihl@netinsight.net>]
+
+   *) Added support to Makefile.in for DESTDIR variable. This allows
+      easier rolling of installation tarballs (for instance from within
+      RPM or similar facilities) by using "make install DESTDIR=/tmp/pth".
+      [Brad Smith <brad@comstyle.com>, Ralf S. Engelschall]
+
+   *) Implemented a pth_system(3) function which is a thread-aware
+      clone of the POSIX system(2) function.
+      [Ralf S. Engelschall]
+
+   *) Fixed typos in pth.pod: "fd" -> "s" for pth_connect/pth_accept.
+      [Sebastian <scut@nb.in-berlin.de>]
+
+   *) Make --disable-shared the default under Solaris-2.[78]/x86, because
+      it is known to segfault sporadically if Pth is built as a DSO.  As
+      traces showed, it is not a Pth problem, but it looks like a problem with
+      the dynamic linker on Solaris/x86.  The same Solaris versions on SPARC
+      don't have this problem.
+      [Ralf S. Engelschall]
+
+   *) Updated copyright messages to cover new year 2001.
+      [Ralf S. Engelschall]
+
+   *) Fixed quoting in configure.in
+      [Ralf S. Engelschall]
+
+   *) Let pth_sleep(3) and pth_usleep(3) immediately return
+      if an argument of zero is given.
+      [Ralf S. Engelschall]
+
+   *) Fixed pthread.pod: the newer pod2man versions seems to dislike
+      embedded comments, so I moved them to the top of the file.
+      [Ralf S. Engelschall]
+
+   *) Changed CVS URL in HACKING document.
+      [Ralf S. Engelschall]
+
+   *) Mention http://www.mail-archive.com/pth-users@gnu.org/ in pth.pod
+      and SUPPORT document.
+      [Ralf S. Engelschall]
+
+  Changes between 1.4a2 and 1.4a3 (01-Jul-2000 to 29-Jul-2000)
+
+   *) Upgraded to GNU shtool 1.5.1
+      [Ralf S. Engelschall]
+
+   *) Fixed (unused) pth_time_mul() function: operator & replaced by %
+      [Tim Harris <tim.harris@snellwilcox.com>]
+
+   *) Use --disable-lock for ltconfig.
+      [Ralf S. Engelschall]
+
+   *) Fixed a few typos in pth.pod.
+      [Thomas Klausner <wiz@danbala.tuwien.ac.at>]
+
+  Changes between 1.4a1 and 1.4a2 (16-Apr-2000 to 01-Jul-2000)
+
+   *) Upgraded to GNU Shtool 1.5.0
+      [Ralf S. Engelschall]
+
+   *) Added OS/390 support to config.sub.
+      [Greg Ames <gregames@raleigh.ibm.com>]
+
+   *) Upgraded rse-pmt.ps paper to latest version as it was
+      published on USENIX 2000.
+      [Ralf S. Engelschall]
+
+   *) Stack boundary fixes for Interactive Unix support
+      (--with-mctx-dsp=sjljisc). This allows one also to use this
+      variant for Interix on Window-NT (a POSIX.1 compliant subsystem).
+      [Kim Jongsu <kimjs@moasys.com>]
+
+   *) Upgraded to GNU Libtool 1.3.5
+      [Ralf S. Engelschall]
+
+   *) Fixed config.param parsing: IF is now also allowed on
+      VARIABLE=VALUE lines.
+      [Ralf S. Engelschall]
+
+   *) Allow for convinience reasons pth_usleep() to accept also
+      arguments greater than 1000000.
+      [Harvinder Sawhney <hsawhney@hotmail.com>]
+
+   *) Updated HACKING document.
+      [Ralf S. Engelschall]
+
+   *) Fixed warnings in pth_string.c related to va_arg() usage
+      and implicit type conversions.
+      [Ralf S. Engelschall]
+
+   *) Merge from Pth 1.3.5:
+      Fixed the <sys/select.h> checks in Autoconf: the logic
+      was reversed and this way <sys/select.h> wasn't included on
+      platforms were it existed and included where it wasn't present.
+      [M. Lavasani <lavasani@connect.org.uk>]
+
+  Changes between 1.3.3 and 1.4a1 (10-Mar-2000 to 16-Apr-2000)
+
+   *) Added a new feature to config.param: parameters can be extended
+      with ``<space>IF<space><shell-test>''. Then the preceeding
+      parameter is only added to the command line if the <shell-test>
+      returns 0. <shell-test> can be anything which is possible in a
+      Bourne-Shell `if' construct's expression.
+      [Ralf S. Engelschall]
+
+   *) Fixed usage of `volatile' qualifier in pointer context.
+      [Ralf S. Engelschall]
+
+   *) Now check also for -Wno-long-long compiler option under
+      --enable-debug, because pth_string.c contains `long long' stuff.
+      [Ralf S. Engelschall]
+
+   *) Now pth.h and pthread.h include the non-standard <sys/select.h>
+      header on brain-dead platforms (like AIX) to get the definition of
+      fd_set (which is required for the pth_select prototype).
+      [Ralf S. Engelschall, Stian Seeberg <stian@nimsoft.no>]
+
+   *) Fixed auto-configuration for ISC and Win32/Cygwin platforms.
+      [Ralf S. Engelschall, Giwon On <Giwon.On@KOM.tu-darmstadt.de>]
+
+   *) Removed -L. from $(LDFLAGS) in Makefile.in, because this
+      is not required (libtool already takes care of this).
+      [Ralf S. Engelschall]
+
+   *) Added a RPM spec file pth.spec which allows one to build RPM
+      packages directly from the Pth distribution tarball through a
+      simple `rpm -tb pth-1.X.Y.tar.gz' call.
+      [Daniel Richard G. <straker@MIT.EDU>]
+
+   *) Removed the too explicit `-m 644' from the libtool/shtool
+      installation command for libpth.la and instead use a `umask 022'.
+      The reason is because some platforms require the shared libraries
+      to be executable, so we cannot use an explicit mode. But we use the
+      umask to make sure we don't result in world or group writeable files.
+      [Ralf S. Engelschall, Daniel Richard G. <straker@MIT.EDU>]
+
+   *) Use full-path /sbin/sysctl in config.guess on FreeBSD because
+      not all users have /sbin in their $PATH.
+      [Jeff Trawick <trawick@ibm.net>]
+
+   *) Added eight new I/O functions pth_{recv,recvfrom,send,sendto}[_ev](3)
+      which correspond to the counterparts in UNIX98 (SUSv2).
+      [Ralf S. Engelschall]
+
+   *) Replaced for security reasons sprintf() and vsprintf() calls
+      with own pth_snprintf() and pth_vsnprintf() functions from the new
+      pth_string.c source.
+      [Ralf S. Engelschall]
+
+   *) Speeded up pth_ring_t handling by inlining code and by maintaining
+      number of contained nodes explicitly to avoid an O(n) operation when
+      the number of elements are requested.
+      [Ralf S. Engelschall]
+
+   *) Upgraded to GNU shtool 1.4.9
+      [Ralf S. Engelschall]
+
+     _   _____
+    / | |___ /
+    | |   |_ \
+    | |_ ___) |
+  __|_(_)____/____________________________________________________________
+
+  Changes between 1.3.6 and 1.3.7 (01-Jul-2000 to 29-Jul-2000)
+
+   *) Backport from GNU Pth 1.4a3:
+      Upgraded to GNU shtool 1.5.1. This fixes especially the
+      compilation problems under Solaris which were caused by a too
+      unportable `shtool version' command from 1.5.0.
+      [Ralf S. Engelschall]
+
+   *) Backport from GNU Pth 1.4a3:
+      Fixed (unused) pth_time_mul() function: operator & replaced by %
+      [Tim Harris <tim.harris@snellwilcox.com>]
+
+  Changes between 1.3.5 and 1.3.6 (17-Apr-2000 to 01-Jul-2000)
+
+   *) Backport from GNU Pth 1.4a2:
+      Upgraded to GNU Shtool 1.5.0
+      [Ralf S. Engelschall]
+
+   *) Backport from GNU Pth 1.4a2:
+      Added OS/390 support to config.sub.
+      [Greg Ames <gregames@raleigh.ibm.com>]
+
+   *) Backport from GNU Pth 1.4a2:
+      Upgraded rse-pmt.ps paper to latest version as it was
+      published on USENIX 2000.
+      [Ralf S. Engelschall]
+
+   *) Backport from GNU Pth 1.4a2:
+      Upgraded to GNU libtool 1.3.5
+      [Ralf S. Engelschall]
+
+   *) Backport from GNU Pth 1.4a2:
+      Allow for convinience reasons pth_usleep() to accept also
+      arguments greater than 1000000.
+      [Harvinder Sawhney <hsawhney@hotmail.com>]
+
+  Changes between 1.3.4 and 1.3.5 (16-Apr-2000 to 17-Apr-2000)
+
+   *) Fixed the <sys/select.h> checks in Autoconf: the logic
+      was reversed and this way <sys/select.h> wasn't included on
+      platforms were it existed and included where it wasn't present.
+      [M. Lavasani <lavasani@connect.org.uk>]
+
+  Changes between 1.3.3 and 1.3.4 (10-Mar-2000 to 16-Apr-2000)
+
+   *) Merged from Pth 1.4a1:
+      Fixed usage of `volatile' qualifier in pointer context.
+      [Ralf S. Engelschall]
+
+   *) Merged from Pth 1.4a1:
+      Now pth.h and pthread.h include the non-standard <sys/select.h>
+      header on brain-dead platforms (like AIX) to get the definition of
+      fd_set (which is required for the pth_select prototype).
+      [Ralf S. Engelschall, Stian Seeberg <stian@nimsoft.no>]
+
+   *) Merged from Pth 1.4a1:
+      Fixed auto-configuration for ISC and Win32/Cygwin platforms.
+      [Ralf S. Engelschall, Giwon On <Giwon.On@KOM.tu-darmstadt.de>]
+
+   *) Merged from Pth 1.4a1:
+      Removed -L. from $(LDFLAGS) in Makefile.in, because this
+      is not required (libtool already takes care of this).
+      [Ralf S. Engelschall]
+
+   *) Merged from Pth 1.4a1:
+      Removed the too explicit `-m 644' from the libtool/shtool
+      installation command for libpth.la and instead use a `umask 022'.
+      The reason is because some platforms require the shared libraries
+      to be executable, so we cannot use an explicit mode. But we use the
+      umask to make sure we don't result in world or group writeable files.
+      [Ralf S. Engelschall, Daniel Richard G. <straker@MIT.EDU>]
+
+   *) Merged from Pth 1.4a1:
+      Use full-path /sbin/sysctl in config.guess on FreeBSD because
+      not all users have /sbin in their $PATH.
+      [Jeff Trawick <trawick@ibm.net>]
+
+   *) Merged from Pth 1.4a1:
+      Upgraded to GNU shtool 1.4.9
+      [Ralf S. Engelschall]
+
+  Changes between 1.3.2 and 1.3.3 (24-Feb-2000 to 10-Mar-2000)
+
+   *) Under Solaris and --enable-optimize we now also check for the
+      compiler option -fast which is supported by the Sun vendor compilers.
+      [Ralf S. Engelschall]
+
+   *) Fixed AC_COMPILER_OPTION macro in aclocal.m4: it wasn't aware of
+      the fact that running gcc with not supported options just leads to a
+      warning (but gcc still compiles the test program and exists with a 0
+      return value).
+      [Ralf S. Engelschall]
+
+   *) Fixed semantics of pth_cond_notify() to match POSIX: if one
+      notifies a condition variable which has still no waiter, the notify
+      operation is a no-op. Previously the condition signal was remembered
+      until a waiter arrived. This is now no longer the case.
+      [Ralf S. Engelschall, Chris Leishman <chris_leishman@freeonline.com.au>]
+
+   *) Allow pth_yield(<tid>) to yield also to <tid> if <tid> is a
+      freshly spawned thread, i.e. in state PTH_STATE_NEW instead of
+      PTH_STATE_READY, directly after a pth_spawn. This allows one better
+      control under co-routine programming.
+      [Ralf S. Engelschall]
+
+   *) Fixed internal pth_pqueue_delete() and pth_pqueue_tail()
+      functions to pth_pqueue.c for convinience reasons.
+      [Ralf S. Engelschall]
+
+   *) API CHANGE: Changed pth_time(int,int) to pth_time(long,long) and
+      pth_timeout(int,int) to pth_timeout(long,long), because pth_time_t
+      is a struct timeval and this structure is defined always via two
+      long's and not just int's.
+      [Ralf S. Engelschall]
+
+   *) Cleaned up source code even more by making sure "signed",
+      "unsigned" and "const" qualifiers are used correctly and
+      consistently.
+      [Ralf S. Engelschall]
+
+   *) Changed default stack size from 32KB to 64KB, because
+      on Solaris and other platforms where one can set FD_SETSIZE to
+      values up to 65535 an fd_set is up to 8KB. Pth internally (in
+      the scheduler in pth_select_ev) has up to three fd_sets (up to
+      24KB) on the stack, so a 32KB stack is too risky. Nevertheless
+      one can still spawn threads with smaller stacks by using
+      PTH_ATTR_STACK_SIZE, of course. Only the scheduler thread remains
+      with a 64KB stack, because this thread cannot be configured by the
+      application.
+      [Ralf S. Engelschall]
+
+   *) Fixed "make depend": a backslash was missing.
+      [Edwin Brown <Edwin.Brown@sdrc.com>]
+
+   *) Fixed "make install" for pth.m4 and the situation where
+      one compiles from a different sub-directory.
+      [Raphael Bossek <raphael.bossek@solutions4linux.de>]
+
+  Changes between 1.3.1 and 1.3.2 (20-Feb-2000 to 24-Feb-2000)
+
+   *) Do no longer use -woff in CFLAGS for IRIX 6.5.2 and above.
+      [Edwin Brown <Edwin.Brown@sdrc.com>, Ralf S. Engelschall]
+
+   *) Replaced ``while (1)'' constructs with ``for (;;)'' because some
+      compilers like this more and do not warn about constant expressions.
+      [Ralf S. Engelschall]
+
+   *) Added hint to pth.pod that ``pth_join(<tid>, NULL)'' is allowed.
+      [Ralf S. Engelschall]
+
+   *) Cancel and join the ticker thread explicitly in test_select.c
+      [Edwin Brown <Edwin.Brown@sdrc.com>, Ralf S. Engelschall]
+
+   *) Removed unnecessary code in pth_event.c
+      [Edwin Brown <Edwin.Brown@sdrc.com>, Ralf S. Engelschall]
+
+   *) Add special namespace workarounds to pthread.h.in for HPUX
+      platforms where the pthread_kill() prototypes conflict without this.
+      [M. Lavasani <lavasani@connect.org.uk>, Ralf S. Engelschall]
+
+  Changes between 1.3.0 and 1.3.1 (19-Feb-2000 to 20-Feb-2000)
+
+   *) Added HISTORY document where we now write down the evolution
+      and release dates of Pth to have a concise history reference.
+      [Ralf S. Engelschall]
+
+   *) Added USERS document where we now collect references to
+      software packages utilizing GNU Pth.
+      [Ralf S. Engelschall]
+
+   *) Fixed a subtle typo in pth.pod about thread-safe functions
+      and finished documentation of pth_attr_set/pth_attr_get functions.
+      [James Robinson <jlrobins@uncc.edu>, Jeremie <jeremie@jabber.org>]
+
+  Changes between 1.3b3 and 1.3.0 (13-Feb-2000 to 19-Feb-2000)
+
+   *) Polished the various document files.
+      [Ralf S. Engelschall]
+
+   *) Use -w in $CFLAGS also on UnixWare 2.1, because its cc
+      complains about "not reached" situations because of our macros.
+      [Ralf S. Engelschall]
+
+   *) Replaced "NOT REACHED" with "NOTREACHED" in comments
+      to be more correct for lint(1).
+      [Ralf S. Engelschall]
+
+   *) Updated config.param and fixed its parsing procedure.
+      [Ralf S. Engelschall]
+
+   *) Fixed a few typos in pth.pod and adjusted example program
+      to make sure it doesn't segfault accidently for the users.
+      [Tim Harris <tim_harris@snellwilcox.com>, Raphael Bossek
+      <raphael.bossek@solutions4linux.de>, Ralf S. Engelschall]
+
+  Changes between 1.3b2 and 1.3b3 (28-Jan-2000 to 13-Feb-2000)
+
+   *) Fixed PTH_EVENT_FUNC handling (it was not polled really
+      in regular intervals if there were no other FUNC events which
+      helped) by extending it with an interval time argument. This way
+      a PTH_EVENT_FUNC event is likewise a PTH_EVENT_TIME event which
+      calls the check function after elapsing and resets itself again if
+      it failed.
+      [Ralf S. Engelschall]
+
+   *) Removed PTH_EVENT_PID because the waiting on a process id was not
+      working as expected (the polling was not done in intervals) and this
+      type of event doesn't really fit very well into the multi-threading
+      environment of Pth (where the events should be thread-related and not
+      process-related). So instead of fixing the pid waiting event handling
+      through some unclean workarounds or kludges (it cannot be done very
+      different), it was decided to kick it out at all.
+      [Ralf S. Engelschall]
+
+   *) Make sure pth_connect[_ev]() doesn't block by internally
+      switching to non-blocking mode temporarily if necessary.
+      [Chris Leishman <chris_leishman@freeonline.com.au>, Ralf S. Engelschall]
+
+   *) Fix pthread_cond_timedwait by making it more POSIX compliant:
+      return ETIMEDOUT instead of 0 if the timeout occurred.
+      [Emanuele Fornara <efornara@hotmail.com>, Ralf S. Engelschall]
+
+  Changes between 1.3b1 and 1.3b2 (26-Jan-2000 to 28-Jan-2000)
+
+   *) Let "make striptease" be aware of $TMPDIR and remove temporary
+      directory from this dir, too.
+      [Ralf S. Engelschall]
+
+   *) Again cleaned up and enhanced the manual page pth.pod.
+      [Ralf S. Engelschall]
+
+   *) Added a few more errno_shield { ... } sections to prevent
+      the destruction of errno values on error returns.
+      [Ralf S. Engelschall]
+
+   *) Added more complete Linux support for --enable-syscall-hard by
+      using SYS_socketcall+SOCKOP_{accept,connect} if
+      SYS_{accept,connect} doesn't exist.
+      [Ralf S. Engelschall]
+
+   *) Added pth_suspend() and pth_resume together with an additional
+      SUSPENDED queue. This can be used to temporarily park threads in
+      order to move them out of the schedulers scope.
+      [Ralf S. Engelschall]
+
+  Changes between 1.3a5 and 1.3b1 (15-Jan-2000 to 26-Jan-2000)
+
+   *) Completely cleaned up the manual page.
+      [Eric Hanchrow <offby1@blarg.net>]
+
+   *) Use SYS__newselect instead of SYS_select under Linux and
+      --enable-syscall-hard because SYS_select is a dummy stub which
+      always just returns -1 and errno = EFAULT.
+      [Artem Gr <artem@bizlink.ru>, Ralf S. Engelschall]
+
+  Changes between 1.3a4 and 1.3a5 (08-Jan-2000 to 15-Jan-2000)
+
+   *) Updated HACKING document.
+      [Ralf S. Engelschall]
+
+   *) Removed '+DAportable' from HPUX flags to avoid problems.
+      [M. Lavasani <lavasani@connect.org.uk>]
+
+   *) Added a workround in Makefile.in (replaced "rm -r" with
+      "rm" + "rmdir") for brain-dead AmigaOS.
+      [Kriton Kyrimis <kyrimis@cti.gr>]
+
+   *) Fixed example in Pth manual page: peer_len wasn't initialized.
+      [Sami Niemi <saminiemi@usa.net>, Ralf S. Engelschall]
+
+   *) Fixed cleanup handling in test_sig.c.
+      [Ralf S. Engelschall]
+
+   *) Fixed memory leaks in some test programs.
+      [Ralf S. Engelschall]
+
+  Changes between 1.3a3 and 1.3a4 (08-Jan-2000 to 08-Jan-2000)
+
+   *) Translated The Open Group's SUSv2 Threading HTML documentation
+      into POD format to form an appendix for pthread.pod. This is for
+      convinience reasons when programming with the Pthread API of GNU Pth.
+      [Ralf S. Engelschall]
+
+   *) Fixed introduced debugging with "==== THREAD CONTEXT SWITCH ===="
+      lines. They were printed always.
+      [Ralf S. Engelschall]
+
+  Changes between 1.3a2 and 1.3a3 (30-Dec-1999 to 08-Jan-2000)
+
+   *) Added a PTH_CTRL_DUMPSTATE to pth_ctrl() which helps in debugging.
+      a pth_ctrl(PTH_CTRL_DUMPSTATE, stderr) for instance writes out a summary
+      page of the internal Pth library state to stderr. This is intended for
+      debugging purposes only, of course.
+      [Ralf S. Engelschall, Lubos Lunak <l.lunak@sh.cvut.cz>]
+
+   *) Fixed destructor for statically initialized events which failed
+      under asynchronous cancellation if those events were merged
+      together at the time of cancellation.
+      [Igor A. Minyukoff, Ralf S. Engelschall]
+
+   *) Updated the INSTALL document.
+      [Ralf S. Engelschall]
+
+   *) Fixed a memory leak in pth_kill(): the TCBs (plus one
+      stack) of the main and scheduler thread were not freed.
+      [Pete <pfv@grex.org>, Ralf S. Engelschall]
+
+   *) Added developer support for compiling and linking against the
+      Dmalloc library (for debugging memory allocation) through the
+      --with-dmalloc[=DIR] Autoconf option.
+      [Ralf S. Engelschall]
+
+   *) Fixed pth_compat.c: the #define for strerror was buggy.
+      [Ralf S. Engelschall]
+
+  Changes between 1.3a1 and 1.3a2 (09-Nov-1999 to 30-Dec-1999)
+
+   *) Added first cut of experimental Win32 support through Cygwin B20.1.
+      [Ralf S. Engelschall, Schizoid <schizoid21@yahoo.com>]
+
+   *) Fixed autoheader step by using AC_CHECK_HEADERS() instead of
+      AC_CHECK_HEADER() because Autoconf's autoheader.m4 isn't aware of
+      AC_CHECK_HEADER().
+      [Ralf S. Engelschall]
+
+   *) Adjusted all copyright messages to include the forthcoming
+      new year 2000, too.
+      [Ralf S. Engelschall]
+
+   *) Fixed $DIFS in pth-config.in and pthread-config.in
+      (the tab was lost) and cleaned up pth-config.in a little bit.
+      [Ralf S. Engelschall]
+
+   *) Upgraded from GNU libtool 1.3.3 to 1.3.4
+      and from GNU shtool 1.4.6 to 1.4.7.
+      [Ralf S. Engelschall]
+
+   *) Fixed cleanup handling for main thread. Now pth_kill()
+      and pth_exit() in the main thread work as expected.
+      [Ralf S. Engelschall, Anton Umnikov <anton@uic.dvgu.ru>]
+
+   *) Fixed Autoconf --host option.
+      [Ralf S. Engelschall, Kent Overstreet <kent@hotmail.com>]
+
+   *) Fixed pth_mctx.c by making sure ss_base is mapped to ss_sp
+      only if sigaltstack(2) is used for the stack trick.
+      [Kriton Kyrimis <kyrimis@cti.gr>]
+
+   *) Fixed return code semantics for error situation in both
+      pth_write(3) and pth_writev(3).
+      [Rob Quinn <rquinn@sec.sprint.net>, Ralf S. Engelschall]
+
+   *) Stripped trailing whitespaces from all source files.
+      [Ralf S. Engelschall]
+
+  Changes between 1.2.0 and 1.3a1 (31-Oct-1999 to 09-Nov-1999)
+
+   *) Changed AC_CHECK_STRUCTATTR macro from a too weak AC_TRY_EGREP to a
+      AC_TRY_LINK based approach to make sure the ss_sp/ss_base checks do not
+      fail on platforms where sys/signal.h contains both sigstack and
+      sigaltstack defines.
+      [Ralf S. Engelschall]
+
+   *) Added a large "BUILD ENVIRONMENT" section to pth.pod which describes
+      three ways to establish build environments for Pth based packages.
+      [Ralf S. Engelschall]
+
+   *) Updated the pth-config.pod and pthread-config.pod for
+      missing option entries.
+      [Ralf S. Engelschall]
+
+   *) Added --datadir and --acdir options to pth-config. Especially
+      --acdir can be used in conjunction with Autoconf's aclocal program to
+      retrieve the AC_CHECK_PTH macro, e.g. aclocal --output-
+      --acdir=`pth-config --acdir` prints the macro definition to stdout.
+      [Ralf S. Engelschall]
+
+   *) Added a new, very flexible and robust pth.m4 Autoconf macro file which
+      is installed under $datadir/aclocal/ and can be used by third-party
+      Autoconf scripts to locate GNU Pth.  Syntax is:
+      AC_CHECK_PTH([MIN-VERSION [,DEFAULT-WITH-PTH [,DEFAULT-WITH-PTH-TEST
+      [,EXTEND-VARS [,ACTION-IF-FOUND [,ACTION-IF-NOT-FOUND]]]]]]).
+      [Ralf S. Engelschall, Markus Fischer <mfischer@josefine.ben.tuwien.ac.at>]
+
+   *) Added PTH_VERSION_{STR,HEX} to pth.h
+      [Ralf S. Engelschall]
+
+   *) Fixed AC_CHECK_EXTLIB macro.
+      [Ralf S. Engelschall]
+
+   *) Added a new developer target `make striptease' which uses the
+      new striptease.{pl,mk} files to strip down the Pth source tree to a
+      minimum (approx. 1/3 of size). The generated striptease.dir/ area can be
+      then imported into third-party source trees and there blows up the stuff
+      only as minimal as possible.
+      [Ralf S. Engelschall]
+
+   *) Cleaned up copyright messages in source files.
+      [Ralf S. Engelschall]
+
+   *) Rewritten the Linux guessing part in config.guess to
+      create more useful GNU platform triples for Linux flavors.
+      [Ralf S. Engelschall]
+
+     _   ____
+    / | |___ \
+    | |   __) |
+    | |_ / __/
+  __|_(_)_____|___________________________________________________________
+
+  Changes between 1.2.2 and 1.2.3 (08-Jan-2000 to 04-Feb-2000)
+
+   *) Backport from Pth 1.3b3:
+      Fix pthread_cond_timedwait by making it more POSIX compliant:
+      return ETIMEDOUT instead of 0 if the timeout occurred.
+      [Emanuele Fornara <efornara@hotmail.com>, Ralf S. Engelschall]
+
+   *) Backport from Pth 1.3b2:
+      Added more complete Linux support for --enable-syscall-hard by
+      using SYS_socketcall+SOCKOP_{accept,connect} if
+      SYS_{accept,connect} doesn't exist.
+      [Ralf S. Engelschall]
+
+   *) Backport from Pth 1.3b2:
+      Added a few more errno_shield { ... } sections to prevent
+      the destruction of errno values on error returns.
+      [Ralf S. Engelschall]
+
+   *) Backport from Pth 1.3b1:
+      Use SYS__newselect instead of SYS_select under Linux and
+      --enable-syscall-hard because SYS_select is a dummy stub which
+      always just returns -1 and errno = EFAULT.
+      [Artem Gr <artem@bizlink.ru>, Ralf S. Engelschall]
+
+   *) Backport from Pth 1.3a5:
+      Removed '+DAportable' from HPUX flags to avoid problems.
+      [M. Lavasani <lavasani@connect.org.uk>]
+
+   *) Backport from Pth 1.3a5:
+      Added a workround in Makefile.in (replaced "rm -r" with
+      "rm" + "rmdir") for brain-dead AmigaOS.
+      [Kriton Kyrimis <kyrimis@cti.gr>]
+
+   *) Backport from Pth 1.3a5:
+      Fixed example in Pth manual page: peer_len wasn't initialized.
+      [Sami Niemi <saminiemi@usa.net>, Ralf S. Engelschall]
+
+   *) Backport from Pth 1.3a5:
+      Fixed memory leaks in some test programs.
+      [Ralf S. Engelschall]
+
+  Changes between 1.2.1 and 1.2.2 (14-Nov-1999 to 08-Jan-2000)
+
+   *) Backport from Pth 1.3a3:
+      Updated the INSTALL document.
+      [Ralf S. Engelschall]
+
+   *) Backport from Pth 1.3a3:
+      Fixed a memory leak in pth_kill(): the TCBs (plus one
+      stack) of the main and scheduler thread were not freed.
+      [Pete <pfv@grex.org>, Ralf S. Engelschall]
+
+   *) Backport from Pth 1.3a3:
+      Fixed pth_compat.c: the #define for strerror was buggy.
+      [Ralf S. Engelschall]
+
+   *) Backport from Pth 1.3a3:
+      Fixed destructor for statically initialized events which failed
+      under asynchronous cancellation if those events were merged
+      together at the time of cancellation.
+      [Igor A. Minyukoff, Ralf S. Engelschall]
+
+   *) Backport from Pth 1.3a2:
+      Upgraded from GNU libtool 1.3.3 to 1.3.4
+      and from GNU shtool 1.4.6 to 1.4.7.
+      [Ralf S. Engelschall]
+
+   *) Backport from Pth 1.3a2:
+      Fixed pth_mctx.c by making sure ss_base is mapped to ss_sp
+      only if sigaltstack(2) is used for the stack trick.
+      [Kriton Kyrimis <kyrimis@cti.gr>]
+
+  Changes between 1.2.0 and 1.2.1 (31-Oct-1999 to 14-Nov-1999)
+
+   *) Backport from Pth 1.3a2:
+      Fixed return code semantics for error situation in both
+      pth_write(3) and pth_writev(3).
+      [Rob Quinn <rquinn@sec.sprint.net>, Ralf S. Engelschall]
+
+   *) Backport from Pth 1.3a1:
+      Changed AC_CHECK_STRUCTATTR macro from a too weak AC_TRY_EGREP to a
+      AC_TRY_LINK based approach to make sure the ss_sp/ss_base checks do not
+      fail on platforms where sys/signal.h contains both sigstack and
+      sigaltstack defines.
+      [Ralf S. Engelschall]
+
+   *) Backport from Pth 1.3a1:
+      Fixed AC_CHECK_EXTLIB macro.
+      [Ralf S. Engelschall]
+
+   *) Backport from Pth 1.3a1:
+      Cleaned up copyright messages in source files.
+      [Ralf S. Engelschall]
+
+  Changes between 1.2b8 and 1.2.0 (26-Oct-1999 to 31-Oct-1999)
+
+   *) Finally tested the package on all major Unix platforms to which
+      I've direct access (see PORTING document for details).
+      [Ralf S. Engelschall]
+
+   *) Fixed a few remaining typos in pth.pod; adjusted README file for
+      release and included ANNOUNCE document in source tree.
+      [Ralf S. Engelschall]
+
+   *) Fixed special Autoconf detections for UnixWare 2.x platform.
+      [Ralf S. Engelschall]
+
+   *) Fixed special Autoconf detections for Linux platforms.
+      [Ralf S. Engelschall]
+
+   *) Updated INSTALL document.
+      [Ralf S. Engelschall]
+
+   *) Added -w option to CFLAGS under HP-UX with CC.
+      [Ralf S. Engelschall]
+
+  Changes between 1.2b7 and 1.2b8 (22-Oct-1999 to 26-Oct-1999)
+
+   *) Fixed Pthread compilation under NetBSD 1.4 and Solaris.  The pth.h
+      header has to skip the fallbacks (and not the pthread.h header) when
+      compiling pthread.c. This subtle difference is important because
+      ordering is important for correct namespace hiding.
+      [Ralf S. Engelschall, John A. Maier <johnam@mail.kemper.org>]
+
+   *) Greatly enhanced AC_CHECK_ARGTYPE macro to support more
+      vendor headers and their syntax.
+      [Ralf S. Engelschall]
+
+   *) Added two new Autoconf options: --enable-maintainer for enabling
+      maintainer targets (now the x.pod -> x.N translation is disabled per
+      default and is enabled with this option only) and --enable-tests which
+      is on per default and can be used (as --disable-tests) to disable the
+      building of the test programs.
+      [Ralf S. Engelschall]
+
+   *) Fixed autoheader processing with a new acheader.m4 file.
+      [Ralf S. Engelschall]
+
+   *) Stripped down shtool script to 7 of 17 ingredients to reduce source
+      tree by approx. 40KB.
+      [Ralf S. Engelschall]
+
+   *) Updated acconfig.h: HAVE_NFDS_T was missing.
+      [Ralf S. Engelschall]
+
+   *) Fixed `make dist': CVS temporary files (.#xx) were included
+      into the distribution tarball.
+      [Ralf S. Engelschall]
+
+  Changes between 1.2b6 and 1.2b7 (28-Sep-1999 to 22-Oct-1999)
+
+   *) Add the .gdbinit file also to the distribution tarball.
+      [Ralf S. Engelschall]
+
+   *) Re-acquire the mutex corresponding to a condition variable when
+      pth_cond_await() is cancelled, in order to restore the condition
+      variable semantics.
+      [Lubos Lunak <l.lunak@email.cz>]
+
+   *) Fixed cancellation point handling.
+      [Lubos Lunak <l.lunak@email.cz>]
+
+   *) Added support for poll(2)'s POSIX nfds_t argument type.
+      [Ralf S. Engelschall]
+
+   *) Fixed AC_CHECK_ARGTYPE: it now handles wrapped lines, too.
+      [Ralf S. Engelschall]
+
+   *) Fixed regex in aclocal.m4: tabs were expanded to spaced.
+      [Ralf S. Engelschall]
+
+   *) Fixed a casting problem related to `void *' in pth_high.c
+      which g++ 2.95.1 hated.
+      [Ralf S. Engelschall]
+
+   *) Replaced Autoconf AC_CHECK_FUNCS macro with an own local copy named
+      AC_CHECK_FUNCTIONS which _always_ uses ``extern "C"'' if __cplusplus is
+      defined. This way one can configure Pth even if $CC is a C++ compiler.
+      [Ralf S. Engelschall]
+
+   *) Updated rse-pmt.ps document.
+      [Ralf S. Engelschall]
+
+   *) Fixed a few typos in the manual page.
+      [Ralf S. Engelschall]
+
+   *) Fixed aclocal.m4: CFXXLAGS -> CXXFLAGS ;)
+      [Alexandre Oliva <oliva@dcc.unicamp.br>]
+
+  Changes between 1.2b5 and 1.2b6 (21-Sep-1999 to 28-Sep-1999)
+
+   *) Added platform support for GNU/Linux kernel 2.2 / glibc 2.1
+      for both Alpha and Intel platforms via sjlj/ssjlj/sas.
+      (tested with both RedHat 6.0 and SuSE 6.1)
+      [Ralf S. Engelschall]
+
+   *) Added platform support for Tru64/OSF1 4.x and 5.0.
+      [Ralf S. Engelschall]
+
+   *) Added --prefix, --bindir, --libdir, --includedir and --mandir
+      options to pth-config and pthread-config. Mainly for convinience
+      and consistency reasons.
+      [Ralf S. Engelschall]
+
+   *) Avoid compiler complains in pth_mctx.c for assigning a `volatile
+      sigset_t'. Instead use a plain memcpy() with sizeof(sigset_t).
+      This now makes also IRIX' 6.5 cc happy.
+      [Ralf S. Engelschall]
+
+   *) Fixed the Autoconf AC_CHECK_MCSC check which tests whether
+      SVR4/SUSv2 makecontext(2), swapcontext(2) and friends can be used for
+      user-space context switching. It was broken because the uc_link and
+      uc_stack structure attributes were not initialized correctly.
+      [Ralf S. Engelschall, Ben Harris <bjh21@cam.ac.uk>]
+
+   *) Updated dependencies in Makefile.in.
+      [Ralf S. Engelschall]
+
+   *) Mention the new pth-users@gnu.org mailing list in SUPPORT
+      and added hint to Makefile.in.
+      [Ralf S. Engelschall]
+
+  Changes between 1.2b4 and 1.2b5 (17-Sep-1999 to 21-Sep-1999)
+
+   *) Added new Autoconf macro AC_COMPILER_OPTION which is now
+      used to check whether -pipe, -ggdb3 and -W<xxx> really work
+      before they are implicitly used.
+      [Ralf S. Engelschall, Alexandre Oliva <oliva@dcc.unicamp.br>]
+
+   *) Make sure pthread.c compiles even if the platforms lacks `struct
+      timespec'. The pthread_cond_timedwait() function will then still be
+      unuseable by the application, of course.  But that's the intended
+      behavour, because the Pthread API cannot be changed at this point.
+      [Michele Satriani <satriani@info.uniroma2.it>, Ralf S. Engelschall]
+
+   *) Document it more clearly that PTH_ATTR_DEFAULT is _not_ the values an
+      pth_attr_init() creates. It means that priority, joinability and
+      cancelstate are _inherited_.
+      [Eric Newton <ecn@smart.net>]
+
+  Changes between 1.2b3 and 1.2b4 (17-Sep-1999 to 17-Sep-1999)
+
+   *) Fixed test_httpd.c: highest port is 65535 and not 65553 ;)
+      [Alex Fiori <alex@linuxbr.com>]
+
+   *) Fix Makefile.in: $(S)shtool -> $(srcdir)shtool
+      [Ben Harris <bjh21@cam.ac.uk>, Ralf S. Engelschall]
+
+   *) Make Rhapsody happy with pth_errno.c by statically initializing
+      the contained variables.
+      [Ben Harris <bjh21@cam.ac.uk>, Ralf S. Engelschall]
+
+  Changes between 1.2b2 and 1.2b3 (04-Sep-1999 to 17-Sep-1999)
+
+   *) Added first cut of support for building Pth outside it's source tree.
+      [Ben Harris <bjh21@cam.ac.uk>, Ralf S. Engelschall]
+
+   *) Updated pth.pod for new socklen_t usage and updated NEWS file.
+      [Ralf S. Engelschall]
+
+   *) Officially switched from ``GNU Library General License v2.0''
+      to successor license: ``GNU Lesser General License v2.1''.
+      [Ralf S. Engelschall]
+
+   *) Enhanced ss_sp to ss_base mapping: There is now Autoconf
+      support for the mapping decision.
+      [Ralf S. Engelschall, Ben Harris <bjh21@cam.ac.uk>]
+
+   *) Add `PTHREAD' also to defines for namespace protection.
+      [Hans v. Sommerfeld <snoopy@redbaron.bir.uunet.de>]
+
+   *) Made the temporary errno saving more elegant with a new
+      `errno_shield { .... }' construct.
+      [Ralf S. Engelschall]
+
+   *) Upgraded to GNU shtool 1.4.6
+      [Ralf S. Engelschall]
+
+  Changes between 1.2b1 and 1.2b2 (02-Sep-1999 to 04-Sep-1999)
+
+   *) Ported Pth to another esoteric, anchient and brain-dead
+      platform which needs jmp_buf fiddling: Interactive Unix (ISC) 4.0.
+      [Ralf S. Engelschall, Brandon Reynolds <bmr@comtime.com>]
+
+   *) Make sys/resource.h an optional header.
+      [Ralf S. Engelschall]
+
+   *) Added CPPFLAGS to Makefile.in and configure.in
+      [Ralf S. Engelschall]
+
+  Changes between 1.1.4 and 1.2b1 (30-Aug-1999 to 02-Sep-1999)
+
+   *) Added TESTS document which shows success stories with
+      Apache, MySQL, Perl, Python, OpenLDAP, pident, etc.
+      [Ralf S. Engelschall]
+
+   *) Enhanced pth-config/pthread-config scripts: first they
+      are now concatenating the output of the options into a single
+      string and print this at the end once. This way one can use things
+      like LIBS="`pthread-config --ldflags --libs`" without getting an
+      intermediate newline which causes trouble in various packages.
+      Second per default only pth-specific CFLAGS/LDFLAGS/LIBS are
+      printed. If one wants also additional flags one has used while
+      building Pth one now can add the --all option. This is to avoid
+      conflicts between Pth flags and flags of the application.
+      [Ralf S. Engelschall]
+
+   *) Added -w to CFLAGS for Solaris if $CC is not GCC to avoid the
+      warnings about "end of loop not reached" because of our
+      ``do { ...return;... } while(0)'' macros.
+      [Ralf S. Engelschall]
+
+   *) Fixed two bugs in internal pth_pqueue_delete() and one in
+      pth_pqueue_insert(): it accidently also adjusted the priority
+      queue top element if one deleted the last element of the queue and it
+      calculated the priority of the following element incorrectly.
+      [Jens Andersen <Jens@trw.nl>, Ralf S. Engelschall]
+
+   *) Optimized the signal mask handling: The application is now required to
+      use pth_sigmask(3) and no longer can use sigprocmask(2) directly
+      (as it's already the case for Pthreads where POSIX states that the
+      behaviour of sigprocmask(2) is not defined in a MT application).
+      The side-effect of this consistencency restriction is that
+      internally the machine context switching no longer has to remember
+      the signal mask on _every_ context switch. It's now sufficient
+      that pth_sigmask(3) sets the mask to allow the scheduler to
+      calculate its own mask. The result is a faster and more clean
+      thread dispatching. Additionally a soft and hard syscall mapping
+      for sigprocmask(2) was added, of course.
+      [Ralf S. Engelschall]
+
+   *) Added support for socklen_t to both avoid warnings under
+      some platforms and to avoid problems on 64 bit machines.
+      [Ralf S. Engelschall]
+
+   *) Added UnixWare7 support to config.guess
+      [Ralf S. Engelschall]
+
+   *) Added config.param facility.
+      [Ralf S. Engelschall]
+
+   *) Cleaned up bootstrap stuff from configure.in and moved it to aclocal.m4.
+      [Ralf S. Engelschall]
+
+   *) Fixed autoconf's `--silent' flag: it wasn't passed to ltconfig.sh
+      [Ralf S. Engelschall]
+
+   *) Rewritten the "make test" message and refreshed the PORTING file to
+      start with a new format which now includes also the machine context and
+      stack growth direction.
+      [Ralf S. Engelschall]
+
+   *) Enhanced the interactive (not --enable-batch) mode: The Makefile now
+      displays real hints what to do as the next step. All messages can
+      be disabled via --enable-batch, of course.
+      [Ralf S. Engelschall]
+
+   *) Fixed aclocal.m4: Tabs were lost by accident.
+      [Ralf S. Engelschall]
+
+   *) Fixed a type warning in pth_debug.c: pid_t vs. int
+      [Ralf S. Engelschall]
+
+     _   _
+    / | / |
+    | | | |
+    | |_| |
+  __|_(_)_|_______________________________________________________________
+
+  Changes between 1.1.5 and 1.1.6 (02-Sep-1999 to 28-Sep-1999)
+
+   *) Backport from Pth 1.2b6:
+      Fixed the Autoconf AC_CHECK_MCSC check which tests whether
+      SVR4/SUSv2 makecontext(2), swapcontext(2) and friends can be used for
+      user-space context switching. It was broken because the uc_link and
+      uc_stack structure attributes were not initialized correctly.
+      [Ralf S. Engelschall, Ben Harris <bjh21@cam.ac.uk>]
+
+   *) Backport from Pth 1.2b5:
+      Document it more clearly that PTH_ATTR_DEFAULT is _not_ the values an
+      pth_attr_init() creates. It means that priority, joinability and
+      cancelstate are _inherited_.
+      [Eric Newton <ecn@smart.net>]
+
+   *) Backport from Pth 1.2b4:
+      Fixed test_httpd.c: highest port is 65535 and not 65553 ;)
+      [Alex Fiori <alex@linuxbr.com>]
+
+   *) Backport from Pth 1.2b4:
+      Make Rhapsody happy with pth_errno.c by statically initializing
+      the contained variables.
+      [Ben Harris <bjh21@cam.ac.uk>, Ralf S. Engelschall]
+
+   *) Backport from Pth 1.2b3:
+      Add `PTHREAD' also to defines for namespace protection.
+      [Hans v. Sommerfeld <snoopy@redbaron.bir.uunet.de>]
+
+   *) Upgraded to GNU shtool 1.4.6
+      [Ralf S. Engelschall]
+
+  Changes between 1.1.4 and 1.1.5 (30-Aug-1999 to 02-Sep-1999)
+
+   *) Backport from Pth 1.2b1:
+      Enhanced pth-config/pthread-config scripts: first they
+      are now concatenating the output of the options into a single
+      string and print this at the end once. This way one can use things
+      like LIBS="`pthread-config --ldflags --libs`" without getting an
+      intermediate newline which causes trouble in various packages.
+      Second per default only pth-specific CFLAGS/LDFLAGS/LIBS are
+      printed. If one wants also additional flags one has used while
+      building Pth one now can add the --all option. This is to avoid
+      conflicts between Pth flags and flags of the application.
+      [Ralf S. Engelschall]
+
+   *) Backport from Pth 1.2b1:
+      Fixed two bugs in internal pth_pqueue_delete() and one in
+      pth_pqueue_insert(): it accidently also adjusted the priority
+      queue top element if one deleted the last element of the queue and it
+      calculated the priority of the following element incorrectly.
+      [Jens Andersen <Jens@trw.nl>, Ralf S. Engelschall]
+
+   *) Backport from Pth 1.2b1:
+      Added -w to CFLAGS for Solaris if $CC is not GCC to avoid the
+      warnings about "end of loop not reached" because of our
+      ``do { ...return;... } while(0)'' macros.
+      [Ralf S. Engelschall]
+
+   *) Backport from Pth 1.2b1:
+      Fixed autoconf's `--silent' flag: it wasn't passed to ltconfig.sh
+      [Ralf S. Engelschall]
+
+   *) Backport from Pth 1.2b1:
+      Fixed aclocal.m4: Tabs were lost by accident.
+      [Ralf S. Engelschall]
+
+   *) Backport from Pth 1.2b1:
+      Fixed a type warning in pth_debug.c: pid_t vs. int
+      [Ralf S. Engelschall]
+
+  Changes between 1.1.3 and 1.1.4 (27-Aug-1999 to 30-Aug-1999)
+
+   *) Changed internal handling of spawned threads: they are now really
+      inserted to the top of the priority queue to make sure a thread is
+      guarrantied to be dispatched next when one calls pth_yield(NULL)
+      directly after a pth_spawn(). This is especially interesting for
+      programming with the co-routine paradigm where it allows one to better
+      control the startup of a co-routine.
+      [Ralf S. Engelschall, Jens Andersen <Jens@trw.nl>]
+
+   *) Fixed pthread_cancel(): a switch statement was incorrect (three
+      breaks were missing to stop falling through).
+      [Jens Andersen <Jens@trw.nl>]
+
+   *) Change internal `_pthread' prefix to `__pthread'.
+      [Ralf S. Engelschall]
+
+   *) Enhanced backward compatibility stuff for Pthread draft 4 (DCE Threads)
+      in pthread.h.in: When _POSIX_BACKCOMPAT is defined before the pthread.h
+      header is included one now gets a lot more backward compatibility
+      mappings.
+      [Ralf S. Engelschall]
+
+   *) Optimize internal processing by inlining various small functions from
+      pth_ring.c, pth_pqueue.c and pth_sched.c which are called a lot.
+      [Ralf S. Engelschall]
+
+   *) Optimized readline() in test_common.c
+      [Ralf S. Engelschall]
+
+   *) Added specific support for Linux/glibc/mc68000 to pth_mctx.c
+      [Roman Hodek <Roman.Hodek@informatik.uni-erlangen.de>]
+
+   *) Updated INSTALL document for --enable-optimize.
+      [Ralf S. Engelschall]
+
+  Changes between 1.1.2 and 1.1.3 (23-Aug-1999 to 27-Aug-1999)
+
+   *) Enhanced test program of AC_CHECK_STACKGROWTH in aclocal.m4 to
+      make sure the test variables are not optimized away by the
+      compiler and this way lead to incorrect check results.
+      [Martin Kraemer <martin.kraemer@mch.sni.de>, Ralf S. Engelschall]
+
+   *) Fixed default stack size: was 32*16384 (=512KB) instead
+      of the intended 32*1024 (=32KB).
+      [Ralf S. Engelschall]
+
+   *) Added --enable-optimize flag to configure with selected
+      standard optimization flags of GCC.
+      [Ralf S. Engelschall]
+
+   *) Added SUPPORT file to source tree.
+      [Ralf S. Engelschall]
+
+   *) Added test_philo, Dijkstra's Five Dining Philosophers ;)
+      [Ralf S. Engelschall]
+
+   *) Add "auto" qualifier to PTH_STACKGROWTH test program
+      to make sure the variables are placed into the stack.
+      [Ralf S. Engelschall]
+
+   *) Use predetermined $PLATFORM of configure also in Makefile
+      [Ralf S. Engelschall]
+
+  Changes between 1.1.1 and 1.1.2 (21-Aug-1999 to 23-Aug-1999)
+
+   *) Fixed Makefile.in: pth_acdef.h and pth_acmac.h were not removed on
+      "distclean" and this way they were accidently distributed.
+      [Ralf S. Engelschall]
+
+   *) Changed return type of pth_yield() from `void' to `int' to
+      be able to return an error FALSE/EINVAL in case the `tid'
+      argument specified an invalid or still not ready thread.
+      [Kurt D. Zeilenga <Kurt@OpenLDAP.Org>, Ralf S. Engelschall]
+
+   *) Fixed description of pth_yield() in pth.pod.
+      [Kurt D. Zeilenga <Kurt@OpenLDAP.Org>, Ralf S. Engelschall]
+
+  Changes between 1.1.0 and 1.1.1 (19-Aug-1999 to 21-Aug-1999)
+
+   *) Changed pthread_yield_np() from `void' return type to `int' to allow the
+      `#define sched_yield pthread_yield_np' work as expected, because
+      sched_yield has `int' return type per SUSv2.
+      [Kurt D. Zeilenga <Kurt@OpenLDAP.Org>, Ralf S. Engelschall]
+
+   *) Fixed problems related to pthread_exit() and pth_exit(): The
+      PTH_EVENT_FUNC internally was used incorrectly by pth_exit() and the
+      implicit initialization was forgotten in pthread_exit().
+      [Kurt D. Zeilenga <Kurt@OpenLDAP.Org>, Ralf S. Engelschall]
+
+   *) Added consistency check for `timeout' attribute of pth_poll
+      and various other EINVAL related checks to pth_event.c.
+      [Ralf S. Engelschall]
+
+   *) Added consistency check for `abstime' attribute of
+      pthread_cond_timedwait().
+      [Ralf S. Engelschall]
+
+  Changes between 1.1b7 and 1.1.0 (18-Aug-1999 to 19-Aug-1999)
+
+   *) Disable vendor typedefs in pthread.h.in because
+      it caused problems under Solaris.
+      [Ralf S. Engelschall]
+
+   *) Cleaned up the sources a little bit more.
+      [Ralf S. Engelschall]
+
+   *) Updated rse-pmt.ps to v0.9.15
+      [Ralf S. Engelschall]
+
+  Changes between 1.1b6 and 1.1b7 (18-Aug-1999 to 18-Aug-1999)
+
+   *) Added test for nested thread operation to test_std.c
+      [Ralf S. Engelschall]
+
+   *) Updated rse-pmt.ps to talk about the sigsetjmp(3) problems.
+      [Ralf S. Engelschall]
+
+   *) Enhanced the heart of Pth: pth_mctx_set().
+      Instead of the real dispatching functions a plain setjmp(3)/longjmp(3)
+      pair is used for the trampoline trick in order to avoid problems with
+      sigjmp_buf-attached signal stacks on platforms where sigsetjmp(3) does
+      more than it is usuallly expected. This especially fixes `thread spawns
+      thread' problems under HPUX.
+      [Ralf S. Engelschall, Aaron Metzger <ametzger@varcom.com>]
+
+  Changes between 1.1b5 and 1.1b6 (17-Aug-1999 to 18-Aug-1999)
+
+   *) Fixed return value of pth_write/pth_read.
+      [Eric Newton <ecn@smart.net>, Ralf S. Engelschall]
+
+   *) Fixed example in manual page (pth.pod): pth_load()
+      is now pth_ctrl(PTH_CTRL_GETAVLOAD, ...)
+      [Eric Newton <ecn@smart.net>]
+
+   *) Fixed warning in pth_high.c related to implicit casting.
+      [Ralf S. Engelschall]
+
+   *) Added BS2000 support to config.guess/config.sub.
+      [Martin Kraemer]
+
+   *) Fixed a sigaltstack() call in pth_mctx.c: the return code
+      was checked incorrectly.
+      [Ralf S. Engelschall]
+
+   *) Updated rse-pmt.ps
+      [Ralf S. Engelschall, Eric Newton <ecn@smart.net>]
+
+   *) Fixed a nasty bug in the thread stack allocation: A stack was also
+      allocated for the main thread, but not used. The problem was that an
+      allocated stack has a guardian and this way was checked each time and
+      could lead to a bogus STACK OVERFLOW for the "main" thread.
+      [Ralf S. Engelschall, Martin Kraemer]
+
+  Changes between 1.1b4 and 1.1b5 (13-Aug-1999 to 17-Aug-1999)
+
+   *) Added draft of forthcoming paper ``Portable Multithreading - The Signal
+      Stack Trick Of User-Space Thread Creation'' to source tree under
+      rse-pmt.ps. Hackers are encouraged to read this if they want to
+      understand Pth's internals.
+      [Ralf S. Engelschall]
+
+   *) Source cleanups: added `extern' qualifier to function prototypes in
+      pth.h.in and pthread.h.in; make compilation silent with both gcc 2.95.1 C
+      and C++ frontends by fixing implicit type conversion situations, etc.
+      [Ralf S. Engelschall]
+
+   *) Return EBUSY instead of EAGAIN for pth_mutex_acquire() when the "try"
+      argument is TRUE. This fixes especially the POSIX semantics of
+      pthread_mutex_trylock().
+      [Ralf S. Engelschall]
+
+   *) Added pth_compat.c with strerror(3) replacement for SunOS.
+      [Ralf S. Engelschall]
+
+   *) Fixed pthread_{mutex,rwlock,cond}_destroy() functions.
+      [Ralf S. Engelschall]
+
+   *) Added support for `configure <platform-id>'.
+      [Ralf S. Engelschall, Martin Kraemer <Martin.Kraemer@mch.sni.de>]
+
+  Changes between 1.1b3 and 1.1b4 (11-Aug-1999 to 13-Aug-1999)
+
+   *) Fixed blocking semantics of pth_writev().
+      [Ralf S. Engelschall]
+
+   *) Fixed a very nasty bug in pth_select(): The write fd_set was passed
+      twice to the scheduler (once as the write fd_set and once as the
+      execptional fd_set). This caused problems, because the event loop this
+      way deleted bits in the write fd_set by accident and the return semantic
+      was broken.
+      [Ralf S. Engelschall]
+
+   *) Added fallbacks for UIO_MAXIOV to pth.h and pthread.h
+      [Ralf S. Engelschall]
+
+   *) Remove locking check in pth_mutex_init() because this would only work
+      with static vars where ANSI C guarranties an initialization with 0
+      bytes.
+      [Martin Kraemer <Martin.Kraemer@mch.sni.de>]
+
+   *) Fixed pth_write() semantics.
+      [Ralf S. Engelschall]
+
+  Changes between 1.1b2 and 1.1b3 (10-Aug-1999 to 11-Aug-1999)
+
+   *) Overhauled pthread.h to make it better compile-able also under
+      platforms where a vendor Pthread library exists.
+      [Ralf S. Engelschall]
+
+   *) Reordered ingredients of configure.in.
+      [Ralf S. Engelschall]
+
+   *) Fixed aclocal.m4: -g was incorrectly stripped.
+      [Ralf S. Engelschall]
+
+   *) Enhance pth_write(): In non-blocking (default) mode it now mimics the
+      behaviour of write(2) more correctly by iterating until all data is
+      written or an error occurs.
+      [Ralf S. Engelschall]
+
+  Changes between 1.1b1 and 1.1b2 (07-Aug-1999 to 10-Aug-1999)
+
+   *) Fixed ring walking inside both public pth_msgport_find() function and
+      the internal pth_mutex_releaseall() function.
+      [Laurent Vaucher <laurent.vaucher@ficsgrp.com>]
+
+  Changes between 1.0.4 and 1.1b1 (03-Aug-1999 to 07-Aug-1999)
+
+   *) Fixed test_select.c: a char has to be used for read(2) and not an int.
+      [Ralf S. Engelschall]
+
+   *) Fixed AC_CHECK_NSIG test and this way PTH_NSIG define.
+      [Ralf S. Engelschall]
+
+   *) Overhauled pth_mctx.c's internals according to latest algorithm of my
+      paper ``Portable Multithreading - The Signal Stack Trick For User-Space
+      Thread Creation''. Especially: sigstack had not restored stack
+      correctly, the signal mask was not inherited correctly; Linux
+      signal mask handling was incorrect, etc.
+      [Ralf S. Engelschall]
+
+   *) Adjusted variables in pth_mctx.c to use `volatile' qualifier.
+      [Ralf S. Engelschall]
+
+   *) Simplified Makefile.in a little bit by removing $(OBJS)
+      [Ralf S. Engelschall]
+
+   *) Replaced the run-time stack growth decision for the guardian in
+      pth_tcb.c with a compile-time decision.
+      [Ralf S. Engelschall]
+
+   *) Completly rewritten the configure.in part which deals
+      with the machine context (mctx) implementation: First SVR4/SUSv2
+      makecontext(2) and friends are generally preferred.  Second, the user
+      now can override the decisions via --with-mctx-{mth,dsp,stk}. Third, the
+      pth_mctx.c source was enhanced by using skaddr_xxx() and sksize_xxx()
+      macros which know through Autoconf checks how a stack has to be setup
+      correctly for makecontext(2), sigaltstack(2) and sigstack(2).
+      [Ralf S. Engelschall]
+
+   *) Add support to pth_mctx.c for SVR4/SUSv2 makecontext(2)/swapcontext(2)
+      and friends. This way Pth now is best prepared to cover forthcoming Unix
+      flavors, because these are didicated and standadized functions for
+      user-space context switching.
+      [Ralf S. Engelschall]
+
+   *) Completely overhauled aclocal.m4
+      [Ralf S. Engelschall]
+
+   *) Use GNU config.guess/config.sub instead of GNU shtool guessos
+      for wider support inside GNU libtool.
+      [Ralf S. Engelschall]
+
+   *) Replaced switch() over long variables (which aren't covered by
+      traditional C) with an if-else construct in pth_event.c to be more
+      portable.
+      [Ralf S. Engelschall]
+
+   *) Fixed timeout handling in pth_select().
+      [Ralf S. Engelschall]
+
+   *) Don't free(2) application-supplied stacks on cleanups.
+      [Ralf S. Engelschall]
+
+   *) Don't allow an application to change the stack size or address on an
+      pth_attr_t object when its attached to a thread (see pth_attr_of).
+      [Ralf S. Engelschall]
+
+   *) Added pth_ext.c for extensional functionality. As a first
+      cut Sfio support is provided by an additional function pth_sfiodisc.
+      This functions is always available, but only reasonably useable when Pth
+      was built with Sfio support (--with-sfio option) and PTH_EXT_SFIO is
+      then defined by pth.h. It is useful for applications which want to use
+      the comprehensive Sfio I/O library with the Pth threading library. Then
+      this function can be used to get an Sfio discipline structure (Sfdisc_t)
+      which can be pushed onto Sfio streams (Sfio_t) in order to let this
+      stream use pth_read(3)/pth_write(2) instead of read(2)/write(2). The
+      benefit is that this way I/O on the Sfio stream does only block the
+      current thread instead of the whole process. The application has to
+      free(3) the Sfdisc_t structure when it is no longer needed.
+      [Ralf S. Engelschall]
+
+   *) Added `barrier' synchronization objects. These provide a way to let a
+      group of threads wait at a barrier until the last reached the barrier.
+      It's implemented on top of mutex and condition variable.
+      [Ralf S. Engelschall]
+
+   *) Replaced a bogus stdio fgetc() in test_select with pth_read().
+      [Ralf S. Engelschall]
+
+   *) Fixed internal pth_debug(3): it now preserved errno to make sure there
+      is no run-time difference in semantics just because of debug messages.
+      [Ralf S. Engelschall]
+
+   *) Overhauled the filedescriptor handling:
+      1. There is no longer a requirement to manually switch a filedescriptor
+      into non-blocking mode in order to use it. This is automatically done
+      temporarily inside Pth now. Instead when you now switch a filedescriptor
+      explicitly into non-blocking mode, pth_read(3) or pth_write(3) will
+      never block the current thread as it is the expected behaviour for
+      non-blocking I/O.
+      2. pth_nonblocking(3) was replaced by a more convinient pth_fdmode(3)
+      function which can perform both get and set operations at once.
+      [Ralf S. Engelschall]
+
+     _   ___
+    / | / _ \
+    | || | | |
+    | || |_| |
+  __|_(_)___/_____________________________________________________________
+
+  Changes between 1.0.4 and 1.0.5 (03-Aug-1999 to 10-Aug-1999)
+
+   *) Backport from Pth 1.1b2:
+      Fixed ring walking inside both public pth_msgport_find() function
+      and the internal pth_mutex_releaseall() function.
+      [Laurent Vaucher <laurent.vaucher@ficsgrp.com>]
+
+   *) Backport from Pth 1.1b1:
+      In pth_mctx.c the signal stack was not restored correctly.
+      [Ralf S. Engelschall]
+
+   *) Backport from Pth 1.1b1:
+      Fixed test_select.c: a char has to be used for read(2) and not an int.
+      And replaced a bogus stdio fgetc() in test_select with pth_read().
+      [Ralf S. Engelschall]
+
+   *) Backport from Pth 1.1b1:
+      Fixed AC_CHECK_NSIG test and this way PTH_NSIG define.
+      [Ralf S. Engelschall]
+
+   *) Backport from Pth 1.1b1:
+      Fixed timeout handling in pth_select().
+      [Ralf S. Engelschall]
+
+  Changes between 1.0.3 and 1.0.4 (30-Jul-1999 to 03-Aug-1999)
+
+   *) Fixed two read/write calls: they didn't use the pth_sc wrapper.
+      [Ralf S. Engelschall]
+
+   *) Make pth_{read,write}() functions more POSIX compliant by returning 0
+      when the nbytes argument is given as 0.  And make pth_{readv,writev}()
+      functions more POSIX compliant by returning -1/EINVAL when the iovcnt
+      argument is less or equal to 0.
+      [Ralf S. Engelschall]
+
+   *) Added missing readv/writev wrappers to pthread.c
+      [Ralf S. Engelschall]
+
+   *) Typo fixes in pth.pod
+      [Eric Newton <ecn@smart.net>]
+
+   *) Fixed special `--disable-static --enable-shared' situation.
+      [Felix von Leitner <leitner@fefe.de>, Ralf S. Engelschall]
+
+   *) Fixed `debug-xx' targets.
+      [Ralf S. Engelschall]
+
+  Changes between 1.0.2 and 1.0.3 (28-Jul-1999 to 30-Jul-1999)
+
+   *) Fixed inconsistent and wrong API value: PTH_ATTR_NULL existed and was
+      documented as PTH_ATTR_NONE. But actually the intended and intuitive
+      value was PTH_ATTR_DEFAULT. !BE CAREFUL: This is an API change and
+      requires adjustments in Pth applications!
+      [Ralf S. Engelschall, Eric Newton <ecn@smart.net>]
+
+   *) Make sure pthread.h.in doesn't redefine the poll(2) environment
+      under built-time because it's already defined by the included pth.h.
+      [Kriton Kyrimis <kyrimis@cti.gr>]
+
+   *) Add readv/writev environment fallback definitions to pthread.h.in.
+      [Ralf S. Engelschall]
+
+   *) Support for AmigaOS in pthreads.c: timespec attributes have (correct)
+      ts_ prefix under AmigaOS and not the (bogus) POSIX tv_ prefix
+      [Kriton Kyrimis <kyrimis@cti.gr>]
+
+   *) Add `#include <time.h>' for struct timespec to pthread.h.in
+      and removed timespec references in pth.h.in.
+      [Ralf S. Engelschall]
+
+   *) Fixed documentation for pth_spawn() and pth_wait().
+      [Ralf S. Engelschall, Eric Newton <ecn@smart.net>]
+
+  Changes between 1.0.1 and 1.0.2 (22-Jul-1999 to 28-Jul-1999)
+
+   *) Upgraded to GNU shtool 1.4.5.
+      [Ralf S. Engelschall]
+
+   *) Added `uninstall' target to Makefile
+      [Ralf S. Engelschall]
+
+   *) Cleanup package to conform to the GNU standards: added AUTHORS document;
+      renamed CHANGES to ChangeLog and added NEWS document; renamed LICENSE to
+      COPYING; renamed CREDITS to THANKS; added hint to bug-pth@gnu.org to
+      pth.pod manual.
+      [Ralf S. Engelschall]
+
+   *) Fixed HAVE_SIGSTACK alternative in pth_mctx.c
+      [Jim Jagielski <jim@jaguNET.com>]
+
+   *) Removed internal "was_blocking" attribute in event structure
+      because it was never used.
+      [Ralf S. Engelschall]
+
+   *) Fixed documentation of pth_xxx_init() synchronization functions.
+      [Ralf S. Engelschall]
+
+  Changes between 1.0.0 and 1.0.1 (16-Jul-1999 to 22-Jul-1999)
+
+   *) Added missing documentation for pth_timeout().
+      [Ralf S. Engelschall]
+
+   *) Moved pthread_p{read,write}() to pth_high.c as pth_p{read,write}()
+      and added syscall wrapper support for it.
+      [Ralf S. Engelschall]
+
+   *) Added support for readv(2) and writev(2): There are now
+      four new API functions pth_readv, pth_readv_ev, pth_writev and
+      pth_writev_ev. Additionally on platforms where no native
+      readv(2)/writev(2) exists, the struct iovec is faked and the internal
+      implementation is based on read(2)/write(2). This way the functionality
+      is available everywhere. Finally, the syscall support was extended to
+      cover readv and writev now, too.
+      [Ralf S. Engelschall]
+
+   *) Added support for FNDELAY to pth_nonblocking.
+      [Ralf S. Engelschall]
+
+   *) Cleaned up pthread.h and pth.h and added extra forward definitions for
+      struct timeval/timespec to avoid problems on some platforms (like SCO).
+      [Ralf S. Engelschall]
+
+   *) Added "make check" as an alias for "make test"
+      [Ralf S. Engelschall]
+
+   *) Upgraded to GNU shtool 1.4.4 and use new `shtool tarball'
+      [Ralf S. Engelschall]
+
+  Changes between 1.0b8 and 1.0.0 (16-Jul-1999 to 16-Jul-1999)
+
+   *) Fixed scheduler reinitialization.
+      [Ralf S. Engelschall]
+
+   *) Upgraded to GNU shtool 1.4.4-dev.
+      [Ralf S. Engelschall]
+
+   *) Cleaned up syscall stuff: usleep() is not longer mapped because it's too
+      unstandardized, sigwait() is again mapped because it is standardized and
+      those platforms which fail are broken.
+      [Ralf S. Engelschall]
+
+   *) Fixed pthread-config.in: -lpth => -lpthread
+      [Ralf S. Engelschall]
+
+   *) Downgraded required Autoconf version to 2.12
+      [Ralf S. Engelschall]
+
+   *) Moved pth_readline[_ev]() from the Pth API into test_common.c because
+      this function is just a half-way solution (pth_read doesn't use the same
+      buffer) and when one needs buffered I/O it's better to use a _real_ I/O
+      library like Sfio, etc.
+      [Ralf S. Engelschall]
+
+   *) Cleanup to Makefile.in
+      [Ralf S. Engelschall]
+
+  Changes between 1.0b7 and 1.0b8 (14-Jul-1999 to 16-Jul-1999)
+
+   *) Fixed result handling of stack growth detection.
+      [Ralf S. Engelschall, Frank Carpenter <carpen@nortelnetworks.com>]
+
+   *) Added explicit libtool --mode flags in Makefile.in
+      to avoid compiler guessing problems on esoteric platforms.
+      [Ralf S. Engelschall]
+
+   *) Fixed broken condition variable handling: the scheduler
+      incorrectly checked the condition variable flags.
+      [Ralf S. Engelschall, Andrew Hunter <esvce@dcs.warwick.ac.uk>]
+
+   *) Allow main thread to be joinable to fulfill POSIX.
+      [Ralf S. Engelschall]
+
+   *) Fixed a nasty bug in the scheduler: the write and exceptional
+      filedescriptor sets were not passed to the select(): ARGL!
+      [Ralf S. Engelschall]
+
+   *) Added implicit initialization to pth_syscall.c stuff
+      and pthread.c stuff.
+      [Ralf S. Engelschall]
+
+   *) Fixed again static initializations via PTHREAD_XXX_INITIALIZER
+      [Ralf S. Engelschall]
+
+   *) Fixed again PTHREAD_ONCE_INIT
+      [Ralf S. Engelschall]
+
+   *) Added PTHREAD_CANCELED to pthread.h.
+      [Ralf S. Engelschall]
+
+   *) Fixed POSIX pthread_testcancel(): it is defined to have
+      void return type and not int.
+      [Ralf S. Engelschall]
+
+  Changes between 1.0b6 and 1.0b7 (14-Jul-1999 to 14-Jul-1999)
+
+   *) Replaced FALSE value for PTHREAD_ONCE_INIT in pthread.h with 0 to
+      be not dependent on such defines.
+      [Ralf S. Engelschall, Rick Brownrigg]
+
+   *) Disabled syscall soft mapping for usleep because it causes prototype
+      conflicts with unistd.h on some platforms due to the fact that usleep(3)
+      is bad standardized.
+      [Ralf S. Engelschall, Rick Brownrigg]
+
+   *) Added pthread_cancel() to POSIX emulation.
+      [Ralf S. Engelschall, Rick Brownrigg]
+
+   *) Fixed poll(2)/poll.h detection in Autoconf.
+      [Ralf S. Engelschall, Igor A. Minyukoff <iam@inser.loniis.spb.su>]
+
+  Changes between 1.0b5 and 1.0b6 (11-Jul-1999 to 14-Jul-1999)
+
+   *) Fixed pth_attr_ctrl(): it failed with EACCES because
+      of incorrect comparisons
+      [Igor A. Minyukoff <iam@inser.loniis.spb.su>]
+
+   *) Replaced PTHREAD_{MUTEX,COND,RWLOCK}_INITIALIZER with an alternative
+      implementation to allow the assignment to `static' variables, too.
+      [Ralf S. Engelschall, Rick Brownrigg <brownrig@erg.sri.com>]
+
+  Changes between 1.0b4 and 1.0b5 (08-Jul-1999 to 11-Jul-1999)
+
+   *) Fixed pth_waitpid() semantics.
+      [Ralf S. Engelschall]
+
+   *) Added pth_poll() and pth_poll_ev() with the following trick: it is always
+      present (independent whether the platform has poll(2) or not), because it
+      is (AND HAS TO BE) internally based on pth_select(). The poll function
+      wrapping support was added, too.
+      [Ralf S. Engelschall]
+
+   *) Moved pth_init() to the top of all test applications.
+      [Ralf S. Engelschall]
+
+   *) Added direct system call mapping support: --enable-syscall-soft
+      enables #define's in pth.h and pthread.h which do a soft-mapping of e.g.
+      read to pth_read. This is _always_ possible. --enable-syscall-hard
+      enables the exportation of syscall wrappers (e.g. read) by the Pth
+      library and the calling of the real system calls via syscall(2), hence
+      this variant is only available when the platform supports syscall(2)
+      [e.g. yes: *BSD, Linux, Solaris, HP/UX, IRIX, UnixWare; no: AIX, SCO5]
+
+      For the soft variant the whole application sources have to include
+      pth[read].h and existing libraries (like stdio!) can still block the
+      whole process, while for the hard variant the application sources do not
+      all have to include pth[read].h an existing libraries (including stdio!)
+      magically use Pth's system call wrappers.
+      [Ralf S. Engelschall]
+
+   *) Speeded up `configure --help' by not creating the header
+      [Ralf S. Engelschall]
+
+   *) Added pth_select_ev() and pth_select() based on the new PTH_EVENT_SELECT
+      and the old PTH_EVENT_TIME events which emulate 4.2BSD's select(2), but
+      suspend only the current thread. Additionally added a select() wrapper to
+      the POSIX wrapper API.
+      [Ralf S. Engelschall]
+
+   *) Added PTH_EVENT_SELECT which can be used to suspend the current thread
+      until an event occured in one of three fd _sets_ similar to select(2) but
+      without the timeout facility.
+      [Ralf S. Engelschall]
+
+   *) Upgraded to GNU shtool 1.4.3. This especially fixes
+      the shared library generation under GNU/Linux now.
+      [Ralf S. Engelschall]
+
+   *) Added pth_abort() and a corresponding pthread_abort()
+      for cruel ways to cancel a thread.
+      [Ralf S. Engelschall]
+
+   *) Fixed POSIX pread()/pwrite(): Their mutex variables have
+      to be static variables and not local variables.
+      [Ralf S. Engelschall]
+
+   *) Added #define for POSIX sched_yield() to pthread.h.in
+      [Ralf S. Engelschall]
+
+  Changes between 1.0b3 and 1.0b4 (07-Jul-1999 to 08-Jul-1999)
+
+   *) Added POSIX pread() and pwrite() [parallel I/O] emulation
+      functions to pthread.{ch].
+      [Ralf S. Engelschall]
+
+   *) Removed double-definition of the fallback types in pthread.h.in.
+      [Ralf S. Engelschall]
+
+   *) Added pthread_atfork() to pthread.c
+      [Ralf S. Engelschall]
+
+   *) Added pth_atfork_{push,pop}() functions and moved them together with
+      pth_fork() to a new pth_fork.c source files. Updated also the
+      documentation to describe the new at-fork handlers.
+      [Ralf S. Engelschall]
+
+   *) Write still missing documentation for pth_cleanup_{push,pop}()
+      [Ralf S. Engelschall]
+
+   *) Fixed again pth_event_concat(): The last attempt was
+      to inefficient and still had a bug.
+      [Igor A. Minyukoff <iam@inser.loniis.spb.su>, Ralf S.  Engelschall]
+
+   *) Cleaned up all name references: The official long name is `GNU Portable
+      Threads', the official short name is `GNU Pth' and the common prefix is
+      `pth_' and `PTH_'.
+      [Ralf S. Engelschall]
+
+  Changes between 1.0b2 and 1.0b3 (04-Jul-1999 to 07-Jul-1999)
+
+   *) Remove a trailing comma inside an enum in pthread.h.in
+      [Martin Kraemer <martin.kraemer@mch.sni.de>]
+
+   *) Added two new API event-related functions which can be used to extract
+      the contents of existing events: pth_event_typeof() and
+      pth_event_extract().
+      [Ralf S. Engelschall]
+
+   *) Fixed pth_event_concat(): It was broken because it
+      handled real/non-single-event event rings not correctly.
+      [Igor A. Minyukoff <iam@inser.loniis.spb.su>, Ralf S. Engelschall]
+
+   *) Fixed pth_event_walk(): It was broken for PTH_WALK_NEXT
+      [Igor A. Minyukoff <iam@inser.loniis.spb.su>, Ralf S. Engelschall]
+
+   *) Fixed memory leak in pth_join()
+      [Igor A. Minyukoff <iam@inser.loniis.spb.su>]
+
+   *) Fixed manual page pthread-config.pod
+      [Ralf S. Engelschall]
+
+   *) Upgraded to GNU shtool 1.4.1 and GNU libtool 1.3.3
+      [Ralf S. Engelschall]
+
+   *) Fixed test_pthread.c: sleep(3) requires unistd.h
+      [Ralf S. Engelschall, Martin Kraemer <martin.kraemer@mch.sni.de>]
+
+   *) Cleaned up --enable-batch/--enable-pthread
+      [Ralf S. Engelschall]
+
+  Changes between 1.0b1 and 1.0b2 (28-Jun-1999 to 04-Jul-1999)
+
+   *) Upgraded to GNU shtool 1.4.0
+      [Ralf S. Engelschall]
+
+   *) Changed return value type of pth_version() from "int" to "long"
+      to avoid problems with too large numbers.
+      [Ralf S. Engelschall]
+
+   *) Simplified internal representation of pth_once_t
+      [Ralf S. Engelschall]
+
+   *) !!ATTENTION!! Renamed _anything_ from the old
+      coding-name nps/NPS to the new official name pth/PTH.
+      [Ralf S. Engelschall]
+
+   *) Added the new POSIX.1c pthread emulation library
+      (pthread* files). It has to be enabled explicitly
+      via --enable-pthread because it's disabled per default)
+      [Ralf S. Engelschall]
+
+   *) Enhanced pthread.pod manual page.
+      [Ralf S. Engelschall]
+
+  Changes between 0.9.21 and 1.0b1 (25-Jun-1999 to 28-Jun-1999)
+
+   *) Added internal pth_util_cpystrn() to pth_util.c
+      [Ralf S. Engelschall]
+
+   *) removed pth_attr(), pth_priority(), pth_detach()
+      [Ralf S. Engelschall]
+
+   *) added new pth_attr_*() functions for manipulating pth_attr_t objects;
+      this is now more flexible because those objects now can be also bound to
+      threads when retrieved via pth_attr_of(). THIS IS A HEAVY BUT IMPORTANT
+      API CHANGE! READ THE DOCS AND THE TEST PROGRAMS FOR DETAILS.  SORRY, BUT
+      IS HAS TO BE DONE BEFORE WE ENTER THE STABLE 1.0 VERSIONS.
+      [Ralf S. Engelschall]
+
+   *) Added --enable-profile and --enable-batch to Autoconf
+      [Ralf S. Engelschall]
+
+   *) Updated pth.pod to reflect latest changes.
+      [Ralf S. Engelschall]
+
+   *) Renamed pth_state_* to upper case names.
+      [Ralf S. Engelschall]
+
+   *) Moved pth_sigmask() to pth_high.c
+      [Ralf S. Engelschall]
+
+   *) Renamed pth_sigraise() to pth_raise() and added support for
+      per-thread signal delivery via pth_raise().
+      [Ralf S. Engelschall]
+
+   *) Renamed pth.c to pth_lib.c
+      [Ralf S. Engelschall]
+
+   *) Upgraded to GNU shtool 1.3.1
+      [Ralf S. Engelschall]
+
+   *) Added pth_version() function
+      [Ralf S. Engelschall]
+
+   *) Added a real test Makefile target via new test_std.c
+      [Ralf S. Engelschall]
+
+   *) Added more references to pth.pod
+      [Ralf S. Engelschall]
+
+      ___   ___
+     / _ \ / _ \
+    | | | | (_) |
+    | |_| |\__, |
+  ___\___(_) /_/__________________________________________________________
+
+  Changes between 0.9.20 and 0.9.21 (24-Jun-1999 to 25-Jun-1999)
+
+   *) Upgraded to final shtool 1.3.0 release version
+      [Ralf S. Engelschall]
+
+   *) Removed all variables names from prototypes to avoid conflicts
+      [Ralf S. Engelschall]
+
+   *) Removed unnecessary casts for malloc() calls.
+      [Ralf S. Engelschall]
+
+   *) Added pth_sigraise() function for later implementing pthread_kill() and
+      currently at least for testing whether a thread still exists in the
+      system (by sending it a signal 0).
+      [Ralf S. Engelschall]
+
+   *) Renamed remaining XXX_INITIALIZER to XXX_INIT to be consistent with
+      other init values.
+      [Ralf S. Engelschall]
+
+   *) Prefixed all pth_attr_t attributes with "at_"
+      [Ralf S. Engelschall]
+
+   *) Removed pth_equal(): we're not such crazy than POSIX...
+      [Ralf S. Engelschall]
+
+  Changes between 0.9.19 and 0.9.20 (21-Jun-1999 to 24-Jun-1999)
+
+   *) Upgraded to latest shtool 1.3.0-dev
+      [Ralf S. Engelschall]
+
+   *) Changed pth_yield(void) to pth_yield(pth_t) to allow the specification of
+      a thread which should be favored.  This allows the usage of the old
+      concept of co-routines where a thread/routine switches to a particular
+      target thread.
+      [Ralf S. Engelschall]
+
+   *) Added hint about async-safety to pth.pod
+      [Ralf S. Engelschall]
+
+   *) Added POSIX-style consistency wrapper pth_sigmask() for sigprocmask().
+      [Ralf S. Engelschall]
+
+   *) Added try argument to pth_mutex_acquire() to allow us later to
+      emulate POSIX pthread_mutex_trylock()
+      [Ralf S. Engelschall]
+
+   *) Moved errno stuff to a new dedicated pth_errno.c source file
+      [Ralf S. Engelschall]
+
+   *) Changed function signatures to support return codes with errno
+      [Ralf S. Engelschall]
+
+   *) pth_exit(val) in the main() thread now really just terminated the thread
+      and not immediately the process, i.e. the thread goes sleeping until all
+      other threads are gone and then does an exit(val).
+      [Ralf S. Engelschall]
+
+  Changes between 0.9.18 and 0.9.19 (20-Jun-1999 to 21-Jun-1999)
+
+   *) Added a POSIX style pth_detach()
+      [Ralf S. Engelschall]
+
+   *) Added pth_sync.c with POSIX style mutual exclusion locks (mutex),
+      read-write locks (rwlock) and condition variable (cond) support
+      [Ralf S. Engelschall]
+
+   *) Added a trivial mutex demo to test_misc.c
+      [Ralf S. Engelschall]
+
+  Changes between 0.9.17 and 0.9.18 (18-Jun-1999 to 20-Jun-1999)
+
+   *) Greatly extended the manual page pth.pod
+      [Ralf S. Engelschall]
+
+   *) Added inclusion hack to pthread.h.in
+      [Ralf S. Engelschall]
+
+   *) Added per thread cleanup functions pth_cleanup_{push,pop}() modeled
+      directly after the POSIX pthread_cleanup_{push,pop}() functions
+      [Ralf S. Engelschall]
+
+   *) Fixed a memory leak related to pth_key_xxx().
+      [Ralf S. Engelschall]
+
+   *) Added internal pth_pqueue_contains() function
+      [Ralf S. Engelschall]
+
+   *) Added public API function pth_cancel(), pth_cancel_state() and
+      pth_cancel_point() for thread cancellation support modeled after the
+      POSIX thread cancellation facility.
+      [Ralf S. Engelschall]
+
+   *) Removed pthread.* stuff. It will be re-integrated later for Pth 1.1.x
+      [Ralf S. Engelschall]
+
+   *) Added cancellation flags to pth_attr().
+      [Ralf S. Engelschall]
+
+   *) Added cancellation demo support to test_sig.c
+      [Ralf S. Engelschall]
+
+  Changes between 0.9.16 and 0.9.17 (09-Jun-1999 to 18-Jun-1999)
+
+   *) Removed pthread_p.h
+      [Ralf S. Engelschall]
+
+   *) Upgraded to latest shtool 1.3.0-dev
+      [Ralf S. Engelschall]
+
+   *) Added stack overflow detection: a SIGSEGV is created when a
+      guardian memory address at the bottom of the stack was
+      overridden. This SIGSEGV can be even catched by the
+      application.
+      [Ralf S. Engelschall]
+
+  Changes between 0.9.15 and 0.9.16 (04-Jun-1999 to 09-Jun-1999)
+
+   *) Some Autoconf related cleanups.
+      [Ralf S. Engelschall]
+
+   *) Added configure --enable-batch for FreeBSD port
+      [Ralf S. Engelschall]
+
+   *) Removed TODO file
+      [Ralf S. Engelschall]
+
+   *) Moved sigdelete stuff to new pth_util.c source
+      [Ralf S. Engelschall]
+
+   *) Added pth_sigwait_ev()
+      [Ralf S. Engelschall]
+
+   *) Updated pth.pod for recent changes
+      [Ralf S. Engelschall]
+
+   *) Fixed GNU/Linux libc v5 pth_mctx_set() variant
+      [Ralf S. Engelschall, Felix von Leitner <leitner@fefe.de>]
+
+  Changes between 0.9.14 and 0.9.15 (01-Jun-1999 to 04-Jun-1999)
+
+   *) Upgraded to shtool 1.2.9
+      [Ralf S. Engelschall]
+
+   *) Avoid race conditions in emulated sigsetjmp() switching
+      [Ralf S. Engelschall]
+
+   *) Added test_sig.c
+      [Ralf S. Engelschall]
+
+   *) Fixed getsockopt() call: errlen wasn't initialized
+      [Ralf S. Engelschall, Anton Umnikov <anton@rest.dvgu.ru>]
+
+   *) Allow pth_event_walk() also to use PTH_UNTIL_OCCURRED
+      to walk to the next/prev. occurred event in a ring
+      [Ralf S. Engelschall]
+
+   *) Completely overhauled the signal processing in the scheduler
+      [Ralf S. Engelschall]
+
+   *) Added pth_sigwait() with POSIX semantics
+      [Ralf S. Engelschall]
+
+   *) Fixed pth_join(): It returns -1 when only one thread is left
+      [Ralf S. Engelschall]
+
+   *) Autoconf now no longer adds -g for gcc unless --enable-debug
+      [Ralf S. Engelschall]
+
+  Changes between 0.9.13 and 0.9.14 (01-Jun-1999 to 01-Jun-1999)
+
+   *) Simplified the event construction by removing unnecessary PTH_UNTIL_XX
+      flags and renaming the remaining ones to PTH_UNTIL_YY_XXX.
+      [Ralf S. Engelschall]
+
+   *) Renamed PTH_EVENT_IRQ to PTH_EVENT_SIG and implemented it the first time
+      via sigpending()/sigismember().
+      [Ralf S. Engelschall]
+
+   *) Documented the event facility in the manual page
+      [Ralf S. Engelschall]
+
+   *) Switched TCB's name attribute from "char *" to "char[40]" and copy in the
+      value when spawning. This allows applications to generate the name
+      temporarily only.
+      [Ralf S. Engelschall]
+
+   *) Cleaned up source code at lots of edges...
+      [Ralf S. Engelschall]
+
+  Changes between 0.9.12 and 0.9.13 (30-May-1999 to 01-Jun-1999)
+
+   *) Cleaned up Makefile.in even more
+      [Ralf S. Engelschall]
+
+   *) Add stackaddr argument to pth_attr() to allow the application
+      to specificy a particular stack
+      [Ralf S. Engelschall]
+
+   *) Added pthread* files which will contain the POSIX.1c threading
+      ("pthread") API wrapper for PTH. This is still work in progress and not
+      enabled per default (one has to use --enable-pthread).
+      [Ralf S. Engelschall]
+
+   *) Added SunSoft's pthread_June95.ps document ("PThreads Summary")
+      as pthreads.ps
+      [Ralf S. Engelschall]
+
+   *) Update pth.pod to reflect recent changes.
+      [Ralf S. Engelschall]
+
+   *) Optimized pth_time_cmp()
+      [Ralf S. Engelschall]
+
+   *) Added support for per-thread signal masks
+      [Ralf S. Engelschall]
+
+   *) Made pth_mctx_set() more robust: It now uses sigsuspend for
+      waiting, correctly blocks signals and restores SIGUSR1 stuff
+      [Ralf S. Engelschall]
+
+   *) Fixed license messages in sources files
+      [Ralf S. Engelschall]
+
+   *) Removed const from pth_connect and pth_connect_ev to avoid problems
+      [Ralf S. Engelschall]
+
+   *) Make sure Autoconf doesn't add -lnsl twice
+      [Ralf S. Engelschall]
+
+   *) Cleaned up pth_mctx.c even more
+      [Ralf S. Engelschall]
+
+  Changes between 0.9.11 and 0.9.12 (28-May-1999 to 30-May-1999)
+
+   *) Some fixes to test_httpd.c: init of addrlen, REQ_MAX handling
+      [Ralf S. Engelschall]
+
+   *) Allow pth_join(NULL) to join any available terminated thread
+      [Ralf S. Engelschall]
+
+   *) Fixed incorrect pth_event_concat() usages: terminated NULL was missing
+      [Ralf S. Engelschall]
+
+   *) Added pth_connect, pth_connect_ev and pth_accept_ev functions
+      [Ralf S. Engelschall]
+
+   *) Removed unnecessary b_extra stuff from pth_read/pth_write
+      [Ralf S. Engelschall]
+
+   *) Removed "intern" on pth_time(), it's a public API function
+      [Ralf S. Engelschall]
+
+   *) Added pth_timeout() constructor function
+      [Ralf S. Engelschall]
+
+   *) Fixed event handling for all pth_xxx_ev() functions
+      [Ralf S. Engelschall]
+
+   *) Use pth_readline_ev() in test_mp to show how pth_xxx_ev() works
+      [Ralf S. Engelschall]
+
+   *) Converted pth_nap() and pth_join() to use PTH_MODE_STATIC
+      [Ralf S. Engelschall]
+
+   *) Fixed event initialization in event rings
+      [Ralf S. Engelschall]
+
+   *) Kicked out the whole "occurred event ring" stuff because it's not really
+      necessary (one can walk through a single ring and check for occurred
+      events easily) and this way two nasty bugs can be fixed and the event
+      manager simplified a lot. pth_wait() not has only one argument
+      and this is a read-only one, i.e. only the occured flag is set
+      in the events in this ring, but the ring is no longer changed.
+      [Ralf S. Engelschall]
+
+  Changes between 0.9.10 and 0.9.11 (28-May-1999 to 28-May-1999)
+
+   *) Fix warnings in test_httpd.c
+      [Ralf S. Engelschall]
+
+   *) Upgraded to final shtool 1.2.8
+      [Ralf S. Engelschall]
+
+   *) Added PTH_KEY_INIT
+      [Ralf S. Engelschall]
+
+   *) Added PTH_MODE_STATIC for statically allocating
+      a per-thread event. This is now used by the various high-level functions
+      to avoid unnecessary alloc/free sequences.
+      [Ralf S. Engelschall]
+
+  Changes between 0.9.9 and 0.9.10 (25-May-1999 to 28-May-1999)
+
+   *) Cleaned up Makefile.in
+      [Ralf S. Engelschall]
+
+   *) Upgraded to GNU libtool 1.3.2
+      [Ralf S. Engelschall]
+
+   *) Upgraded to new shtool 1.2.8 which includes scpp
+      [Ralf S. Engelschall]
+
+   *) Merged all pth_foo.h's into pth_foo.c's with the help of shtool scpp
+      [Ralf S. Engelschall]
+
+   *) Updated dependencies after pth_p.h overhauling
+      [Ralf S. Engelschall]
+
+   *) Added TODO file
+      [Ralf S. Engelschall]
+
+  Changes between 0.9.8 and 0.9.9 (24-May-1999 to 25-May-1999)
+
+   *) Finally converted library generation to use GNU libtool
+      [Ralf S. Engelschall]
+
+   *) Add hints to BIND 8 and adns to manual page
+      [Ralf S. Engelschall]
+
+   *) Fixed memory leaks in test_httpd and test_mp
+      [Ralf S. Engelschall, Flux <flux@iae.nl>]
+
+   *) Fixed typos in manual page
+      [Ralf S. Engelschall]
+
+   *) Fix -lsocket -lnsl tests for Siemens platforms
+      [Ralf S. Engelschall]
+
+   *) Fix chmod in Autoconf stuff
+      [Ralf S. Engelschall]
+
+   *) Removed unneccessary pth_ring_linked()
+      [Ralf S. Engelschall]
+
+  Changes between 0.9.7 and 0.9.8 (23-May-1999 to 24-May-1999)
+
+   *) Fixed bug in priority queue element counting (q_num)
+      [Ralf S. Engelschall]
+
+   *) pth_spawn() now inherits the attributes from the parent thread
+      [Ralf S. Engelschall]
+
+   *) Merged pth_stat() and pth_load() into a generic extensible pth_ctrl()
+      [Ralf S. Engelschall]
+
+   *) Added new pth_fork() function
+      [Ralf S. Engelschall]
+
+   *) Added depend target to Makefile.in and generated dependencies
+      [Ralf S. Engelschall]
+
+   *) Moved joinable argument from pth_attr() to the flags argument
+      [Ralf S. Engelschall]
+
+   *) Added PTH_CTRL_GETPRIO and PTH_CTRL_GETNAME.
+      [Ralf S. Engelschall]
+
+   *) Typo was everywhere: preemtive => preemptive
+      [Ralf S. Engelschall]
+
+   *) Typo was everywhere: occured => occurred
+      [Ralf S. Engelschall]
+
+   *) Finished manual page
+      [Ralf S. Engelschall]
+
+   *) Removed useless PTH_UNTIL_RUNNING
+      [Ralf S. Engelschall]
+
+   *) Replaced errno support with a better variant
+      [Ralf S. Engelschall]
+
+   *) Lots of small fixes and portability cleanups
+      [Ralf S. Engelschall]
+
+  Changes between 0.9.6 and 0.9.7 (22-May-1999 to 23-May-1999)
+
+   *) Added PORTING document.
+      [Ralf S. Engelschall]
+
+   *) Added errno support (pth_errno.[ch]).
+      [Ralf S. Engelschall]
+
+   *) Added exponential average load calculations for scheduler.  The current
+      load value can be retrieved by the application through pth_load().
+      [Ralf S. Engelschall]
+
+  Changes between 0.9.5 and 0.9.6 (21-May-1999 to 22-May-1999)
+
+   *) Added more documentation.
+      [Ralf S. Engelschall]
+
+   *) Autoconf now determines the direction of stack grow and pth_mctx_set()
+      uses this information for sigstack() now.
+      [Ralf S. Engelschall]
+
+   *) Fixed acconfig.h
+      [Ralf S. Engelschall]
+
+   *) Increased stacksizes (was too small for Solaris and friends)
+      [Ralf S. Engelschall]
+
+   *) Switched from BSD-style license to LGPL license
+      [Ralf S. Engelschall]
+
+   *) Fixed a nasty bug in scheduler:
+      when a thread was moved from the wait to the ready queue, it's state
+      wasn't changed to pth_state_ready. This way the next time it was handled
+      it was incorrectly filed to the waiting queue (which caused core dumps
+      because the ev_waiting/ev_occurred pointers didn't exist).  This way now
+      the stuff works great also under Solaris!
+      [Ralf S. Engelschall]
+
+  Changes between 0.9.4 and 0.9.5 (21-May-1999 to 21-May-1999)
+
+   *) Renamed pth_{get,set}specific() to pth_key_{get,set}data().
+      [Ralf S. Engelschall]
+
+   *) Renamed remaining pth_message_xxx() to pth_msgport_xxx()
+      [Ralf S. Engelschall]
+
+   *) Added pth_{readline,read,write}_ev() functions which are similar to
+      pth_{readline,read,write}() but have an additional event argument which
+      can be used for timeouts and other parallel events.
+      [Ralf S. Engelschall]
+
+  Changes between 0.9.3 and 0.9.4 (14-May-1999 to 21-May-1999)
+
+   *) Added ring datastructures (pth_ring.[ch]).
+      [Ralf S. Engelschall]
+
+   *) Add an AmigaOS-style message port facility (pth_msg.[ch]).
+      [Ralf S. Engelschall]
+
+   *) Added a message port related test program (test_mp.c).
+      [Ralf S. Engelschall]
+
+   *) Fix scheduler event management bug: when no I/O events existed
+      plus a next timer but other events (e.g. message ports) already occurred,
+      the scheduler blocked instead of handling the already occurred events
+      first.
+      [Ralf S. Engelschall]
+
+   *) Fix bug in event creating: the event occurrence flag has to be cleared in
+      pth_wait() to avoid spinning events which were already occurred.
+      [Ralf S. Engelschall]
+
+  Changes between 0.9.2 and 0.9.3 (14-May-1999 to 14-May-1999)
+
+   *) Added pth_once() for later (pthreads!)
+      [Ralf S. Engelschall]
+
+   *) Splitted pth.c into pth.c and pth_high.c
+      [Ralf S. Engelschall]
+
+   *) Added pth_data.[ch] with pthread style data storage stuff
+      [Ralf S. Engelschall]
+
+   *) Moved readline stuff from test_httpd to pth_high.c as pth_readline()
+      [Ralf S. Engelschall]
+
+   *) Removed debugging fprintf from test_httpd to speed it up
+      [Ralf S. Engelschall]
+
+   *) Fixed listen() call: now uses REQ_MAX for backlog and tests for -1
+      [Ralf S. Engelschall]
+
+   *) Fix a polling-related timer bug in the event manager
+      [Ralf S. Engelschall]
+
+  Changes between 0.9.1 and 0.9.2 (13-May-1999 to 14-May-1999)
+
+   *) renamed pth_asynchronize() to pth_nonblocking()
+      [Ralf S. Engelschall]
+
+   *) removed implicit pth_nonblocking() calls
+      [Ralf S. Engelschall]
+
+   *) speeded up pth_accept by optimizing event alloc/free
+      [Ralf S. Engelschall]
+
+   *) cleaned up pth_waitpid
+      [Ralf S. Engelschall]
+
+   *) Changed semantics of pth_wait(var, NULL): it now means
+      that the events in var are not removed (although their
+      chanining might be changed)
+      [Ralf S. Engelschall]
+
+   *) Renamed internal pth_usleep() to pth_time_usleep()
+      [Ralf S. Engelschall]
+
+   *) Replaced pth_sleep() with pth_nap() and added
+      two replacement functions: pth_sleep() for a variant
+      of sleep(3) and pth_usleep() for a variant of usleep(3).
+      [Ralf S. Engelschall]
+
+   *) Optimized scheduler a little bit by inlining pth_time_{set,add,sub}
+      [Ralf S. Engelschall]
+
+   *) Added pth_pqueue_{head,walk} functions and used it in eventmanager
+      [Ralf S. Engelschall]
+
+   *) Rewrote pth_sched_eventmanager() without a surrounding loop
+      [Ralf S. Engelschall]
+
+   *) Implemented a readline() function to speedup test_httpd
+      [Ralf S. Engelschall]
+
+  Changes between 0.9.0 and 0.9.1 (12-May-1999 to 13-May-1999)
+
+   *) Imported into CVS repository
+      [Ralf S. Engelschall]
+
+  Changes between GENESIS and 0.9.0 (Feb-1999 to 12-May-1999)
+
+   *) Created initial version on FreeBSD
+      [Ralf S. Engelschall]
+
+   *) Ported to Linux
+      [Ralf S. Engelschall]
+

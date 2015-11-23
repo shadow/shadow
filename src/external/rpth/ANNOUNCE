@@ -1,0 +1,82 @@
+   ____  _   _
+  |  _ \| |_| |__
+  | |_) | __| '_ \                    ``Only those who attempt
+  |  __/| |_| | | |                     the absurd can achieve
+  |_|    \__|_| |_|                     the impossible.''
+
+  GNU Pth - The GNU Portable Threads
+  Version 2.0
+
+  Pth is a very portable POSIX/ANSI-C based library for Unix platforms
+  which provides non-preemptive priority-based scheduling for multiple
+  threads of execution (aka "multi-threading") inside event-driven
+  applications. All threads run in the same address space of the server
+  application, but each thread has its own individual program-counter,
+  run-time stack, signal mask and errno variable.
+
+  The thread scheduling itself is done in a cooperative way, i.e., the
+  threads are managed and dispatched by a priority- and event-driven
+  non-preemptive scheduler. The intention is that this way both better
+  portability and run-time performance is achieved than with preemptive
+  scheduling. The event facility allows threads to wait until various
+  types of internal and external events occur, including pending I/O on
+  file descriptors, asynchronous signals, elapsed timers, pending I/O
+  on message ports, thread and process termination, and even results of
+  customized callback functions.
+
+  Pth also provides an optional emulation API for POSIX.1c threads
+  ("Pthreads") which can be used for backward compatibility to existing
+  multi-threaded applications.
+
+  NEW IN PTH 2.0
+
+  Pth 2.0 provides more strict POSIX.1-2001/SUSv3 compliant wrapper
+  functions in its high-level I/O API. Most notable, the implementations
+  of pth_poll(3) and pth_select(3) were completely worked off in order
+  to achieve POSIX semantics. A Pth variant of the new POSIX pselect(2)
+  function was introduced, too.
+
+  Pth now has support for arbitrary (usually higher than the default)
+  FD_SETSIZE values to support larger-scale server applications.
+
+  A new environment attribute PTH_ATTR_DISPATCHES allows the application
+  to query the total number of machine context dispatches Pth performed
+  since the last attribute reset.
+
+  Pth's internal machine context implementation is now exported in a
+  sub-API pth_uctx in order to allow applications to use raw user-space
+  context switching. This can be used to implement co-routines,
+  exception handling or even an alternative multi-threading environment
+  with the help of Pth.
+
+  The "hard syscall mapping" functionality was completely rewritten
+  from scratch. Previously, the internal system call exit points were
+  based on syscall(2) only. This was problematic because it by-passed
+  the C library glue code which often performs necessary glue code in
+  order to call the code in the kernel correctly. Now the internal exit
+  points are based on a by-system-call dynamically selected combination
+  of RTLD_NEXT+dlsym(2), dlopen(2)+dlsym(2) and the known syscall(2) (in
+  this fallback order). This way the "hard syscall mapping" became a lot
+  more portable and flexible.
+
+  Optional support for OSSP ex based exception handling was added which
+  allows ISO C applications to use fully multi-threading aware ISO C++
+  style exception handling.
+
+  Finally, the Pth build environment was upgraded to be now based on GNU
+  autoconf 2.57, GNU shtool 1.6.2 and GNU libtool 1.4.3.
+
+  MORE INFORMATION
+
+  More details about Pth can be found at the following locations from
+  the GNU and OSSP projects:
+
+  o GNU:  http://www.gnu.org/software/pth/
+  o GNU:   ftp://ftp.gnu.org/gnu/pth/
+  o OSSP: http://www.ossp.org/pkg/lib/pth/
+  o OSSP:  ftp://ftp.ossp.org/pkg/lib/pth/
+
+                                       Ralf S. Engelschall
+                                       rse@engelschall.com
+                                       www.engelschall.com
+

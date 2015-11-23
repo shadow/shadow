@@ -128,7 +128,7 @@ SimulationTime master_getExecutionBarrier(Master* master) {
     return master->executeWindowEnd;
 }
 
-void master_run(Master* master) {
+gint master_run(Master* master) {
     MAGIC_ASSERT(master);
 
     guint slaveSeed = (guint)random_nextInt(master->random);
@@ -142,10 +142,15 @@ void master_run(Master* master) {
     /* start off with some status messages */
     message(SHADOW_VERSION_STRING);
     message(SHADOW_INFO_STRING);
+    gint igraphMajor = -1, igraphMinor = -1, igraphPatch = -1;
+#if defined(IGRAPH_VERSION)
+    igraph_version(NULL, &igraphMajor, &igraphMinor, &igraphPatch);
+#endif
     GDateTime* dt_now = g_date_time_new_now_local();
     gchar* dt_format = g_date_time_format(dt_now, "%F %H:%M:%S");
-    message("Shadow initialized at %s using GLib v%u.%u.%u",
-        dt_format, (guint)GLIB_MAJOR_VERSION, (guint)GLIB_MINOR_VERSION, (guint)GLIB_MICRO_VERSION);
+    message("Shadow initialized at %s using GLib v%u.%u.%u and IGraph v%i.%i.%i",
+        dt_format, (guint)GLIB_MAJOR_VERSION, (guint)GLIB_MINOR_VERSION, (guint)GLIB_MICRO_VERSION,
+        igraphMajor, igraphMinor, igraphPatch);
     g_date_time_unref(dt_now);
     g_free(dt_format);
     message("args=%s", master->config->argstr);
@@ -221,7 +226,7 @@ void master_run(Master* master) {
 
     debug("engine finished, cleaning up...");
 
-    slave_free(slave);
+    return slave_free(slave);
 }
 
 GTimer* master_getRunTimer(Master* master) {

@@ -60,9 +60,9 @@ Timer* timer_new(gint handle, gint clockid, gint flags) {
         return NULL;
     }
 
-    if(!(flags&TFD_NONBLOCK)) {
-        warning("Shadow does not support blocking timers, using TFD_NONBLOCK flag implicitly");
-    }
+//    if(!(flags&TFD_NONBLOCK)) {
+//        warning("Shadow does not support blocking timers, using TFD_NONBLOCK flag implicitly");
+//    }
 
     Timer* timer = g_new0(Timer, 1);
     MAGIC_INIT(timer);
@@ -126,6 +126,7 @@ static void _timer_disarm(Timer* timer) {
     timer->nextExpireTime = 0;
     timer->expireInterval = 0;
     timer->minValidExpireID = timer->nextExpireID;
+    debug("timer fd %i disarmed", timer->super.handle);
 }
 
 static SimulationTime _timer_timespecToSimTime(const struct timespec* config) {
@@ -175,6 +176,9 @@ static void _timer_scheduleNewExpireEvent(Timer* timer) {
     gpointer next = GUINT_TO_POINTER(timer->nextExpireID);
     CallbackEvent* event = callback_new((CallbackFunc)_timer_expire, timer, next);
 
+    /* ref the timer storage in the callback event */
+    descriptor_ref(&timer->super);
+
     SimulationTime nanos = timer->nextExpireTime - worker_getCurrentTime();
     worker_scheduleEvent((Event*)event, nanos, 0);
 
@@ -184,32 +188,38 @@ static void _timer_scheduleNewExpireEvent(Timer* timer) {
 
 static void _timer_expire(Timer* timer, gpointer data) {
     MAGIC_ASSERT(timer);
+
     guint expireID = GPOINTER_TO_UINT(data);
+    debug("timer fd %i expired; isClosed=%i expireID=%u minValidExpireID=%u", timer->isClosed, expireID, timer->minValidExpireID);
 
     timer->numEventsScheduled--;
 
-    if(timer->isClosed || expireID < timer->minValidExpireID) {
-        /* the timer has been reset since we scheduled this expiration event */
-        return;
-    }
+    /* make sure the timer has not been reset since we scheduled this expiration event */
+    if(!timer->isClosed && expireID >= timer->minValidExpireID) {
+        /* if a one-time (non-periodic) timer already expired before they
+         * started listening for the event with epoll, the event is reported
+         * immediately on the next epoll_wait call. this behavior was
+         * verified on linux. */
+        timer->expireCountSinceLastSet++;
+        descriptor_adjustStatus(&(timer->super), DS_READABLE, TRUE);
 
-    /* if a one-time (non-periodic) timer already expired before they
-     * started listening for the event with epoll, the event is reported
-     * immediately on the next epoll_wait call. this behavior was
-     * verified on linux.
-     */
-    timer->expireCountSinceLastSet++;
-    descriptor_adjustStatus(&(timer->super), DS_READABLE, TRUE);
-
-    if(timer->expireInterval > 0) {
-        timer->nextExpireTime += timer->expireInterval;
-        if(timer->nextExpireTime >= worker_getCurrentTime()) {
+        if(timer->expireInterval > 0) {
+            SimulationTime now = worker_getCurrentTime();
+            timer->nextExpireTime += timer->expireInterval;
+            if(timer->nextExpireTime < now) {
+                /* for some reason we looped the interval. expire again immediately
+                 * to keep the periodic timer going. */
+                timer->nextExpireTime = now;
+            }
             _timer_scheduleNewExpireEvent(timer);
+        } else {
+            /* the timer is now disarmed */
+            _timer_disarm(timer);
         }
-    } else {
-        /* the timer is now disarmed */
-        _timer_disarm(timer);
     }
+
+    /* unref the timer storage in the callback event */
+    descriptor_unref(&timer->super);
 }
 
 static void _timer_arm(Timer* timer, const struct itimerspec *config, gint flags) {
@@ -222,9 +232,13 @@ static void _timer_arm(Timer* timer, const struct itimerspec *config, gint flags
         _timer_setCurrentInterval(timer, &(config->it_interval));
     }
 
-    if(timer->nextExpireTime >= worker_getCurrentTime()) {
+    SimulationTime now = worker_getCurrentTime();
+    if(timer->nextExpireTime >= now) {
         _timer_scheduleNewExpireEvent(timer);
     }
+
+    debug("timer fd %i armed to expire in %"G_GUINT64_FORMAT" nanos",
+            timer->super.handle, timer->nextExpireTime - now);
 }
 
 static gboolean _timer_timeIsValid(const struct timespec* config) {
@@ -255,7 +269,7 @@ gint timer_setTime(Timer* timer, gint flags,
 
     /* first get the old value if requested */
     if(old_value) {
-        timer_gettime(timer, old_value);
+        timer_getTime(timer, old_value);
     }
 
     /* always disarm to invalidate old expire events */

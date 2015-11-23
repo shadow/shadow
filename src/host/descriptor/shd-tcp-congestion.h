@@ -9,8 +9,6 @@
 
 #include "shadow.h"
 
-#define congestionlog(congestion,...)       logging_log(G_LOG_DOMAIN, congestion->logLevel, __FUNCTION__, __VA_ARGS__)
-
 typedef enum _TCPCongestionType TCPCongestionType;
 enum _TCPCongestionType {
     TCP_CC_UNKNOWN, TCP_CC_AIMD, TCP_CC_RENO, TCP_CC_CUBIC,
@@ -55,8 +53,6 @@ struct _TCPCongestion {
     gint rttVariance;
     /* type of fast retransmit being performed (default=None) */
     TCPFastRetransmitType fastRetransmit;
-    /* logging level for congestion control messages */
-    GLogLevelFlags logLevel; 
     MAGIC_DECLARE;
 };
 

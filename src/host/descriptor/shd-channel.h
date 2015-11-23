@@ -9,13 +9,15 @@
 
 #include "shadow.h"
 
-enum ChannelType {
+typedef enum _ChannelType ChannelType;
+enum _ChannelType {
     CT_NONE, CT_READONLY, CT_WRITEONLY,
 };
 
 typedef struct _Channel Channel;
 
-Channel* channel_new(gint handle, gint linkedHandle, enum ChannelType type);
-gint channel_getLinkedHandle(Channel* channel);
+Channel* channel_new(gint handle, ChannelType type);
+void channel_setLinkedChannel(Channel* channel, Channel* linkedChannel);
+Channel* channel_getLinkedChannel(Channel* channel);
 
 #endif /* SHD_CHANNEL_H_ */

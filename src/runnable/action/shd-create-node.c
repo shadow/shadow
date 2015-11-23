@@ -200,6 +200,8 @@ void createnodes_run(CreateNodesAction* action) {
         interfaceReceiveLength = worker_getConfig()->interfaceBufferSize;
     }
 
+    const gchar* dataDirPath = worker_getHostsRootPath();
+
     for(gint i = 0; i < action->quantity; i++) {
         /* hostname */
         GString* hostnameBuffer = g_string_new(hostname);
@@ -222,7 +224,7 @@ void createnodes_run(CreateNodesAction* action) {
                 heartbeatInterval, heartbeatLogLevel, heartbeatLogInfo,
                 logLevel, logPcap, pcapDir, qdisc,
                 receiveBufferSize, autotuneReceiveBuffer, sendBufferSize, autotuneSendBuffer,
-                interfaceReceiveLength);
+                interfaceReceiveLength, dataDirPath);
 
         /* save the node somewhere */
         worker_addHost(host, (guint) id);

@@ -12,7 +12,6 @@ python parse-shadow.py --help
 pylab.rcParams.update({
     'backend': 'PDF',
     'font.size': 16,
-    'figure.max_num_figures' : 50,
     'figure.figsize': (6,4.5),
     'figure.dpi': 100.0,
     'figure.subplot.left': 0.15,
@@ -32,17 +31,22 @@ pylab.rcParams.update({
     'legend.fontsize' : 'x-small',
     'legend.fancybox' : False,
     'legend.shadow' : False,
-    'legend.ncol' : 1.0,
     'legend.borderaxespad' : 0.5,
     'legend.numpoints' : 1,
     'legend.handletextpad' : 0.5,
     'legend.handlelength' : 1.6,
     'legend.labelspacing' : .75,
     'legend.markerscale' : 1.0,
-    'ps.useafm' : True,
-    'pdf.use14corefonts' : True,
-    'text.usetex' : True,
+    # turn on the following to embedd fonts; requires latex
+    #'ps.useafm' : True,
+    #'pdf.use14corefonts' : True,
+    #'text.usetex' : True,
 })
+
+try: pylab.rcParams.update({'figure.max_num_figures':50})
+except: pylab.rcParams.update({'figure.max_open_warning':50})
+try: pylab.rcParams.update({'legend.ncol':1.0})
+except: pass
 
 LINEFORMATS="k-,r-,b-,g-,c-,m-,y-,k--,r--,b--,g--,c--,m--,y--,k:,r:,b:,g:,c:,m:,y:,k-.,r-.,b-.,g-.,c-., m-.,y-."
 
@@ -90,8 +94,20 @@ def main():
         action="store", dest="lineformats",
         default=LINEFORMATS)
 
+    parser.add_argument('-s', '--skip',
+        help="""Ignore the first N seconds of each log file while parsing""", 
+        metavar="N",
+        action="store", dest="skiptime", type=type_nonnegative_integer,
+        default=0)
+
+    parser.add_argument('-r', '--rskip',
+        help="""Ignore everything after N seconds of each log file while parsing""", 
+        metavar="N",
+        action="store", dest="rskiptime", type=type_nonnegative_integer,
+        default=0)
+
     args = parser.parse_args()
-    shdata, ftdata, tgendata, tordata = get_data(args.experiments, args.lineformats)
+    shdata, ftdata, tgendata, tordata = get_data(args.experiments, args.lineformats, args.skiptime, args.rskiptime)
 
     page = PdfPages("{0}shadow.results.pdf".format(args.prefix+'.' if args.prefix is not None else ''))
     if len(shdata) > 0:
@@ -688,8 +704,7 @@ def plot_tgen_firstbyte(data, page):
             if "firstbyte" in d[client]:
                 for b in d[client]["firstbyte"]:
                     if f is None: f = pylab.figure()
-                    client_fb_list = d[client]["firstbyte"][b]
-                    for sec in client_fb_list: fb.append(sec)
+                    for sec in d[client]["firstbyte"][b]: fb.extend(d[client]["firstbyte"][b][sec])
         if f is not None and len(fb) > 0:
             x, y = getcdf(fb)
             pylab.plot(x, y, lineformat, label=label)
@@ -713,8 +728,7 @@ def plot_tgen_lastbyte_all(data, page):
                     bytes = int(b)
                     if bytes not in figs: figs[bytes] = pylab.figure()
                     if bytes not in lb: lb[bytes] = []
-                    client_lb_list = d[client]["lastbyte"][b]
-                    for sec in client_lb_list: lb[bytes].append(sec)
+                    for sec in d[client]["lastbyte"][b]: lb[bytes].extend(d[client]["lastbyte"][b][sec])
         for bytes in lb:
             x, y = getcdf(lb[bytes])
             pylab.figure(figs[bytes].number)
@@ -740,7 +754,8 @@ def plot_tgen_lastbyte_median(data, page):
                     bytes = int(b)
                     if bytes not in figs: figs[bytes] = pylab.figure()
                     if bytes not in lb: lb[bytes] = []
-                    client_lb_list = d[client]["lastbyte"][b]
+                    client_lb_list = []
+                    for sec in d[client]["lastbyte"][b]: client_lb_list.extend(d[client]["lastbyte"][b][sec])
                     lb[bytes].append(numpy.median(client_lb_list))
         for bytes in lb:
             x, y = getcdf(lb[bytes])
@@ -767,7 +782,8 @@ def plot_tgen_lastbyte_mean(data, page):
                     bytes = int(b)
                     if bytes not in figs: figs[bytes] = pylab.figure()
                     if bytes not in lb: lb[bytes] = []
-                    client_lb_list = d[client]["lastbyte"][b]
+                    client_lb_list = []
+                    for sec in d[client]["lastbyte"][b]: client_lb_list.extend(d[client]["lastbyte"][b][sec])
                     lb[bytes].append(numpy.mean(client_lb_list))
         for bytes in lb:
             x, y = getcdf(lb[bytes])
@@ -794,7 +810,8 @@ def plot_tgen_lastbyte_max(data, page):
                     bytes = int(b)
                     if bytes not in figs: figs[bytes] = pylab.figure()
                     if bytes not in lb: lb[bytes] = []
-                    client_lb_list = d[client]["lastbyte"][b]
+                    client_lb_list = []
+                    for sec in d[client]["lastbyte"][b]: client_lb_list.extend(d[client]["lastbyte"][b][sec])
                     lb[bytes].append(numpy.max(client_lb_list))
         for bytes in lb:
             x, y = getcdf(lb[bytes])
@@ -822,8 +839,7 @@ def plot_tgen_downloads(data, page):
                     if bytes not in figs: figs[bytes] = pylab.figure()
                     if bytes not in dls: dls[bytes] = {}
                     if client not in dls[bytes]: dls[bytes][client] = 0
-                    client_lb_list = d[client]["lastbyte"][b]
-                    for sec in client_lb_list: dls[bytes][client] += 1
+                    for sec in d[client]["lastbyte"][b]: dls[bytes][client] += len(d[client]["lastbyte"][b][sec])
         for bytes in dls:
             x, y = getcdf(dls[bytes].values(), shownpercentile=1.0)
             pylab.figure(figs[bytes].number)
@@ -849,8 +865,7 @@ def plot_tgen_errors(data, page):
                     if code not in figs: figs[code] = pylab.figure()
                     if code not in dls: dls[code] = {}
                     if client not in dls[code]: dls[code][client] = 0
-                    client_err_list = d[client]["errors"][code]
-                    for b in client_err_list: dls[code][client] += 1
+                    for sec in d[client]["errors"][code]: dls[code][client] += len(d[client]["errors"][code][sec])
         for code in dls:
             x, y = getcdf([dls[code][client] for client in dls[code]], shownpercentile=1.0)
             pylab.figure(figs[code].number)
@@ -875,7 +890,8 @@ def plot_tgen_errsizes_all(data, page):
                 for code in d[client]["errors"]:
                     if code not in figs: figs[code] = pylab.figure()
                     if code not in err: err[code] = []
-                    client_err_list = d[client]["errors"][code]
+                    client_err_list = []
+                    for sec in d[client]["errors"][code]: client_err_list.extend(d[client]["errors"][code][sec])
                     for b in client_err_list: err[code].append(int(b)/1024.0)
         for code in err:
             x, y = getcdf(err[code])
@@ -901,7 +917,8 @@ def plot_tgen_errsizes_median(data, page):
                 for code in d[client]["errors"]:
                     if code not in figs: figs[code] = pylab.figure()
                     if code not in err: err[code] = []
-                    client_err_list = d[client]["errors"][code]
+                    client_err_list = []
+                    for sec in d[client]["errors"][code]: client_err_list.extend(d[client]["errors"][code][sec])
                     err[code].append(numpy.median(client_err_list)/1024.0)
         for code in err:
             x, y = getcdf(err[code])
@@ -927,7 +944,8 @@ def plot_tgen_errsizes_mean(data, page):
                 for code in d[client]["errors"]:
                     if code not in figs: figs[code] = pylab.figure()
                     if code not in err: err[code] = []
-                    client_err_list = d[client]["errors"][code]
+                    client_err_list = []
+                    for sec in d[client]["errors"][code]: client_err_list.extend(d[client]["errors"][code][sec])
                     err[code].append(numpy.mean(client_err_list)/1024.0)
         for code in err:
             x, y = getcdf(err[code])
@@ -1005,7 +1023,7 @@ def plot_tor(data, page, direction="bytes_written"):
     pylab.close()
     del(eachcdffig)
 
-def get_data(experiments, lineformats):
+def get_data(experiments, lineformats, skiptime, rskiptime):
     shdata, ftdata, tgendata, tordata = [], [], [], []
     lflist = lineformats.strip().split(",")
 
@@ -1015,6 +1033,7 @@ def get_data(experiments, lineformats):
         if not os.path.exists(log): continue
         xzcatp = subprocess.Popen(["xzcat", log], stdout=subprocess.PIPE)
         data = json.load(xzcatp.stdout)
+        data = prune_data(data, skiptime, rskiptime)
         shdata.append((data, label, lfcycle.next()))
 
     lfcycle = cycle(lflist)
@@ -1023,6 +1042,7 @@ def get_data(experiments, lineformats):
         if not os.path.exists(log): continue
         xzcatp = subprocess.Popen(["xzcat", log], stdout=subprocess.PIPE)
         data = json.load(xzcatp.stdout)
+        data = prune_data(data, skiptime, rskiptime)
         ftdata.append((data['nodes'], label, lfcycle.next()))
 
     lfcycle = cycle(lflist)
@@ -1031,6 +1051,7 @@ def get_data(experiments, lineformats):
         if not os.path.exists(log): continue
         xzcatp = subprocess.Popen(["xzcat", log], stdout=subprocess.PIPE)
         data = json.load(xzcatp.stdout)
+        data = prune_data(data, skiptime, rskiptime)
         tgendata.append((data['nodes'], label, lfcycle.next()))
 
     lfcycle = cycle(lflist)
@@ -1039,9 +1060,35 @@ def get_data(experiments, lineformats):
         if not os.path.exists(log): continue
         xzcatp = subprocess.Popen(["xzcat", log], stdout=subprocess.PIPE)
         data = json.load(xzcatp.stdout)
+        data = prune_data(data, skiptime, rskiptime)
         tordata.append((data['nodes'], label, lfcycle.next()))
 
     return shdata, ftdata, tgendata, tordata
+
+def prune_data(data, skiptime, rskiptime):
+    if skiptime == 0 and rskiptime == 0: return data
+    if 'nodes' in data:
+        for name in data['nodes']:
+            keys = ['recv', 'send', 'errors', 'firstbyte', 'lastbyte']
+            for k in keys:
+                if k in data['nodes'][name]:
+                    for header in data['nodes'][name][k]:
+                        unwanted = set()
+                        for sec in data['nodes'][name][k][header]:
+                            if (skiptime > 0 and int(sec) < skiptime) or (rskiptime > 0 and int(sec) > rskiptime):
+                                unwanted.add(sec)
+                        for sec in unwanted:
+                            del(data['nodes'][name][k][header][sec])
+            keys = ['bytes_read', 'bytes_written']
+            for k in keys:
+                if k in data['nodes'][name]:
+                    unwanted = set()
+                    for sec in data['nodes'][name][k]:
+                        if (skiptime > 0 and int(sec) < skiptime) or (rskiptime > 0 and int(sec) > rskiptime):
+                            unwanted.add(sec)
+                    for sec in unwanted:
+                        del(data['nodes'][name][k][sec])
+    return data
 
 # helper - compute the window_size moving average over the data in interval
 def movingaverage(interval, window_size):
@@ -1067,5 +1114,10 @@ def getcdf(data, shownpercentile=0.99, maxpoints=100000.0):
         y.append(frac[i])
         lasty = frac[i]
     return x, y
+
+def type_nonnegative_integer(value):
+    i = int(value)
+    if i < 0: raise argparse.ArgumentTypeError("%s is an invalid non-negative int value" % value)
+    return i
 
 if __name__ == '__main__': sys.exit(main())

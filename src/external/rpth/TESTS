@@ -1,0 +1,160 @@
+   ____  _   _
+  |  _ \| |_| |__
+  | |_) | __| '_ \           ``It doesn't need to be
+  |  __/| |_| | | |            tested, because it works.''
+  |_|    \__|_| |_|                 -- Richard Holloway
+
+  GNU Pth - The GNU Portable Threads
+
+  TESTS
+  =====
+
+  GNU Pth was successfully tested with the following real-world
+  applications (which are not just trivial sample applications unlike
+  the shipped test_xxx programs):
+
+    o Apache    (webserver)
+    o MySQL     (relational database system)
+    o OpenLDAP  (LDAP toolkit)
+    o pidentd   (IDENT daemon)
+    o Perl      (scripting language)
+    o Python    (scripting language)
+    o gFTP      (FTP client)
+    o NakenChat (chat server)
+
+  Details of the tests follow:
+
+  Package:  Apache
+  Version:  2.0-dev
+  URL:      http://www.apache.org/
+  Pth:      1.2b1 [--enable-pthread --disable-shared --enable-syscall-soft]
+  Platform: i686-pc-freebsd3.1
+  Tester:   Ralf S. Engelschall <rse@engelschall.com>
+  Date:     30-Aug-1999
+  Config:   CFLAGS="`pthread-config --cflags` \
+                     -DPTHREAD_EVERYWHERE \
+                     -DNO_SERIALIZED_ACCEPT"
+            LDFLAGS="`pthread-config --ldflags`"
+            LIBS="`pthread-config --libs`"
+            --set-rule=MPM_METHOD:dexter
+  Comment:  Apache 2.0-dev is a developer version, `dexter'
+            is a MPM (multi process model) module based on Pthreads.
+            The server served around 1000 requests per second.
+
+  Package:  MySQL
+  Version:  3.22.25
+  URL:      http://www.mysql.com/
+  Pth:      1.2b1 [--enable-pthread --disable-shared --enable-syscall-soft]
+  Platform: i686-pc-freebsd3.1
+  Tester:   Ralf S. Engelschall <rse@engelschall.com>
+  Date:     30-Aug-1999
+  Config:   CC=egcc CXX=eg++ \
+            CFLAGS="`pthread-config --cflags`" \
+            CXXFLAGS="`pthread-config --cflags`" \
+            LDFLAGS="`pthread-config --ldflags`" \
+            ./configure \
+            --prefix=/tmp/mysql \
+            --without-mit-pthreads \
+            --with-pthread \
+            --with-named-thread-libs="`pthread-config --libs`"
+  Comment:  MySQL seems to work fine with Pth. I was able to run
+            the tests from the INSTALL/README documents, i.e. a create
+            table, a few inserts and a select and the server served them
+            fine.
+
+  Package:  OpenLDAP
+  Version:  2.0-dev
+  URL:      http://www.openldap.org/
+  Pth:      1.2b1 [--enable-pthread --disable-shared --enable-syscall-soft]
+  Platform: i686-pc-freebsd3.1
+  Tester:   Ralf S. Engelschall <rse@engelschall.com>
+  Date:     01-Sep-1999
+  Config:   CPPFLAGS="`pth-config --cflags`" \
+            LDFLAGS="`pth-config --ldflags`" \
+            ./configure --prefix=/tmp/openldap \
+            --with-threads=pth
+  Comments: Still not tested under runtime, just compiled the beast.
+            Interesting is that OpenLDAP has native Pth support.
+
+  Package:  pidentd
+  Version:  3.1a14
+  URL:      ftp://ftp.lysator.liu.se/pub/unix/ident/servers/
+  Pth:      1.2b1 [--enable-pthread --disable-shared --enable-syscall-soft]
+  Platform: i686-pc-freebsd3.1
+  Tester:   Ralf S. Engelschall <rse@engelschall.com>
+  Date:     30-Aug-1999
+  Config:   CFLAGS="`pthread-config --cflags`" \
+            LDFLAGS="`pthread-config --ldflags`" \
+            LIBS="`pthread-config --libs`" \
+            ./configure \
+            --prefix=/tmp/pindent \
+            --with-threads
+  Comment:  I had to change ``CC="$CC -pthread"'' in `configure' with
+            ``: CC="$CC -pthread"'' in order to avoid the use uthreads under
+            FreeBSD.
+
+  Package:  Perl
+  Version:  5.005_03
+  URL:      http://www.perl.com/
+  Pth:      1.2b1 [--enable-pthread --disable-shared
+                   --enable-syscall-soft --enable-syscall-hard]
+  Platform: i686-pc-freebsd3.1
+  Tester:   Ralf S. Engelschall <rse@engelschall.com>
+  Date:     02-Sep-1999
+  Config:   ./Configure \
+            -Dusethreads -des \
+            -Dccflags="`pthread-config --cflags`" \
+            -Dlibs="`pthread-config --ldflags --libs` -lm" \
+            -Dprefix=/tmp/perl
+  Comment:  I've tried all tests ext/Thread/*.t. All worked fine,
+            except for the io.t. Even with Pth's --enable-syscall-hard
+            Perl seems to use direct I/O for the <STDIN> facility. So
+            the Pth support for Perl is still not 100%. But perhaps
+            one can make it complete by using PerlIO abstraction layer
+            (either directly to use pth_read/write or via Sfio and
+            pth_sfdisc)? Additionally I had to deactivate the -pthread
+            in hints/freebsd to get rid of uthread under FreeBSD.
+
+  Package:  Python
+  Version:  1.5.2
+  URL:      http://www.python.org/
+  Pth:      1.2b1 [--enable-pthread --disable-shared --enable-syscall-soft]
+  Platform: i686-pc-freebsd3.1
+  Tester:   Ralf S. Engelschall <rse@engelschall.com>
+  Date:     01-Sep-1999
+  Config:   CC="cc `pthread-config --cflags`" \
+            LDFLAGS="`pthread-config --ldflags`" \
+            LIBS="`pthread-config --ldflags --libs`" \
+            ./configure \
+            --prefix=/tmp/python \
+            --with-thread
+  Comment:  The configure stuff of Python was a little bit strange
+            (using CFLAGS or CPPFLAGS didn't work), but except for this
+            Python worked fine. It even passed its "make test" and there
+            also the test_thread. Seems to work fine with Pth.
+
+  Package:  gFTP
+  Version:  2.0.5a
+  URL:      http://gftp.seul.org/
+  Pth:      1.2b6 [--enable-pthread --disable-shared --enable-syscall-soft]
+  Platform: i686-pc-freebsd3.1
+  Tester:   Ralf S. Engelschall <rse@engelschall.com>
+  Date:     04-Oct-1999
+  Config:   CC="cc `pthread-config --cflags`" \
+            LDFLAGS="`pthread-config --ldflags` `pthread-config --ldflags --libs`" \
+            ./configure \
+            --prefix=/tmp/gftp
+  Comment:  none
+
+  Package:  NakenChat
+  Version:  1.10
+  URL:      http://home.i1.net/~naken/nakenchat/
+  Pth:      1.2b7 [--enable-pthread]
+  Platform: i686-pc-freebsd3.1
+  Tester:   Ralf S. Engelschall <rse@engelschall.com>
+  Date:     19-Oct-1999
+  Config:   cc `pthread-config --cflags` \
+               -onakenchat nakenchat.c \
+               `pthread-config --ldflags --libs`
+  Comment:  none
+

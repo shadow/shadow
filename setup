@@ -12,7 +12,7 @@ import sys, os, argparse, subprocess, multiprocessing, shlex, shutil, urllib2, t
 from datetime import datetime
 
 import logging
-logging.basicConfig(format='%(asctime)s %(levelname)s %(message)s', level=logging.DEBUG)
+logging.basicConfig(format='%(asctime)s [%(levelname)s] %(message)s', level=logging.INFO)
 
 BUILD_PREFIX="./build"
 INSTALL_PREFIX=os.path.expanduser("~/.shadow")
@@ -71,7 +71,7 @@ def main():
         help="number of jobs to run simultaneously during the build",
         metavar="N", type=int,
         action="store", dest="njobs",
-        default=multiprocessing.cpu_count())
+        default=1)#multiprocessing.cpu_count())
         
     parser_build.add_argument('-o', '--profile',
         help="build in gprof profiling information when running Shadow",
@@ -93,6 +93,12 @@ def main():
         action="store_true", dest="disable_tgen",
         default=False)
     
+    # configure test subcommand
+    parser_test = subparsers_main.add_parser('test', help='run Shadow tests', 
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser_test.set_defaults(func=test, 
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+        
     # configure install subcommand
     parser_install = subparsers_main.add_parser('install', help='install Shadow', 
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -104,7 +110,7 @@ def main():
     # run chosen command
     r = args.func(args)
     
-    logging.info("returning code '{0}'".format(r))
+    logging.debug("setup is returning code '{0}'".format(r))
 
 def build(args):
     # get absolute paths
@@ -113,14 +119,13 @@ def build(args):
     filepath=getfullpath(__file__)
     rootdir=filepath[:filepath.rfind("/")]
     builddir=getfullpath(BUILD_PREFIX)
-    shadowdir=builddir+"/shadow"
     installdir=getfullpath(args.prefix)
     
     # clear cmake cache
-    if args.do_force_rebuild and os.path.exists(shadowdir): shutil.rmtree(shadowdir)
+    if args.do_force_rebuild and os.path.exists(builddir): shutil.rmtree(builddir)
     
     # create directories
-    if not os.path.exists(shadowdir): os.makedirs(shadowdir)
+    if not os.path.exists(builddir): os.makedirs(builddir)
     if not os.path.exists(installdir): os.makedirs(installdir)
         
     # build up args string for the cmake command
@@ -138,7 +143,7 @@ def build(args):
     calledDirectory = os.getcwd()
     
     # run build tasks
-    os.chdir(shadowdir)
+    os.chdir(builddir)
     
     # hack to make passing args to CMAKE work... doesnt seem to like the first arg
     args.extra_includes.insert(0, "./")
@@ -169,15 +174,15 @@ def build(args):
     # call cmake to configure the make process, wait for completion
     logging.info("running \'{0}\' from \'{1}\'".format(cmake_cmd, os.getcwd()))
     retcode = subprocess.call(cmake_cmd.strip().split())
-    logging.info("cmake returned " + str(retcode))
+    logging.debug("cmake returned " + str(retcode))
     
     if retcode == 0:
         # call make, wait for it to finish
         make = "make -j{0}".format(args.njobs)
         logging.info("calling " + make)
         retcode = subprocess.call(shlex.split(make))
-        logging.info("make returned " + str(retcode))
-        if retcode == 0: logging.info("now run \'./setup install\'")
+        logging.debug("make returned " + str(retcode))
+        if retcode == 0: logging.info("build successful!")
         else: logging.error("Non-zero return code from make.")
     else: logging.error(" Non-zero return code from cmake.")
 
@@ -185,29 +190,51 @@ def build(args):
     os.chdir(calledDirectory)
     return retcode
 
+def test(args):
+    builddir=getfullpath(BUILD_PREFIX)
+    testdir=builddir+"/src/test"
+    if not os.path.exists(testdir): 
+        logging.error("please run './setup build --test' before testing!")
+        return
+
+    # go to build dir and install from makefile
+    calledDirectory = os.getcwd()
+    os.chdir(testdir)
+    
+    # test, wait for it to finish
+    testcmd = "ctest -j1"
+    
+    logging.info("calling \'"+testcmd+"\'")
+    retcode = subprocess.call(testcmd.strip().split())
+    logging.info(str(testcmd) + " returned " + str(retcode))
+    if retcode == 0: pass
+    
+    # go back to where we came from
+    os.chdir(calledDirectory)
+    return retcode
+    
 def install(args):
     builddir=getfullpath(BUILD_PREFIX)
-    shadowdir=builddir+"/shadow"
-    if not os.path.exists(shadowdir): 
+    if not os.path.exists(builddir): 
         logging.error("please build before installing!")
         return
 
     # go to build dir and install from makefile
     calledDirectory = os.getcwd()
-    os.chdir(shadowdir)
+    os.chdir(builddir)
     
     # call make install, wait for it to finish
     makeCommand = "make install"
     
     logging.info("calling \'"+makeCommand+"\'")
     retcode = subprocess.call(makeCommand.strip().split())
-    logging.info("make install returned " + str(retcode))
-    if retcode == 0: logging.info("now run \'shadow\' from \'PREFIX/bin\' (check your PATH)")
+    logging.debug("make install returned " + str(retcode))
+    if retcode == 0: logging.info("now run \'shadow\' from \'PREFIX/bin\' (check your PATH!)")
     
     # go back to where we came from
     os.chdir(calledDirectory)
     return retcode
-
+    
 def getfullpath(path):
     return os.path.abspath(os.path.expanduser(path))
 

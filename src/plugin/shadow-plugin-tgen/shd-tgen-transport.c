@@ -7,10 +7,24 @@
 #include "shd-tgen.h"
 
 typedef enum {
-    PROXY_INIT, PROXY_CHOICE, PROXY_REQUEST, PROXY_RESPONSE, PROXY_SUCCESS, PROXY_ERROR
-} ProxyState;
+    TGEN_XPORT_CONNECT,
+    TGEN_XPORT_PROXY_INIT, TGEN_XPORT_PROXY_CHOICE,
+    TGEN_XPORT_PROXY_REQUEST, TGEN_XPORT_PROXY_RESPONSE,
+    TGEN_XPORT_SUCCESS, TGEN_XPORT_ERROR
+} TGenTransportState;
+
+typedef enum {
+    TGEN_XPORT_ERR_NONE, TGEN_XPORT_ERR_PROXY_CHOICE,
+    TGEN_XPORT_ERR_PROXY_RECONN, TGEN_XPORT_ERR_PROXY_ADDR,
+    TGEN_XPORT_ERR_PROXY_VERSION, TGEN_XPORT_ERR_PROXY_STATUS,
+    TGEN_XPORT_ERR_WRITE, TGEN_XPORT_ERR_READ, TGEN_XPORT_ERR_MISC
+} TGenTransportError;
 
 struct _TGenTransport {
+    TGenTransportState state;
+    TGenTransportError error;
+    gchar* string;
+
     TGenTransportProtocol protocol;
     gint socketD;
 
@@ -18,17 +32,159 @@ struct _TGenTransport {
     gpointer data;
     GDestroyNotify destructData;
 
-    TGenPeer* peer;
-    gchar* string;
-
+    /* our local socket, our side of the transport */
+    TGenPeer* local;
+    /* non-null if we need to connect through a proxy */
     TGenPeer* proxy;
-    ProxyState proxyState;
+    /* the remote side of the transport */
+    TGenPeer* remote;
+
+    /* track timings for time reporting, using g_get_monotonic_time in usec granularity */
+    struct {
+        gint64 start;
+        gint64 socketCreate;
+        gint64 socketConnect;
+        gint64 proxyInit;
+        gint64 proxyChoice;
+        gint64 proxyRequest;
+        gint64 proxyResponse;
+    } time;
 
     gint refcount;
     guint magic;
 };
 
-static TGenTransport* _tgentransport_newHelper(gint socketD, TGenPeer* proxy, TGenPeer* peer,
+static const gchar* _tgentransport_protocolToString(TGenTransport* transport) {
+    switch(transport->protocol) {
+        case TGEN_PROTOCOL_TCP: {
+            return "TCP";
+        }
+        case TGEN_PROTOCOL_UDP: {
+            return "UDP";
+        }
+        case TGEN_PROTOCOL_PIPE: {
+            return "PIPE";
+        }
+        case TGEN_PROTOCOL_SOCKETPAIR: {
+            return "SOCKETPAIR";
+        }
+        case TGEN_PROTOCOL_NONE:
+        default: {
+            return "NONE";
+        }
+    }
+}
+
+static const gchar* _tgentransport_stateToString(TGenTransportState state) {
+    switch(state) {
+        case TGEN_XPORT_CONNECT: {
+            return "CONNECT";
+        }
+        case TGEN_XPORT_PROXY_INIT: {
+            return "INIT";
+        }
+        case TGEN_XPORT_PROXY_CHOICE: {
+            return "CHOICE";
+        }
+        case TGEN_XPORT_PROXY_REQUEST: {
+            return "REQUEST";
+        }
+        case TGEN_XPORT_PROXY_RESPONSE: {
+            return "RESPONSE";
+        }
+        case TGEN_XPORT_SUCCESS: {
+            return "SUCCESS";
+        }
+        case TGEN_XPORT_ERROR:
+        default: {
+            return "ERROR";
+        }
+    }
+}
+
+static const gchar* _tgentransport_errorToString(TGenTransportError error) {
+    switch(error) {
+        case TGEN_XPORT_ERR_NONE: {
+            return "NONE";
+        }
+        case TGEN_XPORT_ERR_PROXY_CHOICE: {
+            return "CHOICE";
+        }
+        case TGEN_XPORT_ERR_PROXY_RECONN: {
+            return "RECONN";
+        }
+        case TGEN_XPORT_ERR_PROXY_ADDR: {
+            return "ADDR";
+        }
+        case TGEN_XPORT_ERR_PROXY_VERSION: {
+            return "VERSION";
+        }
+        case TGEN_XPORT_ERR_PROXY_STATUS: {
+            return "STATUS";
+        }
+        case TGEN_XPORT_ERR_WRITE: {
+            return "WRITE";
+        }
+        case TGEN_XPORT_ERR_READ: {
+            return "READ";
+        }
+        case TGEN_XPORT_ERR_MISC:
+        default: {
+            return "MISC";
+        }
+    }
+}
+
+const gchar* tgentransport_toString(TGenTransport* transport) {
+    TGEN_ASSERT(transport);
+
+    if(!transport->string) {
+        const gchar* protocolStr = _tgentransport_protocolToString(transport);
+        const gchar* stateStr = _tgentransport_stateToString(transport->state);
+        const gchar* errorStr = _tgentransport_errorToString(transport->error);
+
+        /* the following may be NULL, and these toString methods will handle it */
+        const gchar* localStr = tgenpeer_toString(transport->local);
+        const gchar* proxyStr = tgenpeer_toString(transport->proxy);
+        const gchar* remoteStr = tgenpeer_toString(transport->remote);
+
+        GString* buffer = g_string_new(NULL);
+
+        g_string_printf(buffer, "%s,%i,%s,%s,%s,state=%s,error=%s", protocolStr, transport->socketD,
+                localStr, proxyStr, remoteStr, stateStr, errorStr);
+
+        transport->string = g_string_free(buffer, FALSE);
+    }
+
+    return transport->string;
+}
+
+static void _tgentransport_resetString(TGenTransport* transport) {
+    TGEN_ASSERT(transport);
+    if(transport->string) {
+        g_free(transport->string);
+        transport->string = NULL;
+    }
+}
+
+static void _tgentransport_changeState(TGenTransport* transport, TGenTransportState state) {
+    TGEN_ASSERT(transport);
+    tgen_info("transport %s moving from state %s to state %s", tgentransport_toString(transport),
+            _tgentransport_stateToString(transport->state), _tgentransport_stateToString(state));
+    transport->state = state;
+    _tgentransport_resetString(transport);
+}
+
+static void _tgentransport_changeError(TGenTransport* transport, TGenTransportError error) {
+    TGEN_ASSERT(transport);
+    tgen_info("transport %s moving from error %s to error %s", tgentransport_toString(transport),
+            _tgentransport_errorToString(transport->error), _tgentransport_errorToString(error));
+    transport->error = error;
+    _tgentransport_resetString(transport);
+}
+
+static TGenTransport* _tgentransport_newHelper(gint socketD, gint64 startedTime, gint64 createdTime,
+        TGenPeer* proxy, TGenPeer* peer,
         TGenTransport_notifyBytesFunc notify, gpointer data, GDestroyNotify destructData) {
     TGenTransport* transport = g_new0(TGenTransport, 1);
     transport->magic = TGEN_MAGIC;
@@ -38,7 +194,7 @@ static TGenTransport* _tgentransport_newHelper(gint socketD, TGenPeer* proxy, TG
     transport->protocol = TGEN_PROTOCOL_TCP;
 
     if(peer) {
-        transport->peer = peer;
+        transport->remote = peer;
         tgenpeer_ref(peer);
     }
     if(proxy) {
@@ -46,17 +202,35 @@ static TGenTransport* _tgentransport_newHelper(gint socketD, TGenPeer* proxy, TG
         tgenpeer_ref(proxy);
     }
 
+    struct sockaddr_in addrBuf;
+    memset(&addrBuf, 0, sizeof(struct sockaddr_in));
+    socklen_t addrBufLen = (socklen_t)sizeof(struct sockaddr_in);
+    if(getsockname(socketD, (struct sockaddr*) &addrBuf, &addrBufLen) == 0) {
+        transport->local = tgenpeer_newFromIP(addrBuf.sin_addr.s_addr, addrBuf.sin_port);
+    }
+
     transport->notify = notify;
     transport->data = data;
     transport->destructData = destructData;
+
+    transport->time.start = startedTime;
+    transport->time.socketCreate = createdTime;
+    transport->time.socketConnect = -1;
+    transport->time.proxyInit = -1;
+    transport->time.proxyChoice = -1;
+    transport->time.proxyRequest = -1;
+    transport->time.proxyResponse = -1;
 
     return transport;
 }
 
 TGenTransport* tgentransport_newActive(TGenPeer* proxy, TGenPeer* peer,
         TGenTransport_notifyBytesFunc notify, gpointer data, GDestroyNotify destructData) {
+    gint64 started = g_get_monotonic_time();
+
     /* create the socket and get a socket descriptor */
     gint socketD = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
+    gint64 created = g_get_monotonic_time();
 
     if (socketD < 0) {
         tgen_critical("socket(): returned %i error %i: %s",
@@ -88,12 +262,12 @@ TGenTransport* tgentransport_newActive(TGenPeer* proxy, TGenPeer* peer,
         return NULL;
     }
 
-    return _tgentransport_newHelper(socketD, proxy, peer, notify, data, destructData);
+    return _tgentransport_newHelper(socketD, started, created, proxy, peer, notify, data, destructData);
 }
 
 TGenTransport* tgentransport_newPassive(gint socketD, TGenPeer* peer,
         TGenTransport_notifyBytesFunc notify, gpointer data, GDestroyNotify destructData) {
-    return _tgentransport_newHelper(socketD, NULL, peer, notify, data, destructData);
+    return _tgentransport_newHelper(socketD, 0, 0, NULL, peer, notify, data, destructData);
 }
 
 static void _tgentransport_free(TGenTransport* transport) {
@@ -107,12 +281,16 @@ static void _tgentransport_free(TGenTransport* transport) {
         g_free(transport->string);
     }
 
-    if(transport->peer) {
-        tgenpeer_unref(transport->peer);
+    if(transport->remote) {
+        tgenpeer_unref(transport->remote);
     }
 
     if(transport->proxy) {
         tgenpeer_unref(transport->proxy);
+    }
+
+    if(transport->local) {
+        tgenpeer_unref(transport->local);
     }
 
     if(transport->destructData && transport->data) {
@@ -141,6 +319,9 @@ gssize tgentransport_write(TGenTransport* transport, gpointer buffer, gsize leng
 
     gssize bytes = write(transport->socketD, buffer, length);
 
+    if(bytes < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
+        _tgentransport_changeError(transport, TGEN_XPORT_ERR_WRITE);
+    }
     if(bytes > 0 && transport->notify) {
         transport->notify(transport->data, 0, (gsize)bytes);
     }
@@ -153,6 +334,9 @@ gssize tgentransport_read(TGenTransport* transport, gpointer buffer, gsize lengt
 
     gssize bytes = read(transport->socketD, buffer, length);
 
+    if(bytes < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
+        _tgentransport_changeError(transport, TGEN_XPORT_ERR_READ);
+    }
     if(bytes > 0 && transport->notify) {
         transport->notify(transport->data, (gsize)bytes, 0);
     }
@@ -165,38 +349,45 @@ gint tgentransport_getDescriptor(TGenTransport* transport) {
     return transport->socketD;
 }
 
-const gchar* tgentransport_toString(TGenTransport* transport) {
+gchar* tgentransport_getTimeStatusReport(TGenTransport* transport) {
     TGEN_ASSERT(transport);
 
-    if(!transport->string) {
-        GString* buffer = g_string_new(NULL);
+    gint64 create = (transport->time.socketCreate >= 0 && transport->time.start >= 0) ?
+            (transport->time.socketCreate - transport->time.start) : -1;
+    gint64 connect = (transport->time.socketConnect >= 0 && transport->time.start >= 0) ?
+            (transport->time.socketConnect - transport->time.start) : -1;
+    gint64 init = (transport->time.proxyInit >= 0 && transport->time.start >= 0) ?
+            (transport->time.proxyInit - transport->time.start) : -1;
+    gint64 choice = (transport->time.proxyChoice >= 0 && transport->time.start >= 0) ?
+            (transport->time.proxyChoice - transport->time.start) : -1;
+    gint64 request = (transport->time.proxyRequest >= 0 && transport->time.start >= 0) ?
+            (transport->time.proxyRequest - transport->time.start) : -1;
+    gint64 response = (transport->time.proxyResponse >= 0 && transport->time.start >= 0) ?
+            (transport->time.proxyResponse - transport->time.start) : -1;
 
-        if(transport->proxy && transport->peer) {
-            g_string_printf(buffer, "(TCP-%i-%s-%s)", transport->socketD,
-                    tgenpeer_toString(transport->proxy), tgenpeer_toString(transport->peer));
-        } else if(transport->peer) {
-            g_string_printf(buffer, "(TCP-%i-%s)", transport->socketD,
-                    tgenpeer_toString(transport->peer));
-        } else {
-            g_string_printf(buffer, "(TCP-%i)", transport->socketD);
-        }
+    GString* buffer = g_string_new(NULL);
 
-        transport->string = g_string_free(buffer, FALSE);
-    }
+    /* print the times in milliseconds */
+    g_string_printf(buffer,
+            "usecs-to-socket-create=%"G_GINT64_FORMAT" usecs-to-socket-connect=%"G_GINT64_FORMAT" "
+            "usecs-to-proxy-init=%"G_GINT64_FORMAT" usecs-to-proxy-choice=%"G_GINT64_FORMAT" "
+            "usecs-to-proxy-request=%"G_GINT64_FORMAT" usecs-to-proxy-response=%"G_GINT64_FORMAT,
+            create, connect, init, choice, request, response);
 
-    return transport->string;
+    return g_string_free(buffer, FALSE);
 }
 
 gboolean tgentransport_wantsEvents(TGenTransport* transport) {
     TGEN_ASSERT(transport);
-    if(transport->proxy && transport->proxyState != PROXY_SUCCESS
-            && transport->proxyState != PROXY_ERROR) {
+    if(transport->state != TGEN_XPORT_SUCCESS && transport->state != TGEN_XPORT_ERROR) {
         return TRUE;
     }
     return FALSE;
 }
 
 static TGenEvent _tgentransport_sendSocksInit(TGenTransport* transport) {
+    TGEN_ASSERT(transport);
+
     /*
     1 socks init client --> server
     \x05 (version 5)
@@ -206,9 +397,10 @@ static TGenEvent _tgentransport_sendSocksInit(TGenTransport* transport) {
     gssize bytesSent = tgentransport_write(transport, "\x05\x01\x00", 3);
     g_assert(bytesSent == 3);
 
+    transport->time.proxyInit = g_get_monotonic_time();
     tgen_debug("sent socks init to proxy %s", tgenpeer_toString(transport->proxy));
 
-    transport->proxyState = PROXY_CHOICE;
+    _tgentransport_changeState(transport, TGEN_XPORT_PROXY_CHOICE);
     return TGEN_EVENT_READ;
 }
 
@@ -222,16 +414,18 @@ static TGenEvent _tgentransport_receiveSocksChoice(TGenTransport* transport) {
     memset(buffer, 0, 8);
     gssize bytesReceived = tgentransport_read(transport, buffer, 2);
     g_assert(bytesReceived == 2);
+    transport->time.proxyChoice = g_get_monotonic_time();
 
     if(buffer[0] == 0x05 && buffer[1] == 0x00) {
         tgen_debug("socks choice supported by proxy %s", tgenpeer_toString(transport->proxy));
 
-        transport->proxyState = PROXY_REQUEST;
+        _tgentransport_changeState(transport, TGEN_XPORT_PROXY_REQUEST);
         return TGEN_EVENT_WRITE;
     } else {
         tgen_debug("socks choice unsupported by proxy %s", tgenpeer_toString(transport->proxy));
 
-        transport->proxyState = PROXY_ERROR;
+        _tgentransport_changeState(transport, TGEN_XPORT_ERROR);
+        _tgentransport_changeError(transport, TGEN_XPORT_ERR_PROXY_CHOICE);
         return TGEN_EVENT_NONE;
     }
 }
@@ -258,7 +452,7 @@ static TGenEvent _tgentransport_sendSocksRequest(TGenTransport* transport) {
     */
 
     /* prefer name mode if we have it, and let the proxy lookup IP as needed */
-    const gchar* name = tgenpeer_getName(transport->peer);
+    const gchar* name = tgenpeer_getName(transport->remote);
     if(name && g_str_has_suffix(name, ".onion")) { // FIXME remove suffix matching to have proxy do lookup for us
         /* case 3b - domain name */
         glong nameLength = g_utf8_strlen(name, -1);
@@ -269,7 +463,7 @@ static TGenEvent _tgentransport_sendSocksRequest(TGenTransport* transport) {
                     name, nameLength, (guint)guint8max);
         }
 
-        in_addr_t port = tgenpeer_getNetworkPort(transport->peer);
+        in_addr_t port = tgenpeer_getNetworkPort(transport->remote);
 
         gchar buffer[nameLength+8];
         memset(buffer, 0, nameLength+8);
@@ -282,10 +476,10 @@ static TGenEvent _tgentransport_sendSocksRequest(TGenTransport* transport) {
         gssize bytesSent = tgentransport_write(transport, buffer, nameLength+7);
         g_assert(bytesSent == nameLength+7);
     } else {
-        tgenpeer_performLookups(transport->peer); // FIXME remove this to have proxy do lookup for us
+        tgenpeer_performLookups(transport->remote); // FIXME remove this to have proxy do lookup for us
         /* case 3a - IPv4 */
-        in_addr_t ip = tgenpeer_getNetworkIP(transport->peer);
-        in_addr_t port = tgenpeer_getNetworkPort(transport->peer);
+        in_addr_t ip = tgenpeer_getNetworkIP(transport->remote);
+        in_addr_t port = tgenpeer_getNetworkPort(transport->remote);
 
         gchar buffer[16];
         memset(buffer, 0, 16);
@@ -298,10 +492,11 @@ static TGenEvent _tgentransport_sendSocksRequest(TGenTransport* transport) {
         g_assert(bytesSent == 10);
     }
 
-    tgen_debug("requested connection to %s through socks proxy %s",
-            tgenpeer_toString(transport->peer), tgenpeer_toString(transport->proxy));
+    transport->time.proxyRequest = g_get_monotonic_time();
+    tgen_debug("requested connection from %s through socks proxy %s to remote %s",
+            tgenpeer_toString(transport->local), tgenpeer_toString(transport->proxy), tgenpeer_toString(transport->remote));
 
-    transport->proxyState = PROXY_RESPONSE;
+    _tgentransport_changeState(transport, TGEN_XPORT_PROXY_RESPONSE);
     return TGEN_EVENT_READ;
 }
 
@@ -330,6 +525,7 @@ static TGenEvent _tgentransport_receiveSocksResponse(TGenTransport* transport) {
     memset(buffer, 0, 256);
     gssize bytesReceived = tgentransport_read(transport, buffer, 256);
     g_assert(bytesReceived >= 4);
+    transport->time.proxyResponse = g_get_monotonic_time();
 
     if(buffer[0] == 0x05 && buffer[1] == 0x00) {
         if(buffer[3] == 0x01) {
@@ -344,15 +540,16 @@ static TGenEvent _tgentransport_receiveSocksResponse(TGenTransport* transport) {
 
             /* reconnect not supported */
             if(socksBindAddress == 0 && socksBindPort == 0) {
-                tgen_info("connection to %s through socks proxy %s successful",
-                        tgenpeer_toString(transport->peer), tgenpeer_toString(transport->proxy));
+                tgen_info("connection from %s through socks proxy %s to %s successful",
+                        tgenpeer_toString(transport->local), tgenpeer_toString(transport->proxy), tgenpeer_toString(transport->remote));
 
-                transport->proxyState = PROXY_SUCCESS;
+                _tgentransport_changeState(transport, TGEN_XPORT_SUCCESS);
                 return TGEN_EVENT_DONE;
             } else {
-                tgen_warning("connection to %s through socks proxy %s failed: "
+                _tgentransport_changeError(transport, TGEN_XPORT_ERR_PROXY_RECONN);
+                tgen_warning("connection from %s through socks proxy %s to %s failed: "
                         "proxy requested unsupported reconnection to %i:u",
-                        tgenpeer_toString(transport->peer), tgenpeer_toString(transport->proxy),
+                        tgenpeer_toString(transport->local), tgenpeer_toString(transport->proxy), tgenpeer_toString(transport->remote),
                         (gint)socksBindAddress, (guint)ntohs(socksBindPort));
             }
         } else if (buffer[3] == 0x03) {
@@ -371,31 +568,33 @@ static TGenEvent _tgentransport_receiveSocksResponse(TGenTransport* transport) {
 
             /* reconnect not supported */
             if(!g_ascii_strncasecmp(namebuf, "\0", (gsize) 1) && socksBindPort == 0) {
-                tgen_info("connection to %s through socks proxy %s successful",
-                        tgenpeer_toString(transport->peer), tgenpeer_toString(transport->proxy));
+                tgen_info("connection from %s through socks proxy %s to %s successful",
+                        tgenpeer_toString(transport->local), tgenpeer_toString(transport->proxy), tgenpeer_toString(transport->remote));
 
-                transport->proxyState = PROXY_SUCCESS;
+                _tgentransport_changeState(transport, TGEN_XPORT_SUCCESS);
                 return TGEN_EVENT_DONE;
             } else {
-                tgen_warning("connection to %s through socks proxy %s failed: "
+                _tgentransport_changeError(transport, TGEN_XPORT_ERR_PROXY_RECONN);
+                tgen_warning("connection from %s through socks proxy %s to %s failed: "
                         "proxy requested unsupported reconnection to %s:u",
-                        tgenpeer_toString(transport->peer), tgenpeer_toString(transport->proxy),
+                        tgenpeer_toString(transport->local), tgenpeer_toString(transport->proxy), tgenpeer_toString(transport->remote),
                         namebuf, (guint)ntohs(socksBindPort));
             }
         } else {
-            tgen_warning("connection to %s through socks proxy %s failed: unsupported address type %i",
-                    tgenpeer_toString(transport->peer), tgenpeer_toString(transport->proxy),
+            _tgentransport_changeError(transport, TGEN_XPORT_ERR_PROXY_ADDR);
+            tgen_warning("connection from %s through socks proxy %s to %s failed: unsupported address type %i",
+                    tgenpeer_toString(transport->local), tgenpeer_toString(transport->proxy), tgenpeer_toString(transport->remote),
                     (gint)buffer[3]);
         }
     } else {
-        tgen_warning("connection to %s through socks proxy %s failed: unsupported %s %i",
-                tgenpeer_toString(transport->peer), tgenpeer_toString(transport->proxy),
+        _tgentransport_changeError(transport, (buffer[0] != 0x05) ? TGEN_XPORT_ERR_PROXY_VERSION : TGEN_XPORT_ERR_PROXY_STATUS);
+        tgen_warning("connection from %s through socks proxy %s to %s failed: unsupported %s %i",
+                tgenpeer_toString(transport->local), tgenpeer_toString(transport->proxy), tgenpeer_toString(transport->remote),
                 (buffer[0] != 0x05) ? "version" : "status",
                 (buffer[0] != 0x05) ? (gint)buffer[0] : (gint)buffer[1]);
     }
 
-
-    transport->proxyState = PROXY_ERROR;
+    _tgentransport_changeState(transport, TGEN_XPORT_ERROR);
     return TGEN_EVENT_NONE;
 }
 
@@ -405,8 +604,27 @@ TGenEvent tgentransport_onEvent(TGenTransport* transport, TGenEvent events) {
         return TGEN_EVENT_NONE;
     }
 
-    switch(transport->proxyState) {
-    case PROXY_INIT: {
+    switch(transport->state) {
+    case TGEN_XPORT_CONNECT: {
+        if(!(events & TGEN_EVENT_WRITE)) {
+            return TGEN_EVENT_WRITE;
+        } else {
+            /* we are now connected and can send the socks init */
+            transport->time.socketConnect = g_get_monotonic_time();
+            if(transport->proxy) {
+                /* continue with SOCKS handshake next */
+                _tgentransport_changeState(transport, TGEN_XPORT_PROXY_INIT);
+                /* process the next step */
+                return tgentransport_onEvent(transport, events);
+            } else {
+                /* no proxy, this is a direct connection, we are all done */
+                _tgentransport_changeState(transport, TGEN_XPORT_SUCCESS);
+                return TGEN_EVENT_DONE;
+            }
+        }
+    }
+
+    case TGEN_XPORT_PROXY_INIT: {
         if(!(events & TGEN_EVENT_WRITE)) {
             return TGEN_EVENT_WRITE;
         } else {
@@ -414,7 +632,7 @@ TGenEvent tgentransport_onEvent(TGenTransport* transport, TGenEvent events) {
         }
     }
 
-    case PROXY_CHOICE: {
+    case TGEN_XPORT_PROXY_CHOICE: {
         if(!(events & TGEN_EVENT_READ)) {
             return TGEN_EVENT_READ;
         } else {
@@ -422,7 +640,7 @@ TGenEvent tgentransport_onEvent(TGenTransport* transport, TGenEvent events) {
         }
     }
 
-    case PROXY_REQUEST: {
+    case TGEN_XPORT_PROXY_REQUEST: {
         if(!(events & TGEN_EVENT_WRITE)) {
             return TGEN_EVENT_WRITE;
         } else {
@@ -430,7 +648,7 @@ TGenEvent tgentransport_onEvent(TGenTransport* transport, TGenEvent events) {
         }
     }
 
-    case PROXY_RESPONSE: {
+    case TGEN_XPORT_PROXY_RESPONSE: {
         if(!(events & TGEN_EVENT_READ)) {
             return TGEN_EVENT_READ;
         } else {
@@ -438,11 +656,11 @@ TGenEvent tgentransport_onEvent(TGenTransport* transport, TGenEvent events) {
         }
     }
 
-    case PROXY_SUCCESS: {
+    case TGEN_XPORT_SUCCESS: {
         return TGEN_EVENT_DONE;
     }
 
-    case PROXY_ERROR:
+    case TGEN_XPORT_ERROR:
     default: {
         return TGEN_EVENT_NONE;
     }

@@ -53,6 +53,12 @@ struct _Slave {
     /* the last time we logged heartbeat information */
     SimulationTime simClockLastHeartbeat;
 
+    guint numPluginErrors;
+
+    gchar* cwdPath;
+    gchar* dataPath;
+    gchar* hostsPath;
+
     MAGIC_DECLARE;
 };
 
@@ -106,11 +112,28 @@ Slave* slave_new(Master* master, Configuration* config, guint randomSeed) {
     slave->nWorkers = (guint) configuration_getNWorkerThreads(config);
     slave->mainThreadWorker = worker_new(slave);
 
+    slave->cwdPath = g_get_current_dir();
+    slave->dataPath = g_build_filename(slave->cwdPath, "shadow.data", NULL);
+    slave->hostsPath = g_build_filename(slave->dataPath, "hosts", NULL);
+
+    if(g_file_test(slave->dataPath, G_FILE_TEST_EXISTS)) {
+        gboolean success = utility_removeAll(slave->dataPath);
+        utility_assert(success);
+    }
+
+    gchar* templateDataPath = g_build_filename(slave->cwdPath, "shadow.data.template", NULL);
+    if(g_file_test(templateDataPath, G_FILE_TEST_EXISTS)) {
+        gboolean success = utility_copyAll(templateDataPath, slave->dataPath);
+        utility_assert(success);
+    }
+    g_free(templateDataPath);
+
     return slave;
 }
 
-void slave_free(Slave* slave) {
+gint slave_free(Slave* slave) {
     MAGIC_ASSERT(slave);
+    gint returnCode = (slave->numPluginErrors > 0) ? -1 : 0;
 
     /* this launches delete on all the plugins and should be called before
      * the engine is marked "killed" and workers are destroyed.
@@ -135,11 +158,23 @@ void slave_free(Slave* slave) {
     /* join and free spawned worker threads */
 //TODO
 
+    if(slave->cwdPath) {
+        g_free(slave->cwdPath);
+    }
+    if(slave->dataPath) {
+        g_free(slave->dataPath);
+    }
+    if(slave->hostsPath) {
+        g_free(slave->hostsPath);
+    }
+
     /* free main worker */
     worker_free(slave->mainThreadWorker);
 
     MAGIC_CLEAR(slave);
     g_free(slave);
+
+    return returnCode;
 }
 
 gboolean slave_isForced(Slave* slave) {
@@ -462,4 +497,14 @@ void slave_runSerial(Slave* slave) {
     w.hosts = _slave_getAllHosts(slave);
     worker_runSerial(&w);
     g_list_free(w.hosts);
+}
+
+void slave_incrementPluginError(Slave* slave) {
+    MAGIC_ASSERT(slave);
+    slave->numPluginErrors++;
+}
+
+const gchar* slave_getHostsRootPath(Slave* slave) {
+    MAGIC_ASSERT(slave);
+    return slave->hostsPath;
 }

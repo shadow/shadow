@@ -40,6 +40,9 @@ struct _Host {
     GQueue* availableDescriptors;
     gint descriptorHandleCounter;
 
+    /* virtual process id counter */
+    guint processIDCounter;
+
     /* all file, socket, and epoll descriptors we know about and track */
     GHashTable* descriptors;
     guint64 receiveBufferSize;
@@ -66,6 +69,7 @@ struct _Host {
     /* random stream */
     Random* random;
 
+    gchar* dataDirPath;
     MAGIC_DECLARE;
 };
 
@@ -76,7 +80,7 @@ Host* host_new(GQuark id, gchar* hostname, gchar* ipHint, gchar* geocodeHint, gc
         GLogLevelFlags logLevel, gboolean logPcap, gchar* pcapDir, gchar* qdisc,
         guint64 receiveBufferSize, gboolean autotuneReceiveBuffer,
         guint64 sendBufferSize, gboolean autotuneSendBuffer,
-        guint64 interfaceReceiveLength) {
+        guint64 interfaceReceiveLength, const gchar* rootDataPath) {
     Host* host = g_new0(Host, 1);
     MAGIC_INIT(host);
 
@@ -152,6 +156,9 @@ Host* host_new(GQuark id, gchar* hostname, gchar* ipHint, gchar* geocodeHint, gc
             bwUpKiBps, bwDownKiBps, sendBufferSize, receiveBufferSize,
             cpuFrequency, cpuThreshold, cpuPrecision, nodeSeed);
 
+    host->dataDirPath = g_build_filename(rootDataPath, host->name, NULL);
+    g_mkdir_with_parents(host->dataDirPath, 0775);
+    host->processIDCounter = 1000;
     return host;
 }
 
@@ -195,6 +202,10 @@ void host_free(Host* host, gpointer userData) {
 
     g_mutex_clear(&(host->lock));
 
+    if(host->dataDirPath) {
+        g_free(host->dataDirPath);
+    }
+
     MAGIC_CLEAR(host);
     g_free(host);
 }
@@ -217,7 +228,9 @@ EventQueue* host_getEvents(Host* host) {
 void host_addApplication(Host* host, GQuark pluginID,
         SimulationTime startTime, SimulationTime stopTime, gchar* arguments) {
     MAGIC_ASSERT(host);
-    Process* application = process_new(pluginID, startTime, stopTime, arguments);
+
+    guint processID = host->processIDCounter++;
+    Process* application = process_new(host, pluginID, processID, startTime, stopTime, arguments);
     g_queue_push_tail(host->applications, application);
 
     StartApplicationEvent* event = startapplication_new(application);
@@ -243,7 +256,7 @@ void host_freeAllApplications(Host* host) {
     MAGIC_ASSERT(host);
     debug("start freeing applications for host '%s'", host->name);
     while(!g_queue_is_empty(host->applications)) {
-        process_free(g_queue_pop_head(host->applications));
+        process_unref(g_queue_pop_head(host->applications));
     }
     debug("done freeing application for host '%s'", host->name);
 }
@@ -532,9 +545,13 @@ gint host_createDescriptor(Host* host, DescriptorType type) {
             gint linkedHandle = _host_getNextDescriptorHandle(host);
 
             /* each channel is readable and writable */
-            descriptor = (Descriptor*) channel_new(handle, linkedHandle, CT_NONE);
-            Descriptor* linked = (Descriptor*) channel_new(linkedHandle, handle, CT_NONE);
-            _host_monitorDescriptor(host, linked);
+            Channel* channel = channel_new(handle, CT_NONE);
+            Channel* linked = channel_new(linkedHandle, CT_NONE);
+            channel_setLinkedChannel(channel, linked);
+            channel_setLinkedChannel(linked, channel);
+
+            _host_monitorDescriptor(host, (Descriptor*)linked);
+            descriptor = (Descriptor*) channel;
 
             break;
         }
@@ -544,22 +561,27 @@ gint host_createDescriptor(Host* host, DescriptorType type) {
             gint linkedHandle = _host_getNextDescriptorHandle(host);
 
             /* one side is readonly, the other is writeonly */
-            descriptor = (Descriptor*) channel_new(handle, linkedHandle, CT_READONLY);
-            Descriptor* linked = (Descriptor*) channel_new(linkedHandle, handle, CT_WRITEONLY);
-            _host_monitorDescriptor(host, linked);
+            Channel* channel = channel_new(handle, CT_READONLY);
+            Channel* linked = channel_new(linkedHandle, CT_WRITEONLY);
+            channel_setLinkedChannel(channel, linked);
+            channel_setLinkedChannel(linked, channel);
+
+            _host_monitorDescriptor(host, (Descriptor*)linked);
+            descriptor = (Descriptor*) channel;
 
             break;
         }
 
         case DT_TIMER: {
             gint handle = _host_getNextDescriptorHandle(host);
-            descriptor = (Descriptor*) timer_new(handle, CLOCK_MONOTONIC, TFD_NONBLOCK);
+            descriptor = (Descriptor*) timer_new(handle, CLOCK_MONOTONIC, 0);
             break;
         }
 
         default: {
             warning("unknown descriptor type: %i", (gint)type);
-            return EINVAL;
+            errno = EINVAL;
+            return -1;
         }
     }
 
@@ -599,13 +621,7 @@ gint host_epollControl(Host* host, gint epollDescriptor, gint operation,
     if(!host_isShadowDescriptor(host, fileDescriptor)) {
         gint osfd = host_getOSHandle(host, fileDescriptor);
         osfd = osfd >= 0 ? osfd : fileDescriptor;
-
-        gint oldEventFD = event->data.fd;
-        event->data.fd = osfd;
-        gint result = epoll_controlOS(epoll, operation, osfd, event);
-        event->data.fd = oldEventFD;
-
-        return result;
+        return epoll_controlOS(epoll, operation, osfd, event);
     }
 
     /* EBADF  fd is not a valid shadow file descriptor. */
@@ -621,7 +637,6 @@ gint host_epollControl(Host* host, gint epollDescriptor, gint operation,
     }
 
     return epoll_control(epoll, operation, descriptor, event);
-
 }
 
 gint host_epollGetEvents(Host* host, gint handle,
@@ -648,15 +663,176 @@ gint host_epollGetEvents(Host* host, gint handle,
     Epoll* epoll = (Epoll*) descriptor;
     gint ret = epoll_getEvents(epoll, eventArray, eventArrayLength, nEvents);
 
-    for(gint i = 0; i < *nEvents; i++) {
-        if(!host_isShadowDescriptor(host, eventArray[i].data.fd)) {
-            /* the fd is a file that the OS handled for us, translate to shadow fd */
-            eventArray[i].data.fd = host_getShadowHandle(host, eventArray[i].data.fd);
-            utility_assert(eventArray[i].data.fd >= 0);
+    /* i think data is a user-only struct, and a union - which may not have fd set
+     * so lets just leave it alone */
+//    for(gint i = 0; i < *nEvents; i++) {
+//        if(!host_isShadowDescriptor(host, eventArray[i].data.fd)) {
+//            /* the fd is a file that the OS handled for us, translate to shadow fd */
+//            gint shadowHandle = host_getShadowHandle(host, eventArray[i].data.fd);
+//            utility_assert(shadowHandle >= 0);
+//            eventArray[i].data.fd = shadowHandle;
+//        }
+//    }
+
+    return ret;
+}
+
+gint host_select(Host* host, fd_set* readable, fd_set* writeable, fd_set* erroneous) {
+    MAGIC_ASSERT(host);
+
+    /* if they dont want readability or writeability, then we have nothing to do */
+    if(readable == NULL && writeable == NULL) {
+        if(erroneous != NULL) {
+            FD_ZERO(erroneous);
+        }
+        return 0;
+    }
+
+    GQueue* readyDescsRead = g_queue_new();
+    GQueue* readyDescsWrite = g_queue_new();
+
+    /* first look at shadow internal descriptors */
+    GList* descs = g_hash_table_get_values(host->descriptors);
+    GList* item = g_list_first(descs);
+
+    /* iterate all descriptors */
+    while(item) {
+        Descriptor* desc = item->data;
+        if(desc) {
+            DescriptorStatus status = descriptor_getStatus(desc);
+            if((readable != NULL) && FD_ISSET(desc->handle, readable) && (status & DS_ACTIVE) && (status & DS_READABLE)) {
+                g_queue_push_head(readyDescsRead, GINT_TO_POINTER(desc->handle));
+            }
+            if((writeable != NULL) && FD_ISSET(desc->handle, writeable) && (status & DS_ACTIVE) && (status & DS_WRITABLE)) {
+                g_queue_push_head(readyDescsWrite, GINT_TO_POINTER(desc->handle));
+            }
+        }
+        item = g_list_next(item);
+    }
+    /* cleanup the iterator lists */
+    g_list_free(descs);
+    item = descs = NULL;
+
+    /* now check on OS descriptors */
+    struct timeval zeroTimeout;
+    zeroTimeout.tv_sec = 0;
+    zeroTimeout.tv_usec = 0;
+    fd_set osFDSet;
+
+    /* setup our iterator */
+    GHashTableIter iter;
+    gpointer key, value;
+    g_hash_table_iter_init(&iter, host->shadowToOSHandleMap);
+
+    /* iterate all os handles and ask the os for events */
+    while (g_hash_table_iter_next(&iter, &key, &value)) {
+        gint shadowHandle = GPOINTER_TO_INT(key);
+        gint osHandle = GPOINTER_TO_INT(value);
+
+        if ((readable != NULL) && FD_ISSET(shadowHandle, readable)) {
+            FD_ZERO(&osFDSet);
+            FD_SET(osHandle, &osFDSet);
+            select(osHandle+1, &osFDSet, NULL, NULL, &zeroTimeout);
+            if (FD_ISSET(osHandle, &osFDSet)) {
+                g_queue_push_head(readyDescsRead, GINT_TO_POINTER(shadowHandle));
+            }
+        }
+        if ((writeable != NULL) && FD_ISSET(shadowHandle, writeable)) {
+            FD_ZERO(&osFDSet);
+            FD_SET(osHandle, &osFDSet);
+            select(osHandle+1, NULL, &osFDSet, NULL, &zeroTimeout);
+            if (FD_ISSET(osHandle, &osFDSet)) {
+                g_queue_push_head(readyDescsWrite, GINT_TO_POINTER(shadowHandle));
+            }
         }
     }
 
-    return ret;
+    /* now prepare and return the response, start with empty sets */
+    if(readable != NULL) {
+        FD_ZERO(readable);
+    }
+    if(writeable != NULL) {
+        FD_ZERO(writeable);
+    }
+    if(erroneous != NULL) {
+        FD_ZERO(erroneous);
+    }
+    gint nReady = 0;
+
+    /* mark all of the readable handles */
+    if(readable != NULL) {
+        while(!g_queue_is_empty(readyDescsRead)) {
+            gint handle = GPOINTER_TO_INT(g_queue_pop_head(readyDescsRead));
+            FD_SET(handle, readable);
+            nReady++;
+        }
+    }
+    /* cleanup */
+    g_queue_free(readyDescsRead);
+
+    /* mark all of the writeable handles */
+    if(writeable != NULL) {
+        while(!g_queue_is_empty(readyDescsWrite)) {
+            gint handle = GPOINTER_TO_INT(g_queue_pop_head(readyDescsWrite));
+            FD_SET(handle, writeable);
+            nReady++;
+        }
+    }
+    /* cleanup */
+    g_queue_free(readyDescsWrite);
+
+    /* return the total number of bits that are set in all three fdsets */
+    return nReady;
+}
+
+gint host_poll(Host* host, struct pollfd *pollFDs, nfds_t numPollFDs) {
+    MAGIC_ASSERT(host);
+
+    gint numReady = 0;
+
+    for(nfds_t i = 0; i < numPollFDs; i++) {
+        struct pollfd* pfd = &pollFDs[i];
+        pfd->revents = 0;
+
+        if(pfd->fd == -1) {
+            continue;
+        }
+
+        if(host_isShadowDescriptor(host, pfd->fd)){
+            /* descriptor lookup is not NULL */
+            Descriptor* descriptor = host_lookupDescriptor(host, pfd->fd);
+            DescriptorStatus status = descriptor_getStatus(descriptor);
+            if(status & DS_CLOSED) {
+                pfd->revents |= POLLNVAL;
+            }
+
+            if(pfd->events != 0) {
+                if((pfd->events & POLLIN) && (status & DS_ACTIVE) && (status & DS_READABLE)) {
+                    pfd->revents |= POLLIN;
+                }
+                if((pfd->events & POLLOUT) && (status & DS_ACTIVE) && (status & DS_WRITABLE)) {
+                    pfd->revents |= POLLOUT;
+                }
+            }
+        } else {
+            /* check if we have a mapped os fd */
+            gint osfd = host_getOSHandle(host, pfd->fd);
+            if(osfd >= 0) {
+                /* ask the OS, but dont let them block */
+                gint oldfd = pfd->fd;
+                pfd->fd = osfd;
+                gint rc = poll(pfd, (nfds_t)1, 0);
+                pfd->fd = oldfd;
+                if(rc < 0) {
+                    return -1;
+                }
+            }
+        }
+
+        numReady += (pfd->revents == 0) ? 0 : 1;
+    }
+
+    return numReady;
 }
 
 static gboolean _host_doesInterfaceExist(Host* host, in_addr_t interfaceIP) {
@@ -868,13 +1044,6 @@ gint host_connectToPeer(Host* host, gint handle, const struct sockaddr* address)
 
     if(!socket_isFamilySupported(socket, family)) {
         return EAFNOSUPPORT;
-    }
-
-    if(type == DT_TCPSOCKET) {
-        gint error = tcp_getConnectError((TCP*)socket);
-        if(error) {
-            return error;
-        }
     }
 
     if (address->sa_family == AF_UNIX) {
@@ -1234,4 +1403,9 @@ gchar host_isLoggingPcap(Host *host) {
 gdouble host_getNextPacketPriority(Host* host) {
     MAGIC_ASSERT(host);
     return ++(host->packetPriorityCounter);
+}
+
+const gchar* host_getDataPath(Host* host) {
+    MAGIC_ASSERT(host);
+    return host->dataDirPath;
 }

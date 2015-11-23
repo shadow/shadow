@@ -9,12 +9,13 @@
 
 #include <glib.h>
 #include <gmodule.h>
-#include <igraph/igraph.h>
+#include <igraph.h>
 
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
+#include <poll.h>
 #include <sys/un.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -52,7 +53,6 @@ typedef struct _Process Process;
  * place base classes with few dependencies first.
  */
 
-#include "plugin/shadow-plugin-interface.h"
 #include "engine/shd-main.h"
 
 /* configuration, base runnables, and input parsing */
@@ -96,7 +96,6 @@ typedef struct _Process Process;
 #include "host/descriptor/shd-tcp-scoreboard.h"
 #include "host/descriptor/shd-udp.h"
 #include "host/shd-program.h"
-#include "host/shd-thread.h"
 #include "host/shd-process.h"
 #include "host/shd-network-interface.h"
 #include "host/shd-tracker.h"

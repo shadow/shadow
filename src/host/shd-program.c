@@ -9,6 +9,19 @@
 
 #include "shadow.h"
 
+/**
+ * We call this function to run the plugin executable. A symbol with this name
+ * must exist or the dlsym lookup will fail.
+ */
+#define PLUGIN_MAIN_SYMBOL "main"
+
+/**
+ * Global symbols added after using LLVM to automatically extract variable state
+ */
+#define PLUGIN_GLOBALS_SYMBOL "__hoisted_globals"
+#define PLUGIN_GLOBALS_SIZE_SYMBOL "__hoisted_globals_size"
+#define PLUGIN_GLOBALS_POINTER_SYMBOL "__hoisted_globals_pointer"
+
 struct _Program {
     GQuark id;
 
@@ -17,18 +30,13 @@ struct _Program {
     GModule* handle;
     gboolean isTemporary;
 
-    ShadowPluginInitializeFunc init;
-
-    PluginNewInstanceFunc new;
-    PluginNotifyFunc free;
-    PluginNotifyFunc notify;
+    PluginMainFunc main;
 
     gsize residentStateSize;
     gpointer residentStatePointer;
     gpointer residentState;
     ProgramState defaultState;
 
-    gboolean isRegisterred;
     /*
      * TRUE from when we've called into plug-in code until the call completes.
      * Note that the plug-in may get back into shadow code during execution, by
@@ -122,57 +130,63 @@ Program* program_new(const gchar* name, const gchar* path) {
     }
 
     /* make sure it has the required init function */
-    gpointer initFunc = NULL;
+    gpointer mainFunc = NULL;
     gpointer hoistedGlobals = NULL;
     gpointer hoistedGlobalsSize = NULL;
     gpointer hoistedGlobalsPointer = NULL;
     gboolean success = FALSE;
 
-    success = g_module_symbol(prog->handle, PLUGININITSYMBOL, &initFunc);
+    success = g_module_symbol(prog->handle, PLUGIN_MAIN_SYMBOL, &mainFunc);
     if(success) {
-        prog->init = initFunc;
-        message("found '%s' at %p", PLUGININITSYMBOL, initFunc);
+        prog->main = mainFunc;
+        message("found '%s' at %p", PLUGIN_MAIN_SYMBOL, mainFunc);
     } else {
         const gchar* errorMessage = g_module_error();
         critical("g_module_symbol() failed: %s", errorMessage);
         error("unable to find the required function symbol '%s' in plug-in '%s'",
-                PLUGININITSYMBOL, path);
+                PLUGIN_MAIN_SYMBOL, path);
     }
 
-    success = g_module_symbol(prog->handle, PLUGINGLOBALSSYMBOL, &hoistedGlobals);
+    success = g_module_symbol(prog->handle, PLUGIN_GLOBALS_SYMBOL, &hoistedGlobals);
     if(success) {
         prog->residentState = hoistedGlobals;
-        message("found '%s' at %p", PLUGINGLOBALSSYMBOL, hoistedGlobals);
+        message("found '%s' at %p", PLUGIN_GLOBALS_SYMBOL, hoistedGlobals);
     } else {
         const gchar* errorMessage = g_module_error();
         critical("g_module_symbol() failed: %s", errorMessage);
         error("unable to find the required merged globals struct symbol '%s' in plug-in '%s'",
-                PLUGINGLOBALSSYMBOL, path);
+                PLUGIN_GLOBALS_SYMBOL, path);
     }
 
-    success = g_module_symbol(prog->handle, PLUGINGLOBALSPOINTERSYMBOL, &hoistedGlobalsPointer);
+    success = g_module_symbol(prog->handle, PLUGIN_GLOBALS_POINTER_SYMBOL, &hoistedGlobalsPointer);
     if(success) {
         prog->residentStatePointer = hoistedGlobalsPointer;
-        message("found '%s' at %p", PLUGINGLOBALSPOINTERSYMBOL, hoistedGlobalsPointer);
+        message("found '%s' at %p", PLUGIN_GLOBALS_POINTER_SYMBOL, hoistedGlobalsPointer);
     } else {
         const gchar* errorMessage = g_module_error();
         critical("g_module_symbol() failed: %s", errorMessage);
         error("unable to find the required merged globals struct symbol '%s' in plug-in '%s'",
-                PLUGINGLOBALSPOINTERSYMBOL, path);
+                PLUGIN_GLOBALS_POINTER_SYMBOL, path);
     }
 
-    success = g_module_symbol(prog->handle, PLUGINGLOBALSSIZESYMBOL, &hoistedGlobalsSize);
+    success = g_module_symbol(prog->handle, PLUGIN_GLOBALS_SIZE_SYMBOL, &hoistedGlobalsSize);
     if(success) {
         utility_assert(hoistedGlobalsSize);
         gint s = *((gint*) hoistedGlobalsSize);
         prog->residentStateSize = (gsize) s;
-        message("found '%s' of value '%i' at %p", PLUGINGLOBALSSIZESYMBOL, s, hoistedGlobalsSize);
+        message("found '%s' of value '%i' at %p", PLUGIN_GLOBALS_SIZE_SYMBOL, s, hoistedGlobalsSize);
     } else {
         const gchar* errorMessage = g_module_error();
         critical("g_module_symbol() failed: %s", errorMessage);
         error("unable to find the required merged globals struct symbol '%s' in plug-in '%s'",
-                PLUGINGLOBALSSIZESYMBOL, path);
+                PLUGIN_GLOBALS_SIZE_SYMBOL, path);
     }
+
+    /* finally, store a copy of the defaults as they exist now */
+    debug("copying resident plugin memory contents at %p-%p (%"G_GSIZE_FORMAT" bytes) as default start state",
+            prog->residentState, prog->residentState+prog->residentStateSize, prog->residentStateSize);
+    prog->defaultState = g_slice_copy(prog->residentStateSize, prog->residentState);
+    debug("stored default state at %p", prog->defaultState);
 
     return prog;
 }
@@ -233,30 +247,6 @@ Program* program_getTemporaryCopy(Program* prog) {
     return progCopy;
 }
 
-void program_registerResidentState(Program* prog, PluginNewInstanceFunc new, PluginNotifyFunc free, PluginNotifyFunc notify) {
-    MAGIC_ASSERT(prog);
-    if(prog->isRegisterred) {
-        warning("ignoring duplicate state registration");
-        return;
-    }
-
-    utility_assert(new && free && notify);
-
-    /* store the pointers to the callbacks the plugin wants us to call */
-    prog->new = new;
-    prog->free = free;
-    prog->notify = notify;
-
-    /* also store a copy of the defaults as they exist now */
-    debug("copying resident plugin memory contents at %p-%p (%"G_GSIZE_FORMAT" bytes) as default start state",
-            prog->residentState, prog->residentState+prog->residentStateSize, prog->residentStateSize);
-    prog->defaultState = g_slice_copy(prog->residentStateSize, prog->residentState);
-    debug("stored default state at %p", prog->defaultState);
-
-    /* dont change our resident state or defaults */
-    prog->isRegisterred = TRUE;
-}
-
 void program_swapInState(Program* prog, ProgramState state) {
     MAGIC_ASSERT(prog);
     utility_assert(!prog->isExecuting);
@@ -283,24 +273,9 @@ void program_swapOutState(Program* prog, ProgramState state) {
     g_memmove(state, prog->residentState, prog->residentStateSize);
 }
 
-ShadowPluginInitializeFunc program_getInitFunc(Program* prog) {
+PluginMainFunc program_getMainFunc(Program* prog) {
     MAGIC_ASSERT(prog);
-    return prog->init;
-}
-
-PluginNewInstanceFunc program_getNewFunc(Program* prog) {
-    MAGIC_ASSERT(prog);
-    return prog->new;
-}
-
-PluginNotifyFunc program_getFreeFunc(Program* prog) {
-    MAGIC_ASSERT(prog);
-    return prog->free;
-}
-
-PluginNotifyFunc program_getNotifyFunc(Program* prog) {
-    MAGIC_ASSERT(prog);
-    return prog->notify;
+    return prog->main;
 }
 
 ProgramState program_newDefaultState(Program* prog) {
@@ -318,12 +293,12 @@ GQuark* program_getID(Program* prog) {
     return &(prog->id);
 }
 
-gboolean program_isRegistered(Program* prog) {
-    MAGIC_ASSERT(prog);
-    return prog->isRegisterred;
-}
-
 const gchar* program_getName(Program* prog) {
     MAGIC_ASSERT(prog);
     return prog->name->str;
+}
+
+const gchar* program_getPath(Program* prog) {
+    MAGIC_ASSERT(prog);
+    return prog->path->str;
 }

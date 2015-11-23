@@ -32,6 +32,7 @@ enum TCPFlags {
     TCPF_EOF_SIGNALED = 1 << 2,
     TCPF_RESET_SIGNALED = 1 << 3,
     TCPF_WAS_ESTABLISHED = 1 << 4,
+    TCPF_CONNECT_SIGNALED = 1 << 5,
 };
 
 enum TCPError {
@@ -104,6 +105,7 @@ struct _TCP {
         guint32 lastWindow;
         guint32 lastAcknowledgment;
         guint32 lastSequence;
+        gboolean windowUpdatePending;
         GList* lastSelectiveACKs;
     } receive;
 
@@ -1048,7 +1050,7 @@ void tcp_retransmitTimerExpired(TCP* tcp) {
     /* update the scoreboard by marking this as lost */
     scoreboard_markLoss(tcp->retransmit.scoreboard, tcp->receive.lastAcknowledgment, tcp->send.highestSequence);
 
-    congestionlog(tcp->congestion, "[CONG-LOSS] cwnd=%d ssthresh=%d rtt=%d sndbufsize=%d sndbuflen=%d rcvbufsize=%d rcbuflen=%d retrans=%d ploss=%f", 
+    debug("[CONG-LOSS] cwnd=%d ssthresh=%d rtt=%d sndbufsize=%d sndbuflen=%d rcvbufsize=%d rcbuflen=%d retrans=%d ploss=%f",
             tcp->congestion->window, tcp->congestion->threshold, tcp->congestion->rttSmoothed, 
             tcp->super.outputBufferLength, tcp->super.outputBufferSize, tcp->super.inputBufferLength, tcp->super.inputBufferSize, 
             tcp->info.retransmitCount, (float)tcp->info.retransmitCount / tcp->send.packetsSent);
@@ -1094,7 +1096,6 @@ gint tcp_getConnectError(TCP* tcp) {
          */
         return EISCONN;
     }
-
     return 0;
 }
 
@@ -1165,6 +1166,17 @@ void tcp_getInfo(TCP* tcp, struct tcp_info *tcpinfo) {
 
 gint tcp_connectToPeer(TCP* tcp, in_addr_t ip, in_port_t port, sa_family_t family) {
     MAGIC_ASSERT(tcp);
+
+    gint error = tcp_getConnectError(tcp);
+    if(error == EISCONN && !(tcp->flags & TCPF_CONNECT_SIGNALED)) {
+        /* we need to signal that connect was successful  */
+        tcp->flags |= TCPF_CONNECT_SIGNALED;
+        return 0;
+    } else if(error) {
+        return error;
+    }
+
+    /* no error, so we need to do the connect */
 
     /* create the connection state */
     socket_setPeerName(&(tcp->super), ip, port);
@@ -1252,8 +1264,7 @@ gint tcp_acceptServerPeer(TCP* tcp, in_addr_t* ip, in_port_t* port, gint* accept
     }
 
     Tracker* tracker = host_getTracker(worker_getCurrentHost());
-    Descriptor* descriptor = (Descriptor *)socket;
-    tracker_updateSocketPeer(tracker, *acceptedHandle, *ip, ntohs(*port));
+    tracker_updateSocketPeer(tracker, *acceptedHandle, *ip, ntohs(tcpChild->super.peerPort));
 
     return 0;
 }
@@ -1433,7 +1444,7 @@ static void _tcp_logCongestionInfo(TCP* tcp) {
     gsize inLength = socket_getInputBufferLength(&tcp->super);
     double ploss = (double) (tcp->info.retransmitCount / tcp->send.packetsSent);
 
-    congestionlog(tcp->congestion, "[CONG-AVOID] cwnd=%d ssthresh=%d rtt=%d "
+    debug("[CONG-AVOID] cwnd=%d ssthresh=%d rtt=%d "
             "sndbufsize=%"G_GSIZE_FORMAT" sndbuflen=%"G_GSIZE_FORMAT" rcvbufsize=%"G_GSIZE_FORMAT" rcbuflen=%"G_GSIZE_FORMAT" "
             "retrans=%"G_GSIZE_FORMAT" ploss=%f",
             tcp->congestion->window, tcp->congestion->threshold, tcp->congestion->rttSmoothed,
@@ -1814,6 +1825,21 @@ gssize tcp_sendUserData(TCP* tcp, gconstpointer buffer, gsize nBytes, in_addr_t 
     return (gssize) (bytesCopied == 0 ? -1 : bytesCopied);
 }
 
+static void _tcp_sendWindowUpdate(TCP* tcp, gpointer data) {
+    MAGIC_ASSERT(tcp);
+    debug("%s <-> %s: receive window opened, advertising the new "
+            "receive window %"G_GUINT32_FORMAT" as an ACK control packet",
+            tcp->super.boundString, tcp->super.peerString, tcp->receive.window);
+
+    // XXX we may be in trouble if this packet gets dropped
+    Packet* windowUpdate = _tcp_createPacket(tcp, PTCP_ACK, NULL, 0);
+    _tcp_bufferPacketOut(tcp, windowUpdate);
+    _tcp_flush(tcp);
+
+    tcp->receive.windowUpdatePending = FALSE;
+    descriptor_unref(&tcp->super.super.super);
+}
+
 gssize tcp_receiveUserData(TCP* tcp, gpointer buffer, gsize nBytes, in_addr_t* ip, in_port_t* port) {
     MAGIC_ASSERT(tcp);
 
@@ -1932,16 +1958,14 @@ gssize tcp_receiveUserData(TCP* tcp, gpointer buffer, gsize nBytes, in_addr_t* i
     /* if we have advertised a 0 window because the application wasn't reading,
      * we now have to update the window and let the sender know */
     _tcp_updateReceiveWindow(tcp);
-    if(tcp->receive.window > tcp->send.lastWindow) {
+    if(tcp->receive.window > tcp->send.lastWindow && !tcp->receive.windowUpdatePending) {
         /* our receive window just opened, make sure the sender knows it can
-         * send more. otherwise we get into a deadlock situation! */
-        info("%s <-> %s: receive window opened, advertising the new "
-                "receive window %"G_GUINT32_FORMAT" as an ACK control packet",
-                tcp->super.boundString, tcp->super.peerString, tcp->receive.window);
-        // XXX we may be in trouble if this packet gets dropped
-        Packet* windowUpdate = _tcp_createPacket(tcp, PTCP_ACK, NULL, 0);
-        _tcp_bufferPacketOut(tcp, windowUpdate);
-        _tcp_flush(tcp);
+         * send more. otherwise we get into a deadlock situation!
+         * make sure we don't send multiple events when read is called many times per instant */
+        descriptor_ref(&tcp->super.super.super);
+        CallbackEvent* event = callback_new((CallbackFunc)_tcp_sendWindowUpdate, tcp, NULL);
+        worker_scheduleEvent((Event*)event, (SimulationTime)1, 0);
+        tcp->receive.windowUpdatePending = TRUE;
     }
 
     debug("%s <-> %s: receiving %"G_GSIZE_FORMAT" user bytes", tcp->super.boundString, tcp->super.peerString, totalCopied);
@@ -1963,7 +1987,9 @@ void tcp_free(TCP* tcp) {
         MAGIC_ASSERT(tcp->child->parent->server);
 
         /* remove parents reference to child, if it exists */
-        g_hash_table_remove(tcp->child->parent->server->children, &(tcp->child->key));
+        if(tcp->child->parent->server->children) {
+            g_hash_table_remove(tcp->child->parent->server->children, &(tcp->child->key));
+        }
 
         _tcpchild_free(tcp->child);
     }
@@ -2021,6 +2047,9 @@ void tcp_close(TCP* tcp) {
     /* dont have to worry about space since this has no payload */
     _tcp_bufferPacketOut(tcp, packet);
     _tcp_flush(tcp);
+
+    /* the user closed the connection, so should never interact with the socket again */
+    descriptor_adjustStatus((Descriptor*)tcp, DS_ACTIVE, FALSE);
 }
 
 void tcp_closeTimerExpired(TCP* tcp) {

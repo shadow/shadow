@@ -74,7 +74,7 @@ TGenTimer* tgentimer_new(guint64 milliseconds, gboolean isPersistent,
     }
 
     /* create the timer descriptor */
-    int timerD = timerfd_create(CLOCK_MONOTONIC, O_NONBLOCK);
+    int timerD = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
 
     if (timerD < 0) {
         tgen_critical("timerfd_create(): returned %i error %i: %s", timerD, errno, g_strerror(errno));

@@ -32,9 +32,6 @@ gpointer worker_runSerial(WorkLoad* workload);
 void worker_scheduleEvent(Event* event, SimulationTime nano_delay, GQuark receiver_node_id);
 void worker_schedulePacket(Packet* packet);
 gboolean worker_isAlive();
-Host* worker_getCurrentHost();
-Thread* worker_getActiveThread();
-void worker_setActiveThread(Thread* thread);
 SimulationTime worker_getCurrentTime();
 guint worker_getRawCPUFrequency();
 gdouble worker_nextRandomDouble();
@@ -54,5 +51,13 @@ void worker_heartbeat();
 void worker_storeProgram(Program* prog);
 Program* worker_getProgram(GQuark pluginID);
 Program* worker_getPrivateProgram(GQuark pluginID);
+
+Host* worker_getCurrentHost();
+Process* worker_getActiveProcess();
+void worker_setActiveProcess(Process* proc);
+
+void worker_incrementPluginError();
+
+const gchar* worker_getHostsRootPath();
 
 #endif /* SHD_WORKER_H_ */

@@ -1,6 +1,7 @@
 /build
-.autotools
-.cproject
-.project
-.settings
 /Debug
+.autotools
+.project
+.cproject
+.pydevproject
+.settings

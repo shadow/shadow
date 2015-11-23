@@ -27,7 +27,7 @@ typedef struct _Slave Slave;
 Host* _slave_getHost(Slave* slave, GQuark hostID);
 void slave_addHost(Slave* slave, Host* host, guint hostID);
 Slave* slave_new(Master* master, Configuration* config, guint randomSeed);
-void slave_free(Slave* slave);
+gint slave_free(Slave* slave);
 gboolean slave_isForced(Slave* slave);
 guint slave_getRawCPUFrequency(Slave* slave);
 gint slave_nextRandomInt(Slave* slave);
@@ -56,5 +56,9 @@ void slave_runParallel(Slave* slave);
 void slave_runSerial(Slave* slave);
 void slave_storeProgram(Slave* slave, Program* prog);
 Program* slave_getProgram(Slave* slave, GQuark pluginID);
+
+void slave_incrementPluginError(Slave* slave);
+
+const gchar* slave_getHostsRootPath(Slave* slave);
 
 #endif /* SHD_SLAVE_H_ */

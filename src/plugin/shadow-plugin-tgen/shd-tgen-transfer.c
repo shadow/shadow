@@ -8,6 +8,7 @@
 
 /* 60 seconds default timeout */
 #define DEFAULT_XFER_TIMEOUT_USEC 60000000
+#define DEFAULT_XFER_STALLOUT_USEC 15000000
 
 typedef enum _TGenTransferState {
     TGEN_XFER_COMMAND, TGEN_XFER_RESPONSE,
@@ -27,14 +28,16 @@ struct _TGenTransfer {
     TGenEvent events;
     gchar* string;
     gint64 timeoutUSecs;
+    gint64 stalloutUSecs;
 
     /* command information */
-    gsize id;
+    gchar* id; // the unique vertex id from the graph
+    gsize count; // global transfer count
     TGenTransferType type;
     gsize size;
     gboolean isCommander;
-    gchar* name;
-    gsize remoteID;
+    gchar* hostname;
+    gsize remoteCount;
     gchar* remoteName;
 
     /* socket communication layer and buffers */
@@ -55,7 +58,7 @@ struct _TGenTransfer {
         gsize totalWrite;
     } bytes;
 
-    /* track timings for time reporting */
+    /* track timings for time reporting, using g_get_monotonic_time in usec granularity */
     struct {
         gint64 start;
         gint64 command;
@@ -150,9 +153,9 @@ static const gchar* _tgentransfer_toString(TGenTransfer* transfer) {
     if(!transfer->string) {
         GString* stringBuffer = g_string_new(NULL);
 
-        g_string_printf(stringBuffer, "(%"G_GSIZE_FORMAT"-%s-%s-%"G_GSIZE_FORMAT"-%s-%"G_GSIZE_FORMAT"-state=%s-error=%s)",
-                transfer->id, transfer->name, _tgentransfer_typeToString(transfer),
-                transfer->size, transfer->remoteName, transfer->remoteID,
+        g_string_printf(stringBuffer, "%s,%"G_GSIZE_FORMAT",%s,%s,%"G_GSIZE_FORMAT",%s,%"G_GSIZE_FORMAT",state=%s,error=%s",
+                transfer->id, transfer->count, transfer->hostname, _tgentransfer_typeToString(transfer),
+                transfer->size, transfer->remoteName, transfer->remoteCount,
                 _tgentransfer_stateToString(transfer->state), _tgentransfer_errorToString(transfer->error));
 
         transfer->string = g_string_free(stringBuffer, FALSE);
@@ -199,7 +202,7 @@ static gboolean _tgentransfer_getLine(TGenTransfer* transfer) {
     while(bytes > 0) {
         bytes = tgentransport_read(transfer->transport, &c, 1);
 
-        if(bytes < 0 && errno != EAGAIN) {
+        if(bytes < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
             _tgentransfer_changeState(transfer, TGEN_XFER_ERROR);
             _tgentransfer_changeError(transfer, TGEN_XFER_ERR_READ);
             tgen_critical("read(): transport %s transfer %s error %i: %s",
@@ -242,28 +245,32 @@ static void _tgentransfer_readCommand(TGenTransfer* transfer) {
             g_assert(!transfer->remoteName);
             transfer->remoteName = g_strdup(parts[0]);
 
-            transfer->remoteID = (gsize)g_ascii_strtoull(parts[1], NULL, 10);
-            if(transfer->remoteID == 0) {
-                tgen_critical("error parsing command ID '%s'", parts[1]);
+            /* we are not the commander so we should not have an id yet */
+            g_assert(transfer->id == NULL);
+            transfer->id = g_strdup(parts[1]);
+
+            transfer->remoteCount = (gsize)g_ascii_strtoull(parts[2], NULL, 10);
+            if(transfer->remoteCount == 0) {
+                tgen_critical("error parsing command ID '%s'", parts[2]);
                 hasError = TRUE;
             }
 
-            if(!g_ascii_strncasecmp(parts[2], "GET", 3)) {
+            if(!g_ascii_strncasecmp(parts[3], "GET", 3)) {
                 /* they are trying to GET, then we need to PUT to them */
                 transfer->type = TGEN_TYPE_PUT;
                 /* we read command, but now need to write payload */
                 transfer->events |= TGEN_EVENT_WRITE;
-            } else if(!g_ascii_strncasecmp(parts[2], "PUT", 3)) {
+            } else if(!g_ascii_strncasecmp(parts[3], "PUT", 3)) {
                 /* they want to PUT, so we will GET from them */
                 transfer->type = TGEN_TYPE_GET;
             } else {
-                tgen_critical("error parsing command type '%s'", parts[2]);
+                tgen_critical("error parsing command type '%s'", parts[3]);
                 hasError = TRUE;
             }
 
-            transfer->size = (gsize)g_ascii_strtoull(parts[3], NULL, 10);
+            transfer->size = (gsize)g_ascii_strtoull(parts[4], NULL, 10);
             if(transfer->size == 0) {
-                tgen_critical("error parsing command size '%s'", parts[3]);
+                tgen_critical("error parsing command size '%s'", parts[4]);
                 hasError = TRUE;
             }
         }
@@ -305,8 +312,8 @@ static void _tgentransfer_readResponse(TGenTransfer* transfer) {
             g_assert(!transfer->remoteName);
             transfer->remoteName = g_strdup(parts[0]);
 
-            transfer->remoteID = (gsize)g_ascii_strtoull(parts[1], NULL, 10);
-            if(transfer->remoteID == 0) {
+            transfer->remoteCount = (gsize)g_ascii_strtoull(parts[1], NULL, 10);
+            if(transfer->remoteCount == 0) {
                 tgen_critical("error parsing command ID '%s'", parts[1]);
                 hasError = TRUE;
             }
@@ -345,7 +352,7 @@ static void _tgentransfer_readPayload(TGenTransfer* transfer) {
             /* we need to read more payload */
             gssize bytes = tgentransport_read(transfer->transport, buffer, length);
 
-            if(bytes < 0 && errno != EAGAIN) {
+            if(bytes < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
                 _tgentransfer_changeState(transfer, TGEN_XFER_ERROR);
                 _tgentransfer_changeError(transfer, TGEN_XFER_ERR_READ);
                 tgen_critical("read(): transport %s transfer %s error %i: %s",
@@ -475,7 +482,7 @@ static gsize _tgentransfer_flushOut(TGenTransfer* transfer) {
     gsize length = transfer->writeBuffer->len - transfer->writeBufferOffset;
     gssize bytes = tgentransport_write(transfer->transport, position, length);
 
-    if(bytes < 0 && errno != EAGAIN) {
+    if(bytes < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
         _tgentransfer_changeState(transfer, TGEN_XFER_ERROR);
         _tgentransfer_changeError(transfer, TGEN_XFER_ERR_WRITE);
         tgen_critical("write(): transport %s transfer %s error %i: %s",
@@ -506,8 +513,8 @@ static void _tgentransfer_writeCommand(TGenTransfer* transfer) {
     /* buffer the command if we have not done that yet */
     if(!transfer->writeBuffer) {
         transfer->writeBuffer = g_string_new(NULL);
-        g_string_printf(transfer->writeBuffer, "%s %"G_GSIZE_FORMAT" %s %"G_GSIZE_FORMAT"\n",
-            transfer->name, transfer->id, _tgentransfer_typeToString(transfer), transfer->size);
+        g_string_printf(transfer->writeBuffer, "%s %s %"G_GSIZE_FORMAT" %s %"G_GSIZE_FORMAT"\n",
+            transfer->hostname, transfer->id, transfer->count, _tgentransfer_typeToString(transfer), transfer->size);
     }
 
     _tgentransfer_flushOut(transfer);
@@ -529,7 +536,7 @@ static void _tgentransfer_writeResponse(TGenTransfer* transfer) {
     if(!transfer->writeBuffer) {
         transfer->writeBuffer = g_string_new(NULL);
         g_string_printf(transfer->writeBuffer, "%s %"G_GSIZE_FORMAT"\n",
-                transfer->name, transfer->id);
+                transfer->hostname, transfer->count);
     }
 
     _tgentransfer_flushOut(transfer);
@@ -662,19 +669,29 @@ static gchar* _tgentransfer_getBytesStatusReport(TGenTransfer* transfer) {
 static gchar* _tgentransfer_getTimeStatusReport(TGenTransfer* transfer) {
     TGEN_ASSERT(transfer);
 
+    gchar* proxyTimeStr = tgentransport_getTimeStatusReport(transfer->transport);
+
+    gint64 command = (transfer->time.command > 0 && transfer->time.start > 0) ?
+            (transfer->time.command - transfer->time.start) : 0;
+    gint64 response = (transfer->time.response > 0 && transfer->time.start > 0) ?
+            (transfer->time.response - transfer->time.start) : 0;
+    gint64 firstPayloadByte = (transfer->time.firstPayloadByte > 0 && transfer->time.start > 0) ?
+            (transfer->time.firstPayloadByte - transfer->time.start) : 0;
+    gint64 lastPayloadByte = (transfer->time.lastPayloadByte > 0 && transfer->time.start > 0) ?
+            (transfer->time.lastPayloadByte - transfer->time.start) : 0;
+    gint64 checksum = (transfer->time.checksum > 0 && transfer->time.start > 0) ?
+            (transfer->time.checksum - transfer->time.start) : 0;
+
     GString* buffer = g_string_new(NULL);
 
     /* print the times in milliseconds */
     g_string_printf(buffer,
-            "msecs-to-command=%"G_GINT64_FORMAT" msecs-to-response=%"G_GINT64_FORMAT" "
-            "msecs-to-first-byte=%"G_GINT64_FORMAT" msecs-to-last-byte=%"G_GINT64_FORMAT" "
-            "msecs-to-checksum=%"G_GINT64_FORMAT,
-            (transfer->time.command - transfer->time.start) / 1000,
-            (transfer->time.response - transfer->time.start) / 1000,
-            (transfer->time.firstPayloadByte - transfer->time.start) / 1000,
-            (transfer->time.lastPayloadByte - transfer->time.start) / 1000,
-            (transfer->time.checksum - transfer->time.start) / 1000);
+            "%s usecs-to-command=%"G_GINT64_FORMAT" usecs-to-response=%"G_GINT64_FORMAT" "
+            "usecs-to-first-byte=%"G_GINT64_FORMAT" usecs-to-last-byte=%"G_GINT64_FORMAT" "
+            "usecs-to-checksum=%"G_GINT64_FORMAT, proxyTimeStr,
+            command, response, firstPayloadByte, lastPayloadByte, checksum);
 
+    g_free(proxyTimeStr);
     return g_string_free(buffer, FALSE);
 }
 
@@ -687,10 +704,11 @@ static void _tgentransfer_log(TGenTransfer* transfer, gboolean wasActive) {
          * only log an error once. */
         if(transfer->time.lastTimeErrorReport == 0) {
             gchar* bytesMessage = _tgentransfer_getBytesStatusReport(transfer);
+            gchar* timeMessage = _tgentransfer_getTimeStatusReport(transfer);
 
-            tgen_message("[transfer-error] transport %s transfer %s %s",
+            tgen_message("[transfer-error] transport %s transfer %s %s %s",
                     tgentransport_toString(transfer->transport),
-                    _tgentransfer_toString(transfer), bytesMessage);
+                    _tgentransfer_toString(transfer), bytesMessage, timeMessage);
 
             gint64 now = g_get_monotonic_time();
             transfer->time.lastBytesStatusReport = now;
@@ -804,8 +822,10 @@ gboolean tgentransfer_onCheckTimeout(TGenTransfer* transfer, gint descriptor) {
 
     /* the io module is checking to see if we are in a timeout state. if we are, then
      * the transfer will be cancel will be de-registered and destroyed. */
-    if((transfer->time.lastProgress > 0) &&
-            (g_get_monotonic_time() >= transfer->time.lastProgress + transfer->timeoutUSecs)) {
+    gboolean transferStalled = ((transfer->time.lastProgress > 0) &&
+            (g_get_monotonic_time() >= transfer->time.lastProgress + transfer->stalloutUSecs)) ? TRUE : FALSE;
+    gboolean transferTookTooLong = (g_get_monotonic_time() >= (transfer->time.start + transfer->timeoutUSecs)) ? TRUE : FALSE;
+    if(transferStalled || transferTookTooLong) {
         /* log this transfer as a timeout */
         _tgentransfer_changeState(transfer, TGEN_XFER_ERROR);
         _tgentransfer_changeError(transfer, TGEN_XFER_ERR_TIMEOUT);
@@ -827,7 +847,7 @@ gboolean tgentransfer_onCheckTimeout(TGenTransfer* transfer, gint descriptor) {
     }
 }
 
-TGenTransfer* tgentransfer_new(gsize id, TGenTransferType type, gsize size, guint64 timeout,
+TGenTransfer* tgentransfer_new(const gchar* idStr, gsize count, TGenTransferType type, gsize size, guint64 timeout, guint64 stallout,
         TGenTransport* transport, TGenTransfer_notifyCompleteFunc notify,
         gpointer data1, gpointer data2, GDestroyNotify destructData1, GDestroyNotify destructData2) {
     TGenTransfer* transfer = g_new0(TGenTransfer, 1);
@@ -843,14 +863,16 @@ TGenTransfer* tgentransfer_new(gsize id, TGenTransferType type, gsize size, guin
     transfer->time.start = g_get_monotonic_time();
 
     transfer->events = TGEN_EVENT_READ;
-    transfer->id = id;
+    transfer->id = g_strdup(idStr);
+    transfer->count = count;
 
     /* the timeout after which we abandon this transfer */
     transfer->timeoutUSecs = (gint64)(timeout > 0 ? (timeout * 1000) : DEFAULT_XFER_TIMEOUT_USEC);
+    transfer->stalloutUSecs = (gint64)(stallout > 0 ? (stallout * 1000) : DEFAULT_XFER_STALLOUT_USEC);
 
     gchar nameBuffer[256];
     memset(nameBuffer, 0, 256);
-    transfer->name = (0 == gethostname(nameBuffer, 255)) ? g_strdup(nameBuffer) : NULL;
+    transfer->hostname = (0 == gethostname(nameBuffer, 255)) ? g_strdup(nameBuffer) : NULL;
 
     if(type != TGEN_TYPE_NONE) {
         transfer->isCommander = TRUE;
@@ -874,8 +896,12 @@ static void _tgentransfer_free(TGenTransfer* transfer) {
         g_free(transfer->string);
     }
 
-    if(transfer->name) {
-        g_free(transfer->name);
+    if(transfer->hostname) {
+        g_free(transfer->hostname);
+    }
+
+    if(transfer->id) {
+        g_free(transfer->id);
     }
 
     if(transfer->remoteName) {

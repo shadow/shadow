@@ -3,8 +3,8 @@
 ## set build parameters
 project(Shadow C)
 set(SHADOW_VERSION_MAJOR 1)
-set(SHADOW_VERSION_MINOR 10)
-set(SHADOW_VERSION_BUILD 2)
+set(SHADOW_VERSION_MINOR 11)
+set(SHADOW_VERSION_BUILD 0)
 
 ## ensure cmake version
 cmake_minimum_required(VERSION 2.8.8 FATAL_ERROR)
@@ -82,6 +82,10 @@ else(SHADOW_DEBUG STREQUAL ON)
     #add_cflags(-O3) # causes segfault in Tor
 endif(SHADOW_DEBUG STREQUAL ON)
 
+if($ENV{VERBOSE})
+    add_definitions(-DVERBOSE)
+endif()
+
 if(SHADOW_PROFILE STREQUAL ON)
     add_definitions(-DDEBUG)
     add_cflags(-pg)
@@ -126,6 +130,10 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config.h.in ${CMAKE_CURRENT_BINARY_DI
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/shd-config.h DESTINATION include/)
 
+if(POLICY  CMP0026)
+    cmake_policy(SET  CMP0026  OLD)
+endif()
+
 ## recurse our project tree
 add_subdirectory(${CMAKE_SOURCE_DIR}/resource/)
 add_subdirectory(${CMAKE_SOURCE_DIR}/src/)
@@ -134,7 +142,7 @@ add_subdirectory(${CMAKE_SOURCE_DIR}/cpack/)
 ## build test if enabled
 if(SHADOW_TEST STREQUAL ON)
     message(STATUS "SHADOW_TEST enabled")
-    add_subdirectory(${CMAKE_SOURCE_DIR}/test/)
+    add_subdirectory(${CMAKE_SOURCE_DIR}/src/test/)
 endif(SHADOW_TEST STREQUAL ON)
 
 ## install our 'exported' libs so they can be imported by others

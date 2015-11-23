@@ -20,7 +20,7 @@ Host* host_new(GQuark id, gchar* hostname, gchar* requestedIP, gchar* geocodeHin
         GLogLevelFlags logLevel, gboolean logPcap, gchar* pcapDir, gchar* qdisc,
         guint64 receiveBufferSize, gboolean autotuneReceiveBuffer,
         guint64 sendBufferSize, gboolean autotuneSendBuffer,
-        guint64 interfaceReceiveLength);
+        guint64 interfaceReceiveLength, const gchar* rootDataPath);
 void host_free(Host* host, gpointer userData);
 
 void host_lock(Host* host);
@@ -66,6 +66,8 @@ gint host_epollControl(Host* host, gint epollDescriptor, gint operation,
         gint fileDescriptor, struct epoll_event* event);
 gint host_epollGetEvents(Host* host, gint handle, struct epoll_event* eventArray,
         gint eventArrayLength, gint* nEvents);
+gint host_select(Host* host, fd_set* readable, fd_set* writeable, fd_set* erroneous);
+gint host_poll(Host* host, struct pollfd *pollFDs, nfds_t numPollFDs);
 
 gint host_bindToInterface(Host* host, gint handle, const struct sockaddr* address);
 gint host_connectToPeer(Host* host, gint handle, const struct sockaddr* address);
@@ -79,5 +81,7 @@ gint host_getSocketName(Host* host, gint handle, const struct sockaddr* address,
 Tracker* host_getTracker(Host* host);
 GLogLevelFlags host_getLogLevel(Host* host);
 gchar host_isLoggingPcap(Host *host);
+
+const gchar* host_getDataPath(Host* host);
 
 #endif /* SHD_HOST_H_ */

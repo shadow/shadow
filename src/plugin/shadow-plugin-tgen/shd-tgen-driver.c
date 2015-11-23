@@ -9,9 +9,6 @@
 #include "shd-tgen.h"
 
 struct _TGenDriver {
-    /* pointer to a logging function */
-    ShadowLogFunc log;
-
     /* our graphml dependency graph */
     TGenGraph* actionGraph;
 
@@ -29,7 +26,7 @@ struct _TGenDriver {
     TGenIO* io;
 
     /* each transfer has a unique id */
-    gsize transferIDCounter;
+    gsize globalTransferCounter;
 
     /* traffic statistics */
     guint64 heartbeatTransfersCompleted;
@@ -45,12 +42,9 @@ struct _TGenDriver {
     guint magic;
 };
 
-/* store a global pointer to the log func, so we can log in any
- * of our tgen modules without a pointer to the tgen struct */
-ShadowLogFunc tgenLogFunc;
-
 /* forward declaration */
 static void _tgendriver_continueNextActions(TGenDriver* driver, TGenAction* action);
+static void _tgendriver_processAction(TGenDriver* driver, TGenAction* action);
 
 static gint64 _tgendriver_getCurrentTimeMillis() {
     return g_get_monotonic_time()/1000;
@@ -87,10 +81,12 @@ static void _tgendriver_onBytesTransferred(TGenDriver* driver, gsize bytesRead, 
 static gboolean _tgendriver_onHeartbeat(TGenDriver* driver, gpointer nullData) {
     TGEN_ASSERT(driver);
 
-    tgen_message("[driver-heartbeat] transfers-completed=%"G_GUINT64_FORMAT" bytes-read=%"G_GSIZE_FORMAT" "
-            "bytes-write=%"G_GSIZE_FORMAT" transfers-error=%"G_GUINT64_FORMAT,
-            driver->heartbeatTransfersCompleted, driver->heartbeatBytesRead,
-            driver->heartbeatBytesWritten, driver->heartbeatTransferErrors);
+    tgen_message("[driver-heartbeat] bytes-read=%"G_GSIZE_FORMAT" bytes-written=%"G_GSIZE_FORMAT
+            " current-transfers-succeeded=%"G_GUINT64_FORMAT" current-transfers-failed=%"G_GUINT64_FORMAT
+            " total-transfers-succeeded=%"G_GUINT64_FORMAT" total-transfers-failed=%"G_GUINT64_FORMAT,
+            driver->heartbeatBytesRead, driver->heartbeatBytesWritten,
+            driver->heartbeatTransfersCompleted, driver->heartbeatTransferErrors,
+            driver->totalTransfersCompleted, driver->totalTransferErrors);
 
     driver->heartbeatTransfersCompleted = 0;
     driver->heartbeatTransferErrors = 0;
@@ -153,10 +149,11 @@ static void _tgendriver_onNewPeer(TGenDriver* driver, gint socketD, TGenPeer* pe
 
     /* default timeout after which we give up on transfer */
     guint64 defaultTimeout = tgenaction_getDefaultTimeoutMillis(driver->startAction);
+    guint64 defaultStallout = tgenaction_getDefaultStalloutMillis(driver->startAction);
 
     /* a new transfer will be coming in on this transport */
-    gsize id = ++(driver->transferIDCounter);
-    TGenTransfer* transfer = tgentransfer_new(id, TGEN_TYPE_NONE, 0, defaultTimeout, transport,
+    gsize count = ++(driver->globalTransferCounter);
+    TGenTransfer* transfer = tgentransfer_new(NULL, count, TGEN_TYPE_NONE, 0, defaultTimeout, defaultStallout, transport,
             (TGenTransfer_notifyCompleteFunc)_tgendriver_onTransferComplete, driver, NULL,
             (GDestroyNotify)tgendriver_unref, NULL);
 
@@ -211,6 +208,7 @@ static void _tgendriver_initiateTransfer(TGenDriver* driver, TGenAction* action)
 
     /* default timeout after which we give up on transfer */
     guint64 timeout = tgenaction_getDefaultTimeoutMillis(driver->startAction);
+    guint64 stallout = tgenaction_getDefaultStalloutMillis(driver->startAction);
 
     /* ref++ the driver for the transport notify func */
     tgendriver_ref(driver);
@@ -218,12 +216,15 @@ static void _tgendriver_initiateTransfer(TGenDriver* driver, TGenAction* action)
     guint64 size = 0;
     TGenTransferType type = 0;
     /* this will only update timeout if there was a non-default timeout set for this transfer */
-    tgenaction_getTransferParameters(action, &type, NULL, &size, &timeout);
-    gsize id = ++(driver->transferIDCounter);
+    tgenaction_getTransferParameters(action, &type, NULL, &size, &timeout, &stallout);
+
+    /* the unique id of this vertex in the graph */
+    const gchar* idStr = tgengraph_getActionIDStr(driver->actionGraph, action);
+    gsize count = ++(driver->globalTransferCounter);
 
     /* a new transfer will be coming in on this transport. the transfer
      * takes control of the transport pointer reference. */
-    TGenTransfer* transfer = tgentransfer_new(id, type, (gsize)size, timeout, transport,
+    TGenTransfer* transfer = tgentransfer_new(idStr, count, type, (gsize)size, timeout, stallout, transport,
             (TGenTransfer_notifyCompleteFunc)_tgendriver_onTransferComplete, driver, action,
             (GDestroyNotify)tgendriver_unref, (GDestroyNotify)tgenaction_unref);
 
@@ -281,8 +282,15 @@ static void _tgendriver_initiatePause(TGenDriver* driver, TGenAction* action) {
 static void _tgendriver_handleSynchronize(TGenDriver* driver, TGenAction* action) {
     TGEN_ASSERT(driver);
 
-    // FIXME - actually implement synchronize feature - NOOP for now
-    _tgendriver_continueNextActions(driver, action);
+    glong totalIncoming = tgenaction_getTotalIncoming(action);
+    glong completedIncoming = tgenaction_getCompletedIncoming(action);
+
+    completedIncoming = completedIncoming+1;
+    tgenaction_setCompletedIncoming(action, completedIncoming);
+
+    if(completedIncoming == totalIncoming) {
+        _tgendriver_continueNextActions(driver, action);
+    }
 }
 
 static void _tgendriver_checkEndConditions(TGenDriver* driver, TGenAction* action) {
@@ -386,7 +394,7 @@ static void _tgendriver_free(TGenDriver* driver) {
         tgenio_unref(driver->io);
     }
     if(driver->actionGraph) {
-        tgengraph_free(driver->actionGraph);
+        tgengraph_unref(driver->actionGraph);
     }
 
     driver->magic = 0;
@@ -480,8 +488,13 @@ static gboolean _tgendriver_setStartClientTimerHelper(TGenDriver* driver, guint6
 static gboolean _tgendriver_setHeartbeatTimerHelper(TGenDriver* driver) {
     TGEN_ASSERT(driver);
 
+    guint64 heartbeatPeriod = tgenaction_getHeartbeatPeriodMillis(driver->startAction);
+    if(heartbeatPeriod == 0) {
+        heartbeatPeriod = 1000;
+    }
+
     /* start the heartbeat as a persistent timer event */
-    TGenTimer* heartbeatTimer = tgentimer_new((guint64) 1000, TRUE,
+    TGenTimer* heartbeatTimer = tgentimer_new(heartbeatPeriod, TRUE,
             (TGenTimer_notifyExpiredFunc)_tgendriver_onHeartbeat, driver, NULL,
             (GDestroyNotify)tgendriver_unref, NULL);
 
@@ -501,67 +514,26 @@ static gboolean _tgendriver_setHeartbeatTimerHelper(TGenDriver* driver) {
     }
 }
 
-TGenDriver* tgendriver_new(gint argc, gchar* argv[], ShadowLogFunc logf) {
-    tgenLogFunc = logf;
-
-    /* argv[0] is program name, argv[1] should be config file */
-    if (argc != 2) {
-        tgen_warning("USAGE: %s path/to/tgen.xml", argv[0]);
-        return NULL;
-    }
-
-    TGenGraph* graph = tgengraph_new(argv[1]);
-
-    // TODO embedding a tgen graphml inside the shadow.config.xml file not yet supported
-//    if(argv[1] && g_str_has_prefix(argv[1], "<?xml")) {
-//        /* argv contains the xml contents of the xml file */
-//        gchar* tempPath = _tgendriver_makeTempFile();
-//        GError* error = NULL;
-//        gboolean success = g_file_set_contents(tempPath, argv[1], -1, &error);
-//        if(success) {
-//            graph = tgengraph_new(tempPath);
-//        } else {
-//            tgen_warning("error (%i) while generating temporary xml file: %s", error->code, error->message);
-//        }
-//        g_unlink(tempPath);
-//        g_free(tempPath);
-//    } else {
-//        /* argv contains the apth of a graphml config file */
-//        graph = tgengraph_new(argv[1]);
-//    }
-
-    if (graph) {
-        tgen_info("traffic generator config file '%s' passed validation", argv[1]);
-    } else {
-        tgen_error("traffic generator config file '%s' failed validation", argv[1]);
-        return NULL;
-    }
-
+TGenDriver* tgendriver_new(TGenGraph* graph) {
     /* create the main driver object */
     TGenDriver* driver = g_new0(TGenDriver, 1);
     driver->magic = TGEN_MAGIC;
     driver->refcount = 1;
 
-    driver->log = logf;
-    tgen_debug("set log function to %p", logf);
-
     driver->io = tgenio_new();
 
+    tgengraph_ref(graph);
     driver->actionGraph = graph;
     driver->startAction = tgengraph_getStartAction(graph);
 
     /* start a heartbeat status message every second */
     if(!_tgendriver_setHeartbeatTimerHelper(driver)) {
-        tgenio_unref(driver->io);
-        driver->io = NULL;
         tgendriver_unref(driver);
         return NULL;
     }
 
     /* start a server to listen for incoming connections */
     if(!_tgendriver_startServerHelper(driver)) {
-        tgenio_unref(driver->io);
-        driver->io = NULL;
         tgendriver_unref(driver);
         return NULL;
     }
@@ -574,8 +546,6 @@ TGenDriver* tgendriver_new(gint argc, gchar* argv[], ShadowLogFunc logf) {
 
         /* start our client after a timeout */
         if(!_tgendriver_setStartClientTimerHelper(driver, delayMillis)) {
-            tgenio_unref(driver->io);
-            driver->io = NULL;
             tgendriver_unref(driver);
             return NULL;
         }
@@ -592,21 +562,4 @@ gint tgendriver_getEpollDescriptor(TGenDriver* driver) {
 gboolean tgendriver_hasEnded(TGenDriver* driver) {
     TGEN_ASSERT(driver);
     return driver->clientHasEnded;
-}
-
-void tgendriver_shutdown(TGenDriver* driver) {
-    TGEN_ASSERT(driver);
-
-    tgen_info("shutting down IO now, refcount=%u", driver->refcount);
-
-    /* we have to close our IO module first, since it holds several refs */
-    tgenio_unref(driver->io);
-
-    /* make sure its not freed twice */
-    driver->io = NULL;
-
-    tgen_info("shutting down driver now, refcount=%u", driver->refcount);
-
-    /* hopefully this frees the driver */
-    tgendriver_unref(driver);
 }
