@@ -554,6 +554,14 @@ TGenAction* tgenaction_newEndAction(const gchar* timeStr, const gchar* countStr,
         }
     }
 
+    guint64 timeNanos = 0;
+    if (timeStr && g_ascii_strncasecmp(timeStr, "\0", (gsize) 1)) {
+        *error = _tgenaction_handleTime("time", timeStr, &timeNanos);
+        if(*error) {
+            return NULL;
+        }
+    }
+
     TGenAction* action = g_new0(TGenAction, 1);
     action->magic = TGEN_MAGIC;
     action->refcount = 1;
@@ -562,12 +570,7 @@ TGenAction* tgenaction_newEndAction(const gchar* timeStr, const gchar* countStr,
 
     TGenActionEndData* data = g_new0(TGenActionEndData, 1);
     data->size = size;
-    if (timeStr && g_ascii_strncasecmp(timeStr, "\0", (gsize) 1)) {
-        *error = _tgenaction_handleTime("time", timeStr, &data->timeNanos);
-        if(error) {
-            return NULL;
-        }
-    }
+    data->timeNanos = timeNanos;
     if (countStr && g_ascii_strncasecmp(countStr, "\0", (gsize) 1)) {
         data->count = g_ascii_strtoull(countStr, NULL, 10);
     }
