@@ -285,11 +285,13 @@ static void _tgendriver_handleSynchronize(TGenDriver* driver, TGenAction* action
     glong totalIncoming = tgenaction_getTotalIncoming(action);
     glong completedIncoming = tgenaction_getCompletedIncoming(action);
 
-    completedIncoming = completedIncoming+1;
-    tgenaction_setCompletedIncoming(action, completedIncoming);
+    completedIncoming++;
 
-    if(completedIncoming == totalIncoming) {
+    if(completedIncoming >= totalIncoming) {
+        tgenaction_setCompletedIncoming(action, 0);
         _tgendriver_continueNextActions(driver, action);
+    } else {
+        tgenaction_setCompletedIncoming(action, completedIncoming);
     }
 }
 
