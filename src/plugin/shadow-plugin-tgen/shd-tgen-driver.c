@@ -251,7 +251,7 @@ static void _tgendriver_initiateTransfer(TGenDriver* driver, TGenAction* action)
     tgentransport_unref(transport);
 }
 
-static void _tgendriver_initiatePause(TGenDriver* driver, TGenAction* action) {
+static gboolean _tgendriver_initiatePause(TGenDriver* driver, TGenAction* action) {
     TGEN_ASSERT(driver);
 
     guint64 millisecondsPause = tgenaction_getPauseTimeMillis(action);
@@ -263,8 +263,7 @@ static void _tgendriver_initiatePause(TGenDriver* driver, TGenAction* action) {
 
     if(!pauseTimer) {
         tgen_warning("failed to initialize timer for pause action, skipping");
-        _tgendriver_continueNextActions(driver, action);
-        return;
+        return FALSE;
     }
 
     tgen_info("set pause timer for %"G_GUINT64_FORMAT" milliseconds", millisecondsPause);
@@ -277,21 +276,26 @@ static void _tgendriver_initiatePause(TGenDriver* driver, TGenAction* action) {
     tgenio_register(driver->io, tgentimer_getDescriptor(pauseTimer),
             (TGenIO_notifyEventFunc)tgentimer_onEvent, NULL, pauseTimer,
             (GDestroyNotify)tgentimer_unref);
+
+    return TRUE;
 }
 
-static void _tgendriver_handleSynchronize(TGenDriver* driver, TGenAction* action) {
+static void _tgendriver_handlePause(TGenDriver* driver, TGenAction* action) {
     TGEN_ASSERT(driver);
 
-    glong totalIncoming = tgenaction_getTotalIncoming(action);
-    glong completedIncoming = tgenaction_getCompletedIncoming(action);
-
-    completedIncoming++;
-
-    if(completedIncoming >= totalIncoming) {
-        tgenaction_setCompletedIncoming(action, 0);
-        _tgendriver_continueNextActions(driver, action);
+    if(tgenaction_hasPauseTime(action)) {
+        /* do a normal pause based on pause time */
+        gboolean success = _tgendriver_initiatePause(driver, action);
+        if(!success) {
+            /* we have no timer set, lets just continue now so we dont stall forever */
+            _tgendriver_continueNextActions(driver, action);
+        }
     } else {
-        tgenaction_setCompletedIncoming(action, completedIncoming);
+        /* do a 'synchronizing' pause where we wait until all incoming edges visit us */
+        gboolean allVisited = tgenaction_incrementPauseVisited(action);
+        if(allVisited) {
+            _tgendriver_continueNextActions(driver, action);
+        }
     }
 }
 
@@ -338,17 +342,13 @@ static void _tgendriver_processAction(TGenDriver* driver, TGenAction* action) {
             _tgendriver_initiateTransfer(driver, action);
             break;
         }
-        case TGEN_ACTION_SYNCHR0NIZE: {
-            _tgendriver_handleSynchronize(driver, action);
-            break;
-        }
         case TGEN_ACTION_END: {
             _tgendriver_checkEndConditions(driver, action);
             _tgendriver_continueNextActions(driver, action);
             break;
         }
         case TGEN_ACTION_PAUSE: {
-            _tgendriver_initiatePause(driver, action);
+            _tgendriver_handlePause(driver, action);
             break;
         }
         default: {

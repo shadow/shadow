@@ -28,6 +28,8 @@ typedef struct _TGenActionEndData {
 
 typedef struct _TGenActionPauseData {
     TGenPool* pauseTimesNanos;
+    glong totalIncomingEdges;
+    glong completedIncomingEdges;
 } TGenActionPauseData;
 
 typedef struct _TGenActionTransferData {
@@ -40,11 +42,6 @@ typedef struct _TGenActionTransferData {
     gboolean stalloutIsSet;
     TGenPool* peers;
 } TGenActionTransferData;
-
-typedef struct _TGenActionSynchronizeData {
-    glong totalIncoming;
-    glong completedIncoming;
-} TGenActionSynchronizeData;
 
 struct _TGenAction {
     TGenActionType type;
@@ -580,21 +577,20 @@ TGenAction* tgenaction_newEndAction(const gchar* timeStr, const gchar* countStr,
     return action;
 }
 
-TGenAction* tgenaction_newPauseAction(const gchar* timeStr, GError** error) {
+TGenAction* tgenaction_newPauseAction(const gchar* timeStr, glong totalIncoming, GError** error) {
     g_assert(error);
 
-    /* the time is required */
-    if (!timeStr || !g_ascii_strncasecmp(timeStr, "\0", (gsize) 1)) {
-        *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
-                "pause action missing required attribute 'time'");
-        return NULL;
-    }
+    TGenPool* pauseTimesNanos = NULL;
 
-    TGenPool* pauseTimesNanos = tgenpool_new(g_free);
-    *error = _tgenaction_handleTimeList("time", timeStr, pauseTimesNanos);
-    if (*error) {
-        tgenpool_unref(pauseTimesNanos);
-        return NULL;
+    /* the time is optional, if it doesnt exist, we act as a 'synchronizing' pause
+     * where we wait until all incoming edges visit us to wake up */
+    if (timeStr && g_ascii_strncasecmp(timeStr, "\0", (gsize) 1)) {
+        pauseTimesNanos = tgenpool_new(g_free);
+        *error = _tgenaction_handleTimeList("time", timeStr, pauseTimesNanos);
+        if (*error) {
+            tgenpool_unref(pauseTimesNanos);
+            return NULL;
+        }
     }
 
     TGenAction* action = g_new0(TGenAction, 1);
@@ -605,22 +601,8 @@ TGenAction* tgenaction_newPauseAction(const gchar* timeStr, GError** error) {
 
     TGenActionPauseData* data = g_new0(TGenActionPauseData, 1);
     data->pauseTimesNanos = pauseTimesNanos;
-
-    action->data = data;
-
-    return action;
-}
-
-TGenAction* tgenaction_newSynchronizeAction(glong totalIncoming, GError** error) {
-    TGenAction* action = g_new0(TGenAction, 1);
-    action->magic = TGEN_MAGIC;
-    action->refcount = 1;
-
-    action->type = TGEN_ACTION_SYNCHR0NIZE;
-
-    TGenActionSynchronizeData* data = g_new0(TGenActionSynchronizeData, 1);
-    data->totalIncoming = totalIncoming;
-    data->completedIncoming = 0;
+    data->totalIncomingEdges = totalIncoming;
+    data->completedIncomingEdges = 0;
 
     action->data = data;
 
@@ -794,13 +776,6 @@ GLogLevelFlags tgenaction_getLogLevel(TGenAction* action) {
     return ((TGenActionStartData*)action->data)->loglevel;
 }
 
-guint64 tgenaction_getPauseTimeMillis(TGenAction* action) {
-    TGEN_ASSERT(action);
-    g_assert(action->data && action->type == TGEN_ACTION_PAUSE);
-    guint64* time = tgenpool_getRandom(((TGenActionPauseData*)action->data)->pauseTimesNanos);
-    return (guint64)(*time / 1000000);
-}
-
 void tgenaction_getTransferParameters(TGenAction* action, TGenTransferType* typeOut,
         TGenTransportProtocol* protocolOut, guint64* sizeOut, guint64* timeoutOut, guint64* stalloutOut) {
     TGEN_ASSERT(action);
@@ -862,20 +837,29 @@ guint64 tgenaction_getEndSize(TGenAction* action) {
     return ((TGenActionEndData*)action->data)->size;
 }
 
-glong tgenaction_getTotalIncoming(TGenAction* action){
+gboolean tgenaction_hasPauseTime(TGenAction* action) {
     TGEN_ASSERT(action);
-    g_assert(action->data && action->type == TGEN_ACTION_SYNCHR0NIZE);
-    return ((TGenActionSynchronizeData*)action->data)->totalIncoming;
+    g_assert(action->data && action->type == TGEN_ACTION_PAUSE);
+    return (((TGenActionPauseData*)action->data)->pauseTimesNanos) != NULL ? TRUE : FALSE;
 }
 
-glong tgenaction_getCompletedIncoming(TGenAction* action){
+guint64 tgenaction_getPauseTimeMillis(TGenAction* action) {
     TGEN_ASSERT(action);
-    g_assert(action->data && action->type == TGEN_ACTION_SYNCHR0NIZE);
-    return ((TGenActionSynchronizeData*)action->data)->completedIncoming;
+    g_assert(action->data && action->type == TGEN_ACTION_PAUSE);
+    guint64* time = tgenpool_getRandom(((TGenActionPauseData*)action->data)->pauseTimesNanos);
+    return (guint64)(*time / 1000000);
 }
 
-void tgenaction_setCompletedIncoming(TGenAction* action, glong completedIncoming){
+gboolean tgenaction_incrementPauseVisited(TGenAction* action) {
     TGEN_ASSERT(action);
-    g_assert(action->data && action->type == TGEN_ACTION_SYNCHR0NIZE);
-    ((TGenActionSynchronizeData*)action->data)->completedIncoming = completedIncoming;
+    g_assert(action->data && action->type == TGEN_ACTION_PAUSE);
+    TGenActionPauseData* pauseData = (TGenActionPauseData*)action->data;
+
+    pauseData->completedIncomingEdges++;
+    if(pauseData->completedIncomingEdges >= pauseData->totalIncomingEdges) {
+        pauseData->completedIncomingEdges = 0;
+        return TRUE;
+    } else {
+        return FALSE;
+    }
 }
