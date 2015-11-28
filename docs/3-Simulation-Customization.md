@@ -196,7 +196,8 @@ the number of transfer completed by this node
   + _size_ (optional):  
 the total amount of data (see format below) transferred (read+write) by this node
 
-Formatting:
+Attribute value formats:
+
   + size: e.g., "5", or "5 suffix" where suffix is case in-sensitive and one of: kb, mb, gb, tb, kib, mib, gib, tib
   + time: e.g., "60" (defaults to seconds), or "60 suffix" where suffix is case in-sensitive and one of:  
 nanosecond, nanoseconds, nsec, nsecs, ns,  
