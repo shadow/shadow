@@ -149,15 +149,15 @@ The following are valid **actions** and **parameters** (all parameters are curre
   + _serverport_ (required):  
 the local port that will be opened to listen for other tgen connections
   + _time_ (optional):  
-the number of seconds that the tgen node should delay before starting a walk through the action graph
+the time (see format below) that the tgen node should delay before starting a walk through the action graph
   + _socksproxy_ (optional):  
 a peer (`ip:port`, e.g., `127.0.0.1:9051`) to use as a proxy server through which all connections to other tgen peers will be made
   + _timeout_ (optional):  
-the default time in seconds since the transfer started after which we give up on stalled transfers, used for all incoming server-side transfers and all client transfers that do not explicitly specify a _timeout_ attribute. If this is not set or set to 0 and not overridden by the transfer, then an internally defined timeout is used instead (currently 60 seconds).
+the default time (see format below) since the transfer started after which we give up on stalled transfers, used for all incoming server-side transfers and all client transfers that do not explicitly specify a _timeout_ attribute. If this is not set or set to 0 and not overridden by the transfer, then an internally defined timeout is used instead (currently 60 seconds).
   + _stallout_ (optional):  
-the default time in seconds since bytes were last sent/received for this transfer after which we give up on stalled transfers, used for all incoming server-side transfers and all client transfers that do not explicitly specify a _stallout_ attribute. If this is not set or set to 0 and not overridden by the transfer, then an internally defined stallout is used instead (currently 15 seconds).
+the default time (see format below) since bytes were last sent/received for this transfer after which we give up on stalled transfers, used for all incoming server-side transfers and all client transfers that do not explicitly specify a _stallout_ attribute. If this is not set or set to 0 and not overridden by the transfer, then an internally defined stallout is used instead (currently 15 seconds).
   + _heartbeat_ (optional):  
-
+the time period (see format below) between which heartbeat status messages are logged at 'message' level. The default of 1 second is used if _heartbeat_ is 0 or is not set.
   + _loglevel_ (optional):  
 the level above which tgen log messages will be filtered and not shown or logged. Valid values in increasing order are: 'error', 'critical', 'message', 'info', and 'debug'. The default value if _loglevel_ is not set is 'message'.
   + _peers_ (special):  
@@ -170,33 +170,41 @@ type of transfer: "get" to download or "put" to upload
   + _protocol_ (required):  
 protocol to use for this transfer (only "tcp" is supported)
   + _size_ (required):  
-amount of data to transfer (e.g., "5", or "5 suffix" where suffix is case in-sensitive and one of: kb, mb, gb, tb, kib, mib, gib, tib)
+amount of data to transfer (see format below)
   + _timeout_ (optional):  
-the time in seconds since the transfer started after which we consider this a stalled transfer and give up on it. If specified, this overrides the default _timeout_ attribute of the **start** element for this specific transfer. If this is set to 0, then an internally defined timeout is used instead (currently 60 seconds).
+the time (see format below) since the transfer started after which we consider this a stalled transfer and give up on it. If specified, this overrides the default _timeout_ attribute of the **start** element for this specific transfer. If this is set to 0, then an internally defined timeout is used instead (currently 60 seconds).
   + _stallout_ (optional):  
-the time in seconds since bytes were last sent/received for this transfer after which we consider this a stalled transfer and give up on it. If specified, this overrides the default _stallout_ attribute of the **start** element for this specific transfer. If this is set to 0, then an internally defined stallout is used instead (currently 15 seconds).
+the time (see format below) since bytes were last sent/received for this transfer after which we consider this a stalled transfer and give up on it. If specified, this overrides the default _stallout_ attribute of the **start** element for this specific transfer. If this is set to 0, then an internally defined stallout is used instead (currently 15 seconds).
   + _peers_ (special):  
 a list of peers (`ip1:port1,ip2:port21`, e.g., `192.168.1.100:8888,192.168.1.101:8888`) to use for this transfer. The _peers_ attribute is optional, only if a _peers_ attribute is specified in the start action. A peer will be selected at random from this list, or at random from the start action list if this attribute is not specified for a transfer.
 
-**synchronize:** Synchronize actions are optional. The synchronize action will pause a walk until the vertex has been visited by all incoming edges.
-
-More specifically, a synchronize action is 'activated' when it is first visiting by an incoming edge, and then begins counting visitation by all other incoming edges. Once the 'activated' vertex is visited by all incoming edges, it 'deactivates' and then the walk continues by following each outgoing edge.
-
-The synchronize action acts as a 'barrier'; an example usage would be to start multiple transfers in parallel and wait for them all to finish with a 'synchronize' before starting the next action.
-
 **pause:** Pause actions are optional. Acceptable attributes are:
 
-  + _time_ (required):  
-the number of seconds that the tgen node should pause before resuming the walk through the action graph.
+  + _time_ (optional):  
+the time (see format below) that the tgen node should pause before resuming the walk through the action graph.
+
+If no time is given, then this action will pause a walk until the vertex has been visited by all incoming edges. More specifically, a pause action without a time is 'activated' when it is first visiting by an incoming edge, and then begins counting visitation by all other incoming edges. Once the 'activated' vertex is visited by all incoming edges, it 'deactivates' and then the walk continues by following each outgoing edge.
+
+The pause action acts as a 'barrier'; an example usage would be to start multiple transfers in parallel and wait for them all to finish with a 'pause' before starting the next action.
 
 **end:** End actions are optional. The parameters represent termination conditions: if any of the conditions are met upon arriving at an end action vertex, the tgen node will stop and shutdown. Acceptable attributes are:
 
   + _time_ (optional):  
-the number of seconds since the node started
+the time (see format below) since the node started
   + _count_ (optional):  
 the number of transfer completed by this node
   + _size_ (optional):  
-the total amount of data transferred (read+write) by this node
+the total amount of data (see format below) transferred (read+write) by this node
+
+Formatting:
+  + size: e.g., "5", or "5 suffix" where suffix is case in-sensitive and one of: kb, mb, gb, tb, kib, mib, gib, tib
+  + time: e.g., "60" (defaults to seconds), or "60 suffix" where suffix is case in-sensitive and one of:  
+nanosecond, nanoseconds, nsec, nsecs, ns,  
+microsecond, microseconds, usec, usecs, us,  
+millisecond, milliseconds, msec, msecs, ms,  
+second, seconds, sec, secs, s,  
+minute, minutes, min, mins, m,  
+hour, hours, hr, hrs, h
 
 #### Dependencies (edges)
 
