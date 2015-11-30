@@ -4,7 +4,7 @@ import sys, os, argparse, re, json
 from multiprocessing import Pool, cpu_count
 from subprocess import Popen, PIPE
 from signal import signal, SIGINT, SIG_IGN
-from Canvas import Line
+#from Canvas import Line
 
 DESCRIPTION="""
 A utility to help parse results from the tgen traffic generator.
@@ -120,41 +120,43 @@ def process_tgen_log(filename):
     success_count, error_count = 0, 0
 
     for line in source:
-        if name is None and re.search("Initializing traffic generator on host", line) is not None:
-            name = line.strip().split()[11]
-        elif re.search("transfer-complete", line) is not None or re.search("transfer-error", line) is not None:
-            parts = line.strip().split()
-            if len(parts) < 26: continue
-            sim_seconds = timestamp_to_seconds(parts[2])
-            second = int(sim_seconds)
+        try:
+            if name is None and re.search("Initializing traffic generator on host", line) is not None:
+                name = line.strip().split()[11]
+            elif re.search("transfer-complete", line) is not None or re.search("transfer-error", line) is not None:
+                parts = line.strip().split()
+                if len(parts) < 26: continue
+                sim_seconds = timestamp_to_seconds(parts[2])
+                second = int(sim_seconds)
 
-            ioparts = parts[13].split('=')
-            iodirection = ioparts[0]
-            if 'read' not in iodirection: return None # this is a server, do we want its stats?
-            bytes = int(ioparts[1].split('/')[0])
+                ioparts = parts[13].split('=')
+                iodirection = ioparts[0]
+                if 'read' not in iodirection: continue #return None # this is a server, do we want its stats?
+                bytes = int(ioparts[1].split('/')[0])
 
-            if 'transfer-complete' in parts[6]:
-                success_count += 1
-                cmdtime = int(parts[21].split('=')[1])/1000.0
-                rsptime = int(parts[22].split('=')[1])/1000.0
-                fbtime = int(parts[23].split('=')[1])/1000.0
-                lbtime = int(parts[24].split('=')[1])/1000.0
-                chktime = int(parts[25].split('=')[1])/1000.0
+                if 'transfer-complete' in parts[6]:
+                    success_count += 1
+                    cmdtime = int(parts[21].split('=')[1])/1000.0
+                    rsptime = int(parts[22].split('=')[1])/1000.0
+                    fbtime = int(parts[23].split('=')[1])/1000.0
+                    lbtime = int(parts[24].split('=')[1])/1000.0
+                    chktime = int(parts[25].split('=')[1])/1000.0
 
-                if bytes not in d['firstbyte']: d['firstbyte'][bytes] = {}
-                if second not in d['firstbyte'][bytes]: d['firstbyte'][bytes][second] = []
-                d['firstbyte'][bytes][second].append(fbtime-cmdtime)
+                    if bytes not in d['firstbyte']: d['firstbyte'][bytes] = {}
+                    if second not in d['firstbyte'][bytes]: d['firstbyte'][bytes][second] = []
+                    d['firstbyte'][bytes][second].append(fbtime-cmdtime)
 
-                if bytes not in d['lastbyte']: d['lastbyte'][bytes] = {}
-                if second not in d['lastbyte'][bytes]: d['lastbyte'][bytes][second] = []
-                d['lastbyte'][bytes][second].append(lbtime-cmdtime)
+                    if bytes not in d['lastbyte']: d['lastbyte'][bytes] = {}
+                    if second not in d['lastbyte'][bytes]: d['lastbyte'][bytes][second] = []
+                    d['lastbyte'][bytes][second].append(lbtime-cmdtime)
 
-            elif 'transfer-error' in parts[6]:
-                error_count += 1
-                code = parts[10].strip('()').split('-')[7].split('=')[1]
-                if code not in d['errors']: d['errors'][code] = {}
-                if second not in d['errors'][code]: d['errors'][code][second] = []
-                d['errors'][code][second].append(bytes)
+                elif 'transfer-error' in parts[6]:
+                    error_count += 1
+                    code = parts[10].strip('()').split('-')[7].split('=')[1]
+                    if code not in d['errors']: d['errors'][code] = {}
+                    if second not in d['errors'][code]: d['errors'][code][second] = []
+                    d['errors'][code][second].append(bytes)
+        except: continue # data format error
 
     source_cleanup(filename, source, xzproc)
     return [name, d, success_count, error_count]
