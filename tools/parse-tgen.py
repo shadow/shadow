@@ -136,11 +136,11 @@ def process_tgen_log(filename):
 
                 if 'transfer-complete' in parts[6]:
                     success_count += 1
-                    cmdtime = int(parts[21].split('=')[1])/1000.0
-                    rsptime = int(parts[22].split('=')[1])/1000.0
-                    fbtime = int(parts[23].split('=')[1])/1000.0
-                    lbtime = int(parts[24].split('=')[1])/1000.0
-                    chktime = int(parts[25].split('=')[1])/1000.0
+                    cmdtime = int(parts[21].split('=')[1])/1000000.0
+                    rsptime = int(parts[22].split('=')[1])/1000000.0
+                    fbtime = int(parts[23].split('=')[1])/1000000.0
+                    lbtime = int(parts[24].split('=')[1])/1000000.0
+                    chktime = int(parts[25].split('=')[1])/1000000.0
 
                     if bytes not in d['firstbyte']: d['firstbyte'][bytes] = {}
                     if second not in d['firstbyte'][bytes]: d['firstbyte'][bytes][second] = []
