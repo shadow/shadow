@@ -152,7 +152,7 @@ def process_tgen_log(filename):
 
                 elif 'transfer-error' in parts[6]:
                     error_count += 1
-                    code = parts[10].strip('()').split('-')[7].split('=')[1]
+                    code = parts[10].strip('()').split(',')[8].split('=')[1]
                     if code not in d['errors']: d['errors'][code] = {}
                     if second not in d['errors'][code]: d['errors'][code][second] = []
                     d['errors'][code][second].append(bytes)
