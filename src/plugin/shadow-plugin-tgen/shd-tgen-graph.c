@@ -634,7 +634,9 @@ TGenGraph* tgengraph_new(gchar* path) {
     }
 
     if(!error && g->graphPath) {
+#if 1//!defined(IGRAPH_THREAD_SAFE) || (defined(IGRAPH_THREAD_SAFE) && IGRAPH_THREAD_SAFE == 0)
         tgen_lock();
+#endif
         /* use the built-in C attribute handler */
         igraph_attribute_table_t* oldHandler = igraph_i_set_attribute_table(&igraph_cattribute_table);
 
@@ -657,7 +659,9 @@ TGenGraph* tgengraph_new(gchar* path) {
 
         /* replace the old handler */
         igraph_i_set_attribute_table(oldHandler);
+#if 1//!defined(IGRAPH_THREAD_SAFE) || (defined(IGRAPH_THREAD_SAFE) && IGRAPH_THREAD_SAFE == 0)
         tgen_unlock();
+#endif
     }
 
     if(error) {
