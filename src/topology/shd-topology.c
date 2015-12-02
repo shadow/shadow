@@ -72,7 +72,7 @@ struct _AttachHelper {
 typedef void (*EdgeNotifyFunc)(Topology* top, igraph_integer_t edgeIndex, gpointer userData);
 typedef void (*VertexNotifyFunc)(Topology* top, igraph_integer_t vertexIndex, gpointer userData);
 
-#if !defined(IGRAPH_THREAD_SAFE) || (defined(IGRAPH_THREAD_SAFE) && IGRAPH_THREAD_SAFE == 0)
+#if 1//!defined(IGRAPH_THREAD_SAFE) || (defined(IGRAPH_THREAD_SAFE) && IGRAPH_THREAD_SAFE == 0)
 static void _topology_initGraphLock(GMutex* graphLockPtr) {
     g_mutex_init(graphLockPtr);
 }
