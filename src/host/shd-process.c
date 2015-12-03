@@ -23,6 +23,8 @@
 #include <malloc.h>
 #include <signal.h>
 #include <poll.h>
+#include <ifaddrs.h>
+#include <net/if.h>
 #include <sys/epoll.h>
 #include <sys/eventfd.h>
 #include <sys/ioctl.h>
@@ -2224,6 +2226,54 @@ int process_emu_pipe2(Process* proc, int pipefds[2], int flags) {
 
 int process_emu_pipe(Process* proc, int pipefds[2]) {
     return process_emu_pipe2(proc, pipefds, O_NONBLOCK);
+}
+
+int process_emu_getifaddrs(Process* proc, struct ifaddrs **ifap) {
+    if(!ifap) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    /* we always have loopback */
+    struct ifaddrs *i = g_new0(struct ifaddrs, 1);
+    i->ifa_flags = (IFF_UP | IFF_RUNNING | IFF_LOOPBACK);
+    i->ifa_name = g_strdup("lo");
+
+    i->ifa_addr = g_new0(struct sockaddr, 1);
+    i->ifa_addr->sa_family = AF_INET;
+    ((struct sockaddr_in *) i->ifa_addr)->sin_addr.s_addr = address_stringToIP("127.0.0.1");
+
+    /* add the default net address */
+    Address* defaultAddress = host_getDefaultAddress(proc->host);
+    if(defaultAddress != NULL) {
+        struct ifaddrs *j = g_new0(struct ifaddrs, 1);
+        j->ifa_flags = (IFF_UP | IFF_RUNNING);
+        j->ifa_name = g_strdup("eth0");
+
+        j->ifa_addr = g_new0(struct sockaddr, 1);
+        j->ifa_addr->sa_family = AF_INET;
+        ((struct sockaddr_in *) j->ifa_addr)->sin_addr.s_addr = (in_addr_t)address_toNetworkIP(defaultAddress);
+
+        i->ifa_next = j;
+    }
+
+    *ifap = i;
+    return 0;
+}
+
+void process_emu_freeifaddrs(Process* proc, struct ifaddrs *ifa) {
+    struct ifaddrs* iter = ifa;
+    while(iter != NULL) {
+        struct ifaddrs* next = iter->ifa_next;
+        if(iter->ifa_addr) {
+            g_free(iter->ifa_addr);
+        }
+        if(iter->ifa_name) {
+            g_free(iter->ifa_name);
+        }
+        g_free(iter);
+        iter = next;
+    }
 }
 
 /* polling */

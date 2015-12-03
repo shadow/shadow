@@ -20,6 +20,7 @@
 #include <signal.h>
 #include <poll.h>
 #include <malloc.h>
+#include <ifaddrs.h>
 #include <sys/epoll.h>
 //#include <sys/eventfd.h>
 #include <sys/ioctl.h>
@@ -127,6 +128,8 @@ typedef ssize_t (*writev_func)(int, const struct iovec*, int);
 typedef int (*close_func)(int);
 typedef int (*fcntl_func)(int, int, ...);
 typedef int (*ioctl_func)(int, int, ...);
+typedef int (*getifaddrs_func)(struct ifaddrs**);
+typedef void (*freeifaddrs_func)(struct ifaddrs*);
 
 /* polling */
 
@@ -417,6 +420,8 @@ typedef struct {
     close_func close;
     fcntl_func fcntl;
     ioctl_func ioctl;
+    getifaddrs_func getifaddrs;
+    freeifaddrs_func freeifaddrs;
 
     sleep_func sleep;
     nanosleep_func nanosleep;
@@ -735,6 +740,8 @@ static void _interposer_globalInitialize() {
     SETSYM_OR_FAIL(director.next.close, "close");
     SETSYM_OR_FAIL(director.next.fcntl, "fcntl");
     SETSYM_OR_FAIL(director.next.ioctl, "ioctl");
+    SETSYM_OR_FAIL(director.next.getifaddrs, "getifaddrs");
+    SETSYM_OR_FAIL(director.next.freeifaddrs, "freeifaddrs");
     SETSYM_OR_FAIL(director.next.sleep, "sleep");
     SETSYM_OR_FAIL(director.next.nanosleep, "nanosleep");
     SETSYM_OR_FAIL(director.next.usleep, "usleep");
@@ -1155,6 +1162,8 @@ INTERPOSE(ssize_t pwrite(int a, const void *b, size_t c, off_t d), pwrite, a, b,
 INTERPOSE(int close(int a), close, a);
 INTERPOSE(int pipe2(int a[2], int b), pipe2, a, b);
 INTERPOSE(int pipe(int a[2]), pipe, a);
+INTERPOSE(int getifaddrs(struct ifaddrs **a), getifaddrs, a);
+INTERPOSE_NORET(void freeifaddrs(struct ifaddrs *a), freeifaddrs, a);
 
 /* polling */
 

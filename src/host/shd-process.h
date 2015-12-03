@@ -89,6 +89,8 @@ int process_emu_fcntl(Process* proc, int fd, int cmd, void* argp);
 int process_emu_ioctl(Process* proc, int fd, unsigned long int request, void* argp);
 int process_emu_pipe2(Process* proc, int pipefds[2], int flags);
 int process_emu_pipe(Process* proc, int pipefds[2]);
+int process_emu_getifaddrs(Process* proc, struct ifaddrs **ifap);
+void process_emu_freeifaddrs(Process* proc, struct ifaddrs *ifa);
 int process_emu_eventfd(Process* proc, int initval, int flags);
 int process_emu_timerfd_create(Process* proc, int clockid, int flags);
 int process_emu_timerfd_settime(Process* proc, int fd, int flags, const struct itimerspec *new_value, struct itimerspec *old_value);
