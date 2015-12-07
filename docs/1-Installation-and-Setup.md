@@ -119,7 +119,7 @@ rjansen soft nofile 10485760
 rjansen hard nofile 10485760
 ```
 
-The max you can use here is what was set above in `sysctl -w fs.nr_open=10485760`. You need to either log out and back in or reboot for the changes to take affect. You can watch `/proc/sys/fs/file-nr` and reduce the limit according to your usage, if you'd like.
+The max you can use is your `fs.nr_open` setting from above. You need to either log out and back in or reboot for the changes to take affect. You can watch `/proc/sys/fs/file-nr` and reduce the limit according to your usage, if you'd like.
 
 ### Number of Maps
 
