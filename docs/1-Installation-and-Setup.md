@@ -102,30 +102,24 @@ sysctl -p
 
 #### User Limits
 
-You will want to almost certainly want to raise the user file limit by modifying `/etc/security/limits.conf`. After modifying, you need to either log out and back in or reboot for the changes to take affect.
-
-Check the maximum number of open file descriptors allowed in your _current session_:
+Check the maximum number of open file descriptors _currently allowed_ in your session:
 ```bash
 ulimit -n
 ```
 
-Update the user limit. For example, to handle all of our network configurations on EC2, I use:
-
-```
-* soft nofile 25000
-* hard nofile 25000
-```
-
-You can watch `/proc/sys/fs/file-nr` and reduce the limit to something less than 25000 according to your usage, if you'd like.
-
-For more information:
-
+Check the number of files _currently used_ in a process with pid=PID:
 ```bash
-man proc
-man ulimit -n
-cat /proc/sys/fs/file-max
-cat /proc/sys/fs/inode-max
+/bin/ls -l /proc/PID/fd/ | wc -l
 ```
+
+You will want to almost certainly want to raise the user file limit by modifying `/etc/security/limits.conf`. For example:
+
+```
+rjansen soft nofile 1000000
+rjansen hard nofile 1000000
+```
+
+You need to either log out and back in or reboot for the changes to take affect. You can watch `/proc/sys/fs/file-nr` and reduce the limit according to your usage, if you'd like.
 
 ### Number of Maps
 
@@ -154,8 +148,17 @@ sudo echo "vm.max_map_count = 262144" >> /etc/sysctl.conf
 sudo sysctl -p
 ```
 
-For more information:
+### For more information
+
+https://www.kernel.org/doc/Documentation/sysctl/fs.txt
 https://www.kernel.org/doc/Documentation/sysctl/vm.txt
+
+```bash
+man proc
+man ulimit -n
+cat /proc/sys/fs/file-max
+cat /proc/sys/fs/inode-max
+```
 
 # Shadow with Cloud Computing
 
