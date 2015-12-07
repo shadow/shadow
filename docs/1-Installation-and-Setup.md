@@ -115,11 +115,11 @@ Check the number of files _currently used_ in a process with pid=PID:
 You will want to almost certainly want to raise the user file limit by modifying `/etc/security/limits.conf`. For example:
 
 ```
-rjansen soft nofile 1000000
-rjansen hard nofile 1000000
+rjansen soft nofile 10485760
+rjansen hard nofile 10485760
 ```
 
-You need to either log out and back in or reboot for the changes to take affect. You can watch `/proc/sys/fs/file-nr` and reduce the limit according to your usage, if you'd like.
+The max you can use here is what was set above in `sysctl -w fs.nr_open=10485760`. You need to either log out and back in or reboot for the changes to take affect. You can watch `/proc/sys/fs/file-nr` and reduce the limit according to your usage, if you'd like.
 
 ### Number of Maps
 
