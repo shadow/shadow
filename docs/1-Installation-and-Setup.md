@@ -81,20 +81,22 @@ in your Shadow plug-in opens many file or socket descriptors (if you have many n
 Check the _system wide_ limits with:
 
 ```bash
-sysctl fs.file-max
-cat /proc/sys/fs/file-nr
+sysctl fs.nr_open # per-process open file limit
+sysctl fs.file-max # system-wide open file limit
 ```
 
-The latter command shows you:
- 1. the system-wide number of open file handles
- 1. the system-wide number of free handles
+Use `cat /proc/sys/fs/file-nr` to find:
+ 1. the current, system-wide number of used file handles
+ 1. the current, system-wide number of free file handles
  1. and the system-wide limit on the maximum number of open files for all processes
 
-Change the limit, persistent across reboots, and apply now:
+Change the limits, persistent across reboots, and apply now:
 
 ```bash
-sysctl -w fs.file-max=5000000
-echo "fs.file-max = 5000000" >> /etc/sysctl.conf
+sysctl -w fs.nr_open=10485760
+echo "fs.nr_open = 10485760" >> /etc/sysctl.conf
+sysctl -w fs.file-max=10485760
+echo "fs.file-max = 10485760" >> /etc/sysctl.conf
 sysctl -p
 ```
 
