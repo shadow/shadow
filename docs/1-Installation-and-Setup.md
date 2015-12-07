@@ -150,7 +150,7 @@ sudo sysctl -p
 
 ### For more information
 
-https://www.kernel.org/doc/Documentation/sysctl/fs.txt
+https://www.kernel.org/doc/Documentation/sysctl/fs.txt  
 https://www.kernel.org/doc/Documentation/sysctl/vm.txt
 
 ```bash
