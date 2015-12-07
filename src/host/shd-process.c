@@ -167,6 +167,9 @@ struct _Process {
     /* static buffers */
     struct tm timeBuffer;
 
+    /* to avoid glib recursive log errors */
+    GQueue* cachedWarningMessages;
+
     gint referenceCount;
     MAGIC_DECLARE;
 };
@@ -217,6 +220,16 @@ Process* process_new(gpointer host, GQuark programID, guint processID,
     return proc;
 }
 
+static void _process_logCachedWarnings(Process* proc) {
+    if(proc->cachedWarningMessages) {
+        gchar* msgStr = NULL;
+        while((msgStr = g_queue_pop_head(proc->cachedWarningMessages)) != NULL) {
+            warning(msgStr);
+            g_free(msgStr);
+        }
+    }
+}
+
 static void _process_free(Process* proc) {
     MAGIC_ASSERT(proc);
 
@@ -240,6 +253,11 @@ static void _process_free(Process* proc) {
         proc->stderrFile = NULL;
     }
 
+    if(proc->cachedWarningMessages) {
+        _process_logCachedWarnings(proc);
+        g_queue_free(proc->cachedWarningMessages);
+    }
+
     g_timer_destroy(proc->cpuDelayTimer);
 
     MAGIC_CLEAR(proc);
@@ -253,6 +271,19 @@ static FILE* _process_openFile(Process* proc, const gchar* prefix) {
     gchar* pathStr = g_build_filename(hostDataPath, fileNameString->str, NULL);
     FILE* f = g_fopen(pathStr, "a");
     g_string_free(fileNameString, TRUE);
+    if(!f) {
+        /* if we log as normal, glib will freak out about recursion if the plugin was trying to log with glib */
+        if(!proc->cachedWarningMessages) {
+            proc->cachedWarningMessages = g_queue_new();
+        }
+        GString* stringBuffer = g_string_new(NULL);
+        g_string_printf(stringBuffer, "process '%s-%u': unable to open file '%s', error was: %s",
+                g_quark_to_string(proc->programID), proc->processID, pathStr, g_strerror(errno));
+        g_queue_push_tail(proc->cachedWarningMessages, g_string_free(stringBuffer, FALSE));
+
+//        warning("process '%s-%u': unable to open file '%s', error was: %s",
+//                g_quark_to_string(proc->programID), proc->processID, pathStr, g_strerror(errno));
+    }
     g_free(pathStr);
     return f;
 }
@@ -264,11 +295,37 @@ static FILE* _process_getIOFile(Process* proc, gint fd){
     if(fd == STDOUT_FILENO) {
         if(!proc->stdoutFile) {
             proc->stdoutFile = _process_openFile(proc, "stdout");
+            if(!proc->stdoutFile) {
+                /* if we log as normal, glib will freak out about recursion if the plugin was trying to log with glib */
+                if(!proc->cachedWarningMessages) {
+                    proc->cachedWarningMessages = g_queue_new();
+                }
+                GString* stringBuffer = g_string_new(NULL);
+                g_string_printf(stringBuffer, "process '%s-%u': unable to open file for process output, dumping to tty stdout",
+                    g_quark_to_string(proc->programID), proc->processID);
+                g_queue_push_tail(proc->cachedWarningMessages, g_string_free(stringBuffer, FALSE));
+
+                /* now set shadows stdout */
+                proc->stdoutFile = stdout;
+            }
         }
         return proc->stdoutFile;
     } else {
         if(!proc->stderrFile) {
             proc->stderrFile = _process_openFile(proc, "stderr");
+            if(!proc->stderrFile) {
+                /* if we log as normal, glib will freak out about recursion if the plugin was trying to log with glib */
+                if(!proc->cachedWarningMessages) {
+                    proc->cachedWarningMessages = g_queue_new();
+                }
+                GString* stringBuffer = g_string_new(NULL);
+                g_string_printf(stringBuffer, "process '%s-%u': unable to open file for process errors, dumping to tty stderr",
+                        g_quark_to_string(proc->programID), proc->processID);
+                g_queue_push_tail(proc->cachedWarningMessages, g_string_free(stringBuffer, FALSE));
+
+                /* now set shadows stderr */
+                proc->stderrFile = stderr;
+            }
         }
         return proc->stderrFile;
     }
@@ -653,6 +710,9 @@ void process_start(Process* proc) {
     if(proc->stderrFile) {
         fflush(proc->stderrFile);
     }
+    if(proc->cachedWarningMessages) {
+        _process_logCachedWarnings(proc);
+    }
 
     /* cleanup */
     g_string_free(shadowThreadNameBuf, TRUE);
@@ -702,6 +762,10 @@ void process_continue(Process* proc) {
     _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     program_swapOutState(proc->prog, proc->pstate);
     worker_setActiveProcess(NULL);
+
+    if(proc->cachedWarningMessages) {
+        _process_logCachedWarnings(proc);
+    }
 
     if(proc->programMainThread) {
         info("'%s-%u' is running, but threads are blocked waiting for events", g_quark_to_string(proc->programID), proc->processID);
