@@ -325,7 +325,7 @@ python setup build -cg
 python setup install
 cd /vagrant/tor
 cd /vagrant/shadow-plugin-tor
-python setup dependencies
+python setup dependencies -y
 python setup build -cg --tor-prefix /vagrant/tor
 python setup install
 
