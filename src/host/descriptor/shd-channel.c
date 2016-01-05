@@ -25,12 +25,12 @@ static void channel_close(Channel* channel) {
     if(channel->linkedChannel) {
         if(channel == channel->linkedChannel->linkedChannel) {
             /* the link will no longer hold a ref to us */
+            descriptor_unref(&channel->linkedChannel->linkedChannel->super.super);
             channel->linkedChannel->linkedChannel = NULL;
-            descriptor_unref(&channel->super.super);
         }
         /* we will no longer hold a ref to the link */
-        channel->linkedChannel = NULL;
         descriptor_unref(&channel->linkedChannel->super.super);
+        channel->linkedChannel = NULL;
     }
 
     /* host can stop monitoring us for changes */
