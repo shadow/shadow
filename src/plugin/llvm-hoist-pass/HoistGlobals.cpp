@@ -245,7 +245,12 @@ public:
 			SmallVector<Value*, 2> GEPIndexes;
 			GEPIndexes.push_back(ConstantInt::get(Int32Ty, 0));
 			GEPIndexes.push_back(ConstantInt::get(Int32Ty, Field++));
-			Constant *GEP = ConstantExpr::getGetElementPtr(HoistedStruct, GEPIndexes, true);
+
+#if ((__clang_major__ > 3) || (__clang_major__ == 3 && __clang_minor__ > 6))
+            Constant *GEP = ConstantExpr::getGetElementPtr(HoistedStruct->getValueType(), HoistedStruct, GEPIndexes, true);
+#else
+            Constant *GEP = ConstantExpr::getGetElementPtr(HoistedStruct, GEPIndexes, true);
+#endif
 
 			// we have to do this manually so we can preserve debug info
 //			GV->replaceAllUsesWith(GEP);
