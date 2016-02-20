@@ -6,6 +6,10 @@ find_package(M REQUIRED)
 find_package(IGRAPH REQUIRED)
 find_package(GLIB REQUIRED)
 
+## TODO if we have cmake > 3.1, can we do the following?
+#pkg_check_modules (GLIB2   glib-2.0>=2.32)
+#message(STATUS "GLIB2_VERSION = ${GLIB2_VERSION}")
+
 include_directories(${RT_INCLUDES} ${DL_INCLUDES} ${M_INCLUDES} ${IGRAPH_INCLUDES} ${GLIB_INCLUDES})
 
 ## make sure shadow.h is in the include path

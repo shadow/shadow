@@ -3,17 +3,17 @@
 # The following variables are set when LLVM is found:
 #  HAVE_LLVM       = Set to true, if all components of LLVM
 #                          have been found.
-#  LLVM_DIR   = The directory containing LLVM-Config.cmake
+#  LLVM_CMAKE_DIR   = The directory containing LLVM-Config.cmake
 
 ## -----------------------------------------------------------------------------
 ## Check for the files
 
-find_path (LLVM_DIR LLVM-Config.cmake
+find_path (LLVM_CMAKE_DIR LLVM-Config.cmake
   PATHS ${CMAKE_EXTRA_INCLUDES} PATH_SUFFIXES cmake NO_DEFAULT_PATH
   )
 
-if(NOT LLVM_DIR)
-  find_path (LLVM_DIR LLVM-Config.cmake
+if(NOT LLVM_CMAKE_DIR)
+  find_path (LLVM_CMAKE_DIR LLVM-Config.cmake
     PATHS $ENV{HOME}/.shadow/share/llvm /usr/local/share/llvm /usr/share/llvm /usr/share/llvm-3.5 /usr/share/llvm-3.4 /usr/share/llvm-3.3 /usr/share/llvm-3.2 PATH_SUFFIXES cmake
   )
 endif()
@@ -21,12 +21,12 @@ endif()
 ## -----------------------------------------------------------------------------
 ## Actions taken when all components have been found
 
-if (LLVM_DIR)
+if (LLVM_CMAKE_DIR)
   set (HAVE_LLVM TRUE)
-  #GET_FILENAME_COMPONENT(LLVM_DIR "${LLVM_CONF}" PATH) # gets parent dir
+  #GET_FILENAME_COMPONENT(LLVM_CMAKE_DIR "${LLVM_CONF}" PATH) # gets parent dir
   if (NOT LLVM_FIND_QUIETLY)
     message (STATUS "Found components for LLVM")
-    message (STATUS "LLVM_DIR = ${LLVM_DIR}")
+    message (STATUS "LLVM_CMAKE_DIR = ${LLVM_CMAKE_DIR}")
   endif ()
 else ()
   if (LLVM_FIND_REQUIRED)
@@ -36,5 +36,5 @@ endif ()
 
 mark_as_advanced (
   HAVE_LLVM
-  LLVM_DIR
+  LLVM_CMAKE_DIR
   )
