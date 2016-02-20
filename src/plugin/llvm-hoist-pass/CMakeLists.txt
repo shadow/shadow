@@ -3,9 +3,13 @@ cmake_minimum_required(VERSION 2.8 FATAL_ERROR)
 
 set(CMAKE_CXX_FLAGS "-g -fno-rtti -std=c++11 -std=gnu++11 -Wno-unknown-attributes -Wno-unused-command-line-argument")
 
-find_package(LLVM REQUIRED)
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${LLVM_DIR}")
+find_package(LLVM REQUIRED CONFIG)
+message(STATUS "Found components for LLVM")
+message(STATUS "LLVM_PACKAGE_VERSION = ${LLVM_PACKAGE_VERSION}")
+message(STATUS "LLVM_CMAKE_DIR = ${LLVM_CMAKE_DIR}")
 
+## Make sure we can find the cmake modules
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${LLVM_CMAKE_DIR}")
 ## Define add_llvm_* macro's.
 set(LLVM_ON_UNIX 1)
 set(LLVM_ENABLE_PLUGINS ON)

@@ -3,8 +3,12 @@
  * See LICENSE for licensing information
  */
 
+#ifndef __STDC_LIMIT_MACROS
 #define __STDC_LIMIT_MACROS
+#endif
+#ifndef __STDC_CONSTANT_MACROS
 #define __STDC_CONSTANT_MACROS
+#endif
 
 #include "llvm/Pass.h"
 #if ((__clang_major__ < 3) || (__clang_major__ == 3 && __clang_minor__ < 3))
