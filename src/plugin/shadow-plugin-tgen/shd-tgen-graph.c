@@ -769,19 +769,19 @@ GQueue* tgengraph_getNextActions(TGenGraph* g, TGenAction* action) {
 
         /* count up weights until the cumulative exceeds the random choice */
         gdouble cumulativeWeight = 0.0;
-        guint choicePosition = 0;
-        /* do a weighted choice */
+        guint nextChoicePosition = 0;
+        /* do a weighted choice, this return a val in the range [0.0, totalWeight) */
         gdouble randomWeight = g_random_double_range((gdouble)0.0, totalWeight);
 
-        while(cumulativeWeight < randomWeight) {
+	do {
             gdouble* choiceWeightPtr = g_queue_pop_head(chooseWeights);
             g_assert(choiceWeightPtr);
             cumulativeWeight += *choiceWeightPtr;
-            choicePosition++;
-        }
+            nextChoicePosition++;
+        } while(cumulativeWeight <= randomWeight);
 
         /* the weight position matches the action position */
-        TGenAction* choiceAction = g_queue_peek_nth(chooseActions, choicePosition);
+        TGenAction* choiceAction = g_queue_peek_nth(chooseActions, nextChoicePosition-1);
         g_assert(choiceAction);
         g_queue_push_tail(nextActions, choiceAction);
     }
