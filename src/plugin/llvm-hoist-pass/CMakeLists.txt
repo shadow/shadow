@@ -4,14 +4,13 @@ cmake_minimum_required(VERSION 2.8 FATAL_ERROR)
 set(CMAKE_CXX_FLAGS "-g -fno-rtti -std=c++11 -std=gnu++11 -Wno-unknown-attributes -Wno-unused-command-line-argument")
 
 ## first try to use the LLVM package itself
-find_package(LLVM QUIET CONFIG)
-if(NOT "${LLVM_PACKAGE_VERSION}" STREQUAL "")
+find_package(LLVM)
+if("${LLVM_CMAKE_DIR}" STREQUAL "")
+    ## fall back to our custom find package template at cmake/FindLLVM.cmake
+    find_package(LLVM QUIET CONFIG REQUIRED)
     message(STATUS "Found components for LLVM")
     message(STATUS "LLVM_PACKAGE_VERSION = ${LLVM_PACKAGE_VERSION}")
     message(STATUS "LLVM_CMAKE_DIR = ${LLVM_CMAKE_DIR}")
-else()
-    ## fall back to our custom find package template at cmake/FindLLVM.cmake
-    find_package(LLVM REQUIRED)
 endif()
 
 ## Make sure we can find the cmake modules
