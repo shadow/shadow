@@ -61,6 +61,25 @@ TGenServer* tgenserver_new(in_port_t serverPort, TGenServer_notifyNewPeerFunc no
         return NULL;
     }
 
+    gint reuse = 1;
+    gint result = setsockopt(socketD, SOL_SOCKET, SO_REUSEADDR, (const char*)&reuse, sizeof(reuse));
+    if (result < 0) {
+        tgen_critical("setsockopt(SO_REUSEADDR): socket %i returned %i error %i: %s",
+                socketD, result, errno, g_strerror(errno));
+        close(socketD);
+        return NULL;
+    }
+
+#ifdef SO_REUSEPORT
+    result = setsockopt(socketD, SOL_SOCKET, SO_REUSEPORT, (const char*)&reuse, sizeof(reuse));
+    if (result < 0) {
+        tgen_critical("setsockopt(SO_REUSEPORT): socket %i returned %i error %i: %s",
+                socketD, result, errno, g_strerror(errno));
+        close(socketD);
+        return NULL;
+    }
+#endif
+
     /* setup the listener address information */
     struct sockaddr_in listener;
     memset(&listener, 0, sizeof(struct sockaddr_in));
@@ -69,7 +88,7 @@ TGenServer* tgenserver_new(in_port_t serverPort, TGenServer_notifyNewPeerFunc no
     listener.sin_port = serverPort;
 
     /* bind the socket to the server port */
-    gint result = bind(socketD, (struct sockaddr *) &listener, sizeof(listener));
+    result = bind(socketD, (struct sockaddr *) &listener, sizeof(listener));
     if (result < 0) {
         tgen_critical("bind(): socket %i returned %i error %i: %s",
                 socketD, result, errno, g_strerror(errno));
