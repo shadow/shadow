@@ -687,15 +687,15 @@ static gchar* _tgentransfer_getTimeStatusReport(TGenTransfer* transfer) {
     gchar* proxyTimeStr = tgentransport_getTimeStatusReport(transfer->transport);
 
     gint64 command = (transfer->time.command > 0 && transfer->time.start > 0) ?
-            (transfer->time.command - transfer->time.start) : 0;
+            (transfer->time.command - transfer->time.start) : -1;
     gint64 response = (transfer->time.response > 0 && transfer->time.start > 0) ?
-            (transfer->time.response - transfer->time.start) : 0;
+            (transfer->time.response - transfer->time.start) : -1;
     gint64 firstPayloadByte = (transfer->time.firstPayloadByte > 0 && transfer->time.start > 0) ?
-            (transfer->time.firstPayloadByte - transfer->time.start) : 0;
+            (transfer->time.firstPayloadByte - transfer->time.start) : -1;
     gint64 lastPayloadByte = (transfer->time.lastPayloadByte > 0 && transfer->time.start > 0) ?
-            (transfer->time.lastPayloadByte - transfer->time.start) : 0;
+            (transfer->time.lastPayloadByte - transfer->time.start) : -1;
     gint64 checksum = (transfer->time.checksum > 0 && transfer->time.start > 0) ?
-            (transfer->time.checksum - transfer->time.start) : 0;
+            (transfer->time.checksum - transfer->time.start) : -1;
 
     GString* buffer = g_string_new(NULL);
 
