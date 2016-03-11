@@ -10,6 +10,9 @@
 #define DEFAULT_XFER_TIMEOUT_USEC 60000000
 #define DEFAULT_XFER_STALLOUT_USEC 15000000
 
+/* an auth password so we know both sides understand tgen */
+#define TGEN_AUTH_PW "T8nNx9L95LATtckJkR5n"
+
 typedef enum _TGenTransferState {
     TGEN_XFER_COMMAND, TGEN_XFER_RESPONSE,
     TGEN_XFER_PAYLOAD, TGEN_XFER_CHECKSUM,
@@ -17,7 +20,7 @@ typedef enum _TGenTransferState {
 } TGenTransferState;
 
 typedef enum _TGenTransferError {
-    TGEN_XFER_ERR_NONE, TGEN_XFER_ERR_READ, TGEN_XFER_ERR_WRITE,
+    TGEN_XFER_ERR_NONE, TGEN_XFER_ERR_AUTH, TGEN_XFER_ERR_READ, TGEN_XFER_ERR_WRITE,
     TGEN_XFER_ERR_TIMEOUT, TGEN_XFER_ERR_PROXY, TGEN_XFER_ERR_MISC,
 } TGenTransferError;
 
@@ -128,6 +131,9 @@ static const gchar* _tgentransfer_errorToString(TGenTransferError error) {
         case TGEN_XFER_ERR_NONE: {
             return "NONE";
         }
+        case TGEN_XFER_ERR_AUTH: {
+            return "AUTH";
+        }
         case TGEN_XFER_ERR_READ: {
             return "READ";
         }
@@ -237,56 +243,65 @@ static void _tgentransfer_readCommand(TGenTransfer* transfer) {
         gchar* line = g_string_free(transfer->readBuffer, FALSE);
         transfer->readBuffer = NULL;
 
-        gchar** parts = g_strsplit(line, " ", 0);
-        if(parts[0] == NULL || parts[1] == NULL || parts[2] == NULL || parts[3] == NULL) {
-            tgen_critical("error parsing command '%s'", transfer->readBuffer->str);
+        if(g_ascii_strncasecmp(line, TGEN_AUTH_PW, 20)) {
+            /* password doesn't match */
+            tgen_info("transfer authentication error: passwords don't match")
             hasError = TRUE;
-        } else {
-            g_assert(!transfer->remoteName);
-            transfer->remoteName = g_strdup(parts[0]);
-
-            /* we are not the commander so we should not have an id yet */
-            g_assert(transfer->id == NULL);
-            transfer->id = g_strdup(parts[1]);
-
-            transfer->remoteCount = (gsize)g_ascii_strtoull(parts[2], NULL, 10);
-            if(transfer->remoteCount == 0) {
-                tgen_critical("error parsing command ID '%s'", parts[2]);
-                hasError = TRUE;
-            }
-
-            if(!g_ascii_strncasecmp(parts[3], "GET", 3)) {
-                /* they are trying to GET, then we need to PUT to them */
-                transfer->type = TGEN_TYPE_PUT;
-                /* we read command, but now need to write payload */
-                transfer->events |= TGEN_EVENT_WRITE;
-            } else if(!g_ascii_strncasecmp(parts[3], "PUT", 3)) {
-                /* they want to PUT, so we will GET from them */
-                transfer->type = TGEN_TYPE_GET;
-            } else {
-                tgen_critical("error parsing command type '%s'", parts[3]);
-                hasError = TRUE;
-            }
-
-            transfer->size = (gsize)g_ascii_strtoull(parts[4], NULL, 10);
-            if(transfer->size == 0) {
-                tgen_critical("error parsing command size '%s'", parts[4]);
-                hasError = TRUE;
-            }
-        }
-
-        g_strfreev(parts);
-        g_free(line);
-
-        /* payload phase is next unless there was an error parsing */
-        if(hasError) {
             _tgentransfer_changeState(transfer, TGEN_XFER_ERROR);
-            _tgentransfer_changeError(transfer, TGEN_XFER_ERR_READ);
+            _tgentransfer_changeError(transfer, TGEN_XFER_ERR_AUTH);
         } else {
-            /* we need to update our string with the new command info */
-            _tgentransfer_resetString(transfer);
-            _tgentransfer_changeState(transfer, TGEN_XFER_RESPONSE);
-            transfer->events |= TGEN_EVENT_WRITE;
+            /* password matches, lets parse the rest of the string */
+            gchar** parts = g_strsplit(line, " ", 0);
+            if(parts[0] == NULL || parts[1] == NULL || parts[2] == NULL || parts[3] == NULL || parts[4] == NULL || parts[5] == NULL) {
+                tgen_critical("error parsing command '%s'", line);
+                hasError = TRUE;
+            } else {
+                g_assert(!transfer->remoteName);
+                transfer->remoteName = g_strdup(parts[1]);
+
+                /* we are not the commander so we should not have an id yet */
+                g_assert(transfer->id == NULL);
+                transfer->id = g_strdup(parts[2]);
+
+                transfer->remoteCount = (gsize)g_ascii_strtoull(parts[3], NULL, 10);
+                if(transfer->remoteCount == 0) {
+                    tgen_critical("error parsing command ID '%s'", parts[3]);
+                    hasError = TRUE;
+                }
+
+                if(!g_ascii_strncasecmp(parts[4], "GET", 3)) {
+                    /* they are trying to GET, then we need to PUT to them */
+                    transfer->type = TGEN_TYPE_PUT;
+                    /* we read command, but now need to write payload */
+                    transfer->events |= TGEN_EVENT_WRITE;
+                } else if(!g_ascii_strncasecmp(parts[4], "PUT", 3)) {
+                    /* they want to PUT, so we will GET from them */
+                    transfer->type = TGEN_TYPE_GET;
+                } else {
+                    tgen_critical("error parsing command type '%s'", parts[4]);
+                    hasError = TRUE;
+                }
+
+                transfer->size = (gsize)g_ascii_strtoull(parts[5], NULL, 10);
+                if(transfer->size == 0) {
+                    tgen_critical("error parsing command size '%s'", parts[5]);
+                    hasError = TRUE;
+                }
+            }
+
+            g_strfreev(parts);
+            g_free(line);
+
+            /* payload phase is next unless there was an error parsing */
+            if(hasError) {
+                _tgentransfer_changeState(transfer, TGEN_XFER_ERROR);
+                _tgentransfer_changeError(transfer, TGEN_XFER_ERR_READ);
+            } else {
+                /* we need to update our string with the new command info */
+                _tgentransfer_resetString(transfer);
+                _tgentransfer_changeState(transfer, TGEN_XFER_RESPONSE);
+                transfer->events |= TGEN_EVENT_WRITE;
+            }
         }
     } else {
         /* unable to receive entire command, wait for next chance to read */
@@ -513,8 +528,8 @@ static void _tgentransfer_writeCommand(TGenTransfer* transfer) {
     /* buffer the command if we have not done that yet */
     if(!transfer->writeBuffer) {
         transfer->writeBuffer = g_string_new(NULL);
-        g_string_printf(transfer->writeBuffer, "%s %s %"G_GSIZE_FORMAT" %s %"G_GSIZE_FORMAT"\n",
-            transfer->hostname, transfer->id, transfer->count, _tgentransfer_typeToString(transfer), transfer->size);
+        g_string_printf(transfer->writeBuffer, "%s %s %s %"G_GSIZE_FORMAT" %s %"G_GSIZE_FORMAT"\n",
+            TGEN_AUTH_PW, transfer->hostname, transfer->id, transfer->count, _tgentransfer_typeToString(transfer), transfer->size);
     }
 
     _tgentransfer_flushOut(transfer);
