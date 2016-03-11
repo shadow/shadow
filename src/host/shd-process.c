@@ -1851,10 +1851,19 @@ int process_emu_setsockopt(Process* proc, int fd, int level, int optname, const 
 
                 case SO_REUSEADDR: {
                     // TODO implement this!
-                    // XXX Tor actually uses this option!!
+                    // XXX Tor and TGen actually use this option!!
                     debug("setsockopt SO_REUSEADDR not yet implemented");
                     break;
                 }
+
+#ifdef SO_REUSEPORT
+                case SO_REUSEPORT: {
+                    // TODO implement this!
+                    // XXX TGen actually uses this option!!
+                    debug("setsockopt SO_REUSEPORT not yet implemented");
+                    break;
+                }
+#endif
 
                 default: {
                     warning("setsockopt optname %i not implemented", optname);
