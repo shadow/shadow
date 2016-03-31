@@ -245,7 +245,7 @@ static void _tgentransfer_readCommand(TGenTransfer* transfer) {
 
         if(g_ascii_strncasecmp(line, TGEN_AUTH_PW, 20)) {
             /* password doesn't match */
-            tgen_info("transfer authentication error: passwords don't match")
+            tgen_info("transfer authentication error: incorrect cookie in initial request")
             hasError = TRUE;
             _tgentransfer_changeState(transfer, TGEN_XFER_ERROR);
             _tgentransfer_changeError(transfer, TGEN_XFER_ERR_AUTH);
@@ -256,6 +256,7 @@ static void _tgentransfer_readCommand(TGenTransfer* transfer) {
                 tgen_critical("error parsing command '%s'", line);
                 hasError = TRUE;
             } else {
+                /* parts[0] contains TGEN_AUTH_PW */
                 g_assert(!transfer->remoteName);
                 transfer->remoteName = g_strdup(parts[1]);
 
@@ -290,7 +291,6 @@ static void _tgentransfer_readCommand(TGenTransfer* transfer) {
             }
 
             g_strfreev(parts);
-            g_free(line);
 
             /* payload phase is next unless there was an error parsing */
             if(hasError) {
@@ -302,6 +302,11 @@ static void _tgentransfer_readCommand(TGenTransfer* transfer) {
                 _tgentransfer_changeState(transfer, TGEN_XFER_RESPONSE);
                 transfer->events |= TGEN_EVENT_WRITE;
             }
+        }
+
+        /* free the line from the read buffer */
+        if (line != NULL) {
+            g_free(line);
         }
     } else {
         /* unable to receive entire command, wait for next chance to read */
@@ -319,35 +324,48 @@ static void _tgentransfer_readResponse(TGenTransfer* transfer) {
         gchar* line = g_string_free(transfer->readBuffer, FALSE);
         transfer->readBuffer = NULL;
 
-        gchar** parts = g_strsplit(line, " ", 0);
-        if(parts[0] == NULL || parts[1] == NULL) {
-            tgen_critical("error parsing command '%s'", transfer->readBuffer->str);
+        if(g_ascii_strncasecmp(line, TGEN_AUTH_PW, 20)) {
+            /* password doesn't match */
+            tgen_info("transfer authentication error: incorrect cookie in initial response")
             hasError = TRUE;
+            _tgentransfer_changeState(transfer, TGEN_XFER_ERROR);
+            _tgentransfer_changeError(transfer, TGEN_XFER_ERR_AUTH);
         } else {
-            g_assert(!transfer->remoteName);
-            transfer->remoteName = g_strdup(parts[0]);
-
-            transfer->remoteCount = (gsize)g_ascii_strtoull(parts[1], NULL, 10);
-            if(transfer->remoteCount == 0) {
-                tgen_critical("error parsing command ID '%s'", parts[1]);
+            gchar** parts = g_strsplit(line, " ", 0);
+            if(parts[0] == NULL || parts[1] == NULL || parts[2] == NULL) {
+                tgen_critical("error parsing command '%s'", transfer->readBuffer->str);
                 hasError = TRUE;
+            } else {
+                /* parts[0] contains TGEN_AUTH_PW */
+                g_assert(!transfer->remoteName);
+                transfer->remoteName = g_strdup(parts[1]);
+
+                transfer->remoteCount = (gsize)g_ascii_strtoull(parts[2], NULL, 10);
+                if(transfer->remoteCount == 0) {
+                    tgen_critical("error parsing command ID '%s'", parts[2]);
+                    hasError = TRUE;
+                }
+            }
+
+            g_strfreev(parts);
+
+            /* payload phase is next unless there was an error parsing */
+            if(hasError) {
+                _tgentransfer_changeState(transfer, TGEN_XFER_ERROR);
+                _tgentransfer_changeError(transfer, TGEN_XFER_ERR_READ);
+            } else {
+                /* we need to update our string with the new command info */
+                _tgentransfer_resetString(transfer);
+                _tgentransfer_changeState(transfer, TGEN_XFER_PAYLOAD);
+                if(transfer->state == TGEN_TYPE_PUT) {
+                    transfer->events |= TGEN_EVENT_WRITE;
+                }
             }
         }
 
-        g_strfreev(parts);
-        g_free(line);
-
-        /* payload phase is next unless there was an error parsing */
-        if(hasError) {
-            _tgentransfer_changeState(transfer, TGEN_XFER_ERROR);
-            _tgentransfer_changeError(transfer, TGEN_XFER_ERR_READ);
-        } else {
-            /* we need to update our string with the new command info */
-            _tgentransfer_resetString(transfer);
-            _tgentransfer_changeState(transfer, TGEN_XFER_PAYLOAD);
-            if(transfer->state == TGEN_TYPE_PUT) {
-                transfer->events |= TGEN_EVENT_WRITE;
-            }
+        /* free the line taken from the read buffer */
+        if(line != NULL) {
+            g_free(line);
         }
     } else {
         /* unable to receive entire command, wait for next chance to read */
@@ -550,8 +568,8 @@ static void _tgentransfer_writeResponse(TGenTransfer* transfer) {
     /* buffer the command if we have not done that yet */
     if(!transfer->writeBuffer) {
         transfer->writeBuffer = g_string_new(NULL);
-        g_string_printf(transfer->writeBuffer, "%s %"G_GSIZE_FORMAT"\n",
-                transfer->hostname, transfer->count);
+        g_string_printf(transfer->writeBuffer, "%s %s %"G_GSIZE_FORMAT"\n",
+                TGEN_AUTH_PW, transfer->hostname, transfer->count);
     }
 
     _tgentransfer_flushOut(transfer);
