@@ -21,7 +21,3 @@ endif()
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/shadow-plugin-tor)
     add_subdirectory(shadow-plugin-tor)
 endif()
-
-if(SHADOW_TEST STREQUAL ON)
-    add_subdirectory(shadow-plugin-test)
-endif()

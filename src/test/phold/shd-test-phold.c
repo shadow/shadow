@@ -3,8 +3,39 @@
  * See LICENSE for licensing information
  */
 
-#include "shd-test.h"
+#include <glib.h>
+#include <sys/epoll.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <errno.h>
+#include <string.h>
 
+#if 1 /* #ifdef DEBUG */
+#define TEST_MAGIC 0xABBABAAB
+#define TEST_ASSERT(obj) g_assert(obj && (obj->magic == TEST_MAGIC))
+#else
+#define TEST_MAGIC 0
+#define TEST_ASSERT(obj)
+#endif
+
+#define TEST_LOG_ERROR 1
+#define TEST_LOG_WARNING 2
+#define TEST_LOG_INFO 3
+#define TEST_LOG_DEBUG 4
+
+#define test_error(...)     _test_log(TEST_LOG_ERROR, __FUNCTION__, __VA_ARGS__)
+#define test_warning(...)   _test_log(TEST_LOG_WARNING, __FUNCTION__, __VA_ARGS__)
+#define test_info(...)      _test_log(TEST_LOG_INFO, __FUNCTION__, __VA_ARGS__)
+#define test_debug(...)     _test_log(TEST_LOG_DEBUG, __FUNCTION__, __VA_ARGS__)
+
+#define TEST_LISTEN_PORT 8998
+
+typedef struct _Test Test;
 struct _Test {
     GString* basename;
     guint64 quantity;
@@ -63,7 +94,10 @@ void test_free(Test* test) {
 }
 
 static gboolean _test_parseOptions(Test* test, gint argc, gchar* argv[]) {
-    const gchar* usage = "basename=STR quantity=INT msg_load=INT";
+    /* basename: name of the test nodes in shadow, without the integer suffix
+     * quantity: number of test nodes running in the experiment with the same basename as this one
+     * msgload: number of messages to generate, each to a random node */
+    const gchar* usage = "basename=STR quantity=INT msgload=INT";
 
     if(argc == 4 && argv != NULL) {
         for(gint i = 1; i < 4; i++) {
@@ -180,8 +214,8 @@ static void _test_sendNewMessage(Test* test) {
         ssize_t b = sendto(socketd, &msg, 1, 0, (struct sockaddr*) (&node), len);
         if(b > 0) {
             test->nmsgs++;
-            test_info("host '%s' sent '%i' byte%s to host '%s'",
-                            test->basename->str, (gint)b, b == 1 ? "" : "s", chosenNodeBuffer->str);
+            test_info("host '%s' sent %i byte%s to host '%s'",
+                            test->hostname->str, (gint)b, b == 1 ? "" : "s", chosenNodeBuffer->str);
         } else if(b < 0) {
             test_warning("sendto(): returned %i host '%s' errno %i: %s",
                             (gint)b, test->basename->str, errno, g_strerror(errno));
@@ -248,7 +282,7 @@ int main(int argc, char *argv[]) {
     /* create the new state according to user inputs */
     Test* testState = test_new(argc, argv);
     if (!testState) {
-        test_error("Error initializing new Hello instance");
+        test_error("Error initializing new instance");
         return -1;
     }
 
@@ -267,7 +301,7 @@ int main(int argc, char *argv[]) {
     mainevent.events = EPOLLIN | EPOLLOUT;
     mainevent.data.fd = testState->epolld;
     if (!mainevent.data.fd) {
-        test_error("Error retrieving hello epoll descriptor");
+        test_error("Error retrieving epoll descriptor");
         close(mainepolld);
         return -1;
     }

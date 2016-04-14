@@ -1,22 +1,12 @@
-## test: a benchmark and functional test plug-in for Shadow
-project(shadow-plugin-test)
-cmake_minimum_required(VERSION 2.8.8 FATAL_ERROR)
-
-add_definitions(-D_GNU_SOURCE)
-
-find_package(RT REQUIRED)
-find_package(M REQUIRED)
 find_package(GLIB REQUIRED)
+include_directories(${GLIB_INCLUDES})
 
-include_directories(AFTER ${RT_INCLUDES} ${M_INCLUDES} ${GLIB_INCLUDES})
+## build the test as a dynamic executable that plugs into shadow
+add_shadow_plugin(shadow-plugin-test-phold shd-test-phold.c)
 
-## plug-ins need to disable fortification to ensure syscalls are intercepted
-add_cflags("-fno-inline -fno-strict-aliasing -U_FORTIFY_SOURCE")
+## if the test needs any libraries, link them here
+target_link_libraries(shadow-plugin-test-phold ${RT_LIBRARIES} ${GLIB_LIBRARIES})
 
-## CFLAGS status update
-message(STATUS "CMAKE_C_FLAGS = ${CMAKE_C_FLAGS}")
-
-## create and install the shared library that plugs into shadow
-add_shadow_plugin(shadow-plugin-test shd-test.c)
-target_link_libraries(shadow-plugin-test ${RT_LIBRARIES} ${GLIB_LIBRARIES})
-install(TARGETS shadow-plugin-test DESTINATION plugins)
+## register the tests
+#add_test(NAME test-phold COMMAND shadow-plugin-test-phold)
+add_test(NAME test-phold-shadow COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow ${CMAKE_CURRENT_SOURCE_DIR}/phold.test.shadow.config.xml)
