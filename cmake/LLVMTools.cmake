@@ -165,13 +165,90 @@ macro(add_plugin target)
 endmacro(add_plugin)
 
 ######################################################################################################
+## ADD_EXE                                                                                          ##
+######################################################################################################
+
+macro(add_exe target)
+
+    set(bctargets "")
+    foreach(bctarget ${ARGN})
+        set(bcpath "")
+        get_property(bcpath TARGET ${bctarget} PROPERTY LOCATION)
+        if(${bcpath} STREQUAL "")
+            message(FATAL_ERROR "Can't find property path for target '${bctarget}'")
+        endif()
+        list(APPEND bctargets ${bcpath})
+    endforeach(bctarget)
+
+    ## link all the bitcode targets together to the target, then hoist the globals
+    add_custom_command(OUTPUT ${target}.bc
+        COMMAND ${LLVM_BC_LINK} ${BC_LD_FLAGS} -o ${target}.bc ${bctargets}
+        DEPENDS ${bctargets}
+        COMMENT "Linking LLVM bitcode ${target}.bc"
+    )
+    set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_MAKE_CLEAN_FILES ${target}.bc)
+
+    ## double check for correct path
+    if((NOT DEFINED LLVMHoistGlobalsPATH) OR ( "${LLVMHoistGlobalsPATH}" STREQUAL ""))
+        message(FATAL_ERROR "LLVMHoistGlobalsPATH is empty: have you added the path to LLVMHoistGlobals.so to the include path?")
+    endif()
+    ## cant use the following check, because the .so doesnt exist yet when cmake scans this file
+    #if(NOT EXISTS "${LLVMHoistGlobalsPATH}")
+    #    message(FATAL_ERROR "LLVMHoistGlobals.so does not exist at ${LLVMHoistGlobalsPATH}")
+    #endif()
+
+    add_custom_command(OUTPUT ${target}.hoisted.bc
+        COMMAND ${LLVM_BC_OPT} -load=${LLVMHoistGlobalsPATH} -hoist-globals ${target}.bc -o ${target}.hoisted.bc
+        DEPENDS ${target}.bc LLVMHoistGlobals ${LLVMHoistGlobalsPATH}
+        COMMENT "Hoisting globals from ${target}.bc to ${target}.hoisted.bc"
+    )
+    set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_MAKE_CLEAN_FILES ${target}.hoisted.bc)
+
+    ## now we need the actual .so to be built
+    #add_library(${target} SHARED ${target}.hoisted.bc)
+    #add_dependencies(${target} ${target}.hoisted.bc)
+    
+    ## an alternative to the shared library is to build a position-independent executable as follows
+    ## this can still be loaded by shadow, but the internal symbols will not be interposed by LD_PRELOAD
+    add_executable(${target} ${target}.hoisted.bc)
+    
+    set_target_properties(${target} PROPERTIES 
+        INSTALL_RPATH ${CMAKE_INSTALL_PREFIX}/lib 
+        INSTALL_RPATH_USE_LINK_PATH TRUE 
+        #LINK_FLAGS "-rdynamic -Wl,--no-as-needed"
+        LINK_FLAGS "-pie -rdynamic -Wl,--no-as-needed"
+    )
+
+    ## trick cmake so it builds the bitcode into a shared library
+    set_property(TARGET ${target} PROPERTY LINKER_LANGUAGE C)
+    set_property(SOURCE ${target}.hoisted.bc PROPERTY EXTERNAL_OBJECT TRUE)
+
+    ## make sure we have the bitcode we need before building the .so
+    foreach(bctarget ${ARGN})
+        add_dependencies(${target} ${bctarget})
+    endforeach(bctarget)
+
+endmacro(add_plugin)
+
+######################################################################################################
 ## ADD_SHADOW_PLUGIN                                                                                ##
 ######################################################################################################
 
+## this should be used for plugins that want to interpose their internal symbols
 macro(add_shadow_plugin target)
     add_bitcode(${target}-bitcode ${ARGN})
     add_plugin(${target} ${target}-bitcode)
 endmacro(add_shadow_plugin)
+
+######################################################################################################
+## ADD_SHADOW_EXE                                                                                   ##
+######################################################################################################
+
+## this should be used for plugins that dont need or want their internal symbols interposed
+macro(add_shadow_exe target)
+    add_bitcode(${target}-bitcode ${ARGN})
+    add_exe(${target} ${target}-bitcode)
+endmacro(add_shadow_exe)
 
 ######################################################################################################
 ## SETUP                                                                                            ##

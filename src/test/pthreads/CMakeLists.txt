@@ -2,11 +2,11 @@ find_package(Threads REQUIRED)
 include_directories(${RT_INCLUDES})
 
 ## build the test as a dynamic executable that plugs into shadow
-add_shadow_plugin(shadow-plugin-test-pthreads shd-test-pthreads.c)
+add_shadow_exe(shadow-plugin-test-pthreads shd-test-pthreads.c)
 
 ## if the test needs any libraries, link them here
 target_link_libraries(shadow-plugin-test-pthreads ${CMAKE_THREAD_LIBS_INIT})
 
 ## register the tests
 add_test(NAME test-pthreads COMMAND shadow-plugin-test-pthreads)
-add_test(NAME test-pthreads-shadow COMMAND ${CMAKE_BINARY_DIR}/src/shadow  ${CMAKE_CURRENT_SOURCE_DIR}/pthreads.test.shadow.config.xml)
+add_test(NAME test-pthreads-shadow COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow ${CMAKE_CURRENT_SOURCE_DIR}/pthreads.test.shadow.config.xml)
