@@ -346,6 +346,7 @@ int pth_select_ev(int nfd, fd_set *rfds, fd_set *wfds,
     }
 
     int fd;
+    ev_ring = NULL;
     for (fd = 0; fd < nfd; fd++) {
     	uint32_t events = 0;
     	unsigned long goal = PTH_EVENT_FD;
