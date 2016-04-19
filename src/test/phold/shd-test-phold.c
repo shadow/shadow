@@ -23,15 +23,12 @@
 #define TEST_ASSERT(obj)
 #endif
 
-#define TEST_LOG_ERROR 1
-#define TEST_LOG_WARNING 2
-#define TEST_LOG_INFO 3
-#define TEST_LOG_DEBUG 4
-
-#define test_error(...)     _test_log(TEST_LOG_ERROR, __FUNCTION__, __VA_ARGS__)
-#define test_warning(...)   _test_log(TEST_LOG_WARNING, __FUNCTION__, __VA_ARGS__)
-#define test_info(...)      _test_log(TEST_LOG_INFO, __FUNCTION__, __VA_ARGS__)
-#define test_debug(...)     _test_log(TEST_LOG_DEBUG, __FUNCTION__, __VA_ARGS__)
+#define test_error(...)     _test_log(G_LOG_LEVEL_ERROR, __FILE__, __LINE__, __FUNCTION__, __VA_ARGS__)
+#define test_critical(...)  _test_log(G_LOG_LEVEL_CRITICAL, __FILE__, __LINE__, __FUNCTION__, __VA_ARGS__)
+#define test_warning(...)   _test_log(G_LOG_LEVEL_WARNING, __FILE__, __LINE__, __FUNCTION__, __VA_ARGS__)
+#define test_message(...)   _test_log(G_LOG_LEVEL_MESSAGE, __FILE__, __LINE__, __FUNCTION__, __VA_ARGS__)
+#define test_info(...)      _test_log(G_LOG_LEVEL_INFO, __FILE__, __LINE__, __FUNCTION__, __VA_ARGS__)
+#define test_debug(...)     _test_log(G_LOG_LEVEL_DEBUG, __FILE__, __LINE__, __FUNCTION__, __VA_ARGS__)
 
 #define TEST_LISTEN_PORT 8998
 
@@ -47,27 +44,58 @@ struct _Test {
     guint magic;
 };
 
-/* our test code only relies on a log function, so let's supply that implementation here */
-static void _test_log(int level, const char* functionName, const char* format, ...) {
-    char* levelString = "unknown";
-    if(level == TEST_LOG_ERROR) {
-        levelString = "error";
-    } else if(level == TEST_LOG_WARNING) {
-        levelString = "warning";
-    } else if(level == TEST_LOG_INFO) {
-        levelString = "info";
-    } else if(level == TEST_LOG_DEBUG) {
-        levelString = "debug";
+GString* testLogDomain = NULL;
+
+static const gchar* _test_logLevelToString(GLogLevelFlags logLevel) {
+    switch (logLevel) {
+        case G_LOG_LEVEL_ERROR:
+            return "error";
+        case G_LOG_LEVEL_CRITICAL:
+            return "critical";
+        case G_LOG_LEVEL_WARNING:
+            return "warning";
+        case G_LOG_LEVEL_MESSAGE:
+            return "message";
+        case G_LOG_LEVEL_INFO:
+            return "info";
+        case G_LOG_LEVEL_DEBUG:
+            return "debug";
+        default:
+            return "default";
     }
+}
 
-    printf("%li [%s] [%s] ", (long int) time(NULL), levelString, functionName);
+static void _test_logHandler(const gchar *logDomain, GLogLevelFlags logLevel,
+        const gchar *message, gpointer userData) {
+    GLogLevelFlags filter = (GLogLevelFlags)GPOINTER_TO_INT(userData);
+    if(logLevel <= filter) {
+        g_print("%s\n", message);
+    }
+}
 
-    va_list variableArguments;
-    va_start(variableArguments, format);
-    vprintf(format, variableArguments);
-    va_end(variableArguments);
+/* our test code only relies on a log function, so let's supply that implementation here */
+static void _test_log(GLogLevelFlags level, const gchar* fileName, const gint lineNum, const gchar* functionName, const gchar* format, ...) {
+    va_list vargs;
+    va_start(vargs, format);
 
-    printf("%s", "\n");
+    gchar* fileStr = fileName ? g_path_get_basename(fileName) : g_strdup("n/a");
+    const gchar* functionStr = functionName ? functionName : "n/a";
+
+    GDateTime* dt = g_date_time_new_now_local();
+    GString* newformat = g_string_new(NULL);
+
+    g_string_append_printf(newformat, "%04i-%02i-%02i %02i:%02i:%02i %"G_GINT64_FORMAT".%06i [%s] [%s:%i] [%s] %s",
+            g_date_time_get_year(dt), g_date_time_get_month(dt), g_date_time_get_day_of_month(dt),
+            g_date_time_get_hour(dt), g_date_time_get_minute(dt), g_date_time_get_second(dt),
+            g_date_time_to_unix(dt), g_date_time_get_microsecond(dt),
+            _test_logLevelToString(level), fileStr, lineNum, functionName, format);
+    g_logv(testLogDomain->str, level, newformat->str, vargs);
+
+    g_string_free(newformat, TRUE);
+    g_date_time_unref(dt);
+    g_free(fileStr);
+
+    va_end(vargs);
 }
 
 void test_free(Test* test) {
@@ -277,7 +305,17 @@ void test_activate(Test* test) {
 
 /* program execution starts here */
 int main(int argc, char *argv[]) {
-    test_info("Starting Test program");
+    /* construct our unique log domain */
+    gchar hostname[128];
+    memset(hostname, 0, 128);
+    gethostname(hostname, 128);
+    testLogDomain = g_string_new(NULL);
+    g_string_printf(testLogDomain, "%s-test-%i", hostname, (gint)getpid());
+
+    /* default to info level log until we make it configurable */
+    gpointer startupFilter = GINT_TO_POINTER(G_LOG_LEVEL_INFO);
+    guint startupID = g_log_set_handler(testLogDomain->str, G_LOG_LEVEL_MASK|G_LOG_FLAG_FATAL|G_LOG_FLAG_RECURSION, _test_logHandler, startupFilter);
+    test_info("Initializing phold test on host %s using log domain %s", hostname, testLogDomain->str);
 
     /* create the new state according to user inputs */
     Test* testState = test_new(argc, argv);
