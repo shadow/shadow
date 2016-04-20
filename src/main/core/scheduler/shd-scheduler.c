@@ -198,7 +198,7 @@ Scheduler* scheduler_new(SchedulerPolicyType policyType, guint nWorkers, gpointe
     return scheduler;
 }
 
-static void _scheduler_free(Scheduler* scheduler) {
+void scheduler_shutdown(Scheduler* scheduler) {
     MAGIC_ASSERT(scheduler);
 
     message("scheduler is shutting down now");
@@ -224,6 +224,12 @@ static void _scheduler_free(Scheduler* scheduler) {
         }
         threadItem = g_list_next(threadItem);
     }
+}
+
+static void _scheduler_free(Scheduler* scheduler) {
+    MAGIC_ASSERT(scheduler);
+
+    guint nWorkers = g_list_length(scheduler->workerThreads);
     g_list_free(scheduler->workerThreads);
 
     scheduler->policy->free(scheduler->policy);

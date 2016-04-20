@@ -15,6 +15,7 @@ Scheduler* scheduler_new(SchedulerPolicyType policyType, guint nWorkers, gpointe
         guint schedulerSeed, SimulationTime endTime);
 void scheduler_ref(Scheduler*);
 void scheduler_unref(Scheduler*);
+void scheduler_shutdown(Scheduler* scheduler);
 
 void scheduler_awaitStart(Scheduler*);
 void scheduler_awaitFinish(Scheduler*);

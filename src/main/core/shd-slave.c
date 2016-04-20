@@ -130,6 +130,9 @@ gint slave_free(Slave* slave) {
     slave->forceShadowContext = TRUE;
 
     if(slave->scheduler) {
+        /* stop all of the threads and release host resources first */
+        scheduler_shutdown(slave->scheduler);
+        /* now we are the last one holding a ref, free the sched */
         scheduler_unref(slave->scheduler);
     }
 
