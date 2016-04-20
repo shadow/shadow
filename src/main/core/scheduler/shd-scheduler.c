@@ -339,17 +339,26 @@ void scheduler_addHost(Scheduler* scheduler, Host* host) {
     g_hash_table_replace(scheduler->hostIDToHostMap, hostIDKey, host);
 
     /* figure out which thread gets the host */
-    GThread* randomThread = g_thread_self();
+    GThread* chosenThread = NULL;
     gdouble nThreads = (gdouble)g_list_length(scheduler->workerThreads);
     if(nThreads > 0) {
-        /* choose a random one instead of whichever one happens to be running initActions) */
-        gdouble frac = random_nextDouble(scheduler->random);
-        guint index = (guint)round(frac * (nThreads-1.0f));
-        randomThread = g_list_nth_data(scheduler->workerThreads, index);
-        utility_assert(randomThread);
+        /* choose a random one instead of whichever one happens to be running initActions */
+        gdouble randomFraction = random_nextDouble(scheduler->random);
+        guint randomIndex = (guint)floor(randomFraction * (nThreads));
+
+        /* handle frac=1.0 edge case, which would yield nThreads, which is not a valid index */
+        guint maxValidIndex = ((guint)nThreads) - 1;
+        guint index = MIN(randomIndex, maxValidIndex);
+
+        /* choose the thread at the random index */
+        chosenThread = g_list_nth_data(scheduler->workerThreads, index);
+    } else {
+        /* we are the only thread, we get everything */
+        chosenThread = g_thread_self();
     }
 
-    scheduler->policy->addHost(scheduler->policy, host, randomThread);
+    utility_assert(chosenThread);
+    scheduler->policy->addHost(scheduler->policy, host, chosenThread);
 }
 
 Host* scheduler_getHost(Scheduler* scheduler, GQuark hostID) {
