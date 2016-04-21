@@ -44,7 +44,7 @@ struct _Test {
     guint magic;
 };
 
-GString* testLogDomain = NULL;
+GLogLevelFlags pholdLogFilterLevel = G_LOG_LEVEL_INFO;
 
 static const gchar* _test_logLevelToString(GLogLevelFlags logLevel) {
     switch (logLevel) {
@@ -65,16 +65,12 @@ static const gchar* _test_logLevelToString(GLogLevelFlags logLevel) {
     }
 }
 
-static void _test_logHandler(const gchar *logDomain, GLogLevelFlags logLevel,
-        const gchar *message, gpointer userData) {
-    GLogLevelFlags filter = (GLogLevelFlags)GPOINTER_TO_INT(userData);
-    if(logLevel <= filter) {
-        g_print("%s\n", message);
-    }
-}
-
 /* our test code only relies on a log function, so let's supply that implementation here */
 static void _test_log(GLogLevelFlags level, const gchar* fileName, const gint lineNum, const gchar* functionName, const gchar* format, ...) {
+    if(level > pholdLogFilterLevel) {
+        return;
+    }
+
     va_list vargs;
     va_start(vargs, format);
 
@@ -89,7 +85,10 @@ static void _test_log(GLogLevelFlags level, const gchar* fileName, const gint li
             g_date_time_get_hour(dt), g_date_time_get_minute(dt), g_date_time_get_second(dt),
             g_date_time_to_unix(dt), g_date_time_get_microsecond(dt),
             _test_logLevelToString(level), fileStr, lineNum, functionName, format);
-    g_logv(testLogDomain->str, level, newformat->str, vargs);
+
+    gchar* message = g_strdup_vprintf(newformat->str, vargs);
+    g_print("%s\n", message);
+    g_free(message);
 
     g_string_free(newformat, TRUE);
     g_date_time_unref(dt);
@@ -305,17 +304,15 @@ void test_activate(Test* test) {
 
 /* program execution starts here */
 int main(int argc, char *argv[]) {
-    /* construct our unique log domain */
+    pholdLogFilterLevel = G_LOG_LEVEL_INFO;
+
+    /* get our hostname for logging */
     gchar hostname[128];
     memset(hostname, 0, 128);
     gethostname(hostname, 128);
-    testLogDomain = g_string_new(NULL);
-    g_string_printf(testLogDomain, "%s-test-%i", hostname, (gint)getpid());
 
     /* default to info level log until we make it configurable */
-    gpointer startupFilter = GINT_TO_POINTER(G_LOG_LEVEL_INFO);
-    guint startupID = g_log_set_handler(testLogDomain->str, G_LOG_LEVEL_MASK|G_LOG_FLAG_FATAL|G_LOG_FLAG_RECURSION, _test_logHandler, startupFilter);
-    test_info("Initializing phold test on host %s using log domain %s", hostname, testLogDomain->str);
+    test_info("Initializing phold test on host %s process id %i", hostname, (gint)getpid());
 
     /* create the new state according to user inputs */
     Test* testState = test_new(argc, argv);
