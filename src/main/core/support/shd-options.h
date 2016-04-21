@@ -52,27 +52,14 @@ Options* options_new(gint argc, gchar* argv[]);
 void options_free(Options* options);
 
 /**
- * Get the log level flags corresponding to the given input string. Strings are
- * compared ignoring case. If an invalid string is supplied, the default flags
- * are returned.
- *
- * @param config a #Configuration object created with configuration_new()
- * @param input the string representing the log level. Valid strings are:
- *  'error'; 'critical'; 'warning'; 'message'; 'info'; and 'debug'.
- * @return the log level parsed from the input string, or the log level
- * corresponding to 'message' if the input is invalid.
- */
-GLogLevelFlags options_toLogLevel(Options* options, const gchar* input);
-
-/**
  * Get the configured log level based on command line input.
  *
  * @param config a #Configuration object created with configuration_new()
  *
  * @returns the log level as parsed from command line input
  */
-GLogLevelFlags options_getLogLevel(Options* options);
-GLogLevelFlags options_getHeartbeatLogLevel(Options* options);
+LogLevel options_getLogLevel(Options* options);
+LogLevel options_getHeartbeatLogLevel(Options* options);
 
 /**
  * Get the configured log level at which heartbeat messages are printed,

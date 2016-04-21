@@ -622,7 +622,7 @@ static gchar* _packet_getString(Packet* packet) {
 }
 
 void packet_addDeliveryStatus(Packet* packet, PacketDeliveryStatusFlags status) {
-    gboolean skipDebug = worker_isFiltered(G_LOG_LEVEL_DEBUG);
+    gboolean skipDebug = worker_isFiltered(LOGLEVEL_DEBUG);
     gchar* packetStr = NULL;
 
     _packet_lock(packet);

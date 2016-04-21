@@ -69,7 +69,6 @@ Master* master_new(Options* options) {
 
     master->options = options;
     master->random = random_new(options_getRandomSeed(options));
-    master->runTimer = g_timer_new();
 
     gint minRunAhead = (SimulationTime)options_getMinRunAhead(options);
     master->minJumpTimeConfig = ((SimulationTime)minRunAhead) * SIMTIME_ONE_MILLISECOND;
@@ -81,15 +80,12 @@ Master* master_new(Options* options) {
 //  g_unix_signal_add(SIGHUP, (GSourceFunc)_master_handleInterruptSignal, master);
 //  g_unix_signal_add(SIGINT, (GSourceFunc)_master_handleInterruptSignal, master);
 
+    message("simulation master created");
     return master;
 }
 
-gint master_free(Master* master) {
+void master_free(Master* master) {
     MAGIC_ASSERT(master);
-
-    debug("engine finished, cleaning up...");
-
-    gint returnCode = slave_free(master->slave);
 
     if(master->topology) {
         topology_free(master->topology);
@@ -97,13 +93,6 @@ gint master_free(Master* master) {
     if(master->dns) {
         dns_free(master->dns);
     }
-
-    GDateTime* dt_now = g_date_time_new_now_local();
-    gchar* dt_format = g_date_time_format(dt_now, "%F %H:%M:%S");
-    message("%s shut down cleanly at %s", SHADOW_VERSION_STRING, dt_format);
-    g_date_time_unref(dt_now);
-    g_free(dt_format);
-
     if(master->random) {
         random_free(master->random);
     }
@@ -111,7 +100,7 @@ gint master_free(Master* master) {
     MAGIC_CLEAR(master);
     g_free(master);
 
-    return returnCode;
+    message("simulation master destroyed");
 }
 
 static SimulationTime _master_getMinTimeJump(Master* master) {
@@ -289,11 +278,11 @@ static void _master_registerHosts(Master* master) {
             params->cpuPrecision = defaultCPUPrecision > 0 ? defaultCPUPrecision : 0;
 
             params->logLevel = ne->loglevel.isSet ?
-                    options_toLogLevel(master->options, ne->loglevel.string->str) :
+                    loglevel_fromStr(ne->loglevel.string->str) :
                     options_getLogLevel(master->options);
 
             params->heartbeatLogLevel = ne->heartbeatloglevel.isSet ?
-                    options_toLogLevel(master->options, ne->heartbeatloglevel.string->str) :
+                    loglevel_fromStr(ne->heartbeatloglevel.string->str) :
                     options_getHeartbeatLogLevel(master->options);
 
             params->heartbeatInterval = ne->heartbeatfrequency.isSet ?
@@ -349,45 +338,10 @@ static void _master_registerHosts(Master* master) {
     }
 }
 
-void master_run(Master* master) {
+gint master_run(Master* master) {
     MAGIC_ASSERT(master);
 
-    /* hook in our logging system. stack variable used to avoid errors
-     * during cleanup below. */
-    GLogLevelFlags configuredLogLevel = options_getLogLevel(master->options);
-    g_log_set_default_handler(logging_handleLog, &(configuredLogLevel));
-
-    /* start off with some status messages */
-    message(SHADOW_VERSION_STRING);
-    message(SHADOW_INFO_STRING);
-
-    GDateTime* dt_now = g_date_time_new_now_local();
-    gchar* dt_format = g_date_time_format(dt_now, "%F %H:%M:%S");
-
-#if defined(IGRAPH_VERSION)
-    gint igraphMajor = -1, igraphMinor = -1, igraphPatch = -1;
-    igraph_version(NULL, &igraphMajor, &igraphMinor, &igraphPatch);
-    message("Shadow initialized at %s using GLib v%u.%u.%u and IGraph v%i.%i.%i",
-             dt_format, (guint)GLIB_MAJOR_VERSION, (guint)GLIB_MINOR_VERSION, (guint)GLIB_MICRO_VERSION,
-        igraphMajor, igraphMinor, igraphPatch);
-#else
-    message("Shadow initialized at %s using GLib v%u.%u.%u (IGraph version not available)",
-        dt_format, (guint)GLIB_MAJOR_VERSION, (guint)GLIB_MINOR_VERSION, (guint)GLIB_MICRO_VERSION);
-#endif
-
-    g_date_time_unref(dt_now);
-    g_free(dt_format);
-
-    message("args=%s", options_getArgumentString(master->options));
-    message("LD_PRELOAD=%s", g_getenv("LD_PRELOAD"));
-    message("SHADOW_SPAWNED=%s", g_getenv("SHADOW_SPAWNED"));
-
-    /* pause for debugger attachment if the option is set */
-    if(options_doRunDebug(master->options)) {
-        message("Pausing with SIGTSTP to enable debugger attachment (pid %i)", (gint)getpid());
-        g_printerr("** Pausing with SIGTSTP to enable debugger attachment (pid %i)\n", (gint)getpid());
-        raise(SIGTSTP);
-    }
+    message("loading and initializing simulation data");
 
     /* start loading and initializing simulation data */
     _master_loadConfiguration(master);
@@ -400,18 +354,21 @@ void master_run(Master* master) {
     guint slaveSeed = (guint)random_nextInt(master->random);
     master->slave = slave_new(master, master->options, master->endTime, slaveSeed);
 
+    message("registering plugins and hosts");
+
     /* register the components needed by each slave.
      * this must be done after slaves are available so we can send them messages */
     _master_registerPlugins(master);
     _master_registerHosts(master);
 
+    message("running simulation");
+
     /* start running each slave */
     slave_run(master->slave);
-}
 
-GTimer* master_getRunTimer(Master* master) {
-    MAGIC_ASSERT(master);
-    return master->runTimer;
+    message("simulation finished, cleaning up now");
+
+    return slave_free(master->slave);
 }
 
 gboolean master_slaveFinishedCurrentRound(Master* master, SimulationTime minNextEventTime,

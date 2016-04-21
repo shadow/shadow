@@ -1392,7 +1392,7 @@ Tracker* host_getTracker(Host* host) {
     return host->tracker;
 }
 
-GLogLevelFlags host_getLogLevel(Host* host) {
+LogLevel host_getLogLevel(Host* host) {
     MAGIC_ASSERT(host);
     return host->params.logLevel;
 }

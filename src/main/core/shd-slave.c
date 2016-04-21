@@ -189,10 +189,6 @@ gdouble slave_nextRandomDouble(Slave* slave) {
     return r;
 }
 
-GTimer* slave_getRunTimer(Slave* slave) {
-    return master_getRunTimer(slave->master);
-}
-
 void slave_addNewProgram(Slave* slave, const gchar* name, const gchar* path) {
     MAGIC_ASSERT(slave);
 

@@ -378,11 +378,6 @@ Program* worker_getProgram(GQuark pluginID) {
     return slave_getProgram(worker->slave, pluginID);
 }
 
-GTimer* worker_getRunTimer() {
-    Worker* worker = _worker_getPrivate();
-    return slave_getRunTimer(worker->slave);
-}
-
 void worker_updateMinTimeJump(gdouble minPathLatency) {
     Worker* worker = _worker_getPrivate();
     slave_updateMinTimeJump(worker->slave, minPathLatency);
@@ -393,33 +388,8 @@ void worker_setCurrentTime(SimulationTime time) {
     worker->clock.now = time;
 }
 
-gboolean worker_isFiltered(GLogLevelFlags level) {
-    Worker* worker = worker_isAlive() ? _worker_getPrivate() : NULL;
-
-    if(worker) {
-        /* check the local node log level first */
-        gboolean isNodeLevelSet = FALSE;
-        Host* currentHost = worker_getActiveHost();
-        if(worker->active.host) {
-            GLogLevelFlags nodeLevel = host_getLogLevel(currentHost);
-            if(nodeLevel) {
-                isNodeLevelSet = TRUE;
-                if(level > nodeLevel) {
-                    return TRUE;
-                }
-            }
-        }
-
-        /* only check the global config if the node didnt have a local setting */
-        if(!isNodeLevelSet) {
-            Options* c = slave_getOptions(worker->slave);
-            if(c && (level > options_getLogLevel(c))) {
-                return TRUE;
-            }
-        }
-    }
-
-    return FALSE;
+gboolean worker_isFiltered(LogLevel level) {
+    return logger_shouldFilter(logger_getDefault(), level);
 }
 
 void worker_incrementPluginError() {

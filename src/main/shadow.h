@@ -56,6 +56,11 @@ typedef struct _Process Process;
 #include "core/support/shd-definitions.h"
 #include "core/shd-main.h"
 
+/* logging */
+#include "core/logger/shd-log-level.h"
+#include "core/logger/shd-log-record.h"
+#include "core/logger/shd-logger.h"
+
 /* configuration, base runnables, and input parsing */
 #include "core/support/shd-examples.h"
 #include "core/support/shd-options.h"
@@ -101,7 +106,6 @@ typedef struct _Process Process;
 
 #include "routing/shd-topology.h"
 
-#include "core/support/shd-logging.h"
 #include "core/scheduler/shd-scheduler-policy.h"
 #include "core/scheduler/shd-scheduler.h"
 #include "core/shd-master.h"

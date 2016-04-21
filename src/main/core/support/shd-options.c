@@ -238,34 +238,15 @@ void options_free(Options* options) {
     g_free(options);
 }
 
-GLogLevelFlags options_toLogLevel(Options* options, const gchar* input) {
+LogLevel options_getLogLevel(Options* options) {
     MAGIC_ASSERT(options);
-    if (g_ascii_strcasecmp(input, "error") == 0) {
-        return G_LOG_LEVEL_ERROR;
-    } else if (g_ascii_strcasecmp(input, "critical") == 0) {
-        return G_LOG_LEVEL_CRITICAL;
-    } else if (g_ascii_strcasecmp(input, "warning") == 0) {
-        return G_LOG_LEVEL_WARNING;
-    } else if (g_ascii_strcasecmp(input, "message") == 0) {
-        return G_LOG_LEVEL_MESSAGE;
-    } else if (g_ascii_strcasecmp(input, "info") == 0) {
-        return G_LOG_LEVEL_INFO;
-    } else if (g_ascii_strcasecmp(input, "debug") == 0) {
-        return G_LOG_LEVEL_DEBUG;
-    } else {
-        return G_LOG_LEVEL_MESSAGE;
-    }
+    return loglevel_fromStr(options->logLevelInput);
 }
 
-GLogLevelFlags options_getLogLevel(Options* options) {
-    MAGIC_ASSERT(options);
-    return options_toLogLevel(options, options->logLevelInput);
-}
-
-GLogLevelFlags options_getHeartbeatLogLevel(Options* options) {
+LogLevel options_getHeartbeatLogLevel(Options* options) {
     MAGIC_ASSERT(options);
     const gchar* l = (const gchar*) options->heartbeatLogLevelInput;
-    return options_toLogLevel(options, l);
+    return loglevel_fromStr(l);
 }
 
 SimulationTime options_getHeartbeatInterval(Options* options) {

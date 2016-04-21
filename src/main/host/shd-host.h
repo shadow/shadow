@@ -27,9 +27,9 @@ struct _HostParameters {
     guint64 cpuThreshold;
     guint64 cpuPrecision;
     SimulationTime heartbeatInterval;
-    GLogLevelFlags heartbeatLogLevel;
+    LogLevel heartbeatLogLevel;
     LogInfoFlags heartbeatLogInfo;
-    GLogLevelFlags logLevel;
+    LogLevel logLevel;
     gboolean logPcap;
     gchar* pcapDir;
     QDiscMode qdisc;
@@ -99,7 +99,7 @@ gint host_getPeerName(Host* host, gint handle, const struct sockaddr* address, s
 gint host_getSocketName(Host* host, gint handle, const struct sockaddr* address, socklen_t* len);
 
 Tracker* host_getTracker(Host* host);
-GLogLevelFlags host_getLogLevel(Host* host);
+LogLevel host_getLogLevel(Host* host);
 
 const gchar* host_getDataPath(Host* host);
 

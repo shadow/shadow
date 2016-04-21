@@ -34,10 +34,9 @@ guint32 worker_getNodeBandwidthUp(GQuark nodeID, in_addr_t ip);
 guint32 worker_getNodeBandwidthDown(GQuark nodeID, in_addr_t ip);
 gdouble worker_getLatency(GQuark sourceNodeID, GQuark destinationNodeID);
 gint worker_getThreadID();
-GTimer* worker_getRunTimer();
 void worker_updateMinTimeJump(gdouble minPathLatency);
 void worker_setCurrentTime(SimulationTime time);
-gboolean worker_isFiltered(GLogLevelFlags level);
+gboolean worker_isFiltered(LogLevel level);
 
 void worker_bootHosts(GList* hosts);
 void worker_freeHosts(GList* hosts);

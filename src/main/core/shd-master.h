@@ -12,11 +12,11 @@
 typedef struct _Master Master;
 
 Master* master_new(Options*);
-gint master_free(Master*);
-void master_run(Master*);
+void master_free(Master*);
+gint master_run(Master*);
 
 void master_updateMinTimeJump(Master*, gdouble);
-GTimer* master_getRunTimer(Master*);
+gdouble master_getRunTimeElapsed(Master*);
 
 gboolean master_slaveFinishedCurrentRound(Master*, SimulationTime, SimulationTime*, SimulationTime*);
 gdouble master_getLatency(Master* master, Address* srcAddress, Address* dstAddress);
