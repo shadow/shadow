@@ -28,12 +28,17 @@ void random_free(Random* random) {
 }
 
 gint random_nextInt(Random* random) {
-    return (gint) rand_r(&(random->seedState));
+    gdouble randomFraction = random_nextDouble(random);
+    gdouble maxUint = (gdouble)UINT_MAX;
+    uint randomUint = (uint)(randomFraction * maxUint);
+    return (gint)randomUint;
 }
 
 gdouble random_nextDouble(Random* random) {
     utility_assert(random);
-    return (gdouble)(((gdouble)rand_r(&(random->seedState))) / ((gdouble)RAND_MAX));
+    /* returns 0 to RAND_MAX, which is only 31 bits */
+    gint randomValue = rand_r(&(random->seedState));
+    return (gdouble)(((gdouble)randomValue) / ((gdouble)RAND_MAX));
 }
 
 void random_nextNBytes(Random* random, guchar* buffer, gint nbytes) {
