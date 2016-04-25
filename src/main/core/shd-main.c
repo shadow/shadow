@@ -156,30 +156,6 @@ static gboolean _main_spawnShadowWithValgrind(gchar** argv, gchar** envlist, gin
     return success;
 }
 
-static void _main_logStartupMessage() {
-#if defined(IGRAPH_VERSION)
-    gint igraphMajor = -1, igraphMinor = -1, igraphPatch = -1;
-    igraph_version(NULL, &igraphMajor, &igraphMinor, &igraphPatch);
-
-    gchar* startupStr = g_strdup_printf("Starting %s with GLib v%u.%u.%u and IGraph v%i.%i.%i",
-            SHADOW_VERSION_STRING,
-            (guint)GLIB_MAJOR_VERSION, (guint)GLIB_MINOR_VERSION, (guint)GLIB_MICRO_VERSION,
-            igraphMajor, igraphMinor, igraphPatch);
-#else
-    gchar* startupStr = g_strdup_printf("Starting %s with GLib v%u.%u.%u (IGraph version not available)",
-            SHADOW_VERSION_STRING,
-            (guint)GLIB_MAJOR_VERSION, (guint)GLIB_MINOR_VERSION, (guint)GLIB_MICRO_VERSION);
-#endif
-
-    message("%s", startupStr);
-    g_printerr("** %s", startupStr);
-    g_free(startupStr);
-}
-
-static void _main_logShutdownMessage() {
-
-}
-
 gint shadow_main(gint argc, gchar* argv[]) {
     /* check the compiled GLib version */
     if (!GLIB_CHECK_VERSION(2, 32, 0)) {
@@ -312,8 +288,9 @@ gint shadow_main(gint argc, gchar* argv[]) {
 
     message("%s simulation was shut down cleanly", SHADOW_VERSION_STRING);
 
-    logger_unref(shadowLogger);
     options_free(options);
+    logger_setDefault(NULL);
+    logger_unref(shadowLogger);
     g_printerr("** Shadow returning code %i (%s)\n", returnCode, (returnCode == 0) ? "success" : "error");
     return returnCode;
 }

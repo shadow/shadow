@@ -94,12 +94,15 @@ void logger_unref(Logger* logger) {
 }
 
 void logger_setDefault(Logger* logger) {
-    MAGIC_ASSERT(logger);
     if(defaultLogger != NULL) {
         logger_unref(defaultLogger);
+        defaultLogger = NULL;
     }
-    defaultLogger = logger;
-    logger_ref(logger);
+    if(logger != NULL) {
+        MAGIC_ASSERT(logger);
+        defaultLogger = logger;
+        logger_ref(logger);
+    }
 }
 
 Logger* logger_getDefault() {
