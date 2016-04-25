@@ -30,7 +30,7 @@ void random_free(Random* random);
  * @param random the random source
  * @return the next integer in the range [0, RAND_MAX]
  */
-gint random_nextInt(Random* random);
+gint random_rand(Random* random);
 
 /**
  * Gets the next double in the range [0,1] from the random source.
@@ -38,6 +38,8 @@ gint random_nextInt(Random* random);
  * @return the next double in the range [0,1]
  */
 gdouble random_nextDouble(Random* random);
+
+guint random_nextUInt(Random* random);
 
 /**
  * Gets the next nbytes in the range [0, RAND_MAX] from the random source.

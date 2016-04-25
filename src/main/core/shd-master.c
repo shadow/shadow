@@ -351,7 +351,7 @@ gint master_run(Master* master) {
     /* the master will be responsible for distributing the actions to the slaves so that
      * they all have a consistent view of the simulation, topology, etc.
      * For now we only have one slave so send it everything. */
-    guint slaveSeed = (guint)random_nextInt(master->random);
+    guint slaveSeed = random_nextUInt(master->random);
     master->slave = slave_new(master, master->options, master->endTime, slaveSeed);
 
     message("registering plugins and hosts");

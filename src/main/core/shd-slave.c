@@ -100,7 +100,7 @@ Slave* slave_new(Master* master, Options* options, SimulationTime endTime, guint
 
     guint nWorkers = options_getNWorkerThreads(options);
     SchedulerPolicyType policy = _slave_getEventSchedulerPolicy(slave);
-    guint schedulerSeed = (guint)slave_nextRandomInt(slave);
+    guint schedulerSeed = slave_nextRandomUInt(slave);
     slave->scheduler = scheduler_new(policy, nWorkers, slave, schedulerSeed, endTime);
 
     slave->cwdPath = g_get_current_dir();
@@ -176,10 +176,10 @@ guint slave_getRawCPUFrequency(Slave* slave) {
     return freq;
 }
 
-gint slave_nextRandomInt(Slave* slave) {
+guint slave_nextRandomUInt(Slave* slave) {
     MAGIC_ASSERT(slave);
     _slave_lock(slave);
-    gint r = random_nextInt(slave->random);
+    guint r = random_nextUInt(slave->random);
     _slave_unlock(slave);
     return r;
 }
@@ -210,7 +210,7 @@ void slave_addNewVirtualHost(Slave* slave, HostParameters* params) {
 
     /* quarks are unique per slave process, so do the conversion here */
     params->id = g_quark_from_string(params->hostname);
-    params->nodeSeed = (guint) slave_nextRandomInt(slave);
+    params->nodeSeed = slave_nextRandomUInt(slave);
 
     Host* host = host_new(params);
     scheduler_addHost(slave->scheduler, host);

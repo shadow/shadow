@@ -3719,14 +3719,14 @@ int process_emu_gethostbyaddr_r(Process* proc, const void *addr, socklen_t len, 
 
 int process_emu_rand(Process* proc) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-    gint r = random_nextInt(host_getRandom(proc->host));
+    gint r = random_rand(host_getRandom(proc->host));
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return r;
 }
 
 int process_emu_rand_r(Process* proc, unsigned int *seedp) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-    gint r = random_nextInt(host_getRandom(proc->host));
+    gint r = random_rand(host_getRandom(proc->host));
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return r;
 }
@@ -3737,7 +3737,7 @@ void process_emu_srand(Process* proc, unsigned int seed) {
 
 long int process_emu_random(Process* proc) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-    gint r = random_nextInt(host_getRandom(proc->host));
+    gint r = random_rand(host_getRandom(proc->host));
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return (long int)r;
 }
@@ -3745,7 +3745,7 @@ long int process_emu_random(Process* proc) {
 int process_emu_random_r(Process* proc, struct random_data *buf, int32_t *result) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     utility_assert(result != NULL);
-    *result = (int32_t)random_nextInt(host_getRandom(proc->host));
+    *result = (int32_t)random_rand(host_getRandom(proc->host));
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return 0;
 }

@@ -29,7 +29,8 @@ static int _test_dev_urandom() {
         }
 
         double randomFrac = ((double)randomValue) / ((double)UINT_MAX);
-        fprintf(stdout, "########## random_frac is %f\n", randomFrac);
+        //fprintf(stdout, "########## random_frac is %f\n", randomFrac);
+
         if(randomFrac < LOW_THRESH) {
             numLow++;
         } else if(randomFrac > HIGH_THRESH) {
@@ -48,11 +49,25 @@ static int _test_dev_urandom() {
     }
 }
 
+static int _test_rand() {
+    for(int i = 0; i < 100; i++) {
+        int random_value = rand();
+        if(random_value < 0 || random_value > RAND_MAX) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
 int main(int argc, char* argv[]) {
     fprintf(stdout, "########## random test starting ##########\n");
 
     if(_test_dev_urandom() < 0) {
         fprintf(stdout, "########## _test_dev_urandom() failed\n");
+        return -1;
+    }
+    if(_test_rand() < 0) {
+        fprintf(stdout, "########## _test_rand() failed\n");
         return -1;
     }
 

@@ -343,16 +343,6 @@ guint worker_getRawCPUFrequency() {
     return slave_getRawCPUFrequency(worker->slave);
 }
 
-gdouble worker_nextRandomDouble() {
-    Worker* worker = _worker_getPrivate();
-    return slave_nextRandomDouble(worker->slave);
-}
-
-gint worker_nextRandomInt() {
-    Worker* worker = _worker_getPrivate();
-    return slave_nextRandomInt(worker->slave);
-}
-
 guint32 worker_getNodeBandwidthUp(GQuark nodeID, in_addr_t ip) {
     Worker* worker = _worker_getPrivate();
     return slave_getNodeBandwidthUp(worker->slave, nodeID, ip);

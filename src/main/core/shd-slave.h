@@ -30,7 +30,7 @@ gint slave_free(Slave* slave);
 
 gboolean slave_isForced(Slave* slave);
 guint slave_getRawCPUFrequency(Slave* slave);
-gint slave_nextRandomInt(Slave* slave);
+guint slave_nextRandomUInt(Slave* slave);
 gdouble slave_nextRandomDouble(Slave* slave);
 DNS* slave_getDNS(Slave* slave);
 Topology* slave_getTopology(Slave* slave);
