@@ -68,40 +68,40 @@ class PlotDataAction(argparse.Action):
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Utility to help plot results from the Shadow simulator', 
+        description='Utility to help plot results from the Shadow simulator',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-    parser.add_argument('-d', '--data', 
+    parser.add_argument('-d', '--data',
         help="""Append a PATH to the directory containing the xz-compressed
                 tor.throughput.json.xz and filetransfer.downloads.json.xz,
                 and the LABEL we should use for the graph legend for this
-                set of experimental results""", 
+                set of experimental results""",
         metavar=("PATH", "LABEL"),
         nargs=2,
         required="True",
         action=PlotDataAction, dest="experiments")
 
-    parser.add_argument('-p', '--prefix', 
-        help="a STRING filename prefix for graphs we generate", 
+    parser.add_argument('-p', '--prefix',
+        help="a STRING filename prefix for graphs we generate",
         metavar="STRING",
         action="store", dest="prefix",
         default=None)
 
     parser.add_argument('-f', '--format',
-        help="""A comma-separated LIST of color/line format strings to cycle to 
-                matplotlib's plot command (see matplotlib.pyplot.plot)""", 
+        help="""A comma-separated LIST of color/line format strings to cycle to
+                matplotlib's plot command (see matplotlib.pyplot.plot)""",
         metavar="LIST",
         action="store", dest="lineformats",
         default=LINEFORMATS)
 
     parser.add_argument('-s', '--skip',
-        help="""Ignore the first N seconds of each log file while parsing""", 
+        help="""Ignore the first N seconds of each log file while parsing""",
         metavar="N",
         action="store", dest="skiptime", type=type_nonnegative_integer,
         default=0)
 
     parser.add_argument('-r', '--rskip',
-        help="""Ignore everything after N seconds of each log file while parsing""", 
+        help="""Ignore everything after N seconds of each log file while parsing""",
         metavar="N",
         action="store", dest="rskiptime", type=type_nonnegative_integer,
         default=0)
@@ -110,37 +110,43 @@ def main():
     shdata, ftdata, tgendata, tordata = get_data(args.experiments, args.lineformats, args.skiptime, args.rskiptime)
 
     page = PdfPages("{0}shadow.results.pdf".format(args.prefix+'.' if args.prefix is not None else ''))
-    if len(shdata) > 0:
-        plot_shadow_time(shdata, page)
-        plot_shadow_ram(shdata, page)
-        plot_shadow_packets(shdata, page, direction="recv")
-        plot_shadow_packets(shdata, page, direction="send")
-    if len(ftdata) > 0:
-        plot_filetransfer_firstbyte(ftdata, page)
-        plot_filetransfer_lastbyte_all(ftdata, page)
-        plot_filetransfer_lastbyte_median(ftdata, page)
-        plot_filetransfer_lastbyte_mean(ftdata, page)
-        plot_filetransfer_lastbyte_max(ftdata, page)
-        plot_filetransfer_downloads(ftdata, page)
-    if len(tgendata) > 0:
-        plot_tgen_firstbyte(tgendata, page)
-        plot_tgen_lastbyte_all(tgendata, page)
-        plot_tgen_lastbyte_median(tgendata, page)
-        plot_tgen_lastbyte_mean(tgendata, page)
-        plot_tgen_lastbyte_max(tgendata, page)
-        plot_tgen_downloads(tgendata, page)
-        plot_tgen_errors(tgendata, page)
-        plot_tgen_errsizes_all(tgendata, page)
-        plot_tgen_errsizes_median(tgendata, page)
-        plot_tgen_errsizes_mean(tgendata, page)
-    if len(tordata) > 0:
-        plot_tor(tordata, page, direction="bytes_read")
-        plot_tor(tordata, page, direction="bytes_written")
+    # use a try block in case there are errors, the PDF will still be openable
+    try:
+        if len(shdata) > 0:
+            plot_shadow_time(shdata, page)
+            plot_shadow_ram(shdata, page)
+            plot_shadow_packets(shdata, page, direction="recv")
+            plot_shadow_packets(shdata, page, direction="send")
+        if len(ftdata) > 0:
+            plot_filetransfer_firstbyte(ftdata, page)
+            plot_filetransfer_lastbyte_all(ftdata, page)
+            plot_filetransfer_lastbyte_median(ftdata, page)
+            plot_filetransfer_lastbyte_mean(ftdata, page)
+            plot_filetransfer_lastbyte_max(ftdata, page)
+            plot_filetransfer_downloads(ftdata, page)
+        if len(tgendata) > 0:
+            plot_tgen_firstbyte(tgendata, page)
+            plot_tgen_lastbyte_all(tgendata, page)
+            plot_tgen_lastbyte_median(tgendata, page)
+            plot_tgen_lastbyte_mean(tgendata, page)
+            plot_tgen_lastbyte_max(tgendata, page)
+            plot_tgen_downloads(tgendata, page)
+            plot_tgen_errors(tgendata, page)
+            plot_tgen_errsizes_all(tgendata, page)
+            plot_tgen_errsizes_median(tgendata, page)
+            plot_tgen_errsizes_mean(tgendata, page)
+        if len(tordata) > 0:
+            plot_tor(tordata, page, direction="bytes_read")
+            plot_tor(tordata, page, direction="bytes_written")
+    except:
+        page.close()
+        print >>sys.stderr, "!! there was an error while plotting, but some graphs may still be readable"
+        raise
     page.close()
 
 def plot_shadow_time(datasource, page):
     pylab.figure()
-    
+
     for (d, label, lineformat) in datasource:
         data = {}
         for k in d['ticks'].keys(): data[int(k)] = float(d['ticks'][k]['time_seconds'])/3600.0
@@ -157,7 +163,7 @@ def plot_shadow_time(datasource, page):
 
 def plot_shadow_ram(datasource, page):
     pylab.figure()
-    
+
     for (d, label, lineformat) in datasource:
         data = {}
         for k in d['ticks'].keys(): data[int(k)] = float(d['ticks'][k]['maxrss_gib'])
@@ -234,7 +240,7 @@ def plot_shadow_packets(datasource, page, direction="send"):
         y_ma = movingaverage(y, 60)
         pylab.scatter(x, y, s=0.1, edgecolor=lineformat[0])
         pylab.plot(x, y_ma, lineformat, label=label)
-        
+
         pylab.figure(total_all_cdffig.number)
         x, y = getcdf(y)
         pylab.plot(x, y, lineformat, label=label)
@@ -250,7 +256,7 @@ def plot_shadow_packets(datasource, page, direction="send"):
         y_ma = movingaverage(y, 60)
         pylab.scatter(x, y, s=0.1, edgecolor=lineformat[0])
         pylab.plot(x, y_ma, lineformat, label=label)
-        
+
         pylab.figure(data_all_cdffig.number)
         x, y = getcdf(y)
         pylab.plot(x, y, lineformat, label=label)
@@ -265,7 +271,7 @@ def plot_shadow_packets(datasource, page, direction="send"):
         y_ma = movingaverage(y, 60)
         pylab.scatter(x, y, s=0.1, edgecolor=lineformat[0])
         pylab.plot(x, y_ma, lineformat, label=label)
-        
+
         pylab.figure(fracdata_all_cdffig.number)
         x, y = getcdf(y)
         pylab.plot(x, y, lineformat, label=label)
@@ -281,7 +287,7 @@ def plot_shadow_packets(datasource, page, direction="send"):
         y_ma = movingaverage(y, 60)
         pylab.scatter(x, y, s=0.1, edgecolor=lineformat[0])
         pylab.plot(x, y_ma, lineformat, label=label)
-        
+
         pylab.figure(control_all_cdffig.number)
         x, y = getcdf(y)
         pylab.plot(x, y, lineformat, label=label)
@@ -296,7 +302,7 @@ def plot_shadow_packets(datasource, page, direction="send"):
         y_ma = movingaverage(y, 60)
         pylab.scatter(x, y, s=0.1, edgecolor=lineformat[0])
         pylab.plot(x, y_ma, lineformat, label=label)
-        
+
         pylab.figure(fraccontrol_all_cdffig.number)
         x, y = getcdf(y)
         pylab.plot(x, y, lineformat, label=label)
@@ -312,7 +318,7 @@ def plot_shadow_packets(datasource, page, direction="send"):
         y_ma = movingaverage(y, 60)
         pylab.scatter(x, y, s=0.1, edgecolor=lineformat[0])
         pylab.plot(x, y_ma, lineformat, label=label)
-        
+
         pylab.figure(retrans_all_cdffig.number)
         x, y = getcdf(y)
         pylab.plot(x, y, lineformat, label=label)
@@ -327,7 +333,7 @@ def plot_shadow_packets(datasource, page, direction="send"):
         y_ma = movingaverage(y, 60)
         pylab.scatter(x, y, s=0.1, edgecolor=lineformat[0])
         pylab.plot(x, y_ma, lineformat, label=label)
-        
+
         pylab.figure(fracretrans_all_cdffig.number)
         x, y = getcdf(y)
         pylab.plot(x, y, lineformat, label=label)
@@ -548,7 +554,7 @@ def plot_shadow_packets(datasource, page, direction="send"):
 
 def plot_filetransfer_firstbyte(data, page):
     pylab.figure()
-    
+
     for (d, label, lineformat) in data:
         fb = []
         for client in d:
@@ -567,7 +573,7 @@ def plot_filetransfer_firstbyte(data, page):
 
 def plot_filetransfer_lastbyte_all(data, page):
     figs = {}
-    
+
     for (d, label, lineformat) in data:
         lb = {}
         for client in d:
@@ -593,7 +599,7 @@ def plot_filetransfer_lastbyte_all(data, page):
 
 def plot_filetransfer_lastbyte_median(data, page):
     figs = {}
-    
+
     for (d, label, lineformat) in data:
         lb = {}
         for client in d:
@@ -619,7 +625,7 @@ def plot_filetransfer_lastbyte_median(data, page):
 
 def plot_filetransfer_lastbyte_mean(data, page):
     figs = {}
-    
+
     for (d, label, lineformat) in data:
         lb = {}
         for client in d:
@@ -645,7 +651,7 @@ def plot_filetransfer_lastbyte_mean(data, page):
 
 def plot_filetransfer_lastbyte_max(data, page):
     figs = {}
-    
+
     for (d, label, lineformat) in data:
         lb = {}
         for client in d:
@@ -671,7 +677,7 @@ def plot_filetransfer_lastbyte_max(data, page):
 
 def plot_filetransfer_downloads(data, page):
     figs = {}
-    
+
     for (d, label, lineformat) in data:
         dls = {}
         for client in d:
@@ -697,7 +703,7 @@ def plot_filetransfer_downloads(data, page):
 
 def plot_tgen_firstbyte(data, page):
     f = None
-    
+
     for (d, label, lineformat) in data:
         fb = []
         for client in d:
@@ -719,7 +725,7 @@ def plot_tgen_firstbyte(data, page):
 
 def plot_tgen_lastbyte_all(data, page):
     figs = {}
-    
+
     for (d, label, lineformat) in data:
         lb = {}
         for client in d:
@@ -745,7 +751,7 @@ def plot_tgen_lastbyte_all(data, page):
 
 def plot_tgen_lastbyte_median(data, page):
     figs = {}
-    
+
     for (d, label, lineformat) in data:
         lb = {}
         for client in d:
@@ -773,7 +779,7 @@ def plot_tgen_lastbyte_median(data, page):
 
 def plot_tgen_lastbyte_mean(data, page):
     figs = {}
-    
+
     for (d, label, lineformat) in data:
         lb = {}
         for client in d:
@@ -801,7 +807,7 @@ def plot_tgen_lastbyte_mean(data, page):
 
 def plot_tgen_lastbyte_max(data, page):
     figs = {}
-    
+
     for (d, label, lineformat) in data:
         lb = {}
         for client in d:
@@ -829,7 +835,7 @@ def plot_tgen_lastbyte_max(data, page):
 
 def plot_tgen_downloads(data, page):
     figs = {}
-    
+
     for (d, label, lineformat) in data:
         dls = {}
         for client in d:
@@ -856,7 +862,7 @@ def plot_tgen_downloads(data, page):
 
 def plot_tgen_errors(data, page):
     figs = {}
-    
+
     for (d, label, lineformat) in data:
         dls = {}
         for client in d:
@@ -882,17 +888,18 @@ def plot_tgen_errors(data, page):
 
 def plot_tgen_errsizes_all(data, page):
     figs = {}
-    
+
     for (d, label, lineformat) in data:
         err = {}
         for client in d:
             if "errors" in d[client]:
                 for code in d[client]["errors"]:
                     if code not in figs: figs[code] = pylab.figure()
-                    if code not in err: err[code] = []
                     client_err_list = []
                     for sec in d[client]["errors"][code]: client_err_list.extend(d[client]["errors"][code][sec])
-                    for b in client_err_list: err[code].append(int(b)/1024.0)
+                    if len(client_err_list) > 0:
+                        if code not in err: err[code] = []
+                        for b in client_err_list: err[code].append(int(b)/1024.0)
         for code in err:
             x, y = getcdf(err[code])
             pylab.figure(figs[code].number)
@@ -909,17 +916,18 @@ def plot_tgen_errsizes_all(data, page):
 
 def plot_tgen_errsizes_median(data, page):
     figs = {}
-    
+
     for (d, label, lineformat) in data:
         err = {}
         for client in d:
             if "errors" in d[client]:
                 for code in d[client]["errors"]:
                     if code not in figs: figs[code] = pylab.figure()
-                    if code not in err: err[code] = []
                     client_err_list = []
                     for sec in d[client]["errors"][code]: client_err_list.extend(d[client]["errors"][code][sec])
-                    err[code].append(numpy.median(client_err_list)/1024.0)
+                    if len(client_err_list) > 0:
+                        if code not in err: err[code] = []
+                        err[code].append(numpy.median(client_err_list)/1024.0)
         for code in err:
             x, y = getcdf(err[code])
             pylab.figure(figs[code].number)
@@ -936,17 +944,18 @@ def plot_tgen_errsizes_median(data, page):
 
 def plot_tgen_errsizes_mean(data, page):
     figs = {}
-    
+
     for (d, label, lineformat) in data:
         err = {}
         for client in d:
             if "errors" in d[client]:
                 for code in d[client]["errors"]:
                     if code not in figs: figs[code] = pylab.figure()
-                    if code not in err: err[code] = []
                     client_err_list = []
                     for sec in d[client]["errors"][code]: client_err_list.extend(d[client]["errors"][code][sec])
-                    err[code].append(numpy.mean(client_err_list)/1024.0)
+                    if len(client_err_list) > 0:
+                        if code not in err: err[code] = []
+                        err[code].append(numpy.mean(client_err_list)/1024.0)
         for code in err:
             x, y = getcdf(err[code])
             pylab.figure(figs[code].number)
@@ -984,7 +993,7 @@ def plot_tor(data, page, direction="bytes_written"):
         y_ma = movingaverage(y, 60)
         pylab.scatter(x, y, s=0.1)
         pylab.plot(x, y_ma, lineformat, label=label)
-        
+
         pylab.figure(allcdffig.number)
         x, y = getcdf(y)
         pylab.plot(x, y, lineformat, label=label)
