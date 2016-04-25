@@ -22,6 +22,8 @@ struct _Options {
     gchar* preloads;
     gboolean runValgrind;
     gboolean debug;
+    gchar* dataDirPath;
+    gchar* dataTemplatePath;
 
     GOptionGroup* networkOptionGroup;
     gint cpuThreshold;
@@ -78,7 +80,9 @@ Options* options_new(gint argc, gchar* argv[]) {
     /* set options to change defaults for the main group */
     options->mainOptionGroup = g_option_group_new("main", "Main Options", "Primary simulator options", NULL, NULL);
     const GOptionEntry mainEntries[] = {
-      { "debug", 'd', 0, G_OPTION_ARG_NONE, &(options->debug), "Pause at startup for debugger attachment", NULL },
+      { "data-directory", 'd', 0, G_OPTION_ARG_STRING, &(options->dataDirPath), "PATH to store simulation output ['shadow.data']", "PATH" },
+      { "data-template", 'e', 0, G_OPTION_ARG_STRING, &(options->dataTemplatePath), "PATH to recursively copy to the data-directory path during startup ['shadow.data.template']", "PATH" },
+      { "gdb", 'g', 0, G_OPTION_ARG_NONE, &(options->debug), "Pause at startup for debugger attachment", NULL },
       { "heartbeat-frequency", 'h', 0, G_OPTION_ARG_INT, &(options->heartbeatInterval), "Log node statistics every N seconds [1]", "N" },
       { "heartbeat-log-info", 'i', 0, G_OPTION_ARG_STRING, &(options->heartbeatLogInfo), "Comma separated list of information contained in heartbeat ('node','socket','ram') ['node']", "LIST"},
       { "heartbeat-log-level", 'j', 0, G_OPTION_ARG_STRING, &(options->heartbeatLogLevelInput), "Log LEVEL at which to print node statistics ['message']", "LEVEL" },
@@ -200,6 +204,12 @@ Options* options_new(gint argc, gchar* argv[]) {
     if(options->tcpCongestionControl == NULL) {
         options->tcpCongestionControl = g_strdup("cubic");
     }
+    if(options->dataDirPath == NULL) {
+        options->dataDirPath = g_strdup("shadow.data");
+    }
+    if(options->dataTemplatePath == NULL) {
+        options->dataTemplatePath = g_strdup("shadow.data.template");
+    }
 
     options->inputXMLFilename = g_string_new(argv[1]);
 
@@ -229,6 +239,12 @@ void options_free(Options* options) {
     }
     if(options->preloads) {
         g_free(options->preloads);
+    }
+    if(options->dataDirPath != NULL) {
+        g_free(options->dataDirPath);
+    }
+    if(options->dataTemplatePath != NULL) {
+        g_free(options->dataTemplatePath);
     }
 
     /* groups are freed with the context */
@@ -407,4 +423,14 @@ gboolean options_doAutotuneSendBuffer(Options* options) {
 const GString* options_getInputXMLFilename(Options* options) {
     MAGIC_ASSERT(options);
     return options->inputXMLFilename;
+}
+
+const gchar* options_getDataOutputPath(Options* options) {
+    MAGIC_ASSERT(options);
+    return options->dataDirPath;
+}
+
+const gchar* options_getDataTemplatePath(Options* options) {
+    MAGIC_ASSERT(options);
+    return options->dataTemplatePath;
 }

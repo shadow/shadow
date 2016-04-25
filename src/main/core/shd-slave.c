@@ -104,7 +104,7 @@ Slave* slave_new(Master* master, Options* options, SimulationTime endTime, guint
     slave->scheduler = scheduler_new(policy, nWorkers, slave, schedulerSeed, endTime);
 
     slave->cwdPath = g_get_current_dir();
-    slave->dataPath = g_build_filename(slave->cwdPath, "shadow.data", NULL);
+    slave->dataPath = g_build_filename(slave->cwdPath, options_getDataOutputPath(options), NULL);
     slave->hostsPath = g_build_filename(slave->dataPath, "hosts", NULL);
 
     if(g_file_test(slave->dataPath, G_FILE_TEST_EXISTS)) {
@@ -112,12 +112,15 @@ Slave* slave_new(Master* master, Options* options, SimulationTime endTime, guint
         utility_assert(success);
     }
 
-    gchar* templateDataPath = g_build_filename(slave->cwdPath, "shadow.data.template", NULL);
+    gchar* templateDataPath = g_build_filename(slave->cwdPath, options_getDataTemplatePath(options), NULL);
     if(g_file_test(templateDataPath, G_FILE_TEST_EXISTS)) {
         gboolean success = utility_copyAll(templateDataPath, slave->dataPath);
         utility_assert(success);
     }
     g_free(templateDataPath);
+
+    /* now make sure the hosts path exists, as it may not have been in the template */
+    g_mkdir_with_parents(slave->hostsPath, 0775);
 
     return slave;
 }

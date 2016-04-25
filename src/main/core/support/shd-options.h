@@ -118,6 +118,9 @@ gboolean options_doAutotuneSendBuffer(Options* options);
 
 const GString* options_getInputXMLFilename(Options* options);
 
+const gchar* options_getDataOutputPath(Options* options);
+const gchar* options_getDataTemplatePath(Options* options);
+
 /** @} */
 
 #endif /* SHD_CONFIGURATION_H_ */
