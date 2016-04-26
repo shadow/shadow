@@ -34,6 +34,7 @@ add_cflags(-Wno-visibility)
 ## sources for our main shadow program
 set(shadow_srcs
     core/logger/shd-logger.c
+    core/logger/shd-logger-helper.c
     core/logger/shd-log-level.c
     core/logger/shd-log-record.c
     core/scheduler/shd-scheduler.c

@@ -66,6 +66,12 @@ void logrecord_unref(LogRecord* record) {
     }
 }
 
+gint logrecord_compare(const LogRecord* a, const LogRecord* b, gpointer userData) {
+    MAGIC_ASSERT(a);
+    MAGIC_ASSERT(b);
+    return a->wallElapsedSeconds < b->wallElapsedSeconds ? -1 : a->wallElapsedSeconds > b->wallElapsedSeconds ? 1 : 0;
+}
+
 void logrecord_setTime(LogRecord* record, SimulationTime simElapsedNanos) {
     MAGIC_ASSERT(record);
     record->simElapsedNanos = simElapsedNanos;

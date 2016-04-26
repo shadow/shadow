@@ -13,6 +13,7 @@ LogRecord* logrecord_new(LogLevel level, gdouble timespan, const gchar* fileName
 void logrecord_ref(LogRecord* record);
 void logrecord_unref(LogRecord* record);
 
+gint logrecord_compare(const LogRecord* a, const LogRecord* b, gpointer userData);
 void logrecord_setTime(LogRecord* record, SimulationTime simElapsedNanos);
 void logrecord_setNames(LogRecord* record, const gchar* threadName, const gchar* hostName);
 void logrecord_formatMessageVA(LogRecord* record, const gchar *messageFormat, va_list vargs);

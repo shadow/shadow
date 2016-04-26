@@ -743,6 +743,10 @@ static gboolean _topology_computeSourcePaths(Topology* top, igraph_integer_t src
         utility_assert(resultPathVertices == igraph_vector_ptr_e(&resultPaths, position));
     }
 
+    if(attachedTargets) {
+        g_list_free(attachedTargets);
+    }
+
     utility_assert(numTargets == igraph_vector_size(&dstVertexIndexSet));
     utility_assert(numTargets == igraph_vector_ptr_size(&resultPaths));
     utility_assert(foundDstVertexIndex == TRUE);

@@ -77,6 +77,10 @@ static void _scheduler_rebalanceHosts(Scheduler* scheduler) {
             threadIter = g_list_first(scheduler->workerThreads);
         }
     }
+
+    if(allHosts) {
+        g_list_free(allHosts);
+    }
 }
 
 static void _scheduler_startHosts(Scheduler* scheduler) {
@@ -190,6 +194,7 @@ Scheduler* scheduler_new(SchedulerPolicyType policyType, guint nWorkers, gpointe
         GThread* t = g_thread_new(name->str, (GThreadFunc)worker_run, runData);
         utility_assert(t);
         scheduler->workerThreads = g_list_append(scheduler->workerThreads, t);
+        logger_register(logger_getDefault(), t);
 
         g_string_free(name, TRUE);
     }
@@ -314,6 +319,9 @@ Event* scheduler_pop(Scheduler* scheduler) {
                 scheduler->currentRound.minNextEventTime = MIN(scheduler->currentRound.minNextEventTime, nextTime);
                 g_mutex_unlock(&(scheduler->globalLock));
             }
+
+            /* clear all log messages from the last round */
+            logger_flushRecords(logger_getDefault(), g_thread_self());
 
             /* wait for other threads to finish their collect step */
             countdownlatch_countDownAwait(scheduler->collectInfoBarrier);

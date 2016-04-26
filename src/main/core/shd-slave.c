@@ -333,9 +333,15 @@ void slave_run(Slave* slave) {
             /* release the workers and run next round */
             scheduler_continueNextRound(slave->scheduler, windowStart, windowEnd);
 
-            /* we could eventually do some idle processing here if needed */
-            /* XXX the heartbeat should run in single process mode too */
+            /* do some idle processing here if needed */
+            /* XXX the heartbeat should run in single process mode too, and should have wall timestamps */
             _slave_heartbeat(slave, windowStart);
+
+            /* flush slave threads messages */
+            logger_flushRecords(logger_getDefault(), g_thread_self());
+
+            /* let the logger know it can flush everything prior to this round */
+            logger_syncToDisk(logger_getDefault());
 
             /* wait for the workers to finish processing nodes before we update the execution window */
             minNextEventTime = scheduler_awaitNextRound(slave->scheduler);

@@ -176,7 +176,8 @@ static SimulationTime _schedulerpolicythreadperhost_getNextTime(SchedulerPolicy*
     ThreadPerHostThreadData* tdata = g_hash_table_lookup(data->threadToThreadDataMap, g_thread_self());
     if(tdata) {
         /* we are in between rounds. first we have to drain all future events into the priority queue */
-        GList* item = g_hash_table_get_values(tdata->hostToPQueueMap);
+        GList* values = g_hash_table_get_values(tdata->hostToPQueueMap);
+        GList* item = values;
         while(item) {
             PriorityQueue* futureEvents = item->data;
 
@@ -188,6 +189,9 @@ static SimulationTime _schedulerpolicythreadperhost_getNextTime(SchedulerPolicy*
             }
 
             item = g_list_next(item);
+        }
+        if(values) {
+            g_list_free(values);
         }
 
         Event* nextEvent = priorityqueue_peek(tdata->qdata->pq);
