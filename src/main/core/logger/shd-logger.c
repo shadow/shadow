@@ -210,8 +210,10 @@ void logger_flushRecords(Logger* logger, GThread* callerThread) {
     LoggerThreadData* threadData = g_hash_table_lookup(logger->threadToDataMap, callerThread);
     MAGIC_ASSERT(threadData);
     /* send log messages from this thread to the helper */
-    g_async_queue_push(threadData->remoteLogHelperMailbox, threadData->localRecordBundle);
-    threadData->localRecordBundle = g_queue_new();
+    if(!g_queue_is_empty(threadData->localRecordBundle)) {
+        g_async_queue_push(threadData->remoteLogHelperMailbox, threadData->localRecordBundle);
+        threadData->localRecordBundle = g_queue_new();
+    }
 }
 
 Logger* logger_new(LogLevel filterLevel) {
