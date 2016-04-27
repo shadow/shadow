@@ -299,11 +299,11 @@ static void _slave_heartbeat(Slave* slave, SimulationTime simClockNow) {
             gdouble systemTimeMinutes = ((gdouble)resources.ru_stime.tv_sec)/((gdouble)60.0f);
 
             /* log the usage results */
-            message("process resource usage reported by getrusage(): "
+            message("process resource usage at simtime %"G_GUINT64_FORMAT" reported by getrusage(): "
                     "ru_maxrss=%03f GiB, ru_utime=%03f minutes, ru_stime=%03f minutes, ru_nvcsw=%li, ru_nivcsw=%li",
-                    maxMemory, userTimeMinutes, systemTimeMinutes, resources.ru_nvcsw, resources.ru_nivcsw);
+                    simClockNow, maxMemory, userTimeMinutes, systemTimeMinutes, resources.ru_nvcsw, resources.ru_nivcsw);
         } else {
-            warning("unable to print process resources usage: error in getrusage: %i", errno);
+            warning("unable to print process resources usage: error %i in getrusage: %s", errno, g_strerror(errno));
         }
     }
 }
@@ -318,6 +318,8 @@ void slave_run(Slave* slave) {
         data->threadID = 0;
         data->scheduler = slave->scheduler;
         data->userData = slave;
+
+        /* the worker takes control of data pointer and frees it */
         worker_run(data);
 
         scheduler_finish(slave->scheduler);
@@ -334,7 +336,7 @@ void slave_run(Slave* slave) {
             scheduler_continueNextRound(slave->scheduler, windowStart, windowEnd);
 
             /* do some idle processing here if needed */
-            /* XXX the heartbeat should run in single process mode too, and should have wall timestamps */
+            /* TODO the heartbeat should run in single process mode too! */
             _slave_heartbeat(slave, windowStart);
 
             /* flush slave threads messages */
