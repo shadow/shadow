@@ -237,10 +237,8 @@ static gboolean _tgentransfer_getLine(TGenTransfer* transfer) {
     return FALSE;
 }
 
-static gboolean _tgentransfer_authenticate(TGenTransfer* transfer) {
+static void _tgentransfer_authenticate(TGenTransfer* transfer) {
     TGEN_ASSERT(transfer);
-
-    gboolean hasError = FALSE;
 
     while(TRUE) {
         gchar c;
@@ -252,6 +250,8 @@ static gboolean _tgentransfer_authenticate(TGenTransfer* transfer) {
             if(transfer->authIndex == 20) {
                 /* we just read the space following the password, so we are now done */
                 tgen_info("transfer authentication successful!");
+                transfer->authComplete = TRUE;
+                transfer->authSuccess = TRUE;
                 break;
             }
 
@@ -262,35 +262,43 @@ static gboolean _tgentransfer_authenticate(TGenTransfer* transfer) {
                 transfer->authIndex++;
             } else {
                 /* password doesn't match */
-                tgen_info("transfer authentication error: incorrect auth token");
-                hasError = TRUE;
+                tgen_info("transfer authentication error: incorrect authentication token");
+                transfer->authComplete = TRUE;
+                transfer->authSuccess = FALSE;
+                break;
             }
+        } else if(bytes < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+            /* we ran out of bytes for now, but expect more to come */
+            transfer->authComplete = FALSE;
+            transfer->authSuccess = FALSE;
+            break;
+        } else if(bytes == 0) {
+            /* socket closed */
+            tgen_info("transfer authentication error: socket closed before authentication completed");
+            transfer->authComplete = TRUE;
+            transfer->authSuccess = FALSE;
+            break;
         } else {
-            tgen_info("transfer authentication error: incorrect token length");
-            hasError = TRUE;
-        }
-
-        if(hasError) {
-            _tgentransfer_changeState(transfer, TGEN_XFER_ERROR);
-            _tgentransfer_changeError(transfer, TGEN_XFER_ERR_AUTH);
+            /* some type of socket error while reading */
+            tgen_info("transfer authentication error: socket read error before authentication completed");
+            transfer->authComplete = TRUE;
+            transfer->authSuccess = FALSE;
             break;
         }
     }
 
-    transfer->authComplete = TRUE;
-    if(hasError) {
-        transfer->authSuccess = FALSE;
-    } else {
-        transfer->authSuccess = TRUE;
+    if(transfer->authComplete && !transfer->authSuccess) {
+        _tgentransfer_changeState(transfer, TGEN_XFER_ERROR);
+        _tgentransfer_changeError(transfer, TGEN_XFER_ERR_AUTH);
     }
-    return transfer->authSuccess;
 }
 
 static void _tgentransfer_readCommand(TGenTransfer* transfer) {
     TGEN_ASSERT(transfer);
 
     if(!transfer->authComplete) {
-        if(!_tgentransfer_authenticate(transfer)) {
+        _tgentransfer_authenticate(transfer);
+        if(!transfer->authComplete || !transfer->authSuccess) {
             return;
         }
     }
@@ -368,7 +376,8 @@ static void _tgentransfer_readResponse(TGenTransfer* transfer) {
     TGEN_ASSERT(transfer);
 
     if(!transfer->authComplete) {
-        if(!_tgentransfer_authenticate(transfer)) {
+        _tgentransfer_authenticate(transfer);
+        if(!transfer->authComplete || !transfer->authSuccess) {
             return;
         }
     }
