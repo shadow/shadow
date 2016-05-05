@@ -345,33 +345,101 @@ void scheduler_addHost(Scheduler* scheduler, Host* host) {
     GQuark hostID = host_getID(host);
     gpointer hostIDKey = GUINT_TO_POINTER(hostID);
     g_hash_table_replace(scheduler->hostIDToHostMap, hostIDKey, host);
-
-    /* figure out which thread gets the host */
-    GThread* chosenThread = NULL;
-    gdouble nThreads = (gdouble)g_list_length(scheduler->workerThreads);
-    if(nThreads > 0) {
-        /* choose a random one instead of whichever one happens to be running initActions */
-        gdouble randomFraction = random_nextDouble(scheduler->random);
-        guint randomIndex = (guint)floor(randomFraction * (nThreads));
-
-        /* handle frac=1.0 edge case, which would yield nThreads, which is not a valid index */
-        guint maxValidIndex = ((guint)nThreads) - 1;
-        guint index = MIN(randomIndex, maxValidIndex);
-
-        /* choose the thread at the random index */
-        chosenThread = g_list_nth_data(scheduler->workerThreads, index);
-    } else {
-        /* we are the only thread, we get everything */
-        chosenThread = g_thread_self();
-    }
-
-    utility_assert(chosenThread);
-    scheduler->policy->addHost(scheduler->policy, host, chosenThread);
 }
 
 Host* scheduler_getHost(Scheduler* scheduler, GQuark hostID) {
     MAGIC_ASSERT(scheduler);
     return (Host*) g_hash_table_lookup(scheduler->hostIDToHostMap, GUINT_TO_POINTER((guint)hostID));
+}
+
+static GList* _scheduler_shuffleList(Scheduler* scheduler, GList* list) {
+    if(list == NULL) {
+        return NULL;
+    }
+
+    /* convert list to array */
+    guint length = g_list_length(list);
+    gpointer array[length];
+
+    for(guint i = 0; i < length; i++) {
+        array[i] = g_list_nth_data(list, i);
+    }
+    g_list_free(list);
+    list = NULL;
+
+    /* shuffle array - Fisher-Yates shuffle */
+    for(guint i = 0; i < length-1; i++) {
+        gdouble randomFraction = random_nextDouble(scheduler->random);
+        gdouble maxRange = (gdouble) length-i;
+        guint j = (guint)floor(randomFraction * maxRange);
+        /* handle edge case if we got 1.0 as a double */
+        if(j == length-i) {
+            j--;
+        }
+
+        gpointer temp = array[i];
+        array[i] = array[i+j];
+        array[i+j] = temp;
+    }
+
+    /* convert back to list */
+    for(guint i = 0; i < length; i++) {
+        list = g_list_append(list, array[i]);
+    }
+    return list;
+}
+
+static GList* _scheduler_assignHostsToThread(Scheduler* scheduler, GList* hosts, GThread* thread, uint maxAssignments) {
+    MAGIC_ASSERT(scheduler);
+    utility_assert(hosts);
+    utility_assert(thread);
+
+    guint numAssignments = 0;
+    GList* nextItem = hosts;
+    while((maxAssignments == 0 || numAssignments < maxAssignments) && nextItem != NULL) {
+        Host* host = (Host*) nextItem->data;
+        utility_assert(host);
+        scheduler->policy->addHost(scheduler->policy, host, thread);
+        numAssignments++;
+        nextItem = g_list_next(nextItem);
+    }
+    return nextItem;
+}
+
+static void _scheduler_assignHosts(Scheduler* scheduler) {
+    MAGIC_ASSERT(scheduler);
+
+    g_mutex_lock(&scheduler->globalLock);
+
+    GList* allHosts = g_hash_table_get_values(scheduler->hostIDToHostMap);
+    guint nThreads = g_list_length(scheduler->workerThreads);
+
+    if(nThreads <= 1) {
+        /* either the main thread or the single worker gets everything */
+        GThread* chosen = (nThreads == 0) ? g_thread_self() : (GThread*) g_list_nth_data(scheduler->workerThreads, 0);
+        GList* remaining = _scheduler_assignHostsToThread(scheduler, allHosts, chosen, 0);
+        utility_assert(remaining == NULL);
+    } else {
+        /* we need to shuffle the list of hosts to make sure they are randomly assigned */
+        allHosts = _scheduler_shuffleList(scheduler, allHosts);
+
+        /* now that our host order has been randomized, assign them evenly to worker threads */
+        GList* remainingHosts = g_list_first(allHosts);
+        GList* nextThreadItem = g_list_first(scheduler->workerThreads);
+        while(remainingHosts != NULL) {
+            GThread* nextThread = (GThread*)nextThreadItem->data;
+            remainingHosts = _scheduler_assignHostsToThread(scheduler, remainingHosts, nextThread, 1);
+            nextThreadItem = g_list_next(nextThreadItem);
+            if(nextThreadItem == NULL) {
+                nextThreadItem = g_list_first(scheduler->workerThreads);
+            }
+        }
+    }
+
+    if(allHosts) {
+        g_list_free(allHosts);
+    }
+    g_mutex_unlock(&scheduler->globalLock);
 }
 
 SchedulerPolicyType scheduler_getPolicy(Scheduler* scheduler) {
@@ -380,6 +448,7 @@ SchedulerPolicyType scheduler_getPolicy(Scheduler* scheduler) {
 }
 
 gboolean scheduler_isRunning(Scheduler* scheduler) {
+    MAGIC_ASSERT(scheduler);
     return scheduler->isRunning;
 }
 
@@ -407,6 +476,8 @@ void scheduler_awaitFinish(Scheduler* scheduler) {
 }
 
 void scheduler_start(Scheduler* scheduler) {
+    _scheduler_assignHosts(scheduler);
+
     g_mutex_lock(&scheduler->globalLock);
     scheduler->isRunning = TRUE;
     g_mutex_unlock(&scheduler->globalLock);
