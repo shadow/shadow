@@ -24,16 +24,19 @@ static void _tgenserver_acceptPeer(TGenServer* server) {
     memset(&peerAddress, 0, sizeof(struct sockaddr_in));
     socklen_t addressLength = (socklen_t)sizeof(struct sockaddr_in);
 
+    gint64 started = g_get_monotonic_time();
+
     gint peerSocketD = accept(server->socketD, (struct sockaddr*)&peerAddress, &addressLength);
 
     if(peerSocketD >= 0) {
+        gint64 created = g_get_monotonic_time();
         if(server->notify) {
             TGenPeer* peer = tgenpeer_newFromIP(peerAddress.sin_addr.s_addr, peerAddress.sin_port);
 
             /* someone is connecting to us, its ok to perform network lookups */
             tgenpeer_performLookups(peer);
 
-            server->notify(server->data, peerSocketD, peer);
+            server->notify(server->data, peerSocketD, started, created, peer);
             tgenpeer_unref(peer);
         }
     } else {

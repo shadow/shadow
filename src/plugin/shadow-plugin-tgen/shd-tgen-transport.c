@@ -265,9 +265,9 @@ TGenTransport* tgentransport_newActive(TGenPeer* proxy, TGenPeer* peer,
     return _tgentransport_newHelper(socketD, started, created, proxy, peer, notify, data, destructData);
 }
 
-TGenTransport* tgentransport_newPassive(gint socketD, TGenPeer* peer,
+TGenTransport* tgentransport_newPassive(gint socketD, gint64 started, gint64 created, TGenPeer* peer,
         TGenTransport_notifyBytesFunc notify, gpointer data, GDestroyNotify destructData) {
-    return _tgentransport_newHelper(socketD, 0, 0, NULL, peer, notify, data, destructData);
+    return _tgentransport_newHelper(socketD, started, created, NULL, peer, notify, data, destructData);
 }
 
 static void _tgentransport_free(TGenTransport* transport) {

@@ -18,7 +18,7 @@ typedef void (*TGenTransport_notifyBytesFunc)(gpointer data, gsize bytesRead, gs
 
 TGenTransport* tgentransport_newActive(TGenPeer* proxy, TGenPeer* peer,
         TGenTransport_notifyBytesFunc notify, gpointer data, GDestroyNotify destructData);
-TGenTransport* tgentransport_newPassive(gint socketD, TGenPeer* peer,
+TGenTransport* tgentransport_newPassive(gint socketD, gint64 started, gint64 created, TGenPeer* peer,
         TGenTransport_notifyBytesFunc notify, gpointer data, GDestroyNotify destructData);
 
 void tgentransport_ref(TGenTransport* transport);

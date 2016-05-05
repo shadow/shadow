@@ -124,7 +124,7 @@ static gboolean _tgendriver_onPauseTimerExpired(TGenDriver* driver, TGenAction* 
     return TRUE;
 }
 
-static void _tgendriver_onNewPeer(TGenDriver* driver, gint socketD, TGenPeer* peer) {
+static void _tgendriver_onNewPeer(TGenDriver* driver, gint socketD, gint64 started, gint64 created, TGenPeer* peer) {
     TGEN_ASSERT(driver);
 
     /* we have a new peer connecting to our listening socket */
@@ -135,7 +135,7 @@ static void _tgendriver_onNewPeer(TGenDriver* driver, gint socketD, TGenPeer* pe
 
     /* this connect was initiated by the other end.
      * transfer information will be sent to us later. */
-    TGenTransport* transport = tgentransport_newPassive(socketD, peer,
+    TGenTransport* transport = tgentransport_newPassive(socketD, started, created, peer,
             (TGenTransport_notifyBytesFunc) _tgendriver_onBytesTransferred, driver,
             (GDestroyNotify)tgendriver_unref);
 
