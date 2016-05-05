@@ -228,7 +228,7 @@ macro(add_exe target)
         add_dependencies(${target} ${bctarget})
     endforeach(bctarget)
 
-endmacro(add_plugin)
+endmacro(add_exe)
 
 ######################################################################################################
 ## ADD_SHADOW_PLUGIN                                                                                ##
