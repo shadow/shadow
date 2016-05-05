@@ -81,7 +81,7 @@ Options* options_new(gint argc, gchar* argv[]) {
     options->mainOptionGroup = g_option_group_new("main", "Main Options", "Primary simulator options", NULL, NULL);
     const GOptionEntry mainEntries[] = {
       { "data-directory", 'd', 0, G_OPTION_ARG_STRING, &(options->dataDirPath), "PATH to store simulation output ['shadow.data']", "PATH" },
-      { "data-template", 'e', 0, G_OPTION_ARG_STRING, &(options->dataTemplatePath), "PATH to recursively copy to the data-directory path during startup ['shadow.data.template']", "PATH" },
+      { "data-template", 'e', 0, G_OPTION_ARG_STRING, &(options->dataTemplatePath), "PATH to recursively copy during startup and use as the data-directory ['shadow.data.template']", "PATH" },
       { "gdb", 'g', 0, G_OPTION_ARG_NONE, &(options->debug), "Pause at startup for debugger attachment", NULL },
       { "heartbeat-frequency", 'h', 0, G_OPTION_ARG_INT, &(options->heartbeatInterval), "Log node statistics every N seconds [1]", "N" },
       { "heartbeat-log-info", 'i', 0, G_OPTION_ARG_STRING, &(options->heartbeatLogInfo), "Comma separated list of information contained in heartbeat ('node','socket','ram') ['node']", "LIST"},
