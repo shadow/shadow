@@ -140,10 +140,16 @@ def process_shadow_lines(line):
 
         real_seconds = timestamp_to_seconds(parts[0])
         sim_seconds = 0
+        # handle time format change from new scheduler/logger
+        # this can go away once we merge 1.12.0, if we no longer want to support
+        # log files created with older shadow versions
         maxrss_index = 13
         if parts[2] == 'n/a':
-            sim_seconds = int(parts[12])/1000000000.0
-            maxrss_index = 16
+            if 'getrusage' not in parts[12]:
+                sim_seconds = int(parts[12])/1000000000.0
+                maxrss_index = 16
+            else:
+                maxrss_index = 13
         else:
             sim_seconds = timestamp_to_seconds(parts[2])
             maxrss_index = 13
