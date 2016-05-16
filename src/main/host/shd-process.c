@@ -2966,6 +2966,27 @@ off_t process_emu_lseek(Process* proc, int fd, off_t offset, int whence) {
     return (off_t)-1;
 }
 
+off64_t process_emu_lseek64(Process* proc, int fd, off64_t offset, int whence) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+
+    if (host_isShadowDescriptor(proc->host, fd)) {
+        warning("lseek64 not implemented for Shadow descriptor types");
+    } else {
+        /* check if we have a mapped os fd */
+        gint osfd = host_getOSHandle(proc->host, fd);
+        if (osfd >= 0) {
+            off_t ret = lseek64(osfd, offset, whence);
+            _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+            return ret;
+        }
+    }
+
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+
+    errno = EBADF;
+    return (off64_t)-1;
+}
+
 int process_emu_flock(Process* proc, int fd, int operation) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
 
@@ -3023,6 +3044,27 @@ int process_emu_ftruncate(Process* proc, int fd, off_t length) {
         gint osfd = host_getOSHandle(proc->host, fd);
         if (osfd >= 0) {
             gint ret = ftruncate(osfd, length);
+            _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+            return ret;
+        }
+    }
+
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+
+    errno = EBADF;
+    return -1;
+}
+
+int process_emu_ftruncate64(Process* proc, int fd, off64_t length) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+
+    if (host_isShadowDescriptor(proc->host, fd)) {
+        warning("ftruncate64 not implemented for Shadow descriptor types");
+    } else {
+        /* check if we have a mapped os fd */
+        gint osfd = host_getOSHandle(proc->host, fd);
+        if (osfd >= 0) {
+            gint ret = ftruncate64(osfd, length);
             _process_changeContext(proc, PCTX_SHADOW, prevCTX);
             return ret;
         }
@@ -3655,12 +3697,16 @@ int process_emu_getnameinfo(Process* proc, const struct sockaddr* sa, socklen_t 
     gint retval = 0;
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
 
-    GQuark convertedIP = (GQuark) (((struct sockaddr_in*)sa)->sin_addr.s_addr);
+    guint32 convertedIP = (guint32) (((struct sockaddr_in*)sa)->sin_addr.s_addr);
     Address* address = dns_resolveIPToAddress(worker_getDNS(), convertedIP);
-    const gchar* hostname = address ? address_toHostName(address) : NULL;
 
-    if(hostname) {
-        g_utf8_strncpy(host, hostname, hostlen);
+    if(address != NULL) {
+        gchar* hostname = (flags & NI_NUMERICHOST) ? address_toHostIPString(address) : address_toHostName(address);
+        if(hostname != NULL && host != NULL) {
+            g_utf8_strncpy(host, hostname, hostlen);
+        } else {
+            retval = EAI_FAIL;
+        }
     } else {
         retval = EAI_NONAME;
     }

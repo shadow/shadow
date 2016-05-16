@@ -77,6 +77,10 @@ prototype { \
 #define INTERPOSE(prototype, fnctname, ...) INTERPOSE_HELPER(prototype, return, fnctname, ##__VA_ARGS__);
 #define INTERPOSE_NORET(prototype, fnctname, ...) INTERPOSE_HELPER(prototype, , fnctname, ##__VA_ARGS__);
 
+#if !defined __USE_LARGEFILE64
+typedef off_t off64_t;
+#endif
+
 /* memory allocation family */
 
 typedef void* (*malloc_func)(size_t);
@@ -169,11 +173,13 @@ typedef int (*__fxstat64_func)(int, int, struct stat64*);
 typedef int (*fstatfs_func)(int, struct statfs*);
 typedef int (*fstatfs64_func)(int, struct statfs64*);
 typedef off_t (*lseek_func)(int, off_t, int);
+typedef off64_t (*lseek64_func)(int, off64_t, int);
 typedef size_t (*pread_func)(int, void*, size_t, off_t);
 typedef ssize_t (*pwrite_func)(int, const void *, size_t, off_t);
 typedef int (*flock_func)(int, int);
 typedef int (*fsync_func)(int);
 typedef int (*ftruncate_func)(int, int);
+typedef int (*ftruncate64_func)(int, int);
 typedef int (*posix_fallocate_func)(int, int, int);
 
 typedef int (*fstatvfs_func)(int, struct statvfs*);
@@ -451,11 +457,13 @@ typedef struct {
     fstatfs_func fstatfs;
     fstatfs64_func fstatfs64;
     lseek_func lseek;
+    lseek64_func lseek64;
     pread_func pread;
     pwrite_func pwrite;
     flock_func flock;
     fsync_func fsync;
     ftruncate_func ftruncate;
+    ftruncate64_func ftruncate64;
     posix_fallocate_func posix_fallocate;
     fstatvfs_func fstatvfs;
     fdatasync_func fdatasync;
@@ -768,11 +776,13 @@ static void _interposer_globalInitialize() {
     SETSYM_OR_FAIL(director.next.__fxstat64, "__fxstat64");
     SETSYM_OR_FAIL(director.next.fstatfs, "fstatfs");
     SETSYM_OR_FAIL(director.next.lseek, "lseek");
+    SETSYM_OR_FAIL(director.next.lseek64, "lseek64");
     SETSYM_OR_FAIL(director.next.pread, "pread");
     SETSYM_OR_FAIL(director.next.pwrite, "pwrite");
     SETSYM_OR_FAIL(director.next.flock, "flock");
     SETSYM_OR_FAIL(director.next.fsync, "fsync");
     SETSYM_OR_FAIL(director.next.ftruncate, "ftruncate");
+    SETSYM_OR_FAIL(director.next.ftruncate64, "ftruncate64");
     SETSYM_OR_FAIL(director.next.posix_fallocate, "posix_fallocate");
     SETSYM_OR_FAIL(director.next.fstatvfs, "fstatvfs");
     SETSYM_OR_FAIL(director.next.fdatasync, "fdatasync");
@@ -1204,9 +1214,11 @@ INTERPOSE(int __fxstat64 (int a, int b, struct stat64 *c), __fxstat64, a, b, c);
 INTERPOSE(int fstatfs (int a, struct statfs *b), fstatfs, a, b);
 INTERPOSE(int fstatfs64 (int a, struct statfs64 *b), fstatfs64, a, b);
 INTERPOSE(off_t lseek(int a, off_t b, int c), lseek, a, b, c);
+INTERPOSE(off64_t lseek64(int a, off64_t b, int c), lseek64, a, b, c);
 INTERPOSE(int flock(int a, int b), flock, a, b);
 INTERPOSE(int fsync(int a), fsync, a);
 INTERPOSE(int ftruncate(int a, off_t b), ftruncate, a, b);
+INTERPOSE(int ftruncate64(int a, off64_t b), ftruncate64, a, b);
 INTERPOSE(int posix_fallocate(int a, off_t b, off_t c), posix_fallocate, a, b, c);
 INTERPOSE(int fstatvfs(int a, struct statvfs *b), fstatvfs, a, b);
 INTERPOSE(int fdatasync(int a), fdatasync, a);

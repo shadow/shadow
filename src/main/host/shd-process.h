@@ -15,6 +15,10 @@
 
 #include "shadow.h"
 
+#if !defined __USE_LARGEFILE64
+typedef off_t off64_t;
+#endif
+
 Process* process_new(gpointer host, GQuark programID, guint processID,
         SimulationTime startTime, SimulationTime stopTime, gchar* arguments);
 void process_ref(Process* proc);
@@ -113,9 +117,11 @@ int process_emu___fxstat64 (Process* proc, int ver, int fd, struct stat64 *buf);
 int process_emu_fstatfs (Process* proc, int fd, struct statfs *buf);
 int process_emu_fstatfs64 (Process* proc, int fd, struct statfs64 *buf);
 off_t process_emu_lseek(Process* proc, int fd, off_t offset, int whence);
+off64_t process_emu_lseek64(Process* proc, int fd, off64_t offset, int whence);
 int process_emu_flock(Process* proc, int fd, int operation);
 int process_emu_fsync(Process* proc, int fd);
 int process_emu_ftruncate(Process* proc, int fd, off_t length);
+int process_emu_ftruncate64(Process* proc, int fd, off64_t length);
 int process_emu_posix_fallocate(Process* proc, int fd, off_t offset, off_t len);
 
 int process_emu_fstatvfs(Process* proc, int fd, struct statvfs *buf);
