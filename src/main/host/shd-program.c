@@ -22,6 +22,15 @@
 #define PLUGIN_GLOBALS_SIZE_SYMBOL "__hoisted_globals_size"
 #define PLUGIN_GLOBALS_POINTER_SYMBOL "__hoisted_globals_pointer"
 
+/* Global symbols that plugins may define to hook changes in execution control */
+#define PLUGIN_POSTLOAD_SYMBOL "__shadow_plugin_load__"
+#define PLUGIN_PREUNLOAD_SYMBOL "__shadow_plugin_unload__"
+#define PLUGIN_PREENTER_SYMBOL "__shadow_plugin_enter__"
+#define PLUGIN_POSTEXIT_SYMBOL "__shadow_plugin_exit__"
+
+typedef gint (*PluginMainFunc)(int argc, char* argv[]);
+typedef void (*PluginHookFunc)(void* uniqueid);
+
 struct _Program {
     GQuark id;
 
@@ -31,6 +40,13 @@ struct _Program {
     gboolean isTemporary;
 
     PluginMainFunc main;
+
+    /* these functions allow us to notify the plugin code when we are passing control,
+     * they are non-Null only if the plug-in optionally defines the symbols above */
+    PluginHookFunc postLibraryLoad;
+    PluginHookFunc preLibraryUnload;
+    PluginHookFunc preProcessEnter;
+    PluginHookFunc postProcessExit;
 
     gsize residentStateSize;
     gpointer residentStatePointer;
@@ -47,6 +63,69 @@ struct _Program {
 
     MAGIC_DECLARE;
 };
+
+void program_swapInState(Program* prog, ProgramState state) {
+    MAGIC_ASSERT(prog);
+    utility_assert(!prog->isExecuting);
+
+    /* context switch from shadow to plug-in library
+     *
+     * TODO: we can be smarter here - save a pointer to the last plugin that
+     * was loaded... if the physical memory locations still has our state,
+     * there is no need to copy it in again. similarly for stopExecuting()
+     */
+    /* destination, source, size */
+    g_memmove(prog->residentState, state, prog->residentStateSize);
+
+    prog->isExecuting = TRUE;
+}
+
+void program_swapOutState(Program* prog, ProgramState state) {
+    MAGIC_ASSERT(prog);
+    utility_assert(prog->isExecuting);
+
+    prog->isExecuting = FALSE;
+
+    /* destination, source, size */
+    g_memmove(state, prog->residentState, prog->residentStateSize);
+}
+
+static void program_callPostLibraryLoadHookFunc(Program* prog) {
+    MAGIC_ASSERT(prog);
+    if(prog->postLibraryLoad != NULL) {
+        prog->postLibraryLoad(prog->handle);
+    }
+}
+
+static void program_callPreLibraryUnloadHookFunc(Program* prog) {
+    MAGIC_ASSERT(prog);
+    if(prog->preLibraryUnload != NULL) {
+        prog->preLibraryUnload(prog->handle);
+    }
+}
+
+gint program_callMainFunc(Program* prog, gchar** argv, gint argc) {
+    MAGIC_ASSERT(prog);
+    utility_assert(prog->isExecuting);
+    utility_assert(prog->main);
+    return prog->main(argc, argv);
+}
+
+void program_callPreProcessEnterHookFunc(Program* prog) {
+    MAGIC_ASSERT(prog);
+    utility_assert(prog->isExecuting);
+    if(prog->preProcessEnter != NULL) {
+        prog->preProcessEnter(prog->handle);
+    }
+}
+
+void program_callPostProcessExitHookFunc(Program* prog) {
+    MAGIC_ASSERT(prog);
+    utility_assert(prog->isExecuting);
+    if(prog->postProcessExit != NULL) {
+        prog->postProcessExit(prog->handle);
+    }
+}
 
 static GString* _program_getTemporaryFilePath(gchar* originalPath) {
     /* get the basename of the real plug-in and create a temp file template */
@@ -130,16 +209,13 @@ Program* program_new(const gchar* name, const gchar* path) {
     }
 
     /* make sure it has the required init function */
-    gpointer mainFunc = NULL;
-    gpointer hoistedGlobals = NULL;
-    gpointer hoistedGlobalsSize = NULL;
-    gpointer hoistedGlobalsPointer = NULL;
+    gpointer function = NULL;
     gboolean success = FALSE;
 
-    success = g_module_symbol(prog->handle, PLUGIN_MAIN_SYMBOL, &mainFunc);
+    success = g_module_symbol(prog->handle, PLUGIN_MAIN_SYMBOL, &function);
     if(success) {
-        prog->main = mainFunc;
-        message("found '%s' at %p", PLUGIN_MAIN_SYMBOL, mainFunc);
+        prog->main = function;
+        message("found '%s' at %p", PLUGIN_MAIN_SYMBOL, function);
     } else {
         const gchar* errorMessage = g_module_error();
         critical("g_module_symbol() failed: %s", errorMessage);
@@ -147,10 +223,11 @@ Program* program_new(const gchar* name, const gchar* path) {
                 PLUGIN_MAIN_SYMBOL, path);
     }
 
-    success = g_module_symbol(prog->handle, PLUGIN_GLOBALS_SYMBOL, &hoistedGlobals);
+    function = NULL;
+    success = g_module_symbol(prog->handle, PLUGIN_GLOBALS_SYMBOL, &function);
     if(success) {
-        prog->residentState = hoistedGlobals;
-        message("found '%s' at %p", PLUGIN_GLOBALS_SYMBOL, hoistedGlobals);
+        prog->residentState = function;
+        message("found '%s' at %p", PLUGIN_GLOBALS_SYMBOL, function);
     } else {
         const gchar* errorMessage = g_module_error();
         critical("g_module_symbol() failed: %s", errorMessage);
@@ -158,10 +235,11 @@ Program* program_new(const gchar* name, const gchar* path) {
                 PLUGIN_GLOBALS_SYMBOL, path);
     }
 
-    success = g_module_symbol(prog->handle, PLUGIN_GLOBALS_POINTER_SYMBOL, &hoistedGlobalsPointer);
+    function = NULL;
+    success = g_module_symbol(prog->handle, PLUGIN_GLOBALS_POINTER_SYMBOL, &function);
     if(success) {
-        prog->residentStatePointer = hoistedGlobalsPointer;
-        message("found '%s' at %p", PLUGIN_GLOBALS_POINTER_SYMBOL, hoistedGlobalsPointer);
+        prog->residentStatePointer = function;
+        message("found '%s' at %p", PLUGIN_GLOBALS_POINTER_SYMBOL, function);
     } else {
         const gchar* errorMessage = g_module_error();
         critical("g_module_symbol() failed: %s", errorMessage);
@@ -169,18 +247,49 @@ Program* program_new(const gchar* name, const gchar* path) {
                 PLUGIN_GLOBALS_POINTER_SYMBOL, path);
     }
 
-    success = g_module_symbol(prog->handle, PLUGIN_GLOBALS_SIZE_SYMBOL, &hoistedGlobalsSize);
+    function = NULL;
+    success = g_module_symbol(prog->handle, PLUGIN_GLOBALS_SIZE_SYMBOL, &function);
     if(success) {
-        utility_assert(hoistedGlobalsSize);
-        gint s = *((gint*) hoistedGlobalsSize);
+        utility_assert(function);
+        gint s = *((gint*) function);
         prog->residentStateSize = (gsize) s;
-        message("found '%s' of value '%i' at %p", PLUGIN_GLOBALS_SIZE_SYMBOL, s, hoistedGlobalsSize);
+        message("found '%s' of value '%i' at %p", PLUGIN_GLOBALS_SIZE_SYMBOL, s, function);
     } else {
         const gchar* errorMessage = g_module_error();
         critical("g_module_symbol() failed: %s", errorMessage);
         error("unable to find the required merged globals struct symbol '%s' in plug-in '%s'",
                 PLUGIN_GLOBALS_SIZE_SYMBOL, path);
     }
+
+    function = NULL;
+    success = g_module_symbol(prog->handle, PLUGIN_POSTLOAD_SYMBOL, &function);
+    if(success) {
+        prog->postLibraryLoad = function;
+        message("found '%s' at %p", PLUGIN_POSTLOAD_SYMBOL, function);
+    }
+
+    function = NULL;
+    success = g_module_symbol(prog->handle, PLUGIN_PREUNLOAD_SYMBOL, &function);
+    if(success) {
+        prog->preLibraryUnload = function;
+        message("found '%s' at %p", PLUGIN_PREUNLOAD_SYMBOL, function);
+    }
+
+    function = NULL;
+    success = g_module_symbol(prog->handle, PLUGIN_PREENTER_SYMBOL, &function);
+    if(success) {
+        prog->preProcessEnter = function;
+        message("found '%s' at %p", PLUGIN_PREENTER_SYMBOL, function);
+    }
+
+    function = NULL;
+    success = g_module_symbol(prog->handle, PLUGIN_POSTEXIT_SYMBOL, &function);
+    if(success) {
+        prog->postProcessExit = function;
+        message("found '%s' at %p", PLUGIN_POSTEXIT_SYMBOL, function);
+    }
+
+    program_callPostLibraryLoadHookFunc(prog);
 
     /* finally, store a copy of the defaults as they exist now */
     debug("copying resident plugin memory contents at %p-%p (%"G_GSIZE_FORMAT" bytes) as default start state",
@@ -195,6 +304,7 @@ void program_free(Program* prog) {
     MAGIC_ASSERT(prog);
 
     if(prog->handle) {
+        program_callPreLibraryUnloadHookFunc(prog);
         gboolean success = g_module_close(prog->handle);
         if(!success) {
             const gchar* errorMessage = g_module_error();
@@ -247,37 +357,6 @@ Program* program_getTemporaryCopy(Program* prog) {
     return progCopy;
 }
 
-void program_swapInState(Program* prog, ProgramState state) {
-    MAGIC_ASSERT(prog);
-    utility_assert(!prog->isExecuting);
-
-    /* context switch from shadow to plug-in library
-     *
-     * TODO: we can be smarter here - save a pointer to the last plugin that
-     * was loaded... if the physical memory locations still has our state,
-     * there is no need to copy it in again. similarly for stopExecuting()
-     */
-    /* destination, source, size */
-    g_memmove(prog->residentState, state, prog->residentStateSize);
-
-    prog->isExecuting = TRUE;
-}
-
-void program_swapOutState(Program* prog, ProgramState state) {
-    MAGIC_ASSERT(prog);
-    utility_assert(prog->isExecuting);
-
-    prog->isExecuting = FALSE;
-
-    /* destination, source, size */
-    g_memmove(state, prog->residentState, prog->residentStateSize);
-}
-
-PluginMainFunc program_getMainFunc(Program* prog) {
-    MAGIC_ASSERT(prog);
-    return prog->main;
-}
-
 ProgramState program_newDefaultState(Program* prog) {
     MAGIC_ASSERT(prog);
     return g_slice_copy(prog->residentStateSize, prog->defaultState);
@@ -301,4 +380,9 @@ const gchar* program_getName(Program* prog) {
 const gchar* program_getPath(Program* prog) {
     MAGIC_ASSERT(prog);
     return prog->path->str;
+}
+
+void* program_getHandle(Program* prog) {
+    MAGIC_ASSERT(prog);
+    return prog->handle;
 }
