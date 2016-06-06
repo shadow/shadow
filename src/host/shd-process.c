@@ -540,7 +540,6 @@ static void* _process_executeMain(Process* proc) {
     _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
 
     /* get arguments from the program we will run */
-    PluginMainFunc mainFunc = program_getMainFunc(proc->prog);
     gchar** argv;
     gint argc = _process_getArguments(proc, &argv);
 
@@ -553,7 +552,7 @@ static void* _process_executeMain(Process* proc) {
     _process_changeContext(proc, PCTX_SHADOW, PCTX_PLUGIN);
 
     /* call the program's main function, pth will handle blocking as the program runs */
-    gint returnCode = mainFunc(argc, argv);
+    gint returnCode = program_callMainFunc(proc->prog, argv, argc);
 
     /* the program's main function has returned or exited, this process has completed */
     _process_changeContext(proc, PCTX_PLUGIN, PCTX_SHADOW);
@@ -687,8 +686,16 @@ void process_start(Process* proc) {
     proc->programMainThread = pth_spawn(programMainThreadAttr, (PthSpawnFunc)_process_executeMain, proc);
     pth_attr_destroy(programMainThreadAttr);
 
+    _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+    program_callPreProcessEnterHookFunc(proc->prog);
+    _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
+
     /* now give the main program thread a chance to run */
     pth_yield(proc->programMainThread);
+
+    _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+    program_callPostProcessExitHookFunc(proc->prog);
+    _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
 
     /* revert pth global context */
     pth_gctx_set(prevPthGlobalContext);
@@ -739,10 +746,18 @@ void process_continue(Process* proc) {
     pth_gctx_t prevPthGlobalContext = pth_gctx_get();
     pth_gctx_set(proc->tstate);
 
+    _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+    program_callPreProcessEnterHookFunc(proc->prog);
+    _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
+
     /* make sure pth scheduler updates, and process all program threads until they block */
     do {
         pth_yield(NULL);
     } while(pth_ctrl(PTH_CTRL_GETTHREADS_READY | PTH_CTRL_GETTHREADS_NEW));
+
+    _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+    program_callPostProcessExitHookFunc(proc->prog);
+    _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
 
     /* total number of alive pth threads this scheduler has */
     gint nThreads = pth_ctrl(PTH_CTRL_GETTHREADS_NEW|PTH_CTRL_GETTHREADS_READY|\

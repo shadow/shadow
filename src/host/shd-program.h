@@ -9,8 +9,6 @@
 
 #include "shadow.h"
 
-typedef gint (*PluginMainFunc)(int argc, char* argv[]);
-
 typedef struct _Program Program;
 typedef gpointer ProgramState;
 
@@ -24,9 +22,13 @@ ProgramState program_newDefaultState(Program* prog);
 void program_freeState(Program* prog, gpointer state);
 
 Program* program_getTemporaryCopy(Program* prog);
-PluginMainFunc program_getMainFunc(Program* prog);
 GQuark* program_getID(Program* prog);
 const gchar* program_getName(Program* prog);
 const gchar* program_getPath(Program* prog);
+void* program_getHandle(Program* prog);
+
+gint program_callMainFunc(Program* prog, gchar** argv, gint argc);
+void program_callPreProcessEnterHookFunc(Program* prog);
+void program_callPostProcessExitHookFunc(Program* prog);
 
 #endif /* SHD_PROGRAM_H_ */
