@@ -60,7 +60,6 @@ CPU* host_getCPU(Host* host);
 gchar* host_getName(Host* host);
 Address* host_getDefaultAddress(Host* host);
 in_addr_t host_getDefaultIP(Host* host);
-gchar* host_getDefaultIPName(Host* host);
 Random* host_getRandom(Host* host);
 gdouble host_getNextPacketPriority(Host* host);
 

@@ -154,7 +154,10 @@ void logger_logVA(Logger* logger, LogLevel level, const gchar* fileName, const g
         GString* hostNameBuffer = g_string_new("n/a");
         Host* activeHost = worker_getActiveHost();
         if(activeHost) {
-            g_string_printf(hostNameBuffer, "%s~%s", host_getName(activeHost), host_getDefaultIPName(activeHost));
+            Address* hostAddress = host_getDefaultAddress(activeHost);
+            if(hostAddress) {
+                g_string_printf(hostNameBuffer, "%s~%s", host_getName(activeHost), address_toHostIPString(hostAddress));
+            }
         }
 
         /* name info for the thread */

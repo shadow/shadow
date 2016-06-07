@@ -184,6 +184,12 @@ GQuark host_getID(Host* host) {
 void host_boot(Host* host) {
     MAGIC_ASSERT(host);
 
+    /* get unique virtual address identifiers for each network interface */
+    Address* loopbackAddress = dns_register(worker_getDNS(), host->params.id, host->params.hostname, "127.0.0.1");
+    Address* ethernetAddress = dns_register(worker_getDNS(), host->params.id, host->params.hostname, host->params.ipHint);
+    host->defaultAddress = ethernetAddress;
+    address_ref(host->defaultAddress);
+
     if(!host->dataDirPath) {
         host->dataDirPath = g_build_filename(worker_getHostsRootPath(), host->params.hostname, NULL);
         g_mkdir_with_parents(host->dataDirPath, 0775);
@@ -191,12 +197,6 @@ void host_boot(Host* host) {
 
     host->random = random_new(host->params.nodeSeed);
     host->cpu = cpu_new(host->params.cpuFrequency, host->params.cpuThreshold, host->params.cpuPrecision);
-
-    /* get unique virtual address identifiers for each network interface */
-    Address* loopbackAddress = dns_register(worker_getDNS(), host->params.id, host->params.hostname, "127.0.0.1");
-    Address* ethernetAddress = dns_register(worker_getDNS(), host->params.id, host->params.hostname, host->params.ipHint);
-    host->defaultAddress = ethernetAddress;
-    address_ref(host->defaultAddress);
 
     /* connect to topology and get the default bandwidth */
     guint64 bwDownKiBps = 0, bwUpKiBps = 0;
@@ -294,12 +294,6 @@ in_addr_t host_getDefaultIP(Host* host) {
     MAGIC_ASSERT(host);
     return address_toNetworkIP(host->defaultAddress);
 }
-
-gchar* host_getDefaultIPName(Host* host) {
-    MAGIC_ASSERT(host);
-    return address_toHostIPString(host->defaultAddress);
-}
-
 
 Random* host_getRandom(Host* host) {
     MAGIC_ASSERT(host);
