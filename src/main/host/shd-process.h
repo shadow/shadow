@@ -195,6 +195,7 @@ int process_emu_srandom_r(Process* proc, unsigned int seed, struct random_data *
 
 /* exit family */
 
+void process_emu_exit(Process* proc, int status);
 int process_emu_on_exit(Process* proc, void (*function)(int , void *), void *arg);
 int process_emu_atexit(Process* proc, void (*func)(void));
 int process_emu___cxa_atexit(Process* proc, void (*func) (void *), void * arg, void * dso_handle);
