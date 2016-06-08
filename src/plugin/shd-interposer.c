@@ -244,6 +244,7 @@ typedef int (*srandom_r_func)(unsigned int, struct random_data*);
 
 /* exit family */
 
+typedef void (*exit_func)(int status);
 typedef int (*on_exit_func)(void (*function)(int , void *), void *arg);
 typedef int (*atexit_func)(void (*func)(void));
 typedef int (*__cxa_atexit_func)(void (*func) (void *), void * arg, void * dso_handle);
@@ -519,6 +520,7 @@ typedef struct {
     srandom_func srandom;
     srandom_r_func srandom_r;
 
+    exit_func exit;
     on_exit_func on_exit;
     atexit_func atexit;
     __cxa_atexit_func __cxa_atexit;
@@ -836,6 +838,7 @@ static void _interposer_globalInitialize() {
     SETSYM_OR_FAIL(director.next.random_r, "random_r");
     SETSYM_OR_FAIL(director.next.srandom, "srandom");
     SETSYM_OR_FAIL(director.next.srandom_r, "srandom_r");
+    SETSYM_OR_FAIL(director.next.exit, "exit");
     SETSYM_OR_FAIL(director.next.on_exit, "on_exit");
     SETSYM_OR_FAIL(director.next.__cxa_atexit, "__cxa_atexit");
 
@@ -1285,6 +1288,7 @@ INTERPOSE(int srandom_r(unsigned int a, struct random_data *b), srandom_r, a, b)
 
 /* exit family */
 
+INTERPOSE_NORET(void exit(int a), exit, a);
 INTERPOSE(int on_exit(void (*a)(int , void *), void *b), on_exit, a, b);
 INTERPOSE(int atexit(void (*a)(void)), atexit, a);
 INTERPOSE(int __cxa_atexit(void (*a) (void *), void *b, void *c), __cxa_atexit, a, b, c);

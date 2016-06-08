@@ -159,6 +159,9 @@ struct _Process {
     /* process boot and shutdown variables */
     SimulationTime startTime;
     GString* arguments;
+    gchar** argv;
+    gint argc;
+    gint returnCode;
     GQueue* atExitFunctions;
 
     /* other state for pthread interface */
@@ -458,20 +461,23 @@ static void _process_executeCleanup(Process* proc) {
     utility_assert(process_isRunning(proc));
     utility_assert(worker_getActiveProcess() == proc);
 
+    gint numThreads = proc->programAuxiliaryThreads ? g_queue_get_length(proc->programAuxiliaryThreads) : 0;
+    gint numExitFuncs = proc->atExitFunctions ? g_queue_get_length(proc->atExitFunctions) : 0;
     message("cleaning up '%s-%u' process: aborting %u auxiliary threads and calling %u atexit functions",
-            g_quark_to_string(proc->programID), proc->processID,
-            g_queue_get_length(proc->programAuxiliaryThreads), g_queue_get_length(proc->atExitFunctions));
+            g_quark_to_string(proc->programID), proc->processID, numThreads, numExitFuncs);
 
     /* closing the main thread causes all other threads to get terminated */
-    while(g_queue_get_length(proc->programAuxiliaryThreads) > 0) {
-        pth_t auxThread = g_queue_pop_head(proc->programAuxiliaryThreads);
-        if(auxThread) {
-            _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
-            gint success = pth_abort(auxThread);
-            _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+    if(proc->programAuxiliaryThreads != NULL) {
+        while(g_queue_get_length(proc->programAuxiliaryThreads) > 0) {
+            pth_t auxThread = g_queue_pop_head(proc->programAuxiliaryThreads);
+            if(auxThread) {
+                _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
+                gint success = pth_abort(auxThread);
+                _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+            }
         }
+        g_queue_free(proc->programAuxiliaryThreads);
     }
-    g_queue_free(proc->programAuxiliaryThreads);
 
     /* calling the process atexit funcs. these shouldnt use any thread data that got deleted above */
     while(proc->atExitFunctions && g_queue_get_length(proc->atExitFunctions) > 0) {
@@ -508,6 +514,15 @@ static void _process_executeCleanup(Process* proc) {
         proc->stderrFile = NULL;
     }
 
+    if(proc->argv) {
+        /* free the arguments */
+        for(gint i = 0; i < proc->argc; i++) {
+            g_free(proc->argv[i]);
+        }
+        g_free(proc->argv);
+        proc->argv = NULL;
+    }
+
     /* the main thread is done and will be joined by pth */
     proc->programMainThread = NULL;
 
@@ -519,6 +534,22 @@ static void _process_executeCleanup(Process* proc) {
     if(count > 1) {
         _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
     }
+}
+
+static void _process_logReturnCode(Process* proc, gint code) {
+    GString* mainResultString = g_string_new(NULL);
+    g_string_printf(mainResultString, "main %s code '%i' for process '%s-%u'",
+            ((code==0) ? "success" : "error"),
+            code, g_quark_to_string(proc->programID), proc->processID);
+
+    if(code == 0) {
+        message("%s", mainResultString->str);
+    } else {
+        warning("%s", mainResultString->str);
+        worker_incrementPluginError();
+    }
+
+    g_string_free(mainResultString, TRUE);
 }
 
 static void* _process_executeMain(Process* proc) {
@@ -540,8 +571,7 @@ static void* _process_executeMain(Process* proc) {
     _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
 
     /* get arguments from the program we will run */
-    gchar** argv;
-    gint argc = _process_getArguments(proc, &argv);
+    proc->argc = _process_getArguments(proc, &proc->argv);
 
     message("calling main() for '%s-%u' process", g_quark_to_string(proc->programID), proc->processID);
 
@@ -552,7 +582,7 @@ static void* _process_executeMain(Process* proc) {
     _process_changeContext(proc, PCTX_SHADOW, PCTX_PLUGIN);
 
     /* call the program's main function, pth will handle blocking as the program runs */
-    gint returnCode = program_callMainFunc(proc->prog, argv, argc);
+    proc->returnCode = program_callMainFunc(proc->prog, proc->argv, proc->argc);
 
     /* the program's main function has returned or exited, this process has completed */
     _process_changeContext(proc, PCTX_PLUGIN, PCTX_SHADOW);
@@ -569,25 +599,7 @@ static void* _process_executeMain(Process* proc) {
     gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);
     _process_handleTimerResult(proc, elapsed);
 
-    GString* mainResultString = g_string_new(NULL);
-    g_string_printf(mainResultString, "main %s code '%i' for process '%s-%u'",
-            ((returnCode==0) ? "success" : "error"),
-            returnCode, g_quark_to_string(proc->programID), proc->processID);
-
-    if(returnCode == 0) {
-        message("%s", mainResultString->str);
-    } else {
-        warning("%s", mainResultString->str);
-        worker_incrementPluginError();
-    }
-
-    g_string_free(mainResultString, TRUE);
-
-    /* free the arguments */
-    for(gint i = 0; i < argc; i++) {
-        g_free(argv[i]);
-    }
-    g_free(argv);
+    _process_logReturnCode(proc, proc->returnCode);
 
     /* unref for the main func */
     process_unref(proc);
@@ -697,6 +709,10 @@ void process_start(Process* proc) {
     program_callPostProcessExitHookFunc(proc->prog);
     _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
 
+    /* total number of alive pth threads this scheduler has */
+    gint nThreads = pth_ctrl(PTH_CTRL_GETTHREADS_NEW|PTH_CTRL_GETTHREADS_READY|\
+            PTH_CTRL_GETTHREADS_RUNNING|PTH_CTRL_GETTHREADS_WAITING|PTH_CTRL_GETTHREADS_SUSPENDED);
+
     /* revert pth global context */
     pth_gctx_set(prevPthGlobalContext);
 
@@ -708,8 +724,24 @@ void process_start(Process* proc) {
     /* XXX temporary tor process init hack */
     if(doLock) G_UNLOCK(globalProcessInitLock);
 
-    message("'%s-%u' process initialization is complete, main thread %s running",
-            g_quark_to_string(proc->programID), proc->processID, process_isRunning(proc) ? "is" : "is not");
+    /* the main thread wont exist if it exited immediately before returning control to shadow */
+    if(proc->programMainThread) {
+        message("'%s-%u' process initialization is complete, main thread %s running",
+                g_quark_to_string(proc->programID), proc->processID, process_isRunning(proc) ? "is" : "is not");
+    } else {
+        _process_logReturnCode(proc, proc->returnCode);
+
+        utility_assert(nThreads == 1);
+
+        proc->tstate = NULL;
+
+        /* free our copy of plug-in resources, and other application state */
+        program_freeState(proc->prog, proc->pstate);
+        proc->pstate = NULL;
+        utility_assert(!process_isRunning(proc));
+
+        info("'%s-%u' has completed or is otherwise no longer running", g_quark_to_string(proc->programID), proc->processID);
+    }
 
     if(proc->stdoutFile) {
         fflush(proc->stdoutFile);
@@ -3774,6 +3806,11 @@ int process_emu_srandom_r(Process* proc, unsigned int seed, struct random_data *
 }
 
 /* exit family */
+
+void process_emu_exit(Process* proc, int status) {
+    proc->returnCode = status;
+    process_emu_pthread_exit(proc, NULL);
+}
 
 int process_emu_on_exit(Process* proc, void (*function)(int , void *), void *arg) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
