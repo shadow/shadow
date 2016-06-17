@@ -489,15 +489,16 @@ static void _tgentransfer_readChecksum(TGenTransfer* transfer) {
 
         gchar** parts = g_strsplit(line, " ", 0);
         const gchar* receivedSum = parts[1];
-        g_assert(receivedSum);
 
         /* check that the sums match */
-        if(!g_ascii_strncasecmp(computedSum, receivedSum, (gsize)sha1Length)) {
+        if(receivedSum && !g_ascii_strncasecmp(computedSum, receivedSum, (gsize)sha1Length)) {
             tgen_message("transport %s transfer %s MD5 checksums passed: computed=%s received=%s",
                     tgentransport_toString(transfer->transport), _tgentransfer_toString(transfer),
                     computedSum, receivedSum);
-        } else {
+        } else if (receivedSum) {
             tgen_message("MD5 checksums failed: computed=%s received=%s", computedSum, receivedSum);
+        } else {
+            tgen_message("MD5 checksums failed: received sum is NULL");
         }
 
         g_strfreev(parts);
