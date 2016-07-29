@@ -162,6 +162,12 @@ gint shadow_main(gint argc, gchar* argv[]) {
         return -1;
     }
 
+    if(GLIB_MAJOR_VERSION == 2 && GLIB_MINOR_VERSION == 40) {
+        g_printerr("** You compiled against GLib version %u.%u.%u, which has bugs known to break Shadow. Please update to a newer version of GLib.\n",
+                    (guint)GLIB_MAJOR_VERSION, (guint)GLIB_MINOR_VERSION, (guint)GLIB_MICRO_VERSION);
+        return -1;
+    }
+
     /* check the that run-time GLib matches the compiled version */
     const gchar* mismatch = glib_check_version(GLIB_MAJOR_VERSION, GLIB_MINOR_VERSION, GLIB_MICRO_VERSION);
     if(mismatch) {
