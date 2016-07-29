@@ -188,7 +188,10 @@ gint shadow_main(gint argc, gchar* argv[]) {
         /* incorrect options given */
         return -1;
     } else if(config->printSoftwareVersion) {
-        g_printerr("%s\n%s\n", SHADOW_VERSION_STRING, SHADOW_INFO_STRING);
+        g_printerr("%s running GLib %u.%u.%u and IGraph %s\n%s\n",
+                SHADOW_VERSION_STRING,
+                (guint)GLIB_MAJOR_VERSION, (guint)GLIB_MINOR_VERSION, (guint)GLIB_MICRO_VERSION,
+                IGRAPH_VERSION, SHADOW_INFO_STRING);
         configuration_free(config);
         return 0;
     }
