@@ -642,6 +642,7 @@ typedef struct {
 
 /* global storage for function pointers that we look up lazily */
 static FuncDirector director;
+static int directorIsInitialized;
 
 /* track if we are in a recursive loop to avoid infinite recursion.
  * threads MUST access this via &isRecursive to ensure each has its own copy
@@ -683,10 +684,10 @@ void interposer_setShadowIsLoaded() {
     director.shadowIsLoaded = 1;
 }
 
-static void _interposer_globalInitialize() {
-    /* ensure we never intercept during initialization */
-    __sync_fetch_and_add(&isRecursive, 1);
-
+static void _interposer_globalInitializeHelper() {
+    if(directorIsInitialized) {
+        return;
+    }
     memset(&director, 0, sizeof(FuncDirector));
 
     /* use dummy malloc during initial dlsym calls to avoid recursive stack segfaults */
@@ -940,6 +941,14 @@ static void _interposer_globalInitialize() {
     SETSYM(director.next.pthread_cleanup_push, "pthread_cleanup_push");
     SETSYM(director.next.pthread_cleanup_pop, "pthread_cleanup_pop");
 
+    directorIsInitialized = 1;
+}
+
+static void _interposer_globalInitialize() {
+    /* ensure we recursively intercept during initialization */
+    if(!__sync_fetch_and_add(&isRecursive, 1)){
+        _interposer_globalInitializeHelper();
+    }
     __sync_fetch_and_sub(&isRecursive, 1);
 }
 
@@ -960,6 +969,9 @@ void __attribute__((constructor)) construct() {
  ****************************************************************************/
 
 static inline Process* _doEmulate() {
+    if(!directorIsInitialized) {
+        _interposer_globalInitialize();
+    }
     Process* proc = NULL;
     /* recursive calls always go to libc */
     if(!__sync_fetch_and_add(&isRecursive, 1)) {

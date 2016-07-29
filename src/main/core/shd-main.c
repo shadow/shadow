@@ -164,6 +164,12 @@ gint shadow_main(gint argc, gchar* argv[]) {
         return -1;
     }
 
+    if(GLIB_MAJOR_VERSION == 2 && GLIB_MINOR_VERSION == 40) {
+        g_printerr("** You compiled against GLib version %u.%u.%u, which has bugs known to break Shadow. Please update to a newer version of GLib.\n",
+                    (guint)GLIB_MAJOR_VERSION, (guint)GLIB_MINOR_VERSION, (guint)GLIB_MICRO_VERSION);
+        return -1;
+    }
+
     /* check the that run-time GLib matches the compiled version */
     const gchar* mismatch = glib_check_version(GLIB_MAJOR_VERSION, GLIB_MINOR_VERSION, GLIB_MICRO_VERSION);
     if(mismatch) {
@@ -184,7 +190,15 @@ gint shadow_main(gint argc, gchar* argv[]) {
         /* incorrect options given */
         return -1;
     } else if(options_doRunPrintVersion(options)) {
-        g_printerr("%s\n%s\n", SHADOW_VERSION_STRING, SHADOW_INFO_STRING);
+        g_printerr("%s running GLib v%u.%u.%u and IGraph v%s\n%s\n",
+                SHADOW_VERSION_STRING,
+                (guint)GLIB_MAJOR_VERSION, (guint)GLIB_MINOR_VERSION, (guint)GLIB_MICRO_VERSION,
+#if defined(IGRAPH_VERSION)
+                IGRAPH_VERSION,
+#else
+                "(n/a)",
+#endif
+                SHADOW_INFO_STRING);
         options_free(options);
         return 0;
     }
