@@ -14,11 +14,16 @@
  * ./shd-test-module
  */
 
+#if !defined(_GNU_SOURCE)
 #define _GNU_SOURCE
+#endif
 #include <link.h>
 #include <dlfcn.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <stdio.h>
+#include <errno.h>
+#include <string.h>
 #include <signal.h>
 
 //#include <glib.h>
@@ -26,6 +31,7 @@
 #define RTLD_NEXT ((void *) -1l)
 
 #define NUM_LOADS 8
+#define NUM_HARDLINKS 100
 #define PLUGIN_PATH "shadow-test-plugin-dynlink"
 #define PLUGIN_MAIN_SYMBOL "main"
 typedef int (*MainFunc)(int argc, char* argv[]);
@@ -121,7 +127,7 @@ typedef int (*MainFunc)(int argc, char* argv[]);
 //    return EXIT_SUCCESS;
 //}
 
-void* _test_load_dlopen() {
+void* _test_load_dlopen(const char* plugin_path) {
     /* RTLD_LOCAL
      * Symbols defined in this library are not made available to resolve
      * references in subsequently loaded libraries
@@ -130,12 +136,12 @@ void* _test_load_dlopen() {
      * a self-contained library will use its own symbols in preference to global
      * symbols with the same name contained in libraries that have already been loaded
      */
-    return dlopen(PLUGIN_PATH, RTLD_LAZY|RTLD_LOCAL|RTLD_DEEPBIND);
+    return dlopen(plugin_path, RTLD_LAZY|RTLD_LOCAL|RTLD_DEEPBIND);
 }
 
-void* _test_load_dlmopen() {
+void* _test_load_dlmopen(const char* plugin_path) {
     // LM_ID_NEWLM, LM_ID_BASE
-    return dlmopen(LM_ID_NEWLM, PLUGIN_PATH, RTLD_LAZY|RTLD_LOCAL|RTLD_DEEPBIND);
+    return dlmopen(LM_ID_NEWLM, plugin_path, RTLD_LAZY|RTLD_LOCAL|RTLD_DEEPBIND);
 }
 
 int _test_linker_loader_single(int use_dlmopen) {
@@ -147,9 +153,9 @@ int _test_linker_loader_single(int use_dlmopen) {
         dlerror();
 
         if(use_dlmopen) {
-            handles[i] = _test_load_dlmopen();
+            handles[i] = _test_load_dlmopen(PLUGIN_PATH);
         } else {
-            handles[i] = _test_load_dlopen();
+            handles[i] = _test_load_dlopen(PLUGIN_PATH);
         }
 
         if(!handles[i]) {
@@ -215,11 +221,150 @@ int _test_linker_loader_single(int use_dlmopen) {
     }
 }
 
+static char* _get_temp_hard_link(const char* path) {
+    char temp_path[256];
+    memset(temp_path, 0, 256);
+
+    // XXX not supposed to use tmpnam to get pathnames, since the path could
+    // no longer be unique and empty by the time we use it
+    char* p = tmpnam_r(temp_path);
+    if(!p) {
+        return NULL;
+    }
+
+    fprintf(stdout, "tmpnam returned path %s\n", p);
+
+    if(link(path, p) == 0) {
+        return strndup(p, (size_t)255);
+    } else {
+        return NULL;
+    }
+}
+
+#include <glib/gstdio.h>
+gboolean _test_copy(const gchar* source, const gchar* destination) {
+    gchar* content;
+    gsize length;
+    GError *error = NULL;
+
+    /* get the xml file */
+    fprintf(stdout, "attempting to get contents of file '%s'", source);
+    gboolean success = g_file_get_contents(source, &content, &length, &error);
+    fprintf(stdout, "finished getting contents of file '%s'", source);
+
+    /* check for success */
+    if (!success) {
+        fprintf(stdout, "g_file_get_contents: %s", error->message);
+        g_error_free(error);
+        return FALSE;
+    }
+
+    success = g_file_set_contents(destination, content, (gssize)length, &error);
+
+    /* check for success */
+    if (!success) {
+        fprintf(stdout, "g_file_set_contents: %s", error->message);
+        g_error_free(error);
+        return FALSE;
+    }
+
+    g_free(content);
+    return TRUE;
+}
+static char* _get_temp_file_copy(const char* path) {
+    char template_path[256];
+    memset(template_path, 0, 256);
+    snprintf(template_path, (size_t)255, "XXXXXX-%s", path);
+
+    /* try to open a templated file, checking for errors */
+    gchar* temporaryFilename = NULL;
+    GError* error = NULL;
+
+    gint openedFile = g_file_open_tmp(template_path, &temporaryFilename, &error);
+    if(openedFile < 0) {
+        fprintf(stdout, "unable to open temporary file for cdata topology: %s", error->message);
+        return NULL;
+    }
+
+    /* cleanup */
+    close(openedFile);
+    g_unlink(temporaryFilename);
+
+    gboolean success = _test_copy(path, temporaryFilename);
+    if(!success) {
+        return NULL;
+    }
+
+    return temporaryFilename;
+}
+
+static int _test_linker_loader_hardlinks(int do_link) {
+    void* handles[NUM_HARDLINKS];
+    char* paths[NUM_HARDLINKS];
+
+    for(int i = 0; i < NUM_HARDLINKS; i++) {
+        /* clear dlerror */
+        dlerror();
+
+        if(do_link) {
+            paths[i] = _get_temp_hard_link(PLUGIN_PATH);
+        } else {
+            paths[i] = _get_temp_file_copy(PLUGIN_PATH);
+        }
+        if(!paths[i]) {
+            fprintf(stdout, "error creating hard link for path '%s': '%s'\n",
+                                paths[i], strerror(errno));
+            return EXIT_FAILURE;
+        }
+
+        handles[i] = _test_load_dlmopen(paths[i]);
+        if(!handles[i]) {
+            fprintf(stdout, "dlmopen() for path '%s' returned NULL, dlerror is '%s'\n",
+                    paths[i], dlerror());
+            return EXIT_FAILURE;
+        }
+
+        fprintf(stdout, "got handle %p for path '%s'\n", handles[i], paths[i]);
+    }
+
+    int num_failures = 0;
+    for(int i = 0; i < NUM_HARDLINKS; i++) {
+        /* clear dlerror */
+        dlerror();
+
+        if(handles[i] && dlclose(handles[i]) != 0) {
+            num_failures++;
+            fprintf(stdout, "dlclose() error for path '%s' and handle '%p', dlerror is '%s'\n",
+                    paths[i], handles[i], dlerror());
+        }
+    }
+
+    if(num_failures == 0) {
+        return EXIT_SUCCESS;
+    } else {
+        return EXIT_FAILURE;
+    }
+}
+
 int main(int argc, char* argv[]) {
     fprintf(stdout, "########## dynlink test starting ##########\n");
 
     if(_test_linker_loader_single(1) != 0) {
         fprintf(stdout, "########## _test_linker_loader_single() with dlmopen() failed\n");
+        return -EXIT_FAILURE;
+    }
+
+    fprintf(stdout, "########## dynlink testing dlmopen with file copies ##########\n");
+
+    if(_test_linker_loader_hardlinks(0) != 0) {
+        fprintf(stdout, "########## _test_linker_loader_hardlinks() with dlmopen() failed\n");
+        return -EXIT_FAILURE;
+    }
+
+    fprintf(stdout, "########## dynlink testing dlmopen with hardlinks ##########\n");
+
+    if(_test_linker_loader_hardlinks(1) != 0) {
+        fprintf(stdout, "########## _test_linker_loader_hardlinks() with dlmopen() failed\n");
         return -EXIT_FAILURE;
     }
 

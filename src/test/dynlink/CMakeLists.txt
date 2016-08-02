@@ -1,3 +1,6 @@
+find_package(GLIB REQUIRED)
+include_directories(${DL_INCLUDES} ${GLIB_INCLUDES})
+
 ## build the dynamic executable that plugs into shadow
 add_shadow_exe(shadow-test-plugin-dynlink shd-test-dynlink-plugin.c)
 
