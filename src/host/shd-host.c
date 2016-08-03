@@ -888,7 +888,7 @@ static in_port_t _host_getRandomFreePort(Host* host, in_addr_t interfaceIP, Desc
     NetworkInterface* interface = host_lookupInterface(host, interfaceIP);
     in_port_t randomNetworkPort = 0;
 
-    if (interface && networkinterface_hasFreePorts(interface)) {
+    if (interfaceIP == htonl(INADDR_ANY) || (interface && networkinterface_hasFreePorts(interface))) {
         gboolean freePortFound = FALSE;
         while (!freePortFound) {
             gdouble randomFraction = random_nextDouble(host->random);
