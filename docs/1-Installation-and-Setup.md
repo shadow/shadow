@@ -29,8 +29,10 @@ sudo yum install -y git dstat screen htop
 
 **APT (Ubuntu):**
 
+Ubuntu renamed libigraph0 to libigraph0v5 sometime between 14.04 and 16.04. Therefore when using a version of Ubuntu older than 16.04, you should replace `libigraph0v5` with `libigraph0`.
+
 ```bash
-sudo apt-get install -y gcc g++ clang llvm llvm-dev libglib2.0 libglib2.0-dev libigraph0 libigraph0-dev cmake make xz-utils
+sudo apt-get install -y gcc g++ clang llvm llvm-dev libglib2.0-0 libglib2.0-dev libigraph0v5 libigraph0-dev cmake make xz-utils
 sudo apt-get install -y python python-matplotlib python-numpy python-scipy python-networkx python-lxml
 sudo apt-get install -y git dstat screen htop
 ```
