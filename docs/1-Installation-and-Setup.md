@@ -157,7 +157,7 @@ https://www.kernel.org/doc/Documentation/sysctl/vm.txt
 
 ```bash
 man proc
-man ulimit -n
+man ulimit
 cat /proc/sys/fs/file-max
 cat /proc/sys/fs/inode-max
 ```
