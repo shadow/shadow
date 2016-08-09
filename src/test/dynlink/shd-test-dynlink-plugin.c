@@ -13,7 +13,7 @@
  * gcc -shared -Wl,-soname,testplugin.so -fPIC -o testplugin.so shd-test-plugin.c `pkg-config --cflags --libs glib-2.0` -I/home/rob/.shadow/include
  */
 
-int lib_increment();
+extern int lib_increment();
 
 int plugin_value = 0;
 

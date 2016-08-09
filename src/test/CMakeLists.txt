@@ -15,7 +15,7 @@ get_property(LLVMHoistGlobalsPATH TARGET LLVMHoistGlobals PROPERTY LOCATION)
 add_executable(shadow-test-launcher shd-test-launcher.c)
 
 ## add the test directories
-add_subdirectory(dynlink)
+#add_subdirectory(dynlink)
 add_subdirectory(preload)
 add_subdirectory(random)
 add_subdirectory(sleep)

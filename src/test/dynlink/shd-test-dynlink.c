@@ -25,14 +25,15 @@
 #include <errno.h>
 #include <string.h>
 #include <signal.h>
+#include <pthread.h>
 
 //#include <glib.h>
 
 #define RTLD_NEXT ((void *) -1l)
 
-#define NUM_LOADS 8
+#define NUM_LOADS 20
 #define NUM_HARDLINKS 100
-#define PLUGIN_PATH "shadow-test-plugin-dynlink"
+#define PLUGIN_PATH "libshadow-test-dynlink-plugin.so"
 #define PLUGIN_MAIN_SYMBOL "main"
 typedef int (*MainFunc)(int argc, char* argv[]);
 
@@ -214,10 +215,10 @@ int _test_linker_loader_single(int use_dlmopen) {
         }
     }
 
-    if(total_count == expected_count && num_failures == 0) {
-        return EXIT_SUCCESS;
-    } else {
+    if(num_failures > 0 || (use_dlmopen && (total_count != expected_count))) {
         return EXIT_FAILURE;
+    } else {
+        return EXIT_SUCCESS;
     }
 }
 
@@ -248,13 +249,13 @@ gboolean _test_copy(const gchar* source, const gchar* destination) {
     GError *error = NULL;
 
     /* get the xml file */
-    fprintf(stdout, "attempting to get contents of file '%s'", source);
+    fprintf(stdout, "attempting to get contents of file '%s'\n", source);
     gboolean success = g_file_get_contents(source, &content, &length, &error);
-    fprintf(stdout, "finished getting contents of file '%s'", source);
+    fprintf(stdout, "finished getting contents of file '%s'\n", source);
 
     /* check for success */
     if (!success) {
-        fprintf(stdout, "g_file_get_contents: %s", error->message);
+        fprintf(stdout, "error in g_file_get_contents: %s\n", error->message);
         g_error_free(error);
         return FALSE;
     }
@@ -263,7 +264,7 @@ gboolean _test_copy(const gchar* source, const gchar* destination) {
 
     /* check for success */
     if (!success) {
-        fprintf(stdout, "g_file_set_contents: %s", error->message);
+        fprintf(stdout, "error in g_file_set_contents: %s\n", error->message);
         g_error_free(error);
         return FALSE;
     }
@@ -282,7 +283,7 @@ static char* _get_temp_file_copy(const char* path) {
 
     gint openedFile = g_file_open_tmp(template_path, &temporaryFilename, &error);
     if(openedFile < 0) {
-        fprintf(stdout, "unable to open temporary file for cdata topology: %s", error->message);
+        fprintf(stdout, "unable to open temporary file for cdata topology: %s\n", error->message);
         return NULL;
     }
 
@@ -298,7 +299,7 @@ static char* _get_temp_file_copy(const char* path) {
     return temporaryFilename;
 }
 
-static int _test_linker_loader_hardlinks(int do_link) {
+static int _test_linker_loader_newpaths(int do_link, int use_dlmopen) {
     void* handles[NUM_HARDLINKS];
     char* paths[NUM_HARDLINKS];
 
@@ -317,7 +318,11 @@ static int _test_linker_loader_hardlinks(int do_link) {
             return EXIT_FAILURE;
         }
 
-        handles[i] = _test_load_dlmopen(paths[i]);
+        if(use_dlmopen) {
+            handles[i] = _test_load_dlmopen(paths[i]);
+        } else {
+            handles[i] = _test_load_dlopen(paths[i]);
+        }
         if(!handles[i]) {
             fprintf(stdout, "dlmopen() for path '%s' returned NULL, dlerror is '%s'\n",
                     paths[i], dlerror());
@@ -346,28 +351,117 @@ static int _test_linker_loader_hardlinks(int do_link) {
     }
 }
 
-int main(int argc, char* argv[]) {
-    fprintf(stdout, "########## dynlink test starting ##########\n");
+int thread_run() {
+    /**
+     * Test result:
+     * dlopen can load a file multiple times, but not it their own namespace
+     * so this doesnt work for shadow virtual nodes
+     */
+//    fprintf(stdout, "########## dynlink testing dlopen ##########\n");
+//
+//    if(_test_linker_loader_single(0) != 0) {
+//        fprintf(stdout, "########## _test_linker_loader_single() with dlopen() failed\n");
+//        return -EXIT_FAILURE;
+//    }
+
+
+    /**
+     * Test result:
+     * dlmopen can load a plugin in their own namespace, but runs out of TLS
+     * "slots" after opening 13 libs
+     */
+    fprintf(stdout, "########## dynlink testing dlmopen ##########\n");
 
     if(_test_linker_loader_single(1) != 0) {
         fprintf(stdout, "########## _test_linker_loader_single() with dlmopen() failed\n");
         return -EXIT_FAILURE;
     }
 
+
+    /**
+     * Test result:
+     * file copies do work - dlopen gives new handles for plugin copies
+     * but dlopen still doesnt give us new namespaces for libs linked to plugin
+     */
+//    fprintf(stdout, "########## dynlink testing dlopen with file copies ##########\n");
+//
+//    if(_test_linker_loader_newpaths(0, 0) != 0) {
+//        fprintf(stdout, "########## _test_linker_loader_newpaths(copy) with dlopen() failed\n");
+//        return -EXIT_FAILURE;
+//    }
+
+
+    /**
+     * Test result:
+     * dlmopen gives us new handles and new namespaces for file copies
+     * but still only lets us open 13 times, regardless of the file paths
+     */
     fprintf(stdout, "########## dynlink testing dlmopen with file copies ##########\n");
 
-    if(_test_linker_loader_hardlinks(0) != 0) {
-        fprintf(stdout, "########## _test_linker_loader_hardlinks() with dlmopen() failed\n");
+    if(_test_linker_loader_newpaths(0, 1) != 0) {
+        fprintf(stdout, "########## _test_linker_loader_newpaths(copy) with dlmopen() failed\n");
         return -EXIT_FAILURE;
     }
 
+
+    /**
+     * Test result:
+     * hardlinks dont work - dlopen gives the same handle for diff hard link paths
+     */
+//    fprintf(stdout, "########## dynlink testing dlopen with hardlinks ##########\n");
+//
+//    if(_test_linker_loader_newpaths(1, 0) != 0) {
+//        fprintf(stdout, "########## _test_linker_loader_newpaths(link) with dlopen() failed\n");
+//        return -EXIT_FAILURE;
+//    }
+
+
+    /**
+     * Test result:
+     * dlmopen gives us new handles and new namespaces for hard links
+     * but still only lets us open 13 times, regardless of the file paths
+     */
     fprintf(stdout, "########## dynlink testing dlmopen with hardlinks ##########\n");
 
-    if(_test_linker_loader_hardlinks(1) != 0) {
-        fprintf(stdout, "########## _test_linker_loader_hardlinks() with dlmopen() failed\n");
+    if(_test_linker_loader_newpaths(1, 1) != 0) {
+        fprintf(stdout, "########## _test_linker_loader_newpaths(link) with dlmopen() failed\n");
         return -EXIT_FAILURE;
     }
 
     fprintf(stdout, "########## dynlink test passed! ##########\n");
     return EXIT_SUCCESS;
+}
+
+void* thread_main(void* arg) {
+    thread_run();
+    return NULL;
+}
+
+int start_thread() {
+    pthread_t slave_tid;
+    pthread_attr_t slave_attr;
+    size_t stack_size;
+    void *stack_addr;
+
+    pthread_attr_init(&slave_attr);
+    // Stack size is 128M bytes
+    stack_size = 128 * 1024 * 1024;
+    posix_memalign(&stack_addr, sysconf(_SC_PAGESIZE), stack_size);
+    pthread_attr_setstack(&slave_attr, stack_addr, stack_size);
+
+    pthread_create(&slave_tid, &slave_attr, thread_main, NULL);
+    pthread_attr_destroy(&slave_attr);
+
+    pthread_join(slave_tid, NULL);
+    return 0;
+}
+
+int main(int argc, char* argv[]) {
+    // run in a thread to see if we can increase the thread stack size
+    // and if dlmopen would then succeed
+    // test result: nope, thread and thread stack size doesnt matter
+    start_thread();
+    // test result: multiple threads cannot open any more libs than main thread
+    start_thread();
+    return 0;
 }
