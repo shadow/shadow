@@ -100,9 +100,9 @@ When debugging, it will be helpful to use the Shadow option `--cpu-threshold=-1`
 
 Build Shadow with debugging symbols by using the `-g` flag. See the help menu with `python setup.py build --help`.
 
-The easiest way to debug is to run shadow with the `-d` flag, which will pause shadow after startup and print the `PID`. You can then simply attach gdb to shadow in a new terminal and continue the experiment:
+The easiest way to debug is to run shadow with the `-g` flag, which will pause shadow after startup and print the `PID`. You can then simply attach gdb to shadow in a new terminal and continue the experiment:
 ```
-shadow -d shadow.config.xml
+shadow -g shadow.config.xml
 # new terminal
 gdb --pid=PID
 > continue
