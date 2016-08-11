@@ -231,7 +231,8 @@ def main(argv):
     data = debug.get_typedef_member_offset ('tcbhead_t', 'tcb')
     if data is None:
         sys.exit (1)
-    config.write ('#define CONFIG_TCB_TCB_OFFSET ' + str(data.data) + '\n')
+    offset = str(data.data) if len(str(data.data)) > 0 else '0'
+    config.write ('#define CONFIG_TCB_TCB_OFFSET ' + offset + '\n')
 
     data = debug.get_typedef_member_offset ('tcbhead_t', 'dtv')
     if data is None:
