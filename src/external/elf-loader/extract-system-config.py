@@ -71,9 +71,9 @@ class DebugData:
     def find_by_name (self, type, name):
         item = self.read_one ()
         while item is not None:
-            if item.type == type and \
+            if item.type.strip() == type and \
                     item.attributes.has_key ('DW_AT_name') and \
-                    item.attributes['DW_AT_name'] == name:
+                    item.attributes['DW_AT_name'].strip() == name:
                 return item
             item = self.read_one ()
         return item
@@ -90,10 +90,10 @@ class DebugData:
             if sub_item.level == parent.level:
                 self.write_back_one ()
                 return None
-            if sub_item.type == 'DW_TAG_member' and \
+            if sub_item.type.strip() == 'DW_TAG_member' and \
                     sub_item.attributes.has_key ('DW_AT_name') and \
-                    sub_item.attributes['DW_AT_name'] == member_name:
-                return Data (sub_item.attributes['DW_AT_data_member_location'])
+                    sub_item.attributes['DW_AT_name'].strip() == member_name:
+                return Data (sub_item.attributes['DW_AT_data_member_location'].strip())
             sub_item = self.read_one ()
         return None
     # public methods below
@@ -110,7 +110,7 @@ class DebugData:
             return None
         if not item.attributes.has_key ('DW_AT_byte_size'):
             return None
-        return Data (item.attributes['DW_AT_byte_size'])    
+        return Data (item.attributes['DW_AT_byte_size'].strip())
     def get_typedef_member_offset (self, typename, member):
         self.rewind ()
         item = self.find_by_name ('DW_TAG_typedef', typename)
@@ -118,7 +118,7 @@ class DebugData:
             return None
         if not item.attributes.has_key ('DW_AT_type'):
             return None
-        ref = item.attributes['DW_AT_type']
+        ref = item.attributes['DW_AT_type'].strip()
         self.rewind ()
         item = self.find_by_ref (ref)
         if item is None:
@@ -152,6 +152,9 @@ def search_debug_file():
                     # ubuntu 1404
                     '/usr/lib/debug/lib/x86_64-linux-gnu/ld-2.19.so',
                     '/usr/lib/debug/lib/i386-linux-gnu/ld-2.19.so',
+                    # ubuntu 1604
+                    '/usr/lib/debug/lib/x86_64-linux-gnu/ld-2.23.so',
+                    '/usr/lib/debug/lib/i386-linux-gnu/ld-2.23.so',
                     ]
     for file in files_to_try:
         if os.path.isfile (file):
