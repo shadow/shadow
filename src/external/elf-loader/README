@@ -69,7 +69,8 @@ make test
 If everything is allright, you should see a set of PASS 
 statements and you should be able to start using this loader
 by:
-  a. elfedit your-binary /path/to/ldso
+  a. elfedit your-binary /path/to/ldso ; echo $?
+     make sure the above returns 0
   b. put /path/to/libvdl.so in LD_LIBRARY_PATH
   c. run your-binary
 
