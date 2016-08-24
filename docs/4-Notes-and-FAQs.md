@@ -163,17 +163,14 @@ Then check the `doc/` directory. Documentation is currently sparse.
 #### How new Shadow releases are tagged
 
 The following commands can be used to tag a new version of Shadow, after which an
-archive will be available on github's [releases page][https://github.com/shadow/shadow/releases].
+archive will be available on github's [releases page](https://github.com/shadow/shadow/releases).
 
 ```bash
+git checkout master
 git tag -s v1.10.0
 git push origin v1.10.0
-git checkout release
-git merge -Xtheirs v1.10.0
-git rm {DELETED-FILE-NAMES}
 ```
-
-Note that `git merge -Xtheirs v1.5.0` will assume all conflicts can be fixed by taking the remote tag/branch that you are merging into the current branch. This will keep our releases following master.
+Our releases will then be tagged off of the master branch.
 
 #### How to create a signed archive of a release
 
