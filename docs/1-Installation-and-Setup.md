@@ -40,7 +40,7 @@ sudo apt-get install -y git dstat screen htop
 ## Shadow Setup
 
 ```bash
-git clone https://github.com/shadow/shadow.git -b release
+git clone https://github.com/shadow/shadow.git
 cd shadow
 ./setup build
 ./setup install
@@ -226,7 +226,7 @@ There are many ways to do this.  Below, we base our install off of Fedora 22.
 1. Install Shadow:
 
 	```bash
-	git clone https://github.com/shadow/shadow.git -b release
+	git clone https://github.com/shadow/shadow.git
 	cd shadow
 	./setup build
 	./setup install
@@ -245,7 +245,7 @@ There are many ways to do this.  Below, we base our install off of Fedora 22.
  + compile and build shadow-plugin-tor:
  
  	```bash
- 	git clone https://github.com/shadow/shadow-plugin-tor.git -b release
+ 	git clone https://github.com/shadow/shadow-plugin-tor.git
 	cd shadow-plugin-tor
 	./setup dependencies	# answer prompts
 	./setup build	        # answer prompts
@@ -317,8 +317,8 @@ dnf install -y git dstat screen htop
 
 ## get shadow/tor
 cd /vagrant
-git clone https://github.com/shadow/shadow.git -b release
-git clone https://github.com/shadow/shadow-plugin-tor.git -b release
+git clone https://github.com/shadow/shadow.git
+git clone https://github.com/shadow/shadow-plugin-tor.git
 git clone https://git.torproject.org/tor.git -b release-0.2.7
 
 ## setup shadow/tor
