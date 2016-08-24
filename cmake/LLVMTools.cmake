@@ -49,7 +49,7 @@ macro(add_bitcode target)
         endforeach()
 
         set(srcflags "")
-        if(${srcfile} MATCHES "(.*).cpp")
+        if(${srcfile} MATCHES "(.*).(cpp|cc)")
             separate_arguments(srcflags UNIX_COMMAND ${CMAKE_CXX_FLAGS})
             set(src_bc_compiler ${LLVM_BC_CXX_COMPILER})
         else()
