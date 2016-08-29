@@ -12,6 +12,8 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <fcntl.h>
+#include <sys/uio.h>
+#include <errno.h>
 
 static int _test_newfile() {
     FILE* file = fopen("testfile", "w");
@@ -48,6 +50,260 @@ static int _test_write(){
     /* success */
     fclose(file);
     return 0;
+}
+
+static int _test_iov(const char* fpath)
+{
+#undef LOG
+#define LOG(fmt, ...)                                                   \
+    do {                                                                \
+        fprintf(stdout, "line: %d: " fmt "\n",                          \
+                __LINE__, ##__VA_ARGS__);                               \
+    } while (0)
+
+#define LOG_ERROR_AND_RETURN(fmt, ...)                                  \
+    do {                                                                \
+        LOG("error: " fmt, ##__VA_ARGS__);                              \
+        fclose(file);                                                   \
+        return -1;                                                      \
+    } while (0)
+
+
+    FILE* file = fopen(fpath, "w+");
+    if(file == NULL) {
+        LOG("error: could not open file");
+        return -1;
+    }
+
+    int filed = fileno(file);
+    if(filed <  0) {
+        LOG_ERROR_AND_RETURN("fileno did not receive valid stream");
+    }
+
+    struct iovec iov[UIO_MAXIOV];
+
+    int rv = 0;
+    int expected_errno = 0;
+    int expected_rv = 0;
+
+    rv = readv(1923, iov, sizeof(iov));
+    if (rv != -1) {
+        LOG_ERROR_AND_RETURN("should fail on an invalid fd");
+    }
+    expected_errno = EBADF;
+    if (errno != expected_errno) {
+        LOG_ERROR_AND_RETURN("expected errno: %d, actual: %d",
+                             expected_errno, errno);
+    }
+
+    rv = readv(filed, iov, -1);
+    if (rv != -1) {
+        LOG_ERROR_AND_RETURN("should fail on an invalid arg");
+    }
+    expected_errno = EINVAL;
+    if (errno != expected_errno) {
+        LOG_ERROR_AND_RETURN("expected errno: %d, actual: %d",
+                             expected_errno, errno);
+    }
+
+    rv = readv(filed, iov, UIO_MAXIOV+1);
+    if (rv != -1) {
+        LOG_ERROR_AND_RETURN("should fail on an invalid arg");
+    }
+    expected_errno = EINVAL;
+    if (errno != expected_errno) {
+        LOG_ERROR_AND_RETURN("expected errno: %d, actual: %d",
+                             expected_errno, errno);
+    }
+
+#define ARRAY_LENGTH(arr)  (sizeof (arr) / sizeof ((arr)[0]))
+
+    // make all bases point to a string but all len to 0
+    for (int i = 0; i < ARRAY_LENGTH(iov); ++i) {
+        iov[i].iov_base = "REAL DATA";
+        iov[i].iov_len = 0;
+    }
+
+    // should write 0 bytes
+    rv = writev(filed, iov, ARRAY_LENGTH(iov));
+    expected_rv = 0;
+    if (rv != expected_rv) {
+        LOG_ERROR_AND_RETURN(
+            "expected rv: %d, actual: %d", expected_rv, rv);
+    }
+
+    // make all bases share the same buf
+    for (int i = 0; i < ARRAY_LENGTH(iov); ++i) {
+        iov[i].iov_base = NULL;
+        iov[i].iov_len = 80;
+    }
+
+    // should read 0 bytes
+    rv = readv(filed, iov, ARRAY_LENGTH(iov));
+    expected_rv = 0;
+    if (rv != expected_rv) {
+        LOG_ERROR_AND_RETURN(
+            "expected rv: %d, actual: %d", expected_rv, rv);
+    }
+
+    // write two real blocks
+    for (int i = 0; i < ARRAY_LENGTH(iov); ++i) {
+        iov[i].iov_base = "REAL DATA";
+        iov[i].iov_len = 0;
+    }
+
+    const char block_1_data[] = "hellloo o 12  o .<  oadsa flasll llallal";
+    iov[31].iov_base = (void*)block_1_data;
+    iov[31].iov_len = strlen(block_1_data);
+
+    const char block_2_data[] = "___ = ==xll3kjf l  llxkf 0487oqlkj kjalskkkf";
+    iov[972].iov_base = (void*)block_2_data;
+    iov[972].iov_len = strlen(block_2_data);
+
+    rv = writev(filed, iov, ARRAY_LENGTH(iov));
+    expected_rv = strlen(block_1_data) + strlen(block_2_data);
+    if (rv != expected_rv) {
+        LOG_ERROR_AND_RETURN(
+            "expected rv: %d, actual: %d", expected_rv, rv);
+    }
+
+    // read it back in
+
+    // shadow doesn't implement seek, so we have to close the file
+    // and reopen it
+    fclose(file);
+    file = fopen(fpath, "r");
+    filed = fileno(file);
+
+    char sharedreadbuf[14] = {[0 ... 13] = 'y'};
+    const char compare_buf[14] = {[0 ... 13] = 'y'};
+    for (int i = 0; i < ARRAY_LENGTH(iov); ++i) {
+        iov[i].iov_base = sharedreadbuf;
+        iov[i].iov_len = 0;
+    }
+
+    // should read 0 bytes
+    rv = readv(filed, iov, ARRAY_LENGTH(iov));
+    expected_rv = 0;
+    if (rv != expected_rv) {
+        LOG_ERROR_AND_RETURN(
+            "expected rv: %d, actual: %d", expected_rv, rv);
+    }
+
+    // make sure our shared buf have not been touched
+    for (int i = 0; i < ARRAY_LENGTH(iov); ++i) {
+        if (iov[i].iov_len != 0) {
+            LOG_ERROR_AND_RETURN("just BAD!");
+        }
+    }
+    if (memcmp(sharedreadbuf, compare_buf, sizeof compare_buf)) {
+        LOG_ERROR_AND_RETURN("WHAT DID YOU DO!!!");
+    }
+
+    /****
+     **** read into one base
+     ****/
+
+    // to contain data read by readv(). "- 1" to discount the
+    // nul-terminator
+    const size_t num_real_bytes = (sizeof block_1_data - 1) + (sizeof block_2_data - 1);
+    char readbuf[num_real_bytes + 5] = {[0 ... num_real_bytes + 5 - 1] = 'z'};
+    iov[1023].iov_base = readbuf;
+    iov[1023].iov_len = sizeof readbuf;
+
+    rv = readv(filed, iov, ARRAY_LENGTH(iov));
+
+    // verify
+    expected_rv = strlen(block_1_data) + strlen(block_2_data);
+    if (rv != expected_rv) {
+        LOG_ERROR_AND_RETURN(
+            "expected rv: %d, actual: %d", expected_rv, rv);
+    }
+
+    for (int i = 0; i < ARRAY_LENGTH(iov); ++i) {
+        if (i == 1023) {
+            // readv should not have touched the iov_len
+            const size_t expected_len = sizeof readbuf;
+            if (iov[i].iov_len != expected_len) {
+                LOG_ERROR_AND_RETURN(
+                    "readv produces wrong iov_len: %zu, expected: %zu",
+                    iov[i].iov_len, expected_len);
+            }
+        } else {
+            if (iov[i].iov_len != 0) {
+                LOG_ERROR_AND_RETURN("just BAD");
+            }
+            if (memcmp(iov[i].iov_base, compare_buf, sizeof compare_buf)) {
+                LOG_ERROR_AND_RETURN("WHAT DID YOU DO!!!");
+            }
+        }
+    }
+
+    if (memcmp(readbuf, block_1_data, strlen(block_1_data))) {
+        LOG_ERROR_AND_RETURN("read data has incorrect bytes");
+    }
+    if (memcmp(readbuf + strlen(block_1_data), block_2_data, strlen(block_2_data))) {
+        LOG_ERROR_AND_RETURN("read data has incorrect bytes");
+    }
+    if (memcmp(readbuf + strlen(block_1_data) + strlen(block_2_data), "zzzzz", 5)) {
+        LOG_ERROR_AND_RETURN("readv() touched more memory than it should have");
+    }
+
+    /****
+     **** read into two bases
+     ****/
+
+    fclose(file);
+    file = fopen(fpath, "r");
+    filed = fileno(file);
+
+    for (int i = 0; i < ARRAY_LENGTH(iov); ++i) {
+        iov[i].iov_base = NULL;
+        iov[i].iov_len = 0;
+    }
+
+    char buf1[13];
+    char buf2[4];
+    iov[441].iov_base = buf1;
+    iov[441].iov_len = sizeof buf1;
+    iov[442].iov_base = buf2;
+    iov[442].iov_len = sizeof buf2;
+
+    rv = readv(filed, iov, ARRAY_LENGTH(iov));
+
+    // verify
+    expected_rv = (sizeof buf1) + (sizeof buf2);
+    if (rv != expected_rv) {
+        LOG_ERROR_AND_RETURN(
+            "expected rv: %d, actual: %d", expected_rv, rv);
+    }
+
+    for (int i = 0; i < ARRAY_LENGTH(iov); ++i) {
+        if (i == 441) {
+            if (iov[i].iov_len != sizeof buf1) {
+                LOG_ERROR_AND_RETURN("BAD");
+            }
+            if (memcmp(iov[i].iov_base, "hellloo o 12 ", sizeof buf1)) {
+                LOG_ERROR_AND_RETURN("BAD");
+            }
+        } else if (i == 442) {
+            if (iov[i].iov_len != sizeof buf2) {
+                LOG_ERROR_AND_RETURN("BAD");
+            }
+            if (memcmp(iov[i].iov_base, " o .", sizeof buf2)) {
+                LOG_ERROR_AND_RETURN("BAD");
+            }
+        } else {
+            if (iov[i].iov_len != 0) {
+                LOG_ERROR_AND_RETURN("BAD");
+            }
+        }
+    }
+
+    /* success */
+    fclose(file);
+    return 0;
+#undef LOG
 }
 
 static int _test_read() {
@@ -295,6 +551,13 @@ int main(int argc, char* argv[]) {
     if(_test_fread() < 0) {
         fprintf(stdout, "########## _test_fread() failed\n");
         unlink("testfile");
+        return -1;
+    }
+
+    const char* iov_test_file = "iov_test_file";
+    if(_test_iov(iov_test_file) < 0) {
+        fprintf(stdout, "########## _test_iov() failed\n");
+        unlink(iov_test_file);
         return -1;
     }
 
