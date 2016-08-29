@@ -29,7 +29,7 @@
 </graphml>
 ]]></topology>
   <kill time="5"/>
-  <plugin id="testepoll" path="shadow-plugin-test-epoll"/>
+  <plugin id="testepoll" path="libshadow-plugin-test-epoll.so"/>
   <node id="testnode" quantity="1">
     <application plugin="testepoll" starttime="1" arguments=""/>
   </node>
