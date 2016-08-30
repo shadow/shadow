@@ -2097,34 +2097,42 @@ ssize_t process_emu_readv(Process* proc, int fd, const struct iovec *iov, int io
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     gssize ret = 0;
 
-    if(prevCTX == PCTX_PLUGIN) {
+    if(!host_isShadowDescriptor(proc->host, fd)){
+        gint osfd = host_getOSHandle(proc->host, fd);
+        if (osfd >= 0) {
+            ret = readv(osfd, iov, iovcnt);
+        } else {
+            errno = EBADF;
+            ret = -1;
+        }
+    } else if (prevCTX == PCTX_PLUGIN) {
         _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
         utility_assert(proc->tstate == pth_gctx_get());
         ret = pth_readv(fd, iov, iovcnt);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     } else {
-        if(iovcnt < 0 || iovcnt > IOV_MAX) {
+        if (iovcnt < 0 || iovcnt > IOV_MAX) {
             errno = EINVAL;
             ret = -1;
         } else {
             /* figure out how much they want to read total */
             int i = 0;
             size_t totalIOLength = 0;
-            for(i = 0; i < iovcnt; i++) {
+            for (i = 0; i < iovcnt; i++) {
                 totalIOLength += iov[i].iov_len;
             }
 
-            if(totalIOLength == 0) {
+            if (totalIOLength == 0) {
                 ret = 0;
             } else {
                 /* get a temporary buffer and read to it */
                 void* tempBuffer = g_malloc0(totalIOLength);
                 ssize_t totalBytesRead = process_emu_read(proc, fd, tempBuffer, totalIOLength);
 
-                if(totalBytesRead > 0) {
+                if (totalBytesRead > 0) {
                     /* place all of the bytes we read in the iov buffers */
                     size_t bytesCopied = 0;
-                    for(i = 0; i < iovcnt; i++) {
+                    for (i = 0; i < iovcnt; i++) {
                         size_t bytesRemaining = (size_t) (totalBytesRead - bytesCopied);
                         size_t bytesToCopy = MIN(bytesRemaining, iov[i].iov_len);
                         g_memmove(iov[i].iov_base, &tempBuffer[bytesCopied], bytesToCopy);
@@ -2135,7 +2143,6 @@ ssize_t process_emu_readv(Process* proc, int fd, const struct iovec *iov, int io
                 g_free(tempBuffer);
                 ret = totalBytesRead;
             }
-
         }
     }
 
@@ -2147,7 +2154,15 @@ ssize_t process_emu_writev(Process* proc, int fd, const struct iovec *iov, int i
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     gssize ret = 0;
 
-    if(prevCTX == PCTX_PLUGIN) {
+    if(!host_isShadowDescriptor(proc->host, fd)){
+        gint osfd = host_getOSHandle(proc->host, fd);
+        if (osfd >= 0) {
+            ret = writev(osfd, iov, iovcnt);
+        } else {
+            errno = EBADF;
+            ret = -1;
+        }
+    } else if(prevCTX == PCTX_PLUGIN) {
         _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
         utility_assert(proc->tstate == pth_gctx_get());
         ret = pth_writev(fd, iov, iovcnt);
@@ -2178,7 +2193,7 @@ ssize_t process_emu_writev(Process* proc, int fd, const struct iovec *iov, int i
                 ssize_t totalBytesWritten = 0;
                 if(bytesCopied > 0) {
                     /* try to write all of the bytes we got from the iov buffers */
-                    totalBytesWritten = write(fd, tempBuffer, bytesCopied);
+                    totalBytesWritten = process_emu_write(proc, fd, tempBuffer, bytesCopied);
                 }
 
                 g_free(tempBuffer);

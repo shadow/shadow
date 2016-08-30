@@ -52,8 +52,85 @@ static int _test_write(){
     return 0;
 }
 
-static int _test_iov(const char* fpath)
-{
+static int _test_read() {
+    FILE* file = fopen("testfile", "r");
+    if(file == NULL) {
+        fprintf(stdout, "error: could not open file\n");
+        return -1;
+    }
+
+    int filed = fileno(file);
+    if(filed <  0) {
+        fprintf(stdout, "error: fileno did not receive valid stream");
+        fclose(file);
+        return -1;
+    }
+
+    char buf[5];
+    memset(buf, '\0', sizeof(buf));
+    if(read(filed, buf, 4) < 0) {
+        fprintf(stdout, "error: read failed\n");
+        fclose(file);
+        return -1;
+    }
+
+    if(strncmp(buf, "test", 4) != 0) {
+        fprintf(stdout, "error: buf: %s\n", buf);
+        fclose(file);
+        return -1;
+    }
+
+    /* succes */
+    fclose(file);
+    return 0;
+}
+
+static int _test_fwrite() {
+    FILE* file = fopen("testfile", "r+");
+    if(file == NULL) {
+        fprintf(stdout, "error: could not open file\n");
+        return -1;
+    }
+
+    const char* msg = "test";
+    if(fwrite(msg, sizeof(char), sizeof(msg)/sizeof(char), file) <= 0) {
+        fprintf(stdout, "error: fwrite failed\n");
+        fclose(file);
+        return -1;
+    }
+
+    /* succes */
+    fclose(file);
+    return 0;
+}
+
+static int _test_fread() {
+    FILE* file = fopen("testfile", "r");
+    if(file == NULL) {
+        fprintf(stdout, "error: could not open file\n");
+        return -1;
+    }
+
+    char buf[5];
+    memset(buf, '\0', sizeof(buf));
+    if(fread(buf, sizeof(char), 4, file) <= 0) {
+        fprintf(stdout, "error: fread failed\n");
+        fclose(file);
+        return -1;
+    }
+
+    if(strncmp(buf, "test", 4) != 0) {
+        fprintf(stdout, "error: buf: %s\n", buf);
+        fclose(file);
+        return -1;
+    }
+
+    /* succes */
+    fclose(file);
+    return 0;
+}
+
+static int _test_iov(const char* fpath) {
 #undef LOG
 #define LOG(fmt, ...)                                                   \
     do {                                                                \
@@ -86,16 +163,6 @@ static int _test_iov(const char* fpath)
     int expected_errno = 0;
     int expected_rv = 0;
 
-    rv = readv(1923, iov, sizeof(iov));
-    if (rv != -1) {
-        LOG_ERROR_AND_RETURN("should fail on an invalid fd");
-    }
-    expected_errno = EBADF;
-    if (errno != expected_errno) {
-        LOG_ERROR_AND_RETURN("expected errno: %d, actual: %d",
-                             expected_errno, errno);
-    }
-
     rv = readv(filed, iov, -1);
     if (rv != -1) {
         LOG_ERROR_AND_RETURN("should fail on an invalid arg");
@@ -114,6 +181,21 @@ static int _test_iov(const char* fpath)
     if (errno != expected_errno) {
         LOG_ERROR_AND_RETURN("expected errno: %d, actual: %d",
                              expected_errno, errno);
+    }
+
+    rv = readv(1923, iov, UIO_MAXIOV+1);
+    if (rv != -1) {
+        LOG_ERROR_AND_RETURN("should fail on an invalid fd");
+    }
+    expected_errno = EBADF;
+    if (errno != expected_errno) {
+        LOG_ERROR_AND_RETURN("expected errno: %d, actual: %d",
+                             expected_errno, errno);
+    }
+
+    rv = readv(filed, iov, 0);
+    if (rv == -1) {
+        LOG_ERROR_AND_RETURN("should not fail when passing '0' as the iovcnt");
     }
 
 #define ARRAY_LENGTH(arr)  (sizeof (arr) / sizeof ((arr)[0]))
@@ -304,84 +386,6 @@ static int _test_iov(const char* fpath)
     fclose(file);
     return 0;
 #undef LOG
-}
-
-static int _test_read() {
-    FILE* file = fopen("testfile", "r");
-    if(file == NULL) {
-        fprintf(stdout, "error: could not open file\n");
-        return -1;
-    }
-
-    int filed = fileno(file);
-    if(filed <  0) {
-        fprintf(stdout, "error: fileno did not receive valid stream");
-        fclose(file);
-        return -1;
-    }
-
-    char buf[5];
-    memset(buf, '\0', sizeof(buf));
-    if(read(filed, buf, 4) < 0) {
-        fprintf(stdout, "error: read failed\n");
-        fclose(file);
-        return -1;
-    }
-
-    if(strncmp(buf, "test", 4) != 0) {
-        fprintf(stdout, "error: buf: %s\n", buf);
-        fclose(file);
-        return -1;
-    }
-
-    /* succes */
-    fclose(file);
-    return 0;
-}
-
-static int _test_fwrite() {
-    FILE* file = fopen("testfile", "r+");
-    if(file == NULL) {
-        fprintf(stdout, "error: could not open file\n");
-        return -1;
-    }
-
-    const char* msg = "test";
-    if(fwrite(msg, sizeof(char), sizeof(msg)/sizeof(char), file) <= 0) { 
-        fprintf(stdout, "error: fwrite failed\n");
-        fclose(file);
-        return -1;
-    }
-
-    /* succes */
-    fclose(file);
-    return 0;
-}
-
-static int _test_fread() {
-    FILE* file = fopen("testfile", "r");
-    if(file == NULL) {
-        fprintf(stdout, "error: could not open file\n");
-        return -1;
-    }
-
-    char buf[5];
-    memset(buf, '\0', sizeof(buf));
-    if(fread(buf, sizeof(char), 4, file) <= 0) {
-        fprintf(stdout, "error: fread failed\n");
-        fclose(file);
-        return -1;
-    }
-
-    if(strncmp(buf, "test", 4) != 0) {
-        fprintf(stdout, "error: buf: %s\n", buf);
-        fclose(file);
-        return -1;
-    }
-
-    /* succes */
-    fclose(file);
-    return 0;
 }
 
 static int _test_fprintf() {
