@@ -146,7 +146,32 @@ python tools/plot-shadow.py --help
 python tools/plot-shadow.py --data results "example-plots"
 ```
 
-Then open the PDF file that was created to see the results.
+The `parse-*.py` scripts generate `stats.*.json.xz` files. The (heavily trimmed) contents of `stats.shadow.json` look a little like this.
+
+        nodes:
+            4uthority:
+                recv:
+                    bytes_control_header:
+                        0: 0
+                        1: 0
+                        2: 0
+                    bytes_control_header_retrans:
+                    bytes_data_header:
+                    bytes_data_header_retrans:
+                    bytes_data_payload:
+                    bytes_data_payload_retrans:
+                    bytes_total:
+                send:
+            relay1:
+            relay2:
+        ticks:
+            0:
+                maxrss_gib: 0.010578
+                time_seconds: 5.003849
+            1:
+            2:
+
+The `plot-*.py` scripts generate graphs. Open the PDF file that was created to see the graphed results.
 
 ## Example experiment
 
