@@ -1,6 +1,9 @@
 ## build the test as a dynamic executable that plugs into shadow
 add_shadow_plugin(shadow-plugin-test-tcp shd-test-tcp.c)
 
+## create and install an executable that can run outside of shadow
+add_executable(test-tcp shd-test-tcp.c)
+
 ## register the tests
 
 ## tcp blocking - loopback, lossless and lossy
@@ -74,4 +77,13 @@ add_test(
 add_test(
     NAME test-tcp-nonblocking-select-lossy-shadow
     COMMAND ${CMAKE_BINARY_DIR}/src/shadow -l debug ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-select-lossy.test.shadow.config.xml
+)
+
+add_test(
+    NAME test-tcp-iov
+    COMMAND shadow-test-launcher test-tcp iov server : test-tcp iov client 127.0.0.1
+)
+add_test(
+    NAME test-tcp-iov-shadow
+    COMMAND ${CMAKE_BINARY_DIR}/src/shadow --heartbeat-frequency=1000 -l info ${CMAKE_CURRENT_SOURCE_DIR}/tcp-iov.test.shadow.config.xml
 )
