@@ -10,7 +10,7 @@ add_executable(test-tcp shd-test-tcp.c)
 ## these also test "localhost" instead of "127.0.0.1" in the loopback tests
 add_test(
     NAME test-tcp-blocking-loopback
-    COMMAND shadow-test-launcher shadow-plugin-test-tcp blocking server : shadow-plugin-test-tcp blocking client localhost
+    COMMAND shadow-test-launcher test-tcp blocking server : test-tcp blocking client localhost
 )
 add_test(
     NAME test-tcp-blocking-loopback-shadow
@@ -28,7 +28,7 @@ add_test(
 ## tcp nonblocking poll - loopback, lossless and lossy
 add_test(
     NAME test-tcp-nonblocking-poll-loopback
-    COMMAND shadow-test-launcher shadow-plugin-test-tcp nonblocking-poll server : shadow-plugin-test-tcp nonblocking-poll client 127.0.0.1
+    COMMAND shadow-test-launcher test-tcp nonblocking-poll server : test-tcp nonblocking-poll client 127.0.0.1
 )
 add_test(
     NAME test-tcp-nonblocking-poll-loopback-shadow
@@ -46,7 +46,7 @@ add_test(
 ## tcp nonblocking epoll - loopback, lossless and lossy
 add_test(
     NAME test-tcp-nonblocking-epoll-loopback
-    COMMAND shadow-test-launcher shadow-plugin-test-tcp nonblocking-epoll server : shadow-plugin-test-tcp nonblocking-epoll client 127.0.0.1
+    COMMAND shadow-test-launcher test-tcp nonblocking-epoll server : test-tcp nonblocking-epoll client 127.0.0.1
 )
 add_test(
     NAME test-tcp-nonblocking-epoll-loopback-shadow
@@ -64,7 +64,7 @@ add_test(
 ## tcp nonblocking select - loopback, lossless and lossy
 add_test(
     NAME test-tcp-nonblocking-select-loopback
-    COMMAND shadow-test-launcher shadow-plugin-test-tcp nonblocking-select server : shadow-plugin-test-tcp nonblocking-select client 127.0.0.1
+    COMMAND shadow-test-launcher test-tcp nonblocking-select server : test-tcp nonblocking-select client 127.0.0.1
 )
 add_test(
     NAME test-tcp-nonblocking-select-loopback-shadow
