@@ -85,5 +85,5 @@ add_test(
 )
 add_test(
     NAME test-tcp-iov-shadow
-    COMMAND ${CMAKE_BINARY_DIR}/src/shadow --heartbeat-frequency=1000 -l info ${CMAKE_CURRENT_SOURCE_DIR}/tcp-iov.test.shadow.config.xml
+    COMMAND ${CMAKE_BINARY_DIR}/src/shadow -l debug ${CMAKE_CURRENT_SOURCE_DIR}/tcp-iov.test.shadow.config.xml
 )
