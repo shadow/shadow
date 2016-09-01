@@ -1044,10 +1044,12 @@ ssize_t pth_readv_ev(int fd, const struct iovec *iov, int iovcnt, pth_event_t ev
     pth_debug2("pth_readv_ev: enter from thread \"%s\"", pth_gctx_get()->pth_current->name);
 
     /* POSIX compliance */
-    if (iovcnt <= 0 || iovcnt > UIO_MAXIOV)
-        return pth_error(-1, EINVAL);
     if (!pth_util_fd_valid(fd))
         return pth_error(-1, EBADF);
+    if (iovcnt < 0 || iovcnt > UIO_MAXIOV)
+        return pth_error(-1, EINVAL);
+    if (iovcnt == 0)
+        return 0;
 
     /* check mode of filedescriptor */
     if ((fdmode = pth_fdmode(fd, PTH_FDMODE_POLL)) == PTH_FDMODE_ERROR)
@@ -1162,10 +1164,12 @@ ssize_t pth_writev_ev(int fd, const struct iovec *iov, int iovcnt, pth_event_t e
     pth_debug2("pth_writev_ev: enter from thread \"%s\"", pth_gctx_get()->pth_current->name);
 
     /* POSIX compliance */
-    if (iovcnt <= 0 || iovcnt > UIO_MAXIOV)
-        return pth_error(-1, EINVAL);
     if (!pth_util_fd_valid(fd))
         return pth_error(-1, EBADF);
+    if (iovcnt < 0 || iovcnt > UIO_MAXIOV)
+        return pth_error(-1, EINVAL);
+    if (iovcnt == 0)
+        return 0;
 
     /* force filedescriptor into non-blocking mode */
     if ((fdmode = pth_fdmode(fd, PTH_FDMODE_NONBLOCK)) == PTH_FDMODE_ERROR)
@@ -1173,6 +1177,15 @@ ssize_t pth_writev_ev(int fd, const struct iovec *iov, int iovcnt, pth_event_t e
 
     /* poll filedescriptor if not already in non-blocking operation */
     if (fdmode != PTH_FDMODE_NONBLOCK) {
+
+        /* init return value and number of bytes to write */
+        rv      = 0;
+        nbytes  = pth_writev_iov_bytes(iov, iovcnt);
+
+        if(nbytes == 0) {
+            return 0;
+        }
+
         /* provide temporary iovec structure */
         if (iovcnt > sizeof(tiov_stack)) {
             tiovcnt = (sizeof(struct iovec) * UIO_MAXIOV);
@@ -1183,10 +1196,6 @@ ssize_t pth_writev_ev(int fd, const struct iovec *iov, int iovcnt, pth_event_t e
             tiovcnt = sizeof(tiov_stack);
             tiov    = tiov_stack;
         }
-
-        /* init return value and number of bytes to write */
-        rv      = 0;
-        nbytes  = pth_writev_iov_bytes(iov, iovcnt);
 
         /* init local iovec structure */
         liov    = NULL;

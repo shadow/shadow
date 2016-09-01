@@ -29,7 +29,7 @@
 </graphml>
 ]]></topology>
   <kill time="300"/>
-  <plugin id="testtcp" path="shadow-plugin-test-tcp"/>
+  <plugin id="testtcp" path="libshadow-plugin-test-tcp.so"/>
   <node id="tcptestnode" >
     <application plugin="testtcp" time="1" arguments="nonblocking-epoll server" />
     <application plugin="testtcp" time="2" arguments="nonblocking-epoll client 127.0.0.1" />
