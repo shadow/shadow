@@ -13,8 +13,9 @@
  * gcc `pkg-config --cflags --libs glib-2.0 gmodule-2.0` shd-test-module.c -o shd-test-module
  * ./shd-test-module
  */
-
+#if !defined(_GNU_SOURCE)
 #define _GNU_SOURCE
+#endif
 #include <link.h>
 #include <dlfcn.h>
 #include <stdlib.h>
