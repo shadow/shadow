@@ -888,15 +888,26 @@ static in_port_t _host_getRandomFreePort(Host* host, in_addr_t interfaceIP, Desc
     NetworkInterface* interface = host_lookupInterface(host, interfaceIP);
     in_port_t randomNetworkPort = 0;
 
-    if (interfaceIP == htonl(INADDR_ANY) || (interface && networkinterface_hasFreePorts(interface))) {
-        gboolean freePortFound = FALSE;
-        while (!freePortFound) {
-            gdouble randomFraction = random_nextDouble(host->random);
-            in_port_t randomHostPort = (in_port_t) (randomFraction * (UINT16_MAX - MIN_RANDOM_PORT)) + MIN_RANDOM_PORT;
-            utility_assert(randomHostPort >= MIN_RANDOM_PORT);
-            randomNetworkPort = htons(randomHostPort);
-            freePortFound = _host_isInterfaceAvailable(host, interfaceIP, type, randomNetworkPort);
+    if (interfaceIP == htonl(INADDR_ANY)) {
+        /* check if it's possible to bind a random port on all interfaces at once */
+        gboolean isAvailable = FALSE;
+        for (in_port_t port = MIN_RANDOM_PORT; !isAvailable && port < UINT16_MAX; ++port) {
+            isAvailable = _host_isInterfaceAvailable(host, interfaceIP, type, htons(port));
         }
+        if (!isAvailable) {
+            return 0;
+        }
+    } else if (!interface || !networkinterface_hasFreePorts(interface)) {
+        return 0;
+    }
+
+    gboolean freePortFound = FALSE;
+    while (!freePortFound) {
+        gdouble randomFraction = random_nextDouble(host->random);
+        in_port_t randomHostPort = (in_port_t) (randomFraction * (UINT16_MAX - MIN_RANDOM_PORT)) + MIN_RANDOM_PORT;
+        utility_assert(randomHostPort >= MIN_RANDOM_PORT);
+        randomNetworkPort = htons(randomHostPort);
+        freePortFound = _host_isInterfaceAvailable(host, interfaceIP, type, randomNetworkPort);
     }
 
     return randomNetworkPort;
