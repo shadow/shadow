@@ -716,6 +716,10 @@ int vdl_dlinfo (void *handle, int request, void *p)
 	  *ptls = 0;
 	}
     }
+  else if (request ==  RTLD_DI_TLS_SIZE)
+    {
+      *(unsigned long *)p = g_vdl.tls_static_current_size;
+    }
   else
     {
       set_error ("dlinfo: unsupported request=%u", request);

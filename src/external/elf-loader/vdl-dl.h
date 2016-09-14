@@ -4,6 +4,9 @@
 #include <dlfcn.h> // for Dl_info
 #include <link.h> // for struct dl_phdr_info
 
+// new info type we've added
+#define RTLD_DI_TLS_SIZE 127
+
 // the 'private' version is called from ldso itself
 // to avoid the pain of calling these functions through
 // a PLT indirection which would require ldso to be able
