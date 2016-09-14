@@ -176,7 +176,7 @@ vdl_tls_file_initialize_main (struct VdlList *list)
   // then perform initial setup of the static tls area
   struct static_tls static_tls = initialize_static_tls (list);
   g_vdl.tls_static_current_size = static_tls.size;
-  g_vdl.tls_static_total_size = vdl_utils_align_up (g_vdl.tls_static_current_size + TLS_EXTRA_STATIC_ALLOC,
+  g_vdl.tls_static_total_size = vdl_utils_align_up (g_vdl.tls_static_total_size + g_vdl.tls_static_current_size + TLS_EXTRA_STATIC_ALLOC,
 						    static_tls.align);
   g_vdl.tls_static_align = static_tls.align;
 }

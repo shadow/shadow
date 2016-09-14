@@ -155,6 +155,21 @@ setup_env_vars (const char **envp)
     {
       g_vdl.bind_now = 1;
     }
+
+  // get additional static TLS size from LD_STATIC_TLS_SIZE
+  const char *static_tls_extra = vdl_utils_getenv (envp, "LD_STATIC_TLS_EXTRA");
+  if (static_tls_extra == 0)
+    {
+      g_vdl.tls_static_total_size = 0;
+    }
+  else
+    {
+      unsigned long static_tls_size = 0;
+      // we don't have atoi or alternatives
+      for (int i = 0; static_tls_extra[i] != '\0'; i++)
+        static_tls_size = static_tls_size*10 + static_tls_extra[i] - '0';
+      g_vdl.tls_static_total_size = static_tls_size;
+    }
 }
 
 struct Stage2Output
