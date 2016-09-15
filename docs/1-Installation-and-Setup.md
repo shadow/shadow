@@ -49,7 +49,7 @@ cd shadow
 You should add `/home/${USER}/.shadow/bin` to your shell setup for the PATH environment variable (e.g., in `~/.bashrc` or `~/.bash_profile`).
 
 ```bash
-echo "export PATH=${PATH}:/home/${USER}/.shadow/bin" >> ~/.bashrc && bash
+echo "export PATH=${PATH}:/home/${USER}/.shadow/bin" >> ~/.bashrc && source ~/.bashrc
 ```
 
 Check that Shadow is installed and runs:
