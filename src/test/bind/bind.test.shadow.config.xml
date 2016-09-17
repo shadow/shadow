@@ -1,0 +1,37 @@
+<shadow>
+  <topology><![CDATA[<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
+  <key attr.name="packetloss" attr.type="double" for="edge" id="d9" />
+  <key attr.name="jitter" attr.type="double" for="edge" id="d8" />
+  <key attr.name="latency" attr.type="double" for="edge" id="d7" />
+  <key attr.name="asn" attr.type="int" for="node" id="d6" />
+  <key attr.name="type" attr.type="string" for="node" id="d5" />
+  <key attr.name="bandwidthup" attr.type="int" for="node" id="d4" />
+  <key attr.name="bandwidthdown" attr.type="int" for="node" id="d3" />
+  <key attr.name="geocode" attr.type="string" for="node" id="d2" />
+  <key attr.name="ip" attr.type="string" for="node" id="d1" />
+  <key attr.name="packetloss" attr.type="double" for="node" id="d0" />
+  <graph edgedefault="undirected">
+    <node id="poi-1">
+      <data key="d0">0.0</data>
+      <data key="d1">0.0.0.0</data>
+      <data key="d2">US</data>
+      <data key="d3">10240</data>
+      <data key="d4">10240</data>
+      <data key="d5">testnet</data>
+      <data key="d6">0</data>
+    </node>
+    <edge source="poi-1" target="poi-1">
+      <data key="d7">50.0</data>
+      <data key="d8">0.0</data>
+      <data key="d9">0.0</data>
+    </edge>
+  </graph>
+</graphml>
+]]></topology>
+  <kill time="5"/>
+  <plugin id="testfile" path="libshadow-plugin-test-bind.so"/>
+  <node id="testnode" quantity="1">
+    <application plugin="testfile" starttime="1" arguments=""/>
+  </node>
+</shadow>
+
