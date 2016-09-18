@@ -1057,6 +1057,9 @@ gint host_connectToPeer(Host* host, gint handle, const struct sockaddr* address)
         peerIP = saddr->sin_addr.s_addr;
         peerPort = saddr->sin_port;
 
+        if(peerIP == htonl(INADDR_ANY)) {
+            peerIP = htonl(INADDR_LOOPBACK);
+        }
     } else if (address->sa_family == AF_UNIX) {
         struct sockaddr_un* saddr = (struct sockaddr_un*) address;
 
@@ -1282,8 +1285,17 @@ gint host_getSocketName(Host* host, gint handle, const struct sockaddr* address,
         } else {
             struct sockaddr_in* saddr = (struct sockaddr_in*) address;
             saddr->sin_family = AF_INET;
-            saddr->sin_addr.s_addr = ip;
             saddr->sin_port = port;
+
+            if(ip == htonl(INADDR_ANY)) {
+                in_addr_t peerIP = 0;
+                if(socket_getPeerName(sock, &peerIP, NULL) && peerIP != htonl(INADDR_LOOPBACK)) {
+                    Address* address = networkinterface_getAddress(host->defaultInterface);
+                    ip = (in_addr_t) address_toNetworkIP(address);
+                }
+            }
+
+            saddr->sin_addr.s_addr = ip;
         }
         return 0;
     } else {
