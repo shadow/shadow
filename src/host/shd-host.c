@@ -881,24 +881,87 @@ static gboolean _host_isInterfaceAvailable(Host* host, in_addr_t interfaceIP,
     return isAvailable;
 }
 
+static in_port_t _host_getRandomPort(Host* host) {
+    gdouble randomFraction = random_nextDouble(host->random);
+    in_port_t randomHostPort = (in_port_t) (randomFraction * (UINT16_MAX - MIN_RANDOM_PORT)) + MIN_RANDOM_PORT;
+    utility_assert(randomHostPort >= MIN_RANDOM_PORT);
+    return htons(randomHostPort);
+}
 
 static in_port_t _host_getRandomFreePort(Host* host, in_addr_t interfaceIP, DescriptorType type) {
     MAGIC_ASSERT(host);
 
-    NetworkInterface* interface = host_lookupInterface(host, interfaceIP);
-    in_port_t randomNetworkPort = 0;
+    /* we need a random port that is free everywhere we need it to be.
+     * we have two modes here: first we just try grabbing a random port until we
+     * get a free one. if we cannot find one in an expected number of loops
+     * (based on how many we think are free), then we do an inefficient linear
+     * search that is guaranteed to succeed/fail as a fallback. */
 
-    if (interface && networkinterface_hasFreePorts(interface)) {
-        gboolean freePortFound = FALSE;
-        while (!freePortFound) {
-            gdouble randomFraction = random_nextDouble(host->random);
-            in_port_t randomHostPort = (in_port_t) (randomFraction * (UINT16_MAX - MIN_RANDOM_PORT)) + MIN_RANDOM_PORT;
-            utility_assert(randomHostPort >= MIN_RANDOM_PORT);
-            randomNetworkPort = htons(randomHostPort);
-            freePortFound = _host_isInterfaceAvailable(host, interfaceIP, type, randomNetworkPort);
+    /* lets see if we have enough free ports to just choose randomly */
+    guint maxNumBound = 0;
+
+    if(interfaceIP == htonl(INADDR_ANY)) {
+        /* need to make sure the port is free on all interfaces */
+        GHashTableIter iter;
+        gpointer key, value;
+        g_hash_table_iter_init(&iter, host->interfaces);
+
+        while(g_hash_table_iter_next(&iter, &key, &value)) {
+            NetworkInterface* interface = value;
+            if(interface) {
+                guint numBoundSockets = networkinterface_getAssociationCount(interface);
+                maxNumBound = MAX(numBoundSockets, maxNumBound);
+            }
+        }
+    } else {
+        /* just check the one at the given IP */
+        NetworkInterface* interface = host_lookupInterface(host, interfaceIP);
+        if(interface) {
+            guint numBoundSockets = networkinterface_getAssociationCount(interface);
+            maxNumBound = MAX(numBoundSockets, maxNumBound);
         }
     }
 
+    guint numAllocatablePorts = (guint)(UINT16_MAX - MIN_RANDOM_PORT);
+    guint numFreePorts = 0;
+    if(maxNumBound < numAllocatablePorts) {
+        numFreePorts = numAllocatablePorts - maxNumBound;
+    }
+
+    /* we will try to get a port */
+    in_port_t randomNetworkPort = 0;
+
+    /* if more than 1/4 of allocatable ports are free, choose randomly but only
+     * until we try to many times */
+    guint threshold = (guint)(numAllocatablePorts / 4);
+    if(numFreePorts >= threshold) {
+        guint numTries = 0;
+        while(numTries < threshold) {
+            in_port_t randomPort = _host_getRandomPort(host);
+
+            /* this will check all interfaces in the case of INADDR_ANY */
+            if(_host_isInterfaceAvailable(host, interfaceIP, type, randomPort)) {
+                randomNetworkPort = randomPort;
+                break;
+            }
+
+            numTries++;
+        }
+    }
+
+    /* now if we tried too many times and still don't have a port, fall back
+     * to a linear search to make sure we get a free port if we have one */
+    if(!randomNetworkPort) {
+        for(in_port_t i = MIN_RANDOM_PORT; i < UINT16_MAX; i++) {
+            /* this will check all interfaces in the case of INADDR_ANY */
+            if(_host_isInterfaceAvailable(host, interfaceIP, type, i)) {
+                randomNetworkPort = i;
+                break;
+            }
+        }
+    }
+
+    /* this will return 0 if we can't find a free port */
     return randomNetworkPort;
 }
 

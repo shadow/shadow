@@ -230,14 +230,6 @@ static int _test_explicit_bind(int socket_type) {
 }
 
 static int _check_matching_addresses(int fd_server_listen, int fd_server_accept, int fd_client) {
-    /*
-     * the following should hold:
-     *   + listener socket port == client peer port
-     *   + accept socket addr == client peer addr
-     *   + accept socket port == client peer port
-     */
-
-
     struct sockaddr_in server_listen_sockname, server_listen_peername;
     struct sockaddr_in server_accept_sockname, server_accept_peername;
     struct sockaddr_in client_sockname, client_peername;
@@ -289,6 +281,15 @@ static int _check_matching_addresses(int fd_server_listen, int fd_server_accept,
 
     MYLOG("found peername %s:%i for client fd %i", inet_ntoa(client_peername.sin_addr),
             (int)client_peername.sin_port, fd_client);
+
+    /*
+     * the following should hold on linux:
+     *   + listener socket port == accepted socket port
+     *   + accept socket port == client peer port
+     *   + accept socket addr == client peer addr
+     *   + client socket addr == accepted peer addr
+     *   + client socket pot != accepted peer ports
+     */
 
     if(server_listen_sockname.sin_port != server_accept_sockname.sin_port) {
         MYLOG("expected server listener and accepted socket ports to match but they didn't");
