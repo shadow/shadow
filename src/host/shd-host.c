@@ -931,12 +931,12 @@ static in_port_t _host_getRandomFreePort(Host* host, in_addr_t interfaceIP, Desc
     /* we will try to get a port */
     in_port_t randomNetworkPort = 0;
 
-    /* if more than 1/4 of allocatable ports are free, choose randomly but only
+    /* if more than 1/10 of allocatable ports are free, choose randomly but only
      * until we try to many times */
-    guint threshold = (guint)(numAllocatablePorts / 4);
+    guint threshold = (guint)(numAllocatablePorts / 100);
     if(numFreePorts >= threshold) {
         guint numTries = 0;
-        while(numTries < threshold) {
+        while(numTries < numFreePorts) {
             in_port_t randomPort = _host_getRandomPort(host);
 
             /* this will check all interfaces in the case of INADDR_ANY */
