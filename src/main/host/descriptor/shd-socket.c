@@ -141,7 +141,6 @@ Packet* socket_peekNextPacket(const Socket* socket) {
 
 gboolean socket_getPeerName(Socket* socket, in_addr_t* ip, in_port_t* port) {
     MAGIC_ASSERT(socket);
-    utility_assert(ip && port);
 
     if(socket->peerIP == 0 || socket->peerPort == 0) {
         return FALSE;
@@ -183,7 +182,12 @@ gboolean socket_getSocketName(Socket* socket, in_addr_t* ip, in_port_t* port) {
     }
 
     if(ip) {
-        *ip = socket->boundAddress;
+        if(socket->boundAddress == htonl(INADDR_ANY) &&
+                socket->peerIP && socket->peerIP == htonl(INADDR_LOOPBACK)) {
+            *ip = htonl(INADDR_LOOPBACK);
+        } else {
+            *ip = socket->boundAddress;
+        }
     }
     if(port) {
         *port = socket->boundPort;
