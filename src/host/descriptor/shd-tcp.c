@@ -2012,11 +2012,6 @@ void tcp_close(TCP* tcp) {
     tcp->flags |= TCPF_LOCAL_CLOSED;
 
     switch (tcp->state) {
-        case TCPS_LISTEN: {
-            _tcp_setState(tcp, TCPS_CLOSED);
-            return;
-        }
-
         case TCPS_ESTABLISHED: {
             _tcp_setState(tcp, TCPS_FINWAIT1);
             break;
@@ -2036,7 +2031,9 @@ void tcp_close(TCP* tcp) {
         }
 
         default: {
-            /* dont send a FIN */
+            /* dont send a FIN
+             * but make sure we set state to closed so we unbind the socket */
+            _tcp_setState(tcp, TCPS_CLOSED);
             return;
         }
     }
