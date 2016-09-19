@@ -29,7 +29,7 @@
 </graphml>
 ]]></topology>
   <kill time="5"/>
-  <plugin id="testpthreads" path="shadow-plugin-test-pthreads"/>
+  <plugin id="testpthreads" path="libshadow-plugin-test-pthreads.so"/>
   <node id="testnode" quantity="1">
     <application plugin="testpthreads" starttime="1" arguments=""/>
   </node>

@@ -836,6 +836,9 @@ int pth_accept_ev(int s, struct sockaddr *addr, socklen_t *addrlen, pth_event_t 
     if ((fdmode = pth_fdmode(s, PTH_FDMODE_NONBLOCK)) == PTH_FDMODE_ERROR)
         return pth_error(-1, EBADF);
 
+    /* NOTE from now on we need to return via the done goto to make sure the fd returns to
+     * its old blocking/nonblocking mode */
+
     /* poll socket via accept */
     ev = NULL;
     while ((rv = pth_sc(accept)(s, addr, addrlen)) == -1
@@ -843,8 +846,10 @@ int pth_accept_ev(int s, struct sockaddr *addr, socklen_t *addrlen, pth_event_t 
            && fdmode != PTH_FDMODE_NONBLOCK) {
         /* do lazy event allocation */
 		ev = pth_event(PTH_EVENT_FD|PTH_UNTIL_FD_READABLE, s);
-		if (ev == NULL)
-			return pth_error(-1, errno);
+		if (ev == NULL) {
+			rv = pth_error(-1, errno);
+		    goto done;
+		}
 
 		if (ev_extra != NULL)
 			pth_event_concat(ev, ev_extra, NULL);
@@ -861,10 +866,12 @@ int pth_accept_ev(int s, struct sockaddr *addr, socklen_t *addrlen, pth_event_t 
         /* check for the extra events */
         if (ev_extra != NULL && !ev_occurred) {
 			pth_fdmode(s, fdmode);
-			return pth_error(-1, EINTR);
+			rv = pth_error(-1, EINTR);
+			goto done;
         }
     }
 
+done:
     /* restore filedescriptor mode */
     pth_shield {
         pth_fdmode(s, fdmode);
@@ -965,14 +972,19 @@ ssize_t pth_write_ev(int fd, const void *buf, size_t nbytes, pth_event_t ev_extr
     if ((fdmode = pth_fdmode(fd, PTH_FDMODE_NONBLOCK)) == PTH_FDMODE_ERROR)
         return pth_error(-1, EBADF);
 
+    /* NOTE from now on we need to return via the done goto to make sure the fd returns to
+     * its old blocking/nonblocking mode */
+
     /* poll filedescriptor if not already in non-blocking operation */
     if (fdmode != PTH_FDMODE_NONBLOCK) {
         rv = 0;
         for (;;) {
             /* let thread sleep until fd is writable or event occurs */
             ev = pth_event(PTH_EVENT_FD|PTH_UNTIL_FD_WRITEABLE, fd);
-            if (ev == NULL)
-            			return pth_error(-1, errno);
+            if (ev == NULL) {
+                rv = pth_error(-1, errno);
+                goto done;
+            }
 
             if (ev_extra != NULL)
                 pth_event_concat(ev, ev_extra, NULL);
@@ -988,7 +1000,8 @@ ssize_t pth_write_ev(int fd, const void *buf, size_t nbytes, pth_event_t ev_extr
             /* check for the extra events */
             if (ev_extra != NULL && !ev_occurred) {
                 pth_fdmode(s, fdmode);
-                return pth_error(-1, EINTR);
+                rv = pth_error(-1, EINTR);
+                goto done;
             }
 
             /* now perform the actual write operation */
@@ -1020,6 +1033,7 @@ ssize_t pth_write_ev(int fd, const void *buf, size_t nbytes, pth_event_t ev_extr
                && errno == EINTR) ;
     }
 
+done:
     /* restore filedescriptor mode */
     pth_shield { pth_fdmode(fd, fdmode); }
 
@@ -1044,10 +1058,12 @@ ssize_t pth_readv_ev(int fd, const struct iovec *iov, int iovcnt, pth_event_t ev
     pth_debug2("pth_readv_ev: enter from thread \"%s\"", pth_gctx_get()->pth_current->name);
 
     /* POSIX compliance */
-    if (iovcnt <= 0 || iovcnt > UIO_MAXIOV)
-        return pth_error(-1, EINVAL);
     if (!pth_util_fd_valid(fd))
         return pth_error(-1, EBADF);
+    if (iovcnt < 0 || iovcnt > UIO_MAXIOV)
+        return pth_error(-1, EINVAL);
+    if (iovcnt == 0)
+        return 0;
 
     /* check mode of filedescriptor */
     if ((fdmode = pth_fdmode(fd, PTH_FDMODE_POLL)) == PTH_FDMODE_ERROR)
@@ -1162,31 +1178,44 @@ ssize_t pth_writev_ev(int fd, const struct iovec *iov, int iovcnt, pth_event_t e
     pth_debug2("pth_writev_ev: enter from thread \"%s\"", pth_gctx_get()->pth_current->name);
 
     /* POSIX compliance */
-    if (iovcnt <= 0 || iovcnt > UIO_MAXIOV)
-        return pth_error(-1, EINVAL);
     if (!pth_util_fd_valid(fd))
         return pth_error(-1, EBADF);
+    if (iovcnt < 0 || iovcnt > UIO_MAXIOV)
+        return pth_error(-1, EINVAL);
+    if (iovcnt == 0)
+        return 0;
 
     /* force filedescriptor into non-blocking mode */
     if ((fdmode = pth_fdmode(fd, PTH_FDMODE_NONBLOCK)) == PTH_FDMODE_ERROR)
         return pth_error(-1, EBADF);
 
+    /* NOTE from now on we need to return via the done goto to make sure the fd returns to
+     * its old blocking/nonblocking mode */
+
     /* poll filedescriptor if not already in non-blocking operation */
     if (fdmode != PTH_FDMODE_NONBLOCK) {
+
+        /* init return value and number of bytes to write */
+        rv      = 0;
+        nbytes  = pth_writev_iov_bytes(iov, iovcnt);
+
+        if(nbytes == 0) {
+            rv = 0;
+            goto done;
+        }
+
         /* provide temporary iovec structure */
         if (iovcnt > sizeof(tiov_stack)) {
             tiovcnt = (sizeof(struct iovec) * UIO_MAXIOV);
-            if ((tiov = (struct iovec *)malloc(tiovcnt)) == NULL)
-                return pth_error(-1, errno);
+            if ((tiov = (struct iovec *)malloc(tiovcnt)) == NULL) {
+                rv = pth_error(-1, errno);
+                goto done;
+            }
         }
         else {
             tiovcnt = sizeof(tiov_stack);
             tiov    = tiov_stack;
         }
-
-        /* init return value and number of bytes to write */
-        rv      = 0;
-        nbytes  = pth_writev_iov_bytes(iov, iovcnt);
 
         /* init local iovec structure */
         liov    = NULL;
@@ -1196,8 +1225,10 @@ ssize_t pth_writev_ev(int fd, const struct iovec *iov, int iovcnt, pth_event_t e
         for (;;) {
             /* let thread sleep until fd is writeable or event occurs */
             ev = pth_event(PTH_EVENT_FD|PTH_UNTIL_FD_WRITEABLE, fd);
-            if (ev == NULL)
-    			return pth_error(-1, errno);
+            if (ev == NULL) {
+    			rv = pth_error(-1, errno);
+    			goto done;
+            }
 
             if (ev_extra != NULL)
                 pth_event_concat(ev, ev_extra, NULL);
@@ -1215,7 +1246,8 @@ ssize_t pth_writev_ev(int fd, const struct iovec *iov, int iovcnt, pth_event_t e
 				pth_fdmode(fd, fdmode);
 				if (iovcnt > sizeof(tiov_stack))
 					free(tiov);
-    			return pth_error(-1, EINTR);
+    			rv = pth_error(-1, EINTR);
+    			goto done;
             }
 
             /* now perform the actual write operation */
@@ -1261,6 +1293,7 @@ ssize_t pth_writev_ev(int fd, const struct iovec *iov, int iovcnt, pth_event_t e
 #endif
     }
 
+done:
     /* restore filedescriptor mode */
     pth_shield { pth_fdmode(fd, fdmode); }
 
@@ -1542,19 +1575,25 @@ ssize_t pth_sendto_ev(int fd, const void *buf, size_t nbytes, int flags, const s
     if ((fdmode = pth_fdmode(fd, PTH_FDMODE_NONBLOCK)) == PTH_FDMODE_ERROR)
         return pth_error(-1, EBADF);
 
+    /* NOTE from now on we need to return via the done goto to make sure the fd returns to
+     * its old blocking/nonblocking mode */
+
     /* poll filedescriptor if not already in non-blocking operation */
     if (fdmode != PTH_FDMODE_NONBLOCK) {
         if (!pth_util_fd_valid(fd)) {
             pth_fdmode(fd, fdmode);
-            return pth_error(-1, EBADF);
+            rv = pth_error(-1, EBADF);
+            goto done;
         }
 
         rv = 0;
         for (;;) {
             /* let thread sleep until fd is writeable or event occurs */
             ev = pth_event(PTH_EVENT_FD|PTH_UNTIL_FD_WRITEABLE, fd);
-    		if (ev == NULL)
-    			return pth_error(-1, errno);
+    		if (ev == NULL) {
+    			rv = pth_error(-1, errno);
+    		    goto done;
+    		}
 
     		if (ev_extra != NULL)
     			pth_event_concat(ev, ev_extra, NULL);
@@ -1570,7 +1609,8 @@ ssize_t pth_sendto_ev(int fd, const void *buf, size_t nbytes, int flags, const s
     		/* check for the extra events */
     		if (ev_extra != NULL && !ev_occurred) {
 				pth_fdmode(fd, fdmode);
-    			return pth_error(-1, EINTR);
+    			rv = pth_error(-1, EINTR);
+    			goto done;
     		}
 
             /* now perform the actual send operation */
@@ -1602,6 +1642,7 @@ ssize_t pth_sendto_ev(int fd, const void *buf, size_t nbytes, int flags, const s
                && errno == EINTR) ;
     }
 
+done:
     /* restore filedescriptor mode */
     pth_shield { pth_fdmode(fd, fdmode); }
 

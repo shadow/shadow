@@ -311,6 +311,13 @@ static void _master_registerHosts(Master* master) {
                     options_getInterfaceBufferSize(master->options);
             params->qdisc = options_getQueuingDiscipline(master->options);
 
+            /* requested attributes from shadow config */
+            params->ipHint = ne->ipHint.isSet ? ne->ipHint.string->str : NULL;
+            params->geocodeHint = ne->geocodeHint.isSet ? ne->geocodeHint.string->str : NULL;
+            params->typeHint = ne->typeHint.isSet ? ne->typeHint.string->str : NULL;
+            params->requestedBWDownKiBps = ne->bandwidthdown.isSet ? ne->bandwidthdown.integer : 0;
+            params->requestedBWUpKiBps = ne->bandwidthup.isSet ? ne->bandwidthup.integer : 0;
+
             slave_addNewVirtualHost(master->slave, params);
 
             /* now handle each virtual process the host will run */

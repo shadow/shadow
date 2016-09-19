@@ -29,9 +29,9 @@
 </graphml>
 ]]></topology>
   <kill time="5"/>
-  <plugin id="testsleep" path="libshadow-plugin-test-sleep.so"/>
+  <plugin id="testfile" path="libshadow-plugin-test-bind.so"/>
   <node id="testnode" quantity="1">
-    <application plugin="testsleep" starttime="1" arguments=""/>
+    <application plugin="testfile" starttime="1" arguments=""/>
   </node>
 </shadow>
 

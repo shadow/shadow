@@ -29,7 +29,7 @@
 </graphml>
 ]]></topology>
   <kill time="15"/>
-  <plugin id="testtimerfd" path="shadow-plugin-test-timerfd"/>
+  <plugin id="testtimerfd" path="libshadow-plugin-test-timerfd.so"/>
   <node id="testnode" quantity="1">
     <application plugin="testtimerfd" starttime="1" arguments=""/>
   </node>
