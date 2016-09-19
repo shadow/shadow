@@ -10,6 +10,12 @@
 #define __STDC_CONSTANT_MACROS
 #endif
 
+#if ((__clang_major__ > 3) || (__clang_major__ == 3 && __clang_minor__ >= 9))
+#ifdef DEBUG
+#undef DEBUG
+#endif
+#endif
+
 #include "llvm/Pass.h"
 #if ((__clang_major__ < 3) || (__clang_major__ == 3 && __clang_minor__ < 3))
 #include "llvm/Function.h"
@@ -118,7 +124,7 @@ public:
 #ifdef VERBOSE
             errs() << HOIST_LOG_PREFIX << "Did not find '_plugin_ctors', injecting it now\n";
 #endif
-                FunctionType *FT = FunctionType::get(Type::getVoidTy(getGlobalContext()), false);
+                FunctionType *FT = FunctionType::get(Type::getVoidTy(M.getContext()), false);
                 Constant* tmpfunc = M.getOrInsertFunction("_plugin_ctors", FT);
                 initFunc = cast<Function>(tmpfunc);
                 assert(initFunc);
@@ -187,7 +193,7 @@ public:
             errs() << HOIST_LOG_PREFIX << "No globals exist, injecting one now to ensure a non-empty hoisted_globals struct\n";
 #endif
 
-		    PointerType* PointerTy_0 = PointerType::get(IntegerType::get(getGlobalContext(), 8), 0);
+		    PointerType* PointerTy_0 = PointerType::get(IntegerType::get(M.getContext(), 8), 0);
 		    GlobalVariable* hidden_gv = new GlobalVariable(M, PointerTy_0, false, GlobalValue::CommonLinkage, 0, "__hoisted_placeholder__");
 		    ConstantPointerNull* const_ptr_2 = ConstantPointerNull::get(PointerTy_0);
 		    hidden_gv->setInitializer(const_ptr_2);
