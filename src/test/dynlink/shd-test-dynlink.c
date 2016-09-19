@@ -25,7 +25,6 @@
 #include <errno.h>
 #include <string.h>
 #include <signal.h>
-#include <pthread.h>
 
 //#include <glib.h>
 
@@ -432,36 +431,37 @@ int thread_run() {
     return EXIT_SUCCESS;
 }
 
-void* thread_main(void* arg) {
-    thread_run();
-    return NULL;
-}
-
-int start_thread() {
-    pthread_t slave_tid;
-    pthread_attr_t slave_attr;
-    size_t stack_size;
-    void *stack_addr;
-
-    pthread_attr_init(&slave_attr);
-    // Stack size is 128M bytes
-    stack_size = 128 * 1024 * 1024;
-    posix_memalign(&stack_addr, sysconf(_SC_PAGESIZE), stack_size);
-    pthread_attr_setstack(&slave_attr, stack_addr, stack_size);
-
-    pthread_create(&slave_tid, &slave_attr, thread_main, NULL);
-    pthread_attr_destroy(&slave_attr);
-
-    pthread_join(slave_tid, NULL);
-    return 0;
-}
+//#include <pthread.h>
+//void* thread_main(void* arg) {
+//    thread_run();
+//    return NULL;
+//}
+//
+//int start_thread() {
+//    pthread_t slave_tid;
+//    pthread_attr_t slave_attr;
+//    size_t stack_size;
+//    void *stack_addr;
+//
+//    pthread_attr_init(&slave_attr);
+//    // Stack size is 128M bytes
+//    stack_size = 128 * 1024 * 1024;
+//    posix_memalign(&stack_addr, sysconf(_SC_PAGESIZE), stack_size);
+//    pthread_attr_setstack(&slave_attr, stack_addr, stack_size);
+//
+//    pthread_create(&slave_tid, &slave_attr, thread_main, NULL);
+//    pthread_attr_destroy(&slave_attr);
+//
+//    pthread_join(slave_tid, NULL);
+//    return 0;
+//}
 
 int main(int argc, char* argv[]) {
     // run in a thread to see if we can increase the thread stack size
     // and if dlmopen would then succeed
     // test result: nope, thread and thread stack size doesnt matter
-    start_thread();
     // test result: multiple threads cannot open any more libs than main thread
-    start_thread();
-    return 0;
+//    start_thread();
+//    start_thread();
+    return thread_run();
 }

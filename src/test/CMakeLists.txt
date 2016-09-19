@@ -16,7 +16,7 @@ add_executable(shadow-test-launcher shd-test-launcher.c)
 
 ## add the test directories
 add_subdirectory(bind)
-#add_subdirectory(dynlink)
+add_subdirectory(dynlink)
 add_subdirectory(epoll)
 add_subdirectory(file)
 add_subdirectory(phold)
