@@ -1,5 +1,5 @@
 ## build the test as a dynamic executable that plugs into shadow
-add_shadow_exe(shadow-plugin-test-epoll shd-test-epoll.c)
+add_shadow_plugin(shadow-plugin-test-epoll shd-test-epoll.c)
 
 ## create and install an executable that can run outside of shadow
 add_executable(test-epoll shd-test-epoll.c)
