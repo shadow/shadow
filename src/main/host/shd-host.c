@@ -828,10 +828,7 @@ static gboolean _host_doesInterfaceExist(Host* host, in_addr_t interfaceIP) {
     MAGIC_ASSERT(host);
 
     if(interfaceIP == htonl(INADDR_ANY)) {
-        in_addr_t defaultIP = address_toNetworkIP(host->defaultAddress);
-        gpointer key = GUINT_TO_POINTER((guint)defaultIP);
-        NetworkInterface* defaultInterface = g_hash_table_lookup(host->interfaces, key);
-        if(defaultInterface != NULL) {
+        if(g_hash_table_size(host->interfaces) > 0) {
             return TRUE;
         } else {
             return FALSE;
@@ -1286,8 +1283,7 @@ gint host_getSocketName(Host* host, gint handle, const struct sockaddr* address,
             if(ip == htonl(INADDR_ANY)) {
                 in_addr_t peerIP = 0;
                 if(socket_getPeerName(sock, &peerIP, NULL) && peerIP != htonl(INADDR_LOOPBACK)) {
-                    Address* address = networkinterface_getAddress(host->defaultInterface);
-                    ip = (in_addr_t) address_toNetworkIP(address);
+                    ip = (in_addr_t) address_toNetworkIP(host->defaultAddress);
                 }
             }
 
