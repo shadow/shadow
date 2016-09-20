@@ -6,6 +6,10 @@ set(SHADOW_VERSION_MAJOR 1)
 set(SHADOW_VERSION_MINOR 11)
 set(SHADOW_VERSION_BUILD 1)
 
+message(STATUS "System name: ${CMAKE_SYSTEM_NAME}")
+message(STATUS "System version: ${CMAKE_SYSTEM_VERSION}")
+message(STATUS "System processor: ${CMAKE_SYSTEM_PROCESSOR}")
+
 ## ensure cmake version
 cmake_minimum_required(VERSION 2.8.8 FATAL_ERROR)
 

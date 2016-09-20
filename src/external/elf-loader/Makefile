@@ -5,7 +5,8 @@ DEBUG+=-DMALLOC_DEBUG_ENABLE
 #OPT=-O2
 LDSO_SONAME=ldso
 VALGRIND_CFLAGS=$(shell $(SRCDIR)get-valgrind-cflags.py)
-CFLAGS+=-g3 -Wall -Werror $(DEBUG) $(OPT) $(VALGRIND_CFLAGS) -D_GNU_SOURCE -Wp,-MD,$(dir $@).$(notdir $@).d
+#CFLAGS+=-g3 -Wall -Werror $(DEBUG) $(OPT) $(VALGRIND_CFLAGS) -D_GNU_SOURCE -Wp,-MD,$(dir $@).$(notdir $@).d
+CFLAGS+=-g3 -Wall $(DEBUG) $(OPT) $(VALGRIND_CFLAGS) -D_GNU_SOURCE -Wp,-MD,$(dir $@).$(notdir $@).d
 CXXFLAGS+=$(CFLAGS)
 LDFLAGS+=$(OPT)
 INSTALL:=install
@@ -40,6 +41,8 @@ endif
 
 all: ldso libvdl.so elfedit internal-tests display-relocs
 
+loader: ldso
+
 install: all
 	$(INSTALL) -d $(PREFIX)/lib $(PREFIX)/bin
 	$(INSTALL) -t $(PREFIX)/lib ldso libvdl.so 
@@ -61,7 +64,7 @@ FORCE:
 LDSO_ARCH_SRC=\
 
 # for valgrind macros
-alloc.o: CFLAGS+=-Wno-unused-but-set-variable
+#alloc.o: CFLAGS+=-Wno-unused-but-set-variable
 
 LDSO_SOURCE=\
 avprintf-cb.c \

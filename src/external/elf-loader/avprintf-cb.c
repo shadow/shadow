@@ -397,9 +397,9 @@ int avprintf_cb (avprintf_callback_t user_cb, void *user_context, char const *st
         enum parsing_state_t state = CONVERSION_SEEKING;
         va_list list;
         struct local_callback_t callback_context = {
-                user_cb : user_cb,
-                user_context : user_context,
-                count : 0
+                .user_cb = user_cb,
+                .user_context = user_context,
+                .count = 0
         };
         void *context = &callback_context;
         avprintf_callback_t cb = local_callback;
