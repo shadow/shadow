@@ -13,3 +13,8 @@ include_directories(${CMAKE_SOURCE_DIR}/src/main)
 add_library(shadow-interpose SHARED shd-interposer.c)
 target_link_libraries(shadow-interpose dl)
 install(TARGETS shadow-interpose DESTINATION lib)
+set_target_properties(shadow-interpose PROPERTIES 
+    INSTALL_RPATH ${CMAKE_INSTALL_PREFIX}/lib
+    INSTALL_RPATH_USE_LINK_PATH TRUE 
+    LINK_FLAGS "-Wl,--no-as-needed,-rpath=${CMAKE_INSTALL_PREFIX}/lib,-dynamic-linker=${CMAKE_INSTALL_PREFIX}/lib/ldso"
+)

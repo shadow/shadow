@@ -30,105 +30,32 @@
 
 #define RTLD_NEXT ((void *) -1l)
 
-#define NUM_LOADS 20
+// this is for the new dlinfo type we've added to elf-loader
+#define RTLD_DI_TLS_SIZE 127
+
+#define NUM_LOADS 500
 #define NUM_HARDLINKS 100
 #define PLUGIN_PATH "libshadow-test-dynlink-plugin.so"
+
 #define PLUGIN_MAIN_SYMBOL "main"
 typedef int (*MainFunc)(int argc, char* argv[]);
 
-//void load(gchar* path, gboolean useGlib) {
-//    GModule* handle;
-//
-//    if(useGlib) {
-//        handle = g_module_open(path, G_MODULE_BIND_LAZY|G_MODULE_BIND_LOCAL);
-//    } else {
-//        // note: RTLD_DEEPBIND -> prefer local symbols, but still have global access
-//        handle = dlopen(path, RTLD_LAZY|RTLD_LOCAL);
-//    }
-//
-//    if(handle) {
-//        g_message("successfully loaded private plug-in '%s'", path);
-//    } else {
-//        g_error("unable to load private plug-in '%s'", path);
-//    }
-//
-//    /* make sure it has the required init function */
-//    InitFunc func;
-//    gboolean success;
-//
-//    if(useGlib) {
-//        success = g_module_symbol(handle, PLUGININITSYMBOL, (gpointer)&func);
-//    } else {
-//        /* must use handle to search when using G_MODULE_BIND_LOCAL
-//         * using RTLD_NEXT when searching with G_MODULE_BIND_LOCAL will not work!
-//         */
-//        func = dlsym(handle, PLUGININITSYMBOL);
-//        success = func ? TRUE : FALSE;
-//    }
-//
-//    if(success) {
-//        g_message("succesfully found function '%s' in plugin '%s'", PLUGININITSYMBOL, path);
-//    } else {
-//        g_error("unable to find the required function symbol '%s' in plug-in '%s'",
-//                PLUGININITSYMBOL, path);
-//    }
-//
-//    func();
-//
-////  Need to keep the modules open for the test
-////  if(useGlib) {
-////      g_module_close(handle);
-////  } else {
-////      dlclose(handle);
-////  }
-//}
-//
-///*
-// * Without G_MODULE_BIND_LOCAL, the result is:
-//    1 after increment
-//    2 after increment
-//    3 after increment
-//    4 after increment
-//
-// * else the result is:
-//    1 after increment
-//    1 after increment
-//    1 after increment
-//    1 after increment
-//
-// * So, we need G_MODULE_BIND_LOCAL to keep variables private to the plugin.
-// */
-//
-//void threadload(gchar* path, gpointer user_data) {
-//    load(path, TRUE);
-//}
-//
-//gchar* p1 = "/tmp/testplugin1.so";
-//gchar* p2 = "/tmp/testplugin2.so";
-//gchar* p3 = "/tmp/testplugin3.so";
-//gchar* p4 = "/tmp/testplugin4.so";
-//int main(void) {
-//    load(p1, TRUE);
-//    load(p2, TRUE);
-//    load(p3, FALSE);
-//    load(p4, FALSE);
-//
-//    /* so far it seems to work with or without threads */
-//    g_thread_init(NULL);
-//    GError *error = NULL;
-//    GThreadPool* pool = g_thread_pool_new((GFunc)threadload, NULL, 2, TRUE, &error);
-//
-//    g_thread_pool_push(pool, p1, &error);
-//    g_thread_pool_push(pool, p2, &error);
-//    g_thread_pool_push(pool, p3, &error);
-//    g_thread_pool_push(pool, p4, &error);
-//
-//    g_thread_pool_free(pool, FALSE, TRUE);
-//    return EXIT_SUCCESS;
-//}
+int global_num_dlmopens = 0;
+
+static void _test_print_tls_size(void* handle) {
+    /* print the size of the buffer allocated for the TLS block */
+    unsigned long tls_size;
+    int result = dlinfo(handle, RTLD_DI_TLS_SIZE, &tls_size);
+    if (result == 0) {
+        fprintf(stdout, "size of library static TLS after %d loads: %ld\n", global_num_dlmopens, tls_size);
+    } else {
+        fprintf(stdout, "error in dlinfo() getting RTLD_DI_TLS_SIZE for handle %p, dlerror is '%s'\n", handle, dlerror());
+    }
+}
 
 void* _test_load_dlopen(const char* plugin_path) {
-    /* RTLD_LOCAL
+    /*
+     * RTLD_LOCAL
      * Symbols defined in this library are not made available to resolve
      * references in subsequently loaded libraries
      *
@@ -140,7 +67,16 @@ void* _test_load_dlopen(const char* plugin_path) {
 }
 
 void* _test_load_dlmopen(const char* plugin_path) {
-    // LM_ID_NEWLM, LM_ID_BASE
+    /*
+     * LM_ID_BASE
+     * Load the shared object in the initial namespace (i.e., the application's namespace).
+     *
+     * LM_ID_NEWLM
+     * Create  a new namespace and load the shared object in that namespace.  The object
+     * must have been correctly linked to reference all of the other shared objects that
+     * it requires, since the new namespace is initially empty.
+     */
+    global_num_dlmopens++;
     return dlmopen(LM_ID_NEWLM, plugin_path, RTLD_LAZY|RTLD_LOCAL|RTLD_DEEPBIND);
 }
 
@@ -167,11 +103,11 @@ int _test_linker_loader_single(int use_dlmopen) {
         /* clear dlerror */
         dlerror();
 
-        Lmid_t lmid;
+        Lmid_t lmid = 0;
         int result = dlinfo(handles[i], RTLD_DI_LMID, &lmid);
 
         if(result == 0) {
-            fprintf(stdout, "found id %i for handle %p\n", (int)lmid, handles[i]);
+            fprintf(stdout, "found id %lu for handle %p, num loads=%i\n", (long unsigned int)lmid, handles[i], global_num_dlmopens);
         } else {
             fprintf(stdout, "error in dlinfo() for handle %p, dlerror is '%s'\n",
                     handles[i], dlerror());
@@ -201,6 +137,8 @@ int _test_linker_loader_single(int use_dlmopen) {
 
     /* check /proc/<pid>/maps - now we should have a copy-on-write for the incremented variables */
 //    raise(SIGTSTP);
+
+    _test_print_tls_size(handles[0]);
 
     int num_failures = 0;
     for(int i = 0; i < NUM_LOADS; i++) {
@@ -331,6 +269,8 @@ static int _test_linker_loader_newpaths(int do_link, int use_dlmopen) {
         fprintf(stdout, "got handle %p for path '%s'\n", handles[i], paths[i]);
     }
 
+    _test_print_tls_size(handles[0]);
+
     int num_failures = 0;
     for(int i = 0; i < NUM_HARDLINKS; i++) {
         /* clear dlerror */
@@ -350,20 +290,48 @@ static int _test_linker_loader_newpaths(int do_link, int use_dlmopen) {
     }
 }
 
-int thread_run() {
+int test_dynlink_dlopen() {
     /**
      * Test result:
      * dlopen can load a file multiple times, but not it their own namespace
      * so this doesnt work for shadow virtual nodes
      */
-//    fprintf(stdout, "########## dynlink testing dlopen ##########\n");
-//
-//    if(_test_linker_loader_single(0) != 0) {
-//        fprintf(stdout, "########## _test_linker_loader_single() with dlopen() failed\n");
-//        return -EXIT_FAILURE;
-//    }
+    fprintf(stdout, "########## dynlink testing dlopen ##########\n");
+
+    if(_test_linker_loader_single(0) != 0) {
+        fprintf(stdout, "########## _test_linker_loader_single() with dlopen() failed\n");
+        return -EXIT_FAILURE;
+    }
+
+    /**
+     * Test result:
+     * file copies do work - dlopen gives new handles for plugin copies
+     * but dlopen still doesnt give us new namespaces for libs linked to plugin
+     */
+    fprintf(stdout, "########## dynlink testing dlopen with file copies ##########\n");
+
+    if(_test_linker_loader_newpaths(0, 0) != 0) {
+        fprintf(stdout, "########## _test_linker_loader_newpaths(copy) with dlopen() failed\n");
+        return -EXIT_FAILURE;
+    }
 
 
+    /**
+     * Test result:
+     * hardlinks dont work - dlopen gives the same handle for diff hard link paths
+     */
+    fprintf(stdout, "########## dynlink testing dlopen with hardlinks ##########\n");
+
+    if(_test_linker_loader_newpaths(1, 0) != 0) {
+        fprintf(stdout, "########## _test_linker_loader_newpaths(link) with dlopen() failed\n");
+        return -EXIT_FAILURE;
+    }
+
+    fprintf(stdout, "########## dynlink dlopen test passed! ##########\n");
+    return EXIT_SUCCESS;
+}
+
+int test_dynlink_dlmopen() {
     /**
      * Test result:
      * dlmopen can load a plugin in their own namespace, but runs out of TLS
@@ -376,20 +344,10 @@ int thread_run() {
         return -EXIT_FAILURE;
     }
 
+    return EXIT_SUCCESS;
+}
 
-    /**
-     * Test result:
-     * file copies do work - dlopen gives new handles for plugin copies
-     * but dlopen still doesnt give us new namespaces for libs linked to plugin
-     */
-//    fprintf(stdout, "########## dynlink testing dlopen with file copies ##########\n");
-//
-//    if(_test_linker_loader_newpaths(0, 0) != 0) {
-//        fprintf(stdout, "########## _test_linker_loader_newpaths(copy) with dlopen() failed\n");
-//        return -EXIT_FAILURE;
-//    }
-
-
+int test_dynlink_dlmopen_extended() {
     /**
      * Test result:
      * dlmopen gives us new handles and new namespaces for file copies
@@ -401,19 +359,6 @@ int thread_run() {
         fprintf(stdout, "########## _test_linker_loader_newpaths(copy) with dlmopen() failed\n");
         return -EXIT_FAILURE;
     }
-
-
-    /**
-     * Test result:
-     * hardlinks dont work - dlopen gives the same handle for diff hard link paths
-     */
-//    fprintf(stdout, "########## dynlink testing dlopen with hardlinks ##########\n");
-//
-//    if(_test_linker_loader_newpaths(1, 0) != 0) {
-//        fprintf(stdout, "########## _test_linker_loader_newpaths(link) with dlopen() failed\n");
-//        return -EXIT_FAILURE;
-//    }
-
 
     /**
      * Test result:
@@ -427,13 +372,17 @@ int thread_run() {
         return -EXIT_FAILURE;
     }
 
-    fprintf(stdout, "########## dynlink test passed! ##########\n");
+    fprintf(stdout, "########## dynlink dlmopen test passed! ##########\n");
     return EXIT_SUCCESS;
+}
+
+int test_dynlink_run() {
+    return test_dynlink_dlmopen();
 }
 
 //#include <pthread.h>
 //void* thread_main(void* arg) {
-//    thread_run();
+//    test_run();
 //    return NULL;
 //}
 //
@@ -449,19 +398,87 @@ int thread_run() {
 //    posix_memalign(&stack_addr, sysconf(_SC_PAGESIZE), stack_size);
 //    pthread_attr_setstack(&slave_attr, stack_addr, stack_size);
 //
-//    pthread_create(&slave_tid, &slave_attr, thread_main, NULL);
+//    pthread_create(&slave_tid, &slave_attr, test_dynlink_run, NULL);
 //    pthread_attr_destroy(&slave_attr);
 //
 //    pthread_join(slave_tid, NULL);
 //    return 0;
 //}
+//
+//int main(int argc, char* argv[]) {
+//     run in a thread to see if we can increase the thread stack size
+//     and if dlmopen would then succeed
+//     test result: nope, thread and thread stack size doesnt matter
+//     test result: multiple threads cannot open any more libs than main thread
+//    start_thread();
+//    start_thread();
+//    return test_dynlink_run();
+//}
 
-int main(int argc, char* argv[]) {
-    // run in a thread to see if we can increase the thread stack size
-    // and if dlmopen would then succeed
-    // test result: nope, thread and thread stack size doesnt matter
-    // test result: multiple threads cannot open any more libs than main thread
-//    start_thread();
-//    start_thread();
-    return thread_run();
+static unsigned long _test_compute_static_tls_size() {
+    unsigned long tls_size_start = 0;
+    unsigned long tls_size_end = 0;
+
+    /* clear error */
+    dlerror();
+
+    /* we need a handle for dlinfo to work, even though we're not using it */
+    void* handle = _test_load_dlmopen(PLUGIN_PATH);
+    int result = dlinfo(handle, RTLD_DI_TLS_SIZE, &tls_size_start);
+
+    if (result != 0) {
+        fprintf(stdout, "error in dlinfo() for handle %p, dlerror is '%s'\n", handle, dlerror());
+        return 0;
+    }
+
+    /* clear error */
+    dlerror();
+
+    handle = _test_load_dlmopen(PLUGIN_PATH);
+    result = dlinfo(handle, RTLD_DI_TLS_SIZE, &tls_size_end);
+
+    if (result != 0) {
+        fprintf(stdout, "error in dlinfo() for handle %p, dlerror is '%s'\n", handle, dlerror());
+        return 0;
+    }
+
+    unsigned long single_load_size = (tls_size_end - tls_size_start);
+
+    /* we have 3 dlmopen tests, one opens NUM_LOADS, the other two open NUM_HARDLINKS */
+    unsigned long tls_size_to_allocate = single_load_size * (NUM_LOADS+2*NUM_HARDLINKS);
+
+    /* make sure we dont return 0 when successful, and default to a lower limit of 1024 */
+    if(tls_size_to_allocate < 1024) {
+        tls_size_to_allocate = 1024;
+    }
+    return tls_size_to_allocate;
+}
+
+int main_shadow(int argc, char* argv[]) {
+    return test_dynlink_run();
+}
+
+int main_no_shadow(int argc, char* argv[]) {
+    int ret;
+    if (!getenv("LD_STATIC_TLS_EXTRA")) {
+        /* in this path, we calculate the static TLS size we would need */
+        unsigned long tls_size_to_allocate = _test_compute_static_tls_size();
+
+        char call[100];
+
+        /* this strips environment variables, but there are ways to fix that */
+        sprintf(call, "env LD_STATIC_TLS_EXTRA=%lu %s", tls_size_to_allocate, argv[0]);
+
+        /* restart the process with the correct static tls size */
+        ret = system(call);
+        if(ret == 0) {
+            ret = EXIT_SUCCESS;
+        } else {
+            ret = EXIT_FAILURE;
+        }
+    } else {
+        /* the correct sized buffer has been allocated, run things as normal */
+        ret = test_dynlink_run();
+    }
+    return ret;
 }

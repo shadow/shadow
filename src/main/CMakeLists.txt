@@ -93,9 +93,13 @@ set(shadow_srcs
 
 ## specify the main shadow executable, build, link, and install
 add_executable(shadow ${shadow_srcs})
-add_dependencies(shadow shadow-interpose rpth)
+add_dependencies(shadow shadow-interpose elf-loader rpth)
 target_link_libraries(shadow shadow-interpose -lrpth ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES} ${IGRAPH_LIBRARIES} ${GLIB_LIBRARIES})
 install(TARGETS shadow DESTINATION bin)
 
 ## shadow needs to find libshadow-interpose and custom libs after install
-set_target_properties(shadow PROPERTIES INSTALL_RPATH ${CMAKE_INSTALL_PREFIX}/lib INSTALL_RPATH_USE_LINK_PATH TRUE LINK_FLAGS "-Wl,--no-as-needed")
+set_target_properties(shadow PROPERTIES 
+    INSTALL_RPATH ${CMAKE_INSTALL_PREFIX}/lib
+    INSTALL_RPATH_USE_LINK_PATH TRUE 
+    LINK_FLAGS "-Wl,--no-as-needed,-rpath=${CMAKE_INSTALL_PREFIX}/lib,-dynamic-linker=${CMAKE_INSTALL_PREFIX}/lib/ldso"
+)

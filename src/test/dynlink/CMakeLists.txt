@@ -14,15 +14,24 @@ add_library(shadow-test-dynlink-lib SHARED shd-test-dynlink-lib.c)
 target_link_libraries(shadow-test-dynlink-plugin shadow-test-dynlink-lib)
 
 ## build test executable
-add_executable(shadow-test-dynlink shd-test-dynlink.c)
+add_executable(shadow-test-dynlink shd-test-dynlink.c shd-test-dynlink-main.c)
 link_directories(${CMAKE_CURRENT_BINARY_DIR})
-set_target_properties(shadow-test-dynlink PROPERTIES INSTALL_RPATH ${CMAKE_CURRENT_BINARY_DIR} INSTALL_RPATH_USE_LINK_PATH TRUE LINK_FLAGS "-Wl,--no-as-needed,-rpath=${CMAKE_CURRENT_BINARY_DIR}")
+set_target_properties(shadow-test-dynlink PROPERTIES 
+    INSTALL_RPATH ${CMAKE_BINARY_DIR}/src/external/elf-loader/lib
+    INSTALL_RPATH_USE_LINK_PATH TRUE 
+    LINK_FLAGS "-Wl,--no-as-needed,-rpath=${CMAKE_BINARY_DIR}/src/external/elf-loader/lib,-dynamic-linker=${CMAKE_BINARY_DIR}/src/external/elf-loader/lib/ldso"
+)
 
 ## link the test exe to required libraries
 target_link_libraries(shadow-test-dynlink ${DL_LIBRARIES} ${GLIB_LIBRARIES})
 
+## build .so test for running in shadow
+add_shadow_plugin(shadow-plugin-test-dynlink shd-test-dynlink.c shd-test-dynlink-main-shadow.c)
+target_link_libraries(shadow-plugin-test-dynlink ${DL_LIBRARIES} ${GLIB_LIBRARIES})
+
 ## register the test
 add_test(NAME test-dynlink COMMAND shadow-test-dynlink)
+add_test(NAME test-dynlink-shadow COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow ${CMAKE_CURRENT_SOURCE_DIR}/dynlink.test.shadow.config.xml)
 
 ##########################
 ## To do this manually: ##
