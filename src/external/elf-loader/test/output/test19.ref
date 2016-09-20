@@ -1,0 +1,3 @@
+libf constructor
+called function_e in libf.so
+libf destructor

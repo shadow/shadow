@@ -1,0 +1,45 @@
+STT_GNU_IFUNC
+
+      This symbol type is the same as STT_FUNC except that it always
+      points to a function or piece of executable code which takes no
+      arguments and returns a function pointer.  If an STT_GNU_IFUNC
+      symbol is referred to by a relocation, then evaluation of that
+      relocation is delayed until load-time.  The value used in the
+      relocation is the function pointer returned by an invocation
+      of the STT_GNU_IFUNC symbol.
+
+      The purpose of this symbol type is to allow the run-time to
+      select between multiple versions of the implementation of a
+      specific function.  The selection made in general will take the
+      currently available hardware into account and select the most
+      appropriate version.
+
+STT_GNU_IFUNC is defined in OS-specific range:
+
+#define STT_LOOS        10      /* OS-specific semantics */
+#define STT_GNU_IFUNC   10      /* Symbol is an indirect code object */
+#define STT_HIOS        12      /* OS-specific semantics */
+
+R_*_IRELATIVE
+
+      This relocation is similar to R_*_RELATIVE except that the
+      value used in this relocation is the program address returned
+      by the function, which takes no arguments, at the address of
+      the result of the corresponding R_*_RELATIVE relocation.
+
+      The purpose of this relocation to avoid name lookup for locally
+      defined STT_GNU_IFUNC symbols at load-time.
+
+R_*_IRELATIVE is defined for i386 and x86-64:
+
+#define R_386_IRELATIVE    42   /* Adjust indirectly by program base */
+#define R_X86_64_IRELATIVE 37   /* Adjust indirectly by program base */
+
+All references to a STT_GNU_IFUNC symbol, including function call and
+function pointer, will go through a PLT slot, which jumps to the address
+stored in the GOT entry.  If the STT_GNU_IFUNC symbol is locally defined,
+a R_*_IRELATIVE relocation will be applied to the GOT entry at load time.
+Otherwise, dynamic linker will lookup the symbol at the first call to the
+function and update the GOT entry. This applies to all usages of
+STT_GNU_IFUNC symbols in shared library, dynamic executable and static
+executable. 

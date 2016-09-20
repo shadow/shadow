@@ -1,0 +1,4 @@
+libtest24 constructor
+enter main
+leave main
+libtest24 destructor

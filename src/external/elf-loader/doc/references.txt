@@ -1,0 +1,7 @@
+http://blogs.sun.com/ali/entry/gnu_hash_elf_sections
+Linker and Libraries Guide (SUN 817-1984)
+How To Write Shared Libraries, Ulrich Drepper (http://people.redhat.com/drepper/dsohowto.pdf)
+http://www.airs.com/blog/
+http://nickclifton.livejournal.com/
+Executable and Linking Format Specification 1.2 (TIS Committee, may 1995)
+System V, Application Binary Interface (Edition 4.1)

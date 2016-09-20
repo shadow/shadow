@@ -1,0 +1,22 @@
+libtest4 constructor
+enter main
+libf constructor
+dlopen libf.so completed
+libe constructor
+dlopen libe.so completed
+called function_e in libe
+dlclose libe.so completed
+libe destructor
+libf destructor
+dlclose libf.so completed
+libf constructor
+dlopen libf.so completed
+libe constructor
+dlopen libe.so completed
+called function_e in libf.so
+libe destructor
+dlclose libe.so completed
+libf destructor
+dlclose libf.so completed
+leave main
+libtest4 destructor
