@@ -136,6 +136,7 @@ ld_preload_list_new (struct VdlContext *context, const char **envp)
 static void
 setup_env_vars (const char **envp)
 {
+  int i;
   // populate search_dirs from LD_LIBRARY_PATH
   const char *ld_lib_path = vdl_utils_getenv (envp, "LD_LIBRARY_PATH");
   struct VdlList *list = vdl_utils_splitpath (ld_lib_path);
@@ -166,7 +167,7 @@ setup_env_vars (const char **envp)
     {
       unsigned long static_tls_size = 0;
       // we don't have atoi or alternatives
-      for (int i = 0; static_tls_extra[i] != '\0'; i++)
+      for (i = 0; static_tls_extra[i] != '\0'; i++)
         static_tls_size = static_tls_size*10 + static_tls_extra[i] - '0';
       g_vdl.tls_static_total_size = static_tls_size;
     }
