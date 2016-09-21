@@ -5,7 +5,7 @@ add_subdirectory(main)
 add_subdirectory(preload)
 
 ## build plug-in libraries and other components
-add_subdirectory(plugin)
+#add_subdirectory(plugin)
 
 ## build rpth
 add_subdirectory(external)

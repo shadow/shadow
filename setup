@@ -158,17 +158,17 @@ def build(args):
     cmake_cmd += " -DCMAKE_EXTRA_LIBRARIES=" + ';'.join(args.extra_libraries)
 
     # look for the clang/clang++ compilers
-    clangccpath = which("clang")
-    if clangccpath is None: 
-        logging.error("can't find 'clang' compiler in your PATH! Is it installed?")
-    clangcxxpath = which("clang++")
-    if clangcxxpath is None: 
-        logging.error("can't find 'clang++' compiler in your PATH! Is it installed?")
-    if clangccpath is None or clangcxxpath is None: return -1
+ #   clangccpath = which("clang")
+ #   if clangccpath is None: 
+ #       logging.error("can't find 'clang' compiler in your PATH! Is it installed?")
+ #   clangcxxpath = which("clang++")
+ #   if clangcxxpath is None: 
+ #       logging.error("can't find 'clang++' compiler in your PATH! Is it installed?")
+ #   if clangccpath is None or clangcxxpath is None: return -1
     
     # set clang/llvm as compiler
-    os.putenv("CC", clangccpath)
-    os.putenv("CXX", clangcxxpath)
+ #   os.putenv("CC", clangccpath)
+ #   os.putenv("CXX", clangcxxpath)
     #cmake_cmd += " -D_CMAKE_TOOLCHAIN_PREFIX=llvm-"
     
     # call cmake to configure the make process, wait for completion

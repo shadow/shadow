@@ -1170,7 +1170,7 @@ INTERPOSE(ssize_t send(int a, const void *b, size_t c, int d), send, a, b, c, d)
 INTERPOSE(ssize_t sendto(int a, const void *b, size_t c, int d, const struct sockaddr* e, socklen_t f), sendto, a, b, c, d, e, f);
 INTERPOSE(ssize_t sendmsg(int a, const struct msghdr *b, int c), sendmsg, a, b, c);
 INTERPOSE(ssize_t recv(int a, void *b, size_t c, int d), recv, a, b, c, d);
-INTERPOSE(ssize_t recvfrom(int a, void *b, size_t c, int d, struct sockaddr* e, socklen_t *restrict f), recvfrom, a, b, c, d, e, f);
+INTERPOSE(ssize_t recvfrom(int a, void *b, size_t c, int d, struct sockaddr* e, socklen_t *f), recvfrom, a, b, c, d, e, f);
 INTERPOSE(ssize_t recvmsg(int a, struct msghdr *b, int c), recvmsg, a, b, c);
 INTERPOSE(int getsockopt(int a, int b, int c, void* d, socklen_t* e), getsockopt, a, b, c, d, e);
 INTERPOSE(int setsockopt(int a, int b, int c, const void *d, socklen_t e), setsockopt, a, b, c, d, e);

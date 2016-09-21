@@ -7,16 +7,61 @@
 #ifndef SHD_PROCESS_H_
 #define SHD_PROCESS_H_
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
+#include <sys/vfs.h>
 #include <sys/stat.h>
 #include <sys/statfs.h>
 #include <sys/statvfs.h>
 #include <sys/statvfs.h>
+
+#include <fcntl.h>
+
+#include <assert.h>
+#include <errno.h>
+#include <time.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <stddef.h>
+#include <stdarg.h>
+#include <dlfcn.h>
+#include <unistd.h>
+#include <netdb.h>
+#include <string.h>
+#include <malloc.h>
+#include <signal.h>
 #include <poll.h>
+#include <ifaddrs.h>
+#include <net/if.h>
+#include <sys/epoll.h>
+#include <sys/eventfd.h>
+#include <sys/ioctl.h>
+#include <sys/mman.h>
+#include <sys/resource.h>
+#include <sys/select.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/statfs.h>
+#include <sys/statvfs.h>
+#include <sys/time.h>
+#include <sys/timerfd.h>
+#include <sys/types.h>
+#include <sys/file.h>
+#include <sys/uio.h>
+#include <sys/vfs.h>
+#include <linux/sockios.h>
+#include <features.h>
+
+#include <pthread.h>
 
 #include "shadow.h"
 
 #if !defined __USE_LARGEFILE64
 typedef off_t off64_t;
+//typedef struct statfs statfs64;
+//typedef struct stat stat64;
 #endif
 
 Process* process_new(gpointer host, GQuark programID, guint processID,
@@ -73,7 +118,7 @@ ssize_t process_emu_send(Process* proc, int fd, const void *buf, size_t n, int f
 ssize_t process_emu_sendto(Process* proc, int fd, const void *buf, size_t n, int flags, const struct sockaddr* addr, socklen_t addr_len);
 ssize_t process_emu_sendmsg(Process* proc, int fd, const struct msghdr *message, int flags);
 ssize_t process_emu_recv(Process* proc, int fd, void *buf, size_t n, int flags);
-ssize_t process_emu_recvfrom(Process* proc, int fd, void *buf, size_t n, int flags, struct sockaddr* addr, socklen_t *restrict addr_len);
+ssize_t process_emu_recvfrom(Process* proc, int fd, void *buf, size_t n, int flags, struct sockaddr* addr, socklen_t *addr_len);
 ssize_t process_emu_recvmsg(Process* proc, int fd, struct msghdr *message, int flags);
 int process_emu_getsockopt(Process* proc, int fd, int level, int optname, void* optval, socklen_t* optlen);
 int process_emu_setsockopt(Process* proc, int fd, int level, int optname, const void *optval, socklen_t optlen);

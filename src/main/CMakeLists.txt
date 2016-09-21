@@ -26,10 +26,11 @@ add_definitions(-DIGRAPH_VERSION_MAJOR_GUESS=${IGRAPH_VERSION_MAJOR_GUESS})
 add_definitions(-DIGRAPH_VERSION_MINOR_GUESS=${IGRAPH_VERSION_MINOR_GUESS})
 add_definitions(-DIGRAPH_VERSION_PATCH_GUESS=${IGRAPH_VERSION_PATCH_GUESS})
 add_cflags(-fPIC)
-add_cflags(-Wno-unknown-attributes)
-add_cflags(-Wno-unused-command-line-argument)
-add_cflags(-Wno-unknown-warning-option)
-add_cflags(-Wno-visibility)
+#add_cflags(-Wno-unknown-attributes)
+#add_cflags(-Wno-unused-command-line-argument)
+#add_cflags(-Wno-unknown-warning-option)
+#add_cflags(-Wno-visibility)
+add_cflags(-std=gnu99)
 
 ## sources for our main shadow program
 set(shadow_srcs

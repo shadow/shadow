@@ -1770,7 +1770,7 @@ ssize_t process_emu_recv(Process* proc, int fd, void *buf, size_t n, int flags) 
     return ret;
 }
 
-ssize_t process_emu_recvfrom(Process* proc, int fd, void *buf, size_t n, int flags, struct sockaddr* addr, socklen_t *restrict addr_len)  {
+ssize_t process_emu_recvfrom(Process* proc, int fd, void *buf, size_t n, int flags, struct sockaddr* addr, socklen_t *addr_len)  {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     gssize ret = 0;
     if(prevCTX == PCTX_PLUGIN) {

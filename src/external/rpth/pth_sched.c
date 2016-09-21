@@ -151,7 +151,8 @@ static int pth_sched_check_pth_events(pth_t t) {
             }
             /* Signal Set */
             else if (ev->ev_type == PTH_EVENT_SIGS) {
-                for (int sig = 1; sig < PTH_NSIG; sig++) {
+                int sig;
+                for (sig = 1; sig < PTH_NSIG; sig++) {
                     if (sigismember(ev->ev_args.SIGS.sigs, sig)) {
                         /* thread signal handling */
                         if (sigismember(&t->sigpending, sig)) {
@@ -224,7 +225,8 @@ static void pth_sched_eventmanager_async(pth_time_t *now) {
     int n_events_ready = pth_sc(epoll_wait)(pth_gctx_get()->main_efd, events_ready, 100, 0);
 
     /* mark events based on the status we got from epoll */
-    for(int i = 0; i < n_events_ready; i++) {
+    int i;
+    for(i = 0; i < n_events_ready; i++) {
         pth_event_t ev = (pth_event_t) events_ready[i].data.ptr;
         if(!ev) {
             continue;
