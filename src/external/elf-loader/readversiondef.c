@@ -21,6 +21,13 @@ int main (int argc, char *argv[])
     {
       exit (1);
     }
+
+  FILE* out = NULL;
+  if (argc > 2) {
+      out = fopen(argv[2], "w");
+  } else {
+      out = stdout;
+  }
   ElfW(Ehdr) *header = (ElfW(Ehdr) *)file;
   ElfW(Shdr) *sh = (ElfW(Shdr)*)(file + header->e_shoff);
   ElfW(Sym) *symtab = 0;
@@ -68,7 +75,7 @@ int main (int argc, char *argv[])
 	{
 	  continue;
 	}
-      printf ("%s {\n", strtab + first->vda_name);
+      fprintf (out, "%s {\n", strtab + first->vda_name);
       int has_one_symbol = 0;
       for (i = 0; i < n_symtab; i++)
 	{
@@ -82,9 +89,9 @@ int main (int argc, char *argv[])
 	      if (!has_one_symbol)
 		{
 		  has_one_symbol = 1;
-		  printf ("global:\n");
+		  fprintf (out, "global:\n");
 		}
-	      printf ("\t%s;\n", strtab + symtab[i].st_name);
+	      fprintf (out, "\t%s;\n", strtab + symtab[i].st_name);
 	    }
 	}
       if (cur->vd_cnt == 1)
@@ -92,18 +99,19 @@ int main (int argc, char *argv[])
 	  if (!local_passthru_printed)
 	    {
 	      local_passthru_printed = 1;
-	      printf ("local:*;\n};\n");
+	      fprintf (out, "local:*;\n};\n");
 	    }
 	  else
 	    {
-	      printf ("};\n");
+	      fprintf (out, "};\n");
 	    }
 	}
       else
 	{
 	  ElfW(Verdaux) *parent = (ElfW(Verdaux)*)(((unsigned long)first)+first->vda_next);
-	  printf ("} %s;\n", strtab + parent->vda_name);
+	  fprintf (out, "} %s;\n", strtab + parent->vda_name);
 	}
     }
+  fclose(out);
   return 0;
 }
