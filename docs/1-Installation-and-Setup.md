@@ -7,11 +7,13 @@ Shadow can either be run in a [traditional computing](#shadow-with-traditional-c
 **Required**:
   + gcc, gcc-c++
   + clang, llvm (version >= 3.2)
-  + glib (version >= 2.32.0)
+  + glib (version >= 2.32.0) (*)
   + igraph (version >= 0.5.4)
   + cmake (version >= 2.8.8)
   + make
   + xz-utils
+
+(*) on Ubuntu 14.04, you probably need to manually build glib; see https://github.com/shadow/shadow/issues/302#issuecomment-181906148
 
 **Recommended Python Modules** (for helper/analysis scripts):
   + python, numpy, scipy, matplotlib, networkx, lxml
