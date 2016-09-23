@@ -107,14 +107,15 @@ def main():
         default=0)
 
     args = parser.parse_args()
-    shdata, ftdata, tgendata, tordata = get_data(args.experiments, args.lineformats, args.skiptime, args.rskiptime)
+    tickdata, shdata, ftdata, tgendata, tordata = get_data(args.experiments, args.lineformats, args.skiptime, args.rskiptime)
 
     page = PdfPages("{0}shadow.results.pdf".format(args.prefix+'.' if args.prefix is not None else ''))
     # use a try block in case there are errors, the PDF will still be openable
     try:
+        if len(tickdata) > 0:
+            plot_shadow_time(tickdata, page)
+            plot_shadow_ram(tickdata, page)
         if len(shdata) > 0:
-            plot_shadow_time(shdata, page)
-            plot_shadow_ram(shdata, page)
             plot_shadow_packets(shdata, page, direction="recv")
             plot_shadow_packets(shdata, page, direction="send")
         if len(ftdata) > 0:
@@ -149,7 +150,7 @@ def plot_shadow_time(datasource, page):
 
     for (d, label, lineformat) in datasource:
         data = {}
-        for k in d['ticks'].keys(): data[int(k)] = float(d['ticks'][k]['time_seconds'])/3600.0
+        for k in d.keys(): data[int(k)] = float(d[k]['time_seconds'])/3600.0
         x = sorted(data.keys())
         y = [data[k] for k in x]
         pylab.plot(x, y, lineformat, label=label)
@@ -166,7 +167,7 @@ def plot_shadow_ram(datasource, page):
 
     for (d, label, lineformat) in datasource:
         data = {}
-        for k in d['ticks'].keys(): data[int(k)] = float(d['ticks'][k]['maxrss_gib'])
+        for k in d.keys(): data[int(k)] = float(d[k]['maxrss_gib'])
         x = sorted(data.keys())
         y = [data[k] for k in x]
         pylab.plot(x, y, lineformat, label=label)
@@ -179,11 +180,6 @@ def plot_shadow_ram(datasource, page):
     pylab.close()
 
 def plot_shadow_packets(datasource, page, direction="send"):
-    do_proceed = False
-    for (d, label, lineformat) in datasource:
-        if 'nodes' in d: do_proceed = True
-    if not do_proceed: return
-
     total_all_mafig, total_all_cdffig, total_each_cdffig = pylab.figure(), pylab.figure(), pylab.figure()
     data_all_mafig, data_all_cdffig, data_each_cdffig = pylab.figure(), pylab.figure(), pylab.figure()
     control_all_mafig, control_all_cdffig, control_each_cdffig = pylab.figure(), pylab.figure(), pylab.figure()
@@ -193,8 +189,6 @@ def plot_shadow_packets(datasource, page, direction="send"):
     fracretrans_all_mafig, fracretrans_all_cdffig, fracretrans_each_cdffig = pylab.figure(), pylab.figure(), pylab.figure()
 
     for (d, label, lineformat) in datasource:
-        if 'nodes' not in d: continue
-        d = d['nodes']
         total_all, data_all, control_all, retrans_all = {}, {}, {}, {}
         total_each, data_each, control_each, retrans_each = [], [], [], []
         fracdata_all, fraccontrol_all, fracretrans_all = {}, {}, {}
@@ -1033,7 +1027,7 @@ def plot_tor(data, page, direction="bytes_written"):
     del(eachcdffig)
 
 def get_data(experiments, lineformats, skiptime, rskiptime):
-    shdata, ftdata, tgendata, tordata = [], [], [], []
+    tickdata, shdata, ftdata, tgendata, tordata = [], [], [], [], []
     lflist = lineformats.strip().split(",")
 
     lfcycle = cycle(lflist)
@@ -1043,7 +1037,11 @@ def get_data(experiments, lineformats, skiptime, rskiptime):
         xzcatp = subprocess.Popen(["xzcat", log], stdout=subprocess.PIPE)
         data = json.load(xzcatp.stdout)
         data = prune_data(data, skiptime, rskiptime)
-        shdata.append((data, label, lfcycle.next()))
+        nextcycle = lfcycle.next()
+        if 'nodes' in data and len(data['nodes']) > 0:
+            shdata.append((data['nodes'], label, nextcycle))
+        if 'ticks' in data and len(data['ticks']) > 0:
+            tickdata.append((data['ticks'], label, nextcycle))
 
     lfcycle = cycle(lflist)
     for (path, label) in experiments:
@@ -1052,7 +1050,8 @@ def get_data(experiments, lineformats, skiptime, rskiptime):
         xzcatp = subprocess.Popen(["xzcat", log], stdout=subprocess.PIPE)
         data = json.load(xzcatp.stdout)
         data = prune_data(data, skiptime, rskiptime)
-        ftdata.append((data['nodes'], label, lfcycle.next()))
+        if 'nodes' in data and len(data['nodes']) > 0:
+            ftdata.append((data['nodes'], label, lfcycle.next()))
 
     lfcycle = cycle(lflist)
     for (path, label) in experiments:
@@ -1061,7 +1060,8 @@ def get_data(experiments, lineformats, skiptime, rskiptime):
         xzcatp = subprocess.Popen(["xzcat", log], stdout=subprocess.PIPE)
         data = json.load(xzcatp.stdout)
         data = prune_data(data, skiptime, rskiptime)
-        tgendata.append((data['nodes'], label, lfcycle.next()))
+        if 'nodes' in data and len(data['nodes']) > 0:
+            tgendata.append((data['nodes'], label, lfcycle.next()))
 
     lfcycle = cycle(lflist)
     for (path, label) in experiments:
@@ -1072,7 +1072,7 @@ def get_data(experiments, lineformats, skiptime, rskiptime):
         data = prune_data(data, skiptime, rskiptime)
         tordata.append((data['nodes'], label, lfcycle.next()))
 
-    return shdata, ftdata, tgendata, tordata
+    return tickdata, shdata, ftdata, tgendata, tordata
 
 def prune_data(data, skiptime, rskiptime):
     if skiptime == 0 and rskiptime == 0: return data
@@ -1101,8 +1101,11 @@ def prune_data(data, skiptime, rskiptime):
 
 # helper - compute the window_size moving average over the data in interval
 def movingaverage(interval, window_size):
-    window = numpy.ones(int(window_size))/float(window_size)
-    return numpy.convolve(interval, window, 'same')
+    if len(interval) > 0:
+        window = numpy.ones(int(window_size))/float(window_size)
+        return numpy.convolve(interval, window, 'same')
+    else:
+        return []
 
 ## helper - cumulative fraction for y axis
 def cf(d): return pylab.arange(1.0,float(len(d))+1.0)/float(len(d))
