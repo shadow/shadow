@@ -157,4 +157,9 @@ add_executable(display-relocs display-relocs.c)
 
 add_custom_target(elf-loader DEPENDS ldso vdl elfedit display-relocs)
 install(TARGETS elfedit display-relocs DESTINATION bin)
-install(TARGETS ldso vdl DESTINATION lib)
+install(TARGETS ldso vdl 
+        DESTINATION lib
+        PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ
+                    GROUP_EXECUTE GROUP_READ
+                    WORLD_EXECUTE WORLD_READ
+)
