@@ -201,7 +201,7 @@ void slave_addNewProgram(Slave* slave, const gchar* name, const gchar* path) {
         error("attempting to register 2 plugins with the same path."
               "this should have been caught by the configuration parser.");
     } else {
-        g_hash_table_replace(slave->programPaths, name, path);
+        g_hash_table_replace(slave->programPaths, g_strdup(name), g_strdup(path));
     }
 }
 

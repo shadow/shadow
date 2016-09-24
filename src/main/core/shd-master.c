@@ -4,6 +4,15 @@
  * See LICENSE for licensing information
  */
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
+#if !defined __USE_LARGEFILE64
+#define __USE_LARGEFILE64
+#endif
+#include <sys/stat.h>
+
 /* these are only avail in glib >= 2.30, needed for signals */
 #include <glib-unix.h>
 #include <signal.h>

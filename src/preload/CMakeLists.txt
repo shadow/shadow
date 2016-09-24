@@ -3,7 +3,7 @@ find_package(GLIB REQUIRED)
 find_package(IGRAPH REQUIRED)
 include_directories(${IGRAPH_INCLUDES} ${GLIB_INCLUDES})
 
-add_cflags(-Wno-invalid-noreturn)
+#add_cflags(-Wno-invalid-noreturn)
 
 ## build the required library for intercepting system and library calls.
 ## create the interpose library, to be set as LD_PRELOAD to intercept functions.

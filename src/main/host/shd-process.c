@@ -1096,7 +1096,7 @@ static gint _process_emu_fcntlHelper(Process* proc, int fd, int cmd, void* argp)
         if (cmd == F_GETFL) {
             result = descriptor_getFlags(descriptor);
         } else if (cmd == F_SETFL) {
-            gint flags = (gint)argp;
+            gint flags = GPOINTER_TO_INT(argp);
             descriptor_setFlags(descriptor, flags);
         }
     } else {
@@ -2173,7 +2173,7 @@ ssize_t process_emu_readv(Process* proc, int fd, const struct iovec *iov, int io
                     for (i = 0; i < iovcnt; i++) {
                         size_t bytesRemaining = (size_t) (totalBytesRead - bytesCopied);
                         size_t bytesToCopy = MIN(bytesRemaining, iov[i].iov_len);
-                        g_memmove(iov[i].iov_base, &tempBuffer[bytesCopied], bytesToCopy);
+                        g_memmove(iov[i].iov_base, tempBuffer+bytesCopied, bytesToCopy);
                         bytesCopied += bytesToCopy;
                     }
                 }
@@ -2224,7 +2224,7 @@ ssize_t process_emu_writev(Process* proc, int fd, const struct iovec *iov, int i
                 void* tempBuffer = g_malloc0(totalIOLength);
                 size_t bytesCopied = 0;
                 for(i = 0; i < iovcnt; i++) {
-                    g_memmove(&tempBuffer[bytesCopied], iov[i].iov_base, iov[i].iov_len);
+                    g_memmove(tempBuffer+bytesCopied, iov[i].iov_base, iov[i].iov_len);
                     bytesCopied += iov[i].iov_len;
                 }
 

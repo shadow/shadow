@@ -14,8 +14,6 @@
 #if !defined __USE_LARGEFILE64
 #define __USE_LARGEFILE64
 typedef off_t off64_t;
-//typedef struct statfs statfs64;
-//typedef struct stat stat64;
 #endif
 
 //#if !defined _LARGEFILE_SOURCE

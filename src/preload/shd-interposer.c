@@ -1300,7 +1300,18 @@ INTERPOSE(int srandom_r(unsigned int a, struct random_data *b), srandom_r, a, b)
 
 /* exit family */
 
-INTERPOSE_NORET(void exit(int a), exit, a);
+void exit(int a) {
+    Process* proc = NULL;
+    if((proc = _doEmulate()) != NULL) {
+        process_emu_exit(proc, a);
+    } else {
+        ENSURE(exit);
+        director.next.exit(a);
+    }
+    abort();
+}
+//INTERPOSE_NORET(void exit(int a), exit, a);
+
 INTERPOSE(int on_exit(void (*a)(int , void *), void *b), on_exit, a, b);
 INTERPOSE(int atexit(void (*a)(void)), atexit, a);
 INTERPOSE(int __cxa_atexit(void (*a) (void *), void *b, void *c), __cxa_atexit, a, b, c);
@@ -1339,12 +1350,23 @@ INTERPOSE(pthread_t pthread_self(void), pthread_self);
 INTERPOSE(int pthread_equal(pthread_t a, pthread_t b), pthread_equal, a, b);
 INTERPOSE(int pthread_yield(void), pthread_yield);
 INTERPOSE(int pthread_yield_np(void), pthread_yield_np);
-INTERPOSE_NORET(void pthread_exit(void *a), pthread_exit, a);
 INTERPOSE(int pthread_join(pthread_t a, void **b), pthread_join, a, b);
 INTERPOSE(int pthread_once(pthread_once_t *a, void (*b)(void)), pthread_once, a, b);
 INTERPOSE(int pthread_sigmask(int a, const sigset_t *b, sigset_t *c), pthread_sigmask, a, b, c);
 INTERPOSE(int pthread_kill(pthread_t a, int b), pthread_kill, a, b);
 INTERPOSE(int pthread_abort(pthread_t a), pthread_abort, a);
+
+void pthread_exit(void* a) {
+    Process* proc = NULL;
+    if((proc = _doEmulate()) != NULL) {
+        process_emu_pthread_exit(proc, a);
+    } else {
+        ENSURE(pthread_exit);
+        director.next.pthread_exit(a);
+    }
+    abort();
+}
+//INTERPOSE_NORET(void pthread_exit(void *a), pthread_exit, a);
 
 /* concurrency */
 

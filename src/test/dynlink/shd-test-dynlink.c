@@ -41,6 +41,7 @@
 typedef int (*MainFunc)(int argc, char* argv[]);
 
 int global_num_dlmopens = 0;
+long unsigned int global_link_counter = 0;
 
 static void _test_print_tls_size(void* handle) {
     /* print the size of the buffer allocated for the TLS block */
@@ -159,27 +160,26 @@ int _test_linker_loader_single(int use_dlmopen) {
     }
 }
 
+#include <glib.h>
+#include <glib/gstdio.h>
+
 static char* _get_temp_hard_link(const char* path) {
-    char temp_path[256];
-    memset(temp_path, 0, 256);
+    GString* s = g_string_new(NULL);
+    g_string_append_printf(s, "temp-%09lu-%s", ++global_link_counter, path);
 
-    // XXX not supposed to use tmpnam to get pathnames, since the path could
-    // no longer be unique and empty by the time we use it
-    char* p = tmpnam_r(temp_path);
-    if(!p) {
-        return NULL;
-    }
+    char* p = s->str;
+    g_string_free(s, 0);
 
-    fprintf(stdout, "tmpnam returned path %s\n", p);
+    fprintf(stdout, "created path for link at %s\n", p);
 
     if(link(path, p) == 0) {
-        return strndup(p, (size_t)255);
+        return p;
     } else {
+        g_free(p);
         return NULL;
     }
 }
 
-#include <glib/gstdio.h>
 gboolean _test_copy(const gchar* source, const gchar* destination) {
     gchar* content;
     gsize length;
@@ -377,7 +377,15 @@ int test_dynlink_dlmopen_extended() {
 }
 
 int test_dynlink_run() {
-    return test_dynlink_dlmopen();
+    if(test_dynlink_dlmopen() != EXIT_SUCCESS) {
+        return EXIT_FAILURE;
+    }
+
+//    if(test_dynlink_dlmopen_extended() != EXIT_SUCCESS) {
+//        return EXIT_FAILURE;
+//    }
+
+    return EXIT_SUCCESS;
 }
 
 //#include <pthread.h>

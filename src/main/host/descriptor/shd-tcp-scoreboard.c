@@ -204,7 +204,8 @@ TCPProcessFlags scoreboard_update(ScoreBoard* scoreboard, GList* selectiveACKs, 
 
         /* go through all sequence that might be sacked and update scoreboard */
         for(gint seq = firstSeq; seq <= lastSeq; seq++) {
-            gboolean sacked = (gboolean)g_list_find(selectiveACKs, GINT_TO_POINTER(seq));
+            GList* findResult = g_list_find(selectiveACKs, GINT_TO_POINTER(seq));
+            gboolean sacked = findResult ? TRUE : FALSE;
             BlockStatus status = (sacked ? BLOCK_STATUS_SACKED : BLOCK_STATUS_INFLIGHT);
 
             ScoreBoardBlock* block = _scoreboard_findBlock(scoreboard, seq);
