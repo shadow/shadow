@@ -140,7 +140,7 @@ static ElfW(Sym) *update_match (unsigned long addr,
     }
   // this symbol includes the target address
   // is it better than the current match ?
-  if (match != 0 || (match->st_size < candidate->st_size))
+  if (match != 0 && (match->st_size < candidate->st_size))
     {
       // not better.
       return match;
