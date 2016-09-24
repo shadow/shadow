@@ -304,3 +304,27 @@ gchar* utility_getNewTemporaryFilename(const gchar* templateStr) {
     g_unlink(temporaryFilename);
     return temporaryFilename;
 }
+
+gboolean utility_copyFile(const gchar* fromPath, const gchar* toPath) {
+    gchar* contents = NULL;
+    gsize length = 0;
+    GError* error = NULL;
+
+    /* get the original file */
+    if(!g_file_get_contents(fromPath, &contents, &length, &error)) {
+        error("unable to read '%s' for copying: %s", fromPath, error->message);
+        return FALSE;
+    }
+    error = NULL;
+
+    /* copy to the new file */
+    if(!g_file_set_contents(toPath, contents, (gssize)length, &error)) {
+        error("unable to write private copy of '%s' to '%s': %s",
+                fromPath, toPath, error->message);
+        return FALSE;
+    }
+
+    /* ok, our private copy was created, cleanup */
+    g_free(contents);
+    return TRUE;
+}

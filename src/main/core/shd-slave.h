@@ -38,7 +38,6 @@ guint32 slave_getNodeBandwidthUp(Slave* slave, GQuark nodeID, in_addr_t ip);
 guint32 slave_getNodeBandwidthDown(Slave* slave, GQuark nodeID, in_addr_t ip);
 gdouble slave_getLatency(Slave* slave, GQuark sourceNodeID, GQuark destinationNodeID);
 Options* slave_getOptions(Slave* slave);
-Program* slave_getProgram(Slave* slave, GQuark pluginID);
 
 void slave_incrementPluginError(Slave* slave);
 const gchar* slave_getHostsRootPath(Slave* slave);

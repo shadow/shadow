@@ -39,9 +39,6 @@ gboolean worker_isFiltered(LogLevel level);
 void worker_bootHosts(GList* hosts);
 void worker_freeHosts(GList* hosts);
 
-Program* worker_getProgram(GQuark pluginID);
-Program* worker_getPrivateProgram(GQuark pluginID);
-
 Host* worker_getActiveHost();
 void worker_setActiveHost(Host* host);
 Process* worker_getActiveProcess();

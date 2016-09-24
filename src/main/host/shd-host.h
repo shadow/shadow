@@ -49,8 +49,8 @@ void host_unlock(Host* host);
 
 void host_boot(Host* host);
 
-void host_addApplication(Host* host, GQuark pluginID,
-        SimulationTime startTime, SimulationTime stopTime, gchar* arguments);
+void host_addApplication(Host* host, SimulationTime startTime, SimulationTime stopTime,
+        const gchar* pluginName, const gchar* pluginPath, gchar* arguments);
 void host_freeAllApplications(Host* host);
 
 gint host_compare(gconstpointer a, gconstpointer b, gpointer user_data);

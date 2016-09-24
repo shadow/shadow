@@ -24,8 +24,8 @@ struct _Slave {
     /* the parallel event/host/thread scheduler */
     Scheduler* scheduler;
 
-    /* the program code that is run by virtual processes */
-    GHashTable* programs;
+    /* paths to programs (i.e. shadow plug-ins) that are run by virtual processes */
+    GHashTable* programPaths;
 
     GMutex lock;
     GMutex pluginInitLock;
@@ -94,7 +94,7 @@ Slave* slave_new(Master* master, Options* options, SimulationTime endTime, guint
     }
 
     /* we will store the plug-in programs that are loaded */
-    slave->programs = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, (GDestroyNotify)program_free);
+    slave->programPaths = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
 
     /* the main scheduler may utilize multiple threads */
 
@@ -139,7 +139,7 @@ gint slave_free(Slave* slave) {
         scheduler_unref(slave->scheduler);
     }
 
-    g_hash_table_destroy(slave->programs);
+    g_hash_table_destroy(slave->programPaths);
 
     g_mutex_clear(&(slave->lock));
     g_mutex_clear(&(slave->pluginInitLock));
@@ -195,14 +195,14 @@ gdouble slave_nextRandomDouble(Slave* slave) {
 void slave_addNewProgram(Slave* slave, const gchar* name, const gchar* path) {
     MAGIC_ASSERT(slave);
 
-    /* we need a copy of the library for every thread because each of
-     * them needs a separate instance of all the plug-in state so it doesn't
-     * overlap. We'll do this lazily while booting up applications, since that
-     * event will be run by a worker. For now, we just track the default
-     * original plug-in library, so the worker can copy it later.
-     */
-    Program* prog = program_new(name, path);
-    g_hash_table_insert(slave->programs, program_getID(prog), prog);
+    /* store the path to the plugin with the given name, so that we can retrieve
+     * the path later when hosts' processes want to load it */
+    if(g_hash_table_lookup(slave->programPaths, name) != NULL) {
+        error("attempting to register 2 plugins with the same path."
+              "this should have been caught by the configuration parser.");
+    } else {
+        g_hash_table_replace(slave->programPaths, name, path);
+    }
 }
 
 void slave_addNewVirtualHost(Slave* slave, HostParameters* params) {
@@ -222,15 +222,14 @@ void slave_addNewVirtualProcess(Slave* slave, gchar* hostName, gchar* pluginName
 
     /* quarks are unique per process, so do the conversion here */
     GQuark hostID = g_quark_from_string(hostName);
-    GQuark pluginID = g_quark_from_string(pluginName);
+
+    gchar* pluginPath = g_hash_table_lookup(slave->programPaths, pluginName);
+    if(pluginPath == NULL) {
+        error("plugin path not found for name '%s'. this should be verified in the config parser", pluginName);
+    }
 
     Host* host = scheduler_getHost(slave->scheduler, hostID);
-    host_addApplication(host, pluginID, startTime, stopTime, arguments);
-}
-
-Program* slave_getProgram(Slave* slave, GQuark pluginID) {
-    MAGIC_ASSERT(slave);
-    return g_hash_table_lookup(slave->programs, &pluginID);
+    host_addApplication(host, startTime, stopTime, pluginName, pluginPath, arguments);
 }
 
 DNS* slave_getDNS(Slave* slave) {

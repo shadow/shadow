@@ -37,6 +37,7 @@ gboolean utility_copyAll(const gchar* srcPath, const gchar* dstPath);
 
 GString* utility_getFileContents(const gchar* fileName);
 gchar* utility_getNewTemporaryFilename(const gchar* templateStr);
+gboolean utility_copyFile(const gchar* fromPath, const gchar* toPath);
 
 void utility_handleError(const gchar* file, gint line, const gchar* funtcion, const gchar* message);
 

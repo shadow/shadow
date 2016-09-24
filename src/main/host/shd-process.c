@@ -115,15 +115,12 @@ struct _Process {
     Host* host;
 
     /* unique id of the program that this process should run */
-    GQuark programID;
     guint processID;
     FILE* stdoutFile;
     FILE* stderrFile;
 
     /* the shadow plugin executable */
     Program* prog;
-    /* the portable program state this process uses when executing the program */
-    ProgramState pstate;
     /* the portable thread state this process uses when executing the program */
     pth_gctx_t tstate;
     /* the main fd used to wait for notifications from shadow */
@@ -205,8 +202,9 @@ static ProcessContext _process_changeContext(Process* proc, ProcessContext from,
     return prevContext;
 }
 
-Process* process_new(gpointer host, GQuark programID, guint processID,
-        SimulationTime startTime, SimulationTime stopTime, gchar* arguments) {
+Process* process_new(gpointer host, guint processID,
+        SimulationTime startTime, SimulationTime stopTime,
+        const gchar* pluginName, const gchar* pluginPath, gchar* arguments) {
     Process* proc = g_new0(Process, 1);
     MAGIC_INIT(proc);
 
@@ -215,8 +213,8 @@ Process* process_new(gpointer host, GQuark programID, guint processID,
         host_ref(proc->host);
     }
 
-    proc->programID = programID;
     proc->processID = processID;
+    proc->prog = program_new(pluginName, pluginPath);
 
     proc->startTime = startTime;
     proc->stopTime = stopTime;
@@ -284,7 +282,7 @@ static void _process_free(Process* proc) {
 static FILE* _process_openFile(Process* proc, const gchar* prefix) {
     const gchar* hostDataPath = host_getDataPath(proc->host);
     GString* fileNameString = g_string_new(NULL);
-    g_string_printf(fileNameString, "%s-%s-%u.log", prefix, g_quark_to_string(proc->programID), proc->processID);
+    g_string_printf(fileNameString, "%s-%s-%u.log", prefix, program_getName(proc->prog), proc->processID);
     gchar* pathStr = g_build_filename(hostDataPath, fileNameString->str, NULL);
     FILE* f = g_fopen(pathStr, "a");
     g_string_free(fileNameString, TRUE);
@@ -295,11 +293,11 @@ static FILE* _process_openFile(Process* proc, const gchar* prefix) {
         }
         GString* stringBuffer = g_string_new(NULL);
         g_string_printf(stringBuffer, "process '%s-%u': unable to open file '%s', error was: %s",
-                g_quark_to_string(proc->programID), proc->processID, pathStr, g_strerror(errno));
+                program_getName(proc->prog), proc->processID, pathStr, g_strerror(errno));
         g_queue_push_tail(proc->cachedWarningMessages, g_string_free(stringBuffer, FALSE));
 
 //        warning("process '%s-%u': unable to open file '%s', error was: %s",
-//                g_quark_to_string(proc->programID), proc->processID, pathStr, g_strerror(errno));
+//                program_getName(proc->prog), proc->processID, pathStr, g_strerror(errno));
     }
     g_free(pathStr);
     return f;
@@ -319,7 +317,7 @@ static FILE* _process_getIOFile(Process* proc, gint fd){
                 }
                 GString* stringBuffer = g_string_new(NULL);
                 g_string_printf(stringBuffer, "process '%s-%u': unable to open file for process output, dumping to tty stdout",
-                    g_quark_to_string(proc->programID), proc->processID);
+                    program_getName(proc->prog), proc->processID);
                 g_queue_push_tail(proc->cachedWarningMessages, g_string_free(stringBuffer, FALSE));
 
                 /* now set shadows stdout */
@@ -337,7 +335,7 @@ static FILE* _process_getIOFile(Process* proc, gint fd){
                 }
                 GString* stringBuffer = g_string_new(NULL);
                 g_string_printf(stringBuffer, "process '%s-%u': unable to open file for process errors, dumping to tty stderr",
-                        g_quark_to_string(proc->programID), proc->processID);
+                        program_getName(proc->prog), proc->processID);
                 g_queue_push_tail(proc->cachedWarningMessages, g_string_free(stringBuffer, FALSE));
 
                 /* now set shadows stderr */
@@ -361,7 +359,7 @@ static gint _process_getArguments(Process* proc, gchar** argvOut[]) {
     GQueue *arguments = g_queue_new();
 
     /* first argument is the name of the program */
-    const gchar* pluginName = g_quark_to_string(proc->programID);
+    const gchar* pluginName = program_getName(proc->prog);
     g_queue_push_tail(arguments, g_strdup(pluginName));
 
     /* parse the full argument string into separate strings */
@@ -478,7 +476,7 @@ static void _process_executeCleanup(Process* proc) {
     gint numThreads = proc->programAuxiliaryThreads ? g_queue_get_length(proc->programAuxiliaryThreads) : 0;
     gint numExitFuncs = proc->atExitFunctions ? g_queue_get_length(proc->atExitFunctions) : 0;
     message("cleaning up '%s-%u' process: aborting %u auxiliary threads and calling %u atexit functions",
-            g_quark_to_string(proc->programID), proc->processID, numThreads, numExitFuncs);
+            program_getName(proc->prog), proc->processID, numThreads, numExitFuncs);
 
     /* closing the main thread causes all other threads to get terminated */
     if(proc->programAuxiliaryThreads != NULL) {
@@ -554,7 +552,7 @@ static void _process_logReturnCode(Process* proc, gint code) {
     GString* mainResultString = g_string_new(NULL);
     g_string_printf(mainResultString, "main %s code '%i' for process '%s-%u'",
             ((code==0) ? "success" : "error"),
-            code, g_quark_to_string(proc->programID), proc->processID);
+            code, program_getName(proc->prog), proc->processID);
 
     if(code == 0) {
         message("%s", mainResultString->str);
@@ -587,7 +585,7 @@ static void* _process_executeMain(Process* proc) {
     /* get arguments from the program we will run */
     proc->argc = _process_getArguments(proc, &proc->argv);
 
-    message("calling main() for '%s-%u' process", g_quark_to_string(proc->programID), proc->processID);
+    message("calling main() for '%s-%u' process", program_getName(proc->prog), proc->processID);
 
     /* time how long we execute the program */
     g_timer_start(proc->cpuDelayTimer);
@@ -654,22 +652,19 @@ static void _process_start(Process* proc) {
         return;
     }
 
-    message("starting '%s-%u' process and pth threading system", g_quark_to_string(proc->programID), proc->processID);
+    message("starting '%s-%u' process and pth threading system", program_getName(proc->prog), proc->processID);
 
     /* create the thread names while still in shadow context, format is host.process.<id> */
     GString* shadowThreadNameBuf = g_string_new(NULL);
-    g_string_printf(shadowThreadNameBuf, "%s.%s.%u.shadow", host_getName(proc->host), g_quark_to_string(proc->programID), proc->processID);
+    g_string_printf(shadowThreadNameBuf, "%s.%s.%u.shadow", host_getName(proc->host), program_getName(proc->prog), proc->processID);
     GString* programMainThreadNameBuf = g_string_new(NULL);
-    g_string_printf(programMainThreadNameBuf, "%s.%s.%u.main", host_getName(proc->host), g_quark_to_string(proc->programID), proc->processID);
+    g_string_printf(programMainThreadNameBuf, "%s.%s.%u.main", host_getName(proc->host), program_getName(proc->prog), proc->processID);
 
     utility_assert(proc->programAuxiliaryThreads == NULL);
     proc->programAuxiliaryThreads = g_queue_new();
 
-    /* need to get thread-private program from current worker */
-    proc->prog = worker_getPrivateProgram(proc->programID);
-
-    /* create our default state as we run in our assigned worker */
-    proc->pstate = program_newDefaultState(proc->prog);
+    /* make sure the program is loaded */
+    program_load(proc->prog);
 
     /* ref for the spawn below */
     process_ref(proc);
@@ -680,7 +675,7 @@ static void _process_start(Process* proc) {
 
     /* now we will execute in the pth/plugin context, so we need to load the state */
     worker_setActiveProcess(proc);
-    program_swapInState(proc->prog, proc->pstate);
+    program_setExecuting(proc->prog, TRUE);
     _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
 
     /* create a new global context for this process, 0 means it should never block */
@@ -732,7 +727,7 @@ static void _process_start(Process* proc) {
 
     /* the main function finished or blocked somewhere and we are back in shadow land */
     _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
-    program_swapOutState(proc->prog, proc->pstate);
+    program_setExecuting(proc->prog, FALSE);
     worker_setActiveProcess(NULL);
 
     /* XXX temporary tor process init hack */
@@ -741,7 +736,7 @@ static void _process_start(Process* proc) {
     /* the main thread wont exist if it exited immediately before returning control to shadow */
     if(proc->programMainThread) {
         message("'%s-%u' process initialization is complete, main thread %s running",
-                g_quark_to_string(proc->programID), proc->processID, process_isRunning(proc) ? "is" : "is not");
+                program_getName(proc->prog), proc->processID, process_isRunning(proc) ? "is" : "is not");
     } else {
         _process_logReturnCode(proc, proc->returnCode);
 
@@ -750,11 +745,10 @@ static void _process_start(Process* proc) {
         proc->tstate = NULL;
 
         /* free our copy of plug-in resources, and other application state */
-        program_freeState(proc->prog, proc->pstate);
-        proc->pstate = NULL;
+        program_unload(proc->prog);
         utility_assert(!process_isRunning(proc));
 
-        info("'%s-%u' has completed or is otherwise no longer running", g_quark_to_string(proc->programID), proc->processID);
+        info("'%s-%u' has completed or is otherwise no longer running", program_getName(proc->prog), proc->processID);
     }
 
     if(proc->stdoutFile) {
@@ -780,12 +774,12 @@ void process_continue(Process* proc) {
         return;
     }
 
-    info("switching to rpth to continue '%s-%u' process/threads", g_quark_to_string(proc->programID), proc->processID);
+    info("switching to rpth to continue '%s-%u' process/threads", program_getName(proc->prog), proc->processID);
 
     /* there is some i/o or event available, let pth handle it
      * we will execute in the pth/plugin context, so we need to load the state */
     worker_setActiveProcess(proc);
-    program_swapInState(proc->prog, proc->pstate);
+    program_setExecuting(proc->prog, TRUE);
     _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
 
     /* we are in pth land, load in the pth state for this process */
@@ -821,7 +815,7 @@ void process_continue(Process* proc) {
 
     /* the pth threads finished or blocked somewhere and we are back in shadow land */
     _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
-    program_swapOutState(proc->prog, proc->pstate);
+    program_setExecuting(proc->prog, FALSE);
     worker_setActiveProcess(NULL);
 
     if(proc->cachedWarningMessages) {
@@ -829,17 +823,16 @@ void process_continue(Process* proc) {
     }
 
     if(proc->programMainThread) {
-        info("'%s-%u' is running, but threads are blocked waiting for events", g_quark_to_string(proc->programID), proc->processID);
+        info("'%s-%u' is running, but threads are blocked waiting for events", program_getName(proc->prog), proc->processID);
     } else {
         /* pth should have had no remaining alive threads except the one shadow was running in */
         utility_assert(nThreads == 1);
 
         /* free our copy of plug-in resources, and other application state */
-        program_freeState(proc->prog, proc->pstate);
-        proc->pstate = NULL;
+        program_unload(proc->prog);
         utility_assert(!process_isRunning(proc));
 
-        info("'%s-%u' has completed or is otherwise no longer running", g_quark_to_string(proc->programID), proc->processID);
+        info("'%s-%u' has completed or is otherwise no longer running", program_getName(proc->prog), proc->processID);
     }
 }
 
@@ -860,10 +853,10 @@ static void _process_stop(Process* proc) {
         return;
     }
 
-    message("terminating main thread of '%s-%u' process", g_quark_to_string(proc->programID), proc->processID);
+    message("terminating main thread of '%s-%u' process", program_getName(proc->prog), proc->processID);
 
     worker_setActiveProcess(proc);
-    program_swapInState(proc->prog, proc->pstate);
+    program_setExecuting(proc->prog, TRUE);
     _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
 
     /* we are in pth land, load in the pth state for this process */
@@ -885,12 +878,11 @@ static void _process_stop(Process* proc) {
 
     /* the pth threads finished or blocked somewhere and we are back in shadow land */
     _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
-    program_swapOutState(proc->prog, proc->pstate);
+    program_setExecuting(proc->prog, FALSE);
     worker_setActiveProcess(NULL);
 
     /* free our copy of plug-in resources, and other application state */
-    program_freeState(proc->prog, proc->pstate);
-    proc->pstate = NULL;
+    program_unload(proc->prog);
 }
 
 static void _process_runStartTask(Process* proc, gpointer nothing) {
@@ -941,7 +933,7 @@ void process_unref(Process* proc) {
 
 gboolean process_isRunning(Process* proc) {
     MAGIC_ASSERT(proc);
-    return ((proc->pstate != NULL) && (proc->tstate != NULL)) ? TRUE : FALSE;
+    return (proc->tstate != NULL) ? TRUE : FALSE;
 }
 
 gboolean process_shouldEmulate(Process* proc) {
@@ -4529,7 +4521,7 @@ int process_emu_pthread_create(Process* proc, pthread_t *thread, const pthread_a
                 _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
                 GString* programAuxThreadNameBuf = g_string_new(NULL);
                 g_string_printf(programAuxThreadNameBuf, "%s.%s.aux%i", host_getName(proc->host),
-                        g_quark_to_string(proc->programID), proc->programAuxiliaryThreadCounter++);
+                        program_getName(proc->prog), proc->programAuxiliaryThreadCounter++);
                 _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
 
                 pth_attr_t defaultAttr = pth_attr_new();

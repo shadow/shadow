@@ -21,9 +21,6 @@ struct _Worker {
      * the source is seeded by the master random source. */
     Random* random;
 
-    /* all plugin programs that have been loaded by this worker */
-    GHashTable* privatePrograms;
-
     /* timing information tracked by this worker */
     struct {
         SimulationTime now;
@@ -74,9 +71,6 @@ static Worker* _worker_new(Slave* slave, guint threadID) {
     worker->clock.last = SIMTIME_INVALID;
     worker->clock.barrier = SIMTIME_INVALID;
 
-    /* each worker needs a private copy of each plug-in library */
-    worker->privatePrograms = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, (GDestroyNotify)program_free);
-
     g_private_replace(&workerKey, worker);
 
     return worker;
@@ -84,9 +78,6 @@ static Worker* _worker_new(Slave* slave, guint threadID) {
 
 static void _worker_free(Worker* worker) {
     MAGIC_ASSERT(worker);
-
-    /* calls the destroy functions we specified in g_hash_table_new_full */
-    g_hash_table_destroy(worker->privatePrograms);
 
     MAGIC_CLEAR(worker);
     g_private_set(&workerKey, NULL);
@@ -118,25 +109,6 @@ Topology* worker_getTopology() {
 Options* worker_getOptions() {
     Worker* worker = _worker_getPrivate();
     return slave_getOptions(worker->slave);
-}
-
-Program* worker_getPrivateProgram(GQuark pluginID) {
-    /* worker has a private plug-in for each plugin ID */
-    Worker* worker = _worker_getPrivate();
-    Program* privateProg = g_hash_table_lookup(worker->privatePrograms, &pluginID);
-    if(!privateProg) {
-        /* plug-in has yet to be loaded by this worker. do that now. this call
-         * will copy the plug-in library to the temporary directory, and open
-         * that so each thread can execute in its own memory space.
-         */
-        Program* prog = slave_getProgram(worker->slave, pluginID);
-        privateProg = program_getTemporaryCopy(prog);
-        g_hash_table_replace(worker->privatePrograms, program_getID(privateProg), privateProg);
-    }
-
-    debug("worker %u using plug-in at %p", worker->threadID, privateProg);
-
-    return privateProg;
 }
 
 /* this is the entry point for worker threads when running in parallel mode,
@@ -361,11 +333,6 @@ gdouble worker_getLatency(GQuark sourceNodeID, GQuark destinationNodeID) {
 gint worker_getThreadID() {
     Worker* worker = _worker_getPrivate();
     return worker->threadID;
-}
-
-Program* worker_getProgram(GQuark pluginID) {
-    Worker* worker = _worker_getPrivate();
-    return slave_getProgram(worker->slave, pluginID);
 }
 
 void worker_updateMinTimeJump(gdouble minPathLatency) {

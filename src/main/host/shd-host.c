@@ -240,11 +240,11 @@ void host_boot(Host* host) {
                 host->params.cpuFrequency, host->params.cpuThreshold, host->params.cpuPrecision);
 }
 
-void host_addApplication(Host* host, GQuark pluginID,
-        SimulationTime startTime, SimulationTime stopTime, gchar* arguments) {
+void host_addApplication(Host* host, SimulationTime startTime, SimulationTime stopTime,
+        const gchar* pluginName, const gchar* pluginPath, gchar* arguments) {
     MAGIC_ASSERT(host);
     guint processID = host->processIDCounter++;
-    Process* proc = process_new(host, pluginID, processID, startTime, stopTime, arguments);
+    Process* proc = process_new(host, processID, startTime, stopTime, pluginName, pluginPath, arguments);
     g_queue_push_tail(host->processes, proc);
 }
 

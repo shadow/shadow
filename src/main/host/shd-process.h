@@ -11,6 +11,21 @@
 #define _GNU_SOURCE
 #endif
 
+#if !defined __USE_LARGEFILE64
+#define __USE_LARGEFILE64
+typedef off_t off64_t;
+//typedef struct statfs statfs64;
+//typedef struct stat stat64;
+#endif
+
+//#if !defined _LARGEFILE_SOURCE
+//#define _LARGEFILE_SOURCE
+//#endif
+//
+//#if !defined _LARGEFILE64_SOURCE
+//#define _LARGEFILE64_SOURCE
+//#endif
+
 #include <sys/vfs.h>
 #include <sys/stat.h>
 #include <sys/statfs.h>
@@ -58,14 +73,9 @@
 
 #include "shadow.h"
 
-#if !defined __USE_LARGEFILE64
-typedef off_t off64_t;
-//typedef struct statfs statfs64;
-//typedef struct stat stat64;
-#endif
-
-Process* process_new(gpointer host, GQuark programID, guint processID,
-        SimulationTime startTime, SimulationTime stopTime, gchar* arguments);
+Process* process_new(gpointer host, guint processID,
+        SimulationTime startTime, SimulationTime stopTime,
+        const gchar* pluginName, const gchar* pluginPath, gchar* arguments);
 void process_ref(Process* proc);
 void process_unref(Process* proc);
 
