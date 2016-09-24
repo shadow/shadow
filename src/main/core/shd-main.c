@@ -41,6 +41,21 @@ static gboolean _main_checkPreloadEnvironment(gchar** envlist) {
     return found;
 }
 
+static gboolean _main_checkStaticTLSEnvironment(gchar** envlist) {
+    const gchar* ldStaticTLSValue = g_environ_getenv(envlist, "LD_STATIC_TLS_EXTRA");
+    if(!ldStaticTLSValue) {
+        /* LD_STATIC_TLS_EXTRA contains nothing */
+        return FALSE;
+    }
+
+    guint64 tlsSize = g_ascii_strtoull(ldStaticTLSValue, NULL, 10);
+    if(tlsSize > 0) {
+        return TRUE;
+    } else {
+        return FALSE;
+    }
+}
+
 static gchar* _main_getRPath() {
     const ElfW(Dyn) *dyn = _DYNAMIC;
     const ElfW(Dyn) *rpath = NULL;
@@ -132,6 +147,7 @@ static gchar** _main_getSpawnEnviroment(const gchar* preloadHint, gboolean valgr
      * envlist = g_environ_setenv(envlist, "G_SLICE", "debug-blocks", 0);
      */
 
+    envlist = g_environ_setenv(envlist, "LD_STATIC_TLS_EXTRA", "10240000", 0);
     envlist = g_environ_setenv(envlist, "SHADOW_SPAWNED", "TRUE", 1);
     return envlist;
 }
@@ -206,6 +222,7 @@ gint shadow_main(gint argc, gchar* argv[]) {
     /* check environment for LD_PRELOAD */
     gchar** envlist = g_get_environ();
     gboolean preloadSuccess = _main_checkPreloadEnvironment(envlist);
+    gboolean staticTLSSuccess = _main_checkStaticTLSEnvironment(envlist);
     g_strfreev(envlist);
     gboolean respawned = g_getenv("SHADOW_SPAWNED") != NULL ? TRUE : FALSE;
 
@@ -216,6 +233,10 @@ gint shadow_main(gint argc, gchar* argv[]) {
             g_printerr("** Environment Check Failed: LD_PRELOAD does not contain an absolute path to "INTERPOSELIBSTR"\n");
             return -1;
         }
+        if(!staticTLSSuccess) {
+            g_printerr("** Environment Check Failed: LD_STATIC_TLS_EXTRA does not contain a nonzero value\n");
+            return -1;
+        }
         /* NOTE: we ignore valgrind and preload options during the respawn */
     } else {
         /* if preload is not set, or the user added a preload library,
@@ -223,7 +244,7 @@ gint shadow_main(gint argc, gchar* argv[]) {
         gboolean runValgrind = options_doRunValgrind(options);
         const gchar* preloadStr = options_getPreloadString(options);
 
-        if(preloadStr || runValgrind || !preloadSuccess) {
+        if(preloadStr || runValgrind || !preloadSuccess || !staticTLSSuccess) {
             gchar** envlist = _main_getSpawnEnviroment(preloadStr, runValgrind);
             gchar* cmds = g_strjoinv(" ", argv);
             gchar** cmdv = g_strsplit(cmds, " ", 0);
