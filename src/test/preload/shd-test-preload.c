@@ -17,18 +17,20 @@ int run_test(void) {
     time_t t;
 
     t = time(NULL);
-    printf("first time() called = %i\n", (int)t);
+    printf("first time() called, result = %i, expected = -666666\n", (int)t);
 
     if(t != (time_t) -666666) {
-        /* it was intercepted */
+        /* it was not intercepted */
+        printf("test failed because time() was not properly intercepted\n");
         return EXIT_FAILURE;
     }
 
     t = time(NULL);
-    printf("second time() called = %i\n", (int)t);
+    printf("second time() called, result = %i, expected a unix timestamp\n", (int)t);
 
     if(t == (time_t) -666666) {
-        /* it was intercepted and forwarded to libc */
+        /* it was intercepted and not forwarded to libc */
+        printf("test failed because time() was not forwarded to libc\n");
         return EXIT_FAILURE;
     }
 
@@ -41,6 +43,7 @@ int run_test(void) {
         return EXIT_SUCCESS;
     } else {
         /* it was unexpectedly intercepted */
+        printf("test failed, local global function was unexpectedly intercepted\n");
         return EXIT_FAILURE;
     }
 }
