@@ -65,6 +65,8 @@ struct Vdl
   // both member variables are used exclusively by vdl_dl_iterate_phdr
   unsigned long n_added;
   unsigned long n_removed;
+  unsigned long module_map_len;
+  struct VdlFile **module_map;
 };
 
 extern struct Vdl g_vdl;
