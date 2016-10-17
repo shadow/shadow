@@ -1,4 +1,4 @@
-
+add_cflags("-Wl,--warn-unresolved-symbols -L. -Wl,--no-as-needed")
 
 if(NOT ${CMAKE_SYSTEM_PROCESSOR} STREQUAL "x86_64" )
     add_cflags(-m32)
@@ -35,7 +35,7 @@ set_target_properties(q PROPERTIES
 
 
 target_link_libraries(a b)
-target_link_libraries(b e d)
+target_link_libraries(b d e)
 target_link_libraries(d f)
 target_link_libraries(e f)
 target_link_libraries(g h)
@@ -144,13 +144,13 @@ add_executable(test18 test18.c)
 target_link_libraries(test18 -ldl)
 add_test(NAME test-elfloader-test18 COMMAND /bin/bash ${CMAKE_CURRENT_SOURCE_DIR}/runtest.sh test18 ${CMAKE_CURRENT_SOURCE_DIR})
 
-# cant figure out how to get this one to compile and gave up
+# TODO cant figure out how to get this one to compile and gave up
 #add_executable(test19 test19.c)
 #add_dependencies(test19 f)
-#target_link_libraries(test19 f -ldl)
 #set_target_properties(test19 PROPERTIES 
-#    LINK_FLAGS "-Wl,--no-as-needed,--unresolved-symbols=ignore-in-object-files"
+#    LINK_FLAGS "-Wl,--no-as-needed,--warn-unresolved-symbols"
 #)
+#target_link_libraries(test19 f -ldl)
 #add_test(NAME test-elfloader-test19 COMMAND /bin/bash ${CMAKE_CURRENT_SOURCE_DIR}/runtest.sh test19 ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_executable(test20 test20.c)
@@ -171,15 +171,15 @@ if( ${CMAKE_SYSTEM_PROCESSOR} STREQUAL "x86_64" )
         COMPILE_FLAGS "-Wall -Werror -mcmodel=large"
         LINK_FLAGS "-Wl,--no-as-needed"
     )
-    
+
     add_executable(test22 test22.c)
     set_target_properties(test22 PROPERTIES 
         COMPILE_FLAGS "-Wall -Werror"
         LINK_FLAGS ""
     )
     add_test(NAME test-elfloader-test22 COMMAND /bin/bash ${CMAKE_CURRENT_SOURCE_DIR}/runtest.sh test22 ${CMAKE_CURRENT_SOURCE_DIR})
-    
-    
+
+
     target_link_libraries(test22 -ldl)
 endif()
 
