@@ -1,4 +1,4 @@
-project(elf-loader C ASM)
+project(elf-loader C CXX ASM)
 
 add_definitions(-DMALLOC_DEBUG_ENABLE)
 add_definitions(-D_GNU_SOURCE)
@@ -63,40 +63,40 @@ else()
 endif()
 
 set(ldso_srcs
-        alloc.c 
-        avprintf-cb.c 
-#        display-relocs.c 
-        dprintf.c 
-#        elfedit.c 
-        futex.c 
-        gdb.c 
-        glibc.c 
-        interp.c 
-#        libvdl.c 
-#        readversiondef.c 
-        stage1.c 
-        stage2.c 
-        system.c 
-        valgrind.c 
-        vdl.c 
-        vdl-alloc.c 
-        vdl-context.c 
-        vdl-dl.c 
-        vdl-dl-public.c 
-        vdl-fini.c 
-        vdl-gc.c 
-        vdl-init.c 
-        vdl-linkmap.c 
-        vdl-list.c 
-        vdl-log.c 
-        vdl-lookup.c 
-        vdl-map.c 
-        vdl-mem.c 
-        vdl-reloc.c 
-        vdl-sort.c 
-        vdl-tls.c 
-        vdl-unmap.c 
-        vdl-utils.c
+    alloc.c
+    avprintf-cb.c
+#    display-relocs.c
+    dprintf.c
+#    elfedit.c
+    futex.c
+    gdb.c
+    glibc.c
+    interp.c
+#    libvdl.c
+#    readversiondef.c
+    stage1.c
+    stage2.c
+    system.c
+    valgrind.c
+    vdl.c
+    vdl-alloc.c
+    vdl-context.c
+    vdl-dl.c
+    vdl-dl-public.c
+    vdl-fini.c
+    vdl-gc.c
+    vdl-init.c
+    vdl-linkmap.c
+    vdl-list.c
+    vdl-log.c
+    vdl-lookup.c
+    vdl-map.c
+    vdl-mem.c
+    vdl-reloc.c
+    vdl-sort.c
+    vdl-tls.c
+    vdl-unmap.c
+    vdl-utils.c
 )
 
 
@@ -163,3 +163,24 @@ install(TARGETS ldso vdl
                     GROUP_EXECUTE GROUP_READ
                     WORLD_EXECUTE WORLD_READ
 )
+
+## build test if enabled
+if(SHADOW_TEST STREQUAL ON)
+    enable_testing()
+
+    set(test_srcs
+        internal-tests.cc
+        internal-test-alloc.cc
+        internal-test-futex.cc
+        internal-test-list.cc
+        alloc.c
+        futex.c
+        vdl-list.c
+    )
+    
+    add_executable(internal-tests ${test_srcs})
+    target_link_libraries(internal-tests -lpthread)
+    add_test(NAME test-elfloader-internal COMMAND internal-tests)
+
+    add_subdirectory(test)
+endif(SHADOW_TEST STREQUAL ON)

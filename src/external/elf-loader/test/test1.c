@@ -1,4 +1,6 @@
+#if !defined(_GNU_SOURCE)
 #define _GNU_SOURCE
+#endif
 #include <dlfcn.h>
 #include "test.h"
 LIB(test1)

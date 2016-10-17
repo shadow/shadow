@@ -192,8 +192,19 @@ def build(args):
 
 def test(args):
     builddir=getfullpath(BUILD_PREFIX)
-    testdir=builddir+"/src/test"
-    if not os.path.exists(testdir): 
+    
+    # run elf-loader tests
+    retcode = run_tests(builddir+'/src/external/elf-loader')
+    
+    if retcode == 0:
+        # run the shadow tests
+        retcode = run_tests(builddir)
+        
+    if retcode != 0:
+        logging.warning("Failed to pass all test cases!")
+
+def run_tests(testdir):
+    if not os.path.exists(testdir+'/CTestTestfile.cmake'): 
         logging.error("please run './setup build --test' before testing!")
         return
 
@@ -207,7 +218,6 @@ def test(args):
     logging.info("calling \'"+testcmd+"\'")
     retcode = subprocess.call(testcmd.strip().split())
     logging.info(str(testcmd) + " returned " + str(retcode))
-    if retcode == 0: pass
     
     # go back to where we came from
     os.chdir(calledDirectory)

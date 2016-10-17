@@ -7,11 +7,5 @@ add_subdirectory(preload)
 ## build plug-in libraries and other components
 #add_subdirectory(plugin)
 
-## build rpth
+## build rpth and elf-loader
 add_subdirectory(external)
-
-## build test if enabled
-if(SHADOW_TEST STREQUAL ON)
-    message(STATUS "SHADOW_TEST enabled")
-    add_subdirectory(test)
-endif(SHADOW_TEST STREQUAL ON)

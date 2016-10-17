@@ -1,9 +1,5 @@
 ## testing for the shadow simulator
-## http://www.cmake.org/Wiki/CMake_Testing_With_CTest
-
-## this project defines tests
-enable_testing()
-
+    
 ## these are common flags that are needed for shadow plugins
 add_cflags("-fPIC -fno-inline -fno-strict-aliasing -U_FORTIFY_SOURCE -Wno-unused-command-line-argument")
 add_cflags(-std=gnu99)
