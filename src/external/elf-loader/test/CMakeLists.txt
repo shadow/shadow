@@ -46,11 +46,15 @@ target_link_libraries(k l)
 target_link_libraries(p q)
 target_link_libraries(efl f l)
 
-# TODO this one is supposed to be some kind of circular dependency test
-# but cmakes detects it and errors out
-#target_link_libraries(o -ldl n)
-target_link_libraries(o -ldl)
-target_link_libraries(n -ldl o)
+# forced circular dependency
+target_link_libraries(n -ldl)
+target_link_libraries(o -ldl n)
+file(COPY libn.c DESTINATION .)
+file(RENAME ${CMAKE_CURRENT_BINARY_DIR}/libn.c libnn.c)
+add_library(nn SHARED libnn.c)
+target_link_libraries(nn -ldl o)
+
+
 
 
 add_executable(test0 test0.c)
@@ -128,6 +132,7 @@ target_link_libraries(test13 f -ldl)
 add_test(NAME test-elfloader-test13 COMMAND /bin/bash ${CMAKE_CURRENT_SOURCE_DIR}/runtest.sh test13 ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_executable(test14 test14.c)
+add_custom_command(TARGET test14 PRE_BUILD COMMAND mv ${CMAKE_CURRENT_BINARY_DIR}/libnn.so ${CMAKE_CURRENT_BINARY_DIR}/libn.so)
 add_dependencies(test14 n)
 target_link_libraries(test14 n -ldl)
 add_test(NAME test-elfloader-test14 COMMAND /bin/bash ${CMAKE_CURRENT_SOURCE_DIR}/runtest.sh test14 ${CMAKE_CURRENT_SOURCE_DIR})
