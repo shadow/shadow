@@ -146,14 +146,9 @@ add_executable(test18 test18.c)
 target_link_libraries(test18 -ldl)
 add_test(NAME test-elfloader-test18 COMMAND /bin/bash ${CMAKE_CURRENT_SOURCE_DIR}/runtest.sh test18 ${CMAKE_CURRENT_SOURCE_DIR})
 
-# TODO cant figure out how to get this one to compile and gave up
-#add_executable(test19 test19.c)
-#add_dependencies(test19 f)
-#set_target_properties(test19 PROPERTIES 
-#    LINK_FLAGS "-Wl,--no-as-needed,--warn-unresolved-symbols"
-#)
-#target_link_libraries(test19 f -ldl)
-#add_test(NAME test-elfloader-test19 COMMAND /bin/bash ${CMAKE_CURRENT_SOURCE_DIR}/runtest.sh test19 ${CMAKE_CURRENT_SOURCE_DIR})
+add_executable(test19 test19.c)
+target_link_libraries(test19 f -ldl)
+add_test(NAME test-elfloader-test19 COMMAND /bin/bash ${CMAKE_CURRENT_SOURCE_DIR}/runtest.sh test19 ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_executable(test20 test20.c)
 target_link_libraries(test20 -ldl)
