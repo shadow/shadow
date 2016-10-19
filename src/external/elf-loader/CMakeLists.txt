@@ -9,7 +9,6 @@ add_cflags(-Wall)
 #add_cflags(-Werror)
 add_cflags(-fno-stack-protector)
 add_cflags(-fPIC)
-add_cflags(-fvisibility=hidden)
 add_cflags(-MD)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
@@ -138,7 +137,7 @@ add_library(ldso SHARED ${ldso_srcs} ${as_srcs})
 add_dependencies(ldso vdlconfig ldsoversion)
 target_link_libraries(ldso -lgcc)
 set_target_properties(ldso PROPERTIES 
-    LINK_FLAGS "-nostartfiles -nostdlib -Wl,--entry=stage0,--version-script=${CMAKE_CURRENT_BINARY_DIR}/ldso.version,-Bstatic"
+    LINK_FLAGS "-fvisibility=hidden -nostartfiles -nostdlib -Wl,--entry=stage0,--version-script=${CMAKE_CURRENT_BINARY_DIR}/ldso.version,-Bstatic"
     PREFIX ""
     SUFFIX ""
 )
@@ -147,7 +146,7 @@ add_library(vdl SHARED libvdl.c)
 add_dependencies(vdl ldso libdlversion)
 target_link_libraries(vdl ldso)
 set_target_properties(vdl PROPERTIES 
-    LINK_FLAGS "-nostdlib -Wl,--version-script=${CMAKE_CURRENT_BINARY_DIR}/libdl.version"
+    LINK_FLAGS "-fvisibility=hidden -nostdlib -Wl,--version-script=${CMAKE_CURRENT_BINARY_DIR}/libdl.version"
 )
 
 
