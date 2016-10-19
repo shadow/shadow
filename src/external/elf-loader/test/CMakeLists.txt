@@ -118,7 +118,9 @@ add_test(NAME test-elfloader-test11 COMMAND /bin/bash ${CMAKE_CURRENT_SOURCE_DIR
 
 add_executable(test12 test12.c)
 target_link_libraries(test12 -lpthread -ldl)
-add_test(NAME test-elfloader-test12 COMMAND /bin/bash ${CMAKE_CURRENT_SOURCE_DIR}/runtest.sh test12 ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME test-elfloader-test12 COMMAND ${CMAKE_COMMAND} -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR} -P
+  ${CMAKE_CURRENT_SOURCE_DIR}/test12.cmake
+  )
 
 add_executable(test13 test13.c)
 add_dependencies(test13 f)
