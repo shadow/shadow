@@ -1,4 +1,6 @@
+#if !defined(_GNU_SOURCE)
 #define _GNU_SOURCE
+#endif
 #include "test.h"
 #include <stdlib.h>
 #include <dlfcn.h>

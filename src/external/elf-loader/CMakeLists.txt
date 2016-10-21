@@ -1,4 +1,4 @@
-project(elf-loader C ASM)
+project(elf-loader C CXX ASM)
 
 add_definitions(-DMALLOC_DEBUG_ENABLE)
 add_definitions(-D_GNU_SOURCE)
@@ -9,7 +9,6 @@ add_cflags(-Wall)
 #add_cflags(-Werror)
 add_cflags(-fno-stack-protector)
 add_cflags(-fPIC)
-add_cflags(-fvisibility=hidden)
 add_cflags(-MD)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
@@ -63,40 +62,40 @@ else()
 endif()
 
 set(ldso_srcs
-        alloc.c 
-        avprintf-cb.c 
-#        display-relocs.c 
-        dprintf.c 
-#        elfedit.c 
-        futex.c 
-        gdb.c 
-        glibc.c 
-        interp.c 
-#        libvdl.c 
-#        readversiondef.c 
-        stage1.c 
-        stage2.c 
-        system.c 
-        valgrind.c 
-        vdl.c 
-        vdl-alloc.c 
-        vdl-context.c 
-        vdl-dl.c 
-        vdl-dl-public.c 
-        vdl-fini.c 
-        vdl-gc.c 
-        vdl-init.c 
-        vdl-linkmap.c 
-        vdl-list.c 
-        vdl-log.c 
-        vdl-lookup.c 
-        vdl-map.c 
-        vdl-mem.c 
-        vdl-reloc.c 
-        vdl-sort.c 
-        vdl-tls.c 
-        vdl-unmap.c 
-        vdl-utils.c
+    alloc.c
+    avprintf-cb.c
+#    display-relocs.c
+    dprintf.c
+#    elfedit.c
+    futex.c
+    gdb.c
+    glibc.c
+    interp.c
+#    libvdl.c
+#    readversiondef.c
+    stage1.c
+    stage2.c
+    system.c
+    valgrind.c
+    vdl.c
+    vdl-alloc.c
+    vdl-context.c
+    vdl-dl.c
+    vdl-dl-public.c
+    vdl-fini.c
+    vdl-gc.c
+    vdl-init.c
+    vdl-linkmap.c
+    vdl-list.c
+    vdl-log.c
+    vdl-lookup.c
+    vdl-map.c
+    vdl-mem.c
+    vdl-reloc.c
+    vdl-sort.c
+    vdl-tls.c
+    vdl-unmap.c
+    vdl-utils.c
 )
 
 
@@ -138,7 +137,7 @@ add_library(ldso SHARED ${ldso_srcs} ${as_srcs})
 add_dependencies(ldso vdlconfig ldsoversion)
 target_link_libraries(ldso -lgcc)
 set_target_properties(ldso PROPERTIES 
-    LINK_FLAGS "-nostartfiles -nostdlib -Wl,--entry=stage0,--version-script=${CMAKE_CURRENT_BINARY_DIR}/ldso.version,-Bstatic"
+    LINK_FLAGS "-fvisibility=hidden -nostartfiles -nostdlib -Wl,--entry=stage0,--version-script=${CMAKE_CURRENT_BINARY_DIR}/ldso.version,-Bstatic"
     PREFIX ""
     SUFFIX ""
 )
@@ -147,7 +146,7 @@ add_library(vdl SHARED libvdl.c)
 add_dependencies(vdl ldso libdlversion)
 target_link_libraries(vdl ldso)
 set_target_properties(vdl PROPERTIES 
-    LINK_FLAGS "-nostdlib -Wl,--version-script=${CMAKE_CURRENT_BINARY_DIR}/libdl.version"
+    LINK_FLAGS "-fvisibility=hidden -nostdlib -Wl,--version-script=${CMAKE_CURRENT_BINARY_DIR}/libdl.version"
 )
 
 
@@ -163,3 +162,24 @@ install(TARGETS ldso vdl
                     GROUP_EXECUTE GROUP_READ
                     WORLD_EXECUTE WORLD_READ
 )
+
+## build test if enabled
+if(SHADOW_TEST STREQUAL ON)
+    enable_testing()
+
+    set(test_srcs
+        internal-tests.cc
+        internal-test-alloc.cc
+        internal-test-futex.cc
+        internal-test-list.cc
+        alloc.c
+        futex.c
+        vdl-list.c
+    )
+    
+    add_executable(internal-tests ${test_srcs})
+    target_link_libraries(internal-tests -lpthread)
+    add_test(NAME test-elfloader-internal COMMAND internal-tests)
+
+    add_subdirectory(test)
+endif(SHADOW_TEST STREQUAL ON)

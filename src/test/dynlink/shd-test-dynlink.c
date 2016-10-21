@@ -472,13 +472,16 @@ int main_no_shadow(int argc, char* argv[]) {
         /* in this path, we calculate the static TLS size we would need */
         unsigned long tls_size_to_allocate = _test_compute_static_tls_size();
 
-        char call[100];
+        char* call = NULL;
 
         /* this strips environment variables, but there are ways to fix that */
-        sprintf(call, "env LD_STATIC_TLS_EXTRA=%lu %s", tls_size_to_allocate, argv[0]);
+        asprintf(&call, "env LD_STATIC_TLS_EXTRA=%lu %s", tls_size_to_allocate, argv[0]);
 
         /* restart the process with the correct static tls size */
         ret = system(call);
+
+        free(call);
+
         if(ret == 0) {
             ret = EXIT_SUCCESS;
         } else {
