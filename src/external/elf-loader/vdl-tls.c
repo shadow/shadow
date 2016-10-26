@@ -280,11 +280,7 @@ realloc_module_map(size_t size)
   g_vdl.module_map = (struct VdlFile **) vdl_alloc_malloc(size*sizeof(struct VdlFile *));
 
   // we must zero the map, so we can keep track of what is a currently valid mapping
-  unsigned long i;
-  for (i=0; i < size; i++)
-    {
-      g_vdl.module_map[i] = 0;
-    }
+  vdl_memset(g_vdl.module_map, 0, size*sizeof(struct VdlFile *));
   g_vdl.module_map_len = size;
 }
 

@@ -52,7 +52,7 @@ void vdl_linkmap_remove (struct VdlFile *file)
     {
       next->prev = prev;
     }
-  if (file->has_tls)
+  if (file->has_tls && file->tls_index < g_vdl.module_map_len)
     {
       g_vdl.module_map[file->tls_index] = 0;
     }
