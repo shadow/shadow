@@ -300,6 +300,7 @@ gint shadow_main(gint argc, gchar* argv[]) {
     message(SHADOW_INFO_STRING);
     message("args=%s", options_getArgumentString(options));
     message("LD_PRELOAD=%s", g_getenv("LD_PRELOAD"));
+    message("LD_STATIC_TLS_EXTRA=%s", g_getenv("LD_STATIC_TLS_EXTRA"));
     message("SHADOW_SPAWNED=%s", g_getenv("SHADOW_SPAWNED"));
 
     /* pause for debugger attachment if the option is set */
