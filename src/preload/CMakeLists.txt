@@ -1,7 +1,8 @@
 ## for now, interposer includes shadow.h, so it needs to know about glib and igraph
 find_package(GLIB REQUIRED)
 find_package(IGRAPH REQUIRED)
-include_directories(${IGRAPH_INCLUDES} ${GLIB_INCLUDES})
+find_package(DL REQUIRED)
+include_directories(${DL_INCLUDES} ${IGRAPH_INCLUDES} ${GLIB_INCLUDES})
 
 #add_cflags(-Wno-invalid-noreturn)
 
@@ -11,10 +12,12 @@ include_directories(${IGRAPH_INCLUDES} ${GLIB_INCLUDES})
 ## we redirect them to our internal shadow versions, or to libc.
 include_directories(${CMAKE_SOURCE_DIR}/src/main)
 add_library(shadow-interpose SHARED shd-interposer.c)
+
 set_target_properties(shadow-interpose PROPERTIES 
     INSTALL_RPATH ${CMAKE_INSTALL_PREFIX}/lib
     INSTALL_RPATH_USE_LINK_PATH TRUE 
-    LINK_FLAGS "-Wl,--no-as-needed,-rpath=${CMAKE_INSTALL_PREFIX}/lib,-dynamic-linker=${CMAKE_INSTALL_PREFIX}/lib/ldso"
+    LINK_FLAGS "-Wl,--no-as-needed,-rpath=${CMAKE_INSTALL_PREFIX}/lib"
 )
-target_link_libraries(shadow-interpose dl)
+
+target_link_libraries(shadow-interpose ${DL_LIBRARIES})
 install(TARGETS shadow-interpose DESTINATION lib)
