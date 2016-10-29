@@ -219,6 +219,73 @@ void logger_flushRecords(Logger* logger, GThread* callerThread) {
     }
 }
 
+static gchar* _logger_getNewLocalTimeStr(Logger* logger) {
+    MAGIC_ASSERT(logger);
+
+    GDateTime* nowDateTime = g_date_time_new_now_local();
+
+    gchar* nowStr = nowDateTime ?
+            g_date_time_format(nowDateTime, "%F %H:%M:%S") :
+            strdup("0000-00-00 00:00:00");
+
+    if(nowDateTime) {
+        g_date_time_unref(nowDateTime);
+    }
+
+    return nowStr;
+}
+
+static gchar* _logger_getNewRunTimeStr(Logger* logger) {
+    MAGIC_ASSERT(logger);
+
+    /* compute our run time */
+    guint64 elapsed = g_timer_elapsed(logger->runTimer, NULL);
+    guint64 hours = elapsed/3600;
+    elapsed %= 3600;
+    guint64 minutes = elapsed/60;
+    elapsed %= 60;
+    guint64 seconds = elapsed;
+
+    /* create a buffer to hold the string */
+    GString* runTimeString = g_string_new(NULL);
+    g_string_printf(runTimeString,
+            "%02"G_GUINT64_FORMAT":%02"G_GUINT64_FORMAT":%02"G_GUINT64_FORMAT,
+            hours, minutes, seconds);
+
+    /* free the gstring and return the str */
+    return g_string_free(runTimeString, FALSE);
+}
+
+static void _logger_logStartupMessage(Logger* logger) {
+    MAGIC_ASSERT(logger);
+
+    gchar* nowStr = _logger_getNewLocalTimeStr(logger);
+
+    logger_log(logger, LOGLEVEL_MESSAGE, __FILE__, __FUNCTION__, __LINE__,
+            "logging system started at %s", nowStr);
+
+    if(nowStr) {
+        g_free(nowStr);
+    }
+}
+
+static void _logger_logShutdownMessage(Logger* logger) {
+    MAGIC_ASSERT(logger);
+
+    gchar* nowStr = _logger_getNewLocalTimeStr(logger);
+    gchar* runTimeStr = _logger_getNewRunTimeStr(logger);
+
+    logger_log(logger, LOGLEVEL_MESSAGE, __FILE__, __FUNCTION__, __LINE__,
+            "logging system stopped at %s, run time was %s", nowStr, runTimeStr);
+
+    if(nowStr) {
+        g_free(nowStr);
+    }
+    if(runTimeStr) {
+        g_free(runTimeStr);
+    }
+}
+
 Logger* logger_new(LogLevel filterLevel) {
     Logger* logger = g_new0(Logger, 1);
     MAGIC_INIT(logger);
@@ -233,11 +300,7 @@ Logger* logger_new(LogLevel filterLevel) {
 
     logger_register(logger, g_thread_self());
 
-    GDateTime* nowDateTime = g_date_time_new_now_local();
-    gchar* nowStr = g_date_time_format(nowDateTime, "%F %H:%M:%S");
-    logger_log(logger, LOGLEVEL_MESSAGE, __FILE__, __FUNCTION__, __LINE__, "logging system started at %s", nowStr);
-    g_date_time_unref(nowDateTime);
-    g_free(nowStr);
+    _logger_logStartupMessage(logger);
 
     return logger;
 }
@@ -245,23 +308,9 @@ Logger* logger_new(LogLevel filterLevel) {
 static void _logger_free(Logger* logger) {
     MAGIC_ASSERT(logger);
 
-    /* compute our run time */
-    guint64 elapsed = g_timer_elapsed(logger->runTimer, NULL);
-    guint64 hours = elapsed/3600;
-    elapsed %= 3600;
-    guint64 minutes = elapsed/60;
-    elapsed %= 60;
-    guint64 seconds = elapsed;
-
-    /* print the final log message that we are shutting down */
-    GDateTime* nowDateTime = g_date_time_new_now_local();
-    gchar* nowStr = g_date_time_format(nowDateTime, "%F %H:%M:%S");
-    logger_log(logger, LOGLEVEL_MESSAGE, __FILE__, __FUNCTION__, __LINE__,
-            "logging system stopped at %s, run time was "
-            "%02"G_GUINT64_FORMAT":%02"G_GUINT64_FORMAT":%02"G_GUINT64_FORMAT,
-            nowStr, hours, minutes, seconds);
-    g_date_time_unref(nowDateTime);
-    g_free(nowStr);
+    /* print the final log message that we are shutting down
+     * this will be the last message printed by our logger */
+    _logger_logShutdownMessage(logger);
 
     /* one last flush for the above message before we stop */
     logger_flushRecords(logger, g_thread_self());
