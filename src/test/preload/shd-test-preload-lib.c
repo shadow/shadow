@@ -16,15 +16,15 @@ static time_fnctptr _time = NULL;
 // application variable
 static int flag = 0;
 
-time_fnctptr lookup_time() {
+void* do_lookup(char* funcname) {
     // clear old error vals
     dlerror();
     // search for symbol
-    time_fnctptr t = (time_fnctptr) dlsym(RTLD_NEXT, "time");
+    time_fnctptr t = (time_fnctptr) dlsym(RTLD_NEXT, funcname);
     // check for error
     char* err = dlerror();
     if(err != NULL) {
-        printf("dlsym() error, failed to lookup time: '%s'\n", err);
+        printf("dlsym() error, failed to lookup %s(): '%s'\n", funcname, err);
         return NULL;
     }
     return t;
@@ -37,7 +37,7 @@ time_t time (time_t *result){
     // which should be libc time
     if( _time == NULL )
     {
-        _time = lookup_time();
+        _time = (time_fnctptr)do_lookup("time");
         // check for error
         if(!_time)
         {

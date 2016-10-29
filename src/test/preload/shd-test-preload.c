@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include <dlfcn.h>
+#include <limits.h>
 
 int local_global_func(void) {
     printf("direct call to local_global_func()\n");
@@ -31,6 +32,11 @@ int run_test(void) {
     if(t == (time_t) -666666) {
         /* it was intercepted and not forwarded to libc */
         printf("test failed because time() was not forwarded to libc\n");
+        return EXIT_FAILURE;
+    }
+
+    if(t < 0 || t > INT_MAX) {
+        printf("test failed because time() returned an out of range value\n");
         return EXIT_FAILURE;
     }
 
