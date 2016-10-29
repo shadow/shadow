@@ -16,6 +16,20 @@ static time_fnctptr _time = NULL;
 // application variable
 static int flag = 0;
 
+time_fnctptr lookup_time() {
+    // clear old error vals
+    dlerror();
+    // search for symbol
+    time_fnctptr t = (time_fnctptr) dlsym(RTLD_NEXT, "time");
+    // check for error
+    char* err = dlerror();
+    if(err != NULL) {
+        printf("dlsym() error, failed to lookup time: '%s'\n", err);
+        return NULL;
+    }
+    return t;
+}
+
 time_t time (time_t *result){
     printf("time wrapper called\n");
 
@@ -23,12 +37,9 @@ time_t time (time_t *result){
     // which should be libc time
     if( _time == NULL )
     {
-        // clear old error vals
-        dlerror();
-        // search for symbol
-        _time = (time_fnctptr) dlsym(RTLD_NEXT, "time");
+        _time = lookup_time();
         // check for error
-        if( dlerror() != NULL )
+        if(!_time)
         {
             printf("libc_wrapper: failed to load time()\n");
             return -1;
