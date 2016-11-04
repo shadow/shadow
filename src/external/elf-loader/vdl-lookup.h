@@ -13,7 +13,7 @@ struct VdlLookupResult
 {
   bool found;
   const struct VdlFile *file;
-  const ElfW(Sym) *symbol;
+  ElfW(Sym) symbol;
 };
 enum VdlLookupFlag {
   // indicates whether the symbol lookup is allowed to 
@@ -25,6 +25,7 @@ enum VdlLookupFlag {
   // This can be used to get the original symbol back.
   VDL_LOOKUP_NO_REMAP = 2
 };
+void vdl_lookup_symbol_fixup (const struct VdlFile *file, ElfW(Sym) *sym);
 struct VdlLookupResult vdl_lookup (struct VdlFile *from_file,
 				   const char *name, 
 				   const char *ver_name,

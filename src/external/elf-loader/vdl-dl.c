@@ -594,7 +594,8 @@ void *vdl_dlvsym_with_flags (void *handle, const char *symbol, const char *versi
     }
   vdl_list_delete (scope);
   futex_unlock (g_vdl.futex);
-  return (void*)(result.file->load_base + result.symbol->st_value);
+  vdl_lookup_symbol_fixup (result.file, &result.symbol);
+  return (void*)(result.file->load_base + result.symbol.st_value);
  error:
   vdl_list_delete (scope);
   futex_unlock (g_vdl.futex);

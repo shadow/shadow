@@ -11,11 +11,6 @@
 #include <sys/mman.h>
 #include <stdbool.h>
 
-#ifndef STT_GNU_IFUNC
-// magic value decided by our glibc maintainer friends.
-#define STT_GNU_IFUNC 10
-#endif
-
 static bool
 sym_to_ver_req (struct VdlFile *file,
 		unsigned long index,
@@ -110,8 +105,9 @@ do_process_reloc (struct VdlFile *file,
 		    reloc_addr, reloc_addend, reloc_sym == 0?"0":dt_strtab + sym->st_name);
   
   const struct VdlFile *symbol_file = 0;
-  unsigned long symbol_value = 0;
-  unsigned long symbol_type = 0;
+  ElfW(Sym) sym_result;
+  sym_result.st_value = 0;
+  sym_result.st_info = 0;
   if (!machine_reloc_is_relative (reloc_type) &&
       sym->st_name != 0)
     {
@@ -149,47 +145,31 @@ do_process_reloc (struct VdlFile *file,
       if (machine_reloc_is_copy (reloc_type))
 	{
 	  // we handle R_*_COPY relocs ourselves
-	  VDL_LOG_ASSERT (result.symbol->st_size == sym->st_size,
+	  VDL_LOG_ASSERT (result.symbol.st_size == sym->st_size,
 			  "Symbols don't have the same size: likely a recipe for disaster.");
 	  vdl_memcpy (reloc_addr, 
-		      (void*)(result.file->load_base + result.symbol->st_value),
-		      result.symbol->st_size);
+		      (void*)(result.file->load_base + result.symbol.st_value),
+		      result.symbol.st_size);
 	  return *reloc_addr;
 	}
       else
 	{
 	  symbol_file = result.file;
-	  symbol_value = result.symbol->st_value;
-	  symbol_type = ELFW_ST_TYPE (result.symbol->st_info);
+	  sym_result.st_value = result.symbol.st_value;
+	  sym_result.st_info = result.symbol.st_info;
 	}
     }
   else
     {
       symbol_file = file;
-      symbol_value = sym->st_value;
-      symbol_type = ELFW_ST_TYPE (sym->st_info);
+      sym_result.st_value = sym->st_value;
+      sym_result.st_info = sym->st_info;
     }
 
-  if (symbol_type == STT_GNU_IFUNC)
-    {
-      // We must call the symbol to get the symbol value.
-      // This is a glibc extension which appeared in fc12 for
-      // the first time. It is used to delegate at runtime
-      // the decision of which function to run. Typically, it is
-      // used to detect automatically the hardware type and
-      // use optimized versions of specified functions such
-      // as strlen, etc.
-      unsigned long (*ifunc) (void) = (unsigned long (*) (void)) 
-	(symbol_value + symbol_file->load_base);
-      symbol_value = ifunc ();
-      // we need to remove the load base such that the relocation
-      // code which adds the load_base again generates a valid
-      // address
-      symbol_value -= symbol_file->load_base;
-    }
+  vdl_lookup_symbol_fixup(symbol_file, &sym_result);
 
   machine_reloc (symbol_file, reloc_addr, reloc_type, reloc_addend,
-		 symbol_value, symbol_type);
+		 sym_result.st_value, ELFW_ST_TYPE (sym_result.st_info));
 
   return *reloc_addr;
 }
