@@ -6,6 +6,11 @@
 #include "vdl-file.h"
 #include <stdint.h>
 
+#ifndef STT_GNU_IFUNC
+// magic value decided by our glibc maintainer friends.
+#define STT_GNU_IFUNC 10
+#endif
+
 static uint32_t
 vdl_gnu_hash (const char *s)
 {
@@ -416,6 +421,28 @@ symbol_version_matches (const struct VdlFile *in,
   return VERSION_MATCH_BAD;
 }
 
+void
+vdl_lookup_symbol_fixup (const struct VdlFile *file, ElfW(Sym) *sym)
+{
+  if (ELFW_ST_TYPE (sym->st_info) == STT_GNU_IFUNC)
+    {
+      // We must call the symbol to get the symbol value.
+      // This is a glibc extension which appeared in fc12 for
+      // the first time. It is used to delegate at runtime
+      // the decision of which function to run. Typically, it is
+      // used to detect automatically the hardware type and
+      // use optimized versions of specified functions such
+      // as strlen, etc.
+      unsigned long (*ifunc) (void) = (unsigned long (*) (void)) 
+	(sym->st_value + file->load_base);
+      sym->st_value = ifunc ();
+      // we need to remove the load base such that the relocation
+      // code which adds the load_base again generates a valid
+      // address
+      sym->st_value -= file->load_base;
+    }
+}
+
 static struct VdlLookupResult
 vdl_lookup_with_scope_internal (struct VdlFile *file,
 				const char *name, 
@@ -464,7 +491,7 @@ vdl_lookup_with_scope_internal (struct VdlFile *file,
 		}
 	      struct VdlLookupResult result;
 	      result.file = item;
-	      result.symbol = &i.dt_symtab[index];
+	      result.symbol = i.dt_symtab[index];
 	      result.found = true;
 	      return result;
 	    }
@@ -510,7 +537,7 @@ vdl_lookup_with_scope_internal (struct VdlFile *file,
 	}
       struct VdlLookupResult result;
       result.file = final_item;
-      result.symbol = &i.dt_symtab[final_match];
+      result.symbol = i.dt_symtab[final_match];
       result.found = true;
       return result;
     }
@@ -585,8 +612,9 @@ vdl_lookup_local (const struct VdlFile *file, const char *name)
   if (vdl_lookup_file_has_next (&i))
     {
       unsigned long index = vdl_lookup_file_next (&i);
-      result.symbol = &i.dt_symtab[index];
+      result.symbol = i.dt_symtab[index];
       result.found = true;
+      vdl_lookup_symbol_fixup(result.file, &result.symbol);
     }
   else
     {

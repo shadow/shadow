@@ -31,7 +31,7 @@ void vdl_log_printf (enum VdlLog log, const char *str, ...);
 #define VDL_LOG_SYMBOL_OK(symbol_name,from,match)			\
   vdl_log_printf (VDL_LOG_SYM_OK, "Resolved symbol=%s, from file=\"%s\", in file=\"%s\":0x%x\n", \
 		  symbol_name, from->filename, match.file->filename,	\
-		  match.file->load_base + match.symbol->st_value)
+		  match.file->load_base + match.symbol.st_value)
 #define VDL_LOG_RELOC(rel)					      \
   vdl_log_printf (VDL_LOG_REL, "Unhandled reloc type=0x%x at=0x%x\n", \
 		  ELFW_R_TYPE (rel->r_info), rel->r_offset)
