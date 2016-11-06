@@ -25,6 +25,8 @@ add_library(o SHARED libo.c)
 add_library(p SHARED libp.c)
 add_library(q SHARED libq.c)
 add_library(r SHARED libr.c)
+add_library(s SHARED libs.c)
+add_library(t SHARED libt.c)
 add_library(efl SHARED libefl.c)
 
 
@@ -45,6 +47,7 @@ target_link_libraries(j k)
 target_link_libraries(k l)
 target_link_libraries(p q)
 target_link_libraries(efl f l)
+target_link_libraries(s t)
 
 # forced circular dependency
 target_link_libraries(n -ldl)
@@ -203,3 +206,6 @@ add_test(NAME test-elfloader-test25 COMMAND /bin/bash ${CMAKE_CURRENT_SOURCE_DIR
 #target_link_libraries(test26 -lpthread -ldl)
 #add_test(NAME test-elfloader-test26 COMMAND /bin/bash ${CMAKE_CURRENT_SOURCE_DIR}/runtest.sh test26 ${CMAKE_CURRENT_SOURCE_DIR})
 
+add_executable(test27 test27.c)
+target_link_libraries(test27 -ldl)
+add_test(NAME test-elfloader-test27 COMMAND /bin/bash ${CMAKE_CURRENT_SOURCE_DIR}/runtest.sh test27 ${CMAKE_CURRENT_SOURCE_DIR})
