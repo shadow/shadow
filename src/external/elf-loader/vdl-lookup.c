@@ -402,7 +402,7 @@ symbol_version_matches (const struct VdlFile *in,
 		 prev_aux = cur_aux, 
 		   cur_aux = (ElfW(Vernaux)*)(((unsigned long)cur_aux)+cur_aux->vna_next))
 	      {
-		if (cur_aux->vna_other == ver_index &&
+		if ((cur_aux->vna_other == ver_index || in->is_preloaded) &&
 		    cur_aux->vna_hash == from_ver_hash)
 		  {
 		    // the hash values of the version names are equal.

@@ -123,6 +123,7 @@ ld_preload_list_new (struct VdlContext *context, const char **envp)
 	  goto error;
 	}
       result.requested->count++;
+      result.requested->is_preloaded = 1;
       vdl_list_insert_range (retval, vdl_list_end (retval),
 			     vdl_list_begin (result.newly_mapped),
 			     vdl_list_end (result.newly_mapped));
