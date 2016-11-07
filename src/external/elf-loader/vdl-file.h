@@ -111,6 +111,8 @@ struct VdlFile
   uint32_t patched : 1;
   // indicates if this represents the main executable.
   uint32_t is_executable : 1;
+  // indicates if this represents a file from LD_PRELOAD
+  uint32_t is_preloaded : 1;
   uint32_t gc_color : 2;
   // indicates if this file has a TLS program entry
   // If so, all tls_-prefixed variables are valid.
