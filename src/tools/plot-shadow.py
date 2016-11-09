@@ -81,6 +81,12 @@ def main():
         required="True",
         action=PlotDataAction, dest="experiments")
 
+    parser.add_argument('-c', '--config',
+        help="a PATH to a shadow.config.xml file",
+        metavar="PATH", type=type_str_path_in,
+        action="store", dest="shadow_config",
+        default=None)
+
     parser.add_argument('-p', '--prefix',
         help="a STRING filename prefix for graphs we generate",
         metavar="STRING",
@@ -107,6 +113,7 @@ def main():
         default=0)
 
     args = parser.parse_args()
+    conf = args.shadow_config
     tickdata, shdata, ftdata, tgendata, tordata = get_data(args.experiments, args.lineformats, args.skiptime, args.rskiptime)
 
     page = PdfPages("{0}shadow.results.pdf".format(args.prefix+'.' if args.prefix is not None else ''))
@@ -137,8 +144,10 @@ def main():
             plot_tgen_errsizes_median(tgendata, page)
             plot_tgen_errsizes_mean(tgendata, page)
         if len(tordata) > 0:
-            plot_tor(tordata, page, direction="bytes_read")
-            plot_tor(tordata, page, direction="bytes_written")
+            capacities = get_relay_capacities(conf, bwdown=True) if conf is not None else None
+            plot_tor(tordata, page, capacities=capacities, direction="bytes_read")
+            capacities = get_relay_capacities(conf, bwup=True) if conf is not None else None
+            plot_tor(tordata, page, capacities=capacities, direction="bytes_written")
     except:
         page.close()
         print >>sys.stderr, "!! there was an error while plotting, but some graphs may still be readable"
@@ -964,14 +973,15 @@ def plot_tgen_errsizes_mean(data, page):
         page.savefig()
         pylab.close()
 
-def plot_tor(data, page, direction="bytes_written"):
+def plot_tor(data, page, capacities=None, direction="bytes_written"):
     mafig = pylab.figure()
     allcdffig = pylab.figure()
     eachcdffig = pylab.figure()
+    capsfig = None if capacities == None else pylab.figure()
 
     for (d, label, lineformat) in data:
         tput = {}
-        pertput = []
+        pertput, percap = [], []
         for node in d:
             if 'relay' not in node and 'thority' not in node: continue
             for tstr in d[node][direction]:
@@ -980,6 +990,10 @@ def plot_tor(data, page, direction="bytes_written"):
                 if t not in tput: tput[t] = 0
                 tput[t] += mib
                 pertput.append(mib)
+                if capacities != None:
+                    nick = node.split('~')[0]
+                    if nick in capacities:
+                        percap.append(mib/capacities[nick]*100.0)
 
         pylab.figure(mafig.number)
         x = sorted(tput.keys())
@@ -995,6 +1009,11 @@ def plot_tor(data, page, direction="bytes_written"):
         pylab.figure(eachcdffig.number)
         x, y = getcdf(pertput)
         pylab.plot(x, y, lineformat, label=label)
+
+        if capacities != None and len(percap) > 0:
+            pylab.figure(capsfig.number)
+            x, y = getcdf(percap)
+            pylab.plot(x, y, lineformat, label=label)
 
     pylab.figure(mafig.number)
     pylab.xlabel("Tick (s)")
@@ -1025,6 +1044,16 @@ def plot_tor(data, page, direction="bytes_written"):
     page.savefig()
     pylab.close()
     del(eachcdffig)
+
+    if capacities != None:
+        pylab.figure(capsfig.number)
+        #pylab.xscale('log')
+        pylab.xlabel("Bandwidth Utilization (percent)")
+        pylab.ylabel("Cumulative Fraction")
+        pylab.legend(loc="lower right")
+        page.savefig()
+        pylab.close()
+        del(capsfig)
 
 def get_data(experiments, lineformats, skiptime, rskiptime):
     tickdata, shdata, ftdata, tgendata, tordata = [], [], [], [], []
@@ -1099,6 +1128,36 @@ def prune_data(data, skiptime, rskiptime):
                         del(data['nodes'][name][k][sec])
     return data
 
+def get_relay_capacities(shadow_config_path, bwup=False, bwdown=False):
+    if not bwup and not bwdown:
+        return None
+    from lxml import etree
+    # shadow_config_path should be a specific file
+    # this will go through all the relays listed
+    # and extract the "true" bandwidth for each
+    # return a dict of nickname->true_bandwidth
+    relays = {}
+    parser = etree.XMLParser(remove_blank_text=True)
+    tree = etree.parse(shadow_config_path, parser)
+    root = tree.getroot()
+    for n in root.iterchildren("node"):
+        nick = n.get('id')
+        if 'relay' not in nick and 'thority' not in nick:
+            continue
+        l = []
+        if bwup:
+            if 'bandwidthup' in n and n.get('bandwidthup') != None:
+                l.append(int(n.get('bandwidthup'))/1024.0) # KiB/s to MiB/s
+            else:
+                continue
+        if bwdown:
+            if 'bandwidthdown' in n and n.get('bandwidthdown') != None:
+                l.append(int(n.get('bandwidthdown'))/1024.0) # KiB/s to MiB/s
+            else:
+                continue
+        relays[nick] = min(l)
+    return relays
+
 # helper - compute the window_size moving average over the data in interval
 def movingaverage(interval, window_size):
     if len(interval) > 0:
@@ -1131,5 +1190,12 @@ def type_nonnegative_integer(value):
     i = int(value)
     if i < 0: raise argparse.ArgumentTypeError("%s is an invalid non-negative int value" % value)
     return i
+
+def type_str_path_in(value):
+    s = str(value)
+    p = os.path.abspath(os.path.expanduser(s))
+    if not os.path.exists(p):
+        raise argparse.ArgumentTypeError("path '%s' does not exist" % s)
+    return p
 
 if __name__ == '__main__': sys.exit(main())
