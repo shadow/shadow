@@ -1146,12 +1146,12 @@ def get_relay_capacities(shadow_config_path, bwup=False, bwdown=False):
             continue
         l = []
         if bwup:
-            if 'bandwidthup' in n and n.get('bandwidthup') != None:
+            if n.get('bandwidthup') != None:
                 l.append(int(n.get('bandwidthup'))/1024.0) # KiB/s to MiB/s
             else:
                 continue
         if bwdown:
-            if 'bandwidthdown' in n and n.get('bandwidthdown') != None:
+            if n.get('bandwidthdown') != None:
                 l.append(int(n.get('bandwidthdown'))/1024.0) # KiB/s to MiB/s
             else:
                 continue
