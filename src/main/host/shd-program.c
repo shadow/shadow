@@ -102,11 +102,12 @@ void program_unload(Program* prog) {
         /* clear dlerror status string */
         dlerror();
 
-        gboolean success = dlclose(prog->handle);
         if(dlclose(prog->handle) != 0) {
             const gchar* errorMessage = dlerror();
             warning("dlclose() failed: %s", errorMessage);
-            warning("failed closing plugin '%s'", prog->path->str);
+            warning("failed closing plugin '%s' at address '%p'", prog->path->str, prog->handle);
+        } else {
+            message("successfully unloaded private plug-in '%s' at address '%p'", prog->path->str, prog->handle);
         }
     }
 
@@ -149,7 +150,7 @@ void program_load(Program* prog) {
     prog->handle = dlmopen(LM_ID_NEWLM, prog->path->str, RTLD_LAZY|RTLD_LOCAL|RTLD_DEEPBIND);
 
     if(prog->handle) {
-        message("successfully loaded private plug-in '%s' at %p", prog->path->str, prog);
+        message("successfully loaded private plug-in '%s' at address '%p'", prog->path->str, prog->handle);
     } else {
         const gchar* errorMessage = dlerror();
         critical("dlmopen() failed: %s", errorMessage);

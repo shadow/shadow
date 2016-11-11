@@ -160,6 +160,7 @@ struct _Process {
     gchar** argv;
     gint argc;
     gint returnCode;
+    gboolean returnCodeLogged;
     GQueue* atExitFunctions;
 
     /* other state for pthread interface */
@@ -549,19 +550,23 @@ static void _process_executeCleanup(Process* proc) {
 }
 
 static void _process_logReturnCode(Process* proc, gint code) {
-    GString* mainResultString = g_string_new(NULL);
-    g_string_printf(mainResultString, "main %s code '%i' for process '%s-%u'",
-            ((code==0) ? "success" : "error"),
-            code, program_getName(proc->prog), proc->processID);
+    if(!proc->returnCodeLogged) {
+        GString* mainResultString = g_string_new(NULL);
+        g_string_printf(mainResultString, "main %s code '%i' for process '%s-%u'",
+                ((code==0) ? "success" : "error"),
+                code, program_getName(proc->prog), proc->processID);
 
-    if(code == 0) {
-        message("%s", mainResultString->str);
-    } else {
-        warning("%s", mainResultString->str);
-        worker_incrementPluginError();
+        if(code == 0) {
+            message("%s", mainResultString->str);
+        } else {
+            warning("%s", mainResultString->str);
+            worker_incrementPluginError();
+        }
+
+        g_string_free(mainResultString, TRUE);
+
+        proc->returnCodeLogged = TRUE;
     }
-
-    g_string_free(mainResultString, TRUE);
 }
 
 static void* _process_executeMain(Process* proc) {
