@@ -20,14 +20,14 @@ void* do_lookup(char* funcname) {
     // clear old error vals
     dlerror();
     // search for symbol
-    time_fnctptr t = (time_fnctptr) dlsym(RTLD_NEXT, funcname);
+    void* f = dlsym(RTLD_NEXT, funcname);
     // check for error
     char* err = dlerror();
     if(err != NULL) {
         printf("dlsym() error, failed to lookup %s(): '%s'\n", funcname, err);
         return NULL;
     }
-    return t;
+    return f;
 }
 
 time_t time (time_t *result){
