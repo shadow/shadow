@@ -98,42 +98,6 @@ interpreter_map (unsigned long load_base,
   return result;
 }
 
-struct VdlList *
-ld_preload_list_new (struct VdlContext *context, const char **envp)
-{
-  // add the LD_PRELOAD binary if it is specified somewhere.
-  // We must do this _before_ adding the dependencies of the main 
-  // binary to the link map to ensure that the symbol scope of 
-  // the main binary is correct, that is, that symbols are 
-  // resolved first within the LD_PRELOAD binary, before every
-  // other library, but after the main binary itself.
-  struct VdlList *retval = vdl_list_new ();
-  const char *ld_preload = vdl_utils_getenv (envp, "LD_PRELOAD");
-  struct VdlList *list = vdl_utils_strsplit (ld_preload, ':');
-  void **cur;
-  for (cur = vdl_list_begin (list); 
-       cur != vdl_list_end (list); 
-       cur = vdl_list_next (cur))
-    {
-      char *filename = *cur;
-      struct VdlMapResult result = vdl_map_from_filename (context, filename);
-      if (result.requested == 0)
-	{
-	  VDL_LOG_ERROR ("Could not map LD_PRELOAD %s: %s\n", filename, result.error_string);
-	  goto error;
-	}
-      result.requested->count++;
-      result.requested->is_preloaded = 1;
-      vdl_list_insert_range (retval, vdl_list_end (retval),
-			     vdl_list_begin (result.newly_mapped),
-			     vdl_list_end (result.newly_mapped));
-      vdl_list_delete (result.newly_mapped);
-    }
- error:
-  vdl_utils_str_list_delete (list);
-  return retval;
-}
-
 static void
 setup_env_vars (const char **envp)
 {
@@ -205,9 +169,19 @@ stage2_initialize (struct Stage2Input input)
   interp->count++;
   g_vdl.ldso = interp;
 
-  // let's make sure that LD_PRELOAD binaries and their dependencies are loaded.
+  // add the LD_PRELOAD binary if it is specified somewhere.
+  // We must do this _before_ adding the dependencies of the main
+  // binary to the link map to ensure that the symbol scope of
+  // the main binary is correct, that is, that symbols are
+  // resolved first within the LD_PRELOAD binary, before every
+  // other library, but after the main binary itself.
   struct VdlList *ld_preload;
-  ld_preload = ld_preload_list_new (context, (const char **)input.program_envp);
+  {
+    const char *preload_env = vdl_utils_getenv ((const char **)input.program_envp, "LD_PRELOAD");
+    struct VdlList *preload_names = vdl_utils_strsplit (preload_env, ':');
+    ld_preload = vdl_map_from_preload (context, preload_names);
+    vdl_utils_str_list_delete (preload_names);
+  }
 
   // Now, Let's do the main binary.
   struct VdlMapResult main_result;
