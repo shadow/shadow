@@ -52,9 +52,9 @@ target_link_libraries(s t)
 # forced circular dependency
 target_link_libraries(n -ldl)
 target_link_libraries(o -ldl n)
-file(COPY libn.c DESTINATION .)
-file(RENAME ${CMAKE_CURRENT_BINARY_DIR}/libn.c libnn.c)
-add_library(nn SHARED libnn.c)
+file(COPY libn.c DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+file(RENAME ${CMAKE_CURRENT_BINARY_DIR}/libn.c ${CMAKE_CURRENT_BINARY_DIR}/libnn.c)
+add_library(nn SHARED ${CMAKE_CURRENT_BINARY_DIR}/libnn.c)
 target_link_libraries(nn -ldl o)
 
 
