@@ -9,6 +9,8 @@
 #include <dlfcn.h>
 #include <limits.h>
 
+void set_call_next(int should_call_next);
+
 int local_global_func(void) {
     printf("direct call to local_global_func()\n");
     return 0;
@@ -17,6 +19,9 @@ int local_global_func(void) {
 int run_test(void) {
     time_t t;
 
+    set_call_next(0);
+
+    printf("first time() call\n");
     t = time(NULL);
     printf("first time() called, result = %i, expected = -666666\n", (int)t);
 
@@ -26,17 +31,39 @@ int run_test(void) {
         return EXIT_FAILURE;
     }
 
-    t = time(NULL);
-    printf("second time() called, result = %i, expected a unix timestamp\n", (int)t);
+    set_call_next(1);
 
-    if(t == (time_t) -666666) {
-        /* it was intercepted and not forwarded to libc */
-        printf("test failed because time() was not forwarded to libc\n");
+    printf("second time() call\n");
+    t = time(NULL);
+    printf("second time() called, result = %i, expected 111111\n", (int)t);
+
+    if(t != (time_t) 111111) {
+        /* it was not forwarded shd-test-preload-lib.c*/
+        printf("test failed because time() was not forwarded to shd-test-preload-lib.c\n");
         return EXIT_FAILURE;
     }
 
-    if(t < 0 || t > INT_MAX) {
-        printf("test failed because time() returned an out of range value\n");
+    set_call_next(0);
+
+    printf("third time() call\n");
+    t = time(NULL);
+    printf("third time() called, result = %i, expected = -666666\n", (int)t);
+
+    if(t != (time_t) -666666) {
+        /* it was not intercepted */
+        printf("test failed because time() was not properly intercepted\n");
+        return EXIT_FAILURE;
+    }
+
+    set_call_next(1);
+
+    printf("fourth time() call\n");
+    t = time(NULL);
+    printf("fourth time() called, result = %i, expected 111111\n", (int)t);
+
+    if(t != (time_t) 111111) {
+        /* it was not forwarded shd-test-preload-lib.c*/
+        printf("test failed because time() was not forwarded to shd-test-preload-lib.c\n");
         return EXIT_FAILURE;
     }
 
