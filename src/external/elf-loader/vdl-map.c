@@ -936,12 +936,12 @@ struct VdlList *
 vdl_map_from_preload (struct VdlContext *context,
 		      struct VdlList *filenames)
 {
+  // map each of the listed files, but none of their dependencies
   struct VdlList *retval = vdl_list_new ();
   struct SingleMapResult single_results[vdl_list_size(filenames)];
   struct VdlList *empty = vdl_list_new ();
   void **cur;
   int i;
-  // load the specified binaries first
   for (cur = vdl_list_begin (filenames), i = 0;
        cur != vdl_list_end (filenames);
        cur = vdl_list_next (cur), i++)
@@ -959,26 +959,6 @@ vdl_map_from_preload (struct VdlContext *context,
 	{
 	  vdl_list_push_back(retval, single_results[i].file);
 	}
-    }
-  // then their dependencies
-  for (cur = vdl_list_begin (filenames), i = 0;
-       cur != vdl_list_end (filenames);
-       cur = vdl_list_next (cur), i++)
-    {
-      char *filename = *cur;
-      struct VdlList *newly_mapped = vdl_list_new();
-      char *error_string = vdl_file_map_deps_recursive (single_results[i].file, empty,
-							newly_mapped);
-      if (error_string != 0)
-	{
-	  VDL_LOG_ERROR ("Could not map LD_PRELOAD %s dependencies: %s\n", filename, error_string);
-	  goto error;
-	}
-
-      vdl_list_insert_range (retval, vdl_list_end (retval),
-			     vdl_list_begin (newly_mapped),
-			     vdl_list_end (newly_mapped));
-      vdl_list_delete (newly_mapped);
     }
  error:
   vdl_list_delete (empty);
