@@ -169,17 +169,34 @@ stage2_initialize (struct Stage2Input input)
   interp->count++;
   g_vdl.ldso = interp;
 
-  // add the LD_PRELOAD binary if it is specified somewhere.
+  // Add the LD_PRELOAD binaries if they are specified somewhere.
   // We must do this _before_ adding the dependencies of the main
   // binary to the link map to ensure that the symbol scope of
   // the main binary is correct, that is, that symbols are
-  // resolved first within the LD_PRELOAD binary, before every
+  // resolved first within the LD_PRELOAD binaries, before every
   // other library, but after the main binary itself.
+  // However, the dependencies of the LD_PRELOAD binaries should
+  // be added _after_ the dependencies of the main binary,
+  // to maintain the behavior of glibc.
   struct VdlList *ld_preload;
+  struct VdlList *preload_deps;
   {
     const char *preload_env = vdl_utils_getenv ((const char **)input.program_envp, "LD_PRELOAD");
     struct VdlList *preload_names = vdl_utils_strsplit (preload_env, ':');
     ld_preload = vdl_map_from_preload (context, preload_names);
+    preload_deps = vdl_list_new();
+    void **cur;
+    for (cur = vdl_list_begin (preload_names);
+         cur != vdl_list_end (preload_names);
+         cur = vdl_list_next (cur))
+      {
+	char *filename = *cur;
+	struct VdlMapResult preload_result;
+        preload_result = vdl_map_from_filename(context, filename);
+        vdl_list_insert_range (preload_deps, vdl_list_end(preload_deps),
+                               vdl_list_begin (preload_result.newly_mapped),
+                               vdl_list_end (preload_result.newly_mapped));
+      }
     vdl_utils_str_list_delete (preload_names);
   }
 
@@ -204,13 +221,16 @@ stage2_initialize (struct Stage2Input input)
   // Now, we setup our public linkmap.
   // We need to be careful to insert first the main file,
   // then, the interpreter, then, the ld preload entries,
-  // then, the dependencies from the main file
+  // then, the dependencies from the main file,
+  // then, the dependencies from the ld preload entries
   vdl_linkmap_append (main_file);
   vdl_linkmap_append (interp);
   vdl_linkmap_append_range (vdl_list_begin (ld_preload),
 			    vdl_list_end (ld_preload));
   vdl_linkmap_append_range (vdl_list_begin (main_result.newly_mapped),
 			    vdl_list_end (main_result.newly_mapped));
+  vdl_linkmap_append_range (vdl_list_begin (preload_deps),
+			    vdl_list_end (preload_deps));
   vdl_list_delete (main_result.newly_mapped);
   main_result.newly_mapped = 0;
 
@@ -230,6 +250,10 @@ stage2_initialize (struct Stage2Input input)
 			 vdl_list_end (context->global_scope),
 			 vdl_list_begin (all_deps),
 			 vdl_list_end (all_deps));
+  vdl_list_insert_range (context->global_scope,
+			 vdl_list_end (context->global_scope),
+			 vdl_list_begin (preload_deps),
+			 vdl_list_end (preload_deps));
   vdl_list_delete (all_deps);
   vdl_list_unicize (context->global_scope);
 
