@@ -22,25 +22,25 @@ add_library(test-preload-lib SHARED shd-test-preload-lib.c)
 ## first build a version that uses the regular loader
 ##
 
-## build test executable
-add_executable(test-preload-exe shd-test-preload.c)
-target_link_libraries(test-preload-exe test-preload-lib)
+## build test executables
+add_executable(test-preload-exe1 shd-test-preload-main.c shd-test-preload-run1.c)
+target_link_libraries(test-preload-exe1 test-preload-lib)
 
-add_executable(test-preload-exe2 shd-test-preload2.c)
+add_executable(test-preload-exe2 shd-test-preload-main.c shd-test-preload-run2.c)
 target_link_libraries(test-preload-exe2 test-preload-lib)
 
 ## register the tests
-add_test(NAME test-preload COMMAND test-preload-exe)
+add_test(NAME test-preload COMMAND test-preload-exe1)
 SET_TESTS_PROPERTIES(test-preload
     PROPERTIES ENVIRONMENT "LD_PRELOAD=${CMAKE_CURRENT_BINARY_DIR}/libtest-preload-interpose.so")
-    
+
 ## version for chaining
 add_test(NAME test-preload-chain COMMAND test-preload-exe2)
 SET_TESTS_PROPERTIES(test-preload-chain
     PROPERTIES ENVIRONMENT "LD_PRELOAD=${CMAKE_CURRENT_BINARY_DIR}/libtest-preload-interpose.so:${CMAKE_CURRENT_BINARY_DIR}/libtest-preload-interpose2.so")
-    
+
 ## the version with the constructor
-add_test(NAME test-preload-constructor COMMAND test-preload-exe)
+add_test(NAME test-preload-constructor COMMAND test-preload-exe1)
 SET_TESTS_PROPERTIES(test-preload-constructor
     PROPERTIES ENVIRONMENT "LD_PRELOAD=${CMAKE_CURRENT_BINARY_DIR}/libtest-preload-interpose-constructor.so")
 
@@ -50,15 +50,15 @@ SET_TESTS_PROPERTIES(test-preload-constructor
 ##
 
 ## build elf-loader version executable
-add_executable(test-preload-elf-exe shd-test-preload.c)
-target_link_libraries(test-preload-elf-exe test-preload-lib)
-set_target_properties(test-preload-elf-exe PROPERTIES 
+add_executable(test-preload-elf-exe1 shd-test-preload-main.c shd-test-preload-run1.c)
+target_link_libraries(test-preload-elf-exe1 test-preload-lib)
+set_target_properties(test-preload-elf-exe1 PROPERTIES 
     INSTALL_RPATH ${CMAKE_BINARY_DIR}/src/external/elf-loader
     INSTALL_RPATH_USE_LINK_PATH TRUE 
     LINK_FLAGS "-Wl,--no-as-needed,-rpath=${CMAKE_BINARY_DIR}/src/external/elf-loader,-dynamic-linker=${CMAKE_BINARY_DIR}/src/external/elf-loader/ldso"
 )
 
-add_executable(test-preload-elf-exe2 shd-test-preload2.c)
+add_executable(test-preload-elf-exe2 shd-test-preload-main.c shd-test-preload-run2.c)
 target_link_libraries(test-preload-elf-exe2 test-preload-lib)
 set_target_properties(test-preload-elf-exe2 PROPERTIES 
     INSTALL_RPATH ${CMAKE_BINARY_DIR}/src/external/elf-loader
@@ -67,7 +67,7 @@ set_target_properties(test-preload-elf-exe2 PROPERTIES
 )
 
 ## register the tests
-add_test(NAME test-preload-elf COMMAND test-preload-elf-exe)
+add_test(NAME test-preload-elf COMMAND test-preload-elf-exe1)
 SET_TESTS_PROPERTIES(test-preload-elf
     PROPERTIES ENVIRONMENT "LD_PRELOAD=${CMAKE_CURRENT_BINARY_DIR}/libtest-preload-interpose.so")
 
@@ -77,7 +77,7 @@ SET_TESTS_PROPERTIES(test-preload-chain-elf
     PROPERTIES ENVIRONMENT "LD_PRELOAD=${CMAKE_CURRENT_BINARY_DIR}/libtest-preload-interpose.so:${CMAKE_CURRENT_BINARY_DIR}/libtest-preload-interpose2.so")
 
 ## the version with the constructor
-add_test(NAME test-preload-constructor-elf COMMAND test-preload-elf-exe)
+add_test(NAME test-preload-constructor-elf COMMAND test-preload-elf-exe1)
 SET_TESTS_PROPERTIES(test-preload-constructor-elf
     PROPERTIES ENVIRONMENT "LD_PRELOAD=${CMAKE_CURRENT_BINARY_DIR}/libtest-preload-interpose-constructor.so")
 
@@ -100,3 +100,4 @@ SET_TESTS_PROPERTIES(test-preload-constructor-elf
 #         COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug ${CMAKE_CURRENT_SOURCE_DIR}/preload.test.shadow.config.xml)
 #SET_TESTS_PROPERTIES(test-preload-shadow-constructor
 #    PROPERTIES ENVIRONMENT "LD_PRELOAD=${CMAKE_CURRENT_BINARY_DIR}/libtest-preload-interpose-constructor.so:${CMAKE_BINARY_DIR}/src/preload/libshadow-interpose.so;LD_STATIC_TLS_EXTRA=10240000")
+

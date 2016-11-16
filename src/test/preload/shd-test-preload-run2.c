@@ -55,15 +55,3 @@ int run_test(void) {
         return EXIT_SUCCESS;
     }
 }
-
-int main(int argc, char* argv[]) {
-    fprintf(stdout, "########## preload2 test starting ##########\n");
-
-    if(run_test() != 0) {
-        fprintf(stdout, "########## preload2 test failed\n");
-        return -EXIT_FAILURE;
-    }
-
-    fprintf(stdout, "########## preload2 test passed! ##########\n");
-    return EXIT_SUCCESS;
-}
