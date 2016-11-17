@@ -114,11 +114,11 @@ set_target_properties(test-preload-elf-exe-run1 PROPERTIES
 )
 
 add_test(NAME test-preload-elf-lib COMMAND test-preload-exe-run1)
-SET_TESTS_PROPERTIES(test-preload-glibc-lib
+SET_TESTS_PROPERTIES(test-preload-elf-lib
     PROPERTIES ENVIRONMENT "LD_PRELOAD=${CMAKE_CURRENT_BINARY_DIR}/libtest-preload-interpose.so")
 
 add_test(NAME test-preload-elf-lib-constructor COMMAND test-preload-exe-run1)
-SET_TESTS_PROPERTIES(test-preload-glibc-lib-constructor
+SET_TESTS_PROPERTIES(test-preload-elf-lib-constructor
     PROPERTIES ENVIRONMENT "LD_PRELOAD=${CMAKE_CURRENT_BINARY_DIR}/libtest-preload-interpose-constructor.so")
 
 add_executable(test-preload-elf-exe-run2 shd-test-preload-main.c)
@@ -130,7 +130,7 @@ set_target_properties(test-preload-elf-exe-run2 PROPERTIES
 )
 
 add_test(NAME test-preload-elf-lib-chain COMMAND test-preload-exe-run2)
-SET_TESTS_PROPERTIES(test-preload-glibc-lib-chain
+SET_TESTS_PROPERTIES(test-preload-elf-lib-chain
     PROPERTIES ENVIRONMENT "LD_PRELOAD=${CMAKE_CURRENT_BINARY_DIR}/libtest-preload-interpose.so:${CMAKE_CURRENT_BINARY_DIR}/libtest-preload-interpose2.so")
 
 ##
