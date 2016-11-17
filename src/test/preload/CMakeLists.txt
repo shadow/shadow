@@ -6,13 +6,13 @@
 add_library(test-preload-interpose SHARED shd-test-preload-interpose1.c)
 target_link_libraries(test-preload-interpose ${DL_LIBRARIES})
 
-## this one meant for chaining preloads
-add_library(test-preload-interpose2 SHARED shd-test-preload-interpose2.c)
-target_link_libraries(test-preload-interpose2 ${DL_LIBRARIES})
-
 ## this one has a constructor in which it does a dlsym() lookup
 add_library(test-preload-interpose-constructor SHARED shd-test-preload-interpose1.c shd-test-preload-interpose-constructor.c)
 target_link_libraries(test-preload-interpose-constructor ${DL_LIBRARIES})
+
+## this one meant for chaining preloads
+add_library(test-preload-interpose2 SHARED shd-test-preload-interpose2.c)
+target_link_libraries(test-preload-interpose2 ${DL_LIBRARIES})
 
 ## define time and return a constant
 add_library(test-preload-lib SHARED shd-test-preload-lib.c)
@@ -81,12 +81,12 @@ set_target_properties(test-preload-elf-exe1 PROPERTIES
     LINK_FLAGS "-Wl,--no-as-needed,-rpath=${CMAKE_BINARY_DIR}/src/external/elf-loader,-dynamic-linker=${CMAKE_BINARY_DIR}/src/external/elf-loader/ldso"
 )
 
-add_test(NAME test-preload-elf COMMAND test-preload-elf-exe1)
-SET_TESTS_PROPERTIES(test-preload-elf
+add_test(NAME test-preload-elf-exe COMMAND test-preload-elf-exe1)
+SET_TESTS_PROPERTIES(test-preload-elf-exe
     PROPERTIES ENVIRONMENT "LD_PRELOAD=${CMAKE_CURRENT_BINARY_DIR}/libtest-preload-interpose.so")
 
-add_test(NAME test-preload-constructor-elf COMMAND test-preload-elf-exe1)
-SET_TESTS_PROPERTIES(test-preload-constructor-elf
+add_test(NAME test-preload-elf-exe-constructor COMMAND test-preload-elf-exe1)
+SET_TESTS_PROPERTIES(test-preload-elf-exe-constructor
     PROPERTIES ENVIRONMENT "LD_PRELOAD=${CMAKE_CURRENT_BINARY_DIR}/libtest-preload-interpose-constructor.so")
 
 ## another version of the test for chaining
@@ -99,10 +99,39 @@ set_target_properties(test-preload-elf-exe2 PROPERTIES
     LINK_FLAGS "-Wl,--no-as-needed,-rpath=${CMAKE_BINARY_DIR}/src/external/elf-loader,-dynamic-linker=${CMAKE_BINARY_DIR}/src/external/elf-loader/ldso"
 )
 
-add_test(NAME test-preload-chain-elf COMMAND test-preload-elf-exe2)
-SET_TESTS_PROPERTIES(test-preload-chain-elf
+add_test(NAME test-preload-elf-exe-chain COMMAND test-preload-elf-exe2)
+SET_TESTS_PROPERTIES(test-preload-elf-exe-chain
     PROPERTIES ENVIRONMENT "LD_PRELOAD=${CMAKE_CURRENT_BINARY_DIR}/libtest-preload-interpose.so:${CMAKE_CURRENT_BINARY_DIR}/libtest-preload-interpose2.so")
 
+## test preloading functions called from a library
+
+add_executable(test-preload-elf-exe-run1 shd-test-preload-main.c)
+target_link_libraries(test-preload-elf-exe-run1 test-preload-lib-run1 test-preload-lib)
+set_target_properties(test-preload-elf-exe-run1 PROPERTIES 
+    INSTALL_RPATH ${CMAKE_BINARY_DIR}/src/external/elf-loader
+    INSTALL_RPATH_USE_LINK_PATH TRUE 
+    LINK_FLAGS "-Wl,--no-as-needed,-rpath=${CMAKE_BINARY_DIR}/src/external/elf-loader,-dynamic-linker=${CMAKE_BINARY_DIR}/src/external/elf-loader/ldso"
+)
+
+add_test(NAME test-preload-elf-lib COMMAND test-preload-exe-run1)
+SET_TESTS_PROPERTIES(test-preload-glibc-lib
+    PROPERTIES ENVIRONMENT "LD_PRELOAD=${CMAKE_CURRENT_BINARY_DIR}/libtest-preload-interpose.so")
+
+add_test(NAME test-preload-elf-lib-constructor COMMAND test-preload-exe-run1)
+SET_TESTS_PROPERTIES(test-preload-glibc-lib-constructor
+    PROPERTIES ENVIRONMENT "LD_PRELOAD=${CMAKE_CURRENT_BINARY_DIR}/libtest-preload-interpose-constructor.so")
+
+add_executable(test-preload-elf-exe-run2 shd-test-preload-main.c)
+target_link_libraries(test-preload-elf-exe-run2 test-preload-lib-run2 test-preload-lib)
+set_target_properties(test-preload-elf-exe-run2 PROPERTIES 
+    INSTALL_RPATH ${CMAKE_BINARY_DIR}/src/external/elf-loader
+    INSTALL_RPATH_USE_LINK_PATH TRUE 
+    LINK_FLAGS "-Wl,--no-as-needed,-rpath=${CMAKE_BINARY_DIR}/src/external/elf-loader,-dynamic-linker=${CMAKE_BINARY_DIR}/src/external/elf-loader/ldso"
+)
+
+add_test(NAME test-preload-elf-lib-chain COMMAND test-preload-exe-run2)
+SET_TESTS_PROPERTIES(test-preload-glibc-lib-chain
+    PROPERTIES ENVIRONMENT "LD_PRELOAD=${CMAKE_CURRENT_BINARY_DIR}/libtest-preload-interpose.so:${CMAKE_CURRENT_BINARY_DIR}/libtest-preload-interpose2.so")
 
 ##
 ## now test inside of shadow itself
