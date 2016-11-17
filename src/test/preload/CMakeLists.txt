@@ -134,21 +134,44 @@ SET_TESTS_PROPERTIES(test-preload-elf-lib-chain
     PROPERTIES ENVIRONMENT "LD_PRELOAD=${CMAKE_CURRENT_BINARY_DIR}/libtest-preload-interpose.so:${CMAKE_CURRENT_BINARY_DIR}/libtest-preload-interpose2.so")
 
 ##
-## now test inside of shadow itself
+## test preloading functions called from a dynamically loaded plugin
 ##
 
-#add_library(shadow-plugin-test-preload SHARED shd-test-preload.c)
-#target_link_libraries(shadow-plugin-test-preload test-preload-lib)
+add_library(test-preload-dl-run1 SHARED shd-test-preload-run1.c)
+target_link_libraries(test-preload-dl-run1 test-preload-interpose test-preload-lib)
+
+## glibc loader
+
+add_executable(test-preload-exe-dl-run1 shd-test-preload-dl-main.c)
+target_link_libraries(test-preload-exe-dl-run1 test-preload-interpose test-preload-lib ${DL_LIBRARIES})
+
+add_test(NAME test-preload-glibc-dl COMMAND test-preload-exe-dl-run1 ${CMAKE_CURRENT_BINARY_DIR}/libtest-preload-dl-run1.so)
+SET_TESTS_PROPERTIES(test-preload-glibc-dl
+    PROPERTIES ENVIRONMENT "LD_PRELOAD=${CMAKE_CURRENT_BINARY_DIR}/libtest-preload-interpose.so")
+
+## elf loader
+
+add_executable(test-preload-exe-elf-dl-run1 shd-test-preload-dl-main.c)
+target_link_libraries(test-preload-exe-elf-dl-run1 test-preload-interpose test-preload-lib ${DL_LIBRARIES})
+set_target_properties(test-preload-exe-elf-dl-run1 PROPERTIES 
+    INSTALL_RPATH ${CMAKE_BINARY_DIR}/src/external/elf-loader
+    INSTALL_RPATH_USE_LINK_PATH TRUE 
+    LINK_FLAGS "-Wl,--no-as-needed,-rpath=${CMAKE_BINARY_DIR}/src/external/elf-loader,-dynamic-linker=${CMAKE_BINARY_DIR}/src/external/elf-loader/ldso"
+)
+
+add_test(NAME test-preload-elf-dl COMMAND test-preload-exe-elf-dl-run1 ${CMAKE_CURRENT_BINARY_DIR}/libtest-preload-dl-run1.so)
+SET_TESTS_PROPERTIES(test-preload-elf-dl
+    PROPERTIES ENVIRONMENT "LD_PRELOAD=${CMAKE_CURRENT_BINARY_DIR}/libtest-preload-interpose.so")
+
+## shadow
+
+## shadow itself already dynamically loads the plugin, so just combine main() and run_test()
+add_library(shadow-plugin-test-preload SHARED shd-test-preload-main.c shd-test-preload-run1.c)
+target_link_libraries(shadow-plugin-test-preload test-preload-interpose test-preload-lib)
 
 ## register a shadow test
-#add_test(NAME test-preload-shadow
-#         COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug ${CMAKE_CURRENT_SOURCE_DIR}/preload.test.shadow.config.xml)
-#SET_TESTS_PROPERTIES(test-preload-shadow
-#    PROPERTIES ENVIRONMENT "LD_PRELOAD=${CMAKE_CURRENT_BINARY_DIR}/libtest-preload-interpose.so:${CMAKE_BINARY_DIR}/src/preload/libshadow-interpose.so;LD_STATIC_TLS_EXTRA=10240000")
-
-## register the constructor version
-#add_test(NAME test-preload-shadow-constructor
-#         COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug ${CMAKE_CURRENT_SOURCE_DIR}/preload.test.shadow.config.xml)
-#SET_TESTS_PROPERTIES(test-preload-shadow-constructor
-#    PROPERTIES ENVIRONMENT "LD_PRELOAD=${CMAKE_CURRENT_BINARY_DIR}/libtest-preload-interpose-constructor.so:${CMAKE_BINARY_DIR}/src/preload/libshadow-interpose.so;LD_STATIC_TLS_EXTRA=10240000")
+add_test(NAME test-preload-shadow-dl
+         COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug ${CMAKE_CURRENT_SOURCE_DIR}/preload.test.shadow.config.xml)
+SET_TESTS_PROPERTIES(test-preload-shadow-dl
+    PROPERTIES ENVIRONMENT "LD_PRELOAD=${CMAKE_CURRENT_BINARY_DIR}/libtest-preload-interpose.so:${CMAKE_BINARY_DIR}/src/preload/libshadow-interpose.so;LD_STATIC_TLS_EXTRA=10240000")
 

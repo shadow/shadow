@@ -9,7 +9,7 @@
 #include <dlfcn.h>
 #include <limits.h>
 
-void set_call_next(int should_call_next);
+extern void set_call_next(int should_call_next);
 
 int run_test(void) {
     time_t t;
