@@ -11,11 +11,6 @@
 
 void set_call_next(int should_call_next);
 
-int local_global_func(void) {
-    printf("direct call to local_global_func()\n");
-    return 0;
-}
-
 int run_test(void) {
     time_t t;
 
@@ -65,19 +60,8 @@ int run_test(void) {
         /* it was not forwarded shd-test-preload-lib.c*/
         printf("test failed because time() was not forwarded to shd-test-preload-lib.c\n");
         return EXIT_FAILURE;
-    }
-
-    int retval = local_global_func();
-
-    if(retval == 0) {
-        /* our local func was called instead of the preloaded version.
-         * this is expected when called from an exe.
-         * interception can only occur when called from a library.so type */
-        return EXIT_SUCCESS;
     } else {
-        /* it was unexpectedly intercepted */
-        printf("test failed, local global function was unexpectedly intercepted\n");
-        return EXIT_FAILURE;
+        return EXIT_SUCCESS;
     }
 }
 
