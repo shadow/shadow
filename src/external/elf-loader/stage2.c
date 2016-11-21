@@ -257,8 +257,10 @@ stage2_initialize (struct Stage2Input input)
   vdl_list_delete (all_deps);
   vdl_list_unicize (context->global_scope);
 
-  vdl_list_delete (ld_preload);
+  vdl_list_delete (preload_deps);
 
+  // save preload list for searching when in other contexts
+  g_vdl.preloads = ld_preload;
 
   gdb_initialize (main_file);
 

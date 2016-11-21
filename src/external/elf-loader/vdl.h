@@ -68,6 +68,8 @@ struct Vdl
   // dynamic sized array to cache mappings from tls_index to module
   unsigned long module_map_len;
   struct VdlFile **module_map;
+  // preloaded files for inclusion in new contexts
+  struct VdlList *preloads;
 };
 
 extern struct Vdl g_vdl;
