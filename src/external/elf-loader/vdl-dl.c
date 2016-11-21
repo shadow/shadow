@@ -213,6 +213,20 @@ static void *dlopen_with_context (struct VdlContext *context, const char *filena
   map.requested->count++;
 
   struct VdlList *scope = vdl_sort_deps_breadth_first (map.requested);
+
+  // This inserts the files from LD_PRELOAD into all contexts (other than the
+  // default context, which should already have them).
+  // Note that this insertion is of the loaded files as is, not a reloading.
+  // Therefore, all symbols found in these files or from these files will be
+  // in the default context, and _not_ the context we have been passed.
+  if (context != (struct VdlContext *)vdl_list_front(g_vdl.contexts))
+    {
+      vdl_list_insert_range(scope,
+			    vdl_list_begin(scope),
+			    vdl_list_begin(g_vdl.preloads),
+			    vdl_list_end(g_vdl.preloads));
+      vdl_list_unicize (scope);
+    }
   if (flags & RTLD_GLOBAL)
     {
       // add this object as well as its dependencies to the global scope.
