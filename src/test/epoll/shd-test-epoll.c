@@ -39,7 +39,7 @@ static int _test_pipe() {
 
     int efd = epoll_create(1);
     if(epoll_ctl(efd, EPOLL_CTL_ADD, pfds[0], &pevent) < 0) {
-        fprintf(stdout, "error: epoll_ctl failed");
+        fprintf(stdout, "error: epoll_ctl failed\n");
         return -1;
     }
     
