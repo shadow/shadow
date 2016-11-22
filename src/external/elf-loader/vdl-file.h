@@ -62,7 +62,7 @@ struct VdlFile
 
   // this field is here just for padding to allow l_ns to be located at the
   // right offset.
-  uint8_t l_real[sizeof(void*)];
+  uint8_t l_real[sizeof (void *)];
 
   // This field (named l_ns in the libc elf loader)
   // is used by the libc to determine whether malloc
@@ -85,41 +85,41 @@ struct VdlFile
   //     loaded during loader initialization
   // All other files have a count of zero.
   uint32_t count;
-  ElfW(Phdr) *phdr;
+    ElfW (Phdr) * phdr;
   uint32_t phnum;
   char *name;
   dev_t st_dev;
   ino_t st_ino;
   struct VdlList *maps;
   // indicates if the deps field has been initialized correctly
-  uint32_t deps_initialized : 1;
+  uint32_t deps_initialized:1;
   // indicates if the has_tls field has been initialized correctly
-  uint32_t tls_initialized : 1;
+  uint32_t tls_initialized:1;
   // indicates if the ELF initializers of this file
   // have been called.
-  uint32_t init_called : 1;
+  uint32_t init_called:1;
   // indicates that the ELF finalizers of this file are
   // going to be called.
-  uint32_t fini_call_lock : 1;
+  uint32_t fini_call_lock:1;
   // indicates if the ELF finalizers of this file
   // have been called.
-  uint32_t fini_called : 1;
+  uint32_t fini_called:1;
   // indicates if this file has been relocated
-  uint32_t reloced : 1;
+  uint32_t reloced:1;
   // indicates if we patched this file for some
   // nastly glibc-isms.
-  uint32_t patched : 1;
+  uint32_t patched:1;
   // indicates if this represents the main executable.
-  uint32_t is_executable : 1;
+  uint32_t is_executable:1;
   // indicates if this represents a file from LD_PRELOAD
-  uint32_t is_preloaded : 1;
-  uint32_t gc_color : 2;
+  uint32_t is_preloaded:1;
+  uint32_t gc_color:2;
   // indicates if this file has a TLS program entry
   // If so, all tls_-prefixed variables are valid.
-  uint32_t has_tls : 1;
+  uint32_t has_tls:1;
   // indicates whether this file is part of the static TLS
   // block
-  uint32_t tls_is_static : 1;
+  uint32_t tls_is_static:1;
   // start of TLS block template
   unsigned long tls_tmpl_start;
   // size of TLS block template
@@ -160,11 +160,11 @@ struct VdlFile
 
   unsigned long dt_relent;
   unsigned long dt_relsz;
-  ElfW(Rel) *dt_rel;
+  ElfW (Rel) * dt_rel;
 
   unsigned long dt_relaent;
   unsigned long dt_relasz;
-  ElfW(Rela) *dt_rela;
+  ElfW (Rela) * dt_rela;
 
   // pointer to first got entry.
   unsigned long dt_pltgot;
@@ -176,10 +176,10 @@ struct VdlFile
   unsigned long dt_pltrelsz;
 
   const char *dt_strtab;
-  ElfW(Sym) *dt_symtab;
+  ElfW (Sym) * dt_symtab;
   unsigned long dt_flags;
 
-  ElfW(Word) *dt_hash;
+  ElfW (Word) * dt_hash;
   uint32_t *dt_gnu_hash;
 
   unsigned long dt_fini;
@@ -190,16 +190,16 @@ struct VdlFile
   unsigned long dt_init_array;
   unsigned long dt_init_arraysz;
 
-  ElfW(Half) *dt_versym;
-  ElfW(Verdef) *dt_verdef;
+  ElfW (Half) * dt_versym;
+  ElfW (Verdef) * dt_verdef;
   unsigned long dt_verdefnum;
-  ElfW(Verneed) *dt_verneed;
+  ElfW (Verneed) * dt_verneed;
   unsigned long dt_verneednum;
 
   const char *dt_rpath;
   const char *dt_runpath;
   const char *dt_soname;
-  ElfW(Half) e_type;
+  ElfW (Half) e_type;
 };
 
 #endif /* VDL_FILE_H */

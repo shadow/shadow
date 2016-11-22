@@ -9,7 +9,7 @@ extern "C" {
 
 void vdl_memcpy (void *dst, const void *src, size_t len);
 void vdl_memmove (void *dst, const void *src, size_t len);
-void vdl_memset(void *s, int c, size_t n);
+void vdl_memset (void *s, int c, size_t n);
 int vdl_memcmp (void *a, void *b, size_t n);
 
 #ifdef __cplusplus

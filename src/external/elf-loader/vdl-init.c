@@ -49,22 +49,24 @@ call_init (struct VdlFile *file)
   // Then, invoke the newer DT_INIT_ARRAY functions.
   // The address of the functions to call is stored as
   // an array of pointers pointed to by DT_INIT_ARRAY
-  if (file->dt_init_array != 0 &&
-      file->dt_init_arraysz != 0)
+  if (file->dt_init_array != 0 && file->dt_init_arraysz != 0)
     {
-      DtInit *dt_init_array = (DtInit *) (file->load_base + file->dt_init_array);
+      DtInit *dt_init_array =
+        (DtInit *) (file->load_base + file->dt_init_array);
       int i;
       int n = file->dt_init_arraysz / sizeof (DtInit);
       for (i = 0; i < n; i++)
-	{
-	  (dt_init_array[i]) (file->context->argc, file->context->argv, file->context->envp);
-	}
+        {
+          (dt_init_array[i]) (file->context->argc, file->context->argv,
+                              file->context->envp);
+        }
     }
 
   vdl_context_notify (file->context, file, VDL_EVENT_CONSTRUCTED);
 }
 
-void vdl_init_call (struct VdlList *files)
+void
+vdl_init_call (struct VdlList *files)
 {
-  vdl_list_iterate (files, (void(*)(void*))call_init);
+  vdl_list_iterate (files, (void (*)(void *)) call_init);
 }
