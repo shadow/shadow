@@ -22,7 +22,8 @@ struct VdlContextLibRemapEntry
   char *dst;
 };
 
-enum VdlEvent {
+enum VdlEvent
+{
   VDL_EVENT_MAPPED,
   VDL_EVENT_UNMAPPED,
   VDL_EVENT_CONSTRUCTED,
@@ -55,34 +56,33 @@ struct VdlContext
   // we have to pass them around.
   int argc;
   char **argv;
-  char **envp;  
+  char **envp;
 };
 
 struct VdlContext *vdl_context_new (int argc, char **argv, char **envp);
 void vdl_context_delete (struct VdlContext *context);
-void vdl_context_add_file (struct VdlContext *context,
-			   struct VdlFile *file);
+void vdl_context_add_file (struct VdlContext *context, struct VdlFile *file);
 void vdl_context_remove_file (struct VdlContext *context,
-			      struct VdlFile *file);
-void vdl_context_add_lib_remap (struct VdlContext *context, const char *src, const char *dst);
-void vdl_context_add_symbol_remap (struct VdlContext *context, 
-				   const char *src_name, 
-				   const char *src_ver_name, 
-				   const char *src_ver_filename, 
-				   const char *dst_name,
-				   const char *dst_ver_name,
-				   const char *dst_ver_filename);
+                              struct VdlFile *file);
+void vdl_context_add_lib_remap (struct VdlContext *context, const char *src,
+                                const char *dst);
+void vdl_context_add_symbol_remap (struct VdlContext *context,
+                                   const char *src_name,
+                                   const char *src_ver_name,
+                                   const char *src_ver_filename,
+                                   const char *dst_name,
+                                   const char *dst_ver_name,
+                                   const char *dst_ver_filename);
 void vdl_context_add_callback (struct VdlContext *context,
-			       void (*cb) (void *handle, enum VdlEvent event, void *context),
-			       void *cb_context);
-void vdl_context_notify (struct VdlContext *context,
-			 struct VdlFile *file,
-			 enum VdlEvent event);
-const char *vdl_context_lib_remap (const struct VdlContext *context, const char *name);
-void vdl_context_symbol_remap (const struct VdlContext *context, 
-			       const char **name,
-			       const char **ver_name,
-			       const char **ver_filename);
+                               void (*cb) (void *handle, enum VdlEvent event,
+                                           void *context), void *cb_context);
+void vdl_context_notify (struct VdlContext *context, struct VdlFile *file,
+                         enum VdlEvent event);
+const char *vdl_context_lib_remap (const struct VdlContext *context,
+                                   const char *name);
+void vdl_context_symbol_remap (const struct VdlContext *context,
+                               const char **name, const char **ver_name,
+                               const char **ver_filename);
 
 bool vdl_context_empty (const struct VdlContext *context);
 

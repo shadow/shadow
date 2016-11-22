@@ -15,9 +15,10 @@ libc_freeres_interceptor (void)
 {
   VDL_LOG_FUNCTION ("");
   // call glibc function
-  LibcFreeRes libc_freeres = (LibcFreeRes) vdl_dlvsym_with_flags (RTLD_DEFAULT, "__libc_freeres",
-								  0, VDL_LOOKUP_NO_REMAP,
-								  RETURN_ADDRESS);
+  LibcFreeRes libc_freeres =
+    (LibcFreeRes) vdl_dlvsym_with_flags (RTLD_DEFAULT, "__libc_freeres",
+                                         0, VDL_LOOKUP_NO_REMAP,
+                                         RETURN_ADDRESS);
   if (libc_freeres != 0)
     {
       libc_freeres ();
@@ -33,6 +34,6 @@ valgrind_initialize (void)
   // context which is going to trigger the exit_group syscall
   // which is the piece of code which will call __libc_freeres
   vdl_context_add_symbol_remap (vdl_list_front (g_vdl.contexts),
-				"__libc_freeres", 0, 0,
-				"libc_freeres_interceptor", 0, 0);
+                                "__libc_freeres", 0, 0,
+                                "libc_freeres_interceptor", 0, 0);
 }

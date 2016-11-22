@@ -9,21 +9,24 @@
 #include "avprintf-cb.h"
 
 
-int vdl_utils_strisequal (const char *a, const char *b)
+int
+vdl_utils_strisequal (const char *a, const char *b)
 {
   //VDL_LOG_FUNCTION ("a=%s, b=%s", a, b);
   while (*a != 0 && *b != 0)
     {
       if (*a != *b)
-	{
-	  return 0;
-	}
+        {
+          return 0;
+        }
       a++;
       b++;
     }
   return *a == *b;
 }
-int vdl_utils_strlen (const char *str)
+
+int
+vdl_utils_strlen (const char *str)
 {
   //VDL_LOG_FUNCTION ("str=%s", str);
   int len = 0;
@@ -33,7 +36,9 @@ int vdl_utils_strlen (const char *str)
     }
   return len;
 }
-char *vdl_utils_strdup (const char *str)
+
+char *
+vdl_utils_strdup (const char *str)
 {
   if (str == 0)
     {
@@ -41,11 +46,13 @@ char *vdl_utils_strdup (const char *str)
     }
   //VDL_LOG_FUNCTION ("str=%s", str);
   int len = vdl_utils_strlen (str);
-  char *retval = vdl_alloc_malloc (len+1);
-  vdl_memcpy (retval, str, len+1);
+  char *retval = vdl_alloc_malloc (len + 1);
+  vdl_memcpy (retval, str, len + 1);
   return retval;
 }
-char *vdl_utils_strfind (char *str, const char *substr)
+
+char *
+vdl_utils_strfind (char *str, const char *substr)
 {
   char *cur = str;
   while (*cur != 0)
@@ -53,19 +60,21 @@ char *vdl_utils_strfind (char *str, const char *substr)
       char *a = cur;
       const char *b = substr;
       while (*a != 0 && *b != 0 && *a == *b)
-	{
-	  a++;
-	  b++;
-	}
+        {
+          a++;
+          b++;
+        }
       if (*b == 0)
-	{
-	  return cur;
-	}
+        {
+          return cur;
+        }
       cur++;
     }
   return 0;
 }
-char *vdl_utils_strconcat (const char *str, ...)
+
+char *
+vdl_utils_strconcat (const char *str, ...)
 {
   VDL_LOG_FUNCTION ("str=%s", str);
   va_list l1, l2;
@@ -92,7 +101,7 @@ char *vdl_utils_strconcat (const char *str, ...)
   while (cur != 0)
     {
       vdl_memcpy (tmp, cur, vdl_utils_strlen (cur));
-      tmp += vdl_utils_strlen(cur);
+      tmp += vdl_utils_strlen (cur);
       cur = va_arg (l2, char *);
     }
   // append final 0
@@ -100,14 +109,18 @@ char *vdl_utils_strconcat (const char *str, ...)
   va_end (l2);
   return retval;
 }
-int vdl_utils_exists (const char *filename)
+
+int
+vdl_utils_exists (const char *filename)
 {
   VDL_LOG_FUNCTION ("filename=%s", filename);
   struct stat buf;
   int status = system_fstat (filename, &buf);
   return status == 0;
 }
-const char *vdl_utils_getenv (const char **envp, const char *value)
+
+const char *
+vdl_utils_getenv (const char **envp, const char *value)
 {
   VDL_LOG_FUNCTION ("envp=%p, value=%s", envp, value);
   while (*envp != 0)
@@ -115,18 +128,18 @@ const char *vdl_utils_getenv (const char **envp, const char *value)
       const char *env = *envp;
       const char *tmp = value;
       while (*tmp != 0 && *env != 0)
-	{
-	  if (*tmp != *env)
-	    {
-	      goto next;
-	    }
-	  env++;
-	  tmp++;
-	}
+        {
+          if (*tmp != *env)
+            {
+              goto next;
+            }
+          env++;
+          tmp++;
+        }
       if (*env != '=')
-	{
-	  goto next;
-	}
+        {
+          goto next;
+        }
       env++;
       return env;
     next:
@@ -134,21 +147,24 @@ const char *vdl_utils_getenv (const char **envp, const char *value)
     }
   return 0;
 }
+
 void
 vdl_utils_str_list_delete (struct VdlList *list)
 {
   void **i;
   for (i = vdl_list_begin (list);
-       i != vdl_list_end (list);
-       i = vdl_list_next (i))
+       i != vdl_list_end (list); i = vdl_list_next (i))
     {
       vdl_alloc_free (*i);
     }
   vdl_list_delete (list);
 }
-struct VdlList *vdl_utils_strsplit (const char *value, char separator)
+
+struct VdlList *
+vdl_utils_strsplit (const char *value, char separator)
 {
-  VDL_LOG_FUNCTION ("value=%s, separator=%d", (value==0)?"":value, separator);
+  VDL_LOG_FUNCTION ("value=%s, separator=%d", (value == 0) ? "" : value,
+                    separator);
   struct VdlList *list = vdl_list_new ();
   const char *prev = value;
   const char *cur = value;
@@ -162,45 +178,46 @@ struct VdlList *vdl_utils_strsplit (const char *value, char separator)
       size_t prev_len;
       char *str;
       while (*cur != separator && *cur != 0)
-	{
-	  cur++;
-	}
-      prev_len = cur-prev;
-      str = vdl_alloc_malloc (prev_len+1);
+        {
+          cur++;
+        }
+      prev_len = cur - prev;
+      str = vdl_alloc_malloc (prev_len + 1);
       vdl_memcpy (str, prev, prev_len);
       str[prev_len] = 0;
       vdl_list_push_back (list, str);
       if (*cur == 0)
-	{
-	  break;
-	}
+        {
+          break;
+        }
       cur++;
       prev = cur;
     }
   return list;
 }
 
-struct VdlList *vdl_utils_splitpath (const char *value)
+struct VdlList *
+vdl_utils_splitpath (const char *value)
 {
   struct VdlList *list = vdl_utils_strsplit (value, ':');
   void **i;
   for (i = vdl_list_begin (list);
-       i != vdl_list_end (list);
-       i = vdl_list_next (i))
+       i != vdl_list_end (list); i = vdl_list_next (i))
     {
       if (vdl_utils_strisequal (*i, ""))
-	{
-	  // the empty string is interpreted as '.'
-	  vdl_alloc_free (*i);
-	  i = vdl_list_erase (list, i);
-	  i = vdl_list_insert (list, i, vdl_utils_strdup ("."));
-	}
+        {
+          // the empty string is interpreted as '.'
+          vdl_alloc_free (*i);
+          i = vdl_list_erase (list, i);
+          i = vdl_list_insert (list, i, vdl_utils_strdup ("."));
+        }
     }
   return list;
 }
 
 
-unsigned long vdl_utils_align_down (unsigned long v, unsigned long align)
+unsigned long
+vdl_utils_align_down (unsigned long v, unsigned long align)
 {
   if ((v % align) == 0)
     {
@@ -209,7 +226,9 @@ unsigned long vdl_utils_align_down (unsigned long v, unsigned long align)
   unsigned long aligned = v - (v % align);
   return aligned;
 }
-unsigned long vdl_utils_align_up (unsigned long v, unsigned long align)
+
+unsigned long
+vdl_utils_align_up (unsigned long v, unsigned long align)
 {
   if ((v % align) == 0)
     {
@@ -219,17 +238,17 @@ unsigned long vdl_utils_align_up (unsigned long v, unsigned long align)
   return aligned;
 }
 
-ElfW(Phdr) *vdl_utils_search_phdr (ElfW(Phdr) *phdr, int phnum, int type)
+ElfW (Phdr) * vdl_utils_search_phdr (ElfW (Phdr) * phdr, int phnum, int type)
 {
   VDL_LOG_FUNCTION ("phdr=%p, phnum=%d, type=%d", phdr, phnum, type);
-  ElfW(Phdr) *cur;
+  ElfW (Phdr) * cur;
   int i;
   for (cur = phdr, i = 0; i < phnum; cur++, i++)
     {
       if (cur->p_type == type)
-	{
-	  return cur;
-	}
+        {
+          return cur;
+        }
     }
   return 0;
 }
@@ -239,12 +258,13 @@ ElfW(Phdr) *vdl_utils_search_phdr (ElfW(Phdr) *phdr, int phnum, int type)
 // pre-allocate a large string buffer and would create a larger
 // buffer only when needed to avoid the very very many memory
 // allocations and frees done for each caracter.
-static void avprintf_callback (char c, void *context)
+static void
+avprintf_callback (char c, void *context)
 {
   if (c != 0)
     {
-      char **pstr = (char**)context;
-      char new_char[] = {c, 0};
+      char **pstr = (char **) context;
+      char new_char[] = { c, 0 };
       char *new_str = vdl_utils_strconcat (*pstr, new_char, 0);
       vdl_alloc_free (*pstr);
       *pstr = new_str;
@@ -252,7 +272,8 @@ static void avprintf_callback (char c, void *context)
 }
 
 
-char *vdl_utils_vprintf (const char *str, va_list args)
+char *
+vdl_utils_vprintf (const char *str, va_list args)
 {
   char *retval = vdl_utils_strdup ("");
   int status = avprintf_cb (avprintf_callback, &retval, str, args);
@@ -264,7 +285,8 @@ char *vdl_utils_vprintf (const char *str, va_list args)
 }
 
 
-char *vdl_utils_sprintf (const char *str, ...)
+char *
+vdl_utils_sprintf (const char *str, ...)
 {
   va_list list;
   va_start (list, str);

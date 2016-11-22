@@ -15,18 +15,19 @@ file_delete (struct VdlFile *file, bool mapping)
   if (mapping)
     {
       void **i;
-      for (i = vdl_list_begin (file->maps); i != vdl_list_end (file->maps); i = vdl_list_next (i))
-	{
-	  struct VdlFileMap *map = *i;
-	  int status = system_munmap ((void*)map->mem_start_align, 
-				      map->mem_size_align);
-	  if (status == -1)
-	    {
-	      VDL_LOG_ERROR ("unable to unmap map 0x%lx[0x%lx] for \"%s\"\n", 
-			     map->mem_start_align, map->mem_size_align,
-			     file->filename);
-	    }
-	}
+      for (i = vdl_list_begin (file->maps); i != vdl_list_end (file->maps);
+           i = vdl_list_next (i))
+        {
+          struct VdlFileMap *map = *i;
+          int status = system_munmap ((void *) map->mem_start_align,
+                                      map->mem_size_align);
+          if (status == -1)
+            {
+              VDL_LOG_ERROR ("unable to unmap map 0x%lx[0x%lx] for \"%s\"\n",
+                             map->mem_start_align, map->mem_size_align,
+                             file->filename);
+            }
+        }
     }
 
   if (vdl_context_empty (file->context))
@@ -57,12 +58,13 @@ file_delete (struct VdlFile *file, bool mapping)
   vdl_alloc_delete (file);
 }
 
-void vdl_unmap (struct VdlList *files, bool mapping)
+void
+vdl_unmap (struct VdlList *files, bool mapping)
 {
   void **i;
-  for (i = vdl_list_begin (files); i != vdl_list_end (files); i = vdl_list_next (i))
+  for (i = vdl_list_begin (files); i != vdl_list_end (files);
+       i = vdl_list_next (i))
     {
       file_delete (*i, mapping);
     }
 }
-
