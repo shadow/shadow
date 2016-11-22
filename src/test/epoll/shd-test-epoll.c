@@ -42,7 +42,7 @@ static int _test_pipe() {
         fprintf(stdout, "error: epoll_ctl failed\n");
         return -1;
     }
-    
+
     /* First make sure there's nothing there */
     int ready = epoll_wait(efd, &pevent, 1, 100);
     if(ready < 0) {
