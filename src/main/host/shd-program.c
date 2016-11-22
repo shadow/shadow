@@ -21,6 +21,12 @@
  */
 #define PLUGIN_MAIN_SYMBOL "main"
 
+/**
+ * We call this function to get the location where we should set errno for this program.
+ * This symbol must exist or the dlsym lookup will fail.
+ */
+#define PLUGIN_ERRNOLOC_SYMBOL "__errno_location"
+
 /* Global symbols that plugins *may* define to hook changes in execution control */
 #define PLUGIN_POSTLOAD_SYMBOL "__shadow_plugin_load__"
 #define PLUGIN_PREUNLOAD_SYMBOL "__shadow_plugin_unload__"
@@ -29,6 +35,7 @@
 
 typedef gint (*PluginMainFunc)(int argc, char* argv[]);
 typedef void (*PluginHookFunc)(void* uniqueid);
+typedef int* (*ErrnoLocationFunc)(void);
 
 struct _Program {
     GString* name;
@@ -44,6 +51,8 @@ struct _Program {
     PluginHookFunc preLibraryUnload;
     PluginHookFunc preProcessEnter;
     PluginHookFunc postProcessExit;
+
+    ErrnoLocationFunc errnoGetLocation;;
 
     /*
      * TRUE from when we've called into plug-in code until the call completes.
@@ -161,12 +170,12 @@ void program_load(Program* prog) {
     dlerror();
 
     /* make sure it has the required init function */
-    gpointer function = NULL;
+    gpointer symbol = NULL;
 
-    function = dlsym(prog->handle, PLUGIN_MAIN_SYMBOL);
-    if(function) {
-        prog->main = function;
-        message("found '%s' at %p", PLUGIN_MAIN_SYMBOL, function);
+    symbol = dlsym(prog->handle, PLUGIN_MAIN_SYMBOL);
+    if(symbol) {
+        prog->main = symbol;
+        message("found '%s' at %p", PLUGIN_MAIN_SYMBOL, symbol);
     } else {
         const gchar* errorMessage = dlerror();
         critical("dlsym() failed: %s", errorMessage);
@@ -177,32 +186,47 @@ void program_load(Program* prog) {
     /* clear dlerror status string */
     dlerror();
 
-    function = NULL;
-    function = dlsym(prog->handle, PLUGIN_POSTLOAD_SYMBOL);
-    if(function) {
-        prog->postLibraryLoad = function;
-        message("found '%s' at %p", PLUGIN_POSTLOAD_SYMBOL, function);
+    symbol = NULL;
+    symbol = dlsym(prog->handle, PLUGIN_ERRNOLOC_SYMBOL);
+    if(symbol) {
+        prog->errnoGetLocation = symbol;
+        message("found '%s' at %p", PLUGIN_ERRNOLOC_SYMBOL, symbol);
+    } else {
+        const gchar* errorMessage = dlerror();
+        critical("dlsym() failed: %s", errorMessage);
+        error("unable to find the required function symbol '%s' in plug-in '%s'",
+                PLUGIN_ERRNOLOC_SYMBOL, prog->path->str);
     }
 
-    function = NULL;
-    function = dlsym(prog->handle, PLUGIN_PREUNLOAD_SYMBOL);
-    if(function) {
-        prog->preLibraryUnload = function;
-        message("found '%s' at %p", PLUGIN_PREUNLOAD_SYMBOL, function);
+    /* clear dlerror status string */
+    dlerror();
+
+    symbol = NULL;
+    symbol = dlsym(prog->handle, PLUGIN_POSTLOAD_SYMBOL);
+    if(symbol) {
+        prog->postLibraryLoad = symbol;
+        message("found '%s' at %p", PLUGIN_POSTLOAD_SYMBOL, symbol);
     }
 
-    function = NULL;
-    function = dlsym(prog->handle, PLUGIN_PREENTER_SYMBOL);
-    if(function) {
-        prog->preProcessEnter = function;
-        message("found '%s' at %p", PLUGIN_PREENTER_SYMBOL, function);
+    symbol = NULL;
+    symbol = dlsym(prog->handle, PLUGIN_PREUNLOAD_SYMBOL);
+    if(symbol) {
+        prog->preLibraryUnload = symbol;
+        message("found '%s' at %p", PLUGIN_PREUNLOAD_SYMBOL, symbol);
     }
 
-    function = NULL;
-    function = dlsym(prog->handle, PLUGIN_POSTEXIT_SYMBOL);
-    if(function) {
-        prog->postProcessExit = function;
-        message("found '%s' at %p", PLUGIN_POSTEXIT_SYMBOL, function);
+    symbol = NULL;
+    symbol = dlsym(prog->handle, PLUGIN_PREENTER_SYMBOL);
+    if(symbol) {
+        prog->preProcessEnter = symbol;
+        message("found '%s' at %p", PLUGIN_PREENTER_SYMBOL, symbol);
+    }
+
+    symbol = NULL;
+    symbol = dlsym(prog->handle, PLUGIN_POSTEXIT_SYMBOL);
+    if(symbol) {
+        prog->postProcessExit = symbol;
+        message("found '%s' at %p", PLUGIN_POSTEXIT_SYMBOL, symbol);
     }
 
     program_callPostLibraryLoadHookFunc(prog);
@@ -235,6 +259,17 @@ void program_free(Program* prog) {
 
     MAGIC_CLEAR(prog);
     g_free(prog);
+}
+
+void program_setErrno(Program* prog, int errnoValue) {
+    MAGIC_ASSERT(prog);
+
+    if(prog->errnoGetLocation) {
+        int* errnoLocation = prog->errnoGetLocation();
+        if(errnoLocation) {
+            *errnoLocation = errnoValue;
+        }
+    }
 }
 
 void program_setExecuting(Program* prog, gboolean isExecuting) {

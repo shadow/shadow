@@ -25,4 +25,6 @@ gint program_callMainFunc(Program* prog, gchar** argv, gint argc);
 void program_callPreProcessEnterHookFunc(Program* prog);
 void program_callPostProcessExitHookFunc(Program* prog);
 
+void program_setErrno(Program* prog, int errnoValue);
+
 #endif /* SHD_PROGRAM_H_ */
