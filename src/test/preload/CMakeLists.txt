@@ -152,7 +152,7 @@ SET_TESTS_PROPERTIES(test-preload-glibc-dl
 ## elf loader
 
 add_executable(test-preload-exe-elf-dl-run1 shd-test-preload-dl-main.c)
-target_link_libraries(test-preload-exe-elf-dl-run1 test-preload-interpose test-preload-lib ${DL_LIBRARIES})
+target_link_libraries(test-preload-exe-elf-dl-run1 test-preload-lib ${DL_LIBRARIES})
 set_target_properties(test-preload-exe-elf-dl-run1 PROPERTIES 
     INSTALL_RPATH ${CMAKE_BINARY_DIR}/src/external/elf-loader
     INSTALL_RPATH_USE_LINK_PATH TRUE 
@@ -167,7 +167,7 @@ SET_TESTS_PROPERTIES(test-preload-elf-dl
 
 ## shadow itself already dynamically loads the plugin, so just combine main() and run_test()
 add_library(shadow-plugin-test-preload SHARED shd-test-preload-plugin-main.c shd-test-preload-run1.c)
-target_link_libraries(shadow-plugin-test-preload test-preload-interpose test-preload-lib)
+target_link_libraries(shadow-plugin-test-preload test-preload-lib)
 
 ## register a shadow test
 add_test(NAME test-preload-shadow-dl
