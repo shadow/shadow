@@ -22,18 +22,17 @@ struct VdlMapResult
 
 
 struct VdlMapResult vdl_map_from_memory (unsigned long load_base,
-					 uint32_t phnum,
-					 ElfW(Phdr) *phdr,
-					 // a fully-qualified path to the file
-					 // represented by the phdr
-					 const char *path, 
-					 // a non-fully-qualified filename
-					 const char *filename,
-					 struct VdlContext *context);
-struct VdlMapResult vdl_map_from_filename (struct VdlContext *context, 
-					   const char *filename);
+                                         uint32_t phnum, ElfW (Phdr) * phdr,
+                                         // a fully-qualified path to the file
+                                         // represented by the phdr
+                                         const char *path,
+                                         // a non-fully-qualified filename
+                                         const char *filename,
+                                         struct VdlContext *context);
+struct VdlMapResult vdl_map_from_filename (struct VdlContext *context,
+                                           const char *filename);
 struct VdlList *vdl_map_from_preload (struct VdlContext *context,
-				      struct VdlList *filenames);
+                                      struct VdlList *filenames);
 
 
 #endif /* VDL_MAP_H */

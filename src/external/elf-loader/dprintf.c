@@ -3,15 +3,17 @@
 #include "avprintf-cb.h"
 #include <stdarg.h>
 
-static void avprintf_callback (char c, void *context)
+static void
+avprintf_callback (char c, void *context)
 {
   if (c != 0)
     {
-      system_write (2,&c,1);
+      system_write (2, &c, 1);
     }
 }
 
-void dprintf (const char *str, ...)
+void
+dprintf (const char *str, ...)
 {
   va_list list;
   va_start (list, str);
