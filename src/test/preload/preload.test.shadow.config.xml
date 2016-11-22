@@ -31,7 +31,7 @@
   <kill time="5"/>
   <plugin id="testfile" path="libshadow-plugin-test-preload.so"/>
   <node id="testnode" quantity="1">
-    <application plugin="testfile" starttime="1" arguments=""/>
+    <application plugin="testfile" starttime="3" arguments=""/>
   </node>
 </shadow>
 

@@ -11,7 +11,7 @@
 
 extern void set_call_next(int should_call_next);
 
-int run_test(void) {
+int run_test_arg(time_t next_time_result) {
     time_t t;
 
     set_call_next(0);
@@ -32,7 +32,7 @@ int run_test(void) {
     t = time(NULL);
     printf("second time() called, result = %i, expected 111111\n", (int)t);
 
-    if(t != (time_t) 111111) {
+    if(t != (time_t) next_time_result) {
         /* it was not forwarded shd-test-preload-lib.c*/
         printf("test failed because time() was not forwarded to shd-test-preload-lib.c\n");
         return EXIT_FAILURE;
@@ -56,7 +56,7 @@ int run_test(void) {
     t = time(NULL);
     printf("fourth time() called, result = %i, expected 111111\n", (int)t);
 
-    if(t != (time_t) 111111) {
+    if(t != (time_t) next_time_result) {
         /* it was not forwarded shd-test-preload-lib.c*/
         printf("test failed because time() was not forwarded to shd-test-preload-lib.c\n");
         return EXIT_FAILURE;
@@ -65,3 +65,6 @@ int run_test(void) {
     }
 }
 
+int run_test(void) {
+    run_test_arg((time_t)111111);
+}

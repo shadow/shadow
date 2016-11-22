@@ -166,7 +166,7 @@ SET_TESTS_PROPERTIES(test-preload-elf-dl
 ## shadow
 
 ## shadow itself already dynamically loads the plugin, so just combine main() and run_test()
-add_library(shadow-plugin-test-preload SHARED shd-test-preload-main.c shd-test-preload-run1.c)
+add_library(shadow-plugin-test-preload SHARED shd-test-preload-plugin-main.c shd-test-preload-run1.c)
 target_link_libraries(shadow-plugin-test-preload test-preload-interpose test-preload-lib)
 
 ## register a shadow test
