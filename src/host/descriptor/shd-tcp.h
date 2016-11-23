@@ -30,4 +30,7 @@ void tcp_retransmitTimerExpired(TCP* tcp);
 
 void tcp_clearAllChildrenIfServer(TCP* tcp);
 
+gsize tcp_getOutputBufferLength(TCP* tcp);
+gsize tcp_getInputBufferLength(TCP* tcp);
+
 #endif /* SHD_TCP_H_ */

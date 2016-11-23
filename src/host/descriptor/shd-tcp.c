@@ -643,6 +643,14 @@ static Packet* _tcp_createPacket(TCP* tcp, enum ProtocolTCPFlags flags, gconstpo
     return packet;
 }
 
+/* returns the total amount of buffered data in this TCP socket, including TCP-specific buffers */
+gsize tcp_getOutputBufferLength(TCP* tcp) {
+    MAGIC_ASSERT(tcp);
+    /* this does not include the socket output buffer to avoid double counting, since the
+     * data in the socket output buffer is already counted as part of the tcp retransmit queue */
+    return tcp->throttledOutputLength + tcp->retransmit.queueLength;
+}
+
 static gsize _tcp_getBufferSpaceOut(TCP* tcp) {
     MAGIC_ASSERT(tcp);
     /* account for throttled and retransmission buffer */
@@ -662,6 +670,12 @@ static void _tcp_bufferPacketOut(TCP* tcp, Packet* packet) {
     if(_tcp_getBufferSpaceOut(tcp) == 0) {
         descriptor_adjustStatus((Descriptor*)tcp, DS_WRITABLE, FALSE);
     }
+}
+
+/* returns the total amount of buffered data in this TCP socket, including TCP-specific buffers */
+gsize tcp_getInputBufferLength(TCP* tcp) {
+    MAGIC_ASSERT(tcp);
+    return socket_getInputBufferLength(&(tcp->super)) + tcp->unorderedInputLength;
 }
 
 static gsize _tcp_getBufferSpaceIn(TCP* tcp) {
