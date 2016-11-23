@@ -1141,7 +1141,20 @@ static gint _process_emu_ioctlHelper(Process* proc, int fd, unsigned long int re
 
     if(descriptor) {
         DescriptorType t = descriptor_getType(descriptor);
-        if(t == DT_TCPSOCKET || t == DT_UDPSOCKET) {
+        if(t == DT_TCPSOCKET) {
+            TCP* tcpSocket = (TCP*) descriptor;
+            if(request == SIOCINQ || request == FIONREAD) {
+                gsize bufferLength = tcp_getInputBufferLength(tcpSocket);
+                gint* lengthOut = (gint*)argp;
+                *lengthOut = (gint)bufferLength;
+            } else if (request == SIOCOUTQ || request == TIOCOUTQ) {
+                gsize bufferLength = tcp_getOutputBufferLength(tcpSocket);
+                gint* lengthOut = (gint*)argp;
+                *lengthOut = (gint)bufferLength;
+            } else {
+                result = ENOTTY;
+            }
+        } else if(t == DT_UDPSOCKET) {
             Socket* socket = (Socket*) descriptor;
             if(request == SIOCINQ || request == FIONREAD) {
                 gsize bufferLength = socket_getInputBufferLength(socket);

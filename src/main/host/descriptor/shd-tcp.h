@@ -28,4 +28,7 @@ gint tcp_acceptServerPeer(TCP* tcp, in_addr_t* ip, in_port_t* port, gint* accept
 
 void tcp_clearAllChildrenIfServer(TCP* tcp);
 
+gsize tcp_getOutputBufferLength(TCP* tcp);
+gsize tcp_getInputBufferLength(TCP* tcp);
+
 #endif /* SHD_TCP_H_ */
