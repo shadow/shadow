@@ -174,7 +174,7 @@ set_target_properties(test-preload-dl-elf-run1-exe PROPERTIES
     LINK_FLAGS "-Wl,--no-as-needed,-rpath=${CMAKE_BINARY_DIR}/src/external/elf-loader,-dynamic-linker=${CMAKE_BINARY_DIR}/src/external/elf-loader/ldso"
 )
 
-add_test(NAME test-preload-elf-dl COMMAND test-preload-exe-elf-dl-run1 ${CMAKE_CURRENT_BINARY_DIR}/libtest-preload-dl-run1.so)
+add_test(NAME test-preload-elf-dl COMMAND test-preload-dl-elf-run1-exe ${CMAKE_CURRENT_BINARY_DIR}/libtest-preload-dl-elf-run1-lib.so)
 SET_TESTS_PROPERTIES(test-preload-elf-dl
     PROPERTIES ENVIRONMENT "LD_PRELOAD=${CMAKE_CURRENT_BINARY_DIR}/libtest-preload-interpose.so")
 
