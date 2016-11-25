@@ -300,6 +300,8 @@ enum VdlVersionMatch
 // this function. It's not that it would be horrendously
 // hard to handle it but it would make our life harder
 // for the symbol replacement policy we use.
+// For more information on what this function is doing, see
+// elf-loader/doc/references/symbol-versioning
 static enum VdlVersionMatch
 symbol_version_matches (const struct VdlFile *in,
                         const struct VdlFile *from,
@@ -340,13 +342,12 @@ symbol_version_matches (const struct VdlFile *in,
     {
       // ok, so, now, we have version requirements information.
       ElfW (Verdef) * in_dt_verdef = in->dt_verdef;
-      ElfW (Verneed) * in_dt_verneed = in->dt_verneed;
 
-      if (in_dt_versym == 0)
+      if (in_dt_versym == 0 || in_dt_verdef == 0)
         {
-          // we have a version requirement but no version definition in this object
+          // we have a version requirement but no version definition in this object.
           // before accepting this match, we do a sanity check: we verify that
-          // this object ('in') is not explicitely the one required by verneed
+          // this object ('in') is not explicitly the one required by verneed
           if (from_ver_filename != 0)
             {
               VDL_LOG_ASSERT (!vdl_utils_strisequal
@@ -358,10 +359,9 @@ symbol_version_matches (const struct VdlFile *in,
         }
       uint16_t ver_index = in_dt_versym[in_index];
 
-      VDL_LOG_ASSERT (in_dt_versym != 0, "Coding error !")
-        // we have version information in both the 'from' and the 'in'
-        // objects.
-        if (ver_index == 0)
+      // we have version information in both the 'from' and the 'in'
+      // objects.
+      if (ver_index == 0)
         {
           // this is a symbol with local scope
           // it's ok only if we reference it within the same file.
@@ -386,62 +386,30 @@ symbol_version_matches (const struct VdlFile *in,
             }
         }
       const char *in_dt_strtab = in->dt_strtab;
-      // try to lookup a matching version in the verdef array
-      {
-        ElfW (Verdef) * cur, *prev;
-        for (prev = 0, cur = in_dt_verdef; cur != prev;
-             prev = cur, cur =
-             (ElfW (Verdef) *) (((unsigned long) cur) + cur->vd_next))
-          {
-            VDL_LOG_ASSERT (cur->vd_version == 1,
-                            "version number invalid for Verdef");
-            if (cur->vd_ndx == ver_index && cur->vd_hash == from_ver_hash)
-              {
-                // the hash values of the version names are equal.
-                ElfW (Verdaux) * verdaux =
-                  (ElfW (Verdaux) *) (((unsigned long) cur) + cur->vd_aux);
-                if (vdl_utils_strisequal
-                    (in_dt_strtab + verdaux->vda_name, from_ver_name))
-                  {
-                    // the version names are equal.
-                    return VERSION_MATCH_PERFECT;
-                  }
-              }
-          }
-      }
-      // and, then, try to lookup the verneed array
-      // XXX: this is something I really don't understand.
-      // XXX: yes, this is really buggy I think. Why are we doing it ?
-      {
-        ElfW (Verneed) * cur, *prev;
-        for (prev = 0, cur = in_dt_verneed; cur != prev;
-             prev = cur, cur =
-             (ElfW (Verneed) *) (((unsigned long) cur) + cur->vn_next))
-          {
-            VDL_LOG_ASSERT (cur->vn_version == 1,
-                            "version number invalid for Verneed");
-            ElfW (Vernaux) * cur_aux, *prev_aux;
-            for (cur_aux =
-                 (ElfW (Vernaux) *) (((unsigned long) cur) + cur->vn_aux),
-                 prev_aux = 0; cur_aux != prev_aux;
-                 prev_aux = cur_aux, cur_aux =
-                 (ElfW (Vernaux) *) (((unsigned long) cur_aux) +
-                                     cur_aux->vna_next))
-              {
-                if ((cur_aux->vna_other == ver_index || in->is_preloaded) &&
-                    cur_aux->vna_hash == from_ver_hash)
-                  {
-                    // the hash values of the version names are equal.
-                    if (vdl_utils_strisequal
-                        (in_dt_strtab + cur_aux->vna_name, from_ver_name))
-                      {
-                        // the version names are equal.
-                        return VERSION_MATCH_PERFECT;
-                      }
-                  }
-              }
-          }
-      }
+      // find the corresponding index in the verdef array
+      ElfW (Verdef) * cur, *prev;
+      for (prev = 0, cur = in_dt_verdef;
+           cur != prev && cur->vd_ndx != ver_index;
+           prev = cur, cur =
+           (ElfW (Verdef) *) (((unsigned long) cur) + cur->vd_next)) { }
+      VDL_LOG_ASSERT (cur->vd_version == 1,
+                      "version number invalid for Verdef");
+      if (cur->vd_hash == from_ver_hash)
+        {
+          // the hash values of the version names are equal.
+          ElfW (Verdaux) * verdaux =
+            (ElfW (Verdaux) *) (((unsigned long) cur) + cur->vd_aux);
+          if (vdl_utils_strisequal
+              (in_dt_strtab + verdaux->vda_name, from_ver_name))
+            {
+              // the version names are equal.
+              return VERSION_MATCH_PERFECT;
+            }
+        }
+      if (cur->vd_hash == 0)
+	{
+	  return VERSION_MATCH_PERFECT;
+	}
     }
   // the versions don't match.
   return VERSION_MATCH_BAD;

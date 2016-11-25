@@ -11,6 +11,8 @@
 #include <sys/mman.h>
 #include <stdbool.h>
 
+// This function populates ver_name and ver_filename with the symbol version
+// and the file version, respectively, if the symbol has a version requirement
 static bool
 sym_to_ver_req (struct VdlFile *file,
                 unsigned long index,
@@ -20,8 +22,6 @@ sym_to_ver_req (struct VdlFile *file,
   ElfW (Half) * dt_versym = file->dt_versym;
   ElfW (Verneed) * dt_verneed = file->dt_verneed;
   unsigned long dt_verneednum = file->dt_verneednum;
-  ElfW (Verdef) * dt_verdef = file->dt_verdef;
-  unsigned long dt_verdefnum = file->dt_verdefnum;
 
   if (dt_strtab != 0 && dt_versym != 0)
     {
@@ -61,34 +61,6 @@ sym_to_ver_req (struct VdlFile *file,
                       *ver_filename = dt_strtab + cur->vn_file;
                       return true;
                     }
-                }
-            }
-        }
-      // ok, there is no match for the requested version in the verneed array so,
-      // we look in the verdef array.
-      // search the version whose vd_ndx is equal to ver_ndx
-      if (dt_verdef != 0 && dt_verdefnum != 0)
-        {
-          ElfW (Verdef) * cur, *prev;
-          for (prev = 0, cur = dt_verdef; cur != prev;
-               prev = cur, cur =
-               (ElfW (Verdef) *) (((unsigned long) cur) + cur->vd_next))
-            {
-              VDL_LOG_ASSERT (cur->vd_version == 1,
-                              "version number invalid for Verdef");
-              if (cur->vd_ndx == ver_ndx)
-                {
-                  ElfW (Verdaux) * verdaux =
-                    (ElfW (Verdaux) *) (((unsigned long) cur) + cur->vd_aux);
-                  *ver_name = dt_strtab + verdaux->vda_name;
-                  // the filename comes from the base definition (i.e., the first entry)
-                  // in the verdef array.
-                  ElfW (Verdef) * base = &dt_verdef[0];
-                  ElfW (Verdaux) * base_verdaux =
-                    (ElfW (Verdaux) *) (((unsigned long) base) +
-                                        base[0].vd_aux);
-                  *ver_filename = dt_strtab + base_verdaux->vda_name;
-                  return true;
                 }
             }
         }
