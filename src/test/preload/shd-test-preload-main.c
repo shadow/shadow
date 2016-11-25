@@ -9,7 +9,7 @@
 extern int run_test(void);
 
 int local_global_func(void) {
-    printf("direct call to local_global_func()\n");
+    fprintf(stdout, "direct call to local_global_func()\n");
     return 0;
 }
 
@@ -23,7 +23,7 @@ int main(int argc, char* argv[]) {
      * interception can only occur when called from a library.so type */
     if(retval != 0) {
         /* it was unexpectedly intercepted */
-        printf("test failed, local global function was unexpectedly intercepted\n");
+        fprintf(stdout, "test failed, local global function was unexpectedly intercepted\n");
         fprintf(stdout, "########## preload test failed\n");
         return EXIT_FAILURE;
     }

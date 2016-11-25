@@ -25,14 +25,14 @@ void* do_lookup(char* funcname) {
     // check for error
     char* err = dlerror();
     if(err != NULL) {
-        printf("dlsym() error, failed to lookup %s(): '%s'\n", funcname, err);
+        fprintf(stdout, "dlsym() error, failed to lookup %s(): '%s'\n", funcname, err);
         return NULL;
     }
     return f;
 }
 
 time_t time (time_t *result){
-    printf("time wrapper called\n");
+    fprintf(stdout, "time wrapper called\n");
 
     //Custom application logic - conditionally call the dlsym(NEXT) time()
     if(call_next) {
@@ -44,7 +44,7 @@ time_t time (time_t *result){
             // check for error
             if(!_time)
             {
-                printf("libc_wrapper: failed to load time()\n");
+                fprintf(stdout, "libc_wrapper: failed to load time()\n");
                 return -1;
             }
         }
@@ -55,11 +55,11 @@ time_t time (time_t *result){
 }
 
 int local_global_func(void) {
-    printf("interposed call to local_global_func()\n");
+    fprintf(stdout, "interposed call to local_global_func()\n");
     return 1;
 }
 
 void set_call_next(int should_call_next) {
-    printf("set_call_next wrapper called\n");
+    fprintf(stdout, "set_call_next wrapper called\n");
     call_next = should_call_next;
 }

@@ -9,56 +9,59 @@
 #include <dlfcn.h>
 #include <limits.h>
 
+void call_to_ensure_linkage();
 extern void set_call_next(int should_call_next);
 
 int run_test_arg(time_t next_time_result) {
     time_t t;
 
+    call_to_ensure_linkage();
+
     set_call_next(0);
 
-    printf("first time() call\n");
+    fprintf(stdout, "first time() call\n");
     t = time(NULL);
-    printf("first time() called, result = %i, expected = -666666\n", (int)t);
+    fprintf(stdout, "first time() called, result = %i, expected = -666666\n", (int)t);
 
     if(t != (time_t) -666666) {
         /* it was not intercepted */
-        printf("test failed because time() was not properly intercepted\n");
+        fprintf(stdout, "test failed because time() was not properly intercepted\n");
         return EXIT_FAILURE;
     }
 
     set_call_next(1);
 
-    printf("second time() call\n");
+    fprintf(stdout, "second time() call\n");
     t = time(NULL);
-    printf("second time() called, result = %i, expected 111111\n", (int)t);
+    fprintf(stdout, "second time() called, result = %i, expected 111111\n", (int)t);
 
     if(t != (time_t) next_time_result) {
         /* it was not forwarded shd-test-preload-lib.c*/
-        printf("test failed because time() was not forwarded to shd-test-preload-lib.c\n");
+        fprintf(stdout, "test failed because time() was not forwarded to shd-test-preload-lib.c\n");
         return EXIT_FAILURE;
     }
 
     set_call_next(0);
 
-    printf("third time() call\n");
+    fprintf(stdout, "third time() call\n");
     t = time(NULL);
-    printf("third time() called, result = %i, expected = -666666\n", (int)t);
+    fprintf(stdout, "third time() called, result = %i, expected = -666666\n", (int)t);
 
     if(t != (time_t) -666666) {
         /* it was not intercepted */
-        printf("test failed because time() was not properly intercepted\n");
+        fprintf(stdout, "test failed because time() was not properly intercepted\n");
         return EXIT_FAILURE;
     }
 
     set_call_next(1);
 
-    printf("fourth time() call\n");
+    fprintf(stdout, "fourth time() call\n");
     t = time(NULL);
-    printf("fourth time() called, result = %i, expected 111111\n", (int)t);
+    fprintf(stdout, "fourth time() called, result = %i, expected 111111\n", (int)t);
 
     if(t != (time_t) next_time_result) {
         /* it was not forwarded shd-test-preload-lib.c*/
-        printf("test failed because time() was not forwarded to shd-test-preload-lib.c\n");
+        fprintf(stdout, "test failed because time() was not forwarded to shd-test-preload-lib.c\n");
         return EXIT_FAILURE;
     } else {
         return EXIT_SUCCESS;

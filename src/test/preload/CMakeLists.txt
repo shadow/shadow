@@ -137,23 +137,31 @@ SET_TESTS_PROPERTIES(test-preload-elf-lib-chain
 ## test preloading functions called from a dynamically loaded plugin
 ##
 
-add_library(test-preload-dl-run1 SHARED shd-test-preload-run1.c)
-target_link_libraries(test-preload-dl-run1 test-preload-interpose test-preload-lib)
-
 ## glibc loader
 
-add_executable(test-preload-exe-dl-run1 shd-test-preload-dl-main.c)
-target_link_libraries(test-preload-exe-dl-run1 test-preload-interpose test-preload-lib ${DL_LIBRARIES})
+# note - in order for this to work correctly in glibc, you must link to the interpose library
+# this requirement is not ideal - the loaded plugin should not care about preloading
+add_library(test-preload-dl-glibc-run1-lib SHARED shd-test-preload-run1.c)
+target_link_libraries(test-preload-dl-glibc-run1-lib test-preload-interpose test-preload-lib)
 
-add_test(NAME test-preload-glibc-dl COMMAND test-preload-exe-dl-run1 ${CMAKE_CURRENT_BINARY_DIR}/libtest-preload-dl-run1.so)
+add_executable(test-preload-dl-glibc-run1-exe shd-test-preload-dl-main.c)
+target_link_libraries(test-preload-dl-glibc-run1-exe ${DL_LIBRARIES})
+
+add_test(NAME test-preload-glibc-dl COMMAND test-preload-dl-glibc-run1-exe ${CMAKE_CURRENT_BINARY_DIR}/libtest-preload-dl-glibc-run1-lib.so)
 SET_TESTS_PROPERTIES(test-preload-glibc-dl
     PROPERTIES ENVIRONMENT "LD_PRELOAD=${CMAKE_CURRENT_BINARY_DIR}/libtest-preload-interpose.so")
 
 ## elf loader
 
-add_executable(test-preload-exe-elf-dl-run1 shd-test-preload-dl-main.c)
-target_link_libraries(test-preload-exe-elf-dl-run1 test-preload-lib ${DL_LIBRARIES})
-set_target_properties(test-preload-exe-elf-dl-run1 PROPERTIES 
+add_library(test-preload-dl-elf-run1-lib SHARED shd-test-preload-run1.c)
+target_link_libraries(test-preload-dl-elf-run1-lib test-preload-lib)
+
+# note - in order for this to work in elf loader, you must link to the library that
+# is also linked in the dynamically loaded plugin
+# this requirement is not ideal - the executable should not care about the plugins library dependencies
+add_executable(test-preload-dl-elf-run1-exe shd-test-preload-dl-main.c)
+target_link_libraries(test-preload-dl-elf-run1-exe test-preload-lib ${DL_LIBRARIES})
+set_target_properties(test-preload-dl-elf-run1-exe PROPERTIES 
     INSTALL_RPATH ${CMAKE_BINARY_DIR}/src/external/elf-loader
     INSTALL_RPATH_USE_LINK_PATH TRUE 
     LINK_FLAGS "-Wl,--no-as-needed,-rpath=${CMAKE_BINARY_DIR}/src/external/elf-loader,-dynamic-linker=${CMAKE_BINARY_DIR}/src/external/elf-loader/ldso"

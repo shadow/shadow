@@ -15,7 +15,6 @@ typedef int (*run_test_func)(void);
 int main(int argc, char* argv[]) {
     fprintf(stdout, "########## preload test starting ##########\n");
 
-
     if(argc != 2) {
         fprintf(stdout, "incorrect arg count '%i'\n", argc);
         fprintf(stdout, "########## preload test failed\n");
