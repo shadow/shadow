@@ -165,7 +165,9 @@ target_link_libraries(test-preload-dl-elf-run1-lib test-preload-lib)
 
 # note - in order for this to work in elf loader, you must link to the library that
 # is also linked in the dynamically loaded plugin
-# this requirement is not ideal - the executable should not care about the plugins library dependencies
+# o/w, b/c of the search order, dlsym("time") from interpose.so will find the symbol
+# in the libc dependency of the executable before the library dependency of the
+# dynamically loaded plugin
 add_executable(test-preload-dl-elf-run1-exe shd-test-preload-dl-main.c)
 target_link_libraries(test-preload-dl-elf-run1-exe test-preload-lib ${DL_LIBRARIES})
 set_target_properties(test-preload-dl-elf-run1-exe PROPERTIES 
