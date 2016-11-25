@@ -10,7 +10,7 @@
 #include <limits.h>
 
 void call_to_ensure_linkage();
-extern void set_call_next(int should_call_next);
+void set_call_next(int should_call_next);
 
 int run_test_arg(time_t next_time_result) {
     time_t t;
