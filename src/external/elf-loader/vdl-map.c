@@ -342,7 +342,6 @@ file_new (unsigned long load_base,
   file->reloced = 0;
   file->patched = 0;
   file->is_executable = 0;
-  file->is_preloaded = 0;
   // no need to initialize gc_color because it is always
   // initialized when needed by vdl_gc
   file->gc_symbols_resolved_in = vdl_list_new ();
@@ -968,7 +967,6 @@ vdl_map_from_preload (struct VdlContext *context, struct VdlList *filenames)
                          single_results[i].error_string);
           goto error;
         }
-      single_results[i].file->is_preloaded = 1;
       single_results[i].file->count++;
       if (single_results[i].newly_mapped)
         {
