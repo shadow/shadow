@@ -1085,6 +1085,9 @@ static gint _process_emu_fcntlHelper(Process* proc, int fd, int cmd, void* argp)
         gint osfd = host_getOSHandle(proc->host, fd);
         if(osfd >= 0) {
             ret = fcntl(osfd, cmd, argp);
+            if(ret < 0) {
+                program_setErrno(proc->prog, errno);
+            }
         } else {
             program_setErrno(proc->prog, EBADF);
             ret = -1;
@@ -1123,6 +1126,9 @@ static gint _process_emu_ioctlHelper(Process* proc, int fd, unsigned long int re
         gint osfd = host_getOSHandle(proc->host, fd);
         if(osfd >= 0) {
             ret = ioctl(fd, request, argp);
+            if(ret < 0) {
+                program_setErrno(proc->prog, errno);
+            }
         } else {
             program_setErrno(proc->prog, EBADF);
             ret = -1;
@@ -1280,6 +1286,9 @@ static int _process_emu_pollHelper(Process* proc, struct pollfd *fds, nfds_t nfd
         ret = -1;
     } else {
         ret = host_poll(proc->host, fds, nfds);
+        if(ret < 0) {
+            program_setErrno(proc->prog, errno);
+        }
     }
 
     return ret;
@@ -1356,6 +1365,9 @@ void* process_emu_malloc(Process* proc, size_t size) {
     if(size && ptr != NULL) {
         tracker_addAllocatedBytes(host_getTracker(proc->host), ptr, size);
     }
+    if(ptr == NULL) {
+        program_setErrno(proc->prog, errno);
+    }
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ptr;
@@ -1368,6 +1380,10 @@ void* process_emu_calloc(Process* proc, size_t nmemb, size_t size) {
     if(size && ptr != NULL) {
         tracker_addAllocatedBytes(host_getTracker(proc->host), ptr, size);
     }
+    if(ptr == NULL) {
+        program_setErrno(proc->prog, errno);
+    }
+
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ptr;
 }
@@ -1392,6 +1408,10 @@ void* process_emu_realloc(Process* proc, void *ptr, size_t size) {
                 tracker_addAllocatedBytes(host_getTracker(proc->host), newptr, size);
             }
         }
+    }
+
+    if(newptr == NULL) {
+        program_setErrno(proc->prog, errno);
     }
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -1423,6 +1443,9 @@ void* process_emu_memalign(Process* proc, size_t blocksize, size_t bytes) {
     if(bytes && ptr != NULL) {
         tracker_addAllocatedBytes(host_getTracker(proc->host), ptr, bytes);
     }
+    if(ptr == NULL) {
+        program_setErrno(proc->prog, errno);
+    }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ptr;
 }
@@ -1434,6 +1457,9 @@ void* process_emu_aligned_alloc(Process* proc, size_t alignment, size_t size) {
     if(size && ptr != NULL) {
         tracker_addAllocatedBytes(host_getTracker(proc->host), ptr, size);
     }
+    if(ptr == NULL) {
+        program_setErrno(proc->prog, errno);
+    }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ptr;
 }
@@ -1444,6 +1470,9 @@ void* process_emu_valloc(Process* proc, size_t size) {
     if(size && ptr != NULL) {
         tracker_addAllocatedBytes(host_getTracker(proc->host), ptr, size);
     }
+    if(ptr == NULL) {
+        program_setErrno(proc->prog, errno);
+    }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ptr;
 }
@@ -1453,6 +1482,9 @@ void* process_emu_pvalloc(Process* proc, size_t size) {
     gpointer ptr = pvalloc(size);
     if(size && ptr != NULL) {
         tracker_addAllocatedBytes(host_getTracker(proc->host), ptr, size);
+    }
+    if(ptr == NULL) {
+        program_setErrno(proc->prog, errno);
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ptr;
@@ -1466,6 +1498,9 @@ void* process_emu_mmap(Process* proc, void *addr, size_t length, int prot, int f
     /* anonymous mappings ignore file descriptor */
     if(flags & MAP_ANONYMOUS) {
         gpointer ret = mmap(addr, length, prot, flags, -1, offset);
+        if(ret == MAP_FAILED) {
+            program_setErrno(proc->prog, errno);
+        }
         _process_changeContext(proc, PCTX_SHADOW, prevCTX);
         return ret;
     }
@@ -1477,6 +1512,9 @@ void* process_emu_mmap(Process* proc, void *addr, size_t length, int prot, int f
         gint osfd = host_getOSHandle(proc->host, fd);
         if (osfd >= 0) {
             gpointer ret = mmap(addr, length, prot, flags, osfd, offset);
+            if(ret == MAP_FAILED) {
+                program_setErrno(proc->prog, errno);
+            }
             _process_changeContext(proc, PCTX_SHADOW, prevCTX);
             return ret;
         }
@@ -1643,8 +1681,10 @@ int process_emu_socketpair(Process* proc, int domain, int type, int protocol, in
 
     if(result == 0) {
         gint handle = host_createDescriptor(proc->host, DT_SOCKETPAIR);
+        // TODO handle could be -1 on error
         fds[0] = handle;
         Descriptor* desc = host_lookupDescriptor(proc->host, handle);
+        // TODO desc could be NULL
 
         options = descriptor_getFlags(desc);
         if(isNonBlockSet) {
@@ -2086,6 +2126,9 @@ ssize_t process_emu_read(Process* proc, int fd, void *buff, size_t numbytes) {
             gint osfd = host_getOSHandle(proc->host, fd);
             if(osfd >= 0) {
                 ret = read(osfd, buff, numbytes);
+                if(ret < 0) {
+                    program_setErrno(proc->prog, errno);
+                }
             } else {
                 program_setErrno(proc->prog, EBADF);
                 ret = -1;
@@ -2125,6 +2168,9 @@ ssize_t process_emu_write(Process* proc, int fd, const void *buff, size_t n) {
             gint osfd = host_getOSHandle(proc->host, fd);
             if(osfd >= 0) {
                 ret = write(osfd, buff, n);
+                if(ret < 0) {
+                    program_setErrno(proc->prog, errno);
+                }
             } else {
                 program_setErrno(proc->prog, EBADF);
                 ret = -1;
@@ -2144,6 +2190,9 @@ ssize_t process_emu_readv(Process* proc, int fd, const struct iovec *iov, int io
         gint osfd = host_getOSHandle(proc->host, fd);
         if (osfd >= 0) {
             ret = readv(osfd, iov, iovcnt);
+            if(ret < 0) {
+                program_setErrno(proc->prog, errno);
+            }
         } else {
             program_setErrno(proc->prog, EBADF);
             ret = -1;
@@ -2201,6 +2250,9 @@ ssize_t process_emu_writev(Process* proc, int fd, const struct iovec *iov, int i
         gint osfd = host_getOSHandle(proc->host, fd);
         if (osfd >= 0) {
             ret = writev(osfd, iov, iovcnt);
+            if(ret < 0) {
+                program_setErrno(proc->prog, errno);
+            }
         } else {
             program_setErrno(proc->prog, EBADF);
             ret = -1;
@@ -2269,6 +2321,9 @@ ssize_t process_emu_pread(Process* proc, int fd, void *buff, size_t numbytes, of
             gint osfd = host_getOSHandle(proc->host, fd);
             if(osfd >= 0) {
                 ret = pread(osfd, buff, numbytes, offset);
+                if(ret < 0) {
+                    program_setErrno(proc->prog, errno);
+                }
             } else {
                 program_setErrno(proc->prog, EBADF);
                 ret = -1;
@@ -2301,6 +2356,9 @@ ssize_t process_emu_pwrite(Process* proc, int fd, const void *buf, size_t nbytes
             gint osfd = host_getOSHandle(proc->host, fd);
             if(osfd >= 0) {
                 ret = pwrite(fd, buf, nbytes, offset);
+                if(ret < 0) {
+                    program_setErrno(proc->prog, errno);
+                }
             } else {
                 program_setErrno(proc->prog, EBADF);
                 ret = -1;
@@ -2323,13 +2381,22 @@ int process_emu_close(Process* proc, int fd) {
         if(osfd == STDOUT_FILENO) {
             if(proc->stdoutFile) {
                 ret = fclose(proc->stdoutFile);
+                if(ret == EOF) {
+                    program_setErrno(proc->prog, errno);
+                }
             }
         } else if (osfd == STDERR_FILENO) {
             if(proc->stderrFile) {
                 ret = fclose(proc->stderrFile);
+                if(ret == EOF) {
+                    program_setErrno(proc->prog, errno);
+                }
             }
         } else if(osfd >= 0) {
             ret = close(osfd);
+            if(ret < 0) {
+                program_setErrno(proc->prog, errno);
+            }
             host_destroyShadowHandle(proc->host, fd);
         } else {
             program_setErrno(proc->prog, EBADF);
@@ -2650,6 +2717,10 @@ int process_emu_eventfd(Process* proc, int initval, int flags) {
     gint result = 0;
 
     gint osfd = eventfd(initval, flags);
+    if(osfd == -1) {
+        program_setErrno(proc->prog, errno);
+    }
+
     gint shadowfd = osfd >= 3 ? host_createShadowHandle(proc->host, osfd) : osfd;
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -2674,6 +2745,9 @@ int process_emu_timerfd_create(Process* proc, int clockid, int flags) {
             descriptor_setFlags(desc, options);
         }
     }
+    if(result < 0) {
+        program_setErrno(proc->prog, errno);
+    }
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
 
@@ -2695,6 +2769,9 @@ int process_emu_timerfd_settime(Process* proc, int fd, int flags,
         ret = -1;
     } else {
         ret = timer_setTime((Timer*)desc, flags, new_value, old_value);
+        if(ret < 0) {
+            program_setErrno(proc->prog, errno);
+        }
     }
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -2714,6 +2791,9 @@ int process_emu_timerfd_gettime(Process* proc, int fd, struct itimerspec *curr_v
         ret = -1;
     } else {
         ret = timer_getTime((Timer*)desc, curr_value);
+        if(ret < 0) {
+            program_setErrno(proc->prog, errno);
+        }
     }
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -2727,6 +2807,9 @@ int process_emu_fileno(Process* proc, FILE *stream) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
 
     gint osfd = fileno(stream);
+    if(osfd == -1) {
+        program_setErrno(proc->prog, errno);
+    }
     gint shadowfd = host_getShadowHandle(proc->host, osfd);
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -2743,6 +2826,9 @@ int process_emu_open(Process* proc, const char *pathname, int flags, mode_t mode
         program_setErrno(proc->prog, EEXIST);
     } else {
         gint osfd = open(pathname, flags, mode);
+        if(osfd == -1) {
+            program_setErrno(proc->prog, errno);
+        }
         gint shadowfd = osfd >= 3 ? host_createShadowHandle(proc->host, osfd) : osfd;
 
         if(utility_isRandomPath((gchar*)pathname)) {
@@ -2764,6 +2850,9 @@ int process_emu_creat(Process* proc, const char *pathname, mode_t mode) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
 
     gint osfd = creat(pathname, mode);
+    if(osfd == -1) {
+        program_setErrno(proc->prog, errno);
+    }
     gint shadowfd = osfd >= 3 ? host_createShadowHandle(proc->host, osfd) : osfd;
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -2779,8 +2868,14 @@ FILE *process_emu_fopen(Process* proc, const char *path, const char *mode) {
         program_setErrno(proc->prog, EEXIST);
     } else {
         osfile = fopen(path, mode);
+        if(osfile == NULL) {
+            program_setErrno(proc->prog, errno);
+        }
         if(osfile) {
             gint osfd = fileno(osfile);
+            if(osfd == -1) {
+                program_setErrno(proc->prog, errno);
+            }
             gint shadowfd = osfd >= 3 ? host_createShadowHandle(proc->host, osfd) : osfd;
 
             if(utility_isRandomPath((gchar*)path)) {
@@ -2807,6 +2902,9 @@ FILE *process_emu_fdopen(Process* proc, int fd, const char *mode) {
         gint osfd = host_getOSHandle(proc->host, fd);
         if (osfd >= 0) {
             FILE* osfile = fdopen(osfd, mode);
+            if(osfile == NULL) {
+                program_setErrno(proc->prog, errno);
+            }
             _process_changeContext(proc, PCTX_SHADOW, prevCTX);
             return osfile;
         }
@@ -2828,6 +2926,9 @@ int process_emu_dup(Process* proc, int oldfd) {
         gint osfdOld = host_getOSHandle(proc->host, oldfd);
         if (osfdOld >= 0) {
             gint osfd = dup(osfdOld);
+            if(osfd == -1) {
+                program_setErrno(proc->prog, errno);
+            }
             gint shadowfd = osfd >= 3 ? host_createShadowHandle(proc->host, osfd) : osfd;
             _process_changeContext(proc, PCTX_SHADOW, prevCTX);
             return osfd;
@@ -2856,6 +2957,9 @@ int process_emu_dup2(Process* proc, int oldfd, int newfd) {
 
         if (osfdOld >= 0) {
             gint osfd = dup2(osfdOld, osfdNew);
+            if(osfd == -1) {
+                program_setErrno(proc->prog, errno);
+            }
 
             gint shadowfd = !isMapped && osfd >= 3 ? host_createShadowHandle(proc->host, osfd) : osfd;
 
@@ -2891,6 +2995,9 @@ int process_emu_dup3(Process* proc, int oldfd, int newfd, int flags) {
 
         if (osfdOld >= 0) {
             gint osfd = dup3(osfdOld, osfdNew, flags);
+            if(osfd == -1) {
+                program_setErrno(proc->prog, errno);
+            }
 
             gint shadowfd = !isMapped && osfd >= 3 ? host_createShadowHandle(proc->host, osfd) : osfd;
 
@@ -2909,9 +3016,15 @@ int process_emu_fclose(Process* proc, FILE *fp) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
 
     gint osfd = fileno(fp);
+    if(osfd == -1) {
+        program_setErrno(proc->prog, errno);
+    }
     gint shadowHandle = host_getShadowHandle(proc->host, osfd);
 
     gint ret = fclose(fp);
+    if(osfd == EOF) {
+        program_setErrno(proc->prog, errno);
+    }
     host_destroyShadowHandle(proc->host, shadowHandle);
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -2929,6 +3042,9 @@ int process_emu___fxstat (Process* proc, int ver, int fd, struct stat *buf) {
         gint osfd = host_getOSHandle(proc->host, fd);
         if (osfd >= 0) {
             gint ret = fstat(osfd, buf);
+            if(ret == -1) {
+                program_setErrno(proc->prog, errno);
+            }
             _process_changeContext(proc, PCTX_SHADOW, prevCTX);
             return ret;
         }
@@ -2951,6 +3067,9 @@ int process_emu___fxstat64 (Process* proc, int ver, int fd, struct stat64 *buf) 
         gint osfd = host_getOSHandle(proc->host, fd);
         if (osfd >= 0) {
             gint ret = fstat64(osfd, buf);
+            if(ret == -1) {
+                program_setErrno(proc->prog, errno);
+            }
             _process_changeContext(proc, PCTX_SHADOW, prevCTX);
             return ret;
         }
@@ -2972,6 +3091,9 @@ int process_emu_fstatfs (Process* proc, int fd, struct statfs *buf) {
         gint osfd = host_getOSHandle(proc->host, fd);
         if (osfd >= 0) {
             gint ret = fstatfs(osfd, buf);
+            if(ret == -1) {
+                program_setErrno(proc->prog, errno);
+            }
             _process_changeContext(proc, PCTX_SHADOW, prevCTX);
             return ret;
         }
@@ -2993,6 +3115,9 @@ int process_emu_fstatfs64 (Process* proc, int fd, struct statfs64 *buf) {
         gint osfd = host_getOSHandle(proc->host, fd);
         if (osfd >= 0) {
             gint ret = fstatfs64(osfd, buf);
+            if(ret == -1) {
+                program_setErrno(proc->prog, errno);
+            }
             _process_changeContext(proc, PCTX_SHADOW, prevCTX);
             return ret;
         }
@@ -3014,6 +3139,9 @@ off_t process_emu_lseek(Process* proc, int fd, off_t offset, int whence) {
         gint osfd = host_getOSHandle(proc->host, fd);
         if (osfd >= 0) {
             off_t ret = lseek(osfd, offset, whence);
+            if(ret == -1) {
+                program_setErrno(proc->prog, errno);
+            }
             _process_changeContext(proc, PCTX_SHADOW, prevCTX);
             return ret;
         }
@@ -3035,6 +3163,9 @@ off64_t process_emu_lseek64(Process* proc, int fd, off64_t offset, int whence) {
         gint osfd = host_getOSHandle(proc->host, fd);
         if (osfd >= 0) {
             off_t ret = lseek64(osfd, offset, whence);
+            if(ret == -1) {
+                program_setErrno(proc->prog, errno);
+            }
             _process_changeContext(proc, PCTX_SHADOW, prevCTX);
             return ret;
         }
@@ -3056,6 +3187,9 @@ int process_emu_flock(Process* proc, int fd, int operation) {
         gint osfd = host_getOSHandle(proc->host, fd);
         if (osfd >= 0) {
             gint ret = flock(osfd, operation);
+            if(ret == -1) {
+                program_setErrno(proc->prog, errno);
+            }
             _process_changeContext(proc, PCTX_SHADOW, prevCTX);
             return ret;
         }
@@ -3074,6 +3208,9 @@ int process_emu_fsync(Process* proc, int fd) {
     if(prevCTX == PCTX_PLUGIN && (fd == STDOUT_FILENO || fd == STDERR_FILENO)) {
         FILE* f = _process_getIOFile(proc, fd);
         ret = fsync(fileno(f));
+        if(ret == -1) {
+            program_setErrno(proc->prog, errno);
+        }
     } else if (host_isShadowDescriptor(proc->host, fd)) {
         warning("fsync not implemented for Shadow descriptor types");
         program_setErrno(proc->prog, EBADF);
@@ -3083,6 +3220,9 @@ int process_emu_fsync(Process* proc, int fd) {
         gint osfd = host_getOSHandle(proc->host, fd);
         if (osfd >= 0) {
             ret = fsync(osfd);
+            if(ret == -1) {
+                program_setErrno(proc->prog, errno);
+            }
         } else {
             program_setErrno(proc->prog, EBADF);
             ret = -1;
@@ -3103,6 +3243,9 @@ int process_emu_ftruncate(Process* proc, int fd, off_t length) {
         gint osfd = host_getOSHandle(proc->host, fd);
         if (osfd >= 0) {
             gint ret = ftruncate(osfd, length);
+            if(ret == -1) {
+                program_setErrno(proc->prog, errno);
+            }
             _process_changeContext(proc, PCTX_SHADOW, prevCTX);
             return ret;
         }
@@ -3124,6 +3267,9 @@ int process_emu_ftruncate64(Process* proc, int fd, off64_t length) {
         gint osfd = host_getOSHandle(proc->host, fd);
         if (osfd >= 0) {
             gint ret = ftruncate64(osfd, length);
+            if(ret == -1) {
+                program_setErrno(proc->prog, errno);
+            }
             _process_changeContext(proc, PCTX_SHADOW, prevCTX);
             return ret;
         }
@@ -3171,6 +3317,9 @@ int process_emu_fstatvfs(Process* proc, int fd, struct statvfs *buf) {
             ret = -1;
         } else {
             ret = fstatvfs(osfd, buf);
+            if(ret == -1) {
+                program_setErrno(proc->prog, errno);
+            }
         }
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -3192,6 +3341,9 @@ int process_emu_fdatasync(Process* proc, int fd) {
             ret = -1;
         } else {
             ret = fdatasync(osfd);
+            if(ret == -1) {
+                program_setErrno(proc->prog, errno);
+            }
         }
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -3213,6 +3365,9 @@ int process_emu_syncfs(Process* proc, int fd) {
             ret = -1;
         } else {
             ret = syncfs(osfd);
+            if(ret == -1) {
+                program_setErrno(proc->prog, errno);
+            }
         }
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -3234,6 +3389,9 @@ int process_emu_fallocate(Process* proc, int fd, int mode, off_t offset, off_t l
             ret = -1;
         } else {
             ret = fallocate(osfd, mode, offset, len);
+            if(ret == -1) {
+                program_setErrno(proc->prog, errno);
+            }
         }
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -3255,6 +3413,9 @@ int process_emu_fexecve(Process* proc, int fd, char *const argv[], char *const e
             ret = -1;
         } else {
             ret = fexecve(osfd, argv, envp);
+            if(ret == -1) {
+                program_setErrno(proc->prog, errno);
+            }
         }
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -3276,6 +3437,9 @@ long process_emu_fpathconf(Process* proc, int fd, int name) {
             ret = -1;
         } else {
             ret = fpathconf(osfd, name);
+            if(ret == -1) {
+                program_setErrno(proc->prog, errno);
+            }
         }
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -3297,6 +3461,9 @@ int process_emu_fchdir(Process* proc, int fd) {
             ret = -1;
         } else {
             ret = fchdir(osfd);
+            if(ret == -1) {
+                program_setErrno(proc->prog, errno);
+            }
         }
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -3318,6 +3485,9 @@ int process_emu_fchown(Process* proc, int fd, uid_t owner, gid_t group) {
             ret = -1;
         } else {
             ret = fchown(osfd, owner, group);
+            if(ret == -1) {
+                program_setErrno(proc->prog, errno);
+            }
         }
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -3339,6 +3509,9 @@ int process_emu_fchmod(Process* proc, int fd, mode_t mode) {
             ret = -1;
         } else {
             ret = fchmod(osfd, mode);
+            if(ret == -1) {
+                program_setErrno(proc->prog, errno);
+            }
         }
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -3381,6 +3554,9 @@ int process_emu_lockf(Process* proc, int fd, int cmd, off_t len) {
             ret = -1;
         } else {
             ret = lockf(osfd, cmd, len);
+            if(ret == -1) {
+                program_setErrno(proc->prog, errno);
+            }
         }
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -3468,6 +3644,10 @@ int process_emu_fputc(Process* proc, int c, FILE *stream) {
         ret = fputc(c, stream);
     }
 
+    if(ret == EOF) {
+        program_setErrno(proc->prog, errno);
+    }
+
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
 }
@@ -3483,6 +3663,10 @@ int process_emu_fputs(Process* proc, const char *s, FILE *stream) {
         ret = fputs(s, stream);
     }
 
+    if(ret == EOF) {
+        program_setErrno(proc->prog, errno);
+    }
+
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
 }
@@ -3495,6 +3679,10 @@ int process_emu_putchar(Process* proc, int c) {
         ret = fputc(c, _process_getIOFile(proc, STDOUT_FILENO));
     } else {
         ret = putchar(c);
+    }
+
+    if(ret == EOF) {
+        program_setErrno(proc->prog, errno);
     }
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -3512,6 +3700,10 @@ int process_emu_puts(Process* proc, const char *s) {
         }
     } else {
         ret = puts(s);
+    }
+
+    if(ret == EOF) {
+        program_setErrno(proc->prog, errno);
     }
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -3549,6 +3741,10 @@ int process_emu_fflush(Process* proc, FILE *stream) {
         ret = fflush(_process_getIOFile(proc, fd));
     } else {
         ret = fflush(stream);
+    }
+
+    if(ret == EOF) {
+        program_setErrno(proc->prog, errno);
     }
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
