@@ -106,6 +106,13 @@ def main():
         action="store", dest="rskiptime", type=type_nonnegative_integer,
         default=0)
 
+    parser.add_argument('--host-filter',
+        help="""Append a FILTER to the filter list. A hostname must contain as a
+                substring at least one FILTER in order to be included. Defaults
+                to 'relay' and 'thority' if none specified.""",
+        metavar="FILTER",
+        action="append", dest="host_filters")
+
     args = parser.parse_args()
     shdata, ftdata, tgendata, tordata = get_data(args.experiments, args.lineformats, args.skiptime, args.rskiptime)
 
@@ -134,8 +141,8 @@ def main():
         plot_tgen_errsizes_median(tgendata, page)
         plot_tgen_errsizes_mean(tgendata, page)
     if len(tordata) > 0:
-        plot_tor(tordata, page, direction="bytes_read")
-        plot_tor(tordata, page, direction="bytes_written")
+        plot_tor(tordata, page, args.host_filters, direction="bytes_read")
+        plot_tor(tordata, page, args.host_filters, direction="bytes_written")
     page.close()
 
 def plot_shadow_time(datasource, page):
@@ -961,16 +968,17 @@ def plot_tgen_errsizes_mean(data, page):
         page.savefig()
         pylab.close()
 
-def plot_tor(data, page, direction="bytes_written"):
+def plot_tor(data, page, host_filters, direction="bytes_written"):
     mafig = pylab.figure()
     allcdffig = pylab.figure()
     eachcdffig = pylab.figure()
+    if not host_filters: host_filters = ['relay', 'thority']
 
     for (d, label, lineformat) in data:
         tput = {}
         pertput = []
         for node in d:
-            if 'relay' not in node and 'thority' not in node: continue
+            if not any( filter in node for filter in host_filters): continue
             for tstr in d[node][direction]:
                 mib = d[node][direction][tstr]/1048576.0
                 t = int(tstr)
