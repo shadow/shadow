@@ -972,7 +972,7 @@ def plot_tor(data, page, host_filters, direction="bytes_written"):
     mafig = pylab.figure()
     allcdffig = pylab.figure()
     eachcdffig = pylab.figure()
-    if len(host_filters) < 1: host_filters = ['relay', 'thority']
+    if not host_filters: host_filters = ['relay', 'thority']
 
     for (d, label, lineformat) in data:
         tput = {}
