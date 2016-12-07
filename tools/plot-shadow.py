@@ -4,6 +4,7 @@ import matplotlib; matplotlib.use('Agg') # for systems without X11
 from matplotlib.backends.backend_pdf import PdfPages
 import sys, os, argparse, subprocess, json, pylab, numpy
 from itertools import cycle
+from re import search
 
 """
 python parse-shadow.py --help
@@ -106,15 +107,45 @@ def main():
         action="store", dest="rskiptime", type=type_nonnegative_integer,
         default=0)
 
-    parser.add_argument('--host-filter',
-        help="""Append a FILTER to the filter list. A hostname must contain as a
-                substring at least one FILTER in order to be included. Defaults
-                to 'relay' and 'thority' if none specified.""",
-        metavar="FILTER",
-        action="append", dest="host_filters")
+    parser.add_argument('-e', '--host-exp-all',
+        help="""Set the regex PATTERN that is used with re.search to filter
+                by hostname the data used in all generated plots. If set,
+                this option overrides all other host expression options,
+                and replaces the value of all host expressions with the
+                value set here.""", 
+        action="store", dest="hostpatternall",
+        metavar="PATTERN",
+        default=None)
+
+    parser.add_argument('--host-exp-shadow',
+        help="""Set the regex PATTERN that is used with re.search to filter
+                by hostname the data used in generated Shadow plots""", 
+        action="store", dest="hostpatternshadow",
+        metavar="PATTERN",
+        default=".*")
+
+    parser.add_argument('--host-exp-tgen',
+        help="""Set the regex PATTERN that is used with re.search to filter
+                by hostname the data used in generated TGen plots""", 
+        action="store", dest="hostpatterntgen",
+        metavar="PATTERN",
+        default="^(client)")
+
+    parser.add_argument('--host-exp-tor',
+        help="""Set the regex PATTERN that is used with re.search to filter
+                by hostname the data used in generated Tor plots""", 
+        action="store", dest="hostpatterntor",
+        metavar="PATTERN",
+        default="^(relay|4uthority)")
 
     args = parser.parse_args()
-    shdata, ftdata, tgendata, tordata = get_data(args.experiments, args.lineformats, args.skiptime, args.rskiptime)
+
+    if args.hostpatternall is not None:
+        args.hostpatternshadow = args.hostpatternall
+        args.hostpatterntgen = args.hostpatternall
+        args.hostpatterntor = args.hostpatternall
+
+    shdata, ftdata, tgendata, tordata = get_data(args.experiments, args.lineformats, args.skiptime, args.rskiptime, args.hostpatternshadow, args.hostpatterntgen, args.hostpatterntor)
 
     page = PdfPages("{0}shadow.results.pdf".format(args.prefix+'.' if args.prefix is not None else ''))
     if len(shdata) > 0:
@@ -141,8 +172,8 @@ def main():
         plot_tgen_errsizes_median(tgendata, page)
         plot_tgen_errsizes_mean(tgendata, page)
     if len(tordata) > 0:
-        plot_tor(tordata, page, args.host_filters, direction="bytes_read")
-        plot_tor(tordata, page, args.host_filters, direction="bytes_written")
+        plot_tor(tordata, page, direction="bytes_read")
+        plot_tor(tordata, page, direction="bytes_written")
     page.close()
 
 def plot_shadow_time(datasource, page):
@@ -968,17 +999,15 @@ def plot_tgen_errsizes_mean(data, page):
         page.savefig()
         pylab.close()
 
-def plot_tor(data, page, host_filters, direction="bytes_written"):
+def plot_tor(data, page, direction="bytes_written"):
     mafig = pylab.figure()
     allcdffig = pylab.figure()
     eachcdffig = pylab.figure()
-    if not host_filters: host_filters = ['relay', 'thority']
 
     for (d, label, lineformat) in data:
         tput = {}
         pertput = []
         for node in d:
-            if not any( filter in node for filter in host_filters): continue
             for tstr in d[node][direction]:
                 mib = d[node][direction][tstr]/1048576.0
                 t = int(tstr)
@@ -1031,7 +1060,7 @@ def plot_tor(data, page, host_filters, direction="bytes_written"):
     pylab.close()
     del(eachcdffig)
 
-def get_data(experiments, lineformats, skiptime, rskiptime):
+def get_data(experiments, lineformats, skiptime, rskiptime, hostpatternshadow, hostpatterntgen, hostpatterntor):
     shdata, ftdata, tgendata, tordata = [], [], [], []
     lflist = lineformats.strip().split(",")
 
@@ -1041,8 +1070,8 @@ def get_data(experiments, lineformats, skiptime, rskiptime):
         if not os.path.exists(log): continue
         xzcatp = subprocess.Popen(["xzcat", log], stdout=subprocess.PIPE)
         data = json.load(xzcatp.stdout)
-        data = prune_data(data, skiptime, rskiptime)
-        shdata.append((data, label, lfcycle.next()))
+        data = prune_data(data, skiptime, rskiptime, hostpatternshadow)
+        if len(data['nodes']) > 0 or len(data['ticks']) > 0: shdata.append((data, label, lfcycle.next()))
 
     lfcycle = cycle(lflist)
     for (path, label) in experiments:
@@ -1050,8 +1079,8 @@ def get_data(experiments, lineformats, skiptime, rskiptime):
         if not os.path.exists(log): continue
         xzcatp = subprocess.Popen(["xzcat", log], stdout=subprocess.PIPE)
         data = json.load(xzcatp.stdout)
-        data = prune_data(data, skiptime, rskiptime)
-        ftdata.append((data['nodes'], label, lfcycle.next()))
+        data = prune_data(data, skiptime, rskiptime, hostpatterntgen)
+        if len(data['nodes']) > 0: ftdata.append((data['nodes'], label, lfcycle.next()))
 
     lfcycle = cycle(lflist)
     for (path, label) in experiments:
@@ -1059,8 +1088,8 @@ def get_data(experiments, lineformats, skiptime, rskiptime):
         if not os.path.exists(log): continue
         xzcatp = subprocess.Popen(["xzcat", log], stdout=subprocess.PIPE)
         data = json.load(xzcatp.stdout)
-        data = prune_data(data, skiptime, rskiptime)
-        tgendata.append((data['nodes'], label, lfcycle.next()))
+        data = prune_data(data, skiptime, rskiptime, hostpatterntgen)
+        if len(data['nodes']) > 0: tgendata.append((data['nodes'], label, lfcycle.next()))
 
     lfcycle = cycle(lflist)
     for (path, label) in experiments:
@@ -1068,15 +1097,25 @@ def get_data(experiments, lineformats, skiptime, rskiptime):
         if not os.path.exists(log): continue
         xzcatp = subprocess.Popen(["xzcat", log], stdout=subprocess.PIPE)
         data = json.load(xzcatp.stdout)
-        data = prune_data(data, skiptime, rskiptime)
-        tordata.append((data['nodes'], label, lfcycle.next()))
+        data = prune_data(data, skiptime, rskiptime, hostpatterntor)
+        if len(data['nodes']) > 0: tordata.append((data['nodes'], label, lfcycle.next()))
 
     return shdata, ftdata, tgendata, tordata
 
-def prune_data(data, skiptime, rskiptime):
-    if skiptime == 0 and rskiptime == 0: return data
+def prune_data(data, skiptime, rskiptime, hostpattern):
     if 'nodes' in data:
+        # avoid modifying the dict while iterating it
+        names_to_remove = []
         for name in data['nodes']:
+            found = True if search(hostpattern, name) else False
+            if not found: names_to_remove.append(name)
+        for name in names_to_remove:
+            del(data['nodes'][name])
+
+    if skiptime == 0 and rskiptime == 0: return data
+
+    if 'nodes' in data:
+        for name in data['nodes']:                
             keys = ['recv', 'send', 'errors', 'firstbyte', 'lastbyte']
             for k in keys:
                 if k in data['nodes'][name]:
