@@ -146,7 +146,7 @@ static int _wait_select(int fd, waittype t) {
 static int _do_addr(const char* name, struct sockaddr_in* addrout) {
     memset(addrout, 0, sizeof(struct sockaddr_in));
     addrout->sin_family = AF_INET;
-    addrout->sin_addr.s_addr = htons(INADDR_ANY);
+    addrout->sin_addr.s_addr = htonl(INADDR_ANY);
     addrout->sin_port = htons(SERVER_PORT);
 
     if(name) {
