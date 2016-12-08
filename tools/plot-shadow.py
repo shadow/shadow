@@ -129,7 +129,7 @@ def main():
                 by hostname the data used in generated TGen plots""", 
         action="store", dest="hostpatterntgen",
         metavar="PATTERN",
-        default="^(client)")
+        default="client")
 
     parser.add_argument('--host-exp-tor',
         help="""Set the regex PATTERN that is used with re.search to filter
