@@ -1267,6 +1267,9 @@ static int _process_emu_selectHelper(Process* proc, int nfds, fd_set *readfds, f
 static int _process_emu_pollHelper(Process* proc, struct pollfd *fds, nfds_t nfds, const struct timespec *timeout_ts) {
     gint ret = 0;
 
+    /* this function MUST be called after switching in shadow context */
+    utility_assert(proc->activeContext == PCTX_SHADOW);
+
     if(proc->fdLimit == 0) {
         struct rlimit fdRLimit;
         memset(&fdRLimit, 0, sizeof(struct rlimit));
@@ -1574,6 +1577,9 @@ int process_emu_epoll_wait(Process* proc, int epfd, struct epoll_event *events, 
         utility_assert(proc->tstate == pth_gctx_get());
         ret = pth_epoll_wait(epfd, events, maxevents, timeout);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+        if(ret == -1) {
+            program_setErrno(proc->prog, errno);
+        }
     } else {
         ret = _process_emu_epollWaitHelper(proc, epfd, events, maxevents, timeout);
     }
@@ -1589,6 +1595,9 @@ int process_emu_epoll_pwait(Process* proc, int epfd, struct epoll_event *events,
         utility_assert(proc->tstate == pth_gctx_get());
         ret = pth_epoll_pwait(epfd, events, maxevents, timeout, ss);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+        if(ret == -1) {
+            program_setErrno(proc->prog, errno);
+        }
     } else {
         /* shadow ignores the sigmask */
         ret = _process_emu_epollWaitHelper(proc, epfd, events, maxevents, timeout);
@@ -1717,7 +1726,9 @@ int process_emu_socketpair(Process* proc, int domain, int type, int protocol, in
 int process_emu_bind(Process* proc, int fd, const struct sockaddr* addr, socklen_t len)  {
     if((addr->sa_family == AF_INET && len < sizeof(struct sockaddr_in)) ||
             (addr->sa_family == AF_UNIX && len < sizeof(struct sockaddr_un))) {
+        ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
         program_setErrno(proc->prog, EINVAL);
+        _process_changeContext(proc, PCTX_SHADOW, prevCTX);
         return -1;
     }
 
@@ -1731,7 +1742,9 @@ int process_emu_getsockname(Process* proc, int fd, struct sockaddr* addr, sockle
 int process_emu_connect(Process* proc, int fd, const struct sockaddr* addr, socklen_t len)  {
     if((addr->sa_family == AF_INET && len < sizeof(struct sockaddr_in)) ||
             (addr->sa_family == AF_UNIX && len < sizeof(struct sockaddr_un))) {
+        ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
         program_setErrno(proc->prog, EINVAL);
+        _process_changeContext(proc, PCTX_SHADOW, prevCTX);
         return -1;
     }
 
@@ -1742,8 +1755,13 @@ int process_emu_connect(Process* proc, int fd, const struct sockaddr* addr, sock
         utility_assert(proc->tstate == pth_gctx_get());
         ret = pth_connect(fd, addr, len);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+        if(ret == -1) {
+            program_setErrno(proc->prog, errno);
+        }
     } else {
+        _process_changeContext(proc, PCTX_SHADOW, prevCTX);
         ret = _process_emu_addressHelper(proc, fd, addr, &len, SCT_CONNECT);
+        _process_changeContext(proc, prevCTX, PCTX_SHADOW);
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
@@ -1761,6 +1779,9 @@ ssize_t process_emu_send(Process* proc, int fd, const void *buf, size_t n, int f
         utility_assert(proc->tstate == pth_gctx_get());
         ret = pth_send(fd, buf, n, flags);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+        if(ret == -1) {
+            program_setErrno(proc->prog, errno);
+        }
     } else {
         ret = _process_emu_sendHelper(proc, fd, buf, n, flags, NULL, 0);
     }
@@ -1776,6 +1797,9 @@ ssize_t process_emu_sendto(Process* proc, int fd, const void *buf, size_t n, int
         utility_assert(proc->tstate == pth_gctx_get());
         ret = pth_sendto(fd, buf, n, flags, addr, addr_len);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+        if(ret == -1) {
+            program_setErrno(proc->prog, errno);
+        }
     } else {
         ret = _process_emu_sendHelper(proc, fd, buf, n, flags, addr, addr_len);
     }
@@ -1787,8 +1811,8 @@ ssize_t process_emu_sendmsg(Process* proc, int fd, const struct msghdr *message,
     /* TODO implement */
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     warning("sendmsg not implemented");
-    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     program_setErrno(proc->prog, ENOSYS);
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return -1;
 }
 
@@ -1800,6 +1824,9 @@ ssize_t process_emu_recv(Process* proc, int fd, void *buf, size_t n, int flags) 
         utility_assert(proc->tstate == pth_gctx_get());
         ret = pth_recv(fd, buf, n, flags);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+        if(ret == -1) {
+            program_setErrno(proc->prog, errno);
+        }
     } else {
         ret = _process_emu_recvHelper(proc, fd, buf, n, flags, NULL, 0);
     }
@@ -1815,6 +1842,9 @@ ssize_t process_emu_recvfrom(Process* proc, int fd, void *buf, size_t n, int fla
         utility_assert(proc->tstate == pth_gctx_get());
         ret = pth_recvfrom(fd, buf, n, flags, addr, addr_len);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+        if(ret == -1) {
+            program_setErrno(proc->prog, errno);
+        }
     } else {
         ret = _process_emu_recvHelper(proc, fd, buf, n, flags, addr, addr_len);
     }
@@ -1826,14 +1856,16 @@ ssize_t process_emu_recvmsg(Process* proc, int fd, struct msghdr *message, int f
     /* TODO implement */
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     warning("recvmsg not implemented");
-    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     program_setErrno(proc->prog, ENOSYS);
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return -1;
 }
 
 int process_emu_getsockopt(Process* proc, int fd, int level, int optname, void* optval, socklen_t* optlen) {
     if(!optlen) {
+        ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
         program_setErrno(proc->prog, EFAULT);
+        _process_changeContext(proc, PCTX_SHADOW, prevCTX);
         return -1;
     }
 
@@ -2046,6 +2078,9 @@ int process_emu_accept(Process* proc, int fd, struct sockaddr* addr, socklen_t* 
         utility_assert(proc->tstate == pth_gctx_get());
         ret = pth_accept(fd, addr, addr_len);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+        if(ret == -1) {
+            program_setErrno(proc->prog, errno);
+        }
     } else {
         /* check if this is a virtual socket */
         if(!host_isShadowDescriptor(proc->host, fd)){
@@ -2094,8 +2129,8 @@ int process_emu_accept4(Process* proc, int fd, struct sockaddr* addr, socklen_t*
 int process_emu_shutdown(Process* proc, int fd, int how) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     warning("shutdown not implemented");
-    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     program_setErrno(proc->prog, ENOSYS);
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return -1;
 }
 
@@ -2108,6 +2143,9 @@ ssize_t process_emu_read(Process* proc, int fd, void *buff, size_t numbytes) {
         utility_assert(proc->tstate == pth_gctx_get());
         ret = pth_read(fd, buff, numbytes);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+        if(ret == -1) {
+            program_setErrno(proc->prog, errno);
+        }
     } else if(prevCTX == PCTX_PLUGIN && (fd == STDOUT_FILENO || fd == STDERR_FILENO)) {
         ret = fread(buff, numbytes, 1, _process_getIOFile(proc, fd));
     } else {
@@ -2152,6 +2190,9 @@ ssize_t process_emu_write(Process* proc, int fd, const void *buff, size_t n) {
         utility_assert(proc->tstate == pth_gctx_get());
         ret = pth_write(fd, buff, n);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+        if(ret == -1) {
+            program_setErrno(proc->prog, errno);
+        }
     } else if(prevCTX == PCTX_PLUGIN && (fd == STDOUT_FILENO || fd == STDERR_FILENO)) {
         ret = fwrite(buff, 1, n, _process_getIOFile(proc, fd));
     } else if(prevCTX == PCTX_PTH && (fd == STDOUT_FILENO || fd == STDERR_FILENO)) {
@@ -2202,6 +2243,9 @@ ssize_t process_emu_readv(Process* proc, int fd, const struct iovec *iov, int io
         utility_assert(proc->tstate == pth_gctx_get());
         ret = pth_readv(fd, iov, iovcnt);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+        if(ret == -1) {
+            program_setErrno(proc->prog, errno);
+        }
     } else {
         if (iovcnt < 0 || iovcnt > IOV_MAX) {
             program_setErrno(proc->prog, EINVAL);
@@ -2219,7 +2263,9 @@ ssize_t process_emu_readv(Process* proc, int fd, const struct iovec *iov, int io
             } else {
                 /* get a temporary buffer and read to it */
                 void* tempBuffer = g_malloc0(totalIOLength);
+                _process_changeContext(proc, PCTX_SHADOW, prevCTX);
                 ssize_t totalBytesRead = process_emu_read(proc, fd, tempBuffer, totalIOLength);
+                _process_changeContext(proc, prevCTX, PCTX_SHADOW);
 
                 if (totalBytesRead > 0) {
                     /* place all of the bytes we read in the iov buffers */
@@ -2262,6 +2308,9 @@ ssize_t process_emu_writev(Process* proc, int fd, const struct iovec *iov, int i
         utility_assert(proc->tstate == pth_gctx_get());
         ret = pth_writev(fd, iov, iovcnt);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+        if(ret == -1) {
+            program_setErrno(proc->prog, errno);
+        }
     } else {
         if(iovcnt < 0 || iovcnt > IOV_MAX) {
             program_setErrno(proc->prog, EINVAL);
@@ -2288,7 +2337,9 @@ ssize_t process_emu_writev(Process* proc, int fd, const struct iovec *iov, int i
                 ssize_t totalBytesWritten = 0;
                 if(bytesCopied > 0) {
                     /* try to write all of the bytes we got from the iov buffers */
+                    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
                     totalBytesWritten = process_emu_write(proc, fd, tempBuffer, bytesCopied);
+                    _process_changeContext(proc, prevCTX, PCTX_SHADOW);
                 }
 
                 g_free(tempBuffer);
@@ -2310,6 +2361,9 @@ ssize_t process_emu_pread(Process* proc, int fd, void *buff, size_t numbytes, of
         utility_assert(proc->tstate == pth_gctx_get());
         ret = pth_pread(fd, buff, numbytes, offset);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+        if(ret == -1) {
+            program_setErrno(proc->prog, errno);
+        }
     } else if(prevCTX == PCTX_PLUGIN && (fd == STDOUT_FILENO || fd == STDERR_FILENO)) {
         ret = fread(buff, numbytes, 1, _process_getIOFile(proc, fd));
     } else {
@@ -2345,6 +2399,9 @@ ssize_t process_emu_pwrite(Process* proc, int fd, const void *buf, size_t nbytes
         utility_assert(proc->tstate == pth_gctx_get());
         ret = pth_pwrite(fd, buf, nbytes, offset);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+        if(ret == -1) {
+            program_setErrno(proc->prog, errno);
+        }
     } else if(prevCTX == PCTX_PLUGIN && (fd == STDOUT_FILENO || fd == STDERR_FILENO)) {
         ret = fwrite(buf, 1, nbytes, _process_getIOFile(proc, fd));
     } else {
@@ -2475,7 +2532,9 @@ int process_emu_pipe(Process* proc, int pipefds[2]) {
 
 int process_emu_getifaddrs(Process* proc, struct ifaddrs **ifap) {
     if(!ifap) {
+        ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
         program_setErrno(proc->prog, EINVAL);
+        _process_changeContext(proc, PCTX_SHADOW, prevCTX);
         return -1;
     }
 
@@ -2531,6 +2590,9 @@ unsigned int process_emu_sleep(Process* proc, unsigned int sec) {
         utility_assert(proc->tstate == pth_gctx_get());
         ret = pth_sleep(sec);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+        if(ret == -1) {
+            program_setErrno(proc->prog, errno);
+        }
     } else {
         warning("sleep() not currently implemented by shadow");
         program_setErrno(proc->prog, ENOSYS);
@@ -2548,6 +2610,9 @@ int process_emu_usleep(Process* proc, unsigned int sec) {
         utility_assert(proc->tstate == pth_gctx_get());
         ret = pth_usleep(sec);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+        if(ret == -1) {
+            program_setErrno(proc->prog, errno);
+        }
     } else {
         warning("usleep() not currently implemented by shadow");
         program_setErrno(proc->prog, ENOSYS);
@@ -2565,6 +2630,9 @@ int process_emu_nanosleep(Process* proc, const struct timespec *rqtp, struct tim
         utility_assert(proc->tstate == pth_gctx_get());
         ret = pth_nanosleep(rqtp, rmtp);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+        if(ret == -1) {
+            program_setErrno(proc->prog, errno);
+        }
     } else {
         warning("nanosleep() not currently implemented by shadow");
         program_setErrno(proc->prog, ENOSYS);
@@ -2583,6 +2651,9 @@ int process_emu_select(Process* proc, int nfds, fd_set *readfds, fd_set *writefd
         utility_assert(proc->tstate == pth_gctx_get());
         ret = pth_select(nfds, readfds, writefds, exceptfds, timeout);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+        if(ret == -1) {
+            program_setErrno(proc->prog, errno);
+        }
     } else {
         struct timespec timeout_ts;
         timeout_ts.tv_sec = timeout->tv_sec;
@@ -2602,6 +2673,9 @@ int process_emu_pselect(Process* proc, int nfds, fd_set *readfds, fd_set *writef
         utility_assert(proc->tstate == pth_gctx_get());
         ret = pth_pselect(nfds, readfds, writefds, exceptfds, timeout, sigmask);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+        if(ret == -1) {
+            program_setErrno(proc->prog, errno);
+        }
     } else {
         ret = _process_emu_selectHelper(proc, nfds, readfds, writefds, exceptfds, timeout);
     }
@@ -2617,6 +2691,9 @@ int process_emu_poll(Process* proc, struct pollfd *pfd, nfds_t nfd, int timeout)
         utility_assert(proc->tstate == pth_gctx_get());
         ret = pth_poll(pfd, nfd, timeout);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+        if(ret == -1) {
+            program_setErrno(proc->prog, errno);
+        }
     } else {
         struct timespec timeout_ts;
         timeout_ts.tv_sec = timeout / 1000;
@@ -2635,6 +2712,9 @@ int process_emu_ppoll(Process* proc, struct pollfd *fds, nfds_t nfds, const stru
         utility_assert(proc->tstate == pth_gctx_get());
         ret = pth_ppoll(fds, nfds, timeout_ts, sigmask);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+        if(ret == -1) {
+            program_setErrno(proc->prog, errno);
+        }
     } else {
         ret = _process_emu_pollHelper(proc, fds, nfds, timeout_ts);
     }
@@ -2650,6 +2730,9 @@ pid_t process_emu_fork(Process* proc) {
         utility_assert(proc->tstate == pth_gctx_get());
         ret = pth_fork();
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+        if(ret == -1) {
+            program_setErrno(proc->prog, errno);
+        }
     } else {
         warning("fork() not currently implemented by shadow");
         program_setErrno(proc->prog, ENOSYS);
@@ -2667,6 +2750,9 @@ int process_emu_system(Process* proc, const char *cmd) {
         utility_assert(proc->tstate == pth_gctx_get());
         ret = pth_system(cmd);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+        if(ret == -1) {
+            program_setErrno(proc->prog, errno);
+        }
     } else {
         warning("system() not currently implemented by shadow");
         program_setErrno(proc->prog, ENOSYS);
@@ -2684,6 +2770,9 @@ int process_emu_sigwait(Process* proc, const sigset_t *set, int *sig) {
         utility_assert(proc->tstate == pth_gctx_get());
         ret = pth_sigwait(set, sig);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+        if(ret == -1) {
+            program_setErrno(proc->prog, errno);
+        }
     } else {
         warning("sigwait() not currently implemented by shadow");
         program_setErrno(proc->prog, ENOSYS);
@@ -2701,6 +2790,9 @@ pid_t process_emu_waitpid(Process* proc, pid_t pid, int *status, int options) {
         utility_assert(proc->tstate == pth_gctx_get());
         ret = pth_waitpid(pid, status, options);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+        if(ret == -1) {
+            program_setErrno(proc->prog, errno);
+        }
     } else {
         warning("waitpid() not currently implemented by shadow");
         program_setErrno(proc->prog, ENOSYS);
@@ -3973,6 +4065,7 @@ int process_emu_getnameinfo(Process* proc, const struct sockaddr* sa, socklen_t 
 struct hostent* process_emu_gethostbyname(Process* proc, const gchar* name) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     warning("gethostbyname not yet implemented");
+    program_setErrno(proc->prog, ENOSYS);
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return NULL;
 }
@@ -3981,6 +4074,7 @@ int process_emu_gethostbyname_r(Process* proc, const gchar *name, struct hostent
         gsize buflen, struct hostent **result, gint *h_errnop) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     warning("gethostbyname_r not yet implemented");
+    program_setErrno(proc->prog, ENOSYS);
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return -1;
 }
@@ -3988,6 +4082,7 @@ int process_emu_gethostbyname_r(Process* proc, const gchar *name, struct hostent
 struct hostent* process_emu_gethostbyname2(Process* proc, const gchar* name, gint af) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     warning("gethostbyname2 not yet implemented");
+    program_setErrno(proc->prog, ENOSYS);
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return NULL;
 }
@@ -3996,6 +4091,7 @@ int process_emu_gethostbyname2_r(Process* proc, const gchar *name, gint af, stru
         gchar *buf, gsize buflen, struct hostent **result, gint *h_errnop) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     warning("gethostbyname2_r not yet implemented");
+    program_setErrno(proc->prog, ENOSYS);
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return -1;
 }
@@ -4003,6 +4099,7 @@ int process_emu_gethostbyname2_r(Process* proc, const gchar *name, gint af, stru
 struct hostent* process_emu_gethostbyaddr(Process* proc, const void* addr, socklen_t len, gint type) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     warning("gethostbyaddr not yet implemented");
+    program_setErrno(proc->prog, ENOSYS);
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return NULL;
 }
@@ -4012,6 +4109,7 @@ int process_emu_gethostbyaddr_r(Process* proc, const void *addr, socklen_t len, 
         gint *h_errnop) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     warning("gethostbyaddr_r not yet implemented");
+    program_setErrno(proc->prog, ENOSYS);
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return -1;
 }
@@ -4155,8 +4253,11 @@ int process_emu_pthread_attr_destroy(Process* proc, pthread_attr_t *attr) {
                 ret = EINVAL;
                 program_setErrno(proc->prog, EINVAL);
             } else {
-                pth_attr_destroy(na);
+                int result = pth_attr_destroy(na);
                 memset(attr, 0, sizeof(void*));
+                if(result == -1) {
+                    program_setErrno(proc->prog, errno);
+                }
             }
         }
 
@@ -4944,6 +5045,10 @@ int process_emu_pthread_sigmask(Process* proc, int how, const sigset_t *set, sig
         ret = pth_sigmask(how, set, oset);
 
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+
+        if(ret == -1) {
+            program_setErrno(proc->prog, errno);
+        }
     } else {
         warning("pthread_sigmask() is handled by pth but not implemented by shadow");
         program_setErrno(proc->prog, ENOSYS);
@@ -5764,7 +5869,9 @@ int process_emu_pthread_mutex_unlock(Process* proc, pthread_mutex_t *mutex) {
 
 int process_emu_pthread_rwlockattr_init(Process* proc, pthread_rwlockattr_t *attr) {
     if (attr == NULL) {
+        ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
         program_setErrno(proc->prog, EINVAL);
+        _process_changeContext(proc, PCTX_SHADOW, prevCTX);
         return EINVAL;
     } else {
         /* nothing to do for us */
@@ -5774,7 +5881,9 @@ int process_emu_pthread_rwlockattr_init(Process* proc, pthread_rwlockattr_t *att
 
 int process_emu_pthread_rwlockattr_destroy(Process* proc, pthread_rwlockattr_t *attr) {
     if (attr == NULL) {
+        ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
         program_setErrno(proc->prog, EINVAL);
+        _process_changeContext(proc, PCTX_SHADOW, prevCTX);
         return EINVAL;
     } else {
         /* nothing to do for us */

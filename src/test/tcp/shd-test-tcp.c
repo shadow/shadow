@@ -507,11 +507,11 @@ static int _test_iov_server(int clientfd)
 
     // to contain data read by readv(). "- 1" to discount the
     // nul-terminator
-    const size_t num_real_bytes = (sizeof block_1_data - 1) + (sizeof block_2_data - 1);
+    const size_t num_real_bytes = strlen(block_1_data) + strlen(block_2_data);
     size_t readbuf_size = num_real_bytes + 5;
     void* readbuf = calloc(1, readbuf_size);
     int i = 0;
-    for(i = 0; i < (readbuf_size-1); i++) {
+    for(i = 0; i < readbuf_size; i++) {
         sprintf(readbuf+i, "z");
     }
 
