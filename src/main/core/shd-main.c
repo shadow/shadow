@@ -272,8 +272,8 @@ gint shadow_main(gint argc, gchar* argv[]) {
     utility_assert(preloadSuccess);
 
     /* tell the preload lib we are ready for action */
-    extern void interposer_setShadowIsLoaded();
-    interposer_setShadowIsLoaded();
+    extern void interposer_setShadowIsLoaded(int);
+    interposer_setShadowIsLoaded(1);
 
     Logger* shadowLogger = logger_new(options_getLogLevel(options));
     logger_setDefault(shadowLogger);

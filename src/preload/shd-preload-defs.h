@@ -219,10 +219,10 @@ PRELOADDEF(return, int, pthread_setconcurrency, (int a), a);
 /* intercepting these functions causes glib errors, because keys that were created from
  * internal shadow functions then get used in the plugin and get forwarded to pth, which
  * of course does not have the same registered keys. */
-//PRELOADDEF(return, int, pthread_key_create, (pthread_key_t *a, void (*b)(void *)), a, b);
-//PRELOADDEF(return, int, pthread_key_delete, (pthread_key_t a), a);
-//PRELOADDEF(return, int, pthread_setspecific, (pthread_key_t a, const void *b), a, b);
-//PRELOADDEF(return, void*, pthread_getspecific, (pthread_key_t a), a);
+PRELOADDEF(return, int, pthread_key_create, (pthread_key_t *a, void (*b)(void *)), a, b);
+PRELOADDEF(return, int, pthread_key_delete, (pthread_key_t a), a);
+PRELOADDEF(return, int, pthread_setspecific, (pthread_key_t a, const void *b), a, b);
+PRELOADDEF(return, void*, pthread_getspecific, (pthread_key_t a), a);
 
 /* pthread cancel */
 

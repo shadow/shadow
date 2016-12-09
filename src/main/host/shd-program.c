@@ -156,7 +156,8 @@ void program_load(Program* prog) {
     /* clear dlerror status string */
     dlerror();
 
-    prog->handle = dlmopen(LM_ID_NEWLM, prog->path->str, RTLD_LAZY|RTLD_LOCAL|RTLD_DEEPBIND);
+    prog->handle = dlmopen(LM_ID_NEWLM, prog->path->str, RTLD_NOW|RTLD_LOCAL|RTLD_DEEPBIND);
+//    prog->handle = dlopen(prog->path->str, RTLD_LAZY|RTLD_LOCAL|RTLD_DEEPBIND);
 
     if(prog->handle) {
         message("successfully loaded private plug-in '%s' at address '%p'", prog->path->str, prog->handle);

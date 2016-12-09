@@ -113,8 +113,8 @@ static void dummy_free(void *ptr) {
     }
 }
 
-void interposer_setShadowIsLoaded() {
-    director.shadowIsLoaded = 1;
+void interposer_setShadowIsLoaded(int isLoaded) {
+    director.shadowIsLoaded = isLoaded;
 }
 
 static void _interposer_globalInitializeHelper() {

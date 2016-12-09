@@ -79,8 +79,9 @@ static Worker* _worker_new(Slave* slave, guint threadID) {
 static void _worker_free(Worker* worker) {
     MAGIC_ASSERT(worker);
 
-    MAGIC_CLEAR(worker);
     g_private_set(&workerKey, NULL);
+
+    MAGIC_CLEAR(worker);
     g_free(worker);
 }
 

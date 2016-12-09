@@ -28,7 +28,7 @@
   </graph>
 </graphml>
 ]]></topology>
-  <kill time="5"/>
+  <kill time="2"/>
   <plugin id="testphold" path="shadow-plugin-test-phold"/>
   <node id="testnode" quantity="10">
     <application plugin="testphold" starttime="1" arguments="basename=testnode quantity=10 msgload=100"/>
