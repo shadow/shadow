@@ -6,4 +6,4 @@ add_executable(test-timerfd shd-test-timerfd.c)
 
 ## register the tests
 add_test(NAME test-timerfd COMMAND test-timerfd)
-add_test(NAME test-timerfd-shadow COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow ${CMAKE_CURRENT_SOURCE_DIR}/timerfd.test.shadow.config.xml)
+add_test(NAME test-timerfd-shadow COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d timerfd.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/timerfd.test.shadow.config.xml)

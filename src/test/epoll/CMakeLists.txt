@@ -6,4 +6,4 @@ add_executable(test-epoll shd-test-epoll.c)
 
 ## register the tests
 add_test(NAME test-epoll COMMAND test-epoll)
-add_test(NAME test-epoll-shadow COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug ${CMAKE_CURRENT_SOURCE_DIR}/epoll.test.shadow.config.xml)
+add_test(NAME test-epoll-shadow COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d epoll.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/epoll.test.shadow.config.xml)

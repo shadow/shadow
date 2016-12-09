@@ -188,7 +188,7 @@ target_link_libraries(shadow-plugin-test-preload test-preload-lib)
 
 ## register a shadow test
 add_test(NAME test-preload-shadow-dl
-         COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug ${CMAKE_CURRENT_SOURCE_DIR}/preload.test.shadow.config.xml)
+         COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d preload.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/preload.test.shadow.config.xml)
 SET_TESTS_PROPERTIES(test-preload-shadow-dl
     PROPERTIES ENVIRONMENT "LD_PRELOAD=${CMAKE_CURRENT_BINARY_DIR}/libtest-preload-interpose.so:${CMAKE_BINARY_DIR}/src/preload/libshadow-interpose.so;LD_STATIC_TLS_EXTRA=10240000")
 

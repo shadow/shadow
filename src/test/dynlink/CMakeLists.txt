@@ -31,7 +31,7 @@ target_link_libraries(shadow-plugin-test-dynlink ${DL_LIBRARIES} ${GLIB_LIBRARIE
 
 ## register the test
 add_test(NAME test-dynlink COMMAND shadow-test-dynlink)
-add_test(NAME test-dynlink-shadow COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug ${CMAKE_CURRENT_SOURCE_DIR}/dynlink.test.shadow.config.xml)
+add_test(NAME test-dynlink-shadow COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d dynlink.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/dynlink.test.shadow.config.xml)
 
 ##########################
 ## To do this manually: ##
