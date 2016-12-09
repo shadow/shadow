@@ -66,7 +66,7 @@ static void* _test_thread_muxtrylock(void* mx) {
             fprintf(stdout, "error: pthread_mutex_unlock failed\n");
             counter = -1;
         }
-        
+
         counter = 1;
     }
 
@@ -131,7 +131,7 @@ static int _test_makeJoinable(pthread_t* threads) {
 
 static int _test_mutex_lock(pthread_t* threads) {
     int sum=0;
-    
+
     pthread_mutex_t mux;
     if(pthread_mutex_init(&mux, NULL) < 0) {
         fprintf(stdout, "error: pthread_mutex_init failed\n");
