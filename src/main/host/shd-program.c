@@ -271,6 +271,9 @@ void program_setErrno(Program* prog, int errnoValue) {
             *errnoLocation = errnoValue;
         }
     }
+
+    /* this is needed for when pth checks errno */
+    errno = errnoValue;
 }
 
 void program_setExecuting(Program* prog, gboolean isExecuting) {
