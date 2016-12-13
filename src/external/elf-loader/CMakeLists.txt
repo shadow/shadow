@@ -179,7 +179,7 @@ if(SHADOW_TEST STREQUAL ON)
     
     add_executable(internal-tests ${test_srcs})
     target_link_libraries(internal-tests -lpthread)
-    add_test(NAME test-elfloader-internal COMMAND internal-tests)
+    add_test(NAME elfloader-internals COMMAND internal-tests)
 
     add_subdirectory(test)
 endif(SHADOW_TEST STREQUAL ON)
