@@ -1889,6 +1889,9 @@ int process_emu_setsockopt(Process* proc, int fd, int level, int optname, const 
                     } else {
                         gint v = *((gint*) optval);
                         socket_setOutputBufferSize((Socket*)descriptor, (gsize)v*2);
+                        if(t == DT_TCPSOCKET) {
+                            tcp_disableSendBufferAutotuning((TCP*)descriptor);
+                        }
                     }
                     break;
                 }
@@ -1905,6 +1908,9 @@ int process_emu_setsockopt(Process* proc, int fd, int level, int optname, const 
                     } else {
                         gint v = *((gint*) optval);
                         socket_setInputBufferSize((Socket*)descriptor, (gsize)v*2);
+                        if(t == DT_TCPSOCKET) {
+                            tcp_disableReceiveBufferAutotuning((TCP*)descriptor);
+                        }
                     }
                     break;
                 }

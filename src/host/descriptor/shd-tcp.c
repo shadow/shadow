@@ -151,6 +151,8 @@ struct _TCP {
     /* tcp autotuning for the send and recv buffers */
     struct {
         gboolean isEnabled;
+        gboolean userDisabledSend;
+        gboolean userDisabledReceive;
         gsize bytesCopied;
         SimulationTime lastAdjustment;
         gsize space;
@@ -418,10 +420,10 @@ static void _tcp_setBufferSizes(TCP* tcp) {
     /* check to see if the node should set buffer sizes via autotuning, or
      * they were specified by configuration or parameters in XML */
     Host* node = worker_getCurrentHost();
-    if(host_autotuneReceiveBuffer(node)) {
+    if(!tcp->autotune.userDisabledReceive && host_autotuneReceiveBuffer(node)) {
         socket_setInputBufferSize(&(tcp->super), (gsize) receivebuf_size);
     }
-    if(host_autotuneSendBuffer(node)) {
+    if(!tcp->autotune.userDisabledSend && host_autotuneSendBuffer(node)) {
         tcp->super.outputBufferSize = sendbuf_size;
         socket_setOutputBufferSize(&(tcp->super), (gsize) sendbuf_size);
     }
@@ -568,6 +570,16 @@ static void _tcp_autotuneSendBuffer(TCP* tcp) {
         debug("[autotune] output buffer size adjusted from %"G_GSIZE_FORMAT" to %"G_GSIZE_FORMAT,
                 currentSize, newSize);
     }
+}
+
+void tcp_disableSendBufferAutotuning(TCP* tcp) {
+    MAGIC_ASSERT(tcp);
+    tcp->autotune.userDisabledSend = TRUE;
+}
+
+void tcp_disableReceiveBufferAutotuning(TCP* tcp) {
+    MAGIC_ASSERT(tcp);
+    tcp->autotune.userDisabledReceive = TRUE;
 }
 
 static void _tcp_updateReceiveWindow(TCP* tcp) {
@@ -1415,7 +1427,8 @@ TCPProcessFlags _tcp_ackProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *he
             flags |= TCP_PF_DATA_ACKED;
 
             /* increase send buffer size with autotuning */
-            if(tcp->autotune.isEnabled && host_autotuneSendBuffer(worker_getCurrentHost())) {
+            if(tcp->autotune.isEnabled && !tcp->autotune.userDisabledSend &&
+                    host_autotuneSendBuffer(worker_getCurrentHost())) {
                 _tcp_autotuneSendBuffer(tcp);
             }
         }
@@ -1962,7 +1975,7 @@ gssize tcp_receiveUserData(TCP* tcp, gpointer buffer, gsize nBytes, in_addr_t* i
     }
 
     /* update the receive buffer size based on new packets received */
-    if(tcp->autotune.isEnabled) {
+    if(tcp->autotune.isEnabled && !tcp->autotune.userDisabledReceive) {
         Host* host = worker_getCurrentHost();
         if(host_autotuneReceiveBuffer(host)) {
             _tcp_autotuneReceiveBuffer(tcp, totalCopied);
