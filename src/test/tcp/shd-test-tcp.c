@@ -747,6 +747,8 @@ static int _run_server(iowait_func iowait, int use_iov) {
 }
 
 int main(int argc, char *argv[]) {
+    MYLOG("########## tcp test starting ##########");
+
     MYLOG("program started; %s", USAGE);
 
     if(argc < 3) {
@@ -773,16 +775,26 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
+    int result = 0;
     if(strncasecmp(argv[2], "client", 5) == 0) {
         if(argc < 4) {
             MYLOG("error, client mode also needs a server ip address; see usage");
             return -1;
         }
-        return _run_client(wait, argv[3], use_iov);
+        MYLOG("running client in mode %s", argv[1]);
+        result = _run_client(wait, argv[3], use_iov);
     } else if(strncasecmp(argv[2], "server", 6) == 0) {
-        return _run_server(wait, use_iov);
+        MYLOG("running server in mode %s", argv[1]);
+        result = _run_server(wait, use_iov);
     } else {
         MYLOG("error, invalid type specified; see usage");
-        return -1;
+        result = -1;
     }
+
+    if(result == 0) {
+        MYLOG("########## tcp test passed ##########");
+    } else {
+        MYLOG("########## tcp test failed ##########");
+    }
+    return result;
 }

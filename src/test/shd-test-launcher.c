@@ -36,6 +36,7 @@ int main(int argc, char *argv[]) {
             i++; // skip the ':' arg
             k++; // next child pid belongs in the next array spot
             j = 0; // reset for next child
+            usleep(100000); // synchronous in-order startup of children (avoid race conditions)
         }
     }
 
