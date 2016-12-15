@@ -4,6 +4,7 @@ import matplotlib; matplotlib.use('Agg') # for systems without X11
 from matplotlib.backends.backend_pdf import PdfPages
 import sys, os, argparse, subprocess, json, pylab, numpy
 from itertools import cycle
+from re import search
 
 """
 python parse-shadow.py --help
@@ -112,9 +113,46 @@ def main():
         action="store", dest="rskiptime", type=type_nonnegative_integer,
         default=0)
 
+    parser.add_argument('-e', '--host-exp-all',
+        help="""Set the regex PATTERN that is used with re.search to filter
+                by hostname the data used in all generated plots. If set,
+                this option overrides all other host expression options,
+                and replaces the value of all host expressions with the
+                value set here.""",
+        action="store", dest="hostpatternall",
+        metavar="PATTERN",
+        default=None)
+
+    parser.add_argument('--host-exp-shadow',
+        help="""Set the regex PATTERN that is used with re.search to filter
+                by hostname the data used in generated Shadow plots""",
+        action="store", dest="hostpatternshadow",
+        metavar="PATTERN",
+        default=".*")
+
+    parser.add_argument('--host-exp-tgen',
+        help="""Set the regex PATTERN that is used with re.search to filter
+                by hostname the data used in generated TGen plots""",
+        action="store", dest="hostpatterntgen",
+        metavar="PATTERN",
+        default="client")
+
+    parser.add_argument('--host-exp-tor',
+        help="""Set the regex PATTERN that is used with re.search to filter
+                by hostname the data used in generated Tor plots""",
+        action="store", dest="hostpatterntor",
+        metavar="PATTERN",
+        default="^(relay|4uthority)")
+
     args = parser.parse_args()
     conf = args.shadow_config
-    tickdata, shdata, ftdata, tgendata, tordata = get_data(args.experiments, args.lineformats, args.skiptime, args.rskiptime)
+
+    if args.hostpatternall is not None:
+        args.hostpatternshadow = args.hostpatternall
+        args.hostpatterntgen = args.hostpatternall
+        args.hostpatterntor = args.hostpatternall
+
+    tickdata, shdata, ftdata, tgendata, tordata = get_data(args.experiments, args.lineformats, args.skiptime, args.rskiptime, args.hostpatternshadow, args.hostpatterntgen, args.hostpatterntor)
 
     page = PdfPages("{0}shadow.results.pdf".format(args.prefix+'.' if args.prefix is not None else ''))
     # use a try block in case there are errors, the PDF will still be openable
@@ -611,7 +649,7 @@ def plot_filetransfer_lastbyte_median(data, page):
                 if bytes not in figs: figs[bytes] = pylab.figure()
                 if bytes not in lb: lb[bytes] = []
                 client_lb_list = d[client][b]["lastbyte"]
-                lb[bytes].append(numpy.median(client_lb_list))
+                if len(client_lb_list) > 0: lb[bytes].append(numpy.median(client_lb_list))
         for bytes in lb:
             x, y = getcdf(lb[bytes])
             pylab.figure(figs[bytes].number)
@@ -637,7 +675,7 @@ def plot_filetransfer_lastbyte_mean(data, page):
                 if bytes not in figs: figs[bytes] = pylab.figure()
                 if bytes not in lb: lb[bytes] = []
                 client_lb_list = d[client][b]["lastbyte"]
-                lb[bytes].append(numpy.mean(client_lb_list))
+                if len(client_lb_list) > 0: lb[bytes].append(numpy.mean(client_lb_list))
         for bytes in lb:
             x, y = getcdf(lb[bytes])
             pylab.figure(figs[bytes].number)
@@ -663,7 +701,7 @@ def plot_filetransfer_lastbyte_max(data, page):
                 if bytes not in figs: figs[bytes] = pylab.figure()
                 if bytes not in lb: lb[bytes] = []
                 client_lb_list = d[client][b]["lastbyte"]
-                lb[bytes].append(numpy.max(client_lb_list))
+                if len(client_lb_list) > 0: lb[bytes].append(numpy.max(client_lb_list))
         for bytes in lb:
             x, y = getcdf(lb[bytes])
             pylab.figure(figs[bytes].number)
@@ -765,7 +803,7 @@ def plot_tgen_lastbyte_median(data, page):
                     if bytes not in lb: lb[bytes] = []
                     client_lb_list = []
                     for sec in d[client]["lastbyte"][b]: client_lb_list.extend(d[client]["lastbyte"][b][sec])
-                    lb[bytes].append(numpy.median(client_lb_list))
+                    if len(client_lb_list) > 0: lb[bytes].append(numpy.median(client_lb_list))
         for bytes in lb:
             x, y = getcdf(lb[bytes])
             pylab.figure(figs[bytes].number)
@@ -793,7 +831,7 @@ def plot_tgen_lastbyte_mean(data, page):
                     if bytes not in lb: lb[bytes] = []
                     client_lb_list = []
                     for sec in d[client]["lastbyte"][b]: client_lb_list.extend(d[client]["lastbyte"][b][sec])
-                    lb[bytes].append(numpy.mean(client_lb_list))
+                    if len(client_lb_list) > 0: lb[bytes].append(numpy.mean(client_lb_list))
         for bytes in lb:
             x, y = getcdf(lb[bytes])
             pylab.figure(figs[bytes].number)
@@ -821,7 +859,7 @@ def plot_tgen_lastbyte_max(data, page):
                     if bytes not in lb: lb[bytes] = []
                     client_lb_list = []
                     for sec in d[client]["lastbyte"][b]: client_lb_list.extend(d[client]["lastbyte"][b][sec])
-                    lb[bytes].append(numpy.max(client_lb_list))
+                    if len(client_lb_list) > 0: lb[bytes].append(numpy.max(client_lb_list))
         for bytes in lb:
             x, y = getcdf(lb[bytes])
             pylab.figure(figs[bytes].number)
@@ -983,7 +1021,6 @@ def plot_tor(data, page, capacities=None, direction="bytes_written"):
         tput = {}
         pertput, percap = [], []
         for node in d:
-            if 'relay' not in node and 'thority' not in node: continue
             for tstr in d[node][direction]:
                 mib = d[node][direction][tstr]/1048576.0
                 t = int(tstr)
@@ -1055,7 +1092,7 @@ def plot_tor(data, page, capacities=None, direction="bytes_written"):
         pylab.close()
         del(capsfig)
 
-def get_data(experiments, lineformats, skiptime, rskiptime):
+def get_data(experiments, lineformats, skiptime, rskiptime, hostpatternshadow, hostpatterntgen, hostpatterntor):
     tickdata, shdata, ftdata, tgendata, tordata = [], [], [], [], []
     lflist = lineformats.strip().split(",")
 
@@ -1065,7 +1102,8 @@ def get_data(experiments, lineformats, skiptime, rskiptime):
         if not os.path.exists(log): continue
         xzcatp = subprocess.Popen(["xzcat", log], stdout=subprocess.PIPE)
         data = json.load(xzcatp.stdout)
-        data = prune_data(data, skiptime, rskiptime)
+        data = prune_data(data, skiptime, rskiptime, hostpatternshadow)
+
         nextcycle = lfcycle.next()
         if 'nodes' in data and len(data['nodes']) > 0:
             shdata.append((data['nodes'], label, nextcycle))
@@ -1078,7 +1116,7 @@ def get_data(experiments, lineformats, skiptime, rskiptime):
         if not os.path.exists(log): continue
         xzcatp = subprocess.Popen(["xzcat", log], stdout=subprocess.PIPE)
         data = json.load(xzcatp.stdout)
-        data = prune_data(data, skiptime, rskiptime)
+        data = prune_data(data, skiptime, rskiptime, hostpatterntgen)
         if 'nodes' in data and len(data['nodes']) > 0:
             ftdata.append((data['nodes'], label, lfcycle.next()))
 
@@ -1088,7 +1126,7 @@ def get_data(experiments, lineformats, skiptime, rskiptime):
         if not os.path.exists(log): continue
         xzcatp = subprocess.Popen(["xzcat", log], stdout=subprocess.PIPE)
         data = json.load(xzcatp.stdout)
-        data = prune_data(data, skiptime, rskiptime)
+        data = prune_data(data, skiptime, rskiptime, hostpatterntgen)
         if 'nodes' in data and len(data['nodes']) > 0:
             tgendata.append((data['nodes'], label, lfcycle.next()))
 
@@ -1098,13 +1136,23 @@ def get_data(experiments, lineformats, skiptime, rskiptime):
         if not os.path.exists(log): continue
         xzcatp = subprocess.Popen(["xzcat", log], stdout=subprocess.PIPE)
         data = json.load(xzcatp.stdout)
-        data = prune_data(data, skiptime, rskiptime)
-        tordata.append((data['nodes'], label, lfcycle.next()))
+        data = prune_data(data, skiptime, rskiptime, hostpatterntor)
+        if len(data['nodes']) > 0: tordata.append((data['nodes'], label, lfcycle.next()))
 
     return tickdata, shdata, ftdata, tgendata, tordata
 
-def prune_data(data, skiptime, rskiptime):
+def prune_data(data, skiptime, rskiptime, hostpattern):
+    if 'nodes' in data:
+        # avoid modifying the dict while iterating it
+        names_to_remove = []
+        for name in data['nodes']:
+            found = True if search(hostpattern, name) else False
+            if not found: names_to_remove.append(name)
+        for name in names_to_remove:
+            del(data['nodes'][name])
+
     if skiptime == 0 and rskiptime == 0: return data
+
     if 'nodes' in data:
         for name in data['nodes']:
             keys = ['recv', 'send', 'errors', 'firstbyte', 'lastbyte']
