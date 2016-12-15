@@ -523,22 +523,7 @@ static void _tcp_runCloseTimerExpiredTask(TCP* tcp, gpointer userData) {
 static void _tcp_autotuneReceiveBuffer(TCP* tcp, guint bytesCopied) {
     MAGIC_ASSERT(tcp);
 
-    SimulationTime now = worker_getCurrentTime();
-
     tcp->autotune.bytesCopied += (gsize)bytesCopied;
-
-    if(tcp->autotune.lastAdjustment == 0) {
-        tcp->autotune.lastAdjustment = now;
-        return;
-    }
-
-    SimulationTime time = now - tcp->autotune.lastAdjustment;
-    SimulationTime threshold = ((SimulationTime)tcp->congestion->rttSmoothed) * ((SimulationTime)SIMTIME_ONE_MILLISECOND);
-
-    if(tcp->congestion->rttSmoothed == 0 || (time < threshold)) {
-        return;
-    }
-
     gsize space = 2 * tcp->autotune.bytesCopied;
     space = MAX(space, tcp->autotune.space);
 
@@ -554,8 +539,16 @@ static void _tcp_autotuneReceiveBuffer(TCP* tcp, guint bytesCopied) {
         }
     }
 
-    tcp->autotune.lastAdjustment = now;
-    tcp->autotune.bytesCopied = 0;
+    SimulationTime now = worker_getCurrentTime();
+    if(tcp->autotune.lastAdjustment == 0) {
+        tcp->autotune.lastAdjustment = now;
+    } else if(tcp->congestion->rttSmoothed > 0) {
+        SimulationTime threshold = ((SimulationTime)tcp->congestion->rttSmoothed) * ((SimulationTime)SIMTIME_ONE_MILLISECOND);
+        if((now - tcp->autotune.lastAdjustment) > threshold) {
+            tcp->autotune.lastAdjustment = now;
+            tcp->autotune.bytesCopied = 0;
+        }
+    }
 }
 
 static void _tcp_autotuneSendBuffer(TCP* tcp) {
