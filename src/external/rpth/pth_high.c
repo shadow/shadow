@@ -999,7 +999,8 @@ ssize_t pth_write_ev(int fd, const void *buf, size_t nbytes, pth_event_t ev_extr
 
             /* check for the extra events */
             if (ev_extra != NULL && !ev_occurred) {
-                pth_fdmode(s, fdmode);
+                /* restore filedescriptor mode before error */
+                pth_fdmode(fd, fdmode);
                 rv = pth_error(-1, EINTR);
                 goto done;
             }
