@@ -177,6 +177,10 @@ void logger_logVA(Logger* logger, LogLevel level, const gchar* fileName, const g
         logger_flushRecords(logger, g_thread_self());
         logger_syncToDisk(logger);
 
+        /* tell the helper to stop, and join to make sure it finished flushing */
+        _logger_sendStopCommandToHelper(logger);
+        g_thread_join(logger->helper);
+
         /* now abort, but get a backtrace */
         utility_assert(FALSE && "failure due to error-level log message");
     }
@@ -321,7 +325,7 @@ static void _logger_free(Logger* logger) {
     g_thread_join(logger->helper);
     g_thread_unref(logger->helper);
 
-    /* all commands should have been handled and we can free teh queue */
+    /* all commands should have been handled and we can free the queue */
     utility_assert(g_async_queue_length_unlocked(logger->helperCommands) == 0);
     g_async_queue_unref(logger->helperCommands);
 
