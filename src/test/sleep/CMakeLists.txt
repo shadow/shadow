@@ -2,8 +2,7 @@
 find_package(RT REQUIRED)
 find_package(DL REQUIRED)
 find_package(M REQUIRED)
-find_package(GLIB REQUIRED)
-include_directories(${RT_INCLUDES} ${DL_INCLUDES} ${M_INCLUDES} ${GLIB_INCLUDES})
+include_directories(${RT_INCLUDES} ${DL_INCLUDES} ${M_INCLUDES})
 
 ## build the test as a dynamic executable that plugs into shadow
 add_shadow_plugin(shadow-plugin-test-sleep shd-test-sleep.c)
@@ -12,8 +11,8 @@ add_shadow_plugin(shadow-plugin-test-sleep shd-test-sleep.c)
 add_executable(test-sleep shd-test-sleep.c)
 
 ## if the test needs any libraries, link them here
-target_link_libraries(shadow-plugin-test-sleep ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES} ${GLIB_LIBRARIES})
-target_link_libraries(test-sleep ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES} ${GLIB_LIBRARIES})
+target_link_libraries(shadow-plugin-test-sleep ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES})
+target_link_libraries(test-sleep ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES})
 
 ## register the tests
 add_test(NAME sleep COMMAND test-sleep)
