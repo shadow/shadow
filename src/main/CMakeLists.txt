@@ -92,14 +92,11 @@ set(shadow_srcs
     main.c
 )
 
-add_library(shadow-interpose-helper SHARED ${CMAKE_SOURCE_DIR}/src/plugin/shd-interposer-helper.c)
-
 ## specify the main shadow executable, build, link, and install
 add_executable(shadow ${shadow_srcs})
 add_dependencies(shadow shadow-interpose-helper elf-loader rpth)
 target_link_libraries(shadow shadow-interpose-helper -lrpth ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES} ${IGRAPH_LIBRARIES} ${GLIB_LIBRARIES})
 install(TARGETS shadow DESTINATION bin)
-install(TARGETS shadow-interpose-helper DESTINATION lib)
 
 ## shadow needs to find libshadow-interpose and custom libs after install
 set_target_properties(shadow PROPERTIES 
