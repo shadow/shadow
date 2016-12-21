@@ -5,8 +5,13 @@
  */
 
 #ifndef _GNU_SOURCE
-#define _GNU_SOURCE
+#define _GNU_SOURCE 1
 #endif
+#ifndef __USE_GNU
+#define __USE_GNU 1
+#endif
+#include <dlfcn.h>
+#include <unistd.h>
 #include <fcntl.h>
 
 #include <assert.h>
@@ -71,6 +76,29 @@
 
 #include "shadow.h"
 
+/**
+ * We call this function to run the plugin executable. A symbol with this name
+ * must exist or the dlsym lookup will fail.
+ */
+#define PLUGIN_MAIN_SYMBOL "main"
+
+/**
+ * We call this function to get the location where we should set errno for this program.
+ * This symbol must exist or the dlsym lookup will fail.
+ */
+#define PLUGIN_ERRNOLOC_SYMBOL "__errno_location"
+
+/* Global symbols that plugins *may* define to hook changes in execution control */
+#define PLUGIN_POSTLOAD_SYMBOL "__shadow_plugin_load__"
+#define PLUGIN_PREUNLOAD_SYMBOL "__shadow_plugin_unload__"
+#define PLUGIN_PREENTER_SYMBOL "__shadow_plugin_enter__"
+#define PLUGIN_POSTEXIT_SYMBOL "__shadow_plugin_exit__"
+
+/* define function signatures for some plugin functions */
+typedef gint (*PluginMainFunc)(int argc, char* argv[]);
+typedef void (*PluginHookFunc)(void* uniqueid);
+typedef int* (*ErrnoLocationFunc)(void);
+
 typedef void (*PluginExitCallbackFunc)();
 typedef void (*PluginExitCallbackArgumentsFunc)(int, void*);
 
@@ -120,7 +148,32 @@ struct _Process {
     FILE* stderrFile;
 
     /* the shadow plugin executable */
-    Program* prog;
+    struct {
+        GString* name;
+        GString* path;
+        void* handle;
+
+        /* every plug-in needs a main function, which we call to start the virtual process */
+        PluginMainFunc main;
+
+        /* these functions allow us to notify the plugin code when we are passing control,
+         * they are non-Null only if the plug-in optionally defines the symbols above */
+        PluginHookFunc postLibraryLoad;
+        PluginHookFunc preLibraryUnload;
+        PluginHookFunc preProcessEnter;
+        PluginHookFunc postProcessExit;
+
+        /* the function that will return the specific location of errno for this plugin */
+        ErrnoLocationFunc errnoGetLocation;;
+
+        /*
+         * TRUE from when we've called into plug-in code until the call completes.
+         * Note that the plug-in may get back into shadow code during execution, by
+         * calling a function that we intercept. isShadowContext distinguishes this.
+         */
+        gboolean isExecuting;
+    } plugin;
+
     /* the portable thread state this process uses when executing the program */
     pth_gctx_t tstate;
     /* the main fd used to wait for notifications from shadow */
@@ -203,6 +256,170 @@ static ProcessContext _process_changeContext(Process* proc, ProcessContext from,
     return prevContext;
 }
 
+static const gchar* _process_getPluginName(Process* proc) {
+    MAGIC_ASSERT(proc);
+    utility_assert(proc->plugin.name);
+    return proc->plugin.name->str;
+}
+
+static void _process_setErrno(Process* proc, int errnoValue) {
+    MAGIC_ASSERT(proc);
+
+    if(proc->plugin.errnoGetLocation) {
+        int* errnoLocation = proc->plugin.errnoGetLocation();
+        if(errnoLocation) {
+            *errnoLocation = errnoValue;
+        }
+    }
+
+    /* this is needed for when pth checks errno */
+    errno = errnoValue;
+}
+
+static void _process_unloadPlugin(Process* proc) {
+    MAGIC_ASSERT(proc);
+
+    if(proc->plugin.handle) {
+        if(proc->plugin.preLibraryUnload != NULL) {
+            _process_changeContext(proc, PCTX_SHADOW, PCTX_PLUGIN);
+            proc->plugin.preLibraryUnload(proc->plugin.handle);
+            _process_changeContext(proc, PCTX_PLUGIN, PCTX_SHADOW);
+        }
+
+        /* clear dlerror status string */
+        dlerror();
+
+        if(dlclose(proc->plugin.handle) != 0) {
+            const gchar* errorMessage = dlerror();
+            warning("dlclose() failed: %s", errorMessage);
+            warning("failed closing plugin '%s' at address '%p'", proc->plugin.path->str, proc->plugin.handle);
+        } else {
+            message("successfully unloaded private plug-in '%s' at address '%p'", proc->plugin.path->str, proc->plugin.handle);
+        }
+    }
+
+    proc->plugin.handle = NULL;
+}
+
+static void _process_loadPlugin(Process* proc) {
+    MAGIC_ASSERT(proc);
+    utility_assert(!proc->plugin.handle);
+
+    /*
+     * get the plugin handle from the library at filename.
+     *
+     * @warning only global dlopens are searchable with dlsym
+     * we cant use G_MODULE_BIND_LOCAL if we want to be able to lookup
+     * functions using dlsym in the plugin itself. if G_MODULE_BIND_LOCAL
+     * functionality is desired, then we must require plugins to separate their
+     * intercepted functions to a SHARED library, and link the plugin to that.
+     *
+     * We need a new namespace to keep state for each plugin separate.
+     * From the manpage:
+     *
+     * ```
+     * LM_ID_BASE
+     * Load the shared object in the initial namespace (i.e., the application's namespace).
+     *
+     * LM_ID_NEWLM
+     * Create  a new namespace and load the shared object in that namespace.  The object
+     * must have been correctly linked to reference all of the other shared objects that
+     * it requires, since the new namespace is initially empty.
+     * ```
+     */
+
+    /* dlmopen may result in plugin constructors getting called, so make sure
+     * we make that call from the plugin context. */
+    _process_changeContext(proc, PCTX_SHADOW, PCTX_PLUGIN);
+
+    /* clear dlerror status string */
+    dlerror();
+
+    proc->plugin.handle = dlmopen(LM_ID_NEWLM, proc->plugin.path->str, RTLD_NOW|RTLD_LOCAL|RTLD_DEEPBIND);
+    const gchar* errorMessage = dlerror();
+
+    _process_changeContext(proc, PCTX_PLUGIN, PCTX_SHADOW);
+
+    if(proc->plugin.handle) {
+        message("successfully loaded private plug-in '%s' at address '%p'", proc->plugin.path->str, proc->plugin.handle);
+    } else {
+        critical("dlmopen() failed: %s", errorMessage);
+        error("unable to load private plug-in '%s'", proc->plugin.path->str);
+    }
+
+    /* the remaining dlsym lookups should not cause code inside the plugin to get
+     * executed, so we should be able to do them from the shadow context. */
+
+    /* clear dlerror status string */
+    dlerror();
+
+    /* make sure it has the required init function */
+    gpointer symbol = NULL;
+
+    symbol = dlsym(proc->plugin.handle, PLUGIN_MAIN_SYMBOL);
+    if(symbol) {
+        proc->plugin.main = symbol;
+        message("found '%s' at %p", PLUGIN_MAIN_SYMBOL, symbol);
+    } else {
+        const gchar* errorMessage = dlerror();
+        critical("dlsym() failed: %s", errorMessage);
+        error("unable to find the required function symbol '%s' in plug-in '%s'",
+                PLUGIN_MAIN_SYMBOL, proc->plugin.path->str);
+    }
+
+    /* clear dlerror status string */
+    dlerror();
+
+    symbol = NULL;
+    symbol = dlsym(proc->plugin.handle, PLUGIN_ERRNOLOC_SYMBOL);
+    if(symbol) {
+        proc->plugin.errnoGetLocation = symbol;
+        message("found '%s' at %p", PLUGIN_ERRNOLOC_SYMBOL, symbol);
+    } else {
+        const gchar* errorMessage = dlerror();
+        critical("dlsym() failed: %s", errorMessage);
+        error("unable to find the required function symbol '%s' in plug-in '%s'",
+                PLUGIN_ERRNOLOC_SYMBOL, proc->plugin.path->str);
+    }
+
+    /* clear dlerror status string */
+    dlerror();
+
+    symbol = NULL;
+    symbol = dlsym(proc->plugin.handle, PLUGIN_POSTLOAD_SYMBOL);
+    if(symbol) {
+        proc->plugin.postLibraryLoad = symbol;
+        message("found '%s' at %p", PLUGIN_POSTLOAD_SYMBOL, symbol);
+    }
+
+    symbol = NULL;
+    symbol = dlsym(proc->plugin.handle, PLUGIN_PREUNLOAD_SYMBOL);
+    if(symbol) {
+        proc->plugin.preLibraryUnload = symbol;
+        message("found '%s' at %p", PLUGIN_PREUNLOAD_SYMBOL, symbol);
+    }
+
+    symbol = NULL;
+    symbol = dlsym(proc->plugin.handle, PLUGIN_PREENTER_SYMBOL);
+    if(symbol) {
+        proc->plugin.preProcessEnter = symbol;
+        message("found '%s' at %p", PLUGIN_PREENTER_SYMBOL, symbol);
+    }
+
+    symbol = NULL;
+    symbol = dlsym(proc->plugin.handle, PLUGIN_POSTEXIT_SYMBOL);
+    if(symbol) {
+        proc->plugin.postProcessExit = symbol;
+        message("found '%s' at %p", PLUGIN_POSTEXIT_SYMBOL, symbol);
+    }
+
+    if(proc->plugin.postLibraryLoad != NULL) {
+        _process_changeContext(proc, PCTX_SHADOW, PCTX_PLUGIN);
+        proc->plugin.postLibraryLoad(proc->plugin.handle);
+        _process_changeContext(proc, PCTX_PLUGIN, PCTX_SHADOW);
+    }
+}
+
 Process* process_new(gpointer host, guint processID,
         SimulationTime startTime, SimulationTime stopTime,
         const gchar* pluginName, const gchar* pluginPath, gchar* arguments) {
@@ -215,7 +432,11 @@ Process* process_new(gpointer host, guint processID,
     }
 
     proc->processID = processID;
-    proc->prog = program_new(pluginName, pluginPath);
+
+    utility_assert(pluginPath);
+    utility_assert(pluginName);
+    proc->plugin.name = g_string_new(pluginName);
+    proc->plugin.path = g_string_new(pluginPath);
 
     proc->startTime = startTime;
     proc->stopTime = stopTime;
@@ -269,6 +490,12 @@ static void _process_free(Process* proc) {
         _process_logCachedWarnings(proc);
         g_queue_free(proc->cachedWarningMessages);
     }
+    if(proc->plugin.path) {
+        g_string_free(proc->plugin.path, TRUE);
+    }
+    if(proc->plugin.name) {
+        g_string_free(proc->plugin.name, TRUE);
+    }
 
     g_timer_destroy(proc->cpuDelayTimer);
 
@@ -283,7 +510,7 @@ static void _process_free(Process* proc) {
 static FILE* _process_openFile(Process* proc, const gchar* prefix) {
     const gchar* hostDataPath = host_getDataPath(proc->host);
     GString* fileNameString = g_string_new(NULL);
-    g_string_printf(fileNameString, "%s-%s-%u.log", prefix, program_getName(proc->prog), proc->processID);
+    g_string_printf(fileNameString, "%s-%s-%u.log", prefix, _process_getPluginName(proc), proc->processID);
     gchar* pathStr = g_build_filename(hostDataPath, fileNameString->str, NULL);
     FILE* f = g_fopen(pathStr, "a");
     g_string_free(fileNameString, TRUE);
@@ -294,11 +521,11 @@ static FILE* _process_openFile(Process* proc, const gchar* prefix) {
         }
         GString* stringBuffer = g_string_new(NULL);
         g_string_printf(stringBuffer, "process '%s-%u': unable to open file '%s', error was: %s",
-                program_getName(proc->prog), proc->processID, pathStr, g_strerror(errno));
+                _process_getPluginName(proc), proc->processID, pathStr, g_strerror(errno));
         g_queue_push_tail(proc->cachedWarningMessages, g_string_free(stringBuffer, FALSE));
 
 //        warning("process '%s-%u': unable to open file '%s', error was: %s",
-//                program_getName(proc->prog), proc->processID, pathStr, g_strerror(errno));
+//                _process_getPluginName(proc), proc->processID, pathStr, g_strerror(errno));
     }
     g_free(pathStr);
     return f;
@@ -318,7 +545,7 @@ static FILE* _process_getIOFile(Process* proc, gint fd){
                 }
                 GString* stringBuffer = g_string_new(NULL);
                 g_string_printf(stringBuffer, "process '%s-%u': unable to open file for process output, dumping to tty stdout",
-                    program_getName(proc->prog), proc->processID);
+                    _process_getPluginName(proc), proc->processID);
                 g_queue_push_tail(proc->cachedWarningMessages, g_string_free(stringBuffer, FALSE));
 
                 /* now set shadows stdout */
@@ -336,7 +563,7 @@ static FILE* _process_getIOFile(Process* proc, gint fd){
                 }
                 GString* stringBuffer = g_string_new(NULL);
                 g_string_printf(stringBuffer, "process '%s-%u': unable to open file for process errors, dumping to tty stderr",
-                        program_getName(proc->prog), proc->processID);
+                        _process_getPluginName(proc), proc->processID);
                 g_queue_push_tail(proc->cachedWarningMessages, g_string_free(stringBuffer, FALSE));
 
                 /* now set shadows stderr */
@@ -360,7 +587,7 @@ static gint _process_getArguments(Process* proc, gchar** argvOut[]) {
     GQueue *arguments = g_queue_new();
 
     /* first argument is the name of the program */
-    const gchar* pluginName = program_getName(proc->prog);
+    const gchar* pluginName = _process_getPluginName(proc);
     g_queue_push_tail(arguments, g_strdup(pluginName));
 
     /* parse the full argument string into separate strings */
@@ -477,7 +704,7 @@ static void _process_executeCleanup(Process* proc) {
     gint numThreads = proc->programAuxiliaryThreads ? g_queue_get_length(proc->programAuxiliaryThreads) : 0;
     gint numExitFuncs = proc->atExitFunctions ? g_queue_get_length(proc->atExitFunctions) : 0;
     message("cleaning up '%s-%u' process: aborting %u auxiliary threads and calling %u atexit functions",
-            program_getName(proc->prog), proc->processID, numThreads, numExitFuncs);
+            _process_getPluginName(proc), proc->processID, numThreads, numExitFuncs);
 
     /* closing the main thread causes all other threads to get terminated */
     if(proc->programAuxiliaryThreads != NULL) {
@@ -554,7 +781,7 @@ static void _process_logReturnCode(Process* proc, gint code) {
         GString* mainResultString = g_string_new(NULL);
         g_string_printf(mainResultString, "main %s code '%i' for process '%s-%u'",
                 ((code==0) ? "success" : "error"),
-                code, program_getName(proc->prog), proc->processID);
+                code, _process_getPluginName(proc), proc->processID);
 
         if(code == 0) {
             message("%s", mainResultString->str);
@@ -590,7 +817,7 @@ static void* _process_executeMain(Process* proc) {
     /* get arguments from the program we will run */
     proc->argc = _process_getArguments(proc, &proc->argv);
 
-    message("calling main() for '%s-%u' process", program_getName(proc->prog), proc->processID);
+    message("calling main() for '%s-%u' process", _process_getPluginName(proc), proc->processID);
 
     /* time how long we execute the program */
     g_timer_start(proc->cpuDelayTimer);
@@ -599,7 +826,9 @@ static void* _process_executeMain(Process* proc) {
     _process_changeContext(proc, PCTX_SHADOW, PCTX_PLUGIN);
 
     /* call the program's main function, pth will handle blocking as the program runs */
-    proc->returnCode = program_callMainFunc(proc->prog, proc->argv, proc->argc);
+    utility_assert(proc->plugin.isExecuting);
+    utility_assert(proc->plugin.main);
+    proc->returnCode = proc->plugin.main(proc->argc, proc->argv);
 
     /* the program's main function has returned or exited, this process has completed */
     _process_changeContext(proc, PCTX_PLUGIN, PCTX_SHADOW);
@@ -657,30 +886,28 @@ static void _process_start(Process* proc) {
         return;
     }
 
-    message("starting '%s-%u' process and pth threading system", program_getName(proc->prog), proc->processID);
+    message("starting '%s-%u' process and pth threading system", _process_getPluginName(proc), proc->processID);
 
     /* create the thread names while still in shadow context, format is host.process.<id> */
     GString* shadowThreadNameBuf = g_string_new(NULL);
-    g_string_printf(shadowThreadNameBuf, "%s.%s.%u.shadow", host_getName(proc->host), program_getName(proc->prog), proc->processID);
+    g_string_printf(shadowThreadNameBuf, "%s.%s.%u.shadow", host_getName(proc->host), _process_getPluginName(proc), proc->processID);
     GString* programMainThreadNameBuf = g_string_new(NULL);
-    g_string_printf(programMainThreadNameBuf, "%s.%s.%u.main", host_getName(proc->host), program_getName(proc->prog), proc->processID);
+    g_string_printf(programMainThreadNameBuf, "%s.%s.%u.main", host_getName(proc->host), _process_getPluginName(proc), proc->processID);
 
     utility_assert(proc->programAuxiliaryThreads == NULL);
     proc->programAuxiliaryThreads = g_queue_new();
-
-    /* make sure the program is loaded */
-    program_load(proc->prog);
 
     /* ref for the spawn below */
     process_ref(proc);
 
     /* XXX temporary tor process init hack */
-    gboolean doLock = g_strstr_len(program_getPath(proc->prog), -1, "shadow-plugin-tor") ? TRUE : FALSE;
+    utility_assert(proc && proc->plugin.path);
+    gboolean doLock = g_strstr_len(proc->plugin.path->str, -1, "shadow-plugin-tor") ? TRUE : FALSE;
     if(doLock) G_LOCK(globalProcessInitLock);
 
     /* now we will execute in the pth/plugin context, so we need to load the state */
     worker_setActiveProcess(proc);
-    program_setExecuting(proc->prog, TRUE);
+    proc->plugin.isExecuting = TRUE;
     _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
 
     /* create a new global context for this process, 0 means it should never block */
@@ -712,15 +939,30 @@ static void _process_start(Process* proc) {
     proc->programMainThread = pth_spawn(programMainThreadAttr, (PthSpawnFunc)_process_executeMain, proc);
     pth_attr_destroy(programMainThreadAttr);
 
+    /* now that our pth state is set up, load the plugin */
     _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
-    program_callPreProcessEnterHookFunc(proc->prog);
+    _process_loadPlugin(proc);
+    _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
+
+    _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+    utility_assert(proc->plugin.isExecuting);
+    if(proc->plugin.preProcessEnter != NULL) {
+        _process_changeContext(proc, PCTX_SHADOW, PCTX_PLUGIN);
+        proc->plugin.preProcessEnter(proc->plugin.handle);
+        _process_changeContext(proc, PCTX_PLUGIN, PCTX_SHADOW);
+    }
     _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
 
     /* now give the main program thread a chance to run */
     pth_yield(proc->programMainThread);
 
     _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
-    program_callPostProcessExitHookFunc(proc->prog);
+    utility_assert(proc->plugin.isExecuting);
+    if(proc->plugin.postProcessExit != NULL) {
+        _process_changeContext(proc, PCTX_SHADOW, PCTX_PLUGIN);
+        proc->plugin.postProcessExit(proc->plugin.handle);
+        _process_changeContext(proc, PCTX_PLUGIN, PCTX_SHADOW);
+    }
     _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
 
     /* total number of alive pth threads this scheduler has */
@@ -732,7 +974,7 @@ static void _process_start(Process* proc) {
 
     /* the main function finished or blocked somewhere and we are back in shadow land */
     _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
-    program_setExecuting(proc->prog, FALSE);
+    proc->plugin.isExecuting = FALSE;
     worker_setActiveProcess(NULL);
 
     /* XXX temporary tor process init hack */
@@ -741,7 +983,7 @@ static void _process_start(Process* proc) {
     /* the main thread wont exist if it exited immediately before returning control to shadow */
     if(proc->programMainThread) {
         message("'%s-%u' process initialization is complete, main thread %s running",
-                program_getName(proc->prog), proc->processID, process_isRunning(proc) ? "is" : "is not");
+                _process_getPluginName(proc), proc->processID, process_isRunning(proc) ? "is" : "is not");
     } else {
         _process_logReturnCode(proc, proc->returnCode);
 
@@ -750,10 +992,10 @@ static void _process_start(Process* proc) {
         proc->tstate = NULL;
 
         /* free our copy of plug-in resources, and other application state */
-        program_unload(proc->prog);
+        _process_unloadPlugin(proc);
         utility_assert(!process_isRunning(proc));
 
-        info("'%s-%u' has completed or is otherwise no longer running", program_getName(proc->prog), proc->processID);
+        info("'%s-%u' has completed or is otherwise no longer running", _process_getPluginName(proc), proc->processID);
     }
 
     if(proc->stdoutFile) {
@@ -779,12 +1021,12 @@ void process_continue(Process* proc) {
         return;
     }
 
-    info("switching to rpth to continue '%s-%u' process/threads", program_getName(proc->prog), proc->processID);
+    info("switching to rpth to continue '%s-%u' process/threads", _process_getPluginName(proc), proc->processID);
 
     /* there is some i/o or event available, let pth handle it
      * we will execute in the pth/plugin context, so we need to load the state */
     worker_setActiveProcess(proc);
-    program_setExecuting(proc->prog, TRUE);
+    proc->plugin.isExecuting = TRUE;
     _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
 
     /* we are in pth land, load in the pth state for this process */
@@ -792,7 +1034,12 @@ void process_continue(Process* proc) {
     pth_gctx_set(proc->tstate);
 
     _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
-    program_callPreProcessEnterHookFunc(proc->prog);
+    utility_assert(proc->plugin.isExecuting);
+    if(proc->plugin.preProcessEnter != NULL) {
+        _process_changeContext(proc, PCTX_SHADOW, PCTX_PLUGIN);
+        proc->plugin.preProcessEnter(proc->plugin.handle);
+        _process_changeContext(proc, PCTX_PLUGIN, PCTX_SHADOW);
+    }
     _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
 
     /* make sure pth scheduler updates, and process all program threads until they block */
@@ -801,7 +1048,12 @@ void process_continue(Process* proc) {
     } while(pth_ctrl(PTH_CTRL_GETTHREADS_READY | PTH_CTRL_GETTHREADS_NEW));
 
     _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
-    program_callPostProcessExitHookFunc(proc->prog);
+    utility_assert(proc->plugin.isExecuting);
+    if(proc->plugin.postProcessExit != NULL) {
+        _process_changeContext(proc, PCTX_SHADOW, PCTX_PLUGIN);
+        proc->plugin.postProcessExit(proc->plugin.handle);
+        _process_changeContext(proc, PCTX_PLUGIN, PCTX_SHADOW);
+    }
     _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
 
     /* total number of alive pth threads this scheduler has */
@@ -820,7 +1072,7 @@ void process_continue(Process* proc) {
 
     /* the pth threads finished or blocked somewhere and we are back in shadow land */
     _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
-    program_setExecuting(proc->prog, FALSE);
+    proc->plugin.isExecuting = FALSE;
     worker_setActiveProcess(NULL);
 
     if(proc->cachedWarningMessages) {
@@ -828,16 +1080,16 @@ void process_continue(Process* proc) {
     }
 
     if(proc->programMainThread) {
-        info("'%s-%u' is running, but threads are blocked waiting for events", program_getName(proc->prog), proc->processID);
+        info("'%s-%u' is running, but threads are blocked waiting for events", _process_getPluginName(proc), proc->processID);
     } else {
         /* pth should have had no remaining alive threads except the one shadow was running in */
         utility_assert(nThreads == 1);
 
         /* free our copy of plug-in resources, and other application state */
-        program_unload(proc->prog);
+        _process_unloadPlugin(proc);
         utility_assert(!process_isRunning(proc));
 
-        info("'%s-%u' has completed or is otherwise no longer running", program_getName(proc->prog), proc->processID);
+        info("'%s-%u' has completed or is otherwise no longer running", _process_getPluginName(proc), proc->processID);
     }
 }
 
@@ -858,10 +1110,10 @@ static void _process_stop(Process* proc) {
         return;
     }
 
-    message("terminating main thread of '%s-%u' process", program_getName(proc->prog), proc->processID);
+    message("terminating main thread of '%s-%u' process", _process_getPluginName(proc), proc->processID);
 
     worker_setActiveProcess(proc);
-    program_setExecuting(proc->prog, TRUE);
+    proc->plugin.isExecuting = TRUE;
     _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
 
     /* we are in pth land, load in the pth state for this process */
@@ -883,11 +1135,11 @@ static void _process_stop(Process* proc) {
 
     /* the pth threads finished or blocked somewhere and we are back in shadow land */
     _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
-    program_setExecuting(proc->prog, FALSE);
+    proc->plugin.isExecuting = FALSE;
     worker_setActiveProcess(NULL);
 
     /* free our copy of plug-in resources, and other application state */
-    program_unload(proc->prog);
+    _process_unloadPlugin(proc);
 }
 
 static void _process_runStartTask(Process* proc, gpointer nothing) {
@@ -1001,7 +1253,7 @@ static gint _process_emu_addressHelper(Process* proc, gint fd, const struct sock
 
     /* check if there was an error */
     if(result != 0) {
-        program_setErrno(proc->prog, result);
+        _process_setErrno(proc, result);
         return -1;
     }
 
@@ -1016,7 +1268,7 @@ static gssize _process_emu_sendHelper(Process* proc, gint fd, gconstpointer buf,
     /* TODO flags are ignored */
     /* make sure this is a socket */
     if(!host_isShadowDescriptor(proc->host, fd)){
-        program_setErrno(proc->prog, EBADF);
+        _process_setErrno(proc, EBADF);
         return -1;
     }
 
@@ -1034,7 +1286,7 @@ static gssize _process_emu_sendHelper(Process* proc, gint fd, gconstpointer buf,
     gint result = host_sendUserData(proc->host, fd, buf, n, ip, port, &bytes);
 
     if(result != 0) {
-        program_setErrno(proc->prog, result);
+        _process_setErrno(proc, result);
         return -1;
     }
     return (gssize) bytes;
@@ -1048,7 +1300,7 @@ static gssize _process_emu_recvHelper(Process* proc, gint fd, gpointer buf, size
     /* TODO flags are ignored */
     /* make sure this is a socket */
     if(!host_isShadowDescriptor(proc->host, fd)){
-        program_setErrno(proc->prog, EBADF);
+        _process_setErrno(proc, EBADF);
         return -1;
     }
 
@@ -1059,7 +1311,7 @@ static gssize _process_emu_recvHelper(Process* proc, gint fd, gpointer buf, size
     gint result = host_receiveUserData(proc->host, fd, buf, n, &ip, &port, &bytes);
 
     if(result != 0) {
-        program_setErrno(proc->prog, result);
+        _process_setErrno(proc, result);
         return -1;
     }
 
@@ -1086,10 +1338,10 @@ static gint _process_emu_fcntlHelper(Process* proc, int fd, int cmd, void* argp)
         if(osfd >= 0) {
             ret = fcntl(osfd, cmd, argp);
             if(ret < 0) {
-                program_setErrno(proc->prog, errno);
+                _process_setErrno(proc, errno);
             }
         } else {
-            program_setErrno(proc->prog, EBADF);
+            _process_setErrno(proc, EBADF);
             ret = -1;
         }
         _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -1108,7 +1360,7 @@ static gint _process_emu_fcntlHelper(Process* proc, int fd, int cmd, void* argp)
             descriptor_setFlags(descriptor, flags);
         }
     } else {
-        program_setErrno(proc->prog, EBADF);
+        _process_setErrno(proc, EBADF);
         result = -1;
     }
 
@@ -1127,10 +1379,10 @@ static gint _process_emu_ioctlHelper(Process* proc, int fd, unsigned long int re
         if(osfd >= 0) {
             ret = ioctl(fd, request, argp);
             if(ret < 0) {
-                program_setErrno(proc->prog, errno);
+                _process_setErrno(proc, errno);
             }
         } else {
-            program_setErrno(proc->prog, EBADF);
+            _process_setErrno(proc, EBADF);
             ret = -1;
         }
         _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -1174,7 +1426,7 @@ static int _process_emu_selectHelper(Process* proc, int nfds, fd_set *readfds, f
     gint ret = 0;
 
     if (nfds < 0 || nfds > FD_SETSIZE) {
-        program_setErrno(proc->prog, EINVAL);
+        _process_setErrno(proc, EINVAL);
         ret = -1;
     } else if(nfds == 0 && readfds == NULL && writefds == NULL && exceptfds == NULL && timeout != NULL) {
         /* only wait for the timeout, no file descriptor events */
@@ -1279,18 +1531,18 @@ static int _process_emu_pollHelper(Process* proc, struct pollfd *fds, nfds_t nfd
     }
 
     if(((gsize)nfds) > proc->fdLimit) {
-        program_setErrno(proc->prog, EINVAL);
+        _process_setErrno(proc, EINVAL);
         ret = -1;
     } else if(timeout_ts == NULL || timeout_ts->tv_sec != 0 || timeout_ts->tv_nsec != 0) {
         /* either we should block forever, or block until a valid timeout,
          * neither of which shadow supports */
         warning("poll is trying to block, but Shadow doesn't support blocking without pth");
-        program_setErrno(proc->prog, EINTR);
+        _process_setErrno(proc, EINTR);
         ret = -1;
     } else {
         ret = host_poll(proc->host, fds, nfds);
         if(ret < 0) {
-            program_setErrno(proc->prog, errno);
+            _process_setErrno(proc, errno);
         }
     }
 
@@ -1300,13 +1552,13 @@ static int _process_emu_pollHelper(Process* proc, struct pollfd *fds, nfds_t nfd
 static int _process_emu_epollCreateHelper(Process* proc, int size, int flags) {
     /* size should be > 0, but can otherwise be completely ignored */
     if(size < 1) {
-        program_setErrno(proc->prog, EINVAL);
+        _process_setErrno(proc, EINVAL);
         return -1;
     }
     /* the only possible flag is EPOLL_CLOEXEC, which means we should set
      * FD_CLOEXEC on the new file descriptor. just ignore for now. */
     if(flags != 0 && flags != EPOLL_CLOEXEC) {
-        program_setErrno(proc->prog, EINVAL);
+        _process_setErrno(proc, EINVAL);
         return -1;
     }
 
@@ -1334,13 +1586,13 @@ static int _process_emu_epollWaitHelper(Process* proc, int epfd, struct epoll_ev
 
     /* EINVAL if maxevents is less than or equal to zero. */
     if(maxevents <= 0) {
-        program_setErrno(proc->prog, EINVAL);
+        _process_setErrno(proc, EINVAL);
         ret = -1;
     } else if(timeout != 0) {
         /* either we should block forever, or block until a valid timeout,
          * neither of which shadow supports */
         warning("epoll_wait is trying to block, but Shadow doesn't support blocking without pth");
-        program_setErrno(proc->prog, EINTR);
+        _process_setErrno(proc, EINTR);
         ret = -1;
     } else {
         /* switch to shadow context and try to get events if we have any */
@@ -1349,7 +1601,7 @@ static int _process_emu_epollWaitHelper(Process* proc, int epfd, struct epoll_ev
 
         if(result != 0) {
             /* there was an error from shadow */
-            program_setErrno(proc->prog, result);
+            _process_setErrno(proc, result);
             ret = -1;
         } else {
             ret = nEvents;
@@ -1369,7 +1621,7 @@ void* process_emu_malloc(Process* proc, size_t size) {
         tracker_addAllocatedBytes(host_getTracker(proc->host), ptr, size);
     }
     if(ptr == NULL) {
-        program_setErrno(proc->prog, errno);
+        _process_setErrno(proc, errno);
     }
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -1384,7 +1636,7 @@ void* process_emu_calloc(Process* proc, size_t nmemb, size_t size) {
         tracker_addAllocatedBytes(host_getTracker(proc->host), ptr, size);
     }
     if(ptr == NULL) {
-        program_setErrno(proc->prog, errno);
+        _process_setErrno(proc, errno);
     }
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -1414,7 +1666,7 @@ void* process_emu_realloc(Process* proc, void *ptr, size_t size) {
     }
 
     if(newptr == NULL) {
-        program_setErrno(proc->prog, errno);
+        _process_setErrno(proc, errno);
     }
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -1447,7 +1699,7 @@ void* process_emu_memalign(Process* proc, size_t blocksize, size_t bytes) {
         tracker_addAllocatedBytes(host_getTracker(proc->host), ptr, bytes);
     }
     if(ptr == NULL) {
-        program_setErrno(proc->prog, errno);
+        _process_setErrno(proc, errno);
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ptr;
@@ -1461,7 +1713,7 @@ void* process_emu_aligned_alloc(Process* proc, size_t alignment, size_t size) {
         tracker_addAllocatedBytes(host_getTracker(proc->host), ptr, size);
     }
     if(ptr == NULL) {
-        program_setErrno(proc->prog, errno);
+        _process_setErrno(proc, errno);
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ptr;
@@ -1474,7 +1726,7 @@ void* process_emu_valloc(Process* proc, size_t size) {
         tracker_addAllocatedBytes(host_getTracker(proc->host), ptr, size);
     }
     if(ptr == NULL) {
-        program_setErrno(proc->prog, errno);
+        _process_setErrno(proc, errno);
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ptr;
@@ -1487,7 +1739,7 @@ void* process_emu_pvalloc(Process* proc, size_t size) {
         tracker_addAllocatedBytes(host_getTracker(proc->host), ptr, size);
     }
     if(ptr == NULL) {
-        program_setErrno(proc->prog, errno);
+        _process_setErrno(proc, errno);
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ptr;
@@ -1502,7 +1754,7 @@ void* process_emu_mmap(Process* proc, void *addr, size_t length, int prot, int f
     if(flags & MAP_ANONYMOUS) {
         gpointer ret = mmap(addr, length, prot, flags, -1, offset);
         if(ret == MAP_FAILED) {
-            program_setErrno(proc->prog, errno);
+            _process_setErrno(proc, errno);
         }
         _process_changeContext(proc, PCTX_SHADOW, prevCTX);
         return ret;
@@ -1516,7 +1768,7 @@ void* process_emu_mmap(Process* proc, void *addr, size_t length, int prot, int f
         if (osfd >= 0) {
             gpointer ret = mmap(addr, length, prot, flags, osfd, offset);
             if(ret == MAP_FAILED) {
-                program_setErrno(proc->prog, errno);
+                _process_setErrno(proc, errno);
             }
             _process_changeContext(proc, PCTX_SHADOW, prevCTX);
             return ret;
@@ -1525,7 +1777,7 @@ void* process_emu_mmap(Process* proc, void *addr, size_t length, int prot, int f
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
 
-    program_setErrno(proc->prog, EBADF);
+    _process_setErrno(proc, EBADF);
 
     return MAP_FAILED;
 }
@@ -1548,7 +1800,7 @@ int process_emu_epoll_ctl(Process* proc, int epfd, int op, int fd, struct epoll_
      * supported by this interface
      */
     if(epfd == fd) {
-        program_setErrno(proc->prog, EINVAL);
+        _process_setErrno(proc, EINVAL);
         return -1;
     }
 
@@ -1562,7 +1814,7 @@ int process_emu_epoll_ctl(Process* proc, int epfd, int op, int fd, struct epoll_
      * epoll_ctl() returns -1 and errno is set appropriately.
      */
     if(result != 0) {
-        program_setErrno(proc->prog, result);
+        _process_setErrno(proc, result);
         return -1;
     } else {
         return 0;
@@ -1578,7 +1830,7 @@ int process_emu_epoll_wait(Process* proc, int epfd, struct epoll_event *events, 
         ret = pth_epoll_wait(epfd, events, maxevents, timeout);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
         if(ret == -1) {
-            program_setErrno(proc->prog, errno);
+            _process_setErrno(proc, errno);
         }
     } else {
         ret = _process_emu_epollWaitHelper(proc, epfd, events, maxevents, timeout);
@@ -1596,7 +1848,7 @@ int process_emu_epoll_pwait(Process* proc, int epfd, struct epoll_event *events,
         ret = pth_epoll_pwait(epfd, events, maxevents, timeout, ss);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
         if(ret == -1) {
-            program_setErrno(proc->prog, errno);
+            _process_setErrno(proc, errno);
         }
     } else {
         /* shadow ignores the sigmask */
@@ -1628,11 +1880,11 @@ int process_emu_socket(Process* proc, int domain, int type, int protocol) {
     /* check inputs for what we support */
     if (type != SOCK_STREAM && type != SOCK_DGRAM) {
         warning("unsupported socket type \"%i\", we only support SOCK_STREAM and SOCK_DGRAM", type);
-        program_setErrno(proc->prog, EPROTONOSUPPORT);
+        _process_setErrno(proc, EPROTONOSUPPORT);
         result = -1;
     } else if(domain != AF_INET && domain != AF_UNIX) {
         warning("trying to create socket with domain \"%i\", we only support AF_INET and AF_UNIX", domain);
-        program_setErrno(proc->prog, EAFNOSUPPORT);
+        _process_setErrno(proc, EAFNOSUPPORT);
         result = -1;
     }
 
@@ -1662,7 +1914,7 @@ int process_emu_socket(Process* proc, int domain, int type, int protocol) {
 int process_emu_socketpair(Process* proc, int domain, int type, int protocol, int fds[2]) {
     /* create a pair of connected sockets, i.e. a bi-directional pipe */
     if(domain != AF_UNIX) {
-        program_setErrno(proc->prog, EAFNOSUPPORT);
+        _process_setErrno(proc, EAFNOSUPPORT);
         return -1;
     }
 
@@ -1680,7 +1932,7 @@ int process_emu_socketpair(Process* proc, int domain, int type, int protocol, in
     }
 
     if(type != SOCK_STREAM) {
-        program_setErrno(proc->prog, EPROTONOSUPPORT);
+        _process_setErrno(proc, EPROTONOSUPPORT);
         return -1;
     }
 
@@ -1727,7 +1979,7 @@ int process_emu_bind(Process* proc, int fd, const struct sockaddr* addr, socklen
     if((addr->sa_family == AF_INET && len < sizeof(struct sockaddr_in)) ||
             (addr->sa_family == AF_UNIX && len < sizeof(struct sockaddr_un))) {
         ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-        program_setErrno(proc->prog, EINVAL);
+        _process_setErrno(proc, EINVAL);
         _process_changeContext(proc, PCTX_SHADOW, prevCTX);
         return -1;
     }
@@ -1743,7 +1995,7 @@ int process_emu_connect(Process* proc, int fd, const struct sockaddr* addr, sock
     if((addr->sa_family == AF_INET && len < sizeof(struct sockaddr_in)) ||
             (addr->sa_family == AF_UNIX && len < sizeof(struct sockaddr_un))) {
         ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-        program_setErrno(proc->prog, EINVAL);
+        _process_setErrno(proc, EINVAL);
         _process_changeContext(proc, PCTX_SHADOW, prevCTX);
         return -1;
     }
@@ -1756,7 +2008,7 @@ int process_emu_connect(Process* proc, int fd, const struct sockaddr* addr, sock
         ret = pth_connect(fd, addr, len);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
         if(ret == -1) {
-            program_setErrno(proc->prog, errno);
+            _process_setErrno(proc, errno);
         }
     } else {
         _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -1780,7 +2032,7 @@ ssize_t process_emu_send(Process* proc, int fd, const void *buf, size_t n, int f
         ret = pth_send(fd, buf, n, flags);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
         if(ret == -1) {
-            program_setErrno(proc->prog, errno);
+            _process_setErrno(proc, errno);
         }
     } else {
         ret = _process_emu_sendHelper(proc, fd, buf, n, flags, NULL, 0);
@@ -1798,7 +2050,7 @@ ssize_t process_emu_sendto(Process* proc, int fd, const void *buf, size_t n, int
         ret = pth_sendto(fd, buf, n, flags, addr, addr_len);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
         if(ret == -1) {
-            program_setErrno(proc->prog, errno);
+            _process_setErrno(proc, errno);
         }
     } else {
         ret = _process_emu_sendHelper(proc, fd, buf, n, flags, addr, addr_len);
@@ -1811,7 +2063,7 @@ ssize_t process_emu_sendmsg(Process* proc, int fd, const struct msghdr *message,
     /* TODO implement */
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     warning("sendmsg not implemented");
-    program_setErrno(proc->prog, ENOSYS);
+    _process_setErrno(proc, ENOSYS);
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return -1;
 }
@@ -1825,7 +2077,7 @@ ssize_t process_emu_recv(Process* proc, int fd, void *buf, size_t n, int flags) 
         ret = pth_recv(fd, buf, n, flags);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
         if(ret == -1) {
-            program_setErrno(proc->prog, errno);
+            _process_setErrno(proc, errno);
         }
     } else {
         ret = _process_emu_recvHelper(proc, fd, buf, n, flags, NULL, 0);
@@ -1843,7 +2095,7 @@ ssize_t process_emu_recvfrom(Process* proc, int fd, void *buf, size_t n, int fla
         ret = pth_recvfrom(fd, buf, n, flags, addr, addr_len);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
         if(ret == -1) {
-            program_setErrno(proc->prog, errno);
+            _process_setErrno(proc, errno);
         }
     } else {
         ret = _process_emu_recvHelper(proc, fd, buf, n, flags, addr, addr_len);
@@ -1856,7 +2108,7 @@ ssize_t process_emu_recvmsg(Process* proc, int fd, struct msghdr *message, int f
     /* TODO implement */
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     warning("recvmsg not implemented");
-    program_setErrno(proc->prog, ENOSYS);
+    _process_setErrno(proc, ENOSYS);
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return -1;
 }
@@ -1864,7 +2116,7 @@ ssize_t process_emu_recvmsg(Process* proc, int fd, struct msghdr *message, int f
 int process_emu_getsockopt(Process* proc, int fd, int level, int optname, void* optval, socklen_t* optlen) {
     if(!optlen) {
         ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-        program_setErrno(proc->prog, EFAULT);
+        _process_setErrno(proc, EFAULT);
         _process_changeContext(proc, PCTX_SHADOW, prevCTX);
         return -1;
     }
@@ -1889,7 +2141,7 @@ int process_emu_getsockopt(Process* proc, int fd, int level, int optname, void* 
                         result = 0;
                     } else {
                         warning("called getsockopt with TCP_INFO on non-TCP socket");
-                        program_setErrno(proc->prog, ENOPROTOOPT);
+                        _process_setErrno(proc, ENOPROTOOPT);
                         result = -1;
                     }
 
@@ -1899,11 +2151,11 @@ int process_emu_getsockopt(Process* proc, int fd, int level, int optname, void* 
                 case SO_SNDBUF: {
                     if(*optlen < sizeof(gint)) {
                         warning("called getsockopt with SO_SNDBUF with optlen < %i", (gint)(sizeof(gint)));
-                        program_setErrno(proc->prog, EINVAL);
+                        _process_setErrno(proc, EINVAL);
                         result = -1;
                     } else if (t != DT_TCPSOCKET && t != DT_UDPSOCKET) {
                         warning("called getsockopt with SO_SNDBUF on non-socket");
-                        program_setErrno(proc->prog, ENOPROTOOPT);
+                        _process_setErrno(proc, ENOPROTOOPT);
                         result = -1;
                     } else {
                         if(optval) {
@@ -1917,11 +2169,11 @@ int process_emu_getsockopt(Process* proc, int fd, int level, int optname, void* 
                 case SO_RCVBUF: {
                     if(*optlen < sizeof(gint)) {
                         warning("called getsockopt with SO_RCVBUF with optlen < %i", (gint)(sizeof(gint)));
-                        program_setErrno(proc->prog, EINVAL);
+                        _process_setErrno(proc, EINVAL);
                         result = -1;
                     } else if (t != DT_TCPSOCKET && t != DT_UDPSOCKET) {
                         warning("called getsockopt with SO_RCVBUF on non-socket");
-                        program_setErrno(proc->prog, ENOPROTOOPT);
+                        _process_setErrno(proc, ENOPROTOOPT);
                         result = -1;
                     } else {
                         if(optval) {
@@ -1944,18 +2196,18 @@ int process_emu_getsockopt(Process* proc, int fd, int level, int optname, void* 
 
                 default: {
                     warning("getsockopt optname %i not implemented", optname);
-                    program_setErrno(proc->prog, ENOSYS);
+                    _process_setErrno(proc, ENOSYS);
                     result = -1;
                     break;
                 }
             }
         } else {
             warning("getsockopt level %i not implemented", level);
-            program_setErrno(proc->prog, ENOSYS);
+            _process_setErrno(proc, ENOSYS);
             result = -1;
         }
     } else {
-        program_setErrno(proc->prog, EBADF);
+        _process_setErrno(proc, EBADF);
         result = -1;
     }
 
@@ -1965,7 +2217,7 @@ int process_emu_getsockopt(Process* proc, int fd, int level, int optname, void* 
 
 int process_emu_setsockopt(Process* proc, int fd, int level, int optname, const void *optval, socklen_t optlen) {
     if(!optval) {
-        program_setErrno(proc->prog, EFAULT);
+        _process_setErrno(proc, EFAULT);
         return -1;
     }
 
@@ -1982,11 +2234,11 @@ int process_emu_setsockopt(Process* proc, int fd, int level, int optname, const 
                 case SO_SNDBUF: {
                     if(optlen < sizeof(gint)) {
                         warning("called setsockopt with SO_SNDBUF with optlen < %i", (gint)(sizeof(gint)));
-                        program_setErrno(proc->prog, EINVAL);
+                        _process_setErrno(proc, EINVAL);
                         result = -1;
                     } else if (t != DT_TCPSOCKET && t != DT_UDPSOCKET) {
                         warning("called setsockopt with SO_SNDBUF on non-socket");
-                        program_setErrno(proc->prog, ENOPROTOOPT);
+                        _process_setErrno(proc, ENOPROTOOPT);
                         result = -1;
                     } else {
                         gint v = *((gint*) optval);
@@ -1998,11 +2250,11 @@ int process_emu_setsockopt(Process* proc, int fd, int level, int optname, const 
                 case SO_RCVBUF: {
                     if(optlen < sizeof(gint)) {
                         warning("called setsockopt with SO_RCVBUF with optlen < %i", (gint)(sizeof(gint)));
-                        program_setErrno(proc->prog, EINVAL);
+                        _process_setErrno(proc, EINVAL);
                         result = -1;
                     } else if (t != DT_TCPSOCKET && t != DT_UDPSOCKET) {
                         warning("called setsockopt with SO_RCVBUF on non-socket");
-                        program_setErrno(proc->prog, ENOPROTOOPT);
+                        _process_setErrno(proc, ENOPROTOOPT);
                         result = -1;
                     } else {
                         gint v = *((gint*) optval);
@@ -2029,18 +2281,18 @@ int process_emu_setsockopt(Process* proc, int fd, int level, int optname, const 
 
                 default: {
                     warning("setsockopt optname %i not implemented", optname);
-                    program_setErrno(proc->prog, ENOSYS);
+                    _process_setErrno(proc, ENOSYS);
                     result = -1;
                     break;
                 }
             }
         } else {
             warning("setsockopt level %i not implemented", level);
-            program_setErrno(proc->prog, ENOSYS);
+            _process_setErrno(proc, ENOSYS);
             result = -1;
         }
     } else {
-        program_setErrno(proc->prog, EBADF);
+        _process_setErrno(proc, EBADF);
         result = -1;
     }
 
@@ -2053,7 +2305,7 @@ int process_emu_listen(Process* proc, int fd, int n) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     if(!host_isShadowDescriptor(proc->host, fd)){
         _process_changeContext(proc, PCTX_SHADOW, prevCTX);
-        program_setErrno(proc->prog, EBADF);
+        _process_setErrno(proc, EBADF);
         return -1;
     }
 
@@ -2062,7 +2314,7 @@ int process_emu_listen(Process* proc, int fd, int n) {
 
     /* check if there was an error */
     if(result != 0) {
-        program_setErrno(proc->prog, result);
+        _process_setErrno(proc, result);
         return -1;
     }
 
@@ -2079,13 +2331,13 @@ int process_emu_accept(Process* proc, int fd, struct sockaddr* addr, socklen_t* 
         ret = pth_accept(fd, addr, addr_len);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
         if(ret == -1) {
-            program_setErrno(proc->prog, errno);
+            _process_setErrno(proc, errno);
         }
     } else {
         /* check if this is a virtual socket */
         if(!host_isShadowDescriptor(proc->host, fd)){
             warning("intercepted a non-virtual descriptor");
-            program_setErrno(proc->prog, EBADF);
+            _process_setErrno(proc, EBADF);
             ret = -1;
         } else {
             in_addr_t ip = 0;
@@ -2097,7 +2349,7 @@ int process_emu_accept(Process* proc, int fd, struct sockaddr* addr, socklen_t* 
 
             /* check if there was an error */
             if(ret != 0) {
-                program_setErrno(proc->prog, ret);
+                _process_setErrno(proc, ret);
                 ret = -1;
             } else {
                 ret = handle;
@@ -2129,7 +2381,7 @@ int process_emu_accept4(Process* proc, int fd, struct sockaddr* addr, socklen_t*
 int process_emu_shutdown(Process* proc, int fd, int how) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     warning("shutdown not implemented");
-    program_setErrno(proc->prog, ENOSYS);
+    _process_setErrno(proc, ENOSYS);
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return -1;
 }
@@ -2144,7 +2396,7 @@ ssize_t process_emu_read(Process* proc, int fd, void *buff, size_t numbytes) {
         ret = pth_read(fd, buff, numbytes);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
         if(ret == -1) {
-            program_setErrno(proc->prog, errno);
+            _process_setErrno(proc, errno);
         }
     } else if(prevCTX == PCTX_PLUGIN && (fd == STDOUT_FILENO || fd == STDERR_FILENO)) {
         ret = fread(buff, numbytes, 1, _process_getIOFile(proc, fd));
@@ -2165,10 +2417,10 @@ ssize_t process_emu_read(Process* proc, int fd, void *buff, size_t numbytes) {
             if(osfd >= 0) {
                 ret = read(osfd, buff, numbytes);
                 if(ret < 0) {
-                    program_setErrno(proc->prog, errno);
+                    _process_setErrno(proc, errno);
                 }
             } else {
-                program_setErrno(proc->prog, EBADF);
+                _process_setErrno(proc, EBADF);
                 ret = -1;
             }
         }
@@ -2191,7 +2443,7 @@ ssize_t process_emu_write(Process* proc, int fd, const void *buff, size_t n) {
         ret = pth_write(fd, buff, n);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
         if(ret == -1) {
-            program_setErrno(proc->prog, errno);
+            _process_setErrno(proc, errno);
         }
     } else if(prevCTX == PCTX_PLUGIN && (fd == STDOUT_FILENO || fd == STDERR_FILENO)) {
         ret = fwrite(buff, 1, n, _process_getIOFile(proc, fd));
@@ -2210,10 +2462,10 @@ ssize_t process_emu_write(Process* proc, int fd, const void *buff, size_t n) {
             if(osfd >= 0) {
                 ret = write(osfd, buff, n);
                 if(ret < 0) {
-                    program_setErrno(proc->prog, errno);
+                    _process_setErrno(proc, errno);
                 }
             } else {
-                program_setErrno(proc->prog, EBADF);
+                _process_setErrno(proc, EBADF);
                 ret = -1;
             }
         }
@@ -2232,10 +2484,10 @@ ssize_t process_emu_readv(Process* proc, int fd, const struct iovec *iov, int io
         if (osfd >= 0) {
             ret = readv(osfd, iov, iovcnt);
             if(ret < 0) {
-                program_setErrno(proc->prog, errno);
+                _process_setErrno(proc, errno);
             }
         } else {
-            program_setErrno(proc->prog, EBADF);
+            _process_setErrno(proc, EBADF);
             ret = -1;
         }
     } else if (prevCTX == PCTX_PLUGIN) {
@@ -2244,11 +2496,11 @@ ssize_t process_emu_readv(Process* proc, int fd, const struct iovec *iov, int io
         ret = pth_readv(fd, iov, iovcnt);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
         if(ret == -1) {
-            program_setErrno(proc->prog, errno);
+            _process_setErrno(proc, errno);
         }
     } else {
         if (iovcnt < 0 || iovcnt > IOV_MAX) {
-            program_setErrno(proc->prog, EINVAL);
+            _process_setErrno(proc, EINVAL);
             ret = -1;
         } else {
             /* figure out how much they want to read total */
@@ -2297,10 +2549,10 @@ ssize_t process_emu_writev(Process* proc, int fd, const struct iovec *iov, int i
         if (osfd >= 0) {
             ret = writev(osfd, iov, iovcnt);
             if(ret < 0) {
-                program_setErrno(proc->prog, errno);
+                _process_setErrno(proc, errno);
             }
         } else {
-            program_setErrno(proc->prog, EBADF);
+            _process_setErrno(proc, EBADF);
             ret = -1;
         }
     } else if(prevCTX == PCTX_PLUGIN) {
@@ -2309,11 +2561,11 @@ ssize_t process_emu_writev(Process* proc, int fd, const struct iovec *iov, int i
         ret = pth_writev(fd, iov, iovcnt);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
         if(ret == -1) {
-            program_setErrno(proc->prog, errno);
+            _process_setErrno(proc, errno);
         }
     } else {
         if(iovcnt < 0 || iovcnt > IOV_MAX) {
-            program_setErrno(proc->prog, EINVAL);
+            _process_setErrno(proc, EINVAL);
             ret = -1;
         } else {
             /* figure out how much they want to write total */
@@ -2362,24 +2614,24 @@ ssize_t process_emu_pread(Process* proc, int fd, void *buff, size_t numbytes, of
         ret = pth_pread(fd, buff, numbytes, offset);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
         if(ret == -1) {
-            program_setErrno(proc->prog, errno);
+            _process_setErrno(proc, errno);
         }
     } else if(prevCTX == PCTX_PLUGIN && (fd == STDOUT_FILENO || fd == STDERR_FILENO)) {
         ret = fread(buff, numbytes, 1, _process_getIOFile(proc, fd));
     } else {
         if(host_isShadowDescriptor(proc->host, fd)){
             warning("pread on shadow file descriptors is not currently supported");
-            program_setErrno(proc->prog, ENOSYS);
+            _process_setErrno(proc, ENOSYS);
             ret = -1;
         } else {
             gint osfd = host_getOSHandle(proc->host, fd);
             if(osfd >= 0) {
                 ret = pread(osfd, buff, numbytes, offset);
                 if(ret < 0) {
-                    program_setErrno(proc->prog, errno);
+                    _process_setErrno(proc, errno);
                 }
             } else {
-                program_setErrno(proc->prog, EBADF);
+                _process_setErrno(proc, EBADF);
                 ret = -1;
             }
         }
@@ -2400,24 +2652,24 @@ ssize_t process_emu_pwrite(Process* proc, int fd, const void *buf, size_t nbytes
         ret = pth_pwrite(fd, buf, nbytes, offset);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
         if(ret == -1) {
-            program_setErrno(proc->prog, errno);
+            _process_setErrno(proc, errno);
         }
     } else if(prevCTX == PCTX_PLUGIN && (fd == STDOUT_FILENO || fd == STDERR_FILENO)) {
         ret = fwrite(buf, 1, nbytes, _process_getIOFile(proc, fd));
     } else {
         if(host_isShadowDescriptor(proc->host, fd)){
             warning("pwrite on shadow file descriptors is not currently supported");
-            program_setErrno(proc->prog, ENOSYS);
+            _process_setErrno(proc, ENOSYS);
             ret = -1;
         } else {
             gint osfd = host_getOSHandle(proc->host, fd);
             if(osfd >= 0) {
                 ret = pwrite(fd, buf, nbytes, offset);
                 if(ret < 0) {
-                    program_setErrno(proc->prog, errno);
+                    _process_setErrno(proc, errno);
                 }
             } else {
-                program_setErrno(proc->prog, EBADF);
+                _process_setErrno(proc, EBADF);
                 ret = -1;
             }
         }
@@ -2439,24 +2691,24 @@ int process_emu_close(Process* proc, int fd) {
             if(proc->stdoutFile) {
                 ret = fclose(proc->stdoutFile);
                 if(ret == EOF) {
-                    program_setErrno(proc->prog, errno);
+                    _process_setErrno(proc, errno);
                 }
             }
         } else if (osfd == STDERR_FILENO) {
             if(proc->stderrFile) {
                 ret = fclose(proc->stderrFile);
                 if(ret == EOF) {
-                    program_setErrno(proc->prog, errno);
+                    _process_setErrno(proc, errno);
                 }
             }
         } else if(osfd >= 0) {
             ret = close(osfd);
             if(ret < 0) {
-                program_setErrno(proc->prog, errno);
+                _process_setErrno(proc, errno);
             }
             host_destroyShadowHandle(proc->host, fd);
         } else {
-            program_setErrno(proc->prog, EBADF);
+            _process_setErrno(proc, EBADF);
             ret = -1;
         }
         _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -2519,7 +2771,7 @@ int process_emu_pipe2(Process* proc, int pipefds[2], int flags) {
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
 
     if(result != 0) {
-        program_setErrno(proc->prog, result);
+        _process_setErrno(proc, result);
         return -1;
     }
 
@@ -2533,7 +2785,7 @@ int process_emu_pipe(Process* proc, int pipefds[2]) {
 int process_emu_getifaddrs(Process* proc, struct ifaddrs **ifap) {
     if(!ifap) {
         ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-        program_setErrno(proc->prog, EINVAL);
+        _process_setErrno(proc, EINVAL);
         _process_changeContext(proc, PCTX_SHADOW, prevCTX);
         return -1;
     }
@@ -2591,11 +2843,11 @@ unsigned int process_emu_sleep(Process* proc, unsigned int sec) {
         ret = pth_sleep(sec);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
         if(ret == -1) {
-            program_setErrno(proc->prog, errno);
+            _process_setErrno(proc, errno);
         }
     } else {
         warning("sleep() not currently implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = -1;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -2611,11 +2863,11 @@ int process_emu_usleep(Process* proc, unsigned int sec) {
         ret = pth_usleep(sec);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
         if(ret == -1) {
-            program_setErrno(proc->prog, errno);
+            _process_setErrno(proc, errno);
         }
     } else {
         warning("usleep() not currently implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = -1;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -2631,11 +2883,11 @@ int process_emu_nanosleep(Process* proc, const struct timespec *rqtp, struct tim
         ret = pth_nanosleep(rqtp, rmtp);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
         if(ret == -1) {
-            program_setErrno(proc->prog, errno);
+            _process_setErrno(proc, errno);
         }
     } else {
         warning("nanosleep() not currently implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = -1;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -2652,7 +2904,7 @@ int process_emu_select(Process* proc, int nfds, fd_set *readfds, fd_set *writefd
         ret = pth_select(nfds, readfds, writefds, exceptfds, timeout);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
         if(ret == -1) {
-            program_setErrno(proc->prog, errno);
+            _process_setErrno(proc, errno);
         }
     } else {
         struct timespec timeout_ts;
@@ -2674,7 +2926,7 @@ int process_emu_pselect(Process* proc, int nfds, fd_set *readfds, fd_set *writef
         ret = pth_pselect(nfds, readfds, writefds, exceptfds, timeout, sigmask);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
         if(ret == -1) {
-            program_setErrno(proc->prog, errno);
+            _process_setErrno(proc, errno);
         }
     } else {
         ret = _process_emu_selectHelper(proc, nfds, readfds, writefds, exceptfds, timeout);
@@ -2692,7 +2944,7 @@ int process_emu_poll(Process* proc, struct pollfd *pfd, nfds_t nfd, int timeout)
         ret = pth_poll(pfd, nfd, timeout);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
         if(ret == -1) {
-            program_setErrno(proc->prog, errno);
+            _process_setErrno(proc, errno);
         }
     } else {
         struct timespec timeout_ts;
@@ -2713,7 +2965,7 @@ int process_emu_ppoll(Process* proc, struct pollfd *fds, nfds_t nfds, const stru
         ret = pth_ppoll(fds, nfds, timeout_ts, sigmask);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
         if(ret == -1) {
-            program_setErrno(proc->prog, errno);
+            _process_setErrno(proc, errno);
         }
     } else {
         ret = _process_emu_pollHelper(proc, fds, nfds, timeout_ts);
@@ -2731,11 +2983,11 @@ pid_t process_emu_fork(Process* proc) {
         ret = pth_fork();
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
         if(ret == -1) {
-            program_setErrno(proc->prog, errno);
+            _process_setErrno(proc, errno);
         }
     } else {
         warning("fork() not currently implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = -1;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -2751,11 +3003,11 @@ int process_emu_system(Process* proc, const char *cmd) {
         ret = pth_system(cmd);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
         if(ret == -1) {
-            program_setErrno(proc->prog, errno);
+            _process_setErrno(proc, errno);
         }
     } else {
         warning("system() not currently implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = -1;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -2771,11 +3023,11 @@ int process_emu_sigwait(Process* proc, const sigset_t *set, int *sig) {
         ret = pth_sigwait(set, sig);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
         if(ret == -1) {
-            program_setErrno(proc->prog, errno);
+            _process_setErrno(proc, errno);
         }
     } else {
         warning("sigwait() not currently implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = -1;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -2791,11 +3043,11 @@ pid_t process_emu_waitpid(Process* proc, pid_t pid, int *status, int options) {
         ret = pth_waitpid(pid, status, options);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
         if(ret == -1) {
-            program_setErrno(proc->prog, errno);
+            _process_setErrno(proc, errno);
         }
     } else {
         warning("waitpid() not currently implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = -1;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -2810,7 +3062,7 @@ int process_emu_eventfd(Process* proc, int initval, int flags) {
 
     gint osfd = eventfd(initval, flags);
     if(osfd == -1) {
-        program_setErrno(proc->prog, errno);
+        _process_setErrno(proc, errno);
     }
 
     gint shadowfd = osfd >= 3 ? host_createShadowHandle(proc->host, osfd) : osfd;
@@ -2838,7 +3090,7 @@ int process_emu_timerfd_create(Process* proc, int clockid, int flags) {
         }
     }
     if(result < 0) {
-        program_setErrno(proc->prog, errno);
+        _process_setErrno(proc, errno);
     }
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -2854,15 +3106,15 @@ int process_emu_timerfd_settime(Process* proc, int fd, int flags,
 
     Descriptor* desc = host_lookupDescriptor(proc->host, fd);
     if(!desc) {
-        program_setErrno(proc->prog, EBADF);
+        _process_setErrno(proc, EBADF);
         ret = -1;
     } else if(descriptor_getType(desc) != DT_TIMER) {
-        program_setErrno(proc->prog, EINVAL);
+        _process_setErrno(proc, EINVAL);
         ret = -1;
     } else {
         ret = timer_setTime((Timer*)desc, flags, new_value, old_value);
         if(ret < 0) {
-            program_setErrno(proc->prog, errno);
+            _process_setErrno(proc, errno);
         }
     }
 
@@ -2876,15 +3128,15 @@ int process_emu_timerfd_gettime(Process* proc, int fd, struct itimerspec *curr_v
 
     Descriptor* desc = host_lookupDescriptor(proc->host, fd);
     if(!desc) {
-        program_setErrno(proc->prog, EBADF);
+        _process_setErrno(proc, EBADF);
         ret = -1;
     } else if(descriptor_getType(desc) != DT_TIMER) {
-        program_setErrno(proc->prog, EINVAL);
+        _process_setErrno(proc, EINVAL);
         ret = -1;
     } else {
         ret = timer_getTime((Timer*)desc, curr_value);
         if(ret < 0) {
-            program_setErrno(proc->prog, errno);
+            _process_setErrno(proc, errno);
         }
     }
 
@@ -2900,7 +3152,7 @@ int process_emu_fileno(Process* proc, FILE *stream) {
 
     gint osfd = fileno(stream);
     if(osfd == -1) {
-        program_setErrno(proc->prog, errno);
+        _process_setErrno(proc, errno);
     }
     gint shadowfd = host_getShadowHandle(proc->host, osfd);
 
@@ -2915,11 +3167,11 @@ int process_emu_open(Process* proc, const char *pathname, int flags, mode_t mode
     if(prevCTX == PCTX_PLUGIN && g_ascii_strncasecmp(pathname, "/etc/localtime", 14) == 0) {
         /* return error, glib will use UTC time */
         result = -1;
-        program_setErrno(proc->prog, EEXIST);
+        _process_setErrno(proc, EEXIST);
     } else {
         gint osfd = open(pathname, flags, mode);
         if(osfd == -1) {
-            program_setErrno(proc->prog, errno);
+            _process_setErrno(proc, errno);
         }
         gint shadowfd = osfd >= 3 ? host_createShadowHandle(proc->host, osfd) : osfd;
 
@@ -2943,7 +3195,7 @@ int process_emu_creat(Process* proc, const char *pathname, mode_t mode) {
 
     gint osfd = creat(pathname, mode);
     if(osfd == -1) {
-        program_setErrno(proc->prog, errno);
+        _process_setErrno(proc, errno);
     }
     gint shadowfd = osfd >= 3 ? host_createShadowHandle(proc->host, osfd) : osfd;
 
@@ -2957,16 +3209,16 @@ FILE *process_emu_fopen(Process* proc, const char *path, const char *mode) {
     FILE* osfile = NULL;
     if(prevCTX == PCTX_PLUGIN && g_ascii_strncasecmp(path, "/etc/localtime", 14) == 0) {
         /* return error, glib will use UTC time */
-        program_setErrno(proc->prog, EEXIST);
+        _process_setErrno(proc, EEXIST);
     } else {
         osfile = fopen(path, mode);
         if(osfile == NULL) {
-            program_setErrno(proc->prog, errno);
+            _process_setErrno(proc, errno);
         }
         if(osfile) {
             gint osfd = fileno(osfile);
             if(osfd == -1) {
-                program_setErrno(proc->prog, errno);
+                _process_setErrno(proc, errno);
             }
             gint shadowfd = osfd >= 3 ? host_createShadowHandle(proc->host, osfd) : osfd;
 
@@ -2995,7 +3247,7 @@ FILE *process_emu_fdopen(Process* proc, int fd, const char *mode) {
         if (osfd >= 0) {
             FILE* osfile = fdopen(osfd, mode);
             if(osfile == NULL) {
-                program_setErrno(proc->prog, errno);
+                _process_setErrno(proc, errno);
             }
             _process_changeContext(proc, PCTX_SHADOW, prevCTX);
             return osfile;
@@ -3004,7 +3256,7 @@ FILE *process_emu_fdopen(Process* proc, int fd, const char *mode) {
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
 
-    program_setErrno(proc->prog, EBADF);
+    _process_setErrno(proc, EBADF);
     return NULL;
 }
 
@@ -3019,7 +3271,7 @@ int process_emu_dup(Process* proc, int oldfd) {
         if (osfdOld >= 0) {
             gint osfd = dup(osfdOld);
             if(osfd == -1) {
-                program_setErrno(proc->prog, errno);
+                _process_setErrno(proc, errno);
             }
             gint shadowfd = osfd >= 3 ? host_createShadowHandle(proc->host, osfd) : osfd;
             _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -3029,7 +3281,7 @@ int process_emu_dup(Process* proc, int oldfd) {
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
 
-    program_setErrno(proc->prog, EBADF);
+    _process_setErrno(proc, EBADF);
     return -1;
 }
 
@@ -3050,7 +3302,7 @@ int process_emu_dup2(Process* proc, int oldfd, int newfd) {
         if (osfdOld >= 0) {
             gint osfd = dup2(osfdOld, osfdNew);
             if(osfd == -1) {
-                program_setErrno(proc->prog, errno);
+                _process_setErrno(proc, errno);
             }
 
             gint shadowfd = !isMapped && osfd >= 3 ? host_createShadowHandle(proc->host, osfd) : osfd;
@@ -3062,13 +3314,13 @@ int process_emu_dup2(Process* proc, int oldfd, int newfd) {
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
 
-    program_setErrno(proc->prog, EBADF);
+    _process_setErrno(proc, EBADF);
     return -1;
 }
 
 int process_emu_dup3(Process* proc, int oldfd, int newfd, int flags) {
     if(oldfd == newfd) {
-        program_setErrno(proc->prog, EINVAL);
+        _process_setErrno(proc, EINVAL);
         return -1;
     }
 
@@ -3088,7 +3340,7 @@ int process_emu_dup3(Process* proc, int oldfd, int newfd, int flags) {
         if (osfdOld >= 0) {
             gint osfd = dup3(osfdOld, osfdNew, flags);
             if(osfd == -1) {
-                program_setErrno(proc->prog, errno);
+                _process_setErrno(proc, errno);
             }
 
             gint shadowfd = !isMapped && osfd >= 3 ? host_createShadowHandle(proc->host, osfd) : osfd;
@@ -3100,7 +3352,7 @@ int process_emu_dup3(Process* proc, int oldfd, int newfd, int flags) {
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
 
-    program_setErrno(proc->prog, EBADF);
+    _process_setErrno(proc, EBADF);
     return -1;
 }
 
@@ -3109,13 +3361,13 @@ int process_emu_fclose(Process* proc, FILE *fp) {
 
     gint osfd = fileno(fp);
     if(osfd == -1) {
-        program_setErrno(proc->prog, errno);
+        _process_setErrno(proc, errno);
     }
     gint shadowHandle = host_getShadowHandle(proc->host, osfd);
 
     gint ret = fclose(fp);
     if(osfd == EOF) {
-        program_setErrno(proc->prog, errno);
+        _process_setErrno(proc, errno);
     }
     host_destroyShadowHandle(proc->host, shadowHandle);
 
@@ -3135,7 +3387,7 @@ int process_emu___fxstat (Process* proc, int ver, int fd, struct stat *buf) {
         if (osfd >= 0) {
             gint ret = fstat(osfd, buf);
             if(ret == -1) {
-                program_setErrno(proc->prog, errno);
+                _process_setErrno(proc, errno);
             }
             _process_changeContext(proc, PCTX_SHADOW, prevCTX);
             return ret;
@@ -3144,7 +3396,7 @@ int process_emu___fxstat (Process* proc, int ver, int fd, struct stat *buf) {
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
 
-    program_setErrno(proc->prog, EBADF);
+    _process_setErrno(proc, EBADF);
     return -1;
 }
 
@@ -3160,7 +3412,7 @@ int process_emu___fxstat64 (Process* proc, int ver, int fd, struct stat64 *buf) 
         if (osfd >= 0) {
             gint ret = fstat64(osfd, buf);
             if(ret == -1) {
-                program_setErrno(proc->prog, errno);
+                _process_setErrno(proc, errno);
             }
             _process_changeContext(proc, PCTX_SHADOW, prevCTX);
             return ret;
@@ -3169,7 +3421,7 @@ int process_emu___fxstat64 (Process* proc, int ver, int fd, struct stat64 *buf) 
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
 
-    program_setErrno(proc->prog, EBADF);
+    _process_setErrno(proc, EBADF);
     return -1;
 }
 
@@ -3184,7 +3436,7 @@ int process_emu_fstatfs (Process* proc, int fd, struct statfs *buf) {
         if (osfd >= 0) {
             gint ret = fstatfs(osfd, buf);
             if(ret == -1) {
-                program_setErrno(proc->prog, errno);
+                _process_setErrno(proc, errno);
             }
             _process_changeContext(proc, PCTX_SHADOW, prevCTX);
             return ret;
@@ -3193,7 +3445,7 @@ int process_emu_fstatfs (Process* proc, int fd, struct statfs *buf) {
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
 
-    program_setErrno(proc->prog, EBADF);
+    _process_setErrno(proc, EBADF);
     return -1;
 }
 
@@ -3208,7 +3460,7 @@ int process_emu_fstatfs64 (Process* proc, int fd, struct statfs64 *buf) {
         if (osfd >= 0) {
             gint ret = fstatfs64(osfd, buf);
             if(ret == -1) {
-                program_setErrno(proc->prog, errno);
+                _process_setErrno(proc, errno);
             }
             _process_changeContext(proc, PCTX_SHADOW, prevCTX);
             return ret;
@@ -3217,7 +3469,7 @@ int process_emu_fstatfs64 (Process* proc, int fd, struct statfs64 *buf) {
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
 
-    program_setErrno(proc->prog, EBADF);
+    _process_setErrno(proc, EBADF);
     return -1;
 }
 
@@ -3232,7 +3484,7 @@ off_t process_emu_lseek(Process* proc, int fd, off_t offset, int whence) {
         if (osfd >= 0) {
             off_t ret = lseek(osfd, offset, whence);
             if(ret == -1) {
-                program_setErrno(proc->prog, errno);
+                _process_setErrno(proc, errno);
             }
             _process_changeContext(proc, PCTX_SHADOW, prevCTX);
             return ret;
@@ -3241,7 +3493,7 @@ off_t process_emu_lseek(Process* proc, int fd, off_t offset, int whence) {
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
 
-    program_setErrno(proc->prog, EBADF);
+    _process_setErrno(proc, EBADF);
     return (off_t)-1;
 }
 
@@ -3256,7 +3508,7 @@ off64_t process_emu_lseek64(Process* proc, int fd, off64_t offset, int whence) {
         if (osfd >= 0) {
             off_t ret = lseek64(osfd, offset, whence);
             if(ret == -1) {
-                program_setErrno(proc->prog, errno);
+                _process_setErrno(proc, errno);
             }
             _process_changeContext(proc, PCTX_SHADOW, prevCTX);
             return ret;
@@ -3265,7 +3517,7 @@ off64_t process_emu_lseek64(Process* proc, int fd, off64_t offset, int whence) {
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
 
-    program_setErrno(proc->prog, EBADF);
+    _process_setErrno(proc, EBADF);
     return (off64_t)-1;
 }
 
@@ -3280,7 +3532,7 @@ int process_emu_flock(Process* proc, int fd, int operation) {
         if (osfd >= 0) {
             gint ret = flock(osfd, operation);
             if(ret == -1) {
-                program_setErrno(proc->prog, errno);
+                _process_setErrno(proc, errno);
             }
             _process_changeContext(proc, PCTX_SHADOW, prevCTX);
             return ret;
@@ -3289,7 +3541,7 @@ int process_emu_flock(Process* proc, int fd, int operation) {
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
 
-    program_setErrno(proc->prog, EBADF);
+    _process_setErrno(proc, EBADF);
     return (off_t)-1;
 }
 
@@ -3301,11 +3553,11 @@ int process_emu_fsync(Process* proc, int fd) {
         FILE* f = _process_getIOFile(proc, fd);
         ret = fsync(fileno(f));
         if(ret == -1) {
-            program_setErrno(proc->prog, errno);
+            _process_setErrno(proc, errno);
         }
     } else if (host_isShadowDescriptor(proc->host, fd)) {
         warning("fsync not implemented for Shadow descriptor types");
-        program_setErrno(proc->prog, EBADF);
+        _process_setErrno(proc, EBADF);
         ret = -1;
     } else {
         /* check if we have a mapped os fd */
@@ -3313,10 +3565,10 @@ int process_emu_fsync(Process* proc, int fd) {
         if (osfd >= 0) {
             ret = fsync(osfd);
             if(ret == -1) {
-                program_setErrno(proc->prog, errno);
+                _process_setErrno(proc, errno);
             }
         } else {
-            program_setErrno(proc->prog, EBADF);
+            _process_setErrno(proc, EBADF);
             ret = -1;
         }
     }
@@ -3336,7 +3588,7 @@ int process_emu_ftruncate(Process* proc, int fd, off_t length) {
         if (osfd >= 0) {
             gint ret = ftruncate(osfd, length);
             if(ret == -1) {
-                program_setErrno(proc->prog, errno);
+                _process_setErrno(proc, errno);
             }
             _process_changeContext(proc, PCTX_SHADOW, prevCTX);
             return ret;
@@ -3345,7 +3597,7 @@ int process_emu_ftruncate(Process* proc, int fd, off_t length) {
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
 
-    program_setErrno(proc->prog, EBADF);
+    _process_setErrno(proc, EBADF);
     return -1;
 }
 
@@ -3360,7 +3612,7 @@ int process_emu_ftruncate64(Process* proc, int fd, off64_t length) {
         if (osfd >= 0) {
             gint ret = ftruncate64(osfd, length);
             if(ret == -1) {
-                program_setErrno(proc->prog, errno);
+                _process_setErrno(proc, errno);
             }
             _process_changeContext(proc, PCTX_SHADOW, prevCTX);
             return ret;
@@ -3369,7 +3621,7 @@ int process_emu_ftruncate64(Process* proc, int fd, off64_t length) {
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
 
-    program_setErrno(proc->prog, EBADF);
+    _process_setErrno(proc, EBADF);
     return -1;
 }
 
@@ -3390,7 +3642,7 @@ int process_emu_posix_fallocate(Process* proc, int fd, off_t offset, off_t len) 
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
 
-    program_setErrno(proc->prog, EBADF);
+    _process_setErrno(proc, EBADF);
     return -1;
 }
 
@@ -3399,18 +3651,18 @@ int process_emu_fstatvfs(Process* proc, int fd, struct statvfs *buf) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     if (host_isShadowDescriptor(proc->host, fd)) {
         warning("fstatvfs not implemented for Shadow descriptor types");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = -1;
     } else {
         /* check if we have a mapped os fd */
         gint osfd = host_getOSHandle(proc->host, fd);
         if(osfd < 0) {
-            program_setErrno(proc->prog, EBADF);
+            _process_setErrno(proc, EBADF);
             ret = -1;
         } else {
             ret = fstatvfs(osfd, buf);
             if(ret == -1) {
-                program_setErrno(proc->prog, errno);
+                _process_setErrno(proc, errno);
             }
         }
     }
@@ -3423,18 +3675,18 @@ int process_emu_fdatasync(Process* proc, int fd) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     if (host_isShadowDescriptor(proc->host, fd)) {
         warning("fdatasync not implemented for Shadow descriptor types");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = -1;
     } else {
         /* check if we have a mapped os fd */
         gint osfd = host_getOSHandle(proc->host, fd);
         if(osfd < 0) {
-            program_setErrno(proc->prog, EBADF);
+            _process_setErrno(proc, EBADF);
             ret = -1;
         } else {
             ret = fdatasync(osfd);
             if(ret == -1) {
-                program_setErrno(proc->prog, errno);
+                _process_setErrno(proc, errno);
             }
         }
     }
@@ -3447,18 +3699,18 @@ int process_emu_syncfs(Process* proc, int fd) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     if (host_isShadowDescriptor(proc->host, fd)) {
         warning("syncfs not implemented for Shadow descriptor types");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = -1;
     } else {
         /* check if we have a mapped os fd */
         gint osfd = host_getOSHandle(proc->host, fd);
         if(osfd < 0) {
-            program_setErrno(proc->prog, EBADF);
+            _process_setErrno(proc, EBADF);
             ret = -1;
         } else {
             ret = syncfs(osfd);
             if(ret == -1) {
-                program_setErrno(proc->prog, errno);
+                _process_setErrno(proc, errno);
             }
         }
     }
@@ -3471,18 +3723,18 @@ int process_emu_fallocate(Process* proc, int fd, int mode, off_t offset, off_t l
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     if (host_isShadowDescriptor(proc->host, fd)) {
         warning("fallocate not implemented for Shadow descriptor types");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = -1;
     } else {
         /* check if we have a mapped os fd */
         gint osfd = host_getOSHandle(proc->host, fd);
         if(osfd < 0) {
-            program_setErrno(proc->prog, EBADF);
+            _process_setErrno(proc, EBADF);
             ret = -1;
         } else {
             ret = fallocate(osfd, mode, offset, len);
             if(ret == -1) {
-                program_setErrno(proc->prog, errno);
+                _process_setErrno(proc, errno);
             }
         }
     }
@@ -3495,18 +3747,18 @@ int process_emu_fexecve(Process* proc, int fd, char *const argv[], char *const e
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     if (host_isShadowDescriptor(proc->host, fd)) {
         warning("fexecve not implemented for Shadow descriptor types");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = -1;
     } else {
         /* check if we have a mapped os fd */
         gint osfd = host_getOSHandle(proc->host, fd);
         if(osfd < 0) {
-            program_setErrno(proc->prog, EBADF);
+            _process_setErrno(proc, EBADF);
             ret = -1;
         } else {
             ret = fexecve(osfd, argv, envp);
             if(ret == -1) {
-                program_setErrno(proc->prog, errno);
+                _process_setErrno(proc, errno);
             }
         }
     }
@@ -3519,18 +3771,18 @@ long process_emu_fpathconf(Process* proc, int fd, int name) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     if (host_isShadowDescriptor(proc->host, fd)) {
         warning("fpathconf not implemented for Shadow descriptor types");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = -1;
     } else {
         /* check if we have a mapped os fd */
         gint osfd = host_getOSHandle(proc->host, fd);
         if(osfd < 0) {
-            program_setErrno(proc->prog, EBADF);
+            _process_setErrno(proc, EBADF);
             ret = -1;
         } else {
             ret = fpathconf(osfd, name);
             if(ret == -1) {
-                program_setErrno(proc->prog, errno);
+                _process_setErrno(proc, errno);
             }
         }
     }
@@ -3543,18 +3795,18 @@ int process_emu_fchdir(Process* proc, int fd) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     if (host_isShadowDescriptor(proc->host, fd)) {
         warning("fchdir not implemented for Shadow descriptor types");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = -1;
     } else {
         /* check if we have a mapped os fd */
         gint osfd = host_getOSHandle(proc->host, fd);
         if(osfd < 0) {
-            program_setErrno(proc->prog, EBADF);
+            _process_setErrno(proc, EBADF);
             ret = -1;
         } else {
             ret = fchdir(osfd);
             if(ret == -1) {
-                program_setErrno(proc->prog, errno);
+                _process_setErrno(proc, errno);
             }
         }
     }
@@ -3567,18 +3819,18 @@ int process_emu_fchown(Process* proc, int fd, uid_t owner, gid_t group) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     if (host_isShadowDescriptor(proc->host, fd)) {
         warning("fchown not implemented for Shadow descriptor types");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = -1;
     } else {
         /* check if we have a mapped os fd */
         gint osfd = host_getOSHandle(proc->host, fd);
         if(osfd < 0) {
-            program_setErrno(proc->prog, EBADF);
+            _process_setErrno(proc, EBADF);
             ret = -1;
         } else {
             ret = fchown(osfd, owner, group);
             if(ret == -1) {
-                program_setErrno(proc->prog, errno);
+                _process_setErrno(proc, errno);
             }
         }
     }
@@ -3591,18 +3843,18 @@ int process_emu_fchmod(Process* proc, int fd, mode_t mode) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     if (host_isShadowDescriptor(proc->host, fd)) {
         warning("fchmod not implemented for Shadow descriptor types");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = -1;
     } else {
         /* check if we have a mapped os fd */
         gint osfd = host_getOSHandle(proc->host, fd);
         if(osfd < 0) {
-            program_setErrno(proc->prog, EBADF);
+            _process_setErrno(proc, EBADF);
             ret = -1;
         } else {
             ret = fchmod(osfd, mode);
             if(ret == -1) {
-                program_setErrno(proc->prog, errno);
+                _process_setErrno(proc, errno);
             }
         }
     }
@@ -3615,13 +3867,13 @@ int process_emu_posix_fadvise(Process* proc, int fd, off_t offset, off_t len, in
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     if (host_isShadowDescriptor(proc->host, fd)) {
         warning("posix_fadvise not implemented for Shadow descriptor types");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = -1;
     } else {
         /* check if we have a mapped os fd */
         gint osfd = host_getOSHandle(proc->host, fd);
         if(osfd < 0) {
-            program_setErrno(proc->prog, EBADF);
+            _process_setErrno(proc, EBADF);
             ret = -1;
         } else {
             ret = posix_fadvise(osfd, offset, len, advice);
@@ -3636,18 +3888,18 @@ int process_emu_lockf(Process* proc, int fd, int cmd, off_t len) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     if (host_isShadowDescriptor(proc->host, fd)) {
         warning("lockf not implemented for Shadow descriptor types");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = -1;
     } else {
         /* check if we have a mapped os fd */
         gint osfd = host_getOSHandle(proc->host, fd);
         if(osfd < 0) {
-            program_setErrno(proc->prog, EBADF);
+            _process_setErrno(proc, EBADF);
             ret = -1;
         } else {
             ret = lockf(osfd, cmd, len);
             if(ret == -1) {
-                program_setErrno(proc->prog, errno);
+                _process_setErrno(proc, errno);
             }
         }
     }
@@ -3658,7 +3910,7 @@ int process_emu_lockf(Process* proc, int fd, int cmd, off_t len) {
 int process_emu_openat(Process* proc, int dirfd, const char *pathname, int flags, mode_t mode) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     warning("openat not yet implemented");
-    program_setErrno(proc->prog, ENOSYS);
+    _process_setErrno(proc, ENOSYS);
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return -1;
 }
@@ -3666,7 +3918,7 @@ int process_emu_openat(Process* proc, int dirfd, const char *pathname, int flags
 int process_emu_faccessat(Process* proc, int dirfd, const char *pathname, int mode, int flags) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     warning("faccessat not yet implemented");
-    program_setErrno(proc->prog, ENOSYS);
+    _process_setErrno(proc, ENOSYS);
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return -1;
 }
@@ -3674,7 +3926,7 @@ int process_emu_faccessat(Process* proc, int dirfd, const char *pathname, int mo
 int process_emu_unlinkat(Process* proc, int dirfd, const char *pathname, int flags) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     warning("unlinkat not yet implemented");
-    program_setErrno(proc->prog, ENOSYS);
+    _process_setErrno(proc, ENOSYS);
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return -1;
 }
@@ -3682,7 +3934,7 @@ int process_emu_unlinkat(Process* proc, int dirfd, const char *pathname, int fla
 int process_emu_fchmodat(Process* proc, int dirfd, const char *pathname, mode_t mode, int flags) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     warning("fchmodat not yet implemented");
-    program_setErrno(proc->prog, ENOSYS);
+    _process_setErrno(proc, ENOSYS);
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return -1;
 }
@@ -3690,7 +3942,7 @@ int process_emu_fchmodat(Process* proc, int dirfd, const char *pathname, mode_t 
 int process_emu_fchownat(Process* proc, int dirfd, const char *pathname, uid_t owner, gid_t group, int flags) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     warning("fchownat not yet implemented");
-    program_setErrno(proc->prog, ENOSYS);
+    _process_setErrno(proc, ENOSYS);
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return -1;
 }
@@ -3737,7 +3989,7 @@ int process_emu_fputc(Process* proc, int c, FILE *stream) {
     }
 
     if(ret == EOF) {
-        program_setErrno(proc->prog, errno);
+        _process_setErrno(proc, errno);
     }
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -3756,7 +4008,7 @@ int process_emu_fputs(Process* proc, const char *s, FILE *stream) {
     }
 
     if(ret == EOF) {
-        program_setErrno(proc->prog, errno);
+        _process_setErrno(proc, errno);
     }
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -3774,7 +4026,7 @@ int process_emu_putchar(Process* proc, int c) {
     }
 
     if(ret == EOF) {
-        program_setErrno(proc->prog, errno);
+        _process_setErrno(proc, errno);
     }
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -3795,7 +4047,7 @@ int process_emu_puts(Process* proc, const char *s) {
     }
 
     if(ret == EOF) {
-        program_setErrno(proc->prog, errno);
+        _process_setErrno(proc, errno);
     }
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -3836,7 +4088,7 @@ int process_emu_fflush(Process* proc, FILE *stream) {
     }
 
     if(ret == EOF) {
-        program_setErrno(proc->prog, errno);
+        _process_setErrno(proc, errno);
     }
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -3857,7 +4109,7 @@ time_t process_emu_time(Process* proc, time_t *t)  {
 
 int process_emu_clock_gettime(Process* proc, clockid_t clk_id, struct timespec *tp) {
     if(tp == NULL) {
-        program_setErrno(proc->prog, EFAULT);
+        _process_setErrno(proc, EFAULT);
         return -1;
     }
 
@@ -3916,7 +4168,7 @@ int process_emu_gethostname(Process* proc, char* name, size_t len) {
         }
     }
 
-    program_setErrno(proc->prog, EFAULT);
+    _process_setErrno(proc, EFAULT);
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return result;
 }
@@ -3924,7 +4176,7 @@ int process_emu_gethostname(Process* proc, char* name, size_t len) {
 int process_emu_getaddrinfo(Process* proc, const char *name, const char *service,
         const struct addrinfo *hints, struct addrinfo **res) {
     if(name == NULL && service == NULL) {
-        program_setErrno(proc->prog, EINVAL);
+        _process_setErrno(proc, EINVAL);
         return EAI_NONAME;
     }
 
@@ -3967,7 +4219,7 @@ int process_emu_getaddrinfo(Process* proc, const char *name, const char *service
         } else {
             /* at this point it is an error */
             ip = INADDR_NONE;
-            program_setErrno(proc->prog, EINVAL);
+            _process_setErrno(proc, EINVAL);
             result = EAI_NONAME;
         }
     }
@@ -4065,7 +4317,7 @@ int process_emu_getnameinfo(Process* proc, const struct sockaddr* sa, socklen_t 
 struct hostent* process_emu_gethostbyname(Process* proc, const gchar* name) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     warning("gethostbyname not yet implemented");
-    program_setErrno(proc->prog, ENOSYS);
+    _process_setErrno(proc, ENOSYS);
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return NULL;
 }
@@ -4074,7 +4326,7 @@ int process_emu_gethostbyname_r(Process* proc, const gchar *name, struct hostent
         gsize buflen, struct hostent **result, gint *h_errnop) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     warning("gethostbyname_r not yet implemented");
-    program_setErrno(proc->prog, ENOSYS);
+    _process_setErrno(proc, ENOSYS);
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return -1;
 }
@@ -4082,7 +4334,7 @@ int process_emu_gethostbyname_r(Process* proc, const gchar *name, struct hostent
 struct hostent* process_emu_gethostbyname2(Process* proc, const gchar* name, gint af) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     warning("gethostbyname2 not yet implemented");
-    program_setErrno(proc->prog, ENOSYS);
+    _process_setErrno(proc, ENOSYS);
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return NULL;
 }
@@ -4091,7 +4343,7 @@ int process_emu_gethostbyname2_r(Process* proc, const gchar *name, gint af, stru
         gchar *buf, gsize buflen, struct hostent **result, gint *h_errnop) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     warning("gethostbyname2_r not yet implemented");
-    program_setErrno(proc->prog, ENOSYS);
+    _process_setErrno(proc, ENOSYS);
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return -1;
 }
@@ -4099,7 +4351,7 @@ int process_emu_gethostbyname2_r(Process* proc, const gchar *name, gint af, stru
 struct hostent* process_emu_gethostbyaddr(Process* proc, const void* addr, socklen_t len, gint type) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     warning("gethostbyaddr not yet implemented");
-    program_setErrno(proc->prog, ENOSYS);
+    _process_setErrno(proc, ENOSYS);
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return NULL;
 }
@@ -4109,7 +4361,7 @@ int process_emu_gethostbyaddr_r(Process* proc, const void *addr, socklen_t len, 
         gint *h_errnop) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     warning("gethostbyaddr_r not yet implemented");
-    program_setErrno(proc->prog, ENOSYS);
+    _process_setErrno(proc, ENOSYS);
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return -1;
 }
@@ -4217,7 +4469,7 @@ int process_emu_pthread_attr_init(Process* proc, pthread_attr_t *attr) {
 
         pth_attr_t na = NULL;
         if (attr == NULL) {
-            program_setErrno(proc->prog, EINVAL);
+            _process_setErrno(proc, EINVAL);
             ret = EINVAL;
         } else if ((na = pth_attr_new()) == NULL) {
             ret = errno;
@@ -4229,7 +4481,7 @@ int process_emu_pthread_attr_init(Process* proc, pthread_attr_t *attr) {
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     } else {
         warning("pthread_attr_init() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = -1;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -4245,18 +4497,18 @@ int process_emu_pthread_attr_destroy(Process* proc, pthread_attr_t *attr) {
 
         if (attr == NULL) {
             ret = EINVAL;
-            program_setErrno(proc->prog, EINVAL);
+            _process_setErrno(proc, EINVAL);
         } else {
             pth_attr_t na = NULL;
             memmove(&na, attr, sizeof(void*));
             if(na == NULL) {
                 ret = EINVAL;
-                program_setErrno(proc->prog, EINVAL);
+                _process_setErrno(proc, EINVAL);
             } else {
                 int result = pth_attr_destroy(na);
                 memset(attr, 0, sizeof(void*));
                 if(result == -1) {
-                    program_setErrno(proc->prog, errno);
+                    _process_setErrno(proc, errno);
                 }
             }
         }
@@ -4264,7 +4516,7 @@ int process_emu_pthread_attr_destroy(Process* proc, pthread_attr_t *attr) {
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     } else {
         warning("pthread_attr_destroy() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = -1;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -4276,11 +4528,11 @@ int process_emu_pthread_attr_setinheritsched(Process* proc, pthread_attr_t *attr
     int ret = 0;
     if(attr == NULL) {
         ret = EINVAL;
-        program_setErrno(proc->prog, EINVAL);
+        _process_setErrno(proc, EINVAL);
     } else {
         warning("pthread_attr_setinheritsched() is not supported by pth or by shadow");
         ret = ENOSYS;
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
@@ -4291,11 +4543,11 @@ int process_emu_pthread_attr_getinheritsched(Process* proc, const pthread_attr_t
     int ret = 0;
     if(attr == NULL || inheritsched == NULL) {
         ret = EINVAL;
-        program_setErrno(proc->prog, EINVAL);
+        _process_setErrno(proc, EINVAL);
     } else {
         warning("pthread_attr_getinheritsched() is not supported by pth or by shadow");
         ret = ENOSYS;
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
@@ -4307,11 +4559,11 @@ int process_emu_pthread_attr_setschedparam(Process* proc, pthread_attr_t *attr,
     int ret = 0;
     if(attr == NULL) {
         ret = EINVAL;
-        program_setErrno(proc->prog, EINVAL);
+        _process_setErrno(proc, EINVAL);
     } else {
         warning("pthread_attr_setschedparam() is not supported by pth or by shadow");
         ret = ENOSYS;
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
@@ -4323,11 +4575,11 @@ int process_emu_pthread_attr_getschedparam(Process* proc, const pthread_attr_t *
     int ret = 0;
     if(attr == NULL || schedparam == NULL) {
         ret = EINVAL;
-        program_setErrno(proc->prog, EINVAL);
+        _process_setErrno(proc, EINVAL);
     } else {
         warning("pthread_attr_getschedparam() is not supported by pth or by shadow");
         ret = ENOSYS;
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
@@ -4338,11 +4590,11 @@ int process_emu_pthread_attr_setschedpolicy(Process* proc, pthread_attr_t *attr,
     int ret = 0;
     if(attr == NULL) {
         ret = EINVAL;
-        program_setErrno(proc->prog, EINVAL);
+        _process_setErrno(proc, EINVAL);
     } else {
         warning("pthread_attr_setschedpolicy() is not supported by pth or by shadow");
         ret = ENOSYS;
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
@@ -4353,11 +4605,11 @@ int process_emu_pthread_attr_getschedpolicy(Process* proc, const pthread_attr_t 
     int ret = 0;
     if(attr == NULL || schedpolicy == NULL) {
         ret = EINVAL;
-        program_setErrno(proc->prog, EINVAL);
+        _process_setErrno(proc, EINVAL);
     } else {
         warning("pthread_attr_getschedpolicy() is not supported by pth or by shadow");
         ret = ENOSYS;
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
@@ -4368,11 +4620,11 @@ int process_emu_pthread_attr_setscope(Process* proc, pthread_attr_t *attr, int s
     int ret = 0;
     if(attr == NULL) {
         ret = EINVAL;
-        program_setErrno(proc->prog, EINVAL);
+        _process_setErrno(proc, EINVAL);
     } else {
         warning("pthread_attr_setscope() is not supported by pth or by shadow");
         ret = ENOSYS;
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
@@ -4383,11 +4635,11 @@ int process_emu_pthread_attr_getscope(Process* proc, const pthread_attr_t *attr,
     int ret = 0;
     if(attr == NULL || scope == NULL) {
         ret = EINVAL;
-        program_setErrno(proc->prog, EINVAL);
+        _process_setErrno(proc, EINVAL);
     } else {
         warning("pthread_attr_getscope() is not supported by pth or by shadow");
         ret = ENOSYS;
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
@@ -4402,13 +4654,13 @@ int process_emu_pthread_attr_setstacksize(Process* proc, pthread_attr_t *attr, s
 
         if(attr == NULL) {
             ret = EINVAL;
-            program_setErrno(proc->prog, EINVAL);
+            _process_setErrno(proc, EINVAL);
         } else {
             pth_attr_t na = NULL;
             memmove(&na, attr, sizeof(void*));
             if(na == NULL) {
                 ret = EINVAL;
-                program_setErrno(proc->prog, EINVAL);
+                _process_setErrno(proc, EINVAL);
             } else {
                 if(!pth_attr_set(na, PTH_ATTR_STACK_SIZE, (unsigned int) stacksize)) {
                     ret = errno;
@@ -4421,7 +4673,7 @@ int process_emu_pthread_attr_setstacksize(Process* proc, pthread_attr_t *attr, s
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     } else {
         warning("pthread_attr_setstacksize() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = -1;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -4437,13 +4689,13 @@ int process_emu_pthread_attr_getstacksize(Process* proc, const pthread_attr_t *a
 
         if (attr == NULL || stacksize == NULL) {
             ret = EINVAL;
-            program_setErrno(proc->prog, EINVAL);
+            _process_setErrno(proc, EINVAL);
         } else {
             pth_attr_t na = NULL;
             memmove(&na, attr, sizeof(void*));
             if(na == NULL) {
                 ret = EINVAL;
-                program_setErrno(proc->prog, EINVAL);
+                _process_setErrno(proc, EINVAL);
             } else {
                 if (!pth_attr_get(na, PTH_ATTR_STACK_SIZE, (unsigned int *) stacksize)) {
                     ret = errno;
@@ -4456,7 +4708,7 @@ int process_emu_pthread_attr_getstacksize(Process* proc, const pthread_attr_t *a
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     } else {
         warning("pthread_attr_getstacksize() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = -1;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -4472,13 +4724,13 @@ int process_emu_pthread_attr_setstackaddr(Process* proc, pthread_attr_t *attr, v
 
         if (attr == NULL) {
             ret = EINVAL;
-            program_setErrno(proc->prog, EINVAL);
+            _process_setErrno(proc, EINVAL);
         } else {
             pth_attr_t na = NULL;
             memmove(&na, attr, sizeof(void*));
             if(na == NULL) {
                 ret = EINVAL;
-                program_setErrno(proc->prog, EINVAL);
+                _process_setErrno(proc, EINVAL);
             } else {
                 if(!pth_attr_set(na, PTH_ATTR_STACK_ADDR, (char *) stackaddr)) {
                     ret = errno;
@@ -4491,7 +4743,7 @@ int process_emu_pthread_attr_setstackaddr(Process* proc, pthread_attr_t *attr, v
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     } else {
         warning("pthread_attr_setstackaddr() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = -1;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -4507,13 +4759,13 @@ int process_emu_pthread_attr_getstackaddr(Process* proc, const pthread_attr_t *a
 
         if (attr == NULL || stackaddr == NULL) {
             ret = EINVAL;
-            program_setErrno(proc->prog, EINVAL);
+            _process_setErrno(proc, EINVAL);
         } else {
             pth_attr_t na = NULL;
             memmove(&na, attr, sizeof(void*));
             if(na == NULL) {
                 ret = EINVAL;
-                program_setErrno(proc->prog, EINVAL);
+                _process_setErrno(proc, EINVAL);
             } else {
                 if(!pth_attr_get(na, PTH_ATTR_STACK_ADDR, (char **) stackaddr)) {
                     ret = errno;
@@ -4526,7 +4778,7 @@ int process_emu_pthread_attr_getstackaddr(Process* proc, const pthread_attr_t *a
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     } else {
         warning("pthread_attr_getstackaddr() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = -1;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -4542,13 +4794,13 @@ int process_emu_pthread_attr_setdetachstate(Process* proc, pthread_attr_t *attr,
 
         if(attr == NULL) {
             ret = EINVAL;
-            program_setErrno(proc->prog, EINVAL);
+            _process_setErrno(proc, EINVAL);
         } else {
             pth_attr_t na = NULL;
             memmove(&na, attr, sizeof(void*));
             if(na == NULL) {
                 ret = EINVAL;
-                program_setErrno(proc->prog, EINVAL);
+                _process_setErrno(proc, EINVAL);
             } else {
                 if (detachstate == PTHREAD_CREATE_DETACHED) {
                     if (!pth_attr_set(na, PTH_ATTR_JOINABLE, FALSE)) {
@@ -4564,7 +4816,7 @@ int process_emu_pthread_attr_setdetachstate(Process* proc, pthread_attr_t *attr,
                     }
                 } else {
                     ret = EINVAL;
-                    program_setErrno(proc->prog, EINVAL);
+                    _process_setErrno(proc, EINVAL);
                 }
             }
         }
@@ -4572,7 +4824,7 @@ int process_emu_pthread_attr_setdetachstate(Process* proc, pthread_attr_t *attr,
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     } else {
         warning("pthread_attr_setdetachstate() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = -1;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -4588,14 +4840,14 @@ int process_emu_pthread_attr_getdetachstate(Process* proc, const pthread_attr_t 
 
         if(attr == NULL) {
             ret = EINVAL;
-            program_setErrno(proc->prog, EINVAL);
+            _process_setErrno(proc, EINVAL);
         } else {
             int s = 0;
             pth_attr_t na = NULL;
             memmove(&na, attr, sizeof(void*));
             if(na == NULL) {
                 ret = EINVAL;
-                program_setErrno(proc->prog, EINVAL);
+                _process_setErrno(proc, EINVAL);
             } else {
                 if (!pth_attr_get(na, PTH_ATTR_JOINABLE, &s)) {
                     ret = errno;
@@ -4613,7 +4865,7 @@ int process_emu_pthread_attr_getdetachstate(Process* proc, const pthread_attr_t 
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     } else {
         warning("pthread_attr_getdetachstate() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = -1;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -4625,11 +4877,11 @@ int process_emu_pthread_attr_setguardsize(Process* proc, pthread_attr_t *attr, s
     int ret = 0;
     if (attr == NULL) {
         ret = EINVAL;
-        program_setErrno(proc->prog, EINVAL);
+        _process_setErrno(proc, EINVAL);
     } else {
         warning("pthread_attr_setguardsize() is not supported by pth or by shadow");
         ret = ENOSYS;
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
@@ -4640,11 +4892,11 @@ int process_emu_pthread_attr_getguardsize(Process* proc, const pthread_attr_t *a
     int ret = 0;
     if (attr == NULL || stacksize == NULL) {
         ret = EINVAL;
-        program_setErrno(proc->prog, EINVAL);
+        _process_setErrno(proc, EINVAL);
     } else {
         warning("pthread_attr_setguardsize() is not supported by pth or by shadow");
         ret = ENOSYS;
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
@@ -4659,13 +4911,13 @@ int process_emu_pthread_attr_setname_np(Process* proc, pthread_attr_t *attr, cha
 
         if(attr == NULL || name == NULL) {
             ret = EINVAL;
-            program_setErrno(proc->prog, EINVAL);
+            _process_setErrno(proc, EINVAL);
         } else {
             pth_attr_t na = NULL;
             memmove(&na, attr, sizeof(void*));
             if(na == NULL) {
                 ret = EINVAL;
-                program_setErrno(proc->prog, EINVAL);
+                _process_setErrno(proc, EINVAL);
             } else {
                 if (!pth_attr_set(na, PTH_ATTR_NAME, name)) {
                     ret = errno;
@@ -4678,7 +4930,7 @@ int process_emu_pthread_attr_setname_np(Process* proc, pthread_attr_t *attr, cha
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     } else {
         warning("pthread_attr_setname_np() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = -1;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -4694,13 +4946,13 @@ int process_emu_pthread_attr_getname_np(Process* proc, const pthread_attr_t *att
 
         if(attr == NULL || name == NULL) {
             ret = EINVAL;
-            program_setErrno(proc->prog, EINVAL);
+            _process_setErrno(proc, EINVAL);
         } else {
             pth_attr_t na = NULL;
             memmove(&na, attr, sizeof(void*));
             if(na == NULL) {
                 ret = EINVAL;
-                program_setErrno(proc->prog, EINVAL);
+                _process_setErrno(proc, EINVAL);
             } else {
                 if(!pth_attr_get(na, PTH_ATTR_NAME, name)) {
                     ret = errno;
@@ -4713,7 +4965,7 @@ int process_emu_pthread_attr_getname_np(Process* proc, const pthread_attr_t *att
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     } else {
         warning("pthread_attr_setname_np() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = -1;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -4729,13 +4981,13 @@ int process_emu_pthread_attr_setprio_np(Process* proc, pthread_attr_t *attr, int
 
         if (attr == NULL || (prio < PTH_PRIO_MIN || prio > PTH_PRIO_MAX)) {
             ret = EINVAL;
-            program_setErrno(proc->prog, EINVAL);
+            _process_setErrno(proc, EINVAL);
         } else {
             pth_attr_t na = NULL;
             memmove(&na, attr, sizeof(void*));
             if(na == NULL) {
                 ret = EINVAL;
-                program_setErrno(proc->prog, EINVAL);
+                _process_setErrno(proc, EINVAL);
             } else {
                 if (!pth_attr_set(na, PTH_ATTR_PRIO, prio)) {
                     ret = errno;
@@ -4748,7 +5000,7 @@ int process_emu_pthread_attr_setprio_np(Process* proc, pthread_attr_t *attr, int
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     } else {
         warning("pthread_attr_setprio_np() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = -1;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -4764,13 +5016,13 @@ int process_emu_pthread_attr_getprio_np(Process* proc, const pthread_attr_t *att
 
         if (attr == NULL || prio == NULL) {
             ret = EINVAL;
-            program_setErrno(proc->prog, EINVAL);
+            _process_setErrno(proc, EINVAL);
         } else {
             pth_attr_t na = NULL;
             memmove(&na, attr, sizeof(void*));
             if(na == NULL) {
                 ret = EINVAL;
-                program_setErrno(proc->prog, EINVAL);
+                _process_setErrno(proc, EINVAL);
             } else {
                 if (!pth_attr_get(na, PTH_ATTR_PRIO, prio)) {
                     ret = errno;
@@ -4783,7 +5035,7 @@ int process_emu_pthread_attr_getprio_np(Process* proc, const pthread_attr_t *att
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     } else {
         warning("pthread_attr_getprio_np() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = -1;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -4803,12 +5055,12 @@ int process_emu_pthread_create(Process* proc, pthread_t *thread, const pthread_a
         if (thread == NULL || start_routine == NULL) {
             ret = EINVAL;
             _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
-            program_setErrno(proc->prog, EINVAL);
+            _process_setErrno(proc, EINVAL);
             _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
         } else if (pth_ctrl(PTH_CTRL_GETTHREADS) >= 10000) { // arbitrary limit
             ret = EAGAIN;
             _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
-            program_setErrno(proc->prog, EAGAIN);
+            _process_setErrno(proc, EAGAIN);
             _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
         } else {
             pth_t auxThread = NULL;
@@ -4827,7 +5079,7 @@ int process_emu_pthread_create(Process* proc, pthread_t *thread, const pthread_a
                 _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
                 GString* programAuxThreadNameBuf = g_string_new(NULL);
                 g_string_printf(programAuxThreadNameBuf, "%s.%s.aux%i", host_getName(proc->host),
-                        program_getName(proc->prog), proc->programAuxiliaryThreadCounter++);
+                        _process_getPluginName(proc), proc->programAuxiliaryThreadCounter++);
                 _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
 
                 pth_attr_t defaultAttr = pth_attr_new();
@@ -4849,7 +5101,7 @@ int process_emu_pthread_create(Process* proc, pthread_t *thread, const pthread_a
                 _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
                 process_unref(proc);
                 ret = EAGAIN;
-                program_setErrno(proc->prog, EAGAIN);
+                _process_setErrno(proc, EAGAIN);
             } else {
                 memmove(thread, &auxThread, sizeof(void*));
                 _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
@@ -4862,7 +5114,7 @@ int process_emu_pthread_create(Process* proc, pthread_t *thread, const pthread_a
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     } else {
         warning("pthread_create() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = -1;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -4877,7 +5129,7 @@ int process_emu_pthread_detach(Process* proc, pthread_t thread) {
         memmove(&pt, &thread, sizeof(void*));
         if(pt == NULL) {
             ret = EINVAL;
-            program_setErrno(proc->prog, EINVAL);
+            _process_setErrno(proc, EINVAL);
         } else {
             _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
             utility_assert(proc->tstate == pth_gctx_get());
@@ -4894,7 +5146,7 @@ int process_emu_pthread_detach(Process* proc, pthread_t thread) {
         }
     } else {
         warning("pthread_detach() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = ENOSYS;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -4919,7 +5171,7 @@ pthread_t process_emu_pthread_self(Process* proc) {
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     } else {
         warning("pthread_self() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
@@ -4942,7 +5194,7 @@ int process_emu_pthread_yield(Process* proc) {
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     } else {
         warning("pthread_yield() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = ENOSYS;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -4964,7 +5216,7 @@ void process_emu_pthread_exit(Process* proc, void *value_ptr) {
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     } else {
         warning("pthread_exit() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
 }
@@ -4978,7 +5230,7 @@ int process_emu_pthread_join(Process* proc, pthread_t thread, void **value_ptr) 
         if(pt == NULL) {
             ret = EINVAL;
             _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
-            program_setErrno(proc->prog, EINVAL);
+            _process_setErrno(proc, EINVAL);
             _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
         } else {
             _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
@@ -4996,7 +5248,7 @@ int process_emu_pthread_join(Process* proc, pthread_t thread, void **value_ptr) 
         }
     } else {
         warning("pthread_join() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = ENOSYS;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -5013,7 +5265,7 @@ int process_emu_pthread_once(Process* proc, pthread_once_t *once_control, void (
         if(once_control == NULL || init_routine == NULL) {
             ret = EINVAL;
             _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
-            program_setErrno(proc->prog, EINVAL);
+            _process_setErrno(proc, EINVAL);
             _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
         } else {
             if(*once_control != 1) {
@@ -5028,7 +5280,7 @@ int process_emu_pthread_once(Process* proc, pthread_once_t *once_control, void (
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     } else {
         warning("pthread_once() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = ENOSYS;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -5047,11 +5299,11 @@ int process_emu_pthread_sigmask(Process* proc, int how, const sigset_t *set, sig
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
 
         if(ret == -1) {
-            program_setErrno(proc->prog, errno);
+            _process_setErrno(proc, errno);
         }
     } else {
         warning("pthread_sigmask() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = ENOSYS;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -5066,7 +5318,7 @@ int process_emu_pthread_kill(Process* proc, pthread_t thread, int sig) {
         memmove(&pt, &thread, sizeof(void*));
         if(pt == NULL) {
             ret = EINVAL;
-            program_setErrno(proc->prog, EINVAL);
+            _process_setErrno(proc, EINVAL);
         } else {
             _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
             utility_assert(proc->tstate == pth_gctx_get());
@@ -5081,7 +5333,7 @@ int process_emu_pthread_kill(Process* proc, pthread_t thread, int sig) {
         }
     } else {
         warning("pthread_kill() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = ENOSYS;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -5096,7 +5348,7 @@ int process_emu_pthread_abort(Process* proc, pthread_t thread) {
         memmove(&pt, &thread, sizeof(void*));
         if(pt == NULL) {
             ret = EINVAL;
-            program_setErrno(proc->prog, EINVAL);
+            _process_setErrno(proc, EINVAL);
         } else {
             _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
             utility_assert(proc->tstate == pth_gctx_get());
@@ -5111,7 +5363,7 @@ int process_emu_pthread_abort(Process* proc, pthread_t thread) {
         }
     } else {
         warning("pthread_abort() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = ENOSYS;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -5136,7 +5388,7 @@ int process_emu_pthread_setconcurrency(Process* proc, int new_level) {
     gint ret = 0;
     if (new_level < 0) {
         ret = EINVAL;
-        program_setErrno(proc->prog, EINVAL);
+        _process_setErrno(proc, EINVAL);
     } else {
         proc->pthread_concurrency = new_level;
     }
@@ -5161,7 +5413,7 @@ int process_emu_pthread_key_create(Process* proc, pthread_key_t *key, void (*des
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     } else {
         warning("pthread_key_create() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = ENOSYS;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -5184,7 +5436,7 @@ int process_emu_pthread_key_delete(Process* proc, pthread_key_t key) {
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     } else {
         warning("pthread_key_delete() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = ENOSYS;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -5207,7 +5459,7 @@ int process_emu_pthread_setspecific(Process* proc, pthread_key_t key, const void
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     } else {
         warning("pthread_setspecific() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = ENOSYS;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -5226,7 +5478,7 @@ void* process_emu_pthread_getspecific(Process* proc, pthread_key_t key) {
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     } else {
         warning("pthread_getspecific() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = NULL;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -5243,7 +5495,7 @@ int process_emu_pthread_cancel(Process* proc, pthread_t thread) {
         memmove(&pt, &thread, sizeof(void*));
         if(pt == NULL) {
             ret = EINVAL;
-            program_setErrno(proc->prog, EINVAL);
+            _process_setErrno(proc, EINVAL);
         } else {
             _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
             utility_assert(proc->tstate == pth_gctx_get());
@@ -5258,7 +5510,7 @@ int process_emu_pthread_cancel(Process* proc, pthread_t thread) {
         }
     } else {
         warning("pthread_cancel() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = ENOSYS;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -5276,7 +5528,7 @@ void process_emu_pthread_testcancel(Process* proc) {
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     } else {
         warning("pthread_testcancel() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
 }
@@ -5314,7 +5566,7 @@ int process_emu_pthread_setcancelstate(Process* proc, int state, int *oldstate) 
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     } else {
         warning("pthread_setcancelstate() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = ENOSYS;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -5354,7 +5606,7 @@ int process_emu_pthread_setcanceltype(Process* proc, int type, int *oldtype) {
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     } else {
         warning("pthread_setcanceltype() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = ENOSYS;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -5367,7 +5619,7 @@ int process_emu_pthread_setschedparam(Process* proc, pthread_t pthread, int poli
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     int ret = ENOSYS;
     warning("pthread_setschedparam() is not supported by pth or by shadow");
-    program_setErrno(proc->prog, ENOSYS);
+    _process_setErrno(proc, ENOSYS);
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
 }
@@ -5376,7 +5628,7 @@ int process_emu_pthread_getschedparam(Process* proc, pthread_t pthread, int *pol
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     int ret = ENOSYS;
     warning("pthread_getschedparam() is not supported by pth or by shadow");
-    program_setErrno(proc->prog, ENOSYS);
+    _process_setErrno(proc, ENOSYS);
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
 }
@@ -5395,7 +5647,7 @@ void process_emu_pthread_cleanup_push(Process* proc, void (*routine)(void *), vo
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     } else {
         warning("pthread_cleanup_push() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
 }
@@ -5411,7 +5663,7 @@ void process_emu_pthread_cleanup_pop(Process* proc, int execute) {
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     } else {
         warning("pthread_cleanup_pop() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
 }
@@ -5482,7 +5734,7 @@ int process_emu_pthread_atfork(Process* proc, void (*prepare)(void), void (*pare
         }
     } else {
         warning("pthread_atfork() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
@@ -5493,7 +5745,7 @@ int process_emu_pthread_atfork(Process* proc, void (*prepare)(void), void (*pare
 int process_emu_pthread_mutexattr_init(Process* proc, pthread_mutexattr_t *attr) {
     if (attr == NULL) {
         ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-        program_setErrno(proc->prog, EINVAL);
+        _process_setErrno(proc, EINVAL);
         _process_changeContext(proc, PCTX_SHADOW, prevCTX);
         return EINVAL;
     } else {
@@ -5505,7 +5757,7 @@ int process_emu_pthread_mutexattr_init(Process* proc, pthread_mutexattr_t *attr)
 int process_emu_pthread_mutexattr_destroy(Process* proc, pthread_mutexattr_t *attr) {
     if (attr == NULL) {
         ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-        program_setErrno(proc->prog, EINVAL);
+        _process_setErrno(proc, EINVAL);
         _process_changeContext(proc, PCTX_SHADOW, prevCTX);
         return EINVAL;
     } else {
@@ -5519,11 +5771,11 @@ int process_emu_pthread_mutexattr_setprioceiling(Process* proc, pthread_mutexatt
     int ret = 0;
     if (attr == NULL) {
         ret = EINVAL;
-        program_setErrno(proc->prog, EINVAL);
+        _process_setErrno(proc, EINVAL);
     } else {
         warning("pthread_mutexattr_setprioceiling() is not supported by pth or by shadow");
         ret = ENOSYS;
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
@@ -5534,11 +5786,11 @@ int process_emu_pthread_mutexattr_getprioceiling(Process* proc, const pthread_mu
     int ret = 0;
     if (attr == NULL) {
         ret = EINVAL;
-        program_setErrno(proc->prog, EINVAL);
+        _process_setErrno(proc, EINVAL);
     } else {
         warning("pthread_mutexattr_getprioceiling() is not supported by pth or by shadow");
         ret = ENOSYS;
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
@@ -5549,11 +5801,11 @@ int process_emu_pthread_mutexattr_setprotocol(Process* proc, pthread_mutexattr_t
     int ret = 0;
     if (attr == NULL) {
         ret = EINVAL;
-        program_setErrno(proc->prog, EINVAL);
+        _process_setErrno(proc, EINVAL);
     } else {
         warning("pthread_mutexattr_setprotocol() is not supported by pth or by shadow");
         ret = ENOSYS;
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
@@ -5564,11 +5816,11 @@ int process_emu_pthread_mutexattr_getprotocol(Process* proc, const pthread_mutex
     int ret = 0;
     if (attr == NULL) {
         ret = EINVAL;
-        program_setErrno(proc->prog, EINVAL);
+        _process_setErrno(proc, EINVAL);
     } else {
         warning("pthread_mutexattr_getprotocol() is not supported by pth or by shadow");
         ret = ENOSYS;
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
@@ -5579,11 +5831,11 @@ int process_emu_pthread_mutexattr_setpshared(Process* proc, pthread_mutexattr_t 
     int ret = 0;
     if (attr == NULL) {
         ret = EINVAL;
-        program_setErrno(proc->prog, EINVAL);
+        _process_setErrno(proc, EINVAL);
     } else {
         warning("pthread_mutexattr_setpshared() is not supported by pth or by shadow");
         ret = ENOSYS;
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
@@ -5594,11 +5846,11 @@ int process_emu_pthread_mutexattr_getpshared(Process* proc, const pthread_mutexa
     int ret = 0;
     if (attr == NULL) {
         ret = EINVAL;
-        program_setErrno(proc->prog, EINVAL);
+        _process_setErrno(proc, EINVAL);
     } else {
         warning("pthread_mutexattr_getpshared() is not supported by pth or by shadow");
         ret = ENOSYS;
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
@@ -5609,11 +5861,11 @@ int process_emu_pthread_mutexattr_settype(Process* proc, pthread_mutexattr_t *at
     int ret = 0;
     if (attr == NULL) {
         ret = EINVAL;
-        program_setErrno(proc->prog, EINVAL);
+        _process_setErrno(proc, EINVAL);
     } else {
         warning("pthread_mutexattr_settype() is not supported by pth or by shadow");
         ret = ENOSYS;
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
@@ -5624,11 +5876,11 @@ int process_emu_pthread_mutexattr_gettype(Process* proc, const pthread_mutexattr
     int ret = 0;
     if (attr == NULL) {
         ret = EINVAL;
-        program_setErrno(proc->prog, EINVAL);
+        _process_setErrno(proc, EINVAL);
     } else {
         warning("pthread_mutexattr_gettype() is not supported by pth or by shadow");
         ret = ENOSYS;
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
@@ -5645,7 +5897,7 @@ int process_emu_pthread_mutex_init(Process* proc, pthread_mutex_t *mutex, const 
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
 
         if (mutex == NULL) {
-            program_setErrno(proc->prog, EINVAL);
+            _process_setErrno(proc, EINVAL);
             ret = EINVAL;
         } else {
             pth_mutex_t* pm = g_malloc(sizeof(pth_mutex_t));
@@ -5663,7 +5915,7 @@ int process_emu_pthread_mutex_init(Process* proc, pthread_mutex_t *mutex, const 
         }
     } else {
         warning("pthread_mutex_init() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = ENOSYS;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -5679,13 +5931,13 @@ int process_emu_pthread_mutex_destroy(Process* proc, pthread_mutex_t *mutex) {
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
 
         if (mutex == NULL) {
-            program_setErrno(proc->prog, EINVAL);
+            _process_setErrno(proc, EINVAL);
             ret = EINVAL;
         } else {
             pth_mutex_t* pm = NULL;
             memmove(&pm, mutex, sizeof(void*));
             if(pm == NULL) {
-                program_setErrno(proc->prog, EINVAL);
+                _process_setErrno(proc, EINVAL);
                 ret = EINVAL;
             } else {
                 free(pm);
@@ -5696,7 +5948,7 @@ int process_emu_pthread_mutex_destroy(Process* proc, pthread_mutex_t *mutex) {
     } else {
         warning(
                 "pthread_mutex_destroy() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = ENOSYS;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -5708,11 +5960,11 @@ int process_emu_pthread_mutex_setprioceiling(Process* proc, pthread_mutex_t *mut
     int ret = 0;
     if (mutex == NULL) {
         ret = EINVAL;
-        program_setErrno(proc->prog, EINVAL);
+        _process_setErrno(proc, EINVAL);
     } else {
         warning("pthread_mutexattr_setprioceiling() is not supported by pth or by shadow");
         ret = ENOSYS;
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
@@ -5723,11 +5975,11 @@ int process_emu_pthread_mutex_getprioceiling(Process* proc, const pthread_mutex_
     int ret = 0;
     if (mutex == NULL) {
         ret = EINVAL;
-        program_setErrno(proc->prog, EINVAL);
+        _process_setErrno(proc, EINVAL);
     } else {
         warning("pthread_mutexattr_getprioceiling() is not supported by pth or by shadow");
         ret = ENOSYS;
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
@@ -5742,7 +5994,7 @@ int process_emu_pthread_mutex_lock(Process* proc, pthread_mutex_t *mutex) {
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
 
         if (mutex == NULL) {
-            program_setErrno(proc->prog, EINVAL);
+            _process_setErrno(proc, EINVAL);
             ret = EINVAL;
         } else {
             pth_mutex_t* pm = NULL;
@@ -5770,7 +6022,7 @@ int process_emu_pthread_mutex_lock(Process* proc, pthread_mutex_t *mutex) {
         }
     } else {
         warning("pthread_mutex_lock() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = ENOSYS;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -5786,7 +6038,7 @@ int process_emu_pthread_mutex_trylock(Process* proc, pthread_mutex_t *mutex) {
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
 
         if (mutex == NULL) {
-            program_setErrno(proc->prog, EINVAL);
+            _process_setErrno(proc, EINVAL);
             ret = EINVAL;
         } else {
             pth_mutex_t* pm = NULL;
@@ -5814,7 +6066,7 @@ int process_emu_pthread_mutex_trylock(Process* proc, pthread_mutex_t *mutex) {
         }
     } else {
         warning("pthread_mutex_trylock() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = ENOSYS;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -5830,7 +6082,7 @@ int process_emu_pthread_mutex_unlock(Process* proc, pthread_mutex_t *mutex) {
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
 
         if (mutex == NULL) {
-            program_setErrno(proc->prog, EINVAL);
+            _process_setErrno(proc, EINVAL);
             ret = EINVAL;
         } else {
             pth_mutex_t* pm = NULL;
@@ -5858,7 +6110,7 @@ int process_emu_pthread_mutex_unlock(Process* proc, pthread_mutex_t *mutex) {
         }
     } else {
         warning("pthread_mutex_unlock() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = ENOSYS;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -5870,7 +6122,7 @@ int process_emu_pthread_mutex_unlock(Process* proc, pthread_mutex_t *mutex) {
 int process_emu_pthread_rwlockattr_init(Process* proc, pthread_rwlockattr_t *attr) {
     if (attr == NULL) {
         ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-        program_setErrno(proc->prog, EINVAL);
+        _process_setErrno(proc, EINVAL);
         _process_changeContext(proc, PCTX_SHADOW, prevCTX);
         return EINVAL;
     } else {
@@ -5882,7 +6134,7 @@ int process_emu_pthread_rwlockattr_init(Process* proc, pthread_rwlockattr_t *att
 int process_emu_pthread_rwlockattr_destroy(Process* proc, pthread_rwlockattr_t *attr) {
     if (attr == NULL) {
         ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-        program_setErrno(proc->prog, EINVAL);
+        _process_setErrno(proc, EINVAL);
         _process_changeContext(proc, PCTX_SHADOW, prevCTX);
         return EINVAL;
     } else {
@@ -5896,11 +6148,11 @@ int process_emu_pthread_rwlockattr_setpshared(Process* proc, pthread_rwlockattr_
     int ret = 0;
     if (attr == NULL) {
         ret = EINVAL;
-        program_setErrno(proc->prog, EINVAL);
+        _process_setErrno(proc, EINVAL);
     } else {
         warning("pthread_rwlockattr_setpshared() is not supported by pth or by shadow");
         ret = ENOSYS;
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
@@ -5911,11 +6163,11 @@ int process_emu_pthread_rwlockattr_getpshared(Process* proc, const pthread_rwloc
     int ret = 0;
     if (attr == NULL) {
         ret = EINVAL;
-        program_setErrno(proc->prog, EINVAL);
+        _process_setErrno(proc, EINVAL);
     } else {
         warning("pthread_rwlockattr_getpshared() is not supported by pth or by shadow");
         ret = ENOSYS;
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
@@ -5932,7 +6184,7 @@ int process_emu_pthread_rwlock_init(Process* proc, pthread_rwlock_t *rwlock, con
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
 
         if (rwlock == NULL) {
-            program_setErrno(proc->prog, EINVAL);
+            _process_setErrno(proc, EINVAL);
             ret = EINVAL;
         } else {
             pth_rwlock_t *rw;
@@ -5952,7 +6204,7 @@ int process_emu_pthread_rwlock_init(Process* proc, pthread_rwlock_t *rwlock, con
         }
     } else {
         warning("pthread_rwlock_init() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = ENOSYS;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -5968,13 +6220,13 @@ int process_emu_pthread_rwlock_destroy(Process* proc, pthread_rwlock_t *rwlock) 
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
 
         if (rwlock == NULL) {
-            program_setErrno(proc->prog, EINVAL);
+            _process_setErrno(proc, EINVAL);
             ret = EINVAL;
         } else {
             pth_rwlock_t* prw = NULL;
             memmove(&prw, rwlock, sizeof(void*));
             if(prw == NULL) {
-                program_setErrno(proc->prog, EINVAL);
+                _process_setErrno(proc, EINVAL);
                 ret = EINVAL;
             } else {
                 free(prw);
@@ -5984,7 +6236,7 @@ int process_emu_pthread_rwlock_destroy(Process* proc, pthread_rwlock_t *rwlock) 
         }
     } else {
         warning("pthread_rwlock_destroy() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = ENOSYS;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -6000,7 +6252,7 @@ int process_emu_pthread_rwlock_rdlock(Process* proc, pthread_rwlock_t *rwlock) {
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
 
         if (rwlock == NULL) {
-            program_setErrno(proc->prog, EINVAL);
+            _process_setErrno(proc, EINVAL);
             ret = EINVAL;
         } else {
             pth_rwlock_t* prw = NULL;
@@ -6028,7 +6280,7 @@ int process_emu_pthread_rwlock_rdlock(Process* proc, pthread_rwlock_t *rwlock) {
         }
     } else {
         warning("pthread_rwlock_rdlock() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = ENOSYS;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -6044,7 +6296,7 @@ int process_emu_pthread_rwlock_tryrdlock(Process* proc, pthread_rwlock_t *rwlock
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
 
         if (rwlock == NULL) {
-            program_setErrno(proc->prog, EINVAL);
+            _process_setErrno(proc, EINVAL);
             ret = EINVAL;
         } else {
             pth_rwlock_t* prw = NULL;
@@ -6071,7 +6323,7 @@ int process_emu_pthread_rwlock_tryrdlock(Process* proc, pthread_rwlock_t *rwlock
         }
     } else {
         warning("pthread_rwlock_tryrdlock() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = ENOSYS;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -6087,7 +6339,7 @@ int process_emu_pthread_rwlock_wrlock(Process* proc, pthread_rwlock_t *rwlock) {
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
 
         if (rwlock == NULL) {
-            program_setErrno(proc->prog, EINVAL);
+            _process_setErrno(proc, EINVAL);
             ret = EINVAL;
         } else {
             pth_rwlock_t* prw = NULL;
@@ -6115,7 +6367,7 @@ int process_emu_pthread_rwlock_wrlock(Process* proc, pthread_rwlock_t *rwlock) {
 
     } else {
         warning("pthread_rwlock_wrlock() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = ENOSYS;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -6131,7 +6383,7 @@ int process_emu_pthread_rwlock_trywrlock(Process* proc, pthread_rwlock_t *rwlock
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
 
         if (rwlock == NULL) {
-            program_setErrno(proc->prog, EINVAL);
+            _process_setErrno(proc, EINVAL);
             ret = EINVAL;
         } else {
             pth_rwlock_t* prw = NULL;
@@ -6158,7 +6410,7 @@ int process_emu_pthread_rwlock_trywrlock(Process* proc, pthread_rwlock_t *rwlock
         }
     } else {
         warning("pthread_rwlock_trywrlock() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = ENOSYS;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -6174,7 +6426,7 @@ int process_emu_pthread_rwlock_unlock(Process* proc, pthread_rwlock_t *rwlock) {
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
 
         if (rwlock == NULL) {
-            program_setErrno(proc->prog, EINVAL);
+            _process_setErrno(proc, EINVAL);
             ret = EINVAL;
         } else {
             int init_result = 0;
@@ -6201,7 +6453,7 @@ int process_emu_pthread_rwlock_unlock(Process* proc, pthread_rwlock_t *rwlock) {
         }
     } else {
         warning("pthread_rwlock_unlock() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = ENOSYS;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -6213,7 +6465,7 @@ int process_emu_pthread_rwlock_unlock(Process* proc, pthread_rwlock_t *rwlock) {
 int process_emu_pthread_condattr_init(Process* proc, pthread_condattr_t *attr) {
     if (attr == NULL) {
         ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-        program_setErrno(proc->prog, EINVAL);
+        _process_setErrno(proc, EINVAL);
         _process_changeContext(proc, PCTX_SHADOW, prevCTX);
         return EINVAL;
     } else {
@@ -6225,7 +6477,7 @@ int process_emu_pthread_condattr_init(Process* proc, pthread_condattr_t *attr) {
 int process_emu_pthread_condattr_destroy(Process* proc, pthread_condattr_t *attr) {
     if (attr == NULL) {
         ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-        program_setErrno(proc->prog, EINVAL);
+        _process_setErrno(proc, EINVAL);
         _process_changeContext(proc, PCTX_SHADOW, prevCTX);
         return EINVAL;
     } else {
@@ -6239,11 +6491,11 @@ int process_emu_pthread_condattr_setpshared(Process* proc, pthread_condattr_t *a
     int ret = 0;
     if (attr == NULL) {
         ret = EINVAL;
-        program_setErrno(proc->prog, EINVAL);
+        _process_setErrno(proc, EINVAL);
     } else {
         warning("pthread_condattr_setpshared() is not supported by pth or by shadow");
         ret = ENOSYS;
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
@@ -6254,11 +6506,11 @@ int process_emu_pthread_condattr_getpshared(Process* proc, const pthread_condatt
     int ret = 0;
     if (attr == NULL) {
         ret = EINVAL;
-        program_setErrno(proc->prog, EINVAL);
+        _process_setErrno(proc, EINVAL);
     } else {
         warning("pthread_condattr_setpshared() is not supported by pth or by shadow");
         ret = ENOSYS;
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
@@ -6283,7 +6535,7 @@ int process_emu_pthread_cond_init(Process* proc, pthread_cond_t *cond, const pth
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
 
         if (cond == NULL) {
-            program_setErrno(proc->prog, EINVAL);
+            _process_setErrno(proc, EINVAL);
             ret = EINVAL;
         } else {
             pth_cond_t *pcn = g_malloc(sizeof(pth_cond_t));
@@ -6301,7 +6553,7 @@ int process_emu_pthread_cond_init(Process* proc, pthread_cond_t *cond, const pth
         }
     } else {
         warning("pthread_cond_init() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = ENOSYS;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -6317,13 +6569,13 @@ int process_emu_pthread_cond_destroy(Process* proc, pthread_cond_t *cond) {
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
 
         if (cond == NULL) {
-            program_setErrno(proc->prog, EINVAL);
+            _process_setErrno(proc, EINVAL);
             ret = EINVAL;
         } else {
             pth_cond_t* pcn = NULL;
             memmove(&pcn, cond, sizeof(void*));
             if(pcn == NULL) {
-                program_setErrno(proc->prog, EINVAL);
+                _process_setErrno(proc, EINVAL);
                 ret = EINVAL;
             } else {
                 free(pcn);
@@ -6333,7 +6585,7 @@ int process_emu_pthread_cond_destroy(Process* proc, pthread_cond_t *cond) {
         }
     } else {
         warning("pthread_cond_destroy() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = ENOSYS;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -6349,7 +6601,7 @@ int process_emu_pthread_cond_broadcast(Process* proc, pthread_cond_t *cond) {
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
 
         if (cond == NULL) {
-            program_setErrno(proc->prog, EINVAL);
+            _process_setErrno(proc, EINVAL);
             ret = EINVAL;
         } else {
             int init_result = 0;
@@ -6376,7 +6628,7 @@ int process_emu_pthread_cond_broadcast(Process* proc, pthread_cond_t *cond) {
         }
     } else {
         warning("pthread_cond_broadcast() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = ENOSYS;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -6392,7 +6644,7 @@ int process_emu_pthread_cond_signal(Process* proc, pthread_cond_t *cond) {
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
 
         if (cond == NULL) {
-            program_setErrno(proc->prog, EINVAL);
+            _process_setErrno(proc, EINVAL);
             ret = EINVAL;
         } else {
             int init_result = 0;
@@ -6419,7 +6671,7 @@ int process_emu_pthread_cond_signal(Process* proc, pthread_cond_t *cond) {
         }
     } else {
         warning("pthread_cond_signal() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = ENOSYS;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -6435,7 +6687,7 @@ int process_emu_pthread_cond_wait(Process* proc, pthread_cond_t *cond, pthread_m
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
 
         if (cond == NULL || mutex == NULL) {
-            program_setErrno(proc->prog, EINVAL);
+            _process_setErrno(proc, EINVAL);
             ret = EINVAL;
         } else {
             int init_result = 0;
@@ -6475,7 +6727,7 @@ int process_emu_pthread_cond_wait(Process* proc, pthread_cond_t *cond, pthread_m
         }
     } else {
         warning("pthread_cond_signal() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = ENOSYS;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -6492,7 +6744,7 @@ int process_emu_pthread_cond_timedwait(Process* proc, pthread_cond_t *cond, pthr
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
 
         if (cond == NULL || mutex == NULL || abstime == NULL || abstime->tv_sec < 0 || abstime->tv_nsec < 0 || abstime->tv_nsec >= 1000000000) {
-            program_setErrno(proc->prog, EINVAL);
+            _process_setErrno(proc, EINVAL);
             ret = EINVAL;
         } else {
             int init_result = 0;
@@ -6546,7 +6798,7 @@ int process_emu_pthread_cond_timedwait(Process* proc, pthread_cond_t *cond, pthr
         }
     } else {
         warning("pthread_cond_signal() is handled by pth but not implemented by shadow");
-        program_setErrno(proc->prog, ENOSYS);
+        _process_setErrno(proc, ENOSYS);
         ret = ENOSYS;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);

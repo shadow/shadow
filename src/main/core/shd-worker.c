@@ -33,7 +33,6 @@ struct _Worker {
     struct {
         Host* host;
         Process* process;
-        Program* program;
     } active;
 
     MAGIC_DECLARE;
