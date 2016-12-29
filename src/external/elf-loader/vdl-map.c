@@ -881,7 +881,7 @@ vdl_file_map_deps_recursive (struct VdlFile *item,
   for (cur = vdl_list_begin (item->deps);
        cur != vdl_list_end (item->deps); cur = vdl_list_next (cur))
     {
-      error = vdl_file_map_deps_recursive (*cur, rpath, newly_mapped);
+      error = vdl_file_map_deps_recursive (*cur, current_rpath, newly_mapped);
       if (error != 0)
         {
           goto out;
