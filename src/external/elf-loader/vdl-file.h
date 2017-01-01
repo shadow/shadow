@@ -85,7 +85,7 @@ struct VdlFile
   //     loaded during loader initialization
   // All other files have a count of zero.
   uint32_t count;
-    ElfW (Phdr) * phdr;
+  ElfW (Phdr) * phdr;
   uint32_t phnum;
   char *name;
   dev_t st_dev;

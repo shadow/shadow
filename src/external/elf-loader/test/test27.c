@@ -29,4 +29,5 @@ int main (int argc, char *argv[])
   dlclose (s);
   printf ("dlclose libs.so completed\n");
   printf ("leave main\n");
+  return 0;
 }
