@@ -118,7 +118,7 @@ setup_env_vars (const char **envp)
       g_vdl.bind_now = 1;
     }
 
-  // get additional static TLS size from LD_STATIC_TLS_SIZE
+  // get additional static TLS size from LD_STATIC_TLS_EXTRA
   const char *static_tls_extra =
     vdl_utils_getenv (envp, "LD_STATIC_TLS_EXTRA");
   if (static_tls_extra == 0)

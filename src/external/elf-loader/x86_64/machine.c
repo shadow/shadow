@@ -283,7 +283,7 @@ unsigned long
 machine_thread_pointer_get (void)
 {
   unsigned long value = 0;
-asm ("mov %%fs:0,%0": "=r" (value):);
+  asm ("mov %%fs:0,%0": "=r" (value):);
   return value;
 }
 

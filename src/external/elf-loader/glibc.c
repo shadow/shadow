@@ -282,7 +282,7 @@ do_glibc_patch (struct VdlFile *file)
       bool ok = machine_insert_trampoline (addr, (unsigned long) &vdl_dlopen,
                                            result.symbol.st_size);
       VDL_LOG_ASSERT (ok,
-                      "Unable to intercept dl_addr. Check your selinux config.");
+                      "Unable to intercept __libc_dlopen_mode. Check your selinux config.");
     }
   result = vdl_lookup_local (file, "__libc_dlclose");
   if (result.found)
@@ -291,7 +291,7 @@ do_glibc_patch (struct VdlFile *file)
       bool ok = machine_insert_trampoline (addr, (unsigned long) &vdl_dlclose,
                                            result.symbol.st_size);
       VDL_LOG_ASSERT (ok,
-                      "Unable to intercept dl_addr. Check your selinux config.");
+                      "Unable to intercept __libc_dlclose. Check your selinux config.");
     }
   result = vdl_lookup_local (file, "__libc_dlsym");
   if (result.found)
@@ -300,7 +300,7 @@ do_glibc_patch (struct VdlFile *file)
       bool ok = machine_insert_trampoline (addr, (unsigned long) &dlsym_hack,
                                            result.symbol.st_value);
       VDL_LOG_ASSERT (ok,
-                      "Unable to intercept dl_addr. Check your selinux config.");
+                      "Unable to intercept __libc_dlsym. Check your selinux config.");
     }
 }
 
