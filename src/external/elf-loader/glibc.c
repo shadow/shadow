@@ -21,6 +21,19 @@
 
 #define WEAK __attribute__ ((weak))
 
+// The general pattern for these definitions is
+// 1. define a local symbol to ensure that all references to this symbol don't
+//    go through the GOT, then
+// 2. define the exported symbol as an alias to the local symbol.
+
+static char _rtld_local_ro[CONFIG_RTLD_GLOBAL_RO_SIZE];
+extern __typeof (_rtld_local_ro) _rtld_global_ro
+     __attribute__ ((alias("_rtld_local_ro"), visibility("default")));
+
+static char _rtld_local[CONFIG_RTLD_GLOBAL_SIZE];
+extern __typeof (_rtld_local) _rtld_global
+     __attribute__ ((alias("_rtld_local"), visibility("default")));
+
 // Set to zero until just before main is invoked
 // at which point it must be set to 1. Specifically,
 // it is zero during the .init function execution.
@@ -30,7 +43,6 @@
 // XXX: check on a couple more systems if we can't
 // get rid of it.
 static int __dl_starting_up = 0;
-// and, then, we define the exported symbol as an alias to the local symbol.
 extern __typeof (__dl_starting_up) _dl_starting_up
      __attribute__ ((alias("__dl_starting_up"), visibility("default")));
 
@@ -47,15 +59,13 @@ extern __typeof (__dl_starting_up) _dl_starting_up
 // of the stack, we will fail because there is always a hole below
 // the kernel-allocated main stack.
 //
-// Note: I don't know of any application which actually needs
-// an executable stack which is why we don't do much with it.
-//
-// Implementation note: if you assume that the stack grows downward,
-// the easiest way to initialize this variable is to set it to
-// __builtin_frame_address(0) from the top-level dynamic loader
-// entry point.
-//
-EXPORT void *__libc_stack_end = 0;
+// It is also used by libpthread to estimate the size of the stack
+// during initialization, which ends up being important when dlmopen'ing
+// a libpthread-linked object from a libpthread-linked object. 
+static void *_libc_stack_end = 0;
+extern __typeof (_libc_stack_end) __libc_stack_end
+     __attribute__ ((alias("_libc_stack_end"), visibility("default")));
+
 // If set to 1, indicates that we are running with super privileges.
 // If so, the ELF loader won't use LD_LIBRARY_PATH, and the libc will
 // enable a couple of extra security checks.
@@ -66,17 +76,6 @@ EXPORT int __libc_enable_secure = 0;
 // Obviously, points to the program argv. I can't figure out why
 // and how this symbol is imported by libc.so
 EXPORT char **_dl_argv;
-
-static char _rtld_local_ro[CONFIG_RTLD_GLOBAL_RO_SIZE];
-// and, then, we define the exported symbol as an alias to the local symbol.
-extern __typeof (_rtld_local_ro) _rtld_global_ro
-     __attribute__ ((alias("_rtld_local_ro"), visibility("default")));
-// We have to define first a local symbol to ensure that all references
-// to this symbol do not go through the GOT.
-static char _rtld_local[CONFIG_RTLD_GLOBAL_SIZE];
-// and, then, we define the exported symbol as an alias to the local symbol.
-extern __typeof (_rtld_local) _rtld_global
-     __attribute__ ((alias("_rtld_local"), visibility("default")));
 
 //_r_debug;
 //__libc_memalign;
@@ -210,6 +209,12 @@ EXPORT int internal_function
 _dl_make_stack_executable (void **stack_endp)
 {
   return 0;
+}
+
+void
+glibc_set_stack_end (void *addr)
+{
+  _libc_stack_end = addr;
 }
 
 void

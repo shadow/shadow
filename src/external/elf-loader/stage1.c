@@ -8,6 +8,7 @@
 #include "vdl-list.h"
 #include "vdl-utils.h"
 #include "machine.h"
+#include "glibc.h"
 #include <elf.h>
 #include <link.h>
 
@@ -244,6 +245,11 @@ stage1 (struct Stage1InputOutput *input_output)
   // our main global variable. After this function call completes,
   // we are allowed to do memory allocations.
   global_initialize (input_output->load_base);
+
+  // Set the "end of the stack" variable to the frame address of this function,
+  // which appears to be close enough (within a page) to the end as far as
+  // glibc and libpthreads are concerned. See glibc.c for more information.
+  glibc_set_stack_end (__builtin_frame_address (0));
 
   struct Stage2Input stage2_input =
     prepare_stage2 (input_output->entry_point_struct);
