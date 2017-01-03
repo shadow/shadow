@@ -804,17 +804,16 @@ void
 vdl_file_map_update_depths (struct VdlFile *item)
 {
   // we don't want to loop infinitely for circular deps,
-  // so pretend we have no deps before recursing
-  struct VdlList *tmp_deps, *empty = vdl_list_new ();
-  tmp_deps = item->deps;
-  item->deps = empty;
+  // so mark item as an ancestor before recursing
+  struct VdlList *tmp_deps = item->deps;
+  item->deps = 0;
 
   void **cur;
   for (cur = vdl_list_begin (tmp_deps);
        cur != vdl_list_end (tmp_deps); cur = vdl_list_next (cur))
     {
       struct VdlFile *dependency = (struct VdlFile *) *cur;
-      if (item->depth + 1 > dependency->depth)
+      if (item->depth + 1 > dependency->depth && dependency->deps)
         {
           dependency->depth = item->depth + 1;
           vdl_file_map_update_depths (dependency);
@@ -822,7 +821,6 @@ vdl_file_map_update_depths (struct VdlFile *item)
     }
 
   item->deps = tmp_deps;
-  vdl_list_delete (empty);
 }
 
 char *
