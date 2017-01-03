@@ -14,5 +14,6 @@ void glibc_initialize (void);
 
 void glibc_patch (struct VdlList *files);
 
+void glibc_set_stack_end (void * addr);
 
 #endif /* GLIBC_H */
