@@ -229,9 +229,6 @@ struct _Process {
     MAGIC_DECLARE;
 };
 
-/* XXX temporary hack to lock tor process init, until we can find thread errors */
-G_LOCK_DEFINE_STATIC(globalProcessInitLock);
-
 /* forward declaration */
 static void _process_stop(Process* proc);
 
@@ -900,11 +897,6 @@ static void _process_start(Process* proc) {
     /* ref for the spawn below */
     process_ref(proc);
 
-    /* XXX temporary tor process init hack */
-    utility_assert(proc && proc->plugin.path);
-    gboolean doLock = g_strstr_len(proc->plugin.path->str, -1, "shadow-plugin-tor") ? TRUE : FALSE;
-    if(doLock) G_LOCK(globalProcessInitLock);
-
     /* now we will execute in the pth/plugin context, so we need to load the state */
     worker_setActiveProcess(proc);
     proc->plugin.isExecuting = TRUE;
@@ -976,9 +968,6 @@ static void _process_start(Process* proc) {
     _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     proc->plugin.isExecuting = FALSE;
     worker_setActiveProcess(NULL);
-
-    /* XXX temporary tor process init hack */
-    if(doLock) G_UNLOCK(globalProcessInitLock);
 
     /* the main thread wont exist if it exited immediately before returning control to shadow */
     if(proc->programMainThread) {
