@@ -3,6 +3,7 @@
  * See LICENSE for licensing information
  */
 
+#include <stdarg.h>
 #include <pthread.h>
 #include "shadow.h"
 
@@ -28,6 +29,10 @@ struct _Logger {
 
     /* the level below which we filter messages */
     LogLevel filterLevel;
+
+    /* if the logger should cache messages before writing for performance */
+    gboolean shouldBuffer;
+    gdouble lastTimespan;
 
     /* helper to sort messages and handle file i/o */
     GThread* helper;
@@ -114,6 +119,11 @@ gboolean logger_shouldFilter(Logger* logger, LogLevel level) {
     return (level > filter) ? TRUE : FALSE;
 }
 
+void logger_setEnableBuffering(Logger* logger, gboolean enabled) {
+    MAGIC_ASSERT(logger);
+    logger->shouldBuffer = enabled;
+}
+
 static void _logger_sendRegisterCommandToHelper(Logger* logger, LoggerThreadData* threadData) {
     LoggerHelperCommand* command = loggerhelpercommand_new(LHC_REGISTER, threadData->remoteLogHelperMailbox);
     g_async_queue_ref(threadData->remoteLogHelperMailbox);
@@ -132,6 +142,11 @@ static void _logger_sendStopCommandToHelper(Logger* logger) {
 
 void logger_logVA(Logger* logger, LogLevel level, const gchar* fileName, const gchar* functionName,
         const gint lineNumber, const gchar *format, va_list vargs) {
+    if(!logger) {
+        vfprintf(stderr, format, vargs);
+        return;
+    }
+
     MAGIC_ASSERT(logger);
 
     if(logger_shouldFilter(logger, level)) {
@@ -172,11 +187,14 @@ void logger_logVA(Logger* logger, LogLevel level, const gchar* fileName, const g
 
     g_queue_push_tail(threadData->localRecordBundle, record);
 
-    if(level == LOGLEVEL_ERROR) {
-        /* error log level will abort, make sure we have logged everything first */
+    if(level == LOGLEVEL_ERROR || !logger->shouldBuffer || (timespan - logger->lastTimespan) >= 5) {
+        /* make sure we have logged everything */
         logger_flushRecords(logger, g_thread_self());
         logger_syncToDisk(logger);
+        logger->lastTimespan = timespan;
+    }
 
+    if(level == LOGLEVEL_ERROR) {
         /* tell the helper to stop, and join to make sure it finished flushing */
         _logger_sendStopCommandToHelper(logger);
         g_thread_join(logger->helper);
@@ -188,7 +206,6 @@ void logger_logVA(Logger* logger, LogLevel level, const gchar* fileName, const g
 
 void logger_log(Logger* logger, LogLevel level, const gchar* fileName, const gchar* functionName,
         const gint lineNumber, const gchar *format, ...) {
-    MAGIC_ASSERT(logger);
     va_list vargs;
     va_start(vargs, format);
     logger_logVA(logger, level, fileName, functionName, lineNumber, format, vargs);
@@ -296,6 +313,7 @@ Logger* logger_new(LogLevel filterLevel) {
 
     logger->runTimer = g_timer_new();
     logger->filterLevel = filterLevel;
+    logger->shouldBuffer = TRUE;
     logger->referenceCount = 1;
     logger->threadToDataMap = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, (GDestroyNotify)_loggerthreaddata_free);
 

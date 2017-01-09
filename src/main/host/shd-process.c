@@ -152,6 +152,8 @@ struct _Process {
         GString* name;
         GString* path;
         void* handle;
+        GString* preloadName;
+        GString* preloadPath;
 
         /* every plug-in needs a main function, which we call to start the virtual process */
         PluginMainFunc main;
@@ -341,10 +343,52 @@ static void _process_loadPlugin(Process* proc) {
     _process_changeContext(proc, PCTX_PLUGIN, PCTX_SHADOW);
 
     if(proc->plugin.handle) {
-        message("successfully loaded private plug-in '%s' at address '%p'", proc->plugin.path->str, proc->plugin.handle);
+        message("successfully loaded plugin '%s' into new namespace '%p'", proc->plugin.path->str, proc->plugin.handle);
     } else {
-        critical("dlmopen() failed: %s", errorMessage);
+        critical("dlmopen() failed to load plugin '%s': %s", proc->plugin.path->str, errorMessage);
         error("unable to load private plug-in '%s'", proc->plugin.path->str);
+    }
+
+    /* do we also need to load in a preload library for this plugin? */
+    if(proc->plugin.preloadPath) {
+        /* clear dlerror status string */
+        dlerror();
+
+        /* get the LMID so we can load it in the same namespace as the plugin */
+        Lmid_t lmid = 0;
+        int result = dlinfo(proc->plugin.handle, RTLD_DI_LMID, &lmid);
+
+        const gchar* errorMessage2 = dlerror();
+
+        if(result == 0) {
+            debug("found LMID %lu for handle %p", (long unsigned int)lmid, proc->plugin.handle);
+        } else {
+            critical("dlinfo() failed when querying for LMID: %s", errorMessage2);
+            error("unable to load preload library '%s'", proc->plugin.preloadPath->str);
+        }
+
+        /* dlmopen may result in plugin constructors getting called, so make sure
+         * we make that call from the plugin context. */
+        _process_changeContext(proc, PCTX_SHADOW, PCTX_PLUGIN);
+
+        /* clear dlerror status string */
+        dlerror();
+
+        /* now we have the correct lmid, lets load our preload library into it */
+        // TODO FIXME this line needs updating for the correct flag(s)
+        // also, do we need to save/check the return value?
+        //dlmopen(lmid, proc->plugin.preloadPath->str, RTLD_PRELOAD);
+
+        const gchar* errorMessage3 = dlerror();
+
+        _process_changeContext(proc, PCTX_PLUGIN, PCTX_SHADOW);
+
+        if(!errorMessage3) {
+            message("successfully loaded preload '%s' into namespace %p", proc->plugin.preloadPath->str, proc->plugin.handle);
+        } else {
+            critical("dlinfo() failed to load preload '%s': %s", proc->plugin.path->str, errorMessage3);
+            error("unable to load preload library '%s'", proc->plugin.preloadPath->str);
+        }
     }
 
     /* the remaining dlsym lookups should not cause code inside the plugin to get
@@ -421,8 +465,9 @@ static void _process_loadPlugin(Process* proc) {
 }
 
 Process* process_new(gpointer host, guint processID,
-        SimulationTime startTime, SimulationTime stopTime,
-        const gchar* pluginName, const gchar* pluginPath, gchar* arguments) {
+        SimulationTime startTime, SimulationTime stopTime, const gchar* pluginName,
+        const gchar* pluginPath, const gchar* preloadName, const gchar* preloadPath,
+        gchar* arguments) {
     Process* proc = g_new0(Process, 1);
     MAGIC_INIT(proc);
 
@@ -437,6 +482,10 @@ Process* process_new(gpointer host, guint processID,
     utility_assert(pluginName);
     proc->plugin.name = g_string_new(pluginName);
     proc->plugin.path = g_string_new(pluginPath);
+    if(preloadName && preloadPath) {
+        proc->plugin.preloadName = g_string_new(preloadName);
+        proc->plugin.preloadPath = g_string_new(preloadPath);
+    }
 
     proc->startTime = startTime;
     proc->stopTime = stopTime;
@@ -495,6 +544,12 @@ static void _process_free(Process* proc) {
     }
     if(proc->plugin.name) {
         g_string_free(proc->plugin.name, TRUE);
+    }
+    if(proc->plugin.preloadPath) {
+        g_string_free(proc->plugin.preloadPath, TRUE);
+    }
+    if(proc->plugin.preloadName) {
+        g_string_free(proc->plugin.preloadName, TRUE);
     }
 
     g_timer_destroy(proc->cpuDelayTimer);

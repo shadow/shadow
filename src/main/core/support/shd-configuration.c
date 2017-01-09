@@ -20,6 +20,7 @@ struct _Parser {
     GHashTable* pluginIDRefStrings;
 
     /* our final parsed config state */
+    ConfigurationShadowElement* shadow;
     ConfigurationKillElement* kill;
     ConfigurationTopologyElement* topology;
     GList* plugins; // ConfigurationPluginElement
@@ -30,24 +31,79 @@ struct _Parser {
 static GString* _parser_findPathToFile(const gchar* relativeFilePathSuffix, const gchar* defaultShadowPath) {
     GString* foundPath = NULL;
 
-    if(relativeFilePathSuffix){
+    if(relativeFilePathSuffix && defaultShadowPath == NULL){
         /* ok, first check in current directory, then in ~/.shadow/plugins */
         gchar* currentDirStr = g_get_current_dir();
         gchar* currentPathStr = g_build_path("/", currentDirStr, relativeFilePathSuffix, NULL);
-        gchar* pluginsPathStr = g_build_path("/", g_get_home_dir(), ".shadow", defaultShadowPath, relativeFilePathSuffix, NULL);
 
         if(g_file_test(currentPathStr, G_FILE_TEST_EXISTS) && g_file_test(currentPathStr, G_FILE_TEST_IS_REGULAR)) {
             foundPath = g_string_new(currentPathStr);
-        } else if(g_file_test(pluginsPathStr, G_FILE_TEST_EXISTS) && g_file_test(pluginsPathStr, G_FILE_TEST_IS_REGULAR)) {
-            foundPath = g_string_new(pluginsPathStr);
         }
 
         g_free(currentDirStr);
         g_free(currentPathStr);
+    } else if(relativeFilePathSuffix) {
+        gchar* pluginsPathStr = g_build_path("/", g_get_home_dir(), ".shadow", defaultShadowPath, relativeFilePathSuffix, NULL);
+
+        if(g_file_test(pluginsPathStr, G_FILE_TEST_EXISTS) && g_file_test(pluginsPathStr, G_FILE_TEST_IS_REGULAR)) {
+            foundPath = g_string_new(pluginsPathStr);
+        }
+
         g_free(pluginsPathStr);
     }
 
     return foundPath;
+}
+
+static GString* _parser_expandUserPath(GString* string) {
+    utility_assert(string);
+
+    if(g_strstr_len(string->str, (gssize)1, "~")) {
+        string = g_string_erase(string, (gssize)0, (gssize) 1);
+        string = g_string_insert(string, (gssize)0, g_get_home_dir());
+    }
+
+    return string;
+}
+
+static GError* _parser_checkPath(ConfigurationStringAttribute* path) {
+    utility_assert(path->string != NULL);
+
+    GError* error = NULL;
+
+    /* if path starts with '~', replace it with home directory path */
+    path->string = _parser_expandUserPath(path->string);
+
+    /* make sure the path is absolute */
+    if(!g_path_is_absolute(path->string->str)) {
+        /* search in current directory */
+        GString* foundPath = _parser_findPathToFile(path->string->str, NULL);
+
+        /* if not found, search in some default shadow install paths */
+        if(!foundPath) {
+            foundPath = _parser_findPathToFile(path->string->str, "plugins");
+        }
+        if(!foundPath) {
+            foundPath = _parser_findPathToFile(path->string->str, "lib");
+        }
+        if(!foundPath) {
+            foundPath = _parser_findPathToFile(path->string->str, "share");
+        }
+
+        if(foundPath) {
+            g_string_free(path->string, TRUE);
+            path->string = foundPath;
+        }
+    }
+
+    if(!g_file_test(path->string->str, G_FILE_TEST_EXISTS) ||
+            !g_file_test(path->string->str, G_FILE_TEST_IS_REGULAR)) {
+        error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT,
+                "attribute 'path': '%s' is not a valid path to an existing regular file",
+                path->string->str);
+    }
+
+    return error;
 }
 
 struct _Configuration {
@@ -94,6 +150,10 @@ static void _parser_freeApplicationElement(ConfigurationApplicationElement* proc
     if(process->plugin.isSet) {
         utility_assert(process->plugin.string != NULL);
         g_string_free(process->plugin.string, TRUE);
+    }
+    if(process->preload.isSet) {
+        utility_assert(process->preload.string != NULL);
+        g_string_free(process->preload.string, TRUE);
     }
     if(process->arguments.isSet) {
         utility_assert(process->arguments.string != NULL);
@@ -149,6 +209,21 @@ static void _parser_freeNodeElement(ConfigurationNodeElement* node) {
     g_free(node);
 }
 
+static void _parser_freeShadowElement(ConfigurationShadowElement* shadow) {
+    utility_assert(shadow != NULL);
+
+    if(shadow->preloadPath.isSet) {
+        utility_assert(shadow->preloadPath.string != NULL);
+        g_string_free(shadow->preloadPath.string, TRUE);
+    }
+    if(shadow->environment.isSet) {
+        utility_assert(shadow->environment.string != NULL);
+        g_string_free(shadow->environment.string, TRUE);
+    }
+
+    g_free(shadow);
+}
+
 static void _parser_freeKillElement(ConfigurationKillElement* kill) {
     utility_assert(kill != NULL);
     g_free(kill);
@@ -193,23 +268,8 @@ static GError* _parser_handleTopologyAttributes(Parser* parser, const gchar** at
     }
 
     /* validate the values */
-    if(topology->path.isSet) {
-        /* make sure the path is absolute */
-        if(!g_path_is_absolute(topology->path.string->str)) {
-            /* ok, first search in current directory, then in ~/.shadow/share */
-            GString* foundPath = _parser_findPathToFile(topology->path.string->str, "share");
-            if (foundPath) {
-                g_string_free(topology->path.string, TRUE);
-                topology->path.string = foundPath;
-            }
-        }
-
-        if(!g_file_test(topology->path.string->str, G_FILE_TEST_EXISTS) ||
-                !g_file_test(topology->path.string->str, G_FILE_TEST_IS_REGULAR)) {
-            error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT,
-                    "attribute 'topology': '%s' is not a valid path to an existing regular file",
-                    topology->path.string->str);
-        }
+    if(!error && topology->path.isSet) {
+        error = _parser_checkPath(&(topology->path));
     }
 
     if(!error && topology->path.isSet) {
@@ -298,25 +358,8 @@ static GError* _parser_handlePluginAttributes(Parser* parser, const gchar** attr
         error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
                 "element 'plugin' requires attributes 'id' 'path'");
     }
-    if(plugin->path.isSet) {
-        utility_assert(plugin->path.string != NULL);
-
-        /* make sure the path is absolute */
-        if(!g_path_is_absolute(plugin->path.string->str)) {
-            /* ok, first search in current directory, then in ~/.shadow/plugins */
-            GString* foundPath = _parser_findPathToFile(plugin->path.string->str, "plugins");
-            if (foundPath) {
-                g_string_free(plugin->path.string, TRUE);
-                plugin->path.string = foundPath;
-            }
-        }
-
-        if(!g_file_test(plugin->path.string->str, G_FILE_TEST_EXISTS) ||
-                !g_file_test(plugin->path.string->str, G_FILE_TEST_IS_REGULAR)) {
-            error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT,
-                    "attribute 'path': '%s' is not a valid path to an existing regular file",
-                    plugin->path.string->str);
-        }
+    if(!error && plugin->path.isSet) {
+        error = _parser_checkPath(&(plugin->path));
     }
 
     if(error) {
@@ -503,6 +546,9 @@ static GError* _parser_handleApplicationAttributes(Parser* parser, const gchar**
         } else if (!process->stoptime.isSet && !g_ascii_strcasecmp(name, "stoptime")) {
             process->stoptime.integer = g_ascii_strtoull(value, NULL, 10);
             process->stoptime.isSet = TRUE;
+        } else if(!process->preload.isSet && !g_ascii_strcasecmp(name, "preload")) {
+            process->preload.string = g_string_new(value);
+            process->preload.isSet = TRUE;
         } else {
             error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ATTRIBUTE,
                             "unknown 'application' attribute '%s'", name);
@@ -530,8 +576,15 @@ static GError* _parser_handleApplicationAttributes(Parser* parser, const gchar**
 
         node->applications = g_list_append(node->applications, process);
 
+        /* plugin was required, so we know we have one */
         if(!g_hash_table_lookup(parser->pluginIDRefStrings, process->plugin.string->str)) {
             gchar* s = g_strdup(process->plugin.string->str);
+            g_hash_table_replace(parser->pluginIDRefStrings, s, s);
+        }
+
+        /* preload was optional, so only act on it if it was set */
+        if(process->preload.isSet && !g_hash_table_lookup(parser->pluginIDRefStrings, process->preload.string->str)) {
+            gchar* s = g_strdup(process->preload.string->str);
             g_hash_table_replace(parser->pluginIDRefStrings, s, s);
         }
     }
@@ -572,6 +625,58 @@ static void _parser_handleNodeChildEndElement(GMarkupParseContext* context,
     }
 }
 
+static GError* _parser_handleShadowAttributes(Parser* parser, const gchar** attributeNames, const gchar** attributeValues) {
+    ConfigurationShadowElement* shadow = g_new0(ConfigurationShadowElement, 1);
+    GError* error = NULL;
+
+    const gchar **nameCursor = attributeNames;
+    const gchar **valueCursor = attributeValues;
+
+    /* check the attributes */
+    while (!error && *nameCursor) {
+        const gchar* name = *nameCursor;
+        const gchar* value = *valueCursor;
+
+        debug("found attribute '%s=%s'", name, value);
+
+        if (!shadow->environment.isSet && !g_ascii_strcasecmp(name, "environment")) {
+            shadow->environment.string = g_string_new(value);
+            shadow->environment.isSet = TRUE;
+        } else if (!shadow->preloadPath.isSet && !g_ascii_strcasecmp(name, "preload")) {
+            shadow->preloadPath.string = g_string_new(value);
+            shadow->preloadPath.isSet = TRUE;
+        } else {
+            error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ATTRIBUTE,
+                    "unknown 'shadow' attribute '%s'", name);
+        }
+
+        nameCursor++;
+        valueCursor++;
+    }
+
+    /* validate the values */
+//    if(!error && !shadow->preload.isSet) {
+//        error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
+//                "element 'shadow' requires attributes 'preload'");
+//    }
+
+    if(!error && shadow->preloadPath.isSet) {
+        error = _parser_checkPath(&(shadow->preloadPath));
+    }
+
+    if(error) {
+        _parser_freeShadowElement(shadow);
+    } else {
+        /* no error, store the config */
+        utility_assert(parser->shadow == NULL);
+        parser->shadow = shadow;
+    }
+
+    /* nothing to clean up */
+
+    return error;
+}
+
 static void _parser_handleRootStartElement(GMarkupParseContext* context,
         const gchar* elementName, const gchar** attributeNames,
         const gchar** attributeValues, gpointer userData, GError** error) {
@@ -594,7 +699,7 @@ static void _parser_handleRootStartElement(GMarkupParseContext* context,
         *error = _parser_handleTopologyAttributes(parser, attributeNames, attributeValues);
         g_markup_parse_context_push(context, &(parser->xmlTopologyParser), parser);
     } else if (!g_ascii_strcasecmp(elementName, "shadow")) {
-        /* do nothing, this is a root element */
+        *error = _parser_handleShadowAttributes(parser, attributeNames, attributeValues);
     } else {
         *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ELEMENT,
                 "unknown 'root' child starting element '%s'", elementName);
@@ -768,6 +873,12 @@ void configuration_free(Configuration* config) {
 
     MAGIC_CLEAR(config);
     g_free(config);
+}
+
+ConfigurationShadowElement* configuration_getShadowElement(Configuration* config) {
+    MAGIC_ASSERT(config);
+    utility_assert(config->parser && config->parser->shadow);
+    return config->parser->shadow;
 }
 
 ConfigurationKillElement* configuration_getKillElement(Configuration* config) {

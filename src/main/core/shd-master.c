@@ -337,7 +337,8 @@ static void _master_registerHosts(Master* master) {
                 utility_assert(pe->plugin.isSet && pe->plugin.string);
                 utility_assert(pe->arguments.isSet && pe->arguments.string);
 
-                slave_addNewVirtualProcess(master->slave, params->hostname, pe->plugin.string->str,
+                slave_addNewVirtualProcess(master->slave, params->hostname,pe->plugin.string->str,
+                                    pe->preload.isSet ? pe->preload.string->str : NULL,
                                     SIMTIME_ONE_SECOND * pe->starttime.integer,
                                     pe->stoptime.isSet ? SIMTIME_ONE_SECOND * pe->stoptime.integer : 0,
                                     pe->arguments.string->str);

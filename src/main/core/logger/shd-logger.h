@@ -35,6 +35,8 @@ Logger* logger_getDefault();
 void logger_setFilterLevel(Logger* logger, LogLevel level);
 gboolean logger_shouldFilter(Logger* logger, LogLevel level);
 
+void logger_setEnableBuffering(Logger* logger, gboolean enabled);
+
 void logger_logVA(Logger* logger, LogLevel level, const gchar* fileName, const gchar* functionName,
         const gint lineNumber, const gchar *format, va_list vargs);
 void logger_log(Logger* logger, LogLevel level, const gchar* fileName, const gchar* functionName,
