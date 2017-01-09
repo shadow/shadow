@@ -12,6 +12,7 @@ int vdl_utils_strlen (const char *str);
 char *vdl_utils_strdup (const char *str);
 char *vdl_utils_strfind (char *str, const char *substr);
 char *vdl_utils_strconcat (const char *str, ...);
+unsigned long vdl_utils_strtoul (const char *integer);
 const char *vdl_utils_getenv (const char **envp, const char *value);
 
 // convenience function

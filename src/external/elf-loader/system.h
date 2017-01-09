@@ -5,6 +5,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/time.h>
+#include <sys/resource.h>
 #include <linux/unistd.h>
 
 
@@ -21,5 +22,7 @@ void system_exit (int status);
 int system_getpagesize (void);
 void system_futex_wake (uint32_t *uaddr, uint32_t val);
 void system_futex_wait (uint32_t *uaddr, uint32_t val);
+int system_getrlimit (int resource, struct rlimit *rlim);
+int system_setrlimit (int resource, struct rlimit *rlim);
 
 #endif /* SYSTEM_H */
