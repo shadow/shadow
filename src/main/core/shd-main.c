@@ -151,9 +151,9 @@ static gchar* _main_replacePreloadArgument(const gchar** argv, const gchar* prel
     GString* commandBuffer = g_string_new(argv[0]);
     for(gint i = 1; argv != NULL && argv[i] != NULL; i++) {
         /* use -1 to search the entire string */
-        if(g_strstr_len(argv[i], -1, "--preload=")) {
+        if(!g_ascii_strncasecmp(argv[i], "--preload=", 10)) {
             /* skip this key=value string */
-        } else if(g_strstr_len(argv[i], -1, "-p")) {
+        } else if(!g_ascii_strncasecmp(argv[i], "-p", 2)) {
             /* skip this key, and also the next arg which is the value */
             i++;
         } else {
