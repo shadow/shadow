@@ -110,6 +110,24 @@ vdl_utils_strconcat (const char *str, ...)
   return retval;
 }
 
+unsigned long
+vdl_utils_strtoul (const char *integer)
+{
+  unsigned long ret;
+  int i, d;
+  for (i = 0, ret = 0; integer[i] != '\0'; i++)
+    {
+      d = integer[i] - '0';
+      if (d < 0 || d > 9)
+        {
+          continue;
+        }
+      ret = ret * 10 + d;
+    }
+  return ret;
+}
+
+
 int
 vdl_utils_exists (const char *filename)
 {

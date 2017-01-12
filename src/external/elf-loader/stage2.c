@@ -95,10 +95,55 @@ error:
   return result;
 }
 
+// this function is just used to set up the immediate results of the env var,
+// the actual initialization of static TLS happens later
+static void
+setup_static_tls_extra (const char *static_tls_extra)
+{
+  if (static_tls_extra == 0)
+    {
+      g_vdl.tls_static_total_size = 0;
+      return;
+    }
+
+  unsigned long static_tls_size = vdl_utils_strtoul (static_tls_extra);
+  g_vdl.tls_static_total_size = static_tls_size;
+
+  // static TLS is stored in the same map as the stack, so to accommodate
+  // the extra, we increase the default stack allocation size
+  struct rlimit rl;
+  int result = system_getrlimit (RLIMIT_STACK, &rl);
+  if (result != 0)
+    {
+      VDL_LOG_ERROR
+        ("Failed to increase stack size to accommodate LD_STATIC_TLS_EXTRA: getrlimit returned %d\n",
+         result);
+      return;
+    }
+  int new_stack_size = rl.rlim_cur + static_tls_size;
+  if (new_stack_size > rl.rlim_max)
+    {
+      VDL_LOG_ERROR ("\
+WARNING: The hard limit for stack size is too small to add the given\n\
+LD_STATIC_TLS_EXTRA. Use a smaller value, or increase the hard limit\n\
+(e.g., in bash, run 'ulimit -Hs [larger number]' as root).\n\
+Attempting to run with maximum permitted stack size.\n\
+");
+      new_stack_size = rl.rlim_max;
+    }
+  rl.rlim_cur = new_stack_size;
+  result = system_setrlimit (RLIMIT_STACK, &rl);
+  if (result != 0)
+    {
+      VDL_LOG_ERROR
+        ("Failed to increase stack size to accommodate LD_STATIC_TLS_EXTRA: setrlimit returned %d\n",
+         result);
+    }
+}
+
 static void
 setup_env_vars (const char **envp)
 {
-  int i;
   // populate search_dirs from LD_LIBRARY_PATH
   const char *ld_lib_path = vdl_utils_getenv (envp, "LD_LIBRARY_PATH");
   struct VdlList *list = vdl_utils_splitpath (ld_lib_path);
@@ -121,18 +166,7 @@ setup_env_vars (const char **envp)
   // get additional static TLS size from LD_STATIC_TLS_EXTRA
   const char *static_tls_extra =
     vdl_utils_getenv (envp, "LD_STATIC_TLS_EXTRA");
-  if (static_tls_extra == 0)
-    {
-      g_vdl.tls_static_total_size = 0;
-    }
-  else
-    {
-      unsigned long static_tls_size = 0;
-      // we don't have atoi or alternatives
-      for (i = 0; static_tls_extra[i] != '\0'; i++)
-        static_tls_size = static_tls_size * 10 + static_tls_extra[i] - '0';
-      g_vdl.tls_static_total_size = static_tls_size;
-    }
+  setup_static_tls_extra (static_tls_extra);
 }
 
 struct Stage2Output

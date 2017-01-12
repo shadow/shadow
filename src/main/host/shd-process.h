@@ -72,8 +72,9 @@ typedef off_t off64_t;
 #include "shadow.h"
 
 Process* process_new(gpointer host, guint processID,
-        SimulationTime startTime, SimulationTime stopTime,
-        const gchar* pluginName, const gchar* pluginPath, gchar* arguments);
+        SimulationTime startTime, SimulationTime stopTime, const gchar* pluginName,
+        const gchar* pluginPath, const gchar* preloadName, const gchar* preloadPath,
+        gchar* arguments);
 void process_ref(Process* proc);
 void process_unref(Process* proc);
 

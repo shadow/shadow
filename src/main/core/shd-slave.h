@@ -50,7 +50,7 @@ gboolean slave_schedulerIsRunning(Slave* slave);
 /* info received from master to set up the simulation */
 void slave_addNewProgram(Slave* slave, const gchar* name, const gchar* path);
 void slave_addNewVirtualHost(Slave* slave, HostParameters* params);
-void slave_addNewVirtualProcess(Slave* slave, gchar* hostName, gchar* pluginName,
+void slave_addNewVirtualProcess(Slave* slave, gchar* hostName, gchar* pluginName, gchar* preloadName,
         SimulationTime startTime, SimulationTime stopTime, gchar* arguments);
 
 #endif /* SHD_SLAVE_H_ */

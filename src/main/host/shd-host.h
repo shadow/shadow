@@ -50,7 +50,8 @@ void host_unlock(Host* host);
 void host_boot(Host* host);
 
 void host_addApplication(Host* host, SimulationTime startTime, SimulationTime stopTime,
-        const gchar* pluginName, const gchar* pluginPath, gchar* arguments);
+        const gchar* pluginName, const gchar* pluginPath,
+        const gchar* preloadName, const gchar* preloadPath, gchar* arguments);
 void host_freeAllApplications(Host* host);
 
 gint host_compare(gconstpointer a, gconstpointer b, gpointer user_data);

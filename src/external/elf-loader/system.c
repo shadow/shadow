@@ -4,6 +4,7 @@
 #include <fcntl.h>
 #include <sys/param.h>          // for EXEC_PAGESIZE
 #include <linux/futex.h>
+#include <sys/resource.h>
 
 /* The magic checks below for -256 are probably misterious to non-kernel programmers:
  * they come from the fact that we call the raw system calls, not the libc wrappers
@@ -123,4 +124,26 @@ void
 system_futex_wait (uint32_t * uaddr, uint32_t val)
 {
   MACHINE_SYSCALL6 (futex, uaddr, FUTEX_WAIT, val, 0, 0, 0);
+}
+
+int
+system_getrlimit (int resource, struct rlimit *rlim)
+{
+  int status = MACHINE_SYSCALL2 (getrlimit, resource, rlim);
+  if (status < 0 && status > -256)
+    {
+      return -1;
+    }
+  return status;
+}
+
+int
+system_setrlimit (int resource, struct rlimit *rlim)
+{
+  int status = MACHINE_SYSCALL2 (setrlimit, resource, rlim);
+  if (status < 0 && status > -256)
+    {
+      return -1;
+    }
+  return status;
 }

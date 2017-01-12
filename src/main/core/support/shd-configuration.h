@@ -63,6 +63,7 @@ struct _ConfigurationApplicationElement {
     ConfigurationStringAttribute arguments;
     /* optional*/
     ConfigurationIntegerAttribute stoptime;
+    ConfigurationStringAttribute preload;
 };
 
 typedef struct _ConfigurationNodeElement ConfigurationNodeElement;
@@ -89,9 +90,18 @@ struct _ConfigurationNodeElement {
     ConfigurationStringAttribute pcapdir;
 };
 
+typedef struct _ConfigurationShadowElement ConfigurationShadowElement;
+struct _ConfigurationShadowElement {
+    /* required */
+    /* optional*/
+    ConfigurationStringAttribute preloadPath;
+    ConfigurationStringAttribute environment;
+};
+
 Configuration* configuration_new(Options* options, const GString* file);
 void configuration_free(Configuration* config);
 
+ConfigurationShadowElement* configuration_getShadowElement(Configuration* config);
 ConfigurationKillElement* configuration_getKillElement(Configuration* config);
 ConfigurationTopologyElement* configuration_getTopologyElement(Configuration* config);
 GList* configuration_getPluginElements(Configuration* config);

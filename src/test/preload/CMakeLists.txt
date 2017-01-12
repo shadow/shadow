@@ -186,9 +186,12 @@ SET_TESTS_PROPERTIES(preload-elf-dl
 add_library(shadow-plugin-test-preload SHARED shd-test-preload-plugin-main.c shd-test-preload-run1.c)
 target_link_libraries(shadow-plugin-test-preload test-preload-lib)
 
-## register a shadow test
-add_test(NAME preload-shadow-dl
-         COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d preload.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/preload.test.shadow.config.xml)
-SET_TESTS_PROPERTIES(preload-shadow-dl
+## register the shadow tests
+## test loading the preloads with the environment variables
+add_test(NAME preload-shadow-dl-env
+         COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d preload-env.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/preload-env.test.shadow.config.xml)
+SET_TESTS_PROPERTIES(preload-shadow-dl-env
     PROPERTIES ENVIRONMENT "LD_PRELOAD=${CMAKE_CURRENT_BINARY_DIR}/libtest-preload-interpose.so:${CMAKE_BINARY_DIR}/src/preload/libshadow-interpose.so;LD_STATIC_TLS_EXTRA=10240000")
-
+## test loading the preload libs at runtime with elf-loader
+add_test(NAME preload-shadow-dl-run
+         COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d preload-run.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/preload-run.test.shadow.config.xml)

@@ -241,10 +241,11 @@ void host_boot(Host* host) {
 }
 
 void host_addApplication(Host* host, SimulationTime startTime, SimulationTime stopTime,
-        const gchar* pluginName, const gchar* pluginPath, gchar* arguments) {
+        const gchar* pluginName, const gchar* pluginPath,
+        const gchar* preloadName, const gchar* preloadPath, gchar* arguments) {
     MAGIC_ASSERT(host);
     guint processID = host->processIDCounter++;
-    Process* proc = process_new(host, processID, startTime, stopTime, pluginName, pluginPath, arguments);
+    Process* proc = process_new(host, processID, startTime, stopTime, pluginName, pluginPath, preloadName, preloadPath, arguments);
     g_queue_push_tail(host->processes, proc);
 }
 

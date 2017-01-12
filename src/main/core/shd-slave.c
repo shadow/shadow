@@ -216,7 +216,7 @@ void slave_addNewVirtualHost(Slave* slave, HostParameters* params) {
     scheduler_addHost(slave->scheduler, host);
 }
 
-void slave_addNewVirtualProcess(Slave* slave, gchar* hostName, gchar* pluginName,
+void slave_addNewVirtualProcess(Slave* slave, gchar* hostName, gchar* pluginName, gchar* preloadName,
         SimulationTime startTime, SimulationTime stopTime, gchar* arguments) {
     MAGIC_ASSERT(slave);
 
@@ -228,8 +228,16 @@ void slave_addNewVirtualProcess(Slave* slave, gchar* hostName, gchar* pluginName
         error("plugin path not found for name '%s'. this should be verified in the config parser", pluginName);
     }
 
+    gchar* preloadPath = NULL;
+    if(preloadName != NULL) {
+        preloadPath = g_hash_table_lookup(slave->programPaths, preloadName);
+        if(preloadPath == NULL) {
+            error("preload path not found for name '%s'. this should be verified in the config parser", preloadName);
+        }
+    }
+
     Host* host = scheduler_getHost(slave->scheduler, hostID);
-    host_addApplication(host, startTime, stopTime, pluginName, pluginPath, arguments);
+    host_addApplication(host, startTime, stopTime, pluginName, pluginPath, preloadName, preloadPath, arguments);
 }
 
 DNS* slave_getDNS(Slave* slave) {
