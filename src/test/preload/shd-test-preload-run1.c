@@ -69,5 +69,5 @@ int run_test_arg(time_t next_time_result) {
 }
 
 int run_test(void) {
-    run_test_arg((time_t)111111);
+    return run_test_arg((time_t)111111);
 }

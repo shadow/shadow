@@ -51,30 +51,6 @@ static gboolean _main_isValidPathToPreloadLib(const gchar* path) {
     return FALSE;
 }
 
-static gchar* _main_searchColonStringForPreload(const gchar* str) {
-    GString* candidate = NULL;
-
-    if(str != NULL) {
-        gchar** tokens = g_strsplit(str, ":", 0);
-
-        for(gint i = 0; tokens[i] != NULL; i++) {
-            candidate = g_string_new(tokens[i]);
-            g_string_append(candidate, "/"INTERPOSELIBSTR);
-
-            if(_main_isValidPathToPreloadLib(candidate->str)) {
-                break;
-            } else {
-                g_string_free(candidate, TRUE);
-                candidate = NULL;
-            }
-        }
-
-        g_strfreev(tokens);
-    }
-
-    return (candidate != NULL) ? g_string_free(candidate, FALSE) : NULL;
-}
-
 static gboolean _main_loadShadowPreload(Options* options) {
     const gchar* preloadOptionStr = options_getPreloadString(options);
 
@@ -82,7 +58,7 @@ static gboolean _main_loadShadowPreload(Options* options) {
     dlerror();
 
     /* open the shadow preload lib as a preload and in the base program namespace */
-    // TODO FIXME this line needs updating for the correct flag(s)
+    // FIXME this line needs updating for the correct flag(s)
     // also, do we need to save/check the return value?
     void* handle = NULL;
     //handle = dlmopen(LM_ID_BASE, proc->plugin.preloadPath->str, RTLD_PRELOAD);
@@ -94,77 +70,6 @@ static gboolean _main_loadShadowPreload(Options* options) {
     } else {
         return FALSE;
     }
-}
-
-static gchar* _main_getPreloadOptionValue(Options* options, Configuration* config) {
-    /* return the shadow command line option value string that we should use to specify the path
-     * to the shadow preload library. here, our order of preference is:
-     *   1. existing "--preload=" option value
-     *   2. the 'preload' attribute value of the 'shadow' element in shadow.config.xml
-     *   3. the LD_PRELOAD value
-     *   4. as a last hope, try looking in RPATH since shadow is built with one
-     * if we can't find a path in any of these, return NULL.
-     */
-
-    /* 1. */
-
-    const gchar* preloadOptionStr = options_getPreloadString(options);
-    if(_main_isValidPathToPreloadLib(preloadOptionStr)) {
-        return g_strdup(preloadOptionStr);
-    }
-
-    /* 2. */
-
-    gchar* preloadConfigStr = NULL;
-    ConfigurationShadowElement* element = configuration_getShadowElement(config);
-    if(element && element->preloadPath.isSet) {
-        gchar* path = element->preloadPath.string->str;
-        if(_main_isValidPathToPreloadLib(path)) {
-            return g_strdup(path);
-        }
-    }
-
-    /* 3. */
-
-    const gchar* preloadEnvStr = g_getenv("LD_PRELOAD");
-    gchar* preloadPath = _main_searchColonStringForPreload(preloadEnvStr);
-
-    if(preloadPath && _main_isValidPathToPreloadLib(preloadPath)) {
-        return preloadPath;
-    }
-
-    /* 4. */
-
-    gchar* rpathStr = _main_getRPath();
-    preloadPath = _main_searchColonStringForPreload(rpathStr);
-    g_free(rpathStr);
-
-    if(preloadPath && _main_isValidPathToPreloadLib(preloadPath)) {
-        return preloadPath;
-    }
-
-    return NULL;
-}
-
-static gchar* _main_replacePreloadArgument(const gchar** argv, const gchar* preloadArgValue) {
-    /* update the command line for our preload library */
-    GString* commandBuffer = g_string_new(argv[0]);
-    for(gint i = 1; argv != NULL && argv[i] != NULL; i++) {
-        /* use -1 to search the entire string */
-        if(!g_ascii_strncasecmp(argv[i], "--preload=", 10)) {
-            /* skip this key=value string */
-        } else if(!g_ascii_strncasecmp(argv[i], "-p", 2)) {
-            /* skip this key, and also the next arg which is the value */
-            i++;
-        } else {
-            g_string_append_printf(commandBuffer, " %s", argv[i]);
-        }
-    }
-
-    /* now add back in the preload option */
-    g_string_append_printf(commandBuffer, " --preload=%s", preloadArgValue);
-
-    return g_string_free(commandBuffer, FALSE);
 }
 
 static gboolean _main_verifyStaticTLS() {
@@ -190,147 +95,280 @@ static gchar* _main_getStaticTLSValue(Options* options, Configuration* config) {
     return g_strdup("102400");
 }
 
-static gint _main_spawnShadow(gchar** argv, gchar** envlist) {
-    Logger* logger = logger_getDefault();
-    if(logger) {
-        logger_unref(logger);
+static void _shadow_logEnvironment(gchar** argv, gchar** envv) {
+    /* log all args */
+    if(argv) {
+        for(gint i = 0; argv[i] != NULL; i++) {
+            message("arg: %s", argv[i]);
+        }
     }
-    /* execvpe only returns if there is an error replacing the process image */
-    return execvpe(argv[0], argv, envlist);
+
+    /* log some useful environment variables at message, the rest at debug */
+    if(envv) {
+        for(gint i = 0; envv[i] != NULL; i++) {
+            if(!g_ascii_strncasecmp(envv[i], "LD_PRELOAD", 10) ||
+                    !g_ascii_strncasecmp(envv[i], "SHADOW_SPAWNED", 14) ||
+                    !g_ascii_strncasecmp(envv[i], "LD_STATIC_TLS_EXTRA", 19) ||
+                    !g_ascii_strncasecmp(envv[i], "G_DEBUG", 7) ||
+                    !g_ascii_strncasecmp(envv[i], "G_SLICE", 7)) {
+                message("env: %s", envv[i]);
+            } else {
+                debug("env: %s", envv[i]);
+            }
+        }
+    }
 }
 
-static gint _main_spawnShadowWithValgrind(gchar** argv, gchar** envlist) {
-    gchar* args = g_strjoinv(" ", argv);
-    GString* newargvBuffer = g_string_new(args);
-    g_free(args);
+static gint _shadow_mainHelper(Options* options) {
+    /* check if we still need to setup our required environment and relaunch */
+    if(g_getenv("SHADOW_SPAWNED") == NULL) {
+        /* we need to relaunch.
+         * first lets load the config file to help us setup the environment */
+        const GString* fileName = options_getInputXMLFilename(options);
+        if(!fileName) {
+            return EXIT_FAILURE;
+        }
 
-    g_string_prepend(newargvBuffer,
-        "valgrind --leak-check=full --show-reachable=yes --track-origins=yes --trace-children=yes --log-file=shadow-valgrind-%p.log --error-limit=no ");
-    gchar** newargv = g_strsplit(newargvBuffer->str, " ", 0);
-    g_string_free(newargvBuffer, TRUE);
+        GString* file = utility_getFileContents(fileName->str);
+        if(!file) {
+            critical("unable to read config file contents");
+            return EXIT_FAILURE;
+        }
 
-    gboolean success = _main_spawnShadow(newargv, envlist);
-    g_strfreev(newargv);
-    return success;
-}
+        Configuration* config = configuration_new(options, file);
+        g_string_free(file, TRUE);
+        file = NULL;
+        if(!config) {
+            critical("there was a problem parsing the Shadow config file, and we can't run without it");
+            return EXIT_FAILURE;
+        }
 
-static gint _main_relaunch(Options* options, gchar** argv) {
-    const GString* fileName = options_getInputXMLFilename(options);
-    GString* file = utility_getFileContents(fileName->str);
-    Configuration* config = configuration_new(options, file);
-    g_string_free(file, TRUE);
-    if(!config) {
-        return -1;
+        /* now start to set up the environment */
+        gchar** envlist = g_get_environ();
+        GString* commandBuffer = g_string_new(options_getArgumentString(options));
+
+        if(!envlist || !commandBuffer) {
+            critical("there was a problem loading existing environment");
+            configuration_free(config);
+            return EXIT_FAILURE;
+        }
+
+        /* compute the proper TLS size we need for dlmopen()ing all of the plugins,
+         * but only do this if the user didn't manually specify a size */
+        if(g_environ_getenv(envlist, "LD_STATIC_TLS_EXTRA") == NULL) {
+            gchar* staticTLSValue = _main_getStaticTLSValue(options, config);
+            envlist = g_environ_setenv(envlist, "LD_STATIC_TLS_EXTRA", staticTLSValue, 0);
+            g_free(staticTLSValue);
+        }
+
+        /* compute the proper LD_PRELOAD value, extract the shadow preload file and
+         * set it as a command line argument if needed */
+        {
+            /* before we restart, we should:
+             *  -set the shadow preload lib as a command line arg
+             *  -make sure it does not exist in LD_PRELOAD, but otherwise leave LD_PRELOAD in place
+             * we need to search for our preload lib. our order of preference follows.
+             */
+            gchar* preloadArgValue = NULL;
+
+            /* 1. existing "--preload=" option value */
+
+            if(_main_isValidPathToPreloadLib(options_getPreloadString(options))) {
+                preloadArgValue = g_strdup(options_getPreloadString(options));
+            }
+
+            /* 2. the 'preload' attribute value of the 'shadow' element in shadow.config.xml */
+
+            /* we only need to search if we haven't already found a valid path */
+            if(!preloadArgValue) {
+                ConfigurationShadowElement* element = configuration_getShadowElement(config);
+                if(element && element->preloadPath.isSet) {
+                    gchar* path = element->preloadPath.string->str;
+                    if(_main_isValidPathToPreloadLib(path)) {
+                        preloadArgValue = g_strdup(path);
+                    }
+                }
+            }
+
+            /* 3. the LD_PRELOAD value */
+
+            /* we always search the env variable and remove existing Shadow preload libs */
+            if(g_environ_getenv(envlist, "LD_PRELOAD") != NULL) {
+                GString* preloadEnvValueBuffer = NULL;
+                gchar** tokens = g_strsplit(g_environ_getenv(envlist, "LD_PRELOAD"), ":", 0);
+
+                for(gint i = 0; tokens[i] != NULL; i++) {
+                    /* each token in the env variable should be an absolute path */
+                    if(_main_isValidPathToPreloadLib(tokens[i])) {
+                        /* found a valid path, only save it if we don't have one yet (from options or config) */
+                        if(!preloadArgValue) {
+                            preloadArgValue = g_strdup(tokens[i]);
+                        }
+                    } //else { // FIXME once we load preload lib in shadow, this else block is needed
+                        /* maintain non-shadow entries */
+                        if(preloadEnvValueBuffer) {
+                            g_string_append_printf(preloadEnvValueBuffer, ":%s", tokens[i]);
+                        } else {
+                            preloadEnvValueBuffer = g_string_new(tokens[i]);
+                        }
+                    //}
+                }
+
+                g_strfreev(tokens);
+
+                if(preloadEnvValueBuffer) {
+                    envlist = g_environ_setenv(envlist, "LD_PRELOAD", preloadEnvValueBuffer->str, 1);
+                    g_string_free(preloadEnvValueBuffer, TRUE);
+                } else {
+                    envlist = g_environ_unsetenv(envlist, "LD_PRELOAD");
+                }
+            }
+
+            /* 4. as a last hope, try looking in RPATH since shadow is built with one */
+
+            /* we only need to search if we haven't already found a valid path */
+            if(!preloadArgValue) {
+                gchar* rpathStr = _main_getRPath();
+                if(rpathStr != NULL) {
+                    gchar** tokens = g_strsplit(rpathStr, ":", 0);
+
+                    for(gint i = 0; tokens[i] != NULL; i++) {
+                        GString* candidateBuffer = g_string_new(NULL);
+
+                        /* rpath specifies directories, so look inside */
+                        g_string_printf(candidateBuffer, "%s/%s", tokens[i], INTERPOSELIBSTR);
+                        gchar* candidate = g_string_free(candidateBuffer, FALSE);
+
+                        if(_main_isValidPathToPreloadLib(candidate)) {
+                            preloadArgValue = candidate;
+                            break;
+                        } else {
+                            g_free(candidate);
+                        }
+                    }
+
+                    g_strfreev(tokens);
+                }
+                g_free(rpathStr);
+            }
+
+            /* if we still didn't find our preload lib, that is a user error */
+            if(!preloadArgValue) {
+                critical("can't find path to %s, did you specify an absolute path to an existing readable file?", INTERPOSELIBSTR);
+                configuration_free(config);
+                return EXIT_FAILURE;
+            }
+
+            // FIXME temporary hack to be removed when we start loading the preload in shadow
+            if(g_environ_getenv(envlist, "LD_PRELOAD") == NULL) {
+                envlist = g_environ_setenv(envlist, "LD_PRELOAD", preloadArgValue, 1);
+            }
+
+            /* now that we found the correct path to the preload lib, first remove any possibly
+             * incomplete path that might exist in the command line args, and then replace it
+             * with the path that we found and verified is correct. */
+
+            {
+                /* first remove all preload options */
+                gchar** tokens = g_strsplit(commandBuffer->str, " ", 0);
+                g_string_free(commandBuffer, TRUE);
+                commandBuffer = NULL;
+
+                for(gint i = 0; tokens[i] != NULL; i++) {
+                    /* use -1 to search the entire string */
+                    if(!g_ascii_strncasecmp(tokens[i], "--preload=", 10)) {
+                        /* skip this key=value string */
+                    } else if(!g_ascii_strncasecmp(tokens[i], "-p", 2)) {
+                        /* skip this key, and also the next arg which is the value */
+                        i++;
+                    } else {
+                        if(commandBuffer) {
+                            g_string_append_printf(commandBuffer, " %s", tokens[i]);
+                        } else {
+                            commandBuffer = g_string_new(tokens[i]);
+                        }
+                    }
+                }
+
+                g_strfreev(tokens);
+
+                /* now add back in the preload option */
+                g_string_append_printf(commandBuffer, " --preload=%s", preloadArgValue);
+            }
+
+        }
+
+        /* are we running valgrind */
+        if(options_doRunValgrind(options)) {
+            /* make glib friendlier to valgrind */
+            envlist = g_environ_setenv(envlist, "G_DEBUG", "gc-friendly", 0);
+            envlist = g_environ_setenv(envlist, "G_SLICE", "always-malloc", 0);
+
+            /* add the valgrind command and some default options */
+            g_string_prepend(commandBuffer,
+                            "valgrind --leak-check=full --show-reachable=yes --track-origins=yes --trace-children=yes --log-file=shadow-valgrind-%p.log --error-limit=no ");
+        } else {
+            /* The following can be used to add internal GLib memory validation that
+             * will abort the program if it finds an error. This is only useful outside
+             * of the valgrind context, as otherwise valgrind will complain about
+             * the implementation of the GLib validator.
+             * e.g. $ G_SLICE=debug-blocks shadow --file
+             *
+             * envlist = g_environ_setenv(envlist, "G_SLICE", "debug-blocks", 0);
+             */
+        }
+
+        /* keep track that we are relaunching shadow */
+        envlist = g_environ_setenv(envlist, "SHADOW_SPAWNED", "TRUE", 1);
+
+        gchar* command = g_string_free(commandBuffer, FALSE);
+        gchar** arglist = g_strsplit(command, " ", 0);
+        g_free(command);
+
+        _shadow_logEnvironment(arglist, envlist);
+        message("shadow is relaunching now with new environment");
+
+        Logger* logger = logger_getDefault();
+        if(logger) {
+            logger_setDefault(NULL);
+            logger_unref(logger);
+        }
+
+        /* execvpe only returns if there is an error, otherwise the current process
+         * image is replaced with a new process */
+        gint returnValue = execvpe(arglist[0], arglist, envlist);
+
+        /* cleanup */
+        if(envlist) {
+            g_strfreev(envlist);
+        }
+        if(arglist) {
+            g_strfreev(arglist);
+        }
+
+        critical("** Error %i while re-launching shadow process: %s", returnValue, g_strerror(returnValue));
+        return EXIT_FAILURE;
     }
 
-    /* check if we need to run valgrind */
-    gboolean runValgrind = options_doRunValgrind(options);
+    /* we dont need to relaunch, so we can run the simulation */
 
-    gchar* preloadArgValue = _main_getPreloadOptionValue(options, config);
-    gchar* staticTLSValue = _main_getStaticTLSValue(options, config);
-
-    gchar** envlist = g_get_environ();
-
-    /* keep track that we are relaunching shadow */
-    envlist = g_environ_setenv(envlist, "SHADOW_SPAWNED", "TRUE", 1);
-    /* make sure LD_PRELOAD is empty to prevent any possible init errors.
-     * we will load the preload library at runtime after we relaunch */
-//    envlist = g_environ_setenv(envlist, "LD_PRELOAD", "", 1); // uncomment this once we can load the preload lib correctly
-    envlist = g_environ_setenv(envlist, "LD_PRELOAD", preloadArgValue, 1);
-    /* compute the proper TLS size we need for dlmopen()ing all of the plugins */
-    envlist = g_environ_setenv(envlist, "LD_STATIC_TLS_EXTRA", staticTLSValue, 0);
-
-    /* valgrind env */
-    if(runValgrind) {
-        envlist = g_environ_setenv(envlist, "G_DEBUG", "gc-friendly", 0);
-        envlist = g_environ_setenv(envlist, "G_SLICE", "always-malloc", 0);
-    }
-
-    /* The following can be used to add internal GLib memory validation that
-     * will abort the program if it finds an error. This is useful outside
-     * of the valgrind context, as otherwise valgrind will complain about
-     * the implementation of the GLib validator.
-     * e.g. $ G_SLICE=debug-blocks shadow --file
-     *
-     * envlist = g_environ_setenv(envlist, "G_SLICE", "debug-blocks", 0);
-     */
-
-    gchar* cmds = _main_replacePreloadArgument((const gchar**)argv, (const gchar*)preloadArgValue);
-    gchar** cmdv = g_strsplit(cmds, " ", 0);
-
-    gint returnValue = 0;
-    if(runValgrind) {
-        returnValue = _main_spawnShadowWithValgrind(cmdv, envlist);
-    } else {
-        returnValue = _main_spawnShadow(cmdv, envlist);
-    }
-
-    /* cleanup */
-    if(preloadArgValue) {
-        g_free(preloadArgValue);
-    }
-    if(staticTLSValue) {
-        g_free(staticTLSValue);
-    }
-    if(envlist) {
-        g_strfreev(envlist);
-    }
-    if(cmdv) {
-        g_strfreev(cmdv);
-    }
-    if(cmds) {
-        g_free(cmds);
-    }
-
-    return returnValue;
-}
-
-static gboolean _main_doVersionsPass() {
-    /* check the compiled GLib version */
-    if (!GLIB_CHECK_VERSION(2, 32, 0)) {
-        g_printerr("** GLib version 2.32.0 or above is required but Shadow was compiled against version %u.%u.%u\n",
-            (guint)GLIB_MAJOR_VERSION, (guint)GLIB_MINOR_VERSION, (guint)GLIB_MICRO_VERSION);
-        return FALSE;
-    }
-
-    if(GLIB_MAJOR_VERSION == 2 && GLIB_MINOR_VERSION == 40) {
-        g_printerr("** You compiled against GLib version %u.%u.%u, which has bugs known to break Shadow. Please update to a newer version of GLib.\n",
-                    (guint)GLIB_MAJOR_VERSION, (guint)GLIB_MINOR_VERSION, (guint)GLIB_MICRO_VERSION);
-        return FALSE;
-    }
-
-    /* check the that run-time GLib matches the compiled version */
-    const gchar* mismatch = glib_check_version(GLIB_MAJOR_VERSION, GLIB_MINOR_VERSION, GLIB_MICRO_VERSION);
-    if(mismatch) {
-        g_printerr("** The version of the run-time GLib library (%u.%u.%u) is not compatible with the version against which Shadow was compiled (%u.%u.%u). GLib message: '%s'\n",
-        glib_major_version, glib_minor_version, glib_micro_version,
-        (guint)GLIB_MAJOR_VERSION, (guint)GLIB_MINOR_VERSION, (guint)GLIB_MICRO_VERSION,
-        mismatch);
-        return FALSE;
-    }
-
-    /* everything passed */
-    return TRUE;
-}
-
-static gboolean _main_checkRuntimeEnvironment(Options* options) {
     /* make sure we have initialized static tls */
     if(!_main_verifyStaticTLS()) {
-        error("** Shadow Setup Check Failed: LD_STATIC_TLS_EXTRA does not contain a nonzero value");
-        return FALSE;
+        critical("** Shadow Setup Check Failed: LD_STATIC_TLS_EXTRA does not contain a nonzero value");
+        return EXIT_FAILURE;
     }
 
     /* make sure we have the shadow preload lib */
     if(!_main_isValidPathToPreloadLib(options_getPreloadString(options))) {
-        error("** Shadow Setup Check Failed: cannot find absolute path to "INTERPOSELIBSTR"");
-        return FALSE;
+        critical("** Shadow Setup Check Failed: cannot find absolute path to "INTERPOSELIBSTR"");
+        return EXIT_FAILURE;
     }
 
     /* now load the preload library into shadow's namespace */
-    // TODO add this check once we can load the preload lib at runtime
+    // FIXME uncomment the following once we can load the preload lib at runtime
 //    if(!_main_loadShadowPreload(options)) {
-//        error("** Shadow Setup Check Failed: unable to load preload library");
-//        return FALSE;
+//        critical("** Shadow Setup Check Failed: unable to load preload library");
+//        return EXIT_FAILURE;
 //    }
 
     /* tell the preload lib we are ready for action */
@@ -339,59 +377,8 @@ static gboolean _main_checkRuntimeEnvironment(Options* options) {
 
     if(interposerResult != 0) {
         /* it was not intercepted, meaning our preload library is not set up properly */
-        error("** Shadow Setup Check Failed: preload library is not correctly interposing functions");
-        return FALSE;
-    }
-
-    return TRUE;
-}
-
-static Options* _main_parseOptions(gint argc, gchar* argv[]) {
-    gchar* cmds = g_strjoinv(" ", argv);
-    gchar** cmdv = g_strsplit(cmds, " ", 0);
-    Options* options = options_new(argc, cmdv);
-    g_free(cmds);
-    g_strfreev(cmdv);
-    return options;
-}
-
-gint shadow_main(gint argc, gchar* argv[]) {
-    if(!_main_doVersionsPass()) {
-        return -1;
-    }
-
-    Options* options = _main_parseOptions(argc, argv);
-    if(!options) {
-        return -1;
-    }
-
-    if(options_doRunPrintVersion(options)) {
-        g_printerr("%s running GLib v%u.%u.%u and IGraph v%s\n%s\n",
-                SHADOW_VERSION_STRING,
-                (guint)GLIB_MAJOR_VERSION, (guint)GLIB_MINOR_VERSION, (guint)GLIB_MICRO_VERSION,
-#if defined(IGRAPH_VERSION)
-                IGRAPH_VERSION,
-#else
-                "(n/a)",
-#endif
-                SHADOW_INFO_STRING);
-        options_free(options);
-        return 0;
-    }
-
-    Logger* shadowLogger = logger_new(options_getLogLevel(options));
-    logger_setDefault(shadowLogger);
-    logger_setEnableBuffering(shadowLogger, FALSE);
-
-    if(g_getenv("SHADOW_SPAWNED") == NULL) {
-        /* setup our required environment and relaunch */
-        gint returnValue = _main_relaunch(options, argv);
-        error("** Error %i while re-launching shadow process: %s", returnValue, g_strerror(returnValue));
-        return -1;
-    }
-
-    if(!_main_checkRuntimeEnvironment(options)) {
-        return -1;
+        critical("** Shadow Setup Check Failed: preload library is not correctly interposing functions");
+        return EXIT_FAILURE;
     }
 
     /* start off with some status messages */
@@ -414,12 +401,11 @@ gint shadow_main(gint argc, gchar* argv[]) {
     g_free(startupStr);
 
     message(SHADOW_INFO_STRING);
-    message("args=%s", options_getArgumentString(options));
 
     gchar** envlist = g_get_environ();
-    for(gint i = 0; envlist != NULL && envlist[i] != NULL; i++) {
-        info("env: %s", envlist[i]);
-    }
+    gchar** arglist = g_strsplit(options_getArgumentString(options), " ", 0);
+    _shadow_logEnvironment(arglist, envlist);
+    g_strfreev(arglist);
     g_strfreev(envlist);
 
     /* pause for debugger attachment if the option is set */
@@ -436,7 +422,7 @@ gint shadow_main(gint argc, gchar* argv[]) {
     shadowMaster = master_new(options);
 
     message("log message buffering is enabled for efficiency");
-    logger_setEnableBuffering(shadowLogger, TRUE);
+    logger_setEnableBuffering(logger_getDefault(), TRUE);
 
     if(shadowMaster) {
         /* run the simulation */
@@ -447,10 +433,73 @@ gint shadow_main(gint argc, gchar* argv[]) {
     }
 
     message("%s simulation was shut down cleanly", SHADOW_VERSION_STRING);
+    return returnCode;
+}
+
+gint shadow_main(gint argc, gchar* argv[]) {
+    /* check the compiled GLib version */
+    if (!GLIB_CHECK_VERSION(2, 32, 0)) {
+        g_printerr("** GLib version 2.32.0 or above is required but Shadow was compiled against version %u.%u.%u\n",
+            (guint)GLIB_MAJOR_VERSION, (guint)GLIB_MINOR_VERSION, (guint)GLIB_MICRO_VERSION);
+        return EXIT_FAILURE;
+    }
+
+    if(GLIB_MAJOR_VERSION == 2 && GLIB_MINOR_VERSION == 40) {
+        g_printerr("** You compiled against GLib version %u.%u.%u, which has bugs known to break Shadow. Please update to a newer version of GLib.\n",
+                    (guint)GLIB_MAJOR_VERSION, (guint)GLIB_MINOR_VERSION, (guint)GLIB_MICRO_VERSION);
+        return EXIT_FAILURE;
+    }
+
+    /* check the that run-time GLib matches the compiled version */
+    const gchar* mismatch = glib_check_version(GLIB_MAJOR_VERSION, GLIB_MINOR_VERSION, GLIB_MICRO_VERSION);
+    if(mismatch) {
+        g_printerr("** The version of the run-time GLib library (%u.%u.%u) is not compatible with the version against which Shadow was compiled (%u.%u.%u). GLib message: '%s'\n",
+        glib_major_version, glib_minor_version, glib_micro_version,
+        (guint)GLIB_MAJOR_VERSION, (guint)GLIB_MINOR_VERSION, (guint)GLIB_MICRO_VERSION,
+        mismatch);
+        return EXIT_FAILURE;
+    }
+
+    /* parse the options from the command line */
+    gchar* cmds = g_strjoinv(" ", argv);
+    gchar** cmdv = g_strsplit(cmds, " ", 0);
+    Options* options = options_new(argc, cmdv);
+    g_free(cmds);
+    g_strfreev(cmdv);
+    if(!options) {
+        return EXIT_FAILURE;
+    }
+
+    /* if they just want the shadow version, print it and exit */
+    if(options_doRunPrintVersion(options)) {
+        g_printerr("%s running GLib v%u.%u.%u and IGraph v%s\n%s\n",
+                SHADOW_VERSION_STRING,
+                (guint)GLIB_MAJOR_VERSION, (guint)GLIB_MINOR_VERSION, (guint)GLIB_MICRO_VERSION,
+#if defined(IGRAPH_VERSION)
+                IGRAPH_VERSION,
+#else
+                "(n/a)",
+#endif
+                SHADOW_INFO_STRING);
+        options_free(options);
+        return EXIT_SUCCESS;
+    }
+
+    /* start up the logging subsystem to handle all future messages */
+    Logger* shadowLogger = logger_new(options_getLogLevel(options));
+    logger_setDefault(shadowLogger);
+
+    /* disable buffering during startup so that we see every message immediately in the terminal */
+    logger_setEnableBuffering(shadowLogger, FALSE);
+
+    gint returnCode = _shadow_mainHelper(options);
 
     options_free(options);
-    logger_setDefault(NULL);
-    logger_unref(shadowLogger);
+    Logger* logger = logger_getDefault();
+    if(logger) {
+        logger_setDefault(NULL);
+        logger_unref(logger);
+    }
 
     g_printerr("** Shadow returning code %i (%s)\n", returnCode, (returnCode == 0) ? "success" : "error");
     return returnCode;
