@@ -8,9 +8,9 @@
 #define _GNU_SOURCE
 #endif
 #include <unistd.h>
-
 #include <elf.h>
 #include <link.h>
+#include <dlfcn.h>
 #include <sys/types.h>
 
 #include "shadow.h"
@@ -18,6 +18,9 @@
 static Master* shadowMaster;
 
 #define INTERPOSELIBSTR "libshadow-interpose.so"
+
+// this is for the new dlinfo type we've added to elf-loader
+#define RTLD_DI_TLS_SIZE 127
 
 static gchar* _main_getRPath() {
     const ElfW(Dyn) *dyn = _DYNAMIC;
@@ -80,19 +83,150 @@ static gboolean _main_verifyStaticTLS() {
     }
 
     guint64 tlsSize = g_ascii_strtoull(ldStaticTLSValue, NULL, 10);
-    if(tlsSize > 1024) {
+    if(tlsSize >= 1024) {
         return TRUE;
     } else {
         return FALSE;
     }
 }
 
-static gchar* _main_getStaticTLSValue(Options* options, Configuration* config) {
-    // TODO we should compute the actual size we will need based on the shadow.config.xml file
-    // that involves loading all plugin libs and the corresponding preload libs (if any)
-    // and computing how many nodes need to run each of those plugins to compute total size
-    // see src/test/dynlink for code that does this
-    return g_strdup("102400");
+static gulong _main_computeLoadSize(const gchar* libraryPath) {
+    gulong tlsSizeStart = 0, tlsSizeEnd = 0, tlsSizePerLoad = 0;
+    gpointer handle1 = NULL, handle2 = NULL;
+    gint result = 0;
+
+    debug("computing static TLS size needed for library at path '%s", libraryPath);
+
+    /* clear error */
+    dlerror();
+
+    handle1 = dlmopen(LM_ID_NEWLM, libraryPath, RTLD_LAZY|RTLD_LOCAL|RTLD_DEEPBIND);
+
+    if(handle1 == NULL) {
+        warning("error in dlmopen() while computing TLS size, dlerror is '%s'", dlerror());
+        goto err;
+    }
+
+    result = dlinfo(handle1, RTLD_DI_TLS_SIZE, &tlsSizeStart);
+
+    if (result != 0) {
+        warning("error in dlinfo() while computing TLS size, dlerror is '%s'", dlerror());
+        goto err;
+    }
+
+    handle2 = dlmopen(LM_ID_NEWLM, libraryPath, RTLD_LAZY|RTLD_LOCAL|RTLD_DEEPBIND);
+
+    if(handle2 == NULL) {
+        warning("error in dlmopen() while computing TLS size, dlerror is '%s'", dlerror());
+        goto err;
+    }
+
+    result = dlinfo(handle2, RTLD_DI_TLS_SIZE, &tlsSizeEnd);
+
+    if (result != 0) {
+        warning("error in dlinfo() while computing TLS size, dlerror is '%s'", dlerror());
+        goto err;
+    }
+
+// TODO close the handles to clean up, after elf loader supports interleaving dlopens and dlcloses
+//    dlclose(handle1);
+//    dlclose(handle2);
+
+    tlsSizePerLoad = (tlsSizeEnd - tlsSizeStart);
+    message("we need %lu bytes of static TLS per load of library at path '%s", tlsSizePerLoad, libraryPath);
+
+    /* make sure we dont return 0 when successful */
+    if(tlsSizePerLoad < 1) {
+        tlsSizePerLoad = 1;
+    }
+    return tlsSizePerLoad;
+
+err:
+// TODO close the handles to clean up, after elf loader supports interleaving dlopens and dlcloses
+//    if(handle1) {
+//        dlclose(handle1);
+//    }
+//    if(handle2) {
+//        dlclose(handle2);
+//    }
+    return 0;
+}
+
+static gchar* _main_getStaticTLSValue(Options* options, Configuration* config, gchar* preloadArgValue) {
+    /*
+     * compute the actual static TLS size we need based on the libraries specified in the
+     * shadow.config.xml file and our environment. this involves finding all of the plugins
+     * and preloads that we need, and counting how many nodes load each of those libraries.
+     */
+
+    GList* allPlugins = configuration_getPluginElements(config);
+    GList* allNodes = configuration_getNodeElements(config);
+    gulong tlsSizePerLoad = 0, tlsSizeTotal = 0;
+
+    /* for each lib, we go through each node and find each application that uses that lib */
+
+    GList* nextPlugin = g_list_first(allPlugins);
+    while(nextPlugin != NULL) {
+        ConfigurationPluginElement* pluginElement = (ConfigurationPluginElement*)nextPlugin->data;
+
+        if(pluginElement && pluginElement->id.isSet && pluginElement->id.string
+                && pluginElement->path.isSet && pluginElement->path.string) {
+
+            guint numNodesUsingPlugin = 0;
+
+            GList* nextNode = g_list_first(allNodes);
+            while(nextNode != NULL) {
+                ConfigurationNodeElement* nodeElement = (ConfigurationNodeElement*)nextNode->data;
+
+                if(nodeElement && nodeElement->applications) {
+                    GList* nextApp = g_list_first(nodeElement->applications);
+                    while(nextApp != NULL) {
+                        ConfigurationApplicationElement* appElement = (ConfigurationApplicationElement*)nextApp->data;
+
+                        if(appElement && appElement->plugin.isSet && appElement->plugin.string &&
+                                !g_ascii_strcasecmp(appElement->plugin.string->str, pluginElement->id.string->str)) {
+                            numNodesUsingPlugin++;
+                        }
+                        if(appElement && appElement->preload.isSet && appElement->preload.string &&
+                                !g_ascii_strcasecmp(appElement->preload.string->str, pluginElement->id.string->str)) {
+                            numNodesUsingPlugin++;
+                        }
+
+                        nextApp = g_list_next(nextApp);
+                    }
+                }
+
+                nextNode = g_list_next(nextNode);
+            }
+
+            tlsSizePerLoad = _main_computeLoadSize(pluginElement->path.string->str);
+            if(tlsSizePerLoad == 0) {
+                warning("skipping plugin '%s' at path '%s' when computing total needed static TLS size",
+                        pluginElement->id.string->str, pluginElement->path.string->str);
+            } else {
+                tlsSizeTotal += (tlsSizePerLoad * numNodesUsingPlugin);
+            }
+        }
+
+        nextPlugin = g_list_next(nextPlugin);
+    }
+
+    // FIXME for some reason dlmopen of libshadow-interpose.so causes segfaults
+    tlsSizePerLoad = 1024;//_main_computeLoadSize(preloadArgValue);
+    if(tlsSizePerLoad == 0) {
+        warning("skipping shadow global preload lib at path '%s' when computing total needed static TLS size",
+                preloadArgValue);
+    } else {
+        tlsSizeTotal += tlsSizePerLoad;
+    }
+
+    if(tlsSizeTotal < 1024) {
+        tlsSizeTotal = 1024;
+    }
+
+    GString* sbuf = g_string_new(NULL);
+    g_string_printf(sbuf, "%lu", tlsSizeTotal);
+    return g_string_free(sbuf, FALSE);
 }
 
 static void _shadow_logEnvironment(gchar** argv, gchar** envv) {
@@ -153,23 +287,15 @@ static gint _shadow_mainHelper(Options* options) {
             return EXIT_FAILURE;
         }
 
-        /* compute the proper TLS size we need for dlmopen()ing all of the plugins,
-         * but only do this if the user didn't manually specify a size */
-        if(g_environ_getenv(envlist, "LD_STATIC_TLS_EXTRA") == NULL) {
-            gchar* staticTLSValue = _main_getStaticTLSValue(options, config);
-            envlist = g_environ_setenv(envlist, "LD_STATIC_TLS_EXTRA", staticTLSValue, 0);
-            g_free(staticTLSValue);
-        }
-
         /* compute the proper LD_PRELOAD value, extract the shadow preload file and
          * set it as a command line argument if needed */
+        gchar* preloadArgValue = NULL;
         {
             /* before we restart, we should:
              *  -set the shadow preload lib as a command line arg
              *  -make sure it does not exist in LD_PRELOAD, but otherwise leave LD_PRELOAD in place
              * we need to search for our preload lib. our order of preference follows.
              */
-            gchar* preloadArgValue = NULL;
 
             /* 1. existing "--preload=" option value */
 
@@ -296,6 +422,20 @@ static gint _shadow_mainHelper(Options* options) {
                 g_string_append_printf(commandBuffer, " --preload=%s", preloadArgValue);
             }
 
+        }
+
+        /* compute the proper TLS size we need for dlmopen()ing all of the plugins,
+         * but only do this if the user didn't manually specify a size */
+        if(g_environ_getenv(envlist, "LD_STATIC_TLS_EXTRA") == NULL) {
+            gchar* staticTLSValue = _main_getStaticTLSValue(options, config, preloadArgValue);
+            envlist = g_environ_setenv(envlist, "LD_STATIC_TLS_EXTRA", staticTLSValue, 0);
+            g_free(staticTLSValue);
+        }
+
+        /* cleanup unused string */
+        if(preloadArgValue) {
+            g_free(preloadArgValue);
+            preloadArgValue = NULL;
         }
 
         /* are we running valgrind */
