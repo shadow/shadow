@@ -95,7 +95,6 @@ struct _ConfigurationShadowElement {
     /* required */
     /* optional*/
     ConfigurationStringAttribute preloadPath;
-    ConfigurationStringAttribute environment;
 };
 
 Configuration* configuration_new(Options* options, const GString* file);

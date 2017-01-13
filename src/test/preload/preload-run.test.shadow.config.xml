@@ -1,4 +1,4 @@
-<shadow preload="../preload/libshadow-interpose.so" environment="LD_STATIC_TLS_EXTRA=10240001">
+<shadow preload="../../preload/libshadow-interpose.so">
   <topology><![CDATA[<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
   <key attr.name="packetloss" attr.type="double" for="edge" id="d9" />
   <key attr.name="jitter" attr.type="double" for="edge" id="d8" />
