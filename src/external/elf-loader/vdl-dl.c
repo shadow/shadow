@@ -21,6 +21,7 @@
 #include "vdl-unmap.h"
 #include "vdl-init.h"
 #include "vdl-fini.h"
+#include "dl.h"
 
 // reuse glibc flag.
 #define __RTLD_OPENEXEC 0x20000000
@@ -152,6 +153,22 @@ update_match (unsigned long addr,
   return candidate;
 }
 
+static inline void *
+get_post_interpose (struct VdlContext *context, int preload)
+{
+  void **cur;
+  for (cur = vdl_list_begin (context->global_scope);
+       cur != vdl_list_end (context->global_scope);
+       cur = vdl_list_next (cur))
+    {
+      struct VdlFile *item = *cur;
+      if (!item->is_interposer || (!preload && item->context != context))
+        {
+          break;
+        }
+    }
+  return cur;
+}
 
 // assumes caller has lock
 static void *
@@ -223,6 +240,24 @@ dlopen_with_context (struct VdlContext *context, const char *filename,
 
   struct VdlList *scope = vdl_sort_deps_breadth_first (map.requested);
 
+  if (flags & RTLD_PRELOAD)
+    {
+      vdl_list_push_back (g_vdl.preloads, map.requested);
+      vdl_list_unicize (g_vdl.preloads);
+    }
+  // If this is an "interposer" library, we add it to the global scope.
+  // Note that the context in which symbols are resolved depends on whether the
+  // object is LD_PRELOAD or RTLD_PRELOAD (symbol loads in the context the
+  // object was opened with), or RTLD_INTERPOSE (symbol loads in the context of
+  // the caller).
+  if (flags & (RTLD_PRELOAD | RTLD_INTERPOSE))
+    {
+      map.requested->is_interposer = 1;
+      void *post_interpose =
+        get_post_interpose (context, flags & RTLD_PRELOAD);
+      vdl_list_insert (context->global_scope, post_interpose, map.requested);
+      vdl_list_unicize (context->global_scope);
+    }
   if (flags & RTLD_GLOBAL)
     {
       // add this object as well as its dependencies to the global scope.
@@ -232,13 +267,14 @@ dlopen_with_context (struct VdlContext *context, const char *filename,
       vdl_list_insert_range (context->global_scope,
                              vdl_list_end (context->global_scope),
                              vdl_list_begin (scope), vdl_list_end (scope));
-      if (!context->has_main)
-	{
-	  // This is the first non-preload object in the global scope.
-	  // It goes before all other objects in the global scope.
-	  vdl_list_push_front (context->global_scope, map.requested);
-	  context->has_main = 1;
-	}
+      if (!context->has_main && !(flags & (RTLD_PRELOAD | RTLD_INTERPOSE)))
+        {
+          // This is the first non-interposing object in the global scope.
+          // It goes before all other objects in the global scope.
+          vdl_list_push_front (context->global_scope, map.requested);
+          context->has_main = 1;
+          map.requested->is_interposer = 1;
+        }
       vdl_list_unicize (context->global_scope);
     }
 

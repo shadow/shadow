@@ -122,6 +122,7 @@ ld_preload_lists (struct VdlList *preload_files, struct VdlList *preload_deps,
           goto error;
         }
       result.requested->count++;
+      result.requested->is_interposer = 1;
       vdl_list_push_back (preload_files, result.requested);
       vdl_list_insert_range (preload_deps, vdl_list_end (preload_deps),
                              vdl_list_begin (result.newly_mapped),
@@ -272,6 +273,7 @@ stage2_initialize (struct Stage2Input input)
   struct VdlFile *main_file = main_result.requested;
   main_file->count++;
   main_file->is_executable = 1;
+  main_file->is_interposer = 1;
   context->has_main = 1;
 
   // Now, we setup our public linkmap.

@@ -161,11 +161,11 @@ vdl_context_new (int argc, char **argv, char **envp)
   context->argv = argv;
   context->envp = envp;
 
-  // Store the files from LD_PRELOAD in all contexts.
+  // Store the files from LD_PRELOAD and RTLD_PRELOAD in all contexts.
   // Note that this insertion is of the loaded files as is, not a reloading.
   // Therefore, all symbols found in these files or from these files will be
-  // in the default context, and _not_ this newly created context (unless this
-  // is the default context, of course).
+  // in the context they were originally loaded in, and _not_ this newly
+  // created context. (LD_PRELOAD files are loaded in the default context.)
   context->global_scope = vdl_list_copy (g_vdl.preloads);
   context->has_main = 0;
 
