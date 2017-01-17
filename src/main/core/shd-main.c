@@ -19,9 +19,6 @@ static Master* shadowMaster;
 
 #define INTERPOSELIBSTR "libshadow-interpose.so"
 
-// this is for the new dlinfo type we've added to elf-loader
-#define RTLD_DI_TLS_SIZE 127
-
 static gchar* _main_getRPath() {
     const ElfW(Dyn) *dyn = _DYNAMIC;
     const ElfW(Dyn) *rpath = NULL;
@@ -107,7 +104,7 @@ static gulong _main_computeLoadSize(const gchar* libraryPath) {
         goto err;
     }
 
-    result = dlinfo(handle1, RTLD_DI_TLS_SIZE, &tlsSizeStart);
+    result = dlinfo(handle1, RTLD_DI_STATIC_TLS_SIZE, &tlsSizeStart);
 
     if (result != 0) {
         warning("error in dlinfo() while computing TLS size, dlerror is '%s'", dlerror());
@@ -121,7 +118,7 @@ static gulong _main_computeLoadSize(const gchar* libraryPath) {
         goto err;
     }
 
-    result = dlinfo(handle2, RTLD_DI_TLS_SIZE, &tlsSizeEnd);
+    result = dlinfo(handle2, RTLD_DI_STATIC_TLS_SIZE, &tlsSizeEnd);
 
     if (result != 0) {
         warning("error in dlinfo() while computing TLS size, dlerror is '%s'", dlerror());

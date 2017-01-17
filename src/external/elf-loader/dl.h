@@ -6,3 +6,7 @@
 // dl(m)open() flag. Specifies that the loaded file should be placed in load
 // order as though it were added via LD_PRELOAD, in this context only.
 #define RTLD_INTERPOSE 0x00040
+
+// dlinfo() flag. Populates info field with the size of the currently used
+// static TLS.
+#define RTLD_DI_STATIC_TLS_SIZE 127

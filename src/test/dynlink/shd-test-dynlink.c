@@ -31,7 +31,7 @@
 #define RTLD_NEXT ((void *) -1l)
 
 // this is for the new dlinfo type we've added to elf-loader
-#define RTLD_DI_TLS_SIZE 127
+#define RTLD_DI_STATIC_TLS_SIZE 127
 
 #define NUM_LOADS 500
 #define NUM_HARDLINKS 100
@@ -46,11 +46,11 @@ long unsigned int global_link_counter = 0;
 static void _test_print_tls_size(void* handle) {
     /* print the size of the buffer allocated for the TLS block */
     unsigned long tls_size;
-    int result = dlinfo(handle, RTLD_DI_TLS_SIZE, &tls_size);
+    int result = dlinfo(handle, RTLD_DI_STATIC_TLS_SIZE, &tls_size);
     if (result == 0) {
         fprintf(stdout, "size of library static TLS after %d loads: %ld\n", global_num_dlmopens, tls_size);
     } else {
-        fprintf(stdout, "error in dlinfo() getting RTLD_DI_TLS_SIZE for handle %p, dlerror is '%s'\n", handle, dlerror());
+        fprintf(stdout, "error in dlinfo() getting RTLD_DI_STATIC_TLS_SIZE for handle %p, dlerror is '%s'\n", handle, dlerror());
     }
 }
 
@@ -428,7 +428,7 @@ static unsigned long _test_compute_static_tls_size() {
 
     /* we need a handle for dlinfo to work, even though we're not using it */
     void* handle = _test_load_dlmopen(PLUGIN_PATH);
-    int result = dlinfo(handle, RTLD_DI_TLS_SIZE, &tls_size_start);
+    int result = dlinfo(handle, RTLD_DI_STATIC_TLS_SIZE, &tls_size_start);
 
     if (result != 0) {
         fprintf(stdout, "error in dlinfo() for handle %p, dlerror is '%s'\n", handle, dlerror());
@@ -439,7 +439,7 @@ static unsigned long _test_compute_static_tls_size() {
     dlerror();
 
     handle = _test_load_dlmopen(PLUGIN_PATH);
-    result = dlinfo(handle, RTLD_DI_TLS_SIZE, &tls_size_end);
+    result = dlinfo(handle, RTLD_DI_STATIC_TLS_SIZE, &tls_size_end);
 
     if (result != 0) {
         fprintf(stdout, "error in dlinfo() for handle %p, dlerror is '%s'\n", handle, dlerror());
