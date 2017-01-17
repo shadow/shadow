@@ -14,8 +14,8 @@ void preload_functions_do_lookups(PreloadFuncs* vtable, void* handle) {
 #undef PRELOADDEF
 #endif
 #define PRELOADDEF(returnstatement, returntype, functionname, argumentlist, ...) \
-    vtable->functionname = dlsym(handle, #functionname);
-//    dlerror(); \
+    vtable->functionname = dlsym(handle, #functionname); \
+    dlerror();
 //    vtable->functionname = dlsym(handle, functionname); \
 //    char* errorMessage = dlerror(); \
 //    if(errorMessage != NULL) { \
