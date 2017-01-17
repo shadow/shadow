@@ -31,8 +31,6 @@ struct VdlMapResult vdl_map_from_memory (unsigned long load_base,
                                          struct VdlContext *context);
 struct VdlMapResult vdl_map_from_filename (struct VdlContext *context,
                                            const char *filename);
-struct VdlList *vdl_map_from_preload (struct VdlContext *context,
-                                      struct VdlList *filenames);
 
 
 #endif /* VDL_MAP_H */

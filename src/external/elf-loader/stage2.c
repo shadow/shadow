@@ -22,6 +22,7 @@
 #include "vdl-unmap.h"
 #include "vdl-init.h"
 #include "vdl-fini.h"
+#include <stdbool.h>
 
 
 static unsigned long
@@ -94,6 +95,47 @@ interpreter_map (unsigned long load_base,
 error:
   return result;
 }
+
+static bool
+ld_preload_lists (struct VdlList *preload_files, struct VdlList *preload_deps,
+                  struct VdlContext *context, const char **envp)
+{
+  bool retval = true;
+  const char *preload_env = vdl_utils_getenv (envp, "LD_PRELOAD");
+  struct VdlList *preload_names = vdl_utils_strsplit (preload_env, ':');
+  void **cur;
+  for (cur = vdl_list_begin (preload_names);
+       cur != vdl_list_end (preload_names);
+       cur = vdl_list_next (cur))
+    {
+      char *filename = *cur;
+      if (filename[0] == 0)
+        {
+          continue;
+        }
+      struct VdlMapResult result = vdl_map_from_filename (context, filename);
+      if (result.requested == 0)
+        {
+          VDL_LOG_ERROR ("Could not map LD_PRELOAD file %s: %s\n", filename,
+                         result.error_string);
+          retval = false;
+          goto error;
+        }
+      result.requested->count++;
+      vdl_list_push_back (preload_files, result.requested);
+      vdl_list_insert_range (preload_deps, vdl_list_end (preload_deps),
+                             vdl_list_begin (result.newly_mapped),
+                             vdl_list_end (result.newly_mapped));
+      vdl_list_delete (result.newly_mapped);
+    }
+
+  // save preload list for searching when in other contexts
+  g_vdl.preloads = preload_files;
+error:
+  vdl_utils_str_list_delete (preload_names);
+  return retval;
+}
+
 
 // this function is just used to set up the immediate results of the env var,
 // the actual initialization of static TLS happens later
@@ -209,27 +251,14 @@ stage2_initialize (struct Stage2Input input)
   // However, the dependencies of the LD_PRELOAD binaries should
   // be added _after_ the dependencies of the main binary,
   // to maintain the behavior of glibc.
-  struct VdlList *ld_preload;
-  struct VdlList *preload_deps;
-  {
-    const char *preload_env =
-      vdl_utils_getenv ((const char **) input.program_envp, "LD_PRELOAD");
-    struct VdlList *preload_names = vdl_utils_strsplit (preload_env, ':');
-    ld_preload = vdl_map_from_preload (context, preload_names);
-    preload_deps = vdl_list_new ();
-    void **cur;
-    for (cur = vdl_list_begin (preload_names);
-         cur != vdl_list_end (preload_names); cur = vdl_list_next (cur))
-      {
-        char *filename = *cur;
-        struct VdlMapResult preload_result;
-        preload_result = vdl_map_from_filename (context, filename);
-        vdl_list_insert_range (preload_deps, vdl_list_end (preload_deps),
-                               vdl_list_begin (preload_result.newly_mapped),
-                               vdl_list_end (preload_result.newly_mapped));
-      }
-    vdl_utils_str_list_delete (preload_names);
-  }
+  struct VdlList *ld_preload = vdl_list_new ();
+  struct VdlList *preload_deps = vdl_list_new ();
+  bool ok = ld_preload_lists (ld_preload, preload_deps, context,
+                              (const char **) input.program_envp);
+  if (!ok)
+    {
+      goto error;
+    }
 
   // Now, Let's do the main binary.
   struct VdlMapResult main_result;
@@ -265,7 +294,7 @@ stage2_initialize (struct Stage2Input input)
   // The global scope is the same as the public linkmap except that
   // it does not contain the interpreter (unless, of course, it
   // is a dependency of the main binary or one of the ld_preloaded
-  // binaries.
+  // binaries).
   vdl_list_push_back (context->global_scope, main_file);
   // of course, the ld_preload binaries must be in there if needed.
   vdl_list_insert_range (context->global_scope,
@@ -284,9 +313,6 @@ stage2_initialize (struct Stage2Input input)
   vdl_list_unicize (context->global_scope);
 
   vdl_list_delete (preload_deps);
-
-  // save preload list for searching when in other contexts
-  g_vdl.preloads = ld_preload;
 
   gdb_initialize (main_file);
 

@@ -971,35 +971,3 @@ vdl_map_from_filename (struct VdlContext *context, const char *filename)
   vdl_list_delete (empty);
   return result;
 }
-
-struct VdlList *
-vdl_map_from_preload (struct VdlContext *context, struct VdlList *filenames)
-{
-  // map each of the listed files, but none of their dependencies
-  struct VdlList *retval = vdl_list_new ();
-  struct SingleMapResult single_results[vdl_list_size (filenames)];
-  struct VdlList *empty = vdl_list_new ();
-  void **cur;
-  int i;
-  for (cur = vdl_list_begin (filenames), i = 0;
-       cur != vdl_list_end (filenames); cur = vdl_list_next (cur), i++)
-    {
-      char *filename = *cur;
-      single_results[i] =
-        vdl_file_map_single_maybe (context, filename, empty, empty);
-      if (single_results[i].file == 0)
-        {
-          VDL_LOG_ERROR ("Could not map LD_PRELOAD %s: %s\n", filename,
-                         single_results[i].error_string);
-          goto error;
-        }
-      single_results[i].file->count++;
-      if (single_results[i].newly_mapped)
-        {
-          vdl_list_push_back (retval, single_results[i].file);
-        }
-    }
-error:
-  vdl_list_delete (empty);
-  return retval;
-}
