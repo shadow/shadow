@@ -64,7 +64,7 @@ static gboolean _main_loadShadowPreload(Options* options) {
     // FIXME this line needs updating for the correct flag(s)
     // also, do we need to save/check the return value?
     void* handle = NULL;
-    //handle = dlmopen(LM_ID_BASE, proc->plugin.preloadPath->str, RTLD_PRELOAD);
+    handle = dlmopen(LM_ID_BASE, preloadOptionStr, RTLD_LAZY|RTLD_PRELOAD);
 
     const gchar* errorMessage = dlerror();
 
@@ -385,11 +385,6 @@ static gint _shadow_mainHelper(Options* options) {
                 return EXIT_FAILURE;
             }
 
-            // FIXME temporary hack to be removed when we start loading the preload in shadow
-            if(g_environ_getenv(envlist, "LD_PRELOAD") == NULL) {
-                envlist = g_environ_setenv(envlist, "LD_PRELOAD", preloadArgValue, 1);
-            }
-
             /* now that we found the correct path to the preload lib, first remove any possibly
              * incomplete path that might exist in the command line args, and then replace it
              * with the path that we found and verified is correct. */
@@ -506,10 +501,10 @@ static gint _shadow_mainHelper(Options* options) {
 
     /* now load the preload library into shadow's namespace */
     // FIXME uncomment the following once we can load the preload lib at runtime
-//    if(!_main_loadShadowPreload(options)) {
-//        critical("** Shadow Setup Check Failed: unable to load preload library");
-//        return EXIT_FAILURE;
-//    }
+    if(!_main_loadShadowPreload(options)) {
+        critical("** Shadow Setup Check Failed: unable to load preload library");
+        return EXIT_FAILURE;
+    }
 
     /* tell the preload lib we are ready for action */
     extern int interposer_setShadowIsLoaded(int);

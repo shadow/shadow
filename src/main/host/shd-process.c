@@ -334,7 +334,8 @@ static void _process_loadPlugin(Process* proc) {
     /* clear dlerror status string */
     dlerror();
 
-    proc->plugin.handle = dlmopen(LM_ID_NEWLM, proc->plugin.path->str, RTLD_NOW|RTLD_LOCAL);
+    /* We need lazy binding here, so that later loads can interpose symbols. */
+    proc->plugin.handle = dlmopen(LM_ID_NEWLM, proc->plugin.path->str, RTLD_LAZY|RTLD_GLOBAL);
     const gchar* errorMessage = dlerror();
 
     _process_changeContext(proc, PCTX_PLUGIN, PCTX_SHADOW);
@@ -372,9 +373,7 @@ static void _process_loadPlugin(Process* proc) {
         dlerror();
 
         /* now we have the correct lmid, lets load our preload library into it */
-        // TODO FIXME this line needs updating for the correct flag(s)
-        // also, do we need to save/check the return value?
-        //dlmopen(lmid, proc->plugin.preloadPath->str, RTLD_PRELOAD);
+        dlmopen(lmid, proc->plugin.preloadPath->str, RTLD_LAZY|RTLD_GLOBAL|RTLD_INTERPOSE);
 
         const gchar* errorMessage3 = dlerror();
 
