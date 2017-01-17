@@ -58,10 +58,7 @@ static gboolean _main_loadShadowPreload(Options* options) {
     dlerror();
 
     /* open the shadow preload lib as a preload and in the base program namespace */
-    // FIXME this line needs updating for the correct flag(s)
-    // also, do we need to save/check the return value?
-    void* handle = NULL;
-    handle = dlmopen(LM_ID_BASE, preloadOptionStr, RTLD_LAZY|RTLD_PRELOAD);
+    void* handle = dlmopen(LM_ID_BASE, preloadOptionStr, RTLD_LAZY|RTLD_PRELOAD);
 
     const gchar* errorMessage = dlerror();
 
@@ -87,7 +84,7 @@ static gboolean _main_verifyStaticTLS() {
     }
 }
 
-static gulong _main_computeLoadSize(const gchar* libraryPath) {
+static gulong _main_computeLoadSize(Lmid_t lmid, const gchar* libraryPath, gint dlmopenFlags) {
     gulong tlsSizeStart = 0, tlsSizeEnd = 0, tlsSizePerLoad = 0;
     gpointer handle1 = NULL, handle2 = NULL;
     gint result = 0;
@@ -97,7 +94,7 @@ static gulong _main_computeLoadSize(const gchar* libraryPath) {
     /* clear error */
     dlerror();
 
-    handle1 = dlmopen(LM_ID_NEWLM, libraryPath, RTLD_LAZY|RTLD_LOCAL);
+    handle1 = dlmopen(lmid, libraryPath, dlmopenFlags);
 
     if(handle1 == NULL) {
         warning("error in dlmopen() while computing TLS size, dlerror is '%s'", dlerror());
@@ -111,7 +108,7 @@ static gulong _main_computeLoadSize(const gchar* libraryPath) {
         goto err;
     }
 
-    handle2 = dlmopen(LM_ID_NEWLM, libraryPath, RTLD_LAZY|RTLD_LOCAL);
+    handle2 = dlmopen(lmid, libraryPath, dlmopenFlags);
 
     if(handle2 == NULL) {
         warning("error in dlmopen() while computing TLS size, dlerror is '%s'", dlerror());
@@ -147,6 +144,14 @@ err:
 //        dlclose(handle2);
 //    }
     return 0;
+}
+
+static gulong _main_computePluginLoadSize(const gchar* libraryPath) {
+    return _main_computeLoadSize(LM_ID_NEWLM, libraryPath, RTLD_LAZY|RTLD_LOCAL);
+}
+
+static gulong _main_computePreloadLoadSize(const gchar* libraryPath) {
+    return _main_computeLoadSize(LM_ID_BASE, libraryPath, RTLD_LAZY|RTLD_PRELOAD);
 }
 
 static gchar* _main_getStaticTLSValue(Options* options, Configuration* config, gchar* preloadArgValue) {
@@ -196,7 +201,7 @@ static gchar* _main_getStaticTLSValue(Options* options, Configuration* config, g
                 nextNode = g_list_next(nextNode);
             }
 
-            tlsSizePerLoad = _main_computeLoadSize(pluginElement->path.string->str);
+            tlsSizePerLoad = _main_computePluginLoadSize(pluginElement->path.string->str);
             if(tlsSizePerLoad == 0) {
                 warning("skipping plugin '%s' at path '%s' when computing total needed static TLS size",
                         pluginElement->id.string->str, pluginElement->path.string->str);
@@ -208,8 +213,8 @@ static gchar* _main_getStaticTLSValue(Options* options, Configuration* config, g
         nextPlugin = g_list_next(nextPlugin);
     }
 
-    // FIXME for some reason dlmopen of libshadow-interpose.so causes segfaults
-    tlsSizePerLoad = 1024;//_main_computeLoadSize(preloadArgValue);
+    /* now count the size required to load the global shadow preload library */
+    tlsSizePerLoad = _main_computePreloadLoadSize(preloadArgValue);
     if(tlsSizePerLoad == 0) {
         warning("skipping shadow global preload lib at path '%s' when computing total needed static TLS size",
                 preloadArgValue);
@@ -327,14 +332,14 @@ static gint _shadow_mainHelper(Options* options) {
                         if(!preloadArgValue) {
                             preloadArgValue = g_strdup(tokens[i]);
                         }
-                    } //else { // FIXME once we load preload lib in shadow, this else block is needed
+                    } else {
                         /* maintain non-shadow entries */
                         if(preloadEnvValueBuffer) {
                             g_string_append_printf(preloadEnvValueBuffer, ":%s", tokens[i]);
                         } else {
                             preloadEnvValueBuffer = g_string_new(tokens[i]);
                         }
-                    //}
+                    }
                 }
 
                 g_strfreev(tokens);
@@ -497,7 +502,6 @@ static gint _shadow_mainHelper(Options* options) {
     }
 
     /* now load the preload library into shadow's namespace */
-    // FIXME uncomment the following once we can load the preload lib at runtime
     if(!_main_loadShadowPreload(options)) {
         critical("** Shadow Setup Check Failed: unable to load preload library");
         return EXIT_FAILURE;
