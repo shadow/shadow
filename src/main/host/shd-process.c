@@ -334,7 +334,7 @@ static void _process_loadPlugin(Process* proc) {
     /* clear dlerror status string */
     dlerror();
 
-    proc->plugin.handle = dlmopen(LM_ID_NEWLM, proc->plugin.path->str, RTLD_NOW|RTLD_LOCAL|RTLD_DEEPBIND);
+    proc->plugin.handle = dlmopen(LM_ID_NEWLM, proc->plugin.path->str, RTLD_NOW|RTLD_LOCAL);
     const gchar* errorMessage = dlerror();
 
     _process_changeContext(proc, PCTX_PLUGIN, PCTX_SHADOW);

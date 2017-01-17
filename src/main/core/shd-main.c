@@ -100,7 +100,7 @@ static gulong _main_computeLoadSize(const gchar* libraryPath) {
     /* clear error */
     dlerror();
 
-    handle1 = dlmopen(LM_ID_NEWLM, libraryPath, RTLD_LAZY|RTLD_LOCAL|RTLD_DEEPBIND);
+    handle1 = dlmopen(LM_ID_NEWLM, libraryPath, RTLD_LAZY|RTLD_LOCAL);
 
     if(handle1 == NULL) {
         warning("error in dlmopen() while computing TLS size, dlerror is '%s'", dlerror());
@@ -114,7 +114,7 @@ static gulong _main_computeLoadSize(const gchar* libraryPath) {
         goto err;
     }
 
-    handle2 = dlmopen(LM_ID_NEWLM, libraryPath, RTLD_LAZY|RTLD_LOCAL|RTLD_DEEPBIND);
+    handle2 = dlmopen(LM_ID_NEWLM, libraryPath, RTLD_LAZY|RTLD_LOCAL);
 
     if(handle2 == NULL) {
         warning("error in dlmopen() while computing TLS size, dlerror is '%s'", dlerror());

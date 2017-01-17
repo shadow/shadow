@@ -33,7 +33,7 @@ int run(void) {
         dlerror();
 
         /* load the plugin */
-        handles[i] = dlmopen(LM_ID_NEWLM, PLUGIN_PATH, RTLD_LAZY|RTLD_LOCAL|RTLD_DEEPBIND);
+        handles[i] = dlmopen(LM_ID_NEWLM, PLUGIN_PATH, RTLD_LAZY|RTLD_LOCAL);
 
         /* check for plugin load error */
         if(!handles[i]) {
@@ -82,14 +82,14 @@ int main(int argc, char* argv[]) {
         unsigned long tls_size_start;
         /* we need a handle for dlinfo to work, even though we're not using it */
         void* handle = dlmopen(LM_ID_NEWLM, PLUGIN_PATH,
-                RTLD_LAZY | RTLD_LOCAL | RTLD_DEEPBIND);
+                RTLD_LAZY | RTLD_LOCAL);
         int result = dlinfo(handle, RTLD_DI_TLS_SIZE, &tls_size_start);
         if (result != 0) {
             fprintf(stdout, "error in dlinfo() for handle %p, dlerror is '%s'\n",
                     handle, dlerror());
         }
         dlerror();
-        handle = dlmopen(LM_ID_NEWLM, PLUGIN_PATH, RTLD_LAZY | RTLD_LOCAL | RTLD_DEEPBIND);
+        handle = dlmopen(LM_ID_NEWLM, PLUGIN_PATH, RTLD_LAZY | RTLD_LOCAL);
         unsigned long tls_size_end;
         result = dlinfo(handle, RTLD_DI_TLS_SIZE, &tls_size_end);
         if (result != 0) {

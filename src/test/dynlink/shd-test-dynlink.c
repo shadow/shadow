@@ -59,12 +59,8 @@ void* _test_load_dlopen(const char* plugin_path) {
      * RTLD_LOCAL
      * Symbols defined in this library are not made available to resolve
      * references in subsequently loaded libraries
-     *
-     * RTLD_DEEPBIND
-     * a self-contained library will use its own symbols in preference to global
-     * symbols with the same name contained in libraries that have already been loaded
      */
-    return dlopen(plugin_path, RTLD_LAZY|RTLD_LOCAL|RTLD_DEEPBIND);
+    return dlopen(plugin_path, RTLD_LAZY|RTLD_LOCAL);
 }
 
 void* _test_load_dlmopen(const char* plugin_path) {
@@ -78,7 +74,7 @@ void* _test_load_dlmopen(const char* plugin_path) {
      * it requires, since the new namespace is initially empty.
      */
     global_num_dlmopens++;
-    return dlmopen(LM_ID_NEWLM, plugin_path, RTLD_LAZY|RTLD_LOCAL|RTLD_DEEPBIND);
+    return dlmopen(LM_ID_NEWLM, plugin_path, RTLD_LAZY|RTLD_LOCAL);
 }
 
 int _test_linker_loader_single(int use_dlmopen) {

@@ -29,8 +29,8 @@ int main(int argc, char* argv[]) {
     dlerror();
 
     /* open the plugin that contains our test function */
-    void* plugin_handle = dlmopen(LM_ID_NEWLM, plugin_path, RTLD_LAZY|RTLD_LOCAL|RTLD_DEEPBIND);
-    //void* plugin_handle = dlopen(plugin_path, RTLD_LAZY|RTLD_LOCAL|RTLD_DEEPBIND);
+    void* plugin_handle = dlmopen(LM_ID_NEWLM, plugin_path, RTLD_LAZY|RTLD_LOCAL);
+    //void* plugin_handle = dlopen(plugin_path, RTLD_LAZY|RTLD_LOCAL);
 
     if(!plugin_handle) {
         fprintf(stdout, "dlmopen() for path '%s' returned NULL, dlerror is '%s'\n", plugin_path, dlerror());
