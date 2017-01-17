@@ -181,17 +181,19 @@ static gchar* _main_getStaticTLSValue(Options* options, Configuration* config, g
                 ConfigurationNodeElement* nodeElement = (ConfigurationNodeElement*)nextNode->data;
 
                 if(nodeElement && nodeElement->applications) {
+                    guint quantity = nodeElement->quantity.isSet ? ((guint)nodeElement->quantity.integer) : 1;
+
                     GList* nextApp = g_list_first(nodeElement->applications);
                     while(nextApp != NULL) {
                         ConfigurationApplicationElement* appElement = (ConfigurationApplicationElement*)nextApp->data;
 
                         if(appElement && appElement->plugin.isSet && appElement->plugin.string &&
                                 !g_ascii_strcasecmp(appElement->plugin.string->str, pluginElement->id.string->str)) {
-                            numNodesUsingPlugin++;
+                            numNodesUsingPlugin += quantity;
                         }
                         if(appElement && appElement->preload.isSet && appElement->preload.string &&
                                 !g_ascii_strcasecmp(appElement->preload.string->str, pluginElement->id.string->str)) {
-                            numNodesUsingPlugin++;
+                            numNodesUsingPlugin += quantity;
                         }
 
                         nextApp = g_list_next(nextApp);
