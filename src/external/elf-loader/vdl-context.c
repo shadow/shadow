@@ -149,7 +149,6 @@ vdl_context_new (int argc, char **argv, char **envp)
   VDL_LOG_FUNCTION ("argc=%d", argc);
 
   struct VdlContext *context = vdl_alloc_new (struct VdlContext);
-  context->global_scope = vdl_list_new ();
 
   vdl_list_push_back (g_vdl.contexts, context);
 
@@ -161,6 +160,13 @@ vdl_context_new (int argc, char **argv, char **envp)
   context->argc = argc;
   context->argv = argv;
   context->envp = envp;
+
+  // Store the files from LD_PRELOAD in all contexts.
+  // Note that this insertion is of the loaded files as is, not a reloading.
+  // Therefore, all symbols found in these files or from these files will be
+  // in the default context, and _not_ this newly created context (unless this
+  // is the default context, of course).
+  context->global_scope = vdl_list_copy (g_vdl.preloads);
 
   // these are hardcoded name conversions to ensure that
   // we can replace the libc loader.

@@ -95,6 +95,7 @@ global_initialize (unsigned long interpreter_load_base)
   vdl->n_removed = 0;
   vdl->module_map_len = 0;
   vdl->module_map = 0;
+  vdl->preloads = vdl_list_new();
 }
 
 
