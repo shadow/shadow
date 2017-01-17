@@ -39,6 +39,8 @@ struct VdlContext
 {
   // the list of files loaded in this context
   struct VdlList *loaded;
+  // whether this file has a main object in the global scope
+  uint32_t has_main:1;
   // the list of files which are part of the global scope of this context
   // this set is necessarily a subset of the set of loaded files
   struct VdlList *global_scope;

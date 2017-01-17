@@ -232,6 +232,13 @@ dlopen_with_context (struct VdlContext *context, const char *filename,
       vdl_list_insert_range (context->global_scope,
                              vdl_list_end (context->global_scope),
                              vdl_list_begin (scope), vdl_list_end (scope));
+      if (!context->has_main)
+	{
+	  // This is the first non-preload object in the global scope.
+	  // It goes before all other objects in the global scope.
+	  vdl_list_push_front (context->global_scope, map.requested);
+	  context->has_main = 1;
+	}
       vdl_list_unicize (context->global_scope);
     }
 

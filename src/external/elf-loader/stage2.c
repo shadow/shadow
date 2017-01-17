@@ -272,7 +272,7 @@ stage2_initialize (struct Stage2Input input)
   struct VdlFile *main_file = main_result.requested;
   main_file->count++;
   main_file->is_executable = 1;
-
+  context->has_main = 1;
 
   // Now, we setup our public linkmap.
   // We need to be careful to insert first the main file,

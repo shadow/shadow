@@ -167,6 +167,7 @@ vdl_context_new (int argc, char **argv, char **envp)
   // in the default context, and _not_ this newly created context (unless this
   // is the default context, of course).
   context->global_scope = vdl_list_copy (g_vdl.preloads);
+  context->has_main = 0;
 
   // these are hardcoded name conversions to ensure that
   // we can replace the libc loader.
