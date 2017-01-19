@@ -35,8 +35,11 @@ static void _threadsinglethreaddata_free(ThreadSingleThreadData* tdata) {
         if(tdata->assignedHosts) {
             g_list_free(tdata->assignedHosts);
         }
-        priorityqueue_free(tdata->pq);
+        if(tdata->pq) {
+            priorityqueue_free(tdata->pq);
+        }
         g_mutex_clear(&(tdata->lock));
+        g_free(tdata);
     }
 }
 

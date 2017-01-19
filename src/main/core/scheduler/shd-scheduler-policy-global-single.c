@@ -68,7 +68,12 @@ static void _schedulerpolicyglobalsingle_free(SchedulerPolicy* policy) {
     MAGIC_ASSERT(policy);
     GlobalSinglePolicyData* data = policy->data;
 
-    priorityqueue_free(data->pq);
+    if(data->pq) {
+        priorityqueue_free(data->pq);
+    }
+    if(data->assignedHosts) {
+        g_list_free(data->assignedHosts);
+    }
     g_free(data);
 
     MAGIC_CLEAR(policy);

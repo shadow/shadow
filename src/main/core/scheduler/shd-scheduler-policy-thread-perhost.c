@@ -42,7 +42,10 @@ static ThreadPerHostQueueData* _threadperhostqueuedata_new() {
 
 static void _threadperhostqueuedata_free(ThreadPerHostQueueData* qdata) {
     if(qdata) {
-        priorityqueue_free(qdata->pq);
+        if(qdata->pq) {
+            priorityqueue_free(qdata->pq);
+        }
+        g_free(qdata);
     }
 }
 
@@ -59,9 +62,12 @@ static void _threadperhostthreaddata_free(ThreadPerHostThreadData* tdata) {
         if(tdata->assignedHosts) {
             g_list_free(tdata->assignedHosts);
         }
-        g_hash_table_destroy(tdata->hostToPQueueMap);
+        if(tdata->hostToPQueueMap) {
+            g_hash_table_destroy(tdata->hostToPQueueMap);
+        }
         _threadperhostqueuedata_free(tdata->qdata);
         g_mutex_clear(&(tdata->lock));
+        g_free(tdata);
     }
 }
 
@@ -207,9 +213,15 @@ static void _schedulerpolicythreadperhost_free(SchedulerPolicy* policy) {
     MAGIC_ASSERT(policy);
     ThreadPerHostPolicyData* data = policy->data;
 
-    g_hash_table_destroy(data->threadToThreadDataMap);
-    g_hash_table_destroy(data->hostToThreadMap);
-    g_free(data);
+    if(data) {
+        if(data->threadToThreadDataMap) {
+            g_hash_table_destroy(data->threadToThreadDataMap);
+        }
+        if(data->hostToThreadMap) {
+            g_hash_table_destroy(data->hostToThreadMap);
+        }
+        g_free(data);
+    }
 
     MAGIC_CLEAR(policy);
     g_free(policy);

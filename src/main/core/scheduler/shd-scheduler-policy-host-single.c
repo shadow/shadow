@@ -39,6 +39,7 @@ static void _hostsinglethreaddata_free(HostSingleThreadData* tdata) {
         if(tdata->assignedHosts) {
             g_list_free(tdata->assignedHosts);
         }
+        g_free(tdata);
     }
 }
 
@@ -53,8 +54,11 @@ static HostSingleQueueData* _hostsinglequeuedata_new() {
 
 static void _hostsinglequeuedata_free(HostSingleQueueData* qdata) {
     if(qdata) {
-        priorityqueue_free(qdata->pq);
+        if(qdata->pq) {
+            priorityqueue_free(qdata->pq);
+        }
         g_mutex_clear(&(qdata->lock));
+        g_free(qdata);
     }
 }
 
