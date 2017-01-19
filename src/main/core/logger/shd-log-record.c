@@ -30,8 +30,14 @@ LogRecord* logrecord_new(LogLevel level, gdouble timespan, const gchar* fileName
     record->simElapsedNanos = SIMTIME_INVALID;
     record->wallElapsedSeconds = timespan;
 
+    gchar* baseName = (fileName != NULL) ? g_path_get_basename(fileName) : NULL;
+
     record->callInfo = g_strdup_printf("[%s:%i] [%s]",
-            fileName ? g_path_get_basename(fileName) : "n/a", lineNumber, functionName ? functionName : "n/a");
+            (baseName != NULL) ? baseName : "n/a", lineNumber, functionName ? functionName : "n/a");
+
+    if(baseName != NULL) {
+        g_free(baseName);
+    }
 
     return record;
 }
@@ -51,6 +57,9 @@ static void _logrecord_free(LogRecord* record) {
     if(record->message != NULL) {
         g_free(record->message);
     }
+
+    MAGIC_CLEAR(record);
+    g_free(record);
 }
 
 void logrecord_ref(LogRecord* record) {
