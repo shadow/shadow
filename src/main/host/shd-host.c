@@ -105,36 +105,61 @@ static void _host_free(Host* host) {
 
     info("freeing host %s", host->params.hostname);
 
-    g_queue_free(host->processes);
-
-    topology_detach(worker_getTopology(), host->defaultAddress);
-    address_ref(host->defaultAddress);
-
-    g_hash_table_destroy(host->interfaces);
-
-    /* tcp servers and their children holds refs to each other. make sure they
-     * all get freed by removing the refs in one direction */
-    GHashTableIter iter;
-    gpointer key, value;
-    g_hash_table_iter_init(&iter, host->descriptors);
-    while(g_hash_table_iter_next(&iter, &key, &value)) {
-        Descriptor* desc = value;
-        if(desc && desc->type == DT_TCPSOCKET) {
-            tcp_clearAllChildrenIfServer((TCP*)desc);
-        }
+    if(host->processes) {
+        g_queue_free(host->processes);
     }
 
-    g_hash_table_destroy(host->descriptors);
-    g_hash_table_destroy(host->shadowToOSHandleMap);
-    g_hash_table_destroy(host->osToShadowHandleMap);
-    g_hash_table_destroy(host->randomShadowHandleMap);
-    g_hash_table_destroy(host->unixPathToPortMap);
+    if(host->defaultAddress) {
+        topology_detach(worker_getTopology(), host->defaultAddress);
+        address_unref(host->defaultAddress);
+    }
 
-    cpu_free(host->cpu);
-    tracker_free(host->tracker);
+    if(host->interfaces) {
+        g_hash_table_destroy(host->interfaces);
+    }
 
-    g_queue_free(host->availableDescriptors);
-    random_free(host->random);
+    if(host->descriptors) {
+        /* tcp servers and their children holds refs to each other. make sure they
+         * all get freed by removing the refs in one direction */
+        GHashTableIter iter;
+        gpointer key, value;
+        g_hash_table_iter_init(&iter, host->descriptors);
+        while(g_hash_table_iter_next(&iter, &key, &value)) {
+            Descriptor* desc = value;
+            if(desc && desc->type == DT_TCPSOCKET) {
+                tcp_clearAllChildrenIfServer((TCP*)desc);
+            }
+        }
+
+        g_hash_table_destroy(host->descriptors);
+    }
+
+    if(host->shadowToOSHandleMap) {
+        g_hash_table_destroy(host->shadowToOSHandleMap);
+    }
+    if(host->osToShadowHandleMap) {
+        g_hash_table_destroy(host->osToShadowHandleMap);
+    }
+    if(host->randomShadowHandleMap) {
+        g_hash_table_destroy(host->randomShadowHandleMap);
+    }
+    if(host->unixPathToPortMap) {
+        g_hash_table_destroy(host->unixPathToPortMap);
+    }
+
+    if(host->cpu) {
+        cpu_free(host->cpu);
+    }
+    if(host->tracker) {
+        tracker_free(host->tracker);
+    }
+
+    if(host->availableDescriptors) {
+        g_queue_free(host->availableDescriptors);
+    }
+    if(host->random) {
+        random_free(host->random);
+    }
 
     if(host->params.hostname) g_free(host->params.hostname);
     if(host->params.ipHint) g_free(host->params.ipHint);
