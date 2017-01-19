@@ -101,5 +101,5 @@ install(TARGETS shadow DESTINATION bin)
 set_target_properties(shadow PROPERTIES 
     INSTALL_RPATH ${CMAKE_INSTALL_PREFIX}/lib
     INSTALL_RPATH_USE_LINK_PATH TRUE 
-    LINK_FLAGS "-Wl,--no-as-needed,-rpath=${CMAKE_INSTALL_PREFIX}/lib,-dynamic-linker=${CMAKE_INSTALL_PREFIX}/lib/ldso"
+    LINK_FLAGS "-Wl,--no-as-needed,-rpath=${CMAKE_INSTALL_PREFIX}/lib,-dynamic-linker=${CMAKE_INSTALL_PREFIX}/lib/ldso -z lazy"
 )
