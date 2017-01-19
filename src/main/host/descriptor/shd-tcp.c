@@ -606,7 +606,7 @@ static void _tcp_updateSendWindow(TCP* tcp) {
     MAGIC_ASSERT(tcp);
 
     /* send window is minimum of congestion window and the last advertised window */
-    tcp->send.window = MIN(tcp->congestion->window, tcp->receive.lastWindow);
+    tcp->send.window = (guint32)MIN(tcp->congestion->window, (gint)tcp->receive.lastWindow);
 }
 
 static Packet* _tcp_createPacket(TCP* tcp, enum ProtocolTCPFlags flags, gconstpointer payload, gsize payloadLength) {
@@ -896,7 +896,7 @@ static void _tcp_flush(TCP* tcp) {
 
         if(length > 0) {
             /* we cant send it if our window is too small */
-            gboolean fitsInWindow = (header.sequence < (tcp->send.unacked + tcp->send.window)) ? TRUE : FALSE;
+            gboolean fitsInWindow = (header.sequence < (guint)(tcp->send.unacked + tcp->send.window)) ? TRUE : FALSE;
 
             /* we cant send it if we dont have enough space */
             gboolean fitsInBuffer = (length <= socket_getOutputBufferSpace(&(tcp->super))) ? TRUE : FALSE;
@@ -935,7 +935,7 @@ static void _tcp_flush(TCP* tcp) {
          /* socket will queue it ASAP */
         gboolean success = socket_addToOutputBuffer(&(tcp->super), packet);
         tcp->send.packetsSent++;
-        tcp->send.highestSequence = MAX(tcp->send.highestSequence, header.sequence);
+        tcp->send.highestSequence = (guint32)MAX(tcp->send.highestSequence, (guint)header.sequence);
 
         /* we already checked for space, so this should always succeed */
         utility_assert(success);
@@ -1013,7 +1013,7 @@ static void _tcp_fastRetransmitAlert(TCP* tcp, TCPProcessFlags flags) {
         tcp->receive.state = TCPRS_RECOVERY;
         tcp->receive.recoveryPoint = tcp->send.highestSequence;
 
-        tcp->congestion->threshold = tcpCongestion_packetLoss(tcp->congestion);
+        tcp->congestion->threshold = (gint)tcpCongestion_packetLoss(tcp->congestion);
         tcp->congestion->window = tcp->congestion->threshold;
     }
 }
@@ -1069,7 +1069,7 @@ static void _tcp_runRetransmitTimerExpiredTask(TCP* tcp, gpointer userData) {
     tcp->congestion->state = TCP_CCS_AVOIDANCE;
 
     /* resend the next unacked packet */
-    gint sequence = tcp->send.unacked;
+    gint sequence = (gint)tcp->send.unacked;
     if(tcp->send.unacked == 1 && g_hash_table_lookup(tcp->retransmit.queue, GINT_TO_POINTER(0))) {
         sequence = 0;
     }
@@ -1149,7 +1149,7 @@ void tcp_getInfo(TCP* tcp, struct tcp_info *tcpinfo) {
     tcpinfo->tcpi_snd_mss = (u_int32_t)(CONFIG_MTU - CONFIG_HEADER_SIZE_TCPIPETH);
     tcpinfo->tcpi_rcv_mss = (u_int32_t)(CONFIG_MTU - CONFIG_HEADER_SIZE_TCPIPETH);
 
-    tcpinfo->tcpi_unacked = tcp->send.next - tcp->send.unacked;
+    tcpinfo->tcpi_unacked = (u_int32_t)(tcp->send.next - tcp->send.unacked);
 //  tcpinfo->tcpi_sacked;
 //  tcpinfo->tcpi_lost;
     tcpinfo->tcpi_retrans = (u_int32_t) tcp->info.retransmitCount;
@@ -1164,17 +1164,17 @@ void tcp_getInfo(TCP* tcp, struct tcp_info *tcpinfo) {
     /* Metrics. */
     tcpinfo->tcpi_pmtu = (u_int32_t)(CONFIG_MTU);
 //  tcpinfo->tcpi_rcv_ssthresh;
-    tcpinfo->tcpi_rtt = tcp->congestion->rttSmoothed;
-    tcpinfo->tcpi_rttvar = tcp->congestion->rttVariance;
-    tcpinfo->tcpi_snd_ssthresh = tcp->congestion->threshold;
-    tcpinfo->tcpi_snd_cwnd = tcp->congestion->window;
+    tcpinfo->tcpi_rtt = (u_int32_t)tcp->congestion->rttSmoothed;
+    tcpinfo->tcpi_rttvar = (u_int32_t)tcp->congestion->rttVariance;
+    tcpinfo->tcpi_snd_ssthresh = (u_int32_t)tcp->congestion->threshold;
+    tcpinfo->tcpi_snd_cwnd = (u_int32_t)tcp->congestion->window;
     tcpinfo->tcpi_advmss = (u_int32_t)(CONFIG_MTU - CONFIG_HEADER_SIZE_TCPIPETH);
 //  tcpinfo->tcpi_reordering;
 
-    tcpinfo->tcpi_rcv_rtt = tcp->info.rtt;
-    tcpinfo->tcpi_rcv_space = tcp->receive.lastWindow;
+    tcpinfo->tcpi_rcv_rtt = (u_int32_t)tcp->info.rtt;
+    tcpinfo->tcpi_rcv_space = (u_int32_t)tcp->receive.lastWindow;
 
-    tcpinfo->tcpi_total_retrans = tcp->info.retransmitCount;
+    tcpinfo->tcpi_total_retrans = (u_int32_t)tcp->info.retransmitCount;
 }
 
 
@@ -1395,12 +1395,12 @@ TCPProcessFlags _tcp_ackProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *he
     guint32 prevWin = tcp->receive.lastWindow;
 
     /* the ack is in our send window */
-    gboolean isValidAck = (header->acknowledgment > tcp->send.unacked) &&
-            (header->acknowledgment <= tcp->send.next);
+    gboolean isValidAck = (header->acknowledgment > (guint)tcp->send.unacked) &&
+            (header->acknowledgment <= (guint)tcp->send.next);
     /* same ack and window opened, or new ack and window changed */
-    gboolean isValidWindow = ((header->acknowledgment == tcp->receive.lastAcknowledgment) &&
-            (header->window > prevWin)) || ((header->acknowledgment > tcp->receive.lastAcknowledgment) &&
-                    (header->window != prevWin));
+    gboolean isValidWindow = ((header->acknowledgment == (guint)tcp->receive.lastAcknowledgment) &&
+            (header->window > (guint)prevWin)) || ((header->acknowledgment > (guint)tcp->receive.lastAcknowledgment) &&
+                    (header->window != (guint)prevWin));
 
     *nPacketsAcked = 0;
     if(isValidAck) {
@@ -1408,8 +1408,8 @@ TCPProcessFlags _tcp_ackProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *he
         tcp->receive.lastAcknowledgment = (guint32) header->acknowledgment;
 
         /* some data we sent got acknowledged */
-        *nPacketsAcked = header->acknowledgment - tcp->send.unacked;
-        tcp->send.unacked = header->acknowledgment;
+        *nPacketsAcked = header->acknowledgment - (guint)tcp->send.unacked;
+        tcp->send.unacked = (guint32)header->acknowledgment;
 
         if(*nPacketsAcked > 0) {
             flags |= TCP_PF_DATA_ACKED;
@@ -1720,13 +1720,13 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
 
     if(isAckDubious) {
         if((flags & TCP_PF_DATA_ACKED) && mayRaiseWindow) {
-            tcpCongestion_avoidance(tcp->congestion, tcp->send.next, nPacketsAcked, tcp->send.unacked);
+            tcpCongestion_avoidance(tcp->congestion, (gint)tcp->send.next, nPacketsAcked, (gint)tcp->send.unacked);
             _tcp_logCongestionInfo(tcp);
         }
 
         _tcp_fastRetransmitAlert(tcp, flags);
     } else if(flags & TCP_PF_DATA_ACKED) {
-        tcpCongestion_avoidance(tcp->congestion, tcp->send.next, nPacketsAcked, tcp->send.unacked);
+        tcpCongestion_avoidance(tcp->congestion, (gint)tcp->send.next, nPacketsAcked, (gint)tcp->send.unacked);
         _tcp_logCongestionInfo(tcp);
     }
 
@@ -1736,7 +1736,7 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
     /* send ack if they need updates but we didn't send any yet (selective acks) */
     if((tcp->receive.next > tcp->send.lastAcknowledgment) ||
         (tcp->receive.window != tcp->send.lastWindow) ||
-        (tcp->congestion->fastRetransmit && header.sequence > tcp->receive.next)) 
+        (tcp->congestion->fastRetransmit && header.sequence > (guint)tcp->receive.next))
     {
         responseFlags |= PTCP_ACK;
     }
