@@ -464,6 +464,8 @@ static gint _shadow_mainHelper(Options* options) {
         gchar** arglist = g_strsplit(command, " ", 0);
         g_free(command);
 
+        configuration_free(config);
+
         _shadow_logEnvironment(arglist, envlist);
         message("shadow is relaunching now with new environment");
 
