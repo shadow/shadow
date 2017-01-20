@@ -603,8 +603,8 @@ gint shadow_main(gint argc, gchar* argv[]) {
     /* parse the options from the command line */
     gchar* cmds = g_strjoinv(" ", argv);
     gchar** cmdv = g_strsplit(cmds, " ", 0);
-    Options* options = options_new(argc, cmdv);
     g_free(cmds);
+    Options* options = options_new(argc, cmdv);
     g_strfreev(cmdv);
     if(!options) {
         return EXIT_FAILURE;

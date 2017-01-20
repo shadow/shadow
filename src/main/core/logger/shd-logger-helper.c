@@ -103,6 +103,7 @@ gpointer loggerhelper_runHelperThread(GAsyncQueue* commands) {
     while(!g_queue_is_empty(queues)) {
         g_async_queue_unref(g_queue_pop_head(queues));
     }
+    g_queue_free(queues);
     priorityqueue_free(sortedRecords);
 
     return NULL;

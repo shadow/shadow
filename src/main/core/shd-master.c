@@ -102,6 +102,9 @@ void master_free(Master* master) {
     if(master->dns) {
         dns_free(master->dns);
     }
+    if(master->config) {
+        configuration_free(master->config);
+    }
     if(master->random) {
         random_free(master->random);
     }

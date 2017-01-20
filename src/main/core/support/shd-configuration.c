@@ -338,7 +338,9 @@ static GError* _parser_handlePluginAttributes(Parser* parser, const gchar** attr
             plugin->id.string = g_string_new(value);
             plugin->id.isSet = TRUE;
         } else if (!plugin->path.isSet && !g_ascii_strcasecmp(name, "path")) {
-            plugin->path.string = g_string_new(utility_getHomePath(value));
+            gchar* homePath = utility_getHomePath(value);
+            plugin->path.string = g_string_new(homePath);
+            g_free(homePath);
             plugin->path.isSet = TRUE;
         } else {
             error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ATTRIBUTE,
@@ -826,6 +828,9 @@ static void _parser_free(Parser* parser) {
     }
     if(parser->plugins) {
         g_list_free_full(parser->plugins, (GDestroyNotify)_parser_freePluginElement);
+    }
+    if(parser->shadow) {
+        _parser_freeShadowElement(parser->shadow);
     }
     g_hash_table_destroy(parser->pluginIDStrings);
     g_hash_table_destroy(parser->pluginIDRefStrings);

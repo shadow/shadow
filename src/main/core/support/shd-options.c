@@ -234,6 +234,7 @@ void options_free(Options* options) {
     g_free(options->heartbeatLogInfo);
     g_free(options->interfaceQueuingDiscipline);
     g_free(options->eventSchedulingPolicy);
+    g_free(options->tcpCongestionControl);
     if(options->argstr) {
         g_free(options->argstr);
     }

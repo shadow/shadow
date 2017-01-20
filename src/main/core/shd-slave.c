@@ -153,6 +153,9 @@ gint slave_free(Slave* slave) {
     if (slave->hostsPath) {
         g_free(slave->hostsPath);
     }
+    if(slave->random) {
+        random_free(slave->random);
+    }
 
     /* free main worker */
 //    worker_free(slave->mainWorker);
