@@ -37,9 +37,9 @@ struct _Cubic {
         gint32 lowThreshold;
         gint32 nSampling;
         gint32 samplingCount;
-        gint32 roundStart;
-        gint32 lastReset;
-        gint32 lastTime;
+        SimulationTime roundStartTime;
+        SimulationTime lastResetTime;
+        SimulationTime lastTime;
         gint32 lastRTT;
         gint32 currRTT;
         gint32 delayMin;
@@ -54,13 +54,13 @@ static void _cubic_hystartReset(Cubic* cubic, gint ack) {
     TCPCongestion* congestion = (TCPCongestion*)cubic;
 
     SimulationTime now = worker_getCurrentTime() / SIMTIME_ONE_MILLISECOND;
-    cubic->hystart.roundStart = now;
-    cubic->hystart.lastReset = now;
+    cubic->hystart.roundStartTime = now;
+    cubic->hystart.lastResetTime = now;
     cubic->hystart.lastTime = now;
-    cubic->hystart.lastRTT = congestion->rttSmoothed;
+    cubic->hystart.lastRTT = (gint32)congestion->rttSmoothed;
     cubic->hystart.currRTT = 0;
     cubic->hystart.samplingCount = cubic->hystart.nSampling;
-    cubic->hystart.endSequence = ack;
+    cubic->hystart.endSequence = (gint32)ack;
 }
 
 static void _cubic_hystartUpdate(Cubic* cubic) {
@@ -68,12 +68,12 @@ static void _cubic_hystartUpdate(Cubic* cubic) {
     TCPCongestion* congestion = (TCPCongestion*)cubic;
 
     SimulationTime now = worker_getCurrentTime() / SIMTIME_ONE_MILLISECOND;
-    gint rtt = congestion->rttSmoothed;
+    gint32 rtt = (gint32)congestion->rttSmoothed;
     if(!rtt) {
         rtt = 100;
     }
 
-    gint delayMin = MIN(cubic->hystart.delayMin, rtt);
+    gint32 delayMin = MIN(cubic->hystart.delayMin, rtt);
 
     if(!cubic->hystart.delayMin) {
         delayMin = rtt;
@@ -83,7 +83,7 @@ static void _cubic_hystartUpdate(Cubic* cubic) {
     if(!cubic->hystart.found && congestion->window <= congestion->threshold) {
         if(now - cubic->hystart.lastTime <= 2) {
             cubic->hystart.lastTime = now;
-            if(now - cubic->hystart.roundStart >= delayMin / 2) {
+            if(now - cubic->hystart.roundStartTime >= (SimulationTime)(delayMin / 2)) {
                 cubic->hystart.found = 1;
             }
         }
@@ -96,12 +96,12 @@ static void _cubic_hystartUpdate(Cubic* cubic) {
             cubic->hystart.samplingCount--;
         }
 
-        gint n = MAX(2, ceil(cubic->hystart.lastRTT / 16.0));
+        gint32 n = (gint32)MAX(2, ceil(cubic->hystart.lastRTT / 16.0));
         if(!cubic->hystart.samplingCount && cubic->hystart.currRTT >= cubic->hystart.lastRTT + n) {
             cubic->hystart.found = 2;
         }
 
-        if(cubic->hystart.found && congestion->window >= cubic->hystart.lowThreshold) {
+        if(cubic->hystart.found && (gint32)congestion->window >= cubic->hystart.lowThreshold) {
             congestion->threshold = congestion->window;
         }
     }
@@ -113,7 +113,7 @@ static void _cubic_update(Cubic* cubic) {
     MAGIC_ASSERT(cubic);
     TCPCongestion* congestion = (TCPCongestion*)cubic;
 
-    gint now = (gint)(worker_getCurrentTime() / SIMTIME_ONE_MILLISECOND);
+    SimulationTime now = worker_getCurrentTime() / SIMTIME_ONE_MILLISECOND;
     gint rtt = congestion->rttSmoothed;
 
     if(cubic->delayMin) {
@@ -132,58 +132,58 @@ static void _cubic_update(Cubic* cubic) {
 
     if(!cubic->epochStart) {
         cubic->epochStart = now;
-        if(congestion->window < cubic->lastMaxWindow) {
-            cubic->k = cbrt(cubic->cubeFactor * (cubic->lastMaxWindow - congestion->window));
+        if((gint32)congestion->window < cubic->lastMaxWindow) {
+            cubic->k = (gint32)cbrt(cubic->cubeFactor * (gint64)((gint)cubic->lastMaxWindow - congestion->window));
             cubic->originPoint = cubic->lastMaxWindow;
         } else {
             cubic->k = 0;
-            cubic->originPoint = congestion->window;
+            cubic->originPoint = (gint32)congestion->window;
         }
         cubic->ackCount = 1;
-        cubic->tcpWindowEst = congestion->window;
+        cubic->tcpWindowEst = (gint32)congestion->window;
     }
     
-    gint t = now + cubic->delayMin - cubic->epochStart;
+    gint32 timeOffset = (gint32)(now + (SimulationTime)cubic->delayMin - cubic->epochStart);
     gint64 offset = 0;
-    if(t < cubic->k) {
-        offset = cubic->k - t;
+    if(timeOffset < cubic->k) {
+        offset = (gint64)(cubic->k - timeOffset);
     } else {
-        offset = t - cubic->k;
+        offset = (gint64)(timeOffset - cubic->k);
     }
 
-    gint originDelta = (gint)((cubic->rttScale * offset * offset * offset) >> 40);
+    gint32 originDelta = (gint32)(((gint64)cubic->rttScale * offset * offset * offset) >> 40);
     gint target = 0;
-    if(t < cubic->k) {
-        target = cubic->originPoint - originDelta;
+    if(timeOffset < cubic->k) {
+        target = (gint)(cubic->originPoint - originDelta);
     } else {
-        target = cubic->originPoint + originDelta;
+        target = (gint)(cubic->originPoint + originDelta);
     }
     
     if(target > congestion->window) {
-        cubic->count = congestion->window / (target - congestion->window);
+        cubic->count = (gint32)(congestion->window / (target - congestion->window));
     } else {
-        cubic->count = congestion->window * 100;
+        cubic->count = (gint32)(congestion->window * 100);
     }
 
     if(cubic->delayMin > 0) {
-        gint minCount = (congestion->window * 1000 * 8) / (10 * 16 * cubic->delayMin);
-        if(cubic->count < minCount && t >= cubic->k) {
+        gint32 minCount = (gint32)((congestion->window * 1000 * 8) / (10 * 16 * (gint)cubic->delayMin));
+        if(cubic->count < minCount && timeOffset >= cubic->k) {
             cubic->count = minCount;
         }
     }
 
     /* cubic_tcp_friendliness() */
-    gint32 delta = (congestion->window * cubic->betaScale) >> 3;
+    gint32 delta = ((gint32)congestion->window * cubic->betaScale) >> 3;
     while (cubic->ackCount > delta) {       /* update tcp window */
         cubic->ackCount -= delta;
         cubic->tcpWindowEst++;
     }
 
     cubic->ackCount = 0;
-    if(cubic->tcpWindowEst > congestion->window) {
+    if((gint)cubic->tcpWindowEst > congestion->window) {
         guint maxCount = congestion->window / (cubic->tcpWindowEst - congestion->window);
-        if(cubic->count > maxCount) {
-            cubic->count = maxCount;
+        if(cubic->count > (gint32)maxCount) {
+            cubic->count = (gint32)maxCount;
         }
     }
 
@@ -197,8 +197,8 @@ void cubic_congestionAvoidance(Cubic* cubic, gint inFlight, gint packetsAcked, g
     MAGIC_ASSERT(cubic);
     TCPCongestion* congestion = (TCPCongestion*)cubic;
 
-    gint32 now = worker_getCurrentTime() / SIMTIME_ONE_MILLISECOND;
-    if(now - cubic->hystart.lastReset >= congestion->rttSmoothed) {
+    SimulationTime now = worker_getCurrentTime() / SIMTIME_ONE_MILLISECOND;
+    if(now - cubic->hystart.lastResetTime >= (SimulationTime)congestion->rttSmoothed) {
         _cubic_hystartReset(cubic, inFlight);
     }
     _cubic_hystartUpdate(cubic);
@@ -224,15 +224,15 @@ guint cubic_packetLoss(Cubic* cubic) {
     TCPCongestion* congestion = (TCPCongestion*)cubic;
 
     cubic->epochStart = 0;
-    if(congestion->window < cubic->lastMaxWindow) {
-        cubic->lastMaxWindow = (congestion->window * (BETA_SCALE + cubic->beta)) / (2 * BETA_SCALE);
+    if(congestion->window < (gint)cubic->lastMaxWindow) {
+        cubic->lastMaxWindow = (gint32)(congestion->window * (gint)(BETA_SCALE + cubic->beta)) / (2 * BETA_SCALE);
     } else {
-        cubic->lastMaxWindow = congestion->window;
+        cubic->lastMaxWindow = (gint32)congestion->window;
     }
 
-    cubic->lossWindow = congestion->window;
+    cubic->lossWindow = (gint32)congestion->window;
 
-    return MAX((congestion->window * cubic->beta) / BETA_SCALE, 2);
+    return (guint)MAX((congestion->window * (gint)cubic->beta) / BETA_SCALE, 2);
 }
 
 static void _cubic_free(Cubic* cubic) {
@@ -253,7 +253,7 @@ Cubic* cubic_new(gint window, gint threshold) {
     MAGIC_INIT(cubic);
 
     if(!threshold) {
-        threshold = 0x7FFFFFFF;
+        threshold = (gint)0x7FFFFFFF;
     }
 
     tcpCongestion_init(&(cubic->super), &CubicFunctions, TCP_CC_CUBIC, window, threshold);
