@@ -180,6 +180,11 @@ static void _timer_scheduleNewExpireEvent(Timer* timer) {
     descriptor_ref(&timer->super);
 
     SimulationTime delay = timer->nextExpireTime - worker_getCurrentTime();
+
+    /* if the user set a super long delay, let's call back sooner to check if they closed
+     * or disarmed the timer in the meantime. This prevents queueing the task indefinitely. */
+    delay = MIN(delay, SIMTIME_ONE_SECOND);
+
     worker_scheduleTask(task, delay);
     task_unref(task);
 
@@ -190,6 +195,8 @@ static void _timer_scheduleNewExpireEvent(Timer* timer) {
 static void _timer_expire(Timer* timer, gpointer data) {
     MAGIC_ASSERT(timer);
 
+    /* this is a task callback event */
+
     guint expireID = GPOINTER_TO_UINT(data);
     debug("timer fd %i expired; isClosed=%i expireID=%u minValidExpireID=%u", timer->isClosed, expireID, timer->minValidExpireID);
 
@@ -197,29 +204,35 @@ static void _timer_expire(Timer* timer, gpointer data) {
 
     /* make sure the timer has not been reset since we scheduled this expiration event */
     if(!timer->isClosed && expireID >= timer->minValidExpireID) {
-        /* if a one-time (non-periodic) timer already expired before they
-         * started listening for the event with epoll, the event is reported
-         * immediately on the next epoll_wait call. this behavior was
-         * verified on linux. */
-        timer->expireCountSinceLastSet++;
-        descriptor_adjustStatus(&(timer->super), DS_READABLE, TRUE);
+        /* check if it actually expired on this callback check */
+        if(timer->nextExpireTime <= worker_getCurrentTime()) {
+            /* if a one-time (non-periodic) timer already expired before they
+             * started listening for the event with epoll, the event is reported
+             * immediately on the next epoll_wait call. this behavior was
+             * verified on linux. */
+            timer->expireCountSinceLastSet++;
+            descriptor_adjustStatus(&(timer->super), DS_READABLE, TRUE);
 
-        if(timer->expireInterval > 0) {
-            SimulationTime now = worker_getCurrentTime();
-            timer->nextExpireTime += timer->expireInterval;
-            if(timer->nextExpireTime < now) {
-                /* for some reason we looped the interval. expire again immediately
-                 * to keep the periodic timer going. */
-                timer->nextExpireTime = now;
+            if(timer->expireInterval > 0) {
+                SimulationTime now = worker_getCurrentTime();
+                timer->nextExpireTime += timer->expireInterval;
+                if(timer->nextExpireTime < now) {
+                    /* for some reason we looped the interval. expire again immediately
+                     * to keep the periodic timer going. */
+                    timer->nextExpireTime = now;
+                }
+                _timer_scheduleNewExpireEvent(timer);
+            } else {
+                /* the timer is now disarmed */
+                _timer_disarm(timer);
             }
-            _timer_scheduleNewExpireEvent(timer);
         } else {
-            /* the timer is now disarmed */
-            _timer_disarm(timer);
+            /* it didn't expire yet, check again in another second */
+            _timer_scheduleNewExpireEvent(timer);
         }
     }
 
-    /* unref the timer storage in the callback event */
+    /* unref the timer storage in the original task callback event */
     descriptor_unref(&timer->super);
 }
 
