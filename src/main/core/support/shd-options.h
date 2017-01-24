@@ -116,7 +116,6 @@ gint options_getSocketSendBufferSize(Options* options);
 gboolean options_doAutotuneReceiveBuffer(Options* options);
 gboolean options_doAutotuneSendBuffer(Options* options);
 
-const gchar* options_getShadowPath(Options* options);
 const GString* options_getInputXMLFilename(Options* options);
 
 const gchar* options_getDataOutputPath(Options* options);

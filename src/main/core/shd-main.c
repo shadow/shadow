@@ -19,43 +19,21 @@ static Master* shadowMaster;
 
 #define INTERPOSELIBSTR "libshadow-interpose.so"
 
-static gchar* _main_getRPath(const gchar *programPath) {
+static gchar* _main_getRPath() {
     const ElfW(Dyn) *dyn = _DYNAMIC;
     const ElfW(Dyn) *rpath = NULL;
-    unsigned int strtab = 0;
+    const gchar *strtab = NULL;
     for (; dyn->d_tag != DT_NULL; ++dyn) {
         if (dyn->d_tag == DT_RPATH) {
             rpath = dyn;
         } else if (dyn->d_tag == DT_STRTAB) {
-            strtab = dyn->d_un.d_val;
+            strtab = (const gchar *) dyn->d_un.d_val;
         }
     }
-    /* only the dynamic loader knows where the file is in memory,
-       so we just read it from the file on disk */
-    FILE *f = fopen(programPath, "r");
-    if (!f) {
-        warning("error in opening Shadow executable for rpath extraction: %s", g_strerror(errno));
-        return NULL;
-    }
-    if (fseek(f, strtab + rpath->d_un.d_val, SEEK_SET) < 0) {
-        warning("error in seeking Shadow executable for rpath extraction: %s", g_strerror(errno));
-        fclose(f);
-        return NULL;
-    }
     GString* rpathStrBuf = g_string_new(NULL );
-    if (strtab != 0 && rpath != NULL ) {
-        gchar c;
-        do {
-            if (fread(&c, 1, 1, f) != 1) {
-                warning("error in reading Shadow executable for rpath extraction");
-                g_string_free(rpathStrBuf, TRUE);
-                fclose(f);
-                return NULL;
-            }
-            g_string_append_c(rpathStrBuf, c);
-        } while (c != '\0');
+    if (strtab != NULL && rpath != NULL ) {
+        g_string_printf(rpathStrBuf, "%s", strtab + rpath->d_un.d_val);
     }
-    fclose(f);
     return g_string_free(rpathStrBuf, FALSE);
 }
 
@@ -380,8 +358,7 @@ static gint _shadow_mainHelper(Options* options) {
 
             /* we only need to search if we haven't already found a valid path */
             if(!preloadArgValue) {
-                const gchar* shadowPath = options_getShadowPath(options);
-                gchar* rpathStr = _main_getRPath(shadowPath);
+                gchar* rpathStr = _main_getRPath();
                 if(rpathStr != NULL) {
                     gchar** tokens = g_strsplit(rpathStr, ":", 0);
 

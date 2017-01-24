@@ -45,7 +45,6 @@ struct _Options {
     gboolean runTGenExample;
     gboolean runTestExample;
 
-    gchar* shadowPath;
     GString* inputXMLFilename;
 
     MAGIC_DECLARE;
@@ -212,9 +211,6 @@ Options* options_new(gint argc, gchar* argv[]) {
         options->dataTemplatePath = g_strdup("shadow.data.template");
     }
 
-    if(options->shadowPath == NULL) {
-        options->shadowPath = g_strdup(argv[0]);
-    }
     options->inputXMLFilename = g_string_new(argv[1]);
 
     if(socksend) {
@@ -423,11 +419,6 @@ gboolean options_doAutotuneReceiveBuffer(Options* options) {
 gboolean options_doAutotuneSendBuffer(Options* options) {
     MAGIC_ASSERT(options);
     return options->autotuneSocketSendBuffer;
-}
-
-const gchar* options_getShadowPath(Options* options) {
-    MAGIC_ASSERT(options);
-    return options->shadowPath;
 }
 
 const GString* options_getInputXMLFilename(Options* options) {
