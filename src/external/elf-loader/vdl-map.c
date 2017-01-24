@@ -408,8 +408,8 @@ file_new (unsigned long load_base,
       switch (dyn->d_tag)
         {
         case DT_STRTAB:
-          file->dt_strtab =
-            (const char *) (file->load_base + dyn->d_un.d_ptr);
+          dyn->d_un.d_ptr += file->load_base;
+          file->dt_strtab = (const char *) dyn->d_un.d_ptr;
           break;
         }
       dyn++;
@@ -426,7 +426,8 @@ file_new (unsigned long load_base,
           file->dt_relsz = dyn->d_un.d_val;
           break;
         case DT_REL:
-          file->dt_rel = (ElfW (Rel) *) (file->load_base + dyn->d_un.d_ptr);
+          dyn->d_un.d_ptr += file->load_base;
+          file->dt_rel = (ElfW (Rel) *) dyn->d_un.d_ptr;
           break;
 
         case DT_RELAENT:
@@ -436,14 +437,17 @@ file_new (unsigned long load_base,
           file->dt_relasz = dyn->d_un.d_val;
           break;
         case DT_RELA:
-          file->dt_rela = (ElfW (Rela) *) (file->load_base + dyn->d_un.d_ptr);
+          dyn->d_un.d_ptr += file->load_base;
+          file->dt_rela = (ElfW (Rela) *) dyn->d_un.d_ptr;
           break;
 
         case DT_PLTGOT:
-          file->dt_pltgot = file->load_base + dyn->d_un.d_ptr;
+          dyn->d_un.d_ptr += file->load_base;
+          file->dt_pltgot = dyn->d_un.d_ptr;
           break;
         case DT_JMPREL:
-          file->dt_jmprel = file->load_base + dyn->d_un.d_ptr;
+          dyn->d_un.d_ptr += file->load_base;
+          file->dt_jmprel = dyn->d_un.d_ptr;
           break;
         case DT_PLTREL:
           file->dt_pltrel = dyn->d_un.d_val;
@@ -453,19 +457,25 @@ file_new (unsigned long load_base,
           break;
 
         case DT_SYMTAB:
-          file->dt_symtab =
-            (ElfW (Sym) *) (file->load_base + dyn->d_un.d_ptr);
+          dyn->d_un.d_ptr += file->load_base;
+          file->dt_symtab = (ElfW (Sym) *) dyn->d_un.d_ptr;
           break;
         case DT_FLAGS:
           file->dt_flags |= dyn->d_un.d_val;
           break;
 
         case DT_HASH:
-          file->dt_hash = (ElfW (Word) *) (file->load_base + dyn->d_un.d_ptr);
+          dyn->d_un.d_ptr += file->load_base;
+          file->dt_hash = (ElfW (Word) *) dyn->d_un.d_ptr;
           break;
         case DT_GNU_HASH:
-          file->dt_gnu_hash =
-            (uint32_t *) (file->load_base + dyn->d_un.d_ptr);
+          // XXX: In the glibc code that fixes the other dynamic section
+          // pointers, something I don't understand is done for DT_GNU_HASH.
+          // It's not exposed in the elf documentation for _DYNAMIC, so until
+          // I find code that needs it, I'm treating it like everything else.
+          // See elf/get-dynamic-info.h in glibc's code if something breaks.
+          dyn->d_un.d_ptr += file->load_base;
+          file->dt_gnu_hash = (uint32_t *) dyn->d_un.d_ptr;
           break;
 
         case DT_FINI:
@@ -489,9 +499,11 @@ file_new (unsigned long load_base,
           break;
 
         case DT_VERSYM:
-          file->dt_versym =
-            (ElfW (Half) *) (file->load_base + dyn->d_un.d_ptr);
+          // XXX: comment for DT_GNU_HASH applies here as well.
+          dyn->d_un.d_ptr += file->load_base;
+          file->dt_versym = (ElfW (Half) *) dyn->d_un.d_ptr;
           break;
+        // glibc doesn't fix dynamic section pointers for verdef or verneed
         case DT_VERDEF:
           file->dt_verdef =
             (ElfW (Verdef) *) (file->load_base + dyn->d_un.d_ptr);
