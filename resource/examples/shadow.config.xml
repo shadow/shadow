@@ -29,7 +29,7 @@
 </graphml>
 ]]></topology>
   <kill time="1200"/>
-  <plugin id="tgen" path="~/.shadow/bin/tgen"/>
+  <plugin id="tgen" path="~/.shadow/lib/libshadow-plugin-tgen.so"/>
   <node id="server" quantity="50">
     <application plugin="tgen" starttime="1" arguments="tgen.server.graphml.xml"/>
   </node>

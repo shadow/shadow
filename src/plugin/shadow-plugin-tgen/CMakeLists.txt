@@ -40,3 +40,11 @@ set_target_properties(tgen PROPERTIES
         LINK_FLAGS "-pie -rdynamic -Wl,--no-as-needed")
 target_link_libraries(tgen ${RT_LIBRARIES} ${M_LIBRARIES} ${IGRAPH_LIBRARIES} ${GLIB_LIBRARIES})
 install(TARGETS tgen DESTINATION bin)
+
+## the following is not strictly needed, because the above exe can also run inside of shadow
+option(SKIP_SHADOW "only build the tgen tool for running outside of shadow (default: OFF)" OFF)
+if(SKIP_SHADOW STREQUAL OFF)
+    add_shadow_plugin(shadow-plugin-tgen ${tgen_sources})
+    target_link_libraries(shadow-plugin-tgen ${RT_LIBRARIES} ${M_LIBRARIES} ${IGRAPH_LIBRARIES} ${GLIB_LIBRARIES})
+    install(TARGETS shadow-plugin-tgen DESTINATION lib)
+endif()
