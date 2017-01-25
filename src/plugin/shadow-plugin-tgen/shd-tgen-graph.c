@@ -634,9 +634,10 @@ TGenGraph* tgengraph_new(gchar* path) {
     }
 
     if(!error && g->graphPath) {
-#if 1//!defined(IGRAPH_THREAD_SAFE) || (defined(IGRAPH_THREAD_SAFE) && IGRAPH_THREAD_SAFE == 0)
-        tgen_lock();
-#endif
+        /* note - this if block requires a global lock if using the same igraph library
+         * from multiple threads at the same time. this is not a problem when shadow
+         * uses dlmopen to get a private namespace for each plugin. */
+
         /* use the built-in C attribute handler */
         igraph_attribute_table_t* oldHandler = igraph_i_set_attribute_table(&igraph_cattribute_table);
 
@@ -659,9 +660,6 @@ TGenGraph* tgengraph_new(gchar* path) {
 
         /* replace the old handler */
         igraph_i_set_attribute_table(oldHandler);
-#if 1//!defined(IGRAPH_THREAD_SAFE) || (defined(IGRAPH_THREAD_SAFE) && IGRAPH_THREAD_SAFE == 0)
-        tgen_unlock();
-#endif
     }
 
     if(error) {
@@ -773,7 +771,7 @@ GQueue* tgengraph_getNextActions(TGenGraph* g, TGenAction* action) {
         /* do a weighted choice, this return a val in the range [0.0, totalWeight) */
         gdouble randomWeight = g_random_double_range((gdouble)0.0, totalWeight);
 
-	do {
+        do {
             gdouble* choiceWeightPtr = g_queue_pop_head(chooseWeights);
             g_assert(choiceWeightPtr);
             cumulativeWeight += *choiceWeightPtr;

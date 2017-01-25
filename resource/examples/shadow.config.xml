@@ -1,4 +1,4 @@
-<shadow>
+<shadow preload="~/.shadow/lib/libshadow-interpose.so">
   <topology><![CDATA[<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
   <key attr.name="packetloss" attr.type="double" for="edge" id="d9" />
   <key attr.name="jitter" attr.type="double" for="edge" id="d8" />
@@ -29,14 +29,14 @@
 </graphml>
 ]]></topology>
   <kill time="1200"/>
-  <plugin id="tgen" path="~/.shadow/plugins/libshadow-plugin-tgen.so"/>
-  <node id="server" quantity="5">
+  <plugin id="tgen" path="~/.shadow/bin/tgen"/>
+  <node id="server" quantity="50">
     <application plugin="tgen" starttime="1" arguments="tgen.server.graphml.xml"/>
   </node>
-  <node id="webclient" quantity="5">
+  <node id="webclient" quantity="50">
     <application plugin="tgen" starttime="2" arguments="tgen.webclient.graphml.xml"/>
   </node>
-  <node id="bulkclient" quantity="5">
+  <node id="bulkclient" quantity="50">
     <application plugin="tgen" starttime="2" arguments="tgen.bulkclient.graphml.xml"/>
   </node>
 </shadow>
