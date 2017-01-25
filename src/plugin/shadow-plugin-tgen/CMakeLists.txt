@@ -43,25 +43,8 @@ if(SKIP_SHADOW STREQUAL ON)
     return()
 endif()
 
-## skip checks if built in shadow source dir
-if(NOT TARGET LLVMHoistGlobals)
-    message(FATAL_ERROR "shadow-plugin-tgen must currently be built in shadow source tree")
-#
-#    ## fill in LLVM variables since we did not inherit from shadow cmake file
-#    include(LLVMTools)
-#    add_custom_target(LLVMHoistGlobals)
-#    set(LLVMHoistGlobalsPATH "${SHADOW_ROOT}/lib/LLVMHoistGlobals.so")
-#
-#    ## make sure our LLVM plugin exists
-#    if(EXISTS "${LLVMHoistGlobalsPATH}")
-#        message(STATUS "LLVMHoistGlobalsPATH = ${LLVMHoistGlobalsPATH}")
-#    else()
-#        message(FATAL_ERROR "LLVMHoistGlobalsPATH path does not exist: '${LLVMHoistGlobalsPATH}'")
-#    endif()
-endif()
-
 ## plug-ins need to disable fortification to ensure syscalls are intercepted
-add_cflags("-fPIC -fno-inline -fno-strict-aliasing -U_FORTIFY_SOURCE")
+add_cflags("-fPIC -std=gnu11 -fno-inline -fno-strict-aliasing -U_FORTIFY_SOURCE")
 
 ## CFLAGS status update
 message(STATUS "CMAKE_C_FLAGS = ${CMAKE_C_FLAGS}")
@@ -84,6 +67,6 @@ install(TARGETS shadow-tgen-global-lock DESTINATION lib)
 
 ## create and install the dynamic library that can plug into shadow
 add_shadow_plugin(shadow-plugin-tgen ${tgen_sources})
-add_dependencies(shadow-plugin-tgen LLVMHoistGlobals shadow-tgen-global-lock)
+add_dependencies(shadow-plugin-tgen shadow-tgen-global-lock)
 target_link_libraries(shadow-plugin-tgen shadow-tgen-global-lock ${RT_LIBRARIES} ${M_LIBRARIES} ${IGRAPH_LIBRARIES} ${GLIB_LIBRARIES})
 install(TARGETS shadow-plugin-tgen DESTINATION plugins)
