@@ -322,9 +322,9 @@ static gint _shadow_mainHelper(Options* options) {
 
             /* 3. the LD_PRELOAD value */
 
+            GString* preloadEnvValueBuffer = NULL;
             /* we always search the env variable and remove existing Shadow preload libs */
             if(g_environ_getenv(envlist, "LD_PRELOAD") != NULL) {
-                GString* preloadEnvValueBuffer = NULL;
                 gchar** tokens = g_strsplit(g_environ_getenv(envlist, "LD_PRELOAD"), ":", 0);
 
                 for(gint i = 0; tokens[i] != NULL; i++) {
@@ -345,16 +345,70 @@ static gint _shadow_mainHelper(Options* options) {
                 }
 
                 g_strfreev(tokens);
+            }
 
-                if(preloadEnvValueBuffer) {
-                    envlist = g_environ_setenv(envlist, "LD_PRELOAD", preloadEnvValueBuffer->str, 1);
-                    g_string_free(preloadEnvValueBuffer, TRUE);
-                } else {
-                    envlist = g_environ_unsetenv(envlist, "LD_PRELOAD");
+            /* 4. the 'environment' attribute of the 'shadow' configuration element in shadow.config.xml */
+
+            /* always go through the 'environment' attribute of the 'shadow' element to pull in any keys defined there */
+            {
+                ConfigurationShadowElement* element = configuration_getShadowElement(config);
+                if(element && element->environment.isSet) {
+                    /* entries are split by ';' */
+                    gchar** envTokens = g_strsplit(element->environment.string->str, ";", 0);
+
+                    for(gint i = 0; envTokens[i] != NULL; i++) {
+                        /* each env entry is key=value, get 2 tokens max */
+                        gchar** items = g_strsplit(envTokens[i], "=", 2);
+
+                        gchar* key = items[0];
+                        gchar* value = items[1];
+
+                        if(key != NULL && value != NULL) {
+                            /* check if the key is LD_PRELOAD */
+                            if(!g_ascii_strncasecmp(key, "LD_PRELOAD", 10)) {
+                                gchar** preloadTokens = g_strsplit(value, ":", 0);
+
+                                for(gint j = 0; preloadTokens[j] != NULL; j++) {
+                                    /* each token in the env variable should be an absolute path */
+                                    if(_main_isValidPathToPreloadLib(preloadTokens[j])) {
+                                        /* found a valid path, only save it if we don't have one yet (from options or config) */
+                                        if(!preloadArgValue) {
+                                            preloadArgValue = g_strdup(preloadTokens[j]);
+                                        }
+                                    } else {
+                                        /* maintain non-shadow entries */
+                                        if(preloadEnvValueBuffer) {
+                                            g_string_append_printf(preloadEnvValueBuffer, ":%s", preloadTokens[j]);
+                                        } else {
+                                            preloadEnvValueBuffer = g_string_new(preloadTokens[j]);
+                                        }
+                                    }
+                                }
+
+                                g_strfreev(preloadTokens);
+                            } else {
+                                /* set the key=value pair, but don't overwrite any existing settings */
+                                envlist = g_environ_setenv(envlist, key, value, 0);
+                            }
+                        }
+
+                        g_strfreev(items);
+                    }
+
+                    g_strfreev(envTokens);
                 }
             }
 
-            /* 4. as a last hope, try looking in RPATH since shadow is built with one */
+            /* save away the non-shadow preload libs */
+            if(preloadEnvValueBuffer) {
+                envlist = g_environ_setenv(envlist, "LD_PRELOAD", preloadEnvValueBuffer->str, 1);
+                g_string_free(preloadEnvValueBuffer, TRUE);
+                preloadEnvValueBuffer = NULL;
+            } else {
+                envlist = g_environ_unsetenv(envlist, "LD_PRELOAD");
+            }
+
+            /* 5. as a last hope, try looking in RPATH since shadow is built with one */
 
             /* we only need to search if we haven't already found a valid path */
             if(!preloadArgValue) {

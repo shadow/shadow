@@ -217,6 +217,11 @@ static void _parser_freeShadowElement(ConfigurationShadowElement* shadow) {
         g_string_free(shadow->preloadPath.string, TRUE);
     }
 
+    if(shadow->environment.isSet) {
+        utility_assert(shadow->environment.string != NULL);
+        g_string_free(shadow->environment.string, TRUE);
+    }
+
     g_free(shadow);
 }
 
@@ -640,6 +645,9 @@ static GError* _parser_handleShadowAttributes(Parser* parser, const gchar** attr
         if (!shadow->preloadPath.isSet && !g_ascii_strcasecmp(name, "preload")) {
             shadow->preloadPath.string = g_string_new(value);
             shadow->preloadPath.isSet = TRUE;
+        } else if (!shadow->environment.isSet && !g_ascii_strcasecmp(name, "environment")) {
+            shadow->environment.string = g_string_new(value);
+            shadow->environment.isSet = TRUE;
         } else {
             error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ATTRIBUTE,
                     "unknown 'shadow' attribute '%s'", name);
