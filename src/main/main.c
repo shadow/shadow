@@ -7,5 +7,5 @@
 #include "shadow.h"
 
 int main (int argc, char* argv[]) {
-    return shadow_main(argc, argv);
+    return main_runShadow(argc, argv);
 }

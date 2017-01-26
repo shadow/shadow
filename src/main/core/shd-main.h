@@ -18,6 +18,6 @@
  *
  * @returns an integer return code
  */
-gint shadow_main(gint argc, gchar* argv[]);
+gint main_runShadow(gint argc, gchar* argv[]);
 
 #endif /* SHD_MAIN_H_ */

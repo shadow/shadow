@@ -233,7 +233,7 @@ static gchar* _main_getStaticTLSValue(Options* options, Configuration* config, g
     return g_string_free(sbuf, FALSE);
 }
 
-static void _shadow_logEnvironment(gchar** argv, gchar** envv) {
+static void _main_logEnvironment(gchar** argv, gchar** envv) {
     /* log all args */
     if(argv) {
         for(gint i = 0; argv[i] != NULL; i++) {
@@ -257,7 +257,7 @@ static void _shadow_logEnvironment(gchar** argv, gchar** envv) {
     }
 }
 
-static gint _shadow_mainHelper(Options* options) {
+static gint _main_helper(Options* options) {
     /* check if we still need to setup our required environment and relaunch */
     if(g_getenv("SHADOW_SPAWNED") == NULL) {
         /* we need to relaunch.
@@ -520,7 +520,7 @@ static gint _shadow_mainHelper(Options* options) {
 
         configuration_free(config);
 
-        _shadow_logEnvironment(arglist, envlist);
+        _main_logEnvironment(arglist, envlist);
         message("shadow is relaunching now with new environment");
 
         Logger* logger = logger_getDefault();
@@ -598,7 +598,7 @@ static gint _shadow_mainHelper(Options* options) {
 
     gchar** envlist = g_get_environ();
     gchar** arglist = g_strsplit(options_getArgumentString(options), " ", 0);
-    _shadow_logEnvironment(arglist, envlist);
+    _main_logEnvironment(arglist, envlist);
     g_strfreev(arglist);
     g_strfreev(envlist);
 
@@ -630,7 +630,7 @@ static gint _shadow_mainHelper(Options* options) {
     return returnCode;
 }
 
-gint shadow_main(gint argc, gchar* argv[]) {
+gint main_runShadow(gint argc, gchar* argv[]) {
     /* check the compiled GLib version */
     if (!GLIB_CHECK_VERSION(2, 32, 0)) {
         g_printerr("** GLib version 2.32.0 or above is required but Shadow was compiled against version %u.%u.%u\n",
@@ -686,7 +686,7 @@ gint shadow_main(gint argc, gchar* argv[]) {
     /* disable buffering during startup so that we see every message immediately in the terminal */
     logger_setEnableBuffering(shadowLogger, FALSE);
 
-    gint returnCode = _shadow_mainHelper(options);
+    gint returnCode = _main_helper(options);
 
     options_free(options);
     Logger* logger = logger_getDefault();
