@@ -1415,6 +1415,10 @@ TCPProcessFlags _tcp_ackProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *he
             (header->window > prevWin)) || ((header->acknowledgment > tcp->receive.lastAcknowledgment) &&
                     (header->window != prevWin));
 
+    if(header->window != (guint)prevWin) {
+        flags |= TCP_PF_RWND_UPDATED;
+    }
+
     *nPacketsAcked = 0;
     if(isValidAck) {
         /* update their advertisements */
@@ -1729,7 +1733,8 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
         _tcp_updateRTTEstimate(tcp, header.timestampEcho);
     }
 
-    gboolean isAckDubious = (!(flags & TCP_PF_DATA_ACKED) || (flags & TCP_PF_DATA_SACKED));
+    /* see tcp_ack_is_dubious() in net/ipv4/tcp_input.c */
+    gboolean isAckDubious = ((packetLength == 0) && !(flags & TCP_PF_DATA_ACKED) && !(flags & TCP_PF_RWND_UPDATED)) || (flags & TCP_PF_DATA_SACKED);
     gboolean mayRaiseWindow = (tcp->receive.state != TCPRS_RECOVERY);
 
     if(isAckDubious) {

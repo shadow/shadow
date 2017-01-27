@@ -18,6 +18,7 @@ enum TCPProcessFlags {
     TCP_PF_DATA_ACKED = 1 << 1,
     TCP_PF_DATA_SACKED = 1 << 2,
     TCP_PF_DATA_LOST = 1 << 3,
+    TCP_PF_RWND_UPDATED = 1 << 4,
 };
 
 TCP* tcp_new(gint handle, guint receiveBufferSize, guint sendBufferSize);
