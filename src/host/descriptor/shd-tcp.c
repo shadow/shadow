@@ -585,8 +585,9 @@ void tcp_disableReceiveBufferAutotuning(TCP* tcp) {
 static void _tcp_updateReceiveWindow(TCP* tcp) {
     MAGIC_ASSERT(tcp);
 
-    /* the receive window is how much we are willing to accept to our input buffer */
-    gsize space = socket_getInputBufferSpace(&(tcp->super));
+    /* the receive window is how much we are willing to accept to our input buffer.
+     * unordered input packets should count against buffer space, so use the _tcp version. */
+    gsize space = _tcp_getBufferSpaceIn(tcp);
     gsize nPackets = space / (CONFIG_MTU - CONFIG_HEADER_SIZE_TCPIPETH);
     tcp->receive.window = nPackets;
 
