@@ -467,8 +467,8 @@ vdl_lookup_with_scope_internal (struct VdlFile *file,
           continue;
         }
       int n_ambiguous_matches = 0;
-      unsigned long last_ambiguous_match, first_ambiguous_match;
-      struct VdlFile *first_ambiguous_match_item;
+      unsigned long last_ambiguous_match, first_ambiguous_match = 0;
+      struct VdlFile *first_ambiguous_match_item = 0;
       struct VdlFileLookupIterator i =
         vdl_lookup_file_begin (item, name, elf_hash, gnu_hash);
       while (vdl_lookup_file_has_next (&i))
