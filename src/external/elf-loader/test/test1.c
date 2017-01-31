@@ -5,7 +5,7 @@
 #include "test.h"
 LIB(test1)
 
-static void * get_pc (void)
+static void * __attribute__ ((noinline)) get_pc (void)
 {
   void *caller = __builtin_return_address (0);
   return caller;
