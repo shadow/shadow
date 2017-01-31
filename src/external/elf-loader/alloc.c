@@ -197,11 +197,9 @@ alloc_destroy (struct Alloc *alloc)
 uint8_t *
 alloc_malloc (struct Alloc *alloc, uint32_t size)
 {
-  unsigned long *buffer = (unsigned long *) alloc_do_malloc (alloc,
-                                                             size +
-                                                             1 *
-                                                             sizeof (unsigned
-                                                                     long));
+  unsigned long *buffer =
+    (unsigned long *) alloc_do_malloc (alloc,
+                                       size + 1 * sizeof (unsigned long));
   buffer[0] = size;
   return (void *) (buffer + 1);
 }
@@ -211,7 +209,7 @@ alloc_free (struct Alloc *alloc, uint8_t * buffer)
 {
   unsigned long *buf = (unsigned long *) buffer;
   unsigned long size = buf[-1];
-  vdl_memset (buf, 0x66, size);
+  //vdl_memset (buf, 0x66, size);
   alloc_do_free (alloc, (uint8_t *) (buf - 1),
                  size + 1 * sizeof (unsigned long));
 }
