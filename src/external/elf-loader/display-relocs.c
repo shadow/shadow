@@ -140,6 +140,10 @@ type_to_str (unsigned long reloc_type, uint16_t machine)
 int
 main (int argc, char *argv[])
 {
+  if (argc < 2)
+    {
+      exit (1);
+    }
   const char *filename = argv[1];
   int fd = open (filename, O_RDONLY);
   struct stat buf;
@@ -159,11 +163,11 @@ main (int argc, char *argv[])
         {
           ElfW (Rela) * rela = (ElfW (Rela) *) (file + sh[i].sh_offset);
           unsigned long n_rela = sh[i].sh_size / sh[i].sh_entsize;
-          int j;
+          unsigned long j;
           for (j = 0; j < n_rela; j++)
             {
               printf
-                ("i=%d r_offset=0x%lx sym=0x%lx type=0x%lx/%s r_addend=0x%lx\n",
+                ("i=%lu r_offset=0x%lx sym=0x%lx type=0x%lx/%s r_addend=0x%lx\n",
                  j, (unsigned long) rela->r_offset,
                  (unsigned long) ELFW_R_SYM (rela->r_info),
                  (unsigned long) ELFW_R_TYPE (rela->r_info),
@@ -176,10 +180,10 @@ main (int argc, char *argv[])
         {
           ElfW (Rel) * rel = (ElfW (Rel) *) (file + sh[i].sh_offset);
           unsigned long n_rel = sh[i].sh_size / sh[i].sh_entsize;
-          int j;
+          unsigned long j;
           for (j = 0; j < n_rel; j++)
             {
-              printf ("i=%d r_offset=0x%lx sym=0x%lx type=0x%lx/%s\n",
+              printf ("i=%lu r_offset=0x%lx sym=0x%lx type=0x%lx/%s\n",
                       j,
                       (unsigned long) rel->r_offset,
                       (unsigned long) ELFW_R_SYM (rel->r_info),
