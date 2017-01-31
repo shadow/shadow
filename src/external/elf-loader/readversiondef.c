@@ -40,7 +40,7 @@ main (int argc, char *argv[])
   ElfW (Half) * versym = 0;
   ElfW (Verdef) * verdef = 0;
   char *strtab = 0;
-  int i;
+  unsigned int i;
   for (i = 0; i < header->e_shnum; i++)
     {
       if (sh[i].sh_type == SHT_DYNSYM)

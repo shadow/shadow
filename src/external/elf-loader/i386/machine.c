@@ -28,8 +28,7 @@ machine_reloc (const struct VdlFile *file,
                unsigned long *reloc_addr,
                unsigned long reloc_type,
                unsigned long reloc_addend,
-               unsigned long symbol_value,
-               unsigned long symbol_type)
+               unsigned long symbol_value)
 {
   switch (reloc_type)
     {

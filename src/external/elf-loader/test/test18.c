@@ -6,7 +6,8 @@ LIB(test18)
 
 typedef int (*Fn) (int);
 
-int main (int argc, char *argv[])
+int main (__attribute__((unused)) int argc,
+	  __attribute__((unused)) char *argv[])
 {
   void * h1 = dlmopen (LM_ID_NEWLM, "libp.so", RTLD_LAZY);
   void * h2 = dlmopen (LM_ID_NEWLM, "libp.so", RTLD_LAZY);

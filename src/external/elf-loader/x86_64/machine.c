@@ -31,8 +31,7 @@ machine_reloc (const struct VdlFile *file,
                unsigned long *reloc_addr,
                unsigned long reloc_type,
                unsigned long reloc_addend,
-               unsigned long symbol_value,
-               unsigned long symbol_type)
+               unsigned long symbol_value)
 {
   switch (reloc_type)
     {
@@ -118,7 +117,8 @@ machine_reloc_type_to_str (unsigned long reloc_type)
 }
 
 void
-machine_reloc_dynamic (ElfW (Dyn) * dyn, unsigned long load_base)
+machine_reloc_dynamic (__attribute__((unused)) ElfW (Dyn) * dyn,
+		       __attribute__((unused)) unsigned long load_base)
 {
   // this is a no-op on x86-64
 }
@@ -142,7 +142,7 @@ machine_reloc_irelative (struct VdlFile *file)
     }
   VDL_LOG_ASSERT (dt_pltrel == DT_RELA, "x86-64 uses rela entries");
 
-  int i;
+  unsigned long i;
   for (i = 0; i < dt_pltrelsz / sizeof (ElfW (Rela)); i++)
     {
       ElfW (Rela) * rela = &(((ElfW (Rela) *) dt_jmprel)[i]);
@@ -195,7 +195,7 @@ machine_lazy_reloc (struct VdlFile *file)
   got[1] = (unsigned long) file;
   got[2] = (unsigned long) machine_resolve_trampoline;
 
-  int i;
+  unsigned long i;
   for (i = 0; i < dt_pltrelsz / sizeof (ElfW (Rela)); i++)
     {
       ElfW (Rela) * rela = &(((ElfW (Rela) *) dt_jmprel)[i]);

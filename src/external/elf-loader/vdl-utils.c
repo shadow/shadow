@@ -256,7 +256,7 @@ vdl_utils_align_up (unsigned long v, unsigned long align)
   return aligned;
 }
 
-ElfW (Phdr) * vdl_utils_search_phdr (ElfW (Phdr) * phdr, int phnum, int type)
+ElfW (Phdr) * vdl_utils_search_phdr (ElfW (Phdr) * phdr, int phnum, ElfW (Word) type)
 {
   VDL_LOG_FUNCTION ("phdr=%p, phnum=%d, type=%d", phdr, phnum, type);
   ElfW (Phdr) * cur;

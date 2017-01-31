@@ -12,7 +12,8 @@ void function_f (void)
   printf ("called function_f in main\n");
 }
 
-int main (int argc, char *argv[])
+int main (__attribute__((unused)) int argc,
+	  __attribute__((unused))  char *argv[])
 {
   function_f ();
   const char *error = dlerror ();

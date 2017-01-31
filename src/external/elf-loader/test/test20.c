@@ -2,7 +2,7 @@
 #include <dlfcn.h> 
 #include <stdio.h>
 
-int main (int argc, char *argv[])
+int main (__attribute__((unused)) int argc, char *argv[])
 {
   printf ("enter\n");
   void *h = dlmopen (LM_ID_NEWLM, argv[0], RTLD_LAZY | RTLD_GLOBAL);

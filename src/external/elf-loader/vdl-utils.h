@@ -29,7 +29,7 @@ unsigned long vdl_utils_align_up (unsigned long v, unsigned long align);
 #define vdl_utils_max(a,b)(((a)>(b))?(a):(b))
 #define vdl_utils_min(a,b)(((a)<(b))?(a):(b))
 
-ElfW(Phdr) *vdl_utils_search_phdr (ElfW(Phdr) *phdr, int phnum, int type);
+ElfW(Phdr) *vdl_utils_search_phdr (ElfW(Phdr) *phdr, int phnum, ElfW (Word) type);
 
 char *vdl_utils_vprintf (const char *str, va_list args);
 char *vdl_utils_sprintf (const char *str, ...);

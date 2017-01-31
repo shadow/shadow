@@ -9,7 +9,7 @@ static __thread int g_count = 0;
 static sem_t g_sem_a;
 static sem_t g_sem_b;
 
-static void *thread_a (void *ctx)
+static void *thread_a (__attribute__((unused)) void *ctx)
 {
   while (g_count < 10)
     {
@@ -29,7 +29,7 @@ static void *thread_a (void *ctx)
   return 0;
 }
 
-static void *thread_b (void *ctx)
+static void *thread_b (__attribute__((unused)) void *ctx)
 {
   while (g_count < 10)
     {
@@ -50,7 +50,8 @@ static void *thread_b (void *ctx)
 }
 
 
-int main (int argc, char *argv[])
+int main (__attribute__((unused)) int argc,
+	  __attribute__((unused)) char *argv[])
 {
   int status = sem_init (&g_sem_a, 0, 1);
   if (status == -1)

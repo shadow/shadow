@@ -2,7 +2,8 @@
 #include "test.h"
 LIB(test7)
 
-int main (int argc, char *argv[])
+int main (__attribute__((unused)) int argc,
+	  __attribute__((unused)) char *argv[])
 {
   printf ("enter main\n");
 

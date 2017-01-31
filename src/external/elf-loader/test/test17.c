@@ -8,7 +8,8 @@ int foo (const char *str)
   free (copy);
   return len >=2;
 }
-int main (int argc, char *argv[])
+int main (__attribute__((unused)) int argc,
+	  __attribute__((unused)) char *argv[])
 {
   foo("targeted");
   return 0;

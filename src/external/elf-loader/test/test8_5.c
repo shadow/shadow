@@ -5,12 +5,13 @@
 LIB(test8_5)
 
 
-static void *thread (void *ctx)
+static void *thread (__attribute__((unused)) void *ctx)
 {
   return 0;
 }
 
-int main (int argc, char *argv[])
+int main (__attribute__((unused)) int argc,
+	  __attribute__((unused)) char *argv[])
 {
   pthread_t th;
   int status = pthread_create (&th, 0, &thread, 0);

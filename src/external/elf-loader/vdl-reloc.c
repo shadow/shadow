@@ -151,7 +151,7 @@ do_process_reloc (struct VdlFile *file,
   vdl_lookup_symbol_fixup (symbol_file, &sym_result);
 
   machine_reloc (symbol_file, reloc_addr, reloc_type, reloc_addend,
-                 sym_result.st_value, ELFW_ST_TYPE (sym_result.st_info));
+                 sym_result.st_value);
 
   return *reloc_addr;
 }
@@ -196,7 +196,7 @@ reloc_jmprel (struct VdlFile *file)
     }
   if (dt_pltrel == DT_REL)
     {
-      int i;
+      unsigned long i;
       for (i = 0; i < dt_pltrelsz / sizeof (ElfW (Rel)); i++)
         {
           ElfW (Rel) * rel = &(((ElfW (Rel) *) dt_jmprel)[i]);
@@ -205,7 +205,7 @@ reloc_jmprel (struct VdlFile *file)
     }
   else
     {
-      int i;
+      unsigned long i;
       for (i = 0; i < dt_pltrelsz / sizeof (ElfW (Rela)); i++)
         {
           ElfW (Rela) * rela = &(((ElfW (Rela) *) dt_jmprel)[i]);

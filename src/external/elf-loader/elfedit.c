@@ -11,6 +11,10 @@
 int
 main (int argc, char *argv[])
 {
+  if (argc < 3)
+    {
+      return -12;
+    }
   const char *filename = argv[1];
   ElfW (Ehdr) header;
   int fd = open (filename, O_RDWR);
@@ -51,7 +55,7 @@ main (int argc, char *argv[])
           char *interp = malloc (ph[i].p_filesz);
           memset (interp, 0, ph[i].p_filesz);
           memcpy (interp, argv[2], strlen (argv[2]));
-          if (write (fd, argv[2], ph[i].p_filesz) != ph[i].p_filesz)
+          if (write (fd, argv[2], ph[i].p_filesz) != (long long) ph[i].p_filesz)
             {
               return -7;
             }

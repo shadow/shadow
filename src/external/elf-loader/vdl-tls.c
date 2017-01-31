@@ -82,7 +82,7 @@ file_list_initialize (struct VdlList *files)
 
 struct static_tls
 {
-  long size;
+  unsigned long size;
   long align;
 };
 

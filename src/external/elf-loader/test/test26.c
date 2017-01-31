@@ -17,7 +17,8 @@ static void *thread (void*ctx)
   return 0;
 }
 
-int main (int argc, char *argv[])
+int main (__attribute__((unused) int argc,
+          __attribute__((unused)char *argv[])
 {
   int i;
   pthread_t th[100];

@@ -6,7 +6,7 @@
 
 static
 ElfW (Dyn) *
-file_get_dynamic (const struct VdlFile *file, unsigned long tag)
+file_get_dynamic (const struct VdlFile *file, long tag)
 {
   ElfW (Dyn) * cur = (ElfW (Dyn) *) file->dynamic;
   while (cur->d_tag != DT_NULL)

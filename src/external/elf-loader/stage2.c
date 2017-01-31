@@ -163,7 +163,7 @@ setup_static_tls_extra (const char *static_tls_extra)
          result);
       return;
     }
-  int new_stack_size = rl.rlim_cur + static_tls_size;
+  unsigned long new_stack_size = rl.rlim_cur + static_tls_size;
   if (new_stack_size > rl.rlim_max)
     {
       VDL_LOG_ERROR ("\

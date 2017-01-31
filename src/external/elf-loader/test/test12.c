@@ -5,7 +5,7 @@
 #include <pthread.h>
 LIB(test12)
 
-static void *thread (void*ctx)
+static void *thread (__attribute__((unused)) void *ctx)
 {
   void *handle = dlopen ("libl.so", RTLD_LAZY);
   if (handle == 0)
@@ -19,7 +19,8 @@ static void *thread (void*ctx)
   return 0;
 }
 
-int main (int argc, char *argv[])
+int main (__attribute__((unused)) int argc,
+	  __attribute__((unused)) char *argv[])
 {
   void *handle = dlopen ("libj.so", RTLD_LAZY);
   if (handle == 0)

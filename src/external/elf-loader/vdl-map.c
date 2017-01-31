@@ -242,7 +242,7 @@ get_file_info (uint32_t phnum,
   VDL_LOG_FUNCTION ("phnum=%d, phdr=%p", phnum, phdr);
   ElfW (Phdr) * dynamic = 0, *cur;
   struct VdlList *maps = vdl_list_new ();
-  int i;
+  uint32_t i;
   unsigned long align = 0;
   for (i = 0, cur = phdr; i < phnum; i++, cur++)
     {
@@ -605,7 +605,8 @@ file_map_do (const struct VdlFileMap *map,
                                      map->mem_anon_size_align, prot,
                                      MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED,
                                      -1, 0);
-      VDL_LOG_ASSERT (address != -1, "Unable to map zero pages\n");
+      VDL_LOG_ASSERT (address != (unsigned long) -1,
+		      "Unable to map zero pages\n");
     }
 }
 
@@ -617,7 +618,7 @@ vdl_file_map_single (struct VdlContext *context,
                     name);
   ElfW (Ehdr) header;
   ElfW (Phdr) * phdr = 0;
-  size_t bytes_read;
+  ssize_t bytes_read;
   unsigned long mapping_start = 0;
   unsigned long mapping_size = 0;
   unsigned long offset_start = 0;
@@ -685,7 +686,7 @@ vdl_file_map_single (struct VdlContext *context,
     (unsigned long) system_mmap ((void *) requested_mapping_start,
                                  mapping_size, PROT_NONE, MAP_PRIVATE | fixed,
                                  fd, offset_start);
-  if (mapping_start == -1)
+  if (mapping_start == (unsigned long) -1)
     {
       VDL_LOG_ERROR ("Unable to allocate complete mapping for %s\n",
                      filename);

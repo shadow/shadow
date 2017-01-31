@@ -16,7 +16,7 @@ struct Futex
 struct Futex *futex_new (void);
 void futex_delete (struct Futex *futex);
 void futex_construct (struct Futex *futex);
-void futex_destruct (struct Futex *futex);
+#define futex_destruct(futex)
 void futex_lock (struct Futex *futex);
 void futex_unlock (struct Futex *futex);
 

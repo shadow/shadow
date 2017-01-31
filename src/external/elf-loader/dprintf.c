@@ -4,7 +4,7 @@
 #include <stdarg.h>
 
 static void
-avprintf_callback (char c, void *context)
+avprintf_callback (char c, __attribute__((unused)) void *context)
 {
   if (c != 0)
     {

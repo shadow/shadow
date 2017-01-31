@@ -5,7 +5,8 @@ extern void function_e (void);
 void call_function_l (void)
 {}
 
-int main (int argc, char *argv[])
+int main (__attribute__((unused)) int argc,
+	  __attribute__((unused)) char *argv[])
 {
   void *h1 = dlopen ("libf.so", RTLD_GLOBAL | RTLD_LAZY);
   void *h2 = dlopen ("libf.so", RTLD_LAZY);

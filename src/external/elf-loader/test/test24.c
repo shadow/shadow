@@ -5,7 +5,7 @@
 #include "test.h"
 LIB(test24)
 
-static void *thread (void*ctx)
+static void *thread (__attribute__((unused)) void*ctx)
 {
   void *handle1 = dlopen ("libstdc++.so.6", RTLD_LAZY | RTLD_DEEPBIND | RTLD_LOCAL);
   /* It seems loading libstdc++.so is easier reproduce than loading libc
@@ -48,7 +48,8 @@ static void *thread (void*ctx)
  * #12 0x00007f79adec421d in clone () at ../sysdeps/unix/sysv/linux/x86_64/clone.S:112
  * #13 0x0000000000000000 in ?? ()
  */
-int main (int argc, char *argv[])
+int main (__attribute__((unused)) int argc,
+	  __attribute__((unused)) char *argv[])
 {
   printf ("enter main\n");
 

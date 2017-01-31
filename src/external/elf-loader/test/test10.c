@@ -9,7 +9,7 @@ static int *(*g_get_i) (void) = 0;
 static sem_t g_wait_a;
 static sem_t g_wait_b;
 
-static void *thread (void*ctx)
+static void *thread (__attribute__((unused)) void*ctx)
 {
   int *i = g_get_i ();
   printf ("th i=%d\n", *i);
@@ -55,7 +55,8 @@ test_one (void)
   dlclose (handle);
 }
 
-int main (int argc, char *argv[])
+int main (__attribute__((unused)) int argc,
+	  __attribute__((unused)) char *argv[])
 {
   printf ("enter main\n");
 

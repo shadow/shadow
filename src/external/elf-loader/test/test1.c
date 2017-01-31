@@ -10,7 +10,9 @@ static void * get_pc (void)
   void *caller = __builtin_return_address (0);
   return caller;
 }
-int main (int argc, char *argv[])
+
+int main (__attribute__((unused)) int argc,
+	  __attribute__((unused)) char *argv[])
 {
   printf ("enter main\n");
   void *h = dlopen ("liba.so", RTLD_LAZY);

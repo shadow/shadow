@@ -25,12 +25,6 @@ futex_construct (struct Futex *futex)
 }
 
 void
-futex_destruct (struct Futex *futex)
-{
-}
-
-
-void
 futex_lock (struct Futex *futex)
 {
   uint32_t c;

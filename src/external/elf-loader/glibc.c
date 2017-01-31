@@ -206,7 +206,7 @@ _dl_deallocate_tls (void *ptcb, bool dealloc_tcb)
 }
 
 EXPORT int internal_function
-_dl_make_stack_executable (void **stack_endp)
+_dl_make_stack_executable (__attribute__((unused)) void **stack_endp)
 {
   return 0;
 }
@@ -246,7 +246,7 @@ dlsym_hack (void *handle, const char *symbol)
 // In this case, symbolp is 0.
 int internal_function
 _dl_addr_hack (const void *address, Dl_info * info,
-               void **mapp, const ElfW (Sym) ** symbolp)
+               void **mapp, __attribute__((unused)) const ElfW (Sym) ** symbolp)
 {
   return vdl_dladdr1 (address, info, mapp, RTLD_DL_LINKMAP);
 }
