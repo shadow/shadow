@@ -657,6 +657,7 @@ vdl_dlvsym_with_flags (void *handle, const char *symbol, const char *version,
   if (!result.found)
     {
       set_error ("Could not find requested symbol \"%s\"", symbol);
+      vdl_list_delete (scope);
       goto error;
     }
   vdl_list_delete (scope);
@@ -664,7 +665,6 @@ vdl_dlvsym_with_flags (void *handle, const char *symbol, const char *version,
   vdl_lookup_symbol_fixup (result.file, &result.symbol);
   return (void *) (result.file->load_base + result.symbol.st_value);
 error:
-  vdl_list_delete (scope);
   futex_unlock (g_vdl.futex);
   return 0;
 }
