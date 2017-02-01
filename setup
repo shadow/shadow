@@ -111,6 +111,7 @@ def main():
     r = args.func(args)
     
     logging.debug("setup is returning code '{0}'".format(r))
+    sys.exit(r)
 
 def build(args):
     # get absolute paths
