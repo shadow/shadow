@@ -1445,7 +1445,7 @@ TCPProcessFlags _tcp_ackProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *he
         if(tcp->retransmit.backoffCount > 2) {
             tcp->congestion->rttSmoothed = 0;
             tcp->congestion->rttVariance = 0;
-            _tcp_setRetransmitTimeout(tcp, 1);
+            _tcp_setRetransmitTimeout(tcp, CONFIG_TCP_RTO_INIT);
         }
         tcp->retransmit.backoffCount = 0;
     }
