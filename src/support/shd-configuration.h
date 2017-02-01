@@ -139,6 +139,14 @@ typedef guint ShadowID;
 #define CONFIG_TCP_RMEM_MAX 6291456
 
 /**
+ * Default initial retransmission timeout and ranges,
+ * TCP_TIMEOUT_INIT=1000ms, TCP_RTO_MIN=200ms and TCP_RTO_MAX=120000ms from net/tcp.h
+ */
+#define CONFIG_TCP_RTO_INIT 1000
+#define CONFIG_TCP_RTO_MIN 200
+#define CONFIG_TCP_RTO_MAX 1200000
+
+/**
  * Minimum size of the send buffer per socket when TCP-autotuning is used.
  * This value was computed from "man tcp"
  *
