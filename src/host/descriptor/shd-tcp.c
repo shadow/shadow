@@ -582,6 +582,59 @@ void tcp_disableReceiveBufferAutotuning(TCP* tcp) {
     tcp->autotune.userDisabledReceive = TRUE;
 }
 
+/* returns the total amount of buffered data in this TCP socket, including TCP-specific buffers */
+gsize tcp_getOutputBufferLength(TCP* tcp) {
+    MAGIC_ASSERT(tcp);
+    /* this does not include the socket output buffer to avoid double counting, since the
+     * data in the socket output buffer is already counted as part of the tcp retransmit queue */
+    return tcp->throttledOutputLength + tcp->retransmit.queueLength;
+}
+
+/* returns the total amount of buffered data in this TCP socket, including TCP-specific buffers */
+gsize tcp_getInputBufferLength(TCP* tcp) {
+    MAGIC_ASSERT(tcp);
+    return socket_getInputBufferLength(&(tcp->super)) + tcp->unorderedInputLength;
+}
+
+static gsize _tcp_getBufferSpaceOut(TCP* tcp) {
+    MAGIC_ASSERT(tcp);
+    /* account for throttled and retransmission buffer */
+    gssize s = (gssize)(socket_getOutputBufferSpace(&(tcp->super)) - tcp->throttledOutputLength - tcp->retransmit.queueLength);
+    gsize space = (gsize) MAX(0, s);
+    return space;
+}
+
+static gsize _tcp_getBufferSpaceIn(TCP* tcp) {
+    MAGIC_ASSERT(tcp);
+    /* account for unordered input buffer */
+    gssize space = (gssize)(socket_getInputBufferSpace(&(tcp->super)) - tcp->unorderedInputLength);
+    return MAX(0, space);
+}
+
+static void _tcp_bufferPacketOut(TCP* tcp, Packet* packet) {
+    MAGIC_ASSERT(tcp);
+
+    /* TCP wants to avoid congestion */
+    priorityqueue_push(tcp->throttledOutput, packet);
+    tcp->throttledOutputLength += packet_getPayloadLength(packet);
+    packet_addDeliveryStatus(packet, PDS_SND_TCP_ENQUEUE_THROTTLED);
+
+    if(_tcp_getBufferSpaceOut(tcp) == 0) {
+        descriptor_adjustStatus((Descriptor*)tcp, DS_WRITABLE, FALSE);
+    }
+}
+
+static void _tcp_bufferPacketIn(TCP* tcp, Packet* packet) {
+    MAGIC_ASSERT(tcp);
+
+    /* TCP wants in-order data */
+    priorityqueue_push(tcp->unorderedInput, packet);
+    packet_ref(packet);
+    tcp->unorderedInputLength += packet_getPayloadLength(packet);
+
+    packet_addDeliveryStatus(packet, PDS_RCV_TCP_ENQUEUE_UNORDERED);
+}
+
 static void _tcp_updateReceiveWindow(TCP* tcp) {
     MAGIC_ASSERT(tcp);
 
@@ -654,59 +707,6 @@ static Packet* _tcp_createPacket(TCP* tcp, enum ProtocolTCPFlags flags, gconstpo
     }
 
     return packet;
-}
-
-/* returns the total amount of buffered data in this TCP socket, including TCP-specific buffers */
-gsize tcp_getOutputBufferLength(TCP* tcp) {
-    MAGIC_ASSERT(tcp);
-    /* this does not include the socket output buffer to avoid double counting, since the
-     * data in the socket output buffer is already counted as part of the tcp retransmit queue */
-    return tcp->throttledOutputLength + tcp->retransmit.queueLength;
-}
-
-static gsize _tcp_getBufferSpaceOut(TCP* tcp) {
-    MAGIC_ASSERT(tcp);
-    /* account for throttled and retransmission buffer */
-    gssize s = (gssize)(socket_getOutputBufferSpace(&(tcp->super)) - tcp->throttledOutputLength - tcp->retransmit.queueLength);
-    gsize space = (gsize) MAX(0, s);
-    return space;
-}
-
-static void _tcp_bufferPacketOut(TCP* tcp, Packet* packet) {
-    MAGIC_ASSERT(tcp);
-
-    /* TCP wants to avoid congestion */
-    priorityqueue_push(tcp->throttledOutput, packet);
-    tcp->throttledOutputLength += packet_getPayloadLength(packet);
-    packet_addDeliveryStatus(packet, PDS_SND_TCP_ENQUEUE_THROTTLED);
-
-    if(_tcp_getBufferSpaceOut(tcp) == 0) {
-        descriptor_adjustStatus((Descriptor*)tcp, DS_WRITABLE, FALSE);
-    }
-}
-
-/* returns the total amount of buffered data in this TCP socket, including TCP-specific buffers */
-gsize tcp_getInputBufferLength(TCP* tcp) {
-    MAGIC_ASSERT(tcp);
-    return socket_getInputBufferLength(&(tcp->super)) + tcp->unorderedInputLength;
-}
-
-static gsize _tcp_getBufferSpaceIn(TCP* tcp) {
-    MAGIC_ASSERT(tcp);
-    /* account for unordered input buffer */
-    gssize space = (gssize)(socket_getInputBufferSpace(&(tcp->super)) - tcp->unorderedInputLength);
-    return MAX(0, space);
-}
-
-static void _tcp_bufferPacketIn(TCP* tcp, Packet* packet) {
-    MAGIC_ASSERT(tcp);
-
-    /* TCP wants in-order data */
-    priorityqueue_push(tcp->unorderedInput, packet);
-    packet_ref(packet);
-    tcp->unorderedInputLength += packet_getPayloadLength(packet);
-
-    packet_addDeliveryStatus(packet, PDS_RCV_TCP_ENQUEUE_UNORDERED);
 }
 
 static void _tcp_addRetransmit(TCP* tcp, Packet* packet) {
