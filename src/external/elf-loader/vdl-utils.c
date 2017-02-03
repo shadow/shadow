@@ -127,6 +127,20 @@ vdl_utils_strtoul (const char *integer)
   return ret;
 }
 
+uint32_t
+vdl_gnu_hash (const char *s)
+{
+  // Copy/paste from the glibc source code.
+  // This function is coming from comp.lang.c and was originally
+  // posted by Daniel J Bernstein
+  uint32_t h = 5381;
+  unsigned char c;
+  for (c = *s; c != '\0'; c = *++s)
+    {
+      h = h * 33 + c;
+    }
+  return h;
+}
 
 int
 vdl_utils_exists (const char *filename)

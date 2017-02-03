@@ -86,6 +86,7 @@ set(ldso_srcs
     vdl-dl-public.c
     vdl-fini.c
     vdl-gc.c
+    vdl-hashmap.c
     vdl-init.c
     vdl-linkmap.c
     vdl-list.c
@@ -138,7 +139,7 @@ add_custom_target(libdlversion DEPENDS libdl.version)
 add_library(ldso SHARED ${ldso_srcs} ${as_srcs})
 add_dependencies(ldso vdlconfig ldsoversion)
 target_link_libraries(ldso -lgcc)
-set_target_properties(ldso PROPERTIES 
+set_target_properties(ldso PROPERTIES
     LINK_FLAGS "-fvisibility=hidden -nostartfiles -nostdlib -Wl,--entry=stage0,--version-script=${CMAKE_CURRENT_BINARY_DIR}/ldso.version,-Bstatic"
     PREFIX ""
     SUFFIX ""
@@ -147,7 +148,7 @@ set_target_properties(ldso PROPERTIES
 add_library(vdl SHARED libvdl.c)
 add_dependencies(vdl ldso libdlversion)
 target_link_libraries(vdl ldso)
-set_target_properties(vdl PROPERTIES 
+set_target_properties(vdl PROPERTIES
     LINK_FLAGS "-fvisibility=hidden -nostdlib -Wl,--version-script=${CMAKE_CURRENT_BINARY_DIR}/libdl.version"
 )
 
@@ -158,7 +159,7 @@ add_executable(display-relocs display-relocs.c)
 
 add_custom_target(elf-loader DEPENDS ldso vdl elfedit display-relocs)
 install(TARGETS elfedit display-relocs DESTINATION bin)
-install(TARGETS ldso vdl 
+install(TARGETS ldso vdl
         DESTINATION lib
         PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ
                     GROUP_EXECUTE GROUP_READ
@@ -178,7 +179,7 @@ if(SHADOW_TEST STREQUAL ON)
         futex.c
         vdl-list.c
     )
-    
+
     add_executable(internal-tests ${test_srcs})
     target_link_libraries(internal-tests -lpthread)
     add_test(NAME elfloader-internals COMMAND internal-tests)

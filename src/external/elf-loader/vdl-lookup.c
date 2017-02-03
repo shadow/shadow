@@ -11,21 +11,6 @@
 #define STT_GNU_IFUNC 10
 #endif
 
-static uint32_t
-vdl_gnu_hash (const char *s)
-{
-  // Copy/paste from the glibc source code.
-  // This function is coming from comp.lang.c and was originally
-  // posted by Daniel J Bernstein
-  uint32_t h = 5381;
-  unsigned char c;
-  for (c = *s; c != '\0'; c = *++s)
-    {
-      h = h * 33 + c;
-    }
-  return h;
-}
-
 static unsigned long
 vdl_elf_hash (const char *n)
 {
@@ -46,7 +31,7 @@ struct VdlFileLookupIterator
 {
   const char *name;
   const char *dt_strtab;
-    ElfW (Sym) * dt_symtab;
+  ElfW (Sym) * dt_symtab;
   enum
   {
     ELF_HASH,
@@ -59,7 +44,7 @@ struct VdlFileLookupIterator
     struct
     {
       signed long current;
-        ElfW (Word) * chain;
+      ElfW (Word) * chain;
     } elf;
     struct
     {
