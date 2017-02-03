@@ -640,7 +640,8 @@ static void _tcp_updateReceiveWindow(TCP* tcp) {
 
     /* the receive window is how much we are willing to accept to our input buffer.
      * unordered input packets should count against buffer space, so use the _tcp version. */
-    gsize space = _tcp_getBufferSpaceIn(tcp);
+    //gsize space = _tcp_getBufferSpaceIn(tcp); // causes throughput problems
+    gsize space = socket_getInputBufferSpace(&(tcp->super));
     gsize nPackets = space / (CONFIG_MTU - CONFIG_HEADER_SIZE_TCPIPETH);
     tcp->receive.window = nPackets;
 
