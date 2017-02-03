@@ -9,7 +9,6 @@
 #include "vdl-config.h"
 #include <sys/syscall.h>
 #include <sys/mman.h>
-#include <sys/mman.h>
 #include <asm/prctl.h>          // for ARCH_SET_FS
 
 typedef Elf64_Addr (*IRelativeFunction) (void);
@@ -76,9 +75,9 @@ machine_reloc (const struct VdlFile *file,
 const char *
 machine_reloc_type_to_str (unsigned long reloc_type)
 {
-#define ITEM(x)					\
-  case R_##x:					\
-    return "R_" #x ;				\
+#define ITEM(x)                                 \
+  case R_##x:                                   \
+    return "R_" #x ;                            \
   break
   switch (reloc_type)
     {
@@ -118,7 +117,7 @@ machine_reloc_type_to_str (unsigned long reloc_type)
 
 void
 machine_reloc_dynamic (__attribute__((unused)) ElfW (Dyn) * dyn,
-		       __attribute__((unused)) unsigned long load_base)
+                       __attribute__((unused)) unsigned long load_base)
 {
   // this is a no-op on x86-64
 }
@@ -352,6 +351,15 @@ machine_system_mmap (void *start, size_t length, int prot, int flags, int fd,
  * clobbered: all above and %rcx and %r11
  */
 long int
+machine_syscall0 (int name)
+{
+  register unsigned long int resultvar;
+  __asm__ __volatile__ ("syscall\n\t":"=a" (resultvar):"0" (name):"memory",
+                        "cc", "r11", "rcx");
+  return resultvar;
+}
+
+long int
 machine_syscall1 (int name, unsigned long int a1)
 {
   register unsigned long int resultvar;
@@ -389,6 +397,26 @@ machine_syscall3 (int name,
   register long int _a3 asm ("rdx") = _arg3;
   __asm__ __volatile__ ("syscall\n\t":"=a" (resultvar):"0" (name), "r" (_a1),
                         "r" (_a2), "r" (_a3):"memory", "cc", "r11", "rcx");
+  return resultvar;
+}
+
+long int
+machine_syscall4 (int name,
+                  unsigned long int a1, unsigned long int a2,
+                  unsigned long int a3, unsigned long int a4)
+{
+  register unsigned long int resultvar;
+  long int _arg1 = (long int) (a1);
+  register long int _a1 asm ("rdi") = _arg1;
+  long int _arg2 = (long int) (a2);
+  register long int _a2 asm ("rsi") = _arg2;
+  long int _arg3 = (long int) (a3);
+  register long int _a3 asm ("rdx") = _arg3;
+  long int _arg4 = (long int) (a4);
+  register long int _a4 asm ("r10") = _arg4;
+  __asm__ __volatile__ ("syscall\n\t":"=a" (resultvar):"0" (name), "r" (_a1),
+                        "r" (_a2), "r" (_a3), "r" (_a4):"memory", "cc", "r11",
+                        "rcx");
   return resultvar;
 }
 

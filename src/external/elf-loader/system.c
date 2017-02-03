@@ -51,6 +51,17 @@ system_write (int fd, const void *buf, size_t size)
 }
 
 int
+system_open (const char *name, int oflag, mode_t mode)
+{
+  int status = MACHINE_SYSCALL3 (open, name, oflag, mode);
+  if (status < 0 && status > -256)
+    {
+      return -1;
+    }
+  return status;
+}
+
+int
 system_open_ro (const char *file)
 {
   int status = MACHINE_SYSCALL2 (open, file, O_RDONLY);
@@ -60,6 +71,29 @@ system_open_ro (const char *file)
     }
   return status;
 }
+
+int
+system_unlink (const char *name)
+{
+  int status = MACHINE_SYSCALL1 (unlink, name);
+  if (status < 0 && status > -256)
+    {
+      return -1;
+    }
+  return status;
+}
+
+int
+system_sendfile (int out_fd, int in_fd, off_t *offset, size_t count)
+{
+  int status = MACHINE_SYSCALL4 (sendfile, out_fd, in_fd, offset, count);
+  if (status < 0 && status > -256)
+    {
+      return -1;
+    }
+  return status;
+}
+
 
 int
 system_read (int fd, void *buffer, size_t to_read)
@@ -146,4 +180,10 @@ system_setrlimit (int resource, struct rlimit *rlim)
       return -1;
     }
   return status;
+}
+
+unsigned long
+system_getpid (void)
+{
+  return MACHINE_SYSCALL0 (getpid);
 }

@@ -81,9 +81,9 @@ machine_reloc_irelative (struct VdlFile *file)
 const char *
 machine_reloc_type_to_str (unsigned long reloc_type)
 {
-#define ITEM(x)					\
-  case R_##x:					\
-    return "R_" #x ;				\
+#define ITEM(x)                                 \
+  case R_##x:                                   \
+    return "R_" #x ;                            \
   break
   switch (reloc_type)
     {
@@ -343,6 +343,18 @@ machine_system_mmap (void *start, size_t length, int prot, int flags, int fd,
  * return value in %eax, indicates error in range -1,-256
  */
 long int
+machine_syscall0 (int name)
+{
+  register unsigned int resultvar;
+  __asm__ __volatile__ ("movl %1, %%eax\n\t"
+                        "int $0x80\n\t"
+                        :"=a" (resultvar)
+                        :"0" (name)
+                        :"memory", "cc");
+  return resultvar;
+}
+
+long int
 machine_syscall1 (int name, unsigned long int a1)
 {
   register unsigned int resultvar;
@@ -350,8 +362,10 @@ machine_syscall1 (int name, unsigned long int a1)
                         "movl %2, %%ebx\n\t"
                         "movl %1, %%eax\n\t"
                         "int $0x80\n\t"
-                        "popl %%ebx\n\t":"=a" (resultvar):"0" (name),
-                        "acdSD" (a1):"memory", "cc");
+                        "popl %%ebx\n\t"
+                        :"=a" (resultvar)
+                        :"0" (name), "acdSD" (a1)
+                        :"memory", "cc");
   return resultvar;
 }
 
@@ -366,8 +380,10 @@ machine_syscall2 (int name, unsigned long int a1, unsigned long int a2)
                         "movl %1, %%eax\n\t"
                         "int $0x80\n\t"
                         "popl %%ecx\n\t"
-                        "popl %%ebx\n\t":"=a" (resultvar):"0" (name),
-                        "acSD" (a1), "c" (a2):"memory", "cc");
+                        "popl %%ebx\n\t"
+                        :"=a" (resultvar)
+                        :"0" (name), "acSD" (a1), "c" (a2)
+                        :"memory", "cc");
   return resultvar;
 }
 
@@ -387,8 +403,36 @@ machine_syscall3 (int name,
                         "int $0x80\n\t"
                         "popl %%edx\n\t"
                         "popl %%ecx\n\t"
-                        "popl %%ebx\n\t":"=a" (resultvar):"0" (name),
-                        "aSD" (a1), "c" (a2), "d" (a3):"memory", "cc");
+                        "popl %%ebx\n\t"
+                        :"=a" (resultvar)
+                        :"0" (name), "aSD" (a1), "c" (a2), "d" (a3)
+                        :"memory", "cc");
+  return resultvar;
+}
+
+long int
+machine_syscall4 (int name,
+                  unsigned long int a1, unsigned long int a2,
+                  unsigned long int a3, unsigned long int a4)
+{
+  register unsigned int resultvar;
+  __asm__ __volatile__ ("pushl %%ebx\n\t"
+                        "movl %2, %%ebx\n\t"
+                        "pushl %%ecx\n\t"
+                        "movl %3, %%ecx\n\t"
+                        "pushl %%edx\n\t"
+                        "movl %4, %%edx\n\t"
+                        "pushl %%esi\n\t"
+                        "movl %5, %%esi\n\t"
+                        "movl %1, %%eax\n\t"
+                        "int $0x80\n\t"
+                        "popl %%esi\n\t"
+                        "popl %%edx\n\t"
+                        "popl %%ecx\n\t"
+                        "popl %%ebx\n\t"
+                        :"=a" (resultvar)
+                        :"0" (name), "c" (a1), "d" (a2), "S" (a3), "D" (a4)
+                        :"memory", "cc");
   return resultvar;
 }
 
@@ -419,8 +463,10 @@ machine_syscall6 (int name,
                         "popl %%esi\n\t"
                         "popl %%edx\n\t"
                         "popl %%ecx\n\t"
-                        "popl %%ebx\n\t":"=a" (resultvar):"a" (name),
-                        "c" (arg1), "d" (arg2), "S" (arg3), "D" (arg4),
-                        "m" (arg5), "m" (a6):"memory", "cc");
+                        "popl %%ebx\n\t"
+                        :"=a" (resultvar)
+                        :"a" (name), "c" (arg1), "d" (arg2), "S" (arg3),
+                         "D" (arg4), "m" (arg5), "m" (a6)
+                        :"memory", "cc");
   return resultvar;
 }
