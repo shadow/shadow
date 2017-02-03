@@ -6,7 +6,9 @@
 #include "futex.h"
 #include "vdl-alloc.h"
 #include "vdl-list.h"
+#include "vdl-hashmap.h"
 #include "vdl-utils.h"
+#include "vdl-mem.h"
 #include "machine.h"
 #include "glibc.h"
 #include <elf.h>
@@ -66,6 +68,22 @@ prepare_stage2 (unsigned long entry_point_struct)
   return stage2_input;
 }
 
+// returns a string of the form "/dev/shm/elf-loader:[pid]",
+// which we use for the shared mappings in the readonly cache
+char *
+make_shm_name ()
+{
+  const char shm_prefix[] = "/dev/shm/elf-loader:";
+  // our itoa implementation always gives 10 decimal digits
+  const int shm_size = sizeof (shm_prefix) + 10 + 1;
+  char *shm_name = vdl_alloc_malloc (shm_size);
+  vdl_memcpy (shm_name, shm_prefix, sizeof (shm_prefix) - 1);
+  unsigned long pid = (unsigned long) system_getpid ();
+  vdl_utils_itoa (pid, shm_name + sizeof (shm_prefix) - 1);
+  shm_name[shm_size - 1] = 0;
+  return shm_name;
+}
+
 static void
 global_initialize (unsigned long interpreter_load_base)
 {
@@ -97,6 +115,9 @@ global_initialize (unsigned long interpreter_load_base)
   vdl->module_map_len = 0;
   vdl->module_map = 0;
   vdl->preloads = vdl_list_new();
+  vdl->readonly_cache = vdl_hashmap_new();
+  vdl->ro_cache_futex = futex_new();
+  vdl->shm_path = make_shm_name();
 }
 
 // relocate entries in DT_REL
@@ -205,9 +226,11 @@ stage1_freeres (void)
       return;
     }
   stage2_freeres ();
+  vdl_alloc_free (g_vdl.shm_path);
   vdl_list_delete (g_vdl.preloads);
   vdl_utils_str_list_delete (g_vdl.search_dirs);
   vdl_list_delete (g_vdl.contexts);
+  futex_delete (g_vdl.ro_cache_futex);
   futex_delete (g_vdl.global_futex);
   {
     void **i;

@@ -73,6 +73,12 @@ struct Vdl
   struct VdlFile **module_map;
   // preloaded files for inclusion in new contexts
   struct VdlList *preloads;
+  // hash map of readonly file sections (e.g. .text) to their mappings for reuse
+  struct VdlHashMap *readonly_cache;
+  // futex for the readonly cache
+  struct Futex *ro_cache_futex;
+  // the unique ephemeral path we use for our shared memory mappings
+  char* shm_path;
 };
 
 extern struct Vdl g_vdl;

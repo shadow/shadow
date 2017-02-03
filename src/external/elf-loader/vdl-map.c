@@ -3,10 +3,13 @@
 #include "vdl-alloc.h"
 #include "vdl-context.h"
 #include "vdl-file.h"
+#include "vdl-hashmap.h"
 #include "vdl-utils.h"
 #include "vdl-mem.h"
 #include "machine.h"
+#include "futex.h"
 #include <sys/mman.h>
+#include <fcntl.h>
 
 static void
 debug_print_maps (const char *filename, struct VdlList *maps)
@@ -543,8 +546,114 @@ file_new (unsigned long load_base,
   return file;
 }
 
+struct VdlMapCacheItem
+{
+  char *filename;
+  unsigned long section;
+  int fd;
+};
+
+struct VdlMapCacheItem *
+map_cache_item_new (const char *filename, const struct VdlFileMap *map,
+                    int fd)
+{
+  struct VdlMapCacheItem *item = vdl_alloc_new (struct VdlMapCacheItem);
+  item->filename = vdl_utils_strdup (filename);
+  item->section = map->file_start_align;
+  item->fd = fd;
+  return item;
+}
+
 static void
-file_map_do (const struct VdlFileMap *map,
+readonly_cache_insert (const char *filename, const struct VdlFileMap *map,
+                       int fd, unsigned long hash)
+{
+  struct VdlMapCacheItem *item = map_cache_item_new (filename, map, fd);
+  vdl_hashmap_insert (g_vdl.readonly_cache, hash, item);
+}
+
+int
+readonly_cache_compare (const void *query_void, const void *cached_void)
+{
+  const struct VdlMapCacheItem *query =
+    (const struct VdlMapCacheItem *) query_void;
+  const struct VdlMapCacheItem *cached =
+    (const struct VdlMapCacheItem *) cached_void;
+  return (query->section == cached->section
+          && vdl_utils_strisequal (query->filename, cached->filename));
+}
+
+static int
+readonly_cache_find (const char *filename, const struct VdlFileMap *map,
+                     unsigned long hash)
+{
+  struct VdlMapCacheItem *tmp = map_cache_item_new (filename, map, 0);
+  struct VdlMapCacheItem *item =
+    (struct VdlMapCacheItem *) vdl_hashmap_get (g_vdl.readonly_cache, hash,
+                                                tmp, readonly_cache_compare);
+  if (item)
+    {
+      return item->fd;
+    }
+  return -1;
+}
+
+static unsigned long
+readonly_cache_map (const char *filename, const struct VdlFileMap *map,
+                    int fd, int prot, unsigned long load_base)
+{
+  unsigned long hash = vdl_gnu_hash (filename);
+  int cfd = readonly_cache_find (filename, map, hash);
+  if (cfd < 0)
+    {
+      futex_lock (g_vdl.ro_cache_futex);
+      // double check that the section wasn't cached before we had the lock
+      cfd = readonly_cache_find (filename, map, hash);
+      if (cfd >= 0)
+        {
+          futex_unlock (g_vdl.ro_cache_futex);
+          goto found;
+        }
+      // open shared memory to use for all instances of this file section
+      cfd =
+        system_open (g_vdl.shm_path, O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW,
+                     0700);
+      if (cfd < 0)
+        {
+          VDL_LOG_ERROR ("Could not shmopen cache map file %s: %d\n",
+                         g_vdl.shm_path, cfd);
+          futex_unlock (g_vdl.ro_cache_futex);
+          return 0;
+        }
+      // Delete the file from the filesystem immediately.
+      // We don't need it any more, we just store the file descriptor (which
+      // remains valid until closed). This is why it doesn't matter if we
+      // re-use the same filename, so long as it's unique to each process.
+      system_unlink (g_vdl.shm_path);
+      off_t offset = map->file_start_align;
+
+      // copy the section from the original file to the new file descriptor
+      int result = system_sendfile (cfd, fd, &offset, map->mem_size_align);
+      if (result < 0)
+        {
+          VDL_LOG_ERROR ("Could not sendfile from %s to %s: %d\n", filename,
+                         g_vdl.shm_path, result);
+          futex_unlock (g_vdl.ro_cache_futex);
+          return 0;
+        }
+
+      readonly_cache_insert (filename, map, cfd, hash);
+      futex_unlock (g_vdl.ro_cache_futex);
+    }
+found:
+  return (unsigned long) system_mmap ((void *) load_base +
+                                      map->mem_start_align,
+                                      map->mem_size_align, prot,
+                                      MAP_SHARED | MAP_FIXED, cfd, 0);
+}
+
+static void
+file_map_do (const char *filename, const struct VdlFileMap *map,
              int fd, int prot, unsigned long load_base)
 {
   VDL_LOG_FUNCTION ("fd=0x%x, prot=0x%x, load_base=0x%lx", fd, prot,
@@ -552,11 +661,21 @@ file_map_do (const struct VdlFileMap *map,
   int int_result;
   unsigned long address;
   // Now, map again the area at the right location.
-  address =
-    (unsigned long) system_mmap ((void *) load_base + map->mem_start_align,
-                                 map->mem_size_align, prot,
-                                 MAP_PRIVATE | MAP_FIXED, fd,
-                                 map->file_start_align);
+  if (!(prot & PROT_WRITE))
+    {
+      // this area is read-only, so we only load it once
+      address = readonly_cache_map (filename, map, fd, prot, load_base);
+    }
+  else
+    {
+      address =
+        (unsigned long) system_mmap ((void *) load_base +
+                                     map->mem_start_align,
+                                     map->mem_size_align, prot,
+                                     MAP_PRIVATE | MAP_FIXED, fd,
+                                     map->file_start_align);
+    }
+
   VDL_LOG_ASSERT (address == load_base + map->mem_start_align,
                   "Unable to perform remapping");
   if (map->mem_zero_size != 0)
@@ -606,7 +725,7 @@ file_map_do (const struct VdlFileMap *map,
                                      MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED,
                                      -1, 0);
       VDL_LOG_ASSERT (address != (unsigned long) -1,
-		      "Unable to map zero pages\n");
+                      "Unable to map zero pages\n");
     }
 }
 
@@ -709,7 +828,7 @@ vdl_file_map_single (struct VdlContext *context,
        i = vdl_list_next (i))
     {
       struct VdlFileMap *map = *i;
-      file_map_do (map, fd, map->mmap_flags, load_base);
+      file_map_do (filename, map, fd, map->mmap_flags, load_base);
     }
 
   struct stat st_buf;

@@ -127,6 +127,21 @@ vdl_utils_strtoul (const char *integer)
   return ret;
 }
 
+// puts a 10 digit decimal representation of value in the str buffer
+// does *not* null terminate
+void
+vdl_utils_itoa (unsigned long value, char *str)
+{
+  // largest 32 bit int is 10 decimal digits long,
+  // into a 0-indexed char array
+  int i = 10 - 1;
+  for (; i >= 0; i--)
+    {
+      str[i] = '0' + value % 10;
+      value /= 10;
+    }
+}
+
 uint32_t
 vdl_gnu_hash (const char *s)
 {
