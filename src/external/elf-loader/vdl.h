@@ -59,7 +59,9 @@ struct Vdl
   unsigned long tls_static_align;
   unsigned long tls_n_dtv;
   unsigned long tls_next_index;
-  struct Futex *futex;
+  // The original single futex for everything.
+  // The goal is to replace this with more specific futexes.
+  struct Futex *global_futex;
   // holds an entry for each thread which calls one a function
   // which potentially sets the dlerror state.
   struct VdlList *errors;

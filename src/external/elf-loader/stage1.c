@@ -13,15 +13,16 @@
 #include <link.h>
 
 
-#define READ_LONG(p)				\
-  ({long v = *((long*)p);			\
-    p+=sizeof(long);				\
+#define READ_LONG(p)                            \
+  ({long v = *((long*)p);                       \
+    p+=sizeof(long);                            \
     v;})
 
-#define READ_POINTER(p)				\
-  ({char * v = *((char**)p);			\
-    p+=sizeof(char*);				\
+#define READ_POINTER(p)                         \
+  ({char * v = *((char**)p);                    \
+    p+=sizeof(char*);                           \
     v;})
+
 static struct Stage2Input
 prepare_stage2 (unsigned long entry_point_struct)
 {
@@ -89,7 +90,7 @@ global_initialize (unsigned long interpreter_load_base)
   vdl->tls_static_align = 0;
   vdl->tls_n_dtv = 0;
   vdl->tls_next_index = 1;
-  vdl->futex = futex_new ();
+  vdl->global_futex = futex_new ();
   vdl->errors = vdl_list_new ();
   vdl->n_added = 0;
   vdl->n_removed = 0;
@@ -97,8 +98,6 @@ global_initialize (unsigned long interpreter_load_base)
   vdl->module_map = 0;
   vdl->preloads = vdl_list_new();
 }
-
-
 
 // relocate entries in DT_REL
 static void
@@ -206,9 +205,10 @@ stage1_freeres (void)
       return;
     }
   stage2_freeres ();
+  vdl_list_delete (g_vdl.preloads);
   vdl_utils_str_list_delete (g_vdl.search_dirs);
   vdl_list_delete (g_vdl.contexts);
-  futex_delete (g_vdl.futex);
+  futex_delete (g_vdl.global_futex);
   {
     void **i;
     for (i = vdl_list_begin (g_vdl.errors);
@@ -227,7 +227,7 @@ stage1_freeres (void)
 
   g_vdl.search_dirs = 0;
   g_vdl.contexts = 0;
-  g_vdl.futex = 0;
+  g_vdl.global_futex = 0;
   g_vdl.errors = 0;
 }
 

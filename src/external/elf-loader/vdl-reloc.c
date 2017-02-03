@@ -217,7 +217,7 @@ reloc_jmprel (struct VdlFile *file)
 unsigned long
 vdl_reloc_offset_jmprel (struct VdlFile *file, unsigned long offset)
 {
-  futex_lock (g_vdl.futex);
+  futex_lock (g_vdl.global_futex);
   unsigned long dt_jmprel = file->dt_jmprel;
   unsigned long dt_pltrel = file->dt_pltrel;
   unsigned long dt_pltrelsz = file->dt_pltrelsz;
@@ -225,7 +225,7 @@ vdl_reloc_offset_jmprel (struct VdlFile *file, unsigned long offset)
   if ((dt_pltrel != DT_REL && dt_pltrel != DT_RELA) ||
       dt_pltrelsz == 0 || dt_jmprel == 0)
     {
-      futex_unlock (g_vdl.futex);
+      futex_unlock (g_vdl.global_futex);
       return 0;
     }
   VDL_LOG_ASSERT (offset < dt_pltrelsz, "Relocation entry not within range");
@@ -241,7 +241,7 @@ vdl_reloc_offset_jmprel (struct VdlFile *file, unsigned long offset)
       ElfW (Rela) * rela = (ElfW (Rela) *) (dt_jmprel + offset);
       symbol = process_rela (file, rela);
     }
-  futex_unlock (g_vdl.futex);
+  futex_unlock (g_vdl.global_futex);
   return symbol;
 }
 
@@ -249,7 +249,7 @@ unsigned long
 vdl_reloc_index_jmprel (struct VdlFile *file, unsigned long index)
 {
   VDL_LOG_FUNCTION ("file=%s, index=%lu", file->name, index);
-  futex_lock (g_vdl.futex);
+  futex_lock (g_vdl.global_futex);
   unsigned long dt_jmprel = file->dt_jmprel;
   unsigned long dt_pltrel = file->dt_pltrel;
   unsigned long dt_pltrelsz = file->dt_pltrelsz;
@@ -257,7 +257,7 @@ vdl_reloc_index_jmprel (struct VdlFile *file, unsigned long index)
   if ((dt_pltrel != DT_REL && dt_pltrel != DT_RELA) ||
       dt_pltrelsz == 0 || dt_jmprel == 0)
     {
-      futex_unlock (g_vdl.futex);
+      futex_unlock (g_vdl.global_futex);
       return 0;
     }
   unsigned long symbol;
@@ -275,7 +275,7 @@ vdl_reloc_index_jmprel (struct VdlFile *file, unsigned long index)
       ElfW (Rela) * rela = &((ElfW (Rela) *) dt_jmprel)[index];
       symbol = process_rela (file, rela);
     }
-  futex_unlock (g_vdl.futex);
+  futex_unlock (g_vdl.global_futex);
   return symbol;
 }
 

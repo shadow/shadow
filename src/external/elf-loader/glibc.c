@@ -101,9 +101,9 @@ __tls_get_addr (struct tls_index *ti)
     (void *) vdl_tls_get_addr_fast (ti->ti_module, ti->ti_offset);
   if (retval == 0)
     {
-      futex_lock (g_vdl.futex);
+      futex_lock (g_vdl.global_futex);
       retval = (void *) vdl_tls_get_addr_slow (ti->ti_module, ti->ti_offset);
-      futex_unlock (g_vdl.futex);
+      futex_unlock (g_vdl.global_futex);
     }
   return retval;
 }
@@ -124,9 +124,9 @@ __attribute__ ((__regparm__ (1))) ___tls_get_addr (struct tls_index *ti)
     (void *) vdl_tls_get_addr_fast (ti->ti_module, ti->ti_offset);
   if (retval == 0)
     {
-      futex_lock (g_vdl.futex);
+      futex_lock (g_vdl.global_futex);
       retval = (void *) vdl_tls_get_addr_slow (ti->ti_module, ti->ti_offset);
-      futex_unlock (g_vdl.futex);
+      futex_unlock (g_vdl.global_futex);
     }
   return retval;
 }
@@ -161,11 +161,11 @@ _dl_allocate_tls_init (void *tcb)
     {
       return 0;
     }
-  futex_lock (g_vdl.futex);
+  futex_lock (g_vdl.global_futex);
 
   vdl_tls_dtv_initialize ((unsigned long) tcb);
 
-  futex_unlock (g_vdl.futex);
+  futex_unlock (g_vdl.global_futex);
   return tcb;
 }
 
@@ -176,7 +176,7 @@ _dl_allocate_tls_init (void *tcb)
 EXPORT void *internal_function
 _dl_allocate_tls (void *mem)
 {
-  futex_lock (g_vdl.futex);
+  futex_lock (g_vdl.global_futex);
 
   unsigned long tcb = (unsigned long) mem;
   if (tcb == 0)
@@ -186,14 +186,14 @@ _dl_allocate_tls (void *mem)
   vdl_tls_dtv_allocate (tcb);
   vdl_tls_dtv_initialize ((unsigned long) tcb);
 
-  futex_unlock (g_vdl.futex);
+  futex_unlock (g_vdl.global_futex);
   return (void *) tcb;
 }
 
 EXPORT void internal_function
 _dl_deallocate_tls (void *ptcb, bool dealloc_tcb)
 {
-  futex_lock (g_vdl.futex);
+  futex_lock (g_vdl.global_futex);
 
   unsigned long tcb = (unsigned long) ptcb;
   vdl_tls_dtv_deallocate (tcb);
@@ -202,7 +202,7 @@ _dl_deallocate_tls (void *ptcb, bool dealloc_tcb)
       vdl_tls_tcb_deallocate (tcb);
     }
 
-  futex_unlock (g_vdl.futex);
+  futex_unlock (g_vdl.global_futex);
 }
 
 EXPORT int internal_function

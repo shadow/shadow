@@ -324,9 +324,9 @@ dlopen_with_context (struct VdlContext *context, const char *filename,
   // we need to release the lock before calling the initializers
   // to avoid a deadlock if one of them calls dlopen or
   // a symbol resolution function
-  futex_unlock (g_vdl.futex);
+  futex_unlock (g_vdl.global_futex);
   vdl_init_call (call_init);
-  futex_lock (g_vdl.futex);
+  futex_lock (g_vdl.global_futex);
 
   // must hold the lock to call free
   vdl_list_delete (call_init);
@@ -356,12 +356,12 @@ void *
 vdl_dlopen (const char *filename, int flags)
 {
   VDL_LOG_FUNCTION ("filename=%s", filename);
-  futex_lock (g_vdl.futex);
+  futex_lock (g_vdl.global_futex);
   // map it in memory using the normal context, that is, the
   // first context in the context list.
   struct VdlContext *context = vdl_list_front (g_vdl.contexts);
   void *handle = dlopen_with_context (context, filename, flags);
-  futex_unlock (g_vdl.futex);
+  futex_unlock (g_vdl.global_futex);
   return handle;
 }
 
@@ -394,12 +394,12 @@ int
 vdl_dlclose (void *handle)
 {
   VDL_LOG_FUNCTION ("handle=0x%llx", handle);
-  futex_lock (g_vdl.futex);
+  futex_lock (g_vdl.global_futex);
 
   struct VdlFile *file = search_file (handle);
   if (file == 0)
     {
-      futex_unlock (g_vdl.futex);
+      futex_unlock (g_vdl.global_futex);
       return -1;
     }
   file->count--;
@@ -427,9 +427,9 @@ vdl_dlclose (void *handle)
   call_fini = locked;
 
   // must not hold the lock to call fini
-  futex_unlock (g_vdl.futex);
+  futex_unlock (g_vdl.global_futex);
   vdl_fini_call (call_fini);
-  futex_lock (g_vdl.futex);
+  futex_lock (g_vdl.global_futex);
 
   vdl_tls_file_deinitialize (call_fini);
 
@@ -446,7 +446,7 @@ vdl_dlclose (void *handle)
 
   gdb_notify ();
 
-  futex_unlock (g_vdl.futex);
+  futex_unlock (g_vdl.global_futex);
   return 0;
 }
 
@@ -454,14 +454,14 @@ char *
 vdl_dlerror (void)
 {
   VDL_LOG_FUNCTION ("", 0);
-  futex_lock (g_vdl.futex);
+  futex_lock (g_vdl.global_futex);
   struct VdlError *error = find_error ();
   char *error_string = error->error;
   vdl_alloc_free (error->prev_error);
   error->prev_error = error->error;
   // clear the error we are about to report to the user
   error->error = 0;
-  futex_unlock (g_vdl.futex);
+  futex_unlock (g_vdl.global_futex);
   return error_string;
 }
 
@@ -469,7 +469,7 @@ int
 vdl_dladdr1 (const void *addr, Dl_info * info, void **extra_info, int flags)
 {
   VDL_LOG_FUNCTION ("", 0);
-  futex_lock (g_vdl.futex);
+  futex_lock (g_vdl.global_futex);
   struct VdlFile *file = addr_to_file ((unsigned long) addr);
   if (file == 0)
     {
@@ -573,10 +573,10 @@ vdl_dladdr1 (const void *addr, Dl_info * info, void **extra_info, int flags)
       *sym = match;
     }
   else
-    futex_unlock (g_vdl.futex);
+    futex_unlock (g_vdl.global_futex);
   return 1;
 error:
-  futex_unlock (g_vdl.futex);
+  futex_unlock (g_vdl.global_futex);
   return 0;
 }
 
@@ -599,7 +599,7 @@ vdl_dlvsym_with_flags (void *handle, const char *symbol, const char *version,
 {
   VDL_LOG_FUNCTION ("handle=0x%llx, symbol=%s, version=%s, caller=0x%llx",
                     handle, symbol, (version == 0) ? "" : version, caller);
-  futex_lock (g_vdl.futex);
+  futex_lock (g_vdl.global_futex);
   struct VdlList *scope;
   struct VdlFile *caller_file = addr_to_file (caller);
   struct VdlContext *context;
@@ -661,11 +661,11 @@ vdl_dlvsym_with_flags (void *handle, const char *symbol, const char *version,
       goto error;
     }
   vdl_list_delete (scope);
-  futex_unlock (g_vdl.futex);
+  futex_unlock (g_vdl.global_futex);
   vdl_lookup_symbol_fixup (result.file, &result.symbol);
   return (void *) (result.file->load_base + result.symbol.st_value);
 error:
-  futex_unlock (g_vdl.futex);
+  futex_unlock (g_vdl.global_futex);
   return 0;
 }
 
@@ -676,7 +676,7 @@ vdl_dl_iterate_phdr (int (*callback) (struct dl_phdr_info * info,
 {
   VDL_LOG_FUNCTION ("", 0);
   int ret = 0;
-  futex_lock (g_vdl.futex);
+  futex_lock (g_vdl.global_futex);
   struct VdlFile *file = addr_to_file (caller);
 
   // report all objects within the global scope/context of the caller
@@ -704,15 +704,15 @@ vdl_dl_iterate_phdr (int (*callback) (struct dl_phdr_info * info,
           info.dlpi_tls_modid = 0;
           info.dlpi_tls_data = 0;
         }
-      futex_unlock (g_vdl.futex);
+      futex_unlock (g_vdl.global_futex);
       ret = callback (&info, sizeof (struct dl_phdr_info), data);
-      futex_lock (g_vdl.futex);
+      futex_lock (g_vdl.global_futex);
       if (ret != 0)
         {
           break;
         }
     }
-  futex_unlock (g_vdl.futex);
+  futex_unlock (g_vdl.global_futex);
   return ret;
 }
 
@@ -720,7 +720,7 @@ void *
 vdl_dlmopen (Lmid_t lmid, const char *filename, int flag)
 {
   VDL_LOG_FUNCTION ("", 0);
-  futex_lock (g_vdl.futex);
+  futex_lock (g_vdl.global_futex);
   struct VdlContext *context;
   if (lmid == LM_ID_BASE)
     {
@@ -740,7 +740,7 @@ vdl_dlmopen (Lmid_t lmid, const char *filename, int flag)
         }
     }
   void *handle = dlopen_with_context (context, filename, flag);
-  futex_unlock (g_vdl.futex);
+  futex_unlock (g_vdl.global_futex);
   return handle;
 }
 
@@ -748,7 +748,7 @@ int
 vdl_dlinfo (void *handle, int request, void *p)
 {
   VDL_LOG_FUNCTION ("", 0);
-  futex_lock (g_vdl.futex);
+  futex_lock (g_vdl.global_futex);
   struct VdlFile *file = search_file (handle);
   if (file == 0)
     {
@@ -798,10 +798,10 @@ vdl_dlinfo (void *handle, int request, void *p)
       goto error;
     }
 
-  futex_unlock (g_vdl.futex);
+  futex_unlock (g_vdl.global_futex);
   return 0;
 error:
-  futex_unlock (g_vdl.futex);
+  futex_unlock (g_vdl.global_futex);
   return -1;
 }
 
@@ -809,10 +809,10 @@ Lmid_t
 vdl_dl_lmid_new (int argc, char **argv, char **envp)
 {
   VDL_LOG_FUNCTION ("", 0);
-  futex_lock (g_vdl.futex);
+  futex_lock (g_vdl.global_futex);
   struct VdlContext *context = vdl_context_new (argc, argv, envp);
   Lmid_t lmid = (Lmid_t) context;
-  futex_unlock (g_vdl.futex);
+  futex_unlock (g_vdl.global_futex);
   return lmid;
 }
 
@@ -820,7 +820,7 @@ void
 vdl_dl_lmid_delete (Lmid_t lmid)
 {
   VDL_LOG_FUNCTION ("", 0);
-  futex_lock (g_vdl.futex);
+  futex_lock (g_vdl.global_futex);
   struct VdlContext *context = (struct VdlContext *) lmid;
   if (search_context (context) == 0)
     {
@@ -849,7 +849,7 @@ vdl_dl_lmid_delete (Lmid_t lmid)
 
   gdb_notify ();
 out:
-  futex_unlock (g_vdl.futex);
+  futex_unlock (g_vdl.global_futex);
 }
 
 int
@@ -858,7 +858,7 @@ vdl_dl_lmid_add_callback (Lmid_t lmid,
                           void *cb_context)
 {
   VDL_LOG_FUNCTION ("", 0);
-  futex_lock (g_vdl.futex);
+  futex_lock (g_vdl.global_futex);
   struct VdlContext *context = (struct VdlContext *) lmid;
   if (search_context (context) == 0)
     {
@@ -867,10 +867,10 @@ vdl_dl_lmid_add_callback (Lmid_t lmid,
   vdl_context_add_callback (context,
                             (void (*)(void *, enum VdlEvent, void *)) cb,
                             cb_context);
-  futex_unlock (g_vdl.futex);
+  futex_unlock (g_vdl.global_futex);
   return 0;
 error:
-  futex_unlock (g_vdl.futex);
+  futex_unlock (g_vdl.global_futex);
   return -1;
 }
 
@@ -878,17 +878,17 @@ int
 vdl_dl_lmid_add_lib_remap (Lmid_t lmid, const char *src, const char *dst)
 {
   VDL_LOG_FUNCTION ("", 0);
-  futex_lock (g_vdl.futex);
+  futex_lock (g_vdl.global_futex);
   struct VdlContext *context = (struct VdlContext *) lmid;
   if (search_context (context) == 0)
     {
       goto error;
     }
   vdl_context_add_lib_remap (context, src, dst);
-  futex_unlock (g_vdl.futex);
+  futex_unlock (g_vdl.global_futex);
   return 0;
 error:
-  futex_unlock (g_vdl.futex);
+  futex_unlock (g_vdl.global_futex);
   return -1;
 }
 
@@ -902,7 +902,7 @@ vdl_dl_lmid_add_symbol_remap (Lmid_t lmid,
                               const char *dst_ver_filename)
 {
   VDL_LOG_FUNCTION ("", 0);
-  futex_lock (g_vdl.futex);
+  futex_lock (g_vdl.global_futex);
   struct VdlContext *context = (struct VdlContext *) lmid;
   if (search_context (context) == 0)
     {
@@ -911,9 +911,9 @@ vdl_dl_lmid_add_symbol_remap (Lmid_t lmid,
   vdl_context_add_symbol_remap (context,
                                 src_name, src_ver_name, src_ver_filename,
                                 dst_name, dst_ver_name, dst_ver_filename);
-  futex_unlock (g_vdl.futex);
+  futex_unlock (g_vdl.global_futex);
   return 0;
 error:
-  futex_unlock (g_vdl.futex);
+  futex_unlock (g_vdl.global_futex);
   return -1;
 }
