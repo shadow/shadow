@@ -16,8 +16,9 @@ file_delete (struct VdlFile *file, bool mapping)
   if (mapping)
     {
       void **i;
-      for (i = vdl_list_begin (file->maps); i != vdl_list_end (file->maps);
-           i = vdl_list_next (i))
+      for (i = vdl_list_begin (file->maps);
+           i != vdl_list_end (file->maps);
+           i = vdl_list_next (file->maps, i))
         {
           struct VdlFileMap *map = *i;
           struct VdlFileAddress *ret, *address = vdl_alloc_new (struct VdlFileAddress);
@@ -69,8 +70,9 @@ void
 vdl_unmap (struct VdlList *files, bool mapping)
 {
   void **i;
-  for (i = vdl_list_begin (files); i != vdl_list_end (files);
-       i = vdl_list_next (i))
+  for (i = vdl_list_begin (files);
+       i != vdl_list_end (files);
+       i = vdl_list_next (files, i))
     {
       file_delete (*i, mapping);
     }

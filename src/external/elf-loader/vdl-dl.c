@@ -32,7 +32,8 @@ find_error (void)
   unsigned long thread_pointer = machine_thread_pointer_get ();
   void **i;
   for (i = vdl_list_begin (g_vdl.errors);
-       i != vdl_list_end (g_vdl.errors); i = vdl_list_next (i))
+       i != vdl_list_end (g_vdl.errors);
+       i = vdl_list_next (g_vdl.errors, i))
     {
       struct VdlError *error = *i;
       if (error->thread_pointer == thread_pointer)
@@ -82,7 +83,8 @@ search_context (struct VdlContext *context)
 {
   void **i;
   for (i = vdl_list_begin (g_vdl.contexts);
-       i != vdl_list_end (g_vdl.contexts); i = vdl_list_next (i))
+       i != vdl_list_end (g_vdl.contexts);
+       i = vdl_list_next (g_vdl.contexts, i))
     {
       if (context == *i)
         {
@@ -153,7 +155,7 @@ get_post_interpose (struct VdlContext *context, int preload)
   void **cur;
   for (cur = vdl_list_begin (context->global_scope);
        cur != vdl_list_end (context->global_scope);
-       cur = vdl_list_next (cur))
+       cur = vdl_list_next (context->global_scope, cur))
     {
       struct VdlFile *item = *cur;
       if (!item->is_interposer || (!preload && item->context != context))
@@ -176,7 +178,7 @@ dlopen_with_context (struct VdlContext *context, const char *filename,
       void **cur;
       for (cur = vdl_list_begin (context->global_scope);
            cur != vdl_list_end (context->global_scope);
-           cur = vdl_list_next (cur))
+           cur = vdl_list_next (context->global_scope, cur))
         {
           struct VdlFile *item = *cur;
           if (item->is_executable)
@@ -259,7 +261,7 @@ dlopen_with_context (struct VdlContext *context, const char *filename,
       // added to the global scope in the past. We call unicize so
       // any duplicate entries appended here will be removed immediately.
       vdl_list_insert_range (context->global_scope,
-                             vdl_list_end (context->global_scope),
+                             vdl_list_end (context->global_scope), scope,
                              vdl_list_begin (scope), vdl_list_end (scope));
       if (!context->has_main && !(flags & (RTLD_PRELOAD | RTLD_INTERPOSE)))
         {
@@ -275,11 +277,12 @@ dlopen_with_context (struct VdlContext *context, const char *filename,
   // setup the local scope of each newly-loaded file.
   void **cur;
   for (cur = vdl_list_begin (map.newly_mapped);
-       cur != vdl_list_end (map.newly_mapped); cur = vdl_list_next (cur))
+       cur != vdl_list_end (map.newly_mapped);
+       cur = vdl_list_next (map.newly_mapped, cur))
     {
       struct VdlFile *item = *cur;
       vdl_list_insert_range (item->local_scope,
-                             vdl_list_end (item->local_scope),
+                             vdl_list_end (item->local_scope), scope,
                              vdl_list_begin (scope), vdl_list_end (scope));
       if (flags & RTLD_DEEPBIND)
         {
@@ -295,7 +298,8 @@ dlopen_with_context (struct VdlContext *context, const char *filename,
 
   vdl_reloc (map.newly_mapped, g_vdl.bind_now || flags & RTLD_NOW);
 
-  vdl_linkmap_append_range (vdl_list_begin (map.newly_mapped),
+  vdl_linkmap_append_range (map.newly_mapped,
+                            vdl_list_begin (map.newly_mapped),
                             vdl_list_end (map.newly_mapped));
 
   // now, we want to update the dtv of _this_ thread.
@@ -374,7 +378,8 @@ remove_from_scopes (struct VdlList *files, struct VdlFile *file)
   // those who have potentially a reference to us
   void **cur;
   for (cur = vdl_list_begin (files);
-       cur != vdl_list_end (files); cur = vdl_list_next (cur))
+       cur != vdl_list_end (files);
+       cur = vdl_list_next (files, cur))
     {
       struct VdlFile *item = *cur;
       vdl_list_remove (item->local_scope, file);
@@ -409,7 +414,8 @@ vdl_dlclose (void *handle)
   {
     void **cur;
     for (cur = vdl_list_begin (gc.unload);
-         cur != vdl_list_end (gc.unload); cur = vdl_list_next (cur))
+         cur != vdl_list_end (gc.unload);
+         cur = vdl_list_next (gc.unload, cur))
       {
         remove_from_scopes (gc.not_unload, *cur);
       }
@@ -428,7 +434,8 @@ vdl_dlclose (void *handle)
   vdl_tls_file_deinitialize (call_fini);
 
   // update the linkmap before unmapping
-  vdl_linkmap_remove_range (vdl_list_begin (call_fini),
+  vdl_linkmap_remove_range (call_fini,
+                            vdl_list_begin (call_fini),
                             vdl_list_end (call_fini));
 
   // now, unmap
@@ -606,6 +613,7 @@ vdl_dlvsym_with_flags (void *handle, const char *symbol, const char *version,
       scope = vdl_list_new ();
       vdl_list_insert_range (scope,
                              vdl_list_begin (scope),
+                             caller_file->context->global_scope,
                              vdl_list_begin (caller_file->
                                              context->global_scope),
                              vdl_list_end (caller_file->
@@ -624,7 +632,9 @@ vdl_dlvsym_with_flags (void *handle, const char *symbol, const char *version,
           scope = vdl_list_new ();
           vdl_list_insert_range (scope,
                                  vdl_list_end (scope),
-                                 vdl_list_next (cur),
+                                 caller_file->context->global_scope,
+                                 vdl_list_next (caller_file->
+                                                context->global_scope, cur),
                                  vdl_list_end (caller_file->
                                                context->global_scope));
         }
@@ -676,7 +686,7 @@ vdl_dl_iterate_phdr (int (*callback) (struct dl_phdr_info * info,
   void **cur;
   for (cur = vdl_list_begin (file->context->global_scope);
        cur != vdl_list_end (file->context->global_scope);
-       cur = vdl_list_next (cur))
+       cur = vdl_list_next (file->context->global_scope, cur))
     {
       struct VdlFile *item = *cur;
       struct dl_phdr_info info;
@@ -833,7 +843,8 @@ vdl_dl_lmid_delete (Lmid_t lmid)
   vdl_tls_file_deinitialize (context->loaded);
 
   // update the linkmap before unmapping
-  vdl_linkmap_remove_range (vdl_list_begin (context->loaded),
+  vdl_linkmap_remove_range (context->loaded,
+                            vdl_list_begin (context->loaded),
                             vdl_list_end (context->loaded));
   // need to make a copy because the context might disappear from
   // under our feet while we unmap if we unmap its remaining files.

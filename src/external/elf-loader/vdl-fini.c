@@ -59,7 +59,8 @@ vdl_fini_lock (struct VdlList *files)
   {
     void **cur;
     for (cur = vdl_list_begin (files);
-         cur != vdl_list_end (files); cur = vdl_list_next (cur))
+         cur != vdl_list_end (files);
+         cur = vdl_list_next (files, cur))
       {
         struct VdlFile *file = *cur;
         if (file->fini_call_lock == 1)

@@ -17,8 +17,9 @@ debug_print_maps (const char *filename, struct VdlList *maps)
 {
   VDL_LOG_DEBUG ("%s", filename);
   void **i;
-  for (i = vdl_list_begin (maps); i != vdl_list_end (maps);
-       i = vdl_list_next (i))
+  for (i = vdl_list_begin (maps);
+       i != vdl_list_end (maps);
+       i = vdl_list_next (maps, i))
     {
       struct VdlFileMap *map = *i;
       VDL_LOG_DEBUG
@@ -44,8 +45,9 @@ get_total_mapping_boundaries (struct VdlList *maps,
   unsigned long end = 0;
   unsigned long offset = ~0;
   void **cur;
-  for (cur = vdl_list_begin (maps); cur != vdl_list_end (maps);
-       cur = vdl_list_next (cur))
+  for (cur = vdl_list_begin (maps);
+       cur != vdl_list_end (maps);
+       cur = vdl_list_next (maps, cur))
     {
       struct VdlFileMap *map = *cur;
       if (start >= map->mem_start_align)
@@ -91,7 +93,7 @@ int map_address_compare (const void *p1, const void *p2)
 }
 
 static struct VdlFileMap *
-pt_load_to_file_map (const ElfW (Phdr) * phdr)
+pt_load_to_file_map (const ElfW (Phdr) *phdr)
 {
   struct VdlFileMap *map = vdl_alloc_new (struct VdlFileMap);
   unsigned long page_size = system_getpagesize ();
@@ -171,8 +173,9 @@ static char *
 do_search (const char *name, struct VdlList *list)
 {
   void **i;
-  for (i = vdl_list_begin (list); i != vdl_list_end (list);
-       i = vdl_list_next (i))
+  for (i = vdl_list_begin (list);
+       i != vdl_list_end (list);
+       i = vdl_list_next (list, i))
     {
       char *fullname = vdl_utils_strconcat (*i, "/", name, 0);
       fullname = replace_magic (fullname);
@@ -234,7 +237,8 @@ find_by_name (struct VdlContext *context, const char *name)
     }
   void **i;
   for (i = vdl_list_begin (context->loaded);
-       i != vdl_list_end (context->loaded); i = vdl_list_next (i))
+       i != vdl_list_end (context->loaded);
+       i = vdl_list_next (context->loaded, i))
     {
       struct VdlFile *cur = *i;
       if (vdl_utils_strisequal (cur->name, name) ||
@@ -252,7 +256,8 @@ find_by_dev_ino (struct VdlContext *context, dev_t dev, ino_t ino)
 {
   void **i;
   for (i = vdl_list_begin (context->loaded);
-       i != vdl_list_end (context->loaded); i = vdl_list_next (i))
+       i != vdl_list_end (context->loaded);
+       i = vdl_list_next (context->loaded, i))
     {
       struct VdlFile *cur = *i;
       if (cur->st_dev == dev && cur->st_ino == ino)
@@ -264,12 +269,11 @@ find_by_dev_ino (struct VdlContext *context, dev_t dev, ino_t ino)
 }
 
 static int
-get_file_info (uint32_t phnum,
-               ElfW (Phdr) * phdr,
+get_file_info (uint32_t phnum, ElfW (Phdr) *phdr,
                unsigned long *pdynamic, struct VdlList **pmaps)
 {
   VDL_LOG_FUNCTION ("phnum=%d, phdr=%p", phnum, phdr);
-  ElfW (Phdr) * dynamic = 0, *cur;
+  ElfW (Phdr) *dynamic = 0, *cur;
   struct VdlList *maps = vdl_list_new ();
   uint32_t i;
   unsigned long align = 0;
@@ -305,8 +309,9 @@ get_file_info (uint32_t phnum,
     }
   void **j;
   bool included = false;
-  for (j = vdl_list_begin (maps); j != vdl_list_end (maps);
-       j = vdl_list_next (j))
+  for (j = vdl_list_begin (maps);
+       j != vdl_list_end (maps);
+       j = vdl_list_next (maps, j))
     {
       struct VdlFileMap *map = *j;
       if (dynamic->p_offset >= map->file_start_align &&
@@ -335,9 +340,7 @@ error:
 }
 
 static struct VdlFile *
-file_new (unsigned long load_base,
-          unsigned long dynamic,
-          struct VdlList *maps,
+file_new (unsigned long load_base, unsigned long dynamic, struct VdlList *maps,
           const char *filename, const char *name, struct VdlContext *context)
 {
   struct VdlFile *file = vdl_alloc_new (struct VdlFile);
@@ -349,16 +352,16 @@ file_new (unsigned long load_base,
   file->dynamic = dynamic + load_base;
   file->next = 0;
   file->prev = 0;
-  file->is_main_namespace =
-    (context == vdl_list_front (g_vdl.contexts)) ? 0 : 1;
+  file->is_main_namespace = (context == vdl_list_front (g_vdl.contexts));
   file->count = 0;
   file->context = context;
   file->st_dev = 0;
   file->st_ino = 0;
   file->maps = maps;
   void **i;
-  for (i = vdl_list_begin (maps); i != vdl_list_end (maps);
-       i = vdl_list_next (i))
+  for (i = vdl_list_begin (maps);
+       i != vdl_list_end (maps);
+       i = vdl_list_next (maps, i))
     {
       struct VdlFileMap *map = *i;
       file_map_add_load_base (map, load_base);
@@ -634,6 +637,20 @@ static unsigned long
 readonly_cache_map (const char *filename, const struct VdlFileMap *map,
                     int fd, int prot, unsigned long load_base)
 {
+  // With enough clever hacking around the locks here, we could reduce
+  // contention around insertions, since the ro_cache_futex is really only
+  // neccessary on a per-filename basis (we don't want to map the same section
+  // twice). E.g., we could use the locks in the linked lists in the hashmap.
+  // I'm not doing this now, because it would pretty significantly increase the
+  // code complexity, and I can't think of any usecases that involve opening
+  // a significant number of *unique* shared objects, meaning insertions are
+  // infrequent anyway.
+  // Alternatively, we could just remove the lock entirely, since the hashmap
+  // API we wrote is itself thread-safe. This would mean that sections could be
+  // cached multiple times if there were a race in this function, which would
+  // add a memory overhead but not a stability problem (assuming you also added
+  // a means to make shm_path unique on each call, not just each process).
+
   char *section = vdl_utils_itoa (map->file_start_align);
   char *hashname = vdl_utils_strconcat (filename, section);
   unsigned long hash = vdl_gnu_hash (filename);
@@ -856,10 +873,11 @@ vdl_file_map_single (struct VdlContext *context,
 
   // remap the portions we want.
   // To prevent concurrency problems, we don't munmap the mmap at mapping_start.
-  // We can do this because the remaps used MAP_FIXED. (see man mmap)
+  // We can do this because the remaps use MAP_FIXED. (see man mmap)
   void **i;
-  for (i = vdl_list_begin (maps); i != vdl_list_end (maps);
-       i = vdl_list_next (i))
+  for (i = vdl_list_begin (maps);
+       i != vdl_list_end (maps);
+       i = vdl_list_next (maps, i))
     {
       struct VdlFileMap *map = *i;
       file_map_do (filename, map, fd, map->mmap_flags, load_base);
@@ -873,8 +891,7 @@ vdl_file_map_single (struct VdlContext *context,
     }
 
   struct VdlFile *file = file_new (load_base, dynamic, maps,
-                                   filename, name,
-                                   context);
+                                   filename, name, context);
   file->st_dev = st_buf.st_dev;
   file->st_ino = st_buf.st_ino;
 
@@ -977,7 +994,8 @@ vdl_file_map_update_depths (struct VdlFile *item)
 
   void **cur;
   for (cur = vdl_list_begin (tmp_deps);
-       cur != vdl_list_end (tmp_deps); cur = vdl_list_next (cur))
+       cur != vdl_list_end (tmp_deps);
+       cur = vdl_list_next (tmp_deps, cur))
     {
       struct VdlFile *dependency = (struct VdlFile *) *cur;
       if (item->depth + 1 > dependency->depth && dependency->deps)
@@ -1012,6 +1030,7 @@ vdl_file_map_deps_recursive (struct VdlFile *item,
   struct VdlList *current_rpath = vdl_list_copy (rpath);
   vdl_list_insert_range (current_rpath,
                          vdl_list_end (current_rpath),
+                         caller_rpath,
                          vdl_list_begin (caller_rpath),
                          vdl_list_end (caller_rpath));
 
@@ -1021,7 +1040,8 @@ vdl_file_map_deps_recursive (struct VdlFile *item,
   // first, map each dep and accumulate them in deps variable
   void **cur;
   for (cur = vdl_list_begin (dt_needed);
-       cur != vdl_list_end (dt_needed); cur = vdl_list_next (cur))
+       cur != vdl_list_end (dt_needed);
+       cur = vdl_list_next (dt_needed, cur))
     {
       struct SingleMapResult tmp_result;
       tmp_result = vdl_file_map_single_maybe (item->context, *cur,
@@ -1044,7 +1064,8 @@ vdl_file_map_deps_recursive (struct VdlFile *item,
 
   // then, recursively map the deps of each dep.
   for (cur = vdl_list_begin (item->deps);
-       cur != vdl_list_end (item->deps); cur = vdl_list_next (cur))
+       cur != vdl_list_end (item->deps);
+       cur = vdl_list_next (item->deps, cur))
     {
       error = vdl_file_map_deps_recursive (*cur, current_rpath, newly_mapped);
       if (error != 0)
@@ -1066,7 +1087,7 @@ out:
 
 struct VdlMapResult
 vdl_map_from_memory (unsigned long load_base,
-                     uint32_t phnum, ElfW (Phdr) * phdr,
+                     uint32_t phnum, ElfW (Phdr) *phdr,
                      // a fully-qualified path to the file
                      // represented by the phdr
                      const char *path,

@@ -3,6 +3,7 @@
 
 #include "vdl-alloc.h"
 #include "vdl-list.h"
+#include "futex.h"
 
 struct VdlHashMapItem
 {
@@ -12,11 +13,12 @@ struct VdlHashMapItem
 
 struct VdlHashMap
 {
+  struct VdlList **buckets;
   uint32_t n_buckets;
   unsigned int load;
   // load at which we realloc
   unsigned int max_load;
-  struct VdlList **buckets;
+  struct RWLock *lock;
 };
 
 // "hash" is the hashed form of the key

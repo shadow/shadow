@@ -1,6 +1,7 @@
 #ifndef VDL_LIST_H
 #define VDL_LIST_H
 
+#include "futex.h"
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -11,7 +12,7 @@ extern "C" {
 /**
  * This API is based on the std::list API. The name and
  * semantics of all functions is based on the std::list version.
- * Because this is C code, we use void ** for the iterator 
+ * Because this is C code, we use void ** for the iterator
  * type and void * for the value type.
  */
 
@@ -27,6 +28,7 @@ struct VdlList
   struct VdlListItem head;
   struct VdlListItem tail;
   uint32_t size;
+  struct RWLock *lock;
 };
 struct VdlListItem;
 
@@ -40,12 +42,12 @@ bool vdl_list_empty (struct VdlList *list);
 
 void **vdl_list_begin (struct VdlList *list);
 void **vdl_list_end (struct VdlList *list);
-void **vdl_list_next (void **i);
-void **vdl_list_prev (void **i);
+void **vdl_list_next (struct VdlList *list, void **i);
+void **vdl_list_prev (struct VdlList *list, void **i);
 
 void **vdl_list_insert (struct VdlList *list, void **at, void *value);
-void vdl_list_insert_range (struct VdlList *list, void **at,
-			    void **start, void **end);
+void vdl_list_insert_range (struct VdlList *to, void **at,
+                            struct VdlList *from, void **start, void **end);
 void vdl_list_push_back (struct VdlList *list, void *data);
 void vdl_list_push_front (struct VdlList *list, void *data);
 void vdl_list_pop_back (struct VdlList *list);
@@ -56,15 +58,15 @@ void **vdl_list_find (struct VdlList *list, void *data);
 void **vdl_list_find_from (struct VdlList *list, void **from, void *data);
 void vdl_list_clear (struct VdlList *list);
 void **vdl_list_erase (struct VdlList *list, void **i);
-void **vdl_list_erase_range (struct VdlList *list, 
-			     void **start,
-			     void **end);
+void **vdl_list_erase_range (struct VdlList *list,
+                             void **start,
+                             void **end);
 void vdl_list_remove (struct VdlList *list, void *data);
 void vdl_list_reverse (struct VdlList *list);
-void vdl_list_sort (struct VdlList *list, 
-		    // true if a < b, false otherwise
-		    bool (*is_strictly_lower) (void *a, void *b, void *context),
-		    void *context);
+void vdl_list_sort (struct VdlList *list,
+                    // true if a < b, false otherwise
+                    bool (*is_strictly_lower) (void *a, void *b, void *context),
+                    void *context);
 void vdl_list_unique (struct VdlList *list);
 
 // Contrary to the std::list::unique method, this function
@@ -79,11 +81,11 @@ void vdl_list_unicize (struct VdlList *list);
 // but it will not really work correctly.
 void **vdl_list_rbegin (struct VdlList *list);
 void **vdl_list_rend (struct VdlList *list);
-void **vdl_list_rnext (void **i);
-void **vdl_list_rprev (void **i);
+void **vdl_list_rnext (struct VdlList *list, void **i);
+void **vdl_list_rprev (struct VdlList *list, void **i);
 
 void vdl_list_iterate (struct VdlList *list,
-		       void (*iterator) (void *data));
+                       void (*iterator) (void *data));
 
 
 #ifdef __cplusplus

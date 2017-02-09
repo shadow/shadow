@@ -332,8 +332,9 @@ do_reloc (struct VdlFile *file, int now)
       // we need to mark the pages as write to allow
       // the relocations to proceed
       void **i;
-      for (i = vdl_list_begin (file->maps); i != vdl_list_end (file->maps);
-           i = vdl_list_next (i))
+      for (i = vdl_list_begin (file->maps);
+           i != vdl_list_end (file->maps);
+           i = vdl_list_next (file->maps, i))
         {
           struct VdlFileMap *map = *i;
           system_mprotect ((void *) map->mem_start_align, map->mem_size_align,
@@ -356,8 +357,9 @@ do_reloc (struct VdlFile *file, int now)
     {
       // undo the write access
       void **i;
-      for (i = vdl_list_begin (file->maps); i != vdl_list_end (file->maps);
-           i = vdl_list_next (i))
+      for (i = vdl_list_begin (file->maps);
+           i != vdl_list_end (file->maps);
+           i = vdl_list_next (file->maps, i))
         {
           struct VdlFileMap *map = *i;
           system_mprotect ((void *) map->mem_start_align, map->mem_size_align,
@@ -373,7 +375,8 @@ vdl_reloc (struct VdlList *files, int now)
   vdl_list_reverse (sorted);
   void **cur;
   for (cur = vdl_list_begin (sorted);
-       cur != vdl_list_end (sorted); cur = vdl_list_next (cur))
+       cur != vdl_list_end (sorted);
+       cur = vdl_list_next (sorted, cur))
     {
       do_reloc (*cur, now);
     }

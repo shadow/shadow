@@ -241,7 +241,8 @@ stage1_freeres (void)
   {
     void **i;
     for (i = vdl_list_begin (g_vdl.errors);
-         i != vdl_list_end (g_vdl.errors); i = vdl_list_next (i))
+         i != vdl_list_end (g_vdl.errors);
+         i = vdl_list_next (g_vdl.errors, i))
       {
         struct VdlError *error = *i;
         vdl_alloc_free (error->prev_error);

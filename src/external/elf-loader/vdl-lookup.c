@@ -439,8 +439,9 @@ vdl_lookup_with_scope_internal (struct VdlFile *file,
 
   // then, iterate scope until we find the requested symbol.
   void **cur;
-  for (cur = vdl_list_begin (scope); cur != vdl_list_end (scope);
-       cur = vdl_list_next (cur))
+  for (cur = vdl_list_begin (scope);
+       cur != vdl_list_end (scope);
+       cur = vdl_list_next (scope, cur))
     {
       struct VdlFile *item = *cur;
       if (flags & VDL_LOOKUP_NO_EXEC && item->is_executable)

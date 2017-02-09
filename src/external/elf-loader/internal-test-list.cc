@@ -5,14 +5,14 @@
 #include <stdarg.h>
 
 
-#define CHECK_LIST(list,expected_size,...)				\
-  {									\
+#define CHECK_LIST(list,expected_size,...)                              \
+  {                                                                     \
     std::vector<int> expected = get_expected (expected_size, ##__VA_ARGS__); \
-    std::vector<int> got = get_list (list);				\
-    if (!check (expected, got, __FILE__, __LINE__))			\
-      {									\
-	return false;							\
-      }									\
+    std::vector<int> got = get_list (list);                             \
+    if (!check (expected, got, __FILE__, __LINE__))                     \
+      {                                                                 \
+        return false;                                                   \
+      }                                                                 \
   }
 
 static std::vector<int> get_expected (uint32_t n, ...)
@@ -34,14 +34,14 @@ static std::vector<int> get_list (struct VdlList *list)
   void **i;
   for (i = vdl_list_begin (list);
        i != vdl_list_end (list);
-       i = vdl_list_next (i))
+       i = vdl_list_next (list, i))
     {
       vector.push_back ((int)(long)(*i));
     }
   std::vector<int> inverted;
   for (i = vdl_list_rbegin (list);
        i != vdl_list_rend (list);
-       i = vdl_list_rnext (i))
+       i = vdl_list_rnext (list, i))
     {
       inverted.push_back ((int)(long)(*i));
     }
@@ -54,11 +54,11 @@ static std::vector<int> get_list (struct VdlList *list)
   return vector;
 }
 static bool check (std::vector<int> expected,
-		   std::vector<int> got,
-		   const char *file, int line)
+                   std::vector<int> got,
+                   const char *file, int line)
 {
   INTERNAL_TEST_ASSERT_EQ_VERBOSE (expected.size (), got.size (),
-				   file,line);
+                                   file,line);
   uint32_t n = std::min (expected.size (), got.size ());
   for (uint32_t i = 0; i < n; i++)
     {

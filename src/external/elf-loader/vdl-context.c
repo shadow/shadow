@@ -60,7 +60,8 @@ vdl_context_notify (struct VdlContext *context,
 {
   void **i;
   for (i = vdl_list_begin (context->event_callbacks);
-       i != vdl_list_end (context->event_callbacks); i = vdl_list_next (i))
+       i != vdl_list_end (context->event_callbacks);
+       i = vdl_list_next (context->event_callbacks, i))
     {
       struct VdlContextEventCallbackEntry *item = *i;
       item->fn (file, event, item->context);
@@ -74,7 +75,8 @@ vdl_context_lib_remap (const struct VdlContext *context, const char *name)
   VDL_LOG_FUNCTION ("name=%s", name);
   void **i;
   for (i = vdl_list_begin (context->lib_remaps);
-       i != vdl_list_end (context->lib_remaps); i = vdl_list_next (i))
+       i != vdl_list_end (context->lib_remaps);
+       i = vdl_list_next (context->lib_remaps, i))
     {
       struct VdlContextLibRemapEntry *item = *i;
       if (vdl_utils_strisequal (item->src, name))
@@ -97,7 +99,8 @@ vdl_context_symbol_remap (const struct VdlContext *context,
   void **i;
   struct VdlContextSymbolRemapEntry *item;
   for (i = vdl_list_begin (context->symbol_remaps);
-       i != vdl_list_end (context->symbol_remaps); i = vdl_list_next (i))
+       i != vdl_list_end (context->symbol_remaps);
+       i = vdl_list_next (context->symbol_remaps, i))
     {
       item = *i;
       if (!vdl_utils_strisequal (item->src_name, *name))
@@ -203,7 +206,8 @@ vdl_context_delete (struct VdlContext *context)
   {
     void **i;
     for (i = vdl_list_begin (context->lib_remaps);
-         i != vdl_list_end (context->lib_remaps); i = vdl_list_next (i))
+         i != vdl_list_end (context->lib_remaps);
+         i = vdl_list_next (context->lib_remaps, i))
       {
         struct VdlContextLibRemapEntry *item = *i;
         vdl_alloc_free (item->src);
@@ -216,7 +220,8 @@ vdl_context_delete (struct VdlContext *context)
   {
     void **i;
     for (i = vdl_list_begin (context->symbol_remaps);
-         i != vdl_list_end (context->symbol_remaps); i = vdl_list_next (i))
+         i != vdl_list_end (context->symbol_remaps);
+         i = vdl_list_next (context->symbol_remaps, i))
       {
         struct VdlContextSymbolRemapEntry *item = *i;
         vdl_alloc_free (item->src_name);
@@ -233,7 +238,8 @@ vdl_context_delete (struct VdlContext *context)
   {
     void **i;
     for (i = vdl_list_begin (context->event_callbacks);
-         i != vdl_list_end (context->event_callbacks); i = vdl_list_next (i))
+         i != vdl_list_end (context->event_callbacks);
+         i = vdl_list_next (context->event_callbacks, i))
       {
         struct VdlContextEventCallbackEntry *item = *i;
         vdl_alloc_delete (item);

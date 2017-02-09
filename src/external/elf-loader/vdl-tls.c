@@ -62,7 +62,8 @@ file_list_initialize (struct VdlList *files)
   // gets assigned tls module id 1 if needed.
   void **cur;
   for (cur = vdl_list_begin (files);
-       cur != vdl_list_end (files); cur = vdl_list_next (cur))
+       cur != vdl_list_end (files);
+       cur = vdl_list_next (files, cur))
     {
       struct VdlFile *item = *cur;
       if (item->is_executable)
@@ -72,7 +73,8 @@ file_list_initialize (struct VdlList *files)
         }
     }
   for (cur = vdl_list_begin (files);
-       cur != vdl_list_end (files); cur = vdl_list_next (cur))
+       cur != vdl_list_end (files);
+       cur = vdl_list_next (files, cur))
     {
       struct VdlFile *item = *cur;
       if (!item->is_executable)
@@ -100,7 +102,8 @@ initialize_static_tls (struct VdlList *list)
   unsigned long max_align = g_vdl.tls_static_align;
   void **cur;
   for (cur = vdl_list_begin (list);
-       cur != vdl_list_end (list); cur = vdl_list_next (cur))
+       cur != vdl_list_end (list);
+       cur = vdl_list_next (list, cur))
     {
       struct VdlFile *file = *cur;
       if (file->has_tls)
@@ -161,7 +164,8 @@ vdl_tls_file_deinitialize (struct VdlList *files)
   // the deinitialization order here does not matter at all.
   void **cur;
   for (cur = vdl_list_begin (files);
-       cur != vdl_list_end (files); cur = vdl_list_next (cur))
+       cur != vdl_list_end (files);
+       cur = vdl_list_next (files, cur))
     {
       file_deinitialize (*cur);
     }

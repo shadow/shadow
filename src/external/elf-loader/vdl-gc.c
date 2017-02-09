@@ -24,8 +24,9 @@ vdl_gc_white_list_new (struct VdlList *list)
   // track of all roots.
   {
     void **cur;
-    for (cur = vdl_list_begin (list); cur != vdl_list_end (list);
-         cur = vdl_list_next (cur))
+    for (cur = vdl_list_begin (list);
+         cur != vdl_list_end (list);
+         cur = vdl_list_next (list, cur))
       {
         struct VdlFile *item = *cur;
         if (item->count > 0)
@@ -49,7 +50,7 @@ vdl_gc_white_list_new (struct VdlList *list)
       void **cur;
       for (cur = vdl_list_begin (first->gc_symbols_resolved_in);
            cur != vdl_list_end (first->gc_symbols_resolved_in);
-           cur = vdl_list_next (cur))
+           cur = vdl_list_next (first->gc_symbols_resolved_in, cur))
         {
           struct VdlFile *item = *cur;
           if (item->gc_color == VDL_GC_WHITE)
@@ -61,7 +62,8 @@ vdl_gc_white_list_new (struct VdlList *list)
             }
         }
       for (cur = vdl_list_begin (first->deps);
-           cur != vdl_list_end (first->deps); cur = vdl_list_next (cur))
+           cur != vdl_list_end (first->deps);
+           cur = vdl_list_next (first->deps, cur))
         {
           struct VdlFile *item = *cur;
           if (item->gc_color == VDL_GC_WHITE)
@@ -81,8 +83,9 @@ vdl_gc_white_list_new (struct VdlList *list)
   struct VdlList *white = vdl_list_new ();
   {
     void **cur;
-    for (cur = vdl_list_begin (list); cur != vdl_list_end (list);
-         cur = vdl_list_next (cur))
+    for (cur = vdl_list_begin (list);
+         cur != vdl_list_end (list);
+         cur = vdl_list_next (list, cur))
       {
         struct VdlFile *item = *cur;
         if (item->gc_color == VDL_GC_WHITE)
@@ -104,11 +107,12 @@ vdl_gc_run (void)
   while (!vdl_list_empty (white))
     {
       // copy white files into unload list
-      vdl_list_insert_range (unload, vdl_list_end (unload),
+      vdl_list_insert_range (unload, vdl_list_end (unload), white,
                              vdl_list_begin (white), vdl_list_end (white));
       void **cur;
       for (cur = vdl_list_begin (white);
-           cur != vdl_list_end (white); cur = vdl_list_next (cur))
+           cur != vdl_list_end (white);
+           cur = vdl_list_next (white, cur))
         {
           // now, we remove that file from the global list to ensure
           // that the next call to vdl_gc_get_white won't return it again

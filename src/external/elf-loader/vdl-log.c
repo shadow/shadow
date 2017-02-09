@@ -28,7 +28,8 @@ vdl_log_set (const char *debug_str)
   void **cur;
   uint32_t logging = 0;
   for (cur = vdl_list_begin (list);
-       cur != vdl_list_end (list); cur = vdl_list_next (cur))
+       cur != vdl_list_end (list);
+       cur = vdl_list_next (list, cur))
     {
       if (vdl_utils_strisequal (*cur, "debug"))
         {

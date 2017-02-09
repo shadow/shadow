@@ -10,7 +10,8 @@ get_max_depth (struct VdlList *files)
   uint32_t max_depth = 0;
   void **cur;
   for (cur = vdl_list_begin (files);
-       cur != vdl_list_end (files); cur = vdl_list_next (cur))
+       cur != vdl_list_end (files);
+       cur = vdl_list_next (files, cur))
     {
       struct VdlFile *file = *cur;
       max_depth = vdl_utils_max (file->depth, max_depth);
@@ -31,7 +32,8 @@ vdl_sort_increasing_depth (struct VdlList *files)
       // find files with matching depth and output them
       void **cur;
       for (cur = vdl_list_begin (files);
-           cur != vdl_list_end (files); cur = vdl_list_next (cur))
+           cur != vdl_list_end (files);
+           cur = vdl_list_next (files, cur))
         {
           struct VdlFile *file = *cur;
           if (file->depth == i)
@@ -51,12 +53,14 @@ vdl_sort_deps_breadth_first (struct VdlFile *file)
 
   void **i;
   for (i = vdl_list_begin (sorted);
-       i != vdl_list_end (sorted); i = vdl_list_next (i))
+       i != vdl_list_end (sorted);
+       i = vdl_list_next (sorted, i))
     {
       struct VdlFile *item = *i;
       void **j;
       for (j = vdl_list_begin (item->deps);
-           j != vdl_list_end (item->deps); j = vdl_list_next (j))
+           j != vdl_list_end (item->deps);
+           j = vdl_list_next (item->deps, j))
         {
           if (vdl_list_find (sorted, *j) == vdl_list_end (sorted))
             {

@@ -286,6 +286,7 @@ machine_thread_pointer_get (void)
   return value;
 }
 
+// set ptr to new if *ptr == old, return the original value of ptr
 uint32_t
 machine_atomic_compare_and_exchange (uint32_t * ptr, uint32_t old,
                                      uint32_t new)

@@ -106,7 +106,7 @@ ld_preload_lists (struct VdlList *preload_files, struct VdlList *preload_deps,
   void **cur;
   for (cur = vdl_list_begin (preload_names);
        cur != vdl_list_end (preload_names);
-       cur = vdl_list_next (cur))
+       cur = vdl_list_next (preload_names, cur))
     {
       char *filename = *cur;
       if (filename[0] == 0)
@@ -125,6 +125,7 @@ ld_preload_lists (struct VdlList *preload_files, struct VdlList *preload_deps,
       result.requested->is_interposer = 1;
       vdl_list_push_back (preload_files, result.requested);
       vdl_list_insert_range (preload_deps, vdl_list_end (preload_deps),
+                             result.newly_mapped,
                              vdl_list_begin (result.newly_mapped),
                              vdl_list_end (result.newly_mapped));
       vdl_list_delete (result.newly_mapped);
@@ -191,7 +192,7 @@ setup_env_vars (const char **envp)
   const char *ld_lib_path = vdl_utils_getenv (envp, "LD_LIBRARY_PATH");
   struct VdlList *list = vdl_utils_splitpath (ld_lib_path);
   vdl_list_insert_range (g_vdl.search_dirs,
-                         vdl_list_begin (g_vdl.search_dirs),
+                         vdl_list_begin (g_vdl.search_dirs), list,
                          vdl_list_begin (list), vdl_list_end (list));
   vdl_list_delete (list);
 
@@ -283,11 +284,14 @@ stage2_initialize (struct Stage2Input input)
   // then, the dependencies from the ld preload entries
   vdl_linkmap_append (main_file);
   vdl_linkmap_append (interp);
-  vdl_linkmap_append_range (vdl_list_begin (ld_preload),
+  vdl_linkmap_append_range (ld_preload,
+                            vdl_list_begin (ld_preload),
                             vdl_list_end (ld_preload));
-  vdl_linkmap_append_range (vdl_list_begin (main_result.newly_mapped),
+  vdl_linkmap_append_range (main_result.newly_mapped,
+                            vdl_list_begin (main_result.newly_mapped),
                             vdl_list_end (main_result.newly_mapped));
-  vdl_linkmap_append_range (vdl_list_begin (preload_deps),
+  vdl_linkmap_append_range (preload_deps,
+                            vdl_list_begin (preload_deps),
                             vdl_list_end (preload_deps));
   vdl_list_delete (main_result.newly_mapped);
   main_result.newly_mapped = 0;
@@ -301,14 +305,16 @@ stage2_initialize (struct Stage2Input input)
   // of course, the ld_preload binaries must be in there if needed.
   vdl_list_insert_range (context->global_scope,
                          vdl_list_end (context->global_scope),
+                         ld_preload,
                          vdl_list_begin (ld_preload),
                          vdl_list_end (ld_preload));
   struct VdlList *all_deps = vdl_sort_deps_breadth_first (main_file);
   vdl_list_insert_range (context->global_scope,
-                         vdl_list_end (context->global_scope),
+                         vdl_list_end (context->global_scope), all_deps,
                          vdl_list_begin (all_deps), vdl_list_end (all_deps));
   vdl_list_insert_range (context->global_scope,
                          vdl_list_end (context->global_scope),
+                         preload_deps,
                          vdl_list_begin (preload_deps),
                          vdl_list_end (preload_deps));
   vdl_list_delete (all_deps);
@@ -401,7 +407,7 @@ file_list_print (struct VdlList *l)
 {
   void **cur;
   for (cur = vdl_list_begin (l); cur != vdl_list_end (l);
-       cur = vdl_list_next (cur))
+       cur = vdl_list_next (l, cur))
     {
       struct VdlFile *file = *cur;
       VDL_LOG_DEBUG ("file=%p/\"%s\"\n", file, file->filename);

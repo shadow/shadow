@@ -27,10 +27,10 @@ vdl_linkmap_append (struct VdlFile *file)
 }
 
 void
-vdl_linkmap_append_range (void **begin, void **end)
+vdl_linkmap_append_range (struct VdlList *list, void **begin, void **end)
 {
   void **i;
-  for (i = begin; i != end; i = vdl_list_next (i))
+  for (i = begin; i != end; i = vdl_list_next (list, i))
     {
       vdl_linkmap_append (*i);
     }
@@ -69,10 +69,10 @@ vdl_linkmap_remove (struct VdlFile *file)
 }
 
 void
-vdl_linkmap_remove_range (void **begin, void **end)
+vdl_linkmap_remove_range (struct VdlList *list, void **begin, void **end)
 {
   void **i;
-  for (i = begin; i != end; i = vdl_list_next (i))
+  for (i = begin; i != end; i = vdl_list_next (list, i))
     {
       vdl_linkmap_remove (*i);
     }

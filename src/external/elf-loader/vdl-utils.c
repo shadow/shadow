@@ -203,7 +203,7 @@ vdl_utils_str_list_delete (struct VdlList *list)
   void **i;
   for (i = vdl_list_begin (list);
        i != vdl_list_end (list);
-       i = vdl_list_next (i))
+       i = vdl_list_next (list, i))
     {
       vdl_alloc_free (*i);
     }
@@ -253,7 +253,7 @@ vdl_utils_splitpath (const char *value)
   void **i;
   for (i = vdl_list_begin (list);
        i != vdl_list_end (list);
-       i = vdl_list_next (i))
+       i = vdl_list_next (list, i))
     {
       if (vdl_utils_strisequal (*i, ""))
         {
