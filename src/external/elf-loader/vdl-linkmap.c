@@ -7,22 +7,20 @@
 void
 vdl_linkmap_append (struct VdlFile *file)
 {
+  if (file->in_linkmap)
+    {
+      return;
+    }
+  file->in_linkmap = 1;
   if (g_vdl.link_map == 0)
     {
       g_vdl.link_map = file;
+      g_vdl.link_map_tail = file;
       return;
     }
-  struct VdlFile *cur = g_vdl.link_map;
-  while (cur->next != 0 && cur != file)
-    {
-      cur = cur->next;
-    }
-  if (cur == file)
-    {
-      return;
-    }
-  cur->next = file;
-  file->prev = cur;
+  g_vdl.link_map_tail->next = file;
+  file->prev = g_vdl.link_map_tail;
+  g_vdl.link_map_tail = file;
   file->next = 0;
   g_vdl.n_added++;
 }
@@ -45,6 +43,7 @@ vdl_linkmap_remove (struct VdlFile *file)
   struct VdlFile *prev = file->prev;
   file->next = 0;
   file->prev = 0;
+  file->in_linkmap = 0;
   if (prev == 0)
     {
       g_vdl.link_map = next;
@@ -56,6 +55,10 @@ vdl_linkmap_remove (struct VdlFile *file)
   if (next != 0)
     {
       next->prev = prev;
+    }
+  else
+    {
+      g_vdl.link_map_tail = prev;
     }
   if (file->has_tls && file->tls_index < g_vdl.module_map_len)
     {

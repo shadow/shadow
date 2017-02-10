@@ -109,6 +109,8 @@ struct VdlFile
   // indicates if we patched this file for some
   // nastly glibc-isms.
   uint32_t patched:1;
+  // indicates if we have inserted into the global linkmap
+  uint32_t in_linkmap:1;
   // indicates if this represents the main executable.
   uint32_t is_executable:1;
   // indicates if this is an interposing file
