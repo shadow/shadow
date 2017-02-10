@@ -147,8 +147,8 @@ cat /proc/PID/maps | wc -l
 Set a new limit, make it persistent, apply it now:
 
 ```bash
-sudo sysctl -w vm.max_map_count=262144
-sudo echo "vm.max_map_count = 262144" >> /etc/sysctl.conf
+sudo sysctl -w vm.max_map_count=1073741824
+sudo echo "vm.max_map_count = 1073741824" >> /etc/sysctl.conf
 sudo sysctl -p
 ```
 
