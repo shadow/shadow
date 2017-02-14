@@ -221,6 +221,11 @@ def main(argv):
         sys.exit (1)
     config.write ('#define CONFIG_RTLD_DL_PAGESIZE_OFFSET ' + str(data.data) + '\n')
 
+    data = debug.get_struct_member_offset ('rtld_global_ro', '_dl_clktck')
+    if data is None:
+        sys.exit (1)
+    config.write ('#define CONFIG_RTLD_DL_CLKTCK_OFFSET ' + str(data.data) + '\n')
+
     data = debug.get_struct_member_offset ('rtld_global', '_dl_error_catch_tsd')
     if data is None:
         sys.exit (1)

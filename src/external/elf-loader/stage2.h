@@ -13,6 +13,7 @@ struct Stage2Input
   int program_argc;
   char **program_argv;
   char **program_envp;
+  int clktck;
 };
 
 struct Stage2Output

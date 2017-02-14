@@ -10,7 +10,7 @@ struct VdlList;
 // just before calling the executable's entry point.
 void glibc_startup_finished (void);
 
-void glibc_initialize (void);
+void glibc_initialize (int clktck);
 
 void glibc_patch (struct VdlList *files);
 

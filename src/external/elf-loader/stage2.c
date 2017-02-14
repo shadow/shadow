@@ -348,7 +348,7 @@ stage2_initialize (struct Stage2Input input)
   glibc_patch (context->loaded);
 
   // glibc-specific crap to avoid segfault in initializer
-  glibc_initialize ();
+  glibc_initialize (input.clktck);
 
   valgrind_initialize ();
 

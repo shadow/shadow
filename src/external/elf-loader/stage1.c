@@ -44,6 +44,7 @@ prepare_stage2 (unsigned long entry_point_struct)
   stage2_input.sysinfo = 0;
   stage2_input.program_phdr = 0;
   stage2_input.program_phnum = 0;
+  stage2_input.clktck = 0;
   auxvt_tmp = auxvt;
   while (auxvt_tmp->a_type != AT_NULL)
     {
@@ -59,6 +60,10 @@ prepare_stage2 (unsigned long entry_point_struct)
         {
           stage2_input.sysinfo = auxvt_tmp->a_un.a_val;
         }
+      else if (auxvt_tmp->a_type == AT_CLKTCK)
+        {
+          stage2_input.clktck = auxvt_tmp->a_un.a_val;
+        } 
       auxvt_tmp++;
     }
   if (stage2_input.program_phdr == 0 || stage2_input.program_phnum == 0)

@@ -225,7 +225,7 @@ glibc_startup_finished (void)
 
 
 void
-glibc_initialize (void)
+glibc_initialize (int clktck)
 {
   void **(*fn) (void) = vdl_dl_error_catch_tsd;
   char *dst = &_rtld_local[CONFIG_DL_ERROR_CATCH_TSD_OFFSET];
@@ -233,6 +233,8 @@ glibc_initialize (void)
   char *off = &_rtld_local_ro[CONFIG_RTLD_DL_PAGESIZE_OFFSET];
   int pgsz = system_getpagesize ();
   vdl_memcpy (off, &pgsz, sizeof (pgsz));
+  off = &_rtld_local_ro[CONFIG_RTLD_DL_CLKTCK_OFFSET];
+  vdl_memcpy (off, &clktck, sizeof (clktck));
 }
 
 
