@@ -258,8 +258,42 @@ static void _main_logEnvironment(gchar** argv, gchar** envv) {
 }
 
 static gint _main_helper(Options* options) {
+    /* start off with some status messages */
+#if defined(IGRAPH_VERSION)
+    gint igraphMajor = -1, igraphMinor = -1, igraphPatch = -1;
+    igraph_version(NULL, &igraphMajor, &igraphMinor, &igraphPatch);
+
+    gchar* startupStr = g_strdup_printf("Starting %s with GLib v%u.%u.%u and IGraph v%i.%i.%i",
+            SHADOW_VERSION_STRING,
+            (guint)GLIB_MAJOR_VERSION, (guint)GLIB_MINOR_VERSION, (guint)GLIB_MICRO_VERSION,
+            igraphMajor, igraphMinor, igraphPatch);
+#else
+    gchar* startupStr = g_strdup_printf("Starting %s with GLib v%u.%u.%u (IGraph version not available)",
+            SHADOW_VERSION_STRING,
+            (guint)GLIB_MAJOR_VERSION, (guint)GLIB_MINOR_VERSION, (guint)GLIB_MICRO_VERSION);
+#endif
+
+    message("%s", startupStr);
+    /* avoid logging the message to stderr twice (only log if this is not a relaunch) */
+    if(g_getenv("SHADOW_SPAWNED") == NULL) {
+        g_printerr("** %s\n", startupStr);
+    }
+    g_free(startupStr);
+
+    message(SHADOW_INFO_STRING);
+    message("logging current startup arguments and environment");
+
+    gchar** envlist = g_get_environ();
+    gchar** arglist = g_strsplit(options_getArgumentString(options), " ", 0);
+    _main_logEnvironment(arglist, envlist);
+    g_strfreev(arglist);
+    g_strfreev(envlist);
+
     /* check if we still need to setup our required environment and relaunch */
     if(g_getenv("SHADOW_SPAWNED") == NULL) {
+        message("shadow will automatically adjust environment and relaunch");
+        message("loading shadow configuration file");
+
         /* we need to relaunch.
          * first lets load the config file to help us setup the environment */
         const GString* fileName = options_getInputXMLFilename(options);
@@ -281,6 +315,8 @@ static gint _main_helper(Options* options) {
             return EXIT_FAILURE;
         }
 
+        message("shadow configuration file loaded, parsed, and passed validation");
+
         /* now start to set up the environment */
         gchar** envlist = g_get_environ();
         GString* commandBuffer = g_string_new(options_getArgumentString(options));
@@ -290,6 +326,8 @@ static gint _main_helper(Options* options) {
             configuration_free(config);
             return EXIT_FAILURE;
         }
+
+        message("setting up LD_PRELOAD environment");
 
         /* compute the proper LD_PRELOAD value, extract the shadow preload file and
          * set it as a command line argument if needed */
@@ -477,6 +515,8 @@ static gint _main_helper(Options* options) {
 
         }
 
+        message("setting up LD_STATIC_TLS_EXTRA environment");
+
         /* compute the proper TLS size we need for dlmopen()ing all of the plugins,
          * but only do this if the user didn't manually specify a size */
         if(g_environ_getenv(envlist, "LD_STATIC_TLS_EXTRA") == NULL) {
@@ -493,6 +533,8 @@ static gint _main_helper(Options* options) {
 
         /* are we running valgrind */
         if(options_doRunValgrind(options)) {
+            message("setting up environment for valgrind");
+
             /* make glib friendlier to valgrind */
             envlist = g_environ_setenv(envlist, "G_DEBUG", "gc-friendly", 0);
             envlist = g_environ_setenv(envlist, "G_SLICE", "always-malloc", 0);
@@ -520,8 +562,7 @@ static gint _main_helper(Options* options) {
 
         configuration_free(config);
 
-        _main_logEnvironment(arglist, envlist);
-        message("shadow is relaunching now with new environment");
+        message("environment was updated; shadow is relaunching now with new environment");
 
         Logger* logger = logger_getDefault();
         if(logger) {
@@ -575,32 +616,7 @@ static gint _main_helper(Options* options) {
         return EXIT_FAILURE;
     }
 
-    /* start off with some status messages */
-#if defined(IGRAPH_VERSION)
-    gint igraphMajor = -1, igraphMinor = -1, igraphPatch = -1;
-    igraph_version(NULL, &igraphMajor, &igraphMinor, &igraphPatch);
-
-    gchar* startupStr = g_strdup_printf("Starting %s with GLib v%u.%u.%u and IGraph v%i.%i.%i",
-            SHADOW_VERSION_STRING,
-            (guint)GLIB_MAJOR_VERSION, (guint)GLIB_MINOR_VERSION, (guint)GLIB_MICRO_VERSION,
-            igraphMajor, igraphMinor, igraphPatch);
-#else
-    gchar* startupStr = g_strdup_printf("Starting %s with GLib v%u.%u.%u (IGraph version not available)",
-            SHADOW_VERSION_STRING,
-            (guint)GLIB_MAJOR_VERSION, (guint)GLIB_MINOR_VERSION, (guint)GLIB_MICRO_VERSION);
-#endif
-
-    message("%s", startupStr);
-    g_printerr("** %s\n", startupStr);
-    g_free(startupStr);
-
-    message(SHADOW_INFO_STRING);
-
-    gchar** envlist = g_get_environ();
-    gchar** arglist = g_strsplit(options_getArgumentString(options), " ", 0);
-    _main_logEnvironment(arglist, envlist);
-    g_strfreev(arglist);
-    g_strfreev(envlist);
+    message("startup checks passed, we are ready to start simulation");
 
     /* pause for debugger attachment if the option is set */
     if(options_doRunDebug(options)) {
@@ -626,7 +642,7 @@ static gint _main_helper(Options* options) {
         shadowMaster = NULL;
     }
 
-    message("%s simulation was shut down cleanly", SHADOW_VERSION_STRING);
+    message("%s simulation was shut down cleanly, returning code %i", SHADOW_VERSION_STRING, returnCode);
     return returnCode;
 }
 
@@ -695,6 +711,6 @@ gint main_runShadow(gint argc, gchar* argv[]) {
         logger_unref(logger);
     }
 
-    g_printerr("** Shadow returning code %i (%s)\n", returnCode, (returnCode == 0) ? "success" : "error");
+    g_printerr("** Stopping Shadow, returning code %i (%s)\n", returnCode, (returnCode == 0) ? "success" : "error");
     return returnCode;
 }
