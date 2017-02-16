@@ -13,6 +13,7 @@
 #include "glibc.h"
 #include <elf.h>
 #include <link.h>
+#include <signal.h>
 
 
 #define READ_LONG(p)                            \
@@ -63,7 +64,7 @@ prepare_stage2 (unsigned long entry_point_struct)
       else if (auxvt_tmp->a_type == AT_CLKTCK)
         {
           stage2_input.clktck = auxvt_tmp->a_un.a_val;
-        } 
+        }
       auxvt_tmp++;
     }
   if (stage2_input.program_phdr == 0 || stage2_input.program_phnum == 0)
@@ -279,6 +280,18 @@ stage1 (struct Stage1InputOutput *input_output)
   // which appears to be close enough (within a page) to the end as far as
   // glibc and libpthreads are concerned. See glibc.c for more information.
   glibc_set_stack_end (__builtin_frame_address (0));
+
+  // We need to quickly handle SIGPROF signals until _init()s are done,
+  // else a profiled program calling exec() could terminate itself.
+  // We just ignore them, as any profilers will need to start up again anyway.
+  // XXX: If we want to restore the default behavior of a SIGPROF signal
+  // (i.e., crash), we need to store the current sigaction here and restore it
+  // after _init()s in stage2 if nothing else touched it.
+  struct sigaction act;
+  act.sa_handler = SIG_IGN;
+  vdl_memset (&act.sa_mask, 0, sizeof(__sigset_t));
+  act.sa_flags = 0;
+  system_sigaction (SIGPROF, &act, 0);
 
   struct Stage2Input stage2_input =
     prepare_stage2 (input_output->entry_point_struct);

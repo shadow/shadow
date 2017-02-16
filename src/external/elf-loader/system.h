@@ -7,6 +7,7 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 #include <linux/unistd.h>
+#include <signal.h>
 
 
 void *system_mmap(void *start, size_t length, int prot, int flags, int fd, off_t offset);
@@ -28,5 +29,6 @@ void system_futex_wait (uint32_t *uaddr, uint32_t val);
 int system_getrlimit (int resource, struct rlimit *rlim);
 int system_setrlimit (int resource, struct rlimit *rlim);
 unsigned long system_getpid (void);
+int system_sigaction(int signum, struct sigaction *act, struct sigaction *oldact);
 
 #endif /* SYSTEM_H */

@@ -187,3 +187,25 @@ system_getpid (void)
 {
   return MACHINE_SYSCALL0 (getpid);
 }
+
+int system_sigaction(int signum, struct sigaction *act,
+              struct sigaction *oldact)
+{
+  // Rather than implement signal handling ourselves, we let the vDSO do it.
+  // See the manpage for sigreturn for more info.
+  act->sa_flags &= ~0x04000000; // ~SA_RESTORER; not in signal.h for some reason
+  act->sa_restorer = 0;
+  // See "C library/kernel differences" in the sigaction manpage for why we
+  // need to use rt_sigaction instead of sigaction, and what that is.
+  // XXX: Do something smarter than the magic 8 here. It's documented as
+  // requiring the value sizeof(sigset_t), which is currently 128, but in the
+  // actual code it's (largest signal number+1)/8, which according to strace is
+  // currently 8 on my system (not easily accessible anywhere else AFAICT).
+  // Crashes if set to anything else.
+  int status = MACHINE_SYSCALL4 (rt_sigaction, signum, act, oldact, 8);
+  if (status < 0 && status > -256)
+    {
+      return -1;
+    }
+  return status;
+}
