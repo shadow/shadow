@@ -22,8 +22,8 @@ struct _Parser {
     /* our final parsed config state */
     ConfigurationShadowElement* shadow;
     ConfigurationTopologyElement* topology;
-    GList* plugins; // ConfigurationPluginElement
-    GList* hosts; // ConfigurationHostElement
+    GQueue* plugins; // holds items of type ConfigurationPluginElement
+    GQueue* hosts; // holds items of type ConfigurationHostElement
     MAGIC_DECLARE;
 };
 
@@ -202,7 +202,7 @@ static void _parser_freeHostElement(ConfigurationHostElement* host) {
         g_string_free(host->pcapdir.string, TRUE);
     }
     if(host->processes) {
-        g_list_free_full(host->processes, (GDestroyNotify)_parser_freeProcessElement);
+        g_queue_free_full(host->processes, (GDestroyNotify)_parser_freeProcessElement);
     }
 
     g_free(host);
@@ -364,7 +364,7 @@ static GError* _parser_handlePluginAttributes(Parser* parser, const gchar** attr
         _parser_freePluginElement(plugin);
     } else {
         /* no error, store the resulting config */
-        parser->plugins = g_list_append(parser->plugins, plugin);
+        g_queue_push_tail(parser->plugins, plugin);
 
         /* make sure all references to plugins from process elements point to
          * an existing registered plugin element. */
@@ -379,6 +379,7 @@ static GError* _parser_handlePluginAttributes(Parser* parser, const gchar** attr
 
 static GError* _parser_handleHostAttributes(Parser* parser, const gchar** attributeNames, const gchar** attributeValues) {
     ConfigurationHostElement* host = g_new0(ConfigurationHostElement, 1);
+    host->processes = g_queue_new();
     GError* error = NULL;
 
     const gchar **nameCursor = attributeNames;
@@ -465,7 +466,7 @@ static GError* _parser_handleHostAttributes(Parser* parser, const gchar** attrib
         _parser_freeHostElement(host);
     } else {
         /* no error, store the config */
-        parser->hosts = g_list_append(parser->hosts, host);
+        g_queue_push_tail(parser->hosts, host);
     }
 
     return error;
@@ -575,12 +576,10 @@ static GError* _parser_handleProcessAttributes(Parser* parser, const gchar** att
         _parser_freeProcessElement(process);
     } else {
         /* no error, process configs get added to the most recent host */
-        GList* hostItem = g_list_last(parser->hosts);
-        utility_assert(hostItem != NULL);
-        ConfigurationHostElement* host = hostItem->data;
+        ConfigurationHostElement* host = g_queue_peek_tail(parser->hosts);
         utility_assert(host != NULL);
 
-        host->processes = g_list_append(host->processes, process);
+        g_queue_push_tail(host->processes, process);
 
         /* plugin was required, so we know we have one */
         if(!g_hash_table_lookup(parser->pluginIDRefStrings, process->plugin.string->str)) {
@@ -735,11 +734,9 @@ static void _parser_handleRootEndElement(GMarkupParseContext* context,
     /* check for root-level elements */
     if (!g_ascii_strcasecmp(elementName, "host") || !g_ascii_strcasecmp(elementName, "node")) {
         /* validate children */
-        GList* hostItem = g_list_last(parser->hosts);
-        utility_assert(hostItem != NULL);
-        ConfigurationHostElement* host = hostItem->data;
+        ConfigurationHostElement* host = g_queue_peek_tail(parser->hosts);
         utility_assert(host != NULL);
-        if (g_list_length(host->processes) <= 0) {
+        if (g_queue_get_length(host->processes) <= 0) {
             *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_EMPTY,
                     "element 'host' requires at least 1 child 'process'");
         }
@@ -795,6 +792,9 @@ static Parser* _parser_new() {
     parser->pluginIDStrings = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
     parser->pluginIDRefStrings = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
 
+    parser->plugins = g_queue_new();
+    parser->hosts = g_queue_new();
+
     /* we handle the start_element and end_element callbacks, but ignore
      * text, passthrough (comments), and errors
      * handle both hosts and topology files.
@@ -847,10 +847,10 @@ static void _parser_free(Parser* parser) {
         _parser_freeTopologyElement(parser->topology);
     }
     if(parser->hosts) {
-        g_list_free_full(parser->hosts, (GDestroyNotify)_parser_freeHostElement);
+        g_queue_free_full(parser->hosts, (GDestroyNotify)_parser_freeHostElement);
     }
     if(parser->plugins) {
-        g_list_free_full(parser->plugins, (GDestroyNotify)_parser_freePluginElement);
+        g_queue_free_full(parser->plugins, (GDestroyNotify)_parser_freePluginElement);
     }
     if(parser->shadow) {
         _parser_freeShadowElement(parser->shadow);
@@ -908,13 +908,13 @@ ConfigurationTopologyElement* configuration_getTopologyElement(Configuration* co
     return config->parser->topology;
 }
 
-GList* configuration_getPluginElements(Configuration* config) {
+GQueue* configuration_getPluginElements(Configuration* config) {
     MAGIC_ASSERT(config);
     utility_assert(config->parser && config->parser->plugins);
     return config->parser->plugins;
 }
 
-GList* configuration_getHostElements(Configuration* config) {
+GQueue* configuration_getHostElements(Configuration* config) {
     MAGIC_ASSERT(config);
     utility_assert(config->parser && config->parser->hosts);
     return config->parser->hosts;

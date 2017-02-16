@@ -241,121 +241,130 @@ static void _master_initializeTimeWindows(Master* master) {
     }
 }
 
+static void _master_registerPluginCallback(ConfigurationPluginElement* pe, Master* master) {
+    utility_assert(pe);
+    MAGIC_ASSERT(master);
+    utility_assert(pe->id.isSet && pe->id.string);
+    slave_addNewProgram(master->slave, pe->id.string->str, pe->path.string->str);
+}
+
 static void _master_registerPlugins(Master* master) {
     MAGIC_ASSERT(master);
 
-    GList* plugins = configuration_getPluginElements(master->config);
-    GList* pluginItem = plugins;
-    while(pluginItem != NULL) {
-        ConfigurationPluginElement* e = pluginItem->data;
-        slave_addNewProgram(master->slave, e->id.string->str, e->path.string->str);
-        pluginItem = g_list_next(pluginItem);
+    GQueue* plugins = configuration_getPluginElements(master->config);
+    g_queue_foreach(plugins, (GFunc)_master_registerPluginCallback, master);
+}
+
+typedef struct _ProcessCallbackArgs {
+    Master* master;
+    HostParameters* hostParams;
+} ProcessCallbackArgs;
+
+static void _master_registerProcessCallback(ConfigurationProcessElement* pe, ProcessCallbackArgs* args) {
+    utility_assert(pe && args);
+    MAGIC_ASSERT(args->master);
+    utility_assert(pe->plugin.isSet && pe->plugin.string);
+    utility_assert(pe->arguments.isSet && pe->arguments.string);
+
+    slave_addNewVirtualProcess(args->master->slave, args->hostParams->hostname, pe->plugin.string->str,
+                        pe->preload.isSet ? pe->preload.string->str : NULL,
+                        SIMTIME_ONE_SECOND * pe->starttime.integer,
+                        pe->stoptime.isSet ? SIMTIME_ONE_SECOND * pe->stoptime.integer : 0,
+                        pe->arguments.string->str);
+}
+
+static void _master_registerHostCallback(ConfigurationHostElement* he, Master* master) {
+    MAGIC_ASSERT(master);
+    utility_assert(he);
+    utility_assert(he->id.isSet && he->id.string);
+
+    guint64 quantity = he->quantity.isSet ? he->quantity.integer : 1;
+
+    for(guint64 i = 0; i < quantity; i++) {
+        HostParameters* params = g_new0(HostParameters, 1);
+
+        /* hostname and id params */
+        const gchar* hostNameBase = he->id.string->str;
+
+        GString* hostnameBuffer = g_string_new(hostNameBase);
+        if(quantity > 1) {
+            g_string_append_printf(hostnameBuffer, "%"G_GUINT64_FORMAT, i+1);
+        }
+        params->hostname = hostnameBuffer->str;
+
+        /* cpu params - if they didnt specify a CPU frequency, use the slave machine frequency */
+        gint slaveCPUFreq = slave_getRawCPUFrequency(master->slave);
+        params->cpuFrequency = he->cpufrequency.isSet ? he->cpufrequency.integer : (slaveCPUFreq > 0) ? (guint64)slaveCPUFreq : 0;
+        if(params->cpuFrequency == 0) {
+            params->cpuFrequency = 2500000; // 2.5 GHz
+            debug("both configured and raw slave cpu frequencies unavailable, using 2500000 KHz");
+        }
+
+        gint defaultCPUThreshold = options_getCPUThreshold(master->options);
+        params->cpuThreshold = defaultCPUThreshold > 0 ? defaultCPUThreshold : 0;
+        gint defaultCPUPrecision = options_getCPUPrecision(master->options);
+        params->cpuPrecision = defaultCPUPrecision > 0 ? defaultCPUPrecision : 0;
+
+        params->logLevel = he->loglevel.isSet ?
+                loglevel_fromStr(he->loglevel.string->str) :
+                options_getLogLevel(master->options);
+
+        params->heartbeatLogLevel = he->heartbeatloglevel.isSet ?
+                loglevel_fromStr(he->heartbeatloglevel.string->str) :
+                options_getHeartbeatLogLevel(master->options);
+
+        params->heartbeatInterval = he->heartbeatfrequency.isSet ?
+                (SimulationTime)(he->heartbeatfrequency.integer * SIMTIME_ONE_SECOND) :
+                options_getHeartbeatInterval(master->options);
+
+        params->heartbeatLogInfo = he->heartbeatloginfo.isSet ?
+                options_toHeartbeatLogInfo(master->options, he->heartbeatloginfo.string->str) :
+                options_getHeartbeatLogInfo(master->options);
+
+        params->logPcap = (he->logpcap.isSet && !g_ascii_strcasecmp(he->logpcap.string->str, "true")) ? TRUE : FALSE;
+        params->pcapDir = he->pcapdir.isSet ? he->pcapdir.string->str : NULL;
+
+        /* socket buffer settings - if size is set manually, turn off autotuning */
+        params->recvBufSize = he->socketrecvbuffer.isSet ? he->socketrecvbuffer.integer :
+                options_getSocketReceiveBufferSize(master->options);
+        params->autotuneRecvBuf = he->socketrecvbuffer.isSet ? FALSE :
+                options_doAutotuneReceiveBuffer(master->options);
+
+        params->sendBufSize = he->socketsendbuffer.isSet ? he->socketsendbuffer.integer :
+                options_getSocketSendBufferSize(master->options);
+        params->autotuneSendBuf = he->socketsendbuffer.isSet ? FALSE :
+                options_doAutotuneSendBuffer(master->options);
+
+        params->interfaceBufSize = he->interfacebuffer.isSet ? he->interfacebuffer.integer :
+                options_getInterfaceBufferSize(master->options);
+        params->qdisc = options_getQueuingDiscipline(master->options);
+
+        /* requested attributes from shadow config */
+        params->ipHint = he->ipHint.isSet ? he->ipHint.string->str : NULL;
+        params->geocodeHint = he->geocodeHint.isSet ? he->geocodeHint.string->str : NULL;
+        params->typeHint = he->typeHint.isSet ? he->typeHint.string->str : NULL;
+        params->requestedBWDownKiBps = he->bandwidthdown.isSet ? he->bandwidthdown.integer : 0;
+        params->requestedBWUpKiBps = he->bandwidthup.isSet ? he->bandwidthup.integer : 0;
+
+        slave_addNewVirtualHost(master->slave, params);
+
+        ProcessCallbackArgs processArgs;
+        processArgs.master = master;
+        processArgs.hostParams = params;
+
+        /* now handle each virtual process the host will run */
+        g_queue_foreach(he->processes, (GFunc)_master_registerProcessCallback, &processArgs);
+
+        /* cleanup for next pass through the loop */
+        g_string_free(hostnameBuffer, TRUE);
+        g_free(params);
     }
 }
 
 static void _master_registerHosts(Master* master) {
     MAGIC_ASSERT(master);
-
-    GList* nodes = configuration_getHostElements(master->config);
-    GList* nodeItem = nodes;
-    while(nodeItem != NULL) {
-        ConfigurationHostElement* ne = nodeItem->data;
-        utility_assert(ne->id.isSet && ne->id.string);
-
-        guint64 quantity = ne->quantity.isSet ? ne->quantity.integer : 1;
-
-        for(guint64 i = 0; i < quantity; i++) {
-            HostParameters* params = g_new0(HostParameters, 1);
-
-            /* hostname and id params */
-            const gchar* hostNameBase = ne->id.string->str;
-
-            GString* hostnameBuffer = g_string_new(hostNameBase);
-            if(quantity > 1) {
-                g_string_append_printf(hostnameBuffer, "%"G_GUINT64_FORMAT, i+1);
-            }
-            params->hostname = hostnameBuffer->str;
-
-            /* cpu params - if they didnt specify a CPU frequency, use the slave machine frequency */
-            gint slaveCPUFreq = slave_getRawCPUFrequency(master->slave);
-            params->cpuFrequency = ne->cpufrequency.isSet ? ne->cpufrequency.integer : (slaveCPUFreq > 0) ? (guint64)slaveCPUFreq : 0;
-            if(params->cpuFrequency == 0) {
-                params->cpuFrequency = 2500000; // 2.5 GHz
-                debug("both configured and raw slave cpu frequencies unavailable, using 2500000 KHz");
-            }
-
-            gint defaultCPUThreshold = options_getCPUThreshold(master->options);
-            params->cpuThreshold = defaultCPUThreshold > 0 ? defaultCPUThreshold : 0;
-            gint defaultCPUPrecision = options_getCPUPrecision(master->options);
-            params->cpuPrecision = defaultCPUPrecision > 0 ? defaultCPUPrecision : 0;
-
-            params->logLevel = ne->loglevel.isSet ?
-                    loglevel_fromStr(ne->loglevel.string->str) :
-                    options_getLogLevel(master->options);
-
-            params->heartbeatLogLevel = ne->heartbeatloglevel.isSet ?
-                    loglevel_fromStr(ne->heartbeatloglevel.string->str) :
-                    options_getHeartbeatLogLevel(master->options);
-
-            params->heartbeatInterval = ne->heartbeatfrequency.isSet ?
-                    (SimulationTime)(ne->heartbeatfrequency.integer * SIMTIME_ONE_SECOND) :
-                    options_getHeartbeatInterval(master->options);
-
-            params->heartbeatLogInfo = ne->heartbeatloginfo.isSet ?
-                    options_toHeartbeatLogInfo(master->options, ne->heartbeatloginfo.string->str) :
-                    options_getHeartbeatLogInfo(master->options);
-
-            params->logPcap = (ne->logpcap.isSet && !g_ascii_strcasecmp(ne->logpcap.string->str, "true")) ? TRUE : FALSE;
-            params->pcapDir = ne->pcapdir.isSet ? ne->pcapdir.string->str : NULL;
-
-            /* socket buffer settings - if size is set manually, turn off autotuning */
-            params->recvBufSize = ne->socketrecvbuffer.isSet ? ne->socketrecvbuffer.integer :
-                    options_getSocketReceiveBufferSize(master->options);
-            params->autotuneRecvBuf = ne->socketrecvbuffer.isSet ? FALSE :
-                    options_doAutotuneReceiveBuffer(master->options);
-
-            params->sendBufSize = ne->socketsendbuffer.isSet ? ne->socketsendbuffer.integer :
-                    options_getSocketSendBufferSize(master->options);
-            params->autotuneSendBuf = ne->socketsendbuffer.isSet ? FALSE :
-                    options_doAutotuneSendBuffer(master->options);
-
-            params->interfaceBufSize = ne->interfacebuffer.isSet ? ne->interfacebuffer.integer :
-                    options_getInterfaceBufferSize(master->options);
-            params->qdisc = options_getQueuingDiscipline(master->options);
-
-            /* requested attributes from shadow config */
-            params->ipHint = ne->ipHint.isSet ? ne->ipHint.string->str : NULL;
-            params->geocodeHint = ne->geocodeHint.isSet ? ne->geocodeHint.string->str : NULL;
-            params->typeHint = ne->typeHint.isSet ? ne->typeHint.string->str : NULL;
-            params->requestedBWDownKiBps = ne->bandwidthdown.isSet ? ne->bandwidthdown.integer : 0;
-            params->requestedBWUpKiBps = ne->bandwidthup.isSet ? ne->bandwidthup.integer : 0;
-
-            slave_addNewVirtualHost(master->slave, params);
-
-            /* now handle each virtual process the host will run */
-            GList* processes = ne->processes;
-            GList* processItem = processes;
-            while(processItem != NULL) {
-                ConfigurationProcessElement* pe = processItem->data;
-                utility_assert(pe->plugin.isSet && pe->plugin.string);
-                utility_assert(pe->arguments.isSet && pe->arguments.string);
-
-                slave_addNewVirtualProcess(master->slave, params->hostname,pe->plugin.string->str,
-                                    pe->preload.isSet ? pe->preload.string->str : NULL,
-                                    SIMTIME_ONE_SECOND * pe->starttime.integer,
-                                    pe->stoptime.isSet ? SIMTIME_ONE_SECOND * pe->stoptime.integer : 0,
-                                    pe->arguments.string->str);
-
-                processItem = g_list_next(processItem);
-            }
-
-            /* cleanup for next pass through the loop */
-            g_string_free(hostnameBuffer, TRUE);
-            g_free(params);
-        }
-
-        nodeItem = g_list_next(nodeItem);
-    }
+    GQueue* hosts = configuration_getHostElements(master->config);
+    g_queue_foreach(hosts, (GFunc)_master_registerHostCallback, master);
 }
 
 gint master_run(Master* master) {

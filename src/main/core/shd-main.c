@@ -154,6 +154,63 @@ static gulong _main_computePreloadLoadSize(const gchar* libraryPath) {
     return _main_computeLoadSize(LM_ID_BASE, libraryPath, RTLD_LAZY|RTLD_PRELOAD);
 }
 
+typedef struct _TLSCountingState {
+    GQueue* allPlugins;
+    GQueue* allHosts;
+    gulong tlsSizeTotal;
+    ConfigurationPluginElement* currentPluginElement;
+    guint numHostsUsingCurrentPlugin;
+    guint currentHostQuantity;
+} TLSCountingState;
+
+static void _main_countTLSProcessCallback(ConfigurationProcessElement* processElement, TLSCountingState* state) {
+    utility_assert(processElement && state);
+
+    if(processElement && processElement->plugin.isSet && processElement->plugin.string &&
+            !g_ascii_strcasecmp(processElement->plugin.string->str, state->currentPluginElement->id.string->str)) {
+        state->numHostsUsingCurrentPlugin += state->currentHostQuantity;
+    }
+    if(processElement && processElement->preload.isSet && processElement->preload.string &&
+            !g_ascii_strcasecmp(processElement->preload.string->str, state->currentPluginElement->id.string->str)) {
+        state->numHostsUsingCurrentPlugin += state->currentHostQuantity;
+    }
+}
+
+static void _main_countTLSHostCallback(ConfigurationHostElement* hostElement, TLSCountingState* state) {
+    utility_assert(hostElement && state);
+
+    if(hostElement && hostElement->processes) {
+        /* make sure to get the new quantity set of each host */
+        state->currentHostQuantity = hostElement->quantity.isSet ? ((guint)hostElement->quantity.integer) : 1;
+
+        /* now figure out how many processes are using the plugin */
+        g_queue_foreach(hostElement->processes, (GFunc)_main_countTLSProcessCallback, state);
+    }
+}
+
+static void _main_countTLSPluginCallback(ConfigurationPluginElement* pluginElement, TLSCountingState* state) {
+    utility_assert(pluginElement && state);
+
+    if(pluginElement && pluginElement->id.isSet && pluginElement->id.string
+                    && pluginElement->path.isSet && pluginElement->path.string) {
+
+        /* make sure to reset state for each plugin */
+        state->currentPluginElement = pluginElement;
+        state->numHostsUsingCurrentPlugin = 0;
+
+        /* for this plugin, go through all hosts to check references to us */
+        g_queue_foreach(state->allHosts, (GFunc) _main_countTLSHostCallback, state);
+
+        gulong tlsSizePerLoad = _main_computePluginLoadSize(pluginElement->path.string->str);
+        if(tlsSizePerLoad == 0) {
+            warning("skipping plugin '%s' at path '%s' when computing total needed static TLS size",
+                    pluginElement->id.string->str, pluginElement->path.string->str);
+        } else {
+            state->tlsSizeTotal += (tlsSizePerLoad * state->numHostsUsingCurrentPlugin);
+        }
+    }
+}
+
 static gchar* _main_getStaticTLSValue(Options* options, Configuration* config, gchar* preloadArgValue) {
     /*
      * compute the actual static TLS size we need based on the libraries specified in the
@@ -161,75 +218,30 @@ static gchar* _main_getStaticTLSValue(Options* options, Configuration* config, g
      * and preloads that we need, and counting how many nodes load each of those libraries.
      */
 
-    GList* allPlugins = configuration_getPluginElements(config);
-    GList* allHosts = configuration_getHostElements(config);
-    gulong tlsSizePerLoad = 0, tlsSizeTotal = 0;
+    TLSCountingState* state = g_new0(TLSCountingState, 1);
+    state->allPlugins = configuration_getPluginElements(config);
+    state->allHosts = configuration_getHostElements(config);
 
     /* for each lib, we go through each node and find each application that uses that lib */
-
-    GList* nextPlugin = g_list_first(allPlugins);
-    while(nextPlugin != NULL) {
-        ConfigurationPluginElement* pluginElement = (ConfigurationPluginElement*)nextPlugin->data;
-
-        if(pluginElement && pluginElement->id.isSet && pluginElement->id.string
-                && pluginElement->path.isSet && pluginElement->path.string) {
-
-            guint numHostsUsingPlugin = 0;
-
-            GList* nexthost = g_list_first(allHosts);
-            while(nexthost != NULL) {
-                ConfigurationHostElement* hostElement = (ConfigurationHostElement*)nexthost->data;
-
-                if(hostElement && hostElement->processes) {
-                    guint quantity = hostElement->quantity.isSet ? ((guint)hostElement->quantity.integer) : 1;
-
-                    GList* nextProcess = g_list_first(hostElement->processes);
-                    while(nextProcess != NULL) {
-                        ConfigurationProcessElement* processElement = (ConfigurationProcessElement*)nextProcess->data;
-
-                        if(processElement && processElement->plugin.isSet && processElement->plugin.string &&
-                                !g_ascii_strcasecmp(processElement->plugin.string->str, pluginElement->id.string->str)) {
-                            numHostsUsingPlugin += quantity;
-                        }
-                        if(processElement && processElement->preload.isSet && processElement->preload.string &&
-                                !g_ascii_strcasecmp(processElement->preload.string->str, pluginElement->id.string->str)) {
-                            numHostsUsingPlugin += quantity;
-                        }
-
-                        nextProcess = g_list_next(nextProcess);
-                    }
-                }
-
-                nexthost = g_list_next(nexthost);
-            }
-
-            tlsSizePerLoad = _main_computePluginLoadSize(pluginElement->path.string->str);
-            if(tlsSizePerLoad == 0) {
-                warning("skipping plugin '%s' at path '%s' when computing total needed static TLS size",
-                        pluginElement->id.string->str, pluginElement->path.string->str);
-            } else {
-                tlsSizeTotal += (tlsSizePerLoad * numHostsUsingPlugin);
-            }
-        }
-
-        nextPlugin = g_list_next(nextPlugin);
-    }
+    g_queue_foreach(state->allPlugins, (GFunc)_main_countTLSPluginCallback, state);
 
     /* now count the size required to load the global shadow preload library */
-    tlsSizePerLoad = _main_computePreloadLoadSize(preloadArgValue);
+    gulong tlsSizePerLoad = _main_computePreloadLoadSize(preloadArgValue);
     if(tlsSizePerLoad == 0) {
         warning("skipping shadow global preload lib at path '%s' when computing total needed static TLS size",
                 preloadArgValue);
     } else {
-        tlsSizeTotal += tlsSizePerLoad;
+        state->tlsSizeTotal += tlsSizePerLoad;
     }
 
-    if(tlsSizeTotal < 1024) {
-        tlsSizeTotal = 1024;
+    /* make sure we want to use at least 1 KiB */
+    if(state->tlsSizeTotal < 1024) {
+        state->tlsSizeTotal = 1024;
     }
 
     GString* sbuf = g_string_new(NULL);
-    g_string_printf(sbuf, "%lu", tlsSizeTotal);
+    g_string_printf(sbuf, "%lu", state->tlsSizeTotal);
+    g_free(state);
     return g_string_free(sbuf, FALSE);
 }
 
@@ -522,6 +534,7 @@ static gint _main_helper(Options* options) {
         if(g_environ_getenv(envlist, "LD_STATIC_TLS_EXTRA") == NULL) {
             gchar* staticTLSValue = _main_getStaticTLSValue(options, config, preloadArgValue);
             envlist = g_environ_setenv(envlist, "LD_STATIC_TLS_EXTRA", staticTLSValue, 0);
+            message("we need %s bytes of static TLS storage", staticTLSValue);
             g_free(staticTLSValue);
         }
 

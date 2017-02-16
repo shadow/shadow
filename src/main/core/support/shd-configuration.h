@@ -63,7 +63,7 @@ typedef struct _ConfigurationHostElement ConfigurationHostElement;
 struct _ConfigurationHostElement {
     /* required */
     ConfigurationStringAttribute id;
-    GList* processes;
+    GQueue* processes;
     /* optional*/
     ConfigurationStringAttribute ipHint;
     ConfigurationStringAttribute geocodeHint;
@@ -97,8 +97,8 @@ void configuration_free(Configuration* config);
 
 ConfigurationShadowElement* configuration_getShadowElement(Configuration* config);
 ConfigurationTopologyElement* configuration_getTopologyElement(Configuration* config);
-GList* configuration_getPluginElements(Configuration* config);
-GList* configuration_getHostElements(Configuration* config);
+GQueue* configuration_getPluginElements(Configuration* config);
+GQueue* configuration_getHostElements(Configuration* config);
 
 /** @} */
 
