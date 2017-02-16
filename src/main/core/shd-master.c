@@ -223,8 +223,8 @@ static void _master_initializeTimeWindows(Master* master) {
     MAGIC_ASSERT(master);
 
     /* set simulation end time */
-    ConfigurationKillElement* e = configuration_getKillElement(master->config);
-    master->endTime = (SimulationTime) (SIMTIME_ONE_SECOND * e->time.integer);
+    ConfigurationShadowElement* e = configuration_getShadowElement(master->config);
+    master->endTime = (SimulationTime) (SIMTIME_ONE_SECOND * e->stoptime.integer);
 
     /* simulation mode depends on configured number of workers */
     guint nWorkers = options_getNWorkerThreads(master->options);
@@ -256,10 +256,10 @@ static void _master_registerPlugins(Master* master) {
 static void _master_registerHosts(Master* master) {
     MAGIC_ASSERT(master);
 
-    GList* nodes = configuration_getNodeElements(master->config);
+    GList* nodes = configuration_getHostElements(master->config);
     GList* nodeItem = nodes;
     while(nodeItem != NULL) {
-        ConfigurationNodeElement* ne = nodeItem->data;
+        ConfigurationHostElement* ne = nodeItem->data;
         utility_assert(ne->id.isSet && ne->id.string);
 
         guint64 quantity = ne->quantity.isSet ? ne->quantity.integer : 1;
@@ -333,10 +333,10 @@ static void _master_registerHosts(Master* master) {
             slave_addNewVirtualHost(master->slave, params);
 
             /* now handle each virtual process the host will run */
-            GList* processes = ne->applications;
+            GList* processes = ne->processes;
             GList* processItem = processes;
             while(processItem != NULL) {
-                ConfigurationApplicationElement* pe = processItem->data;
+                ConfigurationProcessElement* pe = processItem->data;
                 utility_assert(pe->plugin.isSet && pe->plugin.string);
                 utility_assert(pe->arguments.isSet && pe->arguments.string);
 

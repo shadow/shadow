@@ -33,13 +33,6 @@ struct _ConfigurationIntegerAttribute {
     gboolean isSet;
 };
 
-typedef struct _ConfigurationKillElement ConfigurationKillElement;
-struct _ConfigurationKillElement {
-    /* required */
-    ConfigurationIntegerAttribute time;
-    /* optional*/
-};
-
 typedef struct _ConfigurationPluginElement ConfigurationPluginElement;
 struct _ConfigurationPluginElement {
     /* required */
@@ -55,8 +48,8 @@ struct _ConfigurationTopologyElement {
     ConfigurationStringAttribute cdata;
 };
 
-typedef struct _ConfigurationApplicationElement ConfigurationApplicationElement;
-struct _ConfigurationApplicationElement {
+typedef struct _ConfigurationProcessElement ConfigurationProcessElement;
+struct _ConfigurationProcessElement {
     /* required */
     ConfigurationStringAttribute plugin;
     ConfigurationIntegerAttribute starttime;
@@ -66,11 +59,11 @@ struct _ConfigurationApplicationElement {
     ConfigurationStringAttribute preload;
 };
 
-typedef struct _ConfigurationNodeElement ConfigurationNodeElement;
-struct _ConfigurationNodeElement {
+typedef struct _ConfigurationHostElement ConfigurationHostElement;
+struct _ConfigurationHostElement {
     /* required */
     ConfigurationStringAttribute id;
-    GList* applications;
+    GList* processes;
     /* optional*/
     ConfigurationStringAttribute ipHint;
     ConfigurationStringAttribute geocodeHint;
@@ -93,6 +86,7 @@ struct _ConfigurationNodeElement {
 typedef struct _ConfigurationShadowElement ConfigurationShadowElement;
 struct _ConfigurationShadowElement {
     /* required */
+    ConfigurationIntegerAttribute stoptime;
     /* optional*/
     ConfigurationStringAttribute preloadPath;
     ConfigurationStringAttribute environment;
@@ -102,10 +96,9 @@ Configuration* configuration_new(Options* options, const GString* file);
 void configuration_free(Configuration* config);
 
 ConfigurationShadowElement* configuration_getShadowElement(Configuration* config);
-ConfigurationKillElement* configuration_getKillElement(Configuration* config);
 ConfigurationTopologyElement* configuration_getTopologyElement(Configuration* config);
 GList* configuration_getPluginElements(Configuration* config);
-GList* configuration_getNodeElements(Configuration* config);
+GList* configuration_getHostElements(Configuration* config);
 
 /** @} */
 

@@ -162,7 +162,7 @@ static gchar* _main_getStaticTLSValue(Options* options, Configuration* config, g
      */
 
     GList* allPlugins = configuration_getPluginElements(config);
-    GList* allNodes = configuration_getNodeElements(config);
+    GList* allHosts = configuration_getHostElements(config);
     gulong tlsSizePerLoad = 0, tlsSizeTotal = 0;
 
     /* for each lib, we go through each node and find each application that uses that lib */
@@ -174,33 +174,33 @@ static gchar* _main_getStaticTLSValue(Options* options, Configuration* config, g
         if(pluginElement && pluginElement->id.isSet && pluginElement->id.string
                 && pluginElement->path.isSet && pluginElement->path.string) {
 
-            guint numNodesUsingPlugin = 0;
+            guint numHostsUsingPlugin = 0;
 
-            GList* nextNode = g_list_first(allNodes);
-            while(nextNode != NULL) {
-                ConfigurationNodeElement* nodeElement = (ConfigurationNodeElement*)nextNode->data;
+            GList* nexthost = g_list_first(allHosts);
+            while(nexthost != NULL) {
+                ConfigurationHostElement* hostElement = (ConfigurationHostElement*)nexthost->data;
 
-                if(nodeElement && nodeElement->applications) {
-                    guint quantity = nodeElement->quantity.isSet ? ((guint)nodeElement->quantity.integer) : 1;
+                if(hostElement && hostElement->processes) {
+                    guint quantity = hostElement->quantity.isSet ? ((guint)hostElement->quantity.integer) : 1;
 
-                    GList* nextApp = g_list_first(nodeElement->applications);
-                    while(nextApp != NULL) {
-                        ConfigurationApplicationElement* appElement = (ConfigurationApplicationElement*)nextApp->data;
+                    GList* nextProcess = g_list_first(hostElement->processes);
+                    while(nextProcess != NULL) {
+                        ConfigurationProcessElement* processElement = (ConfigurationProcessElement*)nextProcess->data;
 
-                        if(appElement && appElement->plugin.isSet && appElement->plugin.string &&
-                                !g_ascii_strcasecmp(appElement->plugin.string->str, pluginElement->id.string->str)) {
-                            numNodesUsingPlugin += quantity;
+                        if(processElement && processElement->plugin.isSet && processElement->plugin.string &&
+                                !g_ascii_strcasecmp(processElement->plugin.string->str, pluginElement->id.string->str)) {
+                            numHostsUsingPlugin += quantity;
                         }
-                        if(appElement && appElement->preload.isSet && appElement->preload.string &&
-                                !g_ascii_strcasecmp(appElement->preload.string->str, pluginElement->id.string->str)) {
-                            numNodesUsingPlugin += quantity;
+                        if(processElement && processElement->preload.isSet && processElement->preload.string &&
+                                !g_ascii_strcasecmp(processElement->preload.string->str, pluginElement->id.string->str)) {
+                            numHostsUsingPlugin += quantity;
                         }
 
-                        nextApp = g_list_next(nextApp);
+                        nextProcess = g_list_next(nextProcess);
                     }
                 }
 
-                nextNode = g_list_next(nextNode);
+                nexthost = g_list_next(nexthost);
             }
 
             tlsSizePerLoad = _main_computePluginLoadSize(pluginElement->path.string->str);
@@ -208,7 +208,7 @@ static gchar* _main_getStaticTLSValue(Options* options, Configuration* config, g
                 warning("skipping plugin '%s' at path '%s' when computing total needed static TLS size",
                         pluginElement->id.string->str, pluginElement->path.string->str);
             } else {
-                tlsSizeTotal += (tlsSizePerLoad * numNodesUsingPlugin);
+                tlsSizeTotal += (tlsSizePerLoad * numHostsUsingPlugin);
             }
         }
 

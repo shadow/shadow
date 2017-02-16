@@ -12,19 +12,18 @@ struct _Parser {
     GMarkupParseContext* context;
 
     GMarkupParser xmlRootParser;
-    GMarkupParser xmlNodeParser;
+    GMarkupParser xmlHostParser;
     GMarkupParser xmlTopologyParser;
 
-    /* help verify that application element plugins match plugin element ids */
+    /* help verify that process-element plugins match plugin element ids */
     GHashTable* pluginIDStrings;
     GHashTable* pluginIDRefStrings;
 
     /* our final parsed config state */
     ConfigurationShadowElement* shadow;
-    ConfigurationKillElement* kill;
     ConfigurationTopologyElement* topology;
     GList* plugins; // ConfigurationPluginElement
-    GList* nodes; // ConfigurationNodeElement
+    GList* hosts; // ConfigurationHostElement
     MAGIC_DECLARE;
 };
 
@@ -144,7 +143,7 @@ static void _parser_freePluginElement(ConfigurationPluginElement* plugin) {
     g_free(plugin);
 }
 
-static void _parser_freeApplicationElement(ConfigurationApplicationElement* process) {
+static void _parser_freeProcessElement(ConfigurationProcessElement* process) {
     utility_assert(process != NULL);
 
     if(process->plugin.isSet) {
@@ -163,50 +162,50 @@ static void _parser_freeApplicationElement(ConfigurationApplicationElement* proc
     g_free(process);
 }
 
-static void _parser_freeNodeElement(ConfigurationNodeElement* node) {
-    utility_assert(node != NULL);
+static void _parser_freeHostElement(ConfigurationHostElement* host) {
+    utility_assert(host != NULL);
 
-    if(node->id.isSet) {
-        utility_assert(node->id.string != NULL);
-        g_string_free(node->id.string, TRUE);
+    if(host->id.isSet) {
+        utility_assert(host->id.string != NULL);
+        g_string_free(host->id.string, TRUE);
     }
-    if(node->ipHint.isSet) {
-        utility_assert(node->ipHint.string != NULL);
-        g_string_free(node->ipHint.string, TRUE);
+    if(host->ipHint.isSet) {
+        utility_assert(host->ipHint.string != NULL);
+        g_string_free(host->ipHint.string, TRUE);
     }
-    if(node->geocodeHint.isSet) {
-        utility_assert(node->geocodeHint.string != NULL);
-        g_string_free(node->geocodeHint.string, TRUE);
+    if(host->geocodeHint.isSet) {
+        utility_assert(host->geocodeHint.string != NULL);
+        g_string_free(host->geocodeHint.string, TRUE);
     }
-    if(node->typeHint.isSet) {
-        utility_assert(node->typeHint.string != NULL);
-        g_string_free(node->typeHint.string, TRUE);
+    if(host->typeHint.isSet) {
+        utility_assert(host->typeHint.string != NULL);
+        g_string_free(host->typeHint.string, TRUE);
     }
-    if(node->loglevel.isSet) {
-        utility_assert(node->loglevel.string != NULL);
-        g_string_free(node->loglevel.string, TRUE);
+    if(host->loglevel.isSet) {
+        utility_assert(host->loglevel.string != NULL);
+        g_string_free(host->loglevel.string, TRUE);
     }
-    if(node->heartbeatloglevel.isSet) {
-        utility_assert(node->heartbeatloglevel.string != NULL);
-        g_string_free(node->heartbeatloglevel.string, TRUE);
+    if(host->heartbeatloglevel.isSet) {
+        utility_assert(host->heartbeatloglevel.string != NULL);
+        g_string_free(host->heartbeatloglevel.string, TRUE);
     }
-    if(node->heartbeatloginfo.isSet) {
-        utility_assert(node->heartbeatloginfo.string != NULL);
-        g_string_free(node->heartbeatloginfo.string, TRUE);
+    if(host->heartbeatloginfo.isSet) {
+        utility_assert(host->heartbeatloginfo.string != NULL);
+        g_string_free(host->heartbeatloginfo.string, TRUE);
     }
-    if(node->logpcap.isSet) {
-        utility_assert(node->logpcap.string != NULL);
-        g_string_free(node->logpcap.string, TRUE);
+    if(host->logpcap.isSet) {
+        utility_assert(host->logpcap.string != NULL);
+        g_string_free(host->logpcap.string, TRUE);
     }
-    if(node->pcapdir.isSet) {
-        utility_assert(node->pcapdir.string != NULL);
-        g_string_free(node->pcapdir.string, TRUE);
+    if(host->pcapdir.isSet) {
+        utility_assert(host->pcapdir.string != NULL);
+        g_string_free(host->pcapdir.string, TRUE);
     }
-    if(node->applications) {
-        g_list_free_full(node->applications, (GDestroyNotify)_parser_freeApplicationElement);
+    if(host->processes) {
+        g_list_free_full(host->processes, (GDestroyNotify)_parser_freeProcessElement);
     }
 
-    g_free(node);
+    g_free(host);
 }
 
 static void _parser_freeShadowElement(ConfigurationShadowElement* shadow) {
@@ -223,11 +222,6 @@ static void _parser_freeShadowElement(ConfigurationShadowElement* shadow) {
     }
 
     g_free(shadow);
-}
-
-static void _parser_freeKillElement(ConfigurationKillElement* kill) {
-    utility_assert(kill != NULL);
-    g_free(kill);
 }
 
 static gboolean _parser_hasTopology(Parser* parser) {
@@ -372,7 +366,7 @@ static GError* _parser_handlePluginAttributes(Parser* parser, const gchar** attr
         /* no error, store the resulting config */
         parser->plugins = g_list_append(parser->plugins, plugin);
 
-        /* make sure all references to plugins from application elements point to
+        /* make sure all references to plugins from process elements point to
          * an existing registered plugin element. */
         if(!g_hash_table_lookup(parser->pluginIDStrings, plugin->id.string->str)) {
             gchar* s = g_strdup(plugin->id.string->str);
@@ -383,8 +377,8 @@ static GError* _parser_handlePluginAttributes(Parser* parser, const gchar** attr
     return error;
 }
 
-static GError* _parser_handleNodeAttributes(Parser* parser, const gchar** attributeNames, const gchar** attributeValues) {
-    ConfigurationNodeElement* node = g_new0(ConfigurationNodeElement, 1);
+static GError* _parser_handleHostAttributes(Parser* parser, const gchar** attributeNames, const gchar** attributeValues) {
+    ConfigurationHostElement* host = g_new0(ConfigurationHostElement, 1);
     GError* error = NULL;
 
     const gchar **nameCursor = attributeNames;
@@ -397,63 +391,63 @@ static GError* _parser_handleNodeAttributes(Parser* parser, const gchar** attrib
 
         debug("found attribute '%s=%s'", name, value);
 
-        if(!node->id.isSet && !g_ascii_strcasecmp(name, "id")) {
-            node->id.string = g_string_new(value);
-            node->id.isSet = TRUE;
-        } else if (!node->ipHint.isSet && !g_ascii_strcasecmp(name, "iphint")) {
-            node->ipHint.string = g_string_new(value);
-            node->ipHint.isSet = TRUE;
-        } else if (!node->geocodeHint.isSet && !g_ascii_strcasecmp(name, "geocodehint")) {
-            node->geocodeHint.string = g_string_new(value);
-            node->geocodeHint.isSet = TRUE;
-        } else if (!node->typeHint.isSet && !g_ascii_strcasecmp(name, "typehint")) {
-            node->typeHint.string = g_string_new(value);
-            node->typeHint.isSet = TRUE;
-        } else if (!node->loglevel.isSet && !g_ascii_strcasecmp(name, "loglevel")) {
-            node->loglevel.string = g_string_new(value);
-            node->loglevel.isSet = TRUE;
-        } else if (!node->heartbeatloglevel.isSet && !g_ascii_strcasecmp(name, "heartbeatloglevel")) {
-            node->heartbeatloglevel.string = g_string_new(value);
-            node->heartbeatloglevel.isSet = TRUE;
-        } else if (!node->heartbeatloginfo.isSet && !g_ascii_strcasecmp(name, "heartbeatloginfo")) {
-            node->heartbeatloginfo.string = g_string_new(value);
-            node->heartbeatloginfo.isSet = TRUE;
-        } else if (!node->logpcap.isSet && !g_ascii_strcasecmp(name, "logpcap")) {
-            node->logpcap.string = g_string_new(value);
-            node->logpcap.isSet = TRUE;
-        } else if (!node->pcapdir.isSet && !g_ascii_strcasecmp(name, "pcapdir")) {
-            node->pcapdir.string = g_string_new(value);
-            node->pcapdir.isSet = TRUE;
-        } else if (!node->quantity.isSet && !g_ascii_strcasecmp(name, "quantity")) {
-            node->quantity.integer = g_ascii_strtoull(value, NULL, 10);
-            node->quantity.isSet = TRUE;
-        } else if (!node->bandwidthdown.isSet && !g_ascii_strcasecmp(name, "bandwidthdown")) {
-            node->bandwidthdown.integer  = g_ascii_strtoull(value, NULL, 10);
-            node->bandwidthdown.isSet = TRUE;
-        } else if (!node->bandwidthup.isSet && !g_ascii_strcasecmp(name, "bandwidthup")) {
-            node->bandwidthup.integer = g_ascii_strtoull(value, NULL, 10);
-            node->bandwidthup.isSet = TRUE;
-        } else if (!node->heartbeatfrequency.isSet && !g_ascii_strcasecmp(name, "heartbeatfrequency")) {
-            node->heartbeatfrequency.integer = g_ascii_strtoull(value, NULL, 10);
-            node->heartbeatfrequency.isSet = TRUE;
-        } else if (!node->cpufrequency.isSet && !g_ascii_strcasecmp(name, "cpufrequency")) {
-            node->cpufrequency.integer = g_ascii_strtoull(value, NULL, 10);
-            node->cpufrequency.isSet = TRUE;
-        } else if (!node->socketrecvbuffer.isSet && !g_ascii_strcasecmp(name, "socketrecvbuffer")) {
+        if(!host->id.isSet && !g_ascii_strcasecmp(name, "id")) {
+            host->id.string = g_string_new(value);
+            host->id.isSet = TRUE;
+        } else if (!host->ipHint.isSet && !g_ascii_strcasecmp(name, "iphint")) {
+            host->ipHint.string = g_string_new(value);
+            host->ipHint.isSet = TRUE;
+        } else if (!host->geocodeHint.isSet && !g_ascii_strcasecmp(name, "geocodehint")) {
+            host->geocodeHint.string = g_string_new(value);
+            host->geocodeHint.isSet = TRUE;
+        } else if (!host->typeHint.isSet && !g_ascii_strcasecmp(name, "typehint")) {
+            host->typeHint.string = g_string_new(value);
+            host->typeHint.isSet = TRUE;
+        } else if (!host->loglevel.isSet && !g_ascii_strcasecmp(name, "loglevel")) {
+            host->loglevel.string = g_string_new(value);
+            host->loglevel.isSet = TRUE;
+        } else if (!host->heartbeatloglevel.isSet && !g_ascii_strcasecmp(name, "heartbeatloglevel")) {
+            host->heartbeatloglevel.string = g_string_new(value);
+            host->heartbeatloglevel.isSet = TRUE;
+        } else if (!host->heartbeatloginfo.isSet && !g_ascii_strcasecmp(name, "heartbeatloginfo")) {
+            host->heartbeatloginfo.string = g_string_new(value);
+            host->heartbeatloginfo.isSet = TRUE;
+        } else if (!host->logpcap.isSet && !g_ascii_strcasecmp(name, "logpcap")) {
+            host->logpcap.string = g_string_new(value);
+            host->logpcap.isSet = TRUE;
+        } else if (!host->pcapdir.isSet && !g_ascii_strcasecmp(name, "pcapdir")) {
+            host->pcapdir.string = g_string_new(value);
+            host->pcapdir.isSet = TRUE;
+        } else if (!host->quantity.isSet && !g_ascii_strcasecmp(name, "quantity")) {
+            host->quantity.integer = g_ascii_strtoull(value, NULL, 10);
+            host->quantity.isSet = TRUE;
+        } else if (!host->bandwidthdown.isSet && !g_ascii_strcasecmp(name, "bandwidthdown")) {
+            host->bandwidthdown.integer  = g_ascii_strtoull(value, NULL, 10);
+            host->bandwidthdown.isSet = TRUE;
+        } else if (!host->bandwidthup.isSet && !g_ascii_strcasecmp(name, "bandwidthup")) {
+            host->bandwidthup.integer = g_ascii_strtoull(value, NULL, 10);
+            host->bandwidthup.isSet = TRUE;
+        } else if (!host->heartbeatfrequency.isSet && !g_ascii_strcasecmp(name, "heartbeatfrequency")) {
+            host->heartbeatfrequency.integer = g_ascii_strtoull(value, NULL, 10);
+            host->heartbeatfrequency.isSet = TRUE;
+        } else if (!host->cpufrequency.isSet && !g_ascii_strcasecmp(name, "cpufrequency")) {
+            host->cpufrequency.integer = g_ascii_strtoull(value, NULL, 10);
+            host->cpufrequency.isSet = TRUE;
+        } else if (!host->socketrecvbuffer.isSet && !g_ascii_strcasecmp(name, "socketrecvbuffer")) {
             /* socketReceiveBufferSize */
-            node->socketrecvbuffer.integer = g_ascii_strtoull(value, NULL, 10);
-            node->socketrecvbuffer.isSet = TRUE;
-        } else if (!node->socketsendbuffer.isSet && !g_ascii_strcasecmp(name, "socketsendbuffer")) {
+            host->socketrecvbuffer.integer = g_ascii_strtoull(value, NULL, 10);
+            host->socketrecvbuffer.isSet = TRUE;
+        } else if (!host->socketsendbuffer.isSet && !g_ascii_strcasecmp(name, "socketsendbuffer")) {
             /* socketSendBufferSize */
-            node->socketsendbuffer.integer = g_ascii_strtoull(value, NULL, 10);
-            node->socketsendbuffer.isSet = TRUE;
-        } else if (!node->interfacebuffer.isSet && !g_ascii_strcasecmp(name, "interfacebuffer")) {
+            host->socketsendbuffer.integer = g_ascii_strtoull(value, NULL, 10);
+            host->socketsendbuffer.isSet = TRUE;
+        } else if (!host->interfacebuffer.isSet && !g_ascii_strcasecmp(name, "interfacebuffer")) {
             /* interfaceReceiveBufferLength */
-            node->interfacebuffer.integer = g_ascii_strtoull(value, NULL, 10);
-            node->interfacebuffer.isSet = TRUE;
+            host->interfacebuffer.integer = g_ascii_strtoull(value, NULL, 10);
+            host->interfacebuffer.isSet = TRUE;
         } else {
             error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ATTRIBUTE,
-                            "unknown 'node' attribute '%s'", name);
+                            "unknown 'host' attribute '%s'", name);
         }
 
         nameCursor++;
@@ -461,28 +455,32 @@ static GError* _parser_handleNodeAttributes(Parser* parser, const gchar** attrib
     }
 
     /* validate the values */
-    if(!error && !node->id.isSet) {
+    if(!error && !host->id.isSet) {
         error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
-                "element 'node' requires attributes 'id'");
+                "element 'host' requires attributes 'id'");
     }
 
     if(error) {
         /* clean up */
-        _parser_freeNodeElement(node);
+        _parser_freeHostElement(host);
     } else {
         /* no error, store the config */
-        parser->nodes = g_list_append(parser->nodes, node);
+        parser->hosts = g_list_append(parser->hosts, host);
     }
 
     return error;
 }
 
 static GError* _parser_handleKillAttributes(Parser* parser, const gchar** attributeNames, const gchar** attributeValues) {
-    ConfigurationKillElement* kill = g_new0(ConfigurationKillElement, 1);
     GError* error = NULL;
+
+    /* TODO deprecate the kill element and this function
+     * once we have some time with using stoptime in the shadow element */
 
     const gchar **nameCursor = attributeNames;
     const gchar **valueCursor = attributeValues;
+    guint64 killTime = 0;
+    gboolean isSet = FALSE;
 
     /* check the attributes */
     while (!error && *nameCursor) {
@@ -491,9 +489,9 @@ static GError* _parser_handleKillAttributes(Parser* parser, const gchar** attrib
 
         debug("found attribute '%s=%s'", name, value);
 
-        if (!kill->time.isSet && !g_ascii_strcasecmp(name, "time")) {
-            kill->time.integer = g_ascii_strtoull(value, NULL, 10);
-            kill->time.isSet = TRUE;
+        if (!g_ascii_strcasecmp(name, "time")) {
+            killTime = g_ascii_strtoull(value, NULL, 10);
+            isSet = TRUE;
         } else {
             error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ATTRIBUTE,
                             "unknown 'kill' attribute '%s'", name);
@@ -504,17 +502,22 @@ static GError* _parser_handleKillAttributes(Parser* parser, const gchar** attrib
     }
 
     /* validate the values */
-    if(!error && !kill->time.isSet) {
-        error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
-                "element 'kill' requires attributes 'time'");
+    if(!error) {
+        if(!isSet) {
+            error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
+                    "element 'kill' requires attributes 'time'");
+        } else if(killTime <= 0) {
+            error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT,
+                                "element 'kill' attribute 'time' must be positive");
+        }
     }
 
-    if(error) {
-        _parser_freeKillElement(kill);
-    } else {
-        /* no error, store the config */
-        utility_assert(parser->kill == NULL);
-        parser->kill = kill;
+    if(!error) {
+        /* no error, store the stop time only if it wasn't already stored */
+        if(parser->shadow && !parser->shadow->stoptime.isSet) {
+            parser->shadow->stoptime.integer = killTime;
+            parser->shadow->stoptime.isSet = TRUE;
+        }
     }
 
     /* nothing to clean up */
@@ -522,8 +525,8 @@ static GError* _parser_handleKillAttributes(Parser* parser, const gchar** attrib
     return error;
 }
 
-static GError* _parser_handleApplicationAttributes(Parser* parser, const gchar** attributeNames, const gchar** attributeValues) {
-    ConfigurationApplicationElement* process = g_new0(ConfigurationApplicationElement, 1);
+static GError* _parser_handleProcessAttributes(Parser* parser, const gchar** attributeNames, const gchar** attributeValues) {
+    ConfigurationProcessElement* process = g_new0(ConfigurationProcessElement, 1);
     GError* error = NULL;
 
     const gchar **nameCursor = attributeNames;
@@ -554,7 +557,7 @@ static GError* _parser_handleApplicationAttributes(Parser* parser, const gchar**
             process->preload.isSet = TRUE;
         } else {
             error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ATTRIBUTE,
-                            "unknown 'application' attribute '%s'", name);
+                            "unknown 'process' attribute '%s'", name);
         }
 
         nameCursor++;
@@ -564,20 +567,20 @@ static GError* _parser_handleApplicationAttributes(Parser* parser, const gchar**
     /* validate the values */
     if(!error && (!process->plugin.isSet || !process->arguments.isSet || !process->starttime.isSet)) {
         error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
-                "element 'application' requires attributes 'plugin' 'arguments' 'starttime'");
+                "element 'process' requires attributes 'plugin' 'arguments' 'starttime'");
     }
 
     if(error) {
         /* clean up */
-        _parser_freeApplicationElement(process);
+        _parser_freeProcessElement(process);
     } else {
-        /* no error, application configs get added to the most recent node */
-        GList* nodeItem = g_list_last(parser->nodes);
-        utility_assert(nodeItem != NULL);
-        ConfigurationNodeElement* node = nodeItem->data;
-        utility_assert(node != NULL);
+        /* no error, process configs get added to the most recent host */
+        GList* hostItem = g_list_last(parser->hosts);
+        utility_assert(hostItem != NULL);
+        ConfigurationHostElement* host = hostItem->data;
+        utility_assert(host != NULL);
 
-        node->applications = g_list_append(node->applications, process);
+        host->processes = g_list_append(host->processes, process);
 
         /* plugin was required, so we know we have one */
         if(!g_hash_table_lookup(parser->pluginIDRefStrings, process->plugin.string->str)) {
@@ -595,36 +598,36 @@ static GError* _parser_handleApplicationAttributes(Parser* parser, const gchar**
     return error;
 }
 
-static void _parser_handleNodeChildStartElement(GMarkupParseContext* context,
+static void _parser_handleHostChildStartElement(GMarkupParseContext* context,
         const gchar* elementName, const gchar** attributeNames,
         const gchar** attributeValues, gpointer userData, GError** error) {
     Parser* parser = (Parser*) userData;
     MAGIC_ASSERT(parser);
     utility_assert(context && error);
 
-    debug("found 'node' child starting element '%s'", elementName);
+    debug("found 'host' child starting element '%s'", elementName);
 
     /* check for cluster child-level elements */
-    if (!g_ascii_strcasecmp(elementName, "application")) {
-        *error = _parser_handleApplicationAttributes(parser, attributeNames, attributeValues);
+    if (!g_ascii_strcasecmp(elementName, "process") || !g_ascii_strcasecmp(elementName, "application")) {
+        *error = _parser_handleProcessAttributes(parser, attributeNames, attributeValues);
     } else {
         *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ELEMENT,
-                "unknown 'node' child starting element '%s'", elementName);
+                "unknown 'host' child starting element '%s'", elementName);
     }
 }
 
-static void _parser_handleNodeChildEndElement(GMarkupParseContext* context,
+static void _parser_handleHostChildEndElement(GMarkupParseContext* context,
         const gchar* elementName, gpointer userData, GError** error) {
     Parser* parser = (Parser*) userData;
     MAGIC_ASSERT(parser);
     utility_assert(context && error);
 
-    debug("found 'node' child ending element '%s'", elementName);
+    debug("found 'host' child ending element '%s'", elementName);
 
     /* check for cluster child-level elements */
-    if (!(!g_ascii_strcasecmp(elementName, "application"))) {
+    if (!(!g_ascii_strcasecmp(elementName, "process")) && !(!g_ascii_strcasecmp(elementName, "application"))) {
         *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ELEMENT,
-                "unknown 'node' child ending element '%s'", elementName);
+                "unknown 'host' child ending element '%s'", elementName);
     }
 }
 
@@ -648,6 +651,9 @@ static GError* _parser_handleShadowAttributes(Parser* parser, const gchar** attr
         } else if (!shadow->environment.isSet && !g_ascii_strcasecmp(name, "environment")) {
             shadow->environment.string = g_string_new(value);
             shadow->environment.isSet = TRUE;
+        } else if(!shadow->stoptime.isSet && !g_ascii_strcasecmp(name, "stoptime")) {
+            shadow->stoptime.integer = g_ascii_strtoull(value, NULL, 10);
+            shadow->stoptime.isSet = TRUE;
         } else {
             error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ATTRIBUTE,
                     "unknown 'shadow' attribute '%s'", name);
@@ -665,6 +671,12 @@ static GError* _parser_handleShadowAttributes(Parser* parser, const gchar** attr
 
     if(!error && shadow->preloadPath.isSet) {
         error = _parser_checkPath(&(shadow->preloadPath));
+    }
+
+    /* TODO change stoptime to required after kill is deprecated */
+    if(!error && shadow->stoptime.isSet && shadow->stoptime.integer <= 0) {
+        error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT,
+                    "element 'shadow' attribute 'stoptime' must be positive");
     }
 
     if(error) {
@@ -690,16 +702,19 @@ static void _parser_handleRootStartElement(GMarkupParseContext* context,
     debug("found start element '%s'", elementName);
 
     /* check for root-level elements */
-    if (!g_ascii_strcasecmp(elementName, "plugin")) {
+    if (!g_ascii_strcasecmp(elementName, "host") || !g_ascii_strcasecmp(elementName, "node")) {
+        /* handle the attributes directly */
+        *error = _parser_handleHostAttributes(parser, attributeNames, attributeValues);
+        /* handle internal content in a sub parser */
+        g_markup_parse_context_push(context, &(parser->xmlHostParser), parser);
+    } else if (!g_ascii_strcasecmp(elementName, "plugin")) {
         *error = _parser_handlePluginAttributes(parser, attributeNames, attributeValues);
-    } else if (!g_ascii_strcasecmp(elementName, "node")) {
-        *error = _parser_handleNodeAttributes(parser, attributeNames, attributeValues);
-        /* handle internal elements in a sub parser */
-        g_markup_parse_context_push(context, &(parser->xmlNodeParser), parser);
     } else if (!g_ascii_strcasecmp(elementName, "kill")) {
         *error = _parser_handleKillAttributes(parser, attributeNames, attributeValues);
     } else if (!g_ascii_strcasecmp(elementName, "topology")) {
+        /* handle the attributes directly */
         *error = _parser_handleTopologyAttributes(parser, attributeNames, attributeValues);
+        /* handle content text in a sub parser */
         g_markup_parse_context_push(context, &(parser->xmlTopologyParser), parser);
     } else if (!g_ascii_strcasecmp(elementName, "shadow")) {
         *error = _parser_handleShadowAttributes(parser, attributeNames, attributeValues);
@@ -718,15 +733,15 @@ static void _parser_handleRootEndElement(GMarkupParseContext* context,
     debug("found end element '%s'", elementName);
 
     /* check for root-level elements */
-    if (!g_ascii_strcasecmp(elementName, "node")) {
+    if (!g_ascii_strcasecmp(elementName, "host") || !g_ascii_strcasecmp(elementName, "node")) {
         /* validate children */
-        GList* nodeItem = g_list_last(parser->nodes);
-        utility_assert(nodeItem != NULL);
-        ConfigurationNodeElement* node = nodeItem->data;
-        utility_assert(node != NULL);
-        if (g_list_length(node->applications) <= 0) {
+        GList* hostItem = g_list_last(parser->hosts);
+        utility_assert(hostItem != NULL);
+        ConfigurationHostElement* host = hostItem->data;
+        utility_assert(host != NULL);
+        if (g_list_length(host->processes) <= 0) {
             *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_EMPTY,
-                    "element 'node' requires at least 1 child 'application'");
+                    "element 'host' requires at least 1 child 'process'");
         }
         g_markup_parse_context_pop(context);
     } else if(!g_ascii_strcasecmp(elementName, "topology")) {
@@ -740,6 +755,9 @@ static void _parser_handleRootEndElement(GMarkupParseContext* context,
         if (!_parser_hasTopology(parser)) {
             *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_EMPTY,
                     "element 'shadow' requires at least 1 child 'topology'");
+        } else if(!parser->shadow->stoptime.isSet) {
+            *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_EMPTY,
+                    "element 'shadow' requires a positive attribute 'stoptime'");
         }
     } else {
         if(!(!g_ascii_strcasecmp(elementName, "plugin") ||
@@ -762,7 +780,7 @@ static gboolean _parser_verifyPluginIDsExist(Parser* parser, GError** error) {
         gchar* s = value;
         if(!g_hash_table_lookup(parser->pluginIDStrings, s)) {
             *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT,
-                    "plug-in id '%s' was referenced in an application element without being defined in a plugin element", s);;
+                    "plug-in id '%s' was referenced in a process element without being defined in a plugin element", s);;
             return FALSE;
         }
     }
@@ -788,8 +806,8 @@ static Parser* _parser_new() {
     parser->context = g_markup_parse_context_new(&(parser->xmlRootParser), 0, parser, NULL);
 
     /* sub parsers, without their own context */
-    parser->xmlNodeParser.start_element = &_parser_handleNodeChildStartElement;
-    parser->xmlNodeParser.end_element = &_parser_handleNodeChildEndElement;
+    parser->xmlHostParser.start_element = &_parser_handleHostChildStartElement;
+    parser->xmlHostParser.end_element = &_parser_handleHostChildEndElement;
     parser->xmlTopologyParser.text = &_parser_handleTopologyText;
     parser->xmlTopologyParser.passthrough = &_parser_handleTopologyText;
 
@@ -828,11 +846,8 @@ static void _parser_free(Parser* parser) {
     if(parser->topology) {
         _parser_freeTopologyElement(parser->topology);
     }
-    if(parser->kill) {
-        _parser_freeKillElement(parser->kill);
-    }
-    if(parser->nodes) {
-        g_list_free_full(parser->nodes, (GDestroyNotify)_parser_freeNodeElement);
+    if(parser->hosts) {
+        g_list_free_full(parser->hosts, (GDestroyNotify)_parser_freeHostElement);
     }
     if(parser->plugins) {
         g_list_free_full(parser->plugins, (GDestroyNotify)_parser_freePluginElement);
@@ -887,12 +902,6 @@ ConfigurationShadowElement* configuration_getShadowElement(Configuration* config
     return config->parser->shadow;
 }
 
-ConfigurationKillElement* configuration_getKillElement(Configuration* config) {
-    MAGIC_ASSERT(config);
-    utility_assert(config->parser && config->parser->kill);
-    return config->parser->kill;
-}
-
 ConfigurationTopologyElement* configuration_getTopologyElement(Configuration* config) {
     MAGIC_ASSERT(config);
     utility_assert(config->parser && config->parser->topology);
@@ -905,8 +914,8 @@ GList* configuration_getPluginElements(Configuration* config) {
     return config->parser->plugins;
 }
 
-GList* configuration_getNodeElements(Configuration* config) {
+GList* configuration_getHostElements(Configuration* config) {
     MAGIC_ASSERT(config);
-    utility_assert(config->parser && config->parser->nodes);
-    return config->parser->nodes;
+    utility_assert(config->parser && config->parser->hosts);
+    return config->parser->hosts;
 }
