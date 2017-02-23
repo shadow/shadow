@@ -200,7 +200,7 @@ To use these images:
 
 The **shadow** user has sudo access.  Its password is ***shadow***.
 
-Remember to save your modifications!  See the fine [Docker documentation](https://docs.docker.com/articles/basics/) for more information about how to use containers and images.
+Remember to save your modifications!  See the fine [Docker documentation](https://docs.docker.com/engine/getstarted/) for more information about how to use containers and images.
 
 
 ## Building your own docker image
