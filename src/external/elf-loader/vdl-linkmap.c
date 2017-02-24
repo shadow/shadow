@@ -3,6 +3,7 @@
 #include "vdl.h"
 #include "vdl-file.h"
 #include "vdl-log.h"
+#include "vdl-hashmap.h"
 
 void
 vdl_linkmap_append (struct VdlFile *file)
@@ -60,9 +61,9 @@ vdl_linkmap_remove (struct VdlFile *file)
     {
       g_vdl.link_map_tail = prev;
     }
-  if (file->has_tls && file->tls_index < g_vdl.module_map_len)
+  if (file->has_tls)
     {
-      g_vdl.module_map[file->tls_index] = 0;
+      vdl_hashmap_remove (g_vdl.module_map, file->tls_index, file);
     }
   g_vdl.n_removed++;
 }

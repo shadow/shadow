@@ -5,6 +5,7 @@
 #include "vdl-utils.h"
 #include "vdl-sort.h"
 #include "vdl-list.h"
+#include "vdl-hashmap.h"
 #include "vdl-mem.h"
 #include "vdl-alloc.h"
 #include "machine.h"
@@ -301,55 +302,28 @@ vdl_tls_dtv_initialize (unsigned long tcb)
   dtv[0].gen = g_vdl.tls_gen;
 }
 
-static void
-realloc_module_map (size_t size)
+int
+module_map_compare (const void *module_void, const void *file_void)
 {
-  if (size < 1)
-    {
-      size = 1;
-    }
-  if (g_vdl.module_map != 0)
-    {
-      vdl_alloc_free (g_vdl.module_map);
-    }
-  g_vdl.module_map =
-    (struct VdlFile **) vdl_alloc_malloc (size * sizeof (struct VdlFile *));
-
-  // we must zero the map, so we can keep track of what is a currently valid mapping
-  vdl_memset (g_vdl.module_map, 0, size * sizeof (struct VdlFile *));
-  g_vdl.module_map_len = size;
+  const unsigned long *module = (const unsigned long *) module_void;
+  const struct VdlFile *file = (const struct VdlFile *) file_void;
+  return (file && file->has_tls && file->tls_index == *module);
 }
 
 static struct VdlFile *
 find_file_by_module (unsigned long module)
 {
-  if (module >= g_vdl.module_map_len)
+  struct VdlFile *cur = (struct VdlFile *) vdl_hashmap_get (g_vdl.module_map, module, &module, module_map_compare);
+  if (cur)
     {
-      realloc_module_map (module * 2);
+      return cur;
     }
-  if (g_vdl.module_map[module] != 0 &&
-      g_vdl.module_map[module]->has_tls &&
-      g_vdl.module_map[module]->tls_index == module)
-    {
-      return g_vdl.module_map[module];
-    }
-
-  struct VdlFile *cur;
   for (cur = g_vdl.link_map; cur != 0; cur = cur->next)
     {
-      if (cur->has_tls)
+      if (cur->has_tls && cur->tls_index == module)
         {
-          if (cur->tls_index >= g_vdl.module_map_len)
-            {
-              // there's an index outside of what we allocated,
-              // call again "looking" for that to reinitialize
-              find_file_by_module (cur->tls_index);
-            }
-          g_vdl.module_map[cur->tls_index] = cur;
-          if (cur->tls_index == module)
-            {
-              break;
-            }
+          vdl_hashmap_insert (g_vdl.module_map, module, cur);
+          break;
         }
     }
   return cur;

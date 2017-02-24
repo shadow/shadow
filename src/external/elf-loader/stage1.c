@@ -118,8 +118,7 @@ global_initialize (unsigned long interpreter_load_base)
   vdl->errors = vdl_list_new ();
   vdl->n_added = 0;
   vdl->n_removed = 0;
-  vdl->module_map_len = 0;
-  vdl->module_map = 0;
+  vdl->module_map = vdl_hashmap_new();
   vdl->preloads = vdl_list_new();
   vdl->readonly_cache = vdl_hashmap_new();
   vdl->ro_cache_futex = futex_new();

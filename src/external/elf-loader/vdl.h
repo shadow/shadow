@@ -70,8 +70,7 @@ struct Vdl
   unsigned long n_added;
   unsigned long n_removed;
   // dynamic sized array to cache mappings from tls_index to module
-  unsigned long module_map_len;
-  struct VdlFile **module_map;
+  struct VdlHashMap *module_map;
   // preloaded files for inclusion in new contexts
   struct VdlList *preloads;
   // hash map of readonly file sections (e.g. .text) to their mappings for reuse
