@@ -392,9 +392,15 @@ vdl_tls_tcb_deallocate (unsigned long tcb)
   vdl_alloc_free ((void *) start);
 }
 
+// XXX: There's no way to free dtv modules yet, so this code can't do anything.
+// It's also currently implemented as a linear time operation.
+// For now, we'll just remove it until we actually need to implement it.
+// When we do implement it, move this logic into the deinitialize functions.
 static inline void
-vdl_tls_dtv_update_current (struct dtv_t *dtv, unsigned long dtv_size)
+vdl_tls_dtv_update_current (__attribute__ ((unused)) struct dtv_t *dtv,
+                            __attribute__ ((unused)) unsigned long dtv_size)
 {
+  /*
   unsigned long module;
   for (module = 1; module <= dtv_size; module++)
     {
@@ -429,6 +435,7 @@ vdl_tls_dtv_update_current (struct dtv_t *dtv, unsigned long dtv_size)
       dtv[module].gen = 0;
       dtv[module].is_static = 0;
     }
+  */
 }
 
 static inline void
