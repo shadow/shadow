@@ -141,7 +141,7 @@ cat /proc/sys/vm/max_map_count
 You can check the number of maps currently used in a process with pid=PID like this:
 
 ```bash
-cat /proc/PID/maps | wc -l
+wc -l /proc/PID/maps
 ```
 
 Set a new limit, make it persistent, apply it now:
