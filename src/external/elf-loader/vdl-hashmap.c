@@ -57,11 +57,22 @@ vdl_hashmap_get (struct VdlHashMap *map, uint32_t hash, void *key,
 }
 
 void
-vdl_hashmap_remove (struct VdlHashMap *map, uint32_t hash, void *key)
+vdl_hashmap_remove (struct VdlHashMap *map, uint32_t hash, void *data)
 {
   struct VdlList *items = map->buckets[hash % map->n_buckets];
-  vdl_list_remove (items, key);
-  map->load--;
+  struct VdlHashMapItem *item;
+  void **cur;
+  for (cur = vdl_list_begin (items);
+       cur != vdl_list_end (items); cur = vdl_list_next (cur))
+    {
+      item = (struct VdlHashMapItem *) (*cur);
+      if (data == item->data)
+        {
+          vdl_list_remove (items, item);
+          map->load--;
+          break;
+        }
+    }
 }
 
 void

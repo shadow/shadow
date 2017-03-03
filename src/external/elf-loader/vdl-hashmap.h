@@ -25,7 +25,7 @@ struct VdlHashMap
 void *vdl_hashmap_get (struct VdlHashMap *map, uint32_t hash, void *key,
                        int (*equals)(const void *query, const void *cached));
 void vdl_hashmap_insert (struct VdlHashMap *map, uint32_t hash, void *data);
-void vdl_hashmap_remove (struct VdlHashMap *map, uint32_t hash, void *key);
+void vdl_hashmap_remove (struct VdlHashMap *map, uint32_t hash, void *data);
 struct VdlHashMap *vdl_hashmap_new (void);
 void vdl_hashmap_delete(struct VdlHashMap *map);
 

@@ -149,6 +149,7 @@ file_deinitialize (struct VdlFile *file)
 
   if (file->has_tls)
     {
+      vdl_hashmap_remove (g_vdl.module_map, file->tls_index, file);
       g_vdl.tls_gen++;
       g_vdl.tls_n_dtv--;
     }
@@ -314,7 +315,9 @@ module_map_compare (const void *module_void, const void *file_void)
 static struct VdlFile *
 find_file_by_module (unsigned long module)
 {
-  struct VdlFile *cur = (struct VdlFile *) vdl_hashmap_get (g_vdl.module_map, module, &module, module_map_compare);
+  struct VdlFile *cur = (struct VdlFile *) vdl_hashmap_get (g_vdl.module_map,
+                                                            module, &module,
+                                                            module_map_compare);
   if (cur)
     {
       return cur;
