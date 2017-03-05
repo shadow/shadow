@@ -94,6 +94,7 @@ set(ldso_srcs
     vdl-lookup.c
     vdl-map.c
     vdl-mem.c
+    vdl-rbtree.c
     vdl-reloc.c
     vdl-sort.c
     vdl-tls.c

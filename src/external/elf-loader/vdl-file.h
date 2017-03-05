@@ -30,6 +30,8 @@ typedef void (*DtFini) (void);
 struct VdlFileMap
 {
   int mmap_flags;
+  // parent file structure for fast address->file mappings
+  struct VdlFile *file;
   unsigned long file_start_align;
   unsigned long file_size_align;
   // mem_start_align is the memory equivalent of file_start_align
@@ -39,13 +41,13 @@ struct VdlFileMap
   // mem_zero_start locates the start of a zero-memset area.
   unsigned long mem_zero_start;
   unsigned long mem_zero_size;
-  // mem_anon_start_align locates the start of a set of 
+  // mem_anon_start_align locates the start of a set of
   // zero-initialized anon pages.
   unsigned long mem_anon_start_align;
   unsigned long mem_anon_size_align;
 };
 
-
+// equivalent of link_map in include/link.h in glibc
 struct VdlFile
 {
   // The following fields are part of the ABI. Don't change them
@@ -138,7 +140,7 @@ struct VdlFile
   unsigned long tls_align;
   // TLS module index associated to this file
   // this is the index in each thread's DTV
-  // XXX: this member _must_ be at the same offset as l_tls_modid 
+  // XXX: this member _must_ be at the same offset as l_tls_modid
   // in the glibc linkmap to allow gdb to work (gdb accesses this
   // field for tls variable lookups)
   unsigned long tls_index;
@@ -146,7 +148,7 @@ struct VdlFile
   // this field is valid only for modules which
   // are loaded at startup.
   signed long tls_offset;
-  // the list of objects in which we resolved a symbol 
+  // the list of objects in which we resolved a symbol
   // from a GOT/PLT relocation. This field is used
   // during garbage collection from vdl_gc to detect
   // the set of references an object holds to another one
@@ -156,7 +158,7 @@ struct VdlFile
   enum VdlFileLookupType lookup_type;
   struct VdlContext *context;
   struct VdlList *local_scope;
-  // list of files this file depends upon. 
+  // list of files this file depends upon.
   // equivalent to the content of DT_NEEDED.
   struct VdlList *deps;
   uint32_t depth;
@@ -203,6 +205,15 @@ struct VdlFile
   const char *dt_runpath;
   const char *dt_soname;
   ElfW (Half) e_type;
+};
+
+// Used to map address ranges to files
+struct VdlFileAddress
+{
+  // key = map->mem_start_align if inserting/deleting,
+  // key = caller address if doing lookup
+  unsigned long key;
+  struct VdlFileMap *map;
 };
 
 #endif /* VDL_FILE_H */

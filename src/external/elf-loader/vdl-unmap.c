@@ -1,4 +1,5 @@
 #include "vdl-unmap.h"
+#include "vdl-map.h"
 #include "vdl-context.h"
 #include "vdl-file.h"
 #include "vdl-utils.h"
@@ -19,6 +20,12 @@ file_delete (struct VdlFile *file, bool mapping)
            i = vdl_list_next (i))
         {
           struct VdlFileMap *map = *i;
+          struct VdlFileAddress *ret, *address = vdl_alloc_new (struct VdlFileAddress);
+          address->key = map->mem_start_align;
+          ret = vdl_rbfind (g_vdl.address_ranges, address);
+          vdl_rberase (g_vdl.address_ranges, ret);
+          vdl_alloc_delete (ret);
+          vdl_alloc_delete (address);
           int status = system_munmap ((void *) map->mem_start_align,
                                       map->mem_size_align);
           if (status == -1)

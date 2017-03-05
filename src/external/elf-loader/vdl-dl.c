@@ -65,20 +65,14 @@ set_error (const char *str, ...)
 static struct VdlFile *
 addr_to_file (unsigned long caller)
 {
-  struct VdlFile *cur;
-  for (cur = g_vdl.link_map; cur != 0; cur = cur->next)
+  struct VdlFileAddress *ret, *address = vdl_alloc_new (struct VdlFileAddress);
+  address->key = caller;
+  address->map = 0;
+  ret = vdl_rbfind (g_vdl.address_ranges, address);
+  vdl_alloc_delete (address);
+  if (ret)
     {
-      void **i;
-      for (i = vdl_list_begin (cur->maps); i != vdl_list_end (cur->maps);
-           i = vdl_list_next (i))
-        {
-          struct VdlFileMap *map = *i;
-          if (caller >= map->mem_start_align &&
-              caller <= map->mem_start_align + map->mem_size_align)
-            {
-              return cur;
-            }
-        }
+      return ret->map->file;
     }
   return 0;
 }

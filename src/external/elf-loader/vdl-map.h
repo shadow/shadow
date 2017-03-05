@@ -32,5 +32,6 @@ struct VdlMapResult vdl_map_from_memory (unsigned long load_base,
 struct VdlMapResult vdl_map_from_filename (struct VdlContext *context,
                                            const char *filename);
 
+int map_address_compare (const void *p1, const void *p2);
 
 #endif /* VDL_MAP_H */

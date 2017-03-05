@@ -9,6 +9,7 @@
 #include "vdl-hashmap.h"
 #include "vdl-utils.h"
 #include "vdl-mem.h"
+#include "vdl-map.h"
 #include "machine.h"
 #include "glibc.h"
 #include <elf.h>
@@ -118,11 +119,12 @@ global_initialize (unsigned long interpreter_load_base)
   vdl->errors = vdl_list_new ();
   vdl->n_added = 0;
   vdl->n_removed = 0;
-  vdl->module_map = vdl_hashmap_new();
-  vdl->preloads = vdl_list_new();
-  vdl->readonly_cache = vdl_hashmap_new();
-  vdl->ro_cache_futex = futex_new();
-  vdl->shm_path = make_shm_name();
+  vdl->module_map = vdl_hashmap_new ();
+  vdl->preloads = vdl_list_new ();
+  vdl->address_ranges = vdl_rbnew (map_address_compare, nodup, norel);
+  vdl->readonly_cache = vdl_hashmap_new ();
+  vdl->ro_cache_futex = futex_new ();
+  vdl->shm_path = make_shm_name ();
 }
 
 // relocate entries in DT_REL
@@ -232,7 +234,10 @@ stage1_freeres (void)
     }
   stage2_freeres ();
   vdl_alloc_free (g_vdl.shm_path);
+  vdl_hashmap_delete (g_vdl.readonly_cache);
+  vdl_rbdelete (g_vdl.address_ranges);
   vdl_list_delete (g_vdl.preloads);
+  vdl_hashmap_delete (g_vdl.module_map);
   vdl_utils_str_list_delete (g_vdl.search_dirs);
   vdl_list_delete (g_vdl.contexts);
   futex_delete (g_vdl.ro_cache_futex);

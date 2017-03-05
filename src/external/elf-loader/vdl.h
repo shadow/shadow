@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <elf.h>
 #include <link.h>
+#include "vdl-rbtree.h"
 
 #if __ELF_NATIVE_CLASS == 32
 #define ELFW_R_SYM ELF32_R_SYM
@@ -73,6 +74,8 @@ struct Vdl
   struct VdlHashMap *module_map;
   // preloaded files for inclusion in new contexts
   struct VdlList *preloads;
+  // tree for mapping address -> map containing address -> file containing map
+  vdl_rbtree_t *address_ranges;
   // hash map of readonly file sections (e.g. .text) to their mappings for reuse
   struct VdlHashMap *readonly_cache;
   // futex for the readonly cache

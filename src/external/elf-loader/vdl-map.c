@@ -64,6 +64,27 @@ file_map_add_load_base (struct VdlFileMap *map, unsigned long load_base)
   map->mem_anon_start_align += load_base;
 }
 
+// return -1 if p2 key is below p1's address range, +1 if p2 key is above p1's
+// address range, and 0 if it is in that range
+int map_address_compare (const void *p1, const void *p2)
+{
+  // We need this function to compare correctly both in the case that p2 is a
+  // valid map (insertions, deletions), and when it is not (queries); p1 should
+  // always be a valid map. So we store map->mem_start_align as "key" when
+  // map is valid, and the query value as "key" when querying.
+  struct VdlFileAddress *p1_addr = (struct VdlFileAddress *) p1;
+  struct VdlFileAddress *p2_addr = (struct VdlFileAddress *) p2;
+  if (p2_addr->key < p1_addr->key)
+    {
+      return -1;
+    }
+  else if (p2_addr->key > p1_addr->key + p1_addr->map->mem_size_align)
+    {
+      return 1;
+    }
+  return 0;
+}
+
 static struct VdlFileMap *
 pt_load_to_file_map (const ElfW (Phdr) * phdr)
 {
@@ -336,6 +357,11 @@ file_new (unsigned long load_base,
     {
       struct VdlFileMap *map = *i;
       file_map_add_load_base (map, load_base);
+      map->file = file;
+      struct VdlFileAddress *address = vdl_alloc_new (struct VdlFileAddress);
+      address->map = map;
+      address->key = map->mem_start_align;
+      vdl_rbinsert (g_vdl.address_ranges, address);
     }
   file->deps_initialized = 0;
   file->tls_initialized = 0;
