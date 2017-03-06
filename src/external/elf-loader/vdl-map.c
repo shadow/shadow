@@ -78,7 +78,8 @@ int map_address_compare (const void *p1, const void *p2)
     {
       return -1;
     }
-  else if (p2_addr->key > p1_addr->key + p1_addr->map->mem_size_align)
+  // ">=" instead of ">" because this is page-aligned
+  else if (p2_addr->key >= p1_addr->key + p1_addr->map->mem_size_align)
     {
       return 1;
     }
