@@ -84,41 +84,54 @@ static gboolean _main_verifyStaticTLS() {
     }
 }
 
-static gulong _main_computeLoadSize(Lmid_t lmid, const gchar* libraryPath, gint dlmopenFlags) {
+static gulong _main_computeLoadSize(Lmid_t lmid, const gchar* pluginPath, const gchar* preloadPath, gint dlmopenFlags) {
     gulong tlsSizeStart = 0, tlsSizeEnd = 0, tlsSizePerLoad = 0;
     gpointer handle1 = NULL, handle2 = NULL;
     gint result = 0;
 
-    debug("computing static TLS size needed for library at path '%s", libraryPath);
+    debug("computing static TLS size needed for library at path '%s' and preload at path '%s'",
+            pluginPath, preloadPath ? preloadPath : "NULL");
 
     /* clear error */
     dlerror();
 
-    handle1 = dlmopen(lmid, libraryPath, dlmopenFlags);
+    /* get the initial TLS size used */
+    result = dlinfo(NULL, RTLD_DI_STATIC_TLS_SIZE, &tlsSizeStart);
+
+    if (result != 0) {
+        warning("error in dlinfo() while computing TLS start size, dlerror is '%s'", dlerror());
+        goto err;
+    }
+
+    /* open the plugin library in the requested lmid */
+    handle1 = dlmopen(lmid, pluginPath, dlmopenFlags);
 
     if(handle1 == NULL) {
-        warning("error in dlmopen() while computing TLS size, dlerror is '%s'", dlerror());
+        warning("error in plugin dlmopen() while computing TLS size, dlerror is '%s'", dlerror());
         goto err;
     }
 
-    result = dlinfo(handle1, RTLD_DI_STATIC_TLS_SIZE, &tlsSizeStart);
+    if(preloadPath) {
+        /* get the LMID so we can load it in the same namespace as the plugin */
+        Lmid_t prev_lmid = 0;
+        result = dlinfo(handle1, RTLD_DI_LMID, &prev_lmid);
+
+        if(result != 0) {
+            warning("dlinfo() failed when querying for previous LMID: %s", dlerror());
+            goto err;
+        }
+
+        handle2 = dlmopen(prev_lmid, preloadPath, dlmopenFlags|RTLD_INTERPOSE);
+        if(handle2 == NULL) {
+            warning("error in preload dlmopen() while computing TLS size, dlerror is '%s'", dlerror());
+            goto err;
+        }
+    }
+
+    result = dlinfo(NULL, RTLD_DI_STATIC_TLS_SIZE, &tlsSizeEnd);
 
     if (result != 0) {
-        warning("error in dlinfo() while computing TLS size, dlerror is '%s'", dlerror());
-        goto err;
-    }
-
-    handle2 = dlmopen(lmid, libraryPath, dlmopenFlags);
-
-    if(handle2 == NULL) {
-        warning("error in dlmopen() while computing TLS size, dlerror is '%s'", dlerror());
-        goto err;
-    }
-
-    result = dlinfo(handle2, RTLD_DI_STATIC_TLS_SIZE, &tlsSizeEnd);
-
-    if (result != 0) {
-        warning("error in dlinfo() while computing TLS size, dlerror is '%s'", dlerror());
+        warning("error in dlinfo() while computing TLS end size, dlerror is '%s'", dlerror());
         goto err;
     }
 
@@ -127,7 +140,15 @@ static gulong _main_computeLoadSize(Lmid_t lmid, const gchar* libraryPath, gint 
 //    dlclose(handle2);
 
     tlsSizePerLoad = (tlsSizeEnd - tlsSizeStart);
-    message("we need %lu bytes of static TLS per load of library at path '%s", tlsSizePerLoad, libraryPath);
+
+    /* log the result */
+    GString* msg = g_string_new(NULL);
+    g_string_printf(msg, "we need %lu bytes of static TLS per load of namespace with library at path '%s'", tlsSizePerLoad, pluginPath);
+    if(preloadPath) {
+        g_string_append_printf(msg, " and preload at path '%s'", preloadPath);
+    }
+    message("%s", msg->str);
+    g_string_free(msg, TRUE);
 
     /* make sure we dont return 0 when successful */
     if(tlsSizePerLoad < 1) {
@@ -146,33 +167,93 @@ err:
     return 0;
 }
 
-static gulong _main_computePluginLoadSize(const gchar* libraryPath) {
-    return _main_computeLoadSize(LM_ID_NEWLM, libraryPath, RTLD_LAZY|RTLD_LOCAL);
+static gulong _main_computeProcessLoadSize(const gchar* pluginPath, const gchar* preloadPath) {
+    return _main_computeLoadSize(LM_ID_NEWLM, pluginPath, preloadPath, RTLD_LAZY|RTLD_LOCAL);
 }
 
 static gulong _main_computePreloadLoadSize(const gchar* libraryPath) {
-    return _main_computeLoadSize(LM_ID_BASE, libraryPath, RTLD_LAZY|RTLD_PRELOAD);
+    return _main_computeLoadSize(LM_ID_BASE, libraryPath, NULL, RTLD_LAZY|RTLD_PRELOAD);
 }
 
 typedef struct _TLSCountingState {
-    GQueue* allPlugins;
+    Configuration* config;
     GQueue* allHosts;
-    gulong tlsSizeTotal;
-    ConfigurationPluginElement* currentPluginElement;
-    guint numHostsUsingCurrentPlugin;
+    GHashTable* cachedProcessTLSSize;
     guint currentHostQuantity;
+    gulong tlsSizeTotal;
+    gulong numCacheHits;
+    gulong numCacheMisses;
 } TLSCountingState;
+
+static gulong _main_getTLSUsedByProcess(TLSCountingState* state,
+        ConfigurationPluginElement* pluginElement, ConfigurationPluginElement* preloadElement) {
+    /* figure out how much TLS is used to load both into the same namespace.
+     * only do the actual dlmopens once and then cache the result, so that we
+     * don't repeat the loads for every host. */
+
+    utility_assert(pluginElement);
+    utility_assert(pluginElement->id.isSet && pluginElement->id.string);
+    utility_assert(pluginElement->path.isSet && pluginElement->path.string);
+    if(preloadElement) {
+        utility_assert(preloadElement->id.isSet && preloadElement->id.string);
+        utility_assert(preloadElement->path.isSet && preloadElement->path.string);
+    }
+
+    /* the id for the cache map is the concatenation of the plugin and preload ids */
+    gchar* cacheID = NULL;
+    gint result = asprintf(&cacheID, "%s-%s", pluginElement->id.string->str,
+            preloadElement ? preloadElement->id.string->str : "NULL");
+    if(result < 0) {
+        return 0;
+    }
+
+    /* first check if we can get the size from the cache */
+    gulong* cachedSizePointer = NULL;
+    cachedSizePointer = g_hash_table_lookup(state->cachedProcessTLSSize, cacheID);
+    if(cachedSizePointer != NULL) {
+        /* cache hit, we can avoid doing the dlmopens */
+        state->numCacheHits++;
+        return *cachedSizePointer;
+    } else {
+        /* cache miss, do the dlmopens and cache the result */
+        state->numCacheMisses++;
+        cachedSizePointer = g_new0(gulong, 1);
+        *cachedSizePointer = _main_computeProcessLoadSize(pluginElement->path.string->str,
+            preloadElement ? preloadElement->path.string->str : NULL);
+        g_hash_table_replace(state->cachedProcessTLSSize, cacheID, cachedSizePointer);
+        return *cachedSizePointer;
+    }
+}
 
 static void _main_countTLSProcessCallback(ConfigurationProcessElement* processElement, TLSCountingState* state) {
     utility_assert(processElement && state);
 
-    if(processElement && processElement->plugin.isSet && processElement->plugin.string &&
-            !g_ascii_strcasecmp(processElement->plugin.string->str, state->currentPluginElement->id.string->str)) {
-        state->numHostsUsingCurrentPlugin += state->currentHostQuantity;
+    /* each process must have a plugin, and can optionally have a preload lib */
+    ConfigurationPluginElement* pluginElement = NULL;
+    ConfigurationPluginElement* preloadElement = NULL;
+
+    if(processElement && processElement->plugin.isSet && processElement->plugin.string) {
+        gchar* pluginID = processElement->plugin.string->str;
+        pluginElement = configuration_getPluginElementByID(state->config, pluginID);
     }
-    if(processElement && processElement->preload.isSet && processElement->preload.string &&
-            !g_ascii_strcasecmp(processElement->preload.string->str, state->currentPluginElement->id.string->str)) {
-        state->numHostsUsingCurrentPlugin += state->currentHostQuantity;
+
+    if(processElement && processElement->preload.isSet && processElement->preload.string) {
+        gchar* preloadID = processElement->preload.string->str;
+        preloadElement = configuration_getPluginElementByID(state->config, preloadID);
+    }
+
+    /* get the TLS used by this process and store total needed by this host element */
+    gulong tlsSizePerProcess = _main_getTLSUsedByProcess(state, pluginElement, preloadElement);
+    if(tlsSizePerProcess == 0) {
+        warning("skipping process with plugin '%s' at path '%s' "
+                "and preload '%s' at path '%s' "
+                "when computing total needed static TLS size",
+                pluginElement ? pluginElement->id.string->str : "n/a",
+                pluginElement ? pluginElement->path.string->str : "n/a",
+                preloadElement ? preloadElement->id.string->str : "n/a",
+                preloadElement ? preloadElement->path.string->str : "n/a");
+    } else {
+        state->tlsSizeTotal += (tlsSizePerProcess * state->currentHostQuantity);
     }
 }
 
@@ -183,31 +264,8 @@ static void _main_countTLSHostCallback(ConfigurationHostElement* hostElement, TL
         /* make sure to get the new quantity set of each host */
         state->currentHostQuantity = hostElement->quantity.isSet ? ((guint)hostElement->quantity.integer) : 1;
 
-        /* now figure out how many processes are using the plugin */
+        /* now figure out the plugins that each process is using */
         g_queue_foreach(hostElement->processes, (GFunc)_main_countTLSProcessCallback, state);
-    }
-}
-
-static void _main_countTLSPluginCallback(ConfigurationPluginElement* pluginElement, TLSCountingState* state) {
-    utility_assert(pluginElement && state);
-
-    if(pluginElement && pluginElement->id.isSet && pluginElement->id.string
-                    && pluginElement->path.isSet && pluginElement->path.string) {
-
-        /* make sure to reset state for each plugin */
-        state->currentPluginElement = pluginElement;
-        state->numHostsUsingCurrentPlugin = 0;
-
-        /* for this plugin, go through all hosts to check references to us */
-        g_queue_foreach(state->allHosts, (GFunc) _main_countTLSHostCallback, state);
-
-        gulong tlsSizePerLoad = _main_computePluginLoadSize(pluginElement->path.string->str);
-        if(tlsSizePerLoad == 0) {
-            warning("skipping plugin '%s' at path '%s' when computing total needed static TLS size",
-                    pluginElement->id.string->str, pluginElement->path.string->str);
-        } else {
-            state->tlsSizeTotal += (tlsSizePerLoad * state->numHostsUsingCurrentPlugin);
-        }
     }
 }
 
@@ -219,11 +277,12 @@ static gchar* _main_getStaticTLSValue(Options* options, Configuration* config, g
      */
 
     TLSCountingState* state = g_new0(TLSCountingState, 1);
-    state->allPlugins = configuration_getPluginElements(config);
+    state->config = config;
     state->allHosts = configuration_getHostElements(config);
+    state->cachedProcessTLSSize = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
 
     /* for each lib, we go through each node and find each application that uses that lib */
-    g_queue_foreach(state->allPlugins, (GFunc)_main_countTLSPluginCallback, state);
+    g_queue_foreach(state->allHosts, (GFunc)_main_countTLSHostCallback, state);
 
     /* now count the size required to load the global shadow preload library */
     gulong tlsSizePerLoad = _main_computePreloadLoadSize(preloadArgValue);
@@ -239,8 +298,12 @@ static gchar* _main_getStaticTLSValue(Options* options, Configuration* config, g
         state->tlsSizeTotal = 1024;
     }
 
+    message("finished checking TLS size required for %u hosts; used dlmopen for %lu namespaces and cache for %lu namespaces",
+            state->allHosts->length, state->numCacheMisses, state->numCacheHits);
+
     GString* sbuf = g_string_new(NULL);
     g_string_printf(sbuf, "%lu", state->tlsSizeTotal);
+    g_hash_table_destroy(state->cachedProcessTLSSize);
     g_free(state);
     return g_string_free(sbuf, FALSE);
 }
@@ -534,7 +597,7 @@ static gint _main_helper(Options* options) {
         if(g_environ_getenv(envlist, "LD_STATIC_TLS_EXTRA") == NULL) {
             gchar* staticTLSValue = _main_getStaticTLSValue(options, config, preloadArgValue);
             envlist = g_environ_setenv(envlist, "LD_STATIC_TLS_EXTRA", staticTLSValue, 0);
-            message("we need %s bytes of static TLS storage", staticTLSValue);
+            message("we need %s total bytes of static TLS storage", staticTLSValue);
             g_free(staticTLSValue);
         }
 

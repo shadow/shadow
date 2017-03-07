@@ -97,6 +97,7 @@ void configuration_free(Configuration* config);
 
 ConfigurationShadowElement* configuration_getShadowElement(Configuration* config);
 ConfigurationTopologyElement* configuration_getTopologyElement(Configuration* config);
+ConfigurationPluginElement* configuration_getPluginElementByID(Configuration* config, const gchar* pluginID);
 GQueue* configuration_getPluginElements(Configuration* config);
 GQueue* configuration_getHostElements(Configuration* config);
 

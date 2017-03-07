@@ -743,53 +743,58 @@ vdl_dlinfo (void *handle, int request, void *p)
 {
   VDL_LOG_FUNCTION ("", 0);
   futex_lock (g_vdl.global_futex);
-  struct VdlFile *file = search_file (handle);
-  if (file == 0)
-    {
-      goto error;
-    }
-  if (request == RTLD_DI_LMID)
-    {
-      Lmid_t *plmid = (Lmid_t *) p;
-      *plmid = (Lmid_t) file->context;
-    }
-  else if (request == RTLD_DI_LINKMAP)
-    {
-      struct link_map **pmap = (struct link_map **) p;
-      *pmap = (struct link_map *) file;
-    }
-  else if (request == RTLD_DI_TLS_MODID)
-    {
-      size_t *pmodid = (size_t *) p;
-      if (file->has_tls)
-        {
-          *pmodid = file->tls_index;
-        }
-      else
-        {
-          *pmodid = 0;
-        }
-    }
-  else if (request == RTLD_DI_TLS_DATA)
-    {
-      void **ptls = (void **) p;
-      if (file->has_tls)
-        {
-          *ptls = (void *) vdl_tls_get_addr_fast (file->tls_index, 0);
-        }
-      else
-        {
-          *ptls = 0;
-        }
-    }
-  else if (request == RTLD_DI_STATIC_TLS_SIZE)
+
+  // RTLD_DI_STATIC_TLS_SIZE does not require a handle or VdlFile
+  if(request == RTLD_DI_STATIC_TLS_SIZE)
     {
       *(unsigned long *) p = g_vdl.tls_static_current_size;
     }
   else
     {
-      set_error ("dlinfo: unsupported request=%u", request);
-      goto error;
+      struct VdlFile *file = search_file (handle);
+      if (file == 0)
+        {
+          goto error;
+        }
+      if (request == RTLD_DI_LMID)
+        {
+          Lmid_t *plmid = (Lmid_t *) p;
+          *plmid = (Lmid_t) file->context;
+        }
+      else if (request == RTLD_DI_LINKMAP)
+        {
+          struct link_map **pmap = (struct link_map **) p;
+          *pmap = (struct link_map *) file;
+        }
+      else if (request == RTLD_DI_TLS_MODID)
+        {
+          size_t *pmodid = (size_t *) p;
+          if (file->has_tls)
+            {
+              *pmodid = file->tls_index;
+            }
+          else
+            {
+              *pmodid = 0;
+            }
+        }
+      else if (request == RTLD_DI_TLS_DATA)
+        {
+          void **ptls = (void **) p;
+          if (file->has_tls)
+            {
+              *ptls = (void *) vdl_tls_get_addr_fast (file->tls_index, 0);
+            }
+          else
+            {
+              *ptls = 0;
+            }
+        }
+      else
+        {
+          set_error ("dlinfo: unsupported request=%u", request);
+          goto error;
+        }
     }
 
   futex_unlock (g_vdl.global_futex);

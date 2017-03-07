@@ -31,7 +31,7 @@ add_cflags(-fPIC)
 #add_cflags(-Wno-unknown-warning-option)
 #add_cflags(-Wno-visibility)
 add_cflags(-std=gnu99)
-
+add_cflags(-pg)
 ## sources for our main shadow program
 set(shadow_srcs
     core/logger/shd-logger.c

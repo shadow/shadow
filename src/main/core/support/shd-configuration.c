@@ -16,7 +16,7 @@ struct _Parser {
     GMarkupParser xmlTopologyParser;
 
     /* help verify that process-element plugins match plugin element ids */
-    GHashTable* pluginIDStrings;
+    GHashTable* pluginMap; // maps plugin id string to plugin conf element
     GHashTable* pluginIDRefStrings;
 
     /* our final parsed config state */
@@ -368,9 +368,9 @@ static GError* _parser_handlePluginAttributes(Parser* parser, const gchar** attr
 
         /* make sure all references to plugins from process elements point to
          * an existing registered plugin element. */
-        if(!g_hash_table_lookup(parser->pluginIDStrings, plugin->id.string->str)) {
+        if(!g_hash_table_lookup(parser->pluginMap, plugin->id.string->str)) {
             gchar* s = g_strdup(plugin->id.string->str);
-            g_hash_table_replace(parser->pluginIDStrings, s, s);
+            g_hash_table_replace(parser->pluginMap, s, plugin);
         }
     }
 
@@ -775,7 +775,7 @@ static gboolean _parser_verifyPluginIDsExist(Parser* parser, GError** error) {
 
     while(g_hash_table_iter_next(&iter, &key, &value)) {
         gchar* s = value;
-        if(!g_hash_table_lookup(parser->pluginIDStrings, s)) {
+        if(!g_hash_table_lookup(parser->pluginMap, s)) {
             *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT,
                     "plug-in id '%s' was referenced in a process element without being defined in a plugin element", s);;
             return FALSE;
@@ -789,7 +789,7 @@ static Parser* _parser_new() {
     Parser* parser = g_new0(Parser, 1);
     MAGIC_INIT(parser);
 
-    parser->pluginIDStrings = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
+    parser->pluginMap = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
     parser->pluginIDRefStrings = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
 
     parser->plugins = g_queue_new();
@@ -855,7 +855,7 @@ static void _parser_free(Parser* parser) {
     if(parser->shadow) {
         _parser_freeShadowElement(parser->shadow);
     }
-    g_hash_table_destroy(parser->pluginIDStrings);
+    g_hash_table_destroy(parser->pluginMap);
     g_hash_table_destroy(parser->pluginIDRefStrings);
     g_markup_parse_context_free(parser->context);
 
@@ -906,6 +906,12 @@ ConfigurationTopologyElement* configuration_getTopologyElement(Configuration* co
     MAGIC_ASSERT(config);
     utility_assert(config->parser && config->parser->topology);
     return config->parser->topology;
+}
+
+ConfigurationPluginElement* configuration_getPluginElementByID(Configuration* config, const gchar* pluginID) {
+    MAGIC_ASSERT(config);
+    utility_assert(config->parser && config->parser->pluginMap);
+    return g_hash_table_lookup(config->parser->pluginMap, pluginID);
 }
 
 GQueue* configuration_getPluginElements(Configuration* config) {
