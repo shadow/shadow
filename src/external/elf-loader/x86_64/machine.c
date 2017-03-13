@@ -292,7 +292,7 @@ machine_atomic_compare_and_exchange (uint32_t * ptr, uint32_t old,
 {
   uint32_t prev;
   asm volatile ("lock cmpxchgl %1,%2":"=a" (prev):"r" (new), "m" (*ptr),
-                "0" (old):"memory");
+                "0" (old):"memory", "cc");
   return prev;
 }
 

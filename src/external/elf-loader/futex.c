@@ -54,3 +54,71 @@ futex_unlock (struct Futex *futex)
       system_futex_wake (&futex->state, 1);
     }
 }
+
+// basic readers-writer lock
+// makes no attempt to address writer starvation or r->w upgrades
+struct RWLock *
+rwlock_new (void)
+{
+  struct RWLock *lock = vdl_alloc_new (struct RWLock);
+  rwlock_construct (lock);
+  return lock;
+}
+
+void
+rwlock_delete (struct RWLock *lock)
+{
+  rwlock_destruct (lock);
+  vdl_alloc_delete (lock);
+}
+
+void
+rwlock_construct (struct RWLock *lock)
+{
+  lock->reader = futex_new ();
+  lock->global = futex_new ();
+  lock->count = 0;
+}
+
+void
+rwlock_destruct (struct RWLock *lock)
+{
+  futex_delete (lock->global);
+  futex_delete (lock->reader);
+}
+
+void
+read_lock (struct RWLock *lock)
+{
+  futex_lock (lock->reader);
+  lock->count++;
+  if (lock->count == 1)
+    {
+      futex_lock (lock->global);
+    }
+  futex_unlock (lock->reader);
+}
+
+void
+read_unlock (struct RWLock *lock)
+{
+  futex_lock (lock->reader);
+  lock->count--;
+  if (lock->count == 0)
+    {
+      futex_unlock (lock->global);
+    }
+  futex_unlock (lock->reader);
+}
+
+void
+write_lock (struct RWLock *lock)
+{
+  futex_lock (lock->global);
+}
+
+void
+write_unlock (struct RWLock *lock)
+{
+  futex_unlock (lock->global);
+}
