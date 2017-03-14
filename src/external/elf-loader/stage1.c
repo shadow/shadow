@@ -111,7 +111,7 @@ global_initialize (unsigned long interpreter_load_base)
   vdl->tls_static_align = 0;
   vdl->tls_n_dtv = 0;
   vdl->tls_next_index = 1;
-  vdl->global_futex = futex_new ();
+  vdl->global_lock = rwlock_new ();
   vdl->errors = vdl_list_new ();
   vdl->n_added = 0;
   vdl->n_removed = 0;
@@ -237,7 +237,7 @@ stage1_freeres (void)
   vdl_utils_str_list_delete (g_vdl.search_dirs);
   vdl_list_delete (g_vdl.contexts);
   futex_delete (g_vdl.ro_cache_futex);
-  futex_delete (g_vdl.global_futex);
+  rwlock_delete (g_vdl.global_lock);
   {
     void **i;
     for (i = vdl_list_begin (g_vdl.errors);
@@ -256,7 +256,7 @@ stage1_freeres (void)
 
   g_vdl.search_dirs = 0;
   g_vdl.contexts = 0;
-  g_vdl.global_futex = 0;
+  g_vdl.global_lock = 0;
   g_vdl.errors = 0;
 }
 
