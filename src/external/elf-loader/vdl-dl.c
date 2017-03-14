@@ -566,8 +566,7 @@ vdl_dladdr1 (const void *addr, Dl_info * info, void **extra_info, int flags)
       const ElfW (Sym) ** sym = (const ElfW (Sym) **) extra_info;
       *sym = match;
     }
-  else
-    futex_unlock (g_vdl.global_futex);
+  futex_unlock (g_vdl.global_futex);
   return 1;
 error:
   futex_unlock (g_vdl.global_futex);
