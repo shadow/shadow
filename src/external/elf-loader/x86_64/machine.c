@@ -276,6 +276,7 @@ machine_thread_pointer_set (unsigned long tp)
   int status = MACHINE_SYSCALL2 (arch_prctl, ARCH_SET_FS, fs);
   VDL_LOG_DEBUG ("status=%d\n", status);
   VDL_LOG_ASSERT (status == 0, "Unable to set TP");
+  g_vdl.tp_set = 1;
 }
 
 unsigned long

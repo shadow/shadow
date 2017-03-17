@@ -85,6 +85,8 @@ struct Vdl
   struct Futex *ro_cache_futex;
   // the unique ephemeral path we use for our shared memory mappings
   char* shm_path;
+  // the TCB has been set as the thread pointer
+  uint32_t tp_set:1;
 };
 
 extern struct Vdl g_vdl;

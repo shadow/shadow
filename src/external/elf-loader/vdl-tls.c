@@ -1,3 +1,4 @@
+#include "alloc.h"
 #include "vdl.h"
 #include "vdl-tls.h"
 #include "vdl-config.h"
@@ -216,8 +217,10 @@ vdl_tls_tcb_initialize (unsigned long tcb, unsigned long sysinfo)
 // reads dtv[i].value where i >= 1 to find out the address of a target
 // tls block) and libpthread reads dtv[-1].value to find out the size
 // of the dtv array and be able to memset it to zeros.
+// dtv[0].value is used as glibc/pthreads' generation counter.
 // The only leeway we have is in the glibc static field which we reuse
 // to store a per-dtvi generation counter.
+// the original in the glibc source can be found in sysdeps/[arch]/nptl/tls.h
 struct dtv_t
 {
   unsigned long value;
@@ -238,13 +241,29 @@ vdl_tls_dtv_allocate (unsigned long tcb)
 {
   VDL_LOG_FUNCTION ("tcb=%lu", tcb);
   struct dtv_t *new_dtv, *current_dtv = get_current_dtv (tcb);
-  unsigned long needed_size = (2 + g_vdl.tls_n_dtv) * sizeof (struct dtv_t);
+  // the 3 here is the two entries we put before the dtv, plus a new entry
+  unsigned long needed_size = (3 + g_vdl.tls_n_dtv) * sizeof (struct dtv_t);
   bool migrate = current_dtv && (current_dtv[-1].gen < needed_size);
+  struct LocalTLS *local_tls;
+  if (!current_dtv)
+    {
+      local_tls = vdl_alloc_new (struct LocalTLS);
+      local_tls->allocator = vdl_alloc_new (struct Alloc);
+      alloc_initialize (local_tls->allocator);
+    }
+  else
+    {
+      local_tls = (struct LocalTLS *) current_dtv[-2].value;
+    }
+
   if (!current_dtv || migrate)
     {
       // allocate a dtv for twice the set of tls blocks needed now
       new_dtv = vdl_alloc_malloc (2 * needed_size);
-      new_dtv++;
+      // there are 2 entries before the dtv:
+      new_dtv++; // our (elf-loader's) thread-local storage
+      new_dtv++; // the metadata used by pthreads
+      new_dtv[-2].value = (unsigned long) local_tls;
       new_dtv[-1].gen = 2 * needed_size;
     }
   else
@@ -253,7 +272,7 @@ vdl_tls_dtv_allocate (unsigned long tcb)
     }
 
   new_dtv[-1].value = g_vdl.tls_n_dtv;
-  new_dtv[0].value = 0;         // XXX: Is this used for anything?
+  new_dtv[0].value = 0;
   new_dtv[0].gen = g_vdl.tls_gen;
   vdl_memcpy ((void *) (tcb + CONFIG_TCB_DTV_OFFSET), &new_dtv,
               sizeof (new_dtv));
@@ -267,7 +286,7 @@ vdl_tls_dtv_allocate (unsigned long tcb)
           new_dtv[module] = current_dtv[module];
         }
       // clear the old dtv
-      vdl_alloc_free (&current_dtv[-1]);
+      vdl_alloc_free (&current_dtv[-2]);
     }
 }
 
@@ -306,6 +325,21 @@ vdl_tls_dtv_initialize (unsigned long tcb)
     }
   // initialize its generation counter
   dtv[0].gen = g_vdl.tls_gen;
+}
+
+inline struct LocalTLS *
+vdl_tls_get_local_tls (void)
+{
+  if (g_vdl.tp_set)
+    {
+      unsigned long tp = machine_thread_pointer_get ();
+      struct dtv_t *dtv = get_current_dtv (tp);
+      if (dtv)
+        {
+          return (struct LocalTLS *) dtv[-2].value;
+        }
+    }
+  return 0;
 }
 
 int
@@ -351,7 +385,11 @@ vdl_tls_dtv_deallocate (unsigned long tcb)
       unsigned long *dtvi = (unsigned long *) dtv[module].value;
       vdl_alloc_free (&dtvi[-1]);
     }
-  vdl_alloc_free (&dtv[-1]);
+  // If we could, we would free the allocator associated with this thread now.
+  // But it's possible that it has allocated memory that will be used/freed
+  // later, on some other thread, so we can't.
+  vdl_alloc_free ((struct LocalTLS *) dtv[-2].value);
+  vdl_alloc_free (&dtv[-2]);
 }
 
 void

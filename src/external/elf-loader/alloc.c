@@ -32,6 +32,11 @@ struct AllocAvailable
 {
   struct AllocAvailable *next;
 };
+struct AllocMallocMetadata
+{
+  struct Alloc *alloc;
+  unsigned long size;
+};
 
 
 static uint32_t
@@ -99,7 +104,7 @@ bucket_to_size (uint8_t bucket)
   return size;
 }
 
-static uint8_t *
+static void *
 alloc_do_malloc (struct Alloc *alloc, uint32_t size)
 {
   if (size < (alloc->default_mmap_size - chunk_overhead ()))
@@ -180,6 +185,7 @@ alloc_initialize (struct Alloc *alloc)
       alloc->buckets[i] = 0;
     }
   alloc->default_mmap_size = 1 << 15;
+  futex_construct (&alloc->futex);
 }
 
 void
@@ -192,24 +198,32 @@ alloc_destroy (struct Alloc *alloc)
       system_munmap (tmp->buffer, tmp->size);
     }
   alloc->chunks = 0;
+  futex_destruct (&alloc->futex);
 }
 
-uint8_t *
+void *
 alloc_malloc (struct Alloc *alloc, uint32_t size)
 {
-  unsigned long *buffer =
-    (unsigned long *) alloc_do_malloc (alloc,
-                                       size + 1 * sizeof (unsigned long));
-  buffer[0] = size;
-  return (void *) (buffer + 1);
+  futex_lock (&alloc->futex);
+  void *buffer =
+    alloc_do_malloc (alloc, size + sizeof (struct AllocMallocMetadata));
+  futex_unlock (&alloc->futex);
+  struct AllocMallocMetadata *metadata = (struct AllocMallocMetadata *) buffer;
+  metadata->alloc = alloc;
+  metadata->size = size;
+  return buffer + sizeof (struct AllocMallocMetadata);
 }
 
 void
-alloc_free (struct Alloc *alloc, uint8_t * buffer)
+alloc_free (void *buffer)
 {
-  unsigned long *buf = (unsigned long *) buffer;
-  unsigned long size = buf[-1];
+  struct AllocMallocMetadata *metadata =
+    (struct AllocMallocMetadata *) (buffer - sizeof (struct AllocMallocMetadata));
+  unsigned long size = metadata->size;
+  struct Alloc *alloc = metadata->alloc;
   //vdl_memset (buf, 0x66, size);
-  alloc_do_free (alloc, (uint8_t *) (buf - 1),
-                 size + 1 * sizeof (unsigned long));
+  futex_lock (&alloc->futex);
+  alloc_do_free (alloc, (void *) (metadata),
+                 size + sizeof (struct AllocMallocMetadata));
+  futex_unlock (&alloc->futex);
 }

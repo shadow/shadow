@@ -87,43 +87,43 @@ machine_reloc_type_to_str (unsigned long reloc_type)
   break
   switch (reloc_type)
     {
-      ITEM (386 _NONE);
-      ITEM (386 _32);
-      ITEM (386 _PC32);
-      ITEM (386 _GOT32);
-      ITEM (386 _PLT32);
-      ITEM (386 _COPY);
-      ITEM (386 _GLOB_DAT);
-      ITEM (386 _JMP_SLOT);
-      ITEM (386 _RELATIVE);
-      ITEM (386 _GOTOFF);
-      ITEM (386 _GOTPC);
-      ITEM (386 _32PLT);
-      ITEM (386 _TLS_TPOFF);
-      ITEM (386 _TLS_IE);
-      ITEM (386 _TLS_GOTIE);
-      ITEM (386 _TLS_LE);
-      ITEM (386 _TLS_GD);
-      ITEM (386 _TLS_LDM);
-      ITEM (386 _16);
-      ITEM (386 _PC16);
-      ITEM (386 _8);
-      ITEM (386 _PC8);
-      ITEM (386 _TLS_GD_32);
-      ITEM (386 _TLS_GD_PUSH);
-      ITEM (386 _TLS_GD_CALL);
-      ITEM (386 _TLS_GD_POP);
-      ITEM (386 _TLS_LDM_32);
-      ITEM (386 _TLS_LDM_PUSH);
-      ITEM (386 _TLS_LDM_CALL);
-      ITEM (386 _TLS_LDM_POP);
-      ITEM (386 _TLS_LDO_32);
-      ITEM (386 _TLS_IE_32);
-      ITEM (386 _TLS_LE_32);
-      ITEM (386 _TLS_DTPMOD32);
-      ITEM (386 _TLS_DTPOFF32);
-      ITEM (386 _TLS_TPOFF32);
-      ITEM (386 _NUM);
+      ITEM (386_NONE);
+      ITEM (386_32);
+      ITEM (386_PC32);
+      ITEM (386_GOT32);
+      ITEM (386_PLT32);
+      ITEM (386_COPY);
+      ITEM (386_GLOB_DAT);
+      ITEM (386_JMP_SLOT);
+      ITEM (386_RELATIVE);
+      ITEM (386_GOTOFF);
+      ITEM (386_GOTPC);
+      ITEM (386_32PLT);
+      ITEM (386_TLS_TPOFF);
+      ITEM (386_TLS_IE);
+      ITEM (386_TLS_GOTIE);
+      ITEM (386_TLS_LE);
+      ITEM (386_TLS_GD);
+      ITEM (386_TLS_LDM);
+      ITEM (386_16);
+      ITEM (386_PC16);
+      ITEM (386_8);
+      ITEM (386_PC8);
+      ITEM (386_TLS_GD_32);
+      ITEM (386_TLS_GD_PUSH);
+      ITEM (386_TLS_GD_CALL);
+      ITEM (386_TLS_GD_POP);
+      ITEM (386_TLS_LDM_32);
+      ITEM (386_TLS_LDM_PUSH);
+      ITEM (386_TLS_LDM_CALL);
+      ITEM (386_TLS_LDM_POP);
+      ITEM (386_TLS_LDO_32);
+      ITEM (386_TLS_IE_32);
+      ITEM (386_TLS_LE_32);
+      ITEM (386_TLS_DTPMOD32);
+      ITEM (386_TLS_DTPOFF32);
+      ITEM (386_TLS_TPOFF32);
+      ITEM (386_NUM);
     default:
       return "XXX";
     }
@@ -262,6 +262,7 @@ machine_thread_pointer_set (unsigned long tp)
   // is the least privileged level)
   int gs = (desc.entry_number << 3) | 3;
   asm ("movw %w0, %%gs"::"q" (gs));
+  g_vdl.tp_set = 1;
 }
 
 unsigned long

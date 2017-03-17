@@ -90,11 +90,12 @@ make_shm_name ()
 static void
 global_initialize (unsigned long interpreter_load_base)
 {
+  struct Vdl *vdl = &g_vdl;
   // after this call to vdl_alloc_initialize is completed,
   // we are allowed to allocate heap memory.
+  vdl->tp_set = 0;
   vdl_alloc_initialize ();
 
-  struct Vdl *vdl = &g_vdl;
   vdl->version = 1;
   vdl->link_map = 0;
   vdl->breakpoint = 0;

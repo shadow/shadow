@@ -1,9 +1,16 @@
 #ifndef VDL_TLS_H
 #define VDL_TLS_H
 
+#include "vdl-list.h"
 #include <stdbool.h>
 
-// called prior initial relocation processing. 
+// our own version of TLS for internal elf-loader use
+struct LocalTLS
+{
+  struct Alloc *allocator;
+};
+
+// called prior initial relocation processing.
 // collect and store tls information about everything
 // in g_vdl and each file
 void vdl_tls_file_initialize_main (struct VdlList *list);
@@ -24,6 +31,7 @@ void vdl_tls_dtv_initialize (unsigned long tcb);
 bool vdl_tls_file_initialize (struct VdlList *files);
 void vdl_tls_dtv_deallocate (unsigned long tcb);
 void vdl_tls_tcb_deallocate (unsigned long tcb);
+struct LocalTLS *vdl_tls_get_local_tls (void);
 // no need to call the _fast version with any kind of lock held
 unsigned long vdl_tls_get_addr_fast (unsigned long module, unsigned long offset);
 // the _slow version needs a lock held
