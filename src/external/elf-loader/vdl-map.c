@@ -846,11 +846,9 @@ vdl_file_map_single (struct VdlContext *context,
   // calculate the offset between the start address we asked for and the one we got
   unsigned long load_base = mapping_start - requested_mapping_start;
 
-  // unmap the area before mapping it again.
-  int int_result = system_munmap ((void *) mapping_start, mapping_size);
-  VDL_LOG_ASSERT (int_result == 0, "munmap can't possibly fail here");
-
   // remap the portions we want.
+  // To prevent concurrency problems, we don't munmap the mmap at mapping_start.
+  // We can do this because the remaps used MAP_FIXED. (see man mmap)
   void **i;
   for (i = vdl_list_begin (maps); i != vdl_list_end (maps);
        i = vdl_list_next (i))
