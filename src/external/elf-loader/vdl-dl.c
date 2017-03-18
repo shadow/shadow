@@ -470,7 +470,7 @@ int
 vdl_dladdr1 (const void *addr, Dl_info * info, void **extra_info, int flags)
 {
   VDL_LOG_FUNCTION ("", 0);
-  write_lock (g_vdl.global_lock);
+  read_lock (g_vdl.global_lock);
   struct VdlFile *file = addr_to_file ((unsigned long) addr);
   if (file == 0)
     {
@@ -573,10 +573,10 @@ vdl_dladdr1 (const void *addr, Dl_info * info, void **extra_info, int flags)
       const ElfW (Sym) ** sym = (const ElfW (Sym) **) extra_info;
       *sym = match;
     }
-  write_unlock (g_vdl.global_lock);
+  read_unlock (g_vdl.global_lock);
   return 1;
 error:
-  write_unlock (g_vdl.global_lock);
+  read_unlock (g_vdl.global_lock);
   return 0;
 }
 
@@ -599,7 +599,7 @@ vdl_dlvsym_with_flags (void *handle, const char *symbol, const char *version,
 {
   VDL_LOG_FUNCTION ("handle=0x%llx, symbol=%s, version=%s, caller=0x%llx",
                     handle, symbol, (version == 0) ? "" : version, caller);
-  write_lock (g_vdl.global_lock);
+  read_lock (g_vdl.global_lock);
   struct VdlList *scope;
   struct VdlFile *caller_file = addr_to_file (caller);
   struct VdlContext *context;
@@ -663,12 +663,12 @@ vdl_dlvsym_with_flags (void *handle, const char *symbol, const char *version,
       vdl_list_delete (scope);
       goto error;
     }
+  read_unlock (g_vdl.global_lock);
   vdl_list_delete (scope);
-  write_unlock (g_vdl.global_lock);
   vdl_lookup_symbol_fixup (result.file, &result.symbol);
   return (void *) (result.file->load_base + result.symbol.st_value);
 error:
-  write_unlock (g_vdl.global_lock);
+  read_unlock (g_vdl.global_lock);
   return 0;
 }
 
@@ -679,7 +679,7 @@ vdl_dl_iterate_phdr (int (*callback) (struct dl_phdr_info * info,
 {
   VDL_LOG_FUNCTION ("", 0);
   int ret = 0;
-  write_lock (g_vdl.global_lock);
+  read_lock (g_vdl.global_lock);
   struct VdlFile *file = addr_to_file (caller);
 
   // report all objects within the global scope/context of the caller
@@ -707,15 +707,15 @@ vdl_dl_iterate_phdr (int (*callback) (struct dl_phdr_info * info,
           info.dlpi_tls_modid = 0;
           info.dlpi_tls_data = 0;
         }
-      write_unlock (g_vdl.global_lock);
+      read_unlock (g_vdl.global_lock);
       ret = callback (&info, sizeof (struct dl_phdr_info), data);
-      write_lock (g_vdl.global_lock);
+      read_lock (g_vdl.global_lock);
       if (ret != 0)
         {
           break;
         }
     }
-  write_unlock (g_vdl.global_lock);
+  read_unlock (g_vdl.global_lock);
   return ret;
 }
 
@@ -751,7 +751,7 @@ int
 vdl_dlinfo (void *handle, int request, void *p)
 {
   VDL_LOG_FUNCTION ("", 0);
-  write_lock (g_vdl.global_lock);
+  read_lock (g_vdl.global_lock);
 
   // RTLD_DI_STATIC_TLS_SIZE does not require a handle or VdlFile
   if(request == RTLD_DI_STATIC_TLS_SIZE)
@@ -806,10 +806,10 @@ vdl_dlinfo (void *handle, int request, void *p)
         }
     }
 
-  write_unlock (g_vdl.global_lock);
+  read_unlock (g_vdl.global_lock);
   return 0;
 error:
-  write_unlock (g_vdl.global_lock);
+  read_unlock (g_vdl.global_lock);
   return -1;
 }
 
