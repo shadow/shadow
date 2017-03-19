@@ -31,7 +31,7 @@ struct VdlFileLookupIterator
 {
   const char *name;
   const char *dt_strtab;
-  ElfW (Sym) * dt_symtab;
+  ElfW (Sym) *dt_symtab;
   enum
   {
     ELF_HASH,
@@ -44,7 +44,7 @@ struct VdlFileLookupIterator
     struct
     {
       signed long current;
-      ElfW (Word) * chain;
+      ElfW (Word) *chain;
     } elf;
     struct
     {
@@ -66,7 +66,7 @@ vdl_lookup_file_begin (const struct VdlFile *file,
   // first, gather information needed to look into the hash table
   i.dt_strtab = file->dt_strtab;
   i.dt_symtab = file->dt_symtab;
-  ElfW (Word) * dt_hash = file->dt_hash;
+  ElfW (Word) *dt_hash = file->dt_hash;
   uint32_t *dt_gnu_hash = file->dt_gnu_hash;
 
   if (i.dt_strtab == 0 || i.dt_symtab == 0)
@@ -82,7 +82,7 @@ vdl_lookup_file_begin (const struct VdlFile *file,
       uint32_t maskwords = dt_gnu_hash[2];
       uint32_t shift2 = dt_gnu_hash[3];
       // read other parts of hash table
-      ElfW (Addr) * bloom = (ElfW (Addr) *) (dt_gnu_hash + 4);
+      ElfW (Addr) *bloom = (ElfW (Addr) *) (dt_gnu_hash + 4);
       uint32_t *buckets =
         (uint32_t *) (((unsigned long) bloom) +
                       maskwords * sizeof (ElfW (Addr)));
@@ -139,7 +139,7 @@ vdl_lookup_file_begin (const struct VdlFile *file,
 }
 
 static int
-vdl_lookup_file_has_next (const struct VdlFileLookupIterator *i)
+vdl_lookup_file_has_next (struct VdlFileLookupIterator *i)
 {
   switch (i->type)
     {
@@ -173,7 +173,7 @@ vdl_lookup_file_has_next (const struct VdlFileLookupIterator *i)
         // in the _next function, we set the current position
         // to the previous entry to find the matching entry
         // immediately upon our call to _next.
-        ((struct VdlFileLookupIterator *) i)->u.elf.current = prev;
+        i->u.elf.current = prev;
         return found;
       }
       break;
@@ -209,10 +209,8 @@ vdl_lookup_file_has_next (const struct VdlFileLookupIterator *i)
         // in the _next function, we set the current position
         // to the previous entry to find the matching entry
         // immediately upon our call to _next.
-        struct VdlFileLookupIterator *i_unconst =
-          (struct VdlFileLookupIterator *) i;
-        i_unconst->u.gnu.current = current;
-        i_unconst->u.gnu.cur_hash = cur_hash;
+        i->u.gnu.current = current;
+        i->u.gnu.cur_hash = cur_hash;
         return found;
       }
       break;
@@ -297,7 +295,7 @@ symbol_version_matches (const struct VdlFile *in,
   VDL_LOG_FUNCTION ("%s %s %ld %ld\n", from_ver_name ? from_ver_name : "",
                     from_ver_filename ? from_ver_filename : "", from_ver_hash,
                     in_index);
-  ElfW (Half) * in_dt_versym = in->dt_versym;
+  ElfW (Half) *in_dt_versym = in->dt_versym;
   if (from_ver_name == 0 || from_ver_filename == 0)
     {
       // we have no version requirement.
@@ -326,7 +324,7 @@ symbol_version_matches (const struct VdlFile *in,
   else
     {
       // ok, so, now, we have version requirements information.
-      ElfW (Verdef) * in_dt_verdef = in->dt_verdef;
+      ElfW (Verdef) *in_dt_verdef = in->dt_verdef;
 
       if (in_dt_versym == 0 || in_dt_verdef == 0)
         {
@@ -372,7 +370,7 @@ symbol_version_matches (const struct VdlFile *in,
         }
       const char *in_dt_strtab = in->dt_strtab;
       // find the corresponding index in the verdef array
-      ElfW (Verdef) * cur, *prev;
+      ElfW (Verdef) *cur, *prev;
       for (prev = 0, cur = in_dt_verdef;
            cur != prev && cur->vd_ndx != ver_index;
            prev = cur, cur =
@@ -382,7 +380,7 @@ symbol_version_matches (const struct VdlFile *in,
       if (cur->vd_hash == from_ver_hash)
         {
           // the hash values of the version names are equal.
-          ElfW (Verdaux) * verdaux =
+          ElfW (Verdaux) *verdaux =
             (ElfW (Verdaux) *) (((unsigned long) cur) + cur->vd_aux);
           if (vdl_utils_strisequal
               (in_dt_strtab + verdaux->vda_name, from_ver_name))
@@ -392,16 +390,16 @@ symbol_version_matches (const struct VdlFile *in,
             }
         }
       if (cur->vd_hash == 0)
-	{
-	  return VERSION_MATCH_PERFECT;
-	}
+        {
+          return VERSION_MATCH_PERFECT;
+        }
     }
   // the versions don't match.
   return VERSION_MATCH_BAD;
 }
 
 void
-vdl_lookup_symbol_fixup (const struct VdlFile *file, ElfW (Sym) * sym)
+vdl_lookup_symbol_fixup (const struct VdlFile *file, ElfW (Sym) *sym)
 {
   if (ELFW_ST_TYPE (sym->st_info) == STT_GNU_IFUNC)
     {
