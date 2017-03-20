@@ -8,6 +8,7 @@
 #include "futex.h"
 #include "vdl-mem.h"
 #include "vdl-file.h"
+#include "vdl-context.h"
 #include <sys/mman.h>
 #include <stdbool.h>
 
@@ -217,7 +218,9 @@ reloc_jmprel (struct VdlFile *file)
 unsigned long
 vdl_reloc_offset_jmprel (struct VdlFile *file, unsigned long offset)
 {
-  write_lock (g_vdl.global_lock);
+  read_lock (g_vdl.global_lock);
+  read_lock (file->context->lock);
+  write_lock (file->lock);
   unsigned long dt_jmprel = file->dt_jmprel;
   unsigned long dt_pltrel = file->dt_pltrel;
   unsigned long dt_pltrelsz = file->dt_pltrelsz;
@@ -225,7 +228,9 @@ vdl_reloc_offset_jmprel (struct VdlFile *file, unsigned long offset)
   if ((dt_pltrel != DT_REL && dt_pltrel != DT_RELA) ||
       dt_pltrelsz == 0 || dt_jmprel == 0)
     {
-      write_unlock (g_vdl.global_lock);
+      write_unlock (file->lock);
+      read_unlock (file->context->lock);
+      read_unlock (g_vdl.global_lock);
       return 0;
     }
   VDL_LOG_ASSERT (offset < dt_pltrelsz, "Relocation entry not within range");
@@ -241,7 +246,9 @@ vdl_reloc_offset_jmprel (struct VdlFile *file, unsigned long offset)
       ElfW (Rela) * rela = (ElfW (Rela) *) (dt_jmprel + offset);
       symbol = process_rela (file, rela);
     }
-  write_unlock (g_vdl.global_lock);
+  write_unlock (file->lock);
+  read_unlock (file->context->lock);
+  read_unlock (g_vdl.global_lock);
   return symbol;
 }
 
@@ -249,7 +256,9 @@ unsigned long
 vdl_reloc_index_jmprel (struct VdlFile *file, unsigned long index)
 {
   VDL_LOG_FUNCTION ("file=%s, index=%lu", file->name, index);
-  write_lock (g_vdl.global_lock);
+  read_lock (g_vdl.global_lock);
+  read_lock (file->context->lock);
+  write_lock (file->lock);
   unsigned long dt_jmprel = file->dt_jmprel;
   unsigned long dt_pltrel = file->dt_pltrel;
   unsigned long dt_pltrelsz = file->dt_pltrelsz;
@@ -257,7 +266,9 @@ vdl_reloc_index_jmprel (struct VdlFile *file, unsigned long index)
   if ((dt_pltrel != DT_REL && dt_pltrel != DT_RELA) ||
       dt_pltrelsz == 0 || dt_jmprel == 0)
     {
-      write_unlock (g_vdl.global_lock);
+      write_unlock (file->lock);
+      read_unlock (file->context->lock);
+      read_unlock (g_vdl.global_lock);
       return 0;
     }
   unsigned long symbol;
@@ -275,7 +286,9 @@ vdl_reloc_index_jmprel (struct VdlFile *file, unsigned long index)
       ElfW (Rela) * rela = &((ElfW (Rela) *) dt_jmprel)[index];
       symbol = process_rela (file, rela);
     }
-  write_unlock (g_vdl.global_lock);
+  write_unlock (file->lock);
+  read_unlock (file->context->lock);
+  read_unlock (g_vdl.global_lock);
   return symbol;
 }
 

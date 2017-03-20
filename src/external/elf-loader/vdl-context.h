@@ -37,6 +37,9 @@ struct VdlContextEventCallbackEntry
 
 struct VdlContext
 {
+  // just like the lock in VdlFile, we should only lock this if we have a
+  // read (or write) lock on the global_lock
+  struct RWLock *lock;
   // the list of files loaded in this context
   struct VdlList *loaded;
   // whether this file has a main object in the global scope
@@ -44,17 +47,17 @@ struct VdlContext
   // the list of files which are part of the global scope of this context
   // this set is necessarily a subset of the set of loaded files
   struct VdlList *global_scope;
-  // describe which symbols should be remapped to which 
+  // describe which symbols should be remapped to which
   // other symbols during symbol resolution
   struct VdlList *symbol_remaps;
-  // describe which libraries should be remapped to which 
+  // describe which libraries should be remapped to which
   // other libraries during loading
   struct VdlList *lib_remaps;
   // report events within this context
   struct VdlList *event_callbacks;
   // These variables are used by all .init functions
   // _some_ libc .init functions make use of these
-  // 3 arguments so, even though no one else uses them, 
+  // 3 arguments so, even though no one else uses them,
   // we have to pass them around.
   int argc;
   char **argv;

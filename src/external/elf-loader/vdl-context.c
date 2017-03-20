@@ -4,6 +4,7 @@
 #include "vdl-alloc.h"
 #include "vdl-log.h"
 #include "vdl-unmap.h"
+#include "futex.h"
 
 bool
 vdl_context_empty (const struct VdlContext *context)
@@ -155,6 +156,7 @@ vdl_context_new (int argc, char **argv, char **envp)
 
   vdl_list_push_back (g_vdl.contexts, context);
 
+  context->lock = rwlock_new ();
   context->loaded = vdl_list_new ();
   context->lib_remaps = vdl_list_new ();
   context->symbol_remaps = vdl_list_new ();
@@ -250,6 +252,9 @@ vdl_context_delete (struct VdlContext *context)
   context->lib_remaps = 0;
   context->symbol_remaps = 0;
   context->event_callbacks = 0;
+
+  rwlock_delete (context->lock);
+  context->lock = 0;
 
   // finally, delete context itself
   vdl_alloc_delete (context);

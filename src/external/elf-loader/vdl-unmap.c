@@ -6,6 +6,7 @@
 #include "vdl-log.h"
 #include "vdl-alloc.h"
 #include "system.h"
+#include "futex.h"
 
 
 static void
@@ -51,6 +52,7 @@ file_delete (struct VdlFile *file, bool mapping)
   vdl_alloc_free (file->phdr);
   vdl_list_iterate (file->maps, vdl_alloc_free);
   vdl_list_delete (file->maps);
+  rwlock_delete (file->lock);
 
 
   file->deps = 0;
@@ -62,6 +64,7 @@ file_delete (struct VdlFile *file, bool mapping)
   file->phdr = 0;
   file->phnum = 0;
   file->maps = 0;
+  file->lock = 0;
 
   vdl_alloc_delete (file);
 }

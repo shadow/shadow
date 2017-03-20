@@ -347,6 +347,7 @@ file_new (unsigned long load_base, unsigned long dynamic, struct VdlList *maps,
 
   vdl_context_add_file (context, file);
 
+  file->lock = rwlock_new ();
   file->load_base = load_base;
   file->filename = vdl_utils_strdup (filename);
   file->dynamic = dynamic + load_base;

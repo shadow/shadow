@@ -739,6 +739,7 @@ vdl_dlmopen (Lmid_t lmid, const char *filename, int flag)
       context = (struct VdlContext *) lmid;
       if (search_context (context) == 0)
         {
+          write_unlock (g_vdl.global_lock);
           return 0;
         }
     }
@@ -819,9 +820,8 @@ vdl_dl_lmid_new (int argc, char **argv, char **envp)
   VDL_LOG_FUNCTION ("", 0);
   write_lock (g_vdl.global_lock);
   struct VdlContext *context = vdl_context_new (argc, argv, envp);
-  Lmid_t lmid = (Lmid_t) context;
   write_unlock (g_vdl.global_lock);
-  return lmid;
+  return (Lmid_t) context;
 }
 
 void

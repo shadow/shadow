@@ -205,6 +205,18 @@ struct VdlFile
   const char *dt_runpath;
   const char *dt_soname;
   ElfW (Half) e_type;
+
+  // Since there are a lot of code paths that mess with files and replacing them
+  // all at once is too much work for one commit, the way we ease this lock
+  // into place is by making use of the global_lock as well. In particular, we
+  // should never use this lock if we don't also have a read (or write) lock on
+  // the global_lock. Currently, all modifications to files are done under a
+  // write lock on global_lock. That means if we grab a read lock, we will be
+  // mutually exclusive with all code that hasn't yet been ported over to this
+  // lock, while being concurrent with the code that has.
+  // note: Even though this is a rwlock, for now it is used as a mutex (i.e.,
+  // only write locks). It may be useful to change this in the future.
+  struct RWLock *lock;
 };
 
 // Used to map address ranges to files
