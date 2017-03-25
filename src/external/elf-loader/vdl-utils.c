@@ -202,7 +202,8 @@ vdl_utils_str_list_delete (struct VdlList *list)
 {
   void **i;
   for (i = vdl_list_begin (list);
-       i != vdl_list_end (list); i = vdl_list_next (i))
+       i != vdl_list_end (list);
+       i = vdl_list_next (i))
     {
       vdl_alloc_free (*i);
     }
@@ -251,7 +252,8 @@ vdl_utils_splitpath (const char *value)
   struct VdlList *list = vdl_utils_strsplit (value, ':');
   void **i;
   for (i = vdl_list_begin (list);
-       i != vdl_list_end (list); i = vdl_list_next (i))
+       i != vdl_list_end (list);
+       i = vdl_list_next (i))
     {
       if (vdl_utils_strisequal (*i, ""))
         {
@@ -268,10 +270,6 @@ vdl_utils_splitpath (const char *value)
 unsigned long
 vdl_utils_align_down (unsigned long v, unsigned long align)
 {
-  if ((v % align) == 0)
-    {
-      return v;
-    }
   unsigned long aligned = v - (v % align);
   return aligned;
 }
@@ -279,11 +277,12 @@ vdl_utils_align_down (unsigned long v, unsigned long align)
 unsigned long
 vdl_utils_align_up (unsigned long v, unsigned long align)
 {
-  if ((v % align) == 0)
+  unsigned long off = v % align;
+  if (off == 0)
     {
       return v;
     }
-  unsigned long aligned = v + align - (v % align);
+  unsigned long aligned = v + align - off;
   return aligned;
 }
 
