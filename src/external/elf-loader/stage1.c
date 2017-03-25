@@ -77,17 +77,13 @@ prepare_stage2 (unsigned long entry_point_struct)
 
 // returns a string of the form "/dev/shm/elf-loader:[pid]",
 // which we use for the shared mappings in the readonly cache
-char *
+static char *
 make_shm_name ()
 {
-  const char shm_prefix[] = "/dev/shm/elf-loader:";
-  // our itoa implementation always gives 10 decimal digits
-  const int shm_size = sizeof (shm_prefix) + 10 + 1;
-  char *shm_name = vdl_alloc_malloc (shm_size);
-  vdl_memcpy (shm_name, shm_prefix, sizeof (shm_prefix) - 1);
   unsigned long pid = (unsigned long) system_getpid ();
-  vdl_utils_itoa (pid, shm_name + sizeof (shm_prefix) - 1);
-  shm_name[shm_size - 1] = 0;
+  char *pidstr = vdl_utils_itoa (pid);
+  char *shm_name = vdl_utils_strconcat ("/dev/shm/elf-loader:", pidstr);
+  vdl_alloc_free (pidstr);
   return shm_name;
 }
 

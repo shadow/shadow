@@ -13,7 +13,7 @@ char *vdl_utils_strdup (const char *str);
 char *vdl_utils_strfind (char *str, const char *substr);
 char *vdl_utils_strconcat (const char *str, ...);
 unsigned long vdl_utils_strtoul (const char *integer);
-void vdl_utils_itoa (unsigned long value, char *str);
+char *vdl_utils_itoa (unsigned long value);
 uint32_t vdl_gnu_hash (const char *s);
 const char *vdl_utils_getenv (const char **envp, const char *value);
 

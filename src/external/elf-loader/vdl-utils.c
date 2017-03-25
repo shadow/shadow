@@ -127,11 +127,11 @@ vdl_utils_strtoul (const char *integer)
   return ret;
 }
 
-// puts a 10 digit decimal representation of value in the str buffer
-// does *not* null terminate
-void
-vdl_utils_itoa (unsigned long value, char *str)
+// returns a null-terminated 10 digit decimal representation of value
+char *
+vdl_utils_itoa (unsigned long value)
 {
+  char *str = vdl_alloc_malloc (11);
   // largest 32 bit int is 10 decimal digits long,
   // into a 0-indexed char array
   int i = 10 - 1;
@@ -140,6 +140,8 @@ vdl_utils_itoa (unsigned long value, char *str)
       str[i] = '0' + value % 10;
       value /= 10;
     }
+  str[10] = 0;
+  return str;
 }
 
 uint32_t
