@@ -7,6 +7,7 @@
 */
 #include "vdl-rbtree.h"
 #include "vdl-alloc.h"
+#include "futex.h"
 
 #ifndef HEIGHT_LIMIT
 #define HEIGHT_LIMIT 64         /* Tallest allowable tree */
@@ -26,6 +27,7 @@ struct vdl_rbtree
   dup_f dup;                    /* Clone an item (user-defined) */
   rel_f rel;                    /* Destroy an item (user-defined) */
   size_t size;                  /* Number of items (user-defined) */
+  struct RWLock *lock;          /* Readers-writer lock on tree operations */
 };
 
 struct vdl_rbtrav
@@ -160,6 +162,7 @@ vdl_rbnew (cmp_f cmp, dup_f dup, rel_f rel)
   rt->dup = dup;
   rt->rel = rel;
   rt->size = 0;
+  rt->lock = rwlock_new ();
 
   return rt;
 }
@@ -204,6 +207,7 @@ vdl_rbdelete (vdl_rbtree_t *tree)
       it = save;
     }
 
+  rwlock_delete (tree->lock);
   vdl_alloc_delete (tree);
 }
 
@@ -220,8 +224,9 @@ vdl_rbdelete (vdl_rbtree_t *tree)
   </returns>
 */
 void *
-vdl_rbfind (vdl_rbtree_t *tree, void *data)
+vdl_rbfind (const vdl_rbtree_t *tree, void *data)
 {
+  read_lock (tree->lock);
   vdl_rbnode_t *it = tree->root;
 
   while (it != NULL)
@@ -237,6 +242,7 @@ vdl_rbfind (vdl_rbtree_t *tree, void *data)
        */
       it = it->link[cmp < 0];
     }
+  read_unlock (tree->lock);
 
   return it == NULL ? NULL : it->data;
 }
@@ -256,6 +262,7 @@ vdl_rbfind (vdl_rbtree_t *tree, void *data)
 int
 vdl_rbinsert (vdl_rbtree_t *tree, void *data)
 {
+  write_lock (tree->lock);
   if (tree->root == NULL)
     {
       /*
@@ -265,7 +272,10 @@ vdl_rbinsert (vdl_rbtree_t *tree, void *data)
       tree->root = new_node (tree, data);
 
       if (tree->root == NULL)
-        return 0;
+        {
+          write_unlock (tree->lock);
+          return 0;
+        }
     }
   else
     {
@@ -334,6 +344,7 @@ vdl_rbinsert (vdl_rbtree_t *tree, void *data)
   /* Make the root black for simplified logic */
   tree->root->red = 0;
   ++tree->size;
+  write_unlock (tree->lock);
 
   return 1;
 }
@@ -357,6 +368,7 @@ vdl_rbinsert (vdl_rbtree_t *tree, void *data)
 int
 vdl_rberase (vdl_rbtree_t *tree, void *data)
 {
+  write_lock (tree->lock);
   if (tree->root != NULL)
     {
       vdl_rbnode_t head = { 0 };        /* False tree root */
@@ -444,6 +456,7 @@ vdl_rberase (vdl_rbtree_t *tree, void *data)
 
       --tree->size;
     }
+  write_unlock (tree->lock);
 
   return 1;
 }

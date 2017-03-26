@@ -26,12 +26,13 @@ void norel (void *p);
 /* Red Black tree functions */
 vdl_rbtree_t *vdl_rbnew (cmp_f cmp, dup_f dup, rel_f rel);
 void vdl_rbdelete (vdl_rbtree_t *tree);
-void *vdl_rbfind (vdl_rbtree_t *tree, void *data);
+void *vdl_rbfind (const vdl_rbtree_t *tree, void *data);
 int vdl_rbinsert (vdl_rbtree_t *tree, void *data);
 int vdl_rberase (vdl_rbtree_t *tree, void *data);
 size_t vdl_rbsize (vdl_rbtree_t *tree);
 
 /* Traversal functions */
+/* currently thread-unsafe */
 vdl_rbtrav_t *vdl_rbtnew (void);
 void vdl_rbtdelete (vdl_rbtrav_t *trav);
 void *vdl_rbtfirst (vdl_rbtrav_t *trav, vdl_rbtree_t *tree);
