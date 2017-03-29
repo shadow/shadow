@@ -57,7 +57,11 @@ static void _loggerhelper_sort(GAsyncQueue* incomingRecords, PriorityQueue* sort
     }
 }
 
-gpointer loggerhelper_runHelperThread(GAsyncQueue* commands) {
+gpointer loggerhelper_runHelperThread(LoggerHelperRunData* data) {
+    GAsyncQueue* commands = data->commands;
+    CountDownLatch* notifyDoneRunning = data->notifyDoneRunning;
+    g_free(data);
+    data = NULL;
 
     GQueue* queues = g_queue_new();
     PriorityQueue* sortedRecords = priorityqueue_new((GCompareDataFunc)logrecord_compare, NULL, NULL);
@@ -106,5 +110,6 @@ gpointer loggerhelper_runHelperThread(GAsyncQueue* commands) {
     g_queue_free(queues);
     priorityqueue_free(sortedRecords);
 
+    countdownlatch_countDown(notifyDoneRunning);
     return NULL;
 }

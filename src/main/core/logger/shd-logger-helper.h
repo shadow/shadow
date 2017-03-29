@@ -6,6 +6,8 @@
 #ifndef SHD_LOGGER_HELPER_H_
 #define SHD_LOGGER_HELPER_H_
 
+#include "utility/shd-count-down-latch.h"
+
 typedef enum _LoggerHelperCommmandType LoggerHelperCommmandType;
 enum _LoggerHelperCommmandType {
     LHC_STOP, LHC_REGISTER, LHC_FLUSH,
@@ -17,6 +19,12 @@ LoggerHelperCommand* loggerhelpercommand_new(LoggerHelperCommmandType type, gpoi
 void loggerhelpercommand_ref(LoggerHelperCommand* command);
 void loggerhelpercommand_unref(LoggerHelperCommand* command);
 
-gpointer loggerhelper_runHelperThread(GAsyncQueue* commands);
+typedef struct _LoggerHelperRunData LoggerHelperRunData;
+struct _LoggerHelperRunData {
+    GAsyncQueue* commands;
+    CountDownLatch* notifyDoneRunning;
+};
+
+gpointer loggerhelper_runHelperThread(LoggerHelperRunData* data);
 
 #endif /* SHD_LOGGER_HELPER_H_ */

@@ -37,6 +37,7 @@ struct _Logger {
     /* helper to sort messages and handle file i/o */
     GThread* helper;
     GAsyncQueue* helperCommands;
+    CountDownLatch* helperLatch;
 
     /* store map of other threads that will call logging functions to thread-specific data */
     GHashTable* threadToDataMap;
@@ -140,6 +141,18 @@ static void _logger_sendStopCommandToHelper(Logger* logger) {
     g_async_queue_push(logger->helperCommands, command);
 }
 
+static void _logger_stopHelper(Logger* logger) {
+    MAGIC_ASSERT(logger);
+    /* tell the logger helper that we are done sending commands */
+    _logger_sendStopCommandToHelper(logger);
+
+    /* wait until the thread exits.
+     * XXX: calling thread_join may cause deadlocks in the loader, so let's just wait for the
+     * thread to indicate that it finished everything instead. */
+    //g_thread_join(logger->helper);
+    countdownlatch_await(logger->helperLatch);
+}
+
 void logger_logVA(Logger* logger, LogLevel level, const gchar* fileName, const gchar* functionName,
         const gint lineNumber, const gchar *format, va_list vargs) {
     if(!logger) {
@@ -196,8 +209,7 @@ void logger_logVA(Logger* logger, LogLevel level, const gchar* fileName, const g
 
     if(level == LOGLEVEL_ERROR) {
         /* tell the helper to stop, and join to make sure it finished flushing */
-        _logger_sendStopCommandToHelper(logger);
-        g_thread_join(logger->helper);
+        _logger_stopHelper(logger);
 
         /* now abort, but get a backtrace */
         utility_assert(FALSE && "failure due to error-level log message");
@@ -318,7 +330,15 @@ Logger* logger_new(LogLevel filterLevel) {
     logger->threadToDataMap = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, (GDestroyNotify)_loggerthreaddata_free);
 
     logger->helperCommands = g_async_queue_new();
-    logger->helper = g_thread_new("logger-helper", (GThreadFunc)loggerhelper_runHelperThread, logger->helperCommands);
+    logger->helperLatch = countdownlatch_new(1);
+
+    /* we need to pass some args to the helper thread */
+    LoggerHelperRunData* runArgs = g_new0(LoggerHelperRunData, 1);
+    runArgs->commands = logger->helperCommands;
+    runArgs->notifyDoneRunning = logger->helperLatch;
+
+    /* the thread will consume the reference to the runArgs struct, and will free it */
+    logger->helper = g_thread_new("logger-helper", (GThreadFunc)loggerhelper_runHelperThread, runArgs);
 
     logger_register(logger, g_thread_self());
 
@@ -339,13 +359,13 @@ static void _logger_free(Logger* logger) {
     logger_syncToDisk(logger);
 
     /* tell the helper to stop, wait for it to stop, and then free it */
-    _logger_sendStopCommandToHelper(logger);
-    g_thread_join(logger->helper);
+    _logger_stopHelper(logger);
     g_thread_unref(logger->helper);
 
     /* all commands should have been handled and we can free the queue */
     utility_assert(g_async_queue_length_unlocked(logger->helperCommands) == 0);
     g_async_queue_unref(logger->helperCommands);
+    countdownlatch_free(logger->helperLatch);
 
     g_hash_table_destroy(logger->threadToDataMap);
     g_timer_destroy(logger->runTimer);
