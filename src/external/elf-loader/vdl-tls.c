@@ -24,7 +24,7 @@ file_initialize (struct VdlFile *file)
       return;
     }
 
-  ElfW (Phdr) * pt_tls =
+  ElfW (Phdr) *pt_tls =
     vdl_utils_search_phdr (file->phdr, file->phnum, PT_TLS);
   unsigned long dt_flags = file->dt_flags;
   if (pt_tls == 0)
@@ -125,7 +125,7 @@ initialize_static_tls (struct VdlList *list)
 }
 
 bool
-vdl_tls_file_initialize (struct VdlList * files)
+vdl_tls_file_initialize (struct VdlList *files)
 {
   file_list_initialize (files);
   struct static_tls static_tls = initialize_static_tls (files);
@@ -315,22 +315,10 @@ module_map_compare (const void *module_void, const void *file_void)
 static struct VdlFile *
 find_file_by_module (unsigned long module)
 {
-  struct VdlFile *cur = (struct VdlFile *) vdl_hashmap_get (g_vdl.module_map,
-                                                            module, &module,
-                                                            module_map_compare);
-  if (cur)
-    {
-      return cur;
-    }
-  for (cur = g_vdl.link_map; cur != 0; cur = cur->next)
-    {
-      if (cur->has_tls && cur->tls_index == module)
-        {
-          vdl_hashmap_insert (g_vdl.module_map, module, cur);
-          break;
-        }
-    }
-  return cur;
+  struct VdlFile *file = (struct VdlFile *) vdl_hashmap_get (g_vdl.module_map,
+                                                             module, &module,
+                                                             module_map_compare);
+  return file;
 }
 
 void
