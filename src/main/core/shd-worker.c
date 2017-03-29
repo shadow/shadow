@@ -147,8 +147,13 @@ gpointer worker_run(WorkerRunData* data) {
 
     scheduler_unref(worker->scheduler);
 
+    CountDownLatch* notifyDoneRunning = data->notifyDoneRunning;
     _worker_free(worker);
     g_free(data);
+
+    if(notifyDoneRunning) {
+        countdownlatch_countDown(notifyDoneRunning);
+    }
 
     /* calling g_thread_exit(NULL) is equivalent to returning NULL for spawned threads
      * returning NULL means we don't have to worry about calling g_thread_exit on the main thread */

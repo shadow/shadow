@@ -10,7 +10,7 @@
  * following one of several scheduling policies */
 struct _Scheduler {
     /* all worker threads used by the scheduler */
-    GList* workerThreads;
+    GList* threadItems;
 
     /* global lock for all threads, hold this as little as possible */
     GMutex globalLock;
@@ -48,6 +48,12 @@ struct _Scheduler {
     MAGIC_DECLARE;
 };
 
+typedef struct _SchedulerThreadItem SchedulerThreadItem;
+struct _SchedulerThreadItem {
+    GThread* thread;
+    CountDownLatch* notifyDoneRunning;
+};
+
 static void _scheduler_rebalanceHosts(Scheduler* scheduler) {
     MAGIC_ASSERT(scheduler);
 
@@ -61,20 +67,21 @@ static void _scheduler_rebalanceHosts(Scheduler* scheduler) {
 
     GList* allHosts = g_hash_table_get_values(scheduler->hostIDToHostMap);
     GList* hostIter = g_list_first(allHosts);
-    GList* threadIter = g_list_first(scheduler->workerThreads);
+    GList* threadIter = g_list_first(scheduler->threadItems);
 
     while(hostIter) {
         Host* host = hostIter->data;
 
         utility_assert(threadIter);
-        GThread* thread = threadIter->data;
+        SchedulerThreadItem* item = threadIter->data;
+        GThread* thread = item->thread;
 
 //        g_hash_table_replace(scheduler->hostToThreadMap, host, thread);
 
         hostIter = g_list_next(hostIter);
         threadIter = g_list_next(threadIter);
         if(!threadIter) {
-            threadIter = g_list_first(scheduler->workerThreads);
+            threadIter = g_list_first(scheduler->threadItems);
         }
     }
 
@@ -186,15 +193,20 @@ Scheduler* scheduler_new(SchedulerPolicyType policyType, guint nWorkers, gpointe
         GString* name = g_string_new(NULL);
         g_string_printf(name, "worker-%i", (i));
 
+        SchedulerThreadItem* item = g_new0(SchedulerThreadItem, 1);
+        item->notifyDoneRunning = countdownlatch_new(1);
+
         WorkerRunData* runData = g_new0(WorkerRunData, 1);
         runData->userData = threadUserData;
         runData->scheduler = scheduler;
         runData->threadID = i;
+        runData->notifyDoneRunning = item->notifyDoneRunning;
 
-        GThread* t = g_thread_new(name->str, (GThreadFunc)worker_run, runData);
-        utility_assert(t);
-        scheduler->workerThreads = g_list_append(scheduler->workerThreads, t);
-        logger_register(logger_getDefault(), t);
+        item->thread = g_thread_new(name->str, (GThreadFunc)worker_run, runData);
+        utility_assert(item->thread);
+
+        scheduler->threadItems = g_list_append(scheduler->threadItems, item);
+        logger_register(logger_getDefault(), item->thread);
 
         g_string_free(name, TRUE);
     }
@@ -214,18 +226,23 @@ void scheduler_shutdown(Scheduler* scheduler) {
     g_hash_table_destroy(scheduler->hostIDToHostMap);
 
     /* join and free spawned worker threads */
-    guint nWorkers = g_list_length(scheduler->workerThreads);
+    guint nWorkers = g_list_length(scheduler->threadItems);
 
     message("waiting for %u worker threads to finish", nWorkers);
 
     /* wait for the threads to finish their cleanup */
-    GList* threadItem = scheduler->workerThreads;
+    GList* threadItem = scheduler->threadItems;
     while(threadItem) {
-        GThread* t = threadItem->data;
+        SchedulerThreadItem* item = threadItem->data;
         /* only join the spawned threads, not the main thread */
-        if(t != g_thread_self()) {
-            /* the join will consume the reference, so unref is not needed */
-            g_thread_join(t);
+        if(item->thread != g_thread_self()) {
+            /* the join will consume the reference, so unref is not needed
+             * XXX: calling thread_join may cause deadlocks in the loader, so let's just wait
+             * for the thread to indicate that it finished everything instead. */
+            //g_thread_join(item->thread);
+            if(item->notifyDoneRunning) {
+                countdownlatch_await(item->notifyDoneRunning);
+            }
         }
         threadItem = g_list_next(threadItem);
     }
@@ -234,8 +251,17 @@ void scheduler_shutdown(Scheduler* scheduler) {
 static void _scheduler_free(Scheduler* scheduler) {
     MAGIC_ASSERT(scheduler);
 
-    guint nWorkers = g_list_length(scheduler->workerThreads);
-    g_list_free(scheduler->workerThreads);
+    guint nWorkers = g_list_length(scheduler->threadItems);
+
+    GList* threadItem = scheduler->threadItems;
+    while(threadItem) {
+        SchedulerThreadItem* item = threadItem->data;
+        countdownlatch_free(item->notifyDoneRunning);
+        g_free(item);
+        threadItem = g_list_next(threadItem);
+    }
+
+    g_list_free(scheduler->threadItems);
 
     scheduler->policy->free(scheduler->policy);
     random_free(scheduler->random);
@@ -412,11 +438,17 @@ static void _scheduler_assignHosts(Scheduler* scheduler) {
     g_mutex_lock(&scheduler->globalLock);
 
     GList* allHosts = g_hash_table_get_values(scheduler->hostIDToHostMap);
-    guint nThreads = g_list_length(scheduler->workerThreads);
+    guint nThreads = g_list_length(scheduler->threadItems);
 
     if(nThreads <= 1) {
         /* either the main thread or the single worker gets everything */
-        GThread* chosen = (nThreads == 0) ? g_thread_self() : (GThread*) g_list_nth_data(scheduler->workerThreads, 0);
+        GThread* chosen;
+        if(nThreads == 0) {
+            chosen = g_thread_self();
+        } else {
+            SchedulerThreadItem* item = g_list_nth_data(scheduler->threadItems, 0);
+            chosen = item->thread;
+        }
         GList* remaining = _scheduler_assignHostsToThread(scheduler, allHosts, chosen, 0);
         utility_assert(remaining == NULL);
     } else {
@@ -425,13 +457,14 @@ static void _scheduler_assignHosts(Scheduler* scheduler) {
 
         /* now that our host order has been randomized, assign them evenly to worker threads */
         GList* remainingHosts = g_list_first(allHosts);
-        GList* nextThreadItem = g_list_first(scheduler->workerThreads);
+        GList* nextThreadItem = g_list_first(scheduler->threadItems);
         while(remainingHosts != NULL) {
-            GThread* nextThread = (GThread*)nextThreadItem->data;
+            SchedulerThreadItem* item = nextThreadItem->data;
+            GThread* nextThread = item->thread;
             remainingHosts = _scheduler_assignHostsToThread(scheduler, remainingHosts, nextThread, 1);
             nextThreadItem = g_list_next(nextThreadItem);
             if(nextThreadItem == NULL) {
-                nextThreadItem = g_list_first(scheduler->workerThreads);
+                nextThreadItem = g_list_first(scheduler->threadItems);
             }
         }
     }

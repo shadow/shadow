@@ -14,6 +14,7 @@ struct _WorkerRunData {
     guint threadID;
     Scheduler* scheduler;
     gpointer userData;
+    CountDownLatch* notifyDoneRunning;
 };
 
 typedef struct _Worker Worker;

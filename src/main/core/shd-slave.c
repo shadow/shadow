@@ -328,6 +328,7 @@ void slave_run(Slave* slave) {
         data->threadID = 0;
         data->scheduler = slave->scheduler;
         data->userData = slave;
+        data->notifyDoneRunning = NULL; // we don't need to be notified in single thread mode
 
         /* the worker takes control of data pointer and frees it */
         worker_run(data);
