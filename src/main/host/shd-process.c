@@ -598,7 +598,7 @@ static void _process_free(Process* proc) {
 static FILE* _process_openFile(Process* proc, const gchar* prefix) {
     const gchar* hostDataPath = host_getDataPath(proc->host);
     GString* fileNameString = g_string_new(NULL);
-    g_string_printf(fileNameString, "%s-%s-%u.log", prefix, _process_getPluginName(proc), proc->processID);
+    g_string_printf(fileNameString, "%s-%s.log", prefix, _process_getName(proc));
     gchar* pathStr = g_build_filename(hostDataPath, fileNameString->str, NULL);
     FILE* f = g_fopen(pathStr, "a");
     g_string_free(fileNameString, TRUE);
@@ -608,8 +608,8 @@ static FILE* _process_openFile(Process* proc, const gchar* prefix) {
             proc->cachedWarningMessages = g_queue_new();
         }
         GString* stringBuffer = g_string_new(NULL);
-        g_string_printf(stringBuffer, "process '%s-%u': unable to open file '%s', error was: %s",
-                _process_getPluginName(proc), proc->processID, pathStr, g_strerror(errno));
+        g_string_printf(stringBuffer, "process '%s': unable to open file '%s', error was: %s",
+                _process_getName(proc), pathStr, g_strerror(errno));
         g_queue_push_tail(proc->cachedWarningMessages, g_string_free(stringBuffer, FALSE));
 
 //        warning("process '%s-%u': unable to open file '%s', error was: %s",
@@ -632,8 +632,8 @@ static FILE* _process_getIOFile(Process* proc, gint fd){
                     proc->cachedWarningMessages = g_queue_new();
                 }
                 GString* stringBuffer = g_string_new(NULL);
-                g_string_printf(stringBuffer, "process '%s-%u': unable to open file for process output, dumping to tty stdout",
-                    _process_getPluginName(proc), proc->processID);
+                g_string_printf(stringBuffer, "process '%s': unable to open file for process output, dumping to tty stdout",
+                    _process_getName(proc));
                 g_queue_push_tail(proc->cachedWarningMessages, g_string_free(stringBuffer, FALSE));
 
                 /* now set shadows stdout */
@@ -650,8 +650,8 @@ static FILE* _process_getIOFile(Process* proc, gint fd){
                     proc->cachedWarningMessages = g_queue_new();
                 }
                 GString* stringBuffer = g_string_new(NULL);
-                g_string_printf(stringBuffer, "process '%s-%u': unable to open file for process errors, dumping to tty stderr",
-                        _process_getPluginName(proc), proc->processID);
+                g_string_printf(stringBuffer, "process '%s': unable to open file for process errors, dumping to tty stderr",
+                        _process_getName(proc));
                 g_queue_push_tail(proc->cachedWarningMessages, g_string_free(stringBuffer, FALSE));
 
                 /* now set shadows stderr */
@@ -791,8 +791,8 @@ static void _process_executeCleanup(Process* proc) {
 
     gint numThreads = proc->programAuxiliaryThreads ? g_queue_get_length(proc->programAuxiliaryThreads) : 0;
     gint numExitFuncs = proc->atExitFunctions ? g_queue_get_length(proc->atExitFunctions) : 0;
-    message("cleaning up '%s-%u' process: aborting %u auxiliary threads and calling %u atexit functions",
-            _process_getPluginName(proc), proc->processID, numThreads, numExitFuncs);
+    message("cleaning up process '%s': aborting %u auxiliary threads and calling %u atexit functions",
+            _process_getName(proc), numThreads, numExitFuncs);
 
     /* closing the main thread causes all other threads to get terminated */
     if(proc->programAuxiliaryThreads != NULL) {
@@ -867,9 +867,9 @@ static void _process_executeCleanup(Process* proc) {
 static void _process_logReturnCode(Process* proc, gint code) {
     if(!proc->returnCodeLogged) {
         GString* mainResultString = g_string_new(NULL);
-        g_string_printf(mainResultString, "main %s code '%i' for process '%s-%u'",
+        g_string_printf(mainResultString, "main %s code '%i' for process '%s'",
                 ((code==0) ? "success" : "error"),
-                code, _process_getPluginName(proc), proc->processID);
+                code, _process_getName(proc));
 
         if(code == 0) {
             message("%s", mainResultString->str);
@@ -905,7 +905,7 @@ static void* _process_executeMain(Process* proc) {
     /* get arguments from the program we will run */
     proc->argc = _process_getArguments(proc, &proc->argv);
 
-    message("calling main() for '%s-%u' process", _process_getPluginName(proc), proc->processID);
+    message("calling main() for process '%s'", _process_getName(proc));
 
     /* time how long we execute the program */
     g_timer_start(proc->cpuDelayTimer);
@@ -974,7 +974,7 @@ static void _process_start(Process* proc) {
         return;
     }
 
-    message("starting '%s-%u' process and pth threading system", _process_getPluginName(proc), proc->processID);
+    message("starting process '%s' and pth threading system", _process_getName(proc));
 
     /* create the thread names while still in shadow context, format is host.process.<id> */
     GString* shadowThreadNameBuf = g_string_new(NULL);
@@ -1062,8 +1062,8 @@ static void _process_start(Process* proc) {
 
     /* the main thread wont exist if it exited immediately before returning control to shadow */
     if(proc->programMainThread) {
-        message("'%s-%u' process initialization is complete, main thread %s running",
-                _process_getPluginName(proc), proc->processID, process_isRunning(proc) ? "is" : "is not");
+        message("process '%s' initialization is complete, main thread %s running",
+                _process_getName(proc), process_isRunning(proc) ? "is" : "is not");
     } else {
         _process_logReturnCode(proc, proc->returnCode);
 
@@ -1075,7 +1075,7 @@ static void _process_start(Process* proc) {
         _process_unloadPlugin(proc);
         utility_assert(!process_isRunning(proc));
 
-        info("'%s-%u' has completed or is otherwise no longer running", _process_getPluginName(proc), proc->processID);
+        info("process '%s' has completed or is otherwise no longer running", _process_getName(proc));
     }
 
     if(proc->stdoutFile) {
@@ -1101,7 +1101,7 @@ void process_continue(Process* proc) {
         return;
     }
 
-    info("switching to rpth to continue '%s-%u' process/threads", _process_getPluginName(proc), proc->processID);
+    info("switching to rpth to continue the threads of process '%s'", _process_getName(proc));
 
     /* there is some i/o or event available, let pth handle it
      * we will execute in the pth/plugin context, so we need to load the state */
@@ -1160,7 +1160,7 @@ void process_continue(Process* proc) {
     }
 
     if(proc->programMainThread) {
-        info("'%s-%u' is running, but threads are blocked waiting for events", _process_getPluginName(proc), proc->processID);
+        info("process '%s' is running, but threads are blocked waiting for events", _process_getName(proc));
     } else {
         /* pth should have had no remaining alive threads except the one shadow was running in */
         utility_assert(nThreads == 1);
@@ -1169,7 +1169,7 @@ void process_continue(Process* proc) {
         _process_unloadPlugin(proc);
         utility_assert(!process_isRunning(proc));
 
-        info("'%s-%u' has completed or is otherwise no longer running", _process_getPluginName(proc), proc->processID);
+        info("process '%s' has completed or is otherwise no longer running", _process_getName(proc));
     }
 }
 
@@ -1190,7 +1190,7 @@ static void _process_stop(Process* proc) {
         return;
     }
 
-    message("terminating main thread of '%s-%u' process", _process_getPluginName(proc), proc->processID);
+    message("terminating main thread of process '%s'", _process_getName(proc));
 
     worker_setActiveProcess(proc);
     proc->plugin.isExecuting = TRUE;
@@ -5158,8 +5158,8 @@ int process_emu_pthread_create(Process* proc, pthread_t *thread, const pthread_a
                 /* default for new auxiliary threads */
                 _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
                 GString* programAuxThreadNameBuf = g_string_new(NULL);
-                g_string_printf(programAuxThreadNameBuf, "%s.%s.aux%i", host_getName(proc->host),
-                        _process_getPluginName(proc), proc->programAuxiliaryThreadCounter++);
+                g_string_printf(programAuxThreadNameBuf, "%s.%s.%u.aux%i", host_getName(proc->host),
+                        _process_getPluginName(proc), proc->processID, proc->programAuxiliaryThreadCounter++);
                 _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
 
                 pth_attr_t defaultAttr = pth_attr_new();
