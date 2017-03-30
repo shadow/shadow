@@ -99,6 +99,8 @@ typedef gint (*PluginMainFunc)(int argc, char* argv[]);
 typedef void (*PluginHookFunc)(void* uniqueid);
 typedef int* (*ErrnoLocationFunc)(void);
 
+typedef int (*PluginSigactionFunc)(int signum, const struct sigaction *restrict action, struct sigaction *restrict oldaction);
+
 typedef void (*PluginExitCallbackFunc)();
 typedef void (*PluginExitCallbackArgumentsFunc)(int, void*);
 
@@ -165,6 +167,9 @@ struct _Process {
         PluginHookFunc preLibraryUnload;
         PluginHookFunc preProcessEnter;
         PluginHookFunc postProcessExit;
+
+        /* the sigaction function symbol from inside the plugin namespace */
+        PluginSigactionFunc sigaction;
 
         /* the function that will return the specific location of errno for this plugin */
         ErrnoLocationFunc errnoGetLocation;;
@@ -311,6 +316,11 @@ static void _process_unloadPlugin(Process* proc) {
     }
 
     proc->plugin.handle = NULL;
+}
+
+static void _process_pluginSignalHandler(int signum) {
+    /* calling abort should handle killing the correct pth thread instead of shadow */
+    abort();
 }
 
 static void _process_loadPlugin(Process* proc) {
@@ -484,6 +494,27 @@ static void _process_loadPlugin(Process* proc) {
         message("found '%s' at %p", PLUGIN_POSTEXIT_SYMBOL, symbol);
     }
 
+    /* install a signal handler for errors that happen inside of this namespace */
+    symbol = NULL;
+    symbol = dlsym(proc->plugin.handle, "sigaction");
+    if(symbol) {
+        /* setup and install the handler for deadly signals */
+        proc->plugin.sigaction = symbol;
+
+        struct sigaction action;
+        action.sa_handler = _process_pluginSignalHandler;
+        sigemptyset(&action.sa_mask);
+        action.sa_flags = 0;
+
+        _process_changeContext(proc, PCTX_SHADOW, PCTX_PLUGIN);
+        proc->plugin.sigaction(SIGSEGV, &action, NULL);
+        proc->plugin.sigaction(SIGFPE, &action, NULL);
+        proc->plugin.sigaction(SIGABRT, &action, NULL);
+        proc->plugin.sigaction(SIGILL, &action, NULL);
+        _process_changeContext(proc, PCTX_PLUGIN, PCTX_SHADOW);
+    }
+
+    /* call one of the postload callbacks if needed */
     if(proc->plugin.postLibraryLoad != NULL) {
         _process_changeContext(proc, PCTX_SHADOW, PCTX_PLUGIN);
         proc->plugin.postLibraryLoad(proc->plugin.handle);
@@ -1087,7 +1118,7 @@ static void _process_start(Process* proc) {
         proc->tstate = NULL;
 
         /* free our copy of plug-in resources, and other application state */
-        _process_unloadPlugin(proc);
+        //_process_unloadPlugin(proc); XXX TODO this should be done once elf-loader supports unloading libs
         utility_assert(!process_isRunning(proc));
 
         message("process '%s' has completed or is otherwise no longer running", _process_getName(proc));
@@ -1183,7 +1214,7 @@ void process_continue(Process* proc) {
         utility_assert(nThreads == 1);
 
         /* free our copy of plug-in resources, and other application state */
-        _process_unloadPlugin(proc);
+        //_process_unloadPlugin(proc); XXX TODO this should be done once elf-loader supports unloading libs
         utility_assert(!process_isRunning(proc));
 
         info("process '%s' has completed or is otherwise no longer running", _process_getName(proc));
@@ -4506,11 +4537,65 @@ int process_emu_srandom_r(Process* proc, unsigned int seed, struct random_data *
     return 0;
 }
 
+/* signals */
+
+int process_emu_sigaction(Process* proc, int signum, const struct sigaction* action, struct sigaction* oldaction) {
+    if(signum == SIGSEGV || signum == SIGFPE || signum == SIGABRT || signum == SIGILL) {
+        /* ignore plugin attempts to install signal handlers for the deadly signals*/
+        /* TODO really, we should save any handler that the plugin is trying to set, then if
+         * a deadly signal occurs, set a flag and let the plugin try to correct it once, and if
+         * the signal is triggered a second time, then abort the process. /TODO
+         */
+        return 0;
+    } else {
+        /* allow the plugin to set handlers for other signals */
+        return proc->plugin.sigaction(signum, action, oldaction);
+    }
+}
+
 /* exit family */
 
+static void _process_exitHelper(Process* proc, void *value_ptr) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+    if(prevCTX == PCTX_PLUGIN) {
+        _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
+        utility_assert(proc->tstate == pth_gctx_get());
+
+        /* get the name of the currently running pth thread */
+        char* pthThreadName;
+        pth_attr_t threadAttr = pth_attr_of(pth_self());
+        pth_attr_get(threadAttr, PTH_ATTR_NAME, &pthThreadName);
+        pth_attr_destroy(threadAttr);
+
+        /* switch back to shadow to log a useful message */
+        _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+        warning("thread '%s' in process '%s' will be terminated by pth", pthThreadName, _process_getName(proc));
+        _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
+
+        pth_exit(value_ptr);
+
+        _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+    } else {
+        warning("pthread_exit() is handled by pth but not implemented by shadow");
+        _process_setErrno(proc, ENOSYS);
+    }
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+}
+
 void process_emu_exit(Process* proc, int status) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+    warning("exit() was called in process '%s'", _process_getName(proc));
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     proc->returnCode = status;
-    process_emu_pthread_exit(proc, NULL);
+    _process_exitHelper(proc, NULL);
+}
+
+void process_emu_abort(Process* proc) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+    critical("abort() was called in process '%s'", _process_getName(proc));
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    proc->returnCode = 128 + SIGABRT;
+    _process_exitHelper(proc, NULL);
 }
 
 int process_emu_on_exit(Process* proc, void (*function)(int , void *), void *arg) {
@@ -5304,18 +5389,9 @@ int process_emu_pthread_yield_np(Process* proc) {
 
 void process_emu_pthread_exit(Process* proc, void *value_ptr) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-    if(prevCTX == PCTX_PLUGIN) {
-        _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
-        utility_assert(proc->tstate == pth_gctx_get());
-
-        pth_exit(value_ptr);
-
-        _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
-    } else {
-        warning("pthread_exit() is handled by pth but not implemented by shadow");
-        _process_setErrno(proc, ENOSYS);
-    }
+    warning("pthread_exit() was called in process '%s'", _process_getName(proc));
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    _process_exitHelper(proc, value_ptr);
 }
 
 int process_emu_pthread_join(Process* proc, pthread_t thread, void **value_ptr) {

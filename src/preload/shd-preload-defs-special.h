@@ -33,6 +33,7 @@ PRELOADDEF(return, int, openat, (int a, const char* b, int c, mode_t d), a, b, c
 //typedef void (*exit_func)(int status);
 PRELOADDEF(      , void, pthread_exit, (void* a), a);
 PRELOADDEF(      , void, exit, (int a), a);
+PRELOADDEF(      , void, abort, (void));
 
 /* intercepting these functions causes glib errors, because keys that were created from
  * internal shadow functions then get used in the plugin and get forwarded to pth, which

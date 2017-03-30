@@ -390,7 +390,6 @@ void exit(int a) {
         ENSURE(exit);
         director.next.exit(a);
     }
-    abort();
 }
 
 void pthread_exit(void* a) {
@@ -401,5 +400,14 @@ void pthread_exit(void* a) {
         ENSURE(pthread_exit);
         director.next.pthread_exit(a);
     }
-    abort();
+}
+
+void abort(void) {
+    Process* proc = NULL;
+    if((proc = _doEmulate()) != NULL) {
+        process_emu_abort(proc);
+    } else {
+        ENSURE(abort);
+        director.next.abort();
+    }
 }

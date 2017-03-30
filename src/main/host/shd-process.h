@@ -247,9 +247,14 @@ int process_emu_random_r(Process* proc, struct random_data *buf, int32_t *result
 void process_emu_srandom(Process* proc, unsigned int seed);
 int process_emu_srandom_r(Process* proc, unsigned int seed, struct random_data *buf);
 
+/* signals */
+
+int process_emu_sigaction(Process* proc, int signum, const struct sigaction* action, struct sigaction* oldaction);
+
 /* exit family */
 
 void process_emu_exit(Process* proc, int status);
+void process_emu_abort(Process* proc);
 int process_emu_on_exit(Process* proc, void (*function)(int , void *), void *arg);
 int process_emu_atexit(Process* proc, void (*func)(void));
 int process_emu___cxa_atexit(Process* proc, void (*func) (void *), void * arg, void * dso_handle);
