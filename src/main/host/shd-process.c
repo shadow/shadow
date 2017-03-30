@@ -515,7 +515,8 @@ Process* process_new(gpointer host, guint processID,
     }
 
     proc->processName = g_string_new(NULL);
-    g_string_printf(proc->processName, "%s-%u", _process_getPluginName(proc), proc->processID);
+    g_string_printf(proc->processName, "%s.%s.%u",
+            host_getName(proc->host), _process_getPluginName(proc), proc->processID);
 
     proc->startTime = startTime;
     proc->stopTime = stopTime;
@@ -974,13 +975,16 @@ static void _process_start(Process* proc) {
         return;
     }
 
-    message("starting process '%s' and pth threading system", _process_getName(proc));
+    message("starting process '%s'", _process_getName(proc));
+
+    /* start a timer for initialization tasks */
+    GTimer* initTimer = g_timer_new();
 
     /* create the thread names while still in shadow context, format is host.process.<id> */
     GString* shadowThreadNameBuf = g_string_new(NULL);
-    g_string_printf(shadowThreadNameBuf, "%s.%s.%u.shadow", host_getName(proc->host), _process_getPluginName(proc), proc->processID);
+    g_string_printf(shadowThreadNameBuf, "%s.shadow", _process_getName(proc));
     GString* programMainThreadNameBuf = g_string_new(NULL);
-    g_string_printf(programMainThreadNameBuf, "%s.%s.%u.main", host_getName(proc->host), _process_getPluginName(proc), proc->processID);
+    g_string_printf(programMainThreadNameBuf, "%s.main", _process_getName(proc));
 
     utility_assert(proc->programAuxiliaryThreads == NULL);
     proc->programAuxiliaryThreads = g_queue_new();
@@ -1024,11 +1028,15 @@ static void _process_start(Process* proc) {
 
     /* now that our pth state is set up, load the plugin */
     _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+    gdouble secondsToInitPth = g_timer_elapsed(initTimer, NULL);
+    g_timer_start(initTimer);
     _process_loadPlugin(proc);
+    gdouble secondsToInitPlugin = g_timer_elapsed(initTimer, NULL);
     _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
 
     _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     utility_assert(proc->plugin.isExecuting);
+    g_timer_start(initTimer);
     if(proc->plugin.preProcessEnter != NULL) {
         _process_changeContext(proc, PCTX_SHADOW, PCTX_PLUGIN);
         proc->plugin.preProcessEnter(proc->plugin.handle);
@@ -1046,6 +1054,7 @@ static void _process_start(Process* proc) {
         proc->plugin.postProcessExit(proc->plugin.handle);
         _process_changeContext(proc, PCTX_PLUGIN, PCTX_SHADOW);
     }
+    gdouble secondsUntilMainBlocked = g_timer_elapsed(initTimer, NULL);
     _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
 
     /* total number of alive pth threads this scheduler has */
@@ -1060,10 +1069,16 @@ static void _process_start(Process* proc) {
     proc->plugin.isExecuting = FALSE;
     worker_setActiveProcess(NULL);
 
+    message("process '%s' initialized the pth threading system in %f seconds, "
+            "initialized the plugin namespace in %f seconds, "
+            "and ran the pth main thread until it blocked in %f seconds",
+            _process_getName(proc), secondsToInitPth, secondsToInitPlugin, secondsUntilMainBlocked);
+
     /* the main thread wont exist if it exited immediately before returning control to shadow */
     if(proc->programMainThread) {
-        message("process '%s' initialization is complete, main thread %s running",
-                _process_getName(proc), process_isRunning(proc) ? "is" : "is not");
+        message("process '%s' has set up the main pth thread '%s' and %s running",
+                _process_getName(proc), programMainThreadNameBuf->str,
+                process_isRunning(proc) ? "is" : "is not");
     } else {
         _process_logReturnCode(proc, proc->returnCode);
 
@@ -1075,8 +1090,10 @@ static void _process_start(Process* proc) {
         _process_unloadPlugin(proc);
         utility_assert(!process_isRunning(proc));
 
-        info("process '%s' has completed or is otherwise no longer running", _process_getName(proc));
+        message("process '%s' has completed or is otherwise no longer running", _process_getName(proc));
     }
+
+    g_timer_destroy(initTimer);
 
     if(proc->stdoutFile) {
         fflush(proc->stdoutFile);
