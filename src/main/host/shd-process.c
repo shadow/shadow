@@ -144,6 +144,7 @@ struct _Process {
 
     /* unique id of the program that this process should run */
     guint processID;
+    GString* processName;
     FILE* stdoutFile;
     FILE* stderrFile;
 
@@ -255,10 +256,22 @@ static ProcessContext _process_changeContext(Process* proc, ProcessContext from,
     return prevContext;
 }
 
+static const gchar* _process_getPluginPath(Process* proc) {
+    MAGIC_ASSERT(proc);
+    utility_assert(proc->plugin.path);
+    return proc->plugin.path->str;
+}
+
 static const gchar* _process_getPluginName(Process* proc) {
     MAGIC_ASSERT(proc);
     utility_assert(proc->plugin.name);
     return proc->plugin.name->str;
+}
+
+static const gchar* _process_getName(Process* proc) {
+    MAGIC_ASSERT(proc);
+    utility_assert(proc->processName->str);
+    return proc->processName->str;
 }
 
 static void _process_setErrno(Process* proc, int errnoValue) {
@@ -327,6 +340,9 @@ static void _process_loadPlugin(Process* proc) {
      * ```
      */
 
+    /* set a timer for the loading process */
+    GTimer* loadTimer = g_timer_new();
+
     /* dlmopen may result in plugin constructors getting called, so make sure
      * we make that call from the plugin context. */
     _process_changeContext(proc, PCTX_SHADOW, PCTX_PLUGIN);
@@ -340,8 +356,13 @@ static void _process_loadPlugin(Process* proc) {
 
     _process_changeContext(proc, PCTX_PLUGIN, PCTX_SHADOW);
 
+    /* check the load timer */
+    gdouble secondsElapsedDuringLoad = g_timer_elapsed(loadTimer, NULL);
+
     if(proc->plugin.handle) {
-        message("successfully loaded plugin '%s' into new namespace '%p'", proc->plugin.path->str, proc->plugin.handle);
+        message("process '%s' successfully loaded plugin '%s' at path '%s' into new namespace '%p' in %f seconds",
+                _process_getName(proc), _process_getPluginName(proc), _process_getPluginPath(proc),
+                proc->plugin.handle, secondsElapsedDuringLoad);
     } else {
         critical("dlmopen() failed to load plugin '%s': %s", proc->plugin.path->str, errorMessage);
         error("unable to load private plug-in '%s'", proc->plugin.path->str);
@@ -365,6 +386,9 @@ static void _process_loadPlugin(Process* proc) {
             error("unable to load preload library '%s'", proc->plugin.preloadPath->str);
         }
 
+        /* reset tje timer so we can time loading the preload lib */
+        g_timer_start(loadTimer);
+
         /* dlmopen may result in plugin constructors getting called, so make sure
          * we make that call from the plugin context. */
         _process_changeContext(proc, PCTX_SHADOW, PCTX_PLUGIN);
@@ -379,13 +403,20 @@ static void _process_loadPlugin(Process* proc) {
 
         _process_changeContext(proc, PCTX_PLUGIN, PCTX_SHADOW);
 
+        /* check the load timer */
+        secondsElapsedDuringLoad = g_timer_elapsed(loadTimer, NULL);
+
         if(!errorMessage3) {
-            message("successfully loaded preload '%s' into namespace %p", proc->plugin.preloadPath->str, proc->plugin.handle);
+            message("process '%s' successfully loaded preload '%s' at path '%s' into existing namespace '%p' in %f seconds",
+                    _process_getName(proc), proc->plugin.preloadName->str, proc->plugin.preloadPath->str,
+                    proc->plugin.handle, secondsElapsedDuringLoad);
         } else {
             critical("dlinfo() failed to load preload '%s': %s", proc->plugin.path->str, errorMessage3);
             error("unable to load preload library '%s'", proc->plugin.preloadPath->str);
         }
     }
+
+    g_timer_destroy(loadTimer);
 
     /* the remaining dlsym lookups should not cause code inside the plugin to get
      * executed, so we should be able to do them from the shadow context. */
@@ -483,6 +514,9 @@ Process* process_new(gpointer host, guint processID,
         proc->plugin.preloadPath = g_string_new(preloadPath);
     }
 
+    proc->processName = g_string_new(NULL);
+    g_string_printf(proc->processName, "%s-%u", _process_getPluginName(proc), proc->processID);
+
     proc->startTime = startTime;
     proc->stopTime = stopTime;
     if(arguments && (g_ascii_strncasecmp(arguments, "\0", (gsize) 1) != 0)) {
@@ -546,6 +580,9 @@ static void _process_free(Process* proc) {
     }
     if(proc->plugin.preloadName) {
         g_string_free(proc->plugin.preloadName, TRUE);
+    }
+    if(proc->processName) {
+        g_string_free(proc->processName, TRUE);
     }
 
     g_timer_destroy(proc->cpuDelayTimer);
