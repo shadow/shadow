@@ -16,11 +16,16 @@ enum VdlLog {
 };
 
 void vdl_log_printf (enum VdlLog log, const char *str, ...);
+#ifdef DEBUG
 #define VDL_LOG_FUNCTION(str,...)					\
   vdl_log_printf (VDL_LOG_FUNC, "%s:%d, %s (" str ")\n",		\
 		  __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__)
 #define VDL_LOG_DEBUG(str,...) \
   vdl_log_printf (VDL_LOG_DBG, str, ##__VA_ARGS__)
+#else
+#define VDL_LOG_FUNCTION(...)
+#define VDL_LOG_DEBUG(...)
+#endif
 #define VDL_LOG_ERROR(str,...) \
   vdl_log_printf (VDL_LOG_ERR, "%s:%d:%s: " str,		\
 		  __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__)

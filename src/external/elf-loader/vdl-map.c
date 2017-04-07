@@ -11,6 +11,7 @@
 #include <sys/mman.h>
 #include <fcntl.h>
 
+#ifdef DEBUG
 static void
 debug_print_maps (const char *filename, struct VdlList *maps)
 {
@@ -30,6 +31,9 @@ debug_print_maps (const char *filename, struct VdlList *maps)
          map->mem_anon_size_align);
     }
 }
+#else
+#define debug_print_maps(filename,maps)
+#endif
 
 static void
 get_total_mapping_boundaries (struct VdlList *maps,

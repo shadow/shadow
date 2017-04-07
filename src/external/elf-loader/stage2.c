@@ -395,6 +395,7 @@ stage2_freeres (void)
   vdl_tls_tcb_deallocate (tcb);
 }
 
+#ifdef DEBUG
 inline static void
 file_list_print (struct VdlList *l)
 {
@@ -406,6 +407,9 @@ file_list_print (struct VdlList *l)
       VDL_LOG_DEBUG ("file=%p/\"%s\"\n", file, file->filename);
     }
 }
+#else
+#define file_list_print(l)
+#endif
 
 void
 stage2_finalize (void)
