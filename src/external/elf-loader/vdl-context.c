@@ -154,8 +154,6 @@ vdl_context_new (int argc, char **argv, char **envp)
 
   struct VdlContext *context = vdl_alloc_new (struct VdlContext);
 
-  vdl_list_push_back (g_vdl.contexts, context);
-
   context->lock = rwlock_new ();
   context->loaded = vdl_list_new ();
   context->lib_remaps = vdl_list_new ();
@@ -185,6 +183,8 @@ vdl_context_new (int argc, char **argv, char **envp)
                                 "dl_iterate_phdr", 0, 0,
                                 "vdl_dl_iterate_phdr_public", "VDL_DL",
                                 "ldso");
+
+  vdl_list_push_back (g_vdl.contexts, context);
 
   return context;
 }

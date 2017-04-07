@@ -48,6 +48,7 @@ void **vdl_list_prev (struct VdlList *list, void **i);
 void **vdl_list_insert (struct VdlList *list, void **at, void *value);
 void vdl_list_insert_range (struct VdlList *to, void **at,
                             struct VdlList *from, void **start, void **end);
+void vdl_list_append_list (struct VdlList *a, struct VdlList *b);
 void vdl_list_push_back (struct VdlList *list, void *data);
 void vdl_list_push_front (struct VdlList *list, void *data);
 void vdl_list_pop_back (struct VdlList *list);

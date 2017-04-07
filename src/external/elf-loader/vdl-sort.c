@@ -22,24 +22,29 @@ get_max_depth (struct VdlList *files)
 struct VdlList *
 vdl_sort_increasing_depth (struct VdlList *files)
 {
-  uint32_t max_depth = get_max_depth (files);
-
+  struct VdlList *input = vdl_list_copy (files);
   struct VdlList *output = vdl_list_new ();
+  uint32_t max_depth = get_max_depth (input);
 
   uint32_t i;
   for (i = 0; i <= max_depth; i++)
     {
       // find files with matching depth and output them
       void **cur;
-      for (cur = vdl_list_begin (files);
-           cur != vdl_list_end (files);
-           cur = vdl_list_next (files, cur))
+      for (cur = vdl_list_begin (input);
+           cur != vdl_list_end (input);
+           )
         {
           struct VdlFile *file = *cur;
           if (file->depth == i)
             {
               vdl_list_push_back (output, file);
+              void **found = cur;
+              cur = vdl_list_next (input, cur);
+              vdl_list_erase (input, found);
+              continue;
             }
+          cur = vdl_list_next (input, cur);
         }
     }
   return output;

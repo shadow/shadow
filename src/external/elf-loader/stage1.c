@@ -98,6 +98,7 @@ global_initialize (unsigned long interpreter_load_base)
 
   vdl->version = 1;
   vdl->link_map = 0;
+  vdl->link_map_lock = rwlock_new ();
   vdl->breakpoint = 0;
   vdl->state = VDL_CONSISTENT;
   vdl->interpreter_load_base = interpreter_load_base;
@@ -106,6 +107,7 @@ global_initialize (unsigned long interpreter_load_base)
   vdl->ldso = 0;
   vdl->contexts = vdl_list_new ();
   vdl->search_dirs = vdl_utils_splitpath (machine_get_system_search_dirs ());
+  vdl->tls_lock = rwlock_new ();
   vdl->tls_gen = 1;
   vdl->tls_static_total_size = 0;
   vdl->tls_static_current_size = 0;
@@ -239,6 +241,8 @@ stage1_freeres (void)
   vdl_list_delete (g_vdl.contexts);
   futex_delete (g_vdl.ro_cache_futex);
   rwlock_delete (g_vdl.global_lock);
+  rwlock_delete (g_vdl.tls_lock);
+  rwlock_delete (g_vdl.link_map_lock);
   {
     void **i;
     for (i = vdl_list_begin (g_vdl.errors);

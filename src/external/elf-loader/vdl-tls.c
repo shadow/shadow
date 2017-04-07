@@ -131,14 +131,17 @@ initialize_static_tls (struct VdlList *list)
 bool
 vdl_tls_file_initialize (struct VdlList *files)
 {
+  write_lock (g_vdl.tls_lock);
   file_list_initialize (files);
   struct static_tls static_tls = initialize_static_tls (files);
   if (static_tls.size < g_vdl.tls_static_total_size)
     {
       g_vdl.tls_static_current_size = static_tls.size;
       g_vdl.tls_static_align = static_tls.align;
+      write_unlock (g_vdl.tls_lock);
       return true;
     }
+  write_unlock (g_vdl.tls_lock);
   return false;
 }
 
@@ -236,6 +239,12 @@ get_current_dtv (unsigned long tp)
   return dtv;
 }
 
+static inline void
+set_current_dtv (unsigned long tp, struct dtv_t *dtv)
+{
+  vdl_memcpy ((void *) (tp + CONFIG_TCB_DTV_OFFSET), &dtv, sizeof (dtv));
+}
+
 void
 vdl_tls_dtv_allocate (unsigned long tcb)
 {
@@ -265,6 +274,7 @@ vdl_tls_dtv_allocate (unsigned long tcb)
       new_dtv++; // the metadata used by pthreads
       new_dtv[-2].value = (unsigned long) local_tls;
       new_dtv[-1].gen = 2 * needed_size;
+      set_current_dtv (tcb, new_dtv);
     }
   else
     {
@@ -274,8 +284,6 @@ vdl_tls_dtv_allocate (unsigned long tcb)
   new_dtv[-1].value = g_vdl.tls_n_dtv;
   new_dtv[0].value = 0;
   new_dtv[0].gen = g_vdl.tls_gen;
-  vdl_memcpy ((void *) (tcb + CONFIG_TCB_DTV_OFFSET), &new_dtv,
-              sizeof (new_dtv));
 
   if (migrate)
     {
@@ -363,8 +371,7 @@ void
 vdl_tls_dtv_deallocate (unsigned long tcb)
 {
   VDL_LOG_FUNCTION ("tcb=%lu", tcb);
-  struct dtv_t *dtv;
-  vdl_memcpy (&dtv, (void *) (tcb + CONFIG_TCB_DTV_OFFSET), sizeof (dtv));
+  struct dtv_t *dtv = get_current_dtv (tcb);
 
   unsigned long dtv_size = dtv[-1].value;
   unsigned long module;
@@ -487,8 +494,11 @@ vdl_tls_dtv_update (void)
   unsigned long tp = machine_thread_pointer_get ();
   struct dtv_t *dtv = get_current_dtv (tp);
   unsigned long dtv_size = dtv[-1].value;
+
+  read_lock (g_vdl.tls_lock);
   if (dtv[0].gen == g_vdl.tls_gen)
     {
+      read_unlock (g_vdl.tls_lock);
       return;
     }
 
@@ -501,6 +511,7 @@ vdl_tls_dtv_update (void)
       // we have a big-enough dtv so, now that it's uptodate,
       // update the generation
       dtv[0].gen = g_vdl.tls_gen;
+      read_unlock (g_vdl.tls_lock);
       return;
     }
 
@@ -513,6 +524,7 @@ vdl_tls_dtv_update (void)
   vdl_tls_dtv_update_new (new_dtv, dtv_size, new_dtv_size);
   // now that the dtv is updated, update the generation
   new_dtv[0].gen = g_vdl.tls_gen;
+  read_unlock (g_vdl.tls_lock);
 }
 
 unsigned long

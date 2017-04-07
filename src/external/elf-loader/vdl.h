@@ -52,12 +52,14 @@ struct Vdl
   // end ABI-compatible fields
 
   struct VdlFile *link_map_tail;
+  struct RWLock *link_map_lock;
   // The list of directories to search for binaries in DT_NEEDED entries.
   struct VdlList *search_dirs;
   uint32_t bind_now:1;
   uint32_t finalized:1;
   struct VdlFile *ldso;
   struct VdlList *contexts;
+  struct RWLock *tls_lock;
   unsigned long tls_gen;
   unsigned long tls_static_total_size;
   unsigned long tls_static_current_size;

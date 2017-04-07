@@ -81,31 +81,31 @@ addr_to_file (unsigned long caller)
 static struct VdlContext *
 search_context (struct VdlContext *context)
 {
-  void **i;
-  for (i = vdl_list_begin (g_vdl.contexts);
-       i != vdl_list_end (g_vdl.contexts);
-       i = vdl_list_next (g_vdl.contexts, i))
+  // XXX: This is slow.
+  void **ret = vdl_list_find (g_vdl.contexts, context);
+  if (ret == vdl_list_end (g_vdl.contexts))
     {
-      if (context == *i)
-        {
-          return context;
-        }
+      set_error ("Can't find requested lmid %p", context);
+      return 0;
     }
-  set_error ("Can't find requested lmid %p", context);
-  return 0;
+  return (struct VdlContext *) ret;
 }
 
 static struct VdlFile *
 search_file (void *handle)
 {
+  // XXX: This is slow.
+  read_lock (g_vdl.link_map_lock);
   struct VdlFile *cur;
   for (cur = g_vdl.link_map; cur != 0; cur = cur->next)
     {
       if (cur == handle)
         {
+          read_unlock (g_vdl.link_map_lock);
           return cur;
         }
     }
+  read_unlock (g_vdl.link_map_lock);
   set_error ("Can't find requested file 0x%x", handle);
   return 0;
 }
@@ -166,6 +166,32 @@ get_post_interpose (struct VdlContext *context, int preload)
   return cur;
 }
 
+static void *
+find_main_executable (struct VdlContext *context)
+{
+  read_lock (g_vdl.global_lock);
+  read_lock (context->lock);
+  void **cur;
+  for (cur = vdl_list_begin (context->global_scope);
+       cur != vdl_list_end (context->global_scope);
+       cur = vdl_list_next (context->global_scope, cur))
+    {
+      struct VdlFile *item = *cur;
+      if (item->is_executable)
+        {
+          item->count++;
+          read_unlock (context->lock);
+          read_unlock (g_vdl.global_lock);
+          return *cur;
+        }
+    }
+  VDL_LOG_DEBUG ("Could not find main executable within namespace");
+  set_error ("Could not find main executable within namespace");
+  read_unlock (context->lock);
+  read_unlock (g_vdl.global_lock);
+  return 0;
+}
+
 // assumes caller has lock
 static void *
 dlopen_with_context (struct VdlContext *context, const char *filename,
@@ -175,21 +201,11 @@ dlopen_with_context (struct VdlContext *context, const char *filename,
 
   if (filename == 0)
     {
-      void **cur;
-      for (cur = vdl_list_begin (context->global_scope);
-           cur != vdl_list_end (context->global_scope);
-           cur = vdl_list_next (context->global_scope, cur))
-        {
-          struct VdlFile *item = *cur;
-          if (item->is_executable)
-            {
-              item->count++;
-              return *cur;
-            }
-        }
-      VDL_LOG_ASSERT (false, "Could not find main executable within linkmap");
+      return find_main_executable (context);
     }
 
+  read_lock (g_vdl.global_lock);
+  write_lock (context->lock);
   struct VdlMapResult map = vdl_map_from_filename (context, filename);
   if (map.requested == 0)
     {
@@ -236,11 +252,6 @@ dlopen_with_context (struct VdlContext *context, const char *filename,
 
   struct VdlList *scope = vdl_sort_deps_breadth_first (map.requested);
 
-  if (flags & RTLD_PRELOAD)
-    {
-      vdl_list_push_back (g_vdl.preloads, map.requested);
-      vdl_list_unicize (g_vdl.preloads);
-    }
   // If this is an "interposer" library, we add it to the global scope.
   // Note that the context in which symbols are resolved depends on whether the
   // object is LD_PRELOAD or RTLD_PRELOAD (symbol loads in the context the
@@ -281,9 +292,7 @@ dlopen_with_context (struct VdlContext *context, const char *filename,
        cur = vdl_list_next (map.newly_mapped, cur))
     {
       struct VdlFile *item = *cur;
-      vdl_list_insert_range (item->local_scope,
-                             vdl_list_end (item->local_scope), scope,
-                             vdl_list_begin (scope), vdl_list_end (scope));
+      vdl_list_append_list (item->local_scope, scope);
       if (flags & RTLD_DEEPBIND)
         {
           item->lookup_type = FILE_LOOKUP_LOCAL_GLOBAL;
@@ -298,10 +307,6 @@ dlopen_with_context (struct VdlContext *context, const char *filename,
 
   vdl_reloc (map.newly_mapped, g_vdl.bind_now || flags & RTLD_NOW);
 
-  vdl_linkmap_append_range (map.newly_mapped,
-                            vdl_list_begin (map.newly_mapped),
-                            vdl_list_end (map.newly_mapped));
-
   // now, we want to update the dtv of _this_ thread.
   // i.e., we can't touch the dtv of the other threads
   // because of locking issues so, if the code we loaded
@@ -313,20 +318,30 @@ dlopen_with_context (struct VdlContext *context, const char *filename,
   // this indirectly initializes the content of the tls static area.
   vdl_tls_dtv_update ();
 
-  gdb_notify ();
-
   glibc_patch (map.newly_mapped);
-
-  struct VdlList *call_init = vdl_sort_call_init (map.newly_mapped);
 
   // we need to release the lock before calling the initializers
   // to avoid a deadlock if one of them calls dlopen or
   // a symbol resolution function
-  write_unlock (g_vdl.global_lock);
-  vdl_init_call (call_init);
-  write_lock (g_vdl.global_lock);
+  write_unlock (context->lock);
+  read_unlock (g_vdl.global_lock);
 
-  // must hold the lock to call free
+  // now that this object and its dependencies are ready,
+  // we can add them to the (truly) global lists
+  vdl_linkmap_append_range (map.newly_mapped,
+                            vdl_list_begin (map.newly_mapped),
+                            vdl_list_end (map.newly_mapped));
+  gdb_notify ();
+
+  if (flags & RTLD_PRELOAD)
+    {
+      vdl_list_push_back (g_vdl.preloads, map.requested);
+      vdl_list_unicize (g_vdl.preloads);
+    }
+
+  struct VdlList *call_init = vdl_sort_call_init (map.newly_mapped);
+  vdl_init_call (call_init);
+
   vdl_list_delete (call_init);
   vdl_list_delete (map.newly_mapped);
 
@@ -346,6 +361,8 @@ error:
     vdl_list_delete (gc.not_unload);
 
     gdb_notify ();
+    write_unlock (context->lock);
+    read_unlock (g_vdl.global_lock);
   }
   return 0;
 }
@@ -354,12 +371,10 @@ void *
 vdl_dlopen (const char *filename, int flags)
 {
   VDL_LOG_FUNCTION ("filename=%s", filename);
-  write_lock (g_vdl.global_lock);
   // map it in memory using the normal context, that is, the
   // first context in the context list.
   struct VdlContext *context = vdl_list_front (g_vdl.contexts);
   void *handle = dlopen_with_context (context, filename, flags);
-  write_unlock (g_vdl.global_lock);
   return handle;
 }
 
@@ -455,14 +470,13 @@ char *
 vdl_dlerror (void)
 {
   VDL_LOG_FUNCTION ("", 0);
-  write_lock (g_vdl.global_lock);
+  // VdlErrors are thread-specific, so no need to lock
   struct VdlError *error = find_error ();
   char *error_string = error->error;
   vdl_alloc_free (error->prev_error);
   error->prev_error = error->error;
   // clear the error we are about to report to the user
   error->error = 0;
-  write_unlock (g_vdl.global_lock);
   return error_string;
 }
 
@@ -610,33 +624,22 @@ vdl_dlvsym_with_flags (void *handle, const char *symbol, const char *version,
     }
   if (handle == RTLD_DEFAULT)
     {
-      scope = vdl_list_new ();
-      vdl_list_insert_range (scope,
-                             vdl_list_begin (scope),
-                             caller_file->context->global_scope,
-                             vdl_list_begin (caller_file->
-                                             context->global_scope),
-                             vdl_list_end (caller_file->
-                                           context->global_scope));
       context = caller_file->context;
+      scope = vdl_list_copy (context->global_scope);
     }
   else if (handle == RTLD_NEXT)
     {
       context = caller_file->context;
       // skip all objects before the caller object
-      void **cur = vdl_list_find (caller_file->context->global_scope,
-                                  caller_file);
-      if (cur != vdl_list_end (caller_file->context->global_scope))
+      void **cur = vdl_list_find (context->global_scope, caller_file);
+      if (cur != vdl_list_end (context->global_scope))
         {
           // go to the next object
           scope = vdl_list_new ();
-          vdl_list_insert_range (scope,
-                                 vdl_list_end (scope),
-                                 caller_file->context->global_scope,
-                                 vdl_list_next (caller_file->
-                                                context->global_scope, cur),
-                                 vdl_list_end (caller_file->
-                                               context->global_scope));
+          vdl_list_insert_range (scope, vdl_list_end (scope),
+                                 context->global_scope,
+                                 vdl_list_next (context->global_scope, cur),
+                                 vdl_list_end (context->global_scope));
         }
       else
         {
@@ -651,8 +654,10 @@ vdl_dlvsym_with_flags (void *handle, const char *symbol, const char *version,
         {
           goto error;
         }
-      scope = vdl_sort_deps_breadth_first (file);
       context = file->context;
+      read_lock (context->lock);
+      scope = vdl_sort_deps_breadth_first (file);
+      read_unlock (context->lock);
     }
   struct VdlLookupResult result;
 
@@ -723,7 +728,6 @@ void *
 vdl_dlmopen (Lmid_t lmid, const char *filename, int flag)
 {
   VDL_LOG_FUNCTION ("", 0);
-  write_lock (g_vdl.global_lock);
   struct VdlContext *context;
   if (lmid == LM_ID_BASE)
     {
@@ -739,12 +743,10 @@ vdl_dlmopen (Lmid_t lmid, const char *filename, int flag)
       context = (struct VdlContext *) lmid;
       if (search_context (context) == 0)
         {
-          write_unlock (g_vdl.global_lock);
           return 0;
         }
     }
   void *handle = dlopen_with_context (context, filename, flag);
-  write_unlock (g_vdl.global_lock);
   return handle;
 }
 

@@ -15,9 +15,7 @@ struct VdlList *
 vdl_list_copy (struct VdlList *list)
 {
   struct VdlList *copy = vdl_list_new ();
-  vdl_list_insert_range (copy,
-                         vdl_list_begin (copy), list,
-                         vdl_list_begin (list), vdl_list_end (list));
+  vdl_list_append_list (copy, list);
   return copy;
 }
 
@@ -78,9 +76,8 @@ vdl_list_begin (struct VdlList *list)
 void **
 vdl_list_end (struct VdlList *list)
 {
-  read_lock (list->lock);
+  // no lock needed, this is a constant offset into the struct
   void **end = (void **) &list->tail;
-  read_unlock (list->lock);
   return end;
 }
 
@@ -184,6 +181,26 @@ vdl_list_insert_range (struct VdlList *to, void **at,
       read_unlock (from->lock);
     }
   write_unlock (to->lock);
+}
+
+void
+vdl_list_append_list (struct VdlList *a, struct VdlList *b)
+{
+  write_lock (a->lock);
+  if (a != b)
+    {
+      read_lock (b->lock);
+    }
+  struct VdlListItem *i;
+  for (i = b->head.next; i != &b->tail; i = i->next)
+    {
+      vdl_list_insert_internal (a, (void **) &a->tail, i->data);
+    }
+  if (a != b)
+    {
+      read_unlock (b->lock);
+    }
+  write_unlock (a->lock);
 }
 
 static void **
@@ -352,11 +369,12 @@ vdl_list_remove (struct VdlList *list, void *data)
 void
 vdl_list_reverse (struct VdlList *list)
 {
-  if (vdl_list_empty (list))
+  write_lock (list->lock);
+  if (list->size == 0)
     {
+      write_unlock (list->lock);
       return;
     }
-  write_lock (list->lock);
   struct VdlListItem *cur, *next, *prev;
   struct VdlListItem *begin, *end, *last;
   begin = list->head.next;
