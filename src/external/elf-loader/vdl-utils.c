@@ -145,6 +145,15 @@ vdl_utils_itoa (unsigned long value)
 }
 
 uint32_t
+vdl_int_hash (unsigned long i)
+{
+  char *str = vdl_utils_itoa (i);
+  i = vdl_gnu_hash (str);
+  vdl_alloc_free (str);
+  return i;
+}
+
+uint32_t
 vdl_gnu_hash (const char *s)
 {
   // Copy/paste from the glibc source code.

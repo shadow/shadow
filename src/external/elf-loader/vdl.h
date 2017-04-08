@@ -58,7 +58,8 @@ struct Vdl
   uint32_t bind_now:1;
   uint32_t finalized:1;
   struct VdlFile *ldso;
-  struct VdlList *contexts;
+  struct VdlContext *main_context;
+  struct VdlHashMap *contexts;
   struct RWLock *tls_lock;
   unsigned long tls_gen;
   unsigned long tls_static_total_size;

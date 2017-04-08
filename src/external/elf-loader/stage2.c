@@ -228,6 +228,7 @@ stage2_initialize (struct Stage2Input input)
   struct VdlContext *context = vdl_context_new (input.program_argc,
                                                 input.program_argv,
                                                 input.program_envp);
+  g_vdl.main_context = context;
 
   // First, let's make sure we have an entry for the loader
   const char *pt_interp = get_pt_interp (main_load_base,

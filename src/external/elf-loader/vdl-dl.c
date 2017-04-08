@@ -2,6 +2,7 @@
 #include "vdl-log.h"
 #include "vdl-utils.h"
 #include "vdl-list.h"
+#include "vdl-hashmap.h"
 #include "gdb.h"
 #include "glibc.h"
 #include "vdl-dl.h"
@@ -78,12 +79,18 @@ addr_to_file (unsigned long caller)
   return 0;
 }
 
+int
+context_compare (const void *a, const void *b)
+{
+  return a == b;
+}
+
 static struct VdlContext *
 search_context (struct VdlContext *context)
 {
-  // XXX: This is slow.
-  void **ret = vdl_list_find (g_vdl.contexts, context);
-  if (ret == vdl_list_end (g_vdl.contexts))
+  uint32_t hash = vdl_int_hash ((unsigned long) context);
+  void *ret = vdl_hashmap_get (g_vdl.contexts, hash, context, context_compare);
+  if (ret == 0)
     {
       set_error ("Can't find requested lmid %p", context);
       return 0;
@@ -371,10 +378,7 @@ void *
 vdl_dlopen (const char *filename, int flags)
 {
   VDL_LOG_FUNCTION ("filename=%s", filename);
-  // map it in memory using the normal context, that is, the
-  // first context in the context list.
-  struct VdlContext *context = vdl_list_front (g_vdl.contexts);
-  void *handle = dlopen_with_context (context, filename, flags);
+  void *handle = dlopen_with_context (g_vdl.main_context, filename, flags);
   return handle;
 }
 
@@ -731,11 +735,11 @@ vdl_dlmopen (Lmid_t lmid, const char *filename, int flag)
   struct VdlContext *context;
   if (lmid == LM_ID_BASE)
     {
-      context = vdl_list_front (g_vdl.contexts);
+      context = g_vdl.main_context;
     }
   else if (lmid == LM_ID_NEWLM)
     {
-      context = vdl_list_front (g_vdl.contexts);
+      context = g_vdl.main_context;
       context = vdl_context_new (context->argc, context->argv, context->envp);
     }
   else

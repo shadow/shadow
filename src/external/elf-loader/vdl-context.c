@@ -4,6 +4,7 @@
 #include "vdl-alloc.h"
 #include "vdl-log.h"
 #include "vdl-unmap.h"
+#include "vdl-hashmap.h"
 #include "futex.h"
 
 bool
@@ -183,8 +184,8 @@ vdl_context_new (int argc, char **argv, char **envp)
                                 "dl_iterate_phdr", 0, 0,
                                 "vdl_dl_iterate_phdr_public", "VDL_DL",
                                 "ldso");
-
-  vdl_list_push_back (g_vdl.contexts, context);
+  uint32_t hash = vdl_int_hash ((unsigned long) context);
+  vdl_hashmap_insert (g_vdl.contexts, hash, context);
 
   return context;
 }
@@ -200,7 +201,8 @@ vdl_context_delete (struct VdlContext *context)
   vdl_list_delete (context->loaded);
   context->loaded = 0;
 
-  vdl_list_remove (g_vdl.contexts, context);
+  uint32_t hash = vdl_int_hash ((unsigned long) context);
+  vdl_hashmap_remove (g_vdl.contexts, hash, context);
   context->argc = 0;
   context->argv = 0;
   context->envp = 0;

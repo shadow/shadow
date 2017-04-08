@@ -353,7 +353,7 @@ file_new (unsigned long load_base, unsigned long dynamic, struct VdlList *maps,
   file->dynamic = dynamic + load_base;
   file->next = 0;
   file->prev = 0;
-  file->is_main_namespace = (context == vdl_list_front (g_vdl.contexts));
+  file->is_main_namespace = (context == g_vdl.main_context);
   file->count = 0;
   file->context = context;
   file->st_dev = 0;
