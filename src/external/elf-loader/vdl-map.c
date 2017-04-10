@@ -136,8 +136,8 @@ vdl_file_get_dt_needed (struct VdlFile *file)
     {
       return list;
     }
-  ElfW (Dyn) * dynamic = (ElfW (Dyn) *) file->dynamic;
-  ElfW (Dyn) * cur;
+  ElfW (Dyn) *dynamic = (ElfW (Dyn) *) file->dynamic;
+  ElfW (Dyn) *cur;
   for (cur = dynamic; cur->d_tag != DT_NULL; cur++)
     {
       if (cur->d_tag == DT_NEEDED)
@@ -440,7 +440,7 @@ file_new (unsigned long load_base, unsigned long dynamic, struct VdlList *maps,
   file->dt_runpath = 0;
   file->dt_soname = 0;
 
-  ElfW (Dyn) * dyn = (ElfW (Dyn) *) file->dynamic;
+  ElfW (Dyn) *dyn = (ElfW (Dyn) *) file->dynamic;
   // do a first pass to get dt_strtab
   while (dyn->d_tag != DT_NULL)
     {
@@ -790,7 +790,7 @@ vdl_file_map_single (struct VdlContext *context,
   VDL_LOG_FUNCTION ("context=%p, filename=%s, name=%s", context, filename,
                     name);
   ElfW (Ehdr) header;
-  ElfW (Phdr) * phdr = 0;
+  ElfW (Phdr) *phdr = 0;
   ssize_t bytes_read;
   unsigned long mapping_start = 0;
   unsigned long mapping_size = 0;
@@ -925,7 +925,6 @@ struct SingleMapResult
   bool newly_mapped;
 };
 
-
 static struct SingleMapResult
 vdl_file_map_single_maybe (struct VdlContext *context,
                            const char *requested_filename,
@@ -1017,6 +1016,10 @@ vdl_file_map_deps_recursive (struct VdlFile *item,
   VDL_LOG_FUNCTION ("file=%s", item->name);
   char *error = 0;
 
+  if (item == g_vdl.ldso)
+    {
+      return error;
+    }
   if (item->deps_initialized)
     {
       // an additional file added "item" as a dependency after it was loaded
@@ -1082,9 +1085,6 @@ out:
   vdl_utils_str_list_delete (dt_needed);
   return error;
 }
-
-
-
 
 struct VdlMapResult
 vdl_map_from_memory (unsigned long load_base,
