@@ -51,7 +51,7 @@ chunk_overhead (void)
   return round_to (sizeof (struct AllocMmapChunk), 16);
 }
 
-static void
+static uint8_t *
 alloc_chunk (struct Alloc *alloc, uint32_t size)
 {
   size = round_to (size, 4096);
@@ -64,23 +64,25 @@ alloc_chunk (struct Alloc *alloc, uint32_t size)
   chunk->next = alloc->chunks;
   alloc->chunks = chunk;
   MARK_UNDEFINED (chunk->buffer + chunk->brk, size - chunk->brk);
+  return map;
 }
 
 static uint8_t *
 alloc_brk (struct Alloc *alloc, uint32_t needed)
 {
   struct AllocMmapChunk *tmp;
-  for (tmp = alloc->chunks; tmp != 0; tmp = tmp->next)
-    {
-      if (tmp->size - tmp->brk >= needed)
-        {
-          uint8_t *buffer = tmp->buffer + tmp->brk;
-          tmp->brk += needed;
-          return buffer;
-        }
-    }
-  alloc_chunk (alloc, alloc->default_mmap_size);
-  return alloc_brk (alloc, needed);
+  do {
+    for (tmp = alloc->chunks; tmp != 0; tmp = tmp->next)
+      {
+        if (tmp->size - tmp->brk >= needed)
+          {
+            uint8_t *buffer = tmp->buffer + tmp->brk;
+            tmp->brk += needed;
+            return buffer;
+          }
+      }
+  } while (alloc_chunk (alloc, alloc->default_mmap_size));
+  return 0;
 }
 
 static uint8_t
