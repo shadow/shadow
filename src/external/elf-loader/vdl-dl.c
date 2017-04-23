@@ -186,7 +186,7 @@ find_main_executable (struct VdlContext *context)
       struct VdlFile *item = *cur;
       if (item->is_executable)
         {
-          item->count++;
+          __sync_fetch_and_add(&item->count, 1);
           read_unlock (context->lock);
           read_unlock (g_vdl.global_lock);
           return *cur;
