@@ -79,8 +79,8 @@ addr_to_file (unsigned long caller)
   return 0;
 }
 
-int
-context_compare (const void *a, const void *b)
+static int
+pointer_compare (const void *a, const void *b)
 {
   return a == b;
 }
@@ -89,7 +89,7 @@ static struct VdlContext *
 search_context (struct VdlContext *context)
 {
   uint32_t hash = vdl_int_hash ((unsigned long) context);
-  void *ret = vdl_hashmap_get (g_vdl.contexts, hash, context, context_compare);
+  void *ret = vdl_hashmap_get (g_vdl.contexts, hash, context, pointer_compare);
   if (ret == 0)
     {
       set_error ("Can't find requested lmid %p", context);
@@ -101,20 +101,14 @@ search_context (struct VdlContext *context)
 static struct VdlFile *
 search_file (void *handle)
 {
-  // XXX: This is slow.
-  read_lock (g_vdl.link_map_lock);
-  struct VdlFile *cur;
-  for (cur = g_vdl.link_map; cur != 0; cur = cur->next)
+  uint32_t hash = vdl_int_hash ((unsigned long) handle);
+  void *ret = vdl_hashmap_get (g_vdl.files, hash, handle, pointer_compare);
+  if (ret == 0)
     {
-      if (cur == handle)
-        {
-          read_unlock (g_vdl.link_map_lock);
-          return cur;
-        }
+      set_error ("Can't find requested file 0x%x", handle);
+      return 0;
     }
-  read_unlock (g_vdl.link_map_lock);
-  set_error ("Can't find requested file 0x%x", handle);
-  return 0;
+  return (struct VdlFile *) ret;
 }
 
 static

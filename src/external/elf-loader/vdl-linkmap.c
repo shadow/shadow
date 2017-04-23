@@ -4,6 +4,7 @@
 #include "vdl-file.h"
 #include "vdl-log.h"
 #include "vdl-hashmap.h"
+#include "vdl-utils.h"
 #include "futex.h"
 
 void
@@ -13,6 +14,8 @@ vdl_linkmap_append (struct VdlFile *file)
     {
       return;
     }
+  uint32_t hash = vdl_int_hash ((unsigned long) file);
+  vdl_hashmap_insert (g_vdl.files, hash, file);
   file->in_linkmap = 1;
   if (g_vdl.link_map == 0)
     {
@@ -68,6 +71,8 @@ vdl_linkmap_remove (struct VdlFile *file)
     {
       vdl_hashmap_remove (g_vdl.module_map, file->tls_index, file);
     }
+  uint32_t hash = vdl_int_hash ((unsigned long) file);
+  vdl_hashmap_remove (g_vdl.files, hash, file);
   g_vdl.n_removed++;
 }
 

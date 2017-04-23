@@ -57,9 +57,14 @@ struct Vdl
   struct VdlList *search_dirs;
   uint32_t bind_now:1;
   uint32_t finalized:1;
+  // the TCB has been set as the thread pointer
+  uint32_t tp_set:1;
   struct VdlFile *ldso;
   struct VdlContext *main_context;
+  // these hashmaps are just used for set-membership testing to detect errors,
+  // they could probably be replaced with something like a bloom filter
   struct VdlHashMap *contexts;
+  struct VdlHashMap *files;
   struct RWLock *tls_lock;
   unsigned long tls_gen;
   unsigned long tls_static_total_size;
@@ -88,8 +93,6 @@ struct Vdl
   struct Futex *ro_cache_futex;
   // the unique ephemeral path we use for our shared memory mappings
   char* shm_path;
-  // the TCB has been set as the thread pointer
-  uint32_t tp_set:1;
 };
 
 extern struct Vdl g_vdl;

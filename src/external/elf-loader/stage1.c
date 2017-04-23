@@ -106,6 +106,7 @@ global_initialize (unsigned long interpreter_load_base)
   vdl->finalized = 0;
   vdl->ldso = 0;
   vdl->contexts = vdl_hashmap_new ();
+  vdl->files = vdl_hashmap_new ();
   vdl->search_dirs = vdl_utils_splitpath (machine_get_system_search_dirs ());
   vdl->tls_lock = rwlock_new ();
   vdl->tls_gen = 1;
@@ -238,6 +239,7 @@ stage1_freeres (void)
   vdl_list_delete (g_vdl.preloads);
   vdl_hashmap_delete (g_vdl.module_map);
   vdl_utils_str_list_delete (g_vdl.search_dirs);
+  vdl_hashmap_delete (g_vdl.files);
   vdl_hashmap_delete (g_vdl.contexts);
   futex_delete (g_vdl.ro_cache_futex);
   rwlock_delete (g_vdl.global_lock);
