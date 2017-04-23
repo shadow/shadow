@@ -765,12 +765,6 @@ file_map_do (const char *filename, const struct VdlFileMap *map,
 
   if (map->mem_anon_size_align > 0)
     {
-      // now, unmap the extended file mapping for the zero pages.
-      int_result =
-        system_munmap ((void *) (load_base + map->mem_anon_start_align),
-                       map->mem_anon_size_align);
-      VDL_LOG_ASSERT (int_result == 0,
-                      "again, munmap can't possibly fail here");
       // then, map zero pages.
       address =
         (unsigned long) system_mmap ((void *) load_base +
