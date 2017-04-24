@@ -119,25 +119,16 @@ vdl_list_rend (struct VdlList *list)
   return rend;
 }
 
+/* The compiler aliases these regardless, we just annotate to help it
+   pick the more commonly used symbol names.
+*/
 void **
 vdl_list_rnext (struct VdlList *list, void **i)
-{
-  read_lock (list->lock);
-  struct VdlListItem *item = (struct VdlListItem *) i;
-  void **rnext = (void **) item->prev;
-  read_unlock (list->lock);
-  return rnext;
-}
+  __attribute__ ((weak, alias ("vdl_list_prev")));
 
 void **
 vdl_list_rprev (struct VdlList *list, void **i)
-{
-  read_lock (list->lock);
-  struct VdlListItem *item = (struct VdlListItem *) i;
-  void **rprev = (void **) item->next;
-  read_unlock (list->lock);
-  return rprev;
-}
+  __attribute__ ((weak, alias ("vdl_list_next")));
 
 static void **
 vdl_list_insert_internal (struct VdlList *list, void **at, void *value)
