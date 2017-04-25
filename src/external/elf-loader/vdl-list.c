@@ -483,3 +483,30 @@ vdl_list_iterate (struct VdlList *list, void (*iterator) (void *data))
     }
   read_unlock (list->lock);
 }
+
+/* runs "iterator" on each element of "list" until it returns a non-null value
+   returns said non-null value, or null if every iteration returned null
+   read locks, runs, then unlocks "list"
+   be sure that "iterator" doesn't access or modify the list structure
+*/
+void *
+vdl_list_search_on (struct VdlList *list, void *aux,
+                    void *(*iterator) (void *data, void *aux))
+{
+  read_lock (list->lock);
+  void *ret;
+  struct VdlListItem *i;
+  for (i = list->head.next;
+       i != &list->tail;
+       i = i->next)
+    {
+      ret = (*iterator) (i->data, aux);
+      if (ret)
+        {
+          read_unlock (list->lock);
+          return ret;
+        }
+    }
+  read_unlock (list->lock);
+  return NULL;
+}
