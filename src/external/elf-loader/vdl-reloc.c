@@ -9,6 +9,7 @@
 #include "vdl-mem.h"
 #include "vdl-file.h"
 #include "vdl-context.h"
+#include "vdl-alloc.h"
 #include <sys/mman.h>
 #include <stdbool.h>
 
@@ -106,9 +107,9 @@ do_process_reloc (struct VdlFile *file,
       const char *ver_filename = 0;
       sym_to_ver_req (file, reloc_sym, &ver_name, &ver_filename);
 
-      struct VdlLookupResult result;
+      struct VdlLookupResult *result;
       result = vdl_lookup (file, symbol_name, ver_name, ver_filename, flags);
-      if (!result.found)
+      if (!result)
         {
           if (ELFW_ST_BIND (sym->st_info) == STB_WEAK)
             {
@@ -127,19 +128,21 @@ do_process_reloc (struct VdlFile *file,
       if (machine_reloc_is_copy (reloc_type))
         {
           // we handle R_*_COPY relocs ourselves
-          VDL_LOG_ASSERT (result.symbol.st_size == sym->st_size,
+          VDL_LOG_ASSERT (result->symbol.st_size == sym->st_size,
                           "Symbols don't have the same size: likely a recipe for disaster.");
           vdl_memcpy (reloc_addr,
-                      (void *) (result.file->load_base +
-                                result.symbol.st_value),
-                      result.symbol.st_size);
+                      (void *) (result->file->load_base +
+                                result->symbol.st_value),
+                      result->symbol.st_size);
+          vdl_alloc_delete (result);
           return *reloc_addr;
         }
       else
         {
-          symbol_file = result.file;
-          sym_result.st_value = result.symbol.st_value;
-          sym_result.st_info = result.symbol.st_info;
+          symbol_file = result->file;
+          sym_result.st_value = result->symbol.st_value;
+          sym_result.st_info = result->symbol.st_info;
+          vdl_alloc_delete (result);
         }
     }
   else

@@ -657,10 +657,10 @@ vdl_dlvsym_with_flags (void *handle, const char *symbol, const char *version,
       scope = vdl_sort_deps_breadth_first (file);
       read_unlock (context->lock);
     }
-  struct VdlLookupResult result;
 
+  struct VdlLookupResult *result;
   result = vdl_lookup_with_scope (context, symbol, version, 0, flags, scope);
-  if (!result.found)
+  if (!result)
     {
       set_error ("Could not find requested symbol \"%s\"", symbol);
       vdl_list_delete (scope);
@@ -668,8 +668,10 @@ vdl_dlvsym_with_flags (void *handle, const char *symbol, const char *version,
     }
   read_unlock (g_vdl.global_lock);
   vdl_list_delete (scope);
-  vdl_lookup_symbol_fixup (result.file, &result.symbol);
-  return (void *) (result.file->load_base + result.symbol.st_value);
+  vdl_lookup_symbol_fixup (result->file, &result->symbol);
+  void *ret = (void *) (result->file->load_base + result->symbol.st_value);
+  vdl_alloc_delete (result);
+  return ret;
 error:
   read_unlock (g_vdl.global_lock);
   return 0;

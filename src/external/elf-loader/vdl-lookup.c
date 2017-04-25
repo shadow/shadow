@@ -4,6 +4,7 @@
 #include "vdl-list.h"
 #include "vdl-context.h"
 #include "vdl-file.h"
+#include "vdl-alloc.h"
 #include <stdint.h>
 
 #ifndef STT_GNU_IFUNC
@@ -420,114 +421,119 @@ vdl_lookup_symbol_fixup (const struct VdlFile *file, ElfW (Sym) *sym)
     }
 }
 
-static struct VdlLookupResult
-vdl_lookup_with_scope_internal (struct VdlFile *file,
-                                const char *name,
-                                const char *ver_name,
-                                const char *ver_filename,
-                                unsigned long elf_hash,
-                                uint32_t gnu_hash,
-                                unsigned long ver_hash,
-                                enum VdlLookupFlag flags,
+struct VdlLookupArgs
+{
+  struct VdlFile *file;
+  const char *name;
+  const char *ver_name;
+  const char *ver_filename;
+  unsigned long elf_hash;
+  uint32_t gnu_hash;
+  unsigned long ver_hash;
+  enum VdlLookupFlag flags;
+};
+
+/* designed to be the iterator on the list of files in the scope
+ */
+static void *vdl_lookup_in_file (void *data, void *aux)
+{
+  struct VdlFile *item = data;
+  struct VdlLookupArgs *args = aux;
+  if (args->flags & VDL_LOOKUP_NO_EXEC && item->is_executable)
+    {
+      // this flag specifies that we should not lookup symbols
+      // in the main executable binary. see the definition of VDL_LOOKUP_NO_EXEC
+      return 0;
+    }
+  int n_ambiguous_matches = 0;
+  unsigned long last_ambiguous_match = 0, first_ambiguous_match = 0;
+  struct VdlFile *first_ambiguous_match_item = 0;
+  struct VdlFileLookupIterator i =
+    vdl_lookup_file_begin (item, args->name, args->elf_hash, args->gnu_hash);
+  while (vdl_lookup_file_has_next (&i))
+    {
+      unsigned long index = vdl_lookup_file_next (&i);
+      enum VdlVersionMatch version_match =
+        symbol_version_matches (item, args->file,
+                                args->ver_name, args->ver_filename, args->ver_hash,
+                                index);
+      if (version_match == VERSION_MATCH_PERFECT)
+        {
+          // We have resolved the symbol
+          if (item != args->file && args->file != 0)
+            {
+              // The symbol has been resolved in another binary. Make note of this.
+              vdl_list_push_front (args->file->gc_symbols_resolved_in, item);
+            }
+          struct VdlLookupResult *result = vdl_alloc_new (struct VdlLookupResult);
+          result->file = item;
+          result->symbol = i.dt_symtab[index];
+          result->found = true;
+          return result;
+        }
+      else if (version_match == VERSION_MATCH_AMBIGUOUS)
+        {
+          if (n_ambiguous_matches == 0)
+            {
+              first_ambiguous_match = index;
+              first_ambiguous_match_item = item;
+            }
+          n_ambiguous_matches++;
+          last_ambiguous_match = index;
+        }
+    }
+
+  unsigned long final_match;
+  struct VdlFile *final_item;
+  if (n_ambiguous_matches == 1)
+    {
+      // if there is only one ambiguous match, it's not really ambiguous: it's a match !
+      final_match = last_ambiguous_match;
+      final_item = item;
+    }
+  else if (n_ambiguous_matches > 1)
+    {
+      // If we have multiple ambiguous matches, it means that we are doing
+      // a lookup for a symbol that has no version information and we found
+      // more than one version of this symbol within the current file.
+      // In this case, we pick the 'oldest' symbol, that is, the first one
+      // we found. This is what I believe glibc is doing.
+      final_match = first_ambiguous_match;
+      final_item = first_ambiguous_match_item;
+    }
+  else
+    {
+      // no match so keep looking
+      return 0;
+    }
+  if (final_item != args->file && args->file != 0)
+    {
+      // The symbol has been resolved in another binary. Make note of this.
+      vdl_list_push_front (args->file->gc_symbols_resolved_in, final_item);
+    }
+  struct VdlLookupResult *result = vdl_alloc_new (struct VdlLookupResult);
+  result->file = final_item;
+  result->symbol = i.dt_symtab[final_match];
+  result->found = true;
+  return result;
+}
+
+static struct VdlLookupResult *
+vdl_lookup_with_scope_internal (struct VdlLookupArgs *args,
                                 struct VdlList *scope)
 {
   VDL_LOG_FUNCTION
     ("name=%s, ver_name=%s, ver_filename=%s, elf_hash=0x%lx, gnu_hash=0x%x, "
-     "ver_hash=0x%x, flags=0x%x, scope=%p", name,
-     (ver_name != 0) ? ver_name : "", (ver_filename != 0) ? ver_filename : "",
-     elf_hash, gnu_hash, ver_hash, flags, scope);
+     "ver_hash=0x%x, flags=0x%x, scope=%p", args->name,
+     (args->ver_name != 0) ? args->ver_name : "", (args->ver_filename != 0) ? args->ver_filename : "",
+     args->elf_hash, args->gnu_hash, args->ver_hash, args->flags, scope);
 
   // then, iterate scope until we find the requested symbol.
-  void **cur;
-  for (cur = vdl_list_begin (scope);
-       cur != vdl_list_end (scope);
-       cur = vdl_list_next (scope, cur))
-    {
-      struct VdlFile *item = *cur;
-      if (flags & VDL_LOOKUP_NO_EXEC && item->is_executable)
-        {
-          // this flag specifies that we should not lookup symbols
-          // in the main executable binary. see the definition of VDL_LOOKUP_NO_EXEC
-          continue;
-        }
-      int n_ambiguous_matches = 0;
-      unsigned long last_ambiguous_match = 0, first_ambiguous_match = 0;
-      struct VdlFile *first_ambiguous_match_item = 0;
-      struct VdlFileLookupIterator i =
-        vdl_lookup_file_begin (item, name, elf_hash, gnu_hash);
-      while (vdl_lookup_file_has_next (&i))
-        {
-          unsigned long index = vdl_lookup_file_next (&i);
-          enum VdlVersionMatch version_match =
-            symbol_version_matches (item, file,
-                                    ver_name, ver_filename, ver_hash,
-                                    index);
-          if (version_match == VERSION_MATCH_PERFECT)
-            {
-              // We have resolved the symbol
-              if (item != file && file != 0)
-                {
-                  // The symbol has been resolved in another binary. Make note of this.
-                  vdl_list_push_front (file->gc_symbols_resolved_in, item);
-                }
-              struct VdlLookupResult result;
-              result.file = item;
-              result.symbol = i.dt_symtab[index];
-              result.found = true;
-              return result;
-            }
-          else if (version_match == VERSION_MATCH_AMBIGUOUS)
-            {
-              if (n_ambiguous_matches == 0)
-                {
-                  first_ambiguous_match = index;
-                  first_ambiguous_match_item = item;
-                }
-              n_ambiguous_matches++;
-              last_ambiguous_match = index;
-            }
-        }
-
-      unsigned long final_match;
-      struct VdlFile *final_item;
-      if (n_ambiguous_matches == 1)
-        {
-          // if there is only one ambiguous match, it's not really ambiguous: it's a match !
-          final_match = last_ambiguous_match;
-          final_item = item;
-        }
-      else if (n_ambiguous_matches > 1)
-        {
-          // If we have multiple ambiguous matches, it means that we are doing
-          // a lookup for a symbol that has no version information and we found
-          // more than one version of this symbol within the current file.
-          // In this case, we pick the 'oldest' symbol, that is, the first one
-          // we found. This is what I believe glibc is doing.
-          final_match = first_ambiguous_match;
-          final_item = first_ambiguous_match_item;
-        }
-      else
-        {
-          // no match so keep looking
-          continue;
-        }
-      if (final_item != file && file != 0)
-        {
-          // The symbol has been resolved in another binary. Make note of this.
-          vdl_list_push_front (file->gc_symbols_resolved_in, final_item);
-        }
-      struct VdlLookupResult result;
-      result.file = final_item;
-      result.symbol = i.dt_symtab[final_match];
-      result.found = true;
-      return result;
-    }
-  struct VdlLookupResult result;
-  result.found = false;
+  struct VdlLookupResult *result = vdl_list_search_on (scope, args, vdl_lookup_in_file);
   return result;
 }
 
-struct VdlLookupResult
+struct VdlLookupResult *
 vdl_lookup (struct VdlFile *file,
             const char *name,
             const char *ver_name,
@@ -538,15 +544,17 @@ vdl_lookup (struct VdlFile *file,
       vdl_context_symbol_remap (file->context, &name, &ver_name,
                                 &ver_filename);
     }
+  struct VdlLookupArgs args;
+  args.file = file;
+  args.name = name;
+  args.ver_name = ver_name;
+  args.ver_filename = ver_filename;
   // calculate the hash here to avoid calculating
   // it twice in both calls to symbol_lookup
-  unsigned long elf_hash = vdl_elf_hash (name);
-  uint32_t gnu_hash = vdl_gnu_hash (name);
-  unsigned long ver_hash = 0;
-  if (ver_name != 0)
-    {
-      ver_hash = vdl_elf_hash (ver_name);
-    }
+  args.elf_hash = vdl_elf_hash (name);
+  args.gnu_hash = vdl_gnu_hash (name);
+  args.ver_hash = ver_name ? vdl_elf_hash (ver_name) : 0;
+  args.flags = flags;
 
   struct VdlList *first = 0;
   struct VdlList *second = 0;
@@ -569,16 +577,12 @@ vdl_lookup (struct VdlFile *file,
       second = 0;
       break;
     }
-  struct VdlLookupResult result;
-  result = vdl_lookup_with_scope_internal (file, name, ver_name, ver_filename,
-                                           elf_hash, gnu_hash, ver_hash,
-                                           flags, first);
-  if (!result.found)
+
+  struct VdlLookupResult *result;
+  result = vdl_lookup_with_scope_internal (&args, first);
+  if (!result)
     {
-      result =
-        vdl_lookup_with_scope_internal (file, name, ver_name, ver_filename,
-                                        elf_hash, gnu_hash, ver_hash, flags,
-                                        second);
+      result = vdl_lookup_with_scope_internal (&args, second);
     }
   return result;
 }
@@ -608,7 +612,7 @@ vdl_lookup_local (const struct VdlFile *file, const char *name)
 }
 
 
-struct VdlLookupResult
+struct VdlLookupResult *
 vdl_lookup_with_scope (const struct VdlContext *from_context,
                        const char *name,
                        const char *ver_name,
@@ -620,16 +624,17 @@ vdl_lookup_with_scope (const struct VdlContext *from_context,
       vdl_context_symbol_remap (from_context, &name, &ver_name,
                                 &ver_filename);
     }
-  unsigned long elf_hash = vdl_elf_hash (name);
-  uint32_t gnu_hash = vdl_gnu_hash (name);
-  unsigned long ver_hash = 0;
-  if (ver_name != 0)
-    {
-      ver_hash = vdl_elf_hash (ver_name);
-    }
-  struct VdlLookupResult result;
-  result = vdl_lookup_with_scope_internal (0, name, ver_name, ver_filename,
-                                           elf_hash, gnu_hash, ver_hash,
-                                           flags, scope);
+
+  struct VdlLookupArgs args;
+  args.file = 0;
+  args.name = name;
+  args.ver_name = ver_name;
+  args.ver_filename = ver_filename;
+  args.elf_hash = vdl_elf_hash (name);
+  args.gnu_hash = vdl_gnu_hash (name);
+  args.ver_hash = ver_name ? vdl_elf_hash (ver_name) : 0;
+  args.flags = flags;
+  struct VdlLookupResult *result;
+  result = vdl_lookup_with_scope_internal (&args, scope);
   return result;
 }
