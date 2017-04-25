@@ -90,15 +90,15 @@ vdl_lookup_file_begin (const struct VdlFile *file,
       uint32_t *chains = &buckets[nbuckets];
 
       // test against the Bloom filter
-      uint32_t hashbit1 = gnu_hash % __ELF_NATIVE_CLASS;
-      uint32_t hashbit2 = (gnu_hash >> shift2) % __ELF_NATIVE_CLASS;
+      uint32_t hashbit1 = gnu_hash & (__ELF_NATIVE_CLASS - 1);
+      uint32_t hashbit2 = (gnu_hash >> shift2) & (__ELF_NATIVE_CLASS - 1);
       ElfW (Addr) bitmask1 = 1;
       bitmask1 <<= hashbit1;
       ElfW (Addr) bitmask2 = 1;
       bitmask2 <<= hashbit2;
       ElfW (Addr) bitmask = bitmask1 | bitmask2;
       ElfW (Addr) bitmask_word =
-        bloom[(gnu_hash / __ELF_NATIVE_CLASS) % maskwords];
+        bloom[(gnu_hash / __ELF_NATIVE_CLASS) & (maskwords - 1)];
       if ((bitmask_word & bitmask) == bitmask)
         {
           // check bucket
