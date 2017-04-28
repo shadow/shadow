@@ -30,10 +30,10 @@ add_library(t SHARED libt.c)
 add_library(efl SHARED libefl.c)
 
 
-set_target_properties(p PROPERTIES 
+set_target_properties(p PROPERTIES
     LINK_FLAGS "-nostdlib -Wl,--no-as-needed"
 )
-set_target_properties(q PROPERTIES 
+set_target_properties(q PROPERTIES
     LINK_FLAGS "-nostdlib -Wl,--no-as-needed"
 )
 
@@ -162,7 +162,7 @@ add_test(NAME elfloader-test19 COMMAND /bin/bash ${CMAKE_CURRENT_SOURCE_DIR}/run
 
 add_executable(test20 test20.c)
 target_link_libraries(test20 -ldl)
-set_target_properties(test20 PROPERTIES 
+set_target_properties(test20 PROPERTIES
     LINK_FLAGS "-pie -Wl,--no-as-needed"
 )
 add_test(NAME elfloader-test20 COMMAND /bin/bash ${CMAKE_CURRENT_SOURCE_DIR}/runtest.sh test20 ${CMAKE_CURRENT_SOURCE_DIR})
@@ -173,14 +173,14 @@ add_test(NAME elfloader-test21 COMMAND /bin/bash ${CMAKE_CURRENT_SOURCE_DIR}/run
 
 if( ${CMAKE_SYSTEM_PROCESSOR} STREQUAL "x86_64" )
     add_library(lb22 SHARED lb22.c)
-    set_target_properties(lb22 PROPERTIES 
-        PREFIX "" 
+    set_target_properties(lb22 PROPERTIES
+        PREFIX ""
         COMPILE_FLAGS "-Wall -Werror -mcmodel=large"
         LINK_FLAGS "-Wl,--no-as-needed"
     )
 
     add_executable(test22 test22.c)
-    set_target_properties(test22 PROPERTIES 
+    set_target_properties(test22 PROPERTIES
         COMPILE_FLAGS "-Wall -Werror"
         LINK_FLAGS ""
     )
@@ -209,3 +209,7 @@ add_test(NAME elfloader-test25 COMMAND /bin/bash ${CMAKE_CURRENT_SOURCE_DIR}/run
 add_executable(test27 test27.c)
 target_link_libraries(test27 -ldl)
 add_test(NAME elfloader-test27 COMMAND /bin/bash ${CMAKE_CURRENT_SOURCE_DIR}/runtest.sh test27 ${CMAKE_CURRENT_SOURCE_DIR})
+
+add_executable(test28 test28.c)
+target_link_libraries(test28 -lpthread -ldl)
+add_test(NAME elfloader-test28 COMMAND /bin/bash ${CMAKE_CURRENT_SOURCE_DIR}/runtest.sh test28 ${CMAKE_CURRENT_SOURCE_DIR})
