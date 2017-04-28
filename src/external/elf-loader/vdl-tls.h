@@ -2,6 +2,7 @@
 #define VDL_TLS_H
 
 #include "vdl-list.h"
+#include "vdl-context.h"
 #include <stdbool.h>
 
 // our own version of TLS for internal elf-loader use
@@ -36,6 +37,8 @@ struct LocalTLS *vdl_tls_get_local_tls (void);
 unsigned long vdl_tls_get_addr_fast (unsigned long module, unsigned long offset);
 // the _slow version needs a lock held
 unsigned long vdl_tls_get_addr_slow (unsigned long module, unsigned long offset);
+void vdl_tls_swap_context (struct VdlContext *context,
+                           unsigned long t1, unsigned long t2);
 
 // ensure that the caller dtv is uptodate.
 void vdl_tls_dtv_update (void);

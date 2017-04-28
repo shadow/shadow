@@ -98,3 +98,9 @@ dl_lmid_add_symbol_remap (Lmid_t lmid,
                                               src_ver_filename, dst_name,
                                               dst_ver_name, dst_ver_filename);
 }
+
+EXPORT int
+dl_lmid_swap_tls (Lmid_t lmid, pthread_t *t1, pthread_t *t2)
+{
+  return vdl_dl_lmid_swap_tls_public (lmid, t1, t2);
+}

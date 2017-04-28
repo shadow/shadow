@@ -584,3 +584,62 @@ vdl_tls_get_addr_slow (unsigned long module, unsigned long offset)
   // the request again
   return vdl_tls_get_addr_slow (module, offset);
 }
+
+struct SwapArgs
+{
+  unsigned long t1;
+  unsigned long t2;
+  struct dtv_t *dtv1;
+  struct dtv_t *dtv2;
+};
+
+void *
+vdl_tls_swap_file (void *data, void *aux)
+{
+  struct VdlFile *file = data;
+  struct SwapArgs *args = aux;
+
+  if (!file->has_tls)
+    {
+      return 0;
+    }
+
+  if (file->tls_is_static)
+    {
+      // the TLS is static for this file, so we must swap the contents directly
+      unsigned long tls_size = file->tls_tmpl_size + file->tls_init_zero_size;
+      void *static_tls1 = (void *) args->t1 + file->tls_offset;
+      void *static_tls2 = (void *) args->t2 + file->tls_offset;
+      unsigned char tmp_tls[tls_size];
+      vdl_memcpy (tmp_tls, static_tls1, tls_size);
+      vdl_memcpy (static_tls1, static_tls2, tls_size);
+      vdl_memcpy (static_tls2, tmp_tls, tls_size);
+      // my understanding is static TLS ELF files can't use dynamic TLS,
+      // but the rest of elf-loader supports it and it's cheap to copy,
+      // so better safe than sorry
+    }
+  int module;
+  // make sure we're not trying to swap the gen counter
+  if ((module = file->tls_index) > 0)
+    {
+      struct dtv_t tmp_dtv = args->dtv1[module];
+      args->dtv1[module] = args->dtv2[module];
+      args->dtv2[module] = tmp_dtv;
+    }
+  return 0;
+}
+
+void
+vdl_tls_swap_context (struct VdlContext *context, unsigned long t1, unsigned long t2)
+{
+  write_lock (g_vdl.tls_lock);
+  struct dtv_t *dtv1 = get_current_dtv (t1);
+  struct dtv_t *dtv2 = get_current_dtv (t2);
+  struct SwapArgs args;
+  args.t1 = t1;
+  args.t2 = t2;
+  args.dtv1 = dtv1;
+  args.dtv2 = dtv2;
+  vdl_list_search_on (context->loaded, &args, vdl_tls_swap_file);
+  write_unlock (g_vdl.tls_lock);
+}

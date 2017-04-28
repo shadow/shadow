@@ -928,3 +928,25 @@ error:
   write_unlock (g_vdl.global_lock);
   return -1;
 }
+
+/* swaps the TLS between the two threads of the given namespace
+   It is the user's job to ensure that neither of the given threads are running
+   any code that accesses the TLS of this namespace.
+*/
+int
+vdl_dl_lmid_swap_tls (Lmid_t lmid, pthread_t *t1, pthread_t *t2)
+{
+  VDL_LOG_FUNCTION ("", 0);
+  read_lock (g_vdl.global_lock);
+  struct VdlContext *context = (struct VdlContext *) lmid;
+  if (search_context (context) == 0)
+    {
+      goto error;
+    }
+  vdl_tls_swap_context (context, (unsigned long) *t1, (unsigned long) *t2);
+  read_unlock (g_vdl.global_lock);
+  return 0;
+error:
+  read_unlock (g_vdl.global_lock);
+  return -1;
+}
