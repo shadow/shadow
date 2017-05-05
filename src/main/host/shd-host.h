@@ -47,7 +47,12 @@ void host_unref(Host* host);
 void host_lock(Host* host);
 void host_unlock(Host* host);
 
+void host_continueExecutionTimer(Host* host);
+void host_stopExecutionTimer(Host* host);
+gdouble host_getElapsedExecutionTime(Host* host);
+
 void host_boot(Host* host);
+void host_shutdown(Host* host);
 
 void host_addApplication(Host* host, GQuark pluginID,
         SimulationTime startTime, SimulationTime stopTime, gchar* arguments);

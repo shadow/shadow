@@ -225,7 +225,9 @@ void slave_addNewVirtualProcess(Slave* slave, gchar* hostName, gchar* pluginName
     GQuark pluginID = g_quark_from_string(pluginName);
 
     Host* host = scheduler_getHost(slave->scheduler, hostID);
+    host_continueExecutionTimer(host);
     host_addApplication(host, pluginID, startTime, stopTime, arguments);
+    host_stopExecutionTimer(host);
 }
 
 Program* slave_getProgram(Slave* slave, GQuark pluginID) {
