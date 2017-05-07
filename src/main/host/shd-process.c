@@ -656,6 +656,9 @@ static void _process_start(Process* proc) {
 
     message("starting '%s-%u' process and pth threading system", g_quark_to_string(proc->programID), proc->processID);
 
+    /* start a timer for initialization tasks */
+    GTimer* initTimer = g_timer_new();
+
     /* create the thread names while still in shadow context, format is host.process.<id> */
     GString* shadowThreadNameBuf = g_string_new(NULL);
     g_string_printf(shadowThreadNameBuf, "%s.%s.%u.shadow", host_getName(proc->host), g_quark_to_string(proc->programID), proc->processID);
@@ -666,10 +669,12 @@ static void _process_start(Process* proc) {
     proc->programAuxiliaryThreads = g_queue_new();
 
     /* need to get thread-private program from current worker */
+    g_timer_start(initTimer); // XXX remove when merging dev/issue311
     proc->prog = worker_getPrivateProgram(proc->programID);
 
     /* create our default state as we run in our assigned worker */
     proc->pstate = program_newDefaultState(proc->prog);
+    gdouble secondsToInitPlugin = g_timer_elapsed(initTimer, NULL); // XXX remove when merging dev/issue311
 
     /* ref for the spawn below */
     process_ref(proc);
@@ -679,6 +684,7 @@ static void _process_start(Process* proc) {
     if(doLock) G_LOCK(globalProcessInitLock);
 
     /* now we will execute in the pth/plugin context, so we need to load the state */
+    g_timer_start(initTimer);// XXX remove when merging dev/issue311
     worker_setActiveProcess(proc);
     program_swapInState(proc->prog, proc->pstate);
     _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
@@ -713,6 +719,8 @@ static void _process_start(Process* proc) {
     pth_attr_destroy(programMainThreadAttr);
 
     _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+    gdouble secondsToInitPth = g_timer_elapsed(initTimer, NULL);// XXX remove when merging dev/issue311
+    g_timer_start(initTimer);// XXX remove when merging dev/issue311
     program_callPreProcessEnterHookFunc(proc->prog);
     _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
 
@@ -721,6 +729,7 @@ static void _process_start(Process* proc) {
 
     _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     program_callPostProcessExitHookFunc(proc->prog);
+    gdouble secondsUntilMainBlocked = g_timer_elapsed(initTimer, NULL);// XXX remove when merging dev/issue311
     _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
 
     /* total number of alive pth threads this scheduler has */
@@ -737,6 +746,14 @@ static void _process_start(Process* proc) {
 
     /* XXX temporary tor process init hack */
     if(doLock) G_UNLOCK(globalProcessInitLock);
+
+    {// XXX remove when merging dev/issue311
+        message("process '%s-%u' initialized the pth threading system in %f seconds, "
+            "initialized the plugin namespace in %f seconds, "
+            "and ran the pth main thread until it blocked in %f seconds",
+            g_quark_to_string(proc->programID), proc->processID,
+            secondsToInitPth, secondsToInitPlugin, secondsUntilMainBlocked);
+    }// XXX
 
     /* the main thread wont exist if it exited immediately before returning control to shadow */
     if(proc->programMainThread) {
