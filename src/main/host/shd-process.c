@@ -172,7 +172,9 @@ struct _Process {
         PluginSigactionFunc sigaction;
 
         /* the function that will return the specific location of errno for this plugin */
-        ErrnoLocationFunc errnoGetLocation;;
+        ErrnoLocationFunc errnoGetLocation;
+        /* tracking when the errno location changed because of TLS migration */
+        gboolean errnoGetLocationIsStale;
 
         /*
          * TRUE from when we've called into plug-in code until the call completes.
@@ -279,8 +281,35 @@ static const gchar* _process_getName(Process* proc) {
     return proc->processName->str;
 }
 
+static void _process_updateErrnoLocation(Process* proc) {
+    /* clear dlerror status string */
+    dlerror();
+
+    /* search for the location for errno in the calling thread */
+    gpointer symbol = dlsym(proc->plugin.handle, PLUGIN_ERRNOLOC_SYMBOL);
+    if(symbol) {
+        proc->plugin.errnoGetLocation = symbol;
+        message("found '%s' at %p", PLUGIN_ERRNOLOC_SYMBOL, symbol);
+
+        /* now that we just did the lookup, the errno location is no longer stale */
+        proc->plugin.errnoGetLocationIsStale = FALSE;
+    } else {
+        const gchar* errorMessage = dlerror();
+        critical("dlsym() failed: %s", errorMessage);
+        error("unable to find the required function symbol '%s' in plug-in '%s'",
+                PLUGIN_ERRNOLOC_SYMBOL, proc->plugin.path->str);
+    }
+}
+
 static void _process_setErrno(Process* proc, int errnoValue) {
     MAGIC_ASSERT(proc);
+
+    /* if we migrated to a new thread, the old errno location function is stale and
+     * we need to find the new location. this is because errno uses TLS, and the location
+     * of errno moves after migrating across threads. */
+    if(proc->plugin.errnoGetLocationIsStale) {
+        _process_updateErrnoLocation(proc);
+    }
 
     if(proc->plugin.errnoGetLocation) {
         int* errnoLocation = proc->plugin.errnoGetLocation();
@@ -448,20 +477,8 @@ static void _process_loadPlugin(Process* proc) {
                 PLUGIN_MAIN_SYMBOL, proc->plugin.path->str);
     }
 
-    /* clear dlerror status string */
-    dlerror();
-
-    symbol = NULL;
-    symbol = dlsym(proc->plugin.handle, PLUGIN_ERRNOLOC_SYMBOL);
-    if(symbol) {
-        proc->plugin.errnoGetLocation = symbol;
-        message("found '%s' at %p", PLUGIN_ERRNOLOC_SYMBOL, symbol);
-    } else {
-        const gchar* errorMessage = dlerror();
-        critical("dlsym() failed: %s", errorMessage);
-        error("unable to find the required function symbol '%s' in plug-in '%s'",
-                PLUGIN_ERRNOLOC_SYMBOL, proc->plugin.path->str);
-    }
+    /* search for the location of errno and save it in the plugin state */
+    _process_updateErrnoLocation(proc);
 
     /* clear dlerror status string */
     dlerror();
