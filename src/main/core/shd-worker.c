@@ -272,6 +272,7 @@ void worker_freeHosts(GList* hosts) {
         worker_setActiveHost(host);
         host_shutdown(host);
         worker_setActiveHost(NULL);
+        host_unref(host);
         item = g_list_next(item);
     }
 }
