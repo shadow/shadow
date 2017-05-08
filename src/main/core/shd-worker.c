@@ -245,7 +245,9 @@ void worker_bootHosts(GList* hosts) {
         Host* host = item->data;
         worker_setActiveHost(host);
         worker->clock.now = 0;
+        host_continueExecutionTimer(host);
         host_boot(host);
+        host_stopExecutionTimer(host);
         worker->clock.now = SIMTIME_INVALID;
         worker_setActiveHost(NULL);
         item = g_list_next(item);
@@ -258,7 +260,9 @@ void worker_freeHosts(GList* hosts) {
     while(item) {
         Host* host = item->data;
         worker_setActiveHost(host);
+        host_continueExecutionTimer(host);
         host_freeAllApplications(host);
+        host_stopExecutionTimer(host);
         worker_setActiveHost(NULL);
         item = g_list_next(item);
     }
@@ -266,7 +270,7 @@ void worker_freeHosts(GList* hosts) {
     while(item) {
         Host* host = item->data;
         worker_setActiveHost(host);
-        host_unref(host);
+        host_shutdown(host);
         worker_setActiveHost(NULL);
         item = g_list_next(item);
     }

@@ -1102,8 +1102,8 @@ static void _process_start(Process* proc) {
         proc->plugin.postProcessExit(proc->plugin.handle);
         _process_changeContext(proc, PCTX_PLUGIN, PCTX_SHADOW);
     }
-    gdouble secondsUntilMainBlocked = g_timer_elapsed(initTimer, NULL);
     _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
+    gdouble secondsUntilMainBlocked = g_timer_elapsed(initTimer, NULL);
 
     /* total number of alive pth threads this scheduler has */
     gint nThreads = pth_ctrl(PTH_CTRL_GETTHREADS_NEW|PTH_CTRL_GETTHREADS_READY|\
@@ -1541,7 +1541,20 @@ static gint _process_emu_ioctlHelper(Process* proc, int fd, unsigned long int re
 
     if(descriptor) {
         DescriptorType t = descriptor_getType(descriptor);
-        if(t == DT_TCPSOCKET || t == DT_UDPSOCKET) {
+        if(t == DT_TCPSOCKET) {
+            TCP* tcpSocket = (TCP*) descriptor;
+            if(request == SIOCINQ || request == FIONREAD) {
+                gsize bufferLength = tcp_getInputBufferLength(tcpSocket);
+                gint* lengthOut = (gint*)argp;
+                *lengthOut = (gint)bufferLength;
+            } else if (request == SIOCOUTQ || request == TIOCOUTQ) {
+                gsize bufferLength = tcp_getOutputBufferLength(tcpSocket);
+                gint* lengthOut = (gint*)argp;
+                *lengthOut = (gint)bufferLength;
+            } else {
+                result = ENOTTY;
+            }
+        } else if(t == DT_UDPSOCKET) {
             Socket* socket = (Socket*) descriptor;
             if(request == SIOCINQ || request == FIONREAD) {
                 gsize bufferLength = socket_getInputBufferLength(socket);
@@ -2388,6 +2401,9 @@ int process_emu_setsockopt(Process* proc, int fd, int level, int optname, const 
                     } else {
                         gint v = *((gint*) optval);
                         socket_setOutputBufferSize((Socket*)descriptor, (gsize)v*2);
+                        if(t == DT_TCPSOCKET) {
+                            tcp_disableSendBufferAutotuning((TCP*)descriptor);
+                        }
                     }
                     break;
                 }
@@ -2404,6 +2420,9 @@ int process_emu_setsockopt(Process* proc, int fd, int level, int optname, const 
                     } else {
                         gint v = *((gint*) optval);
                         socket_setInputBufferSize((Socket*)descriptor, (gsize)v*2);
+                        if(t == DT_TCPSOCKET) {
+                            tcp_disableReceiveBufferAutotuning((TCP*)descriptor);
+                        }
                     }
                     break;
                 }

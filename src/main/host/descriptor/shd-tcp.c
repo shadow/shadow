@@ -151,6 +151,8 @@ struct _TCP {
     /* tcp autotuning for the send and recv buffers */
     struct {
         gboolean isEnabled;
+        gboolean userDisabledSend;
+        gboolean userDisabledReceive;
         gsize bytesCopied;
         SimulationTime lastAdjustment;
         gsize space;
@@ -418,10 +420,10 @@ static void _tcp_setBufferSizes(TCP* tcp) {
     /* check to see if the node should set buffer sizes via autotuning, or
      * they were specified by configuration or parameters in XML */
     Host* node = worker_getActiveHost();
-    if(host_autotuneReceiveBuffer(node)) {
+    if(!tcp->autotune.userDisabledReceive && host_autotuneReceiveBuffer(node)) {
         socket_setInputBufferSize(&(tcp->super), (gsize) receivebuf_size);
     }
-    if(host_autotuneSendBuffer(node)) {
+    if(!tcp->autotune.userDisabledSend && host_autotuneSendBuffer(node)) {
         tcp->super.outputBufferSize = sendbuf_size;
         socket_setOutputBufferSize(&(tcp->super), (gsize) sendbuf_size);
     }
@@ -521,22 +523,7 @@ static void _tcp_runCloseTimerExpiredTask(TCP* tcp, gpointer userData) {
 static void _tcp_autotuneReceiveBuffer(TCP* tcp, guint bytesCopied) {
     MAGIC_ASSERT(tcp);
 
-    SimulationTime now = worker_getCurrentTime();
-
     tcp->autotune.bytesCopied += (gsize)bytesCopied;
-
-    if(tcp->autotune.lastAdjustment == 0) {
-        tcp->autotune.lastAdjustment = now;
-        return;
-    }
-
-    SimulationTime time = now - tcp->autotune.lastAdjustment;
-    SimulationTime threshold = ((SimulationTime)tcp->congestion->rttSmoothed) * ((SimulationTime)SIMTIME_ONE_MILLISECOND);
-
-    if(tcp->congestion->rttSmoothed == 0 || (time < threshold)) {
-        return;
-    }
-
     gsize space = 2 * tcp->autotune.bytesCopied;
     space = MAX(space, tcp->autotune.space);
 
@@ -552,8 +539,16 @@ static void _tcp_autotuneReceiveBuffer(TCP* tcp, guint bytesCopied) {
         }
     }
 
-    tcp->autotune.lastAdjustment = now;
-    tcp->autotune.bytesCopied = 0;
+    SimulationTime now = worker_getCurrentTime();
+    if(tcp->autotune.lastAdjustment == 0) {
+        tcp->autotune.lastAdjustment = now;
+    } else if(tcp->congestion->rttSmoothed > 0) {
+        SimulationTime threshold = ((SimulationTime)tcp->congestion->rttSmoothed) * ((SimulationTime)SIMTIME_ONE_MILLISECOND);
+        if((now - tcp->autotune.lastAdjustment) > threshold) {
+            tcp->autotune.lastAdjustment = now;
+            tcp->autotune.bytesCopied = 0;
+        }
+    }
 }
 
 static void _tcp_autotuneSendBuffer(TCP* tcp) {
@@ -580,6 +575,16 @@ static void _tcp_autotuneSendBuffer(TCP* tcp) {
         debug("[autotune] output buffer size adjusted from %"G_GSIZE_FORMAT" to %"G_GSIZE_FORMAT,
                 currentSize, newSize);
     }
+}
+
+void tcp_disableSendBufferAutotuning(TCP* tcp) {
+    MAGIC_ASSERT(tcp);
+    tcp->autotune.userDisabledSend = TRUE;
+}
+
+void tcp_disableReceiveBufferAutotuning(TCP* tcp) {
+    MAGIC_ASSERT(tcp);
+    tcp->autotune.userDisabledReceive = TRUE;
 }
 
 static void _tcp_updateReceiveWindow(TCP* tcp) {
@@ -655,6 +660,14 @@ static Packet* _tcp_createPacket(TCP* tcp, enum ProtocolTCPFlags flags, gconstpo
     return packet;
 }
 
+/* returns the total amount of buffered data in this TCP socket, including TCP-specific buffers */
+gsize tcp_getOutputBufferLength(TCP* tcp) {
+    MAGIC_ASSERT(tcp);
+    /* this does not include the socket output buffer to avoid double counting, since the
+     * data in the socket output buffer is already counted as part of the tcp retransmit queue */
+    return tcp->throttledOutputLength + tcp->retransmit.queueLength;
+}
+
 static gsize _tcp_getBufferSpaceOut(TCP* tcp) {
     MAGIC_ASSERT(tcp);
     /* account for throttled and retransmission buffer */
@@ -674,6 +687,12 @@ static void _tcp_bufferPacketOut(TCP* tcp, Packet* packet) {
     if(_tcp_getBufferSpaceOut(tcp) == 0) {
         descriptor_adjustStatus((Descriptor*)tcp, DS_WRITABLE, FALSE);
     }
+}
+
+/* returns the total amount of buffered data in this TCP socket, including TCP-specific buffers */
+gsize tcp_getInputBufferLength(TCP* tcp) {
+    MAGIC_ASSERT(tcp);
+    return socket_getInputBufferLength(&(tcp->super)) + tcp->unorderedInputLength;
 }
 
 static gsize _tcp_getBufferSpaceIn(TCP* tcp) {
@@ -1415,7 +1434,8 @@ TCPProcessFlags _tcp_ackProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *he
             flags |= TCP_PF_DATA_ACKED;
 
             /* increase send buffer size with autotuning */
-            if(tcp->autotune.isEnabled && host_autotuneSendBuffer(worker_getActiveHost())) {
+            if(tcp->autotune.isEnabled && !tcp->autotune.userDisabledSend &&
+                    host_autotuneSendBuffer(worker_getActiveHost())) {
                 _tcp_autotuneSendBuffer(tcp);
             }
         }
@@ -1962,7 +1982,7 @@ gssize tcp_receiveUserData(TCP* tcp, gpointer buffer, gsize nBytes, in_addr_t* i
     }
 
     /* update the receive buffer size based on new packets received */
-    if(tcp->autotune.isEnabled) {
+    if(tcp->autotune.isEnabled && !tcp->autotune.userDisabledReceive) {
         Host* host = worker_getActiveHost();
         if(host_autotuneReceiveBuffer(host)) {
             _tcp_autotuneReceiveBuffer(tcp, totalCopied);

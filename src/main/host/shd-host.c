@@ -52,6 +52,9 @@ struct _Host {
     /* random stream */
     Random* random;
 
+    /* track the time spent executing this host */
+    GTimer* executionTimer;
+
     gchar* dataDirPath;
 
     gint referenceCount;
@@ -63,6 +66,10 @@ Host* host_new(HostParameters* params) {
 
     Host* host = g_new0(Host, 1);
     MAGIC_INIT(host);
+
+    /* start tracking execution time for this host.
+     * creating the timer automatically starts it. */
+    host->executionTimer = g_timer_new();
 
     /* first copy the entire struct of params */
     host->params = *params;
@@ -97,13 +104,25 @@ Host* host_new(HostParameters* params) {
     host->processIDCounter = 1000;
     host->referenceCount = 1;
 
+    /* we go back to the slave setup process here, so stop counting this host execution */
+    g_timer_stop(host->executionTimer);
+
     return host;
 }
 
 static void _host_free(Host* host) {
     MAGIC_ASSERT(host);
+    MAGIC_CLEAR(host);
+    g_free(host);
+}
 
-    info("freeing host %s", host->params.hostname);
+/* this is needed outside of the free function, because there are parts of the shutdown
+ * process that actually hold references to the host. if you just called host_unref instead
+ * of this function, then host_free would never actually get called. */
+void host_shutdown(Host* host) {
+    g_timer_continue(host->executionTimer);
+
+    info("shutting down host %s", host->params.hostname);
 
     if(host->processes) {
         g_queue_free(host->processes);
@@ -111,7 +130,7 @@ static void _host_free(Host* host) {
 
     if(host->defaultAddress) {
         topology_detach(worker_getTopology(), host->defaultAddress);
-        address_unref(host->defaultAddress);
+        //address_unref(host->defaultAddress);
     }
 
     if(host->interfaces) {
@@ -161,7 +180,6 @@ static void _host_free(Host* host) {
         random_free(host->random);
     }
 
-    if(host->params.hostname) g_free(host->params.hostname);
     if(host->params.ipHint) g_free(host->params.ipHint);
     if(host->params.geocodeHint) g_free(host->params.geocodeHint);
     if(host->params.typeHint) g_free(host->params.typeHint);
@@ -173,8 +191,14 @@ static void _host_free(Host* host) {
         g_free(host->dataDirPath);
     }
 
-    MAGIC_CLEAR(host);
-    g_free(host);
+    gdouble totalExecutionTime = g_timer_elapsed(host->executionTimer, NULL);
+
+    message("host '%s' has been shut down, total execution time was %f seconds",
+            host->params.hostname, totalExecutionTime);
+
+    if(host->defaultAddress) address_unref(host->defaultAddress);
+    if(host->params.hostname) g_free(host->params.hostname);
+    g_timer_destroy(host->executionTimer);
 }
 
 void host_ref(Host* host) {
@@ -199,6 +223,24 @@ void host_lock(Host* host) {
 void host_unlock(Host* host) {
     MAGIC_ASSERT(host);
     g_mutex_unlock(&(host->lock));
+}
+
+/* resumes the execution timer for this host */
+void host_continueExecutionTimer(Host* host) {
+    MAGIC_ASSERT(host);
+    g_timer_continue(host->executionTimer);
+}
+
+/* stops the execution timer for this host */
+void host_stopExecutionTimer(Host* host) {
+    MAGIC_ASSERT(host);
+    g_timer_stop(host->executionTimer);
+}
+
+/* returns the fractional number of seconds that have been spent executing this host */
+gdouble host_getElapsedExecutionTime(Host* host) {
+    MAGIC_ASSERT(host);
+    return g_timer_elapsed(host->executionTimer, NULL);
 }
 
 GQuark host_getID(Host* host) {

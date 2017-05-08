@@ -252,6 +252,7 @@ void scheduler_shutdown(Scheduler* scheduler) {
             gdouble totalWaitTime = g_timer_elapsed(executeEventsBarrierWaitTime, NULL);
             message("joined thread %p, total wait time for round execution barrier was %f seconds", item->thread, totalWaitTime);
         }
+
         threadItem = g_list_next(threadItem);
     }
 }

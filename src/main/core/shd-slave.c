@@ -240,7 +240,9 @@ void slave_addNewVirtualProcess(Slave* slave, gchar* hostName, gchar* pluginName
     }
 
     Host* host = scheduler_getHost(slave->scheduler, hostID);
+    host_continueExecutionTimer(host);
     host_addApplication(host, startTime, stopTime, pluginName, pluginPath, preloadName, preloadPath, arguments);
+    host_stopExecutionTimer(host);
 }
 
 DNS* slave_getDNS(Slave* slave) {

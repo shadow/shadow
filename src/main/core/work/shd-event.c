@@ -68,7 +68,9 @@ void event_execute(Event* event) {
         worker_scheduleTask(event->task, cpuDelay);
     } else {
         /* cpu is not blocked, its ok to execute the event */
+        host_continueExecutionTimer(event->host);
         task_execute(event->task);
+        host_stopExecutionTimer(event->host);
     }
 
     worker_setActiveHost(NULL);
