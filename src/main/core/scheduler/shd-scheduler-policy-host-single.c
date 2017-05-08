@@ -20,6 +20,8 @@ struct _HostSingleThreadData {
     GList* assignedHosts;
     GList* currentItem;
     SimulationTime currentBarrier;
+    GTimer* pushIdleTime;
+    GTimer* popIdleTime;
 };
 
 typedef struct _HostSinglePolicyData HostSinglePolicyData;
@@ -31,7 +33,17 @@ struct _HostSinglePolicyData {
 };
 
 static HostSingleThreadData* _hostsinglethreaddata_new() {
-    return g_new0(HostSingleThreadData, 1);
+    HostSingleThreadData* tdata = g_new0(HostSingleThreadData, 1);
+
+    /* Create new timers to track thread idle times. The timers start in a 'started' state,
+     * so we want to stop them immediately so we can continue/stop later around blocking code
+     * to collect total elapsed idle time in the scheduling process throughout the entire
+     * runtime of the program. */
+    tdata->pushIdleTime = g_timer_new();
+    g_timer_stop(tdata->pushIdleTime);
+    tdata->popIdleTime = g_timer_new();
+    g_timer_stop(tdata->popIdleTime);
+    return tdata;
 }
 
 static void _hostsinglethreaddata_free(HostSingleThreadData* tdata) {
@@ -39,6 +51,18 @@ static void _hostsinglethreaddata_free(HostSingleThreadData* tdata) {
         if(tdata->assignedHosts) {
             g_list_free(tdata->assignedHosts);
         }
+        gdouble totalPushWaitTime = 0.0;
+        gdouble totalPopWaitTime = 0.0;
+        if(tdata->pushIdleTime) {
+            totalPushWaitTime = g_timer_elapsed(tdata->pushIdleTime, NULL);
+            g_timer_destroy(tdata->pushIdleTime);
+        }
+        if(tdata->popIdleTime) {
+            totalPopWaitTime = g_timer_elapsed(tdata->popIdleTime, NULL);
+            g_timer_destroy(tdata->popIdleTime);
+        }
+        message("scheduler thread data destroyed, total push wait time was %f seconds, "
+                "total pop wait time was %f seconds", totalPushWaitTime, totalPopWaitTime);
     }
 }
 
@@ -107,15 +131,28 @@ static void _schedulerpolicyhostsingle_push(SchedulerPolicy* policy, Event* even
                 "to ensure event causality", eventTime, barrier);
     }
 
+    /* we want to track how long this thread spends idle waiting to push the event */
+    HostSingleThreadData* tdata = g_hash_table_lookup(data->threadToThreadDataMap, g_thread_self());
+
     /* get the queue for the destination */
     HostSingleQueueData* qdata = g_hash_table_lookup(data->hostToQueueDataMap, dstHost);
     utility_assert(qdata);
 
-    /* 'deliver' the event there */
+    /* tracking idle time spent waiting for the destination queue lock */
+    if(tdata) {
+        g_timer_continue(tdata->pushIdleTime);
+    }
     g_mutex_lock(&(qdata->lock));
+    if(tdata) {
+        g_timer_stop(tdata->pushIdleTime);
+    }
+
+    /* 'deliver' the event to the destination queue */
     event_setSequence(event, ++(qdata->pushSequenceCounter));
     priorityqueue_push(qdata->pq, event);
     qdata->nPushed++;
+
+    /* release the destination queue lock */
     g_mutex_unlock(&(qdata->lock));
 }
 
@@ -141,7 +178,10 @@ static Event* _schedulerpolicyhostsingle_pop(SchedulerPolicy* policy, Simulation
         HostSingleQueueData* qdata = g_hash_table_lookup(data->hostToQueueDataMap, host);
         utility_assert(qdata);
 
+        /* tracking idle time spent waiting for the host queue lock */
+        g_timer_continue(tdata->popIdleTime);
         g_mutex_lock(&(qdata->lock));
+        g_timer_stop(tdata->popIdleTime);
 
         Event* nextEvent = priorityqueue_peek(qdata->pq);
         SimulationTime eventTime = (nextEvent != NULL) ? event_getTime(nextEvent) : SIMTIME_INVALID;

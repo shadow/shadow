@@ -25,6 +25,9 @@ struct _Scheduler {
     /* barrier to wait for main thread to finish updating for the next round */
     CountDownLatch* prepareRoundBarrier;
 
+    /* holds a timer for each thread to track how long threads wait for execution barrier */
+    GHashTable* threadToWaitTimerMap;
+
     /* the serial/parallel host/thread mapping/scheduling policy */
     SchedulerPolicy* policy;
     SchedulerPolicyType policyType;
@@ -138,6 +141,7 @@ Scheduler* scheduler_new(SchedulerPolicyType policyType, guint nWorkers, gpointe
     scheduler->currentRound.endTime = scheduler->endTime;// default to one single round
     scheduler->currentRound.minNextEventTime = SIMTIME_MAX;
 
+    scheduler->threadToWaitTimerMap = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, (GDestroyNotify)g_timer_destroy);
     scheduler->hostIDToHostMap = g_hash_table_new(g_direct_hash, g_direct_equal);
 
     scheduler->random = random_new(schedulerSeed);
@@ -226,6 +230,10 @@ void scheduler_shutdown(Scheduler* scheduler) {
         if(t != g_thread_self()) {
             /* the join will consume the reference, so unref is not needed */
             g_thread_join(t);
+
+            GTimer* executeEventsBarrierWaitTime = g_hash_table_lookup(scheduler->threadToWaitTimerMap, t);
+            gdouble totalWaitTime = g_timer_elapsed(executeEventsBarrierWaitTime, NULL);
+            message("joined thread %p, total wait time for round execution barrier was %f seconds", t, totalWaitTime);
         }
         threadItem = g_list_next(threadItem);
     }
@@ -245,6 +253,10 @@ static void _scheduler_free(Scheduler* scheduler) {
     countdownlatch_free(scheduler->prepareRoundBarrier);
     countdownlatch_free(scheduler->startBarrier);
     countdownlatch_free(scheduler->finishBarrier);
+
+    if(scheduler->threadToWaitTimerMap) {
+        g_hash_table_destroy(scheduler->threadToWaitTimerMap);
+    }
 
     g_mutex_clear(&(scheduler->globalLock));
 
@@ -306,10 +318,23 @@ Event* scheduler_pop(Scheduler* scheduler) {
             /* we have an event, let the worker run it */
             return nextEvent;
         } else if(scheduler->policyType == SP_SERIAL_GLOBAL) {
+            /* the running thread has no more events to execute this round, but we only have a
+             * single, global, serial queue, so returning NULL without blocking is OK. */
             return NULL;
         } else {
-            /* wait for all other worker threads to finish their events too */
+            /* the running thread has no more events to execute this round and we need to block it
+             * so that we can wait for all threads to finish events from this round. We want to
+             * track idle times, so let's start by making sure we have timer elements in place. */
+            GTimer* executeEventsBarrierWaitTime = g_hash_table_lookup(scheduler->threadToWaitTimerMap, g_thread_self());
+
+            /* wait for all other worker threads to finish their events too, and track wait time */
+            if(executeEventsBarrierWaitTime) {
+                g_timer_continue(executeEventsBarrierWaitTime);
+            }
             countdownlatch_countDownAwait(scheduler->executeEventsBarrier);
+            if(executeEventsBarrierWaitTime) {
+                g_timer_stop(executeEventsBarrierWaitTime);
+            }
 
             /* now all threads reached the current round end barrier time.
              * asynchronously collect some stats that the main thread will use. */
@@ -453,6 +478,15 @@ gboolean scheduler_isRunning(Scheduler* scheduler) {
 }
 
 void scheduler_awaitStart(Scheduler* scheduler) {
+    /* set up the thread timer map */
+    g_mutex_lock(&scheduler->globalLock);
+    if(!g_hash_table_lookup(scheduler->threadToWaitTimerMap, g_thread_self())) {
+        GTimer* waitTimer = g_timer_new();
+        g_timer_stop(waitTimer);
+        g_hash_table_insert(scheduler->threadToWaitTimerMap, g_thread_self(), waitTimer);
+    }
+    g_mutex_unlock(&scheduler->globalLock);
+
     /* wait until all threads are waiting to start */
     countdownlatch_countDownAwait(scheduler->startBarrier);
 
@@ -506,11 +540,12 @@ void scheduler_continueNextRound(Scheduler* scheduler, SimulationTime windowStar
 }
 
 SimulationTime scheduler_awaitNextRound(Scheduler* scheduler) {
+    /* this function is called by the slave main thread */
     if(scheduler->policyType != SP_SERIAL_GLOBAL) {
-        /* workers will wait here when they are finished with their events */
+        /* other workers will also wait at this barrier when they are finished with their events */
         countdownlatch_countDownAwait(scheduler->executeEventsBarrier);
         countdownlatch_reset(scheduler->executeEventsBarrier);
-        /* then they collect stats and wait here */
+        /* then they collect stats and wait at this barrier */
         countdownlatch_countDownAwait(scheduler->collectInfoBarrier);
         countdownlatch_reset(scheduler->collectInfoBarrier);
     }
