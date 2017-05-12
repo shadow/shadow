@@ -65,6 +65,10 @@ struct Vdl
   // they could probably be replaced with something like a bloom filter
   struct VdlHashMap *contexts;
   struct VdlHashMap *files;
+
+  // to use this lock:
+  // read lock when all modified fields must be from the executing thread
+  // write lock when potentially modifying global or another thread's fields
   struct RWLock *tls_lock;
   unsigned long tls_gen;
   unsigned long tls_static_total_size;

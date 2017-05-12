@@ -165,6 +165,7 @@ file_deinitialize (struct VdlFile *file)
 void
 vdl_tls_file_deinitialize (struct VdlList *files)
 {
+  write_lock (g_vdl.tls_lock);
   // the deinitialization order here does not matter at all.
   void **cur;
   for (cur = vdl_list_begin (files);
@@ -173,6 +174,7 @@ vdl_tls_file_deinitialize (struct VdlList *files)
     {
       file_deinitialize (*cur);
     }
+  write_unlock (g_vdl.tls_lock);
 }
 
 void
@@ -487,18 +489,14 @@ vdl_tls_dtv_update_new (struct dtv_t *new_dtv, unsigned long dtv_size,
     }
 }
 
-void
-vdl_tls_dtv_update (void)
+static void
+vdl_tls_dtv_update_given (unsigned long tp, struct dtv_t *dtv)
 {
   VDL_LOG_FUNCTION ("");
-  unsigned long tp = machine_thread_pointer_get ();
-  struct dtv_t *dtv = get_current_dtv (tp);
   unsigned long dtv_size = dtv[-1].value;
 
-  read_lock (g_vdl.tls_lock);
   if (dtv[0].gen == g_vdl.tls_gen)
     {
-      read_unlock (g_vdl.tls_lock);
       return;
     }
 
@@ -511,7 +509,6 @@ vdl_tls_dtv_update (void)
       // we have a big-enough dtv so, now that it's uptodate,
       // update the generation
       dtv[0].gen = g_vdl.tls_gen;
-      read_unlock (g_vdl.tls_lock);
       return;
     }
 
@@ -524,6 +521,15 @@ vdl_tls_dtv_update (void)
   vdl_tls_dtv_update_new (new_dtv, dtv_size, new_dtv_size);
   // now that the dtv is updated, update the generation
   new_dtv[0].gen = g_vdl.tls_gen;
+}
+
+void
+vdl_tls_dtv_update (void)
+{
+  unsigned long tp = machine_thread_pointer_get ();
+  read_lock (g_vdl.tls_lock);
+  struct dtv_t *dtv = get_current_dtv (tp);
+  vdl_tls_dtv_update_given (tp, dtv);
   read_unlock (g_vdl.tls_lock);
 }
 
@@ -547,9 +553,11 @@ unsigned long
 vdl_tls_get_addr_slow (unsigned long module, unsigned long offset)
 {
   VDL_LOG_FUNCTION ("module=%lu, offset=%lu", module, offset);
+  read_lock (g_vdl.tls_lock);
   unsigned long addr = vdl_tls_get_addr_fast (module, offset);
   if (addr != 0)
     {
+      read_unlock (g_vdl.tls_lock);
       return addr;
     }
   unsigned long tp = machine_thread_pointer_get ();
@@ -575,13 +583,15 @@ vdl_tls_get_addr_slow (unsigned long module, unsigned long offset)
       dtv[module].gen = file->tls_tmpl_gen;
       dtv[module].is_static = 0;
       // and return the requested value
+      read_unlock (g_vdl.tls_lock);
       return dtv[module].value + offset;
     }
   // we know for sure that the dtv is _not_ uptodate now
-  vdl_tls_dtv_update ();
+  vdl_tls_dtv_update_given (tp, dtv);
 
   // now that the dtv is supposed to be uptodate, attempt to make
   // the request again
+  read_unlock (g_vdl.tls_lock);
   return vdl_tls_get_addr_slow (module, offset);
 }
 
@@ -635,6 +645,9 @@ vdl_tls_swap_context (struct VdlContext *context, unsigned long t1, unsigned lon
   write_lock (g_vdl.tls_lock);
   struct dtv_t *dtv1 = get_current_dtv (t1);
   struct dtv_t *dtv2 = get_current_dtv (t2);
+  // make sure we're not copying from/to uninitialized/unallocated memory
+  vdl_tls_dtv_update_given (t1, dtv1);
+  vdl_tls_dtv_update_given (t2, dtv2);
   struct SwapArgs args;
   args.t1 = t1;
   args.t2 = t2;
