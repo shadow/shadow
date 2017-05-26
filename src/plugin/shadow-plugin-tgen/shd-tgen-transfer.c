@@ -21,7 +21,7 @@ typedef enum _TGenTransferState {
 
 typedef enum _TGenTransferError {
     TGEN_XFER_ERR_NONE, TGEN_XFER_ERR_AUTH, TGEN_XFER_ERR_READ, TGEN_XFER_ERR_WRITE,
-    TGEN_XFER_ERR_TIMEOUT, TGEN_XFER_ERR_PROXY, TGEN_XFER_ERR_MISC,
+    TGEN_XFER_ERR_TIMEOUT, TGEN_XFER_ERR_STALLOUT, TGEN_XFER_ERR_PROXY, TGEN_XFER_ERR_MISC,
 } TGenTransferError;
 
 struct _TGenTransfer {
@@ -147,6 +147,9 @@ static const gchar* _tgentransfer_errorToString(TGenTransferError error) {
         }
         case TGEN_XFER_ERR_TIMEOUT: {
             return "TIMEOUT";
+        }
+        case TGEN_XFER_ERR_STALLOUT: {
+            return "STALLOUT";
         }
         case TGEN_XFER_ERR_PROXY: {
             return "PROXY";
@@ -914,11 +917,18 @@ gboolean tgentransfer_onCheckTimeout(TGenTransfer* transfer, gint descriptor) {
     gboolean transferStalled = ((transfer->time.lastProgress > 0) &&
             (g_get_monotonic_time() >= transfer->time.lastProgress + transfer->stalloutUSecs)) ? TRUE : FALSE;
     gboolean transferTookTooLong = (g_get_monotonic_time() >= (transfer->time.start + transfer->timeoutUSecs)) ? TRUE : FALSE;
+
     if(transferStalled || transferTookTooLong) {
         /* log this transfer as a timeout */
-        _tgentransfer_changeState(transfer, TGEN_XFER_ERROR);
-        _tgentransfer_changeError(transfer, TGEN_XFER_ERR_TIMEOUT);
         transfer->events |= TGEN_EVENT_DONE;
+        _tgentransfer_changeState(transfer, TGEN_XFER_ERROR);
+
+        if(transferStalled) {
+            _tgentransfer_changeError(transfer, TGEN_XFER_ERR_STALLOUT);
+        } else {
+            _tgentransfer_changeError(transfer, TGEN_XFER_ERR_TIMEOUT);
+        }
+
         _tgentransfer_log(transfer, FALSE);
 
         /* we have to call notify so the next transfer can start */

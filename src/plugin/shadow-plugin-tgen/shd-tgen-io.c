@@ -55,7 +55,7 @@ TGenIO* tgenio_new() {
     io->magic = TGEN_MAGIC;
     io->refcount = 1;
 
-    io->children = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, (GDestroyNotify)_tgeniochild_free);
+    io->children = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, (GDestroyNotify)_tgeniochild_free);
 
     io->epollD = epollD;
 
@@ -95,15 +95,16 @@ static void _tgenio_deregister(TGenIO* io, gint descriptor) {
                 io->epollD, descriptor, result, errno, g_strerror(errno));
     }
 
-    g_hash_table_remove(io->children, &descriptor);
+    g_hash_table_remove(io->children, GINT_TO_POINTER(descriptor));
 }
 
 gboolean tgenio_register(TGenIO* io, gint descriptor, TGenIO_notifyEventFunc notify,
         TGenIO_notifyCheckTimeoutFunc checkTimeout, gpointer data, GDestroyNotify destructData) {
     TGEN_ASSERT(io);
 
-    if(g_hash_table_lookup(io->children, &descriptor)) {
+    if(g_hash_table_lookup(io->children, GINT_TO_POINTER(descriptor))) {
         _tgenio_deregister(io, descriptor);
+        tgen_warning("removed existing entry at descriptor %i to make room for a new one", descriptor);
     }
 
     /* start watching */
@@ -121,7 +122,7 @@ gboolean tgenio_register(TGenIO* io, gint descriptor, TGenIO_notifyEventFunc not
     }
 
     TGenIOChild* child = _tgeniochild_new(descriptor, notify, checkTimeout, data, destructData);
-    g_hash_table_replace(io->children, &child->descriptor, child);
+    g_hash_table_replace(io->children, GINT_TO_POINTER(child->descriptor), child);
 
     return TRUE;
 }
@@ -176,8 +177,7 @@ void tgenio_loopOnce(TGenIO* io) {
     TGEN_ASSERT(io);
 
     /* storage for collecting events from our epoll descriptor */
-    struct epoll_event epevs[100];
-    memset(epevs, 0, 100*sizeof(struct epoll_event));
+    struct epoll_event* epevs = g_new(struct epoll_event, 100);
 
     /* collect all events that are ready */
     gint nfds = epoll_wait(io->epollD, epevs, 100, 0);
@@ -195,8 +195,18 @@ void tgenio_loopOnce(TGenIO* io) {
     for (gint i = 0; i < nfds; i++) {
         gboolean in = (epevs[i].events & EPOLLIN) ? TRUE : FALSE;
         gboolean out = (epevs[i].events & EPOLLOUT) ? TRUE : FALSE;
-        TGenIOChild* child = g_hash_table_lookup(io->children, &epevs[i].data.fd);
-        _tgenio_helper(io, child, in, out);
+        TGenIOChild* child = g_hash_table_lookup(io->children, GINT_TO_POINTER(epevs[i].data.fd));
+        if(child) {
+            _tgenio_helper(io, child, in, out);
+        }
+    }
+
+    if(epevs) {
+        g_free(epevs);
+    }
+
+    if(nfds == 100) {
+        tgenio_loopOnce(io);
     }
 }
 
@@ -211,7 +221,7 @@ void tgenio_checkTimeouts(TGenIO* io) {
     while(item) {
         TGenIOChild* child = item->data;
         if(child && child->checkTimeout) {
-            /* this calls  tgentransfer_onCheckTimeout to check and handle if a timeout is present */
+            /* this calls tgentransfer_onCheckTimeout to check and handle if a timeout is present */
             gboolean hasTimeout = child->checkTimeout(child->data, child->descriptor);
             if(hasTimeout) {
                 _tgenio_deregister(io, child->descriptor);
