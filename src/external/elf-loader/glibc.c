@@ -61,7 +61,7 @@ extern __typeof (__dl_starting_up) _dl_starting_up
 //
 // It is also used by libpthread to estimate the size of the stack
 // during initialization, which ends up being important when dlmopen'ing
-// a libpthread-linked object from a libpthread-linked object. 
+// a libpthread-linked object from a libpthread-linked object.
 static void *_libc_stack_end = 0;
 extern __typeof (_libc_stack_end) __libc_stack_end
      __attribute__ ((alias("_libc_stack_end"), visibility("default")));
@@ -101,9 +101,7 @@ __tls_get_addr (struct tls_index *ti)
     (void *) vdl_tls_get_addr_fast (ti->ti_module, ti->ti_offset);
   if (retval == 0)
     {
-      write_lock (g_vdl.global_lock);
       retval = (void *) vdl_tls_get_addr_slow (ti->ti_module, ti->ti_offset);
-      write_unlock (g_vdl.global_lock);
     }
   return retval;
 }
@@ -124,9 +122,7 @@ __attribute__ ((__regparm__ (1))) ___tls_get_addr (struct tls_index *ti)
     (void *) vdl_tls_get_addr_fast (ti->ti_module, ti->ti_offset);
   if (retval == 0)
     {
-      write_lock (g_vdl.global_lock);
       retval = (void *) vdl_tls_get_addr_slow (ti->ti_module, ti->ti_offset);
-      write_unlock (g_vdl.global_lock);
     }
   return retval;
 }
@@ -161,9 +157,9 @@ _dl_allocate_tls_init (void *tcb)
     {
       return 0;
     }
-  write_lock (g_vdl.global_lock);
+  read_lock (g_vdl.tls_lock);
   vdl_tls_dtv_initialize ((unsigned long) tcb);
-  write_unlock (g_vdl.global_lock);
+  read_unlock (g_vdl.tls_lock);
   return tcb;
 }
 
@@ -174,7 +170,7 @@ _dl_allocate_tls_init (void *tcb)
 EXPORT void *internal_function
 _dl_allocate_tls (void *mem)
 {
-  write_lock (g_vdl.global_lock);
+  read_lock (g_vdl.tls_lock);
 
   unsigned long tcb = (unsigned long) mem;
   if (tcb == 0)
@@ -184,23 +180,21 @@ _dl_allocate_tls (void *mem)
   vdl_tls_dtv_allocate (tcb);
   vdl_tls_dtv_initialize ((unsigned long) tcb);
 
-  write_unlock (g_vdl.global_lock);
+  read_unlock (g_vdl.tls_lock);
   return (void *) tcb;
 }
 
 EXPORT void internal_function
 _dl_deallocate_tls (void *ptcb, bool dealloc_tcb)
 {
-  write_lock (g_vdl.global_lock);
-
   unsigned long tcb = (unsigned long) ptcb;
   vdl_tls_dtv_deallocate (tcb);
   if (dealloc_tcb)
     {
+      read_lock (g_vdl.tls_lock);
       vdl_tls_tcb_deallocate (tcb);
+      read_unlock (g_vdl.tls_lock);
     }
-
-  write_unlock (g_vdl.global_lock);
 }
 
 EXPORT int internal_function
