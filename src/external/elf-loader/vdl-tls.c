@@ -645,6 +645,8 @@ vdl_tls_swap_context (struct VdlContext *context, unsigned long t1, unsigned lon
   // make sure we're not copying from/to uninitialized/unallocated memory
   vdl_tls_dtv_update_given (t1, dtv1);
   vdl_tls_dtv_update_given (t2, dtv2);
+  dtv1 = get_current_dtv (t1);
+  dtv2 = get_current_dtv (t2);
   struct SwapArgs args;
   args.t1 = t1;
   args.t2 = t2;
