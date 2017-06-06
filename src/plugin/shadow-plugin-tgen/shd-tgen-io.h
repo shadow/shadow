@@ -26,7 +26,7 @@ void tgenio_unref(TGenIO* io);
 
 gboolean tgenio_register(TGenIO* io, gint descriptor, TGenIO_notifyEventFunc notify,
         TGenIO_notifyCheckTimeoutFunc checkTimeout, gpointer data, GDestroyNotify destructData);
-void tgenio_loopOnce(TGenIO* io);
+gint tgenio_loopOnce(TGenIO* io, gint maxEvents);
 void tgenio_checkTimeouts(TGenIO* io);
 
 gint tgenio_getEpollDescriptor(TGenIO* io);

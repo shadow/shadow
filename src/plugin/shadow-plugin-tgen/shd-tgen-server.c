@@ -16,7 +16,7 @@ struct _TGenServer {
     guint magic;
 };
 
-static void _tgenserver_acceptPeer(TGenServer* server) {
+static gint _tgenserver_acceptPeer(TGenServer* server) {
     TGEN_ASSERT(server);
 
     /* we have a peer connecting to our listening socket */
@@ -39,17 +39,35 @@ static void _tgenserver_acceptPeer(TGenServer* server) {
             server->notify(server->data, peerSocketD, started, created, peer);
             tgenpeer_unref(peer);
         }
-    } else {
-        tgen_critical("accept(): socket %i returned %i error %i: %s",
-                server->socketD, peerSocketD, errno, g_strerror(errno));
     }
+
+    return peerSocketD;
 }
 
 TGenEvent tgenserver_onEvent(TGenServer* server, gint descriptor, TGenEvent events) {
     TGEN_ASSERT(server);
 
     g_assert((events & TGEN_EVENT_READ) && descriptor == server->socketD);
-    _tgenserver_acceptPeer(server);
+
+    gboolean blocked = FALSE;
+    gint acceptedCount = 0;
+
+    /* accept as many connections as we have available, until we get EWOULDBLOCK error */
+    while(!blocked) {
+        gint result = _tgenserver_acceptPeer(server);
+        if(result < 0) {
+            blocked = TRUE;
+
+            if(errno != EWOULDBLOCK) {
+                tgen_critical("accept(): socket %i returned %i error %i: %s",
+                        server->socketD, result, errno, g_strerror(errno));
+            }
+        } else {
+            acceptedCount++;
+        }
+    }
+
+    tgen_debug("accepted %i peer connection(s) until blocked", acceptedCount);
 
     /* we will only ever accept and never write */
     return TGEN_EVENT_READ;
