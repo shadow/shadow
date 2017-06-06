@@ -173,41 +173,43 @@ static void _tgenio_helper(TGenIO* io, TGenIOChild* child, gboolean in, gboolean
     }
 }
 
-void tgenio_loopOnce(TGenIO* io) {
+gint tgenio_loopOnce(TGenIO* io, gint maxEvents) {
     TGEN_ASSERT(io);
 
     /* storage for collecting events from our epoll descriptor */
-    struct epoll_event* epevs = g_new(struct epoll_event, 100);
+    struct epoll_event* epevs = g_new(struct epoll_event, maxEvents);
 
     /* collect all events that are ready */
-    gint nfds = epoll_wait(io->epollD, epevs, 100, 0);
+    gint nfds = epoll_wait(io->epollD, epevs, maxEvents, 0);
 
-    if(nfds == -1) {
+    if(nfds < 0) {
         tgen_critical("epoll_wait(): epoll %i returned %i error %i: %s",
                 io->epollD, nfds, errno, g_strerror(errno));
-    }
+        g_free(epevs);
 
-    if(nfds <= 0) {
-        return;
+        /* we didn't process any events */
+        return 0;
     }
 
     /* activate correct component for every descriptor that's ready. */
     for (gint i = 0; i < nfds; i++) {
         gboolean in = (epevs[i].events & EPOLLIN) ? TRUE : FALSE;
         gboolean out = (epevs[i].events & EPOLLOUT) ? TRUE : FALSE;
-        TGenIOChild* child = g_hash_table_lookup(io->children, GINT_TO_POINTER(epevs[i].data.fd));
+
+        gint eventDescriptor = epevs[i].data.fd;
+        TGenIOChild* child = g_hash_table_lookup(io->children, GINT_TO_POINTER(eventDescriptor));
+
         if(child) {
             _tgenio_helper(io, child, in, out);
+        } else {
+            /* we don't currently have a child for the event descriptor, stop paying attention to it */
+            tgen_warning("can't find child for descriptor %i, canceling event now", eventDescriptor);
+            _tgenio_deregister(io, eventDescriptor);
         }
     }
 
-    if(epevs) {
-        g_free(epevs);
-    }
-
-    if(nfds == 100) {
-        tgenio_loopOnce(io);
-    }
+    g_free(epevs);
+    return nfds;
 }
 
 void tgenio_checkTimeouts(TGenIO* io) {
