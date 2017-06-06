@@ -587,10 +587,65 @@ void tcp_disableReceiveBufferAutotuning(TCP* tcp) {
     tcp->autotune.userDisabledReceive = TRUE;
 }
 
+/* returns the total amount of buffered data in this TCP socket, including TCP-specific buffers */
+gsize tcp_getOutputBufferLength(TCP* tcp) {
+    MAGIC_ASSERT(tcp);
+    /* this does not include the socket output buffer to avoid double counting, since the
+     * data in the socket output buffer is already counted as part of the tcp retransmit queue */
+    return tcp->throttledOutputLength + tcp->retransmit.queueLength;
+}
+
+/* returns the total amount of buffered data in this TCP socket, including TCP-specific buffers */
+gsize tcp_getInputBufferLength(TCP* tcp) {
+    MAGIC_ASSERT(tcp);
+    return socket_getInputBufferLength(&(tcp->super)) + tcp->unorderedInputLength;
+}
+
+static gsize _tcp_getBufferSpaceOut(TCP* tcp) {
+    MAGIC_ASSERT(tcp);
+    /* account for throttled and retransmission buffer */
+    gssize s = (gssize)(socket_getOutputBufferSpace(&(tcp->super)) - tcp->throttledOutputLength - tcp->retransmit.queueLength);
+    gsize space = (gsize) MAX(0, s);
+    return space;
+}
+
+static gsize _tcp_getBufferSpaceIn(TCP* tcp) {
+    MAGIC_ASSERT(tcp);
+    /* account for unordered input buffer */
+    gssize space = (gssize)(socket_getInputBufferSpace(&(tcp->super)) - tcp->unorderedInputLength);
+    return MAX(0, space);
+}
+
+static void _tcp_bufferPacketOut(TCP* tcp, Packet* packet) {
+    MAGIC_ASSERT(tcp);
+
+    /* TCP wants to avoid congestion */
+    priorityqueue_push(tcp->throttledOutput, packet);
+    tcp->throttledOutputLength += packet_getPayloadLength(packet);
+    packet_addDeliveryStatus(packet, PDS_SND_TCP_ENQUEUE_THROTTLED);
+
+    if(_tcp_getBufferSpaceOut(tcp) == 0) {
+        descriptor_adjustStatus((Descriptor*)tcp, DS_WRITABLE, FALSE);
+    }
+}
+
+static void _tcp_bufferPacketIn(TCP* tcp, Packet* packet) {
+    MAGIC_ASSERT(tcp);
+
+    /* TCP wants in-order data */
+    priorityqueue_push(tcp->unorderedInput, packet);
+    packet_ref(packet);
+    tcp->unorderedInputLength += packet_getPayloadLength(packet);
+
+    packet_addDeliveryStatus(packet, PDS_RCV_TCP_ENQUEUE_UNORDERED);
+}
+
 static void _tcp_updateReceiveWindow(TCP* tcp) {
     MAGIC_ASSERT(tcp);
 
-    /* the receive window is how much we are willing to accept to our input buffer */
+    /* the receive window is how much we are willing to accept to our input buffer.
+     * unordered input packets should count against buffer space, so use the _tcp version. */
+    //gsize space = _tcp_getBufferSpaceIn(tcp); // causes throughput problems
     gsize space = socket_getInputBufferSpace(&(tcp->super));
     gsize nPackets = space / (CONFIG_MTU - CONFIG_HEADER_SIZE_TCPIPETH);
     tcp->receive.window = nPackets;
@@ -658,59 +713,6 @@ static Packet* _tcp_createPacket(TCP* tcp, enum ProtocolTCPFlags flags, gconstpo
     }
 
     return packet;
-}
-
-/* returns the total amount of buffered data in this TCP socket, including TCP-specific buffers */
-gsize tcp_getOutputBufferLength(TCP* tcp) {
-    MAGIC_ASSERT(tcp);
-    /* this does not include the socket output buffer to avoid double counting, since the
-     * data in the socket output buffer is already counted as part of the tcp retransmit queue */
-    return tcp->throttledOutputLength + tcp->retransmit.queueLength;
-}
-
-static gsize _tcp_getBufferSpaceOut(TCP* tcp) {
-    MAGIC_ASSERT(tcp);
-    /* account for throttled and retransmission buffer */
-    gssize s = (gssize)(socket_getOutputBufferSpace(&(tcp->super)) - tcp->throttledOutputLength - tcp->retransmit.queueLength);
-    gsize space = (gsize) MAX(0, s);
-    return space;
-}
-
-static void _tcp_bufferPacketOut(TCP* tcp, Packet* packet) {
-    MAGIC_ASSERT(tcp);
-
-    /* TCP wants to avoid congestion */
-    priorityqueue_push(tcp->throttledOutput, packet);
-    tcp->throttledOutputLength += packet_getPayloadLength(packet);
-    packet_addDeliveryStatus(packet, PDS_SND_TCP_ENQUEUE_THROTTLED);
-
-    if(_tcp_getBufferSpaceOut(tcp) == 0) {
-        descriptor_adjustStatus((Descriptor*)tcp, DS_WRITABLE, FALSE);
-    }
-}
-
-/* returns the total amount of buffered data in this TCP socket, including TCP-specific buffers */
-gsize tcp_getInputBufferLength(TCP* tcp) {
-    MAGIC_ASSERT(tcp);
-    return socket_getInputBufferLength(&(tcp->super)) + tcp->unorderedInputLength;
-}
-
-static gsize _tcp_getBufferSpaceIn(TCP* tcp) {
-    MAGIC_ASSERT(tcp);
-    /* account for unordered input buffer */
-    gssize space = (gssize)(socket_getInputBufferSpace(&(tcp->super)) - tcp->unorderedInputLength);
-    return MAX(0, space);
-}
-
-static void _tcp_bufferPacketIn(TCP* tcp, Packet* packet) {
-    MAGIC_ASSERT(tcp);
-
-    /* TCP wants in-order data */
-    priorityqueue_push(tcp->unorderedInput, packet);
-    packet_ref(packet);
-    tcp->unorderedInputLength += packet_getPayloadLength(packet);
-
-    packet_addDeliveryStatus(packet, PDS_RCV_TCP_ENQUEUE_UNORDERED);
 }
 
 static void _tcp_addRetransmit(TCP* tcp, Packet* packet) {
@@ -816,9 +818,9 @@ static void _tcp_setRetransmitTimeout(TCP* tcp, gint newTimeout) {
     MAGIC_ASSERT(tcp);
     tcp->retransmit.timeout = newTimeout;
 
-    /* ensure correct range, TCP_RTO_MIN=200ms and TCP_RTO_MAX=120000ms from net/tcp.h */
-    tcp->retransmit.timeout = MIN(tcp->retransmit.timeout, 120000);
-    tcp->retransmit.timeout = MAX(tcp->retransmit.timeout, 200);
+    /* ensure correct range */
+    tcp->retransmit.timeout = MIN(tcp->retransmit.timeout, CONFIG_TCP_RTO_MAX);
+    tcp->retransmit.timeout = MAX(tcp->retransmit.timeout, CONFIG_TCP_RTO_MIN);
 }
 
 static void _tcp_updateRTTEstimate(TCP* tcp, SimulationTime timestamp) {
@@ -1421,6 +1423,10 @@ TCPProcessFlags _tcp_ackProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *he
             (header->window > (guint)prevWin)) || ((header->acknowledgment > (guint)tcp->receive.lastAcknowledgment) &&
                     (header->window != (guint)prevWin));
 
+    if(header->window != (guint)prevWin) {
+        flags |= TCP_PF_RWND_UPDATED;
+    }
+
     *nPacketsAcked = 0;
     if(isValidAck) {
         /* update their advertisements */
@@ -1447,7 +1453,7 @@ TCPProcessFlags _tcp_ackProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *he
         if(tcp->retransmit.backoffCount > 2) {
             tcp->congestion->rttSmoothed = 0;
             tcp->congestion->rttVariance = 0;
-            _tcp_setRetransmitTimeout(tcp, 1);
+            _tcp_setRetransmitTimeout(tcp, CONFIG_TCP_RTO_INIT);
         }
         tcp->retransmit.backoffCount = 0;
     }
@@ -1735,7 +1741,8 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
         _tcp_updateRTTEstimate(tcp, header.timestampEcho);
     }
 
-    gboolean isAckDubious = (!(flags & TCP_PF_DATA_ACKED) || (flags & TCP_PF_DATA_SACKED));
+    /* see tcp_ack_is_dubious() in net/ipv4/tcp_input.c */
+    gboolean isAckDubious = ((packetLength == 0) && !(flags & TCP_PF_DATA_ACKED) && !(flags & TCP_PF_RWND_UPDATED)) || (flags & TCP_PF_DATA_SACKED);
     gboolean mayRaiseWindow = (tcp->receive.state != TCPRS_RECOVERY);
 
     if(isAckDubious) {
@@ -2164,8 +2171,8 @@ TCP* tcp_new(gint handle, guint receiveBufferSize, guint sendBufferSize) {
     tcp->retransmit.scheduledTimerExpirations =
             priorityqueue_new((GCompareDataFunc)utility_simulationTimeCompare, NULL, g_free);
 
-    /* TCP_TIMEOUT_INIT=1000ms from net/tcp.h */
-    _tcp_setRetransmitTimeout(tcp, 1000);
+    /* initialize tcp retransmission timeout */
+    _tcp_setRetransmitTimeout(tcp, CONFIG_TCP_RTO_INIT);
 
     return tcp;
 }

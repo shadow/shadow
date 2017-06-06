@@ -24,7 +24,7 @@ find_path (GLIB_CONFIG_INCLUDES glibconfig.h
   )
 if(NOT GLIB_CONFIG_INCLUDES)
     find_path (GLIB_CONFIG_INCLUDES glibconfig.h
-      PATHS /usr/local/include /usr/include /include /sw/include /usr/lib /usr/lib64 /usr/lib/x86_64-linux-gnu/ /usr/lib/i386-linux-gnu ${CMAKE_EXTRA_INCLUDES} ${CMAKE_EXTRA_LIBRARIES} PATH_SUFFIXES glib-2.0 glib-2.0/include
+      PATHS /usr/local/include /usr/include /include /sw/include /usr/lib /usr/lib64 /usr/lib/x86_64-linux-gnu/ /usr/lib/i386-linux-gnu /usr/lib/arm-linux-gnueabihf ${CMAKE_EXTRA_INCLUDES} ${CMAKE_EXTRA_LIBRARIES} PATH_SUFFIXES glib-2.0 glib-2.0/include
       )
 endif(NOT GLIB_CONFIG_INCLUDES)
 
