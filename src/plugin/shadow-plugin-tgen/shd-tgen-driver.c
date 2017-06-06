@@ -8,6 +8,8 @@
 
 #include "shd-tgen.h"
 
+#define MAX_EVENTS_PER_IO_LOOP 100
+
 struct _TGenDriver {
     /* our graphml dependency graph */
     TGenGraph* actionGraph;
@@ -383,7 +385,15 @@ void tgendriver_activate(TGenDriver* driver) {
     }
 
     tgen_debug("activating tgenio loop");
-    tgenio_loopOnce(driver->io);
+
+    gint numEventsProcessed = MAX_EVENTS_PER_IO_LOOP;
+
+    while(numEventsProcessed >= MAX_EVENTS_PER_IO_LOOP) {
+        numEventsProcessed = tgenio_loopOnce(driver->io, MAX_EVENTS_PER_IO_LOOP);
+        tgen_debug("processed %i events out of the max allowed of %i", numEventsProcessed, MAX_EVENTS_PER_IO_LOOP);
+    }
+
+    tgen_debug("tgenio loop complete");
 }
 
 static void _tgendriver_free(TGenDriver* driver) {
