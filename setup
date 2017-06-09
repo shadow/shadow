@@ -8,7 +8,7 @@
  */
 '''
 
-import sys, os, argparse, subprocess, multiprocessing, shlex, shutil, urllib2, tarfile, gzip, stat, time
+import sys, os, argparse, subprocess, multiprocessing, shlex, shutil, tarfile, gzip, stat, time
 from datetime import datetime
 
 import logging
@@ -240,7 +240,7 @@ def getfullpath(path):
     return os.path.abspath(os.path.expanduser(path))
 
 def make_paths_absolute(list):
-    for i in xrange(len(list)): list[i] = getfullpath(list[i])
+    for i in range(len(list)): list[i] = getfullpath(list[i])
 
 ## helper - test if program is in path
 def which(program):
