@@ -89,7 +89,7 @@ static void _hostsinglequeuedata_free(HostSingleQueueData* qdata) {
 }
 
 /* this must be run synchronously, or the call must be protected by locks */
-static void _schedulerpolicyhostsingle_addHost(SchedulerPolicy* policy, Host* host, GThread* randomThread) {
+static void _schedulerpolicyhostsingle_addHost(SchedulerPolicy* policy, Host* host, pthread_t randomThread) {
     MAGIC_ASSERT(policy);
     HostSinglePolicyData* data = policy->data;
 
@@ -99,22 +99,22 @@ static void _schedulerpolicyhostsingle_addHost(SchedulerPolicy* policy, Host* ho
     }
 
     /* each thread keeps track of the hosts it needs to run */
-    GThread* assignedThread = (randomThread != NULL) ? randomThread : g_thread_self();
-    HostSingleThreadData* tdata = g_hash_table_lookup(data->threadToThreadDataMap, assignedThread);
+    pthread_t assignedThread = (randomThread != 0) ? randomThread : pthread_self();
+    HostSingleThreadData* tdata = g_hash_table_lookup(data->threadToThreadDataMap, GUINT_TO_POINTER(assignedThread));
     if(!tdata) {
         tdata = _hostsinglethreaddata_new();
-        g_hash_table_replace(data->threadToThreadDataMap, assignedThread, tdata);
+        g_hash_table_replace(data->threadToThreadDataMap, GUINT_TO_POINTER(assignedThread), tdata);
     }
     tdata->assignedHosts = g_list_append(tdata->assignedHosts, host);
 
     /* finally, store the host-to-thread mapping */
-    g_hash_table_replace(data->hostToThreadMap, host, assignedThread);
+    g_hash_table_replace(data->hostToThreadMap, host, GUINT_TO_POINTER(assignedThread));
 }
 
 static GList* _schedulerpolicyhostsingle_getHosts(SchedulerPolicy* policy) {
     MAGIC_ASSERT(policy);
     HostSinglePolicyData* data = policy->data;
-    HostSingleThreadData* tdata = g_hash_table_lookup(data->threadToThreadDataMap, g_thread_self());
+    HostSingleThreadData* tdata = g_hash_table_lookup(data->threadToThreadDataMap, GUINT_TO_POINTER(pthread_self()));
     return (tdata != NULL) ? tdata->assignedHosts : NULL;
 }
 
@@ -138,7 +138,7 @@ static void _schedulerpolicyhostsingle_push(SchedulerPolicy* policy, Event* even
     }
 
     /* we want to track how long this thread spends idle waiting to push the event */
-    HostSingleThreadData* tdata = g_hash_table_lookup(data->threadToThreadDataMap, g_thread_self());
+    HostSingleThreadData* tdata = g_hash_table_lookup(data->threadToThreadDataMap, GUINT_TO_POINTER(pthread_self()));
 
     /* get the queue for the destination */
     HostSingleQueueData* qdata = g_hash_table_lookup(data->hostToQueueDataMap, dstHost);
@@ -167,7 +167,7 @@ static Event* _schedulerpolicyhostsingle_pop(SchedulerPolicy* policy, Simulation
     HostSinglePolicyData* data = policy->data;
 
     /* figure out which hosts we should be checking */
-    HostSingleThreadData* tdata = g_hash_table_lookup(data->threadToThreadDataMap, g_thread_self());
+    HostSingleThreadData* tdata = g_hash_table_lookup(data->threadToThreadDataMap, GUINT_TO_POINTER(pthread_self()));
     /* if there is no tdata, that means this thread didn't get any hosts assigned to it */
     if(!tdata) {
         /* this thread will remain idle */
@@ -220,7 +220,7 @@ static SimulationTime _schedulerpolicyhostsingle_getNextTime(SchedulerPolicy* po
 
     SimulationTime nextTime = SIMTIME_MAX;
 
-    HostSingleThreadData* tdata = g_hash_table_lookup(data->threadToThreadDataMap, g_thread_self());
+    HostSingleThreadData* tdata = g_hash_table_lookup(data->threadToThreadDataMap, GUINT_TO_POINTER(pthread_self()));
     if(tdata) {
         GList* item = tdata->assignedHosts;
         while(item) {

@@ -6,6 +6,11 @@ find_package(M REQUIRED)
 find_package(IGRAPH REQUIRED)
 find_package(GLIB REQUIRED)
 
+## pthreads
+set(CMAKE_THREAD_PREFER_PTHREAD 1)
+find_package(Threads REQUIRED)
+message(STATUS "Using Threads library: ${CMAKE_THREAD_LIBS_INIT}")
+
 ## TODO if we have cmake > 3.1, can we do the following?
 #pkg_check_modules (GLIB2   glib-2.0>=2.32)
 #message(STATUS "GLIB2_VERSION = ${GLIB2_VERSION}")
@@ -94,7 +99,7 @@ set(shadow_srcs
 ## specify the main shadow executable, build, link, and install
 add_executable(shadow ${shadow_srcs})
 add_dependencies(shadow shadow-interpose-helper elf-loader rpth)
-target_link_libraries(shadow shadow-interpose-helper -lrpth ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES} ${IGRAPH_LIBRARIES} ${GLIB_LIBRARIES})
+target_link_libraries(shadow shadow-interpose-helper -lrpth ${CMAKE_THREAD_LIBS_INIT} ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES} ${IGRAPH_LIBRARIES} ${GLIB_LIBRARIES})
 install(TARGETS shadow DESTINATION bin)
 
 ## shadow needs to find libshadow-interpose and custom libs after install

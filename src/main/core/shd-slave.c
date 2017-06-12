@@ -353,7 +353,7 @@ void slave_run(Slave* slave) {
             _slave_heartbeat(slave, windowStart);
 
             /* flush slave threads messages */
-            logger_flushRecords(logger_getDefault(), g_thread_self());
+            logger_flushRecords(logger_getDefault(), pthread_self());
 
             /* let the logger know it can flush everything prior to this round */
             logger_syncToDisk(logger_getDefault());

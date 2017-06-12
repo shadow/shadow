@@ -4,7 +4,6 @@
  */
 
 #include <stdarg.h>
-#include <pthread.h>
 #include "shadow.h"
 
 /* this stores thread-specific data for each "worker" thread (the threads that
@@ -35,7 +34,7 @@ struct _Logger {
     gdouble lastTimespan;
 
     /* helper to sort messages and handle file i/o */
-    GThread* helper;
+    pthread_t helper;
     GAsyncQueue* helperCommands;
     CountDownLatch* helperLatch;
 
@@ -149,7 +148,7 @@ static void _logger_stopHelper(Logger* logger) {
     /* wait until the thread exits.
      * XXX: calling thread_join may cause deadlocks in the loader, so let's just wait for the
      * thread to indicate that it finished everything instead. */
-    //g_thread_join(logger->helper);
+    //pthread_join(logger->helper);
     countdownlatch_await(logger->helperLatch);
 }
 
@@ -166,7 +165,7 @@ void logger_logVA(Logger* logger, LogLevel level, const gchar* fileName, const g
         return;
     }
 
-    LoggerThreadData* threadData = g_hash_table_lookup(logger->threadToDataMap, g_thread_self());
+    LoggerThreadData* threadData = g_hash_table_lookup(logger->threadToDataMap, GUINT_TO_POINTER(pthread_self()));
     MAGIC_ASSERT(threadData);
 
     gdouble timespan = g_timer_elapsed(threadData->runTimer, NULL);
@@ -202,7 +201,7 @@ void logger_logVA(Logger* logger, LogLevel level, const gchar* fileName, const g
 
     if(level == LOGLEVEL_ERROR || !logger->shouldBuffer || (timespan - logger->lastTimespan) >= 5) {
         /* make sure we have logged everything */
-        logger_flushRecords(logger, g_thread_self());
+        logger_flushRecords(logger, pthread_self());
         logger_syncToDisk(logger);
         logger->lastTimespan = timespan;
     }
@@ -224,14 +223,14 @@ void logger_log(Logger* logger, LogLevel level, const gchar* fileName, const gch
     va_end(vargs);
 }
 
-void logger_register(Logger* logger, GThread* callerThread) {
+void logger_register(Logger* logger, pthread_t callerThread) {
     MAGIC_ASSERT(logger);
 
     /* this must be called by main thread before the workers start accessing the logger! */
 
-    if(g_hash_table_lookup(logger->threadToDataMap, callerThread) == NULL) {
+    if(g_hash_table_lookup(logger->threadToDataMap, GUINT_TO_POINTER(callerThread)) == NULL) {
         LoggerThreadData* threadData = _loggerthreaddata_new(logger->runTimer);
-        g_hash_table_replace(logger->threadToDataMap, callerThread, threadData);
+        g_hash_table_replace(logger->threadToDataMap, GUINT_TO_POINTER(callerThread), threadData);
         _logger_sendRegisterCommandToHelper(logger, threadData);
     }
 }
@@ -241,9 +240,9 @@ void logger_syncToDisk(Logger* logger) {
     _logger_sendFlushCommandToHelper(logger);
 }
 
-void logger_flushRecords(Logger* logger, GThread* callerThread) {
+void logger_flushRecords(Logger* logger, pthread_t callerThread) {
     MAGIC_ASSERT(logger);
-    LoggerThreadData* threadData = g_hash_table_lookup(logger->threadToDataMap, callerThread);
+    LoggerThreadData* threadData = g_hash_table_lookup(logger->threadToDataMap, GUINT_TO_POINTER(callerThread));
     MAGIC_ASSERT(threadData);
     /* send log messages from this thread to the helper */
     if(!g_queue_is_empty(threadData->localRecordBundle)) {
@@ -338,9 +337,14 @@ Logger* logger_new(LogLevel filterLevel) {
     runArgs->notifyDoneRunning = logger->helperLatch;
 
     /* the thread will consume the reference to the runArgs struct, and will free it */
-    logger->helper = g_thread_new("logger-helper", (GThreadFunc)loggerhelper_runHelperThread, runArgs);
+    gint returnVal = pthread_create(&(logger->helper), NULL, (void*(*)(void*))loggerhelper_runHelperThread, runArgs);
+    if(returnVal != 0) {
+        return NULL;
+    }
 
-    logger_register(logger, g_thread_self());
+    pthread_setname_np(logger->helper, "logger-helper");
+
+    logger_register(logger, pthread_self());
 
     _logger_logStartupMessage(logger);
 
@@ -355,12 +359,11 @@ static void _logger_free(Logger* logger) {
     _logger_logShutdownMessage(logger);
 
     /* one last flush for the above message before we stop */
-    logger_flushRecords(logger, g_thread_self());
+    logger_flushRecords(logger, pthread_self());
     logger_syncToDisk(logger);
 
-    /* tell the helper to stop, wait for it to stop, and then free it */
+    /* tell the helper to stop, waiting for it to stop */
     _logger_stopHelper(logger);
-    g_thread_unref(logger->helper);
 
     /* all commands should have been handled and we can free the queue */
     utility_assert(g_async_queue_length_unlocked(logger->helperCommands) == 0);

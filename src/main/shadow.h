@@ -7,6 +7,11 @@
 #ifndef SHADOW_H_
 #define SHADOW_H_
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE 1
+#endif
+#include <pthread.h>
+
 #include <glib.h>
 #include <gmodule.h>
 #include <igraph.h>

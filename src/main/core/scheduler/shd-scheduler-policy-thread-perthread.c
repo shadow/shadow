@@ -72,27 +72,27 @@ static void _threadperthreadthreaddata_free(ThreadPerThreadThreadData* tdata) {
 }
 
 /* this must be run synchronously, or the call must be protected by locks */
-static void _schedulerpolicythreadperthread_addHost(SchedulerPolicy* policy, Host* host, GThread* randomThread) {
+static void _schedulerpolicythreadperthread_addHost(SchedulerPolicy* policy, Host* host, pthread_t randomThread) {
     MAGIC_ASSERT(policy);
     ThreadPerThreadPolicyData* data = policy->data;
 
     /* each thread keeps track of the hosts it needs to run */
-    GThread* assignedThread = (randomThread != NULL) ? randomThread : g_thread_self();
-    ThreadPerThreadThreadData* tdata = g_hash_table_lookup(data->threadToThreadDataMap, assignedThread);
+    pthread_t assignedThread = (randomThread != 0) ? randomThread : pthread_self();
+    ThreadPerThreadThreadData* tdata = g_hash_table_lookup(data->threadToThreadDataMap, GUINT_TO_POINTER(assignedThread));
     if(!tdata) {
         tdata = _threadperthreadthreaddata_new();
-        g_hash_table_replace(data->threadToThreadDataMap, assignedThread, tdata);
+        g_hash_table_replace(data->threadToThreadDataMap, GUINT_TO_POINTER(assignedThread), tdata);
     }
     tdata->assignedHosts = g_list_append(tdata->assignedHosts, host);
 
     /* finally, store the host-to-thread mapping */
-    g_hash_table_replace(data->hostToThreadMap, host, assignedThread);
+    g_hash_table_replace(data->hostToThreadMap, host, GUINT_TO_POINTER(assignedThread));
 }
 
 static GList* _schedulerpolicythreadperthread_getHosts(SchedulerPolicy* policy) {
     MAGIC_ASSERT(policy);
     ThreadPerThreadPolicyData* data = policy->data;
-    ThreadPerThreadThreadData* tdata = g_hash_table_lookup(data->threadToThreadDataMap, g_thread_self());
+    ThreadPerThreadThreadData* tdata = g_hash_table_lookup(data->threadToThreadDataMap, GUINT_TO_POINTER(pthread_self()));
     return (tdata != NULL) ? tdata->assignedHosts : NULL;
 }
 
@@ -103,43 +103,43 @@ static void _schedulerpolicythreadperthread_push(SchedulerPolicy* policy, Event*
     /* non-local events must be properly delayed so the event wont show up at another worker
      * before the next scheduling interval. this is only a problem if the sender and
      * receivers have been assigned to different worker threads. */
-    GThread* srcThread = g_hash_table_lookup(data->hostToThreadMap, srcHost);
-    GThread* dstThread = g_hash_table_lookup(data->hostToThreadMap, dstHost);
+    pthread_t srcThread = GPOINTER_TO_UINT(g_hash_table_lookup(data->hostToThreadMap, srcHost));
+    pthread_t dstThread = GPOINTER_TO_UINT(g_hash_table_lookup(data->hostToThreadMap, dstHost));
 
     SimulationTime eventTime = event_getTime(event);
 
-    if(srcThread != dstThread && eventTime < barrier) {
+    if(!pthread_equal(srcThread, dstThread) && eventTime < barrier) {
         event_setTime(event, barrier);
         info("Inter-host event time %"G_GUINT64_FORMAT" changed to %"G_GUINT64_FORMAT" "
                 "to ensure event causality", eventTime, barrier);
     }
 
     /* get the queue for the destination */
-    ThreadPerThreadThreadData* tdata = g_hash_table_lookup(data->threadToThreadDataMap, dstThread);
+    ThreadPerThreadThreadData* tdata = g_hash_table_lookup(data->threadToThreadDataMap, GUINT_TO_POINTER(dstThread));
     utility_assert(tdata);
 
-    GThread* self = g_thread_self();
-    if(dstThread == self) {
+    pthread_t self = pthread_self();
+    if(pthread_equal(dstThread, self)) {
         event_setSequence(event, ++(tdata->qdata->pushSequenceCounter));
         priorityqueue_push(tdata->qdata->pq, event);
         tdata->qdata->nPushed++;
     } else {
-        /* we need to lock this if srcThread != g_thread_self */
-        if(srcThread != self) {
+        /* we need to lock this if srcThread != pthread_self */
+        if(!pthread_equal(srcThread, self)) {
             g_mutex_lock(&(tdata->lock));
         }
 
         /* now make sure we have a mailbox for the source and create one if needed */
-        PriorityQueue* futureEvents = g_hash_table_lookup(tdata->threadToPQueueMap, srcThread);
+        PriorityQueue* futureEvents = g_hash_table_lookup(tdata->threadToPQueueMap, GUINT_TO_POINTER(srcThread));
         if(!futureEvents) {
             futureEvents = priorityqueue_new((GCompareDataFunc)event_compare, NULL, (GDestroyNotify)event_unref);
-            g_hash_table_replace(tdata->threadToPQueueMap, srcThread, futureEvents);
+            g_hash_table_replace(tdata->threadToPQueueMap, GUINT_TO_POINTER(srcThread), futureEvents);
         }
 
         /* 'deliver' the event there */
         priorityqueue_push(futureEvents, event);
 
-        if(srcThread != self) {
+        if(!pthread_equal(srcThread, self)) {
             g_mutex_unlock(&(tdata->lock));
         }
     }
@@ -150,7 +150,7 @@ static Event* _schedulerpolicythreadperthread_pop(SchedulerPolicy* policy, Simul
     ThreadPerThreadPolicyData* data = policy->data;
 
     /* figure out which hosts we should be checking */
-    ThreadPerThreadThreadData* tdata = g_hash_table_lookup(data->threadToThreadDataMap, g_thread_self());
+    ThreadPerThreadThreadData* tdata = g_hash_table_lookup(data->threadToThreadDataMap, GUINT_TO_POINTER(pthread_self()));
     /* if there is no tdata, that means this thread didn't get any hosts assigned to it */
     if(!tdata) {
         /* this thread will remain idle */
@@ -179,7 +179,7 @@ static SimulationTime _schedulerpolicythreadperthread_getNextTime(SchedulerPolic
 
     SimulationTime nextTime = SIMTIME_MAX;
 
-    ThreadPerThreadThreadData* tdata = g_hash_table_lookup(data->threadToThreadDataMap, g_thread_self());
+    ThreadPerThreadThreadData* tdata = g_hash_table_lookup(data->threadToThreadDataMap, GUINT_TO_POINTER(pthread_self()));
     if(tdata) {
         /* we are in between rounds. first we have to drain all future events into the priority queue */
         GList* values = g_hash_table_get_values(tdata->threadToPQueueMap);

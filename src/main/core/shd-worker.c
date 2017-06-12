@@ -9,7 +9,7 @@
 /* thread-level storage structure */
 struct _Worker {
     /* our thread and an id that is unique among all threads */
-    GThread* thread;
+    pthread_t thread;
     guint threadID;
 
     /* pointer to the object that communicates with the master process */
@@ -64,7 +64,7 @@ static Worker* _worker_new(Slave* slave, guint threadID) {
     MAGIC_INIT(worker);
 
     worker->slave = slave;
-    worker->thread = g_thread_self();
+    worker->thread = pthread_self();
     worker->threadID = threadID;
     worker->clock.now = SIMTIME_INVALID;
     worker->clock.last = SIMTIME_INVALID;
@@ -155,8 +155,8 @@ gpointer worker_run(WorkerRunData* data) {
         countdownlatch_countDown(notifyDoneRunning);
     }
 
-    /* calling g_thread_exit(NULL) is equivalent to returning NULL for spawned threads
-     * returning NULL means we don't have to worry about calling g_thread_exit on the main thread */
+    /* calling pthread_exit(NULL) is equivalent to returning NULL for spawned threads
+     * returning NULL means we don't have to worry about calling pthread_exit on the main thread */
     return NULL;
 }
 

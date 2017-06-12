@@ -16,7 +16,7 @@ struct _GlobalSinglePolicyData {
     MAGIC_DECLARE;
 };
 
-static void _schedulerpolicyglobalsingle_addHost(SchedulerPolicy* policy, Host* host, GThread* randomThread) {
+static void _schedulerpolicyglobalsingle_addHost(SchedulerPolicy* policy, Host* host, pthread_t randomThread) {
     MAGIC_ASSERT(policy);
     /* we dont need to store any special mappings because we only have a single pqueue */
     GlobalSinglePolicyData* data = policy->data;

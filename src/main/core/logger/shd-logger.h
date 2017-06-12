@@ -25,8 +25,8 @@ Logger* logger_new(LogLevel filterLevel);
 void logger_ref(Logger* logger);
 void logger_unref(Logger* logger);
 
-void logger_register(Logger* logger, GThread* callerThread);
-void logger_flushRecords(Logger* logger, GThread* callerThread);
+void logger_register(Logger* logger, pthread_t callerThread);
+void logger_flushRecords(Logger* logger, pthread_t callerThread);
 void logger_syncToDisk(Logger* logger);
 
 void logger_setDefault(Logger* logger);

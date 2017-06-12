@@ -53,7 +53,7 @@ struct _Scheduler {
 
 typedef struct _SchedulerThreadItem SchedulerThreadItem;
 struct _SchedulerThreadItem {
-    GThread* thread;
+    pthread_t thread;
     CountDownLatch* notifyDoneRunning;
 };
 
@@ -77,7 +77,7 @@ static void _scheduler_rebalanceHosts(Scheduler* scheduler) {
 
         utility_assert(threadIter);
         SchedulerThreadItem* item = threadIter->data;
-        GThread* thread = item->thread;
+        pthread_t thread = item->thread;
 
 //        g_hash_table_replace(scheduler->hostToThreadMap, host, thread);
 
@@ -206,7 +206,16 @@ Scheduler* scheduler_new(SchedulerPolicyType policyType, guint nWorkers, gpointe
         runData->threadID = i;
         runData->notifyDoneRunning = item->notifyDoneRunning;
 
-        item->thread = g_thread_new(name->str, (GThreadFunc)worker_run, runData);
+        gint returnVal = pthread_create(&(item->thread), NULL, (void*(*)(void*))worker_run, runData);
+        if(returnVal != 0) {
+            critical("unable to create worker thread");
+            return NULL;
+        }
+
+        returnVal = pthread_setname_np(item->thread, name->str);
+        if(returnVal != 0) {
+            warning("unable to set name of worker thread to '%s'", name->str);
+        }
         utility_assert(item->thread);
 
         scheduler->threadItems = g_list_append(scheduler->threadItems, item);
@@ -239,16 +248,16 @@ void scheduler_shutdown(Scheduler* scheduler) {
     while(threadItem) {
         SchedulerThreadItem* item = threadItem->data;
         /* only join the spawned threads, not the main thread */
-        if(item->thread != g_thread_self()) {
+        if(item->thread != pthread_self()) {
             /* the join will consume the reference, so unref is not needed
              * XXX: calling thread_join may cause deadlocks in the loader, so let's just wait
              * for the thread to indicate that it finished everything instead. */
-            //g_thread_join(item->thread);
+            //pthread_join(item->thread);
             if(item->notifyDoneRunning) {
                 countdownlatch_await(item->notifyDoneRunning);
             }
 
-            GTimer* executeEventsBarrierWaitTime = g_hash_table_lookup(scheduler->threadToWaitTimerMap, item->thread);
+            GTimer* executeEventsBarrierWaitTime = g_hash_table_lookup(scheduler->threadToWaitTimerMap, GUINT_TO_POINTER(item->thread));
             gdouble totalWaitTime = g_timer_elapsed(executeEventsBarrierWaitTime, NULL);
             message("joined thread %p, total wait time for round execution barrier was %f seconds", item->thread, totalWaitTime);
         }
@@ -352,7 +361,7 @@ Event* scheduler_pop(Scheduler* scheduler) {
             /* the running thread has no more events to execute this round and we need to block it
              * so that we can wait for all threads to finish events from this round. We want to
              * track idle times, so let's start by making sure we have timer elements in place. */
-            GTimer* executeEventsBarrierWaitTime = g_hash_table_lookup(scheduler->threadToWaitTimerMap, g_thread_self());
+            GTimer* executeEventsBarrierWaitTime = g_hash_table_lookup(scheduler->threadToWaitTimerMap, GUINT_TO_POINTER(pthread_self()));
 
             /* wait for all other worker threads to finish their events too, and track wait time */
             if(executeEventsBarrierWaitTime) {
@@ -373,7 +382,7 @@ Event* scheduler_pop(Scheduler* scheduler) {
             }
 
             /* clear all log messages from the last round */
-            logger_flushRecords(logger_getDefault(), g_thread_self());
+            logger_flushRecords(logger_getDefault(), pthread_self());
 
             /* wait for other threads to finish their collect step */
             countdownlatch_countDownAwait(scheduler->collectInfoBarrier);
@@ -441,7 +450,7 @@ static GList* _scheduler_shuffleList(Scheduler* scheduler, GList* list) {
     return list;
 }
 
-static GList* _scheduler_assignHostsToThread(Scheduler* scheduler, GList* hosts, GThread* thread, uint maxAssignments) {
+static GList* _scheduler_assignHostsToThread(Scheduler* scheduler, GList* hosts, pthread_t thread, uint maxAssignments) {
     MAGIC_ASSERT(scheduler);
     utility_assert(hosts);
     utility_assert(thread);
@@ -468,9 +477,9 @@ static void _scheduler_assignHosts(Scheduler* scheduler) {
 
     if(nThreads <= 1) {
         /* either the main thread or the single worker gets everything */
-        GThread* chosen;
+        pthread_t chosen;
         if(nThreads == 0) {
-            chosen = g_thread_self();
+            chosen = pthread_self();
         } else {
             SchedulerThreadItem* item = g_list_nth_data(scheduler->threadItems, 0);
             chosen = item->thread;
@@ -486,7 +495,7 @@ static void _scheduler_assignHosts(Scheduler* scheduler) {
         GList* nextThreadItem = g_list_first(scheduler->threadItems);
         while(remainingHosts != NULL) {
             SchedulerThreadItem* item = nextThreadItem->data;
-            GThread* nextThread = item->thread;
+            pthread_t nextThread = item->thread;
             remainingHosts = _scheduler_assignHostsToThread(scheduler, remainingHosts, nextThread, 1);
             nextThreadItem = g_list_next(nextThreadItem);
             if(nextThreadItem == NULL) {
@@ -514,10 +523,10 @@ gboolean scheduler_isRunning(Scheduler* scheduler) {
 void scheduler_awaitStart(Scheduler* scheduler) {
     /* set up the thread timer map */
     g_mutex_lock(&scheduler->globalLock);
-    if(!g_hash_table_lookup(scheduler->threadToWaitTimerMap, g_thread_self())) {
+    if(!g_hash_table_lookup(scheduler->threadToWaitTimerMap, GUINT_TO_POINTER(pthread_self()))) {
         GTimer* waitTimer = g_timer_new();
         g_timer_stop(waitTimer);
-        g_hash_table_insert(scheduler->threadToWaitTimerMap, g_thread_self(), waitTimer);
+        g_hash_table_insert(scheduler->threadToWaitTimerMap, GUINT_TO_POINTER(pthread_self()), waitTimer);
     }
     g_mutex_unlock(&scheduler->globalLock);
 
