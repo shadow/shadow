@@ -320,6 +320,7 @@ gssize tgentransport_write(TGenTransport* transport, gpointer buffer, gsize leng
     gssize bytes = write(transport->socketD, buffer, length);
 
     if(bytes < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
+	      tgen_info("Error writing to socket. Transport has error number %i", errno);
         _tgentransport_changeError(transport, TGEN_XPORT_ERR_WRITE);
     }
     if(bytes > 0 && transport->notify) {
@@ -335,6 +336,7 @@ gssize tgentransport_read(TGenTransport* transport, gpointer buffer, gsize lengt
     gssize bytes = read(transport->socketD, buffer, length);
 
     if(bytes < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
+        tgen_info("Error reading from socket. Transport has error number %i", errno);
         _tgentransport_changeError(transport, TGEN_XPORT_ERR_READ);
     }
     if(bytes > 0 && transport->notify) {
@@ -394,6 +396,7 @@ static TGenEvent _tgentransport_sendSocksInit(TGenTransport* transport) {
     \x01 (1 supported auth method)
     \x00 (method is "no auth")
     */
+
     gssize bytesSent = tgentransport_write(transport, "\x05\x01\x00", 3);
     g_assert(bytesSent == 3);
 
