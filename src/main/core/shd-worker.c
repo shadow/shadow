@@ -238,43 +238,40 @@ void worker_sendPacket(Packet* packet) {
     }
 }
 
-void worker_bootHosts(GList* hosts) {
-    Worker* worker = _worker_getPrivate();
-    GList* item = hosts;
-    while(item) {
-        Host* host = item->data;
-        worker_setActiveHost(host);
-        worker->clock.now = 0;
-        host_continueExecutionTimer(host);
-        host_boot(host);
-        host_stopExecutionTimer(host);
-        worker->clock.now = SIMTIME_INVALID;
-        worker_setActiveHost(NULL);
-        item = g_list_next(item);
-    }
+static void _worker_bootHost(Host* host, Worker* worker) {
+    worker_setActiveHost(host);
+    worker->clock.now = 0;
+    host_continueExecutionTimer(host);
+    host_boot(host);
+    host_stopExecutionTimer(host);
+    worker->clock.now = SIMTIME_INVALID;
+    worker_setActiveHost(NULL);
 }
 
-void worker_freeHosts(GList* hosts) {
+void worker_bootHosts(GQueue* hosts) {
     Worker* worker = _worker_getPrivate();
-    GList* item = hosts;
-    while(item) {
-        Host* host = item->data;
-        worker_setActiveHost(host);
-        host_continueExecutionTimer(host);
-        host_freeAllApplications(host);
-        host_stopExecutionTimer(host);
-        worker_setActiveHost(NULL);
-        item = g_list_next(item);
-    }
-    item = hosts;
-    while(item) {
-        Host* host = item->data;
-        worker_setActiveHost(host);
-        host_shutdown(host);
-        worker_setActiveHost(NULL);
-        host_unref(host);
-        item = g_list_next(item);
-    }
+    g_queue_foreach(hosts, (GFunc)_worker_bootHost, worker);
+}
+
+static void _worker_freeHostProcesses(Host* host, Worker* worker) {
+    worker_setActiveHost(host);
+    host_continueExecutionTimer(host);
+    host_freeAllApplications(host);
+    host_stopExecutionTimer(host);
+    worker_setActiveHost(NULL);
+}
+
+static void _worker_shutdownHost(Host* host, Worker* worker) {
+    worker_setActiveHost(host);
+    host_shutdown(host);
+    worker_setActiveHost(NULL);
+    host_unref(host);
+}
+
+void worker_freeHosts(GQueue* hosts) {
+    Worker* worker = _worker_getPrivate();
+    g_queue_foreach(hosts, (GFunc)_worker_freeHostProcesses, worker);
+    g_queue_foreach(hosts, (GFunc)_worker_shutdownHost, worker);
 }
 
 Process* worker_getActiveProcess() {

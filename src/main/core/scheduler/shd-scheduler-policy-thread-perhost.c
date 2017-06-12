@@ -17,7 +17,7 @@ struct _ThreadPerHostQueueData {
 typedef struct _ThreadPerHostThreadData ThreadPerHostThreadData;
 struct _ThreadPerHostThreadData {
     GMutex lock;
-    GList* assignedHosts;
+    GQueue* assignedHosts;
     /* the main event queue for this thread */
     ThreadPerHostQueueData* qdata;
     /* this thread has pqueue that holds future events during each round, and is emptied into
@@ -53,6 +53,7 @@ static ThreadPerHostThreadData* _threadperhostthreaddata_new() {
     ThreadPerHostThreadData* tdata = g_new0(ThreadPerHostThreadData, 1);
     tdata->hostToPQueueMap = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, (GDestroyNotify)priorityqueue_free);
     tdata->qdata = _threadperhostqueuedata_new();
+    tdata->assignedHosts = g_queue_new();
     g_mutex_init(&(tdata->lock));
     return tdata;
 }
@@ -60,7 +61,7 @@ static ThreadPerHostThreadData* _threadperhostthreaddata_new() {
 static void _threadperhostthreaddata_free(ThreadPerHostThreadData* tdata) {
     if(tdata) {
         if(tdata->assignedHosts) {
-            g_list_free(tdata->assignedHosts);
+            g_queue_free(tdata->assignedHosts);
         }
         if(tdata->hostToPQueueMap) {
             g_hash_table_destroy(tdata->hostToPQueueMap);
@@ -83,13 +84,13 @@ static void _schedulerpolicythreadperhost_addHost(SchedulerPolicy* policy, Host*
         tdata = _threadperhostthreaddata_new();
         g_hash_table_replace(data->threadToThreadDataMap, GUINT_TO_POINTER(assignedThread), tdata);
     }
-    tdata->assignedHosts = g_list_append(tdata->assignedHosts, host);
+    g_queue_push_tail(tdata->assignedHosts, host);
 
     /* finally, store the host-to-thread mapping */
     g_hash_table_replace(data->hostToThreadMap, host, GUINT_TO_POINTER(assignedThread));
 }
 
-static GList* _schedulerpolicythreadperhost_getHosts(SchedulerPolicy* policy) {
+static GQueue* _schedulerpolicythreadperhost_getHosts(SchedulerPolicy* policy) {
     MAGIC_ASSERT(policy);
     ThreadPerHostPolicyData* data = policy->data;
     ThreadPerHostThreadData* tdata = g_hash_table_lookup(data->threadToThreadDataMap, GUINT_TO_POINTER(pthread_self()));

@@ -7,7 +7,7 @@
 
 typedef struct _ThreadSingleThreadData ThreadSingleThreadData;
 struct _ThreadSingleThreadData {
-    GList* assignedHosts;
+    GQueue* assignedHosts2;
     GMutex lock;
     PriorityQueue* pq;
     SimulationTime pushSequenceCounter;
@@ -27,13 +27,14 @@ static ThreadSingleThreadData* _threadsinglethreaddata_new() {
     ThreadSingleThreadData* tdata = g_new0(ThreadSingleThreadData, 1);
     g_mutex_init(&(tdata->lock));
     tdata->pq = priorityqueue_new((GCompareDataFunc)event_compare, NULL, (GDestroyNotify)event_unref);
+    tdata->assignedHosts2 = g_queue_new();
     return tdata;
 }
 
 static void _threadsinglethreaddata_free(ThreadSingleThreadData* tdata) {
     if(tdata) {
-        if(tdata->assignedHosts) {
-            g_list_free(tdata->assignedHosts);
+        if(tdata->assignedHosts2) {
+            g_queue_free(tdata->assignedHosts2);
         }
         if(tdata->pq) {
             priorityqueue_free(tdata->pq);
@@ -55,17 +56,17 @@ static void _schedulerpolicythreadsingle_addHost(SchedulerPolicy* policy, Host* 
         tdata = _threadsinglethreaddata_new();
         g_hash_table_replace(data->threadToThreadDataMap, GUINT_TO_POINTER(assignedThread), tdata);
     }
-    tdata->assignedHosts = g_list_append(tdata->assignedHosts, host);
+    g_queue_push_tail(tdata->assignedHosts2, host);
 
     /* finally, store the host-to-thread mapping */
     g_hash_table_replace(data->hostToThreadMap, host, GUINT_TO_POINTER(assignedThread));
 }
 
-static GList* _schedulerpolicythreadsingle_getHosts(SchedulerPolicy* policy) {
+static GQueue* _schedulerpolicythreadsingle_getHosts(SchedulerPolicy* policy) {
     MAGIC_ASSERT(policy);
     ThreadSinglePolicyData* data = policy->data;
     ThreadSingleThreadData* tdata = g_hash_table_lookup(data->threadToThreadDataMap, GUINT_TO_POINTER(pthread_self()));
-    return (tdata != NULL) ? tdata->assignedHosts : NULL;
+    return (tdata != NULL) ? tdata->assignedHosts2 : NULL;
 }
 
 static void _schedulerpolicythreadsingle_push(SchedulerPolicy* policy, Event* event, Host* srcHost, Host* dstHost, SimulationTime barrier) {

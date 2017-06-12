@@ -26,7 +26,7 @@ typedef enum {
 typedef struct _SchedulerPolicy SchedulerPolicy;
 
 typedef void (*SchedulerPolicyAddHostFunc)(SchedulerPolicy*, Host*, pthread_t);
-typedef GList* (*SchedulerPolicyGetHostsFunc)(SchedulerPolicy*);
+typedef GQueue* (*SchedulerPolicyGetHostsFunc)(SchedulerPolicy*);
 typedef void (*SchedulerPolicyPushFunc)(SchedulerPolicy*, Event*, Host*, Host*, SimulationTime);
 typedef Event* (*SchedulerPolicyPopFunc)(SchedulerPolicy*, SimulationTime);
 typedef SimulationTime (*SchedulerPolicyGetNextTimeFunc)(SchedulerPolicy*);

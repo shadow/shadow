@@ -10,7 +10,7 @@
  * following one of several scheduling policies */
 struct _Scheduler {
     /* all worker threads used by the scheduler */
-    GList* threadItems;
+    GQueue* threadItems;
 
     /* global lock for all threads, hold this as little as possible */
     GMutex globalLock;
@@ -57,47 +57,11 @@ struct _SchedulerThreadItem {
     CountDownLatch* notifyDoneRunning;
 };
 
-static void _scheduler_rebalanceHosts(Scheduler* scheduler) {
-    MAGIC_ASSERT(scheduler);
-
-    // WARNING if this is run, then all existing eventSequenceCounters
-    // need to get set to the max of all existing counters to ensure order correctness
-    // also, we probably would need to update the ProgramState for each virtual process
-    // if we move a host to a different thread, because the other thread has its state
-    // at different memory regions because it opened separate libraries
-
-    // we should add timers to each thread so we know which ones are overloaded or not
-
-    GList* allHosts = g_hash_table_get_values(scheduler->hostIDToHostMap);
-    GList* hostIter = g_list_first(allHosts);
-    GList* threadIter = g_list_first(scheduler->threadItems);
-
-    while(hostIter) {
-        Host* host = hostIter->data;
-
-        utility_assert(threadIter);
-        SchedulerThreadItem* item = threadIter->data;
-        pthread_t thread = item->thread;
-
-//        g_hash_table_replace(scheduler->hostToThreadMap, host, thread);
-
-        hostIter = g_list_next(hostIter);
-        threadIter = g_list_next(threadIter);
-        if(!threadIter) {
-            threadIter = g_list_first(scheduler->threadItems);
-        }
-    }
-
-    if(allHosts) {
-        g_list_free(allHosts);
-    }
-}
-
 static void _scheduler_startHosts(Scheduler* scheduler) {
     if(scheduler->policy->getAssignedHosts) {
-        GList* myHosts = scheduler->policy->getAssignedHosts(scheduler->policy);
+        GQueue* myHosts = scheduler->policy->getAssignedHosts(scheduler->policy);
         if(myHosts) {
-            guint nHosts = g_list_length(myHosts);
+            guint nHosts = g_queue_get_length(myHosts);
             message("starting to boot %u hosts", nHosts);
             worker_bootHosts(myHosts);
             message("%u hosts are booted", nHosts);
@@ -120,9 +84,9 @@ static void _scheduler_stopHosts(Scheduler* scheduler) {
 
 //    GList* allHosts = g_hash_table_get_values(scheduler->hostIDToHostMap);
     if(scheduler->policy->getAssignedHosts) {
-        GList* myHosts = scheduler->policy->getAssignedHosts(scheduler->policy);
+        GQueue* myHosts = scheduler->policy->getAssignedHosts(scheduler->policy);
         if(myHosts) {
-            guint nHosts = g_list_length(myHosts);
+            guint nHosts = g_queue_get_length(myHosts);
             message("starting to shut down %u hosts", nHosts);
             worker_freeHosts(myHosts);
             message("%u hosts are shut down", nHosts);
@@ -191,6 +155,8 @@ Scheduler* scheduler_new(SchedulerPolicyType policyType, guint nWorkers, gpointe
     /* make sure our ref count is set before starting the threads */
     scheduler->referenceCount = 1;
 
+    scheduler->threadItems = g_queue_new();
+
     /* start up threads and create worker storage, each thread will call worker_new,
      * and wait at startBarrier until we are ready to launch */
     for(gint i = 0; i < nWorkers; i++) {
@@ -218,7 +184,7 @@ Scheduler* scheduler_new(SchedulerPolicyType policyType, guint nWorkers, gpointe
         }
         utility_assert(item->thread);
 
-        scheduler->threadItems = g_list_append(scheduler->threadItems, item);
+        g_queue_push_tail(scheduler->threadItems, item);
         logger_register(logger_getDefault(), item->thread);
 
         g_string_free(name, TRUE);
@@ -239,14 +205,14 @@ void scheduler_shutdown(Scheduler* scheduler) {
     g_hash_table_destroy(scheduler->hostIDToHostMap);
 
     /* join and free spawned worker threads */
-    guint nWorkers = g_list_length(scheduler->threadItems);
+    guint nWorkers = g_queue_get_length(scheduler->threadItems);
 
     message("waiting for %u worker threads to finish", nWorkers);
 
     /* wait for the threads to finish their cleanup */
-    GList* threadItem = scheduler->threadItems;
-    while(threadItem) {
-        SchedulerThreadItem* item = threadItem->data;
+    while(!g_queue_is_empty(scheduler->threadItems)) {
+        SchedulerThreadItem* item = g_queue_pop_head(scheduler->threadItems);
+
         /* only join the spawned threads, not the main thread */
         if(item->thread != pthread_self()) {
             /* the join will consume the reference, so unref is not needed
@@ -261,25 +227,21 @@ void scheduler_shutdown(Scheduler* scheduler) {
             gdouble totalWaitTime = g_timer_elapsed(executeEventsBarrierWaitTime, NULL);
             message("joined thread %p, total wait time for round execution barrier was %f seconds", item->thread, totalWaitTime);
         }
-
-        threadItem = g_list_next(threadItem);
     }
 }
 
 static void _scheduler_free(Scheduler* scheduler) {
     MAGIC_ASSERT(scheduler);
 
-    guint nWorkers = g_list_length(scheduler->threadItems);
+    guint nWorkers = g_queue_get_length(scheduler->threadItems);
 
-    GList* threadItem = scheduler->threadItems;
-    while(threadItem) {
-        SchedulerThreadItem* item = threadItem->data;
+    while(!g_queue_is_empty(scheduler->threadItems)) {
+        SchedulerThreadItem* item = g_queue_pop_head(scheduler->threadItems);
         countdownlatch_free(item->notifyDoneRunning);
         g_free(item);
-        threadItem = g_list_next(threadItem);
     }
 
-    g_list_free(scheduler->threadItems);
+    g_queue_free(scheduler->threadItems);
 
     scheduler->policy->free(scheduler->policy);
     random_free(scheduler->random);
@@ -413,20 +375,25 @@ Host* scheduler_getHost(Scheduler* scheduler, GQuark hostID) {
     return (Host*) g_hash_table_lookup(scheduler->hostIDToHostMap, GUINT_TO_POINTER((guint)hostID));
 }
 
-static GList* _scheduler_shuffleList(Scheduler* scheduler, GList* list) {
-    if(list == NULL) {
-        return NULL;
+static void _scheduler_appendHostToQueue(gpointer uintKey, Host* host, GQueue* allHosts) {
+    g_queue_push_tail(allHosts, host);
+}
+
+static void _scheduler_shuffleQueue(Scheduler* scheduler, GQueue* queue) {
+    if(queue == NULL) {
+        return;
     }
 
-    /* convert list to array */
-    guint length = g_list_length(list);
+    /* convert queue to array */
+    guint length = g_queue_get_length(queue);
     gpointer array[length];
 
     for(guint i = 0; i < length; i++) {
-        array[i] = g_list_nth_data(list, i);
+        array[i] = g_queue_pop_head(queue);
     }
-    g_list_free(list);
-    list = NULL;
+
+    /* we now should have moved all elements from the queue to the array */
+    utility_assert(g_queue_is_empty(queue));
 
     /* shuffle array - Fisher-Yates shuffle */
     for(guint i = 0; i < length-1; i++) {
@@ -443,28 +410,24 @@ static GList* _scheduler_shuffleList(Scheduler* scheduler, GList* list) {
         array[i+j] = temp;
     }
 
-    /* convert back to list */
+    /* reload the queue with the newly shuffled ordering */
     for(guint i = 0; i < length; i++) {
-        list = g_list_append(list, array[i]);
+        g_queue_push_tail(queue, array[i]);
     }
-    return list;
 }
 
-static GList* _scheduler_assignHostsToThread(Scheduler* scheduler, GList* hosts, pthread_t thread, uint maxAssignments) {
+static void _scheduler_assignHostsToThread(Scheduler* scheduler, GQueue* hosts, pthread_t thread, uint maxAssignments) {
     MAGIC_ASSERT(scheduler);
     utility_assert(hosts);
     utility_assert(thread);
 
     guint numAssignments = 0;
-    GList* nextItem = hosts;
-    while((maxAssignments == 0 || numAssignments < maxAssignments) && nextItem != NULL) {
-        Host* host = (Host*) nextItem->data;
+    while((maxAssignments == 0 || numAssignments < maxAssignments) && !g_queue_is_empty(hosts)) {
+        Host* host = (Host*) g_queue_pop_head(hosts);
         utility_assert(host);
         scheduler->policy->addHost(scheduler->policy, host, thread);
         numAssignments++;
-        nextItem = g_list_next(nextItem);
     }
-    return nextItem;
 }
 
 static void _scheduler_assignHosts(Scheduler* scheduler) {
@@ -472,8 +435,11 @@ static void _scheduler_assignHosts(Scheduler* scheduler) {
 
     g_mutex_lock(&scheduler->globalLock);
 
-    GList* allHosts = g_hash_table_get_values(scheduler->hostIDToHostMap);
-    guint nThreads = g_list_length(scheduler->threadItems);
+    /* get queue of all hosts */
+    GQueue* hosts = g_queue_new();
+    g_hash_table_foreach(scheduler->hostIDToHostMap, (GHFunc)_scheduler_appendHostToQueue, hosts);
+
+    guint nThreads = g_queue_get_length(scheduler->threadItems);
 
     if(nThreads <= 1) {
         /* either the main thread or the single worker gets everything */
@@ -481,33 +447,61 @@ static void _scheduler_assignHosts(Scheduler* scheduler) {
         if(nThreads == 0) {
             chosen = pthread_self();
         } else {
-            SchedulerThreadItem* item = g_list_nth_data(scheduler->threadItems, 0);
+            SchedulerThreadItem* item = g_queue_peek_head(scheduler->threadItems);
             chosen = item->thread;
         }
-        GList* remaining = _scheduler_assignHostsToThread(scheduler, allHosts, chosen, 0);
-        utility_assert(remaining == NULL);
+
+        /* assign *all* of the hosts to the chosen thread */
+        _scheduler_assignHostsToThread(scheduler, hosts, chosen, 0);
+        utility_assert(g_queue_is_empty(hosts));
     } else {
         /* we need to shuffle the list of hosts to make sure they are randomly assigned */
-        allHosts = _scheduler_shuffleList(scheduler, allHosts);
+        _scheduler_shuffleQueue(scheduler, hosts);
 
         /* now that our host order has been randomized, assign them evenly to worker threads */
-        GList* remainingHosts = g_list_first(allHosts);
-        GList* nextThreadItem = g_list_first(scheduler->threadItems);
-        while(remainingHosts != NULL) {
-            SchedulerThreadItem* item = nextThreadItem->data;
+        while(!g_queue_is_empty(hosts)) {
+            SchedulerThreadItem* item = g_queue_pop_head(scheduler->threadItems);
             pthread_t nextThread = item->thread;
-            remainingHosts = _scheduler_assignHostsToThread(scheduler, remainingHosts, nextThread, 1);
-            nextThreadItem = g_list_next(nextThreadItem);
-            if(nextThreadItem == NULL) {
-                nextThreadItem = g_list_first(scheduler->threadItems);
-            }
+
+            _scheduler_assignHostsToThread(scheduler, hosts, nextThread, 1);
+
+            g_queue_push_tail(scheduler->threadItems, item);
         }
     }
 
-    if(allHosts) {
-        g_list_free(allHosts);
+    if(hosts) {
+        g_queue_free(hosts);
     }
     g_mutex_unlock(&scheduler->globalLock);
+}
+
+static void _scheduler_rebalanceHosts(Scheduler* scheduler) {
+    MAGIC_ASSERT(scheduler);
+
+    // WARNING if this is run, then all existing eventSequenceCounters
+    // need to get set to the max of all existing counters to ensure order correctness
+
+    /* get queue of all hosts */
+    GQueue* hosts = g_queue_new();
+    g_hash_table_foreach(scheduler->hostIDToHostMap, (GHFunc)_scheduler_appendHostToQueue, hosts);
+
+    _scheduler_shuffleQueue(scheduler, hosts);
+
+    /* now that our host order has been randomized, assign them evenly to worker threads */
+    while(!g_queue_is_empty(hosts)) {
+        Host* host = g_queue_pop_head(hosts);
+        SchedulerThreadItem* item = g_queue_pop_head(scheduler->threadItems);
+        pthread_t newThread = item->thread;
+
+//        TODO this needs to get uncommented/updated when migration code is added
+//        scheduler->policy->migrateHost(scheduler->policy, host, newThread);
+
+        g_queue_push_tail(scheduler->threadItems, item);
+    }
+
+    if(hosts) {
+        g_queue_free(hosts);
+    }
 }
 
 SchedulerPolicyType scheduler_getPolicy(Scheduler* scheduler) {

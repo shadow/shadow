@@ -12,7 +12,7 @@ struct _GlobalSinglePolicyData {
     SimulationTime lastEventTime;
     gsize nPushed;
     gsize nPopped;
-    GList* assignedHosts;
+    GQueue* assignedHosts;
     MAGIC_DECLARE;
 };
 
@@ -20,10 +20,10 @@ static void _schedulerpolicyglobalsingle_addHost(SchedulerPolicy* policy, Host* 
     MAGIC_ASSERT(policy);
     /* we dont need to store any special mappings because we only have a single pqueue */
     GlobalSinglePolicyData* data = policy->data;
-    data->assignedHosts = g_list_append(data->assignedHosts, host);
+    g_queue_push_tail(data->assignedHosts, host);
 }
 
-static GList* _schedulerpolicyglobalsingle_getHosts(SchedulerPolicy* policy) {
+static GQueue* _schedulerpolicyglobalsingle_getHosts(SchedulerPolicy* policy) {
     MAGIC_ASSERT(policy);
     GlobalSinglePolicyData* data = policy->data;
     return data->assignedHosts;
@@ -72,7 +72,7 @@ static void _schedulerpolicyglobalsingle_free(SchedulerPolicy* policy) {
         priorityqueue_free(data->pq);
     }
     if(data->assignedHosts) {
-        g_list_free(data->assignedHosts);
+        g_queue_free(data->assignedHosts);
     }
     g_free(data);
 
@@ -83,6 +83,7 @@ static void _schedulerpolicyglobalsingle_free(SchedulerPolicy* policy) {
 SchedulerPolicy* schedulerpolicyglobalsingle_new() {
     GlobalSinglePolicyData* data = g_new0(GlobalSinglePolicyData, 1);
     data->pq = priorityqueue_new((GCompareDataFunc)event_compare, NULL, (GDestroyNotify)event_unref);
+    data->assignedHosts = g_queue_new();
 
     SchedulerPolicy* policy = g_new0(SchedulerPolicy, 1);
     MAGIC_INIT(policy);

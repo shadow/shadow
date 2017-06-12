@@ -37,8 +37,8 @@ void worker_updateMinTimeJump(gdouble minPathLatency);
 void worker_setCurrentTime(SimulationTime time);
 gboolean worker_isFiltered(LogLevel level);
 
-void worker_bootHosts(GList* hosts);
-void worker_freeHosts(GList* hosts);
+void worker_bootHosts(GQueue* hosts);
+void worker_freeHosts(GQueue* hosts);
 
 Host* worker_getActiveHost();
 void worker_setActiveHost(Host* host);
