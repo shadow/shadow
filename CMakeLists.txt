@@ -108,7 +108,7 @@ else(SHADOW_DEBUG STREQUAL ON)
     message(STATUS "CMAKE_BUILD_TYPE Release enabled.")
     set(CMAKE_BUILD_TYPE Release)
     add_definitions(-DNDEBUG)
-    #add_cflags(-O3) # causes segfault in Tor
+    add_cflags(-O3)
 endif(SHADOW_DEBUG STREQUAL ON)
 
 if($ENV{VERBOSE})
