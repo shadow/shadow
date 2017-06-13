@@ -847,6 +847,8 @@ static TGenEvent _tgentransfer_runTransportEventLoop(TGenTransfer* transfer, TGe
         _tgentransfer_changeState(transfer, TGEN_XFER_ERROR);
         _tgentransfer_changeError(transfer, TGEN_XFER_ERR_PROXY);
         _tgentransfer_log(transfer, FALSE);
+
+        /* return DONE to the io module so it does deregistration */
         return TGEN_EVENT_DONE;
     } else {
         transfer->time.lastProgress = g_get_monotonic_time();

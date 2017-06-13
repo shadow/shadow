@@ -322,8 +322,14 @@ gssize tgentransport_write(TGenTransport* transport, gpointer buffer, gsize leng
     if(bytes < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
         tgen_info("write(): write to socket %i returned "G_GSSIZE_FORMAT" error %i: %s",
                         transport->socketD, bytes, errno, g_strerror(errno));
+        _tgentransport_changeState(transport, TGEN_XPORT_ERROR);
+        _tgentransport_changeError(transport, TGEN_XPORT_ERR_WRITE);
+    } else if(bytes == 0) {
+        tgen_info("write(): socket %i closed unexpectedly", transport->socketD);
+        _tgentransport_changeState(transport, TGEN_XPORT_ERROR);
         _tgentransport_changeError(transport, TGEN_XPORT_ERR_WRITE);
     }
+
     if(bytes > 0 && transport->notify) {
         transport->notify(transport->data, 0, (gsize)bytes);
     }
@@ -339,8 +345,14 @@ gssize tgentransport_read(TGenTransport* transport, gpointer buffer, gsize lengt
     if(bytes < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
         tgen_info("read(): read from socket %i returned "G_GSSIZE_FORMAT" error %i: %s",
                         transport->socketD, bytes, errno, g_strerror(errno));
+        _tgentransport_changeState(transport, TGEN_XPORT_ERROR);
+        _tgentransport_changeError(transport, TGEN_XPORT_ERR_READ);
+    } else if(bytes == 0) {
+        tgen_info("read(): socket %i closed unexpectedly", transport->socketD);
+        _tgentransport_changeState(transport, TGEN_XPORT_ERROR);
         _tgentransport_changeError(transport, TGEN_XPORT_ERR_READ);
     }
+
     if(bytes > 0 && transport->notify) {
         transport->notify(transport->data, (gsize)bytes, 0);
     }
@@ -604,9 +616,9 @@ static TGenEvent _tgentransport_receiveSocksResponse(TGenTransport* transport) {
 
 TGenEvent tgentransport_onEvent(TGenTransport* transport, TGenEvent events) {
     TGEN_ASSERT(transport);
-    if(!tgentransport_wantsEvents(transport)) {
-        return TGEN_EVENT_NONE;
-    }
+
+    /* return TGEN_EVENT_NONE to indicate an error, or TGEN_EVENT_DONE to indicate that the socket
+     * is ready for a transfer to start (SOCKS is connected, if necessary) */
 
     switch(transport->state) {
     case TGEN_XPORT_CONNECT: {
