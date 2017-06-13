@@ -320,6 +320,8 @@ gssize tgentransport_write(TGenTransport* transport, gpointer buffer, gsize leng
     gssize bytes = write(transport->socketD, buffer, length);
 
     if(bytes < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
+        tgen_info("write(): write to socket %i returned "G_GSSIZE_FORMAT" error %i: %s",
+                        transport->socketD, bytes, errno, g_strerror(errno));
         _tgentransport_changeError(transport, TGEN_XPORT_ERR_WRITE);
     }
     if(bytes > 0 && transport->notify) {
@@ -335,6 +337,8 @@ gssize tgentransport_read(TGenTransport* transport, gpointer buffer, gsize lengt
     gssize bytes = read(transport->socketD, buffer, length);
 
     if(bytes < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
+        tgen_info("read(): read from socket %i returned "G_GSSIZE_FORMAT" error %i: %s",
+                        transport->socketD, bytes, errno, g_strerror(errno));
         _tgentransport_changeError(transport, TGEN_XPORT_ERR_READ);
     }
     if(bytes > 0 && transport->notify) {
