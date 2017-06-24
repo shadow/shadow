@@ -457,7 +457,7 @@ vdl_tls_dtv_update_current (__attribute__ ((unused)) struct dtv_t *dtv,
 
 static inline void
 vdl_tls_dtv_update_new (struct dtv_t *new_dtv, unsigned long dtv_size,
-                        unsigned long new_dtv_size)
+                        unsigned long new_dtv_size, signed long tcb)
 {
   unsigned long module;
   for (module = dtv_size + 1; module <= new_dtv_size; module++)
@@ -475,7 +475,6 @@ vdl_tls_dtv_update_new (struct dtv_t *new_dtv, unsigned long dtv_size,
         }
       if (file->tls_is_static)
         {
-          signed long tcb = machine_thread_pointer_get ();
           signed long dtvi = tcb + file->tls_offset;
           new_dtv[file->tls_index].value = dtvi;
           new_dtv[file->tls_index].is_static = 1;
@@ -518,7 +517,7 @@ vdl_tls_dtv_update_given (unsigned long tp, struct dtv_t *dtv)
   struct dtv_t *new_dtv = get_current_dtv (tp);
   unsigned long new_dtv_size = new_dtv[-1].value;
   // then, initialize the new area in the new dtv
-  vdl_tls_dtv_update_new (new_dtv, dtv_size, new_dtv_size);
+  vdl_tls_dtv_update_new (new_dtv, dtv_size, new_dtv_size, tp);
   // now that the dtv is updated, update the generation
   new_dtv[0].gen = g_vdl.tls_gen;
 }
@@ -624,9 +623,7 @@ vdl_tls_swap_file (void *data, void *aux)
       vdl_memcpy (tmp_tls, static_tls1, tls_size);
       vdl_memcpy (static_tls1, static_tls2, tls_size);
       vdl_memcpy (static_tls2, tmp_tls, tls_size);
-      // my understanding is static TLS ELF files can't use dynamic TLS,
-      // but the rest of elf-loader supports it and it's cheap to copy,
-      // so better safe than sorry
+      return 0;
     }
   int module;
   // make sure we're not trying to swap the gen counter
