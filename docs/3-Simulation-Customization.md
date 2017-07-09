@@ -264,3 +264,45 @@ nx.write_graphml(G, "tgen.bulk.graphml.xml")
 ```
 
 The scripts are simple, but capable of generating complex behavior profiles.
+
+Here is an example of using multiple transfers and waiting for all of them to complete before moving on to the next action:
+
+```python
+import networkx as nx
+
+servers ="server1:8888,server2:8888"
+
+
+G = nx.DiGraph()
+
+# start is required
+G.add_node("start", serverport="8888", peers=servers)
+
+# multiple transfers
+G.add_node("transfer1", type="get", protocol="tcp", size="50 KiB")
+G.add_node("transfer2", type="get", protocol="tcp", size="1 MiB")
+G.add_node("transfer3", type="get", protocol="tcp", size="5 MiB")
+
+# pause for 60 seconds
+G.add_node("pause_wait", time="60")
+# pause to synchronize transfers
+G.add_node("pause_sync")
+
+# after start, go to all transfers in parallel
+G.add_edge("start", "transfer1")
+G.add_edge("start", "transfer2")
+G.add_edge("start", "transfer3")
+
+# now wait for all of those transfers to complete
+G.add_edge("transfer1", "pause_sync")
+G.add_edge("transfer2", "pause_sync")
+G.add_edge("transfer3", "pause_sync")
+
+# now that all transfers are complete, pause for 60 seconds
+G.add_edge("pause_sync", "pause_wait")
+
+# repeat the transfers
+G.add_edge("pause_wait", "start")
+
+nx.write_graphml(G, "tgen.web.graphml.xml")
+```
