@@ -970,7 +970,7 @@ vdl_file_map_single_maybe (struct VdlContext *context,
   // The file is really not yet mapped so, we have to map it
   result.file = vdl_file_map_single (context, filename, name);
   VDL_LOG_ASSERT (result.file != 0,
-                  "The file should be there so this should not fail.");
+                  "Attempted mapping failed. Try adjusting your system's max_map_count.");
   result.newly_mapped = true;
 
   vdl_alloc_free (filename);
