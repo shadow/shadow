@@ -820,9 +820,9 @@ Lmid_t
 vdl_dl_lmid_new (int argc, char **argv, char **envp)
 {
   VDL_LOG_FUNCTION ("", 0);
-  write_lock (g_vdl.global_lock);
+  read_lock (g_vdl.global_lock);
   struct VdlContext *context = vdl_context_new (argc, argv, envp);
-  write_unlock (g_vdl.global_lock);
+  read_unlock (g_vdl.global_lock);
   return (Lmid_t) context;
 }
 
