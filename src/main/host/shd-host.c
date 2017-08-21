@@ -1539,3 +1539,14 @@ const gchar* host_getDataPath(Host* host) {
     MAGIC_ASSERT(host);
     return host->dataDirPath;
 }
+
+void host_migrate(Host* host, pthread_t *from, pthread_t *to) {
+    MAGIC_ASSERT(host);
+    if(*from == *to) {
+        return;
+    }
+    struct ProcessMigrateArgs ts;
+    ts.t1 = from;
+    ts.t2 = to;
+    g_queue_foreach(host->processes, (GFunc)process_migrate, &ts);
+}

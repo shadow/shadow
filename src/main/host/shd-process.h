@@ -80,6 +80,11 @@ void process_unref(Process* proc);
 
 void process_schedule(Process* proc, gpointer nothing);
 void process_continue(Process* proc);
+struct ProcessMigrateArgs {
+    pthread_t* t1;
+    pthread_t* t2;
+};
+void process_migrate(Process* proc, gpointer threads);
 
 gboolean process_wantsNotify(Process* proc, gint epollfd);
 gboolean process_isRunning(Process* proc);

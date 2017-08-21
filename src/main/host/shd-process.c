@@ -54,6 +54,8 @@
 #include <glib.h>
 #include <glib/gstdio.h>
 
+#include "../external/elf-loader/dl.h"
+
 #if defined(FD_SETSIZE)
 #if FD_SETSIZE > 1024
 #error "FD_SETSIZE is larger than what GNU Pth can handle."
@@ -183,6 +185,11 @@ struct _Process {
          */
         gboolean isExecuting;
     } plugin;
+
+    /* the namespace that the plugin, its preloads, and objects loaded in the
+     * default namespace during execution are in
+     */
+    Lmid_t lmid;
 
     /* the portable thread state this process uses when executing the program */
     pth_gctx_t tstate;
@@ -406,26 +413,25 @@ static void _process_loadPlugin(Process* proc) {
         critical("dlmopen() failed to load plugin '%s': %s", proc->plugin.path->str, errorMessage);
         error("unable to load private plug-in '%s'", proc->plugin.path->str);
     }
+    /* clear dlerror status string */
+    dlerror();
 
+    /* get the LMID so we can load it in the same namespace as the plugin */
+    Lmid_t lmid = 0;
+    int result = dlinfo(proc->plugin.handle, RTLD_DI_LMID, &lmid);
+
+    const gchar* errorMessage2 = dlerror();
+
+    if(result == 0) {
+        debug("found LMID %lu for handle %p", (long unsigned int)lmid, proc->plugin.handle);
+        proc->lmid = lmid;
+    } else {
+        critical("dlinfo() failed when querying for LMID: %s", errorMessage2);
+        error("unable to load preload library '%s'", proc->plugin.preloadPath->str);
+    }
     /* do we also need to load in a preload library for this plugin? */
     if(proc->plugin.preloadPath) {
-        /* clear dlerror status string */
-        dlerror();
-
-        /* get the LMID so we can load it in the same namespace as the plugin */
-        Lmid_t lmid = 0;
-        int result = dlinfo(proc->plugin.handle, RTLD_DI_LMID, &lmid);
-
-        const gchar* errorMessage2 = dlerror();
-
-        if(result == 0) {
-            debug("found LMID %lu for handle %p", (long unsigned int)lmid, proc->plugin.handle);
-        } else {
-            critical("dlinfo() failed when querying for LMID: %s", errorMessage2);
-            error("unable to load preload library '%s'", proc->plugin.preloadPath->str);
-        }
-
-        /* reset tje timer so we can time loading the preload lib */
+        /* reset the timer so we can time loading the preload lib */
         g_timer_start(loadTimer);
 
         /* dlmopen may result in plugin constructors getting called, so make sure
@@ -1340,6 +1346,23 @@ gboolean process_isRunning(Process* proc) {
 
 gboolean process_shouldEmulate(Process* proc) {
     return ((!proc) || (proc->activeContext == PCTX_SHADOW)) ? FALSE : TRUE;
+}
+
+void process_migrate(Process* proc, gpointer threads) {
+    MAGIC_ASSERT(proc);
+    struct ProcessMigrateArgs* ts = threads;
+    if (!proc->lmid) {
+        /* plugin hasn't been loaded into a namespace yet; nothing to do */
+        return;
+    }
+    int ret = dl_lmid_swap_tls (proc->lmid, ts->t1, ts->t2);
+    if (ret != 0) {
+        error("could not find lmid %p", proc->lmid);
+    }
+    /* now that we migrated the TLS, the errno location for this proc is no longer valid.
+     * set the flag so that the next thread executing this process does a new lookup before
+     * trying to set errno again. */
+    proc->plugin.errnoGetLocationIsStale = TRUE;
 }
 
 /*****************************************************************

@@ -57,8 +57,6 @@ typedef struct _Process Process;
  * order of includes is very important to prevent circular dependencies.
  * place base classes with few dependencies first.
  */
-
-#include "../external/elf-loader/dl.h"
 #include "core/support/shd-definitions.h"
 #include "core/shd-main.h"
 

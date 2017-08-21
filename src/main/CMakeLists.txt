@@ -24,6 +24,10 @@ include_directories(${CMAKE_SOURCE_DIR}/src/main)
 include_directories(${CMAKE_BINARY_DIR}/src/external/rpth)
 link_directories(${CMAKE_BINARY_DIR}/src/external/rpth/.libs)
 
+## make sure vdl.h is in the include and link path
+include_directories(${CMAKE_BINARY_DIR}/src/external/elf-loader)
+link_directories(${CMAKE_BINARY_DIR}/src/external/elf-loader/)
+
 ## compile defs and flags
 #add_definitions(-D_SVID_SOURCE -D_XOPEN_SOURCE=600 -D_ISOC11_SOURCE) #-D_GNU_SOURCE
 ## set the igraph version guesses
@@ -99,12 +103,12 @@ set(shadow_srcs
 ## specify the main shadow executable, build, link, and install
 add_executable(shadow ${shadow_srcs})
 add_dependencies(shadow shadow-interpose-helper elf-loader rpth)
-target_link_libraries(shadow shadow-interpose-helper -lrpth ${CMAKE_THREAD_LIBS_INIT} ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES} ${IGRAPH_LIBRARIES} ${GLIB_LIBRARIES})
+target_link_libraries(shadow shadow-interpose-helper -lrpth -lvdl ${CMAKE_THREAD_LIBS_INIT} ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES} ${IGRAPH_LIBRARIES} ${GLIB_LIBRARIES})
 install(TARGETS shadow DESTINATION bin)
 
 ## shadow needs to find libshadow-interpose and custom libs after install
-set_target_properties(shadow PROPERTIES 
+set_target_properties(shadow PROPERTIES
     INSTALL_RPATH ${CMAKE_INSTALL_PREFIX}/lib
-    INSTALL_RPATH_USE_LINK_PATH TRUE 
+    INSTALL_RPATH_USE_LINK_PATH TRUE
     LINK_FLAGS "-Wl,--no-as-needed,-rpath=${CMAKE_INSTALL_PREFIX}/lib,-dynamic-linker=${CMAKE_INSTALL_PREFIX}/lib/ldso -z lazy"
 )
