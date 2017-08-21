@@ -50,6 +50,7 @@ set(shadow_srcs
     core/scheduler/shd-scheduler.c
     core/scheduler/shd-scheduler-policy-global-single.c
     core/scheduler/shd-scheduler-policy-host-single.c
+    core/scheduler/shd-scheduler-policy-host-steal.c
     core/scheduler/shd-scheduler-policy-thread-perhost.c
     core/scheduler/shd-scheduler-policy-thread-perthread.c
     core/scheduler/shd-scheduler-policy-thread-single.c

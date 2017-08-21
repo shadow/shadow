@@ -12,6 +12,8 @@ typedef enum {
     /* every host has a locked pqueue into which every thread inserts events,
      * max queue contention is N for N threads */
     SP_PARALLEL_HOST_SINGLE,
+    /* modified version of SP_PARALLEL_HOST_SINGLE that implements work stealing */
+    SP_PARALLEL_HOST_STEAL,
     /* every thread has a locked pqueue into which every thread inserts events,
      * max queue contention is N for N threads */
     SP_PARALLEL_THREAD_SINGLE,

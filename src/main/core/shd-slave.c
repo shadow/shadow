@@ -65,6 +65,8 @@ static SchedulerPolicyType _slave_getEventSchedulerPolicy(Slave* slave) {
     const gchar* policyStr = options_getEventSchedulerPolicy(slave->options);
     if (g_ascii_strcasecmp(policyStr, "host") == 0) {
         return SP_PARALLEL_HOST_SINGLE;
+    } else if (g_ascii_strcasecmp(policyStr, "steal") == 0) {
+        return SP_PARALLEL_HOST_STEAL;
     } else if (g_ascii_strcasecmp(policyStr, "thread") == 0) {
         return SP_PARALLEL_THREAD_SINGLE;
     } else if (g_ascii_strcasecmp(policyStr, "threadXthread") == 0) {
