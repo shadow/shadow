@@ -17,11 +17,13 @@ struct _HostStealQueueData {
 
 typedef struct _HostStealThreadData HostStealThreadData;
 struct _HostStealThreadData {
+    /* used to cache getHosts() result for memory management as needed*/
+    GQueue* allHosts;
     /* all hosts that have been assigned to this worker for event processing that have not been started this round */
     GQueue* assignedHosts;
     /* during each round, hosts whose events have been processed are moved from assignedHosts to here */
     GQueue* processedHosts;
-    /* the host this worker running */
+    /* the host this worker is running */
     Host* runningHost;
     SimulationTime currentBarrier;
     GTimer* pushIdleTime;
@@ -68,6 +70,9 @@ static HostStealThreadData* _hoststealthreaddata_new() {
 
 static void _hoststealthreaddata_free(HostStealThreadData* tdata) {
     if(tdata) {
+        if(tdata->allHosts) {
+            g_queue_free(tdata->allHosts);
+        }
         if(tdata->assignedHosts) {
             g_queue_free(tdata->assignedHosts);
         }
@@ -163,11 +168,30 @@ static void _schedulerpolicyhoststeal_migrateHost(SchedulerPolicy* policy, Host*
     _schedulerpolicyhoststeal_addHost(policy, host, newThread);
 }
 
+static void concat_queue_iter(gpointer data, gpointer user_data) {
+    GQueue* front_queue = user_data;
+    g_queue_push_tail(front_queue, data);
+}
+
 static GQueue* _schedulerpolicyhoststeal_getHosts(SchedulerPolicy* policy) {
     MAGIC_ASSERT(policy);
     HostStealPolicyData* data = policy->data;
     HostStealThreadData* tdata = g_hash_table_lookup(data->threadToThreadDataMap, GUINT_TO_POINTER(pthread_self()));
-    return (tdata != NULL) ? tdata->assignedHosts : NULL;
+    if(!tdata) {
+        return NULL;
+    }
+    if(g_queue_is_empty(tdata->assignedHosts)) {
+        return tdata->processedHosts;
+    }
+    if(g_queue_is_empty(tdata->processedHosts)) {
+        return tdata->assignedHosts;
+    }
+    if(tdata->allHosts) {
+        g_queue_free(tdata->allHosts);
+    }
+    tdata->allHosts = g_queue_copy(tdata->processedHosts);
+    g_queue_foreach(tdata->assignedHosts, concat_queue_iter, tdata->allHosts);
+    return tdata->assignedHosts;
 }
 
 static void _schedulerpolicyhoststeal_push(SchedulerPolicy* policy, Event* event, Host* srcHost, Host* dstHost, SimulationTime barrier) {
