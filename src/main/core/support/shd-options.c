@@ -90,7 +90,7 @@ Options* options_new(gint argc, gchar* argv[]) {
       { "preload", 'p', 0, G_OPTION_ARG_STRING, &(options->preloads), "LD_PRELOAD environment VALUE to use for function interposition (/path/to/lib:...) [None]", "VALUE" },
       { "runahead", 'r', 0, G_OPTION_ARG_INT, &(options->minRunAhead), "If set, overrides the automatically calculated minimum TIME workers may run ahead when sending events between nodes, in milliseconds [0]", "TIME" },
       { "seed", 's', 0, G_OPTION_ARG_INT, &(options->randomSeed), "Initialize randomness for each thread using seed N [1]", "N" },
-      { "scheduler-policy", 't', 0, G_OPTION_ARG_STRING, &(options->eventSchedulingPolicy), "The event scheduler's policy for thread synchronization ('thread', 'host', 'steal', 'threadXthread', 'threadXhost') ['host']", "SPOL" },
+      { "scheduler-policy", 't', 0, G_OPTION_ARG_STRING, &(options->eventSchedulingPolicy), "The event scheduler's policy for thread synchronization ('thread', 'host', 'steal', 'threadXthread', 'threadXhost') ['steal']", "SPOL" },
       { "workers", 'w', 0, G_OPTION_ARG_INT, &(options->nWorkerThreads), "Run concurrently with N worker threads [0]", "N" },
       { "valgrind", 'x', 0, G_OPTION_ARG_NONE, &(options->runValgrind), "Run through valgrind for debugging", NULL },
       { "version", 'v', 0, G_OPTION_ARG_NONE, &(options->printSoftwareVersion), "Print software version and exit", NULL },
@@ -191,7 +191,7 @@ Options* options_new(gint argc, gchar* argv[]) {
         options->interfaceQueuingDiscipline = g_strdup("fifo");
     }
     if(options->eventSchedulingPolicy == NULL) {
-        options->eventSchedulingPolicy = g_strdup("host");
+        options->eventSchedulingPolicy = g_strdup("steal");
     }
     if(!options->initialSocketReceiveBufferSize) {
         options->initialSocketReceiveBufferSize = CONFIG_RECV_BUFFER_SIZE;

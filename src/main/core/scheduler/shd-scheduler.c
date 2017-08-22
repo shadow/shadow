@@ -121,7 +121,7 @@ Scheduler* scheduler_new(SchedulerPolicyType policyType, guint nWorkers, gpointe
     if(nWorkers == 0) {
         scheduler->policyType = SP_SERIAL_GLOBAL;
     } else if(nWorkers > 0 && policyType == SP_SERIAL_GLOBAL) {
-        policyType = SP_PARALLEL_HOST_SINGLE;
+        policyType = SP_PARALLEL_HOST_STEAL;
     } else {
         scheduler->policyType = policyType;
     }
