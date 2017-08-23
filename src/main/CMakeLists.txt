@@ -25,6 +25,7 @@ include_directories(${CMAKE_BINARY_DIR}/src/external/rpth)
 link_directories(${CMAKE_BINARY_DIR}/src/external/rpth/.libs)
 
 ## make sure vdl.h is in the include and link path
+include_directories(${CMAKE_SOURCE_DIR}/src/external/elf-loader)
 include_directories(${CMAKE_BINARY_DIR}/src/external/elf-loader)
 link_directories(${CMAKE_BINARY_DIR}/src/external/elf-loader/)
 

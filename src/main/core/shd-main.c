@@ -14,7 +14,7 @@
 #include <sys/types.h>
 
 #include "shadow.h"
-#include "../../external/elf-loader/dl.h"
+#include "dl.h"
 
 static Master* shadowMaster;
 

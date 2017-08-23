@@ -54,7 +54,7 @@
 #include <glib.h>
 #include <glib/gstdio.h>
 
-#include "../external/elf-loader/dl.h"
+#include "dl.h"
 
 #if defined(FD_SETSIZE)
 #if FD_SETSIZE > 1024
@@ -1353,6 +1353,12 @@ void process_migrate(Process* proc, gpointer threads) {
     struct ProcessMigrateArgs* ts = threads;
     if (!proc->lmid) {
         /* plugin hasn't been loaded into a namespace yet; nothing to do */
+        warning("can't migrate process before namespace is loaded");
+        return;
+    }
+    if (!ts || !ts->t1 || !ts->t2) {
+        /* can't swap to/from NULL threads */
+        warning("can't migrate process to/from NULL threads");
         return;
     }
     int ret = dl_lmid_swap_tls (proc->lmid, ts->t1, ts->t2);
