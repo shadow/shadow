@@ -152,7 +152,7 @@ static GQueue* _schedulerpolicyhostsingle_getHosts(SchedulerPolicy* policy) {
     }
     tdata->allHosts = g_queue_copy(tdata->processedHosts);
     g_queue_foreach(tdata->unprocessedHosts, (GFunc)concat_queue_iter, tdata->allHosts);
-    return tdata->unprocessedHosts;
+    return tdata->allHosts;
 }
 
 static void _schedulerpolicyhostsingle_push(SchedulerPolicy* policy, Event* event, Host* srcHost, Host* dstHost, SimulationTime barrier) {
