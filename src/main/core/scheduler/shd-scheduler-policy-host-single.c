@@ -19,9 +19,9 @@ typedef struct _HostSingleThreadData HostSingleThreadData;
 struct _HostSingleThreadData {
     /* used to cache getHosts() result for memory management as needed */
     GQueue* allHosts;
-    /* all hosts that have been assigned to this worker for event processing */
-    GQueue* assignedHosts;
-    /* during each round, hosts whose events have been processed are moved from assignedHosts to here */
+    /* all hosts that have been assigned to this worker for event processing but not yet processed this round */
+    GQueue* unprocessedHosts;
+    /* during each round, hosts whose events have been processed are moved from unprocessedHosts to here */
     GQueue* processedHosts;
     SimulationTime currentBarrier;
     GTimer* pushIdleTime;
@@ -45,7 +45,7 @@ struct _HostSingleSearchState {
 static HostSingleThreadData* _hostsinglethreaddata_new() {
     HostSingleThreadData* tdata = g_new0(HostSingleThreadData, 1);
 
-    tdata->assignedHosts = g_queue_new();
+    tdata->unprocessedHosts = g_queue_new();
     tdata->processedHosts = g_queue_new();
 
     /* Create new timers to track thread idle times. The timers start in a 'started' state,
@@ -64,8 +64,8 @@ static void _hostsinglethreaddata_free(HostSingleThreadData* tdata) {
         if(tdata->allHosts) {
             g_queue_free(tdata->allHosts);
         }
-        if(tdata->assignedHosts) {
-            g_queue_free(tdata->assignedHosts);
+        if(tdata->unprocessedHosts) {
+            g_queue_free(tdata->unprocessedHosts);
         }
         if(tdata->processedHosts) {
             g_queue_free(tdata->processedHosts);
@@ -124,15 +124,14 @@ static void _schedulerpolicyhostsingle_addHost(SchedulerPolicy* policy, Host* ho
         tdata = _hostsinglethreaddata_new();
         g_hash_table_replace(data->threadToThreadDataMap, GUINT_TO_POINTER(assignedThread), tdata);
     }
-    g_queue_push_tail(tdata->assignedHosts, host);
+    g_queue_push_tail(tdata->unprocessedHosts, host);
 
     /* finally, store the host-to-thread mapping */
     g_hash_table_replace(data->hostToThreadMap, host, GUINT_TO_POINTER(assignedThread));
 }
 
-static void concat_queue_iter(gpointer data, gpointer user_data) {
-    GQueue* front_queue = user_data;
-    g_queue_push_tail(front_queue, data);
+static void concat_queue_iter(Host* hostItem, GQueue* userQueue) {
+    g_queue_push_tail(userQueue, hostItem);
 }
 
 static GQueue* _schedulerpolicyhostsingle_getHosts(SchedulerPolicy* policy) {
@@ -142,18 +141,18 @@ static GQueue* _schedulerpolicyhostsingle_getHosts(SchedulerPolicy* policy) {
     if(!tdata) {
         return NULL;
     }
-    if(g_queue_is_empty(tdata->assignedHosts)) {
+    if(g_queue_is_empty(tdata->unprocessedHosts)) {
         return tdata->processedHosts;
     }
     if(g_queue_is_empty(tdata->processedHosts)) {
-        return tdata->assignedHosts;
+        return tdata->unprocessedHosts;
     }
     if(tdata->allHosts) {
         g_queue_free(tdata->allHosts);
     }
     tdata->allHosts = g_queue_copy(tdata->processedHosts);
-    g_queue_foreach(tdata->assignedHosts, concat_queue_iter, tdata->allHosts);
-    return tdata->assignedHosts;
+    g_queue_foreach(tdata->unprocessedHosts, (GFunc)concat_queue_iter, tdata->allHosts);
+    return tdata->unprocessedHosts;
 }
 
 static void _schedulerpolicyhostsingle_push(SchedulerPolicy* policy, Event* event, Host* srcHost, Host* dstHost, SimulationTime barrier) {
@@ -216,19 +215,19 @@ static Event* _schedulerpolicyhostsingle_pop(SchedulerPolicy* policy, Simulation
         tdata->currentBarrier = barrier;
 
         /* make sure all of the hosts that were processed last time get processed in the next round */
-        if(g_queue_is_empty(tdata->assignedHosts) && !g_queue_is_empty(tdata->processedHosts)) {
-            GQueue* swap = tdata->assignedHosts;
-            tdata->assignedHosts = tdata->processedHosts;
+        if(g_queue_is_empty(tdata->unprocessedHosts) && !g_queue_is_empty(tdata->processedHosts)) {
+            GQueue* swap = tdata->unprocessedHosts;
+            tdata->unprocessedHosts = tdata->processedHosts;
             tdata->processedHosts = swap;
         } else {
             while(!g_queue_is_empty(tdata->processedHosts)) {
-                g_queue_push_tail(tdata->assignedHosts, g_queue_pop_head(tdata->processedHosts));
+                g_queue_push_tail(tdata->unprocessedHosts, g_queue_pop_head(tdata->processedHosts));
             }
         }
     }
 
-    while(!g_queue_is_empty(tdata->assignedHosts)) {
-        Host* host = g_queue_peek_head(tdata->assignedHosts);
+    while(!g_queue_is_empty(tdata->unprocessedHosts)) {
+        Host* host = g_queue_peek_head(tdata->unprocessedHosts);
         HostSingleQueueData* qdata = g_hash_table_lookup(data->hostToQueueDataMap, host);
         utility_assert(qdata);
 
@@ -256,7 +255,7 @@ static Event* _schedulerpolicyhostsingle_pop(SchedulerPolicy* policy, Simulation
         }
         /* this host is done, store it in the processed queue and then
          * try the next host if we still have more */
-        g_queue_push_tail(tdata->processedHosts, g_queue_pop_head(tdata->assignedHosts));
+        g_queue_push_tail(tdata->processedHosts, g_queue_pop_head(tdata->unprocessedHosts));
     }
 
     /* if we make it here, all hosts for this thread have no more events before barrier */
@@ -289,7 +288,7 @@ static SimulationTime _schedulerpolicyhostsingle_getNextTime(SchedulerPolicy* po
     HostSingleThreadData* tdata = g_hash_table_lookup(data->threadToThreadDataMap, GUINT_TO_POINTER(pthread_self()));
     if(tdata) {
         /* make sure we get all hosts, which are probably held in the processedHosts queue between rounds */
-        g_queue_foreach(tdata->assignedHosts, (GFunc)_schedulerpolicyhostsingle_findMinTime, &searchState);
+        g_queue_foreach(tdata->unprocessedHosts, (GFunc)_schedulerpolicyhostsingle_findMinTime, &searchState);
         g_queue_foreach(tdata->processedHosts, (GFunc)_schedulerpolicyhostsingle_findMinTime, &searchState);
     }
     info("next event at time %"G_GUINT64_FORMAT, searchState.nextEventTime);
