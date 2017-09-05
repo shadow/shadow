@@ -19,11 +19,13 @@ typedef struct _HostStealThreadData HostStealThreadData;
 struct _HostStealThreadData {
     /* used to cache getHosts() result for memory management as needed*/
     GQueue* allHosts;
-    /* all hosts that have been assigned to this worker for event processing that have not been started this round */
+    /* All hosts that have been assigned to this worker for event processing that have not
+     * been started this round. Other than the first round, this is last round's processedHosts. */
     GQueue* unprocessedHosts;
-    /* during each round, hosts whose events have been processed are moved from unprocessedHosts to here */
+    /* during each round, hosts whose events have been processed are moved from some thread's
+     * unprocessedHosts to here, via runningHost */
     GQueue* processedHosts;
-    /* the host this worker is running */
+    /* the host this worker is running; belongs to neither unprocessedHosts nor processedHosts */
     Host* runningHost;
     SimulationTime currentBarrier;
     GTimer* pushIdleTime;
@@ -155,6 +157,9 @@ static void _schedulerpolicyhoststeal_addHost(SchedulerPolicy* policy, Host* hos
     }
 }
 
+/* primarily a wrapper for dealing with TLS and the hostToThread map.
+ * this does not affect unprocessedHosts/processedHosts/runningHost;
+ * that migration should be done as normal (from/to the respective threads) */
 static void _schedulerpolicyhoststeal_migrateHost(SchedulerPolicy* policy, Host* host, pthread_t newThread) {
     MAGIC_ASSERT(policy);
     HostStealPolicyData* data = policy->data;
@@ -286,12 +291,14 @@ static Event* _schedulerpolicyhoststeal_popFromThread(SchedulerPolicy* policy, H
             qdata->lastEventTime = eventTime;
             nextEvent = priorityqueue_pop(qdata->pq);
             qdata->nPopped++;
+            /* migrate iff a migration is needed */
             _schedulerpolicyhoststeal_migrateHost(policy, host, pthread_self());
         } else {
             nextEvent = NULL;
         }
 
         if(nextEvent == NULL) {
+            /* no more events on the runningHost, mark it as NULL so we get a new one */
             g_queue_push_tail(tdata->processedHosts, host);
             tdata->runningHost = NULL;
         }
@@ -311,11 +318,12 @@ static Event* _schedulerpolicyhoststeal_pop(SchedulerPolicy* policy, SimulationT
     MAGIC_ASSERT(policy);
     HostStealPolicyData* data = policy->data;
 
-    /* figure out which hosts we should be checking */
+    /* first, we try to pop a host from this thread's queue */
     g_rw_lock_reader_lock(&data->lock);
     HostStealThreadData* tdata = g_hash_table_lookup(data->threadToThreadDataMap, GUINT_TO_POINTER(pthread_self()));
     g_rw_lock_reader_unlock(&data->lock);
 
+    /* we only need to lock this thread's lock, since it's our own queue */
     g_timer_continue(tdata->popIdleTime);
     g_mutex_lock(&(tdata->lock));
     g_timer_stop(tdata->popIdleTime);
@@ -334,13 +342,14 @@ static Event* _schedulerpolicyhoststeal_pop(SchedulerPolicy* policy, SimulationT
             }
         }
     }
+    /* attempt to get an event from this thread's queue */
     Event* nextEvent = _schedulerpolicyhoststeal_popFromThread(policy, tdata, tdata->unprocessedHosts, barrier);
     g_mutex_unlock(&(tdata->lock));
     if(nextEvent != NULL) {
         return nextEvent;
     }
 
-    /* try the other threads' queues */
+    /* no more hosts with events on this thread, try to steal a host from the other threads' queues */
     GHashTableIter iter;
     gpointer key, value;
     g_rw_lock_reader_lock(&data->lock);
@@ -351,6 +360,11 @@ static Event* _schedulerpolicyhoststeal_pop(SchedulerPolicy* policy, SimulationT
         g_rw_lock_reader_lock(&data->lock);
         HostStealThreadData* stolenTdata = g_array_index(data->threadList, HostStealThreadData*, stolenTnumber);
         g_rw_lock_reader_unlock(&data->lock);
+        /* We don't need a lock here, because we're only reading, and a misread just means either
+         * we read as empty when it's not, in which case the assigned thread (or one of the others)
+         * will pick it up anyway, or it reads as non-empty when it is empty, in which case we'll
+         * just get a NULL event and move on. Accepting this reduces lock contention towards the end
+         * of every round. */
         if(g_queue_is_empty(stolenTdata->unprocessedHosts)) {
             continue;
         }
@@ -369,6 +383,8 @@ static Event* _schedulerpolicyhoststeal_pop(SchedulerPolicy* policy, SimulationT
         }
         g_timer_stop(tdata->popIdleTime);
 
+        /* attempt to get event from the other thread's queue, likely moving a host from its
+         * unprocessedHosts into this threads runningHost (and eventually processedHosts) */
         nextEvent = _schedulerpolicyhoststeal_popFromThread(policy, tdata, stolenTdata->unprocessedHosts, barrier);
 
         /* must unlock in reverse order of locking */
