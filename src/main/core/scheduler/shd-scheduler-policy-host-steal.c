@@ -40,6 +40,7 @@ struct _HostStealPolicyData {
     GHashTable* hostToQueueDataMap;
     GHashTable* threadToThreadDataMap;
     GHashTable* hostToThreadMap;
+    GRWLock lock;
     MAGIC_DECLARE;
 };
 
@@ -116,44 +117,56 @@ static void _hoststealqueuedata_free(HostStealQueueData* qdata) {
     }
 }
 
-/* this must be run synchronously, or the call must be protected by locks */
+/* this must be run synchronously, or the thread must be protected by locks */
 static void _schedulerpolicyhoststeal_addHost(SchedulerPolicy* policy, Host* host, pthread_t randomThread) {
     MAGIC_ASSERT(policy);
     HostStealPolicyData* data = policy->data;
 
-    /* each host has its own queue */
+    /* each host has its own queue
+     * we don't read lock data->lock because we only modify the table here anyway
+     */
     if(!g_hash_table_lookup(data->hostToQueueDataMap, host)) {
+        g_rw_lock_writer_lock(&data->lock);
         g_hash_table_replace(data->hostToQueueDataMap, host, _hoststealqueuedata_new());
+        g_rw_lock_writer_unlock(&data->lock);
     }
 
     /* each thread keeps track of the hosts it needs to run */
     pthread_t assignedThread = (randomThread != 0) ? randomThread : pthread_self();
+    g_rw_lock_reader_lock(&data->lock);
     HostStealThreadData* tdata = g_hash_table_lookup(data->threadToThreadDataMap, GUINT_TO_POINTER(assignedThread));
+    g_rw_lock_reader_unlock(&data->lock);
     if(!tdata) {
         tdata = _hoststealthreaddata_new();
+        g_rw_lock_writer_lock(&data->lock);
         g_hash_table_replace(data->threadToThreadDataMap, GUINT_TO_POINTER(assignedThread), tdata);
         tdata->tnumber = data->threadCount;
         data->threadCount++;
         g_array_append_val(data->threadList, tdata);
+    } else {
+        g_rw_lock_writer_lock(&data->lock);
     }
+    /* store the host-to-thread mapping */
+    g_hash_table_replace(data->hostToThreadMap, host, GUINT_TO_POINTER(assignedThread));
+    g_rw_lock_writer_unlock(&data->lock);
     /* if the target thread is stealing the host, we don't want to add it twice */
     if(host != tdata->runningHost) {
         g_queue_push_tail(tdata->unprocessedHosts, host);
     }
-
-    /* finally, store the host-to-thread mapping */
-    g_hash_table_replace(data->hostToThreadMap, host, GUINT_TO_POINTER(assignedThread));
 }
 
 static void _schedulerpolicyhoststeal_migrateHost(SchedulerPolicy* policy, Host* host, pthread_t newThread) {
     MAGIC_ASSERT(policy);
     HostStealPolicyData* data = policy->data;
+    g_rw_lock_reader_lock(&data->lock);
     pthread_t oldThread = (pthread_t)g_hash_table_lookup(data->hostToThreadMap, host);
     if(oldThread == newThread) {
+        g_rw_lock_reader_unlock(&data->lock);
         return;
     }
     HostStealThreadData* tdata = g_hash_table_lookup(data->threadToThreadDataMap, GUINT_TO_POINTER(oldThread));
     HostStealThreadData* tdataNew = g_hash_table_lookup(data->threadToThreadDataMap, GUINT_TO_POINTER(newThread));
+    g_rw_lock_reader_unlock(&data->lock);
     /* check that there's actually a thread we're migrating from */
     if(tdata) {
         /* Sanity check that the host isn't being run on another thread while migrating.
@@ -175,7 +188,9 @@ static void concat_queue_iter(Host* hostItem, GQueue* userQueue) {
 static GQueue* _schedulerpolicyhoststeal_getHosts(SchedulerPolicy* policy) {
     MAGIC_ASSERT(policy);
     HostStealPolicyData* data = policy->data;
+    g_rw_lock_reader_lock(&data->lock);
     HostStealThreadData* tdata = g_hash_table_lookup(data->threadToThreadDataMap, GUINT_TO_POINTER(pthread_self()));
+    g_rw_lock_reader_unlock(&data->lock);
     if(!tdata) {
         return NULL;
     }
@@ -212,11 +227,13 @@ static void _schedulerpolicyhoststeal_push(SchedulerPolicy* policy, Event* event
                 "to ensure event causality", eventTime, barrier);
     }
 
+    g_rw_lock_reader_lock(&data->lock);
     /* we want to track how long this thread spends idle waiting to push the event */
     HostStealThreadData* tdata = g_hash_table_lookup(data->threadToThreadDataMap, GUINT_TO_POINTER(pthread_self()));
 
     /* get the queue for the destination */
     HostStealQueueData* qdata = g_hash_table_lookup(data->hostToQueueDataMap, dstHost);
+    g_rw_lock_reader_unlock(&data->lock);
     utility_assert(qdata);
 
     /* tracking idle time spent waiting for the destination queue lock */
@@ -255,7 +272,9 @@ static Event* _schedulerpolicyhoststeal_popFromThread(SchedulerPolicy* policy, H
             tdata->runningHost = g_queue_pop_head(assignedHosts);
         }
         Host* host = tdata->runningHost;
+        g_rw_lock_reader_lock(&data->lock);
         HostStealQueueData* qdata = g_hash_table_lookup(data->hostToQueueDataMap, host);
+        g_rw_lock_reader_unlock(&data->lock);
         utility_assert(qdata);
 
         g_mutex_lock(&(qdata->lock));
@@ -293,7 +312,9 @@ static Event* _schedulerpolicyhoststeal_pop(SchedulerPolicy* policy, SimulationT
     HostStealPolicyData* data = policy->data;
 
     /* figure out which hosts we should be checking */
+    g_rw_lock_reader_lock(&data->lock);
     HostStealThreadData* tdata = g_hash_table_lookup(data->threadToThreadDataMap, GUINT_TO_POINTER(pthread_self()));
+    g_rw_lock_reader_unlock(&data->lock);
 
     g_timer_continue(tdata->popIdleTime);
     g_mutex_lock(&(tdata->lock));
@@ -322,10 +343,14 @@ static Event* _schedulerpolicyhoststeal_pop(SchedulerPolicy* policy, SimulationT
     /* try the other threads' queues */
     GHashTableIter iter;
     gpointer key, value;
+    g_rw_lock_reader_lock(&data->lock);
     guint i, n = data->threadCount;
+    g_rw_lock_reader_unlock(&data->lock);
     for(i = 1; i < n; i++) {
         guint stolenTnumber = (i + tdata->tnumber) % n;
+        g_rw_lock_reader_lock(&data->lock);
         HostStealThreadData* stolenTdata = g_array_index(data->threadList, HostStealThreadData*, stolenTnumber);
+        g_rw_lock_reader_unlock(&data->lock);
         if(g_queue_is_empty(stolenTdata->unprocessedHosts)) {
             continue;
         }
@@ -363,7 +388,9 @@ static Event* _schedulerpolicyhoststeal_pop(SchedulerPolicy* policy, SimulationT
 }
 
 static void _schedulerpolicyhoststeal_findMinTime(Host* host, HostStealSearchState* state) {
+    g_rw_lock_reader_lock(&state->data->lock);
     HostStealQueueData* qdata = g_hash_table_lookup(state->data->hostToQueueDataMap, host);
+    g_rw_lock_reader_unlock(&state->data->lock);
     utility_assert(qdata);
 
     g_mutex_lock(&(qdata->lock));
@@ -385,7 +412,9 @@ static SimulationTime _schedulerpolicyhoststeal_getNextTime(SchedulerPolicy* pol
     searchState.data = data;
     searchState.nextEventTime = SIMTIME_MAX;
 
+    g_rw_lock_reader_lock(&data->lock);
     HostStealThreadData* tdata = g_hash_table_lookup(data->threadToThreadDataMap, GUINT_TO_POINTER(pthread_self()));
+    g_rw_lock_reader_unlock(&data->lock);
     if(tdata) {
         /* make sure we get all hosts, which are probably held in the processedHosts queue between rounds */
         g_queue_foreach(tdata->unprocessedHosts, (GFunc)_schedulerpolicyhoststeal_findMinTime, &searchState);
@@ -403,6 +432,7 @@ static void _schedulerpolicyhoststeal_free(SchedulerPolicy* policy) {
     g_hash_table_destroy(data->hostToQueueDataMap);
     g_hash_table_destroy(data->threadToThreadDataMap);
     g_hash_table_destroy(data->hostToThreadMap);
+    g_rw_lock_clear(&data->lock);
     g_free(data);
 
     MAGIC_CLEAR(policy);
@@ -415,6 +445,7 @@ SchedulerPolicy* schedulerpolicyhoststeal_new() {
     data->hostToQueueDataMap = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, (GDestroyNotify)_hoststealqueuedata_free);
     data->threadToThreadDataMap = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, (GDestroyNotify)_hoststealthreaddata_free);
     data->hostToThreadMap = g_hash_table_new(g_direct_hash, g_direct_equal);
+    g_rw_lock_init(&data->lock);
 
     SchedulerPolicy* policy = g_new0(SchedulerPolicy, 1);
     MAGIC_INIT(policy);
