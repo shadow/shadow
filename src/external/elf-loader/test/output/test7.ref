@@ -1,0 +1,11 @@
+libtest7 constructor
+enter main
+libh constructor
+libg constructor
+dlopen libg.so completed
+leave main
+libtest7 destructor
+libg destructor
+special destructor in libh.so
+called function_g in libg
+libh destructor

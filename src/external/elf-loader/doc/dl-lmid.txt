@@ -1,0 +1,96 @@
+#define _GNU_SOURCE 1
+#include <dlfcn.h>
+
+/**
+ * This methods allows you to create a new 'namespace' in the
+ * dlmopen sense without having to load a library at the same time.
+ * It is especially useful if you wish to specify some per-lmid
+ * 'event callbacks' or library/symbol remaps before loading
+ * any library, resolving any symbol or executing any code in
+ * this namespace.
+ * The input argvs and envp are passed down to the constructors
+ * of each global variable and functions with 'constructor' attributes.
+ * This function makes a copy of the input arrays.
+ *
+ * \param argc the number of items in argv
+ * \param argv a null-terminated array of character strings
+ * \param envp a null-terminated array of character strings
+ */
+Lmid_t dl_lmid_new (int argc, const char **argv, const char **envp);
+/**
+ * Delete a namespace created with dl_lmid_new or dlmopen(LD_ID_NEWLM)
+ * This function behaves as a no-op if the input lmid does not exist
+ * anymore (say, dl_lmid_delete is called twice or all the objects loaded
+ * with dlmopen have been closed with dlclose).
+ * Deleting a namespace will not trigger the invocation of any user code.
+ * Specifically, it will not call the destructors of any binary loaded
+ * in that namespace. This function should thus be used as a way to safely
+ * cleanup the ressources associated with a namespace.
+ */
+void dl_lmid_delete (Lmid_t lmid);
+/**
+ * This function adds a new callback with the input namespace (callbacks
+ * cannot be removed from a namespace once they have been added). Each
+ * callback will be invoked whenever an interesting event happens. The
+ * list of interesting events is shown below:
+ * 0 --> "mapped": the associated binary has been mapped into memory
+ *       and is getting ready to be constructed.
+ * 1 --> "unmapped": the associated binary has been unmapped from memory.
+ *       Nothing will happen to this binary anymore
+ * 2 --> "constructed": the
+ * 3 --> "destructed":
+ *
+ * returns 0 on success, -1 otherwise. If -1 is returned, dlerror returns
+ * a string for the user to explain the problem.
+ */
+int dl_lmid_add_callback (Lmid_t lmid,
+                          void (*cb) (void *handle, int event, void *context),
+                          void *cb_context);
+/**
+ * Whenever the user asks for a dlopen ("foo.so"), either directly or through
+ * a DT_NEEDED entry in a binary which is dlopened, the loader will attempt
+ * to find a remapping entry whose "src" value is equal to the requested library.
+ * If they match, the loader will use "dst" instead of "src" to search
+ * for a binary in the host system.
+ * returns 0 on success, -1 otherwise. If -1 is returned, dlerror returns
+ * a string for the user to explain the problem.
+ */
+int dl_lmid_add_lib_remap (Lmid_t lmid, const char *src, const char *dst);
+/**
+ * Whenever the loader needs to resolve a symbol, it will attempt to find
+ * a symbol remapping entry which matches the requested symbol. NULL
+ * corresponds to a wildcard.
+ * Example:
+ *   - src_name=dlopen, src_ver_name=NULL, src_ver_filename=NULL,
+ *     dst_name=my_dlopen, dst_ver_name="MY_VER", dst_ver_name="my-dlopen.so"
+ *     will match any symbol named dlopen, whatever its version name and filename
+ *     to the function my_dlopen whose version is MY_VER provided by binary
+ *     my-dlopen.so.
+ *   - src_name=NULL, ... dst_name=NULL will match any symbol and could be used
+ *     to remap the version names and filenames.
+ *   - src_name=NULL, ... dst_name="foo" would remap every symbol to symbol "foo".
+ *     Not very useful, but certainly fun.
+ * returns 0 on success, -1 otherwise. If -1 is returned, dlerror returns
+ * a string for the user to explain the problem.
+ */
+int dl_lmid_add_symbol_remap (Lmid_t lmid,
+                              const char *src_name,
+                              const char *src_ver_name,
+                              const char *src_ver_filename,
+                              const char *dst_name,
+                              const char *dst_ver_name,
+                              const char *dst_ver_filename);
+/**
+ * This function swaps the TLS of every object loaded in the given namespace
+ * between the two threads. Dynamic TLS has the pointers swapped (i.e. is fast),
+ * while static TLS is moved directly (can be slow, depending on how much there
+ * is).
+ * It is important that when this function is running, the two given threads
+ * aren't running any code that might access the TLS of anything in the
+ * namespace.
+ * Note that the objects with swapped TLS are the objects loaded within the
+ * namespace, not the objects in it's scope. In particular, LD_PRELOAD or
+ * RTLD_PRELOAD obects will not have their TLS affected, unless "lmid" is the
+ * namespace they were loaded in.
+ */
+int dl_lmid_swap_tls (Lmid_t lmid, pthread_t *t1, pthread_t *t2);

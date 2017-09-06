@@ -146,7 +146,7 @@ static int _wait_select(int fd, waittype t) {
 static int _do_addr(const char* name, struct sockaddr_in* addrout) {
     memset(addrout, 0, sizeof(struct sockaddr_in));
     addrout->sin_family = AF_INET;
-    addrout->sin_addr.s_addr = htons(INADDR_ANY);
+    addrout->sin_addr.s_addr = htonl(INADDR_ANY);
     addrout->sin_port = htons(SERVER_PORT);
 
     if(name) {
@@ -507,10 +507,16 @@ static int _test_iov_server(int clientfd)
 
     // to contain data read by readv(). "- 1" to discount the
     // nul-terminator
-    const size_t num_real_bytes = (sizeof block_1_data - 1) + (sizeof block_2_data - 1);
-    char readbuf[num_real_bytes + 5] = {[0 ... num_real_bytes + 5 - 1] = 'z'};
+    const size_t num_real_bytes = strlen(block_1_data) + strlen(block_2_data);
+    size_t readbuf_size = num_real_bytes + 5;
+    void* readbuf = calloc(1, readbuf_size);
+    int i = 0;
+    for(i = 0; i < readbuf_size; i++) {
+        sprintf(readbuf+i, "z");
+    }
+
     iov[1023].iov_base = readbuf;
-    iov[1023].iov_len = sizeof readbuf;
+    iov[1023].iov_len = readbuf_size;
 
     MYLOG("start readv()ing... ");
     rv = readv(clientfd, iov, ARRAY_LENGTH(iov));
@@ -527,7 +533,7 @@ static int _test_iov_server(int clientfd)
     for (int i = 0; i < ARRAY_LENGTH(iov); ++i) {
         if (i == 1023) {
             // readv should not have touched the iov_len
-            const size_t expected_len = sizeof readbuf;
+            const size_t expected_len = readbuf_size;
             if (iov[i].iov_len != expected_len) {
                 LOG_ERROR_AND_RETURN(
                     "readv produces wrong iov_len: %zu, expected: %zu",
@@ -550,6 +556,9 @@ static int _test_iov_server(int clientfd)
         LOG_ERROR_AND_RETURN("readv() touched more memory than it should have");
     }
 
+    free(readbuf);
+    readbuf = NULL;
+
     // send "OK" cuz client is waiting for it
     write(clientfd, "OK", 2);
 
@@ -563,13 +572,22 @@ static int _test_iov_server(int clientfd)
         iov[i].iov_len = 0;
     }
 
+    size_t readbuf1_size = 21;
+    void* readbuf1 = calloc(1, readbuf1_size);
+    for(int j = 0; j < (readbuf1_size); j++) {
+        ((char*)readbuf1)[j] = 'M';
+    }
+    iov[441].iov_base = readbuf1;
+    iov[441].iov_len = 12;
+
     // to contain data read by readv(). "- 1" to discount the
     // nul-terminator
     const size_t num_real_bytes2 = (sizeof block_3_data - 1);
-    char readbuf1[12 + 9] = {[0 ... 12 + 9 - 1] = 'M'};
-    char readbuf2[(num_real_bytes2 - 12) + 5] = {[0 ... (num_real_bytes2 - 12) + 5 - 1] = 'N'};
-    iov[441].iov_base = readbuf1;
-    iov[441].iov_len = 12;
+    size_t readbuf2_size = (num_real_bytes2 - 12) + 5;
+    void* readbuf2 = calloc(1, readbuf2_size);
+    for(int j = 0; j < (readbuf2_size); j++) {
+        ((char*)readbuf2)[j] = 'N';
+    }
     iov[820].iov_base = readbuf2;
     iov[820].iov_len = 16;
 
@@ -613,6 +631,11 @@ static int _test_iov_server(int clientfd)
     if (memcmp(readbuf2 + 16, "NNNNN", 5)) {
         LOG_ERROR_AND_RETURN("readv() touched more memory than it should have");
     }
+
+    free(readbuf1);
+    readbuf = NULL;
+    free(readbuf2);
+    readbuf2 = NULL;
 
     // send "OK" cuz client is waiting for it
     write(clientfd, "OK", 2);
@@ -724,6 +747,8 @@ static int _run_server(iowait_func iowait, int use_iov) {
 }
 
 int main(int argc, char *argv[]) {
+    MYLOG("########## tcp test starting ##########");
+
     MYLOG("program started; %s", USAGE);
 
     if(argc < 3) {
@@ -750,16 +775,26 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
+    int result = 0;
     if(strncasecmp(argv[2], "client", 5) == 0) {
         if(argc < 4) {
             MYLOG("error, client mode also needs a server ip address; see usage");
             return -1;
         }
-        return _run_client(wait, argv[3], use_iov);
+        MYLOG("running client in mode %s", argv[1]);
+        result = _run_client(wait, argv[3], use_iov);
     } else if(strncasecmp(argv[2], "server", 6) == 0) {
-        return _run_server(wait, use_iov);
+        MYLOG("running server in mode %s", argv[1]);
+        result = _run_server(wait, use_iov);
     } else {
         MYLOG("error, invalid type specified; see usage");
-        return -1;
+        result = -1;
     }
+
+    if(result == 0) {
+        MYLOG("########## tcp test passed ##########");
+    } else {
+        MYLOG("########## tcp test failed ##########");
+    }
+    return result;
 }

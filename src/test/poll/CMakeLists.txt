@@ -11,5 +11,5 @@ target_link_libraries(shadow-plugin-test-poll ${M_LIBRARIES} ${DL_LIBRARIES} ${R
 target_link_libraries(test-poll ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES} ${GLIB_LIBRARIES})
 
 ## register the tests
-add_test(NAME test-poll COMMAND test-poll)
-add_test(NAME test-poll-shadow COMMAND ${CMAKE_BINARY_DIR}/src/shadow ${CMAKE_CURRENT_SOURCE_DIR}/poll.test.shadow.config.xml)
+add_test(NAME poll COMMAND test-poll)
+add_test(NAME poll-shadow COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d poll.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/poll.test.shadow.config.xml)

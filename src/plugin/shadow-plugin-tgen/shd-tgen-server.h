@@ -8,7 +8,7 @@
 
 typedef struct _TGenServer TGenServer;
 
-typedef void (*TGenServer_notifyNewPeerFunc)(gpointer data, gint socketD, TGenPeer* peer);
+typedef void (*TGenServer_notifyNewPeerFunc)(gpointer data, gint socketD, gint64 started, gint64 created, TGenPeer* peer);
 
 TGenServer* tgenserver_new(in_port_t serverPort, TGenServer_notifyNewPeerFunc notify,
         gpointer data, GDestroyNotify destructData);

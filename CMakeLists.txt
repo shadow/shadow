@@ -6,6 +6,10 @@ set(SHADOW_VERSION_MAJOR 1)
 set(SHADOW_VERSION_MINOR 11)
 set(SHADOW_VERSION_BUILD 1)
 
+message(STATUS "System name: ${CMAKE_SYSTEM_NAME}")
+message(STATUS "System version: ${CMAKE_SYSTEM_VERSION}")
+message(STATUS "System processor: ${CMAKE_SYSTEM_PROCESSOR}")
+
 ## ensure cmake version
 cmake_minimum_required(VERSION 2.8.8 FATAL_ERROR)
 
@@ -18,6 +22,35 @@ endif((NOT UNIX) OR (NOT (CMAKE_SYSTEM_NAME STREQUAL "Linux")))
 if(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
     message(FATAL_ERROR "Shadow requires an out-of-source build. Please create a separate build directory and run 'cmake path/to/shadow [options]' there.")
 endif(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
+
+## additional user-defined include directories
+foreach(include ${CMAKE_EXTRA_INCLUDES})
+    include_directories(${include})
+    set(CMAKE_MODULE_PATH "${include}" ${CMAKE_MODULE_PATH})
+endforeach(include)
+set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/" ${CMAKE_MODULE_PATH})
+
+message(STATUS "CMAKE_MODULE_PATH = ${CMAKE_MODULE_PATH}")
+
+## additional user-defined library directories
+foreach(library ${CMAKE_EXTRA_LIBRARIES})
+    link_directories(${library})
+endforeach(library)
+
+## get general includes
+include(CheckIncludeFile)
+include(CheckFunctionExists)
+include(CheckLibraryExists)
+include(TestBigEndian)
+include(ShadowTools)
+
+## general tests and configurations
+TEST_BIG_ENDIAN(IS_BIG_ENDIAN)
+set(CMAKE_INCLUDE_DIRECTORIES_BEFORE ON)
+set(CMAKE_INCLUDE_DIRECTORIES_PROJECT_BEFORE ON)
+set(CMAKE_INCLUDE_CURRENT_DIR ON)
+#set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+#set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 ## construct info/version strings
 set(SHADOW_INFO_STRING_CONF "For more information, visit https://shadow.github.io or https://github.com/shadow")
@@ -45,10 +78,6 @@ if(BUILDDATE)
     string(REGEX REPLACE "(..)/(..)/(....).*" "\\3-\\2-\\1" BUILDDATE ${BUILDDATE})
     set(SHADOW_VERSION_STRING_CONF "${SHADOW_VERSION_STRING_CONF} (built ${BUILDDATE})")
 endif(BUILDDATE)
-
-macro(add_cflags)
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${ARGN}")
-endmacro(add_cflags)
 
 ## setup shadow options
 option(SHADOW_DEBUG "turn on debugging for verbose program output (default: OFF)" OFF)
@@ -79,7 +108,7 @@ else(SHADOW_DEBUG STREQUAL ON)
     message(STATUS "CMAKE_BUILD_TYPE Release enabled.")
     set(CMAKE_BUILD_TYPE Release)
     add_definitions(-DNDEBUG)
-    #add_cflags(-O3) # causes segfault in Tor
+    add_cflags(-O3)
 endif(SHADOW_DEBUG STREQUAL ON)
 
 if($ENV{VERBOSE})
@@ -97,34 +126,6 @@ if(SHADOW_EXPORT STREQUAL ON)
     MESSAGE(STATUS "will export Shadow plug-in service libraries and headers")
 endif(SHADOW_EXPORT STREQUAL ON)
 
-## get general includes
-include(CheckIncludeFile)
-include(CheckFunctionExists)
-include(CheckLibraryExists)
-include(TestBigEndian)
-
-## general tests and configurations
-TEST_BIG_ENDIAN(IS_BIG_ENDIAN)
-set(CMAKE_INCLUDE_DIRECTORIES_BEFORE ON)
-set(CMAKE_INCLUDE_DIRECTORIES_PROJECT_BEFORE ON)
-set(CMAKE_INCLUDE_CURRENT_DIR ON)
-#set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-#set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
-
-## additional user-defined include directories
-foreach(include ${CMAKE_EXTRA_INCLUDES})
-    include_directories(${include})
-    set(CMAKE_MODULE_PATH "${include}" ${CMAKE_MODULE_PATH})
-endforeach(include)
-set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/" ${CMAKE_MODULE_PATH})
-
-message(STATUS "CMAKE_MODULE_PATH = ${CMAKE_MODULE_PATH}")
-
-## additional user-defined library directories
-foreach(library ${CMAKE_EXTRA_LIBRARIES})
-    link_directories(${library})
-endforeach(library)
-
 ## generate config header and make sure its on the include path
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config.h.in ${CMAKE_CURRENT_BINARY_DIR}/shd-config.h)
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
@@ -139,10 +140,11 @@ add_subdirectory(${CMAKE_SOURCE_DIR}/resource/)
 add_subdirectory(${CMAKE_SOURCE_DIR}/src/)
 add_subdirectory(${CMAKE_SOURCE_DIR}/cpack/)
 
-## build test if enabled
 if(SHADOW_TEST STREQUAL ON)
+    ## http://www.cmake.org/Wiki/CMake_Testing_With_CTest
     message(STATUS "SHADOW_TEST enabled")
-    add_subdirectory(${CMAKE_SOURCE_DIR}/src/test/)
+    enable_testing()
+    add_subdirectory(src/test)
 endif(SHADOW_TEST STREQUAL ON)
 
 ## install our 'exported' libs so they can be imported by others

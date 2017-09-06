@@ -100,10 +100,12 @@ intern const char *pth_state_names[] = {
 #define SIGSTKSZ 8192
 #endif
 
-//#define PTH_VALGRIND 1
 #undef PTH_VALGRIND
+#define PTH_VALGRIND 1
 #ifdef PTH_VALGRIND
-#include <valgrind/valgrind.h>
+#ifdef PTH_DEBUG
+#include "valgrind.h"
+#endif
 #endif
 
 /* allocate a thread control block */
@@ -133,9 +135,11 @@ intern pth_t pth_tcb_alloc(unsigned int stacksize, void *stackaddr)
         }
 
 #ifdef PTH_VALGRIND
+#ifdef PTH_DEBUG
         t->valgrind_id = VALGRIND_STACK_REGISTER(t->stack, &t->stack[stacksize]);
         pth_debug4("pth_tcb_alloc: allocated new stack at [0x%p-0x%p] with valgrind id %i",
                 t->stack, &t->stack[stacksize], t->valgrind_id);
+#endif
 #endif
 
 #if PTH_STACKGROWTH < 0

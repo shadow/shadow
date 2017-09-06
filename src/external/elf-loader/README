@@ -1,0 +1,79 @@
+      VDL: Virtualizing Dynamic Linker/Loader
+      ---------------------------------------
+
+1) What is this ?
+-----------------
+
+This is an ELF dynamic linker/loader. Its purpose is
+to be a binary-compatible replacement of /lib/ld-linux.so.2
+on a large variety of linux distributions for i386/x86-64
+systems. Support for other hardware platforms is not planned
+but non-intrusive patches are welcome :)
+
+2) What is its purpose ?
+------------------------
+
+I need more features from the dynamic loader than what is
+provided by the default glibc loader. I could have tried to
+hack the glibc loader but since I did not know enough about
+the details of how a loader work, and given the horrid 
+complexity/lack of documentation of the glibc loader, it 
+seemed easier to implement a new loader with the features I
+needed.
+
+Extra features:
+  - unlimited number of namespaces (lmid) with dlmopen (DL_LM_NEWID)
+  - dl_lmid_new
+  - dl_lmid_delete
+  - dl_lmid_add_callback
+  - dl_lmid_add_lib_remap
+  - dl_lmid_add_symbol_remap
+
+API documentation for these new functions in doc/dl-lmid.txt
+
+3) What is its status ?
+-----------------------
+
+Right now, this loader can load pretty complex programs, including
+things like evolution and firefox. Supported systems are:
+  - fc11-64
+  - fc11-32
+  - fc12-64
+  - fc12-32
+  - ubuntu-0804-32
+  - ubuntu-0804-64
+  - ubuntu-0910-32
+  - ubuntu-0910-64
+
+Other systems might work or not. If you find one which works,
+please, let me know. If it does not work, you can ask me to
+try to make it work.
+
+4) How do I use it ?
+--------------------
+
+Obviously, you need to build it first. To do this, you need
+some standard devel packages. 
+On fedora: yum install gcc gcc-c++ make mercurial glibc-debuginfo
+On ubuntu: apt-get install gcc g++ make mercurial libc6-dbg
+
+If you have selinux enabled, you will most likely have to run a 
+command such as this:
+chcon -t textrel_shlib_t '/lib/libc-2.10.2.so'
+
+Building the code:
+make vdl-config.h
+make
+make test
+
+If everything is allright, you should see a set of PASS 
+statements and you should be able to start using this loader
+by:
+  a. elfedit your-binary /path/to/ldso ; echo $?
+     make sure the above returns 0
+  b. put /path/to/libvdl.so in LD_LIBRARY_PATH
+  c. run your-binary
+
+LD_LOG=function is a nice debugging tool.
+LD_LOG=symbol-ok shows the list of symbols successfully resolved
+LD_LOG=symbol-fail shows the list of symbols unsuccessfully resolved

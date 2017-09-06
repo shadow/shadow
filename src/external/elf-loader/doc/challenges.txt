@@ -1,0 +1,24 @@
+1) war story I
+   The thread library creates a new stack for each newly-created thread. This
+   stack also contains, at its bottom, the pthread_t data structure for this
+   thread. The loader also stores at the bottom of the stack its TCB used to 
+   keep track of per-thread data such as the set of static tls blocks
+   of each statically-loaded library. All of this memory is allocated by
+   the thread library it must request from the loader the size of the loader TCB
+   as well as the size of the static tls blocks. _dl_get_tls_static_info is
+   supposed to do this. Sadly, this method _must_ include in its calculate of the
+   size to allocate the size of the pthread_t data structure (why this size
+   is not added by the thread library _after_ calling this function, I don't
+   know). Initially, we forgot to add this size, so, the thread library
+   would store its pthread_t data structure within the stack area and, at some
+   point, the program would start writing into the data structure and corrupt
+   the eventbuf field of the thread data structure which is used by the 
+   controlling debugger to gather events from an inferior process
+   being debugged through the nptl_db library. This would put the debugger
+   in a state where it would simply refuse to continue debugging.
+
+2) must patch glibc to avoid inline copies of _dl_addr, __libc_dlopen_mode,
+   __libc_dlclose, __libc_dlsym. i.e., glibc keeps an internal copy of these
+   functions which access the internal fields of the loader linkmap but our
+   linkmap is, of course, incompatible with the linkmap data structure of
+   the original libc loader

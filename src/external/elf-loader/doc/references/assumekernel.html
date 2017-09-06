@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
+  <head>
+      <title>Explaining LD_ASSUME_KERNEL</title>
+  </head>
+
+  <body>
+    <h1>Explaining <tt>LD_ASSUME_KERNEL</tt></h1>
+
+    <p>Ulrich Drepper, 2004-5-12</p>
+
+    <p>It is frightening how something as simple as the mechanism
+    behind <tt>LD_ASSUME_KERNEL</tt> can create that much confusion.  So
+    here are a few details which should enable everybody to
+    investigate the issue closer by her/himself.</p>
+
+    <ol>
+      <li>
+        <p>First, <tt>LD_ASSUME_KERNEL</tt> is handled by the dynamic
+        linker.</p>
+       </li>
+
+       <li>
+         <p>The behavior of a specific value of <tt>LD_ASSUME_KERNEL</tt>
+	 is <b>not</b> hardcoded in the dynamic linker.</p>
+       </li>
+
+       <li>
+         <p>Every DSO (Dynamic Shared Object, aka shared library) can
+         tell the dynamic linker in glibc which minimum OS ABI version
+         is needed.  NB: dynamic linkers other than glibc's do not
+         have this feature.  The information about the minimum OS ABI
+         version is encoded in a ELF note section usually named
+         <tt>.note.ABI-tag</tt>.  This note section must be referenced
+         by a <tt>PT_NOTE</tt> entry in the DSO's program header.</p>
+
+         <p>To examine the content of a DSO's note section use the
+         <tt>readelf</tt> program from <tt>elfutils</tt> (the version
+         from <tt>binutils</tt> is not capable enough).  On Red Hat
+         system the binary is called <tt>eu-readelf</tt>.  Using it on
+         a Fedora Core 2 system shows the following:</p>
+
+         <pre>$ eu-readelf -n /lib/tls/libc-2.3.3.so
+
+Note segment of 32 bytes at offset 0x174:
+  Owner          Data size  Type
+  GNU                   16  VERSION
+    OS: Linux, ABI: 2.4.20
+</pre>
+
+         <p>This means the <tt>/lib/tls/libc-2.3.3.so</tt> DSO
+         requires at least OS ABI version 2.4.20.</p>
+       </li>
+
+       <li>
+         <p>The specific ABI version requirements on a RHL9, and
+         Fedora Core 1 and 2 system are as follows (NB: this implies
+         IA-32 is the architecture):</p>
+
+         <ul>
+           <li><p>DSOs in <tt>/lib/tls</tt> need ABI version 2.4.20.</p></li>
+           <li><p>DSOs in <tt>/lib/i686</tt> need ABI version 2.4.1.</p></li>
+           <li><p>DSOs in <tt>/lib</tt> need ABI version 2.2.5.</p></li>
+         </ul>
+
+	 <p>This means no <tt>LD_ASSUME_KERNEL</tt> setting requesting
+	 versions earlier than 2.2.5 will work at all.  Versions from
+	 2.2.5 to 2.4.0 will use the DSOs in <tt>/lib</tt>, versions
+	 from 2.4.1 to 2.4.19 will use the DSOs in <tt>/lib/i686</tt>,
+	 versions 2.4.20 and younger will use the DSOs in
+	 <tt>/lib/tls</tt>.</p>
+
+         <p>For the Red Hat releases this layout was chosen to provide
+         the maximum amount of backward compatibility for
+         <b>broken</b> applications (correctly written applications
+         have no problems anyway).  The code in <tt>/lib</tt> consists
+         of the very early LinuxThreads code which had fixed size
+         threads which could not be placed by the application.  The
+         version in <tt>/lib/i686</tt> is the LinuxThreads code which
+         does away with this limitation (aka floating stacks).  The
+         code in <tt>/lib/tls</tt> is the new NPTL POSIX thread
+         library.</p>
+
+       </li>
+
+       <li>
+         <p>The fact that a DSO has a more stringent version
+         requirement does not mean it is automatically chosen.  The
+         dynamic only rejects loading DSOs based on the version
+         information, it does not look for the best fit.  The above
+         description is true because the dynamic linker always looks
+         in the directories <tt>/lib/tls</tt>, <tt>/lib/i686</tt>, and
+         <tt>/lib</tt> in this order.  Why this is the case is
+         complicated and not explained here.  Read the dynamic linker
+         source code.</p>
+       </li>
+
+       <li>
+        <p>For architectures other than IA-32 the situation is
+        similar, but less complicated.  In RHEL3 only two versions of
+        glibc are needed, one using LinuxThreads and one using NPTL.
+        The very old LinuxThreads code is not needed.</p>
+       </li>
+     </ol>
+  </body>
+</html>

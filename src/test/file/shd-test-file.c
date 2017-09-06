@@ -288,10 +288,14 @@ static int _test_iov(const char* fpath) {
 
     // to contain data read by readv(). "- 1" to discount the
     // nul-terminator
-    const size_t num_real_bytes = (sizeof block_1_data - 1) + (sizeof block_2_data - 1);
-    char readbuf[num_real_bytes + 5] = {[0 ... num_real_bytes + 5 - 1] = 'z'};
+    const size_t num_real_bytes = (sizeof(block_1_data) - 1) + (sizeof(block_2_data) - 1);
+    size_t readbuf_size = num_real_bytes + 5;
+    void* readbuf = calloc(1, readbuf_size);
+    for(int j = 0; j < (readbuf_size); j++) {
+        ((char*)readbuf)[j] = 'z';
+    }
     iov[1023].iov_base = readbuf;
-    iov[1023].iov_len = sizeof readbuf;
+    iov[1023].iov_len = readbuf_size;
 
     rv = readv(filed, iov, ARRAY_LENGTH(iov));
 
@@ -305,11 +309,10 @@ static int _test_iov(const char* fpath) {
     for (int i = 0; i < ARRAY_LENGTH(iov); ++i) {
         if (i == 1023) {
             // readv should not have touched the iov_len
-            const size_t expected_len = sizeof readbuf;
-            if (iov[i].iov_len != expected_len) {
+            if (iov[i].iov_len != readbuf_size) {
                 LOG_ERROR_AND_RETURN(
                     "readv produces wrong iov_len: %zu, expected: %zu",
-                    iov[i].iov_len, expected_len);
+                    iov[i].iov_len, readbuf_size);
             }
         } else {
             if (iov[i].iov_len != 0) {
@@ -330,6 +333,9 @@ static int _test_iov(const char* fpath) {
     if (memcmp(readbuf + strlen(block_1_data) + strlen(block_2_data), "zzzzz", 5)) {
         LOG_ERROR_AND_RETURN("readv() touched more memory than it should have");
     }
+
+    free(readbuf);
+    readbuf = NULL;
 
     /****
      **** read into two bases

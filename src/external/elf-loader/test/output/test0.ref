@@ -1,0 +1,14 @@
+libf constructor
+libe constructor
+libd constructor
+libb constructor
+liba constructor
+libtest0 constructor
+enter main
+leave main
+libtest0 destructor
+liba destructor
+libb destructor
+libd destructor
+libe destructor
+libf destructor

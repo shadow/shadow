@@ -12,5 +12,5 @@ target_link_libraries(shadow-plugin-test-pthreads ${CMAKE_THREAD_LIBS_INIT})
 target_link_libraries(test-pthreads ${CMAKE_THREAD_LIBS_INIT})
 
 ## register the tests
-add_test(NAME test-pthreads COMMAND test-pthreads)
-add_test(NAME test-pthreads-shadow COMMAND ${CMAKE_BINARY_DIR}/src/shadow  ${CMAKE_CURRENT_SOURCE_DIR}/pthreads.test.shadow.config.xml)
+add_test(NAME pthreads COMMAND test-pthreads)
+add_test(NAME pthreads-shadow COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d pthreads.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/pthreads.test.shadow.config.xml)

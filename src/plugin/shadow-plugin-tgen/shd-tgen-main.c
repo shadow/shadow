@@ -10,7 +10,7 @@
 /* store a global pointer to the log func, so we can log in any
  * of our tgen modules without a pointer to the tgen struct */
 TGenLogFunc tgenLogFunc = NULL;
-GString* tgenLogDomain = NULL;
+GLogLevelFlags tgenLogFilterLevel = G_LOG_LEVEL_MESSAGE;
 
 static const gchar* _tgenmain_logLevelToString(GLogLevelFlags logLevel) {
     switch (logLevel) {
@@ -31,15 +31,11 @@ static const gchar* _tgenmain_logLevelToString(GLogLevelFlags logLevel) {
     }
 }
 
-static void _tgenmain_logHandler(const gchar *logDomain, GLogLevelFlags logLevel,
-        const gchar *message, gpointer userData) {
-    GLogLevelFlags filter = (GLogLevelFlags)GPOINTER_TO_INT(userData);
-    if(logLevel <= filter) {
-        g_print("%s\n", message);
-    }
-}
-
 static void _tgenmain_log(GLogLevelFlags level, const gchar* fileName, const gint lineNum, const gchar* functionName, const gchar* format, ...) {
+    if(level > tgenLogFilterLevel) {
+        return;
+    }
+
     va_list vargs;
     va_start(vargs, format);
 
@@ -54,7 +50,10 @@ static void _tgenmain_log(GLogLevelFlags level, const gchar* fileName, const gin
             g_date_time_get_hour(dt), g_date_time_get_minute(dt), g_date_time_get_second(dt),
             g_date_time_to_unix(dt), g_date_time_get_microsecond(dt),
             _tgenmain_logLevelToString(level), fileStr, lineNum, functionName, format);
-    g_logv(tgenLogDomain->str, level, newformat->str, vargs);
+
+    gchar* message = g_strdup_vprintf(newformat->str, vargs);
+    g_print("%s\n", message);
+    g_free(message);
 
     g_string_free(newformat, TRUE);
     g_date_time_unref(dt);
@@ -68,26 +67,19 @@ static void _tgenmain_cleanup(gint status, gpointer arg) {
         TGenDriver* tgen = (TGenDriver*) arg;
         tgendriver_unref(tgen);
     }
-    if(tgenLogDomain) {
-        tgen_message("exiting cleanly");
-        g_string_free(tgenLogDomain, TRUE);
-    }
 }
 
 static gint _tgenmain_run(gint argc, gchar *argv[]) {
     tgenLogFunc = _tgenmain_log;
+    tgenLogFilterLevel = G_LOG_LEVEL_MESSAGE;
 
-    /* construct our unique log domain */
+    /* get our hostname for logging */
     gchar hostname[128];
     memset(hostname, 0, 128);
     gethostname(hostname, 128);
-    tgenLogDomain = g_string_new(NULL);
-    g_string_printf(tgenLogDomain, "%s-tgen-%i", hostname, (gint)getpid());
 
     /* default to message level log until we read config */
-    gpointer startupFilter = GINT_TO_POINTER(G_LOG_LEVEL_MESSAGE);
-    guint startupID = g_log_set_handler(tgenLogDomain->str, G_LOG_LEVEL_MASK|G_LOG_FLAG_FATAL|G_LOG_FLAG_RECURSION, _tgenmain_logHandler, startupFilter);
-    tgen_message("Initializing traffic generator on host %s using log domain %s", hostname, tgenLogDomain->str);
+    tgen_message("Initializing traffic generator on host %s process id %i", hostname, (gint)getpid());
 
     // TODO embedding a tgen graphml inside the shadow.config.xml file not yet supported
 //    if(argv[1] && g_str_has_prefix(argv[1], "<?xml")) {
@@ -122,11 +114,7 @@ static gint _tgenmain_run(gint argc, gchar *argv[]) {
     }
 
     /* set log level, which again defaults to message if no level was configured */
-    gpointer configuredFilter = GINT_TO_POINTER(tgenaction_getLogLevel(tgengraph_getStartAction(graph)));
-    if(configuredFilter != startupFilter) {
-        g_log_remove_handler(tgenLogDomain->str, startupID);
-        g_log_set_handler(tgenLogDomain->str, G_LOG_LEVEL_MASK|G_LOG_FLAG_FATAL|G_LOG_FLAG_RECURSION, _tgenmain_logHandler, configuredFilter);
-    }
+    tgenLogFilterLevel = tgenaction_getLogLevel(tgengraph_getStartAction(graph));
 
     /* create the new state according to user inputs */
     TGenDriver* tgen = tgendriver_new(graph);

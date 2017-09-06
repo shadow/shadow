@@ -7,12 +7,21 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <stdint.h>
+#include <string.h>
 
 #define NUM_THREADS 5
 
 struct mux_sum {
     pthread_mutex_t* mux;
     int* sum;
+};
+
+struct mux_try {
+    pthread_mutex_t mux1;
+    pthread_mutex_t mux2;
+    pthread_cond_t cond;
+    int numlocked;
+    int numnolocked;
 };
 
 static void* _test_thread_returnOne() {
@@ -51,26 +60,47 @@ static void* _test_thread_muxlock(void* data) {
 
 static void* _test_thread_muxtrylock(void* mx) {
     /* Track the number of threads that pass the lock. Should be < NUM_THREADS */
-    intptr_t counter = 0;
-    pthread_mutex_t* mux = (pthread_mutex_t*)mx;
+    struct mux_try* muxes = (struct mux_try*)mx;
 
     /* Attempt to lock the mutex */
-    if (pthread_mutex_trylock(mux) == 0) {
-        /* some busy work... Probably a better way TODO this */
-        int i;
-        for(i=0; i<(1000000/NUM_THREADS); i++){
-            int junk = i*i;
+    if (pthread_mutex_trylock(&(muxes->mux1)) == 0) {
+
+        if(pthread_mutex_lock(&(muxes->mux2)) < 0) {
+            fprintf(stdout, "error: pthread_mutex_lock failed\n");
         }
 
-        if(pthread_mutex_unlock(mux) < 0) {
-            fprintf(stdout, "error: pthread_mutex_unlock failed\n");
-            counter = -1;
+        muxes->numlocked++;
+
+        if(muxes->numnolocked == 0) {
+            if(pthread_cond_wait(&(muxes->cond), &(muxes->mux2)) < 0) {
+                fprintf(stdout, "error: pthread_cond_wait failed\n");
+            }
         }
-        
-        counter = 1;
+
+        if(pthread_mutex_unlock(&(muxes->mux2)) < 0) {
+            fprintf(stdout, "error: pthread_mutex_unlock failed\n");
+        }
+
+        if(pthread_mutex_unlock(&(muxes->mux1)) < 0) {
+            fprintf(stdout, "error: pthread_mutex_unlock failed\n");
+        }
+    } else {
+        if(pthread_mutex_lock(&(muxes->mux2)) < 0) {
+            fprintf(stdout, "error: pthread_mutex_lock failed\n");
+        }
+
+        muxes->numnolocked++;
+
+        if(pthread_cond_broadcast(&(muxes->cond)) < 0) {
+            fprintf(stdout, "error: pthread_cond_wait failed\n");
+        }
+
+        if(pthread_mutex_unlock(&(muxes->mux2)) < 0) {
+            fprintf(stdout, "error: pthread_mutex_unlock failed\n");
+        }
     }
 
-    return (void*)counter;
+    return NULL;
 }
 
 static int _test_joinThreads(pthread_t* threads) {
@@ -131,7 +161,7 @@ static int _test_makeJoinable(pthread_t* threads) {
 
 static int _test_mutex_lock(pthread_t* threads) {
     int sum=0;
-    
+
     pthread_mutex_t mux;
     if(pthread_mutex_init(&mux, NULL) < 0) {
         fprintf(stdout, "error: pthread_mutex_init failed\n");
@@ -186,52 +216,63 @@ static int _test_mutex_lock(pthread_t* threads) {
 }
 
 static int _test_mutex_trylock(pthread_t* threads) {
-    pthread_mutex_t mux;
-    if(pthread_mutex_init(&mux, NULL) < 0) {
-        fprintf(stdout, "error: pthread_mutex_init failed\n");
-        return -1;
+    int value_to_return = -1;
+
+    struct mux_try muxes;
+    memset(&muxes, 0, sizeof(struct mux_try));
+
+    if(pthread_mutex_init(&(muxes.mux1), NULL) < 0) {
+        fprintf(stdout, "error: pthread_mutex_init 1 failed\n");
+        goto fail1;
+    }
+    if(pthread_mutex_init(&(muxes.mux2), NULL) < 0) {
+        fprintf(stdout, "error: pthread_mutex_init 2 failed\n");
+        goto fail2;
+    }
+    if(pthread_cond_init(&(muxes.cond), NULL) < 0) {
+        fprintf(stdout, "error: pthread_cond_init failed\n");
+        goto fail3;
     }
 
     /* create / send threads */
     long t;
     int error=0;
     for(t=0; t<NUM_THREADS && error == 0; t++) {
-        error = pthread_create(&threads[t], NULL, _test_thread_muxtrylock, (void*)&mux);
+        error = pthread_create(&threads[t], NULL, _test_thread_muxtrylock, (void*)&muxes);
         if(error < 0) {
             fprintf(stdout, "error: pthread_create failed!\n");
-            pthread_mutex_destroy(&mux);
-            return -1;
+            goto fail;
         }
     }
 
     /* join threads, check their exit values */
-    intptr_t total=0;
-    intptr_t retval=0;
+    void* retval=0;
     for(t=0; t<NUM_THREADS && error == 0; t++) {
         error = pthread_join(threads[t], (void**)&retval);
         if(error < 0) {
             fprintf(stdout, "error: pthread_join failed!\n");
-            pthread_mutex_destroy(&mux);
-            return -1;
+            goto fail;
         }
-        if(retval == -1) {
-            fprintf(stdout, "error: retval from pthread_join is -1!\n");
-            pthread_mutex_destroy(&mux);
-            return -1;
-        }
-        total += retval;
     }
 
     /* check that trylock worked by checking that some threads skipped */
-    if (total >= NUM_THREADS) {
-        fprintf(stdout, "error: expected < %i, total was '%ld'\n", NUM_THREADS, total);
-        pthread_mutex_destroy(&mux);
-        return -1;
+    if (muxes.numnolocked <= 0 || muxes.numlocked <= 0) {
+        fprintf(stdout, "error: %i threads locked (expected at least 1), "
+                "%i threads skipped (expected at least 1)\n",
+                muxes.numlocked, muxes.numnolocked);
+        goto fail;
     }
 
     /* success! */
-    pthread_mutex_destroy(&mux);
-    return 0;
+    value_to_return = 0;
+fail:
+    pthread_cond_destroy(&(muxes.cond));
+fail3:
+    pthread_mutex_destroy(&(muxes.mux2));
+fail2:
+    pthread_mutex_destroy(&(muxes.mux1));
+fail1:
+    return value_to_return;
 }
 int main(int argc, char* argv[]) {
     fprintf(stdout, "########## pthreads test starting ##########\n");
