@@ -27,7 +27,7 @@ link_directories(${CMAKE_BINARY_DIR}/src/external/rpth/.libs)
 ## make sure vdl.h is in the include and link path
 include_directories(${CMAKE_SOURCE_DIR}/src/external/elf-loader)
 include_directories(${CMAKE_BINARY_DIR}/src/external/elf-loader)
-link_directories(${CMAKE_BINARY_DIR}/src/external/elf-loader/)
+link_directories(${CMAKE_BINARY_DIR}/src/external/elf-loader)
 
 ## compile defs and flags
 #add_definitions(-D_SVID_SOURCE -D_XOPEN_SOURCE=600 -D_ISOC11_SOURCE) #-D_GNU_SOURCE
@@ -105,7 +105,8 @@ set(shadow_srcs
 ## specify the main shadow executable, build, link, and install
 add_executable(shadow ${shadow_srcs})
 add_dependencies(shadow shadow-interpose-helper elf-loader rpth)
-target_link_libraries(shadow shadow-interpose-helper -lrpth -lvdl ${CMAKE_THREAD_LIBS_INIT} ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES} ${IGRAPH_LIBRARIES} ${GLIB_LIBRARIES})
+## 'shadow-interpose-helper' and 'vdl' are cmake targets, the rest are external libs for which '-l' is needed
+target_link_libraries(shadow shadow-interpose-helper vdl -lrpth ${CMAKE_THREAD_LIBS_INIT} ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES} ${IGRAPH_LIBRARIES} ${GLIB_LIBRARIES})
 install(TARGETS shadow DESTINATION bin)
 
 ## shadow needs to find libshadow-interpose and custom libs after install
