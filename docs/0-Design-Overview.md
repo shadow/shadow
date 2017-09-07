@@ -77,7 +77,7 @@ See [the original Shadow webcast][youtube-shadow-design] for more information ab
 [tor]: https://www.torproject.org/
 [tormetrics]: https://metrics.torproject.org/
 [torsource]: https://gitweb.torproject.org/tor.git
-[wiki-ec2]: https://github.com/shadow/shadow/wiki/1-Installation-and-Setup#shadow-with-cloud-computing
+[wiki-ec2]: https://github.com/shadow/shadow/wiki/1.4-Shadow-with-EC2
 [wiki-scallion]: https://github.com/shadow/shadow-plugin-tor/wiki
 [wiki-custom-plugin]: https://github.com/shadow/shadow/wiki/2-Simulation-Execution-and-Analysis#shadow-plug-ins
 [youtube-shadow-design]: http://youtu.be/Tb7m8OdpD8A
