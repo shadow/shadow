@@ -19,7 +19,7 @@ Generic applications may be run in Shadow. The most important required features 
  + polls I/O events using one of the `epoll`, `poll`, or `select` interfaces (see, e.g., `$ man epoll`)
  + doesn't fork/exec process (can run in single process mode)
 
-Included with Shadow is a traffic generator plug-in that is capable of modeling generic behaviors represented using an action-dependency graph and the standard graphml xml format. This powerful plug-in means different behavior models can be implemented by simply writing a python script to generate new graphml files rather than modifying simulator code or writing new plug-ins. More information about customizing behaviors is [also on the wiki](3-Simulation-Customization#Traffic-generator-configuration).
+Included with Shadow is a traffic generator plug-in that is capable of modeling generic behaviors represented using an action-dependency graph and the standard graphml xml format. With this powerful plug-in, different behavior models can be implemented by simply writing a python script to generate new graphml files rather than modifying simulator code or writing new plug-ins. More information about customizing behaviors is [also on the wiki](3-Simulation-Customization#Traffic-generator-configuration).
 
 Existing plug-ins for Shadow also include [shadow-plugin-tor](https://github.com/shadow/shadow-plugin-tor) for running Tor anonymity networks and [shadow-plugin-bitcoin](https://github.com/shadow/shadow-plugin-bitcoin) for running Bitcoin cryptocurrency networks. Other useful plug-ins exist in the [shadow-plugin-extras repository](https://github.com/shadow/shadow-plugin-extras), including an HTML-supported web browser and server combo.
 
@@ -43,18 +43,16 @@ Once it finishes, you will notice:
 
 You can browse through `shadow.log` to get a feel for Shadow's logging style and format, and each `shadow.data/hosts/<hostname>` directory contains the standard output and standard error for each virtual process that ran in the simulation.
 
-For now, we are most interested in the tgen virtual process output, and the lines containing `transfer-complete`, since those represent completed downloads and contain useful timing statistics. The clients should have completed a total of **100** transfers:
+For now, we are most interested in the tgen virtual process output, and the lines containing `transfer-complete`, since those represent completed downloads and contain useful timing statistics. The clients should have completed a total of **1000** transfers:
 
 ```bash
-for d in shadow.data/hosts/*client*; do grep "transfer-complete" ${d}/* ; done > clients.log
-cat clients.log | wc -l
+for d in shadow.data/hosts/*client*; do grep "transfer-complete" ${d}/* ; done | tee clients.log | wc -l
 ```
 
 We can also look at the transfers from the servers' perspective:
 
 ```bash
-for d in shadow.data/hosts/*server*; do grep "transfer-complete" ${d}/* ; done > servers.log
-cat servers.log | wc -l
+for d in shadow.data/hosts/*server*; do grep "transfer-complete" ${d}/* ; done | tee servers.log | wc -l
 ```
 
 We now need to know more about the configuration process, as this is a major part of running Shadow experiments.
@@ -136,14 +134,14 @@ Shadow includes some python scripts that can parse some important statistics fro
 # start in the base shadow/ directory
 cd ../..
 # parse the shadow output file
-python tools/parse-shadow.py --help
-python tools/parse-shadow.py --prefix results resource/examples/shadow.log
+python src/tools/parse-shadow.py --help
+python src/tools/parse-shadow.py --prefix results resource/examples/shadow.log
 # parse tgen output files from all hosts
-python tools/plot-tgen.py --help
-python tools/parse-tgen.py --prefix results resource/examples/shadow.data/hosts/
+python src/tools/plot-tgen.py --help
+python src/tools/parse-tgen.py --prefix results resource/examples/shadow.data/hosts/
 # plot the results!
-python tools/plot-shadow.py --help
-python tools/plot-shadow.py --data results "example-plots"
+python src/tools/plot-shadow.py --help
+python src/tools/plot-shadow.py --data results "example-plots"
 ```
 
 The `parse-*.py` scripts generate `stats.*.json.xz` files. The (heavily trimmed) contents of `stats.shadow.json` look a little like this.
@@ -189,16 +187,16 @@ mv shadow.data window1000.data
 To parse these log files, we use the following scripts:
 
 ```bash
-python ../../tools/parse-shadow.py --prefix=window1.results window1.log
-python ../../tools/parse-tgen.py --prefix=window1.results window1.data/hosts
-python ../../tools/parse-shadow.py --prefix=window1000.results window1000.log
-python ../../tools/parse-tgen.py --prefix=window1000.results window1000.data/hosts
+python ../../src/tools/parse-shadow.py --prefix=window1.results window1.log
+python ../../src/tools/parse-tgen.py --prefix=window1.results window1.data/hosts
+python ../../src/tools/parse-shadow.py --prefix=window1000.results window1000.log
+python ../../src/tools/parse-tgen.py --prefix=window1000.results window1000.data/hosts
 ```
 
 Each of the directories `window1.results/` and `window1000.results/` now contain data statistics files extracted from the log files. We can now combine and visualize these results with the `plot-shadow.py` script:
 
 ```bash
-python ../../tools/plot-shadow.py --prefix "window" --data window1.results/ "1 packet" --data window1000.results/ "1000 packets"
+python ../../src/tools/plot-shadow.py --prefix "window" --data window1.results/ "1 packet" --data window1000.results/ "1000 packets"
 ```
 
 Then open the PDF file that was created to compare results from the experiments.
