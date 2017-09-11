@@ -6,7 +6,7 @@ This wiki contains important information about installing and using the Shadow d
 
 [[0 Design Overview]]  
 [[1 Installation and Setup]]  
-[[2 Simulation Execution and Analysis]]  
+[[2 Getting Started Tutorial]]  
 [[3 Simulation Customization]]  
 [[4 Notes and FAQs]]  
 
