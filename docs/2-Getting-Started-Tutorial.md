@@ -65,7 +65,7 @@ Lets take another look at the `tgen` example from above, the configuration for w
 
 The network topology used for the simulation is also configured inside of the `shadow.config.xml` file. In the example above, the network topology was embedded as CDATA inside of the `<topology>` element. This network topology is itself XML in the standard graphml format, and can be stored in a separate file instead of embedding it. You may then modify `shadow.config.xml` to reference the external graphml topology file rather than embedding it with something like `<topology path="~/.shadow/share/topology.graphml.xml" />.
 
-Shadow includes a **pre-built topology file** installed to `~/.shadow/share/topology.graphml.xml` (or `your/prefix/share`), which you can include as described above. You may want to customize the topology **vertices** and **edges** to include your own network characteristics, as the included topology is very basic and quite outdated. The format of all of the attributes and acceptable values for the topology is described on the [network configuration](3.3-Network-Config) page.
+Shadow includes a **pre-built topology file** installed to `~/.shadow/share/topology.graphml.xml` (or `your/prefix/share`), which you can include as described above. You may want to customize the topology **vertices** and **edges** to include your own network characteristics, as the included topology is very basic and quite outdated. The format of all of the attributes and acceptable values for the topology is described on the [network configuration](3.2-Network-Config) page.
 
 ## The log file
 
