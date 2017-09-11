@@ -32,7 +32,9 @@ Yes. You'll need to build Shadow with the `--tor-prefix` option set to the path 
 
 #### My OS does not include the correct Clang/LLVM CMake modules. How do I build Clang/LLVM from source?
 
-Older versions of the **clang/llvm** OS packages do not include the shared CMake module files Shadow requires. ug reports have been filed for ~~[Fedora](https://bugzilla.redhat.com/show_bug.cgi?id=914713)~~ and ~~[Debian](http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=701153)~~). You can get these by building Clang/LLVM from source as follows.
+Clang/LLVM are no longer required to build Shadow as of Shadow v1.12.0.
+
+Older versions of the **clang/llvm** OS packages do not include the shared CMake module files Shadow requires. Bug reports have been filed for ~~[Fedora](https://bugzilla.redhat.com/show_bug.cgi?id=914713)~~ and ~~[Debian](http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=701153)~~). You can get these by building Clang/LLVM from source as follows.
 
 ```bash
 wget http://www.llvm.org/releases/3.2/llvm-3.2.src.tar.gz
@@ -57,6 +59,15 @@ Tor currently requires 3 directory authorities to be configured in order to acce
 
 #### How can I build Shadow directly using cmake instead of the setup script?
 
+For Shadow v1.12.0 or newer, use:
+```bash
+mkdir -p build/shadow; cd build/shadow
+cmake ../..
+make && make install
+```
+
+For Shadow versions before v1.12.0:
+
 ```bash
 mkdir -p build/shadow; cd build/shadow
 CC=`which clang` CXX=`which clang++` cmake ../..
@@ -75,6 +86,7 @@ cd build
 cmake .. -DSKIP_SHADOW=ON -DCMAKE_MODULE_PATH=`pwd`/../../../../cmake/
 make
 ```
+
 #### How can I stop Shadow from forking?
 
 In order to run Shadow, the `LD_PRELOAD` environmental variable must be set to the location of `libshadow-interpose.so`. If this is not done, recent versions of Shadow will attempt to do this on behalf of the user, and then fork itself once the environment is set up properly. To avoid the fork, simply run shadow like:
@@ -83,7 +95,7 @@ In order to run Shadow, the `LD_PRELOAD` environmental variable must be set to t
 LD_PRELOAD=/home/rob/.shadow/lib/libshadow-interpose.so shadow ...
 ```
 
-Similarly, when running `shadow-plugin-tor`, the `shadow-tor` command also sets up some required variables for the user. When running the `shadow-plugin-tor` minimal example, stop Shadow from forking by doing something like the following instead of using the `shadow-tor` command:
+When running the `shadow-plugin-tor` minimal example, stop Shadow from forking by doing something like the following:
 
 ```bash
 cd shadow-plugin-tor/resource/minimal
