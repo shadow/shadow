@@ -34,6 +34,8 @@ enum _EpollWatchFlags {
     EWF_EDGETRIGGER = 1 << 9,
     /* set if one-shot events are enabled on the underlying shadow descriptor */
     EWF_ONESHOT = 1 << 10,
+    /* used to track that ONESHOT mode is used, an event was already reported, and the
+     * socket has not been modified since. This prevents duplicate reporting in ONESHOT mode. */
     EWF_ONESHOT_REPORTED = 1 << 11,
 };
 
@@ -195,6 +197,7 @@ static void _epollwatch_updateStatus(EpollWatch* watch) {
     lazyFlags |= (watch->flags & EWF_READCHANGED) ? EWF_READCHANGED : EWF_NONE;
     lazyFlags |= (watch->flags & EWF_WRITECHANGED) ? EWF_WRITECHANGED : EWF_NONE;
     lazyFlags |= (watch->flags & EWF_WATCHING) ? EWF_WATCHING : EWF_NONE;
+    lazyFlags |= (watch->flags & EWF_ONESHOT_REPORTED) ? EWF_ONESHOT_REPORTED : EWF_NONE;
 
     /* reset our flags */
     EpollWatchFlags oldFlags = watch->flags;
@@ -402,6 +405,8 @@ gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor, struct 
 
             /* the user set new events */
             watch->event = *event;
+            /* we would need to report the new event again if in ONESHOT mode */
+            watch->flags &= ~EWF_ONESHOT_REPORTED;
 
             /* initiate a callback if the new event type on the watched descriptor is ready */
             _epoll_check(epoll);
