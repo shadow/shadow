@@ -138,6 +138,82 @@ static int _test_pipe_oneshot() {
     return _test_pipe_helper(1);
 }
 
+static int _test_pipe_edgetrigger() {
+    /* Create a set of pipefds
+       pfd[0] == read, pfd[1] == write */
+    int pfds[2];
+    if(pipe(pfds) < 0) {
+        fprintf(stdout, "error: pipe could not be created!\n");
+        return EXIT_FAILURE;
+    }
+
+    struct epoll_event pevent;
+    pevent.events = EPOLLOUT|EPOLLET;
+    pevent.data.fd = pfds[1];
+
+    int efd = epoll_create(1);
+    if(epoll_ctl(efd, EPOLL_CTL_ADD, pfds[1], &pevent) < 0) {
+        fprintf(stdout, "error: epoll_ctl failed\n");
+        return EXIT_FAILURE;
+    }
+
+    /* First make sure it is writable */
+    int ready = epoll_wait(efd, &pevent, 1, 100);
+    if(ready < 0) {
+        fprintf(stdout, "error: epoll_wait failed\n");
+        goto fail;
+    }
+    else if(ready == 0) {
+        fprintf(stdout, "error: pipe empty but not marked writable\n");
+        goto fail;
+    }
+
+    /* Now put information in pipe to be read */
+    if(_test_fd_write(pfds[1]) < 0) {
+        fprintf(stdout, "error: could not write to pipe\n");
+        goto fail;
+    }
+
+    /* now we wrote to pipe. in edge-trigger mode, it should not report that it is writable
+     * again since we already collected that event and writable status did not change. */
+    ready = epoll_wait(efd, &pevent, 1, 100);
+    if(ready < 0) {
+        fprintf(stdout, "error: epoll_wait failed\n");
+        goto fail;
+    }
+    else if(ready > 0) {
+        fprintf(stdout, "error: pipe writable event reported twice in edge-trigger mode without changes to descriptor\n");
+        goto fail;
+    }
+
+    /* but if we run a mod operation, then the writable event should be reported once more */
+    pevent.events = EPOLLOUT|EPOLLET;
+    pevent.data.fd = pfds[1];
+    if(epoll_ctl(efd, EPOLL_CTL_MOD, pfds[1], &pevent) < 0) {
+        fprintf(stdout, "error: epoll_ctl failed\n");
+        return EXIT_FAILURE;
+    }
+
+    ready = epoll_wait(efd, &pevent, 1, 100);
+    if(ready < 0) {
+        fprintf(stdout, "error: epoll_wait failed\n");
+        goto fail;
+    }
+    else if(ready == 0) {
+        fprintf(stdout, "error: pipe writable event was not reported in edge-trigger mode after epoll_ctl MOD operation\n");
+        goto fail;
+    }
+
+    /* success! */
+    close(pfds[0]);
+    close(pfds[1]);
+    return EXIT_SUCCESS;
+fail:
+    close(pfds[0]);
+    close(pfds[1]);
+    return EXIT_FAILURE;
+}
+
 static int _test_creat() {
     int fd = creat("testepoll.txt", 0);
     if(fd < 0) {
@@ -179,6 +255,12 @@ int main(int argc, char* argv[]) {
     fprintf(stdout, "########## _test_pipe_oneshot() started\n");
     if(_test_pipe_oneshot() != EXIT_SUCCESS) {
         fprintf(stdout, "########## _test_pipe_oneshot() failed\n");
+        return EXIT_FAILURE;
+    }
+
+    fprintf(stdout, "########## _test_pipe_edgetrigger() started\n");
+    if(_test_pipe_edgetrigger() != EXIT_SUCCESS) {
+        fprintf(stdout, "########## _test_pipe_edgetrigger() failed\n");
         return EXIT_FAILURE;
     }
 

@@ -32,11 +32,12 @@ enum _EpollWatchFlags {
     EWF_WATCHING = 1 << 8,
     /* set if edge-triggered events are enabled on the underlying shadow descriptor */
     EWF_EDGETRIGGER = 1 << 9,
+    EWF_EDGETRIGGER_REPORTED = 1 << 10,
     /* set if one-shot events are enabled on the underlying shadow descriptor */
-    EWF_ONESHOT = 1 << 10,
+    EWF_ONESHOT = 1 << 11,
     /* used to track that ONESHOT mode is used, an event was already reported, and the
      * socket has not been modified since. This prevents duplicate reporting in ONESHOT mode. */
-    EWF_ONESHOT_REPORTED = 1 << 11,
+    EWF_ONESHOT_REPORTED = 1 << 12,
 };
 
 typedef struct _EpollWatch EpollWatch;
@@ -197,6 +198,7 @@ static void _epollwatch_updateStatus(EpollWatch* watch) {
     lazyFlags |= (watch->flags & EWF_READCHANGED) ? EWF_READCHANGED : EWF_NONE;
     lazyFlags |= (watch->flags & EWF_WRITECHANGED) ? EWF_WRITECHANGED : EWF_NONE;
     lazyFlags |= (watch->flags & EWF_WATCHING) ? EWF_WATCHING : EWF_NONE;
+    lazyFlags |= (watch->flags & EWF_EDGETRIGGER_REPORTED) ? EWF_EDGETRIGGER_REPORTED : EWF_NONE;
     lazyFlags |= (watch->flags & EWF_ONESHOT_REPORTED) ? EWF_ONESHOT_REPORTED : EWF_NONE;
 
     /* reset our flags */
@@ -239,19 +241,27 @@ static gboolean _epollwatch_isReady(EpollWatch* watch) {
 
     gboolean isReady = FALSE;
 
-    /* edge-triggered mode is only ready if the read/write event status changed */
+    gboolean hasReadEvent = (watch->flags & EWF_READABLE) && (watch->flags & EWF_WAITINGREAD) ? TRUE : FALSE;
+    gboolean hasWriteEvent = (watch->flags & EWF_WRITEABLE) && (watch->flags & EWF_WAITINGWRITE) ? TRUE : FALSE;
+
+    /* figure out if we should report an event */
     if(watch->flags & EWF_EDGETRIGGER) {
-        if(((watch->flags & EWF_READABLE) && (watch->flags & EWF_WAITINGREAD) && (watch->flags & EWF_READCHANGED)) ||
-                ((watch->flags & EWF_WRITEABLE) && (watch->flags & EWF_WAITINGWRITE) && (watch->flags & EWF_WRITECHANGED))) {
+        /* edge-triggered mode is only ready if the read/write event status changed, unless there is
+         * an event and we have yet to report it. */
+        if(hasReadEvent && ((watch->flags & EWF_READCHANGED) || !(watch->flags & EWF_EDGETRIGGER_REPORTED))) {
+            isReady = TRUE;
+        }
+        if(hasWriteEvent && ((watch->flags & EWF_WRITECHANGED) || !(watch->flags & EWF_EDGETRIGGER_REPORTED))) {
             isReady = TRUE;
         }
     } else {
-        if(((watch->flags & EWF_READABLE) && (watch->flags & EWF_WAITINGREAD)) ||
-                ((watch->flags & EWF_WRITEABLE) && (watch->flags & EWF_WAITINGWRITE))) {
+        /* default level-triggered mode always reports events that exist */
+        if(hasReadEvent || hasWriteEvent) {
             isReady =  TRUE;
         }
     }
 
+    /* ONESHOT mode only reports once until a change happens */
     if(isReady && (watch->flags & EWF_ONESHOT) && (watch->flags & EWF_ONESHOT_REPORTED)) {
         isReady = FALSE;
     }
@@ -405,7 +415,8 @@ gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor, struct 
 
             /* the user set new events */
             watch->event = *event;
-            /* we would need to report the new event again if in ONESHOT mode */
+            /* we would need to report the new event again if in ET or ONESHOT modes */
+            watch->flags &= ~EWF_EDGETRIGGER_REPORTED;
             watch->flags &= ~EWF_ONESHOT_REPORTED;
 
             /* initiate a callback if the new event type on the watched descriptor is ready */
@@ -493,6 +504,10 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray, gint eventArr
             eventIndex++;
             utility_assert(eventIndex <= eventArrayLength);
 
+            if(watch->flags & EWF_EDGETRIGGER) {
+                /* tag that an event was collected in ET mode */
+                watch->flags |= EWF_EDGETRIGGER_REPORTED;
+            }
             if(watch->flags & EWF_ONESHOT) {
                 /* they collected the event, dont report any more */
                 watch->flags |= EWF_ONESHOT_REPORTED;
