@@ -1109,6 +1109,33 @@ gboolean tcp_isFamilySupported(TCP* tcp, sa_family_t family) {
     return family == AF_INET || family == AF_UNIX ? TRUE : FALSE;
 }
 
+/**
+ * Check if the TCP socket is a valid listener.
+ * returns true if the socket has a configured TCP server and is in LISTEN state, false otherwise
+ */
+gboolean tcp_isValidListener(TCP* tcp) {
+    MAGIC_ASSERT(tcp);
+    if(tcp->server && tcp->state == TCPS_LISTEN) {
+        return TRUE;
+    } else {
+        return FALSE;
+    }
+}
+
+/**
+ * Check if the TCP socket allows listening.
+ * A socket must not have been used for other purposes to allow listening.
+ * returns TRUE if the socket state and flags have not yet been set, FALSE otherwise.
+ */
+gboolean tcp_isListeningAllowed(TCP* tcp) {
+    MAGIC_ASSERT(tcp);
+    if(tcp->state == TCPCS_NONE && tcp->flags == TCPF_NONE) {
+        return TRUE;
+    } else {
+        return FALSE;
+    }
+}
+
 gint tcp_getConnectError(TCP* tcp) {
     MAGIC_ASSERT(tcp);
 

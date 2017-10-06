@@ -1219,6 +1219,19 @@ gint host_listenForPeer(Host* host, gint handle, gint backlog) {
     Socket* socket = (Socket*) descriptor;
     TCP* tcp = (TCP*) descriptor;
 
+    /* only listen on the socket if it is not used for other functions */
+    if(!tcp_isListeningAllowed(tcp)) {
+        return EOPNOTSUPP;
+    }
+
+    /* if we are already listening, just return 0.
+     * linux may actually update the backlog to the new backlog passed into this function,
+     * but shadow currently does not make use of the backlog. */
+    if(tcp_isValidListener(tcp)) {
+        return 0;
+    }
+
+    /* if we get here, we are allowed to listen and are not already listening, start listening now */
     if(!socket_isBound(socket)) {
         /* implicit bind */
         in_addr_t bindAddress = htonl(INADDR_ANY);
