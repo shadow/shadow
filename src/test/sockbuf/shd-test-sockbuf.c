@@ -22,6 +22,8 @@
 #include <linux/sockios.h>
 #include <sys/ioctl.h>
 
+#include <../shd-test-common.h>
+
 #define BUFFERSIZE 1048576
 
 #undef SOCKTEST_IOCTL_INQ
@@ -143,112 +145,16 @@ static int log_sizes(int fd, int get_len, char* str) {
     return 0;
 }
 
-static int do_setup(int* serverd_out, int* clientd_out, in_port_t server_port) {
-    /* set up server */
-    int sd = socket(AF_INET, SOCK_STREAM, 0);
-    printf("socket() returned %i\n", sd);
-    if (sd < 0) {
-        printf("socket() error was: %s\n", strerror(errno));
-        return -1;
-    }
-
-//    int yes = 1;
-//    int result = setsockopt(sd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int));
-//    printf("setsockopt() returned %i\n", result);
-//    if(result < 0) {
-//        printf("setsockopt() error was: %s\n", strerror(errno));
-//        return -1;
-//    }
-
-    struct sockaddr_in saddr;
-    memset(&saddr, 0, sizeof(struct sockaddr_in));
-    saddr.sin_family = AF_INET;
-    saddr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    saddr.sin_port = server_port;
-
-    int result = bind(sd, (struct sockaddr *) &saddr, sizeof(struct sockaddr_in));
-    printf("bind() returned %i\n", result);
-    if (result < 0) {
-        printf("bind() error was: %s\n", strerror(errno));
-        return -1;
-    }
-
-    result = listen(sd, 100);
-    printf("listen() returned %i\n", result);
-    if (result == -1) {
-        printf("listen() error was: %s\n", strerror(errno));
-        return -1;
-    }
-
-    /* set up client */
-    int cd = socket(AF_INET, SOCK_STREAM|SOCK_NONBLOCK, 0);
-    printf("socket() returned %i\n", cd);
-    if (cd < 0) {
-        printf("socket() error was: %s\n", strerror(errno));
-        return -1;
-    }
-
-//    yes = 1;
-//    result = setsockopt(cd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int));
-//    printf("setsockopt() returned %i\n", result);
-//    if(result < 0) {
-//        printf("setsockopt() error was: %s\n", strerror(errno));
-//        return -1;
-//    }
-
-    if(serverd_out) {
-        *serverd_out = sd;
-    }
-    if(clientd_out) {
-        *clientd_out = cd;
-    }
-    return 0;
-}
-
-static int do_connect(int sd, int cd, int* sd_child, in_port_t server_port) {
-    struct sockaddr_in caddr;
-    memset(&caddr, 0, sizeof(struct sockaddr_in));
-    caddr.sin_family = AF_INET;
-    caddr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    caddr.sin_port = server_port;
-
-    int result = connect(cd, (struct sockaddr *) &caddr, sizeof(struct sockaddr_in));
-    printf("connect() returned %i\n", result);
-    if(result < 0 && errno != EINPROGRESS) {
-        printf("connect() error was: %s\n", strerror(errno));
-        return -1;
-    }
-
-    result = accept(sd, NULL, NULL);
-    printf("accept() returned %i\n", result);
-    if(result < 0) {
-        printf("accept() error was: %s\n", strerror(errno));
-        return -1;
-    }
-    if(sd_child) {
-        *sd_child = result;
-    }
-
-    result = connect(cd, (struct sockaddr *) &caddr, sizeof(struct sockaddr_in));
-    printf("connect() returned %i\n", result);
-    if(result < 0) {
-        printf("connect() error was: %s\n", strerror(errno));
-        return -1;
-    }
-
-    return 0;
-}
-
 int test_set_size_connect_helper(int call_connect, in_port_t server_port) {
     int sd = 0, cd = 0, sd_child = 0;
     int result = 0;
 
-    if(do_setup(&sd, &cd, server_port) < 0) {
+    if(common_setup_tcp_sockets(&sd, &cd, server_port) < 0) {
         goto fail;
     }
 
     if(call_connect) {
-        if(do_connect(sd, cd, &sd_child, server_port) < 0) {
+        if(common_connect_tcp_sockets(sd, cd, &sd_child, server_port) < 0) {
             goto fail;
         }
     }
@@ -325,7 +231,7 @@ int test_autotune_helper(int use_autotune, in_port_t server_port){
     int sd = 0, cd = 0, sd_child = 0;
     int result = 0;
 
-    if(do_setup(&sd, &cd, server_port) < 0) {
+    if(common_setup_tcp_sockets(&sd, &cd, server_port) < 0) {
         goto fail;
     }
 
@@ -358,7 +264,7 @@ int test_autotune_helper(int use_autotune, in_port_t server_port){
         goto fail;
     }
 
-    if(do_connect(sd, cd, &sd_child, server_port) < 0) {
+    if(common_connect_tcp_sockets(sd, cd, &sd_child, server_port) < 0) {
         goto fail;
     }
 
