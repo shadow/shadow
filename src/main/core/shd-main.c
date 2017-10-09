@@ -25,7 +25,7 @@ static gchar* _main_getRPath() {
     const ElfW(Dyn) *rpath = NULL;
     const gchar *strtab = NULL;
     for (; dyn->d_tag != DT_NULL; ++dyn) {
-        if (dyn->d_tag == DT_RPATH) {
+        if (dyn->d_tag == DT_RPATH || dyn->d_tag == DT_RUNPATH) {
             rpath = dyn;
         } else if (dyn->d_tag == DT_STRTAB) {
             strtab = (const gchar *) dyn->d_un.d_val;
