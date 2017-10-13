@@ -212,7 +212,7 @@ dlopen_with_context (struct VdlContext *context, const char *filename,
     {
       VDL_LOG_DEBUG ("Unable to load requested %s: %s", filename,
                      map.error_string);
-      set_error ("Unable to load: \"%s\"", filename);
+      set_error ("Unable to load \"%s\": %s", filename, map.error_string);
       goto error;
     }
 
