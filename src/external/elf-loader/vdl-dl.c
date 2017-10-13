@@ -701,11 +701,11 @@ vdl_dl_iterate_phdr (int (*callback) (struct dl_phdr_info * info,
   read_lock (g_vdl.global_lock);
   struct VdlFile *file = addr_to_file (caller);
 
-  // report all objects within the global scope/context of the caller
+  // report all objects loaded within the context of the caller
   void **cur;
-  for (cur = vdl_list_begin (file->context->global_scope);
-       cur != vdl_list_end (file->context->global_scope);
-       cur = vdl_list_next (file->context->global_scope, cur))
+  for (cur = vdl_list_begin (file->context->loaded);
+       cur != vdl_list_end (file->context->loaded);
+       cur = vdl_list_next (file->context->loaded, cur))
     {
       struct VdlFile *item = *cur;
       struct dl_phdr_info info;
