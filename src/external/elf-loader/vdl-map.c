@@ -941,7 +941,7 @@ vdl_file_map_single_maybe (struct VdlContext *context,
   char *filename = search_filename (name, rpath, runpath);
   if (filename == 0)
     {
-      result.error_string = vdl_utils_sprintf ("Could not find %s\n", name);
+      result.error_string = vdl_utils_sprintf ("Could not find %s", name);
       return result;
     }
   // get information about file.
