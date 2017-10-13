@@ -107,7 +107,7 @@ add_executable(readversiondef readversiondef.c)
 
 
 add_custom_command(OUTPUT vdl-config.h
-  COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/extract-system-config.py --config=vdl-config.h
+  COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/extract-system-config.py --config=vdl-config.h --builddir=${CMAKE_INSTALL_PREFIX}/lib
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMENT "Generating vdl-config.h"
   VERBATIM

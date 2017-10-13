@@ -185,8 +185,8 @@ def main(argv):
     config_filename = ''
     debug_filename = ''
     try:
-        opts, args = getopt.getopt(argv, 'hc:d:',
-                                   ['help', 'config=', 'debug='])
+        opts, args = getopt.getopt(argv, 'hc:d:b:',
+                                   ['help', 'config=', 'debug=', 'builddir='])
     except getopt.GetoptError:
         usage()
         sys.exit(2)
@@ -198,6 +198,8 @@ def main(argv):
             config_filename = arg
         elif opt in ('-d', '--debug'):
             debug_filename = arg
+        elif opt in ('-b', '--builddir'):
+            build_dir = arg
 
     if config_filename != '':
         config = open (config_filename, 'w')
@@ -262,7 +264,7 @@ def main(argv):
         sys.exit (1)
     config.write ('#define CONFIG_TCB_STACK_GUARD ' + str(data.data) + '\n')
 
-    config.write ('#define CONFIG_SYSTEM_LDSO_LIBRARY_PATH \"' + list_lib_path () + '\"\n')
+    config.write ('#define CONFIG_SYSTEM_LDSO_LIBRARY_PATH \"' + list_lib_path () + ':' + build_dir + '\"\n')
 
 if __name__ == "__main__":
     main(sys.argv[1:])
