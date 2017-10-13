@@ -710,17 +710,20 @@ static void
 file_map_do (const char *filename, const struct VdlFileMap *map,
              int fd, int prot, unsigned long load_base)
 {
+  // Now, map again the area at the right location.
   VDL_LOG_FUNCTION ("fd=0x%x, prot=0x%x, load_base=0x%lx", fd, prot,
                     load_base);
   int int_result;
   unsigned long address;
-  // Now, map again the area at the right location.
+  // shared pages for code breaks gdb, so just don't use them in debug builds
+#ifndef DEBUG
   if (!(prot & PROT_WRITE))
     {
       // this area is read-only, so we only load it once
       address = readonly_cache_map (filename, map, fd, prot, load_base);
     }
   else
+#endif
     {
       address =
         (unsigned long) system_mmap ((void *) load_base +
