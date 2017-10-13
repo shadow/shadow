@@ -6,7 +6,8 @@
 #include <link.h>               // for struct dl_phdr_info
 
 // these functions are called from libvdl.so
-EXPORT void *vdl_dlopen_public (const char *filename, int flag);
+EXPORT void *vdl_dlopen_public (const char *filename, int flag,
+                                unsigned long caller);
 EXPORT char *vdl_dlerror_public (void);
 EXPORT void *vdl_dlsym_public (void *handle, const char *symbol,
                                unsigned long caller);
