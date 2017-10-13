@@ -2,9 +2,9 @@
 #include "vdl-dl.h"
 
 EXPORT void *
-vdl_dlopen_public (const char *filename, int flag)
+vdl_dlopen_public (const char *filename, int flag, unsigned long caller)
 {
-  return vdl_dlopen (filename, flag);
+  return vdl_dlopen (filename, flag, caller);
 }
 
 EXPORT char *

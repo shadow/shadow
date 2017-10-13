@@ -13,7 +13,7 @@
 EXPORT void *
 dlopen (const char *filename, int flag)
 {
-  return vdl_dlopen_public (filename, flag);
+  return vdl_dlopen_public (filename, flag, RETURN_ADDRESS);
 }
 
 EXPORT char *

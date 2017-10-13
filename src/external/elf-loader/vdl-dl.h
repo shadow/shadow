@@ -9,7 +9,7 @@
 // a PLT indirection which would require ldso to be able
 // to relocate its own JMP_SLOT entries which would be a
 // bit painful to do.
-void *vdl_dlopen (const char *filename, int flag);
+void *vdl_dlopen (const char *filename, int flag, unsigned long caller);
 char *vdl_dlerror (void);
 void *vdl_dlsym (void *handle, const char *symbol, unsigned long caller);
 int vdl_dlclose (void *handle);

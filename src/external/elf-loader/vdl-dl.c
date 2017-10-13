@@ -369,10 +369,24 @@ error:
 }
 
 void *
-vdl_dlopen (const char *filename, int flags)
+vdl_dlopen (const char *filename, int flags, unsigned long caller)
 {
   VDL_LOG_FUNCTION ("filename=%s", filename);
-  void *handle = dlopen_with_context (g_vdl.main_context, filename, flags);
+  read_lock (g_vdl.global_lock);
+  // unlike glibc, our dlopen opens files from the caller's namespace
+  struct VdlFile *caller_file = addr_to_file (caller);
+  read_unlock (g_vdl.global_lock);
+  struct VdlContext *context;
+  if (caller_file)
+    {
+      context = caller_file->context;
+    }
+  else
+    {
+      context = g_vdl.main_context;
+    }
+  
+  void *handle = dlopen_with_context (context, filename, flags);
   return handle;
 }
 
