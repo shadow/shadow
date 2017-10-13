@@ -78,7 +78,7 @@ struct VdlFile
   // but since it is used only to determine whether this object
   // is located in the main namespace or not, we just set it to
   // zero or one to indicate that condition.
-  long int is_main_namespace;
+  long int is_not_main_namespace;
 
   // This count indicates how many users hold a reference
   // to this file:
