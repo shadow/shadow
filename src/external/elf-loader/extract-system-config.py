@@ -6,6 +6,22 @@ import getopt
 import os
 
 
+def find_build_id(path):
+    file = os.popen('readelf -n {}'.format(path), 'r')
+    lines = file.readlines()
+    regex = re.compile(r'^    Build ID: (\w+)$')
+
+    for line in lines:
+        result = regex.search(line)
+
+        if not result:
+            continue
+
+        h = result.group(1)
+        return "/usr/lib/debug/.build-id/{}/{}.debug".format(h[0:2], h[2:])
+
+    return None
+
 class Data:
     def __init__(self, data):
         self.data = data
@@ -158,8 +174,14 @@ def search_debug_file():
                     # ubuntu 1610
                     '/usr/lib/debug/lib/x86_64-linux-gnu/ld-2.24.so',
                     '/usr/lib/debug/lib/i386-linux-gnu/ld-2.24.so',
+                    # debian 9
+                    find_build_id('/lib/x86_64-linux-gnu/ld-2.24.so'),
+                    find_build_id('/lib/i386-linux-gnu/ld-2.24.so'),
                     ]
     for file in files_to_try:
+        if not file:
+            continue
+
         if os.path.isfile (file):
             return file
     
