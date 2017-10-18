@@ -7,18 +7,19 @@ import os
 
 
 def find_build_id(path):
-    file = os.popen('readelf -n {}'.format(path), 'r')
-    lines = file.readlines()
-    regex = re.compile(r'^    Build ID: (\w+)$')
+    if os.path.exists(path):
+        file = os.popen('readelf -n {}'.format(path), 'r')
+        lines = file.readlines()
+        regex = re.compile(r'^    Build ID: (\w+)$')
 
-    for line in lines:
-        result = regex.search(line)
+        for line in lines:
+            result = regex.search(line)
 
-        if not result:
-            continue
+            if not result:
+                continue
 
-        h = result.group(1)
-        return "/usr/lib/debug/.build-id/{}/{}.debug".format(h[0:2], h[2:])
+            h = result.group(1)
+            return "/usr/lib/debug/.build-id/{}/{}.debug".format(h[0:2], h[2:])
 
     return None
 
@@ -177,6 +178,8 @@ def search_debug_file():
                     # debian 9
                     find_build_id('/lib/x86_64-linux-gnu/ld-2.24.so'),
                     find_build_id('/lib/i386-linux-gnu/ld-2.24.so'),
+                    # solus - link points to latest version of ld
+                    find_build_id('/usr/lib/ld-linux-x86-64.so.2'),
                     ]
     for file in files_to_try:
         if not file:
@@ -290,9 +293,4 @@ def main(argv):
 
 if __name__ == "__main__":
     main(sys.argv[1:])
-
-
-
-
-
 
