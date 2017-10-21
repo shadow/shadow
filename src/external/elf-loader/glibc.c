@@ -219,9 +219,12 @@ glibc_startup_finished (void)
 void
 glibc_initialize (int clktck)
 {
+  // _dl_error_catch_tsd only exists in glibc versions <2.25
+#ifdef CONFIG_DL_ERROR_CATCH_TSD_OFFSET
   void **(*fn) (void) = vdl_dl_error_catch_tsd;
   char *dst = &_rtld_local[CONFIG_DL_ERROR_CATCH_TSD_OFFSET];
   vdl_memcpy ((void *) dst, &fn, sizeof (fn));
+#endif
   char *off = &_rtld_local_ro[CONFIG_RTLD_DL_PAGESIZE_OFFSET];
   int pgsz = system_getpagesize ();
   vdl_memcpy (off, &pgsz, sizeof (pgsz));
