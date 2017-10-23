@@ -361,6 +361,19 @@ Packet* socket_removeFromInputBuffer(Socket* socket) {
     return packet;
 }
 
+gsize _socket_getOutputBufferSpaceIncludingTCP(Socket* socket) {
+    /* get the space in the socket layer */
+    gsize space = socket_getOutputBufferSpace(socket);
+
+    /* internal TCP buffers count against our space */
+    gsize tcpLength = socket->protocol == PTCP ? tcp_getOutputBufferLength((TCP*)socket) : 0;
+
+    /* subtract tcpLength without underflowing space */
+    space = (tcpLength < space) ? (space - tcpLength) : 0;
+
+    return space;
+}
+
 gboolean socket_addToOutputBuffer(Socket* socket, Packet* packet) {
     MAGIC_ASSERT(socket);
 
@@ -381,7 +394,7 @@ gboolean socket_addToOutputBuffer(Socket* socket, Packet* packet) {
     tracker_updateSocketOutputBuffer(tracker, descriptor->handle, socket->outputBufferLength, socket->outputBufferSize);
 
     /* we just added a packet, we are no longer writable if full */
-    if(socket_getOutputBufferSpace(socket) <= 0) {
+    if(_socket_getOutputBufferSpaceIncludingTCP(socket) <= 0) {
         descriptor_adjustStatus((Descriptor*)socket, DS_WRITABLE, FALSE);
     }
 
@@ -414,7 +427,7 @@ Packet* socket_removeFromOutputBuffer(Socket* socket) {
         tracker_updateSocketOutputBuffer(tracker, descriptor->handle, socket->outputBufferLength, socket->outputBufferSize);
 
         /* we are writable if we now have space */
-        if(socket_getOutputBufferSpace(socket) > 0) {
+        if(_socket_getOutputBufferSpaceIncludingTCP(socket) > 0) {
             descriptor_adjustStatus((Descriptor*)socket, DS_WRITABLE, TRUE);
         }
     }
