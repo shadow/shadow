@@ -137,7 +137,7 @@ cd ../..
 python src/tools/parse-shadow.py --help
 python src/tools/parse-shadow.py --prefix results resource/examples/shadow.log
 # parse tgen output files from all hosts
-python src/tools/plot-tgen.py --help
+python src/tools/parse-tgen.py --help
 python src/tools/parse-tgen.py --prefix results resource/examples/shadow.data/hosts/
 # plot the results!
 python src/tools/plot-shadow.py --help
