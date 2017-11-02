@@ -9,6 +9,7 @@ This wiki contains important information about installing and using the Shadow d
 [[2 Getting Started Tutorial]]  
 [[3 Simulation Customization]]  
 [[4 Notes and FAQs]]  
+[[5 Developer Guide]]  
 
 ## Plug-in Wikis:
 
