@@ -80,6 +80,38 @@ EXPORT char **_dl_argv;
 //_r_debug;
 //__libc_memalign;
 
+// XXX: tunables were added in 2.25. They allow customization of glibc
+// behavior via environment variables in a more (though not completely)
+// standardized manner. A good place to start to understand them is here:
+// https://siddhesh.in/posts/the-story-of-tunables.html
+// Unfortunately, they are implemented in the dynamic loader, and while
+// they currently aren't heavily used, that's likely to change. For now,
+// we get away with some stub code that seems to get us far enough, but
+// what we really need to do is copy the entire implementation here.
+typedef enum
+{
+  // XXX: These are the currently used tunables in glibc 2.25 and 2.26.
+  // They are likely to change, so we should be getting them from the debug
+  // symbols instead, via extract-system-config.py.
+  glibc_malloc_arena_max, glibc_malloc_mmap_max, glibc_malloc_mmap_threshold,
+  glibc_malloc_check, glibc_malloc_perturb, glibc_malloc_trim_threshold,
+  glibc_malloc_arena_test, glibc_malloc_top_pad
+} tunable_id_t;
+typedef union
+{
+  // the types of supported tunables
+  int64_t numval;
+  const char *str;
+} tunable_val_t;
+typedef void (*tunable_callback_t) (tunable_val_t *);
+EXPORT void
+__tunable_set_val (tunable_id_t id, void *valp, tunable_callback_t callback)
+{
+  // XXX: Currently the only tunable function I've seen called in practice,
+  // and it just sets them, so an empty stub is fine. Once anything really
+  // makes use of them though, we need to reimplement ~the whole system.
+  return;
+}
 
 static void **
 vdl_dl_error_catch_tsd (void)
