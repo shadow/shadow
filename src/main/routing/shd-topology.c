@@ -134,6 +134,8 @@ static gboolean _topology_isComplete(Topology* top, gboolean *result) {
     igraph_vit_t vit;
     int ret;
     igraph_integer_t vcount = igraph_vcount(graph);
+    gboolean is_success = FALSE;
+    gboolean is_complete = FALSE;
     /*
      * Determines if a graph is complete by:
      * - knowning how many vertexes there are
@@ -144,12 +146,14 @@ static gboolean _topology_isComplete(Topology* top, gboolean *result) {
     ret = igraph_vs_all(&vs);
     if (ret != IGRAPH_SUCCESS) {
         critical("igraph_vs_all returned non-success code %i", ret);
-        return FALSE;
+        is_success = FALSE;
+        goto done;
     }
     ret = igraph_vit_create(graph, vs, &vit);
     if (ret != IGRAPH_SUCCESS) {
         critical("igraph_vit_create returned non-success code %i", ret);
-        return FALSE;
+        is_success = FALSE;
+        goto done;
     }
     while (!IGRAPH_VIT_END(vit)) {
         igraph_vector_t iedges;
@@ -157,20 +161,30 @@ static gboolean _topology_isComplete(Topology* top, gboolean *result) {
         ret = igraph_incident(graph, &iedges, IGRAPH_VIT_GET(vit), IGRAPH_OUT);
         if (ret != IGRAPH_SUCCESS) {
             critical("error computing igraph_incident\n");
-            return FALSE;
+            is_success = FALSE;
+            igraph_vector_destroy(&iedges);
+            goto done;
         }
         igraph_integer_t ecount = igraph_vector_size(&iedges);
         if (ecount < vcount) {
             info("Vert id=%li has %li incident edges to %li total verts "
                 "and thus this isn't a complete graph",
                 IGRAPH_VIT_GET(vit), ecount, vcount);
-            *result = FALSE;
-            return TRUE;
+            is_success = TRUE;
+            is_complete = FALSE;
+            igraph_vector_destroy(&iedges);
+            goto done;
         }
+        igraph_vector_destroy(&iedges);
         IGRAPH_VIT_NEXT(vit);
     }
-    *result = TRUE;
-    return TRUE;
+    is_complete = TRUE;
+    is_success = TRUE;
+done:
+    igraph_vs_destroy(&vs);
+    igraph_vit_destroy(&vit);
+    *result = is_complete;
+    return is_success;
 }
 
 static gboolean _topology_checkGraphProperties(Topology* top) {
