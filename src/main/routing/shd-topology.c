@@ -123,9 +123,12 @@ static gboolean _topology_loadGraph(Topology* top, const gchar* graphPath) {
 }
 
 /** Returns FALSE if issue parsing graph, otherwise returns TRUE.
+ * If returning FALSE, consider result to be undefined.
  * If returning TRUE, whether or not the graph is complete is stored in result.
  */
 static gboolean _topology_isComplete(Topology* top, gboolean *result) {
+    MAGIC_ASSERT(top);
+    g_assert(result);
     igraph_t *graph = &top->graph;
     igraph_vs_t vs;
     igraph_vit_t vit;
