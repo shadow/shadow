@@ -133,7 +133,7 @@ static gboolean _topology_isComplete(Topology* top, gboolean *result) {
     igraph_vs_t vs;
     igraph_vit_t vit;
     int ret;
-    long int vcount = igraph_vcount(graph);
+    igraph_integer_t vcount = igraph_vcount(graph);
     /*
      * Determines if a graph is complete by:
      * - knowning how many vertexes there are
@@ -159,7 +159,7 @@ static gboolean _topology_isComplete(Topology* top, gboolean *result) {
             critical("error computing igraph_incident\n");
             return FALSE;
         }
-        long int ecount = igraph_vector_size(&iedges);
+        igraph_integer_t ecount = igraph_vector_size(&iedges);
         if (ecount < vcount) {
             info("Vert id=%li has %li incident edges to %li total verts "
                 "and thus this isn't a complete graph",
