@@ -169,7 +169,7 @@ static gboolean _topology_isComplete(Topology* top, gboolean *result) {
         if (ecount < vcount) {
             info("Vert id=%li has %li incident edges to %li total verts "
                 "and thus this isn't a complete graph",
-                IGRAPH_VIT_GET(vit), ecount, vcount);
+                IGRAPH_VIT_GET(vit), (long int)ecount, (long int)vcount);
             is_success = TRUE;
             is_complete = FALSE;
             igraph_vector_destroy(&iedges);
