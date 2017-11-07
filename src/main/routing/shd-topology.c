@@ -122,6 +122,71 @@ static gboolean _topology_loadGraph(Topology* top, const gchar* graphPath) {
     return TRUE;
 }
 
+/** Returns FALSE if issue parsing graph, otherwise returns TRUE.
+ * If returning FALSE, consider result to be undefined.
+ * If returning TRUE, whether or not the graph is complete is stored in result.
+ */
+static gboolean _topology_isComplete(Topology* top, gboolean *result) {
+    MAGIC_ASSERT(top);
+    g_assert(result);
+    igraph_t *graph = &top->graph;
+    igraph_vs_t vs;
+    igraph_vit_t vit;
+    int ret;
+    igraph_integer_t vcount = igraph_vcount(graph);
+    gboolean is_success = FALSE;
+    gboolean is_complete = FALSE;
+    /*
+     * Determines if a graph is complete by:
+     * - knowning how many vertexes there are
+     * - for each vertex, count the indcident edges
+     *   - if less than the number of vertexes, it isn't a complete graph
+     * - otherwise the graph is complete
+    /* vert selector. We wall all verts */
+    ret = igraph_vs_all(&vs);
+    if (ret != IGRAPH_SUCCESS) {
+        critical("igraph_vs_all returned non-success code %i", ret);
+        is_success = FALSE;
+        goto done;
+    }
+    ret = igraph_vit_create(graph, vs, &vit);
+    if (ret != IGRAPH_SUCCESS) {
+        critical("igraph_vit_create returned non-success code %i", ret);
+        is_success = FALSE;
+        goto done;
+    }
+    while (!IGRAPH_VIT_END(vit)) {
+        igraph_vector_t iedges;
+        igraph_vector_init(&iedges, 0);
+        ret = igraph_incident(graph, &iedges, IGRAPH_VIT_GET(vit), IGRAPH_OUT);
+        if (ret != IGRAPH_SUCCESS) {
+            critical("error computing igraph_incident\n");
+            is_success = FALSE;
+            igraph_vector_destroy(&iedges);
+            goto done;
+        }
+        igraph_integer_t ecount = igraph_vector_size(&iedges);
+        if (ecount < vcount) {
+            info("Vert id=%li has %li incident edges to %li total verts "
+                "and thus this isn't a complete graph",
+                IGRAPH_VIT_GET(vit), (long int)ecount, (long int)vcount);
+            is_success = TRUE;
+            is_complete = FALSE;
+            igraph_vector_destroy(&iedges);
+            goto done;
+        }
+        igraph_vector_destroy(&iedges);
+        IGRAPH_VIT_NEXT(vit);
+    }
+    is_complete = TRUE;
+    is_success = TRUE;
+done:
+    igraph_vs_destroy(&vs);
+    igraph_vit_destroy(&vit);
+    *result = is_complete;
+    return is_success;
+}
+
 static gboolean _topology_checkGraphProperties(Topology* top) {
     MAGIC_ASSERT(top);
     gint result = 0;
@@ -152,17 +217,12 @@ static gboolean _topology_checkGraphProperties(Topology* top) {
 
     top->isDirected = igraph_is_directed(&top->graph);
 
-    /* the topology is complete if the largest clique includes all vertices */
-    igraph_integer_t largestCliqueSize = 0;
-    result = igraph_clique_number(&top->graph, &largestCliqueSize);
-    if(result != IGRAPH_SUCCESS) {
-        critical("igraph_clique_number return non-success code %i", result);
+    gboolean is_complete;
+    if (!_topology_isComplete(top, &is_complete)) {
+        critical("Couldn't determine if topology is complete");
         return FALSE;
     }
-
-    if(largestCliqueSize == igraph_vcount(&top->graph)) {
-        top->isComplete = (igraph_bool_t)TRUE;
-    }
+    top->isComplete = (igraph_bool_t)is_complete;
 
     message("topology graph is %s, %s, and %s with %u %s",
             top->isComplete ? "complete" : "incomplete",
