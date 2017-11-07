@@ -179,7 +179,7 @@ Consider a set of experiments where we would like to analyze the effect of chang
 cd resource/examples/
 rm -rf shadow.data shadow.log
 shadow --tcp-windows=1 shadow.config.xml > window1.log
-mv shadow.data windows1.data
+mv shadow.data window1.data
 shadow --tcp-windows=1000 shadow.config.xml > window1000.log
 mv shadow.data window1000.data
 ```
