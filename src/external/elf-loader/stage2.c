@@ -328,6 +328,12 @@ stage2_initialize (struct Stage2Input input)
   // We need to do this before relocation because the TLS-type relocations
   // need tls information.
   vdl_tls_file_initialize_main (context->loaded);
+  // We also need to set up the TCB before pthreads relocates
+  unsigned long tcb = vdl_tls_tcb_allocate ();
+  vdl_tls_tcb_initialize (tcb, input.sysinfo);
+  vdl_tls_dtv_allocate (tcb);
+  // configure the current thread to use this TCB as a thread pointer
+  machine_thread_pointer_set (tcb);
 
   // We either setup the GOT for lazy symbol resolution
   // or we perform binding for all symbols now if LD_BIND_NOW is set
@@ -337,12 +343,7 @@ stage2_initialize (struct Stage2Input input)
   // and the dtv. We need to wait post-reloc because the tls
   // template area used to initialize the tls blocks is likely
   // to be modified during relocation processing.
-  unsigned long tcb = vdl_tls_tcb_allocate ();
-  vdl_tls_tcb_initialize (tcb, input.sysinfo);
-  vdl_tls_dtv_allocate (tcb);
   vdl_tls_dtv_initialize (tcb);
-  // configure the current thread to use this TCB as a thread pointer
-  machine_thread_pointer_set (tcb);
 
   // Note that we must invoke this method to notify gdb that we have
   // a valid linkmap only _after_ relocations have been done (if you do
