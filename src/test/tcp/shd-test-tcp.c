@@ -19,6 +19,7 @@
 #include <sys/epoll.h>
 #include <sys/select.h>
 #include <fcntl.h>
+#include <sys/uio.h>
 
 #define USAGE "USAGE: 'shd-test-tcp iomode type'; iomode=('blocking'|'nonblocking-poll'|'nonblocking-epoll'|'nonblocking-select') type=('client' server_ip|'server')"
 #define MYLOG(...) _mylog(__FILE__, __LINE__, __FUNCTION__, __VA_ARGS__)

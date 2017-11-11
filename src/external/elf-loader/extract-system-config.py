@@ -175,6 +175,9 @@ def search_debug_file():
                     # ubuntu 1610
                     '/usr/lib/debug/lib/x86_64-linux-gnu/ld-2.24.so',
                     '/usr/lib/debug/lib/i386-linux-gnu/ld-2.24.so',
+                    # ubuntu 1710
+                    '/usr/lib/debug/lib/x86_64-linux-gnu/ld-2.26.so',
+                    '/usr/lib/debug/lib/i386-linux-gnu/ld-2.26.so',
                     # debian 9
                     find_build_id('/lib/x86_64-linux-gnu/ld-2.24.so'),
                     find_build_id('/lib/i386-linux-gnu/ld-2.24.so'),
