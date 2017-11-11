@@ -22,7 +22,14 @@ L1:	lea -L1(%rdi),%rdi
 	push %rdi
 	# pass pointer to TrampolineInformation to stage1
 	lea 8(%rsp),%rdi
+        # save the stack pointer for when we come back
+        # (r12 is preserved by functions and syscalls)
+        movq %rsp, %r12
+        # align the stack to 16 bytes
+        andq $-16, %rsp
 	call stage1
+        # get the stack pointer back
+        movq %r12, %rsp
 	# read dl_fini field of TrampolineInformation
 	mov 32(%rsp),%rdx
 	# read entry_point field of TrampolineInformation
@@ -35,4 +42,3 @@ L1:	lea -L1(%rdi),%rdi
 	# trick from glibc: crash if we return here. Should not
 	# happen ever
 	hlt
-	
