@@ -216,33 +216,96 @@ vdl_tls_tcb_initialize (unsigned long tcb, unsigned long sysinfo)
               sizeof (sysinfo));
 }
 
-// This dtv structure needs to be compatible with the one used by the
+// The dtv_t structure needs to be compatible with the one used by the
 // glibc loader. Although it's supposed to be opaque to the glibc or
 // libpthread, it's not. nptl_db reads it to lookup tls variables (it
 // reads dtv[i].value where i >= 1 to find out the address of a target
-// tls block) and libpthread reads dtv[-1].value to find out the size
+// tls block) and libpthread reads dtv[-1] to find out the size
 // of the dtv array and be able to memset it to zeros.
-// dtv[0].value is used as glibc/pthreads' generation counter.
-// The only leeway we have is in the glibc static field which we reuse
-// to store a per-dtvi generation counter.
-// the original in the glibc source can be found in sysdeps/[arch]/nptl/tls.h
-struct dtv_t
+// dtv[0] is used as glibc/pthreads' generation counter.
+// Details depend on the glibc version, see comments below.
+
+struct dtv_meta
 {
-  unsigned long value;
+  unsigned long nptl;
+  //ABI < glibc 2.25
   unsigned long is_static:1;
   unsigned long gen:(sizeof (unsigned long) * 8 - 1);
 };
 
-static inline struct dtv_t *
+struct dtv_ptrs
+{
+  void *value;
+  // ABI >= glibc 2.25
+  void *to_free;
+};
+
+typedef union dtv
+{
+  struct dtv_meta meta;
+  struct dtv_ptrs ptrs;
+} dtv_t;
+
+// some macros to define special values in the dtv
+// macros with "ABI" in them are part of the glibc/pthreads ABI
+#define DTV_ABI_GEN(dtv) dtv[0].meta.gen
+// number of actively used elements
+#define DTV_ABI_SIZE(dtv) dtv[-1].meta.nptl
+// size of the buffer allocated
+#define DTV_MEM_SIZE(dtv) dtv[-1].meta.gen
+// tls for elf-loader to use
+#define DTV_LOCAL_TLS(dtv) dtv[-2].ptrs.value
+
+// we support two ABIs for the dtv, because of the new layout in glibc 2.25
+#if __GLIBC_MINOR__ < 25
+// In older versions, there's a single bit is_static flag we can use,
+// plus store the generation counter in the slack space of the mem-aligned
+// struct. No need for extra structs or functionality.
+typedef dtv_t shadowdtv_t;
+#define DTV_SHADOW_DTV(dtv) dtv
+#define DTV_ALLOCATE_SHADOW(dtv, size)
+#define DTV_MIGRATE_SHADOW(old_dtv, new_dtv, module)
+#define DTV_FREE_SHADOW(dtv)
+#define DTV_ABI_SET_TO_FREE(dtv, module)
+#else
+// From 25 on, the dtv struct replaces the "is_static" flag with a "to_free"
+// field to keep track of the unaligned memory to call free() on.
+// This causes two problems.
+// One: we no longer have room in the dtv to store our metadata.
+// We solve this by adding a "shadow" dtv that stores the fields that used to
+// be in the dtv itself.
+typedef union shadowdtv
+{
+  struct
+  {
+    unsigned long is_static:1; // width isn't for an ABI, it just saves space
+    unsigned long gen:(sizeof (unsigned long) * 8 - 1);
+  } meta;
+} shadowdtv_t;
+#define DTV_SHADOW_DTV(dtv) dtv[-2].ptrs.to_free
+#define DTV_ALLOCATE_SHADOW(dtv, size)          \
+  DTV_SHADOW_DTV(dtv) = vdl_alloc_malloc (size)
+#define DTV_FREE_SHADOW(dtv) vdl_alloc_free (DTV_SHADOW_DTV(dtv))
+#define DTV_MIGRATE_SHADOW(new_dtv, old_dtv, module)    \
+  ((shadowdtv_t *) DTV_SHADOW_DTV(new_dtv))[module] =   \
+    ((shadowdtv_t *) DTV_SHADOW_DTV(old_dtv))[module]
+// Two: glibc's free() isn't our internal free(), and has an incompatible ABI.
+// Since it's us who allocates the TLS, we can't let glibc clean it up.
+// We make sure to always set the "to_free" field to 0, which free() ignores.
+#define DTV_ABI_SET_TO_FREE(dtv, module)        \
+  dtv[module].ptrs.to_free = 0
+#endif
+
+static inline dtv_t *
 get_current_dtv (unsigned long tp)
 {
-  struct dtv_t *dtv;
+  dtv_t *dtv;
   vdl_memcpy (&dtv, (void *) (tp + CONFIG_TCB_DTV_OFFSET), sizeof (dtv));
   return dtv;
 }
 
 static inline void
-set_current_dtv (unsigned long tp, struct dtv_t *dtv)
+set_current_dtv (unsigned long tp, dtv_t *dtv)
 {
   vdl_memcpy ((void *) (tp + CONFIG_TCB_DTV_OFFSET), &dtv, sizeof (dtv));
 }
@@ -251,10 +314,10 @@ void
 vdl_tls_dtv_allocate (unsigned long tcb)
 {
   VDL_LOG_FUNCTION ("tcb=%lu", tcb);
-  struct dtv_t *new_dtv, *current_dtv = get_current_dtv (tcb);
+  dtv_t *new_dtv, *current_dtv = get_current_dtv (tcb);
   // the 3 here is the two entries we put before the dtv, plus a new entry
-  unsigned long needed_size = (3 + g_vdl.tls_n_dtv) * sizeof (struct dtv_t);
-  bool migrate = current_dtv && (current_dtv[-1].gen < needed_size);
+  unsigned long needed_size = (3 + g_vdl.tls_n_dtv) * sizeof (dtv_t);
+  bool migrate = current_dtv && (DTV_MEM_SIZE(current_dtv) < needed_size);
   struct LocalTLS *local_tls;
   if (!current_dtv)
     {
@@ -264,7 +327,7 @@ vdl_tls_dtv_allocate (unsigned long tcb)
     }
   else
     {
-      local_tls = (struct LocalTLS *) current_dtv[-2].value;
+      local_tls = DTV_LOCAL_TLS(current_dtv);
     }
 
   if (!current_dtv || migrate)
@@ -274,8 +337,10 @@ vdl_tls_dtv_allocate (unsigned long tcb)
       // there are 2 entries before the dtv:
       new_dtv++; // our (elf-loader's) thread-local storage
       new_dtv++; // the metadata used by pthreads
-      new_dtv[-2].value = (unsigned long) local_tls;
-      new_dtv[-1].gen = 2 * needed_size;
+      DTV_LOCAL_TLS(new_dtv) = local_tls;
+      DTV_MEM_SIZE(new_dtv) = 2 * needed_size;
+      // Must always be the same size as the real dtv.
+      DTV_ALLOCATE_SHADOW(new_dtv, 2 * needed_size);
       set_current_dtv (tcb, new_dtv);
     }
   else
@@ -283,17 +348,18 @@ vdl_tls_dtv_allocate (unsigned long tcb)
       new_dtv = current_dtv;
     }
 
-  new_dtv[-1].value = g_vdl.tls_n_dtv;
-  new_dtv[0].value = 0;
-  new_dtv[0].gen = g_vdl.tls_gen;
+  DTV_ABI_SIZE(new_dtv) = g_vdl.tls_n_dtv;
+  new_dtv[0].meta.nptl = 0;
+  DTV_ABI_GEN(new_dtv) = g_vdl.tls_gen;
 
   if (migrate)
     {
       unsigned long module;
       // copy over the data from the old dtv into the new one.
-      for (module = 1; module <= current_dtv[-1].value; module++)
+      for (module = 1; module <= DTV_ABI_SIZE(current_dtv); module++)
         {
           new_dtv[module] = current_dtv[module];
+          DTV_MIGRATE_SHADOW(new_dtv, current_dtv, module);
         }
       // clear the old dtv
       vdl_alloc_free (&current_dtv[-2]);
@@ -304,8 +370,8 @@ void
 vdl_tls_dtv_initialize (unsigned long tcb)
 {
   VDL_LOG_FUNCTION ("tcb=%lu", tcb);
-  struct dtv_t *dtv;
-  vdl_memcpy (&dtv, (void *) (tcb + CONFIG_TCB_DTV_OFFSET), sizeof (dtv));
+  dtv_t *dtv = get_current_dtv (tcb);
+  shadowdtv_t *shadow_dtv = DTV_SHADOW_DTV(dtv);
   // allocate a dtv for the set of tls blocks needed now
 
   struct VdlFile *cur;
@@ -316,9 +382,9 @@ vdl_tls_dtv_initialize (unsigned long tcb)
           // setup the dtv to point to the tls block
           if (cur->tls_is_static)
             {
-              signed long dtvi = tcb + cur->tls_offset;
-              dtv[cur->tls_index].value = dtvi;
-              dtv[cur->tls_index].is_static = 1;
+              void *dtvi = (void *)tcb + cur->tls_offset;
+              dtv[cur->tls_index].ptrs.value = dtvi;
+              shadow_dtv[cur->tls_index].meta.is_static = 1;
               // copy the template in the module tls block
               vdl_memcpy ((void *) dtvi, (void *) cur->tls_tmpl_start,
                           cur->tls_tmpl_size);
@@ -327,14 +393,16 @@ vdl_tls_dtv_initialize (unsigned long tcb)
             }
           else
             {
-              dtv[cur->tls_index].value = 0;    // unallocated
-              dtv[cur->tls_index].is_static = 0;
+              dtv[cur->tls_index].ptrs.value = 0;    // unallocated
+              shadow_dtv[cur->tls_index].meta.is_static = 0;
             }
-          dtv[cur->tls_index].gen = cur->tls_tmpl_gen;
+          DTV_ABI_SET_TO_FREE(dtv, cur->tls_index);
+          shadowdtv_t *shadow_dtv = DTV_SHADOW_DTV(dtv);
+          shadow_dtv[cur->tls_index].meta.gen = cur->tls_tmpl_gen;
         }
     }
   // initialize its generation counter
-  dtv[0].gen = g_vdl.tls_gen;
+  DTV_ABI_GEN(dtv) = g_vdl.tls_gen;
 }
 
 inline struct LocalTLS *
@@ -343,10 +411,10 @@ vdl_tls_get_local_tls (void)
   if (g_vdl.tp_set)
     {
       unsigned long tp = machine_thread_pointer_get ();
-      struct dtv_t *dtv = get_current_dtv (tp);
+      dtv_t *dtv = get_current_dtv (tp);
       if (dtv)
         {
-          return (struct LocalTLS *) dtv[-2].value;
+          return (struct LocalTLS *) DTV_LOCAL_TLS(dtv);
         }
     }
   return 0;
@@ -373,31 +441,33 @@ void
 vdl_tls_dtv_deallocate (unsigned long tcb)
 {
   VDL_LOG_FUNCTION ("tcb=%lu", tcb);
-  struct dtv_t *dtv = get_current_dtv (tcb);
+  dtv_t *dtv = get_current_dtv (tcb);
+  shadowdtv_t *shadow_dtv = DTV_SHADOW_DTV(dtv);
 
-  unsigned long dtv_size = dtv[-1].value;
+  unsigned long dtv_size = DTV_ABI_SIZE(dtv);
   unsigned long module;
   for (module = 1; module <= dtv_size; module++)
     {
-      if (dtv[module].value == 0)
+      if (dtv[module].ptrs.value == 0)
         {
           // this was an unallocated entry
           continue;
         }
-      if (dtv[module].is_static)
+      if (shadow_dtv[module].meta.is_static)
         {
           // this was a static entry so, we don't
           // have anything to free here.
           continue;
         }
       // this was not a static entry
-      unsigned long *dtvi = (unsigned long *) dtv[module].value;
+      unsigned long *dtvi = (unsigned long *) dtv[module].ptrs.value;
       vdl_alloc_free (&dtvi[-1]);
     }
   // If we could, we would free the allocator associated with this thread now.
   // But it's possible that it has allocated memory that will be used/freed
   // later, on some other thread, so we can't.
-  vdl_alloc_free ((struct LocalTLS *) dtv[-2].value);
+  vdl_alloc_free ((struct LocalTLS *) DTV_LOCAL_TLS(dtv));
+  DTV_FREE_SHADOW(dtv);
   vdl_alloc_free (&dtv[-2]);
 }
 
@@ -414,7 +484,7 @@ vdl_tls_tcb_deallocate (unsigned long tcb)
 // For now, we'll just remove it until we actually need to implement it.
 // When we do implement it, move this logic into the deinitialize functions.
 static inline void
-vdl_tls_dtv_update_current (__attribute__ ((unused)) struct dtv_t *dtv,
+vdl_tls_dtv_update_current (__attribute__ ((unused)) dtv_t *dtv,
                             __attribute__ ((unused)) unsigned long dtv_size)
 {
   /*
@@ -456,15 +526,17 @@ vdl_tls_dtv_update_current (__attribute__ ((unused)) struct dtv_t *dtv,
 }
 
 static inline void
-vdl_tls_dtv_update_new (struct dtv_t *new_dtv, unsigned long dtv_size,
+vdl_tls_dtv_update_new (dtv_t *new_dtv, unsigned long dtv_size,
                         unsigned long new_dtv_size, signed long tcb)
 {
   unsigned long module;
+  shadowdtv_t *new_shadow_dtv = DTV_SHADOW_DTV(new_dtv);
   for (module = dtv_size + 1; module <= new_dtv_size; module++)
     {
-      new_dtv[module].value = 0;
-      new_dtv[module].gen = 0;
-      new_dtv[module].is_static = 0;
+      new_dtv[module].ptrs.value = 0;
+      DTV_ABI_SET_TO_FREE(new_dtv, module);
+      new_shadow_dtv[module].meta.gen = 0;
+      new_shadow_dtv[module].meta.is_static = 0;
       struct VdlFile *file = find_file_by_module (module);
       if (file == 0)
         {
@@ -475,26 +547,26 @@ vdl_tls_dtv_update_new (struct dtv_t *new_dtv, unsigned long dtv_size,
         }
       if (file->tls_is_static)
         {
-          signed long dtvi = tcb + file->tls_offset;
-          new_dtv[file->tls_index].value = dtvi;
-          new_dtv[file->tls_index].is_static = 1;
-          new_dtv[file->tls_index].gen = file->tls_tmpl_gen;
+          void *dtvi = (void *)tcb + file->tls_offset;
+          new_dtv[file->tls_index].ptrs.value = dtvi;
+          new_shadow_dtv[file->tls_index].meta.is_static = 1;
+          new_shadow_dtv[file->tls_index].meta.gen = file->tls_tmpl_gen;
           // copy the template in the module tls block
-          vdl_memcpy ((void *) dtvi, (void *) file->tls_tmpl_start,
+          vdl_memcpy (dtvi, (void *) file->tls_tmpl_start,
                       file->tls_tmpl_size);
-          vdl_memset ((void *) (dtvi + file->tls_tmpl_size), 0,
+          vdl_memset (dtvi + file->tls_tmpl_size, 0,
                       file->tls_init_zero_size);
         }
     }
 }
 
 static void
-vdl_tls_dtv_update_given (unsigned long tp, struct dtv_t *dtv)
+vdl_tls_dtv_update_given (unsigned long tp, dtv_t *dtv)
 {
   VDL_LOG_FUNCTION ("");
-  unsigned long dtv_size = dtv[-1].value;
+  unsigned long dtv_size = DTV_ABI_SIZE(dtv);
 
-  if (dtv[0].gen == g_vdl.tls_gen)
+  if (DTV_ABI_GEN(dtv) == g_vdl.tls_gen)
     {
       return;
     }
@@ -507,19 +579,19 @@ vdl_tls_dtv_update_given (unsigned long tp, struct dtv_t *dtv)
     {
       // we have a big-enough dtv so, now that it's uptodate,
       // update the generation
-      dtv[0].gen = g_vdl.tls_gen;
+      DTV_ABI_GEN(dtv) = g_vdl.tls_gen;
       return;
     }
 
   // the size of the new dtv is bigger than the
   // current dtv. We need a newly-sized dtv
   vdl_tls_dtv_allocate (tp);
-  struct dtv_t *new_dtv = get_current_dtv (tp);
-  unsigned long new_dtv_size = new_dtv[-1].value;
+  dtv_t *new_dtv = get_current_dtv (tp);
+  unsigned long new_dtv_size = DTV_ABI_SIZE(new_dtv);
   // then, initialize the new area in the new dtv
   vdl_tls_dtv_update_new (new_dtv, dtv_size, new_dtv_size, tp);
   // now that the dtv is updated, update the generation
-  new_dtv[0].gen = g_vdl.tls_gen;
+  DTV_ABI_GEN(new_dtv) = g_vdl.tls_gen;
 }
 
 void
@@ -527,7 +599,7 @@ vdl_tls_dtv_update (void)
 {
   unsigned long tp = machine_thread_pointer_get ();
   read_lock (g_vdl.tls_lock);
-  struct dtv_t *dtv = get_current_dtv (tp);
+  dtv_t *dtv = get_current_dtv (tp);
   vdl_tls_dtv_update_given (tp, dtv);
   read_unlock (g_vdl.tls_lock);
 }
@@ -536,12 +608,12 @@ unsigned long
 vdl_tls_get_addr_fast (unsigned long module, unsigned long offset)
 {
   unsigned long tp = machine_thread_pointer_get ();
-  struct dtv_t *dtv = get_current_dtv (tp);
-  if (dtv[0].gen == g_vdl.tls_gen && dtv[module].value != 0)
+  dtv_t *dtv = get_current_dtv (tp);
+  if (DTV_ABI_GEN(dtv) == g_vdl.tls_gen && dtv[module].ptrs.value != 0)
     {
       // our dtv is really uptodate _and_ the requested module block
       // has been already initialized.
-      return dtv[module].value + offset;
+      return dtv[module].ptrs.value + offset;
     }
   // either we need to update the dtv or we need to initialize
   // the dtv entry to point to the requested module block
@@ -560,8 +632,9 @@ vdl_tls_get_addr_slow (unsigned long module, unsigned long offset)
       return addr;
     }
   unsigned long tp = machine_thread_pointer_get ();
-  struct dtv_t *dtv = get_current_dtv (tp);
-  if (dtv[0].gen == g_vdl.tls_gen && dtv[module].value == 0)
+  dtv_t *dtv = get_current_dtv (tp);
+  shadowdtv_t *shadow_dtv = DTV_SHADOW_DTV(dtv);
+  if (DTV_ABI_GEN(dtv) == g_vdl.tls_gen && dtv[module].ptrs.value == 0)
     {
       // the dtv is uptodate but the requested module block
       // has not been initialized already
@@ -578,12 +651,13 @@ vdl_tls_get_addr_slow (unsigned long module, unsigned long offset)
       vdl_memset ((void *) (((unsigned long) dtvi) + file->tls_tmpl_size),
                   0, file->tls_init_zero_size);
       // finally, update the dtv
-      dtv[module].value = (unsigned long) dtvi;
-      dtv[module].gen = file->tls_tmpl_gen;
-      dtv[module].is_static = 0;
+      dtv[module].ptrs.value = dtvi;
+      DTV_ABI_SET_TO_FREE(dtv, module);
+      shadow_dtv[module].meta.gen = file->tls_tmpl_gen;
+      shadow_dtv[module].meta.is_static = 0;
       // and return the requested value
       read_unlock (g_vdl.tls_lock);
-      return dtv[module].value + offset;
+      return dtv[module].ptrs.value + offset;
     }
   // we know for sure that the dtv is _not_ uptodate now
   vdl_tls_dtv_update_given (tp, dtv);
@@ -598,8 +672,8 @@ struct SwapArgs
 {
   unsigned long t1;
   unsigned long t2;
-  struct dtv_t *dtv1;
-  struct dtv_t *dtv2;
+  dtv_t *dtv1;
+  dtv_t *dtv2;
 };
 
 void *
@@ -629,9 +703,11 @@ vdl_tls_swap_file (void *data, void *aux)
   // make sure we're not trying to swap the gen counter
   if ((module = file->tls_index) > 0)
     {
-      struct dtv_t tmp_dtv = args->dtv1[module];
+      dtv_t tmp_dtv = args->dtv1[module];
       args->dtv1[module] = args->dtv2[module];
       args->dtv2[module] = tmp_dtv;
+      // we don't need to swap the shadow dtvs because we should only be
+      // swapping after an update, so metadata it stores should be the same
     }
   return 0;
 }
@@ -640,8 +716,8 @@ void
 vdl_tls_swap_context (struct VdlContext *context, unsigned long t1, unsigned long t2)
 {
   write_lock (g_vdl.tls_lock);
-  struct dtv_t *dtv1 = get_current_dtv (t1);
-  struct dtv_t *dtv2 = get_current_dtv (t2);
+  dtv_t *dtv1 = get_current_dtv (t1);
+  dtv_t *dtv2 = get_current_dtv (t2);
   // make sure we're not copying from/to uninitialized/unallocated memory
   vdl_tls_dtv_update_given (t1, dtv1);
   vdl_tls_dtv_update_given (t2, dtv2);
