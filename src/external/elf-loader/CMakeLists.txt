@@ -38,6 +38,8 @@ if( ${CMAKE_SYSTEM_PROCESSOR} STREQUAL "x86_64" )
         set(LIBDL_FILE /lib/x86_64-linux-gnu/libdl.so.2)
     elseif(EXISTS /lib64/libdl.so.2)
         set(LIBDL_FILE /lib64/libdl.so.2)
+    elseif(EXISTS /usr/lib64/libdl.so.2)
+        set(LIBDL_FILE /usr/lib64/libdl.so.2)
     endif()
     message(STATUS "LIBDL = ${LIBDL_FILE}")
 
