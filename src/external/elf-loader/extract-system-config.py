@@ -105,7 +105,7 @@ class DebugData:
         sub_item = self.read_one ()
         while sub_item is not None:
             if sub_item.level == parent.level:
-                self.write_back_one ()
+                self.write_back_one (sub_item)
                 return None
             if sub_item.type.strip() == 'DW_TAG_member' and \
                     sub_item.attributes.has_key ('DW_AT_name') and \
@@ -187,12 +187,14 @@ def search_debug_file():
 
         if os.path.isfile (file):
             return file
-    
+
     raise CouldNotFindFile ()
 
 def list_lib_path():
     paths = []
     re_lib = re.compile ('(?<=^#)')
+    if not os.path.isdir("/etc/ld.so.conf.d/"):
+        return ''
     for filename in os.listdir("/etc/ld.so.conf.d/"):
         try:
             for line in open ("/etc/ld.so.conf.d/" + filename, 'r'):
@@ -202,13 +204,14 @@ def list_lib_path():
         except:
             continue
     return ':'.join(paths)
-        
+
 def usage():
     print ''
 
 def main(argv):
     config_filename = ''
     debug_filename = ''
+    build_dir = ''
     try:
         opts, args = getopt.getopt(argv, 'hc:d:b:',
                                    ['help', 'config=', 'debug=', 'builddir='])
@@ -293,4 +296,3 @@ def main(argv):
 
 if __name__ == "__main__":
     main(sys.argv[1:])
-
