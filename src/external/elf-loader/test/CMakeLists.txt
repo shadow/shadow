@@ -211,5 +211,5 @@ target_link_libraries(test27 -ldl)
 add_test(NAME elfloader-test27 COMMAND /bin/bash ${CMAKE_CURRENT_SOURCE_DIR}/runtest.sh test27 ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_executable(test28 test28.c)
-target_link_libraries(test28 -lpthread -ldl)
+target_link_libraries(test28 vdl -lpthread -ldl)
 add_test(NAME elfloader-test28 COMMAND /bin/bash ${CMAKE_CURRENT_SOURCE_DIR}/runtest.sh test28 ${CMAKE_CURRENT_SOURCE_DIR})
