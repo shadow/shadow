@@ -87,3 +87,8 @@ add_test(
     NAME tcp-iov-shadow
     COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d iov.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-iov.test.shadow.config.xml
 )
+
+set_tests_properties(
+  tcp-blocking-loopback tcp-nonblocking-select-loopback tcp-iov
+  PROPERTIES RUN_SERIAL true
+)
