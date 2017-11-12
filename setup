@@ -19,34 +19,34 @@ INSTALL_PREFIX=os.path.expanduser("~/.shadow")
 
 def main():
     parser_main = argparse.ArgumentParser(
-        description='Utility to help setup the Shadow simulator', 
+        description='Utility to help setup the Shadow simulator',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    
+
     # setup our commands
     subparsers_main = parser_main.add_subparsers(
         help='run a subcommand (for help use <subcommand> --help)')
-        
+
     # configure build subcommand
     parser_build = subparsers_main.add_parser('build',
-        help='configure and build Shadow', 
+        help='configure and build Shadow',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser_build.set_defaults(func=build, 
+    parser_build.set_defaults(func=build,
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    
+
     # add building options
-    parser_build.add_argument('-p', '--prefix', 
-        help="configure PATH as Shadow root installation directory", 
+    parser_build.add_argument('-p', '--prefix',
+        help="configure PATH as Shadow root installation directory",
         metavar="PATH",
         action="store", dest="prefix",
         default=INSTALL_PREFIX)
-    
-    parser_build.add_argument('-i', '--include', 
+
+    parser_build.add_argument('-i', '--include',
         help="append PATH to the list of paths searched for headers. useful if dependencies are installed to non-standard locations, or when compiling custom libraries.",
         metavar="PATH",
         action="append", dest="extra_includes",
         default=[INSTALL_PREFIX+ "/include"])
-    
-    parser_build.add_argument('-l', '--library', 
+
+    parser_build.add_argument('-l', '--library',
         help="append PATH to the list of paths searched for libraries. useful if dependencies are installed to non-standard locations, or when compiling custom libraries.",
         metavar="PATH",
         action="append", dest="extra_libraries",
@@ -56,7 +56,7 @@ def main():
         help="force a full rebuild of Shadow by removing build cache",
         action="store_true", dest="do_force_rebuild",
         default=False)
-    
+
     parser_build.add_argument('-g', '--debug',
         help="build in extra memory checks and debugging symbols when running Shadow",
         action="store_true", dest="do_debug",
@@ -66,69 +66,75 @@ def main():
         help="print verbose output from the compiler",
         action="store_true", dest="do_verbose",
         default=False)
-        
+
     parser_build.add_argument('-j', '--jobs',
         help="number of jobs to run simultaneously during the build",
         metavar="N", type=int,
         action="store", dest="njobs",
         default=1)#multiprocessing.cpu_count())
-        
+
     parser_build.add_argument('-o', '--profile',
         help="build in gprof profiling information when running Shadow",
         action="store_true", dest="do_profile",
         default=False)
-    
+
     parser_build.add_argument('-t', '--test',
-        help="build tests", 
+        help="build tests",
         action="store_true", dest="do_test",
         default=False)
-    
-    parser_build.add_argument('--export-libraries', 
-        help="export Shadow's plug-in service libraries and headers", 
+
+    parser_build.add_argument('--export-libraries',
+        help="export Shadow's plug-in service libraries and headers",
         action="store_true", dest="export_libraries",
         default=False)
-        
+
     parser_build.add_argument('--disable-plugin-tgen',
-        help="do not build the built-in traffic generator plug-in (tgen)", 
+        help="do not build the built-in traffic generator plug-in (tgen)",
         action="store_true", dest="disable_tgen",
         default=False)
-    
+
     # configure test subcommand
-    parser_test = subparsers_main.add_parser('test', help='run Shadow tests', 
+    parser_test = subparsers_main.add_parser('test', help='run Shadow tests',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser_test.set_defaults(func=test, 
+    parser_test.set_defaults(func=test,
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-        
+
+    parser_test.add_argument('-j', '--jobs',
+        help="number of tests to run simultaneously during testing",
+        metavar="N", type=int,
+        action="store", dest="njobs",
+        default=1)#multiprocessing.cpu_count())
+
     # configure install subcommand
-    parser_install = subparsers_main.add_parser('install', help='install Shadow', 
+    parser_install = subparsers_main.add_parser('install', help='install Shadow',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser_install.set_defaults(func=install, 
+    parser_install.set_defaults(func=install,
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    
+
     # get arguments, accessible with args.value
     args = parser_main.parse_args()
     # run chosen command
     r = args.func(args)
-    
+
     logging.debug("setup is returning code '{0}'".format(r))
     sys.exit(r)
 
 def build(args):
     # get absolute paths
     if args.prefix is not None: args.prefix = getfullpath(args.prefix)
-    
+
     filepath=getfullpath(__file__)
     rootdir=filepath[:filepath.rfind("/")]
     builddir=getfullpath(BUILD_PREFIX)
     installdir=getfullpath(args.prefix)
-    
+
     # clear cmake cache
     if args.do_force_rebuild and os.path.exists(builddir): shutil.rmtree(builddir)
-    
+
     # create directories
     if not os.path.exists(builddir): os.makedirs(builddir)
     if not os.path.exists(installdir): os.makedirs(installdir)
-        
+
     # build up args string for the cmake command
     cmake_cmd = "cmake " + rootdir + " -DCMAKE_INSTALL_PREFIX=" + installdir
 
@@ -142,14 +148,14 @@ def build(args):
 
     # we will run from build directory
     calledDirectory = os.getcwd()
-    
+
     # run build tasks
     os.chdir(builddir)
-    
+
     # hack to make passing args to CMAKE work... doesnt seem to like the first arg
     args.extra_includes.insert(0, "./")
     args.extra_libraries.insert(0, "./")
-    
+
     # add extra library and include directories as absolution paths
     make_paths_absolute(args.extra_includes)
     make_paths_absolute(args.extra_libraries)
@@ -160,23 +166,23 @@ def build(args):
 
     # look for the clang/clang++ compilers
  #   clangccpath = which("clang")
- #   if clangccpath is None: 
+ #   if clangccpath is None:
  #       logging.error("can't find 'clang' compiler in your PATH! Is it installed?")
  #   clangcxxpath = which("clang++")
- #   if clangcxxpath is None: 
+ #   if clangcxxpath is None:
  #       logging.error("can't find 'clang++' compiler in your PATH! Is it installed?")
  #   if clangccpath is None or clangcxxpath is None: return -1
-    
+
     # set clang/llvm as compiler
  #   os.putenv("CC", clangccpath)
  #   os.putenv("CXX", clangcxxpath)
     #cmake_cmd += " -D_CMAKE_TOOLCHAIN_PREFIX=llvm-"
-    
+
     # call cmake to configure the make process, wait for completion
     logging.info("running \'{0}\' from \'{1}\'".format(cmake_cmd, os.getcwd()))
     retcode = subprocess.call(cmake_cmd.strip().split())
     logging.debug("cmake returned " + str(retcode))
-    
+
     if retcode == 0:
         # call make, wait for it to finish
         make = "make -j{0}".format(args.njobs)
@@ -193,59 +199,59 @@ def build(args):
 
 def test(args):
     builddir=getfullpath(BUILD_PREFIX)
-    
+
     # run elf-loader tests
-    retcode = run_tests(builddir+'/src/external/elf-loader')
-    
+    retcode = run_tests(builddir+'/src/external/elf-loader', args)
+
     if retcode == 0:
         # run the shadow tests
-        retcode = run_tests(builddir)
-        
+        retcode = run_tests(builddir, args)
+
     if retcode != 0:
         logging.warning("Failed to pass all test cases!")
 
-def run_tests(testdir):
-    if not os.path.exists(testdir+'/CTestTestfile.cmake'): 
+def run_tests(testdir, args):
+    if not os.path.exists(testdir+'/CTestTestfile.cmake'):
         logging.error("please run './setup build --test' before testing!")
         return
 
     # go to build dir and install from makefile
     calledDirectory = os.getcwd()
     os.chdir(testdir)
-    
+
     # test, wait for it to finish
-    testcmd = "ctest -j1"
-    
+    testcmd = "ctest -j{0}".format(args.njobs)
+
     logging.info("calling \'"+testcmd+"\'")
     retcode = subprocess.call(testcmd.strip().split())
     logging.info(str(testcmd) + " returned " + str(retcode))
-    
+
     # go back to where we came from
     os.chdir(calledDirectory)
     return retcode
-    
+
 def install(args):
     builddir=getfullpath(BUILD_PREFIX)
-    if not os.path.exists(builddir): 
+    if not os.path.exists(builddir):
         logging.error("please build before installing!")
         return
 
     # go to build dir and install from makefile
     calledDirectory = os.getcwd()
     os.chdir(builddir)
-    
+
     # call make install, wait for it to finish
     makeCommand = "make install"
-    
+
     logging.info("calling \'"+makeCommand+"\'")
     retcode = subprocess.call(makeCommand.strip().split())
     logging.debug("make install returned " + str(retcode))
     if retcode == 0: logging.info("now run \'shadow\' from \'PREFIX/bin\' (check your PATH!)")
-    
+
     # go back to where we came from
     os.chdir(calledDirectory)
     return retcode
-    
+
 def getfullpath(path):
     return os.path.abspath(os.path.expanduser(path))
 
@@ -266,6 +272,6 @@ def which(program):
             if is_exe(exe_file):
                 return exe_file
     return None
-    
+
 if __name__ == '__main__':
     main()
