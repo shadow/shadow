@@ -103,7 +103,7 @@ def main():
         help="number of tests to run simultaneously during testing",
         metavar="N", type=int,
         action="store", dest="njobs",
-        default=1)#multiprocessing.cpu_count())
+        default=4)#multiprocessing.cpu_count())
 
     # configure install subcommand
     parser_install = subparsers_main.add_parser('install', help='install Shadow',
