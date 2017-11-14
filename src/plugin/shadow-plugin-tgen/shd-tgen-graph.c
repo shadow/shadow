@@ -22,6 +22,8 @@ typedef enum {
     TGEN_VA_HEARTBEAT = 1 << 12,
     TGEN_VA_LOGLEVEL = 1 << 13,
     TGEN_EA_WEIGHT = 1 << 14,
+    TGEN_VA_OURSIZE = 1 << 15,
+    TGEN_VA_THEIRSIZE = 1 << 16,
 } AttributeFlags;
 
 struct _TGenGraph {
@@ -333,6 +335,10 @@ static GError* _tgengraph_parseTransferVertex(TGenGraph* g, const gchar* idStr,
             VAS(g->graph, "protocol", vertexIndex) : NULL;
     const gchar* sizeStr = (g->knownAttributes&TGEN_VA_SIZE) ?
             VAS(g->graph, "size", vertexIndex) : NULL;
+    const gchar *ourSizeStr = (g->knownAttributes&TGEN_VA_OURSIZE) ?
+            VAS(g->graph, "oursize", vertexIndex) : NULL;
+    const gchar *theirSizeStr = (g->knownAttributes&TGEN_VA_THEIRSIZE) ?
+            VAS(g->graph, "theirsize", vertexIndex) : NULL;
     const gchar* peersStr = (g->knownAttributes&TGEN_VA_PEERS) ?
             VAS(g->graph, "peers", vertexIndex) : NULL;
     const gchar* timeoutStr = (g->knownAttributes&TGEN_VA_TIMEOUT) ?
@@ -340,11 +346,11 @@ static GError* _tgengraph_parseTransferVertex(TGenGraph* g, const gchar* idStr,
     const gchar* stalloutStr = (g->knownAttributes&TGEN_VA_STALLOUT) ?
             VAS(g->graph, "stallout", vertexIndex) : NULL;
 
-    tgen_debug("found vertex %li (%s), type=%s protocol=%s size=%s peers=%s timeout=%s stallout=%s",
-            (glong)vertexIndex, idStr, typeStr, protocolStr, sizeStr, peersStr, timeoutStr, stalloutStr);
+    tgen_debug("found vertex %li (%s), type=%s protocol=%s size=%s oursize=%s theirsize=%s peers=%s timeout=%s stallout=%s",
+            (glong)vertexIndex, idStr, typeStr, protocolStr, sizeStr, ourSizeStr, theirSizeStr, peersStr, timeoutStr, stalloutStr);
 
     GError* error = NULL;
-    TGenAction* a = tgenaction_newTransferAction(typeStr, protocolStr, sizeStr, peersStr, timeoutStr, stalloutStr, &error);
+    TGenAction* a = tgenaction_newTransferAction(typeStr, protocolStr, sizeStr, ourSizeStr, theirSizeStr, peersStr, timeoutStr, stalloutStr, &error);
 
     if(a) {
         _tgengraph_storeAction(g, a, vertexIndex);
@@ -445,6 +451,10 @@ static AttributeFlags _tgengraph_vertexAttributeToFlag(const gchar* stringAttrib
             return TGEN_VA_COUNT;
         } else if(!g_ascii_strcasecmp(stringAttribute, "size")) {
             return TGEN_VA_SIZE;
+        } else if (!g_ascii_strcasecmp(stringAttribute, "oursize")) {
+            return TGEN_VA_OURSIZE;
+        } else if (!g_ascii_strcasecmp(stringAttribute, "theirsize")) {
+            return TGEN_VA_THEIRSIZE;
         } else if(!g_ascii_strcasecmp(stringAttribute, "type")) {
             return TGEN_VA_TYPE;
         } else if(!g_ascii_strcasecmp(stringAttribute, "protocol")) {

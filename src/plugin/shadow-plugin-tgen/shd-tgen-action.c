@@ -36,6 +36,8 @@ typedef struct _TGenActionTransferData {
     TGenTransferType type;
     TGenTransportProtocol protocol;
     guint64 size;
+    guint64 ourSize;
+    guint64 theirSize;
     guint64 timeoutNanos;
     gboolean timeoutIsSet;
     guint64 stalloutNanos;
@@ -625,7 +627,8 @@ TGenAction* tgenaction_newPauseAction(const gchar* timeStr, glong totalIncoming,
 }
 
 TGenAction* tgenaction_newTransferAction(const gchar* typeStr, const gchar* protocolStr,
-        const gchar* sizeStr, const gchar* peersStr, const gchar* timeoutStr, const gchar* stalloutStr, GError** error) {
+        const gchar* sizeStr, const gchar *ourSizeStr, const gchar *theirSizeStr,
+        const gchar* peersStr, const gchar* timeoutStr, const gchar* stalloutStr, GError** error) {
     g_assert(error);
 
     /* type is required */
@@ -638,6 +641,8 @@ TGenAction* tgenaction_newTransferAction(const gchar* typeStr, const gchar* prot
         type = TGEN_TYPE_GET;
     } else if (!g_ascii_strcasecmp(typeStr, "put")) {
         type = TGEN_TYPE_PUT;
+    } else if (!g_ascii_strcasecmp(typeStr, "getput")) {
+        type = TGEN_TYPE_GETPUT;
     } else {
         *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ATTRIBUTE,
                 "transfer action has unknown value '%s' for 'type' attribute",
@@ -666,16 +671,49 @@ TGenAction* tgenaction_newTransferAction(const gchar* typeStr, const gchar* prot
         return NULL;
     }
 
-    /* size is required */
-    if (!sizeStr || !g_ascii_strncasecmp(sizeStr, "\0", (gsize) 1)) {
+    /* size is required for certain types */
+    if ((type == TGEN_TYPE_GET || type == TGEN_TYPE_PUT) &&
+        (!sizeStr || !g_ascii_strncasecmp(sizeStr, "\0", (gsize) 1))) {
         *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
                 "transfer action missing required attribute 'size'");
         return NULL;
     }
     guint64 size = 0;
-    *error = _tgenaction_handleBytes("size", sizeStr, &size);
-    if (*error) {
+    if (sizeStr && g_ascii_strncasecmp(sizeStr, "\0", (gsize)1)) {
+        *error = _tgenaction_handleBytes("size", sizeStr, &size);
+        if (*error) {
+            return NULL;
+        }
+    }
+
+    /* oursize is required for certain types */
+    if ((type == TGEN_TYPE_GETPUT) &&
+        (!ourSizeStr || !g_ascii_strncasecmp(ourSizeStr, "\0", (gsize) 1))) {
+        *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
+                "transfer action missing required attribute 'oursize'");
         return NULL;
+    }
+    guint64 ourSize = 0;
+    if (ourSizeStr && g_ascii_strncasecmp(ourSizeStr, "\0", (gsize)1)) {
+        *error = _tgenaction_handleBytes("size", ourSizeStr, &ourSize);
+        if (*error) {
+            return NULL;
+        }
+    }
+
+    /* theirsize is required for certain types */
+    if ((type == TGEN_TYPE_GETPUT) &&
+        (!theirSizeStr || !g_ascii_strncasecmp(theirSizeStr, "\0", (gsize) 1))) {
+        *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
+                "transfer action missing required attribute 'theirsize'");
+        return NULL;
+    }
+    guint64 theirSize = 0;
+    if (theirSizeStr && g_ascii_strncasecmp(theirSizeStr, "\0", (gsize)1)) {
+        *error = _tgenaction_handleBytes("size", theirSizeStr, &theirSize);
+        if (*error) {
+            return NULL;
+        }
     }
 
     /* peers are optional */
@@ -720,6 +758,8 @@ TGenAction* tgenaction_newTransferAction(const gchar* typeStr, const gchar* prot
     data->protocol = protocol;
     data->type = type;
     data->size = size;
+    data->ourSize = ourSize;
+    data->theirSize = theirSize;
     data->peers = peerPool;
     data->timeoutNanos = timeoutNanos;
     data->timeoutIsSet = timeoutIsSet;
@@ -792,7 +832,8 @@ GLogLevelFlags tgenaction_getLogLevel(TGenAction* action) {
 }
 
 void tgenaction_getTransferParameters(TGenAction* action, TGenTransferType* typeOut,
-        TGenTransportProtocol* protocolOut, guint64* sizeOut, guint64* timeoutOut, guint64* stalloutOut) {
+        TGenTransportProtocol* protocolOut, guint64* sizeOut, guint64 *ourSizeOut,
+        guint64 *theirSizeOut, guint64* timeoutOut, guint64* stalloutOut) {
     TGEN_ASSERT(action);
     g_assert(action->data && action->type == TGEN_ACTION_TRANSFER);
 
@@ -804,6 +845,12 @@ void tgenaction_getTransferParameters(TGenAction* action, TGenTransferType* type
     }
     if(sizeOut) {
         *sizeOut = ((TGenActionTransferData*)action->data)->size;
+    }
+    if (ourSizeOut) {
+        *ourSizeOut = ((TGenActionTransferData*)action->data)->ourSize;
+    }
+    if (theirSizeOut) {
+        *theirSizeOut = ((TGenActionTransferData*)action->data)->theirSize;
     }
     if(timeoutOut) {
         TGenActionTransferData* data = (TGenActionTransferData*)action->data;
