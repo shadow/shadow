@@ -579,6 +579,23 @@ static void _tgentransfer_readChecksum(TGenTransfer* transfer) {
     }
 }
 
+static gboolean
+_tgentransfer_getputWantsReadEvents(TGenTransfer *transfer) {
+    TGEN_ASSERT(transfer);
+
+    if (transfer->type != TGEN_TYPE_GETPUT) {
+        return FALSE;
+    } else if (transfer->readBuffer) {
+        return TRUE;
+    } else if (transfer->state == TGEN_XFER_RESPONSE) {
+        return TRUE;
+    } else if (!transfer->getput.doneReadingPayload && transfer->state == TGEN_XFER_PAYLOAD) {
+        return TRUE;
+    } else {
+        return FALSE;
+    }
+}
+
 static void _tgentransfer_onReadable(TGenTransfer* transfer) {
     TGEN_ASSERT(transfer);
 
@@ -611,7 +628,7 @@ static void _tgentransfer_onReadable(TGenTransfer* transfer) {
 
     if(transfer->readBuffer ||
             (transfer->type == TGEN_TYPE_GET && transfer->state != TGEN_XFER_SUCCESS) ||
-            (transfer->type == TGEN_TYPE_GETPUT && transfer->state != TGEN_XFER_SUCCESS)) {
+            (_tgentransfer_getputWantsReadEvents(transfer))) {
         /* we have more to read */
         transfer->events |= TGEN_EVENT_READ;
     } else {
