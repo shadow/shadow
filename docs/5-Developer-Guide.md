@@ -53,8 +53,6 @@ You may also want to ensure that debugging symbols are included in the GLib
 that Shadow links to, and any library used by the plug-in. This can be achieved
 with the compiler flag `-g` when manually building a local version of GLib.
 
-__NOTE__: Currently, symbols from plug-ins are not accessible via GDB until [this issue](https://github.com/shadow/shadow/issues/101) gets fixed. See [this thread](http://mailman.cs.umn.edu/archives/shadow-dev/2013-September/000066.html) for more information.
-
 ### Profiling Shadow
 
 Coming soon.
