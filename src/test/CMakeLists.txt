@@ -17,6 +17,7 @@ add_subdirectory(dynlink)
 add_subdirectory(preload)
 
 add_subdirectory(bind)
+add_subdirectory(cpp)
 add_subdirectory(epoll)
 add_subdirectory(file)
 add_subdirectory(phold)

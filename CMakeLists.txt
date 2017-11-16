@@ -1,7 +1,7 @@
 ## (c) 2010-2012 Shadow, Rob Jansen jansen@cs.umn.edu
 
 ## set build parameters
-project(Shadow C)
+project(Shadow)
 set(SHADOW_VERSION_MAJOR 1)
 set(SHADOW_VERSION_MINOR 12)
 set(SHADOW_VERSION_BUILD 0)
