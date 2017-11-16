@@ -2472,6 +2472,13 @@ int process_emu_setsockopt(Process* proc, int fd, int level, int optname, const 
                 }
 #endif
 
+                case SO_KEEPALIVE: {
+                    // TODO implement this!
+                    // XXX libevent actually uses this option in evconnlistener_new_bind!!
+                    debug("setsockopt SO_KEEPALIVE not yet implemented");
+                    break;
+                }
+
                 default: {
                     warning("setsockopt optname %i not implemented", optname);
                     _process_setErrno(proc, ENOSYS);
