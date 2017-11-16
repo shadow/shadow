@@ -6,6 +6,8 @@
 #include <stdlib.h>
 
 #include <iostream>
+#include <sstream>
+#include <string>
 
 typedef struct _Hello Hello;
 struct _Hello {
@@ -71,6 +73,24 @@ static int _test_init() {
     return EXIT_SUCCESS;
 }
 
+static int _test_endl() {
+	std::string correct ("Line 1\nLine 2\nLine 3\n");
+
+	std::stringstream test;
+	test << "Line 1" << std::endl << "Line 2" << std::endl << "Line 3\n";
+
+	std::cout << correct;
+	std::cout << test.str();
+	std::cout << "Line 1" << std::endl << "Line 2" << std::endl << "Line 3\n";
+	std::cout << std::endl;
+
+	if (correct.compare(test.str()) == 0) {
+		return EXIT_SUCCESS;
+	} else {
+		return EXIT_FAILURE;
+	}
+}
+
 int main(void) {
     fprintf(stdout, "########## cpp test starting ##########\n");
 
@@ -78,6 +98,13 @@ int main(void) {
 
     if(_test_init() == EXIT_FAILURE) {
         fprintf(stdout, "########## _test_init() failed\n");
+        return EXIT_FAILURE;
+    }
+
+    fprintf(stdout, "########## running test: _test_endl()\n");
+
+    if(_test_endl() == EXIT_FAILURE) {
+        fprintf(stdout, "########## _test_endl() failed\n");
         return EXIT_FAILURE;
     }
 
