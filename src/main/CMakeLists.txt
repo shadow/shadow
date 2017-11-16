@@ -42,6 +42,11 @@ add_cflags(-fPIC)
 #add_cflags(-Wno-visibility)
 add_cflags(-std=gnu99)
 
+if(SHADOW_PROFILE STREQUAL ON)
+    message(STATUS "Building Shadow core with profiling support using '-pg'")
+    add_cflags(-pg)
+endif(SHADOW_PROFILE STREQUAL ON)
+
 ## sources for our main shadow program
 set(shadow_srcs
     core/logger/shd-logger.c

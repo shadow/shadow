@@ -117,8 +117,7 @@ endif()
 
 if(SHADOW_PROFILE STREQUAL ON)
     add_definitions(-DDEBUG)
-    add_cflags(-pg)
-    #set(CMAKE_EXE_LINKER_FLAGS ${CMAKE_EXE_LINKER_FLAGS} -pg)
+    ## see src/main/CMakeLists.txt, where we add the -pg flags
 endif(SHADOW_PROFILE STREQUAL ON)
 
 if(SHADOW_EXPORT STREQUAL ON)
