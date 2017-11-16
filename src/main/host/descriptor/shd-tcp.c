@@ -1220,7 +1220,7 @@ void tcp_getInfo(TCP* tcp, struct tcp_info *tcpinfo) {
 //  tcpinfo->tcpi_reordering;
 
     tcpinfo->tcpi_rcv_rtt = (u_int32_t)tcp->info.rtt;
-    tcpinfo->tcpi_rcv_space = (u_int32_t)tcp->receive.lastWindow;
+    tcpinfo->tcpi_rcv_space = (u_int32_t)tcp->receive.window;
 
     tcpinfo->tcpi_total_retrans = (u_int32_t)tcp->info.retransmitCount;
 }
