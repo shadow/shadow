@@ -65,7 +65,7 @@ This method only provides profiling info for the core of Shadow, not for elf-loa
 cd resource/examples
 shadow shadow.config.xml > shadow.log
 gprof `which shadow` gmon.out > analysis.txt
-less analysis.text
+less analysis.txt
 ```
 
 ##### Profiling with `perf`
