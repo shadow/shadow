@@ -55,7 +55,7 @@ with the compiler flag `-g` when manually building a local version of GLib.
 
 ### Profiling Shadow
 
-**Using `gprof`**
+##### Profiling with `gprof`
 
 This method only provides profiling info for the core of Shadow, not for elf-loader, plug-ins, or other libraries. Also, the profiling info is limited since gprof only measures active CPU usage and function call counts and misses performance related to blocking IO and barrier waits.
 
@@ -68,7 +68,7 @@ gprof `which shadow` gmon.out > analysis.txt
 less analysis.text
 ```
 
-**using `perf`**
+##### Profiling with `perf`
 
 TODO.
 
