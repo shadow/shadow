@@ -213,3 +213,8 @@ add_test(NAME elfloader-test27 COMMAND /bin/bash ${CMAKE_CURRENT_SOURCE_DIR}/run
 add_executable(test28 test28.c)
 target_link_libraries(test28 vdl -lpthread -ldl)
 add_test(NAME elfloader-test28 COMMAND /bin/bash ${CMAKE_CURRENT_SOURCE_DIR}/runtest.sh test28 ${CMAKE_CURRENT_SOURCE_DIR})
+
+set_tests_properties(
+	elfloader-test15
+	PROPERTIES RUN_SERIAL true
+)

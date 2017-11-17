@@ -89,6 +89,6 @@ add_test(
 )
 
 set_tests_properties(
-  tcp-blocking-loopback tcp-nonblocking-select-loopback tcp-iov
+  tcp-blocking-loopback tcp-nonblocking-poll-loopback tcp-nonblocking-epoll-loopback tcp-nonblocking-select-loopback tcp-iov
   PROPERTIES RUN_SERIAL true
 )
