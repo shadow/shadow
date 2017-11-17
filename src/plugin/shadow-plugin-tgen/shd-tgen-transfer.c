@@ -505,7 +505,9 @@ static void _tgentransfer_readPayload(TGenTransfer* transfer) {
         } else if (transfer->type == TGEN_TYPE_GETPUT) {
             length = MIN(65536, (transfer->getput->theirSize - transfer->bytes.payloadRead));
         } else {
-            tgen_critical("Should be either GET or GETPUT if we are in readPayload");
+            tgen_critical("When reading a payload, we expect the transfer type "
+                    "to be GET or GETPUT, not %s",
+                    _tgentransfer_typeToString(transfer));
             g_assert(NULL);
         }
 
@@ -787,7 +789,9 @@ static void _tgentransfer_writePayload(TGenTransfer* transfer) {
         } else if (transfer->type == TGEN_TYPE_GETPUT) {
             length = MIN(16384, (transfer->getput->ourSize - transfer->bytes.payloadWrite));
         } else {
-            tgen_critical("Should be either PUT or GETPUT if we are in writePayload");
+            tgen_critical("When writing a payload, we expect the transfer type "
+                    "to be PUT or GETPUT, not %s",
+                    _tgentransfer_typeToString(transfer));
             g_assert(NULL);
         }
 
