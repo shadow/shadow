@@ -643,17 +643,13 @@ static void _tgentransfer_onReadable(TGenTransfer* transfer) {
     }
 
     /* check if we are responsible for reading payload bytes */
-    if(transfer->type == TGEN_TYPE_GET && transfer->state == TGEN_XFER_PAYLOAD) {
-        _tgentransfer_readPayload(transfer);
-    }
-    if(transfer->type == TGEN_TYPE_GETPUT && transfer->state == TGEN_XFER_PAYLOAD) {
+    if((transfer->type == TGEN_TYPE_GET || transfer->type == TGEN_TYPE_GETPUT)
+            && transfer->state == TGEN_XFER_PAYLOAD) {
         _tgentransfer_readPayload(transfer);
     }
 
-    if(transfer->type == TGEN_TYPE_GET && transfer->state == TGEN_XFER_CHECKSUM) {
-        _tgentransfer_readChecksum(transfer);
-    }
-    if(transfer->type == TGEN_TYPE_GETPUT && transfer->state == TGEN_XFER_CHECKSUM) {
+    if((transfer->type == TGEN_TYPE_GET || transfer->type == TGEN_TYPE_GETPUT)
+            && transfer->state == TGEN_XFER_CHECKSUM) {
         _tgentransfer_readChecksum(transfer);
     }
 
@@ -898,17 +894,13 @@ static void _tgentransfer_onWritable(TGenTransfer* transfer) {
     }
 
     /* check if we are responsible for writing payload bytes */
-    if(transfer->type == TGEN_TYPE_PUT && transfer->state == TGEN_XFER_PAYLOAD) {
-        _tgentransfer_writePayload(transfer);
-    }
-    if(transfer->type == TGEN_TYPE_GETPUT && transfer->state == TGEN_XFER_PAYLOAD) {
+    if((transfer->type == TGEN_TYPE_PUT || transfer->type == TGEN_TYPE_GETPUT)
+            && transfer->state == TGEN_XFER_PAYLOAD) {
         _tgentransfer_writePayload(transfer);
     }
 
-    if(transfer->type == TGEN_TYPE_PUT && transfer->state == TGEN_XFER_CHECKSUM) {
-        _tgentransfer_writeChecksum(transfer);
-    }
-    if(transfer->type == TGEN_TYPE_GETPUT && transfer->state == TGEN_XFER_CHECKSUM) {
+    if((transfer->type == TGEN_TYPE_PUT || transfer->type == TGEN_TYPE_GETPUT)
+            && transfer->state == TGEN_XFER_CHECKSUM) {
         _tgentransfer_writeChecksum(transfer);
     }
 
