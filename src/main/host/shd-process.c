@@ -46,6 +46,7 @@
 #include <sys/file.h>
 #include <sys/uio.h>
 #include <sys/vfs.h>
+#include <sys/syscall.h>
 #include <linux/sockios.h>
 #include <features.h>
 
@@ -4710,6 +4711,306 @@ int process_emu___cxa_atexit(Process* proc, void (*func) (void *), void * arg, v
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return success == TRUE ? 0 : -1;
+}
+
+/* syscall */
+
+int process_emu_syscall(Process* proc, int number, va_list ap) {
+	va_list args;
+	va_copy(args, ap);
+
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+
+    int do_syscall = 0;
+    int result = 0;
+    int ret = 0;
+
+    switch (number) {
+#if defined SYS_clock_gettime
+		case SYS_clock_gettime: {
+			/* get the args for clock_gettime */
+			clockid_t id = va_arg(args, clockid_t);
+			struct timespec* ts = va_arg(args, struct timespec*);
+
+			/* call our emulation version, which thinks its being called from a non-shadow context */
+			_process_changeContext(proc, PCTX_SHADOW, prevCTX);
+			result = process_emu_clock_gettime(proc, id, ts);
+			_process_changeContext(proc, prevCTX, PCTX_SHADOW);
+
+			/* result is our actual return value.
+			 * if result is -1, then the process errno was already set */
+			ret = result;
+			break;
+		}
+#endif
+
+		/* TODO the following are functions that shadow normally intercepts, and we should handle them */
+
+#if defined SYS_accept
+        case SYS_accept:
+#endif
+#if defined SYS_accept4
+        case SYS_accept4:
+#endif
+#if defined SYS_bind
+        case SYS_bind:
+#endif
+#if defined SYS_close
+        case SYS_close:
+#endif
+#if defined SYS_connect
+        case SYS_connect:
+#endif
+#if defined SYS_creat
+        case SYS_creat:
+#endif
+#if defined SYS_dup
+        case SYS_dup:
+#endif
+#if defined SYS_dup2
+        case SYS_dup2:
+#endif
+#if defined SYS_dup3
+        case SYS_dup3:
+#endif
+#if defined SYS_epoll_create
+        case SYS_epoll_create:
+#endif
+#if defined SYS_epoll_create1
+        case SYS_epoll_create1:
+#endif
+#if defined SYS_epoll_ctl
+        case SYS_epoll_ctl:
+#endif
+#if defined SYS_epoll_pwait
+        case SYS_epoll_pwait:
+#endif
+#if defined SYS_epoll_wait
+        case SYS_epoll_wait:
+#endif
+#if defined SYS_eventfd
+        case SYS_eventfd:
+#endif
+#if defined SYS_exit
+        case SYS_exit:
+#endif
+#if defined SYS_faccessat
+        case SYS_faccessat:
+#endif
+#if defined SYS_fallocate
+        case SYS_fallocate:
+#endif
+#if defined SYS_fchdir
+        case SYS_fchdir:
+#endif
+#if defined SYS_fchmod
+        case SYS_fchmod:
+#endif
+#if defined SYS_fchmodat
+        case SYS_fchmodat:
+#endif
+#if defined SYS_fchown
+        case SYS_fchown:
+#endif
+#if defined SYS_fchownat
+        case SYS_fchownat:
+#endif
+#if defined SYS_fcntl
+        case SYS_fcntl:
+#endif
+#if defined SYS_fdatasync
+        case SYS_fdatasync:
+#endif
+#if defined SYS_flock
+        case SYS_flock:
+#endif
+#if defined SYS_fork
+        case SYS_fork:
+#endif
+#if defined SYS_fstat
+        case SYS_fstat:
+#endif
+#if defined SYS_fstatfs
+        case SYS_fstatfs:
+#endif
+#if defined SYS_fstatfs64
+        case SYS_fstatfs64:
+#endif
+#if defined SYS_fsync
+        case SYS_fsync:
+#endif
+#if defined SYS_ftruncate
+        case SYS_ftruncate:
+#endif
+#if defined SYS_ftruncate64
+        case SYS_ftruncate64:
+#endif
+#if defined SYS_gethostname
+        case SYS_gethostname:
+#endif
+#if defined SYS_getpeername
+        case SYS_getpeername:
+#endif
+#if defined SYS_getsockname
+        case SYS_getsockname:
+#endif
+#if defined SYS_getsockopt
+        case SYS_getsockopt:
+#endif
+#if defined SYS_gettimeofday
+        case SYS_gettimeofday:
+#endif
+#if defined SYS_ioctl
+        case SYS_ioctl:
+#endif
+#if defined SYS_listen
+        case SYS_listen:
+#endif
+#if defined SYS_lock
+        case SYS_lock:
+#endif
+#if defined SYS_lseek
+        case SYS_lseek:
+#endif
+#if defined SYS_mmap
+        case SYS_mmap:
+#endif
+#if defined SYS_nanosleep
+        case SYS_nanosleep:
+#endif
+#if defined SYS_open
+        case SYS_open:
+#endif
+#if defined SYS_openat
+        case SYS_openat:
+#endif
+#if defined SYS_pipe
+        case SYS_pipe:
+#endif
+#if defined SYS_pipe2
+        case SYS_pipe2:
+#endif
+#if defined SYS_poll
+        case SYS_poll:
+#endif
+#if defined SYS_ppoll
+        case SYS_ppoll:
+#endif
+#if defined SYS_read
+        case SYS_read:
+#endif
+#if defined SYS_readv
+        case SYS_readv:
+#endif
+#if defined SYS_recv
+        case SYS_recv:
+#endif
+#if defined SYS_recvfrom
+        case SYS_recvfrom:
+#endif
+#if defined SYS_recvmsg
+        case SYS_recvmsg:
+#endif
+#if defined SYS_select
+        case SYS_select:
+#endif
+#if defined SYS_send
+        case SYS_send:
+#endif
+#if defined SYS_sendmsg
+        case SYS_sendmsg:
+#endif
+#if defined SYS_sendto
+        case SYS_sendto:
+#endif
+#if defined SYS_setsockopt
+        case SYS_setsockopt:
+#endif
+#if defined SYS_shutdown
+        case SYS_shutdown:
+#endif
+#if defined SYS_sigaction
+        case SYS_sigaction:
+#endif
+#if defined SYS_socket
+        case SYS_socket:
+#endif
+#if defined SYS_socketpair
+        case SYS_socketpair:
+#endif
+#if defined SYS_sync
+        case SYS_sync:
+#endif
+#if defined SYS_syncfs
+        case SYS_syncfs:
+#endif
+#if defined SYS_syscall
+        case SYS_syscall:
+#endif
+#if defined SYS_time
+        case SYS_time:
+#endif
+#if defined SYS_timerfd
+        case SYS_timerfd:
+#endif
+#if defined SYS_timerfd_create
+        case SYS_timerfd_create:
+#endif
+#if defined SYS_timerfd_gettime
+        case SYS_timerfd_gettime:
+#endif
+#if defined SYS_timerfd_settime
+        case SYS_timerfd_settime:
+#endif
+#if defined SYS_unlink
+        case SYS_unlink:
+#endif
+#if defined SYS_unlinkat
+        case SYS_unlinkat:
+#endif
+#if defined SYS_waitpid
+        case SYS_waitpid:
+#endif
+#if defined SYS_write
+        case SYS_write:
+#endif
+#if defined SYS_writev
+        case SYS_writev:
+#endif
+
+		{
+			/* Shadow should deal with these, so this is a critical issue that we should address */
+			critical("syscall() was called with syscall number '%i'. Shadow handles the libc version of this "
+					"function, but does not yet handle the syscall() version. We will forward to libc as a "
+					"fallback, but it is unlikely to work correctly because it is not Shadow-aware. "
+					"Please report if you notice strange behavior.", number);
+			do_syscall = 1;
+			break;
+		}
+
+		default: {
+			/* We may get by with letting the kernel deal with this since it may not affect Shadow. */
+			info("syscall() was called with number '%i'. Shadow does not yet intercept this function. "
+					"We will forward to the kernel/libc, which is not Shadow-aware and is not guaranteed "
+					"to handle things correctly. "
+					"Please report if you notice strange behavior.", number);
+			do_syscall = 1;
+			break;
+		}
+    }
+
+    if(do_syscall) {
+    	result = syscall(number, ap);
+    	if(result == EOF) {
+			_process_setErrno(proc, errno);
+		}
+    	ret = result;
+    }
+
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+
+    va_end(args);
+    return ret;
 }
 
 /* pthread attributes */

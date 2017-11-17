@@ -2,9 +2,12 @@
  * The Shadow Simulator
  * See LICENSE for licensing information
  */
+#define _POSIX_C_SOURCE 199309L
+#include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <chrono>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -91,6 +94,18 @@ static int _test_endl() {
 	}
 }
 
+static int _test_time() {
+	auto t0 = std::chrono::system_clock::now();
+	sleep(1);
+	auto t1 = std::chrono::system_clock::now();
+
+	if (std::chrono::duration_cast<std::chrono::seconds>(t1 - t0).count() == 0) {
+		return EXIT_FAILURE;
+	} else {
+		return EXIT_SUCCESS;
+	}
+}
+
 int main(void) {
     fprintf(stdout, "########## cpp test starting ##########\n");
 
@@ -105,6 +120,13 @@ int main(void) {
 
     if(_test_endl() == EXIT_FAILURE) {
         fprintf(stdout, "########## _test_endl() failed\n");
+        return EXIT_FAILURE;
+    }
+
+    fprintf(stdout, "########## running test: _test_time()\n");
+
+    if(_test_time() == EXIT_FAILURE) {
+        fprintf(stdout, "########## _test_time() failed\n");
         return EXIT_FAILURE;
     }
 

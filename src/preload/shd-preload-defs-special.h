@@ -35,6 +35,8 @@ PRELOADDEF(      , void, pthread_exit, (void* a), a);
 PRELOADDEF(      , void, exit, (int a), a);
 PRELOADDEF(      , void, abort, (void));
 
+PRELOADDEF(return, int, syscall, (int a, ...), a);
+
 /* intercepting these functions causes glib errors, because keys that were created from
  * internal shadow functions then get used in the plugin and get forwarded to pth, which
  * of course does not have the same registered keys. */

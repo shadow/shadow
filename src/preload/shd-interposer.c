@@ -14,7 +14,13 @@
 #include <stddef.h>
 #include <stdarg.h>
 #include <dlfcn.h>
+#if defined __USE_MISC
+#undef __USE_MISC
 #include <unistd.h>
+#define __USE_MISC 1
+#else
+#include <unistd.h>
+#endif
 #include <netdb.h>
 #include <string.h>
 #include <signal.h>
@@ -34,6 +40,7 @@
 #include <sys/types.h>
 #include <sys/file.h>
 #include <sys/uio.h>
+#include <sys/syscall.h>
 #include <linux/sockios.h>
 #include <features.h>
 
@@ -375,6 +382,23 @@ int fprintf(FILE *stream, const char *format, ...) {
     } else {
         ENSURE(vfprintf);
         result = director.next.vfprintf(stream, format, arglist);
+    }
+    va_end(arglist);
+    return result;
+}
+
+/* syscall */
+
+int syscall(int number, ...) {
+    va_list arglist;
+    va_start(arglist, number);
+    int result = 0;
+    Process* proc = NULL;
+    if((proc = _doEmulate()) != NULL) {
+        result = process_emu_syscall(proc, number, arglist);
+    } else {
+        ENSURE(syscall);
+        result = director.next.syscall(number, arglist);
     }
     va_end(arglist);
     return result;

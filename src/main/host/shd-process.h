@@ -264,6 +264,10 @@ int process_emu_on_exit(Process* proc, void (*function)(int , void *), void *arg
 int process_emu_atexit(Process* proc, void (*func)(void));
 int process_emu___cxa_atexit(Process* proc, void (*func) (void *), void * arg, void * dso_handle);
 
+/* syscall */
+
+int process_emu_syscall(Process* proc, int number, va_list ap);
+
 /* pthread attributes */
 
 int process_emu_pthread_attr_init(Process* proc, pthread_attr_t *attr);
