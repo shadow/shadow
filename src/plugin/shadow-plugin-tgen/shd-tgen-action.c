@@ -672,14 +672,14 @@ TGenAction* tgenaction_newTransferAction(const gchar* typeStr, const gchar* prot
     }
 
     /* size is required for certain types */
-    if ((type == TGEN_TYPE_GET || type == TGEN_TYPE_PUT) &&
-        (!sizeStr || !g_ascii_strncasecmp(sizeStr, "\0", (gsize) 1))) {
+    gboolean sizeIsValid = sizeStr && g_ascii_strncasecmp(sizeStr, "\0", (gsize)1);
+    if ((type == TGEN_TYPE_GET || type == TGEN_TYPE_PUT) && !sizeIsValid) {
         *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
                 "transfer action missing required attribute 'size'");
         return NULL;
     }
     guint64 size = 0;
-    if (sizeStr && g_ascii_strncasecmp(sizeStr, "\0", (gsize)1)) {
+    if (sizeIsValid) {
         *error = _tgenaction_handleBytes("size", sizeStr, &size);
         if (*error) {
             return NULL;
@@ -687,14 +687,14 @@ TGenAction* tgenaction_newTransferAction(const gchar* typeStr, const gchar* prot
     }
 
     /* oursize is required for certain types */
-    if ((type == TGEN_TYPE_GETPUT) &&
-        (!ourSizeStr || !g_ascii_strncasecmp(ourSizeStr, "\0", (gsize) 1))) {
+    gboolean ourSizeIsValid = ourSizeStr && g_ascii_strncasecmp(ourSizeStr, "\0", (gsize)1);
+    if (type == TGEN_TYPE_GETPUT && !ourSizeIsValid) {
         *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
                 "transfer action missing required attribute 'oursize'");
         return NULL;
     }
     guint64 ourSize = 0;
-    if (ourSizeStr && g_ascii_strncasecmp(ourSizeStr, "\0", (gsize)1)) {
+    if (ourSizeIsValid) {
         *error = _tgenaction_handleBytes("size", ourSizeStr, &ourSize);
         if (*error) {
             return NULL;
@@ -702,14 +702,14 @@ TGenAction* tgenaction_newTransferAction(const gchar* typeStr, const gchar* prot
     }
 
     /* theirsize is required for certain types */
-    if ((type == TGEN_TYPE_GETPUT) &&
-        (!theirSizeStr || !g_ascii_strncasecmp(theirSizeStr, "\0", (gsize) 1))) {
+    gboolean theirSizeIsValid = theirSizeStr && g_ascii_strncasecmp(theirSizeStr, "\0", (gsize)1);
+    if (type == TGEN_TYPE_GETPUT && !theirSizeIsValid) {
         *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
                 "transfer action missing required attribute 'theirsize'");
         return NULL;
     }
     guint64 theirSize = 0;
-    if (theirSizeStr && g_ascii_strncasecmp(theirSizeStr, "\0", (gsize)1)) {
+    if (theirSizeIsValid) {
         *error = _tgenaction_handleBytes("size", theirSizeStr, &theirSize);
         if (*error) {
             return NULL;
