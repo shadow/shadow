@@ -724,7 +724,7 @@ static void _tgentransfer_writeCommand(TGenTransfer* transfer) {
     /* buffer the command if we have not done that yet */
     if(!transfer->writeBuffer) {
         transfer->writeBuffer = g_string_new(NULL);
-        if (transfer->type == TGEN_TYPE_GET) {
+        if (transfer->type != TGEN_TYPE_GETPUT) {
             g_string_printf(transfer->writeBuffer, "%s %s %s %"G_GSIZE_FORMAT" %s %"G_GSIZE_FORMAT"\n",
                 TGEN_AUTH_PW, transfer->hostname, transfer->id, transfer->count, _tgentransfer_typeToString(transfer), transfer->size);
         } else if (transfer->type == TGEN_TYPE_GETPUT) {
