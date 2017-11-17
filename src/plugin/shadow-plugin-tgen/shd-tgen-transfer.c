@@ -575,7 +575,7 @@ static void _tgentransfer_readChecksum(TGenTransfer* transfer) {
         /* we have read the entire checksum from the other end */
         gssize sha1Length = g_checksum_type_get_length(G_CHECKSUM_MD5);
         g_assert(sha1Length >= 0);
-        gchar* computedSum;
+        gchar* computedSum = NULL;
         if (transfer->type == TGEN_TYPE_GET) {
             computedSum = g_strdup(g_checksum_get_string(transfer->payloadChecksum));
         } else if (transfer->type == TGEN_TYPE_GETPUT) {
