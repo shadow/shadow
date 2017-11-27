@@ -340,6 +340,7 @@ static void _tgentransfer_authenticate(TGenTransfer* transfer) {
 
 static void _tgentransfer_readCommand(TGenTransfer* transfer) {
     TGEN_ASSERT(transfer);
+    g_assert(transfer->type == TGEN_TYPE_NONE);
 
     if(!transfer->authComplete) {
         _tgentransfer_authenticate(transfer);
@@ -436,6 +437,7 @@ static void _tgentransfer_readCommand(TGenTransfer* transfer) {
 
 static void _tgentransfer_readResponse(TGenTransfer* transfer) {
     TGEN_ASSERT(transfer);
+    g_assert(transfer->type != TGEN_TYPE_NONE);
 
     if(!transfer->authComplete) {
         _tgentransfer_authenticate(transfer);
@@ -494,6 +496,7 @@ static void _tgentransfer_readResponse(TGenTransfer* transfer) {
 
 static void _tgentransfer_readPayload(TGenTransfer* transfer) {
     TGEN_ASSERT(transfer);
+    g_assert(transfer->type == TGEN_TYPE_GET || transfer->type == TGEN_TYPE_GETPUT);
 
     guchar buffer[65536];
 
@@ -502,13 +505,8 @@ static void _tgentransfer_readPayload(TGenTransfer* transfer) {
         gsize length;
         if (transfer->type == TGEN_TYPE_GET) {
             length = MIN(65536, (transfer->size - transfer->bytes.payloadRead));
-        } else if (transfer->type == TGEN_TYPE_GETPUT) {
-            length = MIN(65536, (transfer->getput->theirSize - transfer->bytes.payloadRead));
         } else {
-            tgen_critical("When reading a payload, we expect the transfer type "
-                    "to be GET or GETPUT, not %s",
-                    _tgentransfer_typeToString(transfer));
-            g_assert(NULL);
+            length = MIN(65536, (transfer->getput->theirSize - transfer->bytes.payloadRead));
         }
 
         if(length > 0) {
@@ -545,7 +543,7 @@ static void _tgentransfer_readPayload(TGenTransfer* transfer) {
                 /* payload done, send the checksum next */
                 _tgentransfer_changeState(transfer, TGEN_XFER_CHECKSUM);
                 transfer->time.lastPayloadByte = g_get_monotonic_time();
-            } else if (transfer->type == TGEN_TYPE_GETPUT) {
+            } else {
                 transfer->getput->doneReadingPayload = TRUE;
                 if (transfer->getput->doneWritingPayload) {
                     _tgentransfer_changeState(transfer, TGEN_XFER_CHECKSUM);
@@ -560,13 +558,14 @@ static void _tgentransfer_readPayload(TGenTransfer* transfer) {
 
 static void _tgentransfer_readChecksum(TGenTransfer* transfer) {
     TGEN_ASSERT(transfer);
+    g_assert(transfer->type == TGEN_TYPE_GET || transfer->type == TGEN_TYPE_GETPUT);
 
     if(_tgentransfer_getLine(transfer)) {
         if (transfer->type == TGEN_TYPE_GET) {
             /* transfer is done */
             _tgentransfer_changeState(transfer, TGEN_XFER_SUCCESS);
             transfer->time.checksum = g_get_monotonic_time();
-        } else if (transfer->type == TGEN_TYPE_GETPUT) {
+        } else {
             transfer->getput->receivedTheirChecksum = TRUE;
             if (transfer->getput->sentOurChecksum) {
                 _tgentransfer_changeState(transfer, TGEN_XFER_SUCCESS);
@@ -580,7 +579,7 @@ static void _tgentransfer_readChecksum(TGenTransfer* transfer) {
         gchar* computedSum = NULL;
         if (transfer->type == TGEN_TYPE_GET) {
             computedSum = g_strdup(g_checksum_get_string(transfer->payloadChecksum));
-        } else if (transfer->type == TGEN_TYPE_GETPUT) {
+        } else {
             computedSum = g_strdup(g_checksum_get_string(transfer->getput->theirPayloadChecksum));
         }
         g_assert(computedSum);
@@ -720,14 +719,15 @@ static gsize _tgentransfer_flushOut(TGenTransfer* transfer) {
 
 static void _tgentransfer_writeCommand(TGenTransfer* transfer) {
     TGEN_ASSERT(transfer);
+    g_assert(transfer->type != TGEN_TYPE_NONE);
 
     /* buffer the command if we have not done that yet */
     if(!transfer->writeBuffer) {
         transfer->writeBuffer = g_string_new(NULL);
-        if (transfer->type != TGEN_TYPE_GETPUT) {
+        if (transfer->type == TGEN_TYPE_GET || transfer->type == TGEN_TYPE_PUT) {
             g_string_printf(transfer->writeBuffer, "%s %s %s %"G_GSIZE_FORMAT" %s %"G_GSIZE_FORMAT"\n",
                 TGEN_AUTH_PW, transfer->hostname, transfer->id, transfer->count, _tgentransfer_typeToString(transfer), transfer->size);
-        } else if (transfer->type == TGEN_TYPE_GETPUT) {
+        } else {
             g_string_printf(transfer->writeBuffer,
                 "%s %s %s %"G_GSIZE_FORMAT" %s %"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT"\n",
                 TGEN_AUTH_PW, transfer->hostname, transfer->id, transfer->count,
@@ -750,6 +750,7 @@ static void _tgentransfer_writeCommand(TGenTransfer* transfer) {
 
 static void _tgentransfer_writeResponse(TGenTransfer* transfer) {
     TGEN_ASSERT(transfer);
+    g_assert(transfer->type != TGEN_TYPE_NONE);
 
     /* buffer the command if we have not done that yet */
     if(!transfer->writeBuffer) {
@@ -771,6 +772,7 @@ static void _tgentransfer_writeResponse(TGenTransfer* transfer) {
 
 static void _tgentransfer_writePayload(TGenTransfer* transfer) {
     TGEN_ASSERT(transfer);
+    g_assert(transfer->type == TGEN_TYPE_GETPUT || transfer->type == TGEN_TYPE_PUT);
 
     gboolean firstByte = transfer->bytes.payloadWrite == 0 ? TRUE : FALSE;
 
@@ -782,13 +784,8 @@ static void _tgentransfer_writePayload(TGenTransfer* transfer) {
         gsize length;
         if (transfer->type == TGEN_TYPE_PUT) {
             length = MIN(16384, (transfer->size - transfer->bytes.payloadWrite));
-        } else if (transfer->type == TGEN_TYPE_GETPUT) {
-            length = MIN(16384, (transfer->getput->ourSize - transfer->bytes.payloadWrite));
         } else {
-            tgen_critical("When writing a payload, we expect the transfer type "
-                    "to be PUT or GETPUT, not %s",
-                    _tgentransfer_typeToString(transfer));
-            g_assert(NULL);
+            length = MIN(16384, (transfer->getput->ourSize - transfer->bytes.payloadWrite));
         }
 
         if(length > 0) {
@@ -829,6 +826,7 @@ static void _tgentransfer_writePayload(TGenTransfer* transfer) {
 
 static void _tgentransfer_writeChecksum(TGenTransfer* transfer) {
     TGEN_ASSERT(transfer);
+    g_assert(transfer->type == TGEN_TYPE_GETPUT || transfer->type == TGEN_TYPE_PUT);
 
     /* buffer the checksum if we have not done that yet */
     if(!transfer->writeBuffer) {
@@ -836,7 +834,7 @@ static void _tgentransfer_writeChecksum(TGenTransfer* transfer) {
         if (transfer->type == TGEN_TYPE_PUT) {
             g_string_printf(transfer->writeBuffer, "MD5 %s\n",
                     g_checksum_get_string(transfer->payloadChecksum));
-        } else if (transfer->type == TGEN_TYPE_GETPUT) {
+        } else {
             g_string_printf(transfer->writeBuffer, "MD5 %s\n",
                     g_checksum_get_string(transfer->getput->ourPayloadChecksum));
         }
@@ -849,7 +847,7 @@ static void _tgentransfer_writeChecksum(TGenTransfer* transfer) {
             /* entire checksum was sent, we are now done */
             _tgentransfer_changeState(transfer, TGEN_XFER_SUCCESS);
             transfer->time.checksum = g_get_monotonic_time();
-        } else if (transfer->type == TGEN_TYPE_GETPUT) {
+        } else {
             transfer->getput->sentOurChecksum = TRUE;
             if (transfer->getput->receivedTheirChecksum) {
                 _tgentransfer_changeState(transfer, TGEN_XFER_SUCCESS);
