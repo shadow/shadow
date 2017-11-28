@@ -208,13 +208,20 @@ static const gchar* _tgentransfer_toString(TGenTransfer* transfer) {
 
     if(!transfer->string) {
         GString* stringBuffer = g_string_new(NULL);
-
-        g_string_printf(stringBuffer, "%s,%"G_GSIZE_FORMAT",%s,%s,%"G_GSIZE_FORMAT",%s,%"G_GSIZE_FORMAT",state=%s,error=%s",
+        GString *sizeStr = g_string_new(NULL);
+        if (transfer->type != TGEN_TYPE_GETPUT) {
+            g_string_printf(sizeStr, "%"G_GSIZE_FORMAT, transfer->size);
+        } else {
+            g_string_printf(sizeStr, "%"G_GSIZE_FORMAT"|%"G_GSIZE_FORMAT,
+                    transfer->getput->ourSize, transfer->getput->theirSize);
+        }
+        g_string_printf(stringBuffer, "%s,%"G_GSIZE_FORMAT",%s,%s,%s,%s,%"G_GSIZE_FORMAT",state=%s,error=%s",
                 transfer->id, transfer->count, transfer->hostname, _tgentransfer_typeToString(transfer),
-                transfer->size, transfer->remoteName, transfer->remoteCount,
+                sizeStr->str, transfer->remoteName, transfer->remoteCount,
                 _tgentransfer_stateToString(transfer->state), _tgentransfer_errorToString(transfer->error));
 
         transfer->string = g_string_free(stringBuffer, FALSE);
+        g_string_free(sizeStr, TRUE);
     }
 
     return transfer->string;
@@ -927,16 +934,34 @@ static gchar* _tgentransfer_getBytesStatusReport(TGenTransfer* transfer) {
 
     GString* buffer = g_string_new(NULL);
 
-    gsize payload = transfer->type == TGEN_TYPE_GET ?
-            transfer->bytes.payloadRead : transfer->bytes.payloadWrite;
-    const gchar* payloadVerb = transfer->type == TGEN_TYPE_GET ? "read" : "write";
-    gdouble progress = (gdouble)payload / (gdouble)transfer->size * 100.0f;
+    g_string_append_printf(buffer, "total-bytes-read=%"G_GSIZE_FORMAT
+            " total-bytes-write=%"G_GSIZE_FORMAT" ", transfer->bytes.totalRead,
+            transfer->bytes.totalWrite);
 
-    g_string_printf(buffer,
-            "total-bytes-read=%"G_GSIZE_FORMAT" total-bytes-write=%"G_GSIZE_FORMAT" "
-            "payload-bytes-%s=%"G_GSIZE_FORMAT"/%"G_GSIZE_FORMAT" (%.2f%%)",
-            transfer->bytes.totalRead, transfer->bytes.totalWrite,
-            payloadVerb, payload, transfer->size, progress);
+    if (transfer->type != TGEN_TYPE_GETPUT) {
+        gsize payload = transfer->type == TGEN_TYPE_GET ?
+                transfer->bytes.payloadRead : transfer->bytes.payloadWrite;
+        const gchar* payloadVerb = transfer->type == TGEN_TYPE_GET ?
+                "read" : "write";
+        gdouble progress = (gdouble)payload / (gdouble)transfer->size * 100.0f;
+        g_string_append_printf(buffer, "payload-bytes-%s=%"G_GSIZE_FORMAT"/"
+                "%"G_GSIZE_FORMAT" (%.2f%%)", payloadVerb, payload,
+                transfer->size, progress);
+    } else {
+        gsize read, written;
+        gdouble read_progress, write_progress;
+        read = transfer->bytes.payloadRead;
+        written = transfer->bytes.payloadWrite;
+        read_progress = (gdouble)read / (gdouble)transfer->getput->theirSize \
+                * 100.0f;
+        write_progress = (gdouble)written / (gdouble)transfer->getput->ourSize \
+                * 100.0f;
+        g_string_append_printf(buffer, "payload-bytes-read=%"G_GSIZE_FORMAT"/"
+                "%"G_GSIZE_FORMAT" (%.2f%%) payload-bytes-write=%"
+                G_GSIZE_FORMAT"/%"G_GSIZE_FORMAT" (%.2f%%)",
+                read, transfer->getput->theirSize, read_progress,
+                written, transfer->getput->ourSize, write_progress);
+    }
 
     return g_string_free(buffer, FALSE);
 }

@@ -125,6 +125,11 @@ def process_tgen_log(filename):
                 name = line.strip().split()[11]
             elif re.search("transfer-complete", line) is not None or re.search("transfer-error", line) is not None:
                 parts = line.strip().split()
+
+                if re.search('GETPUT', parts[10]) is not None:
+                    # Ignore GETPUT transfer results
+                    continue
+
                 if len(parts) < 26: continue
                 sim_seconds = timestamp_to_seconds(parts[2])
                 second = int(sim_seconds)
