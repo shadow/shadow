@@ -37,6 +37,34 @@ static void _tgentimer_disarm(TGenTimer* timer) {
     }
 }
 
+/** Sets the timer to go off in the given number of microseconds. If the timer
+ * is persistent, then configure it to continue going off at the new interval.
+ */
+void
+tgentimer_settime_micros(TGenTimer *timer, guint64 microseconds)
+{
+    TGEN_ASSERT(timer);
+    struct itimerspec arm;
+    guint64 seconds = microseconds / 1000000;
+    guint64 nanoseconds = (microseconds % 1000000) * 1000;
+
+    arm.it_value.tv_sec = seconds;
+    arm.it_value.tv_nsec = nanoseconds;
+    if (timer->isPersistent) {
+        arm.it_interval.tv_sec = seconds;
+        arm.it_interval.tv_nsec = nanoseconds;
+    } else {
+        arm.it_interval.tv_sec = 0;
+        arm.it_interval.tv_nsec = 0;
+    }
+    gint result = timerfd_settime(timer->timerD, 0, &arm, NULL);
+    if (result < 0) {
+        tgen_critical("timerfd_settime(): returned %i error %i: %s", result,
+                errno, g_strerror(errno));
+        return;
+    }
+}
+
 TGenEvent tgentimer_onEvent(TGenTimer* timer, gint descriptor, TGenEvent events) {
     TGEN_ASSERT(timer);
 
