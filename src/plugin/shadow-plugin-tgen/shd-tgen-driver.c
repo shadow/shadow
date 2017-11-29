@@ -579,3 +579,11 @@ gboolean tgendriver_hasEnded(TGenDriver* driver) {
     TGEN_ASSERT(driver);
     return driver->clientHasEnded;
 }
+
+/** Forward a request for all READ/WRITE events to the TGenIO */
+void
+tgendriver_giveAllEvents(TGenDriver *driver, gint descriptor)
+{
+    TGEN_ASSERT(driver);
+    tgenio_giveAllEvents(driver->io, descriptor);
+}

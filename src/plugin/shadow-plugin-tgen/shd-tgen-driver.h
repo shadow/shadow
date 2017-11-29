@@ -18,5 +18,6 @@ void tgendriver_activate(TGenDriver* driver);
 
 gboolean tgendriver_hasEnded(TGenDriver* driver);
 gint tgendriver_getEpollDescriptor(TGenDriver* driver);
+void tgendriver_giveAllEvents(TGenDriver *driver, gint descriptor);
 
 #endif /* SHD_TGEN_DRIVER_H_ */
