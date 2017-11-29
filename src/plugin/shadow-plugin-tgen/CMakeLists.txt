@@ -8,6 +8,7 @@ set(tgen_sources
     shd-tgen-graph.c
     shd-tgen-io.c
     shd-tgen-main.c
+    shd-tgen-mmodel.c
     shd-tgen-peer.c
     shd-tgen-pool.c
     shd-tgen-server.c

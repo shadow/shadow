@@ -44,5 +44,6 @@ extern TGenLogFunc tgenLogFunc;
 #include "shd-tgen-action.h"
 #include "shd-tgen-graph.h"
 #include "shd-tgen-driver.h"
+#include "shd-tgen-mmodel.h"
 
 #endif /* SHD_TGEN_H_ */
