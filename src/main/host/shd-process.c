@@ -4155,6 +4155,11 @@ size_t process_emu_fread(Process* proc, void *ptr, size_t size, size_t nmemb, FI
     int fd = fileno(stream);
     if(prevCTX == PCTX_PLUGIN && (fd == STDOUT_FILENO || fd == STDERR_FILENO)) {
         ret = fread(ptr, size, nmemb, _process_getIOFile(proc, fd));
+    } else if(host_isRandomHandle(proc->host, fd)) {
+        Random* random = host_getRandom(proc->host);
+        gsize numbytes = size*nmemb;
+        random_nextNBytes(random, (guchar*)ptr, numbytes);
+        ret = nmemb;
     } else {
         ret = fread(ptr, size, nmemb, stream);
     }
