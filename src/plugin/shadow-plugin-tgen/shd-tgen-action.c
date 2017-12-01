@@ -18,6 +18,7 @@ typedef struct _TGenActionStartData {
     guint16 serverport;
     TGenPeer* socksproxy;
     TGenPool* peers;
+    TGenMModel *mmodel;
 } TGenActionStartData;
 
 typedef struct _TGenActionEndData {
@@ -43,6 +44,7 @@ typedef struct _TGenActionTransferData {
     guint64 stalloutNanos;
     gboolean stalloutIsSet;
     TGenPool* peers;
+    TGenMModel *mmodel;
 } TGenActionTransferData;
 
 struct _TGenAction {
@@ -455,8 +457,10 @@ void tgenaction_unref(TGenAction* action) {
 }
 
 TGenAction* tgenaction_newStartAction(const gchar* timeStr, const gchar* timeoutStr,
-        const gchar* stalloutStr, const gchar* heartbeatStr, const gchar* loglevelStr, const gchar* serverPortStr,
-        const gchar* peersStr, const gchar* socksProxyStr, GError** error) {
+        const gchar* stalloutStr, const gchar* heartbeatStr,
+        const gchar* loglevelStr, const gchar* serverPortStr,
+        const gchar* peersStr, const gchar* socksProxyStr,
+        const gchar *mmodelStr, GError** error) {
     g_assert(error);
 
     /* a serverport is required */
@@ -530,6 +534,16 @@ TGenAction* tgenaction_newStartAction(const gchar* timeStr, const gchar* timeout
         }
     }
 
+    TGenMModel *mmodel = NULL;
+    if (mmodelStr && g_ascii_strncasecmp(mmodelStr, "\0", (gsize)1)) {
+        mmodel = tgenmmodel_new(mmodelStr);
+        if (!mmodel) {
+            *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT,
+                    "unable to load MModel");
+            return NULL;
+        }
+    }
+
     /* if we get here, we have what we need and validated it */
     TGenAction* action = g_new0(TGenAction, 1);
     action->magic = TGEN_MAGIC;
@@ -548,6 +562,7 @@ TGenAction* tgenaction_newStartAction(const gchar* timeStr, const gchar* timeout
     data->serverport = htons((guint16)longport);
     data->peers = peerPool;
     data->socksproxy = socksproxy;
+    data->mmodel = mmodel;
 
     action->data = data;
 
@@ -628,7 +643,8 @@ TGenAction* tgenaction_newPauseAction(const gchar* timeStr, glong totalIncoming,
 
 TGenAction* tgenaction_newTransferAction(const gchar* typeStr, const gchar* protocolStr,
         const gchar* sizeStr, const gchar *ourSizeStr, const gchar *theirSizeStr,
-        const gchar* peersStr, const gchar* timeoutStr, const gchar* stalloutStr, GError** error) {
+        const gchar* peersStr, const gchar* timeoutStr, const gchar* stalloutStr,
+        const gchar *mmodelStr, GError** error) {
     g_assert(error);
 
     /* type is required */
@@ -643,6 +659,8 @@ TGenAction* tgenaction_newTransferAction(const gchar* typeStr, const gchar* prot
         type = TGEN_TYPE_PUT;
     } else if (!g_ascii_strcasecmp(typeStr, "getput")) {
         type = TGEN_TYPE_GETPUT;
+    } else if (!g_ascii_strcasecmp(typeStr, "mmodel")) {
+        type = TGEN_TYPE_MMODEL;
     } else {
         *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ATTRIBUTE,
                 "transfer action has unknown value '%s' for 'type' attribute",
@@ -748,6 +766,17 @@ TGenAction* tgenaction_newTransferAction(const gchar* typeStr, const gchar* prot
         stalloutIsSet = TRUE;
     }
 
+    /* mmodel is optional */
+    TGenMModel *mmodel = NULL;
+    if (mmodelStr && g_ascii_strncasecmp(mmodelStr, "\0", (gsize)1)) {
+        mmodel = tgenmmodel_new(mmodelStr);
+        if (!mmodel) {
+            *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT,
+                    "unable to load MModel");
+            return NULL;
+        }
+    }
+
     TGenAction* action = g_new0(TGenAction, 1);
     action->magic = TGEN_MAGIC;
     action->refcount = 1;
@@ -765,6 +794,7 @@ TGenAction* tgenaction_newTransferAction(const gchar* typeStr, const gchar* prot
     data->timeoutIsSet = timeoutIsSet;
     data->stalloutNanos = stalloutNanos;
     data->stalloutIsSet = stalloutIsSet;
+    data->mmodel = mmodel;
 
     action->data = data;
 
@@ -819,6 +849,13 @@ guint64 tgenaction_getDefaultStalloutMillis(TGenAction* action) {
     return (guint64)(((TGenActionStartData*)action->data)->stalloutNanos / 1000000);
 }
 
+TGenMModel *
+tgenaction_getDefaultMModel(TGenAction *action) {
+    TGEN_ASSERT(action);
+    g_assert(action->data && action->type == TGEN_ACTION_START);
+    return ((TGenActionStartData *)action->data)->mmodel;
+}
+
 guint64 tgenaction_getHeartbeatPeriodMillis(TGenAction* action) {
     TGEN_ASSERT(action);
     g_assert(action->data && action->type == TGEN_ACTION_START);
@@ -833,7 +870,8 @@ GLogLevelFlags tgenaction_getLogLevel(TGenAction* action) {
 
 void tgenaction_getTransferParameters(TGenAction* action, TGenTransferType* typeOut,
         TGenTransportProtocol* protocolOut, guint64* sizeOut, guint64 *ourSizeOut,
-        guint64 *theirSizeOut, guint64* timeoutOut, guint64* stalloutOut) {
+        guint64 *theirSizeOut, guint64* timeoutOut, guint64* stalloutOut,
+        TGenMModel **mmodelOut) {
     TGEN_ASSERT(action);
     g_assert(action->data && action->type == TGEN_ACTION_TRANSFER);
 
@@ -864,6 +902,12 @@ void tgenaction_getTransferParameters(TGenAction* action, TGenTransferType* type
         if(data->stalloutIsSet) {
             /* nanoseconds to milliseconds */
             *stalloutOut = (guint64)(data->stalloutNanos / 1000000);
+        }
+    }
+    if (mmodelOut) {
+        TGenActionTransferData *data = (TGenActionTransferData *)action->data;
+        if (data->mmodel) {
+            *mmodelOut = data->mmodel;
         }
     }
 }

@@ -276,12 +276,14 @@ static void _tgenmmodel_free(TGenMModel *mmodel)
 void tgenmmodel_ref(TGenMModel *mmodel)
 {
     TGEN_ASSERT(mmodel);
+    //tgen_debug("TGenMModel ref++");
     mmodel->refcount++;
 }
 
 void tgenmmodel_unref(TGenMModel *mmodel)
 {
     TGEN_ASSERT(mmodel);
+    //tgen_debug("TGenMModel ref--");
     if (--(mmodel->refcount) == 0) {
         _tgenmmodel_free(mmodel);
     }

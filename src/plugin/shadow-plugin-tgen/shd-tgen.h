@@ -34,6 +34,7 @@ extern TGenLogFunc tgenLogFunc;
 #define tgen_info(...)      if(tgenLogFunc){tgenLogFunc(G_LOG_LEVEL_INFO, __FILE__, __LINE__, __FUNCTION__, __VA_ARGS__);}
 #define tgen_debug(...)     if(tgenLogFunc){tgenLogFunc(G_LOG_LEVEL_DEBUG, __FILE__, __LINE__, __FUNCTION__, __VA_ARGS__);}
 
+#include "shd-tgen-mmodel.h"
 #include "shd-tgen-io.h"
 #include "shd-tgen-timer.h"
 #include "shd-tgen-pool.h"
@@ -44,6 +45,5 @@ extern TGenLogFunc tgenLogFunc;
 #include "shd-tgen-action.h"
 #include "shd-tgen-graph.h"
 #include "shd-tgen-driver.h"
-#include "shd-tgen-mmodel.h"
 
 #endif /* SHD_TGEN_H_ */

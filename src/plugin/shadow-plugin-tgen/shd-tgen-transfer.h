@@ -7,7 +7,7 @@
 
 typedef enum _TGenTransferType {
     TGEN_TYPE_NONE, TGEN_TYPE_GET, TGEN_TYPE_PUT,
-    TGEN_TYPE_GETPUT,
+    TGEN_TYPE_GETPUT, TGEN_TYPE_MMODEL,
 } TGenTransferType;
 
 typedef struct _TGenTransfer TGenTransfer;
@@ -16,7 +16,7 @@ typedef void (*TGenTransfer_notifyCompleteFunc)(gpointer data1, gpointer data2, 
 
 TGenTransfer* tgentransfer_new(const gchar* idStr, gsize count, TGenTransferType type,
         gsize size, gsize ourSize, gsize theirSize, guint64 timeout, guint64 stallout,
-        TGenTransport* transport, TGenTransfer_notifyCompleteFunc notify,
+        TGenMModel *mmodel, TGenTransport* transport, TGenTransfer_notifyCompleteFunc notify,
         gpointer data1, gpointer data2, GDestroyNotify destructData1, GDestroyNotify destructData2);
 void tgentransfer_ref(TGenTransfer* transfer);
 void tgentransfer_unref(TGenTransfer* transfer);

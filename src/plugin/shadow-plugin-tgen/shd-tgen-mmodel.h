@@ -8,6 +8,7 @@
 #include <glib.h>
 
 #define TGEN_MMODEL_PACKET_DATA_SIZE 1434
+#define TGEN_MMODEL_MICROS_AT_ONCE 100
 
 typedef struct _TGenMModel TGenMModel;
 

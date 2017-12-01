@@ -41,12 +41,12 @@ static void _tgentimer_disarm(TGenTimer* timer) {
  * is persistent, then configure it to continue going off at the new interval.
  */
 void
-tgentimer_settime_micros(TGenTimer *timer, guint64 microseconds)
+tgentimer_settime_micros(TGenTimer *timer, guint64 micros)
 {
     TGEN_ASSERT(timer);
     struct itimerspec arm;
-    guint64 seconds = microseconds / 1000000;
-    guint64 nanoseconds = (microseconds % 1000000) * 1000;
+    guint64 seconds = micros / 1000000;
+    guint64 nanoseconds = (micros % 1000000) * 1000;
 
     arm.it_value.tv_sec = seconds;
     arm.it_value.tv_nsec = nanoseconds;

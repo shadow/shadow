@@ -237,13 +237,18 @@ void tgenio_checkTimeouts(TGenIO* io) {
     }
 }
 
-/** Ask epoll for all events for the given descriptor */
+/** Ask epoll for the given events for the given descriptor */
 void
-tgenio_giveAllEvents(TGenIO *io, gint descriptor)
+tgenio_giveEvents(TGenIO *io, gint descriptor, TGenEvent events)
 {
     struct epoll_event ee;
     memset(&ee, 0, sizeof(struct epoll_event));
-    ee.events = EPOLLIN|EPOLLOUT;
+    if (events & TGEN_EVENT_READ) {
+        ee.events |= EPOLLIN;
+    }
+    if (events & TGEN_EVENT_WRITE) {
+        ee.events |= EPOLLOUT;
+    }
     ee.data.fd = descriptor;
     gint result = epoll_ctl(io->epollD, EPOLL_CTL_MOD, descriptor, &ee);
     if (result != 0) {

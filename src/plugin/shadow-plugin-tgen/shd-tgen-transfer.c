@@ -36,6 +36,23 @@ typedef struct _TGenTransferGetputData {
     gboolean receivedTheirChecksum;
 } TGenTransferGetputData;
 
+typedef struct _TGenTransferMModelData {
+    TGenMModel *mmodel;
+    TGenTimer *timer;
+    GChecksum *ourPayloadChecksum;
+    GChecksum *theirPayloadChecksum;
+    GArray *sched;
+    gint schedIdx;
+    gint descriptor;
+    gsize expectedReceiveBytes;
+    gboolean timerSet;
+    gboolean goneToSleepOnce;
+    gboolean doneReadingPayload;
+    gboolean doneWritingPayload;
+    gboolean sentOurChecksum;
+    gboolean receivedTheirChecksum;
+} TGenTransferMModelData;
+
 struct _TGenTransfer {
     /* transfer progress and context information */
     TGenTransferState state;
@@ -79,6 +96,7 @@ struct _TGenTransfer {
     } bytes;
 
     TGenTransferGetputData *getput;
+    TGenTransferMModelData *mmodel;
 
     /* track timings for time reporting, using g_get_monotonic_time in usec granularity */
     struct {
@@ -117,6 +135,60 @@ static void _tgentransfer_initGetputData(TGenTransfer *transfer,
     transfer->getput->theirSize = theirSize;
 }
 
+static void
+_tgentransfer_setMModelSchedFromString(TGenTransfer *transfer, gchar *str)
+{
+    TGEN_ASSERT(transfer);
+    g_assert(!transfer->mmodel->sched);
+    g_assert(str);
+    transfer->mmodel->sched = g_array_new(TRUE, FALSE, 4);
+    transfer->mmodel->schedIdx = 0;
+    gchar **delays = g_strsplit(str, ",", 0);
+    int i = 0;
+    gboolean first_item = TRUE;
+    gchar *delay = delays[i];
+    while (delay) {
+        if (strlen(delay) < 1) {
+            delay = delays[++i];
+            continue;
+        }
+        /* The first item is the number of bytes we should expect the other
+         * side to send us */
+        if (first_item) {
+            first_item = FALSE;
+            transfer->mmodel->expectedReceiveBytes =
+                    g_ascii_strtoll(delay, NULL, 10);
+        /* The remaining items are delays */
+        } else {
+            int32_t v = g_ascii_strtoll(delay, NULL, 10);
+            //tgen_debug("Got delay '%s' (%d)", delay, v);
+            g_array_append_val(transfer->mmodel->sched, v);
+            transfer->size += TGEN_MMODEL_PACKET_DATA_SIZE;
+        }
+        delay = delays[++i];
+    }
+    g_strfreev(delays);
+}
+
+static void _tgentransfer_initMModelData(TGenTransfer *transfer,
+        TGenMModel *mmodel, gchar *str)
+{
+    TGEN_ASSERT(transfer);
+    g_assert(!transfer->mmodel); // Yes, assert that it is NULL
+    transfer->mmodel = g_new0(TGenTransferMModelData, 1);
+    transfer->mmodel->ourPayloadChecksum = g_checksum_new(G_CHECKSUM_MD5);
+    transfer->mmodel->theirPayloadChecksum = g_checksum_new(G_CHECKSUM_MD5);
+    if (mmodel) {
+        transfer->mmodel->mmodel = mmodel;
+        tgenmmodel_ref(mmodel);
+    } else {
+        transfer->mmodel->mmodel = NULL;
+    }
+    if (str) {
+        _tgentransfer_setMModelSchedFromString(transfer, str);
+    }
+}
+
 static void _tgentransfer_freeGetputData(TGenTransfer *transfer) {
     TGEN_ASSERT(transfer);
     if (!transfer->getput) {
@@ -131,6 +203,28 @@ static void _tgentransfer_freeGetputData(TGenTransfer *transfer) {
     g_free(transfer->getput);
 }
 
+static void _tgentransfer_freeMModelData(TGenTransfer *transfer) {
+    TGEN_ASSERT(transfer);
+    if (!transfer->mmodel) {
+        return;
+    }
+    if (transfer->mmodel->ourPayloadChecksum) {
+        g_checksum_free(transfer->mmodel->ourPayloadChecksum);
+    }
+    if (transfer->mmodel->theirPayloadChecksum) {
+        g_checksum_free(transfer->mmodel->theirPayloadChecksum);
+    }
+    if (transfer->mmodel->sched) {
+        g_array_unref(transfer->mmodel->sched);
+    }
+    if (transfer->mmodel->timer) {
+        tgentimer_unref(transfer->mmodel->timer);
+    }
+    if (transfer->mmodel->mmodel) {
+        tgenmmodel_unref(transfer->mmodel->mmodel);
+    }
+}
+
 static const gchar* _tgentransfer_typeToString(TGenTransfer* transfer) {
     switch(transfer->type) {
         case TGEN_TYPE_GET: {
@@ -141,6 +235,9 @@ static const gchar* _tgentransfer_typeToString(TGenTransfer* transfer) {
         }
         case TGEN_TYPE_GETPUT: {
             return "GETPUT";
+        }
+        case TGEN_TYPE_MMODEL: {
+            return "MMODEL";
         }
         case TGEN_TYPE_NONE:
         default: {
@@ -396,6 +493,8 @@ static void _tgentransfer_readCommand(TGenTransfer* transfer) {
             } else if(!g_ascii_strncasecmp(parts[3], "PUT", 3)) {
                 /* they want to PUT, so we will GET from them */
                 transfer->type = TGEN_TYPE_GET;
+            } else if (!g_ascii_strncasecmp(parts[3], "MMODEL", 6)) {
+                transfer->type = TGEN_TYPE_MMODEL;
             } else {
                 tgen_critical("error parsing command type '%s'", parts[3]);
                 hasError = TRUE;
@@ -417,6 +516,8 @@ static void _tgentransfer_readCommand(TGenTransfer* transfer) {
                 ourSize = (gsize)g_ascii_strtoull(sizeParts[1], NULL, 10);
                 g_strfreev(sizeParts);
                 _tgentransfer_initGetputData(transfer, ourSize, theirSize);
+            } else if (transfer->type == TGEN_TYPE_MMODEL) {
+                _tgentransfer_initMModelData(transfer, NULL, parts[4]);
             }
         }
 
@@ -494,6 +595,8 @@ static void _tgentransfer_readResponse(TGenTransfer* transfer) {
                 transfer->events |= TGEN_EVENT_WRITE;
             } else if (transfer->state == TGEN_TYPE_GETPUT) {
                 transfer->events |= TGEN_EVENT_WRITE;
+            } else if (transfer->state == TGEN_TYPE_MMODEL) {
+                transfer->events |= TGEN_EVENT_WRITE|TGEN_EVENT_READ;
             }
         }
     } else {
@@ -503,7 +606,9 @@ static void _tgentransfer_readResponse(TGenTransfer* transfer) {
 
 static void _tgentransfer_readPayload(TGenTransfer* transfer) {
     TGEN_ASSERT(transfer);
-    g_assert(transfer->type == TGEN_TYPE_GET || transfer->type == TGEN_TYPE_GETPUT);
+    g_assert(transfer->type == TGEN_TYPE_GET
+            || transfer->type == TGEN_TYPE_GETPUT
+            || transfer->type == TGEN_TYPE_MMODEL);
 
     guchar buffer[65536];
 
@@ -512,8 +617,10 @@ static void _tgentransfer_readPayload(TGenTransfer* transfer) {
         gsize length;
         if (transfer->type == TGEN_TYPE_GET) {
             length = MIN(65536, (transfer->size - transfer->bytes.payloadRead));
-        } else {
+        } else if (transfer->type == TGEN_TYPE_GETPUT) {
             length = MIN(65536, (transfer->getput->theirSize - transfer->bytes.payloadRead));
+        } else {
+            length = MIN(65536, (transfer->mmodel->expectedReceiveBytes - transfer->bytes.payloadRead));
         }
 
         if(length > 0) {
@@ -542,6 +649,8 @@ static void _tgentransfer_readPayload(TGenTransfer* transfer) {
                     g_checksum_update(transfer->payloadChecksum, buffer, bytes);
                 } else if (transfer->type == TGEN_TYPE_GETPUT) {
                     g_checksum_update(transfer->getput->theirPayloadChecksum, buffer, bytes);
+                } else {
+                    g_checksum_update(transfer->mmodel->theirPayloadChecksum, buffer, bytes);
                 }
                 continue;
             }
@@ -550,9 +659,16 @@ static void _tgentransfer_readPayload(TGenTransfer* transfer) {
                 /* payload done, send the checksum next */
                 _tgentransfer_changeState(transfer, TGEN_XFER_CHECKSUM);
                 transfer->time.lastPayloadByte = g_get_monotonic_time();
-            } else {
+            } else if (transfer->type == TGEN_TYPE_GETPUT) {
                 transfer->getput->doneReadingPayload = TRUE;
                 if (transfer->getput->doneWritingPayload) {
+                    _tgentransfer_changeState(transfer, TGEN_XFER_CHECKSUM);
+                    transfer->time.lastPayloadByte = g_get_monotonic_time();
+                    transfer->events |= TGEN_EVENT_WRITE;
+                }
+            } else {
+                transfer->mmodel->doneReadingPayload = TRUE;
+                if (transfer->mmodel->doneWritingPayload) {
                     _tgentransfer_changeState(transfer, TGEN_XFER_CHECKSUM);
                     transfer->time.lastPayloadByte = g_get_monotonic_time();
                     transfer->events |= TGEN_EVENT_WRITE;
@@ -565,16 +681,24 @@ static void _tgentransfer_readPayload(TGenTransfer* transfer) {
 
 static void _tgentransfer_readChecksum(TGenTransfer* transfer) {
     TGEN_ASSERT(transfer);
-    g_assert(transfer->type == TGEN_TYPE_GET || transfer->type == TGEN_TYPE_GETPUT);
+    g_assert(transfer->type == TGEN_TYPE_GET
+            || transfer->type == TGEN_TYPE_GETPUT
+            || transfer->type == TGEN_TYPE_MMODEL);
 
     if(_tgentransfer_getLine(transfer)) {
         if (transfer->type == TGEN_TYPE_GET) {
             /* transfer is done */
             _tgentransfer_changeState(transfer, TGEN_XFER_SUCCESS);
             transfer->time.checksum = g_get_monotonic_time();
-        } else {
+        } else if (transfer->type == TGEN_TYPE_GETPUT) {
             transfer->getput->receivedTheirChecksum = TRUE;
             if (transfer->getput->sentOurChecksum) {
+                _tgentransfer_changeState(transfer, TGEN_XFER_SUCCESS);
+                transfer->time.checksum = g_get_monotonic_time();
+            }
+        } else {
+            transfer->mmodel->receivedTheirChecksum = TRUE;
+            if (transfer->mmodel->sentOurChecksum) {
                 _tgentransfer_changeState(transfer, TGEN_XFER_SUCCESS);
                 transfer->time.checksum = g_get_monotonic_time();
             }
@@ -586,8 +710,10 @@ static void _tgentransfer_readChecksum(TGenTransfer* transfer) {
         gchar* computedSum = NULL;
         if (transfer->type == TGEN_TYPE_GET) {
             computedSum = g_strdup(g_checksum_get_string(transfer->payloadChecksum));
-        } else {
+        } else if (transfer->type == TGEN_TYPE_GETPUT) {
             computedSum = g_strdup(g_checksum_get_string(transfer->getput->theirPayloadChecksum));
+        } else {
+            computedSum = g_strdup(g_checksum_get_string(transfer->mmodel->theirPayloadChecksum));
         }
         g_assert(computedSum);
 
@@ -633,6 +759,25 @@ _tgentransfer_getputWantsReadEvents(TGenTransfer *transfer) {
     }
 }
 
+static gboolean
+_tgentransfer_mmodelWantsReadEvents(TGenTransfer *transfer) {
+    TGEN_ASSERT(transfer);
+
+    if (transfer->type != TGEN_TYPE_MMODEL) {
+        return FALSE;
+    } else if (transfer->readBuffer) {
+        return TRUE;
+    } else if (transfer->state == TGEN_XFER_RESPONSE) {
+        return TRUE;
+    } else if (!transfer->mmodel->doneReadingPayload && transfer->state == TGEN_XFER_PAYLOAD) {
+        return TRUE;
+    } else if (!transfer->mmodel->receivedTheirChecksum && transfer->state == TGEN_XFER_CHECKSUM) {
+        return TRUE;
+    } else {
+        return FALSE;
+    }
+}
+
 static void _tgentransfer_onReadable(TGenTransfer* transfer) {
     TGEN_ASSERT(transfer);
 
@@ -649,19 +794,24 @@ static void _tgentransfer_onReadable(TGenTransfer* transfer) {
     }
 
     /* check if we are responsible for reading payload bytes */
-    if((transfer->type == TGEN_TYPE_GET || transfer->type == TGEN_TYPE_GETPUT)
+    if((transfer->type == TGEN_TYPE_GET
+                || transfer->type == TGEN_TYPE_GETPUT
+                || transfer->type == TGEN_TYPE_MMODEL)
             && transfer->state == TGEN_XFER_PAYLOAD) {
         _tgentransfer_readPayload(transfer);
     }
 
-    if((transfer->type == TGEN_TYPE_GET || transfer->type == TGEN_TYPE_GETPUT)
+    if((transfer->type == TGEN_TYPE_GET
+                || transfer->type == TGEN_TYPE_GETPUT
+                || transfer->type == TGEN_TYPE_MMODEL)
             && transfer->state == TGEN_XFER_CHECKSUM) {
         _tgentransfer_readChecksum(transfer);
     }
 
     if(transfer->readBuffer ||
             (transfer->type == TGEN_TYPE_GET && transfer->state != TGEN_XFER_SUCCESS) ||
-            (_tgentransfer_getputWantsReadEvents(transfer))) {
+            (_tgentransfer_getputWantsReadEvents(transfer)) ||
+            (_tgentransfer_mmodelWantsReadEvents(transfer))) {
         /* we have more to read */
         transfer->events |= TGEN_EVENT_READ;
     } else {
@@ -731,16 +881,29 @@ static void _tgentransfer_writeCommand(TGenTransfer* transfer) {
     /* buffer the command if we have not done that yet */
     if(!transfer->writeBuffer) {
         transfer->writeBuffer = g_string_new(NULL);
-        if (transfer->type == TGEN_TYPE_GET || transfer->type == TGEN_TYPE_PUT) {
-            g_string_printf(transfer->writeBuffer, "%s %s %s %"G_GSIZE_FORMAT" %s %"G_GSIZE_FORMAT"\n",
-                TGEN_AUTH_PW, transfer->hostname, transfer->id, transfer->count, _tgentransfer_typeToString(transfer), transfer->size);
-        } else {
-            g_string_printf(transfer->writeBuffer,
-                "%s %s %s %"G_GSIZE_FORMAT" %s %"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT"\n",
+        g_string_printf(transfer->writeBuffer, "%s %s %s %"G_GSIZE_FORMAT" %s ",
                 TGEN_AUTH_PW, transfer->hostname, transfer->id, transfer->count,
-                _tgentransfer_typeToString(transfer), transfer->getput->ourSize,
-                transfer->getput->theirSize);
+                _tgentransfer_typeToString(transfer));
+        if (transfer->type == TGEN_TYPE_GET || transfer->type == TGEN_TYPE_PUT) {
+            g_string_append_printf(transfer->writeBuffer,"%"G_GSIZE_FORMAT,
+                transfer->size);
+        } else if (transfer->type == TGEN_TYPE_GETPUT) {
+            g_string_append_printf(transfer->writeBuffer,
+                "%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT,
+                transfer->getput->ourSize, transfer->getput->theirSize);
+        } else {
+            GString *us = g_string_new(NULL);
+            GString *them = g_string_new(NULL);
+            if (!tgenmmodel_generatePath(transfer->mmodel->mmodel, us, them)) {
+                tgen_critical("Unable to generate path and store it in strings");
+                g_assert(NULL);
+            }
+            _tgentransfer_setMModelSchedFromString(transfer, us->str);
+            g_string_append_printf(transfer->writeBuffer, "%s", them->str);
+            g_string_free(us, TRUE);
+            g_string_free(them, TRUE);
         }
+        g_string_append_printf(transfer->writeBuffer, "\n");
     }
 
     _tgentransfer_flushOut(transfer);
@@ -831,9 +994,160 @@ static void _tgentransfer_writePayload(TGenTransfer* transfer) {
     }
 }
 
+static void
+_tgentransfer_mmodelOnTimerExpired(gpointer data1, gpointer data2)
+{
+    TGenTransfer *transfer = (TGenTransfer *)data1;
+    TGEN_ASSERT(transfer);
+    transfer->mmodel->timerSet = FALSE;
+    tgen_debug("MModel timer expired. Asking for write events again.");
+    tgendriver_giveEvents(transfer->data1, transfer->mmodel->descriptor,
+            TGEN_EVENT_WRITE);
+}
+
+static void
+_tgentransfer_mmodelStartPause(TGenTransfer *transfer, int32_t micros)
+{
+    TGEN_ASSERT(transfer);
+    g_assert(micros >= 0);
+    if (!transfer->mmodel->timer) {
+        tgentransfer_ref(transfer);
+        /* The initial timeout isn't important since we will set it later in
+         * the function body */
+        transfer->mmodel->timer = tgentimer_new(5000, FALSE,
+                (TGenTimer_notifyExpiredFunc)_tgentransfer_mmodelOnTimerExpired,
+                transfer, NULL, (GDestroyNotify)tgentransfer_unref, NULL);
+    }
+    g_assert(transfer->mmodel->timer);
+    tgen_debug("Setting a MModel timer for %dus", micros);
+    tgentimer_settime_micros(transfer->mmodel->timer, micros);
+    /* XXX does it have to be registered every time? */
+    tgendriver_registerTransferPause(transfer->data1, transfer->mmodel->timer);
+    transfer->mmodel->timerSet = TRUE;
+    transfer->mmodel->goneToSleepOnce = TRUE;
+}
+
+static gboolean
+_tgentransfer_mmodelSchedAdvance(TGenTransfer *transfer)
+{
+    TGEN_ASSERT(transfer);
+    g_assert(transfer->type == TGEN_TYPE_MMODEL);
+    tgen_debug("Advancing one from idx=%d (len=%d)",
+            transfer->mmodel->schedIdx, transfer->mmodel->sched->len);
+    if (++transfer->mmodel->schedIdx >= transfer->mmodel->sched->len) {
+        return FALSE;
+    }
+    return TRUE;
+
+}
+
+static void
+_tgentransfer_mmodelTryFlushWriteBuffer(TGenTransfer *transfer)
+{
+    TGEN_ASSERT(transfer);
+    g_assert(transfer->type == TGEN_TYPE_MMODEL);
+    g_assert(transfer->writeBuffer);
+    gboolean firstByte = transfer->bytes.payloadWrite == 0 ? TRUE : FALSE;
+    transfer->bytes.payloadWrite += _tgentransfer_flushOut(transfer);
+    if (firstByte && transfer->bytes.payloadWrite > 0) {
+        transfer->time.firstPayloadByte = g_get_monotonic_time();
+    }
+}
+
+static void
+_tgentransfer_mmodelWriteToBuffer(TGenTransfer *transfer)
+{
+    TGEN_ASSERT(transfer);
+    g_assert(transfer->type == TGEN_TYPE_MMODEL);
+    g_assert(!transfer->writeBuffer);
+    GString *more_data;
+    int32_t delay, cum_delay = 0;
+    gsize flushed;
+
+    transfer->writeBuffer = g_string_new(NULL);
+    more_data = _tgentransfer_getRandomString(TGEN_MMODEL_PACKET_DATA_SIZE);
+    g_string_append(transfer->writeBuffer, more_data->str);
+    g_string_free(more_data, TRUE);
+    while (_tgentransfer_mmodelSchedAdvance(transfer)) {
+        delay = g_array_index(transfer->mmodel->sched, int32_t,
+                transfer->mmodel->schedIdx);
+        cum_delay += delay;
+        if (cum_delay <= TGEN_MMODEL_MICROS_AT_ONCE) {
+            more_data = _tgentransfer_getRandomString(TGEN_MMODEL_PACKET_DATA_SIZE);
+            g_string_append(transfer->writeBuffer, more_data->str);
+            g_string_free(more_data, TRUE);
+        } else {
+            _tgentransfer_mmodelStartPause(transfer, cum_delay);
+            break;
+        }
+    }
+    g_checksum_update(transfer->mmodel->ourPayloadChecksum,
+            (guchar*)transfer->writeBuffer->str,
+            (gssize)transfer->writeBuffer->len);
+}
+
+static void
+_tgentransfer_writeMModelPayload(TGenTransfer *transfer)
+{
+    TGEN_ASSERT(transfer);
+    g_assert(transfer->type == TGEN_TYPE_MMODEL);
+    if (transfer->writeBuffer) {
+        tgen_debug("There's an existing writeBuffer, so going to try to write "
+                "it out first");
+        _tgentransfer_mmodelTryFlushWriteBuffer(transfer);
+    }
+
+    if (!transfer->writeBuffer) {
+        if (!transfer->mmodel->timerSet) {
+            if (transfer->mmodel->schedIdx < transfer->mmodel->sched->len) {
+                if (transfer->mmodel->schedIdx == 0) {
+                    int32_t delay = g_array_index(transfer->mmodel->sched,
+                            int32_t, transfer->mmodel->schedIdx);
+                    if (delay > 0 && !transfer->mmodel->goneToSleepOnce) {
+                        tgen_debug("This is the first item but it calls to "
+                                "sleep first. So we are not going to write "
+                                "this time.");
+                        _tgentransfer_mmodelStartPause(transfer, delay);
+                    }
+                }
+                /* Make sure timer still isn't set since it might have been set
+                 * if this was the first schedIdx and we needed to sleep */
+                if (!transfer->mmodel->timerSet) {
+                    tgen_debug("Empty write buffer, no timer set, and not at "
+                            "the end of the schedule. Writing more data.");
+                    _tgentransfer_mmodelWriteToBuffer(transfer);
+                    _tgentransfer_mmodelTryFlushWriteBuffer(transfer);
+                }
+            }
+        } else {
+            tgen_debug("Empty write buffer, but timer is set. Trusting that "
+                    "when it expires we'll get the writable event again.");
+        }
+    } else {
+        tgen_debug("There's a write buffer already so we aren't going to "
+                "write more");
+    }
+
+    if (transfer->mmodel->schedIdx >= transfer->mmodel->sched->len &&
+            !transfer->writeBuffer) {
+        tgen_debug("We're done writing for the MModel!");
+        transfer->mmodel->doneWritingPayload = TRUE;
+        if (transfer->mmodel->doneReadingPayload) {
+            transfer->time.lastPayloadByte = g_get_monotonic_time();
+            _tgentransfer_changeState(transfer, TGEN_XFER_CHECKSUM);
+            transfer->events |= TGEN_EVENT_READ|TGEN_EVENT_WRITE;
+        }
+        if (transfer->mmodel->timer) {
+            tgentimer_settime_micros(transfer->mmodel->timer, 0);
+        }
+    }
+}
+
 static void _tgentransfer_writeChecksum(TGenTransfer* transfer) {
     TGEN_ASSERT(transfer);
-    g_assert(transfer->type == TGEN_TYPE_GETPUT || transfer->type == TGEN_TYPE_PUT);
+    g_assert(transfer->type == TGEN_TYPE_GETPUT
+            || transfer->type == TGEN_TYPE_PUT
+            || transfer->type == TGEN_TYPE_MMODEL);
 
     /* buffer the checksum if we have not done that yet */
     if(!transfer->writeBuffer) {
@@ -841,9 +1155,12 @@ static void _tgentransfer_writeChecksum(TGenTransfer* transfer) {
         if (transfer->type == TGEN_TYPE_PUT) {
             g_string_printf(transfer->writeBuffer, "MD5 %s\n",
                     g_checksum_get_string(transfer->payloadChecksum));
-        } else {
+        } else if (transfer->type == TGEN_TYPE_GETPUT) {
             g_string_printf(transfer->writeBuffer, "MD5 %s\n",
                     g_checksum_get_string(transfer->getput->ourPayloadChecksum));
+        } else {
+            g_string_printf(transfer->writeBuffer, "MD5 %s\n",
+                    g_checksum_get_string(transfer->mmodel->ourPayloadChecksum));
         }
     }
 
@@ -854,9 +1171,15 @@ static void _tgentransfer_writeChecksum(TGenTransfer* transfer) {
             /* entire checksum was sent, we are now done */
             _tgentransfer_changeState(transfer, TGEN_XFER_SUCCESS);
             transfer->time.checksum = g_get_monotonic_time();
-        } else {
+        } else if (transfer->type == TGEN_TYPE_GETPUT) {
             transfer->getput->sentOurChecksum = TRUE;
             if (transfer->getput->receivedTheirChecksum) {
+                _tgentransfer_changeState(transfer, TGEN_XFER_SUCCESS);
+                transfer->time.checksum = g_get_monotonic_time();
+            }
+        } else {
+            transfer->mmodel->sentOurChecksum = TRUE;
+            if (transfer->mmodel->receivedTheirChecksum) {
                 _tgentransfer_changeState(transfer, TGEN_XFER_SUCCESS);
                 transfer->time.checksum = g_get_monotonic_time();
             }
@@ -883,6 +1206,27 @@ _tgentransfer_getputWantsWriteEvents(TGenTransfer *transfer) {
     }
 }
 
+static gboolean
+_tgentransfer_mmodelWantsWriteEvents(TGenTransfer *transfer) {
+    TGEN_ASSERT(transfer);
+
+    if (transfer->type != TGEN_TYPE_MMODEL) {
+        return FALSE;
+    } else if (transfer->writeBuffer) {
+        return TRUE;
+    } else if (transfer->state == TGEN_XFER_COMMAND) {
+        return TRUE;
+    } else if (!transfer->mmodel->doneWritingPayload
+            && transfer->state == TGEN_XFER_PAYLOAD
+            && !transfer->mmodel->timerSet) {
+        return TRUE;
+    } else if (!transfer->mmodel->sentOurChecksum && transfer->state == TGEN_XFER_CHECKSUM) {
+        return TRUE;
+    } else {
+        return FALSE;
+    }
+}
+
 static void _tgentransfer_onWritable(TGenTransfer* transfer) {
     TGEN_ASSERT(transfer);
 
@@ -902,16 +1246,23 @@ static void _tgentransfer_onWritable(TGenTransfer* transfer) {
     if((transfer->type == TGEN_TYPE_PUT || transfer->type == TGEN_TYPE_GETPUT)
             && transfer->state == TGEN_XFER_PAYLOAD) {
         _tgentransfer_writePayload(transfer);
+    } else if (transfer->type == TGEN_TYPE_MMODEL
+            && transfer->state == TGEN_XFER_PAYLOAD) {
+        _tgentransfer_writeMModelPayload(transfer);
     }
 
-    if((transfer->type == TGEN_TYPE_PUT || transfer->type == TGEN_TYPE_GETPUT)
+
+    if((transfer->type == TGEN_TYPE_PUT
+                || transfer->type == TGEN_TYPE_GETPUT
+                || transfer->type == TGEN_TYPE_MMODEL)
             && transfer->state == TGEN_XFER_CHECKSUM) {
         _tgentransfer_writeChecksum(transfer);
     }
 
     if(transfer->writeBuffer ||
             (transfer->type == TGEN_TYPE_PUT && transfer->state == TGEN_XFER_PAYLOAD) ||
-            (_tgentransfer_getputWantsWriteEvents(transfer))) {
+            (_tgentransfer_getputWantsWriteEvents(transfer)) ||
+            (_tgentransfer_mmodelWantsWriteEvents(transfer))) {
         /* we have more to write */
         transfer->events |= TGEN_EVENT_WRITE;
     } else {
@@ -938,7 +1289,7 @@ static gchar* _tgentransfer_getBytesStatusReport(TGenTransfer* transfer) {
             " total-bytes-write=%"G_GSIZE_FORMAT" ", transfer->bytes.totalRead,
             transfer->bytes.totalWrite);
 
-    if (transfer->type != TGEN_TYPE_GETPUT) {
+    if (transfer->type == TGEN_TYPE_GET || transfer->type == TGEN_TYPE_PUT) {
         gsize payload = transfer->type == TGEN_TYPE_GET ?
                 transfer->bytes.payloadRead : transfer->bytes.payloadWrite;
         const gchar* payloadVerb = transfer->type == TGEN_TYPE_GET ?
@@ -949,18 +1300,24 @@ static gchar* _tgentransfer_getBytesStatusReport(TGenTransfer* transfer) {
                 transfer->size, progress);
     } else {
         gsize read, written;
+        gsize to_read, to_write;
         gdouble read_progress, write_progress;
         read = transfer->bytes.payloadRead;
         written = transfer->bytes.payloadWrite;
-        read_progress = (gdouble)read / (gdouble)transfer->getput->theirSize \
-                * 100.0f;
-        write_progress = (gdouble)written / (gdouble)transfer->getput->ourSize \
-                * 100.0f;
+        if (transfer->type == TGEN_TYPE_GETPUT) {
+            to_read = transfer->getput->theirSize;
+            to_write = transfer->getput->ourSize;
+        } else {
+            to_read = transfer->mmodel->expectedReceiveBytes;
+            to_write = transfer->size;
+        }
+        read_progress = (gdouble)read / (gdouble)to_read * 100.0f;
+        write_progress = (gdouble)written / (gdouble)to_write * 100.0f;
         g_string_append_printf(buffer, "payload-bytes-read=%"G_GSIZE_FORMAT"/"
                 "%"G_GSIZE_FORMAT" (%.2f%%) payload-bytes-write=%"
                 G_GSIZE_FORMAT"/%"G_GSIZE_FORMAT" (%.2f%%)",
-                read, transfer->getput->theirSize, read_progress,
-                written, transfer->getput->ourSize, write_progress);
+                read, to_read, read_progress,
+                written, to_write, write_progress);
     }
 
     return g_string_free(buffer, FALSE);
@@ -1092,6 +1449,11 @@ static TGenEvent _tgentransfer_runTransferEventLoop(TGenTransfer* transfer, TGen
 TGenEvent tgentransfer_onEvent(TGenTransfer* transfer, gint descriptor, TGenEvent events) {
     TGEN_ASSERT(transfer);
 
+    if (transfer->type == TGEN_TYPE_MMODEL && transfer->mmodel
+            && !transfer->mmodel->descriptor) {
+        transfer->mmodel->descriptor = descriptor;
+    }
+
     TGenEvent retEvents = TGEN_EVENT_NONE;
 
     if(transfer->transport && tgentransport_wantsEvents(transfer->transport)) {
@@ -1158,7 +1520,7 @@ gboolean tgentransfer_onCheckTimeout(TGenTransfer* transfer, gint descriptor) {
 
 TGenTransfer* tgentransfer_new(const gchar* idStr, gsize count, TGenTransferType type,
         gsize size, gsize ourSize, gsize theirSize,
-        guint64 timeout, guint64 stallout,
+        guint64 timeout, guint64 stallout, TGenMModel *mmodel,
         TGenTransport* transport, TGenTransfer_notifyCompleteFunc notify,
         gpointer data1, gpointer data2, GDestroyNotify destructData1, GDestroyNotify destructData2) {
     TGenTransfer* transfer = g_new0(TGenTransfer, 1);
@@ -1194,6 +1556,8 @@ TGenTransfer* tgentransfer_new(const gchar* idStr, gsize count, TGenTransferType
 
     if (type == TGEN_TYPE_GETPUT) {
         _tgentransfer_initGetputData(transfer, ourSize, theirSize);
+    } else if (type == TGEN_TYPE_MMODEL) {
+        _tgentransfer_initMModelData(transfer, mmodel, NULL);
     }
 
     transfer->payloadChecksum = g_checksum_new(G_CHECKSUM_MD5);
@@ -1237,6 +1601,10 @@ static void _tgentransfer_free(TGenTransfer* transfer) {
 
     if (transfer->getput) {
         _tgentransfer_freeGetputData(transfer);
+    }
+
+    if (transfer->mmodel) {
+        _tgentransfer_freeMModelData(transfer);
     }
 
     if(transfer->destructData1 && transfer->data1) {
