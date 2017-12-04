@@ -4749,6 +4749,26 @@ int process_emu_syscall(Process* proc, int number, va_list ap) {
 		}
 #endif
 
+#if defined SYS_getrandom
+		case SYS_getrandom: {
+			uint8_t* out = va_arg(args, uint8_t*);
+			size_t out_len = va_arg(args, size_t);
+			const unsigned int flags = va_arg(args, const unsigned int);
+
+			/* get the random bytes internally from Shadow's random source
+			 * for this host to maintain determistic behavior */
+			random_nextNBytes(host_getRandom(proc->host), (guchar*)out, out_len);
+
+			if(out_len > INT_MAX) {
+				ret = INT_MAX;
+			} else {
+				ret = (int)out_len;
+			}
+
+			break;
+		}
+#endif
+
 		/* TODO the following are functions that shadow normally intercepts, and we should handle them */
 
 #if defined SYS_accept
@@ -4985,11 +5005,11 @@ int process_emu_syscall(Process* proc, int number, va_list ap) {
 
 		{
 			/* Shadow should deal with these, so this is a critical issue that we should address */
-			critical("syscall() was called with syscall number '%i'. Shadow handles the libc version of this "
-					"function, but does not yet handle the syscall() version. We will forward to libc as a "
-					"fallback, but it is unlikely to work correctly because it is not Shadow-aware. "
-					"Please report if you notice strange behavior.", number);
-			do_syscall = 1;
+			error("syscall() was called with syscall number '%i'. Shadow handles the libc version of this "
+					"function, but does not yet handle the syscall() version, and therefore "
+					"this function call is unlikely to work correctly because it is not Shadow-aware. "
+					"Please report this error at https://github.com/shadow/shadow/issues.", number);
+			do_syscall = 0;
 			break;
 		}
 
