@@ -31,7 +31,11 @@ the '-m' option.\n
 """
 
 SHADOWJSON="stats.shadow.json"
-LABELS = ['bytes_total', 'bytes_control_header', 'bytes_control_header_retrans', 'bytes_data_header', 'bytes_data_payload', 'bytes_data_header_retrans', 'bytes_data_payload_retrans']
+LABELS = ['packets_total', 'bytes_total',
+    'packets_control', 'bytes_control_header',
+    'packets_control_retrans', 'bytes_control_header_retrans',
+    'packets_data', 'bytes_data_header', 'bytes_data_payload',
+    'packets_data_retrans', 'bytes_data_header_retrans', 'bytes_data_payload_retrans']
 NUMLINES=10000
 
 def main():
@@ -200,20 +204,29 @@ def process_shadow_lines(line):
         packets-data,bytes-data-header,bytes-data-payload,
         packets-data-retrans,bytes-data-header-retrans,bytes-data-payload-retrans
         '''
-        # packet counts are also available, but we are ignoring them
+        d['nodes'][name]['recv']['packets_total'][second] += int(remotein[0])
         d['nodes'][name]['recv']['bytes_total'][second] += int(remotein[1])
+        d['nodes'][name]['recv']['packets_control'][second] += int(remotein[2])
         d['nodes'][name]['recv']['bytes_control_header'][second] += int(remotein[3])
+        d['nodes'][name]['recv']['packets_control_retrans'][second] += int(remotein[4])
         d['nodes'][name]['recv']['bytes_control_header_retrans'][second] += int(remotein[5])
+        d['nodes'][name]['recv']['packets_data'][second] += int(remotein[6])
         d['nodes'][name]['recv']['bytes_data_header'][second] += int(remotein[7])
         d['nodes'][name]['recv']['bytes_data_payload'][second] += int(remotein[8])
+        d['nodes'][name]['recv']['packets_data_retrans'][second] += int(remotein[9])
         d['nodes'][name]['recv']['bytes_data_header_retrans'][second] += int(remotein[10])
         d['nodes'][name]['recv']['bytes_data_payload_retrans'][second] += int(remotein[11])
 
+        d['nodes'][name]['send']['packets_total'][second] += int(remoteout[0])
         d['nodes'][name]['send']['bytes_total'][second] += int(remoteout[1])
+        d['nodes'][name]['send']['packets_control'][second] += int(remoteout[2])
         d['nodes'][name]['send']['bytes_control_header'][second] += int(remoteout[3])
+        d['nodes'][name]['send']['packets_control_retrans'][second] += int(remoteout[4])
         d['nodes'][name]['send']['bytes_control_header_retrans'][second] += int(remoteout[5])
+        d['nodes'][name]['send']['packets_data'][second] += int(remoteout[6])
         d['nodes'][name]['send']['bytes_data_header'][second] += int(remoteout[7])
         d['nodes'][name]['send']['bytes_data_payload'][second] += int(remoteout[8])
+        d['nodes'][name]['send']['packets_data_retrans'][second] += int(remoteout[9])
         d['nodes'][name]['send']['bytes_data_header_retrans'][second] += int(remoteout[10])
         d['nodes'][name]['send']['bytes_data_payload_retrans'][second] += int(remoteout[11])
 
