@@ -148,7 +148,11 @@ _tgentransfer_setMModelSchedFromString(TGenTransfer *transfer, gchar *str)
     gboolean first_item = TRUE;
     gchar *delay = delays[i];
     while (delay) {
-        if (strlen(delay) < 1) {
+        /* Make sure this string is of positive length, but stop at a max
+         * length of 10 chars so we don't read garbage. 10 chars isn't really
+         * important, but if it somehow became important, it allows for 1000
+         * seconds of delay expressed in microseconds */
+        if (strnlen(delay, 10) < 1) {
             delay = delays[++i];
             continue;
         }
