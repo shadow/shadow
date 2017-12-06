@@ -95,8 +95,8 @@ tgenmmodel_new(const gchar *mmodelPath)
  * on a specific vertex and need to tie together the ID of an adjacent vertex
  * with the weight of the edge between them. */
 typedef struct _VertAndWeight {
-    igraph_integer_t v;
-    double w;
+    igraph_integer_t vert;
+    double weight;
 } VertAndWeight;
 
 static igraph_integer_t
@@ -108,7 +108,7 @@ _tgenmmodel_selectNextVertex(TGenMModel *mmodel, igraph_integer_t current_vert_i
     igraph_integer_t selected_vert_id = -1;
     igraph_integer_t working_vert_id = -2;
     igraph_integer_t working_edge_id = -3;
-    VertAndWeight vw;
+    VertAndWeight vert_weight_pair;
     igraph_real_t working_edge_weight;
     igraph_real_t cumulative_weight = 0;
     gdouble rand_value;
@@ -127,9 +127,12 @@ _tgenmmodel_selectNextVertex(TGenMModel *mmodel, igraph_integer_t current_vert_i
         goto done;
     }
 
-    /* Iterate over them and pair each adj vert with the edge weight between
-     * the current vert and it. We also accumulate a cumulative weight for use
-     * later */
+    /* Iterate over the vertexes that are adjacent to the current_vert_id.
+     * We call the one we are looking at presently the working vertex, and we
+     * call the edge between the current vertex and the working vertex the
+     * working edge. We associate the working edge's weight with the working
+     * vertex using a VertAndWeight struct. We also accumulate a
+     * cumulative weight for use later. */
     while (!IGRAPH_VIT_END(vit)) {
         working_vert_id = IGRAPH_VIT_GET(vit);
         /* Get the edge between the current_vert_id and the working_vert_id */
@@ -147,31 +150,32 @@ _tgenmmodel_selectNextVertex(TGenMModel *mmodel, igraph_integer_t current_vert_i
         cumulative_weight += working_edge_weight;
         /* And store the working_vert_id and its weight in the list of adjacent
          * verts */
-        vw.v = working_vert_id;
-        vw.w = working_edge_weight;
-        g_array_append_val(adj_verts, vw);
-        //tgen_debug("%s (%d) to %s (%d) via edge %d: weight is %f and total is %f",
-        //        VAS(mmodel->graph, "id", current_vert_id), current_vert_id,
-        //        VAS(mmodel->graph, "id", working_vert_id), working_vert_id,
-        //        working_edge_id, working_edge_weight, cumulative_weight);
+        vert_weight_pair.vert = working_vert_id;
+        vert_weight_pair.weight = working_edge_weight;
+        g_array_append_val(adj_verts, vert_weight_pair);
+        tgen_debug("%s (%d) to %s (%d) via edge %d: weight is %f and total is %f",
+                VAS(mmodel->graph, "id", current_vert_id), current_vert_id,
+                VAS(mmodel->graph, "id", working_vert_id), working_vert_id,
+                working_edge_id, working_edge_weight, cumulative_weight);
         IGRAPH_VIT_NEXT(vit);
     }
-    /* We now know all the possible next verts, their weight of the edges to
-     * each of them, and the total weight. Pick a positive random number below
-     * the total weight. Iterate through the list of adj verts and subtract
-     * their wegiths from the random value. Stop and return the first vert
-     * that would make random value go negative. This is a simple way to make a
-     * weighted random choice */
+    /* We now know all the possible next vertexes from the current vertex,
+     * their weights (fetched from edges), and the total weight. It is now time
+     * to make a weighted random choice of which vertex to select.
+     *
+     * Pick a positive random number below the total weigth. Iterate through
+     * the list of adjacent vertexes and subtract their wegiths from the random
+     * value. Stop and select the first vertex that would make the random value
+     * go negative. This is a simple way to make a weighted random choice. */
     rand_value = g_random_double_range(0, cumulative_weight);
     for (i = 0; i < adj_verts->len; i++) {
-        vw = g_array_index(adj_verts, VertAndWeight, i);
-        if (rand_value < vw.w) {
-            selected_vert_id = vw.v;
+        vert_weight_pair = g_array_index(adj_verts, VertAndWeight, i);
+        if (rand_value < vert_weight_pair.weight) {
+            selected_vert_id = vert_weight_pair.vert;
             goto done;
         }
-        rand_value -= vw.w;
+        rand_value -= vert_weight_pair.weight;
     }
-    goto done;
 
 done:
     igraph_vit_destroy(&vit);
