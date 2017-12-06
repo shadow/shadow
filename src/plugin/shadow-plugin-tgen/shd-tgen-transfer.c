@@ -161,7 +161,6 @@ _tgentransfer_setMModelSchedFromString(TGenTransfer *transfer, gchar *str)
         /* The remaining items are delays */
         } else {
             int32_t v = g_ascii_strtoll(delay, NULL, 10);
-            //tgen_debug("Got delay '%s' (%d)", delay, v);
             g_array_append_val(transfer->mmodel->sched, v);
             transfer->size += TGEN_MMODEL_PACKET_DATA_SIZE;
         }

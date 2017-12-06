@@ -15,7 +15,7 @@ struct _TGenMModel {
 };
 
 /** In the given MModel, find the vertex with the given action name.
- * Returns the igraph id of the vertex if finds, else -1. */
+ * Returns the igraph id of the vertex if found, else -1. */
 static igraph_integer_t
 _tgenmmodel_find_vertex(TGenMModel *mmodel, const gchar *action)
 {
@@ -39,7 +39,6 @@ _tgenmmodel_find_vertex(TGenMModel *mmodel, const gchar *action)
         }
         IGRAPH_VIT_NEXT(vert_iter);
     }
-    goto done;
 done:
     igraph_vit_destroy(&vert_iter);
     return return_value;
@@ -65,12 +64,14 @@ _tgenmmodel_load_mmodel(TGenMModel *mmodel)
     if (result != IGRAPH_SUCCESS) {
         tgen_critical("error reading igraph from MModel file");
         g_free(mmodel->graph);
+        mmodel->graph = NULL;
         return FALSE;
     }
     mmodel->start_vert_id = _tgenmmodel_find_vertex(mmodel, "start");
     if (mmodel->start_vert_id < 0) {
         tgen_critical("no start vertex found in MModel file");
         g_free(mmodel->graph);
+        mmodel->graph = NULL;
         return FALSE;
     }
     return TRUE;
@@ -93,10 +94,10 @@ tgenmmodel_new(const gchar *mmodelPath)
 /** Helper struct for _tgenmmodel_selectNextVertex. In that func we are sitting
  * on a specific vertex and need to tie together the ID of an adjacent vertex
  * with the weight of the edge between them. */
-struct VertAndWeight {
+typedef struct _VertAndWeight {
     igraph_integer_t v;
     double w;
-};
+} VertAndWeight;
 
 static igraph_integer_t
 _tgenmmodel_selectNextVertex(TGenMModel *mmodel, igraph_integer_t current_vert_id)
@@ -107,11 +108,11 @@ _tgenmmodel_selectNextVertex(TGenMModel *mmodel, igraph_integer_t current_vert_i
     igraph_integer_t selected_vert_id = -1;
     igraph_integer_t working_vert_id = -2;
     igraph_integer_t working_edge_id = -3;
-    struct VertAndWeight vw;
+    VertAndWeight vw;
     igraph_real_t working_edge_weight;
     igraph_real_t cumulative_weight = 0;
     gdouble rand_value;
-    GArray *adj_verts = g_array_new(TRUE, FALSE, sizeof(struct VertAndWeight));
+    GArray *adj_verts = g_array_new(TRUE, FALSE, sizeof(VertAndWeight));
     gint res, i;
 
     /* Get all vertexes adjacent to the current_vert_id */
@@ -146,7 +147,8 @@ _tgenmmodel_selectNextVertex(TGenMModel *mmodel, igraph_integer_t current_vert_i
         cumulative_weight += working_edge_weight;
         /* And store the working_vert_id and its weight in the list of adjacent
          * verts */
-        vw.v = working_vert_id; vw.w = working_edge_weight;
+        vw.v = working_vert_id;
+        vw.w = working_edge_weight;
         g_array_append_val(adj_verts, vw);
         //tgen_debug("%s (%d) to %s (%d) via edge %d: weight is %f and total is %f",
         //        VAS(mmodel->graph, "id", current_vert_id), current_vert_id,
@@ -162,7 +164,7 @@ _tgenmmodel_selectNextVertex(TGenMModel *mmodel, igraph_integer_t current_vert_i
      * weighted random choice */
     rand_value = g_random_double_range(0, cumulative_weight);
     for (i = 0; i < adj_verts->len; i++) {
-        vw = g_array_index(adj_verts, struct VertAndWeight, i);
+        vw = g_array_index(adj_verts, VertAndWeight, i);
         if (rand_value < vw.w) {
             selected_vert_id = vw.v;
             goto done;
@@ -247,9 +249,6 @@ tgenmmodel_generatePath(TGenMModel *mmodel, GString *ourStr, GString *theirStr)
             our_cum_delay = 0;
             bytes_we_will_send += TGEN_MMODEL_PACKET_DATA_SIZE;
         }
-        //tgen_debug("Moving from %s to %s",
-        //        VAS(mmodel->graph, "id", current_vert_id),
-        //        VAS(mmodel->graph, "id", working_vert_id));
         current_vert_id = working_vert_id;
     }
     GString *bytes = g_string_new(NULL);
@@ -276,14 +275,12 @@ static void _tgenmmodel_free(TGenMModel *mmodel)
 void tgenmmodel_ref(TGenMModel *mmodel)
 {
     TGEN_ASSERT(mmodel);
-    //tgen_debug("TGenMModel ref++");
     mmodel->refcount++;
 }
 
 void tgenmmodel_unref(TGenMModel *mmodel)
 {
     TGEN_ASSERT(mmodel);
-    //tgen_debug("TGenMModel ref--");
     if (--(mmodel->refcount) == 0) {
         _tgenmmodel_free(mmodel);
     }
