@@ -4152,16 +4152,21 @@ size_t process_emu_fread(Process* proc, void *ptr, size_t size, size_t nmemb, FI
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     size_t ret;
 
-    int fd = fileno(stream);
-    if(prevCTX == PCTX_PLUGIN && (fd == STDOUT_FILENO || fd == STDERR_FILENO)) {
-        ret = fread(ptr, size, nmemb, _process_getIOFile(proc, fd));
-    } else if(host_isRandomHandle(proc->host, fd)) {
-        Random* random = host_getRandom(proc->host);
-        gsize numbytes = size*nmemb;
-        random_nextNBytes(random, (guchar*)ptr, numbytes);
-        ret = nmemb;
+    int osfd = fileno(stream);
+    if(prevCTX == PCTX_PLUGIN && (osfd == STDOUT_FILENO || osfd == STDERR_FILENO)) {
+        ret = fread(ptr, size, nmemb, _process_getIOFile(proc, osfd));
     } else {
-        ret = fread(ptr, size, nmemb, stream);
+        gint shadowHandle = host_getShadowHandle(proc->host, osfd);
+        if(shadowHandle > 0) {
+            /* this is either an internal shadow read or a random file read, let read handle it */
+            ret = process_emu_read(proc, shadowHandle, ptr, size*nmemb);
+            if(ret > 0) {
+                ret = ret / size;
+                g_assert(ret <= nmemb);
+            }
+        } else {
+            ret = fread(ptr, size, nmemb, stream);
+        }
     }
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
