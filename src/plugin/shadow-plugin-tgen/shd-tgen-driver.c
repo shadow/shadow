@@ -593,10 +593,10 @@ gboolean tgendriver_hasEnded(TGenDriver* driver) {
     return driver->clientHasEnded;
 }
 
-/** Forward a request for all READ/WRITE events to the TGenIO */
+/** Forward a request for the given events to the tgenio epoll instance */
 void
-tgendriver_giveEvents(TGenDriver *driver, gint descriptor, TGenEvent events)
+tgendriver_setEvents(TGenDriver *driver, gint descriptor, TGenEvent events)
 {
     TGEN_ASSERT(driver);
-    tgenio_giveEvents(driver->io, descriptor, events);
+    tgenio_setEvents(driver->io, descriptor, events);
 }

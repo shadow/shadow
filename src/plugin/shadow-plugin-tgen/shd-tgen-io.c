@@ -237,9 +237,10 @@ void tgenio_checkTimeouts(TGenIO* io) {
     }
 }
 
-/** Ask epoll for the given events for the given descriptor */
+/** Modify the tgenio epoll instance so that it notifies us when the given
+ * events occur on the given descriptor. */
 void
-tgenio_giveEvents(TGenIO *io, gint descriptor, TGenEvent events)
+tgenio_setEvents(TGenIO *io, gint descriptor, TGenEvent events)
 {
     struct epoll_event ee;
     memset(&ee, 0, sizeof(struct epoll_event));

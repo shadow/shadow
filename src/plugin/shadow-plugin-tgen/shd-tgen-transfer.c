@@ -1000,7 +1000,7 @@ _tgentransfer_mmodelOnTimerExpired(gpointer data1, gpointer data2)
     TGEN_ASSERT(transfer);
     transfer->mmodel->timerSet = FALSE;
     tgen_debug("MModel timer expired. Asking for write events again.");
-    tgendriver_giveEvents(transfer->data1, transfer->mmodel->descriptor,
+    tgendriver_setEvents(transfer->data1, transfer->mmodel->descriptor,
             TGEN_EVENT_WRITE);
 }
 
