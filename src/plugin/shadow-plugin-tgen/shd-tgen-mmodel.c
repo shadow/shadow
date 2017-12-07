@@ -23,25 +23,23 @@ _tgenmmodel_find_vertex(TGenMModel *mmodel, const gchar *action)
     g_assert(mmodel->graph);
     igraph_t *graph = mmodel->graph;
     igraph_vit_t vert_iter;
-    igraph_integer_t return_value = -1;
     gint res;
     res = igraph_vit_create(graph, igraph_vss_all(), &vert_iter);
     if (res != IGRAPH_SUCCESS) {
-        goto done;
+        return -1;
     }
     while (!IGRAPH_VIT_END(vert_iter)) {
         igraph_integer_t idx = IGRAPH_VIT_GET(vert_iter);
         const gchar *action_str = VAS(graph, "action", idx);
         tgen_debug("%s", action_str);
         if (g_ascii_strncasecmp(action_str, action, strlen(action)) == 0) {
-            return_value = idx;
-            goto done;
+            igraph_vit_destroy(&vert_iter);
+            return idx;
         }
         IGRAPH_VIT_NEXT(vert_iter);
     }
-done:
     igraph_vit_destroy(&vert_iter);
-    return return_value;
+    return -1;
 }
 
 /** Given a MModel with a fileName, flesh out its struct by reading in the
@@ -104,8 +102,8 @@ _tgenmmodel_selectNextVertex(TGenMModel *mmodel, igraph_integer_t current_vert_i
 {
     igraph_vs_t vs; // vertex selector
     igraph_vit_t vit; // vertex iterator
-    /* These are DIFFERENT negative values just for debugging purposes */
-    igraph_integer_t selected_vert_id = -1;
+    /* These initial values aren't important. They're just different and
+     * negative to help debug */
     igraph_integer_t working_vert_id = -2;
     igraph_integer_t working_edge_id = -3;
     VertAndWeight vert_weight_pair;
@@ -118,13 +116,16 @@ _tgenmmodel_selectNextVertex(TGenMModel *mmodel, igraph_integer_t current_vert_i
     /* Get all vertexes adjacent to the current_vert_id */
     res = igraph_vs_adj(&vs, current_vert_id, IGRAPH_OUT);
     if (res != IGRAPH_SUCCESS) {
-        tgen_critical("unable to create adj vertex selector");
-        goto done;
+        tgen_critical("unable to create adjacent vertex selector");
+        g_array_unref(adj_verts);
+        return -1;
     }
     res = igraph_vit_create(mmodel->graph, vs, &vit);
     if (res != IGRAPH_SUCCESS) {
-        tgen_critical("unable to create adj vertex iterator");
-        goto done;
+        tgen_critical("unable to create adjacent vertex iterator");
+        g_array_unref(adj_verts);
+        igraph_vs_destroy(&vs);
+        return -1;
     }
 
     /* Iterate over the vertexes that are adjacent to the current_vert_id.
@@ -142,7 +143,10 @@ _tgenmmodel_selectNextVertex(TGenMModel *mmodel, igraph_integer_t current_vert_i
             tgen_critical("unable to find edge between %s and %s",
                     VAS(mmodel->graph, "id", current_vert_id),
                     VAS(mmodel->graph, "id", working_vert_id));
-            goto done;
+            g_array_unref(adj_verts);
+            igraph_vs_destroy(&vs);
+            igraph_vit_destroy(&vit);
+            return -1;
         }
         /* Get the weight from the edge */
         working_edge_weight = EAN(mmodel->graph, "weight", working_edge_id);
@@ -171,17 +175,13 @@ _tgenmmodel_selectNextVertex(TGenMModel *mmodel, igraph_integer_t current_vert_i
     for (i = 0; i < adj_verts->len; i++) {
         vert_weight_pair = g_array_index(adj_verts, VertAndWeight, i);
         if (rand_value < vert_weight_pair.weight) {
-            selected_vert_id = vert_weight_pair.vert;
-            goto done;
+            g_array_unref(adj_verts);
+            igraph_vs_destroy(&vs);
+            igraph_vit_destroy(&vit);
+            return vert_weight_pair.vert;
         }
         rand_value -= vert_weight_pair.weight;
     }
-
-done:
-    igraph_vit_destroy(&vit);
-    igraph_vs_destroy(&vs);
-    g_array_unref(adj_verts);
-    return selected_vert_id;
 }
 
 /** Ask the MModel to generate a path. Stores the instructions for us (the
