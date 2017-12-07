@@ -8,6 +8,7 @@
 #define SHD_TCP_H_
 
 #include "shadow.h"
+#define TCP_MIN_CWND 10
 
 typedef struct _TCP TCP;
 

@@ -55,6 +55,8 @@ Packet* packet_copy(Packet* packet);
 void packet_ref(Packet* packet);
 void packet_unref(Packet* packet);
 
+void packet_setPriority(Packet *packet, double value);
+
 void packet_setLocal(Packet* packet, enum ProtocolLocalFlags flags,
         gint sourceDescriptorHandle, gint destinationDescriptorHandle, in_port_t port);
 void packet_setUDP(Packet* packet, enum ProtocolUDPFlags flags,

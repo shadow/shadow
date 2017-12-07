@@ -435,3 +435,4 @@ const gchar* options_getDataTemplatePath(Options* options) {
     MAGIC_ASSERT(options);
     return options->dataTemplatePath;
 }
+

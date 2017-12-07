@@ -180,6 +180,10 @@ void packet_unref(Packet* packet) {
     }
 }
 
+void packet_setPriority(Packet *packet, double value) {
+   packet->priority = value;
+}
+
 gint packet_compareTCPSequence(Packet* packet1, Packet* packet2, gpointer user_data) {
     MAGIC_ASSERT(packet1 && packet2);
 
@@ -672,6 +676,10 @@ gchar* packet_toString(Packet* packet) {
     }
 
     return g_string_free(packetString, FALSE);
+}
+
+gchar* _packet_getString(Packet* packet) {
+    return packet_toString(packet);
 }
 
 void packet_addDeliveryStatus(Packet* packet, PacketDeliveryStatusFlags status) {

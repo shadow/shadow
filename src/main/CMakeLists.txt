@@ -41,6 +41,7 @@ add_cflags(-fPIC)
 #add_cflags(-Wno-unknown-warning-option)
 #add_cflags(-Wno-visibility)
 add_cflags(-std=gnu99)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} $ENV{CXXFLAGS} -std=c++11 -fPIC")
 
 if(SHADOW_PROFILE STREQUAL ON)
     message(STATUS "Building Shadow core with profiling support using '-pg'")
@@ -81,7 +82,6 @@ set(shadow_srcs
     host/descriptor/shd-tcp-congestion.c
     host/descriptor/shd-tcp-cubic.c
     host/descriptor/shd-tcp-reno.c
-    host/descriptor/shd-tcp-scoreboard.c
     host/descriptor/shd-timer.c
     host/descriptor/shd-transport.c
     host/descriptor/shd-udp.c
@@ -109,12 +109,22 @@ set(shadow_srcs
     main.c
 )
 
+set(REMORA_SRC
+   host/descriptor/shd-tcp-retransmit-tally.cc
+)
+
+add_library(shadow-remora SHARED ${REMORA_SRC})
+install(TARGETS shadow-remora DESTINATION lib)
+
 ## specify the main shadow executable, build, link, and install
 add_executable(shadow ${shadow_srcs})
-add_dependencies(shadow shadow-interpose-helper elf-loader rpth)
+add_dependencies(shadow shadow-remora shadow-interpose-helper elf-loader rpth)
 ## 'shadow-interpose-helper' and 'vdl' are cmake targets, the rest are external libs for which '-l' is needed
-target_link_libraries(shadow shadow-interpose-helper vdl -lrpth ${CMAKE_THREAD_LIBS_INIT} ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES} ${IGRAPH_LIBRARIES} ${GLIB_LIBRARIES})
+target_link_libraries(shadow shadow-interpose-helper vdl -lrpth
+   ${CMAKE_THREAD_LIBS_INIT} ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES}
+   ${IGRAPH_LIBRARIES} ${GLIB_LIBRARIES} shadow-remora)
 install(TARGETS shadow DESTINATION bin)
+
 
 ## shadow needs to find libshadow-interpose and custom libs after install
 set_target_properties(shadow PROPERTIES
