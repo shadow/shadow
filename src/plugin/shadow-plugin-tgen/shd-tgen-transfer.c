@@ -997,7 +997,7 @@ static void _tgentransfer_writePayload(TGenTransfer* transfer) {
     }
 }
 
-static void
+static gboolean
 _tgentransfer_mmodelOnTimerExpired(gpointer data1, gpointer data2)
 {
     TGenTransfer *transfer = (TGenTransfer *)data1;
@@ -1006,6 +1006,10 @@ _tgentransfer_mmodelOnTimerExpired(gpointer data1, gpointer data2)
     tgen_debug("MModel timer expired. Asking for write events again.");
     tgendriver_setEvents(transfer->data1, transfer->mmodel->descriptor,
             TGEN_EVENT_WRITE);
+    /* Meaning YES cancel future callbacks of this function from
+     * tgentimer_onEvent. The timer is already not persistent, so this is just
+     * extra. */
+    return TRUE;
 }
 
 static void
@@ -1018,13 +1022,12 @@ _tgentransfer_mmodelStartPause(TGenTransfer *transfer, int32_t micros)
         /* The initial timeout isn't important since we will set it later in
          * the function body */
         transfer->mmodel->timer = tgentimer_new(5000, FALSE,
-                (TGenTimer_notifyExpiredFunc)_tgentransfer_mmodelOnTimerExpired,
+                _tgentransfer_mmodelOnTimerExpired,
                 transfer, NULL, (GDestroyNotify)tgentransfer_unref, NULL);
     }
     g_assert(transfer->mmodel->timer);
     tgen_debug("Setting a MModel timer for %dus", micros);
     tgentimer_settime_micros(transfer->mmodel->timer, micros);
-    /* XXX does it have to be registered every time? */
     tgendriver_registerTransferPause(transfer->data1, transfer->mmodel->timer);
     transfer->mmodel->timerSet = TRUE;
     transfer->mmodel->goneToSleepOnce = TRUE;
