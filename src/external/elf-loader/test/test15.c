@@ -15,7 +15,7 @@ function_f (void)
 }
 
 int main (__attribute__((unused)) int argc,
-	  __attribute__((unused)) char *argv[])
+          __attribute__((unused)) char *argv[])
 {
   printf ("enter main\n");
 
@@ -126,21 +126,21 @@ int main (__attribute__((unused)) int argc,
     error = dlerror ();
     if (error == 0)
       {
-	printf ("reopen libf.so\n");
+        printf ("reopen libf.so\n");
       }
     // it's not interposed here !
     fn = dlsym (other_handle, "function_f");
     error = dlerror ();
     if (error == 0)
       {
-	fn ();
+        fn ();
       }
     // and we can't look this up from here.
     fn = dlsym (other_handle, "function_l");
     error = dlerror ();
     if (error != 0)
       {
-	printf ("dlsym is not performing lookups according to local scope\n");
+        printf ("dlsym is not performing lookups according to local scope\n");
       }
     dlclose (other_handle);
     error = dlerror ();

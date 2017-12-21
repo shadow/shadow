@@ -15,15 +15,15 @@ static void *thread_a (__attribute__((unused)) void *ctx)
     {
       int status = sem_wait (&g_sem_a);
       if (status == -1)
-	{
-	  return (void*)-1;
-	}
+        {
+          return (void*)-1;
+        }
       printf ("a=%d\n", g_count);
       status = sem_post (&g_sem_b);
       if (status == -1)
-	{
-	  return (void*)-1;
-	}
+        {
+          return (void*)-1;
+        }
       g_count++;
     }
   return 0;
@@ -35,15 +35,15 @@ static void *thread_b (__attribute__((unused)) void *ctx)
     {
       int status = sem_wait (&g_sem_b);
       if (status == -1)
-	{
-	  return (void*)-1;
-	}
+        {
+          return (void*)-1;
+        }
       printf ("b=%d\n", g_count);
       status = sem_post (&g_sem_a);
       if (status == -1)
-	{
-	  return (void*)-1;
-	}
+        {
+          return (void*)-1;
+        }
       g_count++;
     }
   return 0;
@@ -51,7 +51,7 @@ static void *thread_b (__attribute__((unused)) void *ctx)
 
 
 int main (__attribute__((unused)) int argc,
-	  __attribute__((unused)) char *argv[])
+          __attribute__((unused)) char *argv[])
 {
   int status = sem_init (&g_sem_a, 0, 1);
   if (status == -1)

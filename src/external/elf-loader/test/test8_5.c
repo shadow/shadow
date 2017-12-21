@@ -11,7 +11,7 @@ static void *thread (__attribute__((unused)) void *ctx)
 }
 
 int main (__attribute__((unused)) int argc,
-	  __attribute__((unused)) char *argv[])
+          __attribute__((unused)) char *argv[])
 {
   pthread_t th;
   int status = pthread_create (&th, 0, &thread, 0);

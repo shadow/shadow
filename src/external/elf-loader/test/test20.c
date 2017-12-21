@@ -1,5 +1,5 @@
 #define _GNU_SOURCE 1
-#include <dlfcn.h> 
+#include <dlfcn.h>
 #include <stdio.h>
 
 int main (__attribute__((unused)) int argc, char *argv[])

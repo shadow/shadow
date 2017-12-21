@@ -12,7 +12,7 @@ static void * __attribute__ ((noinline)) get_pc (void)
 }
 
 int main (__attribute__((unused)) int argc,
-	  __attribute__((unused)) char *argv[])
+          __attribute__((unused)) char *argv[])
 {
   printf ("enter main\n");
   void *h = dlopen ("liba.so", RTLD_LAZY);
@@ -22,8 +22,8 @@ int main (__attribute__((unused)) int argc,
   int status = dladdr(get_pc (), &info);
   if (status != 0)
     {
-      printf ("dladdr ok file=%s, symbol=%s\n", 
-	      info.dli_fname, info.dli_sname);
+      printf ("dladdr ok file=%s, symbol=%s\n",
+              info.dli_fname, info.dli_sname);
     }
 
   dlclose (h);

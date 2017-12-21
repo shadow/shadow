@@ -20,7 +20,7 @@ static void *thread (__attribute__((unused)) void *ctx)
 }
 
 int main (__attribute__((unused)) int argc,
-	  __attribute__((unused)) char *argv[])
+          __attribute__((unused)) char *argv[])
 {
   void *handle = dlopen ("libj.so", RTLD_LAZY);
   if (handle == 0)

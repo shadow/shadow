@@ -4,7 +4,7 @@ import subprocess
 import re
 
 try:
-    version = subprocess.Popen (['valgrind', '--version'], 
+    version = subprocess.Popen (['valgrind', '--version'],
                                 stdout = subprocess.PIPE,
                                 stderr = subprocess.PIPE)
 except e:
@@ -27,10 +27,9 @@ if ver >= 340:
 
 cmd += sys.argv[1:]
 
-val = subprocess.Popen(cmd, 
+val = subprocess.Popen(cmd,
                        stdout = subprocess.PIPE,
                        stderr = subprocess.PIPE)
 (stdout, stderr) = val.communicate()
 if val.returncode != 0 or "== LEAK SUMMARY:" in stderr:
     sys.exit(1)
-

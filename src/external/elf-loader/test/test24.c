@@ -9,14 +9,14 @@ static void *thread (__attribute__((unused)) void*ctx)
 {
   void *handle1 = dlopen ("libstdc++.so.6", RTLD_LAZY | RTLD_DEEPBIND | RTLD_LOCAL);
   /* It seems loading libstdc++.so is easier reproduce than loading libc
-   * on Ubuntu 10.04, x86_64. 
+   * on Ubuntu 10.04, x86_64.
    */
   //  void *handle1 = dlopen ("libc.so.6", RTLD_LAZY | RTLD_DEEPBIND | RTLD_LOCAL);
   dlclose (handle1);
   return 0;
 }
 
-/* 
+/*
  * typical crash is:
  * #0  0x00007f79ae584972 in alloc_do_malloc (alloc=0x7f79ae798180, size=32)
  *    at /home/tazaki/hgworks/ns-3-dce-thehajime/elf-loader-outgoing/alloc.c:104
@@ -28,7 +28,7 @@ static void *thread (__attribute__((unused)) void*ctx)
  *     at /home/tazaki/hgworks/ns-3-dce-thehajime/elf-loader-outgoing/alloc.c:185
  * #2  0x00007f79ae58b1aa in vdl_alloc_malloc (size=24)
  *     at /home/tazaki/hgworks/ns-3-dce-thehajime/elf-loader-outgoing/vdl-alloc.c:17
- * #3  0x00007f79ae58a080 in vdl_list_insert (list=0x7f79ae78e7d8, at=0x7f79ae78e7f0, 
+ * #3  0x00007f79ae58a080 in vdl_list_insert (list=0x7f79ae78e7d8, at=0x7f79ae78e7f0,
  *     value=0x7f79ae78e2e8)
  *     at /home/tazaki/hgworks/ns-3-dce-thehajime/elf-loader-outgoing/vdl-list.c:91
  * #4  0x00007f79ae58a19c in vdl_list_push_front (list=0x7f79ae78e7d8, data=0x7f79ae78e2e8)
@@ -49,7 +49,7 @@ static void *thread (__attribute__((unused)) void*ctx)
  * #13 0x0000000000000000 in ?? ()
  */
 int main (__attribute__((unused)) int argc,
-	  __attribute__((unused)) char *argv[])
+          __attribute__((unused)) char *argv[])
 {
   printf ("enter main\n");
 

@@ -7,7 +7,7 @@ class Foo
 
 int main (int argc, char *argv[])
 {
-  try 
+  try
     {
       throw Foo ();
     }

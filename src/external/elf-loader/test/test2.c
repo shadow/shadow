@@ -3,7 +3,7 @@
 LIB(test2)
 
 int main (__attribute__((unused)) int argc,
-	  __attribute__((unused)) char *argv[])
+          __attribute__((unused)) char *argv[])
 {
   printf ("enter main\n");
   void *f = dlopen ("libf.so", RTLD_LAZY);
