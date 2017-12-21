@@ -6,9 +6,9 @@ int main (__attribute__((unused)) int argc,
           __attribute__((unused)) char *argv[])
 {
   printf ("enter main\n");
-  void *f = dlopen ("libf.so", RTLD_LAZY);
+  void *f = dlopen ("./libf.so", RTLD_LAZY);
   printf ("dlopen libf.so completed\n");
-  void *e = dlopen ("libe.so", RTLD_LAZY);
+  void *e = dlopen ("./libe.so", RTLD_LAZY);
   printf ("dlopen libe.so completed\n");
 
   dlclose (f);
@@ -16,9 +16,9 @@ int main (__attribute__((unused)) int argc,
   dlclose (e);
   printf ("dlclose libe.so completed\n");
 
-  e = dlopen ("libe.so", RTLD_LAZY | RTLD_DEEPBIND);
+  e = dlopen ("./libe.so", RTLD_LAZY | RTLD_DEEPBIND);
   printf ("dlopen libe.so completed\n");
-  f = dlopen ("libf.so", RTLD_LAZY | RTLD_DEEPBIND);
+  f = dlopen ("./libf.so", RTLD_LAZY | RTLD_DEEPBIND);
   printf ("dlopen libf.so completed\n");
 
   dlclose (e);

@@ -7,7 +7,7 @@ LIB(test12)
 
 static void *thread (__attribute__((unused)) void *ctx)
 {
-  void *handle = dlopen ("libl.so", RTLD_LAZY);
+  void *handle = dlopen ("./libl.so", RTLD_LAZY);
   if (handle == 0)
     {
       printf ("dlopen failed: %s\n", dlerror ());
@@ -22,7 +22,7 @@ static void *thread (__attribute__((unused)) void *ctx)
 int main (__attribute__((unused)) int argc,
           __attribute__((unused)) char *argv[])
 {
-  void *handle = dlopen ("libj.so", RTLD_LAZY);
+  void *handle = dlopen ("./libj.so", RTLD_LAZY);
   if (handle == 0)
     {
       printf ("dlopen failed\n");

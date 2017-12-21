@@ -51,7 +51,7 @@ int main (__attribute__((unused)) int argc,
   error = dlerror (); // clear error
 
   // ok, now, let's try to see in libf.so
-  handle = dlopen ("libf.so", RTLD_LAZY);
+  handle = dlopen ("./libf.so", RTLD_LAZY);
   error = dlerror ();
   if (error == 0)
     {
@@ -83,7 +83,7 @@ int main (__attribute__((unused)) int argc,
   error = dlerror (); // clear error
 
   // ok, let's see what we can find in libef.so
-  handle = dlopen ("libefl.so", RTLD_LAZY);
+  handle = dlopen ("./libefl.so", RTLD_LAZY);
   error = dlerror ();
   if (error == 0)
     {
@@ -122,7 +122,7 @@ int main (__attribute__((unused)) int argc,
     }
 
   {
-    void *other_handle = dlopen ("libf.so", RTLD_LAZY);
+    void *other_handle = dlopen ("./libf.so", RTLD_LAZY);
     error = dlerror ();
     if (error == 0)
       {
@@ -149,7 +149,7 @@ int main (__attribute__((unused)) int argc,
   error = dlerror (); // clear error
 
   // now, let's see what RTLD_GLOBAL does
-  handle = dlopen ("libf.so", RTLD_LAZY | RTLD_GLOBAL);
+  handle = dlopen ("./libf.so", RTLD_LAZY | RTLD_GLOBAL);
   error = dlerror ();
   if (error == 0)
     {

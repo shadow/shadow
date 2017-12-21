@@ -8,8 +8,8 @@ int main (__attribute__((unused)) int argc,
   printf ("enter main\n");
 
   //void *g;
-  //g = dlopen ("libg.so", RTLD_LAZY);
-  dlopen ("libg.so", RTLD_LAZY);
+  //g = dlopen ("./libg.so", RTLD_LAZY);
+  dlopen ("./libg.so", RTLD_LAZY);
   printf ("dlopen libg.so completed\n");
 
   printf ("leave main\n");

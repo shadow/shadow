@@ -9,7 +9,7 @@ int main (__attribute__((unused)) int argc,
   int i = 0;
   int j = 0;
   printf ("enter main\n");
-  void *s = dlopen ("libs.so", RTLD_LAZY);
+  void *s = dlopen ("./libs.so", RTLD_LAZY);
   printf ("dlopen libs.so completed\n");
 
   // test the relocated symbol path (i.e. do_process_reloc)

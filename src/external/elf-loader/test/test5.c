@@ -7,10 +7,10 @@ int main (__attribute__((unused)) int argc,
 {
   printf ("enter main\n");
 
-  void *f = dlopen ("libf.so", RTLD_LAZY | RTLD_GLOBAL);
+  void *f = dlopen ("./libf.so", RTLD_LAZY | RTLD_GLOBAL);
   printf ("dlopen libf.so completed\n");
 
-  void *g = dlopen ("libg.so", RTLD_LAZY);
+  void *g = dlopen ("./libg.so", RTLD_LAZY);
   printf ("dlopen libg.so completed\n");
   void (*function_g_f) (void) = dlsym (g, "function_g_f");
   function_g_f ();
@@ -21,10 +21,10 @@ int main (__attribute__((unused)) int argc,
   printf ("dlclose libg.so completed\n");
 
 
-  f = dlopen ("libf.so", RTLD_LAZY | RTLD_GLOBAL);
+  f = dlopen ("./libf.so", RTLD_LAZY | RTLD_GLOBAL);
   printf ("dlopen libf.so completed\n");
 
-  g = dlopen ("libg.so", RTLD_LAZY);
+  g = dlopen ("./libg.so", RTLD_LAZY);
   printf ("dlopen libg.so completed\n");
 
   dlclose (f);

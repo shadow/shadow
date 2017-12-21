@@ -27,7 +27,7 @@ static void *thread (__attribute__((unused)) void*ctx)
 static void
 test_one (void)
 {
-  void *handle = dlopen ("libi.so", RTLD_LAZY);
+  void *handle = dlopen ("./libi.so", RTLD_LAZY);
 
   g_get_i = (int *(*) (void)) dlsym (handle, "get_i");
   int *i = g_get_i ();
@@ -42,7 +42,7 @@ test_one (void)
 
   sem_wait (&g_wait_a);
   dlclose (handle);
-  handle = dlopen ("libi.so", RTLD_LAZY);
+  handle = dlopen ("./libi.so", RTLD_LAZY);
 
   g_get_i = (int *(*) (void)) dlsym (handle, "get_i");
   i = g_get_i ();
