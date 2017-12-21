@@ -15,7 +15,7 @@ static void *thread (__attribute__((unused)) void*ctx)
 }
 
 int main (__attribute__((unused)) int argc,
-	  __attribute__((unused)) char *argv[])
+          __attribute__((unused)) char *argv[])
 {
   size_t i;
   pthread_t th[100];

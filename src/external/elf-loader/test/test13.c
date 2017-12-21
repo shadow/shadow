@@ -13,7 +13,7 @@ void function_f (void)
 }
 
 int main (__attribute__((unused)) int argc,
-	  __attribute__((unused))  char *argv[])
+          __attribute__((unused))  char *argv[])
 {
   function_f ();
   const char *error = dlerror ();

@@ -1,26 +1,26 @@
 #ifndef TEST_H
 #define TEST_H
 #include <stdio.h>
-#define LIB(name)						\
-  static __attribute__ ((constructor))				\
-  void constructor (void)					\
-  {								\
-    printf ("lib%s constructor\n", #name);			\
-  }								\
-  static __attribute__ ((destructor))				\
-  void destructor (void)					\
-  {								\
-    printf ("lib%s destructor\n", #name);			\
-  }								\
-  void function_##name (void)					\
-  {								\
-    printf ("called function_%s in lib%s\n",			\
-	    #name, #name);					\
-  }								\
-  void call_function_##name (void)				\
-  {								\
-    printf ("calling function_%s in lib%s\n",			\
-	    #name, #name);					\
-    function_##name ();						\
+#define LIB(name)                               \
+  static __attribute__ ((constructor))          \
+  void constructor (void)                       \
+  {                                             \
+    printf ("lib%s constructor\n", #name);      \
+  }                                             \
+  static __attribute__ ((destructor))           \
+  void destructor (void)                        \
+  {                                             \
+    printf ("lib%s destructor\n", #name);       \
+  }                                             \
+  void function_##name (void)                   \
+  {                                             \
+    printf ("called function_%s in lib%s\n",    \
+            #name, #name);                      \
+  }                                             \
+  void call_function_##name (void)              \
+  {                                             \
+    printf ("calling function_%s in lib%s\n",   \
+            #name, #name);                      \
+    function_##name ();                         \
   }
 #endif

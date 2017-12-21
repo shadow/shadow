@@ -4,7 +4,7 @@
 LIB(test27)
 
 int main (__attribute__((unused)) int argc,
-	  __attribute__((unused)) char *argv[])
+          __attribute__((unused)) char *argv[])
 {
   int i = 0;
   int j = 0;

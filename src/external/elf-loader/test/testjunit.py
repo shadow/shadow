@@ -11,13 +11,13 @@ for arg in sys.argv[1:]:
     if '12' in arg:
         val = subprocess.Popen(['rm' ,'-f', 'libl.so'])
         val.wait ()
-    
+
     cmd = ['./'+arg+'-ldso']
     test_env = os.environ.copy()
     test_env['LD_LIBRARY_PATH'] = '.:../'
-    val = subprocess.Popen(cmd, 
+    val = subprocess.Popen(cmd,
                            stdout = subprocess.PIPE,
-                           stderr = subprocess.PIPE, 
+                           stderr = subprocess.PIPE,
                            env = test_env)
     (stdout, stderr) = val.communicate()
     f = open ('output/' + arg, 'w')
@@ -28,10 +28,10 @@ for arg in sys.argv[1:]:
                                                     "failure"))
         print 'CRASH ' + arg + '  -- LD_LIBRARY_PATH=.:../ ./' + arg + '-ldso'
     else:
-        cmd = ['diff', '-q', 
+        cmd = ['diff', '-q',
                'output/' + arg,
                'output/' + arg + '.ref']
-        val = subprocess.Popen(cmd, 
+        val = subprocess.Popen(cmd,
                                stdout = subprocess.PIPE,
                                stderr = subprocess.PIPE)
         (stdout, stderr) = val.communicate()
