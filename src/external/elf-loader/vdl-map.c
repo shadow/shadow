@@ -654,7 +654,7 @@ readonly_cache_map (const char *filename, const struct VdlFileMap *map,
 
   char *section = vdl_utils_itoa (map->file_start_align);
   char *hashname = vdl_utils_strconcat (filename, section);
-  unsigned long hash = vdl_gnu_hash (filename);
+  unsigned long hash = vdl_gnu_hash (hashname);
   vdl_alloc_free (section);
   vdl_alloc_free (hashname);
   int cfd = readonly_cache_find (filename, map, hash);
