@@ -15,7 +15,7 @@ int main (__attribute__((unused)) int argc,
           __attribute__((unused)) char *argv[])
 {
   printf ("enter main\n");
-  void *h = dlopen ("liba.so", RTLD_LAZY);
+  void *h = dlopen ("./liba.so", RTLD_LAZY);
   printf ("dlopen completed\n");
 
   Dl_info info;

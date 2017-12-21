@@ -7,7 +7,7 @@ int main (__attribute__((unused)) int argc,
           __attribute__((unused)) char *argv[])
 {
   printf ("enter main\n");
-  void *f = dlopen ("libf.so", RTLD_LAZY);
+  void *f = dlopen ("./libf.so", RTLD_LAZY);
   printf ("dlopen libf.so completed\n");
   void (*function_f) (void) = dlsym (f, "function_f");
   function_f ();
