@@ -202,9 +202,9 @@ add_executable(test25 test25.c)
 target_link_libraries(test25 -lpthread -ldl)
 add_test(NAME elfloader-test25 COMMAND /bin/bash ${CMAKE_CURRENT_SOURCE_DIR}/runtest.sh test25 ${CMAKE_CURRENT_SOURCE_DIR})
 
-#add_executable(test26 test26.c)
-#target_link_libraries(test26 -lpthread -ldl)
-#add_test(NAME elfloader-test26 COMMAND /bin/bash ${CMAKE_CURRENT_SOURCE_DIR}/runtest.sh test26 ${CMAKE_CURRENT_SOURCE_DIR})
+add_executable(test26 test26.c)
+target_link_libraries(test26 -lpthread -ldl)
+add_test(NAME elfloader-test26 COMMAND /bin/bash ${CMAKE_CURRENT_SOURCE_DIR}/runtest.sh test26 ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_executable(test27 test27.c)
 target_link_libraries(test27 -ldl)
