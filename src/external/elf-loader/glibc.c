@@ -105,7 +105,9 @@ typedef union
 } tunable_val_t;
 typedef void (*tunable_callback_t) (tunable_val_t *);
 EXPORT void
-__tunable_set_val (tunable_id_t id, void *valp, tunable_callback_t callback)
+__tunable_set_val (__attribute__ ((unused)) tunable_id_t id,
+                   __attribute__ ((unused)) void *valp,
+                   __attribute__ ((unused)) tunable_callback_t callback)
 {
   // XXX: Currently the only tunable function I've seen called in practice,
   // and it just sets them, so an empty stub is fine. Once anything really
@@ -113,12 +115,15 @@ __tunable_set_val (tunable_id_t id, void *valp, tunable_callback_t callback)
   return;
 }
 
+// _dl_error_catch_tsd only exists in glibc versions <2.25
+#ifdef CONFIG_DL_ERROR_CATCH_TSD_OFFSET
 static void **
 vdl_dl_error_catch_tsd (void)
 {
   static void *data;
   return &data;
 }
+#endif
 
 // definition stolen from glibc...
 struct tls_index
