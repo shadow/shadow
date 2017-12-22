@@ -600,6 +600,7 @@ map_cache_item_new (const char *filename, const struct VdlFileMap *map,
   return item;
 }
 
+#ifndef DEBUG
 static void
 readonly_cache_insert (const char *filename, const struct VdlFileMap *map,
                        int fd, unsigned long hash)
@@ -705,14 +706,15 @@ found:
                                       map->mem_size_align, prot,
                                       MAP_SHARED | MAP_FIXED, cfd, 0);
 }
+#endif
 
 static void
 file_map_do (const char *filename, const struct VdlFileMap *map,
              int fd, int prot, unsigned long load_base)
 {
   // Now, map again the area at the right location.
-  VDL_LOG_FUNCTION ("fd=0x%x, prot=0x%x, load_base=0x%lx", fd, prot,
-                    load_base);
+  VDL_LOG_FUNCTION ("file=%s, fd=0x%x, prot=0x%x, load_base=0x%lx", filename,
+                    fd, prot, load_base);
   int int_result;
   unsigned long address;
   // shared pages for code breaks gdb, so just don't use them in debug builds
