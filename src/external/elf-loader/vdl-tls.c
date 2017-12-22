@@ -613,7 +613,7 @@ vdl_tls_get_addr_fast (unsigned long module, unsigned long offset)
     {
       // our dtv is really uptodate _and_ the requested module block
       // has been already initialized.
-      return dtv[module].ptrs.value + offset;
+      return (unsigned long) dtv[module].ptrs.value + offset;
     }
   // either we need to update the dtv or we need to initialize
   // the dtv entry to point to the requested module block
@@ -657,7 +657,7 @@ vdl_tls_get_addr_slow (unsigned long module, unsigned long offset)
       shadow_dtv[module].meta.is_static = 0;
       // and return the requested value
       read_unlock (g_vdl.tls_lock);
-      return dtv[module].ptrs.value + offset;
+      return (unsigned long) dtv[module].ptrs.value + offset;
     }
   // we know for sure that the dtv is _not_ uptodate now
   vdl_tls_dtv_update_given (tp, dtv);
