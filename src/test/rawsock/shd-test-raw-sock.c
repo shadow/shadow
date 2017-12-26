@@ -1,0 +1,235 @@
+/*
+ * The Shadow Simulator
+ * See LICENSE for licensing information
+ */
+
+#include <errno.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <sys/time.h>
+#include <linux/if_ether.h>
+#include <linux/if_packet.h>
+#include <arpa/inet.h>
+#include <fcntl.h>
+#define MYLOG(...) _mylog(__FILE__, __LINE__, __FUNCTION__, __VA_ARGS__)
+
+static void _mylog(const char* fileName, const int lineNum, const char* funcName, const char* format, ...) {
+    struct timeval t;
+    memset(&t, 0, sizeof(struct timeval));
+    gettimeofday(&t, NULL);
+    fprintf(stdout, "[%ld.%.06ld] [%s:%i] [%s] ", (long)t.tv_sec, (long)t.tv_usec, fileName, lineNum, funcName);
+
+    va_list vargs;
+    va_start(vargs, format);
+    vfprintf(stdout, format, vargs);
+    va_end(vargs);
+
+    fprintf(stdout, "\n");
+    fflush(stdout);
+}
+
+static int _do_socket(int* fdout) {
+    /* create a socket and get a socket descriptor */
+    int sd = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
+
+    MYLOG("socket() returned %i", sd);
+
+    if (sd < 0) {
+        MYLOG("socket() error was: %s", strerror(errno));
+        return EXIT_FAILURE;
+    }
+
+    if(fdout) {
+        *fdout = sd;
+    }
+
+    return EXIT_SUCCESS;
+}
+
+static int _do_bind(int fd, const char *ifname) {
+    struct sockaddr_in bindaddr;
+    memset(&bindaddr, 0, sizeof(struct sockaddr_in));
+	struct sockaddr_ll ll;
+	memset(&ll, 0, sizeof(ll));
+		ll.sll_family = PF_PACKET;
+		ll.sll_ifindex = if_nametoindex(ifname);
+		ll.sll_protocol = htons(ETH_P_ALL);
+
+    /* bind the socket to the server port */
+    int result = bind(fd, (struct sockaddr *)&ll, sizeof(ll));
+
+    MYLOG("bind() returned %i", result);
+
+    if (result < 0) {
+        MYLOG("bind() error was: %s", strerror(errno));
+        return EXIT_FAILURE;
+    }
+
+    return EXIT_SUCCESS;
+}
+
+
+static int _do_setsockopt(int fd, const char *ifname) {
+    struct sockaddr_in bindaddr;
+    memset(&bindaddr, 0, sizeof(struct sockaddr_in));
+
+    /* bind the socket to the server port */
+    int result = setsockopt(fd, SOL_PACKET, PACKET_QDISC_BYPASS, &val,
+			 sizeof(val));
+
+    MYLOG("setsockopt() returned %i", result);
+
+    if (result < 0) {
+        MYLOG("setsockopt() error was: %s", strerror(errno));
+        return EXIT_FAILURE;
+    }
+
+    return EXIT_SUCCESS;
+}
+
+
+
+static int _check_matching_addresses(int fd_server_listen, int fd_server_accept, int fd_client) {
+    struct sockaddr_in server_listen_sockname, server_listen_peername;
+    struct sockaddr_in server_accept_sockname, server_accept_peername;
+    struct sockaddr_in client_sockname, client_peername;
+    socklen_t addr_len = sizeof(struct sockaddr_in);
+
+    memset(&server_listen_sockname, 0, sizeof(struct sockaddr_in));
+    memset(&server_accept_sockname, 0, sizeof(struct sockaddr_in));
+    memset(&client_sockname, 0, sizeof(struct sockaddr_in));
+    memset(&server_listen_peername, 0, sizeof(struct sockaddr_in));
+    memset(&server_accept_peername, 0, sizeof(struct sockaddr_in));
+    memset(&client_peername, 0, sizeof(struct sockaddr_in));
+
+    if(getsockname(fd_server_listen, (struct sockaddr*) &server_listen_sockname, &addr_len) < 0) {
+        MYLOG("getsockname() error was: %s", strerror(errno));
+        return EXIT_FAILURE;
+    }
+
+    MYLOG("found sockname %s:%i for server listen fd %i", inet_ntoa(server_listen_sockname.sin_addr),
+            (int)server_listen_sockname.sin_port, fd_server_listen);
+
+    if(getsockname(fd_server_accept, (struct sockaddr*) &server_accept_sockname, &addr_len) < 0) {
+        MYLOG("getsockname() error was: %s", strerror(errno));
+        return EXIT_FAILURE;
+    }
+
+    MYLOG("found sockname %s:%i for server accept fd %i", inet_ntoa(server_accept_sockname.sin_addr),
+            (int)server_accept_sockname.sin_port, fd_server_accept);
+
+    if(getsockname(fd_client, (struct sockaddr*) &client_sockname, &addr_len) < 0) {
+        MYLOG("getsockname() error was: %s", strerror(errno));
+        return EXIT_FAILURE;
+    }
+
+    MYLOG("found sockname %s:%i for client fd %i", inet_ntoa(client_sockname.sin_addr),
+            (int)client_sockname.sin_port, fd_client);
+
+    if(getpeername(fd_server_accept, (struct sockaddr*) &server_accept_peername, &addr_len) < 0) {
+        MYLOG("getpeername() error was: %s", strerror(errno));
+        return EXIT_FAILURE;
+    }
+
+    MYLOG("found peername %s:%i for server accept fd %i", inet_ntoa(server_accept_peername.sin_addr),
+            (int)server_accept_peername.sin_port, fd_server_accept);
+
+    if(getpeername(fd_client, (struct sockaddr*) &client_peername, &addr_len) < 0) {
+        MYLOG("getpeername() error was: %s", strerror(errno));
+        return EXIT_FAILURE;
+    }
+
+    MYLOG("found peername %s:%i for client fd %i", inet_ntoa(client_peername.sin_addr),
+            (int)client_peername.sin_port, fd_client);
+
+    /*
+     * the following should hold on linux:
+     *   + listener socket port == accepted socket port
+     *   + accept socket port == client peer port
+     *   + accept socket addr == client peer addr
+     *   + client socket addr == accepted peer addr
+     *   + client socket pot != accepted peer ports
+     */
+
+    if(server_listen_sockname.sin_port != server_accept_sockname.sin_port) {
+        MYLOG("expected server listener and accepted socket ports to match but they didn't");
+        return EXIT_FAILURE;
+    }
+
+    if(server_accept_sockname.sin_port != client_peername.sin_port) {
+        MYLOG("expected server accepted socket port to match client peer port but they didn't");
+        return EXIT_FAILURE;
+    }
+
+    if(server_accept_sockname.sin_addr.s_addr != client_peername.sin_addr.s_addr) {
+        MYLOG("expected server accepted socket addr to match client peer addr but they didn't");
+        return EXIT_FAILURE;
+    }
+
+    if(client_sockname.sin_addr.s_addr != server_accept_peername.sin_addr.s_addr) {
+        MYLOG("expected client socket addr to match server accepted peer addr but they didn't");
+        return EXIT_FAILURE;
+    }
+
+    if(client_sockname.sin_port == server_accept_peername.sin_port) {
+        MYLOG("expected client socket port NOT to match server accepted peer port but they did");
+        return EXIT_FAILURE;
+    }
+
+    return EXIT_SUCCESS;
+}
+
+static int _test_raw_socket() {
+    int fd1 = 0, fd2 = 0, fd3 = 0;
+    struct sockaddr_in clientaddr;
+    struct sockaddr_in serveraddr;
+    socklen_t addr_len = sizeof(struct sockaddr_in);
+    memset(&serveraddr, 0, sizeof(struct sockaddr_in));
+
+    MYLOG("creating sockets");
+
+    if(_do_socket( &fd1) == EXIT_FAILURE) {
+        MYLOG("unable to create socket");
+        return EXIT_FAILURE;
+    }
+
+    if(_do_bind( &fd2,"lo") == EXIT_FAILURE) {
+        MYLOG("unable to create socket");
+        return EXIT_FAILURE;
+    }
+
+    MYLOG("listening on server socket with implicit bind");
+
+    if(_do_setsockopt(fd1,"lo") == EXIT_FAILURE) {
+        MYLOG("unable to listen on server socket");
+        return EXIT_FAILURE;
+    }
+
+    // FIXME start
+    // on ubuntu, the firewall 'ufw' blocks the remaining tests from succeeding
+    // ufw auto-blocks 0.0.0.0 and 127.0.0.1, and can't seem to be made to allow it
+    // so we bail out early until we have a fix
+    close(fd1);
+    return EXIT_SUCCESS;
+    // FIXME end
+
+}
+
+int main(int argc, char* argv[]) {
+    fprintf(stdout, "########## raw socket test starting ##########\n");
+
+    fprintf(stdout, "########## running test: _test_raw_socket()\n");
+
+    if(_test_raw_socket() == EXIT_FAILURE) {
+        fprintf(stdout, "########## _test_explicit_bind(SOCK_STREAM) failed\n");
+        return EXIT_FAILURE;
+    }
+
+    return EXIT_SUCCESS;
+}
