@@ -129,9 +129,9 @@ global_initialize (unsigned long interpreter_load_base)
 
 // relocate entries in DT_REL
 static void
-relocate_dt_rel (ElfW (Dyn) * dynamic, unsigned long load_base)
+relocate_dt_rel (ElfW(Addr) load_base)
 {
-  ElfW (Dyn) * tmp = dynamic;
+  ElfW (Dyn) * tmp = _DYNAMIC;
   ElfW (Rel) * dt_rel = 0;
   unsigned long dt_relsz = 0;
   unsigned long dt_relent = 0;
@@ -275,14 +275,18 @@ stage1 (struct Stage1InputOutput *input_output)
   // The linker defines the symbol _DYNAMIC to give you the offset from
   // the load base to the start of the PT_DYNAMIC area which has been
   // mapped by the OS loader as part of the rw PT_LOAD segment.
-  void *dynamic = _DYNAMIC;
-  dynamic += input_output->load_base;
-  relocate_dt_rel (dynamic, input_output->load_base);
+  // Because it's the first element of the GOT, we can also use it to
+  // calculate what the load base actually is.
+  extern ElfW(Dyn) _DYNAMIC[] __attribute__ ((visibility ("hidden")));
+  extern const ElfW(Addr) _GLOBAL_OFFSET_TABLE_[] __attribute__ ((visibility ("hidden")));
+  ElfW(Addr) load_base = (ElfW(Addr)) &_DYNAMIC - (unsigned long)_GLOBAL_OFFSET_TABLE_[0];
+  
+  relocate_dt_rel (load_base);
 
   // Now that access to global variables is possible, we initialize
   // our main global variable. After this function call completes,
   // we are allowed to do memory allocations.
-  global_initialize (input_output->load_base);
+  global_initialize (load_base);
 
   // Set the "end of the stack" variable to the frame address of this function,
   // which appears to be close enough (within a page) to the end as far as
@@ -303,7 +307,7 @@ stage1 (struct Stage1InputOutput *input_output)
 
   struct Stage2Input stage2_input =
     prepare_stage2 (input_output->entry_point_struct);
-  stage2_input.interpreter_load_base = input_output->load_base;
+  stage2_input.interpreter_load_base = load_base;
 
   // Now that we have relocated this binary, we can access global variables
   // so, we switch to stage2 to complete the loader initialization.

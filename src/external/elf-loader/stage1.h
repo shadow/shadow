@@ -4,8 +4,6 @@
 struct Stage1InputOutput
 {
   // initialized by stage0
-  unsigned long load_base;
-  // initialized by stage0
   unsigned long entry_point_struct;
   // set by stage1 before returning to stage0
   unsigned long entry_point;
