@@ -1,8 +1,8 @@
 #include "vdl-mem.h"
 #include <stdint.h>
 
-void
-vdl_memcpy (void *d, const void *s, size_t len)
+void *
+memcpy (void *d, const void *s, size_t len)
 {
   int tmp = len;
   char *dst = d;
@@ -14,6 +14,13 @@ vdl_memcpy (void *d, const void *s, size_t len)
       src++;
       tmp--;
     }
+  return d;
+}
+
+void
+vdl_memcpy (void *d, const void *s, size_t len)
+{
+  memcpy (d, s, len);
 }
 
 void
@@ -51,8 +58,8 @@ vdl_memmove (void *dst, const void *src, size_t len)
     }
 }
 
-void
-vdl_memset (void *d, int c, size_t n)
+void *
+memset (void *d, int c, size_t n)
 {
   char *dst = d;
   size_t i;
@@ -60,6 +67,13 @@ vdl_memset (void *d, int c, size_t n)
     {
       dst[i] = c;
     }
+  return d;
+}
+
+void
+vdl_memset (void *d, int c, size_t n)
+{
+  memset(d, c, n);
 }
 
 int
