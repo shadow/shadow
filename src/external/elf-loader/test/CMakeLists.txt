@@ -175,13 +175,13 @@ if( ${CMAKE_SYSTEM_PROCESSOR} STREQUAL "x86_64" )
     add_library(lb22 SHARED lb22.c)
     set_target_properties(lb22 PROPERTIES
         PREFIX ""
-        COMPILE_FLAGS "-Wall -Werror -mcmodel=large"
+        COMPILE_FLAGS "-Wall -mcmodel=large"
         LINK_FLAGS "-Wl,--no-as-needed"
     )
 
     add_executable(test22 test22.c)
     set_target_properties(test22 PROPERTIES
-        COMPILE_FLAGS "-Wall -Werror"
+        COMPILE_FLAGS "-Wall"
         LINK_FLAGS ""
     )
     add_test(NAME elfloader-test22 COMMAND /bin/bash ${CMAKE_CURRENT_SOURCE_DIR}/runtest.sh test22 ${CMAKE_CURRENT_SOURCE_DIR})
