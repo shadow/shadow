@@ -198,15 +198,16 @@ unsigned long
 vdl_tls_tcb_allocate (void)
 {
   // we allocate continuous memory for the set of tls blocks + libpthread TCB
-  unsigned long tcb_size = g_vdl.tls_static_total_size;
-  unsigned long total_size = tcb_size + CONFIG_TCB_SIZE;        // specific to variant II
-  unsigned long buffer = (unsigned long) vdl_alloc_malloc (total_size);
-  vdl_memset ((void *) buffer, 0, total_size);
-  unsigned long tcb = buffer + tcb_size;
+  // such that the TCB data structure is 16 byte aligned
+  unsigned long tcb_offset = (g_vdl.tls_static_total_size + 0x0f) & ~0x0f;
+  unsigned long total_size = tcb_offset + CONFIG_TCB_SIZE;        // specific to variant II
+  void *buffer = vdl_alloc_malloc (total_size);
+  vdl_memset (buffer, 0, total_size);
+  void **tcb = buffer + tcb_offset;
   // complete setup of TCB
-  vdl_memcpy ((void *) (tcb + CONFIG_TCB_TCB_OFFSET), &tcb, sizeof (tcb));
-  vdl_memcpy ((void *) (tcb + CONFIG_TCB_SELF_OFFSET), &tcb, sizeof (tcb));
-  return tcb;
+  tcb[CONFIG_TCB_TCB_OFFSET/sizeof(void *)] = tcb;
+  tcb[CONFIG_TCB_SELF_OFFSET/sizeof(void *)] = tcb;
+  return (unsigned long) tcb;
 }
 
 void
