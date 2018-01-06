@@ -42,7 +42,7 @@ file_initialize (struct VdlFile *file)
   file->tls_align = pt_tls->p_align;
   file->tls_index = g_vdl.tls_next_index;
   vdl_hashmap_insert (g_vdl.module_map, file->tls_index, file);
-  file->tls_is_static = (dt_flags & DF_STATIC_TLS) ? 1 : 0;
+  file->tls_is_static = (dt_flags & DF_STATIC_TLS) || file->is_executable;
   file->tls_tmpl_gen = g_vdl.tls_gen;
   // XXX: the next_index increment code below is bad for many reasons.
   // Instead, we should try to reuse tls indexes that are not used anymore
