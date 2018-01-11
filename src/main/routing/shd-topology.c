@@ -41,6 +41,14 @@ struct _Topology {
     igraph_bool_t isConnected;
     igraph_bool_t isDirected;
     igraph_bool_t isComplete;
+    /* Also a graph property. Normally when a graph is not complete, Shadow
+     * will always do shortest path to get from A to B, even if a path from A
+     * to B already exists. Sometimes ACB is shorter than AB.
+     *
+     * If this is true and the graph is not complete, then when Shadow needs to
+     * route from A to B, it will prefer to use AB (if it exists) even if it
+     * could do shortest path to determine ACB is shorter. */
+    gboolean prefersDirectPaths;
 
     /* keep track of how many, and how long we spend computing shortest paths */
     gdouble shortestPathTotalTime;
@@ -266,11 +274,23 @@ static gboolean _topology_checkGraphProperties(Topology* top) {
     }
     top->isComplete = (igraph_bool_t)is_complete;
 
-    message("topology graph is %s, %s, and %s with %u %s",
+    gboolean prefersDirectPaths = FALSE;
+    if (igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_GRAPH, "preferdirectpaths")) {
+        if (g_ascii_strncasecmp(igraph_cattribute_GAS(&top->graph, "preferdirectpaths"), "yes", 3) == 0) {
+            debug("Enabling preferdirectpaths");
+            prefersDirectPaths = TRUE;
+        } else {
+            debug("Not enabling preferdirectpaths (set to 'yes' to enable)");
+        }
+    }
+    top->prefersDirectPaths = prefersDirectPaths;
+
+    message("topology graph is %s, %s, and %s with %u %s. It does%s prefer direct paths.",
             top->isComplete ? "complete" : "incomplete",
             top->isDirected ? "directed" : "undirected",
             top->isConnected ? "strongly connected" : "disconnected",
-            (guint)top->clusterCount, top->clusterCount == 1 ? "cluster" : "clusters");
+            (guint)top->clusterCount, top->clusterCount == 1 ? "cluster" : "clusters",
+            top->prefersDirectPaths ? "" : " not");
 
     message("checking graph attributes...");
 
