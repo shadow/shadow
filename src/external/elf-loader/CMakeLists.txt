@@ -147,6 +147,7 @@ add_library(ldso SHARED ${ldso_srcs} ${as_srcs})
 add_dependencies(ldso vdlconfig ldsoversion)
 target_link_libraries(ldso -lgcc)
 set_target_properties(ldso PROPERTIES
+    COMPILE_FLAGS "-mno-mmx -mno-sse"
     LINK_FLAGS "-fvisibility=hidden -nostartfiles -nostdlib -Wl,--entry=stage0,--version-script=${CMAKE_CURRENT_BINARY_DIR}/ldso.version,-Bstatic"
     PREFIX ""
     SUFFIX ""
