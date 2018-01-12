@@ -134,6 +134,7 @@ static gboolean _topology_isComplete(Topology* top, gboolean *result) {
     igraph_vit_t vit;
     int ret;
     igraph_integer_t vcount = igraph_vcount(graph);
+    igraph_bool_t is_directed = igraph_is_directed(&top->graph);
     gboolean is_success = FALSE;
     gboolean is_complete = FALSE;
     /*
@@ -142,6 +143,10 @@ static gboolean _topology_isComplete(Topology* top, gboolean *result) {
      * - for each vertex, count the indcident edges
      *   - if less than the number of vertexes, it isn't a complete graph
      * - otherwise the graph is complete
+     *
+     * Notice: In order to be considerd complete, every vertex must have an
+     * edge beginning and ending at itself too.
+     */
     /* vert selector. We wall all verts */
     ret = igraph_vs_all(&vs);
     if (ret != IGRAPH_SUCCESS) {
@@ -166,6 +171,21 @@ static gboolean _topology_isComplete(Topology* top, gboolean *result) {
             goto done;
         }
         igraph_integer_t ecount = igraph_vector_size(&iedges);
+        /* If the graph is undirected and there is a self-loop edge (an edge
+         * that begins and ends at the same vertex) on this vertex, then igraph
+         * will have double counted it and we need to correct that. */
+        if (!is_directed) {
+            igraph_integer_t edge_id;
+            igraph_get_eid(&top->graph, &edge_id, IGRAPH_VIT_GET(vit), IGRAPH_VIT_GET(vit), TRUE, FALSE);
+            /* If the edge does not exist, then -1 will be stored in edge_id.
+             * If it is found, then it will be >= 0 */
+            if (edge_id >= 0) {
+                debug("Subtracting one from vert id=%li's edge count because "
+                        "this is an undirected graph and this vertex's "
+                        "self-looping edge has been counted twice", IGRAPH_VIT_GET(vit));
+                ecount -= 1;
+            }
+        }
         if (ecount < vcount) {
             info("Vert id=%li has %li incident edges to %li total verts "
                 "and thus this isn't a complete graph",
@@ -174,10 +194,16 @@ static gboolean _topology_isComplete(Topology* top, gboolean *result) {
             is_complete = FALSE;
             igraph_vector_destroy(&iedges);
             goto done;
+        } else {
+            debug("Vert id=%li has %li incident edges to %li total verts "
+                "and thus doesn't determine whether this graph is incomplete. "
+                "Must keep searching.", IGRAPH_VIT_GET(vit),
+                (long int)ecount, (long int)vcount);
         }
         igraph_vector_destroy(&iedges);
         IGRAPH_VIT_NEXT(vit);
     }
+    info("Determined this graph is complete.");
     is_complete = TRUE;
     is_success = TRUE;
 done:
