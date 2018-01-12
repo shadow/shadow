@@ -998,6 +998,20 @@ static gboolean _topology_lookupPath(Topology* top, igraph_integer_t srcVertexIn
     return TRUE;
 }
 
+static gboolean _topology_vertexesAreAdjacent(Topology* top, igraph_integer_t srcVertexIndex, igraph_integer_t dstVertexIndex) {
+    MAGIC_ASSERT(top);
+    igraph_integer_t edge_id;
+    gint result;
+    _topology_lockGraph(top);
+    result = igraph_get_eid(&top->graph, &edge_id, srcVertexIndex, dstVertexIndex, top->isDirected, FALSE);
+    _topology_unlockGraph(top);
+    if (result != IGRAPH_SUCCESS) {
+        warning("Unable to determine whether or not an edge exists between vertexes %d and %d",
+                srcVertexIndex, dstVertexIndex);
+        return FALSE;
+    }
+    return edge_id >= 0;
+}
 
 static gboolean _topology_getPathEntry(Topology* top, Address* srcAddress, Address* dstAddress,
         gdouble* latency, gdouble* reliability) {
@@ -1031,8 +1045,29 @@ static gboolean _topology_getPathEntry(Topology* top, Address* srcAddress, Addre
             /* use the edge between src and dst as the path */
             success = _topology_lookupPath(top, srcVertexIndex, dstVertexIndex);
         } else {
-            /* use shortest path over the network graph */
-            success = _topology_computeSourcePaths(top, srcVertexIndex, dstVertexIndex);
+            if (top->prefersDirectPaths) {
+                if (!_topology_vertexesAreAdjacent(top, srcVertexIndex, dstVertexIndex)) {
+                    debug("prefersDirectPaths but no path between %d and %d. Doing shortest path.",
+                            srcVertexIndex, dstVertexIndex);
+                    success = _topology_computeSourcePaths(top, srcVertexIndex, dstVertexIndex);
+                } else {
+                    debug("prefersDirectPaths and found path between %d and %d. Storing it in the cache.",
+                            srcVertexIndex, dstVertexIndex);
+                    igraph_real_t latency, reliability;
+                    gint result;
+                    result = _topology_getEdgeHelper(top, srcVertexIndex, dstVertexIndex, &latency, &reliability);
+                    if (result != IGRAPH_SUCCESS) {
+                        error("Unable to get edge between %d and %d after determining it should exist");
+                        success = FALSE;
+                    } else {
+                        _topology_storePathInCache(top, srcVertexIndex, dstVertexIndex, latency, reliability);
+                        success = TRUE;
+                    }
+                }
+            } else {
+                debug("not prefersDirectPaths so doing shortest path");
+                success = _topology_computeSourcePaths(top, srcVertexIndex, dstVertexIndex);
+            }
         }
 
         if(success) {
