@@ -144,7 +144,7 @@ static gboolean _topology_isComplete(Topology* top, gboolean *result) {
      *   - if less than the number of vertexes, it isn't a complete graph
      * - otherwise the graph is complete
      *
-     * Notice: In order to be considerd complete, every vertex must have an
+     * Notice: In order to be considered complete, every vertex must have an
      * edge beginning and ending at itself too.
      */
     /* vert selector. We wall all verts */
