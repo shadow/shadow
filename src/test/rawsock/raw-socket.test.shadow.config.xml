@@ -28,10 +28,13 @@
   </graph>
 </graphml>
 ]]></topology>
-  <kill time="300"/>
+  <kill time="60"/>
   <plugin id="testrawsock" path="libshadow-plugin-test-raw-sock.so"/>
-  <node id="rawsocktestnode" >
-    <application plugin="testrawsock" time="1" arguments=" server" />
-    <application plugin="testrawsock" time="2" arguments=" client localhost" />
+  <node id="rawsockservernode" >
+    <application plugin="testrawsock" time="1" arguments=" rawsock server  " />
+  </node >
+  
+  <node id="rawsockclientnode" >
+    <application plugin="testrawsock" time="2" arguments=" rawsock client rawsockservernode" />
   </node >
 </shadow>

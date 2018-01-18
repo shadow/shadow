@@ -18,7 +18,7 @@
 #include <arpa/inet.h>
 #include <fcntl.h>
 #define MYLOG(...) _mylog(__FILE__, __LINE__, __FUNCTION__, __VA_ARGS__)
-
+int sockfd;
 static void _mylog(const char* fileName, const int lineNum, const char* funcName, const char* format, ...) {
     struct timeval t;
     memset(&t, 0, sizeof(struct timeval));
@@ -45,14 +45,15 @@ static int _do_socket(int* fdout) {
         return EXIT_FAILURE;
     }
 
-    if(fdout) {
+//    if(fdout) {
         *fdout = sd;
-    }
-
+//    }
+sockfd = sd;
     return EXIT_SUCCESS;
 }
 
-static int _do_bind(int fd, const char *ifname) {
+static int _do_bind(int *fd, const char *ifname) {
+//	fd =sockfd;
     struct sockaddr_in bindaddr;
     memset(&bindaddr, 0, sizeof(struct sockaddr_in));
 	struct sockaddr_ll ll;
@@ -62,7 +63,7 @@ static int _do_bind(int fd, const char *ifname) {
 		ll.sll_protocol = htons(ETH_P_ALL);
 
     /* bind the socket to the server port */
-    int result = bind(fd, (struct sockaddr *)&ll, sizeof(ll));
+    int result = bind(sockfd, (struct sockaddr *)&ll, sizeof(ll));
 
     MYLOG("bind() returned %i", result);
 
@@ -75,12 +76,13 @@ static int _do_bind(int fd, const char *ifname) {
 }
 
 
-static int _do_setsockopt(int fd, const char *ifname) {
+static int _do_setsockopt(int *fd, const char *ifname) {
     struct sockaddr_in bindaddr;
+	fd =sockfd;
     memset(&bindaddr, 0, sizeof(struct sockaddr_in));
-
+int val = 1;
     /* bind the socket to the server port */
-    int result = setsockopt(fd, SOL_PACKET, PACKET_QDISC_BYPASS, &val,
+    int result = setsockopt(sockfd, SOL_PACKET, PACKET_QDISC_BYPASS, &val,
 			 sizeof(val));
 
     MYLOG("setsockopt() returned %i", result);
@@ -95,7 +97,7 @@ static int _do_setsockopt(int fd, const char *ifname) {
 
 
 
-static int _check_matching_addresses(int fd_server_listen, int fd_server_accept, int fd_client) {
+/*static int _check_matching_addresses(int fd_server_listen, int fd_server_accept, int fd_client) {
     struct sockaddr_in server_listen_sockname, server_listen_peername;
     struct sockaddr_in server_accept_sockname, server_accept_peername;
     struct sockaddr_in client_sockname, client_peername;
@@ -157,7 +159,7 @@ static int _check_matching_addresses(int fd_server_listen, int fd_server_accept,
      *   + client socket pot != accepted peer ports
      */
 
-    if(server_listen_sockname.sin_port != server_accept_sockname.sin_port) {
+  /*  if(server_listen_sockname.sin_port != server_accept_sockname.sin_port) {
         MYLOG("expected server listener and accepted socket ports to match but they didn't");
         return EXIT_FAILURE;
     }
@@ -183,7 +185,7 @@ static int _check_matching_addresses(int fd_server_listen, int fd_server_accept,
     }
 
     return EXIT_SUCCESS;
-}
+}*/
 
 static int _test_raw_socket() {
     int fd1 = 0, fd2 = 0, fd3 = 0;
@@ -199,29 +201,32 @@ static int _test_raw_socket() {
         return EXIT_FAILURE;
     }
 
-    if(_do_bind( &fd2,"lo") == EXIT_FAILURE) {
-        MYLOG("unable to create socket");
-        return EXIT_FAILURE;
-    }
-
     MYLOG("listening on server socket with implicit bind");
 
-    if(_do_setsockopt(fd1,"lo") == EXIT_FAILURE) {
-        MYLOG("unable to listen on server socket");
+       if(_do_setsockopt(fd1,"lo") == EXIT_FAILURE) {
+           MYLOG("unable to listen on server socket");
+           return EXIT_FAILURE;
+       }
+
+       if(_do_bind( &fd1,"lo") == EXIT_FAILURE) {
+        MYLOG("unable to bind socket");
         return EXIT_FAILURE;
     }
+
+
 
     // FIXME start
     // on ubuntu, the firewall 'ufw' blocks the remaining tests from succeeding
     // ufw auto-blocks 0.0.0.0 and 127.0.0.1, and can't seem to be made to allow it
     // so we bail out early until we have a fix
-    close(fd1);
+   // close(fd1);
     return EXIT_SUCCESS;
     // FIXME end
 
 }
 
 int main(int argc, char* argv[]) {
+	printf("Starting raw sock test");
     fprintf(stdout, "########## raw socket test starting ##########\n");
 
     fprintf(stdout, "########## running test: _test_raw_socket()\n");

@@ -9,8 +9,8 @@ add_executable(test-rawsock shd-test-raw-sock.c)
 ## Creating raw socket 
 ## these also test "localhost" instead of "127.0.0.1" in the loopback tests
 add_test(
-    NAME raw-socket
-    COMMAND shadow-test-launcher test-rawsock  server : test-rawsock  client localhost
+    NAME rawsock
+    COMMAND  test-rawsock  rawsock server : test-rawsock  rawsock client localhost
 )
 add_test(
     NAME rawsock-shadow
