@@ -19,8 +19,8 @@ else
 fi
 
 objdump -d $ldso |
-    grep -v "nop" | # nops are just used for data priming, no need to worry
-    egrep -o "%[[:alnum:]][[:alnum:]][[:alnum:]]?" | # get all the registers
+    grep -v "nop" | # nops are just used for cache priming, no need to worry
+    egrep -o "%[[:alnum:]][[:alnum:]][[:alnum:]]*" | # get all the registers
     # remove everything pushed:
     grep -v "\
 %ah\|%al\|%ax\|%eax\|%rax\|\
