@@ -23,12 +23,6 @@ typedef guint ShadowID;
 #define SIMTIME_INVALID G_MAXUINT64
 
 /**
- * Maximum and minimum valid values.
- */
-#define SIMTIME_MAX (G_MAXUINT64-1)
-#define SIMTIME_MIN 0
-
-/**
  * Represents one nanosecond in simulation time.
  */
 #define SIMTIME_ONE_NANOSECOND G_GUINT64_CONSTANT(1)
@@ -57,6 +51,15 @@ typedef guint ShadowID;
  * Represents one hour in simulation time.
  */
 #define SIMTIME_ONE_HOUR G_GUINT64_CONSTANT(3600000000000)
+
+/**
+ * Maximum and minimum valid values.
+ */
+#define SIMTIME_MAX (G_MAXUINT64-1)
+/* 792,892,800 is 16 Feb 1995. It is also about 220,248 hours since the 1970
+ * epoch. Some programs assume the current time is not that close to 1970, so
+ * start simulations at something arbitrary, but not close to 1970. */
+#define SIMTIME_MIN (792892800 * SIMTIME_ONE_SECOND)
 
 #ifdef DEBUG
 /**
