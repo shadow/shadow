@@ -548,10 +548,10 @@ static GError* _parser_handleProcessAttributes(Parser* parser, const gchar** att
             process->arguments.isSet = TRUE;
         } else if (!process->starttime.isSet && (!g_ascii_strcasecmp(name, "starttime") ||
                 !g_ascii_strcasecmp(name, "time"))) { /* TODO deprecate 'time' */
-            process->starttime.integer = g_ascii_strtoull(value, NULL, 10);
+            process->starttime.integer = g_ascii_strtoull(value, NULL, 10) + (SIMTIME_MIN / SIMTIME_ONE_SECOND);
             process->starttime.isSet = TRUE;
         } else if (!process->stoptime.isSet && !g_ascii_strcasecmp(name, "stoptime")) {
-            process->stoptime.integer = g_ascii_strtoull(value, NULL, 10);
+            process->stoptime.integer = g_ascii_strtoull(value, NULL, 10) + (SIMTIME_MIN / SIMTIME_ONE_SECOND);
             process->stoptime.isSet = TRUE;
         } else if(!process->preload.isSet && !g_ascii_strcasecmp(name, "preload")) {
             process->preload.string = g_string_new(value);
