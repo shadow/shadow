@@ -11,8 +11,8 @@ extern int run_test_arg(time_t);
 int main(int argc, char* argv[]) {
     fprintf(stdout, "########## preload test starting ##########\n");
 
-    /* preload.test.shadow.config.xml runs at time 3, so shadow's preload will return 3 */
-    if(run_test_arg((time_t)3) != 0) {
+    /* preload.test.shadow.config.xml runs at time 946684803, so shadow's preload will return 946684803 */
+    if(run_test_arg((time_t)946684803) != 0) {
         fprintf(stdout, "########## preload test failed\n");
         return -EXIT_FAILURE;
     }

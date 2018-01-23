@@ -4308,9 +4308,16 @@ int process_emu_fflush(Process* proc, FILE *stream) {
 
 /* time family */
 
+/* make sure we return the 'emulated' time, and not the actual simulation clock */
+EmulatedTime _process_getEmulatedTimeHelper(Process* proc) {
+    return worker_getEmulatedTime();
+}
+
 time_t process_emu_time(Process* proc, time_t *t)  {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-    time_t secs = (time_t) (worker_getCurrentTime() / SIMTIME_ONE_SECOND);
+
+    EmulatedTime now = _process_getEmulatedTimeHelper(proc);
+    time_t secs = (time_t) (now / SIMTIME_ONE_SECOND);
     if(t != NULL){
         *t = secs;
     }
@@ -4326,7 +4333,7 @@ int process_emu_clock_gettime(Process* proc, clockid_t clk_id, struct timespec *
 
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
 
-    SimulationTime now = worker_getCurrentTime();
+    EmulatedTime now = _process_getEmulatedTimeHelper(proc);
     tp->tv_sec = now / SIMTIME_ONE_SECOND;
     tp->tv_nsec = now % SIMTIME_ONE_SECOND;
 
@@ -4337,12 +4344,14 @@ int process_emu_clock_gettime(Process* proc, clockid_t clk_id, struct timespec *
 int process_emu_gettimeofday(Process* proc, struct timeval* tv, struct timezone* tz) {
     if(tv) {
         ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-        SimulationTime now = worker_getCurrentTime();
-        SimulationTime sec = now / (SimulationTime)SIMTIME_ONE_SECOND;
-        SimulationTime usec = (now - (sec*(SimulationTime)SIMTIME_ONE_SECOND)) / (SimulationTime)SIMTIME_ONE_MICROSECOND;
-        utility_assert(usec < (SimulationTime)1000000);
+
+        EmulatedTime now = _process_getEmulatedTimeHelper(proc);
+        EmulatedTime sec = now / (EmulatedTime)SIMTIME_ONE_SECOND;
+        EmulatedTime usec = (now - (sec*(EmulatedTime)SIMTIME_ONE_SECOND)) / (EmulatedTime)SIMTIME_ONE_MICROSECOND;
+        utility_assert(usec < (EmulatedTime)1000000);
         tv->tv_sec = (time_t)sec;
         tv->tv_usec = (suseconds_t)usec;
+
         _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     }
     return 0;

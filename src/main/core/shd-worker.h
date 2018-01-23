@@ -28,6 +28,8 @@ void worker_sendPacket(Packet* packet);
 gboolean worker_isAlive();
 
 SimulationTime worker_getCurrentTime();
+EmulatedTime worker_getEmulatedTime();
+
 guint worker_getRawCPUFrequency();
 guint32 worker_getNodeBandwidthUp(GQuark nodeID, in_addr_t ip);
 guint32 worker_getNodeBandwidthDown(GQuark nodeID, in_addr_t ip);

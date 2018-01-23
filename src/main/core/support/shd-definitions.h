@@ -58,6 +58,20 @@ typedef guint ShadowID;
  */
 #define SIMTIME_ONE_HOUR G_GUINT64_CONSTANT(3600000000000)
 
+/**
+ * Emulation time in nanoseconds. Allows for a consistent representation
+ * of time throughput the simulator. Emulation time is the simulation time
+ * plus the EMULATION_TIME_OFFSET. This type allows us to explicitly
+ * distinguish each type of time in the code.,
+ */
+typedef guint64 EmulatedTime;
+
+/**
+ * The number of nanoseconds from the epoch to January 1st, 2000 at 12:00am UTC.
+ * This is used to emulate to applications that we are in a recent time.
+ */
+#define EMULATED_TIME_OFFSET G_GUINT64_CONSTANT(946684800) * SIMTIME_ONE_SECOND
+
 #ifdef DEBUG
 /**
  * Memory magic for assertions that memory has not been freed. The idea behind

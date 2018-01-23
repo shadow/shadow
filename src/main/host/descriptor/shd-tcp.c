@@ -1737,7 +1737,6 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
         return;
     }
 
-    SimulationTime now = worker_getCurrentTime();
     gint nPacketsAcked = 0;
 
     if(packetLength > 0) {

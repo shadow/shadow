@@ -317,6 +317,13 @@ SimulationTime worker_getCurrentTime() {
     return worker->clock.now;
 }
 
+/* The emulated time starts at January 1st, 2000. This time should be used
+ * in any places where time is returned to the application, to handle code
+ * that assumes the world is in a relatively recent time. */
+EmulatedTime worker_getEmulatedTime() {
+    return (EmulatedTime)(worker_getCurrentTime() + EMULATED_TIME_OFFSET);
+}
+
 guint worker_getRawCPUFrequency() {
     Worker* worker = _worker_getPrivate();
     return slave_getRawCPUFrequency(worker->slave);
