@@ -240,7 +240,7 @@ void worker_sendPacket(Packet* packet) {
 
 static void _worker_bootHost(Host* host, Worker* worker) {
     worker_setActiveHost(host);
-    worker->clock.now = 0;
+    worker->clock.now = SIMTIME_MIN;
     host_continueExecutionTimer(host);
     host_boot(host);
     host_stopExecutionTimer(host);

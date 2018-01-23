@@ -491,7 +491,7 @@ static GError* _parser_handleKillAttributes(Parser* parser, const gchar** attrib
         debug("found attribute '%s=%s'", name, value);
 
         if (!g_ascii_strcasecmp(name, "time")) {
-            killTime = g_ascii_strtoull(value, NULL, 10);
+            killTime = g_ascii_strtoull(value, NULL, 10) + (SIMTIME_MIN / SIMTIME_ONE_SECOND);
             isSet = TRUE;
         } else {
             error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ATTRIBUTE,
@@ -548,10 +548,10 @@ static GError* _parser_handleProcessAttributes(Parser* parser, const gchar** att
             process->arguments.isSet = TRUE;
         } else if (!process->starttime.isSet && (!g_ascii_strcasecmp(name, "starttime") ||
                 !g_ascii_strcasecmp(name, "time"))) { /* TODO deprecate 'time' */
-            process->starttime.integer = g_ascii_strtoull(value, NULL, 10);
+            process->starttime.integer = g_ascii_strtoull(value, NULL, 10) + (SIMTIME_MIN / SIMTIME_ONE_SECOND);
             process->starttime.isSet = TRUE;
         } else if (!process->stoptime.isSet && !g_ascii_strcasecmp(name, "stoptime")) {
-            process->stoptime.integer = g_ascii_strtoull(value, NULL, 10);
+            process->stoptime.integer = g_ascii_strtoull(value, NULL, 10) + (SIMTIME_MIN / SIMTIME_ONE_SECOND);
             process->stoptime.isSet = TRUE;
         } else if(!process->preload.isSet && !g_ascii_strcasecmp(name, "preload")) {
             process->preload.string = g_string_new(value);
@@ -651,7 +651,13 @@ static GError* _parser_handleShadowAttributes(Parser* parser, const gchar** attr
             shadow->environment.string = g_string_new(value);
             shadow->environment.isSet = TRUE;
         } else if(!shadow->stoptime.isSet && !g_ascii_strcasecmp(name, "stoptime")) {
-            shadow->stoptime.integer = g_ascii_strtoull(value, NULL, 10);
+            /* At one point, Shadow considered secs_since_1970 and
+             * secs_since_simulation_start to be the same. That's no longer the
+             * case. We don't expect the user to know that, and we epxect them
+             * to specify the stoptime relative to the simulation start, not
+             * relative to the unix epoch. Thus we add SIMTIME_MIN to the value
+             * they specified. */
+            shadow->stoptime.integer = g_ascii_strtoull(value, NULL, 10) + (SIMTIME_MIN / SIMTIME_ONE_SECOND);
             shadow->stoptime.isSet = TRUE;
         } else {
             error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ATTRIBUTE,
