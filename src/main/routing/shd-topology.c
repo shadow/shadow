@@ -1013,25 +1013,36 @@ static gboolean _topology_vertexesAreAdjacent(Topology* top, igraph_integer_t sr
     return edge_id >= 0;
 }
 
-static void _topology_logAllCachedPathsHelper2(gpointer dstIndexKey, Path* path, GString* pathStringBuffer) {
+static void _topology_logAllCachedPathsHelper2(gpointer dstIndexKey, Path* path, Topology* top) {
     if(path) {
-        path_toString(path, pathStringBuffer);
+
+        gchar* pathStr = path_toString(path);
+
+        igraph_integer_t srcVertexIndex = (igraph_integer_t)path_getSrcVertexIndex(path);
+        igraph_integer_t dstVertexIndex = (igraph_integer_t)path_getDstVertexIndex(path);
+
+        _topology_lockGraph(top);
+        const gchar* srcIDStr = VAS(&top->graph, "id", srcVertexIndex);
+        const gchar* dstIDStr = VAS(&top->graph, "id", dstVertexIndex);
+        _topology_unlockGraph(top);
+
         /* log this at info level so we don't spam the message level logs */
-        info("Found path in cache: %s", pathStringBuffer->str);
+        info("Found path %s%s%s in cache: %s",
+                srcIDStr, top->isDirected ? "->" : "<->", dstIDStr, pathStr);
+
+        g_free(pathStr);
     }
 }
 
-static void _topology_logAllCachedPathsHelper1(gpointer srcIndexKey, GHashTable* sourceCache, GString* pathStringBuffer) {
+static void _topology_logAllCachedPathsHelper1(gpointer srcIndexKey, GHashTable* sourceCache, Topology* top) {
     if(sourceCache) {
-        g_hash_table_foreach(sourceCache, (GHFunc)_topology_logAllCachedPathsHelper2, pathStringBuffer);
+        g_hash_table_foreach(sourceCache, (GHFunc)_topology_logAllCachedPathsHelper2, top);
     }
 }
 
-static void _topology_logAllCachedPaths(Topology *top) {
+static void _topology_logAllCachedPaths(Topology* top) {
     MAGIC_ASSERT(top);
-    GString* pathStringBuffer = g_string_new(NULL);
-    g_hash_table_foreach(top->pathCache, (GHFunc)_topology_logAllCachedPathsHelper1, pathStringBuffer);
-    g_string_free(pathStringBuffer, TRUE);
+    g_hash_table_foreach(top->pathCache, (GHFunc)_topology_logAllCachedPathsHelper1, top);
 }
 
 static Path* _topology_getPathEntry(Topology* top, Address* srcAddress, Address* dstAddress) {

@@ -49,13 +49,26 @@ void path_incrementPacketCount(Path* path) {
     path->packetCount++;
 }
 
-void path_toString(Path* path, GString* string) {
+gchar* path_toString(Path* path) {
     MAGIC_ASSERT(path);
-    if(string != NULL) {
-        g_string_printf(string,
-                "SourceIndex=%"G_GINT64_FORMAT" DestinationIndex=%"G_GINT64_FORMAT" "
-                "Latency=%f Reliability=%f PacketCount=%"G_GUINT64_FORMAT,
-                path->srcVertexIndex, path->dstVertexIndex,
-                path->latency, path->reliability, path->packetCount);
-    }
+
+    GString* pathStringBuffer = g_string_new(NULL);
+
+    g_string_printf(pathStringBuffer,
+            "SourceIndex=%"G_GINT64_FORMAT" DestinationIndex=%"G_GINT64_FORMAT" "
+            "Latency=%f Reliability=%f PacketCount=%"G_GUINT64_FORMAT,
+            path->srcVertexIndex, path->dstVertexIndex,
+            path->latency, path->reliability, path->packetCount);
+
+    return g_string_free(pathStringBuffer, FALSE);
+}
+
+gint64 path_getSrcVertexIndex(Path* path) {
+    MAGIC_ASSERT(path);
+    return path->srcVertexIndex;
+}
+
+gint64 path_getDstVertexIndex(Path* path) {
+    MAGIC_ASSERT(path);
+    return path->dstVertexIndex;
 }
