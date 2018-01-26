@@ -247,6 +247,8 @@ void worker_sendPacket(Packet* packet) {
         SimulationTime delay = (SimulationTime) ceil(latency * SIMTIME_ONE_MILLISECOND);
         SimulationTime deliverTime = worker->clock.now + delay;
 
+        topology_incrementPathPacketCounter(worker_getTopology(), srcAddress, dstAddress);
+
         /* TODO this should change for sending to remote slave (on a different machine)
          * this is the only place where tasks are sent between separate hosts */
 

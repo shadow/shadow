@@ -7,17 +7,22 @@
 #include "shadow.h"
 
 struct _Path {
+    gint64 srcVertexIndex;
+    gint64 dstVertexIndex;
     gdouble latency;
-    gdouble reliablity;
+    gdouble reliability;
+    guint64 packetCount;
     MAGIC_DECLARE;
 };
 
-Path* path_new(gdouble latency, gdouble reliablity) {
+Path* path_new(gint64 srcVertexIndex, gint64 dstVertexIndex, gdouble latency, gdouble reliability) {
     Path* path = g_new0(Path, 1);
     MAGIC_INIT(path);
 
+    path->srcVertexIndex = srcVertexIndex;
+    path->dstVertexIndex = dstVertexIndex;
     path->latency = latency;
-    path->reliablity = reliablity;
+    path->reliability = reliability;
 
     return path;
 }
@@ -36,5 +41,21 @@ gdouble path_getLatency(Path* path) {
 
 gdouble path_getReliability(Path* path) {
     MAGIC_ASSERT(path);
-    return path->reliablity;
+    return path->reliability;
+}
+
+void path_incrementPacketCount(Path* path) {
+    MAGIC_ASSERT(path);
+    path->packetCount++;
+}
+
+void path_toString(Path* path, GString* string) {
+    MAGIC_ASSERT(path);
+    if(string != NULL) {
+        g_string_printf(string,
+                "SourceIndex=%"G_GINT64_FORMAT" DestinationIndex=%"G_GINT64_FORMAT" "
+                "Latency=%f Reliability=%f PacketCount=%"G_GUINT64_FORMAT,
+                path->srcVertexIndex, path->dstVertexIndex,
+                path->latency, path->reliability, path->packetCount);
+    }
 }

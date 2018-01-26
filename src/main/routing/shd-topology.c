@@ -277,10 +277,10 @@ static gboolean _topology_checkGraphProperties(Topology* top) {
     gboolean prefersDirectPaths = FALSE;
     if (igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_GRAPH, "preferdirectpaths")) {
         if (g_ascii_strncasecmp(igraph_cattribute_GAS(&top->graph, "preferdirectpaths"), "yes", 3) == 0) {
-            debug("Enabling preferdirectpaths");
+            info("Enabling preferdirectpaths");
             prefersDirectPaths = TRUE;
         } else {
-            debug("Not enabling preferdirectpaths (set to 'yes' to enable)");
+            info("Not enabling preferdirectpaths (set to 'yes' to enable)");
         }
     }
     top->prefersDirectPaths = prefersDirectPaths;
@@ -599,7 +599,7 @@ static void _topology_storePathInCache(Topology* top, igraph_integer_t srcVertex
     gdouble latencyMS = (gdouble) totalLatency;
     gboolean wasUpdated = FALSE;
 
-    Path* path = path_new(latencyMS, (gdouble) totalReliability);
+    Path* path = path_new((gint64)srcVertexIndex, (gint64)dstVertexIndex, latencyMS, (gdouble) totalReliability);
 
     g_rw_lock_writer_lock(&(top->pathCacheLock));
 
@@ -1013,8 +1013,28 @@ static gboolean _topology_vertexesAreAdjacent(Topology* top, igraph_integer_t sr
     return edge_id >= 0;
 }
 
-static gboolean _topology_getPathEntry(Topology* top, Address* srcAddress, Address* dstAddress,
-        gdouble* latency, gdouble* reliability) {
+static void _topology_logAllCachedPathsHelper2(gpointer dstIndexKey, Path* path, GString* pathStringBuffer) {
+    if(path) {
+        path_toString(path, pathStringBuffer);
+        /* log this at info level so we don't spam the message level logs */
+        info("Found path in cache: %s", pathStringBuffer->str);
+    }
+}
+
+static void _topology_logAllCachedPathsHelper1(gpointer srcIndexKey, GHashTable* sourceCache, GString* pathStringBuffer) {
+    if(sourceCache) {
+        g_hash_table_foreach(sourceCache, (GHFunc)_topology_logAllCachedPathsHelper2, pathStringBuffer);
+    }
+}
+
+static void _topology_logAllCachedPaths(Topology *top) {
+    MAGIC_ASSERT(top);
+    GString* pathStringBuffer = g_string_new(NULL);
+    g_hash_table_foreach(top->pathCache, (GHFunc)_topology_logAllCachedPathsHelper1, pathStringBuffer);
+    g_string_free(pathStringBuffer, TRUE);
+}
+
+static Path* _topology_getPathEntry(Topology* top, Address* srcAddress, Address* dstAddress) {
     MAGIC_ASSERT(top);
 
     /* get connected points */
@@ -1047,11 +1067,11 @@ static gboolean _topology_getPathEntry(Topology* top, Address* srcAddress, Addre
         } else {
             if (top->prefersDirectPaths) {
                 if (!_topology_vertexesAreAdjacent(top, srcVertexIndex, dstVertexIndex)) {
-                    debug("prefersDirectPaths but no path between %d and %d. Doing shortest path.",
+                    info("prefersDirectPaths is true but no path between %d and %d. Doing shortest path.",
                             srcVertexIndex, dstVertexIndex);
                     success = _topology_computeSourcePaths(top, srcVertexIndex, dstVertexIndex);
                 } else {
-                    debug("prefersDirectPaths and found path between %d and %d. Storing it in the cache.",
+                    info("prefersDirectPaths is true and found path between %d and %d. Storing it in the cache.",
                             srcVertexIndex, dstVertexIndex);
                     igraph_real_t latency, reliability;
                     gint result;
@@ -1065,7 +1085,7 @@ static gboolean _topology_getPathEntry(Topology* top, Address* srcAddress, Addre
                     }
                 }
             } else {
-                debug("not prefersDirectPaths so doing shortest path");
+                debug("prefersDirectPaths is false so doing shortest path");
                 success = _topology_computeSourcePaths(top, srcVertexIndex, dstVertexIndex);
             }
         }
@@ -1086,23 +1106,30 @@ static gboolean _topology_getPathEntry(Topology* top, Address* srcAddress, Addre
                 "and node %s at %s (vertex %i)",
                 address_toString(srcAddress), srcIDStr, (gint)srcVertexIndex,
                 address_toString(dstAddress), dstIDStr, (gint)dstVertexIndex);
-        return FALSE;
     }
 
-    if(latency) {
-        *latency = path_getLatency(path);
+    return path;
+}
+
+void topology_incrementPathPacketCounter(Topology* top, Address* srcAddress, Address* dstAddress) {
+    MAGIC_ASSERT(top);
+
+    Path* path = _topology_getPathEntry(top, srcAddress, dstAddress);
+    if(path != NULL) {
+        path_incrementPacketCount(path);
+    } else {
+        error("unable to find path between node %s and node %s",
+                address_toString(srcAddress), address_toString(dstAddress));
     }
-    if(reliability) {
-        *reliability = path_getReliability(path);
-    }
-    return TRUE;
 }
 
 gdouble topology_getLatency(Topology* top, Address* srcAddress, Address* dstAddress) {
     MAGIC_ASSERT(top);
-    gdouble latency = 0;
-    if(_topology_getPathEntry(top, srcAddress, dstAddress, &latency, NULL)) {
-        return latency;
+
+    Path* path = _topology_getPathEntry(top, srcAddress, dstAddress);
+
+    if(path != NULL) {
+        return path_getLatency(path);
     } else {
         return (gdouble) -1;
     }
@@ -1110,9 +1137,11 @@ gdouble topology_getLatency(Topology* top, Address* srcAddress, Address* dstAddr
 
 gdouble topology_getReliability(Topology* top, Address* srcAddress, Address* dstAddress) {
     MAGIC_ASSERT(top);
-    gdouble reliability = 0;
-    if(_topology_getPathEntry(top, srcAddress, dstAddress, NULL, &reliability)) {
-        return reliability;
+
+    Path* path = _topology_getPathEntry(top, srcAddress, dstAddress);
+
+    if(path != NULL) {
+        return path_getReliability(path);
     } else {
         return (gdouble) -1;
     }
@@ -1120,7 +1149,7 @@ gdouble topology_getReliability(Topology* top, Address* srcAddress, Address* dst
 
 gboolean topology_isRoutable(Topology* top, Address* srcAddress, Address* dstAddress) {
     MAGIC_ASSERT(top);
-    return topology_getLatency(top, srcAddress, dstAddress) > -1;
+    return (topology_getLatency(top, srcAddress, dstAddress) > -1) ? TRUE : FALSE;
 }
 
 static void _topology_findAttachmentVertexHelperHook(Topology* top, igraph_integer_t vertexIndex, AttachHelper* ah) {
@@ -1359,6 +1388,9 @@ void topology_detach(Topology* top, Address* address) {
 
 void topology_free(Topology* top) {
     MAGIC_ASSERT(top);
+
+    /* log all of the paths that we looked up for post analysis */
+    _topology_logAllCachedPaths(top);
 
     /* clear the virtual ip table */
     g_rw_lock_writer_lock(&(top->virtualIPLock));
