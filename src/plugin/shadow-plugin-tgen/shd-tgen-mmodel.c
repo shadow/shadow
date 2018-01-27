@@ -197,7 +197,7 @@ tgenmmodel_generatePath(TGenMModel *mmodel, GString *ourStr, GString *theirStr)
     igraph_integer_t current_vert_id = mmodel->start_vert_id;
     igraph_integer_t working_vert_id;
     igraph_integer_t working_edge_id;
-    gchar *working_vert_action;
+    const gchar *working_vert_action;
     igraph_real_t delay;
     igraph_real_t our_cum_delay = 0;
     igraph_real_t their_cum_delay = 0;
