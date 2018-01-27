@@ -393,14 +393,21 @@ gint master_run(Master* master) {
 
     message("running simulation");
 
-    message("log message buffering is enabled for efficiency");
-    logger_setEnableBuffering(logger_getDefault(), TRUE);
+    /* dont buffer log messages in debug mode */
+    if(options_getLogLevel(master->options) != LOGLEVEL_DEBUG) {
+        message("log message buffering is enabled for efficiency");
+        logger_setEnableBuffering(logger_getDefault(), TRUE);
+    }
 
     /* start running each slave */
     slave_run(master->slave);
 
-    message("log message buffering is disabled during cleanup");
-    logger_setEnableBuffering(logger_getDefault(), FALSE);
+    /* only need to disable buffering if it was enabled, otherwise
+     * don't log the message as it may confuse the user. */
+    if(options_getLogLevel(master->options) != LOGLEVEL_DEBUG) {
+        message("log message buffering is disabled during cleanup");
+        logger_setEnableBuffering(logger_getDefault(), FALSE);
+    }
 
     message("simulation finished, cleaning up now");
 
