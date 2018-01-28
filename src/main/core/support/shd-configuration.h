@@ -67,6 +67,8 @@ struct _ConfigurationHostElement {
     GQueue* processes;
     /* optional*/
     ConfigurationStringAttribute ipHint;
+    ConfigurationStringAttribute citycodeHint;
+    ConfigurationStringAttribute countrycodeHint;
     ConfigurationStringAttribute geocodeHint;
     ConfigurationStringAttribute typeHint;
     ConfigurationIntegerAttribute quantity;

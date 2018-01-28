@@ -19,6 +19,8 @@ struct _HostParameters {
     guint nodeSeed;
     gchar* hostname;
     gchar* ipHint;
+    gchar* citycodeHint;
+    gchar* countrycodeHint;
     gchar* geocodeHint;
     gchar* typeHint;
     guint64 requestedBWDownKiBps;

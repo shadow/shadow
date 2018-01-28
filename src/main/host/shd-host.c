@@ -77,6 +77,8 @@ Host* host_new(HostParameters* params) {
     /* now dup the strings so we own them */
     if(params->hostname) host->params.hostname = g_strdup(params->hostname);
     if(params->ipHint) host->params.ipHint = g_strdup(params->ipHint);
+    if(params->citycodeHint) host->params.citycodeHint = g_strdup(params->citycodeHint);
+    if(params->countrycodeHint) host->params.countrycodeHint = g_strdup(params->countrycodeHint);
     if(params->geocodeHint) host->params.geocodeHint = g_strdup(params->geocodeHint);
     if(params->typeHint) host->params.typeHint = g_strdup(params->typeHint);
     if(params->pcapDir) host->params.pcapDir = g_strdup(params->pcapDir);
@@ -188,6 +190,8 @@ void host_shutdown(Host* host) {
     }
 
     if(host->params.ipHint) g_free(host->params.ipHint);
+    if(host->params.citycodeHint) g_free(host->params.citycodeHint);
+    if(host->params.countrycodeHint) g_free(host->params.countrycodeHint);
     if(host->params.geocodeHint) g_free(host->params.geocodeHint);
     if(host->params.typeHint) g_free(host->params.typeHint);
     if(host->params.pcapDir) g_free(host->params.pcapDir);
@@ -275,7 +279,8 @@ void host_boot(Host* host) {
     /* connect to topology and get the default bandwidth */
     guint64 bwDownKiBps = 0, bwUpKiBps = 0;
     topology_attach(worker_getTopology(), ethernetAddress, host->random,
-            host->params.ipHint, host->params.geocodeHint, host->params.typeHint, &bwDownKiBps, &bwUpKiBps);
+            host->params.ipHint, host->params.citycodeHint, host->params.countrycodeHint, host->params.geocodeHint,
+            host->params.typeHint, &bwDownKiBps, &bwUpKiBps);
 
     /* prefer assigned bandwidth if available */
     if(host->params.requestedBWDownKiBps) {

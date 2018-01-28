@@ -345,6 +345,8 @@ static void _master_registerHostCallback(ConfigurationHostElement* he, Master* m
 
         /* requested attributes from shadow config */
         params->ipHint = he->ipHint.isSet ? he->ipHint.string->str : NULL;
+        params->countrycodeHint = he->countrycodeHint.isSet ? he->countrycodeHint.string->str : NULL;
+        params->citycodeHint = he->citycodeHint.isSet ? he->citycodeHint.string->str : NULL;
         params->geocodeHint = he->geocodeHint.isSet ? he->geocodeHint.string->str : NULL;
         params->typeHint = he->typeHint.isSet ? he->typeHint.string->str : NULL;
         params->requestedBWDownKiBps = he->bandwidthdown.isSet ? he->bandwidthdown.integer : 0;
